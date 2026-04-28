@@ -29,6 +29,7 @@ def main(keyword):
 
     print(f"--- Amazon Fetch Log ---")
     print(f"Input Keyword: {keyword}")
+    print(f"Target Country: {country_code}")
     
     try:
         search_result = api.search_items(keywords=keyword)
@@ -65,13 +66,17 @@ def main(keyword):
         }
 
         os.makedirs("data", exist_ok=True)
+        # 互換性のために両方のファイル名で保存
         with open("data/amazon_result.json", "w", encoding="utf-8") as f:
             json.dump(results, f, ensure_ascii=False, indent=4)
+        with open("data/search_result.json", "w", encoding="utf-8") as f:
+            json.dump(results, f, ensure_ascii=False, indent=4)
 
-        print(f"Successfully saved {len(items)} items to data/amazon_result.json")
+        print(f"Successfully saved {len(items)} items to data/amazon_result.json and data/search_result.json")
 
     except Exception as e:
         print(f"An error occurred during Amazon API call: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:

@@ -1,4 +1,91 @@
-baseURL = 'https://example.org/'
+baseURL = 'https://omochairo.github.io/amazon/'
 languageCode = 'ja-jp'
-title = 'My Amazon Comparison Site'
+title = 'おもちゃいろ Amazon比較ナビ 🧸'
 theme = 'PaperMod'
+paginate = 10
+
+[params]
+  env = "production"
+  description = "Julesが毎日自動更新！人気おもちゃのAmazon価格比較サイト"
+  author = "おもちゃいろ編集部"
+  defaultTheme = "auto"
+  ShowReadingTime = true
+  ShowShareButtons = true
+  ShowPostNavLinks = true
+  ShowBreadCrumbs = true
+  ShowCodeCopyButtons = false
+  ShowToc = true
+  disableSpecial1stPost = false
+  hidemeta = false
+  comments = false
+
+  # ホームページをプロフィールモードに
+  [params.homeInfoParams]
+    Title = "🧸 おもちゃいろ Amazon比較ナビ"
+    Content = """
+AIエージェント **Jules** が毎日自動で更新中！
+Amazon の人気おもちゃを比較して、**今いちばんお得な買い方**がわかります。
+
+> 🔍 元ソニーエンジニア × 医療従事者の夫婦が厳選したおもちゃ情報をお届け
+"""
+
+  [[params.socialIcons]]
+    name = "globe"
+    url = "https://omcha.jp/"
+    title = "おもちゃいろ公式ブログ"
+
+  [[params.socialIcons]]
+    name = "github"
+    url = "https://github.com/omochairo"
+    title = "GitHub"
+
+  [params.cover]
+    linkFullImages = true
+    responsiveImages = true
+
+  [params.label]
+    text = "🧸 おもちゃいろ比較ナビ"
+
+  [params.assets]
+    favicon = "🧸"
+
+  # 検索機能
+  [params.fuseOpts]
+    isCaseSensitive = false
+    shouldSort = true
+    location = 0
+    distance = 1000
+    threshold = 0.4
+    minMatchCharLength = 0
+    keys = ["title", "permalink", "summary", "content"]
+
+# Markdown表示設定
+[markup]
+  [markup.highlight]
+    style = "monokai"
+    noClasses = false
+  [markup.goldmark.renderer]
+    unsafe = true
+
+# 出力フォーマット（検索用JSON）
+[outputs]
+  home = ["HTML", "RSS", "JSON"]
+
+# ナビゲーションメニュー
+[menu]
+  [[menu.main]]
+    name = "🏠 ホーム"
+    url = "/"
+    weight = 1
+  [[menu.main]]
+    name = "📚 記事一覧"
+    url = "/posts/"
+    weight = 2
+  [[menu.main]]
+    name = "🔍 検索"
+    url = "/search/"
+    weight = 3
+  [[menu.main]]
+    name = "🌐 おもちゃいろ"
+    url = "https://omcha.jp/"
+    weight = 4

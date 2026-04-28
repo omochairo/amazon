@@ -3,6 +3,7 @@ import os
 import re
 from datetime import datetime
 
+<<<<<<< HEAD
 def load_json(filepath):
     if os.path.exists(filepath):
         with open(filepath, "r", encoding="utf-8") as f:
@@ -30,12 +31,35 @@ def main():
     title = f"おすすめの{keyword}徹底比較・最新情報まとめ"
     date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S+09:00")
 
+=======
+def main():
+    json_path = "data/search_result.json"
+    if not os.path.exists(json_path):
+        print(f"Error: {json_path} not found.")
+        return
+
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    keyword = data.get("keyword", "Amazon Product")
+    items = data.get("items", [])
+
+    if not items:
+        print("No items found in JSON.")
+        return
+
+    # 記事の内容を作成
+    title = f"おすすめの{keyword}比較紹介"
+    date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S+09:00")
+
+>>>>>>> origin/main
     content = f"""---
 title: "{title}"
 date: {date}
 draft: false
 ---
 
+<<<<<<< HEAD
 人気の「{keyword}」について、商品比較から最新ニュース、役立つ動画まで情報をまとめました。
 
 ## 商品比較一覧
@@ -60,10 +84,24 @@ draft: false
 - **価格**: {item['price']}
 - **詳細・購入はこちら**: [{item['title']}]({item['url']})
 - **情報元**: {source}
+=======
+Amazonで人気の「{keyword}」をいくつかピックアップしてご紹介します。
+
+## 商品一覧
+
+"""
+
+    for item in items:
+        content += f"""### {item['title']}
+- **価格**: {item['price']}
+- **詳細はこちら**: [{item['title']}]({item['url']})
+- **ASIN**: {item['asin']}
+>>>>>>> origin/main
 
 ---
 """
 
+<<<<<<< HEAD
     # トレンド情報
     if trends_data and trends_data.get("top_queries"):
         content += f"\n## 「{keyword}」に関するトレンドワード\n\n"
@@ -94,6 +132,12 @@ draft: false
         content += "\n"
 
     # ファイル名を作成
+=======
+    # ファイル名を作成
+    # Hugoは日本語のファイル名も扱えるが、URLセーフな名前にすることを検討
+    # ここではシンプルに、ASINなどをベースにするか、キーワードをそのまま使う（ユーザーの元々の要望に合わせる）
+    # ただし、記号などは除去する
+>>>>>>> origin/main
     safe_keyword = re.sub(r'[\\/*?:"<>|]', "", keyword)
     filename = f"{safe_keyword}.md"
     filepath = os.path.join("content/posts", filename)
