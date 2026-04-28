@@ -3,28 +3,31 @@ import os
 import re
 from datetime import datetime
 
+def load_json(filepath):
+    if os.path.exists(filepath):
+        with open(filepath, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return None
+
 def main():
     data_dir = "data"
-    all_items = []
     keyword = "Product"
 
-    # 指定されたJSONファイルを読み込む
-    files = ["amazon_result.json", "rakuten_result.json", "yahoo_result.json"]
+    # 商品データ
+    amazon_data = load_json(os.path.join(data_dir, "amazon_result.json"))
+    rakuten_data = load_json(os.path.join(data_dir, "rakuten_result.json"))
+    yahoo_data = load_json(os.path.join(data_dir, "yahoo_result.json"))
 
-    for filename in files:
-        filepath = os.path.join(data_dir, filename)
-        if os.path.exists(filepath):
-            with open(filepath, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                keyword = data.get("keyword", keyword)
-                all_items.extend(data.get("items", []))
+    if amazon_data: keyword = amazon_data.get("keyword", keyword)
 
-    if not all_items:
-        print("No items found in any JSON file.")
-        return
+    # その他データ
+    youtube_data = load_json(os.path.join(data_dir, "youtube_result.json"))
+    news_data = load_json(os.path.join(data_dir, "news_result.json"))
+    trends_data = load_json(os.path.join(data_dir, "trends_result.json"))
+    internal_links_data = load_json(os.path.join(data_dir, "internal_links_result.json"))
 
     # 記事の内容を作成
-    title = f"おすすめの{keyword}比較紹介"
+    title = f"おすすめの{keyword}徹底比較・最新情報まとめ"
     date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S+09:00")
 
     content = f"""---
@@ -33,20 +36,25 @@ date: {date}
 draft: false
 ---
 
-人気の「{keyword}」を、Amazon・楽天・Yahoo!ショッピングからピックアップしてご紹介します。
+人気の「{keyword}」について、商品比較から最新ニュース、役立つ動画まで情報をまとめました。
 
 ## 商品比較一覧
 
 """
 
-    for item in all_items:
+    # 商品リストの結合
+    all_products = []
+    if amazon_data: all_products.extend(amazon_data.get("items", []))
+    if rakuten_data: all_products.extend(rakuten_data.get("items", []))
+    if yahoo_data: all_products.extend(yahoo_data.get("items", []))
+
+    for item in all_products:
         source = item.get("source", "Unknown")
         title_text = item['title']
-        # 既にソース名が含まれている場合は重複を避ける
-        if title_text.startswith(f"[{source}]"):
-            display_title = title_text
-        else:
+        if not title_text.startswith(f"[{source}]"):
             display_title = f"[{source}] {title_text}"
+        else:
+            display_title = title_text
 
         content += f"""### {display_title}
 - **価格**: {item['price']}
@@ -55,6 +63,35 @@ draft: false
 
 ---
 """
+
+    # トレンド情報
+    if trends_data and trends_data.get("top_queries"):
+        content += f"\n## 「{keyword}」に関するトレンドワード\n\n"
+        for query in trends_data["top_queries"]:
+            content += f"- {query['query']}\n"
+        content += "\n"
+
+    # YouTube動画
+    if youtube_data and youtube_data.get("items"):
+        content += f"\n## 関連動画\n\n"
+        for video in youtube_data["items"]:
+            content += f"### {video['title']}\n"
+            content += f"[![{video['title']}]({video['thumbnail']})]({video['url']})\n\n"
+        content += "\n"
+
+    # 最新ニュース
+    if news_data and news_data.get("items"):
+        content += f"\n## 最新ニュース\n\n"
+        for news in news_data["items"]:
+            content += f"- [{news['title']}]({news['url']}) ({news['published']})\n"
+        content += "\n"
+
+    # 内部リンク
+    if internal_links_data and internal_links_data.get("items"):
+        content += f"\n## 関連記事\n\n"
+        for link in internal_links_data["items"]:
+            content += f"- [{link['title']}]({link['url']})\n"
+        content += "\n"
 
     # ファイル名を作成
     safe_keyword = re.sub(r'[\\/*?:"<>|]', "", keyword)
