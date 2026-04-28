@@ -6,10 +6,10 @@ import sys
 def fetch_books(keyword):
     # ユーザーが新しく設定した個別の環境変数名に変更
     api_key = os.environ.get("GOOGLEBOOKS_API_KEY")
-    
+
     # 知育・育児ブログ向けに検索クエリを最適化
     query = f"{keyword} 知育 絵本"
-    
+
     url = "https://www.googleapis.com/books/v1/volumes"
     params = {
         "q": query,
@@ -23,7 +23,7 @@ def fetch_books(keyword):
         response = requests.get(url, params=params)
         response.raise_for_status()
         data = response.json()
-        
+
         books = []
         for item in data.get("items", []):
             info = item.get("volumeInfo", {})
@@ -34,12 +34,12 @@ def fetch_books(keyword):
                 "info_url": info.get("infoLink"),
                 "image": info.get("imageLinks", {}).get("thumbnail")
             })
-            
+
         # 実行場所に関わらずプロジェクトルートのdataフォルダを指定
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         save_path = os.path.join(base_dir, "data", "books_result.json")
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        
+
         with open(save_path, "w", encoding="utf-8") as f:
             json.dump(books, f, ensure_ascii=False, indent=4)
         print(f"関連書籍を{len(books)}件取得しました: {save_path}")

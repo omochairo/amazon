@@ -7,7 +7,7 @@ def fetch_youtube_reviews(toy_name):
     api_key = os.environ.get("YOUTUBE_API_KEY")
     # 検索キーワードを「おもちゃ名 + レビュー」や「おもちゃ名 + 遊んでみた」に調整
     query = f"{toy_name} おもちゃ レビュー"
-    
+
     url = "https://www.googleapis.com/youtube/v3/search"
     params = {
         "key": api_key,
@@ -21,7 +21,7 @@ def fetch_youtube_reviews(toy_name):
 
     response = requests.get(url, params=params)
     data = response.json()
-    
+
     videos = []
     for item in data.get("items", []):
         video_id = item["id"]["videoId"]
@@ -30,12 +30,12 @@ def fetch_youtube_reviews(toy_name):
             "url": f"https://www.youtube.com/watch?v={video_id}",
             "embed_url": f"https://www.youtube.com/embed/{video_id}" # 埋め込み用
         })
-        
+
     # 保存処理
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     save_path = os.path.join(base_dir, "data", "youtube_result.json")
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    
+
     with open(save_path, "w", encoding="utf-8") as f:
         json.dump(videos, f, ensure_ascii=False, indent=4)
     print(f"YouTube動画を{len(videos)}件保存しました。")

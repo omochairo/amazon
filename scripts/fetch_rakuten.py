@@ -6,7 +6,7 @@ import sys
 def fetch_rakuten(keyword):
     # 2026年からの新エンドポイント
     url = "https://openapi.rakuten.co.jp/ichibams/api/202602/item/search"
-    
+
     params = {
         "applicationId": os.environ.get("RAKUTEN_APP_ID"),
         "accessKey": os.environ.get("RAKUTEN_ACCESS_KEY"),
@@ -15,7 +15,7 @@ def fetch_rakuten(keyword):
         "format": "json",
         "hits": 5
     }
-    
+
     # 2026年仕様：Refererヘッダーが必須になるケースがあります
     headers = {
         "Referer": "https://omochairo.github.io/amazon/"
@@ -23,7 +23,7 @@ def fetch_rakuten(keyword):
 
     response = requests.get(url, params=params, headers=headers)
     data = response.json()
-    
+
     # 抽出して保存
     items = []
     for i in data.get("Items", []):
@@ -34,7 +34,7 @@ def fetch_rakuten(keyword):
             "url": item.get("affiliateUrl"),
             "shop": "Rakuten"
         })
-        
+
     os.makedirs("data", exist_ok=True)
     with open("data/rakuten_result.json", "w", encoding="utf-8") as f:
         json.dump(items, f, ensure_ascii=False, indent=4)

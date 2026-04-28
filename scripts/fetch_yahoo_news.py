@@ -9,14 +9,14 @@ def fetch_yahoo_news():
         "life": "https://news.yahoo.co.jp/rss/categories/life.xml",
         "it": "https://news.yahoo.co.jp/rss/categories/it.xml"
     }
-    
+
     news_list = []
-    
+
     for cat, url in urls.items():
         try:
             response = requests.get(url)
             root = ET.fromstring(response.content)
-            
+
             for item in root.findall(".//item")[:5]: # 各カテゴリ上位5件
                 title = item.find("title").text
                 link = item.find("link").text
@@ -34,7 +34,7 @@ def fetch_yahoo_news():
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     save_path = os.path.join(base_dir, "data", "yahoo_news.json")
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    
+
     with open(save_path, "w", encoding="utf-8") as f:
         json.dump(news_list, f, ensure_ascii=False, indent=4)
     print(f"Yahooニュースを{len(news_list)}件保存しました。")
