@@ -1,247 +1,296 @@
 """
-fetch_yahoo.py
-Yahoo!ショッピング 商品検索API (V3) でキーワード検索し、
-バリューコマース連携のアフィリエイトリンク付き JSON を生成する。
+fetch_amazon.py
+Amazon Creators API (旧 PA-API 5.0 の後継) でキーワード検索し、
+アフィリエイトリンク付き JSON を生成する。
 
-【2026年4月時点の仕様】
-- エンドポイント: https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch
-- アフィリエイト連携は Yahoo! API 公式パラメータ (affiliate_type=vc + affiliate_id) を使用
-  → API 側で正規化された affiliateUrl が返るため、自前でURL組み立てるより安全
-  → SID/PID は Yahoo! 側に渡す affiliate_id 文字列の中で利用する
+PA-API 5.0 は 2026年4月30日に廃止されるため、本スクリプトは新しい
+Amazon Creators API (OAuth 2.0 ベース) で動作する。
 
 必要な環境変数 (GitHub Secrets):
-  YAHOO_CLIENT_ID        : Yahoo! デベロッパーアプリの Client ID (アプリケーションID)
-  VALUECOMMERCE_SID      : バリューコマース サイトID
-  VALUECOMMERCE_PID      : バリューコマース 広告スペースID(プログラムID)
+  AMAZON_ACCESS_KEY    : Creators API の Credential ID
+                         (Associates Central → Tools → Creators API で発行)
+  AMAZON_SECRET_KEY    : Creators API の Credential Secret
+  AMAZON_PARTNER_TAG   : アフィリエイトタグ (例: yourtag-22)
 
 任意の環境変数:
-  YAHOO_RESULTS          : 取得件数 (デフォルト: 5、API上限は1リクエストあたり50)
-  YAHOO_SORT             : ソート順 (デフォルト: -score)
-                           例: -score / +price / -price / -review_count
-  YAHOO_IMAGE_SIZE       : 取得画像サイズ (76/106/132/146/300/600、デフォルト: 300)
+  AMAZON_COUNTRY            : 国コード (デフォルト: JP)
+  AMAZON_API_VERSION        : Credential Version
+                              省略時は国に応じて自動 (NA=2.1 / EU=2.2 / FE=2.3)
+  AMAZON_SEARCH_ITEM_COUNT  : 取得件数 (1〜10、デフォルト: 10)
 
-API利用制限:
-  1クエリ/秒 (短時間の連続アクセスは制限される可能性あり)
+注意:
+  Creators API は OAuth 2.0 + 新しい Credential ID/Secret を使用するため、
+  旧 PA-API 5.0 の Access Key / Secret Key は使用できません。
+  GitHub Secrets の AMAZON_ACCESS_KEY / AMAZON_SECRET_KEY には、
+  Creators API の Credential ID / Credential Secret を設定してください。
 """
 
 import os
 import json
 import sys
 import logging
-import urllib.parse
 from typing import Any, Optional
 
-import requests
+try:
+    from amazon_creatorsapi import AmazonCreatorsApi, Country
+    from amazon_creatorsapi.errors import AmazonCreatorsApiError
+except ImportError:
+    print(
+        "Error: 'amazon_creatorsapi' モジュールがインストールされていません。\n"
+        "  pip install python-amazon-paapi\n"
+        "  (パッケージ名は python-amazon-paapi ですが、import 名は amazon_creatorsapi です)",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 
 # ---------------------------------------------------------------------------
-# 設定
+# ログ設定
 # ---------------------------------------------------------------------------
-YAHOO_API_URL = "https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch"
-REQUEST_TIMEOUT = 15  # 秒
-
-# バリューコマースの referral URL ベース。
-# Yahoo! API の affiliate_id にはこの URL を末尾「&vc_url=」付きで渡す仕様。
-# https://developer.yahoo.co.jp/webapi/shopping/affiliate.html
-VC_REFERRAL_BASE = "https://ck.jp.ap.valuecommerce.com/servlet/referral"
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
-logger = logging.getLogger("fetch_yahoo")
+logger = logging.getLogger("fetch_amazon")
+
+
+# ---------------------------------------------------------------------------
+# 国 / リージョン設定
+# ---------------------------------------------------------------------------
+# 国コード -> Amazon ドメイン (アフィリエイトリンク生成に使用)
+COUNTRY_DOMAIN = {
+    "JP": "amazon.co.jp",
+    "US": "amazon.com",
+    "UK": "amazon.co.uk",
+    "GB": "amazon.co.uk",
+    "DE": "amazon.de",
+    "FR": "amazon.fr",
+    "IT": "amazon.it",
+    "ES": "amazon.es",
+    "CA": "amazon.ca",
+    "AU": "amazon.com.au",
+    "IN": "amazon.in",
+    "MX": "amazon.com.mx",
+    "BR": "amazon.com.br",
+    "SG": "amazon.sg",
+    "AE": "amazon.ae",
+    "NL": "amazon.nl",
+    "SE": "amazon.se",
+    "PL": "amazon.pl",
+    "TR": "amazon.com.tr",
+    "SA": "amazon.sa",
+    "BE": "amazon.com.be",
+    "EG": "amazon.eg",
+}
+
+# Creators API の Credential Version (リージョン別)
+# https://pypi.org/project/amazon-creatorsapi-python-sdk/ の仕様より
+#   NA (北米)   = "2.1"
+#   EU (欧州・印度ほか) = "2.2"
+#   FE (極東)   = "2.3"
+REGION_VERSION = {
+    # FE region
+    "JP": "2.3",
+    "AU": "2.3",
+    "SG": "2.3",
+    # NA region
+    "US": "2.1",
+    "CA": "2.1",
+    "MX": "2.1",
+    "BR": "2.1",
+    # EU region
+    "UK": "2.2", "GB": "2.2",
+    "DE": "2.2", "FR": "2.2", "IT": "2.2", "ES": "2.2",
+    "IN": "2.2", "NL": "2.2", "SE": "2.2", "PL": "2.2",
+    "TR": "2.2", "AE": "2.2", "SA": "2.2", "BE": "2.2", "EG": "2.2",
+}
 
 
 # ---------------------------------------------------------------------------
 # ヘルパー
 # ---------------------------------------------------------------------------
-def build_vc_affiliate_id(sid: str, pid: str) -> str:
+def _safe_get(obj: Any, *attrs: str, default: Any = None) -> Any:
+    """ネストした属性を安全に取り出す。途中が None でも例外を出さない。"""
+    cur = obj
+    for a in attrs:
+        if cur is None:
+            return default
+        cur = getattr(cur, a, None)
+    return cur if cur is not None else default
+
+
+def build_affiliate_url(asin: str, tag: str, domain: str) -> str:
+    """正規のアフィリエイトリンクを生成する。形式: https://www.{domain}/dp/{ASIN}/?tag={TAG}"""
+    return f"https://www.{domain}/dp/{asin}/?tag={tag}"
+
+
+def validate_url(url: str) -> bool:
+    """生成された URL の最終チェック。"""
+    return (
+        isinstance(url, str)
+        and url.startswith("https://www.amazon.")
+        and "/dp/" in url
+        and "tag=" in url
+    )
+
+
+def extract_price(item: Any) -> str:
     """
-    Yahoo!ショッピング API の affiliate_id パラメータに渡す文字列を構築する。
-    公式仕様 (Yahoo!デベロッパーネットワーク) に従い、末尾は「&vc_url=」で終える。
-    例: https://ck.jp.ap.valuecommerce.com/servlet/referral?sid=XXX&pid=YYY&vc_url=
+    価格を取り出す。Creators API では OffersV2 が標準だが、SDK のラッパーは
+    item.offers.listings[0].price.display_amount で旧来通りアクセスできるため、
+    まずそちらを試し、ダメなら OffersV2 を見る。
     """
-    return f"{VC_REFERRAL_BASE}?sid={sid}&pid={pid}&vc_url="
+    # 1) 旧来形式 (SDK が互換ラップしている場合)
+    listings = _safe_get(item, "offers", "listings", default=None)
+    if listings:
+        first = listings[0] if len(listings) > 0 else None
+        price = _safe_get(first, "price", "display_amount", default=None)
+        if price:
+            return price
+
+    # 2) OffersV2 形式
+    listings_v2 = _safe_get(item, "offers_v2", "listings", default=None)
+    if listings_v2:
+        first = listings_v2[0] if len(listings_v2) > 0 else None
+        price = (
+            _safe_get(first, "price", "money", "display_amount", default=None)
+            or _safe_get(first, "price", "display_amount", default=None)
+        )
+        if price:
+            return price
+
+    return "N/A"
 
 
-def build_vc_affiliate_url_fallback(target_url: str, sid: str, pid: str) -> str:
-    """
-    API 側でアフィリエイト URL が返らなかった場合の保険として、
-    自前で MyLink 形式のアフィリエイトリンクを組み立てる。
-    """
-    encoded = urllib.parse.quote(target_url, safe="")
-    return f"{VC_REFERRAL_BASE}?sid={sid}&pid={pid}&vc_url={encoded}"
-
-
-def _get_int_env(name: str, default: int, lo: int, hi: int) -> int:
-    raw = os.getenv(name)
-    if raw is None or raw == "":
-        return default
-    try:
-        v = int(raw)
-    except ValueError:
-        logger.warning("Invalid value for %s: %r (using default %s)", name, raw, default)
-        return default
-    return max(lo, min(v, hi))
-
-
-def _pick_image(hit: dict, preferred_size: int) -> Optional[str]:
-    """商品画像 URL を 1 つ取り出す。exImage(任意サイズ) → medium → small の順で優先。"""
-    ex = hit.get("exImage") or {}
-    if isinstance(ex, dict) and ex.get("url"):
-        return ex["url"]
-
-    image = hit.get("image") or {}
-    if isinstance(image, dict):
-        return image.get("medium") or image.get("small")
-    return None
-
-
-def _normalize_hit(hit: dict, sid: str, pid: str) -> Optional[dict]:
-    """
-    Yahoo! API のレスポンス hits[] 1 件分を整形する。
-    URL は API が返したもの (affiliate_type=vc 指定時はアフィリエイト済) を使用。
-    念のため、ドメインがバリューコマース経由になっていない場合は自前で変換する。
-    """
-    name = hit.get("name")
-    raw_url = hit.get("url")
-    if not name or not raw_url:
+def extract_item_data(item: Any, affiliate_tag: str, domain: str) -> Optional[dict]:
+    """API レスポンスの item 1 件分を辞書化する。失敗時は None。"""
+    asin = getattr(item, "asin", None)
+    if not asin:
         return None
 
-    # 既に API 側で affiliate_type=vc によりバリューコマース経由になっているかをチェック。
-    # なっていなければフォールバックで自前変換する。
-    if "valuecommerce.com" not in raw_url and sid and pid:
-        affiliate_url = build_vc_affiliate_url_fallback(raw_url, sid, pid)
-    else:
-        affiliate_url = raw_url
+    affiliate_url = build_affiliate_url(asin, affiliate_tag, domain)
+    if not validate_url(affiliate_url):
+        logger.warning("Invalid URL generated for ASIN %s", asin)
+        return None
 
-    seller = hit.get("seller") or {}
-    review = hit.get("review") or {}
+    title = _safe_get(item, "item_info", "title", "display_value", default="No Title")
+    price = extract_price(item)
+    image_url = _safe_get(item, "images", "primary", "large", "url", default=None)
 
     return {
-        "title": name,
-        "price": hit.get("price"),
+        "asin": asin,
+        "title": title,
+        "price": price,
+        "image": image_url,
         "url": affiliate_url,
-        "image": _pick_image(hit, preferred_size=300),
-        "shop": seller.get("name") or "Yahoo",
-        "code": hit.get("code"),
-        "janCode": hit.get("janCode"),
-        "reviewCount": review.get("count"),
-        "reviewAverage": review.get("rate"),
-        "source": "Yahoo",
+        "source": "Amazon",
     }
 
 
 # ---------------------------------------------------------------------------
 # メイン処理
 # ---------------------------------------------------------------------------
-def fetch_yahoo(keyword: str) -> None:
+def main(keyword: str) -> None:
     # --- 認証情報 ----------------------------------------------------------
-    client_id = os.environ.get("YAHOO_CLIENT_ID")
-    sid = os.environ.get("VALUECOMMERCE_SID")
-    pid = os.environ.get("VALUECOMMERCE_PID")
+    # GitHub Secrets の既存名 (AMAZON_ACCESS_KEY / AMAZON_SECRET_KEY) を維持。
+    # ただし中身は Creators API の Credential ID / Credential Secret を入れる必要あり。
+    credential_id = os.getenv("AMAZON_ACCESS_KEY")
+    credential_secret = os.getenv("AMAZON_SECRET_KEY")
+    affiliate_tag = (
+        os.getenv("AMAZON_PARTNER_TAG") or os.getenv("AMAZON_AFFILIATE_TAG")
+    )
+    country_code = os.getenv("AMAZON_COUNTRY", "JP").upper()
 
-    if not client_id:
-        logger.error("YAHOO_CLIENT_ID が未設定です。")
-        sys.exit(1)
-
-    if not sid or not pid:
-        logger.warning(
-            "VALUECOMMERCE_SID または VALUECOMMERCE_PID が未設定です。"
-            "アフィリエイトリンクは生成されず、通常の商品URLになります。"
-        )
-
-    # --- リクエストパラメータ ---------------------------------------------
-    results_count = _get_int_env("YAHOO_RESULTS", default=5, lo=1, hi=50)
-    sort = os.environ.get("YAHOO_SORT", "-score")
-    image_size = _get_int_env("YAHOO_IMAGE_SIZE", default=300, lo=76, hi=600)
-
-    params: dict[str, Any] = {
-        "appid": client_id,
-        "query": keyword,
-        "results": results_count,
-        "sort": sort,
-        "image_size": image_size,
-        "in_stock": "true",  # 在庫ありのみ
-    }
-
-    # 公式アフィリエイト連携: affiliate_type=vc + affiliate_id
-    # Yahoo! API 側がバリューコマース経由のアフィリエイト URL を返してくれる
-    if sid and pid:
-        params["affiliate_type"] = "vc"
-        params["affiliate_id"] = build_vc_affiliate_id(sid, pid)
-
-    logger.info("--- Yahoo! Shopping V3 Fetch ---")
-    logger.info("Endpoint     : %s", YAHOO_API_URL)
-    logger.info("Keyword      : %s", keyword)
-    logger.info("Results      : %s", results_count)
-    logger.info("Sort         : %s", sort)
-    logger.info("Affiliate    : %s", "vc (ValueCommerce)" if sid and pid else "OFF")
-
-    # --- API 呼び出し ------------------------------------------------------
-    try:
-        response = requests.get(
-            YAHOO_API_URL,
-            params=params,
-            timeout=REQUEST_TIMEOUT,
-        )
-    except requests.exceptions.RequestException as e:
-        logger.error("HTTP request failed: %s", e)
-        sys.exit(1)
-
-    # 429 (Too Many Requests) など Yahoo API 固有のエラーをログ出力
-    if response.status_code != 200:
-        snippet = response.text[:500] if response.text else ""
+    if not all([credential_id, credential_secret, affiliate_tag]):
         logger.error(
-            "Yahoo Shopping API error (HTTP %s): %s",
-            response.status_code,
-            snippet,
+            "AMAZON_ACCESS_KEY (=Credential ID), AMAZON_SECRET_KEY (=Credential Secret), "
+            "AMAZON_PARTNER_TAG をすべて設定してください。"
         )
-        if response.status_code == 429:
-            logger.error("Rate limit exceeded (1 query/sec). Please retry after a moment.")
         sys.exit(1)
 
+    # --- 国 / バージョン解決 -----------------------------------------------
+    country = getattr(Country, country_code, Country.JP)
+    domain = COUNTRY_DOMAIN.get(country_code, "amazon.co.jp")
+    api_version = (
+        os.getenv("AMAZON_API_VERSION")
+        or REGION_VERSION.get(country_code, "2.3")
+    )
+
+    # --- 取得件数 (Creators API は 1〜10) ---------------------------------
     try:
-        data = response.json()
-    except ValueError as e:
-        logger.error("Failed to parse JSON response: %s", e)
+        item_count = int(os.getenv("AMAZON_SEARCH_ITEM_COUNT", "10"))
+    except ValueError:
+        item_count = 10
+    item_count = max(1, min(item_count, 10))
+
+    # --- API クライアント初期化 -------------------------------------------
+    api = AmazonCreatorsApi(
+        credential_id=credential_id,
+        credential_secret=credential_secret,
+        version=api_version,
+        tag=affiliate_tag,
+        country=country,
+    )
+
+    logger.info("--- Amazon Creators API Fetch ---")
+    logger.info("Input Keyword     : %s", keyword)
+    logger.info("Target Country    : %s", country_code)
+    logger.info("Marketplace Domain: %s", domain)
+    logger.info("Credential Version: %s", api_version)
+    logger.info("Item Count        : %s", item_count)
+
+    # --- 検索実行 ----------------------------------------------------------
+    try:
+        search_result = api.search_items(
+            keywords=keyword,
+            item_count=item_count,
+        )
+    except AmazonCreatorsApiError as e:
+        logger.error("Amazon Creators API error: %s", e)
+        sys.exit(1)
+    except Exception as e:
+        logger.error("Unexpected error during API call: %s", e)
         sys.exit(1)
 
-    # --- レスポンス整形 ----------------------------------------------------
-    hits = data.get("hits") or []
-    items: list[dict] = []
-    for hit in hits:
-        normalized = _normalize_hit(hit, sid or "", pid or "")
-        if normalized is None:
-            continue
-        logger.info("Product : %s", normalized["title"])
-        logger.info("  URL   : %s", normalized["url"])
-        logger.info("  Price : %s", normalized["price"])
-        items.append(normalized)
+    raw_items = getattr(search_result, "items", None) or []
+    if not raw_items:
+        logger.warning("No items returned for keyword: %s", keyword)
 
-    if not items:
-        logger.warning("No items found for keyword: %s", keyword)
+    # --- 結果整形 ----------------------------------------------------------
+    items: list[dict] = []
+    for item in raw_items:
+        data = extract_item_data(item, affiliate_tag, domain)
+        if data is None:
+            continue
+        logger.info("Product : %s", data["title"])
+        logger.info("  URL   : %s", data["url"])
+        logger.info("  Price : %s", data["price"])
+        items.append(data)
 
     results = {
         "keyword": keyword,
-        "totalResultsAvailable": data.get("totalResultsAvailable"),
-        "totalResultsReturned": data.get("totalResultsReturned"),
+        "country": country_code,
         "items": items,
     }
 
-    # --- 保存 (プロジェクトルートの data フォルダ) -------------------------
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    save_path = os.path.join(base_dir, "data", "yahoo_result.json")
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    with open(save_path, "w", encoding="utf-8") as f:
-        json.dump(results, f, ensure_ascii=False, indent=4)
+    # --- 保存 (既存コードとの互換性のため両方の名前で出力) -----------------
+    os.makedirs("data", exist_ok=True)
+    for path in ("data/amazon_result.json", "data/search_result.json"):
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(results, f, ensure_ascii=False, indent=4)
 
-    logger.info("Saved %d items to %s", len(items), save_path)
+    logger.info(
+        "Saved %d items to data/amazon_result.json and data/search_result.json",
+        len(items),
+    )
 
 
 # ---------------------------------------------------------------------------
 # エントリーポイント
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    keyword = sys.argv[1] if len(sys.argv) > 1 else "ワイヤレスイヤホン"
-    fetch_yahoo(keyword)
+    if len(sys.argv) > 1:
+        main(sys.argv[1])
+    else:
+        print("Usage: python scripts/fetch_amazon.py <keyword>")
+        sys.exit(1)
