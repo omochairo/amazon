@@ -2,7 +2,8 @@ baseURL = 'https://omochairo.github.io/amazon/'
 languageCode = 'ja-jp'
 title = 'おもちゃいろ Amazon比較ナビ 🧸'
 theme = 'PaperMod'
-paginate = 10
+[pagination]
+  pagerSize = 10
 
 [params]
   env = "production"

@@ -66,7 +66,7 @@ def main(keyword):
         }
 
         os.makedirs("data", exist_ok=True)
-        # 互換性のために両方のファイル名で保存
+        # 既存コードとの互換性のため、両方の名前で保存
         with open("data/amazon_result.json", "w", encoding="utf-8") as f:
             json.dump(results, f, ensure_ascii=False, indent=4)
         with open("data/search_result.json", "w", encoding="utf-8") as f:
