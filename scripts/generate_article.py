@@ -4,19 +4,23 @@ import re
 from datetime import datetime
 
 def main():
-    json_path = "data/search_result.json"
-    if not os.path.exists(json_path):
-        print(f"Error: {json_path} not found.")
-        return
+    data_dir = "data"
+    all_items = []
+    keyword = "Product"
 
-    with open(json_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    # 指定されたJSONファイルを読み込む
+    files = ["amazon_result.json", "rakuten_result.json", "yahoo_result.json"]
 
-    keyword = data.get("keyword", "Amazon Product")
-    items = data.get("items", [])
+    for filename in files:
+        filepath = os.path.join(data_dir, filename)
+        if os.path.exists(filepath):
+            with open(filepath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                keyword = data.get("keyword", keyword)
+                all_items.extend(data.get("items", []))
 
-    if not items:
-        print("No items found in JSON.")
+    if not all_items:
+        print("No items found in any JSON file.")
         return
 
     # 記事の内容を作成
@@ -29,25 +33,30 @@ date: {date}
 draft: false
 ---
 
-Amazonで人気の「{keyword}」をいくつかピックアップしてご紹介します。
+人気の「{keyword}」を、Amazon・楽天・Yahoo!ショッピングからピックアップしてご紹介します。
 
-## 商品一覧
+## 商品比較一覧
 
 """
 
-    for item in items:
-        content += f"""### {item['title']}
+    for item in all_items:
+        source = item.get("source", "Unknown")
+        title_text = item['title']
+        # 既にソース名が含まれている場合は重複を避ける
+        if title_text.startswith(f"[{source}]"):
+            display_title = title_text
+        else:
+            display_title = f"[{source}] {title_text}"
+
+        content += f"""### {display_title}
 - **価格**: {item['price']}
-- **詳細はこちら**: [{item['title']}]({item['url']})
-- **ASIN**: {item['asin']}
+- **詳細・購入はこちら**: [{item['title']}]({item['url']})
+- **情報元**: {source}
 
 ---
 """
 
     # ファイル名を作成
-    # Hugoは日本語のファイル名も扱えるが、URLセーフな名前にすることを検討
-    # ここではシンプルに、ASINなどをベースにするか、キーワードをそのまま使う（ユーザーの元々の要望に合わせる）
-    # ただし、記号などは除去する
     safe_keyword = re.sub(r'[\\/*?:"<>|]', "", keyword)
     filename = f"{safe_keyword}.md"
     filepath = os.path.join("content/posts", filename)

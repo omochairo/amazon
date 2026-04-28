@@ -1,16 +1,21 @@
 import os
 import json
 import sys
+import re
 from amazon_creatorsapi import AmazonCreatorsApi, Country
+
+def validate_url(url):
+    return url.startswith("http")
 
 def main(keyword):
     access_key = os.getenv("AMAZON_ACCESS_KEY")
     secret_key = os.getenv("AMAZON_SECRET_KEY")
-    partner_tag = os.getenv("AMAZON_PARTNER_TAG")
+    # AMAZON_AFFILIATE_TAG を優先し、なければ AMAZON_PARTNER_TAG を使用
+    affiliate_tag = os.getenv("AMAZON_AFFILIATE_TAG") or os.getenv("AMAZON_PARTNER_TAG")
     country_code = os.getenv("AMAZON_COUNTRY", "JP")
 
-    if not all([access_key, secret_key, partner_tag]):
-        print("Error: AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, and AMAZON_PARTNER_TAG must be set.")
+    if not all([access_key, secret_key, affiliate_tag]):
+        print("Error: AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, and AMAZON_AFFILIATE_TAG must be set.")
         sys.exit(1)
 
     country = getattr(Country, country_code, Country.JP)
@@ -18,23 +23,39 @@ def main(keyword):
     api = AmazonCreatorsApi(
         credential_id=access_key,
         credential_secret=secret_key,
-        tag=partner_tag,
+        tag=affiliate_tag,
         country=country
     )
 
-    print(f"Searching for: {keyword} in {country_code}")
+    print(f"--- Amazon Fetch Log ---")
+    print(f"Input Keyword: {keyword}")
     
     try:
         search_result = api.search_items(keywords=keyword)
 
         items = []
         for item in search_result.items:
-            # 必要な情報を抽出
+            asin = item.asin
+            # リンク構造の強制: https://www.amazon.co.jp/dp/[ASIN]/?tag=[TAG]
+            affiliate_url = f"https://www.amazon.co.jp/dp/{asin}/?tag={affiliate_tag}"
+
+            # 自己検閲
+            if not validate_url(affiliate_url):
+                print(f"Warning: Invalid URL generated for ASIN {asin}")
+                continue
+
+            title = item.item_info.title.display_value if item.item_info and item.item_info.title else "No Title"
+            price = item.offers.listings[0].price.display_amount if item.offers and item.offers.listings and item.offers.listings[0].price else "N/A"
+
+            print(f"Product Name: {title}")
+            print(f"Final Affiliate URL: {affiliate_url}")
+
             item_data = {
-                "asin": item.asin,
-                "title": item.item_info.title.display_value if item.item_info and item.item_info.title else "No Title",
-                "price": item.offers.listings[0].price.display_amount if item.offers and item.offers.listings and item.offers.listings[0].price else "N/A",
-                "url": item.detail_page_url
+                "asin": asin,
+                "title": title,
+                "price": price,
+                "url": affiliate_url,
+                "source": "Amazon"
             }
             items.append(item_data)
 
@@ -43,14 +64,14 @@ def main(keyword):
             "items": items
         }
 
-        with open("data/search_result.json", "w", encoding="utf-8") as f:
+        os.makedirs("data", exist_ok=True)
+        with open("data/amazon_result.json", "w", encoding="utf-8") as f:
             json.dump(results, f, ensure_ascii=False, indent=4)
 
-        print(f"Successfully saved {len(items)} items to data/search_result.json")
+        print(f"Successfully saved {len(items)} items to data/amazon_result.json")
 
     except Exception as e:
-        print(f"An error occurred during API call: {e}")
-        sys.exit(1)
+        print(f"An error occurred during Amazon API call: {e}")
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
