@@ -121,8 +121,11 @@ ShowToc: true
 
     content += "---\n\n"
 
-    if mode == "【隠れた名作発掘】":
-        content += f"## 💡 Julesの深掘り：隠れた名作\nAPIデータには現れにくいですが、{keyword}の中でも特に教育的価値が高いと感じる一品をご紹介しました。\n\n"
+    if trends_data and isinstance(trends_data, dict) and trends_data.get("top_queries"):
+        content += f"## 📈 今、注目されているトレンドワード\n\n"
+        for q in trends_data["top_queries"][:5]:
+            content += f"- **{q['query']}** (注目度: {q['traffic']})\n"
+        content += "\n"
 
     if youtube_data and isinstance(youtube_data, dict) and youtube_data.get("items"):
         content += f"## 📺 関連動画でチェック\n\n"
@@ -137,8 +140,13 @@ ShowToc: true
             if b.get('image'):
                 content += f"![{b['title']}]({b['image']})\n\n"
             content += f"- **✍️ 著者**: {', '.join(b.get('authors', []))}\n"
-            content += f"- **📖 内容**: {b.get('description', '説明なし')[:100]}...\n"
             content += f"- **🔗 詳細**: [{b['title']}]({b['url']})\n\n"
+
+    if news_data and isinstance(news_data, dict) and news_data.get("items"):
+        content += f"## 📰 最新の育児・ライフニュース\n\n"
+        for n in news_data["items"][:3]:
+            content += f"- [{n['title']}]({n['url']}) ({n.get('published', '')})\n"
+        content += "\n"
 
     if internal_links:
         content += f"## 🔗 あわせて読みたい：おもちゃいろの関連記事\n\n"

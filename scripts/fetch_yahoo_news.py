@@ -2,42 +2,50 @@ import requests
 import xml.etree.ElementTree as ET
 import os
 import json
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("fetch_yahoo_news")
 
 def fetch_yahoo_news():
-    # 育児やトレンドに近い「ライフ」や「IT・科学」のRSS
+    # 育児やトレンドに近い「ライフ」のRSS
     urls = {
         "life": "https://news.yahoo.co.jp/rss/categories/life.xml",
-        "it": "https://news.yahoo.co.jp/rss/categories/it.xml"
     }
 
     news_list = []
 
     for cat, url in urls.items():
         try:
-            response = requests.get(url)
+            response = requests.get(url, timeout=15)
+            response.raise_for_status()
             root = ET.fromstring(response.content)
 
-            for item in root.findall(".//item")[:5]: # 各カテゴリ上位5件
+            for item in root.findall(".//item")[:10]: # 上位10件
                 title = item.find("title").text
                 link = item.find("link").text
                 pub_date = item.find("pubDate").text
                 news_list.append({
                     "category": cat,
                     "title": title,
-                    "link": link,
-                    "date": pub_date
+                    "url": link,
+                    "published": pub_date
                 })
         except Exception as e:
-            print(f"Yahooニュース取得エラー ({cat}): {e}")
+            logger.error(f"Yahooニュース取得エラー ({cat}): {e}")
 
-    # 保存
+    result = {
+        "items": news_list
+    }
+
+    # プロジェクトルートのdataフォルダに保存
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    save_path = os.path.join(base_dir, "data", "yahoo_news.json")
+    save_path = os.path.join(base_dir, "data", "news_result.json")
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
     with open(save_path, "w", encoding="utf-8") as f:
-        json.dump(news_list, f, ensure_ascii=False, indent=4)
-    print(f"Yahooニュースを{len(news_list)}件保存しました。")
+        json.dump(result, f, ensure_ascii=False, indent=4)
+    logger.info(f"Yahooニュースを {len(news_list)} 件取得し、{save_path} に保存しました。")
 
 if __name__ == "__main__":
     fetch_yahoo_news()
