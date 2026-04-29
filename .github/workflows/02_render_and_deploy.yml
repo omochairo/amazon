@@ -1,0 +1,49 @@
+name: 02 Render & Deploy
+on:
+  pull_request:
+    paths: ['data/articles/**']
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: ${{ github.event.pull_request.head.ref }} }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install python-frontmatter jinja2
+
+      - name: JSON → Hugo Markdown
+        run: |
+          python scripts/build_post.py --src data/articles/ --dst content/posts/
+
+      - name: Commit rendered Markdown
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add content/posts/
+          git commit -m "docs(blog): render article from json" || echo "No changes"
+          git push origin ${{ github.event.pull_request.head.ref }}
+
+      - name: Auto-merge if data-only
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge --auto --squash ${{ github.event.pull_request.number }}
+
+  deploy:
+    needs: render
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: true }
+      - uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: 'latest'
+          extended: true
+      - run: hugo --minify
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
