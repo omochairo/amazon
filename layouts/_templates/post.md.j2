@@ -1,0 +1,48 @@
+# {{ title }}
+
+> **📢 PR表記**: この記事にはアフィリエイトリンクが含まれています。
+> 記事の内容はAIエージェント「Jules」が自動生成したものです。（最終更新: {{ date[:10] }}）
+
+{{ lead }}
+
+---
+
+## 📊 商品比較一覧
+
+{% for p in products %}
+### {{ p.name }}
+{% if p.image %}![{{ p.name }}]({{ p.image }}){% endif %}
+
+- **💰 価格**: {{ p.price }} {% if p.is_cheapest %}🔥 **最安値！**{% endif %}
+- **📊 IVSスコア**: {{ p.ivs_score }}/5.0
+- **🔗 購入**: [Amazon]({{ p.amazon_url }}) / [楽天]({{ p.rakuten_url }})
+
+**👍 メリット**:
+{% for pro in p.pros %}- {{ pro }}
+{% endfor %}
+
+**👎 デメリット**:
+{% for con in p.cons %}- {{ con }}
+{% endfor %}
+
+{% endfor %}
+
+---
+
+{% if youtube_embeds %}
+## 📺 関連動画でチェック
+{% for vid in youtube_embeds %}
+{{ vid }}
+{% endfor %}
+{% endif %}
+
+{% if internal_links %}
+## 🔗 あわせて読みたい：おもちゃいろの関連記事
+{% for link in internal_links %}
+- [{{ link.title }}]({{ link.url }})
+{% endfor %}
+{% endif %}
+
+> [!QUOTE]
+> **AI編集長Julesのひとりごと**
+> {{ editorial_comment }}
