@@ -29,7 +29,8 @@ def _safe_get(obj: Any, *attrs: str, default: Any = None) -> Any:
     return cur if cur is not None else default
 
 def extract_features(item: Any) -> list:
-    return _safe_get(item, "item_info", "features", "display_values", default=[])
+    features = _safe_get(item, "item_info", "features", "display_values", default=[])
+    return features
 
 def extract_price(item: Any) -> int:
     listings = _safe_get(item, "offers", "listings", default=None)
@@ -40,9 +41,10 @@ def extract_price(item: Any) -> int:
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", default="daily_random")
     parser.add_argument("--asin", default="")
     parser.add_argument("--keyword", default="知育玩具")
-    parser.add_argument("--out", default="data/products/")
+    parser.add_argument("--out", default="data/raw/")
     args = parser.parse_args()
 
     cid = get_secret("AMAZON_ACCESS_KEY")
@@ -53,9 +55,11 @@ def main():
 
     items = []
 
+    # Sniper Mode: Fetch specific ASIN first
     if args.asin:
-        logger.info(f"Fetching target ASIN: {args.asin}")
+        logger.info(f"Sniper Mode: Fetching ASIN {args.asin}")
         try:
+            # SDK might have get_items for specific ASINs
             res = api.get_items(item_ids=[args.asin])
             for it in getattr(res, "items", []):
                 items.append({
@@ -65,14 +69,18 @@ def main():
                     "features": extract_features(it),
                     "url": f"https://www.amazon.co.jp/dp/{it.asin}/?tag={tag}",
                     "image": _safe_get(it, "images", "primary", "large", "url"),
-                    "source": "Amazon"
+                    "source": "Amazon (Target)"
                 })
         except Exception as e:
-            logger.warning(f"ASIN lookup failed: {e}")
+            logger.warning(f"Failed to fetch target ASIN: {e}")
 
-    search_kw = args.keyword if args.keyword else (items[0]["title"][:20] if items else "知育玩具")
-    logger.info(f"Searching for competitors: {search_kw}")
+    # Search Mode: Complement with related products
+    search_kw = args.keyword
+    if args.asin and not search_kw:
+        # Use first item title as keyword if possible, else generic
+        search_kw = items[0]["title"][:20] if items else "知育玩具"
 
+    logger.info(f"Search Mode: Keyword '{search_kw}'")
     try:
         res = api.search_items(keywords=search_kw, item_count=10)
         for it in getattr(res, "items", []):
@@ -90,11 +98,8 @@ def main():
         logger.error(f"Search failed: {e}")
 
     os.makedirs(args.out, exist_ok=True)
-    filename = args.asin if args.asin else "search_result"
-    out_path = os.path.join(args.out, f"{filename}.json")
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump({"keyword": search_kw, "items": items}, f, ensure_ascii=False, indent=4)
-    logger.info(f"Data saved to {out_path}")
+    with open(os.path.join(args.out, "amazon.json"), "w", encoding="utf-8") as f:
+        json.dump({"keyword": search_kw, "items": items, "mode": args.mode}, f, ensure_ascii=False, indent=4)
 
 if __name__ == "__main__":
     main()

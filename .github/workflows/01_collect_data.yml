@@ -24,16 +24,31 @@ jobs:
         with: { python-version: '3.11' }
       - run: pip install -r requirements.txt
 
-      - name: Fetch Amazon
+      - name: Pull Topic from Queue (Scheduled only)
+        if: github.event_name == 'schedule'
+        run: |
+          TOPIC=$(python scripts/jules_tools/keyword_planner.py)
+          echo "MODE=$(echo $TOPIC | jq -r .mode)" >> $GITHUB_ENV
+          echo "KEYWORD=$(echo $TOPIC | jq -r .keyword)" >> $GITHUB_ENV
+          echo "ASIN=$(echo $TOPIC | jq -r .asin)" >> $GITHUB_ENV
+
+      - name: Use Inputs (Manual only)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "MODE=${{ github.event.inputs.mode }}" >> $GITHUB_ENV
+          echo "KEYWORD=${{ github.event.inputs.keyword }}" >> $GITHUB_ENV
+          echo "ASIN=${{ github.event.inputs.asin }}" >> $GITHUB_ENV
+
+      - name: Fetch Amazon (Sniper/Search)
         env:
           AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
           AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
           AMAZON_ASSOC_TAG:  ${{ secrets.AMAZON_ASSOC_TAG }}
         run: |
           python scripts/fetchers/fetch_amazon.py \
-               --mode "${{ github.event.inputs.mode || 'daily_random' }}" \
-               --asin "${{ github.event.inputs.asin }}" \
-               --keyword "${{ github.event.inputs.keyword || '知育玩具' }}" \
+               --mode "$MODE" \
+               --asin "$ASIN" \
+               --keyword "$KEYWORD" \
                --out data/raw/
 
       - name: Fetch Rakuten / YouTube / Trends / News
@@ -42,21 +57,22 @@ jobs:
           RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
           YOUTUBE_API_KEY:   ${{ secrets.YOUTUBE_API_KEY }}
         run: |
-          python scripts/fetchers/fetch_rakuten.py --keyword "${{ github.event.inputs.keyword || '知育玩具' }}" --out data/raw/
-          python scripts/fetchers/fetch_youtube.py --keyword "${{ github.event.inputs.keyword || '知育玩具' }}" --out data/raw/
+          # Use the same keyword as Amazon for consistency
+          SEARCH_KW=$(cat data/raw/amazon.json | jq -r .keyword)
+          python scripts/fetchers/fetch_rakuten.py --keyword "$SEARCH_KW" --out data/raw/
+          python scripts/fetchers/fetch_youtube.py --keyword "$SEARCH_KW" --out data/raw/
           python scripts/fetchers/fetch_trends.py  --out data/raw/
           python scripts/fetchers/fetch_yahoo_news.py --out data/raw/
 
       - name: Commit raw data to a new branch
         run: |
           TIMESTAMP=$(date +%Y%m%d-%H%M)
-          MODE="${{ github.event.inputs.mode || 'daily_random' }}"
           BRANCH="data/${TIMESTAMP}-${MODE}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
           git add data/raw/
-          git commit -m "chore(data): collect ${MODE}"
+          git commit -m "chore(data): collect $MODE for $KEYWORD"
           git push origin "$BRANCH"
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
 
@@ -65,4 +81,5 @@ jobs:
           JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
         run: |
           echo "Triggering Jules on branch $BRANCH"
-          # python scripts/dispatch_jules.py --branch "$BRANCH"
+          # In local agent context, we stop here.
+          # In GitHub, this would trigger the AI agent tool.
