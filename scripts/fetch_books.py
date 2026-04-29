@@ -2,10 +2,22 @@ import os
 import requests
 import json
 import sys
+import logging
+
+# ---------------------------------------------------------------------------
+# Logging Setup
+# ---------------------------------------------------------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+logger = logging.getLogger("fetch_books")
 
 def fetch_books(keyword):
-    # ユーザーが新しく設定した個別の環境変数名に変更
     api_key = os.environ.get("GOOGLEBOOKS_API_KEY")
+    if not api_key:
+        logger.error("GOOGLEBOOKS_API_KEY が設定されていません。")
+        # return # Continue without key might work for public data, but Google often requires it
 
     # 知育・育児ブログ向けに検索クエリを最適化
     query = f"{keyword} 知育 絵本"
@@ -20,34 +32,46 @@ def fetch_books(keyword):
     }
 
     try:
-        response = requests.get(url, params=params)
+        response = requests.get(url, params=params, timeout=15)
         response.raise_for_status()
         data = response.json()
-
-        books = []
-        for item in data.get("items", []):
-            info = item.get("volumeInfo", {})
-            books.append({
-                "title": info.get("title"),
-                "authors": info.get("authors", ["不明"]),
-                "description": info.get("description", "説明なし"),
-                "info_url": info.get("infoLink"),
-                "image": info.get("imageLinks", {}).get("thumbnail")
-            })
-
-        # 実行場所に関わらずプロジェクトルートのdataフォルダを指定
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        save_path = os.path.join(base_dir, "data", "books_result.json")
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-
-        with open(save_path, "w", encoding="utf-8") as f:
-            json.dump(books, f, ensure_ascii=False, indent=4)
-        print(f"関連書籍を{len(books)}件取得しました: {save_path}")
-
     except Exception as e:
-        print(f"Google Books APIエラー: {e}")
+        logger.error(f"Google Books APIエラー: {e}")
+        return
+
+    items = []
+    for item in data.get("items", []):
+        info = item.get("volumeInfo", {})
+        image_links = info.get("imageLinks", {})
+        thumbnail = image_links.get("thumbnail") or image_links.get("smallThumbnail")
+
+        # Use https for images
+        if thumbnail and thumbnail.startswith("http://"):
+            thumbnail = thumbnail.replace("http://", "https://")
+
+        items.append({
+            "title": info.get("title"),
+            "authors": info.get("authors", ["不明"]),
+            "description": info.get("description", "説明なし"),
+            "url": info.get("infoLink"),
+            "image": thumbnail
+        })
+
+    result = {
+        "keyword": keyword,
+        "items": items
+    }
+
+    # 保存処理
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    save_path = os.path.join(base_dir, "data", "books_result.json")
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+    with open(save_path, "w", encoding="utf-8") as f:
+        json.dump(result, f, ensure_ascii=False, indent=4)
+
+    logger.info(f"関連書籍を {len(items)} 件取得し、{save_path} に保存しました。")
 
 if __name__ == "__main__":
-    # 引数がない場合はデフォルトで「知育」を検索
     keyword = sys.argv[1] if len(sys.argv) > 1 else "知育"
     fetch_books(keyword)
