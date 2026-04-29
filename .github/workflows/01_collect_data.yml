@@ -1,0 +1,68 @@
+name: 01 Collect Data
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [asin_sniper, daily_random, seasonal_curated]
+        default: daily_random
+      asin:
+        type: string
+        required: false
+      keyword:
+        type: string
+        required: false
+  schedule:
+    - cron: '0 21 * * *'  # JST 6:00
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install -r requirements.txt
+
+      - name: Fetch Amazon
+        env:
+          AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
+          AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
+          AMAZON_ASSOC_TAG:  ${{ secrets.AMAZON_ASSOC_TAG }}
+        run: |
+          python scripts/fetchers/fetch_amazon.py \
+               --mode "${{ github.event.inputs.mode || 'daily_random' }}" \
+               --asin "${{ github.event.inputs.asin }}" \
+               --keyword "${{ github.event.inputs.keyword || '知育玩具' }}" \
+               --out data/raw/
+
+      - name: Fetch Rakuten / YouTube / Trends / News
+        env:
+          RAKUTEN_APP_ID:    ${{ secrets.RAKUTEN_APP_ID }}
+          RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
+          YOUTUBE_API_KEY:   ${{ secrets.YOUTUBE_API_KEY }}
+        run: |
+          python scripts/fetchers/fetch_rakuten.py --keyword "${{ github.event.inputs.keyword || '知育玩具' }}" --out data/raw/
+          python scripts/fetchers/fetch_youtube.py --keyword "${{ github.event.inputs.keyword || '知育玩具' }}" --out data/raw/
+          python scripts/fetchers/fetch_trends.py  --out data/raw/
+          python scripts/fetchers/fetch_yahoo_news.py --out data/raw/
+
+      - name: Commit raw data to a new branch
+        run: |
+          TIMESTAMP=$(date +%Y%m%d-%H%M)
+          MODE="${{ github.event.inputs.mode || 'daily_random' }}"
+          BRANCH="data/${TIMESTAMP}-${MODE}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add data/raw/
+          git commit -m "chore(data): collect ${MODE}"
+          git push origin "$BRANCH"
+          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
+
+      - name: Trigger Jules via API
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+        run: |
+          echo "Triggering Jules on branch $BRANCH"
+          # python scripts/dispatch_jules.py --branch "$BRANCH"
