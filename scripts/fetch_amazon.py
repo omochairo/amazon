@@ -33,7 +33,7 @@ from typing import Any, Optional
 
 try:
     from amazon_creatorsapi import AmazonCreatorsApi, Country
-    from amazon_creatorsapi.errors import AmazonException
+    from amazon_creatorsapi.errors import AmazonCreatorsApiError
 except ImportError:
     print(
         "Error: 'amazon_creatorsapi' モジュールがインストールされていません。\n"
@@ -245,7 +245,7 @@ def main(keyword: str) -> None:
             keywords=keyword,
             item_count=item_count,
         )
-    except AmazonException as e:
+    except AmazonCreatorsApiError as e:
         logger.error("Amazon Creators API error: %s", e)
         sys.exit(1)
     except Exception as e:
