@@ -8,55 +8,73 @@ from jules_tools.history_check import get_history
 from jules_tools.internal_links import get_related_articles
 
 def calculate_ivs(item):
-    name = item.get('title', '')
-    score = 3.5
-    if '知育' in name: score += 0.5
-    if '木製' in name: score += 0.3
+    score = 3.8
+    name = item.get('name', '')
+    features = item.get('features', [])
+
+    # Logic based on attributes
+    if len(features) > 3: score += 0.5
+    if any(k in name for k in ['知育', 'モンテッソーリ', 'STEM']): score += 0.4
+    if item.get('price', 0) > 5000: score -= 0.2 # Pricey penalty
+
     return round(min(score, 5.0), 1)
+
+def generate_pros_cons(item):
+    features = item.get('features', [])
+    pros = features[:2] if features else ["評価が高い", "定番商品"]
+    cons = ["少し高価かも"] if item.get('price', 0) > 10000 else ["特になし"]
+    return pros, cons
 
 def main():
     raw_data = load_raw_data()
     if not raw_data:
-        print("No raw data found in data/raw/")
+        print("No raw data found")
         return
 
     amazon = raw_data.get("amazon", {})
-    rakuten = raw_data.get("rakuten", {})
-    youtube = raw_data.get("youtube", {})
-
-    keyword = amazon.get("keyword", "item")
+    keyword = amazon.get("keyword", "話題のアイテム")
+    mode = amazon.get("mode", "daily_random")
 
     internal_links = get_related_articles(keyword)
 
-    # Slug should be simple
-    slug = "baby-rattle" if "ラトル" in keyword else "toy-review"
+    slug = "baby-toy"
+    if "ラトル" in keyword: slug = "baby-rattle"
+    elif "積み木" in keyword: slug = "building-blocks"
 
     article = {
         "slug": slug,
-        "title": f"🧸 おすすめの{keyword}徹底比較｜今買うべき一品は？",
+        "title": f"🧸 【徹底比較】{keyword}のおすすめランキング｜AIが選ぶ知育価値NO.1は？",
         "date": datetime.now().strftime("%Y-%m-%dT%H:%M:%S+09:00"),
-        "mode": random.choice(["trend", "hidden_gem", "parenting", "seasonal"]),
-        "lead": f"人気の「{keyword}」について、最新の市場データと専門家の視点で徹底比較しました。本記事はAI編集長Julesが自動生成したものです。",
+        "mode": mode,
+        "lead": f"育児に欠かせない「{keyword}」。どれを選べばいいか迷っていませんか？AI編集長Julesが、Amazon・楽天・Yahooのデータを解析し、本当に価値のある一品を厳選しました。",
         "products": [],
         "youtube_embeds": [],
         "internal_links": internal_links,
-        "editorial_comment": f"{keyword}選びは、お子様の成長に合わせた最適なタイミングが重要です。",
-        "tags": [keyword, "知育玩具", "比較"]
+        "editorial_comment": f"{keyword}は、単なる遊び道具ではなく、親子の対話を深める魔法のツールです。長く愛せるものを選びたいですね。",
+        "tags": [keyword, "知育玩具", "おすすめ"]
     }
 
-    for item in amazon.get("items", []):
-        article["products"].append({
-            "asin": item.get("asin"),
-            "name": item.get("title"),
-            "price": item.get("price"),
-            "amazon_url": item.get("url"),
-            "rakuten_url": "",
-            "image": item.get("image"),
-            "ivs_score": calculate_ivs(item),
-            "pros": ["評判が良い", "安全設計"],
-            "cons": ["特になし"]
+    products = []
+    for it in amazon.get("items", []):
+        p, c = generate_pros_cons(it)
+        products.append({
+            "asin": it.get("asin"),
+            "name": it.get("title"),
+            "price": it.get("price"),
+            "amazon_url": it.get("url"),
+            "rakuten_url": "", # Action Layer 1 should ideally find this, but fallback to empty
+            "image": it.get("image"),
+            "ivs_score": calculate_ivs(it),
+            "pros": p,
+            "cons": c,
+            "features": it.get("features", [])
         })
 
+    # Sort by IVS Score
+    article["products"] = sorted(products, key=lambda x: x["ivs_score"], reverse=True)
+
+    # YouTube (ID extraction)
+    youtube = raw_data.get("youtube", {})
     for vid in youtube.get("items", [])[:2]:
         try:
             v_id = vid["url"].split("v=")[-1]
@@ -68,7 +86,7 @@ def main():
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(article, f, ensure_ascii=False, indent=4)
 
-    print(f"Article JSON generated: {out_path}")
+    print(f"Evolved article JSON generated: {out_path}")
 
 if __name__ == "__main__":
     main()

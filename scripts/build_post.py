@@ -1,10 +1,10 @@
-from datetime import datetime
 import json
 import frontmatter
 import pathlib
 import argparse
 import jinja2
 import os
+from datetime import datetime
 
 def main():
     parser = argparse.ArgumentParser()
@@ -16,7 +16,7 @@ def main():
     dst_path = pathlib.Path(args.dst)
     dst_path.mkdir(parents=True, exist_ok=True)
 
-    template_file = pathlib.Path("layouts/_templates/post.md.j2")
+    template_file = pathlib.Path("scripts/templates/post.md.j2")
     if not template_file.exists():
         print("Template not found")
         return
@@ -27,20 +27,17 @@ def main():
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
 
-            # Determine if cheapest
-            prices = [p.get("price", 999999) for p in data.get("products", []) if isinstance(p.get("price"), (int, float))]
+            # Cheapest Logic
+            prices = [p.get("price", 999999) for p in data.get("products", []) if isinstance(p.get("price"), (int, float)) and p.get("price") > 0]
             min_p = min(prices) if prices else None
             for p in data.get("products", []):
-                if min_p and p.get("price") == min_p:
-                    p["is_cheapest"] = True
-                else:
-                    p["is_cheapest"] = False
+                p["is_cheapest"] = (min_p and p.get("price") == min_p)
 
             md_body = template.render(**data)
 
             post = frontmatter.Post(md_body, **{
                 "title": data.get("title", "No Title"),
-                "date": data.get("date", datetime.now().isoformat()) if "datetime" in globals() else data.get("date", "2026-04-29"),
+                "date": data.get("date", datetime.now().isoformat()),
                 "tags": data.get("tags", []),
                 "draft": False,
                 "slug": data.get("slug")
