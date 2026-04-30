@@ -4,7 +4,10 @@ on:
     inputs:
       asins:
         description: 'カンマ区切りASIN'
-        required: true
+        required: false
+      keyword:
+        description: '検索キーワード'
+        required: false
   schedule:
     - cron: '0 22 * * *'  # 毎朝7時(JST)にトレンド取得
 
@@ -17,7 +20,11 @@ jobs:
         with: { python-version: '3.11' }
       - run: pip install -r requirements.txt
       - name: Fetch Amazon Data
-        run: python scripts/fetch_amazon.py
+        run: |
+          python scripts/fetch_amazon.py \
+            --asin "${{ github.event.inputs.asins }}" \
+            --keyword "${{ github.event.inputs.keyword }}" \
+            --out data/products/
         env:
           PAAPI_ACCESS_KEY: ${{ secrets.PAAPI_ACCESS_KEY }}
           PAAPI_SECRET_KEY: ${{ secrets.PAAPI_SECRET_KEY }}
