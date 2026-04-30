@@ -1,19 +1,26 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Product",
+  "title": "Amazon Product Data",
   "type": "object",
   "properties": {
     "asin": { "type": "string" },
-    "name": { "type": "string" },
-    "price": { "type": ["number", "null"] },
-    "amazon_url": { "type": "string", "format": "uri" },
-    "rakuten_url": { "type": "string" },
-    "yahoo_url": { "type": "string" },
-    "image": { "type": "string", "format": "uri" },
-    "ivs_score": { "type": "number", "minimum": 0, "maximum": 5 },
-    "pros": { "type": "array", "items": { "type": "string" } },
-    "cons": { "type": "array", "items": { "type": "string" } },
-    "features": { "type": "array", "items": { "type": "string" } }
+    "title": { "type": "string" },
+    "brand": { "type": "string" },
+    "category": { "type": "string" },
+    "price_jpy": { "type": "integer" },
+    "rating": { "type": "number" },
+    "review_count": { "type": "integer" },
+    "images": {
+      "type": "array",
+      "items": { "type": "string", "format": "uri" }
+    },
+    "features": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "description_raw": { "type": "string" },
+    "url_associate": { "type": "string", "format": "uri" },
+    "fetched_at": { "type": "string", "format": "date-time" }
   },
-  "required": ["asin", "name", "amazon_url"]
+  "required": ["asin", "title", "price_jpy", "url_associate", "fetched_at"]
 }

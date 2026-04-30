@@ -1,15 +1,26 @@
-name: 02 Invoke Jules
+name: Invoke Jules for New Queue
 on:
   push:
-    branches:
-      - 'data/**'
+    paths: ['data/queue/**']
 
 jobs:
-  jules:
+  invoke:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Jules
+      - name: Call Jules API
         run: |
-          echo "Jules is triggered on branch ${{ github.ref }}"
-          # This workflow represents the handoff to the AI agent.
-          # In a real environment, this might call a webhook or use a custom action.
+          curl -X POST https://jules.googleapis.com/v1/tasks \
+            -H "Authorization: Bearer ${{ secrets.JULES_API_KEY }}" \
+            -d @- <<EOF
+          {
+            "repo": "omochairo/amazon",
+            "branch": "main",
+            "prompt_file": "jules/PROMPT_TEMPLATE.md",
+            "context_files": [
+              "AGENTS.md",
+              "data/queue/",
+              "data/products/",
+              "jules/EXAMPLES/"
+            ]
+          }
+          EOF
