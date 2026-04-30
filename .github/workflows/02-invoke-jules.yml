@@ -1,0 +1,15 @@
+name: 02 Invoke Jules
+on:
+  push:
+    branches:
+      - 'data/**'
+
+jobs:
+  jules:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Jules
+        run: |
+          echo "Jules is triggered on branch ${{ github.ref }}"
+          # This workflow represents the handoff to the AI agent.
+          # In a real environment, this might call a webhook or use a custom action.

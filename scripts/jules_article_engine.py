@@ -3,9 +3,9 @@ import os
 import re
 import random
 from datetime import datetime
-from jules_tools.read_raw import load_raw_data
-from jules_tools.history_check import get_history
-from jules_tools.internal_links import get_related_articles
+from read_raw import load_raw_data
+from history_check import get_history
+from internal_links import get_related_articles
 
 def calculate_ivs(item):
     score = 3.8

@@ -1,4 +1,4 @@
-name: 02 Render & Deploy
+name: 03 Deploy
 on:
   pull_request:
     paths: ['data/articles/**']
@@ -11,7 +11,13 @@ jobs:
         with: { ref: ${{ github.event.pull_request.head.ref }} }
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
-      - run: pip install python-frontmatter jinja2
+      - run: pip install python-frontmatter jinja2 jsonschema
+
+      - name: Validate Article JSON
+        run: |
+          for f in data/articles/*.json; do
+            python scripts/validate_json.py --json "$f" --schema data/schema/product.schema.json
+          done
 
       - name: JSON → Hugo Markdown
         run: |
@@ -25,12 +31,6 @@ jobs:
           git commit -m "docs(blog): render article from json" || echo "No changes"
           git push origin ${{ github.event.pull_request.head.ref }}
 
-      - name: Auto-merge if data-only
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh pr merge --auto --squash ${{ github.event.pull_request.number }}
-
   deploy:
     needs: render
     if: github.event.pull_request.merged == true
@@ -42,7 +42,10 @@ jobs:
         with:
           hugo-version: 'latest'
           extended: true
-      - run: hugo --minify
+      - name: Build Hugo
+        run: |
+          cd hugo && hugo --minify --destination ../public
+
       - uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
