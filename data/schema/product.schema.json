@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Product",
+  "type": "object",
+  "properties": {
+    "asin": { "type": "string" },
+    "name": { "type": "string" },
+    "price": { "type": ["number", "null"] },
+    "amazon_url": { "type": "string", "format": "uri" },
+    "rakuten_url": { "type": "string" },
+    "yahoo_url": { "type": "string" },
+    "image": { "type": "string", "format": "uri" },
+    "ivs_score": { "type": "number", "minimum": 0, "maximum": 5 },
+    "pros": { "type": "array", "items": { "type": "string" } },
+    "cons": { "type": "array", "items": { "type": "string" } },
+    "features": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["asin", "name", "amazon_url"]
+}

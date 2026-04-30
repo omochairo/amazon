@@ -1,4 +1,4 @@
-name: 01 Collect Data
+name: 01 Fetch Products
 on:
   workflow_dispatch:
     inputs:
@@ -27,7 +27,7 @@ jobs:
       - name: Pull Topic from Queue (Scheduled only)
         if: github.event_name == 'schedule'
         run: |
-          TOPIC=$(python scripts/jules_tools/keyword_planner.py)
+          TOPIC=$(python scripts/keyword_planner.py)
           echo "MODE=$(echo $TOPIC | jq -r .mode)" >> $GITHUB_ENV
           echo "KEYWORD=$(echo $TOPIC | jq -r .keyword)" >> $GITHUB_ENV
           echo "ASIN=$(echo $TOPIC | jq -r .asin)" >> $GITHUB_ENV
@@ -45,7 +45,7 @@ jobs:
           AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
           AMAZON_ASSOC_TAG:  ${{ secrets.AMAZON_ASSOC_TAG }}
         run: |
-          python scripts/fetchers/fetch_amazon.py \
+          python scripts/fetch_amazon.py \
                --mode "$MODE" \
                --asin "$ASIN" \
                --keyword "$KEYWORD" \
@@ -57,29 +57,23 @@ jobs:
           RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
           YOUTUBE_API_KEY:   ${{ secrets.YOUTUBE_API_KEY }}
         run: |
-          # Use the same keyword as Amazon for consistency
           SEARCH_KW=$(cat data/raw/amazon.json | jq -r .keyword)
-          python scripts/fetchers/fetch_rakuten.py --keyword "$SEARCH_KW" --out data/raw/
-          python scripts/fetchers/fetch_youtube.py --keyword "$SEARCH_KW" --out data/raw/
-          python scripts/fetchers/fetch_trends.py  --out data/raw/
-          python scripts/fetchers/fetch_yahoo_news.py --out data/raw/
+          python scripts/fetch_rakuten.py --keyword "$SEARCH_KW" --out data/raw/
+          python scripts/fetch_youtube.py --keyword "$SEARCH_KW" --out data/raw/
+          python scripts/fetch_trends.py  --out data/raw/
+          python scripts/fetch_yahoo_news.py --out data/raw/
 
-      - name: Commit raw data to a new branch
+      - name: Run Trend Picker
+        run: |
+          python scripts/trend_picker.py --src data/raw/trends.json --out data/queue/
+
+      - name: Commit data
         run: |
           TIMESTAMP=$(date +%Y%m%d-%H%M)
           BRANCH="data/${TIMESTAMP}-${MODE}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
-          git add data/raw/
+          git add data/raw/ data/queue/
           git commit -m "chore(data): collect $MODE for $KEYWORD"
           git push origin "$BRANCH"
-          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
-
-      - name: Trigger Jules via API
-        env:
-          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
-        run: |
-          echo "Triggering Jules on branch $BRANCH"
-          # In local agent context, we stop here.
-          # In GitHub, this would trigger the AI agent tool.
