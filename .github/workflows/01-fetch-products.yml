@@ -1,79 +1,37 @@
-name: 01 Fetch Products
+name: Fetch Amazon Products
 on:
   workflow_dispatch:
     inputs:
-      mode:
-        type: choice
-        options: [asin_sniper, daily_random, seasonal_curated]
-        default: daily_random
-      asin:
-        type: string
-        required: false
-      keyword:
-        type: string
-        required: false
+      asins:
+        description: 'カンマ区切りASIN'
+        required: true
   schedule:
-    - cron: '0 21 * * *'  # JST 6:00
+    - cron: '0 22 * * *'  # 毎朝7時(JST)にトレンド取得
 
 jobs:
-  collect:
+  fetch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
       - run: pip install -r requirements.txt
-
-      - name: Pull Topic from Queue (Scheduled only)
-        if: github.event_name == 'schedule'
-        run: |
-          TOPIC=$(python scripts/keyword_planner.py)
-          echo "MODE=$(echo $TOPIC | jq -r .mode)" >> $GITHUB_ENV
-          echo "KEYWORD=$(echo $TOPIC | jq -r .keyword)" >> $GITHUB_ENV
-          echo "ASIN=$(echo $TOPIC | jq -r .asin)" >> $GITHUB_ENV
-
-      - name: Use Inputs (Manual only)
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          echo "MODE=${{ github.event.inputs.mode }}" >> $GITHUB_ENV
-          echo "KEYWORD=${{ github.event.inputs.keyword }}" >> $GITHUB_ENV
-          echo "ASIN=${{ github.event.inputs.asin }}" >> $GITHUB_ENV
-
-      - name: Fetch Amazon (Sniper/Search)
+      - name: Fetch Amazon Data
+        run: python scripts/fetch_amazon.py
         env:
-          AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
-          AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
-          AMAZON_ASSOC_TAG:  ${{ secrets.AMAZON_ASSOC_TAG }}
+          PAAPI_ACCESS_KEY: ${{ secrets.PAAPI_ACCESS_KEY }}
+          PAAPI_SECRET_KEY: ${{ secrets.PAAPI_SECRET_KEY }}
+          PAAPI_PARTNER_TAG: ${{ secrets.PAAPI_PARTNER_TAG }}
+      - name: Fetch Trends
+        run: python scripts/fetch_trends.py
+      - name: Validate Data
         run: |
-          python scripts/fetch_amazon.py \
-               --mode "$MODE" \
-               --asin "$ASIN" \
-               --keyword "$KEYWORD" \
-               --out data/raw/
-
-      - name: Fetch Rakuten / YouTube / Trends / News
-        env:
-          RAKUTEN_APP_ID:    ${{ secrets.RAKUTEN_APP_ID }}
-          RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
-          YOUTUBE_API_KEY:   ${{ secrets.YOUTUBE_API_KEY }}
-        run: |
-          SEARCH_KW=$(cat data/raw/amazon.json | jq -r .keyword)
-          python scripts/fetch_rakuten.py --keyword "$SEARCH_KW" --out data/raw/
-          python scripts/fetch_youtube.py --keyword "$SEARCH_KW" --out data/raw/
-          python scripts/fetch_trends.py  --out data/raw/
-          python scripts/fetch_yahoo_news.py --out data/raw/
-
-      - name: Run Trend Picker
-        run: |
-          python scripts/trend_picker.py --src data/raw/trends.json --out data/queue/
-
-      - name: Commit data
-        run: |
-          TIMESTAMP=$(date +%Y%m%d-%H%M)
-          BRANCH="data/${TIMESTAMP}-${MODE}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$BRANCH"
-          git add data/raw/ data/queue/
-          git commit -m "chore(data): collect $MODE for $KEYWORD"
-          git push origin "$BRANCH"
+          for f in data/products/*.json; do
+            python scripts/validate_json.py --json "$f" --schema data/schema/product.schema.json
+          done
+      - name: Create queue if products updated
+        run: python scripts/trend_picker.py
+      - uses: peter-evans/create-pull-request@v6
+        with:
+          branch: data/auto-fetch
+          title: "data: 商品データ更新"

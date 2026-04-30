@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Article Task Queue",
+  "type": "object",
+  "properties": {
+    "task_id": { "type": "string" },
+    "post_type": { "type": "string", "enum": ["single", "comparison", "ranking"] },
+    "theme": { "type": "string" },
+    "target_age": { "type": "string" },
+    "asins": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "tone": { "type": "string" },
+    "min_words": { "type": "integer" },
+    "max_words": { "type": "integer" },
+    "seo_keywords": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "required": ["task_id", "post_type", "asins"]
+}
