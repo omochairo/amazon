@@ -33,7 +33,7 @@
 {
   "slug": "article-url-slug",
   "title": "🧸 記事のタイトル",
-  "date": "2026-04-29T10:00:00+09:00",
+  "date": "2024-04-29T10:00:00+09:00",
   "mode": "trend|hidden_gem|parenting|seasonal",
   "lead": "リード文（AI執筆である旨の免責と、読者を惹きつける導入）",
   "products": [

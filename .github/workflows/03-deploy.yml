@@ -15,7 +15,7 @@ jobs:
           hugo-version: 'latest'
           extended: true
       - run: |
-          cd hugo && hugo --minify --destination ../public
+          cd hugo && hugo --minify --buildFuture --destination ../public
       - uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
