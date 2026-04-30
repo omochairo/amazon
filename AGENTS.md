@@ -27,7 +27,7 @@ Front Matter（必須・YAML）:
 ```yaml
 ---
 title: "（30〜45文字、SEOキーワードを自然に含む）"
-date: 2026-04-29T10:00:00+09:00
+date: 2024-04-29T10:00:00+09:00
 draft: false
 categories: ["おもちゃ"]
 tags: ["可動フィギュア", "5000円以下"]
