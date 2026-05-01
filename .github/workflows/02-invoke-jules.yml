@@ -9,16 +9,19 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: '3.11' }
-      - run: pip install -r requirements.txt
-      - name: Call Jules Article Engine
+      - name: Call Jules API
         run: |
-          export PYTHONPATH=scripts
-          python scripts/jules_article_engine.py
-      - uses: peter-evans/create-pull-request@v6
-        with:
-          branch: auto-article-generation
-          title: "docs: 新しい記事の自動生成"
-          body: "Jules AIエージェントによって新しい記事のJSONが生成されました。"
+          curl -X POST https://jules.googleapis.com/v1/tasks \
+            -H "Authorization: Bearer ${{ secrets.JULES_API_KEY }}" \
+            -d @- <<EOF
+          {
+            "repo": "omochairo/amazon",
+            "branch": "main",
+            "prompt_file": "jules/PROMPT_TEMPLATE.md",
+            "context_files": [
+              "AGENTS.md",
+              "data/raw/",
+              "jules/EXAMPLES/"
+            ]
+          }
+          EOF

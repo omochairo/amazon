@@ -43,9 +43,9 @@ def main():
     parser.add_argument("--out", default="data/raw/")
     args = parser.parse_args()
 
-    cid = get_secret("PAAPI_ACCESS_KEY")
-    cs = get_secret("PAAPI_SECRET_KEY")
-    tag = get_secret("PAAPI_PARTNER_TAG")
+    cid = get_secret("AMAZON_ACCESS_KEY")
+    cs = get_secret("AMAZON_SECRET_KEY")
+    tag = get_secret("AMAZON_ASSOC_TAG")
 
     items = []
 
