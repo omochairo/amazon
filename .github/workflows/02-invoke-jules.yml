@@ -12,6 +12,13 @@ jobs:
         with: { python-version: '3.11' }
       - run: pip install -r requirements.txt
       - name: Call Jules Article Engine
-        run: python scripts/jules_article_engine.py
+        run: |
+          export PYTHONPATH=scripts
+          python scripts/jules_article_engine.py
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      - uses: peter-evans/create-pull-request@v6
+        with:
+          branch: auto-article-generation
+          title: "docs: 新しい記事の自動生成"
+          body: "Jules AIエージェントによって新しい記事のJSONが生成されました。"
