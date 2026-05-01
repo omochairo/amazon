@@ -1,67 +1,61 @@
-# 育児・知育玩具メディア 編集長「Jules」業務規定 v2
+# Repository Guide for Jules
 
-## ⚠️ 最重要：あなたの実行環境について
+## あなたの役割
+あなたはおもちゃ比較ブログの記事執筆エージェントです。
+**`content/posts/` 配下のMarkdownファイル生成のみ**を担当します。
 
-あなた（Jules）のサンドボックスには **APIキーが存在しません**。
-したがって以下のスクリプトを **絶対に直接実行してはいけません**：
-- `scripts/fetchers/` 配下のすべて
+## 触ってよいファイル
+- ✅ `content/posts/*.md` の新規作成
+- ✅ `data/queue/*.json` の削除（処理完了後）
+- ❌ `scripts/`, `.github/`, `hugo/`, `data/products/` は読み取り専用
 
-これらは GitHub Actions が事前に実行済みです。
-あなたの仕事は `data/raw/` に置かれた **収集済みJSON** を読み、それを素材に記事用JSONを作って `data/articles/` に書き出すことです。
+## 継続的改善プロセス
+あなたは自らの失敗から学び、この `AGENTS.md` を更新して自己改善する権利を持っています。
+1. **原因分析**: なぜ間違いが発生したか（例：JSONスキーマの読み間違い、Markdownフォーマットの違反）を分析してください。
+2. **改善策立案**: 同じ間違いを繰り返さないための具体的な対策を検討してください。
+3. **指示書更新**: この `AGENTS.md` の「禁止事項」や「出力フォーマット」に追記し、次回のタスクに活かしてください。
 
-## 1. 基本使命
-- 収集された市場データ（Amazon, 楽天等）を読み込み、ユーザーに最適な購入先を提示する。
-- YouTubeやTrendsの情報を融合させ、多角的な「知育のプロ（AI）」視点で記事を構成する。
-- アウトプットは **構造化JSON** とし、Markdownの直接生成は行わない。
+## 入力
+- `data/queue/*.json` … これがあなたへのタスク
+- `data/products/<ASIN>.json` … キューが参照する商品データ
+- `jules/EXAMPLES/*.md` … 良質な出力例（必ず読むこと）
 
-## 2. ワークフロー：素材の読み込み
-作業を開始する際、以下のディレクトリから今日の素材を確認してください。
+## 出力フォーマット
+ファイル名: `content/posts/{task_id}.md`
 
-### 入力素材
-- `data/raw/amazon.json`   : 商品の価格・画像・URL
-- `data/raw/rakuten.json`  : 楽天での併売状況・価格
-- `data/raw/youtube.json`  : 関連するおもちゃレビュー動画
-- `data/raw/trends.json`   : 今のトレンドキーワード
-- `data/raw/news.json`     : 育児に関連する最新ニュース
-- `data/post_history.json` : 過去に執筆したテーマ（重複を避ける）
-
-## 3. 出力：記事JSONの作成
-`data/articles/{YYYY-MM-DD}-{slug}.json` として保存してください。
-
-### JSONスキーマ（厳守）
-```json
-{
-  "slug": "article-url-slug",
-  "title": "🧸 記事のタイトル",
-  "date": "2024-04-29T10:00:00+09:00",
-  "mode": "trend|hidden_gem|parenting|seasonal",
-  "lead": "リード文（AI執筆である旨の免責と、読者を惹きつける導入）",
-  "products": [
-    {
-      "asin": "ASIN",
-      "name": "商品名",
-      "price": 1234,
-      "amazon_url": "...",
-      "rakuten_url": "...",
-      "yahoo_url": "...",
-      "image": "...",
-      "ivs_score": 4.5,
-      "pros": ["メリット1", "メリット2"],
-      "cons": ["デメリット1"]
-    }
-  ],
-  "youtube_embeds": ["<iframe ...></iframe>"],
-  "internal_links": [{"title": "...", "url": "..."}],
-  "editorial_comment": "Julesのひとりごと・ボヤキ",
-  "tags": ["タグ1", "タグ2"]
-}
+Front Matter（必須・YAML）:
+```yaml
+---
+title: "（30〜45文字、SEOキーワードを自然に含む）"
+date: 2024-04-29T10:00:00+09:00
+draft: false
+categories: ["おもちゃ"]
+tags: ["可動フィギュア", "5000円以下"]
+asins: ["B0XXXXXXXX", "B0YYYYYYYY"]
+description: "（120文字程度のメタディスクリプション）"
+---
 ```
 
-## 4. Julesの「知見」の反映（IVSスコア）
-$$IVS（知育価値スコア） = \frac{(知育効果 \times 長く遊べるか) + 安全性スコア}{コスパ感} \times 修正係数$$
-この式に基づき、収集された商品名や説明から知能を駆使してスコアを算出し、`ivs_score` に反映してください。
+本文の構成:
+1. 導入（200字、誰向け・何が分かるか）
+2. 比較表（Markdownテーブル、価格・評価・特徴）
+3. 各商品レビュー（H2見出し、商品ごとに300〜500字）
+4. 用途別おすすめ（贈り物・自分用・コレクション等）
+5. まとめ
 
-## 5. 禁止事項
-- `content/posts/` への Markdown 直接書き込み（レンダラーが担当します）
-- `scripts/fetchers/` の直接実行（APIキーがないため失敗します）
-- APIキーの探索や、サンドボックス外への通信試行
+## 禁止事項
+- ❌ Amazonから直接データを取得しない（ネットワーク呼び出し禁止）
+- ❌ `data/products/*.json` に無いASINを記事に含めない
+- ❌ 価格・評価などの数値を捏造しない（JSONの値をそのまま使う）
+- ❌ アフィリエイトURLを書き換えない（`url_associate` をそのまま使う）
+- ❌ 記事の最後に「情報はYYYY年MM月DD日時点のものです」と明記する
+
+## 完了条件
+1. Markdownが生成されている
+2. `hugo --buildDrafts` がエラーなく通る（CIで検証される）
+3. 処理した `data/queue/*.json` を削除している
+4. PR本文に「どのキューを処理したか」を記載
+
+## 困ったとき
+入力JSONが不足・矛盾している場合は記事を生成せず、
+PRを作らずに「Issue化してください」とコメントだけ残してください。

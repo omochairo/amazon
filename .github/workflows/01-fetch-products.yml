@@ -24,23 +24,20 @@ jobs:
           python scripts/fetch_amazon.py \
             --asin "${{ github.event.inputs.asins }}" \
             --keyword "${{ github.event.inputs.keyword }}" \
-            --out data/raw/
+            --out data/products/
         env:
           PAAPI_ACCESS_KEY: ${{ secrets.PAAPI_ACCESS_KEY }}
           PAAPI_SECRET_KEY: ${{ secrets.PAAPI_SECRET_KEY }}
           PAAPI_PARTNER_TAG: ${{ secrets.PAAPI_PARTNER_TAG }}
       - name: Fetch Trends
-        run: python scripts/fetch_trends.py --out data/raw/
-      - name: Fetch Rakuten Data
-        run: python scripts/fetch_rakuten.py --out data/raw/
-        env:
-          RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
-      - name: Fetch YouTube Data
-        run: python scripts/fetch_youtube.py --out data/raw/
-        env:
-          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
-      - name: Fetch Yahoo News
-        run: python scripts/fetch_yahoo_news.py --out data/raw/
+        run: python scripts/fetch_trends.py
+      - name: Validate Data
+        run: |
+          for f in data/products/*.json; do
+            python scripts/validate_json.py --json "$f" --schema data/schema/product.schema.json
+          done
+      - name: Create queue if products updated
+        run: python scripts/trend_picker.py
       - uses: peter-evans/create-pull-request@v6
         with:
           branch: data/auto-fetch
