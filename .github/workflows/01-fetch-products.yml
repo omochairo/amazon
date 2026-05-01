@@ -9,7 +9,7 @@ on:
         description: '検索キーワード'
         required: false
   schedule:
-    - cron: '0 22 * * *'  # 毎朝7時(JST)にトレンド取得
+    - cron: '*/10 * * * *'  # 10分おきにトレンド取得
 
 jobs:
   fetch:
