@@ -1,7 +1,5 @@
 import json
 import os
-import re
-import random
 from datetime import datetime
 from read_raw import load_raw_data
 from history_check import get_history
