@@ -1,9 +1,22 @@
 import json
 import os
-import sys
 from datetime import datetime
-from pathlib import Path
-from openai import OpenAI
+from read_raw import load_raw_data
+from history_check import get_history
+from internal_links import get_related_articles
+
+# Constants
+IVS_KEYWORDS = ['知育', 'モンテッソーリ', 'STEM']
+
+def calculate_ivs(item):
+    score = 3.8
+    name = item.get('name', '')
+    features = item.get('features', [])
+
+    # Logic based on attributes
+    if len(features) > 3: score += 0.5
+    if any(k in name for k in IVS_KEYWORDS): score += 0.4
+    if item.get('price', 0) > 5000: score -= 0.2 # Pricey penalty
 
 # Custom modules
 from read_raw import load_raw_data
