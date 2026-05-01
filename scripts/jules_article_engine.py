@@ -18,76 +18,57 @@ def calculate_ivs(item):
     if any(k in name for k in IVS_KEYWORDS): score += 0.4
     if item.get('price', 0) > 5000: score -= 0.2 # Pricey penalty
 
-    return round(min(score, 5.0), 1)
+# Custom modules
+from read_raw import load_raw_data
 
-def generate_pros_cons(item):
-    features = item.get('features', [])
-    pros = features[:2] if features else ["評価が高い", "定番商品"]
-    cons = ["少し高価かも"] if item.get('price', 0) > 10000 else ["特になし"]
-    return pros, cons
+def get_prompt():
+    prompt_path = Path("jules/PROMPT_TEMPLATE.md")
+    if prompt_path.exists():
+        return prompt_path.read_text(encoding="utf-8")
+    return "You are an AI generating a JSON article based on product data."
 
 def main():
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        print("[Error] OPENAI_API_KEY is missing. Cannot generate article.")
+        sys.exit(1)
+
     raw_data = load_raw_data()
     if not raw_data:
-        print("No raw data found")
+        print("No raw data found in data/raw/ to process.")
         return
 
-    amazon = raw_data.get("amazon", {})
-    keyword = amazon.get("keyword", "話題のアイテム")
-    mode = amazon.get("mode", "daily_random")
+    system_prompt = get_prompt()
+    user_prompt = f"Here is the raw data from various APIs:\n{json.dumps(raw_data, ensure_ascii=False)}\n\nPlease generate the article JSON."
 
-    internal_links = get_related_articles(keyword)
+    client = OpenAI(api_key=api_key)
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-2024-08-06",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            response_format={"type": "json_object"}
+        )
 
-    slug = "baby-toy"
-    if "ラトル" in keyword: slug = "baby-rattle"
-    elif "積み木" in keyword: slug = "building-blocks"
+        content = response.choices[0].message.content
+        article_data = json.loads(content)
 
-    article = {
-        "slug": slug,
-        "title": f"🧸 【徹底比較】{keyword}のおすすめランキング｜AIが選ぶ知育価値NO.1は？",
-        "date": datetime.now().strftime("%Y-%m-%dT%H:%M:%S+09:00"),
-        "mode": mode,
-        "lead": f"育児に欠かせない「{keyword}」。どれを選べばいいか迷っていませんか？AI編集長Julesが、Amazon・楽天・Yahooのデータを解析し、本当に価値のある一品を厳選しました。",
-        "products": [],
-        "youtube_embeds": [],
-        "internal_links": internal_links,
-        "editorial_comment": f"{keyword}は、単なる遊び道具ではなく、親子の対話を深める魔法のツールです。長く愛せるものを選びたいですね。",
-        "tags": [keyword, "知育玩具", "おすすめ"]
-    }
+        slug = article_data.get("slug", "new-article")
+        date_str = datetime.now().strftime('%Y-%m-%d')
 
-    products = []
-    for it in amazon.get("items", []):
-        p, c = generate_pros_cons(it)
-        products.append({
-            "asin": it.get("asin"),
-            "name": it.get("title"),
-            "price": it.get("price"),
-            "amazon_url": it.get("url"),
-            "rakuten_url": "", # Action Layer 1 should ideally find this, but fallback to empty
-            "image": it.get("image"),
-            "ivs_score": calculate_ivs(it),
-            "pros": p,
-            "cons": c,
-            "features": it.get("features", [])
-        })
+        os.makedirs("data/articles", exist_ok=True)
+        out_path = f"data/articles/{date_str}-{slug}.json"
 
-    # Sort by IVS Score
-    article["products"] = sorted(products, key=lambda x: x["ivs_score"], reverse=True)
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(article_data, f, ensure_ascii=False, indent=4)
 
-    # YouTube (ID extraction)
-    youtube = raw_data.get("youtube", {})
-    for vid in youtube.get("items", [])[:2]:
-        try:
-            v_id = vid["url"].split("v=")[-1]
-            article["youtube_embeds"].append(f'<iframe width="560" height="315" src="https://www.youtube.com/embed/{v_id}" frameborder="0" allowfullscreen></iframe>')
-        except: pass
+        print(f"Generated LLM article JSON: {out_path}")
 
-    os.makedirs("data/articles", exist_ok=True)
-    out_path = f"data/articles/{datetime.now().strftime('%Y-%m-%d')}-{article['slug']}.json"
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(article, f, ensure_ascii=False, indent=4)
-
-    print(f"Evolved article JSON generated: {out_path}")
+    except Exception as e:
+        print(f"Failed to generate article using LLM: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
