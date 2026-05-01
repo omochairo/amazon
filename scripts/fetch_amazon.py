@@ -8,14 +8,16 @@ from typing import Any, Optional
 def get_secret(name: str) -> str:
     return os.environ.get(name)
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("fetch_amazon")
+
+HAS_CREATORS_API = False
 try:
     from amazon_creatorsapi import AmazonCreatorsApi, Country
     from amazon_creatorsapi.errors import AmazonCreatorsApiError
+    HAS_CREATORS_API = True
 except ImportError:
-    sys.exit(1)
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-logger = logging.getLogger("fetch_amazon")
+    logger.warning("amazon_creatorsapi module not found. Falling back to mock data generation.")
 
 def _safe_get(obj: Any, *attrs: str, default: Any = None) -> Any:
     cur = obj
@@ -49,8 +51,8 @@ def main():
 
     items = []
 
-    if not cid or not cs:
-        logger.warning("Amazon API keys missing. Generating mock test data for Amazon.")
+    if not cid or not cs or not HAS_CREATORS_API:
+        logger.warning("Amazon API keys or module missing. Generating mock test data for Amazon.")
         os.makedirs(args.out, exist_ok=True)
         items = [{
             "asin": "MOCK_AMZN_001",
