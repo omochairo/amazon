@@ -1,26 +1,17 @@
 name: Invoke Jules for New Queue
 on:
   push:
-    paths: ['data/queue/**']
+    paths: ['data/raw/**']
 
 jobs:
   invoke:
     runs-on: ubuntu-latest
     steps:
-      - name: Call Jules API
-        run: |
-          curl -X POST https://jules.googleapis.com/v1/tasks \
-            -H "Authorization: Bearer ${{ secrets.JULES_API_KEY }}" \
-            -d @- <<EOF
-          {
-            "repo": "omochairo/amazon",
-            "branch": "main",
-            "prompt_file": "jules/PROMPT_TEMPLATE.md",
-            "context_files": [
-              "AGENTS.md",
-              "data/queue/",
-              "data/products/",
-              "jules/EXAMPLES/"
-            ]
-          }
-          EOF
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install -r requirements.txt
+      - name: Call Jules Article Engine
+        run: python scripts/jules_article_engine.py
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
