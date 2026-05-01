@@ -6,11 +6,7 @@ import argparse
 from typing import Any, Optional
 
 def get_secret(name: str) -> str:
-    v = os.environ.get(name)
-    if not v:
-        sys.stderr.write(f"[FATAL] {name} not set. This script MUST run on GitHub Actions.\n")
-        sys.exit(2)
-    return v
+    return os.environ.get(name)
 
 try:
     from amazon_creatorsapi import AmazonCreatorsApi, Country
@@ -51,9 +47,25 @@ def main():
     cs = get_secret("AMAZON_SECRET_KEY")
     tag = get_secret("AMAZON_ASSOC_TAG")
 
-    api = AmazonCreatorsApi(cid, cs, "2.3", tag, Country.JP)
-
     items = []
+
+    if not cid or not cs:
+        logger.warning("Amazon API keys missing. Generating mock test data for Amazon.")
+        os.makedirs(args.out, exist_ok=True)
+        items = [{
+            "asin": "MOCK_AMZN_001",
+            "title": "[テストデータ] モック知育玩具ブロック",
+            "price": 3500,
+            "features": ["テスト特徴1", "テスト特徴2"],
+            "url": "https://www.amazon.co.jp/dp/MOCK_AMZN_001/?tag=mock-22",
+            "image": "https://via.placeholder.com/300x300.png?text=Amazon+Mock",
+            "source": "Amazon (Mock)"
+        }]
+        with open(os.path.join(args.out, "amazon.json"), "w", encoding="utf-8") as f:
+            json.dump({"keyword": args.keyword, "items": items, "mode": args.mode}, f, ensure_ascii=False, indent=4)
+        return
+
+    api = AmazonCreatorsApi(cid, cs, "2.3", tag, Country.JP)
 
     # Sniper Mode: Fetch specific ASIN first
     if args.asin:

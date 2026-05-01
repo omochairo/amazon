@@ -37,6 +37,8 @@ jobs:
         run: python scripts/fetch_rakuten.py --out data/raw/
         env:
           RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
+          RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
+          RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}
       - name: Fetch YouTube Data
         run: python scripts/fetch_youtube.py --out data/raw/
         env:
