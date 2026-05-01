@@ -7,14 +7,23 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
         with: { submodules: true }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install -r requirements.txt
+      - name: Build Posts from JSON
+        run: python scripts/build_post.py
       - uses: peaceiris/actions-hugo@v3
         with:
           hugo-version: 'latest'
           extended: true
       - run: |
+          mkdir -p hugo/content/
+          cp -r content/* hugo/content/
           cd hugo && hugo --minify --buildFuture --destination ../public
       - uses: peaceiris/actions-gh-pages@v4
         with:
