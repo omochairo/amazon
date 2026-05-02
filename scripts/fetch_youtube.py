@@ -17,8 +17,11 @@ def main():
     items = []
 
     if not api_key:
-        logger.error("YouTube API keys missing. Keys must be set.")
-        sys.exit(1)
+        logger.warning("YouTube API keys missing. Skipping YouTube fetch (returning empty data).")
+        os.makedirs(args.out, exist_ok=True)
+        with open(os.path.join(args.out, "youtube.json"), "w", encoding="utf-8") as f:
+            json.dump({"items": []}, f, ensure_ascii=False, indent=4)
+        return
 
     url = "https://www.googleapis.com/youtube/v3/search"
     params = {
