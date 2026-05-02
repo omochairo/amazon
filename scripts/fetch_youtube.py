@@ -17,16 +17,8 @@ def main():
     items = []
 
     if not api_key:
-        logger.warning("YouTube API keys missing. Generating mock test data for YouTube.")
-        os.makedirs(args.out, exist_ok=True)
-        items = [{
-            "title": "[テストデータ] モック知育玩具レビュー",
-            "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-            "thumbnail": "https://via.placeholder.com/300x300.png?text=YouTube+Mock"
-        }]
-        with open(os.path.join(args.out, "youtube.json"), "w", encoding="utf-8") as f:
-            json.dump({"items": items}, f, ensure_ascii=False, indent=4)
-        return
+        logger.error("YouTube API keys missing. Keys must be set.")
+        sys.exit(1)
 
     url = "https://www.googleapis.com/youtube/v3/search"
     params = {

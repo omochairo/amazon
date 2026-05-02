@@ -46,7 +46,8 @@ jobs:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
       - name: Fetch Yahoo News
         run: python scripts/fetch_yahoo_news.py --out data/raw/
-      - uses: peter-evans/create-pull-request@v6
+      - uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          branch: data/auto-fetch
-          title: "data: 商品データ更新"
+          commit_message: "data: 商品データの自動更新"
+          file_pattern: "data/raw/*.json"
+          branch: main

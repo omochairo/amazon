@@ -51,20 +51,8 @@ def main():
     items = []
 
     if not app_id or not cid or not cs or not tag or not HAS_CREATORS_API:
-        logger.warning("Amazon API keys or module missing. Generating mock test data for Amazon.")
-        os.makedirs(args.out, exist_ok=True)
-        items = [{
-            "asin": "MOCK_AMZN_001",
-            "title": "[テストデータ] モック知育玩具ブロック",
-            "price": 3500,
-            "features": ["テスト特徴1", "テスト特徴2"],
-            "url": "https://www.amazon.co.jp/dp/MOCK_AMZN_001/?tag=mock-22",
-            "image": "https://via.placeholder.com/300x300.png?text=Amazon+Mock",
-            "source": "Amazon (Mock)"
-        }]
-        with open(os.path.join(args.out, "amazon.json"), "w", encoding="utf-8") as f:
-            json.dump({"keyword": args.keyword, "items": items, "mode": args.mode}, f, ensure_ascii=False, indent=4)
-        return
+        logger.error("Amazon API keys or module missing. Keys must be set.")
+        sys.exit(1)
 
     api = CreatorsAPIClient()
 
@@ -93,7 +81,8 @@ def main():
                     "source": "Amazon (Target)"
                 })
         except Exception as e:
-            logger.warning(f"Failed to fetch target ASIN: {e}")
+            logger.error(f"Failed to fetch target ASIN: {e}")
+            sys.exit(1)
 
     # Search Mode: Complement with related products
     search_kw = args.keyword
@@ -119,6 +108,7 @@ def main():
             })
     except Exception as e:
         logger.error(f"Search failed: {e}")
+        sys.exit(1)
 
     os.makedirs(args.out, exist_ok=True)
     with open(os.path.join(args.out, "amazon.json"), "w", encoding="utf-8") as f:
