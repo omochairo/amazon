@@ -33,20 +33,25 @@ jobs:
           AMAZON_CREATORS_CREDENTIAL_SECRET: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_SECRET }}
           AMAZON_PARTNER_TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
       - name: Fetch Trends
+        if: always()
         run: python scripts/fetch_trends.py --out data/raw/
       - name: Fetch Rakuten Data
+        if: always()
         run: python scripts/fetch_rakuten.py --out data/raw/
         env:
           RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
           RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
           RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}
       - name: Fetch YouTube Data
+        if: always()
         run: python scripts/fetch_youtube.py --out data/raw/
         env:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
       - name: Fetch Yahoo News
+        if: always()
         run: python scripts/fetch_yahoo_news.py --out data/raw/
       - uses: stefanzweifel/git-auto-commit-action@v5
+        if: always()
         with:
           commit_message: "data: 商品データの自動更新"
           file_pattern: "data/raw/*.json"
