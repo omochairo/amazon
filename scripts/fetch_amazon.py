@@ -51,8 +51,11 @@ def main():
     items = []
 
     if not app_id or not cid or not cs or not tag or not HAS_CREATORS_API:
-        logger.error("Amazon API keys or module missing. Keys must be set.")
-        sys.exit(1)
+        logger.warning("Amazon API keys or module missing. Skipping Amazon fetch (returning empty data).")
+        os.makedirs(args.out, exist_ok=True)
+        with open(os.path.join(args.out, "amazon.json"), "w", encoding="utf-8") as f:
+            json.dump({"keyword": args.keyword, "items": [], "mode": args.mode}, f, ensure_ascii=False, indent=4)
+        return
 
     api = CreatorsAPIClient()
 
