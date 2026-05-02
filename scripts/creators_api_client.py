@@ -67,10 +67,10 @@ class CreatorsAPIClient:
         partner_tag: str = None,
         max_retries: int = 5
     ):
-        self.application_id = application_id or os.environ.get('AMAZON_CREATORS_APPLICATION_ID', '')
-        self.credential_id = credential_id or os.environ.get('AMAZON_CREATORS_CREDENTIAL_ID', '')
-        self.credential_secret = credential_secret or os.environ.get('AMAZON_CREATORS_CREDENTIAL_SECRET', '')
-        self.partner_tag = partner_tag or os.environ.get('AMAZON_PARTNER_TAG', '')
+        self.application_id = (application_id or os.environ.get('AMAZON_CREATORS_APPLICATION_ID', '')).strip()
+        self.credential_id = (credential_id or os.environ.get('AMAZON_CREATORS_CREDENTIAL_ID', '')).strip()
+        self.credential_secret = (credential_secret or os.environ.get('AMAZON_CREATORS_CREDENTIAL_SECRET', '')).strip()
+        self.partner_tag = (partner_tag or os.environ.get('AMAZON_PARTNER_TAG', '')).strip()
         self.max_retries = max_retries
 
         self._access_token = None
