@@ -28,9 +28,10 @@ jobs:
             --keyword "${{ github.event.inputs.keyword }}" \
             --out data/raw/
         env:
-          PAAPI_ACCESS_KEY: ${{ secrets.PAAPI_ACCESS_KEY }}
-          PAAPI_SECRET_KEY: ${{ secrets.PAAPI_SECRET_KEY }}
-          PAAPI_PARTNER_TAG: ${{ secrets.PAAPI_PARTNER_TAG }}
+          AMAZON_CREATORS_APPLICATION_ID: ${{ secrets.AMAZON_CREATORS_APPLICATION_ID }}
+          AMAZON_CREATORS_CREDENTIAL_ID: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_ID }}
+          AMAZON_CREATORS_CREDENTIAL_SECRET: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_SECRET }}
+          AMAZON_PARTNER_TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
       - name: Fetch Trends
         run: python scripts/fetch_trends.py --out data/raw/
       - name: Fetch Rakuten Data
