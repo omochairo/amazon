@@ -51,3 +51,14 @@ jobs:
           commit_message: "data: 商品データの自動更新"
           file_pattern: "data/raw/*.json"
           branch: main
+
+          - name: Verify secrets format
+  run: |
+    echo "APPLICATION_ID length: ${#APPLICATION_ID}"
+    echo "CREDENTIAL_ID length: ${#CREDENTIAL_ID}"
+    echo "CREDENTIAL_SECRET length: ${#CREDENTIAL_SECRET}"
+    echo "APPLICATION_ID first 4 chars: ${APPLICATION_ID:0:4}"
+  env:
+    APPLICATION_ID: ${{ secrets.AMAZON_CREATORS_APPLICATION_ID }}
+    CREDENTIAL_ID: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_ID }}
+    CREDENTIAL_SECRET: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_SECRET }}
