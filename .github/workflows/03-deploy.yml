@@ -2,7 +2,7 @@ name: Deploy
 on:
   push:
     branches: [main]
-    paths: ['content/**', 'hugo/**']
+    paths: ['data/articles/**', 'content/**', 'hugo/**']
 
 jobs:
   build:

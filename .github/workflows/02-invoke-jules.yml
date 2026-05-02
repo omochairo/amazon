@@ -17,8 +17,8 @@ jobs:
         run: |
           export PYTHONPATH=scripts
           python scripts/jules_article_engine.py
-      - uses: peter-evans/create-pull-request@v6
+      - uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          branch: auto-article-generation
-          title: "docs: 新しい記事の自動生成"
-          body: "Jules AIエージェントによって新しい記事のJSONが生成されました。"
+          commit_message: "docs: 新しい記事の自動生成"
+          file_pattern: "data/articles/*.json"
+          branch: main
