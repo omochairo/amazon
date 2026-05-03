@@ -19,7 +19,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: '3.11' }
+        with:
+          python-version: '3.11'
       - run: pip install -r requirements.txt
       - name: Fetch Amazon Data
         run: |
@@ -50,7 +51,8 @@ jobs:
       - name: Fetch Yahoo News
         if: always()
         run: python scripts/fetch_yahoo_news.py --out data/raw/
-      - uses: stefanzweifel/git-auto-commit-action@v5
+      - name: Auto Commit
+        uses: stefanzweifel/git-auto-commit-action@v5
         if: always()
         with:
           commit_message: "data: 商品データの自動更新"
