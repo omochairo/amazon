@@ -1,11 +1,7 @@
 import os, sys, json, requests, logging
 
 def get_secret(name: str) -> str:
-    v = os.environ.get(name)
-    if not v:
-        sys.stderr.write(f"[FATAL] {name} not set.\n")
-        sys.exit(2)
-    return v
+    return os.environ.get(name)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fetch_youtube")
@@ -18,10 +14,20 @@ def main():
     args = parser.parse_args()
 
     api_key = get_secret("YOUTUBE_API_KEY")
+    items = []
+
+    if not api_key:
+        logger.warning("YouTube API keys missing. Skipping YouTube fetch (returning empty data).")
+        os.makedirs(args.out, exist_ok=True)
+        with open(os.path.join(args.out, "youtube.json"), "w", encoding="utf-8") as f:
+            json.dump({"items": []}, f, ensure_ascii=False, indent=4)
+        return
+
     url = "https://www.googleapis.com/youtube/v3/search"
+    search_kw = args.keyword if args.keyword else "知育玩具"
     params = {
         "key": api_key,
-        "q": f"{args.keyword} おもちゃ レビュー",
+        "q": f"{search_kw} おもちゃ レビュー",
         "part": "snippet",
         "maxResults": 5,
         "type": "video",
@@ -31,7 +37,6 @@ def main():
 
     resp = requests.get(url, params=params)
     data = resp.json()
-    items = []
     for item in data.get("items", []):
         video_id = item["id"]["videoId"]
         items.append({
