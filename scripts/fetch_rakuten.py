@@ -28,13 +28,13 @@ def main():
     headers = {"Authorization": f"Bearer {access_key}"}
     params = {
         "applicationId": app_id,
-        "keyword": args.keyword,
+        "keyword": search_kw,
         "formatVersion": 2,
         "hits": 10
     }
     if aff_id: params["affiliateId"] = aff_id
 
-    resp = requests.get(url, params=params, headers=headers)
+    resp = requests.get(url, params=params)
     if resp.status_code != 200:
         logger.error(f"Rakuten error: {resp.text}")
         sys.exit(1)

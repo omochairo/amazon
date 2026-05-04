@@ -89,9 +89,8 @@ def main():
 
     # Search Mode: Complement with related products
     search_kw = args.keyword
-    if args.asin and not search_kw:
-        # Use first item title as keyword if possible, else generic
-        search_kw = items[0]["title"][:20] if items else "知育玩具"
+    if not search_kw:
+        search_kw = items[0]["title"][:20] if (args.asin and items) else "知育玩具"
 
     logger.info(f"Search Mode: Keyword '{search_kw}'")
     try:

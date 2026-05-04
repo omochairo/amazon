@@ -24,9 +24,10 @@ def main():
         return
 
     url = "https://www.googleapis.com/youtube/v3/search"
+    search_kw = args.keyword if args.keyword else "知育玩具"
     params = {
         "key": api_key,
-        "q": f"{args.keyword} おもちゃ レビュー",
+        "q": f"{search_kw} おもちゃ レビュー",
         "part": "snippet",
         "maxResults": 5,
         "type": "video",
