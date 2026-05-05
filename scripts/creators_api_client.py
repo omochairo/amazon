@@ -82,20 +82,12 @@ class CreatorsAPIClient:
         if self._access_token and time.time() < self._token_expires_at - 60:
             return self._access_token
 
-        # Create Basic Auth header: base64(credential_id:credential_secret)
-        credentials = f"{self.credential_id}:{self.credential_secret}"
-        auth_header = base64.b64encode(credentials.encode()).decode()
-
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Authorization": f"Basic {auth_header}"
-        }
-
-        # OAuth 2.0 client credentials grant
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
         data = "grant_type=client_credentials&scope=creatorsapi/default"
 
         response = requests.post(
             self.OAUTH_TOKEN_URL,
+            auth=(self.credential_id, self.credential_secret),
             headers=headers,
             data=data,
             timeout=30
