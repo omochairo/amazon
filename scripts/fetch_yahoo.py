@@ -243,5 +243,5 @@ def fetch_yahoo(keyword: str) -> None:
 # エントリーポイント
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    keyword = sys.argv[1] if len(sys.argv) > 1 else "ワイヤレスイヤホン"
+    keyword = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] else "知育玩具"
     fetch_yahoo(keyword)

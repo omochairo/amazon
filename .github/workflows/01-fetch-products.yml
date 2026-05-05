@@ -62,6 +62,20 @@ jobs:
         if: ${{ always() }}
         run: python scripts/fetch_yahoo_news.py --out data/raw/
 
+      - name: Fetch Yahoo Shopping Data
+        if: ${{ always() }}
+        run: python scripts/fetch_yahoo.py "${{ github.event.inputs.keyword }}"
+        env:
+          YAHOO_CLIENT_ID: ${{ secrets.YAHOO_CLIENT_ID }}
+          VALUECOMMERCE_SID: ${{ secrets.VALUECOMMERCE_SID }}
+          VALUECOMMERCE_PID: ${{ secrets.VALUECOMMERCE_PID }}
+
+      - name: Fetch Books Data
+        if: ${{ always() }}
+        run: python scripts/fetch_books.py "${{ github.event.inputs.keyword }}"
+        env:
+          GOOGLEBOOKS_API_KEY: ${{ secrets.GOOGLEBOOKS_API_KEY }}
+
       - name: Auto Commit
         if: ${{ always() }}
         uses: stefanzweifel/git-auto-commit-action@v5
