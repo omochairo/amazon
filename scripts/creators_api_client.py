@@ -67,10 +67,10 @@ class CreatorsAPIClient:
         partner_tag: str = None,
         max_retries: int = 5
     ):
-        self.application_id = (application_id or os.environ.get('AMAZON_CREATORS_APPLICATION_ID', '')).strip()
-        self.credential_id = (credential_id or os.environ.get('AMAZON_CREATORS_CREDENTIAL_ID', '')).strip()
-        self.credential_secret = (credential_secret or os.environ.get('AMAZON_CREATORS_CREDENTIAL_SECRET', '')).strip()
-        self.partner_tag = (partner_tag or os.environ.get('AMAZON_PARTNER_TAG', '')).strip()
+        self.application_id = application_id or os.environ.get('AMAZON_CREATORS_APPLICATION_ID', '')
+        self.credential_id = credential_id or os.environ.get('AMAZON_CREATORS_CREDENTIAL_ID', '')
+        self.credential_secret = credential_secret or os.environ.get('AMAZON_CREATORS_CREDENTIAL_SECRET', '')
+        self.partner_tag = partner_tag or os.environ.get('AMAZON_PARTNER_TAG', '')
         self.max_retries = max_retries
 
         self._access_token = None
@@ -82,16 +82,32 @@ class CreatorsAPIClient:
         if self._access_token and time.time() < self._token_expires_at - 60:
             return self._access_token
 
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
-        data = "grant_type=client_credentials&scope=creatorsapi/default"
+        # Check if using LwA (v3.x) or legacy Cognito (v2.x)
+        is_lwa = self.credential_id.startswith("amzn1.application-oa2-client.")
 
-        response = requests.post(
-            self.OAUTH_TOKEN_URL,
-            auth=(self.credential_id, self.credential_secret),
-            headers=headers,
-            data=data,
-            timeout=30
-        )
+        if is_lwa:
+            self.CREDENTIAL_VERSION = "3.3"
+            token_url = "https://api.amazon.co.jp/auth/o2/token"
+            headers = {"Content-Type": "application/json"}
+            payload = {
+                "grant_type": "client_credentials",
+                "client_id": self.credential_id,
+                "client_secret": self.credential_secret,
+                "scope": "creatorsapi::default"
+            }
+            response = requests.post(token_url, headers=headers, json=payload, timeout=30)
+        else:
+            self.CREDENTIAL_VERSION = "2.3"
+            token_url = self.OAUTH_TOKEN_URL
+            headers = {"Content-Type": "application/x-www-form-urlencoded"}
+            data = "grant_type=client_credentials&scope=creatorsapi/default"
+            response = requests.post(
+                token_url,
+                auth=(self.credential_id, self.credential_secret),
+                headers=headers,
+                data=data,
+                timeout=30
+            )
 
         if response.status_code != 200:
             raise CreatorsAPITokenError(f"Failed to get access token: {response.status_code} - {response.text}")
