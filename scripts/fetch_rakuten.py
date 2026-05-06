@@ -1,7 +1,8 @@
 import os, sys, json, requests, logging
 
 def get_secret(name: str) -> str:
-    return os.environ.get(name)
+    v = os.environ.get(name)
+    return v.strip() if v else v
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fetch_rakuten")
@@ -15,7 +16,7 @@ def main():
 
     app_id = get_secret("RAKUTEN_APP_ID")
     access_key = get_secret("RAKUTEN_ACCESS_KEY")
-    aff_id = os.environ.get("RAKUTEN_AFFILIATE_ID", "")
+    aff_id = os.environ.get("RAKUTEN_AFFILIATE_ID", "").strip()
 
     if not app_id:
         logger.warning("Rakuten API keys missing (app_id required). Skipping Rakuten fetch (returning empty data).")

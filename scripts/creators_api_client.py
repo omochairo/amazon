@@ -83,7 +83,7 @@ class CreatorsAPIClient:
             return self._access_token
 
         # Check if using LwA (v3.x) or legacy Cognito (v2.x)
-        is_lwa = self.credential_id.startswith("amzn1.application-oa2-client.")
+        is_lwa = self.credential_id.startswith("amzn1.")
 
         if is_lwa:
             self.CREDENTIAL_VERSION = "3.3"
