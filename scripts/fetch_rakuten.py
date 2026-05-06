@@ -25,31 +25,45 @@ def main():
             json.dump({"keyword": args.keyword, "items": []}, f, ensure_ascii=False, indent=4)
         return
 
-    url = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601"
-
-    # Check if keyword is empty due to scheduled run defaults
     search_kw = args.keyword if args.keyword else "知育玩具"
 
-    params = {
+    # Attempt 1: Standard Affiliate API
+    url_aff = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601"
+    params_aff = {
         "applicationId": app_id,
-        "accessKey": access_key,
         "keyword": search_kw,
         "formatVersion": 2,
         "hits": 10
     }
-    if aff_id: params["affiliateId"] = aff_id
+    if aff_id: params_aff["affiliateId"] = aff_id
 
-    # The 2026 API strictly checks Referer/Origin headers
-    # The user must register this URL in the Rakuten App console
+    # Attempt 2: RMS API (2026 update)
+    url_rms = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601"
+    params_rms = params_aff.copy()
+    if access_key:
+        params_rms["accessKey"] = access_key
+
     headers = {
         "Referer": "https://github.com/omochairo/amazon",
         "Origin": "https://github.com/omochairo/amazon"
     }
 
+    # Try RMS first if access_key is present, otherwise Affiliate API
+    url = url_rms if access_key else url_aff
+    params = params_rms if access_key else params_aff
+
     resp = requests.get(url, params=params, headers=headers)
+
     if resp.status_code != 200:
-        logger.error(f"Rakuten error: {resp.text}")
-        sys.exit(1)
+        # Fallback to the other API
+        logger.warning(f"Rakuten first attempt failed ({url}): {resp.text}. Trying fallback API...")
+        url = url_aff if url == url_rms else url_rms
+        params = params_aff if url == url_aff else params_rms
+        resp = requests.get(url, params=params, headers=headers)
+
+        if resp.status_code != 200:
+            logger.error(f"Rakuten fallback error ({url}): {resp.text}")
+            sys.exit(1)
 
     data = resp.json()
     items = []
