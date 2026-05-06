@@ -25,7 +25,7 @@ def fetch_books(keyword):
         return
 
     # 知育・育児ブログ向けに検索クエリを最適化
-    query = f"{keyword} 知育 絵本"
+    query = f"{keyword} 絵本" if "知育" in keyword else f"{keyword} 知育 絵本"
 
     url = "https://www.googleapis.com/books/v1/volumes"
     params = {
@@ -40,8 +40,15 @@ def fetch_books(keyword):
         response = requests.get(url, params=params, timeout=15)
         response.raise_for_status()
         data = response.json()
+    except requests.exceptions.HTTPError as e:
+        if response.status_code >= 500:
+            logger.warning(f"Google Books API 5xx Server Error (temporarily down). Skipping. Details: {e}")
+            data = {"items": []}
+        else:
+            logger.error(f"Google Books API HTTP Error: {e}")
+            sys.exit(1)
     except Exception as e:
-        logger.error(f"Google Books APIエラー: {e}")
+        logger.error(f"Google Books API Request Error: {e}")
         sys.exit(1)
 
     items = []
