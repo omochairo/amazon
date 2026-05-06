@@ -25,7 +25,7 @@
 
 - **💰 価格**: {{ p.price }} {% if p.is_cheapest %}🔥 **最安値！**{% endif %}
 - **📊 IVS（知育価値スコア）**: {{ p.ivs_score }}/5.0
-- **🔗 購入サイト**: [Amazon]({{ p.amazon_url }}) / [楽天]({{ p.rakuten_url or "#" }})
+- **🔗 購入サイト**: [Amazon]({{ p.amazon_url }}) / [楽天]({{ p.rakuten_url or "#" }}) / [Yahoo]({{ p.yahoo_url or "#" }})
 
 > [!TIP]
 > **👍 メリット**: {{ p.pros | join(', ') }}
@@ -41,7 +41,25 @@
 {% if youtube_embeds %}
 ## 📺 関連動画でチェック
 {% for vid in youtube_embeds %}
-{{ vid }}
+### {{ vid.title }}
+{{ vid.embed_html }}
+{% endfor %}
+{% endif %}
+
+{% if books %}
+## 📚 知育に役立つ関連絵本・書籍
+{% for book in books %}
+### [{{ book.title }}]({{ book.url }})
+{% if book.image %}![{{ book.title }}]({{ book.image }}){% endif %}
+
+{{ book.description }}
+{% endfor %}
+{% endif %}
+
+{% if news %}
+## 📰 最新の知育・子育てニュース
+{% for n in news %}
+- [{{ n.title }}]({{ n.url }})
 {% endfor %}
 {% endif %}
 
