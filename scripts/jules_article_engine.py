@@ -32,8 +32,11 @@ def main():
         return
 
     amazon = raw_data.get("amazon", {})
+    rakuten = raw_data.get("rakuten", {})
     keyword = amazon.get("keyword", "話題のアイテム")
     mode = amazon.get("mode", "daily_random")
+
+    rakuten_items = rakuten.get("items", [])
 
     internal_links = get_related_articles(keyword)
 
@@ -55,14 +58,19 @@ def main():
     }
 
     products = []
-    for it in amazon.get("items", []):
+    for i, it in enumerate(amazon.get("items", [])):
         p, c = generate_pros_cons(it)
+        # Match rakuten url (fallback to first available if mock, or empty)
+        r_url = ""
+        if i < len(rakuten_items):
+            r_url = rakuten_items[i].get("url", "")
+
         products.append({
             "asin": it.get("asin"),
             "name": it.get("title"),
             "price": it.get("price"),
             "amazon_url": it.get("url"),
-            "rakuten_url": "", # Action Layer 1 should ideally find this, but fallback to empty
+            "rakuten_url": r_url,
             "image": it.get("image"),
             "ivs_score": calculate_ivs(it),
             "pros": p,
