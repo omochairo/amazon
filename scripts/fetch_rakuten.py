@@ -18,27 +18,35 @@ def main():
     access_key = get_secret("RAKUTEN_ACCESS_KEY")
     aff_id = os.environ.get("RAKUTEN_AFFILIATE_ID", "").strip()
 
-    if not app_id:
-        logger.warning("Rakuten API keys missing (app_id required). Skipping Rakuten fetch (returning empty data).")
+    if not app_id or not access_key:
+        logger.warning("Rakuten API keys missing (app_id and access_key required). Skipping Rakuten fetch (returning empty data).")
         os.makedirs(args.out, exist_ok=True)
         with open(os.path.join(args.out, "rakuten.json"), "w", encoding="utf-8") as f:
             json.dump({"keyword": args.keyword, "items": []}, f, ensure_ascii=False, indent=4)
         return
 
-    url = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601"
+    url = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601"
 
     # Check if keyword is empty due to scheduled run defaults
     search_kw = args.keyword if args.keyword else "知育玩具"
 
     params = {
         "applicationId": app_id,
+        "accessKey": access_key,
         "keyword": search_kw,
         "formatVersion": 2,
         "hits": 10
     }
     if aff_id: params["affiliateId"] = aff_id
 
-    resp = requests.get(url, params=params)
+    # The 2026 API strictly checks Referer/Origin headers
+    # The user must register this URL in the Rakuten App console
+    headers = {
+        "Referer": "https://github.com/omochairo/amazon",
+        "Origin": "https://github.com/omochairo/amazon"
+    }
+
+    resp = requests.get(url, params=params, headers=headers)
     if resp.status_code != 200:
         logger.error(f"Rakuten error: {resp.text}")
         sys.exit(1)
