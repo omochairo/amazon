@@ -22,7 +22,10 @@ def _safe_get(obj: dict, *attrs: str, default: Any = None) -> Any:
     cur = obj
     for a in attrs:
         if cur is None: return default
-        cur = getattr(cur, a, None)
+        if isinstance(cur, dict):
+            cur = cur.get(a)
+        else:
+            cur = getattr(cur, a, None)
     return cur if cur is not None else default
 
 def extract_features(item: dict) -> list:

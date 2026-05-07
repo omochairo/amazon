@@ -1,8 +1,7 @@
 import os, sys, json, requests, logging
 
 def get_secret(name: str) -> str:
-    v = os.environ.get(name)
-    return v.strip() if v else v
+    return os.environ.get(name)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fetch_rakuten")
@@ -19,21 +18,28 @@ def main():
     aff_id = os.environ.get("RAKUTEN_AFFILIATE_ID", "").strip()
 
     if not app_id or not access_key:
-        logger.warning("Rakuten API keys missing (app_id and access_key required). Skipping Rakuten fetch (returning empty data).")
+        logger.warning("Rakuten API keys missing. Generating mock test data for Rakuten.")
         os.makedirs(args.out, exist_ok=True)
+        items = [{
+            "title": "[テストデータ] 楽天モック知育玩具ブロック",
+            "price": 3500,
+            "url": "https://hb.afl.rakuten.co.jp/hgc/mock/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Fmock%2Fitem%2F",
+            "image": "https://via.placeholder.com/300x300.png?text=Rakuten+Mock",
+            "source": "Rakuten (Mock)"
+        }]
         with open(os.path.join(args.out, "rakuten.json"), "w", encoding="utf-8") as f:
-            json.dump({"keyword": args.keyword, "items": []}, f, ensure_ascii=False, indent=4)
+            json.dump({"keyword": args.keyword, "items": items}, f, ensure_ascii=False, indent=4)
         return
 
-    search_kw = args.keyword if args.keyword else "知育玩具"
-
-    # Attempt 1: Standard Affiliate API
-    url_aff = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601"
-    params_aff = {
+    url = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601"
+    headers = {"Authorization": f"Bearer {access_key}"}
+    params = {
         "applicationId": app_id,
-        "keyword": search_kw,
+        "keyword": args.keyword,
+        "genreId": "566382",
+        "sort": "-updateTimestamp",
         "formatVersion": 2,
-        "hits": 10
+        "hits": 30
     }
     if aff_id: params_aff["affiliateId"] = aff_id
 
@@ -73,9 +79,41 @@ def main():
             "price": item.get("itemPrice"),
             "url": item.get("affiliateUrl") or item.get("itemUrl"),
             "image": item.get("mediumImageUrls", [None])[0],
+            "itemCode": item.get("itemCode", ""),
+            "reviewCount": item.get("reviewCount", 0),
             "source": "Rakuten"
         })
 
+
+    # --- Fetch Ranking Data (Layer 1) ---
+    ranking_url = "https://openapi.rakuten.co.jp/services/api/IchibaItem/Ranking/20220601"
+    ranking_params = {
+        "applicationId": app_id,
+        "accessKey": access_key,
+        "genreId": "566382", # Toys genre
+    }
+    if aff_id: ranking_params["affiliateId"] = aff_id
+
+    try:
+        rank_resp = requests.get(ranking_url, params=ranking_params)
+        rank_items = []
+        if rank_resp.status_code == 200:
+            for item in rank_resp.json().get("Items", []):
+                i = item.get("Item", {})
+                rank_items.append({
+                    "rank": i.get("rank"),
+                    "title": i.get("itemName"),
+                    "price": i.get("itemPrice"),
+                    "url": i.get("affiliateUrl") or i.get("itemUrl"),
+                    "image": i.get("mediumImageUrls", [{"imageUrl": ""}])[0]["imageUrl"] if i.get("mediumImageUrls") else "",
+                    "itemCode": i.get("itemCode"),
+                    "reviewCount": i.get("reviewCount", 0)
+                })
+
+        with open(os.path.join(args.out, "rakuten_ranking.json"), "w", encoding="utf-8") as f:
+            json.dump({"items": rank_items}, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        logger.error(f"Ranking API failed: {e}")
     os.makedirs(args.out, exist_ok=True)
     with open(os.path.join(args.out, "rakuten.json"), "w", encoding="utf-8") as f:
         json.dump({"keyword": args.keyword, "items": items}, f, ensure_ascii=False, indent=4)

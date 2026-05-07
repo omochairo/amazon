@@ -50,6 +50,7 @@ def main():
         return
 
     amazon = raw_data.get("amazon", {})
+    tomy = raw_data.get("takaratomy", {})
     rakuten = raw_data.get("rakuten", {})
     yahoo = raw_data.get("yahoo", {})
     youtube = raw_data.get("youtube", {})
@@ -65,18 +66,45 @@ def main():
 
     internal_links = get_related_articles(keyword)
 
+
+    # Read signal if available
+    signal_title = ""
+    signal_type = "standard"
+    try:
+        with open("data/raw/top_signals.json", "r", encoding="utf-8") as f:
+            sig = json.load(f)
+            signal_title = sig.get("title", "")
+            signal_type = sig.get("type", "standard")
+    except: pass
+
     slug = "baby-toy"
     if "ラトル" in keyword: slug = "baby-rattle"
     elif "積み木" in keyword or "ブロック" in keyword: slug = "building-blocks"
 
+    # Deep SEO Optimization Structure tailored by Signal
+    if signal_type == "sudden_jump":
+        title = f"【急上昇速報】昨日まで圏外だった「{signal_title[:15]}...」が突然売れ始めた理由は？"
+        lead = f"楽天ランキングで異例の急上昇を記録した「{signal_title}」。なぜ今、爆発的に売れているのか？SNSの口コミや類似商品との比較から、その人気の秘密を徹底解剖します！"
+    elif signal_type == "preorder":
+        title = f"【予約完売注意】「{signal_title[:15]}...」の予約が開始！絶対に手に入れたい注目アイテムまとめ"
+        lead = f"ファン待望の新作「{signal_title}」の予約がついに始まりました！発売直前にはプレミア化して手に入らなくなる可能性があるため、早めの確保がおすすめです。あわせてチェックしたい関連アイテムも厳選しました。"
+    elif signal_type == "new_arrival":
+        title = f"【初登場】市場が注目する最新おもちゃ「{signal_title[:15]}...」のポテンシャルとは？"
+        lead = f"データ分析システムが市場に初登場したばかりの注目アイテム「{signal_title}」をキャッチしました！まだ誰も知らないこの最新アイテムの魅力と、ライバル商品とのスペック比較をお届けします。"
+    else:
+        title = f"【徹底比較】{keyword}のおすすめ人気ランキング厳選！失敗しない選び方"
+        lead = f"育児に欠かせない「{keyword}」。種類が多すぎてどれを選べばいいか迷っていませんか？この記事では、Amazon・楽天・Yahoo!ショッピングから厳選した本当に価値のあるアイテムを徹底比較します。さらに、タカラトミーモール直送の最新情報も合わせてお届け！"
+
     # Deep SEO Optimization Structure
     article = {
         "slug": slug,
-        "title": f"【徹底比較】{keyword}のおすすめ人気ランキング厳選！失敗しない選び方",
-        "meta_description": f"AIが厳選した{keyword}のおすすめ人気ランキングを大公開！Amazon・楽天・Yahooの口コミや最安値情報から、本当に選ぶべき一品を分かりやすく比較解説します。",
+        "title": title,
+        "meta_description": lead[:100] + "...",
         "date": datetime.now().strftime("%Y-%m-%dT%H:%M:%S+09:00"),
         "mode": mode,
-        "lead": f"育児に欠かせない「{keyword}」。種類が多すぎてどれを選べばいいか迷っていませんか？この記事では、Amazon・楽天・Yahoo!ショッピングから厳選した本当に価値のあるアイテムを徹底比較します。",
+        "lead": lead,
+        "signal_type": signal_type if signal_type != "standard" else None,
+        "signal_type_label": "急上昇" if signal_type == "sudden_jump" else "予約開始" if signal_type == "preorder" else "新着" if signal_type == "new_arrival" else "",
         "products": [],
         "youtube_embeds": [],
         "books": [],
@@ -136,6 +164,14 @@ def main():
         article["news"].append({
             "title": n.get("title"),
             "url": n.get("url")
+        })
+
+    # Takara Tomy Integration
+    article["tomy_items"] = []
+    for t in tomy.get("items", [])[:3]:
+        article["tomy_items"].append({
+            "title": t.get("title"),
+            "url": t.get("url")
         })
 
     os.makedirs("data/articles", exist_ok=True)

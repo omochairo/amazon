@@ -62,6 +62,10 @@ jobs:
         if: ${{ always() }}
         run: python scripts/fetch_yahoo_news.py --out data/raw/
 
+      - name: Fetch Takara Tomy Latest
+        if: ${{ always() }}
+        run: python scripts/fetch_takaratomy.py
+
       - name: Fetch Yahoo Shopping Data
         if: ${{ always() }}
         run: python scripts/fetch_yahoo.py "${{ github.event.inputs.keyword }}"
@@ -76,10 +80,15 @@ jobs:
         env:
           GOOGLEBOOKS_API_KEY: ${{ secrets.GOOGLEBOOKS_API_KEY }}
 
+
+      - name: Detect Signals (Layer 2)
+        if: ${{ always() }}
+        run: python scripts/signal_detector.py
+
       - name: Auto Commit
         if: ${{ always() }}
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "data: automated product data update"
-          file_pattern: "data/raw/*.json"
+          file_pattern: "data/raw/*.json data/item_db.json"
           branch: main
