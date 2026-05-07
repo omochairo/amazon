@@ -15,7 +15,21 @@ def main():
 
     app_id = get_secret("RAKUTEN_APP_ID")
     access_key = get_secret("RAKUTEN_ACCESS_KEY")
-    aff_id = os.environ.get("RAKUTEN_AFFILIATE_ID", "")
+    aff_id = os.environ.get("RAKUTEN_AFFILIATE_ID", "").strip()
+
+    if not app_id or not access_key:
+        logger.warning("Rakuten API keys missing. Generating mock test data for Rakuten.")
+        os.makedirs(args.out, exist_ok=True)
+        items = [{
+            "title": "[テストデータ] 楽天モック知育玩具ブロック",
+            "price": 3500,
+            "url": "https://hb.afl.rakuten.co.jp/hgc/mock/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Fmock%2Fitem%2F",
+            "image": "https://via.placeholder.com/300x300.png?text=Rakuten+Mock",
+            "source": "Rakuten (Mock)"
+        }]
+        with open(os.path.join(args.out, "rakuten.json"), "w", encoding="utf-8") as f:
+            json.dump({"keyword": args.keyword, "items": items}, f, ensure_ascii=False, indent=4)
+        return
 
     if not app_id or not access_key:
         logger.warning("Rakuten API keys missing. Generating mock test data for Rakuten.")
@@ -41,12 +55,35 @@ def main():
         "formatVersion": 2,
         "hits": 30
     }
-    if aff_id: params["affiliateId"] = aff_id
+    if aff_id: params_aff["affiliateId"] = aff_id
+
+    # Attempt 2: RMS API (2026 update)
+    url_rms = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601"
+    params_rms = params_aff.copy()
+    if access_key:
+        params_rms["accessKey"] = access_key
+
+    headers = {
+        "Referer": "https://github.com/omochairo/amazon",
+        "Origin": "https://github.com/omochairo/amazon"
+    }
+
+    # Try RMS first if access_key is present, otherwise Affiliate API
+    url = url_rms if access_key else url_aff
+    params = params_rms if access_key else params_aff
 
     resp = requests.get(url, params=params, headers=headers)
+
     if resp.status_code != 200:
-        logger.error(f"Rakuten error: {resp.text}")
-        sys.exit(1)
+        # Fallback to the other API
+        logger.warning(f"Rakuten first attempt failed ({url}): {resp.text}. Trying fallback API...")
+        url = url_aff if url == url_rms else url_rms
+        params = params_aff if url == url_aff else params_rms
+        resp = requests.get(url, params=params, headers=headers)
+
+        if resp.status_code != 200:
+            logger.error(f"Rakuten fallback error ({url}): {resp.text}")
+            sys.exit(1)
 
     data = resp.json()
     items = []
