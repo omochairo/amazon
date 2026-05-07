@@ -16,11 +16,16 @@ logger = logging.getLogger("fetch_books")
 def fetch_books(keyword):
     api_key = os.environ.get("GOOGLEBOOKS_API_KEY")
     if not api_key:
-        logger.error("GOOGLEBOOKS_API_KEY が設定されていません。")
-        # return # Continue without key might work for public data, but Google often requires it
+        logger.warning("GOOGLEBOOKS_API_KEY missing. Skipping Google Books fetch.")
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        save_path = os.path.join(base_dir, "data", "books_result.json")
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        with open(save_path, "w", encoding="utf-8") as f:
+            json.dump({"keyword": keyword, "items": []}, f, ensure_ascii=False, indent=4)
+        return
 
     # 知育・育児ブログ向けに検索クエリを最適化
-    query = f"{keyword} 知育 絵本"
+    query = f"{keyword} 絵本" if "知育" in keyword else f"{keyword} 知育 絵本"
 
     url = "https://www.googleapis.com/books/v1/volumes"
     params = {
@@ -35,9 +40,16 @@ def fetch_books(keyword):
         response = requests.get(url, params=params, timeout=15)
         response.raise_for_status()
         data = response.json()
+    except requests.exceptions.HTTPError as e:
+        if response.status_code >= 500:
+            logger.warning(f"Google Books API 5xx Server Error (temporarily down). Skipping. Details: {e}")
+            data = {"items": []}
+        else:
+            logger.error(f"Google Books API HTTP Error: {e}")
+            sys.exit(1)
     except Exception as e:
-        logger.error(f"Google Books APIエラー: {e}")
-        return
+        logger.error(f"Google Books API Request Error: {e}")
+        sys.exit(1)
 
     items = []
     for item in data.get("items", []):
@@ -73,5 +85,5 @@ def fetch_books(keyword):
     logger.info(f"関連書籍を {len(items)} 件取得し、{save_path} に保存しました。")
 
 if __name__ == "__main__":
-    keyword = sys.argv[1] if len(sys.argv) > 1 else "知育"
+    keyword = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] else "知育"
     fetch_books(keyword)
