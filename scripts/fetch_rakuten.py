@@ -39,6 +39,7 @@ def main():
     }
     params = {
         "applicationId": app_id,
+        "accessKey": access_key,
         "keyword": args.keyword,
         "genreId": "566382",
         "sort": "-updateTimestamp",
