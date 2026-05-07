@@ -95,6 +95,7 @@ def main():
         title = f"【徹底比較】{keyword}のおすすめ人気ランキング厳選！失敗しない選び方"
         lead = f"育児に欠かせない「{keyword}」。種類が多すぎてどれを選べばいいか迷っていませんか？この記事では、Amazon・楽天・Yahoo!ショッピングから厳選した本当に価値のあるアイテムを徹底比較します。さらに、タカラトミーモール直送の最新情報も合わせてお届け！"
 
+    # Deep SEO Optimization Structure
     article = {
         "slug": slug,
         "title": title,

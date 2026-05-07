@@ -45,7 +45,22 @@ def main():
         "formatVersion": 2,
         "hits": 30
     }
-    if aff_id: params["affiliateId"] = aff_id
+    if aff_id: params_aff["affiliateId"] = aff_id
+
+    # Attempt 2: RMS API (2026 update)
+    url_rms = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601"
+    params_rms = params_aff.copy()
+    if access_key:
+        params_rms["accessKey"] = access_key
+
+    headers = {
+        "Referer": "https://github.com/omochairo/amazon",
+        "Origin": "https://github.com/omochairo/amazon"
+    }
+
+    # Try RMS first if access_key is present, otherwise Affiliate API
+    url = url_rms if access_key else url_aff
+    params = params_rms if access_key else params_aff
 
     resp = requests.get(url, params=params, headers=headers)
 
