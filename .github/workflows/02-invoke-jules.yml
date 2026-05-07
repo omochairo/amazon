@@ -17,6 +17,8 @@ jobs:
         run: |
           export PYTHONPATH=scripts
           python scripts/jules_article_engine.py
+      - name: Sync with remote
+        run: git pull --rebase origin main
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "docs: 新しい記事の自動生成"

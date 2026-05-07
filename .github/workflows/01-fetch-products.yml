@@ -85,10 +85,14 @@ jobs:
         if: ${{ always() }}
         run: python scripts/signal_detector.py
 
+      - name: Sync with remote
+        if: ${{ always() }}
+        run: git pull --rebase origin main
+
       - name: Auto Commit
         if: ${{ always() }}
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "data: automated product data update"
-          file_pattern: "data/raw/*.json data/item_db.json"
+          file_pattern: "data/"
           branch: main

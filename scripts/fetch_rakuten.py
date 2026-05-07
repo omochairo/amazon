@@ -31,22 +31,12 @@ def main():
             json.dump({"keyword": args.keyword, "items": items}, f, ensure_ascii=False, indent=4)
         return
 
-    if not app_id or not access_key:
-        logger.warning("Rakuten API keys missing. Generating mock test data for Rakuten.")
-        os.makedirs(args.out, exist_ok=True)
-        items = [{
-            "title": "[テストデータ] 楽天モック知育玩具ブロック",
-            "price": 3500,
-            "url": "https://hb.afl.rakuten.co.jp/hgc/mock/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Fmock%2Fitem%2F",
-            "image": "https://via.placeholder.com/300x300.png?text=Rakuten+Mock",
-            "source": "Rakuten (Mock)"
-        }]
-        with open(os.path.join(args.out, "rakuten.json"), "w", encoding="utf-8") as f:
-            json.dump({"keyword": args.keyword, "items": items}, f, ensure_ascii=False, indent=4)
-        return
-
     url = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601"
-    headers = {"Authorization": f"Bearer {access_key}"}
+    headers = {
+        "Authorization": f"Bearer {access_key}",
+        "Referer": "https://github.com/omochairo/amazon",
+        "Origin": "https://github.com/omochairo/amazon"
+    }
     params = {
         "applicationId": app_id,
         "keyword": args.keyword,
@@ -75,14 +65,21 @@ def main():
     resp = requests.get(url, params=params, headers=headers)
 
     if resp.status_code != 200:
-        # Fallback to the other API
-        logger.warning(f"Rakuten first attempt failed ({url}): {resp.text}. Trying fallback API...")
-        url = url_aff if url == url_rms else url_rms
-        params = params_aff if url == url_aff else params_rms
-        resp = requests.get(url, params=params, headers=headers)
+        logger.warning(f"Rakuten RMS API failed ({url}): {resp.text}. Trying Affiliate API fallback...")
+        url_aff = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601"
+        params_aff = {
+            "applicationId": app_id,
+            "keyword": args.keyword,
+            "genreId": "566382",
+            "sort": "-updateTimestamp",
+            "formatVersion": 2,
+            "hits": 30
+        }
+        if aff_id: params_aff["affiliateId"] = aff_id
+        resp = requests.get(url_aff, params=params_aff)
 
         if resp.status_code != 200:
-            logger.error(f"Rakuten fallback error ({url}): {resp.text}")
+            logger.error(f"Rakuten fallback error ({url_aff}): {resp.text}")
             sys.exit(1)
 
     data = resp.json()
