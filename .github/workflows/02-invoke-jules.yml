@@ -1,26 +1,26 @@
 name: Invoke Jules for New Queue
 on:
   push:
-    paths: ['data/queue/**']
+    paths: ['data/raw/**']
 
 jobs:
   invoke:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - name: Call Jules API
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install -r requirements.txt
+      - name: Call Jules Article Engine
         run: |
-          curl -X POST https://jules.googleapis.com/v1/tasks \
-            -H "Authorization: Bearer ${{ secrets.JULES_API_KEY }}" \
-            -d @- <<EOF
-          {
-            "repo": "omochairo/amazon",
-            "branch": "main",
-            "prompt_file": "jules/PROMPT_TEMPLATE.md",
-            "context_files": [
-              "AGENTS.md",
-              "data/queue/",
-              "data/products/",
-              "jules/EXAMPLES/"
-            ]
-          }
-          EOF
+          export PYTHONPATH=scripts
+          python scripts/jules_article_engine.py
+      - name: Sync with remote
+        run: git pull --rebase origin main
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "docs: 新しい記事の自動生成"
+          file_pattern: "data/articles/*.json"
+          branch: main

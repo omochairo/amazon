@@ -142,8 +142,13 @@ def fetch_yahoo(keyword: str) -> None:
     pid = os.environ.get("VALUECOMMERCE_PID")
 
     if not client_id:
-        logger.error("YAHOO_CLIENT_ID が未設定です。")
-        sys.exit(1)
+        logger.warning("YAHOO_CLIENT_ID missing. Skipping Yahoo fetch.")
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        save_path = os.path.join(base_dir, "data", "yahoo_result.json")
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        with open(save_path, "w", encoding="utf-8") as f:
+            json.dump({"keyword": keyword, "items": []}, f, ensure_ascii=False, indent=4)
+        return
 
     if not sid or not pid:
         logger.warning(
@@ -243,5 +248,5 @@ def fetch_yahoo(keyword: str) -> None:
 # エントリーポイント
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    keyword = sys.argv[1] if len(sys.argv) > 1 else "ワイヤレスイヤホン"
+    keyword = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] else "知育玩具"
     fetch_yahoo(keyword)

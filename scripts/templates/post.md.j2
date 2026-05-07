@@ -5,6 +5,10 @@
 
 {{ lead }}
 
+{% if signal_type %}
+> **⚡ Jules検出トレンド**: この記事は「{{ signal_type_label }}」シグナルに基づいて、最新の市場動向を反映して作成されています。
+{% endif %}
+
 ---
 
 ## 🏆 クイック比較：今回のおすすめトップ3
@@ -25,7 +29,7 @@
 
 - **💰 価格**: {{ p.price }} {% if p.is_cheapest %}🔥 **最安値！**{% endif %}
 - **📊 IVS（知育価値スコア）**: {{ p.ivs_score }}/5.0
-- **🔗 購入サイト**: [Amazon]({{ p.amazon_url }}) / [楽天]({{ p.rakuten_url or "#" }})
+- **🔗 購入サイト**: [Amazon]({{ p.amazon_url }}) / [楽天]({{ p.rakuten_url or "#" }}) / [Yahoo]({{ p.yahoo_url or "#" }})
 
 > [!TIP]
 > **👍 メリット**: {{ p.pros | join(', ') }}
@@ -41,7 +45,33 @@
 {% if youtube_embeds %}
 ## 📺 関連動画でチェック
 {% for vid in youtube_embeds %}
-{{ vid }}
+### {{ vid.title }}
+{{ vid.embed_html }}
+{% endfor %}
+{% endif %}
+
+{% if books %}
+## 📚 知育に役立つ関連絵本・書籍
+{% for book in books %}
+### [{{ book.title }}]({{ book.url }})
+{% if book.image %}![{{ book.title }}]({{ book.image }}){% endif %}
+
+{{ book.description }}
+{% endfor %}
+{% endif %}
+
+{% if tomy_items %}
+## 🆕 タカラトミーモール直送！最新＆予約アイテム情報
+公式ストアから最新のラインナップをお届けします。（※まだAPIで取得できない未発売商品も含むため、確実な予約は公式からどうぞ）
+{% for t in tomy_items %}
+- 🧸 **[{{ t.title }}]({{ t.url }})**
+{% endfor %}
+{% endif %}
+
+{% if news %}
+## 📰 最新の知育・子育てニュース
+{% for n in news %}
+- [{{ n.title }}]({{ n.url }})
 {% endfor %}
 {% endif %}
 
