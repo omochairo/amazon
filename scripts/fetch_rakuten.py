@@ -31,9 +31,9 @@ def main():
             json.dump({"keyword": args.keyword, "items": items}, f, ensure_ascii=False, indent=4)
         return
 
+    # --- Fetch Search Data (Layer 1) ---
     url = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601"
     headers = {
-        "Authorization": f"Bearer {access_key}",
         "Referer": "https://github.com/omochairo/amazon",
         "Origin": "https://github.com/omochairo/amazon"
     }
@@ -51,39 +51,26 @@ def main():
     resp = requests.get(url, params=params, headers=headers)
 
     if resp.status_code != 200:
-        logger.warning(f"Rakuten RMS API failed ({url}): {resp.text}. Trying Affiliate API fallback...")
-        url_aff = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601"
-        params_aff = {
-            "applicationId": app_id,
-            "keyword": args.keyword,
-            "genreId": "566382",
-            "sort": "-updateTimestamp",
-            "formatVersion": 2,
-            "hits": 30
-        }
-        if aff_id: params_aff["affiliateId"] = aff_id
-        resp = requests.get(url_aff, params=params_aff)
-
-        if resp.status_code != 200:
-            logger.error(f"Rakuten fallback error ({url_aff}): {resp.text}")
-            sys.exit(1)
+        logger.error(f"Rakuten RMS API failed ({url}): {resp.text}")
+        sys.exit(1)
 
     data = resp.json()
     items = []
+    # Note: New API might have a different JSON structure, but we assume it's still 'Items'
     for item in data.get("Items", []):
+        i = item.get("Item", item) # Safely handle if it's nested or not
         items.append({
-            "title": item.get("itemName"),
-            "price": item.get("itemPrice"),
-            "url": item.get("affiliateUrl") or item.get("itemUrl"),
-            "image": item.get("mediumImageUrls", [None])[0],
-            "itemCode": item.get("itemCode", ""),
-            "reviewCount": item.get("reviewCount", 0),
+            "title": i.get("itemName"),
+            "price": i.get("itemPrice"),
+            "url": i.get("affiliateUrl") or i.get("itemUrl"),
+            "image": i.get("mediumImageUrls", [{"imageUrl": ""}])[0]["imageUrl"] if i.get("mediumImageUrls") else "",
+            "itemCode": i.get("itemCode", ""),
+            "reviewCount": i.get("reviewCount", 0),
             "source": "Rakuten"
         })
 
-
     # --- Fetch Ranking Data (Layer 1) ---
-    ranking_url = "https://openapi.rakuten.co.jp/services/api/IchibaItem/Ranking/20220601"
+    ranking_url = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Ranking/20220601"
     ranking_params = {
         "applicationId": app_id,
         "accessKey": access_key,
@@ -92,11 +79,11 @@ def main():
     if aff_id: ranking_params["affiliateId"] = aff_id
 
     try:
-        rank_resp = requests.get(ranking_url, params=ranking_params)
+        rank_resp = requests.get(ranking_url, params=ranking_params, headers=headers)
         rank_items = []
         if rank_resp.status_code == 200:
             for item in rank_resp.json().get("Items", []):
-                i = item.get("Item", {})
+                i = item.get("Item", item)
                 rank_items.append({
                     "rank": i.get("rank"),
                     "title": i.get("itemName"),
@@ -111,6 +98,7 @@ def main():
             json.dump({"items": rank_items}, f, ensure_ascii=False, indent=4)
     except Exception as e:
         logger.error(f"Ranking API failed: {e}")
+
     os.makedirs(args.out, exist_ok=True)
     with open(os.path.join(args.out, "rakuten.json"), "w", encoding="utf-8") as f:
         json.dump({"keyword": args.keyword, "items": items}, f, ensure_ascii=False, indent=4)
