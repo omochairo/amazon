@@ -59,11 +59,22 @@ def main():
     # Note: New API might have a different JSON structure, but we assume it's still 'Items'
     for item in data.get("Items", []):
         i = item.get("Item", item) # Safely handle if it's nested or not
+
+        # Robust image extraction
+        image_url = ""
+        img_list = i.get("mediumImageUrls")
+        if img_list and len(img_list) > 0:
+            first_img = img_list[0]
+            if isinstance(first_img, dict):
+                image_url = first_img.get("imageUrl", "")
+            else:
+                image_url = first_img
+
         items.append({
             "title": i.get("itemName"),
             "price": i.get("itemPrice"),
             "url": i.get("affiliateUrl") or i.get("itemUrl"),
-            "image": i.get("mediumImageUrls", [{"imageUrl": ""}])[0]["imageUrl"] if i.get("mediumImageUrls") else "",
+            "image": image_url,
             "itemCode": i.get("itemCode", ""),
             "reviewCount": i.get("reviewCount", 0),
             "source": "Rakuten"
@@ -84,12 +95,23 @@ def main():
         if rank_resp.status_code == 200:
             for item in rank_resp.json().get("Items", []):
                 i = item.get("Item", item)
+
+                # Robust image extraction
+                image_url = ""
+                img_list = i.get("mediumImageUrls")
+                if img_list and len(img_list) > 0:
+                    first_img = img_list[0]
+                    if isinstance(first_img, dict):
+                        image_url = first_img.get("imageUrl", "")
+                    else:
+                        image_url = first_img
+
                 rank_items.append({
                     "rank": i.get("rank"),
                     "title": i.get("itemName"),
                     "price": i.get("itemPrice"),
                     "url": i.get("affiliateUrl") or i.get("itemUrl"),
-                    "image": i.get("mediumImageUrls", [{"imageUrl": ""}])[0]["imageUrl"] if i.get("mediumImageUrls") else "",
+                    "image": image_url,
                     "itemCode": i.get("itemCode"),
                     "reviewCount": i.get("reviewCount", 0)
                 })
