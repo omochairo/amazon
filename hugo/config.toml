@@ -4,6 +4,7 @@ title = 'おもちゃいろ Amazon比較ナビ 🧸'
 theme = 'PaperMod'
 contentDir = 'content'
 canonifyURLs = true
+relativeURLs = false
 
 [pagination]
   pagerSize = 10
@@ -13,6 +14,7 @@ canonifyURLs = true
   description = "Julesが毎日自動更新！人気おもちゃのAmazon価格比較サイト"
   author = "おもちゃいろ編集部"
   defaultTheme = "auto"
+  mainSections = ["posts"]
   ShowReadingTime = true
   ShowShareButtons = true
   ShowPostNavLinks = true

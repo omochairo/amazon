@@ -7,6 +7,8 @@
 
 {% if signal_type %}
 > **⚡ Jules検出トレンド**: この記事は「{{ signal_type_label }}」シグナルに基づいて、最新の市場動向を反映して作成されています。
+{% elif mode %}
+> **🏷️ カテゴリ**: {{ mode }}（Jules編集長による厳選ピックアップ）
 {% endif %}
 
 ---
@@ -15,7 +17,7 @@
 
 | 順位 | 商品名 | 知育スコア | 特徴 | リンク |
 |:---:|:---|:---:|:---|:---:|
-{% for p in products[:3] %}
+{% for p in products[:3] -%}
 | {{ loop.index }} | {{ p.name[:20] }}... | {{ p.ivs_score }} | {{ p.pros[0] }} | [詳細]({{ p.amazon_url }}) |
 {% endfor %}
 
