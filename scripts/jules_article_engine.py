@@ -111,9 +111,15 @@ def find_best_match(target_title, pool_items):
 def generate_slug(keyword):
     """Generates a URL-safe slug from a keyword."""
     # Convert to lowercase and replace spaces/special chars
+    # We strictly use alphanumeric ASCII for broadest compatibility
     slug = keyword.lower()
-    slug = re.sub(r'[^a-z0-9\u4e00-\u9faf\u3040-\u309f\u30a0-\u30ff]+', '-', slug)
+    # Replace non-alphanumeric with hyphens
+    slug = re.sub(r'[^a-z0-9]+', '-', slug)
     slug = slug.strip('-')
+
+    # If slug is empty after filtering (e.g. only Japanese), use a fallback
+    if not slug:
+        slug = "toy-review"
 
     # Prepend date
     date_str = datetime.now().strftime('%Y-%m-%d')

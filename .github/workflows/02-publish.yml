@@ -4,6 +4,11 @@ on:
     paths: ['data/raw/**']
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -14,6 +19,11 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
+
+      - name: Sync with remote
+        run: |
+          git fetch origin main
+          git reset --mixed origin/main
 
       - uses: actions/setup-python@v5
         with:
@@ -30,16 +40,16 @@ jobs:
       - name: Layer 3 - Render Markdown
         run: python scripts/build_post.py
 
-      - name: Sync with remote
+      - name: Debug Output
         run: |
-          git fetch origin main
-          git reset --mixed origin/main
+          ls -R data/articles/
+          ls -R hugo/content/posts/
 
       - name: Commit Generated Data
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "docs: AI-generated article update [skip ci]"
-          file_pattern: "data/articles/ hugo/content/posts/"
+          file_pattern: "data/articles/*.json hugo/content/posts/*.md"
           branch: main
 
       - name: Setup Hugo
