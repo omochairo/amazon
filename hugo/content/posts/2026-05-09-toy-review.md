@@ -8,15 +8,15 @@ tags:
 - おすすめ
 - 徹底比較
 - 2026年最新
-title: 【初登場】市場が注目する最新おもちゃ「【0の付く日先着7名様限定! ...」のポテンシャルとは？
+title: 【初登場】市場が注目する最新おもちゃ「【5/10限定】最大100％ポ...」のポテンシャルとは？
 ---
 
-# 【初登場】市場が注目する最新おもちゃ「【0の付く日先着7名様限定! ...」のポテンシャルとは？
+# 【初登場】市場が注目する最新おもちゃ「【5/10限定】最大100％ポ...」のポテンシャルとは？
 
 > **📢 PR表記**: この記事にはアフィリエイトリンクが含まれています。
 > 記事の内容はAIエージェント「Jules」が自動生成したものです。（最終更新: 2026-05-09）
 
-データ分析システムが市場に初登場したばかりの注目アイテム「【0の付く日先着7名様限定! 15％OFFクーポン [5/10 00:00〜23:59]】 ベビージム　木製　【送料無料】　ベビージムセット　木のおもちゃ　玩具　5か月　赤ちゃん　ベビー　プレゼント　贈り物　HOPPL　木　プレイジム　ベビートレーナー　知育玩具　出産祝い　セット　カワイ」をキャッチしました！まだ誰も知らないこの最新アイテムの魅力と、ライバル商品とのスペック比較をお届けします。
+データ分析システムが市場に初登場したばかりの注目アイテム「【5/10限定】最大100％ポイントバック　　くもん スタディクロック」をキャッチしました！まだ誰も知らないこの最新アイテムの魅力と、ライバル商品とのスペック比較をお届けします。
 
 
 > **⚡ Jules検出トレンド**: この記事は「新着」シグナルに基づいて、最新の市場動向を反映して作成されています。
@@ -43,7 +43,7 @@ title: 【初登場】市場が注目する最新おもちゃ「【0の付く日
 
 - **💰 価格**: 1799 🔥 **最安値！**
 - **📊 IVS（知育価値スコア）**: 5.0/5.0
-- **🔗 購入サイト**: [Amazon](https://www.amazon.co.jp/dp/B0F2T9PFS9/?tag=zefiransesu-22) / [楽天](https://hb.afl.rakuten.co.jp/hgc/g00syksh.wjrz5b96.g00syksh.wjrz6884/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Fhayaritsushin%2Fpaintingset%2F&m=http%3A%2F%2Fm.rakuten.co.jp%2Fhayaritsushin%2Fi%2F10001572%2F&rafcid=wsc_i_is_e1a8d36c-477f-43ee-b1ee-b55930c00087) / [Yahoo](#)
+- **🔗 購入サイト**: [Amazon](https://www.amazon.co.jp/dp/B0F2T9PFS9/?tag=zefiransesu-22) / [楽天](https://hb.afl.rakuten.co.jp/hgc/g00qcnfh.wjrz53bf.g00qcnfh.wjrz6d93/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Fnatural-living%2Fu171184%2F&m=http%3A%2F%2Fm.rakuten.co.jp%2Fnatural-living%2Fi%2F10018768%2F&rafcid=wsc_i_is_e1a8d36c-477f-43ee-b1ee-b55930c00087) / [Yahoo](#)
 
 > [!TIP]
 > **👍 メリット**: 高い安全性, 知育効果が高い
@@ -63,9 +63,9 @@ title: 【初登場】市場が注目する最新おもちゃ「【0の付く日
 ### グッドトイ受賞 ジスター (GESTAR) 天才のはじまり (混合カラー) 知育玩具 ブロック おもちゃ (3歳～12歳対応 / 男の子 女の子) 480ピース＋40枚増量中 / LOTUS LIFE
 ![グッドトイ受賞 ジスター (GESTAR) 天才のはじまり (混合カラー) 知育玩具 ブロック おもちゃ (3歳～12歳対応 / 男の子 女の子) 480ピース＋40枚増量中 / LOTUS LIFE](https://m.media-amazon.com/images/I/51TFRmNzv4L._SL500_.jpg)
 
-- **💰 価格**: 3399
+- **💰 価格**: 3399 
 - **📊 IVS（知育価値スコア）**: 4.7/5.0
-- **🔗 購入サイト**: [Amazon](https://www.amazon.co.jp/dp/B073W9V2WB/?tag=zefiransesu-22) / [楽天](https://hb.afl.rakuten.co.jp/hgc/g00syksh.wjrz5b96.g00syksh.wjrz6884/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Fhayaritsushin%2Fpaintingset%2F&m=http%3A%2F%2Fm.rakuten.co.jp%2Fhayaritsushin%2Fi%2F10001572%2F&rafcid=wsc_i_is_e1a8d36c-477f-43ee-b1ee-b55930c00087) / [Yahoo](#)
+- **🔗 購入サイト**: [Amazon](https://www.amazon.co.jp/dp/B073W9V2WB/?tag=zefiransesu-22) / [楽天](https://hb.afl.rakuten.co.jp/hgc/g00qcnfh.wjrz53bf.g00qcnfh.wjrz6d93/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Fnatural-living%2Fu171184%2F&m=http%3A%2F%2Fm.rakuten.co.jp%2Fnatural-living%2Fi%2F10018768%2F&rafcid=wsc_i_is_e1a8d36c-477f-43ee-b1ee-b55930c00087) / [Yahoo](#)
 
 > [!TIP]
 > **👍 メリット**: 高い安全性, 長く愛用できる, 直感的に遊べる
@@ -84,7 +84,7 @@ title: 【初登場】市場が注目する最新おもちゃ「【0の付く日
 ### TOY AWARD 2025 受賞 モンテッソーリ 【楽しく知育！プロ推薦】 赤ちゃん おもちゃ アクティビティキューブ知育玩具 0歳 6か月～ わくわく6キューブ【食品衛生法試験合格】安全設計 高い耐久性 音が鳴る 0歳 1歳 2歳 誕生日プレゼント 男の子 女の子 ベビー 幼児 出産祝い ギフト【日本正規品】
 ![TOY AWARD 2025 受賞 モンテッソーリ 【楽しく知育！プロ推薦】 赤ちゃん おもちゃ アクティビティキューブ知育玩具 0歳 6か月～ わくわく6キューブ【食品衛生法試験合格】安全設計 高い耐久性 音が鳴る 0歳 1歳 2歳 誕生日プレゼント 男の子 女の子 ベビー 幼児 出産祝い ギフト【日本正規品】](https://m.media-amazon.com/images/I/51MKVu2vYDL._SL500_.jpg)
 
-- **💰 価格**: 3980
+- **💰 価格**: 3980 
 - **📊 IVS（知育価値スコア）**: 4.6/5.0
 - **🔗 購入サイト**: [Amazon](https://www.amazon.co.jp/dp/B0FHVH6JML/?tag=zefiransesu-22) / [楽天](https://hb.afl.rakuten.co.jp/hgc/g00qp8ah.wjrz5cf7.g00qp8ah.wjrz6b88/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Fbackyard%2Fclothbook%2F&m=http%3A%2F%2Fm.rakuten.co.jp%2Fbackyard%2Fi%2F10370400%2F&rafcid=wsc_i_is_e1a8d36c-477f-43ee-b1ee-b55930c00087) / [Yahoo](#)
 
@@ -107,9 +107,9 @@ title: 【初登場】市場が注目する最新おもちゃ「【0の付く日
 ### 3in1モンテッソーリ玩具 知育玩具 3 4 5 6歳 ボードゲーム バランスゲーム 子供も大人も老若男女楽しめるおもちゃ Bajoy テーブルゲーム パーティーゲーム 49PCS大容量セット 日本語説明書付き
 ![3in1モンテッソーリ玩具 知育玩具 3 4 5 6歳 ボードゲーム バランスゲーム 子供も大人も老若男女楽しめるおもちゃ Bajoy テーブルゲーム パーティーゲーム 49PCS大容量セット 日本語説明書付き](https://m.media-amazon.com/images/I/51sUZD0G11L._SL500_.jpg)
 
-- **💰 価格**: 3350
+- **💰 価格**: 3350 
 - **📊 IVS（知育価値スコア）**: 4.4/5.0
-- **🔗 購入サイト**: [Amazon](https://www.amazon.co.jp/dp/B0F8QQ4XH4/?tag=zefiransesu-22) / [楽天](https://hb.afl.rakuten.co.jp/hgc/g00ulv1h.wjrz5b4a.g00ulv1h.wjrz63f2/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Fhellodear%2Fb0d9crw6yk%2F&m=http%3A%2F%2Fm.rakuten.co.jp%2Fhellodear%2Fi%2F11035242%2F&rafcid=wsc_i_is_e1a8d36c-477f-43ee-b1ee-b55930c00087) / [Yahoo](#)
+- **🔗 購入サイト**: [Amazon](https://www.amazon.co.jp/dp/B0F8QQ4XH4/?tag=zefiransesu-22) / [楽天](https://hb.afl.rakuten.co.jp/hgc/g00qcnfh.wjrz53bf.g00qcnfh.wjrz6d93/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Fnatural-living%2Fu171184%2F&m=http%3A%2F%2Fm.rakuten.co.jp%2Fnatural-living%2Fi%2F10018768%2F&rafcid=wsc_i_is_e1a8d36c-477f-43ee-b1ee-b55930c00087) / [Yahoo](#)
 
 > [!TIP]
 > **👍 メリット**: 高い安全性, 直感的に遊べる, 知育効果が高い
@@ -129,9 +129,9 @@ title: 【初登場】市場が注目する最新おもちゃ「【0の付く日
 ### Bajoy 木製パズル 4種類シリーズ プラスサイズ60PCS大容量 型はめパズル 脳トレ 3 4 5 6歳 モンテッソーリ 知育玩具 指先あそび 図形認識 空間認識 色彩感覚 記憶力トレ 男の子 女の子おもちゃ 誕生日 クリスマス プレゼント
 ![Bajoy 木製パズル 4種類シリーズ プラスサイズ60PCS大容量 型はめパズル 脳トレ 3 4 5 6歳 モンテッソーリ 知育玩具 指先あそび 図形認識 空間認識 色彩感覚 記憶力トレ 男の子 女の子おもちゃ 誕生日 クリスマス プレゼント](https://m.media-amazon.com/images/I/51xBp9Z-bgL._SL500_.jpg)
 
-- **💰 価格**: 3500
+- **💰 価格**: 3500 
 - **📊 IVS（知育価値スコア）**: 4.2/5.0
-- **🔗 購入サイト**: [Amazon](https://www.amazon.co.jp/dp/B0CZDVTJZG/?tag=zefiransesu-22) / [楽天](https://hb.afl.rakuten.co.jp/hgc/g00qu8oh.wjrz5361.g00qu8oh.wjrz6153/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Fyuki-closet%2F100793%2F&m=http%3A%2F%2Fm.rakuten.co.jp%2Fyuki-closet%2Fi%2F10008171%2F&rafcid=wsc_i_is_e1a8d36c-477f-43ee-b1ee-b55930c00087) / [Yahoo](#)
+- **🔗 購入サイト**: [Amazon](https://www.amazon.co.jp/dp/B0CZDVTJZG/?tag=zefiransesu-22) / [楽天](https://hb.afl.rakuten.co.jp/hgc/g00qcnfh.wjrz53bf.g00qcnfh.wjrz6d93/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Fnatural-living%2Fu171184%2F&m=http%3A%2F%2Fm.rakuten.co.jp%2Fnatural-living%2Fi%2F10018768%2F&rafcid=wsc_i_is_e1a8d36c-477f-43ee-b1ee-b55930c00087) / [Yahoo](#)
 
 > [!TIP]
 > **👍 メリット**: 高い安全性, 直感的に遊べる, 知育効果が高い
@@ -150,9 +150,9 @@ title: 【初登場】市場が注目する最新おもちゃ「【0の付く日
 ### Joyreal モンテッソーリ ビジーボード 知育玩具2 3歳誕生日プレゼント男の子 女の子 知育玩具 LED おもちゃ 指先知育 早期開発
 ![Joyreal モンテッソーリ ビジーボード 知育玩具2 3歳誕生日プレゼント男の子 女の子 知育玩具 LED おもちゃ 指先知育 早期開発](https://m.media-amazon.com/images/I/51mxHsMHBxL._SL500_.jpg)
 
-- **💰 価格**: 3199
+- **💰 価格**: 3199 
 - **📊 IVS（知育価値スコア）**: 4.1/5.0
-- **🔗 購入サイト**: [Amazon](https://www.amazon.co.jp/dp/B0CQY911ZP/?tag=zefiransesu-22) / [楽天](https://hb.afl.rakuten.co.jp/hgc/g00uge1h.wjrz534d.g00uge1h.wjrz6101/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Ftsjahop%2F10015485%2F&m=http%3A%2F%2Fm.rakuten.co.jp%2Ftsjahop%2Fi%2F10015485%2F&rafcid=wsc_i_is_e1a8d36c-477f-43ee-b1ee-b55930c00087) / [Yahoo](#)
+- **🔗 購入サイト**: [Amazon](https://www.amazon.co.jp/dp/B0CQY911ZP/?tag=zefiransesu-22) / [楽天](https://hb.afl.rakuten.co.jp/hgc/g00qcnfh.wjrz53bf.g00qcnfh.wjrz6d93/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Fnatural-living%2Fu171184%2F&m=http%3A%2F%2Fm.rakuten.co.jp%2Fnatural-living%2Fi%2F10018768%2F&rafcid=wsc_i_is_e1a8d36c-477f-43ee-b1ee-b55930c00087) / [Yahoo](#)
 
 > [!TIP]
 > **👍 メリット**: 高い安全性, 直感的に遊べる, 知育効果が高い
@@ -171,7 +171,7 @@ title: 【初登場】市場が注目する最新おもちゃ「【0の付く日
 ### アガツマ(AGATSUMA) おうたもあいうえおも! アンパンマン はじめてのキッズタブレット 【日本おもちゃ大賞2023共有玩具部門優秀賞】(対象年齢:1歳半以上)
 ![アガツマ(AGATSUMA) おうたもあいうえおも! アンパンマン はじめてのキッズタブレット 【日本おもちゃ大賞2023共有玩具部門優秀賞】(対象年齢:1歳半以上)](https://m.media-amazon.com/images/I/51tamHMPgCL._SL500_.jpg)
 
-- **💰 価格**: 2955
+- **💰 価格**: 2955 
 - **📊 IVS（知育価値スコア）**: 3.9/5.0
 - **🔗 購入サイト**: [Amazon](https://www.amazon.co.jp/dp/B0C8HK543G/?tag=zefiransesu-22) / [楽天](#) / [Yahoo](#)
 
@@ -192,7 +192,7 @@ title: 【初登場】市場が注目する最新おもちゃ「【0の付く日
 ### セガフェイブ(SEGA FAVE) アンパンマン つかまえて♪ころぴょん アンパンマン
 ![セガフェイブ(SEGA FAVE) アンパンマン つかまえて♪ころぴょん アンパンマン](https://m.media-amazon.com/images/I/41Sjn+8JekL._SL500_.jpg)
 
-- **💰 価格**: 2055
+- **💰 価格**: 2055 
 - **📊 IVS（知育価値スコア）**: 3.9/5.0
 - **🔗 購入サイト**: [Amazon](https://www.amazon.co.jp/dp/B00QER4Y1E/?tag=zefiransesu-22) / [楽天](#) / [Yahoo](#)
 
@@ -213,9 +213,9 @@ title: 【初登場】市場が注目する最新おもちゃ「【0の付く日
 ### Numberblocks ナンバーブロックス シング＆レコード ミュージックプレーヤー かずあそび 歌って録音＆再生 知育玩具 96941 正規品
 ![Numberblocks ナンバーブロックス シング＆レコード ミュージックプレーヤー かずあそび 歌って録音＆再生 知育玩具 96941 正規品](https://m.media-amazon.com/images/I/51G9JLnsXiL._SL500_.jpg)
 
-- **💰 価格**: 5698
+- **💰 価格**: 5698 
 - **📊 IVS（知育価値スコア）**: 3.6/5.0
-- **🔗 購入サイト**: [Amazon](https://www.amazon.co.jp/dp/B0FM8V4H6X/?tag=zefiransesu-22) / [楽天](https://hb.afl.rakuten.co.jp/hgc/g00uge1h.wjrz534d.g00uge1h.wjrz6101/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Ftsjahop%2F10015485%2F&m=http%3A%2F%2Fm.rakuten.co.jp%2Ftsjahop%2Fi%2F10015485%2F&rafcid=wsc_i_is_e1a8d36c-477f-43ee-b1ee-b55930c00087) / [Yahoo](#)
+- **🔗 購入サイト**: [Amazon](https://www.amazon.co.jp/dp/B0FM8V4H6X/?tag=zefiransesu-22) / [楽天](https://hb.afl.rakuten.co.jp/hgc/g00qp8ah.wjrz5cf7.g00qp8ah.wjrz6b88/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Fbackyard%2Fdigort001%2F&m=http%3A%2F%2Fm.rakuten.co.jp%2Fbackyard%2Fi%2F10367930%2F&rafcid=wsc_i_is_e1a8d36c-477f-43ee-b1ee-b55930c00087) / [Yahoo](#)
 
 > [!TIP]
 > **👍 メリット**: 知育効果が高い
@@ -234,7 +234,7 @@ title: 【初登場】市場が注目する最新おもちゃ「【0の付く日
 ### ディズニー 3WAYへんしん知育ボックス くまのプーさん
 ![ディズニー 3WAYへんしん知育ボックス くまのプーさん](https://m.media-amazon.com/images/I/41OLncmHv5L._SL500_.jpg)
 
-- **💰 価格**: 6040
+- **💰 価格**: 6040 
 - **📊 IVS（知育価値スコア）**: 3.5/5.0
 - **🔗 購入サイト**: [Amazon](https://www.amazon.co.jp/dp/B0DF724WKX/?tag=zefiransesu-22) / [楽天](#) / [Yahoo](#)
 
@@ -249,46 +249,10 @@ title: 【初登場】市場が注目する最新おもちゃ「【0の付く日
 
 ---
 
-### ウルトラアクションフィギュア ウルトラマン
-![ウルトラアクションフィギュア ウルトラマン](https://m.media-amazon.com/images/I/41-l5lXvD2L.jpg)
-
-- **💰 価格**: 0
-- **📊 IVS（知育価値スコア）**: 3.4/5.0
-- **🔗 購入サイト**: [Amazon](None) / [楽天](#) / [Yahoo](#)
-
-> [!TIP]
-> **👍 メリット**: 評価が高い, 定番商品
-> **👎 デメリット**: 特になし
-
-#### 🔍 主な特徴
-- 全身18箇所以上が可動
-- 遊びやすい約150mmサイズ
-
-
----
-
-### ウルトラアクションフィギュア ゾフィー
-![ウルトラアクションフィギュア ゾフィー](https://m.media-amazon.com/images/I/41-l5lXvD2L.jpg)
-
-- **💰 価格**: 0
-- **📊 IVS（知育価値スコア）**: 3.4/5.0
-- **🔗 購入サイト**: [Amazon](None) / [楽天](#) / [Yahoo](#)
-
-> [!TIP]
-> **👍 メリット**: 評価が高い, 定番商品
-> **👎 デメリット**: 特になし
-
-#### 🔍 主な特徴
-- 全身18箇所可動
-- ブラザーズマント付属
-
-
----
-
 ### ウルトラアクションフィギュア ウルトラセブン
 ![ウルトラアクションフィギュア ウルトラセブン](https://m.media-amazon.com/images/I/41-l5lXvD2L.jpg)
 
-- **💰 価格**: 0
+- **💰 価格**: 0 
 - **📊 IVS（知育価値スコア）**: 3.4/5.0
 - **🔗 購入サイト**: [Amazon](None) / [楽天](#) / [Yahoo](#)
 
@@ -303,10 +267,28 @@ title: 【初登場】市場が注目する最新おもちゃ「【0の付く日
 
 ---
 
+### ウルトラアクションフィギュア ゾフィー
+![ウルトラアクションフィギュア ゾフィー](https://m.media-amazon.com/images/I/41-l5lXvD2L.jpg)
+
+- **💰 価格**: 0 
+- **📊 IVS（知育価値スコア）**: 3.4/5.0
+- **🔗 購入サイト**: [Amazon](None) / [楽天](#) / [Yahoo](#)
+
+> [!TIP]
+> **👍 メリット**: 評価が高い, 定番商品
+> **👎 デメリット**: 特になし
+
+#### 🔍 主な特徴
+- 全身18箇所可動
+- ブラザーズマント付属
+
+
+---
+
 ### コンビ ピカチュウ ラトル
 ![コンビ ピカチュウ ラトル](https://m.media-amazon.com/images/I/41-l5lXvD2L.jpg)
 
-- **💰 価格**: 0
+- **💰 価格**: 0 
 - **📊 IVS（知育価値スコア）**: 3.4/5.0
 - **🔗 購入サイト**: [Amazon](None) / [楽天](#) / [Yahoo](#)
 
@@ -322,6 +304,24 @@ title: 【初登場】市場が注目する最新おもちゃ「【0の付く日
 
 ---
 
+### ウルトラアクションフィギュア ウルトラマン
+![ウルトラアクションフィギュア ウルトラマン](https://m.media-amazon.com/images/I/41-l5lXvD2L.jpg)
+
+- **💰 価格**: 0 
+- **📊 IVS（知育価値スコア）**: 3.4/5.0
+- **🔗 購入サイト**: [Amazon](None) / [楽天](#) / [Yahoo](#)
+
+> [!TIP]
+> **👍 メリット**: 評価が高い, 定番商品
+> **👎 デメリット**: 特になし
+
+#### 🔍 主な特徴
+- 全身18箇所以上が可動
+- 遊びやすい約150mmサイズ
+
+
+---
+
 
 
 ## 📺 関連動画でチェック
@@ -332,8 +332,8 @@ title: 【初登場】市場が注目する最新おもちゃ「【0の付く日
 ### 知育も楽しく！生後6ヶ月から遊べるおもちゃレビュー【360°知育ベビードーム&amp;バイリンガル2in1転がしてたたいてベビードラム】
 <iframe width="560" height="315" src="https://www.youtube.com/embed/CEfk7zcf_hk" frameborder="0" allowfullscreen></iframe>
 
-### 知育玩具「ラトル TOWER」
-<iframe width="560" height="315" src="https://www.youtube.com/embed/ohu6x5jp32Y" frameborder="0" allowfullscreen></iframe>
+### 知育玩具！3歳から99歳まで家族で楽しめるテトリスみたいなおもちゃ！頭脳を鍛えるパズルゲーム「カタミノ」【デパチャン】
+<iframe width="560" height="315" src="https://www.youtube.com/embed/rfd27osFryw" frameborder="0" allowfullscreen></iframe>
 
 
 
@@ -354,11 +354,11 @@ title: 【初登場】市場が注目する最新おもちゃ「【0の付く日
 
 ## 📰 最新の知育・子育てニュース
 
-- [サイズで選ぶ「ルイ・ヴィトン」の名品バッグ。今選びたい注目モデル(Numero TOKYO)](https://news.yahoo.co.jp/articles/16e39ad0684715a28e38d415481cc21c4477268e?source=rss)
+- [なんと年の数だけ無料…インパクトが強すぎる『バースデー餃子』名古屋コーチンや八丁味噌でこだわりの味に(FNNプライムオンライン)](https://news.yahoo.co.jp/articles/53403eb9a9ca21edd7d4c265f4074d5814f73a9c?source=rss)
 
-- [“ひんやり涼しい日傘”おすすめ2選！ 完全遮光・UVカット率100％で上昇温度も抑える(MAQUIA)](https://news.yahoo.co.jp/articles/3a516eb581bab6cbac3ee37769226afd69b4467c?source=rss)
+- [99歳・中村晋也が刻む「かくれ念仏」　高さ約3m、2026年10月西本願寺鹿児島別院でお披露目予定(FNNプライムオンライン)](https://news.yahoo.co.jp/articles/72774300e68465b3f92c2880ad6f7653b48a061a?source=rss)
 
-- [オシャレな大人が愛用するゴアテックスな「黒いサロモン」は“XT-6じゃないほう”で。【買ってよかったスニーカースナップ】(MEN’S NON-NO WEB)](https://news.yahoo.co.jp/articles/7e6aa0e4e71a0b24fa4802a00cdb47ed222d2711?source=rss)
+- [悔やんでます…年収1,200万円の元営業本部長、「65歳までバリバリ働く」はずが59歳で静かに退場。昼間からぼんやりテレビを眺める空虚な日々(THE GOLD ONLINE（ゴールドオンライン）)](https://news.yahoo.co.jp/articles/b2b605acfd394372519df6bc39b2ab1f72e2c9d5?source=rss)
 
 
 
