@@ -3,7 +3,7 @@ import os
 import re
 from datetime import datetime
 
-DB_PATH = "data/item_db.json"
+DB_PATH = "data/raw/item_db.json"
 OUT_PATH = "data/raw/top_signals.json"
 
 def load_db():

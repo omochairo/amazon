@@ -81,6 +81,9 @@ def main():
     if "ラトル" in keyword: slug = "baby-rattle"
     elif "積み木" in keyword or "ブロック" in keyword: slug = "building-blocks"
 
+    # Append date to slug to prevent overwriting
+    slug = f"{datetime.now().strftime('%Y-%m-%d')}-{slug}"
+
     # Deep SEO Optimization Structure tailored by Signal
     if signal_type == "sudden_jump":
         title = f"【急上昇速報】昨日まで圏外だった「{signal_title[:15]}...」が突然売れ始めた理由は？"
@@ -100,7 +103,7 @@ def main():
         "slug": slug,
         "title": title,
         "meta_description": lead[:100] + "...",
-        "date": datetime.now().strftime("%Y-%m-%dT%H:%M:%S+09:00"),
+        "date": datetime.now().astimezone().replace(microsecond=0).isoformat(),
         "mode": mode,
         "lead": lead,
         "signal_type": signal_type if signal_type != "standard" else None,
@@ -123,14 +126,30 @@ def main():
         r_match = find_best_match(it.get("title", ""), rakuten_items)
         y_match = find_best_match(it.get("title", ""), yahoo_items)
 
+        amazon_p = it.get("price") or 0
+        rakuten_p = r_match.get("price") if r_match else 0
+        yahoo_p = y_match.get("price") if y_match else 0
+
+        # Cross-reference analysis
+        prices = [p for p in [amazon_p, rakuten_p, yahoo_p] if p > 0]
+        min_p = min(prices) if prices else 0
+        best_platform = "Amazon"
+        if min_p > 0:
+            if min_p == rakuten_p: best_platform = "楽天"
+            elif min_p == yahoo_p: best_platform = "Yahoo"
+
         products.append({
             "asin": it.get("asin"),
             "name": it.get("title"),
-            "price": it.get("price"),
+            "price": amazon_p,
+            "rakuten_price": rakuten_p,
+            "yahoo_price": yahoo_p,
             "amazon_url": it.get("url"),
             "rakuten_url": r_match.get("url") if r_match else "",
             "yahoo_url": y_match.get("url") if y_match else "",
-            "image": it.get("image"),
+            "best_platform": best_platform,
+            "price_diff_label": f"({best_platform}が最安)" if min_p < amazon_p else "(Amazonが最安)",
+            "image": it.get("image") or (it.get("images")[0] if it.get("images") else ""),
             "ivs_score": calculate_ivs(it),
             "pros": p,
             "cons": c,
@@ -139,6 +158,13 @@ def main():
 
     # Sort by IVS Score
     article["products"] = sorted(products, key=lambda x: x["ivs_score"], reverse=True)
+
+    # Cross-reference analysis summary (Layer 2 Editorial logic)
+    cheapest_count = sum(1 for p in products if "最安" in p.get("price_diff_label", ""))
+    if cheapest_count > len(products) / 2:
+        article["editorial_comment"] += f" 今回調査した中ではAmazonが全体的に低価格な傾向にありました。"
+    elif cheapest_count < len(products) / 3:
+        article["editorial_comment"] += f" 楽天やYahooショッピングの方がお得なケースが多いようです。ポイント還元も含めて検討しましょう。"
 
     # YouTube (ID extraction)
     for vid in youtube.get("items", [])[:3]: # Up to 3 videos
@@ -175,7 +201,7 @@ def main():
         })
 
     os.makedirs("data/articles", exist_ok=True)
-    out_path = f"data/articles/{datetime.now().strftime('%Y-%m-%d')}-{article['slug']}.json"
+    out_path = f"data/articles/{article['slug']}.json"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(article, f, ensure_ascii=False, indent=4)
 

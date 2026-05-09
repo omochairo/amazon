@@ -2,7 +2,9 @@ baseURL = 'https://omochairo.github.io/amazon/'
 languageCode = 'ja-jp'
 title = 'おもちゃいろ Amazon比較ナビ 🧸'
 theme = 'PaperMod'
-contentDir = '../content'
+contentDir = 'content'
+canonifyURLs = false
+relativeURLs = true
 
 [pagination]
   pagerSize = 10
@@ -78,15 +80,15 @@ Amazon の人気おもちゃを比較して、**今いちばんお得な買い�
 [menu]
   [[menu.main]]
     name = "🏠 ホーム"
-    url = "/"
+    url = "./"
     weight = 1
   [[menu.main]]
     name = "📚 記事一覧"
-    url = "/posts/"
+    url = "posts/"
     weight = 2
   [[menu.main]]
     name = "🔍 検索"
-    url = "/search/"
+    url = "search/"
     weight = 3
   [[menu.main]]
     name = "🌐 おもちゃいろ"
