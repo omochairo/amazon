@@ -123,14 +123,30 @@ def main():
         r_match = find_best_match(it.get("title", ""), rakuten_items)
         y_match = find_best_match(it.get("title", ""), yahoo_items)
 
+        amazon_p = it.get("price") or 0
+        rakuten_p = r_match.get("price") if r_match else 0
+        yahoo_p = y_match.get("price") if y_match else 0
+
+        # Cross-reference analysis
+        prices = [p for p in [amazon_p, rakuten_p, yahoo_p] if p > 0]
+        min_p = min(prices) if prices else 0
+        best_platform = "Amazon"
+        if min_p > 0:
+            if min_p == rakuten_p: best_platform = "楽天"
+            elif min_p == yahoo_p: best_platform = "Yahoo"
+
         products.append({
             "asin": it.get("asin"),
             "name": it.get("title"),
-            "price": it.get("price"),
+            "price": amazon_p,
+            "rakuten_price": rakuten_p,
+            "yahoo_price": yahoo_p,
             "amazon_url": it.get("url"),
             "rakuten_url": r_match.get("url") if r_match else "",
             "yahoo_url": y_match.get("url") if y_match else "",
-            "image": it.get("image"),
+            "best_platform": best_platform,
+            "price_diff_label": f"({best_platform}が最安)" if min_p < amazon_p else "(Amazonが最安)",
+            "image": it.get("image") or (it.get("images")[0] if it.get("images") else ""),
             "ivs_score": calculate_ivs(it),
             "pros": p,
             "cons": c,
