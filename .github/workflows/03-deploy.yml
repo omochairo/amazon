@@ -2,7 +2,7 @@ name: Deploy
 on:
   push:
     branches: [main]
-    paths: ['data/articles/**', 'content/**', 'hugo/**']
+    paths: ['data/articles/**', 'hugo/**']
 
 jobs:
   build:
@@ -22,8 +22,6 @@ jobs:
           hugo-version: 'latest'
           extended: true
       - run: |
-          mkdir -p hugo/content/
-          cp -r content/* hugo/content/
           cd hugo && hugo --minify --buildFuture --destination ../public
       - uses: peaceiris/actions-gh-pages@v4
         with:
