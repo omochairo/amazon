@@ -1,0 +1,60 @@
+name: Jules Publish Pipeline
+on:
+  push:
+    paths: ['data/raw/**']
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Layer 2 - Generate Article JSON
+        run: |
+          export PYTHONPATH=$PYTHONPATH:$(pwd)/scripts
+          python scripts/jules_article_engine.py
+
+      - name: Layer 3 - Render Markdown
+        run: python scripts/build_post.py
+
+      - name: Sync with remote
+        run: |
+          git fetch origin main
+          git reset --mixed origin/main
+
+      - name: Commit Generated Data
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "docs: AI-generated article update [skip ci]"
+          file_pattern: "data/articles/ hugo/content/posts/"
+          branch: main
+
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: '0.140.0'
+          extended: true
+
+      - name: Build Hugo Site
+        run: |
+          mkdir -p hugo/content/posts
+          cd hugo && hugo --minify --buildFuture --destination ../public
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
