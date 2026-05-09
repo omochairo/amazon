@@ -289,7 +289,7 @@ def main():
         })
 
     os.makedirs("data/articles", exist_ok=True)
-    out_path = f"data/articles/{datetime.now().strftime('%Y-%m-%d')}-{article['slug']}.json"
+    out_path = f"data/articles/{article['slug']}.json"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(article, f, ensure_ascii=False, indent=4)
 
