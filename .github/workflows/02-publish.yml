@@ -1,0 +1,58 @@
+name: Jules Publish Pipeline
+on:
+  push:
+    paths: ['data/raw/**']
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Layer 2: Jules Article Engine
+        run: |
+          export PYTHONPATH=scripts
+          python scripts/jules_article_engine.py
+
+      - name: Layer 3: Render Markdown
+        run: python scripts/build_post.py
+
+      - name: Sync Articles back to Repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git reset --mixed origin/main
+          git add data/articles/ hugo/content/posts/
+          git commit -m "docs: AI-generated article update" || echo "No changes to commit"
+          git push origin HEAD:main
+
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: 'latest'
+          extended: true
+
+      - name: Build and Deploy to GitHub Pages
+        run: |
+          mkdir -p hugo/content/posts
+          cd hugo && hugo --minify --buildFuture --destination ../public
+
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
