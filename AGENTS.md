@@ -4,7 +4,7 @@
 
 あなた（Jules）のサンドボックスには **APIキーが存在しません**。
 したがって以下のスクリプトを **絶対に直接実行してはいけません**：
-- `scripts/fetchers/` 配下のすべて
+- `scripts/fetch_*.py` 配下のすべて
 
 これらは GitHub Actions が事前に実行済みです。
 あなたの仕事は `data/raw/` に置かれた **収集済みJSON** を読み、それを素材に記事用JSONを作って `data/articles/` に書き出すことです。
@@ -62,6 +62,6 @@ $$IVS（知育価値スコア） = \frac{(知育効果 \times 長く遊べるか
 この式に基づき、収集された商品名や説明から知能を駆使してスコアを算出し、`ivs_score` に反映してください。
 
 ## 5. 禁止事項
-- `content/posts/` への Markdown 直接書き込み（レンダラーが担当します）
-- `scripts/fetchers/` の直接実行（APIキーがないため失敗します）
+- `hugo/content/posts/` への Markdown 直接書き込み（`scripts/build_post.py` が担当します）
+- `scripts/fetch_*.py` の直接実行（APIキーがないため失敗します）
 - APIキーの探索や、サンドボックス外への通信試行

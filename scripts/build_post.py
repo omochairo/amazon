@@ -9,7 +9,7 @@ from datetime import datetime
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--src", default="data/articles/")
-    parser.add_argument("--dst", default="content/posts/")
+    parser.add_argument("--dst", default="hugo/content/posts/")
     args = parser.parse_args()
 
     src_path = pathlib.Path(args.src)
