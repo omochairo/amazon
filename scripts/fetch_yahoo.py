@@ -144,7 +144,7 @@ def fetch_yahoo(keyword: str) -> None:
     if not client_id:
         logger.warning("YAHOO_CLIENT_ID missing. Skipping Yahoo fetch.")
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        save_path = os.path.join(base_dir, "data", "yahoo_result.json")
+        save_path = os.path.join(base_dir, "data", "raw", "yahoo_result.json")
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         with open(save_path, "w", encoding="utf-8") as f:
             json.dump({"keyword": keyword, "items": []}, f, ensure_ascii=False, indent=4)
@@ -236,7 +236,7 @@ def fetch_yahoo(keyword: str) -> None:
 
     # --- 保存 (プロジェクトルートの data フォルダ) -------------------------
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    save_path = os.path.join(base_dir, "data", "yahoo_result.json")
+    save_path = os.path.join(base_dir, "data", "raw", "yahoo_result.json")
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     with open(save_path, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=4)

@@ -57,13 +57,29 @@ def main():
     data = resp.json()
     items = []
     # Note: New API might have a different JSON structure, but we assume it's still 'Items'
-    for item in data.get("Items", []):
-        i = item.get("Item", item) # Safely handle if it's nested or not
+    raw_items = data.get("Items", [])
+    if not isinstance(raw_items, list):
+        logger.warning(f"Unexpected Rakuten Search API structure: 'Items' is {type(raw_items)}")
+        raw_items = []
+
+    for item in raw_items:
+        i = item.get("Item", item) if isinstance(item, dict) else {}
+
+        # Robust image extraction
+        image_url = ""
+        img_list = i.get("mediumImageUrls", [])
+        if isinstance(img_list, list) and len(img_list) > 0:
+            first_img = img_list[0]
+            if isinstance(first_img, dict):
+                image_url = first_img.get("imageUrl", "")
+            elif isinstance(first_img, str):
+                image_url = first_img
+
         items.append({
-            "title": i.get("itemName"),
-            "price": i.get("itemPrice"),
-            "url": i.get("affiliateUrl") or i.get("itemUrl"),
-            "image": i.get("mediumImageUrls", [{"imageUrl": ""}])[0]["imageUrl"] if i.get("mediumImageUrls") else "",
+            "title": i.get("itemName", "Unknown Rakuten Product"),
+            "price": i.get("itemPrice", 0),
+            "url": i.get("affiliateUrl") or i.get("itemUrl", ""),
+            "image": image_url,
             "itemCode": i.get("itemCode", ""),
             "reviewCount": i.get("reviewCount", 0),
             "source": "Rakuten"
@@ -82,15 +98,32 @@ def main():
         rank_resp = requests.get(ranking_url, params=ranking_params, headers=headers)
         rank_items = []
         if rank_resp.status_code == 200:
-            for item in rank_resp.json().get("Items", []):
-                i = item.get("Item", item)
+            rank_data = rank_resp.json()
+            raw_rank_items = rank_data.get("Items", [])
+            if not isinstance(raw_rank_items, list):
+                logger.warning(f"Unexpected Rakuten Ranking API structure: 'Items' is {type(raw_rank_items)}")
+                raw_rank_items = []
+
+            for item in raw_rank_items:
+                i = item.get("Item", item) if isinstance(item, dict) else {}
+
+                # Robust image extraction
+                image_url = ""
+                img_list = i.get("mediumImageUrls", [])
+                if isinstance(img_list, list) and len(img_list) > 0:
+                    first_img = img_list[0]
+                    if isinstance(first_img, dict):
+                        image_url = first_img.get("imageUrl", "")
+                    elif isinstance(first_img, str):
+                        image_url = first_img
+
                 rank_items.append({
                     "rank": i.get("rank"),
-                    "title": i.get("itemName"),
-                    "price": i.get("itemPrice"),
-                    "url": i.get("affiliateUrl") or i.get("itemUrl"),
-                    "image": i.get("mediumImageUrls", [{"imageUrl": ""}])[0]["imageUrl"] if i.get("mediumImageUrls") else "",
-                    "itemCode": i.get("itemCode"),
+                    "title": i.get("itemName", "Unknown Rank Product"),
+                    "price": i.get("itemPrice", 0),
+                    "url": i.get("affiliateUrl") or i.get("itemUrl", ""),
+                    "image": image_url,
+                    "itemCode": i.get("itemCode", ""),
                     "reviewCount": i.get("reviewCount", 0)
                 })
 
