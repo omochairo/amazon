@@ -81,6 +81,9 @@ def main():
     if "ラトル" in keyword: slug = "baby-rattle"
     elif "積み木" in keyword or "ブロック" in keyword: slug = "building-blocks"
 
+    # Append date to slug to prevent overwriting
+    slug = f"{datetime.now().strftime('%Y-%m-%d')}-{slug}"
+
     # Deep SEO Optimization Structure tailored by Signal
     if signal_type == "sudden_jump":
         title = f"【急上昇速報】昨日まで圏外だった「{signal_title[:15]}...」が突然売れ始めた理由は？"
@@ -155,6 +158,13 @@ def main():
 
     # Sort by IVS Score
     article["products"] = sorted(products, key=lambda x: x["ivs_score"], reverse=True)
+
+    # Cross-reference analysis summary (Layer 2 Editorial logic)
+    cheapest_count = sum(1 for p in products if "最安" in p.get("price_diff_label", ""))
+    if cheapest_count > len(products) / 2:
+        article["editorial_comment"] += f" 今回調査した中ではAmazonが全体的に低価格な傾向にありました。"
+    elif cheapest_count < len(products) / 3:
+        article["editorial_comment"] += f" 楽天やYahooショッピングの方がお得なケースが多いようです。ポイント還元も含めて検討しましょう。"
 
     # YouTube (ID extraction)
     for vid in youtube.get("items", [])[:3]: # Up to 3 videos
