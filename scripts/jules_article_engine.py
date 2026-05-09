@@ -100,7 +100,7 @@ def main():
         "slug": slug,
         "title": title,
         "meta_description": lead[:100] + "...",
-        "date": datetime.now().strftime("%Y-%m-%dT%H:%M:%S+09:00"),
+        "date": datetime.now().astimezone().replace(microsecond=0).isoformat(),
         "mode": mode,
         "lead": lead,
         "signal_type": signal_type if signal_type != "standard" else None,
