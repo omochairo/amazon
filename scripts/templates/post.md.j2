@@ -1,12 +1,11 @@
 # {{ title }}
 
-> **📢 PR表記**: この記事にはアフィリエイトリンクが含まれています。
-> 記事の内容はAIエージェント「Jules」が自動生成したものです。（最終更新: {{ date[:10] }}）
+> **📊 データ分析レポート**: この記事は、AIエージェント「Jules」が複数のECプラットフォームから収集したリアルタイムデータを基に作成しています。（最終更新: {{ date[:10] }}）
 
 {{ lead }}
 
 {% if signal_type %}
-> **⚡ Jules検出トレンド**: この記事は「{{ signal_type_label }}」シグナルに基づいて、最新の市場動向を反映して作成されています。
+> **⚡ トレンド検出**: 「{{ signal_type_label }}」シグナルに基づき、市場での注目度が急上昇しているアイテムを中心に構成しています。
 {% elif mode %}
 > **🏷️ カテゴリ**: {{ mode }}（Jules編集長による厳選ピックアップ）
 {% endif %}
@@ -15,29 +14,38 @@
 
 ## 🏆 クイック比較：今回のおすすめトップ3
 
-| 順位 | 商品名 | 知育スコア | 特徴 | リンク |
-|:---:|:---|:---:|:---|:---:|
+| 順位 | アイテム名 | スコア | 価格 | 特徴 | リンク |
+|:---:|:---|:---:|:---|:---|:---:|
 {% for p in products[:3] -%}
-| {{ loop.index }} | {{ p.name[:20] }}... | {{ p.ivs_score }} | {{ p.pros[0] }} | [詳細]({{ p.amazon_url }}) |
+| {{ loop.index }} | **{{ p.name[:25] }}...** | 🏆 **{{ p.ivs_score_100 }}点** | ￥{{ "{:,}".format(p.price) }} | {{ p.pros[0] }} | [詳細]({{ p.amazon_url }}) |
 {% endfor %}
 
 ---
 
-## 📊 商品詳細比較一覧
+## 🔍 商品詳細徹底比較
 
 {% for p in products %}
-### {{ p.name }}
-{% if p.image %}![{{ p.name }}]({{ p.image }}){% endif %}
+### {{ loop.index }}. {{ p.name }}
 
-- **💰 価格**: {{ p.price }} {% if p.is_cheapest %}🔥 **最安値！**{% endif %}
-- **📊 IVS（知育価値スコア）**: {{ p.ivs_score }}/5.0
-- **🔗 購入サイト**: [Amazon]({{ p.amazon_url }}) / [楽天]({{ p.rakuten_url or "#" }}) / [Yahoo]({{ p.yahoo_url or "#" }})
+{% if p.image %}
+<div align="center">
+  <img src="{{ p.image }}" alt="{{ p.name }}" width="300">
+</div>
+{% endif %}
 
-> [!TIP]
-> **👍 メリット**: {{ p.pros | join(', ') }}
-> **👎 デメリット**: {{ p.cons | join(', ') }}
+#### 📊 評価スコア
+- **総合スコア (IVS)**: 🏆 **{{ p.ivs_score_100 }} / 100点**
+- **知育価値**: {{ p.ivs_score }}/5.0
 
-#### 🔍 主な特徴
+#### 💰 最安値・購入先情報
+- **販売価格**: ￥{{ "{:,}".format(p.price) }} {% if p.is_cheapest %}🔥 **最安値！**{% endif %}
+- **比較対象**: [Amazon]({{ p.amazon_url }}) / [楽天]({{ p.rakuten_url or "#" }}) / [Yahoo]({{ p.yahoo_url or "#" }})
+
+> [!IMPORTANT]
+> **👍 メリット**: {{ p.pros | join('、') }}
+> **👎 デメリット**: {{ p.cons | join('、') }}
+
+#### 📝 特徴・スペック
 {% for feature in p.features %}- {{ feature }}
 {% endfor %}
 
@@ -45,7 +53,7 @@
 {% endfor %}
 
 {% if youtube_embeds %}
-## 📺 関連動画でチェック
+## 📺 関連レビュー動画
 {% for vid in youtube_embeds %}
 ### {{ vid.title }}
 {{ vid.embed_html }}
@@ -53,7 +61,7 @@
 {% endif %}
 
 {% if books %}
-## 📚 知育に役立つ関連絵本・書籍
+## 📚 知識を深める関連書籍
 {% for book in books %}
 ### [{{ book.title }}]({{ book.url }})
 {% if book.image %}![{{ book.title }}]({{ book.image }}){% endif %}
@@ -63,30 +71,21 @@
 {% endif %}
 
 {% if tomy_items %}
-## 🆕 タカラトミーモール直送！最新＆予約アイテム情報
-公式ストアから最新のラインナップをお届けします。（※まだAPIで取得できない未発売商品も含むため、確実な予約は公式からどうぞ）
-{% for t in tomy_items %}
-- 🧸 **[{{ t.title }}]({{ t.url }})**
-{% endfor %}
-{% endif %}
-
-{% if news %}
-## 📰 最新の知育・子育てニュース
-{% for n in news %}
-- [{{ n.title }}]({{ n.url }})
-{% endfor %}
+## 🆕 タカラトミー最新情報
+- 🧸 **[{{ tomy_items[0].title }}]({{ tomy_items[0].url }})**
 {% endif %}
 
 {% if internal_links %}
-## 🔗 あわせて読みたい：おもちゃいろの関連記事
+## 🔗 関連記事
 {% for link in internal_links %}
 - [{{ link.title }}]({{ link.url }})
 {% endfor %}
 {% endif %}
 
-> [!QUOTE]
-> **AI編集長Julesのひとりごと**
+---
+
+> [!TIP]
+> **Julesの分析結論**
 > {{ editorial_comment }}
 
----
-**免責事項**: 価格や在庫状況は記事更新時点のものです。ご購入の際は必ず販売サイトの最新情報をご確認ください。
+**免責事項**: 価格や在庫状況は記事更新時点のものです。ご購入の際は必ず販売サイトの最新情報をご確認ください。アフィリエイトリンクを通じて購入が発生した場合、当サイトに収益が発生することがあります。

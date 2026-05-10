@@ -108,6 +108,20 @@ def find_best_match(target_title, pool_items):
 
     return best_item
 
+def clean_title(text):
+    """Removes marketing noise, brackets, and extra spaces from titles."""
+    if not text: return ""
+    # Remove contents inside brackets 【】 [] （） ()
+    text = re.sub(r'[【\[（\(].*?[】\]）\)]', '', text)
+    # Remove marketing keywords
+    noise = ['送料無料', 'ポイント10倍', '楽天1位', '限定', 'クーポン', '正規品', '公式']
+    for n in noise:
+        text = text.replace(n, '')
+    # Strip symbols and extra spaces
+    text = re.sub(r'[!！?？@＠#＃$%&＊*+＋=＝_＿|｜\\＼/／:：;；"”''’`｀^＾~～]', ' ', text)
+    text = " ".join(text.split())
+    return text.strip()
+
 def generate_slug(keyword):
     """Generates a URL-safe slug from a keyword."""
     # Convert to lowercase and replace spaces/special chars
@@ -117,9 +131,10 @@ def generate_slug(keyword):
     slug = re.sub(r'[^a-z0-9]+', '-', slug)
     slug = slug.strip('-')
 
-    # If slug is empty after filtering (e.g. only Japanese), use a fallback
+    # If slug is empty after filtering (e.g. only Japanese), use a unique fallback
     if not slug:
-        slug = "toy-review"
+        import hashlib
+        slug = hashlib.md5(keyword.encode()).hexdigest()[:8]
 
     # Prepend date
     date_str = datetime.now().strftime('%Y-%m-%d')
@@ -166,28 +181,29 @@ def main():
 
     slug = generate_slug(keyword)
 
+    clean_sig_title = clean_title(signal_title)
     # Deep SEO Optimization Structure tailored by Signal or Mode
     if signal_type == "sudden_jump":
-        title = f"【急上昇速報】昨日まで圏外だった「{signal_title[:15]}...」が突然売れ始めた理由は？"
-        lead = f"楽天ランキングで異例の急上昇を記録した「{signal_title}」。なぜ今、爆発的に売れているのか？SNSの口コミや類似商品との比較から、その人気の秘密を徹底解剖します！"
+        title = f"【急上昇速報】なぜ今「{clean_sig_title[:15]}」が売れている？人気の秘密を徹底解剖"
+        lead = f"市場データが異常な売れ行きをキャッチ！現在、急激に注目を集めている「{clean_sig_title}」の魅力と、ライバル商品との比較結果をまとめました。"
     elif signal_type == "preorder":
-        title = f"【予約完売注意】「{signal_title[:15]}...」の予約が開始！絶対に手に入れたい注目アイテムまとめ"
-        lead = f"ファン待望の新作「{signal_title}」の予約がついに始まりました！発売直前にはプレミア化して手に入らなくなる可能性があるため、早めの確保がおすすめです。あわせてチェックしたい関連アイテムも厳選しました。"
+        title = f"【予約開始】最新「{clean_sig_title[:15]}」を最安で手に入れる！スペック徹底比較レポート"
+        lead = f"待望の新作「{clean_sig_title}」の予約がついに解禁。どこで買うのが一番お得か、主要3プラットフォームの価格と特典を調査しました。"
     elif signal_type == "new_arrival":
-        title = f"【初登場】市場が注目する最新おもちゃ「{signal_title[:15]}...」のポテンシャルとは？"
-        lead = f"データ分析システムが市場に初登場したばかりの注目アイテム「{signal_title}」をキャッチしました！まだ誰も知らないこの最新アイテムの魅力と、ライバル商品とのスペック比較をお届けします。"
+        title = f"【新着リサーチ】最新おもちゃ「{clean_sig_title[:15]}」の実力は？専門AIがスペック検証"
+        lead = f"市場に登場したばかりの「{clean_sig_title}」。先行データから判明した知育効果と安全性を、既存の人気商品と比較してレポートします。"
     elif mode == "trend":
-        title = f"【2026年最新トレンド】今売れている{keyword}ランキング！人気の理由をプロが解説"
-        lead = f"今、SNSや育児コミュニティで話題沸騰中の「{keyword}」。なぜこれほどまでに注目されているのか、最新の販売データからその魅力を紐解きます。"
+        title = f"【2026最新】{keyword}の徹底比較レポート｜今選ぶべきおすすめアイテム"
+        lead = f"現在、SNSや市場で高く評価されている「{keyword}」をプロの視点で比較。失敗しないための選び方と、最も価値のある一品を特定します。"
     elif mode == "hidden_gem":
-        title = f"【知る人ぞ知る名作】{keyword}の隠れた逸品を見つけました。コスパ最強の選択肢とは？"
-        lead = f"有名ブランドではないけれど、実は高い知育効果と安全性を兼ね備えた「{keyword}」。そんな掘り出し物アイテムを厳選してご紹介します。"
+        title = f"【掘り出し物】コスパ最強の{keyword}はどれ？知る人ぞ知る名作をAIが特定"
+        lead = f"有名ブランド以外にも優れた商品は存在します。価格以上の満足度（IVS）を叩き出した「{keyword}」の隠れた逸品をご紹介。"
     elif mode == "parenting":
-        title = f"【現役パパママが選ぶ】{keyword}選びで後悔しないためのポイントとおすすめ10選"
-        lead = f"毎日忙しいパパ・ママに贈る、実生活で本当に役立つ「{keyword}」ガイド。長く使えて、子どもが夢中になるアイテムだけをピックアップしました。"
+        title = f"【実用性重視】パパ・ママが選ぶ「{keyword}」比較ガイド｜長く使える一品はこれ"
+        lead = f"忙しい子育て世代のために、片付けやすさ、安全性、子供の食いつきを基準に「{keyword}」を徹底比較しました。"
     elif mode == "seasonal":
-        title = f"【季節のおすすめ】今この時期に贈りたい、特別な{keyword}特集"
-        lead = f"季節の行事やプレゼントにぴったりの「{keyword}」。今しか買えない注目アイテムや、ギフトに最適なセットをまとめました。"
+        title = f"【贈り物に】今プレゼントしたい{keyword}特集｜予算別・人気順比較"
+        lead = f"大切な人へのギフトに最適な「{keyword}」。予算内で最高の結果を出せるアイテムを、市場価格データから厳選して提案します。"
     else:
         title = f"【徹底比較】{keyword}のおすすめ人気ランキング厳選！失敗しない選び方"
         lead = f"育児に欠かせない「{keyword}」。種類が多すぎてどれを選べばいいか迷っていませんか？この記事では、Amazon・楽天・Yahoo!ショッピングから厳選した本当に価値のあるアイテムを徹底比較します。"
@@ -232,9 +248,10 @@ def main():
             if min_p == rakuten_p: best_platform = "楽天"
             elif min_p == yahoo_p: best_platform = "Yahoo"
 
+        ivs_base = calculate_ivs(it)
         products.append({
             "asin": it.get("asin"),
-            "name": it.get("title"),
+            "name": clean_title(it.get("title")),
             "price": amazon_p,
             "rakuten_price": rakuten_p,
             "yahoo_price": yahoo_p,
@@ -244,7 +261,8 @@ def main():
             "best_platform": best_platform,
             "price_diff_label": f"({best_platform}が最安)" if min_p < amazon_p else "(Amazonが最安)",
             "image": it.get("image") or (it.get("images")[0] if it.get("images") else ""),
-            "ivs_score": calculate_ivs(it),
+            "ivs_score": ivs_base,
+            "ivs_score_100": int(ivs_base * 20),
             "pros": p,
             "cons": c,
             "features": it.get("features", [])
