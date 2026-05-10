@@ -227,97 +227,114 @@ def main():
         "tags": [keyword, "知育玩具", "おすすめ", "徹底比較", "2026年最新"]
     }
 
-    # Process Products (Amazon is base)
-    products = []
-    for it in amazon.get("items", []):
-        p, c = generate_pros_cons(it)
+    # Chunking logic: Split products into multiple smaller articles
+    raw_items = amazon.get("items", [])
+    chunk_size = 5
+    item_chunks = [raw_items[i:i + chunk_size] for i in range(0, len(raw_items), chunk_size)]
 
-        # Cross-match with Rakuten and Yahoo for unified affiliate links
-        r_match = find_best_match(it.get("title", ""), rakuten_items)
-        y_match = find_best_match(it.get("title", ""), yahoo_items)
+    for idx, chunk in enumerate(item_chunks):
+        current_products = []
+        for it in chunk:
+            p, c = generate_pros_cons(it)
 
-        amazon_p = it.get("price") or 0
-        rakuten_p = r_match.get("price") if r_match else 0
-        yahoo_p = y_match.get("price") if y_match else 0
+            r_match = find_best_match(it.get("title", ""), rakuten_items)
+            y_match = find_best_match(it.get("title", ""), yahoo_items)
 
-        # Cross-reference analysis
-        prices = [p for p in [amazon_p, rakuten_p, yahoo_p] if p > 0]
-        min_p = min(prices) if prices else 0
-        best_platform = "Amazon"
-        if min_p > 0:
-            if min_p == rakuten_p: best_platform = "楽天"
-            elif min_p == yahoo_p: best_platform = "Yahoo"
+            amazon_p = it.get("price") or 0
+            rakuten_p = r_match.get("price") if r_match else 0
+            yahoo_p = y_match.get("price") if y_match else 0
 
-        ivs_base = calculate_ivs(it)
-        products.append({
-            "asin": it.get("asin"),
-            "name": clean_title(it.get("title")),
-            "price": amazon_p,
-            "rakuten_price": rakuten_p,
-            "yahoo_price": yahoo_p,
-            "amazon_url": it.get("url"),
-            "rakuten_url": r_match.get("url") if r_match else "",
-            "yahoo_url": y_match.get("url") if y_match else "",
-            "best_platform": best_platform,
-            "price_diff_label": f"({best_platform}が最安)" if min_p < amazon_p else "(Amazonが最安)",
-            "image": it.get("image") or (it.get("images")[0] if it.get("images") else ""),
-            "ivs_score": ivs_base,
-            "ivs_score_100": int(ivs_base * 20),
-            "pros": p,
-            "cons": c,
-            "features": it.get("features", [])
-        })
+            prices = [p for p in [amazon_p, rakuten_p, yahoo_p] if p > 0]
+            min_p = min(prices) if prices else 0
+            best_platform = "Amazon"
+            if min_p > 0:
+                if min_p == rakuten_p: best_platform = "楽天"
+                elif min_p == yahoo_p: best_platform = "Yahoo"
 
-    # Sort by IVS Score
-    article["products"] = sorted(products, key=lambda x: x["ivs_score"], reverse=True)
-
-    # Cross-reference analysis summary (Layer 2 Editorial logic)
-    cheapest_count = sum(1 for p in products if "最安" in p.get("price_diff_label", ""))
-    if cheapest_count > len(products) / 2:
-        article["editorial_comment"] += f" 今回調査した中ではAmazonが全体的に低価格な傾向にありました。"
-    elif cheapest_count < len(products) / 3:
-        article["editorial_comment"] += f" 楽天やYahooショッピングの方がお得なケースが多いようです。ポイント還元も含めて検討しましょう。"
-
-    # YouTube (ID extraction)
-    for vid in youtube.get("items", [])[:3]: # Up to 3 videos
-        try:
-            v_id = vid["url"].split("v=")[-1]
-            article["youtube_embeds"].append({
-                "title": vid.get("title", "おすすめ動画"),
-                "embed_html": f'<iframe width="560" height="315" src="https://www.youtube.com/embed/{v_id}" frameborder="0" allowfullscreen></iframe>'
+            ivs_base = calculate_ivs(it)
+            current_products.append({
+                "asin": it.get("asin"),
+                "name": clean_title(it.get("title")),
+                "price": amazon_p,
+                "rakuten_price": rakuten_p,
+                "yahoo_price": yahoo_p,
+                "amazon_url": it.get("url"),
+                "rakuten_url": r_match.get("url") if r_match else "",
+                "yahoo_url": y_match.get("url") if y_match else "",
+                "best_platform": best_platform,
+                "price_diff_label": f"({best_platform}が最安)" if min_p < amazon_p else "(Amazonが最安)",
+                "image": it.get("image") or (it.get("images")[0] if it.get("images") else ""),
+                "ivs_score": ivs_base,
+                "ivs_score_100": int(ivs_base * 20),
+                "pros": p,
+                "cons": c,
+                "features": it.get("features", [])
             })
-        except: pass
 
-    # Books Integration
-    for book in books_items[:3]:
-        article["books"].append({
-            "title": book.get("title"),
-            "url": book.get("url"),
-            "image": book.get("image"),
-            "description": book.get("description", "")[:100] + "..."
-        })
+        # Create unique slug and title for each chunk
+        chunk_slug = f"{slug}-part{idx+1}" if len(item_chunks) > 1 else slug
+        chunk_title = f"{title} (Vol.{idx+1})" if len(item_chunks) > 1 else title
 
-    # News Integration
-    for n in news.get("items", [])[:3]:
-        article["news"].append({
-            "title": n.get("title"),
-            "url": n.get("url")
-        })
+        current_article = {
+            "slug": chunk_slug,
+            "title": chunk_title,
+            "meta_description": lead[:100] + "...",
+            "date": datetime.now().astimezone().replace(microsecond=0).isoformat(),
+            "mode": mode,
+            "lead": lead,
+            "signal_type": signal_type if signal_type != "standard" else None,
+            "signal_type_label": "急上昇" if signal_type == "sudden_jump" else "予約開始" if signal_type == "preorder" else "新着" if signal_type == "new_arrival" else "",
+            "products": sorted(current_products, key=lambda x: x["ivs_score"], reverse=True),
+            "youtube_embeds": [],
+            "books": [],
+            "news": [],
+            "internal_links": internal_links,
+            "editorial_comment": f"{keyword}を選ぶ際のポイントは、子どもの月齢や興味に合っているかどうかです。長く愛せる一品を見つけて、親子の充実した時間を過ごしましょう。",
+            "tags": [keyword, "知育玩具", "おすすめ", "徹底比較", "2026年最新"]
+        }
 
-    # Takara Tomy Integration
-    article["tomy_items"] = []
-    for t in tomy.get("items", [])[:3]:
-        article["tomy_items"].append({
-            "title": t.get("title"),
-            "url": t.get("url")
-        })
+        # Add editorial summary
+        cheapest_count = sum(1 for p in current_products if "最安" in p.get("price_diff_label", ""))
+        if cheapest_count > len(current_products) / 2:
+            current_article["editorial_comment"] += f" 今回のラインナップではAmazonがお得な傾向にあります。"
 
-    os.makedirs("data/articles", exist_ok=True)
-    out_path = f"data/articles/{article['slug']}.json"
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(article, f, ensure_ascii=False, indent=4)
+        # Distribute YouTube/Books/News/Tomy across chunks
+        for vid in youtube.get("items", [])[idx*2 : (idx+1)*2]:
+            try:
+                v_id = vid["url"].split("v=")[-1]
+                current_article["youtube_embeds"].append({
+                    "title": vid.get("title", "おすすめ動画"),
+                    "embed_html": f'<iframe width="560" height="315" src="https://www.youtube.com/embed/{v_id}" frameborder="0" allowfullscreen></iframe>'
+                })
+            except: pass
 
-    print(f"Evolved article JSON generated: {out_path}")
+        for book in books_items[idx : idx+1]:
+            current_article["books"].append({
+                "title": book.get("title"),
+                "url": book.get("url"),
+                "image": book.get("image"),
+                "description": book.get("description", "")[:100] + "..."
+            })
+
+        for n in news.get("items", [])[idx : idx+1]:
+            current_article["news"].append({
+                "title": n.get("title"),
+                "url": n.get("url")
+            })
+
+        current_article["tomy_items"] = []
+        for t in tomy.get("items", [])[idx : idx+1]:
+            current_article["tomy_items"].append({
+                "title": t.get("title"),
+                "url": t.get("url")
+            })
+
+        os.makedirs("data/articles", exist_ok=True)
+        out_path = f"data/articles/{current_article['slug']}.json"
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(current_article, f, ensure_ascii=False, indent=4)
+
+        print(f"Generated: {out_path}")
 
 if __name__ == "__main__":
     main()
