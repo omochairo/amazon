@@ -12,9 +12,9 @@ def load_raw_data(data_dir="data/raw", products_dir="data/products"):
             except:
                 pass
 
-    # 2. Load Individual Product Data (if missing in amazon.json)
+    # 2. Load Individual Product Data (Only as fallback)
     p_path = pathlib.Path(products_dir)
-    if p_path.exists():
+    if p_path.exists() and not data.get("amazon"):
         product_list = []
         for f in p_path.glob("*.json"):
             try:
@@ -22,15 +22,8 @@ def load_raw_data(data_dir="data/raw", products_dir="data/products"):
             except:
                 pass
 
-        # Merge products into amazon pool if amazon.json is empty or missing
-        if not data.get("amazon"):
+        if product_list:
             data["amazon"] = {"keyword": "おすすめアイテム", "items": product_list, "mode": "legacy_merge"}
-        else:
-            # Append new ASINs if not present
-            existing_asins = {it.get("asin") for it in data["amazon"].get("items", [])}
-            for p in product_list:
-                if p.get("asin") not in existing_asins:
-                    data["amazon"]["items"].append(p)
 
     return data
 
