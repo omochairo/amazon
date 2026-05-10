@@ -111,14 +111,31 @@ def find_best_match(target_title, pool_items):
 def clean_title(text):
     """Removes marketing noise, brackets, and extra spaces from titles."""
     if not text: return ""
-    # Remove contents inside brackets 【】 [] （） ()
-    text = re.sub(r'[【\[（\(].*?[】\]）\)]', '', text)
+
+    # Pre-clean: Remove common dangling brackets often seen at start/end
+    text = re.sub(r'^[】\]）\)]+', '', text)
+    text = re.sub(r'[【\[（\(]+$', '', text)
+
+    # Remove contents inside brackets 【】 [] （） () ＼／
+    # Non-greedy match to handle multiple bracket sets correctly
+    text = re.sub(r'[【\[（\(＼].*?[】\]）\)／]', ' ', text)
+
+    # Remove any remaining standalone brackets that might be left from unbalanced strings
+    text = re.sub(r'[【】\[\]（）\(\)＼／]', ' ', text)
+
     # Remove marketing keywords
-    noise = ['送料無料', 'ポイント10倍', '楽天1位', '限定', 'クーポン', '正規品', '公式']
+    noise = [
+        '送料無料', 'ポイント10倍', '楽天1位', '限定', 'クーポン', '正規品', '公式',
+        '最新', '2024', '2025', '2026', '予約', 'おまけ付き', 'ラッピング無料',
+        'あす楽', '即納'
+    ]
     for n in noise:
-        text = text.replace(n, '')
-    # Strip symbols and extra spaces
+        text = text.replace(n, ' ')
+
+    # Strip symbols and replace with space
     text = re.sub(r'[!！?？@＠#＃$%&＊*+＋=＝_＿|｜\\＼/／:：;；"”''’`｀^＾~～]', ' ', text)
+
+    # Cleanup whitespace
     text = " ".join(text.split())
     return text.strip()
 
