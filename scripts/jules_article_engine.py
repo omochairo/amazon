@@ -8,23 +8,88 @@ from history_check import get_history
 from internal_links import get_related_articles
 
 def calculate_ivs(item):
-    score = 3.8
+    """
+    Calculates the Intelligent Value Score (IVS) based on the formula:
+    IVS = ((Educational Effect * Longevity) + Safety Score) / Cost Performance * Correction Factor
+    """
     name = item.get('name', item.get('title', ''))
-    features = item.get('features', [])
+    features = " ".join(item.get('features', []))
+    price = item.get('price', 0) or 0
 
-    # Logic based on attributes
-    if len(features) > 3: score += 0.5
-    if any(k in name for k in ['知育', 'モンテッソーリ', 'STEM', 'プログラミング', 'ブロック']): score += 0.4
-    if item.get('price', 0) > 5000: score -= 0.2 # Pricey penalty
-    if item.get('reviewCount', 0) > 100: score += 0.3
+    # 1. Educational Effect (1.0 - 5.0)
+    edu_effect = 3.0
+    edu_keywords = ['知育', 'モンテッソーリ', 'STEM', 'プログラミング', 'ブロック', '思考力', '想像力', '空間把握']
+    edu_effect += sum(0.3 for k in edu_keywords if k in name or k in features)
+    edu_effect = min(edu_effect, 5.0)
 
-    return round(min(score, 5.0), 1)
+    # 2. Longevity (1.0 - 5.0)
+    longevity = 3.0
+    long_keywords = ['長く遊べる', '成長に合わせて', '～', '歳以上', '全年齢', '丈夫']
+    longevity += sum(0.4 for k in long_keywords if k in features)
+    longevity = min(longevity, 5.0)
+
+    # 3. Safety Score (1.0 - 5.0)
+    safety = 3.0
+    safe_keywords = ['安全', 'STマーク', '自然由来', '食品衛生法', '角を丸く', 'なめても安心', '無毒']
+    safety += sum(0.5 for k in safe_keywords if k in features)
+    safety = min(safety, 5.0)
+
+    # 4. Cost Performance (1.0 - 5.0, where lower price is better CP)
+    # Assume 3000-5000 yen is 'average' (3.0)
+    cp = 3.0
+    if price > 0:
+        if price < 2000: cp = 4.5
+        elif price < 4000: cp = 4.0
+        elif price < 7000: cp = 3.0
+        elif price < 12000: cp = 2.0
+        else: cp = 1.5
+
+    # 5. Correction Factor (Review count / popularity)
+    correction = 1.0
+    review_count = item.get('reviewCount', 0)
+    if review_count > 500: correction = 1.1
+    elif review_count > 100: correction = 1.05
+    elif review_count < 10: correction = 0.9
+
+    # Final Calculation
+    # IVS = ((edu * long) + safety) / (6 - cp) * correction
+    # (6-cp) makes it so higher CP (lower price) results in higher score
+    raw_score = ((edu_effect * longevity) + safety) / (6 - cp) * correction
+
+    # Normalize to 0-5 range (roughly)
+    final_score = (raw_score / 10) * 2.5 + 2.5
+
+    return round(min(max(final_score, 1.0), 5.0), 1)
 
 def generate_pros_cons(item):
     features = item.get('features', [])
-    pros = features[:2] if features else ["評価が高い", "定番商品"]
-    cons = ["少し高価かも"] if item.get('price', 0) > 10000 else ["特になし"]
-    return pros, cons
+    full_text = " ".join(features) + item.get('title', '')
+
+    pros = []
+    if any(k in full_text for k in ['安全', 'STマーク', 'なめても安心', '自然由来']):
+        pros.append("高い安全性")
+    if any(k in full_text for k in ['長く遊べる', '成長に合わせて', '幅広い年齢']):
+        pros.append("長く愛用できる")
+    if any(k in full_text for k in ['簡単', 'すぐ遊べる', 'シンプル']):
+        pros.append("直感的に遊べる")
+    if any(k in full_text for k in ['知育', '学習', '思考力', '創造力']):
+        pros.append("知育効果が高い")
+
+    if not pros:
+        pros = ["評価が高い", "定番商品"]
+
+    cons = []
+    if item.get('price', 0) > 10000:
+        cons.append("やや高価")
+    if any(k in full_text for k in ['難しい', '大人と一緒', '複雑']):
+        cons.append("低年齢児には少し難しい")
+    if any(k in full_text for k in ['電池', '別売り']):
+        cons.append("電池が別途必要")
+
+    if not cons:
+        cons = ["特になし"]
+
+    return pros[:3], cons[:2]
 
 def find_best_match(target_title, pool_items):
     """Finds the best matching product from another API pool based on simple token overlap."""
@@ -43,6 +108,38 @@ def find_best_match(target_title, pool_items):
 
     return best_item
 
+def clean_title(text):
+    """Removes marketing noise, brackets, and extra spaces from titles."""
+    if not text: return ""
+    # Remove contents inside brackets 【】 [] （） ()
+    text = re.sub(r'[【\[（\(].*?[】\]）\)]', '', text)
+    # Remove marketing keywords
+    noise = ['送料無料', 'ポイント10倍', '楽天1位', '限定', 'クーポン', '正規品', '公式']
+    for n in noise:
+        text = text.replace(n, '')
+    # Strip symbols and extra spaces
+    text = re.sub(r'[!！?？@＠#＃$%&＊*+＋=＝_＿|｜\\＼/／:：;；"”''’`｀^＾~～]', ' ', text)
+    text = " ".join(text.split())
+    return text.strip()
+
+def generate_slug(keyword):
+    """Generates a URL-safe slug from a keyword."""
+    # Convert to lowercase and replace spaces/special chars
+    # We strictly use alphanumeric ASCII for broadest compatibility
+    slug = keyword.lower()
+    # Replace non-alphanumeric with hyphens
+    slug = re.sub(r'[^a-z0-9]+', '-', slug)
+    slug = slug.strip('-')
+
+    # If slug is empty after filtering (e.g. only Japanese), use a unique fallback
+    if not slug:
+        import hashlib
+        slug = hashlib.md5(keyword.encode()).hexdigest()[:8]
+
+    # Prepend date
+    date_str = datetime.now().strftime('%Y-%m-%d')
+    return f"{date_str}-{slug}"
+
 def main():
     raw_data = load_raw_data()
     if not raw_data:
@@ -58,7 +155,12 @@ def main():
     books = raw_data.get("books", {})
 
     keyword = amazon.get("keyword", "話題のアイテム")
-    mode = amazon.get("mode", "daily_random")
+
+    # Mode selection: prioritizes explicit mode, otherwise picks one
+    modes = ['trend', 'hidden_gem', 'parenting', 'seasonal']
+    mode = amazon.get("mode")
+    if mode not in modes:
+        mode = random.choice(modes)
 
     rakuten_items = rakuten.get("items", [])
     yahoo_items = yahoo.get("items", [])
@@ -77,26 +179,34 @@ def main():
             signal_type = sig.get("type", "standard")
     except: pass
 
-    slug = "baby-toy"
-    if "ラトル" in keyword: slug = "baby-rattle"
-    elif "積み木" in keyword or "ブロック" in keyword: slug = "building-blocks"
+    slug = generate_slug(keyword)
 
-    # Append date to slug to prevent overwriting
-    slug = f"{datetime.now().strftime('%Y-%m-%d')}-{slug}"
-
-    # Deep SEO Optimization Structure tailored by Signal
+    clean_sig_title = clean_title(signal_title)
+    # Deep SEO Optimization Structure tailored by Signal or Mode
     if signal_type == "sudden_jump":
-        title = f"【急上昇速報】昨日まで圏外だった「{signal_title[:15]}...」が突然売れ始めた理由は？"
-        lead = f"楽天ランキングで異例の急上昇を記録した「{signal_title}」。なぜ今、爆発的に売れているのか？SNSの口コミや類似商品との比較から、その人気の秘密を徹底解剖します！"
+        title = f"【急上昇速報】なぜ今「{clean_sig_title[:15]}」が売れている？人気の秘密を徹底解剖"
+        lead = f"市場データが異常な売れ行きをキャッチ！現在、急激に注目を集めている「{clean_sig_title}」の魅力と、ライバル商品との比較結果をまとめました。"
     elif signal_type == "preorder":
-        title = f"【予約完売注意】「{signal_title[:15]}...」の予約が開始！絶対に手に入れたい注目アイテムまとめ"
-        lead = f"ファン待望の新作「{signal_title}」の予約がついに始まりました！発売直前にはプレミア化して手に入らなくなる可能性があるため、早めの確保がおすすめです。あわせてチェックしたい関連アイテムも厳選しました。"
+        title = f"【予約開始】最新「{clean_sig_title[:15]}」を最安で手に入れる！スペック徹底比較レポート"
+        lead = f"待望の新作「{clean_sig_title}」の予約がついに解禁。どこで買うのが一番お得か、主要3プラットフォームの価格と特典を調査しました。"
     elif signal_type == "new_arrival":
-        title = f"【初登場】市場が注目する最新おもちゃ「{signal_title[:15]}...」のポテンシャルとは？"
-        lead = f"データ分析システムが市場に初登場したばかりの注目アイテム「{signal_title}」をキャッチしました！まだ誰も知らないこの最新アイテムの魅力と、ライバル商品とのスペック比較をお届けします。"
+        title = f"【新着リサーチ】最新おもちゃ「{clean_sig_title[:15]}」の実力は？専門AIがスペック検証"
+        lead = f"市場に登場したばかりの「{clean_sig_title}」。先行データから判明した知育効果と安全性を、既存の人気商品と比較してレポートします。"
+    elif mode == "trend":
+        title = f"【2026最新】{keyword}の徹底比較レポート｜今選ぶべきおすすめアイテム"
+        lead = f"現在、SNSや市場で高く評価されている「{keyword}」をプロの視点で比較。失敗しないための選び方と、最も価値のある一品を特定します。"
+    elif mode == "hidden_gem":
+        title = f"【掘り出し物】コスパ最強の{keyword}はどれ？知る人ぞ知る名作をAIが特定"
+        lead = f"有名ブランド以外にも優れた商品は存在します。価格以上の満足度（IVS）を叩き出した「{keyword}」の隠れた逸品をご紹介。"
+    elif mode == "parenting":
+        title = f"【実用性重視】パパ・ママが選ぶ「{keyword}」比較ガイド｜長く使える一品はこれ"
+        lead = f"忙しい子育て世代のために、片付けやすさ、安全性、子供の食いつきを基準に「{keyword}」を徹底比較しました。"
+    elif mode == "seasonal":
+        title = f"【贈り物に】今プレゼントしたい{keyword}特集｜予算別・人気順比較"
+        lead = f"大切な人へのギフトに最適な「{keyword}」。予算内で最高の結果を出せるアイテムを、市場価格データから厳選して提案します。"
     else:
         title = f"【徹底比較】{keyword}のおすすめ人気ランキング厳選！失敗しない選び方"
-        lead = f"育児に欠かせない「{keyword}」。種類が多すぎてどれを選べばいいか迷っていませんか？この記事では、Amazon・楽天・Yahoo!ショッピングから厳選した本当に価値のあるアイテムを徹底比較します。さらに、タカラトミーモール直送の最新情報も合わせてお届け！"
+        lead = f"育児に欠かせない「{keyword}」。種類が多すぎてどれを選べばいいか迷っていませんか？この記事では、Amazon・楽天・Yahoo!ショッピングから厳選した本当に価値のあるアイテムを徹底比較します。"
 
     # Deep SEO Optimization Structure
     article = {
@@ -138,9 +248,10 @@ def main():
             if min_p == rakuten_p: best_platform = "楽天"
             elif min_p == yahoo_p: best_platform = "Yahoo"
 
+        ivs_base = calculate_ivs(it)
         products.append({
             "asin": it.get("asin"),
-            "name": it.get("title"),
+            "name": clean_title(it.get("title")),
             "price": amazon_p,
             "rakuten_price": rakuten_p,
             "yahoo_price": yahoo_p,
@@ -150,7 +261,8 @@ def main():
             "best_platform": best_platform,
             "price_diff_label": f"({best_platform}が最安)" if min_p < amazon_p else "(Amazonが最安)",
             "image": it.get("image") or (it.get("images")[0] if it.get("images") else ""),
-            "ivs_score": calculate_ivs(it),
+            "ivs_score": ivs_base,
+            "ivs_score_100": int(ivs_base * 20),
             "pros": p,
             "cons": c,
             "features": it.get("features", [])
@@ -201,7 +313,7 @@ def main():
         })
 
     os.makedirs("data/articles", exist_ok=True)
-    out_path = f"data/articles/{datetime.now().strftime('%Y-%m-%d')}-{article['slug']}.json"
+    out_path = f"data/articles/{article['slug']}.json"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(article, f, ensure_ascii=False, indent=4)
 
