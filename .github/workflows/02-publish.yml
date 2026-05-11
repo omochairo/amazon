@@ -5,6 +5,8 @@ on:
       - 'data/raw/**'
       - 'data/articles/**'
       - 'hugo/content/**'
+      - 'scripts/**'
+      - 'AGENTS.md'
   workflow_run:
     workflows: ["Fetch Amazon Products"]
     types: [completed]
