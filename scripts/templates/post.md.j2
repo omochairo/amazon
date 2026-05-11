@@ -1,84 +1,95 @@
 # {{ title }}
 
-> **📊 データ分析レポート**: この記事は、AIエージェント「Jules」が複数のECプラットフォームから収集したリアルタイムデータを基に作成しています。（最終更新: {{ date[:10] }}）
-
-{{ lead }}
-
-{% if signal_type %}
-> **⚡ トレンド検出**: 「{{ signal_type_label }}」シグナルに基づき、市場での注目度が急上昇しているアイテムを中心に構成しています。
-{% elif mode %}
-> **🏷️ カテゴリ**: {{ mode }}（Jules編集長による厳選ピックアップ）
-{% endif %}
+> **📊 購入ガイド**: この記事は、AIエージェント「Jules」がAmazon・楽天・Yahoo!ショッピングの価格データをリアルタイム比較して作成しています。（最終更新: {{ date[:10] }}）
 
 ---
 
-## 🏆 クイック比較：今回のおすすめトップ3
+## 🧸 {{ product.name }}
 
-| 順位 | アイテム名 | スコア | 価格 | 特徴 | リンク |
-|:---:|:---|:---:|:---|:---|:---:|
-{% for p in products[:3] -%}
-| {{ loop.index }} | **{{ p.name[:25] }}...** | 🏆 **{{ p.ivs_score_100 }}点** | ￥{{ "{:,}".format(p.price) }} | {{ p.pros[0] }} | [詳細]({{ p.amazon_url }}) |
-{% endfor %}
-
----
-
-## 🔍 商品詳細徹底比較
-
-{% for p in products %}
-### {{ loop.index }}. {{ p.name }}
-
-{% if p.image %}
+{% if product.image %}
 <div align="center">
-  <img src="{{ p.image }}" alt="{{ p.name }}" width="300">
+  <img src="{{ product.image }}" alt="{{ product.name }}" width="300">
 </div>
 {% endif %}
 
-#### 📊 評価スコア
-- **総合スコア (IVS)**: 🏆 **{{ p.ivs_score_100 }} / 100点**
-- **知育価値**: {{ p.ivs_score }}/5.0
+---
 
-#### 💰 最安値・購入先情報
-- **販売価格**: ￥{{ "{:,}".format(p.price) }} {% if p.is_cheapest %}🔥 **最安値！**{% endif %}
-- **比較対象**: [Amazon]({{ p.amazon_url }}) / [楽天]({{ p.rakuten_url or "#" }}) / [Yahoo]({{ p.yahoo_url or "#" }})
+## 💰 3サイト価格比較
 
-> [!IMPORTANT]
-> **👍 メリット**: {{ p.pros | join('、') }}
-> **👎 デメリット**: {{ p.cons | join('、') }}
+| ショップ | 価格 | リンク |
+|:---:|:---:|:---:|
+| 🟠 **Amazon** | {% if product.prices.amazon.price > 0 %}￥{{ "{:,}".format(product.prices.amazon.price) }}{% else %}取扱なし{% endif %} | {% if product.prices.amazon.url %}[購入する →]({{ product.prices.amazon.url }}){% else %}-{% endif %} |
+| 🔴 **楽天** | {% if product.prices.rakuten.price > 0 %}￥{{ "{:,}".format(product.prices.rakuten.price) }}{% else %}{% if product.prices.rakuten.is_search %}価格を確認{% else %}取扱なし{% endif %}{% endif %} | {% if product.prices.rakuten.url %}[{% if product.prices.rakuten.is_search %}楽天で検索 →{% else %}購入する →{% endif %}]({{ product.prices.rakuten.url }}){% else %}-{% endif %} |
+| 🟣 **Yahoo** | {% if product.prices.yahoo.price > 0 %}￥{{ "{:,}".format(product.prices.yahoo.price) }}{% else %}{% if product.prices.yahoo.is_search %}価格を確認{% else %}取扱なし{% endif %}{% endif %} | {% if product.prices.yahoo.url %}[{% if product.prices.yahoo.is_search %}Yahooで検索 →{% else %}購入する →{% endif %}]({{ product.prices.yahoo.url }}){% else %}-{% endif %} |
 
-#### 📝 特徴・スペック
-{% for feature in p.features %}- {{ feature }}
-{% endfor %}
+{% if product.best_price > 0 %}
+> [!TIP]
+> 🏆 **現在の最安値: {{ product.best_platform }}（￥{{ "{:,}".format(product.best_price) }}）**
+{% endif %}
 
 ---
+
+## 📊 知育価値スコア（IVS）
+
+| 項目 | スコア |
+|:---|:---:|
+| 🎓 知育効果 | {{ product.ivs_detail.education }} / 5.0 |
+| ⏳ 長く遊べるか | {{ product.ivs_detail.longevity }} / 5.0 |
+| 🛡️ 安全性 | {{ product.ivs_detail.safety }} / 5.0 |
+| 💴 コスパ | {{ product.ivs_detail.cost_performance }} / 5.0 |
+| **🏆 総合スコア** | **{{ product.ivs_detail.total_100 }} / 100点** |
+
+---
+
+## ✅ メリット・デメリット
+
+> [!IMPORTANT]
+> **👍 メリット**: {{ product.pros | join('、') }}
+> **👎 デメリット**: {{ product.cons | join('、') }}
+
+---
+
+## 📝 商品の特徴
+
+{% for feature in product.features %}- {{ feature }}
 {% endfor %}
 
 {% if youtube_embeds %}
-## 📺 関連レビュー動画
+---
+
+## 📺 関連動画
+
 {% for vid in youtube_embeds %}
 ### {{ vid.title }}
 {{ vid.embed_html }}
+
+{% endfor %}
+{% endif %}
+
+{% if news %}
+---
+
+## 📰 関連ニュース
+
+{% for n in news %}- [{{ n.title }}]({{ n.url }})
 {% endfor %}
 {% endif %}
 
 {% if books %}
-## 📚 知識を深める関連書籍
-{% for book in books %}
-### [{{ book.title }}]({{ book.url }})
-{% if book.image %}![{{ book.title }}]({{ book.image }}){% endif %}
+---
 
-{{ book.description }}
+## 📚 関連書籍
+
+{% for book in books %}- [{{ book.title }}]({{ book.url }})
 {% endfor %}
 {% endif %}
 
-{% if tomy_items %}
-## 🆕 タカラトミー最新情報
-- 🧸 **[{{ tomy_items[0].title }}]({{ tomy_items[0].url }})**
-{% endif %}
-
 {% if internal_links %}
-## 🔗 関連記事
-{% for link in internal_links %}
-- [{{ link.title }}]({{ link.url }})
+---
+
+## 🔗 あわせて読みたい
+
+{% for link in internal_links %}- [{{ link.title }}]({{ link.url }})
 {% endfor %}
 {% endif %}
 

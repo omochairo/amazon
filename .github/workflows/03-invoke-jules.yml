@@ -12,6 +12,8 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,15 +21,96 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Trigger Jules
-        uses: google-labs-code/jules-invoke@v1
-        with:
-          jules_api_key: ${{ secrets.JULES_API_KEY }}
-          prompt: |
-            instructions.md を必ず読み、その指示に従って新しい記事を1本生成してください。
+      # Step 1: ソースを確認
+      - name: List Jules Sources
+        id: list-sources
+        run: |
+          echo "=== Listing Jules Sources ==="
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            'https://jules.googleapis.com/v1alpha/sources' \
+            -H "X-Goog-Api-Key: ${{ secrets.JULES_API_KEY }}")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          echo "HTTP: $HTTP_CODE"
+          echo "$BODY" | head -20
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Failed to list sources (HTTP $HTTP_CODE)"
+            exit 1
+          fi
+          # リポジトリ名を抽出
+          SOURCE_NAME=$(echo "$BODY" | jq -r '.sources[] | select(.githubRepo.owner=="omochairo" and .githubRepo.repo=="amazon") | .name' 2>/dev/null || echo "")
+          if [ -z "$SOURCE_NAME" ]; then
+            echo "::warning::Source not found, using default"
+            SOURCE_NAME="sources/github/omochairo/amazon"
+          fi
+          echo "source_name=$SOURCE_NAME" >> $GITHUB_OUTPUT
+          echo "Source: $SOURCE_NAME"
 
-            【重要な制約】
-            1. data/ フォルダ内の最新JSONデータを読み込んでください。
-            2. instructions.md のルールに従い、data/articles/ に新しい記事JSON を1本だけ作成してください。
-            3. 既存ファイルの編集・削除は禁止です。新規ファイルの追加のみ行ってください。
-            4. ワークフロー(.github/)、scripts/、hugo/config.toml、requirements.txt は絶対に変更しないでください。
+      # Step 2: セッション作成
+      - name: Create Jules Session
+        id: create-session
+        run: |
+          echo "=== Creating Jules Session ==="
+          PROMPT='AGENTS.md を必ず最初に読み、その指示に厳密に従ってください。
+
+          あなたの仕事:
+          1. data/raw/amazon.json から商品を1つ選ぶ（data/articles/ に同じASINの記事がないもの）
+          2. data/raw/rakuten.json, data/raw/yahoo_result.json から同じ商品を探す
+          3. data/raw/youtube.json から関連動画を探す
+          4. AGENTS.md のJSONスキーマに従い、data/articles/{今日の日付}-{ASIN}.json を1つだけ作成する
+
+          【絶対守るルール】
+          - 新規ファイル追加のみ。既存ファイルの変更・削除は禁止
+          - .github/、scripts/、hugo/ への変更は禁止
+          - data/articles/ フォルダへのJSON追加のみ許可'
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            'https://jules.googleapis.com/v1alpha/sessions' \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "X-Goog-Api-Key: ${{ secrets.JULES_API_KEY }}" \
+            -d "$(jq -n \
+              --arg prompt "$PROMPT" \
+              --arg source "${{ steps.list-sources.outputs.source_name }}" \
+              '{
+                prompt: $prompt,
+                sourceContext: {
+                  source: $source,
+                  githubRepoContext: {
+                    startingBranch: "main"
+                  }
+                },
+                automationMode: "AUTO_CREATE_PR",
+                title: "記事生成: 商品深掘りガイド"
+              }')")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          echo "HTTP: $HTTP_CODE"
+          echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Failed to create session (HTTP $HTTP_CODE)"
+            exit 1
+          fi
+          SESSION_ID=$(echo "$BODY" | jq -r '.id // empty')
+          echo "session_id=$SESSION_ID" >> $GITHUB_OUTPUT
+          echo "Session created: $SESSION_ID"
+
+      # Step 3: セッション状態確認（最大5分待機）
+      - name: Wait for Jules completion
+        if: steps.create-session.outputs.session_id != ''
+        run: |
+          SESSION_ID="${{ steps.create-session.outputs.session_id }}"
+          echo "=== Monitoring Session: $SESSION_ID ==="
+          for i in $(seq 1 10); do
+            sleep 30
+            RESPONSE=$(curl -s \
+              "https://jules.googleapis.com/v1alpha/sessions/$SESSION_ID" \
+              -H "X-Goog-Api-Key: ${{ secrets.JULES_API_KEY }}")
+            STATUS=$(echo "$RESPONSE" | jq -r '.status // "unknown"')
+            echo "[$i/10] Status: $STATUS"
+            if [ "$STATUS" = "COMPLETED" ] || [ "$STATUS" = "FAILED" ]; then
+              echo "$RESPONSE" | jq '.outputs // empty' 2>/dev/null
+              break
+            fi
+          done
+          echo "Jules session monitoring complete"

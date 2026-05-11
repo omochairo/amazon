@@ -3,8 +3,8 @@ import frontmatter
 import pathlib
 import argparse
 import jinja2
-import os
 from datetime import datetime
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -27,27 +27,23 @@ def main():
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
 
-            # Cheapest Logic
-            prices = [p.get("price", 999999) for p in data.get("products", []) if isinstance(p.get("price"), (int, float)) and p.get("price") > 0]
-            min_p = min(prices) if prices else None
-            for p in data.get("products", []):
-                p["is_cheapest"] = (min_p and p.get("price") == min_p)
-
             md_body = template.render(**data)
 
+            slug = data.get("slug", f.stem)
             post = frontmatter.Post(md_body, **{
                 "title": data.get("title", "No Title"),
                 "date": data.get("date", datetime.now().isoformat()),
                 "tags": data.get("tags", []),
                 "draft": False,
-                "slug": data.get("slug")
+                "slug": slug,
             })
 
-            out_file = dst_path / f"{data.get('slug', f.stem)}.md"
+            out_file = dst_path / f"{slug}.md"
             out_file.write_text(frontmatter.dumps(post), encoding="utf-8")
             print(f"Rendered: {out_file}")
         except Exception as e:
             print(f"Error processing {f}: {e}")
+
 
 if __name__ == "__main__":
     main()
