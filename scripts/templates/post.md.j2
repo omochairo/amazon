@@ -1,6 +1,8 @@
 # {{ title }}
 
-> **📊 購入ガイド**: この記事は、AIエージェント「Jules」がAmazon・楽天・Yahoo!ショッピングの価格データをリアルタイム比較して作成しています。（最終更新: {{ date[:10] }}）
+<div style="background:#e8f5e9;border-left:4px solid #4caf50;padding:12px 16px;border-radius:8px;margin-bottom:20px;">
+🤖 <strong>おもちゃロボ</strong>がAmazon・楽天・Yahoo!ショッピングの価格をくらべたよ！（{{ date[:10] }} しらべ）
+</div>
 
 ---
 
@@ -12,44 +14,55 @@
 </div>
 {% endif %}
 
----
-
-## 💰 3サイト価格比較
-
-| ショップ | 価格 | リンク |
-|:---:|:---:|:---:|
-| 🟠 **Amazon** | {% if product.prices.amazon.price > 0 %}￥{{ "{:,}".format(product.prices.amazon.price) }}{% else %}取扱なし{% endif %} | {% if product.prices.amazon.url %}[購入する →]({{ product.prices.amazon.url }}){% else %}-{% endif %} |
-| 🔴 **楽天** | {% if product.prices.rakuten.price > 0 %}￥{{ "{:,}".format(product.prices.rakuten.price) }}{% else %}{% if product.prices.rakuten.is_search %}価格を確認{% else %}取扱なし{% endif %}{% endif %} | {% if product.prices.rakuten.url %}[{% if product.prices.rakuten.is_search %}楽天で検索 →{% else %}購入する →{% endif %}]({{ product.prices.rakuten.url }}){% else %}-{% endif %} |
-| 🟣 **Yahoo** | {% if product.prices.yahoo.price > 0 %}￥{{ "{:,}".format(product.prices.yahoo.price) }}{% else %}{% if product.prices.yahoo.is_search %}価格を確認{% else %}取扱なし{% endif %}{% endif %} | {% if product.prices.yahoo.url %}[{% if product.prices.yahoo.is_search %}Yahooで検索 →{% else %}購入する →{% endif %}]({{ product.prices.yahoo.url }}){% else %}-{% endif %} |
-
-{% if product.best_price > 0 %}
-> [!TIP]
-> 🏆 **現在の最安値: {{ product.best_platform }}（￥{{ "{:,}".format(product.best_price) }}）**
+{% if product.intro %}
+{{ product.intro }}
 {% endif %}
 
 ---
 
-## 📊 知育価値スコア（IVS）
+## 💰 3サイトの価格をくらべたよ！
 
-| 項目 | スコア |
+| ショップ | 価格 | リンク |
+|:---:|:---:|:---:|
+| 🟠 **Amazon** | {% if product.prices.amazon.price > 0 %}**￥{{ "{:,}".format(product.prices.amazon.price) }}**{% else %}取りあつかいなし{% endif %} | {% if product.prices.amazon.url %}[Amazonで見る →]({{ product.prices.amazon.url }}){% else %}-{% endif %} |
+| 🔴 **楽天** | {% if product.prices.rakuten.price > 0 %}**￥{{ "{:,}".format(product.prices.rakuten.price) }}**{% else %}{% if product.prices.rakuten.is_search %}↓検索してね{% else %}取りあつかいなし{% endif %}{% endif %} | {% if product.prices.rakuten.url %}[{% if product.prices.rakuten.is_search %}楽天で検索する →{% else %}楽天で見る →{% endif %}]({{ product.prices.rakuten.url }}){% else %}-{% endif %} |
+| 🟣 **Yahoo** | {% if product.prices.yahoo.price > 0 %}**￥{{ "{:,}".format(product.prices.yahoo.price) }}**{% else %}{% if product.prices.yahoo.is_search %}↓検索してね{% else %}取りあつかいなし{% endif %}{% endif %} | {% if product.prices.yahoo.url %}[{% if product.prices.yahoo.is_search %}Yahooで検索する →{% else %}Yahooで見る →{% endif %}]({{ product.prices.yahoo.url }}){% else %}-{% endif %} |
+
+{% if product.best_price > 0 %}
+<div style="background:#fff3e0;border-left:4px solid #ff9800;padding:12px 16px;border-radius:8px;margin:16px 0;">
+🏆 <strong>いま一番おトク → {{ product.best_platform }}（￥{{ "{:,}".format(product.best_price) }}）</strong>
+</div>
+{% endif %}
+
+---
+
+## 📊 おもちゃロボの採点けっか
+
+| しんさ項目 | スコア |
 |:---|:---:|
-| 🎓 知育効果 | {{ product.ivs_detail.education }} / 5.0 |
-| ⏳ 長く遊べるか | {{ product.ivs_detail.longevity }} / 5.0 |
-| 🛡️ 安全性 | {{ product.ivs_detail.safety }} / 5.0 |
+| 🎓 まなべるか | {{ product.ivs_detail.education }} / 5.0 |
+| ⏳ ながく遊べるか | {{ product.ivs_detail.longevity }} / 5.0 |
+| 🛡️ あんぜんか | {{ product.ivs_detail.safety }} / 5.0 |
 | 💴 コスパ | {{ product.ivs_detail.cost_performance }} / 5.0 |
-| **🏆 総合スコア** | **{{ product.ivs_detail.total_100 }} / 100点** |
+| **🏆 そうごうスコア** | **{{ product.ivs_detail.total_100 }} / 100点** |
 
 ---
 
-## ✅ メリット・デメリット
+## ✅ いいところ・きになるところ
 
-> [!IMPORTANT]
-> **👍 メリット**: {{ product.pros | join('、') }}
-> **👎 デメリット**: {{ product.cons | join('、') }}
+<div style="background:#e3f2fd;border-left:4px solid #2196f3;padding:12px 16px;border-radius:8px;margin:16px 0;">
+<strong>👍 いいところ</strong><br>
+{{ product.pros | join('、') }}
+</div>
+
+<div style="background:#fce4ec;border-left:4px solid #e91e63;padding:12px 16px;border-radius:8px;margin:16px 0;">
+<strong>👎 きになるところ</strong><br>
+{{ product.cons | join('、') }}
+</div>
 
 ---
 
-## 📝 商品の特徴
+## 📝 くわしい特徴
 
 {% for feature in product.features %}- {{ feature }}
 {% endfor %}
@@ -57,10 +70,10 @@
 {% if youtube_embeds %}
 ---
 
-## 📺 関連動画
+## 📺 かんれん動画
 
 {% for vid in youtube_embeds %}
-### {{ vid.title }}
+### 🎬 {{ vid.title }}
 {{ vid.embed_html }}
 
 {% endfor %}
@@ -69,7 +82,7 @@
 {% if news %}
 ---
 
-## 📰 関連ニュース
+## 📰 かんれんニュース
 
 {% for n in news %}- [{{ n.title }}]({{ n.url }})
 {% endfor %}
@@ -78,7 +91,7 @@
 {% if books %}
 ---
 
-## 📚 関連書籍
+## 📚 もっとしりたい人へ
 
 {% for book in books %}- [{{ book.title }}]({{ book.url }})
 {% endfor %}
@@ -87,7 +100,7 @@
 {% if internal_links %}
 ---
 
-## 🔗 あわせて読みたい
+## 🔗 ほかの記事もみてね
 
 {% for link in internal_links %}- [{{ link.title }}]({{ link.url }})
 {% endfor %}
@@ -95,8 +108,9 @@
 
 ---
 
-> [!TIP]
-> **Julesの分析結論**
-> {{ editorial_comment }}
+<div style="background:#f3e5f5;border-left:4px solid #9c27b0;padding:12px 16px;border-radius:8px;margin:16px 0;">
+🤖 <strong>おもちゃロボのひとこと</strong><br>
+{{ editorial_comment }}
+</div>
 
-**免責事項**: 価格や在庫状況は記事更新時点のものです。ご購入の際は必ず販売サイトの最新情報をご確認ください。アフィリエイトリンクを通じて購入が発生した場合、当サイトに収益が発生することがあります。
+<small>※ 価格やざいこは記事を書いた時点のものだよ。買うときはかならずお店のページでたしかめてね。リンクから買いものをすると、このサイトにすこし収益がはいることがあるよ。</small>

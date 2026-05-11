@@ -3,8 +3,8 @@ languageCode = 'ja-jp'
 title = 'おもちゃいろ Amazon比較ナビ 🧸'
 theme = 'PaperMod'
 contentDir = 'content'
-canonifyURLs = true
-relativeURLs = false
+canonifyURLs = false
+relativeURLs = true
 
 [pagination]
   pagerSize = 10
@@ -12,7 +12,7 @@ relativeURLs = false
 [params]
   env = "production"
   description = "Julesが毎日自動更新！人気おもちゃのAmazon価格比較サイト"
-  author = "おもちゃいろ編集部"
+  author = "おもちゃロボ 🤖"
   defaultTheme = "auto"
   mainSections = ["posts"]
   ShowReadingTime = true

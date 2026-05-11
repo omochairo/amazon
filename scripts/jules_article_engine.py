@@ -2,6 +2,7 @@ import json
 import os
 import re
 import pathlib
+import urllib.parse
 from datetime import datetime
 from read_raw import load_raw_data
 from history_check import get_history
@@ -15,7 +16,7 @@ NOISE_WORDS = frozenset([
     '送料無料', '対象年齢', '以上', '歳', '玩具', '遊び', '知育',
     'おすすめ', '人気', '出産祝い', 'クリスマス', '入園', '入学',
     '男', '女', 'お祝い', '新品', '正規品', '日本', '木製', '教育',
-    'セット', 'おもしろ', '楽しい', '安全', '安心', 'ブロック',
+    'セット', 'おもしろ', '楽しい', '安全', '安心',
     'toy', 'kids', 'baby', 'gift', 'present', 'boy', 'girl',
 ])
 
@@ -24,10 +25,56 @@ def extract_product_tokens(title):
     """商品名から固有性の高いトークンを抽出する。"""
     if not title:
         return set()
-    # Unicode文字/英数字トークンを抽出
     tokens = set(re.findall(r'[一-龥ぁ-んァ-ヴー]{2,}|[a-zA-Z0-9]{2,}', title))
-    # ノイズワード除去
     return tokens - NOISE_WORDS
+
+
+def extract_brand_and_product(title):
+    """タイトルからブランド名と商品名を推定して抽出する。"""
+    if not title:
+        return "", ""
+    # ブランド名パターン（カタカナ連続 or 英字）
+    brands = re.findall(r'[ァ-ヴー]{3,}|[A-Z][a-zA-Z]+', title)
+    brand = brands[0] if brands else ""
+
+    # 商品名: ブランド後の最初の意味のある部分
+    clean = re.sub(r'[【\[（\(＼].*?[】\]）\)／]', ' ', title)
+    clean = re.sub(r'\s+', ' ', clean).strip()
+    return brand, clean
+
+
+def smart_truncate(text, max_len=35):
+    """日本語の区切り文字で自然に切る。途中切れを防止。"""
+    if len(text) <= max_len:
+        return text
+    # 自然な区切りポイントを探す
+    cut_chars = ['　', ' ', '/', '・', '｜', '|', '、', ',']
+    best_cut = max_len
+    for i in range(max_len, max(max_len - 10, 0), -1):
+        if text[i] in cut_chars:
+            best_cut = i
+            break
+    return text[:best_cut].rstrip()
+
+
+def extract_tags(title, brand=""):
+    """タイトルからタグを抽出。途中切れしない。"""
+    tags = set()
+    if brand and len(brand) >= 2:
+        tags.add(brand)
+    # カタカナ連続3文字以上を抽出
+    katakana = re.findall(r'[ァ-ヴー]{3,}', title)
+    for k in katakana:
+        if k not in NOISE_WORDS and len(k) >= 3:
+            tags.add(k)
+    # 英字ブランド名
+    eng = re.findall(r'[A-Z][a-zA-Z]{2,}', title)
+    for e in eng:
+        if e.lower() not in {'the', 'and', 'for', 'with'}:
+            tags.add(e)
+    tags.add("価格比較")
+    tags.add("購入ガイド")
+    return list(tags)[:6]
 
 
 def calculate_ivs(item):
@@ -38,7 +85,7 @@ def calculate_ivs(item):
 
     edu = 3.0
     edu_kw = ['知育', 'モンテッソーリ', 'STEM', 'プログラミング', 'ブロック',
-              '思考力', '想像力', '空間把握', '学習', '教育']
+              '思考力', '想像力', '空間把握', '学習', '教育', 'パズル']
     edu += sum(0.3 for k in edu_kw if k in name or k in features)
     edu = min(edu, 5.0)
 
@@ -65,7 +112,6 @@ def calculate_ivs(item):
     rc = item.get('reviewCount', 0)
     if rc > 500: correction = 1.1
     elif rc > 100: correction = 1.05
-    elif rc < 10: correction = 0.9
 
     raw = ((edu * lon) + safe) / (6 - cp) * correction
     score5 = round(min(max((raw / 10) * 2.5 + 2.5, 1.0), 5.0), 1)
@@ -87,40 +133,38 @@ def generate_pros_cons(item):
 
     pros = []
     if any(k in full for k in ['安全', 'STマーク', 'なめても安心', '自然由来', '食品衛生']):
-        pros.append("高い安全性")
+        pros.append("安全性が高く安心")
     if any(k in full for k in ['長く遊べる', '成長に合わせて', '幅広い年齢']):
-        pros.append("長く愛用できる")
+        pros.append("長く遊べる")
     if any(k in full for k in ['簡単', 'すぐ遊べる', 'シンプル', 'タッチ']):
-        pros.append("直感的に遊べる")
+        pros.append("かんたんに遊べる")
     if any(k in full for k in ['知育', '学習', '思考力', '創造力', '教育']):
-        pros.append("知育効果が高い")
+        pros.append("遊びながら学べる")
     if any(k in full for k in ['グッドトイ', '受賞', '大賞']):
-        pros.append("受賞歴あり")
+        pros.append("受賞歴あり！")
+    if any(k in full for k in ['人気', 'ベストセラー', 'ランキング']):
+        pros.append("みんなに人気")
     if not pros:
-        pros = ["評価が高い", "定番商品"]
+        pros = ["みんなに人気", "定番のおもちゃ"]
 
     cons = []
     if item.get('price', 0) > 10000:
-        cons.append("やや高価")
-    if any(k in full for k in ['難しい', '大人と一緒', '複雑']):
-        cons.append("低年齢児には少し難しい")
+        cons.append("お値段がちょっと高め")
     if any(k in full for k in ['電池', '別売り']):
-        cons.append("電池が別途必要")
+        cons.append("電池がべつに必要だよ")
+    if any(k in full for k in ['小さい', 'パーツ', '部品']):
+        cons.append("小さいパーツがあるよ")
     if not cons:
-        cons = ["特になし"]
+        cons = ["とくになし！"]
     return pros[:3], cons[:2]
 
 
-def find_best_match(target_title, pool_items, min_overlap=3):
-    """
-    商品タイトルの固有トークンマッチング。
-    ノイズワードを除去した上でブランド名・商品固有名で一致を判定。
-    min_overlap=3 により、少なくとも3つの固有トークンが一致する必要がある。
-    """
+def find_best_match(target_title, pool_items, min_overlap=2):
+    """固有トークンでのマッチング。min_overlap=2に緩和。"""
     if not pool_items:
         return None
     t_tokens = extract_product_tokens(target_title)
-    if len(t_tokens) < 2:
+    if len(t_tokens) < 1:
         return None
 
     best, best_score, best_ratio = None, 0, 0.0
@@ -128,8 +172,7 @@ def find_best_match(target_title, pool_items, min_overlap=3):
         p_tokens = extract_product_tokens(item.get("title", ""))
         overlap = t_tokens & p_tokens
         score = len(overlap)
-        # 重複トークンの割合も考慮（ターゲット側の何%がマッチしたか）
-        ratio = score / len(t_tokens) if t_tokens else 0
+        ratio = score / max(len(t_tokens), 1)
 
         if score >= min_overlap and (score > best_score or
                                      (score == best_score and ratio > best_ratio)):
@@ -140,7 +183,6 @@ def find_best_match(target_title, pool_items, min_overlap=3):
 
 
 def find_related_videos(product_title, videos, max_results=2):
-    """商品タイトルの固有キーワードで関連動画をマッチング。"""
     if not videos:
         return []
     t_tokens = extract_product_tokens(product_title)
@@ -148,15 +190,29 @@ def find_related_videos(product_title, videos, max_results=2):
     for vid in videos:
         v_tokens = extract_product_tokens(vid.get("title", ""))
         score = len(t_tokens & v_tokens)
-        if score >= 2:
+        if score >= 1:
             scored.append((score, vid))
     scored.sort(key=lambda x: x[0], reverse=True)
     return [v for _, v in scored[:max_results]]
 
 
+def find_related_news(product_title, news_items, max_results=2):
+    """商品に関連するニュースのみ返す。関連なければ空。"""
+    if not news_items:
+        return []
+    t_tokens = extract_product_tokens(product_title)
+    scored = []
+    for n in news_items:
+        n_tokens = extract_product_tokens(n.get("title", ""))
+        score = len(t_tokens & n_tokens)
+        if score >= 2:
+            scored.append((score, n))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [{"title": n.get("title", ""), "url": n.get("url", "")}
+            for _, n in scored[:max_results]]
+
+
 def make_search_url(platform, keyword):
-    """マッチしなかった場合の検索リンクを生成。"""
-    import urllib.parse
     q = urllib.parse.quote(keyword[:30])
     if platform == "rakuten":
         return f"https://search.rakuten.co.jp/search/mall/{q}/"
@@ -166,16 +222,33 @@ def make_search_url(platform, keyword):
 
 
 def clean_title(text):
+    """タイトルをクリーンにする。ブランド名と商品名を保持。"""
     if not text:
         return ""
-    text = re.sub(r'[【\[（\(＼].*?[】\]）\)／]', ' ', text)
-    text = re.sub(r'[【】\[\]（）\(\)＼／]', ' ', text)
+    # 括弧内のノイズだけ除去（ただし商品名っぽいものは残す）
     noise = ['送料無料', 'ポイント10倍', '楽天1位', '限定', 'クーポン',
              '正規品', '公式', '最新', '予約', 'おまけ付き', 'ラッピング無料',
-             'あす楽', '即納']
+             'あす楽', '即納', '税込']
     for n in noise:
         text = text.replace(n, ' ')
     return " ".join(text.split()).strip()
+
+
+def generate_description(item, brand, product_name):
+    """商品の特徴から子供向けの説明文を生成する。"""
+    features = item.get('features', [])
+    price = item.get('price', 0)
+    lines = []
+    lines.append(f"「{product_name}」は、{brand}から発売されているおもちゃだよ！")
+    if price:
+        lines.append(f"お値段は **￥{price:,}** からだよ。")
+    if features:
+        lines.append("このおもちゃの特徴は…")
+        for f in features[:3]:
+            # 特徴を短く要約
+            short = f[:60] + "…" if len(f) > 60 else f
+            lines.append(f"- {short}")
+    return "\n".join(lines)
 
 
 def main():
@@ -195,7 +268,6 @@ def main():
         print("No Amazon items to process")
         return
 
-    # 既存記事をチェック（重複防止）
     articles_dir = pathlib.Path("data/articles")
     existing_slugs = set()
     if articles_dir.exists():
@@ -217,37 +289,25 @@ def main():
 
         title_raw = item.get("title", "")
         title_clean = clean_title(title_raw)
+        brand, _ = extract_brand_and_product(title_raw)
+        product_name = smart_truncate(title_clean, 35)
         price_amazon = item.get("price", 0) or 0
 
-        # --- 楽天・Yahoo マッチング（固有トークンベース）---
+        # --- マッチング ---
         r_match = find_best_match(title_raw, rakuten_items)
         y_match = find_best_match(title_raw, yahoo_items)
-
-        # マッチ結果の信頼度ログ
-        if r_match:
-            r_tokens = extract_product_tokens(title_raw) & extract_product_tokens(r_match.get("title", ""))
-            print(f"  Rakuten match: {len(r_tokens)} tokens ({', '.join(list(r_tokens)[:5])})")
-        if y_match:
-            y_tokens = extract_product_tokens(title_raw) & extract_product_tokens(y_match.get("title", ""))
-            print(f"  Yahoo match: {len(y_tokens)} tokens ({', '.join(list(y_tokens)[:5])})")
 
         price_rakuten = r_match.get("price", 0) if r_match else 0
         price_yahoo = y_match.get("price", 0) if y_match else 0
 
-        # マッチしなかった場合は検索リンクを使用
         rakuten_url = r_match.get("url", "") if r_match else make_search_url("rakuten", title_clean)
         yahoo_url = y_match.get("url", "") if y_match else make_search_url("yahoo", title_clean)
-        rakuten_label = r_match.get("title", "") if r_match else "楽天で検索"
-        yahoo_label = y_match.get("title", "") if y_match else "Yahoo!で検索"
 
         # 最安プラットフォーム判定
         prices = {}
-        if price_amazon > 0:
-            prices["Amazon"] = price_amazon
-        if price_rakuten > 0:
-            prices["楽天"] = price_rakuten
-        if price_yahoo > 0:
-            prices["Yahoo"] = price_yahoo
+        if price_amazon > 0: prices["Amazon"] = price_amazon
+        if price_rakuten > 0: prices["楽天"] = price_rakuten
+        if price_yahoo > 0: prices["Yahoo"] = price_yahoo
 
         if prices:
             best_platform = min(prices, key=prices.get)
@@ -256,10 +316,7 @@ def main():
             best_platform = "Amazon"
             best_price = price_amazon
 
-        # IVSスコア
         ivs_score, ivs_detail = calculate_ivs(item)
-
-        # メリット・デメリット
         pros, cons = generate_pros_cons(item)
 
         # 関連動画
@@ -276,13 +333,8 @@ def main():
             except Exception:
                 pass
 
-        # 関連ニュース
-        related_news = []
-        for n in news_items[:2]:
-            related_news.append({
-                "title": n.get("title", ""),
-                "url": n.get("url", ""),
-            })
+        # 関連ニュース（関連するものだけ）
+        related_news = find_related_news(title_raw, news_items)
 
         # 関連書籍
         related_books = []
@@ -294,25 +346,39 @@ def main():
                 "image": b_match.get("image", ""),
             })
 
-        # 内部リンク
         internal_links = get_related_articles(title_clean)
 
-        # 記事タイトル生成（商品名を先頭に）
-        short_name = title_clean[:25]
-        article_title = f"【価格比較】{short_name}｜Amazon・楽天・Yahoo最安値ガイド"
+        # タグ生成（途中切れ防止）
+        tags = extract_tags(title_raw, brand)
+
+        # 記事タイトル（自然な切り方）
+        article_title = f"【価格比較】{product_name}｜どこで買うのが一番おトク？"
+
+        # 商品紹介文（子どもフレンドリー）
+        intro_text = generate_description(item, brand or "メーカー", product_name)
+
+        # おもちゃロボットのコメント
+        if best_price > 0 and len(prices) > 1:
+            robot_comment = f"おもちゃロボが調べたよ！「{product_name}」は、いま **{best_platform}** で買うのが一番おトクだよ💰 お値段は ￥{best_price:,} だよ！"
+        elif best_price > 0:
+            robot_comment = f"おもちゃロボが調べたよ！「{product_name}」は **Amazon** で ￥{best_price:,} で買えるよ🛒"
+        else:
+            robot_comment = f"おもちゃロボが「{product_name}」を調べたよ！ぜひチェックしてみてね🔍"
 
         article = {
             "slug": slug,
             "title": article_title,
-            "meta_description": f"{title_clean[:40]}をAmazon・楽天・Yahooで徹底比較。最安値・IVSスコア・関連動画つき購入ガイド。",
+            "meta_description": f"{product_name}をAmazon・楽天・Yahooで徹底比較！最安値・スコア・関連動画つき購入ガイド。",
             "date": datetime.now().astimezone().replace(microsecond=0).isoformat(),
-            "tags": [title_clean[:10], "価格比較", "購入ガイド", "知育玩具"],
+            "tags": tags,
             "product": {
                 "asin": asin,
-                "name": title_clean,
+                "name": product_name,
                 "name_full": title_raw,
+                "brand": brand,
                 "image": item.get("image", ""),
                 "features": item.get("features", []),
+                "intro": intro_text,
                 "pros": pros,
                 "cons": cons,
                 "ivs_score": ivs_score,
@@ -325,13 +391,13 @@ def main():
                     "rakuten": {
                         "price": price_rakuten,
                         "url": rakuten_url,
-                        "matched_title": rakuten_label,
+                        "matched_title": r_match.get("title", "") if r_match else "",
                         "is_search": r_match is None,
                     },
                     "yahoo": {
                         "price": price_yahoo,
                         "url": yahoo_url,
-                        "matched_title": yahoo_label,
+                        "matched_title": y_match.get("title", "") if y_match else "",
                         "is_search": y_match is None,
                     },
                 },
@@ -342,10 +408,9 @@ def main():
             "news": related_news,
             "books": related_books,
             "internal_links": internal_links,
-            "editorial_comment": f"「{title_clean[:15]}」は{best_platform}で購入するのが現時点で最もお得です。" if best_price > 0 else f"「{title_clean[:15]}」の詳細な価格比較をお届けしました。",
+            "editorial_comment": robot_comment,
         }
 
-        # 保存
         articles_dir.mkdir(parents=True, exist_ok=True)
         out_path = articles_dir / f"{slug}.json"
         with open(out_path, "w", encoding="utf-8") as f:
