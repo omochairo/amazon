@@ -150,7 +150,10 @@ def generate_pros_cons(item):
     cons = []
     if item.get('price', 0) > 10000:
         cons.append("お値段がちょっと高め")
-    if any(k in full for k in ['電池', '別売り']):
+    # 電池が「別売り」の場合のみ。「電池は使用しません」は除外
+    has_battery_needed = any(k in full for k in ['別売り', '電池別売'])
+    has_no_battery = '電池は使用しません' in full or '電池不要' in full
+    if has_battery_needed and not has_no_battery:
         cons.append("電池がべつに必要だよ")
     if any(k in full for k in ['小さい', 'パーツ', '部品']):
         cons.append("小さいパーツがあるよ")
@@ -251,6 +254,30 @@ def generate_description(item, brand, product_name):
     return "\n".join(lines)
 
 
+def load_cross_search_data():
+    """クロスサーチ結果をASINインデックスで読み込む。"""
+    r_index, y_index = {}, {}
+    r_path = pathlib.Path("data/raw/rakuten_matched.json")
+    y_path = pathlib.Path("data/raw/yahoo_matched.json")
+    if r_path.exists():
+        try:
+            for item in json.loads(r_path.read_text(encoding="utf-8")).get("items", []):
+                asin = item.get("matched_asin", "")
+                if asin:
+                    r_index[asin] = item
+        except Exception:
+            pass
+    if y_path.exists():
+        try:
+            for item in json.loads(y_path.read_text(encoding="utf-8")).get("items", []):
+                asin = item.get("matched_asin", "")
+                if asin:
+                    y_index[asin] = item
+        except Exception:
+            pass
+    return r_index, y_index
+
+
 def main():
     raw = load_raw_data()
     if not raw:
@@ -263,6 +290,10 @@ def main():
     youtube_items = raw.get("youtube", {}).get("items", [])
     news_items = raw.get("news", {}).get("items", [])
     books_items = raw.get("books_result", raw.get("books", {})).get("items", [])
+
+    # ASINベースのクロスサーチ結果を読み込む
+    r_cross, y_cross = load_cross_search_data()
+    print(f"Cross-search data: Rakuten={len(r_cross)}, Yahoo={len(y_cross)}")
 
     if not amazon_items:
         print("No Amazon items to process")
@@ -293,9 +324,9 @@ def main():
         product_name = smart_truncate(title_clean, 35)
         price_amazon = item.get("price", 0) or 0
 
-        # --- マッチング ---
-        r_match = find_best_match(title_raw, rakuten_items)
-        y_match = find_best_match(title_raw, yahoo_items)
+        # --- マッチング: クロスサーチ結果を優先、なければトークンマッチ ---
+        r_match = r_cross.get(asin) or find_best_match(title_raw, rakuten_items)
+        y_match = y_cross.get(asin) or find_best_match(title_raw, yahoo_items)
 
         price_rakuten = r_match.get("price", 0) if r_match else 0
         price_yahoo = y_match.get("price", 0) if y_match else 0

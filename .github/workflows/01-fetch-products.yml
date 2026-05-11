@@ -83,6 +83,16 @@ jobs:
         env:
           GOOGLEBOOKS_API_KEY: ${{ secrets.GOOGLEBOOKS_API_KEY }}
 
+      - name: Cross-Search (Amazon→楽天/Yahoo個別検索)
+        if: ${{ always() }}
+        run: python scripts/fetch_cross_search.py
+        env:
+          RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
+          RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}
+          YAHOO_CLIENT_ID: ${{ secrets.YAHOO_CLIENT_ID }}
+          VALUECOMMERCE_SID: ${{ secrets.VALUECOMMERCE_SID }}
+          VALUECOMMERCE_PID: ${{ secrets.VALUECOMMERCE_PID }}
+
       - name: Detect Signals (Layer 2)
         if: ${{ always() }}
         run: python scripts/signal_detector.py
