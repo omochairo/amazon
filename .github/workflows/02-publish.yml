@@ -1,8 +1,18 @@
 name: Jules Publish Pipeline
 on:
   push:
-    paths: ['data/raw/**']
+    paths:
+      - 'data/raw/**'
+      - 'data/articles/**'
+      - 'hugo/content/**'
+  workflow_run:
+    workflows: ["Fetch Amazon Products"]
+    types: [completed]
   workflow_dispatch:
+
+concurrency:
+  group: "publish"
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -11,6 +21,8 @@ permissions:
 
 jobs:
   publish:
+    # workflow_run の場合は成功時のみ実行
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -18,12 +30,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          ref: main
           fetch-depth: 0
-
-      - name: Sync with remote
-        run: |
-          git fetch origin main
-          git reset --mixed origin/main
 
       - uses: actions/setup-python@v5
         with:
@@ -42,13 +50,15 @@ jobs:
 
       - name: Debug Output
         run: |
-          ls -R data/articles/
-          ls -R hugo/content/posts/
+          echo "=== Articles ==="
+          ls -la data/articles/ || echo "No articles dir"
+          echo "=== Hugo Posts ==="
+          ls -la hugo/content/posts/ || echo "No posts dir"
 
       - name: Commit Generated Data
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "docs: AI-generated article update [skip ci]"
+          commit_message: "docs: AI-generated article update"
           file_pattern: "data/articles/ hugo/content/posts/"
           branch: main
 
@@ -60,7 +70,6 @@ jobs:
 
       - name: Build Hugo Site
         run: |
-          mkdir -p hugo/content/posts
           cd hugo && hugo --minify --buildFuture --destination ../public
 
       - name: Deploy to GitHub Pages

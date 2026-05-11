@@ -164,7 +164,6 @@ def main():
         return
 
     amazon = raw_data.get("amazon", {})
-    tomy = raw_data.get("takaratomy", {})
     rakuten = raw_data.get("rakuten", {})
     yahoo = raw_data.get("yahoo", {})
     youtube = raw_data.get("youtube", {})
@@ -340,11 +339,6 @@ def main():
             })
 
         current_article["tomy_items"] = []
-        for t in tomy.get("items", [])[idx : idx+1]:
-            current_article["tomy_items"].append({
-                "title": t.get("title"),
-                "url": t.get("url")
-            })
 
         os.makedirs("data/articles", exist_ok=True)
         out_path = f"data/articles/{current_article['slug']}.json"

@@ -9,16 +9,23 @@ on:
         description: '検索キーワード'
         required: false
   schedule:
-    - cron: '*/10 * * * *'  # 10分おきにトレンド取得
+    # 1日2回: 朝9時(JST=0:00 UTC) と 夕方18時(JST=9:00 UTC)
+    - cron: '0 0 * * *'
+    - cron: '0 9 * * *'
 
 jobs:
   fetch:
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    permissions:
+      contents: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -62,10 +69,6 @@ jobs:
         if: ${{ always() }}
         run: python scripts/fetch_yahoo_news.py --out data/raw/
 
-      - name: Fetch Takara Tomy Latest
-        if: ${{ always() }}
-        run: python scripts/fetch_takaratomy.py
-
       - name: Fetch Yahoo Shopping Data
         if: ${{ always() }}
         run: python scripts/fetch_yahoo.py "${{ github.event.inputs.keyword }}"
@@ -80,16 +83,9 @@ jobs:
         env:
           GOOGLEBOOKS_API_KEY: ${{ secrets.GOOGLEBOOKS_API_KEY }}
 
-
       - name: Detect Signals (Layer 2)
         if: ${{ always() }}
         run: python scripts/signal_detector.py
-
-      - name: Sync with remote
-        if: ${{ always() }}
-        run: |
-          git fetch origin main
-          git reset --mixed origin/main
 
       - name: Auto Commit
         if: ${{ always() }}

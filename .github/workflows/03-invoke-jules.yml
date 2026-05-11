@@ -1,0 +1,35 @@
+name: Invoke Jules for Article
+on:
+  workflow_run:
+    workflows: ["Jules Publish Pipeline"]
+    types: [completed]
+  workflow_dispatch:
+
+jobs:
+  invoke-jules:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Trigger Jules
+        uses: google-labs/jules-github-action@v0
+        with:
+          model: "gemini-2.5-flash"
+          query: |
+            instructions.md を必ず読み、その指示に従って新しい記事を1本生成してください。
+
+            【重要な制約】
+            1. data/ フォルダ内の最新JSONデータを読み込んでください。
+            2. instructions.md のルールに従い、hugo/content/posts/ に新しいMarkdown記事を1本だけ作成してください。
+            3. 既存ファイルの編集・削除は禁止です。新規ファイルの追加のみ行ってください。
+            4. ワークフロー(.github/)、scripts/、hugo/config.toml、requirements.txt は絶対に変更しないでください。
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
