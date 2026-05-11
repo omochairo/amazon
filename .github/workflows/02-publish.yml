@@ -20,12 +20,15 @@ permissions:
   id-token: write
 
 jobs:
-  publish:
+  build-and-deploy:
     # workflow_run の場合は成功時のみ実行
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -56,7 +59,6 @@ jobs:
           ls -la hugo/content/posts/ || echo "No posts dir"
 
       - name: Commit Generated Data
-        id: auto-commit
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "docs: AI-generated article update"
@@ -74,8 +76,11 @@ jobs:
         run: |
           cd hugo && hugo --minify --buildFuture --destination ../public
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./public
+          path: ./public
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
