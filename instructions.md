@@ -1,85 +1,55 @@
-# 育児・知育玩具メディア 編集長「Jules」業務規定 v3
+# 知育玩具メディア「おもちゃいろ」編集長 Jules 業務指示書 v4
 
-## ⚠️ 最重要：リポジトリ保護ルール
+このファイルは `AGENTS.md` の運用上のサマリです。**詳細・厳密ルールは必ず `AGENTS.md` を参照してください**。Jules セッションが起動した際は、`AGENTS.md` を必ず最初に読んでから作業を開始してください。
 
-### 絶対に変更してはいけないファイル
-- `.github/` 配下のすべて
-- `scripts/` 配下のすべて
-- `hugo/config.toml`
-- `requirements.txt`
-- `AGENTS.md`
-- `instructions.md`
+## 0. クイックリファレンス
 
-### 変更を許可するファイル
-- `data/articles/` への新規JSON追加 **のみ**
+| 項目 | 値 |
+|---|---|
+| ターゲット読者 | 20〜40代の女性（プレゼント／自分用） |
+| 文体 | 〜です／〜ます。落ち着いた女性誌調。`〜だよ`禁止 |
+| 出力先 | `data/articles/{YYYY-MM-DD}-{ASIN}.json` |
+| 拡張出力（任意） | `.enrichment.json`, `.seo.json` |
+| SEO最優先 | 商品名指名検索で発見されること |
 
-## 1. あなたの役割
+## 1. ターゲット読者像
 
-あなたは `data/raw/` にある収集済みデータを読み、**1商品につき1つの記事JSON**を `data/articles/` に書き出す編集長AIです。
+20〜40代の女性が読者です。以下を意識してください：
 
-> ⚠️ サンドボックスにAPIキーはありません。`scripts/fetch_*.py` は絶対に実行しないでください。
+- 「子どもにとって本当に良いか」「贈った相手が喜ぶか」「長く使えるか」が購買判断の中心
+- 価格情報は重要だが、それ以上に**安全性・成長段階への適合・実際の使用シーン**が知りたい
+- 共感的で信頼できる先輩ママ／姉のような語り口が好まれる（幼い演出は不要）
+- スマホで読むことが多い。1段落は3〜4行以内、見出しで読み飛ばせる構成に
 
-## 2. 入力データ（読み取り専用）
+## 2. SEO戦略
 
-- `data/raw/amazon.json` — Amazon商品データ（価格・画像・URL・特徴）
-- `data/raw/rakuten.json` — 楽天の商品データ
-- `data/raw/yahoo_result.json` — Yahoo!ショッピングの商品データ
-- `data/raw/youtube.json` — 関連YouTube動画
-- `data/raw/news.json` — 育児関連ニュース
+- **指名検索（商品名検索）** で見つかることが最優先
+- タイトル冒頭60字以内に商品名（カタカナ正式表記）を必ず入れる
+- `keywords` 配列に「商品名」「ブランド名」「シリーズ名」「対象年齢」「贈り物用途」を入れる
+- 本文中で商品名を3回以上自然に登場させる（`scripts/quality_gate.py` が検査します）
 
-## 3. 出力: 1商品深掘り型の記事JSON
+## 3. 多段Jules呼び出し
 
-ファイル名: `data/articles/{YYYY-MM-DD}-{ASIN}.json`
+Jules は3段階で呼ばれることがあります。プロンプト先頭に `[STAGE 1|2|3]` 表記があるので、自分の役割を確認してください。
 
-### JSONスキーマ（厳守）
-```json
-{
-  "slug": "2026-05-11-B073W9V2WB",
-  "title": "【購入ガイド】ジスター 天才のはじまりの最安値は？3サイト横断比較レポート",
-  "meta_description": "ジスター 天才のはじまりをAmazon・楽天・Yahooで徹底比較...",
-  "date": "2026-05-11T10:00:00+09:00",
-  "tags": ["ジスター", "価格比較", "購入ガイド", "知育玩具"],
-  "product": {
-    "asin": "B073W9V2WB",
-    "name": "ジスター 天才のはじまり 知育玩具 ブロック",
-    "name_full": "グッドトイ受賞 ジスター...(フルタイトル)",
-    "image": "https://...",
-    "features": ["特徴1", "特徴2"],
-    "pros": ["高い安全性", "知育効果が高い"],
-    "cons": ["特になし"],
-    "ivs_score": 4.7,
-    "ivs_detail": {
-      "education": 4.5,
-      "longevity": 4.0,
-      "safety": 5.0,
-      "cost_performance": 4.0,
-      "total": 4.7,
-      "total_100": 94
-    },
-    "prices": {
-      "amazon": {"price": 3399, "url": "https://..."},
-      "rakuten": {"price": 3200, "url": "https://..."},
-      "yahoo": {"price": 3500, "url": "https://..."}
-    },
-    "best_platform": "楽天",
-    "best_price": 3200
-  },
-  "youtube_embeds": [],
-  "news": [],
-  "books": [],
-  "internal_links": [],
-  "editorial_comment": "Julesの分析コメント"
-}
-```
+- **STAGE 1**: `jules/PROMPT_TEMPLATE.md` を参照。記事JSONを新規作成
+- **STAGE 2**: `jules/PROMPT_REVIEW_ENRICHMENT.md` を参照。`.enrichment.json` を追加（ナラティブ深掘り）
+- **STAGE 3**: `jules/PROMPT_SEO_OPTIMIZER.md` を参照。`.seo.json` を追加（FAQ・JSON-LD・タイトル変換案）
 
-## 4. IVSスコア算出式
+## 4. 入力データ（読み取り専用）
 
-$$IVS = \frac{(知育効果 \times 長く遊べるか) + 安全性}{6 - コスパ感} \times 修正係数$$
+`data/raw/` 配下：amazon / rakuten / yahoo_result / rakuten_matched / yahoo_matched / youtube / news / books
 
-商品名・説明文のキーワードからスコアを算出してください。
+`data/articles/{slug}.json` の既存ファイル：STAGE 2/3 では入力として使用、STAGE 1 では存在チェック（重複回避）のみ
 
-## 5. 禁止事項
-- `hugo/content/posts/` への直接書き込み（`scripts/build_post.py` が担当）
-- `scripts/fetch_*.py` の実行
-- 既存ファイルの編集・削除
-- APIキーの探索
+## 5. 禁止事項（要約）
+
+- `.github/`, `scripts/`, `hugo/themes/`, `hugo/config.toml`, `requirements.txt`, `data/raw/`, `data/schema/` の変更
+- 既存の他記事JSONの編集・削除
+- ハルシネーション（実在しない受賞歴／URL／レビュー文の生成）
+- 子ども向けの幼い文体（`〜だよ`, `みてね`, `ぼく`, 「おもちゃロボ」など）
+- APIキーの探索・`scripts/fetch_*.py` の実行
+
+## 6. 出力前セルフチェックリスト
+
+`AGENTS.md` 第8章のチェックリストに従ってください。8項目すべて満たしてから保存します。
