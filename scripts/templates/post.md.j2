@@ -1,116 +1,219 @@
-# {{ title }}
-
-<div style="background:#e8f5e9;border-left:4px solid #4caf50;padding:12px 16px;border-radius:8px;margin-bottom:20px;">
-🤖 <strong>おもちゃロボ</strong>がAmazon・楽天・Yahoo!ショッピングの価格をくらべたよ！（{{ date[:10] }} しらべ）
-</div>
-
----
-
-## 🧸 {{ product.name }}
+{#-
+  Hugo Markdown template for おもちゃいろ v4.
+  Target: 20〜40代女性。語り口は落ち着いた女性誌調。
+  SEO: 商品名を H1 / 複数の H2 / 本文中に自然に配置。
+  Inputs:
+    title, meta_description, date, tags, keywords, persona_fit, narrative, faq, product, youtube_embeds, news, books, internal_links, editorial_comment
+  Optional enrichment (merged at build time):
+    review_summary, use_case_scenarios, competitive_position, gift_reaction_prediction, expert_take
+  Optional seo (merged at build time):
+    h2_recommendations, faq_extended, jsonld_*, breadcrumbs
+-#}
+# {{ product.name_full or product.name }}
 
 {% if product.image %}
-<div align="center">
-  <img src="{{ product.image }}" alt="{{ product.name }}" width="300">
-</div>
+<figure style="text-align:center;margin:0 0 24px;">
+  <img src="{{ product.image }}" alt="{{ product.name }}の商品画像" loading="lazy" style="max-width:360px;width:100%;height:auto;border-radius:12px;">
+  <figcaption style="font-size:0.85rem;color:#666;margin-top:8px;">出典：Amazon商品ページ</figcaption>
+</figure>
 {% endif %}
 
-{% if product.intro %}
-{{ product.intro }}
+{{ narrative.lead }}
+
+{% if persona_fit %}
+<aside class="persona-fit" style="background:#fef7f0;border-left:4px solid #ec8b5e;border-radius:8px;padding:16px 20px;margin:24px 0;">
+  <strong>この記事はこんな方へ</strong>
+  <ul style="margin:8px 0 0;padding-left:20px;">
+    {% for r in persona_fit.recommended_for %}<li>{{ r }}</li>{% endfor %}
+  </ul>
+  {% if persona_fit.age_range %}<p style="margin:8px 0 0;font-size:0.9rem;">対象年齢：<strong>{{ persona_fit.age_range }}</strong></p>{% endif %}
+</aside>
 {% endif %}
 
----
+## {{ product.name }}が選ばれている理由
 
-## 💰 3サイトの価格をくらべたよ！
+{{ narrative.why_this_product }}
+
+{% if product.features %}
+### {{ product.name }}の主な特徴
+
+{% for f in product.features %}- {{ f }}
+{% endfor %}
+{% endif %}
+
+## {{ product.name }}の価格を3サイトで比較
+
+執筆時点の価格をAmazon・楽天・Yahoo!ショッピングで横断比較しました。
 
 | ショップ | 価格 | リンク |
 |:---:|:---:|:---:|
-| 🟠 **Amazon** | {% if product.prices.amazon.price > 0 %}**￥{{ "{:,}".format(product.prices.amazon.price) }}**{% else %}取りあつかいなし{% endif %} | {% if product.prices.amazon.url %}[Amazonで見る →]({{ product.prices.amazon.url }}){% else %}-{% endif %} |
-| 🔴 **楽天** | {% if product.prices.rakuten.price > 0 %}**￥{{ "{:,}".format(product.prices.rakuten.price) }}**{% else %}{% if product.prices.rakuten.is_search %}↓検索してね{% else %}取りあつかいなし{% endif %}{% endif %} | {% if product.prices.rakuten.url %}[{% if product.prices.rakuten.is_search %}楽天で検索する →{% else %}楽天で見る →{% endif %}]({{ product.prices.rakuten.url }}){% else %}-{% endif %} |
-| 🟣 **Yahoo** | {% if product.prices.yahoo.price > 0 %}**￥{{ "{:,}".format(product.prices.yahoo.price) }}**{% else %}{% if product.prices.yahoo.is_search %}↓検索してね{% else %}取りあつかいなし{% endif %}{% endif %} | {% if product.prices.yahoo.url %}[{% if product.prices.yahoo.is_search %}Yahooで検索する →{% else %}Yahooで見る →{% endif %}]({{ product.prices.yahoo.url }}){% else %}-{% endif %} |
+| Amazon | {% if product.prices.amazon.price > 0 %}**￥{{ "{:,}".format(product.prices.amazon.price) }}**{% else %}取り扱いなし{% endif %} | {% if product.prices.amazon.url %}[Amazonで見る]({{ product.prices.amazon.url }}){% else %}-{% endif %} |
+| 楽天市場 | {% if product.prices.rakuten.price > 0 %}**￥{{ "{:,}".format(product.prices.rakuten.price) }}**{% else %}{% if product.prices.rakuten.is_search %}検索で確認{% else %}取り扱いなし{% endif %}{% endif %} | {% if product.prices.rakuten.url %}[{% if product.prices.rakuten.is_search %}楽天で検索{% else %}楽天で見る{% endif %}]({{ product.prices.rakuten.url }}){% else %}-{% endif %} |
+| Yahoo!ショッピング | {% if product.prices.yahoo.price > 0 %}**￥{{ "{:,}".format(product.prices.yahoo.price) }}**{% else %}{% if product.prices.yahoo.is_search %}検索で確認{% else %}取り扱いなし{% endif %}{% endif %} | {% if product.prices.yahoo.url %}[{% if product.prices.yahoo.is_search %}Yahoo!で検索{% else %}Yahoo!で見る{% endif %}]({{ product.prices.yahoo.url }}){% else %}-{% endif %} |
 
 {% if product.best_price > 0 %}
-<div style="background:#fff3e0;border-left:4px solid #ff9800;padding:12px 16px;border-radius:8px;margin:16px 0;">
-🏆 <strong>いま一番おトク → {{ product.best_platform }}（￥{{ "{:,}".format(product.best_price) }}）</strong>
+<div class="best-deal" style="background:#fff3e0;border-left:4px solid #ff9800;border-radius:8px;padding:14px 18px;margin:20px 0;">
+  <strong>本記事執筆時点での最安値</strong><br>
+  {{ product.best_platform }}：<strong>￥{{ "{:,}".format(product.best_price) }}</strong>（在庫や送料により変動する場合があります）
 </div>
 {% endif %}
 
----
+## プレゼントに選ぶなら：{{ product.name }}の贈り物としての魅力
 
-## 📊 おもちゃロボの採点けっか
+{{ narrative.gift_appeal }}
 
-| しんさ項目 | スコア |
+{% if persona_fit and persona_fit.gift_scene %}
+**こんなギフトシーンに**：{{ persona_fit.gift_scene | join('、') }}
+{% endif %}
+
+{% if gift_reaction_prediction %}
+### 贈った相手の反応として期待できること
+
+**お子さまの反応**：{{ gift_reaction_prediction.child_response }}
+
+**ご家族（親御さん）の反応**：{{ gift_reaction_prediction.parent_response }}
+{% endif %}
+
+## {{ product.name }}の評価ポイント
+
+編集部の評価基準IVS（知育価値スコア）で採点しました。
+
+| 観点 | スコア |
 |:---|:---:|
-| 🎓 まなべるか | {{ product.ivs_detail.education }} / 5.0 |
-| ⏳ ながく遊べるか | {{ product.ivs_detail.longevity }} / 5.0 |
-| 🛡️ あんぜんか | {{ product.ivs_detail.safety }} / 5.0 |
-| 💴 コスパ | {{ product.ivs_detail.cost_performance }} / 5.0 |
-| **🏆 そうごうスコア** | **{{ product.ivs_detail.total_100 }} / 100点** |
+| 知育効果 | {{ product.ivs_detail.education }} / 5.0 |
+| 長く遊べるか | {{ product.ivs_detail.longevity }} / 5.0 |
+| 安全性 | {{ product.ivs_detail.safety }} / 5.0 |
+| コストパフォーマンス | {{ product.ivs_detail.cost_performance }} / 5.0 |
+| **総合スコア** | **{{ product.ivs_detail.total_100 }} / 100点** |
 
----
+{% if product.ivs_detail.score_rationale %}
+<details style="margin:16px 0;">
+<summary><strong>スコアの根拠を見る</strong></summary>
+<ul style="margin-top:10px;">
+{% for r in product.ivs_detail.score_rationale %}<li><strong>{{ r.factor }}（{{ r.delta }}）</strong>：{{ r.reason }}</li>
+{% endfor %}
+</ul>
+</details>
+{% endif %}
 
-## ✅ いいところ・きになるところ
+### 良いところ
 
-<div style="background:#e3f2fd;border-left:4px solid #2196f3;padding:12px 16px;border-radius:8px;margin:16px 0;">
-<strong>👍 いいところ</strong><br>
-{{ product.pros | join('、') }}
-</div>
-
-<div style="background:#fce4ec;border-left:4px solid #e91e63;padding:12px 16px;border-radius:8px;margin:16px 0;">
-<strong>👎 きになるところ</strong><br>
-{{ product.cons | join('、') }}
-</div>
-
----
-
-## 📝 くわしい特徴
-
-{% for feature in product.features %}- {{ feature }}
+{% for p in product.pros %}- {{ p }}
 {% endfor %}
 
-{% if youtube_embeds %}
----
+### 気になるところ
 
-## 📺 かんれん動画
+{% for c in product.cons %}- {{ c }}
+{% endfor %}
+
+## {{ product.name }}の実際の使い方・遊び方
+
+{{ narrative.daily_use }}
+
+{% if use_case_scenarios %}
+{% for uc in use_case_scenarios %}
+### {{ uc.scene }}
+
+{{ uc.narrative }}
+
+{% endfor %}
+{% endif %}
+
+## {{ product.name }}の安全性で気になること
+
+{{ narrative.safety_note }}
+
+{% if review_summary %}
+## レビューから見る{{ product.name }}の評判
+
+{% if review_summary.review_count %}口コミ件数：**{{ review_summary.review_count }}件**（平均評価 {{ review_summary.avg_rating }} / 5.0｜信頼度：{{ review_summary.confidence }}）{% endif %}
+
+{% if review_summary.positive_themes %}
+### よく聞かれる「良い」声
+
+{% for t in review_summary.positive_themes %}- **{{ t.theme }}** — {{ t.evidence }}
+{% endfor %}
+{% endif %}
+
+{% if review_summary.concern_themes %}
+### 気をつけたい声
+
+{% for t in review_summary.concern_themes %}- **{{ t.theme }}** — {{ t.evidence }}
+{% endfor %}
+{% endif %}
+{% endif %}
+
+{% if competitive_position %}
+## {{ product.name }}と似た商品との違い
+
+{{ competitive_position.position_explain }}
+
+{% if competitive_position.similar_products_note %}
+{{ competitive_position.similar_products_note }}
+{% endif %}
+{% endif %}
+
+## まとめ：{{ product.name }}は買うべき？
+
+{{ narrative.closing }}
+
+{% if expert_take %}
+<aside class="expert-take" style="background:#f3e5f5;border-left:4px solid #9c27b0;border-radius:8px;padding:14px 18px;margin:20px 0;">
+<strong>編集部の見立て</strong><br>
+{{ expert_take }}
+</aside>
+{% endif %}
+
+{% if faq %}
+## よくある質問（FAQ）
+
+{% for q in (faq_extended or faq) %}
+### {{ q.question }}
+
+{{ q.answer }}
+
+{% endfor %}
+{% endif %}
+
+{% if youtube_embeds %}
+## {{ product.name }}の関連動画
 
 {% for vid in youtube_embeds %}
-### 🎬 {{ vid.title }}
+**{{ vid.title }}**
+
 {{ vid.embed_html }}
 
 {% endfor %}
 {% endif %}
 
 {% if news %}
----
-
-## 📰 かんれんニュース
+## 関連ニュース
 
 {% for n in news %}- [{{ n.title }}]({{ n.url }})
 {% endfor %}
 {% endif %}
 
 {% if books %}
----
-
-## 📚 もっとしりたい人へ
+## あわせて読みたい書籍
 
 {% for book in books %}- [{{ book.title }}]({{ book.url }})
 {% endfor %}
 {% endif %}
 
 {% if internal_links %}
----
-
-## 🔗 ほかの記事もみてね
+## おもちゃいろの関連記事
 
 {% for link in internal_links %}- [{{ link.title }}]({{ link.url }})
 {% endfor %}
 {% endif %}
 
+{% if editorial_comment %}
+<aside class="editorial-comment" style="background:#e8f4f8;border-left:4px solid #4a90b8;border-radius:8px;padding:14px 18px;margin:24px 0;">
+<strong>編集後記</strong><br>
+{{ editorial_comment }}
+</aside>
+{% endif %}
+
 ---
 
-<div style="background:#f3e5f5;border-left:4px solid #9c27b0;padding:12px 16px;border-radius:8px;margin:16px 0;">
-🤖 <strong>おもちゃロボのひとこと</strong><br>
-{{ editorial_comment }}
-</div>
-
-<small>※ 価格やざいこは記事を書いた時点のものだよ。買うときはかならずお店のページでたしかめてね。リンクから買いものをすると、このサイトにすこし収益がはいることがあるよ。</small>
+<small>※ 価格・在庫情報は本記事執筆時点のものです。ご購入の際は必ず販売ページで最新情報をご確認ください。本記事のリンクから商品をご購入いただくと、当サイトに少額の収益が入る場合があります（読者の負担はありません）。</small>
