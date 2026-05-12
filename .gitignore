@@ -8,3 +8,6 @@ public_test/
 /hugo
 /hugo_server.log
 /hugo.tar.gz
+
+# quality_gate.py / build_post.py が毎回生成する派生物
+data/articles/*.quality.json
