@@ -79,10 +79,11 @@ jobs:
                   githubRepoContext: {
                     startingBranch: "main"
                   }
-                },
-                automationMode: "AUTO_CREATE_PR",
-                title: "記事生成: 商品深掘りガイド"
+                }
               }')")
+          # NOTE: 2026-05-12 切り分け: automationMode と title を一旦削除。
+          # 必須フィールドのみで HTTP 200 になるか検証。
+          # 通れば次に automationMode のみ復活させて再検証する。
           HTTP_CODE=$(echo "$RESPONSE" | tail -1)
           BODY=$(echo "$RESPONSE" | sed '$d')
           echo "HTTP: $HTTP_CODE"
