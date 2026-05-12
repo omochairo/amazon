@@ -37,38 +37,34 @@ jobs:
             echo "::error::Failed to list sources (HTTP $HTTP_CODE)"
             exit 1
           fi
-          # 2026-05-13 切り分け: source 名のスラッシュをハイフンに置換
-          # 公式ドキュメント (developers.google.com/jules/api) のサンプルでは
-          # "sources/github-myorg-myrepo" のハイフン区切り形式。
-          # List API レスポンスは "sources/github/omochairo/amazon" を返すが
-          # Create API が新形式 (ハイフン) を要求している可能性がある。
-          SOURCE_NAME_RAW=$(echo "$BODY" | jq -r '.sources[] | select(.githubRepo.owner=="omochairo" and .githubRepo.repo=="amazon") | .name' 2>/dev/null || echo "")
-          if [ -z "$SOURCE_NAME_RAW" ]; then
-            SOURCE_NAME_RAW="sources/github/omochairo/amazon"
+          # 2026-05-13: ハイフン形式は NOT_FOUND と判明したのでスラッシュ形式に戻す
+          # (List API が返す .name フィールドをそのまま使うのが正解)
+          SOURCE_NAME=$(echo "$BODY" | jq -r '.sources[] | select(.githubRepo.owner=="omochairo" and .githubRepo.repo=="amazon") | .name' 2>/dev/null || echo "")
+          if [ -z "$SOURCE_NAME" ]; then
             echo "::warning::Source not found, using default"
+            SOURCE_NAME="sources/github/omochairo/amazon"
           fi
-          # sources/github/owner/repo -> sources/github-owner-repo
-          SOURCE_NAME=$(echo "$SOURCE_NAME_RAW" | tr '/' '-' | sed 's|^sources-|sources/|')
           echo "source_name=$SOURCE_NAME" >> $GITHUB_OUTPUT
-          echo "Source (raw from API): $SOURCE_NAME_RAW"
-          echo "Source (hyphen form):  $SOURCE_NAME"
+          echo "Source: $SOURCE_NAME"
 
       # Step 2: セッション作成
       - name: Create Jules Session
         id: create-session
         run: |
           echo "=== Creating Jules Session ==="
+          # 2026-05-13: prompt 内の中括弧 { } を排除 (Jules API がテンプレート構文と
+          # 誤解釈して FAILED_PRECONDITION を返す可能性を切り分け)
           PROMPT='AGENTS.md を必ず最初に読み、その指示に厳密に従ってください。
 
           あなたの仕事:
-          1. data/raw/amazon.json から商品を1つ選ぶ（data/articles/ に同じASINの記事がないもの）
+          1. data/raw/amazon.json から商品を1つ選ぶ (data/articles/ に同じASINの記事がないもの)
           2. data/raw/rakuten.json, data/raw/yahoo_result.json から同じ商品を探す
           3. data/raw/youtube.json から関連動画を探す
-          4. AGENTS.md のJSONスキーマに従い、data/articles/{今日の日付}-{ASIN}.json を1つだけ作成する
+          4. AGENTS.md のJSONスキーマに従い、data/articles/ 配下に YYYY-MM-DD-ASIN.json の命名で1ファイルだけ作成する
 
-          【絶対守るルール】
+          絶対守るルール:
           - 新規ファイル追加のみ。既存ファイルの変更・削除は禁止
-          - .github/、scripts/、hugo/ への変更は禁止
+          - .github/, scripts/, hugo/ への変更は禁止
           - data/articles/ フォルダへのJSON追加のみ許可'
 
           RESPONSE=$(curl -s -w "\n%{http_code}" \
