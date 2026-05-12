@@ -18,7 +18,7 @@
 </figure>
 {% endif %}
 
-{{ narrative.lead }}
+{% if narrative.lead %}{{ narrative.lead }}{% endif %}
 
 {% if persona_fit %}
 <aside class="persona-fit" style="background:#fef7f0;border-left:4px solid #ec8b5e;border-radius:8px;padding:16px 20px;margin:24px 0;">
@@ -30,9 +30,11 @@
 </aside>
 {% endif %}
 
+{% if narrative.why_this_product %}
 ## {{ product.name }}が選ばれている理由
 
 {{ narrative.why_this_product }}
+{% endif %}
 
 {% if product.features %}
 ### {{ product.name }}の主な特徴
@@ -58,9 +60,11 @@
 </div>
 {% endif %}
 
+{% if narrative.gift_appeal %}
 ## プレゼントに選ぶなら：{{ product.name }}の贈り物としての魅力
 
 {{ narrative.gift_appeal }}
+{% endif %}
 
 {% if persona_fit and persona_fit.gift_scene %}
 **こんなギフトシーンに**：{{ persona_fit.gift_scene | join('、') }}
@@ -106,9 +110,11 @@
 {% for c in product.cons %}- {{ c }}
 {% endfor %}
 
+{% if narrative.daily_use %}
 ## {{ product.name }}の実際の使い方・遊び方
 
 {{ narrative.daily_use }}
+{% endif %}
 
 {% if use_case_scenarios %}
 {% for uc in use_case_scenarios %}
@@ -119,9 +125,11 @@
 {% endfor %}
 {% endif %}
 
+{% if narrative.safety_note %}
 ## {{ product.name }}の安全性で気になること
 
 {{ narrative.safety_note }}
+{% endif %}
 
 {% if review_summary %}
 ## レビューから見る{{ product.name }}の評判
@@ -153,9 +161,11 @@
 {% endif %}
 {% endif %}
 
+{% if narrative.closing %}
 ## まとめ：{{ product.name }}は買うべき？
 
 {{ narrative.closing }}
+{% endif %}
 
 {% if expert_take %}
 <aside class="expert-take" style="background:#f3e5f5;border-left:4px solid #9c27b0;border-radius:8px;padding:14px 18px;margin:20px 0;">

@@ -178,10 +178,15 @@ def main() -> None:
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
             slug = data.get("slug", f.stem)
-            if "narrative" not in data:
-                print(f"Skip (legacy v3, no 'narrative'): {f.name}")
+            legacy_v3 = "narrative" not in data
+            if legacy_v3:
+                data.setdefault("narrative", {k: "" for k in (
+                    "lead", "why_this_product", "gift_appeal",
+                    "daily_use", "safety_note", "closing")})
+                data.setdefault("persona_fit", {})
+                data.setdefault("faq", [])
+                data.setdefault("keywords", [])
                 skipped_legacy += 1
-                continue
             _merge(data, _load_optional_json(src_path / f"{slug}.enrichment.json"), ENRICHMENT_KEYS)
             _merge(data, _load_optional_json(src_path / f"{slug}.seo.json"), SEO_KEYS)
             _fill_jsonld(data)
@@ -208,13 +213,14 @@ def main() -> None:
                 else:
                     tag += f"  [score {report.total_score}]"
 
-            print(f"Rendered: {out_file}{tag}")
+            legacy_tag = "  [legacy v3 fallback]" if legacy_v3 else ""
+            print(f"Rendered: {out_file}{tag}{legacy_tag}")
             rendered += 1
         except Exception as e:
             print(f"Error processing {f}: {e}")
     msg = f"\nDone. {rendered} post(s) rendered."
     if skipped_legacy:
-        msg += f" {skipped_legacy} legacy v3 article(s) skipped (regenerate via Jules)."
+        msg += f" {skipped_legacy} rendered as legacy v3 fallback (regenerate via Jules)."
     print(msg)
 
 
