@@ -50,29 +50,53 @@ def extract_search_keyword(title):
     return keyword[:40]  # 長すぎると検索ヒットしない
 
 
-def search_rakuten(keyword, app_id, aff_id=""):
+def search_rakuten(keyword, app_id, access_key="", aff_id=""):
     """楽天で1商品を検索して最も関連性の高い結果を返す。"""
-    params = {
-        "applicationId": app_id,
-        "keyword": keyword,
-        "sort": "standard",
-        "formatVersion": 2,
-        "hits": 3,  # 上位3件から最良を選択
-    }
+    # RMS API (fetch_rakuten.pyと同じエンドポイント)
+    rms_url = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601"
+    public_url = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601"
+
+    # accessKeyがあればRMS API、なければ公開APIを使用
+    if access_key:
+        url = rms_url
+        params = {
+            "applicationId": app_id,
+            "accessKey": access_key,
+            "keyword": keyword,
+            "sort": "-updateTimestamp",
+            "formatVersion": 2,
+            "hits": 3,
+        }
+        headers = {
+            "Referer": "https://github.com/omochairo/amazon",
+            "Origin": "https://github.com/omochairo/amazon"
+        }
+    else:
+        url = public_url
+        params = {
+            "applicationId": app_id,
+            "keyword": keyword,
+            "sort": "standard",
+            "formatVersion": 2,
+            "hits": 3,
+        }
+        headers = {}
+
     if aff_id:
         params["affiliateId"] = aff_id
 
     try:
-        resp = requests.get(RAKUTEN_SEARCH_URL, params=params, timeout=10)
+        resp = requests.get(url, params=params, headers=headers, timeout=10)
         if resp.status_code != 200:
-            logger.warning(f"Rakuten search failed for '{keyword}': HTTP {resp.status_code}")
+            logger.warning(f"Rakuten search failed for '{keyword}': HTTP {resp.status_code} - {resp.text[:200]}")
             return None
         data = resp.json()
         raw_items = data.get("Items", [])
         if not raw_items:
+            logger.info(f"Rakuten: 0 results for '{keyword}'")
             return None
 
-        # 最初のアイテムを返す（standard sort = 関連度順）
+        # 最初のアイテムを返す
         item = raw_items[0]
         i = item.get("Item", item) if isinstance(item, dict) else {}
 
@@ -161,6 +185,7 @@ def main():
 
     # API キー
     rakuten_app_id = os.environ.get("RAKUTEN_APP_ID", "")
+    rakuten_access_key = os.environ.get("RAKUTEN_ACCESS_KEY", "")
     rakuten_aff_id = os.environ.get("RAKUTEN_AFFILIATE_ID", "")
     yahoo_client_id = os.environ.get("YAHOO_CLIENT_ID", "")
     vc_sid = os.environ.get("VALUECOMMERCE_SID", "")
@@ -177,7 +202,7 @@ def main():
 
         # 楽天検索
         if rakuten_app_id:
-            r_result = search_rakuten(keyword, rakuten_app_id, rakuten_aff_id)
+            r_result = search_rakuten(keyword, rakuten_app_id, rakuten_access_key, rakuten_aff_id)
             if r_result:
                 r_result["matched_asin"] = asin
                 r_result["search_keyword"] = keyword
