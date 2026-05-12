@@ -67,34 +67,44 @@ jobs:
           - .github/, scripts/, hugo/ への変更は禁止
           - data/articles/ フォルダへのJSON追加のみ許可'
 
-          RESPONSE=$(curl -s -w "\n%{http_code}" \
+          # 2026-05-13 詳細デバッグ: payload を変数に保存してログに表示、
+          # curl -i でレスポンスヘッダも取得 (quota/rate-limit/詳細エラーを確認)
+          REQUEST_BODY=$(jq -n \
+            --arg prompt "$PROMPT" \
+            --arg source "${{ steps.list-sources.outputs.source_name }}" \
+            '{
+              prompt: $prompt,
+              sourceContext: {
+                source: $source,
+                githubRepoContext: {
+                  startingBranch: "main"
+                }
+              }
+            }')
+          echo "=== Request Body (JSON sent to Jules) ==="
+          echo "$REQUEST_BODY" | jq .
+          echo "=== End Request Body ==="
+
+          # -i: レスポンスヘッダを含めて出力 (rate-limit / quota / WWW-Authenticate 等)
+          RESPONSE=$(curl -s -i -w "\n__HTTP_CODE__%{http_code}" \
             'https://jules.googleapis.com/v1alpha/sessions' \
             -X POST \
             -H "Content-Type: application/json" \
             -H "X-Goog-Api-Key: ${{ secrets.JULES_API_KEY }}" \
-            -d "$(jq -n \
-              --arg prompt "$PROMPT" \
-              --arg source "${{ steps.list-sources.outputs.source_name }}" \
-              '{
-                prompt: $prompt,
-                sourceContext: {
-                  source: $source,
-                  githubRepoContext: {
-                    startingBranch: "main"
-                  }
-                }
-              }')")
-          # NOTE: 2026-05-12 切り分け: automationMode と title を一旦削除。
-          # 必須フィールドのみで HTTP 200 になるか検証。
-          # 通れば次に automationMode のみ復活させて再検証する。
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
+            -d "$REQUEST_BODY")
+          HTTP_CODE=$(echo "$RESPONSE" | grep -oP '(?<=__HTTP_CODE__)\d+' | tail -1)
+          # HTTP ヘッダ部とボディ部を分離して両方表示
+          FULL_OUTPUT=$(echo "$RESPONSE" | sed 's/__HTTP_CODE__[0-9]*$//')
+          echo "=== Full Response (headers + body) ==="
+          echo "$FULL_OUTPUT"
+          echo "=== End Full Response ==="
           echo "HTTP: $HTTP_CODE"
-          echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
           if [ "$HTTP_CODE" != "200" ]; then
             echo "::error::Failed to create session (HTTP $HTTP_CODE)"
             exit 1
           fi
+          # 成功時のみ body を再パース
+          BODY=$(echo "$FULL_OUTPUT" | awk 'BEGIN{body=0} /^\r?$/{body=1; next} body{print}')
           SESSION_ID=$(echo "$BODY" | jq -r '.id // empty')
           echo "session_id=$SESSION_ID" >> $GITHUB_OUTPUT
           echo "Session created: $SESSION_ID"
