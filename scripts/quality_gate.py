@@ -36,12 +36,15 @@ except ImportError:
     Draft7Validator = None  # type: ignore
 
 
+# 幼児口調・子ども向け演出は禁止（女性誌調をキープするため）。
+# 「おもちゃロボ」はサイト公式キャラ（AI編集ロボの名称）として narrative や
+# editorial_comment に登場可。ただし「おもちゃロボがしらべたよ」のように
+# 幼児口調と組み合わせると下記パターンに引っかかるので注意。
 FORBIDDEN_TONE_PATTERNS = [
     r"だよ[。！\s]",
     r"なんだ[。！\s]",
     r"みてね",
     r"しらべたよ",
-    r"おもちゃロボ",
     r"ぼく[はが、]",
     r"だね[。！\s]",
 ]
