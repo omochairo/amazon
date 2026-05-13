@@ -73,7 +73,11 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "docs: AI-generated article update"
-          file_pattern: "data/articles/ hugo/content/posts/ data/raw/per_asin/"
+          # 2026-05-13: hugo/content/posts/ は .gitignore (/hugo) で除外されるため
+          # git add がエラーを返し、本ステップ全体が失敗 → per_asin/ も commit
+          # されないバグを修正 (continue-on-error: true で隠蔽されていた)。
+          # hugo/content/posts/ は build_post.py が毎回再生成するので commit 不要。
+          file_pattern: "data/articles/ data/raw/per_asin/"
           branch: main
         continue-on-error: true
 
