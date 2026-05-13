@@ -202,7 +202,11 @@
   - `low`：検索結果スニペット、SNS、出所不明の個人ブログ
 - `url` は **実在するページのみ**を参照。**架空URL・架空レビュー文の創作は厳禁（ハルシネーション禁止）**
 - `notes` には「そのソースが何を言っているか」の要約を残す。本文 `narrative` の根拠になる
-- ASIN由来の生レビュー（`data/raw/amazon.json` のレビュー欄）があればそれを最優先で `sources` に投入する
+- **`data/raw/reviews.json` を最優先で `sources` に投入する**。このファイルには ASIN ベースで楽天/Yahoo のレビュー本文（rating, title, body, posted_at）が格納されている：
+  - `reviews.json["<ASIN>"]["rakuten"]` の各エントリ → `sources` に `tier: "medium"`, `evidence_type: "secondary"`, `author: "楽天市場購入者レビュー"`, `notes: body` の本文を入れる
+  - `reviews.json["<ASIN>"]["yahoo"]` の各エントリ → 同様に `author: "Yahoo!ショッピング購入者レビュー"`
+  - レビュー本文があれば `narrative.daily_use` `safety_note` などに**実体験ベースの言葉**として反映する（例：「『〜』という口コミがありました」「実際の購入者からは『〜』との声があります」）
+  - ASIN由来の生レビュー（`data/raw/amazon.json` のレビュー欄）があればそれも追加で使う
 
 ### 6.5.2 主張（claims）と cross-check
 

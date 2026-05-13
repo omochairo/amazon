@@ -94,6 +94,13 @@ jobs:
           VALUECOMMERCE_SID: ${{ secrets.VALUECOMMERCE_SID }}
           VALUECOMMERCE_PID: ${{ secrets.VALUECOMMERCE_PID }}
 
+      - name: Fetch Reviews (楽天/Yahoo レビュー本文)
+        if: ${{ always() }}
+        run: python scripts/fetch_reviews.py
+        env:
+          RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
+          YAHOO_CLIENT_ID: ${{ secrets.YAHOO_CLIENT_ID }}
+
       - name: Detect Signals (Layer 2)
         if: ${{ always() }}
         run: python scripts/signal_detector.py
