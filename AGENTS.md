@@ -84,6 +84,17 @@
 - `product`: 既存スキーマ通り（ivs_score, ivs_detail, prices, pros, cons, features など）
 - `editorial_comment`: 編集後記（200字程度）
 
+### v4.1 追加の任意フィールド（記事品質ゲート）
+
+無難な記事を防ぐため、次のフィールドを **可能な限り出力してください**（詳細は `jules/PROMPT_TEMPLATE.md` §6.5 参照）：
+
+- `sources`: 採用したレビュー・出典の配列（`id`, `name`, `url`, `tier`, `evidence_type`, `notes` 等）。3件以上推奨
+- `claims`: 記事の重要な主張と出典の紐付け（`supporting_source_ids`, `cross_checked`）。`cross_checked: true` は2系統以上で一致したものだけ
+- `competitive_analysis`: 同カテゴリの競合 3〜6件（`name`, `asin`, `feature_comparison`, `differentiators`）
+- `technical_specs`: 寸法・重量・素材・原産国・対象年齢など（メートル法のみ、不明項目は省略）
+
+これらは現スキーマでは required ではないが、`narrative` 内の主張は **必ずどちらかに裏付けがあること**（架空エピソードの創作禁止）。
+
 ## 6. IVSスコア算出ルール（v4 で精密化）
 
 **基本点 70（=ivs_score 3.5）を出発点**とし、以下の独立した加減点を **個別に列挙してから合算** します。

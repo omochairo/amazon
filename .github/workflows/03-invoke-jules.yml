@@ -52,20 +52,25 @@ jobs:
         id: create-session
         run: |
           echo "=== Creating Jules Session ==="
-          # 2026-05-13: prompt 内の中括弧 { } を排除 (Jules API がテンプレート構文と
-          # 誤解釈して FAILED_PRECONDITION を返す可能性を切り分け)
-          PROMPT='AGENTS.md を必ず最初に読み、その指示に厳密に従ってください。
+          # 2026-05-13: 12行のハードコードプロンプトを廃止し、jules/PROMPT_TEMPLATE.md
+          # を読み込む形に変更（記事品質向上のため出典・競合比較・cross-check ルールを
+          # フルプロンプトとして渡す）。
+          # ※ FAILED_PRECONDITION が再発した場合は memory:
+          # feedback_jules_api_failed_precondition.md を参照し、まず API キー再発行を試す。
+          INTRO='AGENTS.md を最初に必ず読み、その指示に厳密に従ってください。
+          以下は STAGE 1 (記事JSON生成) の詳細プロンプトです。出典・競合比較・cross-check のルールを必ず守ってください。
 
-          あなたの仕事:
-          1. data/raw/amazon.json から商品を1つ選ぶ (data/articles/ に同じASINの記事がないもの)
-          2. data/raw/rakuten.json, data/raw/yahoo_result.json から同じ商品を探す
-          3. data/raw/youtube.json から関連動画を探す
-          4. AGENTS.md のJSONスキーマに従い、data/articles/ 配下に YYYY-MM-DD-ASIN.json の命名で1ファイルだけ作成する
-
-          絶対守るルール:
+          絶対守るリポジトリ保護ルール:
           - 新規ファイル追加のみ。既存ファイルの変更・削除は禁止
           - .github/, scripts/, hugo/ への変更は禁止
-          - data/articles/ フォルダへのJSON追加のみ許可'
+          - data/articles/ フォルダへの JSON 追加のみ許可（命名: YYYY-MM-DD-ASIN.json）
+          - data/raw/amazon.json から data/articles/ に同じ ASIN の記事がないものを1つ選ぶ
+          - data/raw/rakuten.json / yahoo_result.json / youtube.json も活用する
+
+          === 以下、jules/PROMPT_TEMPLATE.md の内容 ==='
+          PROMPT="$INTRO
+
+          $(cat jules/PROMPT_TEMPLATE.md)"
 
           # payload を変数に保存 (失敗時のデバッグ用にログ表示)
           REQUEST_BODY=$(jq -n \
