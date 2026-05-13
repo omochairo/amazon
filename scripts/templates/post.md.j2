@@ -22,52 +22,23 @@
 {%- endif -%}
 {%- endif -%}
 {%- endmacro -%}
-<aside class="auto-gen-notice" style="background:#fafafa;border:1px solid #e0e0e0;border-radius:8px;padding:12px 16px;margin:0 0 20px;font-size:0.88rem;color:#555;line-height:1.6;">
-  <strong style="color:#d33;">[PR]</strong>　この記事は、おもちゃいろのAI編集ロボ <strong>「おもちゃロボ」</strong> が Amazon・楽天・Yahoo!ショッピングなどの市場データをもとに自動生成しています。本文中の商品リンクには<strong>アフィリエイト広告</strong>を含み、ご購入いただくと当サイトに収益が入る場合があります（読者のご負担はありません）。
-</aside>
+<aside class="auto-gen-notice" style="background:#fafafa;border:1px solid #e0e0e0;border-radius:8px;padding:12px 16px;margin:0 0 20px;font-size:0.88rem;color:#444;line-height:1.6;"><strong style="color:#d33;">[PR]</strong>　この記事は、おもちゃいろのAI編集ロボ <strong>「おもちゃロボ」</strong> が Amazon・楽天・Yahoo!ショッピングなどの市場データをもとに自動生成しています。本文中の商品リンクには<strong>アフィリエイト広告</strong>を含み、ご購入いただくと当サイトに収益が入る場合があります（読者のご負担はありません）。</aside>
 
 # {{ product.name_full or product.name }}
 
 {% if product.image %}
-<figure style="text-align:center;margin:0 0 16px;">
-  <img src="{{ product.image }}" alt="{{ product.name }}の商品画像" loading="lazy" style="max-width:360px;width:100%;height:auto;border-radius:12px;">
-  <figcaption style="font-size:0.85rem;color:#666;margin-top:8px;">出典：Amazon商品ページ</figcaption>
-</figure>
+<figure style="text-align:center;margin:0 auto 16px;display:block;width:100%;"><img src="{{ product.image }}" alt="{{ product.name }}の商品画像" loading="lazy" style="display:block;margin:0 auto;max-width:360px;width:100%;height:auto;border-radius:12px;"><figcaption style="font-size:0.85rem;color:#888;margin-top:8px;text-align:center;">出典：Amazon商品ページ</figcaption></figure>
 {% endif %}
 
 {# ===== Hero score + key points (新 v4.2) ===== #}
 {% if product.ivs_detail %}
-<div class="hero-score" style="background:linear-gradient(135deg,#fff7ed 0%,#fef3c7 100%);border:1px solid #fde68a;border-radius:14px;padding:18px 20px;margin:0 0 24px;">
-  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-    <div style="flex:0 0 auto;text-align:center;background:#fff;border-radius:12px;padding:10px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
-      <div style="font-size:0.75rem;color:#92400e;font-weight:600;letter-spacing:0.05em;">IVS 総合</div>
-      <div style="font-size:2rem;font-weight:800;color:#b45309;line-height:1.1;">{{ product.ivs_detail.total_100 }}<span style="font-size:0.9rem;font-weight:400;color:#92400e;">/100</span></div>
-    </div>
-    <div style="flex:1 1 240px;display:grid;grid-template-columns:repeat(2,minmax(110px,1fr));gap:6px 12px;font-size:0.85rem;">
-      <div>📚 知育効果 <strong>{{ product.ivs_detail.education }}/5</strong></div>
-      <div>🕰️ 長く遊べる <strong>{{ product.ivs_detail.longevity }}/5</strong></div>
-      <div>🛡️ 安全性 <strong>{{ product.ivs_detail.safety }}/5</strong></div>
-      <div>💰 コスパ <strong>{{ product.ivs_detail.cost_performance }}/5</strong></div>
-    </div>
-  </div>
-  {% if product.best_price > 0 %}
-  <div style="margin-top:12px;padding-top:12px;border-top:1px dashed #fcd34d;font-size:0.92rem;">
-    🏷️ 執筆時点の最安値：<strong style="color:#b45309;font-size:1.1rem;">￥{{ "{:,}".format(product.best_price) }}</strong>（{{ product.best_platform }}）
-  </div>
-  {% endif %}
-</div>
+<div class="hero-score" style="background:linear-gradient(135deg,#fff7ed 0%,#fef3c7 100%);border:1px solid #fde68a;border-radius:14px;padding:18px 20px;margin:0 0 24px;color:#1f2937;"><div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;"><div style="flex:0 0 auto;text-align:center;background:#fff;border-radius:12px;padding:10px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div style="font-size:0.75rem;color:#92400e;font-weight:600;letter-spacing:0.05em;">IVS 総合</div><div style="font-size:2rem;font-weight:800;color:#b45309;line-height:1.1;">{{ product.ivs_detail.total_100 }}<span style="font-size:0.9rem;font-weight:400;color:#92400e;">/100</span></div></div><div style="flex:1 1 240px;display:grid;grid-template-columns:repeat(2,minmax(110px,1fr));gap:6px 12px;font-size:0.85rem;color:#1f2937;"><div>📚 知育効果 <strong>{{ product.ivs_detail.education }}/5</strong></div><div>🕰️ 長く遊べる <strong>{{ product.ivs_detail.longevity }}/5</strong></div><div>🛡️ 安全性 <strong>{{ product.ivs_detail.safety }}/5</strong></div><div>💰 コスパ <strong>{{ product.ivs_detail.cost_performance }}/5</strong></div></div></div>{% if product.best_price > 0 %}<div style="margin-top:12px;padding-top:12px;border-top:1px dashed #fcd34d;font-size:0.92rem;color:#1f2937;">🏷️ 執筆時点の最安値：<strong style="color:#b45309;font-size:1.1rem;">￥{{ "{:,}".format(product.best_price) }}</strong>（{{ product.best_platform }}）</div>{% endif %}</div>
 {% endif %}
 
 {% if narrative.lead %}{{ narrative.lead }}{% endif %}
 
 {% if persona_fit %}
-<aside class="persona-fit" style="background:#fef7f0;border-left:4px solid #ec8b5e;border-radius:8px;padding:16px 20px;margin:24px 0;">
-  <strong>この記事はこんな方へ</strong>
-  <ul style="margin:8px 0 0;padding-left:20px;">
-    {% for r in persona_fit.recommended_for %}<li>{{ r }}</li>{% endfor %}
-  </ul>
-  {% if persona_fit.age_range %}<p style="margin:8px 0 0;font-size:0.9rem;">対象年齢：<strong>{{ persona_fit.age_range }}</strong></p>{% endif %}
-</aside>
+<aside class="persona-fit" style="background:#fef7f0;border-left:4px solid #ec8b5e;border-radius:8px;padding:16px 20px;margin:24px 0;color:#1f2937;"><strong style="color:#9a3412;">この記事はこんな方へ</strong><ul style="margin:8px 0 0;padding-left:20px;color:#1f2937;">{% for r in persona_fit.recommended_for %}<li style="color:#1f2937;">{{ r }}</li>{% endfor %}</ul>{% if persona_fit.age_range %}<p style="margin:8px 0 0;font-size:0.9rem;color:#1f2937;">対象年齢：<strong>{{ persona_fit.age_range }}</strong></p>{% endif %}</aside>
 {% endif %}
 
 {% if narrative.why_this_product %}
@@ -99,31 +70,14 @@
 
 執筆時点の価格をAmazon・楽天・Yahoo!ショッピングで横断比較しました。
 
-<div class="price-cta-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:18px 0;">
-  {# Amazon #}
-  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;text-align:center;box-shadow:0 1px 2px rgba(0,0,0,0.04);">
-    <div style="font-size:0.78rem;color:#6b7280;letter-spacing:0.04em;font-weight:600;">Amazon</div>
-    <div style="font-size:1.5rem;font-weight:800;color:#111;margin:4px 0 8px;">{% if product.prices.amazon.price > 0 %}￥{{ "{:,}".format(product.prices.amazon.price) }}{% else %}<span style="font-size:0.95rem;color:#999;">取り扱い確認</span>{% endif %}</div>
-    {% if product.prices.amazon.url %}<a href="{{ product.prices.amazon.url }}" target="_blank" rel="noopener nofollow sponsored" style="display:inline-block;background:#ff9900;color:#fff;font-weight:700;padding:8px 18px;border-radius:6px;text-decoration:none;width:90%;">Amazonで見る →</a>{% else %}<span style="color:#aaa;font-size:0.85rem;">リンクなし</span>{% endif %}
-  </div>
-  {# 楽天 #}
-  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;text-align:center;box-shadow:0 1px 2px rgba(0,0,0,0.04);">
-    <div style="font-size:0.78rem;color:#6b7280;letter-spacing:0.04em;font-weight:600;">楽天市場</div>
-    <div style="font-size:1.5rem;font-weight:800;color:#111;margin:4px 0 8px;">{% if product.prices.rakuten.price > 0 %}￥{{ "{:,}".format(product.prices.rakuten.price) }}{% else %}<span style="font-size:0.95rem;color:#999;">{% if product.prices.rakuten.is_search %}検索で確認{% else %}取り扱い確認{% endif %}</span>{% endif %}</div>
-    {% if product.prices.rakuten.url %}<a href="{{ product.prices.rakuten.url }}" target="_blank" rel="noopener nofollow sponsored" style="display:inline-block;background:#bf0000;color:#fff;font-weight:700;padding:8px 18px;border-radius:6px;text-decoration:none;width:90%;">{% if product.prices.rakuten.is_search %}楽天で検索{% else %}楽天で見る{% endif %} →</a>{% else %}<span style="color:#aaa;font-size:0.85rem;">リンクなし</span>{% endif %}
-  </div>
-  {# Yahoo #}
-  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;text-align:center;box-shadow:0 1px 2px rgba(0,0,0,0.04);">
-    <div style="font-size:0.78rem;color:#6b7280;letter-spacing:0.04em;font-weight:600;">Yahoo!ショッピング</div>
-    <div style="font-size:1.5rem;font-weight:800;color:#111;margin:4px 0 8px;">{% if product.prices.yahoo.price > 0 %}￥{{ "{:,}".format(product.prices.yahoo.price) }}{% else %}<span style="font-size:0.95rem;color:#999;">{% if product.prices.yahoo.is_search %}検索で確認{% else %}取り扱い確認{% endif %}</span>{% endif %}</div>
-    {% if product.prices.yahoo.url %}<a href="{{ product.prices.yahoo.url }}" target="_blank" rel="noopener nofollow sponsored" style="display:inline-block;background:#ff0033;color:#fff;font-weight:700;padding:8px 18px;border-radius:6px;text-decoration:none;width:90%;">{% if product.prices.yahoo.is_search %}Yahoo!で検索{% else %}Yahoo!で見る{% endif %} →</a>{% else %}<span style="color:#aaa;font-size:0.85rem;">リンクなし</span>{% endif %}
-  </div>
+<div class="price-cta-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:18px 0;color:#1f2937;">
+<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;text-align:center;box-shadow:0 1px 2px rgba(0,0,0,0.04);color:#1f2937;"><div style="font-size:0.78rem;color:#6b7280;letter-spacing:0.04em;font-weight:600;">Amazon</div><div style="font-size:1.5rem;font-weight:800;color:#111;margin:4px 0 8px;">{% if product.prices.amazon.price > 0 %}￥{{ "{:,}".format(product.prices.amazon.price) }}{% else %}<span style="font-size:0.95rem;color:#999;">取り扱い確認</span>{% endif %}</div>{% if product.prices.amazon.url %}<a href="{{ product.prices.amazon.url }}" target="_blank" rel="noopener nofollow sponsored" style="display:inline-block;background:#ff9900;color:#fff;font-weight:700;padding:8px 18px;border-radius:6px;text-decoration:none;width:90%;">Amazonで見る →</a>{% else %}<span style="color:#aaa;font-size:0.85rem;">リンクなし</span>{% endif %}</div>
+<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;text-align:center;box-shadow:0 1px 2px rgba(0,0,0,0.04);color:#1f2937;"><div style="font-size:0.78rem;color:#6b7280;letter-spacing:0.04em;font-weight:600;">楽天市場</div><div style="font-size:1.5rem;font-weight:800;color:#111;margin:4px 0 8px;">{% if product.prices.rakuten.price > 0 %}￥{{ "{:,}".format(product.prices.rakuten.price) }}{% else %}<span style="font-size:0.95rem;color:#999;">{% if product.prices.rakuten.is_search %}検索で確認{% else %}取り扱い確認{% endif %}</span>{% endif %}</div>{% if product.prices.rakuten.url %}<a href="{{ product.prices.rakuten.url }}" target="_blank" rel="noopener nofollow sponsored" style="display:inline-block;background:#bf0000;color:#fff;font-weight:700;padding:8px 18px;border-radius:6px;text-decoration:none;width:90%;">{% if product.prices.rakuten.is_search %}楽天で検索{% else %}楽天で見る{% endif %} →</a>{% else %}<span style="color:#aaa;font-size:0.85rem;">リンクなし</span>{% endif %}</div>
+<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;text-align:center;box-shadow:0 1px 2px rgba(0,0,0,0.04);color:#1f2937;"><div style="font-size:0.78rem;color:#6b7280;letter-spacing:0.04em;font-weight:600;">Yahoo!ショッピング</div><div style="font-size:1.5rem;font-weight:800;color:#111;margin:4px 0 8px;">{% if product.prices.yahoo.price > 0 %}￥{{ "{:,}".format(product.prices.yahoo.price) }}{% else %}<span style="font-size:0.95rem;color:#999;">{% if product.prices.yahoo.is_search %}検索で確認{% else %}取り扱い確認{% endif %}</span>{% endif %}</div>{% if product.prices.yahoo.url %}<a href="{{ product.prices.yahoo.url }}" target="_blank" rel="noopener nofollow sponsored" style="display:inline-block;background:#ff0033;color:#fff;font-weight:700;padding:8px 18px;border-radius:6px;text-decoration:none;width:90%;">{% if product.prices.yahoo.is_search %}Yahoo!で検索{% else %}Yahoo!で見る{% endif %} →</a>{% else %}<span style="color:#aaa;font-size:0.85rem;">リンクなし</span>{% endif %}</div>
 </div>
 
 {% if product.best_price > 0 %}
-<div class="best-deal" style="background:#fff3e0;border-left:4px solid #ff9800;border-radius:8px;padding:12px 16px;margin:14px 0;font-size:0.95rem;">
-  💰 <strong>本記事執筆時点での最安値</strong>：{{ product.best_platform }} <strong style="color:#e65100;">￥{{ "{:,}".format(product.best_price) }}</strong>（在庫や送料により変動する場合があります）
-</div>
+<div class="best-deal" style="background:#fff3e0;border-left:4px solid #ff9800;border-radius:8px;padding:12px 16px;margin:14px 0;font-size:0.95rem;color:#1f2937;">💰 <strong>本記事執筆時点での最安値</strong>：{{ product.best_platform }} <strong style="color:#e65100;">￥{{ "{:,}".format(product.best_price) }}</strong>（在庫や送料により変動する場合があります）</div>
 {% endif %}
 
 {% if narrative.gift_appeal %}
@@ -149,30 +103,12 @@
 冒頭の IVS スコア (おもちゃロボの知育価値スコア) の内訳と、良い点・気になる点をまとめました。
 
 {% if product.ivs_detail.score_rationale %}
-<details style="margin:16px 0;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 14px;">
-<summary style="cursor:pointer;font-weight:600;">📋 スコアの加減点根拠を見る</summary>
-<ul style="margin-top:10px;font-size:0.9rem;">
-{% for r in product.ivs_detail.score_rationale %}<li><strong>{{ r.factor }}（{{ r.delta }}）</strong>：{{ r.reason }}</li>
-{% endfor %}
-</ul>
-</details>
+<details style="margin:16px 0;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 14px;color:#1f2937;"><summary style="cursor:pointer;font-weight:600;color:#1f2937;">📋 スコアの加減点根拠を見る</summary><ul style="margin-top:10px;font-size:0.9rem;color:#1f2937;">{% for r in product.ivs_detail.score_rationale %}<li style="color:#1f2937;"><strong>{{ r.factor }}（{{ r.delta }}）</strong>：{{ r.reason }}</li>{% endfor %}</ul></details>
 {% endif %}
 
-<div class="pros-cons-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin:18px 0;">
-  <div style="background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;padding:14px 18px;">
-    <h3 style="margin:0 0 10px;font-size:1.05rem;color:#15803d;">👍 良いところ</h3>
-    <ul style="margin:0;padding-left:18px;font-size:0.95rem;line-height:1.7;">
-    {% for p in product.pros %}<li>{{ p }}</li>
-    {% endfor %}
-    </ul>
-  </div>
-  <div style="background:#fef2f2;border-left:4px solid #ef4444;border-radius:8px;padding:14px 18px;">
-    <h3 style="margin:0 0 10px;font-size:1.05rem;color:#b91c1c;">⚠️ 気になるところ</h3>
-    <ul style="margin:0;padding-left:18px;font-size:0.95rem;line-height:1.7;">
-    {% for c in product.cons %}<li>{{ c }}</li>
-    {% endfor %}
-    </ul>
-  </div>
+<div class="pros-cons-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin:18px 0;color:#1f2937;">
+<div style="background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;padding:14px 18px;color:#1f2937;"><h3 style="margin:0 0 10px;font-size:1.05rem;color:#15803d;">👍 良いところ</h3><ul style="margin:0;padding-left:18px;font-size:0.95rem;line-height:1.7;color:#1f2937;">{% for p in product.pros %}<li style="color:#1f2937;">{{ p }}</li>{% endfor %}</ul></div>
+<div style="background:#fef2f2;border-left:4px solid #ef4444;border-radius:8px;padding:14px 18px;color:#1f2937;"><h3 style="margin:0 0 10px;font-size:1.05rem;color:#b91c1c;">⚠️ 気になるところ</h3><ul style="margin:0;padding-left:18px;font-size:0.95rem;line-height:1.7;color:#1f2937;">{% for c in product.cons %}<li style="color:#1f2937;">{{ c }}</li>{% endfor %}</ul></div>
 </div>
 
 {% if narrative.daily_use %}
@@ -221,24 +157,9 @@
 
 近い価格帯・コンセプトの競合商品と並べて、{{ product.name }}を選ぶ判断材料を整理しました。
 
-<div class="competitor-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin:18px 0;">
-{% for c in competitive_analysis %}
-<div class="competitor-card" style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
-  {% if c.asin %}<div style="text-align:center;margin-bottom:10px;"><img src="https://images-na.ssl-images-amazon.com/images/P/{{ c.asin }}.09.LZZZZZZZ.jpg" alt="{{ c.name }}" loading="lazy" style="max-height:120px;width:auto;border-radius:6px;" onerror="this.style.display='none'"></div>{% endif %}
-  <h3 style="margin:0 0 8px;font-size:1.02rem;line-height:1.4;">{{ c.name }}</h3>
-  {% if c.price_comparison %}<div style="font-size:0.85rem;color:#92400e;background:#fef3c7;display:inline-block;padding:2px 8px;border-radius:4px;margin-bottom:8px;">💴 {{ c.price_comparison }}</div>{% endif %}
-  {% if c.feature_comparison %}<ul style="margin:8px 0;padding-left:18px;font-size:0.88rem;line-height:1.6;">
-  {% for fc in c.feature_comparison %}<li>{{ fc }}</li>
-  {% endfor %}
-  </ul>{% endif %}
-  {% if c.differentiators %}<details style="margin:8px 0;font-size:0.85rem;"><summary style="cursor:pointer;color:#6b7280;">選び方のポイント</summary><ul style="margin-top:6px;padding-left:18px;line-height:1.6;">
-  {% for d in c.differentiators %}<li>{{ d }}</li>
-  {% endfor %}
-  </ul></details>{% endif %}
-  {% if c.asin %}<div style="margin-top:10px;text-align:center;"><a href="https://www.amazon.co.jp/dp/{{ c.asin }}/?tag=zefiransesu-22" target="_blank" rel="noopener nofollow sponsored" style="display:inline-block;background:#ff9900;color:#fff;font-weight:700;padding:6px 14px;border-radius:5px;text-decoration:none;font-size:0.85rem;">Amazonで見る →</a></div>{% endif %}
-</div>
-{% endfor %}
-</div>
+<div class="competitor-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin:18px 0;color:#1f2937;">
+{% for c in competitive_analysis %}<div class="competitor-card" style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.05);color:#1f2937;">{% if c.asin %}<div style="text-align:center;margin-bottom:10px;"><img src="https://images-na.ssl-images-amazon.com/images/P/{{ c.asin }}.09.LZZZZZZZ.jpg" alt="{{ c.name }}" loading="lazy" style="max-height:120px;width:auto;border-radius:6px;" onerror="this.style.display='none'"></div>{% endif %}<h3 style="margin:0 0 8px;font-size:1.02rem;line-height:1.4;color:#1f2937;">{{ c.name }}</h3>{% if c.price_comparison %}<div style="font-size:0.85rem;color:#92400e;background:#fef3c7;display:inline-block;padding:2px 8px;border-radius:4px;margin-bottom:8px;">💴 {{ c.price_comparison }}</div>{% endif %}{% if c.feature_comparison %}<ul style="margin:8px 0;padding-left:18px;font-size:0.88rem;line-height:1.6;color:#1f2937;">{% for fc in c.feature_comparison %}<li style="color:#1f2937;">{{ fc }}</li>{% endfor %}</ul>{% endif %}{% if c.differentiators %}<details style="margin:8px 0;font-size:0.85rem;color:#1f2937;"><summary style="cursor:pointer;color:#6b7280;">選び方のポイント</summary><ul style="margin-top:6px;padding-left:18px;line-height:1.6;color:#1f2937;">{% for d in c.differentiators %}<li style="color:#1f2937;">{{ d }}</li>{% endfor %}</ul></details>{% endif %}{% if c.asin %}<div style="margin-top:10px;text-align:center;"><a href="https://www.amazon.co.jp/dp/{{ c.asin }}/?tag=zefiransesu-22" target="_blank" rel="noopener nofollow sponsored" style="display:inline-block;background:#ff9900;color:#fff;font-weight:700;padding:6px 14px;border-radius:5px;text-decoration:none;font-size:0.85rem;">Amazonで見る →</a></div>{% endif %}</div>
+{% endfor %}</div>
 {% endif %}
 
 {% if competitive_position %}
@@ -258,10 +179,7 @@
 {% endif %}
 
 {% if expert_take %}
-<aside class="expert-take" style="background:#f3e5f5;border-left:4px solid #9c27b0;border-radius:8px;padding:14px 18px;margin:20px 0;">
-<strong>おもちゃロボの見立て</strong><br>
-{{ expert_take }}
-</aside>
+<aside class="expert-take" style="background:#f3e5f5;border-left:4px solid #9c27b0;border-radius:8px;padding:14px 18px;margin:20px 0;color:#1f2937;"><strong style="color:#6a1b9a;">おもちゃロボの見立て</strong><br>{{ expert_take }}</aside>
 {% endif %}
 
 {% if faq %}
@@ -312,34 +230,15 @@
 
 {{ product.name }}に関する記述は、以下の{{ sources|length }}件のソースをもとにおもちゃロボが整理しました。
 
-<ul style="font-size:0.9rem;line-height:1.7;">
-{% for s in sources %}<li>
-{% if s.url %}<a href="{{ affiliate_url(s.url) }}" target="_blank" rel="noopener noreferrer nofollow sponsored">{{ s.name }}</a>{% else %}{{ s.name }}{% endif %}
-{% if s.tier %}<span style="display:inline-block;font-size:0.75rem;padding:1px 6px;margin-left:6px;border-radius:4px;background:{% if s.tier == 'high' %}#dcedc8{% elif s.tier == 'medium' %}#fff9c4{% else %}#ffe0b2{% endif %};color:#333;">信頼度：{{ s.tier }}</span>{% endif %}
-{% if s.author %}<br><small style="color:#666;">執筆主体：{{ s.author }}{% if s.published_at %} / 確認日：{{ s.published_at }}{% endif %}</small>{% endif %}
-{% if s.notes %}<br><small style="color:#555;">{{ s.notes }}</small>{% endif %}
-</li>
-{% endfor %}</ul>
+<ul style="font-size:0.9rem;line-height:1.7;">{% for s in sources %}<li>{% if s.url %}<a href="{{ affiliate_url(s.url) }}" target="_blank" rel="noopener noreferrer nofollow sponsored">{{ s.name }}</a>{% else %}{{ s.name }}{% endif %}{% if s.tier %} <span style="display:inline-block;font-size:0.75rem;padding:1px 6px;margin-left:6px;border-radius:4px;background:{% if s.tier == 'high' %}#dcedc8{% elif s.tier == 'medium' %}#fff9c4{% else %}#ffe0b2{% endif %};color:#333;">信頼度：{{ s.tier }}</span>{% endif %}{% if s.author %}<br><small style="color:#888;">執筆主体：{{ s.author }}{% if s.published_at %} / 確認日：{{ s.published_at }}{% endif %}</small>{% endif %}{% if s.notes %}<br><small style="color:#999;">{{ s.notes }}</small>{% endif %}</li>{% endfor %}</ul>
 
 {% if claims %}
-<details style="margin:16px 0;font-size:0.9rem;">
-<summary><strong>検証済みの主要な主張（{{ claims|length }}件）を見る</strong></summary>
-<ul style="margin-top:10px;">
-{% for cl in claims %}<li>
-<strong>{{ cl.claim }}</strong>
-<small style="color:#666;">（{{ cl.category }} / 確度：{{ cl.confidence }}{% if cl.cross_checked %} / <span style="color:#2e7d32;">2系統以上で確認済み</span>{% endif %}）</small>
-{% if cl.notes %}<br><small>{{ cl.notes }}</small>{% endif %}
-</li>
-{% endfor %}</ul>
-</details>
+<details style="margin:16px 0;font-size:0.9rem;color:#1f2937;"><summary style="color:#1f2937;"><strong>検証済みの主要な主張（{{ claims|length }}件）を見る</strong></summary><ul style="margin-top:10px;color:#1f2937;">{% for cl in claims %}<li style="color:#1f2937;"><strong>{{ cl.claim }}</strong> <small style="color:#666;">（{{ cl.category }} / 確度：{{ cl.confidence }}{% if cl.cross_checked %} / <span style="color:#2e7d32;">2系統以上で確認済み</span>{% endif %}）</small>{% if cl.notes %}<br><small style="color:#888;">{{ cl.notes }}</small>{% endif %}</li>{% endfor %}</ul></details>
 {% endif %}
 {% endif %}
 
 {% if editorial_comment %}
-<aside class="editorial-comment" style="background:#e8f4f8;border-left:4px solid #4a90b8;border-radius:8px;padding:14px 18px;margin:24px 0;">
-<strong>おもちゃロボのひとこと</strong><br>
-{{ editorial_comment }}
-</aside>
+<aside class="editorial-comment" style="background:#e8f4f8;border-left:4px solid #4a90b8;border-radius:8px;padding:14px 18px;margin:24px 0;color:#1f2937;"><strong style="color:#1565c0;">おもちゃロボのひとこと</strong><br>{{ editorial_comment }}</aside>
 {% endif %}
 
 ---
