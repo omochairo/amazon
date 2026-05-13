@@ -47,6 +47,18 @@
 {% endfor %}
 {% endif %}
 
+{% if technical_specs %}
+### {{ product.name }}の基本スペック
+
+{% if technical_specs.dimensions %}- **サイズ**：{% if technical_specs.dimensions.width %}幅 {{ technical_specs.dimensions.width }}{% endif %}{% if technical_specs.dimensions.height %} / 高さ {{ technical_specs.dimensions.height }}{% endif %}{% if technical_specs.dimensions.depth %} / 奥行 {{ technical_specs.dimensions.depth }}{% endif %}
+{% endif %}{% if technical_specs.weight %}- **重量**：{{ technical_specs.weight }}
+{% endif %}{% if technical_specs.material %}- **素材**：{{ technical_specs.material }}
+{% endif %}{% if technical_specs.origin %}- **原産国**：{{ technical_specs.origin }}
+{% endif %}{% if technical_specs.capacity %}- **容量**：{{ technical_specs.capacity }}
+{% endif %}{% if technical_specs.other %}{% for spec in technical_specs.other %}- {{ spec }}
+{% endfor %}{% endif %}
+{% endif %}
+
 ## {{ product.name }}の価格を3サイトで比較
 
 執筆時点の価格をAmazon・楽天・Yahoo!ショッピングで横断比較しました。
@@ -155,8 +167,31 @@
 {% endif %}
 {% endif %}
 
+{% if competitive_analysis %}
+## {{ product.name }}と似た商品との比較
+
+近い価格帯・コンセプトの競合商品と並べて、{{ product.name }}を選ぶ判断材料を整理しました。
+
+{% for c in competitive_analysis %}
+### {{ c.name }}{% if c.asin %} （ASIN: {{ c.asin }}）{% endif %}
+
+{% if c.price_comparison %}**価格感**：{{ c.price_comparison }}
+{% endif %}
+{% if c.feature_comparison %}{% for fc in c.feature_comparison %}- {{ fc }}
+{% endfor %}{% endif %}
+{% if c.differentiators %}
+**選び方のポイント**
+
+{% for d in c.differentiators %}- {{ d }}
+{% endfor %}{% endif %}
+{% if c.asin %}
+[{{ c.name }}をAmazonで見る](https://www.amazon.co.jp/dp/{{ c.asin }}/?tag=zefiransesu-22)
+{% endif %}
+{% endfor %}
+{% endif %}
+
 {% if competitive_position %}
-## {{ product.name }}と似た商品との違い
+## {{ product.name }}のポジショニング（補足）
 
 {{ competitive_position.position_explain }}
 
@@ -219,6 +254,34 @@
 
 {% for link in internal_links %}- [{{ link.title }}]({{ link.url }})
 {% endfor %}
+{% endif %}
+
+{% if sources %}
+## この記事の根拠（参考にしたソース）
+
+{{ product.name }}に関する記述は、以下の{{ sources|length }}件のソースをもとにおもちゃロボが整理しました。
+
+<ul style="font-size:0.9rem;line-height:1.7;">
+{% for s in sources %}<li>
+{% if s.url %}<a href="{{ s.url }}" target="_blank" rel="noopener noreferrer nofollow">{{ s.name }}</a>{% else %}{{ s.name }}{% endif %}
+{% if s.tier %}<span style="display:inline-block;font-size:0.75rem;padding:1px 6px;margin-left:6px;border-radius:4px;background:{% if s.tier == 'high' %}#dcedc8{% elif s.tier == 'medium' %}#fff9c4{% else %}#ffe0b2{% endif %};color:#333;">信頼度：{{ s.tier }}</span>{% endif %}
+{% if s.author %}<br><small style="color:#666;">執筆主体：{{ s.author }}{% if s.published_at %} / 確認日：{{ s.published_at }}{% endif %}</small>{% endif %}
+{% if s.notes %}<br><small style="color:#555;">{{ s.notes }}</small>{% endif %}
+</li>
+{% endfor %}</ul>
+
+{% if claims %}
+<details style="margin:16px 0;font-size:0.9rem;">
+<summary><strong>検証済みの主要な主張（{{ claims|length }}件）を見る</strong></summary>
+<ul style="margin-top:10px;">
+{% for cl in claims %}<li>
+<strong>{{ cl.claim }}</strong>
+<small style="color:#666;">（{{ cl.category }} / 確度：{{ cl.confidence }}{% if cl.cross_checked %} / <span style="color:#2e7d32;">2系統以上で確認済み</span>{% endif %}）</small>
+{% if cl.notes %}<br><small>{{ cl.notes }}</small>{% endif %}
+</li>
+{% endfor %}</ul>
+</details>
+{% endif %}
 {% endif %}
 
 {% if editorial_comment %}
