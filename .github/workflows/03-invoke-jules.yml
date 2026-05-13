@@ -5,6 +5,15 @@ on:
     types: [completed]
   workflow_dispatch:
 
+# 2026-05-13: 連鎖トリガー (Fetch → Publish → Invoke Jules → PR merge → Publish → ...)
+# によって短時間に複数の Jules セッションが並列起動し、同じ ASIN を選んで
+# 重複 PR (#111 / #112 = 共に B0FHVH6JML) を作る問題に対応。
+# cancel-in-progress: false で先行ジョブを待つことで、Jules セッション作成が
+# 直列化され、後続セッションは最新 main を読んで別 ASIN を選ぶ。
+concurrency:
+  group: invoke-jules
+  cancel-in-progress: false
+
 jobs:
   invoke-jules:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}

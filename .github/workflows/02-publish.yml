@@ -45,10 +45,11 @@ jobs:
       - name: Install Dependencies
         run: pip install -r requirements.txt
 
-      - name: Layer 2 - Generate Article JSON
-        run: |
-          export PYTHONPATH=$PYTHONPATH:$(pwd)/scripts
-          python scripts/jules_article_engine.py
+      # 2026-05-13: v3 旧エンジン (jules_article_engine.py) の自動実行を停止。
+      # data/raw/ に居るが data/articles/ に v4 JSON が無い ASIN について、
+      # 「【価格比較】〜｜どこで買うのが一番おトク？」型の低品質 v3 記事が
+      # 自動生成・公開されていた問題に対応。v4 記事 (Jules 生成 PR) のみ公開する。
+      # v3 を再有効化したい場合はこのコメントを参照し、ブロックを復活させること。
 
       - name: Layer 3 - Render Markdown
         run: python scripts/build_post.py
