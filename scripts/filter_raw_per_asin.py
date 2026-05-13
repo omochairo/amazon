@@ -131,19 +131,63 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
     return scored[:TOP_N]
 
 
+def collect_targets(amazon_items: list, articles_dir: pathlib.Path) -> dict:
+    """処理対象 ASIN を {asin: title} で集める。
+    1) amazon.json の全 ASIN (最新の検索結果)
+    2) data/articles/ にある全記事の ASIN (過去 Jules セッションが選んだもの)
+       → amazon.json から消えても per_asin/ を維持し、Jules がクローンした
+         古い main で参照されたときに空にならないようにする。
+    """
+    targets: dict[str, str] = {}
+    for amz in amazon_items:
+        asin = amz.get("asin", "")
+        if asin:
+            targets[asin] = amz.get("title", "")
+    if not articles_dir.exists():
+        return targets
+    for art_path in articles_dir.glob("*.json"):
+        # ファイル名規則: YYYY-MM-DD-ASIN.json
+        stem = art_path.stem
+        parts = stem.split("-")
+        if len(parts) < 4:
+            continue
+        asin = parts[-1]
+        if asin in targets:
+            continue  # amazon.json 由来を優先
+        try:
+            art = json.loads(art_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        # title は記事 JSON の product.name or title フィールド
+        title = ""
+        if isinstance(art.get("product"), dict):
+            title = art["product"].get("name", "") or art["product"].get("title", "")
+        if not title:
+            title = art.get("title", "")
+        if title:
+            targets[asin] = title
+    return targets
+
+
 def main():
     root = pathlib.Path(".")
     raw_dir = root / "data" / "raw"
+    articles_dir = root / "data" / "articles"
     amazon_path = raw_dir / "amazon.json"
     if not amazon_path.exists():
         logger.error(f"{amazon_path} not found")
         return
 
     amazon = json.loads(amazon_path.read_text(encoding="utf-8"))
-    items = amazon.get("items", [])
-    if not items:
-        logger.warning("amazon.json has no items")
+    amazon_items = amazon.get("items", [])
+    if not amazon_items:
+        logger.warning("amazon.json has no items (still processing existing articles)")
+
+    targets = collect_targets(amazon_items, articles_dir)
+    if not targets:
+        logger.warning("No targets to process")
         return
+    logger.info(f"Targets: {len(amazon_items)} from amazon.json + {len(targets) - len(amazon_items)} from articles/")
 
     youtube_items = json.loads((raw_dir / "youtube.json").read_text(encoding="utf-8")).get("items", []) \
         if (raw_dir / "youtube.json").exists() else []
@@ -158,9 +202,7 @@ def main():
     out_root.mkdir(parents=True, exist_ok=True)
 
     summary = []
-    for amz in items:
-        asin = amz.get("asin", "")
-        title = amz.get("title", "")
+    for asin, title in targets.items():
         if not asin:
             continue
 
