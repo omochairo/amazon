@@ -45,6 +45,7 @@
 - `data/raw/rakuten.json` — 楽天の商品データ
 - `data/raw/yahoo_result.json` — Yahoo!ショッピングの商品データ
 - `data/raw/rakuten_matched.json` / `data/raw/yahoo_matched.json` — クロスサーチで照合済みのASINマッチ結果（あれば優先利用）
+- `data/raw/reviews.json` — **楽天/Yahoo のレビュー本文** (Phase 2 (c) で追加 / ASIN ベース格納)。**`sources` を埋める最優先データソース**。本文・評価・投稿日が入っているので、これを `sources[].notes` に投入してハルシネーションを防ぐ
 - `data/raw/youtube.json` — 関連YouTube動画
 - `data/raw/news.json` — 育児関連ニュース
 - `data/raw/books.json` — 関連書籍
