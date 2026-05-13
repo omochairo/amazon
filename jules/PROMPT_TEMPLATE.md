@@ -236,12 +236,28 @@
 - 根拠が無い一般論は削り、商品固有の事実（仕様・素材・受賞歴・レビュー件数・SNS言及）に置き換える
 - 「口コミ・最安値・対象年齢」をタイトルに掲げているなら、本文中に**口コミ由来の具体表現**が最低3つ登場すること
 
+## 6.6 関連メディア（youtube_embeds / news / books）の選定ルール（v4.2）
+
+`youtube_embeds` / `news` / `books` は **対象 ASIN の `data/raw/per_asin/<ASIN>/` 配下のファイルのみ** を出典とすること。
+
+- `data/raw/per_asin/<ASIN>/youtube.json` → `youtube_embeds`
+- `data/raw/per_asin/<ASIN>/news.json` → `news`
+- `data/raw/per_asin/<ASIN>/books.json` → `books`
+
+これらは Python スクリプト `scripts/filter_raw_per_asin.py` が **商品名・ブランド・モデル番号で関連度スコアリング**して事前抽出した結果。`data/raw/youtube.json` などのジャンル全体ファイルから直接拾うと無関係な動画/ニュースが混入するため**禁止**。
+
+- per_asin/<ASIN>/ ファイルが空（`{"items": []}`）の場合は対応する配列を空 `[]` のままにすること。**無理やり関連度の低いものを入れない**
+- `_relevance_score` フィールドは出力に含めない（内部用）
+- 1 セクション最大 3 件まで（記事の流れを崩さない範囲で精選）
+- 動画は `narrative.daily_use` の補強、ニュースは時事性・話題性、書籍は子育て/知育の関連読み物として位置づける
+
 ## 7. データ取り扱いの禁止事項
 
 - raw JSON 由来でない価格・URL・受賞歴・レビュー文の捏造（**ハルシネーション厳禁**）
 - アフィリエイトURLの書き換え
 - 既存記事JSONの編集・削除
 - `hugo/content/posts/` への直接書き込み（`scripts/build_post.py` が担当）
+- `data/raw/youtube.json` / `news.json` / `books_result.json`（ジャンル全体）から直接 youtube_embeds/news/books を埋めること（必ず per_asin/<ASIN>/ を経由）
 
 ## 8. 出力前セルフチェック（必須）
 
@@ -262,6 +278,7 @@ JSON保存前に以下を確認：
 13. [ ] `narrative` 内の主張（特に `why_this_product` `safety_note` の核となる訴求）が `claims` または `sources[].notes` で裏付けられている
 14. [ ] 一般化された口コミ表現（「集中して遊ぶ」「夢中になる」等）を使う場合、対応する `sources` が存在する
 15. [ ] 「編集部」「編集者」表記が含まれていない（あれば「おもちゃロボ」に置換）
+16. [ ] `youtube_embeds` / `news` / `books` の各エントリは `data/raw/per_asin/<ASIN>/` 由来である（無関係なジャンル全体ファイルから拾っていない）。空配列でも可
 
 ## 9. 参考：既存記事のサンプル
 

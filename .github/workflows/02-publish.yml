@@ -51,6 +51,14 @@ jobs:
       # 自動生成・公開されていた問題に対応。v4 記事 (Jules 生成 PR) のみ公開する。
       # v3 を再有効化したい場合はこのコメントを参照し、ブロックを復活させること。
 
+      # 2026-05-13: ASIN 別関連度フィルタを生成 (Phase 2 (3a))。
+      # ジャンル全体取得した youtube/news/books を、各 ASIN のブランド・モデル番号で
+      # スコアリングし data/raw/per_asin/<ASIN>/ に top-N で書き出す。
+      # Jules はこの per_asin/<ASIN>/ のみを youtube_embeds/news/books の出典に使う
+      # (PROMPT_TEMPLATE.md §6.6 参照)。
+      - name: Layer 2.5 - Filter raw per ASIN
+        run: python scripts/filter_raw_per_asin.py
+
       - name: Layer 3 - Render Markdown
         run: python scripts/build_post.py
 
@@ -65,7 +73,7 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "docs: AI-generated article update"
-          file_pattern: "data/articles/ hugo/content/posts/"
+          file_pattern: "data/articles/ hugo/content/posts/ data/raw/per_asin/"
           branch: main
         continue-on-error: true
 
