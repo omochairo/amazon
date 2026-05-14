@@ -78,6 +78,49 @@ def write_per_asin_snapshot(out_root: str, item: dict) -> None:
         logger.warning(f"Failed to write per_asin snapshot for {asin}: {e}")
 
 
+def write_per_asin_competitors(out_root: str, target_asin: str, items: list, max_n: int = 5) -> None:
+    """Save real Amazon search hits as competitor candidates for the target ASIN.
+
+    Jules hallucinates competitor ASINs in ``competitive_analysis[]``; this file
+    lets ``build_post.py`` replace those with API-verified items so the
+    Amazonで見る button and product image always resolve to a real listing.
+    """
+    if not target_asin:
+        return
+    competitors = []
+    for it in items:
+        a = it.get("asin")
+        if not a or a == target_asin:
+            continue
+        if not it.get("image"):
+            continue
+        competitors.append({
+            "asin": a,
+            "name": it.get("title") or "",
+            "image": it.get("image"),
+            "price": it.get("price") or 0,
+            "url": it.get("url") or f"https://www.amazon.co.jp/dp/{a}/",
+            "features": (it.get("features") or [])[:3],
+        })
+        if len(competitors) >= max_n:
+            break
+    if not competitors:
+        return
+    per_asin_dir = os.path.join(out_root, "per_asin", target_asin)
+    try:
+        os.makedirs(per_asin_dir, exist_ok=True)
+        payload = {
+            "asin": target_asin,
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
+            "competitors": competitors,
+        }
+        with open(os.path.join(per_asin_dir, "competitors.json"), "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        logger.info(f"Wrote {len(competitors)} competitors for {target_asin}")
+    except OSError as e:
+        logger.warning(f"Failed to write competitors for {target_asin}: {e}")
+
+
 def extract_savings_percentage(item: dict) -> int:
     listings = _safe_get(item, "offersV2", "listings", default=[])
     if listings:
@@ -179,6 +222,9 @@ def main():
 
     for it in items:
         write_per_asin_snapshot(args.out, it)
+
+    if args.asin:
+        write_per_asin_competitors(args.out, args.asin, items)
 
 if __name__ == "__main__":
     main()

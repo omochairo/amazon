@@ -81,6 +81,84 @@ def _load_raw_amazon_index(raw_path: pathlib.Path) -> dict[str, dict[str, Any]]:
     return {it.get("asin"): it for it in raw.get("items", []) if it.get("asin")}
 
 
+def _load_per_asin_competitors(per_asin_root: pathlib.Path, asin: str) -> list[dict[str, Any]]:
+    """Return the API-fetched competitor list for ``asin`` (possibly empty).
+
+    Written by fetch_amazon.py as
+    ``data/raw/per_asin/<ASIN>/competitors.json`` with shape
+    ``{asin, fetched_at, competitors: [{asin, name, image, price, url, features}]}``.
+    Every entry has a verified ASIN, image, and affiliate URL — so they can
+    replace Jules-hallucinated ``competitive_analysis[]`` items wholesale.
+    """
+    p = per_asin_root / asin / "competitors.json"
+    if not p.exists():
+        return []
+    try:
+        payload = json.loads(p.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    items = payload.get("competitors") if isinstance(payload, dict) else None
+    return [c for c in items if isinstance(c, dict) and c.get("asin")] if isinstance(items, list) else []
+
+
+def _price_comparison_label(target_price: int, competitor_price: int) -> str:
+    if not target_price or not competitor_price:
+        return ""
+    diff = competitor_price - target_price
+    if abs(diff) < 100:
+        return "本品とほぼ同価格"
+    yen = f"{abs(diff):,}円"
+    return f"本品より{yen}安い" if diff < 0 else f"本品より{yen}高い"
+
+
+def _override_competitive_analysis(
+    data: dict[str, Any],
+    per_asin_root: pathlib.Path,
+) -> None:
+    """If we have API-fetched competitors for this article's ASIN, replace
+    ``competitive_analysis`` with entries that always resolve to a real listing
+    (verified ASIN, real image URL, real affiliate URL).
+
+    The Jules-authored ``feature_comparison`` / ``differentiators`` text is
+    dropped — those routinely paired with fabricated ASINs, so trying to
+    fuzzy-match them onto real competitors is worse than starting clean.
+    """
+    product = data.get("product") if isinstance(data.get("product"), dict) else None
+    if not product:
+        return
+    asin = product.get("asin")
+    if not asin:
+        return
+    competitors = _load_per_asin_competitors(per_asin_root, asin)
+    if not competitors:
+        return
+    target_price = 0
+    amazon_price = (product.get("prices") or {}).get("amazon") or {}
+    if isinstance(amazon_price, dict):
+        try:
+            target_price = int(amazon_price.get("price") or 0)
+        except (TypeError, ValueError):
+            target_price = 0
+
+    new_entries: list[dict[str, Any]] = []
+    for c in competitors:
+        try:
+            cp = int(c.get("price") or 0)
+        except (TypeError, ValueError):
+            cp = 0
+        new_entries.append({
+            "asin": c["asin"],
+            "name": c.get("name") or "",
+            "image": c.get("image") or "",
+            "url": c.get("url") or f"https://www.amazon.co.jp/dp/{c['asin']}/",
+            "price": cp,
+            "price_comparison": _price_comparison_label(target_price, cp),
+            "feature_comparison": [f"特徴：{f}" for f in (c.get("features") or [])[:2]],
+            "differentiators": [],
+        })
+    data["competitive_analysis"] = new_entries
+
+
 def _load_per_asin_amazon(per_asin_root: pathlib.Path, asin: str) -> dict[str, Any] | None:
     """Return the per-ASIN amazon snapshot dict, or None if absent/malformed.
 
@@ -271,6 +349,7 @@ def main() -> None:
             _merge(data, _load_optional_json(src_path / f"{slug}.enrichment.json"), ENRICHMENT_KEYS)
             _merge(data, _load_optional_json(src_path / f"{slug}.seo.json"), SEO_KEYS)
             _backfill_amazon_badges(data, raw_amazon_index, per_asin_root)
+            _override_competitive_analysis(data, per_asin_root)
             _fill_jsonld(data)
 
             _meta_re = re.compile(r"\s*[(（]\s*\d+\s*字\s*[)）]\s*$")
