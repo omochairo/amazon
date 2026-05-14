@@ -2,10 +2,25 @@ import os
 import re
 import json
 import sys
+import time
 import logging
 import argparse
 from datetime import datetime, timezone
 from typing import Any, Optional
+
+DEFAULT_KEYWORDS = [
+    "知育玩具", "知育", "木のおもちゃ", "パズル", "ブロック",
+    "レゴ", "プラレール", "トミカ", "シルバニアファミリー", "アンパンマン",
+]
+
+
+def parse_keywords(cli_value: Optional[str]) -> list:
+    """CLI/ENV のキーワード文字列を list に。
+    優先順: --keywords (CSV/改行) > $AMAZON_SEARCH_KEYWORDS > DEFAULT_KEYWORDS"""
+    raw = cli_value if cli_value else os.environ.get("AMAZON_SEARCH_KEYWORDS", "")
+    if not raw or not raw.strip():
+        return list(DEFAULT_KEYWORDS)
+    return [k.strip() for k in re.split(r"[,\n]", raw) if k.strip()]
 
 def get_secret(name: str) -> str:
     return os.environ.get(name)
@@ -178,6 +193,12 @@ def main():
     parser.add_argument("--out", default="data/raw/")
     parser.add_argument("--articles-dir", default="data/articles",
                         help="Directory scanned for already-published ASINs; matching items are excluded from amazon.json so Jules cannot pick a duplicate")
+    parser.add_argument("--keywords", default="",
+                        help="Additional search keywords (CSV or newline-separated). Combined with --keyword and falls back to DEFAULT_KEYWORDS / $AMAZON_SEARCH_KEYWORDS.")
+    parser.add_argument("--pages", type=int, default=2,
+                        help="PA-API search pages per keyword (1-10, each up to 10 items)")
+    parser.add_argument("--min-new", type=int, default=20,
+                        help="Stop searching once this many ASINs not in articles-dir are collected")
     args = parser.parse_args()
 
     app_id = get_secret("AMAZON_CREATORS_APPLICATION_ID")
@@ -229,32 +250,78 @@ def main():
             logger.error(f"Failed to fetch target ASIN: {e}")
             sys.exit(1)
 
-    # Search Mode: Complement with related products
-    search_kw = args.keyword
-    if not search_kw:
-        search_kw = items[0]["title"][:20] if (args.asin and items) else "知育玩具"
+    # Search Mode: multi-keyword × multi-page sweep to keep the new-ASIN pool
+    # large enough that the existing-article dedup gate below doesn't starve
+    # Jules of fresh ASINs.
+    existing = _load_existing_article_asins(args.articles_dir)
+    target_asin = args.asin or None
+    seen_asins = {it["asin"] for it in items if it.get("asin")}
 
-    logger.info(f"Search Mode: Keyword '{search_kw}'")
-    try:
-        res = api.search_items(keywords=search_kw, search_index="All", resources=resources)
-        found_items = _safe_get(res, "searchResult", "items", default=[])
-        for it in found_items:
-            asin = it.get("asin")
-            if any(i["asin"] == asin for i in items): continue
-            items.append({
-                "asin": asin,
-                "title": _safe_get(it, "itemInfo", "title", "displayValue"),
-                "price": extract_price(it),
-                "features": extract_features(it),
-                "url": f"https://www.amazon.co.jp/dp/{asin}/?tag={tag}",
-                "image": _safe_get(it, "images", "primary", "large", "url"),
-                "availability": extract_availability(it),
-                "loyalty_points": extract_loyalty_points(it),
-                "savings_percentage": extract_savings_percentage(it),
-                "source": "Amazon"
-            })
-    except Exception as e:
-        logger.error(f"Search failed: {e}")
+    keywords = parse_keywords(args.keywords)
+    # Surface the legacy --keyword as the first search term for back-compat
+    # (workflows pass it explicitly). Fall back to the AMAZON title slice
+    # when running Sniper Mode without an explicit keyword.
+    primary_kw = args.keyword
+    if not primary_kw and args.asin and items:
+        primary_kw = items[0]["title"][:20]
+    if primary_kw and primary_kw not in keywords:
+        keywords.insert(0, primary_kw)
+
+    new_for_jules = sum(
+        1 for it in items
+        if it.get("asin") == target_asin or it.get("asin") not in existing
+    )
+
+    pages = max(1, min(args.pages, 10))
+    logger.info(
+        f"Search Mode: {len(keywords)} keyword(s) × {pages} page(s), "
+        f"target new-for-Jules ASINs = {args.min_new}"
+    )
+
+    done = False
+    for kw in keywords:
+        if done:
+            break
+        for page in range(1, pages + 1):
+            if new_for_jules >= args.min_new:
+                done = True
+                break
+            logger.info(f"  '{kw}' page={page} (new={new_for_jules}/{args.min_new})")
+            try:
+                res = api.search_items(
+                    keywords=kw, search_index="All",
+                    item_page=page, resources=resources,
+                )
+                found_items = _safe_get(res, "searchResult", "items", default=[])
+            except Exception as e:
+                # PA-API can return TooManyRequests / no-results errors per page;
+                # log and continue rather than aborting the whole pipeline.
+                logger.warning(f"  search failed for '{kw}' p{page}: {e}")
+                time.sleep(1.1)
+                continue
+            for it in found_items:
+                asin = it.get("asin")
+                if not asin or asin in seen_asins:
+                    continue
+                seen_asins.add(asin)
+                items.append({
+                    "asin": asin,
+                    "title": _safe_get(it, "itemInfo", "title", "displayValue"),
+                    "price": extract_price(it),
+                    "features": extract_features(it),
+                    "url": f"https://www.amazon.co.jp/dp/{asin}/?tag={tag}",
+                    "image": _safe_get(it, "images", "primary", "large", "url"),
+                    "availability": extract_availability(it),
+                    "loyalty_points": extract_loyalty_points(it),
+                    "savings_percentage": extract_savings_percentage(it),
+                    "source": "Amazon"
+                })
+                if asin == target_asin or asin not in existing:
+                    new_for_jules += 1
+            time.sleep(1.1)  # PA-API TPS=1 safety margin
+
+    if not items:
+        logger.error("Search returned zero items across all keywords; aborting")
         sys.exit(1)
 
     os.makedirs(args.out, exist_ok=True)
@@ -263,21 +330,23 @@ def main():
     # target ASIN is exempt (user explicitly asked to re-fetch it). Snapshots
     # and per-ASIN competitor files still get every item so that internal
     # linking and badge back-fill keep working for the full catalog.
-    existing = _load_existing_article_asins(args.articles_dir)
-    target_asin = args.asin or None
     items_for_jules = [
         it for it in items
         if it.get("asin") == target_asin or it.get("asin") not in existing
     ]
     dropped = len(items) - len(items_for_jules)
-    if dropped:
-        logger.info(
-            f"Excluded {dropped} item(s) already covered by data/articles/ "
-            f"({len(items_for_jules)} remain for Jules)"
+    logger.info(
+        f"Collected {len(items)} unique ASINs, {len(items_for_jules)} new for Jules "
+        f"(dropped {dropped} already-covered)"
+    )
+    if len(items_for_jules) < args.min_new:
+        logger.warning(
+            f"Pool below target ({len(items_for_jules)} < {args.min_new}); "
+            f"consider expanding --keywords or --pages"
         )
 
     with open(os.path.join(args.out, "amazon.json"), "w", encoding="utf-8") as f:
-        json.dump({"keyword": search_kw, "items": items_for_jules, "mode": args.mode}, f, ensure_ascii=False, indent=4)
+        json.dump({"keyword": primary_kw or keywords[0], "items": items_for_jules, "mode": args.mode}, f, ensure_ascii=False, indent=4)
 
     for it in items:
         write_per_asin_snapshot(args.out, it)
