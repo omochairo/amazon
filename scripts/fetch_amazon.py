@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import sys
 import logging
@@ -121,6 +122,44 @@ def write_per_asin_competitors(out_root: str, target_asin: str, items: list, max
         logger.warning(f"Failed to write competitors for {target_asin}: {e}")
 
 
+def _load_existing_article_asins(articles_dir: str = "data/articles") -> set:
+    """Return the set of ASINs that already have an article.
+
+    Used to strip already-covered ASINs from amazon.json before Jules reads
+    it, so the AI can't pick a duplicate even if it ignores the textual
+    "no duplicate ASIN" rule in the prompt. Falls back to the slug suffix
+    when ``product.asin`` is missing.
+    """
+    asins: set = set()
+    if not os.path.isdir(articles_dir):
+        return asins
+    pattern = re.compile(r"-(B0[A-Z0-9]{8})$")
+    for name in os.listdir(articles_dir):
+        if not name.endswith(".json"):
+            continue
+        stem = name[:-5]
+        if stem.endswith((".enrichment", ".seo", ".quality")):
+            continue
+        path = os.path.join(articles_dir, name)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            data = None
+        a = None
+        if isinstance(data, dict):
+            prod = data.get("product") if isinstance(data.get("product"), dict) else None
+            if prod and prod.get("asin"):
+                a = prod["asin"]
+        if not a:
+            m = pattern.search(stem)
+            if m:
+                a = m.group(1)
+        if a:
+            asins.add(a)
+    return asins
+
+
 def extract_savings_percentage(item: dict) -> int:
     listings = _safe_get(item, "offersV2", "listings", default=[])
     if listings:
@@ -137,6 +176,8 @@ def main():
     parser.add_argument("--asin", default="")
     parser.add_argument("--keyword", default="知育玩具")
     parser.add_argument("--out", default="data/raw/")
+    parser.add_argument("--articles-dir", default="data/articles",
+                        help="Directory scanned for already-published ASINs; matching items are excluded from amazon.json so Jules cannot pick a duplicate")
     args = parser.parse_args()
 
     app_id = get_secret("AMAZON_CREATORS_APPLICATION_ID")
@@ -217,8 +258,26 @@ def main():
         sys.exit(1)
 
     os.makedirs(args.out, exist_ok=True)
+
+    # Strip already-covered ASINs from the Jules-facing list. Sniper-mode
+    # target ASIN is exempt (user explicitly asked to re-fetch it). Snapshots
+    # and per-ASIN competitor files still get every item so that internal
+    # linking and badge back-fill keep working for the full catalog.
+    existing = _load_existing_article_asins(args.articles_dir)
+    target_asin = args.asin or None
+    items_for_jules = [
+        it for it in items
+        if it.get("asin") == target_asin or it.get("asin") not in existing
+    ]
+    dropped = len(items) - len(items_for_jules)
+    if dropped:
+        logger.info(
+            f"Excluded {dropped} item(s) already covered by data/articles/ "
+            f"({len(items_for_jules)} remain for Jules)"
+        )
+
     with open(os.path.join(args.out, "amazon.json"), "w", encoding="utf-8") as f:
-        json.dump({"keyword": search_kw, "items": items, "mode": args.mode}, f, ensure_ascii=False, indent=4)
+        json.dump({"keyword": search_kw, "items": items_for_jules, "mode": args.mode}, f, ensure_ascii=False, indent=4)
 
     for it in items:
         write_per_asin_snapshot(args.out, it)
