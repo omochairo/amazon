@@ -212,6 +212,18 @@ def _override_competitive_analysis(
         return
     competitors = _load_per_asin_competitors(per_asin_root, asin)
     if not competitors:
+        # Jules routinely pairs a real-sounding ``name`` with a fabricated
+        # ``asin`` (sometimes one that happens to belong to a different
+        # article on this very site, which would otherwise be turned into a
+        # misleading internal link). Strip the ASIN entirely when we have
+        # no API-verified replacement — the card still renders its text
+        # block, but the thumbnail / Amazon CTA / internal-link button all
+        # disappear via the ``c.asin AND (c.image OR c.internal_url)`` gate.
+        ca = data.get("competitive_analysis")
+        if isinstance(ca, list):
+            for c in ca:
+                if isinstance(c, dict):
+                    c.pop("asin", None)
         return
     target_price = 0
     amazon_price = (product.get("prices") or {}).get("amazon") or {}
