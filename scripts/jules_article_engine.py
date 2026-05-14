@@ -418,6 +418,9 @@ def main():
                     "amazon": {
                         "price": price_amazon,
                         "url": item.get("url", ""),
+                        "availability": item.get("availability", ""),
+                        "loyalty_points": item.get("loyalty_points", 0) or 0,
+                        "savings_percentage": item.get("savings_percentage", 0) or 0,
                     },
                     "rakuten": {
                         "price": price_rakuten,

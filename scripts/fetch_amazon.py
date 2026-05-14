@@ -38,6 +38,34 @@ def extract_price(item: dict) -> int:
         return int(money.get("amount", 0))
     return 0
 
+def extract_availability(item: dict) -> str:
+    listings = _safe_get(item, "offersV2", "listings", default=[])
+    if listings:
+        msg = _safe_get(listings[0], "availability", "message")
+        if isinstance(msg, str):
+            return msg.strip()
+    return ""
+
+def extract_loyalty_points(item: dict) -> int:
+    listings = _safe_get(item, "offersV2", "listings", default=[])
+    if listings:
+        pts = _safe_get(listings[0], "loyaltyPoints", "points")
+        try:
+            return int(pts) if pts is not None else 0
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+def extract_savings_percentage(item: dict) -> int:
+    listings = _safe_get(item, "offersV2", "listings", default=[])
+    if listings:
+        pct = _safe_get(listings[0], "price", "savings", "percentage")
+        try:
+            return int(pct) if pct is not None else 0
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", default="daily_random")
@@ -66,7 +94,9 @@ def main():
         "images.primary.large",
         "itemInfo.title",
         "itemInfo.features",
-        "offersV2.listings.price"
+        "offersV2.listings.price",
+        "offersV2.listings.availability",
+        "offersV2.listings.loyaltyPoints",
     ]
 
     # Sniper Mode: Fetch specific ASIN first
@@ -84,6 +114,9 @@ def main():
                     "features": extract_features(it),
                     "url": f"https://www.amazon.co.jp/dp/{asin}/?tag={tag}",
                     "image": _safe_get(it, "images", "primary", "large", "url"),
+                    "availability": extract_availability(it),
+                    "loyalty_points": extract_loyalty_points(it),
+                    "savings_percentage": extract_savings_percentage(it),
                     "source": "Amazon (Target)"
                 })
         except Exception as e:
@@ -109,6 +142,9 @@ def main():
                 "features": extract_features(it),
                 "url": f"https://www.amazon.co.jp/dp/{asin}/?tag={tag}",
                 "image": _safe_get(it, "images", "primary", "large", "url"),
+                "availability": extract_availability(it),
+                "loyalty_points": extract_loyalty_points(it),
+                "savings_percentage": extract_savings_percentage(it),
                 "source": "Amazon"
             })
     except Exception as e:
