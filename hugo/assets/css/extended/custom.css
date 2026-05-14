@@ -169,6 +169,21 @@ header .logo a {
   border-left: 4px solid var(--brand-secondary);
   padding-left: 12px;
   margin-top: 2em;
+  line-height: 1.45;
+}
+
+.post-content h3 small {
+  display: block;
+  font-size: 0.6em;
+  font-weight: 400;
+  color: var(--secondary);
+  line-height: 1.4;
+  margin-bottom: 2px;
+  letter-spacing: 0.01em;
+}
+
+.dark .post-content h3 small {
+  color: rgba(255,255,255,0.7);
 }
 
 /* ---------- 商品カード (Product Cards) ---------- */

@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
+import re
 from datetime import datetime
 from typing import Any
 
@@ -190,6 +191,17 @@ def main() -> None:
             _merge(data, _load_optional_json(src_path / f"{slug}.enrichment.json"), ENRICHMENT_KEYS)
             _merge(data, _load_optional_json(src_path / f"{slug}.seo.json"), SEO_KEYS)
             _fill_jsonld(data)
+
+            _meta_re = re.compile(r"\s*[(（]\s*\d+\s*字\s*[)）]\s*$")
+            if isinstance(data.get("narrative"), dict):
+                for k in ("lead", "why_this_product", "gift_appeal", "daily_use", "safety_note", "closing"):
+                    v = data["narrative"].get(k)
+                    if isinstance(v, str):
+                        data["narrative"][k] = _meta_re.sub("", v).strip()
+            for top_key in ("editorial_comment", "expert_take"):
+                v = data.get(top_key)
+                if isinstance(v, str):
+                    data[top_key] = _meta_re.sub("", v).strip()
 
             md_body = template.render(**data)
             draft = _quality_draft(slug, src_path, args.min_score)
