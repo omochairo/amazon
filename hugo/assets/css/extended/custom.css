@@ -429,6 +429,42 @@ header .logo a {
   color: rgba(255,255,255,0.75);
 }
 
+/* ---------- Amazon badges (stock / points / discount) ---------- */
+/* Live inside the price-cta-grid Amazon card <div>. Kept outside <p> so the
+   global `p a[href*="amazon.co.jp"]` CTA rule does not affect them. */
+.post-content .amazon-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin: 6px 0 10px;
+  font-size: 0.78rem;
+  line-height: 1.2;
+}
+.post-content .amazon-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.post-content .amazon-badge.badge-discount {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+.post-content .amazon-badge.badge-points {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+.post-content .amazon-badge.badge-stock {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
 /* ---------- Print ---------- */
 @media print {
   .post-content p a[href*="amazon.co.jp"] {
