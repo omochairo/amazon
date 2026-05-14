@@ -123,9 +123,29 @@ header .logo a {
 .post-content h2 {
   font-family: 'M PLUS Rounded 1c', sans-serif !important;
   font-weight: 700;
-  border-bottom: 3px solid var(--brand-primary);
-  padding-bottom: 8px;
+  font-size: 1.35rem;
+  line-height: 1.55;
+  background: linear-gradient(135deg, rgba(255,107,53,0.08), rgba(247,201,72,0.08));
+  border-left: 6px solid var(--brand-primary);
+  border-bottom: none;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  padding: 14px 18px;
   margin-top: 2.5em;
+  color: var(--primary);
+  word-break: break-word;
+}
+
+.dark .post-content h2 {
+  background: linear-gradient(135deg, rgba(255,107,53,0.18), rgba(247,201,72,0.10));
+  color: var(--brand-secondary);
+}
+
+@media (max-width: 600px) {
+  .post-content h2 {
+    font-size: 1.18rem;
+    padding: 12px 14px;
+    line-height: 1.5;
+  }
 }
 
 .post-content h3 {
@@ -335,6 +355,38 @@ header .logo a {
   }
 }
 
+/* ---------- YouTube Responsive Embed ---------- */
+.post-content .yt-embed {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  margin: 1.5em 0 0.4em;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--card-shadow);
+  background: #000;
+}
+
+.post-content .yt-embed iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.post-content .yt-caption {
+  font-size: 0.92rem;
+  color: var(--secondary);
+  text-align: center;
+  margin: 0.3em 0 1.8em;
+  line-height: 1.5;
+}
+
+.dark .post-content .yt-caption {
+  color: rgba(255,255,255,0.75);
+}
+
 /* ---------- Print ---------- */
 @media print {
   .post-content a[href*="amazon.co.jp"] {
@@ -344,4 +396,5 @@ header .logo a {
     padding: 0;
     text-decoration: underline !important;
   }
+  .post-content .yt-embed { display: none; }
 }

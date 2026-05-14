@@ -197,9 +197,29 @@
 ## 🎬 {{ product.name }}の関連動画
 
 {% for vid in youtube_embeds %}
-**{{ vid.title }}**
+{%- set _u = vid.url | default('') -%}
+{%- if 'youtube.com/watch?v=' in _u -%}
+{%- set _vid_id = _u.split('v=')[1].split('&')[0].split('#')[0] -%}
+{%- elif 'youtu.be/' in _u -%}
+{%- set _vid_id = _u.split('youtu.be/')[1].split('?')[0].split('#')[0] -%}
+{%- elif 'youtube.com/embed/' in _u -%}
+{%- set _vid_id = _u.split('embed/')[1].split('?')[0].split('#')[0] -%}
+{%- else -%}
+{%- set _vid_id = '' -%}
+{%- endif -%}
+{% if vid.embed_html %}
 
 {{ vid.embed_html }}
+
+<p class="yt-caption">{{ vid.title }}</p>
+{% elif _vid_id %}
+
+<div class="yt-embed"><iframe src="https://www.youtube-nocookie.com/embed/{{ _vid_id }}" title="{{ vid.title | e }}" loading="lazy" frameborder="0" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>
+
+<p class="yt-caption">{{ vid.title }}</p>
+{% else %}
+- [{{ vid.title }}]({{ vid.url }})
+{% endif %}
 
 {% endfor %}
 {% endif %}
