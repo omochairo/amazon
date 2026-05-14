@@ -261,8 +261,13 @@ header .logo a {
   background: rgba(231,76,60,0.06);
 }
 
-/* ---------- Amazon Links (CTA Buttons) ---------- */
-.post-content a[href*="amazon.co.jp"] {
+/* ---------- Amazon Links (CTA Buttons) ----------
+   narrative 本文（<p> 内）のインライン Amazon リンクのみ自動 CTA 化する。
+   価格比較グリッド / 競合カード / 参考ソース欄など、インラインスタイル済の
+   ボタンや単なるソース列挙にこのルールが適用されると、🛒 プレフィックスで
+   テキストが膨らんで改行したり、プレーンリンクをボタン化してしまうため、
+   セレクタは `.post-content p a[...]` に限定する。 */
+.post-content p a[href*="amazon.co.jp"] {
   display: inline-block;
   background: var(--brand-gradient);
   color: white !important;
@@ -275,13 +280,21 @@ header .logo a {
   font-size: 0.95rem;
 }
 
-.post-content a[href*="amazon.co.jp"]:hover {
+.post-content p a[href*="amazon.co.jp"]:hover {
   transform: translateY(-2px) scale(1.03);
   box-shadow: 0 6px 20px rgba(255,107,53,0.4);
 }
 
-.post-content a[href*="amazon.co.jp"]::before {
+.post-content p a[href*="amazon.co.jp"]::before {
   content: "🛒 ";
+}
+
+/* ---------- Hide PaperMod post-description (subtitle) ----------
+   PaperMod は frontmatter の description をタイトル下のサブタイトルとして
+   表示する。本サイトでは narrative.lead が画像直下に出るため重複するので
+   非表示にし、description は <meta name="description"> 用途のみに使う。 */
+.post-description {
+  display: none;
 }
 
 /* ---------- Price Tag ---------- */
@@ -376,7 +389,7 @@ header .logo a {
     font-size: 0.88rem;
   }
 
-  .post-content a[href*="amazon.co.jp"] {
+  .post-content p a[href*="amazon.co.jp"] {
     display: block;
     text-align: center;
     padding: 14px 20px;
@@ -418,7 +431,7 @@ header .logo a {
 
 /* ---------- Print ---------- */
 @media print {
-  .post-content a[href*="amazon.co.jp"] {
+  .post-content p a[href*="amazon.co.jp"] {
     background: none;
     color: #333 !important;
     box-shadow: none;
