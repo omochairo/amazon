@@ -186,7 +186,10 @@ def _attach_internal_links(
             continue
         slug = asin_to_slug.get(asin)
         if slug:
-            c["internal_url"] = f"{site_base_path}/posts/{slug}/"
+            # Hugo / PaperMod serves post URLs lower-cased (disablePathToLower
+            # default is false), so the ASIN segment in the slug has to be
+            # lowered to avoid 404s on GitHub Pages.
+            c["internal_url"] = f"{site_base_path}/posts/{slug.lower()}/"
 
 
 def _override_competitive_analysis(
