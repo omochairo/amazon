@@ -15,8 +15,37 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  invoke-jules:
+  # 2026-05-15: Jules セッションの非同期性により workflow_run の concurrency だけでは
+  # 重複 ASIN を防げない (5分待機 < 実際の PR 作成 12-50分)。事故例 PR #185-189
+  # (全部 B0DT15VQF8) を踏まえ、open 記事 PR が 1 件でもあれば新規セッションを skip する。
+  # B 段階 (workflow 側で ASIN 事前選定) の前段ガード。
+  check-open-prs:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      should_invoke: ${{ steps.check.outputs.should_invoke }}
+    steps:
+      - name: Check for open Jules article PRs
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Jules が生成した記事 PR は title に必ず ASIN (B0XXXXXXXX) を含む
+          OPEN=$(gh pr list --repo ${{ github.repository }} --state open --json title \
+            --jq '[.[] | select(.title | test("B0[A-Z0-9]{8}"; "i"))] | length')
+          echo "Open Jules article PR(s): $OPEN"
+          if [ "$OPEN" -eq 0 ]; then
+            echo "should_invoke=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_invoke=false" >> $GITHUB_OUTPUT
+            echo "::warning::Skipping Jules invocation: $OPEN open article PR(s) exist — merge or close them first to prevent duplicate ASIN selection."
+          fi
+
+  invoke-jules:
+    needs: check-open-prs
+    if: needs.check-open-prs.outputs.should_invoke == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
