@@ -56,6 +56,10 @@
 <div class="best-deal" style="background:#fff3e0;border-left:4px solid #ff9800;border-radius:8px;padding:12px 16px;margin:14px 0;font-size:0.95rem;color:#1f2937;">💰 <strong>本記事執筆時点での最安値</strong>：{{ product.best_platform }} <strong style="color:#e65100;">￥{{ "{:,}".format(product.best_price) }}</strong>（在庫や送料により変動する場合があります）</div>
 {% endif %}
 
+{% if asin %}
+<details class="keepa-graph" style="margin:14px 0;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 14px;color:#1f2937;"><summary style="cursor:pointer;font-weight:600;color:#1f2937;">📈 Amazon 価格推移グラフ（Keepa 提供）</summary><div style="margin-top:12px;text-align:center;"><img src="https://graph.keepa.com/pricehistory.png?domain=co.jp&asin={{ asin }}" alt="{{ product.name }} の Amazon 価格推移グラフ" loading="lazy" style="max-width:100%;height:auto;border-radius:6px;" onerror="this.parentElement.parentElement.style.display='none'"><p style="margin:8px 0 0;font-size:0.8rem;color:#6b7280;">※ グラフは <a href="https://keepa.com/" target="_blank" rel="noopener nofollow">Keepa</a> によって自動生成される画像です。記事執筆後の価格変動も反映されます。</p></div></details>
+{% endif %}
+
 ## <small>{{ product.name }}の</small>⭐ 評価ポイント
 
 冒頭の IVS スコア (おもちゃロボの知育価値スコア) の内訳と、良い点・気になる点をまとめました。
