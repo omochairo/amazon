@@ -3,6 +3,7 @@ import json
 import sys
 import logging
 import argparse
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 def get_secret(name: str) -> str:
@@ -55,6 +56,27 @@ def extract_loyalty_points(item: dict) -> int:
         except (TypeError, ValueError):
             return 0
     return 0
+
+def write_per_asin_snapshot(out_root: str, item: dict) -> None:
+    """Persist per-ASIN amazon snapshot so build_post.py can back-fill badge
+    fields for past articles even after data/raw/amazon.json gets overwritten.
+    """
+    asin = item.get("asin")
+    if not asin:
+        return
+    per_asin_dir = os.path.join(out_root, "per_asin", asin)
+    try:
+        os.makedirs(per_asin_dir, exist_ok=True)
+        snapshot = {
+            "asin": asin,
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
+            "item": item,
+        }
+        with open(os.path.join(per_asin_dir, "amazon.json"), "w", encoding="utf-8") as f:
+            json.dump(snapshot, f, ensure_ascii=False, indent=2)
+    except OSError as e:
+        logger.warning(f"Failed to write per_asin snapshot for {asin}: {e}")
+
 
 def extract_savings_percentage(item: dict) -> int:
     listings = _safe_get(item, "offersV2", "listings", default=[])
@@ -154,6 +176,9 @@ def main():
     os.makedirs(args.out, exist_ok=True)
     with open(os.path.join(args.out, "amazon.json"), "w", encoding="utf-8") as f:
         json.dump({"keyword": search_kw, "items": items, "mode": args.mode}, f, ensure_ascii=False, indent=4)
+
+    for it in items:
+        write_per_asin_snapshot(args.out, it)
 
 if __name__ == "__main__":
     main()
