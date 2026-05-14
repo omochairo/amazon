@@ -1,26 +1,14 @@
 """
 fetch_reviews.py
-楽天 IchibaItemReview API と Yahoo!ショッピング reviewSearch API から
-商品レビュー本文を取得し、ASIN ベースで data/raw/reviews.json に保存する。
+商品レビュー本文を取得して ASIN ベースで data/raw/reviews.json に保存するスクリプト。
 
-入力:
-  data/raw/rakuten_matched.json — Amazon ASIN ↔ 楽天 itemCode のマッチ結果
-  data/raw/yahoo_matched.json   — Amazon ASIN ↔ Yahoo url のマッチ結果
+現状: 楽天 (IchibaItem/Review) も Yahoo!ショッピング (V1/reviewSearch) も
+公開エンドポイントが廃止済みで、全リクエストが HTTP 400 を返す。
+本スクリプトは空の reviews.json を書き出して即終了する no-op に縮退させてある。
+fetch_rakuten_reviews / fetch_yahoo_reviews の実装は将来 API が復活した場合や
+Threads API 等の代替経路を組み込むときの足場として残置。
 
-出力:
-  data/raw/reviews.json = {
-    "<ASIN>": {
-      "rakuten": [{"rating": int, "title": str, "body": str, "posted_at": str}],
-      "yahoo":   [{"rating": int, "title": str, "body": str, "posted_at": str}]
-    }, ...
-  }
-
-必要な環境変数 (GitHub Secrets):
-  RAKUTEN_APP_ID    — 楽天 WebService applicationId (legacy /services/api 用)
-  YAHOO_CLIENT_ID   — Yahoo! デベロッパー Client ID
-
-API キーが無い場合は空ファイルを書き出して終了する (fail-soft)。
-楽天 WebService API は段階的廃止予定なので、失敗しても Yahoo 側の取得は継続する。
+復活させるときの入口は main() 冒頭の DEPRECATED ガードを外すこと。
 """
 
 import json
@@ -42,6 +30,9 @@ YAHOO_REVIEW_URL = "https://shopping.yahooapis.jp/ShoppingWebService/V1/json/rev
 REQUEST_TIMEOUT = 15
 TOP_N_PER_SITE = 5  # ASIN あたり各サイトから最大 N 件
 SLEEP_SEC = 1.0     # API レート制限対策 (1リクエスト/秒)
+
+# Flip to True once a working review source (Threads API 等) is wired in.
+REVIEWS_ENABLED = False
 
 
 def _load_json(path: str) -> Any:
@@ -116,6 +107,16 @@ def main():
     out_dir = "data/raw"
     out_path = os.path.join(out_dir, "reviews.json")
     os.makedirs(out_dir, exist_ok=True)
+
+    if not REVIEWS_ENABLED:
+        # Both legacy review APIs return HTTP 400 for every request, so skip
+        # the fetch loop entirely until a replacement source is wired in.
+        logger.warning(
+            "fetch_reviews: rakuten/yahoo review endpoints are retired; "
+            "writing empty reviews.json. Flip REVIEWS_ENABLED once a replacement is added."
+        )
+        json.dump({}, open(out_path, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+        return
 
     rakuten_app = os.environ.get("RAKUTEN_APP_ID", "").strip()
     yahoo_app = os.environ.get("YAHOO_CLIENT_ID", "").strip()
