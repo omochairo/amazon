@@ -24,8 +24,9 @@
 {%- endmacro -%}
 <aside class="auto-gen-notice" style="background:#fafafa;border:1px solid #e0e0e0;border-radius:8px;padding:8px 14px;margin:0 0 16px;font-size:0.82rem;color:#666;line-height:1.5;"><strong style="color:#d33;">[PR]</strong>　この記事はおもちゃロボが市場データから自動生成しています。詳細は記事末尾の参考ソース欄をご覧ください。</aside>
 
-# {{ product.name_full or product.name }}
-
+{% if product.name_full and product.name_full != product.name %}
+<p class="product-full-name" style="font-size:0.9rem;color:#666;margin:0 0 12px;">正式商品名：<strong>{{ product.name_full }}</strong></p>
+{% endif %}
 {% if product.image %}
 <figure style="text-align:center;margin:0 auto 16px;display:block;width:100%;"><img src="{{ product.image }}" alt="{{ product.name }}の商品画像" loading="lazy" style="display:block;margin:0 auto;max-width:360px;width:100%;height:auto;border-radius:12px;"><figcaption style="font-size:0.85rem;color:#888;margin-top:8px;text-align:center;">出典：Amazon商品ページ</figcaption></figure>
 {% endif %}
@@ -48,14 +49,14 @@
 {% endif %}
 
 {% if product.features %}
-### {{ product.name }}の主な特徴
+### <small>{{ product.name }}の</small>主な特徴
 
 {% for f in product.features %}- {{ f }}
 {% endfor %}
 {% endif %}
 
 {% if technical_specs %}
-### {{ product.name }}の基本スペック
+### <small>{{ product.name }}の</small>基本スペック
 
 {% if technical_specs.dimensions %}- **サイズ**：{% if technical_specs.dimensions.width %}幅 {{ technical_specs.dimensions.width }}{% endif %}{% if technical_specs.dimensions.height %} / 高さ {{ technical_specs.dimensions.height }}{% endif %}{% if technical_specs.dimensions.depth %} / 奥行 {{ technical_specs.dimensions.depth }}{% endif %}
 {% endif %}{% if technical_specs.weight %}- **重量**：{{ technical_specs.weight }}
@@ -101,6 +102,8 @@
 ## <small>{{ product.name }}の</small>⭐ 評価ポイント
 
 冒頭の IVS スコア (おもちゃロボの知育価値スコア) の内訳と、良い点・気になる点をまとめました。
+
+<details style="margin:16px 0;background:#fffdf5;border:1px solid #fde68a;border-radius:8px;padding:8px 14px;color:#1f2937;"><summary style="cursor:pointer;font-weight:600;color:#92400e;">📖 IVS スコアの詳細（評価軸の説明）</summary><div style="margin-top:10px;font-size:0.9rem;line-height:1.7;color:#1f2937;"><p style="margin:0 0 8px;"><strong>IVS（Ikuiku Value Score）</strong>は、おもちゃロボが知育玩具を 4 つの観点から 5 点満点で評価し、加重平均で 100 点満点に換算した独自スコアです。</p><ul style="margin:0;padding-left:18px;color:#1f2937;"><li><strong>📚 知育効果 (5点満点)</strong>：年齢に応じた学びや、思考力・想像力・手先の発達への刺激度を評価。</li><li><strong>🕰️ 長く遊べる (5点満点)</strong>：遊び方の幅、年齢を超えた長期的な遊び寿命を評価。</li><li><strong>🛡️ 安全性 (5点満点)</strong>：対象年齢の妥当性、素材・形状・誤飲リスク等の安全配慮を評価。</li><li><strong>💰 コスパ (5点満点)</strong>：価格に対する品質・遊び寿命・教育効果のバランスを評価。</li></ul><p style="margin:8px 0 0;font-size:0.85rem;color:#666;">※ スコアは執筆時点の市場データ・レビュー・公式情報をもとに付与しています。実際の感じ方には個人差があります。</p></div></details>
 
 {% if product.ivs_detail.score_rationale %}
 <details style="margin:16px 0;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 14px;color:#1f2937;"><summary style="cursor:pointer;font-weight:600;color:#1f2937;">📋 スコアの加減点根拠を見る</summary><ul style="margin-top:10px;font-size:0.9rem;color:#1f2937;">{% for r in product.ivs_detail.score_rationale %}<li style="color:#1f2937;"><strong>{{ r.factor }}（{{ r.delta }}）</strong>：{{ r.reason }}</li>{% endfor %}</ul></details>
