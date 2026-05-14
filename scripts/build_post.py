@@ -81,23 +81,61 @@ def _load_raw_amazon_index(raw_path: pathlib.Path) -> dict[str, dict[str, Any]]:
     return {it.get("asin"): it for it in raw.get("items", []) if it.get("asin")}
 
 
-def _backfill_amazon_badges(data: dict[str, Any], raw_index: dict[str, dict[str, Any]]) -> None:
-    """If prices.amazon is missing badge fields, copy them from raw/amazon.json
-    by ASIN. Existing values in the article win — this only fills gaps."""
+def _load_per_asin_amazon(per_asin_root: pathlib.Path, asin: str) -> dict[str, Any] | None:
+    """Return the per-ASIN amazon snapshot dict, or None if absent/malformed.
+
+    Snapshots are written by fetch_amazon.py as
+    ``data/raw/per_asin/<ASIN>/amazon.json`` with shape ``{asin, fetched_at, item}``.
+    Older snapshots may store the item dict at the root — both shapes are tolerated.
+    """
+    p = per_asin_root / asin / "amazon.json"
+    if not p.exists():
+        return None
+    try:
+        snap = json.loads(p.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(snap, dict):
+        return None
+    item = snap.get("item") if isinstance(snap.get("item"), dict) else snap
+    return item if isinstance(item, dict) else None
+
+
+def _backfill_amazon_badges(
+    data: dict[str, Any],
+    raw_index: dict[str, dict[str, Any]],
+    per_asin_root: pathlib.Path,
+) -> None:
+    """If prices.amazon is missing badge fields, copy them from the latest
+    raw/amazon.json first, then fall back to the per-ASIN snapshot under
+    data/raw/per_asin/<ASIN>/amazon.json. Existing values in the article win."""
     product = data.get("product") if isinstance(data.get("product"), dict) else None
     if not product:
         return
     asin = product.get("asin")
     if not asin:
         return
+
+    sources: list[dict[str, Any]] = []
     raw_item = raw_index.get(asin)
-    if not raw_item:
+    if raw_item:
+        sources.append(raw_item)
+    snap_item = _load_per_asin_amazon(per_asin_root, asin)
+    if snap_item:
+        sources.append(snap_item)
+    if not sources:
         return
+
     prices = product.setdefault("prices", {})
     amazon = prices.setdefault("amazon", {})
     for field in BADGE_FIELDS:
-        if not amazon.get(field) and raw_item.get(field):
-            amazon[field] = raw_item[field]
+        if amazon.get(field):
+            continue
+        for src in sources:
+            val = src.get(field)
+            if val:
+                amazon[field] = val
+                break
 
 
 def _fill_jsonld(data: dict[str, Any]) -> None:
@@ -175,6 +213,8 @@ def main() -> None:
                         help="Schema path used when --gate is set")
     parser.add_argument("--raw-amazon", default="data/raw/amazon.json",
                         help="Raw amazon.json used to back-fill badge fields (availability/loyalty_points/savings_percentage)")
+    parser.add_argument("--per-asin-root", default="data/raw/per_asin",
+                        help="Directory holding per-ASIN amazon snapshots used as a back-fill fallback when raw/amazon.json no longer contains the ASIN")
     args = parser.parse_args()
 
     evaluate_article = None
@@ -197,6 +237,7 @@ def main() -> None:
     dst_path = pathlib.Path(args.dst)
     dst_path.mkdir(parents=True, exist_ok=True)
     raw_amazon_index = _load_raw_amazon_index(pathlib.Path(args.raw_amazon))
+    per_asin_root = pathlib.Path(args.per_asin_root)
 
     template_file = pathlib.Path("scripts/templates/post.md.j2")
     if not template_file.exists():
@@ -229,7 +270,7 @@ def main() -> None:
                 skipped_legacy += 1
             _merge(data, _load_optional_json(src_path / f"{slug}.enrichment.json"), ENRICHMENT_KEYS)
             _merge(data, _load_optional_json(src_path / f"{slug}.seo.json"), SEO_KEYS)
-            _backfill_amazon_badges(data, raw_amazon_index)
+            _backfill_amazon_badges(data, raw_amazon_index, per_asin_root)
             _fill_jsonld(data)
 
             _meta_re = re.compile(r"\s*[(（]\s*\d+\s*字\s*[)）]\s*$")

@@ -300,10 +300,27 @@ def main():
         return
 
     articles_dir = pathlib.Path("data/articles")
-    existing_slugs = set()
+    existing_asins: set[str] = set()
+    _ASIN_FROM_SLUG = re.compile(r"-(B0[A-Z0-9]{8})$")
+    _SIDECAR_SUFFIXES = (".enrichment", ".seo", ".quality")
     if articles_dir.exists():
         for f in articles_dir.glob("*.json"):
-            existing_slugs.add(f.stem)
+            if f.stem.endswith(_SIDECAR_SUFFIXES):
+                continue
+            asin_from_file = None
+            try:
+                meta = json.loads(f.read_text(encoding="utf-8"))
+                product = meta.get("product") if isinstance(meta.get("product"), dict) else None
+                if product and product.get("asin"):
+                    asin_from_file = product["asin"]
+            except (json.JSONDecodeError, OSError):
+                pass
+            if not asin_from_file:
+                m = _ASIN_FROM_SLUG.search(f.stem)
+                if m:
+                    asin_from_file = m.group(1)
+            if asin_from_file:
+                existing_asins.add(asin_from_file)
 
     today = datetime.now().strftime('%Y-%m-%d')
     generated = 0
@@ -314,8 +331,8 @@ def main():
             continue
 
         slug = f"{today}-{asin}"
-        if slug in existing_slugs:
-            print(f"Skip (already exists): {slug}")
+        if asin in existing_asins:
+            print(f"Skip (ASIN {asin} already has an article): {slug}")
             continue
 
         title_raw = item.get("title", "")
@@ -450,6 +467,7 @@ def main():
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(article, f, ensure_ascii=False, indent=4)
         print(f"Generated: {out_path}")
+        existing_asins.add(asin)
         generated += 1
 
     print(f"\nTotal: {generated} articles generated")
