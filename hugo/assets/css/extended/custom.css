@@ -123,8 +123,8 @@ header .logo a {
 .post-content h2 {
   font-family: 'M PLUS Rounded 1c', sans-serif !important;
   font-weight: 700;
-  font-size: 1.35rem;
-  line-height: 1.55;
+  font-size: 1.5rem;
+  line-height: 1.45;
   background: linear-gradient(135deg, rgba(255,107,53,0.08), rgba(247,201,72,0.08));
   border-left: 6px solid var(--brand-primary);
   border-bottom: none;
@@ -133,6 +133,20 @@ header .logo a {
   margin-top: 2.5em;
   color: var(--primary);
   word-break: break-word;
+}
+
+.post-content h2 small {
+  display: block;
+  font-size: 0.6em;
+  font-weight: 400;
+  color: var(--secondary);
+  line-height: 1.4;
+  margin-bottom: 4px;
+  letter-spacing: 0.01em;
+}
+
+.dark .post-content h2 small {
+  color: rgba(255,255,255,0.7);
 }
 
 .dark .post-content h2 {
