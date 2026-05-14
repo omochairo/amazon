@@ -111,6 +111,84 @@ def _price_comparison_label(target_price: int, competitor_price: int) -> str:
     return f"本品より{yen}安い" if diff < 0 else f"本品より{yen}高い"
 
 
+def _build_asin_to_slug_map(src_path: pathlib.Path) -> dict[str, str]:
+    """Return {asin: slug} for every article JSON under ``src_path``.
+
+    Used so competitor cards can deep-link to an existing internal article
+    when the competitor ASIN already has dedicated coverage on the site.
+    """
+    mapping: dict[str, str] = {}
+    if not src_path.exists():
+        return mapping
+    for f in src_path.glob("*.json"):
+        if f.stem.endswith(SUFFIX_SKIP):
+            continue
+        try:
+            meta = json.loads(f.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        slug = meta.get("slug") or f.stem
+        product = meta.get("product") if isinstance(meta.get("product"), dict) else None
+        asin = product.get("asin") if product else None
+        if not asin:
+            m = re.search(r"-(B0[A-Z0-9]{8})$", f.stem)
+            if m:
+                asin = m.group(1)
+        if not asin:
+            continue
+        mapping.setdefault(asin, slug)
+    return mapping
+
+
+def _site_base_path(config_path: pathlib.Path) -> str:
+    """Extract the path component of ``baseURL`` from hugo/config.toml.
+
+    Returns e.g. ``/amazon`` for ``https://omochairo.github.io/amazon/``,
+    or ``""`` when the site is served at the host root. Hugo does not
+    rewrite raw <a href> URLs emitted from our jinja template, so the
+    GitHub-Pages subpath has to be baked in here.
+    """
+    if not config_path.exists():
+        return ""
+    try:
+        for line in config_path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped.lower().startswith("baseurl"):
+                continue
+            m = re.search(r"['\"]([^'\"]+)['\"]", stripped)
+            if not m:
+                return ""
+            from urllib.parse import urlparse
+            return urlparse(m.group(1)).path.rstrip("/")
+    except OSError:
+        return ""
+    return ""
+
+
+def _attach_internal_links(
+    data: dict[str, Any],
+    asin_to_slug: dict[str, str],
+    site_base_path: str,
+) -> None:
+    """Mark each competitor entry with ``internal_url`` when we already
+    publish an article for that ASIN. The current article's own ASIN is
+    excluded so a card never self-links."""
+    ca = data.get("competitive_analysis")
+    if not isinstance(ca, list) or not asin_to_slug:
+        return
+    product = data.get("product") if isinstance(data.get("product"), dict) else None
+    self_asin = product.get("asin") if product else None
+    for c in ca:
+        if not isinstance(c, dict):
+            continue
+        asin = c.get("asin")
+        if not asin or asin == self_asin:
+            continue
+        slug = asin_to_slug.get(asin)
+        if slug:
+            c["internal_url"] = f"{site_base_path}/posts/{slug}/"
+
+
 def _override_competitive_analysis(
     data: dict[str, Any],
     per_asin_root: pathlib.Path,
@@ -293,6 +371,8 @@ def main() -> None:
                         help="Raw amazon.json used to back-fill badge fields (availability/loyalty_points/savings_percentage)")
     parser.add_argument("--per-asin-root", default="data/raw/per_asin",
                         help="Directory holding per-ASIN amazon snapshots used as a back-fill fallback when raw/amazon.json no longer contains the ASIN")
+    parser.add_argument("--hugo-config", default="hugo/config.toml",
+                        help="Hugo config used to derive site base path for internal links on competitor cards")
     args = parser.parse_args()
 
     evaluate_article = None
@@ -316,6 +396,8 @@ def main() -> None:
     dst_path.mkdir(parents=True, exist_ok=True)
     raw_amazon_index = _load_raw_amazon_index(pathlib.Path(args.raw_amazon))
     per_asin_root = pathlib.Path(args.per_asin_root)
+    asin_to_slug = _build_asin_to_slug_map(src_path)
+    site_base_path = _site_base_path(pathlib.Path(args.hugo_config))
 
     template_file = pathlib.Path("scripts/templates/post.md.j2")
     if not template_file.exists():
@@ -350,6 +432,7 @@ def main() -> None:
             _merge(data, _load_optional_json(src_path / f"{slug}.seo.json"), SEO_KEYS)
             _backfill_amazon_badges(data, raw_amazon_index, per_asin_root)
             _override_competitive_analysis(data, per_asin_root)
+            _attach_internal_links(data, asin_to_slug, site_base_path)
             _fill_jsonld(data)
 
             _meta_re = re.compile(r"\s*[(（]\s*\d+\s*字\s*[)）]\s*$")
