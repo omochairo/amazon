@@ -230,6 +230,7 @@ class CreatorsAPIClient:
         keywords: str = None,
         search_index: str = "All",
         item_count: int = 10,
+        item_page: int = 1,
         resources: list[str] = None
     ) -> dict:
         """Search for items.
@@ -238,6 +239,7 @@ class CreatorsAPIClient:
             keywords: Search keywords
             search_index: Category to search (e.g., 'Electronics', 'All')
             item_count: Number of results (1-10)
+            item_page: Page number for pagination (1-10)
             resources: List of resources to include
         """
         if resources is None:
@@ -253,6 +255,7 @@ class CreatorsAPIClient:
             "keywords": keywords,
             "searchIndex": search_index,
             "itemCount": item_count,
+            "itemPage": item_page,
             "marketplace": self.MARKETPLACE,
             "partnerTag": self.partner_tag,
             "resources": resources
