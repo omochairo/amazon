@@ -28,6 +28,8 @@ import jinja2
 
 SUFFIX_SKIP = (".enrichment", ".seo", ".quality")
 
+BADGE_FIELDS = ("availability", "loyalty_points", "savings_percentage")
+
 ENRICHMENT_KEYS = (
     "review_summary",
     "use_case_scenarios",
@@ -62,6 +64,40 @@ def _merge(data: dict[str, Any], extra: dict[str, Any], keys: tuple[str, ...]) -
     for key in keys:
         if key in extra and key not in data:
             data[key] = extra[key]
+
+
+def _load_raw_amazon_index(raw_path: pathlib.Path) -> dict[str, dict[str, Any]]:
+    """Return {asin: item} from data/raw/amazon.json, or {} if absent/malformed.
+
+    Used to back-fill availability / loyalty_points / savings_percentage into
+    article JSON when the upstream generator (Jules) did not include them.
+    """
+    if not raw_path.exists():
+        return {}
+    try:
+        raw = json.loads(raw_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    return {it.get("asin"): it for it in raw.get("items", []) if it.get("asin")}
+
+
+def _backfill_amazon_badges(data: dict[str, Any], raw_index: dict[str, dict[str, Any]]) -> None:
+    """If prices.amazon is missing badge fields, copy them from raw/amazon.json
+    by ASIN. Existing values in the article win — this only fills gaps."""
+    product = data.get("product") if isinstance(data.get("product"), dict) else None
+    if not product:
+        return
+    asin = product.get("asin")
+    if not asin:
+        return
+    raw_item = raw_index.get(asin)
+    if not raw_item:
+        return
+    prices = product.setdefault("prices", {})
+    amazon = prices.setdefault("amazon", {})
+    for field in BADGE_FIELDS:
+        if not amazon.get(field) and raw_item.get(field):
+            amazon[field] = raw_item[field]
 
 
 def _fill_jsonld(data: dict[str, Any]) -> None:
@@ -137,6 +173,8 @@ def main() -> None:
                         help="Run quality_gate after each render and write {slug}.quality.json")
     parser.add_argument("--schema", default="data/schema/article.schema.json",
                         help="Schema path used when --gate is set")
+    parser.add_argument("--raw-amazon", default="data/raw/amazon.json",
+                        help="Raw amazon.json used to back-fill badge fields (availability/loyalty_points/savings_percentage)")
     args = parser.parse_args()
 
     evaluate_article = None
@@ -158,6 +196,7 @@ def main() -> None:
     src_path = pathlib.Path(args.src)
     dst_path = pathlib.Path(args.dst)
     dst_path.mkdir(parents=True, exist_ok=True)
+    raw_amazon_index = _load_raw_amazon_index(pathlib.Path(args.raw_amazon))
 
     template_file = pathlib.Path("scripts/templates/post.md.j2")
     if not template_file.exists():
@@ -190,6 +229,7 @@ def main() -> None:
                 skipped_legacy += 1
             _merge(data, _load_optional_json(src_path / f"{slug}.enrichment.json"), ENRICHMENT_KEYS)
             _merge(data, _load_optional_json(src_path / f"{slug}.seo.json"), SEO_KEYS)
+            _backfill_amazon_badges(data, raw_amazon_index)
             _fill_jsonld(data)
 
             _meta_re = re.compile(r"\s*[(（]\s*\d+\s*字\s*[)）]\s*$")
