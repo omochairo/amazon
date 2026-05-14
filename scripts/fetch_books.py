@@ -26,12 +26,33 @@ KNOWN_BRANDS = [
     "エポック", "アガツマ", "ジョイレア",
 ]
 
+NOISE = [
+    "送料無料", "ポイント10倍", "正規品", "公式", "最新", "予約",
+    "おまけ付き", "ラッピング無料", "あす楽", "即納", "税込",
+    "知育玩具", "おもちゃ", "プレゼント", "誕生日", "ギフト",
+    "2個セット", "3歳から", "男の子", "女の子", "対象年齢",
+]
+
 
 def extract_brand(text: str) -> str:
     for b in KNOWN_BRANDS:
         if b in text:
             return b
     return ""
+
+
+def extract_fallback_keyword(title: str) -> str:
+    """KNOWN_BRANDS にヒットしないタイトルから検索語を抽出。
+    括弧/ノイズ語除去後の先頭 2 語を使う。"""
+    if not title:
+        return ""
+    clean = re.sub(r"[【\[（\(].*?[】\]）\)]", " ", title)
+    for n in NOISE:
+        clean = clean.replace(n, " ")
+    tokens = clean.split()
+    if not tokens:
+        return ""
+    return " ".join(tokens[:2]).strip()
 
 
 def books_search(api_key: str, query: str, max_results: int = 3) -> list:
@@ -102,15 +123,22 @@ def main():
         try:
             amazon = json.loads(amazon_path.read_text(encoding="utf-8"))
             asin_items = amazon.get("items", [])
-            seen_brands = set()
-            logger.info(f"Per-ASIN search: {len(asin_items)} ASINs (deduped by brand)")
+            seen_queries = set()
+            logger.info(f"Per-ASIN search: {len(asin_items)} ASINs (deduped by query)")
             for amz in asin_items:
-                brand = extract_brand(amz.get("title", ""))
-                if not brand or brand in seen_brands:
+                title = amz.get("title", "")
+                brand = extract_brand(title)
+                if brand:
+                    query = f"{brand} 知育"
+                else:
+                    fb = extract_fallback_keyword(title)
+                    if not fb:
+                        continue
+                    query = f"{fb} 知育"
+                if query in seen_queries:
                     continue
-                seen_brands.add(brand)
-                query = f"{brand} 知育"
-                logger.info(f"  brand='{brand}' query='{query}'")
+                seen_queries.add(query)
+                logger.info(f"  brand='{brand or '-'}' query='{query}'")
                 for b in books_search(api_key, query, max_results=2):
                     url = b.get("url") or ""
                     if url and url not in seen_urls:
