@@ -199,6 +199,8 @@ def main():
                         help="PA-API search pages per keyword (1-10, each up to 10 items)")
     parser.add_argument("--min-new", type=int, default=20,
                         help="Stop searching once this many ASINs not in articles-dir are collected")
+    parser.add_argument("--search-index", default="Toys",
+                        help="PA-API SearchIndex / category (e.g. 'Toys', 'Baby', 'All'). 'All' disables ItemPage on JP marketplace; pick a concrete category to use pagination.")
     args = parser.parse_args()
 
     app_id = get_secret("AMAZON_CREATORS_APPLICATION_ID")
@@ -289,7 +291,7 @@ def main():
             logger.info(f"  '{kw}' page={page} (new={new_for_jules}/{args.min_new})")
             try:
                 res = api.search_items(
-                    keywords=kw, search_index="All",
+                    keywords=kw, search_index=args.search_index,
                     item_page=page, resources=resources,
                 )
                 found_items = _safe_get(res, "searchResult", "items", default=[])
