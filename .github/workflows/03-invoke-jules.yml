@@ -59,8 +59,54 @@ jobs:
           ref: main
           fetch-depth: 0
 
+      # 2026-05-15: B 段階対策。事故 PR #185-189 は Jules が `amazon.json` の items[0]
+      # (= B0DT15VQF8) を毎回選んでいたことが原因。workflow 側で候補を計算し
+      # (articles 既存 + open PR 内 ASIN を除外)、ランダムに 1 件選んで prompt に明示する。
+      - name: Pick next ASIN
+        id: pick-asin
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          gh pr list --repo ${{ github.repository }} --state open --json title \
+            --jq '.[].title' > /tmp/open_titles.txt || echo "" > /tmp/open_titles.txt
+          python3 - <<'PY'
+          import json, re, glob, os, random
+          with open('data/raw/amazon.json', encoding='utf-8') as f:
+              raw = json.load(f)
+          items = raw.get('items', [])
+          candidates = [i['asin'] for i in items if isinstance(i, dict) and i.get('asin')]
+          existing = set()
+          for path in glob.glob('data/articles/*.json'):
+              base = os.path.basename(path)
+              if base.endswith('.enrichment.json') or base.endswith('.quality.json'):
+                  continue
+              m = re.search(r'(B0[A-Z0-9]{8})', base)
+              if m:
+                  existing.add(m.group(1))
+          with open('/tmp/open_titles.txt', encoding='utf-8') as f:
+              for line in f:
+                  for m in re.finditer(r'(B0[A-Z0-9]{8})', line):
+                      existing.add(m.group(1))
+          remaining = [a for a in candidates if a not in existing]
+          print(f"candidates={len(candidates)} existing_excluded={len(existing)} remaining={len(remaining)}")
+          out_path = os.environ['GITHUB_OUTPUT']
+          if not remaining:
+              with open(out_path, 'a') as f:
+                  f.write("asin=\n")
+              print("::warning::No candidate ASINs remain — fetch more products or wait")
+          else:
+              # GITHUB_RUN_ID で seed して並列 run が同じ ASIN を引かないようにする
+              rng = random.Random(os.environ.get('GITHUB_RUN_ID', ''))
+              chosen = rng.choice(remaining)
+              print(f"chosen={chosen}")
+              with open(out_path, 'a') as f:
+                  f.write(f"asin={chosen}\n")
+          PY
+
       # Step 1: ソースを確認
       - name: List Jules Sources
+        if: steps.pick-asin.outputs.asin != ''
         id: list-sources
         run: |
           echo "=== Listing Jules Sources ==="
@@ -88,24 +134,32 @@ jobs:
       # Step 2: セッション作成
       - name: Create Jules Session
         id: create-session
+        if: steps.pick-asin.outputs.asin != ''
+        env:
+          TARGET_ASIN: ${{ steps.pick-asin.outputs.asin }}
         run: |
-          echo "=== Creating Jules Session ==="
+          echo "=== Creating Jules Session (target: $TARGET_ASIN) ==="
           # 2026-05-13: 12行のハードコードプロンプトを廃止し、jules/PROMPT_TEMPLATE.md
           # を読み込む形に変更（記事品質向上のため出典・競合比較・cross-check ルールを
           # フルプロンプトとして渡す）。
+          # 2026-05-15: 対象 ASIN を workflow 側で事前選定して prompt に明示注入する形に変更
+          # （事故 PR #185-189 = 全 5 件 B0DT15VQF8 の再発防止）。
           # ※ FAILED_PRECONDITION が再発した場合は memory:
           # feedback_jules_api_failed_precondition.md を参照し、まず API キー再発行を試す。
-          INTRO='AGENTS.md を最初に必ず読み、その指示に厳密に従ってください。
+          INTRO="AGENTS.md を最初に必ず読み、その指示に厳密に従ってください。
           以下は STAGE 1 (記事JSON生成) の詳細プロンプトです。出典・競合比較・cross-check のルールを必ず守ってください。
+
+          【今回生成する記事の対象 ASIN】: ${TARGET_ASIN}
+          このセッションで生成する記事は必ずこの ASIN を対象としてください。他の ASIN は選ばないでください。
 
           絶対守るリポジトリ保護ルール:
           - 新規ファイル追加のみ。既存ファイルの変更・削除は禁止
           - .github/, scripts/, hugo/ への変更は禁止
-          - data/articles/ フォルダへの JSON 追加のみ許可（命名: YYYY-MM-DD-ASIN.json）
-          - data/raw/amazon.json から data/articles/ に同じ ASIN の記事がないものを1つ選ぶ
+          - data/articles/ フォルダへの JSON 追加のみ許可（命名: YYYY-MM-DD-${TARGET_ASIN}.json）
+          - data/raw/amazon.json から対象 ASIN (${TARGET_ASIN}) のエントリを読み込んで記事を生成
           - data/raw/rakuten.json / yahoo_result.json / youtube.json も活用する
 
-          === 以下、jules/PROMPT_TEMPLATE.md の内容 ==='
+          === 以下、jules/PROMPT_TEMPLATE.md の内容 ==="
           PROMPT="$INTRO
 
           $(cat jules/PROMPT_TEMPLATE.md)"
