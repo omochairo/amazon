@@ -1,0 +1,50 @@
+{{- /*
+  Product card partial used in the home grid.
+  Expects the current context (.) to be a Page with these front matter fields:
+    - product_image (URL)
+    - product_name  (string, optional)
+    - brand         (string, optional)
+    - ivs_score     (float 0–5)
+    - ivs_score_100 (int 0–100)
+*/ -}}
+{{- $img := .Params.product_image -}}
+{{- $score := .Params.ivs_score -}}
+{{- $score100 := .Params.ivs_score_100 -}}
+{{- $brand := .Params.brand -}}
+{{- /* ブランド不明系は表示しない (根本対策は別途タスク化: brand 正規化を data pipeline 側で) */ -}}
+{{- if in (slice "不明" "不明 / 不明" "Unknown" "N/A" "なし" "—" "-" "ノーブランド" "ノーブランド品" "NoBrand" "No Brand" "Generic") $brand -}}
+  {{- $brand = "" -}}
+{{- end -}}
+{{- $name := .Params.product_name | default .Title -}}
+<a class="product-card" href="{{ .Permalink }}" aria-label="{{ $name }} の比較レビューを読む">
+  <div class="product-card-image">
+    {{- if $img }}
+      <img src="{{ $img }}" alt="{{ $name }}" loading="lazy" decoding="async" referrerpolicy="no-referrer">
+    {{- else }}
+      <div class="product-card-image-fallback">🧸</div>
+    {{- end }}
+    {{- if $score100 }}
+      <span class="product-card-score" title="IVSスコア (100点満点)">
+        🏆 <strong>{{ $score100 }}</strong><span class="product-card-score-suffix">点</span>
+      </span>
+    {{- else if $score }}
+      <span class="product-card-score" title="IVSスコア (5点満点)">
+        🏆 <strong>{{ lang.FormatNumber 1 $score }}</strong><span class="product-card-score-suffix">/5</span>
+      </span>
+    {{- end }}
+  </div>
+  <div class="product-card-body">
+    {{- if $brand }}
+      <div class="product-card-brand">{{ $brand }}</div>
+    {{- end }}
+    <h3 class="product-card-title">{{ .Title }}</h3>
+    <div class="product-card-meta">
+      <time datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date.Format "2006-01-02" }}</time>
+      {{- with .Params.tags }}
+        <span class="product-card-tags">
+          {{- range first 2 . }}<span class="product-card-tag">#{{ . }}</span>{{ end }}
+        </span>
+      {{- end }}
+    </div>
+  </div>
+</a>

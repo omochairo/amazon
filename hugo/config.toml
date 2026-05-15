@@ -1,6 +1,6 @@
 baseURL = 'https://omochairo.github.io/amazon/'
 languageCode = 'ja-jp'
-title = 'おもちゃいろ Amazon比較ナビ 🧸'
+title = '知育玩具スコアランキング｜Amazon・楽天比較ナビ'
 theme = 'PaperMod'
 contentDir = 'content'
 canonifyURLs = false
@@ -11,7 +11,7 @@ relativeURLs = false
 
 [params]
   env = "production"
-  description = "Julesが毎日自動更新！人気おもちゃのAmazon価格比較サイト"
+  description = "知育玩具をIVSスコアでランキング。Amazon・楽天・Yahoo!の3サイト価格を横断比較。元ソニーエンジニア×医療従事者のおもちゃいろのパパママが、20〜40代ファミリーの『今いちばんお得な買い方』を毎日更新します。"
   author = "おもちゃロボ 🤖"
   defaultTheme = "auto"
   mainSections = ["posts"]
@@ -27,15 +27,11 @@ relativeURLs = false
   # 見出し末尾に表示される # アンカーリンクを非表示
   disableAnchoredHeadings = true
 
-  # ホームページをプロフィールモードに
-  [params.homeInfoParams]
-    Title = "🧸 おもちゃいろ Amazon比較ナビ"
-    Content = """
-AIエージェント **Jules** が毎日自動で更新中！
-Amazon の人気おもちゃを比較して、**今いちばんお得な買い方**がわかります。
-
-> 🔍 元ソニーエンジニア × 医療従事者の夫婦が厳選したおもちゃ情報をお届け
-"""
+  # カスタムホームレイアウト用のヒーロー設定 (homeInfoParams は使わずに layouts/index.html で描画)
+  [params.hero]
+    Title = "知育玩具スコアランキング"
+    Subtitle = "Amazon・楽天・Yahoo! を横断したIVSスコア比較で、今いちばんお得な買い方がわかる"
+    Lead = "元ソニーエンジニア × 医療従事者の夫婦が運営する [おもちゃいろ](https://omcha.jp/) のパパママが、AI と一緒に毎日更新。20〜40代ファミリーの『失敗しない知育玩具選び』をサポートします。"
 
   [[params.socialIcons]]
     name = "globe"
@@ -52,10 +48,10 @@ Amazon の人気おもちゃを比較して、**今いちばんお得な買い�
     responsiveImages = true
 
   [params.label]
-    text = "🧸 おもちゃいろ比較ナビ"
+    text = "知育玩具スコアランキング"
 
   [params.assets]
-    favicon = "🧸"
+    favicon = "🏆"
 
   # 検索機能
   [params.fuseOpts]
