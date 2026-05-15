@@ -252,6 +252,49 @@ def _override_competitive_analysis(
     data["competitive_analysis"] = new_entries
 
 
+def _load_per_asin_items(
+    per_asin_root: pathlib.Path,
+    asin: str,
+    filename: str,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Return up to ``limit`` items from ``data/raw/per_asin/<ASIN>/<filename>``.
+
+    Used as a fallback for the Jules-authored ``news``/``books`` fields when
+    they come back empty. File shape: ``{"items": [...]}``.
+    """
+    p = per_asin_root / asin / filename
+    if not p.exists():
+        return []
+    try:
+        payload = json.loads(p.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    items = payload.get("items") if isinstance(payload, dict) else None
+    if not isinstance(items, list):
+        return []
+    return [
+        it for it in items
+        if isinstance(it, dict) and it.get("title") and it.get("url")
+    ][:limit]
+
+
+def _fallback_news_books(data: dict[str, Any], per_asin_root: pathlib.Path) -> None:
+    """When the article JSON's ``news``/``books`` field is missing or empty,
+    populate it from the per-ASIN snapshots written by fetch_yahoo_news.py and
+    fetch_books.py. Non-empty Jules-authored values are preserved."""
+    product = data.get("product") if isinstance(data.get("product"), dict) else None
+    asin = product.get("asin") if product else None
+    if not asin:
+        return
+    for key, filename in (("news", "news.json"), ("books", "books.json")):
+        if data.get(key):
+            continue
+        items = _load_per_asin_items(per_asin_root, asin, filename)
+        if items:
+            data[key] = items
+
+
 def _load_per_asin_amazon(per_asin_root: pathlib.Path, asin: str) -> dict[str, Any] | None:
     """Return the per-ASIN amazon snapshot dict, or None if absent/malformed.
 
@@ -447,6 +490,7 @@ def main() -> None:
             _merge(data, _load_optional_json(src_path / f"{slug}.seo.json"), SEO_KEYS)
             _backfill_amazon_badges(data, raw_amazon_index, per_asin_root)
             _override_competitive_analysis(data, per_asin_root)
+            _fallback_news_books(data, per_asin_root)
             _attach_internal_links(data, asin_to_slug, site_base_path)
             _fill_jsonld(data)
 
