@@ -1,0 +1,55 @@
+{{- define "main" }}
+
+{{- /* タクソノミー種別ごとのラベル/アイコン */ -}}
+{{- $kind := .Data.Plural -}}
+{{- $icon := "🏷" -}}
+{{- $kindLabel := "タグ" -}}
+{{- if eq $kind "brands" -}}
+  {{- $icon = "🏢" -}}
+  {{- $kindLabel = "メーカー" -}}
+{{- else if eq $kind "categories" -}}
+  {{- $icon = "📂" -}}
+  {{- $kindLabel = "カテゴリ" -}}
+{{- end -}}
+
+<header class="page-header term-header">
+  {{- partial "breadcrumbs.html" . }}
+  <div class="term-header-eyebrow">{{ $icon }} {{ $kindLabel }}</div>
+  <h1 class="term-header-title">{{ .Title }}</h1>
+  {{- with .Description }}<p class="term-header-description">{{ . | markdownify }}</p>{{ end }}
+  <div class="term-header-meta">
+    <span class="term-header-count">{{ len .Pages }} 件の記事</span>
+    {{- if eq $kind "brands" }}
+    <a class="term-header-link" href="{{ "brands/" | relURL }}">← メーカー一覧へ戻る</a>
+    {{- else if eq $kind "tags" }}
+    <a class="term-header-link" href="{{ "tags/" | relURL }}">← タグ一覧へ戻る</a>
+    {{- end }}
+  </div>
+</header>
+
+{{- if .Content }}
+<div class="post-content md-content">{{ .Content }}</div>
+{{- end }}
+
+{{- $paginator := .Paginate .Pages -}}
+<div class="card-grid term-card-grid">
+  {{- range $paginator.Pages }}
+    {{- partial "product_card.html" . }}
+  {{- end }}
+</div>
+
+{{- if gt $paginator.TotalPages 1 }}
+<footer class="page-footer posts-pagination">
+  <nav class="pagination">
+    {{- if $paginator.HasPrev }}
+    <a class="prev" href="{{ $paginator.Prev.URL | absURL }}">« 前のページ</a>
+    {{- end }}
+    <span class="pagination-info">{{ $paginator.PageNumber }} / {{ $paginator.TotalPages }}</span>
+    {{- if $paginator.HasNext }}
+    <a class="next" href="{{ $paginator.Next.URL | absURL }}">次のページ »</a>
+    {{- end }}
+  </nav>
+</footer>
+{{- end }}
+
+{{- end }}{{- /* end main */ -}}

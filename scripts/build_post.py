@@ -400,6 +400,14 @@ def _frontmatter_meta(data: dict[str, Any], slug: str, draft: bool) -> dict[str,
         meta["product_image"] = image_url
     if product.get("brand"):
         meta["brand"] = product["brand"]
+        # brands taxonomy 用: ノーブランド / 不明系はタクソノミーに含めない
+        # (UI 側ブラックリストと同期。根本対策は @J で別途)
+        _brand_blacklist = {
+            "不明", "不明 / 不明", "Unknown", "N/A", "なし", "—", "-",
+            "ノーブランド", "ノーブランド品", "NoBrand", "No Brand", "Generic",
+        }
+        if product["brand"] not in _brand_blacklist:
+            meta["brands"] = [product["brand"]]
     if product.get("name"):
         meta["product_name"] = product["name"]
     ivs_score = product.get("ivs_score")

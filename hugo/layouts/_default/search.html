@@ -1,0 +1,20 @@
+{{- define "main" }}
+
+<header class="page-header search-header">
+  <div class="term-header-eyebrow">🔍 検索</div>
+  <h1 class="term-header-title">{{ .Title | default "記事を検索" }}</h1>
+  {{- if .Description }}
+  <p class="term-header-description">{{ .Description | markdownify }}</p>
+  {{- else }}
+  <p class="term-header-description">商品名・ブランド名・キーワードでサイト内の比較レビュー記事を検索できます。</p>
+  {{- end }}
+</header>
+
+<div id="searchbox" class="searchbox searchbox-grid">
+  <input id="searchInput" autofocus placeholder="{{ .Params.placeholder | default "おもちゃ名・メーカー名を入力" }}"
+    aria-label="search" type="search" autocomplete="off" maxlength="64">
+  <div id="searchSummary" class="search-summary" aria-live="polite"></div>
+  <div id="searchResults" class="card-grid search-card-grid" aria-label="search results"></div>
+</div>
+
+{{- end }}{{/* end main */}}

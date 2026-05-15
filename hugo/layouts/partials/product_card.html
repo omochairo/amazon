@@ -16,7 +16,7 @@
   {{- $brand = "" -}}
 {{- end -}}
 {{- $name := .Params.product_name | default .Title -}}
-<a class="product-card" href="{{ .Permalink }}" aria-label="{{ $name }} の比較レビューを読む">
+<a class="product-card" href="{{ .Permalink }}" aria-label="{{ $name }} の比較レビューを読む" data-ivs="{{ $score | default 0 }}" data-ivs100="{{ $score100 | default 0 }}">
   <div class="product-card-image">
     {{- if $img }}
       <img src="{{ $img }}" alt="{{ $name }}" loading="lazy" decoding="async" referrerpolicy="no-referrer">
