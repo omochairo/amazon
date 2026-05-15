@@ -47,14 +47,18 @@ def _sync_ivs_for_render(data: dict[str, Any]) -> None:
     product["ivs_score"] = sr.ivs_score
     ivs = product.setdefault("ivs_detail", {})
     ivs["total_100"] = sr.total_100
-    # 4 軸 (/5) は 6 要素から再導出: 教育=edu_value, 安全=safety_cert,
-    # コスパ=price_value, 長く遊べる=brand_tier+media_exposure を平均化
-    ivs["education"] = round(bd["edu_value"] / 15 * 5, 1)
-    ivs["safety"] = round(bd["safety_cert"] / 10 * 5, 1)
-    ivs["cost_performance"] = round(bd["price_value"] / 15 * 5, 1)
-    ivs["longevity"] = round(
-        (bd["brand_tier"] / 25 + bd["media_exposure"] / 15) / 2 * 5, 1
-    )
+    # 4 軸 (/5 表示) は 6 要素から再導出。
+    # 「玩具である以上 0 は不当」のため 2.0-5.0 にスケール (中央 3.5)。
+    # 式: axis = 2.0 + (raw / max) * 3.0  -> raw 0->2.0, mid->3.5, max->5.0
+    def _scale(raw: float, max_v: float) -> float:
+        return round(2.0 + (raw / max_v) * 3.0, 1)
+
+    ivs["education"] = _scale(bd["edu_value"], 15)
+    ivs["safety"] = _scale(bd["safety_cert"], 10)
+    ivs["cost_performance"] = _scale(bd["price_value"], 15)
+    # 長く遊べる = brand_tier (max 35) + media_exposure (max 15) を合算正規化
+    longevity_norm = (bd["brand_tier"] / 35 + bd["media_exposure"] / 15) / 2
+    ivs["longevity"] = round(2.0 + longevity_norm * 3.0, 1)
     ivs["score_rationale"] = [
         {"factor": "ブランド信頼度", "delta": f"+{bd['brand_tier']}/25", "reason": sr.rationale[0]},
         {"factor": "安全認証", "delta": f"+{bd['safety_cert']}/10", "reason": sr.rationale[1]},

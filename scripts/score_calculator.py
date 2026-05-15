@@ -36,7 +36,17 @@ class ScoreResult:
     rationale: list[str] = field(default_factory=list)
 
 
-_TIER_POINTS = {"S": 25, "A": 20, "B": 15, "C": 10, "D": 5}
+# tier ベース基礎点 (max 35): S=35 / A=28 / B=22 / C=17 / D=10
+# 「掲載に値する玩具メーカー = 一定の下駄」を表現
+_TIER_POINTS = {"S": 35, "A": 28, "B": 22, "C": 17, "D": 10}
+
+# 安全性 tier floor (max 10): 国内 C tier までは ST マーク玩具組合加入企業 = 安全試験前提
+# S=10 / A=9 / B=8 / C=6 / D=0
+_SAFETY_FLOOR = {"S": 10, "A": 9, "B": 8, "C": 6, "D": 0}
+
+# 知育 tier floor (max 15): 玩具メーカーである以上 0 にはしない
+# S=5 / A=4 / B=3 / C=2 / D=0
+_EDU_FLOOR = {"S": 5, "A": 4, "B": 3, "C": 2, "D": 0}
 
 _EDU_DOMAINS = {
     "STEM": ["STEM", "プログラミング", "ロボット", "数学", "科学", "実験", "論理", "パズル", "ブロック"],
@@ -47,23 +57,22 @@ _EDU_DOMAINS = {
 
 
 def _brand_tier_score(brand: NormalizedBrand) -> tuple[int, str]:
-    pt = _TIER_POINTS.get(brand.tier, 5)
-    return pt, f"brand_tier={brand.tier}({brand.canonical}) -> {pt}/25"
+    pt = _TIER_POINTS.get(brand.tier, 10)
+    return pt, f"brand_tier={brand.tier}({brand.canonical}) -> {pt}/35"
 
 
 def _safety_score(brand: NormalizedBrand, product: dict) -> tuple[int, str]:
+    # tier floor (国内 C tier までは ST マーク玩具組合加入企業の前提)
+    floor = _SAFETY_FLOOR.get(brand.tier, 0)
     certs = list(brand.safety_default or [])
     pcerts = product.get("certifications") or []
     if isinstance(pcerts, list):
         certs += [str(c) for c in pcerts]
     up = {c.upper() for c in certs if c}
-    if "ST" in up:
-        return 10, f"safety=ST -> 10/10"
-    if up & {"CE", "EN71", "ASTM"}:
-        return 8, f"safety=海外認証({sorted(up)}) -> 8/10"
-    if up:
-        return 5, f"safety=その他({sorted(up)}) -> 5/10"
-    return 0, "safety=なし -> 0/10"
+    # 認証ボーナス: ST 明記なら +1 (D tier には大きく効く)
+    bonus = 1 if "ST" in up else (1 if up & {"CE", "EN71", "ASTM"} else 0)
+    pts = min(10, floor + bonus)
+    return pts, f"safety=tier_floor({brand.tier}:{floor})+cert({sorted(up) or '-'}:{bonus}) -> {pts}/10"
 
 
 def _age_fit_score(product: dict) -> tuple[int, str, Optional[tuple[int, int]]]:
@@ -87,7 +96,9 @@ def _age_fit_score(product: dict) -> tuple[int, str, Optional[tuple[int, int]]]:
     return 5, f"age=記載のみ('{raw[:15]}') -> 5/10", None
 
 
-def _edu_value_score(article: dict) -> tuple[int, str]:
+def _edu_value_score(article: dict, brand: NormalizedBrand) -> tuple[int, str]:
+    # tier floor (玩具メーカーは 0 にしない)
+    floor = _EDU_FLOOR.get(brand.tier, 0)
     blob = " ".join(
         [
             " ".join(article.get("tags") or []),
@@ -98,8 +109,10 @@ def _edu_value_score(article: dict) -> tuple[int, str]:
     )
     hit = [d for d, kws in _EDU_DOMAINS.items() if any(k in blob for k in kws)]
     n = len(hit)
-    pts = [0, 4, 8, 12, 15][min(n, 4)]
-    return pts, f"edu=[{','.join(hit) or '-'}] ({n}/4) -> {pts}/15"
+    # キーワード加点: 1分野=+2.5, 2=+5, 3=+7.5, 4=+10 (max 10)
+    bonus = round(min(10, n * 2.5))
+    pts = min(15, floor + bonus)
+    return pts, f"edu=tier_floor({brand.tier}:{floor})+domains[{','.join(hit) or '-'}]({n}/4:+{bonus}) -> {pts}/15"
 
 
 def _count_items(path: pathlib.Path) -> int:
@@ -113,9 +126,14 @@ def _count_items(path: pathlib.Path) -> int:
     return len(items) if isinstance(items, list) else 0
 
 
-def _media_exposure_score(asin: str, repo_root: pathlib.Path) -> tuple[int, str]:
+def _media_exposure_score(
+    asin: str, brand: NormalizedBrand, repo_root: pathlib.Path
+) -> tuple[int, str]:
+    # 海外ブランドは日本語メディア露出が少ないのが普通 -> 中立 5 を保証
+    is_overseas = brand.region not in ("JP", "unknown", "")
+    floor = 5 if is_overseas else 0
     if not asin:
-        return 0, "media=asin不明 -> 0/15"
+        return floor, f"media=asin不明 -> {floor}/15"
     d = repo_root / "data" / "raw" / "per_asin" / asin
     yt = _count_items(d / "youtube.json")
     nw = _count_items(d / "news.json")
@@ -123,8 +141,10 @@ def _media_exposure_score(asin: str, repo_root: pathlib.Path) -> tuple[int, str]
     yt_p = 6 if yt >= 3 else 3 if yt >= 1 else 0
     nw_p = 5 if nw >= 2 else 2 if nw >= 1 else 0
     bk_p = 4 if bk >= 2 else 2 if bk >= 1 else 0
-    pts = min(15, yt_p + nw_p + bk_p)
-    return pts, f"media=yt:{yt}({yt_p}) news:{nw}({nw_p}) books:{bk}({bk_p}) -> {pts}/15"
+    raw = yt_p + nw_p + bk_p
+    pts = min(15, max(floor, raw))
+    tag = f"[海外floor={floor}]" if is_overseas and floor > raw else ""
+    return pts, f"media=yt:{yt}({yt_p}) news:{nw}({nw_p}) books:{bk}({bk_p}){tag} -> {pts}/15"
 
 
 _MARKET_CACHE: Optional[dict[str, set[str]]] = None
@@ -155,20 +175,23 @@ def _load_market(repo_root: pathlib.Path) -> dict[str, set[str]]:
     return out
 
 
-def _multi_market_score(asin: str, repo_root: pathlib.Path) -> tuple[int, str]:
+def _multi_market_score(
+    asin: str, brand: NormalizedBrand, repo_root: pathlib.Path
+) -> tuple[int, str]:
+    # 海外ブランドは正規流通が限定的で楽天/Yahoo に出にくい -> 中立 5 を保証
+    is_overseas = brand.region not in ("JP", "unknown", "")
+    floor = 5 if is_overseas else 3
     if not asin:
-        return 3, "market=asin不明 -> 3/10(中立)"
+        return floor, f"market=asin不明 -> {floor}/10"
     mm = _load_market(repo_root)
-    # rakuten/yahoo_matched は全 ASIN をカバーしない (fetch 対象限定) ため、
-    # データなし = penalty ではなく中立 3 点とする
     if not mm["rakuten"] and not mm["yahoo"]:
-        return 3, "market=matchedデータなし -> 3/10(中立)"
+        return floor, f"market=matchedデータなし -> {floor}/10(中立)"
     r, y = asin in mm["rakuten"], asin in mm["yahoo"]
     if r and y:
         return 10, "market=楽天+Yahoo -> 10/10"
     if r or y:
-        return 7, f"market={'楽天' if r else 'Yahoo'}のみ -> 7/10"
-    return 3, "market=Amazonのみ(matched無) -> 3/10(中立)"
+        return max(floor, 7), f"market={'楽天' if r else 'Yahoo'}のみ -> {max(floor,7)}/10"
+    return floor, f"market=Amazonのみ(matched無) -> {floor}/10(中立)"
 
 
 def _price_value_score(
@@ -207,17 +230,17 @@ def calculate(
     bt, br = _brand_tier_score(brand)
     sf, sr = _safety_score(brand, product)
     ag, ar, age_range = _age_fit_score(product)
-    ev, er = _edu_value_score(article)
-    me, mr = _media_exposure_score(asin, repo_root)
-    mm, mmr = _multi_market_score(asin, repo_root)
+    ev, er = _edu_value_score(article, brand)
+    me, mr = _media_exposure_score(asin, brand, repo_root)
+    mm, mmr = _multi_market_score(asin, brand, repo_root)
     pv, pr = _price_value_score(product, age_range)
 
-    # raw は 0-100 範囲だが、実データで 10-65 に偏るため最終表示用に再マップ。
-    # 最低 50 を保証 (掲載商品の暗黙下限), 100 で上限 cap。
-    # マップ式: final = max(50, min(100, 50 + raw * 0.7))
-    #   raw 0  -> 50,  raw 30 -> 71,  raw 60 -> 92,  raw 70+ -> 100
-    raw_total = max(0, min(100, bt + sf + ag + ev + me + mm + pv))
-    total = max(50, min(100, round(50 + raw_total * 0.7)))
+    # 各要素配点: brand_tier(35) + safety(10) + age(10) + edu(15) + media(15) + market(10) + price(15) = max 110
+    # 係数 0.5 でリマップ: D tier を 50 寄りに落としつつ tier floor で S/A/B を底上げ。
+    # マップ式: final = max(50, min(100, 50 + raw * 0.5))
+    #   raw 0 -> 50, raw 40 -> 70, raw 70 -> 85, raw 100+ -> 100
+    raw_total = max(0, min(110, bt + sf + ag + ev + me + mm + pv))
+    total = max(50, min(100, round(50 + raw_total * 0.5)))
     return ScoreResult(
         total_100=total,
         ivs_score=round(total / 20.0, 2),
