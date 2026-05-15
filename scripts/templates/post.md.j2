@@ -115,6 +115,13 @@
 {% endfor %}{% endif %}
 {% endif %}
 
+{% if omcha_related %}
+## 🔗 おもちゃいろの関連記事
+
+{% for link in omcha_related %}- [{{ link.title }}]({{ link.url }})
+{% endfor %}
+{% endif %}
+
 {% if youtube_embeds %}
 ## <small>{{ product.name }}の</small>🎬 関連動画
 
@@ -243,12 +250,6 @@
 {% endfor %}
 {% endif %}
 
-{% if internal_links %}
-## 🔗 おもちゃいろの関連記事
-
-{% for link in internal_links %}- [{{ link.title }}]({{ link.url }})
-{% endfor %}
-{% endif %}
 
 {% if sources %}
 ## 🔍 この記事の根拠（参考にしたソース）
