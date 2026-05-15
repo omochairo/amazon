@@ -28,8 +28,8 @@ VC_REFERRAL_BASE = "https://ck.jp.ap.valuecommerce.com/servlet/referral"
 
 
 _AGE_DIGIT_TOKEN = re.compile(r'^[0-9]{1,3}$')
-_AGE_RANGE_TOKEN = re.compile(r'^[0-9]{1,2}[\-〜~][0-9]{1,2}$')
-_AGE_SUFFIX_TOKEN = re.compile(r'^[0-9]{1,2}(歳|才|か月|ヶ月|カ月)(以上|から|まで|向け)?$')
+_AGE_RANGE_TOKEN = re.compile(r'^[0-9]{1,2}[\-〜~～][0-9]{1,2}$')
+_AGE_SUFFIX_TOKEN = re.compile(r'^([0-9]{1,2}[\-〜~～])?[0-9]{1,2}(歳|才|か月|ヶ月|カ月)(以上|から|まで|向け|[〜~～])?$')
 _KANJI_DIGIT_TOKEN = re.compile(r'^[一二三四五六七八九十]$')
 _MODEL_PATTERN = re.compile(r'^[A-Z][A-Z0-9\-]{3,11}$')
 
@@ -250,8 +250,8 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id=""):
     return None
 
 
-def search_yahoo(keyword, client_id, sid="", pid=""):
-    """Yahooで1商品を検索して価格中央値に近い結果を返す。"""
+def _yahoo_query(keyword, client_id, sid="", pid=""):
+    """Yahoo Shopping API を 1 回叩いて、parsed_items のリストを返す。"""
     params = {
         "appid": client_id,
         "query": keyword,
@@ -263,43 +263,65 @@ def search_yahoo(keyword, client_id, sid="", pid=""):
         params["affiliate_type"] = "vc"
         params["affiliate_id"] = f"{VC_REFERRAL_BASE}?sid={sid}&pid={pid}&vc_url="
 
-    try:
-        resp = requests.get(YAHOO_SEARCH_URL, params=params, timeout=10)
-        if resp.status_code != 200:
-            logger.warning(f"Yahoo search failed for '{keyword}': HTTP {resp.status_code}")
-            return None
-        data = resp.json()
-        hits = data.get("hits", [])
-        if not hits:
-            return None
+    resp = requests.get(YAHOO_SEARCH_URL, params=params, timeout=10)
+    if resp.status_code != 200:
+        logger.warning(f"Yahoo search failed for '{keyword}': HTTP {resp.status_code}")
+        return []
+    data = resp.json()
+    hits = data.get("hits", [])
+    if not hits:
+        return []
 
-        parsed_items = []
-        for hit in hits:
-            raw_url = hit.get("url", "")
-            if "valuecommerce.com" not in raw_url and sid and pid:
-                encoded = urllib.parse.quote(raw_url, safe="")
-                affiliate_url = f"{VC_REFERRAL_BASE}?sid={sid}&pid={pid}&vc_url={encoded}"
-            else:
-                affiliate_url = raw_url
+    parsed_items = []
+    for hit in hits:
+        raw_url = hit.get("url", "")
+        if "valuecommerce.com" not in raw_url and sid and pid:
+            encoded = urllib.parse.quote(raw_url, safe="")
+            affiliate_url = f"{VC_REFERRAL_BASE}?sid={sid}&pid={pid}&vc_url={encoded}"
+        else:
+            affiliate_url = raw_url
 
-            image = hit.get("image", {})
-            image_url = ""
-            if isinstance(image, dict):
-                image_url = image.get("medium") or image.get("small") or ""
+        image = hit.get("image", {})
+        image_url = ""
+        if isinstance(image, dict):
+            image_url = image.get("medium") or image.get("small") or ""
 
-            parsed_items.append({
-                "title": hit.get("name", ""),
-                "price": hit.get("price", 0),
-                "url": affiliate_url,
-                "image": image_url,
-                "source": "Yahoo",
-            })
+        parsed_items.append({
+            "title": hit.get("name", ""),
+            "price": hit.get("price", 0),
+            "url": affiliate_url,
+            "image": image_url,
+            "source": "Yahoo",
+        })
+    return parsed_items
 
-        best = _select_median_priced_item(parsed_items)
-        return best
-    except Exception as e:
-        logger.error(f"Yahoo search error: {e}")
-        return None
+
+def search_yahoo(keyword, client_id, sid="", pid=""):
+    """Yahooで階層的に検索する (full keyword → 先頭2語 → 先頭1語)。"""
+    tokens = keyword.split()
+    candidates = [keyword]
+    if len(tokens) > 2:
+        candidates.append(" ".join(tokens[:2]))
+    if len(tokens) > 1:
+        candidates.append(tokens[0])
+    # 重複除去 (順序保持)
+    seen = set()
+    candidates = [c for c in candidates if not (c in seen or seen.add(c))]
+
+    for idx, kw in enumerate(candidates, start=1):
+        try:
+            items = _yahoo_query(kw, client_id, sid, pid)
+        except Exception as e:
+            logger.error(f"Yahoo Stage{idx} error for '{kw}': {e}")
+            items = []
+        if items:
+            logger.info(f"Yahoo Stage{idx}: {len(items)} hits for '{kw}'")
+            best = _select_median_priced_item(items)
+            if best:
+                return best
+        if idx < len(candidates):
+            time.sleep(1.0)  # Yahoo rate limit: 1 query/sec
+    return None
 
 
 def main():
