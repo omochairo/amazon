@@ -1,0 +1,1124 @@
+# data/brand_taxonomy.yaml
+# ブランド正規化マスター (Phase 1, toy.md 統合版)
+#
+# tier:
+#   S = 国内最大手 + 国際トップ          (スコア寄与最大)
+#   A = 国内中堅 + 海外有名               (高)
+#   B = 国内小ブランド + 海外特定ジャンル (中)
+#   C = 地方問屋 / 特定卸 / 100均系 (ST有) (中低)
+#   D = ノーブランド / 中華新興 / 不明     (低)
+#
+# exclude_from_taxonomy: true なら Hugo /brands/ ページから除外
+# safety_default: 通常付与される安全認証
+# region: 製造元主拠点 (ISO 国コード or 地域)
+#
+# 編集ルール:
+#   - canonical はユーザー検索で表示される正式名 (Hugo /brands/<canonical>/)
+#   - aliases に括弧形 (例: "タカラトミー(TAKARA TOMY)") を含めること
+#   - 表記ゆれは aliases に足すだけで正規化される
+#   - データソース: toy.md (200+ JP/海外ブランド) + 既存記事の中華系/暫定 C
+
+version: 1
+updated: "2026-05-15"
+
+brands:
+  # ==========================================
+  # Tier S: 国内最大手 + 国際トップ
+  # ==========================================
+  - canonical: バンダイ
+    aliases: [バンダイ(BANDAI), BANDAI, BANDAI SPIRITS, バンダイナムコ, バンダイナムコクラフト, バンダイナムコヌイ]
+    tier: S
+    region: JP
+    safety_default: [ST]
+  - canonical: タカラトミー
+    aliases: [タカラトミー(TAKARA TOMY), TAKARA TOMY, タカラトミーアーツ, タカラトミーマーケティング]
+    tier: S
+    region: JP
+    safety_default: [ST]
+  - canonical: レゴ
+    aliases: [レゴ(LEGO), LEGO, レゴジャパン]
+    tier: S
+    region: DK
+  - canonical: マテル
+    aliases: [マテル(Mattel), Mattel, マテル・インターナショナル, フィッシャープライス, Fisher-Price, バービー, ホットウィール]
+    tier: S
+    region: US
+  - canonical: ハズブロ
+    aliases: [ハズブロ(Hasbro), Hasbro, ハズブロジャパン]
+    tier: S
+    region: US
+
+  # ==========================================
+  # Tier A: 国内中堅 + 海外有名
+  # ==========================================
+  - canonical: セガ フェイブ
+    aliases: [セガ フェイブ(SEGA FAVE), セガトイズ, SEGA TOYS, SEGA FAVE]
+    tier: A
+    region: JP
+    safety_default: [ST]
+  - canonical: エポック社
+    aliases: [エポック社(EPOCH), エポック, EPOCH, シルバニアファミリー]
+    tier: A
+    region: JP
+    safety_default: [ST]
+  - canonical: アガツマ
+    aliases: [アガツマ(AGATSUMA), AGATSUMA, ピノチオ, PINOCCHIO]
+    tier: A
+    region: JP
+    safety_default: [ST]
+  - canonical: ピープル
+    aliases: [ピープル(People), People]
+    tier: A
+    region: JP
+    safety_default: [ST]
+  - canonical: パイロットコーポレーション
+    aliases: [パイロットコーポレーション, PILOT, メルちゃん, パイロットインキ]
+    tier: A
+    region: JP
+    safety_default: [ST]
+  - canonical: カワダ
+    aliases: [カワダ(KAWADA), KAWADA, ナノブロック, nanoblock]
+    tier: A
+    region: JP
+    safety_default: [ST]
+  - canonical: くもん出版
+    aliases: [くもん出版(KUMON TOY), KUMON, 公文, くもん]
+    tier: A
+    region: JP
+    safety_default: [ST]
+  - canonical: 学研
+    aliases: [学研(Gakken), Gakken, 学研ステイフル, ニューブロック]
+    tier: A
+    region: JP
+    safety_default: [ST]
+  - canonical: メガハウス
+    aliases: [メガハウス(MegaHouse), MegaHouse]
+    tier: A
+    region: JP
+    safety_default: [ST]
+  - canonical: ジョイパレット
+    aliases: [ジョイパレット(JOYPALETTE), JOYPALETTE]
+    tier: A
+    region: JP
+    safety_default: [ST]
+  - canonical: テンヨー
+    aliases: [テンヨー(Tenyo), Tenyo]
+    tier: A
+    region: JP
+    safety_default: [ST]
+  - canonical: コナミデジタルエンタテインメント
+    aliases: [コナミデジタルエンタテインメント, コナミ, KONAMI]
+    tier: A
+    region: JP
+    safety_default: [ST]
+  - canonical: スクウェア・エニックス
+    aliases: [スクウェア・エニックス, スクエニ, SQUARE ENIX]
+    tier: A
+    region: JP
+    safety_default: [ST]
+  - canonical: サンリオ
+    aliases: [サンリオ(SANRIO), SANRIO]
+    tier: A
+    region: JP
+    safety_default: [ST]
+  - canonical: スピンマスター
+    aliases: [スピンマスター, Spin Master, パウ・パトロール]
+    tier: A
+    region: CA
+  - canonical: MGAエンターテインメント
+    aliases: [MGAエンターテインメント, MGA Entertainment, L.O.L. サプライズ!]
+    tier: A
+    region: US
+  - canonical: プレイモービル
+    aliases: [プレイモービル, Playmobil]
+    tier: A
+    region: DE
+  - canonical: ブリオ
+    aliases: [ブリオ, BRIO, Brio]
+    tier: A
+    region: SE
+  - canonical: シュライヒ
+    aliases: [シュライヒ, Schleich]
+    tier: A
+    region: DE
+  - canonical: ボーネルンド
+    aliases: [ボーネルンド, Bornelund]
+    tier: A
+    region: JP
+  - canonical: VTech
+    aliases: [VTech, Vテック, ヴイテック]
+    tier: A
+    region: HK
+  - canonical: リープフロッグ
+    aliases: [リープフロッグ, LeapFrog]
+    tier: A
+    region: US
+  - canonical: ハペ
+    aliases: [ハペ, Hape]
+    tier: A
+    region: CH
+  - canonical: グリムス
+    aliases: [グリムス, Grimm's, Grimm’s]
+    tier: A
+    region: DE
+  - canonical: ハバ
+    aliases: [ハバ, HABA]
+    tier: A
+    region: DE
+  - canonical: ネフ
+    aliases: [ネフ, Naef]
+    tier: A
+    region: CH
+  - canonical: ラーニングリソーシズ
+    aliases: [ラーニングリソーシズ, Learning Resources]
+    tier: A
+    region: US
+  - canonical: ジェコ
+    aliases: [ジェコ, Djeco]
+    tier: A
+    region: FR
+  - canonical: ジク
+    aliases: [ジク, Siku]
+    tier: A
+    region: DE
+  - canonical: キュボロ
+    aliases: [キュボロ, cuboro]
+    tier: A
+    region: CH
+  - canonical: メリッサ＆ダグ
+    aliases: [メリッサ＆ダグ, Melissa & Doug, メリッサアンドダグ]
+    tier: A
+    region: US
+  - canonical: マグフォーマー
+    aliases: [マグフォーマー, Magformers]
+    tier: A
+    region: KR
+  - canonical: クレヨラ
+    aliases: [クレヨラ, Crayola]
+    tier: A
+    region: US
+  - canonical: プラントイ
+    aliases: [プラントイ, PlanToys, プラントイジャパン]
+    tier: A
+    region: TH
+  - canonical: ファットブレイントイズ
+    aliases: [ファットブレイントイズ, Fat Brain Toys]
+    tier: A
+    region: US
+
+  # ==========================================
+  # Tier B: 小ブランド（特定ジャンル有名・知育等）
+  # ==========================================
+  - canonical: アーテック
+    aliases: [アーテック(Artec), Artec]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: アイアップ
+    aliases: [アイアップ(eyeup), eyeup]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: アイデス
+    aliases: [アイデス(ides), ides]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: 池田工業社
+    aliases: [池田工業社(IKEDA), IKEDA]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: イワヤ
+    aliases: [イワヤ(IWAYA), IWAYA]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: ウッディプッディ
+    aliases: [ウッディプッディ(WOODY PUDDY), WOODY PUDDY, ディンギー]
+    tier: B
+    region: JP
+  - canonical: エンスカイ
+    aliases: [エンスカイ(ensky), ensky]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: エジソン販売
+    aliases: [エジソン販売, EDISON mama, エジソンママ]
+    tier: B
+    region: JP
+  - canonical: 奇譚クラブ
+    aliases: [奇譚クラブ, KITAN CLUB]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: キューブ
+    aliases: [キューブ, CUBE, オタマトーン]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: 京商
+    aliases: [京商(KYOSHO), KYOSHO]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: 銀鳥産業
+    aliases: [銀鳥産業, ギンポー, GINPO]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: 幻冬舎
+    aliases: [幻冬舎(GENTOSHA), 幻冬舎エデュケーション]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: サン・アロー
+    aliases: [サン・アロー, SUN ARROW]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: 三英貿易
+    aliases: [三英貿易, SAN-EI CO.]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: サンスター文具
+    aliases: [サンスター文具, SUNSTAR]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: ショウワノート
+    aliases: [ショウワノート, SHOWA NOTE]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: セキグチ
+    aliases: [セキグチ, Sekiguchi, モンチッチ]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: ダッドウェイ
+    aliases: [ダッドウェイ(DADWAY), DADWAY]
+    tier: B
+    region: JP
+  - canonical: トイコー
+    aliases: [トイコー, TOYCO]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: トーヨー
+    aliases: [トーヨー, TOYO, オリガミ]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: トレーン
+    aliases: [トレーン, TRANE, Nゲージダイキャスト]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: ナカジマコーポレーション
+    aliases: [ナカジマコーポレーション, NAKAJIMA CORPORATION]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: ニチガン
+    aliases: [ニチガン, NICHIGAN]
+    tier: B
+    region: JP
+  - canonical: 野中製作所
+    aliases: [野中製作所, NONAKA WORLD]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: ハナヤマ
+    aliases: [ハナヤマ(HANAYAMA), HANAYAMA, はなやま]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: ハピネット
+    aliases: [ハピネット(Happinet), Happinet]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: 博品館
+    aliases: [博品館, HAKUHINKAN]
+    tier: B
+    region: JP
+  - canonical: ビバリー
+    aliases: [ビバリー(BEVERLY), BEVERLY]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: 増田屋コーポレーション
+    aliases: [増田屋コーポレーション, マスダヤ, MASUDAYA]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: マルカ
+    aliases: [マルカ(MARUKA), MARUKA]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: マイクロスクーター・ジャパン
+    aliases: [マイクロスクーター・ジャパン, Micro Scooter]
+    tier: B
+    region: JP
+  - canonical: ミズタニ
+    aliases: [ミズタニ, A-KIDS, ミズタニ自転車]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: やのまん
+    aliases: [やのまん, YANOMAN]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: 吉徳
+    aliases: [吉徳, 吉徳大光]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: ヨシリツ
+    aliases: [ヨシリツ, LaQ, ラキュー]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: ラベンスバーガージャパン
+    aliases: [ラベンスバーガージャパン, Ravensburger]
+    tier: B
+    region: JP
+  - canonical: ラングスジャパン
+    aliases: [ラングスジャパン, RANGS JAPAN]
+    tier: B
+    region: JP
+  - canonical: リーメント
+    aliases: [リーメント, RE-MENT]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: ローヤル
+    aliases: [ローヤル(Royal), Royal]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: 日本トイザらス
+    aliases: [日本トイザらス, トイザらス, Toys"R"Us]
+    tier: B
+    region: JP
+  - canonical: ZURU
+    aliases: [ZURU, ズールー, X-SHOT, エックスショット]
+    tier: B
+    region: NZ
+  - canonical: ブルーダー
+    aliases: [ブルーダー, bruder]
+    tier: B
+    region: DE
+  - canonical: ファンコ
+    aliases: [ファンコ, Funko, POP!]
+    tier: B
+    region: US
+  - canonical: ハンドトゥーマインド
+    aliases: [ハンドトゥーマインド, hand2mind]
+    tier: B
+    region: US
+  - canonical: タイムタイマー
+    aliases: [タイムタイマー, Time Timer]
+    tier: B
+    region: US
+  - canonical: バナナグラム
+    aliases: [バナナグラム, Bananagrams]
+    tier: B
+    region: US
+  - canonical: マインドウェア
+    aliases: [マインドウェア, MindWare]
+    tier: B
+    region: US
+  - canonical: キッドクラフト
+    aliases: [キッドクラフト, KidKraft]
+    tier: B
+    region: US
+  - canonical: キャスドン
+    aliases: [キャスドン, Casdon]
+    tier: B
+    region: GB
+  - canonical: グリーンボードゲームズ
+    aliases: [グリーンボードゲームズ, Green Board Games]
+    tier: B
+    region: GB
+  - canonical: ギガミック
+    aliases: [ギガミック, Gigamic]
+    tier: B
+    region: FR
+  - canonical: ララブーム
+    aliases: [ララブーム, Lalaboom]
+    tier: B
+    region: FR
+  - canonical: スマートマックス
+    aliases: [スマートマックス, SmartMax]
+    tier: B
+    region: BE
+  - canonical: SMRTゲームズ
+    aliases: [SMRTゲームズ, SMRT Games]
+    tier: B
+    region: BE
+  - canonical: フォックスマインド
+    aliases: [フォックスマインド, FoxMind]
+    tier: B
+    region: CA
+  - canonical: スーパーシンプルラーニング
+    aliases: [スーパーシンプルラーニング, Super Simple Learning]
+    tier: B
+    region: CA
+  - canonical: リトルダッチ
+    aliases: [リトルダッチ, Little Dutch]
+    tier: B
+    region: NL
+  - canonical: リーウッド
+    aliases: [リーウッド, LIEWOOD]
+    tier: B
+    region: DK
+  - canonical: キッズコンセプト
+    aliases: [キッズコンセプト, Kids Concept]
+    tier: B
+    region: SE
+  - canonical: コンゲススロイド
+    aliases: [コンゲススロイド, Konges Sløjd]
+    tier: B
+    region: DK
+  - canonical: ストイ
+    aliases: [ストイ, STOY]
+    tier: B
+    region: DK
+  - canonical: ボブルス
+    aliases: [ボブルス, bObles]
+    tier: B
+    region: DK
+  - canonical: ヴュリ
+    aliases: [ヴュリ, Vulli]
+    tier: B
+    region: FR
+  - canonical: オスカー＆エレン
+    aliases: [オスカー＆エレン, Oskar & Ellen]
+    tier: B
+    region: SE
+  - canonical: ル・トイ・ヴァン
+    aliases: [ル・トイ・ヴァン, LE TOY VAN]
+    tier: B
+    region: GB
+  - canonical: セレクタ
+    aliases: [セレクタ, SELECTA]
+    tier: B
+    region: DE
+  - canonical: ニック
+    aliases: [ニック, NIC]
+    tier: B
+    region: DE
+  - canonical: ラドガグレズ
+    aliases: [ラドガグレズ, Raduga Grez]
+    tier: B
+    region: RU
+  - canonical: レシオ
+    aliases: [レシオ, LECCIO]
+    tier: B
+    region: IT
+  - canonical: モエス
+    aliases: [モエス, MOES]
+    tier: B
+    region: BE
+  - canonical: バイアストラップ
+    aliases: [バイアストラップ, by ASTRUP]
+    tier: B
+    region: DK
+  - canonical: ビナボ
+    aliases: [ビナボ, binabo]
+    tier: B
+    region: DE
+  - canonical: コジーノクシーズ
+    aliases: [コジーノクシーズ, Cozy Noxxiez]
+    tier: B
+    region: NL
+
+  # ==========================================
+  # Tier C: 地方問屋・特定卸・フックトイ・100均系他（すべてST有）
+  # ==========================================
+  - canonical: アートプレスト
+    aliases: [アートプレスト, ART PRESTO]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: アイジュ
+    aliases: [アイジュ, AIJU]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ACTマーケティング
+    aliases: [ACTマーケティング, アクトマーケティング]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: イエロー
+    aliases: [イエロー, YELLOW]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: イガラシ
+    aliases: [イガラシ]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 石川玩具
+    aliases: [石川玩具]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: イチネン製作所
+    aliases: [イチネン製作所]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ウィズコーポレーション
+    aliases: [ウィズコーポレーション]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ヴィットハート
+    aliases: [ヴィットハート]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ウララキューブ
+    aliases: [ウララキューブ]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: エイコー
+    aliases: [エイコー, EIKO]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: エウレカ
+    aliases: [エウレカ, EUREKA]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ＳＩS
+    aliases: [SIS, エスアイエス]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: エスエージーバルーンズ
+    aliases: [エスエージーバルーンズ, SAG BALLOONS]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: NP・ネクスト
+    aliases: [NP・ネクスト, NP NEXT]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: エヒメ紙工
+    aliases: [エヒメ紙工]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: エフトイズ・コンフェクト
+    aliases: [エフトイズ・コンフェクト, エフトイズ, F-toys]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: エムアイシー
+    aliases: [エムアイシー, MIC]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 尾上萬
+    aliases: [尾上萬(ONOEMAN), オノエマン, ONOEMAN]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: オオイケ
+    aliases: [オオイケ, OIKE]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: オリエンタルトーイ
+    aliases: [オリエンタルトーイ]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: オンダ
+    aliases: [オンダ(ONDA), ONDA]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: カサハラ
+    aliases: [カサハラ]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: カバヤ食品
+    aliases: [カバヤ食品, カバヤ, Kabaya]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: カヨ通商
+    aliases: [カヨ通商]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: KEAK JAPAN
+    aliases: [KEAK JAPAN, キークジャパン]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: キーズファクトリー
+    aliases: [キーズファクトリー, KeysFactory]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: キクチ
+    aliases: [キクチ]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: キッシーズ
+    aliases: [キッシーズ, Kishi's]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: キラキラ
+    aliases: [キラキラ]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: キャッチアップ
+    aliases: [キャッチアップ]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 協和紙工
+    aliases: [協和紙工]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 旭栄
+    aliases: [旭栄, キョクエイ]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: クマモト
+    aliases: [クマモト]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: クラサワ
+    aliases: [クラサワ]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: クラフトコネクト
+    aliases: [クラフトコネクト]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: クワガタ
+    aliases: [クワガタ]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: GUN-ZO
+    aliases: [GUN-ZO, ガンゾー]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ケイ・ジェイ・アイコーポレーション
+    aliases: [ケイ・ジェイ・アイコーポレーション, KJI]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 国際貿易
+    aliases: [国際貿易, KOKUSAI BOEKI]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 子宝産業
+    aliases: [子宝産業]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: サンヨウ
+    aliases: [サンヨウ]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: サンヨープレジャー
+    aliases: [サンヨープレジャー]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: G.P.WOODWORK
+    aliases: [G.P.WOODWORK]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ジェイジェイ
+    aliases: [ジェイジェイ]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: JS国際貿易
+    aliases: [JS国際貿易]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 四国団扇
+    aliases: [四国団扇]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: システムサービス
+    aliases: [システムサービス, SYSTEM SERVICE]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: シャオール
+    aliases: [シャオール, SHAOOL]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 周プランズワーク
+    aliases: [周プランズワーク]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: SOOTANG HOBBY
+    aliases: [SOOTANG HOBBY, スータンホビー]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: スズキ紙工業
+    aliases: [スズキ紙工業]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: スモール・プラネット
+    aliases: [スモール・プラネット, SMALL PLANET]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: スワン社
+    aliases: [スワン社]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: SO-TA
+    aliases: [SO-TA, ソータ]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ソウルフル
+    aliases: [ソウルフル]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: そろはむ
+    aliases: [そろはむ, スピンギア, SPINGEAR]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ターリン・インターナショナル
+    aliases: [ターリン・インターナショナル, tarlin]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ダイシン
+    aliases: [ダイシン]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 大元クリエイティブジャパン
+    aliases: [大元クリエイティブジャパン]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ダイワトーイ
+    aliases: [ダイワトーイ]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: TakaraTec
+    aliases: [TakaraTec, タカラテック]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 辰巳屋
+    aliases: [辰巳屋(TATSUMIYA), タツミヤ]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ツバメ玩具製作所
+    aliases: [ツバメ玩具製作所]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ツヤマ
+    aliases: [ツヤマ]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: テイクハート
+    aliases: [テイクハート]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ティーエスティーアドバンス
+    aliases: [ティーエスティーアドバンス, TST ADVANCE]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ティ・ピー・ジェイ
+    aliases: [ティ・ピー・ジェイ, TPJ]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: デジレクト
+    aliases: [デジレクト]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 天栄
+    aliases: [天栄, TENEI]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: トイボックス
+    aliases: [トイボックス, TOYBOX]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 東京ローソク製造
+    aliases: [東京ローソク製造]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 桃源堂
+    aliases: [桃源堂]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 東邦化工
+    aliases: [東邦化工]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: トキワ商事
+    aliases: [トキワ商事]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: トップエース
+    aliases: [トップエース, TOP ACE]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 友田商会
+    aliases: [友田商会]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: とらや
+    aliases: [とらや]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ドリームブロッサム
+    aliases: [ドリームブロッサム, Dream Blossom]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 西野
+    aliases: [西野]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 日本歯固め玩具協会
+    aliases: [日本歯固め玩具協会]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 野首木工所
+    aliases: [野首木工所]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: nomad's
+    aliases: [nomad's, ノマズ]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ハート
+    aliases: [ハート, HEART, バンダイナムコグループ・ハート]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: パルス
+    aliases: [パルス, PULSE]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 早川玩具
+    aliases: [早川玩具, ハヤカワ玩具]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ビッグベン
+    aliases: [ビッグベン, BIGBEN]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ファミリア クリエイティブ ファクトリー
+    aliases: [ファミリア クリエイティブ ファクトリー]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: フェリクロス
+    aliases: [フェリクロス]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 吹き戻しの里
+    aliases: [吹き戻しの里]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 藤田屋
+    aliases: [藤田屋]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: フジトーイ
+    aliases: [フジトーイ]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 不二宮製作所
+    aliases: [不二宮製作所]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 平和工業
+    aliases: [平和工業, MOCCO, モッコ]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ベル玩菓
+    aliases: [ベル玩菓]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ホッパーエンターテイメント
+    aliases: [ホッパーエンターテイメント]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: MARUSAN
+    aliases: [マルサン, MARUSAN]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 丸彰
+    aliases: [丸彰(MARUSHO), マルショウ, MARUSHO]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: 丸昌
+    aliases: [丸昌, マルショウ]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ムラオカ
+    aliases: [ムラオカ, MURAOKA]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ヤマサン
+    aliases: [ヤマサン]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ユニバーサルソフト
+    aliases: [ユニバーサルソフト]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: よしみ
+    aliases: [よしみ]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ライオンゴム
+    aliases: [ライオンゴム]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: リリック
+    aliases: [リリック, LYRIC]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: レモン
+    aliases: [レモン, LEMON]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ワークスインターナショナル
+    aliases: [ワークスインターナショナル]
+    tier: C
+    region: JP
+    safety_default: [ST]
+  - canonical: ワンダーランド
+    aliases: [ワンダーランド]
+    tier: C
+    region: JP
+    safety_default: [ST]
+
+  # ==========================================
+  # Tier D: ノーブランド
+  # ==========================================
+  - canonical: ノーブランド
+    aliases: [不明, Generic, NoBrand, "—", "-"]
+    tier: D
+    exclude_from_taxonomy: true
+
+  # ==========================================
+  # 既存記事のみで使用 (toy.md 未掲載 / 暫定)
+  # ==========================================
+  - canonical: ジーピー
+    aliases: [ジーピー(GP), GP Games, GPゲームズ]
+    tier: B
+    region: JP
+  - canonical: トイローヤル
+    aliases: [トイローヤル(Toyroyal), Toyroyal, TOYROYAL]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: LOTUS LIFE
+    aliases: [Lotus Life, lotus life]
+    tier: C
+    region: unknown
+  - canonical: フォレストロッジ
+    aliases: [Forest Lodge, フォレストロッジ(Forest Lodge)]
+    tier: C
+    region: unknown
+
+  # ==========================================
+  # 中華系新興ブランド (固有名あり / 認証・信頼性不明 = Tier D)
+  # ==========================================
+  - {canonical: Bajoy, tier: D, region: CN, aliases: [BAJOY, bajoy]}
+  - {canonical: Globaledutoy, tier: D, region: CN, aliases: [GLOBALEDUTOY, GlobalEduToy]}
+  - {canonical: HMshuo, tier: D, region: CN, aliases: [HMSHUO, hmshuo]}
+  - {canonical: JoyGrow, tier: D, region: CN, aliases: [JOYGROW, Joygrow, joygrow]}
+  - {canonical: Joyreal, tier: D, region: CN, aliases: [JOYREAL, JoyReal, joyreal]}
+  - {canonical: LumiLumi, tier: D, region: CN, aliases: [LUMILUMI, Lumilumi, lumilumi]}
+  - {canonical: TAETOE, tier: D, region: CN, aliases: [Taetoe, taetoe]}
+  - {canonical: Vanplay, tier: D, region: CN, aliases: [VANPLAY, VanPlay, vanplay]}
