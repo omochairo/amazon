@@ -19,6 +19,7 @@ import argparse
 import json
 import pathlib
 import re
+import time
 from datetime import datetime
 from typing import Any
 
@@ -26,6 +27,7 @@ import frontmatter
 import jinja2
 
 from brand_normalizer import normalize as normalize_brand
+from internal_links import get_related_articles as fetch_omcha_related
 from score_calculator import calculate as calculate_score
 
 
@@ -336,6 +338,73 @@ def _fallback_news_books(data: dict[str, Any], per_asin_root: pathlib.Path) -> N
             data[key] = items
 
 
+_OMCHA_CACHE_TTL_SECONDS = 24 * 3600
+
+
+def _omcha_keyword_from_tags(data: dict[str, Any]) -> str:
+    """Join the article's top-3 tags into a single search keyword for the
+    omcha related API. Returns empty string when no usable tags exist."""
+    tags = data.get("tags")
+    if not isinstance(tags, list):
+        return ""
+    picked: list[str] = []
+    for t in tags:
+        if not isinstance(t, str):
+            continue
+        s = t.strip()
+        if not s:
+            continue
+        picked.append(s)
+        if len(picked) >= 3:
+            break
+    return " ".join(picked)
+
+
+def _attach_omcha_related(data: dict[str, Any], per_asin_root: pathlib.Path) -> None:
+    """Fetch up to 3 related editorial posts from omcha.jp and attach them to
+    ``data["omcha_related"]``.
+
+    Results are cached under ``data/raw/per_asin/<ASIN>/omcha_related.json``
+    with a 24h TTL so repeated builds (and CI re-runs) don't hammer the API.
+    Non-empty Jules-authored ``omcha_related`` (should not exist today, but
+    reserved for future) is preserved.
+    """
+    if data.get("omcha_related"):
+        return
+    keyword = _omcha_keyword_from_tags(data)
+    if not keyword:
+        return
+    product = data.get("product") if isinstance(data.get("product"), dict) else None
+    asin = product.get("asin") if product else None
+    cache_path = per_asin_root / asin / "omcha_related.json" if asin else None
+    items: list[dict[str, Any]] | None = None
+    if cache_path and cache_path.exists():
+        try:
+            if time.time() - cache_path.stat().st_mtime < _OMCHA_CACHE_TTL_SECONDS:
+                cached = json.loads(cache_path.read_text(encoding="utf-8"))
+                if isinstance(cached, dict) and isinstance(cached.get("items"), list):
+                    items = cached["items"]
+        except (OSError, json.JSONDecodeError):
+            items = None
+    if items is None:
+        items = fetch_omcha_related(keyword, count=3, min_score=10)
+        if cache_path is not None:
+            try:
+                cache_path.parent.mkdir(parents=True, exist_ok=True)
+                cache_path.write_text(
+                    json.dumps(
+                        {"keyword": keyword, "items": items},
+                        ensure_ascii=False,
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+            except OSError:
+                pass
+    if items:
+        data["omcha_related"] = items[:3]
+
+
 def _load_per_asin_amazon(per_asin_root: pathlib.Path, asin: str) -> dict[str, Any] | None:
     """Return the per-ASIN amazon snapshot dict, or None if absent/malformed.
 
@@ -574,6 +643,7 @@ def main() -> None:
             _backfill_amazon_badges(data, raw_amazon_index, per_asin_root)
             _override_competitive_analysis(data, per_asin_root)
             _fallback_news_books(data, per_asin_root)
+            _attach_omcha_related(data, per_asin_root)
             _attach_internal_links(data, asin_to_slug, site_base_path)
             _fill_jsonld(data)
 

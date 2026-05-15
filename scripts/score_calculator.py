@@ -2,8 +2,8 @@
 
 知育スコア (0-100 / ivs_score 0-5) を 6 要素から論理計算する。
 review データが取得できないため review_signal は使わず、
-media_exposure (YouTube/news/books 件数) と multi_market
-(楽天/Yahoo 取扱) で代替する。
+media_exposure (YouTube/news 件数 + omcha.jp 関連記事マッチ度) と
+multi_market (楽天/Yahoo 取扱) で代替する。
 
 Public API:
     calculate(article, brand, asin=None) -> ScoreResult
@@ -13,7 +13,7 @@ Public API:
     safety_cert      10   (ST=10 / 海外認証=8 / その他=5 / なし=0)
     age_fit          10   (明確範囲=10 / 下限のみ=8 / 記載=5 / なし=0)
     edu_value        15   (STEM/言語/運動/想像 検出分野数 0→0..4→15)
-    media_exposure   15   (per_asin/<ASIN>/{yt,news,books}.json items 数)
+    media_exposure   15   (yt+news+omcha 関連記事マッチ度トップスコアで配点)
     multi_market     10   (rakuten+yahoo=10 / 片方=5 / なし=0)
     price_value      15   (円/想定使用年数 で tier 化)
 """
@@ -126,6 +126,29 @@ def _count_items(path: pathlib.Path) -> int:
     return len(items) if isinstance(items, list) else 0
 
 
+def _omcha_top_score(path: pathlib.Path) -> int:
+    """Return the highest match score among omcha.jp related articles cached
+    at ``path`` (file written by build_post._attach_omcha_related). 0 when
+    missing or empty."""
+    if not path.exists():
+        return 0
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return 0
+    items = data.get("items") if isinstance(data, dict) else None
+    if not isinstance(items, list):
+        return 0
+    top = 0
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        s = it.get("score")
+        if isinstance(s, (int, float)) and s > top:
+            top = int(s)
+    return top
+
+
 def _media_exposure_score(
     asin: str, brand: NormalizedBrand, repo_root: pathlib.Path
 ) -> tuple[int, str]:
@@ -137,14 +160,17 @@ def _media_exposure_score(
     d = repo_root / "data" / "raw" / "per_asin" / asin
     yt = _count_items(d / "youtube.json")
     nw = _count_items(d / "news.json")
-    bk = _count_items(d / "books.json")
+    # omcha.jp 関連記事マッチ度: トップスコアで段階配点 (books 枠を置き換え)
+    # API score 内訳例: タイトル完全一致=15 / タグ・カテゴリ完全一致=8 / サブワード=6
+    # 1件でも 30 超え = 商品コンセプトが omcha 編集記事と強くマッチ
+    om_top = _omcha_top_score(d / "omcha_related.json")
     yt_p = 6 if yt >= 3 else 3 if yt >= 1 else 0
     nw_p = 5 if nw >= 2 else 2 if nw >= 1 else 0
-    bk_p = 4 if bk >= 2 else 2 if bk >= 1 else 0
-    raw = yt_p + nw_p + bk_p
+    om_p = 4 if om_top >= 30 else 3 if om_top >= 15 else 2 if om_top >= 10 else 0
+    raw = yt_p + nw_p + om_p
     pts = min(15, max(floor, raw))
     tag = f"[海外floor={floor}]" if is_overseas and floor > raw else ""
-    return pts, f"media=yt:{yt}({yt_p}) news:{nw}({nw_p}) books:{bk}({bk_p}){tag} -> {pts}/15"
+    return pts, f"media=yt:{yt}({yt_p}) news:{nw}({nw_p}) omcha:{om_top}({om_p}){tag} -> {pts}/15"
 
 
 _MARKET_CACHE: Optional[dict[str, set[str]]] = None
