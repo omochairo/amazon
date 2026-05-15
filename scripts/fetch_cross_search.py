@@ -31,7 +31,18 @@ _AGE_DIGIT_TOKEN = re.compile(r'^[0-9]{1,3}$')
 _AGE_RANGE_TOKEN = re.compile(r'^[0-9]{1,2}[\-〜~～][0-9]{1,2}$')
 _AGE_SUFFIX_TOKEN = re.compile(r'^([0-9]{1,2}[\-〜~～])?[0-9]{1,2}(歳|才|か月|ヶ月|カ月)(以上|から|まで|向け|[〜~～])?$')
 _KANJI_DIGIT_TOKEN = re.compile(r'^[一二三四五六七八九十]$')
-_MODEL_PATTERN = re.compile(r'^[A-Z][A-Z0-9\-]{3,11}$')
+# 型番: 英大文字+数字を**両方**含む 4〜12 文字。BEYBLADE / TOMICA / T-SPARK 等の
+# 単語シリーズ名 (英字のみ) を誤検出しないように数字を必須にする。
+_MODEL_PATTERN = re.compile(r'^(?=[A-Z0-9\-]{4,12}$)(?=.*[A-Z])(?=.*[0-9])[A-Z0-9\-]+$')
+# Rakuten Stage3 で短縮した結果これだけになる場合、汎用過ぎてマッチが事故るため
+# 短縮検索を抑止するブランド/シリーズ語
+_GENERIC_BRAND_TOKENS = {
+    'タカラトミー', 'TAKARA', 'TOMY', 'バンダイ', 'BANDAI', 'エポック',
+    'ボーネルンド', 'EPOCH', 'KONAMI', 'コナミ', 'セガ', 'SEGA',
+    'トミカ', 'TOMICA', 'プラレール', 'BEYBLADE', 'ベイブレード',
+    'ポケモン', 'ポケットモンスター', 'ディズニー', 'DISNEY',
+    'おもちゃ', '知育玩具',
+}
 
 
 def _is_age_token(t):
@@ -52,14 +63,28 @@ def _strip_trailing_digits(keyword):
     return " ".join(toks)
 
 
+def _dedupe_tokens(tokens):
+    """順序保持のまま、すでに出現済みの同一トークンを除去する。"""
+    seen = set()
+    out = []
+    for t in tokens:
+        if t in seen:
+            continue
+        seen.add(t)
+        out.append(t)
+    return out
+
+
 def extract_search_keyword(title):
     """Amazonタイトルから検索用キーワードを抽出する。
     ブランド名 + 型番を最優先し、なければブランド名 + 商品シリーズ名にする。
     末尾が数字トークンで終わると Rakuten Ichiba が HTTP 400 を返すため、
     年齢を表す数字/数字+歳/漢数字単独トークンは除去する。
     """
-    # 括弧内を除去
-    clean = re.sub(r'[【\[（\(].*?[】\]）\)]', ' ', title)
+    # 括弧内・カギ括弧を除去 (角・全角・かぎ・二重かぎ・山括弧)
+    clean = re.sub(r'[【\[（\(「『〈《].*?[】\]）\)」』〉》]', ' ', title)
+    # 単独で残ったカギ括弧記号もスペースに置換
+    clean = re.sub(r'[「」『』【】〈〉《》()（）\[\]]', ' ', clean)
     # 著作権表記を除去
     clean = re.sub(r'\(C\).*?(?=\s|$)', '', clean)
     # ノイズ語除去
@@ -79,19 +104,19 @@ def extract_search_keyword(title):
     if not tokens:
         return title[:40]
 
-    # 型番候補: 英字で始まり、英数字混合、4〜12文字のトークン
-    # 例: HCM807, EH-2310, B-901, BO-100
+    # 型番候補: 英大文字+数字を両方含む 4〜12 文字 (例: HCM807, EH-2310, CX-13, CT-P09)
     models = [t for t in tokens if _MODEL_PATTERN.match(t)]
 
     if models:
-        # ブランド名 (先頭1〜2語) + 型番1個
-        brand = " ".join(tokens[:2])
-        keyword = f"{brand} {models[0]}"
+        # ブランド名 (先頭1〜2語) + 型番1個。同一トークンの重複は除去
+        head = tokens[:2]
+        keyword_tokens = _dedupe_tokens(head + [models[0]])
+        keyword = " ".join(keyword_tokens)
     else:
         # フォールバック: 最初の方の単語をまとめる
-        keyword = " ".join(tokens[:4]).strip()
+        keyword = " ".join(_dedupe_tokens(tokens[:4])).strip()
         if len(keyword) < 3:
-            keyword = " ".join(tokens[:6]).strip()
+            keyword = " ".join(_dedupe_tokens(tokens[:6])).strip()
 
     # 防御的: 何かの拍子に末尾へ数字が残った場合に再度トリム
     keyword = _strip_trailing_digits(keyword).strip()
@@ -229,23 +254,30 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id=""):
         logger.error(f"Rakuten Stage2 error: {e}")
 
     # Stage 3: Shortened Ichiba (同じく RMS or 公開 API を継承)
+    # ブランド+メガジャンル (例: "タカラトミー トミカ") のような汎用2語にしかならない場合、
+    # 検索結果が無関係な人気商品で埋まり誤マッチを生むのでスキップ。
     tokens = keyword.split()
     if len(tokens) > 2:
         short_keyword = " ".join(tokens[:2])
-        try:
-            resp = _fetch_rakuten_ichiba(short_keyword, app_id, access_key, aff_id, hits=15)
-            if resp.status_code == 200:
-                data = resp.json()
-                raw_items = data.get("Items", [])
-                if raw_items:
-                    logger.info(f"Rakuten Stage3 (Shortened): {len(raw_items)} hits for '{short_keyword}'")
-                    parsed_items = [it for it in [_parse_rakuten_item(ri) for ri in raw_items] if it]
-                    best = _select_median_priced_item(parsed_items)
-                    if best:
-                        best["source"] = "Rakuten"
-                        return best
-        except Exception as e:
-            logger.error(f"Rakuten Stage3 error: {e}")
+        short_tokens = short_keyword.split()
+        is_all_generic = short_tokens and all(t in _GENERIC_BRAND_TOKENS for t in short_tokens)
+        if is_all_generic:
+            logger.info(f"Rakuten Stage3 skipped (too generic): '{short_keyword}'")
+        else:
+            try:
+                resp = _fetch_rakuten_ichiba(short_keyword, app_id, access_key, aff_id, hits=15)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    raw_items = data.get("Items", [])
+                    if raw_items:
+                        logger.info(f"Rakuten Stage3 (Shortened): {len(raw_items)} hits for '{short_keyword}'")
+                        parsed_items = [it for it in [_parse_rakuten_item(ri) for ri in raw_items] if it]
+                        best = _select_median_priced_item(parsed_items)
+                        if best:
+                            best["source"] = "Rakuten"
+                            return best
+            except Exception as e:
+                logger.error(f"Rakuten Stage3 error: {e}")
 
     return None
 
@@ -297,7 +329,10 @@ def _yahoo_query(keyword, client_id, sid="", pid=""):
 
 
 def search_yahoo(keyword, client_id, sid="", pid=""):
-    """Yahooで階層的に検索する (full keyword → 先頭2語 → 先頭1語)。"""
+    """Yahooで階層的に検索する (full keyword → 先頭2語 → 先頭1語)。
+    短縮候補が `_GENERIC_BRAND_TOKENS` のみで構成される場合 (例: 'タカラトミー トミカ',
+    'タカラトミー' 単独) は無関係な人気商品にマッチするのでスキップする。
+    """
     tokens = keyword.split()
     candidates = [keyword]
     if len(tokens) > 2:
@@ -307,6 +342,11 @@ def search_yahoo(keyword, client_id, sid="", pid=""):
     # 重複除去 (順序保持)
     seen = set()
     candidates = [c for c in candidates if not (c in seen or seen.add(c))]
+    # 汎用ブランド/メガジャンル単独に短縮されたものは除外
+    def _all_generic(kw):
+        toks = kw.split()
+        return toks and all(t in _GENERIC_BRAND_TOKENS for t in toks)
+    candidates = [c for c in candidates if not (c != keyword and _all_generic(c))]
 
     for idx, kw in enumerate(candidates, start=1):
         try:
