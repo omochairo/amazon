@@ -1,6 +1,6 @@
 /* ==========================================
-   おもちゃいろ Amazon比較ナビ - カスタムCSS
-   PaperMod拡張スタイル
+   知育玩具スコアランキング｜Amazon・楽天比較ナビ - カスタムCSS
+   PaperMod拡張スタイル (おもちゃいろ運営)
    ========================================== */
 
 /* ---------- Google Fonts ---------- */
@@ -476,3 +476,260 @@ header .logo a {
   }
   .post-content .yt-embed { display: none; }
 }
+
+/* ==========================================
+   ホームページ刷新 (2026-05) — Hero + カードグリッド
+   ========================================== */
+
+/* --- Hero --- */
+.home-hero {
+  margin: 1.2rem 0 2.4rem;
+  padding: 2.2rem 1.6rem 2rem;
+  background: var(--brand-gradient-subtle);
+  border-radius: var(--radius-lg);
+  text-align: center;
+}
+.home-hero-title {
+  margin: 0 0 0.6rem;
+  font-size: clamp(1.5rem, 3.6vw, 2.2rem);
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  background: var(--brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.home-hero-subtitle {
+  margin: 0 auto 1rem;
+  max-width: 680px;
+  font-size: 1.05rem;
+  color: var(--primary, #333);
+  line-height: 1.6;
+}
+.home-hero-lead {
+  margin: 0 auto 1.4rem;
+  max-width: 720px;
+  font-size: 0.95rem;
+  color: var(--secondary, #555);
+  line-height: 1.7;
+}
+.home-hero-lead a { color: var(--brand-primary); font-weight: 700; }
+.home-hero-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  justify-content: center;
+}
+.home-hero-btn {
+  display: inline-block;
+  padding: 0.6rem 1.1rem;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--primary, #333);
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-decoration: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.home-hero-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.14); }
+.home-hero-btn.primary { background: var(--brand-primary); color: #fff; }
+.home-hero-btn.outline { background: transparent; border: 1.5px solid var(--brand-primary); color: var(--brand-primary); }
+.dark .home-hero-btn { background: #2a2a3a; color: #eee; }
+.dark .home-hero-btn.primary { background: var(--brand-primary); color: #fff; }
+
+/* --- Section header --- */
+.home-section { margin: 2.2rem 0 0; }
+.home-section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0 0 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--brand-secondary);
+}
+.home-section-header h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--primary, #222);
+}
+.home-section-more {
+  font-size: 0.92rem;
+  color: var(--brand-primary);
+  text-decoration: none;
+  font-weight: 700;
+}
+.home-section-more:hover { text-decoration: underline; }
+.home-section-note {
+  font-size: 0.85rem;
+  color: var(--secondary, #777);
+}
+
+/* --- Card grid --- */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.1rem;
+}
+@media (max-width: 900px) { .card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .card-grid { grid-template-columns: 1fr; gap: 0.9rem; } }
+
+/* --- Product card --- */
+.product-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-md);
+  background: #fff;
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+  color: inherit !important;
+  text-decoration: none !important;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.product-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--card-shadow-hover);
+}
+.dark .product-card { background: #1f1f2e; }
+
+.product-card-image {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: #f7f7f7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.dark .product-card-image { background: #2a2a3a; }
+.product-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 8%;
+  background: #fff;
+}
+.dark .product-card-image img { background: #fafafa; }
+.product-card-image-fallback {
+  font-size: 3rem;
+  opacity: 0.4;
+}
+
+/* --- IVS score badge --- */
+.product-card-score {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.15rem;
+  padding: 0.28rem 0.55rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #FFD93D 0%, #FF9A3C 100%);
+  color: #2a2a2a;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+}
+.product-card-score strong { font-size: 1.05rem; font-weight: 900; }
+.product-card-score-suffix { font-size: 0.7rem; font-weight: 700; }
+
+/* --- Card body --- */
+.product-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.85rem 0.95rem 1rem;
+  flex: 1;
+}
+.product-card-brand {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--brand-primary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.product-card-title {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--primary, #222);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.dark .product-card-title { color: #f0f0f0; }
+.product-card-meta {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--secondary, #888);
+}
+.product-card-tags { display: inline-flex; gap: 0.3rem; flex-wrap: wrap; justify-content: flex-end; }
+.product-card-tag {
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--brand-gradient-subtle);
+  color: var(--brand-primary);
+  font-weight: 600;
+  font-size: 0.72rem;
+}
+
+/* --- Tag chips --- */
+.tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--primary, #333) !important;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-decoration: none !important;
+  box-shadow: var(--card-shadow);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.tag-chip:hover { transform: translateY(-2px); box-shadow: var(--card-shadow-hover); }
+.dark .tag-chip { background: #1f1f2e; color: #eee !important; }
+.tag-chip-count {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--brand-primary);
+  background: var(--brand-gradient-subtle);
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+}
+
+/* --- Home credit --- */
+.home-credit {
+  margin: 3rem 0 1rem;
+  padding: 1.2rem 1.4rem;
+  border-radius: var(--radius-md);
+  background: var(--brand-bg-warm);
+  font-size: 0.9rem;
+  line-height: 1.7;
+  color: var(--secondary, #555);
+  text-align: center;
+}
+.home-credit a { color: var(--brand-primary); font-weight: 700; }
+.dark .home-credit { color: #ccc; }
+
+/* --- ホーム時は PaperMod の first-entry / post-entry を抑止 (homeInfoParams を消したので念のため) --- */
+.home-hero ~ .first-entry,
+.home-hero ~ .post-entry { display: none !important; }
+

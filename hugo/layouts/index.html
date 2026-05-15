@@ -1,0 +1,78 @@
+{{- define "main" }}
+
+{{- /* === Source pages (記事のみ) === */ -}}
+{{- $allPosts := where site.RegularPages "Type" "in" site.Params.mainSections }}
+{{- $allPosts = where $allPosts "Params.hiddenInHomeList" "!=" "true" }}
+
+{{- /* === Hero === */ -}}
+{{- with site.Params.hero }}
+<section class="home-hero">
+  <h1 class="home-hero-title">{{ .Title }}</h1>
+  {{- with .Subtitle }}<p class="home-hero-subtitle">{{ . }}</p>{{ end }}
+  {{- with .Lead }}<div class="home-hero-lead">{{ . | markdownify }}</div>{{ end }}
+  <div class="home-hero-cta">
+    <a class="home-hero-btn primary" href="{{ "posts/" | relURL }}">📚 記事一覧から探す</a>
+    <a class="home-hero-btn" href="{{ "search/" | relURL }}">🔍 商品名で検索</a>
+    <a class="home-hero-btn outline" href="https://omcha.jp/" target="_blank" rel="noopener">🧸 おもちゃいろ公式</a>
+  </div>
+</section>
+{{- end }}
+
+{{- /* === Section: 最新の比較レビュー === */ -}}
+{{- $latest := first 9 $allPosts }}
+{{- if $latest }}
+<section class="home-section">
+  <header class="home-section-header">
+    <h2>🆕 最新の比較レビュー</h2>
+    <a class="home-section-more" href="{{ "posts/" | relURL }}">すべて見る →</a>
+  </header>
+  <div class="card-grid">
+    {{- range $latest }}
+      {{- partial "product_card.html" . }}
+    {{- end }}
+  </div>
+</section>
+{{- end }}
+
+{{- /* === Section: IVSスコア上位 === */ -}}
+{{- $scored := where $allPosts "Params.ivs_score" "!=" nil }}
+{{- $topScore := first 9 (sort $scored "Params.ivs_score" "desc") }}
+{{- if $topScore }}
+<section class="home-section">
+  <header class="home-section-header">
+    <h2>🏆 IVSスコア上位ランキング</h2>
+    <span class="home-section-note">教育性・耐用年数・安全性・コスパを総合スコア化</span>
+  </header>
+  <div class="card-grid">
+    {{- range $topScore }}
+      {{- partial "product_card.html" . }}
+    {{- end }}
+  </div>
+</section>
+{{- end }}
+
+{{- /* === Section: 人気タグ === */ -}}
+{{- $tags := site.Taxonomies.tags }}
+{{- if $tags }}
+<section class="home-section">
+  <header class="home-section-header">
+    <h2>🏷 人気タグから探す</h2>
+  </header>
+  <div class="tag-chips">
+    {{- range $name, $taxonomy := $tags }}
+      {{- if ge (len $taxonomy.Pages) 2 }}
+      <a class="tag-chip" href="{{ (printf "tags/%s/" (urlize $name)) | relURL }}">
+        #{{ $name }} <span class="tag-chip-count">{{ len $taxonomy.Pages }}</span>
+      </a>
+      {{- end }}
+    {{- end }}
+  </div>
+</section>
+{{- end }}
+
+{{- /* === Footer credit === */ -}}
+<section class="home-credit">
+  <p>このサイトは <a href="https://omcha.jp/" target="_blank" rel="noopener">おもちゃいろ</a> のパパママ（元ソニーエンジニア × 医療従事者夫婦）が、AI と一緒に毎日更新している知育玩具の価格・スコア比較サイトです。</p>
+</section>
+
+{{- end }}{{- /* end main */ -}}

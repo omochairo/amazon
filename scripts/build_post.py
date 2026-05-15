@@ -394,6 +394,21 @@ def _frontmatter_meta(data: dict[str, Any], slug: str, draft: bool) -> dict[str,
         "description": description,
         "keywords": data.get("keywords", []),
     }
+    product = data.get("product") or {}
+    image_url = product.get("image") or ""
+    if image_url:
+        meta["product_image"] = image_url
+    if product.get("brand"):
+        meta["brand"] = product["brand"]
+    if product.get("name"):
+        meta["product_name"] = product["name"]
+    ivs_score = product.get("ivs_score")
+    if isinstance(ivs_score, (int, float)):
+        meta["ivs_score"] = float(ivs_score)
+    ivs_detail = product.get("ivs_detail") or {}
+    total_100 = ivs_detail.get("total_100")
+    if isinstance(total_100, (int, float)):
+        meta["ivs_score_100"] = int(total_100)
     if data.get("jsonld"):
         meta["jsonld"] = data["jsonld"]
     if data.get("breadcrumbs"):
