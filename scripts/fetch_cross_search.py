@@ -27,9 +27,36 @@ YAHOO_SEARCH_URL = "https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSear
 VC_REFERRAL_BASE = "https://ck.jp.ap.valuecommerce.com/servlet/referral"
 
 
+_AGE_DIGIT_TOKEN = re.compile(r'^[0-9]{1,3}$')
+_AGE_RANGE_TOKEN = re.compile(r'^[0-9]{1,2}[\-〜~][0-9]{1,2}$')
+_AGE_SUFFIX_TOKEN = re.compile(r'^[0-9]{1,2}(歳|才|か月|ヶ月|カ月)(以上|から|まで|向け)?$')
+_KANJI_DIGIT_TOKEN = re.compile(r'^[一二三四五六七八九十]$')
+_MODEL_PATTERN = re.compile(r'^[A-Z][A-Z0-9\-]{3,11}$')
+
+
+def _is_age_token(t):
+    """年齢を表すトークンかどうか (Rakuten API が嫌う 'keyword末尾の数字' の元凶)。"""
+    return bool(
+        _AGE_DIGIT_TOKEN.match(t)
+        or _AGE_RANGE_TOKEN.match(t)
+        or _AGE_SUFFIX_TOKEN.match(t)
+        or _KANJI_DIGIT_TOKEN.match(t)
+    )
+
+
+def _strip_trailing_digits(keyword):
+    """末尾の数字トークン列を除去する (Rakuten 400 'keyword is not valid' 対策)。"""
+    toks = keyword.split()
+    while toks and _is_age_token(toks[-1]):
+        toks.pop()
+    return " ".join(toks)
+
+
 def extract_search_keyword(title):
     """Amazonタイトルから検索用キーワードを抽出する。
     ブランド名 + 型番を最優先し、なければブランド名 + 商品シリーズ名にする。
+    末尾が数字トークンで終わると Rakuten Ichiba が HTTP 400 を返すため、
+    年齢を表す数字/数字+歳/漢数字単独トークンは除去する。
     """
     # 括弧内を除去
     clean = re.sub(r'[【\[（\(].*?[】\]）\)]', ' ', title)
@@ -43,25 +70,32 @@ def extract_search_keyword(title):
     for n in noise:
         clean = clean.replace(n, ' ')
 
-    tokens = clean.split()
+    tokens = [t for t in clean.split() if t]
     if not tokens:
         return title[:40]
 
-    # 型番候補: 英大文字で始まり、英数字混合、4〜12文字のトークン
+    # 年齢を表すトークン (純数字 / 数字+歳 / 漢数字単独) は API が嫌うので全て除去
+    tokens = [t for t in tokens if not _is_age_token(t)]
+    if not tokens:
+        return title[:40]
+
+    # 型番候補: 英字で始まり、英数字混合、4〜12文字のトークン
     # 例: HCM807, EH-2310, B-901, BO-100
-    model_pattern = re.compile(r'^[A-Z][A-Z0-9\-]{3,11}$')
-    models = [t for t in tokens if model_pattern.match(t)]
+    models = [t for t in tokens if _MODEL_PATTERN.match(t)]
 
     if models:
         # ブランド名 (先頭1〜2語) + 型番1個
         brand = " ".join(tokens[:2])
-        return f"{brand} {models[0]}"[:40].strip()
+        keyword = f"{brand} {models[0]}"
+    else:
+        # フォールバック: 最初の方の単語をまとめる
+        keyword = " ".join(tokens[:4]).strip()
+        if len(keyword) < 3:
+            keyword = " ".join(tokens[:6]).strip()
 
-    # フォールバック: 最初の方の単語をまとめる
-    keyword = " ".join(tokens[:4]).strip()
-    if len(keyword) < 3:
-        keyword = " ".join(tokens[:6]).strip()
-    return keyword[:40]
+    # 防御的: 何かの拍子に末尾へ数字が残った場合に再度トリム
+    keyword = _strip_trailing_digits(keyword).strip()
+    return keyword[:40] if keyword else title[:40]
 
 
 def _parse_rakuten_item(raw_item):
@@ -167,21 +201,29 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id=""):
         logger.error(f"Rakuten Stage1 error: {e}")
 
     # Stage 2: Rakuten Ichiba (access_key あれば RMS API、なければ公開 API)
+    stage2_keyword = keyword
     try:
-        resp = _fetch_rakuten_ichiba(keyword, app_id, access_key, aff_id, hits=15)
+        resp = _fetch_rakuten_ichiba(stage2_keyword, app_id, access_key, aff_id, hits=15)
+        # 400 "keyword is not valid" は末尾の数字が原因なことが多いので一度だけ trim してリトライ
+        if resp.status_code == 400 and "keyword" in resp.text:
+            trimmed = _strip_trailing_digits(stage2_keyword).strip()
+            if trimmed and trimmed != stage2_keyword:
+                logger.info(f"Rakuten Stage2 retry with trimmed keyword: '{stage2_keyword}' → '{trimmed}'")
+                stage2_keyword = trimmed
+                resp = _fetch_rakuten_ichiba(stage2_keyword, app_id, access_key, aff_id, hits=15)
         if resp.status_code == 200:
             data = resp.json()
             raw_items = data.get("Items", [])
             if raw_items:
                 api_label = "Ichiba RMS" if access_key else "Ichiba"
-                logger.info(f"Rakuten Stage2 ({api_label}): {len(raw_items)} hits for '{keyword}'")
+                logger.info(f"Rakuten Stage2 ({api_label}): {len(raw_items)} hits for '{stage2_keyword}'")
                 parsed_items = [it for it in [_parse_rakuten_item(ri) for ri in raw_items] if it]
                 best = _select_median_priced_item(parsed_items)
                 if best:
                     best["source"] = "Rakuten"
                     return best
         else:
-            logger.warning(f"Rakuten Stage2 failed for '{keyword}': HTTP {resp.status_code} - {resp.text[:200]}")
+            logger.warning(f"Rakuten Stage2 failed for '{stage2_keyword}': HTTP {resp.status_code} - {resp.text[:200]}")
         time.sleep(0.5)
     except Exception as e:
         logger.error(f"Rakuten Stage2 error: {e}")
