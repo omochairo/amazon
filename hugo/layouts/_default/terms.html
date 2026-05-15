@@ -1,0 +1,77 @@
+{{- define "main" }}
+
+{{- $plural := .Data.Plural -}}
+{{- $singular := .Data.Singular -}}
+{{- $icon := "🏷" -}}
+{{- $label := "タグ" -}}
+{{- $cardKind := "tag" -}}
+{{- if eq $plural "brands" -}}
+  {{- $icon = "🏢" -}}
+  {{- $label = "メーカー" -}}
+  {{- $cardKind = "brand" -}}
+{{- else if eq $plural "categories" -}}
+  {{- $icon = "📂" -}}
+  {{- $label = "カテゴリ" -}}
+  {{- $cardKind = "category" -}}
+{{- end -}}
+
+<header class="page-header term-header">
+  {{- partial "breadcrumbs.html" . }}
+  <div class="term-header-eyebrow">{{ $icon }} {{ $label }}一覧</div>
+  <h1 class="term-header-title">{{ $icon }} {{ $label }}から探す</h1>
+  {{- if eq $plural "brands" }}
+  <p class="term-header-description">気になる<strong>メーカー</strong>から、IVSスコア比較レビュー記事を探せます。タカラトミーやセガフェイブ、レゴなどおもちゃの人気ブランドを掲載中。</p>
+  {{- else if eq $plural "categories" }}
+  <p class="term-header-description">カテゴリからレビュー記事を探せます。</p>
+  {{- else }}
+  <p class="term-header-description">タグから関連するレビュー記事を探せます。</p>
+  {{- end }}
+  <div class="term-header-meta">
+    <span class="term-header-count">{{ len .Data.Terms }} {{ $label }}</span>
+  </div>
+</header>
+
+{{- $terms := .Data.Terms.ByCount -}}
+{{- if eq $plural "brands" }}
+
+<div class="brand-grid">
+  {{- range $terms }}
+    {{- $term := .Name -}}
+    {{- $pages := .Pages -}}
+    {{- /* 各 brand の代表画像 = そのブランドの記事の中で IVS スコア最大の記事のサムネ */ -}}
+    {{- $top := first 1 (sort $pages "Params.ivs_score" "desc") -}}
+    {{- $thumb := "" -}}
+    {{- $maxScore := "" -}}
+    {{- with index $top 0 -}}
+      {{- $thumb = .Params.product_image -}}
+      {{- $maxScore = .Params.ivs_score_100 -}}
+    {{- end }}
+    <a class="brand-card" href="{{ (printf "%s/%s/" $plural (urlize $term)) | relURL }}">
+      <div class="brand-card-image">
+        {{- if $thumb }}<img src="{{ $thumb }}" alt="{{ $term }}" loading="lazy" referrerpolicy="no-referrer">
+        {{- else }}<div class="brand-card-image-fallback">🏢</div>{{ end }}
+      </div>
+      <div class="brand-card-body">
+        <h3 class="brand-card-name">{{ $term }}</h3>
+        <div class="brand-card-meta">
+          <span class="brand-card-count">{{ len $pages }} 記事</span>
+          {{- if $maxScore }}<span class="brand-card-score">🏆 最高 {{ $maxScore }}点</span>{{ end }}
+        </div>
+      </div>
+    </a>
+  {{- end }}
+</div>
+
+{{- else }}
+
+<div class="tag-chips term-tag-chips">
+  {{- range $terms }}
+    <a class="tag-chip" href="{{ (printf "%s/%s/" $plural (urlize .Name)) | relURL }}">
+      #{{ .Name }} <span class="tag-chip-count">{{ len .Pages }}</span>
+    </a>
+  {{- end }}
+</div>
+
+{{- end }}
+
+{{- end }}{{- /* end main */ -}}

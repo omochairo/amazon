@@ -1,0 +1,85 @@
+{{- define "main" }}
+
+<header class="page-header posts-grid-header">
+  {{- partial "breadcrumbs.html" . }}
+  <h1>
+    {{ .Title | default "記事一覧" }}
+    {{- with .OutputFormats.Get "rss" }}
+    <a href="{{ .RelPermalink }}" title="RSS" aria-label="RSS">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round" height="20">
+        <path d="M4 11a9 9 0 0 1 9 9" />
+        <path d="M4 4a16 16 0 0 1 16 16" />
+        <circle cx="5" cy="19" r="1" />
+      </svg>
+    </a>
+    {{- end }}
+  </h1>
+  {{- if .Description }}
+  <div class="post-description">{{ .Description | markdownify }}</div>
+  {{- else }}
+  <div class="post-description">知育玩具をAmazon・楽天・Yahoo!の3サイトで横断比較したレビュー記事一覧。IVSスコア（教育性・耐用年数・安全性・コスパ）で評価しています。</div>
+  {{- end }}
+</header>
+
+{{- if .Content }}
+<div class="post-content md-content">
+  {{ .Content }}
+</div>
+{{- end }}
+
+{{- /* === Sort / filter bar === */ -}}
+{{- $sort := .Params.sort | default "date" -}}
+<nav class="posts-toolbar" aria-label="記事の並び替え">
+  <span class="posts-toolbar-label">並び替え:</span>
+  <a class="posts-toolbar-link{{ if eq $sort "date" }} is-active{{ end }}" href="?sort=date#top" data-sort="date">📅 新着順</a>
+  <a class="posts-toolbar-link{{ if eq $sort "score" }} is-active{{ end }}" href="?sort=score#top" data-sort="score">🏆 スコア順</a>
+</nav>
+
+{{- /* === Card grid (server renders 新着順. クライアント側でスコア順に並べ替え) === */ -}}
+{{- $pages := where .RegularPages "Params.hiddenInHomeList" "!=" "true" -}}
+{{- $paginator := .Paginate $pages -}}
+
+<div class="card-grid posts-card-grid" id="posts-grid">
+  {{- range $paginator.Pages }}
+    {{- partial "product_card.html" . }}
+  {{- end }}
+</div>
+
+{{- if gt $paginator.TotalPages 1 }}
+<footer class="page-footer posts-pagination">
+  <nav class="pagination">
+    {{- if $paginator.HasPrev }}
+    <a class="prev" href="{{ $paginator.Prev.URL | absURL }}">« 前のページ</a>
+    {{- end }}
+    <span class="pagination-info">{{ $paginator.PageNumber }} / {{ $paginator.TotalPages }}</span>
+    {{- if $paginator.HasNext }}
+    <a class="next" href="{{ $paginator.Next.URL | absURL }}">次のページ »</a>
+    {{- end }}
+  </nav>
+</footer>
+{{- end }}
+
+{{- /* スコア順ボタン押下時にクライアント側で .product-card の並び替え (data-ivs 属性ベース) */ -}}
+<script>
+(function() {
+  var grid = document.getElementById('posts-grid');
+  if (!grid) return;
+  var params = new URLSearchParams(location.search);
+  var sort = params.get('sort') || 'date';
+  document.querySelectorAll('.posts-toolbar-link').forEach(function(a) {
+    a.classList.toggle('is-active', a.dataset.sort === sort);
+  });
+  if (sort === 'score') {
+    var cards = Array.prototype.slice.call(grid.querySelectorAll('.product-card'));
+    cards.sort(function(a, b) {
+      var sa = parseFloat(a.dataset.ivs || '0');
+      var sb = parseFloat(b.dataset.ivs || '0');
+      return sb - sa;
+    });
+    cards.forEach(function(c) { grid.appendChild(c); });
+  }
+})();
+</script>
+
+{{- end }}{{- /* end main */ -}}

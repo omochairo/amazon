@@ -1,0 +1,19 @@
+{{- $.Scratch.Add "index" slice -}}
+{{- range site.RegularPages -}}
+    {{- if and (not .Params.searchHidden) (ne .Layout `archives`) (ne .Layout `search`) }}
+    {{- $.Scratch.Add "index" (dict
+        "title"        .Title
+        "content"      .Plain
+        "permalink"    .Permalink
+        "summary"      .Summary
+        "image"        (.Params.product_image | default "")
+        "brand"        (.Params.brand | default "")
+        "product_name" (.Params.product_name | default "")
+        "ivs_score"    (.Params.ivs_score | default 0)
+        "ivs_score_100" (.Params.ivs_score_100 | default 0)
+        "date"         (.Date.Format "2006-01-02")
+        "tags"         (.Params.tags | default slice)
+    ) -}}
+    {{- end }}
+{{- end -}}
+{{- $.Scratch.Get "index" | jsonify -}}
