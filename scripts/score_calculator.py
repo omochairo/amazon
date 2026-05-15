@@ -212,7 +212,12 @@ def calculate(
     mm, mmr = _multi_market_score(asin, repo_root)
     pv, pr = _price_value_score(product, age_range)
 
-    total = max(0, min(100, bt + sf + ag + ev + me + mm + pv))
+    # raw は 0-100 範囲だが、実データで 10-65 に偏るため最終表示用に再マップ。
+    # 最低 50 を保証 (掲載商品の暗黙下限), 100 で上限 cap。
+    # マップ式: final = max(50, min(100, 50 + raw * 0.7))
+    #   raw 0  -> 50,  raw 30 -> 71,  raw 60 -> 92,  raw 70+ -> 100
+    raw_total = max(0, min(100, bt + sf + ag + ev + me + mm + pv))
+    total = max(50, min(100, round(50 + raw_total * 0.7)))
     return ScoreResult(
         total_100=total,
         ivs_score=round(total / 20.0, 2),

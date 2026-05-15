@@ -31,6 +31,40 @@ from score_calculator import calculate as calculate_score
 
 SUFFIX_SKIP = (".enrichment", ".seo", ".quality")
 
+
+def _sync_ivs_for_render(data: dict[str, Any]) -> None:
+    """テンプレ参照用に product.ivs_detail を新スコアで上書きする。
+    本文の IVS 総合/知育効果/長く遊べる/安全性/コスパ と加減点根拠を
+    score_calculator の結果と同期させる (frontmatter とのズレ防止)。
+    """
+    product = data.get("product") if isinstance(data.get("product"), dict) else None
+    raw_brand = product.get("brand") if product else None
+    if not (product and raw_brand):
+        return
+    nb = normalize_brand(raw_brand)
+    sr = calculate_score(data, nb, asin=product.get("asin"))
+    bd = sr.breakdown
+    product["ivs_score"] = sr.ivs_score
+    ivs = product.setdefault("ivs_detail", {})
+    ivs["total_100"] = sr.total_100
+    # 4 軸 (/5) は 6 要素から再導出: 教育=edu_value, 安全=safety_cert,
+    # コスパ=price_value, 長く遊べる=brand_tier+media_exposure を平均化
+    ivs["education"] = round(bd["edu_value"] / 15 * 5, 1)
+    ivs["safety"] = round(bd["safety_cert"] / 10 * 5, 1)
+    ivs["cost_performance"] = round(bd["price_value"] / 15 * 5, 1)
+    ivs["longevity"] = round(
+        (bd["brand_tier"] / 25 + bd["media_exposure"] / 15) / 2 * 5, 1
+    )
+    ivs["score_rationale"] = [
+        {"factor": "ブランド信頼度", "delta": f"+{bd['brand_tier']}/25", "reason": sr.rationale[0]},
+        {"factor": "安全認証", "delta": f"+{bd['safety_cert']}/10", "reason": sr.rationale[1]},
+        {"factor": "対象年齢", "delta": f"+{bd['age_fit']}/10", "reason": sr.rationale[2]},
+        {"factor": "知育価値", "delta": f"+{bd['edu_value']}/15", "reason": sr.rationale[3]},
+        {"factor": "メディア露出", "delta": f"+{bd['media_exposure']}/15", "reason": sr.rationale[4]},
+        {"factor": "正規流通", "delta": f"+{bd['multi_market']}/10", "reason": sr.rationale[5]},
+        {"factor": "コスパ", "delta": f"+{bd['price_value']}/15", "reason": sr.rationale[6]},
+    ]
+
 BADGE_FIELDS = ("availability", "loyalty_points", "savings_percentage")
 
 ENRICHMENT_KEYS = (
@@ -550,6 +584,9 @@ def main() -> None:
                 if isinstance(v, str):
                     data[top_key] = _meta_re.sub("", v).strip()
 
+            # 2026-05-15 (@J Phase 2): テンプレが参照する product.ivs_detail を
+            # 新スコアで上書きしてから render する (本文内 IVS 表示を frontmatter と同期)。
+            _sync_ivs_for_render(data)
             md_body = template.render(**data)
             draft = _quality_draft(slug, src_path, args.min_score)
             post = frontmatter.Post(md_body, **_frontmatter_meta(data, slug, draft))
