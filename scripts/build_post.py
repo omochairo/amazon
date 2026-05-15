@@ -25,6 +25,9 @@ from typing import Any
 import frontmatter
 import jinja2
 
+from brand_normalizer import normalize as normalize_brand
+from score_calculator import calculate as calculate_score
+
 
 SUFFIX_SKIP = (".enrichment", ".seo", ".quality")
 
@@ -398,25 +401,44 @@ def _frontmatter_meta(data: dict[str, Any], slug: str, draft: bool) -> dict[str,
     image_url = product.get("image") or ""
     if image_url:
         meta["product_image"] = image_url
-    if product.get("brand"):
-        meta["brand"] = product["brand"]
-        # brands taxonomy 用: ノーブランド / 不明系はタクソノミーに含めない
-        # (UI 側ブラックリストと同期。根本対策は @J で別途)
-        _brand_blacklist = {
-            "不明", "不明 / 不明", "Unknown", "N/A", "なし", "—", "-",
-            "ノーブランド", "ノーブランド品", "NoBrand", "No Brand", "Generic",
-        }
-        if product["brand"] not in _brand_blacklist:
-            meta["brands"] = [product["brand"]]
+    # 2026-05-15 (@J Phase 1): data/brand_taxonomy.yaml に基づくブランド正規化。
+    # raw brand (Jules / API 取得時の表記ゆれ含む) → canonical 名に統一して
+    # Hugo /brands/<canonical>/ ページで集約検索できるようにする。
+    # 旧 UI 側ブラックリストはこちらに移譲済。
+    raw_brand = product.get("brand")
+    if raw_brand:
+        nb = normalize_brand(raw_brand)
+        meta["brand"] = nb.canonical
+        meta["brand_raw"] = raw_brand
+        meta["brand_tier"] = nb.tier
+        meta["brand_region"] = nb.region
+        meta["brand_match_type"] = nb.match_type
+        if not nb.exclude_from_taxonomy:
+            meta["brands"] = [nb.canonical]
     if product.get("name"):
         meta["product_name"] = product["name"]
-    ivs_score = product.get("ivs_score")
-    if isinstance(ivs_score, (int, float)):
-        meta["ivs_score"] = float(ivs_score)
-    ivs_detail = product.get("ivs_detail") or {}
-    total_100 = ivs_detail.get("total_100")
-    if isinstance(total_100, (int, float)):
-        meta["ivs_score_100"] = int(total_100)
+
+    # 2026-05-15 (@J Phase 2): Jules の ivs_score を破棄し、6要素から論理再計算する。
+    # Jules スコアはブランド信頼度を反映しないため (ノーブランド=4.7 等の不正)、
+    # brand_tier(25) + safety(10) + age(10) + edu(15) + media(15) + market(10) + price(15)
+    # = total_100 を score_calculator で算出して上書きする。
+    # Jules の元値は ivs_score_jules に保持し、比較・デバッグに使う。
+    jules_ivs = product.get("ivs_score")
+    if raw_brand:
+        sr = calculate_score(data, nb, asin=product.get("asin"))
+        meta["ivs_score"] = sr.ivs_score
+        meta["ivs_score_100"] = sr.total_100
+        meta["score_breakdown"] = sr.breakdown
+        if isinstance(jules_ivs, (int, float)):
+            meta["ivs_score_jules"] = float(jules_ivs)
+    else:
+        # brand が空のレアケース: Jules の値を流用 (互換性)
+        if isinstance(jules_ivs, (int, float)):
+            meta["ivs_score"] = float(jules_ivs)
+        ivs_detail = product.get("ivs_detail") or {}
+        total_100 = ivs_detail.get("total_100")
+        if isinstance(total_100, (int, float)):
+            meta["ivs_score_100"] = int(total_100)
     if data.get("jsonld"):
         meta["jsonld"] = data["jsonld"]
     if data.get("breadcrumbs"):
