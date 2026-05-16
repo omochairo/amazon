@@ -145,13 +145,58 @@ def _load_per_asin_competitors(per_asin_root: pathlib.Path, asin: str) -> list[d
 
 
 def _price_comparison_label(target_price: int, competitor_price: int) -> str:
-    if not target_price or not competitor_price:
+    """競合の絶対価格と本品との差額を一体表示する。
+    差額のみ出すと「2,087円高い」だけが残り、本品/競合の基準価格が見えず
+    読者が判断できない問題があったため、必ず競合の絶対価格を先に出す。
+    """
+    if not competitor_price:
         return ""
+    abs_yen = f"¥{competitor_price:,}"
+    if not target_price:
+        return abs_yen
     diff = competitor_price - target_price
     if abs(diff) < 100:
-        return "本品とほぼ同価格"
-    yen = f"{abs(diff):,}円"
-    return f"本品より{yen}安い" if diff < 0 else f"本品より{yen}高い"
+        return f"{abs_yen}（本品とほぼ同価格）"
+    diff_yen = f"{abs(diff):,}円"
+    rel = f"本品より{diff_yen}安い" if diff < 0 else f"本品より{diff_yen}高い"
+    return f"{abs_yen}（{rel}）"
+
+
+_COMPETITOR_NAME_MAX = 38
+_COMPETITOR_FEATURE_MAX = 60
+_COMPETITOR_TOP_N = 3
+
+
+_TRAILING_BRACKET_RE = re.compile(r"\s*[（(\[【][^）)\]】]*[）)\]】]\s*$")
+
+
+def _shrink_competitor_name(name: str) -> str:
+    """カード見出し用に商品名を縮める。Amazon タイトルは長すぎてカードが
+    崩れるため一定文字数で省略。末尾の括弧コピー (例 ``【...優秀賞】``
+    ``(対象年齢:1歳半以上)``) は情報量が低いので 1 ブロックずつ剥がす。
+    """
+    if not name:
+        return ""
+    s = name.strip()
+    while True:
+        stripped = _TRAILING_BRACKET_RE.sub("", s).strip()
+        if stripped == s or not stripped:
+            break
+        s = stripped
+    if len(s) <= _COMPETITOR_NAME_MAX:
+        return s
+    return s[: _COMPETITOR_NAME_MAX - 1].rstrip("、。・,. ") + "…"
+
+
+def _shrink_competitor_feature(text: str) -> str:
+    """カード内の feature_comparison を 1 行プレビューに丸める。"""
+    if not text:
+        return ""
+    s = re.sub(r"\s+", " ", text).strip()
+    # 「特徴：」プレフィックスは付けたまま受け取るのでそのまま縮める
+    if len(s) <= _COMPETITOR_FEATURE_MAX:
+        return s
+    return s[: _COMPETITOR_FEATURE_MAX - 1].rstrip("、。・,. ") + "…"
 
 
 def _build_asin_to_slug_map(src_path: pathlib.Path) -> dict[str, str]:
@@ -277,19 +322,25 @@ def _override_competitive_analysis(
             target_price = 0
 
     new_entries: list[dict[str, Any]] = []
-    for c in competitors:
+    for c in competitors[:_COMPETITOR_TOP_N]:
         try:
             cp = int(c.get("price") or 0)
         except (TypeError, ValueError):
             cp = 0
+        raw_features = [f for f in (c.get("features") or []) if isinstance(f, str) and f.strip()]
+        if raw_features:
+            feature_line = _shrink_competitor_feature(f"特徴：{raw_features[0]}")
+            feature_comparison = [feature_line] if feature_line else []
+        else:
+            feature_comparison = []
         new_entries.append({
             "asin": c["asin"],
-            "name": c.get("name") or "",
+            "name": _shrink_competitor_name(c.get("name") or ""),
             "image": c.get("image") or "",
             "url": c.get("url") or f"https://www.amazon.co.jp/dp/{c['asin']}/",
             "price": cp,
             "price_comparison": _price_comparison_label(target_price, cp),
-            "feature_comparison": [f"特徴：{f}" for f in (c.get("features") or [])[:2]],
+            "feature_comparison": feature_comparison,
             "differentiators": [],
         })
     data["competitive_analysis"] = new_entries
