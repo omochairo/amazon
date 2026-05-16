@@ -15,6 +15,7 @@ import logging
 import pathlib
 import requests
 import urllib.parse
+from datetime import datetime, timezone
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("cross_search")
@@ -367,6 +368,65 @@ def search_yahoo(keyword, client_id, sid="", pid=""):
     return None
 
 
+_ASIN_FROM_FILENAME = re.compile(r"(B0[A-Z0-9]{8}|[0-9]{9}[0-9X])")
+_SIDECAR_SUFFIXES = (".enrichment", ".seo", ".quality")
+
+
+def _load_existing_matched(path: pathlib.Path) -> dict:
+    """既存 matched JSON を {asin: item} で返す (累積マージ用)。"""
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    index = {}
+    for it in data.get("items", []):
+        asin = it.get("matched_asin", "")
+        if asin:
+            index[asin] = it
+    return index
+
+
+def _collect_targets(amazon_items: list, articles_dir: pathlib.Path) -> dict:
+    """ASIN -> title の処理対象を集める。
+    1) amazon.json (今回の検索結果) は **強制再取得** = 価格を新鮮に保つ
+    2) data/articles/ にある記事の ASIN は、既存 matched に登録済みなら preserve、
+       未登録なら新規検索 (1回だけ実施で逐次キャッチアップ)
+    返り値の値は (title, force_refresh) のタプル。
+    """
+    targets: dict[str, tuple[str, bool]] = {}
+    for amz in amazon_items:
+        asin = amz.get("asin", "")
+        if asin:
+            targets[asin] = (amz.get("title", ""), True)
+
+    if not articles_dir.exists():
+        return targets
+
+    for art_path in articles_dir.glob("*.json"):
+        if art_path.stem.endswith(_SIDECAR_SUFFIXES):
+            continue
+        m = _ASIN_FROM_FILENAME.search(art_path.stem)
+        if not m:
+            continue
+        asin = m.group(1)
+        if asin in targets:
+            continue
+        try:
+            art = json.loads(art_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        title = ""
+        if isinstance(art.get("product"), dict):
+            title = art["product"].get("name_full") or art["product"].get("name") or ""
+        if not title:
+            title = art.get("title", "")
+        if title:
+            targets[asin] = (title, False)
+    return targets
+
+
 def main():
     # Amazon商品データを読む
     amazon_path = pathlib.Path("data/raw/amazon.json")
@@ -378,7 +438,20 @@ def main():
     amazon_items = amazon_data.get("items", [])
     if not amazon_items:
         logger.warning("No Amazon items found")
-        return
+
+    # 既存 matched を累積マージのベースとして読み込む
+    out_dir = pathlib.Path("data/raw")
+    r_existing = _load_existing_matched(out_dir / "rakuten_matched.json")
+    y_existing = _load_existing_matched(out_dir / "yahoo_matched.json")
+
+    # 処理対象を amazon.json ∪ data/articles/ で構築
+    articles_dir = pathlib.Path("data/articles")
+    targets = _collect_targets(amazon_items, articles_dir)
+    logger.info(
+        f"Cross-search targets: amazon.json={len(amazon_items)}, "
+        f"articles_only={len(targets) - len(amazon_items)} "
+        f"(existing rakuten={len(r_existing)}, yahoo={len(y_existing)})"
+    )
 
     # API キー
     rakuten_app_id = os.environ.get("RAKUTEN_APP_ID", "")
@@ -388,50 +461,89 @@ def main():
     vc_sid = os.environ.get("VALUECOMMERCE_SID", "")
     vc_pid = os.environ.get("VALUECOMMERCE_PID", "")
 
-    rakuten_results = []
-    yahoo_results = []
+    now_iso = datetime.now(timezone.utc).isoformat()
+    rakuten_index = dict(r_existing)
+    yahoo_index = dict(y_existing)
 
-    for item in amazon_items:
-        asin = item.get("asin", "")
-        title = item.get("title", "")
+    r_new, r_kept, r_skipped = 0, 0, 0
+    y_new, y_kept, y_skipped = 0, 0, 0
+
+    for asin, (title, force_refresh) in targets.items():
+        # 既に matched があり、かつ amazon.json 由来でない (force_refresh=False) ASIN
+        # → 既存エントリ保持で API コール節約
+        r_has = asin in rakuten_index
+        y_has = asin in yahoo_index
+        need_rakuten = force_refresh or not r_has
+        need_yahoo = force_refresh or not y_has
+
+        if not need_rakuten and not need_yahoo:
+            r_kept += 1 if r_has else 0
+            y_kept += 1 if y_has else 0
+            continue
+
         keyword = extract_search_keyword(title)
-        logger.info(f"Cross-searching: {keyword} (ASIN: {asin})")
+        logger.info(f"Cross-searching: {keyword} (ASIN: {asin}, force={force_refresh})")
 
         # 楽天検索
-        if rakuten_app_id:
+        if rakuten_app_id and need_rakuten:
             r_result = search_rakuten_tiered(keyword, rakuten_app_id, rakuten_access_key, rakuten_aff_id)
             if r_result:
                 r_result["matched_asin"] = asin
                 r_result["search_keyword"] = keyword
-                rakuten_results.append(r_result)
+                r_result["_refreshed_at"] = now_iso
+                rakuten_index[asin] = r_result
+                r_new += 1
                 logger.info(f"  → Rakuten: {r_result['title'][:40]}... ￥{r_result['price']}")
             else:
-                logger.info(f"  → Rakuten: not found")
+                # 検索失敗時、既存エントリがあれば保持 (上書きで消さない)
+                if r_has:
+                    r_kept += 1
+                    logger.info(f"  → Rakuten: not found (preserving existing entry)")
+                else:
+                    r_skipped += 1
+                    logger.info(f"  → Rakuten: not found")
             time.sleep(0.5)  # Rate limit
+        elif r_has:
+            r_kept += 1
 
         # Yahoo検索
-        if yahoo_client_id:
+        if yahoo_client_id and need_yahoo:
             y_result = search_yahoo(keyword, yahoo_client_id, vc_sid, vc_pid)
             if y_result:
                 y_result["matched_asin"] = asin
                 y_result["search_keyword"] = keyword
-                yahoo_results.append(y_result)
+                y_result["_refreshed_at"] = now_iso
+                yahoo_index[asin] = y_result
+                y_new += 1
                 logger.info(f"  → Yahoo: {y_result['title'][:40]}... ￥{y_result['price']}")
             else:
-                logger.info(f"  → Yahoo: not found")
+                if y_has:
+                    y_kept += 1
+                    logger.info(f"  → Yahoo: not found (preserving existing entry)")
+                else:
+                    y_skipped += 1
+                    logger.info(f"  → Yahoo: not found")
             time.sleep(1.0)  # Yahoo rate limit: 1 query/sec
+        elif y_has:
+            y_kept += 1
 
-    # 保存
-    out_dir = pathlib.Path("data/raw")
+    # 保存 (累積マージ後)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    rakuten_results = list(rakuten_index.values())
+    yahoo_results = list(yahoo_index.values())
 
     with open(out_dir / "rakuten_matched.json", "w", encoding="utf-8") as f:
         json.dump({"items": rakuten_results}, f, ensure_ascii=False, indent=4)
-    logger.info(f"Saved {len(rakuten_results)} Rakuten matches")
+    logger.info(
+        f"Rakuten saved: total={len(rakuten_results)} (refreshed={r_new}, kept={r_kept}, no_match={r_skipped})"
+    )
 
     with open(out_dir / "yahoo_matched.json", "w", encoding="utf-8") as f:
         json.dump({"items": yahoo_results}, f, ensure_ascii=False, indent=4)
-    logger.info(f"Saved {len(yahoo_results)} Yahoo matches")
+    logger.info(
+        f"Yahoo saved: total={len(yahoo_results)} (refreshed={y_new}, kept={y_kept}, no_match={y_skipped})"
+    )
 
 
 if __name__ == "__main__":

@@ -157,7 +157,12 @@ jobs:
           - .github/, scripts/, hugo/ への変更は禁止
           - data/articles/ フォルダへの JSON 追加のみ許可（命名: YYYY-MM-DD-${TARGET_ASIN}.json）
           - data/raw/amazon.json から対象 ASIN (${TARGET_ASIN}) のエントリを読み込んで記事を生成
-          - data/raw/rakuten.json / yahoo_result.json / youtube.json も活用する
+          - 楽天/Yahoo の価格・URL は **必ず data/raw/rakuten_matched.json および data/raw/yahoo_matched.json** から
+            matched_asin == "${TARGET_ASIN}" のエントリを参照し、product.prices.rakuten / product.prices.yahoo に
+            { price, url } を埋め込む。マッチが無ければ price=0 / url="" / is_search=true で良い。
+            data/raw/rakuten.json と data/raw/yahoo_result.json はキーワード検索結果でありASIN単位のマッチではないため
+            価格欄には**使わない**こと (sources の補助情報としては可)。
+          - data/raw/youtube.json および data/raw/per_asin/${TARGET_ASIN}/ 配下の補助データも活用する
 
           === 以下、jules/PROMPT_TEMPLATE.md の内容 ==="
           PROMPT="$INTRO
