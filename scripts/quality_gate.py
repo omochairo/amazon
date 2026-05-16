@@ -234,6 +234,54 @@ def check_score_rationale(data: dict) -> CheckResult:
     return CheckResult("score_rationale", score >= 0.7, score, "; ".join(msg) or "OK")
 
 
+_V5_VALID_EDU_DOMAINS = {"STEM", "言語", "運動", "想像"}
+_V5_TARGET_AGE_RE = re.compile(r"\d+\s*(歳|才|ヶ月)")
+
+
+def check_target_age(data: dict) -> CheckResult:
+    """v5: product.target_age が正規化表記である。フィールド無しは skip (score 1.0)."""
+    product = data.get("product") or {}
+    if "target_age" not in product:
+        return CheckResult("target_age_v5", True, 1.0, "field absent (legacy article, skipped)")
+    raw = product.get("target_age")
+    if not isinstance(raw, str) or not raw.strip():
+        return CheckResult("target_age_v5", False, 0.0, "target_age must be non-empty string")
+    if not _V5_TARGET_AGE_RE.search(raw):
+        return CheckResult("target_age_v5", False, 0.0, f"target_age '{raw[:30]}' lacks digits+歳/才/ヶ月")
+    return CheckResult("target_age_v5", True, 1.0, "OK")
+
+
+def check_certifications(data: dict) -> CheckResult:
+    """v5: product.certifications が list。空配列も可。フィールド無しは skip."""
+    product = data.get("product") or {}
+    if "certifications" not in product:
+        return CheckResult("certifications_v5", True, 1.0, "field absent (legacy article, skipped)")
+    val = product.get("certifications")
+    if not isinstance(val, list):
+        return CheckResult("certifications_v5", False, 0.0, "certifications must be a list")
+    non_str = [c for c in val if not isinstance(c, str)]
+    if non_str:
+        return CheckResult("certifications_v5", False, 0.0, f"non-string entries: {non_str[:3]}")
+    return CheckResult("certifications_v5", True, 1.0, "OK")
+
+
+def check_edu_domains(data: dict) -> CheckResult:
+    """v5: product.edu_domains が {STEM,言語,運動,想像} の部分集合。空配列も可。フィールド無しは skip."""
+    product = data.get("product") or {}
+    if "edu_domains" not in product:
+        return CheckResult("edu_domains_v5", True, 1.0, "field absent (legacy article, skipped)")
+    val = product.get("edu_domains")
+    if not isinstance(val, list):
+        return CheckResult("edu_domains_v5", False, 0.0, "edu_domains must be a list")
+    invalid = [d for d in val if d not in _V5_VALID_EDU_DOMAINS]
+    if invalid:
+        return CheckResult(
+            "edu_domains_v5", False, 0.0,
+            f"invalid domains: {invalid[:3]} (allowed: STEM, 言語, 運動, 想像)"
+        )
+    return CheckResult("edu_domains_v5", True, 1.0, "OK")
+
+
 def check_tone(data: dict) -> CheckResult:
     """Scan all narrative + faq text for forbidden childish tone patterns."""
     texts = []
@@ -335,6 +383,9 @@ def evaluate_article(json_path: pathlib.Path, schema: dict, md_path: pathlib.Pat
     report.checks.append(check_narrative(data, product_name))
     report.checks.append(check_faq(data, product_name))
     report.checks.append(check_score_rationale(data))
+    report.checks.append(check_target_age(data))
+    report.checks.append(check_certifications(data))
+    report.checks.append(check_edu_domains(data))
     report.checks.append(check_tone(data))
     report.checks.append(check_heading_hierarchy(md_text))
     report.checks.append(check_body_word_count(md_text))
