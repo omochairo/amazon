@@ -340,6 +340,27 @@ def _fallback_news_books(data: dict[str, Any], per_asin_root: pathlib.Path) -> N
 
 _OMCHA_CACHE_TTL_SECONDS = 24 * 3600
 
+# UTM パラメータ: GA4 で omcha.jp 側が本サイト (amazon サブサイト) からの
+# 流入を計測できるようにする。utm_content には ASIN を入れて、どの商品記事
+# からの遷移かを記事単位で区別する。
+_OMCHA_UTM_BASE = (
+    "utm_source=omochairo-amazon"
+    "&utm_medium=referral"
+    "&utm_campaign=related_card"
+)
+
+
+def _append_omcha_utm(url: str, asin: str | None) -> str:
+    """Append UTM tracking params to an omcha.jp URL. Idempotent — URLs that
+    already carry ``utm_source`` are returned untouched."""
+    if not url or "utm_source=" in url:
+        return url
+    sep = "&" if "?" in url else "?"
+    suffix = _OMCHA_UTM_BASE
+    if asin:
+        suffix = f"{suffix}&utm_content={asin}"
+    return f"{url}{sep}{suffix}"
+
 
 def _omcha_keyword_from_tags(data: dict[str, Any]) -> str:
     """Join the article's top-3 tags into a single search keyword for the
@@ -407,7 +428,14 @@ def _attach_omcha_related(data: dict[str, Any], per_asin_root: pathlib.Path) -> 
             except OSError:
                 pass
     if items:
-        data["omcha_related"] = items[:3]
+        # キャッシュには生 URL を保存しつつ、テンプレに渡す前段で UTM を付与する
+        # (キャッシュは API 結果の純粋なスナップショット、UTM は出力時の決定)。
+        decorated: list[dict[str, Any]] = []
+        for it in items[:3]:
+            new_it = dict(it)
+            new_it["url"] = _append_omcha_utm(new_it.get("url", ""), asin)
+            decorated.append(new_it)
+        data["omcha_related"] = decorated
 
 
 def _load_per_asin_amazon(per_asin_root: pathlib.Path, asin: str) -> dict[str, Any] | None:
