@@ -65,8 +65,8 @@ jobs:
           set -e
           # gh requires branch protection / rulesets with a required check to honor --auto.
           # See PR description for the one-time `gh api` setup snippet.
-          if gh pr merge --auto --squash "$PR_URL"; then
-            echo "Auto-merge enabled on $PR_URL."
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge (squash + delete-branch) enabled on $PR_URL."
           else
             echo "::warning::Could not enable auto-merge. This usually means branch protection or repo-level 'Allow auto-merge' is not configured. PR will need manual merge until setup is complete."
           fi
