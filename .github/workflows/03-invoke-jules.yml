@@ -68,8 +68,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
-          gh pr list --repo ${{ github.repository }} --state open --json title \
+          REPO=${{ github.repository }}
+          gh pr list --repo $REPO --state open --json title \
             --jq '.[].title' > /tmp/open_titles.txt || echo "" > /tmp/open_titles.txt
+          # 既存 lock ブランチ (jules-lock/<ASIN>) を exclusion に追加。
+          # 2026-05-17 Step C-2: inter-run race (前 run の Jules セッションが PR 出す前に
+          # 次 run が同 ASIN を picking) を防ぐ。lock ブランチは ref 作成が atomic (422 on conflict)。
+          gh api "repos/$REPO/git/matching-refs/heads/jules-lock/" \
+            --jq '.[] | .ref | sub("refs/heads/jules-lock/"; "")' > /tmp/locked.txt 2>/dev/null || echo "" > /tmp/locked.txt
           python3 - <<'PY'
           import json, re, glob, os, random
           with open('data/raw/amazon.json', encoding='utf-8') as f:
@@ -84,25 +90,50 @@ jobs:
               m = re.search(r'(B0[A-Z0-9]{8})', base)
               if m:
                   existing.add(m.group(1))
-          with open('/tmp/open_titles.txt', encoding='utf-8') as f:
-              for line in f:
-                  for m in re.finditer(r'(B0[A-Z0-9]{8})', line):
-                      existing.add(m.group(1))
+          for fname in ('/tmp/open_titles.txt', '/tmp/locked.txt'):
+              try:
+                  with open(fname, encoding='utf-8') as f:
+                      for line in f:
+                          for m in re.finditer(r'(B0[A-Z0-9]{8})', line):
+                              existing.add(m.group(1))
+              except FileNotFoundError:
+                  pass
           remaining = [a for a in candidates if a not in existing]
           print(f"candidates={len(candidates)} existing_excluded={len(existing)} remaining={len(remaining)}")
-          out_path = os.environ['GITHUB_OUTPUT']
-          if not remaining:
-              with open(out_path, 'a') as f:
-                  f.write("asin=\n")
-              print("::warning::No candidate ASINs remain — fetch more products or wait")
-          else:
-              # GITHUB_RUN_ID で seed して並列 run が同じ ASIN を引かないようにする
-              rng = random.Random(os.environ.get('GITHUB_RUN_ID', ''))
-              chosen = rng.choice(remaining)
-              print(f"chosen={chosen}")
-              with open(out_path, 'a') as f:
-                  f.write(f"asin={chosen}\n")
+          # GITHUB_RUN_ID で seed してシャッフル。bash 側で 1 件ずつ lock 試行 → 取得成功した時点で確定
+          rng = random.Random(os.environ.get('GITHUB_RUN_ID', ''))
+          rng.shuffle(remaining)
+          with open('/tmp/shuffled.txt', 'w') as f:
+              for a in remaining:
+                  f.write(a + '\n')
           PY
+          # lock ブランチ用の empty commit を作る (committer.date を TTL 判定に利用)
+          MAIN_SHA=$(gh api repos/$REPO/git/refs/heads/main --jq .object.sha)
+          MAIN_TREE=$(gh api repos/$REPO/git/commits/$MAIN_SHA --jq .tree.sha)
+          CHOSEN=""
+          while IFS= read -r asin; do
+            [ -z "$asin" ] && continue
+            TS=$(date -u +%FT%TZ)
+            COMMIT=$(jq -n --arg msg "jules-lock $asin" --arg tree "$MAIN_TREE" --arg parent "$MAIN_SHA" --arg ts "$TS" \
+              '{message: $msg, tree: $tree, parents: [$parent], author: {name: "github-actions", email: "actions@github.com", date: $ts}, committer: {name: "github-actions", email: "actions@github.com", date: $ts}}' | \
+              gh api -X POST "repos/$REPO/git/commits" --input - --jq .sha 2>/dev/null)
+            [ -z "$COMMIT" ] && continue
+            if gh api -X POST "repos/$REPO/git/refs" \
+                -f ref="refs/heads/jules-lock/$asin" -f sha="$COMMIT" >/dev/null 2>&1; then
+              echo "Lock acquired: jules-lock/$asin"
+              CHOSEN="$asin"
+              break
+            else
+              echo "Lock contention on $asin, trying next"
+            fi
+          done < /tmp/shuffled.txt
+          if [ -z "$CHOSEN" ]; then
+            echo "::warning::No candidate ASINs available (all excluded/locked)"
+            echo "asin=" >> $GITHUB_OUTPUT
+          else
+            echo "chosen=$CHOSEN"
+            echo "asin=$CHOSEN" >> $GITHUB_OUTPUT
+          fi
 
       # Step 1: ソースを確認
       - name: List Jules Sources
