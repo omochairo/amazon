@@ -175,6 +175,28 @@ def _load_existing_article_asins(articles_dir: str = "data/articles") -> set:
     return asins
 
 
+def extract_images(item: dict, max_n: int = 6) -> list:
+    """Return up to ``max_n`` large-image URLs: primary first, then variants.
+
+    PA-API ``images.variants`` is an optional array of additional product
+    images (sub-cuts, lifestyle, package shots). We surface them so the
+    Hugo template can render a small thumbnail strip below the hero image
+    and let readers see more than one angle before clicking through.
+    """
+    urls: list = []
+    primary = _safe_get(item, "images", "primary", "large", "url")
+    if primary:
+        urls.append(primary)
+    variants = _safe_get(item, "images", "variants", default=[]) or []
+    for v in variants:
+        u = _safe_get(v, "large", "url")
+        if u and u not in urls:
+            urls.append(u)
+        if len(urls) >= max_n:
+            break
+    return urls
+
+
 def extract_savings_percentage(item: dict) -> int:
     listings = _safe_get(item, "offersV2", "listings", default=[])
     if listings:
@@ -221,6 +243,7 @@ def main():
 
     resources = [
         "images.primary.large",
+        "images.variants.large",
         "itemInfo.title",
         "itemInfo.features",
         "offersV2.listings.price",
@@ -243,6 +266,7 @@ def main():
                     "features": extract_features(it),
                     "url": f"https://www.amazon.co.jp/dp/{asin}/?tag={tag}",
                     "image": _safe_get(it, "images", "primary", "large", "url"),
+                    "images": extract_images(it),
                     "availability": extract_availability(it),
                     "loyalty_points": extract_loyalty_points(it),
                     "savings_percentage": extract_savings_percentage(it),
@@ -313,6 +337,7 @@ def main():
                     "features": extract_features(it),
                     "url": f"https://www.amazon.co.jp/dp/{asin}/?tag={tag}",
                     "image": _safe_get(it, "images", "primary", "large", "url"),
+                    "images": extract_images(it),
                     "availability": extract_availability(it),
                     "loyalty_points": extract_loyalty_points(it),
                     "savings_percentage": extract_savings_percentage(it),
