@@ -1251,6 +1251,11 @@ body.dark .search-summary { color: #c8c8d0; }
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  text-overflow: ellipsis;
+  /* 3行ジャストの高さで固定し、4行目が見切れて出るのを防ぐ
+     (font-size × line-height × 3行) + padding上下 */
+  box-sizing: border-box;
+  height: calc(0.92rem * 1.5 * 3 + 12px + 14px);
 }
 
 [data-theme="dark"] .post-content .omcha-card,
@@ -1278,6 +1283,8 @@ body.dark .post-content .omcha-card-title {
     padding: 10px 12px 12px;
     font-size: 0.86rem;
     -webkit-line-clamp: 3;
+    /* モバイルでも高さを再計算 (font-size 縮小 + padding 縮小に合わせる) */
+    height: calc(0.86rem * 1.5 * 3 + 10px + 12px);
   }
 }
 
