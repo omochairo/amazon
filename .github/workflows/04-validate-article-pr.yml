@@ -1,0 +1,107 @@
+name: Validate Article PR
+on:
+  pull_request:
+    paths:
+      - 'data/articles/**.json'
+      - 'data/schema/article.schema.json'
+      - 'scripts/validate_json.py'
+      - 'scripts/quality_gate.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: validate-article-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Resolve diff range
+        id: range
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ -z "$BASE_SHA" ] || [ -z "$HEAD_SHA" ]; then
+            # workflow_dispatch fallback: validate every article (full sweep)
+            echo "mode=full" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=diff" >> "$GITHUB_OUTPUT"
+            echo "base=$BASE_SHA" >> "$GITHUB_OUTPUT"
+            echo "head=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: List changed article JSON
+        id: list
+        run: |
+          set -e
+          if [ "${{ steps.range.outputs.mode }}" = "full" ]; then
+            files=$(ls data/articles/*.json 2>/dev/null | grep -v '\.quality\.json$' || true)
+          else
+            files=$(git diff --name-only --diff-filter=AM \
+                      "${{ steps.range.outputs.base }}" "${{ steps.range.outputs.head }}" \
+                      -- 'data/articles/*.json' \
+                    | grep -v '\.quality\.json$' || true)
+          fi
+          if [ -z "$files" ]; then
+            echo "No article JSON changes detected; nothing to validate."
+            echo "files=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Changed article JSON:"
+          echo "$files"
+          {
+            echo "files<<EOF"
+            echo "$files"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Validate against article.schema.json
+        if: steps.list.outputs.files != ''
+        run: |
+          set -e
+          fail=0
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            echo "::group::Validating $f"
+            if ! python scripts/validate_json.py --json "$f" --schema data/schema/article.schema.json; then
+              fail=1
+            fi
+            echo "::endgroup::"
+          done <<< "${{ steps.list.outputs.files }}"
+          exit $fail
+
+      - name: Run quality gate (strict, changed only)
+        if: steps.list.outputs.files != ''
+        run: |
+          set -e
+          # quality_gate.py scans the full --src dir, so stage just the changed files
+          tmp_src=$(mktemp -d)
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            cp "$f" "$tmp_src/"
+            # carry any pre-existing rendered markdown so MD-based checks can run
+            base=$(basename "$f" .json)
+            md="hugo/content/posts/${base}.md"
+            [ -f "$md" ] || true
+          done <<< "${{ steps.list.outputs.files }}"
+          python scripts/quality_gate.py \
+            --src "$tmp_src/" \
+            --posts hugo/content/posts/ \
+            --schema data/schema/article.schema.json \
+            --strict
