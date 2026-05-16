@@ -1248,14 +1248,16 @@ body.dark .search-summary { color: #c8c8d0; }
   font-weight: 600;
   color: var(--primary);
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
-  /* 3行ジャストの高さで固定し、4行目が見切れて出るのを防ぐ
-     (font-size × line-height × 3行) + padding上下 */
+  /* タイトルは4行まで表示し、それを超える場合のみ末尾を ... で省略する。
+     min-height で4行分の領域を確保しカードの揃いを保つが、
+     height 固定にはせず短いタイトルは余白を増やさない。
+     (font-size 0.92rem × line-height 1.5 × 4 行 + padding 上 12 + 下 14 ≈ 114px) */
   box-sizing: border-box;
-  height: calc(0.92rem * 1.5 * 3 + 12px + 14px);
+  min-height: 114px;
 }
 
 [data-theme="dark"] .post-content .omcha-card,
@@ -1282,9 +1284,9 @@ body.dark .post-content .omcha-card-title {
   .post-content .omcha-card-title {
     padding: 10px 12px 12px;
     font-size: 0.86rem;
-    -webkit-line-clamp: 3;
-    /* モバイルでも高さを再計算 (font-size 縮小 + padding 縮小に合わせる) */
-    height: calc(0.86rem * 1.5 * 3 + 10px + 12px);
+    -webkit-line-clamp: 4;
+    /* モバイル: 0.86rem × 1.5 × 4 + padding 上 10 + 下 12 ≈ 104px */
+    min-height: 104px;
   }
 }
 
