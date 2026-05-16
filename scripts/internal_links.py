@@ -83,7 +83,14 @@ def get_related_articles(
         url_ = r.get("url")
         if not title or not url_:
             continue
-        out.append({"title": str(title), "url": str(url_), "score": int(score)})
+        thumb = r.get("thumbnail")
+        thumb = str(thumb) if isinstance(thumb, str) and thumb else None
+        out.append({
+            "title": str(title),
+            "url": str(url_),
+            "score": int(score),
+            "thumbnail": thumb,
+        })
         if len(out) >= count:
             break
     return out

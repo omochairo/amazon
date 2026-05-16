@@ -118,8 +118,14 @@
 {% if omcha_related %}
 ## 🔗 おもちゃいろの関連記事
 
-{% for link in omcha_related %}- [{{ link.title }}]({{ link.url }})
-{% endfor %}
+<div class="omcha-card-grid">
+{%- for link in omcha_related %}
+<a class="omcha-card" href="{{ link.url }}" target="_blank" rel="noopener nofollow">
+{%- if link.thumbnail %}<div class="omcha-card-thumb"><img src="{{ link.thumbnail }}" alt="" loading="lazy" decoding="async"></div>{% else %}<div class="omcha-card-thumb omcha-card-thumb--placeholder"><span>🧸</span></div>{% endif %}
+<div class="omcha-card-title">{{ link.title }}</div>
+</a>
+{%- endfor %}
+</div>
 {% endif %}
 
 {% if youtube_embeds %}
