@@ -138,7 +138,13 @@ jobs:
         env:
           TARGET_ASIN: ${{ steps.pick-asin.outputs.asin }}
         run: |
-          echo "=== Creating Jules Session (target: $TARGET_ASIN) ==="
+          # 2026-05-17: Jules が date/slug を未来日付でハルシネートする事故
+          # (filename 2026-05-25, 実生成 5/14 ≒ +11日先 等 / posts/2026-05-25-b0fx3qbqbf)
+          # への対策として、本日 (Asia/Tokyo) を明示的に注入する。
+          # Hugo サイトは JST 表示なので date フィールドも +09:00 で揃える。
+          TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
+          TODAY_ISO=${TODAY}T10:00:00+09:00
+          echo "=== Creating Jules Session (target: $TARGET_ASIN, today: $TODAY) ==="
           # 2026-05-13: 12行のハードコードプロンプトを廃止し、jules/PROMPT_TEMPLATE.md
           # を読み込む形に変更（記事品質向上のため出典・競合比較・cross-check ルールを
           # フルプロンプトとして渡す）。
@@ -152,10 +158,16 @@ jobs:
           【今回生成する記事の対象 ASIN】: ${TARGET_ASIN}
           このセッションで生成する記事は必ずこの ASIN を対象としてください。他の ASIN は選ばないでください。
 
+          【本日の日付 (必ず使用)】: ${TODAY}
+          - 出力ファイル名: data/articles/${TODAY}-${TARGET_ASIN}.json
+          - slug フィールド: \"${TODAY}-${TARGET_ASIN}\"
+          - date フィールド: \"${TODAY_ISO}\"
+          PROMPT_TEMPLATE.md のスキーマ例にある日付 (2026-05-12 等) はあくまで例示なので絶対に流用しないでください。未来日付・過去日付の生成は禁止です。
+
           絶対守るリポジトリ保護ルール:
           - 新規ファイル追加のみ。既存ファイルの変更・削除は禁止
           - .github/, scripts/, hugo/ への変更は禁止
-          - data/articles/ フォルダへの JSON 追加のみ許可（命名: YYYY-MM-DD-${TARGET_ASIN}.json）
+          - data/articles/ フォルダへの JSON 追加のみ許可（命名: ${TODAY}-${TARGET_ASIN}.json 固定）
           - data/raw/amazon.json から対象 ASIN (${TARGET_ASIN}) のエントリを読み込んで記事を生成
           - 楽天/Yahoo の価格・URL は **必ず data/raw/rakuten_matched.json および data/raw/yahoo_matched.json** から
             matched_asin == "${TARGET_ASIN}" のエントリを参照し、product.prices.rakuten / product.prices.yahoo に
