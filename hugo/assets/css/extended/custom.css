@@ -1357,26 +1357,46 @@ body.dark .post-content .omcha-card-title {
 .post-content .product-slideshow .slide-next:hover {
   background: rgba(17, 24, 39, 0.85);
 }
-.post-content .product-slideshow .slide-dots {
+.post-content .product-slideshow .slide-thumbs {
   display: flex;
   justify-content: center;
   gap: 8px;
   margin-top: 14px;
   flex-wrap: wrap;
 }
-.post-content .product-slideshow .slide-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 0;
-  background: #cbd5e1;
+.post-content .product-slideshow .slide-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background: #ffffff;
   cursor: pointer;
-  padding: 0;
-  transition: background 0.15s ease, transform 0.15s ease;
+  padding: 2px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  opacity: 0.65;
 }
-.post-content .product-slideshow .slide-dot.active {
-  background: #0ea5e9;
-  transform: scale(1.2);
+.post-content .product-slideshow .slide-thumb img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+}
+.post-content .product-slideshow .slide-thumb:hover {
+  opacity: 1;
+  border-color: #cbd5e1;
+}
+.post-content .product-slideshow .slide-thumb.active {
+  opacity: 1;
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.25);
+  transform: translateY(-1px);
 }
 .post-content .product-slideshow .slide-counter {
   text-align: center;
@@ -1396,9 +1416,18 @@ body.dark .post-content .product-slideshow .slideshow-stage,
 html[data-theme="dark"] .post-content .product-slideshow .slideshow-stage {
   background: #111827;
 }
-body.dark .post-content .product-slideshow .slide-dot,
-html[data-theme="dark"] .post-content .product-slideshow .slide-dot {
-  background: #4b5563;
+body.dark .post-content .product-slideshow .slide-thumb,
+html[data-theme="dark"] .post-content .product-slideshow .slide-thumb {
+  background: #1f2937;
+}
+body.dark .post-content .product-slideshow .slide-thumb:hover,
+html[data-theme="dark"] .post-content .product-slideshow .slide-thumb:hover {
+  border-color: #4b5563;
+}
+body.dark .post-content .product-slideshow .slide-thumb.active,
+html[data-theme="dark"] .post-content .product-slideshow .slide-thumb.active {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.3);
 }
 
 @media (max-width: 520px) {
