@@ -56,9 +56,24 @@ _EDU_DOMAINS = {
 }
 
 
+# SEO 向け自然文 reason の語彙テーブル
+# 内部式 (tier=A -> 28/35) ではなく、商品の魅力を伝える平叙文で書き、
+# ブランド名 / 認証名 / 知育分野などの SEO 上意味のあるキーワードを含める。
+_BRAND_TIER_TEMPLATE = {
+    "S": "{name}は知育玩具業界でトップクラスの信頼を得ているブランドで、設計品質と長年の実績に裏付けられた安心感があります。",
+    "A": "{name}は知育玩具メーカーとして広く知られたブランドで、商品の安全性と教育的配慮に定評があります。",
+    "B": "{name}は知育・玩具分野で確かな実績を持つブランドで、信頼できる商品設計が期待できる水準です。",
+    "C": "{name}は玩具市場で着実に商品展開を続けるブランドで、基本的な品質基準を満たした製品づくりが行われています。",
+    # D tier はブランド名を出さず「商品本来の特徴で評価する」スタンスに振る
+    "D": "知育玩具市場で流通する商品で、ブランドの知名度より商品本来の機能・素材・設計で評価するのに適したカテゴリです。",
+}
+
+
 def _brand_tier_score(brand: NormalizedBrand) -> tuple[int, str]:
     pt = _TIER_POINTS.get(brand.tier, 10)
-    return pt, f"brand_tier={brand.tier}({brand.canonical}) -> {pt}/35"
+    template = _BRAND_TIER_TEMPLATE.get(brand.tier, _BRAND_TIER_TEMPLATE["D"])
+    # D tier はテンプレ内に {name} がない (固定文) ため format しても安全
+    return pt, template.format(name=brand.canonical or "メーカー")
 
 
 def _safety_score(brand: NormalizedBrand, product: dict) -> tuple[int, str]:
@@ -69,10 +84,22 @@ def _safety_score(brand: NormalizedBrand, product: dict) -> tuple[int, str]:
     if isinstance(pcerts, list):
         certs += [str(c) for c in pcerts]
     up = {c.upper() for c in certs if c}
-    # 認証ボーナス: ST 明記なら +1 (D tier には大きく効く)
     bonus = 1 if "ST" in up else (1 if up & {"CE", "EN71", "ASTM"} else 0)
     pts = min(10, floor + bonus)
-    return pts, f"safety=tier_floor({brand.tier}:{floor})+cert({sorted(up) or '-'}:{bonus}) -> {pts}/10"
+
+    if "ST" in up:
+        reason = "STマーク取得済みで、日本玩具協会の安全基準をクリアしています。お子さまが口に入れたり投げたりしても比較的安心して使える設計です。"
+    elif up & {"CE", "EN71", "ASTM"}:
+        cert_jp = ", ".join(sorted(up & {"CE", "EN71", "ASTM"}))
+        reason = f"{cert_jp} 認証を取得しており、海外の玩具安全基準に適合しています。素材や塗料の安全性が第三者検証されています。"
+    elif brand.tier in ("S", "A", "B"):
+        reason = f"{brand.canonical or 'メーカー'}は玩具安全規格に準拠した製造体制を持つブランドのため、商品の安全性は標準水準を満たしていると考えられます。"
+    elif brand.tier == "C":
+        reason = "玩具メーカー組合加入企業が手がける商品のため、出荷前の基本的な安全試験が前提となっています。"
+    else:
+        # D tier: 中立かつ前向きに案内
+        reason = "STマーク等の認証情報は商品本文と Amazon 商品ページの素材・対象年齢欄で確認できます。お子さまの月齢に合わせて選ぶ際の参考にしてください。"
+    return pts, reason
 
 
 def _age_fit_score(product: dict) -> tuple[int, str, Optional[tuple[int, int]]]:
@@ -83,21 +110,30 @@ def _age_fit_score(product: dict) -> tuple[int, str, Optional[tuple[int, int]]]:
         or ""
     )
     if not raw.strip():
-        # Jules がフィールドを出さない場合の中立扱い (Phase 3 で改善)
-        return 5, "age=未取得 -> 5/10(中立)", None
+        return 5, "対象年齢の詳細は商品ページに準じます。お子さまの発達段階に合わせて選んでください。", None
     m = re.search(r"(\d+)\s*[〜~\-]\s*(\d+)\s*(?:歳|才)", raw)
     if m:
         lo, hi = int(m.group(1)), int(m.group(2))
-        return 10, f"age={lo}-{hi}歳 -> 10/10", (lo, hi)
+        span = hi - lo
+        if span >= 5:
+            return 10, f"対象年齢は{lo}〜{hi}歳と幅広く、成長段階に合わせて長く遊べる設計です。きょうだいで共用しやすいのも魅力です。", (lo, hi)
+        return 10, f"対象年齢は{lo}〜{hi}歳に明確に設定されており、その年齢帯のお子さまに最適化された遊び方ができます。", (lo, hi)
     m = re.search(r"(\d+)\s*(?:歳|才)\s*(?:〜|~|から|以上|\+)", raw)
     if m:
         lo = int(m.group(1))
-        return 8, f"age={lo}歳〜 -> 8/10", (lo, lo + 5)
-    return 5, f"age=記載のみ('{raw[:15]}') -> 5/10", None
+        return 8, f"{lo}歳以上向けの設計で、{lo}歳前後〜小学生のお子さまに適しています。上限の指定はなく、興味があれば長く楽しめます。", (lo, lo + 5)
+    return 5, f"対象年齢の記載は『{raw[:20]}』です。お子さまの月齢・発達状況に合わせてご検討ください。", None
+
+
+_EDU_DOMAIN_PHRASES = {
+    "STEM": "STEM・論理思考",
+    "言語": "言語・読み書き",
+    "運動": "手指・微細運動",
+    "想像": "想像力・創造性",
+}
 
 
 def _edu_value_score(article: dict, brand: NormalizedBrand) -> tuple[int, str]:
-    # tier floor (玩具メーカーは 0 にしない)
     floor = _EDU_FLOOR.get(brand.tier, 0)
     blob = " ".join(
         [
@@ -109,10 +145,21 @@ def _edu_value_score(article: dict, brand: NormalizedBrand) -> tuple[int, str]:
     )
     hit = [d for d, kws in _EDU_DOMAINS.items() if any(k in blob for k in kws)]
     n = len(hit)
-    # キーワード加点: 1分野=+2.5, 2=+5, 3=+7.5, 4=+10 (max 10)
     bonus = round(min(10, n * 2.5))
     pts = min(15, floor + bonus)
-    return pts, f"edu=tier_floor({brand.tier}:{floor})+domains[{','.join(hit) or '-'}]({n}/4:+{bonus}) -> {pts}/15"
+
+    if n >= 2:
+        phrases = "・".join(_EDU_DOMAIN_PHRASES.get(d, d) for d in hit)
+        reason = f"{phrases}と、複数の知育領域に同時に働きかける構成です。一つの遊びで多面的な発達を促せる点が評価できます。"
+    elif n == 1:
+        phrase = _EDU_DOMAIN_PHRASES.get(hit[0], hit[0])
+        reason = f"{phrase}の領域に重点を置いた設計で、その分野の学習効果が特に期待できる商品です。"
+    elif brand.tier in ("S", "A", "B"):
+        reason = f"{brand.canonical or 'メーカー'}は知育志向の商品ラインを多く展開するブランドのため、子どもの発達を意識した遊び方ができる設計です。"
+    else:
+        # D tier かつ知育分野キーワード未検出: 商品本文への誘導で締める
+        reason = "本商品の知育的な遊び方・期待される発達効果は、本記事の使い方解説と Amazon 商品ページの仕様欄を組み合わせてご判断ください。"
+    return pts, reason
 
 
 def _count_items(path: pathlib.Path) -> int:
@@ -152,25 +199,52 @@ def _omcha_top_score(path: pathlib.Path) -> int:
 def _media_exposure_score(
     asin: str, brand: NormalizedBrand, repo_root: pathlib.Path
 ) -> tuple[int, str]:
-    # 海外ブランドは日本語メディア露出が少ないのが普通 -> 中立 5 を保証
     is_overseas = brand.region not in ("JP", "unknown", "")
     floor = 5 if is_overseas else 0
     if not asin:
-        return floor, f"media=asin不明 -> {floor}/15"
+        reason = "ASIN 情報が不足しているため、メディア露出は中立評価としています。"
+        return floor, reason
     d = repo_root / "data" / "raw" / "per_asin" / asin
     yt = _count_items(d / "youtube.json")
     nw = _count_items(d / "news.json")
-    # omcha.jp 関連記事マッチ度: トップスコアで段階配点 (books 枠を置き換え)
-    # API score 内訳例: タイトル完全一致=15 / タグ・カテゴリ完全一致=8 / サブワード=6
-    # 1件でも 30 超え = 商品コンセプトが omcha 編集記事と強くマッチ
     om_top = _omcha_top_score(d / "omcha_related.json")
     yt_p = 6 if yt >= 3 else 3 if yt >= 1 else 0
     nw_p = 5 if nw >= 2 else 2 if nw >= 1 else 0
     om_p = 4 if om_top >= 30 else 3 if om_top >= 15 else 2 if om_top >= 10 else 0
     raw = yt_p + nw_p + om_p
     pts = min(15, max(floor, raw))
-    tag = f"[海外floor={floor}]" if is_overseas and floor > raw else ""
-    return pts, f"media=yt:{yt}({yt_p}) news:{nw}({nw_p}) omcha:{om_top}({om_p}){tag} -> {pts}/15"
+
+    # 主要な露出を 1 文目に、補助露出 + 締めを 2 文目に分けて読みやすくする
+    primary = ""
+    if yt >= 3:
+        primary = "YouTube に複数の紹介動画があり、実際の遊び方や子どもの反応を映像で確認できます"
+    elif yt >= 1:
+        primary = "YouTube に紹介動画があり、遊び方のイメージを掴みやすい商品です"
+    elif om_top >= 30:
+        primary = "本サイトの編集記事と商品コンセプトが強くマッチしており、関連レビューを横断して特徴を比較できます"
+    elif nw >= 1:
+        primary = "ニュース・記事での取り上げ事例があり、市場の評価情報を参照できます"
+    elif om_top >= 10:
+        primary = "本サイト内に関連レビューがあり、近いコンセプトの商品と比較しながら選べます"
+
+    extras = []
+    if primary and "YouTube" not in primary and (yt >= 1):
+        extras.append("YouTube にも紹介動画あり")
+    if primary and "ニュース" not in primary and (nw >= 1):
+        extras.append("関連ニュースの取り上げ実績あり")
+    if primary and "本サイト" not in primary and (om_top >= 10):
+        extras.append("本サイト内の関連レビューあり")
+
+    if primary:
+        if extras:
+            reason = f"{primary}。加えて{('・'.join(extras))}と、購入前の比較検討がしやすい情報量が揃っています。"
+        else:
+            reason = f"{primary}。"
+    elif is_overseas:
+        reason = "海外発のブランドで日本語の紹介事例は限定的ですが、商品本来のスペックは本文の詳細解説でご確認いただけます。"
+    else:
+        reason = "本記事執筆時点では関連メディアでの紹介事例が限定的なため、商品本来の特徴は本文の使い方解説をご参照ください。"
+    return pts, reason
 
 
 _MARKET_CACHE: Optional[dict[str, set[str]]] = None
@@ -204,43 +278,51 @@ def _load_market(repo_root: pathlib.Path) -> dict[str, set[str]]:
 def _multi_market_score(
     asin: str, brand: NormalizedBrand, repo_root: pathlib.Path
 ) -> tuple[int, str]:
-    # 海外ブランドは正規流通が限定的で楽天/Yahoo に出にくい -> 中立 5 を保証
     is_overseas = brand.region not in ("JP", "unknown", "")
     floor = 5 if is_overseas else 3
     if not asin:
-        return floor, f"market=asin不明 -> {floor}/10"
+        return floor, "ASIN 情報が不足しているため、取扱マーケットは中立評価としています。"
     mm = _load_market(repo_root)
     if not mm["rakuten"] and not mm["yahoo"]:
-        return floor, f"market=matchedデータなし -> {floor}/10(中立)"
+        return floor, "本記事執筆時点では Amazon を主要な購入経路としています。楽天・Yahoo! の取扱状況は変動するため最新情報をご確認ください。"
     r, y = asin in mm["rakuten"], asin in mm["yahoo"]
     if r and y:
-        return 10, "market=楽天+Yahoo -> 10/10"
-    if r or y:
-        return max(floor, 7), f"market={'楽天' if r else 'Yahoo'}のみ -> {max(floor,7)}/10"
-    return floor, f"market=Amazonのみ(matched無) -> {floor}/10(中立)"
+        return 10, "Amazon・楽天市場・Yahoo!ショッピングの3サイトで取扱があり、ポイント還元・セール・送料を比較して最適な購入先を選べます。"
+    if r:
+        return max(floor, 7), "Amazon と楽天市場で取扱があり、楽天ポイント還元やセール時の価格差を比較しながら購入できます。"
+    if y:
+        return max(floor, 7), "Amazon と Yahoo!ショッピングで取扱があり、PayPayポイントやキャンペーン併用で実質価格を抑えられる場合があります。"
+    if is_overseas:
+        return floor, "海外ブランドのため正規流通は限定的で、Amazon が現時点で最も入手しやすいルートです。"
+    return floor, "現時点では Amazon が主要な購入経路です。楽天・Yahoo! の取扱は時期により変動するため、本文の価格比較セクションをご参照ください。"
 
 
 def _price_value_score(
     product: dict, age_range: Optional[tuple[int, int]]
 ) -> tuple[int, str]:
-    # 価格フィールドは best_price (= 最安マーケット価格) を優先、なければ price
     price = product.get("best_price") or product.get("price")
     if not isinstance(price, (int, float)) or price <= 0:
-        return 5, "price=未取得 -> 5/15(中立)"
+        return 5, "本記事執筆時点での価格情報を取得中です。最新の価格は本文の比較セクションでご確認ください。"
     years = max(1.0, (age_range[1] - age_range[0] + 1) if age_range else 3.0)
     yp = price / years
-    pts = (
-        15
-        if yp <= 1000
-        else 12
-        if yp <= 2000
-        else 8
-        if yp <= 5000
-        else 5
-        if yp <= 10000
-        else 2
-    )
-    return pts, f"price=¥{price:.0f}/{years:.0f}yr=¥{yp:.0f}/yr -> {pts}/15"
+    price_yen = f"¥{int(price):,}"
+    yp_yen = f"¥{int(yp):,}"
+    if yp <= 1000:
+        pts = 15
+        reason = f"価格は{price_yen}で、対象年齢の幅から見ると年間{yp_yen}相当。長く遊べる前提で考えるとコストパフォーマンスは非常に高い水準です。"
+    elif yp <= 2000:
+        pts = 12
+        reason = f"価格は{price_yen}で、年間コスト換算で{yp_yen}前後。ブランド品質と遊び込める期間を踏まえると良好なコストパフォーマンスです。"
+    elif yp <= 5000:
+        pts = 8
+        reason = f"価格は{price_yen}で、年間換算{yp_yen}相当。やや投資感はありますが、機能性とブランド信頼度を考慮すると妥当な価格帯です。"
+    elif yp <= 10000:
+        pts = 5
+        reason = f"価格は{price_yen}とやや高めの設定です。ギフトや特別な機会の選択肢として、品質・耐久性を重視する方に向いた価格帯です。"
+    else:
+        pts = 2
+        reason = f"価格は{price_yen}とプレミアム帯です。コレクション目的・ギフト・専門用途など、特定の目的にこだわる方に向いた商品です。"
+    return pts, reason
 
 
 def calculate(
