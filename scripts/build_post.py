@@ -495,6 +495,44 @@ def _backfill_amazon_badges(
                 break
 
 
+def _backfill_product_images(
+    data: dict[str, Any],
+    raw_index: dict[str, dict[str, Any]],
+    per_asin_root: pathlib.Path,
+) -> None:
+    """Attach ``product.images`` (variant gallery) from raw/amazon.json
+    or the per-ASIN snapshot. Jules-authored JSON only carries a single
+    ``product.image``; PA-API ``images.variants.large`` gives us extra
+    angles which the template renders as a thumbnail strip.
+
+    Existing ``product.images`` (e.g. a future Jules schema bump) wins.
+    """
+    product = data.get("product") if isinstance(data.get("product"), dict) else None
+    if not product:
+        return
+    asin = product.get("asin")
+    if not asin:
+        return
+    existing = product.get("images")
+    if isinstance(existing, list) and existing:
+        return
+
+    images: list[str] = []
+    primary = product.get("image")
+    if isinstance(primary, str) and primary:
+        images.append(primary)
+    for src in (raw_index.get(asin), _load_per_asin_amazon(per_asin_root, asin)):
+        if not isinstance(src, dict):
+            continue
+        for u in src.get("images") or []:
+            if isinstance(u, str) and u and u not in images:
+                images.append(u)
+        if len(images) > 1:
+            break
+    if len(images) > 1:
+        product["images"] = images
+
+
 def _fill_jsonld(data: dict[str, Any]) -> None:
     jsonld = data.get("jsonld")
     if not isinstance(jsonld, dict):
@@ -674,6 +712,7 @@ def main() -> None:
             _merge(data, _load_optional_json(src_path / f"{slug}.enrichment.json"), ENRICHMENT_KEYS)
             _merge(data, _load_optional_json(src_path / f"{slug}.seo.json"), SEO_KEYS)
             _backfill_amazon_badges(data, raw_amazon_index, per_asin_root)
+            _backfill_product_images(data, raw_amazon_index, per_asin_root)
             _override_competitive_analysis(data, per_asin_root)
             _fallback_news_books(data, per_asin_root)
             _attach_omcha_related(data, per_asin_root)

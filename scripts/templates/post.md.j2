@@ -30,6 +30,9 @@
 {% if product.image %}
 <figure style="text-align:center;margin:0 auto 16px;display:block;width:100%;"><img src="{{ product.image }}" alt="{{ product.name }}の商品画像" loading="lazy" style="display:block;margin:0 auto;max-width:360px;width:100%;height:auto;border-radius:12px;"><figcaption style="font-size:0.85rem;color:#888;margin-top:8px;text-align:center;">出典：Amazon商品ページ</figcaption></figure>
 {% endif %}
+{% if product.images and product.images|length > 1 %}
+<div class="product-gallery" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:0 0 18px;">{% for img in product.images %}<a href="{{ img }}" target="_blank" rel="noopener nofollow" style="display:block;flex:0 0 auto;"><img src="{{ img }}" alt="{{ product.name }}の商品画像 {{ loop.index }}" loading="lazy" style="width:72px;height:72px;object-fit:contain;background:#fafafa;border:1px solid #e5e7eb;border-radius:8px;padding:4px;" onerror="this.parentElement.style.display='none'"></a>{% endfor %}</div>
+{% endif %}
 
 {% if narrative.lead %}{{ narrative.lead }}{% endif %}
 
