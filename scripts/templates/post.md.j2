@@ -30,9 +30,6 @@
 {% if product.image %}
 <figure style="text-align:center;margin:0 auto 16px;display:block;width:100%;"><img src="{{ product.image }}" alt="{{ product.name }}の商品画像" loading="lazy" style="display:block;margin:0 auto;max-width:360px;width:100%;height:auto;border-radius:12px;"><figcaption style="font-size:0.85rem;color:#888;margin-top:8px;text-align:center;">出典：Amazon商品ページ</figcaption></figure>
 {% endif %}
-{% if product.images and product.images|length > 1 %}
-<div class="product-gallery" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:0 0 18px;">{% for img in product.images %}<a href="{{ img }}" target="_blank" rel="noopener nofollow" style="display:block;flex:0 0 auto;"><img src="{{ img }}" alt="{{ product.name }}の商品画像 {{ loop.index }}" loading="lazy" style="width:72px;height:72px;object-fit:contain;background:#fafafa;border:1px solid #e5e7eb;border-radius:8px;padding:4px;" onerror="this.parentElement.style.display='none'"></a>{% endfor %}</div>
-{% endif %}
 
 {% if narrative.lead %}{{ narrative.lead }}{% endif %}
 
@@ -82,6 +79,20 @@
 <div style="background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;padding:14px 18px;color:#1f2937;"><h3 style="margin:0 0 10px;font-size:1.05rem;color:#15803d;">👍 良いところ</h3><ul style="margin:0;padding-left:18px;font-size:0.95rem;line-height:1.7;color:#1f2937;">{% for p in product.pros %}<li style="color:#1f2937;">{{ p }}</li>{% endfor %}</ul></div>
 <div style="background:#fef2f2;border-left:4px solid #ef4444;border-radius:8px;padding:14px 18px;color:#1f2937;"><h3 style="margin:0 0 10px;font-size:1.05rem;color:#b91c1c;">⚠️ 気になるところ</h3><ul style="margin:0;padding-left:18px;font-size:0.95rem;line-height:1.7;color:#1f2937;">{% for c in product.cons %}<li style="color:#1f2937;">{{ c }}</li>{% endfor %}</ul></div>
 </div>
+
+{% if product.images and product.images|length > 1 %}
+## <small>{{ product.name }}の</small>📸 関連画像情報
+
+{{ product.name }}の角度違いや使用イメージなど、Amazon掲載の追加画像をスライドショーでご紹介します。
+
+<div class="product-slideshow" data-autoplay="5000">
+<div class="slideshow-stage">{% for img in product.images[1:] %}<img src="{{ img }}" alt="{{ product.name }} 関連画像 {{ loop.index }}" loading="lazy" class="slide{% if loop.first %} active{% endif %}">{% endfor %}</div>
+<button type="button" class="slide-prev" aria-label="前の画像">‹</button>
+<button type="button" class="slide-next" aria-label="次の画像">›</button>
+<div class="slide-dots">{% for img in product.images[1:] %}<button type="button" class="slide-dot{% if loop.first %} active{% endif %}" data-idx="{{ loop.index0 }}" aria-label="{{ loop.index }}枚目"></button>{% endfor %}</div>
+<div class="slide-counter"><span class="slide-current">1</span> / {{ product.images[1:]|length }}</div>
+</div>
+{% endif %}
 
 {% if competitive_analysis %}
 ## <small>{{ product.name }}と</small>🥊 似た商品との比較
