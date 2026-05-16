@@ -251,36 +251,45 @@ def main():
         "offersV2.listings.loyaltyPoints",
     ]
 
-    # Sniper Mode: Fetch specific ASIN first
+    # Sniper Mode: Fetch specific ASIN(s) first.
+    # --asin accepts CSV per workflow input "カンマ区切りASIN"; PA-API GetItems
+    # supports up to 10 ASINs per call, so chunk to be safe.
+    sniper_asins: list[str] = []
     if args.asin:
-        logger.info(f"Sniper Mode: Fetching ASIN {args.asin}")
-        try:
-            res = api.get_items([args.asin], resources=resources)
-            found_items = _safe_get(res, "itemsResult", "items", default=[])
-            for it in found_items:
-                asin = it.get("asin")
-                items.append({
-                    "asin": asin,
-                    "title": _safe_get(it, "itemInfo", "title", "displayValue"),
-                    "price": extract_price(it),
-                    "features": extract_features(it),
-                    "url": f"https://www.amazon.co.jp/dp/{asin}/?tag={tag}",
-                    "image": _safe_get(it, "images", "primary", "large", "url"),
-                    "images": extract_images(it),
-                    "availability": extract_availability(it),
-                    "loyalty_points": extract_loyalty_points(it),
-                    "savings_percentage": extract_savings_percentage(it),
-                    "source": "Amazon (Target)"
-                })
-        except Exception as e:
-            logger.error(f"Failed to fetch target ASIN: {e}")
-            sys.exit(1)
+        sniper_asins = [a.strip() for a in args.asin.split(",") if a.strip()]
+    if sniper_asins:
+        logger.info(f"Sniper Mode: Fetching ASIN(s) {sniper_asins}")
+        for chunk_start in range(0, len(sniper_asins), 10):
+            chunk = sniper_asins[chunk_start:chunk_start + 10]
+            try:
+                res = api.get_items(chunk, resources=resources)
+                found_items = _safe_get(res, "itemsResult", "items", default=[])
+                for it in found_items:
+                    asin = it.get("asin")
+                    items.append({
+                        "asin": asin,
+                        "title": _safe_get(it, "itemInfo", "title", "displayValue"),
+                        "price": extract_price(it),
+                        "features": extract_features(it),
+                        "url": f"https://www.amazon.co.jp/dp/{asin}/?tag={tag}",
+                        "image": _safe_get(it, "images", "primary", "large", "url"),
+                        "images": extract_images(it),
+                        "availability": extract_availability(it),
+                        "loyalty_points": extract_loyalty_points(it),
+                        "savings_percentage": extract_savings_percentage(it),
+                        "source": "Amazon (Target)"
+                    })
+            except Exception as e:
+                logger.error(f"Failed to fetch target ASIN(s) {chunk}: {e}")
+                sys.exit(1)
+            if chunk_start + 10 < len(sniper_asins):
+                time.sleep(1.1)  # PA-API TPS=1 safety margin
 
     # Search Mode: multi-keyword × multi-page sweep to keep the new-ASIN pool
     # large enough that the existing-article dedup gate below doesn't starve
     # Jules of fresh ASINs.
     existing = _load_existing_article_asins(args.articles_dir)
-    target_asin = args.asin or None
+    target_asins: set[str] = set(sniper_asins)
     seen_asins = {it["asin"] for it in items if it.get("asin")}
 
     keywords = parse_keywords(args.keywords)
@@ -288,14 +297,14 @@ def main():
     # (workflows pass it explicitly). Fall back to the AMAZON title slice
     # when running Sniper Mode without an explicit keyword.
     primary_kw = args.keyword
-    if not primary_kw and args.asin and items:
+    if not primary_kw and sniper_asins and items:
         primary_kw = items[0]["title"][:20]
     if primary_kw and primary_kw not in keywords:
         keywords.insert(0, primary_kw)
 
     new_for_jules = sum(
         1 for it in items
-        if it.get("asin") == target_asin or it.get("asin") not in existing
+        if it.get("asin") in target_asins or it.get("asin") not in existing
     )
 
     pages = max(1, min(args.pages, 10))
@@ -343,7 +352,7 @@ def main():
                     "savings_percentage": extract_savings_percentage(it),
                     "source": "Amazon"
                 })
-                if asin == target_asin or asin not in existing:
+                if asin in target_asins or asin not in existing:
                     new_for_jules += 1
             time.sleep(1.1)  # PA-API TPS=1 safety margin
 
@@ -359,7 +368,7 @@ def main():
     # linking and badge back-fill keep working for the full catalog.
     items_for_jules = [
         it for it in items
-        if it.get("asin") == target_asin or it.get("asin") not in existing
+        if it.get("asin") in target_asins or it.get("asin") not in existing
     ]
     dropped = len(items) - len(items_for_jules)
     logger.info(
@@ -383,7 +392,7 @@ def main():
     # available at build time. Without this, scheduled cron runs (which pass
     # an empty --asin) leave build_post.py with no real competitor data, and
     # competitor cards render as text-only boxes with no image or Amazon CTA.
-    targets = [args.asin] if args.asin else [it["asin"] for it in items if it.get("asin")]
+    targets = sniper_asins if sniper_asins else [it["asin"] for it in items if it.get("asin")]
     for target in targets:
         write_per_asin_competitors(args.out, target, items)
 
