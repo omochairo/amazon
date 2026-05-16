@@ -382,8 +382,13 @@ def _attach_omcha_related(data: dict[str, Any], per_asin_root: pathlib.Path) -> 
         try:
             if time.time() - cache_path.stat().st_mtime < _OMCHA_CACHE_TTL_SECONDS:
                 cached = json.loads(cache_path.read_text(encoding="utf-8"))
-                if isinstance(cached, dict) and isinstance(cached.get("items"), list):
-                    items = cached["items"]
+                cached_items = cached.get("items") if isinstance(cached, dict) else None
+                # キャッシュスキーマに ``thumbnail`` キーが入っていれば
+                # 最新フォーマット (ブログカード対応)。古いキャッシュは無効化して再生成。
+                if isinstance(cached_items, list) and (
+                    not cached_items or "thumbnail" in cached_items[0]
+                ):
+                    items = cached_items
         except (OSError, json.JSONDecodeError):
             items = None
     if items is None:
