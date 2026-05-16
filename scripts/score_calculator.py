@@ -55,6 +55,11 @@ _EDU_DOMAINS = {
     "想像": ["想像", "創造", "ごっこ", "ロールプレイ", "見立て", "クリエイティブ", "ままごと"],
 }
 
+# v5: edu_domains フィールド要素数 → tier floor への追加点
+# n=4 → +10 cap15 / n=3 → +8 / n=2 → +6 / n=1 → +3 / n=0 → +0
+_EDU_DOMAIN_BONUS = {0: 0, 1: 3, 2: 6, 3: 8, 4: 10}
+_VALID_EDU_DOMAINS = {"STEM", "言語", "運動", "想像"}
+
 
 # SEO 向け自然文 reason の語彙テーブル
 # 内部式 (tier=A -> 28/35) ではなく、商品の魅力を伝える平叙文で書き、
@@ -77,15 +82,30 @@ def _brand_tier_score(brand: NormalizedBrand) -> tuple[int, str]:
 
 
 def _safety_score(brand: NormalizedBrand, product: dict) -> tuple[int, str]:
-    # tier floor (国内 C tier までは ST マーク玩具組合加入企業の前提)
+    # tier floor (国内 C tier までは ST マーク玩具組合加入企業の前提) — 死守
     floor = _SAFETY_FLOOR.get(brand.tier, 0)
-    certs = list(brand.safety_default or [])
-    pcerts = product.get("certifications") or []
-    if isinstance(pcerts, list):
-        certs += [str(c) for c in pcerts]
-    up = {c.upper() for c in certs if c}
-    bonus = 1 if "ST" in up else (1 if up & {"CE", "EN71", "ASTM"} else 0)
-    pts = min(10, floor + bonus)
+
+    # v5: product.certifications がフィールドとして存在すれば field-driven 配点
+    # (空配列も「Jules が明示的に none と判定」とみなして fallback には落とさない)
+    pcerts_raw = product.get("certifications")
+    field_driven = isinstance(pcerts_raw, list)
+
+    if field_driven:
+        up = {str(c).upper() for c in pcerts_raw if c}
+        # ST / CE / EN71 / ASTM は同等扱い (海外メーカー強化方針)
+        if "ST" in up or (up & {"CE", "EN71", "ASTM"}):
+            bonus = 2
+        elif "食品衛生法" in {str(c) for c in pcerts_raw if c}:
+            bonus = 1
+        else:
+            bonus = 0
+        pts = min(10, floor + bonus)
+    else:
+        # 後方互換フォールバック: brand.safety_default のみで判定
+        certs = list(brand.safety_default or [])
+        up = {c.upper() for c in certs if c}
+        bonus = 1 if "ST" in up else (1 if up & {"CE", "EN71", "ASTM"} else 0)
+        pts = min(10, floor + bonus)
 
     if "ST" in up:
         reason = "STマーク取得済みで、日本玩具協会の安全基準をクリアしています。お子さまが口に入れたり投げたりしても比較的安心して使える設計です。"
@@ -97,12 +117,13 @@ def _safety_score(brand: NormalizedBrand, product: dict) -> tuple[int, str]:
     elif brand.tier == "C":
         reason = "玩具メーカー組合加入企業が手がける商品のため、出荷前の基本的な安全試験が前提となっています。"
     else:
-        # D tier: 中立かつ前向きに案内
         reason = "STマーク等の認証情報は商品本文と Amazon 商品ページの素材・対象年齢欄で確認できます。お子さまの月齢に合わせて選ぶ際の参考にしてください。"
     return pts, reason
 
 
 def _age_fit_score(product: dict) -> tuple[int, str, Optional[tuple[int, int]]]:
+    # v5: product.target_age を優先 (Jules 出力の構造化フィールド)
+    # 後方互換: なければ age / age_band もフォールバック対象
     raw = str(
         product.get("target_age")
         or product.get("age")
@@ -111,17 +132,29 @@ def _age_fit_score(product: dict) -> tuple[int, str, Optional[tuple[int, int]]]:
     )
     if not raw.strip():
         return 5, "対象年齢の詳細は商品ページに準じます。お子さまの発達段階に合わせて選んでください。", None
-    m = re.search(r"(\d+)\s*[〜~\-]\s*(\d+)\s*(?:歳|才)", raw)
+
+    # 範囲: "3歳〜7歳" / "6ヶ月〜2歳"
+    # 月単位の場合は age_range タプルでは歳換算 (months/12, 小数切上げ) を返す
+    def _to_years(n: int, unit: str) -> int:
+        return max(1, (n + 11) // 12) if "ヶ月" in unit else n
+
+    m = re.search(r"(\d+)\s*(歳|才|ヶ月)\s*[〜~\-]\s*(\d+)\s*(歳|才|ヶ月)", raw)
     if m:
-        lo, hi = int(m.group(1)), int(m.group(2))
+        lo_n, lo_u, hi_n, hi_u = int(m.group(1)), m.group(2), int(m.group(3)), m.group(4)
+        lo, hi = _to_years(lo_n, lo_u), _to_years(hi_n, hi_u)
         span = hi - lo
+        label = f"{lo_n}{lo_u}〜{hi_n}{hi_u}"
         if span >= 5:
-            return 10, f"対象年齢は{lo}〜{hi}歳と幅広く、成長段階に合わせて長く遊べる設計です。きょうだいで共用しやすいのも魅力です。", (lo, hi)
-        return 10, f"対象年齢は{lo}〜{hi}歳に明確に設定されており、その年齢帯のお子さまに最適化された遊び方ができます。", (lo, hi)
-    m = re.search(r"(\d+)\s*(?:歳|才)\s*(?:〜|~|から|以上|\+)", raw)
+            return 10, f"対象年齢は{label}と幅広く、成長段階に合わせて長く遊べる設計です。きょうだいで共用しやすいのも魅力です。", (lo, hi)
+        return 10, f"対象年齢は{label}に明確に設定されており、その年齢帯のお子さまに最適化された遊び方ができます。", (lo, hi)
+
+    # 下限のみ: "6歳以上" / "3歳〜" / "12ヶ月から"
+    m = re.search(r"(\d+)\s*(歳|才|ヶ月)\s*(?:〜|~|から|以上|\+)", raw)
     if m:
-        lo = int(m.group(1))
-        return 8, f"{lo}歳以上向けの設計で、{lo}歳前後〜小学生のお子さまに適しています。上限の指定はなく、興味があれば長く楽しめます。", (lo, lo + 5)
+        n, u = int(m.group(1)), m.group(2)
+        lo = _to_years(n, u)
+        return 8, f"{n}{u}以上向けの設計で、{n}{u}前後〜小学生のお子さまに適しています。上限の指定はなく、興味があれば長く楽しめます。", (lo, lo + 5)
+
     return 5, f"対象年齢の記載は『{raw[:20]}』です。お子さまの月齢・発達状況に合わせてご検討ください。", None
 
 
@@ -135,17 +168,27 @@ _EDU_DOMAIN_PHRASES = {
 
 def _edu_value_score(article: dict, brand: NormalizedBrand) -> tuple[int, str]:
     floor = _EDU_FLOOR.get(brand.tier, 0)
-    blob = " ".join(
-        [
-            " ".join(article.get("tags") or []),
-            " ".join(article.get("keywords") or []),
-            str(article.get("title", "")),
-            str(article.get("meta_description", "")),
-        ]
-    )
-    hit = [d for d, kws in _EDU_DOMAINS.items() if any(k in blob for k in kws)]
-    n = len(hit)
-    bonus = round(min(10, n * 2.5))
+
+    # v5: product.edu_domains を優先 (Jules 出力の構造化フィールド)
+    product = article.get("product") or {}
+    edu_raw = product.get("edu_domains")
+    if isinstance(edu_raw, list):
+        hit = [d for d in edu_raw if d in _VALID_EDU_DOMAINS]
+        n = len(set(hit))
+        bonus = _EDU_DOMAIN_BONUS.get(min(n, 4), 0)
+    else:
+        # 後方互換フォールバック: tags/keywords ブロブ検出
+        blob = " ".join(
+            [
+                " ".join(article.get("tags") or []),
+                " ".join(article.get("keywords") or []),
+                str(article.get("title", "")),
+                str(article.get("meta_description", "")),
+            ]
+        )
+        hit = [d for d, kws in _EDU_DOMAINS.items() if any(k in blob for k in kws)]
+        n = len(hit)
+        bonus = round(min(10, n * 2.5))
     pts = min(15, floor + bonus)
 
     if n >= 2:
