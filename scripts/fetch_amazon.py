@@ -353,8 +353,14 @@ def main():
     for it in items:
         write_per_asin_snapshot(args.out, it)
 
-    if args.asin:
-        write_per_asin_competitors(args.out, args.asin, items)
+    # Write competitors.json for every ASIN in the pool so that whichever
+    # ASIN Jules ends up picking from amazon.json has API-verified competitors
+    # available at build time. Without this, scheduled cron runs (which pass
+    # an empty --asin) leave build_post.py with no real competitor data, and
+    # competitor cards render as text-only boxes with no image or Amazon CTA.
+    targets = [args.asin] if args.asin else [it["asin"] for it in items if it.get("asin")]
+    for target in targets:
+        write_per_asin_competitors(args.out, target, items)
 
 if __name__ == "__main__":
     main()
