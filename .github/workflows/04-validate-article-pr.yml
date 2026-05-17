@@ -1,8 +1,16 @@
 name: Validate Article PR
+# 2026-05-17 — `pull_request_target` を使う理由:
+# GITHUB_TOKEN で作成された PR (例: 01-fetch-products.yml の Auto PR) は通常の
+# `pull_request` イベントを発火させないため、validate が走らず required check が
+# 通らない。`pull_request_target` は base branch 側の workflow 定義で走り、
+# GITHUB_TOKEN 作成 PR でも確実に trigger される。
+# 同一リポジトリ branch のみを前提とし、checkout は明示的に PR head sha を取る。
+# (本ジョブはユーザコードを execute せず、決定的な JSON validate + quality_gate のみ)
 on:
-  pull_request:
+  pull_request_target:
     paths:
       - 'data/articles/**.json'
+      - 'data/raw/**'
       - 'data/schema/article.schema.json'
       - 'scripts/validate_json.py'
       - 'scripts/quality_gate.py'
@@ -22,6 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
           fetch-depth: 0
 
       - uses: actions/setup-python@v5

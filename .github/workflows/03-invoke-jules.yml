@@ -49,7 +49,16 @@ jobs:
           with open('data/raw/amazon.json', encoding='utf-8') as f:
               raw = json.load(f)
           items = raw.get('items', [])
-          candidates = [i['asin'] for i in items if isinstance(i, dict) and i.get('asin')]
+          # 2026-05-17: candidates は B0[A-Z0-9]{8} 形式 (Amazon 標準 ASIN) のみに絞る。
+          # PR #279 で書籍/JAN 形式 ASIN (例 4910762175) が pick されてしまい、
+          # 06-jules-lock-cleanup.yml の release-on-merge regex (B0...) にも一致せず
+          # lock が schedule TTL まで残る事故が発生した。
+          _ASIN_RE = re.compile(r'^B0[A-Z0-9]{8}$')
+          candidates = [
+              i['asin'] for i in items
+              if isinstance(i, dict) and isinstance(i.get('asin'), str)
+              and _ASIN_RE.match(i['asin'])
+          ]
           existing = set()
           for path in glob.glob('data/articles/*.json'):
               base = os.path.basename(path)
