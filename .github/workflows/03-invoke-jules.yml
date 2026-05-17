@@ -5,47 +5,15 @@ on:
     types: [completed]
   workflow_dispatch:
 
-# 2026-05-13: 連鎖トリガー (Fetch → Publish → Invoke Jules → PR merge → Publish → ...)
-# によって短時間に複数の Jules セッションが並列起動し、同じ ASIN を選んで
-# 重複 PR (#111 / #112 = 共に B0FHVH6JML) を作る問題に対応。
-# cancel-in-progress: false で先行ジョブを待つことで、Jules セッション作成が
-# 直列化され、後続セッションは最新 main を読んで別 ASIN を選ぶ。
-concurrency:
-  group: invoke-jules
-  cancel-in-progress: false
+# 2026-05-17 Step C-1: 1 run = 1 ASIN から 1 run = 最大 8 ASIN へ並列化。
+# - concurrency: invoke-jules は外す (jules-lock/<ASIN> branch が atomic 排他を担う)
+# - check-open-prs ガードも外す (open PR でも別 ASIN なら lock 取得時点で衝突しない)
+# - pick-asin は 8 件 lock 取れるまで loop、後続 step は bash for-loop で 8 ASIN 分回す
+# Step C-2 (lock branch) と組み合わせて inter-run race を防ぎつつスループット 8x を狙う。
 
 jobs:
-  # 2026-05-15: Jules セッションの非同期性により workflow_run の concurrency だけでは
-  # 重複 ASIN を防げない (5分待機 < 実際の PR 作成 12-50分)。事故例 PR #185-189
-  # (全部 B0DT15VQF8) を踏まえ、open 記事 PR が 1 件でもあれば新規セッションを skip する。
-  # B 段階 (workflow 側で ASIN 事前選定) の前段ガード。
-  check-open-prs:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: read
-    outputs:
-      should_invoke: ${{ steps.check.outputs.should_invoke }}
-    steps:
-      - name: Check for open Jules article PRs
-        id: check
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Jules が生成した記事 PR は title に必ず ASIN (B0XXXXXXXX) を含む
-          OPEN=$(gh pr list --repo ${{ github.repository }} --state open --json title \
-            --jq '[.[] | select(.title | test("B0[A-Z0-9]{8}"; "i"))] | length')
-          echo "Open Jules article PR(s): $OPEN"
-          if [ "$OPEN" -eq 0 ]; then
-            echo "should_invoke=true" >> $GITHUB_OUTPUT
-          else
-            echo "should_invoke=false" >> $GITHUB_OUTPUT
-            echo "::warning::Skipping Jules invocation: $OPEN open article PR(s) exist — merge or close them first to prevent duplicate ASIN selection."
-          fi
-
   invoke-jules:
-    needs: check-open-prs
-    if: needs.check-open-prs.outputs.should_invoke == 'true'
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -108,11 +76,15 @@ jobs:
                   f.write(a + '\n')
           PY
           # lock ブランチ用の empty commit を作る (committer.date を TTL 判定に利用)
+          # 2026-05-17 Step C-1: MAX_LOCKS まで lock を取得し、picked.txt に列挙する。
+          MAX_LOCKS=8
           MAIN_SHA=$(gh api repos/$REPO/git/refs/heads/main --jq .object.sha)
           MAIN_TREE=$(gh api repos/$REPO/git/commits/$MAIN_SHA --jq .tree.sha)
-          CHOSEN=""
+          : > /tmp/picked.txt
+          ACQUIRED=0
           while IFS= read -r asin; do
             [ -z "$asin" ] && continue
+            [ "$ACQUIRED" -ge "$MAX_LOCKS" ] && break
             TS=$(date -u +%FT%TZ)
             COMMIT=$(jq -n --arg msg "jules-lock $asin" --arg tree "$MAIN_TREE" --arg parent "$MAIN_SHA" --arg ts "$TS" \
               '{message: $msg, tree: $tree, parents: [$parent], author: {name: "github-actions", email: "actions@github.com", date: $ts}, committer: {name: "github-actions", email: "actions@github.com", date: $ts}}' | \
@@ -121,23 +93,27 @@ jobs:
             if gh api -X POST "repos/$REPO/git/refs" \
                 -f ref="refs/heads/jules-lock/$asin" -f sha="$COMMIT" >/dev/null 2>&1; then
               echo "Lock acquired: jules-lock/$asin"
-              CHOSEN="$asin"
-              break
+              echo "$asin" >> /tmp/picked.txt
+              ACQUIRED=$((ACQUIRED + 1))
             else
               echo "Lock contention on $asin, trying next"
             fi
           done < /tmp/shuffled.txt
-          if [ -z "$CHOSEN" ]; then
+          echo "Locks acquired: $ACQUIRED / target $MAX_LOCKS"
+          if [ "$ACQUIRED" -eq 0 ]; then
             echo "::warning::No candidate ASINs available (all excluded/locked)"
-            echo "asin=" >> $GITHUB_OUTPUT
+            echo "count=0" >> $GITHUB_OUTPUT
+            echo "asins=" >> $GITHUB_OUTPUT
           else
-            echo "chosen=$CHOSEN"
-            echo "asin=$CHOSEN" >> $GITHUB_OUTPUT
+            ASINS_CSV=$(paste -sd, /tmp/picked.txt)
+            echo "count=$ACQUIRED" >> $GITHUB_OUTPUT
+            echo "asins=$ASINS_CSV" >> $GITHUB_OUTPUT
+            echo "chosen=$ASINS_CSV"
           fi
 
-      # Step 1: ソースを確認
+      # Step 1: ソースを確認 (全 ASIN で共通の source_name)
       - name: List Jules Sources
-        if: steps.pick-asin.outputs.asin != ''
+        if: steps.pick-asin.outputs.count != '0'
         id: list-sources
         run: |
           echo "=== Listing Jules Sources ==="
@@ -162,12 +138,13 @@ jobs:
           echo "source_name=$SOURCE_NAME" >> $GITHUB_OUTPUT
           echo "Source: $SOURCE_NAME"
 
-      # Step 2: セッション作成
-      - name: Create Jules Session
-        id: create-session
-        if: steps.pick-asin.outputs.asin != ''
+      # Step 2: セッション作成 (picked.txt の全 ASIN 分ループ)
+      - name: Create Jules Sessions
+        id: create-sessions
+        if: steps.pick-asin.outputs.count != '0'
         env:
-          TARGET_ASIN: ${{ steps.pick-asin.outputs.asin }}
+          ASINS_CSV: ${{ steps.pick-asin.outputs.asins }}
+          SOURCE_NAME: ${{ steps.list-sources.outputs.source_name }}
         run: |
           # 2026-05-17: Jules が date/slug を未来日付でハルシネートする事故
           # (filename 2026-05-25, 実生成 5/14 ≒ +11日先 等 / posts/2026-05-25-b0fx3qbqbf)
@@ -175,99 +152,129 @@ jobs:
           # Hugo サイトは JST 表示なので date フィールドも +09:00 で揃える。
           TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
           TODAY_ISO=${TODAY}T10:00:00+09:00
-          echo "=== Creating Jules Session (target: $TARGET_ASIN, today: $TODAY) ==="
-          # 2026-05-13: 12行のハードコードプロンプトを廃止し、jules/PROMPT_TEMPLATE.md
-          # を読み込む形に変更（記事品質向上のため出典・競合比較・cross-check ルールを
-          # フルプロンプトとして渡す）。
-          # 2026-05-15: 対象 ASIN を workflow 側で事前選定して prompt に明示注入する形に変更
-          # （事故 PR #185-189 = 全 5 件 B0DT15VQF8 の再発防止）。
-          # ※ FAILED_PRECONDITION が再発した場合は memory:
-          # feedback_jules_api_failed_precondition.md を参照し、まず API キー再発行を試す。
-          INTRO="AGENTS.md を最初に必ず読み、その指示に厳密に従ってください。
-          以下は STAGE 1 (記事JSON生成) の詳細プロンプトです。出典・競合比較・cross-check のルールを必ず守ってください。
+          : > /tmp/session_ids.txt
+          OK=0
+          FAIL=0
+          IFS=',' read -ra ASIN_ARR <<< "$ASINS_CSV"
+          for TARGET_ASIN in "${ASIN_ARR[@]}"; do
+            [ -z "$TARGET_ASIN" ] && continue
+            echo "=== Creating Jules Session (target: $TARGET_ASIN, today: $TODAY) ==="
+            # 2026-05-13: 12行のハードコードプロンプトを廃止し、jules/PROMPT_TEMPLATE.md
+            # を読み込む形に変更（記事品質向上のため出典・競合比較・cross-check ルールを
+            # フルプロンプトとして渡す）。
+            # 2026-05-15: 対象 ASIN を workflow 側で事前選定して prompt に明示注入する形に変更
+            # （事故 PR #185-189 = 全 5 件 B0DT15VQF8 の再発防止）。
+            # ※ FAILED_PRECONDITION が再発した場合は memory:
+            # feedback_jules_api_failed_precondition.md を参照し、まず API キー再発行を試す。
+            INTRO="AGENTS.md を最初に必ず読み、その指示に厳密に従ってください。
+            以下は STAGE 1 (記事JSON生成) の詳細プロンプトです。出典・競合比較・cross-check のルールを必ず守ってください。
 
-          【今回生成する記事の対象 ASIN】: ${TARGET_ASIN}
-          このセッションで生成する記事は必ずこの ASIN を対象としてください。他の ASIN は選ばないでください。
+            【今回生成する記事の対象 ASIN】: ${TARGET_ASIN}
+            このセッションで生成する記事は必ずこの ASIN を対象としてください。他の ASIN は選ばないでください。
 
-          【本日の日付 (必ず使用)】: ${TODAY}
-          - 出力ファイル名: data/articles/${TODAY}-${TARGET_ASIN}.json
-          - slug フィールド: \"${TODAY}-${TARGET_ASIN}\"
-          - date フィールド: \"${TODAY_ISO}\"
-          PROMPT_TEMPLATE.md のスキーマ例にある日付 (2026-05-12 等) はあくまで例示なので絶対に流用しないでください。未来日付・過去日付の生成は禁止です。
+            【本日の日付 (必ず使用)】: ${TODAY}
+            - 出力ファイル名: data/articles/${TODAY}-${TARGET_ASIN}.json
+            - slug フィールド: \"${TODAY}-${TARGET_ASIN}\"
+            - date フィールド: \"${TODAY_ISO}\"
+            PROMPT_TEMPLATE.md のスキーマ例にある日付 (2026-05-12 等) はあくまで例示なので絶対に流用しないでください。未来日付・過去日付の生成は禁止です。
 
-          絶対守るリポジトリ保護ルール:
-          - 新規ファイル追加のみ。既存ファイルの変更・削除は禁止
-          - .github/, scripts/, hugo/ への変更は禁止
-          - data/articles/ フォルダへの JSON 追加のみ許可（命名: ${TODAY}-${TARGET_ASIN}.json 固定）
-          - data/raw/amazon.json から対象 ASIN (${TARGET_ASIN}) のエントリを読み込んで記事を生成
-          - 楽天/Yahoo の価格・URL は **必ず data/raw/rakuten_matched.json および data/raw/yahoo_matched.json** から
-            matched_asin == "${TARGET_ASIN}" のエントリを参照し、product.prices.rakuten / product.prices.yahoo に
-            { price, url } を埋め込む。マッチが無ければ price=0 / url="" / is_search=true で良い。
-            data/raw/rakuten.json と data/raw/yahoo_result.json はキーワード検索結果でありASIN単位のマッチではないため
-            価格欄には**使わない**こと (sources の補助情報としては可)。
-          - data/raw/youtube.json および data/raw/per_asin/${TARGET_ASIN}/ 配下の補助データも活用する
+            絶対守るリポジトリ保護ルール:
+            - 新規ファイル追加のみ。既存ファイルの変更・削除は禁止
+            - .github/, scripts/, hugo/ への変更は禁止
+            - data/articles/ フォルダへの JSON 追加のみ許可（命名: ${TODAY}-${TARGET_ASIN}.json 固定）
+            - data/raw/amazon.json から対象 ASIN (${TARGET_ASIN}) のエントリを読み込んで記事を生成
+            - 楽天/Yahoo の価格・URL は **必ず data/raw/rakuten_matched.json および data/raw/yahoo_matched.json** から
+              matched_asin == \"${TARGET_ASIN}\" のエントリを参照し、product.prices.rakuten / product.prices.yahoo に
+              { price, url } を埋め込む。マッチが無ければ price=0 / url=\"\" / is_search=true で良い。
+              data/raw/rakuten.json と data/raw/yahoo_result.json はキーワード検索結果でありASIN単位のマッチではないため
+              価格欄には**使わない**こと (sources の補助情報としては可)。
+            - data/raw/youtube.json および data/raw/per_asin/${TARGET_ASIN}/ 配下の補助データも活用する
 
-          === 以下、jules/PROMPT_TEMPLATE.md の内容 ==="
-          PROMPT="$INTRO
+            === 以下、jules/PROMPT_TEMPLATE.md の内容 ==="
+            PROMPT="$INTRO
 
-          $(cat jules/PROMPT_TEMPLATE.md)"
+            $(cat jules/PROMPT_TEMPLATE.md)"
 
-          # payload を変数に保存 (失敗時のデバッグ用にログ表示)
-          REQUEST_BODY=$(jq -n \
-            --arg prompt "$PROMPT" \
-            --arg source "${{ steps.list-sources.outputs.source_name }}" \
-            '{
-              prompt: $prompt,
-              sourceContext: {
-                source: $source,
-                githubRepoContext: {
-                  startingBranch: "main"
-                }
-              },
-              automationMode: "AUTO_CREATE_PR",
-              title: "記事生成: 商品深掘りガイド"
-            }')
-          echo "=== Request Body (JSON sent to Jules) ==="
-          echo "$REQUEST_BODY" | jq .
-          echo "=== End Request Body ==="
+            REQUEST_BODY=$(jq -n \
+              --arg prompt "$PROMPT" \
+              --arg source "$SOURCE_NAME" \
+              '{
+                prompt: $prompt,
+                sourceContext: {
+                  source: $source,
+                  githubRepoContext: {
+                    startingBranch: "main"
+                  }
+                },
+                automationMode: "AUTO_CREATE_PR",
+                title: "記事生成: 商品深掘りガイド"
+              }')
 
-          RESPONSE=$(curl -s -w "\n%{http_code}" \
-            'https://jules.googleapis.com/v1alpha/sessions' \
-            -X POST \
-            -H "Content-Type: application/json" \
-            -H "X-Goog-Api-Key: ${{ secrets.JULES_API_KEY }}" \
-            -d "$REQUEST_BODY")
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
-          echo "HTTP: $HTTP_CODE"
-          echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "::error::Failed to create session (HTTP $HTTP_CODE)"
-            # FAILED_PRECONDITION が出たら memory: feedback_jules_api_failed_precondition.md
-            # 参照 → 最優先で API キーを再発行 (jules.google.com → Settings → API keys)
-            echo "::error::HTTP 400 FAILED_PRECONDITION が出る場合は API キーを再発行してください"
+            RESPONSE=$(curl -s -w "\n%{http_code}" \
+              'https://jules.googleapis.com/v1alpha/sessions' \
+              -X POST \
+              -H "Content-Type: application/json" \
+              -H "X-Goog-Api-Key: ${{ secrets.JULES_API_KEY }}" \
+              -d "$REQUEST_BODY")
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
+            echo "HTTP: $HTTP_CODE"
+            echo "$BODY" | jq -c '{name, id, status}' 2>/dev/null || echo "$BODY" | head -c 500
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "::warning::Failed to create session for $TARGET_ASIN (HTTP $HTTP_CODE)"
+              # FAILED_PRECONDITION が出たら memory: feedback_jules_api_failed_precondition.md
+              # 参照 → 最優先で API キーを再発行 (jules.google.com → Settings → API keys)
+              FAIL=$((FAIL + 1))
+              continue
+            fi
+            SESSION_ID=$(echo "$BODY" | jq -r '.id // empty')
+            if [ -z "$SESSION_ID" ]; then
+              echo "::warning::No session id returned for $TARGET_ASIN"
+              FAIL=$((FAIL + 1))
+              continue
+            fi
+            echo "${TARGET_ASIN}:${SESSION_ID}" >> /tmp/session_ids.txt
+            OK=$((OK + 1))
+            echo "Session created: $TARGET_ASIN -> $SESSION_ID"
+          done
+          echo "Sessions: OK=$OK FAIL=$FAIL"
+          echo "count_ok=$OK" >> $GITHUB_OUTPUT
+          echo "count_fail=$FAIL" >> $GITHUB_OUTPUT
+          if [ "$OK" -eq 0 ]; then
+            echo "::error::No Jules sessions were created"
             exit 1
           fi
-          SESSION_ID=$(echo "$BODY" | jq -r '.id // empty')
-          echo "session_id=$SESSION_ID" >> $GITHUB_OUTPUT
-          echo "Session created: $SESSION_ID"
 
-      # Step 3: セッション状態確認（最大5分待機）
-      - name: Wait for Jules completion
-        if: steps.create-session.outputs.session_id != ''
+      # Step 3: セッション状態確認 (全 session を順次 poll、最大5分の smoke test)
+      # AUTO_CREATE_PR は非同期で完了するため、ここでの完了待ちは目視/早期エラー検知用。
+      - name: Wait for Jules completions
+        if: steps.create-sessions.outputs.count_ok != '0'
         run: |
-          SESSION_ID="${{ steps.create-session.outputs.session_id }}"
-          echo "=== Monitoring Session: $SESSION_ID ==="
+          declare -a LINES
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            LINES+=("$line")
+          done < /tmp/session_ids.txt
+          TOTAL=${#LINES[@]}
+          echo "=== Monitoring $TOTAL sessions ==="
           for i in $(seq 1 10); do
             sleep 30
-            RESPONSE=$(curl -s \
-              "https://jules.googleapis.com/v1alpha/sessions/$SESSION_ID" \
-              -H "X-Goog-Api-Key: ${{ secrets.JULES_API_KEY }}")
-            STATUS=$(echo "$RESPONSE" | jq -r '.status // "unknown"')
-            echo "[$i/10] Status: $STATUS"
-            if [ "$STATUS" = "COMPLETED" ] || [ "$STATUS" = "FAILED" ]; then
-              echo "$RESPONSE" | jq '.outputs // empty' 2>/dev/null
+            DONE=0
+            for line in "${LINES[@]}"; do
+              ASIN="${line%%:*}"
+              SESSION_ID="${line#*:}"
+              RESPONSE=$(curl -s \
+                "https://jules.googleapis.com/v1alpha/sessions/$SESSION_ID" \
+                -H "X-Goog-Api-Key: ${{ secrets.JULES_API_KEY }}")
+              STATUS=$(echo "$RESPONSE" | jq -r '.status // "unknown"')
+              echo "[$i/10] $ASIN ($SESSION_ID): $STATUS"
+              if [ "$STATUS" = "COMPLETED" ] || [ "$STATUS" = "FAILED" ]; then
+                DONE=$((DONE + 1))
+              fi
+            done
+            if [ "$DONE" -eq "$TOTAL" ]; then
+              echo "All $TOTAL sessions reached terminal state"
               break
             fi
           done
-          echo "Jules session monitoring complete"
+          echo "Polling complete (best-effort; AUTO_CREATE_PR continues async)"
