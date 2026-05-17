@@ -1,0 +1,71 @@
+name: Jules Lock Cleanup
+# 2026-05-17 Step C-2: lock ブランチ (jules-lock/<ASIN>) のライフサイクル管理
+# - schedule (30分毎): committer.date が 1h 以上前の stale lock を削除 (Jules セッション失敗時の救済)
+# - pull_request closed (merged): merge 済 Jules PR の lock を即時解放
+# - workflow_dispatch: 手動 cleanup
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+
+jobs:
+  release-on-merge:
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Release lock for merged Jules PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          ASIN=$(echo "$PR_TITLE" | grep -oE 'B0[A-Z0-9]{8}' | head -1 || true)
+          if [ -z "$ASIN" ]; then
+            echo "PR title has no ASIN; skipping"
+            exit 0
+          fi
+          if gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/jules-lock/$ASIN" 2>/dev/null; then
+            echo "Released lock: jules-lock/$ASIN"
+          else
+            echo "No lock to release for $ASIN (already cleaned up)"
+          fi
+
+  cleanup-stale:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Delete stale lock branches (committer.date > 1h)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          REPO=${{ github.repository }}
+          TTL_SECONDS=3600
+          NOW=$(date -u +%s)
+          gh api "repos/$REPO/git/matching-refs/heads/jules-lock/" \
+            --jq '.[] | .ref' > /tmp/locks.txt 2>/dev/null || echo "" > /tmp/locks.txt
+          DELETED=0
+          KEPT=0
+          while IFS= read -r ref; do
+            [ -z "$ref" ] && continue
+            SHA=$(gh api "repos/$REPO/git/$ref" --jq '.object.sha' 2>/dev/null || echo "")
+            [ -z "$SHA" ] && continue
+            COMMIT_DATE=$(gh api "repos/$REPO/git/commits/$SHA" --jq '.committer.date' 2>/dev/null || echo "")
+            [ -z "$COMMIT_DATE" ] && continue
+            COMMIT_EPOCH=$(date -u -d "$COMMIT_DATE" +%s)
+            AGE=$((NOW - COMMIT_EPOCH))
+            BRANCH=$(echo "$ref" | sed 's|refs/heads/||')
+            if [ "$AGE" -gt "$TTL_SECONDS" ]; then
+              echo "Deleting stale $BRANCH (age ${AGE}s)"
+              gh api -X DELETE "repos/$REPO/git/$ref" >/dev/null 2>&1 && DELETED=$((DELETED + 1)) || echo "  delete failed"
+            else
+              echo "Keeping $BRANCH (age ${AGE}s)"
+              KEPT=$((KEPT + 1))
+            fi
+          done < /tmp/locks.txt
+          echo "Summary: deleted=$DELETED kept=$KEPT"
