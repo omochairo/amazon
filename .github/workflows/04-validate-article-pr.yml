@@ -1,13 +1,11 @@
 name: Validate Article PR
-# 2026-05-17 — `pull_request_target` を使う理由:
-# GITHUB_TOKEN で作成された PR (例: 01-fetch-products.yml の Auto PR) は通常の
-# `pull_request` イベントを発火させないため、validate が走らず required check が
-# 通らない。`pull_request_target` は base branch 側の workflow 定義で走り、
-# GITHUB_TOKEN 作成 PR でも確実に trigger される。
-# 同一リポジトリ branch のみを前提とし、checkout は明示的に PR head sha を取る。
-# (本ジョブはユーザコードを execute せず、決定的な JSON validate + quality_gate のみ)
+# 2026-05-17 — fetch_amazon (01) が作る data/raw のみの auto-PR では `pull_request`
+# イベントが発火しない (GITHUB_TOKEN 作成 PR の anti-recursion guard、
+# pull_request_target も同じく抑制される)。代わりに 01 から workflow_dispatch で
+# `gh workflow run "Validate Article PR" --ref <branch>` を呼ぶ運用にしている。
+# 通常の Jules article PR は今まで通り `pull_request` で発火する。
 on:
-  pull_request_target:
+  pull_request:
     paths:
       - 'data/articles/**.json'
       - 'data/raw/**'
@@ -30,7 +28,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.ref }}
           fetch-depth: 0
 
       - uses: actions/setup-python@v5
@@ -46,13 +43,25 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          if [ -z "$BASE_SHA" ] || [ -z "$HEAD_SHA" ]; then
-            # workflow_dispatch fallback: validate every article (full sweep)
-            echo "mode=full" >> "$GITHUB_OUTPUT"
-          else
+          if [ -n "$BASE_SHA" ] && [ -n "$HEAD_SHA" ]; then
             echo "mode=diff" >> "$GITHUB_OUTPUT"
             echo "base=$BASE_SHA" >> "$GITHUB_OUTPUT"
             echo "head=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          else
+            # workflow_dispatch: diff current ref against origin/main so the dispatch
+            # from 01-fetch-products.yml (data/raw-only branches) only validates the
+            # branch's actual changes — not every article on main. fetch-depth: 0 above
+            # already pulls full history.
+            BASE=$(git rev-parse origin/main 2>/dev/null || git rev-parse main 2>/dev/null || echo "")
+            HEAD=$(git rev-parse HEAD)
+            if [ -n "$BASE" ] && [ "$BASE" != "$HEAD" ]; then
+              echo "mode=diff" >> "$GITHUB_OUTPUT"
+              echo "base=$BASE" >> "$GITHUB_OUTPUT"
+              echo "head=$HEAD" >> "$GITHUB_OUTPUT"
+            else
+              # main itself or no base: full sweep
+              echo "mode=full" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
       - name: List changed article JSON
