@@ -70,3 +70,33 @@ jobs:
           else
             echo "::warning::Could not enable auto-merge. This usually means branch protection or repo-level 'Allow auto-merge' is not configured. PR will need manual merge until setup is complete."
           fi
+
+      # 2026-05-17 Step C-3: auto-merge を有効化した時点で jules-lock/<ASIN> を即時解放する。
+      # 06-jules-lock-cleanup.yml の pull_request:closed トリガは
+      # GITHUB_TOKEN 起因の merge では発火しない (GitHub Actions の既知制約) ため、
+      # 05 側で能動的に削除する。失敗しても 06 schedule (30 分毎・TTL 1h) で回収されるので非致命。
+      # 安全性: この時点で Jules PR が open 状態で存在し、03-invoke-jules.yml の pick-asin が
+      # /tmp/open_titles.txt でも ASIN を除外するため、lock を消しても同 ASIN の再 pick は起きない。
+      - name: Release jules-lock branch
+        if: steps.scope.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          # ASIN は PR タイトル → head branch 名 (小文字混在可) の順で抽出
+          ASIN=$(echo "$PR_TITLE" | grep -oE 'B0[A-Z0-9]{8}' | head -1 || true)
+          if [ -z "$ASIN" ]; then
+            ASIN=$(echo "$HEAD_REF" | grep -oiE 'b0[a-z0-9]{8}' | head -1 | tr '[:lower:]' '[:upper:]' || true)
+          fi
+          if [ -z "$ASIN" ]; then
+            echo "No ASIN found in PR title or head ref; skipping lock release"
+            exit 0
+          fi
+          if gh api -X DELETE "repos/$REPO/git/refs/heads/jules-lock/$ASIN" 2>/dev/null; then
+            echo "Released lock: jules-lock/$ASIN"
+          else
+            echo "No lock to release for $ASIN (already cleaned up or never existed)"
+          fi
