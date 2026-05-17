@@ -21,6 +21,10 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      # 2026-05-17: actions:write は `gh workflow run "Validate Article PR"`
+      # の workflow_dispatch を実行するために必須。無いと HTTP 403
+      # "Resource not accessible by integration"。
+      actions: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
