@@ -20,6 +20,7 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -105,11 +106,46 @@ jobs:
         if: ${{ always() }}
         run: python scripts/signal_detector.py
 
-      - name: Auto Commit
+      # 2026-05-17: branch protection の required `validate` check が main 直接 push を
+      # 拒否する (PR #256 以降の Step A 設計)。stefanzweifel/git-auto-commit-action@v5
+      # では GH006 で永続失敗していたので、ここで feature branch + PR + auto-merge に切替。
+      # 04-validate-article-pr.yml は data/raw/** 変更でも走り、 article 差分が無ければ
+      # validate ジョブは skip-on-empty で success 終了 → required check 通過。
+      # PR は GITHUB_TOKEN で作成されるが、04 が `pull_request_target` を listen しているので
+      # validate は確実に発火する。05-jules-auto-merge.yml は article 差分専用なので発火しない
+      # → 本ステップ内で直接 auto-merge を有効化する。
+      - name: Create data update PR + enable auto-merge
         if: ${{ always() }}
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "data: automated product data update"
-          file_pattern: "data/"
-          branch: main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          # data/ 配下に差分が無ければ何もしない
+          if git diff --quiet --exit-code -- data/ && [ -z "$(git status --porcelain -- data/)" ]; then
+            echo "No data changes to commit; skipping PR creation."
+            exit 0
+          fi
+          BRANCH="fetch-data/${{ github.run_id }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add data/
+          if git diff --cached --quiet; then
+            echo "Nothing staged after git add; skipping."
+            exit 0
+          fi
+          git commit -m "data: automated product data update (run ${{ github.run_id }})"
+          git push -u origin "$BRANCH"
+          PR_URL=$(gh pr create \
+            --title "data: automated fetch update (run ${{ github.run_id }})" \
+            --body "Automated fetch_amazon data refresh. data/raw/ updates only — no article changes." \
+            --base main \
+            --head "$BRANCH")
+          echo "Created: $PR_URL"
+          # branch protection の required check (validate) が pass し次第 squash + delete-branch
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge enabled on $PR_URL"
+          else
+            echo "::warning::Could not enable auto-merge on $PR_URL — manual admin override may be required."
+          fi
         continue-on-error: true
