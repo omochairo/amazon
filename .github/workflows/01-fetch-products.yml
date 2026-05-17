@@ -142,6 +142,16 @@ jobs:
             --base main \
             --head "$BRANCH")
           echo "Created: $PR_URL"
+          # GITHUB_TOKEN で作成された PR は `pull_request` / `pull_request_target` を
+          # 発火させない (anti-recursion guard) ため、validate を workflow_dispatch で
+          # 明示的に kick する。workflow_dispatch はガードの例外。
+          # validate job の check_run は branch HEAD commit に付くので branch protection
+          # の required `validate` を満たせる。
+          if gh workflow run "Validate Article PR" --ref "$BRANCH"; then
+            echo "Dispatched Validate Article PR on $BRANCH"
+          else
+            echo "::warning::Failed to dispatch Validate Article PR"
+          fi
           # branch protection の required check (validate) が pass し次第 squash + delete-branch
           if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
             echo "Auto-merge enabled on $PR_URL"
