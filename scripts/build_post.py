@@ -546,6 +546,144 @@ def _backfill_amazon_badges(
                 break
 
 
+# 楽天/Yahoo cross-search 結果を本文の価格グリッドに流し込むときに、
+# 検索ヒットしただけで実商品とかけ離れた item (ふるさと納税の高額品など) を
+# 弾くためのガード閾値。Amazon 価格を anchor にする。
+_MARKET_PRICE_BAND_LOW = 0.5   # Amazon 価格の 50% 未満は除外
+_MARKET_PRICE_BAND_HIGH = 2.0  # Amazon 価格の 200% 超は除外
+# search_keyword を title overlap 判定するときに、汎用すぎて根拠にならない語
+_MARKET_GENERIC_TOKENS = frozenset({
+    "おもちゃ", "知育玩具", "プレゼント", "誕生日", "ギフト",
+    "木製", "木のおもちゃ", "セット", "玩具",
+})
+
+
+def _load_matched_index(path: pathlib.Path) -> dict[str, dict[str, Any]]:
+    """data/raw/{rakuten,yahoo}_matched.json を ``{asin: item}`` に展開。"""
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    index: dict[str, dict[str, Any]] = {}
+    for it in data.get("items", []):
+        if not isinstance(it, dict):
+            continue
+        asin = it.get("matched_asin") or it.get("asin")
+        if asin:
+            index[asin] = it
+    return index
+
+
+def _matched_passes_quality(matched: dict[str, Any], amazon_price: int) -> bool:
+    """Phase 2 quality gate: 価格帯と検索語タイトル overlap で誤マッチを弾く。
+
+    - Amazon 価格 (>0) を anchor に [0.5x, 2.0x] 帯外を除外 (ふるさと納税対策)。
+    - search_keyword のうち汎用語を除いた meaningful token が、matched title に
+      閾値以上一致しているかを確認 (median band 選出後の無関係 hit 除外)。
+    """
+    title = matched.get("title") or ""
+    try:
+        price = int(matched.get("price") or 0)
+    except (TypeError, ValueError):
+        price = 0
+    if not title or price <= 0:
+        return False
+
+    if amazon_price > 0:
+        if price < amazon_price * _MARKET_PRICE_BAND_LOW:
+            return False
+        if price > amazon_price * _MARKET_PRICE_BAND_HIGH:
+            return False
+
+    kw = matched.get("search_keyword") or ""
+    kw_tokens = [t for t in re.split(r"\s+", kw) if len(t) >= 2]
+    meaningful = [t for t in kw_tokens if t not in _MARKET_GENERIC_TOKENS]
+    if not meaningful:
+        return True  # 区別語が無ければ cross-search 側 median band の選出を尊重
+    hits = sum(1 for t in meaningful if t in title)
+    threshold = 2 if len(meaningful) >= 2 else 1
+    return hits >= threshold
+
+
+def _attach_market_prices(
+    data: dict[str, Any],
+    rakuten_index: dict[str, dict[str, Any]],
+    yahoo_index: dict[str, dict[str, Any]],
+) -> None:
+    """``product.prices.{rakuten,yahoo}`` を matched JSON から populate。
+
+    Jules 出力は空 (``price: 0, url: ""``) を吐くことが多いため、price/url が
+    両方とも空なら matched エントリで上書きする。Phase 2 ガード (価格帯 +
+    検索語 overlap) を通過したものだけ採用する。最後に
+    ``product.best_price`` / ``product.best_platform`` を全プラットフォーム
+    最安に再計算する。
+    """
+    product = data.get("product") if isinstance(data.get("product"), dict) else None
+    if not product:
+        return
+    asin = product.get("asin")
+    if not asin:
+        return
+
+    prices = product.setdefault("prices", {})
+    amazon_entry = prices.get("amazon") if isinstance(prices.get("amazon"), dict) else None
+    amazon_price = 0
+    if amazon_entry:
+        try:
+            amazon_price = int(amazon_entry.get("price") or 0)
+        except (TypeError, ValueError):
+            amazon_price = 0
+
+    for key, index in (("rakuten", rakuten_index), ("yahoo", yahoo_index)):
+        existing = prices.get(key) if isinstance(prices.get(key), dict) else None
+        # 既に価格 or URL が入っていれば記事側の値を尊重 (Jules が空でも上書き可)
+        if existing and (existing.get("price") or existing.get("url")):
+            continue
+        matched = index.get(asin)
+        if not matched:
+            continue
+        if not _matched_passes_quality(matched, amazon_price):
+            continue
+        try:
+            mprice = int(matched.get("price") or 0)
+        except (TypeError, ValueError):
+            mprice = 0
+        prices[key] = {
+            "price": mprice,
+            "url": matched.get("url") or "",
+            "title": matched.get("title") or "",
+            "is_search": False,
+        }
+
+    _recompute_best_price(product)
+
+
+def _recompute_best_price(product: dict[str, Any]) -> None:
+    """全プラットフォーム最安を ``product.best_price`` / ``best_platform`` に反映。"""
+    prices = product.get("prices")
+    if not isinstance(prices, dict):
+        return
+    labels = (("amazon", "Amazon"), ("rakuten", "楽天市場"), ("yahoo", "Yahoo!ショッピング"))
+    candidates: list[tuple[int, str]] = []
+    for key, label in labels:
+        entry = prices.get(key)
+        if not isinstance(entry, dict):
+            continue
+        try:
+            p = int(entry.get("price") or 0)
+        except (TypeError, ValueError):
+            p = 0
+        if p > 0:
+            candidates.append((p, label))
+    if not candidates:
+        return
+    best = min(candidates, key=lambda x: x[0])
+    product["best_price"] = best[0]
+    product["best_platform"] = best[1]
+
+
 def _backfill_product_images(
     data: dict[str, Any],
     raw_index: dict[str, dict[str, Any]],
@@ -728,6 +866,9 @@ def main() -> None:
     dst_path.mkdir(parents=True, exist_ok=True)
     raw_amazon_index = _load_raw_amazon_index(pathlib.Path(args.raw_amazon))
     per_asin_root = pathlib.Path(args.per_asin_root)
+    raw_root = pathlib.Path(args.raw_amazon).parent
+    rakuten_matched_index = _load_matched_index(raw_root / "rakuten_matched.json")
+    yahoo_matched_index = _load_matched_index(raw_root / "yahoo_matched.json")
     asin_to_slug = _build_asin_to_slug_map(src_path)
     site_base_path = _site_base_path(pathlib.Path(args.hugo_config))
 
@@ -763,6 +904,7 @@ def main() -> None:
             _merge(data, _load_optional_json(src_path / f"{slug}.enrichment.json"), ENRICHMENT_KEYS)
             _merge(data, _load_optional_json(src_path / f"{slug}.seo.json"), SEO_KEYS)
             _backfill_amazon_badges(data, raw_amazon_index, per_asin_root)
+            _attach_market_prices(data, rakuten_matched_index, yahoo_matched_index)
             _backfill_product_images(data, raw_amazon_index, per_asin_root)
             _override_competitive_analysis(data, per_asin_root)
             _fallback_news_books(data, per_asin_root)
