@@ -1441,3 +1441,46 @@ html[data-theme="dark"] .post-content .product-slideshow .slide-thumb.active {
   }
 }
 
+
+/* === Price card: unverified badge & search fallback (2026-05-18) ============
+ * build_post.py:_attach_market_prices() が verified=False を付けた楽天/Yahoo
+ * エントリ向け。Jules が cross_search 未マッチで自力検索した URL は誤商品の
+ * 可能性があるため、目立つバッジで読者に注意喚起し、検索フォールバックリンク
+ * を併設する。
+ */
+.post-content .price-cta-grid .price-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  cursor: help;
+}
+.post-content .price-cta-grid .price-badge--unverified {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+.post-content .price-cta-grid .price-search-fallback a {
+  color: #6b7280;
+  text-decoration: underline;
+}
+.post-content .price-cta-grid .price-search-fallback a:hover {
+  color: #374151;
+}
+/* dark mode */
+body.dark .post-content .price-cta-grid .price-badge--unverified,
+html[data-theme="dark"] .post-content .price-cta-grid .price-badge--unverified {
+  background: #422006;
+  color: #fcd34d;
+  border-color: #92400e;
+}
+body.dark .post-content .price-cta-grid .price-search-fallback a,
+html[data-theme="dark"] .post-content .price-cta-grid .price-search-fallback a {
+  color: #94a3b8;
+}
+body.dark .post-content .price-cta-grid .price-search-fallback a:hover,
+html[data-theme="dark"] .post-content .price-cta-grid .price-search-fallback a:hover {
+  color: #cbd5f5;
+}

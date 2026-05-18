@@ -20,6 +20,7 @@ import json
 import pathlib
 import re
 import time
+import urllib.parse
 from datetime import datetime
 from typing import Any
 
@@ -607,18 +608,30 @@ def _matched_passes_quality(matched: dict[str, Any], amazon_price: int) -> bool:
     return hits >= threshold
 
 
+_SEARCH_URL_BUILDERS = {
+    "rakuten": lambda q: f"https://search.rakuten.co.jp/search/mall/{urllib.parse.quote(q)}/",
+    "yahoo": lambda q: f"https://shopping.yahoo.co.jp/search?p={urllib.parse.quote(q)}",
+}
+
+
 def _attach_market_prices(
     data: dict[str, Any],
     rakuten_index: dict[str, dict[str, Any]],
     yahoo_index: dict[str, dict[str, Any]],
 ) -> None:
-    """``product.prices.{rakuten,yahoo}`` を matched JSON から populate。
+    """``product.prices.{rakuten,yahoo}`` を matched JSON で検証/上書きする。
 
-    Jules 出力は空 (``price: 0, url: ""``) を吐くことが多いため、price/url が
-    両方とも空なら matched エントリで上書きする。Phase 2 ガード (価格帯 +
-    検索語 overlap) を通過したものだけ採用する。最後に
-    ``product.best_price`` / ``product.best_platform`` を全プラットフォーム
-    最安に再計算する。
+    優先順位:
+      1. matched JSON に entry があり Phase 2 ガード (価格帯 + 検索語 overlap)
+         を通過 → ``verified=True`` で **matched データを採用** (Jules の値を
+         上書き)。これが「決定論的に同一商品と判定済み」の唯一の正規ソース。
+      2. matched は無いが Jules が price/url を埋めている → そのまま残す。
+         ただし ``verified=False`` と検索フォールバック ``search_url`` を付与
+         し、テンプレ側で「※確度低」バッジ + 検索リンクを表示する。
+      3. matched も Jules 由来も無い → 既存挙動 (テンプレが「取り扱い確認」)。
+
+    最後に ``product.best_price`` / ``product.best_platform`` を全プラット
+    フォーム最安で再計算する。
     """
     product = data.get("product") if isinstance(data.get("product"), dict) else None
     if not product:
@@ -636,26 +649,43 @@ def _attach_market_prices(
         except (TypeError, ValueError):
             amazon_price = 0
 
+    product_name = product.get("name") or ""
+
     for key, index in (("rakuten", rakuten_index), ("yahoo", yahoo_index)):
         existing = prices.get(key) if isinstance(prices.get(key), dict) else None
-        # 既に価格 or URL が入っていれば記事側の値を尊重 (Jules が空でも上書き可)
-        if existing and (existing.get("price") or existing.get("url")):
-            continue
         matched = index.get(asin)
-        if not matched:
+        matched_ok = bool(matched) and _matched_passes_quality(matched, amazon_price)
+
+        if matched_ok:
+            try:
+                mprice = int(matched.get("price") or 0)
+            except (TypeError, ValueError):
+                mprice = 0
+            prices[key] = {
+                "price": mprice,
+                "url": matched.get("url") or "",
+                "title": matched.get("title") or "",
+                "is_search": False,
+                "verified": True,
+            }
             continue
-        if not _matched_passes_quality(matched, amazon_price):
+
+        if existing and (existing.get("price") or existing.get("url")):
+            # Jules-supplied data with no deterministic cross-check. Keep it
+            # so we don't lose the (often correct, sometimes wrong) link, but
+            # flag it as unverified so the template can render a 確度低 badge
+            # plus a fallback search URL.
+            existing["verified"] = False
+            existing.setdefault("is_search", False)
+            if product_name and not existing.get("search_url"):
+                builder = _SEARCH_URL_BUILDERS.get(key)
+                if builder:
+                    existing["search_url"] = builder(product_name)
+            prices[key] = existing
             continue
-        try:
-            mprice = int(matched.get("price") or 0)
-        except (TypeError, ValueError):
-            mprice = 0
-        prices[key] = {
-            "price": mprice,
-            "url": matched.get("url") or "",
-            "title": matched.get("title") or "",
-            "is_search": False,
-        }
+
+        # Nothing to attach. Leave whatever (if anything) was there; the
+        # template's is_search/取り扱い確認 branch handles the empty case.
 
     _recompute_best_price(product)
 
@@ -935,7 +965,11 @@ def main() -> None:
             tag = "  [DRAFT: low quality]" if draft else ""
 
             if args.gate and evaluate_article is not None:
-                report = evaluate_article(f, schema, out_file)
+                report = evaluate_article(
+                    f, schema, out_file,
+                    rakuten_idx=rakuten_matched_index,
+                    yahoo_idx=yahoo_matched_index,
+                )
                 qpath = src_path / f"{slug}.quality.json"
                 qpath.write_text(
                     json.dumps(report.to_dict(), ensure_ascii=False, indent=2),
