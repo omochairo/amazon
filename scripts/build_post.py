@@ -552,6 +552,11 @@ def _backfill_amazon_badges(
 # 弾くためのガード閾値。Amazon 価格を anchor にする。
 _MARKET_PRICE_BAND_LOW = 0.5   # Amazon 価格の 50% 未満は除外
 _MARKET_PRICE_BAND_HIGH = 2.0  # Amazon 価格の 200% 超は除外
+# coverage ratio (hits / len(meaningful))。これ未満は borderline 扱いで
+# verified=False に格下げ → ※確度低 badge + 検索 fallback 表示。
+# 例: kw='Hape ビーズコインドロップス E0328' vs title='Hape ビーズコインドロップス
+# E0327' は 2/3=0.67 で borderline (異モデル番号) として捕捉される。
+_MARKET_COVERAGE_RATIO = 0.7
 # search_keyword を title overlap 判定するときに、汎用すぎて根拠にならない語
 _MARKET_GENERIC_TOKENS = frozenset({
     "おもちゃ", "知育玩具", "プレゼント", "誕生日", "ギフト",
@@ -605,7 +610,13 @@ def _matched_passes_quality(matched: dict[str, Any], amazon_price: int) -> bool:
         return True  # 区別語が無ければ cross-search 側 median band の選出を尊重
     hits = sum(1 for t in meaningful if t in title)
     threshold = 2 if len(meaningful) >= 2 else 1
-    return hits >= threshold
+    if hits < threshold:
+        return False
+    # 絶対 hits 数を満たしても、meaningful 全体に占める割合が低いマッチは
+    # シリーズ違い/別モデルの誤マッチが多いため verified=False に格下げ。
+    if hits / len(meaningful) < _MARKET_COVERAGE_RATIO:
+        return False
+    return True
 
 
 _SEARCH_URL_BUILDERS = {
