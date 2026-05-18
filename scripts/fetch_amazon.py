@@ -223,6 +223,8 @@ def main():
                         help="Stop searching once this many ASINs not in articles-dir are collected")
     parser.add_argument("--search-index", default="Toys",
                         help="PA-API SearchIndex / category (e.g. 'Toys', 'Baby', 'All'). 'All' disables ItemPage on JP marketplace; pick a concrete category to use pagination.")
+    parser.add_argument("--competitors-only", action="store_true",
+                        help="Backfill mode: fetch --asin CSV, merge current amazon.json pool as competitor candidates, and write per_asin/<ASIN>/{snapshot.json,competitors.json} for the sniper ASINs only. Does NOT overwrite amazon.json (so the live Jules pool is preserved). Requires --asin.")
     args = parser.parse_args()
 
     app_id = get_secret("AMAZON_CREATORS_APPLICATION_ID")
@@ -284,6 +286,40 @@ def main():
                 sys.exit(1)
             if chunk_start + 10 < len(sniper_asins):
                 time.sleep(1.1)  # PA-API TPS=1 safety margin
+
+    # Competitors-only backfill mode: emit per_asin snapshot + competitors.json
+    # for the sniper ASINs without overwriting amazon.json or running the
+    # search sweep. Merges the existing amazon.json pool as competitor
+    # candidates so the backfilled competitors.json contains real listings
+    # rather than just the sniper batch competing with itself.
+    if args.competitors_only:
+        if not sniper_asins:
+            logger.error("--competitors-only requires --asin (CSV)")
+            sys.exit(1)
+        existing_pool_path = os.path.join(args.out, "amazon.json")
+        if os.path.exists(existing_pool_path):
+            try:
+                with open(existing_pool_path, "r", encoding="utf-8") as f:
+                    existing_data = json.load(f)
+                existing_items = existing_data.get("items", []) if isinstance(existing_data, dict) else []
+                sniper_set = set(sniper_asins)
+                merged = 0
+                for ex in existing_items:
+                    if ex.get("asin") and ex.get("asin") not in sniper_set:
+                        items.append(ex)
+                        merged += 1
+                logger.info(f"Merged {merged} items from existing amazon.json as competitor candidates")
+            except Exception as e:
+                logger.warning(f"Failed to load existing amazon.json: {e}")
+        os.makedirs(args.out, exist_ok=True)
+        sniper_set = set(sniper_asins)
+        for it in items:
+            if it.get("asin") in sniper_set:
+                write_per_asin_snapshot(args.out, it)
+        for target in sniper_asins:
+            write_per_asin_competitors(args.out, target, items)
+        logger.info(f"--competitors-only complete: backfilled {len(sniper_asins)} ASIN(s)")
+        return
 
     # Search Mode: multi-keyword × multi-page sweep to keep the new-ASIN pool
     # large enough that the existing-article dedup gate below doesn't starve
