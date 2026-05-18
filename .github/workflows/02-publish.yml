@@ -14,7 +14,9 @@ on:
 
 concurrency:
   group: "publish"
-  cancel-in-progress: false
+  # 6 件 cascade で auto-merge 後に 6 回 dispatch される場合、最新の 1 回だけ走る。
+  # Hugo は main 全体ビルドで冪等なので、途中のビルドを cancel しても最終結果は同じ。
+  cancel-in-progress: true
 
 permissions:
   contents: write

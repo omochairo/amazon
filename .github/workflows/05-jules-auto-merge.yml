@@ -103,3 +103,39 @@ jobs:
           else
             echo "No lock to release for $ASIN (already cleaned up or never existed)"
           fi
+
+      # 2026-05-18: GITHUB_TOKEN による auto-merge は push event cascade を発火しない
+      # (GHA 既知制約 — 無限ループ防止のため) ため、02-publish.yml の
+      # `push: paths: data/articles/**` トリガが起動しない。
+      # 対策: ここで PR が実際に MERGED になるまで polling し、
+      # 検知したら workflow_dispatch で publish を明示起動する。
+      # workflow_dispatch は GHA cascade 制約の数少ない例外として GITHUB_TOKEN
+      # 経由でも下流ワークフローを起動できる。
+      - name: Wait for merge and dispatch publish
+        if: steps.scope.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          # validate (~30s) + auto-merge (~10s) で通常 30-60s。6 分 (15s × 24) で十分なゆとり。
+          MAX_ATTEMPTS=24
+          attempt=0
+          while [ $attempt -lt $MAX_ATTEMPTS ]; do
+            state=$(gh pr view "$PR_NUMBER" -R "$REPO" --json state --jq '.state' || echo "UNKNOWN")
+            echo "Attempt $((attempt+1))/$MAX_ATTEMPTS: PR #$PR_NUMBER state=$state"
+            if [ "$state" = "MERGED" ]; then
+              echo "PR merged. Dispatching Jules Publish Pipeline."
+              gh workflow run "Jules Publish Pipeline" -R "$REPO" --ref main
+              echo "Dispatched."
+              exit 0
+            fi
+            if [ "$state" = "CLOSED" ]; then
+              echo "PR closed without merge. Skipping publish dispatch."
+              exit 0
+            fi
+            attempt=$((attempt+1))
+            sleep 15
+          done
+          echo "::warning::PR #$PR_NUMBER did not reach MERGED within timeout. Publish must be dispatched manually: gh workflow run \"Jules Publish Pipeline\" --ref main"
