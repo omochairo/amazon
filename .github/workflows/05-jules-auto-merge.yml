@@ -8,6 +8,11 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # 2026-05-18: workflow_dispatch event 作成 (Wait for merge and dispatch publish step) のため必須。
+  # 不足すると PR MERGED 検知後の `gh workflow run "Jules Publish Pipeline"` が
+  # HTTP 403 "Resource not accessible by integration" で失敗する。
+  # 同 token 制約は 01-fetch-products.yml の PR #287 で経験済。
+  actions: write
 
 concurrency:
   group: jules-auto-merge-${{ github.event.pull_request.number }}
