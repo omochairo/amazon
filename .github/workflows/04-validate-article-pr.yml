@@ -12,6 +12,12 @@ on:
       - 'data/schema/article.schema.json'
       - 'scripts/validate_json.py'
       - 'scripts/quality_gate.py'
+      # β v5.0: テンプレ / build_post / CSS を触る PR も validate を必須 check として
+      # 発火させる (workflow_dispatch では branch protection の required check に
+      # ならないケースがあるため、pull_request 経由で確実に走らせる)。
+      - 'scripts/build_post.py'
+      - 'scripts/templates/**'
+      - 'hugo/assets/css/**'
   workflow_dispatch:
 
 permissions:
