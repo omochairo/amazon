@@ -4,7 +4,7 @@
   SEO: 商品名を H1 / 複数の H2 / 本文中に自然に配置。
   v4.2 (2026-05-14):
     - Hero score block / 3-platform CTA cards / Pros-Cons 2-col / Competitor cards
-    - セクション見出しに絵文字 (📦 🛒 ⭐ 🥊 🎯 🔍 等)
+    - セクション見出しに絵文字 (📦 💴 🌟 💭 🆚 💡 📚 等 / β v5.0 で 🛒→💴 / ⭐→🌟 / 🥊→🆚 / 🎯→💡 / 🔍→📚)
     - sources URL の自動アフィリエイト化 (Amazon: tag付与, 楽天/Yahoo はそのまま透過)
   Inputs:
     title, meta_description, date, tags, keywords, persona_fit, narrative, faq, product, youtube_embeds, news, books, internal_links, editorial_comment
@@ -33,16 +33,47 @@
 
 {% if narrative.lead %}{{ narrative.lead }}{% endif %}
 
-{# ===== Hero score + key points (新 v4.2) ===== #}
+{# ===== Hero score block (β v5.0): SVG bar+radar + verdict + pros/cons ===== #}
 {% if product.ivs_detail %}
-<div class="hero-score" style="background:linear-gradient(135deg,#fff7ed 0%,#fef3c7 100%);border:1px solid #fde68a;border-radius:14px;padding:18px 20px;margin:0 0 24px;color:#1f2937;"><div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;"><div style="flex:0 0 auto;text-align:center;background:#fff;border-radius:12px;padding:10px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div style="font-size:0.75rem;color:#92400e;font-weight:600;letter-spacing:0.05em;">IVS 総合</div><div style="font-size:2rem;font-weight:800;color:#b45309;line-height:1.1;">{{ product.ivs_detail.total_100 }}<span style="font-size:0.9rem;font-weight:400;color:#92400e;">/100</span></div></div><div style="flex:1 1 240px;display:grid;grid-template-columns:repeat(2,minmax(110px,1fr));gap:6px 12px;font-size:0.85rem;color:#1f2937;"><div>📚 知育効果 <strong>{{ product.ivs_detail.education }}/5</strong></div><div>🕰️ 長く遊べる <strong>{{ product.ivs_detail.longevity }}/5</strong></div><div>🛡️ 安全性 <strong>{{ product.ivs_detail.safety }}/5</strong></div><div>💰 コスパ <strong>{{ product.ivs_detail.cost_performance }}/5</strong></div></div></div>{% if persona_fit and persona_fit.age_range %}<div style="margin-top:12px;padding-top:12px;border-top:1px dashed #fcd34d;font-size:0.92rem;color:#1f2937;">🎯 対象年齢：<strong style="color:#b45309;font-size:1.05rem;">{{ persona_fit.age_range }}</strong></div>{% endif %}{% if product.best_price > 0 %}<div style="margin-top:{% if persona_fit and persona_fit.age_range %}8px{% else %}12px{% endif %};{% if not (persona_fit and persona_fit.age_range) %}padding-top:12px;border-top:1px dashed #fcd34d;{% endif %}font-size:0.92rem;color:#1f2937;">🏷️ 執筆時点の最安値：<strong style="color:#b45309;font-size:1.1rem;">￥{{ "{:,}".format(product.best_price) }}</strong>（{{ product.best_platform }}）</div>{% endif %}</div>
+<div class="hero-score">
+<div class="hero-total-row">
+<div class="hero-total-badge"><span class="hero-total-label">🌟 知育玩具スコア</span><span class="hero-total-value">{{ product.ivs_detail.total_100 }}<small>/100</small></span></div>
+{% if verdict and verdict.headline %}<p class="hero-verdict">「{{ verdict.headline }}」</p>{% endif %}
+</div>
+<div class="hero-charts">
+<div class="hero-bars" aria-label="4軸スコアの棒グラフ">
+<div class="hero-bar-row"><span class="hero-bar-label">📚 知育効果</span><span class="hero-bar-track"><span class="hero-bar-fill" style="--bar-w:{{ product.ivs_detail.bar_education_pct }}%"></span></span><span class="hero-bar-value">{{ product.ivs_detail.education }}/5</span></div>
+<div class="hero-bar-row"><span class="hero-bar-label">🕰️ 長く遊べる</span><span class="hero-bar-track"><span class="hero-bar-fill" style="--bar-w:{{ product.ivs_detail.bar_longevity_pct }}%"></span></span><span class="hero-bar-value">{{ product.ivs_detail.longevity }}/5</span></div>
+<div class="hero-bar-row"><span class="hero-bar-label">🛡️ 安全性</span><span class="hero-bar-track"><span class="hero-bar-fill" style="--bar-w:{{ product.ivs_detail.bar_safety_pct }}%"></span></span><span class="hero-bar-value">{{ product.ivs_detail.safety }}/5</span></div>
+<div class="hero-bar-row"><span class="hero-bar-label">💰 コスパ</span><span class="hero-bar-track"><span class="hero-bar-fill" style="--bar-w:{{ product.ivs_detail.bar_cost_pct }}%"></span></span><span class="hero-bar-value">{{ product.ivs_detail.cost_performance }}/5</span></div>
+</div>
+<div class="hero-radar" aria-label="4軸スコアのレーダーチャート">
+<svg viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="false">
+<g class="radar-grid"><polygon points="120,30 210,120 120,210 30,120"/><polygon points="120,60 180,120 120,180 60,120"/><polygon points="120,90 150,120 120,150 90,120"/></g>
+<g class="radar-axes"><line x1="120" y1="30" x2="120" y2="210"/><line x1="30" y1="120" x2="210" y2="120"/></g>
+<polygon class="radar-shape" points="{{ product.ivs_detail.radar_points }}"/>
+<g class="radar-labels" font-size="12"><text x="120" y="22" text-anchor="middle">💰 コスパ</text><text x="218" y="124" text-anchor="start">🛡️ 安全</text><text x="120" y="228" text-anchor="middle">🕰️ 長く遊べる</text><text x="22" y="124" text-anchor="end">📚 知育</text></g>
+</svg>
+</div>
+</div>
+{% if (product.pros and product.pros|length) or (product.cons and product.cons|length) %}
+<div class="hero-pros-cons">
+<div class="hero-pros"><strong>👍 良いところ</strong><ul>{% for p in product.pros[:3] %}<li>{{ p }}</li>{% endfor %}</ul></div>
+<div class="hero-cons"><strong>⚠️ 気になるところ</strong><ul>{% for c in product.cons[:3] %}<li>{{ c }}</li>{% endfor %}</ul></div>
+</div>
+{% endif %}
+<div class="hero-meta">
+{% if persona_fit and persona_fit.age_range %}<div class="hero-meta-row">💡 対象年齢：<strong>{{ persona_fit.age_range }}</strong></div>{% endif %}
+{% if product.best_price > 0 %}<div class="hero-meta-row">🏷️ 執筆時点の最安値：<strong>￥{{ "{:,}".format(product.best_price) }}</strong>（{{ product.best_platform }}）</div>{% endif %}
+</div>
+</div>
 {% endif %}
 
 {% if persona_fit %}
 <aside class="persona-fit" style="background:#fef7f0;border-left:4px solid #ec8b5e;border-radius:8px;padding:16px 20px;margin:24px 0;color:#1f2937;"><strong style="color:#9a3412;">この記事はこんな方へ</strong><ul style="margin:8px 0 0;padding-left:20px;color:#1f2937;">{% for r in persona_fit.recommended_for %}<li style="color:#1f2937;">{{ r }}</li>{% endfor %}</ul>{% if persona_fit.age_range %}<p style="margin:8px 0 0;font-size:0.9rem;color:#1f2937;">対象年齢：<strong>{{ persona_fit.age_range }}</strong></p>{% endif %}</aside>
 {% endif %}
 
-## <small>{{ product.name }}の</small>🛒 価格を3サイトで比較
+## <small>{{ product.name }}の</small>💴 価格を3サイトで比較
 
 執筆時点の価格をAmazon・楽天・Yahoo!ショッピングで横断比較しました。
 
@@ -60,25 +91,49 @@
 <div class="keepa-graph" style="margin:18px 0;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;color:#1f2937;text-align:center;"><div style="font-weight:600;color:#1f2937;margin-bottom:10px;">📈 Amazon 価格推移グラフ（Keepa 提供）</div><img src="https://graph.keepa.com/pricehistory.png?domain=co.jp&asin={{ product.asin }}" alt="{{ product.name }} の Amazon 価格推移グラフ" loading="lazy" style="max-width:100%;height:auto;border-radius:6px;" onerror="this.closest('.keepa-graph').style.display='none'"><p style="margin:8px 0 0;font-size:0.8rem;color:#6b7280;">※ グラフは <a href="https://keepa.com/" target="_blank" rel="noopener nofollow">Keepa</a> によって自動生成される画像です。記事執筆後の価格変動も反映されます。</p></div>
 {% endif %}
 
-## <small>{{ product.name }}の</small>⭐ 評価ポイント
+## <small>{{ product.name }}の</small>🌟 知育玩具スコアの内訳
 
-冒頭の IVS スコア (おもちゃロボの知育価値スコア) の内訳と、良い点・気になる点をまとめました。
-
-{# IVS Hero block 再掲: 詳細を読みながらスコアを再確認できるよう、評価ポイント H2 内にも表示 #}
-{% if product.ivs_detail %}
-<div class="hero-score" style="background:linear-gradient(135deg,#fff7ed 0%,#fef3c7 100%);border:1px solid #fde68a;border-radius:14px;padding:18px 20px;margin:0 0 18px;color:#1f2937;"><div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;"><div style="flex:0 0 auto;text-align:center;background:#fff;border-radius:12px;padding:10px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div style="font-size:0.75rem;color:#92400e;font-weight:600;letter-spacing:0.05em;">IVS 総合</div><div style="font-size:2rem;font-weight:800;color:#b45309;line-height:1.1;">{{ product.ivs_detail.total_100 }}<span style="font-size:0.9rem;font-weight:400;color:#92400e;">/100</span></div></div><div style="flex:1 1 240px;display:grid;grid-template-columns:repeat(2,minmax(110px,1fr));gap:6px 12px;font-size:0.85rem;color:#1f2937;"><div>📚 知育効果 <strong>{{ product.ivs_detail.education }}/5</strong></div><div>🕰️ 長く遊べる <strong>{{ product.ivs_detail.longevity }}/5</strong></div><div>🛡️ 安全性 <strong>{{ product.ivs_detail.safety }}/5</strong></div><div>💰 コスパ <strong>{{ product.ivs_detail.cost_performance }}/5</strong></div></div></div></div>
-{% endif %}
-
-<details style="margin:16px 0;background:#fffdf5;border:1px solid #fde68a;border-radius:8px;padding:8px 14px;color:#1f2937;"><summary style="cursor:pointer;font-weight:600;color:#92400e;">📖 IVS スコアの詳細（評価軸の説明）</summary><div style="margin-top:10px;font-size:0.9rem;line-height:1.7;color:#1f2937;"><p style="margin:0 0 8px;"><strong>IVS（Ikuiku Value Score）</strong>は、おもちゃロボが知育玩具を 4 つの観点から 5 点満点で評価し、加重平均で 100 点満点に換算した独自スコアです。</p><ul style="margin:0;padding-left:18px;color:#1f2937;"><li><strong>📚 知育効果 (5点満点)</strong>：年齢に応じた学びや、思考力・想像力・手先の発達への刺激度を評価。</li><li><strong>🕰️ 長く遊べる (5点満点)</strong>：遊び方の幅、年齢を超えた長期的な遊び寿命を評価。</li><li><strong>🛡️ 安全性 (5点満点)</strong>：対象年齢の妥当性、素材・形状・誤飲リスク等の安全配慮を評価。</li><li><strong>💰 コスパ (5点満点)</strong>：価格に対する品質・遊び寿命・教育効果のバランスを評価。</li></ul><p style="margin:8px 0 0;font-size:0.85rem;color:#666;">※ スコアは執筆時点の市場データ・レビュー・公式情報をもとに付与しています。実際の感じ方には個人差があります。</p></div></details>
+冒頭で示した IVS（おもちゃロボの知育価値スコア）の **加減点根拠** を、寄与の大きい要素から順に並べました。
 
 {% if product.ivs_detail.score_rationale %}
-<details style="margin:16px 0;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 14px;color:#1f2937;"><summary style="cursor:pointer;font-weight:600;color:#1f2937;">📋 スコアの加減点根拠を見る</summary><ul style="margin-top:10px;font-size:0.9rem;color:#1f2937;">{% for r in product.ivs_detail.score_rationale %}<li style="color:#1f2937;"><strong>{{ r.factor }}（{{ r.delta }}）</strong>：{{ r.reason }}</li>{% endfor %}</ul></details>
+<ul class="score-rationale-list">{% for r in product.ivs_detail.score_rationale %}<li><strong>{{ r.factor }}<span class="score-delta">（{{ r.delta }}）</span></strong>：{{ r.reason }}</li>{% endfor %}</ul>
 {% endif %}
 
-<div class="pros-cons-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin:18px 0;color:#1f2937;">
-<div style="background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;padding:14px 18px;color:#1f2937;"><h3 style="margin:0 0 10px;font-size:1.05rem;color:#15803d;">👍 良いところ</h3><ul style="margin:0;padding-left:18px;font-size:0.95rem;line-height:1.7;color:#1f2937;">{% for p in product.pros %}<li style="color:#1f2937;">{{ p }}</li>{% endfor %}</ul></div>
-<div style="background:#fef2f2;border-left:4px solid #ef4444;border-radius:8px;padding:14px 18px;color:#1f2937;"><h3 style="margin:0 0 10px;font-size:1.05rem;color:#b91c1c;">⚠️ 気になるところ</h3><ul style="margin:0;padding-left:18px;font-size:0.95rem;line-height:1.7;color:#1f2937;">{% for c in product.cons %}<li style="color:#1f2937;">{{ c }}</li>{% endfor %}</ul></div>
-</div>
+<details class="score-axes-doc"><summary>📖 IVS スコアの 4 軸（評価軸の説明を見る）</summary><div><p><strong>IVS（Ikuiku Value Score）</strong>は、おもちゃロボが知育玩具を 4 つの観点から 5 点満点で評価し、加重平均で 100 点満点に換算した独自スコアです。</p><ul><li><strong>📚 知育効果 (5点満点)</strong>：年齢に応じた学びや、思考力・想像力・手先の発達への刺激度を評価。</li><li><strong>🕰️ 長く遊べる (5点満点)</strong>：遊び方の幅、年齢を超えた長期的な遊び寿命を評価。</li><li><strong>🛡️ 安全性 (5点満点)</strong>：対象年齢の妥当性、素材・形状・誤飲リスク等の安全配慮を評価。</li><li><strong>💰 コスパ (5点満点)</strong>：価格に対する品質・遊び寿命・教育効果のバランスを評価。</li></ul><p class="score-axes-note">※ スコアは執筆時点の市場データ・レビュー・公式情報をもとに付与しています。実際の感じ方には個人差があります。</p></div></details>
+
+{% if review_signals %}
+## <small>{{ product.name }}の</small>💭 レビュー傾向の分析
+
+{% if review_signals.summary_one_line %}{{ review_signals.summary_one_line }}{% endif %}
+
+{% if review_signals.high_points %}
+### 👏 高評価で繰り返し挙がる点
+
+<ul class="review-signals-list review-signals-positive">{% for h in review_signals.high_points %}<li><strong>{{ h.label or h.point or h.theme }}</strong>{% if h.detail %} — {{ h.detail }}{% endif %}</li>{% endfor %}</ul>
+{% endif %}
+
+{% if review_signals.concerns %}
+### ⚠️ 気になる声として残る点
+
+<ul class="review-signals-list review-signals-concern">{% for c in review_signals.concerns %}<li><strong>{{ c.label or c.point or c.theme }}</strong>{% if c.detail %} — {{ c.detail }}{% endif %}</li>{% endfor %}</ul>
+{% endif %}
+
+{% if review_signals.use_scenes %}
+### 📍 よく挙がる使用シーン
+
+<ul class="review-signals-list review-signals-scene">{% for s in review_signals.use_scenes %}<li>{% if s.scene %}<strong>{{ s.scene }}</strong>{% if s.detail %} — {{ s.detail }}{% endif %}{% else %}{{ s }}{% endif %}</li>{% endfor %}</ul>
+{% endif %}
+
+{% if review_signals.segment_voices %}
+### 🧑‍🤝‍🧑 層ごとの評価傾向
+
+<ul class="review-signals-list review-signals-segment">{% for sv in review_signals.segment_voices %}<li><strong>{{ sv.segment or sv.layer }}層</strong>では{% if sv.evaluation %} {{ sv.evaluation }}{% elif sv.detail %} {{ sv.detail }}{% endif %}</li>{% endfor %}</ul>
+{% endif %}
+
+{% if product.amazon_review_url %}
+<p class="review-cta"><a href="{{ product.amazon_review_url }}" target="_blank" rel="noopener nofollow sponsored">🛍️ Amazon のカスタマーレビューを見る →</a></p>
+{% endif %}
+{% endif %}
 
 {% if product.images and product.images|length > 1 %}
 ## <small>{{ product.name }}の</small>📸 関連画像情報
@@ -95,7 +150,7 @@
 {% endif %}
 
 {% if competitive_analysis %}
-## <small>{{ product.name }}と</small>🥊 似た商品との比較
+## <small>{{ product.name }}と</small>🆚 似た商品との比較
 
 近い価格帯・コンセプトの競合商品と並べて、{{ product.name }}を選ぶ判断材料を整理しました。
 
@@ -243,7 +298,7 @@
 {% endif %}
 
 {% if narrative.closing %}
-## <small>{{ product.name }}は</small>🎯 まとめ：買うべき？
+## <small>{{ product.name }}は</small>💡 まとめ：買うべき？
 
 {{ narrative.closing }}
 {% endif %}
@@ -272,7 +327,7 @@
 
 
 {% if sources %}
-## 🔍 この記事の根拠（参考にしたソース）
+## 📚 この記事の根拠（参考にしたソース）
 
 {{ product.name }}に関する記述は、以下の{{ sources|length }}件のソースをもとにおもちゃロボが整理しました。
 

@@ -71,6 +71,33 @@ def _sync_ivs_for_render(data: dict[str, Any]) -> None:
         {"factor": "正規流通", "delta": f"+{bd['multi_market']}/10", "reason": sr.rationale[5]},
         {"factor": "コスパ", "delta": f"+{bd['price_value']}/15", "reason": sr.rationale[6]},
     ]
+    # β テンプレ: レーダー軸 (上=コスパ / 下=長く遊べる / 左=知育 / 右=安全) を
+    # SVG 用座標で事前計算する。viewBox 240x240, 中心 (120,120), 半径上限 90。
+    cx, cy, rmax = 120.0, 120.0, 90.0
+    axes = [
+        ("cost", ivs["cost_performance"], cx, cy - rmax),       # 上
+        ("safety", ivs["safety"], cx + rmax, cy),               # 右
+        ("longevity", ivs["longevity"], cx, cy + rmax),         # 下
+        ("education", ivs["education"], cx - rmax, cy),         # 左
+    ]
+    points = []
+    for _key, val, ex, ey in axes:
+        ratio = max(0.0, min(1.0, float(val) / 5.0))
+        px = round(cx + (ex - cx) * ratio, 1)
+        py = round(cy + (ey - cy) * ratio, 1)
+        points.append(f"{px},{py}")
+    ivs["radar_points"] = " ".join(points)
+    # 棒グラフ: 0..5 を 0..100% に。
+    ivs["bar_education_pct"] = round(ivs["education"] / 5.0 * 100, 1)
+    ivs["bar_longevity_pct"] = round(ivs["longevity"] / 5.0 * 100, 1)
+    ivs["bar_safety_pct"] = round(ivs["safety"] / 5.0 * 100, 1)
+    ivs["bar_cost_pct"] = round(ivs["cost_performance"] / 5.0 * 100, 1)
+    # Amazon レビューアンカー URL (CTA 用)
+    asin = product.get("asin")
+    if asin:
+        product["amazon_review_url"] = (
+            f"https://www.amazon.co.jp/dp/{asin}/?tag=zefiransesu-22#customerReviews"
+        )
 
 BADGE_FIELDS = ("availability", "loyalty_points", "savings_percentage")
 
