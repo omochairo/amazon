@@ -191,6 +191,11 @@ jobs:
             - 新規ファイル追加のみ。既存ファイルの変更・削除は禁止
             - .github/, scripts/, hugo/ への変更は禁止
             - data/articles/ フォルダへの JSON 追加のみ許可（命名: ${TODAY}-${TARGET_ASIN}.json 固定）
+            - **最終 PR の差分は data/articles/${TODAY}-${TARGET_ASIN}.json の追加 1 ファイルのみ**。
+              ワークスペース内で fix_*.py / tmp_*.py / debug_*.py / scratch_*.json などの一時スクリプト・
+              中間ファイルを作って JSON を整形するのは構わないが、それらは **必ず最終コミット前に削除し PR に含めないこと**。
+              article JSON 以外がコミットされていると 05-jules-auto-merge の scope ガードが eligible=false にして
+              auto-merge を停止する（PR #301 の事故事例）。
             - data/raw/amazon.json から対象 ASIN (${TARGET_ASIN}) のエントリを読み込んで記事を生成
             - 楽天/Yahoo の価格・URL は **必ず data/raw/rakuten_matched.json および data/raw/yahoo_matched.json** から
               matched_asin == \"${TARGET_ASIN}\" のエントリを参照し、product.prices.rakuten / product.prices.yahoo に

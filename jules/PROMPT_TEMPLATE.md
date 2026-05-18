@@ -62,6 +62,12 @@ narrative.lead の**冒頭 2 文**は「結論ファースト hook」を必須�
 
 `data/articles/{YYYY-MM-DD}-{ASIN}.json` （1ファイル / 商品）
 
+**PR に含めるファイルの厳守ルール（v5.1 / 2026-05-18 追加）**：
+
+- 最終 PR の差分は **上記 1 ファイルの追加のみ**。それ以外のファイル（`fix_*.py` / `tmp_*.py` / `debug_*.py` / `scratch_*.json` などの一時スクリプト、Jules ワークスペース内の中間生成物）は **絶対に PR に含めないこと**。
+- 整形・truncate などのために一時スクリプトを書くのは構わないが、コミット前に必ず `rm` / `git restore --staged` で除外してください。
+- 違反すると `.github/workflows/05-jules-auto-merge.yml` の scope ガード（許可パス: `data/articles/` ∪ `data/raw/per_asin/` のみ）が `eligible=false` を返し auto-merge が完全に停止します（事故事例: 2026-05-17 PR #301 で `fix_json.py` 混入により auto-merge が止まり手動介入が必要になった）。
+
 **日付の決定ルール（厳守）**：
 
 - `{YYYY-MM-DD}` には **INTRO で渡された「本日の日付 (必ず使用)」を使用** してください。INTRO に日付指定が無い場合は、その実行時点の UTC 日付を使用してください。
