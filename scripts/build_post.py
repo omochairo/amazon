@@ -71,9 +71,11 @@ def _sync_ivs_for_render(data: dict[str, Any]) -> None:
         {"factor": "正規流通", "delta": f"+{bd['multi_market']}/10", "reason": sr.rationale[5]},
         {"factor": "コスパ", "delta": f"+{bd['price_value']}/15", "reason": sr.rationale[6]},
     ]
-    # β テンプレ: レーダー軸 (上=コスパ / 下=長く遊べる / 左=知育 / 右=安全) を
-    # SVG 用座標で事前計算する。viewBox 240x240, 中心 (120,120), 半径上限 90。
-    cx, cy, rmax = 120.0, 120.0, 90.0
+    # β テンプレ v5.1: レーダー軸 (上=コスパ / 下=長く遊べる / 左=知育 / 右=安全) を
+    # SVG 用座標で事前計算する。viewBox 400x280, 中心 (200,140), 半径上限 90。
+    # v5.0 比で横方向を大きく取り、軸ラベル「📚 知育効果 3.8」「🛡️ 安全性 4.4」等の
+    # 末尾の値併記がクリップしないようにする。
+    cx, cy, rmax = 200.0, 140.0, 90.0
     axes = [
         ("cost", ivs["cost_performance"], cx, cy - rmax),       # 上
         ("safety", ivs["safety"], cx + rmax, cy),               # 右
@@ -87,11 +89,8 @@ def _sync_ivs_for_render(data: dict[str, Any]) -> None:
         py = round(cy + (ey - cy) * ratio, 1)
         points.append(f"{px},{py}")
     ivs["radar_points"] = " ".join(points)
-    # 棒グラフ: 0..5 を 0..100% に。
-    ivs["bar_education_pct"] = round(ivs["education"] / 5.0 * 100, 1)
-    ivs["bar_longevity_pct"] = round(ivs["longevity"] / 5.0 * 100, 1)
-    ivs["bar_safety_pct"] = round(ivs["safety"] / 5.0 * 100, 1)
-    ivs["bar_cost_pct"] = round(ivs["cost_performance"] / 5.0 * 100, 1)
+    # 総合スコアの棒グラフ (1 本) は total_100 をそのまま % として使う。
+    # 4 軸ごとの bar_*_pct は v5.1 でレーダー一元化に統合し撤去。
     # Amazon レビューアンカー URL (CTA 用)
     asin = product.get("asin")
     if asin:
