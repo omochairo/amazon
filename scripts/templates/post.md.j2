@@ -49,7 +49,7 @@
 <g class="radar-grid"><polygon points="200,50 290,140 200,230 110,140"/><polygon points="200,80 260,140 200,200 140,140"/><polygon points="200,110 230,140 200,170 170,140"/></g>
 <g class="radar-axes"><line x1="200" y1="50" x2="200" y2="230"/><line x1="110" y1="140" x2="290" y2="140"/></g>
 <polygon class="radar-shape" points="{{ product.ivs_detail.radar_points }}"/>
-<g class="radar-labels" font-size="14"><text x="200" y="38" text-anchor="middle">💰 コスパ {{ product.ivs_detail.cost_performance }}</text><text x="298" y="144" text-anchor="start">🛡️ 安全性 {{ product.ivs_detail.safety }}</text><text x="200" y="254" text-anchor="middle">🕰️ 長く遊べる {{ product.ivs_detail.longevity }}</text><text x="102" y="144" text-anchor="end">📚 知育効果 {{ product.ivs_detail.education }}</text></g>
+<g class="radar-labels" font-size="14"><text x="200" y="22" text-anchor="middle">💰 コスパ<tspan x="200" dy="1.25em">{{ "%.1f"|format(product.ivs_detail.cost_performance) }}/5.0</tspan></text><text x="298" y="136" text-anchor="start">🛡️ 安全性<tspan x="298" dy="1.25em">{{ "%.1f"|format(product.ivs_detail.safety) }}/5.0</tspan></text><text x="200" y="246" text-anchor="middle">🕰️ 長く遊べる<tspan x="200" dy="1.25em">{{ "%.1f"|format(product.ivs_detail.longevity) }}/5.0</tspan></text><text x="102" y="136" text-anchor="end">📚 知育効果<tspan x="102" dy="1.25em">{{ "%.1f"|format(product.ivs_detail.education) }}/5.0</tspan></text></g>
 </svg>
 </div>
 {% if (product.pros and product.pros|length) or (product.cons and product.cons|length) %}
@@ -89,9 +89,18 @@
 
 ## <small>{{ product.name }}の</small>🌟 知育玩具スコアの内訳
 
-冒頭で示した IVS（おもちゃロボの知育価値スコア）の **加減点根拠** を、寄与の大きい要素から順に並べました。
+冒頭で示した IVS（おもちゃロボの知育価値スコア）の内訳を、まず 4 軸のスコアでおさらいしてから、寄与の大きい順に **加減点根拠** を並べました。
+
+<div class="score-recap" aria-label="4 軸スコアのおさらい">
+<div class="score-recap-card"><span class="score-recap-axis">📚 知育効果</span><span class="score-recap-value">{{ "%.1f"|format(product.ivs_detail.education) }}<small>/5.0</small></span></div>
+<div class="score-recap-card"><span class="score-recap-axis">🕰️ 長く遊べる</span><span class="score-recap-value">{{ "%.1f"|format(product.ivs_detail.longevity) }}<small>/5.0</small></span></div>
+<div class="score-recap-card"><span class="score-recap-axis">🛡️ 安全性</span><span class="score-recap-value">{{ "%.1f"|format(product.ivs_detail.safety) }}<small>/5.0</small></span></div>
+<div class="score-recap-card"><span class="score-recap-axis">💰 コスパ</span><span class="score-recap-value">{{ "%.1f"|format(product.ivs_detail.cost_performance) }}<small>/5.0</small></span></div>
+</div>
+<p class="score-recap-note">各軸 5.0 点満点。下の <strong>📖 4 軸の説明</strong> に評価基準の詳細をまとめています。</p>
 
 {% if product.ivs_detail.score_rationale %}
+<p class="score-rationale-intro">この 4 軸スコアは、以下の要素を加減点して算出しています。</p>
 <ul class="score-rationale-list">{% for r in product.ivs_detail.score_rationale %}<li><strong>{{ r.factor }}<span class="score-delta">（{{ r.delta }}）</span></strong>：{{ r.reason }}</li>{% endfor %}</ul>
 {% endif %}
 

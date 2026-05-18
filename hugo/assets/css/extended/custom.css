@@ -1658,6 +1658,51 @@ html[data-theme="dark"] .post-content .price-cta-grid .price-search-fallback a:h
 }
 
 /* ========== β v5.0 score rationale & review signals ========== */
+.post-content .score-recap {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 16px 0 6px;
+}
+.post-content .score-recap-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: #fffdf5;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  padding: 10px 8px;
+  text-align: center;
+}
+.post-content .score-recap-axis {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #92400e;
+  letter-spacing: 0.02em;
+}
+.post-content .score-recap-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #b45309;
+  line-height: 1;
+}
+.post-content .score-recap-value small {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #92400e;
+  margin-left: 1px;
+}
+.post-content .score-recap-note {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin: 4px 0 14px;
+}
+.post-content .score-rationale-intro {
+  margin: 14px 0 6px;
+  font-size: 0.95rem;
+  color: #1f2937;
+}
 .post-content .score-rationale-list {
   margin: 14px 0;
   padding-left: 20px;
@@ -1795,6 +1840,31 @@ html[data-theme="dark"] .post-content .hero-score .hero-meta-row strong {
 body.dark .post-content .score-rationale-list .score-delta,
 html[data-theme="dark"] .post-content .score-rationale-list .score-delta {
   color: #fdba74;
+}
+body.dark .post-content .score-recap-card,
+html[data-theme="dark"] .post-content .score-recap-card {
+  background: #1f1209;
+  border-color: #78350f;
+}
+body.dark .post-content .score-recap-axis,
+html[data-theme="dark"] .post-content .score-recap-axis {
+  color: #fde68a;
+}
+body.dark .post-content .score-recap-value,
+html[data-theme="dark"] .post-content .score-recap-value {
+  color: #fdba74;
+}
+body.dark .post-content .score-recap-value small,
+html[data-theme="dark"] .post-content .score-recap-value small {
+  color: #fde68a;
+}
+body.dark .post-content .score-recap-note,
+html[data-theme="dark"] .post-content .score-recap-note {
+  color: #d6d3d1;
+}
+body.dark .post-content .score-rationale-intro,
+html[data-theme="dark"] .post-content .score-rationale-intro {
+  color: #fef3c7;
 }
 body.dark .post-content details.score-axes-doc,
 html[data-theme="dark"] .post-content details.score-axes-doc {
