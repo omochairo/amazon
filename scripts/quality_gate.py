@@ -263,8 +263,25 @@ def check_target_age(data: dict) -> CheckResult:
     return CheckResult("target_age_v5", True, 1.0, "OK")
 
 
+_SALES_PAGE_HOSTS = (
+    "amazon.co.jp", "amazon.com",
+    "rakuten.co.jp", "hb.afl.rakuten.co.jp", "search.rakuten.co.jp",
+    "shopping.yahoo.co.jp", "ck.jp.ap.valuecommerce.com", "store.shopping.yahoo.co.jp",
+)
+
+
+def _is_sales_source(src: dict) -> bool:
+    url = (src.get("url") or "").lower()
+    return any(h in url for h in _SALES_PAGE_HOSTS)
+
+
 def check_certifications(data: dict) -> CheckResult:
-    """v5: product.certifications が list。空配列も可。フィールド無しは skip."""
+    """v5: product.certifications が list。空配列も可。フィールド無しは skip.
+
+    追加 (P2): certifications が非空のとき、その cert 名を本文で主張している
+    claim を探し、その claim の supporting_source_ids が空または全販売ページ
+    だけだった場合は failure とする (§6.5.6 ハルシネーション防止)。
+    """
     product = data.get("product") or {}
     if "certifications" not in product:
         return CheckResult("certifications_v5", True, 1.0, "field absent (legacy article, skipped)")
@@ -274,6 +291,40 @@ def check_certifications(data: dict) -> CheckResult:
     non_str = [c for c in val if not isinstance(c, str)]
     if non_str:
         return CheckResult("certifications_v5", False, 0.0, f"non-string entries: {non_str[:3]}")
+    certs = [c for c in val if c]
+    if not certs:
+        return CheckResult("certifications_v5", True, 1.0, "OK (empty)")
+
+    claims = data.get("claims") or []
+    sources_by_id = {s.get("id"): s for s in (data.get("sources") or []) if isinstance(s, dict) and s.get("id")}
+
+    # cert 名を含む claim を抽出
+    mentioning = [
+        c for c in claims
+        if isinstance(c, dict) and isinstance(c.get("claim"), str)
+        and any(cert in c["claim"] for cert in certs)
+    ]
+    if not mentioning:
+        return CheckResult(
+            "certifications_v5", False, 0.0,
+            f"certifications {certs} 主張だが本文 claim 内に cert 名を含む裏付け記述が無い",
+        )
+
+    bad = []
+    for cl in mentioning:
+        sids = cl.get("supporting_source_ids") or []
+        srcs = [sources_by_id.get(sid) for sid in sids if sources_by_id.get(sid)]
+        if not srcs:
+            bad.append((cl.get("claim", "")[:60], "sources=空"))
+            continue
+        if all(_is_sales_source(s) for s in srcs):
+            bad.append((cl.get("claim", "")[:60], f"全販売ページ ({len(srcs)}件)"))
+    if bad:
+        first = bad[0]
+        return CheckResult(
+            "certifications_v5", False, 0.0,
+            f"certifications {certs} の裏付け不足: claim='{first[0]}' → {first[1]}",
+        )
     return CheckResult("certifications_v5", True, 1.0, "OK")
 
 
