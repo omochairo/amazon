@@ -409,6 +409,44 @@ def check_source_uniqueness(data: dict) -> CheckResult:
     return CheckResult("source_uniqueness", True, 1.0, "OK")
 
 
+def check_sources_v5(data: dict) -> CheckResult:
+    """v5 §6.5.1 件数規律: sources は最低 5 件、うち非販売 (第三者) が 2 件以上。
+
+    セッション 19 で「certs=[] にすれば cert 系 check が全 skip → sources を
+    緩めても通過する」盲点が判明 (例: B0GFVV4YG9 は販売 5 件のみ / B0C8HM1F94
+    は sources=3)。プロンプトには明記されているが gate 未強制だったため追加。
+
+    判定:
+    - sources field 無し → skip (legacy article)
+    - sources が list でない → fail
+    - len(sources) < 5 → fail
+    - 非販売 (= _is_sales_source False) が 2 件未満 → fail
+    """
+    if "sources" not in data:
+        return CheckResult("sources_v5", True, 1.0, "field absent (legacy article, skipped)")
+    srcs = data.get("sources") or []
+    if not isinstance(srcs, list):
+        return CheckResult("sources_v5", False, 0.0, "sources must be a list")
+
+    valid = [s for s in srcs if isinstance(s, dict) and s.get("url")]
+    total = len(valid)
+    if total < 5:
+        return CheckResult(
+            "sources_v5", False, 0.0,
+            f"sources={total} 件 (v5 §6.5.1 最低 5 件必須)",
+        )
+
+    non_sales = [s for s in valid if not _is_sales_source(s)]
+    if len(non_sales) < 2:
+        sales_count = total - len(non_sales)
+        return CheckResult(
+            "sources_v5", False, 0.0,
+            f"非販売 source={len(non_sales)} 件 / 販売={sales_count} 件 "
+            f"(v5 §6.5.1 第三者 2 件以上必須)",
+        )
+    return CheckResult("sources_v5", True, 1.0, f"OK (total={total}, non_sales={len(non_sales)})")
+
+
 # cert 名と HTML 本文内で許容するトークン (alias) の対応
 # 個別 cert 主張時に、第三者 source HTML がこれらのいずれかを含めば OK
 _CERT_HTML_TOKENS: dict[str, tuple[str, ...]] = {
@@ -770,6 +808,7 @@ def evaluate_article(
     report.checks.append(check_target_age(data))
     report.checks.append(check_certifications(data))
     report.checks.append(check_source_uniqueness(data))
+    report.checks.append(check_sources_v5(data))
     report.checks.append(check_cert_sources_content(data, fetch_enabled=cert_fetch))
     report.checks.append(check_edu_domains(data))
     report.checks.append(check_prices_verified(data))
