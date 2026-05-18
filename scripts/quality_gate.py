@@ -31,6 +31,18 @@ from dataclasses import dataclass, field
 from typing import Any
 
 try:
+    # Reuse build_post's verification logic so quality_gate and the actual
+    # rendered template agree on what counts as "verified". Loaded lazily so
+    # quality_gate still works when run in isolation without build_post on
+    # the import path.
+    from build_post import _load_matched_index as _bp_load_matched_index
+    from build_post import _matched_passes_quality as _bp_matched_passes_quality
+except ImportError:  # pragma: no cover - best-effort fallback
+    _bp_load_matched_index = None
+    _bp_matched_passes_quality = None
+from typing import Any
+
+try:
     from jsonschema import Draft7Validator
 except ImportError:
     Draft7Validator = None  # type: ignore
@@ -282,6 +294,47 @@ def check_edu_domains(data: dict) -> CheckResult:
     return CheckResult("edu_domains_v5", True, 1.0, "OK")
 
 
+def check_prices_verified(data: dict) -> CheckResult:
+    """Warn-only: count rakuten/yahoo price entries that have a clickable URL
+    but lack deterministic cross_search verification. Build_post tags entries
+    with ``verified=True`` only when ``data/raw/{rakuten,yahoo}_matched.json``
+    confirms an ASIN-level match. Jules-supplied URLs without that match are
+    legitimate (often correct) but carry a higher chance of pointing to a
+    look-alike product, especially for no-brand listings. We surface the count
+    in the report (and modestly nudge the score) but never strict-fail —
+    blocking every Jules PR with an unverified Yahoo link would be too harsh.
+    """
+    product = data.get("product") or {}
+    prices = product.get("prices") or {}
+    unverified: list[str] = []
+    verified: list[str] = []
+    for key in ("rakuten", "yahoo"):
+        entry = prices.get(key)
+        if not isinstance(entry, dict):
+            continue
+        try:
+            p = int(entry.get("price") or 0)
+        except (TypeError, ValueError):
+            p = 0
+        if p <= 0 or not entry.get("url"):
+            continue  # no clickable link rendered to readers
+        if entry.get("verified") is True:
+            verified.append(key)
+        else:
+            unverified.append(key)
+    total = len(verified) + len(unverified)
+    if total == 0:
+        return CheckResult("prices_verified", True, 1.0, "no rakuten/yahoo links present")
+    if not unverified:
+        return CheckResult("prices_verified", True, 1.0, f"all {total} link(s) verified via cross_search")
+    score = max(0.5, 1.0 - 0.1 * len(unverified))
+    msg = (
+        f"unverified={','.join(unverified)} verified={','.join(verified) or 'none'} "
+        f"(warn-only; template renders ※確度低 badge + search fallback)"
+    )
+    return CheckResult("prices_verified", True, score, msg)
+
+
 def check_tone(data: dict) -> CheckResult:
     """Scan all narrative + faq text for forbidden childish tone patterns."""
     texts = []
@@ -364,12 +417,56 @@ def check_product_name_in_body(md_text: str | None, product_name: str) -> CheckR
     )
 
 
-def evaluate_article(json_path: pathlib.Path, schema: dict, md_path: pathlib.Path | None) -> ArticleReport:
+def _derive_verified_status(
+    data: dict,
+    rakuten_idx: dict[str, Any] | None,
+    yahoo_idx: dict[str, Any] | None,
+) -> None:
+    """In-place: mirror ``build_post._attach_market_prices()`` for the
+    ``verified`` flag so ``check_prices_verified`` can be called on raw Jules
+    JSON before build_post has rewritten it. No-op when matched indexes are
+    not available or the build_post helpers are not importable."""
+    if _bp_matched_passes_quality is None or rakuten_idx is None or yahoo_idx is None:
+        return
+    product = data.get("product") if isinstance(data.get("product"), dict) else None
+    if not product:
+        return
+    asin = product.get("asin")
+    if not asin:
+        return
+    prices = product.get("prices") or {}
+    try:
+        amazon_price = int((prices.get("amazon") or {}).get("price") or 0)
+    except (TypeError, ValueError):
+        amazon_price = 0
+    for key, idx in (("rakuten", rakuten_idx), ("yahoo", yahoo_idx)):
+        entry = prices.get(key)
+        if not isinstance(entry, dict):
+            continue
+        matched = (idx or {}).get(asin)
+        matched_ok = bool(matched) and _bp_matched_passes_quality(matched, amazon_price)
+        if matched_ok:
+            entry["verified"] = True
+            continue
+        if entry.get("price") or entry.get("url"):
+            entry["verified"] = False
+
+
+def evaluate_article(
+    json_path: pathlib.Path,
+    schema: dict,
+    md_path: pathlib.Path | None,
+    *,
+    rakuten_idx: dict[str, Any] | None = None,
+    yahoo_idx: dict[str, Any] | None = None,
+) -> ArticleReport:
     data = json.loads(json_path.read_text(encoding="utf-8"))
     slug = data.get("slug", json_path.stem)
     md_text: str | None = None
     if md_path and md_path.exists():
         md_text = md_path.read_text(encoding="utf-8")
+
+    _derive_verified_status(data, rakuten_idx, yahoo_idx)
 
     product = data.get("product", {})
     product_name = product.get("name", "")
@@ -386,6 +483,7 @@ def evaluate_article(json_path: pathlib.Path, schema: dict, md_path: pathlib.Pat
     report.checks.append(check_target_age(data))
     report.checks.append(check_certifications(data))
     report.checks.append(check_edu_domains(data))
+    report.checks.append(check_prices_verified(data))
     report.checks.append(check_tone(data))
     report.checks.append(check_heading_hierarchy(md_text))
     report.checks.append(check_body_word_count(md_text))
@@ -417,6 +515,16 @@ def main() -> int:
 
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
 
+    rakuten_idx = None
+    yahoo_idx = None
+    if _bp_load_matched_index is not None:
+        rakuten_matched_path = pathlib.Path("data/raw/rakuten_matched.json")
+        yahoo_matched_path = pathlib.Path("data/raw/yahoo_matched.json")
+        if rakuten_matched_path.exists():
+            rakuten_idx = _bp_load_matched_index(rakuten_matched_path)
+        if yahoo_matched_path.exists():
+            yahoo_idx = _bp_load_matched_index(yahoo_matched_path)
+
     json_files = sorted(p for p in src.glob("*.json") if not p.stem.endswith(".enrichment") and not p.stem.endswith(".seo") and not p.stem.endswith(".quality"))
 
     if not json_files:
@@ -429,7 +537,10 @@ def main() -> int:
 
     for jp in json_files:
         md_candidate = posts / f"{jp.stem}.md"
-        report = evaluate_article(jp, schema, md_candidate if md_candidate.exists() else None)
+        report = evaluate_article(
+            jp, schema, md_candidate if md_candidate.exists() else None,
+            rakuten_idx=rakuten_idx, yahoo_idx=yahoo_idx,
+        )
         all_reports.append(report)
         if args.write_reports:
             out = jp.with_suffix(".quality.json")
