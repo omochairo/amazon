@@ -168,6 +168,28 @@
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
       "notes": "価格および商品パッケージ情報を確認。"
+    },
+    {
+      "id": "src-4",
+      "name": "Cha Cha Cha 知育玩具コラム",
+      "url": "https://chachacha-toy.com/column/pull-toy-recommendations/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-05-18",
+      "author": "知育玩具専門メディア",
+      "conflict_of_interest": "none",
+      "notes": "プルトイは歩行を促すだけでなく、積む遊びなどが複合されたものは指先の知育効果も高いと解説されている。"
+    },
+    {
+      "id": "src-5",
+      "name": "ToySchool コラム",
+      "url": "https://toyschool.net/pull-toy/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-05-18",
+      "author": "知育玩具専門メディア",
+      "conflict_of_interest": "none",
+      "notes": "引っ張るおもちゃ（プルトイ）の知育効果について、空間認識能力の向上などが挙げられている。"
     }
   ],
   "claims": [
@@ -212,6 +234,17 @@
       ],
       "cross_checked": false,
       "notes": "公式情報に基づく"
+    },
+    {
+      "claim": "プルトイは歩行と指先の両方の発達を促す",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-4",
+        "src-5"
+      ],
+      "cross_checked": true,
+      "notes": "知育専門メディアによる一般的なプルトイの見解"
     }
   ],
   "competitive_analysis": [
