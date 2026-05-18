@@ -206,7 +206,17 @@
   ],
   "claims": [
     {
-      "claim": "食品衛生法や欧米の安全基準（EN71、ASTM）をクリアしており、安全性が高い",
+      "claim": "国内の食品検査基準（食品級ABS素材）基準をクリアしており、なめても安心",
+      "category": "safety",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-1"
+      ],
+      "cross_checked": false,
+      "notes": "メーカー公式ページにて食品級ABS素材の使用が明記されている。"
+    },
+    {
+      "claim": "欧米の玩具安全基準（EN71、ASTM）をクリアしており、安全性が高い",
       "category": "safety",
       "confidence": "high",
       "supporting_source_ids": [
@@ -215,7 +225,7 @@
         "src-4"
       ],
       "cross_checked": true,
-      "notes": "メーカー公式の説明に加え、複数の第三者レビューブログでも安全基準のクリアが評価されている。"
+      "notes": "複数の第三者レビューブログでEN71およびASTM基準のクリアが評価されている。"
     },
     {
       "claim": "マグフォーマー等の他社製品と互換性があり、追加パーツとしても活用できる",
