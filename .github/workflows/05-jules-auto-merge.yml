@@ -29,7 +29,10 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -e
-          changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          # Triple-dot: diff from merge-base of BASE and HEAD to HEAD.
+          # Excludes changes landed on main after this branch diverged so the
+          # scope guard sees only what *this PR* added/modified.
+          changed=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA")
           echo "Changed files:"
           echo "$changed"
           # Safety: every changed file must be under data/articles/ or data/raw/per_asin/
@@ -43,7 +46,7 @@ jobs:
             exit 0
           fi
           # Must add or modify at least one data/articles/B0XXXXXXXX.json
-          added=$(git diff --name-only --diff-filter=AM "$BASE_SHA" "$HEAD_SHA" \
+          added=$(git diff --name-only --diff-filter=AM "$BASE_SHA"..."$HEAD_SHA" \
                     -- 'data/articles/*.json' \
                   | grep -v '\.quality\.json$' \
                   | grep -E 'data/articles/[0-9]{4}-[0-9]{2}-[0-9]{2}-B0[A-Z0-9]{8}\.json$' || true)
