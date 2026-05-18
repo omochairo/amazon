@@ -275,6 +275,41 @@ def _is_sales_source(src: dict) -> bool:
     return any(h in url for h in _SALES_PAGE_HOSTS)
 
 
+# 検索エンジン結果ページ自体は独立した第三者ソースになり得ない (PR #325 後継)
+# Jules が「検索した URL をそのまま src に貼る」手抜きを禁止する
+_SEARCH_ENGINE_URL_PATTERNS = (
+    "html.duckduckgo.com",
+    "duckduckgo.com/?q=", "duckduckgo.com/html",
+    "www.google.com/search", "google.com/search?",
+    "www.bing.com/search", "bing.com/search?",
+    "search.yahoo.co.jp", "search.yahoo.com",
+    "search.brave.com",
+    "www.baidu.com/s?", "baidu.com/s?",
+)
+
+
+def _is_search_engine_url(url: str) -> bool:
+    u = (url or "").lower()
+    return any(p in u for p in _SEARCH_ENGINE_URL_PATTERNS)
+
+
+def _normalize_url(url: str) -> str:
+    """URL 正規化: 同一 URL を src 間で重複検出するための比較キー。
+    末尾スラッシュ・大小文字・affiliate tag を吸収するが、path や query 構造は保持。
+    """
+    if not url:
+        return ""
+    u = url.strip().lower()
+    # affiliate tag を剥がす (Amazon の ?tag= や &tag= が代表)
+    u = re.sub(r"[?&]tag=[^&]*", "", u)
+    u = re.sub(r"[?&]utm_[a-z_]+=[^&]*", "", u)
+    # 残った "?" や "&" の連結を整える
+    u = re.sub(r"\?&", "?", u)
+    u = re.sub(r"&+", "&", u)
+    u = u.rstrip("?&/")
+    return u
+
+
 def check_certifications(data: dict) -> CheckResult:
     """v5: product.certifications が list。空配列も可。フィールド無しは skip.
 
@@ -326,6 +361,206 @@ def check_certifications(data: dict) -> CheckResult:
             f"certifications {certs} の裏付け不足: claim='{first[0]}' → {first[1]}",
         )
     return CheckResult("certifications_v5", True, 1.0, "OK")
+
+
+def check_source_uniqueness(data: dict) -> CheckResult:
+    """sources 構造健全性チェック (v5 §6.5.1 補強):
+    1. 検索エンジン結果ページ URL (DuckDuckGo/Google 等) は src に不可
+    2. 同一 URL (正規化後) が 2 つ以上の src id に分割されていない (1 URL multi-source 化禁止)
+    """
+    if "sources" not in data:
+        return CheckResult("source_uniqueness", True, 1.0, "field absent (legacy article, skipped)")
+    srcs = data.get("sources") or []
+    if not isinstance(srcs, list) or not srcs:
+        return CheckResult("source_uniqueness", True, 1.0, "OK (empty)")
+
+    # 1. 検索エンジン URL
+    bad_search = []
+    for s in srcs:
+        if not isinstance(s, dict):
+            continue
+        url = s.get("url") or ""
+        if _is_search_engine_url(url):
+            bad_search.append((s.get("id", "?"), url[:100]))
+    if bad_search:
+        sid, u = bad_search[0]
+        return CheckResult(
+            "source_uniqueness", False, 0.0,
+            f"検索エンジン結果ページが src に含まれる: {sid}={u}",
+        )
+
+    # 2. URL 重複 (正規化後)
+    seen: dict[str, list[str]] = {}
+    for s in srcs:
+        if not isinstance(s, dict):
+            continue
+        norm = _normalize_url(s.get("url") or "")
+        if not norm:
+            continue
+        seen.setdefault(norm, []).append(s.get("id") or "?")
+    dups = {u: ids for u, ids in seen.items() if len(ids) >= 2}
+    if dups:
+        u0 = next(iter(dups))
+        return CheckResult(
+            "source_uniqueness", False, 0.0,
+            f"同一 URL が複数 src に分割: {dups[u0]} → {u0[:100]}",
+        )
+
+    return CheckResult("source_uniqueness", True, 1.0, "OK")
+
+
+# cert 名と HTML 本文内で許容するトークン (alias) の対応
+# 個別 cert 主張時に、第三者 source HTML がこれらのいずれかを含めば OK
+_CERT_HTML_TOKENS: dict[str, tuple[str, ...]] = {
+    "食品衛生法": ("食品衛生法", "食品衛生", "食品級", "食用級"),
+    "EN71": ("EN71", "EN 71", "EN-71"),
+    "ASTM": ("ASTM",),
+    "CE": ("CE承認", "CE認証", "CEマーク", "CE基準", "CE適合", "CE標準", "EN71"),
+    "ST": ("STマーク", "ST基準", "ST規格", "ST認証", "日本玩具協会", "玩具安全基準"),
+    "PSC": ("PSCマーク", "PSC認証", "PSC基準", "PSC適合", "消費生活用製品安全法"),
+    "KC": ("KCマーク", "KC認証", "KC基準"),
+}
+
+
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_HTML_SCRIPT_RE = re.compile(r"<(script|style|noscript)[^>]*>.*?</\1>", re.DOTALL | re.IGNORECASE)
+
+
+def _fetch_url_text(url: str, *, cache: dict[str, str | None], timeout: float = 8.0) -> str | None:
+    """source URL を fetch して本文テキストを返す。失敗時 None。簡易 cache 付き。
+    bs4 を避け、regex で <script>/<style>/<noscript> と HTML タグを剥がす軽量版。
+    cert トークンは plain string なので tag stripping が雑でも捕捉できる。
+    """
+    if url in cache:
+        return cache[url]
+    try:
+        import requests  # type: ignore
+    except ImportError:
+        cache[url] = None
+        return None
+    try:
+        r = requests.get(
+            url,
+            timeout=timeout,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (compatible; omochairo-quality-gate/1.0; "
+                    "+https://omochairo.github.io/amazon/)"
+                ),
+                "Accept-Language": "ja,en;q=0.5",
+            },
+            allow_redirects=True,
+        )
+        if r.status_code >= 400:
+            cache[url] = None
+            return None
+        ct = r.headers.get("Content-Type", "").lower()
+        if "html" not in ct and "text" not in ct:
+            cache[url] = None
+            return None
+        raw = r.text
+        raw = _HTML_SCRIPT_RE.sub(" ", raw)
+        text = _HTML_TAG_RE.sub(" ", raw)
+        cache[url] = text
+        return text
+    except Exception:
+        cache[url] = None
+        return None
+
+
+def check_cert_sources_content(data: dict, *, fetch_enabled: bool = True) -> CheckResult:
+    """v5 §6.5.6 補強 (P0.5): cert claim の supporting 第三者 source HTML を
+    fetch して cert 名 (or alias) トークンが本文に出現するか検証する。
+
+    PR #313 ゲートは「non-sales URL を 1 件 supporting に挙げる」だけで通過する
+    構造だったため、B07GCYY4M6 の kanamiblog のように cert を一切言及しない
+    blog を Jules が「形だけ」埋めて gate 突破する事例が確認された (セッション18)。
+
+    判定:
+    - certifications 空 → skip
+    - fetch_enabled=False → skip (local dryrun 用)
+    - cert ごとに claim を抽出 → 非販売 supporting source HTML を順次 fetch
+    - 1 source でも cert token を含めば、その cert は OK
+    - 全 fetch 成功かつ cert token 0 件 → fail
+    - 全 fetch 失敗 (network/4xx/5xx) → warn (score 0.7, passed=True) — flake 耐性
+    """
+    product = data.get("product") or {}
+    if "certifications" not in product:
+        return CheckResult("cert_sources_content", True, 1.0, "field absent (skipped)")
+    certs = [c for c in (product.get("certifications") or []) if isinstance(c, str) and c]
+    if not certs:
+        return CheckResult("cert_sources_content", True, 1.0, "no certifications (skipped)")
+    if not fetch_enabled:
+        return CheckResult("cert_sources_content", True, 1.0, "network disabled (skipped)")
+
+    claims = data.get("claims") or []
+    sources_by_id = {
+        s.get("id"): s for s in (data.get("sources") or [])
+        if isinstance(s, dict) and s.get("id")
+    }
+    cache: dict[str, str | None] = {}
+
+    indeterminate_certs: list[str] = []
+    failed_certs: list[tuple[str, str]] = []  # (cert, reason)
+
+    for cert in certs:
+        tokens = _CERT_HTML_TOKENS.get(cert, (cert,))
+        mentioning = [
+            c for c in claims
+            if isinstance(c, dict) and isinstance(c.get("claim"), str) and cert in c["claim"]
+        ]
+        if not mentioning:
+            # cert listed but no claim mentions it — caught by check_certifications already
+            continue
+
+        # この cert を主張する全 claim の非販売 supporting を集約
+        non_sales_srcs: list[dict] = []
+        for cl in mentioning:
+            for sid in cl.get("supporting_source_ids") or []:
+                s = sources_by_id.get(sid)
+                if s and not _is_sales_source(s) and s.get("url"):
+                    non_sales_srcs.append(s)
+        if not non_sales_srcs:
+            # 全販売 supporting — check_certifications 側で既に fail されるはず
+            continue
+
+        # 重複 URL は 1 回だけ fetch
+        seen_urls = []
+        for s in non_sales_srcs:
+            u = s.get("url") or ""
+            if u and u not in seen_urls:
+                seen_urls.append(u)
+
+        any_fetch_success = False
+        token_found = False
+        for url in seen_urls:
+            text = _fetch_url_text(url, cache=cache)
+            if text is None:
+                continue
+            any_fetch_success = True
+            if any(tok in text for tok in tokens):
+                token_found = True
+                break
+
+        if token_found:
+            continue
+        if not any_fetch_success:
+            indeterminate_certs.append(cert)
+            continue
+        failed_certs.append((cert, f"非販売 source {len(seen_urls)} 件 fetch 成功 / token {tokens} 言及無し"))
+
+    if failed_certs:
+        cert, reason = failed_certs[0]
+        return CheckResult(
+            "cert_sources_content", False, 0.0,
+            f"certifications '{cert}' の第三者 source 本文に cert 言及無し: {reason}",
+        )
+    if indeterminate_certs:
+        return CheckResult(
+            "cert_sources_content", True, 0.7,
+            f"network 失敗で未検証: {indeterminate_certs}",
+        )
+    return CheckResult("cert_sources_content", True, 1.0, "OK")
 
 
 def check_edu_domains(data: dict) -> CheckResult:
@@ -510,6 +745,7 @@ def evaluate_article(
     *,
     rakuten_idx: dict[str, Any] | None = None,
     yahoo_idx: dict[str, Any] | None = None,
+    cert_fetch: bool = True,
 ) -> ArticleReport:
     data = json.loads(json_path.read_text(encoding="utf-8"))
     slug = data.get("slug", json_path.stem)
@@ -533,6 +769,8 @@ def evaluate_article(
     report.checks.append(check_score_rationale(data))
     report.checks.append(check_target_age(data))
     report.checks.append(check_certifications(data))
+    report.checks.append(check_source_uniqueness(data))
+    report.checks.append(check_cert_sources_content(data, fetch_enabled=cert_fetch))
     report.checks.append(check_edu_domains(data))
     report.checks.append(check_prices_verified(data))
     report.checks.append(check_tone(data))
@@ -551,6 +789,10 @@ def main() -> int:
     parser.add_argument("--strict", action="store_true", help="exit non-zero if any article fails any check")
     parser.add_argument("--write-reports", action="store_true", default=True, help="write {slug}.quality.json")
     parser.add_argument("--quiet", action="store_true")
+    parser.add_argument(
+        "--no-cert-fetch", action="store_true",
+        help="cert HTML content check の HTTP fetch を無効化 (local dryrun 用)",
+    )
     args = parser.parse_args()
 
     src = pathlib.Path(args.src)
@@ -591,6 +833,7 @@ def main() -> int:
         report = evaluate_article(
             jp, schema, md_candidate if md_candidate.exists() else None,
             rakuten_idx=rakuten_idx, yahoo_idx=yahoo_idx,
+            cert_fetch=not args.no_cert_fetch,
         )
         all_reports.append(report)
         if args.write_reports:
