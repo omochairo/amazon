@@ -94,32 +94,110 @@ def write_per_asin_snapshot(out_root: str, item: dict) -> None:
         logger.warning(f"Failed to write per_asin snapshot for {asin}: {e}")
 
 
-def write_per_asin_competitors(out_root: str, target_asin: str, items: list, max_n: int = 5) -> None:
-    """Save real Amazon search hits as competitor candidates for the target ASIN.
+def _load_published_snapshots_pool(out_root: str, covered_asins: set, limit: int = 500) -> list:
+    """既掲載 ASIN の per_asin/<ASIN>/amazon.json (=snapshot) を candidate 形式に整形。
 
-    Jules hallucinates competitor ASINs in ``competitive_analysis[]``; this file
-    lets ``build_post.py`` replace those with API-verified items so the
-    Amazonで見る button and product image always resolve to a real listing.
+    内部リンク floor 用のプール。Plan D の SearchItems 結果と合流して
+    ranking にかけるため、`items[]` と同じ shape にして返す。
     """
+    pool: list = []
+    per_asin_root = os.path.join(out_root, "per_asin")
+    if not os.path.isdir(per_asin_root):
+        return pool
+    for asin in covered_asins:
+        path = os.path.join(per_asin_root, asin, "amazon.json")
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                snap = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            continue
+        item = snap.get("item") if isinstance(snap, dict) else None
+        if not isinstance(item, dict) or not item.get("asin") or not item.get("image"):
+            continue
+        pool.append(item)
+        if len(pool) >= limit:
+            break
+    return pool
+
+
+def _search_competitor_pool(api, target_item: dict, search_index: str, resources: list, max_n: int = 10) -> list:
+    """target の title からキーワードを組み立てて SearchItems を 1 回叩く。
+
+    Plan D の本体: Amazon の検索 relevance に「似た商品」の判断を任せる。
+    失敗時は空 list を返して呼び出し側で Plan B フォールバックに繋ぐ。
+    """
+    from competitor_ranking import build_search_keyword
+    kw = build_search_keyword(target_item.get("title") or "")
+    if not kw:
+        return []
+    tag = get_secret("AMAZON_PARTNER_TAG") or ""
+    try:
+        res = api.search_items(keywords=kw, search_index=search_index, item_count=max_n, item_page=1, resources=resources)
+    except Exception as e:
+        logger.warning(f"  SearchItems failed for target {target_item.get('asin')} kw='{kw}': {e}")
+        return []
+    found = _safe_get(res, "searchResult", "items", default=[]) or []
+    pool: list = []
+    for it in found:
+        asin = it.get("asin")
+        if not asin:
+            continue
+        pool.append({
+            "asin": asin,
+            "title": _safe_get(it, "itemInfo", "title", "displayValue"),
+            "price": extract_price(it),
+            "features": extract_features(it),
+            "url": f"https://www.amazon.co.jp/dp/{asin}/?tag={tag}" if tag else f"https://www.amazon.co.jp/dp/{asin}/",
+            "image": _safe_get(it, "images", "primary", "large", "url") or _safe_get(it, "images", "primary", "medium", "url"),
+        })
+    return pool
+
+
+def write_per_asin_competitors(
+    out_root: str, target_item: dict, fallback_pool: list,
+    api=None, search_index: str = "Toys", resources: list = None,
+    covered_asins: set = None, max_n: int = 5,
+) -> None:
+    """Plan D+ 実装: target ごとに SearchItems を打って候補プールを作り、
+    自社既掲載 ASIN の snapshot プールと統合してから類似度ランキングする。
+
+    旧実装は ``items`` をそのまま先頭から N 件取っていたため、全 target が
+    同じ items[0..2] を競合に焼き付けていた (= 78% のレポート濃度問題)。
+    Plan D+ は (1) Amazon 検索の relevance、(2) 価格距離、(3) 自社内部リンク
+    の 3 シグナルを target ごとに合成して並べ替える。
+    """
+    from competitor_ranking import (
+        dedupe_candidates, rank_candidates, ensure_internal_link_floor,
+    )
+    target_asin = (target_item or {}).get("asin")
     if not target_asin:
         return
-    competitors = []
-    for it in items:
-        a = it.get("asin")
-        if not a or a == target_asin:
-            continue
-        if not it.get("image"):
-            continue
-        competitors.append({
-            "asin": a,
-            "name": it.get("title") or "",
-            "image": it.get("image"),
-            "price": it.get("price") or 0,
-            "url": it.get("url") or f"https://www.amazon.co.jp/dp/{a}/",
-            "features": (it.get("features") or [])[:3],
-        })
-        if len(competitors) >= max_n:
-            break
+    covered_asins = covered_asins or set()
+    # Pool 1: SearchItems (Plan D の本体)
+    search_pool: list = []
+    if api is not None:
+        search_pool = _search_competitor_pool(api, target_item, search_index, resources or [])
+        time.sleep(1.1)  # PA-API TPS=1 safety margin
+    # Pool 2: 自社既掲載 ASIN の snapshot (内部リンク floor 用)
+    article_pool = _load_published_snapshots_pool(out_root, covered_asins - {target_asin})
+    # Pool 3: 旧来の amazon.json プール (Plan B フォールバック)
+    candidates = dedupe_candidates([search_pool, article_pool, fallback_pool or []], exclude_asin=target_asin)
+    if not candidates:
+        return
+    ranked = rank_candidates(target_item, candidates, covered_asins)
+    top = ensure_internal_link_floor(
+        ranked, covered_asins, total=max_n, min_internal=1, target=target_item,
+    )
+    competitors = [{
+        "asin": c["asin"],
+        "name": c.get("title") or c.get("name") or "",
+        "image": c.get("image") or "",
+        "price": c.get("price") or 0,
+        "url": c.get("url") or f"https://www.amazon.co.jp/dp/{c['asin']}/",
+        "features": (c.get("features") or [])[:3],
+    } for c in top if c.get("asin") and c.get("image")]
     if not competitors:
         return
     per_asin_dir = os.path.join(out_root, "per_asin", target_asin)
@@ -129,10 +207,12 @@ def write_per_asin_competitors(out_root: str, target_asin: str, items: list, max
             "asin": target_asin,
             "fetched_at": datetime.now(timezone.utc).isoformat(),
             "competitors": competitors,
+            "source": "plan_d_plus" if search_pool else "fallback",
         }
         with open(os.path.join(per_asin_dir, "competitors.json"), "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
-        logger.info(f"Wrote {len(competitors)} competitors for {target_asin}")
+        n_internal = sum(1 for c in competitors if c["asin"] in covered_asins)
+        logger.info(f"Wrote {len(competitors)} competitors for {target_asin} (internal={n_internal}, source={payload['source']})")
     except OSError as e:
         logger.warning(f"Failed to write competitors for {target_asin}: {e}")
 
@@ -316,8 +396,17 @@ def main():
         for it in items:
             if it.get("asin") in sniper_set:
                 write_per_asin_snapshot(args.out, it)
-        for target in sniper_asins:
-            write_per_asin_competitors(args.out, target, items)
+        existing_covered = _load_existing_article_asins(args.articles_dir)
+        for target_asin in sniper_asins:
+            target_item = next((it for it in items if it.get("asin") == target_asin), None)
+            if not target_item:
+                logger.warning(f"--competitors-only: target {target_asin} not present in items; GetItems may have failed. Skipping.")
+                continue
+            write_per_asin_competitors(
+                args.out, target_item, fallback_pool=items,
+                api=api, search_index=args.search_index, resources=resources,
+                covered_asins=existing_covered,
+            )
         logger.info(f"--competitors-only complete: backfilled {len(sniper_asins)} ASIN(s)")
         return
 
@@ -429,8 +518,15 @@ def main():
     # an empty --asin) leave build_post.py with no real competitor data, and
     # competitor cards render as text-only boxes with no image or Amazon CTA.
     targets = sniper_asins if sniper_asins else [it["asin"] for it in items if it.get("asin")]
-    for target in targets:
-        write_per_asin_competitors(args.out, target, items)
+    for target_asin in targets:
+        target_item = next((it for it in items if it.get("asin") == target_asin), None)
+        if not target_item:
+            continue
+        write_per_asin_competitors(
+            args.out, target_item, fallback_pool=items,
+            api=api, search_index=args.search_index, resources=resources,
+            covered_asins=existing,
+        )
 
 if __name__ == "__main__":
     main()
