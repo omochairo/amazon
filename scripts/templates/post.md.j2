@@ -114,25 +114,25 @@
 {% if review_signals.high_points %}
 ### 👏 高評価で繰り返し挙がる点
 
-<ul class="review-signals-list review-signals-positive">{% for h in review_signals.high_points %}<li><strong>{{ h.label or h.point or h.theme }}</strong>{% if h.detail %} — {{ h.detail }}{% endif %}</li>{% endfor %}</ul>
+<ul class="review-signals-list review-signals-positive">{% for h in review_signals.high_points %}<li>{{ h.text }}</li>{% endfor %}</ul>
 {% endif %}
 
 {% if review_signals.concerns %}
 ### ⚠️ 気になる声として残る点
 
-<ul class="review-signals-list review-signals-concern">{% for c in review_signals.concerns %}<li><strong>{{ c.label or c.point or c.theme }}</strong>{% if c.detail %} — {{ c.detail }}{% endif %}</li>{% endfor %}</ul>
+<ul class="review-signals-list review-signals-concern">{% for c in review_signals.concerns %}<li>{{ c.text }}</li>{% endfor %}</ul>
 {% endif %}
 
 {% if review_signals.use_scenes %}
 ### 📍 よく挙がる使用シーン
 
-<ul class="review-signals-list review-signals-scene">{% for s in review_signals.use_scenes %}<li>{% if s.scene %}<strong>{{ s.scene }}</strong>{% if s.detail %} — {{ s.detail }}{% endif %}{% else %}{{ s }}{% endif %}</li>{% endfor %}</ul>
+<ul class="review-signals-list review-signals-scene">{% for s in review_signals.use_scenes %}<li>{{ s.text }}</li>{% endfor %}</ul>
 {% endif %}
 
 {% if review_signals.segment_voices %}
 ### 🧑‍🤝‍🧑 層ごとの評価傾向
 
-<ul class="review-signals-list review-signals-segment">{% for sv in review_signals.segment_voices %}<li><strong>{{ sv.segment or sv.layer }}層</strong>では{% if sv.evaluation %} {{ sv.evaluation }}{% elif sv.detail %} {{ sv.detail }}{% endif %}</li>{% endfor %}</ul>
+<ul class="review-signals-list review-signals-segment">{% for sv in review_signals.segment_voices %}<li><strong>{{ sv.segment_label }}</strong>：{{ sv.summary }}</li>{% endfor %}</ul>
 {% endif %}
 
 {% if product.amazon_review_url %}
