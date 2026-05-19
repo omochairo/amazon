@@ -27,13 +27,26 @@ jobs:
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-    permissions:
-      contents: write
-      pull-requests: write
+    # 2026-05-19 (session 32): GitHub App token に切替。session 31 で peter-evans/
+    # create-pull-request の GITHUB_TOKEN 由来 commit が anti-recursion guard で
+    # pull_request event を発火させず、validate (required check) が走らないため
+    # auto-merge が永遠に BLOCKED になる罠を踏んだ (PR #419 が DIRTY 衰突で破棄、
+    # PR #425 は空コミット push で手動回避)。App token なら通常 PR と同じ扱いで
+    # pull_request 経由 validate が発火し、auto-merge も成立する。
+    # 01-fetch-products.yml と同じ omochairo-fetch-bot App を使用。
+    # permissions: は App 側 scope で決まるので job レベル指定は不要。
     steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          token: ${{ steps.app-token.outputs.token }}
           ref: main
           fetch-depth: 0
 
@@ -72,24 +85,55 @@ jobs:
           AMAZON_PARTNER_TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
 
       - name: Create PR with backfilled data
-        uses: peter-evans/create-pull-request@v6
-        with:
-          commit-message: "${{ github.event.inputs.all == 'true' && 'chore(data): backfill per_asin competitors (--all)' || format('chore(data): backfill per_asin competitors for {0}', github.event.inputs.asins) }}"
-          title: "${{ github.event.inputs.all == 'true' && 'chore(data): backfill per_asin competitors (--all, all articles)' || format('chore(data): backfill per_asin competitors ({0})', github.event.inputs.asins) }}"
-          body: |
-            ## Summary
-            Backfill of `data/raw/per_asin/<ASIN>/{snapshot.json,competitors.json}`.
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          ALL_MODE: ${{ github.event.inputs.all }}
+          ASINS: ${{ github.event.inputs.asins }}
+        run: |
+          set -e
+          if git diff --quiet --exit-code -- data/raw/per_asin/ && [ -z "$(git status --porcelain -- data/raw/per_asin/)" ]; then
+            echo "No per_asin changes to commit; skipping PR creation."
+            exit 0
+          fi
+          if [ "$ALL_MODE" = "true" ]; then
+            TITLE="chore(data): backfill per_asin competitors (--all, all articles)"
+            MODE_LINE='`--all-articles` (every ASIN under `data/articles/`)'
+          else
+            TITLE="chore(data): backfill per_asin competitors (${ASINS})"
+            MODE_LINE="\`--asin\` (\`${ASINS}\`)"
+          fi
+          BRANCH="chore/backfill-competitors-${{ github.run_id }}"
+          git config user.name "omochairo-fetch-bot[bot]"
+          git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add data/raw/per_asin/
+          if git diff --cached --quiet; then
+            echo "Nothing staged after git add; skipping."
+            exit 0
+          fi
+          git commit -m "$TITLE"
+          git push -u origin "$BRANCH"
+          PR_URL=$(gh pr create \
+            --title "$TITLE" \
+            --body "$(cat <<EOF
+          ## Summary
+          Backfill of \`data/raw/per_asin/<ASIN>/{snapshot.json,competitors.json}\`.
 
-            **Mode**: ${{ github.event.inputs.all == 'true' && '`--all-articles` (every ASIN under `data/articles/`)' || format('`--asin` (`{0}`)', github.event.inputs.asins) }}
+          **Mode**: ${MODE_LINE}
 
-            ## Why
-            `build_post.py::_override_competitive_analysis` replaces Jules-authored `competitive_analysis[]` with API-verified competitors only when `per_asin/<ASIN>/competitors.json` exists. Articles without this file fall back to Jules output (often paired with fabricated ASINs), which renders as text-only cards with no image / Amazon CTA. This PR closes that gap.
+          ## Why
+          \`build_post.py::_override_competitive_analysis\` replaces Jules-authored \`competitive_analysis[]\` with API-verified competitors only when \`per_asin/<ASIN>/competitors.json\` exists. Articles without this file fall back to Jules output (often paired with fabricated ASINs), which renders as text-only cards with no image / Amazon CTA. This PR closes that gap.
 
-            ## Impact
-            - Touches: `data/raw/per_asin/<ASIN>/` only (does NOT touch `amazon.json` or the live Jules pool)
-            - 02-publish re-render will pick up new competitor data on next run
-          branch: chore/backfill-competitors-${{ github.run_id }}
-          base: main
-          add-paths: |
-            data/raw/per_asin/**
-          delete-branch: true
+          ## Impact
+          - Touches: \`data/raw/per_asin/<ASIN>/\` only (does NOT touch \`amazon.json\` or the live Jules pool)
+          - 02-publish re-render will pick up new competitor data on next run
+          EOF
+          )" \
+            --base main \
+            --head "$BRANCH")
+          echo "Created: $PR_URL"
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge enabled on $PR_URL"
+          else
+            echo "::warning::Could not enable auto-merge on $PR_URL"
+          fi
