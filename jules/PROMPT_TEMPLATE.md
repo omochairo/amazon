@@ -205,15 +205,6 @@ narrative.lead の**冒頭 2 文**は「結論ファースト hook」を必須�
       "notes": "2系統以上で一致確認した内容"
     }
   ],
-  "competitive_analysis": [
-    {
-      "name": "競合商品名",
-      "asin": "競合ASIN（不明なら null）",
-      "price_comparison": "本品との価格差と、その差が意味するもの",
-      "feature_comparison": ["共通点：…", "相違点：…"],
-      "differentiators": ["本品の利点：…", "競合の利点：…"]
-    }
-  ],
   "technical_specs": {
     "dimensions": { "height": "XXmm", "width": "XXmm", "depth": "XXmm" },
     "weight": "XXg",
@@ -320,7 +311,7 @@ narrative.lead の**冒頭 2 文**は「結論ファースト hook」を必須�
 - `segment_label` の良い例：「出産祝いとしてギフト購入した層」「3-4 歳児の自宅遊び用に購入した層」「祖父母世代から孫へのプレゼントとして購入された家庭」
 - `segment_label` の悪い例：「32 歳の田中さん」（個人特定）／「みんな」「ユーザー」（集合過剰一般化）／「興味がない人」（層になっていない）
 - `summary` は **1〜2 文の集合的傾向の要約**。個人擬人化（「○○さんは…」「30 代の方は…と語ります」）は厳禁
-- 「『〜』とのレビューがあります」型の**直接引用フォーマットは使わない**（それは別途 `narrative` 側 §6.5.5 の領域）。`segment_voices` は集合的傾向の**地の文**で書く
+- 「『〜』とのレビューがあります」型の**直接引用フォーマットは使わない**（それは別途 `narrative` 側 §6.5.4 の領域）。`segment_voices` は集合的傾向の**地の文**で書く
 - `supporting_source_ids` を最低 1 件必須
 
 ### 5.D.4 絶対禁止
@@ -412,7 +403,9 @@ narrative.lead の**冒頭 2 文**は「結論ファースト hook」を必須�
 
 ## 6.5 出典と検証ルール（v4.1 追加 / 品質ゲート）
 
-無難な記事や口コミ感の薄い記事を防ぐため、**主張の根拠をJSONに必ず残します**。`sources` `claims` `competitive_analysis` `technical_specs` は現スキーマでは任意フィールドですが、**今回からは可能な限り埋めてください**。
+無難な記事や口コミ感の薄い記事を防ぐため、**主張の根拠をJSONに必ず残します**。`sources` `claims` `technical_specs` は現スキーマでは任意フィールドですが、**今回からは可能な限り埋めてください**。
+
+**`competitive_analysis` は出力不要**：競合データは `data/raw/per_asin/<ASIN>/competitors.json` に格納された API 由来データから `scripts/build_post.py` の `_override_competitive_analysis` がレンダー時に自動入稿します（118/120 記事カバー済）。Jules が書いた競合は ASIN ハルシネーション事故の温床になっていたため**完全に上書きされる仕様**になっており、Jules 側で生成する必要はありません。`competitive_analysis` フィールドは省略するか空配列 `[]` で構いません。
 
 ### 6.5.1 出典（sources）の収集（v5 厳格化）
 
@@ -432,7 +425,7 @@ narrative.lead の**冒頭 2 文**は「結論ファースト hook」を必須�
 - **`data/raw/reviews.json` を最優先で `sources` に投入する**。このファイルには ASIN ベースで楽天/Yahoo のレビュー本文（rating, title, body, posted_at）が格納されている：
   - `reviews.json["<ASIN>"]["rakuten"]` の各エントリ → `sources` に `tier: "medium"`, `evidence_type: "secondary"`, `author: "楽天市場購入者レビュー"`, `notes: body` の本文を入れる
   - `reviews.json["<ASIN>"]["yahoo"]` の各エントリ → 同様に `author: "Yahoo!ショッピング購入者レビュー"`
-  - レビュー本文があれば `narrative.daily_use` `safety_note` などに**実体験ベースの言葉**として反映する（直接引用形式は §6.5.5 を参照）
+  - レビュー本文があれば `narrative.daily_use` `safety_note` などに**実体験ベースの言葉**として反映する（直接引用形式は §6.5.4 を参照）
   - ASIN由来の生レビュー（`data/raw/amazon.json` のレビュー欄）があればそれも追加で使う
   - `reviews.json` が空 or 該当 ASIN エントリ無しの場合：**Jules 検索ツールで楽天市場の該当商品ページ・Amazon レビューページ等を実取得して引用する**（§7 参照）
 
@@ -445,20 +438,13 @@ narrative.lead の**冒頭 2 文**は「結論ファースト hook」を必須�
   - 例：Amazon レビュー1件のみ → false（または `confidence: "low"`）
 - **循環参照禁止**（v5 新規）：メーカー販売ページの記載のみを根拠とする `claim` は `cross_checked: false` 固定。販売ページ＝主張者自身なので「2 系統以上の独立ソース」要件を満たしません
 
-### 6.5.3 競合比較（competitive_analysis）
-
-- 同カテゴリ・近価格帯の競合を **3〜6件**特定。raw JSON に競合が無い場合でも、商品カテゴリから一般的な競合を1〜2件は挙げる
-- 競合名と ASIN（判明する範囲で。不明なら null）を明記
-- `feature_comparison` は「共通点：…」「相違点：…」の2行構成
-- `differentiators` は **本品の利点 / 競合の利点を双方向で記述**（読者が自分の条件で選べるように）
-
-### 6.5.4 技術仕様（technical_specs）
+### 6.5.3 技術仕様（technical_specs）
 
 - raw JSON や商品ページから読み取れる寸法・重量・素材・原産国・対象年齢・電池仕様・認証（STマーク等）を網羅
 - **サイズはメートル法のみ**（インチ表記が原典にあればmm/cmに換算）
 - 不明な項目は省略してよい。**架空値で埋めない**
 
-### 6.5.5 narrative との接続義務（v5 強化）
+### 6.5.4 narrative との接続義務（v5 強化）
 
 - `narrative.why_this_product` `safety_note` `daily_use` の主張は、`claims` または `sources[].notes` の内容に必ず裏付けられること
 - 「集中して遊んでくれる」「お子さまが夢中に」など**一般化された口コミ表現を使う場合は、その根拠が `sources` に存在しなければならない**
@@ -474,7 +460,7 @@ narrative.lead の**冒頭 2 文**は「結論ファースト hook」を必須�
 - 直接引用を載せなかった側（daily_use または safety_note）は、`claims` か `sources[].notes` 由来の**具体的な事実**（仕様・素材・受賞歴・SNS言及など）で 4-step の「根拠」ブロックを埋めること。曖昧な強調表現（「安心」「楽しめる」だけ）で済ませない
 - **創作禁止**：レビュー本文の架空生成は厳禁。実在の引用のみ
 
-### 6.5.6 ハルシネーション防止（v5 新規・厳守）
+### 6.5.5 ハルシネーション防止（v5 新規・厳守）
 
 事故事例から導出された明示禁止リスト：
 
@@ -487,7 +473,7 @@ narrative.lead の**冒頭 2 文**は「結論ファースト hook」を必須�
 - **販売実績数値**：「累計○万個販売」は raw / 公式に明記がある場合のみ。「人気」「定番」は形容詞として OK
 - **「マンションでも音は静か」「角を丸く加工」**等の設計言及は、raw データに該当記述がある場合のみ。「天然木だから優しい音」のような**素材から効果を推論**するのは可だが、認証や数値は推論禁止
 
-### 6.5.7 自律的補完の手順（v5 新規）
+### 6.5.6 自律的補完の手順（v5 新規）
 
 `sources` 5 件・`claims` cross_checked 2 件・直接引用 1 件以上を確保できない場合の対処：
 
@@ -538,39 +524,38 @@ JSON保存前に以下を確認：
 9. [ ] `persona_fit.primary_buyer` に「20〜40代女性」相当の表記がある
 10. [ ] `sources` が3件以上あり、各 `url` が実在ページである
 11. [ ] `claims` のうち少なくとも2件が `cross_checked: true` で、`supporting_source_ids` に2件以上のIDを持つ
-12. [ ] `competitive_analysis` が3件以上あり、各エントリに `feature_comparison` と `differentiators` が両方ある
-13. [ ] `narrative` 内の主張（特に `why_this_product` `safety_note` の核となる訴求）が `claims` または `sources[].notes` で裏付けられている
-14. [ ] 一般化された口コミ表現（「集中して遊ぶ」「夢中になる」等）を使う場合、対応する `sources` が存在する
-15. [ ] 「編集部」「編集者」表記が含まれていない（あれば「おもちゃロボ」に置換）
-16. [ ] `youtube_embeds` / `news` / `books` の各エントリは `data/raw/per_asin/<ASIN>/` 由来である（無関係なジャンル全体ファイルから拾っていない）。空配列でも可
-17. [ ] `product.target_age` を正規化表記（`"3歳〜7歳"` / `"6歳以上"` 等）で出力している。推定不可なら**フィールド自体を省略**
-18. [ ] `product.certifications` を配列で出力している。確証のない認証は入れず、無ければ空配列 `[]`
-19. [ ] `product.edu_domains` を `{"STEM","言語","運動","想像"}` の部分集合で出力している。該当ゼロなら空配列 `[]`
+12. [ ] `narrative` 内の主張（特に `why_this_product` `safety_note` の核となる訴求）が `claims` または `sources[].notes` で裏付けられている
+13. [ ] 一般化された口コミ表現（「集中して遊ぶ」「夢中になる」等）を使う場合、対応する `sources` が存在する
+14. [ ] 「編集部」「編集者」表記が含まれていない（あれば「おもちゃロボ」に置換）
+15. [ ] `youtube_embeds` / `news` / `books` の各エントリは `data/raw/per_asin/<ASIN>/` 由来である（無関係なジャンル全体ファイルから拾っていない）。空配列でも可
+16. [ ] `product.target_age` を正規化表記（`"3歳〜7歳"` / `"6歳以上"` 等）で出力している。推定不可なら**フィールド自体を省略**
+17. [ ] `product.certifications` を配列で出力している。確証のない認証は入れず、無ければ空配列 `[]`
+18. [ ] `product.edu_domains` を `{"STEM","言語","運動","想像"}` の部分集合で出力している。該当ゼロなら空配列 `[]`
 
 ### v5 追加チェック（厳守）
 
-20. [ ] `narrative.lead` の冒頭 2 文が §1.B の hook パターン A/B/C のいずれかで書かれており、lead 全体で禁止フレーズ（「本記事ではおもちゃロボが3サイトを横断」「3サイト横断で徹底比較」「丁寧に解説します」「丁寧に比較しました」「〜なのでしょうか。本記事では…」型のメタ説明）を**一度も**使っていない。lead は〈結論 / 価格事実 / persona ヒット〉の 3 要素構成に限定されている
-21. [ ] `narrative.why_this_product` / `gift_appeal` / `daily_use` / `safety_note` / `closing` の **5 セクションすべて**が §5.A の 4-step 構造（問い→答え→根拠→締め）で書かれている
-22. [ ] `persona_fit.not_recommended_for` を 2〜3 件出力している（曖昧表現・侮蔑表現でなく実体的なミスマッチ要因）
-23. [ ] `sources` が **5 件以上**で、うち**販売ページ以外の第三者ソース 2 件以上**を含む。それぞれの URL は実取得して商品名含有を確認済み
-24. [ ] `claims` が **4 件以上**で、うち **2 件以上が `cross_checked: true`**。販売ページのみを根拠とする claim は `cross_checked: false`
-25. [ ] `narrative.daily_use` または `narrative.safety_note` の**少なくともどちらか一方**に、購入者レビューからの直接引用（「〜」との声があります 形式）が最低 1 つ含まれている。両方に入れることが理想だが、レビュー本文取得状況で配置を判断してよい。レビュー取得不能なら公式の具体引用で代替（「購入者から」とは書かない）。引用を載せなかった側は仕様・素材・受賞歴など具体的事実で根拠ブロックを埋める
-26. [ ] PSC 等の対象国の異なる認証マークを誤用していない。`certifications` の各値は raw データ・公式・販売ページのいずれかに**明示記載**を確認済
-27. [ ] 30 秒で記事をスキャンした読者が「自分は買うべきか / 買うべきでないか」を判断できる構成になっている（hook → recommended/not_recommended → 価格 → 締め の流れが追える）
+19. [ ] `narrative.lead` の冒頭 2 文が §1.B の hook パターン A/B/C のいずれかで書かれており、lead 全体で禁止フレーズ（「本記事ではおもちゃロボが3サイトを横断」「3サイト横断で徹底比較」「丁寧に解説します」「丁寧に比較しました」「〜なのでしょうか。本記事では…」型のメタ説明）を**一度も**使っていない。lead は〈結論 / 価格事実 / persona ヒット〉の 3 要素構成に限定されている
+20. [ ] `narrative.why_this_product` / `gift_appeal` / `daily_use` / `safety_note` / `closing` の **5 セクションすべて**が §5.A の 4-step 構造（問い→答え→根拠→締め）で書かれている
+21. [ ] `persona_fit.not_recommended_for` を 2〜3 件出力している（曖昧表現・侮蔑表現でなく実体的なミスマッチ要因）
+22. [ ] `sources` が **5 件以上**で、うち**販売ページ以外の第三者ソース 2 件以上**を含む。それぞれの URL は実取得して商品名含有を確認済み
+23. [ ] `claims` が **4 件以上**で、うち **2 件以上が `cross_checked: true`**。販売ページのみを根拠とする claim は `cross_checked: false`
+24. [ ] `narrative.daily_use` または `narrative.safety_note` の**少なくともどちらか一方**に、購入者レビューからの直接引用（「〜」との声があります 形式）が最低 1 つ含まれている。両方に入れることが理想だが、レビュー本文取得状況で配置を判断してよい。レビュー取得不能なら公式の具体引用で代替（「購入者から」とは書かない）。引用を載せなかった側は仕様・素材・受賞歴など具体的事実で根拠ブロックを埋める
+25. [ ] PSC 等の対象国の異なる認証マークを誤用していない。`certifications` の各値は raw データ・公式・販売ページのいずれかに**明示記載**を確認済
+26. [ ] 30 秒で記事をスキャンした読者が「自分は買うべきか / 買うべきでないか」を判断できる構成になっている（hook → recommended/not_recommended → 価格 → 締め の流れが追える）
 
 ### v5.2 追加チェック（厳守 / 品質ゲート連動）
 
-28. [ ] `sources[]` の中に**同じ URL を 2 つ以上の id に分割して登録した例が無い**（affiliate tag・末尾スラッシュを正規化して同一なら 1 src のみ）。第三者 2 件要件は独立した 2 ドメイン（または 2 ページ）で満たしている
-29. [ ] `sources[].url` に**検索エンジンの検索結果ページ**（`html.duckduckgo.com/html/?q=...` / `google.com/search?q=...` / `search.yahoo.co.jp/search?p=...` 等）が含まれていない。検索した先の個別ページの URL を採用している
-30. [ ] `certifications` を非空で出力し cert 名を含む claim を書く場合、その claim の `supporting_source_ids` に含めた**非販売ページ source の本文に cert 名（または §6.5.6 の alias）が実記載されている**ことを Web 閲覧で確認済み。URL だけ埋めて中身に言及が無いものは入れていない
+27. [ ] `sources[]` の中に**同じ URL を 2 つ以上の id に分割して登録した例が無い**（affiliate tag・末尾スラッシュを正規化して同一なら 1 src のみ）。第三者 2 件要件は独立した 2 ドメイン（または 2 ページ）で満たしている
+28. [ ] `sources[].url` に**検索エンジンの検索結果ページ**（`html.duckduckgo.com/html/?q=...` / `google.com/search?q=...` / `search.yahoo.co.jp/search?p=...` 等）が含まれていない。検索した先の個別ページの URL を採用している
+29. [ ] `certifications` を非空で出力し cert 名を含む claim を書く場合、その claim の `supporting_source_ids` に含めた**非販売ページ source の本文に cert 名（または §6.5.5 の alias）が実記載されている**ことを Web 閲覧で確認済み。URL だけ埋めて中身に言及が無いものは入れていない
 
 ### v6 追加チェック（厳守）
 
-31. [ ] `review_signals.summary_one_line` を 50-100 字で出力している。集合受動表現で、個人特定（年齢+性別+職業の組合せ・固有名）を含まない
-32. [ ] `review_signals.{high_points, concerns, use_scenes}` の各エントリに 50-80 字の `text` と **`supporting_source_ids` 1 件以上**が紐付いている。件数レンジ（high_points 3〜5 / concerns 2〜4 / use_scenes 3〜5）を満たしている
-33. [ ] `review_signals.segment_voices` を**最低 1 件**出力している（最大 3 件）。`segment_label` は「○○層」型の集合名、`summary` は 1〜2 文の集合的傾向。個人擬人化（「○○さんは…」）や直接引用フォーマット（「『〜』との声」）を使っていない。`supporting_source_ids` 1 件以上必須
-34. [ ] `verdict.headline` を 50-80 字の 1 文で出力している。〈推奨条件〉+〈非推奨/躊躇条件〉構造で、スコアと `product.pros` / `product.cons` の整合が取れている。強い断定（最高/絶対/必ず/間違いなく）を使っていない
-35. [ ] `score_rationale` で `factor: "longevity"` の `reason` を書く時、ラベルは「長く遊べる」に統一している（「長持ち」「耐久性」は longevity の概念ではないので使わない）
+30. [ ] `review_signals.summary_one_line` を 50-100 字で出力している。集合受動表現で、個人特定（年齢+性別+職業の組合せ・固有名）を含まない
+31. [ ] `review_signals.{high_points, concerns, use_scenes}` の各エントリに 50-80 字の `text` と **`supporting_source_ids` 1 件以上**が紐付いている。件数レンジ（high_points 3〜5 / concerns 2〜4 / use_scenes 3〜5）を満たしている
+32. [ ] `review_signals.segment_voices` を**最低 1 件**出力している（最大 3 件）。`segment_label` は「○○層」型の集合名、`summary` は 1〜2 文の集合的傾向。個人擬人化（「○○さんは…」）や直接引用フォーマット（「『〜』との声」）を使っていない。`supporting_source_ids` 1 件以上必須
+33. [ ] `verdict.headline` を 50-80 字の 1 文で出力している。〈推奨条件〉+〈非推奨/躊躇条件〉構造で、スコアと `product.pros` / `product.cons` の整合が取れている。強い断定（最高/絶対/必ず/間違いなく）を使っていない
+34. [ ] `score_rationale` で `factor: "longevity"` の `reason` を書く時、ラベルは「長く遊べる」に統一している（「長持ち」「耐久性」は longevity の概念ではないので使わない）
 
 ## 9. 参考：既存記事のサンプル
 

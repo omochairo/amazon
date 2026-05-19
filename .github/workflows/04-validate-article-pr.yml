@@ -18,6 +18,9 @@ on:
       - 'scripts/build_post.py'
       - 'scripts/templates/**'
       - 'hugo/assets/css/**'
+      # Jules プロンプト本体。CA 削除など Jules 出力に影響する変更を含む PR は
+      # validate を pull_request 経由で発火させる (記事変更ゼロなら vacuous SUCCESS)
+      - 'jules/PROMPT_TEMPLATE.md'
   workflow_dispatch:
 
 permissions:
