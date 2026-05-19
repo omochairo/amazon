@@ -390,8 +390,23 @@ def main():
             except Exception:
                 pass
 
-        # 関連ニュース（関連するものだけ）
-        related_news = find_related_news(title_raw, news_items)
+        # 関連ニュース: per_asin/<ASIN>/news.json を優先 (filter_raw_per_asin が brand/
+        # model/series で関連度スコアリング済の TOP-N)。空ならグローバル news_items から
+        # find_related_news で抽出。per_asin は事前フィルタ済なので >=2 token しきい値を
+        # 適用せず先頭から拾う (現在 find_related_news の score>=2 が global 用に厳しすぎ、
+        # マッチが取れず news=[] になる事例が観測されているための回避も兼ねる)。
+        related_news = []
+        per_asin_news = pathlib.Path(f"data/raw/per_asin/{asin}/news.json")
+        if per_asin_news.exists():
+            try:
+                pa_items = json.loads(per_asin_news.read_text(encoding="utf-8")).get("items", [])
+                if pa_items:
+                    related_news = [{"title": n.get("title", ""), "url": n.get("url", "")}
+                                    for n in pa_items[:2]]
+            except Exception:
+                pass
+        if not related_news:
+            related_news = find_related_news(title_raw, news_items)
 
         # 関連書籍
         related_books = []
