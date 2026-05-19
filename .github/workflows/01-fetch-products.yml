@@ -116,6 +116,20 @@ jobs:
         if: ${{ always() }}
         run: python scripts/signal_detector.py
 
+      # 2026-05-19 (session 34): per-ASIN フィルタを fetch PR に同梱する。
+      # 旧設計では 02-publish.yml が filter_raw_per_asin.py を走らせた後に
+      # stefanzweifel/git-auto-commit-action で main に直 push していたが、
+      # main は branch protection で保護されており GH006 reject (silent fail with
+      # continue-on-error: true)。結果として per_asin/<ASIN>/{youtube,news,books}.json
+      # は永久にコミットされず、Jules が PROMPT_TEMPLATE.md §6.6 の指示通り
+      # per_asin/<ASIN>/ を見に行っても空 → youtube_embeds/news/books が常に [] になる
+      # 事故が発生していた (B0GJX8ZWCK 等で観測)。
+      # ここで生成すれば既存の "Create data update PR + auto-merge" にバンドルされ、
+      # validate を通して main にマージできる。
+      - name: Filter raw per ASIN (Layer 2.5)
+        if: ${{ always() }}
+        run: python scripts/filter_raw_per_asin.py
+
       # 2026-05-19 (session 29): App token で PR 起票するため anti-recursion guard 対象外。
       # pull_request event が通常通り発火し、04-validate-article-pr.yml が required check
       # `validate` を満たす SUCCESS で返す → auto-merge SQUASH 即発火。
