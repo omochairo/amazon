@@ -367,8 +367,17 @@ def main():
         ivs_score, ivs_detail = calculate_ivs(item)
         pros, cons = generate_pros_cons(item)
 
-        # 関連動画
-        related_vids = find_related_videos(title_raw, youtube_items)
+        # 関連動画: per_asin/<ASIN>/youtube.json を優先、空ならグローバル fallback
+        yt_pool = youtube_items
+        per_asin_yt = pathlib.Path(f"data/raw/per_asin/{asin}/youtube.json")
+        if per_asin_yt.exists():
+            try:
+                pa_items = json.loads(per_asin_yt.read_text(encoding="utf-8")).get("items", [])
+                if pa_items:
+                    yt_pool = pa_items
+            except Exception:
+                pass
+        related_vids = find_related_videos(title_raw, yt_pool)
         youtube_embeds = []
         for vid in related_vids:
             try:
