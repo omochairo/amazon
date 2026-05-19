@@ -80,7 +80,9 @@ def youtube_search(api_key: str, query: str, max_results: int = 5) -> list:
     try:
         resp = requests.get(YOUTUBE_SEARCH_URL, params=params, timeout=15)
         if resp.status_code != 200:
-            logger.warning(f"YouTube search failed for '{query}': HTTP {resp.status_code}")
+            logger.warning(
+                f"YouTube search failed for '{query}': HTTP {resp.status_code} body={resp.text[:300]}"
+            )
             return []
         data = resp.json()
         out = []

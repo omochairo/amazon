@@ -27,6 +27,7 @@ on:
       # required check として発火させる ([[04-validate-paths-trap]] 対策)
       - '.github/workflows/01-fetch-products.yml'
       - 'scripts/fetch_amazon.py'
+      - 'scripts/fetch_youtube.py'
       # 2026-05-19 (session 32): backfill workflow も paths に追加。自身の bug fix /
       # 設定変更 PR を merge する際に validate (required check) を必ず通すため。
       - '.github/workflows/01b-backfill-competitors.yml'
