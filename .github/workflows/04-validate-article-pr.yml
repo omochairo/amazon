@@ -17,6 +17,7 @@ on:
       # ならないケースがあるため、pull_request 経由で確実に走らせる)。
       - 'scripts/build_post.py'
       - 'scripts/score_calculator.py'
+      - 'scripts/jules_article_engine.py'
       - 'scripts/templates/**'
       - 'hugo/assets/css/**'
       # Jules プロンプト本体。CA 削除など Jules 出力に影響する変更を含む PR は
