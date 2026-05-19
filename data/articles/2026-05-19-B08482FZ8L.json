@@ -204,6 +204,28 @@
       "author": "購入者",
       "conflict_of_interest": "none",
       "notes": "バックドアと座席を外すとピクニックテーブルセットに早変わりし、かなり遊びの幅が広がる点が高評価"
+    },
+    {
+      "id": "src-review-702mug",
+      "name": "702号室（個人ブログレビュー）",
+      "url": "https://702mug.com/2020/05/15/ippai-noreruyo-picnic-wagon/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2020-05-15",
+      "author": "購入者",
+      "conflict_of_interest": "none",
+      "notes": "ドライブにピクニックにお店にと使い勝手が良く、極小スペースで楽しめる点を高評価"
+    },
+    {
+      "id": "src-review-teenyweenyclub",
+      "name": "Teeny Weeny Club",
+      "url": "https://teenyweenyclub.com/v_06/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2020-05-02",
+      "author": "第三者メディア",
+      "conflict_of_interest": "none",
+      "notes": "最大8人乗れるキャリア付きの車で、使い道が多彩なワゴンであることを紹介"
     }
   ],
   "claims": [
@@ -213,9 +235,10 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-amazon",
-        "src-official"
+        "src-official",
+        "src-review-teenyweenyclub"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "Amazon商品ページと公式ページの両方で確認"
     },
     {
