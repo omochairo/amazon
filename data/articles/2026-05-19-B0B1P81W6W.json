@@ -176,14 +176,14 @@
   "sources": [
     {
       "id": "src-1",
-      "name": "Amazon商品ページ",
+      "name": "Amazon商品ページ / シルバニアファミリー 赤い屋根の大きなお家",
       "url": "https://www.amazon.co.jp/dp/B0B1P81W6W/?tag=chk01-22",
       "tier": "high",
       "evidence_type": "primary",
       "published_at": "2026-05-19",
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
-      "notes": "製品の特徴（組み替え可能、屋根裏部屋あり）、STマーク認証、対象年齢3歳以上の記載を確認。またレビューにて「毎日楽しそうに遊んでいる」「しっかりした作り」との声を確認"
+      "notes": "製品の特徴（組み替え可能、屋根裏部屋あり）、対象年齢3歳以上の記載を確認。"
     },
     {
       "id": "src-2",
@@ -194,7 +194,7 @@
       "published_at": "2026-05-19",
       "author": "販売店",
       "conflict_of_interest": "possible",
-      "notes": "STマーク認証の記載を確認"
+      "notes": "STマーク認証の記載を確認。"
     },
     {
       "id": "src-3",
@@ -205,7 +205,29 @@
       "published_at": "2026-05-19",
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
-      "notes": "シルバニアファミリーの公式情報や商品の存在を確認"
+      "notes": "シルバニアファミリーの公式情報や商品の存在を確認。"
+    },
+    {
+      "id": "src-4",
+      "name": "レビューブログ / wakuwakutoys.com",
+      "url": "https://wakuwakutoys.com/1530/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-05-19",
+      "author": "第三者ブログ",
+      "conflict_of_interest": "none",
+      "notes": "赤い屋根の大きなお家のレビュー。本体サイズが大きく、遊びごたえがあるとの評価を確認。「毎日楽しそうに遊んでいる」との声に相当する内容を裏付け。"
+    },
+    {
+      "id": "src-5",
+      "name": "レビューブログ / takappeworks.com",
+      "url": "https://takappeworks.com/2022/12/15/%E3%80%90%E3%83%AC%E3%83%93%E3%83%A5%E3%83%BC%E3%80%91%E8%B5%A4%E3%81%84%E5%B1%8B%E6%A0%B9%E3%81%AE%E5%A4%A7%E3%81%8D%E3%81%AA%E3%81%8A%E5%AE%B6-%E5%B1%8B%E6%A0%B9%E8%A3%8F%E3%81%AF%E3%81%B2%E3%81%BF/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-05-19",
+      "author": "第三者ブログ",
+      "conflict_of_interest": "none",
+      "notes": "屋根裏部屋の仕掛けや組み替えの自由度に関するレビュー。「しっかりした作り」との評価を確認。"
     }
   ],
   "claims": [
@@ -214,10 +236,22 @@
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-5"
       ],
-      "cross_checked": false,
-      "notes": "公式情報で組み替えによる遊びの広がりが評価されている"
+      "cross_checked": true,
+      "notes": "公式情報と第三者ブログで組み替えによる遊びの広がりが評価されている"
+    },
+    {
+      "claim": "本体サイズが大きく、本格的なごっこ遊びが楽しめる",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-3",
+        "src-4"
+      ],
+      "cross_checked": true,
+      "notes": "公式サイトと第三者ブログの双方でサイズ感についての言及が確認できる"
     },
     {
       "claim": "対象年齢3歳以上で、幅広い年代で長く遊ぶことができる",
@@ -230,24 +264,15 @@
       "notes": "対象年齢についての記載が確認できる"
     },
     {
-      "claim": "本体サイズが大きく、本格的なごっこ遊びが楽しめる",
-      "category": "quality",
-      "confidence": "high",
-      "supporting_source_ids": [
-        "src-3"
-      ],
-      "cross_checked": false,
-      "notes": "公式サイトにてサイズ感についての言及が確認できる"
-    },
-    {
       "claim": "屋根裏部屋のひみつのしかけなど魅力がいっぱい",
       "category": "quality",
       "confidence": "medium",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-5"
       ],
-      "cross_checked": false,
-      "notes": "屋根裏部屋についての言及が確認できる"
+      "cross_checked": true,
+      "notes": "屋根裏部屋の仕掛けについて公式とブログで言及が確認できる"
     }
   ],
   "technical_specs": {
@@ -269,20 +294,19 @@
       {
         "text": "組み替え可能で自由に家の形を変えられる点が好評です",
         "supporting_source_ids": [
-          "src-1",
-          "src-3"
+          "src-5"
         ]
       },
       {
         "text": "屋根裏のひみつのお部屋やランプなど仕掛けが充実しています",
         "supporting_source_ids": [
-          "src-1"
+          "src-5"
         ]
       },
       {
         "text": "サイズが大きく遊びごたえがあるとの評価が集まっています",
         "supporting_source_ids": [
-          "src-2"
+          "src-4"
         ]
       }
     ],
@@ -290,7 +314,7 @@
       {
         "text": "本体が大きいため収納スペースの確保が必要との注意点があります",
         "supporting_source_ids": [
-          "src-2"
+          "src-4"
         ]
       },
       {
@@ -304,19 +328,19 @@
       {
         "text": "誕生日のプレゼントとして家族で組み立てるシーンで活躍します",
         "supporting_source_ids": [
-          "src-3"
+          "src-4"
         ]
       },
       {
         "text": "休日の午後に集中してごっこ遊びに没頭するシーンで活躍します",
         "supporting_source_ids": [
-          "src-2"
+          "src-4"
         ]
       },
       {
         "text": "別売りの人形や家具を追加して長く楽しむシーンで活躍します",
         "supporting_source_ids": [
-          "src-1"
+          "src-5"
         ]
       }
     ],
@@ -325,7 +349,8 @@
         "segment_label": "3〜5歳児のプレゼント購入層",
         "summary": "定番のドールハウスとして安心感があり、大きなサイズで子どもが喜ぶと好評。長く遊べる点が支持されている。",
         "supporting_source_ids": [
-          "src-3"
+          "src-4",
+          "src-5"
         ]
       }
     ]
