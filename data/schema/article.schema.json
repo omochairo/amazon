@@ -47,11 +47,11 @@
       "required": ["lead", "why_this_product", "gift_appeal", "daily_use", "safety_note", "closing"],
       "properties": {
         "lead": { "type": "string", "minLength": 120 },
-        "why_this_product": { "type": "string", "minLength": 150 },
-        "gift_appeal": { "type": "string", "minLength": 120 },
-        "daily_use": { "type": "string", "minLength": 150 },
-        "safety_note": { "type": "string", "minLength": 120 },
-        "closing": { "type": "string", "minLength": 120 }
+        "why_this_product": { "$ref": "#/definitions/narrativeSection" },
+        "gift_appeal":      { "$ref": "#/definitions/narrativeSection" },
+        "daily_use":        { "$ref": "#/definitions/narrativeSection" },
+        "safety_note":      { "$ref": "#/definitions/narrativeSection" },
+        "closing":          { "$ref": "#/definitions/narrativeSection" }
       }
     },
     "faq": {
@@ -128,7 +128,21 @@
           }
         },
         "best_platform": { "type": "string" },
-        "best_price": { "type": "integer" }
+        "best_price": { "type": "integer" },
+        "target_age": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": ".*[0-9０-９].*(歳|才|ヶ月|か月)"
+        },
+        "certifications": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "edu_domains": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["STEM", "言語", "運動", "想像"] },
+          "uniqueItems": true
+        }
       }
     },
     "youtube_embeds": { "type": "array" },
@@ -136,5 +150,19 @@
     "books": { "type": "array" },
     "internal_links": { "type": "array" },
     "editorial_comment": { "type": "string", "minLength": 80 }
+  },
+  "definitions": {
+    "narrativeSection": {
+      "description": "δ-A: 散文 string か、短文 (60-120字) を 2-4 要素並べた array。array 推奨 (読みやすさ向上)。",
+      "oneOf": [
+        { "type": "string", "minLength": 120 },
+        {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 4,
+          "items": { "type": "string", "minLength": 30, "maxLength": 160 }
+        }
+      ]
+    }
   }
 }

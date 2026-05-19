@@ -22,6 +22,16 @@
 {%- endif -%}
 {%- endif -%}
 {%- endmacro -%}
+{#- δ-A: narrative section が string なら従来描画、array なら段落分割 -#}
+{%- macro narrative_section(v) -%}
+{%- if v is string -%}
+{{ v }}
+{%- elif v is iterable -%}
+{% for p in v %}{{ p }}
+
+{% endfor %}
+{%- endif -%}
+{%- endmacro -%}
 <aside class="auto-gen-notice" style="background:#fafafa;border:1px solid #e0e0e0;border-radius:8px;padding:8px 14px;margin:0 0 16px;font-size:0.82rem;color:#666;line-height:1.5;"><strong style="color:#d33;">[PR]</strong>　この記事はおもちゃロボが市場データから自動生成しています。詳細は記事末尾の参考ソース欄をご覧ください。</aside>
 
 {% if product.name_full and product.name_full != product.name %}
@@ -167,7 +177,7 @@
 {% if narrative.why_this_product %}
 ## <small>{{ product.name }}が</small>📦 選ばれている理由
 
-{{ narrative.why_this_product }}
+{{ narrative_section(narrative.why_this_product) }}
 {% endif %}
 
 {% if product.features %}
@@ -236,7 +246,7 @@
 {% if narrative.daily_use %}
 ## <small>{{ product.name }}の</small>🎮 実際の使い方・遊び方
 
-{{ narrative.daily_use }}
+{{ narrative_section(narrative.daily_use) }}
 {% endif %}
 
 {% if use_case_scenarios %}
@@ -251,7 +261,7 @@
 {% if narrative.safety_note %}
 ## <small>{{ product.name }}の</small>🛡️ 安全性で気になること
 
-{{ narrative.safety_note }}
+{{ narrative_section(narrative.safety_note) }}
 {% endif %}
 
 {% if review_summary %}
@@ -277,7 +287,7 @@
 {% if narrative.gift_appeal %}
 ## <small>{{ product.name }}の</small>🎁 プレゼントに選ぶなら（贈り物としての魅力）
 
-{{ narrative.gift_appeal }}
+{{ narrative_section(narrative.gift_appeal) }}
 {% endif %}
 
 {% if persona_fit and persona_fit.gift_scene %}
@@ -305,7 +315,7 @@
 {% if narrative.closing %}
 ## <small>{{ product.name }}は</small>💡 まとめ：買うべき？
 
-{{ narrative.closing }}
+{{ narrative_section(narrative.closing) }}
 {% endif %}
 
 {% if expert_take %}
