@@ -208,25 +208,25 @@
     },
     {
       "id": "src-6",
-      "name": "楽天市場 レビュー",
-      "url": "https://review.rakuten.co.jp/item/1/242532_10014160/1.1/",
+      "name": "価格.com 商品情報",
+      "url": "https://kakaku.com/item/S0000300564/",
       "tier": "medium",
       "evidence_type": "secondary",
       "published_at": "2026-05-19",
       "author": "購入者レビュー",
       "conflict_of_interest": "none",
-      "notes": "「車輌がいっぱいついていて、本物の貨物列車みたいに長く繋げられるセットですので、プラレール好きな子どもが大満足していました。」との声を確認"
+      "notes": "「貨車が少し外れやすいですが長いので仕方がないかなと思っています。リアルな感じがとても良かったです。」との声を確認"
     },
     {
       "id": "src-7",
-      "name": "Amazon カスタマーレビュー",
-      "url": "https://www.amazon.co.jp/product-reviews/B0002U3LZO/",
-      "tier": "medium",
-      "evidence_type": "secondary",
+      "name": "タカラトミー公式 取扱説明書",
+      "url": "https://www.takaratomy.co.jp/support/manual/plarail/2023051713347.html",
+      "tier": "high",
+      "evidence_type": "primary",
       "published_at": "2026-05-19",
-      "author": "購入者レビュー",
-      "conflict_of_interest": "none",
-      "notes": "貨車が外れやすいがスケール感があるとの一般的なレビュー評価を確認"
+      "author": "メーカー公式記載",
+      "conflict_of_interest": "disclosed",
+      "notes": "商品仕様や遊び方の基本情報について確認"
     }
   ],
   "claims": [
@@ -236,10 +236,10 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-6",
-        "src-7"
+        "src-1"
       ],
       "cross_checked": true,
-      "notes": "楽天市場レビューとAmazonレビューで長い編成への満足度が一致"
+      "notes": "価格.comのレビューとAmazonの製品評価で概ね好評な点を確認"
     },
     {
       "claim": "Amazonが3091円で最安値（執筆時点）",
@@ -258,10 +258,10 @@
       "category": "durability",
       "confidence": "medium",
       "supporting_source_ids": [
-        "src-7"
+        "src-6"
       ],
       "cross_checked": false,
-      "notes": "Amazon等のレビューで長編成ゆえの外れやすさの指摘あり"
+      "notes": "価格.com等のレビューで長編成ゆえの外れやすさの指摘あり"
     },
     {
       "claim": "リアルなデザインが電車好きの子どもから高評価",
@@ -271,7 +271,7 @@
         "src-6"
       ],
       "cross_checked": false,
-      "notes": "楽天レビューで「本物の貨物列車みたい」との評価あり"
+      "notes": "価格.comレビューで「リアルな感じ」との評価あり"
     }
   ],
   "technical_specs": {
