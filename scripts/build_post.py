@@ -59,8 +59,8 @@ def _sync_ivs_for_render(data: dict[str, Any]) -> None:
     ivs["education"] = _scale(bd["edu_value"], 15)
     ivs["safety"] = _scale(bd["safety_cert"], 10)
     ivs["cost_performance"] = _scale(bd["price_value"], 15)
-    # 長く遊べる = brand_tier (max 35) + media_exposure (max 15) を合算正規化
-    longevity_norm = (bd["brand_tier"] / 35 + bd["media_exposure"] / 15) / 2
+    # 長く遊べる = brand_tier (max 25) + media_exposure (max 15) を合算正規化
+    longevity_norm = (bd["brand_tier"] / 25 + bd["media_exposure"] / 15) / 2
     ivs["longevity"] = round(2.0 + longevity_norm * 3.0, 1)
     ivs["score_rationale"] = [
         {"factor": "ブランド信頼度", "delta": f"+{bd['brand_tier']}/25", "reason": sr.rationale[0]},
