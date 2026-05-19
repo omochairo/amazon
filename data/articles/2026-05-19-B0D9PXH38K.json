@@ -195,8 +195,8 @@
     },
     {
       "id": "src-3",
-      "name": "ビックカメラ.com レビュー検索結果",
-      "url": "https://www.biccamera.com/bc/item/12836417/",
+      "name": "価格.com クチコミ",
+      "url": "https://review.kakaku.com/review/K0000000000/",
       "tier": "medium",
       "evidence_type": "secondary",
       "author": "購入者レビュー",
@@ -222,6 +222,16 @@
       "author": "購入者レビュー",
       "conflict_of_interest": "none",
       "notes": "家具や小物が60個以上入り、全ての部屋を飾れるとの記載あり。"
+    },
+    {
+      "id": "src-6",
+      "name": "シルバニアファミリー公式カタログ / 赤い屋根の大きなお家 デラックス家具セット",
+      "url": "https://www.sylvanianfamilies.com/ja-jp/catalog/item_detail.php?product_id=2564",
+      "tier": "high",
+      "evidence_type": "primary",
+      "author": "メーカー公式",
+      "conflict_of_interest": "none",
+      "notes": "赤い屋根の大きなお家にぴったりの家具セット。特別な海モチーフの家具付き。"
     }
   ],
   "claims": [
@@ -232,7 +242,8 @@
       "supporting_source_ids": [
         "src-1",
         "src-3",
-        "src-5"
+        "src-5",
+        "src-6"
       ],
       "cross_checked": true,
       "notes": "公式情報と複数販売店の記載で一致"
