@@ -117,8 +117,14 @@ class ArticleReport:
         }
 
 
-def _count_chars(text: str) -> int:
-    return len(text or "")
+def _count_chars(text) -> int:
+    if text is None:
+        return 0
+    if isinstance(text, str):
+        return len(text)
+    if isinstance(text, list):
+        return sum(len(s) for s in text if isinstance(s, str))
+    return 0
 
 
 def check_schema(data: dict, schema: dict) -> CheckResult:
