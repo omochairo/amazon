@@ -187,7 +187,6 @@ def check_narrative(data: dict, product_name: str) -> CheckResult:
         return CheckResult("narrative", False, 0.0, f"missing keys: {missing}")
 
     issues = []
-    name_occurrences = 0
     char_score_sum = 0.0
     for key in REQUIRED_NARRATIVE_KEYS:
         text = narrative.get(key, "")
@@ -198,14 +197,8 @@ def check_narrative(data: dict, product_name: str) -> CheckResult:
             char_score_sum += actual / min_chars
         else:
             char_score_sum += 1.0
-        if product_name and product_name in text:
-            name_occurrences += text.count(product_name)
 
-    char_score = char_score_sum / len(REQUIRED_NARRATIVE_KEYS)
-    seo_score = min(name_occurrences / 6.0, 1.0)  # 各セクション最低1回想定
-    total = char_score * 0.7 + seo_score * 0.3
-    if name_occurrences < 3:
-        issues.append(f"product name only appears {name_occurrences} times in narrative (need >=3)")
+    total = char_score_sum / len(REQUIRED_NARRATIVE_KEYS)
     msg = "; ".join(issues) if issues else "OK"
     return CheckResult("narrative", total >= 0.7, total, msg)
 
@@ -728,19 +721,6 @@ def check_body_word_count(md_text: str | None) -> CheckResult:
     return CheckResult("body_word_count", chars >= 1600, score, msg)
 
 
-def check_product_name_in_body(md_text: str | None, product_name: str) -> CheckResult:
-    if not md_text or not product_name:
-        return CheckResult("product_name_density", True, 1.0, "skipped")
-    n = md_text.count(product_name)
-    score = min(n / 5.0, 1.0)
-    return CheckResult(
-        "product_name_density",
-        n >= 3,
-        score,
-        f"appears {n} times (target>=5 for strong SEO, min 3)",
-    )
-
-
 def _derive_verified_status(
     data: dict,
     rakuten_idx: dict[str, Any] | None,
@@ -815,7 +795,6 @@ def evaluate_article(
     report.checks.append(check_tone(data))
     report.checks.append(check_heading_hierarchy(md_text))
     report.checks.append(check_body_word_count(md_text))
-    report.checks.append(check_product_name_in_body(md_text, product_name))
     return report
 
 
