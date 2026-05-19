@@ -36,9 +36,10 @@ class ScoreResult:
     rationale: list[str] = field(default_factory=list)
 
 
-# tier ベース基礎点 (max 35): S=35 / A=28 / B=22 / C=17 / D=10
+# tier ベース基礎点 (max 25): S=25 / A=20 / B=15 / C=10 / D=5
 # 「掲載に値する玩具メーカー = 一定の下駄」を表現
-_TIER_POINTS = {"S": 35, "A": 28, "B": 22, "C": 17, "D": 10}
+# 2026-05-19: 35→25 に戻す。raw_total 上限 100 に揃え、cap 100 が頻発する設計ミスを解消
+_TIER_POINTS = {"S": 25, "A": 20, "B": 15, "C": 10, "D": 5}
 
 # 安全性 tier floor (max 10): 国内 C tier までは ST マーク玩具組合加入企業 = 安全試験前提
 # S=10 / A=9 / B=8 / C=6 / D=0
@@ -62,7 +63,7 @@ _VALID_EDU_DOMAINS = {"STEM", "言語", "運動", "想像"}
 
 
 # SEO 向け自然文 reason の語彙テーブル
-# 内部式 (tier=A -> 28/35) ではなく、商品の魅力を伝える平叙文で書き、
+# 内部式 (tier=A -> 20/25) ではなく、商品の魅力を伝える平叙文で書き、
 # ブランド名 / 認証名 / 知育分野などの SEO 上意味のあるキーワードを含める。
 _BRAND_TIER_TEMPLATE = {
     "S": "{name}は知育玩具業界でトップクラスの信頼を得ているブランドで、設計品質と長年の実績に裏付けられた安心感があります。",
@@ -75,7 +76,7 @@ _BRAND_TIER_TEMPLATE = {
 
 
 def _brand_tier_score(brand: NormalizedBrand) -> tuple[int, str]:
-    pt = _TIER_POINTS.get(brand.tier, 10)
+    pt = _TIER_POINTS.get(brand.tier, 5)
     template = _BRAND_TIER_TEMPLATE.get(brand.tier, _BRAND_TIER_TEMPLATE["D"])
     # D tier はテンプレ内に {name} がない (固定文) ため format しても安全
     return pt, template.format(name=brand.canonical or "メーカー")
@@ -386,12 +387,13 @@ def calculate(
     mm, mmr = _multi_market_score(asin, brand, repo_root)
     pv, pr = _price_value_score(product, age_range)
 
-    # 各要素配点: brand_tier(35) + safety(10) + age(10) + edu(15) + media(15) + market(10) + price(15) = max 110
-    # 係数 0.5 でリマップ: D tier を 50 寄りに落としつつ tier floor で S/A/B を底上げ。
-    # マップ式: final = max(50, min(100, 50 + raw * 0.5))
-    #   raw 0 -> 50, raw 40 -> 70, raw 70 -> 85, raw 100+ -> 100
-    raw_total = max(0, min(110, bt + sf + ag + ev + me + mm + pv))
-    total = max(50, min(100, round(50 + raw_total * 0.5)))
+    # 各要素配点: brand_tier(25) + safety(10) + age(10) + edu(15) + media(15) + market(10) + price(15) = max 100
+    # 係数 0.4 でリマップ: 上位集中を抑制しつつ、D tier も floor 50 で下支え。
+    # マップ式: final = max(50, min(100, 50 + raw * 0.4))
+    #   raw 0 -> 50, raw 25 -> 60, raw 50 -> 70, raw 75 -> 80, raw 100 -> 90
+    # 2026-05-19: 110→100 / 0.5→0.4 に変更。raw cap が頻発し上位解像度が潰れる問題を解消
+    raw_total = max(0, min(100, bt + sf + ag + ev + me + mm + pv))
+    total = max(50, min(100, round(50 + raw_total * 0.4)))
     return ScoreResult(
         total_100=total,
         ivs_score=round(total / 20.0, 2),
