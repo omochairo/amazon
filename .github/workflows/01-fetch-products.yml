@@ -18,17 +18,23 @@ jobs:
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-    permissions:
-      contents: write
-      pull-requests: write
-      # 2026-05-17: actions:write は `gh workflow run "Validate Article PR"`
-      # の workflow_dispatch を実行するために必須。無いと HTTP 403
-      # "Resource not accessible by integration"。
-      actions: write
+    # 2026-05-19 (session 29): GitHub App token に切替。GITHUB_TOKEN で作成した PR は
+    # anti-recursion guard で pull_request event が発火せず validate (required check) が
+    # 通らなかった (#382 #384 #386 の auto-merge stuck 事例)。App token なら通常 PR と
+    # 同じ扱いで pull_request 経由 validate が発火する。permissions: は App 側 scope に
+    # よって決まるので job レベル permissions は不要 (GITHUB_TOKEN を使わなくなったため)。
     steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
+          token: ${{ steps.app-token.outputs.token }}
           ref: main
           fetch-depth: 0
 
@@ -110,28 +116,25 @@ jobs:
         if: ${{ always() }}
         run: python scripts/signal_detector.py
 
-      # 2026-05-17: branch protection の required `validate` check が main 直接 push を
-      # 拒否する (PR #256 以降の Step A 設計)。stefanzweifel/git-auto-commit-action@v5
-      # では GH006 で永続失敗していたので、ここで feature branch + PR + auto-merge に切替。
-      # 04-validate-article-pr.yml は data/raw/** 変更でも走り、 article 差分が無ければ
-      # validate ジョブは skip-on-empty で success 終了 → required check 通過。
-      # PR は GITHUB_TOKEN で作成されるが、04 が `pull_request_target` を listen しているので
-      # validate は確実に発火する。05-jules-auto-merge.yml は article 差分専用なので発火しない
-      # → 本ステップ内で直接 auto-merge を有効化する。
+      # 2026-05-19 (session 29): App token で PR 起票するため anti-recursion guard 対象外。
+      # pull_request event が通常通り発火し、04-validate-article-pr.yml が required check
+      # `validate` を満たす SUCCESS で返す → auto-merge SQUASH 即発火。
+      # 旧設計の `gh workflow run "Validate Article PR"` による workflow_dispatch kick は
+      # 不要になったため削除 (workflow_dispatch run は required check に算入されない問題が
+      # auto-merge stuck の根本原因だった)。
       - name: Create data update PR + enable auto-merge
         if: ${{ always() }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -e
-          # data/ 配下に差分が無ければ何もしない
           if git diff --quiet --exit-code -- data/ && [ -z "$(git status --porcelain -- data/)" ]; then
             echo "No data changes to commit; skipping PR creation."
             exit 0
           fi
           BRANCH="fetch-data/${{ github.run_id }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "omochairo-fetch-bot[bot]"
+          git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
           git add data/
           if git diff --cached --quiet; then
@@ -146,20 +149,9 @@ jobs:
             --base main \
             --head "$BRANCH")
           echo "Created: $PR_URL"
-          # GITHUB_TOKEN で作成された PR は `pull_request` / `pull_request_target` を
-          # 発火させない (anti-recursion guard) ため、validate を workflow_dispatch で
-          # 明示的に kick する。workflow_dispatch はガードの例外。
-          # validate job の check_run は branch HEAD commit に付くので branch protection
-          # の required `validate` を満たせる。
-          if gh workflow run "Validate Article PR" --ref "$BRANCH"; then
-            echo "Dispatched Validate Article PR on $BRANCH"
-          else
-            echo "::warning::Failed to dispatch Validate Article PR"
-          fi
-          # branch protection の required check (validate) が pass し次第 squash + delete-branch
           if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
             echo "Auto-merge enabled on $PR_URL"
           else
-            echo "::warning::Could not enable auto-merge on $PR_URL — manual admin override may be required."
+            echo "::warning::Could not enable auto-merge on $PR_URL"
           fi
         continue-on-error: true

@@ -219,7 +219,7 @@ def main():
                         help="Additional search keywords (CSV or newline-separated). Combined with --keyword and falls back to DEFAULT_KEYWORDS / $AMAZON_SEARCH_KEYWORDS.")
     parser.add_argument("--pages", type=int, default=2,
                         help="PA-API search pages per keyword (1-10, each up to 10 items)")
-    parser.add_argument("--min-new", type=int, default=20,
+    parser.add_argument("--min-new", type=int, default=40,
                         help="Stop searching once this many ASINs not in articles-dir are collected")
     parser.add_argument("--search-index", default="Toys",
                         help="PA-API SearchIndex / category (e.g. 'Toys', 'Baby', 'All'). 'All' disables ItemPage on JP marketplace; pick a concrete category to use pagination.")
