@@ -305,7 +305,27 @@ def main():
                         help="PA-API SearchIndex / category (e.g. 'Toys', 'Baby', 'All'). 'All' disables ItemPage on JP marketplace; pick a concrete category to use pagination.")
     parser.add_argument("--competitors-only", action="store_true",
                         help="Backfill mode: fetch --asin CSV, merge current amazon.json pool as competitor candidates, and write per_asin/<ASIN>/{snapshot.json,competitors.json} for the sniper ASINs only. Does NOT overwrite amazon.json (so the live Jules pool is preserved). Requires --asin.")
+    parser.add_argument("--all-articles", action="store_true",
+                        help="Backfill mode helper: replace --asin with the full set of ASINs discovered under --articles-dir. Only valid together with --competitors-only. Useful for one-shot regeneration of every per_asin/<ASIN>/competitors.json after a ranking change (e.g. Plan D+).")
     args = parser.parse_args()
+
+    # --all-articles expands sniper input to every published article ASIN.
+    # Validate up front so the user gets a clear error instead of an opaque
+    # PA-API failure later. --competitors-only is required because --all-articles
+    # in search/sniper mode would issue 200+ GetItems with no clear benefit.
+    if args.all_articles:
+        if not args.competitors_only:
+            logger.error("--all-articles requires --competitors-only")
+            sys.exit(1)
+        if args.asin:
+            logger.error("--all-articles and --asin are mutually exclusive")
+            sys.exit(1)
+        discovered = sorted(_load_existing_article_asins(args.articles_dir))
+        if not discovered:
+            logger.error(f"--all-articles: no ASINs found under {args.articles_dir}")
+            sys.exit(1)
+        args.asin = ",".join(discovered)
+        logger.info(f"--all-articles: expanded to {len(discovered)} ASIN(s) from {args.articles_dir}")
 
     app_id = get_secret("AMAZON_CREATORS_APPLICATION_ID")
     cid = get_secret("AMAZON_CREATORS_CREDENTIAL_ID")
