@@ -74,7 +74,13 @@ jobs:
         if: ${{ always() }}
         run: python scripts/fetch_youtube.py --out data/raw/
         env:
+          # 4 つの key は別 Google Cloud project の YouTube Data API v3 key。
+          # fetch_youtube.py が quotaExceeded を検出するたびに次の slot に
+          # フォールバックする (合計 ~40,000 units/day = manual dispatch 9 回/day 余裕)。
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          YOUTUBE_API_KEY2: ${{ secrets.YOUTUBE_API_KEY2 }}
+          YOUTUBE_API_KEY3: ${{ secrets.YOUTUBE_API_KEY3 }}
+          YOUTUBE_API_KEY4: ${{ secrets.YOUTUBE_API_KEY4 }}
 
       - name: Fetch Yahoo News
         if: ${{ always() }}
