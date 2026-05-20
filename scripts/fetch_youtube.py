@@ -108,18 +108,82 @@ def extract_brand(text: str) -> str:
     return ""
 
 
+# 商品同定に効かないサフィックス/汎用語。product_term 候補から外す。
+_QUERY_NOISE = {
+    "知育玩具", "おもちゃ", "玩具", "プレゼント", "誕生日", "ギフト", "男の子",
+    "女の子", "子供", "知育", "周年", "記念", "限定", "シリーズ", "セット",
+    "コレクション", "スペシャル", "オリジナル", "デラックス", "プレミアム",
+    "公式", "新品", "保護", "対象", "本体", "付属", "別売", "マーク", "認証",
+    "推奨", "規格", "対応", "簡単", "便利",
+}
+_QUERY_LEAD_PARTICLE = re.compile(r"^[系型形]+")
+_QUERY_SPLIT = re.compile(r"[\s！。、・/／,!\?？:：「」『』\-]+")
+_QUERY_TRAIL = re.compile(
+    r"(\d{1,4}周年(記念)?|記念|限定|新品|BOX|セット|版|号|\d{4}年|"
+    r"スペシャル|オリジナル|コレクション)$"
+)
+_QUERY_JA = re.compile(r"[ぁ-んァ-ヶー一-龯]{3,12}")
+_QUERY_VERB = re.compile(r"^[ぁ-ん]{3,5}[うるく]$")
+
+
+def _extract_query_terms(title: str, brand: str) -> list[str]:
+    """タイトルから商品同定に効く 3-12 字の語を抽出 (重複排除しつつ出現順を保持)。
+    ブランド除去・括弧除去・サフィックス剥がし・動詞風 (あそぼう/しゃべろう) 除外。"""
+    if not title:
+        return []
+    clean = re.sub(r"[【\[（\(].*?[】\]）\)]", " ", title)
+    if brand:
+        clean = clean.replace(brand, " ")
+    seen: set[str] = set()
+    out: list[str] = []
+    for chunk in _QUERY_SPLIT.split(clean):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        for m in _QUERY_JA.finditer(chunk):
+            t = m.group(0)
+            for _ in range(2):
+                stripped = _QUERY_TRAIL.sub("", t)
+                if stripped == t:
+                    break
+                t = stripped
+            # 先頭の "系/型/形" 助辞 (例: "系総武線" → "総武線") を剥がす
+            t = _QUERY_LEAD_PARTICLE.sub("", t)
+            if len(t) < 3 or t in _QUERY_NOISE or _QUERY_VERB.match(t):
+                continue
+            if t not in seen:
+                seen.add(t)
+                out.append(t)
+    return out
+
+
 def build_per_asin_query(title: str) -> str:
-    """ASIN タイトルから YouTube 検索向けクエリ文字列を作る。
-    優先度: brand+モデル番号 > brand+先頭2-3トークン > タイトル先頭30字"""
+    """ASIN タイトルから YouTube 検索クエリを作る。
+    優先度:
+      1. brand + 4-5 桁モデル番号 (LEGO 71439 等の最も識別性が高い)
+      2. brand + 商品語 2 つ (例: アンパンマン ことばずかん にほんごえいご二語文)
+      3. brand + 商品語 1 つ
+      4. brand 単独
+      5. タイトル先頭 30 字 (ブランド未検出時のフォールバック)
+    商品語は _extract_query_terms で抽出 (句読点・周年記念BOX 等のサフィックス
+    剥がし + 動詞風語の除外を含む)。先頭から最長 2 つを採用。
+    """
     brand = extract_brand(title)
     model = extract_model_number(title)
+    if brand and model and len(model) >= 4:
+        return f"{brand} {model}"
+    terms = _extract_query_terms(title, brand)
+    # 長い順 (識別性高い) + 同点はタイトル後方優先 (商品名は末尾寄りに来ることが
+    # 多いので、tie 時に後方の語を優先する)。最大 3 つまで採用。
+    indexed = [(len(t), idx, t) for idx, t in enumerate(terms)]
+    indexed.sort(key=lambda x: (-x[0], -x[1]))
+    picked = [t for _, _, t in indexed[:3]]
+    if brand and picked:
+        return f"{brand} {' '.join(picked)}"
     if brand and model:
         return f"{brand} {model}"
     if brand:
-        # ブランド + シリーズらしい部分 (タイトルの先頭から2語)
-        clean = re.sub(r"[【\[（\(].*?[】\]）\)]", " ", title).replace(brand, "")
-        tokens = [t for t in clean.split() if len(t) >= 2][:2]
-        return f"{brand} {' '.join(tokens)}".strip()
+        return brand
     return title[:30]
 
 

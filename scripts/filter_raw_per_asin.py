@@ -25,14 +25,18 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("filter_raw_per_asin")
 
 SCORE_THRESHOLD = 3.0
-TOP_N = 5
+
+# コンテンツ種別ごとの top-N。youtube は本文に iframe で 1 件ずつ縦に並ぶので
+# 多すぎると記事が重くなる + 関連度の薄い候補を巻き込みやすいため少なめ。
+TOP_N_DEFAULT = 5
+TOP_N_BY_KEY = {"youtube": 3}
 
 # 既知ブランド/シリーズ辞書 (拡張可)
 KNOWN_BRANDS = [
     "レゴ", "LEGO", "プラレール", "トミカ", "アンパンマン", "ディズニー", "サンリオ",
     "ポケモン", "すみっコぐらし", "リカちゃん", "シルバニアファミリー", "BorneLund",
     "ボーネルンド", "くもん", "公文", "学研", "ピープル", "バンダイ", "タカラトミー",
-    "セガトイズ", "エポック", "アガツマ", "ジョイレア", "Joyreal",
+    "セガトイズ", "セガフェイブ", "エポック", "アガツマ", "ジョイレア", "Joyreal",
 ]
 
 KNOWN_SERIES = [
@@ -47,19 +51,93 @@ NOISE = {
     "プレゼント", "誕生日", "ギフト", "男の子", "女の子", "子供", "知育",
 }
 
+# product_term 抽出時のサフィックス/汎用語ノイズ。これらは商品固有性が無いので
+# 「これだけ一致しても商品同定にならない」語。
+PRODUCT_NOISE = NOISE | {
+    "周年", "記念", "限定", "シリーズ", "セット", "セレクション", "スペシャル",
+    "バージョン", "オリジナル", "コレクション", "デラックス", "プレミアム",
+    "スタンダード", "ベーシック", "保護", "対象", "対応", "推奨", "簡単", "新品",
+    "中古", "大容量", "完全", "公式", "サイズ", "本体", "付属", "別売",
+}
+
+
+_MODEL_PATTERNS = [
+    re.compile(r"\b(\d{5})\b"),                           # LEGO 71439 など
+    re.compile(r"\b(\d{4})\b"),                           # 4 桁
+    re.compile(r"(?:No\.?|NO\.?)\s*(\d{1,4})", re.I),     # トミカ No.94
+    re.compile(r"\b([A-Z]{1,2}-?\d{1,4}[A-Z]?)\b"),       # S-07 / C-12 / M55
+]
+
 
 def extract_model_number(text: str) -> str:
-    """LEGO/トミカ系の 4-5 桁モデル番号を抽出。先頭一致を優先。"""
+    """LEGO/トミカ系のモデル番号を抽出。5桁優先、なければ4桁→No.XX→英数字混在の順。
+    最初にヒットしたものを返す。"""
     if not text:
         return ""
-    # 5 桁を優先 (71439 等)、次に 4 桁
-    m = re.search(r"\b(\d{5})\b", text)
-    if m:
-        return m.group(1)
-    m = re.search(r"\b(\d{4})\b", text)
-    if m:
-        return m.group(1)
+    for pat in _MODEL_PATTERNS:
+        m = pat.search(text)
+        if m:
+            v = m.group(1)
+            # 単独の "OK"/"NEW" などを除外
+            if len(v) >= 2 and v.upper() not in {"OK", "NEW", "BOX", "DX"}:
+                return v
     return ""
+
+
+_PUNCT_SPLIT = re.compile(r"[\s！。、・/／,!\?？:：「」『』\-]+")
+_JA_TERM = re.compile(r"[ぁ-んァ-ヶー一-龯]{3,12}")
+_ASCII_TERM = re.compile(r"[A-Za-z][A-Za-z0-9]{2,}")
+_HIRAGANA_VERB = re.compile(r"^[ぁ-ん]{3,5}[うるく]$")
+_TRAIL_NOISE = re.compile(
+    r"(\d{1,4}周年(記念)?|記念|限定|新品|BOX|セット|版|号|"
+    r"\d{4}年|\d{4}-\d{4}|スペシャル|オリジナル|コレクション)$"
+)
+
+
+def extract_product_terms(title: str, brands: set, series: set) -> set[str]:
+    """ASIN タイトルから「商品を一意に同定する」非ブランド・非シリーズ語を抽出。
+
+    例: 「アンパンマン にほんごえいご二語文も！…ことばずかん15周年記念BOX」
+        → {ことばずかん, にほんごえいご二語文} 等。
+    抽出ルール:
+      - 括弧内除去、ブランド/シリーズ語を除去
+      - 句読点/スラッシュで分割、長さ 3-12 の日本語語 (かな/カナ/漢字) を拾う
+      - 末尾の 周年記念BOX / 限定 / 年号 等のサフィックスを剥がして core を残す
+      - 動詞風 (5字以下のひらがな末尾 う/る/く) は除外
+      - ASCII モデル風 (例 M55) は別途模型番号で扱うのでここでは英字 3+ のみ拾う
+    """
+    if not title:
+        return set()
+    clean = re.sub(r"[【\[（\(].*?[】\]）\)]", " ", title)
+    for w in (brands | series):
+        clean = clean.replace(w, " ")
+    terms: set[str] = set()
+    for chunk in _PUNCT_SPLIT.split(clean):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        for m in _JA_TERM.finditer(chunk):
+            t = m.group(0)
+            # 末尾サフィックスを最大 2 回剥がす (例: "15周年記念BOX" → "")
+            for _ in range(2):
+                stripped = _TRAIL_NOISE.sub("", t)
+                if stripped == t:
+                    break
+                t = stripped
+            if len(t) < 3:
+                continue
+            if t in PRODUCT_NOISE:
+                continue
+            if _HIRAGANA_VERB.match(t):
+                continue
+            terms.add(t)
+        for m in _ASCII_TERM.finditer(chunk):
+            t = m.group(0)
+            if t.upper() in {"NEW", "SET", "FOR", "THE", "BOX", "SEGA",
+                             "FAVE", "TOMY", "LTD", "VER"}:
+                continue
+            terms.add(t)
+    return terms
 
 
 def extract_brand_series(text: str) -> tuple[set, set]:
@@ -95,40 +173,77 @@ def tokenize(text: str) -> set:
 
 
 def score_item(item_text: str, asin_brands: set, asin_series: set,
-               asin_model: str, asin_tokens: set) -> float:
-    """1 アイテムのテキストに対する関連度スコア。"""
+               asin_model: str, asin_tokens: set,
+               asin_product_terms: set) -> tuple[float, dict]:
+    """1 アイテムのテキストに対する関連度スコアと、どのシグナルが当たったかを返す。
+
+    signals = {brand, series, model, product_term, token_overlap} の bool/int。
+    呼び出し側 (filter_items) が strict モードで「ブランドだけ」を弾く判断に使う。
+    """
     if not item_text:
-        return 0.0
+        return 0.0, {}
     score = 0.0
+    signals: dict = {"brand": False, "series": False, "model": False,
+                     "product_term": 0, "token_overlap": 0}
     item_brands, item_series = extract_brand_series(item_text)
     if asin_brands & item_brands:
         score += 5.0
+        signals["brand"] = True
     if asin_model and asin_model in item_text:
         score += 10.0
+        signals["model"] = True
     if asin_series & item_series:
         score += 3.0
+        signals["series"] = True
+    if asin_product_terms:
+        hits = sum(1 for pt in asin_product_terms if pt in item_text)
+        if hits:
+            score += min(hits * 4.0, 8.0)
+            signals["product_term"] = hits
     item_tokens = tokenize(item_text)
     overlap = len(asin_tokens & item_tokens)
-    score += min(overlap * 0.5, 3.0)
-    return score
+    if overlap:
+        score += min(overlap * 0.5, 3.0)
+        signals["token_overlap"] = overlap
+    return score, signals
 
 
 def filter_items(raw_items: list, asin_brands: set, asin_series: set,
                  asin_model: str, asin_tokens: set,
-                 text_keys: list[str]) -> list:
-    """raw 配列をスコアリングして閾値以上を返す。"""
+                 asin_product_terms: set,
+                 text_keys: list[str],
+                 top_n: int = TOP_N_DEFAULT,
+                 strict: bool = False) -> list:
+    """raw 配列をスコアリングして閾値以上を返す。
+
+    strict=True (youtube 用): ASIN タイトルから model か product_terms が抽出
+    できている場合、候補は強シグナルを満たさないと除外する:
+      - series 一致 / product_term 一致 のいずれか、または
+      - model 一致 **かつ** 同じ候補に ASIN のブランドも一致
+
+    model のみ単独 (例: ASIN model="94" が候補の "94 pcs" に偶然マッチ) を
+    弾くためブランド付帯を要求する。ブランド一致だけ (例: アンパンマン
+    ことばずかん 記事に「アンパンマンレジスター」動画) も弾く。
+    """
+    has_strong_anchor = bool(asin_model or asin_product_terms or asin_series)
     scored = []
     for item in raw_items:
         if not isinstance(item, dict):
             continue
         text = " ".join(str(item.get(k, "")) for k in text_keys)
-        s = score_item(text, asin_brands, asin_series, asin_model, asin_tokens)
+        s, signals = score_item(text, asin_brands, asin_series, asin_model,
+                                asin_tokens, asin_product_terms)
+        if strict and has_strong_anchor:
+            strong = (signals.get("series") or signals.get("product_term")
+                      or (signals.get("model") and signals.get("brand")))
+            if not strong:
+                continue
         if s >= SCORE_THRESHOLD:
             enriched = dict(item)
             enriched["_relevance_score"] = round(s, 2)
             scored.append(enriched)
     scored.sort(key=lambda x: x["_relevance_score"], reverse=True)
-    return scored[:TOP_N]
+    return scored[:top_n]
 
 
 def collect_targets(amazon_items: list, articles_dir: pathlib.Path) -> dict:
@@ -209,11 +324,21 @@ def main():
         brands, series = extract_brand_series(title)
         model = extract_model_number(title)
         tokens = tokenize(title)
-        logger.info(f"[{asin}] brands={brands or '-'} series={series or '-'} model={model or '-'}")
+        product_terms = extract_product_terms(title, brands, series)
+        logger.info(
+            f"[{asin}] brands={brands or '-'} series={series or '-'} "
+            f"model={model or '-'} product_terms={product_terms or '-'}"
+        )
 
-        yt = filter_items(youtube_items, brands, series, model, tokens, ["title"])
-        nw = filter_items(news_items, brands, series, model, tokens, ["title"])
-        bk = filter_items(books_items, brands, series, model, tokens, ["title", "description"])
+        # youtube は strict (ブランドだけの一致を弾く) + 上限 3 件
+        yt = filter_items(youtube_items, brands, series, model, tokens,
+                          product_terms, ["title"],
+                          top_n=TOP_N_BY_KEY.get("youtube", TOP_N_DEFAULT),
+                          strict=True)
+        nw = filter_items(news_items, brands, series, model, tokens,
+                          product_terms, ["title"])
+        bk = filter_items(books_items, brands, series, model, tokens,
+                          product_terms, ["title", "description"])
 
         asin_dir = out_root / asin
         asin_dir.mkdir(parents=True, exist_ok=True)
