@@ -420,7 +420,7 @@ def _fallback_news_books(data: dict[str, Any], per_asin_root: pathlib.Path) -> N
 def _fallback_youtube_embeds(
     data: dict[str, Any],
     per_asin_root: pathlib.Path,
-    limit: int = 5,
+    limit: int = 3,
 ) -> None:
     """When the article JSON's ``youtube_embeds`` field is missing or empty,
     populate it from ``data/raw/per_asin/<ASIN>/youtube.json`` (written by
