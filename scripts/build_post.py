@@ -602,6 +602,12 @@ def _backfill_amazon_badges(
 # 弾くためのガード閾値。Amazon 価格を anchor にする。
 _MARKET_PRICE_BAND_LOW = 0.5   # Amazon 価格の 50% 未満は除外
 _MARKET_PRICE_BAND_HIGH = 2.0  # Amazon 価格の 200% 超は除外
+# verified=False の existing として keep する場合でも、Amazon の 3.0x 超 / 1/3 未満
+# の極端な乖離は別商品確定として丸ごと破棄し、検索フォールバックのみ残す。
+# 例: B0F4X462WH (amazon 1579円) yahoo_matched が 14395 円 (9.12x) で Jules が同 URL
+#     を埋めていたケース。確度低 badge では「クリックすれば確認できる」と誤読される
+#     ので、リンク自体を消して「Yahoo!で検索 →」ボタンに置き換える。
+_MARKET_PRICE_BAND_EXTREME = 3.0
 # coverage ratio (hits / len(meaningful))。これ未満は borderline 扱いで
 # verified=False に格下げ → ※確度低 badge + 検索 fallback 表示。
 # 例: kw='Hape ビーズコインドロップス E0328' vs title='Hape ビーズコインドロップス
@@ -731,7 +737,20 @@ def _attach_market_prices(
             }
             continue
 
-        if existing and (existing.get("price") or existing.get("url")):
+        existing_price = 0
+        if existing:
+            try:
+                existing_price = int(existing.get("price") or 0)
+            except (TypeError, ValueError):
+                existing_price = 0
+        existing_extreme = (
+            amazon_price > 0 and existing_price > 0 and (
+                existing_price > amazon_price * _MARKET_PRICE_BAND_EXTREME
+                or existing_price < amazon_price / _MARKET_PRICE_BAND_EXTREME
+            )
+        )
+
+        if existing and not existing_extreme and (existing.get("price") or existing.get("url")):
             # Jules-supplied data with no deterministic cross-check. Keep it
             # so we don't lose the (often correct, sometimes wrong) link, but
             # flag it as unverified so the template can render a 確度低 badge
@@ -745,8 +764,18 @@ def _attach_market_prices(
             prices[key] = existing
             continue
 
-        # Nothing to attach. Leave whatever (if anything) was there; the
-        # template's is_search/取り扱い確認 branch handles the empty case.
+        # Final fallback: matched failed, and either no Jules-supplied data or
+        # an extreme price outlier we just discarded. Render a search-mode
+        # entry so the template shows a 楽天/Yahoo!で検索 button pointing at
+        # the product name instead of an empty 取り扱い確認 / リンクなし cell.
+        if product_name:
+            builder = _SEARCH_URL_BUILDERS.get(key)
+            if builder:
+                prices[key] = {
+                    "price": 0,
+                    "url": builder(product_name),
+                    "is_search": True,
+                }
 
     _recompute_best_price(product)
 
