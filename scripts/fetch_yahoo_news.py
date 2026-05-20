@@ -23,32 +23,96 @@ logger = logging.getLogger("fetch_yahoo_news")
 
 GNEWS_URL = "https://news.google.com/rss/search"
 
-NOISE = [
+NOISE = {
     "送料無料", "ポイント10倍", "正規品", "公式", "最新", "予約",
     "おまけ付き", "ラッピング無料", "あす楽", "即納", "税込",
     "知育玩具", "おもちゃ", "プレゼント", "誕生日", "ギフト",
     "2個セット", "3歳から", "男の子", "女の子", "対象年齢",
-]
+    "周年", "記念", "限定", "シリーズ", "セット", "コレクション",
+    "スペシャル", "オリジナル", "デラックス", "プレミアム", "新品",
+    "保護", "対象", "本体", "付属", "別売", "マーク", "認証", "推奨",
+    "規格", "対応", "簡単", "便利", "玩具", "子供", "知育",
+}
 
 MODEL_PATTERN = re.compile(r"^([A-Z][A-Z0-9\-]{3,11}|\d{4,5})$")
 
+# ニュース検索では「ブランド名 + 商品語」が当たりやすい。短いブランド
+# (レゴ/トミカ) は _QUERY_JA (3 字以上) で漏れるため明示的に prepend する。
+KNOWN_BRANDS = [
+    "レゴ", "LEGO", "プラレール", "トミカ", "アンパンマン", "ディズニー", "サンリオ",
+    "ポケモン", "すみっコぐらし", "リカちゃん", "シルバニアファミリー", "ボーネルンド",
+    "くもん", "公文", "学研", "ピープル", "バンダイ", "タカラトミー", "セガトイズ",
+    "セガフェイブ", "エポック", "アガツマ", "ジョイレア", "Hape", "ホイップる",
+]
 
-def extract_keyword(title: str) -> str:
-    """Amazon タイトルから検索クエリ (ブランド + 型番 or 先頭語) を抽出。"""
+
+def _extract_brand(text: str) -> str:
+    for b in KNOWN_BRANDS:
+        if b in text:
+            return b
+    return ""
+_QUERY_SPLIT = re.compile(r"[\s！。、・/／,!\?？:：「」『』\-]+")
+_QUERY_TRAIL = re.compile(
+    r"(\d{1,4}周年(記念)?|記念|限定|新品|BOX|セット|版|号|\d{4}年|"
+    r"スペシャル|オリジナル|コレクション)$"
+)
+_QUERY_JA = re.compile(r"[ぁ-んァ-ヶー一-龯]{3,12}")
+_QUERY_VERB = re.compile(r"^[ぁ-ん]{3,5}[うるく]$")
+_QUERY_LEAD_PARTICLE = re.compile(r"^[系型形]+")
+
+
+def _extract_terms(title: str) -> list[str]:
+    """タイトルから商品同定に効く 3-12 字語を出現順に抽出。
+    fetch_youtube._extract_query_terms と対称な実装 (brand 除去はここでは
+    しない: 検索クエリには brand も入れたいため、brand 含む chunk もそのまま
+    返し、呼び出し側で brand を頭に置く)。"""
     if not title:
-        return ""
+        return []
     clean = re.sub(r"[【\[（\(].*?[】\]）\)]", " ", title)
     clean = re.sub(r"\(C\).*?(?=\s|$)", "", clean)
-    for n in NOISE:
-        clean = clean.replace(n, " ")
-    tokens = clean.split()
-    if not tokens:
-        return title[:30]
-    models = [t for t in tokens if MODEL_PATTERN.match(t)]
-    if models:
-        brand = " ".join(tokens[:2])
-        return f"{brand} {models[0]}"[:40].strip()
-    return " ".join(tokens[:3])[:40].strip()
+    seen: set[str] = set()
+    out: list[str] = []
+    for chunk in _QUERY_SPLIT.split(clean):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        for m in _QUERY_JA.finditer(chunk):
+            t = m.group(0)
+            for _ in range(2):
+                s = _QUERY_TRAIL.sub("", t)
+                if s == t:
+                    break
+                t = s
+            t = _QUERY_LEAD_PARTICLE.sub("", t)
+            if len(t) < 3 or t in NOISE or _QUERY_VERB.match(t):
+                continue
+            if t not in seen:
+                seen.add(t)
+                out.append(t)
+    return out
+
+
+def extract_keyword(title: str) -> str:
+    """Amazon タイトルから Google News 検索クエリを抽出。
+
+    旧実装は `clean.split()` で先頭 3 語を採用していたが、空白の少ない
+    日本語タイトル (例: "アンパンマン にほんごえいご二語文も！あそぼう！…
+    ことばずかん15周年記念BOX") では区切れず 40 字切り捨ての無意味クエリに
+    なっていた。新実装は句読点でも分割し、3-12 字の同定語を最大 3 つ
+    (長さ降順 + tie は後方優先) 拾って結合する。
+    """
+    if not title:
+        return ""
+    brand = _extract_brand(title)
+    terms = [t for t in _extract_terms(title) if t != brand]
+    if not terms and not brand:
+        return title[:40]
+    # 商品名末尾優先 + 識別性 (長さ) を兼ねた採用順
+    indexed = [(len(t), idx, t) for idx, t in enumerate(terms)]
+    indexed.sort(key=lambda x: (-x[0], -x[1]))
+    picked = [t for _, _, t in indexed[:3]]
+    parts = ([brand] if brand else []) + picked
+    return " ".join(parts)[:60].strip()
 
 
 def gnews_search(query: str, max_results: int = 5) -> list:

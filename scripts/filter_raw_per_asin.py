@@ -330,15 +330,20 @@ def main():
             f"model={model or '-'} product_terms={product_terms or '-'}"
         )
 
-        # youtube は strict (ブランドだけの一致を弾く) + 上限 3 件
+        # youtube / news / books とも strict: ブランドだけの一致や偶発 model
+        # ヒットを排除し、series / product_term / (model AND brand) のいずれかを
+        # 満たす候補のみ通す。news は同ブランドの汎用ニュースが大量に紛れ込む
+        # 問題 (シルバニア全製品に同じ 5 件、アンパンマン ことばずかん 記事に
+        # ヘアクリップ記事) を解消するため strict が必須。
         yt = filter_items(youtube_items, brands, series, model, tokens,
                           product_terms, ["title"],
                           top_n=TOP_N_BY_KEY.get("youtube", TOP_N_DEFAULT),
                           strict=True)
         nw = filter_items(news_items, brands, series, model, tokens,
-                          product_terms, ["title"])
+                          product_terms, ["title"], strict=True)
         bk = filter_items(books_items, brands, series, model, tokens,
-                          product_terms, ["title", "description"])
+                          product_terms, ["title", "description"],
+                          strict=True)
 
         asin_dir = out_root / asin
         asin_dir.mkdir(parents=True, exist_ok=True)
