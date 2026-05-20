@@ -15,6 +15,8 @@ import logging
 import pathlib
 import requests
 
+import _fetch_targets
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("fetch_youtube")
 
@@ -249,6 +251,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--keyword", default="知育玩具")
     parser.add_argument("--out", default="data/raw/")
+    parser.add_argument("--articles-dir", default="data/articles",
+                        help="article ASIN を per-ASIN target に union するソース")
+    parser.add_argument("--max-per-run", type=int, default=50,
+                        help="1 run あたりの per-ASIN query 上限 (quota 制御)")
+    parser.add_argument("--stale-after-days", type=int, default=7,
+                        help="この日数以内に query 済の ASIN はスキップ")
     args = parser.parse_args()
 
     global _API_KEYS, _KEY_INDEX, _EXHAUSTED_LOGGED
@@ -257,17 +265,19 @@ def main():
     _EXHAUSTED_LOGGED = set()
     items = []
 
+    out_dir = pathlib.Path(args.out)
+
     if not _API_KEYS:
         logger.warning("YouTube API key missing (no YOUTUBE_API_KEY{,2,3,4}). Skipping fetch.")
-        os.makedirs(args.out, exist_ok=True)
-        with open(os.path.join(args.out, "youtube.json"), "w", encoding="utf-8") as f:
-            json.dump({"items": []}, f, ensure_ascii=False, indent=4)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "youtube.json").write_text(
+            json.dumps({"items": []}, ensure_ascii=False, indent=4), encoding="utf-8")
         return
 
     logger.info(f"Loaded {len(_API_KEYS)} YouTube API key(s) for quota fallback.")
     seen_urls = set()
 
-    # 1. ジャンル全体検索
+    # 1. ジャンル全体検索 (global pool — 全 ASIN の filter で共通使用)
     genre_kw = args.keyword if args.keyword else "知育玩具"
     logger.info(f"Genre search: {genre_kw}")
     for v in youtube_search(f"{genre_kw} おもちゃ レビュー", max_results=5):
@@ -275,34 +285,53 @@ def main():
             items.append(v)
             seen_urls.add(v["url"])
 
-    # 2. ASIN 別検索 (per_asin/ フィルタが意味あるコンテンツを得られるように)
-    amazon_path = pathlib.Path(args.out) / "amazon.json"
+    # 2. ASIN 別検索 (stale-first 巡回、quota 制御)
+    #    target = union(amazon.json, data/articles/*.json) を _fetch_targets で
+    #    staleness 順に並べて先頭 max_per_run のみ query。Quota が枯渇したら
+    #    youtube_search が [] を返すので残りは自動的に no-op。
+    amazon_items = []
+    amazon_path = out_dir / "amazon.json"
     if amazon_path.exists():
         try:
-            amazon = json.loads(amazon_path.read_text(encoding="utf-8"))
-            asin_items = amazon.get("items", [])
-            logger.info(f"Per-ASIN search: {len(asin_items)} ASINs")
-            for amz in asin_items:
-                title = amz.get("title", "")
-                if not title:
-                    continue
-                query = build_per_asin_query(title)
-                if not query:
-                    continue
-                logger.info(f"  [{amz.get('asin')}] query='{query}'")
-                for v in youtube_search(query, max_results=3):
-                    if v["url"] not in seen_urls:
-                        items.append(v)
-                        seen_urls.add(v["url"])
-        except Exception as e:
-            logger.warning(f"Per-ASIN YouTube search skipped: {e}")
-    else:
-        logger.info("amazon.json not found, skipping per-ASIN search")
+            amazon_items = json.loads(amazon_path.read_text(encoding="utf-8")).get("items", [])
+        except json.JSONDecodeError:
+            logger.warning("amazon.json unreadable; using article targets only")
 
-    os.makedirs(args.out, exist_ok=True)
-    with open(os.path.join(args.out, "youtube.json"), "w", encoding="utf-8") as f:
-        json.dump({"items": items}, f, ensure_ascii=False, indent=4)
-    logger.info(f"Saved {len(items)} videos to youtube.json")
+    targets = _fetch_targets.pick_target_asins(
+        out_dir=out_dir,
+        source="youtube",
+        amazon_items=amazon_items,
+        articles_dir=pathlib.Path(args.articles_dir),
+        max_per_run=args.max_per_run,
+        stale_after_days=args.stale_after_days,
+    )
+
+    queried_asins: list[str] = []
+    for asin, title in targets:
+        if not title:
+            continue
+        query = build_per_asin_query(title)
+        if not query:
+            continue
+        logger.info(f"  [{asin}] query='{query}'")
+        per_asin_items: list = []
+        for v in youtube_search(query, max_results=3):
+            per_asin_items.append(v)
+            if v["url"] not in seen_urls:
+                items.append(v)
+                seen_urls.add(v["url"])
+        # Empty result も含めて raw を書く (= 次 run までスキップ対象になる)
+        _fetch_targets.write_per_asin_raw(out_dir, "youtube", asin, query, per_asin_items)
+        queried_asins.append(asin)
+
+    # state を一括更新 (空 result でも mark することで retry loop 防止)
+    if queried_asins:
+        _fetch_targets.mark_queried(out_dir, "youtube", queried_asins)
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "youtube.json").write_text(
+        json.dumps({"items": items}, ensure_ascii=False, indent=4), encoding="utf-8")
+    logger.info(f"Saved {len(items)} videos to youtube.json (queried {len(queried_asins)} ASINs)")
 
 
 if __name__ == "__main__":

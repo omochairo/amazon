@@ -14,6 +14,8 @@ import logging
 import pathlib
 import requests
 
+import _fetch_targets
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("fetch_books")
 
@@ -92,17 +94,32 @@ def books_search(api_key: str, query: str, max_results: int = 3) -> list:
 
 
 def main():
-    keyword = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] else "知育"
+    import argparse
+    parser = argparse.ArgumentParser()
+    # sys.argv[1] 互換のための positional (旧呼出 `fetch_books.py "<keyword>"`)
+    parser.add_argument("keyword", nargs="?", default="知育")
+    parser.add_argument("--out", default=None,
+                        help="出力先 (省略時は repo root/data/raw/)")
+    parser.add_argument("--articles-dir", default=None,
+                        help="article ASIN を per-ASIN target に union するソース")
+    parser.add_argument("--max-per-run", type=int, default=50,
+                        help="1 run あたりの per-ASIN query 上限")
+    parser.add_argument("--stale-after-days", type=int, default=7,
+                        help="この日数以内に query 済の ASIN はスキップ")
+    args = parser.parse_args()
+    keyword = args.keyword or "知育"
 
     api_key = os.environ.get("GOOGLEBOOKS_API_KEY")
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    save_path = os.path.join(base_dir, "data", "raw", "books_result.json")
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    base_dir = pathlib.Path(__file__).resolve().parent.parent
+    out_dir = pathlib.Path(args.out) if args.out else (base_dir / "data" / "raw")
+    articles_dir = pathlib.Path(args.articles_dir) if args.articles_dir else (base_dir / "data" / "articles")
+    save_path = out_dir / "books_result.json"
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     if not api_key:
         logger.warning("GOOGLEBOOKS_API_KEY missing. Skipping fetch.")
-        with open(save_path, "w", encoding="utf-8") as f:
-            json.dump({"keyword": keyword, "items": []}, f, ensure_ascii=False, indent=4)
+        save_path.write_text(json.dumps({"keyword": keyword, "items": []}, ensure_ascii=False, indent=4),
+                             encoding="utf-8")
         return
 
     items = []
@@ -117,41 +134,57 @@ def main():
             items.append(b)
             seen_urls.add(url)
 
-    # 2. ASIN 別検索 (ブランド名 + 知育絵本)
-    amazon_path = pathlib.Path(base_dir) / "data" / "raw" / "amazon.json"
+    # 2. ASIN 別検索 (stale-first 巡回)
+    amazon_items = []
+    amazon_path = out_dir / "amazon.json"
     if amazon_path.exists():
         try:
-            amazon = json.loads(amazon_path.read_text(encoding="utf-8"))
-            asin_items = amazon.get("items", [])
-            seen_queries = set()
-            logger.info(f"Per-ASIN search: {len(asin_items)} ASINs (deduped by query)")
-            for amz in asin_items:
-                title = amz.get("title", "")
-                brand = extract_brand(title)
-                if brand:
-                    query = f"{brand} 知育"
-                else:
-                    fb = extract_fallback_keyword(title)
-                    if not fb:
-                        continue
-                    query = f"{fb} 知育"
-                if query in seen_queries:
-                    continue
-                seen_queries.add(query)
-                logger.info(f"  brand='{brand or '-'}' query='{query}'")
-                for b in books_search(api_key, query, max_results=2):
-                    url = b.get("url") or ""
-                    if url and url not in seen_urls:
-                        items.append(b)
-                        seen_urls.add(url)
-        except Exception as e:
-            logger.warning(f"Per-ASIN books search skipped: {e}")
-    else:
-        logger.info("amazon.json not found, skipping per-ASIN search")
+            amazon_items = json.loads(amazon_path.read_text(encoding="utf-8")).get("items", [])
+        except json.JSONDecodeError:
+            logger.warning("amazon.json unreadable; using article targets only")
 
-    with open(save_path, "w", encoding="utf-8") as f:
-        json.dump({"keyword": keyword, "items": items}, f, ensure_ascii=False, indent=4)
-    logger.info(f"Saved {len(items)} books to {save_path}")
+    targets = _fetch_targets.pick_target_asins(
+        out_dir=out_dir,
+        source="books",
+        amazon_items=amazon_items,
+        articles_dir=articles_dir,
+        max_per_run=args.max_per_run,
+        stale_after_days=args.stale_after_days,
+    )
+
+    # ブランド共通の query になりやすいので same-query dedup (API 節約)
+    seen_queries: set[str] = set()
+    queried_asins: list[str] = []
+    for asin, title in targets:
+        brand = extract_brand(title)
+        if brand:
+            query = f"{brand} 知育"
+        else:
+            fb = extract_fallback_keyword(title)
+            if not fb:
+                continue
+            query = f"{fb} 知育"
+        per_asin_items: list = []
+        if query not in seen_queries:
+            seen_queries.add(query)
+            logger.info(f"  [{asin}] brand='{brand or '-'}' query='{query}'")
+            for b in books_search(api_key, query, max_results=2):
+                per_asin_items.append(b)
+                url = b.get("url") or ""
+                if url and url not in seen_urls:
+                    items.append(b)
+                    seen_urls.add(url)
+        else:
+            logger.info(f"  [{asin}] query='{query}' (deduped, no API call)")
+        _fetch_targets.write_per_asin_raw(out_dir, "books", asin, query, per_asin_items)
+        queried_asins.append(asin)
+
+    if queried_asins:
+        _fetch_targets.mark_queried(out_dir, "books", queried_asins)
+
+    save_path.write_text(json.dumps({"keyword": keyword, "items": items}, ensure_ascii=False, indent=4),
+                         encoding="utf-8")
+    logger.info(f"Saved {len(items)} books to {save_path} (queried {len(queried_asins)} ASINs)")
 
 
 if __name__ == "__main__":

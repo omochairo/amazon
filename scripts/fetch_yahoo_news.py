@@ -18,6 +18,8 @@ import xml.etree.ElementTree as ET
 
 import requests
 
+import _fetch_targets
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("fetch_yahoo_news")
 
@@ -146,11 +148,19 @@ def main():
     parser.add_argument("--out", default="data/raw/")
     parser.add_argument("--keyword", default="知育玩具",
                         help="ジャンル全体検索クエリ (フォールバック)")
+    parser.add_argument("--articles-dir", default="data/articles",
+                        help="article ASIN を per-ASIN target に union するソース")
+    parser.add_argument("--max-per-run", type=int, default=50,
+                        help="1 run あたりの per-ASIN query 上限")
+    parser.add_argument("--stale-after-days", type=int, default=7,
+                        help="この日数以内に query 済の ASIN はスキップ")
     args = parser.parse_args()
 
+    out_dir = pathlib.Path(args.out)
     items = []
     seen_urls = set()
 
+    # 1. ジャンル全体検索
     logger.info(f"Genre search: {args.keyword}")
     for n in gnews_search(args.keyword, max_results=5):
         url = n.get("url") or ""
@@ -158,35 +168,53 @@ def main():
             items.append(n)
             seen_urls.add(url)
 
-    base_dir = pathlib.Path(__file__).resolve().parent.parent
-    amazon_path = base_dir / "data" / "raw" / "amazon.json"
+    # 2. ASIN 別検索 (stale-first 巡回)
+    amazon_items = []
+    amazon_path = out_dir / "amazon.json"
     if amazon_path.exists():
         try:
-            amazon = json.loads(amazon_path.read_text(encoding="utf-8"))
-            asin_items = amazon.get("items", [])
-            logger.info(f"Per-ASIN search: {len(asin_items)} ASINs")
-            seen_queries = set()
-            for amz in asin_items:
-                query = extract_keyword(amz.get("title", ""))
-                if not query or query in seen_queries:
-                    continue
-                seen_queries.add(query)
-                logger.info(f"  query='{query}'")
-                for n in gnews_search(query, max_results=3):
-                    url = n.get("url") or ""
-                    if url and url not in seen_urls:
-                        items.append(n)
-                        seen_urls.add(url)
-        except Exception as e:
-            logger.warning(f"Per-ASIN news search skipped: {e}")
-    else:
-        logger.info("amazon.json not found, skipping per-ASIN search")
+            amazon_items = json.loads(amazon_path.read_text(encoding="utf-8")).get("items", [])
+        except json.JSONDecodeError:
+            logger.warning("amazon.json unreadable; using article targets only")
 
-    os.makedirs(args.out, exist_ok=True)
-    save_path = os.path.join(args.out, "news.json")
-    with open(save_path, "w", encoding="utf-8") as f:
-        json.dump({"items": items}, f, ensure_ascii=False, indent=4)
-    logger.info(f"Saved {len(items)} news items to {save_path}")
+    targets = _fetch_targets.pick_target_asins(
+        out_dir=out_dir,
+        source="news",
+        amazon_items=amazon_items,
+        articles_dir=pathlib.Path(args.articles_dir),
+        max_per_run=args.max_per_run,
+        stale_after_days=args.stale_after_days,
+    )
+
+    seen_queries: set[str] = set()
+    queried_asins: list[str] = []
+    for asin, title in targets:
+        query = extract_keyword(title)
+        if not query:
+            continue
+        # 同一 query は API 呼ばず空 raw で mark (シリーズ違いの兄弟 ASIN 対策)
+        per_asin_items: list = []
+        if query not in seen_queries:
+            seen_queries.add(query)
+            logger.info(f"  [{asin}] query='{query}'")
+            for n in gnews_search(query, max_results=3):
+                per_asin_items.append(n)
+                url = n.get("url") or ""
+                if url and url not in seen_urls:
+                    items.append(n)
+                    seen_urls.add(url)
+        else:
+            logger.info(f"  [{asin}] query='{query}' (deduped, no API call)")
+        _fetch_targets.write_per_asin_raw(out_dir, "news", asin, query, per_asin_items)
+        queried_asins.append(asin)
+
+    if queried_asins:
+        _fetch_targets.mark_queried(out_dir, "news", queried_asins)
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    save_path = out_dir / "news.json"
+    save_path.write_text(json.dumps({"items": items}, ensure_ascii=False, indent=4), encoding="utf-8")
+    logger.info(f"Saved {len(items)} news items to {save_path} (queried {len(queried_asins)} ASINs)")
 
 
 if __name__ == "__main__":
