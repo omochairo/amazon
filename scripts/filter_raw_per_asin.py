@@ -21,6 +21,8 @@ import logging
 import pathlib
 import re
 
+import _fetch_targets
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("filter_raw_per_asin")
 
@@ -316,6 +318,20 @@ def main():
     out_root = raw_dir / "per_asin"
     out_root.mkdir(parents=True, exist_ok=True)
 
+    def _dedupe_by_url(lst: list) -> list:
+        seen = set()
+        out = []
+        for it in lst:
+            if not isinstance(it, dict):
+                continue
+            u = it.get("url") or it.get("link") or ""
+            if u and u in seen:
+                continue
+            if u:
+                seen.add(u)
+            out.append(it)
+        return out
+
     summary = []
     for asin, title in targets.items():
         if not asin:
@@ -330,18 +346,27 @@ def main():
             f"model={model or '-'} product_terms={product_terms or '-'}"
         )
 
+        # Pool = global (genre) + per-ASIN raw (stale-first 巡回で蓄積)。
+        # per-ASIN raw は当該 ASIN だけを狙った fetch 結果なので関連度が高い。
+        # global pool は genre 全般なのでブランド被りで偶然 hit するケース用。
+        # 両方を union-dedup してから strict filter に渡す。
+        yt_pool = _dedupe_by_url(youtube_items +
+                                 _fetch_targets.load_per_asin_raw_items(raw_dir, "youtube", asin))
+        nw_pool = _dedupe_by_url(news_items +
+                                 _fetch_targets.load_per_asin_raw_items(raw_dir, "news", asin))
+        bk_pool = _dedupe_by_url(books_items +
+                                 _fetch_targets.load_per_asin_raw_items(raw_dir, "books", asin))
+
         # youtube / news / books とも strict: ブランドだけの一致や偶発 model
         # ヒットを排除し、series / product_term / (model AND brand) のいずれかを
-        # 満たす候補のみ通す。news は同ブランドの汎用ニュースが大量に紛れ込む
-        # 問題 (シルバニア全製品に同じ 5 件、アンパンマン ことばずかん 記事に
-        # ヘアクリップ記事) を解消するため strict が必須。
-        yt = filter_items(youtube_items, brands, series, model, tokens,
+        # 満たす候補のみ通す。
+        yt = filter_items(yt_pool, brands, series, model, tokens,
                           product_terms, ["title"],
                           top_n=TOP_N_BY_KEY.get("youtube", TOP_N_DEFAULT),
                           strict=True)
-        nw = filter_items(news_items, brands, series, model, tokens,
+        nw = filter_items(nw_pool, brands, series, model, tokens,
                           product_terms, ["title"], strict=True)
-        bk = filter_items(books_items, brands, series, model, tokens,
+        bk = filter_items(bk_pool, brands, series, model, tokens,
                           product_terms, ["title", "description"],
                           strict=True)
 

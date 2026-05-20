@@ -36,6 +36,8 @@ on:
       - 'scripts/fetch_yahoo_news.py'
       - 'scripts/fetch_books.py'
       - 'scripts/filter_raw_per_asin.py'
+      # 2026-05-20 (session 38): per-ASIN fetch 巡回の共有モジュール。
+      - 'scripts/_fetch_targets.py'
   workflow_dispatch:
 
 permissions:
