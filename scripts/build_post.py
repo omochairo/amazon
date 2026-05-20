@@ -381,8 +381,9 @@ def _load_per_asin_items(
 ) -> list[dict[str, Any]]:
     """Return up to ``limit`` items from ``data/raw/per_asin/<ASIN>/<filename>``.
 
-    Used as a fallback for the Jules-authored ``news``/``books`` fields when
-    they come back empty. File shape: ``{"items": [...]}``.
+    Used as a fallback for the Jules-authored ``news`` / ``books`` /
+    ``youtube_embeds`` fields when they come back empty. File shape:
+    ``{"items": [...]}``.
     """
     p = per_asin_root / asin / filename
     if not p.exists():
@@ -414,6 +415,29 @@ def _fallback_news_books(data: dict[str, Any], per_asin_root: pathlib.Path) -> N
         items = _load_per_asin_items(per_asin_root, asin, filename)
         if items:
             data[key] = items
+
+
+def _fallback_youtube_embeds(
+    data: dict[str, Any],
+    per_asin_root: pathlib.Path,
+    limit: int = 5,
+) -> None:
+    """When the article JSON's ``youtube_embeds`` field is missing or empty,
+    populate it from ``data/raw/per_asin/<ASIN>/youtube.json`` (written by
+    filter_raw_per_asin.py on top of fetch_youtube.py's pool). Items are
+    passed through as-is; the post template reads ``vid.url`` (in
+    ``youtube.com/watch?v=<id>`` format) and ``vid.title`` to build the
+    iframe — no ``embed_html`` synthesis needed here. Non-empty
+    Jules-authored values are preserved."""
+    product = data.get("product") if isinstance(data.get("product"), dict) else None
+    asin = product.get("asin") if product else None
+    if not asin:
+        return
+    if data.get("youtube_embeds"):
+        return
+    items = _load_per_asin_items(per_asin_root, asin, "youtube.json", limit=limit)
+    if items:
+        data["youtube_embeds"] = items
 
 
 _OMCHA_CACHE_TTL_SECONDS = 24 * 3600
@@ -975,6 +999,7 @@ def main() -> None:
             _backfill_product_images(data, raw_amazon_index, per_asin_root)
             _override_competitive_analysis(data, per_asin_root)
             _fallback_news_books(data, per_asin_root)
+            _fallback_youtube_embeds(data, per_asin_root)
             _attach_omcha_related(data, per_asin_root)
             _attach_internal_links(data, asin_to_slug, site_base_path)
             _fill_jsonld(data)
