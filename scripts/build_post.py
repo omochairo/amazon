@@ -301,10 +301,9 @@ def _attach_internal_links(
             continue
         slug = asin_to_slug.get(asin)
         if slug:
-            # Hugo / PaperMod serves post URLs lower-cased (disablePathToLower
-            # default is false), so the ASIN segment in the slug has to be
-            # lowered to avoid 404s on GitHub Pages.
-            c["internal_url"] = f"{site_base_path}/posts/{slug.lower()}/"
+            # URL structure moved from /posts/{slug}/ to /products/{asin}/
+            # (See #511). Hugo aliases handle 301 redirects for the old paths.
+            c["internal_url"] = f"{site_base_path}/products/{asin.lower()}/"
 
 
 def _override_competitive_analysis(
@@ -875,16 +874,28 @@ def _frontmatter_meta(data: dict[str, Any], slug: str, draft: bool) -> dict[str,
     if variants and isinstance(variants[0], dict) and variants[0].get("title"):
         title = variants[0]["title"]
     description = data.get("meta_description_optimized") or data.get("meta_description", "")
+    
+    product = data.get("product") or {}
+    asin = product.get("asin")
+    if not asin:
+        import re
+        m = re.search(r"-(B0[A-Z0-9]{8})$", slug, flags=re.IGNORECASE)
+        if m:
+            asin = m.group(1)
+        else:
+            asin = slug
+
     meta: dict[str, Any] = {
         "title": title,
         "date": data.get("date", datetime.now().isoformat()),
         "tags": data.get("tags", []),
         "slug": slug,
+        "url": f"/products/{asin.lower()}/",
+        "aliases": [f"/posts/{slug.lower()}/"],
         "draft": draft,
         "description": description,
         "keywords": data.get("keywords", []),
     }
-    product = data.get("product") or {}
     image_url = product.get("image") or ""
     if image_url:
         meta["product_image"] = image_url
