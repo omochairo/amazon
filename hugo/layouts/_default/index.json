@@ -17,6 +17,7 @@
         "price_yahoo"  (.Params.price_yahoo | default 0)
         "date"         (.Date.Format "2006-01-02")
         "unix_time"    .Date.Unix
+        "age_range"    (.Params.age_range | default "")
         "tags"         (.Params.tags | default slice)
     ) -}}
     {{- end }}
