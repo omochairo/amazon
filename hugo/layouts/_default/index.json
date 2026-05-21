@@ -8,10 +8,15 @@
         "summary"      .Summary
         "image"        (.Params.product_image | default "")
         "brand"        (.Params.brand | default "")
+        "brands"       (.Params.brands | default slice)
         "product_name" (.Params.product_name | default "")
         "ivs_score"    (.Params.ivs_score | default 0)
         "ivs_score_100" (.Params.ivs_score_100 | default 0)
+        "price_amazon" (.Params.price_amazon | default 0)
+        "price_rakuten" (.Params.price_rakuten | default 0)
+        "price_yahoo"  (.Params.price_yahoo | default 0)
         "date"         (.Date.Format "2006-01-02")
+        "unix_time"    .Date.Unix
         "tags"         (.Params.tags | default slice)
     ) -}}
     {{- end }}

@@ -888,7 +888,7 @@ def _frontmatter_meta(data: dict[str, Any], slug: str, draft: bool) -> dict[str,
     meta: dict[str, Any] = {
         "title": title,
         "date": data.get("date", datetime.now().isoformat()),
-        "tags": data.get("tags", []),
+        "tags": [t.rstrip(". ") for t in data.get("tags", []) if t],
         "slug": slug,
         "url": f"/products/{asin.lower()}/",
         "aliases": [f"/posts/{slug.lower()}/"],
@@ -941,6 +941,20 @@ def _frontmatter_meta(data: dict[str, Any], slug: str, draft: bool) -> dict[str,
         meta["jsonld"] = data["jsonld"]
     if data.get("breadcrumbs"):
         meta["breadcrumbs"] = data["breadcrumbs"]
+        
+    # 2026-05-21 (#516): 価格ソート用のメタデータ追加
+    if product and isinstance(product.get("prices"), dict):
+        prices = product["prices"]
+        for key in ("amazon", "rakuten", "yahoo"):
+            entry = prices.get(key)
+            if isinstance(entry, dict):
+                try:
+                    price_val = int(entry.get("price") or 0)
+                    if price_val > 0:
+                        meta[f"price_{key}"] = price_val
+                except (TypeError, ValueError):
+                    pass
+
     return meta
 
 

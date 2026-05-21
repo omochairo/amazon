@@ -31,12 +31,176 @@
 <div class="post-content md-content">{{ .Content }}</div>
 {{- end }}
 
-{{- $paginator := .Paginate .Pages -}}
-<div class="card-grid term-card-grid">
+{{- $pages := (.Pages.ByParam "ivs_score_100").Reverse -}}
+{{- $paginator := .Paginate $pages -}}
+<div class="term-sort-controls" style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center;">
+  <span style="font-size: 0.9rem; font-weight: bold; color: #4b5563;">並び替え:</span>
+  <button class="sort-btn" data-sort="date" style="padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; cursor: pointer; font-size: 0.85rem;">新着順</button>
+  <button class="sort-btn active" data-sort="score" style="padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 4px; background: #0ea5e9; color: #fff; cursor: pointer; font-size: 0.85rem;">スコア順</button>
+  <button class="sort-btn" data-sort="price" style="padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; cursor: pointer; font-size: 0.85rem;">価格が安い順</button>
+</div>
+
+<div class="card-grid term-card-grid" id="term-card-grid" data-taxonomy="{{ $kind }}" data-term="{{ .Title }}">
   {{- range $paginator.Pages }}
     {{- partial "product_card.html" . }}
   {{- end }}
 </div>
+
+<div id="term-pagination-container">
+{{- if gt $paginator.TotalPages 1 }}
+<footer class="page-footer posts-pagination">
+  <nav class="pagination">
+    {{- if $paginator.HasPrev }}
+    <a class="prev" href="{{ $paginator.Prev.URL | absURL }}">« 前のページ</a>
+    {{- end }}
+    <span class="pagination-info">{{ $paginator.PageNumber }} / {{ $paginator.TotalPages }}</span>
+    {{- if $paginator.HasNext }}
+    <a class="next" href="{{ $paginator.Next.URL | absURL }}">次のページ »</a>
+    {{- end }}
+  </nav>
+</footer>
+{{- end }}
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const grid = document.getElementById("term-card-grid");
+  const taxonomy = grid.getAttribute("data-taxonomy"); // "brands" or "tags"
+  const term = grid.getAttribute("data-term"); // "メーカー名" or "タグ名"
+  const sortBtns = document.querySelectorAll(".sort-btn");
+  const paginationContainer = document.getElementById("term-pagination-container");
+  
+  let allItems = [];
+  let currentSort = ""; 
+  let currentPage = 1;
+  const ITEMS_PER_PAGE = 20;
+
+  function renderCards(page) {
+    if (page === 1) grid.innerHTML = "";
+    const start = (page - 1) * ITEMS_PER_PAGE;
+    const end = start + ITEMS_PER_PAGE;
+    const itemsToShow = allItems.slice(start, end);
+    
+    itemsToShow.forEach(item => {
+      const a = document.createElement("a");
+      a.className = "product-card";
+      a.href = item.permalink;
+      a.setAttribute("aria-label", (item.product_name || item.title) + " の比較レビューを読む");
+      
+      let scoreHtml = "";
+      if (item.ivs_score_100) {
+        scoreHtml = `<span class="product-card-score" title="IVSスコア (100点満点)">
+          🏆 <strong>${item.ivs_score_100}</strong><span class="product-card-score-suffix">点</span>
+        </span>`;
+      } else if (item.ivs_score) {
+        scoreHtml = `<span class="product-card-score" title="IVSスコア (5点満点)">
+          🏆 <strong>${item.ivs_score.toFixed(1)}</strong><span class="product-card-score-suffix">/5</span>
+        </span>`;
+      }
+
+      let imgHtml = item.image 
+        ? `<img src="${item.image}" alt="${item.product_name || item.title}" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
+        : `<div class="product-card-image-fallback">🧸</div>`;
+        
+      let brandHtml = item.brand ? `<div class="product-card-brand">${item.brand}</div>` : "";
+      
+      let tagsHtml = "";
+      if (item.tags && item.tags.length > 0) {
+        const tHtml = item.tags.slice(0, 2).map(t => `<span class="product-card-tag">#${t}</span>`).join("");
+        tagsHtml = `<span class="product-card-tags">${tHtml}</span>`;
+      }
+
+      a.innerHTML = `
+        <div class="product-card-image">
+          ${imgHtml}
+          ${scoreHtml}
+        </div>
+        <div class="product-card-body">
+          ${brandHtml}
+          <h3 class="product-card-title">${item.title}</h3>
+          <div class="product-card-meta">
+            <time datetime="${item.date}">${item.date}</time>
+            ${tagsHtml}
+          </div>
+        </div>
+      `;
+      grid.appendChild(a);
+    });
+
+    // Handle Load More button
+    if (allItems.length > end) {
+      paginationContainer.innerHTML = `<div style="text-align:center; margin-top: 20px;">
+        <button id="load-more-btn" style="padding: 10px 24px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer; font-weight: bold; color: #374151;">さらに読み込む</button>
+      </div>`;
+      document.getElementById("load-more-btn").addEventListener("click", () => {
+        currentPage++;
+        renderCards(currentPage);
+      });
+    } else {
+      paginationContainer.innerHTML = "";
+    }
+  }
+
+  function applySort(sortType) {
+    currentSort = sortType;
+    if (sortType === "score") {
+      allItems.sort((a, b) => (b.ivs_score_100 || 0) - (a.ivs_score_100 || 0));
+    } else if (sortType === "price") {
+      allItems.sort((a, b) => {
+        const pa = a.price_amazon || a.price_rakuten || a.price_yahoo || 99999999;
+        const pb = b.price_amazon || b.price_rakuten || b.price_yahoo || 99999999;
+        return pa - pb;
+      });
+    } else {
+      allItems.sort((a, b) => (b.unix_time || 0) - (a.unix_time || 0));
+    }
+    
+    // Update active button state
+    sortBtns.forEach(btn => {
+      if (btn.getAttribute("data-sort") === sortType) {
+        btn.classList.add("active");
+        btn.style.background = "#0ea5e9";
+        btn.style.color = "#fff";
+      } else {
+        btn.classList.remove("active");
+        btn.style.background = "#fff";
+        btn.style.color = "initial";
+      }
+    });
+
+    currentPage = 1;
+    renderCards(currentPage);
+  }
+
+  sortBtns.forEach(btn => {
+    btn.addEventListener("click", async function() {
+      const sortType = this.getAttribute("data-sort");
+      
+      if (allItems.length === 0) {
+        try {
+          const res = await fetch("/index.json");
+          const data = await res.json();
+          // Filter items by taxonomy term
+          allItems = data.filter(item => {
+            if (taxonomy === "brands") {
+              // ターム名（.Title）がブランド名に一致するか
+              return item.brands && item.brands.includes(term);
+            } else if (taxonomy === "tags") {
+              return item.tags && item.tags.includes(term);
+            }
+            return false;
+          });
+        } catch (err) {
+          console.error("Failed to load index.json", err);
+          return;
+        }
+      }
+      
+      applySort(sortType);
+    });
+  });
+});
+</script>
 
 {{- if gt $paginator.TotalPages 1 }}
 <footer class="page-footer posts-pagination">
