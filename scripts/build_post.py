@@ -915,6 +915,8 @@ def _frontmatter_meta(data: dict[str, Any], slug: str, draft: bool) -> dict[str,
             meta["brands"] = [nb.canonical]
     if product.get("name"):
         meta["product_name"] = product["name"]
+    if product.get("age_range"):
+        meta["age_range"] = product["age_range"]
 
     # 2026-05-15 (@J Phase 2): Jules の ivs_score を破棄し、6要素から論理再計算する。
     # Jules スコアはブランド信頼度を反映しないため (ノーブランド=4.7 等の不正)、
