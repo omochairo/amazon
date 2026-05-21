@@ -1880,3 +1880,162 @@ body.dark .post-content details.score-axes-doc .score-axes-note,
 html[data-theme="dark"] .post-content details.score-axes-doc .score-axes-note {
   color: #d6d3d1;
 }
+
+/* ==========================================
+   #510 競合カード画像: 中央寄せ + サイズ改善
+   ========================================== */
+
+/* 競合カード内の画像コンテナ — 中央寄せ */
+.post-content .competitor-grid .competitor-card img {
+  display: block;
+  margin: 0 auto;
+  max-height: 180px;
+  width: auto;
+  border-radius: 8px;
+}
+
+/* Keepa グラフ画像も中央寄せ */
+.post-content .keepa-graph img {
+  display: block;
+  margin: 0 auto;
+}
+
+/* 競合カード全体のテキスト中央寄せ（画像部分） */
+.post-content .competitor-grid .competitor-card > div:first-child {
+  text-align: center;
+}
+
+/* ==========================================
+   #512 CTA ボタンアニメーション (価格比較 + 競合カード)
+   ========================================== */
+
+/* --- shimmer キーフレーム --- */
+@keyframes ctaShimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes ctaPulse {
+  0%, 100% { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  50%      { box-shadow: 0 4px 16px rgba(0,0,0,0.18); }
+}
+
+/* --- 価格比較グリッド内の CTA ボタン共通 --- */
+.post-content .price-cta-grid a[href][target="_blank"] {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  animation: ctaPulse 3s ease-in-out infinite;
+}
+
+/* hover: リフト + グロー */
+.post-content .price-cta-grid a[href][target="_blank"]:hover {
+  transform: translateY(-2px) scale(1.03);
+  filter: brightness(1.08);
+}
+
+/* shimmer overlay — ::after 疑似要素 */
+.post-content .price-cta-grid a[href][target="_blank"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    110deg,
+    transparent 30%,
+    rgba(255,255,255,0.25) 48%,
+    rgba(255,255,255,0.35) 50%,
+    rgba(255,255,255,0.25) 52%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: ctaShimmer 3.5s ease-in-out infinite;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* --- Amazon ボタン固有のグロー色 --- */
+.post-content .price-cta-grid a[href*="amazon"]:hover {
+  box-shadow: 0 6px 24px rgba(255, 153, 0, 0.4);
+}
+
+/* --- 楽天ボタン固有のグロー色 --- */
+.post-content .price-cta-grid a[href*="rakuten"]:hover {
+  box-shadow: 0 6px 24px rgba(191, 0, 0, 0.35);
+}
+
+/* --- Yahoo ボタン固有のグロー色 --- */
+.post-content .price-cta-grid a[href*="yahoo"]:hover,
+.post-content .price-cta-grid a[href*="shopping.yahoo"]:hover {
+  box-shadow: 0 6px 24px rgba(255, 0, 51, 0.35);
+}
+
+/* --- 競合カード内のボタン --- */
+.post-content .competitor-grid .competitor-card a[href][style*="background"] {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+.post-content .competitor-grid .competitor-card a[href][style*="background"]:hover {
+  transform: translateY(-2px) scale(1.05);
+  filter: brightness(1.08);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+}
+
+.post-content .competitor-grid .competitor-card a[href][style*="background"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    110deg,
+    transparent 30%,
+    rgba(255,255,255,0.2) 48%,
+    rgba(255,255,255,0.3) 50%,
+    rgba(255,255,255,0.2) 52%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: ctaShimmer 4s ease-in-out infinite;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* --- prefers-reduced-motion: アニメーション無効化 --- */
+@media (prefers-reduced-motion: reduce) {
+  .post-content .price-cta-grid a[href][target="_blank"],
+  .post-content .competitor-grid .competitor-card a[href][style*="background"] {
+    animation: none;
+  }
+  .post-content .price-cta-grid a[href][target="_blank"]::after,
+  .post-content .competitor-grid .competitor-card a[href][style*="background"]::after {
+    animation: none;
+    background: none;
+  }
+}
+
+/* --- Dark mode: shimmer 明度調整 --- */
+body.dark .post-content .price-cta-grid a[href][target="_blank"]::after,
+html[data-theme="dark"] .post-content .price-cta-grid a[href][target="_blank"]::after {
+  background: linear-gradient(
+    110deg,
+    transparent 30%,
+    rgba(255,255,255,0.12) 48%,
+    rgba(255,255,255,0.18) 50%,
+    rgba(255,255,255,0.12) 52%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+}
+
+body.dark .post-content .competitor-grid .competitor-card a[href][style*="background"]::after,
+html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][style*="background"]::after {
+  background: linear-gradient(
+    110deg,
+    transparent 30%,
+    rgba(255,255,255,0.1) 48%,
+    rgba(255,255,255,0.15) 50%,
+    rgba(255,255,255,0.1) 52%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+}
