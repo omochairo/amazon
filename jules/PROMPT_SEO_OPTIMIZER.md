@@ -71,7 +71,7 @@
     {"name": "おもちゃいろ", "url": "/"},
     {"name": "知育玩具", "url": "/categories/知育玩具/"},
     {"name": "ブロック・パズル", "url": "/categories/ブロック/"},
-    {"name": "ジスター 天才のはじまり", "url": "/posts/2026-05-12-B073W9V2WB/"}
+    {"name": "ジスター 天才のはじまり", "url": "/products/b073w9v2wb/"}
   ],
   "jsonld": {
     "product": {
