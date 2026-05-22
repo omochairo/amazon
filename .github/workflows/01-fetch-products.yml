@@ -152,6 +152,17 @@ jobs:
             echo "No data changes to commit; skipping PR creation."
             exit 0
           fi
+
+          # Close any existing open fetch-data PRs to avoid conflicts and stale runs
+          echo "Checking for old automated fetch PRs..."
+          gh pr list --base main --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("fetch-data/")) | .number' | while read -r pr_num; do
+            if [ -n "$pr_num" ]; then
+              echo "Closing old PR #$pr_num and deleting branch..."
+              gh pr close "$pr_num" -d || true
+            fi
+          done
+
           BRANCH="fetch-data/${{ github.run_id }}"
           git config user.name "omochairo-fetch-bot[bot]"
           git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
