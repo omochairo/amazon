@@ -8,6 +8,7 @@ ShowBreadCrumbs: true
 ShowShareButtons: false
 ShowReadingTime: false
 description: "おもちゃいろ 比較ナビのプライバシーポリシー・免責事項・アフィリエイト開示について"
+searchHidden: true
 ---
 
 ## 運営者情報

@@ -2112,3 +2112,33 @@ body.dark .sort-btn:not(.active):hover {
     background: #374151;
   }
 }
+
+/* --- Age Badge (Bottom-Right overlay) --- */
+.product-card-age {
+  position: absolute;
+  bottom: 0.5rem;
+  right: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  background: #0284c7;  /* Sky 600 - 鮮やかなブルー */
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.22);
+  z-index: 2;
+  pointer-events: none;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+
+/* Dark mode adjust for age badge */
+[data-theme="dark"] .product-card-age,
+body.dark .product-card-age {
+  background: #0369a1;  /* Sky 700 - ダークモードでコントラスト比を考慮した濃いめのブルー */
+  color: #ffffff;
+  border-color: rgba(255,255,255,0.1);
+}
+

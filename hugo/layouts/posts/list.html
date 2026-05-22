@@ -210,7 +210,6 @@ document.addEventListener("DOMContentLoaded", function() {
           <span class="product-card-score ${tierClass}" title="IVSスコア (100点満点)">
             &#127942; <strong>${score100}</strong><span class="product-card-score-suffix">点</span>
             ${minPrice > 0 ? `<span class="product-card-score-price">最安 &yen;${minPrice.toLocaleString()}</span>` : ""}
-            ${ageStr ? `<span class="product-card-score-age">&#128118; ${ageStr}</span>` : ""}
           </span>
         </div>`;
       } else if (item.ivs_score) {
@@ -218,10 +217,11 @@ document.addEventListener("DOMContentLoaded", function() {
           <span class="product-card-score score-bronze" title="IVSスコア (5点満点)">
             &#127942; <strong>${item.ivs_score.toFixed(1)}</strong><span class="product-card-score-suffix">/5</span>
             ${minPrice > 0 ? `<span class="product-card-score-price">最安 &yen;${minPrice.toLocaleString()}</span>` : ""}
-            ${ageStr ? `<span class="product-card-score-age">&#128118; ${ageStr}</span>` : ""}
           </span>
         </div>`;
       }
+
+      var ageHtml = ageStr ? `<span class="product-card-age" title="対象年齢">&#128118; ${ageStr}</span>` : "";
 
       var imgHtml = item.image 
         ? `<img src="${item.image}" alt="${item.product_name || item.title}" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
@@ -239,6 +239,7 @@ document.addEventListener("DOMContentLoaded", function() {
         <div class="product-card-image">
           ${imgHtml}
           ${scoreHtml}
+          ${ageHtml}
         </div>
         <div class="product-card-body">
           ${brandHtml}

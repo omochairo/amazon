@@ -64,7 +64,6 @@
         <span class="product-card-score {{ $tierClass }}" title="IVSスコア (100点満点)">
           &#127942; <strong>{{ $score100 }}</strong><span class="product-card-score-suffix">点</span>
           {{- if gt $minPrice 0 }}<span class="product-card-score-price">最安 &yen;{{ lang.FormatNumber 0 $minPrice }}</span>{{ end -}}
-          {{- if $ageStr }}<span class="product-card-score-age">&#128118; {{ $ageStr }}</span>{{ end -}}
         </span>
       </div>
     {{- else if $score }}
@@ -72,9 +71,14 @@
         <span class="product-card-score score-bronze" title="IVSスコア (5点満点)">
           &#127942; <strong>{{ lang.FormatNumber 1 $score }}</strong><span class="product-card-score-suffix">/5</span>
           {{- if gt $minPrice 0 }}<span class="product-card-score-price">最安 &yen;{{ lang.FormatNumber 0 $minPrice }}</span>{{ end -}}
-          {{- if $ageStr }}<span class="product-card-score-age">&#128118; {{ $ageStr }}</span>{{ end -}}
         </span>
       </div>
+    {{- end }}
+
+    {{- if $ageStr }}
+      <span class="product-card-age" title="対象年齢">
+        &#128118; {{ $ageStr }}
+      </span>
     {{- end }}
   </div>
   <div class="product-card-body">

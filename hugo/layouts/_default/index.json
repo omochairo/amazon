@@ -1,6 +1,6 @@
 {{- $.Scratch.Add "index" slice -}}
-{{- range site.RegularPages -}}
-    {{- if and (not .Params.searchHidden) (ne .Layout `archives`) (ne .Layout `search`) }}
+{{- range where site.RegularPages "Section" "posts" -}}
+    {{- if and (not .Params.searchhidden) (not .Params.searchHidden) (ne .File.BaseFileName "privacy") (ne .Layout `archives`) (ne .Layout `search`) }}
     {{- $.Scratch.Add "index" (dict
         "title"        .Title
         "content"      .Plain
