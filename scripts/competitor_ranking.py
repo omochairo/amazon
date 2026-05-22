@@ -31,28 +31,78 @@ _FILLER_WORDS = {
 }
 
 
+# 助詞切り離し処理で誤判定（副作用）を起こすひらがな固有名詞等の例外辞書
+_EXCEPTION_WORDS = {
+    "のりもの", "おままごと", "いつまで", "おかいもの", "なに"
+}
+
+_JOSHI_START = set("のでに")
+_JOSHI_END = set("のでにとをはがやもへ")
+
+
 def _normalize(text: str) -> str:
     """括弧で囲まれた装飾語と記号を剥がして単語抽出に適した形に。"""
     if not text:
         return ""
     s = _PAREN_BRACKET_RE.sub(" ", text)
     s = _PUNCT_RE.sub(" ", s)
+    s = _WHITESPACE_RE.sub(" ", s).strip()
+
+    # 1. 漢字・カタカナの直後にある助詞（の, に, と, を, は, が, や, も, で, へ）をスペースで切り離す
+    s = re.sub(r"(?<=[一-龥々々ァ-ヶー])([のにとをはがやもでへ])", r" \1 ", s)
+
+    # 2. ひらがなが2文字以上続いた直後にあり、かつ後ろがひらがなではない助詞をスペースで切り離す
+    # ただし、例外辞書に含まれる単語は切り離さない
+    def split_joshi_hiragana(match: re.Match) -> str:
+        word = match.group(0)
+        if word in _EXCEPTION_WORDS:
+            return word
+        return f"{match.group(1)} {match.group(2)} "
+
+    s = re.sub(r"([ぁ-ん]{2,})([のにとをはがやもでへ])(?=[^ぁ-ん]|$)", split_joshi_hiragana, s)
+
     return _WHITESPACE_RE.sub(" ", s).strip()
 
 
+def _is_filler(token: str) -> bool:
+    """助詞ストリップを考慮して filler 語か判定する。"""
+    low = token.lower()
+    if low in _FILLER_WORDS:
+        return True
+
+    # 末尾の助詞を剥がして判定
+    if len(token) >= 3 and token[-1] in _JOSHI_END:
+        if token[:-1].lower() in _FILLER_WORDS:
+            return True
+
+    # 先頭の助詞を剥がして判定
+    if len(token) >= 3 and token[0] in _JOSHI_START:
+        if token[1:].lower() in _FILLER_WORDS:
+            return True
+
+    # 両方を剥がして判定
+    if len(token) >= 4 and token[0] in _JOSHI_START and token[-1] in _JOSHI_END:
+        if token[1:-1].lower() in _FILLER_WORDS:
+            return True
+
+    return False
+
+
 def _tokens(text: str) -> list[str]:
-    """カナ/漢字/英数字の連続をトークンとして抽出。長さ 2 文字以上のみ採用。"""
+    """カナ/漢字/ひらがな/英数字を適切に考慮してトークンを抽出。"""
     if not text:
         return []
     normalized = _normalize(text)
-    # 連続する日本語 (カタカナ/ひらがな/漢字) と英数字を別トークンとして拾う
-    raw = re.findall(r"[ァ-ヶー一-龥々]+|[A-Za-z0-9]+", normalized)
+
+    # 漢字・カタカナ・ひらがなが交互に現れる複合語を一体として抽出
+    # [ひらがな任意個] + [漢字/カタカナ連続 + ひらがな任意個] の1回以上の繰り返し
+    # またはひらがなのみ（2文字以上）、または英数字
+    raw = re.findall(r"[ぁ-ん]*(?:[ァ-ヶー一-龥々々]+[ぁ-ん]*)+|[ぁ-ん]{2,}|[A-Za-z0-9]+", normalized)
     out = []
     for t in raw:
-        low = t.lower()
         if len(t) < 2:
             continue
-        if low in _FILLER_WORDS:
+        if _is_filler(t):
             continue
         out.append(t)
     return out
