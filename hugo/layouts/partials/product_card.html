@@ -38,12 +38,33 @@
     {{- end -}}
     {{- if eq $minPrice 99999999 }}{{ $minPrice = 0 }}{{ end -}}
 
+    {{- $ageStr := "" -}}
+    {{- if isset .Params "age_min_months" -}}
+      {{- $m := int .Params.age_min_months -}}
+      {{- if eq $m 0 -}}
+        {{- $ageStr = "0歳〜" -}}
+      {{- else if lt $m 12 -}}
+        {{- $ageStr = printf "%dヶ月〜" $m -}}
+      {{- else -}}
+        {{- $years := div $m 12 -}}
+        {{- $rem := mod $m 12 -}}
+        {{- if eq $rem 0 -}}
+          {{- $ageStr = printf "%d歳〜" $years -}}
+        {{- else if eq $rem 6 -}}
+          {{- $ageStr = printf "%d.5歳〜" $years -}}
+        {{- else -}}
+          {{- $yearsFloat := div (float $m) 12.0 -}}
+          {{- $ageStr = printf "%.1f歳〜" $yearsFloat -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+
     {{- if $score100 }}
       <div class="product-card-badges">
         <span class="product-card-score {{ $tierClass }}" title="IVSスコア (100点満点)">
           &#127942; <strong>{{ $score100 }}</strong><span class="product-card-score-suffix">点</span>
           {{- if gt $minPrice 0 }}<span class="product-card-score-price">最安 &yen;{{ lang.FormatNumber 0 $minPrice }}</span>{{ end -}}
-          {{- with .Params.age_range }}<span class="product-card-score-age">&#128118; {{ . }}</span>{{ end -}}
+          {{- if $ageStr }}<span class="product-card-score-age">&#128118; {{ $ageStr }}</span>{{ end -}}
         </span>
       </div>
     {{- else if $score }}
@@ -51,7 +72,7 @@
         <span class="product-card-score score-bronze" title="IVSスコア (5点満点)">
           &#127942; <strong>{{ lang.FormatNumber 1 $score }}</strong><span class="product-card-score-suffix">/5</span>
           {{- if gt $minPrice 0 }}<span class="product-card-score-price">最安 &yen;{{ lang.FormatNumber 0 $minPrice }}</span>{{ end -}}
-          {{- with .Params.age_range }}<span class="product-card-score-age">&#128118; {{ . }}</span>{{ end -}}
+          {{- if $ageStr }}<span class="product-card-score-age">&#128118; {{ $ageStr }}</span>{{ end -}}
         </span>
       </div>
     {{- end }}
