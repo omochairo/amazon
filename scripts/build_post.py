@@ -981,7 +981,59 @@ def _fill_jsonld(data: dict[str, Any]) -> None:
 
 
 
-def _frontmatter_meta(data: dict[str, Any], slug: str, draft: bool) -> dict[str, Any]:
+def _load_git_history(src_path: pathlib.Path) -> dict[str, dict[str, Any]]:
+    """git log を一括実行し、各記事 JSON ファイルの更新履歴を取得する。
+    返り値の形式: { "2026-05-11-B00I7JXEEA.json": { "lastmod": "ISO_DATE", "update_count": N } }
+    """
+    import subprocess
+    history: dict[str, dict[str, Any]] = {}
+    src_dir_str = str(src_path).replace("\\", "/")
+    if not src_dir_str.endswith("/"):
+        src_dir_str += "/"
+
+    try:
+        # git log を実行してコミット時のファイル変更リストを取得
+        res = subprocess.run(
+            ["git", "log", "--name-only", "--pretty=format:COMMIT:%cI"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True
+        )
+        lines = res.stdout.splitlines()
+    except Exception as e:
+        print(f"  ! Failed to retrieve git log: {e}. Fallback to file timestamps.")
+        return {}
+
+    current_commit_date = None
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("COMMIT:"):
+            current_commit_date = line[7:]
+        else:
+            normalized_line = line.replace("\\", "/")
+            if normalized_line.startswith(src_dir_str) and normalized_line.endswith(".json"):
+                basename = normalized_line[len(src_dir_str):]
+                if basename.endswith(SUFFIX_SKIP):
+                    continue
+                if basename not in history:
+                    history[basename] = {
+                        "lastmod": current_commit_date,
+                        "update_count": 0
+                    }
+                history[basename]["update_count"] += 1
+    return history
+
+
+def _frontmatter_meta(
+    data: dict[str, Any],
+    slug: str,
+    draft: bool,
+    git_history: dict[str, dict[str, Any]],
+    json_file_path: pathlib.Path,
+) -> dict[str, Any]:
     title = data.get("title", "No Title")
     variants = data.get("title_variants") or []
     if variants and isinstance(variants[0], dict) and variants[0].get("title"):
@@ -998,9 +1050,27 @@ def _frontmatter_meta(data: dict[str, Any], slug: str, draft: bool) -> dict[str,
         else:
             asin = slug
 
+    # git_history から値を取得する
+    json_filename = json_file_path.name
+    history_entry = git_history.get(json_filename)
+    
+    if history_entry:
+        lastmod = history_entry["lastmod"]
+        update_count = history_entry["update_count"]
+    else:
+        # 暫定化: コミットがない場合（新規ファイル等）や Git が無効な場合はファイルの最終更新日時を使用
+        try:
+            mtime = json_file_path.stat().st_mtime
+            lastmod = datetime.fromtimestamp(mtime).astimezone().isoformat()
+        except Exception:
+            lastmod = data.get("date", datetime.now().isoformat())
+        update_count = 1
+
     meta: dict[str, Any] = {
         "title": title,
         "date": data.get("date", datetime.now().isoformat()),
+        "lastmod": lastmod,
+        "update_count": update_count,
         "tags": [t.rstrip(". ") for t in data.get("tags", []) if t],
         "slug": slug,
         "url": f"/products/{asin.lower()}/",
@@ -1131,6 +1201,7 @@ def main() -> None:
     yahoo_matched_index = _load_matched_index(raw_root / "yahoo_matched.json")
     asin_to_slug = _build_asin_to_slug_map(src_path)
     site_base_path = _site_base_path(pathlib.Path(args.hugo_config))
+    git_history = _load_git_history(src_path)
 
     template_file = pathlib.Path("scripts/templates/post.md.j2")
     if not template_file.exists():
@@ -1189,7 +1260,7 @@ def main() -> None:
             _sync_ivs_for_render(data)
             md_body = template.render(**data)
             draft = _quality_draft(slug, src_path, args.min_score)
-            post = frontmatter.Post(md_body, **_frontmatter_meta(data, slug, draft))
+            post = frontmatter.Post(md_body, **_frontmatter_meta(data, slug, draft, git_history, f))
 
             out_file = dst_path / f"{slug}.md"
             out_file.write_text(frontmatter.dumps(post), encoding="utf-8")

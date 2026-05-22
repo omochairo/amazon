@@ -1,0 +1,37 @@
+{{- $scratch := newScratch }}
+
+{{- if not .Date.IsZero -}}
+{{- $scratch.Add "meta" (slice (printf "<span title='%s'>📅 %s</span>" (.Date) (.Date | time.Format (default ":date_long" site.Params.DateFormat)))) }}
+{{- end }}
+
+{{/* 最終更新日 lastmod が存在し、かつ投稿日 Date と日付が異なる場合のみ表示 */}}
+{{- if not .Lastmod.IsZero -}}
+{{- if or (ne (.Lastmod.Format "2006-01-02") (.Date.Format "2006-01-02")) -}}
+{{- $scratch.Add "meta" (slice (printf "<span title='%s'>📝 最終更新: %s</span>" (.Lastmod) (.Lastmod | time.Format (default ":date_long" site.Params.DateFormat)))) }}
+{{- end }}
+{{- end }}
+
+{{/* 更新回数 update_count が 2回以上の場合のみ表示 */}}
+{{- if .Params.update_count -}}
+{{- if gt (int .Params.update_count) 1 -}}
+{{- $scratch.Add "meta" (slice (printf "<span>🔄 更新回数: %d回</span>" (int .Params.update_count))) }}
+{{- end }}
+{{- end }}
+
+{{- if (.Param "ShowReadingTime") -}}
+{{- $scratch.Add "meta" (slice (printf "<span>%s</span>" (i18n "read_time" .ReadingTime | default (printf "%d min" .ReadingTime)))) }}
+{{- end }}
+
+{{- if (.Param "ShowWordCount") -}}
+{{- $scratch.Add "meta" (slice (printf "<span>%s</span>" (i18n "words" .WordCount | default (printf "%d words" .WordCount)))) }}
+{{- end }}
+
+{{- if not (.Param "hideAuthor") -}}
+{{- with (partial "author.html" .) }}
+{{- $scratch.Add "meta" (slice (printf "<span>%s</span>" .)) }}
+{{- end }}
+{{- end }}
+
+{{- with ($scratch.Get "meta") }}
+{{- delimit . "&nbsp;·&nbsp;" | safeHTML -}}
+{{- end -}}
