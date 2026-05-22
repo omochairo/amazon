@@ -194,6 +194,44 @@ _COMPETITOR_FEATURE_MAX = 60
 _COMPETITOR_TOP_N = 3
 
 
+def _parse_age_min_months(raw: Any) -> int:
+    """年齢文字列から最小月齢（months）を数値でパースする。"""
+    if not raw:
+        return 0
+    raw_str = str(raw).strip()
+    if not raw_str:
+        return 0
+    
+    # 1.5歳半、18ヶ月などの特異パターンを優先判定
+    if re.search(r"1\.5|1歳半|1歳6ヶ月|18ヶ月", raw_str):
+        return 18
+    
+    # 範囲パターン: e.g. "6ヶ月〜2歳", "3歳〜7歳"
+    m_range = re.search(r"(\d+)\s*(歳|才|ヶ月)\s*[〜~\-]", raw_str)
+    if m_range:
+        n, u = int(m_range.group(1)), m_range.group(2)
+        return n if u == "ヶ月" else n * 12
+        
+    # 下限のみ: e.g. "6歳以上", "3歳〜", "12ヶ月から"
+    m_min = re.search(r"(\d+)\s*(歳|才|ヶ月)\s*(?:〜|~|から|以上|\+)", raw_str)
+    if m_min:
+        n, u = int(m_min.group(1)), m_min.group(2)
+        return n if u == "ヶ月" else n * 12
+
+    # 単一: e.g. "3歳"
+    m_single = re.search(r"(\d+)\s*(歳|才|ヶ月)", raw_str)
+    if m_single:
+        n, u = int(m_single.group(1)), m_single.group(2)
+        return n if u == "ヶ月" else n * 12
+
+    # 単なる数値
+    m_num = re.search(r"(\d+)", raw_str)
+    if m_num:
+        return int(m_num.group(1)) * 12
+        
+    return 0
+
+
 _TRAILING_BRACKET_RE = re.compile(r"\s*[（(\[【][^）)\]】]*[）)\]】]\s*$")
 
 
@@ -1103,6 +1141,10 @@ def _frontmatter_meta(
         meta["product_name"] = product["name"]
     if product.get("age_range"):
         meta["age_range"] = product["age_range"]
+    
+    # 年齢フィルター用の最小月数メタデータを追加
+    raw_age = product.get("target_age") or product.get("age_range") or product.get("age") or product.get("age_band") or ""
+    meta["age_min_months"] = _parse_age_min_months(raw_age)
 
     # 2026-05-15 (@J Phase 2): Jules の ivs_score を破棄し、6要素から論理再計算する。
     # Jules スコアはブランド信頼度を反映しないため (ノーブランド=4.7 等の不正)、

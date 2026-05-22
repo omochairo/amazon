@@ -18,6 +18,7 @@
         "date"         (.Date.Format "2006-01-02")
         "unix_time"    .Date.Unix
         "age_range"    (.Params.age_range | default "")
+        "age_min_months" (.Params.age_min_months | default 0)
         "tags"         (.Params.tags | default slice)
     ) -}}
     {{- end }}
