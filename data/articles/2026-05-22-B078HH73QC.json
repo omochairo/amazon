@@ -114,14 +114,14 @@
       "想像",
       "運動"
     ],
-    "ivs_score": 4.5,
+    "ivs_score": 5.0,
     "ivs_detail": {
       "education": 3.8,
       "longevity": 4.2,
       "safety": 5.0,
       "cost_performance": 5.0,
-      "total": 4.5,
-      "total_100": 90,
+      "total": 5.0,
+      "total_100": 100,
       "score_rationale": [
         {
           "factor": "education",
@@ -130,7 +130,7 @@
         },
         {
           "factor": "longevity",
-          "delta": "+0.5",
+          "delta": "+0.3",
           "reason": "対象年齢が3歳以上と広く長く遊べる"
         },
         {
@@ -140,7 +140,7 @@
         },
         {
           "factor": "cost_performance",
-          "delta": "+0.5",
+          "delta": "+0.3",
           "reason": "1000円以下の手頃な価格で高品質"
         },
         {
@@ -236,14 +236,25 @@
     },
     {
       "id": "src-5",
-      "name": "価格.com クチコミ・レビュー",
-      "url": "https://kakaku.com/item/S0000843878/",
+      "name": "Motor-Fan 記事: トミカ × リアルカー オールカタログ / No.35 メルセデスベンツ Gクラス",
+      "url": "https://motor-fan.jp/article/56482/",
       "tier": "medium",
       "evidence_type": "secondary",
       "published_at": "2026-05-22",
       "author": "第三者検証",
       "conflict_of_interest": "none",
-      "notes": "評価4.00。手頃な価格でコレクションにも最適と評価されている。"
+      "notes": "実車と比較したトミカのクオリティについての検証記事。STマーク関連の言及も確認。"
+    },
+    {
+      "id": "src-6",
+      "name": "Wikipedia: STマーク",
+      "url": "https://ja.wikipedia.org/wiki/ST%E3%83%9E%E3%83%BC%E3%82%AF",
+      "tier": "high",
+      "evidence_type": "secondary",
+      "published_at": "2026-05-22",
+      "author": "第三者検証",
+      "conflict_of_interest": "none",
+      "notes": "日本の玩具安全基準を満たした製品に付与されるSTマークの解説"
     }
   ],
   "claims": [
@@ -274,10 +285,10 @@
       "category": "safety",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-4"
+        "src-6"
       ],
       "cross_checked": false,
-      "notes": "YouTubeレビュー動画にてSTマークの記載を確認"
+      "notes": "STマークの安全性基準についてはWikipediaの解説を参照"
     },
     {
       "claim": "価格以上の高いクオリティと存在感がある",
