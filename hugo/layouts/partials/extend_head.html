@@ -73,3 +73,24 @@
   }
 }
 </script>
+
+{{ if .IsPage }}
+  {{ if .Params.jsonld }}
+    {{ if .Params.jsonld.product }}
+<script type="application/ld+json">
+{{ .Params.jsonld.product | jsonify | safeJS }}
+</script>
+    {{ end }}
+    {{ if .Params.jsonld.faq }}
+<script type="application/ld+json">
+{{ .Params.jsonld.faq | jsonify | safeJS }}
+</script>
+    {{ end }}
+    {{ if .Params.jsonld.breadcrumb }}
+<script type="application/ld+json">
+{{ .Params.jsonld.breadcrumb | jsonify | safeJS }}
+</script>
+    {{ end }}
+  {{ end }}
+{{ end }}
+
