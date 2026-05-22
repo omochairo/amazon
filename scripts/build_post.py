@@ -733,6 +733,9 @@ def _attach_market_prices(
                 "title": matched.get("title") or "",
                 "is_search": False,
                 "verified": True,
+                "availability": matched.get("availability"),
+                "free_shipping": matched.get("free_shipping"),
+                "asuraku": matched.get("asuraku"),
             }
             continue
 
