@@ -1,0 +1,301 @@
+<div class="age-filter-container" id="age-filter-container">
+  <div class="age-filter-header">
+    <span class="age-filter-title">👶 対象年齢で絞り込む</span>
+    <button class="age-filter-clear-btn" id="age-filter-clear" style="display: none;" aria-label="年齢フィルターをクリアする">フィルター解除</button>
+  </div>
+  
+  <div class="age-filter-stages">
+    <!-- 乳児 (0歳) -->
+    <div class="age-filter-stage" data-stage="baby">
+      <button class="age-filter-stage-trigger" aria-expanded="false" aria-controls="stage-content-baby">
+        <span class="stage-name">乳児 (0歳・月齢)</span>
+        <span class="stage-arrow" aria-hidden="true">▼</span>
+      </button>
+      <div id="stage-content-baby" class="age-filter-stage-content" role="region" aria-label="乳児向け月齢選択">
+        <div class="age-filter-stage-content-inner">
+          <button class="age-btn" data-age="0">新生児〜 (0ヶ月〜)</button>
+          <button class="age-btn" data-age="3">3ヶ月〜 (ねんね期)</button>
+          <button class="age-btn" data-age="6">6ヶ月〜 (お座り期)</button>
+          <button class="age-btn" data-age="10">10ヶ月〜 (はいはい期)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 幼児 (1〜2歳) -->
+    <div class="age-filter-stage" data-stage="toddler">
+      <button class="age-filter-stage-trigger" aria-expanded="false" aria-controls="stage-content-toddler">
+        <span class="stage-name">幼児 (1〜2歳)</span>
+        <span class="stage-arrow" aria-hidden="true">▼</span>
+      </button>
+      <div id="stage-content-toddler" class="age-filter-stage-content" role="region" aria-label="幼児向け年齢選択">
+        <div class="age-filter-stage-content-inner">
+          <button class="age-btn" data-age="12">1歳〜</button>
+          <button class="age-btn" data-age="18">1.5歳〜</button>
+          <button class="age-btn" data-age="24">2歳〜</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 園児 (3〜5歳) -->
+    <div class="age-filter-stage" data-stage="preschool">
+      <button class="age-filter-stage-trigger" aria-expanded="false" aria-controls="stage-content-preschool">
+        <span class="stage-name">園児 (3〜5歳)</span>
+        <span class="stage-arrow" aria-hidden="true">▼</span>
+      </button>
+      <div id="stage-content-preschool" class="age-filter-stage-content" role="region" aria-label="園児向け年齢選択">
+        <div class="age-filter-stage-content-inner">
+          <button class="age-btn" data-age="36">3歳〜 (年少前後)</button>
+          <button class="age-btn" data-age="48">4歳〜 (年中前後)</button>
+          <button class="age-btn" data-age="60">5歳〜 (年長前後)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 小学生 (6〜12歳) -->
+    <div class="age-filter-stage" data-stage="school">
+      <button class="age-filter-stage-trigger" aria-expanded="false" aria-controls="stage-content-school">
+        <span class="stage-name">小学生 (6〜12歳)</span>
+        <span class="stage-arrow" aria-hidden="true">▼</span>
+      </button>
+      <div id="stage-content-school" class="age-filter-stage-content" role="region" aria-label="小学生向け年齢選択">
+        <div class="age-filter-stage-content-inner">
+          <button class="age-btn" data-age="72">6歳〜 (小学校入学前後)</button>
+          <button class="age-btn" data-age="84">7〜8歳〜 (低・中学年)</button>
+          <button class="age-btn" data-age="108">9〜10歳〜 (中・高学年)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 高学年・中学生以上 -->
+    <div class="age-filter-stage" data-stage="senior">
+      <button class="age-filter-stage-trigger" aria-expanded="false" aria-controls="stage-content-senior">
+        <span class="stage-name">高学年・中学生以上 (12歳〜)</span>
+        <span class="stage-arrow" aria-hidden="true">▼</span>
+      </button>
+      <div id="stage-content-senior" class="age-filter-stage-content" role="region" aria-label="高学年・中学生以上向け年齢選択">
+        <div class="age-filter-stage-content-inner">
+          <button class="age-btn" data-age="144">12歳〜 (中学生前後)</button>
+          <button class="age-btn" data-age="180">15歳〜 (高校生・大人向け)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* Glassmorphism age-filter container */
+  .age-filter-container {
+    margin: 24px 0;
+    padding: 16px;
+    border-radius: 12px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+    
+    /* Default Light Mode tokens */
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid rgba(229, 231, 235, 0.8);
+    --title-color: #111827;
+    --stage-text: #1f2937;
+    --stage-bg: rgba(243, 244, 246, 0.6);
+    --stage-bg-hover: rgba(229, 231, 235, 0.8);
+    --btn-bg: #ffffff;
+    --btn-text: #374151;
+    --btn-border: #d1d5db;
+    --btn-hover-bg: #f3f4f6;
+    --btn-active-bg: #0369a1; /* Sky-700 (Contrast ratio with white is >6:1) */
+    --btn-active-text: #ffffff;
+    --clear-bg: #dc2626; /* Darker red for clear button (High contrast) */
+    --clear-hover-bg: #b91c1c;
+  }
+
+  /* Dark mode integration */
+  [data-theme="dark"] .age-filter-container,
+  body.dark .age-filter-container {
+    background: rgba(17, 24, 39, 0.75);
+    border: 1px solid rgba(75, 85, 99, 0.7);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    --title-color: #f9fafb;
+    --stage-text: #f3f4f6;
+    --stage-bg: rgba(55, 65, 81, 0.5);
+    --stage-bg-hover: rgba(75, 85, 99, 0.7);
+    --btn-bg: #1f2937;
+    --btn-text: #e5e7eb;
+    --btn-border: #4b5563;
+    --btn-hover-bg: #374151;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body:not([data-theme="light"]) .age-filter-container {
+      background: rgba(17, 24, 39, 0.75);
+      border: 1px solid rgba(75, 85, 99, 0.7);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+      --title-color: #f9fafb;
+      --stage-text: #f3f4f6;
+      --stage-bg: rgba(55, 65, 81, 0.5);
+      --stage-bg-hover: rgba(75, 85, 99, 0.7);
+      --btn-bg: #1f2937;
+      --btn-text: #e5e7eb;
+      --btn-border: #4b5563;
+      --btn-hover-bg: #374151;
+    }
+  }
+
+  .age-filter-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .age-filter-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--title-color);
+  }
+
+  .age-filter-clear-btn {
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 6px;
+    border: none;
+    background: var(--clear-bg);
+    color: #ffffff;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+  .age-filter-clear-btn:hover {
+    background: var(--clear-hover-bg);
+  }
+
+  .age-filter-stages {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .age-filter-stage {
+    border-radius: 8px;
+    overflow: hidden;
+    transition: all 0.25s ease;
+  }
+
+  .age-filter-stage-trigger {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    background: var(--stage-bg);
+    color: var(--stage-text);
+    border: none;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.2s ease;
+  }
+  .age-filter-stage-trigger:hover {
+    background: var(--stage-bg-hover);
+  }
+
+  .age-filter-stage-trigger .stage-arrow {
+    font-size: 0.75rem;
+    transition: transform 0.25s ease;
+    color: var(--stage-text);
+    opacity: 0.7;
+  }
+
+  .age-filter-stage.is-open .stage-arrow {
+    transform: rotate(180deg);
+  }
+
+  /* Smart Accordion using grid-template-rows */
+  .age-filter-stage-content {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.25s ease-out;
+    background: rgba(0, 0, 0, 0.02);
+  }
+  
+  [data-theme="dark"] .age-filter-stage-content,
+  body.dark .age-filter-stage-content {
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body:not([data-theme="light"]) .age-filter-stage-content {
+      background: rgba(255, 255, 255, 0.02);
+    }
+  }
+
+  .age-filter-stage.is-open .age-filter-stage-content {
+    grid-template-rows: 1fr;
+  }
+
+  .age-filter-stage-content-inner {
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 0 14px;
+    transition: padding 0.25s ease;
+  }
+
+  .age-filter-stage.is-open .age-filter-stage-content-inner {
+    padding: 12px 14px;
+  }
+
+  /* Age filter buttons styling */
+  .age-btn {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    font-weight: 550;
+    border-radius: 6px;
+    background: var(--btn-bg);
+    color: var(--btn-text);
+    border: 1px solid var(--btn-border);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .age-btn:hover {
+    background: var(--btn-hover-bg);
+  }
+
+  .age-btn.active {
+    background: var(--btn-active-bg) !important;
+    color: var(--btn-active-text) !important;
+    border-color: var(--btn-active-bg) !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const container = document.getElementById("age-filter-container");
+  if (!container) return;
+
+  const triggers = container.querySelectorAll(".age-filter-stage-trigger");
+  triggers.forEach(trigger => {
+    trigger.addEventListener("click", function() {
+      const stage = this.closest(".age-filter-stage");
+      const isOpen = stage.classList.contains("is-open");
+      
+      // Close other stages (optional, but makes UI cleaner)
+      container.querySelectorAll(".age-filter-stage").forEach(s => {
+        if (s !== stage) {
+          s.classList.remove("is-open");
+          s.querySelector(".age-filter-stage-trigger").setAttribute("aria-expanded", "false");
+        }
+      });
+
+      stage.classList.toggle("is-open", !isOpen);
+      this.setAttribute("aria-expanded", !isOpen ? "true" : "false");
+    });
+  });
+});
+</script>

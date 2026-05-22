@@ -31,6 +31,8 @@
 <div class="post-content md-content">{{ .Content }}</div>
 {{- end }}
 
+{{- partial "age_filter.html" . }}
+
 {{- $pages := (.Pages.ByParam "ivs_score_100").Reverse -}}
 {{- $paginator := .Paginate $pages -}}
 <div class="term-sort-controls">
@@ -95,13 +97,19 @@
 <script>
 document.addEventListener("DOMContentLoaded", function() {
   const grid = document.getElementById("term-card-grid");
+  if (!grid) return;
   const taxonomy = grid.getAttribute("data-taxonomy"); // "brands" or "tags"
   const term = grid.getAttribute("data-term"); // "メーカー名" or "タグ名"
   const sortBtns = document.querySelectorAll(".sort-btn");
   const paginationContainer = document.getElementById("term-pagination-container");
   
+  // 年齢フィルター用の要素
+  const ageBtns = document.querySelectorAll(".age-btn");
+  const clearBtn = document.getElementById("age-filter-clear");
+  
   let allItems = [];
-  let currentSort = ""; 
+  let currentSort = "score"; // デフォルト
+  let activeAgeFilter = null; // 選択された月数 (nullはフィルターなし)
   let currentPage = 1;
   const ITEMS_PER_PAGE = 20;
 
@@ -111,17 +119,79 @@ document.addEventListener("DOMContentLoaded", function() {
     return "score-bronze";
   }
 
-  function renderCards(page) {
+  // index.json ロード用
+  async function ensureItemsLoaded() {
+    if (allItems.length > 0) return true;
+    try {
+      const res = await fetch("/index.json");
+      const data = await res.json();
+      allItems = data.filter(item => {
+        if (taxonomy === "brands") {
+          return item.brands && item.brands.includes(term);
+        } else if (taxonomy === "tags") {
+          return item.tags && item.tags.includes(term);
+        }
+        return false;
+      });
+      return true;
+    } catch (err) {
+      console.error("Failed to load index.json", err);
+      return false;
+    }
+  }
+
+  // フィルターとソートを適用して再描画
+  function updateList() {
+    let items = [...allItems];
+    
+    // 1. 年齢フィルター適用 (選択した年齢 >= 商品の age_min)
+    if (activeAgeFilter !== null) {
+      items = items.filter(item => {
+        const minMonths = parseInt(item.age_min_months || 0, 10);
+        return minMonths <= activeAgeFilter;
+      });
+      if (clearBtn) clearBtn.style.display = "block";
+    } else {
+      if (clearBtn) clearBtn.style.display = "none";
+    }
+    
+    // 2. ソート適用
+    if (currentSort === "score") {
+      items.sort((a, b) => (b.ivs_score_100 || 0) - (a.ivs_score_100 || 0));
+    } else if (currentSort === "price") {
+      items.sort((a, b) => {
+        const minA = Math.min(a.price_amazon || 99999999, a.price_rakuten || 99999999, a.price_yahoo || 99999999);
+        const minB = Math.min(b.price_amazon || 99999999, b.price_rakuten || 99999999, b.price_yahoo || 99999999);
+        return minA - minB;
+      });
+    } else if (currentSort === "date") {
+      items.sort((a, b) => (b.unix_time || 0) - (a.unix_time || 0));
+    }
+    
+    // 3. レンダリング
+    currentPage = 1;
+    renderCards(items, currentPage);
+  }
+
+  function renderCards(items, page) {
     if (page === 1) grid.innerHTML = "";
+    
+    if (items.length === 0) {
+      grid.innerHTML = `<div class="no-results-message" style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-color, #6b7280); font-weight: 600;">条件に一致するおもちゃが見つかりませんでした。</div>`;
+      paginationContainer.innerHTML = "";
+      return;
+    }
+
     const start = (page - 1) * ITEMS_PER_PAGE;
     const end = start + ITEMS_PER_PAGE;
-    const itemsToShow = allItems.slice(start, end);
+    const itemsToShow = items.slice(start, end);
     
     itemsToShow.forEach(item => {
       const a = document.createElement("a");
       a.className = "product-card";
       a.href = item.permalink;
       a.setAttribute("aria-label", (item.product_name || item.title) + " の比較レビューを読む");
+      a.setAttribute("data-age-min", item.age_min_months || 0);
       
       const score100 = item.ivs_score_100 || 0;
       const tierClass = scoreTierClass(score100);
@@ -180,70 +250,57 @@ document.addEventListener("DOMContentLoaded", function() {
       grid.appendChild(a);
     });
 
-    if (allItems.length > end) {
+    if (items.length > end) {
       paginationContainer.innerHTML = `<div style="text-align:center; margin-top: 20px;">
         <button id="load-more-btn" class="sort-btn" style="padding: 10px 24px;">さらに読み込む</button>
       </div>`;
       document.getElementById("load-more-btn").addEventListener("click", () => {
         currentPage++;
-        renderCards(currentPage);
+        renderCards(items, currentPage);
       });
     } else {
       paginationContainer.innerHTML = "";
     }
   }
 
-  function applySort(sortType) {
-    currentSort = sortType;
-    if (sortType === "score") {
-      allItems.sort((a, b) => (b.ivs_score_100 || 0) - (a.ivs_score_100 || 0));
-    } else if (sortType === "price") {
-      allItems.sort((a, b) => {
-        const minA = Math.min(a.price_amazon || 99999999, a.price_rakuten || 99999999, a.price_yahoo || 99999999);
-        const minB = Math.min(b.price_amazon || 99999999, b.price_rakuten || 99999999, b.price_yahoo || 99999999);
-        return minA - minB;
-      });
-    } else {
-      allItems.sort((a, b) => (b.unix_time || 0) - (a.unix_time || 0));
-    }
-    
-    sortBtns.forEach(btn => {
-      if (btn.getAttribute("data-sort") === sortType) {
-        btn.classList.add("active");
-      } else {
-        btn.classList.remove("active");
-      }
-    });
-
-    currentPage = 1;
-    renderCards(currentPage);
-  }
-
+  // 並び替えボタン
   sortBtns.forEach(btn => {
     btn.addEventListener("click", async function() {
       const sortType = this.getAttribute("data-sort");
+      currentSort = sortType;
       
-      if (allItems.length === 0) {
-        try {
-          const res = await fetch("/index.json");
-          const data = await res.json();
-          allItems = data.filter(item => {
-            if (taxonomy === "brands") {
-              return item.brands && item.brands.includes(term);
-            } else if (taxonomy === "tags") {
-              return item.tags && item.tags.includes(term);
-            }
-            return false;
-          });
-        } catch (err) {
-          console.error("Failed to load index.json", err);
-          return;
-        }
-      }
+      sortBtns.forEach(b => b.classList.toggle("active", b === this));
       
-      applySort(sortType);
+      const loaded = await ensureItemsLoaded();
+      if (!loaded) return;
+      
+      updateList();
     });
   });
+
+  // 年齢ボタン
+  ageBtns.forEach(btn => {
+    btn.addEventListener("click", async function() {
+      const targetAge = parseInt(this.getAttribute("data-age"), 10);
+      
+      ageBtns.forEach(b => b.classList.toggle("active", b === this));
+      activeAgeFilter = targetAge;
+      
+      const loaded = await ensureItemsLoaded();
+      if (!loaded) return;
+      
+      updateList();
+    });
+  });
+
+  // クリアボタン
+  if (clearBtn) {
+    clearBtn.addEventListener("click", function() {
+      ageBtns.forEach(b => b.classList.remove("active"));
+      activeAgeFilter = null;
+      updateList();
+    });
+  }
 });
 </script>
 

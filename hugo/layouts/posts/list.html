@@ -28,13 +28,16 @@
 </div>
 {{- end }}
 
+{{- /* === Age filter === */ -}}
+{{- partial "age_filter.html" . }}
+
 {{- /* === Sort / filter bar === */ -}}
-{{- $sort := .Params.sort | default "date" -}}
-<nav class="posts-toolbar" aria-label="記事の並び替え">
-  <span class="posts-toolbar-label">並び替え:</span>
-  <a class="posts-toolbar-link{{ if eq $sort "date" }} is-active{{ end }}" href="?sort=date#top" data-sort="date">📅 新着順</a>
-  <a class="posts-toolbar-link{{ if eq $sort "score" }} is-active{{ end }}" href="?sort=score#top" data-sort="score">🏆 スコア順</a>
-</nav>
+<div class="term-sort-controls">
+  <span class="sort-label">並び替え:</span>
+  <button class="sort-btn active" data-sort="date">📅 新着順</button>
+  <button class="sort-btn" data-sort="score">🏆 スコア順</button>
+  <button class="sort-btn" data-sort="price">🪙 価格が安い順</button>
+</div>
 
 {{- /* === Card grid (server renders 新着順. クライアント側でスコア順に並べ替え) === */ -}}
 {{- $pages := where .RegularPages "Params.hiddenInHomeList" "!=" "true" -}}
@@ -46,6 +49,7 @@
   {{- end }}
 </div>
 
+<div id="list-pagination-container">
 {{- if gt $paginator.TotalPages 1 }}
 <footer class="page-footer posts-pagination">
   <nav class="pagination">
@@ -59,27 +63,213 @@
   </nav>
 </footer>
 {{- end }}
+</div>
 
 {{- /* スコア順ボタン押下時にクライアント側で .product-card の並び替え (data-ivs 属性ベース) */ -}}
 <script>
-(function() {
+document.addEventListener("DOMContentLoaded", function() {
   var grid = document.getElementById('posts-grid');
   if (!grid) return;
-  var params = new URLSearchParams(location.search);
-  var sort = params.get('sort') || 'date';
-  document.querySelectorAll('.posts-toolbar-link').forEach(function(a) {
-    a.classList.toggle('is-active', a.dataset.sort === sort);
-  });
-  if (sort === 'score') {
-    var cards = Array.prototype.slice.call(grid.querySelectorAll('.product-card'));
-    cards.sort(function(a, b) {
-      var sa = parseFloat(a.dataset.ivs || '0');
-      var sb = parseFloat(b.dataset.ivs || '0');
-      return sb - sa;
-    });
-    cards.forEach(function(c) { grid.appendChild(c); });
+
+  var sortBtns = document.querySelectorAll(".sort-btn");
+  var paginationContainer = document.getElementById("list-pagination-container");
+  
+  // 年齢フィルター用の要素
+  var ageBtns = document.querySelectorAll(".age-btn");
+  var clearBtn = document.getElementById("age-filter-clear");
+  
+  var allItems = [];
+  var currentSort = "date"; // デフォルト
+  var activeAgeFilter = null; // 選択された月数 (nullはフィルターなし)
+  var currentPage = 1;
+  var ITEMS_PER_PAGE = 20;
+
+  function scoreTierClass(score100) {
+    if (score100 >= 90) return "score-gold";
+    if (score100 >= 75) return "score-silver";
+    return "score-bronze";
   }
-})();
+
+  // index.json ロード用
+  async function ensureItemsLoaded() {
+    if (allItems.length > 0) return true;
+    try {
+      var res = await fetch("/index.json");
+      var data = await res.json();
+      allItems = data; // 全件
+      return true;
+    } catch (err) {
+      console.error("Failed to load index.json", err);
+      return false;
+    }
+  }
+
+  // フィルターとソートを適用して再描画
+  function updateList() {
+    var items = allItems.slice(); // コピー
+    
+    // 1. 年齢フィルター適用
+    if (activeAgeFilter !== null) {
+      items = items.filter(function(item) {
+        var minMonths = parseInt(item.age_min_months || 0, 10);
+        return minMonths <= activeAgeFilter;
+      });
+      if (clearBtn) clearBtn.style.display = "block";
+    } else {
+      if (clearBtn) clearBtn.style.display = "none";
+    }
+    
+    // 2. ソート適用
+    if (currentSort === "score") {
+      items.sort(function(a, b) {
+        return (b.ivs_score_100 || 0) - (a.ivs_score_100 || 0);
+      });
+    } else if (currentSort === "price") {
+      items.sort(function(a, b) {
+        var minA = Math.min(a.price_amazon || 99999999, a.price_rakuten || 99999999, a.price_yahoo || 99999999);
+        var minB = Math.min(b.price_amazon || 99999999, b.price_rakuten || 99999999, b.price_yahoo || 99999999);
+        return minA - minB;
+      });
+    } else if (currentSort === "date") {
+      items.sort(function(a, b) {
+        return (b.unix_time || 0) - (a.unix_time || 0);
+      });
+    }
+    
+    // 3. レンダリング
+    currentPage = 1;
+    renderCards(items, currentPage);
+  }
+
+  function renderCards(items, page) {
+    if (page === 1) grid.innerHTML = "";
+    
+    if (items.length === 0) {
+      grid.innerHTML = `<div class="no-results-message" style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-color, #6b7280); font-weight: 600;">条件に一致するおもちゃが見つかりませんでした。</div>`;
+      paginationContainer.innerHTML = "";
+      return;
+    }
+
+    var start = (page - 1) * ITEMS_PER_PAGE;
+    var end = start + ITEMS_PER_PAGE;
+    var itemsToShow = items.slice(start, end);
+    
+    itemsToShow.forEach(function(item) {
+      var a = document.createElement("a");
+      a.className = "product-card";
+      a.href = item.permalink;
+      a.setAttribute("aria-label", (item.product_name || item.title) + " の比較レビューを読む");
+      a.setAttribute("data-age-min", item.age_min_months || 0);
+      
+      var score100 = item.ivs_score_100 || 0;
+      var tierClass = scoreTierClass(score100);
+      
+      var minPrice = 99999999;
+      if (item.price_amazon > 0 && item.price_amazon < minPrice) minPrice = item.price_amazon;
+      if (item.price_rakuten > 0 && item.price_rakuten < minPrice) minPrice = item.price_rakuten;
+      if (item.price_yahoo > 0 && item.price_yahoo < minPrice) minPrice = item.price_yahoo;
+      if (minPrice === 99999999) minPrice = 0;
+
+      var scoreHtml = "";
+      if (score100) {
+        scoreHtml = `<div class="product-card-badges">
+          <span class="product-card-score ${tierClass}" title="IVSスコア (100点満点)">
+            &#127942; <strong>${score100}</strong><span class="product-card-score-suffix">点</span>
+            ${minPrice > 0 ? `<span class="product-card-score-price">最安 &yen;${minPrice.toLocaleString()}</span>` : ""}
+            ${item.age_range ? `<span class="product-card-score-age">&#128118; ${item.age_range}</span>` : ""}
+          </span>
+        </div>`;
+      } else if (item.ivs_score) {
+        scoreHtml = `<div class="product-card-badges">
+          <span class="product-card-score score-bronze" title="IVSスコア (5点満点)">
+            &#127942; <strong>${item.ivs_score.toFixed(1)}</strong><span class="product-card-score-suffix">/5</span>
+            ${minPrice > 0 ? `<span class="product-card-score-price">最安 &yen;${minPrice.toLocaleString()}</span>` : ""}
+            ${item.age_range ? `<span class="product-card-score-age">&#128118; ${item.age_range}</span>` : ""}
+          </span>
+        </div>`;
+      }
+
+      var imgHtml = item.image 
+        ? `<img src="${item.image}" alt="${item.product_name || item.title}" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
+        : `<div class="product-card-image-fallback">&#129528;</div>`;
+        
+      var brandHtml = item.brand ? `<div class="product-card-brand">${item.brand}</div>` : "";
+      
+      var tagsHtml = "";
+      if (item.tags && item.tags.length > 0) {
+        var tHtml = item.tags.slice(0, 2).map(function(t) { return `<span class="product-card-tag">#${t}</span>`; }).join("");
+        tagsHtml = `<span class="product-card-tags">${tHtml}</span>`;
+      }
+
+      a.innerHTML = `
+        <div class="product-card-image">
+          ${imgHtml}
+          ${scoreHtml}
+        </div>
+        <div class="product-card-body">
+          ${brandHtml}
+          <h3 class="product-card-title">${item.title}</h3>
+          <div class="product-card-meta">
+            <time datetime="${item.date}">${item.date}</time>
+            ${tagsHtml}
+          </div>
+        </div>
+      `;
+      grid.appendChild(a);
+    });
+
+    if (items.length > end) {
+      paginationContainer.innerHTML = `<div style="text-align:center; margin-top: 20px;">
+        <button id="load-more-btn" class="sort-btn" style="padding: 10px 24px;">さらに読み込む</button>
+      </div>`;
+      document.getElementById("load-more-btn").addEventListener("click", function() {
+        currentPage++;
+        renderCards(items, currentPage);
+      });
+    } else {
+      paginationContainer.innerHTML = "";
+    }
+  }
+
+  // 並び替えボタン
+  sortBtns.forEach(function(btn) {
+    btn.addEventListener("click", async function() {
+      var sortType = this.getAttribute("data-sort");
+      currentSort = sortType;
+      
+      sortBtns.forEach(function(b) { b.classList.toggle("active", b === btn); });
+      
+      var loaded = await ensureItemsLoaded();
+      if (!loaded) return;
+      
+      updateList();
+    });
+  });
+
+  // 年齢ボタン
+  ageBtns.forEach(function(btn) {
+    btn.addEventListener("click", async function() {
+      var targetAge = parseInt(this.getAttribute("data-age"), 10);
+      
+      ageBtns.forEach(function(b) { b.classList.toggle("active", b === btn); });
+      activeAgeFilter = targetAge;
+      
+      var loaded = await ensureItemsLoaded();
+      if (!loaded) return;
+      
+      updateList();
+    });
+  });
+
+  // クリアボタン
+  if (clearBtn) {
+    clearBtn.addEventListener("click", function() {
+      ageBtns.forEach(function(b) { b.classList.remove("active"); });
+      activeAgeFilter = null;
+      updateList();
+    });
+  }
+});
 </script>
 
 {{- end }}{{- /* end main */ -}}
