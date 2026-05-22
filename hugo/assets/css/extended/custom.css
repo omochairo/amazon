@@ -1326,7 +1326,7 @@ body.dark .post-content .omcha-card-title {
 }
 .post-content .product-slideshow .slideshow-stage {
   position: relative;
-  height: 340px;
+  height: 420px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1336,8 +1336,8 @@ body.dark .post-content .omcha-card-title {
 }
 .post-content .product-slideshow .slide {
   position: absolute;
-  max-width: 92%;
-  max-height: 92%;
+  max-width: 96%;
+  max-height: 96%;
   width: auto;
   height: auto;
   object-fit: contain;
@@ -1352,7 +1352,7 @@ body.dark .post-content .omcha-card-title {
 .post-content .product-slideshow .slide-prev,
 .post-content .product-slideshow .slide-next {
   position: absolute;
-  top: calc(16px + 170px);
+  top: calc(16px + 210px);
   transform: translateY(-50%);
   background: rgba(17, 24, 39, 0.55);
   color: #ffffff;
@@ -1449,10 +1449,10 @@ html[data-theme="dark"] .post-content .product-slideshow .slide-thumb.active {
 }
 
 @media (max-width: 520px) {
-  .post-content .product-slideshow .slideshow-stage { height: 260px; }
+  .post-content .product-slideshow .slideshow-stage { height: 320px; }
   .post-content .product-slideshow .slide-prev,
   .post-content .product-slideshow .slide-next {
-    top: calc(16px + 130px);
+    top: calc(16px + 160px);
     width: 32px;
     height: 32px;
     font-size: 18px;
@@ -1907,7 +1907,7 @@ html[data-theme="dark"] .post-content details.score-axes-doc .score-axes-note {
 .post-content .competitor-grid .competitor-card img {
   display: block;
   margin: 0 auto;
-  max-height: 180px;
+  max-height: 160px;
   width: auto;
   border-radius: 8px;
 }
