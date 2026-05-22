@@ -1903,12 +1903,14 @@ html[data-theme="dark"] .post-content details.score-axes-doc .score-axes-note {
    #510 競合カード画像: 中央寄せ + サイズ改善
    ========================================== */
 
-/* 競合カード内の画像コンテナ — 中央寄せ */
 .post-content .competitor-grid .competitor-card img {
   display: block;
   margin: 0 auto;
-  max-height: 160px;
-  width: auto;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: 380px;
+  object-fit: contain;
   border-radius: 8px;
 }
 
