@@ -199,6 +199,28 @@
       "author": "PR TIMES",
       "conflict_of_interest": "disclosed",
       "notes": "サンエックスキャラクターとのコラボ新商品の発表。リカちゃんの手のひらサイズの可愛さが強調されている。対象年齢が3歳以上であることも記載されている。"
+    },
+    {
+      "id": "src-4",
+      "name": "サンエックス公式ブログ",
+      "url": "https://www.san-x.co.jp/ja/blog/2026-04-post-0503070/",
+      "tier": "high",
+      "evidence_type": "secondary",
+      "published_at": "2026-05-22",
+      "author": "サンエックス",
+      "conflict_of_interest": "disclosed",
+      "notes": "サンエックスキャラクターがリカちゃんとコラボしたという告知。すみっコぐらしなどのファンにアピール。"
+    },
+    {
+      "id": "src-5",
+      "name": "タカラトミーモール公式通販サイト",
+      "url": "https://takaratomymall.jp/shop/g/g4904810083962/?srsltid=AfmBOorfBHvfgMW-mMh2Mvu3CeVSl-61V9thLN8L0QHkMDPclRgmrW_3",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2026-05-22",
+      "author": "タカラトミー",
+      "conflict_of_interest": "disclosed",
+      "notes": "1個1650円での販売、パッケージ画像などを確認。小さな部品があり誤飲の危険があるとの記載あり。"
     }
   ],
   "claims": [
@@ -208,7 +230,8 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-1",
-        "src-3"
+        "src-3",
+        "src-5"
       ],
       "cross_checked": true,
       "notes": "タカラトミー公式特設サイトおよびPR TIMESのプレスリリースで一致確認"
@@ -219,7 +242,8 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-2",
-        "src-3"
+        "src-3",
+        "src-5"
       ],
       "cross_checked": true,
       "notes": "Amazon商品ページとPR TIMESのプレスリリースで一致確認"
@@ -230,7 +254,8 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-1",
-        "src-3"
+        "src-3",
+        "src-4"
       ],
       "cross_checked": true,
       "notes": "公式特設ページおよびPR TIMESのプレスリリースで一致確認"
@@ -240,10 +265,11 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-2"
+        "src-2",
+        "src-5"
       ],
-      "cross_checked": false,
-      "notes": "Amazon商品ページのみで確認"
+      "cross_checked": true,
+      "notes": "Amazon商品ページとタカラトミーモールで確認"
     }
   ],
   "technical_specs": {
@@ -264,13 +290,15 @@
       {
         "text": "サンエックスの人気キャラクターとのコラボデザインが魅力的",
         "supporting_source_ids": [
-          "src-3"
+          "src-3",
+          "src-4"
         ]
       },
       {
         "text": "1650円と手頃な価格で、ちょっとしたプレゼントに最適",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-5"
         ]
       }
     ],
@@ -278,13 +306,15 @@
       {
         "text": "ブラインド仕様のため、欲しいキャラクターが確実に出るとは限らない",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-5"
         ]
       },
       {
         "text": "小さなパーツがあるため、3歳未満のいる家庭では注意が必要",
         "supporting_source_ids": [
-          "src-2"
+          "src-2",
+          "src-5"
         ]
       }
     ],
