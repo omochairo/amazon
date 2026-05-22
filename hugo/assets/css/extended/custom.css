@@ -630,25 +630,43 @@ main.main:has(.card-grid) {
   opacity: 0.4;
 }
 
-/* --- IVS score badge --- */
-.product-card-score {
+/* --- IVS score badge wrapper (left-bottom overlay) --- */
+.product-card-badges {
   position: absolute;
-  top: 0.55rem;
-  right: 0.55rem;
+  bottom: 0.5rem;
+  left: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 2;
+}
+.product-card-score {
   display: inline-flex;
   align-items: baseline;
-  gap: 0.15rem;
-  padding: 0.28rem 0.55rem;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #FFD93D 0%, #FF9A3C 100%);
-  color: #2a2a2a;
+  gap: 0.2rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  background: #cd7f32;  /* default: bronze */
+  color: #fff;
   font-size: 0.82rem;
   font-weight: 700;
   line-height: 1;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.22);
+  width: max-content;
 }
+/* Score color tiers */
+.product-card-score.score-gold   { background: #ffd700; color: #5c4000; }
+.product-card-score.score-silver { background: #c0c0c0; color: #1f2937; }
+.product-card-score.score-bronze { background: #cd7f32; color: #fff; }
 .product-card-score strong { font-size: 1.05rem; font-weight: 900; }
 .product-card-score-suffix { font-size: 0.7rem; font-weight: 700; }
+.product-card-score-price,
+.product-card-score-age {
+  margin-left: 6px;
+  font-size: 0.78rem;
+  opacity: 0.9;
+}
 
 /* --- Card body --- */
 .product-card-body {

@@ -21,13 +21,14 @@
     {{- if $img }}
       <img src="{{ $img }}" alt="{{ $name }}" loading="lazy" decoding="async" referrerpolicy="no-referrer">
     {{- else }}
-      <div class="product-card-image-fallback">🧸</div>
+      <div class="product-card-image-fallback">&#129528;</div>
     {{- end }}
-    {{- $bg := "#cd7f32" -}}
-    {{- if ge $score100 90 }}{{ $bg = "#ffd700" }}{{ else if ge $score100 75 }}{{ $bg = "#c0c0c0" }}{{ end -}}
-    {{- $color := "#fff" -}}
-    {{- if ge $score100 90 }}{{ $color = "#5c4000" }}{{ else if ge $score100 75 }}{{ $color = "#1f2937" }}{{ end -}}
-    
+
+    {{- /* Score tier CSS class */ -}}
+    {{- $tierClass := "score-bronze" -}}
+    {{- if ge $score100 90 }}{{ $tierClass = "score-gold" }}{{ else if ge $score100 75 }}{{ $tierClass = "score-silver" }}{{ end -}}
+
+    {{- /* Cheapest price */ -}}
     {{- $prices := slice .Params.price_amazon .Params.price_rakuten .Params.price_yahoo -}}
     {{- $minPrice := 99999999 -}}
     {{- range $prices -}}
@@ -38,19 +39,19 @@
     {{- if eq $minPrice 99999999 }}{{ $minPrice = 0 }}{{ end -}}
 
     {{- if $score100 }}
-      <div class="product-card-badges" style="position: absolute; bottom: 8px; left: 8px; display: flex; flex-direction: column; gap: 4px; pointer-events: none;">
-        <span class="product-card-score" title="IVSスコア (100点満点)" style="background: {{ $bg }}; color: {{ $color }}; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.2); display: inline-block; width: max-content;">
-          🏆 <strong>{{ $score100 }}</strong><span class="product-card-score-suffix">点</span>
-          {{- if gt $minPrice 0 }}<span style="margin-left: 6px; font-size: 0.8rem; opacity: 0.9;">最安 ¥{{ lang.FormatNumber 0 $minPrice }}</span>{{ end -}}
-          {{- with .Params.age_range }}<span style="margin-left: 6px; font-size: 0.8rem; opacity: 0.9;">👶 {{ . }}</span>{{ end -}}
+      <div class="product-card-badges">
+        <span class="product-card-score {{ $tierClass }}" title="IVSスコア (100点満点)">
+          &#127942; <strong>{{ $score100 }}</strong><span class="product-card-score-suffix">点</span>
+          {{- if gt $minPrice 0 }}<span class="product-card-score-price">最安 &yen;{{ lang.FormatNumber 0 $minPrice }}</span>{{ end -}}
+          {{- with .Params.age_range }}<span class="product-card-score-age">&#128118; {{ . }}</span>{{ end -}}
         </span>
       </div>
     {{- else if $score }}
-      <div class="product-card-badges" style="position: absolute; bottom: 8px; left: 8px; display: flex; flex-direction: column; gap: 4px; pointer-events: none;">
-        <span class="product-card-score" title="IVSスコア (5点満点)" style="background: #cd7f32; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.2); display: inline-block; width: max-content;">
-          🏆 <strong>{{ lang.FormatNumber 1 $score }}</strong><span class="product-card-score-suffix">/5</span>
-          {{- if gt $minPrice 0 }}<span style="margin-left: 6px; font-size: 0.8rem; opacity: 0.9;">最安 ¥{{ lang.FormatNumber 0 $minPrice }}</span>{{ end -}}
-          {{- with .Params.age_range }}<span style="margin-left: 6px; font-size: 0.8rem; opacity: 0.9;">👶 {{ . }}</span>{{ end -}}
+      <div class="product-card-badges">
+        <span class="product-card-score score-bronze" title="IVSスコア (5点満点)">
+          &#127942; <strong>{{ lang.FormatNumber 1 $score }}</strong><span class="product-card-score-suffix">/5</span>
+          {{- if gt $minPrice 0 }}<span class="product-card-score-price">最安 &yen;{{ lang.FormatNumber 0 $minPrice }}</span>{{ end -}}
+          {{- with .Params.age_range }}<span class="product-card-score-age">&#128118; {{ . }}</span>{{ end -}}
         </span>
       </div>
     {{- end }}
@@ -70,3 +71,4 @@
     </div>
   </div>
 </a>
+
