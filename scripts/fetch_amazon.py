@@ -287,7 +287,79 @@ def extract_savings_percentage(item: dict) -> int:
             return 0
     return 0
 
+# Global API client reference for summary logging on exit
+api = None
+
+def write_github_step_summary() -> None:
+    """PA-API の利用統計と TooManyRequests レートを $GITHUB_STEP_SUMMARY に書き込み、
+    必要に応じて警告を出力します。
+    """
+    global api
+    if not api or not hasattr(api, "total_requests"):
+        return
+
+    total = api.total_requests
+    throttled = api.throttle_count
+    
+    if total == 0:
+        return
+
+    throttle_rate = (throttled / total) * 100
+    
+    # 1日あたりの Quota 上限（デフォルトは PA-API 標準の 8,640）
+    daily_limit = int(os.environ.get("AMAZON_PAAPI_DAILY_LIMIT", 8640))
+    quota_usage_percent = (total / daily_limit) * 100
+
+    # Markdown レポート作成
+    lines = [
+        "## 📊 PA-API Quota & スロットリング観測レポート",
+        "",
+        "今回の実行における Amazon Product Advertising API (Creators API) のリクエスト統計です。",
+        "",
+        "| 項目 | 統計値 | 割合 / 詳細 |",
+        "| --- | --- | --- |",
+        f"| **リクエスト総数 (リトライ含む)** | `{total}` 回 | - |",
+        f"| **TooManyRequests (429) エラー** | `{throttled}` 回 | `{throttle_rate:.2f}%` |",
+        f"| **1日あたりQuota消費量 (見積もり)** | `{total} / {daily_limit}` | `{quota_usage_percent:.2f}%` (上限 {daily_limit} に対する割合) |",
+        ""
+    ]
+
+    # 警告しきい値判定 (環境変数で変更可能にする)
+    # quota_usage_percent_threshold: デフォルト 80%
+    # throttle_rate_threshold: デフォルト 20%
+    quota_threshold = float(os.environ.get("AMAZON_PAAPI_QUOTA_WARNING_THRESHOLD", 80.0))
+    throttle_threshold = float(os.environ.get("AMAZON_PAAPI_THROTTLE_WARNING_THRESHOLD", 20.0))
+
+    warnings = []
+    if quota_usage_percent >= quota_threshold:
+        warnings.append(f"PA-API quota usage ({quota_usage_percent:.2f}%) exceeded threshold ({quota_threshold}%)")
+    if throttle_rate >= throttle_threshold:
+        warnings.append(f"PA-API TooManyRequests rate ({throttle_rate:.2f}%) exceeded threshold ({throttle_threshold}%)")
+
+    if warnings:
+        warning_msg = " | ".join(warnings)
+        # GHA の Warning 記法
+        print(f"::warning title=PA-API Quota Warning::{warning_msg}")
+        lines.append(f"> [!WARNING]\n> **警告**: {warning_msg}\n")
+
+    summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_file:
+        try:
+            with open(summary_file, "a", encoding="utf-8") as f:
+                f.write("\n".join(lines) + "\n")
+            logger.info(f"Wrote PA-API metrics to GITHUB_STEP_SUMMARY: {summary_file}")
+        except Exception as e:
+            logger.error(f"Failed to write to GITHUB_STEP_SUMMARY: {e}")
+    else:
+        # ローカル実行時のために標準出力にも表示
+        logger.info("--- PA-API Metrics Summary ---")
+        for line in lines:
+            if line.strip() and not line.startswith("|") and not line.startswith("##"):
+                logger.info(line)
+        logger.info(f"Total Requests: {total}, Throttled: {throttled} ({throttle_rate:.2f}%), Quota Usage: {quota_usage_percent:.2f}%")
+
 def main():
+    global api
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", default="daily_random")
     parser.add_argument("--asin", default="")
@@ -549,4 +621,7 @@ def main():
         )
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    finally:
+        write_github_step_summary()

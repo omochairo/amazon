@@ -76,6 +76,10 @@ class CreatorsAPIClient:
         self._access_token = None
         self._token_expires_at = 0
 
+        # Quota and error tracking
+        self.total_requests = 0
+        self.throttle_count = 0
+
     def _get_access_token(self) -> str:
         """Get OAuth 2.0 access token using client credentials flow."""
         # Return cached token if still valid (60 seconds buffer)
@@ -153,6 +157,7 @@ class CreatorsAPIClient:
 
     def _attempt_request(self, url: str, headers: dict, payload: dict) -> tuple[Optional[dict], bool]:
         """Perform a single API request attempt. Returns (response_json, should_retry)."""
+        self.total_requests += 1
         try:
             response = requests.post(url, headers=headers, json=payload, timeout=30)
 
@@ -161,6 +166,9 @@ class CreatorsAPIClient:
 
             if response.status_code == 404:
                 return response.json(), False
+
+            if response.status_code == 429:
+                self.throttle_count += 1
 
             if self._handle_retryable_error(response, headers):
                 msg = "Rate limited" if response.status_code == 429 else ""
