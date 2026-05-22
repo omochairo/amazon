@@ -41,6 +41,49 @@ class BuildSearchKeywordTests(unittest.TestCase):
         for filler in ["3歳", "誕生日プレゼント", "男の子", "知育玩具"]:
             self.assertNotIn(filler, kw.split())
 
+    def test_compound_words_extracted_correctly(self):
+        # 漢字＋ひらがな＋漢字の複合語が1語で正しく抽出されることを検証
+        title1 = "脳トレ積み木パズル 木製ブロック"
+        kw1 = build_search_keyword(title1, max_tokens=3)
+        self.assertIn("脳トレ積み木パズル", kw1.split())
+
+        title2 = "エド・インター あそび方ガイド付き積み木"
+        kw2 = build_search_keyword(title2, max_tokens=3)
+        self.assertIn("あそび方ガイド付き積み木", kw2.split())
+
+    def test_filler_removal_with_joshi(self):
+        # 助詞を伴う filler 語 (「おもちゃの」「プレゼントに」等) が除去されることを検証
+        title = "子供へのおもちゃのプレゼントに最適！レゴブロック"
+        kw = build_search_keyword(title, max_tokens=3)
+        # 「レゴブロック」が主要キーワードとして残るべき
+        self.assertIn("レゴブロック", kw.split())
+        # filler（おもちゃの、プレゼントに、等）は除去されているべき
+        kw_tokens = kw.split()
+        for f in ["おもちゃの", "プレゼントに", "おもちゃ", "プレゼント", "子供への", "子供"]:
+            self.assertNotIn(f, kw_tokens)
+
+    def test_exception_dictionary_preserves_hiragana_words(self):
+        """例外辞書 (_EXCEPTION_WORDS) に含まれるひらがな固有名詞が、助詞切り離しで破壊されないことを検証。
+
+        【既知の副作用ケース (Known Issues - 計7件 5単語)】
+        V11→V12の助詞切り離しロジック移行時に、以下のひらがな固有名詞で語尾が助詞と誤判定される副作用が発生した。
+        これらは _EXCEPTION_WORDS に登録することで回避されている。
+        1. のりもの (のりも + の) -> 2件
+        2. おままごと (おままご + と) -> 2件
+        3. いつまで (いつま + で) -> 1件
+        4. おかいもの (おかいも + の) -> 1件
+        5. なに (な + に) -> 1件
+        """
+        # 例外辞書対象語のテスト
+        title = "のりもの おままごと いつまで おかいもの なに"
+        kw = build_search_keyword(title, max_tokens=5)
+        tokens = kw.split()
+        self.assertIn("のりもの", tokens)
+        self.assertIn("おままごと", tokens)
+        self.assertIn("いつまで", tokens)
+        self.assertIn("おかいもの", tokens)
+        self.assertIn("なに", tokens)
+
 
 class TitleSimilarityTests(unittest.TestCase):
 
