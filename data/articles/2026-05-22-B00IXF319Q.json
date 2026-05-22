@@ -239,6 +239,17 @@
       "author": "メーカー公式",
       "conflict_of_interest": "none",
       "notes": "実際の使用イメージ、音が鳴る様子"
+    },
+    {
+      "id": "src-6",
+      "name": "親かめブログ",
+      "url": "https://oyakame.com/suttemo-fuitemo-whistle/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2025-03-28",
+      "author": "購入者",
+      "conflict_of_interest": "none",
+      "notes": "STマークを取得しており安全性に配慮されている、水洗い可能でお手入れがしやすい"
     }
   ],
   "claims": [
@@ -247,20 +258,22 @@
       "category": "safety",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-2"
+        "src-2",
+        "src-6"
       ],
-      "cross_checked": false,
-      "notes": "公式でSTマーク取得の記載あり"
+      "cross_checked": true,
+      "notes": "公式でSTマーク取得の記載あり、個人ブログでも言及"
     },
     {
       "claim": "水洗い可能で清潔に保てる",
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-2"
+        "src-2",
+        "src-6"
       ],
-      "cross_checked": false,
-      "notes": "公式で水洗い可能の記載あり"
+      "cross_checked": true,
+      "notes": "公式と個人ブログで水洗い可能の記載あり"
     },
     {
       "claim": "吸う動作でも音が鳴るため早くから楽しめる",
