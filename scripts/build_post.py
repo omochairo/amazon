@@ -1143,7 +1143,33 @@ def _frontmatter_meta(
         meta["age_range"] = product["age_range"]
     
     # 年齢フィルター用の最小月数メタデータを追加
-    raw_age = product.get("target_age") or product.get("age_range") or product.get("age") or product.get("age_band") or ""
+    raw_age = ""
+    if isinstance(product, dict):
+        raw_age = (
+            product.get("target_age")
+            or product.get("age_range")
+            or product.get("age")
+            or product.get("age_band")
+            or ""
+        )
+    if not raw_age and isinstance(data, dict):
+        raw_age = (
+            data.get("persona_fit", {}).get("age_range")
+            or data.get("technical_specs", {}).get("age_range")
+            or ""
+        )
+        if not raw_age and isinstance(data.get("technical_specs"), dict):
+            other_specs = data["technical_specs"].get("other", [])
+            for spec in other_specs:
+                if isinstance(spec, str) and ("年齢" in spec or "才" in spec):
+                    raw_age = spec
+                    break
+        if not raw_age and product and product.get("name_full"):
+            name_full = product["name_full"]
+            match = re.search(r"(\d+)\s*(歳|才|ヶ月|ヶ月以上|歳以上)", name_full)
+            if match:
+                raw_age = match.group(0)
+                
     meta["age_min_months"] = _parse_age_min_months(raw_age)
 
     # 2026-05-15 (@J Phase 2): Jules の ivs_score を破棄し、6要素から論理再計算する。
