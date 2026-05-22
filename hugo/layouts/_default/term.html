@@ -109,9 +109,11 @@ document.addEventListener("DOMContentLoaded", function() {
   
   let allItems = [];
   let currentSort = "score"; // デフォルト
-  let activeAgeFilter = null; // 選択された月数 (nullはフィルターなし)
+  let activeAgeFilter = null; // 選択された月数(数値) またはオブジェクト {min, max, type: 'stage'}
+  let ageFilterMode = "match"; // "match" または "all"
   let currentPage = 1;
   const ITEMS_PER_PAGE = 20;
+  const AGE_STEPS = [0, 3, 6, 10, 12, 18, 24, 36, 48, 60, 72, 84, 108, 144, 180];
 
   function scoreTierClass(score100) {
     if (score100 >= 90) return "score-gold";
@@ -144,11 +146,32 @@ document.addEventListener("DOMContentLoaded", function() {
   function updateList() {
     let items = [...allItems];
     
-    // 1. 年齢フィルター適用 (選択した年齢 >= 商品の age_min)
+    // 1. 年齢フィルター適用
     if (activeAgeFilter !== null) {
       items = items.filter(item => {
         const minMonths = parseInt(item.age_min_months || 0, 10);
-        return minMonths <= activeAgeFilter;
+        
+        if (typeof activeAgeFilter === "number") {
+          // 個別年齢ボタン選択時
+          const targetAge = activeAgeFilter;
+          if (ageFilterMode === "match") {
+            const idx = AGE_STEPS.indexOf(targetAge);
+            const prevAge = idx > 0 ? AGE_STEPS[idx - 1] : 0;
+            return minMonths >= prevAge && minMonths <= targetAge;
+          } else {
+            return minMonths <= targetAge;
+          }
+        } else if (activeAgeFilter && typeof activeAgeFilter === "object") {
+          // ステージ全体選択時
+          const min = activeAgeFilter.min;
+          const max = activeAgeFilter.max;
+          if (ageFilterMode === "match") {
+            return minMonths >= min && minMonths <= max;
+          } else {
+            return minMonths <= max;
+          }
+        }
+        return true;
       });
       if (clearBtn) clearBtn.style.display = "block";
     } else {
@@ -269,7 +292,7 @@ document.addEventListener("DOMContentLoaded", function() {
       const sortType = this.getAttribute("data-sort");
       currentSort = sortType;
       
-      sortBtns.forEach(b => b.classList.toggle("active", b === this));
+      sortBtns.forEach(b => b.classList.toggle("active", b === btn));
       
       const loaded = await ensureItemsLoaded();
       if (!loaded) return;
@@ -278,12 +301,107 @@ document.addEventListener("DOMContentLoaded", function() {
     });
   });
 
-  // 年齢ボタン
+  // トグルスイッチの制御
+  const toggleMatch = document.getElementById("age-toggle-match");
+  const toggleAll = document.getElementById("age-toggle-all");
+  
+  function updateToggleUI() {
+    if (!toggleMatch || !toggleAll) return;
+    if (ageFilterMode === "match") {
+      toggleMatch.classList.add("active");
+      toggleMatch.setAttribute("aria-checked", "true");
+      toggleAll.classList.remove("active");
+      toggleAll.setAttribute("aria-checked", "false");
+    } else {
+      toggleAll.classList.add("active");
+      toggleAll.setAttribute("aria-checked", "true");
+      toggleMatch.classList.remove("active");
+      toggleMatch.setAttribute("aria-checked", "false");
+    }
+  }
+
+  if (toggleMatch) {
+    toggleMatch.addEventListener("click", async function() {
+      if (ageFilterMode === "match") return;
+      ageFilterMode = "match";
+      updateToggleUI();
+      const loaded = await ensureItemsLoaded();
+      if (loaded) updateList();
+    });
+  }
+
+  if (toggleAll) {
+    toggleAll.addEventListener("click", async function() {
+      if (ageFilterMode === "all") return;
+      ageFilterMode = "all";
+      updateToggleUI();
+      const loaded = await ensureItemsLoaded();
+      if (loaded) updateList();
+    });
+  }
+
+  // アコーディオン開閉＆ステージ選択
+  const stages = document.querySelectorAll(".age-filter-stage");
+  stages.forEach(stage => {
+    const trigger = stage.querySelector(".age-filter-stage-trigger");
+    if (!trigger) return;
+
+    trigger.addEventListener("click", async function() {
+      const isOpen = stage.classList.contains("is-open");
+      
+      // 他のステージを閉じる＆ステージ選択解除
+      stages.forEach(s => {
+        if (s !== stage) {
+          s.classList.remove("is-open");
+          s.classList.remove("stage-active");
+          const trig = s.querySelector(".age-filter-stage-trigger");
+          if (trig) trig.setAttribute("aria-expanded", "false");
+        }
+      });
+
+      // 個別年齢ボタンのアクティブも解除する
+      ageBtns.forEach(b => b.classList.remove("active"));
+
+      if (!isOpen) {
+        // 開く場合：このステージを選択状態にする
+        stage.classList.add("is-open");
+        stage.classList.add("stage-active");
+        trigger.setAttribute("aria-expanded", "true");
+        
+        const min = parseInt(stage.getAttribute("data-min"), 10);
+        const max = parseInt(stage.getAttribute("data-max"), 10);
+        activeAgeFilter = { min: min, max: max, type: "stage" };
+      } else {
+        // 閉じる場合：選択を解除する
+        stage.classList.remove("is-open");
+        stage.classList.remove("stage-active");
+        trigger.setAttribute("aria-expanded", "false");
+        
+        // 閉じられたステージが現在選択されていたら、フィルター解除
+        if (activeAgeFilter && activeAgeFilter.type === "stage" && activeAgeFilter.min === parseInt(stage.getAttribute("data-min"), 10)) {
+          activeAgeFilter = null;
+        }
+      }
+
+      const loaded = await ensureItemsLoaded();
+      if (!loaded) return;
+      updateList();
+    });
+  });
+
+  // 個別年齢ボタンクリック時の処理
   ageBtns.forEach(btn => {
-    btn.addEventListener("click", async function() {
+    btn.addEventListener("click", async function(e) {
+      e.stopPropagation(); // アコーディオンのトリガー等への伝播を防ぐ
+      
       const targetAge = parseInt(this.getAttribute("data-age"), 10);
       
-      ageBtns.forEach(b => b.classList.toggle("active", b === this));
+      // 個別ボタンのアクティブ切り替え
+      ageBtns.forEach(b => b.classList.toggle("active", b === btn));
+      
+      // 親ステージのステージ選択状態(ヘッダーハイライト)は解除する
+      stages.forEach(s => s.classList.remove("stage-active"));
+      
       activeAgeFilter = targetAge;
       
       const loaded = await ensureItemsLoaded();
@@ -297,6 +415,12 @@ document.addEventListener("DOMContentLoaded", function() {
   if (clearBtn) {
     clearBtn.addEventListener("click", function() {
       ageBtns.forEach(b => b.classList.remove("active"));
+      stages.forEach(s => {
+        s.classList.remove("is-open");
+        s.classList.remove("stage-active");
+        const trig = s.querySelector(".age-filter-stage-trigger");
+        if (trig) trig.setAttribute("aria-expanded", "false");
+      });
       activeAgeFilter = null;
       updateList();
     });

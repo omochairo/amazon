@@ -1,13 +1,25 @@
 <div class="age-filter-container" id="age-filter-container">
   <div class="age-filter-header">
     <span class="age-filter-title">👶 対象年齢で絞り込む</span>
+    
+    <div class="age-filter-toggle-container">
+      <div class="age-filter-toggle-switch" role="radiogroup" aria-label="年齢絞り込みモード">
+        <button type="button" class="age-filter-toggle-btn active" id="age-toggle-match" data-mode="match" aria-checked="true" role="radio">
+          ベストマッチ
+        </button>
+        <button type="button" class="age-filter-toggle-btn" id="age-toggle-all" data-mode="all" aria-checked="false" role="radio">
+          遊べるおもちゃ全部
+        </button>
+      </div>
+    </div>
+    
     <button class="age-filter-clear-btn" id="age-filter-clear" style="display: none;" aria-label="年齢フィルターをクリアする">フィルター解除</button>
   </div>
   
   <div class="age-filter-stages">
     <!-- 乳児 (0歳) -->
-    <div class="age-filter-stage" data-stage="baby">
-      <button class="age-filter-stage-trigger" aria-expanded="false" aria-controls="stage-content-baby">
+    <div class="age-filter-stage" data-stage="baby" data-min="0" data-max="11">
+      <button class="age-filter-stage-trigger" aria-expanded="false" aria-controls="stage-content-baby" type="button">
         <span class="stage-name">乳児 (0歳・月齢)</span>
         <span class="stage-arrow" aria-hidden="true">▼</span>
       </button>
@@ -22,8 +34,8 @@
     </div>
 
     <!-- 幼児 (1〜2歳) -->
-    <div class="age-filter-stage" data-stage="toddler">
-      <button class="age-filter-stage-trigger" aria-expanded="false" aria-controls="stage-content-toddler">
+    <div class="age-filter-stage" data-stage="toddler" data-min="12" data-max="35">
+      <button class="age-filter-stage-trigger" aria-expanded="false" aria-controls="stage-content-toddler" type="button">
         <span class="stage-name">幼児 (1〜2歳)</span>
         <span class="stage-arrow" aria-hidden="true">▼</span>
       </button>
@@ -37,8 +49,8 @@
     </div>
 
     <!-- 園児 (3〜5歳) -->
-    <div class="age-filter-stage" data-stage="preschool">
-      <button class="age-filter-stage-trigger" aria-expanded="false" aria-controls="stage-content-preschool">
+    <div class="age-filter-stage" data-stage="preschool" data-min="36" data-max="71">
+      <button class="age-filter-stage-trigger" aria-expanded="false" aria-controls="stage-content-preschool" type="button">
         <span class="stage-name">園児 (3〜5歳)</span>
         <span class="stage-arrow" aria-hidden="true">▼</span>
       </button>
@@ -52,8 +64,8 @@
     </div>
 
     <!-- 小学生 (6〜12歳) -->
-    <div class="age-filter-stage" data-stage="school">
-      <button class="age-filter-stage-trigger" aria-expanded="false" aria-controls="stage-content-school">
+    <div class="age-filter-stage" data-stage="school" data-min="72" data-max="143">
+      <button class="age-filter-stage-trigger" aria-expanded="false" aria-controls="stage-content-school" type="button">
         <span class="stage-name">小学生 (6〜12歳)</span>
         <span class="stage-arrow" aria-hidden="true">▼</span>
       </button>
@@ -67,8 +79,8 @@
     </div>
 
     <!-- 高学年・中学生以上 -->
-    <div class="age-filter-stage" data-stage="senior">
-      <button class="age-filter-stage-trigger" aria-expanded="false" aria-controls="stage-content-senior">
+    <div class="age-filter-stage" data-stage="senior" data-min="144" data-max="999">
+      <button class="age-filter-stage-trigger" aria-expanded="false" aria-controls="stage-content-senior" type="button">
         <span class="stage-name">高学年・中学生以上 (12歳〜)</span>
         <span class="stage-arrow" aria-hidden="true">▼</span>
       </button>
@@ -104,10 +116,16 @@
     --btn-text: #374151;
     --btn-border: #d1d5db;
     --btn-hover-bg: #f3f4f6;
-    --btn-active-bg: #0369a1; /* Sky-700 (Contrast ratio with white is >6:1) */
+    --btn-active-bg: #0284c7; /* Sky-600 */
     --btn-active-text: #ffffff;
     --clear-bg: #dc2626; /* Darker red for clear button (High contrast) */
     --clear-hover-bg: #b91c1c;
+    
+    /* Toggle switch tokens (Light Mode) */
+    --toggle-bg: rgba(229, 231, 235, 0.7);
+    --toggle-btn-color: #4b5563;
+    --toggle-active-bg: #0284c7;
+    --toggle-active-text: #ffffff;
   }
 
   /* Dark mode integration */
@@ -124,6 +142,12 @@
     --btn-text: #e5e7eb;
     --btn-border: #4b5563;
     --btn-hover-bg: #374151;
+    
+    /* Toggle switch tokens (Dark Mode) */
+    --toggle-bg: rgba(55, 65, 81, 0.6);
+    --toggle-btn-color: #d1d5db;
+    --toggle-active-bg: #0284c7;
+    --toggle-active-text: #ffffff;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -139,6 +163,11 @@
       --btn-text: #e5e7eb;
       --btn-border: #4b5563;
       --btn-hover-bg: #374151;
+      
+      --toggle-bg: rgba(55, 65, 81, 0.6);
+      --toggle-btn-color: #d1d5db;
+      --toggle-active-bg: #0284c7;
+      --toggle-active-text: #ffffff;
     }
   }
 
@@ -146,7 +175,9 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
   }
 
   .age-filter-title {
@@ -155,8 +186,46 @@
     color: var(--title-color);
   }
 
+  /* Segmented Toggle Control Styling */
+  .age-filter-toggle-container {
+    display: flex;
+    align-items: center;
+  }
+
+  .age-filter-toggle-switch {
+    display: flex;
+    background: var(--toggle-bg);
+    padding: 3px;
+    border-radius: 20px;
+    gap: 2px;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+  }
+
+  .age-filter-toggle-btn {
+    border: none;
+    background: transparent;
+    padding: 6px 14px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--toggle-btn-color);
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    white-space: nowrap;
+  }
+
+  .age-filter-toggle-btn:hover {
+    color: var(--title-color);
+  }
+
+  .age-filter-toggle-btn.active {
+    background: var(--toggle-active-bg);
+    color: var(--toggle-active-text) !important;
+    box-shadow: 0 2px 5px rgba(2, 132, 199, 0.4);
+  }
+
   .age-filter-clear-btn {
-    padding: 4px 10px;
+    padding: 6px 12px;
     font-size: 0.75rem;
     font-weight: 600;
     border-radius: 6px;
@@ -180,6 +249,7 @@
     border-radius: 8px;
     overflow: hidden;
     transition: all 0.25s ease;
+    border: 1px solid transparent;
   }
 
   .age-filter-stage-trigger {
@@ -187,7 +257,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 14px;
+    padding: 11px 14px;
     background: var(--stage-bg);
     color: var(--stage-text);
     border: none;
@@ -195,8 +265,9 @@
     font-weight: 600;
     cursor: pointer;
     text-align: left;
-    transition: background 0.2s ease;
+    transition: all 0.2s ease;
   }
+  
   .age-filter-stage-trigger:hover {
     background: var(--stage-bg-hover);
   }
@@ -210,6 +281,22 @@
 
   .age-filter-stage.is-open .stage-arrow {
     transform: rotate(180deg);
+  }
+
+  /* Stage Active Highlight (When the whole stage/accordion is selected for filtering) */
+  .age-filter-stage.stage-active {
+    border-color: var(--btn-active-bg);
+    box-shadow: 0 0 8px rgba(2, 132, 199, 0.25);
+  }
+
+  .age-filter-stage.stage-active .age-filter-stage-trigger {
+    background: var(--btn-active-bg) !important;
+    color: var(--btn-active-text) !important;
+  }
+
+  .age-filter-stage.stage-active .age-filter-stage-trigger .stage-arrow {
+    color: var(--btn-active-text) !important;
+    opacity: 1;
   }
 
   /* Smart Accordion using grid-template-rows */
@@ -273,29 +360,3 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 </style>
-
-<script>
-document.addEventListener("DOMContentLoaded", function() {
-  const container = document.getElementById("age-filter-container");
-  if (!container) return;
-
-  const triggers = container.querySelectorAll(".age-filter-stage-trigger");
-  triggers.forEach(trigger => {
-    trigger.addEventListener("click", function() {
-      const stage = this.closest(".age-filter-stage");
-      const isOpen = stage.classList.contains("is-open");
-      
-      // Close other stages (optional, but makes UI cleaner)
-      container.querySelectorAll(".age-filter-stage").forEach(s => {
-        if (s !== stage) {
-          s.classList.remove("is-open");
-          s.querySelector(".age-filter-stage-trigger").setAttribute("aria-expanded", "false");
-        }
-      });
-
-      stage.classList.toggle("is-open", !isOpen);
-      this.setAttribute("aria-expanded", !isOpen ? "true" : "false");
-    });
-  });
-});
-</script>
