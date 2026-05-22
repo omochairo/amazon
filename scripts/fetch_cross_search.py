@@ -127,7 +127,7 @@ def extract_search_keyword(title):
     return keyword[:40] if keyword else title[:40]
 
 
-def _parse_rakuten_item(raw_item):
+def _parse_rakuten_item(raw_item, is_books=False):
     """楽天APIの個別のItem要素を正規化された辞書に変換する。"""
     i = raw_item.get("Item", raw_item) if isinstance(raw_item, dict) else {}
     if not i:
@@ -144,12 +144,59 @@ def _parse_rakuten_item(raw_item):
     elif isinstance(img_list, str):
         image_url = img_list
 
+    # 在庫状況 (availability)
+    availability_val = i.get("availability")
+    availability = "instock"
+    if is_books:
+        if availability_val is not None:
+            av_str = str(availability_val).strip()
+            if av_str in ("6", "9"):
+                availability = "outofstock"
+            elif av_str in ("1", "2", "3", "4", "5", "7", "8"):
+                availability = "instock"
+    else:
+        if availability_val is not None:
+            try:
+                if int(availability_val) == 0:
+                    availability = "outofstock"
+            except (ValueError, TypeError):
+                pass
+
+    # 送料 (free_shipping)
+    if is_books:
+        free_shipping = True
+    else:
+        postage_flag = i.get("postageFlag")
+        if postage_flag is not None:
+            try:
+                free_shipping = (int(postage_flag) == 0)
+            except (ValueError, TypeError):
+                free_shipping = False
+        else:
+            free_shipping = False
+
+    # あす楽 (asuraku)
+    if is_books:
+        asuraku = False
+    else:
+        asuraku_flag = i.get("asurakuFlag")
+        if asuraku_flag is not None:
+            try:
+                asuraku = (int(asuraku_flag) == 1)
+            except (ValueError, TypeError):
+                asuraku = False
+        else:
+            asuraku = False
+
     return {
         "title": i.get("itemName", "") or i.get("title", ""),
         "price": i.get("itemPrice", 0),
         "url": i.get("affiliateUrl") or i.get("itemUrl", ""),
         "image": image_url,
         "itemCode": i.get("itemCode", ""),
+        "availability": availability,
+        "free_shipping": free_shipping,
+        "asuraku": asuraku,
     }
 
 
@@ -220,7 +267,7 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id=""):
             raw_items = data.get("Items", [])
             if raw_items:
                 logger.info(f"Rakuten Stage1 (Books): {len(raw_items)} hits for '{keyword}'")
-                parsed_items = [it for it in [_parse_rakuten_item(ri) for ri in raw_items] if it]
+                parsed_items = [it for it in [_parse_rakuten_item(ri, is_books=True) for ri in raw_items] if it]
                 best = _select_median_priced_item(parsed_items)
                 if best:
                     best["source"] = "Rakuten Books"
@@ -246,7 +293,7 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id=""):
             if raw_items:
                 api_label = "Ichiba RMS" if access_key else "Ichiba"
                 logger.info(f"Rakuten Stage2 ({api_label}): {len(raw_items)} hits for '{stage2_keyword}'")
-                parsed_items = [it for it in [_parse_rakuten_item(ri) for ri in raw_items] if it]
+                parsed_items = [it for it in [_parse_rakuten_item(ri, is_books=False) for ri in raw_items] if it]
                 best = _select_median_priced_item(parsed_items)
                 if best:
                     best["source"] = "Rakuten"
@@ -275,7 +322,7 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id=""):
                     raw_items = data.get("Items", [])
                     if raw_items:
                         logger.info(f"Rakuten Stage3 (Shortened): {len(raw_items)} hits for '{short_keyword}'")
-                        parsed_items = [it for it in [_parse_rakuten_item(ri) for ri in raw_items] if it]
+                        parsed_items = [it for it in [_parse_rakuten_item(ri, is_books=False) for ri in raw_items] if it]
                         best = _select_median_priced_item(parsed_items)
                         if best:
                             best["source"] = "Rakuten"
@@ -322,12 +369,27 @@ def _yahoo_query(keyword, client_id, sid="", pid=""):
         if isinstance(image, dict):
             image_url = image.get("medium") or image.get("small") or ""
 
+        # 在庫状況 (inStock)
+        instock_val = hit.get("inStock")
+        availability = "instock"
+        if instock_val is False:
+            availability = "outofstock"
+
+        # 送料条件 (shipping.code)
+        # code: 1 -> 設定なし (有料), code: 2 -> 送料無料, code: 3 -> 条件付き送料無料
+        # ユーザー指示により、条件付き送料無料(code:3)は非表示にするため、code == 2 の場合のみ free_shipping = True とする
+        shipping_code = hit.get("shipping", {}).get("code")
+        free_shipping = (shipping_code == 2)
+
         parsed_items.append({
             "title": hit.get("name", ""),
             "price": hit.get("price", 0),
             "url": affiliate_url,
             "image": image_url,
             "source": "Yahoo",
+            "availability": availability,
+            "free_shipping": free_shipping,
+            "asuraku": False,
         })
     return parsed_items
 
