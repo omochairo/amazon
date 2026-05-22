@@ -1317,7 +1317,7 @@ body.dark .post-content .omcha-card-title {
 /* Product image slideshow (PA-API images.variants.large 由来の2枚目以降) */
 .post-content .product-slideshow {
   position: relative;
-  max-width: 560px;
+  max-width: 720px;
   margin: 0 auto 28px;
   background: var(--code-bg, #f8fafc);
   border: 1px solid var(--border, #e5e7eb);
@@ -1326,7 +1326,7 @@ body.dark .post-content .omcha-card-title {
 }
 .post-content .product-slideshow .slideshow-stage {
   position: relative;
-  height: 420px;
+  height: 580px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1352,7 +1352,7 @@ body.dark .post-content .omcha-card-title {
 .post-content .product-slideshow .slide-prev,
 .post-content .product-slideshow .slide-next {
   position: absolute;
-  top: calc(16px + 210px);
+  top: calc(16px + 290px);
   transform: translateY(-50%);
   background: rgba(17, 24, 39, 0.55);
   color: #ffffff;
