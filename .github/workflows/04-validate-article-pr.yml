@@ -31,6 +31,7 @@ on:
       # 2026-05-19 (session 32): backfill workflow も paths に追加。自身の bug fix /
       # 設定変更 PR を merge する際に validate (required check) を必ず通すため。
       - '.github/workflows/01b-backfill-competitors.yml'
+      - '.github/workflows/02-publish.yml'
       # 2026-05-20 (session 37): news/books 関連の同定ロジックを触る PR も validate を
       # 必須 check として発火させる。
       - 'scripts/fetch_yahoo_news.py'
