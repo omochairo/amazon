@@ -233,6 +233,28 @@
       "author": "販売ストア",
       "conflict_of_interest": "possible",
       "notes": "対象年齢が3歳以上であること、メーカー希望小売価格などの仕様記載。"
+    },
+    {
+      "id": "src-4",
+      "name": "Wikipedia / トミカ",
+      "url": "https://ja.wikipedia.org/wiki/%E3%83%88%E3%83%9F%E3%82%AB",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-05-23",
+      "author": "第三者",
+      "conflict_of_interest": "none",
+      "notes": "トミカが長年親しまれているミニカーブランドであるという一般的事実の裏付け。"
+    },
+    {
+      "id": "src-5",
+      "name": "Amazon 商品ページ",
+      "url": "https://www.amazon.co.jp/dp/B0FNM3JGFZ",
+      "tier": "high",
+      "evidence_type": "secondary",
+      "published_at": "2026-05-23",
+      "author": "販売ストア",
+      "conflict_of_interest": "possible",
+      "notes": "Amazonでの取り扱いと電池不使用の仕様についての裏付け。"
     }
   ],
   "claims": [
@@ -277,6 +299,16 @@
       ],
       "cross_checked": true,
       "notes": "複数サイトで500円前後の価格設定であることを確認。"
+    },
+    {
+      "claim": "トミカは長年親しまれている実績のあるブランドである",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-4"
+      ],
+      "cross_checked": false,
+      "notes": "ブランドの歴史的背景を確認。"
     }
   ],
   "technical_specs": {
