@@ -375,49 +375,4 @@ document.addEventListener("DOMContentLoaded", () => {
 
         return card;
     }
-
-    // 自動テスト用シミュレータ
-    if (window.location.search.includes("test=true")) {
-        console.log("DIAGNOSIS_TEST: Auto test mode detected. Waiting for data load...");
-        
-        function runAutoTest() {
-            if (!itemsCache) {
-                setTimeout(runAutoTest, 100);
-                return;
-            }
-            console.log("DIAGNOSIS_TEST: Data loaded. Starting simulation...");
-            
-            let stepTimer = setInterval(() => {
-                const activeStep = document.querySelector(".diagnosis-step.active");
-                if (activeStep) {
-                    const stepNum = activeStep.getAttribute("data-step");
-                    const firstOption = activeStep.querySelector(".diagnosis-option-btn");
-                    if (firstOption) {
-                        console.log(`DIAGNOSIS_TEST: Clicking step ${stepNum} option: ${firstOption.querySelector(".label").textContent}`);
-                        firstOption.click();
-                    } else {
-                        console.error(`DIAGNOSIS_TEST: No options found in step ${stepNum}`);
-                        clearInterval(stepTimer);
-                    }
-                } else {
-                    // 5問回答完了して結果表示に移行しているはず
-                    clearInterval(stepTimer);
-                    
-                    // 結果の確認
-                    setTimeout(() => {
-                        const resultCards = document.querySelectorAll("#diagnosis-result-grid .product-card");
-                        console.log(`DIAGNOSIS_TEST: Simulation completed. Cards count: ${resultCards.length}`);
-                        if (resultCards.length > 0) {
-                            const titles = Array.from(resultCards).map(c => c.querySelector(".product-card-title").textContent);
-                            console.log("DIAGNOSIS_TEST_SUCCESS: Recommended toys:", JSON.stringify(titles));
-                        } else {
-                            console.error("DIAGNOSIS_TEST_ERROR: No cards rendered.");
-                        }
-                    }, 500);
-                }
-            }, 300);
-        }
-        
-        runAutoTest();
-    }
 });
