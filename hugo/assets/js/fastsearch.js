@@ -32,9 +32,9 @@ function renderCard(it) {
 
   let scoreBadge = '';
   if (score100 > 0) {
-    scoreBadge = `<span class="product-card-score" title="IVSスコア (100点満点)">🏆 <strong>${score100}</strong><span class="product-card-score-suffix">点</span></span>`;
+    scoreBadge = `<span class="product-card-score" title="知育スコア (100点満点)">🏆 <strong>${score100}</strong><span class="product-card-score-suffix">点</span></span>`;
   } else if (score > 0) {
-    scoreBadge = `<span class="product-card-score" title="IVSスコア (5点満点)">🏆 <strong>${score.toFixed(1)}</strong><span class="product-card-score-suffix">/5</span></span>`;
+    scoreBadge = `<span class="product-card-score" title="知育スコア (5点満点)">🏆 <strong>${score.toFixed(1)}</strong><span class="product-card-score-suffix">/5</span></span>`;
   }
 
   const imgBlock = img

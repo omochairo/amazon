@@ -239,14 +239,14 @@ document.addEventListener("DOMContentLoaded", function() {
       const ageStr = formatAgeMin(item.age_min_months);
       if (score100) {
         scoreHtml = `<div class="product-card-badges">
-          <span class="product-card-score ${tierClass}" title="IVSスコア (100点満点)">
+          <span class="product-card-score ${tierClass}" title="知育スコア (100点満点)">
             &#127942; <strong>${score100}</strong><span class="product-card-score-suffix">点</span>
             ${minPrice > 0 ? `<span class="product-card-score-price">最安 &yen;${minPrice.toLocaleString()}</span>` : ""}
           </span>
         </div>`;
       } else if (item.ivs_score) {
         scoreHtml = `<div class="product-card-badges">
-          <span class="product-card-score score-bronze" title="IVSスコア (5点満点)">
+          <span class="product-card-score score-bronze" title="知育スコア (5点満点)">
             &#127942; <strong>${item.ivs_score.toFixed(1)}</strong><span class="product-card-score-suffix">/5</span>
             ${minPrice > 0 ? `<span class="product-card-score-price">最安 &yen;${minPrice.toLocaleString()}</span>` : ""}
           </span>

@@ -20,7 +20,7 @@
   <div class="term-header-eyebrow">{{ $icon }} {{ $label }}一覧</div>
   <h1 class="term-header-title">{{ $icon }} {{ $label }}から探す</h1>
   {{- if eq $plural "brands" }}
-  <p class="term-header-description">気になる<strong>メーカー</strong>から、IVSスコア比較レビュー記事を探せます。タカラトミーやセガフェイブ、レゴなどおもちゃの人気ブランドを掲載中。</p>
+  <p class="term-header-description">気になる<strong>メーカー</strong>から、知育スコア比較レビュー記事を探せます。タカラトミーやセガフェイブ、レゴなどおもちゃの人気ブランドを掲載中。</p>
   {{- else if eq $plural "categories" }}
   <p class="term-header-description">カテゴリからレビュー記事を探せます。</p>
   {{- else }}
@@ -38,7 +38,7 @@
   {{- range $terms }}
     {{- $term := .Name -}}
     {{- $pages := .Pages -}}
-    {{- /* 各 brand の代表画像 = そのブランドの記事の中で IVS スコア最大の記事のサムネ */ -}}
+    {{- /* 各 brand の代表画像 = そのブランドの記事の中で知育スコア最大の記事のサムネ */ -}}
     {{- $top := first 1 (sort $pages "Params.ivs_score" "desc") -}}
     {{- $thumb := "" -}}
     {{- $maxScore := "" -}}

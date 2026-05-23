@@ -47,10 +47,10 @@
 {% if product.ivs_detail %}
 <div class="hero-score">
 <div class="hero-total-row">
-<div class="hero-total-badge"><span class="hero-total-label">🌟 知育玩具スコア</span><span class="hero-total-value">{{ product.ivs_detail.total_100 }}<small>/100</small></span></div>
+<div class="hero-total-badge"><span class="hero-total-label">🌟 知育スコア</span><span class="hero-total-value">{{ product.ivs_detail.total_100 }}<small>/100</small></span></div>
 {% if verdict and verdict.headline %}<p class="hero-verdict">「{{ verdict.headline }}」</p>{% endif %}
 </div>
-<div class="hero-total-bar" aria-label="知育玩具スコア（総合）の棒グラフ">
+<div class="hero-total-bar" aria-label="知育スコア（総合）の棒グラフ">
 <div class="hero-total-bar-track"><div class="hero-total-bar-fill" style="--bar-w:{{ product.ivs_detail.total_100 }}%"><span class="hero-total-bar-value">{{ product.ivs_detail.total_100 }} / 100 点</span></div></div>
 <p class="hero-total-bar-caption">下のレーダー 4 軸（📚 知育効果 / 🕰️ 長く遊べる / 🛡️ 安全性 / 💰 コスパ）を加重平均し、100 点満点に換算したおもちゃロボ独自の総合スコアです。</p>
 </div>
@@ -97,9 +97,9 @@
 <div class="keepa-graph" style="margin:18px 0;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;color:#1f2937;text-align:center;"><div style="font-weight:600;color:#1f2937;margin-bottom:10px;">📈 Amazon 価格推移グラフ（Keepa 提供）</div><img src="https://graph.keepa.com/pricehistory.png?domain=co.jp&asin={{ product.asin }}" alt="{{ product.name }} の Amazon 価格推移グラフ" loading="lazy" style="max-width:100%;height:auto;border-radius:6px;" onerror="this.closest('.keepa-graph').style.display='none'"><p style="margin:8px 0 0;font-size:0.8rem;color:#6b7280;">※ グラフは <a href="https://keepa.com/" target="_blank" rel="noopener nofollow">Keepa</a> によって自動生成される画像です。記事執筆後の価格変動も反映されます。</p></div>
 {% endif %}
 
-## <small>{{ product.name }}の</small>🌟 知育玩具スコアの内訳
+## <small>{{ product.name }}の</small>🌟 知育スコアの内訳
 
-冒頭で示した IVS（おもちゃロボの知育価値スコア）の内訳を、まず 4 軸のスコアでおさらいしてから、寄与の大きい順に **加減点根拠** を並べました。
+冒頭で示した知育スコア（おもちゃロボの知育評価スコア）の内訳を、まず 4 軸のスコアでおさらいしてから、寄与の大きい順に **加減点根拠** を並べました。
 
 <div class="score-recap" aria-label="4 軸スコアのおさらい">
 <div class="score-recap-card"><span class="score-recap-axis">📚 知育効果</span><span class="score-recap-value">{{ "%.1f"|format(product.ivs_detail.education) }}<small>/5.0</small></span></div>
@@ -114,7 +114,7 @@
 <ul class="score-rationale-list">{% for r in product.ivs_detail.score_rationale %}<li><strong>{{ r.factor }}<span class="score-delta">（{{ r.delta }}）</span></strong>：{{ r.reason }}</li>{% endfor %}</ul>
 {% endif %}
 
-<details class="score-axes-doc"><summary>📖 IVS スコアの 4 軸（評価軸の説明を見る）</summary><div><p><strong>IVS（Ikuiku Value Score）</strong>は、おもちゃロボが知育玩具を 4 つの観点から 5 点満点で評価し、加重平均で 100 点満点に換算した独自スコアです。</p><ul><li><strong>📚 知育効果 (5点満点)</strong>：年齢に応じた学びや、思考力・想像力・手先の発達への刺激度を評価。</li><li><strong>🕰️ 長く遊べる (5点満点)</strong>：遊び方の幅、年齢を超えた長期的な遊び寿命を評価。</li><li><strong>🛡️ 安全性 (5点満点)</strong>：対象年齢の妥当性、素材・形状・誤飲リスク等の安全配慮を評価。</li><li><strong>💰 コスパ (5点満点)</strong>：価格に対する品質・遊び寿命・教育効果のバランスを評価。</li></ul><p class="score-axes-note">※ スコアは執筆時点の市場データ・レビュー・公式情報をもとに付与しています。実際の感じ方には個人差があります。</p></div></details>
+<details class="score-axes-doc"><summary>📖 知育スコアの 4 軸（評価軸の説明を見る）</summary><div><p><strong>知育スコア（おもちゃロボの知育評価スコア）</strong>は、おもちゃロボが知育玩具を 4 つの観点から 5 点満点で評価し、加重平均で 100 点満点に換算した独自スコアです。</p><ul><li><strong>📚 知育効果 (5点満点)</strong>：年齢に応じた学びや、思考力・想像力・手先の発達への刺激度を評価。</li><li><strong>🕰️ 長く遊べる (5点満点)</strong>：遊び方の幅、年齢を超えた長期的な遊び寿命を評価。</li><li><strong>🛡️ 安全性 (5点満点)</strong>：対象年齢の妥当性、素材・形状・誤飲リスク等の安全配慮を評価。</li><li><strong>💰 コスパ (5点満点)</strong>：価格に対する品質・遊び寿命・教育効果のバランスを評価。</li></ul><p class="score-axes-note">※ スコアは執筆時点の市場データ・レビュー・公式情報をもとに付与しています。実際の感じ方には個人差があります。</p></div></details>
 
 {% if review_signals %}
 ## <small>{{ product.name }}の</small>💭 レビュー傾向の分析
