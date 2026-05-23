@@ -552,7 +552,7 @@ def _attach_omcha_related(data: dict[str, Any], per_asin_root: pathlib.Path) -> 
         except (OSError, json.JSONDecodeError):
             items = None
     if items is None:
-        items = fetch_omcha_related(keyword, count=3, min_score=10)
+        items = fetch_omcha_related(keyword, count=3, min_score=20)
         if cache_path is not None:
             try:
                 cache_path.parent.mkdir(parents=True, exist_ok=True)

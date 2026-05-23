@@ -38,7 +38,7 @@ DEFAULT_TIMEOUT = 10
 def get_related_articles(
     keyword: str,
     count: int = 3,
-    min_score: int = 10,
+    min_score: int = 20,
     base_url: str | None = None,
     timeout: int = DEFAULT_TIMEOUT,
 ) -> list[dict[str, Any]]:
