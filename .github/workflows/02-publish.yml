@@ -4,9 +4,10 @@ on:
     paths:
       - 'data/raw/**'
       - 'data/articles/**'
-      - 'hugo/content/**'
+      - 'hugo/**'
       - 'scripts/**'
       - 'AGENTS.md'
+      - '.github/workflows/02-publish.yml'
   workflow_run:
     workflows: ["Fetch Amazon Products"]
     types: [completed]
