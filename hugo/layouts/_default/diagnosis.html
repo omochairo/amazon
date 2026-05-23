@@ -1,0 +1,168 @@
+{{- define "main" }}
+
+<header class="page-header">
+  <h1>{{ .Title }}</h1>
+  {{- if .Description }}
+  <div class="post-description">
+    {{ .Description }}
+  </div>
+  {{- end }}
+</header>
+
+<div class="diagnosis-wrapper">
+  <!-- プログレスバー -->
+  <div class="diagnosis-progress-container">
+    <div class="diagnosis-progress-bar" id="diagnosis-progress-bar" style="width: 0%;"></div>
+    <div class="diagnosis-progress-text" id="diagnosis-progress-text">質問 1 / 5</div>
+  </div>
+
+  <div class="diagnosis-wizard" id="diagnosis-wizard">
+    <!-- Q1 -->
+    <div class="diagnosis-step active" data-step="1">
+      <h2 class="diagnosis-question">Q1. お子さんの年齢は？</h2>
+      <div class="diagnosis-options">
+        <button class="diagnosis-option-btn" data-name="q1" data-value="0-1">
+          <span class="emoji">👶</span>
+          <span class="label">0〜1歳</span>
+          <span class="sublabel">ねんね・おすわり期</span>
+        </button>
+        <button class="diagnosis-option-btn" data-name="q1" data-value="1-2">
+          <span class="emoji">🚶</span>
+          <span class="label">1〜2歳</span>
+          <span class="sublabel">よちよち・あんよ期</span>
+        </button>
+        <button class="diagnosis-option-btn" data-name="q1" data-value="3-4">
+          <span class="emoji">🧩</span>
+          <span class="label">3〜4歳</span>
+          <span class="sublabel">ごっこ遊び・社会性発達期</span>
+        </button>
+        <button class="diagnosis-option-btn" data-name="q1" data-value="5-6">
+          <span class="emoji">🎒</span>
+          <span class="label">5〜6歳</span>
+          <span class="sublabel">創造・就学前準備期</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Q2 -->
+    <div class="diagnosis-step" data-step="2">
+      <h2 class="diagnosis-question">Q2. 今一番伸ばしたい力は？</h2>
+      <div class="diagnosis-options">
+        <button class="diagnosis-option-btn" data-name="q2" data-value="dexterity">
+          <span class="emoji">👋</span>
+          <span class="label">手先の器用さ</span>
+          <span class="sublabel">指先・手の運動発達を促す</span>
+        </button>
+        <button class="diagnosis-option-btn" data-name="q2" data-value="language">
+          <span class="emoji">🔤</span>
+          <span class="label">言語・数</span>
+          <span class="sublabel">言葉の理解や論理的な思考</span>
+        </button>
+        <button class="diagnosis-option-btn" data-name="q2" data-value="imagination">
+          <span class="emoji">🎨</span>
+          <span class="label">想像力</span>
+          <span class="sublabel">クリエイティビティ・自由な表現</span>
+        </button>
+        <button class="diagnosis-option-btn" data-name="q2" data-value="social">
+          <span class="emoji">🤝</span>
+          <span class="label">社会性</span>
+          <span class="sublabel">役割模倣・やり取りを学ぶ</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Q3 -->
+    <div class="diagnosis-step" data-step="3">
+      <h2 class="diagnosis-question">Q3. 遊ぶ場所は？</h2>
+      <div class="diagnosis-options">
+        <button class="diagnosis-option-btn" data-name="q3" data-value="indoor">
+          <span class="emoji">🏠</span>
+          <span class="label">室内メイン</span>
+          <span class="sublabel">お部屋でじっくり遊ぶ</span>
+        </button>
+        <button class="diagnosis-option-btn" data-name="q3" data-value="outdoor">
+          <span class="emoji">🌳</span>
+          <span class="label">外でも使いたい</span>
+          <span class="sublabel">公園やおでかけ先、持ち運び</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Q4 -->
+    <div class="diagnosis-step" data-step="4">
+      <h2 class="diagnosis-question">Q4. ご予算はどのくらい？</h2>
+      <div class="diagnosis-options">
+        <button class="diagnosis-option-btn" data-name="q4" data-value="3000">
+          <span class="emoji">👛</span>
+          <span class="label">〜3,000円</span>
+          <span class="sublabel">手頃に買えるギフトやご褒美</span>
+        </button>
+        <button class="diagnosis-option-btn" data-name="q4" data-value="8000">
+          <span class="emoji">🎁</span>
+          <span class="label">〜8,000円</span>
+          <span class="sublabel">誕生日などの定番プレゼント</span>
+        </button>
+        <button class="diagnosis-option-btn" data-name="q4" data-value="8000+">
+          <span class="emoji">👑</span>
+          <span class="label">8,000円以上</span>
+          <span class="sublabel">特別で豪華な贈り物</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Q5 -->
+    <div class="diagnosis-step" data-step="5">
+      <h2 class="diagnosis-question">Q5. 今持っているおもちゃのタイプは？</h2>
+      <div class="diagnosis-options">
+        <button class="diagnosis-option-btn" data-name="q5" data-value="block">
+          <span class="emoji">🧱</span>
+          <span class="label">積み木・ブロック系</span>
+          <span class="sublabel">組み立てるおもちゃはすでにある</span>
+        </button>
+        <button class="diagnosis-option-btn" data-name="q5" data-value="puzzle">
+          <span class="emoji">🧩</span>
+          <span class="label">パズル・カード系</span>
+          <span class="sublabel">パズルやゲームは持っている</span>
+        </button>
+        <button class="diagnosis-option-btn" data-name="q5" data-value="gokko">
+          <span class="emoji">🍳</span>
+          <span class="label">ごっこ遊び・ままごと系</span>
+          <span class="sublabel">ままごとやキャラクター玩具がある</span>
+        </button>
+        <button class="diagnosis-option-btn" data-name="q5" data-value="few">
+          <span class="emoji">🌱</span>
+          <span class="label">まだ少ない / 定番から揃えたい</span>
+          <span class="sublabel">おすすめの定番品を優先</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ナビゲーションボタン -->
+  <div class="diagnosis-navigation">
+    <button class="diagnosis-nav-btn" id="diagnosis-prev-btn" style="display: none;">← 戻る</button>
+  </div>
+
+  <!-- 結果表示コンテナ -->
+  <div class="diagnosis-result-container" id="diagnosis-result-container" style="display: none;">
+    <div class="diagnosis-result-header">
+      <h2>✨ あなたにおすすめのおもちゃ処方箋 ✨</h2>
+      <p>ご回答いただいた内容をもとに、最適なおもちゃを選定しました。</p>
+      <div class="diagnosis-fallback-badge" id="diagnosis-fallback-badge" style="display: none;"></div>
+    </div>
+
+    <!-- 結果カードグリッド (PaperModのcard-gridスタイルを利用) -->
+    <div class="card-grid" id="diagnosis-result-grid">
+      <!-- ここに JS で動的におもちゃカードを挿入 -->
+    </div>
+
+    <div class="diagnosis-result-footer">
+      <button class="diagnosis-retry-btn" id="diagnosis-retry-btn">🔄 もう一度診断する</button>
+    </div>
+  </div>
+</div>
+
+{{- $js := resources.Get "js/diagnosis.js" | minify | fingerprint -}}
+<script src="{{ $js.RelPermalink }}" defer></script>
+
+{{- end }}

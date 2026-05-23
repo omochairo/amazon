@@ -1,0 +1,262 @@
+/* diagnosis.css */
+
+.diagnosis-wrapper {
+    max-width: 700px;
+    margin: 2rem auto;
+    padding: 2rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: all 0.3s ease;
+}
+
+body.dark .diagnosis-wrapper {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+/* プログレスバー */
+.diagnosis-progress-container {
+    margin-bottom: 2.5rem;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 8px;
+    height: 8px;
+    position: relative;
+    overflow: hidden;
+}
+
+body.dark .diagnosis-progress-container {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.diagnosis-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #4f46e5 0%, #7c3aed 100%);
+    border-radius: 8px;
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.diagnosis-progress-text {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--secondary);
+    text-align: right;
+    margin-top: 0.5rem;
+}
+
+/* ウィザードステップ */
+.diagnosis-step {
+    display: none;
+    opacity: 0;
+    transform: translateY(10px);
+}
+
+.diagnosis-step.active {
+    display: block;
+    animation: diagnosisFadeInUp 0.4s forwards cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes diagnosisFadeInUp {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.diagnosis-question {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 2rem;
+    text-align: center;
+    color: var(--primary);
+    border: none;
+    padding: 0;
+}
+
+/* 選択肢オプション */
+.diagnosis-options {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+}
+
+@media (min-width: 550px) {
+    .diagnosis-options {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.diagnosis-option-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 1.5rem 1rem;
+    background: rgba(0, 0, 0, 0.02);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    color: var(--primary);
+    position: relative;
+    overflow: hidden;
+    outline: none;
+    width: 100%;
+}
+
+body.dark .diagnosis-option-btn {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.diagnosis-option-btn:hover {
+    transform: translateY(-3px);
+    background: rgba(79, 70, 229, 0.05);
+    border-color: rgba(79, 70, 229, 0.4);
+    box-shadow: 0 8px 20px rgba(79, 70, 229, 0.1);
+}
+
+body.dark .diagnosis-option-btn:hover {
+    background: rgba(124, 58, 237, 0.08);
+    border-color: rgba(124, 58, 237, 0.4);
+    box-shadow: 0 8px 20px rgba(124, 58, 237, 0.2);
+}
+
+.diagnosis-option-btn .emoji {
+    font-size: 2.25rem;
+    margin-bottom: 0.75rem;
+    transition: transform 0.3s ease;
+}
+
+.diagnosis-option-btn:hover .emoji {
+    transform: scale(1.15) rotate(5deg);
+}
+
+.diagnosis-option-btn .label {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.diagnosis-option-btn .sublabel {
+    font-size: 0.8rem;
+    color: var(--secondary);
+    line-height: 1.3;
+}
+
+/* ナビゲーション */
+.diagnosis-navigation {
+    margin-top: 2rem;
+    display: flex;
+    justify-content: flex-start;
+}
+
+.diagnosis-nav-btn {
+    padding: 0.5rem 1.25rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--secondary);
+    transition: all 0.2s ease;
+}
+
+.diagnosis-nav-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--primary);
+    border-color: var(--secondary);
+}
+
+body.dark .diagnosis-nav-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* 結果表示 */
+.diagnosis-result-container {
+    animation: diagnosisFadeIn 0.6s forwards ease;
+}
+
+@keyframes diagnosisFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.diagnosis-result-header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+}
+
+.diagnosis-result-header h2 {
+    font-size: 1.8rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+    color: var(--primary);
+    border: none;
+    padding: 0;
+}
+
+.diagnosis-result-header p {
+    color: var(--secondary);
+    font-size: 0.95rem;
+}
+
+.diagnosis-fallback-badge {
+    display: inline-block;
+    margin-top: 1rem;
+    padding: 0.5rem 1rem;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #d97706;
+}
+
+body.dark .diagnosis-fallback-badge {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border-color: rgba(245, 158, 11, 0.4);
+}
+
+.diagnosis-result-footer {
+    margin-top: 3rem;
+    text-align: center;
+}
+
+.diagnosis-retry-btn {
+    padding: 0.75rem 2rem;
+    font-size: 1rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    border: none;
+    border-radius: 30px;
+    color: #ffffff !important;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(79, 70, 229, 0.2);
+    transition: all 0.25s ease;
+}
+
+.diagnosis-retry-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(79, 70, 229, 0.35);
+}
+
+/* 診断カードグリッド上書き */
+.diagnosis-result-container .card-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+    .diagnosis-result-container .card-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
