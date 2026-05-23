@@ -94,6 +94,7 @@ _TRAIL_NOISE = re.compile(
     r"(\d{1,4}周年(記念)?|記念|限定|新品|BOX|セット|版|号|"
     r"\d{4}年|\d{4}-\d{4}|スペシャル|オリジナル|コレクション)$"
 )
+_PARTICLE_STRIP = re.compile(r"[もがはにでを]$")
 
 
 def extract_product_terms(title: str, brands: set, series: set) -> set[str]:
@@ -105,6 +106,7 @@ def extract_product_terms(title: str, brands: set, series: set) -> set[str]:
       - 括弧内除去、ブランド/シリーズ語を除去
       - 句読点/スラッシュで分割、長さ 3-12 の日本語語 (かな/カナ/漢字) を拾う
       - 末尾の 周年記念BOX / 限定 / 年号 等のサフィックスを剥がして core を残す
+      - 末尾の 1文字助詞 (もがはにでを) を安全に strip
       - 動詞風 (5字以下のひらがな末尾 う/る/く) は除外
       - ASCII モデル風 (例 M55) は別途模型番号で扱うのでここでは英字 3+ のみ拾う
     """
@@ -126,6 +128,11 @@ def extract_product_terms(title: str, brands: set, series: set) -> set[str]:
                 if stripped == t:
                     break
                 t = stripped
+            # 末尾の助詞を1文字剥がす (例: "にほんごえいご二語文も" → "にほんごえいご二語文")
+            stripped_particle = _PARTICLE_STRIP.sub("", t)
+            if stripped_particle != t:
+                if len(stripped_particle) >= 3:
+                    t = stripped_particle
             if len(t) < 3:
                 continue
             if t in PRODUCT_NOISE:
