@@ -1,10 +1,72 @@
-import os, sys, json, requests, logging
+import os, sys, json, re, pathlib, datetime, requests, logging
 
 def get_secret(name: str) -> str:
     return os.environ.get(name)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fetch_rakuten")
+
+JAN_RE = re.compile(r"(?<!\d)(4\d{12}|4\d{7})(?!\d)")
+
+
+def _build_itemcode_to_asin(matched_path: pathlib.Path) -> dict:
+    if not matched_path.exists():
+        return {}
+    try:
+        data = json.loads(matched_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    index = {}
+    for it in data.get("items", []):
+        code = (it.get("itemCode") or "").strip()
+        asin = (it.get("matched_asin") or "").strip()
+        if code and asin:
+            index[code] = asin
+    return index
+
+
+def _build_jan_to_asin(per_asin_root: pathlib.Path) -> dict:
+    index: dict[str, str] = {}
+    if not per_asin_root.exists():
+        return index
+    for snap_path in per_asin_root.glob("*/amazon.json"):
+        asin = snap_path.parent.name
+        try:
+            snap = json.loads(snap_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        item = snap.get("item") if isinstance(snap, dict) else None
+        if not isinstance(item, dict):
+            continue
+        jan = (item.get("jan_code") or "").strip()
+        if jan:
+            index.setdefault(jan, asin)
+    return index
+
+
+def _extract_jan_from_text(text: str) -> str:
+    if not text:
+        return ""
+    m = JAN_RE.search(text)
+    return m.group(1) if m else ""
+
+
+def _match_ranking_item(item: dict, itemcode_idx: dict, jan_idx: dict) -> tuple:
+    """ranking item を ASIN にマッチング。返り値: (matched_asin, match_stage)。
+    match_stage は 'stage1' (itemCode 直接), 'stage2_jan' (JAN 抽出), '' (未マッチ)。
+    """
+    code = (item.get("itemCode") or "").strip()
+    if code:
+        asin = itemcode_idx.get(code)
+        if asin:
+            return asin, "stage1"
+    text = (item.get("itemCaption") or "") + " " + (item.get("title") or "")
+    jan = _extract_jan_from_text(text)
+    if jan:
+        asin = jan_idx.get(jan)
+        if asin:
+            return asin, "stage2_jan"
+    return "", ""
 
 def main():
     import argparse
@@ -50,17 +112,21 @@ def main():
 
     resp = requests.get(url, params=params, headers=headers)
 
-    if resp.status_code != 200:
-        logger.error(f"Rakuten RMS API failed ({url}): {resp.text}")
-        sys.exit(1)
-
-    data = resp.json()
     items = []
-    # Note: New API might have a different JSON structure, but we assume it's still 'Items'
-    raw_items = data.get("Items", [])
-    if not isinstance(raw_items, list):
-        logger.warning(f"Unexpected Rakuten Search API structure: 'Items' is {type(raw_items)}")
+    if resp.status_code != 200:
+        # Search API が落ちても Ranking 取得は独立して続行する (PR1 で sys.exit(1) を除去)
+        logger.error(f"Rakuten RMS Search API failed ({url}): {resp.text[:300]}")
         raw_items = []
+    else:
+        try:
+            data = resp.json()
+        except ValueError:
+            logger.error("Rakuten RMS Search API returned non-JSON")
+            data = {}
+        raw_items = data.get("Items", []) if isinstance(data, dict) else []
+        if not isinstance(raw_items, list):
+            logger.warning(f"Unexpected Rakuten Search API structure: 'Items' is {type(raw_items)}")
+            raw_items = []
 
     for item in raw_items:
         i = item.get("Item", item) if isinstance(item, dict) else {}
@@ -95,9 +161,9 @@ def main():
     }
     if aff_id: ranking_params["affiliateId"] = aff_id
 
+    rank_items = []
     try:
         rank_resp = requests.get(ranking_url, params=ranking_params, headers=headers)
-        rank_items = []
         if rank_resp.status_code == 200:
             rank_data = rank_resp.json()
             raw_rank_items = rank_data.get("Items", [])
@@ -108,7 +174,6 @@ def main():
             for item in raw_rank_items:
                 i = item.get("Item", item) if isinstance(item, dict) else {}
 
-                # Robust image extraction
                 image_url = ""
                 img_list = i.get("mediumImageUrls", [])
                 if isinstance(img_list, list) and len(img_list) > 0:
@@ -125,17 +190,68 @@ def main():
                     "url": i.get("affiliateUrl") or i.get("itemUrl", ""),
                     "image": image_url,
                     "itemCode": i.get("itemCode", ""),
-                    "reviewCount": i.get("reviewCount", 0)
+                    "itemCaption": i.get("itemCaption", ""),
+                    "reviewCount": i.get("reviewCount", 0),
+                    "shopName": i.get("shopName", ""),
                 })
-
-        with open(os.path.join(args.out, "rakuten_ranking.json"), "w", encoding="utf-8") as f:
-            json.dump({"items": rank_items}, f, ensure_ascii=False, indent=4)
+        else:
+            logger.error(f"Rakuten Ranking API failed: HTTP {rank_resp.status_code} {rank_resp.text[:300]}")
     except Exception as e:
         logger.error(f"Ranking API failed: {e}")
 
+    # --- Stage 1/2 Matching: itemCode 直引き + JAN 抽出 ----------------------
+    raw_root = pathlib.Path("data/raw")
+    itemcode_idx = _build_itemcode_to_asin(raw_root / "rakuten_matched.json")
+    jan_idx = _build_jan_to_asin(raw_root / "per_asin")
+    logger.info(f"Match indices: itemCode={len(itemcode_idx)}, jan={len(jan_idx)}")
+
+    stage1_n, stage2_n, unmatched = 0, 0, []
+    for it in rank_items:
+        asin, stage = _match_ranking_item(it, itemcode_idx, jan_idx)
+        it["matched_asin"] = asin or None
+        it["match_stage"] = stage or None
+        if stage == "stage1":
+            stage1_n += 1
+        elif stage == "stage2_jan":
+            stage2_n += 1
+        else:
+            unmatched.append({"rank": it.get("rank"), "itemCode": it.get("itemCode"), "title": it.get("title")})
+
+    generated_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    manifest = {
+        "generated_at": generated_at,
+        "genre_id": "566382",
+        "input_total": len(rank_items),
+        "stage1_matches": stage1_n,
+        "stage2_matches": stage2_n,
+        "unmatched": len(unmatched),
+        "unmatched_items": unmatched,
+    }
+    logger.info(
+        f"Rakuten Ranking match: total={len(rank_items)} "
+        f"stage1={stage1_n} stage2_jan={stage2_n} unmatched={len(unmatched)}"
+    )
+
+    # --- Write outputs --------------------------------------------------------
+    # PR1 scope: data/raw/ 配下にのみ書き出す (hugo/data/ranking/ への配置は PR2
+    # で gitignore 例外を入れて配信フローを整える)。
     os.makedirs(args.out, exist_ok=True)
     with open(os.path.join(args.out, "rakuten.json"), "w", encoding="utf-8") as f:
         json.dump({"keyword": args.keyword, "items": items}, f, ensure_ascii=False, indent=4)
+
+    # signal_detector が読む既存パス。matched_asin/match_stage は追加フィールド (後方互換)
+    ranking_payload = {
+        "generated_at": generated_at,
+        "source": "Rakuten Ichiba Ranking API",
+        "genre_id": "566382",
+        "items": rank_items,
+    }
+    with open(os.path.join(args.out, "rakuten_ranking.json"), "w", encoding="utf-8") as f:
+        json.dump(ranking_payload, f, ensure_ascii=False, indent=4)
+
+    # Observability: PR #677 と同方針の build/match manifest
+    with open(os.path.join(args.out, "_rakuten_ranking_manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, ensure_ascii=False, indent=2)
 
 if __name__ == "__main__":
     main()
