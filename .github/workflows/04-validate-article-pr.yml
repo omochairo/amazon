@@ -57,6 +57,10 @@ on:
       # validate (required check) に通すため paths に追加。
       - 'scripts/fetch_wiki_data.py'
       - 'scripts/tests/test_fetch_wiki_data.py'
+      # 2026-05-25 (session 43 / Issue #683 Phase 3): Wikipedia tooltip cron workflow を
+      # validate (required check) として発火させる。
+      - '.github/workflows/08-wiki-cache.yml'
+      - 'hugo/static/wiki_cache.json'
   workflow_dispatch:
 
 permissions:
