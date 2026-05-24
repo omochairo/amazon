@@ -1,0 +1,82 @@
+{{- define "main" }}
+
+<header class="page-header ranking-header">
+  <h1>{{ .Title }}</h1>
+  {{- if .Description }}
+  <div class="post-description">
+    {{ .Description }}
+  </div>
+  {{- end }}
+  {{- with site.Data.ranking.weekly }}
+    {{- if .generated_at }}
+    <p class="ranking-updated">最終更新: <time datetime="{{ .generated_at }}">{{ dateFormat "2006-01-02" .generated_at }}</time></p>
+    {{- end }}
+  {{- end }}
+</header>
+
+<div class="post-content ranking-content">
+  {{ .Content }}
+
+  {{- $data := site.Data.ranking.weekly }}
+  {{- $items := and $data $data.items }}
+  {{- if not $items }}
+  <p class="ranking-empty">現在ランキングデータを更新しています。次回 cron 実行までしばらくお待ちください。</p>
+  {{- else }}
+  <ol class="ranking-list">
+    {{- range $items }}
+    {{- $item := . }}
+    {{- $rank := .rank | default 0 }}
+    {{- $asin := .matched_asin }}
+    {{- $stage := .match_stage }}
+    {{- $internal := "" }}
+    {{- if $asin }}{{ $internal = printf "/products/%s/" (lower $asin) }}{{ end }}
+    <li class="ranking-item ranking-item--rank-{{ $rank }}{{ if not $asin }} ranking-item--external-only{{ end }}" data-rank="{{ $rank }}"{{ with $stage }} data-match-stage="{{ . }}"{{ end }}>
+      <div class="ranking-badge ranking-badge--rank-{{ $rank }}" aria-label="第 {{ $rank }} 位">
+        {{- if eq $rank 1 }}<span class="ranking-medal">🥇</span>
+        {{- else if eq $rank 2 }}<span class="ranking-medal">🥈</span>
+        {{- else if eq $rank 3 }}<span class="ranking-medal">🥉</span>
+        {{- else }}<span class="ranking-number">{{ $rank }}</span>
+        {{- end }}
+      </div>
+
+      {{- with .image }}
+      <a class="ranking-thumb" href="{{ $item.url }}" rel="sponsored nofollow noopener" target="_blank" aria-hidden="true" tabindex="-1">
+        <img src="{{ . }}" alt="" loading="lazy" decoding="async" width="200" height="200">
+      </a>
+      {{- end }}
+
+      <div class="ranking-body">
+        <h2 class="ranking-title">
+          {{- if $internal -}}
+          <a href="{{ $internal }}">{{ .title }}</a>
+          {{- else -}}
+          <a href="{{ .url }}" rel="sponsored nofollow noopener" target="_blank">{{ .title }}</a>
+          {{- end -}}
+        </h2>
+        {{- with .shopName }}
+        <p class="ranking-shop">{{ . }}</p>
+        {{- end }}
+        {{- with .price }}
+        <p class="ranking-price">¥{{ lang.FormatNumberCustom 0 . }}</p>
+        {{- end }}
+        {{- with .reviewCount }}
+          {{- if gt . 0 }}
+        <p class="ranking-reviews">★ レビュー {{ . }} 件</p>
+          {{- end }}
+        {{- end }}
+        <div class="ranking-cta">
+          {{- if $internal }}
+          <a class="ranking-cta-internal" href="{{ $internal }}">💡 徹底解説レビューを見る</a>
+          {{- end }}
+          <a class="ranking-cta-external" href="{{ .url }}" rel="sponsored nofollow noopener" target="_blank">🔴 楽天市場で見る</a>
+        </div>
+      </div>
+    </li>
+    {{- end }}
+  </ol>
+
+  <p class="ranking-disclaimer">※ 順位・価格・在庫は楽天 API 取得時点のもので、リンク先と異なる場合があります。当ページのリンクは楽天アフィリエイトを含みます。</p>
+  {{- end }}
+</div>
+
+{{- end }}

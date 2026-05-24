@@ -46,6 +46,9 @@ on:
       # build_post から fetch 層に分離。01-fetch flow に乗る。
       - 'scripts/fetch_omcha_related.py'
       - 'scripts/internal_links.py'
+      # 2026-05-24 (session 42 / Issue #600): 楽天ランキング → ASIN マッチング。
+      # fetch_rakuten.py の拡張 PR が required check (validate) を取れるよう paths に追加。
+      - 'scripts/fetch_rakuten.py'
   workflow_dispatch:
 
 permissions:
