@@ -2142,3 +2142,249 @@ body.dark .product-card-age {
   border-color: rgba(255,255,255,0.1);
 }
 
+/* ==========================================
+   楽天週次ランキング (/ranking/) — Issue #600 PR4
+   ========================================== */
+
+.ranking-header { margin-bottom: 1.25rem; }
+.ranking-updated {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin-top: 0.25rem;
+}
+.ranking-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: #64748b;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  border: 1px dashed #cbd5e1;
+}
+.ranking-disclaimer {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 1.5rem;
+  line-height: 1.5;
+}
+
+.ranking-list {
+  list-style: none;
+  padding: 0;
+  margin: 1.25rem 0 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.ranking-item {
+  display: grid;
+  grid-template-columns: 64px 140px 1fr;
+  align-items: center;
+  gap: 1.1rem;
+  padding: 1rem 1.25rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.ranking-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+}
+.ranking-item--external-only {
+  background: rgba(248, 250, 252, 0.55);
+}
+
+.ranking-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #e2e8f0, #cbd5e1);
+  color: #0f172a;
+  font-weight: 800;
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+.ranking-medal {
+  font-size: 1.9rem;
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.18));
+}
+.ranking-number { font-size: 1.4rem; }
+.ranking-badge--rank-1 {
+  background: linear-gradient(135deg, #fde047, #facc15);
+  box-shadow: 0 4px 12px rgba(250, 204, 21, 0.45);
+}
+.ranking-badge--rank-2 {
+  background: linear-gradient(135deg, #e5e7eb, #94a3b8);
+  box-shadow: 0 4px 10px rgba(148, 163, 184, 0.45);
+}
+.ranking-badge--rank-3 {
+  background: linear-gradient(135deg, #fbbf24, #d97706);
+  box-shadow: 0 4px 10px rgba(217, 119, 6, 0.4);
+}
+
+.ranking-thumb {
+  display: block;
+  width: 140px;
+  height: 140px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f1f5f9;
+  flex-shrink: 0;
+}
+.ranking-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.ranking-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+.ranking-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0;
+  line-height: 1.35;
+}
+.ranking-title a {
+  color: inherit;
+  text-decoration: none;
+}
+.ranking-title a:hover {
+  color: #0284c7;
+}
+.ranking-shop {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin: 0;
+}
+.ranking-price {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #dc2626;
+  margin: 0.2rem 0;
+}
+.ranking-reviews {
+  font-size: 0.8rem;
+  color: #475569;
+  margin: 0;
+}
+
+.ranking-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+.ranking-cta-internal,
+.ranking-cta-external {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.ranking-cta-internal {
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3);
+}
+.ranking-cta-internal:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(2, 132, 199, 0.45);
+  color: #ffffff;
+}
+.ranking-cta-external {
+  background: linear-gradient(135deg, #f87171, #dc2626);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3);
+}
+.ranking-cta-external:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(220, 38, 38, 0.45);
+  color: #ffffff;
+}
+
+@media (max-width: 720px) {
+  .ranking-item {
+    grid-template-columns: 56px 1fr;
+    grid-template-areas:
+      "badge body"
+      "thumb thumb";
+    gap: 0.75rem;
+    padding: 0.85rem;
+  }
+  .ranking-badge { grid-area: badge; width: 56px; height: 56px; font-size: 1.15rem; }
+  .ranking-medal { font-size: 1.6rem; }
+  .ranking-body { grid-area: body; }
+  .ranking-thumb {
+    grid-area: thumb;
+    width: 100%;
+    height: auto;
+    max-height: 220px;
+    margin-top: 0.5rem;
+  }
+  .ranking-thumb img { max-height: 220px; }
+}
+
+/* Dark mode */
+[data-theme="dark"] .ranking-item,
+body.dark .ranking-item {
+  background: rgba(30, 41, 59, 0.6);
+  border-color: rgba(71, 85, 105, 0.55);
+  color: #e5e7eb;
+}
+[data-theme="dark"] .ranking-item--external-only,
+body.dark .ranking-item--external-only {
+  background: rgba(15, 23, 42, 0.5);
+}
+[data-theme="dark"] .ranking-empty,
+body.dark .ranking-empty {
+  background: rgba(30, 41, 59, 0.5);
+  color: #94a3b8;
+  border-color: rgba(71, 85, 105, 0.6);
+}
+[data-theme="dark"] .ranking-shop,
+body.dark .ranking-shop {
+  color: #94a3b8;
+}
+[data-theme="dark"] .ranking-reviews,
+body.dark .ranking-reviews {
+  color: #cbd5e1;
+}
+[data-theme="dark"] .ranking-price,
+body.dark .ranking-price {
+  color: #f87171;
+}
+[data-theme="dark"] .ranking-thumb,
+body.dark .ranking-thumb {
+  background: #1f2937;
+}
+[data-theme="dark"] .ranking-updated,
+body.dark .ranking-updated {
+  color: #94a3b8;
+}
+[data-theme="dark"] .ranking-disclaimer,
+body.dark .ranking-disclaimer {
+  color: #64748b;
+}
+[data-theme="dark"] .ranking-title a:hover,
+body.dark .ranking-title a:hover {
+  color: #38bdf8;
+}
+

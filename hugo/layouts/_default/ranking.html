@@ -25,7 +25,8 @@
   <ol class="ranking-list">
     {{- range $items }}
     {{- $item := . }}
-    {{- $rank := .rank | default 0 }}
+    {{- /* JSON 数値は float64 でアンマーシャルされるため eq の型整合で int 化が必要 */}}
+    {{- $rank := int (.rank | default 0) }}
     {{- $asin := .matched_asin }}
     {{- $stage := .match_stage }}
     {{- $internal := "" }}
