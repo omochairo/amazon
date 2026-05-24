@@ -61,6 +61,9 @@ on:
       # validate (required check) として発火させる。
       - '.github/workflows/08-wiki-cache.yml'
       - 'hugo/static/wiki_cache.json'
+      # 2026-05-25 (session 44 / Issue #682): .gitignore 変更 PR で validate を
+      # 発火させ required check を通す。
+      - '.gitignore'
   workflow_dispatch:
 
 permissions:
