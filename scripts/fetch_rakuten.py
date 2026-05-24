@@ -233,8 +233,6 @@ def main():
     )
 
     # --- Write outputs --------------------------------------------------------
-    # PR1 scope: data/raw/ 配下にのみ書き出す (hugo/data/ranking/ への配置は PR2
-    # で gitignore 例外を入れて配信フローを整える)。
     os.makedirs(args.out, exist_ok=True)
     with open(os.path.join(args.out, "rakuten.json"), "w", encoding="utf-8") as f:
         json.dump({"keyword": args.keyword, "items": items}, f, ensure_ascii=False, indent=4)
@@ -252,6 +250,19 @@ def main():
     # Observability: PR #677 と同方針の build/match manifest
     with open(os.path.join(args.out, "_rakuten_ranking_manifest.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2)
+
+    # Hugo Data Templates 用に同データを hugo/data/ranking/ へも複製する。
+    # `/hugo` は .gitignore 対象だが weekly.json を 1 回 force-add で tracked にしておき、
+    # 以降は通常の git add で更新可能 (cron workflow は git add -f で初回作成も吸収)。
+    hugo_ranking_dir = pathlib.Path("hugo/data/ranking")
+    hugo_ranking_dir.mkdir(parents=True, exist_ok=True)
+    (hugo_ranking_dir / "weekly.json").write_text(
+        json.dumps(ranking_payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    (hugo_ranking_dir / "_match_manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
 
 if __name__ == "__main__":
     main()
