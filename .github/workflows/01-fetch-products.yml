@@ -118,6 +118,17 @@ jobs:
           RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
           YAHOO_CLIENT_ID: ${{ secrets.YAHOO_CLIENT_ID }}
 
+      # 2026-05-24 (session 41 / Issue #674): omcha.jp 関連記事を per-ASIN で
+      # 事前フェッチして per_asin/<ASIN>/omcha_related.json に書く。
+      # 旧設計では build_post.py が描画ループで 218 ASIN 分 omcha.jp を叩いていた
+      # (untracked 汚染 + 描画レイヤ I/O + score_calculator race の三重問題)。
+      # PR #486 の stale-first per-ASIN cycle (50/run × 7d) と同型で巡回する。
+      - name: Fetch omcha.jp Related Articles
+        if: ${{ always() }}
+        run: python scripts/fetch_omcha_related.py --out data/raw/
+        env:
+          OMCHA_API_KEY: ${{ secrets.OMCHA_API_KEY }}
+
       - name: Detect Signals (Layer 2)
         if: ${{ always() }}
         run: python scripts/signal_detector.py
