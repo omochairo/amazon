@@ -1,0 +1,96 @@
+name: Rakuten Weekly Ranking
+# Issue #600 PR3: 火曜 06:00 JST = 月曜 21:00 UTC に楽天ランキングを
+# 取得し、マッチング済みデータ (hugo/data/ranking/weekly.json) を main に
+# PR + auto-merge で乗せる専用 workflow。
+#
+# 01-fetch-products.yml も日次で fetch_rakuten.py を走らせるが、git add は
+# data/ にだけかかるため hugo/data/ranking/weekly.json は commit されない。
+# 本 workflow は hugo/data/ も含めて force-add し、週次の安定したランキング
+# ページ更新フローを担当する。
+on:
+  workflow_dispatch:
+  schedule:
+    # 毎週火曜 06:00 JST = 毎週月曜 21:00 UTC。
+    # 楽天ランキングは前週月〜日集計→月曜更新のため、火曜に取得して確定値を扱う。
+    - cron: '0 21 * * 1'
+
+jobs:
+  publish-ranking:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch Rakuten Ranking + Match to ASIN
+        run: python scripts/fetch_rakuten.py --out data/raw/
+        env:
+          RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
+          RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
+          RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}
+
+      - name: Create ranking update PR + enable auto-merge
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+
+          # hugo/ は .gitignore 対象のため -f で強制 stage する。
+          git add -f hugo/data/ranking/weekly.json hugo/data/ranking/_match_manifest.json || true
+          git add data/raw/rakuten_ranking.json data/raw/_rakuten_ranking_manifest.json || true
+
+          if git diff --cached --quiet; then
+            echo "No ranking changes to commit; skipping PR creation."
+            exit 0
+          fi
+
+          # 既存 open ranking PR があれば閉じる (週次重複防止)。
+          echo "Checking for old automated ranking PRs..."
+          gh pr list --base main --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("rakuten-ranking/")) | .number' | while read -r pr_num; do
+            if [ -n "$pr_num" ]; then
+              echo "Closing old PR #$pr_num and deleting branch..."
+              gh pr close "$pr_num" -d || true
+            fi
+          done
+
+          BRANCH="rakuten-ranking/${{ github.run_id }}"
+          git config user.name "omochairo-fetch-bot[bot]"
+          git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit -m "data: weekly rakuten ranking update (run ${{ github.run_id }})"
+          git push -u origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "data: weekly rakuten ranking update (run ${{ github.run_id }})" \
+            --body "Automated weekly Rakuten ranking refresh. Updates hugo/data/ranking/weekly.json for the /ranking/ page and data/raw/rakuten_ranking.json for signal_detector." \
+            --base main \
+            --head "$BRANCH")
+          echo "Created: $PR_URL"
+
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge enabled on $PR_URL"
+          else
+            echo "::warning::Could not enable auto-merge on $PR_URL"
+          fi
+        continue-on-error: true

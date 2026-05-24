@@ -49,6 +49,10 @@ on:
       # 2026-05-24 (session 42 / Issue #600): 楽天ランキング → ASIN マッチング。
       # fetch_rakuten.py の拡張 PR が required check (validate) を取れるよう paths に追加。
       - 'scripts/fetch_rakuten.py'
+      # 2026-05-24 (session 42 / Issue #600 PR3): 週次ランキング workflow と
+      # 出力先 hugo/data/ranking/* を validate 対象に含める。
+      - '.github/workflows/07-rakuten-ranking.yml'
+      - 'hugo/data/ranking/**'
   workflow_dispatch:
 
 permissions:
