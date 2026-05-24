@@ -53,6 +53,10 @@ on:
       # 出力先 hugo/data/ranking/* を validate 対象に含める。
       - '.github/workflows/07-rakuten-ranking.yml'
       - 'hugo/data/ranking/**'
+      # 2026-05-25 (session 43 / Issue #683): Wikipedia tooltip cron workflow を
+      # validate (required check) として発火させる。
+      - '.github/workflows/08-wiki-cache.yml'
+      - 'hugo/static/wiki_cache.json'
   workflow_dispatch:
 
 permissions:
