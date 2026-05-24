@@ -19,7 +19,6 @@ import argparse
 import json
 import pathlib
 import re
-import time
 import urllib.parse
 from datetime import datetime
 from typing import Any
@@ -28,7 +27,6 @@ import frontmatter
 import jinja2
 
 from brand_normalizer import normalize as normalize_brand
-from internal_links import get_related_articles as fetch_omcha_related
 from score_calculator import calculate as calculate_score
 
 
@@ -477,8 +475,6 @@ def _fallback_youtube_embeds(
         data["youtube_embeds"] = items
 
 
-_OMCHA_CACHE_TTL_SECONDS = 24 * 3600
-
 # UTM パラメータ: GA4 で omcha.jp 側が本サイト (amazon サブサイト) からの
 # 流入を計測できるようにする。utm_content には ASIN を入れて、どの商品記事
 # からの遷移かを記事単位で区別する。
@@ -501,80 +497,46 @@ def _append_omcha_utm(url: str, asin: str | None) -> str:
     return f"{url}{sep}{suffix}"
 
 
-def _omcha_keyword_from_tags(data: dict[str, Any]) -> str:
-    """Join the article's top-3 tags into a single search keyword for the
-    omcha related API. Returns empty string when no usable tags exist."""
-    tags = data.get("tags")
-    if not isinstance(tags, list):
-        return ""
-    picked: list[str] = []
-    for t in tags:
-        if not isinstance(t, str):
-            continue
-        s = t.strip()
-        if not s:
-            continue
-        picked.append(s)
-        if len(picked) >= 3:
-            break
-    return " ".join(picked)
-
-
 def _attach_omcha_related(data: dict[str, Any], per_asin_root: pathlib.Path) -> None:
-    """Fetch up to 3 related editorial posts from omcha.jp and attach them to
-    ``data["omcha_related"]``.
+    """``data["omcha_related"]`` を per-ASIN キャッシュから埋める (read-only)。
 
-    Results are cached under ``data/raw/per_asin/<ASIN>/omcha_related.json``
-    with a 24h TTL so repeated builds (and CI re-runs) don't hammer the API.
-    Non-empty Jules-authored ``omcha_related`` (should not exist today, but
-    reserved for future) is preserved.
+    キャッシュ自体の生成は `scripts/fetch_omcha_related.py` が 01-fetch flow で
+    行う (50/run × 7日 stale-first cycle、PR #486 と同型)。build_post は
+    `per_asin/<ASIN>/omcha_related.json` を読んで UTM 装飾するだけ。
+    Jules-authored な `omcha_related` がある場合 (今は未使用、将来の予約) はそれを優先。
+    キャッシュ未存在の新規記事は no-op (次回 fetch_omcha_related サイクルでカードが出る)。
+
+    Issue #674 でこのリファクタを実施。旧設計の問題:
+    - per_asin dir に書く 24h TTL キャッシュが untracked 汚染を生んでいた
+    - build_post が描画ループ内で 218 ASIN 分 omcha.jp を叩いていた
+    - score_calculator._omcha_top_score() が「ファイル無→0 点」race を持っていた
     """
     if data.get("omcha_related"):
         return
-    keyword = _omcha_keyword_from_tags(data)
-    if not keyword:
-        return
     product = data.get("product") if isinstance(data.get("product"), dict) else None
     asin = product.get("asin") if product else None
-    cache_path = per_asin_root / asin / "omcha_related.json" if asin else None
-    items: list[dict[str, Any]] | None = None
-    if cache_path and cache_path.exists():
-        try:
-            if time.time() - cache_path.stat().st_mtime < _OMCHA_CACHE_TTL_SECONDS:
-                cached = json.loads(cache_path.read_text(encoding="utf-8"))
-                cached_items = cached.get("items") if isinstance(cached, dict) else None
-                # キャッシュスキーマに ``thumbnail`` キーが入っていれば
-                # 最新フォーマット (ブログカード対応)。古いキャッシュは無効化して再生成。
-                if isinstance(cached_items, list) and (
-                    not cached_items or "thumbnail" in cached_items[0]
-                ):
-                    items = cached_items
-        except (OSError, json.JSONDecodeError):
-            items = None
-    if items is None:
-        items = fetch_omcha_related(keyword, count=3, min_score=20)
-        if cache_path is not None:
-            try:
-                cache_path.parent.mkdir(parents=True, exist_ok=True)
-                cache_path.write_text(
-                    json.dumps(
-                        {"keyword": keyword, "items": items},
-                        ensure_ascii=False,
-                        indent=2,
-                    ),
-                    encoding="utf-8",
-                )
-            except OSError:
-                pass
-    if items:
-        # キャッシュには生 URL を保存しつつ、テンプレに渡す前段で UTM を付与する
-        # (キャッシュは API 結果の純粋なスナップショット、UTM は出力時の決定)。
-        decorated: list[dict[str, Any]] = []
-        for it in items[:3]:
-            new_it = dict(it)
-            new_it["url"] = _append_omcha_utm(new_it.get("url", ""), asin)
-            decorated.append(new_it)
-        data["omcha_related"] = decorated
+    if not asin:
+        return
+    cache_path = per_asin_root / asin / "omcha_related.json"
+    if not cache_path.exists():
+        return
+    try:
+        cached = json.loads(cache_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    items = cached.get("items") if isinstance(cached, dict) else None
+    if not isinstance(items, list) or not items:
+        return
+    # 旧キャッシュ (thumbnail フィールド無し) は古いスキーマなのでスキップ。
+    # 次回 fetch_omcha_related サイクルで新スキーマに置き換わる。
+    if "thumbnail" not in items[0]:
+        return
+    decorated: list[dict[str, Any]] = []
+    for it in items[:3]:
+        new_it = dict(it)
+        new_it["url"] = _append_omcha_utm(new_it.get("url", ""), asin)
+        decorated.append(new_it)
+    data["omcha_related"] = decorated
 
 
 def _load_per_asin_amazon(per_asin_root: pathlib.Path, asin: str) -> dict[str, Any] | None:

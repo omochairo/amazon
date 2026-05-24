@@ -42,6 +42,10 @@ on:
       # 2026-05-24 (session 41): JAN/EAN マッチング (#660) で楽天/Yahoo クロス検索の
       # 同定ロジックを変更するため paths に追加。
       - 'scripts/fetch_cross_search.py'
+      # 2026-05-24 (session 41 / Issue #674): omcha.jp 関連記事フェッチを
+      # build_post から fetch 層に分離。01-fetch flow に乗る。
+      - 'scripts/fetch_omcha_related.py'
+      - 'scripts/internal_links.py'
   workflow_dispatch:
 
 permissions:
