@@ -11,3 +11,7 @@ public_test/
 
 # quality_gate.py / build_post.py が毎回生成する派生物
 data/articles/*.quality.json
+
+# ローカル開発の一時生成物 (preview スクリーンショット / 解析スクリプト)
+/screenshot*.png
+/scratch/
