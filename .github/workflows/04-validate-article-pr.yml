@@ -53,6 +53,10 @@ on:
       # 出力先 hugo/data/ranking/* を validate 対象に含める。
       - '.github/workflows/07-rakuten-ranking.yml'
       - 'hugo/data/ranking/**'
+      # 2026-05-25 (session 43 / Issue #683 Phase 1): Wikipedia tooltip fetch 層を
+      # validate (required check) に通すため paths に追加。
+      - 'scripts/fetch_wiki_data.py'
+      - 'scripts/tests/test_fetch_wiki_data.py'
   workflow_dispatch:
 
 permissions:
