@@ -48,6 +48,19 @@ def _safe_get(obj: dict, *attrs: str, default: Any = None) -> Any:
 def extract_features(item: dict) -> list:
     return _safe_get(item, "itemInfo", "features", "displayValues", default=[])
 
+def extract_jan(item: dict) -> str:
+    """Return the first EAN/JAN code if PA-API exposes it via externalIds.
+
+    Requires the `itemInfo.externalIds` resource to be requested. Returns ""
+    when the product has no registered EAN (common for some imported items),
+    which the downstream cross-search treats as "JAN unavailable → fall back
+    to text search".
+    """
+    eans = _safe_get(item, "itemInfo", "externalIds", "eans", "displayValues", default=[]) or []
+    if eans and isinstance(eans[0], str):
+        return eans[0].strip()
+    return ""
+
 def extract_price(item: dict) -> int:
     listings = _safe_get(item, "offersV2", "listings", default=[])
     if listings and len(listings) > 0:
@@ -420,6 +433,7 @@ def main():
         "images.variants.large",
         "itemInfo.title",
         "itemInfo.features",
+        "itemInfo.externalIds",
         "offersV2.listings.price",
         "offersV2.listings.availability",
         "offersV2.listings.loyaltyPoints",
@@ -445,6 +459,7 @@ def main():
                         "title": _safe_get(it, "itemInfo", "title", "displayValue"),
                         "price": extract_price(it),
                         "features": extract_features(it),
+                        "jan_code": extract_jan(it),
                         "url": f"https://www.amazon.co.jp/dp/{asin}/?tag={tag}",
                         "image": _safe_get(it, "images", "primary", "large", "url"),
                         "images": extract_images(it),
@@ -561,6 +576,7 @@ def main():
                     "title": _safe_get(it, "itemInfo", "title", "displayValue"),
                     "price": extract_price(it),
                     "features": extract_features(it),
+                    "jan_code": extract_jan(it),
                     "url": f"https://www.amazon.co.jp/dp/{asin}/?tag={tag}",
                     "image": _safe_get(it, "images", "primary", "large", "url"),
                     "images": extract_images(it),
@@ -592,6 +608,12 @@ def main():
         f"Collected {len(items)} unique ASINs, {len(items_for_jules)} new for Jules "
         f"(dropped {dropped} already-covered)"
     )
+    jan_present = sum(1 for it in items if it.get("jan_code"))
+    if items:
+        logger.info(
+            f"JAN coverage: {jan_present}/{len(items)} "
+            f"({jan_present * 100 // len(items)}%) items have EAN/JAN from PA-API"
+        )
     if len(items_for_jules) < args.min_new:
         logger.warning(
             f"Pool below target ({len(items_for_jules)} < {args.min_new}); "

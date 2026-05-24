@@ -256,8 +256,69 @@ def _fetch_rakuten_ichiba(keyword, app_id, access_key, aff_id, hits=15):
     return requests.get(url, params=params, headers=headers, timeout=10)
 
 
-def search_rakuten_tiered(keyword, app_id, access_key="", aff_id=""):
-    """楽天で階層的検索を行う (Books -> Ichiba -> Shortened Ichiba)"""
+def _rakuten_books_by_isbnjan(jan_code, app_id, aff_id):
+    """Rakuten Books の `isbnjan` パラメータで JAN/EAN/ISBN を直引きする。
+
+    商品が Books カテゴリに存在する場合、これがユニーク識別での最高精度マッチ。
+    keyword 検索とは別 endpoint パラメータなので、ヒットすればテキスト検索を
+    完全にスキップできる。
+    """
+    url = "https://app.rakuten.co.jp/services/api/BooksTotal/Search/20170404"
+    params = {
+        "applicationId": app_id,
+        "isbnjan": jan_code,
+        "formatVersion": 2,
+        "hits": 5,
+    }
+    if aff_id:
+        params["affiliateId"] = aff_id
+    return requests.get(url, params=params, timeout=10)
+
+
+def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""):
+    """楽天で階層的検索を行う (JAN優先 → Books → Ichiba → Shortened Ichiba)
+
+    `jan_code` が与えられた場合、まず Books の `isbnjan` 直引き、続いて Ichiba を
+    `keyword=<JAN>` で叩く。どちらも 1 件目を即返却して `_select_median_priced_item`
+    の中央値選択をバイパスする (JAN ヒット = 同一商品なので中央値選択は無意味)。
+    返り値 dict には診断用に `_match_method` を埋め込む。
+    """
+
+    # Stage 0a: JAN 直引き (Rakuten Books `isbnjan`)
+    if jan_code:
+        try:
+            resp = _rakuten_books_by_isbnjan(jan_code, app_id, aff_id)
+            if resp.status_code == 200:
+                data = resp.json()
+                raw_items = data.get("Items", [])
+                parsed_items = [it for it in [_parse_rakuten_item(ri, is_books=True) for ri in raw_items] if it]
+                if parsed_items:
+                    logger.info(f"Rakuten Stage0a (Books isbnjan={jan_code}): {len(parsed_items)} hit(s)")
+                    best = parsed_items[0]
+                    best["source"] = "Rakuten Books"
+                    best["_match_method"] = "jan_books"
+                    return best
+            time.sleep(0.5)
+        except Exception as e:
+            logger.error(f"Rakuten Stage0a error: {e}")
+
+        # Stage 0b: JAN を Ichiba の keyword に投入
+        try:
+            resp = _fetch_rakuten_ichiba(jan_code, app_id, access_key, aff_id, hits=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                raw_items = data.get("Items", [])
+                parsed_items = [it for it in [_parse_rakuten_item(ri, is_books=False) for ri in raw_items] if it]
+                if parsed_items:
+                    api_label = "Ichiba RMS" if access_key else "Ichiba"
+                    logger.info(f"Rakuten Stage0b ({api_label} keyword=JAN:{jan_code}): {len(parsed_items)} hit(s)")
+                    best = parsed_items[0]
+                    best["source"] = "Rakuten"
+                    best["_match_method"] = "jan_ichiba"
+                    return best
+            time.sleep(0.5)
+        except Exception as e:
+            logger.error(f"Rakuten Stage0b error: {e}")
 
     # Stage 1: Rakuten Books (公開 API のみ、accessKey 非対応)
     books_url = "https://app.rakuten.co.jp/services/api/BooksTotal/Search/20170404"
@@ -281,6 +342,7 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id=""):
                 best = _select_median_priced_item(parsed_items)
                 if best:
                     best["source"] = "Rakuten Books"
+                    best["_match_method"] = "text"
                     return best
         time.sleep(0.5)
     except Exception as e:
@@ -307,6 +369,7 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id=""):
                 best = _select_median_priced_item(parsed_items)
                 if best:
                     best["source"] = "Rakuten"
+                    best["_match_method"] = "text"
                     return best
         else:
             logger.warning(f"Rakuten Stage2 failed for '{stage2_keyword}': HTTP {resp.status_code} - {resp.text[:200]}")
@@ -336,6 +399,7 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id=""):
                         best = _select_median_priced_item(parsed_items)
                         if best:
                             best["source"] = "Rakuten"
+                            best["_match_method"] = "text"
                             return best
             except Exception as e:
                 logger.error(f"Rakuten Stage3 error: {e}")
@@ -343,22 +407,30 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id=""):
     return None
 
 
-def _yahoo_query(keyword, client_id, sid="", pid=""):
-    """Yahoo Shopping API を 1 回叩いて、parsed_items のリストを返す。"""
+def _yahoo_query(keyword, client_id, sid="", pid="", jan_code=""):
+    """Yahoo Shopping API V3 itemSearch を 1 回叩いて parsed_items を返す。
+
+    `jan_code` が指定された場合は `jan_code` パラメータで送信し、`query` は
+    省略する (V3 仕様: 完全一致検索)。それ以外は従来通り `query` でテキスト検索。
+    """
     params = {
         "appid": client_id,
-        "query": keyword,
         "results": 15,
         "sort": "-score",
         "in_stock": "true",
     }
+    if jan_code:
+        params["jan_code"] = jan_code
+    else:
+        params["query"] = keyword
     if sid and pid:
         params["affiliate_type"] = "vc"
         params["affiliate_id"] = f"{VC_REFERRAL_BASE}?sid={sid}&pid={pid}&vc_url="
 
     resp = requests.get(YAHOO_SEARCH_URL, params=params, timeout=10)
     if resp.status_code != 200:
-        logger.warning(f"Yahoo search failed for '{keyword}': HTTP {resp.status_code}")
+        probe = f"JAN:{jan_code}" if jan_code else keyword
+        logger.warning(f"Yahoo search failed for '{probe}': HTTP {resp.status_code}")
         return []
     data = resp.json()
     hits = data.get("hits", [])
@@ -404,11 +476,27 @@ def _yahoo_query(keyword, client_id, sid="", pid=""):
     return parsed_items
 
 
-def search_yahoo(keyword, client_id, sid="", pid=""):
-    """Yahooで階層的に検索する (full keyword → 先頭2語 → 先頭1語)。
+def search_yahoo(keyword, client_id, sid="", pid="", jan_code=""):
+    """Yahooで階層的に検索する (JAN優先 → full keyword → 先頭2語 → 先頭1語)。
+
+    `jan_code` が与えられた場合、V3 itemSearch の `jan_code` パラメータで完全一致を
+    最優先で試す。ヒットすればテキスト検索はスキップ (中央値選択もバイパスして即返却)。
     短縮候補が `_GENERIC_BRAND_TOKENS` のみで構成される場合 (例: 'タカラトミー トミカ',
     'タカラトミー' 単独) は無関係な人気商品にマッチするのでスキップする。
     """
+    if jan_code:
+        try:
+            items = _yahoo_query("", client_id, sid, pid, jan_code=jan_code)
+        except Exception as e:
+            logger.error(f"Yahoo JAN error for '{jan_code}': {e}")
+            items = []
+        if items:
+            logger.info(f"Yahoo Stage0 (jan_code={jan_code}): {len(items)} hits")
+            best = items[0]
+            best["_match_method"] = "jan"
+            return best
+        time.sleep(1.0)  # Yahoo rate limit: 1 query/sec
+
     tokens = keyword.split()
     candidates = [keyword]
     if len(tokens) > 2:
@@ -434,6 +522,7 @@ def search_yahoo(keyword, client_id, sid="", pid=""):
             logger.info(f"Yahoo Stage{idx}: {len(items)} hits for '{kw}'")
             best = _select_median_priced_item(items)
             if best:
+                best["_match_method"] = "text"
                 return best
         if idx < len(candidates):
             time.sleep(1.0)  # Yahoo rate limit: 1 query/sec
@@ -460,18 +549,43 @@ def _load_existing_matched(path: pathlib.Path) -> dict:
     return index
 
 
-def _collect_targets(amazon_items: list, articles_dir: pathlib.Path) -> dict:
-    """ASIN -> title の処理対象を集める。
+def _load_jan_from_per_asin(per_asin_root: pathlib.Path, asin: str) -> str:
+    """data/raw/per_asin/<ASIN>/amazon.json snapshot から jan_code を引く。
+
+    amazon.json 本体に jan_code が無い articles-only ASIN のための fallback。
+    snapshot 自体が古く JAN フィールドを持っていない場合は空文字を返す
+    (= JAN unavailable → text フォールバックに自動で落ちる)。
+    """
+    snap_path = per_asin_root / asin / "amazon.json"
+    if not snap_path.exists():
+        return ""
+    try:
+        snap = json.loads(snap_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return ""
+    item = snap.get("item") if isinstance(snap, dict) else None
+    if isinstance(item, dict):
+        jc = item.get("jan_code", "")
+        if isinstance(jc, str):
+            return jc.strip()
+    return ""
+
+
+def _collect_targets(amazon_items: list, articles_dir: pathlib.Path, per_asin_root: pathlib.Path | None = None) -> dict:
+    """ASIN -> (title, force_refresh, jan_code) の処理対象を集める。
     1) amazon.json (今回の検索結果) は **強制再取得** = 価格を新鮮に保つ
     2) data/articles/ にある記事の ASIN は、既存 matched に登録済みなら preserve、
        未登録なら新規検索 (1回だけ実施で逐次キャッチアップ)
-    返り値の値は (title, force_refresh) のタプル。
+    JAN コードは amazon.json から直接取得、無ければ per_asin snapshot から fallback。
     """
-    targets: dict[str, tuple[str, bool]] = {}
+    targets: dict[str, tuple[str, bool, str]] = {}
     for amz in amazon_items:
         asin = amz.get("asin", "")
         if asin:
-            targets[asin] = (amz.get("title", ""), True)
+            jan = amz.get("jan_code") or ""
+            if not jan and per_asin_root is not None:
+                jan = _load_jan_from_per_asin(per_asin_root, asin)
+            targets[asin] = (amz.get("title", ""), True, jan)
 
     if not articles_dir.exists():
         return targets
@@ -495,7 +609,8 @@ def _collect_targets(amazon_items: list, articles_dir: pathlib.Path) -> dict:
         if not title:
             title = art.get("title", "")
         if title:
-            targets[asin] = (title, False)
+            jan = _load_jan_from_per_asin(per_asin_root, asin) if per_asin_root is not None else ""
+            targets[asin] = (title, False, jan)
     return targets
 
 
@@ -518,11 +633,14 @@ def main():
 
     # 処理対象を amazon.json ∪ data/articles/ で構築
     articles_dir = pathlib.Path("data/articles")
-    targets = _collect_targets(amazon_items, articles_dir)
+    per_asin_root = out_dir / "per_asin"
+    targets = _collect_targets(amazon_items, articles_dir, per_asin_root)
+    jan_available = sum(1 for (_t, _f, jan) in targets.values() if jan)
     logger.info(
         f"Cross-search targets: amazon.json={len(amazon_items)}, "
         f"articles_only={len(targets) - len(amazon_items)} "
-        f"(existing rakuten={len(r_existing)}, yahoo={len(y_existing)})"
+        f"(existing rakuten={len(r_existing)}, yahoo={len(y_existing)}, "
+        f"jan_available={jan_available}/{len(targets)})"
     )
 
     # API キー
@@ -539,8 +657,10 @@ def main():
 
     r_new, r_kept, r_skipped = 0, 0, 0
     y_new, y_kept, y_skipped = 0, 0, 0
+    r_jan_hit, r_jan_miss, r_text_hit = 0, 0, 0
+    y_jan_hit, y_jan_miss, y_text_hit = 0, 0, 0
 
-    for asin, (title, force_refresh) in targets.items():
+    for asin, (title, force_refresh, jan_code) in targets.items():
         # 既に matched があり、かつ amazon.json 由来でない (force_refresh=False) ASIN
         # → 既存エントリ保持で API コール節約
         r_has = asin in rakuten_index
@@ -558,16 +678,26 @@ def main():
 
         # 楽天検索
         if rakuten_app_id and need_rakuten:
-            r_result = search_rakuten_tiered(keyword, rakuten_app_id, rakuten_access_key, rakuten_aff_id)
+            r_result = search_rakuten_tiered(keyword, rakuten_app_id, rakuten_access_key, rakuten_aff_id, jan_code=jan_code)
             if r_result:
                 r_result["matched_asin"] = asin
                 r_result["search_keyword"] = keyword
+                r_result["jan_code"] = jan_code
                 r_result["_refreshed_at"] = now_iso
+                method = r_result.get("_match_method", "text")
+                if method in ("jan_books", "jan_ichiba"):
+                    r_jan_hit += 1
+                else:
+                    r_text_hit += 1
+                    if jan_code:
+                        r_jan_miss += 1
                 rakuten_index[asin] = r_result
                 r_new += 1
-                logger.info(f"  → Rakuten: {r_result['title'][:40]}... ￥{r_result['price']}")
+                logger.info(f"  → Rakuten[{method}]: {r_result['title'][:40]}... ￥{r_result['price']}")
             else:
                 # 検索失敗時、既存エントリがあれば保持 (上書きで消さない)
+                if jan_code:
+                    r_jan_miss += 1
                 if r_has:
                     r_kept += 1
                     logger.info(f"  → Rakuten: not found (preserving existing entry)")
@@ -580,15 +710,25 @@ def main():
 
         # Yahoo検索
         if yahoo_client_id and need_yahoo:
-            y_result = search_yahoo(keyword, yahoo_client_id, vc_sid, vc_pid)
+            y_result = search_yahoo(keyword, yahoo_client_id, vc_sid, vc_pid, jan_code=jan_code)
             if y_result:
                 y_result["matched_asin"] = asin
                 y_result["search_keyword"] = keyword
+                y_result["jan_code"] = jan_code
                 y_result["_refreshed_at"] = now_iso
+                method = y_result.get("_match_method", "text")
+                if method == "jan":
+                    y_jan_hit += 1
+                else:
+                    y_text_hit += 1
+                    if jan_code:
+                        y_jan_miss += 1
                 yahoo_index[asin] = y_result
                 y_new += 1
-                logger.info(f"  → Yahoo: {y_result['title'][:40]}... ￥{y_result['price']}")
+                logger.info(f"  → Yahoo[{method}]: {y_result['title'][:40]}... ￥{y_result['price']}")
             else:
+                if jan_code:
+                    y_jan_miss += 1
                 if y_has:
                     y_kept += 1
                     logger.info(f"  → Yahoo: not found (preserving existing entry)")
@@ -610,11 +750,17 @@ def main():
     logger.info(
         f"Rakuten saved: total={len(rakuten_results)} (refreshed={r_new}, kept={r_kept}, no_match={r_skipped})"
     )
+    logger.info(
+        f"Rakuten match-method: jan_hit={r_jan_hit}, jan_miss={r_jan_miss}, text_fallback={r_text_hit}"
+    )
 
     with open(out_dir / "yahoo_matched.json", "w", encoding="utf-8") as f:
         json.dump({"items": yahoo_results}, f, ensure_ascii=False, indent=4)
     logger.info(
         f"Yahoo saved: total={len(yahoo_results)} (refreshed={y_new}, kept={y_kept}, no_match={y_skipped})"
+    )
+    logger.info(
+        f"Yahoo match-method: jan_hit={y_jan_hit}, jan_miss={y_jan_miss}, text_fallback={y_text_hit}"
     )
 
 
