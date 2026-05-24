@@ -1,0 +1,241 @@
+/* ==========================================
+   wiki_tooltip.css — 教育的背景解説 (Issue #683)
+   ボトムシート + Glassmorphism + ダークモード対応
+   ========================================== */
+
+/* ---------- インライン用語マーカー ---------- */
+.wiki-term {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: #6366f1;
+  border-bottom: 2px dotted rgba(99, 102, 241, 0.55);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.wiki-term:hover,
+.wiki-term:focus-visible {
+  color: #4f46e5;
+  border-bottom-color: #4f46e5;
+  outline: none;
+}
+
+.wiki-term__icon {
+  font-size: 0.8em;
+  margin-left: 0.15em;
+  vertical-align: 0.05em;
+  opacity: 0.75;
+}
+
+.dark .wiki-term {
+  color: #a5b4fc;
+  border-bottom-color: rgba(165, 180, 252, 0.55);
+}
+
+.dark .wiki-term:hover,
+.dark .wiki-term:focus-visible {
+  color: #c7d2fe;
+  border-bottom-color: #c7d2fe;
+}
+
+/* ---------- スクロールロック ---------- */
+body.wiki-scroll-lock {
+  overflow: hidden;
+  touch-action: none;
+}
+
+/* ---------- 背面オーバーレイ ---------- */
+.wiki-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  z-index: 9998;
+  transition: opacity 0.24s ease;
+}
+
+.wiki-overlay.is-open {
+  opacity: 1;
+}
+
+/* ---------- ボトムシート本体 ---------- */
+.wiki-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  max-height: 75vh;
+  border-radius: 18px 18px 0 0;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(15px) saturate(140%);
+  -webkit-backdrop-filter: blur(15px) saturate(140%);
+  color: #1f2937;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.18);
+  transform: translateY(100%);
+  transition: transform 0.28s cubic-bezier(0.25, 0.8, 0.25, 1);
+  display: flex;
+  flex-direction: column;
+  will-change: transform;
+}
+
+.wiki-sheet.is-open {
+  transform: translateY(0);
+}
+
+.wiki-sheet--instant,
+.wiki-sheet--instant.is-open {
+  transition: none;
+}
+
+.dark .wiki-sheet {
+  background: rgba(28, 28, 36, 0.92);
+  color: #e5e7eb;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------- ドラッグハンドル ---------- */
+.wiki-sheet__handle {
+  flex: 0 0 auto;
+  padding: 10px 0 6px;
+  display: flex;
+  justify-content: center;
+  cursor: grab;
+  touch-action: none;
+}
+
+.wiki-sheet__handle:active {
+  cursor: grabbing;
+}
+
+.wiki-sheet__bar {
+  display: block;
+  width: 42px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.dark .wiki-sheet__bar {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* ---------- ヘッダー / タイトル / クローズ ---------- */
+.wiki-sheet__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 20px 8px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.dark .wiki-sheet__header {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.wiki-sheet__title {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.wiki-sheet__title::before {
+  content: '💡 ';
+  margin-right: 2px;
+}
+
+.wiki-sheet__close {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.wiki-sheet__close:hover,
+.wiki-sheet__close:focus-visible {
+  background: rgba(0, 0, 0, 0.06);
+  outline: none;
+}
+
+.dark .wiki-sheet__close:hover,
+.dark .wiki-sheet__close:focus-visible {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ---------- 本文 / フッター ---------- */
+.wiki-sheet__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 14px 20px 24px;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.wiki-sheet__extract {
+  margin: 0 0 16px;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: inherit;
+}
+
+.wiki-sheet__footer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.dark .wiki-sheet__footer {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.wiki-sheet__link {
+  align-self: flex-start;
+  font-size: 0.9rem;
+  color: #6366f1;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.wiki-sheet__link:hover {
+  text-decoration: underline;
+}
+
+.dark .wiki-sheet__link {
+  color: #a5b4fc;
+}
+
+/* ---------- PC レイアウト: 中央寄せの控えめ幅 ---------- */
+@media (min-width: 720px) {
+  .wiki-sheet {
+    left: 50%;
+    right: auto;
+    width: min(560px, 92vw);
+    transform: translate(-50%, 100%);
+  }
+  .wiki-sheet.is-open {
+    transform: translate(-50%, 0);
+  }
+}
+
+/* ---------- prefers-reduced-motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .wiki-sheet,
+  .wiki-overlay {
+    transition: none !important;
+  }
+}
