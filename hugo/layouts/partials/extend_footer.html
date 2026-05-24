@@ -1,0 +1,10 @@
+{{- /* Wikipedia 連携ボトムシート (Issue #683)
+       記事ページのみで wiki_tooltip.js + wiki_tooltip.css を読み込む。
+       CSS は assets/css/extended/wiki_tooltip.css が PaperMod の自動取り込みで
+       バンドルされるため、ここでは JS のみ defer 読み込み + fingerprint で配信。 */ -}}
+{{- if and .IsPage (eq .Section "posts") }}
+  {{- $wiki := resources.Get "js/wiki_tooltip.js" | resources.Minify | resources.Fingerprint "sha256" }}
+  {{- if $wiki }}
+<script defer src="{{ $wiki.RelPermalink }}" integrity="{{ $wiki.Data.Integrity }}" crossorigin="anonymous"></script>
+  {{- end }}
+{{- end }}
