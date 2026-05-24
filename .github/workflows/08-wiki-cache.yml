@@ -59,13 +59,14 @@ jobs:
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet hugo/static/wiki_cache.json 2>/dev/null; then
-            echo "No changes to wiki_cache.json"
-            exit 0
-          fi
           BRANCH="auto/wiki-cache-$(date -u +%Y%m%d-%H%M%S)"
           git checkout -b "$BRANCH"
-          git add hugo/static/wiki_cache.json
+          # hugo/ は .gitignore 対象のため -f で強制 stage する (07-rakuten-ranking.yml と同パターン)。
+          git add -f hugo/static/wiki_cache.json
+          if git diff --cached --quiet; then
+            echo "No changes to wiki_cache.json; skipping PR creation."
+            exit 0
+          fi
           git commit -m "data(wiki): auto refresh wiki_cache.json (run ${{ github.run_id }})"
           git push origin "$BRANCH"
           # PR ベースで反映 (main 直 push は GH006 で silent reject される教訓 #silent_push_reject_trap)
