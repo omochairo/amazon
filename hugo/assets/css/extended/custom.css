@@ -2388,3 +2388,61 @@ body.dark .ranking-title a:hover {
   color: #38bdf8;
 }
 
+/* ---------- 最安値パルスアニメーション (Cheapest Deal Pulse) ---------- */
+.price-card.is-cheapest {
+  border: 1.5px solid var(--brand-primary) !important;
+  animation: cheapest-pulse 3s infinite ease-in-out;
+  z-index: 2; /* 隣り合うカードの影より手前に出す */
+}
+
+@keyframes cheapest-pulse {
+  0% {
+    box-shadow: 0 2px 6px rgba(255, 107, 53, 0.15);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 8px 24px rgba(255, 107, 53, 0.35);
+    transform: scale(1.025);
+  }
+  100% {
+    box-shadow: 0 2px 6px rgba(255, 107, 53, 0.15);
+    transform: scale(1);
+  }
+}
+
+/* ダークモード時の最安値パルス設定 */
+[data-theme="dark"] .price-card.is-cheapest,
+body.dark .price-card.is-cheapest {
+  border-color: #FFB57A !important;
+  animation: cheapest-pulse-dark 3s infinite ease-in-out;
+}
+
+@keyframes cheapest-pulse-dark {
+  0% {
+    box-shadow: 0 2px 6px rgba(255, 181, 122, 0.1);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 8px 24px rgba(255, 181, 122, 0.25);
+    transform: scale(1.025);
+  }
+  100% {
+    box-shadow: 0 2px 6px rgba(255, 181, 122, 0.1);
+    transform: scale(1);
+  }
+}
+
+/* ---------- スクロール進捗バー (Scroll Progress Bar) ---------- */
+#scroll-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 4px;
+  background: var(--brand-gradient, linear-gradient(135deg, #FF6B35 0%, #F7C948 50%, #2EC4B6 100%));
+  width: 0%;
+  z-index: 9999;
+  transition: width 0.08s ease-out;
+  pointer-events: none;
+}
+
+

@@ -7,4 +7,32 @@
   {{- if $wiki }}
 <script defer src="{{ $wiki.RelPermalink }}" integrity="{{ $wiki.Data.Integrity }}" crossorigin="anonymous"></script>
   {{- end }}
+
+  <!-- スクロール進捗バー -->
+  <div id="scroll-progress-bar"></div>
+  <script>
+  (function(){
+    var bar = document.getElementById('scroll-progress-bar');
+    if (!bar) return;
+    function updateProgress() {
+      var scrollTop = window.scrollY || document.documentElement.scrollTop;
+      var docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      if (docHeight > 0) {
+        var progress = (scrollTop / docHeight) * 100;
+        bar.style.width = Math.min(progress, 100) + '%';
+      }
+    }
+    var ticking = false;
+    window.addEventListener('scroll', function() {
+      if (!ticking) {
+        window.requestAnimationFrame(function() {
+          updateProgress();
+          ticking = false;
+        });
+        ticking = true;
+      }
+    });
+    updateProgress();
+  })();
+  </script>
 {{- end }}
