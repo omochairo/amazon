@@ -2494,3 +2494,24 @@ body.dark .price-card.is-cheapest {
 }
 
 
+/* ---------- スクロール連動ふわっと登場 (Scroll Reveal) ---------- */
+.scroll-reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1), transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform, opacity;
+}
+
+.scroll-reveal.is-revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* アニメーションを好まない（アクセシビリティ設定）ユーザー向けの対応 */
+@media (prefers-reduced-motion: reduce) {
+  .scroll-reveal {
+    opacity: 1 !important;
+    transform: translateY(0) !important;
+    transition: none !important;
+  }
+}
