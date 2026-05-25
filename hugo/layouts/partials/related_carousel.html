@@ -87,6 +87,36 @@
   {{- end -}}
 {{- end -}}
 
+{{- /* --- Hub banner (Issue #729 / トピッククラスター part C): サテライト → ブランドハブ逆リンク --- */ -}}
+{{- /* 自分の brand と同じブランドのサテライトを集計 (自分自身を除く) */ -}}
+{{- $brandSiblings := slice -}}
+{{- $brandMaxScore := 0 -}}
+{{- if $selfBrand -}}
+  {{- range $pages -}}
+    {{- if and .Params.brand (eq .Params.brand $selfBrand) -}}
+      {{- $brandSiblings = $brandSiblings | append . -}}
+      {{- $sc := int (.Params.ivs_score_100 | default 0) -}}
+      {{- if gt $sc $brandMaxScore -}}{{- $brandMaxScore = $sc -}}{{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $hubMinSiblings := 3 -}}
+{{- if and $selfBrand (ge (len $brandSiblings) $hubMinSiblings) }}
+<aside class="hub-banner" aria-label="{{ $selfBrand }} ブランドハブ">
+  <a class="hub-banner-link" href="{{ (printf "brands/%s/" (urlize $selfBrand)) | relURL }}">
+    <span class="hub-banner-icon" aria-hidden="true">📘</span>
+    <span class="hub-banner-text">
+      <span class="hub-banner-title">「{{ $selfBrand }}」のおもちゃ完全ガイド</span>
+      <span class="hub-banner-meta">
+        全 {{ add (len $brandSiblings) 1 }} 件のレビュー
+        {{- if gt $brandMaxScore 0 }} ／ 最高スコア {{ $brandMaxScore }}点{{ end }}
+      </span>
+    </span>
+    <span class="hub-banner-cta" aria-hidden="true">一覧を見る →</span>
+  </a>
+</aside>
+{{- end }}
+
 {{- if gt (len $top) 0 }}
 <section class="related-carousel-section">
   <header class="home-section-header">
