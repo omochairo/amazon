@@ -69,7 +69,7 @@
           {{- end }}
         {{- else }}
           {{- with .ivs_100 }}
-          <p class="feature-cospa-badge">IVS スコア <strong>{{ int . }}</strong> / 100</p>
+          <p class="feature-cospa-badge"><a href="/about-score/" class="feature-cospa-badge-link">知育スコア</a> <strong>{{ int . }}</strong> / 100</p>
           {{- end }}
         {{- end }}
 
@@ -94,7 +94,7 @@
     {{- if eq $type "deals" -}}
     ※ 割引率・価格は Amazon から取得した時点のスナップショットです。リンク先での最新の価格・在庫をご確認ください。当ページのリンクは Amazon アソシエイトを含みます。
     {{- else -}}
-    ※ IVS スコアと実売価格は集計時点のものです。価格・在庫はリンク先で必ずご確認ください。当ページのリンクは Amazon アソシエイトを含みます。
+    ※ <a href="/about-score/">知育スコア</a>と実売価格は集計時点のものです。価格・在庫はリンク先で必ずご確認ください。当ページのリンクは Amazon アソシエイトを含みます。
     {{- end -}}
   </p>
   {{- end }}
