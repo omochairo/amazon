@@ -121,15 +121,9 @@ document.addEventListener("DOMContentLoaded", function() {
     return "score-bronze";
   }
 
-  function formatAgeMin(months) {
-    if (months === undefined || months === null) return "";
-    const m = parseInt(months, 10);
-    if (isNaN(m)) return "";
-    if (m === 0) return "0歳〜";
-    if (m < 12) return m + "ヶ月〜";
-    if (m % 12 === 0) return (m / 12) + "歳〜";
-    return (m / 12).toFixed(1).replace(".0", "") + "歳〜";
-  }
+  // formatAgeMin は hugo/assets/js/utils/age.js (window.OmochaUtils.formatAgeMin) に集約済
+  // (Issue #745 Phase 1)。
+  const formatAgeMin = (window.OmochaUtils && window.OmochaUtils.formatAgeMin) || function () { return ""; };
 
   // index.json ロード用
   async function ensureItemsLoaded() {
@@ -240,14 +234,14 @@ document.addEventListener("DOMContentLoaded", function() {
       if (score100) {
         scoreHtml = `<div class="product-card-badges">
           <span class="product-card-score ${tierClass}" title="知育スコア (100点満点)">
-            &#127942; <strong>${score100}</strong><span class="product-card-score-suffix">点</span>
+            🏆 <strong>${score100}</strong><span class="product-card-score-suffix">点</span>
             ${minPrice > 0 ? `<span class="product-card-score-price">最安 &yen;${minPrice.toLocaleString()}</span>` : ""}
           </span>
         </div>`;
       } else if (item.ivs_score) {
         scoreHtml = `<div class="product-card-badges">
           <span class="product-card-score score-bronze" title="知育スコア (5点満点)">
-            &#127942; <strong>${item.ivs_score.toFixed(1)}</strong><span class="product-card-score-suffix">/5</span>
+            🏆 <strong>${item.ivs_score.toFixed(1)}</strong><span class="product-card-score-suffix">/5</span>
             ${minPrice > 0 ? `<span class="product-card-score-price">最安 &yen;${minPrice.toLocaleString()}</span>` : ""}
           </span>
         </div>`;

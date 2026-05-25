@@ -1,3 +1,7 @@
+<!-- Shared JS utilities (Issue #745 Phase 1: formatAgeMin) -->
+{{- $ageUtil := resources.Get "js/utils/age.js" | minify | fingerprint -}}
+<script src="{{ $ageUtil.RelPermalink }}" defer></script>
+
 <!-- Google Search Console verification -->
 <meta name="google-site-verification" content="P6g6vzSBBm0bNsbjQ8kQgFhMVgo5c3d7pVEMw1UWDNs" />
 
