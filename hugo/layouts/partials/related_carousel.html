@@ -1,60 +1,93 @@
 {{- /*
-  Related articles carousel partial.
-  Finds other articles with the same brand or tags, and shows them in a swipeable carousel.
+  Related articles carousel partial (Issue #725 / #586 part).
+  Selects up to 6 related posts using a multi-axis relevance score and
+  surfaces "why related?" diff badges (price / age / shared tag) on each card.
 */ -}}
 {{- $pages := where site.RegularPages "Section" "posts" -}}
 {{- $pages = where $pages "Permalink" "!=" .Permalink -}}
 
-{{- $brand := .Params.brand -}}
-{{- $tags := .Params.tags -}}
-
-{{- /* 1. 同じブランドのページを抽出 */ -}}
-{{- $brandMatches := slice -}}
-{{- if $brand -}}
-  {{- $brandMatches = where $pages "Params.brand" $brand -}}
-{{- end -}}
-
-{{- /* 2. 同じタグを持つページを抽出 */ -}}
-{{- $tagMatches := slice -}}
-{{- if $tags -}}
-  {{- $tagMatches = where $pages "Params.tags" "intersect" $tags -}}
-{{- end -}}
-
-{{- /* 3. 重複を排除し、ブランド一致 ➔ タグ一致 ➔ 最新記事の順序を厳格に維持して結合 */ -}}
-{{- $related := slice -}}
-{{- $seen := dict .Permalink true -}}
-
-{{- /* ① ブランドが一致する記事を追加 */ -}}
-{{- range $brandMatches -}}
-  {{- if not (index $seen .Permalink) -}}
-    {{- $related = $related | append . -}}
-    {{- $seen = merge $seen (dict .Permalink true) -}}
+{{- /* --- self axes --- */ -}}
+{{- $selfBrand := .Params.brand -}}
+{{- $selfTier  := .Params.brand_tier -}}
+{{- $selfTags  := .Params.tags | default slice -}}
+{{- $selfAge   := int (.Params.age_min_months | default 0) -}}
+{{- $selfPrice := 0 -}}
+{{- range slice (.Params.price_amazon | default 0) (.Params.price_rakuten | default 0) (.Params.price_yahoo | default 0) -}}
+  {{- $p := int . -}}
+  {{- if gt $p 0 -}}
+    {{- if or (eq $selfPrice 0) (lt $p $selfPrice) -}}{{- $selfPrice = $p -}}{{- end -}}
   {{- end -}}
 {{- end -}}
 
-{{- /* ② タグが一致する記事を追加 (6件に満たない場合のみ) */ -}}
-{{- range $tagMatches -}}
-  {{- if lt (len $related) 6 -}}
-    {{- if not (index $seen .Permalink) -}}
-      {{- $related = $related | append . -}}
-      {{- $seen = merge $seen (dict .Permalink true) -}}
-    {{- end -}}
-  {{- end -}}
-{{- end -}}
-
-{{- /* ③ 残りの枠を最新の記事から補充 (6件に満たない場合のみ) */ -}}
+{{- /* --- score each candidate --- */ -}}
+{{- $scored := slice -}}
 {{- range $pages -}}
-  {{- if lt (len $related) 6 -}}
-    {{- if not (index $seen .Permalink) -}}
-      {{- $related = $related | append . -}}
-      {{- $seen = merge $seen (dict .Permalink true) -}}
+  {{- $s := 0 -}}
+  {{- if and $selfBrand .Params.brand (eq .Params.brand $selfBrand) -}}{{- $s = add $s 100 -}}{{- end -}}
+  {{- if and $selfTier .Params.brand_tier (eq .Params.brand_tier $selfTier) -}}{{- $s = add $s 15 -}}{{- end -}}
+  {{- $common := intersect $selfTags (.Params.tags | default slice) -}}
+  {{- $tb := mul (len $common) 20 -}}
+  {{- if gt $tb 80 -}}{{- $tb = 80 -}}{{- end -}}
+  {{- $s = add $s $tb -}}
+
+  {{- $cp := 0 -}}
+  {{- range slice (.Params.price_amazon | default 0) (.Params.price_rakuten | default 0) (.Params.price_yahoo | default 0) -}}
+    {{- $p := int . -}}
+    {{- if gt $p 0 -}}
+      {{- if or (eq $cp 0) (lt $p $cp) -}}{{- $cp = $p -}}{{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- $priceDiffPct := -1 -}}
+  {{- if and (gt $selfPrice 0) (gt $cp 0) -}}
+    {{- $absDiff := math.Abs (sub $cp $selfPrice) -}}
+    {{- $priceDiffPct = int (mul (div (float $absDiff) (float $selfPrice)) 100) -}}
+    {{- if le $priceDiffPct 20 -}}{{- $s = add $s 50 -}}
+    {{- else if le $priceDiffPct 40 -}}{{- $s = add $s 25 -}}{{- end -}}
+  {{- end -}}
+
+  {{- $ca := int (.Params.age_min_months | default 0) -}}
+  {{- if and (gt $selfAge 0) (gt $ca 0) -}}
+    {{- $ageDiff := int (math.Abs (sub $ca $selfAge)) -}}
+    {{- if le $ageDiff 6 -}}{{- $s = add $s 40 -}}
+    {{- else if le $ageDiff 12 -}}{{- $s = add $s 25 -}}
+    {{- else if le $ageDiff 24 -}}{{- $s = add $s 10 -}}{{- end -}}
+  {{- end -}}
+
+  {{- if gt $s 0 -}}
+    {{- $scored = $scored | append (dict "page" . "score" $s "priceDiffPct" $priceDiffPct "candPrice" $cp "candAge" $ca "common" $common) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $sorted := sort $scored "score" "desc" -}}
+{{- /* 同 brand 偏重を回避: 同 brand は最大 4 件、残り 2 枠は別 brand に優先割当 */ -}}
+{{- $top := slice -}}
+{{- $sameBrandCount := 0 -}}
+{{- range $sorted -}}
+  {{- if lt (len $top) 6 -}}
+    {{- $cb := .page.Params.brand -}}
+    {{- if and $selfBrand $cb (eq $cb $selfBrand) -}}
+      {{- if lt $sameBrandCount 4 -}}
+        {{- $top = $top | append . -}}
+        {{- $sameBrandCount = add $sameBrandCount 1 -}}
+      {{- end -}}
+    {{- else -}}
+      {{- $top = $top | append . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- /* 別 brand 候補が薄いときは同 brand から補充 */ -}}
+{{- if lt (len $top) 6 -}}
+  {{- $seen := dict -}}
+  {{- range $top -}}{{- $seen = merge $seen (dict .page.Permalink true) -}}{{- end -}}
+  {{- range $sorted -}}
+    {{- if lt (len $top) 6 -}}
+      {{- if not (index $seen .page.Permalink) -}}{{- $top = $top | append . -}}{{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
 
-{{- $relatedLimit := first 6 $related -}}
-
-{{- if gt (len $relatedLimit) 0 }}
+{{- if gt (len $top) 0 }}
 <section class="related-carousel-section">
   <header class="home-section-header">
     <h2>📚 関連する比較レビュー</h2>
@@ -65,26 +98,61 @@
   </header>
   <div class="carousel-wrapper">
     <div class="carousel-track">
-      {{- range $relatedLimit }}
-        <a class="carousel-card" href="{{ .Permalink }}" aria-label="{{ .Title }} の比較レビューを読む">
+      {{- range $top }}
+        {{- $p := .page -}}
+        <a class="carousel-card" href="{{ $p.Permalink }}" aria-label="{{ $p.Title }} の比較レビューを読む">
           <div class="carousel-card-image">
-            {{- if .Params.product_image }}
-              <img src="{{ .Params.product_image }}" alt="{{ .Title }}" loading="lazy" referrerpolicy="no-referrer">
+            {{- if $p.Params.product_image }}
+              <img src="{{ $p.Params.product_image }}" alt="{{ $p.Title }}" loading="lazy" referrerpolicy="no-referrer">
             {{- else }}
               {{- $emojis := slice "🧸" "🎨" "🧩" "🪁" "🚂" "🤹" "🧱" "🪀" "🛹" "🎺" -}}
-              {{- $emojiIndex := mod (len .Title) (len $emojis) -}}
-              {{- $fallbackEmoji := index $emojis $emojiIndex -}}
+              {{- $fallbackEmoji := index $emojis (mod (len $p.Title) (len $emojis)) -}}
               <div class="carousel-card-image-fallback">{{ $fallbackEmoji }}</div>
             {{- end }}
-            {{- if .Params.ivs_score_100 }}
-              <span class="carousel-card-score">🏆 {{ .Params.ivs_score_100 }}点</span>
+            {{- if $p.Params.ivs_score_100 }}
+              <span class="carousel-card-score">🏆 {{ $p.Params.ivs_score_100 }}点</span>
             {{- end }}
           </div>
           <div class="carousel-card-body">
-            {{- if .Params.brand }}
-              <span class="carousel-card-brand">{{ .Params.brand }}</span>
-            {{- end }}
-            <h3 class="carousel-card-title">{{ .Title }}</h3>
+            {{- with $p.Params.brand }}<span class="carousel-card-brand">{{ . }}</span>{{ end }}
+            <h3 class="carousel-card-title">{{ $p.Title }}</h3>
+            <div class="carousel-card-badges">
+              {{- /* price badge */ -}}
+              {{- if gt .candPrice 0 -}}
+                {{- $label := printf "¥%d" .candPrice -}}
+                {{- if and (gt $selfPrice 0) (ge .priceDiffPct 0) -}}
+                  {{- if gt .candPrice $selfPrice -}}
+                    {{- $label = printf "¥%d (+%d%%)" .candPrice .priceDiffPct -}}
+                  {{- else if lt .candPrice $selfPrice -}}
+                    {{- $label = printf "¥%d (−%d%%)" .candPrice .priceDiffPct -}}
+                  {{- else -}}
+                    {{- $label = printf "¥%d (同価格)" .candPrice -}}
+                  {{- end -}}
+                {{- end -}}
+                <span class="carousel-card-badge cc-badge-price">💰 {{ $label }}</span>
+              {{- end -}}
+              {{- /* age badge */ -}}
+              {{- if gt .candAge 0 -}}
+                {{- $years := int (div .candAge 12) -}}
+                {{- $ageLabel := printf "%d歳〜" $years -}}
+                {{- if gt $selfAge 0 -}}
+                  {{- $myYears := int (div $selfAge 12) -}}
+                  {{- $yd := sub $years $myYears -}}
+                  {{- if eq $yd 0 -}}{{- $ageLabel = printf "%d歳〜 (同じ)" $years -}}
+                  {{- else if gt $yd 0 -}}{{- $ageLabel = printf "%d歳〜 (+%d歳)" $years $yd -}}
+                  {{- else -}}{{- $ageLabel = printf "%d歳〜 (%d歳)" $years $yd -}}{{- end -}}
+                {{- end -}}
+                <span class="carousel-card-badge cc-badge-age">👶 {{ $ageLabel }}</span>
+              {{- end -}}
+              {{- /* shared tag badge (brand 名は除外、先頭 1 件) */ -}}
+              {{- $sharedTag := "" -}}
+              {{- range .common -}}
+                {{- if and (eq $sharedTag "") (ne . $selfBrand) -}}{{- $sharedTag = . -}}{{- end -}}
+              {{- end -}}
+              {{- if ne $sharedTag "" -}}
+                <span class="carousel-card-badge cc-badge-tag">🏷️ {{ $sharedTag }}</span>
+              {{- end -}}
+            </div>
           </div>
         </a>
       {{- end }}
