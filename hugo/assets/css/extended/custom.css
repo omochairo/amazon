@@ -395,6 +395,16 @@ header .logo a {
     padding: 14px 20px;
     font-size: 1rem;
   }
+
+  /* モバイル・タッチデバイス向けのアクティブ（押し込み）フィードバック */
+  .product-card:active,
+  .brand-card:active,
+  .tag-chip:active,
+  .home-hero-btn:active {
+    transform: scale(0.96) !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15) !important;
+    transition: transform 0.08s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+  }
 }
 
 /* ---------- YouTube Responsive Embed ---------- */
