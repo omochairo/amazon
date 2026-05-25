@@ -156,6 +156,7 @@ def main():
     ranking_url = "https://app.rakuten.co.jp/services/api/IchibaItem/Ranking/20220601"
     ranking_params = {
         "applicationId": app_id,
+        "accessKey": access_key,
         "genreId": "566382", # Toys genre
         "formatVersion": 2
     }
