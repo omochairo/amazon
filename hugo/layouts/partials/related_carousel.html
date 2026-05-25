@@ -1,0 +1,67 @@
+{{- /*
+  Related articles carousel partial.
+  Finds other articles with the same brand or tags, and shows them in a swipeable carousel.
+*/ -}}
+{{- $pages := where (where site.RegularPages "Type" "in" site.Params.mainSections) "Permalink" "!=" .Permalink -}}
+{{- $brand := .Params.brand -}}
+{{- $tags := .Params.tags -}}
+
+{{- /* 1. 同じブランドのページを抽出 */ -}}
+{{- $brandMatches := slice -}}
+{{- if $brand -}}
+  {{- $brandMatches = where $pages "Params.brand" "==" $brand -}}
+{{- end -}}
+
+{{- /* 2. 同じタグを持つページを抽出 */ -}}
+{{- $tagMatches := slice -}}
+{{- if $tags -}}
+  {{- range $pages -}}
+    {{- $intersect := intersect .Params.tags $tags -}}
+    {{- if gt (len $intersect) 0 -}}
+      {{- $tagMatches = $tagMatches | append . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* 3. マージして順序整理（ブランド一致を優先し、重複を排除） */ -}}
+{{- $related := ($brandMatches | union $tagMatches) | union $pages -}}
+{{- $relatedLimit := first 6 $related -}}
+
+{{- if gt (len $relatedLimit) 0 }}
+<section class="related-carousel-section scroll-reveal">
+  <header class="home-section-header">
+    <h2>📚 関連する比較レビュー</h2>
+    <div class="carousel-nav-arrows">
+      <button class="carousel-arrow prev" aria-label="左にスクロール" disabled>‹</button>
+      <button class="carousel-arrow next" aria-label="右にスクロール">›</button>
+    </div>
+  </header>
+  <div class="carousel-wrapper">
+    <div class="carousel-track">
+      {{- range $relatedLimit }}
+        <a class="carousel-card" href="{{ .Permalink }}" aria-label="{{ .Title }} の比較レビューを読む">
+          <div class="carousel-card-image">
+            {{- if .Params.product_image }}
+              <img src="{{ .Params.product_image }}" alt="{{ .Title }}" loading="lazy" referrerpolicy="no-referrer">
+            {{- else }}
+              {{- $emojis := slice "🧸" "🎨" "🧩" "🪁" "🚂" "🤹" "🧱" "🪀" "🛹" "🎺" -}}
+              {{- $emojiIndex := mod (len .Title) (len $emojis) -}}
+              {{- $fallbackEmoji := index $emojis $emojiIndex -}}
+              <div class="carousel-card-image-fallback">{{ $fallbackEmoji }}</div>
+            {{- end }}
+            {{- if .Params.ivs_score_100 }}
+              <span class="carousel-card-score">🏆 {{ .Params.ivs_score_100 }}点</span>
+            {{- end }}
+          </div>
+          <div class="carousel-card-body">
+            {{- if .Params.brand }}
+              <span class="carousel-card-brand">{{ .Params.brand }}</span>
+            {{- end }}
+            <h3 class="carousel-card-title">{{ .Title }}</h3>
+          </div>
+        </a>
+      {{- end }}
+    </div>
+  </div>
+</section>
+{{- end }}
