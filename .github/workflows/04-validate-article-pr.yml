@@ -72,6 +72,10 @@ on:
       # required check として走らせる ([[04-validate-paths-trap]] 対策)
       - 'hugo/layouts/**'
       - 'hugo/config.toml'
+      # 2026-05-25 (session 47 / Issue #590 PR-1): /cospa/ /deals/ 特集集計スクリプトと
+      # 単体テストを validate 対象に含める。後続 PR で hugo/data/features/ も追加予定。
+      - 'scripts/build_feature_lists.py'
+      - 'scripts/tests/test_build_feature_lists.py'
   workflow_dispatch:
 
 permissions:
