@@ -2516,11 +2516,11 @@ body.dark .price-card.is-cheapest {
   }
 }
 /* ==========================================
-   関連記事カルーセル (Related Articles Carousel)
-   ========================================== */
+    関連記事カルーセル (Related Articles Carousel)
+    ========================================== */
 
 .related-carousel-section {
-  margin: 2.5rem 0;
+  margin: 3rem 0;
   padding: 0;
 }
 
@@ -2528,7 +2528,7 @@ body.dark .price-card.is-cheapest {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
   border-bottom: 2px solid var(--border);
   padding-bottom: 0.5rem;
 }
@@ -2539,7 +2539,8 @@ body.dark .price-card.is-cheapest {
   color: var(--primary);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
+  font-weight: 700;
 }
 
 .carousel-nav-arrows {
@@ -2551,28 +2552,30 @@ body.dark .price-card.is-cheapest {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--entry);
-  color: var(--primary);
-  font-size: 1.2rem;
+  border: 1px solid var(--border) !important;
+  background: var(--entry) !important;
+  color: var(--primary) !important;
+  font-size: 1.3rem;
   font-weight: bold;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   user-select: none;
+  padding: 0;
+  line-height: 1;
 }
 
 .carousel-arrow:hover:not(:disabled) {
-  background: var(--primary);
-  color: var(--bg);
-  border-color: var(--primary);
-  transform: scale(1.05);
+  background: var(--primary) !important;
+  color: var(--bg) !important;
+  border-color: var(--primary) !important;
+  transform: scale(1.08);
 }
 
 .carousel-arrow:disabled {
-  opacity: 0.3;
+  opacity: 0.25;
   cursor: not-allowed;
   pointer-events: none;
 }
@@ -2582,8 +2585,8 @@ body.dark .price-card.is-cheapest {
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
-  margin: 0 -12px; /* スマホではみ出し（ピーク）を表現するためのネガティブマージン */
-  padding: 0 12px;
+  margin: 0 -16px; /* スマホではみ出し（ピーク）を表現するためのネガティブマージン */
+  padding: 4px 16px 16px;
   /* スクロールバー非表示 (Firefox / Webkit) */
   scrollbar-width: none;
 }
@@ -2594,39 +2597,49 @@ body.dark .price-card.is-cheapest {
 
 .carousel-track {
   display: flex;
-  gap: 16px;
-  padding: 8px 4px 16px;
+  gap: 20px;
 }
 
+/* PaperMod等のリンクの下線・ボーダー・左線を完全にリセットする詳細度指定 */
+.post-content a.carousel-card,
 .carousel-card {
   scroll-snap-align: start;
-  flex: 0 0 260px; /* モバイルでは少し小さめにしてはみ出しを見せる */
+  flex: 0 0 250px; /* モバイル用デフォルト幅 */
   display: flex;
   flex-direction: column;
-  background: var(--entry);
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  background: var(--entry) !important;
+  border-radius: 16px !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05) !important;
   overflow: hidden;
-  text-decoration: none;
-  color: var(--primary);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  text-decoration: none !important;
+  color: var(--primary) !important;
+  transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), 
+              box-shadow 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), 
+              border-color 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+  border-bottom: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.post-content a.carousel-card::after,
+.carousel-card::after {
+  display: none !important; /* PaperModのリンク末尾アイコン等の干渉防止 */
 }
 
 .carousel-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
-  border-color: var(--tertiary);
-  color: var(--primary);
+  transform: translateY(-6px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12) !important;
+  border-color: var(--tertiary) !important;
 }
 
 .carousel-card-image {
   position: relative;
   width: 100%;
-  padding-top: 60%; /* 5:3 アスペクト比 */
-  background: #f8fafc;
+  padding-top: 65%; /* 接近した黄金比レイアウト */
+  background: #ffffff !important; /* 白背景の玩具画像を浮かび上がらせるため、常に白に統一 */
   overflow: hidden;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border) !important;
 }
 
 .carousel-card-image img {
@@ -2636,12 +2649,13 @@ body.dark .price-card.is-cheapest {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  padding: 8px;
-  transition: transform 0.3s ease;
+  padding: 12px; /* 少し余白を広くして製品を綺麗に見せる */
+  transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+  background: #ffffff !important;
 }
 
 .carousel-card:hover .carousel-card-image img {
-  transform: scale(1.05);
+  transform: scale(1.06);
 }
 
 .carousel-card-image-fallback {
@@ -2653,58 +2667,71 @@ body.dark .price-card.is-cheapest {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2.5rem;
-  background: var(--border);
+  font-size: 2.8rem;
+  background: #f1f5f9;
 }
 
 .carousel-card-score {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  background: rgba(15, 23, 42, 0.85);
-  color: #fff;
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 3px 8px;
-  border-radius: 20px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  top: 10px;
+  right: 10px;
+  background: linear-gradient(135deg, #f59e0b, #d97706) !important; /* プレミアムなゴールドグラデーション */
+  color: #ffffff !important;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 4px 10px !important;
+  border-radius: 30px !important;
+  box-shadow: 0 4px 10px rgba(217, 119, 6, 0.35) !important;
   backdrop-filter: blur(4px);
+  z-index: 2;
+  border: none !important;
 }
 
 .carousel-card-body {
-  padding: 12px;
+  padding: 16px 14px !important;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   flex-grow: 1;
+  border-left: none !important; /* 左の縦線を消す */
+  border-bottom: none !important;
 }
 
 .carousel-card-brand {
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  color: #64748b;
+  color: var(--secondary) !important;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
+  border-bottom: none !important;
+  text-decoration: none !important;
 }
 
 .carousel-card-title {
-  font-size: 0.85rem;
+  font-size: 0.88rem;
   font-weight: 700;
-  line-height: 1.4;
+  line-height: 1.5;
   margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  height: 2.8em; /* 2行分の高さを確保して揃える */
-  color: var(--primary);
+  height: 3.0em; /* 2行で統一 */
+  color: var(--primary) !important;
+  border-bottom: none !important;
+  text-decoration: none !important;
+  transition: color 0.2s ease;
+}
+
+.carousel-card:hover .carousel-card-title {
+  color: var(--tertiary) !important;
 }
 
 /* PC等、画面が広い場合の調整 */
 @media (min-width: 768px) {
   .carousel-wrapper {
     margin: 0;
-    padding: 0;
+    padding: 4px 4px 16px;
   }
   .carousel-card {
     flex: 0 0 280px; /* PCでは幅を広げる */
@@ -2722,14 +2749,9 @@ body.dark .price-card.is-cheapest {
   }
 }
 
-/* ダークモード対応 */
-[data-theme="dark"] .carousel-card-image,
-body.dark .carousel-card-image {
-  background: #1e293b;
-}
-
-[data-theme="dark"] .carousel-card-brand,
-body.dark .carousel-card-brand {
-  color: #94a3b8;
+/* ダークモード時のカードの枠線微調整 */
+[data-theme="dark"] .carousel-card,
+body.dark .carousel-card {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
 }
 
