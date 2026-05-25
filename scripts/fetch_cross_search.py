@@ -4,6 +4,14 @@ Amazon商品データを読み、各商品の名前で楽天・Yahoo を個別�
 data/raw/rakuten_matched.json, data/raw/yahoo_matched.json に保存する。
 
 これにより、ジャンル検索では見つからない商品も正確にマッチできる。
+
+実行モード:
+  通常: python scripts/fetch_cross_search.py
+    → amazon.json は force_refresh, articles のみの ASIN は欠落のみ補填
+  低信頼再検索: python scripts/fetch_cross_search.py --re-search-low-confidence
+    → JAN が利用可能で、既存マッチが (a) 欠落 / (b) quality 不合格 /
+      (c) text マッチ (JAN アップグレード余地) のいずれかに該当する
+      ASIN を強制再検索。新結果が品質ガード不合格で旧結果が合格なら旧を保持。
 """
 
 import os
@@ -13,6 +21,7 @@ import re
 import time
 import logging
 import pathlib
+import argparse
 import requests
 import urllib.parse
 from datetime import datetime, timezone
@@ -571,6 +580,60 @@ def _load_jan_from_per_asin(per_asin_root: pathlib.Path, asin: str) -> str:
     return ""
 
 
+def _load_amazon_price_from_per_asin(per_asin_root: pathlib.Path, asin: str) -> int:
+    """data/raw/per_asin/<ASIN>/amazon.json snapshot から price を引く。
+
+    --re-search-low-confidence モードで quality gate (0.5x〜2.0x 価格帯) を
+    判定するために必要。snapshot が無い・price が無い場合は 0 を返す
+    (= 価格制約なし → token overlap のみで判定)。
+    """
+    snap_path = per_asin_root / asin / "amazon.json"
+    if not snap_path.exists():
+        return 0
+    try:
+        snap = json.loads(snap_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return 0
+    item = snap.get("item") if isinstance(snap, dict) else None
+    if isinstance(item, dict):
+        try:
+            return int(item.get("price") or 0)
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
+def _is_low_confidence_match(
+    existing_entry: dict | None,
+    jan_code: str,
+    amazon_price: int,
+    quality_check_fn,
+) -> tuple[bool, str]:
+    """既存マッチが「再検索すべき低信頼」かを判定。
+
+    Returns:
+        (need_refresh: bool, reason: str)
+
+    判定基準:
+        - existing_entry なし → ("missing", 再検索)
+        - quality_check_fn が False → ("quality_fail", 再検索)
+        - JAN あり かつ _match_method == "text" → ("text_upgrade", 再検索)
+        - それ以外 → (False, 保持)
+    """
+    if not existing_entry:
+        return True, "missing"
+    try:
+        if not quality_check_fn(existing_entry, amazon_price):
+            price = existing_entry.get("price", "?")
+            return True, f"quality_fail (price={price} vs amazon={amazon_price})"
+    except Exception as e:
+        return True, f"quality_check_error ({e})"
+    method = existing_entry.get("_match_method", "text")
+    if jan_code and method == "text":
+        return True, "text_upgrade"
+    return False, ""
+
+
 def _collect_targets(amazon_items: list, articles_dir: pathlib.Path, per_asin_root: pathlib.Path | None = None) -> dict:
     """ASIN -> (title, force_refresh, jan_code) の処理対象を集める。
     1) amazon.json (今回の検索結果) は **強制再取得** = 価格を新鮮に保つ
@@ -615,6 +678,29 @@ def _collect_targets(amazon_items: list, articles_dir: pathlib.Path, per_asin_ro
 
 
 def main():
+    parser = argparse.ArgumentParser(description="楽天/Yahoo を Amazon ASIN 単位で cross-search")
+    parser.add_argument(
+        "--re-search-low-confidence",
+        action="store_true",
+        help=(
+            "JAN コードが利用可能で既存マッチが (a) 欠落 / (b) quality 不合格 / "
+            "(c) text マッチで JAN アップグレード余地 のいずれかに該当する ASIN を強制再検索。"
+            "新結果が quality 不合格で旧結果が合格なら旧を保持。"
+        ),
+    )
+    args = parser.parse_args()
+    re_search_mode = args.re_search_low_confidence
+
+    # 低信頼再検索モードでは build_post の quality gate を借用
+    quality_check_fn = None
+    if re_search_mode:
+        try:
+            from build_post import _matched_passes_quality as quality_check_fn  # noqa: F401
+            logger.info("Mode: --re-search-low-confidence (using build_post._matched_passes_quality)")
+        except ImportError as e:
+            logger.error(f"Failed to import build_post._matched_passes_quality: {e}")
+            sys.exit(1)
+
     # Amazon商品データを読む
     amazon_path = pathlib.Path("data/raw/amazon.json")
     if not amazon_path.exists():
@@ -643,6 +729,17 @@ def main():
         f"jan_available={jan_available}/{len(targets)})"
     )
 
+    # amazon.json 内の price をルックアップテーブル化 (per-target で fallback 用)
+    amazon_price_by_asin: dict[str, int] = {}
+    for amz in amazon_items:
+        asin = amz.get("asin", "")
+        if not asin:
+            continue
+        try:
+            amazon_price_by_asin[asin] = int(amz.get("price") or 0)
+        except (TypeError, ValueError):
+            amazon_price_by_asin[asin] = 0
+
     # API キー
     rakuten_app_id = os.environ.get("RAKUTEN_APP_ID", "")
     rakuten_access_key = os.environ.get("RAKUTEN_ACCESS_KEY", "")
@@ -659,6 +756,9 @@ def main():
     y_new, y_kept, y_skipped = 0, 0, 0
     r_jan_hit, r_jan_miss, r_text_hit = 0, 0, 0
     y_jan_hit, y_jan_miss, y_text_hit = 0, 0, 0
+    # --re-search-low-confidence 専用カウンタ
+    r_low_conf_targets, y_low_conf_targets = 0, 0
+    r_no_better, y_no_better = 0, 0
 
     for asin, (title, force_refresh, jan_code) in targets.items():
         # 既に matched があり、かつ amazon.json 由来でない (force_refresh=False) ASIN
@@ -668,13 +768,41 @@ def main():
         need_rakuten = force_refresh or not r_has
         need_yahoo = force_refresh or not y_has
 
+        # --re-search-low-confidence: JAN がある低信頼マッチを強制再検索対象に追加
+        r_reason = ""
+        y_reason = ""
+        if re_search_mode and jan_code:
+            amazon_price_local = amazon_price_by_asin.get(asin, 0)
+            if amazon_price_local <= 0:
+                amazon_price_local = _load_amazon_price_from_per_asin(per_asin_root, asin)
+
+            r_low, r_reason = _is_low_confidence_match(
+                rakuten_index.get(asin), jan_code, amazon_price_local, quality_check_fn
+            )
+            if r_low and not need_rakuten:
+                need_rakuten = True
+                r_low_conf_targets += 1
+
+            y_low, y_reason = _is_low_confidence_match(
+                yahoo_index.get(asin), jan_code, amazon_price_local, quality_check_fn
+            )
+            if y_low and not need_yahoo:
+                need_yahoo = True
+                y_low_conf_targets += 1
+
         if not need_rakuten and not need_yahoo:
             r_kept += 1 if r_has else 0
             y_kept += 1 if y_has else 0
             continue
 
         keyword = extract_search_keyword(title)
-        logger.info(f"Cross-searching: {keyword} (ASIN: {asin}, force={force_refresh})")
+        if re_search_mode and (r_reason or y_reason):
+            logger.info(
+                f"Cross-searching: {keyword} (ASIN: {asin}, force={force_refresh}, "
+                f"r_reason='{r_reason}', y_reason='{y_reason}')"
+            )
+        else:
+            logger.info(f"Cross-searching: {keyword} (ASIN: {asin}, force={force_refresh})")
 
         # 楽天検索
         if rakuten_app_id and need_rakuten:
@@ -685,15 +813,34 @@ def main():
                 r_result["jan_code"] = jan_code
                 r_result["_refreshed_at"] = now_iso
                 method = r_result.get("_match_method", "text")
-                if method in ("jan_books", "jan_ichiba"):
-                    r_jan_hit += 1
-                else:
-                    r_text_hit += 1
-                    if jan_code:
-                        r_jan_miss += 1
-                rakuten_index[asin] = r_result
-                r_new += 1
-                logger.info(f"  → Rakuten[{method}]: {r_result['title'][:40]}... ￥{r_result['price']}")
+
+                # --re-search-low-confidence: no-worse-than-old guard
+                # 旧エントリが quality pass で新結果が fail なら旧を保持
+                replace = True
+                if re_search_mode and r_has:
+                    amazon_price_local = amazon_price_by_asin.get(asin, 0) or \
+                        _load_amazon_price_from_per_asin(per_asin_root, asin)
+                    new_passed = quality_check_fn(r_result, amazon_price_local)
+                    old_passed = quality_check_fn(rakuten_index[asin], amazon_price_local)
+                    if old_passed and not new_passed:
+                        replace = False
+                        r_no_better += 1
+                        r_kept += 1
+                        logger.info(
+                            f"  → Rakuten: rejected new result (price={r_result.get('price')}) — "
+                            f"old entry passed quality, keeping it"
+                        )
+
+                if replace:
+                    if method in ("jan_books", "jan_ichiba"):
+                        r_jan_hit += 1
+                    else:
+                        r_text_hit += 1
+                        if jan_code:
+                            r_jan_miss += 1
+                    rakuten_index[asin] = r_result
+                    r_new += 1
+                    logger.info(f"  → Rakuten[{method}]: {r_result['title'][:40]}... ￥{r_result['price']}")
             else:
                 # 検索失敗時、既存エントリがあれば保持 (上書きで消さない)
                 if jan_code:
@@ -717,15 +864,32 @@ def main():
                 y_result["jan_code"] = jan_code
                 y_result["_refreshed_at"] = now_iso
                 method = y_result.get("_match_method", "text")
-                if method == "jan":
-                    y_jan_hit += 1
-                else:
-                    y_text_hit += 1
-                    if jan_code:
-                        y_jan_miss += 1
-                yahoo_index[asin] = y_result
-                y_new += 1
-                logger.info(f"  → Yahoo[{method}]: {y_result['title'][:40]}... ￥{y_result['price']}")
+
+                replace = True
+                if re_search_mode and y_has:
+                    amazon_price_local = amazon_price_by_asin.get(asin, 0) or \
+                        _load_amazon_price_from_per_asin(per_asin_root, asin)
+                    new_passed = quality_check_fn(y_result, amazon_price_local)
+                    old_passed = quality_check_fn(yahoo_index[asin], amazon_price_local)
+                    if old_passed and not new_passed:
+                        replace = False
+                        y_no_better += 1
+                        y_kept += 1
+                        logger.info(
+                            f"  → Yahoo: rejected new result (price={y_result.get('price')}) — "
+                            f"old entry passed quality, keeping it"
+                        )
+
+                if replace:
+                    if method == "jan":
+                        y_jan_hit += 1
+                    else:
+                        y_text_hit += 1
+                        if jan_code:
+                            y_jan_miss += 1
+                    yahoo_index[asin] = y_result
+                    y_new += 1
+                    logger.info(f"  → Yahoo[{method}]: {y_result['title'][:40]}... ￥{y_result['price']}")
             else:
                 if jan_code:
                     y_jan_miss += 1
@@ -762,6 +926,13 @@ def main():
     logger.info(
         f"Yahoo match-method: jan_hit={y_jan_hit}, jan_miss={y_jan_miss}, text_fallback={y_text_hit}"
     )
+
+    if re_search_mode:
+        logger.info(
+            f"Low-confidence re-search summary: "
+            f"rakuten_targets={r_low_conf_targets} (no_better={r_no_better}), "
+            f"yahoo_targets={y_low_conf_targets} (no_better={y_no_better})"
+        )
 
 
 if __name__ == "__main__":

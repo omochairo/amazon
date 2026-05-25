@@ -1,0 +1,105 @@
+name: Re-search low confidence cross matches (manual)
+# Issue #515 / JAN re-search: 既存の rakuten_matched.json / yahoo_matched.json の
+# うち、JAN コードが利用可能で (a) 欠落 / (b) build_post._matched_passes_quality
+# 不合格 / (c) text マッチで JAN アップグレード余地 のいずれかに該当する ASIN を
+# 強制再検索し、結果を main に PR で起票する manual cleanup workflow。
+#
+# 設計判断 (memory):
+# - cron なし: 普段の 01-fetch-products は API コール節約のため既存マッチを
+#   保持する仕様。低信頼再検索はメンテ用途なので手動 trigger 限定にする。
+# - App token + 通常の git commit + gh pr create: peter-evans/create-pr では
+#   validate (pull_request) が発火しない trap を避ける (feedback_omochairo_peter_evans_validate_trap)。
+# - --re-search-low-confidence は scripts/fetch_cross_search.py に実装された
+#   新フラグ。新結果が quality 不合格で旧結果が合格なら旧を保持 (no-worse guard)。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: re-search-low-confidence
+  cancel-in-progress: false
+
+jobs:
+  re-search:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Re-search low confidence cross matches
+        run: python scripts/fetch_cross_search.py --re-search-low-confidence
+        env:
+          RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
+          RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
+          RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}
+          YAHOO_CLIENT_ID: ${{ secrets.YAHOO_CLIENT_ID }}
+          VALUECOMMERCE_SID: ${{ secrets.VALUECOMMERCE_SID }}
+          VALUECOMMERCE_PID: ${{ secrets.VALUECOMMERCE_PID }}
+
+      - name: Create re-search result PR + enable auto-merge
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+
+          git add data/raw/rakuten_matched.json data/raw/yahoo_matched.json || true
+
+          if git diff --cached --quiet; then
+            echo "No matched.json changes after re-search; skipping PR creation."
+            exit 0
+          fi
+
+          # 既存 open の自動 re-search PR があれば閉じる (再実行重複防止)。
+          echo "Checking for old automated re-search PRs..."
+          gh pr list --base main --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("re-search-low-confidence/")) | .number' | while read -r pr_num; do
+            if [ -n "$pr_num" ]; then
+              echo "Closing old PR #$pr_num and deleting branch..."
+              gh pr close "$pr_num" -d || true
+            fi
+          done
+
+          BRANCH="re-search-low-confidence/${{ github.run_id }}"
+          git config user.name "omochairo-fetch-bot[bot]"
+          git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit -m "data: re-search low confidence cross matches (run ${{ github.run_id }})"
+          git push -u origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "data: re-search low confidence cross matches (run ${{ github.run_id }})" \
+            --body "Automated low-confidence re-search of \`data/raw/rakuten_matched.json\` and \`data/raw/yahoo_matched.json\` by \`scripts/fetch_cross_search.py --re-search-low-confidence\`. Triggered by manual workflow_dispatch (run ${{ github.run_id }}). Refs #515." \
+            --base main \
+            --head "$BRANCH")
+          echo "Created: $PR_URL"
+
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge enabled on $PR_URL"
+          else
+            echo "::warning::Could not enable auto-merge on $PR_URL"
+          fi
+        continue-on-error: true
