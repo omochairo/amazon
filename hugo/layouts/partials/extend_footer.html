@@ -7,6 +7,10 @@
   {{- if $wiki }}
 <script defer src="{{ $wiki.RelPermalink }}" integrity="{{ $wiki.Data.Integrity }}" crossorigin="anonymous"></script>
   {{- end }}
+  {{- $reveal := resources.Get "js/scroll_reveal.js" | resources.Minify | resources.Fingerprint "sha256" }}
+  {{- if $reveal }}
+<script defer src="{{ $reveal.RelPermalink }}" integrity="{{ $reveal.Data.Integrity }}" crossorigin="anonymous"></script>
+  {{- end }}
 
   <!-- スクロール進捗バー -->
   <div id="scroll-progress-bar"></div>
