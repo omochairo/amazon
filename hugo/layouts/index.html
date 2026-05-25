@@ -11,9 +11,10 @@
   {{- with .Subtitle }}<p class="home-hero-subtitle">{{ . }}</p>{{ end }}
   {{- with .Lead }}<div class="home-hero-lead">{{ . | markdownify }}</div>{{ end }}
   <div class="home-hero-cta">
-    <a class="home-hero-btn primary" href="{{ "posts/" | relURL }}">📚 記事一覧から探す</a>
+    <a class="home-hero-btn primary" href="{{ "diagnosis/" | relURL }}">🧸 おもちゃ診断を試す</a>
+    <a class="home-hero-btn" href="{{ "posts/" | relURL }}">📚 記事一覧から探す</a>
     <a class="home-hero-btn" href="{{ "search/" | relURL }}">🔍 商品名で検索</a>
-    <a class="home-hero-btn outline" href="https://omcha.jp/" target="_blank" rel="noopener">🧸 おもちゃいろ公式</a>
+    <a class="home-hero-btn outline" href="https://omcha.jp/" target="_blank" rel="noopener">🌐 おもちゃいろ公式</a>
   </div>
 </section>
 {{- end }}
