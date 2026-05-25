@@ -24,13 +24,9 @@ document.addEventListener("DOMContentLoaded", () => {
             console.error("Failed to load index.json", err);
         });
 
-    // formatAge は hugo/assets/js/utils/age.js に集約済 (Issue #745 Phase 1)。
-    const formatAge = (window.OmochaUtils && window.OmochaUtils.formatAgeMin) || function () { return ""; };
-
-    function formatPrice(p) {
-        if (!p) return "";
-        return new Intl.NumberFormat('ja-JP').format(p);
-    }
+    // カード描画は window.OmochaUtils.renderProductCard に集約済 (Issue #745 Phase 2)。
+    // hugo/assets/js/utils/product-card.js を参照。
+    const renderProductCard = (window.OmochaUtils && window.OmochaUtils.renderProductCard) || null;
 
     function getKeywordsForPower(q2) {
         switch (q2) {
@@ -302,68 +298,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // 結果カードの動的生成
         resultGrid.innerHTML = "";
+        if (!renderProductCard) return;
         recommendations.forEach(item => {
-            const cardHtml = createProductCardHtml(item);
-            resultGrid.appendChild(cardHtml);
+            resultGrid.appendChild(renderProductCard(item));
         });
-    }
-
-    function createProductCardHtml(item) {
-        const prices = [item.price_amazon, item.price_rakuten, item.price_yahoo].filter(p => p > 0);
-        const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
-        const score100 = item.ivs_score_100 || 0;
-        const score = item.ivs_score || 0;
-
-        let tierClass = "score-bronze";
-        if (score100 >= 90) tierClass = "score-gold";
-        else if (score100 >= 75) tierClass = "score-silver";
-
-        const ageStr = formatAge(item.age_min_months);
-
-        const card = document.createElement("a");
-        card.className = "product-card";
-        card.href = item.permalink;
-        card.setAttribute("aria-label", `${item.product_name || item.title} の比較レビューを読む`);
-
-        let badgeHtml = "";
-        if (score100) {
-            badgeHtml = `
-                <div class="product-card-badges">
-                    <span class="product-card-score ${tierClass}">
-                        🏆 <strong>${score100}</strong><span class="product-card-score-suffix">点</span>
-                        ${minPrice > 0 ? `<span class="product-card-score-price">最安 &yen;${formatPrice(minPrice)}</span>` : ""}
-                    </span>
-                </div>
-            `;
-        } else if (score) {
-            badgeHtml = `
-                <div class="product-card-badges">
-                    <span class="product-card-score score-bronze">
-                        🏆 <strong>${score.toFixed(1)}</strong><span class="product-card-score-suffix">/5</span>
-                        ${minPrice > 0 ? `<span class="product-card-score-price">最安 &yen;${formatPrice(minPrice)}</span>` : ""}
-                    </span>
-                </div>
-            `;
-        }
-
-        const tagsHtml = (item.tags || []).slice(0, 2).map(t => `<span class="product-card-tag">#${t}</span>`).join("");
-
-        card.innerHTML = `
-            <div class="product-card-image">
-                ${item.image ? `<img src="${item.image}" alt="${item.product_name || item.title}" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<div class="product-card-image-fallback">&#129528;</div>`}
-                ${badgeHtml}
-                ${ageStr ? `<span class="product-card-age" title="対象年齢">👶 ${ageStr}</span>` : ""}
-            </div>
-            <div class="product-card-body">
-                ${item.brand ? `<div class="product-card-brand">${item.brand}</div>` : ""}
-                <h3 class="product-card-title">${item.title}</h3>
-                <div class="product-card-meta">
-                    <time datetime="${item.date}">${item.date}</time>
-                    ${tagsHtml ? `<span class="product-card-tags">${tagsHtml}</span>` : ""}
-                </div>
-            </div>
-        `;
-
-        return card;
     }
 });

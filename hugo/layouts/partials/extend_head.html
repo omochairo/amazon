@@ -1,6 +1,8 @@
-<!-- Shared JS utilities (Issue #745 Phase 1: formatAgeMin) -->
+<!-- Shared JS utilities (Issue #745 Phase 1: formatAgeMin / Phase 2: renderProductCard) -->
 {{- $ageUtil := resources.Get "js/utils/age.js" | minify | fingerprint -}}
 <script src="{{ $ageUtil.RelPermalink }}" defer></script>
+{{- $cardUtil := resources.Get "js/utils/product-card.js" | minify | fingerprint -}}
+<script src="{{ $cardUtil.RelPermalink }}" defer></script>
 
 <!-- Google Search Console verification -->
 <meta name="google-site-verification" content="P6g6vzSBBm0bNsbjQ8kQgFhMVgo5c3d7pVEMw1UWDNs" />

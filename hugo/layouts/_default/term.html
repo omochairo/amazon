@@ -115,15 +115,9 @@ document.addEventListener("DOMContentLoaded", function() {
   const ITEMS_PER_PAGE = 20;
   const AGE_STEPS = [0, 3, 6, 10, 12, 18, 24, 36, 48, 60, 72, 84, 108, 144, 180];
 
-  function scoreTierClass(score100) {
-    if (score100 >= 90) return "score-gold";
-    if (score100 >= 75) return "score-silver";
-    return "score-bronze";
-  }
-
-  // formatAgeMin は hugo/assets/js/utils/age.js (window.OmochaUtils.formatAgeMin) に集約済
-  // (Issue #745 Phase 1)。
-  const formatAgeMin = (window.OmochaUtils && window.OmochaUtils.formatAgeMin) || function () { return ""; };
+  // カード描画は window.OmochaUtils.renderProductCard に集約済
+  // (Issue #745 Phase 2 / hugo/assets/js/utils/product-card.js)。
+  const renderProductCard = (window.OmochaUtils && window.OmochaUtils.renderProductCard) || null;
 
   // index.json ロード用
   async function ensureItemsLoaded() {
@@ -214,69 +208,8 @@ document.addEventListener("DOMContentLoaded", function() {
     const itemsToShow = items.slice(start, end);
     
     itemsToShow.forEach(item => {
-      const a = document.createElement("a");
-      a.className = "product-card";
-      a.href = item.permalink;
-      a.setAttribute("aria-label", (item.product_name || item.title) + " の比較レビューを読む");
-      a.setAttribute("data-age-min", item.age_min_months || 0);
-      
-      const score100 = item.ivs_score_100 || 0;
-      const tierClass = scoreTierClass(score100);
-      
-      let minPrice = 99999999;
-      if (item.price_amazon > 0 && item.price_amazon < minPrice) minPrice = item.price_amazon;
-      if (item.price_rakuten > 0 && item.price_rakuten < minPrice) minPrice = item.price_rakuten;
-      if (item.price_yahoo > 0 && item.price_yahoo < minPrice) minPrice = item.price_yahoo;
-      if (minPrice === 99999999) minPrice = 0;
-
-      let scoreHtml = "";
-      const ageStr = formatAgeMin(item.age_min_months);
-      if (score100) {
-        scoreHtml = `<div class="product-card-badges">
-          <span class="product-card-score ${tierClass}" title="知育スコア (100点満点)">
-            🏆 <strong>${score100}</strong><span class="product-card-score-suffix">点</span>
-            ${minPrice > 0 ? `<span class="product-card-score-price">最安 &yen;${minPrice.toLocaleString()}</span>` : ""}
-          </span>
-        </div>`;
-      } else if (item.ivs_score) {
-        scoreHtml = `<div class="product-card-badges">
-          <span class="product-card-score score-bronze" title="知育スコア (5点満点)">
-            🏆 <strong>${item.ivs_score.toFixed(1)}</strong><span class="product-card-score-suffix">/5</span>
-            ${minPrice > 0 ? `<span class="product-card-score-price">最安 &yen;${minPrice.toLocaleString()}</span>` : ""}
-          </span>
-        </div>`;
-      }
-
-      const ageHtml = ageStr ? `<span class="product-card-age" title="対象年齢">&#128118; ${ageStr}</span>` : "";
-
-      let imgHtml = item.image 
-        ? `<img src="${item.image}" alt="${item.product_name || item.title}" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
-        : `<div class="product-card-image-fallback">&#129528;</div>`;
-        
-      let brandHtml = item.brand ? `<div class="product-card-brand">${item.brand}</div>` : "";
-      
-      let tagsHtml = "";
-      if (item.tags && item.tags.length > 0) {
-        const tHtml = item.tags.slice(0, 2).map(t => `<span class="product-card-tag">#${t}</span>`).join("");
-        tagsHtml = `<span class="product-card-tags">${tHtml}</span>`;
-      }
-
-      a.innerHTML = `
-        <div class="product-card-image">
-          ${imgHtml}
-          ${scoreHtml}
-          ${ageHtml}
-        </div>
-        <div class="product-card-body">
-          ${brandHtml}
-          <h3 class="product-card-title">${item.title}</h3>
-          <div class="product-card-meta">
-            <time datetime="${item.date}">${item.date}</time>
-            ${tagsHtml}
-          </div>
-        </div>
-      `;
-      grid.appendChild(a);
+      if (!renderProductCard) return;
+      grid.appendChild(renderProductCard(item));
     });
 
     if (items.length > end) {
