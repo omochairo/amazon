@@ -76,6 +76,21 @@ def extract_availability(item: dict) -> str:
             return msg.strip()
     return ""
 
+
+def extract_free_shipping(item: dict) -> bool:
+    """offersV2.listings.deliveryInfo から送料無料判定を取り出す。
+
+    PA-API の `deliveryInfo.isFreeShippingEligible` (True/False) を返す。
+    resources に `offersV2.listings.deliveryInfo` が含まれている必要がある。
+    取得失敗時は False (バッジ非表示) にフォールバック。
+    """
+    listings = _safe_get(item, "offersV2", "listings", default=[])
+    if listings:
+        flag = _safe_get(listings[0], "deliveryInfo", "isFreeShippingEligible")
+        if isinstance(flag, bool):
+            return flag
+    return False
+
 def extract_loyalty_points(item: dict) -> int:
     listings = _safe_get(item, "offersV2", "listings", default=[])
     if listings:
@@ -530,6 +545,9 @@ def main():
         # is_trusted_seller(seller) が False になる ASIN は items_for_jules
         # から除外される (search mode)。
         "offersV2.listings.merchantInfo",
+        # 送料無料バッジ表示用 (#613 案件⑤)。isFreeShippingEligible が True の
+        # ASIN のみ price-card に 🚚 送料無料 バッジを出す。
+        "offersV2.listings.deliveryInfo",
     ]
 
     blocklist = _load_asin_blocklist()
@@ -563,6 +581,7 @@ def main():
                         "availability": extract_availability(it),
                         "loyalty_points": extract_loyalty_points(it),
                         "savings_percentage": extract_savings_percentage(it),
+                        "free_shipping": extract_free_shipping(it),
                         "seller": extract_seller(it),
                         "source": "Amazon (Target)"
                     })
@@ -685,6 +704,7 @@ def main():
                     "availability": extract_availability(it),
                     "loyalty_points": extract_loyalty_points(it),
                     "savings_percentage": extract_savings_percentage(it),
+                    "free_shipping": extract_free_shipping(it),
                     "seller": extract_seller(it),
                     "source": "Amazon"
                 })

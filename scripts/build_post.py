@@ -96,7 +96,7 @@ def _sync_ivs_for_render(data: dict[str, Any]) -> None:
             f"https://www.amazon.co.jp/dp/{asin}/?tag=zefiransesu-22#customerReviews"
         )
 
-BADGE_FIELDS = ("availability", "loyalty_points", "savings_percentage")
+BADGE_FIELDS = ("availability", "loyalty_points", "savings_percentage", "free_shipping")
 
 
 def amazon_stock_state(availability: Any) -> str:
