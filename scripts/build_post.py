@@ -98,6 +98,29 @@ def _sync_ivs_for_render(data: dict[str, Any]) -> None:
 
 BADGE_FIELDS = ("availability", "loyalty_points", "savings_percentage")
 
+
+def amazon_stock_state(availability: Any) -> str:
+    """Amazon PA-API の availability メッセージから在庫状態を分類する。
+
+    返り値: "instock" / "low_stock" / "outofstock" / "preorder" / "unknown"
+    楽天/Yahoo は fetch_cross_search.py で正規化済 (instock/outofstock) だが
+    Amazon は自由記述文字列のためテンプレ側で分類する必要がある。
+    """
+    if not availability or not isinstance(availability, str):
+        return "unknown"
+    text = availability.strip()
+    if not text:
+        return "unknown"
+    if "在庫切れ" in text or "入荷時期は未定" in text or "取扱い終了" in text:
+        return "outofstock"
+    if "発売予定日" in text or "予約受付" in text:
+        return "preorder"
+    if "残り" in text and "点" in text:
+        return "low_stock"
+    if "在庫あり" in text or text.startswith("通常"):
+        return "instock"
+    return "unknown"
+
 ENRICHMENT_KEYS = (
     "review_summary",
     "use_case_scenarios",
@@ -1246,6 +1269,7 @@ def main() -> None:
         autoescape=False,
         keep_trailing_newline=True,
     )
+    env.filters["amazon_stock_state"] = amazon_stock_state
     template = env.get_template(template_file.name)
 
     rendered = 0
