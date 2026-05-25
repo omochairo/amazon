@@ -24,17 +24,8 @@ document.addEventListener("DOMContentLoaded", () => {
             console.error("Failed to load index.json", err);
         });
 
-    function formatAge(m) {
-        if (m === undefined || m === null) return "";
-        m = parseInt(m, 10);
-        if (m === 0) return "0歳〜";
-        if (m < 12) return `${m}ヶ月〜`;
-        const years = Math.floor(m / 12);
-        const rem = m % 12;
-        if (rem === 0) return `${years}歳〜`;
-        if (rem === 6) return `${years}.5歳〜`;
-        return `${(m / 12).toFixed(1)}歳〜`;
-    }
+    // formatAge は hugo/assets/js/utils/age.js に集約済 (Issue #745 Phase 1)。
+    const formatAge = (window.OmochaUtils && window.OmochaUtils.formatAgeMin) || function () { return ""; };
 
     function formatPrice(p) {
         if (!p) return "";
