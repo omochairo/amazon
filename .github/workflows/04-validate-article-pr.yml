@@ -84,6 +84,11 @@ on:
       - 'hugo/content/cospa.md'
       - 'hugo/content/deals.md'
       - 'hugo/data/features/**'
+      # 2026-05-25 (session 55 / Issue #745 follow-up): 知育スコア用語統一の一環で
+      # /about-score/ 説明ページを新設、/privacy/ を併せて更新。両 top-level page を
+      # validate (required check) として発火させる。
+      - 'hugo/content/about-score.md'
+      - 'hugo/content/privacy.md'
       # 2026-05-25 (session 47 / Issue #590 PR-3): /cospa/ /deals/ 自動更新 workflow。
       # workflow 本体を触る PR も validate を required check として発火させる。
       - '.github/workflows/09-feature-lists.yml'
