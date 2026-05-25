@@ -474,6 +474,42 @@ header .logo a {
   color: #166534;
   border: 1px solid #bbf7d0;
 }
+.post-content .amazon-badge.badge-stock--low {
+  background: #fff7ed;
+  color: #9a3412;
+  border: 1px solid #fed7aa;
+}
+.post-content .amazon-badge.badge-preorder {
+  background: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
+/* Amazon 実質価格 (ポイント還元考慮) */
+.post-content .amazon-effective-price {
+  font-size: 0.78rem;
+  color: #166534;
+  margin: -4px 0 6px;
+  text-align: center;
+}
+.post-content .amazon-effective-price strong { color: #14532d; }
+
+/* 在庫切れカード: amount をグレーアウト + CTA を muted */
+.post-content .price-card.is-outofstock .price-card-amount {
+  color: #94a3b8;
+  text-decoration: line-through;
+}
+.post-content .price-card .price-card-cta--muted {
+  background: #94a3b8 !important;
+  opacity: 0.85;
+}
+
+[data-theme="dark"] .post-content .amazon-effective-price,
+body.dark .post-content .amazon-effective-price { color: #86efac; }
+[data-theme="dark"] .post-content .amazon-effective-price strong,
+body.dark .post-content .amazon-effective-price strong { color: #bbf7d0; }
+[data-theme="dark"] .post-content .price-card.is-outofstock .price-card-amount,
+body.dark .post-content .price-card.is-outofstock .price-card-amount { color: #64748b; }
 
 /* ---------- Print ---------- */
 @media print {
