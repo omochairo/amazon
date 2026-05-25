@@ -2,29 +2,56 @@
   Related articles carousel partial.
   Finds other articles with the same brand or tags, and shows them in a swipeable carousel.
 */ -}}
-{{- $pages := where (where site.RegularPages "Type" "in" site.Params.mainSections) "Permalink" "!=" .Permalink -}}
+{{- $pages := where site.RegularPages "Section" "posts" -}}
+{{- $pages = where $pages "Permalink" "!=" .Permalink -}}
+
 {{- $brand := .Params.brand -}}
 {{- $tags := .Params.tags -}}
 
 {{- /* 1. 同じブランドのページを抽出 */ -}}
 {{- $brandMatches := slice -}}
 {{- if $brand -}}
-  {{- $brandMatches = where $pages "Params.brand" "==" $brand -}}
+  {{- $brandMatches = where $pages "Params.brand" $brand -}}
 {{- end -}}
 
 {{- /* 2. 同じタグを持つページを抽出 */ -}}
 {{- $tagMatches := slice -}}
 {{- if $tags -}}
-  {{- range $pages -}}
-    {{- $intersect := intersect .Params.tags $tags -}}
-    {{- if gt (len $intersect) 0 -}}
-      {{- $tagMatches = $tagMatches | append . -}}
+  {{- $tagMatches = where $pages "Params.tags" "intersect" $tags -}}
+{{- end -}}
+
+{{- /* 3. 重複を排除し、ブランド一致 ➔ タグ一致 ➔ 最新記事の順序を厳格に維持して結合 */ -}}
+{{- $related := slice -}}
+{{- $seen := dict .Permalink true -}}
+
+{{- /* ① ブランドが一致する記事を追加 */ -}}
+{{- range $brandMatches -}}
+  {{- if not (index $seen .Permalink) -}}
+    {{- $related = $related | append . -}}
+    {{- $seen = merge $seen (dict .Permalink true) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* ② タグが一致する記事を追加 (6件に満たない場合のみ) */ -}}
+{{- range $tagMatches -}}
+  {{- if lt (len $related) 6 -}}
+    {{- if not (index $seen .Permalink) -}}
+      {{- $related = $related | append . -}}
+      {{- $seen = merge $seen (dict .Permalink true) -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
 
-{{- /* 3. マージして順序整理（ブランド一致を優先し、重複を排除） */ -}}
-{{- $related := ($brandMatches | union $tagMatches) | union $pages -}}
+{{- /* ③ 残りの枠を最新の記事から補充 (6件に満たない場合のみ) */ -}}
+{{- range $pages -}}
+  {{- if lt (len $related) 6 -}}
+    {{- if not (index $seen .Permalink) -}}
+      {{- $related = $related | append . -}}
+      {{- $seen = merge $seen (dict .Permalink true) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
 {{- $relatedLimit := first 6 $related -}}
 
 {{- if gt (len $relatedLimit) 0 }}
