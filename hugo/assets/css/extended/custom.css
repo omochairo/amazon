@@ -3014,3 +3014,432 @@ body.dark .feature-platform {
 /* product-slideshow / hero などの既存 max-width:720px コンポーネントは
    wide screen でも中央寄せのまま残す (拡大しすぎると画像粗くなる) */
 
+/* ==========================================
+   #744: post.md.j2 のインラインスタイルを CSS に集約 (light + dark)
+   既存記事はインライン優先のため影響なし。新規生成記事のみ反映。
+   ========================================== */
+
+/* ---------- 自動生成記事の冒頭通知 ---------- */
+.post-content .auto-gen-notice {
+  background: #fafafa;
+  border: 1px solid #e0e0e0;
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  margin: 0 0 16px;
+  font-size: 0.82rem;
+  color: #666;
+  line-height: 1.5;
+}
+.post-content .auto-gen-notice strong { color: #d33; }
+
+[data-theme="dark"] .post-content .auto-gen-notice,
+body.dark .post-content .auto-gen-notice {
+  background: #1e293b;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+[data-theme="dark"] .post-content .auto-gen-notice strong,
+body.dark .post-content .auto-gen-notice strong { color: #fca5a5; }
+
+/* ---------- 正式商品名 ---------- */
+.post-content .product-full-name {
+  font-size: 0.9rem;
+  color: #666;
+  margin: 0 0 12px;
+}
+[data-theme="dark"] .post-content .product-full-name,
+body.dark .post-content .product-full-name { color: #94a3b8; }
+
+/* ---------- 商品ヒーロー画像 figure ---------- */
+.post-content .product-hero-image {
+  text-align: center;
+  margin: 0 auto 16px;
+  display: block;
+  width: 100%;
+}
+.post-content .product-hero-image img {
+  display: block;
+  margin: 0 auto;
+  max-width: 480px;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+}
+.post-content .product-hero-image figcaption {
+  font-size: 0.85rem;
+  color: #888;
+  margin-top: 8px;
+  text-align: center;
+}
+[data-theme="dark"] .post-content .product-hero-image figcaption,
+body.dark .post-content .product-hero-image figcaption { color: #94a3b8; }
+
+/* ---------- ターゲット紹介 (persona-fit) ---------- */
+.post-content .persona-fit {
+  background: #fef7f0;
+  border-left: 4px solid #ec8b5e;
+  border-radius: var(--radius-sm);
+  padding: 16px 20px;
+  margin: 24px 0;
+  color: #1f2937;
+}
+.post-content .persona-fit > strong { color: #9a3412; }
+.post-content .persona-fit ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+.post-content .persona-fit p {
+  margin: 8px 0 0;
+  font-size: 0.9rem;
+}
+
+[data-theme="dark"] .post-content .persona-fit,
+body.dark .post-content .persona-fit {
+  background: #2a1f17;
+  border-left-color: #fb923c;
+  color: #fde68a;
+}
+[data-theme="dark"] .post-content .persona-fit > strong,
+body.dark .post-content .persona-fit > strong { color: #fdba74; }
+
+/* ---------- 価格 3 サイト比較グリッド ---------- */
+.post-content .price-cta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+  color: #1f2937;
+}
+
+.post-content .price-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 14px 16px;
+  text-align: center;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  color: #1f2937;
+  position: relative;
+}
+.post-content .price-card .price-card-label {
+  font-size: 0.78rem;
+  color: #6b7280;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+.post-content .price-card .price-card-amount {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #111;
+  margin: 4px 0 8px;
+}
+.post-content .price-card .price-card-amount .price-card-tbd {
+  font-size: 0.95rem;
+  color: #999;
+  font-weight: 400;
+}
+.post-content .price-card .price-card-nolink {
+  color: #aaa;
+  font-size: 0.85rem;
+}
+.post-content .price-card .price-card-cta {
+  display: inline-block;
+  color: #fff;
+  font-weight: 700;
+  padding: 8px 18px;
+  border-radius: 6px;
+  text-decoration: none;
+  width: 90%;
+}
+.post-content .price-card .price-card-cta--amazon { background: #ff9900; }
+.post-content .price-card .price-card-cta--rakuten { background: #bf0000; }
+.post-content .price-card .price-card-cta--yahoo { background: #ff0033; }
+
+.post-content .price-card .amazon-badge.badge-asuraku {
+  background: #f5f3ff;
+  color: #6d28d9;
+  border: 1px solid #ddd6fe;
+}
+.post-content .price-card .price-badge-row { margin: -4px 0 8px; }
+
+[data-theme="dark"] .post-content .price-cta-grid,
+body.dark .post-content .price-cta-grid { color: #e5e7eb; }
+
+[data-theme="dark"] .post-content .price-card,
+body.dark .post-content .price-card {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+[data-theme="dark"] .post-content .price-card .price-card-label,
+body.dark .post-content .price-card .price-card-label { color: #94a3b8; }
+[data-theme="dark"] .post-content .price-card .price-card-amount,
+body.dark .post-content .price-card .price-card-amount { color: #f9fafb; }
+[data-theme="dark"] .post-content .price-card .price-card-amount .price-card-tbd,
+body.dark .post-content .price-card .price-card-amount .price-card-tbd { color: #64748b; }
+[data-theme="dark"] .post-content .price-card .price-card-nolink,
+body.dark .post-content .price-card .price-card-nolink { color: #64748b; }
+[data-theme="dark"] .post-content .price-card .amazon-badge.badge-asuraku,
+body.dark .post-content .price-card .amazon-badge.badge-asuraku {
+  background: #2d1b56;
+  color: #c4b5fd;
+  border-color: #4c1d95;
+}
+
+/* ---------- リンク誤報告フラグ (Issue #515) ---------- */
+.post-content .link-report-flag {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  color: #cbd5e1;
+  text-decoration: none;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+[data-theme="dark"] .post-content .link-report-flag,
+body.dark .post-content .link-report-flag { color: #64748b; }
+
+/* ---------- 最安値通知 (best-deal) ---------- */
+.post-content .best-deal {
+  background: #fff3e0;
+  border-left: 4px solid #ff9800;
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  margin: 14px 0;
+  font-size: 0.95rem;
+  color: #1f2937;
+}
+.post-content .best-deal strong.best-deal-price { color: #e65100; }
+
+[data-theme="dark"] .post-content .best-deal,
+body.dark .post-content .best-deal {
+  background: #2a1f0a;
+  border-left-color: #fb923c;
+  color: #fde68a;
+}
+[data-theme="dark"] .post-content .best-deal strong.best-deal-price,
+body.dark .post-content .best-deal strong.best-deal-price { color: #fdba74; }
+
+/* ---------- Keepa 価格推移グラフ ---------- */
+.post-content .keepa-graph {
+  margin: 18px 0;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  color: #1f2937;
+  text-align: center;
+}
+.post-content .keepa-graph .keepa-graph-label {
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 10px;
+}
+.post-content .keepa-graph img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+.post-content .keepa-graph p {
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+[data-theme="dark"] .post-content .keepa-graph,
+body.dark .post-content .keepa-graph {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e5e7eb;
+}
+[data-theme="dark"] .post-content .keepa-graph .keepa-graph-label,
+body.dark .post-content .keepa-graph .keepa-graph-label { color: #f9fafb; }
+[data-theme="dark"] .post-content .keepa-graph p,
+body.dark .post-content .keepa-graph p { color: #94a3b8; }
+
+/* ---------- 競合比較グリッド ---------- */
+.post-content .competitor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin: 18px 0;
+  color: #1f2937;
+}
+.post-content .competitor-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  color: #1f2937;
+}
+.post-content .competitor-card .competitor-card-image {
+  text-align: center;
+  margin-bottom: 10px;
+}
+.post-content .competitor-card .competitor-card-image img { border-radius: 6px; }
+.post-content .competitor-card h3 {
+  margin: 0 0 8px;
+  font-size: 1.02rem;
+  line-height: 1.4;
+  color: #1f2937;
+}
+.post-content .competitor-card .competitor-price-tag {
+  font-size: 0.85rem;
+  color: #92400e;
+  background: #fef3c7;
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+.post-content .competitor-card .competitor-features {
+  margin: 8px 0;
+  padding-left: 18px;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+.post-content .competitor-card details {
+  margin: 8px 0;
+  font-size: 0.85rem;
+  color: #1f2937;
+}
+.post-content .competitor-card details summary {
+  cursor: pointer;
+  color: #6b7280;
+}
+.post-content .competitor-card details ul {
+  margin-top: 6px;
+  padding-left: 18px;
+  line-height: 1.6;
+}
+.post-content .competitor-card .competitor-cta-wrap {
+  margin-top: 10px;
+  text-align: center;
+}
+.post-content .competitor-card .competitor-cta-wrap--amazon { margin-top: 8px; }
+.post-content .competitor-card .competitor-cta {
+  display: inline-block;
+  color: #fff;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 5px;
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+.post-content .competitor-card .competitor-cta--internal { background: #0ea5e9; }
+.post-content .competitor-card .competitor-cta--amazon { background: #ff9900; }
+
+[data-theme="dark"] .post-content .competitor-grid,
+body.dark .post-content .competitor-grid { color: #e5e7eb; }
+[data-theme="dark"] .post-content .competitor-card,
+body.dark .post-content .competitor-card {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+[data-theme="dark"] .post-content .competitor-card h3,
+body.dark .post-content .competitor-card h3 { color: #f9fafb; }
+[data-theme="dark"] .post-content .competitor-card .competitor-price-tag,
+body.dark .post-content .competitor-card .competitor-price-tag {
+  background: #422006;
+  color: #fcd34d;
+}
+[data-theme="dark"] .post-content .competitor-card details,
+body.dark .post-content .competitor-card details { color: #e5e7eb; }
+[data-theme="dark"] .post-content .competitor-card details summary,
+body.dark .post-content .competitor-card details summary { color: #94a3b8; }
+
+/* ---------- 専門家評価 (expert-take) ---------- */
+.post-content .expert-take {
+  background: #f3e5f5;
+  border-left: 4px solid #9c27b0;
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+  margin: 20px 0;
+  color: #1f2937;
+}
+.post-content .expert-take > strong { color: #6a1b9a; }
+
+[data-theme="dark"] .post-content .expert-take,
+body.dark .post-content .expert-take {
+  background: #2d1b4e;
+  border-left-color: #c084fc;
+  color: #e9d5ff;
+}
+[data-theme="dark"] .post-content .expert-take > strong,
+body.dark .post-content .expert-take > strong { color: #d8b4fe; }
+
+/* ---------- 編集者コメント (editorial-comment) ---------- */
+.post-content .editorial-comment {
+  background: #e8f4f8;
+  border-left: 4px solid #4a90b8;
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+  margin: 24px 0;
+  color: #1f2937;
+}
+.post-content .editorial-comment > strong { color: #1565c0; }
+
+[data-theme="dark"] .post-content .editorial-comment,
+body.dark .post-content .editorial-comment {
+  background: #0c2540;
+  border-left-color: #60a5fa;
+  color: #dbeafe;
+}
+[data-theme="dark"] .post-content .editorial-comment > strong,
+body.dark .post-content .editorial-comment > strong { color: #93c5fd; }
+
+/* ---------- ソース一覧 (sources-list) + 信頼度バッジ ---------- */
+.post-content .sources-list {
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+.post-content .sources-list .source-tier {
+  display: inline-block;
+  font-size: 0.75rem;
+  padding: 1px 6px;
+  margin-left: 6px;
+  border-radius: 4px;
+  color: #333;
+}
+.post-content .sources-list .source-tier--high { background: #dcedc8; }
+.post-content .sources-list .source-tier--medium { background: #fff9c4; }
+.post-content .sources-list .source-tier--low { background: #ffe0b2; }
+.post-content .sources-list .source-author { color: #888; }
+.post-content .sources-list .source-notes { color: #999; }
+
+[data-theme="dark"] .post-content .sources-list .source-tier,
+body.dark .post-content .sources-list .source-tier { color: #1f2937; }
+[data-theme="dark"] .post-content .sources-list .source-author,
+body.dark .post-content .sources-list .source-author { color: #94a3b8; }
+[data-theme="dark"] .post-content .sources-list .source-notes,
+body.dark .post-content .sources-list .source-notes { color: #64748b; }
+
+/* ---------- claims details ---------- */
+.post-content .claims-details {
+  margin: 16px 0;
+  font-size: 0.9rem;
+  color: #1f2937;
+}
+.post-content .claims-details summary { color: #1f2937; }
+.post-content .claims-details ul { margin-top: 10px; }
+.post-content .claims-details .claim-meta { color: #666; }
+.post-content .claims-details .claim-meta .claim-cross-check { color: #2e7d32; }
+.post-content .claims-details .claim-notes { color: #888; }
+
+[data-theme="dark"] .post-content .claims-details,
+body.dark .post-content .claims-details { color: #e5e7eb; }
+[data-theme="dark"] .post-content .claims-details summary,
+body.dark .post-content .claims-details summary { color: #e5e7eb; }
+[data-theme="dark"] .post-content .claims-details .claim-meta,
+body.dark .post-content .claims-details .claim-meta { color: #94a3b8; }
+[data-theme="dark"] .post-content .claims-details .claim-meta .claim-cross-check,
+body.dark .post-content .claims-details .claim-meta .claim-cross-check { color: #86efac; }
+[data-theme="dark"] .post-content .claims-details .claim-notes,
+body.dark .post-content .claims-details .claim-notes { color: #64748b; }
+
