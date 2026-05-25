@@ -1,0 +1,33 @@
+{
+  "generated_at": "2026-05-25T02:07:59Z",
+  "articles_loaded": 317,
+  "cospa": {
+    "count": 20,
+    "filter": {
+      "min_ivs": 4.0,
+      "price_min": 500,
+      "price_max": 5000,
+      "top_n": 20
+    },
+    "drops": {
+      "low_ivs": 26,
+      "price_out_of_band": 62,
+      "missing_ivs_100": 0
+    }
+  },
+  "deals": {
+    "count": 20,
+    "filter": {
+      "min_ivs": 4.0,
+      "min_savings": 20,
+      "stale_days": 14,
+      "top_n": 20
+    },
+    "drops": {
+      "low_ivs": 26,
+      "no_savings_data": 0,
+      "savings_below_threshold": 172,
+      "stale_or_unknown_fetch": 0
+    }
+  }
+}
