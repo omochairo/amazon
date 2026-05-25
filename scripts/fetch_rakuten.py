@@ -152,8 +152,10 @@ def main():
         })
 
     # --- Fetch Ranking Data (Layer 1) ---
-    # Use standard Ichiba Ranking API (v1) if the RMS specific one is failing
-    ranking_url = "https://app.rakuten.co.jp/services/api/IchibaItem/Ranking/20220601"
+    # Use the openapi host (RMS-style) for v20220601. The legacy
+    # app.rakuten.co.jp host returns "specify valid applicationId" for
+    # v20220601 with our app_id, mirroring how Search migrated above.
+    ranking_url = "https://openapi.rakuten.co.jp/ichibaranking/api/IchibaItem/Ranking/20220601"
     ranking_params = {
         "applicationId": app_id,
         "accessKey": access_key,
