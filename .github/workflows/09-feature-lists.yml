@@ -1,0 +1,117 @@
+name: Feature Lists (cospa monthly / deals weekly)
+# Issue #590 PR-3: /cospa/ 月次 + /deals/ 週次 の特集ページに自動生成データを反映する
+# 専用 workflow。scripts/build_feature_lists.py で data/articles/*.json と
+# data/raw/per_asin/<ASIN>/amazon.json を集計し、hugo/data/features/{cospa,deals}.json
+# と data/features/_build_manifest.json を更新する PR を App token で起票して
+# auto-merge する。
+#
+# 構成: 単一 job で常に cospa と deals の両方を再生成する (build_feature_lists.py が
+# 両方を一気に出力するため)。cron は cospa 用 (月次) と deals 用 (週次) の 2 種類を
+# 並べる。実際の hugo build は data に変化があった日だけ走るので、毎週 cospa を
+# 再計算しても無駄にはならない。
+#
+# trap 対応 (memory):
+# - hugo/ は .gitignore 対象のため git add -f で強制 stage
+# - main 保護下の git-auto-commit-action は GH006 silent reject になるので使わず
+#   App token + 通常の git commit + gh pr create で PR を経由させる
+# - APP token は actions/create-github-app-token で発行 (peter-evans/create-pr では
+#   validate が発火しない trap を避ける)
+on:
+  workflow_dispatch:
+  schedule:
+    # 月次 cospa: 毎月 1 日 19:00 UTC = 2 日 04:00 JST
+    - cron: '0 19 1 * *'
+    # 週次 deals: 毎週火曜 19:00 UTC = 水曜 04:00 JST。火曜の楽天ランキング
+    # workflow (07) と日をずらして同時刻 push の衝突を避ける。
+    - cron: '0 19 * * 2'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: feature-lists
+  cancel-in-progress: false
+
+jobs:
+  publish-features:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build feature lists (cospa + deals)
+        run: |
+          python scripts/build_feature_lists.py \
+            --articles-dir data/articles \
+            --per-asin-dir data/raw/per_asin \
+            --out-hugo hugo/data/features \
+            --out-manifest data/features/_build_manifest.json \
+            --top-n 20
+
+      - name: Create feature lists update PR + enable auto-merge
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+
+          # /hugo は gitignore 対象のため -f で強制 stage する。
+          git add -f hugo/data/features/cospa.json hugo/data/features/deals.json || true
+          git add data/features/_build_manifest.json || true
+
+          if git diff --cached --quiet; then
+            echo "No feature list changes to commit; skipping PR creation."
+            exit 0
+          fi
+
+          # 既存 open の自動 feature-lists PR があれば閉じる (週次重複防止)。
+          echo "Checking for old automated feature-lists PRs..."
+          gh pr list --base main --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("feature-lists/")) | .number' | while read -r pr_num; do
+            if [ -n "$pr_num" ]; then
+              echo "Closing old PR #$pr_num and deleting branch..."
+              gh pr close "$pr_num" -d || true
+            fi
+          done
+
+          BRANCH="feature-lists/${{ github.run_id }}"
+          git config user.name "omochairo-fetch-bot[bot]"
+          git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit -m "data: refresh /cospa/ + /deals/ feature lists (run ${{ github.run_id }})"
+          git push -u origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "data: refresh /cospa/ + /deals/ feature lists (run ${{ github.run_id }})" \
+            --body "Automated refresh of \`hugo/data/features/cospa.json\` and \`hugo/data/features/deals.json\` by \`scripts/build_feature_lists.py\`. Triggered by schedule \`${{ github.event.schedule }}\` (workflow run ${{ github.run_id }}). Refs #590." \
+            --base main \
+            --head "$BRANCH")
+          echo "Created: $PR_URL"
+
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge enabled on $PR_URL"
+          else
+            echo "::warning::Could not enable auto-merge on $PR_URL"
+          fi
+        continue-on-error: true
