@@ -658,6 +658,51 @@ def check_prices_verified(data: dict) -> CheckResult:
     return CheckResult("prices_verified", True, score, msg)
 
 
+def check_no_reseller_pricing(data: dict) -> CheckResult:
+    """Detect ASINs whose Amazon Buy Box price is dramatically higher than
+    the same product on Rakuten / Yahoo — a strong indicator that the ASIN
+    is a third-party reseller scam (e.g. B0G398BYV6 Switch Mario Wonder
+    listed at ¥8480 when official ASIN B0C8Y9THVS is ¥5980).
+
+    Hard fail when amazon_price > 1.3x min(rakuten, yahoo). 1.3x balances
+    legitimate Amazon markup (1.0-1.15x typical) against clear reseller
+    premiums (1.3x+). Only fires when at least one of rakuten/yahoo has a
+    real price so the gate doesn't false-trip on niche products.
+    """
+    product = data.get("product") or {}
+    prices = product.get("prices") or {}
+    amazon = prices.get("amazon") or {}
+    try:
+        a_price = int(amazon.get("price") or 0)
+    except (TypeError, ValueError):
+        a_price = 0
+    if a_price <= 0:
+        return CheckResult("no_reseller_pricing", True, 1.0, "no amazon price")
+    cross_prices: list[tuple[str, int]] = []
+    for src in ("rakuten", "yahoo"):
+        entry = prices.get(src) or {}
+        try:
+            p = int(entry.get("price") or 0)
+        except (TypeError, ValueError):
+            p = 0
+        if p > 0:
+            cross_prices.append((src, p))
+    if not cross_prices:
+        return CheckResult("no_reseller_pricing", True, 1.0, "no rakuten/yahoo price to compare")
+    best_src, best_p = min(cross_prices, key=lambda x: x[1])
+    ratio = a_price / best_p
+    if ratio > 1.30:
+        asin = product.get("asin", "?")
+        msg = (
+            f"reseller-pricing suspect: Amazon ¥{a_price} vs {best_src} ¥{best_p} "
+            f"(ratio {ratio:.2f}x > 1.30). ASIN {asin} may be a third-party "
+            f"reseller scam. Investigate canonical ASIN and add to "
+            f"data/asin_blocklist.json if confirmed."
+        )
+        return CheckResult("no_reseller_pricing", False, 0.0, msg)
+    return CheckResult("no_reseller_pricing", True, 1.0, f"OK (ratio {ratio:.2f}x vs {best_src})")
+
+
 def check_tone(data: dict) -> CheckResult:
     """Scan all narrative + faq text for forbidden childish tone patterns."""
     texts = []
@@ -798,6 +843,7 @@ def evaluate_article(
     report.checks.append(check_cert_sources_content(data, fetch_enabled=cert_fetch))
     report.checks.append(check_edu_domains(data))
     report.checks.append(check_prices_verified(data))
+    report.checks.append(check_no_reseller_pricing(data))
     report.checks.append(check_tone(data))
     report.checks.append(check_heading_hierarchy(md_text))
     report.checks.append(check_body_word_count(md_text))

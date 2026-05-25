@@ -86,6 +86,95 @@ def extract_loyalty_points(item: dict) -> int:
             return 0
     return 0
 
+
+# 信頼できる出品者 (Buy Box が Amazon 直販 or メーカー直販の場合のみ
+# 記事化候補にする)。第三者セラーが Buy Box を取っている ASIN は転売価格の
+# プレミアム上乗せが多発するため、article pool から除外する。
+TRUSTED_SELLER_PATTERNS = (
+    "amazon.co.jp",
+    "amazon japan",
+    "アマゾン",                       # アマゾンジャパン G.K.
+    "任天堂",                         # 任天堂直販 (漢字)
+    "ニンテンドー",                   # 任天堂直販 (カタカナ)
+    "nintendo",
+    "タカラトミー",
+    "takara tomy",
+    "バンダイ",                       # BANDAI
+    "bandai",
+    "エポック",                       # エポック社
+    "epoch",
+    "セガトイズ",
+    "sega",
+    "lego",                          # レゴジャパン
+    "学研",
+    "くもん",
+    "公文",
+    "kumon",
+    "ボーネルンド",
+    "borne",
+)
+
+
+def extract_seller(item: dict) -> str:
+    """offersV2.listings.merchantInfo.name から Buy Box の出品者名を取り出す。
+
+    PA-API resources に `offersV2.listings.merchantInfo` を要求している場合
+    のみ取得できる。未指定または取得失敗時は空文字。
+    """
+    listings = _safe_get(item, "offersV2", "listings", default=[])
+    if listings:
+        name = _safe_get(listings[0], "merchantInfo", "name")
+        if isinstance(name, str):
+            return name.strip()
+    return ""
+
+
+def is_trusted_seller(seller: str) -> bool:
+    """seller 名が `TRUSTED_SELLER_PATTERNS` のいずれかに部分一致するか。
+
+    PA-API が seller を返さない (空文字) 場合は **信頼不能** として False。
+    これにより、merchantInfo を返さない transient エラーで誤ってスカム
+    ASIN を通すリスクを避ける。
+    """
+    if not seller:
+        return False
+    s = seller.lower()
+    return any(pat in s for pat in TRUSTED_SELLER_PATTERNS)
+
+
+def is_low_stock_reseller_signal(availability: str) -> bool:
+    """`残り\\d+点` などの限定在庫表記は転売出品の典型シグナル。
+
+    Amazon 直販 / メーカー直販は通常潤沢な在庫を持つため低在庫メッセージは
+    出ない。`カートに追加できます` / `通常配送無料` 等の標準表記は False。
+    """
+    if not availability:
+        return False
+    if re.search(r"残り\s*\d+\s*点", availability):
+        return True
+    if "在庫わずか" in availability:
+        return True
+    return False
+
+
+def _load_asin_blocklist(path: str = "data/asin_blocklist.json") -> set:
+    """data/asin_blocklist.json から ASIN ブロックリストを読む。
+
+    ファイル形式: {"blocked": [{"asin": "B0G398BYV6", "reason": "..."}]}
+    取り扱いはセッション中に動的: 検出済みの転売 ASIN を恒久ブロックする。
+    """
+    if not os.path.exists(path):
+        return set()
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        blocked = data.get("blocked", []) if isinstance(data, dict) else []
+        return {entry["asin"] for entry in blocked if isinstance(entry, dict) and entry.get("asin")}
+    except (OSError, json.JSONDecodeError) as e:
+        logger.warning(f"Failed to load ASIN blocklist {path}: {e}")
+        return set()
+
+
 def write_per_asin_snapshot(out_root: str, item: dict) -> None:
     """Persist per-ASIN amazon snapshot so build_post.py can back-fill badge
     fields for past articles even after data/raw/amazon.json gets overwritten.
@@ -437,7 +526,15 @@ def main():
         "offersV2.listings.price",
         "offersV2.listings.availability",
         "offersV2.listings.loyaltyPoints",
+        # Buy Box の出品者名を取得して転売 ASIN を弾くために使う。
+        # is_trusted_seller(seller) が False になる ASIN は items_for_jules
+        # から除外される (search mode)。
+        "offersV2.listings.merchantInfo",
     ]
+
+    blocklist = _load_asin_blocklist()
+    if blocklist:
+        logger.info(f"ASIN blocklist loaded: {len(blocklist)} ASIN(s) will be skipped")
 
     # Sniper Mode: Fetch specific ASIN(s) first.
     # --asin accepts CSV per workflow input "カンマ区切りASIN"; PA-API GetItems
@@ -466,6 +563,7 @@ def main():
                         "availability": extract_availability(it),
                         "loyalty_points": extract_loyalty_points(it),
                         "savings_percentage": extract_savings_percentage(it),
+                        "seller": extract_seller(it),
                         "source": "Amazon (Target)"
                     })
             except Exception as e:
@@ -570,6 +668,10 @@ def main():
                 asin = it.get("asin")
                 if not asin or asin in seen_asins:
                     continue
+                if asin in blocklist:
+                    logger.info(f"  skip blocklisted ASIN {asin}")
+                    seen_asins.add(asin)
+                    continue
                 seen_asins.add(asin)
                 items.append({
                     "asin": asin,
@@ -583,6 +685,7 @@ def main():
                     "availability": extract_availability(it),
                     "loyalty_points": extract_loyalty_points(it),
                     "savings_percentage": extract_savings_percentage(it),
+                    "seller": extract_seller(it),
                     "source": "Amazon"
                 })
                 if asin in target_asins or asin not in existing:
@@ -595,18 +698,43 @@ def main():
 
     os.makedirs(args.out, exist_ok=True)
 
-    # Strip already-covered ASINs from the Jules-facing list. Sniper-mode
-    # target ASIN is exempt (user explicitly asked to re-fetch it). Snapshots
-    # and per-ASIN competitor files still get every item so that internal
-    # linking and badge back-fill keep working for the full catalog.
-    items_for_jules = [
-        it for it in items
-        if it.get("asin") in target_asins or it.get("asin") not in existing
-    ]
+    # Strip already-covered ASINs + reseller/scam signals from the Jules-facing
+    # list. Sniper-mode target ASIN is exempt (user explicitly asked to
+    # re-fetch it). Snapshots and per-ASIN competitor files still get every
+    # item so that internal linking and badge back-fill keep working for the
+    # full catalog.
+    #
+    # 転売 ASIN 検出ロジック (2026-05-25, #732 follow-up):
+    #   1. blocklist (data/asin_blocklist.json): 既知の転売 ASIN を恒久除外
+    #   2. seller != Amazon.co.jp / メーカー公式: Buy Box が第三者出品の ASIN は
+    #      価格プレミアム上乗せが典型。is_trusted_seller() で除外
+    #   3. availability に "残り N 点" 表記: 直販は通常潤沢な在庫なのでこの
+    #      表記が出る ASIN は転売出品の確率が高い
+    # sniper 指定された ASIN はユーザ意図を尊重して除外しない (=明示確認済み)
+    reseller_dropped = 0
+    items_for_jules: list = []
+    for it in items:
+        asin = it.get("asin") or ""
+        if asin in target_asins:
+            items_for_jules.append(it)
+            continue
+        if asin in existing:
+            continue
+        seller = it.get("seller") or ""
+        availability = it.get("availability") or ""
+        if not is_trusted_seller(seller):
+            logger.info(f"  reseller-drop {asin}: seller={seller!r} not in trusted list")
+            reseller_dropped += 1
+            continue
+        if is_low_stock_reseller_signal(availability):
+            logger.info(f"  reseller-drop {asin}: low-stock availability={availability!r}")
+            reseller_dropped += 1
+            continue
+        items_for_jules.append(it)
     dropped = len(items) - len(items_for_jules)
     logger.info(
         f"Collected {len(items)} unique ASINs, {len(items_for_jules)} new for Jules "
-        f"(dropped {dropped} already-covered)"
+        f"(dropped {dropped} already-covered + {reseller_dropped} reseller-signal)"
     )
     jan_present = sum(1 for it in items if it.get("jan_code"))
     if items:
