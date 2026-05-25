@@ -77,7 +77,7 @@
 {{- $topBrands := first 8 $brands.ByCount }}
 <section class="home-section">
   <header class="home-section-header">
-    <h2>🏢 メーカーから探す</h2>
+    <h2>🧸 メーカーから探す</h2>
     <a class="home-section-more" href="{{ "brands/" | relURL }}">すべて見る →</a>
   </header>
   <div class="brand-grid">
@@ -93,8 +93,17 @@
       {{- end }}
       <a class="brand-card" href="{{ (printf "brands/%s/" (urlize $term)) | relURL }}">
         <div class="brand-card-image">
-          {{- if $thumb }}<img src="{{ $thumb }}" alt="{{ $term }}" loading="lazy" referrerpolicy="no-referrer">
-          {{- else }}<div class="brand-card-image-fallback">🏢</div>{{ end }}
+          {{- if $thumb }}
+            <img src="{{ $thumb }}" alt="{{ $term }}" loading="lazy" referrerpolicy="no-referrer">
+          {{- else }}
+            {{- $emojis := slice "🧸" "🎨" "🧩" "🪁" "🚂" "🤹" "🧱" "🪀" "🛹" "🎺" -}}
+            {{- $emojiIndex := mod (len $term) (len $emojis) -}}
+            {{- $fallbackEmoji := index $emojis $emojiIndex -}}
+            <div class="brand-card-image-fallback">{{ $fallbackEmoji }}</div>
+          {{- end }}
+          <div class="brand-card-hover-overlay">
+            <span class="brand-card-hover-text">{{ $term }} のおもちゃを見る →</span>
+          </div>
         </div>
         <div class="brand-card-body">
           <h3 class="brand-card-name">{{ $term }}</h3>
