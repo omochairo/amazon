@@ -16,3 +16,15 @@ data/build_manifest.json
 # ローカル開発の一時生成物 (preview スクリーンショット / 解析スクリプト)
 /screenshot*.png
 /scratch/
+
+# ==========================================
+# Jules/LLM エージェント向けの一時生成物 (ルート直下のみ)
+# ==========================================
+/fix_*.py
+/fix_*.json
+/tmp_*.py
+/tmp_*.json
+/debug_*.py
+/debug_*.json
+/scratch_*.py
+/scratch_*.json
