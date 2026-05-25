@@ -1291,6 +1291,8 @@ def main() -> None:
             # 2026-05-15 (@J Phase 2): テンプレが参照する product.ivs_detail を
             # 新スコアで上書きしてから render する (本文内 IVS 表示を frontmatter と同期)。
             _sync_ivs_for_render(data)
+            # Issue #515: link_report_flag macro が記事 URL 構築用に slug を参照する。
+            data["slug"] = slug
             md_body = template.render(**data)
             draft = _quality_draft(slug, src_path, args.min_score)
             post = frontmatter.Post(md_body, **_frontmatter_meta(data, slug, draft, git_history, f))
