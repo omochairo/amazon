@@ -68,6 +68,10 @@ on:
       # /hugo gitignore trap で main 未 push だった wiki_mapping.json 追加 PR を
       # required check として走らせる。
       - 'hugo/data/wiki_mapping.json'
+      # 2026-05-25 (session 46 / PR #693): hugo layouts / config.toml を触る UI 改善 PR を
+      # required check として走らせる ([[04-validate-paths-trap]] 対策)
+      - 'hugo/layouts/**'
+      - 'hugo/config.toml'
   workflow_dispatch:
 
 permissions:
