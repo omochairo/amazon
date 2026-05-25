@@ -1250,6 +1250,15 @@ def main() -> None:
 
     rendered = 0
     skipped_legacy = 0
+
+    # 充足率統計データの初期化
+    stats = {
+        "youtube": {"primary": 0, "fallback": 0, "missing": 0},
+        "news": {"primary": 0, "fallback": 0, "missing": 0},
+        "books": {"primary": 0, "fallback": 0, "missing": 0},
+        "omcha": {"primary": 0, "fallback": 0, "missing": 0},
+    }
+
     for f in sorted(src_path.glob("*.json")):
         if f.stem.endswith(SUFFIX_SKIP):
             continue
@@ -1265,6 +1274,12 @@ def main() -> None:
                 data.setdefault("faq", [])
                 data.setdefault("keywords", [])
                 skipped_legacy += 1
+            # フォールバック実行前の Jules 由来データの存在有無を記録
+            has_jules_yt = bool(data.get("youtube_embeds"))
+            has_jules_news = bool(data.get("news"))
+            has_jules_books = bool(data.get("books"))
+            has_jules_omcha = bool(data.get("omcha_related"))
+
             _merge(data, _load_optional_json(src_path / f"{slug}.enrichment.json"), ENRICHMENT_KEYS)
             _merge(data, _load_optional_json(src_path / f"{slug}.seo.json"), SEO_KEYS)
             _backfill_amazon_badges(data, raw_amazon_index, per_asin_root)
@@ -1276,6 +1291,20 @@ def main() -> None:
             _attach_omcha_related(data, per_asin_root)
             _attach_internal_links(data, asin_to_slug, site_base_path)
             _fill_jsonld(data)
+
+            # 統計データの集計
+            def _update_stats(key: str, has_jules: bool, has_final: bool) -> None:
+                if has_jules:
+                    stats[key]["primary"] += 1
+                elif has_final:
+                    stats[key]["fallback"] += 1
+                else:
+                    stats[key]["missing"] += 1
+
+            _update_stats("youtube", has_jules_yt, bool(data.get("youtube_embeds")))
+            _update_stats("news", has_jules_news, bool(data.get("news")))
+            _update_stats("books", has_jules_books, bool(data.get("books")))
+            _update_stats("omcha", has_jules_omcha, bool(data.get("omcha_related")))
 
             _meta_re = re.compile(r"\s*[(（]\s*\d+\s*字\s*[)）]\s*$")
             if isinstance(data.get("narrative"), dict):
@@ -1324,6 +1353,54 @@ def main() -> None:
             rendered += 1
         except Exception as e:
             print(f"Error processing {f}: {e}")
+
+    # data/build_manifest.json の出力
+    manifest_dir = pathlib.Path("data")
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "built_at": datetime.now().astimezone().isoformat(),
+        "total": rendered,
+        "summary": {
+            "youtube": stats["youtube"],
+            "news": stats["news"],
+            "books": stats["books"],
+            "omcha": stats["omcha"],
+        }
+    }
+    try:
+        (manifest_dir / "build_manifest.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2),
+            encoding="utf-8"
+        )
+    except Exception as e:
+        print(f"Failed to write build_manifest.json: {e}")
+
+    # GITHUB_STEP_SUMMARY への出力
+    import os
+    summary_env = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_env:
+        def _pct(val: int, total: int) -> str:
+            return f"{val} ({val / total * 100:.1f}%)" if total > 0 else "0 (0.0%)"
+
+        def _cov_pct(primary: int, fallback: int, total: int) -> str:
+            return f"{(primary + fallback) / total * 100:.1f}%" if total > 0 else "0.0%"
+
+        summary_md = f"""
+## Build Manifest ({rendered} articles)
+
+| Media Type | Primary (Jules) | Fallback (Cache) | Missing | Coverage |
+| :--- | :---: | :---: | :---: | :---: |
+| **YouTube** | {_pct(stats['youtube']['primary'], rendered)} | {_pct(stats['youtube']['fallback'], rendered)} | {_pct(stats['youtube']['missing'], rendered)} | {_cov_pct(stats['youtube']['primary'], stats['youtube']['fallback'], rendered)} |
+| **News** | {_pct(stats['news']['primary'], rendered)} | {_pct(stats['news']['fallback'], rendered)} | {_pct(stats['news']['missing'], rendered)} | {_cov_pct(stats['news']['primary'], stats['news']['fallback'], rendered)} |
+| **Books** | {_pct(stats['books']['primary'], rendered)} | {_pct(stats['books']['fallback'], rendered)} | {_pct(stats['books']['missing'], rendered)} | {_cov_pct(stats['books']['primary'], stats['books']['fallback'], rendered)} |
+| **omcha** | {_pct(stats['omcha']['primary'], rendered)} | {_pct(stats['omcha']['fallback'], rendered)} | {_pct(stats['omcha']['missing'], rendered)} | {_cov_pct(stats['omcha']['primary'], stats['omcha']['fallback'], rendered)} |
+"""
+        try:
+            with open(summary_env, "a", encoding="utf-8") as sf:
+                sf.write(summary_md)
+        except Exception as e:
+            print(f"Failed to write GITHUB_STEP_SUMMARY: {e}")
+
     msg = f"\nDone. {rendered} post(s) rendered."
     if skipped_legacy:
         msg += f" {skipped_legacy} rendered as legacy v3 fallback (regenerate via Jules)."
