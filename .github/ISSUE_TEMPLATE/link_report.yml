@@ -1,0 +1,61 @@
+name: "\U0001F6A9 リンク誤報告"
+description: 記事内の Amazon / 楽天市場 / Yahoo!ショッピング のリンクが間違っている場合に報告
+title: "[link-report] "
+labels: ["link-report", "todo"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        記事内の商品リンクが「別商品」「廃番」「在庫切れ」などで実商品と乖離している場合にご報告ください。
+        各リンク横の 🚩 アイコンから起票すると下記フィールドが自動入力されます。
+  - type: input
+    id: article_url
+    attributes:
+      label: 記事 URL
+      description: 該当の記事ページの URL
+      placeholder: "https://navi.omcha.jp/posts/2026-05-11-b00i7jxeea/"
+    validations:
+      required: true
+  - type: input
+    id: asin
+    attributes:
+      label: 商品 ASIN
+      description: Amazon の 10 桁商品コード (B0... 等)
+      placeholder: "B00I7JXEEA"
+    validations:
+      required: true
+  - type: dropdown
+    id: ec_site
+    attributes:
+      label: 対象 EC サイト
+      description: どのリンクが問題か
+      options:
+        - Amazon
+        - 楽天市場
+        - Yahoo!ショッピング
+    validations:
+      required: true
+  - type: input
+    id: wrong_url
+    attributes:
+      label: 問題のあるリンク URL (任意)
+      description: 遷移先 URL がわかる場合に貼り付け
+      placeholder: "https://..."
+  - type: dropdown
+    id: reason
+    attributes:
+      label: 問題の種類
+      options:
+        - 別商品にリンクされている
+        - 商品が廃番
+        - 在庫切れ
+        - 価格が大きく乖離している
+        - その他
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: 詳細 (任意)
+      description: 気づいた点があればご記入ください (商品名のズレ、ブランド違い、型番違い等)
+      placeholder: "例: シリーズ違いの別商品が表示されています"
