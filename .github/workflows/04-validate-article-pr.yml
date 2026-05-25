@@ -73,9 +73,14 @@ on:
       - 'hugo/layouts/**'
       - 'hugo/config.toml'
       # 2026-05-25 (session 47 / Issue #590 PR-1): /cospa/ /deals/ 特集集計スクリプトと
-      # 単体テストを validate 対象に含める。後続 PR で hugo/data/features/ も追加予定。
+      # 単体テストを validate 対象に含める。
       - 'scripts/build_feature_lists.py'
       - 'scripts/tests/test_build_feature_lists.py'
+      # 2026-05-25 (session 47 / Issue #590 PR-2): /cospa/ /deals/ Hugo content + layout +
+      # placeholder JSON。後続 PR-3 で workflow を追加。
+      - 'hugo/content/cospa.md'
+      - 'hugo/content/deals.md'
+      - 'hugo/data/features/**'
   workflow_dispatch:
 
 permissions:

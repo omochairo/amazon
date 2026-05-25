@@ -2755,3 +2755,89 @@ body.dark .carousel-card {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
 }
 
+/* ============================================================
+   /cospa/ /deals/ 特集ページ (Issue #590)
+   .ranking-* クラスを共有し、ここでは type 固有のバッジだけ定義する。
+   ============================================================ */
+
+.feature-header--cospa h1 {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.feature-header--deals h1 {
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.feature-discount-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3em;
+  margin: 0.2rem 0;
+  padding: 0.25rem 0.65rem;
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  color: #991b1b;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  width: max-content;
+}
+.feature-discount-pct {
+  font-size: 1.15rem;
+  letter-spacing: 0.02em;
+}
+
+.feature-cospa-badge {
+  display: inline-block;
+  margin: 0.2rem 0;
+  padding: 0.25rem 0.65rem;
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  color: #92400e;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  width: max-content;
+}
+.feature-cospa-badge strong {
+  font-size: 1rem;
+  color: #78350f;
+}
+
+.feature-platform {
+  font-size: 0.8rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.feature-cta-external--amazon {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b) !important;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.35) !important;
+}
+.feature-cta-external--amazon:hover {
+  box-shadow: 0 4px 10px rgba(245, 158, 11, 0.5) !important;
+}
+
+/* ダークモード調整 */
+[data-theme="dark"] .feature-discount-badge,
+body.dark .feature-discount-badge {
+  background: rgba(220, 38, 38, 0.2);
+  color: #fecaca;
+}
+[data-theme="dark"] .feature-cospa-badge,
+body.dark .feature-cospa-badge {
+  background: rgba(217, 119, 6, 0.2);
+  color: #fde68a;
+}
+[data-theme="dark"] .feature-cospa-badge strong,
+body.dark .feature-cospa-badge strong {
+  color: #fed7aa;
+}
+[data-theme="dark"] .feature-platform,
+body.dark .feature-platform {
+  color: #94a3b8;
+}
+
