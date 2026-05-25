@@ -2981,3 +2981,36 @@ body.dark .feature-platform {
   color: #94a3b8;
 }
 
+/* ==========================================
+   PC / tablet で main を広く使う (2026-05-25)
+   PaperMod default --main-width:720px は PC で狭すぎるため、
+   レイアウトの幅を画面サイズに応じて段階的に広げる。
+   - tablet portrait (<1024px): 既定の 720px のまま (狭い画面は触らない)
+   - laptop (1024-1279px): 980px
+   - desktop (1280-1599px): 1180px (= 既存 card-grid ページ幅と一致)
+   - wide (>=1600px): 1280px (大型モニタの余白活用)
+   コンポーネント (EC 価格カード / 比較表 / 関連カルーセル等) が
+   main 幅いっぱいまで広がるため、横スクロールや窮屈さが解消される。
+   本文段落の折り返しは PaperMod 既定 + 段落 inline style に任せる
+   (prose-narrowing は inline style と衝突するため見送り)。
+   ========================================== */
+@media (min-width: 1024px) {
+  :root { --main-width: 980px; }
+}
+@media (min-width: 1280px) {
+  :root { --main-width: 1180px; }
+}
+@media (min-width: 1600px) {
+  :root { --main-width: 1280px; }
+}
+
+/* card-grid ページは wide で +100px だけ広げる */
+@media (min-width: 1600px) {
+  main.main:has(.card-grid) {
+    max-width: 1280px !important;
+  }
+}
+
+/* product-slideshow / hero などの既存 max-width:720px コンポーネントは
+   wide screen でも中央寄せのまま残す (拡大しすぎると画像粗くなる) */
+
