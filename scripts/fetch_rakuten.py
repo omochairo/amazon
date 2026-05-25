@@ -153,7 +153,7 @@ def main():
 
     # --- Fetch Ranking Data (Layer 1) ---
     # Use standard Ichiba Ranking API (v1) if the RMS specific one is failing
-    ranking_url = "https://app.rakuten.co.jp/services/api/IchibaItem/Ranking/20171001"
+    ranking_url = "https://app.rakuten.co.jp/services/api/IchibaItem/Ranking/20220601"
     ranking_params = {
         "applicationId": app_id,
         "genreId": "566382", # Toys genre
