@@ -11,6 +11,10 @@
   {{- if $reveal }}
 <script defer src="{{ $reveal.RelPermalink }}" integrity="{{ $reveal.Data.Integrity }}" crossorigin="anonymous"></script>
   {{- end }}
+  {{- $carousel := resources.Get "js/carousel_swipe.js" | resources.Minify | resources.Fingerprint "sha256" }}
+  {{- if $carousel }}
+<script defer src="{{ $carousel.RelPermalink }}" integrity="{{ $carousel.Data.Integrity }}" crossorigin="anonymous"></script>
+  {{- end }}
 
   <!-- スクロール進捗バー -->
   <div id="scroll-progress-bar"></div>
