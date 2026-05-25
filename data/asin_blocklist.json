@@ -1,0 +1,12 @@
+{
+  "_doc": "転売・詐欺出品の ASIN を恒久除外するブロックリスト。fetch_amazon.py が読み込み、search/sniper 共に skip する。新規追加時は asin / canonical_asin / reason を埋める。canonical_asin は同一商品の真正 ASIN (任意)。",
+  "blocked": [
+    {
+      "asin": "B0G398BYV6",
+      "canonical_asin": "B0C8Y9THVS",
+      "product_name": "スーパーマリオブラザーズ ワンダー - Switch",
+      "reason": "第三者セラーによる転売リスティング。Amazon ¥8480 vs Rakuten ¥5880 (44% プレミアム), availability='残り10点' = 在庫薄シグナル。canonical は B0C8Y9THVS (JAN 4902370551587)。",
+      "added_at": "2026-05-25"
+    }
+  ]
+}
