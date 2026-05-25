@@ -13,7 +13,8 @@
       '.keepa-graph, ' +
       '.competitor-grid, ' +
       '.yt-embed, ' +
-      '.omcha-card-grid'
+      '.omcha-card-grid, ' +
+      '.related-carousel-section'
     );
 
     if (!targets.length) return;
