@@ -88,18 +88,34 @@ relativeURLs = false
     url = "./"
     weight = 1
   [[menu.main]]
+    name = "🧸 おもちゃ診断"
+    url = "diagnosis/"
+    weight = 2
+  [[menu.main]]
     name = "📚 記事一覧"
     url = "posts/"
-    weight = 2
+    weight = 3
+  [[menu.main]]
+    name = "🔥 楽天ランキング"
+    url = "ranking/"
+    weight = 4
   [[menu.main]]
     name = "🏢 メーカー別"
     url = "brands/"
-    weight = 3
+    weight = 5
   [[menu.main]]
     name = "🔍 検索"
     url = "search/"
-    weight = 4
+    weight = 6
   [[menu.main]]
-    name = "🩺 診断ツール"
-    url = "diagnosis/"
-    weight = 5
+    name = "🌐 おもちゃいろ"
+    url = "https://omcha.jp/"
+    weight = 7
+  [[menu.main]]
+    name = "📜 プライバシーポリシー"
+    url = "privacy/"
+    weight = 8
+  [[menu.main]]
+    name = "✉️ お問い合わせ"
+    url = "https://omcha.jp/contact/"
+    weight = 9
