@@ -2708,15 +2708,15 @@ body.dark .price-card.is-cheapest {
 }
 
 .carousel-card-title {
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   font-weight: 700;
-  line-height: 1.5;
+  line-height: 1.4;
   margin: 0;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  height: 3.0em; /* 2行で統一 */
+  height: 4.2em; /* 3行で統一 */
   color: var(--primary) !important;
   border-bottom: none !important;
   text-decoration: none !important;
