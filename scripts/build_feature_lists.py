@@ -26,6 +26,15 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
+# 知育スコアは build_post.py と同じ score_calculator で再計算する。
+# Jules が保存した data/articles/*.json の生 ivs_score / ivs_detail.total_100 は
+# 旧スコア (Jules 推定) であり、build_post の _sync_ivs_for_render で記事ページ表示時に
+# 再計算されている。/cospa/ /deals/ がここを読まず Jules 生値を出していたため
+# 「list 100 / 詳細 81」の乖離が出ていた (session 58)。同じ algorithm で再計算する。
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from brand_normalizer import normalize as normalize_brand  # noqa: E402
+from score_calculator import calculate as calculate_score  # noqa: E402
+
 logger = logging.getLogger("build_feature_lists")
 
 ARTICLE_SKIP_SUFFIXES = (".quality.json", ".enrichment.json", ".seo.json")
@@ -83,15 +92,18 @@ def load_articles(articles_dir: Path) -> list[ArticleRecord]:
 
         prod = raw.get("product") or {}
         asin = prod.get("asin")
-        ivs_score = prod.get("ivs_score")
         best_price = prod.get("best_price")
-        if not asin or ivs_score is None or best_price is None:
+        if not asin or prod.get("ivs_score") is None or best_price is None:
             logger.debug("skip article missing required fields: %s", path.name)
             continue
 
-        det = prod.get("ivs_detail") or {}
         prices = prod.get("prices") or {}
         amazon_block = prices.get("amazon") or {}
+
+        # 記事ページと同じ式で再計算 (score_calculator)。生 JSON の ivs_score は
+        # Jules 推定で stale。brand が無い場合は normalize_brand("") が unknown を返す。
+        brand = normalize_brand(prod.get("brand") or "")
+        sr = calculate_score(raw, brand, asin=asin)
 
         records.append(
             ArticleRecord(
@@ -99,8 +111,8 @@ def load_articles(articles_dir: Path) -> list[ArticleRecord]:
                 slug=str(raw.get("slug") or path.stem),
                 name=prod.get("name"),
                 image=prod.get("image"),
-                ivs_score=_safe_float(ivs_score),
-                ivs_100=_safe_int(det.get("total_100")),
+                ivs_score=sr.ivs_score,
+                ivs_100=sr.total_100,
                 best_price=_safe_int(best_price),
                 best_platform=prod.get("best_platform"),
                 amazon_url=amazon_block.get("url"),
