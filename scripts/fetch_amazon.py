@@ -545,11 +545,13 @@ def main():
         # is_trusted_seller(seller) が False になる ASIN は items_for_jules
         # から除外される (search mode)。
         "offersV2.listings.merchantInfo",
-        # PR #761 で "offersV2.listings.deliveryInfo" を追加したが、PA-API 5 の
-        # OffersV2 サブには DeliveryInfo が存在せず (V1 Offers.Listings.DeliveryInfo
-        # のみ)、SearchItems が 400 で全 keyword 0 items を返して fetch_amazon が
+        # PR #761 で "offersV2.listings.deliveryInfo" を追加したが、
+        # omochairo の Amazon 連携は Amazon Creator API (creatorsapi.amazon) を使う
+        # ところ、Creator API では deliveryInfo は valid resource ではなかった
+        # (merchantInfo は同じ V2 サブで動いているので個別判定が必要)。
+        # searchItems が 400 で全 keyword 0 items を返し、fetch_amazon が
         # 2026-05-26 cron で死亡。緊急 hotfix として一旦削除。送料無料バッジ
-        # 機能は V1 resource への切替を別 issue で再設計する。
+        # 機能は Creator API で valid な代替シグナルを Issue #784 で再設計。
         # extract_free_shipping helper は残す (常に False を返すので無害)。
     ]
 
