@@ -42,29 +42,122 @@ import argparse
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-# #795: 王道キーワードに偏ると新規 ASIN ヒット率が落ちる (210 中 200 = 95% が既存)。
-# ニッチブランド/カテゴリを多めに混ぜて、毎 run シャッフル + サンプリングで
-# 検索空間を散らす。王道 (知育玩具 / 木のおもちゃ / パズル / レゴ) も最低限残し
-# つつ、ボーネルンド・Hape・LaQ などの知育系ブランド + モンテッソーリ /
-# 紐通し / 形合わせ など発達課題ベースの語を追加。
+# #795 follow-up (session 62): 旧 DEFAULT_KEYWORDS は 10 件中 4 件が王道
+# (知育玩具/木のおもちゃ/パズル/レゴ) で、これらは Amazon search の top 100 が
+# 半年単位で動かないため毎回同じ既存 ASIN を吐き出す = 95% 重複の元凶だった。
+# v2 (本リスト) では王道を **完全削除** し、ニッチ寄り 240+ 件に拡張。
+#
+# PA-API searchItems は 1 keyword あたり最大 100 件 (10 件 × 10 page) の構造的
+# 上限がある。keyword 数を増やしても 1 keyword の top 100 を超えた SKU は永遠に
+# 拾えないので、本リストは「discovery のロングテール側」を担う設計。網羅性
+# (Amazon ベストセラー全件カバー) は別経路 (Issue #810: bestseller → sniper
+# getItems pipeline) で担保する予定。
+#
+# 構成 (約 240 件):
+#   A. 海外ブランド (木製/教育/構築/アクション/STEAM)
+#   B. 国内ブランド (大手/中堅/伝統工芸)
+#   C. 年齢 × 主要カテゴリ (1-6 歳 × 6 カテゴリ)
+#   D. 教育メソッド (モンテッソーリ/シュタイナー/etc + STEAM)
+#   E. 発達課題 (微細運動/数概念/形認識/etc)
+#   F. おもちゃ種別 (積み木/型はめ/スロープ/etc)
+#   G. 素材 (木製/布製/シリコン/etc)
+#   H. ギフト/シーン (誕生日/出産祝い/孫プレゼント/etc)
+#   I. LEGO エデュケーション系サブ (デュプロ/クラシック/教育版のみ)
+#   J. 楽器系 (リトミック/木琴/etc)
+#   K. ごっこ遊び 知育
+#   L. 言語/国際
 DEFAULT_KEYWORDS = [
-    # 王道 (最低限残す)
-    "知育玩具", "木のおもちゃ", "パズル", "レゴ",
-    # 海外知育ブランド
-    "ボーネルンド", "Hape", "LaQ", "HABA", "Plan Toys", "Brio",
-    "kiko+", "PlanToys", "ボーネルンド ボール",
-    # 国産知育ブランド
+    # A. 海外ブランド (木製/教育)
+    "ボーネルンド", "Hape", "PlanToys", "BRIO", "HABA", "kiko+",
+    "Grimm's", "Ostheimer", "Goki", "Selecta", "Wooden Story", "Tegu",
+    # A. 海外ブランド (構築/ブロック)
+    "LaQ", "Magformers", "Geomag", "GraviTrax", "Lasy", "Connetix",
+    "Picasso Tiles", "Mobilo", "Tinkertoy", "Smartmax",
+    # A. 海外ブランド (アクション/フィギュア)
+    "PLAYMOBIL", "Schleich", "Janod", "Vilac",
+    # A. 海外ブランド (STEAM/プログラミング)
+    "Wonder Workshop", "Osmo", "Snap Circuits", "Cubetto",
+
+    # B. 国内ブランド (教育系大手)
     "エド・インター", "くもん 知育", "学研ステイフル", "ピープル 知育",
-    # 教育メソッド系
-    "モンテッソーリ", "シュタイナー おもちゃ",
-    # 発達課題ベース (ロングテール)
-    "積み木", "スタッキング おもちゃ", "マグネットブロック", "木製パズル",
-    "ジオボード", "数字パズル", "紐通し", "ペグさし", "形合わせ",
-    "ひらがな カード", "アルファベット おもちゃ",
-    # 年齢別
-    "1歳 知育", "2歳 知育", "3歳 知育", "4歳 知育",
-    # シーン
-    "誕生日 知育", "出産祝い おもちゃ",
+    "アガツマ 知育", "ピノチオ", "ローヤル ベビー",
+    # B. 国内ブランド (玩具メーカー知育ライン)
+    "バンダイ 知育", "セガトイズ 知育", "MEGA HOUSE 知育",
+    # B. 国内ブランド (中堅/伝統工芸)
+    "ジョリーキッズ", "ニチガン 知育", "三進 木のおもちゃ", "平和工業 知育",
+    "IKONIH", "MOCCO 木", "ノーチェ 知育", "銀鳥産業 知育",
+    "BorneLund Japan", "ハバ ジャパン", "クムン", "ヤマト工芸 知育",
+    "デザインレーベル 木のおもちゃ", "ファルマトイ", "ベルニーニ おもちゃ",
+
+    # C. 年齢 × カテゴリ (1-6 歳 × 6 カテゴリ)
+    "1歳 ブロック", "1歳 パズル", "1歳 木 おもちゃ", "1歳 絵本", "1歳 楽器", "1歳 型はめ",
+    "2歳 ブロック", "2歳 パズル", "2歳 木 おもちゃ", "2歳 絵本", "2歳 楽器", "2歳 型はめ",
+    "3歳 ブロック", "3歳 パズル", "3歳 木 おもちゃ", "3歳 絵本", "3歳 楽器", "3歳 ボードゲーム",
+    "4歳 ブロック", "4歳 パズル", "4歳 木 おもちゃ", "4歳 絵本", "4歳 ボードゲーム", "4歳 STEAM",
+    "5歳 ブロック", "5歳 パズル", "5歳 ボードゲーム", "5歳 STEAM", "5歳 プログラミング", "5歳 算数",
+    "6歳 パズル", "6歳 ボードゲーム", "6歳 STEAM", "6歳 プログラミング", "6歳 算数", "6歳 工作",
+
+    # D. 教育メソッド
+    "モンテッソーリ", "シュタイナー おもちゃ", "ピクラー", "ヴァルドルフ",
+    "レッジョ・エミリア おもちゃ", "OKIDOKI 知育", "STEAM 知育",
+    "SDGs おもちゃ", "プログラミング おもちゃ", "ScratchJr",
+    "Bee-Bot", "ロボット おもちゃ",
+
+    # E. 発達課題
+    "微細運動 おもちゃ", "粗大運動 おもちゃ", "感覚統合 おもちゃ",
+    "五感 おもちゃ", "因果関係 おもちゃ", "数概念 おもちゃ",
+    "形認識 おもちゃ", "色覚 おもちゃ", "文字認識 おもちゃ",
+    "鏡 知育", "集中力 おもちゃ", "記憶力 ゲーム",
+    "言語発達 おもちゃ", "空間認識 おもちゃ", "ロジック おもちゃ",
+    "創造性 おもちゃ", "問題解決 おもちゃ", "想像力 おもちゃ",
+
+    # F. おもちゃ種別 (40 件)
+    "積み木", "型はめ", "スロープ おもちゃ", "ハンマートイ",
+    "スタッキング おもちゃ", "リングタワー", "ペグさし", "ビーズコースター",
+    "紐通し", "ボール落とし", "形合わせ", "パズルボックス",
+    "引き車 木", "知育時計", "バランスゲーム", "マグネット ボード",
+    "ジオボード", "あいうえお ボード", "アルファベット 知育", "タングラム",
+    "ソロバン 子供", "ボードゲーム 子供", "カードゲーム 子供", "ドミノ おもちゃ",
+    "ジェンガ 子供", "パターンブロック", "ナンプレ 子供", "シール 知育",
+    "シールブック", "図形 パズル", "知育絵本", "仕掛け絵本",
+    "さわる絵本", "数字 おもちゃ", "算数 ボード", "大型ブロック",
+    "ソフトブロック", "マグネットブロック", "ロディ おもちゃ", "ベビージム 木",
+
+    # G. 素材
+    "木製 知育", "布製 おもちゃ", "シリコン 歯固め 知育",
+    "EVA おもちゃ", "フェルト おもちゃ", "紙パズル",
+    "厚紙 絵本", "オーガニック おもちゃ", "無塗装 木", "竹 おもちゃ",
+
+    # H. ギフト/シーン
+    "誕生日 プレゼント 子供 知育", "出産祝い 知育", "入園祝い",
+    "入学祝い 知育", "七五三 プレゼント 知育", "初節句 おもちゃ",
+    "クリスマス 知育", "お正月 おもちゃ", "帰省 手土産 おもちゃ",
+    "病院 おもちゃ", "旅行 おもちゃ 子供", "室内 おもちゃ 子供",
+    "雨の日 おもちゃ", "静かに遊ぶ おもちゃ", "一人遊び 知育",
+    "兄弟 で遊ぶ おもちゃ", "孫 プレゼント 知育", "姪 プレゼント 知育",
+    "甥 プレゼント 知育", "ハーフバースデー おもちゃ",
+
+    # I. LEGO エデュケーション系 (王道 LEGO は除外、教育系サブのみ)
+    "LEGO デュプロ", "LEGO クラシック", "LEGO エデュケーション",
+    "LEGO アイデア", "LEGO デュプロ 動物", "LEGO デュプロ 街",
+    "LEGO 数字", "LEGO アルファベット",
+
+    # J. 楽器系
+    "知育 楽器", "子供 ピアノ おもちゃ", "子供 ドラム",
+    "タンバリン 子供", "シロフォン 木", "鉄琴 子供",
+    "木琴 子供", "カリンバ 子供", "リトミック おもちゃ",
+    "ハンドベル 子供", "トライアングル 子供", "リズム おもちゃ",
+
+    # K. ごっこ遊び 知育
+    "キッチン おもちゃ 木", "レジスター おもちゃ", "お医者さん 知育",
+    "クッキング おもちゃ 知育", "お店屋さん 知育", "病院ごっこ",
+    "美容師 ごっこ", "工具 おもちゃ 木", "ごっこ遊び セット",
+    "知育 ぬいぐるみ", "抱き人形 教育", "食育 おもちゃ",
+
+    # L. 言語/国際
+    "英語 知育", "バイリンガル 知育", "タッチペン 英語",
+    "フォニックス おもちゃ", "多言語 おもちゃ", "中国語 子供 知育",
+    "スペイン語 子供 知育", "数字 英語 おもちゃ",
 ]
 
 
@@ -685,8 +778,8 @@ def main():
                         help="Backfill mode helper: replace --asin with the full set of ASINs discovered under --articles-dir. Only valid together with --competitors-only. Useful for one-shot regeneration of every per_asin/<ASIN>/competitors.json after a ranking change (e.g. Plan D+).")
     parser.add_argument("--competitors-cache-ttl-days", type=float, default=7.0,
                         help="In non-sniper cron runs, skip per-target SearchItems if per_asin/<ASIN>/competitors.json is newer than this many days (default 7.0; #792). Pass 0 to force-refresh every target (legacy behaviour). Sniper (--asin) and --competitors-only backfill always force-refresh regardless of this flag.")
-    parser.add_argument("--keyword-sample-size", type=int, default=8,
-                        help="Shuffle the keyword list each run and pick this many to actually search (#795: spreads search space across runs so new-ASIN hit rate stays high even when DEFAULT_KEYWORDS saturates). Pass 0 to disable sampling (= search every keyword in shuffled order). Ignored when --keywords is set explicitly to a short list shorter than this size.")
+    parser.add_argument("--keyword-sample-size", type=int, default=20,
+                        help="Shuffle the keyword list each run and pick this many to actually search (#795: spreads search space across runs so new-ASIN hit rate stays high even when DEFAULT_KEYWORDS saturates). Default 20 = ~8%% of the 240-entry niche list per run, hitting each keyword ~once/3 months on weekly cron. Pass 0 to disable sampling (= search every keyword in shuffled order). Ignored when --keywords is set explicitly.")
     args = parser.parse_args()
 
     # --all-articles expands sniper input to every published article ASIN.
