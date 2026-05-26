@@ -170,6 +170,16 @@ class CreatorsAPIClient:
             if response.status_code == 429:
                 self.throttle_count += 1
 
+            # session 60: 元々ここで 400/500/422 等の本文を捨てており、retry 後に
+            # 「API request failed after 5 attempts」だけが残って原因究明不能だった。
+            # PR #761 で resource 名が invalid だったケース (PR #783 hotfix) を二度と
+            # 「真因不明」にしないため、status code と response body 冒頭を必ず出す。
+            body_preview = (response.text or "")[:300].replace("\n", " ")
+            print(
+                f"[CreatorsAPI] HTTP {response.status_code} {url} :: {body_preview}",
+                flush=True,
+            )
+
             if self._handle_retryable_error(response, headers):
                 msg = "Rate limited" if response.status_code == 429 else ""
                 return None, (msg or True)
@@ -177,6 +187,10 @@ class CreatorsAPIClient:
             return None, True
 
         except requests.exceptions.RequestException as e:
+            print(
+                f"[CreatorsAPI] RequestException {url} :: {type(e).__name__}: {e}",
+                flush=True,
+            )
             return None, f"Request failed: {e}"
 
     def _make_request(self, endpoint: str, payload: dict) -> dict:
