@@ -1,3 +1,32 @@
+"""Amazon 商品データ取得スクリプト (Creator API クライアント)
+
+🚨 重要 — 使用 API: **Amazon Creator API (creatorsapi.amazon)**
+  - PA-API 5 (webservices.amazon.co.jp/paapi5/...) では **ない**。
+  - PA-API 5 公式ドキュメントの resource / endpoint / レスポンス仕様は流用不可。
+  - OAuth 2.0 Client Credentials 認証。実装は ``scripts/creators_api_client.py``。
+
+エンドポイント:
+  - searchItems: ``POST /catalog/v1/searchItems`` → 応答は ``searchResult.items``
+  - getItems:    ``POST /catalog/v1/getItems``    → 応答は ``itemsResult.items``
+
+resource 配列の真実の源:
+  本ファイルの ``SEARCH_ITEM_RESOURCES`` 定数。これを変更する PR は
+  ``04-validate-article-pr.yml`` の **Creator API resources dry-run gate** で
+  ``scripts/fetch_amazon_dry_run.py`` が実 API に 1 keyword × 1 item の
+  searchItems を投げて HTTP 200 + items[] != [] を確認する (Issue #785)。
+
+有効/無効が分かっている resource (2026-05-26 時点):
+  ✅ 有効: images.primary.large / images.variants.large /
+          itemInfo.{title,features,externalIds} /
+          offersV2.listings.{price,availability,loyaltyPoints,merchantInfo}
+  ❌ 無効: offersV2.listings.deliveryInfo
+          (PR #761 で投入 → 全 keyword 400 で cron 死亡 → PR #783 hotfix で削除)
+
+関連 trap:
+  [[feedback-omochairo-creators-api-deliveryinfo-trap]] —
+  Creator API は PA-API 5 と response schema / resource 名が異なる。
+  resource を追加する前に必ず Creator API 公式ドキュメントで確認すること。
+"""
 import os
 import re
 import json
