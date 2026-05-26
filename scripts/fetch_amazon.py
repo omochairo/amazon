@@ -326,6 +326,20 @@ TRUSTED_SELLER_PATTERNS = (
     "人形の伏見屋",
     "長生堂",
     "エデュテ",
+    "amazonアウトレット",
+    "トイスタジアム",
+    "だいわ",                        # 木製おもちゃのだいわ
+    "ぷりふあ",                      # ぷりふあ人形
+    "rufas",                         # Rufas オンラインストア
+    "sora",                          # 木のおもちゃと雑貨 Sora
+    "おもちゃの森",                  # 本の森おもちゃの森
+    "mamimami",                      # mamimami home
+    "木玩社",
+    "lotus life",                    # LOTUS LIFE
+    "joyreal",                       # Joyreal
+    "jasonwell",                     # Jasonwell
+    "kaekid",                        # KaeKid
+    "plafarm",                       # plafarm
 )
 
 
