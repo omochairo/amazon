@@ -264,6 +264,33 @@ def write_per_asin_snapshot(out_root: str, item: dict) -> None:
         logger.warning(f"Failed to write per_asin snapshot for {asin}: {e}")
 
 
+def _is_competitors_cache_fresh(out_root: str, asin: str, ttl_days: float) -> bool:
+    """``per_asin/<ASIN>/competitors.json`` が ``ttl_days`` 以内に書かれていれば True。
+
+    Issue #792: 既存記事 ASIN の毎週 SearchItems 再検索 (= 旧挙動) は
+    PA-API quota / 待機時間ともに大きな浪費だった。``fetched_at`` を見て
+    TTL 以内ならスキップする。``ttl_days <= 0`` は常に False (= 必ず refresh)
+    で、sniper / backfill / 旧挙動と等価。
+    """
+    if ttl_days <= 0:
+        return False
+    path = os.path.join(out_root, "per_asin", asin, "competitors.json")
+    if not os.path.exists(path):
+        return False
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        ts = data.get("fetched_at") if isinstance(data, dict) else None
+        if not ts:
+            return False
+        # ISO 8601 with 'Z' suffix written by ``datetime.now(timezone.utc).isoformat()``
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        age = datetime.now(timezone.utc) - dt
+        return age.total_seconds() < ttl_days * 86400
+    except (OSError, json.JSONDecodeError, ValueError, TypeError):
+        return False
+
+
 def _load_published_snapshots_pool(out_root: str, covered_asins: set, limit: int = 500) -> list:
     """既掲載 ASIN の per_asin/<ASIN>/amazon.json (=snapshot) を candidate 形式に整形。
 
@@ -330,6 +357,7 @@ def write_per_asin_competitors(
     api=None, search_index: str = "Toys", resources: list = None,
     covered_asins: set = None, max_n: int = 5,
     published_pool: list = None,
+    cache_ttl_days: float = 0.0,
 ) -> None:
     """Plan D+ 実装: target ごとに SearchItems を打って候補プールを作り、
     自社既掲載 ASIN の snapshot プールと統合してから類似度ランキングする。
@@ -342,12 +370,22 @@ def write_per_asin_competitors(
     ``published_pool`` は呼び出し側で 1 度だけビルドした内部リンク用プール。
     省略時はターゲットごとに ``_load_published_snapshots_pool`` を呼ぶ
     (= N*M ファイル open) ので、カタログが大きいときは必ず渡すこと。
+
+    ``cache_ttl_days > 0`` のとき、既存 ``competitors.json`` が TTL 以内なら
+    SearchItems と ``time.sleep(1.1)`` ごとスキップする (#792)。sniper /
+    backfill では 0 のまま呼んで強制 refresh を維持する。
     """
     from competitor_ranking import (
         dedupe_candidates, rank_candidates, ensure_internal_link_floor,
     )
     target_asin = (target_item or {}).get("asin")
     if not target_asin:
+        return
+    # #792: 既存記事 ASIN の毎週 SearchItems 再検索を TTL でスキップ。
+    # 関数全体を早期 return することで _search_competitor_pool と
+    # time.sleep(1.1) の両方を省ける (= 200 件で約 4 分削減)。
+    if _is_competitors_cache_fresh(out_root, target_asin, cache_ttl_days):
+        logger.info(f"  skip competitors refresh for {target_asin}: cache < {cache_ttl_days}d")
         return
     covered_asins = covered_asins or set()
     # Pool 1: SearchItems (Plan D の本体)
@@ -550,6 +588,8 @@ def main():
                         help="Backfill mode: fetch --asin CSV, merge current amazon.json pool as competitor candidates, and write per_asin/<ASIN>/{snapshot.json,competitors.json} for the sniper ASINs only. Does NOT overwrite amazon.json (so the live Jules pool is preserved). Requires --asin.")
     parser.add_argument("--all-articles", action="store_true",
                         help="Backfill mode helper: replace --asin with the full set of ASINs discovered under --articles-dir. Only valid together with --competitors-only. Useful for one-shot regeneration of every per_asin/<ASIN>/competitors.json after a ranking change (e.g. Plan D+).")
+    parser.add_argument("--competitors-cache-ttl-days", type=float, default=7.0,
+                        help="In non-sniper cron runs, skip per-target SearchItems if per_asin/<ASIN>/competitors.json is newer than this many days (default 7.0; #792). Pass 0 to force-refresh every target (legacy behaviour). Sniper (--asin) and --competitors-only backfill always force-refresh regardless of this flag.")
     args = parser.parse_args()
 
     # --all-articles expands sniper input to every published article ASIN.
@@ -843,6 +883,10 @@ def main():
     # target (=> N*M = ~10万 opens on a full catalog); building it once and
     # filtering by target_asin in-memory cuts that to a single pass.
     published_pool = _load_published_snapshots_pool(args.out, existing)
+    # #792: sniper の場合は user 意図優先で強制 refresh (TTL=0)。
+    # 通常 cron は --competitors-cache-ttl-days で既存 ASIN の SearchItems
+    # 再検索をスキップする。
+    competitors_ttl = 0.0 if sniper_asins else args.competitors_cache_ttl_days
     for target_asin in targets:
         target_item = next((it for it in items if it.get("asin") == target_asin), None)
         if not target_item:
@@ -852,6 +896,7 @@ def main():
             api=api, search_index=args.search_index, resources=resources,
             covered_asins=existing,
             published_pool=published_pool,
+            cache_ttl_days=competitors_ttl,
         )
 
 if __name__ == "__main__":
