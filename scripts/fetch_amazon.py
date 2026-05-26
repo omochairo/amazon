@@ -28,6 +28,30 @@ def get_secret(name: str) -> str:
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("fetch_amazon")
 
+# Creator API searchItems / getItems の resources 配列。
+# session 60 で PR #761 が "offersV2.listings.deliveryInfo" を入れて Creator API
+# が全 keyword で 400 を返し cron が死亡 (PR #783 hotfix で復旧)。再発防止として
+# 04-validate-article-pr.yml が scripts/fetch_amazon.py / creators_api_client.py
+# を触る PR で scripts/fetch_amazon_dry_run.py を呼んで実 API への 1 リクエストで
+# 200 OK + items[] を確認する (Issue #785)。
+SEARCH_ITEM_RESOURCES = [
+    "images.primary.large",
+    "images.variants.large",
+    "itemInfo.title",
+    "itemInfo.features",
+    "itemInfo.externalIds",
+    "offersV2.listings.price",
+    "offersV2.listings.availability",
+    "offersV2.listings.loyaltyPoints",
+    # Buy Box の出品者名を取得して転売 ASIN を弾くために使う。
+    # is_trusted_seller(seller) が False になる ASIN は items_for_jules
+    # から除外される (search mode)。
+    "offersV2.listings.merchantInfo",
+    # PR #761 で "offersV2.listings.deliveryInfo" を追加したが Creator API では
+    # invalid だったため hotfix PR #783 で削除。送料無料バッジ機能は Issue #784 で
+    # Creator API valid な代替シグナルを再設計予定。
+]
+
 HAS_CREATORS_API = False
 try:
     from creators_api_client import CreatorsAPIClient
@@ -532,28 +556,9 @@ def main():
 
     api = CreatorsAPIClient()
 
-    resources = [
-        "images.primary.large",
-        "images.variants.large",
-        "itemInfo.title",
-        "itemInfo.features",
-        "itemInfo.externalIds",
-        "offersV2.listings.price",
-        "offersV2.listings.availability",
-        "offersV2.listings.loyaltyPoints",
-        # Buy Box の出品者名を取得して転売 ASIN を弾くために使う。
-        # is_trusted_seller(seller) が False になる ASIN は items_for_jules
-        # から除外される (search mode)。
-        "offersV2.listings.merchantInfo",
-        # PR #761 で "offersV2.listings.deliveryInfo" を追加したが、
-        # omochairo の Amazon 連携は Amazon Creator API (creatorsapi.amazon) を使う
-        # ところ、Creator API では deliveryInfo は valid resource ではなかった
-        # (merchantInfo は同じ V2 サブで動いているので個別判定が必要)。
-        # searchItems が 400 で全 keyword 0 items を返し、fetch_amazon が
-        # 2026-05-26 cron で死亡。緊急 hotfix として一旦削除。送料無料バッジ
-        # 機能は Creator API で valid な代替シグナルを Issue #784 で再設計。
-        # extract_free_shipping helper は残す (常に False を返すので無害)。
-    ]
+    # 共通定数 SEARCH_ITEM_RESOURCES を流用 (Issue #785: fetch_amazon_dry_run.py が
+    # validate gate で同一配列を Creator API に投げて 200 OK + items[] を確認する)。
+    resources = SEARCH_ITEM_RESOURCES
 
     blocklist = _load_asin_blocklist()
     if blocklist:

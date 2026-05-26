@@ -35,6 +35,9 @@ on:
       # validate を required check として発火させる (PR #783 で paths 未登録の trap を
       # 踏み、validate run 起動せず auto-merge eligible でなくなる事例があった)。
       - 'scripts/creators_api_client.py'
+      # 2026-05-26 (session 61 / Issue #785): Creator API dry-run gate スクリプト本体。
+      # 自身の変更 PR でも validate を発火させ、gate が壊れていないかを確認する。
+      - 'scripts/fetch_amazon_dry_run.py'
       # 2026-05-19 (session 32): backfill workflow も paths に追加。自身の bug fix /
       # 設定変更 PR を merge する際に validate (required check) を必ず通すため。
       - '.github/workflows/01b-backfill-competitors.yml'
@@ -187,6 +190,40 @@ jobs:
             echo "::endgroup::"
           done <<< "${{ steps.list.outputs.files }}"
           exit $fail
+
+      # 2026-05-26 (session 61 / Issue #785): Creator API resources dry-run gate.
+      # PR #761 が "offersV2.listings.deliveryInfo" を入れて Creator API が全 keyword
+      # で 400 を返し fetch_amazon cron が死亡 (PR #783 で hotfix) した再発防止。
+      # scripts/fetch_amazon.py / creators_api_client.py / fetch_amazon_dry_run.py を
+      # 触る PR で実 API に 1 keyword × 1 item を投げ、HTTP 200 + items[] を確認する。
+      # Quota 消費極小 (1 OAuth token + 1 searchItems / PR)。
+      - name: Detect Creator API code changes
+        id: detect_creators_changes
+        if: steps.range.outputs.mode == 'diff'
+        run: |
+          set -e
+          changed=$(git diff --name-only --diff-filter=AM \
+                      "${{ steps.range.outputs.base }}" "${{ steps.range.outputs.head }}" \
+                      -- 'scripts/fetch_amazon.py' \
+                         'scripts/creators_api_client.py' \
+                         'scripts/fetch_amazon_dry_run.py' || true)
+          if [ -n "$changed" ]; then
+            echo "trigger=1" >> "$GITHUB_OUTPUT"
+            echo "Files triggering Creator API dry-run gate:"
+            echo "$changed"
+          else
+            echo "trigger=0" >> "$GITHUB_OUTPUT"
+            echo "No fetch_amazon / creators_api_client / dry-run script changes; gate skipped."
+          fi
+
+      - name: Creator API resources dry-run gate (Issue #785)
+        if: steps.detect_creators_changes.outputs.trigger == '1'
+        env:
+          AMAZON_CREATORS_APPLICATION_ID: ${{ secrets.AMAZON_CREATORS_APPLICATION_ID }}
+          AMAZON_CREATORS_CREDENTIAL_ID: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_ID }}
+          AMAZON_CREATORS_CREDENTIAL_SECRET: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_SECRET }}
+          AMAZON_PARTNER_TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
+        run: python scripts/fetch_amazon_dry_run.py
 
       - name: Run quality gate (strict, changed only)
         if: steps.list.outputs.files != ''
