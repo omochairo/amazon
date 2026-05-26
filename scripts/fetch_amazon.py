@@ -17,10 +17,14 @@ resource 配列の真実の源:
 
 有効/無効が分かっている resource (2026-05-26 時点):
   ✅ 有効: images.primary.large / images.variants.large /
-          itemInfo.{title,features,externalIds} /
+          itemInfo.{title,features,externalIds,productInfo} /
           offersV2.listings.{price,availability,loyaltyPoints,merchantInfo}
   ❌ 無効: offersV2.listings.deliveryInfo
           (PR #761 で投入 → 全 keyword 400 で cron 死亡 → PR #783 hotfix で削除)
+  ⚠ Creator API では getItems と searchItems で valid set が異なる可能性あり
+    (deliveryInfo trap)。新規 resource は必ず dry-run gate (Issue #785) を通すこと。
+    itemInfo.productInfo は getItems で実用済 + dry-run gate で searchItems も OK
+    と確認済 (PR #795 で導入)。
 
 関連 trap:
   [[feedback-omochairo-creators-api-deliveryinfo-trap]] —
@@ -32,24 +36,56 @@ import re
 import json
 import sys
 import time
+import random
 import logging
 import argparse
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+# #795: 王道キーワードに偏ると新規 ASIN ヒット率が落ちる (210 中 200 = 95% が既存)。
+# ニッチブランド/カテゴリを多めに混ぜて、毎 run シャッフル + サンプリングで
+# 検索空間を散らす。王道 (知育玩具 / 木のおもちゃ / パズル / レゴ) も最低限残し
+# つつ、ボーネルンド・Hape・LaQ などの知育系ブランド + モンテッソーリ /
+# 紐通し / 形合わせ など発達課題ベースの語を追加。
 DEFAULT_KEYWORDS = [
-    "知育玩具", "知育", "木のおもちゃ", "パズル", "ブロック",
-    "レゴ", "プラレール", "トミカ", "シルバニアファミリー", "アンパンマン",
+    # 王道 (最低限残す)
+    "知育玩具", "木のおもちゃ", "パズル", "レゴ",
+    # 海外知育ブランド
+    "ボーネルンド", "Hape", "LaQ", "HABA", "Plan Toys", "Brio",
+    "kiko+", "PlanToys", "ボーネルンド ボール",
+    # 国産知育ブランド
+    "エド・インター", "くもん 知育", "学研ステイフル", "ピープル 知育",
+    # 教育メソッド系
+    "モンテッソーリ", "シュタイナー おもちゃ",
+    # 発達課題ベース (ロングテール)
+    "積み木", "スタッキング おもちゃ", "マグネットブロック", "木製パズル",
+    "ジオボード", "数字パズル", "紐通し", "ペグさし", "形合わせ",
+    "ひらがな カード", "アルファベット おもちゃ",
+    # 年齢別
+    "1歳 知育", "2歳 知育", "3歳 知育", "4歳 知育",
+    # シーン
+    "誕生日 知育", "出産祝い おもちゃ",
 ]
 
 
-def parse_keywords(cli_value: Optional[str]) -> list:
+def parse_keywords(cli_value: Optional[str], shuffle: bool = False, sample_size: int = 0) -> list:
     """CLI/ENV のキーワード文字列を list に。
-    優先順: --keywords (CSV/改行) > $AMAZON_SEARCH_KEYWORDS > DEFAULT_KEYWORDS"""
+
+    優先順: --keywords (CSV/改行) > $AMAZON_SEARCH_KEYWORDS > DEFAULT_KEYWORDS
+
+    ``shuffle=True`` のとき返り値をシャッフルし、``sample_size > 0`` のとき先頭
+    ``sample_size`` 個を返す (#795: 王道偏重の新規 ASIN ヒット率低下を緩和)。
+    """
     raw = cli_value if cli_value else os.environ.get("AMAZON_SEARCH_KEYWORDS", "")
     if not raw or not raw.strip():
-        return list(DEFAULT_KEYWORDS)
-    return [k.strip() for k in re.split(r"[,\n]", raw) if k.strip()]
+        kws = list(DEFAULT_KEYWORDS)
+    else:
+        kws = [k.strip() for k in re.split(r"[,\n]", raw) if k.strip()]
+    if shuffle:
+        random.shuffle(kws)
+    if sample_size > 0:
+        kws = kws[:sample_size]
+    return kws
 
 def get_secret(name: str) -> str:
     return os.environ.get(name)
@@ -69,6 +105,12 @@ SEARCH_ITEM_RESOURCES = [
     "itemInfo.title",
     "itemInfo.features",
     "itemInfo.externalIds",
+    # #795: parentAsin を取得してバリエーション (色違い/サイズ違い) 重複を排除する。
+    # creators_api_client.get_items のデフォルト resources に同名 ("itemInfo.productInfo")
+    # が含まれているので Creator API の getItems では valid と判明済。searchItems も
+    # 同じ resource 名で valid なはず — 04-validate の dry-run gate (Issue #785)
+    # が PR で 200 + items[] != [] を確認する。
+    "itemInfo.productInfo",
     "offersV2.listings.price",
     "offersV2.listings.availability",
     "offersV2.listings.loyaltyPoints",
@@ -496,6 +538,59 @@ def extract_savings_percentage(item: dict) -> int:
             return 0
     return 0
 
+
+def extract_parent_asin(item: dict) -> Optional[str]:
+    """``itemInfo.productInfo`` から parentAsin を取り出す (#795)。
+
+    PA-API 5 でも Creator API でも parentAsin は ``itemInfo.productInfo`` 配下に
+    入る (=色違い・サイズ違いバリエーション群の root ASIN)。Creator API の
+    レスポンス schema は PA-API 5 と微妙に違うため、ありうる 2 形を両方
+    decode する:
+
+      * ``productInfo.parentAsin = "B0XXXXXXXX"`` (フラットな文字列)
+      * ``productInfo.parentAsin = {"displayValue": "B0XXXXXXXX"}`` (DisplayValue 包装)
+
+    どちらも取れないときは None を返し、呼び出し側で「dedup skip」と
+    fallback させる (= 機能無効 / 旧挙動と等価)。Creator API で parentAsin
+    フィールド自体が空のときも cron は止めない。
+    """
+    pi = _safe_get(item, "itemInfo", "productInfo")
+    if not isinstance(pi, dict):
+        return None
+    raw = pi.get("parentAsin")
+    if isinstance(raw, dict):
+        val = raw.get("displayValue")
+        return val if isinstance(val, str) and val else None
+    return raw if isinstance(raw, str) and raw else None
+
+
+def _load_existing_parent_asins(out_root: str) -> set:
+    """過去 run で per_asin/<ASIN>/amazon.json snapshot に保存された
+    parent_asin を集めて返す (#795 cross-session dedup)。
+
+    snapshot[item][parent_asin] は本 PR 以降の run で初めて埋められるため、
+    初回 cron では空集合 → 段階的に蓄積される。
+    """
+    parents: set = set()
+    per_asin_root = os.path.join(out_root, "per_asin")
+    if not os.path.isdir(per_asin_root):
+        return parents
+    for asin_dir in os.listdir(per_asin_root):
+        path = os.path.join(per_asin_root, asin_dir, "amazon.json")
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                snap = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            continue
+        it = snap.get("item") if isinstance(snap, dict) else None
+        if isinstance(it, dict):
+            p = it.get("parent_asin")
+            if isinstance(p, str) and p:
+                parents.add(p)
+    return parents
+
 # Global API client reference for summary logging on exit
 api = None
 
@@ -590,6 +685,8 @@ def main():
                         help="Backfill mode helper: replace --asin with the full set of ASINs discovered under --articles-dir. Only valid together with --competitors-only. Useful for one-shot regeneration of every per_asin/<ASIN>/competitors.json after a ranking change (e.g. Plan D+).")
     parser.add_argument("--competitors-cache-ttl-days", type=float, default=7.0,
                         help="In non-sniper cron runs, skip per-target SearchItems if per_asin/<ASIN>/competitors.json is newer than this many days (default 7.0; #792). Pass 0 to force-refresh every target (legacy behaviour). Sniper (--asin) and --competitors-only backfill always force-refresh regardless of this flag.")
+    parser.add_argument("--keyword-sample-size", type=int, default=8,
+                        help="Shuffle the keyword list each run and pick this many to actually search (#795: spreads search space across runs so new-ASIN hit rate stays high even when DEFAULT_KEYWORDS saturates). Pass 0 to disable sampling (= search every keyword in shuffled order). Ignored when --keywords is set explicitly to a short list shorter than this size.")
     args = parser.parse_args()
 
     # --all-articles expands sniper input to every published article ASIN.
@@ -663,6 +760,7 @@ def main():
                         "savings_percentage": extract_savings_percentage(it),
                         "free_shipping": extract_free_shipping(it),
                         "seller": extract_seller(it),
+                        "parent_asin": extract_parent_asin(it),
                         "source": "Amazon (Target)"
                     })
             except Exception as e:
@@ -721,7 +819,19 @@ def main():
     target_asins: set[str] = set(sniper_asins)
     seen_asins = {it["asin"] for it in items if it.get("asin")}
 
-    keywords = parse_keywords(args.keywords)
+    # #795: 親 ASIN プール (色違い/サイズ違い重複の排除に使う)。
+    # snapshot.item.parent_asin は本 PR 以降の run でしか埋まらないので、初回は
+    # ほぼ空。run を重ねるたびに蓄積されて精度が上がる段階的設計。
+    existing_parent_asins = _load_existing_parent_asins(args.out)
+    seen_parent_asins: set[str] = set()
+    parent_skipped_existing = 0
+    parent_skipped_session = 0
+
+    # #795: 王道偏重を避けるため、shuffled + sampled キーワードで検索する。
+    # --keywords 明示時は env/CLI が user 意図なのでシャッフルだけ (= 順序ランダム
+    # 化のみ、件数は明示分を尊重)。Default keywords のときはサンプリングも有効。
+    sample_size = args.keyword_sample_size if not args.keywords and not os.environ.get("AMAZON_SEARCH_KEYWORDS") else 0
+    keywords = parse_keywords(args.keywords, shuffle=True, sample_size=sample_size)
     # Surface the legacy --keyword as the first search term for back-compat
     # (workflows pass it explicitly). Fall back to the AMAZON title slice
     # when running Sniper Mode without an explicit keyword.
@@ -788,6 +898,20 @@ def main():
                     logger.info(f"  skip blocklisted ASIN {asin}")
                     seen_asins.add(asin)
                     continue
+                # #795: 親 ASIN dedup — 色違い/サイズ違いバリエーションを排除
+                parent = extract_parent_asin(it)
+                if parent and asin not in target_asins:
+                    if parent in existing_parent_asins:
+                        logger.info(f"  skip variation {asin}: parent {parent} already covered by article")
+                        seen_asins.add(asin)
+                        parent_skipped_existing += 1
+                        continue
+                    if parent in seen_parent_asins:
+                        logger.info(f"  skip variation {asin}: parent {parent} already in this session")
+                        seen_asins.add(asin)
+                        parent_skipped_session += 1
+                        continue
+                    seen_parent_asins.add(parent)
                 seen_asins.add(asin)
                 normalized = {
                     "asin": asin,
@@ -803,6 +927,7 @@ def main():
                     "savings_percentage": extract_savings_percentage(it),
                     "free_shipping": extract_free_shipping(it),
                     "seller": extract_seller(it),
+                    "parent_asin": parent,
                     "source": "Amazon"
                 }
                 items.append(normalized)
@@ -853,6 +978,13 @@ def main():
     logger.info(
         f"Collected {len(items)} unique ASINs, {len(items_for_jules)} new for Jules "
         f"(dropped {dropped} already-covered + {reseller_dropped} reseller-signal)"
+    )
+    # #795: 親 ASIN dedup の効きを観察する。0 が続けば Creator API の productInfo
+    # で parentAsin が取れていない可能性 → Issue を再起票して resource を再評価。
+    logger.info(
+        f"Parent-ASIN dedup: {parent_skipped_existing} variation(s) already in articles, "
+        f"{parent_skipped_session} variation(s) collapsed in this session "
+        f"(parent pool size={len(existing_parent_asins)})"
     )
     jan_present = sum(1 for it in items if it.get("jan_code"))
     if items:
