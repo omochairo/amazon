@@ -48,15 +48,47 @@ def test_is_trusted_seller_recognizes_amazon_and_manufacturers():
 
 def test_is_trusted_seller_rejects_unknown_and_empty():
     assert not is_trusted_seller("")
-    assert not is_trusted_seller("ゲームショップ ABC")
     assert not is_trusted_seller("RareBoxJP")
+    # generic marker 無しの英字 / 中国系は drop
+    assert not is_trusted_seller("Zhengzhou Zouzha Information Technology")
+    assert not is_trusted_seller("chenyius")
+    assert not is_trusted_seller("✅シャイニングストア")
 
 
-def test_is_low_stock_reseller_signal_detects_zanri_pattern():
-    # B0G398BYV6 の実データ
-    assert is_low_stock_reseller_signal("残り10点 ご注文はお早めに")
-    assert is_low_stock_reseller_signal("残り 3 点")
+def test_is_trusted_seller_generic_markers_recognized():
+    """#817: 個別 TRUSTED_SELLER_PATTERNS に無くても標識で trust する."""
+    # 公式 / 直営 / メーカー
+    assert is_trusted_seller("【公式】シャオール ／ 知育玩具メーカー")
+    assert is_trusted_seller("POMONA 直営店")
+    assert is_trusted_seller("知育玩具メーカー エデュテ")
+    # 専門店
+    assert is_trusted_seller("家電専門店エコアース")
+    assert is_trusted_seller("節句＆ギフト専門店 ぷりふあ人形")
+    # 法人
+    assert is_trusted_seller("株式会社カケハシ")
+    assert is_trusted_seller("Colorful Co., Ltd【インボイス（適格請求書発行）対応事業者】")
+    # 商標保有
+    assert is_trusted_seller("商標登録第6108155号 鈴木商店")
+
+
+def test_is_low_stock_reseller_signal_detects_low_remaining():
+    """残り N 点 で N < 10 のみフリッピング在庫として drop."""
+    assert is_low_stock_reseller_signal("残り3点 ご注文はお早めに")
+    assert is_low_stock_reseller_signal("残り 1 点")
+    assert is_low_stock_reseller_signal("残り9点 ご注文はお早めに")
     assert is_low_stock_reseller_signal("在庫わずか")
+
+
+def test_is_low_stock_reseller_signal_passes_replenishment_notice():
+    """#817: 「入荷予定あり」付きは補充確約で健全在庫."""
+    assert not is_low_stock_reseller_signal("残り16点（入荷予定あり）")
+    assert not is_low_stock_reseller_signal("残り2点（入荷予定あり）")
+
+
+def test_is_low_stock_reseller_signal_passes_high_remaining():
+    """#817: 残り 10 点以上は直販の transient 低在庫として通す."""
+    assert not is_low_stock_reseller_signal("残り10点 ご注文はお早めに")
+    assert not is_low_stock_reseller_signal("残り12点 ご注文はお早めに")
 
 
 def test_is_low_stock_reseller_signal_passes_normal_availability():

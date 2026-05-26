@@ -357,17 +357,47 @@ def extract_seller(item: dict) -> str:
     return ""
 
 
-def is_trusted_seller(seller: str) -> bool:
-    """seller 名が `TRUSTED_SELLER_PATTERNS` のいずれかに部分一致するか。
+# 汎用 legitimate-seller heuristic 標識 (#817):
+# seller 名にこれらの語が含まれていれば、TRUSTED_SELLER_PATTERNS の個別
+# 列挙に頼らず信頼扱いとする。enumeration の whack-a-mole を避ける目的。
+# - 「公式 / 直営 / メーカー」: 自己宣言の正規/直販ルート
+# - 「専門店」: ジャンル専門店 (誠文堂書店, 家電専門店エコアース 等)
+# - 「株式会社 / (株) / Co., Ltd / Co.,Ltd」: 法人実在の標識
+# - 「インボイス / 適格請求書 / 発行事業者」: 適格事業者登録あり (法人登録要)
+# - 「商標登録」: 商標保有 = 法人実在
+TRUSTED_SELLER_GENERIC_MARKERS = (
+    "公式",
+    "直営",
+    "メーカー",
+    "専門店",
+    "株式会社",
+    "(株)",
+    "（株）",
+    "co., ltd",
+    "co.,ltd",
+    "インボイス",
+    "適格請求書",
+    "発行事業者",
+    "商標登録",
+)
 
-    PA-API が seller を返さない (空文字) 場合は **信頼不能** として False。
-    これにより、merchantInfo を返さない transient エラーで誤ってスカム
-    ASIN を通すリスクを避ける。
+
+def is_trusted_seller(seller: str) -> bool:
+    """seller 名が信頼セラーに該当するか。
+
+    判定順:
+      1. 空文字 → False (PA-API merchantInfo 取得失敗等は信頼不能扱い)
+      2. TRUSTED_SELLER_PATTERNS に部分一致 → True (well-known brand)
+      3. TRUSTED_SELLER_GENERIC_MARKERS に部分一致 → True (#817: 汎用 heuristic)
     """
     if not seller:
         return False
     s = seller.lower()
-    return any(pat in s for pat in TRUSTED_SELLER_PATTERNS)
+    if any(pat in s for pat in TRUSTED_SELLER_PATTERNS):
+        return True
+    if any(marker in s for marker in TRUSTED_SELLER_GENERIC_MARKERS):
+        return True
+    return False
 
 
 def is_low_stock_reseller_signal(availability: str) -> bool:
@@ -375,11 +405,25 @@ def is_low_stock_reseller_signal(availability: str) -> bool:
 
     Amazon 直販 / メーカー直販は通常潤沢な在庫を持つため低在庫メッセージは
     出ない。`カートに追加できます` / `通常配送無料` 等の標準表記は False。
+
+    #817 緩和:
+      - 「入荷予定あり」付き → 補充確約で健全在庫 (False)
+      - 残り N 点 で N >= 10 → 直販でも一時的に低在庫になる場合あり (False)
+        転売出品は通常 5 点以下のフリッピング在庫が典型。
     """
     if not availability:
         return False
-    if re.search(r"残り\s*\d+\s*点", availability):
-        return True
+    # 補充確約: 「残り N 点（入荷予定あり）」等は健全
+    if "入荷予定あり" in availability:
+        return False
+    m = re.search(r"残り\s*(\d+)\s*点", availability)
+    if m:
+        try:
+            remaining = int(m.group(1))
+        except ValueError:
+            return True
+        # 10 点以上は正規在庫の transient 低在庫として扱う
+        return remaining < 10
     if "在庫わずか" in availability:
         return True
     return False
