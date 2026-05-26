@@ -99,6 +99,13 @@ on:
       # 2026-05-25 (session 47 / Issue #590 PR-3): /cospa/ /deals/ 自動更新 workflow。
       # workflow 本体を触る PR も validate を required check として発火させる。
       - '.github/workflows/09-feature-lists.yml'
+      # 2026-05-26 (session 63 / Issue #812): idle-slot rewrite 機構。
+      # priority module + apply 層 + workflow 本体を触る PR で validate を発火。
+      - 'scripts/select_rewrite_targets.py'
+      - 'scripts/apply_rewrite_targets.py'
+      - 'scripts/tests/test_select_rewrite_targets.py'
+      - 'scripts/tests/test_apply_rewrite_targets.py'
+      - '.github/workflows/12-rewrite-idle-fill.yml'
   workflow_dispatch:
 
 permissions:

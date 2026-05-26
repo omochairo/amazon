@@ -1,0 +1,157 @@
+name: Rewrite Idle Fill
+
+# Issue #812 Phase 1 — fill idle Jules slots with rewrites of low-quality / old-prompt
+# articles whenever new-ASIN fetch supply is below the 8-slot capacity.
+#
+# Flow:
+# 1. Compute exclude set = open PR titles + jules-lock/<ASIN> branches.
+# 2. slack = max(0, 8 - active). Manual `limit` input overrides.
+# 3. select_rewrite_targets.py picks `slack` ASINs by (quality.total_score asc,
+#    slug date asc). Missing quality.json → top priority.
+# 4. fetch_amazon.py --asin <CSV> --competitors-only refreshes per_asin/<ASIN>/.
+# 5. Inject per_asin/<ASIN>/amazon.json items into data/raw/amazon.json items[]
+#    so 03-invoke-jules pick-asin sees them in candidates, and delete the
+#    existing data/articles/<slug>-<ASIN>.{json,quality.json,enrichment.json,seo.json}.
+# 6. Open PR + enable auto-merge. After merge, 02-publish → 03-invoke-jules
+#    chain naturally picks up the now-uncovered ASINs.
+
+on:
+  schedule:
+    # 02:00 + 14:00 UTC = 11:00 + 23:00 JST, ~2h after each fetch cron
+    # (fetch is at 00:00 + 09:00 UTC) so slack reflects latest supply.
+    - cron: '0 2,14 * * *'
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Override target count (default: idle-slot based, max 8). Use 0 to dry-run select only.'
+        required: false
+        default: ''
+
+jobs:
+  rewrite:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Compute idle slack + select rewrite targets
+        id: select
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ github.repository }}
+          INPUT_LIMIT: ${{ github.event.inputs.limit }}
+        run: |
+          set -e
+          gh pr list --repo "$REPO" --state open --json title --jq '.[].title' > /tmp/open_titles.txt || echo "" > /tmp/open_titles.txt
+          gh api "repos/$REPO/git/matching-refs/heads/jules-lock/" \
+            --jq '.[] | .ref | sub("refs/heads/jules-lock/"; "")' > /tmp/locked.txt 2>/dev/null || echo "" > /tmp/locked.txt
+          cat /tmp/open_titles.txt /tmp/locked.txt > /tmp/excluded.txt
+          ACTIVE=$(grep -oE 'B0[A-Z0-9]{8}' /tmp/excluded.txt | sort -u | wc -l || echo 0)
+          MAX_LOCKS=8
+          SLACK=$((MAX_LOCKS - ACTIVE))
+          [ "$SLACK" -lt 0 ] && SLACK=0
+          if [ -n "$INPUT_LIMIT" ]; then SLACK="$INPUT_LIMIT"; fi
+          echo "active=$ACTIVE max=$MAX_LOCKS slack=$SLACK"
+          if [ "$SLACK" -le 0 ]; then
+            echo "No idle slots; skipping."
+            echo "count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          python scripts/select_rewrite_targets.py \
+            --articles-dir data/articles \
+            --exclude-file /tmp/excluded.txt \
+            --limit "$SLACK" \
+            --out /tmp/rewrite_targets.txt
+          COUNT=$(grep -cE 'B0[A-Z0-9]{8}' /tmp/rewrite_targets.txt || echo 0)
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          if [ "$COUNT" -gt 0 ]; then
+            ASINS_CSV=$(paste -sd, /tmp/rewrite_targets.txt)
+            echo "asins=$ASINS_CSV" >> "$GITHUB_OUTPUT"
+            echo "Selected: $ASINS_CSV"
+          fi
+
+      - name: Refresh per_asin data via Creator API
+        if: steps.select.outputs.count != '0'
+        env:
+          AMAZON_CREATORS_APPLICATION_ID: ${{ secrets.AMAZON_CREATORS_APPLICATION_ID }}
+          AMAZON_CREATORS_CREDENTIAL_ID: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_ID }}
+          AMAZON_CREATORS_CREDENTIAL_SECRET: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_SECRET }}
+          AMAZON_PARTNER_TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
+        run: |
+          python scripts/fetch_amazon.py \
+            --asin "${{ steps.select.outputs.asins }}" \
+            --competitors-only \
+            --out data/raw/
+
+      - name: Inject targets into amazon.json + delete old article files
+        if: steps.select.outputs.count != '0'
+        env:
+          ASINS_CSV: ${{ steps.select.outputs.asins }}
+        run: python scripts/apply_rewrite_targets.py --asins "$ASINS_CSV"
+
+      - name: Create PR with auto-merge
+        if: steps.select.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          ASINS_CSV: ${{ steps.select.outputs.asins }}
+        run: |
+          set -e
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes to commit; skipping PR."
+            exit 0
+          fi
+          BRANCH="rewrite-idle/${{ github.run_id }}"
+          TITLE="chore(rewrite): idle-fill rewrite of ${ASINS_CSV} (#812)"
+          git config user.name "omochairo-fetch-bot[bot]"
+          git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add data/raw/amazon.json data/raw/per_asin/ data/articles/
+          if git diff --cached --quiet; then
+            echo "Nothing staged after git add; skipping."
+            exit 0
+          fi
+          git commit -m "$TITLE"
+          git push -u origin "$BRANCH"
+          PR_URL=$(gh pr create \
+            --title "$TITLE" \
+            --body "$(cat <<EOF
+          ## Summary
+          Idle-fill rewrite cycle (Issue #812 Phase 1).
+
+          **Targets**: \`${ASINS_CSV}\`
+
+          ## What this PR does
+          - Refreshes \`data/raw/per_asin/<ASIN>/{amazon.json,competitors.json}\` via Creator API
+          - Prepends each target's item record into \`data/raw/amazon.json\` items[] so 03-invoke-jules can pick them
+          - Deletes \`data/articles/<old-slug>-<ASIN>.{json,quality.json,enrichment.json,seo.json}\`
+
+          ## Why
+          fetch_amazon new-ASIN supply was low at cron time, leaving Jules slots idle. Selected ASINs are the lowest \`quality.total_score\` / oldest articles (sidecar-missing articles ranked first as old-prompt revisions).
+
+          After merge, 02-publish → 03-invoke-jules naturally re-generates each ASIN with the current prompt.
+          EOF
+          )" \
+            --base main \
+            --head "$BRANCH")
+          echo "Created: $PR_URL"
+          gh pr merge --auto --squash --delete-branch "$PR_URL" || echo "::warning::Could not enable auto-merge on $PR_URL"
