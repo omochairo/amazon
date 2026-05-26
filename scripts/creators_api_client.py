@@ -1,14 +1,39 @@
 #!/usr/bin/env python3
-"""
-Amazon Creators API Client
+"""Amazon Creators API Client
 
-Creators API用クライアント。OAuth 2.0 Client Credentials認証を使用。
-(Legacy: PAAPIClient)
+🚨 重要 — これは Amazon **Creator API (creatorsapi.amazon)** のクライアント。
+  - **PA-API 5 (webservices.amazon.co.jp/paapi5/...) ではない**。Legacy 名は
+    PAAPIClient だったが、現行 omochairo は Creator API のみ使用する。
+  - PA-API 5 公式仕様 (resource 名 / response schema / TPS / signing) は **流用不可**。
+
+エンドポイント (FE / 日本マーケットプレイス, www.amazon.co.jp):
+  - OAuth Token: ``https://creatorsapi.auth.us-west-2.amazoncognito.com/oauth2/token``
+                 (v2.3, legacy Cognito) または ``https://api.amazon.co.jp/auth/o2/token``
+                 (v3.3, LwA: credential_id が ``amzn1.`` で始まる場合)
+  - getItems:    ``POST /catalog/v1/getItems``    → 応答 ``itemsResult.items``
+  - searchItems: ``POST /catalog/v1/searchItems`` → 応答 ``searchResult.items``
+
+認証フロー:
+  OAuth 2.0 Client Credentials。``Authorization: Bearer <token>, Version <2.3|3.3>``
+  と ``x-marketplace`` / ``x-amz-application-id`` ヘッダを併用する。
 
 環境変数:
-    AMAZON_CREATORS_CREDENTIAL_ID: クレデンシャルID (OAuth client_id)
+    AMAZON_CREATORS_APPLICATION_ID: アプリケーション ID (x-amz-application-id ヘッダ)
+    AMAZON_CREATORS_CREDENTIAL_ID:  クレデンシャル ID (OAuth client_id)
     AMAZON_CREATORS_CREDENTIAL_SECRET: クレデンシャルシークレット (OAuth client_secret)
-    AMAZON_PARTNER_TAG: アソシエイトID
+    AMAZON_PARTNER_TAG: アソシエイト ID (partnerTag フィールド)
+
+エラー応答 (session 60 PR #786):
+  200/404 以外のレスポンスは ``[CreatorsAPI] HTTP <code> <url> :: <body[:300]>``
+  形式で stdout に出す。PR #761 (deliveryInfo invalid resource) の真因究明が
+  「API request failed after 5 attempts」しか残らず不能だった事案の再発防止。
+
+関連 trap:
+  [[feedback-omochairo-creators-api-deliveryinfo-trap]] —
+  resource 名は PA-API 5 と互換しない箇所がある。本クライアントを使う側
+  (``fetch_amazon.py`` 等) の SEARCH_ITEM_RESOURCES 定数を変更する PR は
+  ``scripts/fetch_amazon_dry_run.py`` (validate workflow の gate) で実 API
+  検証されることを前提に設計すること。
 """
 import os
 import json

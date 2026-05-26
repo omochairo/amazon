@@ -1,3 +1,27 @@
+"""楽天市場 商品 / ランキングデータ取得スクリプト
+
+🚨 重要 — 使用 API: **楽天ウェブサービス v20220601 (新エンドポイント)**
+  - 旧 endpoint (``app.rakuten.co.jp``) は **使えない** (session 58 で trap)。
+  - 必ず ``openapi.rakuten.co.jp`` ホスト + URL 末尾の ``/20220601`` バージョン。
+  - 認証は ``applicationId`` クエリパラメータ (環境変数 ``RAKUTEN_APP_ID``)。
+  - PA-API 5 / Amazon Creator API とは別系統の楽天独自 API。
+
+エンドポイント:
+  - 商品検索: ``GET https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601``
+  - ランキング: ``GET https://openapi.rakuten.co.jp/ichibaranking/api/IchibaItem/Ranking/20220601``
+  - 共通必須パラメータ:
+      ``applicationId``: RAKUTEN_APP_ID (環境変数)
+      ``formatVersion``: 2  (items が flat list で返る; v1 は dict-wrap)
+
+関連 trap:
+  [[omochairo-rakuten-v20220601-trap]] — 3 段 trap:
+    1. ``version=20220601`` クエリパラメータではなく URL 末尾必須
+    2. ``applicationId`` 必須 (``accessKey`` ではない)
+    3. ホストは ``openapi.rakuten.co.jp`` (``app.rakuten.co.jp`` は廃止)
+
+環境変数:
+    RAKUTEN_APP_ID: 楽天ウェブサービスのアプリケーション ID (必須)
+"""
 import os, sys, json, re, pathlib, datetime, requests, logging
 
 def get_secret(name: str) -> str:
