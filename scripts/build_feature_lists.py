@@ -212,11 +212,17 @@ def build_cospa(
     price_min: int = 500,
     price_max: int = 5000,
     top_n: int = 20,
+    sort_key: str = "cospa",
 ) -> tuple[list[ArticleRecord], dict[str, int]]:
     """Select TOP-N cospa picks.
 
-    Returns ``(items, drops)`` where ``drops`` counts records rejected per
-    reason (for the build manifest).
+    ``sort_key`` controls ordering:
+      - ``"cospa"`` (default): cospa efficiency (ivs_100 / log(price)) 降順。
+        帯横断 TOP-N で「IVS と価格のバランス」を見たいときに使う。
+      - ``"ivs"``: 知育スコア (ivs_100) 降順 → 価格 昇順。
+        価格帯ナビのように既に帯を固定しているケースで、UI 文言
+        「知育スコアの高い順」と一致させるために使う (帯内 cospa 順だと
+        IVS が高いのに安くないせいで下位になり、文言と矛盾する)。
     """
     drops = {"low_ivs": 0, "price_out_of_band": 0, "missing_ivs_100": 0}
     survivors: list[ArticleRecord] = []
@@ -233,9 +239,14 @@ def build_cospa(
         rec.score_cospa = _cospa_score(rec.ivs_100, rec.best_price)
         survivors.append(rec)
 
-    survivors.sort(
-        key=lambda r: (-(r.score_cospa or 0.0), -(r.ivs_100 or 0)),
-    )
+    if sort_key == "ivs":
+        survivors.sort(
+            key=lambda r: (-(r.ivs_100 or 0), r.best_price or 0),
+        )
+    else:
+        survivors.sort(
+            key=lambda r: (-(r.score_cospa or 0.0), -(r.ivs_100 or 0)),
+        )
     return survivors[:top_n], drops
 
 
@@ -250,6 +261,7 @@ def build_cospa_bands(
     各帯の中では「知育スコア (ivs_100) 降順 → 価格 昇順」で並べる。
     cospa score (IVS/log(price)) は帯横断比較のための式なので、帯内では
     純粋にスコアの高い順を見せたほうがユーザにとってわかりやすい。
+    (UI 文言 feature.html:74 「知育スコアの高い順に並べています」と整合)
     """
     # records は generator の可能性があるため一度 list 化 (各帯で再走査するため)
     records_list = list(_dedupe_by_asin(records))
@@ -261,6 +273,7 @@ def build_cospa_bands(
             price_min=band["price_min"],
             price_max=band["price_max"],
             top_n=top_n_per_band,
+            sort_key="ivs",
         )
         bands_out.append({
             **band,
