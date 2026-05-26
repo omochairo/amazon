@@ -19,6 +19,9 @@
 
   {{- $data := site.Data.ranking.weekly }}
   {{- $items := and $data $data.items }}
+  {{- /* Rakuten API は rank 30 → 1 の順で返すため、表示時は rank 昇順にソートして
+         1 位を最上段に揃える (/cospa/ /deals/ と統一)。 */}}
+  {{- if $items }}{{ $items = sort $items "rank" "asc" }}{{ end }}
   {{- if not $items }}
   <p class="ranking-empty">現在ランキングデータを更新しています。次回 cron 実行までしばらくお待ちください。</p>
   {{- else }}
