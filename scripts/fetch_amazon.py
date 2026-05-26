@@ -545,9 +545,12 @@ def main():
         # is_trusted_seller(seller) が False になる ASIN は items_for_jules
         # から除外される (search mode)。
         "offersV2.listings.merchantInfo",
-        # 送料無料バッジ表示用 (#613 案件⑤)。isFreeShippingEligible が True の
-        # ASIN のみ price-card に 🚚 送料無料 バッジを出す。
-        "offersV2.listings.deliveryInfo",
+        # PR #761 で "offersV2.listings.deliveryInfo" を追加したが、PA-API 5 の
+        # OffersV2 サブには DeliveryInfo が存在せず (V1 Offers.Listings.DeliveryInfo
+        # のみ)、SearchItems が 400 で全 keyword 0 items を返して fetch_amazon が
+        # 2026-05-26 cron で死亡。緊急 hotfix として一旦削除。送料無料バッジ
+        # 機能は V1 resource への切替を別 issue で再設計する。
+        # extract_free_shipping helper は残す (常に False を返すので無害)。
     ]
 
     blocklist = _load_asin_blocklist()
