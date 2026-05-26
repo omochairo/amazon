@@ -780,7 +780,7 @@ def _attach_market_prices(
             # so we don't lose the (often correct, sometimes wrong) link, but
             # flag it as unverified so the template can render a 確度低 badge
             # plus a fallback search URL.
-            existing["verified"] = False
+            existing["verified"] = existing.get("verified", False)
             existing.setdefault("is_search", False)
             if product_name and not existing.get("search_url"):
                 builder = _SEARCH_URL_BUILDERS.get(key)

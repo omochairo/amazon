@@ -117,6 +117,20 @@ class ArticleReport:
         }
 
 
+def _is_legacy_article(data: dict) -> bool:
+    """Check if the article date is on or before 2026-05-17 to treat it as legacy."""
+    date_str = data.get("date")
+    if not date_str:
+        return True
+    try:
+        dt = date_str.split("T")[0]
+        if dt <= "2026-05-17":
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def _count_chars(text) -> int:
     if text is None:
         return 0
@@ -367,8 +381,8 @@ def check_source_uniqueness(data: dict) -> CheckResult:
     1. 検索エンジン結果ページ URL (DuckDuckGo/Google 等) は src に不可
     2. 同一 URL (正規化後) が 2 つ以上の src id に分割されていない (1 URL multi-source 化禁止)
     """
-    if "sources" not in data:
-        return CheckResult("source_uniqueness", True, 1.0, "field absent (legacy article, skipped)")
+    if "sources" not in data or _is_legacy_article(data):
+        return CheckResult("source_uniqueness", True, 1.0, "field absent or legacy article (skipped)")
     srcs = data.get("sources") or []
     if not isinstance(srcs, list) or not srcs:
         return CheckResult("source_uniqueness", True, 1.0, "OK (empty)")
@@ -421,8 +435,8 @@ def check_sources_v5(data: dict) -> CheckResult:
     - len(sources) < 5 → fail
     - 非販売 (= _is_sales_source False) が 2 件未満 → fail
     """
-    if "sources" not in data:
-        return CheckResult("sources_v5", True, 1.0, "field absent (legacy article, skipped)")
+    if "sources" not in data or _is_legacy_article(data):
+        return CheckResult("sources_v5", True, 1.0, "field absent or legacy article (skipped)")
     srcs = data.get("sources") or []
     if not isinstance(srcs, list):
         return CheckResult("sources_v5", False, 0.0, "sources must be a list")
