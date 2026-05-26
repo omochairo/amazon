@@ -191,6 +191,20 @@ def _cospa_score(ivs_100: int, best_price: int) -> float:
     return (ivs_100 / 100.0) / math.log10(best_price + 100)
 
 
+# /cospa/ 価格帯ナビ (Issue: session 58 ユーザー要望)。
+# 「全 TOP20 で IVS 寄り集計だと知育スコアランキングと変わらない & トミカ/レゴで埋まる」
+# を解消するため、価格帯ごとに TOP-N を出す。デフォルト表示は 3,000-5,000 円
+# (一番選びにくく、贈答需要が高い帯)。
+PRICE_BANDS: list[dict[str, Any]] = [
+    {"key": "lt1000",     "label": "〜¥1,000",       "price_min": 0,     "price_max": 999},
+    {"key": "1000-2000",  "label": "¥1,000-¥2,000",  "price_min": 1000,  "price_max": 1999},
+    {"key": "2000-3000",  "label": "¥2,000-¥3,000",  "price_min": 2000,  "price_max": 2999},
+    {"key": "3000-5000",  "label": "¥3,000-¥5,000",  "price_min": 3000,  "price_max": 4999, "default": True},
+    {"key": "5000-7000",  "label": "¥5,000-¥7,000",  "price_min": 5000,  "price_max": 6999},
+    {"key": "7000-10000", "label": "¥7,000-¥10,000", "price_min": 7000,  "price_max": 9999},
+]
+
+
 def build_cospa(
     records: Iterable[ArticleRecord],
     *,
@@ -223,6 +237,37 @@ def build_cospa(
         key=lambda r: (-(r.score_cospa or 0.0), -(r.ivs_100 or 0)),
     )
     return survivors[:top_n], drops
+
+
+def build_cospa_bands(
+    records: Iterable[ArticleRecord],
+    *,
+    min_ivs: float = 4.0,
+    top_n_per_band: int = 10,
+) -> list[dict[str, Any]]:
+    """Build per-price-band cospa lists.
+
+    各帯の中では「知育スコア (ivs_100) 降順 → 価格 昇順」で並べる。
+    cospa score (IVS/log(price)) は帯横断比較のための式なので、帯内では
+    純粋にスコアの高い順を見せたほうがユーザにとってわかりやすい。
+    """
+    # records は generator の可能性があるため一度 list 化 (各帯で再走査するため)
+    records_list = list(_dedupe_by_asin(records))
+    bands_out: list[dict[str, Any]] = []
+    for band in PRICE_BANDS:
+        items, _drops = build_cospa(
+            records_list,
+            min_ivs=min_ivs,
+            price_min=band["price_min"],
+            price_max=band["price_max"],
+            top_n=top_n_per_band,
+        )
+        bands_out.append({
+            **band,
+            "count": len(items),
+            "items": items,
+        })
+    return bands_out
 
 
 def _parse_iso8601(value: str | None) -> datetime | None:
@@ -307,25 +352,39 @@ def _record_to_payload_common(rec: ArticleRecord, rank: int) -> dict[str, Any]:
     }
 
 
-def serialize_cospa(
-    items: list[ArticleRecord],
+def serialize_cospa_bands(
+    bands: list[dict[str, Any]],
     *,
     filter_params: dict[str, Any],
     generated_at: str,
 ) -> dict[str, Any]:
-    payload_items = []
-    for idx, rec in enumerate(items, start=1):
-        entry = _record_to_payload_common(rec, idx)
-        entry["score_cospa"] = (
-            round(rec.score_cospa, 4) if rec.score_cospa is not None else None
-        )
-        payload_items.append(entry)
+    """価格帯ナビ用シリアライズ。各 band の items を payload に変換する。"""
+    payload_bands = []
+    total = 0
+    for band in bands:
+        payload_items = []
+        for idx, rec in enumerate(band["items"], start=1):
+            entry = _record_to_payload_common(rec, idx)
+            entry["score_cospa"] = (
+                round(rec.score_cospa, 4) if rec.score_cospa is not None else None
+            )
+            payload_items.append(entry)
+        total += len(payload_items)
+        payload_bands.append({
+            "key": band["key"],
+            "label": band["label"],
+            "price_min": band["price_min"],
+            "price_max": band["price_max"],
+            "default": bool(band.get("default")),
+            "count": len(payload_items),
+            "items": payload_items,
+        })
     return {
         "generated_at": generated_at,
         "type": "cospa",
         "filter": filter_params,
-        "count": len(payload_items),
-        "items": payload_items,
+        "count": total,
+        "bands": payload_bands,
     }
 
 
@@ -401,12 +460,10 @@ def run(
     records = load_articles(articles_dir)
     attach_amazon_meta(records, per_asin_dir)
 
-    cospa_items, cospa_drops = build_cospa(
+    cospa_bands = build_cospa_bands(
         records,
         min_ivs=min_ivs,
-        price_min=price_min,
-        price_max=price_max,
-        top_n=top_n,
+        top_n_per_band=top_n,
     )
     deals_items, deals_drops = build_deals(
         records,
@@ -420,9 +477,11 @@ def run(
     generated_at = _now_iso()
     cospa_filter = {
         "min_ivs": min_ivs,
-        "price_min": price_min,
-        "price_max": price_max,
-        "top_n": top_n,
+        "top_n_per_band": top_n,
+        "bands": [
+            {"key": b["key"], "price_min": b["price_min"], "price_max": b["price_max"]}
+            for b in cospa_bands
+        ],
     }
     deals_filter = {
         "min_ivs": min_ivs,
@@ -431,8 +490,8 @@ def run(
         "top_n": top_n,
     }
 
-    cospa_payload = serialize_cospa(
-        cospa_items, filter_params=cospa_filter, generated_at=generated_at
+    cospa_payload = serialize_cospa_bands(
+        cospa_bands, filter_params=cospa_filter, generated_at=generated_at
     )
     deals_payload = serialize_deals(
         deals_items, filter_params=deals_filter, generated_at=generated_at
@@ -442,9 +501,8 @@ def run(
         "generated_at": generated_at,
         "articles_loaded": len(records),
         "cospa": {
-            "count": len(cospa_items),
+            "bands": {b["key"]: b["count"] for b in cospa_bands},
             "filter": cospa_filter,
-            "drops": cospa_drops,
         },
         "deals": {
             "count": len(deals_items),
@@ -501,9 +559,11 @@ def main(argv: list[str] | None = None) -> int:
         min_savings=args.min_savings,
         stale_days=args.stale_days,
     )
+    cospa_total = sum(manifest["cospa"].get("bands", {}).values())
     logger.info(
-        "built: cospa=%d deals=%d (from %d articles)",
-        manifest["cospa"]["count"],
+        "built: cospa=%d (across %d bands) deals=%d (from %d articles)",
+        cospa_total,
+        len(manifest["cospa"].get("bands", {})),
         manifest["deals"]["count"],
         manifest["articles_loaded"],
     )

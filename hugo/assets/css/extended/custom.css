@@ -3018,6 +3018,96 @@ body.dark .feature-platform {
 }
 
 /* ==========================================
+   /cospa/ 価格帯ナビ (session 58 ユーザー要望)
+   ========================================== */
+.cospa-bands {
+  margin: 0 0 1.5rem;
+}
+.cospa-band-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 1.25rem;
+  padding: 0;
+  border-bottom: 2px solid #e5e7eb;
+}
+.cospa-band-tab {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 14px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  color: #374151;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.05s ease;
+  margin-bottom: -2px; /* 下線とくっつける */
+}
+.cospa-band-tab:hover {
+  background: #fffbeb;
+  color: #b45309;
+}
+.cospa-band-tab.is-active {
+  background: #fff7ed;
+  color: #b45309;
+  border-color: #fbbf24;
+  border-bottom: 2px solid #fff7ed;
+  font-weight: 600;
+}
+.cospa-band-tab-label {
+  white-space: nowrap;
+}
+.cospa-band-tab-count {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+.cospa-band-tab.is-active .cospa-band-tab-count {
+  color: #d97706;
+}
+.cospa-band-pane {
+  margin: 0;
+}
+.cospa-band-pane[hidden] {
+  display: none;
+}
+
+/* ダークモード */
+[data-theme="dark"] .cospa-band-tabs,
+body.dark .cospa-band-tabs {
+  border-bottom-color: #334155;
+}
+[data-theme="dark"] .cospa-band-tab,
+body.dark .cospa-band-tab {
+  background: #1e293b;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+[data-theme="dark"] .cospa-band-tab:hover,
+body.dark .cospa-band-tab:hover {
+  background: rgba(217, 119, 6, 0.18);
+  color: #fde68a;
+}
+[data-theme="dark"] .cospa-band-tab.is-active,
+body.dark .cospa-band-tab.is-active {
+  background: rgba(217, 119, 6, 0.25);
+  color: #fde68a;
+  border-color: #d97706;
+  border-bottom-color: rgba(217, 119, 6, 0.25);
+}
+[data-theme="dark"] .cospa-band-tab-count,
+body.dark .cospa-band-tab-count {
+  color: #64748b;
+}
+[data-theme="dark"] .cospa-band-tab.is-active .cospa-band-tab-count,
+body.dark .cospa-band-tab.is-active .cospa-band-tab-count {
+  color: #fcd34d;
+}
+
+/* ==========================================
    PC / tablet で main を広く使う (2026-05-25)
    PaperMod default --main-width:720px は PC で狭すぎるため、
    レイアウトの幅を画面サイズに応じて段階的に広げる。
