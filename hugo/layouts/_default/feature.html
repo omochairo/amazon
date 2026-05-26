@@ -1,9 +1,7 @@
 {{- /*
   Shared layout for the /cospa/ and /deals/ pages (Issue #590).
-  The content file's `params.feature_type` selects which dataset under
-  `site.Data.features` to render. The visual structure mirrors the
-  /ranking/ page so the two feature pages and the ranking page feel
-  like one product family; only the badge/price details differ.
+  - /deals/  : flat list rendered from $data.items
+  - /cospa/  : price-band navigator rendered from $data.bands (session 58 ユーザー要望)
 */}}
 {{- define "main" }}
 
@@ -27,76 +25,96 @@
 <div class="post-content ranking-content feature-content feature-content--{{ $type }}">
   {{ .Content }}
 
-  {{- $items := and $data $data.items }}
-  {{- if not $items }}
-  <p class="ranking-empty">現在データを集計中です。次回の自動更新までしばらくお待ちください。</p>
-  {{- else }}
-  <ol class="ranking-list feature-list feature-list--{{ $type }}">
-    {{- range $items }}
-    {{- $item := . }}
-    {{- /* JSON 数値は float64 でアンマーシャルされるため eq の型整合で int 化必須 */}}
-    {{- $rank := int (.rank | default 0) }}
-    {{- $internal := .url_internal }}
-    {{- $external := .amazon_url }}
-    <li class="ranking-item feature-item feature-item--{{ $type }} ranking-item--rank-{{ $rank }}" data-rank="{{ $rank }}" data-asin="{{ .asin }}">
-      <div class="ranking-badge ranking-badge--rank-{{ $rank }}" aria-label="第 {{ $rank }} 位">
-        {{- if eq $rank 1 }}<span class="ranking-medal">🥇</span>
-        {{- else if eq $rank 2 }}<span class="ranking-medal">🥈</span>
-        {{- else if eq $rank 3 }}<span class="ranking-medal">🥉</span>
-        {{- else }}<span class="ranking-number">{{ $rank }}</span>
+  {{- if eq $type "cospa" }}
+    {{- /* ===== /cospa/ : 価格帯ナビ ===== */}}
+    {{- $bands := and $data $data.bands }}
+    {{- if not $bands }}
+    <p class="ranking-empty">現在データを集計中です。次回の自動更新までしばらくお待ちください。</p>
+    {{- else }}
+    <div class="cospa-bands" role="region" aria-label="価格帯切り替え">
+      <nav class="cospa-band-tabs" role="tablist" aria-label="価格帯">
+        {{- range $bands }}
+        {{- $key := .key }}
+        {{- $isDefault := .default }}
+        <button type="button"
+                class="cospa-band-tab{{ if $isDefault }} is-active{{ end }}"
+                role="tab"
+                data-band="{{ $key }}"
+                aria-selected="{{ if $isDefault }}true{{ else }}false{{ end }}"
+                aria-controls="cospa-band-pane-{{ $key }}">
+          <span class="cospa-band-tab-label">{{ .label }}</span>
+          <span class="cospa-band-tab-count">{{ .count }}件</span>
+        </button>
         {{- end }}
-      </div>
+      </nav>
 
-      {{- with .image }}
-      <a class="ranking-thumb" href="{{ $internal | default $external }}"{{ if not $internal }} rel="sponsored nofollow noopener" target="_blank"{{ end }} aria-hidden="true" tabindex="-1">
-        <img src="{{ . }}" alt="" loading="lazy" decoding="async" width="200" height="200">
-      </a>
-      {{- end }}
-
-      <div class="ranking-body">
-        <h2 class="ranking-title">
-          {{- if $internal -}}
-          <a href="{{ $internal }}">{{ .name }}</a>
-          {{- else -}}
-          <a href="{{ $external }}" rel="sponsored nofollow noopener" target="_blank">{{ .name }}</a>
-          {{- end -}}
-        </h2>
-
-        {{- /* type-specific accent badge */}}
-        {{- if eq $type "deals" }}
-          {{- with .savings_percentage }}
-          <p class="feature-discount-badge"><span class="feature-discount-pct">{{ . }}%</span> OFF</p>
+      {{- range $bands }}
+      {{- $key := .key }}
+      {{- $isDefault := .default }}
+      <section id="cospa-band-pane-{{ $key }}"
+               class="cospa-band-pane{{ if $isDefault }} is-active{{ end }}"
+               role="tabpanel"
+               data-band="{{ $key }}"
+               aria-labelledby="cospa-band-tab-{{ $key }}"
+               {{ if not $isDefault }}hidden{{ end }}>
+        {{- if .items }}
+        <ol class="ranking-list feature-list feature-list--cospa">
+          {{- range .items }}
+          {{- partial "feature-item.html" (dict "item" . "type" "cospa") }}
           {{- end }}
+        </ol>
         {{- else }}
-          {{- with .ivs_100 }}
-          <p class="feature-cospa-badge"><a href="/about-score/" class="feature-cospa-badge-link">知育スコア</a> <strong>{{ int . }}</strong> / 100</p>
-          {{- end }}
+        <p class="ranking-empty">この価格帯はまだ十分な件数の知育スコアデータが集まっていません。次回更新でランキングを公開予定です。</p>
         {{- end }}
+      </section>
+      {{- end }}
+    </div>
 
-        {{- with .best_price }}
-        <p class="ranking-price">¥{{ lang.FormatNumberCustom 0 . }}{{- with $item.best_platform }} <span class="feature-platform">（{{ . }} 最安）</span>{{- end -}}</p>
-        {{- end }}
+    <p class="ranking-disclaimer">
+      ※ <a href="/about-score/">知育スコア</a>と実売価格は集計時点のものです。各価格帯の中で知育スコアの高い順に並べています。価格・在庫はリンク先で必ずご確認ください。当ページのリンクは Amazon アソシエイトを含みます。
+    </p>
 
-        <div class="ranking-cta">
-          {{- if $internal }}
-          <a class="ranking-cta-internal" href="{{ $internal }}">💡 徹底解説レビューを見る</a>
-          {{- end }}
-          {{- with $external }}
-          <a class="ranking-cta-external feature-cta-external--amazon" href="{{ . }}" rel="sponsored nofollow noopener" target="_blank">🟠 Amazon で確認する</a>
-          {{- end }}
-        </div>
-      </div>
-    </li>
+    <script>
+      (function () {
+        var root = document.querySelector('.cospa-bands');
+        if (!root) return;
+        var tabs = root.querySelectorAll('.cospa-band-tab');
+        var panes = root.querySelectorAll('.cospa-band-pane');
+        function activate(key) {
+          tabs.forEach(function (t) {
+            var on = t.dataset.band === key;
+            t.classList.toggle('is-active', on);
+            t.setAttribute('aria-selected', on ? 'true' : 'false');
+          });
+          panes.forEach(function (p) {
+            var on = p.dataset.band === key;
+            p.classList.toggle('is-active', on);
+            if (on) { p.removeAttribute('hidden'); } else { p.setAttribute('hidden', ''); }
+          });
+        }
+        tabs.forEach(function (t) {
+          t.addEventListener('click', function () { activate(t.dataset.band); });
+        });
+      })();
+    </script>
     {{- end }}
-  </ol>
 
-  <p class="ranking-disclaimer">
-    {{- if eq $type "deals" -}}
-    ※ 割引率・価格は Amazon から取得した時点のスナップショットです。リンク先での最新の価格・在庫をご確認ください。当ページのリンクは Amazon アソシエイトを含みます。
-    {{- else -}}
-    ※ <a href="/about-score/">知育スコア</a>と実売価格は集計時点のものです。価格・在庫はリンク先で必ずご確認ください。当ページのリンクは Amazon アソシエイトを含みます。
-    {{- end -}}
-  </p>
+  {{- else }}
+    {{- /* ===== /deals/ : 従来通りのフラットリスト ===== */}}
+    {{- $items := and $data $data.items }}
+    {{- if not $items }}
+    <p class="ranking-empty">現在データを集計中です。次回の自動更新までしばらくお待ちください。</p>
+    {{- else }}
+    <ol class="ranking-list feature-list feature-list--{{ $type }}">
+      {{- range $items }}
+      {{- partial "feature-item.html" (dict "item" . "type" $type) }}
+      {{- end }}
+    </ol>
+
+    <p class="ranking-disclaimer">
+      ※ 割引率・価格は Amazon から取得した時点のスナップショットです。リンク先での最新の価格・在庫をご確認ください。当ページのリンクは Amazon アソシエイトを含みます。
+    </p>
+    {{- end }}
   {{- end }}
 </div>
 

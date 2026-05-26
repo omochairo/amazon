@@ -1,0 +1,57 @@
+{{- /*
+  Renders a single <li> for /cospa/ /deals/ pages.
+  Expected context: a dict with keys .item (one item dict) and .type ("cospa" | "deals").
+*/}}
+{{- $item := .item }}
+{{- $type := .type }}
+{{- $rank := int ($item.rank | default 0) }}
+{{- $internal := $item.url_internal }}
+{{- $external := $item.amazon_url }}
+<li class="ranking-item feature-item feature-item--{{ $type }} ranking-item--rank-{{ $rank }}" data-rank="{{ $rank }}" data-asin="{{ $item.asin }}">
+  <div class="ranking-badge ranking-badge--rank-{{ $rank }}" aria-label="第 {{ $rank }} 位">
+    {{- if eq $rank 1 }}<span class="ranking-medal">🥇</span>
+    {{- else if eq $rank 2 }}<span class="ranking-medal">🥈</span>
+    {{- else if eq $rank 3 }}<span class="ranking-medal">🥉</span>
+    {{- else }}<span class="ranking-number">{{ $rank }}</span>
+    {{- end }}
+  </div>
+
+  {{- with $item.image }}
+  <a class="ranking-thumb" href="{{ $internal | default $external }}"{{ if not $internal }} rel="sponsored nofollow noopener" target="_blank"{{ end }} aria-hidden="true" tabindex="-1">
+    <img src="{{ . }}" alt="" loading="lazy" decoding="async" width="200" height="200">
+  </a>
+  {{- end }}
+
+  <div class="ranking-body">
+    <h2 class="ranking-title">
+      {{- if $internal -}}
+      <a href="{{ $internal }}">{{ $item.name }}</a>
+      {{- else -}}
+      <a href="{{ $external }}" rel="sponsored nofollow noopener" target="_blank">{{ $item.name }}</a>
+      {{- end -}}
+    </h2>
+
+    {{- if eq $type "deals" }}
+      {{- with $item.savings_percentage }}
+      <p class="feature-discount-badge"><span class="feature-discount-pct">{{ . }}%</span> OFF</p>
+      {{- end }}
+    {{- else }}
+      {{- with $item.ivs_100 }}
+      <p class="feature-cospa-badge"><a href="/about-score/" class="feature-cospa-badge-link">知育スコア</a> <strong>{{ int . }}</strong> / 100</p>
+      {{- end }}
+    {{- end }}
+
+    {{- with $item.best_price }}
+    <p class="ranking-price">¥{{ lang.FormatNumberCustom 0 . }}{{- with $item.best_platform }} <span class="feature-platform">（{{ . }} 最安）</span>{{- end -}}</p>
+    {{- end }}
+
+    <div class="ranking-cta">
+      {{- if $internal }}
+      <a class="ranking-cta-internal" href="{{ $internal }}">💡 徹底解説レビューを見る</a>
+      {{- end }}
+      {{- with $external }}
+      <a class="ranking-cta-external feature-cta-external--amazon" href="{{ . }}" rel="sponsored nofollow noopener" target="_blank">🟠 Amazon で確認する</a>
+      {{- end }}
+    </div>
+  </div>
+</li>

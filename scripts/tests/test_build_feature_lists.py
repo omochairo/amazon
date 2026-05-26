@@ -29,6 +29,29 @@ if SCRIPTS_DIR not in sys.path:
 import build_feature_lists as bfl  # noqa: E402
 
 
+# build_feature_lists.load_articles() は brand_normalizer + score_calculator で
+# 知育スコアを再計算する (session 58: list / 詳細ページの score 乖離解消)。
+# 本テストは集計ロジック単体を検証するのが目的なので、テスト中は recalc を
+# 「JSON 上の ivs_score / ivs_detail.total_100 をそのまま返す」スタブに差し替える。
+class _StubScoreResult:
+    def __init__(self, total_100: int, ivs_score: float) -> None:
+        self.total_100 = total_100
+        self.ivs_score = ivs_score
+
+
+def _stub_calculate_score(article, brand, asin=None):
+    prod = article.get("product") or {}
+    det = prod.get("ivs_detail") or {}
+    return _StubScoreResult(
+        total_100=int(det.get("total_100") or 0),
+        ivs_score=float(prod.get("ivs_score") or 0.0),
+    )
+
+
+# モジュール import 直後に差し替えておく (各 TestCase は import 済みの bfl を共有)。
+bfl.calculate_score = _stub_calculate_score
+
+
 # ---------------------------------------------------------------------------
 # Fixture helpers
 # ---------------------------------------------------------------------------
@@ -361,12 +384,19 @@ class SerializeTest(unittest.TestCase):
             best_platform="Amazon", amazon_url="https://example/dp/B00ABCXYZ",
         )
         rec.score_cospa = 0.333333
-        payload = bfl.serialize_cospa(
-            [rec], filter_params={}, generated_at="2026-05-25T00:00:00Z"
+        # session 58 で serialize_cospa は bands 構造を返す serialize_cospa_bands に置換済
+        bands = [
+            {"key": "1000-2000", "label": "¥1,000-¥2,000", "price_min": 1000,
+             "price_max": 1999, "default": True, "items": [rec]},
+        ]
+        payload = bfl.serialize_cospa_bands(
+            bands, filter_params={}, generated_at="2026-05-25T00:00:00Z"
         )
         self.assertEqual(payload["type"], "cospa")
         self.assertEqual(payload["count"], 1)
-        entry = payload["items"][0]
+        self.assertEqual(payload["bands"][0]["key"], "1000-2000")
+        self.assertTrue(payload["bands"][0]["default"])
+        entry = payload["bands"][0]["items"][0]
         # Hugo lowercases URLs - slug.lower() must be applied (memory trap).
         self.assertEqual(entry["url_internal"], "/posts/2026-05-13-b00abcxyz/")
         self.assertEqual(entry["score_cospa"], 0.3333)  # rounded to 4dp
@@ -436,9 +466,16 @@ class RunEndToEndTest(unittest.TestCase):
             deals = json.loads((out_hugo / "deals.json").read_text(encoding="utf-8"))
             saved_manifest = json.loads(out_manifest.read_text(encoding="utf-8"))
 
-            # cospa: all 3 articles qualify (ivs>=4.0, price in band), TOP1 = B0AAA1
+            # cospa: 価格帯ナビ構造。記事 3 件はそれぞれ別の帯に入る
+            # (¥1,200 -> 1000-2000, ¥2,500 -> 2000-3000, ¥3,000 -> 3000-5000)
             self.assertEqual(cospa["count"], 3)
-            self.assertEqual(cospa["items"][0]["asin"], "B0AAA1")
+            # bands は PRICE_BANDS の順で 6 要素
+            self.assertEqual(len(cospa["bands"]), 6)
+            band_by_key = {b["key"]: b for b in cospa["bands"]}
+            self.assertEqual(band_by_key["1000-2000"]["items"][0]["asin"], "B0AAA1")
+            self.assertEqual(band_by_key["2000-3000"]["items"][0]["asin"], "B0CCC3")
+            self.assertEqual(band_by_key["3000-5000"]["items"][0]["asin"], "B0BBB2")
+            self.assertTrue(band_by_key["3000-5000"]["default"])  # 既定タブ
 
             # deals: only B0BBB2 (B0CCC3 stale, B0AAA1 no savings data)
             self.assertEqual(deals["count"], 1)
@@ -451,7 +488,10 @@ class RunEndToEndTest(unittest.TestCase):
             self.assertEqual(
                 saved_manifest["deals"]["drops"]["stale_or_unknown_fetch"], 1
             )
-            self.assertEqual(manifest["cospa"]["count"], 3)
+            # cospa manifest は band 別 dict
+            self.assertEqual(manifest["cospa"]["bands"]["1000-2000"], 1)
+            self.assertEqual(manifest["cospa"]["bands"]["2000-3000"], 1)
+            self.assertEqual(manifest["cospa"]["bands"]["3000-5000"], 1)
 
 
 if __name__ == "__main__":
