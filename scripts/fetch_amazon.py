@@ -329,6 +329,7 @@ def write_per_asin_competitors(
     out_root: str, target_item: dict, fallback_pool: list,
     api=None, search_index: str = "Toys", resources: list = None,
     covered_asins: set = None, max_n: int = 5,
+    published_pool: list = None,
 ) -> None:
     """Plan D+ 実装: target ごとに SearchItems を打って候補プールを作り、
     自社既掲載 ASIN の snapshot プールと統合してから類似度ランキングする。
@@ -337,6 +338,10 @@ def write_per_asin_competitors(
     同じ items[0..2] を競合に焼き付けていた (= 78% のレポート濃度問題)。
     Plan D+ は (1) Amazon 検索の relevance、(2) 価格距離、(3) 自社内部リンク
     の 3 シグナルを target ごとに合成して並べ替える。
+
+    ``published_pool`` は呼び出し側で 1 度だけビルドした内部リンク用プール。
+    省略時はターゲットごとに ``_load_published_snapshots_pool`` を呼ぶ
+    (= N*M ファイル open) ので、カタログが大きいときは必ず渡すこと。
     """
     from competitor_ranking import (
         dedupe_candidates, rank_candidates, ensure_internal_link_floor,
@@ -351,7 +356,10 @@ def write_per_asin_competitors(
         search_pool = _search_competitor_pool(api, target_item, search_index, resources or [])
         time.sleep(1.1)  # PA-API TPS=1 safety margin
     # Pool 2: 自社既掲載 ASIN の snapshot (内部リンク floor 用)
-    article_pool = _load_published_snapshots_pool(out_root, covered_asins - {target_asin})
+    if published_pool is None:
+        article_pool = _load_published_snapshots_pool(out_root, covered_asins - {target_asin})
+    else:
+        article_pool = [it for it in published_pool if it.get("asin") != target_asin]
     # Pool 3: 旧来の amazon.json プール (Plan B フォールバック)
     candidates = dedupe_candidates([search_pool, article_pool, fallback_pool or []], exclude_asin=target_asin)
     if not candidates:
@@ -392,36 +400,29 @@ def _load_existing_article_asins(articles_dir: str = "data/articles") -> set:
 
     Used to strip already-covered ASINs from amazon.json before Jules reads
     it, so the AI can't pick a duplicate even if it ignores the textual
-    "no duplicate ASIN" rule in the prompt. Falls back to the slug suffix
-    when ``product.asin`` is missing.
+    "no duplicate ASIN" rule in the prompt.
+
+    Filename suffix is authoritative: every article slug ends with the ASIN
+    (e.g. ``2026-05-26-B01MUBACGI.json``), so we can derive the ASIN set
+    by regex alone — no JSON parsing required. Skips
+    ``.enrichment / .seo / .quality`` companion files.
     """
     asins: set = set()
     if not os.path.isdir(articles_dir):
         return asins
-    pattern = re.compile(r"-(B0[A-Z0-9]{8})$")
+    # Match any 10-char uppercase ASIN suffix, not just ``B0...`` — book ASINs
+    # are ISBN-10 (numeric-only, e.g. ``4910762175``) and would otherwise leak
+    # past the duplicate filter.
+    pattern = re.compile(r"-([A-Z0-9]{10})$")
     for name in os.listdir(articles_dir):
         if not name.endswith(".json"):
             continue
         stem = name[:-5]
         if stem.endswith((".enrichment", ".seo", ".quality")):
             continue
-        path = os.path.join(articles_dir, name)
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except (OSError, json.JSONDecodeError):
-            data = None
-        a = None
-        if isinstance(data, dict):
-            prod = data.get("product") if isinstance(data.get("product"), dict) else None
-            if prod and prod.get("asin"):
-                a = prod["asin"]
-        if not a:
-            m = pattern.search(stem)
-            if m:
-                a = m.group(1)
-        if a:
-            asins.add(a)
+        m = pattern.search(stem)
+        if m:
+            asins.add(m.group(1))
     return asins
 
 
@@ -690,10 +691,27 @@ def main():
     if primary_kw and primary_kw not in keywords:
         keywords.insert(0, primary_kw)
 
-    new_for_jules = sum(
-        1 for it in items
-        if it.get("asin") in target_asins or it.get("asin") not in existing
-    )
+    def _is_jules_eligible(it: dict) -> bool:
+        """Return True iff ``it`` would survive the post-loop reseller filter.
+
+        Used both for the early-termination counter inside the search loop
+        and for the final pruning pass below, so the ``min_new`` target
+        reflects items that will *actually* reach Jules (#794: previously
+        the counter included items the reseller filter would later drop,
+        causing 'Pool below target' warnings on every run).
+        """
+        asin = it.get("asin") or ""
+        if asin in target_asins:
+            return True
+        if asin in existing:
+            return False
+        if not is_trusted_seller(it.get("seller") or ""):
+            return False
+        if is_low_stock_reseller_signal(it.get("availability") or ""):
+            return False
+        return True
+
+    new_for_jules = sum(1 for it in items if _is_jules_eligible(it))
 
     pages = max(1, min(args.pages, 10))
     logger.info(
@@ -731,7 +749,7 @@ def main():
                     seen_asins.add(asin)
                     continue
                 seen_asins.add(asin)
-                items.append({
+                normalized = {
                     "asin": asin,
                     "title": _safe_get(it, "itemInfo", "title", "displayValue"),
                     "price": extract_price(it),
@@ -746,8 +764,9 @@ def main():
                     "free_shipping": extract_free_shipping(it),
                     "seller": extract_seller(it),
                     "source": "Amazon"
-                })
-                if asin in target_asins or asin not in existing:
+                }
+                items.append(normalized)
+                if _is_jules_eligible(normalized):
                     new_for_jules += 1
             time.sleep(1.1)  # PA-API TPS=1 safety margin
 
@@ -819,6 +838,11 @@ def main():
     # an empty --asin) leave build_post.py with no real competitor data, and
     # competitor cards render as text-only boxes with no image or Amazon CTA.
     targets = sniper_asins if sniper_asins else [it["asin"] for it in items if it.get("asin")]
+    # Hoist the per_asin/<ASIN>/amazon.json snapshot pool out of the per-target
+    # loop. The old call site re-opened up to 500 snapshot files for every
+    # target (=> N*M = ~10万 opens on a full catalog); building it once and
+    # filtering by target_asin in-memory cuts that to a single pass.
+    published_pool = _load_published_snapshots_pool(args.out, existing)
     for target_asin in targets:
         target_item = next((it for it in items if it.get("asin") == target_asin), None)
         if not target_item:
@@ -827,6 +851,7 @@ def main():
             args.out, target_item, fallback_pool=items,
             api=api, search_index=args.search_index, resources=resources,
             covered_asins=existing,
+            published_pool=published_pool,
         )
 
 if __name__ == "__main__":
