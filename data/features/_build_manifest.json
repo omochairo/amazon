@@ -1,18 +1,50 @@
 {
-  "generated_at": "2026-05-26T00:17:33Z",
+  "generated_at": "2026-05-26T00:53:54Z",
   "articles_loaded": 338,
   "cospa": {
-    "count": 20,
+    "bands": {
+      "lt1000": 20,
+      "1000-2000": 20,
+      "2000-3000": 20,
+      "3000-5000": 20,
+      "5000-7000": 20,
+      "7000-10000": 5
+    },
     "filter": {
       "min_ivs": 4.0,
-      "price_min": 500,
-      "price_max": 5000,
-      "top_n": 20
-    },
-    "drops": {
-      "low_ivs": 136,
-      "price_out_of_band": 48,
-      "missing_ivs_100": 0
+      "top_n_per_band": 20,
+      "bands": [
+        {
+          "key": "lt1000",
+          "price_min": 0,
+          "price_max": 999
+        },
+        {
+          "key": "1000-2000",
+          "price_min": 1000,
+          "price_max": 1999
+        },
+        {
+          "key": "2000-3000",
+          "price_min": 2000,
+          "price_max": 2999
+        },
+        {
+          "key": "3000-5000",
+          "price_min": 3000,
+          "price_max": 4999
+        },
+        {
+          "key": "5000-7000",
+          "price_min": 5000,
+          "price_max": 6999
+        },
+        {
+          "key": "7000-10000",
+          "price_min": 7000,
+          "price_max": 9999
+        }
+      ]
     }
   },
   "deals": {
