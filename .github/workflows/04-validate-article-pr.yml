@@ -31,6 +31,10 @@ on:
       - '.github/workflows/01-fetch-products.yml'
       - 'scripts/fetch_amazon.py'
       - 'scripts/fetch_youtube.py'
+      # 2026-05-26 (session 60 PR #786): Creator API クライアント本体を触る PR も
+      # validate を required check として発火させる (PR #783 で paths 未登録の trap を
+      # 踏み、validate run 起動せず auto-merge eligible でなくなる事例があった)。
+      - 'scripts/creators_api_client.py'
       # 2026-05-19 (session 32): backfill workflow も paths に追加。自身の bug fix /
       # 設定変更 PR を merge する際に validate (required check) を必ず通すため。
       - '.github/workflows/01b-backfill-competitors.yml'
