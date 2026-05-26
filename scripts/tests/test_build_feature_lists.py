@@ -265,6 +265,41 @@ class BuildCospaTest(unittest.TestCase):
         items, _ = bfl.build_cospa(recs, top_n=3)
         self.assertEqual(len(items), 3)
 
+    def test_sort_order_by_ivs(self):
+        # sort_key="ivs": 帯内 UI 用 — ivs_100 降順 → 価格 昇順。
+        # cospa score 順だと「IVS 88 で ¥3,593」より「IVS 87 で ¥3,043」が上位に
+        # 来るが、UI 文言「知育スコアの高い順」と矛盾するので別ソートを用意する。
+        recs = [
+            bfl.ArticleRecord(
+                asin="MID_CHEAP", slug="a", name="a", image=None,
+                ivs_score=4.5, ivs_100=87, best_price=3043,
+                best_platform="Amazon", amazon_url=None,
+            ),
+            bfl.ArticleRecord(
+                asin="HI_PRICEY", slug="b", name="b", image=None,
+                ivs_score=4.6, ivs_100=88, best_price=3593,
+                best_platform="Amazon", amazon_url=None,
+            ),
+            bfl.ArticleRecord(
+                asin="LO_CHEAP", slug="c", name="c", image=None,
+                ivs_score=4.4, ivs_100=86, best_price=3145,
+                best_platform="Amazon", amazon_url=None,
+            ),
+            bfl.ArticleRecord(
+                asin="LO_CHEAPER", slug="d", name="d", image=None,
+                ivs_score=4.4, ivs_100=86, best_price=3100,
+                best_platform="Amazon", amazon_url=None,
+            ),
+        ]
+        items, _ = bfl.build_cospa(
+            recs, price_min=3000, price_max=5000, sort_key="ivs",
+        )
+        # 88 が先頭、87 が 2 番手、IVS 同点 86 は安い方が先 (¥3,100 < ¥3,145)
+        self.assertEqual(
+            [r.asin for r in items],
+            ["HI_PRICEY", "MID_CHEAP", "LO_CHEAPER", "LO_CHEAP"],
+        )
+
     def test_dedupe_by_asin_keeps_higher_ivs(self):
         recs = [
             bfl.ArticleRecord(
