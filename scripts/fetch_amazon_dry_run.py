@@ -83,7 +83,8 @@ def main() -> int:
 
     # Creator API は invalid resource をエラー扱いせず items[] 空で返すことが
     # あるため、items の有無を必ず確認する (PR #761 の cron 死亡パターン)。
-    items = (result or {}).get("itemsResult", {}).get("items") or []
+    # searchItems の応答は searchResult.items に入る (getItems は itemsResult.items)。
+    items = (result or {}).get("searchResult", {}).get("items") or []
     errors = (result or {}).get("errors") or []
 
     if errors:
