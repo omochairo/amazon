@@ -206,6 +206,28 @@
       "author": "販売ページ",
       "conflict_of_interest": "possible",
       "notes": "プラントイ PLANTOYS 6404 ソリッドドラム 本体サイズ:16×16×8.5cm"
+    },
+    {
+      "id": "src-4",
+      "name": "グッド・トイ2015",
+      "url": "https://goodtoy.jp/archive/2015/13.html",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2015-01-01",
+      "author": "認定NPO法人 芸術と遊び創造協会",
+      "conflict_of_interest": "none",
+      "notes": "子どもが思い切り叩いても壊れにくい、安全なドラムです。太鼓の表面には長さの違う切込みがあり、それにより1つのドラムで3つの異なる音色を出すことができます。"
+    },
+    {
+      "id": "src-5",
+      "name": "yubo-shop",
+      "url": "https://yubo-shop.com/products/soliddrum",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-05-27",
+      "author": "販売ページ",
+      "conflict_of_interest": "possible",
+      "notes": "プラントイ ソリッドドラム"
     }
   ],
   "claims": [
@@ -214,9 +236,10 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-4"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "メーカー公式情報に基づく"
     },
     {
