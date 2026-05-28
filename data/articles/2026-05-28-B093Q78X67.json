@@ -208,6 +208,26 @@
       "author": "第三者メディア",
       "conflict_of_interest": "none",
       "notes": "ドラムのおもちゃ特集で紹介。1歳から遊べる木製楽器として評価されている。"
+    },
+    {
+      "id": "src-4",
+      "name": "楽天商品ページ",
+      "url": "https://item.rakuten.co.jp/edute/im29321/",
+      "tier": "medium",
+      "evidence_type": "primary",
+      "author": "販売店",
+      "conflict_of_interest": "disclosed",
+      "notes": "1歳のお誕生日プレゼントとして推奨されており、安全な塗料を使用している旨が記載されている。"
+    },
+    {
+      "id": "src-5",
+      "name": "エデュテ公式ショップ",
+      "url": "https://www.edute.jp/c/item/toy/sound/im-29321",
+      "tier": "high",
+      "evidence_type": "primary",
+      "author": "メーカー公式",
+      "conflict_of_interest": "possible",
+      "notes": "音の鳴る太鼓の木のおもちゃとしてクラシックドラムを紹介。18ヶ月からの対象年齢を明記。"
     }
   ],
   "claims": [
@@ -217,7 +237,8 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-1",
-        "src-2"
+        "src-2",
+        "src-4"
       ],
       "cross_checked": true,
       "notes": "商品仕様として複数箇所で言及されている"
@@ -227,7 +248,8 @@
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-2"
+        "src-2",
+        "src-5"
       ],
       "cross_checked": false,
       "notes": "こどもと暮らしの商品説明に記載あり"
@@ -238,7 +260,8 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-2",
-        "src-3"
+        "src-3",
+        "src-4"
       ],
       "cross_checked": true,
       "notes": "販売店のおすすめや検証メディアの対象年齢で裏付けられる"
@@ -248,8 +271,8 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-2",
-        "src-3"
+        "src-1",
+        "src-5"
       ],
       "cross_checked": true,
       "notes": "複数の販売店・検証メディアで言及"
