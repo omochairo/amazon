@@ -62,7 +62,7 @@
     ],
     "safety_note": [
       "低年齢の兄弟がいる場合、安全性や対象年齢が気になるポイントです。",
-      "本品は対象年齢5歳以上と設定されており、STマーク（玩具安全基準）も取得済みです。",
+      "本品は対象年齢5歳以上と設定されており、コマなどの素材は硬くて丈夫なプラスチック製です。",
       "ただし細かなコマやカードが含まれるため、誤飲には注意が必要です。",
       "遊ぶ際は対象年齢を守り、必ず保護者の方と一緒に楽しむようにしてください。"
     ],
@@ -108,9 +108,7 @@
       "通常版のようなお札の計算要素はない"
     ],
     "target_age": "5歳以上",
-    "certifications": [
-      "ST"
-    ],
+    "certifications": [],
     "edu_domains": [
       "STEM",
       "想像"
@@ -137,7 +135,7 @@
         {
           "factor": "safety",
           "delta": "+0.3",
-          "reason": "STマーク取得済で安全基準を満たしている"
+          "reason": "コマは硬くて丈夫なプラスチック製で破損しにくい"
         },
         {
           "factor": "cost_performance",
@@ -183,7 +181,7 @@
       "published_at": "2026-05-28",
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
-      "notes": "STマーク認証取得、対象年齢5歳以上、プレイ人数2〜4人と明記。"
+      "notes": "対象年齢5歳以上、プレイ人数2〜4人と明記。"
     },
     {
       "id": "src-2",
@@ -236,10 +234,11 @@
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-3"
+        "src-3",
+        "src-4"
       ],
-      "cross_checked": false,
-      "notes": "通常版よりもコンパクトで手軽"
+      "cross_checked": true,
+      "notes": "複数のブログでコンパクトさ・手軽さが言及されている"
     },
     {
       "claim": "名産品や歴史人物が描かれたカードで遊びながら自然と日本地理の基礎が身につく",
@@ -264,22 +263,20 @@
       "notes": "日本旅行、どこドラ10、ドラストワンの3種類"
     },
     {
-      "claim": "1000円未満の手頃な価格ながら、コマやボードの耐久性が高くSTマーク認証（ST）を取得している",
+      "claim": "1000円未満の手頃な価格ながら、コマやボードの耐久性が高い",
       "category": "safety",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1",
         "src-4"
       ],
-      "cross_checked": true,
-      "notes": "STマークはメーカー公式、耐久性と安さはブログで言及"
+      "cross_checked": false,
+      "notes": "耐久性と安さはブログで言及"
     }
   ],
   "technical_specs": {
     "other": [
       "対象年齢 5歳以上",
-      "プレイ人数 2〜4人",
-      "STマーク認証"
+      "プレイ人数 2〜4人"
     ]
   },
   "review_signals": {
