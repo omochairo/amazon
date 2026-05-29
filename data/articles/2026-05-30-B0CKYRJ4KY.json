@@ -177,6 +177,17 @@
       "notes": "角はなく丸まっており安全との記載。"
     },
     {
+      "id": "src-2",
+      "name": "YouTube 知育動画",
+      "url": "https://www.youtube.com/watch?v=G4yBLeePZyI",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-05-30",
+      "author": "第三者",
+      "conflict_of_interest": "none",
+      "notes": "0歳からの赤ちゃんの発達を促すおもちゃとしての一般的な特徴の参考。本商品への直接言及はない。"
+    },
+    {
       "id": "src-3",
       "name": "Yahoo!ショッピング 商品ページ",
       "url": "https://store.shopping.yahoo.co.jp/e-alamode/0451-0630.html",
@@ -186,6 +197,17 @@
       "author": "販売店",
       "conflict_of_interest": "possible",
       "notes": "出産祝いとしてのギフト需要を確認。"
+    },
+    {
+      "id": "src-4",
+      "name": "PR TIMES / マテル・インターナショナル 木製玩具ニュース",
+      "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTE9RSWxOSll3UkxaNFRrMnBnVE94aXh3QXZSUEhaMkxUV19zX1JYZzVYVnQwMzV5QkxzbDZkaG1WNmo0NV96YjBXN19mbDdXQ0Q2SUhTTHh3cTVFNkR3SHdCdEJ2Zm1ZYzFld3c?oc=5",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2024-11-28",
+      "author": "第三者",
+      "conflict_of_interest": "none",
+      "notes": "幼児期からの木製玩具に関するトレンド情報。本商品自体の記述はないが知育玩具全体の文脈として参照。"
     },
     {
       "id": "src-5",
@@ -206,9 +228,9 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-1",
-        "src-5"
+        "src-3"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "複数サイトの商品説明で丸みを帯びた安全設計であることを確認"
     },
     {
@@ -219,7 +241,7 @@
         "src-1",
         "src-3"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "複数サイトで出産祝いとしての推奨を確認"
     },
     {
@@ -260,33 +282,34 @@
     "summary_one_line": "出産祝いや1歳の初めての誕生日プレゼントとして、角のない安全な設計と優しいデザインが高く評価されています。",
     "high_points": [
       {
-        "text": "角が丸く加工されており、小さな手でも握りやすい",
+        "text": "角が丸く加工されたフォルムになっており、小さな手でも握りやすく安全に遊べる設計が評価されています。",
         "supporting_source_ids": [
           "src-1"
         ]
       },
       {
-        "text": "優しい色合いでインテリアに馴染むデザイン",
+        "text": "優しい色合いでインテリアに馴染みやすく、お部屋に置いても可愛らしいデザインとして人気があります。",
         "supporting_source_ids": [
           "src-1"
         ]
       },
       {
-        "text": "手頃な価格でプレゼントとして選びやすい",
+        "text": "2000円以下の手頃な価格帯で購入できるため、出産祝いのギフトやプレゼントとして選びやすいとの声があります。",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-3"
         ]
       }
     ],
     "concerns": [
       {
-        "text": "木製のため、水洗いができず手入れに気を使う",
+        "text": "木製のおもちゃであるため、水洗いや煮沸消毒ができず、手入れに気を遣うという懸念事項があります。",
         "supporting_source_ids": [
           "src-1"
         ]
       },
       {
-        "text": "シンプルなため、音や光の仕掛けが好きな子には物足りない",
+        "text": "シンプルな設計であるため、音や光の派手な仕掛けが好きな子どもには少し物足りない可能性があります。",
         "supporting_source_ids": [
           "src-1"
         ]
@@ -294,19 +317,19 @@
     ],
     "use_scenes": [
       {
-        "text": "1歳の誕生日プレゼントとして贈るシーン",
+        "text": "1歳の誕生日プレゼントとして、初めての車遊びを楽しむ記念すべきシーンで活躍します。",
         "supporting_source_ids": [
           "src-1"
         ]
       },
       {
-        "text": "出産祝いとして知人に贈るギフトシーン",
+        "text": "出産祝いとして知人に贈るギフトシーンで、失敗しにくい定番の選択肢として利用されています。",
         "supporting_source_ids": [
           "src-3"
         ]
       },
       {
-        "text": "室内でラトルとして振って遊ぶ日常のシーン",
+        "text": "室内でラトルとして振って音を鳴らしながら、日常的な遊びの中で五感を刺激するシーンに最適です。",
         "supporting_source_ids": [
           "src-1"
         ]
