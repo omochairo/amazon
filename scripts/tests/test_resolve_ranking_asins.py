@@ -147,6 +147,49 @@ class LoadCoveredAsinsTest(unittest.TestCase):
     def test_missing_dirs_return_empty(self):
         self.assertEqual(rr._load_covered_asins("/no/such/a", "/no/such/p"), set())
 
+    def test_article_asins_excludes_per_asin(self):
+        # #810 Phase 1.5: article-only set は per_asin を含まない (pool prune の正しさ)。
+        with tempfile.TemporaryDirectory() as td:
+            adir = pathlib.Path(td) / "articles"
+            adir.mkdir()
+            (adir / "2026-05-26-B01MUBACGI.json").write_text("{}", encoding="utf-8")
+            proot = pathlib.Path(td) / "per_asin"
+            (proot / "B0RANKING1").mkdir(parents=True)
+            self.assertEqual(rr._load_article_asins(str(adir)), {"B01MUBACGI"})
+            self.assertEqual(rr._load_per_asin_asins(str(proot)), {"B0RANKING1"})
+            # union は両方 (resolve step の skip 判定はこちらを使う)
+            self.assertEqual(
+                rr._load_covered_asins(str(adir), str(proot)),
+                {"B01MUBACGI", "B0RANKING1"},
+            )
+
+
+class UpdateRankingPoolTest(unittest.TestCase):
+    def test_appends_new_and_dedups_preserving_order(self):
+        pool = rr.update_ranking_pool(["B0OLD001", "B0OLD002"], ["B0NEW003", "B0OLD001"], set())
+        # B0OLD001 は既存なので重複追加されない、順序は既存→新規
+        self.assertEqual(pool, ["B0OLD001", "B0OLD002", "B0NEW003"])
+
+    def test_prunes_article_covered_only(self):
+        # B0OLD001 が記事化された → pool から除く。per_asin 済でも article でなければ残す。
+        pool = rr.update_ranking_pool(["B0OLD001", "B0OLD002"], [], {"B0OLD001"})
+        self.assertEqual(pool, ["B0OLD002"])
+
+    def test_prune_is_case_insensitive(self):
+        pool = rr.update_ranking_pool(["b0old001"], [], {"B0OLD001"})
+        self.assertEqual(pool, [])
+
+    def test_skips_blank_and_non_str(self):
+        pool = rr.update_ranking_pool(["B0OK00001", "", None, "  "], [123, "B0OK00002"], set())
+        self.assertEqual(pool, ["B0OK00001", "B0OK00002"])
+
+    def test_resolved_then_covered_lifecycle(self):
+        # Run 1: resolve B0X → pool=[B0X]。Run 2: B0X 記事化 → pool=[]。
+        p1 = rr.update_ranking_pool([], ["B0X0000001"], set())
+        self.assertEqual(p1, ["B0X0000001"])
+        p2 = rr.update_ranking_pool(p1, [], {"B0X0000001"})
+        self.assertEqual(p2, [])
+
 
 if __name__ == "__main__":
     unittest.main()
