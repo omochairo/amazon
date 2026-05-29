@@ -340,6 +340,7 @@ TRUSTED_SELLER_PATTERNS = (
     "jasonwell",                     # Jasonwell
     "kaekid",                        # KaeKid
     "plafarm",                       # plafarm
+    "駿河屋",                        # 大手ホビー/中古チェーン (#817 follow-up)
 )
 
 
@@ -371,10 +372,12 @@ TRUSTED_SELLER_GENERIC_MARKERS = (
     "メーカー",
     "専門店",
     "株式会社",
+    "合同会社",                       # #817 follow-up: LLC も法人実在標識
     "(株)",
     "（株）",
     "co., ltd",
     "co.,ltd",
+    "直売",                           # #817 follow-up: 直売店 = 直営と同義の直販標識
     "インボイス",
     "適格請求書",
     "発行事業者",
