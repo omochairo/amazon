@@ -164,6 +164,41 @@ class LoadCoveredAsinsTest(unittest.TestCase):
             )
 
 
+class SearchPoolMiningTest(unittest.TestCase):
+    """#810 Phase 2: ランキング + 楽天 Search items を混ぜた JAN mining。
+
+    Search items は matched_asin を持たない (= 全件候補) ので、ランキングが
+    マッチ済でも Search 側の JAN から新規 ASIN を解決できることを検証する。
+    main() が ranking_items + search_items を concat して resolve に渡す挙動を、
+    その concat 済リストを直接 resolve_ranking_asins に与えて再現する。
+    """
+
+    def test_search_item_jan_resolves_when_ranking_matched(self):
+        ranking = [
+            # ランキングは既存記事にマッチ済 → JAN mining から除外される
+            {"rank": 1, "matched_asin": "B0EXIST001", "title": "既存 4904810000010"},
+        ]
+        search = [
+            # Search item は matched_asin 無し → 候補。itemCaption に JAN。
+            {"title": "新作ブロック", "itemCaption": "型番 JAN 4904810000099 知育",
+             "source": "Rakuten"},
+        ]
+        api = FakeAPI({"4904810000099": "B0SEARCH99"})
+        m = rr.resolve_ranking_asins(ranking + search, api, set(), sleep=0)
+        self.assertEqual(m["new_asins"], ["B0SEARCH99"])
+        self.assertEqual(m["input_unmatched_jans"], 1)
+
+    def test_same_jan_in_ranking_and_search_dedups(self):
+        # 同 JAN がランキング(未マッチ)と Search の双方にあっても 1 回だけ解決。
+        ranking = [{"rank": 2, "matched_asin": None, "title": "A 4904810000020"}]
+        search = [{"title": "A 別出品", "itemCaption": "4904810000020", "source": "Rakuten"}]
+        api = FakeAPI({"4904810000020": "B0DUP00020"})
+        m = rr.resolve_ranking_asins(ranking + search, api, set(), sleep=0)
+        self.assertEqual(m["new_asins"], ["B0DUP00020"])
+        self.assertEqual(m["input_unmatched_jans"], 1)
+        self.assertEqual(api.calls, ["4904810000020"])  # 1 回だけ
+
+
 class UpdateRankingPoolTest(unittest.TestCase):
     def test_appends_new_and_dedups_preserving_order(self):
         pool = rr.update_ranking_pool(["B0OLD001", "B0OLD002"], ["B0NEW003", "B0OLD001"], set())

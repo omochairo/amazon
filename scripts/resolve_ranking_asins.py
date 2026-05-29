@@ -1,13 +1,19 @@
-"""楽天ランキングの未マッチ item を JAN 経由で新規 Amazon ASIN に解決する。
+"""楽天ランキング/検索の未マッチ item を JAN 経由で新規 Amazon ASIN に解決する。
 
 Issue #810 Phase 1 — keyword × top100 の構造的上限を突破する第一歩。
+Issue #810 Phase 2 — 探索源を楽天 Ichiba Search にも拡張 (``--search-in``)。
+  Creator API には GetBrowseNodes も searchItems(browseNodeId) も無く、Amazon
+  ベストセラー経由の探索は API では不可能。代わりに楽天 Search (無料・高 quota・
+  スクレイピング不要) の JAN を mine することで、Amazon の keyword×top100 の外に
+  ある売れ筋を発見する。ランキング 30 件と同じ Option A 解決経路を再利用する。
 
 背景:
   ``fetch_rakuten.py`` は楽天おもちゃランキングの各 item を既存記事 ASIN に
   マッチングするが、**未マッチ** (=まだ記事化されていない売れ筋) は
   ``data/raw/rakuten_ranking.json`` に ``matched_asin: null`` で残る。本スクリプトは
-  その未マッチ item から JAN を取り出し、**Creator API searchItems(keyword=JAN)**
-  の応答を ``itemInfo.externalIds.eans`` で照合して新規 ASIN を解決する (案A)。
+  その未マッチ item (+ ``--search-in`` 指定時は ``data/raw/rakuten.json`` の Search
+  items) から JAN を取り出し、**Creator API searchItems(keyword=JAN)** の応答を
+  ``itemInfo.externalIds.eans`` で照合して新規 ASIN を解決する (案A)。
 
   解決済 ASIN は ``fetch_amazon.py --asin <CSV> --competitors-only`` に渡して
   per_asin スナップショットへ backfill する (ライブの amazon.json プールには触れない)。
@@ -202,6 +208,10 @@ def resolve_ranking_asins(ranking_items, api, covered, limit=0, search_index="To
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--in", dest="in_path", default="data/raw/rakuten_ranking.json")
+    parser.add_argument("--search-in", dest="search_in_path", default="",
+                        help="Optional Rakuten Ichiba Search pool (data/raw/rakuten.json). #810 Phase 2: "
+                             "その items の itemCaption/title からも JAN を mine し、ランキング 30 件の外の "
+                             "売れ筋まで新規 ASIN 解決の対象を広げる。空文字なら無効 (ランキングのみ)。")
     parser.add_argument("--out", default="data/raw/")
     parser.add_argument("--articles-dir", default="data/articles")
     parser.add_argument("--per-asin-root", default="data/raw/per_asin")
@@ -223,6 +233,24 @@ def main():
     payload = json.loads(in_path.read_text(encoding="utf-8"))
     ranking_items = payload.get("items", []) if isinstance(payload, dict) else []
 
+    # #810 Phase 2: 楽天 Ichiba Search プールからも JAN を mine する。Search items は
+    # matched_asin を持たないので _collect_unmatched_jans が全件を候補として扱う
+    # (resolve 段で covered/JAN 重複は弾かれる)。ランキングを先に置き JAN dedup を優先。
+    search_items = []
+    if args.search_in_path:
+        sp = pathlib.Path(args.search_in_path)
+        if sp.exists():
+            try:
+                sdata = json.loads(sp.read_text(encoding="utf-8"))
+                search_items = sdata.get("items", []) if isinstance(sdata, dict) else []
+            except (OSError, json.JSONDecodeError) as e:
+                logger.warning(f"Failed to load search pool {sp}: {e}")
+        else:
+            logger.info(f"Search pool not found (ranking-only): {sp}")
+    mine_items = list(ranking_items) + list(search_items)
+    logger.info(f"JAN mining input: ranking={len(ranking_items)} search={len(search_items)} "
+                f"total={len(mine_items)}")
+
     try:
         from creators_api_client import CreatorsAPIClient
     except ImportError as e:
@@ -236,7 +264,7 @@ def main():
                 f"(articles-only={len(article_covered)})")
 
     manifest = resolve_ranking_asins(
-        ranking_items, api, covered,
+        mine_items, api, covered,
         limit=args.limit, search_index=args.search_index, sleep=args.sleep,
     )
     manifest["generated_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
