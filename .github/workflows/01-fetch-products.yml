@@ -48,9 +48,17 @@ jobs:
 
       - name: Fetch Amazon Data
         run: |
+          # #810 follow-up: keyword×top100 が saturation し fresh ASIN 供給が
+          # 8並列を賄えていないため、discovery sweep を拡大する。
+          #   --keyword-sample-size 60 : 231 keyword から 60 件サンプル (was 20)
+          #   --pages 3                : 深い page ほど未記事化の mid-tail に当たる (was 2)
+          #   --min-new 80             : fresh ASIN 目標を倍増 (was 40)
           python scripts/fetch_amazon.py \
             --asin "${{ github.event.inputs.asins }}" \
             --keyword "${{ github.event.inputs.keyword }}" \
+            --keyword-sample-size 60 \
+            --pages 3 \
+            --min-new 80 \
             --out data/raw/
         env:
           AMAZON_CREATORS_APPLICATION_ID: ${{ secrets.AMAZON_CREATORS_APPLICATION_ID }}
