@@ -1,8 +1,13 @@
 name: Link Report Aggregate
-# Issue #722: PR #720 で記事カードに配備された 🚩 link-report ボタンの集積を
-# 週次で集計し、閾値超え (同一 ASIN × EC site で 2 件以上) のうち researchable
+# Issue #722: PR #720 で記事カードに配備された link-report ボタンの集積を
+# 週次で集計し、閾値超え (同一 ASIN x EC site で 2 件以上) のうち researchable
 # 対象 (楽天 / Yahoo) があれば 10-re-search-low-confidence.yml を自動 dispatch、
 # 該当 Issue にコメント + close + `link-report-processed` label 付け替えを行う。
+#
+# Note: GitHub Actions YAML parser は 4-byte UTF-8 (emoji / U+10000 以上) を
+# plain scalar で受け付けないため、本ファイルは emoji を一切使わない。
+# 元 v1 で comment 中の旗 emoji + × 全角記号で全 push event が parse failure
+# になり全 run が conclusion=failure となった (修正前: 18 runs all failed)。
 #
 # 設計判断:
 # - App token (omochairo-fetch-bot[bot]) 必須: gh workflow run + gh issue
@@ -99,12 +104,11 @@ jobs:
               --description "Auto-aggregated and dispatched to 10-re-search (#722)" || true
           fi
 
+          MSG="ご報告ありがとうございます。同一 ASIN x EC サイトの通報が閾値 (${THRESHOLD} 件) を超えたため、10-re-search-low-confidence workflow を自動 dispatch しました (run ID: ${{ github.run_id }})。次回 02-publish で記事に反映されます (最大 7 日)。経過: #722"
           for n in $(echo "$ISSUE_NUMBERS" | tr ',' ' '); do
             [ -z "$n" ] && continue
             echo "Processing issue #$n"
-            gh issue comment "$n" --body \
-              "ご報告ありがとうございます。同一 ASIN × EC サイトの通報が閾値 (${THRESHOLD} 件) を超えたため、\`10-re-search-low-confidence\` workflow を自動 dispatch しました (run ID: ${{ github.run_id }})。
-次回 \`02-publish\` で記事に反映されます (最大 7 日)。経過: #722" || true
+            gh issue comment "$n" --body "$MSG" || true
             gh issue edit "$n" --remove-label "link-report" --add-label "link-report-processed" || true
             gh issue close "$n" --reason completed || true
           done
