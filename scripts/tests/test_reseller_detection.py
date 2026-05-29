@@ -64,11 +64,16 @@ def test_is_trusted_seller_generic_markers_recognized():
     # 専門店
     assert is_trusted_seller("家電専門店エコアース")
     assert is_trusted_seller("節句＆ギフト専門店 ぷりふあ人形")
-    # 法人
+    # 法人 (株式会社 / 合同会社)
     assert is_trusted_seller("株式会社カケハシ")
+    assert is_trusted_seller("Across Rainbow合同会社")
     assert is_trusted_seller("Colorful Co., Ltd【インボイス（適格請求書発行）対応事業者】")
+    # 直売 (直営と同義の直販標識)
+    assert is_trusted_seller("AkaiJP-直売店")
     # 商標保有
     assert is_trusted_seller("商標登録第6108155号 鈴木商店")
+    # 著名ホビーチェーン
+    assert is_trusted_seller("通販ショップの駿河屋")
 
 
 def test_is_low_stock_reseller_signal_detects_low_remaining():
