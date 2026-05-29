@@ -198,6 +198,39 @@
       "author": "購入者・レビュアー",
       "conflict_of_interest": "unknown",
       "notes": "1-3歳の集中力UPに効果的。実際の光り方やスイッチの硬さが確認できる。"
+    },
+    {
+      "id": "src-2",
+      "name": "Amazonレビュー",
+      "url": "https://www.amazon.co.jp/product-reviews/B0CQY911ZP/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-05-29",
+      "author": "購入者レビュー",
+      "conflict_of_interest": "none",
+      "notes": "車での長距離移動中も静かに集中して遊んでくれたとの声がある。"
+    },
+    {
+      "id": "src-4",
+      "name": "楽天市場 商品ページ",
+      "url": "https://item.rakuten.co.jp/flaack/b0cqy911zp-mori/",
+      "tier": "low",
+      "evidence_type": "primary",
+      "published_at": "2026-05-29",
+      "author": "販売店",
+      "conflict_of_interest": "possible",
+      "notes": "指先知育や早期開発を目的としたプレゼントとして販売されている。"
+    },
+    {
+      "id": "src-6",
+      "name": "たまひよ 育児ニュース",
+      "url": "https://news.google.com/rss/articles/CBMiqAFBVV95cUxPMWNmTUFvZzdnOThoUjh2NExub2gzbkNHc2J4cUM3cEd6WmZwaXRsMU1TOXlmSy1VT1lranVNMlg4SjhVSkMzUmh3emFfVlNPZ1BxZWJBX0VGLV9PR1ZiZlo0ZENZM1p4QXQ4S09fWWMzNlBQLXRtOHJnMzZpN3Njb19sWVNMam1Hb1EzdVVtVHhWczV0R3BRZ0czTkNNZXlxQTBuaTktRE0?oc=5",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-05-19",
+      "author": "第三者メディア",
+      "conflict_of_interest": "none",
+      "notes": "モンテッソーリ教育が子どもが自分で学ぶ力や集中力を育むと解説されている。"
     }
   ],
   "claims": [
@@ -217,7 +250,8 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-1",
-        "src-3"
+        "src-3",
+        "src-6"
       ],
       "cross_checked": true,
       "notes": "公式機能と動画レビューの双方で知育効果が確認されている"
