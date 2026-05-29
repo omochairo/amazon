@@ -116,6 +116,9 @@ on:
       - 'scripts/aggregate_link_reports.py'
       - 'scripts/tests/test_aggregate_link_reports.py'
       - '.github/workflows/11-link-report-aggregate.yml'
+      # 2026-05-30 (Issue #784): 送料無料判定を merchantInfo.name == Amazon 直販
+      # に再設計したため unit test を validate (required check) 対象に。
+      - 'scripts/tests/test_free_shipping.py'
   workflow_dispatch:
 
 permissions:
