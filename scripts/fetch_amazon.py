@@ -212,8 +212,9 @@ SEARCH_ITEM_RESOURCES = [
     # から除外される (search mode)。
     "offersV2.listings.merchantInfo",
     # PR #761 で "offersV2.listings.deliveryInfo" を追加したが Creator API では
-    # invalid だったため hotfix PR #783 で削除。送料無料バッジ機能は Issue #784 で
-    # Creator API valid な代替シグナルを再設計予定。
+    # invalid だったため hotfix PR #783 で削除。Issue #784 (本 PR) で代替案として
+    # extract_free_shipping を merchantInfo.name == Amazon 直販 ベースに切替済
+    # (Amazon 直販なら Prime/2,000円以上 free shipping が保証されるため実質同義)。
 ]
 
 HAS_CREATORS_API = False
@@ -265,19 +266,34 @@ def extract_availability(item: dict) -> str:
     return ""
 
 
-def extract_free_shipping(item: dict) -> bool:
-    """offersV2.listings.deliveryInfo から送料無料判定を取り出す。
+# #784: Amazon 直販 (= 実質送料無料) と判定する merchant 名パターン。
+# Amazon 直販は Prime / 2,000円以上で送料無料が保証されるため、
+# Buy Box の merchant がここに合致するとき free_shipping=True とする。
+# 第三者セラーや TRUSTED_SELLER_PATTERNS のメーカー直販店は各店舗ごとに
+# 送料ポリシーが異なるため対象外 (false-positive を避ける目的)。
+AMAZON_DIRECT_SELLER_PATTERNS = (
+    "amazon.co.jp",
+    "amazon japan",
+    "amazonアウトレット",
+    "アマゾン",  # アマゾンジャパン G.K. を含む
+)
 
-    PA-API の `deliveryInfo.isFreeShippingEligible` (True/False) を返す。
-    resources に `offersV2.listings.deliveryInfo` が含まれている必要がある。
-    取得失敗時は False (バッジ非表示) にフォールバック。
+
+def extract_free_shipping(item: dict) -> bool:
+    """offersV2.listings.merchantInfo.name が Amazon 直販なら送料無料判定 True。
+
+    #784 / PR #761 で導入した `offersV2.listings.deliveryInfo.isFreeShippingEligible`
+    は Creator API では invalid resource で 400 を返し cron が死亡 (hotfix
+    PR #783 で削除済)。代替案として既に valid な `offersV2.listings.merchantInfo`
+    の name を検査し、Amazon 直販系のとき True を返す (Amazon 直販は Prime /
+    2,000円以上で送料無料保証)。
+
+    検出失敗 / 第三者セラー / 取得不可は False (バッジ非表示) にフォールバック。
     """
-    listings = _safe_get(item, "offersV2", "listings", default=[])
-    if listings:
-        flag = _safe_get(listings[0], "deliveryInfo", "isFreeShippingEligible")
-        if isinstance(flag, bool):
-            return flag
-    return False
+    seller = extract_seller(item).lower()
+    if not seller:
+        return False
+    return any(p in seller for p in AMAZON_DIRECT_SELLER_PATTERNS)
 
 def extract_loyalty_points(item: dict) -> int:
     listings = _safe_get(item, "offersV2", "listings", default=[])
