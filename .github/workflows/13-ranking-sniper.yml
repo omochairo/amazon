@@ -16,17 +16,19 @@ on:
       limit:
         description: 'Max unmatched JANs to resolve this run (1 = single-JAN dry-run)'
         type: string
-        default: '8'
+        default: '30'
   schedule:
-    # 毎週水曜 04:00 JST = 火曜 19:00 UTC。07 (月 21:00 UTC) / 01 日次とずらす。
-    - cron: '0 19 * * 2'
+    # #810 follow-up: 毎日 04:00 JST = 19:00 UTC。keyword×top100 saturation で
+    # amazon.json の fresh 供給が枯れるため、楽天ランキング/サーチ由来の新規 ASIN
+    # を日次で ranking_pool に積んで 03-invoke-jules の候補バッファを底上げする。
+    - cron: '0 19 * * *'
 
 jobs:
   ranking-sniper:
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      LIMIT: ${{ github.event.inputs.limit || '8' }}
+      LIMIT: ${{ github.event.inputs.limit || '30' }}
       DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
     steps:
       - name: Generate App token
