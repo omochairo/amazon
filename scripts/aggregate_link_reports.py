@@ -89,16 +89,23 @@ def extract_report(issue: dict) -> dict | None:
 
 
 def fetch_issues_via_gh(repo: str) -> list[dict]:
-    """gh api でlink-report open issues を全件取得 (paginate)."""
-    cmd = [
-        "gh", "api",
-        f"repos/{repo}/issues",
-        "-f", "labels=link-report",
-        "-f", "state=open",
-        "-f", "per_page=100",
-        "--paginate",
-    ]
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    """gh api でlink-report open issues を全件取得 (paginate).
+
+    `gh api` の `-f key=value` は **body フィールド** として解釈され、
+    GET ではなく POST にメソッドが切り替わってしまう (Issue 作成 API として
+    `Invalid request. For 'properties/labels', "link-report" is not an array.`
+    が返る)。query string はそのまま URL に embed するのが安全。
+    """
+    url = (
+        f"repos/{repo}/issues"
+        "?labels=link-report&state=open&per_page=100"
+    )
+    cmd = ["gh", "api", url, "--paginate"]
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"gh api failed (exit {proc.returncode}): {proc.stderr.strip()[:500]}"
+        )
     raw = proc.stdout.strip()
     if not raw:
         return []
