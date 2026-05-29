@@ -91,6 +91,11 @@ brands:
     tier: A
     region: JP
     safety_default: [ST]
+  - canonical: エド・インター
+    aliases: [エド・インター(Ed.Inter), エド・インター, エドインター, Ed.Inter, Ed-Inter, EdInter]
+    tier: A
+    region: JP
+    safety_default: [ST]
   - canonical: メガハウス
     aliases: [メガハウス(MegaHouse), MegaHouse]
     tier: A
@@ -537,6 +542,14 @@ brands:
     aliases: [コジーノクシーズ, Cozy Noxxiez]
     tier: B
     region: NL
+  - canonical: BabyBus
+    aliases: [BabyBus, babybus, ベイビーバス]
+    tier: B
+    region: CN
+  - canonical: Apitor
+    aliases: [Apitor, apitor, アピター]
+    tier: B
+    region: CN
 
   # ==========================================
   # Tier C: 地方問屋・特定卸・フックトイ・100均系他（すべてST有）
@@ -1122,3 +1135,5 @@ brands:
   - {canonical: LumiLumi, tier: D, region: CN, aliases: [LUMILUMI, Lumilumi, lumilumi]}
   - {canonical: TAETOE, tier: D, region: CN, aliases: [Taetoe, taetoe]}
   - {canonical: Vanplay, tier: D, region: CN, aliases: [VANPLAY, VanPlay, vanplay]}
+  - {canonical: Mamimami Home, tier: D, region: CN, aliases: [Mamimami Home, MamimamiHome, mamimami home, mamimamihome]}
+  - {canonical: SHOP SHIMATARO, tier: D, region: JP, aliases: [SHOP SHIMATARO, おもちゃとホビー SHOP SHIMATARO, SHIMATARO]}
