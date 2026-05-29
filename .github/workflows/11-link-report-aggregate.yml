@@ -1,0 +1,154 @@
+name: Link Report Aggregate
+# Issue #722: PR #720 で記事カードに配備された 🚩 link-report ボタンの集積を
+# 週次で集計し、閾値超え (同一 ASIN × EC site で 2 件以上) のうち researchable
+# 対象 (楽天 / Yahoo) があれば 10-re-search-low-confidence.yml を自動 dispatch、
+# 該当 Issue にコメント + close + `link-report-processed` label 付け替えを行う。
+#
+# 設計判断:
+# - App token (omochairo-fetch-bot[bot]) 必須: gh workflow run + gh issue
+#   close は GITHUB_TOKEN ではなく App token で行う ([[feedback-omochairo-hugo-output-cron-trio]])。
+# - PR (peter-evans ではなく gh) でデータをコミット: data/link_report_counts.json
+#   と data/raw/low_confidence_asins.txt を main に反映するため
+#   ([[feedback-omochairo-peter-evans-validate-trap]])。
+# - 閾値 2 件は #722 の保守初期値。誤報 / 荒らし対策で最初 conservative に。
+# - Amazon リンク誤報は ASIN 由来なので auto re-search 対象外 (flagged のまま残し、
+#   issue は close せず Phase 4 で別経路を検討する仕様)。
+on:
+  workflow_dispatch:
+    inputs:
+      threshold:
+        description: 'Min reports per (ASIN, EC) to flag (default 2)'
+        type: string
+        default: '2'
+      dry_run:
+        description: 'Aggregate only — do not dispatch / close issues'
+        type: boolean
+        default: false
+  schedule:
+    # 月曜 04:00 JST = 日曜 19:00 UTC。10-re-search は long-running なので
+    # 週末ロー帯で発火させて月曜朝には結果が反映されている状態を作る。
+    - cron: '0 19 * * 0'
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: link-report-aggregate
+  cancel-in-progress: false
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      THRESHOLD: ${{ github.event.inputs.threshold || '2' }}
+      DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Aggregate link-report issues
+        id: aggregate
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+          python scripts/aggregate_link_reports.py --threshold "$THRESHOLD"
+
+      - name: Dispatch 10-re-search-low-confidence (if researchable flagged)
+        if: ${{ env.DRY_RUN != 'true' && steps.aggregate.outputs.researchable_count != '0' && steps.aggregate.outputs.researchable_count != '' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+          echo "Dispatching 10-re-search-low-confidence (researchable_count=${{ steps.aggregate.outputs.researchable_count }})"
+          gh workflow run 10-re-search-low-confidence.yml --ref main
+
+      - name: Close + label processed Issues
+        if: ${{ env.DRY_RUN != 'true' && steps.aggregate.outputs.processed_issue_numbers != '' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          ISSUE_NUMBERS: ${{ steps.aggregate.outputs.processed_issue_numbers }}
+        run: |
+          set -e
+          # link-report-processed label が無ければ作成 (idempotent)
+          if ! gh label list --json name --jq '.[].name' | grep -qx "link-report-processed"; then
+            gh label create "link-report-processed" \
+              --color "0e8a16" \
+              --description "Auto-aggregated and dispatched to 10-re-search (#722)" || true
+          fi
+
+          for n in $(echo "$ISSUE_NUMBERS" | tr ',' ' '); do
+            [ -z "$n" ] && continue
+            echo "Processing issue #$n"
+            gh issue comment "$n" --body \
+              "ご報告ありがとうございます。同一 ASIN × EC サイトの通報が閾値 (${THRESHOLD} 件) を超えたため、\`10-re-search-low-confidence\` workflow を自動 dispatch しました (run ID: ${{ github.run_id }})。
+次回 \`02-publish\` で記事に反映されます (最大 7 日)。経過: #722" || true
+            gh issue edit "$n" --remove-label "link-report" --add-label "link-report-processed" || true
+            gh issue close "$n" --reason completed || true
+          done
+
+      - name: Create aggregate result PR + enable auto-merge
+        if: ${{ env.DRY_RUN != 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+
+          git add data/link_report_counts.json data/raw/low_confidence_asins.txt || true
+
+          if git diff --cached --quiet; then
+            echo "No aggregate data changes to commit; skipping PR creation."
+            exit 0
+          fi
+
+          # 既存 open の aggregate PR を閉じる (重複防止)
+          gh pr list --base main --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("link-report-aggregate/")) | .number' | while read -r pr_num; do
+            if [ -n "$pr_num" ]; then
+              echo "Closing old PR #$pr_num and deleting branch..."
+              gh pr close "$pr_num" -d || true
+            fi
+          done
+
+          BRANCH="link-report-aggregate/${{ github.run_id }}"
+          git config user.name "omochairo-fetch-bot[bot]"
+          git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit -m "data: link-report aggregate (run ${{ github.run_id }})"
+          git push -u origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "data: link-report aggregate (run ${{ github.run_id }})" \
+            --body "Issue #722 weekly aggregate: scanned link-report issues → \`data/link_report_counts.json\` (counts) と \`data/raw/low_confidence_asins.txt\` (researchable な閾値超え ASIN, append-unique) を更新。閾値超え researchable があれば 10-re-search-low-confidence.yml を dispatch 済。" \
+            --base main \
+            --head "$BRANCH")
+          echo "Created: $PR_URL"
+
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge enabled on $PR_URL"
+          else
+            echo "::warning::Could not enable auto-merge on $PR_URL"
+          fi
+        continue-on-error: true
