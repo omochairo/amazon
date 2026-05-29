@@ -1,0 +1,137 @@
+name: Rakuten Ranking Sniper Backfill
+# Issue #810 Phase 1 — 楽天おもちゃランキングの未記事化 item を JAN 経由で
+# 新規 Amazon ASIN に解決し (resolve_ranking_asins.py / 案A: Creator API
+# searchItems + externalIds 照合)、fetch_amazon --competitors-only で per_asin に
+# backfill する。keyword × top100 の構造的上限を突破する別経路の第一歩。
+#
+# dry_run=true で dispatch すると Option A の解決可否だけをログ確認し PR を作らない
+# (creds がローカルに無いため、本番 secret で 1 JAN 解決を実機検証する用)。
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Resolve only, write no files / no PR (Option A verification)'
+        type: boolean
+        default: false
+      limit:
+        description: 'Max unmatched JANs to resolve this run (1 = single-JAN dry-run)'
+        type: string
+        default: '5'
+  schedule:
+    # 毎週水曜 04:00 JST = 火曜 19:00 UTC。07 (月 21:00 UTC) / 01 日次とずらす。
+    - cron: '0 19 * * 2'
+
+jobs:
+  ranking-sniper:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      LIMIT: ${{ github.event.inputs.limit || '5' }}
+      DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch Rakuten Ranking + Match to ASIN
+        run: python scripts/fetch_rakuten.py --out data/raw/
+        env:
+          RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
+          RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
+          RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}
+
+      - name: Resolve unmatched ranking JANs → new ASINs (Option A)
+        env:
+          AMAZON_CREATORS_APPLICATION_ID: ${{ secrets.AMAZON_CREATORS_APPLICATION_ID }}
+          AMAZON_CREATORS_CREDENTIAL_ID: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_ID }}
+          AMAZON_CREATORS_CREDENTIAL_SECRET: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_SECRET }}
+          AMAZON_PARTNER_TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
+        run: |
+          set -e
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "DRY RUN: resolving up to $LIMIT JAN(s), no files written."
+            python scripts/resolve_ranking_asins.py --limit "$LIMIT" --dry-run
+          else
+            python scripts/resolve_ranking_asins.py --limit "$LIMIT"
+          fi
+
+      - name: Sniper backfill resolved ASINs into per_asin
+        if: ${{ env.DRY_RUN != 'true' }}
+        env:
+          AMAZON_CREATORS_APPLICATION_ID: ${{ secrets.AMAZON_CREATORS_APPLICATION_ID }}
+          AMAZON_CREATORS_CREDENTIAL_ID: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_ID }}
+          AMAZON_CREATORS_CREDENTIAL_SECRET: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_SECRET }}
+          AMAZON_PARTNER_TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
+        run: |
+          set -e
+          CSV_FILE="data/raw/ranking_sniper_asins.csv"
+          ASINS=$(cat "$CSV_FILE" 2>/dev/null || true)
+          if [ -z "$ASINS" ]; then
+            echo "No resolved ASINs; nothing to backfill."
+            exit 0
+          fi
+          echo "Sniper backfill (competitors-only) for: $ASINS"
+          python scripts/fetch_amazon.py --asin "$ASINS" --competitors-only --out data/raw/
+
+      - name: Create backfill PR + enable auto-merge
+        if: ${{ env.DRY_RUN != 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+
+          # data/ は .gitignore 対象外。per_asin snapshot + manifest + csv を stage。
+          git add data/raw/per_asin data/raw/_ranking_resolved_manifest.json data/raw/ranking_sniper_asins.csv || true
+
+          if git diff --cached --quiet; then
+            echo "No backfill changes to commit; skipping PR creation."
+            exit 0
+          fi
+
+          # 既存 open backfill PR があれば閉じる (重複防止)。
+          gh pr list --base main --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("ranking-sniper/")) | .number' | while read -r pr_num; do
+            if [ -n "$pr_num" ]; then
+              echo "Closing old PR #$pr_num and deleting branch..."
+              gh pr close "$pr_num" -d || true
+            fi
+          done
+
+          BRANCH="ranking-sniper/${{ github.run_id }}"
+          git config user.name "omochairo-fetch-bot[bot]"
+          git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit -m "data: ranking-sniper per_asin backfill (run ${{ github.run_id }})"
+          git push -u origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "data: ranking-sniper per_asin backfill (run ${{ github.run_id }})" \
+            --body "Issue #810 Phase 1: resolved unmatched Rakuten-ranking JANs to new Amazon ASINs (Option A) and backfilled data/raw/per_asin via fetch_amazon --competitors-only. See _ranking_resolved_manifest.json for the resolved/unresolved breakdown." \
+            --base main \
+            --head "$BRANCH")
+          echo "Created: $PR_URL"
+
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge enabled on $PR_URL"
+          else
+            echo "::warning::Could not enable auto-merge on $PR_URL"
+          fi
+        continue-on-error: true
