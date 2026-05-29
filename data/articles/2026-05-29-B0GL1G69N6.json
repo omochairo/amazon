@@ -170,7 +170,7 @@
     },
     "best_platform": "Amazon",
     "best_price": 8432,
-    "target_age": "2歳〜5歳"
+    "target_age": "1歳から"
   },
   "youtube_embeds": [
     {
@@ -204,6 +204,39 @@
       "author": "購入者レビュー",
       "conflict_of_interest": "none",
       "notes": "4歳児が毎日遊ぶほど夢中に。「タッチすると歌や鳴き声、クイズが流れる」と評価。録音機能も楽しまれている。シールブックについても言及。"
+    },
+    {
+      "id": "src-3",
+      "name": "BabyBus公式ニュース",
+      "url": "https://www.babybus.co.jp/news/13969/",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2024-12-05",
+      "author": "メーカー公式",
+      "conflict_of_interest": "possible",
+      "notes": "対象年齢は1歳からと明記。多彩な22のテーマで楽しく学べる。ボタンの切り替えでペンだけでも遊べる音楽モードあり。"
+    },
+    {
+      "id": "src-4",
+      "name": "BabyBus公式 YouTube Shorts",
+      "url": "https://www.youtube.com/watch?v=GZIwP_f-204",
+      "tier": "medium",
+      "evidence_type": "primary",
+      "published_at": "2026-05-29",
+      "author": "メーカー公式",
+      "conflict_of_interest": "possible",
+      "notes": "動画内でタッチペンを使って3か国語で遊ぶ様子が紹介されている。"
+    },
+    {
+      "id": "src-5",
+      "name": "Amazon商品ページ (録音機能)",
+      "url": "https://www.amazon.co.jp/dp/B0GL1G69N6/#feature-3",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2026-05-29",
+      "author": "メーカー公式",
+      "conflict_of_interest": "possible",
+      "notes": "録音機能がついており遊びながら思い出も残せる。"
     }
   ],
   "claims": [
@@ -223,11 +256,11 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1",
+        "src-5",
         "src-2"
       ],
       "cross_checked": true,
-      "notes": "公式の録音機能に加え、レビューでも「歌やメッセージを録音して楽しんでる」と好評"
+      "notes": "公式の録音機能紹介に加え、レビューでも「歌やメッセージを録音して楽しんでる」と好評"
     },
     {
       "claim": "シールは水洗いで繰り返し使用可能",
@@ -244,11 +277,22 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1",
+        "src-3",
         "src-2"
       ],
       "cross_checked": true,
-      "notes": "メーカー公式のほか、レビューでもクイズや鳴き声への関心が言及されている"
+      "notes": "メーカー公式ニュースのほか、レビューでもクイズや鳴き声への関心が言及されている"
+    },
+    {
+      "claim": "1歳から遊べる設計でペン単体でも遊べる",
+      "category": "safety",
+      "confidence": "medium",
+      "supporting_source_ids": [
+        "src-3",
+        "src-2"
+      ],
+      "cross_checked": true,
+      "notes": "公式の対象年齢1歳からの表記と、レビューでのタッチペン単体の持ち歩き提案"
     }
   ],
   "technical_specs": {
