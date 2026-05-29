@@ -61,6 +61,16 @@ FORBIDDEN_TONE_PATTERNS = [
     r"だね[。！\s]",
 ]
 
+# narrative.lead 専用の禁止フレーズ (PROMPT_TEMPLATE.md §1.B WARNING)。
+# meta_description のメタ説明調が lead に流入する事故 (#506) を catch する。
+# title/meta_description には適用しない (そちらは SEO 用で「3サイト横断」等は許容)。
+LEAD_FORBIDDEN_PATTERNS = [
+    r"本記事では",  # 「本記事ではおもちゃロボが…」型のメタ説明 (lead では全面禁止)
+    r"3\s*サイト[をで]?\s*横断",  # 「3サイト横断で徹底比較」マーケ常套句
+    r"丁寧に(比較|解説)",  # 「丁寧に比較しました」「丁寧に解説します」
+    r"でしょうか[。\s]+本記事",  # 「〜なのでしょうか。本記事では…」型のメタ説明
+]
+
 REQUIRED_NARRATIVE_KEYS = [
     "lead",
     "why_this_product",
@@ -717,6 +727,33 @@ def check_no_reseller_pricing(data: dict) -> CheckResult:
     return CheckResult("no_reseller_pricing", True, 1.0, f"OK (ratio {ratio:.2f}x vs {best_src})")
 
 
+def check_lead_hook(data: dict) -> CheckResult:
+    """narrative.lead に §1.B 禁止フレーズが残っていないかを検出する (#506)。
+
+    meta_description のメタ説明調 (「本記事では…3サイト横断…丁寧に比較しました」)
+    が lead に流れ込む事故を catch する。legacy 記事は skip。
+    """
+    if _is_legacy_article(data):
+        return CheckResult("lead_hook", True, 1.0, "legacy article (skipped)")
+    narrative = data.get("narrative", {})
+    lead = narrative.get("lead", "")
+    if not isinstance(lead, str) or not lead:
+        return CheckResult("lead_hook", True, 1.0, "lead empty (other check handles)")
+    hits = []
+    for pat in LEAD_FORBIDDEN_PATTERNS:
+        m = re.search(pat, lead)
+        if m:
+            hits.append(m.group(0))
+    if not hits:
+        return CheckResult("lead_hook", True, 1.0, "OK")
+    msg = ", ".join(f"'{h}'" for h in hits)
+    return CheckResult(
+        "lead_hook", False, 0.0,
+        f"forbidden meta-narration in narrative.lead: {msg} "
+        f"(see PROMPT_TEMPLATE.md §1.B)"
+    )
+
+
 def check_tone(data: dict) -> CheckResult:
     """Scan all narrative + faq text for forbidden childish tone patterns."""
     texts = []
@@ -858,6 +895,7 @@ def evaluate_article(
     report.checks.append(check_edu_domains(data))
     report.checks.append(check_prices_verified(data))
     report.checks.append(check_no_reseller_pricing(data))
+    report.checks.append(check_lead_hook(data))
     report.checks.append(check_tone(data))
     report.checks.append(check_heading_hierarchy(md_text))
     report.checks.append(check_body_word_count(md_text))
