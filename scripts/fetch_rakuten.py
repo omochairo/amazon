@@ -22,7 +22,7 @@
 環境変数:
     RAKUTEN_APP_ID: 楽天ウェブサービスのアプリケーション ID (必須)
 """
-import os, sys, json, re, pathlib, datetime, requests, logging
+import os, sys, json, re, time, pathlib, datetime, requests, logging
 
 def get_secret(name: str) -> str:
     return os.environ.get(name)
@@ -97,6 +97,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--keyword", default="知育玩具")
     parser.add_argument("--out", default="data/raw/")
+    parser.add_argument("--search-pages", type=int, default=1,
+                        help="Rakuten Ichiba Search pages to fetch (hits=30/page). #810 Phase 2: "
+                             "sniper raises this to widen the JAN discovery pool beyond the 30-item ranking.")
     args = parser.parse_args()
 
     app_id = get_secret("RAKUTEN_APP_ID")
@@ -134,23 +137,37 @@ def main():
     }
     if aff_id: params["affiliateId"] = aff_id
 
-    resp = requests.get(url, params=params, headers=headers)
-
+    # #810 Phase 2: ページングで Search プールを広げ、ランキング 30 件の外にある
+    # 売れ筋 JAN も resolve_ranking_asins の解決対象に供給する。Search API が落ちても
+    # Ranking 取得は独立して続行する (PR1 で sys.exit(1) を除去)。
     items = []
-    if resp.status_code != 200:
-        # Search API が落ちても Ranking 取得は独立して続行する (PR1 で sys.exit(1) を除去)
-        logger.error(f"Rakuten RMS Search API failed ({url}): {resp.text[:300]}")
-        raw_items = []
-    else:
+    raw_items = []
+    search_pages = max(1, args.search_pages)
+    for page in range(1, search_pages + 1):
+        params["page"] = page
+        try:
+            resp = requests.get(url, params=params, headers=headers)
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Rakuten RMS Search API request failed page={page}: {e}")
+            break
+        if resp.status_code != 200:
+            logger.error(f"Rakuten RMS Search API failed page={page} ({url}): {resp.text[:300]}")
+            break
         try:
             data = resp.json()
         except ValueError:
             logger.error("Rakuten RMS Search API returned non-JSON")
-            data = {}
-        raw_items = data.get("Items", []) if isinstance(data, dict) else []
-        if not isinstance(raw_items, list):
-            logger.warning(f"Unexpected Rakuten Search API structure: 'Items' is {type(raw_items)}")
-            raw_items = []
+            break
+        page_items = data.get("Items", []) if isinstance(data, dict) else []
+        if not isinstance(page_items, list):
+            logger.warning(f"Unexpected Rakuten Search API structure: 'Items' is {type(page_items)}")
+            break
+        if not page_items:
+            break  # ページ尽き
+        raw_items.extend(page_items)
+        if page < search_pages:
+            time.sleep(0.4)  # Rakuten TPS=1 safety margin
+    logger.info(f"Rakuten Search: fetched {len(raw_items)} items across up to {search_pages} page(s)")
 
     for item in raw_items:
         i = item.get("Item", item) if isinstance(item, dict) else {}
@@ -171,6 +188,9 @@ def main():
             "url": i.get("affiliateUrl") or i.get("itemUrl", ""),
             "image": image_url,
             "itemCode": i.get("itemCode", ""),
+            # #810 Phase 2: itemCaption は JAN/型番を含むことが多く、resolve_ranking_asins
+            # の _extract_jan_from_text が新規 ASIN 解決のためにここから JAN を抽出する。
+            "itemCaption": i.get("itemCaption", ""),
             "reviewCount": i.get("reviewCount", 0),
             "source": "Rakuten"
         })

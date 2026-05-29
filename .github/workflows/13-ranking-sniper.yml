@@ -16,7 +16,7 @@ on:
       limit:
         description: 'Max unmatched JANs to resolve this run (1 = single-JAN dry-run)'
         type: string
-        default: '5'
+        default: '8'
   schedule:
     # 毎週水曜 04:00 JST = 火曜 19:00 UTC。07 (月 21:00 UTC) / 01 日次とずらす。
     - cron: '0 19 * * 2'
@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      LIMIT: ${{ github.event.inputs.limit || '5' }}
+      LIMIT: ${{ github.event.inputs.limit || '8' }}
       DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
     steps:
       - name: Generate App token
@@ -51,8 +51,10 @@ jobs:
       - name: Install Dependencies
         run: pip install -r requirements.txt
 
-      - name: Fetch Rakuten Ranking + Match to ASIN
-        run: python scripts/fetch_rakuten.py --out data/raw/
+      - name: Fetch Rakuten Ranking + Search + Match to ASIN
+        # #810 Phase 2: --search-pages 5 で Search プール (= ~150 件) を取得し、
+        # ランキング 30 件の外の売れ筋 JAN も resolve の対象に供給する。
+        run: python scripts/fetch_rakuten.py --out data/raw/ --search-pages 5
         env:
           RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
           RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
@@ -66,11 +68,12 @@ jobs:
           AMAZON_PARTNER_TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
         run: |
           set -e
+          # #810 Phase 2: --search-in で楽天 Search プール (rakuten.json) の JAN も mine する。
           if [ "$DRY_RUN" = "true" ]; then
             echo "DRY RUN: resolving up to $LIMIT JAN(s), no files written."
-            python scripts/resolve_ranking_asins.py --limit "$LIMIT" --dry-run
+            python scripts/resolve_ranking_asins.py --limit "$LIMIT" --search-in data/raw/rakuten.json --dry-run
           else
-            python scripts/resolve_ranking_asins.py --limit "$LIMIT"
+            python scripts/resolve_ranking_asins.py --limit "$LIMIT" --search-in data/raw/rakuten.json
           fi
 
       - name: Sniper backfill resolved ASINs into per_asin
