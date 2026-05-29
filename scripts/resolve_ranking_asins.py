@@ -22,6 +22,11 @@ Issue #810 Phase 1 — keyword × top100 の構造的上限を突破する第一
                                                (workflow が fetch_amazon --asin に渡す)
   - ``data/raw/_ranking_resolved_manifest.json`` : 可観測性 (resolved / unresolved /
                                                already-covered の内訳)
+  - ``data/raw/ranking_pool.json``           : ランキング由来・未記事化 ASIN の永続
+                                               候補リスト (#810 Phase 1.5)。03-invoke-jules
+                                               の pick-asin が amazon.json 候補に union し、
+                                               記事化済になるまで残す (daily の amazon.json
+                                               上書きで消えない別経路)。
 
 環境変数: AMAZON_CREATORS_* (creators_api_client.py 参照)
 """
@@ -108,8 +113,12 @@ def _collect_unmatched_jans(ranking_items: list) -> list:
 _ASIN_SUFFIX_RE = re.compile(r"-([A-Z0-9]{10})$")
 
 
-def _load_covered_asins(articles_dir: str, per_asin_root: str) -> set:
-    """既に記事化 / per_asin に存在する ASIN 集合 (再フェッチ不要の判定用)。"""
+def _load_article_asins(articles_dir: str) -> set:
+    """``data/articles`` のスラッグ末尾 ASIN 集合 (= **記事化済**)。
+
+    ranking_pool の prune に使う。per_asin は **含めない**: per_asin に
+    backfill 済でもまだ記事が無い ASIN は pool に残すべきだから (#810 Phase 1.5)。
+    """
     covered = set()
     adir = pathlib.Path(articles_dir)
     if adir.is_dir():
@@ -120,12 +129,45 @@ def _load_covered_asins(articles_dir: str, per_asin_root: str) -> set:
             m = _ASIN_SUFFIX_RE.search(stem)
             if m:
                 covered.add(m.group(1))
+    return covered
+
+
+def _load_per_asin_asins(per_asin_root: str) -> set:
+    """``data/raw/per_asin/<ASIN>/`` ディレクトリ名の ASIN 集合 (= snapshot 済)。"""
+    out = set()
     proot = pathlib.Path(per_asin_root)
     if proot.is_dir():
         for d in proot.iterdir():
             if d.is_dir():
-                covered.add(d.name.upper())
-    return covered
+                out.add(d.name.upper())
+    return out
+
+
+def _load_covered_asins(articles_dir: str, per_asin_root: str) -> set:
+    """記事化 ∪ per_asin に存在する ASIN 集合 (再フェッチ不要の判定用; resolve step)。"""
+    return _load_article_asins(articles_dir) | _load_per_asin_asins(per_asin_root)
+
+
+def update_ranking_pool(existing_asins, new_asins, article_covered) -> list:
+    """ranking_pool の asins を再構築して返す (#810 Phase 1.5)。
+
+    Jules の記事化プールに渡す「ランキング由来・未記事化」ASIN の永続リスト。
+    既存 pool から **記事化済** (article_covered) を除き、今回 resolved を末尾に
+    追加して順序保持 dedup する。per_asin に backfill 済でも記事が無ければ残す
+    (article_covered のみで prune)。03-invoke-jules の pick-asin がこの asins を
+    amazon.json 候補に union して記事化する。
+    """
+    covered_u = {a.upper() for a in article_covered}
+    merged, seen = [], set()
+    for a in list(existing_asins) + list(new_asins):
+        if not isinstance(a, str) or not a.strip():
+            continue
+        au = a.upper()
+        if au in covered_u or au in seen:
+            continue
+        seen.add(au)
+        merged.append(a)
+    return merged
 
 
 def resolve_ranking_asins(ranking_items, api, covered, limit=0, search_index="Toys", sleep=1.1):
@@ -163,6 +205,8 @@ def main():
     parser.add_argument("--out", default="data/raw/")
     parser.add_argument("--articles-dir", default="data/articles")
     parser.add_argument("--per-asin-root", default="data/raw/per_asin")
+    parser.add_argument("--pool", default="data/raw/ranking_pool.json",
+                        help="Persistent ranking-discovered ASIN pool consumed by 03-invoke-jules pick-asin (#810 Phase 1.5).")
     parser.add_argument("--search-index", default="Toys")
     parser.add_argument("--limit", type=int, default=0,
                         help="Resolve at most N unmatched JANs (0 = all). Use --limit 1 for a single-JAN dry-run verification of Option A.")
@@ -186,8 +230,10 @@ def main():
         sys.exit(1)
     api = CreatorsAPIClient()
 
-    covered = _load_covered_asins(args.articles_dir, args.per_asin_root)
-    logger.info(f"Covered ASINs (articles ∪ per_asin): {len(covered)}")
+    article_covered = _load_article_asins(args.articles_dir)
+    covered = article_covered | _load_per_asin_asins(args.per_asin_root)
+    logger.info(f"Covered ASINs (articles ∪ per_asin): {len(covered)} "
+                f"(articles-only={len(article_covered)})")
 
     manifest = resolve_ranking_asins(
         ranking_items, api, covered,
@@ -202,6 +248,23 @@ def main():
     for r in manifest["resolved"]:
         logger.info(f"  resolved JAN {r['jan']} → {r['asin']} (rank={r['rank']})")
 
+    # ranking_pool: ランキング由来・未記事化 ASIN の永続候補リスト (#810 Phase 1.5)。
+    # 既存 pool を読み、記事化済を prune して今回 resolved を足し、Jules pick-asin に渡す。
+    pool_path = pathlib.Path(args.pool)
+    existing_pool = []
+    if pool_path.exists():
+        try:
+            loaded = json.loads(pool_path.read_text(encoding="utf-8"))
+            existing_pool = loaded.get("asins", []) if isinstance(loaded, dict) else []
+        except (OSError, json.JSONDecodeError):
+            existing_pool = []
+    updated_pool = update_ranking_pool(existing_pool, manifest["new_asins"], article_covered)
+    manifest["ranking_pool_size"] = len(updated_pool)
+    logger.info(
+        f"ranking_pool: {len(existing_pool)} → {len(updated_pool)} asins "
+        f"(+{len(manifest['new_asins'])} resolved, prune by {len(article_covered)} article-covered)"
+    )
+
     if args.dry_run:
         logger.info("--dry-run: no output files written.")
         print(",".join(manifest["new_asins"]))
@@ -213,6 +276,12 @@ def main():
     )
     (pathlib.Path(args.out) / "_ranking_resolved_manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    pool_path.parent.mkdir(parents=True, exist_ok=True)
+    pool_path.write_text(
+        json.dumps({"asins": updated_pool, "generated_at": manifest["generated_at"]},
+                   ensure_ascii=False, indent=2),
+        encoding="utf-8",
     )
     print(",".join(manifest["new_asins"]))
 

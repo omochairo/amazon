@@ -93,11 +93,34 @@ jobs:
                                   existing.add(m.group(1))
                   except FileNotFoundError:
                       pass
-              remaining = [a for a in candidates if a not in existing]
-              print(f"candidates={len(candidates)} existing_excluded={len(existing)} remaining={len(remaining)}")
-              # GITHUB_RUN_ID で seed してシャッフル。bash 側で 1 件ずつ lock 試行 → 取得成功した時点で確定
+              # #810 Phase 1.5: ranking_pool.json = 楽天ランキング由来・未記事化 ASIN の
+              # 永続プール (13-ranking-sniper が main にコミット)。keyword × top100 の
+              # 構造的上限の外にある売れ筋を記事化するため、keyword 候補に union する。
+              # 件数が少なく高価値なので **先頭** に置き (shuffle せず)、毎日数枠ある
+              # Jules pick で確実に消化されるようにする。記事化されると existing 除外で消える。
+              ranking_pool = []
+              try:
+                  with open('data/raw/ranking_pool.json', encoding='utf-8') as f:
+                      rp = json.load(f)
+                  ranking_pool = [
+                      a for a in rp.get('asins', [])
+                      if isinstance(a, str) and _ASIN_RE.match(a)
+                  ]
+              except FileNotFoundError:
+                  pass
+              ranking_set = set(ranking_pool)
+              remaining_ranking = [a for a in ranking_pool if a not in existing]
+              remaining_kw = [a for a in candidates if a not in existing and a not in ranking_set]
+              # GITHUB_RUN_ID で seed してシャッフル。bash 側で 1 件ずつ lock 試行 → 取得成功した時点で確定。
+              # ranking 内も shuffle: 生成に失敗し続ける ASIN が毎回 slot 1 を占有して
+              # keyword pool を枯渇させる pathological loop を避ける (ranking 優先は維持)。
               rng = random.Random(os.environ.get('GITHUB_RUN_ID', ''))
-              rng.shuffle(remaining)
+              rng.shuffle(remaining_ranking)
+              rng.shuffle(remaining_kw)
+              remaining = remaining_ranking + remaining_kw
+              print(f"candidates={len(candidates)} ranking_pool={len(ranking_pool)} "
+                    f"existing_excluded={len(existing)} ranking_first={len(remaining_ranking)} "
+                    f"remaining={len(remaining)}")
               with open('/tmp/shuffled.txt', 'w') as f:
                   for a in remaining:
                       f.write(a + '\n')
@@ -214,7 +237,10 @@ jobs:
               中間ファイルを作って JSON を整形するのは構わないが、それらは **必ず最終コミット前に削除し PR に含めないこと**。
               article JSON 以外がコミットされていると 05-jules-auto-merge の scope ガードが eligible=false にして
               auto-merge を停止する（PR #301 の事故事例）。
-            - data/raw/amazon.json から対象 ASIN (${TARGET_ASIN}) のエントリを読み込んで記事を生成
+            - data/raw/amazon.json から対象 ASIN (${TARGET_ASIN}) のエントリを読み込んで記事を生成。
+              **amazon.json に該当 ASIN が無い場合** (= 楽天ランキング由来の新規 ASIN, #810 Phase 1.5)
+              は data/raw/per_asin/${TARGET_ASIN}/amazon.json の \`item\` フィールドを商品データとして使う
+              (title / price / features / image / availability 等は同じ形)
             - 楽天/Yahoo の価格・URL は **必ず data/raw/rakuten_matched.json および data/raw/yahoo_matched.json** から
               matched_asin == \"${TARGET_ASIN}\" のエントリを参照し、product.prices.rakuten / product.prices.yahoo に
               { price, url } を埋め込む。マッチが無ければ price=0 / url=\"\" / is_search=true で良い。

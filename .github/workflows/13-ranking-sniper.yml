@@ -98,8 +98,9 @@ jobs:
         run: |
           set -e
 
-          # data/ は .gitignore 対象外。per_asin snapshot + manifest + csv を stage。
-          git add data/raw/per_asin data/raw/_ranking_resolved_manifest.json data/raw/ranking_sniper_asins.csv || true
+          # data/ は .gitignore 対象外。per_asin snapshot + manifest + csv + ranking_pool を stage。
+          # ranking_pool.json は #810 Phase 1.5: 03-invoke-jules pick-asin が読む記事化候補プール。
+          git add data/raw/per_asin data/raw/_ranking_resolved_manifest.json data/raw/ranking_sniper_asins.csv data/raw/ranking_pool.json || true
 
           if git diff --cached --quiet; then
             echo "No backfill changes to commit; skipping PR creation."
@@ -124,7 +125,7 @@ jobs:
 
           PR_URL=$(gh pr create \
             --title "data: ranking-sniper per_asin backfill (run ${{ github.run_id }})" \
-            --body "Issue #810 Phase 1: resolved unmatched Rakuten-ranking JANs to new Amazon ASINs (Option A) and backfilled data/raw/per_asin via fetch_amazon --competitors-only. See _ranking_resolved_manifest.json for the resolved/unresolved breakdown." \
+            --body "Issue #810 Phase 1+1.5: resolved unmatched Rakuten-ranking JANs to new Amazon ASINs (Option A), backfilled data/raw/per_asin via fetch_amazon --competitors-only, and updated data/raw/ranking_pool.json (Phase 1.5 — 03-invoke-jules pick-asin unions this pool so ranking ASINs become articles). See _ranking_resolved_manifest.json for the resolved/unresolved breakdown." \
             --base main \
             --head "$BRANCH")
           echo "Created: $PR_URL"
