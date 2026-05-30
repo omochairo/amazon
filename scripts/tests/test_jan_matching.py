@@ -134,7 +134,9 @@ class YahooJanFlowTest(unittest.TestCase):
         return m
 
     def test_yahoo_query_uses_jan_code_param(self):
-        """jan_code 指定時は params に `jan_code` を入れ、`query` は送らない。"""
+        """jan_code 指定時は params に `jan_code` を入れ、`query` は送らない。
+        さらに `in_stock=true` フィルタは text 検索のみ。JAN は unique ID なので
+        在庫切れ商品も valid (PR fix/yahoo-jan-search-loosen-in-stock)。"""
         hits = [{"name": "Yテスト", "price": 1800, "url": "http://y.example/x",
                  "image": {"medium": "http://img/y.jpg"}, "inStock": True,
                  "shipping": {"code": 2}}]
@@ -145,6 +147,21 @@ class YahooJanFlowTest(unittest.TestCase):
         sent_params = mock_get.call_args.kwargs["params"]
         self.assertEqual(sent_params.get("jan_code"), "4900000000003")
         self.assertNotIn("query", sent_params)
+        # ★ in_stock フィルタは JAN 検索では掛けない (regression guard)
+        self.assertNotIn("in_stock", sent_params)
+
+    def test_yahoo_query_text_search_keeps_in_stock_filter(self):
+        """text 検索 (jan_code 無し) は従来通り `in_stock=true` を付与する。"""
+        hits = [{"name": "Yテキスト", "price": 1500, "url": "http://y.example/t",
+                 "image": {"medium": "http://img/yt.jpg"}, "inStock": True,
+                 "shipping": {"code": 2}}]
+        with patch.object(fetch_cross_search.requests, "get") as mock_get:
+            mock_get.return_value = self._mk_yahoo_resp(hits)
+            fetch_cross_search._yahoo_query("ブランド ワード", "dummy_appid")
+        sent_params = mock_get.call_args.kwargs["params"]
+        self.assertEqual(sent_params.get("query"), "ブランド ワード")
+        self.assertEqual(sent_params.get("in_stock"), "true")
+        self.assertNotIn("jan_code", sent_params)
 
     def test_search_yahoo_jan_first_then_text(self):
         """search_yahoo は jan_code があれば最初に JAN クエリを叩き、

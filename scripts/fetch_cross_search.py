@@ -325,6 +325,10 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
                     best["source"] = "Rakuten"
                     best["_match_method"] = "jan_ichiba"
                     return best
+                else:
+                    logger.info(f"Rakuten Stage0b (keyword=JAN:{jan_code}): 0 hits")
+            else:
+                logger.warning(f"Rakuten Stage0b failed (keyword=JAN:{jan_code}): HTTP {resp.status_code} {resp.text[:200]}")
             time.sleep(0.5)
         except Exception as e:
             logger.error(f"Rakuten Stage0b error: {e}")
@@ -421,17 +425,26 @@ def _yahoo_query(keyword, client_id, sid="", pid="", jan_code=""):
 
     `jan_code` が指定された場合は `jan_code` パラメータで送信し、`query` は
     省略する (V3 仕様: 完全一致検索)。それ以外は従来通り `query` でテキスト検索。
+
+    `in_stock=true` フィルタは text search のみに適用する。JAN は unique ID
+    なので在庫切れでも商品ページ自体は valid (ユーザーが裏で入荷確認できる)。
+    かつ小規模 Yahoo Store はしばしば inStock メタを False で送ってくるため、
+    JAN 検索でこのフィルタを掛けると Yahoo Shopping カタログに実在する商品でも
+    0 hits で silent fall through する (Issue #1087 続き)。Rakuten 側に同等
+    フィルタが無く JAN hit 率が高い (93.5% vs Yahoo 87.2%) ことの主因と判明。
+    parsed_items 側で `inStock` field を見て availability=outofstock を立て
+    続けるので、availability 情報は失わない。
     """
     params = {
         "appid": client_id,
         "results": 15,
         "sort": "-score",
-        "in_stock": "true",
     }
     if jan_code:
         params["jan_code"] = jan_code
     else:
         params["query"] = keyword
+        params["in_stock"] = "true"
     if sid and pid:
         params["affiliate_type"] = "vc"
         params["affiliate_id"] = f"{VC_REFERRAL_BASE}?sid={sid}&pid={pid}&vc_url="
@@ -444,6 +457,9 @@ def _yahoo_query(keyword, client_id, sid="", pid="", jan_code=""):
     data = resp.json()
     hits = data.get("hits", [])
     if not hits:
+        # 0 hits も明示的に log してフォールスルー診断を可能にする。
+        probe = f"JAN:{jan_code}" if jan_code else keyword
+        logger.info(f"Yahoo search returned 0 hits for '{probe}'")
         return []
 
     parsed_items = []
