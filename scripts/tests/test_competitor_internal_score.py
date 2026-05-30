@@ -52,6 +52,31 @@ class BuildArticleIndexTests(unittest.TestCase):
             idx = bp._build_article_index(root)
         self.assertEqual(list(idx), ["B01CCCCCCC"])
 
+    def test_recomputes_score_when_brand_present(self):
+        """#1089: brand があれば JSON の stale ivs_detail.total_100 を信用せず
+        score_calculator で再計算する (cross-article cards 上のスコアと当該記事の
+        表示スコアを一致させる)。"""
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            article = _make_article("B0RECOMPUTE", 99, ivs=4.9, price=2000)
+            article["product"]["brand"] = "レゴ"  # tier 1 brand
+            (root / "a.json").write_text(json.dumps(article), encoding="utf-8")
+            idx = bp._build_article_index(root)
+        # JSON 上の 99 は Jules era の捏造値想定。score_calculator 結果と一致しないはず。
+        self.assertIn("B0RECOMPUTE", idx)
+        recomputed = idx["B0RECOMPUTE"]["ivs_score_100"]
+        self.assertIsInstance(recomputed, int)
+        self.assertNotEqual(recomputed, 99,
+                            "ivs_detail.total_100 (Jules era cache) を bypass していない")
+
+    def test_falls_back_to_cached_when_brand_missing(self):
+        """brand が無いレア record では再計算できないので JSON の値を fallback で使う。"""
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            (root / "a.json").write_text(json.dumps(_make_article("B0NOBRAND01", 77)), encoding="utf-8")
+            idx = bp._build_article_index(root)
+        self.assertEqual(idx["B0NOBRAND01"]["ivs_score_100"], 77)
+
     def test_legacy_wrapper_returns_slug_map(self):
         with tempfile.TemporaryDirectory() as td:
             root = pathlib.Path(td)
@@ -203,9 +228,9 @@ class SamePriceBandTests(unittest.TestCase):
         bp._recommend_same_price_band(data, idx, "", limit=4)
         spb = data["same_price_band"]
         self.assertEqual(spb["band_key"], "3000-5000")
-        self.assertEqual([s["asin"] for s in spb["items"]],
+        self.assertEqual([s["asin"] for s in spb["cards"]],
                          ["B02SAME0002", "B04SAME0004", "B01SAME0001"])
-        self.assertEqual(spb["items"][0]["internal_ivs_score_100"], 88)
+        self.assertEqual(spb["cards"][0]["internal_ivs_score_100"], 88)
 
     def test_band_url_uses_site_base_path(self):
         idx = self._index(("B01SAMEX001", 80, 3500))
@@ -213,7 +238,7 @@ class SamePriceBandTests(unittest.TestCase):
         bp._recommend_same_price_band(data, idx, "/amazon", limit=2)
         self.assertEqual(data["same_price_band"]["band_url"],
                          "/amazon/cospa/#cospa-band-pane-3000-5000")
-        self.assertEqual(data["same_price_band"]["items"][0]["internal_url"],
+        self.assertEqual(data["same_price_band"]["cards"][0]["internal_url"],
                          "/amazon/products/b01samex001/")
 
     def test_excludes_self_and_existing_competitors(self):
@@ -225,7 +250,7 @@ class SamePriceBandTests(unittest.TestCase):
         data = self._data(target_price=3500, target_asin="B00SELFSELF",
                           ca=[{"asin": "B01ALREADYY1", "name": "x"}])
         bp._recommend_same_price_band(data, idx, "", limit=4)
-        self.assertEqual([s["asin"] for s in data["same_price_band"]["items"]],
+        self.assertEqual([s["asin"] for s in data["same_price_band"]["cards"]],
                          ["B02FRESH0002"])
 
     def test_skips_when_price_outside_all_bands(self):
@@ -251,14 +276,14 @@ class SamePriceBandTests(unittest.TestCase):
         idx = self._index(("B01ZEROSCO1", 0, 3500), ("B02OK000002", 65, 3600))
         data = self._data(target_price=3500)
         bp._recommend_same_price_band(data, idx, "", limit=3)
-        self.assertEqual([s["asin"] for s in data["same_price_band"]["items"]],
+        self.assertEqual([s["asin"] for s in data["same_price_band"]["cards"]],
                          ["B02OK000002"])
 
     def test_limit_caps_output(self):
         idx = self._index(*[(f"B0{i:02d}MANY000", 90 - i, 3500) for i in range(1, 9)])
         data = self._data(target_price=3500)
         bp._recommend_same_price_band(data, idx, "", limit=3)
-        self.assertEqual(len(data["same_price_band"]["items"]), 3)
+        self.assertEqual(len(data["same_price_band"]["cards"]), 3)
 
 
 class ResolvePriceBandTests(unittest.TestCase):
