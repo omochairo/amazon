@@ -1,0 +1,28 @@
+{{- /*
+  #589: Score breakdown mini-chart shown on list cards.
+  Expects context = a dict map with float keys education / safety /
+  cost_performance / longevity (each 2.0-5.0, scaled in
+  score_calculator.compute_ivs_axes). Renders only when all 4 are present;
+  otherwise nothing (so older articles without the field stay clean).
+*/ -}}
+{{- $axes := . -}}
+{{- $edu := $axes.education -}}
+{{- $saf := $axes.safety -}}
+{{- $cost := $axes.cost_performance -}}
+{{- $long := $axes.longevity -}}
+{{- if and $edu $saf $cost $long -}}
+<div class="score-minichart" aria-label="知育スコア内訳">
+  {{- range slice
+    (dict "key" "education" "label" "知育"   "icon" "📚" "value" $edu)
+    (dict "key" "longevity" "label" "長く遊べる" "icon" "🧸" "value" $long)
+    (dict "key" "cost"      "label" "コスパ" "icon" "💴" "value" $cost)
+    (dict "key" "safety"    "label" "安全性" "icon" "🛡️" "value" $saf) -}}
+    {{- $pct := mul (div .value 5.0) 100 -}}
+    <div class="score-minichart-row" data-axis="{{ .key }}">
+      <span class="score-minichart-label">{{ .icon }} {{ .label }}</span>
+      <span class="score-minichart-bar" role="meter" aria-valuemin="0" aria-valuemax="5" aria-valuenow="{{ printf "%.1f" .value }}"><span class="score-minichart-bar-fill" style="width: {{ printf "%.0f" $pct }}%"></span></span>
+      <span class="score-minichart-value">{{ printf "%.1f" .value }}</span>
+    </div>
+  {{- end }}
+</div>
+{{- end -}}

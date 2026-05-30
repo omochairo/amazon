@@ -28,7 +28,7 @@ import jinja2
 
 from brand_normalizer import normalize as normalize_brand
 from build_feature_lists import PRICE_BANDS
-from score_calculator import calculate as calculate_score
+from score_calculator import calculate as calculate_score, compute_ivs_axes
 
 
 SUFFIX_SKIP = (".enrichment", ".seo", ".quality")
@@ -49,18 +49,8 @@ def _sync_ivs_for_render(data: dict[str, Any]) -> None:
     product["ivs_score"] = sr.ivs_score
     ivs = product.setdefault("ivs_detail", {})
     ivs["total_100"] = sr.total_100
-    # 4 軸 (/5 表示) は 6 要素から再導出。
-    # 「玩具である以上 0 は不当」のため 2.0-5.0 にスケール (中央 3.5)。
-    # 式: axis = 2.0 + (raw / max) * 3.0  -> raw 0->2.0, mid->3.5, max->5.0
-    def _scale(raw: float, max_v: float) -> float:
-        return round(2.0 + (raw / max_v) * 3.0, 1)
-
-    ivs["education"] = _scale(bd["edu_value"], 15)
-    ivs["safety"] = _scale(bd["safety_cert"], 10)
-    ivs["cost_performance"] = _scale(bd["price_value"], 15)
-    # 長く遊べる = brand_tier (max 25) + media_exposure (max 15) を合算正規化
-    longevity_norm = (bd["brand_tier"] / 25 + bd["media_exposure"] / 15) / 2
-    ivs["longevity"] = round(2.0 + longevity_norm * 3.0, 1)
+    # 4 軸 (/5 表示) は 6 要素から再導出。スケール式は compute_ivs_axes に集約。
+    ivs.update(compute_ivs_axes(bd))
     ivs["score_rationale"] = [
         {"factor": "ブランド信頼度", "delta": f"+{bd['brand_tier']}/25", "reason": sr.rationale[0]},
         {"factor": "安全認証", "delta": f"+{bd['safety_cert']}/10", "reason": sr.rationale[1]},
@@ -1375,6 +1365,9 @@ def _frontmatter_meta(
         meta["ivs_score"] = sr.ivs_score
         meta["ivs_score_100"] = sr.total_100
         meta["score_breakdown"] = sr.breakdown
+        # 4 軸 (#589) — カード一覧で簡易バーを描くために frontmatter に持たせる。
+        # index.json / Hugo partial がここを読む。スケール定義は score_calculator 一元管理。
+        meta["ivs_axes"] = compute_ivs_axes(sr.breakdown)
         if isinstance(jules_ivs, (int, float)):
             meta["ivs_score_jules"] = float(jules_ivs)
     else:

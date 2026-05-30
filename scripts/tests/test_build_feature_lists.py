@@ -33,10 +33,19 @@ import build_feature_lists as bfl  # noqa: E402
 # 知育スコアを再計算する (session 58: list / 詳細ページの score 乖離解消)。
 # 本テストは集計ロジック単体を検証するのが目的なので、テスト中は recalc を
 # 「JSON 上の ivs_score / ivs_detail.total_100 をそのまま返す」スタブに差し替える。
+_ZERO_BREAKDOWN = {
+    "brand_tier": 0, "safety_cert": 0, "age_fit": 0, "edu_value": 0,
+    "media_exposure": 0, "multi_market": 0, "price_value": 0,
+}
+
+
 class _StubScoreResult:
     def __init__(self, total_100: int, ivs_score: float) -> None:
         self.total_100 = total_100
         self.ivs_score = ivs_score
+        # compute_ivs_axes() needs a full breakdown; zeros make every axis 2.0
+        # which is fine for tests that only care about ranking / serialization.
+        self.breakdown = dict(_ZERO_BREAKDOWN)
 
 
 def _stub_calculate_score(article, brand, asin=None):
@@ -527,6 +536,75 @@ class RunEndToEndTest(unittest.TestCase):
             self.assertEqual(manifest["cospa"]["bands"]["1000-2000"], 1)
             self.assertEqual(manifest["cospa"]["bands"]["2000-3000"], 1)
             self.assertEqual(manifest["cospa"]["bands"]["3000-5000"], 1)
+
+
+class IvsAxesPropagationTest(unittest.TestCase):
+    """#589: 4 軸 (education / safety / cost_performance / longevity) が
+    ArticleRecord → cospa.json / deals.json payload まで透過することを確認。"""
+
+    def test_load_articles_attaches_ivs_axes(self):
+        with tempfile.TemporaryDirectory() as td:
+            d = pathlib.Path(td)
+            _write_article(d, _make_article("B0AXIS0001"))
+            records = bfl.load_articles(d)
+        self.assertEqual(len(records), 1)
+        axes = records[0].ivs_axes
+        self.assertIsNotNone(axes)
+        self.assertEqual(set(axes), {"education", "safety", "cost_performance", "longevity"})
+        # stub の breakdown は全 0 なので axes は 2.0 floor
+        for v in axes.values():
+            self.assertEqual(v, 2.0)
+
+    def test_cospa_payload_includes_ivs_axes(self):
+        rec = bfl.ArticleRecord(
+            asin="B0AXIS0002", slug="2026-05-30-B0AXIS0002", name="x", image=None,
+            ivs_score=4.5, ivs_100=90, best_price=2500,
+            best_platform="Amazon", amazon_url=None,
+            ivs_axes={"education": 4.2, "safety": 5.0, "cost_performance": 3.8, "longevity": 4.5},
+        )
+        bands = [
+            {"key": "2000-3000", "label": "¥2,000-¥3,000", "price_min": 2000,
+             "price_max": 2999, "default": False, "items": [rec]},
+        ]
+        payload = bfl.serialize_cospa_bands(
+            bands, filter_params={}, generated_at="2026-05-30T00:00:00Z"
+        )
+        entry = payload["bands"][0]["items"][0]
+        self.assertEqual(entry["ivs_axes"], {
+            "education": 4.2, "safety": 5.0, "cost_performance": 3.8, "longevity": 4.5,
+        })
+
+    def test_deals_payload_includes_ivs_axes(self):
+        rec = bfl.ArticleRecord(
+            asin="B0AXIS0003", slug="2026-05-30-B0AXIS0003", name="x", image=None,
+            ivs_score=4.3, ivs_100=86, best_price=2000,
+            best_platform="Amazon", amazon_url=None,
+            savings_percentage=30, fetched_at="2026-05-29T10:00:00+00:00",
+            ivs_axes={"education": 4.0, "safety": 4.6, "cost_performance": 4.1, "longevity": 3.9},
+        )
+        payload = bfl.serialize_deals(
+            [rec], filter_params={}, generated_at="2026-05-30T00:00:00Z"
+        )
+        entry = payload["items"][0]
+        self.assertEqual(entry["ivs_axes"]["education"], 4.0)
+        self.assertEqual(entry["ivs_axes"]["safety"], 4.6)
+
+    def test_payload_omits_ivs_axes_when_absent(self):
+        rec = bfl.ArticleRecord(
+            asin="B0AXIS0004", slug="2026-05-30-B0AXIS0004", name="x", image=None,
+            ivs_score=4.0, ivs_100=80, best_price=1500,
+            best_platform="Amazon", amazon_url=None,
+            ivs_axes=None,
+        )
+        bands = [
+            {"key": "1000-2000", "label": "¥1,000-¥2,000", "price_min": 1000,
+             "price_max": 1999, "default": True, "items": [rec]},
+        ]
+        payload = bfl.serialize_cospa_bands(
+            bands, filter_params={}, generated_at="2026-05-30T00:00:00Z"
+        )
+        entry = payload["bands"][0]["items"][0]
+        self.assertNotIn("ivs_axes", entry)
 
 
 if __name__ == "__main__":
