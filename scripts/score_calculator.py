@@ -123,6 +123,18 @@ def _safety_score(brand: NormalizedBrand, product: dict) -> tuple[int, str]:
 
 
 def _age_fit_score(product: dict) -> tuple[int, str, Optional[tuple[int, int]]]:
+    """対象年齢の明確さスコア (0-10) を返す。
+
+    玩具安全基準 / ST マーク制度では「対象年齢 = 下限のみ明示 (X歳以上)」が
+    業界標準フォーマット。これは「安全に遊び始められる年齢」を伝える正式表記で、
+    上限の有無は「子どもの成長次第で長く遊べる」ことを意味するため、買い手視点では
+    範囲表記 (X歳〜Y歳) と同等の情報量を持つ。よって両者を満点 (10) とする。
+    上限の有無は longevity 軸 (brand_tier + media_exposure) で別途評価済。
+
+    旧設計 (#1107 follow-up 以前) は下限のみ表記を AG=8 にしていたため、78.6%
+    (422/537 件) の記事が AG=10 に到達せず、サイト全体で実質 -2 raw の常時
+    ペナルティを抱えていた。
+    """
     # v5: product.target_age を優先 (Jules 出力の構造化フィールド)
     # 後方互換: なければ age / age_band もフォールバック対象
     raw = str(
@@ -132,7 +144,8 @@ def _age_fit_score(product: dict) -> tuple[int, str, Optional[tuple[int, int]]]:
         or ""
     )
     if not raw.strip():
-        return 5, "対象年齢の詳細は商品ページに準じます。お子さまの発達段階に合わせて選んでください。", None
+        # 対象年齢の記載が一切ない: 安全に与えられる下限が分からない真の情報不足
+        return 4, "対象年齢の詳細は商品ページに準じます。お子さまの発達段階に合わせて選んでください。", None
 
     # 範囲: "3歳〜7歳" / "6ヶ月〜2歳"
     # 月単位の場合は age_range タプルでは歳換算 (months/12, 小数切上げ) を返す
@@ -150,13 +163,16 @@ def _age_fit_score(product: dict) -> tuple[int, str, Optional[tuple[int, int]]]:
         return 10, f"対象年齢は{label}に明確に設定されており、その年齢帯のお子さまに最適化された遊び方ができます。", (lo, hi)
 
     # 下限のみ: "6歳以上" / "3歳〜" / "12ヶ月から"
+    # 玩具安全基準の標準表記。下限が parseable なら買い手は「安全に与えられる年齢」を
+    # 判断できる十分な情報を持つため満点とする (#1107 follow-up)。
     m = re.search(r"(\d+)\s*(歳|才|ヶ月)\s*(?:〜|~|から|以上|\+)", raw)
     if m:
         n, u = int(m.group(1)), m.group(2)
         lo = _to_years(n, u)
-        return 8, f"{n}{u}以上向けの設計で、{n}{u}前後〜小学生のお子さまに適しています。上限の指定はなく、興味があれば長く楽しめます。", (lo, lo + 5)
+        return 10, f"{n}{u}以上の対象年齢が明示されており、安全に遊び始められる年齢が明確です。上限の指定はなく、興味があれば長く楽しめる設計です。", (lo, lo + 5)
 
-    return 5, f"対象年齢の記載は『{raw[:20]}』です。お子さまの月齢・発達状況に合わせてご検討ください。", None
+    # 数値が抽出できない textual mention のみ ("幼児向け" 等)
+    return 6, f"対象年齢の記載は『{raw[:20]}』です。お子さまの月齢・発達状況に合わせてご検討ください。", None
 
 
 _EDU_DOMAIN_PHRASES = {
@@ -388,12 +404,19 @@ def calculate(
     pv, pr = _price_value_score(product, age_range)
 
     # 各要素配点: brand_tier(25) + safety(10) + age(10) + edu(15) + media(15) + market(10) + price(15) = max 100
-    # 係数 0.4 でリマップ: 上位集中を抑制しつつ、D tier も floor 50 で下支え。
-    # マップ式: final = max(50, min(100, 50 + raw * 0.4))
-    #   raw 0 -> 50, raw 25 -> 60, raw 50 -> 70, raw 75 -> 80, raw 100 -> 90
-    # 2026-05-19: 110→100 / 0.5→0.4 に変更。raw cap が頻発し上位解像度が潰れる問題を解消
+    # 線形リマップ: final = max(50, min(100, round(50 + raw * 0.5)))
+    #   raw 0 -> 50, raw 25 -> 62, raw 50 -> 75, raw 75 -> 88, raw 100 -> 100
+    # D tier も floor 50 で下支えしつつ、上位はフル 100 までスケール。
+    #
+    # 履歴:
+    #   2026-05-19: 旧 (raw_cap=110, 係数 0.5) で raw cap=110 が頻発し上位解像度が潰れる
+    #               問題に対処するため (raw_cap=100, 係数 0.4) に変更したが、係数まで
+    #               下げてしまったため total max が 90 に圧縮される副作用が発生していた。
+    #   #1107 follow-up (本変更): raw_cap=100 のまま係数 0.5 に戻し、raw 100 -> total 100 の
+    #               フルレンジを回復。raw cap は raw_total 上限を 100 に固定したことで
+    #               再発しない (7 要素合計の理論最大が 100 ぴったりのため)。
     raw_total = max(0, min(100, bt + sf + ag + ev + me + mm + pv))
-    total = max(50, min(100, round(50 + raw_total * 0.4)))
+    total = max(50, min(100, round(50 + raw_total * 0.5)))
     return ScoreResult(
         total_100=total,
         ivs_score=round(total / 20.0, 2),
