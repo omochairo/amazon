@@ -543,9 +543,9 @@ def _recommend_same_price_band(
         return
     candidates.sort(key=lambda t: (-t[0], t[1]))
 
-    items: list[dict[str, Any]] = []
+    cards: list[dict[str, Any]] = []
     for score, asin, meta in candidates[:limit]:
-        items.append({
+        cards.append({
             "asin": asin,
             "name": _shrink_competitor_name(meta.get("name") or ""),
             "image": meta.get("image") or "",
@@ -554,11 +554,15 @@ def _recommend_same_price_band(
             "price": meta.get("amazon_price") or 0,
         })
 
+    # NOTE: key は "cards" (not "items")。dict.items は Python の builtin method
+    # で、Jinja2 の getattr → __getitem__ 解決順だと
+    # ``same_price_band.items`` が bound method を返してしまい
+    # ``|length`` で TypeError になる (#1078 直後に検知)。
     data["same_price_band"] = {
         "band_key": band["key"],
         "band_label": band["label"],
         "band_url": f"{site_base_path}/cospa/#cospa-band-pane-{band['key']}",
-        "items": items,
+        "cards": cards,
     }
 
 
