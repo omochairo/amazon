@@ -28,23 +28,31 @@ import jinja2
 
 from brand_normalizer import normalize as normalize_brand
 from build_feature_lists import PRICE_BANDS
-from score_calculator import calculate as calculate_score, compute_ivs_axes
+from score_calculator import ScoreResult, calculate as calculate_score, compute_ivs_axes
 
 
 SUFFIX_SKIP = (".enrichment", ".seo", ".quality")
 
 
-def _sync_ivs_for_render(data: dict[str, Any]) -> None:
+def _sync_ivs_for_render(
+    data: dict[str, Any], score_result: ScoreResult | None = None
+) -> None:
     """テンプレ参照用に product.ivs_detail を新スコアで上書きする。
     本文の IVS 総合/知育効果/長く遊べる/安全性/コスパ と加減点根拠を
     score_calculator の結果と同期させる (frontmatter とのズレ防止)。
+
+    ``score_result`` を渡せば :func:`calculate_score` の再計算をスキップして
+    その結果を再利用する。#1107 で main loop 側 (enrichment + 価格 backfill 後)
+    に算出した ScoreResult を `_frontmatter_meta` と共有するための引数。
     """
     product = data.get("product") if isinstance(data.get("product"), dict) else None
     raw_brand = product.get("brand") if product else None
     if not (product and raw_brand):
         return
-    nb = normalize_brand(raw_brand)
-    sr = calculate_score(data, nb, asin=product.get("asin"))
+    if score_result is None:
+        nb = normalize_brand(raw_brand)
+        score_result = calculate_score(data, nb, asin=product.get("asin"))
+    sr = score_result
     bd = sr.breakdown
     product["ivs_score"] = sr.ivs_score
     ivs = product.setdefault("ivs_detail", {})
@@ -1289,6 +1297,7 @@ def _frontmatter_meta(
     draft: bool,
     git_history: dict[str, dict[str, Any]],
     json_file_path: pathlib.Path,
+    score_result: ScoreResult | None = None,
 ) -> dict[str, Any]:
     title = data.get("title", "No Title")
     variants = data.get("title_variants") or []
@@ -1394,7 +1403,11 @@ def _frontmatter_meta(
     # Jules の元値は ivs_score_jules に保持し、比較・デバッグに使う。
     jules_ivs = product.get("ivs_score")
     if raw_brand:
-        sr = calculate_score(data, nb, asin=product.get("asin"))
+        # #1107: 同記事の ScoreResult が事前計算済 (main loop が enrichment 後に算出) なら
+        # それを再利用し、calculate_score の重複呼出を避ける。
+        sr = score_result if score_result is not None else calculate_score(
+            data, nb, asin=product.get("asin")
+        )
         meta["ivs_score"] = sr.ivs_score
         meta["ivs_score_100"] = sr.total_100
         meta["score_breakdown"] = sr.breakdown
@@ -1576,14 +1589,35 @@ def main() -> None:
                 if isinstance(v, str):
                     data[top_key] = _meta_re.sub("", v).strip()
 
+            # #1107: enrichment + 価格 backfill 後の data から ScoreResult を 1 回だけ算出し、
+            # _sync_ivs_for_render と _frontmatter_meta で再利用する
+            # (本文 / frontmatter 用の calculate_score 呼出を 2 回 → 1 回に削減)。
+            # 注: _build_article_index 側は raw JSON 由来の cross-article カード用スコアを
+            # 別途算出しており、価格 backfill 前の値を持つため再利用不可。
+            fresh_sr: ScoreResult | None = None
+            product_obj = data.get("product")
+            if isinstance(product_obj, dict):
+                raw_brand_for_score = product_obj.get("brand")
+                if raw_brand_for_score:
+                    try:
+                        fresh_sr = calculate_score(
+                            data,
+                            normalize_brand(raw_brand_for_score),
+                            asin=product_obj.get("asin"),
+                        )
+                    except Exception:
+                        fresh_sr = None
             # 2026-05-15 (@J Phase 2): テンプレが参照する product.ivs_detail を
             # 新スコアで上書きしてから render する (本文内 IVS 表示を frontmatter と同期)。
-            _sync_ivs_for_render(data)
+            _sync_ivs_for_render(data, fresh_sr)
             # Issue #515: link_report_flag macro が記事 URL 構築用に slug を参照する。
             data["slug"] = slug
             md_body = template.render(**data)
             draft = _quality_draft(slug, src_path, args.min_score)
-            post = frontmatter.Post(md_body, **_frontmatter_meta(data, slug, draft, git_history, f))
+            post = frontmatter.Post(
+                md_body,
+                **_frontmatter_meta(data, slug, draft, git_history, f, score_result=fresh_sr),
+            )
 
             out_file = dst_path / f"{slug}.md"
             out_file.write_text(frontmatter.dumps(post), encoding="utf-8")
