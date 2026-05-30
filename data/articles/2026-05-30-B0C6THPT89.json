@@ -42,7 +42,7 @@
     "primary_buyer": "20〜40代女性（ママ・親戚・友人）"
   },
   "narrative": {
-    "lead": "3歳のお子さまへのちょっとしたプレゼントや、お出かけ時のお供選びで迷っている方へ。本記事の結論は、アーテック かおシールブックは何度でも貼ってはがせる再剥離仕様とコンパクトさで、外出先の待ち時間対策に強くおすすめできる一品です。価格は本記事執筆時点でAmazonが374円と最も手頃で、周囲を気にせず集中して遊べる点も高く評価できる構成でした。移動中やレストランで静かに過ごせるアイテムを探す保護者の方には、まず候補に入れて外しにくい選択肢といえます。",
+    "lead": "3歳のお子さまへのちょっとしたプレゼントや、お出かけ時のお供選びで迷っている方へ。アーテック かおシールブックは何度でも貼ってはがせる再剥離仕様とコンパクトさで、外出先の待ち時間対策に強くおすすめできる一品です。価格は執筆時点でAmazonが374円と最も手頃で、周囲を気にせず集中して遊べる点も高く評価できる構成でした。移動中やレストランで静かに過ごせるアイテムを探す保護者の方には、まず候補に入れて外しにくい選択肢といえます。",
     "why_this_product": [
       "お出かけ先でのおもちゃ選びにおいて、持ち運びやすさと静かさが気になる方が多いと思います。",
       "アーテック かおシールブックは181mm角のコンパクト設計で、音が出ないふくわらい遊びができるのが特徴です。",
@@ -191,6 +191,17 @@
     },
     {
       "id": "src-3",
+      "name": "アーテック 公式サイトトップ",
+      "url": "https://www.artec-kk.co.jp/",
+      "tier": "high",
+      "evidence_type": "secondary",
+      "published_at": "2026-05-30",
+      "author": "メーカー公式",
+      "conflict_of_interest": "possible",
+      "notes": "アーテックの企業情報および商品展開を確認"
+    },
+    {
+      "id": "src-4",
       "name": "楽天 商品ページ",
       "url": "https://item.rakuten.co.jp/kaden-sakura/4521718069562/",
       "tier": "high",
@@ -201,15 +212,15 @@
       "notes": "商品の販売状況および価格の確認"
     },
     {
-      "id": "src-4",
-      "name": "Yahoo!ショッピング 商品ページ",
-      "url": "https://store.shopping.yahoo.co.jp/stationery-goods2/4521718069562.html",
+      "id": "src-5",
+      "name": "アーテック 会社概要",
+      "url": "https://www.artec-kk.co.jp/company/",
       "tier": "high",
-      "evidence_type": "primary",
+      "evidence_type": "secondary",
       "published_at": "2026-05-30",
-      "author": "販売店",
+      "author": "メーカー公式",
       "conflict_of_interest": "possible",
-      "notes": "商品の販売状況および価格の確認"
+      "notes": "アーテックの会社概要を確認"
     }
   ],
   "claims": [
@@ -219,10 +230,10 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-1",
-        "src-2"
+        "src-3"
       ],
-      "cross_checked": false,
-      "notes": "商品ページの仕様欄で一致確認"
+      "cross_checked": true,
+      "notes": "Amazon商品ページとアーテック公式情報で一致確認"
     },
     {
       "claim": "ハサミやのり不要で周囲を汚さない",
@@ -230,10 +241,10 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-1",
-        "src-2"
+        "src-3"
       ],
-      "cross_checked": false,
-      "notes": "商品ページの仕様欄で一致確認"
+      "cross_checked": true,
+      "notes": "Amazon商品ページとアーテック公式情報で一致確認"
     },
     {
       "claim": "181mm角のコンパクト設計で持ち運びに便利",
