@@ -59,6 +59,12 @@ jobs:
       - name: Layer 3 - Render Markdown
         run: python scripts/build_post.py
 
+      # #731 Prep: ブランドハブ用集計 (narrative / JSON-LD / hero の入力)。
+      # hugo/data/brand_hub.json は /hugo gitignore 配下なので毎ビルド再生成し、
+      # Hugo の site.Data.brand_hub から参照する。commit back は不要。
+      - name: Build brand hub stats
+        run: python scripts/build_brand_hub_stats.py
+
       - name: Debug Output
         run: |
           echo "=== Articles ==="
