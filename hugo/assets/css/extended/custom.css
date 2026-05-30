@@ -2197,11 +2197,13 @@ body.dark .sort-btn:not(.active):hover {
   }
 }
 
-/* --- Age Badge (Bottom-Right overlay) --- */
+/* --- Age Badge (Top-Left overlay) ---
+   右上は 🆚 比較トグル (.compare-toggle, top:8px/right:8px) が占有するので
+   年齢バッジは左上に逃がす (#588 と #745 のレイアウト衝突解消)。 */
 .product-card-age {
   position: absolute;
   top: 0.5rem;
-  right: 0.5rem;
+  left: 0.5rem;
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
