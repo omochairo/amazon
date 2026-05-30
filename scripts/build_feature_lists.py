@@ -33,7 +33,7 @@ from typing import Any, Iterable
 # 「list 100 / 詳細 81」の乖離が出ていた (session 58)。同じ algorithm で再計算する。
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from brand_normalizer import normalize as normalize_brand  # noqa: E402
-from score_calculator import calculate as calculate_score  # noqa: E402
+from score_calculator import calculate as calculate_score, compute_ivs_axes  # noqa: E402
 
 logger = logging.getLogger("build_feature_lists")
 
@@ -55,6 +55,8 @@ class ArticleRecord:
     amazon_url: str | None
     savings_percentage: int | None = None
     fetched_at: str | None = None
+    # 4 軸 0-5 (#589 — feature-item.html がカード上で簡易バーを描く)。
+    ivs_axes: dict[str, float] | None = None
     score_cospa: float | None = field(default=None, init=False)
 
 
@@ -116,6 +118,7 @@ def load_articles(articles_dir: Path) -> list[ArticleRecord]:
                 best_price=_safe_int(best_price),
                 best_platform=prod.get("best_platform"),
                 amazon_url=amazon_block.get("url"),
+                ivs_axes=compute_ivs_axes(sr.breakdown),
             )
         )
 
@@ -350,7 +353,7 @@ def build_deals(
 # ---------------------------------------------------------------------------
 
 def _record_to_payload_common(rec: ArticleRecord, rank: int) -> dict[str, Any]:
-    return {
+    payload = {
         "rank": rank,
         "asin": rec.asin,
         "slug": rec.slug,
@@ -363,6 +366,9 @@ def _record_to_payload_common(rec: ArticleRecord, rank: int) -> dict[str, Any]:
         "best_platform": rec.best_platform,
         "amazon_url": rec.amazon_url,
     }
+    if rec.ivs_axes:
+        payload["ivs_axes"] = rec.ivs_axes
+    return payload
 
 
 def serialize_cospa_bands(

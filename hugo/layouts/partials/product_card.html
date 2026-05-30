@@ -86,6 +86,7 @@
       <div class="product-card-brand">{{ $brand }}</div>
     {{- end }}
     <h3 class="product-card-title">{{ .Title }}</h3>
+    {{- with .Params.ivs_axes }}{{ partial "score_minichart.html" . }}{{- end }}
     <div class="product-card-meta">
       <time datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date.Format "2006-01-02" }}</time>
       {{- with .Params.tags }}

@@ -410,6 +410,25 @@ def calculate(
     )
 
 
+def compute_ivs_axes(breakdown: dict) -> dict:
+    """Project a 7-element ``breakdown`` to the 4 axes shown in /5 score UI.
+
+    Mirrors the scaling used in ``build_post._sync_ivs_for_render`` so the
+    article detail page, list cards (#589), and feature pages all agree.
+    Axes are clamped to 2.0-5.0 ("floor 2.0 because a real toy is never
+    a 0/5 axis"). Shared so build_post / build_feature_lists don't drift.
+    """
+    def _scale(raw: float, max_v: float) -> float:
+        return round(2.0 + (raw / max_v) * 3.0, 1)
+    longevity_norm = (breakdown["brand_tier"] / 25 + breakdown["media_exposure"] / 15) / 2
+    return {
+        "education": _scale(breakdown["edu_value"], 15),
+        "safety": _scale(breakdown["safety_cert"], 10),
+        "cost_performance": _scale(breakdown["price_value"], 15),
+        "longevity": round(2.0 + longevity_norm * 3.0, 1),
+    }
+
+
 def _cli() -> None:
     import glob
     from brand_normalizer import normalize

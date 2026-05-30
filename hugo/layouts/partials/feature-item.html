@@ -45,6 +45,8 @@
     <p class="ranking-price">¥{{ lang.FormatNumberCustom 0 . }}{{- with $item.best_platform }} <span class="feature-platform">（{{ . }} 最安）</span>{{- end -}}</p>
     {{- end }}
 
+    {{- with $item.ivs_axes }}{{ partial "score_minichart.html" . }}{{- end }}
+
     <div class="ranking-cta">
       {{- if $internal }}
       <a class="ranking-cta-internal" href="{{ $internal }}">💡 徹底解説レビューを見る</a>

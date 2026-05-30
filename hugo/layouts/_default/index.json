@@ -12,6 +12,7 @@
         "product_name" (.Params.product_name | default "")
         "ivs_score"    (.Params.ivs_score | default 0)
         "ivs_score_100" (.Params.ivs_score_100 | default 0)
+        "ivs_axes"     (.Params.ivs_axes | default dict)
         "price_amazon" (.Params.price_amazon | default 0)
         "price_rakuten" (.Params.price_rakuten | default 0)
         "price_yahoo"  (.Params.price_yahoo | default 0)
