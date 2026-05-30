@@ -3405,8 +3405,58 @@ body.dark .post-content .keepa-graph p { color: #94a3b8; }
 .post-content .competitor-card .competitor-card-image {
   text-align: center;
   margin-bottom: 10px;
+  position: relative;
 }
 .post-content .competitor-card .competitor-card-image img { border-radius: 6px; }
+
+/* #508: 既存記事 ASIN の知育スコアバッジ (product-card と同じ tier 配色を再利用) */
+.post-content .competitor-card-score {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.2rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 6px;
+  background: #cd7f32;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.22);
+}
+.post-content .competitor-card-score.score-gold   { background: #ffd700; color: #5c4000; }
+.post-content .competitor-card-score.score-silver { background: #c0c0c0; color: #1f2937; }
+.post-content .competitor-card-score.score-bronze { background: #cd7f32; color: #fff; }
+.post-content .competitor-card-score strong { font-size: 1rem; font-weight: 900; }
+.post-content .competitor-card-score-suffix { font-size: 0.68rem; font-weight: 700; }
+
+/* #508: 「点数の近い競合」自動推薦カード */
+.post-content .competitor-card--similar {
+  border-color: #93c5fd;
+  background: linear-gradient(180deg, #eff6ff 0%, #fff 60%);
+}
+.post-content .competitor-card-similar-label {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #1d4ed8;
+  background: #dbeafe;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+[data-theme="dark"] .post-content .competitor-card--similar,
+body.dark .post-content .competitor-card--similar {
+  background: linear-gradient(180deg, #1e3a5f 0%, #1e293b 60%);
+  border-color: #3b82f6;
+}
+[data-theme="dark"] .post-content .competitor-card-similar-label,
+body.dark .post-content .competitor-card-similar-label {
+  background: #1e3a5f;
+  color: #93c5fd;
+}
 .post-content .competitor-card h3 {
   margin: 0 0 8px;
   font-size: 1.02rem;

@@ -285,15 +285,16 @@ def _shrink_competitor_feature(text: str) -> str:
     return s[: _COMPETITOR_FEATURE_MAX - 1].rstrip("、。・,. ") + "…"
 
 
-def _build_asin_to_slug_map(src_path: pathlib.Path) -> dict[str, str]:
-    """Return {asin: slug} for every article JSON under ``src_path``.
+def _build_article_index(src_path: pathlib.Path) -> dict[str, dict[str, Any]]:
+    """Return {asin: {slug, ivs_score_100, ivs_score, name, image, amazon_price}}.
 
     Used so competitor cards can deep-link to an existing internal article
-    when the competitor ASIN already has dedicated coverage on the site.
+    (with the article's IVS score badge) and so we can auto-recommend
+    score-similar internal articles as additional competitor cards (#508).
     """
-    mapping: dict[str, str] = {}
+    index: dict[str, dict[str, Any]] = {}
     if not src_path.exists():
-        return mapping
+        return index
     for f in src_path.glob("*.json"):
         if f.stem.endswith(SUFFIX_SKIP):
             continue
@@ -302,16 +303,34 @@ def _build_asin_to_slug_map(src_path: pathlib.Path) -> dict[str, str]:
         except (json.JSONDecodeError, OSError):
             continue
         slug = meta.get("slug") or f.stem
-        product = meta.get("product") if isinstance(meta.get("product"), dict) else None
-        asin = product.get("asin") if product else None
+        product = meta.get("product") if isinstance(meta.get("product"), dict) else {}
+        asin = product.get("asin")
         if not asin:
             m = re.search(r"-(B0[A-Z0-9]{8})$", f.stem)
             if m:
                 asin = m.group(1)
-        if not asin:
+        if not asin or asin in index:
             continue
-        mapping.setdefault(asin, slug)
-    return mapping
+        ivs_detail = product.get("ivs_detail") if isinstance(product.get("ivs_detail"), dict) else {}
+        amazon_price_obj = (product.get("prices") or {}).get("amazon") or {}
+        try:
+            amazon_price = int(amazon_price_obj.get("price") or 0) if isinstance(amazon_price_obj, dict) else 0
+        except (TypeError, ValueError):
+            amazon_price = 0
+        index[asin] = {
+            "slug": slug,
+            "ivs_score_100": ivs_detail.get("total_100"),
+            "ivs_score": product.get("ivs_score"),
+            "name": product.get("name") or "",
+            "image": product.get("image") or "",
+            "amazon_price": amazon_price,
+        }
+    return index
+
+
+def _build_asin_to_slug_map(src_path: pathlib.Path) -> dict[str, str]:
+    """Back-compat thin wrapper around :func:`_build_article_index`."""
+    return {asin: meta["slug"] for asin, meta in _build_article_index(src_path).items()}
 
 
 def _site_base_path(config_path: pathlib.Path) -> str:
@@ -341,14 +360,20 @@ def _site_base_path(config_path: pathlib.Path) -> str:
 
 def _attach_internal_links(
     data: dict[str, Any],
-    asin_to_slug: dict[str, str],
+    article_index: dict[str, dict[str, Any]],
     site_base_path: str,
 ) -> None:
-    """Mark each competitor entry with ``internal_url`` when we already
-    publish an article for that ASIN. The current article's own ASIN is
-    excluded so a card never self-links."""
+    """Mark each competitor entry with ``internal_url`` and the existing
+    article's IVS score badge when we already publish an article for that
+    ASIN (#508). The current article's own ASIN is excluded so a card never
+    self-links.
+
+    Accepts either the rich ``_build_article_index`` mapping or the legacy
+    ``_build_asin_to_slug_map`` ``{asin: slug}`` mapping for back-compat;
+    in the latter case only ``internal_url`` is attached.
+    """
     ca = data.get("competitive_analysis")
-    if not isinstance(ca, list) or not asin_to_slug:
+    if not isinstance(ca, list) or not article_index:
         return
     product = data.get("product") if isinstance(data.get("product"), dict) else None
     self_asin = product.get("asin") if product else None
@@ -358,11 +383,100 @@ def _attach_internal_links(
         asin = c.get("asin")
         if not asin or asin == self_asin:
             continue
-        slug = asin_to_slug.get(asin)
-        if slug:
-            # URL structure moved from /posts/{slug}/ to /products/{asin}/
-            # (See #511). Hugo aliases handle 301 redirects for the old paths.
+        entry = article_index.get(asin)
+        if entry is None:
+            continue
+        if isinstance(entry, str):
+            # legacy {asin: slug} shape
             c["internal_url"] = f"{site_base_path}/products/{asin.lower()}/"
+            continue
+        # URL structure moved from /posts/{slug}/ to /products/{asin}/
+        # (See #511). Hugo aliases handle 301 redirects for the old paths.
+        c["internal_url"] = f"{site_base_path}/products/{asin.lower()}/"
+        score_100 = entry.get("ivs_score_100")
+        if isinstance(score_100, (int, float)) and score_100 > 0:
+            c["internal_ivs_score_100"] = int(score_100)
+        score = entry.get("ivs_score")
+        if isinstance(score, (int, float)) and score > 0:
+            c["internal_ivs_score"] = float(score)
+
+
+_NEARBY_SCORE_WINDOW = 5
+_NEARBY_MAX_RECOMMENDATIONS = 2
+
+
+def _recommend_nearby_competitors(
+    data: dict[str, Any],
+    article_index: dict[str, dict[str, Any]],
+    site_base_path: str,
+    window: int = _NEARBY_SCORE_WINDOW,
+    limit: int = _NEARBY_MAX_RECOMMENDATIONS,
+) -> None:
+    """Append up to ``limit`` competitor cards picked from existing internal
+    articles whose IVS 100-point score is within ``±window`` of the current
+    article (#508). Cards are tagged ``recommended_by_score=True`` so the
+    template can label them as score-similar suggestions.
+
+    Skips ASINs already present in ``competitive_analysis`` and the article's
+    own ASIN. Sort key: score-proximity ascending, then ASIN for determinism.
+    """
+    if limit <= 0 or not article_index:
+        return
+    product = data.get("product") if isinstance(data.get("product"), dict) else None
+    if not product:
+        return
+    self_asin = product.get("asin") or ""
+    target_score = (product.get("ivs_detail") or {}).get("total_100")
+    if not isinstance(target_score, (int, float)) or target_score <= 0:
+        return
+    target_score = int(target_score)
+    target_price = 0
+    amazon_price = (product.get("prices") or {}).get("amazon") or {}
+    if isinstance(amazon_price, dict):
+        try:
+            target_price = int(amazon_price.get("price") or 0)
+        except (TypeError, ValueError):
+            target_price = 0
+
+    ca = data.get("competitive_analysis")
+    if not isinstance(ca, list):
+        ca = []
+        data["competitive_analysis"] = ca
+    taken_asins = {self_asin}
+    for c in ca:
+        if isinstance(c, dict) and c.get("asin"):
+            taken_asins.add(c["asin"])
+
+    candidates: list[tuple[int, str, dict[str, Any]]] = []
+    for asin, meta in article_index.items():
+        if asin in taken_asins:
+            continue
+        score = meta.get("ivs_score_100")
+        if not isinstance(score, (int, float)) or score <= 0:
+            continue
+        delta = abs(int(score) - target_score)
+        if delta > window:
+            continue
+        candidates.append((delta, asin, meta))
+
+    candidates.sort(key=lambda t: (t[0], t[1]))
+
+    for delta, asin, meta in candidates[:limit]:
+        ca.append({
+            "asin": asin,
+            "name": _shrink_competitor_name(meta.get("name") or ""),
+            "image": meta.get("image") or "",
+            "url": f"https://www.amazon.co.jp/dp/{asin}/?tag=zefiransesu-22",
+            "internal_url": f"{site_base_path}/products/{asin.lower()}/",
+            "internal_ivs_score_100": int(meta.get("ivs_score_100") or 0),
+            "internal_ivs_score": float(meta.get("ivs_score") or 0) if meta.get("ivs_score") else None,
+            "price": meta.get("amazon_price") or 0,
+            "price_comparison": _price_comparison_label(target_price, meta.get("amazon_price") or 0),
+            "feature_comparison": [],
+            "differentiators": [],
+            "recommended_by_score": True,
+            "score_delta": delta,
+        })
 
 
 def _override_competitive_analysis(
@@ -1255,7 +1369,7 @@ def main() -> None:
     raw_root = pathlib.Path(args.raw_amazon).parent
     rakuten_matched_index = _load_matched_index(raw_root / "rakuten_matched.json")
     yahoo_matched_index = _load_matched_index(raw_root / "yahoo_matched.json")
-    asin_to_slug = _build_asin_to_slug_map(src_path)
+    article_index = _build_article_index(src_path)
     site_base_path = _site_base_path(pathlib.Path(args.hugo_config))
     git_history = _load_git_history(src_path)
 
@@ -1313,7 +1427,8 @@ def main() -> None:
             _fallback_news_books(data, per_asin_root)
             _fallback_youtube_embeds(data, per_asin_root)
             _attach_omcha_related(data, per_asin_root)
-            _attach_internal_links(data, asin_to_slug, site_base_path)
+            _attach_internal_links(data, article_index, site_base_path)
+            _recommend_nearby_competitors(data, article_index, site_base_path)
             _fill_jsonld(data)
 
             # 統計データの集計
