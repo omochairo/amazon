@@ -282,6 +282,14 @@ def _build_article_index(src_path: pathlib.Path) -> dict[str, dict[str, Any]]:
     Used so competitor cards can deep-link to an existing internal article
     (with the article's IVS score badge) and so we can auto-recommend
     score-similar internal articles as additional competitor cards (#508).
+
+    Scores are recomputed via :func:`score_calculator.calculate` for every
+    article rather than read from ``product.ivs_detail.total_100``. The JSON
+    field is written by Jules at article creation and only refreshed in-memory
+    by :func:`_sync_ivs_for_render` for the article currently being rendered,
+    so cross-article references (similar / same-price-band cards) would
+    otherwise surface stale Jules-era values that disagree with the score on
+    the target article's own page (#1089).
     """
     index: dict[str, dict[str, Any]] = {}
     if not src_path.exists():
@@ -302,16 +310,37 @@ def _build_article_index(src_path: pathlib.Path) -> dict[str, dict[str, Any]]:
                 asin = m.group(1)
         if not asin or asin in index:
             continue
-        ivs_detail = product.get("ivs_detail") if isinstance(product.get("ivs_detail"), dict) else {}
         amazon_price_obj = (product.get("prices") or {}).get("amazon") or {}
         try:
             amazon_price = int(amazon_price_obj.get("price") or 0) if isinstance(amazon_price_obj, dict) else 0
         except (TypeError, ValueError):
             amazon_price = 0
+
+        ivs_score_100: int | None = None
+        ivs_score: float | None = None
+        raw_brand = product.get("brand")
+        if raw_brand:
+            try:
+                sr = calculate_score(meta, normalize_brand(raw_brand), asin=asin)
+                ivs_score_100 = int(sr.total_100)
+                ivs_score = float(sr.ivs_score)
+            except Exception:
+                # Fall through to JSON-cached value below if recompute fails.
+                ivs_score_100 = None
+                ivs_score = None
+        if ivs_score_100 is None:
+            ivs_detail = product.get("ivs_detail") if isinstance(product.get("ivs_detail"), dict) else {}
+            cached_100 = ivs_detail.get("total_100")
+            if isinstance(cached_100, (int, float)) and cached_100 > 0:
+                ivs_score_100 = int(cached_100)
+            cached_score = product.get("ivs_score")
+            if isinstance(cached_score, (int, float)) and cached_score > 0:
+                ivs_score = float(cached_score)
+
         index[asin] = {
             "slug": slug,
-            "ivs_score_100": ivs_detail.get("total_100"),
-            "ivs_score": product.get("ivs_score"),
+            "ivs_score_100": ivs_score_100,
+            "ivs_score": ivs_score,
             "name": product.get("name") or "",
             "image": product.get("image") or "",
             "amazon_price": amazon_price,
