@@ -31,7 +31,7 @@ brands:
     region: JP
     safety_default: [ST]
   - canonical: タカラトミー
-    aliases: [タカラトミー(TAKARA TOMY), TAKARA TOMY, タカラトミーアーツ, タカラトミーマーケティング]
+    aliases: [タカラトミー(TAKARA TOMY), TAKARA TOMY, タカラトミーアーツ, タカラトミーマーケティング, トミカ, TOMICA, プラレール, PLARAIL, リカちゃん]
     tier: S
     region: JP
     safety_default: [ST]
@@ -40,13 +40,17 @@ brands:
     tier: S
     region: DK
   - canonical: マテル
-    aliases: [マテル(Mattel), Mattel, マテル・インターナショナル, フィッシャープライス, Fisher-Price, バービー, ホットウィール]
+    aliases: [マテル(Mattel), Mattel, マテル・インターナショナル, フィッシャープライス, Fisher-Price, バービー, ホットウィール, マテルゲーム, "メガ(MEGA)", MEGA, "メガ", Mega Bloks, メガブロック, マッチボックス, Matchbox]
     tier: S
     region: US
   - canonical: ハズブロ
-    aliases: [ハズブロ(Hasbro), Hasbro, ハズブロジャパン]
+    aliases: [ハズブロ(Hasbro), Hasbro, ハズブロジャパン, ナーフ, NERF, Nerf, プレイドー, Play-Doh, Play Doh]
     tier: S
     region: US
+  - canonical: 任天堂
+    aliases: [任天堂, Nintendo, ニンテンドー, NINTENDO]
+    tier: S
+    region: JP
 
   # ==========================================
   # Tier A: 国内中堅 + 海外有名
@@ -72,7 +76,7 @@ brands:
     region: JP
     safety_default: [ST]
   - canonical: パイロットコーポレーション
-    aliases: [パイロットコーポレーション, PILOT, メルちゃん, パイロットインキ]
+    aliases: [パイロットコーポレーション, PILOT, メルちゃん, パイロットインキ, パイロット]
     tier: A
     region: JP
     safety_default: [ST]
@@ -213,6 +217,10 @@ brands:
     region: TH
   - canonical: ファットブレイントイズ
     aliases: [ファットブレイントイズ, Fat Brain Toys]
+    tier: A
+    region: US
+  - canonical: Osmo
+    aliases: [Osmo, OSMO, オズモ]
     tier: A
     region: US
 
@@ -548,13 +556,52 @@ brands:
     tier: B
     region: NL
   - canonical: BabyBus
-    aliases: [BabyBus, babybus, ベイビーバス]
+    aliases: [BabyBus, babybus, ベイビーバス, ベビーバス]
     tier: B
     region: CN
   - canonical: Apitor
     aliases: [Apitor, apitor, アピター]
     tier: B
     region: CN
+  - canonical: すごろくや
+    aliases: [すごろくや, スゴロクヤ, Sugorokuya]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: アークライト
+    aliases: [アークライト, "アークライト(Arclight)", Arclight, ARCLIGHT]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: ThinkFun
+    aliases: [ThinkFun, THINKFUN, シンクファン]
+    tier: B
+    region: US
+  - canonical: エレキット
+    aliases: [エレキット, Elekit, ELEKIT, イーケイジャパン]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: グッドスマイルカンパニー
+    aliases: [グッドスマイルカンパニー, Good Smile Company, GOOD SMILE COMPANY, グッスマ, GSC]
+    tier: B
+    region: JP
+  - canonical: クロバー
+    aliases: [クロバー, "クロバー(Clover)", "クロバー (Clover)", Clover, CLOVER, クロバー手芸]
+    tier: B
+    region: JP
+  - canonical: Pinkfong
+    aliases: [Pinkfong, PINKFONG, ピンキッツ, Pinkfong Baby Shark]
+    tier: B
+    region: KR
+  - canonical: Goliath
+    aliases: [Goliath, GOLIATH, "Goliath(ゴライアス)", "Goliath (ゴライアス)", ゴライアス]
+    tier: B
+    region: NL
+  - canonical: LabelLabel
+    aliases: [LabelLabel, "Label Label", ラベルラベル]
+    tier: B
+    region: NL
 
   # ==========================================
   # Tier C: 地方問屋・特定卸・フックトイ・100均系他（すべてST有）

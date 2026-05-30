@@ -10,6 +10,9 @@ on:
       - 'data/articles/**.json'
       - 'data/raw/**'
       - 'data/schema/article.schema.json'
+      # 2026-05-31: brand 正規化マスター。新規 alias/canonical 追加 PR を
+      # validate (build_post smoke test) で必須 check として発火させる。
+      - 'data/brand_taxonomy.yaml'
       - 'scripts/validate_json.py'
       - 'scripts/quality_gate.py'
       # β v5.0: テンプレ / build_post / CSS を触る PR も validate を必須 check として
