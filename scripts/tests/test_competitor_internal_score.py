@@ -173,5 +173,106 @@ class RecommendNearbyCompetitorsTests(unittest.TestCase):
         self.assertEqual(len(data["competitive_analysis"]), 2)
 
 
+class SamePriceBandTests(unittest.TestCase):
+    """#586: 同価格帯リンク — PRICE_BANDS と整合し /cospa/#anchor で抜け出せる。"""
+
+    def _index(self, *entries):
+        idx = {}
+        for asin, score_100, price in entries:
+            idx[asin] = {"slug": f"2026-05-30-{asin}", "ivs_score_100": score_100,
+                         "ivs_score": float(score_100) / 20, "name": f"商品 {asin}",
+                         "image": f"https://example.com/{asin}.jpg", "amazon_price": price}
+        return idx
+
+    def _data(self, *, target_price=3500, target_asin="B00SELFSELF", ca=None):
+        return {
+            "product": {"asin": target_asin, "ivs_detail": {"total_100": 80},
+                        "prices": {"amazon": {"price": target_price}}},
+            "competitive_analysis": ca or [],
+        }
+
+    def test_picks_same_band_orders_by_ivs_desc(self):
+        # target ¥3500 → "3000-5000" 帯
+        idx = self._index(
+            ("B01SAME0001", 70, 3200),  # 同帯
+            ("B02SAME0002", 88, 4800),  # 同帯 (最高スコア)
+            ("B03OTHER003", 90, 2500),  # 帯外 (2000-3000)
+            ("B04SAME0004", 75, 3700),  # 同帯
+        )
+        data = self._data(target_price=3500)
+        bp._recommend_same_price_band(data, idx, "", limit=4)
+        spb = data["same_price_band"]
+        self.assertEqual(spb["band_key"], "3000-5000")
+        self.assertEqual([s["asin"] for s in spb["items"]],
+                         ["B02SAME0002", "B04SAME0004", "B01SAME0001"])
+        self.assertEqual(spb["items"][0]["internal_ivs_score_100"], 88)
+
+    def test_band_url_uses_site_base_path(self):
+        idx = self._index(("B01SAMEX001", 80, 3500))
+        data = self._data(target_price=3500)
+        bp._recommend_same_price_band(data, idx, "/amazon", limit=2)
+        self.assertEqual(data["same_price_band"]["band_url"],
+                         "/amazon/cospa/#cospa-band-pane-3000-5000")
+        self.assertEqual(data["same_price_band"]["items"][0]["internal_url"],
+                         "/amazon/products/b01samex001/")
+
+    def test_excludes_self_and_existing_competitors(self):
+        idx = self._index(
+            ("B00SELFSELF", 80, 3500),   # self
+            ("B01ALREADYY1", 78, 3300),  # already in CA
+            ("B02FRESH0002", 70, 3800),  # eligible
+        )
+        data = self._data(target_price=3500, target_asin="B00SELFSELF",
+                          ca=[{"asin": "B01ALREADYY1", "name": "x"}])
+        bp._recommend_same_price_band(data, idx, "", limit=4)
+        self.assertEqual([s["asin"] for s in data["same_price_band"]["items"]],
+                         ["B02FRESH0002"])
+
+    def test_skips_when_price_outside_all_bands(self):
+        idx = self._index(("B01ANYTHIN1", 80, 3500))
+        data = self._data(target_price=99999)  # 帯外
+        bp._recommend_same_price_band(data, idx, "")
+        self.assertNotIn("same_price_band", data)
+
+    def test_skips_when_no_amazon_price(self):
+        idx = self._index(("B01ANYTHIN2", 80, 3500))
+        data = {"product": {"asin": "X", "ivs_detail": {"total_100": 80}, "prices": {"amazon": {}}},
+                "competitive_analysis": []}
+        bp._recommend_same_price_band(data, idx, "")
+        self.assertNotIn("same_price_band", data)
+
+    def test_skips_when_no_peers_in_band(self):
+        idx = self._index(("B01OTHERX01", 80, 1500))  # 別帯のみ
+        data = self._data(target_price=3500)
+        bp._recommend_same_price_band(data, idx, "")
+        self.assertNotIn("same_price_band", data)
+
+    def test_skips_zero_score_peers(self):
+        idx = self._index(("B01ZEROSCO1", 0, 3500), ("B02OK000002", 65, 3600))
+        data = self._data(target_price=3500)
+        bp._recommend_same_price_band(data, idx, "", limit=3)
+        self.assertEqual([s["asin"] for s in data["same_price_band"]["items"]],
+                         ["B02OK000002"])
+
+    def test_limit_caps_output(self):
+        idx = self._index(*[(f"B0{i:02d}MANY000", 90 - i, 3500) for i in range(1, 9)])
+        data = self._data(target_price=3500)
+        bp._recommend_same_price_band(data, idx, "", limit=3)
+        self.assertEqual(len(data["same_price_band"]["items"]), 3)
+
+
+class ResolvePriceBandTests(unittest.TestCase):
+    def test_resolves_boundaries(self):
+        self.assertEqual(bp._resolve_price_band(1000)["key"], "1000-2000")
+        self.assertEqual(bp._resolve_price_band(1999)["key"], "1000-2000")
+        self.assertEqual(bp._resolve_price_band(3000)["key"], "3000-5000")
+        self.assertEqual(bp._resolve_price_band(999)["key"], "lt1000")
+
+    def test_returns_none_for_out_of_range(self):
+        self.assertIsNone(bp._resolve_price_band(0))
+        self.assertIsNone(bp._resolve_price_band(-100))
+        self.assertIsNone(bp._resolve_price_band(50000))
+
+
 if __name__ == "__main__":
     unittest.main()

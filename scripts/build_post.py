@@ -27,6 +27,7 @@ import frontmatter
 import jinja2
 
 from brand_normalizer import normalize as normalize_brand
+from build_feature_lists import PRICE_BANDS
 from score_calculator import calculate as calculate_score
 
 
@@ -477,6 +478,98 @@ def _recommend_nearby_competitors(
             "recommended_by_score": True,
             "score_delta": delta,
         })
+
+
+_SAME_PRICE_BAND_LIMIT = 4
+
+
+def _resolve_price_band(price: int) -> dict[str, Any] | None:
+    """Return the PRICE_BANDS entry matching ``price``, or None when outside.
+
+    The bands are defined in :mod:`build_feature_lists` so this stays in
+    lockstep with the /cospa/ navigator (links anchor to those tabs).
+    """
+    if not isinstance(price, int) or price <= 0:
+        return None
+    for band in PRICE_BANDS:
+        if band["price_min"] <= price <= band["price_max"]:
+            return band
+    return None
+
+
+def _recommend_same_price_band(
+    data: dict[str, Any],
+    article_index: dict[str, dict[str, Any]],
+    site_base_path: str,
+    limit: int = _SAME_PRICE_BAND_LIMIT,
+) -> None:
+    """Attach ``data["same_price_band"]`` for #586 topic-cluster internal links.
+
+    Picks up to ``limit`` other published articles whose Amazon price falls in
+    the same /cospa/ price band as the current article. Excludes the article's
+    own ASIN and anything already surfaced via ``competitive_analysis`` (incl.
+    score-similar recommendations from #1018) so the section never repeats a
+    card the reader just saw above. Ordering: IVS score desc, then ASIN —
+    same band already controls for price-tier comparability.
+
+    Skips silently if the current article has no Amazon price, no price band
+    match, or no eligible same-band peers.
+    """
+    if limit <= 0 or not article_index:
+        return
+    product = data.get("product") if isinstance(data.get("product"), dict) else None
+    if not product:
+        return
+    self_asin = product.get("asin") or ""
+    amazon_price_obj = (product.get("prices") or {}).get("amazon") or {}
+    try:
+        target_price = int(amazon_price_obj.get("price") or 0) if isinstance(amazon_price_obj, dict) else 0
+    except (TypeError, ValueError):
+        target_price = 0
+    band = _resolve_price_band(target_price)
+    if band is None:
+        return
+
+    taken_asins = {self_asin}
+    ca = data.get("competitive_analysis")
+    if isinstance(ca, list):
+        for c in ca:
+            if isinstance(c, dict) and c.get("asin"):
+                taken_asins.add(c["asin"])
+
+    candidates: list[tuple[int, str, dict[str, Any]]] = []
+    for asin, meta in article_index.items():
+        if asin in taken_asins:
+            continue
+        peer_price = meta.get("amazon_price") or 0
+        if not (band["price_min"] <= peer_price <= band["price_max"]):
+            continue
+        score = meta.get("ivs_score_100")
+        if not isinstance(score, (int, float)) or score <= 0:
+            continue
+        candidates.append((int(score), asin, meta))
+
+    if not candidates:
+        return
+    candidates.sort(key=lambda t: (-t[0], t[1]))
+
+    items: list[dict[str, Any]] = []
+    for score, asin, meta in candidates[:limit]:
+        items.append({
+            "asin": asin,
+            "name": _shrink_competitor_name(meta.get("name") or ""),
+            "image": meta.get("image") or "",
+            "internal_url": f"{site_base_path}/products/{asin.lower()}/",
+            "internal_ivs_score_100": int(score),
+            "price": meta.get("amazon_price") or 0,
+        })
+
+    data["same_price_band"] = {
+        "band_key": band["key"],
+        "band_label": band["label"],
+        "band_url": f"{site_base_path}/cospa/#cospa-band-pane-{band['key']}",
+        "items": items,
+    }
 
 
 def _override_competitive_analysis(
@@ -1429,6 +1522,7 @@ def main() -> None:
             _attach_omcha_related(data, per_asin_root)
             _attach_internal_links(data, article_index, site_base_path)
             _recommend_nearby_competitors(data, article_index, site_base_path)
+            _recommend_same_price_band(data, article_index, site_base_path)
             _fill_jsonld(data)
 
             # 統計データの集計
