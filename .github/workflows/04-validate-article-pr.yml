@@ -101,6 +101,11 @@ on:
       # validate (required check) として発火させる。
       - 'hugo/content/about-score.md'
       - 'hugo/content/privacy.md'
+      # 2026-05-30 (#731 Part A PoC): /brands/<brand>/_index.md narrative
+      # を validate (required check) として発火させる ([[04-validate-paths-trap]])。
+      # 全 hugo/content/** を含めると Jules 記事 (/posts/) も拾ってしまうので、
+      # brand hub 配下 (/brands/) と次の features/ で目的限定する。
+      - 'hugo/content/brands/**'
       # 2026-05-25 (session 47 / Issue #590 PR-3): /cospa/ /deals/ 自動更新 workflow。
       # workflow 本体を触る PR も validate を required check として発火させる。
       - '.github/workflows/09-feature-lists.yml'
