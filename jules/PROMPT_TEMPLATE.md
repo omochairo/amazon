@@ -263,13 +263,9 @@ narrative.lead の**冒頭 2 文**は「結論ファースト hook」を必須�
 
 ## 5. 文体ルール
 
-✅ 推奨：「お子さまが夢中になります」「贈り物として選ばれる理由は」「実際に手に取ってみると」「気になる方も多いのが」「ご家庭の遊びの幅が広がります」
-
-❌ 禁止：「おトク」「すごい」「最高」など強い形容の連発（1 記事 1 回まで）
-
-✅ サイト公式キャラ：「おもちゃロボ」は editorial_comment や narrative.closing で三人称的な署名表現として登場可（例：「おもちゃロボのおすすめは…」）。
-
-絵文字は title・meta_description には入れない。narrative 内では各セクションに最大 1 個まで。
+- 「先輩ママ・姉」調の落ち着いた女性誌文体（§1 既出）。強い形容・断定の連発禁止（詳細は §5.B）
+- 絵文字は title・meta_description には入れない。narrative では各セクション最大 1 個
+- サイト公式キャラ「おもちゃロボ」は editorial_comment / narrative.closing で署名的に登場可（§1 既出。「編集部」は使わない）
 
 ## 5.A narrative の 4-step 構造（v5 新規・厳守）
 
@@ -464,29 +460,24 @@ narrative.lead の**冒頭 2 文**は「結論ファースト hook」を必須�
 
 ### 6.5.5 ハルシネーション防止
 
-事実関係を捏造しないために、以下は raw データ（amazon.json / per_asin/<ASIN>/ / 公式ページ）に明示記載がある場合のみ書く:
+raw データ（amazon.json / per_asin/<ASIN>/ / 公式ページ）に明示記載がある場合のみ書く:
 
-- 認証マーク（ST / 食品衛生法 / EN71 / ASTM / PSC / CE 等）。記載なければ `certifications: []`。PSC は日本向け玩具では稀なので、書くなら raw に "PSC" の文字列がある場合に限る
-- 対象年齢（raw が「1歳〜」のとき勝手に「6ヶ月〜」に変えない）
-- 受賞歴（「グッドトイ」「キッズデザイン賞」等は公式リストか商品ページに明示された場合のみ）
-- 販売実績数値（「累計○万個販売」は明記がある場合のみ。「人気」「定番」は形容詞として OK）
-- 設計言及（「マンションでも音は静か」「角を丸く加工」等は raw に該当記述がある場合のみ）
+- **認証マーク**（一覧は §6.4.2 参照。記載なければ `certifications: []`）
+- **対象年齢**（raw が「1歳〜」のとき勝手に「6ヶ月〜」に変えない）
+- **受賞歴**（「グッドトイ」「キッズデザイン賞」等は公式リストか商品ページに明示された場合のみ）
+- **販売実績数値**（「累計○万個販売」は明記がある場合のみ。「人気」「定番」は形容詞として OK）
+- **設計言及**（「マンションでも音は静か」「角を丸く加工」等は raw に該当記述がある場合のみ）
 
-cert を書く場合の supporting_source_ids 規律（`quality_gate.check_cert_sources_content` が URL fetch して検証）:
-- cert 名に言及する `claims[]` の `supporting_source_ids` には、本文に当該 cert 名（または alias: 食品衛生法→食品級、EN71→EN 71、ST→STマーク、PSC→PSCマーク、等）が実際に書かれている非販売ページ source のみを含める。形だけの URL は本文 fetch で fail する
+cert 名に言及する `claims[]` の `supporting_source_ids` には、**本文に当該 cert 名（または alias: 食品衛生法→食品級 / EN71→EN 71 / ST→STマーク 等）が実際に書かれている非販売ページ source のみ**を含める（`quality_gate.check_cert_sources_content` が URL fetch して検証）。
 
-### 6.5.6 自律的補完の手順（v5 新規）
+### 6.5.6 自律的補完の手順
 
-`sources` 5 件・`claims` cross_checked 2 件・直接引用 1 件以上を確保できない場合の対処：
+`sources` 5 件・`claims` cross_checked 2 件・直接引用 1 件以上が揃わない時は §1.C に従って能動補完する。優先クエリ:
 
-1. `data/raw/per_asin/<ASIN>/` 配下を全ファイル確認（reviews.json / news.json / books.json / youtube.json 等）
-2. `data/raw/reviews.json` の他 ASIN エントリも参考にしつつ、対象 ASIN を再検索
-3. Jules の組み込みツール（google_search 等）で次のクエリ群を試す：
-   - `"{商品名} レビュー"` / `"{商品名} 口コミ"`
-   - `"{ブランド名} {モデル番号}" レビュー`
-   - `site:kakaku.com {商品名}` / `site:rakuten.co.jp {商品名} レビュー`
-4. 取得した URL は §6.5.1 の「URL 採用前検証義務」に従って商品名含有確認してから採用
-5. それでも 5 件に届かない場合は、**取得できたソースだけで記事を書き上げ**、`sources` の不足は事実として受け入れる。`narrative` を水増しせず、**短くても誠実な記事**を優先する
+- `"{商品名} レビュー"` / `"{商品名} 口コミ"` / `"{ブランド名} {モデル番号}" レビュー`
+- `site:kakaku.com {商品名}` / `site:rakuten.co.jp {商品名} レビュー`
+
+採用 URL は §6.5.1 の商品名含有確認を通すこと。それでも届かなければ**水増しせず、取得できた範囲で誠実に短く書く**。
 
 ## 6.6 関連メディア（youtube_embeds / news / books）の選定ルール（v4.2）
 
@@ -529,7 +520,3 @@ cert を書く場合の supporting_source_ids 規律（`quality_gate.check_cert_
 12. [ ] `review_signals.{high_points, concerns, use_scenes}` の各エントリに 50-80 字の `text` と `supporting_source_ids` 1 件以上が紐付いている。件数レンジ（high_points 3〜5 / concerns 2〜4 / use_scenes 3〜5）を満たしている
 13. [ ] `review_signals.segment_voices` を最低 1 件出力している（最大 3 件）。`segment_label` は「○○層」型の集合名、`summary` は 1〜2 文の集合的傾向。個人擬人化（「○○さんは…」）や直接引用フォーマット（「『〜』との声」）を使っていない。`supporting_source_ids` 1 件以上必須
 14. [ ] `verdict.headline` を 50-80 字の 1 文で出力している。〈推奨条件〉+〈非推奨/躊躇条件〉構造で、スコアと `product.pros` / `product.cons` の整合が取れている（強い断定の禁止は §5.B / longevity ラベル統一は §6 参照）
-
-## 9. 参考：既存記事のサンプル
-
-`data/articles/2026-05-12-B0FNM5CR25.json` は v3 時点の旧フォーマットなので、構造そのままを真似しないでください。v4 では `keywords` / `persona_fit` / `narrative` / `faq` / `ivs_detail.score_rationale` が追加されています。
