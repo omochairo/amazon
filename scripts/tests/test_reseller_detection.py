@@ -55,6 +55,24 @@ def test_is_trusted_seller_rejects_unknown_and_empty():
     assert not is_trusted_seller("✅シャイニングストア")
 
 
+def test_is_trusted_seller_recognizes_740_data_driven_additions():
+    """#740: per_asin 集計で untrusted top-10 に居た正規流通を新規 trust."""
+    # Amazon 海外直販 (52 ASIN, 全 untrusted のうち最多)
+    assert is_trusted_seller("Amazon US")
+    # 老舗知育玩具店 (12 ASIN)
+    assert is_trusted_seller("ナビッピドットコム　オンラインショップ")
+    # シルバニア専門の老舗 (12 ASIN)
+    assert is_trusted_seller("ティーズマルシェ")
+    # 木製節句飾り 専門 (13 ASIN, 「専門店」マーカー無しのため社名で trust)
+    assert is_trusted_seller("木製節句飾り 人と木")
+
+
+def test_is_trusted_seller_recognizes_authorized_distributor_markers():
+    """#740: 「正規取扱店 / 正規販売店」自己宣言を generic marker として trust."""
+    assert is_trusted_seller("【embot正規取扱店】e-Craft Shop（NTTドコモグループ）")
+    assert is_trusted_seller("bebicia（べビシア）正規販売店")
+
+
 def test_is_trusted_seller_generic_markers_recognized():
     """#817: 個別 TRUSTED_SELLER_PATTERNS に無くても標識で trust する."""
     # 公式 / 直営 / メーカー
