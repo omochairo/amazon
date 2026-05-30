@@ -404,19 +404,25 @@ def calculate(
     pv, pr = _price_value_score(product, age_range)
 
     # 各要素配点: brand_tier(25) + safety(10) + age(10) + edu(15) + media(15) + market(10) + price(15) = max 100
-    # 線形リマップ: final = max(50, min(100, round(50 + raw * 0.5)))
-    #   raw 0 -> 50, raw 25 -> 62, raw 50 -> 75, raw 75 -> 88, raw 100 -> 100
-    # D tier も floor 50 で下支えしつつ、上位はフル 100 までスケール。
+    #
+    # 線形リマップ: total = max(50, min(100, round(50 + max(0, raw - 30) * 5/7)))
+    #   raw 30 -> 50 / raw 50 -> 64 / raw 65 -> 75 / raw 80 -> 86 / raw 100 -> 100
+    #
+    # 設計意図:
+    #   - 上限は raw 100 → total 100 を維持 (edu_value=15 を満たした S-tier 完璧記事の希少枠)
+    #   - 下限は実データ最弱記事 (raw≈30 = D-tier ノーブランド + 限定情報) を total 50 に対応付け、
+    #     旧 (50 + raw*0.5) で 65 に張り付いていた下端を 50 まで開放して分布を広げる
+    #   - 中域は (raw - 30) * 5/7 で線形に按分。raw 80 = 86 のように高評価記事に十分な解像度を維持
     #
     # 履歴:
-    #   2026-05-19: 旧 (raw_cap=110, 係数 0.5) で raw cap=110 が頻発し上位解像度が潰れる
-    #               問題に対処するため (raw_cap=100, 係数 0.4) に変更したが、係数まで
-    #               下げてしまったため total max が 90 に圧縮される副作用が発生していた。
-    #   #1107 follow-up (本変更): raw_cap=100 のまま係数 0.5 に戻し、raw 100 -> total 100 の
-    #               フルレンジを回復。raw cap は raw_total 上限を 100 に固定したことで
-    #               再発しない (7 要素合計の理論最大が 100 ぴったりのため)。
+    #   2026-05-19: 旧 (raw_cap=110, 係数 0.5) → (raw_cap=100, 係数 0.4) に変更。raw cap 飽和は
+    #               解消したが係数まで下げたため total max が 90 に圧縮される副作用発生。
+    #   #1107 follow-up A: raw_cap=100 のまま係数 0.5 に戻し total max=100 を回復。ただし
+    #               実データ下限 raw≈30 が total 65 で頭打ちになり分布 65-99 と狭かった。
+    #   #1107 follow-up B (本変更): 下端を raw 30→50 に再マッピングし分布を 50-99 へ拡張。
+    #               上端は変更せず (ユーザー要望: 上限は現状維持で十分)。
     raw_total = max(0, min(100, bt + sf + ag + ev + me + mm + pv))
-    total = max(50, min(100, round(50 + raw_total * 0.5)))
+    total = max(50, min(100, round(50 + max(0, raw_total - 30) * 5 / 7)))
     return ScoreResult(
         total_100=total,
         ivs_score=round(total / 20.0, 2),
