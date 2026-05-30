@@ -187,6 +187,18 @@
 {% endfor %}</div>
 {% endif %}
 
+{% if same_price_band and same_price_band.items %}
+## <small>{{ product.name }}と</small>💴 同じ価格帯のおすすめ（{{ same_price_band.band_label }}）
+
+予算を変えずに比べたい方へ。{{ same_price_band.band_label }} の価格帯で公開中の知育玩具レビューから、知育スコアの高い順に {{ same_price_band.items|length }} 件をご紹介します。
+
+<div class="same-price-grid">
+{% for s in same_price_band.items %}<a class="same-price-card" href="{{ s.internal_url }}">{% if s.image %}<div class="same-price-card-image"><img src="{{ s.image }}" alt="{{ s.name }}" loading="lazy"></div>{% endif %}<div class="same-price-card-body"><div class="same-price-card-name">{{ s.name }}</div><div class="same-price-card-meta">🏆 <strong>{{ s.internal_ivs_score_100 }}</strong>点{% if s.price %}<span class="same-price-card-price">／￥{{ "{:,}".format(s.price) }}</span>{% endif %}</div></div></a>
+{% endfor %}</div>
+
+<p class="same-price-more"><a href="{{ same_price_band.band_url }}">{{ same_price_band.band_label }} の知育玩具をもっと見る →</a></p>
+{% endif %}
+
 {% if narrative.why_this_product %}
 ## <small>{{ product.name }}が</small>📦 選ばれている理由
 
