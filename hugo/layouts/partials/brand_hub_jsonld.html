@@ -1,0 +1,47 @@
+{{- /*
+  brand_hub_jsonld.html — #731 Part B (JSON-LD ItemList)
+
+  /brands/<brand>/ のタクソノミー term ページ用に schema.org/ItemList を
+  emit する。site.Data.brand_hub.brands[<term>] に narrative entry
+  (count >= narrative_min_count, 既定 3) がある場合のみ出力する。
+
+  各 ListItem は { @type, position, url, name, image? } を持つ最小形。
+  Hugo の term.html と同じく ivs_score_100 降順で並べる
+  (itemListOrder = ItemListOrderDescending を SERP に明示する)。
+
+  呼び出し元: hugo/layouts/partials/extend_head.html
+*/ -}}
+{{- if and (eq .Kind "term") (eq .Data.Plural "brands") -}}
+  {{- with site.Data.brand_hub -}}
+    {{- $entry := index .brands $.Title -}}
+    {{- $threshold := int (.narrative_min_count | default 3) -}}
+    {{- if and $entry (ge (int (index $entry "count")) $threshold) -}}
+      {{- $pages := ($.Pages.ByParam "ivs_score_100").Reverse -}}
+      {{- $items := slice -}}
+      {{- range $i, $p := $pages -}}
+        {{- $item := dict
+            "@type" "ListItem"
+            "position" (add $i 1)
+            "url" $p.Permalink
+            "name" $p.Title
+        -}}
+        {{- with $p.Params.product_image -}}
+          {{- $item = merge $item (dict "image" .) -}}
+        {{- end -}}
+        {{- $items = $items | append $item -}}
+      {{- end -}}
+      {{- $payload := dict
+          "@context" "https://schema.org"
+          "@type" "ItemList"
+          "name" (printf "%s の知育玩具一覧" $.Title)
+          "url" $.Permalink
+          "itemListOrder" "https://schema.org/ItemListOrderDescending"
+          "numberOfItems" (len $pages)
+          "itemListElement" $items
+      -}}
+<script type="application/ld+json">
+{{ $payload | jsonify (dict "indent" "  ") | safeJS }}
+</script>
+    {{- end -}}
+  {{- end -}}
+{{- end -}}

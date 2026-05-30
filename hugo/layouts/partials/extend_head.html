@@ -86,6 +86,9 @@
 }
 </script>
 
+{{- /* #731 Part B: brand hub ItemList JSON-LD (term ページかつ narrative 対象のみ emit) */ -}}
+{{- partial "brand_hub_jsonld.html" . -}}
+
 {{ if .IsPage }}
   {{ if .Params.jsonld }}
     {{ if .Params.jsonld.product }}
