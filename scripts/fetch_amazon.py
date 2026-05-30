@@ -357,6 +357,13 @@ TRUSTED_SELLER_PATTERNS = (
     "kaekid",                        # KaeKid
     "plafarm",                       # plafarm
     "駿河屋",                        # 大手ホビー/中古チェーン (#817 follow-up)
+    # 2026-05-30 (#740): data-driven 追加。`scripts/analyze_reseller_drops.py`
+    # で per_asin 2192 ASIN を集計したところ以下が untrusted top-10 に出現、
+    # かつ正規流通として裏取り可能だったため TRUSTED 化。
+    "amazon us",                     # Amazon 海外直販 (52 ASIN)
+    "ナビッピ",                      # ナビッピドットコム (老舗知育玩具店, 12 ASIN)
+    "ティーズマルシェ",              # シルバニア専門の老舗 (12 ASIN)
+    "人と木",                        # 木製節句飾り 人と木 (13 ASIN)
 )
 
 
@@ -398,6 +405,11 @@ TRUSTED_SELLER_GENERIC_MARKERS = (
     "適格請求書",
     "発行事業者",
     "商標登録",
+    # 2026-05-30 (#740): メーカーから流通契約を結んだ自己宣言。完全な保証では
+    # ないが、契約違反リスクを背負ってまで偽る reseller は稀。untrusted top-30
+    # に「embot正規取扱店」「bebicia正規販売店」「わんぱく堂」等 6 件以上出現。
+    "正規取扱店",
+    "正規販売店",
 )
 
 
