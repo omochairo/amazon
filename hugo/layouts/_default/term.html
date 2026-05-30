@@ -27,6 +27,73 @@
   </div>
 </header>
 
+{{- /* #731 Part D: brand hub hero — narrative entry がある brand 限定 */ -}}
+{{- if eq $kind "brands" -}}
+  {{- with site.Data.brand_hub -}}
+    {{- $entry := index .brands $.Title -}}
+    {{- $threshold := int (.narrative_min_count | default 3) -}}
+    {{- if and $entry (ge (int (index $entry "count")) $threshold) -}}
+      {{- $img := index $entry "representative_image" -}}
+      {{- $tier := index $entry "tier" -}}
+      {{- $avgIvs := index $entry "avg_ivs_100" -}}
+      {{- $avgAge := index $entry "avg_age_min_months" -}}
+      {{- $low := index $entry "lowest_price" -}}
+      {{- $series := index $entry "top_3_series" -}}
+      {{- $repAsin := index $entry "representative_asin" -}}
+<section class="brand-hub-hero" data-brand="{{ $.Title }}">
+  {{- if $img }}
+  <div class="brand-hub-hero-image">
+    {{- if $repAsin }}
+    <a href="{{ printf "/products/%s/" (lower $repAsin) | relURL }}" aria-label="{{ $.Title }} の代表商品を見る">
+      <img src="{{ $img }}" alt="{{ $.Title }} 代表商品" loading="lazy" decoding="async">
+    </a>
+    {{- else }}
+    <img src="{{ $img }}" alt="{{ $.Title }} 代表商品" loading="lazy" decoding="async">
+    {{- end }}
+  </div>
+  {{- end }}
+  <div class="brand-hub-hero-body">
+    <div class="brand-hub-hero-meta">
+      {{- if $tier }}<span class="brand-hub-tier brand-hub-tier-{{ lower $tier }}" title="ブランドティア {{ $tier }}">ティア {{ $tier }}</span>{{ end }}
+      <span class="brand-hub-stat">📚 {{ len $.Pages }} 件のレビュー</span>
+      {{- if $avgIvs }}<span class="brand-hub-stat">⭐ 平均知育スコア {{ printf "%.1f" $avgIvs }} / 100</span>{{ end }}
+      {{- if $avgAge }}
+        {{- $ageLabel := "" -}}
+        {{- if lt $avgAge 12.0 -}}
+          {{- $ageLabel = printf "%.0fヶ月〜" $avgAge -}}
+        {{- else -}}
+          {{- $years := div $avgAge 12.0 -}}
+          {{- $ageLabel = printf "%.1f歳〜" $years -}}
+        {{- end }}
+      <span class="brand-hub-stat">👶 平均対象年齢 {{ $ageLabel }}</span>
+      {{- end }}
+      {{- if $low }}
+        {{- $lowInt := int $low -}}
+        {{- $lowFmt := "" -}}
+        {{- if ge $lowInt 1000 -}}
+          {{- $thousands := div $lowInt 1000 -}}
+          {{- $remainder := mod $lowInt 1000 -}}
+          {{- $lowFmt = printf "%d,%03d" $thousands $remainder -}}
+        {{- else -}}
+          {{- $lowFmt = printf "%d" $lowInt -}}
+        {{- end }}
+      <span class="brand-hub-stat">💴 最安 ¥{{ $lowFmt }} 〜</span>
+      {{- end }}
+    </div>
+    {{- if $series }}
+    <div class="brand-hub-hero-series">
+      <span class="brand-hub-hero-series-label">人気シリーズ:</span>
+      {{- range $series }}
+      <span class="brand-hub-series-chip">{{ . }}</span>
+      {{- end }}
+    </div>
+    {{- end }}
+  </div>
+</section>
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
 {{- if .Content }}
 <div class="post-content md-content">{{ .Content }}</div>
 {{- end }}
@@ -65,6 +132,81 @@
 </div>
 
 <style>
+  /* #731 Part D: brand hub hero */
+  .brand-hub-hero {
+    display: flex; gap: 20px; align-items: center;
+    margin: 16px 0 24px;
+    padding: 18px 20px;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(14,165,233,0.06), rgba(14,165,233,0.0));
+  }
+  .brand-hub-hero-image {
+    flex: 0 0 auto; width: 120px; height: 120px;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; border-radius: 8px;
+    background: var(--code-bg, #f3f4f6);
+  }
+  .brand-hub-hero-image img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .brand-hub-hero-image a { display: contents; }
+  .brand-hub-hero-body { flex: 1 1 auto; min-width: 0; }
+  .brand-hub-hero-meta {
+    display: flex; flex-wrap: wrap; gap: 8px 12px;
+    font-size: 0.9rem; color: var(--primary, #1f2937);
+  }
+  .brand-hub-hero-meta .brand-hub-stat {
+    display: inline-flex; align-items: center; gap: 4px;
+    white-space: nowrap;
+  }
+  .brand-hub-tier {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-weight: 700; font-size: 0.8rem;
+    background: #6b7280; color: #fff;
+  }
+  .brand-hub-tier-s { background: #f59e0b; }
+  .brand-hub-tier-a { background: #10b981; }
+  .brand-hub-tier-b { background: #0ea5e9; }
+  .brand-hub-tier-c { background: #6366f1; }
+  .brand-hub-tier-d { background: #6b7280; }
+  .brand-hub-hero-series {
+    margin-top: 10px;
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+    font-size: 0.85rem; color: var(--secondary, #6b7280);
+  }
+  .brand-hub-hero-series-label { font-weight: 600; }
+  .brand-hub-series-chip {
+    display: inline-block; padding: 3px 10px;
+    border: 1px solid var(--border, #d1d5db); border-radius: 999px;
+    background: var(--entry, #fff); color: var(--primary, #1f2937);
+  }
+  /* Mobile: stack vertically */
+  @media (max-width: 600px) {
+    .brand-hub-hero { flex-direction: column; align-items: flex-start; gap: 12px; padding: 14px; }
+    .brand-hub-hero-image { width: 96px; height: 96px; }
+  }
+  /* Dark mode */
+  [data-theme="dark"] .brand-hub-hero,
+  body.dark .brand-hub-hero {
+    background: linear-gradient(135deg, rgba(14,165,233,0.10), rgba(14,165,233,0.0));
+    border-color: #374151;
+  }
+  [data-theme="dark"] .brand-hub-hero-image,
+  body.dark .brand-hub-hero-image { background: #1f2937; }
+  [data-theme="dark"] .brand-hub-series-chip,
+  body.dark .brand-hub-series-chip {
+    background: #1f2937; color: #e5e7eb; border-color: #374151;
+  }
+  @media (prefers-color-scheme: dark) {
+    body:not([data-theme="light"]) .brand-hub-hero {
+      background: linear-gradient(135deg, rgba(14,165,233,0.10), rgba(14,165,233,0.0));
+      border-color: #374151;
+    }
+    body:not([data-theme="light"]) .brand-hub-hero-image { background: #1f2937; }
+    body:not([data-theme="light"]) .brand-hub-series-chip {
+      background: #1f2937; color: #e5e7eb; border-color: #374151;
+    }
+  }
+
   .term-sort-controls { margin-bottom: 20px; display: flex; gap: 10px; align-items: center; }
   .sort-label { font-size: 0.9rem; font-weight: bold; color: var(--text-color, #4b5563); }
   .sort-btn {
