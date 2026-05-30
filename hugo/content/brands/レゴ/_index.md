@@ -4,6 +4,9 @@
 # 同じ値を明示する。これにより Part C (head.html) / Part B (jsonld) / Part D
 # (hero) が gate しているキー lookup `$.Title` が "レゴ" のままになる。
 title: "レゴ"
+# #731 narrative-auto-gen guard: 14-brand-narrative.yml cron は auto_generated:false
+# を見て当ファイルを上書き対象から外す。手書きを Jules で潰さないための保護フラグ。
+auto_generated: false
 ---
 
 ## レゴはなぜ「知育の定番」なのか

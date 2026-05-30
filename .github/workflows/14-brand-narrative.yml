@@ -1,0 +1,222 @@
+name: Generate Brand Narrative
+
+# #731 epic — automate Part A narrative coverage for the 28 long-tail brands
+# (manual narratives for レゴ / タカラトミー are protected by auto_generated:false
+# in their _index.md frontmatter).
+#
+# Flow:
+# 1. scripts/select_brand_narrative_target.py picks 1 brand (no _index.md yet,
+#    or oldest auto_generated:true). Exits 2 = nothing to do.
+# 2. Build Jules prompt from jules/BRAND_NARRATIVE_PROMPT.md + selector vars.
+# 3. Jules session with AUTO_CREATE_PR — the session creates the PR itself,
+#    same plumbing as 03-invoke-jules.
+# 4. NO auto-merge. The user reviews each narrative PR before it goes live
+#    (Jules hallucination on unfamiliar brands would otherwise reach prod).
+#
+# Cadence: monthly on day 1, 03:00 UTC (= 12:00 JST). 28 brands / monthly =
+# ~1 PR/week of review cost for the user, ~2.3 years to full coverage. If
+# Jules quality proves consistently good, the cron can be sped up later.
+
+on:
+  schedule:
+    - cron: '0 3 1 * *'
+  workflow_dispatch:
+    inputs:
+      brand:
+        description: 'Force a specific brand name (overrides selector). Must already be in hugo/data/brand_hub.json with count>=3.'
+        required: false
+        default: ''
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Select target brand
+        id: select
+        env:
+          INPUT_BRAND: ${{ github.event.inputs.brand }}
+        run: |
+          set -e
+          if [ -n "$INPUT_BRAND" ]; then
+            # Workflow_dispatch override: bypass selector, pull stats directly.
+            python - <<PY > /tmp/brand.json
+          import json, sys
+          with open('hugo/data/brand_hub.json', encoding='utf-8') as f:
+              hub = json.load(f)
+          name = "${INPUT_BRAND}"
+          stats = hub.get('brands', {}).get(name)
+          if not stats or stats.get('count', 0) < 3:
+              print(f"::error::brand '{name}' not in brand_hub.json or count<3", file=sys.stderr)
+              sys.exit(1)
+          top3 = stats.get('top_3_series', [])
+          out = {
+              'brand': name,
+              'count': stats['count'],
+              'tier': stats.get('tier', '?'),
+              'avg_ivs_100': stats.get('avg_ivs_100', 0),
+              'avg_age_min_months': stats.get('avg_age_min_months', 0),
+              'lowest_price': stats.get('lowest_price', 0),
+              'top_3_series_csv': ', '.join(top3),
+              'representative_asin': stats.get('representative_asin', ''),
+              'representative_image': stats.get('representative_image', ''),
+              'is_refresh': False,
+              'previous_last_generated_at': None,
+          }
+          json.dump(out, sys.stdout, ensure_ascii=False)
+          PY
+          else
+            # Cron path: let the selector pick (exits 2 if nothing eligible).
+            if ! python scripts/select_brand_narrative_target.py > /tmp/brand.json; then
+              echo "selector returned no eligible brand; nothing to do."
+              echo "count=0" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "count=1" >> "$GITHUB_OUTPUT"
+          BRAND=$(python -c "import json; print(json.load(open('/tmp/brand.json', encoding='utf-8'))['brand'])")
+          echo "brand=$BRAND" >> "$GITHUB_OUTPUT"
+          echo "Picked: $BRAND"
+          cat /tmp/brand.json
+
+      - name: List Jules Sources
+        if: steps.select.outputs.count == '1'
+        id: list-sources
+        run: |
+          set -e
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            'https://jules.googleapis.com/v1alpha/sources' \
+            -H "X-Goog-Api-Key: ${{ secrets.JULES_API_KEY }}")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Failed to list sources (HTTP $HTTP_CODE): $BODY"
+            exit 1
+          fi
+          SOURCE_NAME=$(echo "$BODY" | jq -r '.sources[] | select(.githubRepo.owner=="omochairo" and .githubRepo.repo=="amazon") | .name' 2>/dev/null || echo "")
+          if [ -z "$SOURCE_NAME" ]; then
+            SOURCE_NAME="sources/github/omochairo/amazon"
+          fi
+          echo "source_name=$SOURCE_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Create Jules session
+        if: steps.select.outputs.count == '1'
+        id: create-session
+        env:
+          SOURCE_NAME: ${{ steps.list-sources.outputs.source_name }}
+        run: |
+          set -e
+          TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
+          TODAY_ISO=${TODAY}T10:00:00+09:00
+          BRAND=$(python -c "import json; print(json.load(open('/tmp/brand.json', encoding='utf-8'))['brand'])")
+          COUNT=$(python -c "import json; print(json.load(open('/tmp/brand.json', encoding='utf-8'))['count'])")
+          TIER=$(python -c "import json; print(json.load(open('/tmp/brand.json', encoding='utf-8'))['tier'])")
+          AVG_IVS=$(python -c "import json; print(json.load(open('/tmp/brand.json', encoding='utf-8'))['avg_ivs_100'])")
+          AVG_AGE=$(python -c "import json; print(json.load(open('/tmp/brand.json', encoding='utf-8'))['avg_age_min_months'])")
+          LOWEST=$(python -c "import json; print(json.load(open('/tmp/brand.json', encoding='utf-8'))['lowest_price'])")
+          TOP3=$(python -c "import json; print(json.load(open('/tmp/brand.json', encoding='utf-8'))['top_3_series_csv'])")
+          IS_REFRESH=$(python -c "import json; print(json.load(open('/tmp/brand.json', encoding='utf-8'))['is_refresh'])")
+
+          # Build prompt: AGENTS.md preamble + variable injection + template body.
+          INTRO=$(cat <<EOF
+          AGENTS.md を最初に必ず読み、その指示に厳密に従ってください。
+          以下は #731 ブランドハブ narrative 生成タスクです。jules/BRAND_NARRATIVE_PROMPT.md
+          をフル読み込みし、そこに書かれた scope / hallucination 防止 / frontmatter ルールを
+          すべて守ってください。
+
+          【今回生成する brand】: ${BRAND}
+          【出力ファイル (新規作成のみ)】: hugo/content/brands/${BRAND}/_index.md
+          【本日の日付 (frontmatter last_generated_at に使用)】: ${TODAY_ISO}
+          【データ (これ以外の事実は書かない)】:
+            - count = ${COUNT}
+            - tier = ${TIER}
+            - avg_ivs_100 = ${AVG_IVS}
+            - avg_age_min_months = ${AVG_AGE}
+            - lowest_price = ${LOWEST}
+            - top_3_series = ${TOP3}
+          【既存ファイル状態】: is_refresh=${IS_REFRESH}
+            - false (新規) なら作成、true (再生成) ならファイルを置き換え
+
+          絶対守るリポジトリ保護ルール:
+          - 新規ファイル追加 (または当該 _index.md の置き換え) のみ。他ファイルは触らない
+          - .github/, scripts/, hugo/layouts/, data/ への変更は禁止
+          - hugo/content/brands/${BRAND}/_index.md 以外の hugo/content/ 配下も触らない
+          - **最終 PR の差分は hugo/content/brands/${BRAND}/_index.md の 1 ファイルのみ**
+          - 作業中に作った fix_*.py / tmp_*.json 等は最終コミット前に必ず削除
+          - frontmatter には title: "${BRAND}" / auto_generated: true / last_generated_at: "${TODAY_ISO}" を必ず含める
+
+          === 以下、jules/BRAND_NARRATIVE_PROMPT.md の内容 ===
+          EOF
+          )
+          PROMPT="$INTRO
+
+          $(cat jules/BRAND_NARRATIVE_PROMPT.md)"
+
+          REQUEST_BODY=$(jq -n \
+            --arg prompt "$PROMPT" \
+            --arg source "$SOURCE_NAME" \
+            --arg title "narrative: ${BRAND} (#731)" \
+            '{
+              prompt: $prompt,
+              sourceContext: {
+                source: $source,
+                githubRepoContext: {
+                  startingBranch: "main"
+                }
+              },
+              automationMode: "AUTO_CREATE_PR",
+              title: $title
+            }')
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            'https://jules.googleapis.com/v1alpha/sessions' \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "X-Goog-Api-Key: ${{ secrets.JULES_API_KEY }}" \
+            -d "$REQUEST_BODY")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          echo "HTTP: $HTTP_CODE"
+          echo "$BODY" | jq -c '{name, id, status}' 2>/dev/null || echo "$BODY" | head -c 500
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Failed to create Jules session (HTTP $HTTP_CODE)"
+            exit 1
+          fi
+          SESSION_ID=$(echo "$BODY" | jq -r '.id // empty')
+          if [ -z "$SESSION_ID" ]; then
+            echo "::error::No session id returned"
+            exit 1
+          fi
+          echo "session_id=$SESSION_ID" >> "$GITHUB_OUTPUT"
+          echo "Session: $SESSION_ID (brand=$BRAND)"
+
+      - name: Wait for completion (best-effort)
+        if: steps.create-session.outputs.session_id != ''
+        env:
+          SESSION_ID: ${{ steps.create-session.outputs.session_id }}
+        run: |
+          for i in $(seq 1 10); do
+            sleep 30
+            RESPONSE=$(curl -s \
+              "https://jules.googleapis.com/v1alpha/sessions/$SESSION_ID" \
+              -H "X-Goog-Api-Key: ${{ secrets.JULES_API_KEY }}")
+            STATUS=$(echo "$RESPONSE" | jq -r '.status // "unknown"')
+            echo "[$i/10] status: $STATUS"
+            if [ "$STATUS" = "COMPLETED" ] || [ "$STATUS" = "FAILED" ]; then
+              exit 0
+            fi
+          done
+          echo "Polling complete; Jules continues async."
