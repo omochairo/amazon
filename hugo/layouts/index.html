@@ -55,16 +55,17 @@
 {{- /* === Section: 人気タグ === */ -}}
 {{- $tags := site.Taxonomies.tags }}
 {{- if $tags }}
+{{- $topTags := first 20 $tags.ByCount }}
 <section class="home-section">
   <header class="home-section-header">
     <h2>🏷 人気タグから探す</h2>
     <a class="home-section-more" href="{{ "tags/" | relURL }}">すべて見る →</a>
   </header>
   <div class="tag-chips">
-    {{- range $name, $taxonomy := $tags }}
-      {{- if ge (len $taxonomy.Pages) 2 }}
-      <a class="tag-chip" href="{{ (printf "tags/%s/" (urlize $name)) | relURL }}">
-        #{{ $name }} <span class="tag-chip-count">{{ len $taxonomy.Pages }}</span>
+    {{- range $topTags }}
+      {{- if ge .Count 5 }}
+      <a class="tag-chip" href="{{ (printf "tags/%s/" (urlize .Name)) | relURL }}">
+        #{{ .Name }} <span class="tag-chip-count">{{ .Count }}</span>
       </a>
       {{- end }}
     {{- end }}
