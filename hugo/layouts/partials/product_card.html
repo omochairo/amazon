@@ -16,7 +16,14 @@
   {{- $brand = "" -}}
 {{- end -}}
 {{- $name := .Params.product_name | default .Title -}}
-<a class="product-card" href="{{ .Permalink }}" aria-label="{{ $name }} の比較レビューを読む" data-ivs="{{ $score | default 0 }}" data-ivs100="{{ $score100 | default 0 }}" data-age-min="{{ .Params.age_min_months | default 0 }}">
+{{- /* ASIN は url 末尾の /products/<asin>/ から取れるが、compare.js が DOM 走査時に
+       即時取得できるよう data-asin を併載する (#588)。url の正規表現 fallback も用意。 */ -}}
+{{- $asin := "" -}}
+{{- if .Params.url -}}
+  {{- $m := findRE "/products/([a-z0-9]+)/" (.Params.url | default "") 1 -}}
+  {{- if $m -}}{{- $asin = index (split (index $m 0) "/") 2 | upper -}}{{- end -}}
+{{- end -}}
+<a class="product-card" href="{{ .Permalink }}" aria-label="{{ $name }} の比較レビューを読む" data-asin="{{ $asin }}" data-ivs="{{ $score | default 0 }}" data-ivs100="{{ $score100 | default 0 }}" data-age-min="{{ .Params.age_min_months | default 0 }}">
   <div class="product-card-image">
     {{- if $img }}
       <img src="{{ $img }}" alt="{{ $name }}" loading="lazy" decoding="async" referrerpolicy="no-referrer">
