@@ -125,6 +125,12 @@ on:
       # 2026-05-30 (Issue #784): 送料無料判定を merchantInfo.name == Amazon 直販
       # に再設計したため unit test を validate (required check) 対象に。
       - 'scripts/tests/test_free_shipping.py'
+      # 2026-05-30 (Issue #806): 低確度アフィリエイトリンク監査ツール
+      # (scratch 永続化 + Phase 2 JAN backfill の前段) を required check 対象に。
+      - 'scripts/analyze_low_confidence_links.py'
+      - 'scripts/tests/test_analyze_low_confidence_links.py'
+      - 'scripts/backfill_jan_codes.py'
+      - 'scripts/tests/test_backfill_jan_codes.py'
   workflow_dispatch:
 
 permissions:
