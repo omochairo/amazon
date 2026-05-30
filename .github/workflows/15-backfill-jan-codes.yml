@@ -1,0 +1,128 @@
+name: Backfill JAN codes from Creator API (manual)
+# Issue #806 Phase 2-3: jan_unknown な ASIN を Creator API getItems
+# (itemInfo.externalIds) で再問い合わせし JAN を per_asin / amazon.json に
+# 書き戻す one-shot メンテワークフロー。dry-run mode 既定。
+#
+# 設計判断:
+# - cron なし: 低確度リンクのクリーンアップは突発メンテ用途。
+# - App token + 通常 git commit + gh pr create:
+#   ([[feedback-omochairo-peter-evans-validate-trap]])
+# - report は artifact として保存し、apply 時のみ PR 起票 + auto-merge。
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry-run = API 呼びのみ / apply = 書き戻し + PR"
+        required: true
+        type: choice
+        default: dry-run
+        options:
+          - dry-run
+          - apply
+      limit:
+        description: "先頭 N 件だけ (0 = 全件)"
+        required: false
+        type: string
+        default: "0"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: backfill-jan-codes
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Analyze low confidence links (produce jan_unknown list)
+        run: |
+          mkdir -p scratch
+          python scripts/analyze_low_confidence_links.py \
+            --json scratch/low_confidence.json \
+            --stats
+
+      - name: Backfill JAN codes (mode = ${{ inputs.mode }})
+        env:
+          AMAZON_CREATORS_APPLICATION_ID: ${{ secrets.AMAZON_CREATORS_APPLICATION_ID }}
+          AMAZON_CREATORS_CREDENTIAL_ID: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_ID }}
+          AMAZON_CREATORS_CREDENTIAL_SECRET: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_SECRET }}
+          AMAZON_PARTNER_TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
+        run: |
+          APPLY_FLAG=""
+          if [ "${{ inputs.mode }}" = "apply" ]; then
+            APPLY_FLAG="--apply"
+          fi
+          python scripts/backfill_jan_codes.py \
+            --input scratch/low_confidence.json \
+            --limit ${{ inputs.limit }} \
+            --report scratch/jan_backfill_report.json \
+            $APPLY_FLAG
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jan-backfill-report-${{ github.run_id }}
+          path: scratch/jan_backfill_report.json
+          if-no-files-found: warn
+
+      - name: Create backfill PR + enable auto-merge (apply mode only)
+        if: ${{ inputs.mode == 'apply' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+
+          git add data/raw/per_asin data/raw/amazon.json || true
+
+          if git diff --cached --quiet; then
+            echo "No JAN backfills applied; skipping PR creation."
+            exit 0
+          fi
+
+          BRANCH="backfill-jan-codes/${{ github.run_id }}"
+          git config user.name "omochairo-fetch-bot[bot]"
+          git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit -m "data(#806): backfill jan_code from Creator API (run ${{ github.run_id }})"
+          git push -u origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "data(#806): backfill jan_code from Creator API (run ${{ github.run_id }})" \
+            --body "Automated JAN backfill via \`scripts/backfill_jan_codes.py --apply\` for low-confidence ASINs. Refs #806." \
+            --base main \
+            --head "$BRANCH")
+          echo "Created: $PR_URL"
+
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge enabled on $PR_URL"
+          else
+            echo "::warning::Could not enable auto-merge on $PR_URL"
+          fi
+        continue-on-error: true

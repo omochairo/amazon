@@ -131,6 +131,7 @@ on:
       - 'scripts/tests/test_analyze_low_confidence_links.py'
       - 'scripts/backfill_jan_codes.py'
       - 'scripts/tests/test_backfill_jan_codes.py'
+      - '.github/workflows/15-backfill-jan-codes.yml'
   workflow_dispatch:
 
 permissions:
