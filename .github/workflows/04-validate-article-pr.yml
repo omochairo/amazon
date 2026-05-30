@@ -79,6 +79,7 @@ on:
       # 2026-05-25 (session 44 / Issue #682): .gitignore 変更 PR で validate を
       # 発火させ required check を通す。
       - '.gitignore'
+      - 'data/README.md'
       # 2026-05-25 (session 45 / PR #688): Wikipedia tooltip マッピング JSON。
       # /hugo gitignore trap で main 未 push だった wiki_mapping.json 追加 PR を
       # required check として走らせる。
