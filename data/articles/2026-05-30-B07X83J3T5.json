@@ -228,6 +228,28 @@
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
       "notes": "お米のおもちゃシリーズの特徴、純国産の安全性についての解説。"
+    },
+    {
+      "id": "src-6",
+      "name": "価格.com クチコミ・レビュー",
+      "url": "https://kakaku.com/item/S0000886622/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-05-30",
+      "author": "購入者",
+      "conflict_of_interest": "none",
+      "notes": "国産で安全な素材を使用している点が評価されている。"
+    },
+    {
+      "id": "src-7",
+      "name": "PR TIMES ピープル株式会社 プレスリリース",
+      "url": "https://prtimes.jp/main/html/rd/p/000000150.000045493.html",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2026-05-30",
+      "author": "メーカー公式",
+      "conflict_of_interest": "disclosed",
+      "notes": "お米のどうぶつつみき いろどりの累計販売実績や安全性の特徴を紹介。"
     }
   ],
   "claims": [
@@ -237,9 +259,10 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-1",
-        "src-5"
+        "src-5",
+        "src-7"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "Amazon商品ページとメーカー公式ページの両方で純国産・無塗装の旨を確認。"
     },
     {
@@ -259,7 +282,8 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-2",
-        "src-3"
+        "src-3",
+        "src-6"
       ],
       "cross_checked": true,
       "notes": "複数サイトでギフト用途としての実績がアピールされている。"
