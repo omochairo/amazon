@@ -185,7 +185,7 @@
       "notes": "「論理的思考、プログラミング的思考、集中力、忍耐力、問題解決能力を自然に伸ばすことができる」との記載あり。また118問のチャレンジ問題を収録。"
     },
     {
-      "id": "src-3",
+      "id": "src-2",
       "name": "Rakuten 商品ページ",
       "url": "https://item.rakuten.co.jp/namions/nm-16uos2q4gnoja0ij/",
       "tier": "medium",
@@ -196,7 +196,7 @@
       "notes": "プログラミング的思考、集中力を伸ばすという趣旨の記載あり。"
     },
     {
-      "id": "src-4",
+      "id": "src-3",
       "name": "Yahoo 商品ページ",
       "url": "https://store.shopping.yahoo.co.jp/chansuaa/49081359723.html",
       "tier": "medium",
@@ -205,6 +205,28 @@
       "author": "販売店",
       "conflict_of_interest": "possible",
       "notes": "VoSinrly ロジカルルートパズルの取り扱いあり。"
+    },
+    {
+      "id": "src-4",
+      "name": "サクラチェッカー (ASIN分析)",
+      "url": "https://sakura-checker.jp/search/B0G4WWHWC2/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-05-30",
+      "author": "第三者メディア",
+      "conflict_of_interest": "none",
+      "notes": "該当ASINの製品情報が存在することを確認。"
+    },
+    {
+      "id": "src-5",
+      "name": "Keepa 価格履歴",
+      "url": "https://keepa.com/#!product/5-B0G4WWHWC2",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-05-30",
+      "author": "第三者メディア",
+      "conflict_of_interest": "none",
+      "notes": "該当ASINの価格トラッキング情報を確認。"
     }
   ],
   "claims": [
@@ -214,7 +236,7 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-1",
-        "src-3"
+        "src-2"
       ],
       "cross_checked": true,
       "notes": "メーカー公式と楽天販売ページでの説明が一致"
@@ -225,7 +247,7 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-1",
-        "src-3"
+        "src-2"
       ],
       "cross_checked": true,
       "notes": "メーカー公式の商品説明と楽天商品ページの記載で一致。"
