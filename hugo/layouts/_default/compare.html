@@ -1,0 +1,38 @@
+{{- /*
+  #588 比較モード専用レイアウト。compare.js が以下の流れで hydrate する:
+    1. URL の ?asins=A,B,C を読む (無ければ localStorage から復元)
+    2. /index.json を fetch して ASIN マッチ
+    3. #compare-root にテーブルを描画 (画像 / 名前 / スコア / 4 軸 / 価格 / 年齢)
+  サーバ側で描画しないのは、選択状態がユーザーローカル (localStorage) で
+  検索インデックスにも公開不要なため。空状態ヘルプ + ヘッダのみ SSR する。
+*/ -}}
+{{- define "main" }}
+<header class="page-header">
+  <h1>{{ .Title }}</h1>
+  {{- if .Description }}
+  <div class="post-description">{{ .Description }}</div>
+  {{- end }}
+</header>
+
+<article class="post-single compare-page">
+  <div class="post-content">
+    <p class="compare-intro">
+      気になった知育玩具のカードで「<span class="compare-intro-chip">🆚 比較</span>」を押すと、ここに横並びで並べて比較できます。
+      最大 <strong>{{ "4" }}</strong> 件まで選べます。
+    </p>
+
+    <div id="compare-root" class="compare-root">
+      <p class="compare-loading">読み込み中...</p>
+    </div>
+
+    <details class="compare-help">
+      <summary>使い方</summary>
+      <ol>
+        <li>商品一覧（ホーム / <a href="/cospa/">/cospa/</a> / <a href="/deals/">/deals/</a> など）で、カードの「🆚 比較」ボタンを押します。</li>
+        <li>画面下の「比較中 N / 4」バーで「比較する →」をクリック、もしくはこのページを直接開きます。</li>
+        <li>選択は次回訪問時も自動で復元されます（ブラウザの localStorage を使用）。</li>
+      </ol>
+    </details>
+  </div>
+</article>
+{{- end }}

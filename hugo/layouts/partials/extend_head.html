@@ -3,6 +3,9 @@
 <script src="{{ $ageUtil.RelPermalink }}" defer></script>
 {{- $cardUtil := resources.Get "js/utils/product-card.js" | minify | fingerprint -}}
 <script src="{{ $cardUtil.RelPermalink }}" defer></script>
+{{- /* #588 比較モード: 全ページで mount (一覧のカードに toggle 注入 + 下部 floating bar) */ -}}
+{{- $compareJs := resources.Get "js/compare.js" | minify | fingerprint -}}
+<script src="{{ $compareJs.RelPermalink }}" defer></script>
 
 <!-- Google Search Console verification -->
 <meta name="google-site-verification" content="P6g6vzSBBm0bNsbjQ8kQgFhMVgo5c3d7pVEMw1UWDNs" />

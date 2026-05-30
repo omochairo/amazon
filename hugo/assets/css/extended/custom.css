@@ -3718,3 +3718,251 @@ body.dark .score-minichart-bar { background: #374151; }
 [data-theme="dark"] .score-minichart-value,
 body.dark .score-minichart-value { color: #f1f5f9; }
 
+/* ---------- 比較モード (#588) ---------- */
+/* 一覧カードの「🆚 比較」トグル。product-card は <a> なので preventDefault 必須 (JS 側で対応)。
+   absolute で右上に貼り付けて画像 score badge と衝突しないよう top: 8px / right: 8px。 */
+.product-card { position: relative; }
+.feature-item { position: relative; }
+.compare-toggle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid rgba(0,0,0,.12);
+  border-radius: 999px;
+  background: rgba(255,255,255,.92);
+  color: #1f2937;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: background .12s ease, color .12s ease, transform .12s ease, box-shadow .12s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+.compare-toggle:hover { transform: translateY(-1px); box-shadow: 0 3px 8px rgba(0,0,0,.12); }
+.compare-toggle.is-selected {
+  background: #2563eb;
+  border-color: #1d4ed8;
+  color: #fff;
+}
+.compare-toggle-check {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(0,0,0,.06);
+  color: inherit;
+  font-size: 0.8em;
+  line-height: 1;
+}
+.compare-toggle.is-selected .compare-toggle-check { background: rgba(255,255,255,.25); }
+.compare-toggle--limit {
+  animation: compareLimitShake .4s ease;
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+@keyframes compareLimitShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-3px); }
+  75% { transform: translateX(3px); }
+}
+
+/* 浮動バー (画面下固定) */
+.compare-floating-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  background: linear-gradient(180deg, rgba(255,255,255,.92), #ffffff);
+  border-top: 1px solid rgba(0,0,0,.08);
+  box-shadow: 0 -4px 16px rgba(0,0,0,.08);
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+}
+.compare-floating-bar-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.compare-floating-bar-count { flex: 1; font-size: 0.92rem; }
+.compare-floating-bar-count strong { color: #2563eb; font-size: 1.15em; margin: 0 2px; }
+.compare-floating-bar-clear {
+  background: transparent;
+  border: 1px solid #d1d5db;
+  color: #6b7280;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.compare-floating-bar-clear:hover { background: #f3f4f6; }
+.compare-floating-bar-cta {
+  background: #2563eb;
+  color: #fff !important;
+  text-decoration: none !important;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+.compare-floating-bar-cta:hover { background: #1d4ed8; }
+.compare-floating-bar-cta.is-disabled {
+  background: #cbd5e1;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+/* 比較ページ本体 */
+.compare-page .compare-intro {
+  background: #f0f9ff;
+  border-left: 4px solid #0284c7;
+  padding: 12px 14px;
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+.compare-page .compare-intro-chip {
+  display: inline-block;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 0.88em;
+}
+.compare-empty, .compare-loading, .compare-error {
+  padding: 24px 12px;
+  text-align: center;
+  color: #6b7280;
+}
+.compare-error { color: #b91c1c; }
+.compare-table-wrap {
+  overflow-x: auto;
+  margin: 16px -4px;
+  -webkit-overflow-scrolling: touch;
+}
+.compare-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  min-width: 100%;
+}
+.compare-table th[scope="row"] {
+  position: sticky;
+  left: 0;
+  background: #f9fafb;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #4b5563;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  width: 6em;
+  z-index: 2;
+}
+.compare-table td {
+  vertical-align: top;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  min-width: 180px;
+  font-size: 0.92rem;
+}
+.compare-row--image td { text-align: center; }
+.compare-row--image img { max-width: 140px; max-height: 140px; object-fit: contain; }
+.compare-row--name .compare-brand {
+  display: block;
+  font-size: 0.78rem;
+  color: #6b7280;
+  margin-bottom: 2px;
+}
+.compare-name-link { font-weight: 600; color: #1f2937; text-decoration: none; }
+.compare-name-link:hover { text-decoration: underline; }
+.compare-remove {
+  display: inline-block;
+  margin-top: 6px;
+  background: transparent;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  width: 22px;
+  height: 22px;
+  line-height: 1;
+  color: #9ca3af;
+  cursor: pointer;
+}
+.compare-remove:hover { color: #b91c1c; border-color: #fca5a5; }
+.compare-score-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #fef3c7;
+  font-weight: 700;
+}
+.compare-score-badge.score-gold { background: linear-gradient(180deg, #fde68a, #f59e0b); color: #78350f; }
+.compare-score-badge.score-silver { background: linear-gradient(180deg, #e5e7eb, #9ca3af); color: #1f2937; }
+.compare-score-badge.score-bronze { background: linear-gradient(180deg, #fed7aa, #fb923c); color: #7c2d12; }
+.compare-score-badge strong { font-size: 1.4em; }
+.compare-score-suffix { font-size: 0.75em; opacity: .8; }
+.compare-axes { grid-template-columns: 1fr; }  /* 比較表内では 1 軸 1 行で縦詰め */
+.compare-cta {
+  display: inline-block;
+  background: #2563eb;
+  color: #fff !important;
+  text-decoration: none !important;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+.compare-cta:hover { background: #1d4ed8; }
+.compare-help {
+  margin-top: 24px;
+  background: #f9fafb;
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+.compare-help summary { cursor: pointer; font-weight: 600; }
+.compare-help ol { margin: 10px 0 0 1.2em; }
+
+/* mobile: floating bar をコンパクト + 表は横スクロール (.compare-table-wrap で対応済) */
+@media (max-width: 720px) {
+  .compare-toggle-text { display: none; }
+  .compare-toggle { padding: 4px 6px; }
+  .compare-floating-bar-count { font-size: 0.82rem; }
+  .compare-floating-bar-cta { padding: 8px 12px; font-size: 0.85rem; }
+  .compare-table th[scope="row"] { width: 5.2em; font-size: 0.78rem; }
+  .compare-table td { min-width: 150px; font-size: 0.85rem; }
+  .compare-row--image img { max-width: 100px; max-height: 100px; }
+}
+
+/* dark mode */
+[data-theme="dark"] .compare-toggle,
+body.dark .compare-toggle { background: rgba(31,41,55,.92); color: #f1f5f9; border-color: rgba(255,255,255,.12); }
+[data-theme="dark"] .compare-toggle.is-selected,
+body.dark .compare-toggle.is-selected { background: #1d4ed8; color: #fff; }
+[data-theme="dark"] .compare-floating-bar,
+body.dark .compare-floating-bar { background: linear-gradient(180deg, rgba(17,24,39,.92), #0f172a); border-top-color: rgba(255,255,255,.08); }
+[data-theme="dark"] .compare-floating-bar-clear,
+body.dark .compare-floating-bar-clear { color: #cbd5e1; border-color: rgba(255,255,255,.16); }
+[data-theme="dark"] .compare-page .compare-intro,
+body.dark .compare-page .compare-intro { background: #0c1b2a; border-left-color: #38bdf8; color: #e2e8f0; }
+[data-theme="dark"] .compare-page .compare-intro-chip,
+body.dark .compare-page .compare-intro-chip { background: #1e293b; border-color: rgba(255,255,255,.16); color: #f1f5f9; }
+[data-theme="dark"] .compare-table th[scope="row"],
+body.dark .compare-table th[scope="row"] { background: #0f172a; color: #cbd5e1; border-bottom-color: rgba(255,255,255,.08); }
+[data-theme="dark"] .compare-table td,
+body.dark .compare-table td { color: #e2e8f0; border-bottom-color: rgba(255,255,255,.08); }
+[data-theme="dark"] .compare-name-link,
+body.dark .compare-name-link { color: #f1f5f9; }
+[data-theme="dark"] .compare-help,
+body.dark .compare-help { background: #0f172a; color: #cbd5e1; }
+
