@@ -3986,3 +3986,46 @@ body.dark .compare-name-link { color: #f1f5f9; }
 [data-theme="dark"] .compare-help,
 body.dark .compare-help { background: #0f172a; color: #cbd5e1; }
 
+/* 2026-05-31 (#1143): 記事ページ H1 が大きすぎて記事タイトルだけで初期画面が
+   埋まる問題を解消。PaperMod デフォルトの 40px から H2 (1.5rem) に近いサイズへ
+   縮小。clamp で widescreen でもダブつかないようにする。 */
+.post-title {
+  font-size: clamp(1.4rem, 3.2vw, 1.75rem) !important;
+  line-height: 1.35 !important;
+  margin-bottom: 0.6rem !important;
+}
+.post-content .competitor-card h3 {
+  /* 関連する比較レビューのタイトル: 0.9rem → carousel-card-title (0.78rem) と揃え。
+     画像の主張を尊重し、タイトルはアクセントに留める。 */
+  font-size: 0.78rem;
+}
+/* 知育スコアの内訳セクションを collapsible に。詳しく見たい読者だけが展開する。
+   #1143 で導入: 冒頭 hero score block で既に総合点 + レーダー + 軸別数値が出るため、
+   下の細かな加減点根拠は default 折り畳みでスクロール量を減らす。 */
+details.score-breakdown-doc {
+  margin: 1rem 0 1.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--code-bg);
+}
+details.score-breakdown-doc > summary {
+  cursor: pointer;
+  padding: 12px 16px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--primary);
+  list-style: none;
+}
+details.score-breakdown-doc > summary::-webkit-details-marker { display: none; }
+details.score-breakdown-doc > summary::before {
+  content: "▶ ";
+  display: inline-block;
+  margin-right: 6px;
+  font-size: 0.8em;
+  transition: transform 0.2s ease;
+}
+details.score-breakdown-doc[open] > summary::before { transform: rotate(90deg); }
+details.score-breakdown-doc > div {
+  padding: 4px 16px 16px;
+  border-top: 1px solid var(--border);
+}

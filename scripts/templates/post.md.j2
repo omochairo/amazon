@@ -114,8 +114,8 @@
 
 ## <small>{{ product.name }}の</small>🌟 知育スコアの内訳
 
-冒頭で示した知育スコア（おもちゃロボの知育評価スコア）の内訳を、まず 4 軸のスコアでおさらいしてから、寄与の大きい順に **加減点根拠** を並べました。
-
+<details class="score-breakdown-doc"><summary>4 軸の内訳と加減点根拠を見る</summary><div>
+<p>冒頭で示した知育スコア（おもちゃロボの知育評価スコア）の内訳を、まず 4 軸のスコアでおさらいしてから、寄与の大きい順に <strong>加減点根拠</strong> を並べました。</p>
 <div class="score-recap" aria-label="4 軸スコアのおさらい">
 <div class="score-recap-card"><span class="score-recap-axis">📚 知育効果</span><span class="score-recap-value">{{ "%.1f"|format(score.education) }}<small>/5.0</small></span></div>
 <div class="score-recap-card"><span class="score-recap-axis">🕰️ 長く遊べる</span><span class="score-recap-value">{{ "%.1f"|format(score.longevity) }}<small>/5.0</small></span></div>
@@ -123,13 +123,12 @@
 <div class="score-recap-card"><span class="score-recap-axis">💰 コスパ</span><span class="score-recap-value">{{ "%.1f"|format(score.cost_performance) }}<small>/5.0</small></span></div>
 </div>
 <p class="score-recap-note">各軸 5.0 点満点。下の <strong>📖 4 軸の説明</strong> に評価基準の詳細をまとめています。</p>
-
 {% if score.score_rationale %}
 <p class="score-rationale-intro">この 4 軸スコアは、以下の要素を加減点して算出しています。</p>
 <ul class="score-rationale-list">{% for r in score.score_rationale %}<li><strong>{{ r.factor }}<span class="score-delta">（{{ r.delta }}）</span></strong>：{{ r.reason }}</li>{% endfor %}</ul>
 {% endif %}
-
 <details class="score-axes-doc"><summary>📖 知育スコアの 4 軸（評価軸の説明を見る）</summary><div><p><strong>知育スコア（おもちゃロボの知育評価スコア）</strong>は、おもちゃロボが知育玩具を 4 つの観点から 5 点満点で評価し、加重平均で 100 点満点に換算した独自スコアです。</p><ul><li><strong>📚 知育効果 (5点満点)</strong>：年齢に応じた学びや、思考力・想像力・手先の発達への刺激度を評価。</li><li><strong>🕰️ 長く遊べる (5点満点)</strong>：遊び方の幅、年齢を超えた長期的な遊び寿命を評価。</li><li><strong>🛡️ 安全性 (5点満点)</strong>：対象年齢の妥当性、素材・形状・誤飲リスク等の安全配慮を評価。</li><li><strong>💰 コスパ (5点満点)</strong>：価格に対する品質・遊び寿命・教育効果のバランスを評価。</li></ul><p class="score-axes-note">※ スコアは執筆時点の市場データ・レビュー・公式情報をもとに付与しています。実際の感じ方には個人差があります。</p></div></details>
+</div></details>
 
 {% if review_signals %}
 ## <small>{{ product.name }}の</small>💭 レビュー傾向の分析
