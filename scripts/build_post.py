@@ -241,6 +241,29 @@ def _parse_age_min_months(raw: Any) -> int:
     return 0
 
 
+def _get_development_stage(age_min_months: int, stages_data: dict[str, Any]) -> dict[str, Any] | None:
+    """最小月齢から、合致する最適な発達段階のデータを取り出す。"""
+    if not stages_data:
+        return None
+    stage_keys = []
+    for k in stages_data.keys():
+        if k.endswith('m'):
+            try:
+                stage_keys.append(int(k[:-1]))
+            except ValueError:
+                pass
+    stage_keys.sort()
+    
+    selected_key = 0
+    for sk in stage_keys:
+        if age_min_months >= sk:
+            selected_key = sk
+        else:
+            break
+            
+    return stages_data.get(f"{selected_key}m")
+
+
 _TRAILING_BRACKET_RE = re.compile(r"\s*[（(\[【][^）)\]】]*[）)\]】]\s*$")
 
 
@@ -1364,7 +1387,6 @@ def _frontmatter_meta(
     product = data.get("product") or {}
     asin = product.get("asin")
     if not asin:
-        import re
         m = re.search(r"-(B0[A-Z0-9]{8})$", slug, flags=re.IGNORECASE)
         if m:
             asin = m.group(1)
@@ -1548,6 +1570,15 @@ def main() -> None:
     site_base_path = _site_base_path(pathlib.Path(args.hugo_config))
     git_history = _load_git_history(src_path)
 
+    # 年齢別発達段階目安データのロード
+    stages_path = pathlib.Path("hugo/data/development_stages.json")
+    stages_data = {}
+    if stages_path.exists():
+        try:
+            stages_data = json.loads(stages_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"Failed to load development_stages.json: {e}")
+
     template_file = pathlib.Path("scripts/templates/post.md.j2")
     if not template_file.exists():
         print("Template not found")
@@ -1681,6 +1712,18 @@ def main() -> None:
                             f"https://www.amazon.co.jp/dp/{asin_for_review}"
                             "/?tag=zefiransesu-22#customerReviews"
                         )
+            # 年齢別発達段階目安データのマッピング
+            target_age_raw = ""
+            if isinstance(product_obj, dict):
+                target_age_raw = product_obj.get("target_age")
+            if not target_age_raw and isinstance(data.get("persona_fit"), dict):
+                target_age_raw = data["persona_fit"].get("age_range")
+
+            age_months = _parse_age_min_months(target_age_raw)
+            development_stage = _get_development_stage(age_months, stages_data)
+            if development_stage:
+                data["development_stage"] = development_stage
+
             # Issue #515: link_report_flag macro が記事 URL 構築用に slug を参照する。
             data["slug"] = slug
             md_body = template.render(**data)

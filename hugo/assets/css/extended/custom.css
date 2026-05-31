@@ -4034,3 +4034,49 @@ details.score-breakdown-doc > div {
   padding: 4px 16px 16px;
   border-top: 1px solid var(--border);
 }
+
+/* 年齢別発達段階目安のアコーディオン */
+details.development-stage-accordion {
+  margin: 1.5rem 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--code-bg);
+}
+details.development-stage-accordion > summary {
+  cursor: pointer;
+  padding: 14px 16px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--primary);
+  list-style: none;
+}
+details.development-stage-accordion > summary::-webkit-details-marker { display: none; }
+details.development-stage-accordion > summary::before {
+  content: "▶ ";
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 0.8em;
+  transition: transform 0.2s ease;
+}
+details.development-stage-accordion[open] > summary::before {
+  transform: rotate(90deg);
+}
+.development-stage-content {
+  padding: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+.development-stage-content p {
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+.development-stage-content p:last-of-type {
+  margin-bottom: 8px;
+}
+.development-stage-source {
+  display: block;
+  color: var(--secondary);
+  font-size: 0.78rem;
+  margin-top: 12px;
+}
