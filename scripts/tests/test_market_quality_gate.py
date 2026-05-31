@@ -101,5 +101,100 @@ class MatchedPassesQualityTest(unittest.TestCase):
         ))
 
 
+class NonBrandDescriptorGateTest(unittest.TestCase):
+    """Issue #1140: brand head だけで通過する FP を非ブランド descriptor 一致で弾く。"""
+
+    def _check(self, *, title: str, price: int, kw: str, amazon_price: int) -> bool:
+        return build_post._matched_passes_quality(
+            {"title": title, "price": price, "search_keyword": kw},
+            amazon_price,
+        )
+
+    # === FP として弾くべき Mamimami Home 系 (Issue #1140 リスト) ===
+
+    def test_rejects_mamimami_tissue_vs_pazzle(self):
+        """B0DJSB2MPD: kw 'ティッシュ 赤ちゃん' vs 型はめパズル → brand head のみ一致で FP。"""
+        self.assertFalse(self._check(
+            title="Mamimami Home 型はめ パズル 形合わせ はめ込み 木製 パズルボックス モンテッソーリ",
+            price=3944,
+            kw="Mamimami Home ティッシュ 赤ちゃん",
+            amazon_price=3500,
+        ))
+
+    def test_rejects_mamimami_blocks_vs_cube(self):
+        """B0DY7C8SKY: kw '積み木 車' vs アクティビティキューブ → 同上 FP。"""
+        self.assertFalse(self._check(
+            title="Mamimami Home アクティビティキューブ 木製 型はめ モンテッソーリ パズルボックス",
+            price=3962,
+            kw="Mamimami Home 積み木 車",
+            amazon_price=3800,
+        ))
+
+    def test_rejects_mamimami_gakki_vs_box(self):
+        """B0GFWDGHT9: kw '楽器 木製' vs パズルボックス → FP。"""
+        self.assertFalse(self._check(
+            title="Mamimami Home パズルボックス 木製 型はめ モンテッソーリ 知育玩具",
+            price=3500,
+            kw="Mamimami Home 楽器 木製",
+            amazon_price=3200,
+        ))
+
+    # === 通すべき正常ケース (regression guard) ===
+
+    def test_accepts_when_descriptor_substring_hits(self):
+        """正規 Mamimami ティッシュ商品なら descriptor が部分一致して pass。"""
+        self.assertTrue(self._check(
+            title="Mamimami Home ティッシュボックス 赤ちゃん 引っ張り出す 木製 おもちゃ",
+            price=3500,
+            kw="Mamimami Home ティッシュ 赤ちゃん",
+            amazon_price=3500,
+        ))
+
+    def test_accepts_when_no_common_prefix(self):
+        """共通 prefix が無ければ既存 coverage gate に委ねる (新ロジックは spurious fail しない)。"""
+        self.assertTrue(self._check(
+            title="おもちゃ Hape ビーズコインドロップス E0328 木製",
+            price=3000,
+            kw="Hape ビーズコインドロップス E0328",
+            amazon_price=3000,
+        ))
+
+    def test_accepts_when_descriptor_empty(self):
+        """kw が brand head しか無い場合は descriptor 要件を課さない。"""
+        self.assertTrue(self._check(
+            title="タカラトミー リカちゃん 公式 グッズ",
+            price=2500,
+            kw="タカラトミー リカちゃん",  # 2 tokens 全部 prefix
+            amazon_price=2500,
+        ))
+
+    def test_accepts_suffix_variation_via_bidirectional(self):
+        """suffix 揺れ (タッチペン vs タッチペン付) を双方向 substring で吸収する。"""
+        self.assertTrue(self._check(
+            title="BabyBus はじめてのちいくずかん 日本語 英語 中国語 タッチペン 音楽再生 知育玩具",
+            price=8000,
+            kw="BabyBus はじめてのちいくずかん タッチペン付",
+            amazon_price=8000,
+        ))
+
+    def test_accepts_html_entity_decoded(self):
+        """title の &amp; を & に decode してから比較する (パイロット ペン2本&スタンプセット)。"""
+        self.assertTrue(self._check(
+            title="パイロット スイスイおえかき カラフルシート ペン2本&amp;スタンプセット 知育玩具",
+            price=3000,
+            kw="パイロット スイスイおえかき カラフルシート ペン2本&スタンプセット",
+            amazon_price=3000,
+        ))
+
+    def test_accepts_middle_dot_variation(self):
+        """半角中黒 ･ と全角中黒 ・ を同一視 (トイ・ストーリー)。"""
+        self.assertTrue(self._check(
+            title="タカラトミー トミカプレミアム トイ・ストーリー ピザ・プラネット トラック",
+            price=2000,
+            kw="タカラトミー トミカプレミアム トイ･ストーリー ピザ･プラネット",
+            amazon_price=2000,
+        ))
+
+
 if __name__ == "__main__":
     unittest.main()
