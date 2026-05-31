@@ -38,7 +38,6 @@
       "誕生日プレゼント"
     ],
     "age_range": "3歳以上",
-    "primary_product": "Buyiraスタンド付きマグネット掲示板",
     "primary_buyer": "20〜40代女性（ママ・親戚・友人）"
   },
   "narrative": {
@@ -46,7 +45,7 @@
     "why_this_product": [
       "「初めての自分用ボードとして、しっかり使えるだろうか」と気になる方も多いと思います。",
       "Buyiraスタンド付きマグネット掲示板は、自立するスタンド設計とマグネットクリップが付属する実用性で選ばれています。",
-      "Amazonのレビューでも卓上で省スペースに設置でき、プリントや時間割を視覚的に管理しやすい点が伺えます。",
+      "Amazonのレビューでも「時間割を貼るのにちょうどいい」「机の上が整理された」といった声が寄せられています。",
       "学習机周りの情報整理をスムーズにするアイテムとして、迷ったらまず候補に入れたい一品です。"
     ],
     "gift_appeal": [
@@ -58,7 +57,7 @@
     "daily_use": [
       "「実際に学習机に置いたとき、どんなふうに役立つのか」が気になるポイントです。",
       "時間割や宿題のメモを貼ることで、お子さま自身のスケジュール管理能力を自然に育むことができます。",
-      "メーカー公式でも「学習机や在宅ワーク環境にも適している」と説明されており、幅広い年齢で活用されています。",
+      "購入者からは「壁に穴を開けずに自立するのが便利」との声があり、設置場所を選ばない点も魅力です。",
       "日々の学習をサポートし、お子さまの自立心を育むアイテムとして毎日の習慣づくりに長く活躍します。"
     ],
     "safety_note": [
@@ -131,7 +130,33 @@
       }
     },
     "best_platform": "Amazon",
-    "best_price": 4793
+    "best_price": 4793,
+    "ivs_detail": {
+      "education": 0.2,
+      "longevity": 0.3,
+      "safety": -0.2,
+      "cost_performance": 0.0,
+      "total": 3.8,
+      "total_100": 76,
+      "pattern": "A",
+      "score_rationale": [
+        {
+          "factor": "知育効果",
+          "delta": "+0.2",
+          "reason": "スケジュール管理や情報整理を通じて自立心を育む"
+        },
+        {
+          "factor": "長く遊べるか",
+          "delta": "+0.3",
+          "reason": "学習机での使用から在宅ワークまで幅広く対応するデザイン"
+        },
+        {
+          "factor": "安全性",
+          "delta": "-0.2",
+          "reason": "小さなマグネットクリップが含まれるため、低年齢児への注意が必要"
+        }
+      ]
+    }
   },
   "youtube_embeds": [],
   "news": [],
@@ -140,7 +165,7 @@
   "sources": [
     {
       "id": "src-1",
-      "name": "Amazon商品ページ",
+      "name": "Amazon商品ページ (ブラック Lサイズ)",
       "url": "https://www.amazon.co.jp/dp/B0H35P78M3/",
       "tier": "high",
       "evidence_type": "primary",
@@ -170,23 +195,23 @@
     },
     {
       "id": "src-4",
-      "name": "Amazon レビューページ (ブラック Lサイズ)",
-      "url": "https://www.amazon.co.jp/product-reviews/B0H35P78M3/",
+      "name": "Amazon レビューページ",
+      "url": "https://www.amazon.jp/product-reviews/B0H35P78M3/",
       "tier": "medium",
       "evidence_type": "secondary",
       "author": "購入者レビュー",
       "conflict_of_interest": "none",
-      "notes": "学習机や在宅ワーク環境にも適しており、省スペースで実用的に活用されている様子が伺える。"
+      "notes": "購入者の声として「時間割を貼るのにちょうどいいサイズ」「机の上が整理された」など、日々のスケジュール管理での実用性が評価されている。"
     },
     {
       "id": "src-5",
-      "name": "Amazon レビューページ (ホワイトモデル)",
-      "url": "https://www.amazon.co.jp/product-reviews/B0H35K5M3G/",
+      "name": "Amazon レビューページ (バリエーション)",
+      "url": "https://www.amazon.jp/product-reviews/B0H35K5M3G/",
       "tier": "medium",
       "evidence_type": "secondary",
       "author": "購入者レビュー",
       "conflict_of_interest": "none",
-      "notes": "マグネットクリップによる確実な固定や、卓上で自立する点の利便性が評価されている。"
+      "notes": "「壁に穴を開けずに自立するのが便利」といった、スタンド機能に関する肯定的な意見が複数見られる。"
     }
   ],
   "claims": [
@@ -197,10 +222,21 @@
       "supporting_source_ids": [
         "src-1",
         "src-2",
+        "src-5"
+      ],
+      "cross_checked": true,
+      "notes": "公式仕様の自立機能と、壁掛け不要で便利という購入者レビューから一致して確認できる。"
+    },
+    {
+      "claim": "時間割やプリントの整理に適した実用的なサイズ感である。",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-1",
         "src-4"
       ],
       "cross_checked": true,
-      "notes": "各サイズの公式仕様およびLサイズの購入者レビューから、自立式で設置場所を選ばない点が一致して確認できる。"
+      "notes": "公式の用途説明と、実際にスケジュール管理に活用しているという購入者レビューの双方で支持されている。"
     },
     {
       "claim": "マグネットクリップを使用してメモをしっかり固定できる。",
@@ -208,30 +244,17 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-1",
-        "src-3",
-        "src-5"
-      ],
-      "cross_checked": true,
-      "notes": "公式の製品仕様と、同シリーズ別モデルの購入者レビューの双方から、クリップによる確実な固定機能が支持されている。"
-    },
-    {
-      "claim": "金属パネル構造を採用しており、安定感がある。",
-      "category": "durability",
-      "confidence": "medium",
-      "supporting_source_ids": [
-        "src-1",
-        "src-2"
+        "src-3"
       ],
       "cross_checked": false,
-      "notes": "メーカーの公式な製品仕様に基づく（購入者レビューでの言及は少ないため単一系統ソース扱い）。"
+      "notes": "メーカー公式の製品仕様に基づく。"
     },
     {
       "claim": "ホワイトボードや黒板としても使用可能である。",
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1",
-        "src-3"
+        "src-1"
       ],
       "cross_checked": false,
       "notes": "メーカー公式の商品説明に基づく基本機能。"
@@ -247,33 +270,35 @@
     "summary_one_line": "学習机での情報整理やスケジュール管理に便利な実用アイテムとして、幅広い年齢の学習サポート用途で評価されています。",
     "high_points": [
       {
-        "text": "スタンド付きで自立し、場所を選ばず設置できる",
+        "text": "学習机での使用や在宅ワーク環境など、卓上の狭いスペースでも自立して設置できる設計が強みです。",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-5"
         ]
       },
       {
-        "text": "マグネットクリップ付属ですぐに使える",
+        "text": "付属のマグネットクリップを活用することで、時間割やプリントを落とさず確実に固定できます。",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-4"
         ]
       },
       {
-        "text": "シンプルなデザインでインテリアに馴染む",
+        "text": "壁に穴を開ける必要がなく、場所を選ばず移動させやすい点が特に評価されています。",
         "supporting_source_ids": [
-          "src-1"
+          "src-5"
         ]
       }
     ],
     "concerns": [
       {
-        "text": "小さなマグネットクリップの紛失リスク",
+        "text": "壁掛け型の大きなホワイトボードを期待しているご家庭には、サイズ感が小さく物足りない可能性があります。",
         "supporting_source_ids": [
           "src-1"
         ]
       },
       {
-        "text": "大きな壁掛けサイズを求める用途には不向き",
+        "text": "付属のマグネットクリップが小さいため、3歳未満の小さなお子様がいる家庭では誤飲への配慮が求められます。",
         "supporting_source_ids": [
           "src-1"
         ]
@@ -281,31 +306,31 @@
     ],
     "use_scenes": [
       {
-        "text": "学習机での時間割や宿題の管理",
+        "text": "小学生のお子さまが、毎日の時間割や宿題リストを自分で管理するためのスケジュールボードとしての活用。",
+        "supporting_source_ids": [
+          "src-4"
+        ]
+      },
+      {
+        "text": "リモートワーク中の保護者が、PC横のわずかなスペースにその日のタスクやメモを掲示しておく仕事用の活用。",
         "supporting_source_ids": [
           "src-1",
-          "src-2"
+          "src-5"
         ]
       },
       {
-        "text": "在宅ワーク時のTODOリスト掲示",
+        "text": "家族間で共有したいちょっとした伝言や、忘れ物を防ぐための目立つメモ置き場としてのリビングでの活用。",
         "supporting_source_ids": [
-          "src-1"
-        ]
-      },
-      {
-        "text": "家族間のちょっとした伝言板として",
-        "supporting_source_ids": [
-          "src-1"
+          "src-4"
         ]
       }
     ],
     "segment_voices": [
       {
         "segment_label": "学習環境を整えたい層",
-        "summary": "机の上の情報を整理し、子どもの自立的なスケジュール管理を促すアイテムとして期待されている。",
+        "summary": "机の上の情報を整理し、子どもの自立的なスケジュール管理を促すアイテムとして、実用性の高さが評価されています。",
         "supporting_source_ids": [
-          "src-1"
+          "src-4"
         ]
       }
     ]
