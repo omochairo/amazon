@@ -29,7 +29,13 @@ import jinja2
 
 from brand_normalizer import normalize as normalize_brand
 from build_feature_lists import PRICE_BANDS
-from score_calculator import ScoreResult, calculate as calculate_score, compute_ivs_axes
+from score_calculator import (
+    ScoreResult,
+    calculate as calculate_score,
+    compute_ivs_axes,
+    get_media_exposure_metrics,
+    reset_media_exposure_metrics,
+)
 
 
 SUFFIX_SKIP = (".enrichment", ".seo", ".quality")
@@ -1565,6 +1571,13 @@ def main() -> None:
         "books": {"primary": 0, "fallback": 0, "missing": 0},
         "omcha": {"primary": 0, "fallback": 0, "missing": 0},
     }
+    # #677: per-ASIN fallback breakdown. ``manifest["by_asin"][asin]["fallbacks"]``
+    # records which path each media source took (primary / fallback_used / missing)
+    # for drill-down beyond the aggregate summary.
+    by_asin: dict[str, dict[str, Any]] = {}
+    # score_calculator の missing/empty counter は build_post 経由の calculate_score
+    # 呼出で蓄積されるため、明示的にリセットしてから loop を回す。
+    reset_media_exposure_metrics()
 
     for f in sorted(src_path.glob("*.json")):
         if f.stem.endswith(SUFFIX_SKIP):
@@ -1602,18 +1615,28 @@ def main() -> None:
             _fill_jsonld(data)
 
             # 統計データの集計
+            _po = data.get("product")
+            asin_for_manifest = _po.get("asin") if isinstance(_po, dict) else ""
+            per_article_fallbacks: dict[str, str] = {}
+
             def _update_stats(key: str, has_jules: bool, has_final: bool) -> None:
                 if has_jules:
                     stats[key]["primary"] += 1
+                    per_article_fallbacks[key] = "primary"
                 elif has_final:
                     stats[key]["fallback"] += 1
+                    per_article_fallbacks[key] = "fallback_used"
                 else:
                     stats[key]["missing"] += 1
+                    per_article_fallbacks[key] = "missing"
 
             _update_stats("youtube", has_jules_yt, bool(data.get("youtube_embeds")))
             _update_stats("news", has_jules_news, bool(data.get("news")))
             _update_stats("books", has_jules_books, bool(data.get("books")))
             _update_stats("omcha", has_jules_omcha, bool(data.get("omcha_related")))
+
+            if asin_for_manifest:
+                by_asin[asin_for_manifest] = {"fallbacks": per_article_fallbacks}
 
             _meta_re = re.compile(r"\s*[(（]\s*\d+\s*字\s*[)）]\s*$")
             if isinstance(data.get("narrative"), dict):
@@ -1706,7 +1729,13 @@ def main() -> None:
             "news": stats["news"],
             "books": stats["books"],
             "omcha": stats["omcha"],
-        }
+            # #677: score_calculator が記録した missing (file 不在) と empty
+            # (file 有り API 0 hit) を分離して可視化。
+            "media_exposure_metrics": get_media_exposure_metrics().as_dict(),
+        },
+        # #677: per-ASIN の fallback breakdown。`gh run view` から個別 ASIN の
+        # 状態をドリルダウン確認するために残す。
+        "by_asin": by_asin,
     }
     try:
         (manifest_dir / "build_manifest.json").write_text(
@@ -1726,6 +1755,8 @@ def main() -> None:
         def _cov_pct(primary: int, fallback: int, total: int) -> str:
             return f"{(primary + fallback) / total * 100:.1f}%" if total > 0 else "0.0%"
 
+        me = get_media_exposure_metrics().as_dict()
+        me_total = me["total"] or rendered
         summary_md = f"""
 ## Build Manifest ({rendered} articles)
 
@@ -1735,6 +1766,16 @@ def main() -> None:
 | **News** | {_pct(stats['news']['primary'], rendered)} | {_pct(stats['news']['fallback'], rendered)} | {_pct(stats['news']['missing'], rendered)} | {_cov_pct(stats['news']['primary'], stats['news']['fallback'], rendered)} |
 | **Books** | {_pct(stats['books']['primary'], rendered)} | {_pct(stats['books']['fallback'], rendered)} | {_pct(stats['books']['missing'], rendered)} | {_cov_pct(stats['books']['primary'], stats['books']['fallback'], rendered)} |
 | **omcha** | {_pct(stats['omcha']['primary'], rendered)} | {_pct(stats['omcha']['fallback'], rendered)} | {_pct(stats['omcha']['missing'], rendered)} | {_cov_pct(stats['omcha']['primary'], stats['omcha']['fallback'], rendered)} |
+
+### Score calculator media-exposure ({me_total} ASIN)
+
+`missing` = per-ASIN cache file 不在 (fetch サイクル未到達) / `empty` = file 有り API 0 hit。Issue #677。
+
+| Source | missing | empty |
+| :--- | :---: | :---: |
+| YouTube | {_pct(me['yt_missing'], me_total)} | {_pct(me['yt_empty'], me_total)} |
+| News | {_pct(me['news_missing'], me_total)} | {_pct(me['news_empty'], me_total)} |
+| omcha | {_pct(me['omcha_missing'], me_total)} | {_pct(me['omcha_empty'], me_total)} |
 """
         try:
             with open(summary_env, "a", encoding="utf-8") as sf:

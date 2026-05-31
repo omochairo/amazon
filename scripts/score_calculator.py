@@ -222,6 +222,50 @@ def _edu_value_score(article: dict, brand: NormalizedBrand) -> tuple[int, str]:
     return pts, reason
 
 
+@dataclass
+class _MediaExposureMetrics:
+    """Counter for ``_media_exposure_score`` data availability per ASIN.
+
+    Distinguishes between "fetch cycle未到達" (file absent) and "API returned 0
+    hits" (file present but empty). Issue #677.
+    """
+
+    total: int = 0
+    yt_missing: int = 0
+    yt_empty: int = 0
+    news_missing: int = 0
+    news_empty: int = 0
+    omcha_missing: int = 0
+    omcha_empty: int = 0
+
+    def as_dict(self) -> dict[str, int]:
+        return {
+            "total": self.total,
+            "yt_missing": self.yt_missing,
+            "yt_empty": self.yt_empty,
+            "news_missing": self.news_missing,
+            "news_empty": self.news_empty,
+            "omcha_missing": self.omcha_missing,
+            "omcha_empty": self.omcha_empty,
+        }
+
+
+_METRICS = _MediaExposureMetrics()
+
+
+def get_media_exposure_metrics() -> _MediaExposureMetrics:
+    """Snapshot of the missing/empty counters accumulated since import (or last
+    ``reset_media_exposure_metrics`` call). Consumed by build_post manifest
+    output (Issue #677)."""
+    return _METRICS
+
+
+def reset_media_exposure_metrics() -> None:
+    """Reset the module-level metrics counters. Useful for tests."""
+    global _METRICS
+    _METRICS = _MediaExposureMetrics()
+
+
 def _count_items(path: pathlib.Path) -> int:
     if not path.exists():
         return 0
@@ -231,6 +275,22 @@ def _count_items(path: pathlib.Path) -> int:
         return 0
     items = data.get("items") if isinstance(data, dict) else data
     return len(items) if isinstance(items, list) else 0
+
+
+def _file_state(path: pathlib.Path) -> str:
+    """Return ``"missing"`` / ``"empty"`` / ``"present"`` for an items-file
+    cache path. Reused by ``_media_exposure_score`` to distinguish
+    fetch-cycle-未到達 from API-returned-0-hits without re-reading the file."""
+    if not path.exists():
+        return "missing"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return "missing"
+    items = data.get("items") if isinstance(data, dict) else data
+    if isinstance(items, list) and items:
+        return "present"
+    return "empty"
 
 
 def _omcha_top_score(path: pathlib.Path) -> int:
@@ -265,9 +325,28 @@ def _media_exposure_score(
         reason = "ASIN 情報が不足しているため、メディア露出は中立評価としています。"
         return floor, reason
     d = repo_root / "data" / "raw" / "per_asin" / asin
-    yt = _count_items(d / "youtube.json")
-    nw = _count_items(d / "news.json")
-    om_top = _omcha_top_score(d / "omcha_related.json")
+    yt_path = d / "youtube.json"
+    news_path = d / "news.json"
+    omcha_path = d / "omcha_related.json"
+    yt_state = _file_state(yt_path)
+    news_state = _file_state(news_path)
+    omcha_state = _file_state(omcha_path)
+    _METRICS.total += 1
+    if yt_state == "missing":
+        _METRICS.yt_missing += 1
+    elif yt_state == "empty":
+        _METRICS.yt_empty += 1
+    if news_state == "missing":
+        _METRICS.news_missing += 1
+    elif news_state == "empty":
+        _METRICS.news_empty += 1
+    if omcha_state == "missing":
+        _METRICS.omcha_missing += 1
+    elif omcha_state == "empty":
+        _METRICS.omcha_empty += 1
+    yt = _count_items(yt_path)
+    nw = _count_items(news_path)
+    om_top = _omcha_top_score(omcha_path)
     yt_p = 6 if yt >= 3 else 3 if yt >= 1 else 0
     nw_p = 5 if nw >= 2 else 2 if nw >= 1 else 0
     om_p = 4 if om_top >= 30 else 3 if om_top >= 15 else 2 if om_top >= 10 else 0
@@ -480,6 +559,16 @@ def _cli() -> None:
         bd_str = f"BT:{bd['brand_tier']} SF:{bd['safety_cert']} AG:{bd['age_fit']} EV:{bd['edu_value']} ME:{bd['media_exposure']} MK:{bd['multi_market']} PV:{bd['price_value']}"
         print(
             f"{asin:12} {r.ivs_score:>5} {r.total_100:>5}  {b.canonical}[{b.tier}]   {bd_str}"
+        )
+
+    m = get_media_exposure_metrics()
+    if m.total:
+        print(
+            "score_calc media-exposure: "
+            f"yt_missing={m.yt_missing}/{m.total} (empty={m.yt_empty}), "
+            f"news_missing={m.news_missing}/{m.total} (empty={m.news_empty}), "
+            f"omcha_missing={m.omcha_missing}/{m.total} (empty={m.omcha_empty}). "
+            "missing=fetch サイクル未到達 / empty=API で 0 hit"
         )
 
 
