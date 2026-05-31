@@ -16,6 +16,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import pathlib
 import re
@@ -867,6 +868,43 @@ _MARKET_GENERIC_TOKENS = frozenset({
     "木製", "木のおもちゃ", "セット", "玩具",
 })
 
+# 型番ハイフン揺れを吸収 (例: 'RD-6' vs 'RD−6' / 'EH-2310' vs 'EH−2310').
+# title vs kw の substring 判定で false negative を防ぐ。Issue #1140 で
+# B09BQMCSFL (kw 'RD-6' vs title 'RD−6') が descriptor 不一致と誤判定された対応。
+_HYPHEN_VARIANTS_RE = re.compile(r"[‐‑‒–—―−ー]")
+# 中黒 (半角 ﾟ・ U+FF65 / 全角 ・ U+30FB / 半角 ･ U+FF65) を 1 文字に統一。
+# 'トイ・ストーリー' vs 'トイ･ストーリー' を同一視。
+_MIDDOT_VARIANTS_RE = re.compile(r"[･・]")
+
+
+def _normalize_for_match(s: str) -> str:
+    if not s:
+        return s
+    s = html.unescape(s)  # '&amp;' → '&' 等の HTML entity を吸収
+    s = _HYPHEN_VARIANTS_RE.sub("-", s)
+    s = _MIDDOT_VARIANTS_RE.sub("・", s)
+    return s
+
+
+def _descriptor_hits_title(descriptor: str, title_norm: str, title_tokens_norm: list) -> bool:
+    """Issue #1140: descriptor token が title に「実質的に」出現するか。
+
+    1. 正規化後の substring 一致 (タッチペン → 'タッチペン...' を含む title)
+    2. title token が descriptor の substring (タッチペン付 ⊃ タッチペン)
+       → suffix 表記揺れ (付/版/セット) を吸収
+    3. 先頭/末尾の punctuation を剥がして再判定 ('-Switch' → 'Switch')
+    """
+    d = _normalize_for_match(descriptor)
+    if d in title_norm:
+        return True
+    for tt in title_tokens_norm:
+        if len(tt) >= 3 and tt in d:
+            return True
+    d_stripped = d.strip("-_/.,;:!?()[]{}<>")
+    if d_stripped and d_stripped != d and len(d_stripped) >= 3 and d_stripped in title_norm:
+        return True
+    return False
+
 
 def _load_matched_index(path: pathlib.Path) -> dict[str, dict[str, Any]]:
     """data/raw/{rakuten,yahoo}_matched.json を ``{asin: item}`` に展開。"""
@@ -912,7 +950,8 @@ def _matched_passes_quality(matched: dict[str, Any], amazon_price: int) -> bool:
     meaningful = [t for t in kw_tokens if t not in _MARKET_GENERIC_TOKENS]
     if not meaningful:
         return True  # 区別語が無ければ cross-search 側 median band の選出を尊重
-    hits = sum(1 for t in meaningful if t in title)
+    title_norm = _normalize_for_match(title)
+    hits = sum(1 for t in meaningful if _normalize_for_match(t) in title_norm)
     threshold = 2 if len(meaningful) >= 2 else 1
     if hits < threshold:
         return False
@@ -920,6 +959,29 @@ def _matched_passes_quality(matched: dict[str, Any], amazon_price: int) -> bool:
     # シリーズ違い/別モデルの誤マッチが多いため verified=False に格下げ。
     if hits / len(meaningful) < _MARKET_COVERAGE_RATIO:
         return False
+    # Issue #1140: 非ブランド descriptor 一致を必須化。
+    # search_keyword は extract_search_keyword で「brand head (先頭 1-2 token) +
+    # descriptor」の構造になる。Mamimami Home のようなカテゴリ横断ブランドだと
+    # brand head だけが title と一致して通過し、descriptor (ティッシュ/積み木/楽器)
+    # が別商品とずれていても FP として救済されてしまう (relax_both で 4 件確認)。
+    # kw と matched title の共通 leading token prefix を brand head とみなし、
+    # それ以外の descriptor から最低 1 token は title に含まれることを要求する。
+    title_tokens = [t for t in re.split(r"\s+", title) if t]
+    prefix_len = 0
+    for kt, tt in zip(kw_tokens, title_tokens):
+        if _normalize_for_match(kt) == _normalize_for_match(tt):
+            prefix_len += 1
+        else:
+            break
+    if prefix_len >= 1:
+        descriptor = [
+            t for t in kw_tokens[prefix_len:]
+            if len(t) >= 2 and t not in _MARKET_GENERIC_TOKENS
+        ]
+        if descriptor:
+            title_tokens_norm = [_normalize_for_match(t) for t in title_tokens if len(t) >= 2]
+            if not any(_descriptor_hits_title(d, title_norm, title_tokens_norm) for d in descriptor):
+                return False
     return True
 
 
