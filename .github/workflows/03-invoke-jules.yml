@@ -43,6 +43,25 @@ jobs:
         run: |
           set -e
           REPO=${{ github.repository }}
+          # 2026-05-31 (#1198): Jules daily PR cap。02-publish → invoke-jules → 8 PR
+          # の自己増殖ループで 2026-05-31 に Jules quota を 800 session 級まで溢れた。
+          # 当日 google-labs-jules[bot] が起票した PR 数を gh search で取得し、
+          # 上限超なら count=0 で early return (downstream は count != '0' gate で skip)。
+          # workflow_dispatch (手動 override) は cap を bypass — 緊急時の人手 dispatch を残す。
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            DAILY_CAP=30
+            TODAY=$(date -u +%Y-%m-%d)
+            JULES_PR_TODAY=$(gh pr list -R "$REPO" --state all \
+              --search "author:app/google-labs-jules created:$TODAY" \
+              --json number --jq 'length' 2>/dev/null || echo 0)
+            echo "Jules PRs today: $JULES_PR_TODAY / cap $DAILY_CAP"
+            if [ "$JULES_PR_TODAY" -ge "$DAILY_CAP" ]; then
+              echo "Daily Jules PR cap reached; skipping pick + downstream."
+              echo "count=0" >> "$GITHUB_OUTPUT"
+              echo "asins=" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
           gh pr list --repo $REPO --state open --json title \
             --jq '.[].title' > /tmp/open_titles.txt || echo "" > /tmp/open_titles.txt
           # 既存 lock ブランチ (jules-lock/<ASIN>) を exclusion に追加。
