@@ -131,7 +131,32 @@
       }
     },
     "best_platform": "Amazon",
-    "best_price": 1677
+    "best_price": 1677,
+    "ivs_detail": {
+      "education": 8,
+      "longevity": 8,
+      "safety": 7,
+      "cost_performance": 9,
+      "total": 8.0,
+      "score_rationale": [
+        {
+          "factor": "知育効果",
+          "delta": "+2",
+          "reason": "空間認識能力と論理的思考力を同時に鍛えられる設計"
+        },
+        {
+          "factor": "コストパフォーマンス",
+          "delta": "+1",
+          "reason": "Amazonにて手頃な価格帯で入手可能で負担が少ない"
+        },
+        {
+          "factor": "ギフト適性",
+          "delta": "+1",
+          "reason": "コンパクトで年齢を問わず遊べるため汎用性が高い"
+        }
+      ],
+      "total_100": 80
+    }
   },
   "youtube_embeds": [],
   "news": [],
@@ -170,6 +195,28 @@
       "author": "販売店",
       "conflict_of_interest": "possible",
       "notes": "コンパクトで持ち運びしやすい。プレゼント用途としての展開。"
+    },
+    {
+      "id": "src-4",
+      "name": "Wikipedia / 知育玩具",
+      "url": "https://ja.wikipedia.org/wiki/%E7%9F%A5%E8%82%B2%E7%8E%A9%E5%85%B7",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-05-31",
+      "author": "Wikipedia",
+      "conflict_of_interest": "none",
+      "notes": "知育玩具の一般的定義。幼児や児童の知能的発達を促進する目的を持つ。"
+    },
+    {
+      "id": "src-5",
+      "name": "Wikipedia / パズル",
+      "url": "https://ja.wikipedia.org/wiki/%E3%83%91%E3%82%BA%E3%83%AB",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-05-31",
+      "author": "Wikipedia",
+      "conflict_of_interest": "none",
+      "notes": "パズルは論理的思考や直感を鍛える娯楽として知られる。"
     }
   ],
   "claims": [
