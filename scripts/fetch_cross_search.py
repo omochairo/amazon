@@ -44,6 +44,17 @@ _KANJI_DIGIT_TOKEN = re.compile(r'^[一二三四五六七八九十]$')
 # 型番: 英大文字+数字を**両方**含む 4〜12 文字。BEYBLADE / TOMICA / T-SPARK 等の
 # 単語シリーズ名 (英字のみ) を誤検出しないように数字を必須にする。
 _MODEL_PATTERN = re.compile(r'^(?=[A-Z0-9\-]{4,12}$)(?=.*[A-Z])(?=.*[0-9])[A-Z0-9\-]+$')
+# Issue #1087 Phase 2: タイトル中盤の固有商品名 (e.g. メロディーゴーラウンド,
+# クラシックドラム) を product identifier として優先採用するための判定。長め (8 文字
+# 以上) の純カタカナ token は generic 修飾語ではなく商品/シリーズ名である確度が高い。
+_KATAKANA_PRODUCT_RE = re.compile(r'^[゠-ヿー・]+$')
+_KATAKANA_PRODUCT_MIN_LEN = 8
+# Issue #1087 Phase 2: noise 除去で「以上 / 以下 / 向け / から」等の age 修飾語が
+# 末尾に残ると kw 末尾が無意味なものになり、検索 noise を増やすので token として除去。
+_STOP_TOKENS = frozenset({
+    '以上', '以下', '前後', '向け', 'から', 'まで', '対応',
+    '入り', '入', '版', '用',
+})
 # Rakuten Stage3 で短縮した結果これだけになる場合、汎用過ぎてマッチが事故るため
 # 短縮検索を抑止するブランド/シリーズ語
 _GENERIC_BRAND_TOKENS = {
@@ -90,6 +101,14 @@ def extract_search_keyword(title):
     ブランド名 + 型番を最優先し、なければブランド名 + 商品シリーズ名にする。
     末尾が数字トークンで終わると Rakuten Ichiba が HTTP 400 を返すため、
     年齢を表す数字/数字+歳/漢数字単独トークンは除去する。
+
+    Issue #1087 Phase 2 改善:
+    - noise 除去を「トークン化後の完全一致」に変更 (旧 substring 置換は
+      "木製おもちゃのだいわ" のような noise 内包ブランドを破壊していた)。
+    - 型番が見つからないとき、タイトル中盤の長い純カタカナ token (8 文字以上)
+      を product identifier として優先採用 (例: メロディーゴーラウンド,
+      クラシックドラム, レインボーアバカス)。
+    - 末尾 "以上"/"以下"/"向け" 等の age 修飾語 token を除去。
     """
     # 1. 記号 ! と ！ やその他装飾記号をスペースに置換 (ノイズ記号のクリーンアップ)
     clean = re.sub(r'[!！?？♪]', ' ', title)
@@ -110,20 +129,38 @@ def extract_search_keyword(title):
     # - 単位付き数値: 15cm, 1.5kg, 500g, 2.4mm, 100ml, 1000ピース, 90pcs, 10個, 24色 など
     clean = re.sub(r'\d+(?:\.\d+)?\s*(?:cm|mm|m|kg|g|ml|l|pcs|ピース|個|色|枚|倍|pt|L|才|歳)(?=\s|$|[^a-zA-Z0-9])', ' ', clean, flags=re.IGNORECASE)
 
-    # 4. ノイズ語除去
-    noise = ['送料無料', 'ポイント10倍', '正規品', '公式', '最新', '予約',
-             'おまけ付き', 'ラッピング無料', 'あす楽', '即納', '税込',
-             '知育玩具', 'おもちゃ', 'プレゼント', '誕生日', 'ギフト',
-             '2個セット', '3歳から', '男の子', '女の子', '対象年齢']
-    for n in noise:
+    # 4a. substring で剥がしても誤爆しない short Latin / 記号系 noise は string-replace で除去
+    sub_noise = ['送料無料', 'ポイント10倍', '正規品', '公式', '最新', '予約',
+                 'おまけ付き', 'ラッピング無料', 'あす楽', '即納', '税込',
+                 '2個セット', '3歳から', '対象年齢',
+                 # Issue #1087 Phase 2: マーケ/受賞修飾語。B001A29UQW で
+                 # 'グッドデザイン賞 グッド・トイ賞 受賞' の 3 語が tokens[:4] を埋めて
+                 # 商品名 'アースカイト' を押し出す問題を緩和。
+                 'グッドデザイン賞', 'グッド・トイ賞', 'グッドトイ賞']
+    for n in sub_noise:
         clean = clean.replace(n, ' ')
 
     tokens = [t for t in clean.split() if t]
     if not tokens:
         return title[:40]
 
+    # 4b. トークン化後に「完全一致」だけ落とす noise (おもちゃ / 知育玩具 等)。
+    #     旧来の substring 除去は "木製おもちゃのだいわ" や "木のおもちゃ" のブランド
+    #     /シリーズ語内に紛れた noise を意図せず破壊していた (Issue #1087 Phase 2)。
+    token_noise = frozenset({
+        '知育玩具', 'おもちゃ', 'プレゼント', '誕生日', 'ギフト',
+        '男の子', '女の子', '子供', '子ども', '幼児', '赤ちゃん',
+        # Issue #1087 Phase 2: 受賞/人気フラグも brand+受賞 で kw が埋まる原因
+        '受賞', '人気',
+    })
+    tokens = [t for t in tokens if t not in token_noise]
+    if not tokens:
+        return title[:40]
+
     # 年齢を表すトークン (純数字 / 数字+歳 / 漢数字単独) は API が嫌うので全て除去
     tokens = [t for t in tokens if not _is_age_token(t)]
+    # 末尾装飾語 (以上/以下/向け) を除去
+    tokens = [t for t in tokens if t not in _STOP_TOKENS]
     if not tokens:
         return title[:40]
 
@@ -136,8 +173,20 @@ def extract_search_keyword(title):
         keyword_tokens = _dedupe_tokens(head + [models[0]])
         keyword = " ".join(keyword_tokens)
     else:
-        # フォールバック: 最初の方の単語をまとめる
-        keyword = " ".join(_dedupe_tokens(tokens[:4])).strip()
+        # 型番なし: タイトル中盤の長い純カタカナ token を product identifier として優先。
+        # Issue #1087 Phase 2: ブランド head + メロディーゴーラウンド のような商品名で
+        # B08DCHWRJC タイプの「楽器/音色 等の generic 語に流れて別商品マッチ」を回避。
+        head = tokens[:2]
+        katakana_long = [
+            t for t in tokens[2:]
+            if _KATAKANA_PRODUCT_RE.match(t) and len(t) >= _KATAKANA_PRODUCT_MIN_LEN
+        ]
+        if katakana_long:
+            keyword_tokens = _dedupe_tokens(head + [katakana_long[0]])
+        else:
+            # フォールバック: 最初の方の単語をまとめる
+            keyword_tokens = _dedupe_tokens(tokens[:4])
+        keyword = " ".join(keyword_tokens).strip()
         if len(keyword) < 3:
             keyword = " ".join(_dedupe_tokens(tokens[:6])).strip()
 
