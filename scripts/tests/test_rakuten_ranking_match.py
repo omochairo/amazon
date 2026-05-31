@@ -158,5 +158,140 @@ class MatchRankingItemTest(unittest.TestCase):
         self.assertEqual((asin, stage), ("B0001", "stage1"))
 
 
+class ArticleAsinIndexTest(unittest.TestCase):
+    """Issue #1149: _build_article_asins / 記事ありき gate のテスト。"""
+
+    def test_extracts_asin_from_post_filenames(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            for name in [
+                "2026-05-31-B0FRMFZW29.md",  # 正規
+                "2026-05-30-b076zdqb15.md",  # 小文字でも拾う
+                "2026-01-01-B0XXXXXXXX.md",  # 別 ASIN
+                "_index.md",                 # 拾わない
+                "draft-note.md",             # 拾わない
+            ]:
+                (root / name).write_text("---\n---\n", encoding="utf-8")
+            asins = fetch_rakuten._build_article_asins(root)
+            self.assertEqual(asins, {"B0FRMFZW29", "B076ZDQB15", "B0XXXXXXXX"})
+
+    def test_returns_empty_when_missing(self):
+        self.assertEqual(
+            fetch_rakuten._build_article_asins(pathlib.Path("/no/such/posts")),
+            set(),
+        )
+
+    def test_match_filters_out_asin_without_article(self):
+        itemcode_idx = {"shopa:1": "B0001"}
+        jan_idx = {"4904810642602": "B0002"}
+        article_asins = {"B0002"}  # B0001 は記事無し
+        # itemCode は当たるが記事無し → unmatched
+        item1 = {"itemCode": "shopa:1", "title": "x", "itemCaption": ""}
+        self.assertEqual(
+            fetch_rakuten._match_ranking_item(item1, itemcode_idx, jan_idx, article_asins),
+            ("", ""),
+        )
+        # JAN は当たり記事あり → stage2_jan
+        item2 = {"itemCode": "", "title": "x", "itemCaption": "JAN 4904810642602"}
+        self.assertEqual(
+            fetch_rakuten._match_ranking_item(item2, itemcode_idx, jan_idx, article_asins),
+            ("B0002", "stage2_jan"),
+        )
+
+    def test_match_without_article_filter_is_backward_compatible(self):
+        # article_asins=None なら従来通り全マッチ許容
+        itemcode_idx = {"shopa:1": "B0001"}
+        jan_idx = {}
+        item = {"itemCode": "shopa:1", "title": "x", "itemCaption": ""}
+        self.assertEqual(
+            fetch_rakuten._match_ranking_item(item, itemcode_idx, jan_idx, None),
+            ("B0001", "stage1"),
+        )
+
+
+class RematchOnlyTest(unittest.TestCase):
+    """Issue #1149: --rematch-only モードが既存 weekly.json を現行 indices で再マッチし、
+    記事の無い ASIN は unmatched 扱いにすることを検証する。"""
+
+    def test_rematch_links_newly_added_article(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            (root / "data/raw/per_asin/B0NEW00001").mkdir(parents=True)
+            (root / "data/raw/per_asin/B0NEW00001/amazon.json").write_text(
+                json.dumps({"item": {"jan_code": "4904810000001"}}), encoding="utf-8"
+            )
+            (root / "data/raw/rakuten_matched.json").write_text(
+                json.dumps({"items": []}), encoding="utf-8"
+            )
+            (root / "hugo/content/posts").mkdir(parents=True)
+            (root / "hugo/content/posts/2026-05-31-B0NEW00001.md").write_text(
+                "---\n---\n", encoding="utf-8"
+            )
+            weekly_dir = root / "hugo/data/ranking"
+            weekly_dir.mkdir(parents=True)
+            (weekly_dir / "weekly.json").write_text(json.dumps({
+                "generated_at": "2026-05-25T00:00:00+00:00",
+                "items": [
+                    {"rank": 1, "title": "t", "itemCaption": "JAN 4904810000001",
+                     "itemCode": "shop:1", "matched_asin": None, "match_stage": None},
+                    {"rank": 2, "title": "t2", "itemCaption": "no jan",
+                     "itemCode": "shop:2", "matched_asin": None, "match_stage": None},
+                ],
+            }), encoding="utf-8")
+
+            cwd = os.getcwd()
+            try:
+                os.chdir(root)
+                rc = fetch_rakuten._rematch_only(pathlib.Path("data/raw"))
+            finally:
+                os.chdir(cwd)
+            self.assertEqual(rc, 0)
+            after = json.loads((weekly_dir / "weekly.json").read_text(encoding="utf-8"))
+            self.assertEqual(after["items"][0]["matched_asin"], "B0NEW00001")
+            self.assertEqual(after["items"][0]["match_stage"], "stage2_jan")
+            self.assertIsNone(after["items"][1]["matched_asin"])
+            self.assertIn("rematched_at", after)
+
+    def test_rematch_skips_asin_without_article(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            (root / "data/raw/per_asin/B0NOART0001").mkdir(parents=True)
+            (root / "data/raw/per_asin/B0NOART0001/amazon.json").write_text(
+                json.dumps({"item": {"jan_code": "4904810000002"}}), encoding="utf-8"
+            )
+            (root / "data/raw/rakuten_matched.json").write_text(
+                json.dumps({"items": []}), encoding="utf-8"
+            )
+            (root / "hugo/content/posts").mkdir(parents=True)  # 空 = 記事無し
+            weekly_dir = root / "hugo/data/ranking"
+            weekly_dir.mkdir(parents=True)
+            (weekly_dir / "weekly.json").write_text(json.dumps({
+                "items": [
+                    {"rank": 1, "title": "t", "itemCaption": "JAN 4904810000002",
+                     "itemCode": "shop:1", "matched_asin": None, "match_stage": None},
+                ],
+            }), encoding="utf-8")
+            cwd = os.getcwd()
+            try:
+                os.chdir(root)
+                rc = fetch_rakuten._rematch_only(pathlib.Path("data/raw"))
+            finally:
+                os.chdir(cwd)
+            self.assertEqual(rc, 0)
+            after = json.loads((weekly_dir / "weekly.json").read_text(encoding="utf-8"))
+            # per_asin にあっても記事が無いので /products/<asin>/ 404 防止で未マッチ
+            self.assertIsNone(after["items"][0]["matched_asin"])
+
+    def test_rematch_missing_weekly_returns_code_2(self):
+        with tempfile.TemporaryDirectory() as td:
+            cwd = os.getcwd()
+            try:
+                os.chdir(td)
+                rc = fetch_rakuten._rematch_only(pathlib.Path("data/raw"))
+            finally:
+                os.chdir(cwd)
+            self.assertEqual(rc, 2)
+
+
 if __name__ == "__main__":
     unittest.main()
