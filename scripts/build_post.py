@@ -34,66 +34,48 @@ from score_calculator import ScoreResult, calculate as calculate_score, compute_
 SUFFIX_SKIP = (".enrichment", ".seo", ".quality")
 
 
-def _sync_ivs_for_render(
-    data: dict[str, Any], score_result: ScoreResult | None = None
-) -> None:
-    """テンプレ参照用に product.ivs_detail を新スコアで上書きする。
-    本文の IVS 総合/知育効果/長く遊べる/安全性/コスパ と加減点根拠を
-    score_calculator の結果と同期させる (frontmatter とのズレ防止)。
+def _build_score_context(sr: ScoreResult) -> dict[str, Any]:
+    """Build the ``score`` dict consumed by ``post.md.j2`` (hero + recap blocks).
 
-    ``score_result`` を渡せば :func:`calculate_score` の再計算をスキップして
-    その結果を再利用する。#1107 で main loop 側 (enrichment + 価格 backfill 後)
-    に算出した ScoreResult を `_frontmatter_meta` と共有するための引数。
+    Pure: only reads ``sr`` and never mutates ``data`` / ``product``. Replaces
+    the legacy ``_sync_ivs_for_render`` which mutated ``product.ivs_detail`` in
+    place (#1111 / Phase 2/3 of #1107).
+
+    Coordinate convention: viewBox 400x280, center (200,140), radius cap 90.
+    Order = top (cost) / right (safety) / bottom (longevity) / left (education).
     """
-    product = data.get("product") if isinstance(data.get("product"), dict) else None
-    raw_brand = product.get("brand") if product else None
-    if not (product and raw_brand):
-        return
-    if score_result is None:
-        nb = normalize_brand(raw_brand)
-        score_result = calculate_score(data, nb, asin=product.get("asin"))
-    sr = score_result
     bd = sr.breakdown
-    product["ivs_score"] = sr.ivs_score
-    ivs = product.setdefault("ivs_detail", {})
-    ivs["total_100"] = sr.total_100
-    # 4 軸 (/5 表示) は 6 要素から再導出。スケール式は compute_ivs_axes に集約。
-    ivs.update(compute_ivs_axes(bd))
-    ivs["score_rationale"] = [
-        {"factor": "ブランド信頼度", "delta": f"+{bd['brand_tier']}/25", "reason": sr.rationale[0]},
-        {"factor": "安全認証", "delta": f"+{bd['safety_cert']}/10", "reason": sr.rationale[1]},
-        {"factor": "対象年齢", "delta": f"+{bd['age_fit']}/10", "reason": sr.rationale[2]},
-        {"factor": "知育価値", "delta": f"+{bd['edu_value']}/15", "reason": sr.rationale[3]},
-        {"factor": "メディア露出", "delta": f"+{bd['media_exposure']}/15", "reason": sr.rationale[4]},
-        {"factor": "正規流通", "delta": f"+{bd['multi_market']}/10", "reason": sr.rationale[5]},
-        {"factor": "コスパ", "delta": f"+{bd['price_value']}/15", "reason": sr.rationale[6]},
-    ]
-    # β テンプレ v5.1: レーダー軸 (上=コスパ / 下=長く遊べる / 左=知育 / 右=安全) を
-    # SVG 用座標で事前計算する。viewBox 400x280, 中心 (200,140), 半径上限 90。
-    # v5.0 比で横方向を大きく取り、軸ラベル「📚 知育効果 3.8」「🛡️ 安全性 4.4」等の
-    # 末尾の値併記がクリップしないようにする。
+    axes = compute_ivs_axes(bd)
     cx, cy, rmax = 200.0, 140.0, 90.0
-    axes = [
-        ("cost", ivs["cost_performance"], cx, cy - rmax),       # 上
-        ("safety", ivs["safety"], cx + rmax, cy),               # 右
-        ("longevity", ivs["longevity"], cx, cy + rmax),         # 下
-        ("education", ivs["education"], cx - rmax, cy),         # 左
+    radar = [
+        ("cost", axes["cost_performance"], cx, cy - rmax),     # 上
+        ("safety", axes["safety"], cx + rmax, cy),             # 右
+        ("longevity", axes["longevity"], cx, cy + rmax),       # 下
+        ("education", axes["education"], cx - rmax, cy),       # 左
     ]
     points = []
-    for _key, val, ex, ey in axes:
+    for _key, val, ex, ey in radar:
         ratio = max(0.0, min(1.0, float(val) / 5.0))
         px = round(cx + (ex - cx) * ratio, 1)
         py = round(cy + (ey - cy) * ratio, 1)
         points.append(f"{px},{py}")
-    ivs["radar_points"] = " ".join(points)
-    # 総合スコアの棒グラフ (1 本) は total_100 をそのまま % として使う。
-    # 4 軸ごとの bar_*_pct は v5.1 でレーダー一元化に統合し撤去。
-    # Amazon レビューアンカー URL (CTA 用)
-    asin = product.get("asin")
-    if asin:
-        product["amazon_review_url"] = (
-            f"https://www.amazon.co.jp/dp/{asin}/?tag=zefiransesu-22#customerReviews"
-        )
+    return {
+        "total_100": sr.total_100,
+        "education": axes["education"],
+        "longevity": axes["longevity"],
+        "safety": axes["safety"],
+        "cost_performance": axes["cost_performance"],
+        "radar_points": " ".join(points),
+        "score_rationale": [
+            {"factor": "ブランド信頼度", "delta": f"+{bd['brand_tier']}/25", "reason": sr.rationale[0]},
+            {"factor": "安全認証", "delta": f"+{bd['safety_cert']}/10", "reason": sr.rationale[1]},
+            {"factor": "対象年齢", "delta": f"+{bd['age_fit']}/10", "reason": sr.rationale[2]},
+            {"factor": "知育価値", "delta": f"+{bd['edu_value']}/15", "reason": sr.rationale[3]},
+            {"factor": "メディア露出", "delta": f"+{bd['media_exposure']}/15", "reason": sr.rationale[4]},
+            {"factor": "正規流通", "delta": f"+{bd['multi_market']}/10", "reason": sr.rationale[5]},
+            {"factor": "コスパ", "delta": f"+{bd['price_value']}/15", "reason": sr.rationale[6]},
+        ],
+    }
 
 BADGE_FIELDS = ("availability", "loyalty_points", "savings_percentage", "free_shipping")
 
@@ -294,10 +276,11 @@ def _build_article_index(src_path: pathlib.Path) -> dict[str, dict[str, Any]]:
     Scores are recomputed via :func:`score_calculator.calculate` for every
     article rather than read from ``product.ivs_detail.total_100``. The JSON
     field is written by Jules at article creation and only refreshed in-memory
-    by :func:`_sync_ivs_for_render` for the article currently being rendered,
-    so cross-article references (similar / same-price-band cards) would
-    otherwise surface stale Jules-era values that disagree with the score on
-    the target article's own page (#1089).
+    via the per-article ``data["score"]`` render context (built from a fresh
+    ``ScoreResult`` in the main loop, post enrichment + price backfill), so
+    cross-article references (similar / same-price-band cards) would otherwise
+    surface stale Jules-era values that disagree with the score on the target
+    article's own page (#1089).
     """
     index: dict[str, dict[str, Any]] = {}
     if not src_path.exists():
@@ -1590,7 +1573,7 @@ def main() -> None:
                     data[top_key] = _meta_re.sub("", v).strip()
 
             # #1107: enrichment + 価格 backfill 後の data から ScoreResult を 1 回だけ算出し、
-            # _sync_ivs_for_render と _frontmatter_meta で再利用する
+            # 本文 (data["score"]) と frontmatter (_frontmatter_meta) で再利用する
             # (本文 / frontmatter 用の calculate_score 呼出を 2 回 → 1 回に削減)。
             # 注: _build_article_index 側は raw JSON 由来の cross-article カード用スコアを
             # 別途算出しており、価格 backfill 前の値を持つため再利用不可。
@@ -1607,9 +1590,20 @@ def main() -> None:
                         )
                     except Exception:
                         fresh_sr = None
-            # 2026-05-15 (@J Phase 2): テンプレが参照する product.ivs_detail を
-            # 新スコアで上書きしてから render する (本文内 IVS 表示を frontmatter と同期)。
-            _sync_ivs_for_render(data, fresh_sr)
+            # #1111: テンプレへは data["score"] を直接渡す (旧 product.ivs_detail の
+            # in-place mutation = _sync_ivs_for_render は廃止)。
+            # 副作用が必要な小物 (frontmatter の ivs_score_jules 互換用の
+            # product.ivs_score 上書き / レビュー CTA URL) のみ main loop で行う。
+            if fresh_sr is not None:
+                data["score"] = _build_score_context(fresh_sr)
+                if isinstance(product_obj, dict):
+                    product_obj["ivs_score"] = fresh_sr.ivs_score
+                    asin_for_review = product_obj.get("asin")
+                    if asin_for_review:
+                        product_obj["amazon_review_url"] = (
+                            f"https://www.amazon.co.jp/dp/{asin_for_review}"
+                            "/?tag=zefiransesu-22#customerReviews"
+                        )
             # Issue #515: link_report_flag macro が記事 URL 構築用に slug を参照する。
             data["slug"] = slug
             md_body = template.render(**data)
