@@ -89,6 +89,18 @@
 <aside class="persona-fit"><strong>この記事はこんな方へ</strong><ul>{% for r in persona_fit.recommended_for %}<li>{{ r }}</li>{% endfor %}</ul>{% if persona_fit.age_range %}<p>対象年齢：<strong>{{ persona_fit.age_range }}</strong></p>{% endif %}</aside>
 {% endif %}
 
+{% if development_stage %}
+<details class="development-stage-accordion">
+<summary>👶 このおもちゃの対象年齢（{{ development_stage.age_label }}）における発達の目安を見る</summary>
+<div class="development-stage-content">
+<p><strong>🧠 発達の特徴（認知・運動）：</strong><br>{{ development_stage.developmental_features }}</p>
+<p><strong>🎯 知育の目的と効果：</strong><br>{{ development_stage.educational_goals }}</p>
+<p><strong>🧸 おすすめの遊び方と関わり方：</strong><br>{{ development_stage.recommended_toys }}</p>
+<small class="development-stage-source">※WHO（世界保健機関）や文部科学省の乳幼児発達指針等を基に作成しています。発達のペースには個人差があります。</small>
+</div>
+</details>
+{% endif %}
+
 ## <small>{{ product.name }}の</small>💴 価格を3サイトで比較
 
 執筆時点の価格をAmazon・楽天・Yahoo!ショッピングで横断比較しました。
