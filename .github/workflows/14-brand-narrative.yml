@@ -45,6 +45,11 @@ jobs:
         with:
           python-version: '3.11'
 
+      # hugo/data/brand_hub.json は /hugo gitignore で repo に居ない。
+      # 両 path (cron selector / dispatch override) が読むので runtime で生成する。
+      - name: Build brand_hub.json
+        run: python scripts/build_brand_hub_stats.py
+
       - name: Select target brand
         id: select
         env:

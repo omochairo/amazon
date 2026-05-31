@@ -40,6 +40,9 @@ on:
       # 2026-05-19 (session 29): fetch 系の workflow / script を触る PR も validate を
       # required check として発火させる ([[04-validate-paths-trap]] 対策)
       - '.github/workflows/01-fetch-products.yml'
+      # 2026-05-31 (#731 Part A): brand narrative cron workflow を触る PR も
+      # validate を required check として発火させる (vacuous SUCCESS)。
+      - '.github/workflows/14-brand-narrative.yml'
       - 'scripts/fetch_amazon.py'
       - 'scripts/fetch_youtube.py'
       # 2026-05-26 (session 60 PR #786): Creator API クライアント本体を触る PR も
