@@ -200,11 +200,16 @@ jobs:
           HTTP_CODE=$(echo "$RESPONSE" | tail -1)
           BODY=$(echo "$RESPONSE" | sed '$d')
           echo "HTTP: $HTTP_CODE"
-          echo "$BODY" | jq -c '{name, id, status}' 2>/dev/null || echo "$BODY" | head -c 500
+          # Non-200: dump raw body. jq projection は error 系 body で nulls を返して
+          # 真因を隠す (HTTP 400 で {"error":{"message":...}} が見えなかった事例)。
           if [ "$HTTP_CODE" != "200" ]; then
+            echo "--- raw response body ---"
+            echo "$BODY"
+            echo "--------------------------"
             echo "::error::Failed to create Jules session (HTTP $HTTP_CODE)"
             exit 1
           fi
+          echo "$BODY" | jq -c '{name, id, status}' 2>/dev/null || echo "$BODY" | head -c 500
           SESSION_ID=$(echo "$BODY" | jq -r '.id // empty')
           if [ -z "$SESSION_ID" ]; then
             echo "::error::No session id returned"
