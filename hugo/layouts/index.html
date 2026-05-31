@@ -9,7 +9,9 @@
 <section class="home-hero">
   <h1 class="home-hero-title">{{ .Title }}</h1>
   {{- with .Subtitle }}<p class="home-hero-subtitle">{{ . }}</p>{{ end }}
-  {{- with .Lead }}<div class="home-hero-lead">{{ . | markdownify }}</div>{{ end }}
+  <div class="home-hero-lead">
+    元ソニーエンジニア × 医療従事者の夫婦が運営する <a href="https://omcha.jp/" target="_blank" rel="noopener">おもちゃいろ</a> のパパママが、AI と一緒に毎日更新。<strong>{{ len $allPosts }}</strong> 種類の知育おもちゃのスコアをランキングや年齢から選べます。
+  </div>
   <div class="home-hero-cta">
     <a class="home-hero-btn primary" href="{{ "diagnosis/" | relURL }}">🧸 おもちゃ診断を試す</a>
     <a class="home-hero-btn" href="{{ "posts/" | relURL }}">📚 記事一覧から探す</a>
