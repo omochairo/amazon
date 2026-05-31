@@ -468,7 +468,7 @@ def _cli() -> None:
         for f in files
         if not f.endswith((".enrichment.json", ".quality.json", ".seo.json"))
     ]
-    print(f"{'ASIN':12} {'jules':>5} {'new':>5} {'/100':>5}  brand[tier]   breakdown")
+    print(f"{'ASIN':12} {'score':>5} {'/100':>5}  brand[tier]   breakdown")
     for f in files:
         d = json.loads(pathlib.Path(f).read_text(encoding="utf-8"))
         product = d.get("product") or {}
@@ -476,11 +476,10 @@ def _cli() -> None:
         m = re.search(r"(B0[A-Z0-9]{8})", f)
         asin = m.group(1) if m else ""
         r = calculate(d, b, asin=asin)
-        jules = product.get("ivs_score", "?")
         bd = r.breakdown
         bd_str = f"BT:{bd['brand_tier']} SF:{bd['safety_cert']} AG:{bd['age_fit']} EV:{bd['edu_value']} ME:{bd['media_exposure']} MK:{bd['multi_market']} PV:{bd['price_value']}"
         print(
-            f"{asin:12} {str(jules):>5} {r.ivs_score:>5} {r.total_100:>5}  {b.canonical}[{b.tier}]   {bd_str}"
+            f"{asin:12} {r.ivs_score:>5} {r.total_100:>5}  {b.canonical}[{b.tier}]   {bd_str}"
         )
 
 
