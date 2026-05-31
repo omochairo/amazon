@@ -202,6 +202,115 @@ class YahooJanFlowTest(unittest.TestCase):
         self.assertEqual(mock_get.call_args_list[1].kwargs["params"].get("query"), "ブランド ワード")
 
 
+class JanAttemptObservabilityTest(unittest.TestCase):
+    """Issue #1087 Phase 1: `_jan_attempt` field が JAN フェーズ outcome を
+    正しく記録することを確認する。"""
+
+    def _mk_resp(self, status, payload, text=""):
+        m = MagicMock()
+        m.status_code = status
+        m.json.return_value = payload
+        m.text = text
+        return m
+
+    def test_rakuten_jan_books_hit_records_jan_books(self):
+        books_payload = {"Items": [{"itemName": "A", "itemPrice": 1000,
+                                     "itemUrl": "http://x/a", "availability": 1}]}
+        with patch.object(fetch_cross_search.requests, "get") as mock_get:
+            mock_get.return_value = self._mk_resp(200, books_payload)
+            result = fetch_cross_search.search_rakuten_tiered(
+                "kw", app_id="x", jan_code="4900000000010"
+            )
+        self.assertEqual(result["_jan_attempt"], "jan_books")
+
+    def test_rakuten_jan_zero_falls_to_text_records_jan_zero(self):
+        """0a と 0b が共に 0 hits → text fallback で hit したら _jan_attempt=jan_zero。"""
+        empty = self._mk_resp(200, {"Items": []})
+        text_hit = self._mk_resp(200, {"Items": [
+            {"itemName": "T", "itemPrice": 1500, "itemUrl": "http://x/t", "availability": 1}
+        ]})
+        # Stage 0a (zero) → 0b (zero) → Stage 1 Books text (hit)
+        with patch.object(fetch_cross_search.requests, "get",
+                          side_effect=[empty, empty, text_hit]) as mock_get, \
+             patch.object(fetch_cross_search.time, "sleep"):
+            result = fetch_cross_search.search_rakuten_tiered(
+                "ブランド ワード", app_id="x", jan_code="4900000000011"
+            )
+        self.assertIsNotNone(result)
+        self.assertEqual(result["_match_method"], "text")
+        self.assertEqual(result["_jan_attempt"], "jan_zero")
+        self.assertEqual(mock_get.call_count, 3)
+
+    def test_rakuten_jan_400_classified(self):
+        """Stage 0a HTTP 400 → 0b HTTP 400 → text hit で _jan_attempt=jan_400。"""
+        err400 = self._mk_resp(400, {}, text="keyword is not valid")
+        # Stage 2 Ichiba text hit (Books Stage 1 は空にする)
+        empty = self._mk_resp(200, {"Items": []})
+        ichiba_hit = self._mk_resp(200, {"Items": [
+            {"itemName": "I", "itemPrice": 2000, "itemUrl": "http://x/i", "availability": 1}
+        ]})
+        with patch.object(fetch_cross_search.requests, "get",
+                          side_effect=[err400, err400, empty, ichiba_hit]) as mock_get, \
+             patch.object(fetch_cross_search.time, "sleep"):
+            result = fetch_cross_search.search_rakuten_tiered(
+                "ブランド ワード", app_id="x", jan_code="4900000000012"
+            )
+        self.assertIsNotNone(result)
+        self.assertEqual(result["_jan_attempt"], "jan_400")
+
+    def test_rakuten_no_jan_records_no_jan(self):
+        text_hit = self._mk_resp(200, {"Items": [
+            {"itemName": "N", "itemPrice": 1000, "itemUrl": "http://x/n", "availability": 1}
+        ]})
+        with patch.object(fetch_cross_search.requests, "get", return_value=text_hit), \
+             patch.object(fetch_cross_search.time, "sleep"):
+            result = fetch_cross_search.search_rakuten_tiered("kw", app_id="x", jan_code="")
+        self.assertEqual(result["_jan_attempt"], "no_jan")
+
+    def test_yahoo_jan_hit_records_jan(self):
+        hit = MagicMock()
+        hit.status_code = 200
+        hit.json.return_value = {"hits": [
+            {"name": "Y", "price": 2500, "url": "http://y/j",
+             "image": {"medium": "http://i"}, "inStock": True, "shipping": {"code": 2}}
+        ]}
+        with patch.object(fetch_cross_search.requests, "get", return_value=hit), \
+             patch.object(fetch_cross_search.time, "sleep"):
+            result = fetch_cross_search.search_yahoo(
+                "kw", "appid", jan_code="4900000000020"
+            )
+        self.assertEqual(result["_jan_attempt"], "jan")
+
+    def test_yahoo_jan_zero_falls_to_text_records_jan_zero(self):
+        empty = MagicMock(); empty.status_code = 200; empty.json.return_value = {"hits": []}
+        text = MagicMock(); text.status_code = 200; text.json.return_value = {"hits": [
+            {"name": "T", "price": 1500, "url": "http://y/t",
+             "image": {"medium": "http://i"}, "inStock": True, "shipping": {"code": 2}}
+        ]}
+        with patch.object(fetch_cross_search.requests, "get",
+                          side_effect=[empty, text]), \
+             patch.object(fetch_cross_search.time, "sleep"):
+            result = fetch_cross_search.search_yahoo(
+                "kw", "appid", jan_code="4900000000021"
+            )
+        self.assertEqual(result["_match_method"], "text")
+        self.assertEqual(result["_jan_attempt"], "jan_zero")
+
+    def test_yahoo_jan_http_5xx_classified(self):
+        err = MagicMock(); err.status_code = 503; err.json.return_value = {}; err.text = ""
+        text = MagicMock(); text.status_code = 200; text.json.return_value = {"hits": [
+            {"name": "T", "price": 1500, "url": "http://y/t",
+             "image": {"medium": "http://i"}, "inStock": True, "shipping": {"code": 2}}
+        ]}
+        with patch.object(fetch_cross_search.requests, "get",
+                          side_effect=[err, text]), \
+             patch.object(fetch_cross_search.time, "sleep"):
+            result = fetch_cross_search.search_yahoo(
+                "kw", "appid", jan_code="4900000000022"
+            )
+        self.assertEqual(result["_jan_attempt"], "jan_5xx")
+
+
 class CollectTargetsJanTest(unittest.TestCase):
     def test_collect_targets_passes_jan_from_amazon_json(self):
         amazon_items = [
