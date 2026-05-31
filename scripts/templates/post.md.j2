@@ -51,23 +51,25 @@
 
 {% if narrative.lead %}{{ narrative.lead }}{% endif %}
 
-{# ===== Hero score block (β v5.1): 総合スコア棒グラフ + 4軸レーダー + verdict + pros/cons ===== #}
-{% if product.ivs_detail %}
+{# ===== Hero score block (β v5.1): 総合スコア棒グラフ + 4軸レーダー + verdict + pros/cons =====
+   #1111: data["score"] (build_post._build_score_context が ScoreResult から構築) を参照する。
+   旧 product.ivs_detail.* は廃止 (Phase 2/3 完了 = _sync_ivs_for_render 削除済)。 #}
+{% if score %}
 <div class="hero-score">
 <div class="hero-total-row">
-<div class="hero-total-badge"><span class="hero-total-label">🌟 知育スコア</span><span class="hero-total-value">{{ product.ivs_detail.total_100 }}<small>/100</small></span></div>
+<div class="hero-total-badge"><span class="hero-total-label">🌟 知育スコア</span><span class="hero-total-value">{{ score.total_100 }}<small>/100</small></span></div>
 {% if verdict and verdict.headline %}<p class="hero-verdict">「{{ verdict.headline }}」</p>{% endif %}
 </div>
 <div class="hero-total-bar" aria-label="知育スコア（総合）の棒グラフ">
-<div class="hero-total-bar-track"><div class="hero-total-bar-fill" style="--bar-w:{{ product.ivs_detail.total_100 }}%"><span class="hero-total-bar-value">{{ product.ivs_detail.total_100 }} / 100 点</span></div></div>
+<div class="hero-total-bar-track"><div class="hero-total-bar-fill" style="--bar-w:{{ score.total_100 }}%"><span class="hero-total-bar-value">{{ score.total_100 }} / 100 点</span></div></div>
 <p class="hero-total-bar-caption">下のレーダー 4 軸（📚 知育効果 / 🕰️ 長く遊べる / 🛡️ 安全性 / 💰 コスパ）を加重平均し、100 点満点に換算したおもちゃロボ独自の総合スコアです。</p>
 </div>
 <div class="hero-radar" aria-label="4軸スコアのレーダーチャート（上=コスパ・下=長く遊べる・左=知育効果・右=安全性）">
 <svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="false">
 <g class="radar-grid"><polygon points="200,50 290,140 200,230 110,140"/><polygon points="200,80 260,140 200,200 140,140"/><polygon points="200,110 230,140 200,170 170,140"/></g>
 <g class="radar-axes"><line x1="200" y1="50" x2="200" y2="230"/><line x1="110" y1="140" x2="290" y2="140"/></g>
-<polygon class="radar-shape" points="{{ product.ivs_detail.radar_points }}"/>
-<g class="radar-labels" font-size="14"><text x="200" y="22" text-anchor="middle">💰 コスパ<tspan x="200" dy="1.25em">{{ "%.1f"|format(product.ivs_detail.cost_performance) }}/5.0</tspan></text><text x="298" y="136" text-anchor="start">🛡️ 安全性<tspan x="298" dy="1.25em">{{ "%.1f"|format(product.ivs_detail.safety) }}/5.0</tspan></text><text x="200" y="246" text-anchor="middle">🕰️ 長く遊べる<tspan x="200" dy="1.25em">{{ "%.1f"|format(product.ivs_detail.longevity) }}/5.0</tspan></text><text x="102" y="136" text-anchor="end">📚 知育効果<tspan x="102" dy="1.25em">{{ "%.1f"|format(product.ivs_detail.education) }}/5.0</tspan></text></g>
+<polygon class="radar-shape" points="{{ score.radar_points }}"/>
+<g class="radar-labels" font-size="14"><text x="200" y="22" text-anchor="middle">💰 コスパ<tspan x="200" dy="1.25em">{{ "%.1f"|format(score.cost_performance) }}/5.0</tspan></text><text x="298" y="136" text-anchor="start">🛡️ 安全性<tspan x="298" dy="1.25em">{{ "%.1f"|format(score.safety) }}/5.0</tspan></text><text x="200" y="246" text-anchor="middle">🕰️ 長く遊べる<tspan x="200" dy="1.25em">{{ "%.1f"|format(score.longevity) }}/5.0</tspan></text><text x="102" y="136" text-anchor="end">📚 知育効果<tspan x="102" dy="1.25em">{{ "%.1f"|format(score.education) }}/5.0</tspan></text></g>
 </svg>
 </div>
 {% if (product.pros and product.pros|length) or (product.cons and product.cons|length) %}
@@ -115,16 +117,16 @@
 冒頭で示した知育スコア（おもちゃロボの知育評価スコア）の内訳を、まず 4 軸のスコアでおさらいしてから、寄与の大きい順に **加減点根拠** を並べました。
 
 <div class="score-recap" aria-label="4 軸スコアのおさらい">
-<div class="score-recap-card"><span class="score-recap-axis">📚 知育効果</span><span class="score-recap-value">{{ "%.1f"|format(product.ivs_detail.education) }}<small>/5.0</small></span></div>
-<div class="score-recap-card"><span class="score-recap-axis">🕰️ 長く遊べる</span><span class="score-recap-value">{{ "%.1f"|format(product.ivs_detail.longevity) }}<small>/5.0</small></span></div>
-<div class="score-recap-card"><span class="score-recap-axis">🛡️ 安全性</span><span class="score-recap-value">{{ "%.1f"|format(product.ivs_detail.safety) }}<small>/5.0</small></span></div>
-<div class="score-recap-card"><span class="score-recap-axis">💰 コスパ</span><span class="score-recap-value">{{ "%.1f"|format(product.ivs_detail.cost_performance) }}<small>/5.0</small></span></div>
+<div class="score-recap-card"><span class="score-recap-axis">📚 知育効果</span><span class="score-recap-value">{{ "%.1f"|format(score.education) }}<small>/5.0</small></span></div>
+<div class="score-recap-card"><span class="score-recap-axis">🕰️ 長く遊べる</span><span class="score-recap-value">{{ "%.1f"|format(score.longevity) }}<small>/5.0</small></span></div>
+<div class="score-recap-card"><span class="score-recap-axis">🛡️ 安全性</span><span class="score-recap-value">{{ "%.1f"|format(score.safety) }}<small>/5.0</small></span></div>
+<div class="score-recap-card"><span class="score-recap-axis">💰 コスパ</span><span class="score-recap-value">{{ "%.1f"|format(score.cost_performance) }}<small>/5.0</small></span></div>
 </div>
 <p class="score-recap-note">各軸 5.0 点満点。下の <strong>📖 4 軸の説明</strong> に評価基準の詳細をまとめています。</p>
 
-{% if product.ivs_detail.score_rationale %}
+{% if score.score_rationale %}
 <p class="score-rationale-intro">この 4 軸スコアは、以下の要素を加減点して算出しています。</p>
-<ul class="score-rationale-list">{% for r in product.ivs_detail.score_rationale %}<li><strong>{{ r.factor }}<span class="score-delta">（{{ r.delta }}）</span></strong>：{{ r.reason }}</li>{% endfor %}</ul>
+<ul class="score-rationale-list">{% for r in score.score_rationale %}<li><strong>{{ r.factor }}<span class="score-delta">（{{ r.delta }}）</span></strong>：{{ r.reason }}</li>{% endfor %}</ul>
 {% endif %}
 
 <details class="score-axes-doc"><summary>📖 知育スコアの 4 軸（評価軸の説明を見る）</summary><div><p><strong>知育スコア（おもちゃロボの知育評価スコア）</strong>は、おもちゃロボが知育玩具を 4 つの観点から 5 点満点で評価し、加重平均で 100 点満点に換算した独自スコアです。</p><ul><li><strong>📚 知育効果 (5点満点)</strong>：年齢に応じた学びや、思考力・想像力・手先の発達への刺激度を評価。</li><li><strong>🕰️ 長く遊べる (5点満点)</strong>：遊び方の幅、年齢を超えた長期的な遊び寿命を評価。</li><li><strong>🛡️ 安全性 (5点満点)</strong>：対象年齢の妥当性、素材・形状・誤飲リスク等の安全配慮を評価。</li><li><strong>💰 コスパ (5点満点)</strong>：価格に対する品質・遊び寿命・教育効果のバランスを評価。</li></ul><p class="score-axes-note">※ スコアは執筆時点の市場データ・レビュー・公式情報をもとに付与しています。実際の感じ方には個人差があります。</p></div></details>
