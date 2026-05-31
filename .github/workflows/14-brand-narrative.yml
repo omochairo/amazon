@@ -45,6 +45,11 @@ jobs:
         with:
           python-version: '3.11'
 
+      # brand_normalizer.py が yaml を import する。requirements.txt には居ないので
+      # 単独 install (この workflow 以外は brand_normalizer を経由しない)。
+      - name: Install pyyaml
+        run: pip install pyyaml
+
       # hugo/data/brand_hub.json は /hugo gitignore で repo に居ない。
       # 両 path (cron selector / dispatch override) が読むので runtime で生成する。
       - name: Build brand_hub.json
