@@ -1,0 +1,64 @@
+name: Jules Daily Usage Report
+
+# #1200 — 毎日 08:00 JST (= 23:00 UTC 前日) に Jules 消費を集計して Issue #1200
+# に append する。run 数 / PR 数 / cap 状況を可視化。
+#
+# 設計判断:
+#   - target date は「実行日の UTC 前日」(深夜 cron 23:00 UTC は実行日付の
+#     朝 JST だが、データ集計対象は前日 UTC 0:00-23:59)。
+#   - workflow_dispatch では --date 指定可能 (任意日のバックフィル / 当日確認)。
+#   - GITHUB_TOKEN で issue write 可能 (permissions: issues: write)。
+
+on:
+  schedule:
+    # 23:00 UTC = 08:00 JST 翌朝 (UTC date は前日のまま、JST date は翌朝)。
+    - cron: '0 23 * * *'
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Override date (YYYY-MM-DD, UTC). Default: today UTC.'
+        required: false
+        default: ''
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Generate report
+        id: report
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_DATE: ${{ github.event.inputs.date }}
+        run: |
+          set -e
+          if [ -n "$INPUT_DATE" ]; then
+            DATE="$INPUT_DATE"
+          else
+            DATE=$(date -u +%Y-%m-%d)
+          fi
+          echo "Target date: $DATE"
+          python scripts/report_jules_usage.py --date "$DATE" > /tmp/report.md
+          echo "--- preview ---"
+          cat /tmp/report.md
+          echo "--- end ---"
+
+      - name: Post comment to dashboard Issue #1200
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          gh issue comment 1200 -R "${{ github.repository }}" --body-file /tmp/report.md
