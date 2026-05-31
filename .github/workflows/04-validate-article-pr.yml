@@ -19,6 +19,10 @@ on:
       # 発火させる (workflow_dispatch では branch protection の required check に
       # ならないケースがあるため、pull_request 経由で確実に走らせる)。
       - 'scripts/build_post.py'
+      # 2026-05-31 (Issue #677): build_manifest.json 出力の smoke test と
+      # score_calculator media-exposure counter test を validate (required check) に。
+      - 'scripts/tests/test_build_post_manifest.py'
+      - 'scripts/tests/test_score_calculator.py'
       # 2026-05-31: 分析専用 script (analyze_*) を触る PR も validate を経由
       # させる ([[04-validate-paths-trap]] / PR #1133 で踏んだ)。
       # 副作用なしの dry-run analyzer なので vacuous SUCCESS で通過する。
