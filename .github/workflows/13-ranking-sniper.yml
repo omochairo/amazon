@@ -96,6 +96,16 @@ jobs:
           echo "Sniper backfill (competitors-only) for: $ASINS"
           python scripts/fetch_amazon.py --asin "$ASINS" --competitors-only --out data/raw/
 
+      - name: Rematch /ranking/ weekly.json with current per_asin + articles
+        # Issue #1149: weekly.json は火曜 weekly cron でしか matched_asin が更新されない
+        # ため、sniper backfill / Jules article publish で新しく追加された ASIN が
+        # 「楽天ランキング → 自社レビュー」リンクに反映されるまで最大 7 日遅延する。
+        # API を叩かず現行 per_asin + article インデックスで再マッチして即時反映する。
+        if: ${{ env.DRY_RUN != 'true' }}
+        run: |
+          set -e
+          python scripts/fetch_rakuten.py --rematch-only --out data/raw/ || true
+
       - name: Create backfill PR + enable auto-merge
         if: ${{ env.DRY_RUN != 'true' }}
         env:
@@ -106,6 +116,11 @@ jobs:
           # data/ は .gitignore 対象外。per_asin snapshot + manifest + csv + ranking_pool を stage。
           # ranking_pool.json は #810 Phase 1.5: 03-invoke-jules pick-asin が読む記事化候補プール。
           git add data/raw/per_asin data/raw/_ranking_resolved_manifest.json data/raw/ranking_sniper_asins.csv data/raw/ranking_pool.json || true
+
+          # Issue #1149: rematch で更新された /ranking/ 用 weekly.json + manifest も同 PR で main 反映。
+          # hugo/ は .gitignore 対象 → -f が必須 ([[hugo-gitignore-trap]] / [[hugo-output-cron-trio]])。
+          git add -f hugo/data/ranking/weekly.json hugo/data/ranking/_match_manifest.json || true
+          git add data/raw/rakuten_ranking.json data/raw/_rakuten_ranking_manifest.json || true
 
           if git diff --cached --quiet; then
             echo "No backfill changes to commit; skipping PR creation."
