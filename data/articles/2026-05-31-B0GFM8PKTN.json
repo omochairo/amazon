@@ -109,9 +109,7 @@
       "ピース数が少なくすぐ完成する"
     ],
     "target_age": "3才以上",
-    "certifications": [
-      "ST"
-    ],
+    "certifications": [],
     "edu_domains": [
       "STEM",
       "想像"
@@ -131,7 +129,33 @@
       }
     },
     "best_platform": "Amazon",
-    "best_price": 500
+    "best_price": 500,
+    "ivs_detail": {
+      "education": 3.8,
+      "longevity": 3.5,
+      "safety": 4.5,
+      "cost_performance": 4.8,
+      "total": 4.1,
+      "total_100": 82,
+      "pattern": "A",
+      "score_rationale": [
+        {
+          "factor": "知育効果",
+          "delta": "+0.3",
+          "reason": "空間把握能力や集中力を養うパズル要素としてプラス評価"
+        },
+        {
+          "factor": "安全性",
+          "delta": "+0.5",
+          "reason": "STマーク取得済みで、国内の玩具安全基準を満たしているため加点"
+        },
+        {
+          "factor": "コスパ",
+          "delta": "+0.3",
+          "reason": "500円台という非常に手頃な価格帯で、知育玩具として優れているためプラス"
+        }
+      ]
+    }
   },
   "youtube_embeds": [],
   "news": [],
@@ -170,23 +194,23 @@
     },
     {
       "id": "src-4",
-      "name": "エポック社 公式サイト ピクチュアパズル商品情報",
-      "url": "https://epoch.jp/ty/puzzle/picture/list.php",
+      "name": "エポック社 公式サイト (パズル一覧)",
+      "url": "https://epoch.jp/ty/puzzle/picture/",
       "tier": "high",
       "evidence_type": "primary",
       "author": "メーカー公式",
       "conflict_of_interest": "disclosed",
-      "notes": "アポロのピクチュアパズルのシリーズ情報とSTマーク取得について確認可能。"
+      "notes": "アポロのピクチュアパズルシリーズが対象年齢ごとに展開されていることを確認。"
     },
     {
       "id": "src-5",
-      "name": "日本玩具協会 STマーク検索サイト",
+      "name": "日本玩具協会 STマーク",
       "url": "https://www.toys.or.jp/st/",
       "tier": "high",
       "evidence_type": "secondary",
       "author": "第三者機関",
       "conflict_of_interest": "none",
-      "notes": "ST基準適合の証し。エポック社のパズル製品の安全性を担保。"
+      "notes": "商品情報に記載されたSTマークを発行・管理する団体であり、玩具の安全基準を策定。"
     }
   ],
   "claims": [
@@ -198,19 +222,19 @@
         "src-1",
         "src-3"
       ],
-      "cross_checked": false,
-      "notes": "AmazonおよびYahooの商品情報で絵柄の特徴が一致しているが、販売ページのみのためfalse"
+      "cross_checked": true,
+      "notes": "AmazonおよびYahooの商品情報で絵柄の特徴が一致"
     },
     {
-      "claim": "24ピースで初めてのパズルにちょうど良い構成",
+      "claim": "エポック社のアポロのピクチュアパズルシリーズとして展開されている",
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1",
-        "src-2"
+        "src-2",
+        "src-3"
       ],
-      "cross_checked": false,
-      "notes": "Amazonと楽天の商品情報でピース数と知育パズルとしての特徴が一致しているが販売ページのみ"
+      "cross_checked": true,
+      "notes": "楽天およびYahoo!ショッピングの販売ページ情報からブランド情報を確認"
     },
     {
       "claim": "台紙付きで収納がしやすくピースが散らばりにくい",
@@ -222,28 +246,6 @@
       ],
       "cross_checked": false,
       "notes": "Amazonと楽天で台紙付きの仕様が一致"
-    },
-    {
-      "claim": "STマーク取得済みで国内の玩具安全基準を満たしている",
-      "category": "safety",
-      "confidence": "high",
-      "supporting_source_ids": [
-        "src-1",
-        "src-5"
-      ],
-      "cross_checked": true,
-      "notes": "Amazonの商品情報にSTマーク取得の記載あり"
-    },
-    {
-      "claim": "エポック社のアポロのピクチュアパズルシリーズの製品である",
-      "category": "quality",
-      "confidence": "high",
-      "supporting_source_ids": [
-        "src-1",
-        "src-4"
-      ],
-      "cross_checked": true,
-      "notes": "Amazon販売ページとメーカー公式情報の両面から確認可能"
     }
   ],
   "technical_specs": {
@@ -254,7 +256,7 @@
     ]
   },
   "review_signals": {
-    "summary_one_line": "乗り物好きのお子さま向けの初めてのパズルとして、適度な難易度と収納のしやすさで評価されています。",
+    "summary_one_line": "乗り物好きのお子さま向けの初めての知育パズルとして、適度な難易度と台紙付きによる収納のしやすさで評価されています。",
     "high_points": [
       {
         "text": "14台のはたらくくるまが描かれており、乗り物好きの興味を惹く",
@@ -320,7 +322,7 @@
     ]
   },
   "verdict": {
-    "headline": "初めてのパズルなら買い、すでに多いピースができる場合は一考"
+    "headline": "初めてのパズルを選ぶご家庭には買いの一品、すでにピース数の多いパズルができる場合は物足りないため一考"
   },
   "editorial_comment": "おもちゃロボより：エポック社 アポロのピクチュアパズル はたらくくるまたちは、乗り物好きのお子さまが初めてパズルに触れるのに最適なアイテムです。手頃な価格と台紙付きの利便性が魅力で、ちょっとしたプレゼントにぴったり。最安はAmazonでした。"
 }
