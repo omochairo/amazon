@@ -1379,12 +1379,9 @@ def _frontmatter_meta(
                 
     meta["age_min_months"] = _parse_age_min_months(raw_age)
 
-    # 2026-05-15 (@J Phase 2): Jules の ivs_score を破棄し、6要素から論理再計算する。
-    # Jules スコアはブランド信頼度を反映しないため (ノーブランド=4.7 等の不正)、
+    # #1124: Jules 側の ivs_score / ivs_detail 生成は廃止。スコアは
     # brand_tier(25) + safety(10) + age(10) + edu(15) + media(15) + market(10) + price(15)
-    # = total_100 を score_calculator で算出して上書きする。
-    # Jules の元値は ivs_score_jules に保持し、比較・デバッグに使う。
-    jules_ivs = product.get("ivs_score")
+    # を score_calculator で算出する一本化された source-of-truth に揃える。
     if raw_brand:
         # #1107: 同記事の ScoreResult が事前計算済 (main loop が enrichment 後に算出) なら
         # それを再利用し、calculate_score の重複呼出を避ける。
@@ -1397,16 +1394,6 @@ def _frontmatter_meta(
         # 4 軸 (#589) — カード一覧で簡易バーを描くために frontmatter に持たせる。
         # index.json / Hugo partial がここを読む。スケール定義は score_calculator 一元管理。
         meta["ivs_axes"] = compute_ivs_axes(sr.breakdown)
-        if isinstance(jules_ivs, (int, float)):
-            meta["ivs_score_jules"] = float(jules_ivs)
-    else:
-        # brand が空のレアケース: Jules の値を流用 (互換性)
-        if isinstance(jules_ivs, (int, float)):
-            meta["ivs_score"] = float(jules_ivs)
-        ivs_detail = product.get("ivs_detail") or {}
-        total_100 = ivs_detail.get("total_100")
-        if isinstance(total_100, (int, float)):
-            meta["ivs_score_100"] = int(total_100)
     if data.get("jsonld"):
         meta["jsonld"] = data["jsonld"]
     if data.get("breadcrumbs"):
@@ -1592,12 +1579,12 @@ def main() -> None:
                         fresh_sr = None
             # #1111: テンプレへは data["score"] を直接渡す (旧 product.ivs_detail の
             # in-place mutation = _sync_ivs_for_render は廃止)。
-            # 副作用が必要な小物 (frontmatter の ivs_score_jules 互換用の
-            # product.ivs_score 上書き / レビュー CTA URL) のみ main loop で行う。
+            # #1124: product.ivs_score の上書きも廃止 (frontmatter は
+            # _frontmatter_meta が fresh_sr を直接参照する)。残る副作用は
+            # レビュー CTA URL の付与のみ。
             if fresh_sr is not None:
                 data["score"] = _build_score_context(fresh_sr)
                 if isinstance(product_obj, dict):
-                    product_obj["ivs_score"] = fresh_sr.ivs_score
                     asin_for_review = product_obj.get("asin")
                     if asin_for_review:
                         product_obj["amazon_review_url"] = (
