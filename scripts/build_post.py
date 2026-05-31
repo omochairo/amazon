@@ -843,8 +843,13 @@ def _backfill_amazon_badges(
 # 楽天/Yahoo cross-search 結果を本文の価格グリッドに流し込むときに、
 # 検索ヒットしただけで実商品とかけ離れた item (ふるさと納税の高額品など) を
 # 弾くためのガード閾値。Amazon 価格を anchor にする。
-_MARKET_PRICE_BAND_LOW = 0.5   # Amazon 価格の 50% 未満は除外
-_MARKET_PRICE_BAND_HIGH = 2.0  # Amazon 価格の 200% 超は除外
+# Issue #1072 Phase 3-B (2026-05-31): jan_unknown 58 ASIN を救済するため
+#   price band を [0.5, 2.0] → [0.4, 2.5] に、coverage を 0.7 → 0.5 に緩和。
+#   dry-run (scripts/analyze_threshold_relaxation.py) で +25 件救済を確認、
+#   FP の主因は閾値ではなく Mamimami Home 系 search_keyword の品質問題
+#   (別 Issue で対処予定)。relax_both preset 採用。
+_MARKET_PRICE_BAND_LOW = 0.4   # Amazon 価格の 40% 未満は除外
+_MARKET_PRICE_BAND_HIGH = 2.5  # Amazon 価格の 250% 超は除外
 # verified=False の existing として keep する場合でも、Amazon の 3.0x 超 / 1/3 未満
 # の極端な乖離は別商品確定として丸ごと破棄し、検索フォールバックのみ残す。
 # 例: B0F4X462WH (amazon 1579円) yahoo_matched が 14395 円 (9.12x) で Jules が同 URL
@@ -855,7 +860,7 @@ _MARKET_PRICE_BAND_EXTREME = 3.0
 # verified=False に格下げ → ※確度低 badge + 検索 fallback 表示。
 # 例: kw='Hape ビーズコインドロップス E0328' vs title='Hape ビーズコインドロップス
 # E0327' は 2/3=0.67 で borderline (異モデル番号) として捕捉される。
-_MARKET_COVERAGE_RATIO = 0.7
+_MARKET_COVERAGE_RATIO = 0.5
 # search_keyword を title overlap 判定するときに、汎用すぎて根拠にならない語
 _MARKET_GENERIC_TOKENS = frozenset({
     "おもちゃ", "知育玩具", "プレゼント", "誕生日", "ギフト",
