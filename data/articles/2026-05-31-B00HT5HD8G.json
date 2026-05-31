@@ -134,24 +134,32 @@
     "best_platform": "Amazon",
     "best_price": 3750,
     "ivs_detail": {
+      "education": 4.5,
+      "longevity": 4.0,
+      "safety": 3.5,
+      "cost_performance": 4.0,
+      "total": 4.0,
+      "total_100": 80,
+      "pattern": "A",
       "score_rationale": [
         {
           "factor": "知育効果",
-          "delta": 0.4,
+          "delta": "+0.4",
           "reason": "図形の構造を実践的に理解でき、STEM教育にも効果的。"
         },
         {
           "factor": "長く遊べるか",
-          "delta": 0.2,
+          "delta": "+0.2",
           "reason": "平面図形から立体図形まで、年齢に合わせてステップアップ可能。"
         },
         {
           "factor": "安全性",
-          "delta": -0.2,
+          "delta": "-0.2",
           "reason": "球体コネクターなど小さなパーツが多く、3歳未満の誤飲リスクが残る。"
         }
       ]
-    }
+    },
+    "ivs_score": 4.0
   },
   "youtube_embeds": [
     {
