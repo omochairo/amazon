@@ -57,6 +57,9 @@ on:
       # 必須 check として発火させる。
       - 'scripts/fetch_yahoo_news.py'
       - 'scripts/fetch_books.py'
+      # 2026-05-31 (Issue #503 / #560): books query 戦略 + NG フィルタの unit test
+      # も validate (required check) 対象に。
+      - 'scripts/tests/test_fetch_books_query.py'
       - 'scripts/filter_raw_per_asin.py'
       # 2026-05-20 (session 38): per-ASIN fetch 巡回の共有モジュール。
       - 'scripts/_fetch_targets.py'

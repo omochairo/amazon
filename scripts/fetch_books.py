@@ -3,7 +3,11 @@ fetch_books.py
 ジャンル全体 (--keyword) 検索に加え、data/raw/amazon.json の各 ASIN について
 ブランド名での個別検索も実行し、結果をマージして data/raw/books_result.json に保存する。
 
-書籍は商品モデル番号で hit しないため、ブランド名 + "知育絵本" の形式で検索する。
+書籍は商品モデル番号で hit しないため、ブランド固有のジャンル語彙
+(キャラ系=絵本 / 鉄道系=のりもの / STEM系=図鑑 など) を組み合わせて
+検索する。Issue #503 / #560 (2026-05-31): "ブランド 知育" 単独だと Google
+Books に殆ど hit せず books 充足率が 0% で停滞していたため、ジャンル別
+プライマリ + フォールバックチェーン + 旅行ガイド NG フィルタを導入。
 """
 
 import os
@@ -34,6 +38,107 @@ NOISE = [
     "知育玩具", "おもちゃ", "プレゼント", "誕生日", "ギフト",
     "2個セット", "3歳から", "男の子", "女の子", "対象年齢",
 ]
+
+# #503: brand 別の最適 secondary keyword。デフォルトは "絵本" (Google Books に
+# 最も hit しやすい子供向け書籍カテゴリ)。鉄道・乗り物系は "のりもの" のほうが
+# シリーズ図鑑にヒットしやすい。STEM/知育玩具系は "図鑑" を優先する。
+# キーは KNOWN_BRANDS の表記に揃える。未収録ブランドは default ("絵本") を使う。
+BRAND_GENRE_VOCAB = {
+    # キャラ・絵本系
+    "アンパンマン": "絵本",
+    "ディズニー": "絵本",
+    "サンリオ": "絵本",
+    "ポケモン": "絵本",
+    "すみっコぐらし": "絵本",
+    "リカちゃん": "絵本",
+    "シルバニアファミリー": "絵本",
+    # 鉄道・乗り物系
+    "プラレール": "のりもの",
+    "トミカ": "のりもの",
+    # STEM・知育玩具系
+    "レゴ": "図鑑",
+    "LEGO": "図鑑",
+    "くもん": "ドリル",
+    "公文": "ドリル",
+    "学研": "図鑑",
+    "ピープル": "図鑑",
+    "ボーネルンド": "図鑑",
+    # 大手メーカー (キャラ依存度高いので絵本)
+    "バンダイ": "絵本",
+    "タカラトミー": "絵本",
+    "セガトイズ": "絵本",
+    "エポック": "絵本",
+    "アガツマ": "絵本",
+    "ジョイレア": "絵本",
+}
+
+# #560: マッチ精度を下げる「子供 + 広域語」で偶発 hit しやすい書籍ファミリーを
+# タイトル単位で弾く。代表例:
+#   - るるぶこどもとあそぼ / まっぷるキッズ (旅行ガイド)
+#   - 〇〇県年鑑 / 年版 (年版もの)
+#   - 観光案内 / 旅行ガイド / 都道府県ガイド
+#   - 中古試験問題 / 公務員試験 (大人向け資格本が「子供」と無関係でヒット)
+# `re.search` で大文字小文字無視 + 全角半角差は別パターンで吸収する。
+BOOKS_NG_PATTERNS = [
+    r"るるぶ",
+    r"まっぷる",
+    r"観光ガイド",
+    r"旅行ガイド",
+    r"地球の歩き方",
+    # 年版書籍 ('15～'16 / 2024年版 / 2024-2025 など)
+    r"['']\d{2}\s*[~〜～-]\s*['']?\d{2}",
+    r"20\d{2}\s*[~〜～-]\s*20\d{2}",
+    r"20\d{2}\s*年版",
+    # 大人向け資格・試験本
+    r"公務員試験",
+    r"宅建士",
+    r"FP\s*\d級",
+    # 婦人雑誌・実用書
+    r"婦人画報",
+    r"きょうの料理",
+]
+_NG_RE = re.compile("|".join(BOOKS_NG_PATTERNS), re.IGNORECASE)
+
+
+def is_books_noise(title: str | None) -> bool:
+    """``BOOKS_NG_PATTERNS`` のいずれかにマッチする書籍タイトルなら True。
+
+    #560: 「ジグソーパズル → るるぶこどもとあそぼ」のように、子供 + 広域語で
+    偶発的に strict filter を通過してしまう旅行ガイド/年鑑ファミリーを弾く。
+    """
+    if not title:
+        return False
+    return bool(_NG_RE.search(title))
+
+
+def _genre_query_for_brand(brand: str) -> str:
+    """ブランド別 secondary keyword を返す。未収録なら ``"絵本"``。"""
+    return BRAND_GENRE_VOCAB.get(brand, "絵本")
+
+
+def build_query_chain(brand: str, fallback_kw: str) -> list[str]:
+    """#503: per-ASIN query の段階フォールバック列を返す。
+
+    primary: ``<brand> <genre>`` (brand あり) / ``<fallback_kw> 絵本`` (brand なし)
+    second:  ``<brand>`` 単独 (brand あり)
+    どちらの段階で hit したかは呼び出し側が API レスポンスを見て決める。
+    最大 2 段までに抑えて API quota を節約する。
+    """
+    chain: list[str] = []
+    if brand:
+        chain.append(f"{brand} {_genre_query_for_brand(brand)}")
+        chain.append(brand)
+    elif fallback_kw:
+        chain.append(f"{fallback_kw} 絵本")
+    # 重複と空文字を除去
+    seen: set[str] = set()
+    out: list[str] = []
+    for q in chain:
+        q = q.strip()
+        if q and q not in seen:
+            seen.add(q)
+            out.append(q)
+    return out
 
 
 def extract_brand(text: str) -> str:
@@ -79,12 +184,18 @@ def books_search(api_key: str, query: str, max_results: int = 3) -> list:
     out = []
     for item in data.get("items", []):
         info = item.get("volumeInfo", {})
+        title = info.get("title")
+        # #560: 旅行ガイド/年鑑ファミリーをここで捨てる (per_asin/books.json まで
+        # 残らないように)。description も併せて見るのは過剰なので title のみ。
+        if is_books_noise(title):
+            logger.info(f"  drop NG book: {title!r}")
+            continue
         thumbnail = info.get("imageLinks", {}).get("thumbnail") \
             or info.get("imageLinks", {}).get("smallThumbnail")
         if thumbnail and thumbnail.startswith("http://"):
             thumbnail = thumbnail.replace("http://", "https://")
         out.append({
-            "title": info.get("title"),
+            "title": title,
             "authors": info.get("authors", ["不明"]),
             "description": info.get("description", "説明なし"),
             "url": info.get("infoLink"),
@@ -157,26 +268,39 @@ def main():
     queried_asins: list[str] = []
     for asin, title in targets:
         brand = extract_brand(title)
-        if brand:
-            query = f"{brand} 知育"
-        else:
-            fb = extract_fallback_keyword(title)
-            if not fb:
-                continue
-            query = f"{fb} 知育"
+        fb = "" if brand else extract_fallback_keyword(title)
+        if not brand and not fb:
+            continue
+        # #503: brand 別 vocab + fallback chain。最大 2 段で primary が hit
+        # しないときだけ次段に進む (API quota 節約)。
+        query_chain = build_query_chain(brand, fb)
+        if not query_chain:
+            continue
         per_asin_items: list = []
-        if query not in seen_queries:
+        used_query = ""
+        for query in query_chain:
+            if query in seen_queries:
+                # 既に他 ASIN で叩いた query は再度叩かない (API 節約)。
+                # ただし stage 進行は止めず、次の query があれば試す。
+                logger.info(f"  [{asin}] query='{query}' (deduped, no API call)")
+                used_query = used_query or query
+                continue
             seen_queries.add(query)
             logger.info(f"  [{asin}] brand='{brand or '-'}' query='{query}'")
-            for b in books_search(api_key, query, max_results=2):
+            fetched = books_search(api_key, query, max_results=2)
+            for b in fetched:
                 per_asin_items.append(b)
                 url = b.get("url") or ""
                 if url and url not in seen_urls:
                     items.append(b)
                     seen_urls.add(url)
-        else:
-            logger.info(f"  [{asin}] query='{query}' (deduped, no API call)")
-        _fetch_targets.write_per_asin_raw(out_dir, "books", asin, query, per_asin_items)
+            used_query = query
+            if per_asin_items:
+                # primary で hit したら fallback 段は試さない。
+                break
+        _fetch_targets.write_per_asin_raw(
+            out_dir, "books", asin, used_query or query_chain[0], per_asin_items
+        )
         queried_asins.append(asin)
 
     if queried_asins:
