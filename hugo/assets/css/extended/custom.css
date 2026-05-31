@@ -2822,9 +2822,14 @@ body.dark .hub-banner-link {
   text-decoration: none !important;
 }
 
+/* #1089 / #1144: title が大きすぎる問題を再修正。
+   PaperMod の `.md-content h3 { font-size: 24px }` (specificity 0,1,1) が
+   `.carousel-card-title` (0,1,0) を上書きするため、`.post-content` を前置して
+   specificity を 0,2,0 に上げ、確実に勝たせる。
+   3 セクション間で title サイズを統一 (carousel-card-title と一致, 0.78rem),
+   行数も 3 → 2 にクランプして縦幅を圧縮 */
+.post-content .carousel-card-title,
 .carousel-card-title {
-  /* #1089: title が大きすぎるとの指摘を受け、product-card-title と揃え (0.95rem → 0.78rem),
-     行数も 3 → 2 にクランプして縦幅を圧縮 */
   font-size: 0.78rem;
   font-weight: 600;
   line-height: 1.35;
