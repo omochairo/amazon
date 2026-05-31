@@ -46,6 +46,10 @@ on:
       # 2026-05-31 (#1198): Jules daily cap 等で 03-invoke-jules を触る PR も
       # validate を required check として発火させる (vacuous SUCCESS)。
       - '.github/workflows/03-invoke-jules.yml'
+      # 2026-05-31 (#1200): Jules daily report workflow / script を触る PR も
+      # validate を required check として発火させる (vacuous SUCCESS)。
+      - '.github/workflows/16-jules-daily-report.yml'
+      - 'scripts/report_jules_usage.py'
       - 'scripts/fetch_amazon.py'
       - 'scripts/fetch_youtube.py'
       # 2026-05-26 (session 60 PR #786): Creator API クライアント本体を触る PR も
