@@ -1490,7 +1490,21 @@ def _frontmatter_meta(
         # index.json / Hugo partial がここを読む。スケール定義は score_calculator 一元管理。
         meta["ivs_axes"] = compute_ivs_axes(sr.breakdown)
     if data.get("jsonld"):
-        meta["jsonld"] = data["jsonld"]
+        # Issue #1297: Hugo の .Params map はキーを小文字化するため、JSON-LD を
+        # ネスト dict のまま渡すと aggregateRating → aggregaterating のように
+        # schema.org キーが壊れる。各値を JSON 文字列としてシリアライズし、
+        # template 側は | safeJS で素通しする。
+        # `<` / `>` / `&` は HTML escape して </script> 衝突を防ぐ
+        # (Go encoding/json のデフォルト挙動と同等)。
+        ld = data["jsonld"]
+        meta["jsonld"] = {}
+        for k, v in ld.items():
+            if isinstance(v, (dict, list)):
+                s = json.dumps(v, ensure_ascii=False)
+                s = s.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+                meta["jsonld"][k] = s
+            else:
+                meta["jsonld"][k] = v
     if data.get("breadcrumbs"):
         meta["breadcrumbs"] = data["breadcrumbs"]
         
@@ -1734,7 +1748,7 @@ def main() -> None:
             )
 
             out_file = dst_path / f"{slug}.md"
-            out_file.write_text(frontmatter.dumps(post), encoding="utf-8")
+            out_file.write_text(frontmatter.dumps(post, width=10000), encoding="utf-8")
             tag = "  [DRAFT: low quality]" if draft else ""
 
             if args.gate and evaluate_article is not None:
@@ -1750,7 +1764,7 @@ def main() -> None:
                 )
                 if args.min_score > 0 and report.total_score < args.min_score and not draft:
                     post.metadata["draft"] = True
-                    out_file.write_text(frontmatter.dumps(post), encoding="utf-8")
+                    out_file.write_text(frontmatter.dumps(post, width=10000), encoding="utf-8")
                     tag = f"  [DRAFT: score {report.total_score} < {args.min_score}]"
                 else:
                     tag += f"  [score {report.total_score}]"
