@@ -185,7 +185,7 @@
 <div class="slideshow-stage">{% for img in product.images[1:] %}<img src="{{ img }}" alt="{{ product.name }} 関連画像 {{ loop.index }}" loading="lazy" class="slide{% if loop.first %} active{% endif %}">{% endfor %}</div>
 <button type="button" class="slide-prev" aria-label="前の画像">‹</button>
 <button type="button" class="slide-next" aria-label="次の画像">›</button>
-<div class="slide-thumbs">{% for img in product.images[1:] %}<button type="button" class="slide-thumb{% if loop.first %} active{% endif %}" data-idx="{{ loop.index0 }}" aria-label="{{ loop.index }}枚目"><img src="{{ img }}" alt="" loading="lazy"></button>{% endfor %}</div>
+<div class="slide-thumbs">{% for img in product.images[1:] %}<button type="button" class="slide-thumb{% if loop.first %} active{% endif %}" data-idx="{{ loop.index0 }}" aria-label="{{ loop.index }}枚目"><img src="{{ img }}" alt="{{ product.name }} サムネイル {{ loop.index }}" loading="lazy"></button>{% endfor %}</div>
 <div class="slide-counter"><span class="slide-current">1</span> / {{ product.images[1:]|length }}</div>
 </div>
 {% endif %}
