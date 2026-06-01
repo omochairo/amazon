@@ -241,6 +241,142 @@ def _parse_age_min_months(raw: Any) -> int:
     return 0
 
 
+# Issue #1301 B4 Stage 2: Article 単位 JSON-LD の reviewedBy / creator 用定数。
+# Person @id / URL は hugo/config.toml の authorProfile.founders と
+# hugo/content/author/<slug>.md の Person @id (#person fragment) と同期必須。
+# 変更時は 3 箇所同時更新。
+_SITE_BASE_URL = "https://navi.omcha.jp"
+
+PERSON_IROPAPA: dict[str, Any] = {
+    "@type": "Person",
+    "@id": f"{_SITE_BASE_URL}/author/iropapa/#person",
+    "name": "いろパパ",
+    "url": f"{_SITE_BASE_URL}/author/iropapa/",
+}
+PERSON_IROMAMA: dict[str, Any] = {
+    "@type": "Person",
+    "@id": f"{_SITE_BASE_URL}/author/iromama/#person",
+    "name": "いろママ",
+    "url": f"{_SITE_BASE_URL}/author/iromama/",
+}
+
+# 安全性 reviewer (いろママ) 判定のシグナル。
+_MAMA_NAME_TOKENS: tuple[str, ...] = (
+    "ままごと", "おままごと", "ぬいぐるみ", "歯固め", "おしゃぶり", "離乳",
+)
+_MAMA_TAG_TOKENS: frozenset[str] = frozenset({
+    "食育", "ベビー", "0歳", "1歳", "2歳", "ぬいぐるみ", "安全", "離乳",
+})
+
+# 分析 reviewer (いろパパ) 判定のシグナル。
+_PAPA_NAME_TOKENS: tuple[str, ...] = (
+    "プログラミング", "ロボット", "stem", "知育ロボ", "ドローン", "コーディング",
+)
+_PAPA_TAG_TOKENS: frozenset[str] = frozenset({
+    "stem", "プログラミング", "ロボット", "コスパ", "電子工作", "実験",
+})
+
+# 3 歳未満は安全性 reviewer (誤飲リスク年齢圏)。
+_AGE_MAMA_THRESHOLD_MONTHS: int = 36
+
+
+def _determine_reviewers(
+    product: dict[str, Any], tags: list[str] | None
+) -> list[dict[str, Any]]:
+    """商品特性に応じて記事の reviewer (Person) を判定する。
+
+    Issue #1301 B4 Stage 2: AI 下書き + 人間レビューを JSON-LD で分離するための
+    担当 founder ルーティング。
+
+    判定優先順位:
+        1. いろママ — 安全性が主軸: 36 ヶ月未満 / 安全性タグ / 食育系名
+        2. いろパパ — 分析が主軸: STEM / プログラミング / コスパ タグ・名
+        3. どちらでもない — 両者連名 (default = dual review で E-E-A-T 強)
+
+    Returns:
+        Person dict のリスト (要素数 1 or 2)。
+    """
+    try:
+        age_min = int(product.get("age_min_months") or 0)
+    except (TypeError, ValueError):
+        age_min = 0
+
+    name_lower = str(product.get("name") or "").lower()
+    tags_lower = {str(t).lower() for t in (tags or []) if t}
+    mama_tag_lower = {t.lower() for t in _MAMA_TAG_TOKENS}
+    papa_tag_lower = {t.lower() for t in _PAPA_TAG_TOKENS}
+
+    # いろママ判定 (誤飲リスク年齢 + 食育・安全タグ + 食/縫いぐるみ系名)
+    if (
+        (age_min and age_min < _AGE_MAMA_THRESHOLD_MONTHS)
+        or (tags_lower & mama_tag_lower)
+        or any(tok.lower() in name_lower for tok in _MAMA_NAME_TOKENS)
+    ):
+        return [PERSON_IROMAMA]
+
+    # いろパパ判定 (STEM・分析タグ + 機械系名)
+    if (
+        (tags_lower & papa_tag_lower)
+        or any(tok.lower() in name_lower for tok in _PAPA_NAME_TOKENS)
+    ):
+        return [PERSON_IROPAPA]
+
+    # default: 両者連名 (dual review)
+    return [PERSON_IROPAPA, PERSON_IROMAMA]
+
+
+# AI 下書き責任の Organization (creator) 定数。
+ORG_OMOCHAIRO_EDITORIAL: dict[str, Any] = {
+    "@type": "Organization",
+    "name": "おもちゃいろ編集部",
+    "url": f"{_SITE_BASE_URL}/about/",
+}
+ORG_AI_AGENT: dict[str, Any] = {
+    "@type": "Organization",
+    "name": "おもちゃロボ (AI 編集システム)",
+    "description": "Amazon・楽天・Yahoo! ショッピングの市場データを集約し、記事下書きとスコア計算を担当する AI エージェント。",
+}
+
+
+def _build_webpage_jsonld(
+    *,
+    product: dict[str, Any],
+    tags: list[str] | None,
+    title: str,
+    date: str,
+    lastmod: str,
+    asin: str,
+) -> dict[str, Any]:
+    """商品ページの WebPage JSON-LD を構築する。
+
+    Issue #1301 B4 Stage 2:
+        - author     = Organization (公開責任 = おもちゃいろ編集部)
+        - reviewedBy = Person (担当 founder、_determine_reviewers で判定)
+        - creator    = Organization (AI 編集システム / 下書き責任)
+
+    既存の Product / FAQ / Breadcrumb JSON-LD と並列で emit される (既存非破壊)。
+    """
+    reviewers = _determine_reviewers(product, tags)
+    page_url = f"{_SITE_BASE_URL}/products/{asin.lower()}/"
+    reviewed_by: Any = reviewers[0] if len(reviewers) == 1 else reviewers
+    return {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "@id": f"{page_url}#webpage",
+        "url": page_url,
+        "name": title,
+        "author": ORG_OMOCHAIRO_EDITORIAL,
+        "reviewedBy": reviewed_by,
+        "creator": ORG_AI_AGENT,
+        "datePublished": date,
+        "dateModified": lastmod,
+        "isPartOf": {
+            "@type": "WebSite",
+            "url": f"{_SITE_BASE_URL}/",
+        },
+    }
+
+
 def _get_development_stage(age_min_months: int, stages_data: dict[str, Any]) -> dict[str, Any] | None:
     """最小月齢から、合致する最適な発達段階のデータを取り出す。"""
     if not stages_data:
@@ -1494,22 +1630,37 @@ def _frontmatter_meta(
         # 4 軸 (#589) — カード一覧で簡易バーを描くために frontmatter に持たせる。
         # index.json / Hugo partial がここを読む。スケール定義は score_calculator 一元管理。
         meta["ivs_axes"] = compute_ivs_axes(sr.breakdown)
+    # Issue #1297: Hugo の .Params map はキーを小文字化するため、JSON-LD を
+    # ネスト dict のまま渡すと aggregateRating → aggregaterating のように
+    # schema.org キーが壊れる。各値を JSON 文字列としてシリアライズし、
+    # template 側は | safeJS で素通しする。
+    # `<` / `>` / `&` は HTML escape して </script> 衝突を防ぐ
+    # (Go encoding/json のデフォルト挙動と同等)。
+    meta_jsonld: dict[str, Any] = {}
     if data.get("jsonld"):
-        # Issue #1297: Hugo の .Params map はキーを小文字化するため、JSON-LD を
-        # ネスト dict のまま渡すと aggregateRating → aggregaterating のように
-        # schema.org キーが壊れる。各値を JSON 文字列としてシリアライズし、
-        # template 側は | safeJS で素通しする。
-        # `<` / `>` / `&` は HTML escape して </script> 衝突を防ぐ
-        # (Go encoding/json のデフォルト挙動と同等)。
-        ld = data["jsonld"]
-        meta["jsonld"] = {}
-        for k, v in ld.items():
+        for k, v in data["jsonld"].items():
             if isinstance(v, (dict, list)):
                 s = json.dumps(v, ensure_ascii=False)
                 s = s.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
-                meta["jsonld"][k] = s
+                meta_jsonld[k] = s
             else:
-                meta["jsonld"][k] = v
+                meta_jsonld[k] = v
+    # Issue #1301 B4 Stage 2: WebPage JSON-LD (author / reviewedBy / creator)。
+    # AI 下書きと人間レビューを分離可視化する。既存 product/faq/breadcrumb と並列 emit。
+    if product and asin:
+        webpage_ld = _build_webpage_jsonld(
+            product=product,
+            tags=meta.get("tags") or [],
+            title=title,
+            date=str(data.get("date") or lastmod),
+            lastmod=lastmod,
+            asin=str(asin),
+        )
+        s = json.dumps(webpage_ld, ensure_ascii=False)
+        s = s.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+        meta_jsonld["webpage"] = s
+    if meta_jsonld:
+        meta["jsonld"] = meta_jsonld
     if data.get("breadcrumbs"):
         meta["breadcrumbs"] = data["breadcrumbs"]
         
