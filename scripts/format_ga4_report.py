@@ -44,6 +44,7 @@ def _fmt_rate(v) -> str:
 def render(data: dict, top_page: int, top_source: int) -> str:
     r = data.get("range", {})
     t = data.get("totals", {})
+    by_host = data.get("by_host", [])
     by_page = data.get("by_page", [])[:top_page]
     by_device = data.get("by_device", [])
     by_source = data.get("by_source", [])[:top_source]
@@ -56,6 +57,22 @@ def render(data: dict, top_page: int, top_source: int) -> str:
     lines.append(f"- 合計 PV: **{_fmt_int(t.get('screenPageViews_sum'))}**")
     lines.append(f"- 合計 engagedSessions: **{_fmt_int(t.get('engagedSessions_sum'))}**")
     lines.append("")
+
+    if by_host:
+        lines.append("### サイト別合計 (cross-domain)")
+        lines.append("| hostName | PV | engaged | avg dur | bounce |")
+        lines.append("|---|---:|---:|---:|---:|")
+        for row in by_host:
+            lines.append(
+                f"| `{row.get('hostName', '-')}` "
+                f"| {_fmt_int(row.get('screenPageViews'))} "
+                f"| {_fmt_int(row.get('engagedSessions'))} "
+                f"| {_fmt_dur(row.get('averageSessionDuration'))} "
+                f"| {_fmt_rate(row.get('bounceRate'))} |"
+            )
+        lines.append("")
+        lines.append("> 注: omcha.jp (WP 本体) と navi.omcha.jp (Hugo 知育玩具ナビ) は同一 GA4 計測 ID を共有。Phase 4 score 連携時は navi のみ filter する。")
+        lines.append("")
 
     if by_device:
         lines.append("### デバイス別")
@@ -83,14 +100,17 @@ def render(data: dict, top_page: int, top_source: int) -> str:
 
     if by_page:
         lines.append(f"### 人気ページ Top {len(by_page)}")
-        lines.append("| # | pagePath | PV | engaged | avg dur | bounce |")
-        lines.append("|---:|---|---:|---:|---:|---:|")
+        lines.append("| # | host | pagePath | PV | engaged | avg dur | bounce |")
+        lines.append("|---:|---|---|---:|---:|---:|---:|")
         for i, row in enumerate(by_page, 1):
+            host = row.get("hostName", "-")
+            # host を短縮: navi.omcha.jp → navi, omcha.jp → wp で識別性アップ
+            host_short = "navi" if host == "navi.omcha.jp" else ("wp" if host == "omcha.jp" else host)
             path = row.get("pagePath", "-")
-            if len(path) > 60:
-                path = path[:57] + "..."
+            if len(path) > 50:
+                path = path[:47] + "..."
             lines.append(
-                f"| {i} | `{path}` "
+                f"| {i} | {host_short} | `{path}` "
                 f"| {_fmt_int(row.get('screenPageViews'))} "
                 f"| {_fmt_int(row.get('engagedSessions'))} "
                 f"| {_fmt_dur(row.get('averageSessionDuration'))} "
