@@ -73,14 +73,25 @@ def fetch(property_id: str, sa_json: str, days: int, top_n: int) -> dict[str, An
     start_s, end_s = start.isoformat(), end.isoformat()
     logger.info("range: %s .. %s (property=%s)", start_s, end_s, property_id)
 
+    # hostName + pagePath で取得 (omcha.jp / navi.omcha.jp が同一 GA4 を共有しているため、
+    # サイト識別のため hostName を必ず含める。Phase 4 score 連携時の filter にも使う)
     by_page = _run_report(
         client, property_id, start_s, end_s,
-        dims=["pagePath"],
+        dims=["hostName", "pagePath"],
         metrics=["screenPageViews", "engagedSessions",
                  "averageSessionDuration", "bounceRate"],
         limit=top_n,
     )
     by_page.sort(key=lambda r: r.get("screenPageViews", 0), reverse=True)
+
+    # サイト別合算 (cross-domain inflow/outflow の規模比較用)
+    by_host = _run_report(
+        client, property_id, start_s, end_s,
+        dims=["hostName"],
+        metrics=["screenPageViews", "engagedSessions",
+                 "averageSessionDuration", "bounceRate"],
+    )
+    by_host.sort(key=lambda r: r.get("screenPageViews", 0), reverse=True)
 
     by_device = _run_report(
         client, property_id, start_s, end_s,
@@ -104,6 +115,7 @@ def fetch(property_id: str, sa_json: str, days: int, top_n: int) -> dict[str, An
             "screenPageViews_sum": sum(r.get("screenPageViews", 0) for r in by_page),
             "engagedSessions_sum": sum(r.get("engagedSessions", 0) for r in by_page),
         },
+        "by_host": by_host,
         "by_page": by_page,
         "by_device": by_device,
         "by_source": by_source,
