@@ -34,8 +34,22 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-{{- if hugo.IsProduction | or (eq site.Params.env "production") | and (ne .Params.robotsNoIndex true) }}
+{{- /* B2 (Issue #1301): thin taxonomy term ページ (tags / brands / categories で
+       紐づく記事数が threshold 未満) を noindex,follow にする。
+       メーカー (brand) も同じゲートを通過するため、記事が増えれば自動で index,follow に戻る。
+       閾値は site.Params.thinTermNoindexThreshold で上書き可 (default 3)。 */ -}}
+{{- $isThinTerm := false -}}
+{{- if eq .Kind "term" -}}
+  {{- $threshold := int (site.Params.thinTermNoindexThreshold | default 3) -}}
+  {{- if lt (len .Pages) $threshold -}}
+    {{- $isThinTerm = true -}}
+  {{- end -}}
+{{- end -}}
+{{- $isProd := or hugo.IsProduction (eq site.Params.env "production") -}}
+{{- if and $isProd (ne .Params.robotsNoIndex true) (not $isThinTerm) }}
 <meta name="robots" content="index, follow">
+{{- else if and $isProd $isThinTerm (ne .Params.robotsNoIndex true) }}
+<meta name="robots" content="noindex, follow">
 {{- else }}
 <meta name="robots" content="noindex, nofollow">
 {{- end }}
