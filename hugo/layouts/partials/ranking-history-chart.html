@@ -1,0 +1,43 @@
+{{- /* Issue #600 Phase B: 楽天ランキング順位推移チャート (Chart.js client-side)
+
+   入力: . が `dict "asin" <ASIN> "title" <記事タイトル>` 形式の context。
+   挙動: site.Data.ranking.history.history[ASIN] に履歴 ≥ 2 点あれば <section> 出力。
+         なし or 1 点なら何も出さない (記事側で見出しが浮かない)。
+
+   描画は client-side: history を JSON で data 属性に渡し、Chart.js が読む。
+   Hugo SSR は重いので [object Object] 文字列化等はせず JSON.stringify 経由。 */ -}}
+{{- $asin := upper (.asin | default "") -}}
+{{- if $asin -}}
+  {{- $data := (site.Data.ranking | default dict).history | default dict -}}
+  {{- $entries := (index $data "history") | default dict -}}
+  {{- $entry := index $entries $asin -}}
+  {{- if $entry -}}
+    {{- $points := $entry.history | default slice -}}
+    {{- if ge (len $points) 2 -}}
+      {{- $current := index $points (sub (len $points) 1) -}}
+      {{- $best := 999 -}}
+      {{- range $points -}}
+        {{- if lt (int .r) $best }}{{ $best = int .r }}{{ end -}}
+      {{- end -}}
+<section class="ranking-history-chart" aria-labelledby="ranking-history-heading">
+  <h2 id="ranking-history-heading">楽天ランキング順位の推移 (直近{{ len $points }}日)</h2>
+  <p class="ranking-history-meta">
+    現在 <strong>{{ $current.r }}位</strong> / 期間内ベスト <strong>{{ $best }}位</strong>
+    <span class="ranking-history-updated">更新: {{ $data.updated_at | default "—" }}</span>
+  </p>
+  <div class="ranking-history-canvas-wrap">
+    <canvas
+      class="ranking-history-canvas"
+      data-ranking-history="{{ $points | jsonify }}"
+      data-ranking-asin="{{ $asin }}"
+      aria-label="ASIN {{ $asin }} の楽天ランキング順位推移グラフ"
+      role="img"
+    ></canvas>
+  </div>
+  <noscript>
+    <p class="ranking-history-noscript">グラフ表示には JavaScript が必要です。</p>
+  </noscript>
+</section>
+    {{- end -}}
+  {{- end -}}
+{{- end -}}

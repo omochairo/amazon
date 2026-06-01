@@ -2484,6 +2484,16 @@ body.dark .product-card-age {
   box-shadow: 0 4px 10px rgba(220, 38, 38, 0.45);
   color: #ffffff;
 }
+/* Issue #600 Phase C: Amazon CTA を楽天 CTA の隣に並列表示するため、
+   Amazon ブランドカラー (#ff9900) で塗り分け。.ranking-cta-external を
+   ベースとし、.ranking-cta-amazon が背景色だけを上書きする。 */
+.ranking-cta-amazon {
+  background: linear-gradient(135deg, #ffb84d, #ff9900);
+  box-shadow: 0 2px 6px rgba(255, 153, 0, 0.3);
+}
+.ranking-cta-amazon:hover {
+  box-shadow: 0 4px 10px rgba(255, 153, 0, 0.45);
+}
 
 @media (max-width: 720px) {
   .ranking-item {
@@ -4158,4 +4168,54 @@ details.development-stage-accordion[open] > summary::before {
   color: var(--secondary);
   font-size: 0.78rem;
   margin-top: 12px;
+}
+
+/* Issue #600: 楽天ランキング順位推移チャート */
+.ranking-history-chart {
+  margin: 32px 0;
+  padding: 20px 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--code-bg, var(--entry, transparent));
+}
+.ranking-history-chart h2 {
+  margin: 0 0 8px;
+  font-size: 1.15rem;
+  color: var(--primary);
+}
+.ranking-history-meta {
+  margin: 0 0 14px;
+  font-size: 0.92rem;
+  color: var(--secondary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: baseline;
+}
+.ranking-history-meta strong {
+  color: var(--primary);
+  font-weight: 700;
+}
+.ranking-history-updated {
+  font-size: 0.78rem;
+  color: var(--tertiary, var(--secondary));
+}
+.ranking-history-canvas-wrap {
+  position: relative;
+  height: 240px;
+  width: 100%;
+}
+.ranking-history-canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+.ranking-history-noscript {
+  margin: 0;
+  color: var(--secondary);
+  font-size: 0.88rem;
+}
+@media (max-width: 600px) {
+  .ranking-history-chart { padding: 14px 12px; }
+  .ranking-history-canvas-wrap { height: 200px; }
 }
