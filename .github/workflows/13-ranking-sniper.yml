@@ -106,6 +106,15 @@ jobs:
           set -e
           python scripts/fetch_rakuten.py --rematch-only --out data/raw/ || true
 
+      - name: Append ranking history snapshot
+        # Issue #600 Phase A: rematch 済 weekly.json から matched_asin 付き item を
+        # hugo/data/ranking/history.json に日次 append (90日 rotation)。チャート/
+        # 「楽天N位」バッジ用の時系列ソース。日次 sniper cron に同梱して PR に乗せる。
+        if: ${{ env.DRY_RUN != 'true' }}
+        run: |
+          set -e
+          python scripts/append_ranking_history.py || true
+
       - name: Create backfill PR + enable auto-merge
         if: ${{ env.DRY_RUN != 'true' }}
         env:
@@ -118,8 +127,10 @@ jobs:
           git add data/raw/per_asin data/raw/_ranking_resolved_manifest.json data/raw/ranking_sniper_asins.csv data/raw/ranking_pool.json || true
 
           # Issue #1149: rematch で更新された /ranking/ 用 weekly.json + manifest も同 PR で main 反映。
+          # Issue #600: history.json も同 PR で日次更新 (90日 rotation, Chart.js / バッジ用)。
           # hugo/ は .gitignore 対象 → -f が必須 ([[hugo-gitignore-trap]] / [[hugo-output-cron-trio]])。
           git add -f hugo/data/ranking/weekly.json hugo/data/ranking/_match_manifest.json || true
+          git add -f hugo/data/ranking/history.json || true
           git add data/raw/rakuten_ranking.json data/raw/_rakuten_ranking_manifest.json || true
 
           if git diff --cached --quiet; then
