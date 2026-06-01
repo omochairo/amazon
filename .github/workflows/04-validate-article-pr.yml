@@ -173,6 +173,17 @@ on:
       - 'scripts/backfill_jan_codes.py'
       - 'scripts/tests/test_backfill_jan_codes.py'
       - '.github/workflows/15-backfill-jan-codes.yml'
+      # 2026-06-01 (Issue #1316 Phase 1): GA4 週次 read-only レポート。
+      # fetch_ga4.py / format_ga4_report.py / 17-analytics-report.yml は
+      # 記事生成パイプラインから独立しているが、required check (validate) を通すため
+      # paths に追加 ([[04-validate-paths-trap]])。validate は副作用ゼロで vacuous SUCCESS。
+      - 'scripts/fetch_ga4.py'
+      - 'scripts/format_ga4_report.py'
+      - '.github/workflows/17-analytics-report.yml'
+      # requirements.txt は今回 google-analytics-data 追加で触る。
+      # validate が pip install -r requirements.txt しているため、deps 追加 PR を
+      # validate 経由で発火させる ([[04-validate-paths-trap]])。
+      - 'requirements.txt'
   workflow_dispatch:
 
 permissions:
