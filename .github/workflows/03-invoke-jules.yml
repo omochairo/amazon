@@ -146,7 +146,9 @@ jobs:
           PY
           # lock ブランチ用の empty commit を作る (committer.date を TTL 判定に利用)
           # 2026-05-17 Step C-1: MAX_LOCKS まで lock を取得し、picked.txt に列挙する。
-          MAX_LOCKS=8
+          # 2026-06-01 Issue #967: supply 黒字確認 (remaining=71 >> 8 基準) 後 8 → 12 に拡張
+          # (12-rewrite-idle-fill.yml も同値で揃える)
+          MAX_LOCKS=12
           MAIN_SHA=$(gh api repos/$REPO/git/refs/heads/main --jq .object.sha)
           MAIN_TREE=$(gh api repos/$REPO/git/commits/$MAIN_SHA --jq .tree.sha)
           : > /tmp/picked.txt
