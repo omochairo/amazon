@@ -2484,6 +2484,16 @@ body.dark .product-card-age {
   box-shadow: 0 4px 10px rgba(220, 38, 38, 0.45);
   color: #ffffff;
 }
+/* Issue #600 Phase C: Amazon CTA を楽天 CTA の隣に並列表示するため、
+   Amazon ブランドカラー (#ff9900) で塗り分け。.ranking-cta-external を
+   ベースとし、.ranking-cta-amazon が背景色だけを上書きする。 */
+.ranking-cta-amazon {
+  background: linear-gradient(135deg, #ffb84d, #ff9900);
+  box-shadow: 0 2px 6px rgba(255, 153, 0, 0.3);
+}
+.ranking-cta-amazon:hover {
+  box-shadow: 0 4px 10px rgba(255, 153, 0, 0.45);
+}
 
 @media (max-width: 720px) {
   .ranking-item {
