@@ -1425,6 +1425,11 @@ def _frontmatter_meta(
     image_url = product.get("image") or ""
     if image_url:
         meta["product_image"] = image_url
+        # Issue #1300 ②: og:image / twitter:image を商品画像で上書き。
+        # PaperMod の opengraph.html / twitter_cards.html は .Params.images が
+        # 設定されていれば _funcs/get-page-images 経由で最初の URL を採用する
+        # (未設定だと site.Params.images の /og-image.jpg 汎用画像に fallback)。
+        meta["images"] = [image_url]
     # 2026-05-15 (@J Phase 1): data/brand_taxonomy.yaml に基づくブランド正規化。
     # raw brand (Jules / API 取得時の表記ゆれ含む) → canonical 名に統一して
     # Hugo /brands/<canonical>/ ページで集約検索できるようにする。
