@@ -1,0 +1,104 @@
+name: Analytics Weekly Report (GA4)
+
+# Issue #1316 Phase 1 — GA4 Data API から過去 7 日の PV / engagement を取得し、
+# analytics ラベル付き Issue として投稿する read-only 観察 workflow。
+#
+# 設計判断:
+#   - cron: 月曜 09:00 JST (= 日曜 00:00 UTC)。前週 (月曜-日曜) のおおよそをカバー。
+#   - score / narrative / 記事生成パイプラインには一切影響しない (副作用ゼロ)。
+#   - data/analytics/ga4_weekly.json は artifact upload のみ、main に commit しない
+#     (main 保護下で App token を新設する手間を Phase 1 では避ける)。
+#   - SA JSON は GA4_SA_JSON シークレットに全文格納。改行を含む JSON 全文を
+#     そのまま secret value としてセットすれば動く (GitHub Actions が自動でマスク)。
+#
+# 必須 secrets:
+#   - GA4_SA_JSON     Service Account JSON 全文
+#   - GA4_PROPERTY_ID GA4 property の数値 ID (例: 460504075)
+
+on:
+  schedule:
+    # 月曜 09:00 JST = 日曜 00:00 UTC
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Lookback window in days (default 7)'
+        required: false
+        default: '7'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: analytics-weekly-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-analytics-data google-auth
+
+      - name: Fetch GA4 data
+        env:
+          GA4_SA_JSON: ${{ secrets.GA4_SA_JSON }}
+          GA4_PROPERTY_ID: ${{ secrets.GA4_PROPERTY_ID }}
+          INPUT_DAYS: ${{ github.event.inputs.days }}
+        run: |
+          set -e
+          DAYS="${INPUT_DAYS:-7}"
+          if [ -z "$GA4_SA_JSON" ] || [ -z "$GA4_PROPERTY_ID" ]; then
+            echo "::error::GA4_SA_JSON or GA4_PROPERTY_ID secret is not set"
+            exit 1
+          fi
+          python scripts/fetch_ga4.py --days "$DAYS"
+
+      - name: Build markdown summary
+        id: summary
+        run: |
+          set -e
+          python scripts/format_ga4_report.py --input data/analytics/ga4_weekly.json > /tmp/report.md
+          # 範囲を Issue タイトル用に抽出
+          START=$(python -c "import json; print(json.load(open('data/analytics/ga4_weekly.json'))['range']['start'])")
+          END=$(python -c "import json; print(json.load(open('data/analytics/ga4_weekly.json'))['range']['end'])")
+          echo "range_start=$START" >> "$GITHUB_OUTPUT"
+          echo "range_end=$END" >> "$GITHUB_OUTPUT"
+          echo "--- preview ---"
+          head -40 /tmp/report.md
+          echo "--- end ---"
+
+      - name: Upload JSON artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ga4-weekly-${{ steps.summary.outputs.range_end }}
+          path: data/analytics/ga4_weekly.json
+          retention-days: 90
+
+      - name: Create weekly Issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RANGE_START: ${{ steps.summary.outputs.range_start }}
+          RANGE_END: ${{ steps.summary.outputs.range_end }}
+        run: |
+          set -e
+          TITLE="GA4 weekly report ${RANGE_START} 〜 ${RANGE_END}"
+          gh issue create \
+            -R "${{ github.repository }}" \
+            --title "$TITLE" \
+            --label "analytics,observation" \
+            --body-file /tmp/report.md
