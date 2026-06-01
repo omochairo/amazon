@@ -124,9 +124,17 @@ enableRobotsTXT = true
     organizationName = "おもちゃいろ運営局（元ソニー技術者×医療従事者）"
     organizationLogo = "https://omcha.jp/wp-content/uploads/2025/09/image-52.png"
     organizationUrl  = "https://omcha.jp"
+    # Legacy single-founder fields (#1263 で導入)。複数 founder 化後も互換のため残置。
+    # extend_head.html は新規の founders 配列があれば優先採用する。
     founderName      = "IroPapa & IroMama"
     founderJobTitle  = "元ソニー技術者 × 医療従事者"
     description      = "20〜40代ファミリーの『失敗しない知育玩具選び』をサポートする、元ソニー技術者と医療従事者の夫婦運営メディア。"
+    # Issue #1301 B4: founder を 2 人の Person に分割。/author/<slug>/ ページに対応する
+    # Person JSON-LD と @id で連携 (Hugo .Params がキーを小文字化するため key は小文字)。
+    founders = [
+      { name = "いろパパ", jobtitle = "元ソニー IT エンジニア / おもちゃ研究家", url = "/author/iropapa/", image = "https://omcha.jp/wp-content/uploads/2025/04/c22cd52e63323cfe98c0cb54c211d308.jpg" },
+      { name = "いろママ", jobtitle = "栄養士 / 臨床検査技師", url = "/author/iromama/", image = "https://omcha.jp/wp-content/uploads/2025/04/a5b0c622e23a862ce050186e940695a1.jpg" },
+    ]
 
   [params.assets]
     favicon = "favicon.ico"
@@ -200,3 +208,7 @@ enableRobotsTXT = true
     name = "📚 記事一覧"
     url = "posts/"
     weight = 8
+  [[menu.main]]
+    name = "📖 編集部について"
+    url = "about/"
+    weight = 9

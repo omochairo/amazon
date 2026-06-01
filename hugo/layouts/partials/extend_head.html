@@ -98,9 +98,13 @@
 }
 </script>
 
-{{- /* Issue #1263 ⑤: E-E-A-T — Organization with founder (元ソニー技術者×医療従事者) + sameAs */ -}}
-{{- /* jsonify は <script> 内で auto-escape されるため safeJS で打ち消す (PR #1277 hotfix) */ -}}
+{{- /* Issue #1263 ⑤ + #1301 B4: E-E-A-T — Organization with founder(s) + sameAs.
+       founders 配列が定義されていれば Person 配列で emit し、各 Person は
+       /author/<slug>/ ページの Person schema と @id で連携。未定義時は
+       legacy 単一 founder にフォールバック。jsonify | safeJS は <script>
+       auto-escape を打ち消すための定石 (PR #1277 hotfix)。 */ -}}
 {{- with site.Params.authorProfile }}
+{{- $ap := . -}}
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -109,6 +113,25 @@
   "url": {{ .organizationUrl | jsonify | safeJS }},
   "logo": {{ .organizationLogo | jsonify | safeJS }},
   "description": {{ .description | jsonify | safeJS }},
+  {{- if .founders }}
+  "founder": [
+    {{- range $i, $f := .founders }}{{ if $i }},{{ end }}
+    {
+      "@type": "Person",
+      "@id": {{ printf "%s%s#person" (site.BaseURL | strings.TrimRight "/") (index $f "url") | jsonify | safeJS }},
+      "name": {{ index $f "name" | jsonify | safeJS }},
+      "jobTitle": {{ index $f "jobtitle" | jsonify | safeJS }},
+      "url": {{ printf "%s%s" (site.BaseURL | strings.TrimRight "/") (index $f "url") | jsonify | safeJS }},
+      "image": {{ index $f "image" | jsonify | safeJS }},
+      "worksFor": {
+        "@type": "Organization",
+        "name": {{ $ap.organizationName | jsonify | safeJS }},
+        "url": {{ $ap.organizationUrl | jsonify | safeJS }}
+      }
+    }
+    {{- end }}
+  ]
+  {{- else }}
   "founder": {
     "@type": "Person",
     "name": {{ .founderName | jsonify | safeJS }},
@@ -118,7 +141,8 @@
       "name": {{ .organizationName | jsonify | safeJS }},
       "url": {{ .organizationUrl | jsonify | safeJS }}
     }
-  }{{ with site.Params.schema.sameAs }},
+  }
+  {{- end }}{{ with site.Params.schema.sameAs }},
   "sameAs": [
     {{- range $i, $u := . }}{{ if $i }},{{ end }}
     {{ $u | jsonify | safeJS }}
