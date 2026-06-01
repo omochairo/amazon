@@ -99,28 +99,29 @@
 </script>
 
 {{- /* Issue #1263 ⑤: E-E-A-T — Organization with founder (元ソニー技術者×医療従事者) + sameAs */ -}}
+{{- /* jsonify は <script> 内で auto-escape されるため safeJS で打ち消す (PR #1277 hotfix) */ -}}
 {{- with site.Params.authorProfile }}
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "Organization",
-  "name": {{ .organizationName | jsonify }},
-  "url": {{ .organizationUrl | jsonify }},
-  "logo": {{ .organizationLogo | jsonify }},
-  "description": {{ .description | jsonify }},
+  "name": {{ .organizationName | jsonify | safeJS }},
+  "url": {{ .organizationUrl | jsonify | safeJS }},
+  "logo": {{ .organizationLogo | jsonify | safeJS }},
+  "description": {{ .description | jsonify | safeJS }},
   "founder": {
     "@type": "Person",
-    "name": {{ .founderName | jsonify }},
-    "jobTitle": {{ .founderJobTitle | jsonify }},
+    "name": {{ .founderName | jsonify | safeJS }},
+    "jobTitle": {{ .founderJobTitle | jsonify | safeJS }},
     "worksFor": {
       "@type": "Organization",
-      "name": {{ .organizationName | jsonify }},
-      "url": {{ .organizationUrl | jsonify }}
+      "name": {{ .organizationName | jsonify | safeJS }},
+      "url": {{ .organizationUrl | jsonify | safeJS }}
     }
   }{{ with site.Params.schema.sameAs }},
   "sameAs": [
     {{- range $i, $u := . }}{{ if $i }},{{ end }}
-    {{ $u | jsonify }}
+    {{ $u | jsonify | safeJS }}
     {{- end }}
   ]
   {{- end }}
