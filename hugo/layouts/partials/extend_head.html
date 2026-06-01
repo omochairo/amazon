@@ -10,7 +10,12 @@
 <!-- Google Search Console verification -->
 <meta name="google-site-verification" content="P6g6vzSBBm0bNsbjQ8kQgFhMVgo5c3d7pVEMw1UWDNs" />
 
-<!-- Google Fonts preconnect for performance -->
+<!-- Issue #1263 ③: PWA / Add to Home Screen -->
+<link rel="manifest" href="/site.webmanifest" />
+
+<!-- Issue #1263 ④: Preconnect — DNS / TLS を事前確立して LCP を改善 (商品画像 / Google Fonts) -->
+<link rel="preconnect" href="https://m.media-amazon.com" crossorigin>
+<link rel="dns-prefetch" href="https://m.media-amazon.com">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
@@ -69,22 +74,59 @@
 })();
 </script>
 
-<!-- Structured Data (JSON-LD) -->
+<!-- Structured Data (JSON-LD) — WebSite (Issue #1263: URL を本番ドメインに修正) -->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "WebSite",
   "name": "おもちゃいろ 比較ナビ",
   "alternateName": "おもちゃいろ Amazon比較ナビ",
-  "url": "https://omochairo.github.io/amazon/",
-  "description": "知育玩具を知育スコアでランキング。Amazon・楽天・Yahoo!の3サイトを横断比較。おもちゃいろのパパママが運営。",
+  "url": "{{ site.BaseURL }}",
+  "description": "知育玩具を知育スコアでランキング。Amazon・楽天・Yahoo!の3サイトを横断比較。元ソニー技術者×医療従事者の夫婦運営。",
+  "inLanguage": "ja-JP",
+  "potentialAction": {
+    "@type": "SearchAction",
+    "target": "{{ site.BaseURL }}search/?q={search_term_string}",
+    "query-input": "required name=search_term_string"
+  },
   "publisher": {
     "@type": "Organization",
-    "name": "おもちゃいろ",
-    "url": "https://omcha.jp/"
+    "name": "{{ with site.Params.authorProfile }}{{ .organizationName }}{{ else }}おもちゃいろ{{ end }}",
+    "url": "{{ with site.Params.authorProfile }}{{ .organizationUrl }}{{ else }}https://omcha.jp/{{ end }}",
+    "logo": "{{ with site.Params.authorProfile }}{{ .organizationLogo }}{{ end }}"
   }
 }
 </script>
+
+{{- /* Issue #1263 ⑤: E-E-A-T — Organization with founder (元ソニー技術者×医療従事者) + sameAs */ -}}
+{{- with site.Params.authorProfile }}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": {{ .organizationName | jsonify }},
+  "url": {{ .organizationUrl | jsonify }},
+  "logo": {{ .organizationLogo | jsonify }},
+  "description": {{ .description | jsonify }},
+  "founder": {
+    "@type": "Person",
+    "name": {{ .founderName | jsonify }},
+    "jobTitle": {{ .founderJobTitle | jsonify }},
+    "worksFor": {
+      "@type": "Organization",
+      "name": {{ .organizationName | jsonify }},
+      "url": {{ .organizationUrl | jsonify }}
+    }
+  }{{ with site.Params.schema.sameAs }},
+  "sameAs": [
+    {{- range $i, $u := . }}{{ if $i }},{{ end }}
+    {{ $u | jsonify }}
+    {{- end }}
+  ]
+  {{- end }}
+}
+</script>
+{{- end }}
 
 {{- /* #731 Part B: brand hub ItemList JSON-LD (term ページかつ narrative 対象のみ emit) */ -}}
 {{- partial "brand_hub_jsonld.html" . -}}

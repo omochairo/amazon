@@ -34,6 +34,12 @@ on:
       # 2026-05-25 (session 54): JS 共通化 (Issue #745 Phase 1) で
       # hugo/assets/js/** を触る PR も validate を必須 check として発火させる。
       - 'hugo/assets/js/**'
+      # 2026-06-01 (Issue #1263): SEO/E-E-A-T/PWA メタデータ強化で config.toml /
+      # layouts (head.html / extend_head.html) / static (site.webmanifest / favicon.ico)
+      # を触る PR も validate を必須 check として発火させる ([[04-validate-paths-trap]])。
+      - 'hugo/config.toml'
+      - 'hugo/layouts/**'
+      - 'hugo/static/**'
       # Jules プロンプト本体。CA 削除など Jules 出力に影響する変更を含む PR は
       # validate を pull_request 経由で発火させる (記事変更ゼロなら vacuous SUCCESS)
       - 'jules/PROMPT_TEMPLATE.md'
