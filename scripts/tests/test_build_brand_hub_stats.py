@@ -84,6 +84,24 @@ class TestSeriesCandidates(unittest.TestCase):
         )
         self.assertEqual(out, ["プラレール"])
 
+    def test_filters_life_event_tags(self):
+        out = bhs._series_candidates(
+            ["Mamimami Home", "プレイマット", "出産祝い", "誕生日", "クリスマス"]
+        )
+        self.assertEqual(out, ["プレイマット"])
+
+    def test_filters_age_tags(self):
+        out = bhs._series_candidates(
+            ["Mamimami Home", "プレイマット", "0歳", "1歳半", "6ヶ月", "12カ月"]
+        )
+        self.assertEqual(out, ["プレイマット"])
+
+    def test_filters_demographic_tags(self):
+        out = bhs._series_candidates(
+            ["ブランド", "シリーズA", "男の子", "女の子", "赤ちゃん", "幼児"]
+        )
+        self.assertEqual(out, ["シリーズA"])
+
     def test_empty(self):
         self.assertEqual(bhs._series_candidates([]), [])
         self.assertEqual(bhs._series_candidates(None), [])
