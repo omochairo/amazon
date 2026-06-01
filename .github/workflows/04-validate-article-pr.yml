@@ -96,6 +96,8 @@ on:
       # ([[04-validate-paths-trap]] 対策)。
       - 'scripts/append_ranking_history.py'
       - 'scripts/tests/test_append_ranking_history.py'
+      # 2026-06-01 (#600 follow-up): /ranking/ ページ本文 (週次→日次の wording 修正)。
+      - 'hugo/content/ranking.md'
       # 2026-05-25 (session 43 / Issue #683 Phase 1): Wikipedia tooltip fetch 層を
       # validate (required check) に通すため paths に追加。
       - 'scripts/fetch_wiki_data.py'
