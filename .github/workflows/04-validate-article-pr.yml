@@ -40,6 +40,10 @@ on:
       - 'hugo/config.toml'
       - 'hugo/layouts/**'
       - 'hugo/static/**'
+      # 2026-06-01 (session 74): taxonomy term の _index.md (例: brands/_index.md)
+      # を触る PR も validate を required check として発火させる
+      # ([[04-validate-paths-trap]])。
+      - 'hugo/content/**'
       # Jules プロンプト本体。CA 削除など Jules 出力に影響する変更を含む PR は
       # validate を pull_request 経由で発火させる (記事変更ゼロなら vacuous SUCCESS)
       - 'jules/PROMPT_TEMPLATE.md'

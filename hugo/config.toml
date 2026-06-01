@@ -1,5 +1,10 @@
 baseURL = 'https://navi.omcha.jp/'
 languageCode = 'ja-jp'
+# Issue #1297 follow-up: PaperMod baseof.html は {{ site.Language }} (= Lang) を
+# <html lang="..."> に注入する。languageCode は RSS 専用なので defaultContentLanguage
+# を明示しないと Lang が "en" デフォルトに落ち、全ページが <html lang=en> + hreflang=en
+# として配信される (Google 言語認識・Screen reader・翻訳機能に悪影響)。
+defaultContentLanguage = "ja"
 title = 'おもちゃいろ 比較ナビ｜知育玩具スコア＆最安値チェッカー'
 theme = 'PaperMod'
 contentDir = 'content'
