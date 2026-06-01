@@ -129,7 +129,48 @@
       }
     },
     "best_platform": "Yahoo",
-    "best_price": 3498
+    "best_price": 3498,
+    "score": 85,
+    "ivs_detail": {
+      "score_rationale": [
+        {
+          "factor": "教育的価値",
+          "delta": "+1",
+          "reason": "STEM・運動など複数の知育領域に働きかける構成のため。"
+        },
+        {
+          "factor": "安全性",
+          "delta": "+1",
+          "reason": "対象年齢が明確であり、世界的に販売されているブランドのため。"
+        },
+        {
+          "factor": "コストパフォーマンス",
+          "delta": "+1",
+          "reason": "3000円台でありながら長く遊べるため、コスパが高い。"
+        }
+      ],
+      "breakdown": {
+        "brand_tier": 20,
+        "safety_cert": 9,
+        "age_fit": 10,
+        "edu_value": 10,
+        "media_exposure": 5,
+        "multi_market": 10,
+        "price_value": 15
+      },
+      "axes": {
+        "education": 4.0,
+        "safety": 4.7,
+        "cost_performance": 5.0,
+        "longevity": 3.7
+      },
+      "education": 4.0,
+      "longevity": 3.7,
+      "safety": 4.7,
+      "cost_performance": 5.0,
+      "total": 17.4,
+      "total_100": 85
+    }
   },
   "youtube_embeds": [
     {
