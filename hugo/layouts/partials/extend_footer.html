@@ -16,6 +16,16 @@
 <script defer src="{{ $carousel.RelPermalink }}" integrity="{{ $carousel.Data.Integrity }}" crossorigin="anonymous"></script>
   {{- end }}
 
+  {{- /* Issue #600 Phase B: 楽天ランキング順位推移チャート。Chart.js (UMD) を CDN
+         から defer 読み込みし、renderer は assets パイプライン経由でバンドル。
+         該当 ASIN に履歴がなければ partial が <section> を出さないので、
+         renderer は探索のみで no-op になり描画コストは発生しない。 */ -}}
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4" crossorigin="anonymous"></script>
+  {{- $rankChart := resources.Get "js/ranking_history_chart.js" | resources.Minify | resources.Fingerprint "sha256" }}
+  {{- if $rankChart }}
+<script defer src="{{ $rankChart.RelPermalink }}" integrity="{{ $rankChart.Data.Integrity }}" crossorigin="anonymous"></script>
+  {{- end }}
+
   <!-- スクロール進捗バー -->
   <div id="scroll-progress-bar"></div>
   <script>

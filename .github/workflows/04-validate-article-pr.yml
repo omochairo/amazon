@@ -92,6 +92,10 @@ on:
       - 'scripts/resolve_ranking_asins.py'
       - 'scripts/tests/test_resolve_ranking_asins.py'
       - '.github/workflows/13-ranking-sniper.yml'
+      # 2026-06-01 (session ↑ / Issue #600 Phase A): 楽天ランキング日次履歴アキュムレータ
+      # ([[04-validate-paths-trap]] 対策)。
+      - 'scripts/append_ranking_history.py'
+      - 'scripts/tests/test_append_ranking_history.py'
       # 2026-05-25 (session 43 / Issue #683 Phase 1): Wikipedia tooltip fetch 層を
       # validate (required check) に通すため paths に追加。
       - 'scripts/fetch_wiki_data.py'
