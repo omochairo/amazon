@@ -132,21 +132,24 @@
 {{- /* #731 Part B: brand hub ItemList JSON-LD (term ページかつ narrative 対象のみ emit) */ -}}
 {{- partial "brand_hub_jsonld.html" . -}}
 
+{{- /* Issue #1297: Hugo の .Params map はキーを小文字化するため、build_post.py 側で
+       JSON 文字列としてシリアライズ済 (<>& は \uXXXX escape 済)。
+       ここでは jsonify を介さず safeJS のみで素通しして camelCase を保つ。 */ -}}
 {{ if .IsPage }}
   {{ if .Params.jsonld }}
     {{ if .Params.jsonld.product }}
 <script type="application/ld+json">
-{{ .Params.jsonld.product | jsonify | safeJS }}
+{{ .Params.jsonld.product | safeJS }}
 </script>
     {{ end }}
     {{ if .Params.jsonld.faq }}
 <script type="application/ld+json">
-{{ .Params.jsonld.faq | jsonify | safeJS }}
+{{ .Params.jsonld.faq | safeJS }}
 </script>
     {{ end }}
     {{ if .Params.jsonld.breadcrumb }}
 <script type="application/ld+json">
-{{ .Params.jsonld.breadcrumb | jsonify | safeJS }}
+{{ .Params.jsonld.breadcrumb | safeJS }}
 </script>
     {{ end }}
   {{ end }}
