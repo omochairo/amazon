@@ -187,6 +187,15 @@ on:
       # validate が pip install -r requirements.txt しているため、deps 追加 PR を
       # validate 経由で発火させる ([[04-validate-paths-trap]])。
       - 'requirements.txt'
+      # 2026-06-02 (session 77 / PR #1315): README / LICENSE 編集 PR を validate を
+      # required check として通すため paths に追加 ([[04-validate-paths-trap]])。
+      # 04-validate-article-pr.yml 自身も paths に含めて、validate paths の編集 PR
+      # で self-validate できるようにする (workflow_dispatch は required check と
+      # して認識されないため、self-listing が無いと paths 更新 PR が永久に
+      # BLOCKED になる)。
+      - 'README.md'
+      - 'LICENSE'
+      - '.github/workflows/04-validate-article-pr.yml'
   workflow_dispatch:
 
 permissions:
