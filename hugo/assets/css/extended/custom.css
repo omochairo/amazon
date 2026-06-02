@@ -4909,3 +4909,160 @@ details.development-stage-accordion[open] > summary::before {
 @media (max-width: 600px) {
   .recently-viewed-card { flex-basis: 150px; }
 }
+
+/* ==========================================
+   モバイル sticky CTA bar (#1368) (epic #1365 Layer 2-①)
+   商品ページのみ、viewport ≤ 720px で表示。
+   ========================================== */
+
+.mobile-sticky-cta {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 95;
+  display: none; /* デフォルト非表示、media query で mobile + post page でのみ表示 */
+  grid-template-columns: 1fr 1fr 1.4fr;
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.1);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.mobile-sticky-cta[hidden] {
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dark .mobile-sticky-cta {
+  background: rgba(20, 20, 30, 0.96);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.m-sticky-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 56px;
+  padding: 8px 4px;
+  border: none;
+  background: transparent;
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none !important;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease;
+}
+
+.m-sticky-btn:active {
+  background: rgba(255, 107, 53, 0.1);
+}
+
+.m-sticky-icon {
+  font-size: 20px;
+  line-height: 1;
+  color: var(--secondary);
+  transition: color 0.18s ease, transform 0.18s ease;
+}
+
+.m-sticky-fav.is-on .m-sticky-icon {
+  color: #ff4d6d;
+  transform: scale(1.08);
+}
+.m-sticky-fav.is-on .m-sticky-label { color: #ff4d6d; }
+
+.m-sticky-compare.is-on .m-sticky-icon { color: #2563eb; }
+.m-sticky-compare.is-on .m-sticky-label { color: #2563eb; }
+
+.m-sticky-buy {
+  background: var(--brand-gradient);
+  color: #fff !important;
+  font-weight: 700;
+}
+.m-sticky-buy .m-sticky-icon { color: #fff; font-size: 22px; }
+.m-sticky-buy .m-sticky-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.15;
+  gap: 1px;
+}
+.m-sticky-buy-label {
+  font-size: 10px;
+  opacity: 0.95;
+}
+.m-sticky-buy-price {
+  font-size: 13px;
+  font-weight: 700;
+}
+.m-sticky-buy:active {
+  background: linear-gradient(135deg, #e85a26 0%, #e0b03a 50%, #25aaa0 100%);
+}
+
+@keyframes m-sticky-flash {
+  0%, 100% { background: transparent; }
+  50% { background: rgba(255, 77, 109, 0.25); }
+}
+.m-sticky-btn.m-sticky-flash {
+  animation: m-sticky-flash 0.6s ease;
+}
+
+/* ---- 表示制御: viewport ≤ 720px のみ、hidden 属性は JS が制御 ---- */
+@media (max-width: 720px) {
+  .mobile-sticky-cta { display: grid; }
+}
+
+/* prefers-reduced-motion: アニメーション停止 */
+@media (prefers-reduced-motion: reduce) {
+  .mobile-sticky-cta { transition: opacity 0.15s ease; }
+  .mobile-sticky-cta[hidden] { transform: none; }
+  .m-sticky-fav.is-on .m-sticky-icon { transform: none; }
+  .m-sticky-btn.m-sticky-flash { animation: none; }
+}
+
+/* ==========================================
+   上に戻るボタン (#top-link) のモバイル位置バグ修正
+   バグ: PaperMod の zmedia.css:34 が `.list .top-link { transform: translateY(-5rem); }`
+        を mobile 全体に適用 → ホーム (body.list) で 5rem 上にズレて見える。
+        さらに iOS Safari の URL bar 動的伸縮で「スクロールするとズレる」体感に。
+   修正:
+     1. .list の translateY override (ホームでも他ページと同じ位置に)
+     2. safe-area-inset-bottom 対応 (iPhone home indicator 領域回避)
+     3. sticky CTA bar 表示時は CTA bar の上に位置
+   ========================================== */
+
+#top-link {
+  /* PaperMod の `.list .top-link transform: translateY(-5rem)` を打ち消す */
+  transform: none !important;
+  /* iPhone home indicator の安全領域を加味した bottom */
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 4rem) !important;
+  /* ブラウザの位置計算 hint (Safari/iOS で position: fixed のドリフト軽減) */
+  will-change: opacity, visibility;
+}
+
+#top-link:hover {
+  /* hover scale はそのまま継承 */
+  transform: scale(1.1) !important;
+}
+
+/* モバイル sticky CTA bar が表示されている時 (post page + ≤720px) は
+   重ならないように top-link を CTA bar の上にずらす。
+   CTA bar の高さ: 56px (min-height) + safe-area-inset-bottom。 */
+@media (max-width: 720px) {
+  body:has(.mobile-sticky-cta:not([hidden])) #top-link {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 56px + 1rem) !important;
+  }
+}
+
+/* prefers-reduced-motion: hover scale も停止 */
+@media (prefers-reduced-motion: reduce) {
+  #top-link:hover { transform: none !important; }
+}
