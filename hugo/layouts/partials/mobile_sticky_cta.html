@@ -16,6 +16,10 @@
   {{- if and . (gt . 0) (lt . $minPrice) -}}{{- $minPrice = . -}}{{- end -}}
 {{- end -}}
 {{- if eq $minPrice 99999999 }}{{ $minPrice = 0 }}{{ end -}}
+{{- /* 初期 href は ASIN ベースの Amazon 直リンク (chk01-22 タグ)。
+       JS (_wireBuy) が is-cheapest CTA の URL に上書きするが、
+       JS 失敗 / 旧キャッシュ / 早期タップでも必ず購入導線が機能する保険。 */ -}}
+{{- $fallbackBuyUrl := printf "https://www.amazon.co.jp/dp/%s/?tag=chk01-22" $asin -}}
 <aside id="mobile-sticky-cta" class="mobile-sticky-cta" role="region" aria-label="購入と比較のクイックメニュー"
        data-asin="{{ $asin }}" data-min-price="{{ $minPrice }}" hidden>
   <button type="button" class="m-sticky-btn m-sticky-share" data-action="share" aria-label="この商品をシェア">
@@ -30,7 +34,7 @@
     <span class="m-sticky-icon" aria-hidden="true">📊</span>
     <span class="m-sticky-label">比較</span>
   </button>
-  <a class="m-sticky-btn m-sticky-buy" href="#price-comparison" data-action="buy" aria-label="最安値で購入する">
+  <a class="m-sticky-btn m-sticky-buy" href="{{ $fallbackBuyUrl }}" target="_blank" rel="noopener nofollow sponsored" data-action="buy" aria-label="最安値で購入する">
     <span class="m-sticky-icon" aria-hidden="true">🛒</span>
     <span class="m-sticky-label">
       <span class="m-sticky-buy-label">最安値で見る</span>

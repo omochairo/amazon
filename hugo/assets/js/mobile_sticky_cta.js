@@ -190,6 +190,8 @@
     var anchor = _q(".m-sticky-buy", bar);
     if (!anchor) return;
     var info = _extractBuyUrl();
+    // info が取れたら最安サイトの URL に上書き、なければ partial が埋めた
+    // Amazon フォールバック URL をそのまま使う (preventDefault しない)。
     if (info && info.url) {
       anchor.setAttribute("href", info.url);
       anchor.setAttribute("target", "_blank");
@@ -198,13 +200,6 @@
         var labelEl = anchor.querySelector(".m-sticky-buy-label");
         if (labelEl) labelEl.textContent = info.label + " 最安";
       }
-    } else {
-      // 価格 CTA が見つからなければ価格比較セクションへ scroll
-      anchor.addEventListener("click", function (e) {
-        e.preventDefault();
-        var target = _q(".price-cards") || _q(".price-card") || _q(".post-content h2");
-        if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
     }
   }
 
