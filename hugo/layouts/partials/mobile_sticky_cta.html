@@ -1,0 +1,37 @@
+{{- /* #1368 モバイル sticky CTA bar (epic #1365 Layer 2-①)
+       商品ページの記事下端に固定する 3 ボタン bar (♡ / 📊 / 🛒 最安値)。
+       mobile_sticky_cta.js が:
+         1. .price-card.is-cheapest から最安値 URL + ラベルを抽出して buy ボタンに反映
+         2. ♡ は favorites.js (window.OmochaFavorites)、📊 は compare.js (window.OmochaCompare) と連動
+         3. footer / sources セクションに到達したら IntersectionObserver で hide (重複導線回避)
+       CSS は viewport > 720px なら全体 hidden、モバイル限定。 */ -}}
+{{- $asin := "" -}}
+{{- $base := .File.BaseFileName | default "" -}}
+{{- $m := findRE "[A-Z0-9]{10}$" (upper $base) 1 -}}
+{{- if $m }}{{ $asin = index $m 0 }}{{ end -}}
+{{- if $asin }}
+{{- $prices := slice .Params.price_amazon .Params.price_rakuten .Params.price_yahoo -}}
+{{- $minPrice := 99999999 -}}
+{{- range $prices -}}
+  {{- if and . (gt . 0) (lt . $minPrice) -}}{{- $minPrice = . -}}{{- end -}}
+{{- end -}}
+{{- if eq $minPrice 99999999 }}{{ $minPrice = 0 }}{{ end -}}
+<aside id="mobile-sticky-cta" class="mobile-sticky-cta" role="region" aria-label="購入と比較のクイックメニュー"
+       data-asin="{{ $asin }}" data-min-price="{{ $minPrice }}" hidden>
+  <button type="button" class="m-sticky-btn m-sticky-fav" data-action="fav" aria-pressed="false" aria-label="お気に入りに追加">
+    <span class="m-sticky-icon" aria-hidden="true">♡</span>
+    <span class="m-sticky-label">気になる</span>
+  </button>
+  <button type="button" class="m-sticky-btn m-sticky-compare" data-action="compare" aria-pressed="false" aria-label="比較リストに追加">
+    <span class="m-sticky-icon" aria-hidden="true">📊</span>
+    <span class="m-sticky-label">比較</span>
+  </button>
+  <a class="m-sticky-btn m-sticky-buy" href="#price-comparison" data-action="buy" aria-label="最安値で購入する">
+    <span class="m-sticky-icon" aria-hidden="true">🛒</span>
+    <span class="m-sticky-label">
+      <span class="m-sticky-buy-label">最安値で見る</span>
+      {{- if gt $minPrice 0 }}<span class="m-sticky-buy-price">&yen;{{ lang.FormatNumber 0 $minPrice }}</span>{{ end -}}
+    </span>
+  </a>
+</aside>
+{{- end }}

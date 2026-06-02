@@ -15,6 +15,11 @@
        CSS は assets/css/extended/wiki_tooltip.css が PaperMod の自動取り込みで
        バンドルされるため、ここでは JS のみ defer 読み込み + fingerprint で配信。 */ -}}
 {{- if and .IsPage (eq .Section "posts") }}
+  {{- /* #1368 モバイル sticky CTA bar — 商品ページ限定 */ -}}
+  {{- $stickyCta := resources.Get "js/mobile_sticky_cta.js" | resources.Minify | resources.Fingerprint "sha256" }}
+  {{- if $stickyCta }}
+<script defer src="{{ $stickyCta.RelPermalink }}" integrity="{{ $stickyCta.Data.Integrity }}" crossorigin="anonymous"></script>
+  {{- end }}
   {{- $wiki := resources.Get "js/wiki_tooltip.js" | resources.Minify | resources.Fingerprint "sha256" }}
   {{- if $wiki }}
 <script defer src="{{ $wiki.RelPermalink }}" integrity="{{ $wiki.Data.Integrity }}" crossorigin="anonymous"></script>
