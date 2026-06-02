@@ -154,13 +154,33 @@ header .logo a {
   color: var(--brand-secondary);
 }
 
-@media (max-width: 600px) {
+/* #1418 follow-up: スマホで H2 が依然として大きく、border-left 6px と padding 14px の
+   存在感が読みにくさに直結していたため、フォント・余白・装飾を一段階圧縮する。 */
+@media (max-width: 720px) {
   .post-content h2 {
-    font-size: 1.1rem;
-    padding: 12px 14px;
-    line-height: 1.5;
+    font-size: 1.05rem !important;
+    line-height: 1.45;
+    padding: 8px 12px;
+    border-left-width: 4px;
+    margin-top: 1.8em;
     word-break: break-word;
     overflow-wrap: anywhere;
+  }
+  .post-content h2 small {
+    font-size: 0.72em;
+  }
+  .post-content h3 {
+    font-size: 1rem;
+    margin-top: 1.5em;
+  }
+}
+@media (max-width: 480px) {
+  .post-content h2 {
+    font-size: 0.98rem !important;
+    padding: 7px 10px;
+  }
+  .post-content h3 {
+    font-size: 0.94rem;
   }
 }
 
@@ -4159,11 +4179,26 @@ body.dark .compare-help { background: #0f172a; color: #cbd5e1; }
 
 /* 2026-05-31 (#1143): 記事ページ H1 が大きすぎて記事タイトルだけで初期画面が
    埋まる問題を解消。PaperMod デフォルトの 40px から H2 (1.5rem) に近いサイズへ
-   縮小。clamp で widescreen でもダブつかないようにする。 */
+   縮小。clamp で widescreen でもダブつかないようにする。
+   2026-06-02 (#1418 follow-up): clamp 下限 1.4rem が iPhone 375px で発火しなかった
+   ため、明示的な media query で 720px 以下を更に縮小。 */
 .post-title {
   font-size: clamp(1.4rem, 3.2vw, 1.75rem) !important;
   line-height: 1.35 !important;
   margin-bottom: 0.6rem !important;
+}
+@media (max-width: 720px) {
+  .post-title {
+    font-size: 1.15rem !important;
+    line-height: 1.4 !important;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+}
+@media (max-width: 480px) {
+  .post-title {
+    font-size: 1.05rem !important;
+  }
 }
 .post-content .competitor-card h3 {
   /* 関連する比較レビューのタイトル: 0.9rem → carousel-card-title (0.78rem) と揃え。
