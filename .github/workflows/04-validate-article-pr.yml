@@ -187,6 +187,13 @@ on:
       # 2026-06-01 (Issue #1316 Phase 2): GSC OAuth refresh token 方式の fetch / format。
       - 'scripts/fetch_gsc.py'
       - 'scripts/format_gsc_report.py'
+      # 2026-06-02 (session 78 / epic #1356 A-1): GSC データから低 CTR ページを抽出して
+      # Jules リライト Issue を自動起票するスクリプトと unit test を validate
+      # (required check) 対象に ([[04-validate-paths-trap]])。
+      - 'scripts/detect_low_ctr_pages.py'
+      - 'scripts/tests/test_detect_low_ctr_pages.py'
+      - 'scripts/open_low_ctr_issues.py'
+      - 'scripts/tests/test_open_low_ctr_issues.py'
       - '.github/workflows/17-analytics-report.yml'
       # requirements.txt は今回 google-analytics-data 追加で触る。
       # validate が pip install -r requirements.txt しているため、deps 追加 PR を
