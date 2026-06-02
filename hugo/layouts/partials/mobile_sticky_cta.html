@@ -18,6 +18,10 @@
 {{- if eq $minPrice 99999999 }}{{ $minPrice = 0 }}{{ end -}}
 <aside id="mobile-sticky-cta" class="mobile-sticky-cta" role="region" aria-label="購入と比較のクイックメニュー"
        data-asin="{{ $asin }}" data-min-price="{{ $minPrice }}" hidden>
+  <button type="button" class="m-sticky-btn m-sticky-share" data-action="share" aria-label="この商品をシェア">
+    <span class="m-sticky-icon" aria-hidden="true">📤</span>
+    <span class="m-sticky-label">シェア</span>
+  </button>
   <button type="button" class="m-sticky-btn m-sticky-fav" data-action="fav" aria-pressed="false" aria-label="お気に入りに追加">
     <span class="m-sticky-icon" aria-hidden="true">♡</span>
     <span class="m-sticky-label">気になる</span>

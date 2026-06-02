@@ -49,11 +49,15 @@
        /posts/page/2-65/ などのパジネーション URL は canonical が /posts/ を指す
        (PaperMod デフォルト) ため、index,follow のままだと canonical と矛盾し、
        Google からは「重複コンテンツの紛らわしい挙動」とみなされる。
-       1 ページ目だけ index,follow、それ以降は noindex,follow が SEO 標準。 */ -}}
+       1 ページ目だけ index,follow、それ以降は noindex,follow が SEO 標準。
+       Hugo 0.146.0 以降は kind=page で .Paginator を呼ぶとビルドエラーになるため、
+       paginate 可能な kind に限定する (#1374 follow-up build break)。 */ -}}
 {{- $isPaginated := false -}}
-{{- with .Paginator -}}
-  {{- if gt .PageNumber 1 -}}
-    {{- $isPaginated = true -}}
+{{- if in (slice "home" "section" "taxonomy" "term") .Kind -}}
+  {{- with .Paginator -}}
+    {{- if gt .PageNumber 1 -}}
+      {{- $isPaginated = true -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 {{- $isProd := or hugo.IsProduction (eq site.Params.env "production") -}}

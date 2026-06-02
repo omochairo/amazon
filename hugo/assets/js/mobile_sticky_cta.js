@@ -137,6 +137,55 @@
     });
   }
 
+  function _wireShare(bar) {
+    var btn = _q(".m-sticky-share", bar);
+    if (!btn) return;
+    btn.addEventListener("click", function (e) {
+      e.preventDefault();
+      var meta = _buildMeta(bar);
+      var title = meta.title || document.title || "おもちゃいろ 比較ナビ";
+      var url = global.location.origin + meta.url;
+      var text = title + " — おもちゃいろ 比較ナビでスコア・最安値をチェック";
+
+      // 1. Web Share API (mobile native) を優先
+      if (navigator.share) {
+        navigator.share({ title: title, text: text, url: url }).then(function () {
+          _flashLabel(btn, "シェア済", "シェア");
+        }).catch(function () { /* user cancelled, no-op */ });
+        return;
+      }
+
+      // 2. fallback: clipboard コピー
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(function () {
+          _flashLabel(btn, "URLコピー済", "シェア");
+        }).catch(function () {
+          _fallbackPrompt(url);
+        });
+        return;
+      }
+
+      // 3. 最終 fallback: prompt
+      _fallbackPrompt(url);
+    });
+  }
+
+  function _flashLabel(btn, msg, original) {
+    var label = btn.querySelector(".m-sticky-label");
+    if (!label) return;
+    label.textContent = msg;
+    btn.classList.add("is-flash");
+    setTimeout(function () {
+      label.textContent = original;
+      btn.classList.remove("is-flash");
+    }, 1600);
+  }
+
+  function _fallbackPrompt(url) {
+    try { global.prompt("URL をコピーしてください:", url); }
+    catch (e) { /* ignore */ }
+  }
+
   function _wireBuy(bar) {
     var anchor = _q(".m-sticky-buy", bar);
     if (!anchor) return;
@@ -209,6 +258,7 @@
     try {
       var bar = _byId("mobile-sticky-cta");
       if (!bar) return;
+      _wireShare(bar);
       _wireBuy(bar);
       _wireFav(bar);
       _wireCompare(bar);

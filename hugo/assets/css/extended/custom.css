@@ -4922,7 +4922,8 @@ details.development-stage-accordion[open] > summary::before {
   bottom: 0;
   z-index: 95;
   display: none; /* デフォルト非表示、media query で mobile + post page でのみ表示 */
-  grid-template-columns: 1fr 1fr 1.4fr;
+  /* 4 列: 📤 シェア / ♡ 気になる / 📊 比較 / 🛒 最安値 */
+  grid-template-columns: 0.85fr 0.85fr 0.85fr 1.45fr;
   gap: 1px;
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(10px);
@@ -4981,6 +4982,20 @@ details.development-stage-accordion[open] > summary::before {
 
 .m-sticky-compare.is-on .m-sticky-icon { color: #2563eb; }
 .m-sticky-compare.is-on .m-sticky-label { color: #2563eb; }
+
+/* シェアボタン (#1374 follow-up) — Web Share API → clipboard → prompt の fallback。
+   コピー完了時は label を 1.6 秒だけ「シェア済」「URLコピー済」に切り替え。 */
+.m-sticky-share .m-sticky-icon {
+  color: #16a085;
+}
+.m-sticky-share.is-flash {
+  background: rgba(46, 196, 182, 0.18);
+}
+.m-sticky-share.is-flash .m-sticky-icon { color: #16a085; }
+.m-sticky-share.is-flash .m-sticky-label {
+  color: #16a085;
+  font-weight: 700;
+}
 
 .m-sticky-buy {
   background: var(--brand-gradient);
