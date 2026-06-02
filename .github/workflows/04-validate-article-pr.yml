@@ -215,6 +215,12 @@ on:
       - 'scripts/tests/test_append_analytics_history.py'
       - '.github/workflows/18-analytics-daily.yml'
       - 'data/analytics/history/**'
+      # 2026-06-02 (session 78 / epic #1357 B-1 Phase 1): CrUX 月次 fetch script と
+      # workflow を validate (required check) 対象に。Phase 2 (劣化検出 → Issue 起票)
+      # は 2 ヶ月分蓄積後の follow-up PR。
+      - 'scripts/fetch_crux.py'
+      - 'scripts/tests/test_fetch_crux.py'
+      - '.github/workflows/19-cwv-monitor.yml'
       - '.github/workflows/17-analytics-report.yml'
       # requirements.txt は今回 google-analytics-data 追加で触る。
       # validate が pip install -r requirements.txt しているため、deps 追加 PR を

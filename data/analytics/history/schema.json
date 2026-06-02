@@ -32,6 +32,13 @@
       "fields": ["date", "screenPageViews_sum", "engagedSessions_sum", "rows_by_page"],
       "key": ["date"],
       "source": "scripts/fetch_ga4.py --days 1"
+    },
+    "crux_history.jsonl": {
+      "description": "Google Chrome UX Report monthly fetch, 1 line per (date, key_type, key_value, form_factor). LCP / CLS / INP / FCP / TTFB の p75 + histogram density 3 bin (good/ni/poor)",
+      "fields": ["date", "key_type", "key_value", "form_factor", "collection_period_start", "collection_period_end", "lcp_p75", "lcp_good_density", "lcp_ni_density", "lcp_poor_density", "cls_p75", "cls_good_density", "cls_ni_density", "cls_poor_density", "inp_p75", "inp_good_density", "inp_ni_density", "inp_poor_density", "fcp_p75", "fcp_good_density", "fcp_ni_density", "fcp_poor_density", "ttfb_p75", "ttfb_good_density", "ttfb_ni_density", "ttfb_poor_density"],
+      "key": ["date", "key_type", "key_value", "form_factor"],
+      "source": "scripts/fetch_crux.py (monthly, 19-cwv-monitor.yml)",
+      "notes": "key_type は origin | url。form_factor は PHONE | DESKTOP | TABLET。404 (低トラフィック URL のデータ不足) は行を書かないため、欠損 = データなし"
     }
   },
   "idempotency": {
@@ -53,6 +60,6 @@
   "consumers_future": [
     "trend analysis for A-1/A-2 detection (compare current week vs prior weeks)",
     "Phase 3 GSC-driven brand narrative (#1329) — 4-week rolling top queries",
-    "B-1 CrUX joins with daily LCP/INP to attribute CWV drops to traffic shifts"
+    "B-1 Phase 2 (劣化検出): 2 ヶ月分以上の crux_history を読み、p75 が >20% 悪化した URL を Issue 起票"
   ]
 }
