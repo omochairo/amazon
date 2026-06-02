@@ -4219,3 +4219,305 @@ details.development-stage-accordion[open] > summary::before {
   .ranking-history-chart { padding: 14px 12px; }
   .ranking-history-canvas-wrap { height: 200px; }
 }
+
+/* ==========================================
+   ヘッダボタン化 + フッター運営リンク (#1363 follow-up)
+   - ヘッダ menu items を pill ボタン化 (CTA 化)
+   - 編集部 関連リンクをフッター上部に専用ブロックで配置
+   ========================================== */
+
+/* ---- ヘッダナビをボタン化 ---- */
+#menu {
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0;
+}
+
+#menu li a {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.95rem;
+  border-radius: 999px;
+  background: rgba(255, 107, 53, 0.08);
+  border: 1.5px solid transparent;
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.25;
+  color: var(--primary);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+#menu li a:hover {
+  background: var(--brand-gradient-subtle);
+  border-color: rgba(255, 107, 53, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(255, 107, 53, 0.18);
+  text-decoration: none;
+}
+
+#menu li a:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(255, 107, 53, 0.16);
+}
+
+#menu li a .active {
+  text-decoration: none;
+}
+
+#menu li a:has(.active) {
+  background: var(--brand-gradient);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 4px 14px rgba(255, 107, 53, 0.32);
+}
+
+.dark #menu li a {
+  background: rgba(255, 107, 53, 0.16);
+  color: #ffe7d4;
+}
+.dark #menu li a:hover {
+  background: rgba(255, 107, 53, 0.28);
+  border-color: rgba(255, 107, 53, 0.55);
+}
+
+/* コスパ最強 / おトク特集 を強調 (3 番目=ranking, 4 番目=cospa, 5 番目=deals) */
+#menu li:nth-child(4) a,
+#menu li:nth-child(5) a {
+  background: linear-gradient(135deg, rgba(247, 201, 72, 0.22), rgba(255, 107, 53, 0.22));
+  border-color: rgba(247, 201, 72, 0.5);
+}
+#menu li:nth-child(4) a:hover,
+#menu li:nth-child(5) a:hover {
+  background: linear-gradient(135deg, rgba(247, 201, 72, 0.4), rgba(255, 107, 53, 0.4));
+}
+
+@media (max-width: 720px) {
+  #menu li a {
+    padding: 0.35rem 0.7rem;
+    font-size: 13px;
+  }
+}
+
+/* ---- フッター運営リンクブロック ---- */
+.footer-editorial {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1.1rem;
+  flex-wrap: wrap;
+  margin: 0 auto 1rem;
+  padding: 0.6rem 1rem;
+  max-width: 720px;
+  border-radius: var(--radius-md);
+  background: var(--brand-gradient-subtle);
+  border: 1px solid rgba(255, 107, 53, 0.18);
+}
+
+.footer-editorial-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--brand-primary);
+  background: #fff;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 107, 53, 0.25);
+}
+
+.dark .footer-editorial-label {
+  background: #2a1f1a;
+  color: #ffb89a;
+}
+
+.footer-editorial a {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary);
+  padding: 0.2rem 0.4rem;
+  border-radius: 6px;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.footer-editorial a:hover {
+  background: rgba(255, 107, 53, 0.15);
+  transform: translateY(-1px);
+  text-decoration: none;
+}
+
+@media (max-width: 600px) {
+  .footer-editorial {
+    gap: 0.6rem;
+    padding: 0.55rem 0.7rem;
+  }
+  .footer-editorial a {
+    font-size: 13px;
+  }
+}
+
+/* ==========================================
+   スポットライトカルーセル (#1363 follow-up)
+   コスパ最強 / おトク特集 が一言で伝わらない問題に対し、
+   説明吹き出し 4 つを CSS-only で順次 fade-in/out 回転させる。
+   ========================================== */
+
+.spotlight {
+  margin: 1.5rem auto 2.5rem;
+  max-width: 980px;
+  padding: 0 var(--gap, 1rem);
+}
+
+.spotlight-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--secondary);
+  margin: 0 0 0.9rem;
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
+.spotlight-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 700px) {
+  .spotlight-grid { grid-template-columns: 1fr; }
+}
+
+.spotlight-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.1rem 1.2rem;
+  border-radius: var(--radius-lg);
+  background: #fff;
+  border: 2px solid transparent;
+  box-shadow: var(--card-shadow);
+  text-decoration: none !important;
+  color: inherit;
+  overflow: hidden;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.dark .spotlight-card {
+  background: #1f1f2e;
+}
+
+.spotlight-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.06;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.spotlight-card--cospa::before {
+  background: linear-gradient(135deg, #F7C948 0%, #FF6B35 100%);
+}
+.spotlight-card--deals::before {
+  background: linear-gradient(135deg, #FF8FAB 0%, #9B5DE5 100%);
+}
+
+.spotlight-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--card-shadow-hover);
+  border-color: rgba(255, 107, 53, 0.35);
+}
+.spotlight-card:hover::before { opacity: 0.12; }
+
+.spotlight-card-icon {
+  font-size: 2.4rem;
+  line-height: 1;
+}
+
+.spotlight-card-body {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.spotlight-card-name {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0 0 0.35rem;
+  color: var(--primary);
+}
+
+.spotlight-card-arrow {
+  font-size: 1.4rem;
+  color: var(--brand-primary);
+  font-weight: 700;
+  transition: transform 0.25s ease;
+}
+
+.spotlight-card:hover .spotlight-card-arrow {
+  transform: translateX(4px);
+}
+
+/* 吹き出しカルーセル — 4 つを順次 fade で表示 */
+.spotlight-bubbles {
+  position: relative;
+  min-height: 2.6em;
+  display: block;
+}
+
+.spotlight-bubble {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: inline-block;
+  padding: 0.45rem 0.75rem;
+  background: var(--brand-bg-warm);
+  border: 1px solid rgba(255, 107, 53, 0.25);
+  border-radius: 12px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--primary);
+  opacity: 0;
+  transform: translateY(6px);
+  animation: spotlight-bubble-cycle 12s infinite;
+}
+
+.spotlight-bubble::before {
+  content: "";
+  position: absolute;
+  left: 18px;
+  top: -6px;
+  width: 12px;
+  height: 12px;
+  background: var(--brand-bg-warm);
+  border-left: 1px solid rgba(255, 107, 53, 0.25);
+  border-top: 1px solid rgba(255, 107, 53, 0.25);
+  transform: rotate(45deg);
+}
+
+/* 4 つを 3 秒ずつ表示、合計 12 秒で 1 周 */
+.spotlight-bubble:nth-child(1) { animation-delay: 0s; }
+.spotlight-bubble:nth-child(2) { animation-delay: 3s; }
+.spotlight-bubble:nth-child(3) { animation-delay: 6s; }
+.spotlight-bubble:nth-child(4) { animation-delay: 9s; }
+
+@keyframes spotlight-bubble-cycle {
+  0%   { opacity: 0; transform: translateY(8px); }
+  4%   { opacity: 1; transform: translateY(0); }
+  21%  { opacity: 1; transform: translateY(0); }
+  25%  { opacity: 0; transform: translateY(-8px); }
+  100% { opacity: 0; transform: translateY(-8px); }
+}
+
+/* prefers-reduced-motion: 1 つ目だけ表示してアニメーション停止 */
+@media (prefers-reduced-motion: reduce) {
+  .spotlight-bubble {
+    animation: none;
+    opacity: 0;
+  }
+  .spotlight-bubble:nth-child(1) {
+    opacity: 1;
+    transform: none;
+  }
+}

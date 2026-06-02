@@ -208,7 +208,6 @@ enableRobotsTXT = true
     name = "📚 記事一覧"
     url = "posts/"
     weight = 8
-  [[menu.main]]
-    name = "📖 編集部について"
-    url = "about/"
-    weight = 9
+  # 📖 編集部について はフッターに移動 (#1363 follow-up)。
+  # ヘッダの導線を「比較・検索・購入」の主要 CTA に絞り、運営情報は
+  # hugo/layouts/partials/footer.html の footer-editorial ブロックに集約。

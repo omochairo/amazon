@@ -21,6 +21,42 @@
 </section>
 {{- end }}
 
+{{- /* === Section: 特集スポットライト (#1363 follow-up)
+       コスパ最強 / おトク特集 が一言で伝わらない問題に対し、
+       説明吹き出しを CSS-only でカルーセル回転させる。
+       prefers-reduced-motion 時はアニメーション停止 (最初の bubble を表示) */ -}}
+<section class="spotlight">
+  <h2 class="spotlight-title">こんな探し方ができます</h2>
+  <div class="spotlight-grid">
+    <a class="spotlight-card spotlight-card--cospa" href="{{ "cospa/" | relURL }}">
+      <div class="spotlight-card-icon">💎</div>
+      <div class="spotlight-card-body">
+        <h3 class="spotlight-card-name">コスパ最強</h3>
+        <div class="spotlight-bubbles" role="list">
+          <span class="spotlight-bubble" role="listitem">スコア ÷ 価格で1円あたりの満足度を算出 🧮</span>
+          <span class="spotlight-bubble" role="listitem">3,000円以下でも高評価のおもちゃが見つかる 💰</span>
+          <span class="spotlight-bubble" role="listitem">予算別 (〜2,000円 / 〜5,000円) で絞り込みOK 🎯</span>
+          <span class="spotlight-bubble" role="listitem">「安かろう悪かろう」を回避できる 🛡️</span>
+        </div>
+      </div>
+      <span class="spotlight-card-arrow" aria-hidden="true">→</span>
+    </a>
+    <a class="spotlight-card spotlight-card--deals" href="{{ "deals/" | relURL }}">
+      <div class="spotlight-card-icon">🏷️</div>
+      <div class="spotlight-card-body">
+        <h3 class="spotlight-card-name">おトク特集</h3>
+        <div class="spotlight-bubbles" role="list">
+          <span class="spotlight-bubble" role="listitem">Amazon・楽天・Yahoo!の最安値を毎日チェック 🛒</span>
+          <span class="spotlight-bubble" role="listitem">ポイント還元込みで一番おトクなサイトが分かる ✨</span>
+          <span class="spotlight-bubble" role="listitem">値下げ中・タイムセールの商品をピックアップ 🔥</span>
+          <span class="spotlight-bubble" role="listitem">セールを逃さないよう日次更新 📅</span>
+        </div>
+      </div>
+      <span class="spotlight-card-arrow" aria-hidden="true">→</span>
+    </a>
+  </div>
+</section>
+
 {{- /* === Section: 最新の比較レビュー === */ -}}
 {{- $latest := first 9 $allPosts }}
 {{- if $latest }}
