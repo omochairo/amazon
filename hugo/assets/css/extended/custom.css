@@ -2558,17 +2558,28 @@ body.dark .product-card-age {
     margin-top: 0.5rem;
   }
   .ranking-thumb img { max-height: 220px; }
-  /* #1418 P0: 長い商品名 (例: 「3,000円以上で送料無料 おもち・きなこ...」) が
-     カード全体を圧迫していた問題を解消。3 行で line-clamp し、はみ出し防止。 */
+  /* #1418 P0 (follow-up 2): 当初 line-clamp 3 + overflow:hidden で短縮していたが、
+     .post-content h2 のグラデーション BG が line-clamp で計算される box height に
+     追随せず、テキストが BG 外に飛び出して見切れる事故を起こした。
+     根本対策として line-clamp を撤去し、フォント縮小 + word-break で自然折返しに
+     寄せる。長尺タイトルは縦に伸びるが視認性は明らかに向上する。 */
   .ranking-title {
     font-size: 0.92rem;
     line-height: 1.4;
     word-break: break-word;
     overflow-wrap: anywhere;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+  }
+  /* .post-content h2 のグラデ BG + border-left 4px + padding は読みづらさの主因。
+     ranking-title 用にコンパクト化する。 */
+  .post-content h2.ranking-title {
+    background: none !important;
+    border-left: 3px solid var(--brand-primary) !important;
+    border-radius: 0 !important;
+    padding: 2px 0 2px 10px !important;
+    margin: 0 0 6px !important;
+    font-family: inherit !important;
+    font-weight: 700;
+    color: inherit;
   }
   .ranking-price { font-size: 1rem; }
   .ranking-shop, .ranking-reviews { font-size: 0.78rem; }
@@ -2584,8 +2595,7 @@ body.dark .product-card-age {
 /* #1418 P0: 極小画面 (iPhone SE 等) では更に圧縮 */
 @media (max-width: 480px) {
   .ranking-title {
-    font-size: 0.85rem;
-    -webkit-line-clamp: 2;
+    font-size: 0.88rem;
   }
   .ranking-badge { width: 48px; height: 48px; font-size: 1rem; }
   .ranking-medal { font-size: 1.4rem; }
@@ -4187,17 +4197,26 @@ body.dark .compare-help { background: #0f172a; color: #cbd5e1; }
   line-height: 1.35 !important;
   margin-bottom: 0.6rem !important;
 }
+/* 2026-06-02 (#1418 follow-up 2): .post-title は単記事 (single.html) のみ。
+   /cospa/ /deals/ /楽天ランキング/ /tags/ などのリスト/特集ページは PaperMod の
+   .page-header h1 (デフォルト 40px) を使っており、前回 PR では未到達だった。
+   よって main 配下の全 h1 を mobile で強制縮小する。 */
 @media (max-width: 720px) {
-  .post-title {
-    font-size: 1.15rem !important;
+  .post-title,
+  .page-header h1,
+  main.main h1 {
+    font-size: 1.2rem !important;
     line-height: 1.4 !important;
     word-break: break-word;
     overflow-wrap: anywhere;
+    margin-bottom: 0.5rem !important;
   }
 }
 @media (max-width: 480px) {
-  .post-title {
-    font-size: 1.05rem !important;
+  .post-title,
+  .page-header h1,
+  main.main h1 {
+    font-size: 1.08rem !important;
   }
 }
 .post-content .competitor-card h3 {
