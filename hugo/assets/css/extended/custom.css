@@ -4940,8 +4940,10 @@ details.development-stage-accordion[open] > summary::before {
 }
 
 .dark .mobile-sticky-cta {
-  background: rgba(20, 20, 30, 0.96);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  /* 96% → 99% で背景の透過を抑え、bar 上のテキストとアイコンの可読性を最優先。
+     blur が裏側を ぼかすので、わずかな透過は維持。 */
+  background: rgba(12, 14, 22, 0.99);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .m-sticky-btn {
@@ -4983,6 +4985,13 @@ details.development-stage-accordion[open] > summary::before {
 .m-sticky-compare.is-on .m-sticky-icon { color: #2563eb; }
 .m-sticky-compare.is-on .m-sticky-label { color: #2563eb; }
 
+/* Dark mode の active 色は brand-blue / brand-pink を明るく差し替えて
+   AA 4.5:1 を満たす (#2563eb は dark bg で 3.18 と AA fail のため #60a5fa へ)。 */
+.dark .m-sticky-compare.is-on .m-sticky-icon { color: #60a5fa; }
+.dark .m-sticky-compare.is-on .m-sticky-label { color: #60a5fa; }
+.dark .m-sticky-fav.is-on .m-sticky-icon { color: #ff7a93; }
+.dark .m-sticky-fav.is-on .m-sticky-label { color: #ff7a93; }
+
 /* シェアボタン (#1374 follow-up) — Web Share API → clipboard → prompt の fallback。
    コピー完了時は label を 1.6 秒だけ「シェア済」「URLコピー済」に切り替え。 */
 .m-sticky-share .m-sticky-icon {
@@ -4997,12 +5006,27 @@ details.development-stage-accordion[open] > summary::before {
   font-weight: 700;
 }
 
+/* Dark mode: teal を明るく (2dd4bf, 5eead4) して可読性確保。 */
+.dark .m-sticky-share .m-sticky-icon { color: #2dd4bf; }
+.dark .m-sticky-share.is-flash .m-sticky-icon { color: #2dd4bf; }
+.dark .m-sticky-share.is-flash .m-sticky-label { color: #5eead4; }
+
 .m-sticky-buy {
-  background: var(--brand-gradient);
+  /* brand-gradient は中央が黄色 (#F7C948) なので、白文字 contrast 1.66 で
+     ライト/ダークどちらでも読みにくい。テキスト全体に黒シャドウを敷いて
+     白文字を浮かせる + 全体を少し暗めにする overlay でラベルの可読性を確保。 */
+  background:
+    linear-gradient(180deg, rgba(0,0,0,0.0) 0%, rgba(0,0,0,0.22) 100%),
+    var(--brand-gradient);
   color: #fff !important;
   font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55), 0 0 1px rgba(0, 0, 0, 0.45);
 }
-.m-sticky-buy .m-sticky-icon { color: #fff; font-size: 22px; }
+.m-sticky-buy .m-sticky-icon {
+  color: #fff;
+  font-size: 22px;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
+}
 .m-sticky-buy .m-sticky-label {
   display: flex;
   flex-direction: column;
