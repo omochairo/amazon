@@ -377,6 +377,239 @@ def _build_webpage_jsonld(
     }
 
 
+# AI 編集システム (おもちゃロボ) を Review の author として利用する Person 定義。
+# Person 表現の理由: schema.org の Review.author は Person/Organization。
+# Google の Review snippet 適格条件で「author は識別可能な実体」が求められる。
+# Organization (ORG_AI_AGENT) ではなく Person 扱いで sameAs と organization 親で
+# 「AI 編集システムである」事実を示しつつ、Review snippet として認識される形にする。
+PERSON_OMOCHAIRO_BOT: dict[str, Any] = {
+    "@type": "Person",
+    "@id": f"{_SITE_BASE_URL}/about/#omochairo-bot",
+    "name": "おもちゃロボ",
+    "url": f"{_SITE_BASE_URL}/about/",
+    "description": (
+        "Amazon・楽天・Yahoo! ショッピングの市場データを集約し、"
+        "記事下書きとスコア計算を担当する AI 編集システム。"
+        "本サイトの全レビューは おもちゃロボ の独自スコア (知育価値 / 長寿命性 / 安全性 / コスパ) に基づく。"
+    ),
+}
+
+
+def _build_review_jsonld(
+    *,
+    product: dict[str, Any],
+    title: str,
+    date: str,
+    avg_rating: float | int | str,
+    review_body: str,
+    asin: str,
+) -> dict[str, Any] | None:
+    """Issue #1301 B5: Product.aggregateRating とは別に独立した Review JSON-LD を構築。
+
+    aggregateRating は「サイトの集約評価」を示すが、Google の Review snippet 適格には
+    「個別レビュー (Review エンティティ)」も必要。本関数は おもちゃロボ による
+    独自レビュー 1 件を Review として emit する。
+
+    - author: PERSON_OMOCHAIRO_BOT (AI 編集システム)
+    - itemReviewed: Product (name/image を最小限再掲)
+    - reviewRating: 1-5 スケール
+    - reviewBody: editorial_comment / verdict / closing から抽出
+    - datePublished: 記事公開日
+
+    review_body が空 (= 抽出失敗) の場合は None を返し、emit しない。
+    """
+    name = product.get("name") or title
+    image = product.get("image") or ""
+    if not name or not review_body:
+        return None
+    # rating を 1-5 スケールに正規化
+    try:
+        rv = float(avg_rating)
+    except (TypeError, ValueError):
+        rv = 4.0
+    if rv < 1.0:
+        rv = 1.0
+    elif rv > 5.0:
+        rv = 5.0
+    page_url = f"{_SITE_BASE_URL}/products/{asin.lower()}/"
+    item_reviewed: dict[str, Any] = {
+        "@type": "Product",
+        "name": name,
+    }
+    if image:
+        item_reviewed["image"] = image
+    raw_brand = product.get("brand")
+    if raw_brand:
+        item_reviewed["brand"] = {"@type": "Brand", "name": raw_brand}
+    return {
+        "@context": "https://schema.org",
+        "@type": "Review",
+        "@id": f"{page_url}#review",
+        "itemReviewed": item_reviewed,
+        "author": PERSON_OMOCHAIRO_BOT,
+        "reviewRating": {
+            "@type": "Rating",
+            "ratingValue": f"{rv:.1f}",
+            "bestRating": "5",
+            "worstRating": "1",
+        },
+        "reviewBody": review_body,
+        "datePublished": date,
+        "publisher": ORG_OMOCHAIRO_EDITORIAL,
+    }
+
+
+def _build_howto_jsonld(
+    *,
+    product: dict[str, Any],
+    data: dict[str, Any],
+    asin: str,
+) -> dict[str, Any] | None:
+    """Issue #1301 B6: 「{product} を選ぶ前の確認ステップ」HowTo schema を構築。
+
+    既存の narrative 構造 (lead / why_this_product / gift_appeal / daily_use /
+    safety_note / closing) から 4-5 ステップを programmatic に組み立てる。
+
+    HowTo schema は「複数ステップの手順」を要求するため、ナレーション本文を
+    そのまま流すのではなく、確認すべき観点を 4 ステップに固定化する:
+
+        Step 1: 対象年齢を確認 — age_min_months から月齢 / 歳を文字列化
+        Step 2: 何が伸びるかを確認 — narrative.why_this_product から抜粋
+        Step 3: 日常での使い方 — narrative.daily_use から抜粋
+        Step 4: 安全認証を確認 — narrative.safety_note から抜粋
+
+    各ステップ本文が空なら HowTo を emit しない (None 返し)。
+    """
+    name = product.get("name") or data.get("title") or ""
+    if not name:
+        return None
+    nar = data.get("narrative") or {}
+    if not isinstance(nar, dict):
+        return None
+
+    def _trim(text: Any, limit: int = 200) -> str:
+        if not isinstance(text, str):
+            return ""
+        s = re.sub(r"\s+", " ", text.strip())
+        if not s:
+            return ""
+        if len(s) <= limit:
+            return s
+        return s[: limit - 1].rstrip("、。・,. ") + "..."
+
+    steps: list[dict[str, Any]] = []
+
+    # Step 1: 対象年齢
+    age_min: int = 0
+    try:
+        age_min = int(product.get("age_min_months") or 0)
+    except (TypeError, ValueError):
+        age_min = 0
+    if age_min > 0:
+        if age_min < 12:
+            age_label = f"生後 {age_min} ヶ月以上"
+        else:
+            years = age_min // 12
+            age_label = f"{years} 歳以上"
+        steps.append({
+            "@type": "HowToStep",
+            "position": 1,
+            "name": "対象年齢を確認",
+            "text": f"{name}の対象年齢は {age_label}。お子さまの月齢/年齢が合うかを最初に確認してください。",
+        })
+
+    # Step 2: 何が伸びるか (why_this_product)
+    why_text = _trim(nar.get("why_this_product"))
+    if why_text:
+        steps.append({
+            "@type": "HowToStep",
+            "position": len(steps) + 1,
+            "name": "何が伸びるかを確認",
+            "text": why_text,
+        })
+
+    # Step 3: 日常での使い方
+    daily_text = _trim(nar.get("daily_use"))
+    if daily_text:
+        steps.append({
+            "@type": "HowToStep",
+            "position": len(steps) + 1,
+            "name": "日常での使い方をイメージ",
+            "text": daily_text,
+        })
+
+    # Step 4: 安全認証 / 安全性
+    safety_text = _trim(nar.get("safety_note"))
+    if safety_text:
+        steps.append({
+            "@type": "HowToStep",
+            "position": len(steps) + 1,
+            "name": "安全性を確認",
+            "text": safety_text,
+        })
+
+    # Step 5 (optional): 贈り物としての適性
+    gift_text = _trim(nar.get("gift_appeal"))
+    if gift_text:
+        steps.append({
+            "@type": "HowToStep",
+            "position": len(steps) + 1,
+            "name": "贈り物としての適性を確認",
+            "text": gift_text,
+        })
+
+    # 最低 2 ステップ無いと HowTo として弱い
+    if len(steps) < 2:
+        return None
+
+    page_url = f"{_SITE_BASE_URL}/products/{asin.lower()}/"
+    image = product.get("image") or ""
+    howto: dict[str, Any] = {
+        "@context": "https://schema.org",
+        "@type": "HowTo",
+        "@id": f"{page_url}#howto",
+        "name": f"{name} を選ぶ前に確認したい {len(steps)} つのポイント",
+        "description": (
+            f"{name} を購入する前にチェックすべき観点を、おもちゃロボが整理しました。"
+            "対象年齢・知育効果・日常での使い方・安全性を順番に確認することで、"
+            "ご家庭にぴったりかを判断できます。"
+        ),
+        "step": steps,
+    }
+    if image:
+        howto["image"] = image
+    return howto
+
+
+def _extract_review_body(data: dict[str, Any]) -> str:
+    """Issue #1301 B5: Review.reviewBody に流す本文を記事 JSON から抽出する。
+
+    優先順位:
+        1. editorial_comment (おもちゃロボの締め所感) — 簡潔・主観あり・最適
+        2. narrative.closing — narrative の締め
+        3. verdict — Stage 2 enrichment 後の結論
+        4. narrative.lead — fallback
+
+    280 文字以内に丸める (Google の Review snippet は短文を好む)。
+    """
+    candidates = [
+        data.get("editorial_comment"),
+    ]
+    nar = data.get("narrative")
+    if isinstance(nar, dict):
+        candidates.append(nar.get("closing"))
+        candidates.append(nar.get("lead"))
+    candidates.append(data.get("verdict"))
+
+    for c in candidates:
+        if isinstance(c, str) and c.strip():
+            s = re.sub(r"\s+", " ", c.strip())
+            if len(s) <= 280:
+                return s
+            return s[:277].rstrip("、。・,. ") + "..."
+    return ""
+
+
 def _get_development_stage(age_min_months: int, stages_data: dict[str, Any]) -> dict[str, Any] | None:
     """最小月齢から、合致する最適な発達段階のデータを取り出す。"""
     if not stages_data:
@@ -1659,6 +1892,39 @@ def _frontmatter_meta(
         s = json.dumps(webpage_ld, ensure_ascii=False)
         s = s.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
         meta_jsonld["webpage"] = s
+
+        # Issue #1301 B5: 個別 Review JSON-LD。Product.aggregateRating とは別に
+        # おもちゃロボの独自レビュー 1 件を Review として emit。
+        review_body = _extract_review_body(data)
+        if review_body:
+            avg_for_review: Any = 4.0
+            rs = data.get("review_summary")
+            if isinstance(rs, dict) and rs.get("avg_rating") is not None:
+                avg_for_review = rs["avg_rating"]
+            elif product.get("ivs_score") is not None:
+                avg_for_review = product["ivs_score"]
+            review_ld = _build_review_jsonld(
+                product=product,
+                title=title,
+                date=str(data.get("date") or lastmod),
+                avg_rating=avg_for_review,
+                review_body=review_body,
+                asin=str(asin),
+            )
+            if review_ld:
+                s = json.dumps(review_ld, ensure_ascii=False)
+                s = s.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+                meta_jsonld["review"] = s
+
+        # Issue #1301 B6: HowTo JSON-LD (「選び方」確認ステップ)。
+        # narrative の why_this_product / daily_use / safety_note / gift_appeal を
+        # 4-5 ステップに programmatic に組み立てる。
+        howto_ld = _build_howto_jsonld(product=product, data=data, asin=str(asin))
+        if howto_ld:
+            s = json.dumps(howto_ld, ensure_ascii=False)
+            s = s.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+            meta_jsonld["howto"] = s
+
     if meta_jsonld:
         meta["jsonld"] = meta_jsonld
     if data.get("breadcrumbs"):

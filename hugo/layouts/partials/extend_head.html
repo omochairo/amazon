@@ -181,6 +181,18 @@
 {{ .Params.jsonld.webpage | safeJS }}
 </script>
     {{ end }}
+    {{/* Issue #1301 B5: 個別 Review JSON-LD (Product.aggregateRating と別 emit) */}}
+    {{ if .Params.jsonld.review }}
+<script type="application/ld+json">
+{{ .Params.jsonld.review | safeJS }}
+</script>
+    {{ end }}
+    {{/* Issue #1301 B6: HowTo JSON-LD (「選び方」確認ステップ) */}}
+    {{ if .Params.jsonld.howto }}
+<script type="application/ld+json">
+{{ .Params.jsonld.howto | safeJS }}
+</script>
+    {{ end }}
   {{ end }}
 {{ end }}
 
