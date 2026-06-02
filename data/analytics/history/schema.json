@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "created": "2026-06-02",
+  "description": "B-0 (epic #1357): daily analytics history (GA4 / GSC) as append-only JSONL. Written by scripts/append_analytics_history.py from 18-analytics-daily.yml cron.",
+  "files": {
+    "gsc_by_query.jsonl": {
+      "description": "GSC Search Analytics by_query, 1 line per (date, query)",
+      "fields": ["date", "query", "clicks", "impressions", "ctr", "position"],
+      "key": ["date", "query"],
+      "source": "scripts/fetch_gsc.py --days 1"
+    },
+    "gsc_by_page.jsonl": {
+      "description": "GSC Search Analytics by_page, 1 line per (date, page)",
+      "fields": ["date", "page", "clicks", "impressions", "ctr", "position"],
+      "key": ["date", "page"],
+      "source": "scripts/fetch_gsc.py --days 1"
+    },
+    "gsc_totals.jsonl": {
+      "description": "GSC site totals, 1 line per date",
+      "fields": ["date", "clicks_sum", "impressions_sum", "queries_count", "pages_count"],
+      "key": ["date"],
+      "source": "scripts/fetch_gsc.py --days 1"
+    },
+    "ga4_pages.jsonl": {
+      "description": "GA4 by hostName x pagePath, 1 line per (date, hostName, pagePath)",
+      "fields": ["date", "hostName", "pagePath", "screenPageViews", "engagedSessions", "averageSessionDuration", "bounceRate"],
+      "key": ["date", "hostName", "pagePath"],
+      "source": "scripts/fetch_ga4.py --days 1"
+    },
+    "ga4_totals.jsonl": {
+      "description": "GA4 site totals, 1 line per date",
+      "fields": ["date", "screenPageViews_sum", "engagedSessions_sum", "rows_by_page"],
+      "key": ["date"],
+      "source": "scripts/fetch_ga4.py --days 1"
+    }
+  },
+  "idempotency": {
+    "sidecar": "seen_dates.json",
+    "structure": "{ gsc: { 'YYYY-MM-DD': true, ... }, ga4: { ... } }",
+    "note": "append_analytics_history.py marks (source, date) here. Re-running with the same date is a no-op."
+  },
+  "retention": {
+    "soft_limit_months": 18,
+    "rationale": "GSC Search Analytics API only returns ~16 months of history (hard limit). Keep 18 months locally as a safety margin.",
+    "vacuum_status": "not_implemented",
+    "vacuum_plan_issue": "see #1357 follow-up"
+  },
+  "estimated_volume": {
+    "current_navi_omcha_jp": "~1.8 MB/year (5 files combined)",
+    "ceiling_at_100x_traffic": "~18 MB/year",
+    "format": "UTF-8 JSONL, one JSON object per line, sort_keys=True"
+  },
+  "consumers_future": [
+    "trend analysis for A-1/A-2 detection (compare current week vs prior weeks)",
+    "Phase 3 GSC-driven brand narrative (#1329) — 4-week rolling top queries",
+    "B-1 CrUX joins with daily LCP/INP to attribute CWV drops to traffic shifts"
+  ]
+}

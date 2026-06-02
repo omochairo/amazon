@@ -207,6 +207,14 @@ on:
       - 'scripts/tests/test_suggest_brand_taxonomy_additions.py'
       - 'scripts/open_brand_suggestion_issue.py'
       - 'scripts/tests/test_open_brand_suggestion_issue.py'
+      # 2026-06-02 (session 78 / epic #1357 B-0): GA4/GSC 日次 history accumulator
+      # を validate (required check) 対象に。data/analytics/history/** は日次 PR で
+      # 更新されるため、auto-merge を成立させるために validate を発火させる必要がある
+      # ([[04-validate-paths-trap]])。
+      - 'scripts/append_analytics_history.py'
+      - 'scripts/tests/test_append_analytics_history.py'
+      - '.github/workflows/18-analytics-daily.yml'
+      - 'data/analytics/history/**'
       - '.github/workflows/17-analytics-report.yml'
       # requirements.txt は今回 google-analytics-data 追加で触る。
       # validate が pip install -r requirements.txt しているため、deps 追加 PR を
