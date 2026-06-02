@@ -158,6 +158,16 @@
 </section>
 {{- end }}
 
+{{- /* === Section: 最近見た商品 (#1367) — recently_viewed.js が localStorage から hydrate、
+       空なら hidden 属性で非表示。home / single 双方で同じ .recently-viewed-mount を使う。 */ -}}
+<section class="home-section recently-viewed-mount" hidden aria-label="最近見た商品">
+  <header class="home-section-header">
+    <h2>🕘 最近見た商品</h2>
+    <span class="home-section-note">続きから検討できます</span>
+  </header>
+  <div class="recently-viewed-grid"></div>
+</section>
+
 {{- /* === Footer credit === */ -}}
 <section class="home-credit">
   <p>このサイトは <a href="https://omcha.jp/" target="_blank" rel="noopener">おもちゃいろ</a> のパパママ（元ソニーエンジニア × 医療従事者夫婦）が、AI と一緒に毎日更新している知育玩具の価格・スコア比較サイトです。</p>
