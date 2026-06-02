@@ -4380,8 +4380,10 @@ details.development-stage-accordion[open] > summary::before {
 }
 
 /* dark mode の title は --primary (#dadadb) でしっかり見せる
-   (元の --secondary だと #9b9c9d で薄かった指摘あり)。 */
-.dark .spotlight-title { color: #f1f1f3; }
+   (元の --secondary だと #9b9c9d で薄かった指摘あり)。
+   ⚠️ PaperMod は <html data-theme="dark"> で切替。`.dark` (body class)
+   セレクタは本コードベースで一切付与されないため死んでいる。 */
+[data-theme="dark"] .spotlight-title { color: #f1f1f3; }
 
 .spotlight-grid {
   display: grid;
@@ -4442,7 +4444,7 @@ details.development-stage-accordion[open] > summary::before {
   .spotlight-grid--4col .spotlight-card-arrow { display: none; }
 }
 
-.dark .spotlight-card {
+[data-theme="dark"] .spotlight-card {
   background: #23232f;
   border-color: rgba(255, 255, 255, 0.06);
 }
@@ -4470,7 +4472,7 @@ details.development-stage-accordion[open] > summary::before {
 }
 
 /* dark mode は overlay 強めて差別化 (元の 0.06 だと暗背景で識別困難) */
-.dark .spotlight-card::before { opacity: 0.14; }
+[data-theme="dark"] .spotlight-card::before { opacity: 0.14; }
 
 .spotlight-card:hover {
   transform: translateY(-4px);
@@ -4478,7 +4480,7 @@ details.development-stage-accordion[open] > summary::before {
   border-color: rgba(255, 107, 53, 0.35);
 }
 .spotlight-card:hover::before { opacity: 0.18; }
-.dark .spotlight-card:hover::before { opacity: 0.28; }
+[data-theme="dark"] .spotlight-card:hover::before { opacity: 0.28; }
 
 .spotlight-card-icon {
   font-size: 2.4rem;
@@ -4510,7 +4512,7 @@ details.development-stage-accordion[open] > summary::before {
 }
 
 /* dark mode で確実に明るく */
-.dark .spotlight-card-name { color: #f3f3f5; }
+[data-theme="dark"] .spotlight-card-name { color: #f3f3f5; }
 
 /* tagline — 役割を 1 言で示す sub-title (4 カード版のみ) */
 .spotlight-card-tagline {
@@ -4520,7 +4522,7 @@ details.development-stage-accordion[open] > summary::before {
   margin: 0 0 0.45rem;
   letter-spacing: 0.02em;
 }
-.dark .spotlight-card-tagline { color: #c0c1c3; }
+[data-theme="dark"] .spotlight-card-tagline { color: #c0c1c3; }
 @media (max-width: 700px) {
   .spotlight-grid--4col .spotlight-card-tagline {
     font-size: 0.72rem;
@@ -4567,7 +4569,7 @@ details.development-stage-accordion[open] > summary::before {
 
 /* dark mode の bubble は border をやや明るくして輪郭を視認、
    text は #f1f1f3 で確実な可読性。 */
-.dark .spotlight-bubble {
+[data-theme="dark"] .spotlight-bubble {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 138, 91, 0.5);
   color: #f1f1f3;
@@ -4585,7 +4587,7 @@ details.development-stage-accordion[open] > summary::before {
   border-top: 1px solid rgba(255, 107, 53, 0.25);
   transform: rotate(45deg);
 }
-.dark .spotlight-bubble::before {
+[data-theme="dark"] .spotlight-bubble::before {
   background: #23232f;
   border-color: rgba(255, 138, 91, 0.5);
 }
@@ -4694,10 +4696,10 @@ details.development-stage-accordion[open] > summary::before {
   color: #ff4d6d;
 }
 
-.dark .fav-toggle { background: rgba(35, 35, 50, 0.92); }
-.dark .fav-toggle-icon { color: #777; }
-.dark .fav-toggle.is-on { background: #2a1f25; }
-.dark .fav-toggle.is-on .fav-toggle-icon { color: #ff7a93; }
+[data-theme="dark"] .fav-toggle { background: rgba(35, 35, 50, 0.92); }
+[data-theme="dark"] .fav-toggle-icon { color: #777; }
+[data-theme="dark"] .fav-toggle.is-on { background: #2a1f25; }
+[data-theme="dark"] .fav-toggle.is-on .fav-toggle-icon { color: #ff7a93; }
 
 @keyframes fav-bump {
   0%   { transform: scale(1); }
@@ -4774,7 +4776,7 @@ details.development-stage-accordion[open] > summary::before {
   overflow: hidden;
   transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
-.dark .favorites-card { background: #1f1f2e; }
+[data-theme="dark"] .favorites-card { background: #1f1f2e; }
 .favorites-card:hover {
   transform: translateY(-3px);
   box-shadow: var(--card-shadow-hover);
@@ -4793,7 +4795,7 @@ details.development-stage-accordion[open] > summary::before {
   display: block;
   background: #f3f3f3;
 }
-.dark .favorites-card-image { background: #16161f; }
+[data-theme="dark"] .favorites-card-image { background: #16161f; }
 
 .favorites-card-image-fallback {
   width: 100%;
@@ -5051,7 +5053,7 @@ details.development-stage-accordion[open] > summary::before {
   pointer-events: none;
 }
 
-.dark .mobile-sticky-cta {
+[data-theme="dark"] .mobile-sticky-cta {
   /* 96% → 99% で背景の透過を抑え、bar 上のテキストとアイコンの可読性を最優先。
      blur が裏側を ぼかすので、わずかな透過は維持。 */
   background: rgba(12, 14, 22, 0.99);
@@ -5099,10 +5101,10 @@ details.development-stage-accordion[open] > summary::before {
 
 /* Dark mode の active 色は brand-blue / brand-pink を明るく差し替えて
    AA 4.5:1 を満たす (#2563eb は dark bg で 3.18 と AA fail のため #60a5fa へ)。 */
-.dark .m-sticky-compare.is-on .m-sticky-icon { color: #60a5fa; }
-.dark .m-sticky-compare.is-on .m-sticky-label { color: #60a5fa; }
-.dark .m-sticky-fav.is-on .m-sticky-icon { color: #ff7a93; }
-.dark .m-sticky-fav.is-on .m-sticky-label { color: #ff7a93; }
+[data-theme="dark"] .m-sticky-compare.is-on .m-sticky-icon { color: #60a5fa; }
+[data-theme="dark"] .m-sticky-compare.is-on .m-sticky-label { color: #60a5fa; }
+[data-theme="dark"] .m-sticky-fav.is-on .m-sticky-icon { color: #ff7a93; }
+[data-theme="dark"] .m-sticky-fav.is-on .m-sticky-label { color: #ff7a93; }
 
 /* シェアボタン (#1374 follow-up) — Web Share API → clipboard → prompt の fallback。
    コピー完了時は label を 1.6 秒だけ「シェア済」「URLコピー済」に切り替え。 */
@@ -5119,9 +5121,9 @@ details.development-stage-accordion[open] > summary::before {
 }
 
 /* Dark mode: teal を明るく (2dd4bf, 5eead4) して可読性確保。 */
-.dark .m-sticky-share .m-sticky-icon { color: #2dd4bf; }
-.dark .m-sticky-share.is-flash .m-sticky-icon { color: #2dd4bf; }
-.dark .m-sticky-share.is-flash .m-sticky-label { color: #5eead4; }
+[data-theme="dark"] .m-sticky-share .m-sticky-icon { color: #2dd4bf; }
+[data-theme="dark"] .m-sticky-share.is-flash .m-sticky-icon { color: #2dd4bf; }
+[data-theme="dark"] .m-sticky-share.is-flash .m-sticky-label { color: #5eead4; }
 
 .m-sticky-buy {
   /* brand-gradient は中央が黄色 (#F7C948) なので、白文字 contrast 1.66 で
