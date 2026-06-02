@@ -4362,18 +4362,22 @@ details.development-stage-accordion[open] > summary::before {
 
 .spotlight {
   margin: 1.5rem auto 2.5rem;
-  max-width: 980px;
+  max-width: 1100px;
   padding: 0 var(--gap, 1rem);
 }
 
 .spotlight-title {
   font-size: 1.05rem;
   font-weight: 700;
-  color: var(--secondary);
+  color: var(--primary);
   margin: 0 0 0.9rem;
   text-align: center;
   letter-spacing: 0.04em;
 }
+
+/* dark mode の title は --primary (#dadadb) でしっかり見せる
+   (元の --secondary だと #9b9c9d で薄かった指摘あり)。 */
+.dark .spotlight-title { color: #f1f1f3; }
 
 .spotlight-grid {
   display: grid;
@@ -4381,8 +4385,23 @@ details.development-stage-accordion[open] > summary::before {
   gap: 1rem;
 }
 
+/* 4 カード版 — desktop で 4 列、tablet 以下で 2x2 */
+.spotlight-grid--4col {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.85rem;
+}
+
+@media (max-width: 980px) {
+  .spotlight-grid--4col { grid-template-columns: repeat(2, 1fr); }
+}
+
 @media (max-width: 700px) {
   .spotlight-grid { grid-template-columns: 1fr; }
+  /* 4 カード版は mobile でも 2 列を維持 (邪魔にならないコンパクトサイズに) */
+  .spotlight-grid--4col {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.6rem;
+  }
 }
 
 .spotlight-card {
@@ -4402,8 +4421,26 @@ details.development-stage-accordion[open] > summary::before {
   transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
+/* 4 カード版はカード自体をコンパクトに */
+.spotlight-grid--4col .spotlight-card {
+  padding: 0.85rem 0.9rem;
+  gap: 0.7rem;
+}
+
+@media (max-width: 700px) {
+  .spotlight-grid--4col .spotlight-card {
+    padding: 0.7rem 0.7rem;
+    gap: 0.5rem;
+    grid-template-columns: auto 1fr;
+    border-radius: var(--radius-md);
+  }
+  /* mobile では右端の矢印を消して spread を抑える */
+  .spotlight-grid--4col .spotlight-card-arrow { display: none; }
+}
+
 .dark .spotlight-card {
-  background: #1f1f2e;
+  background: #23232f;
+  border-color: rgba(255, 255, 255, 0.06);
 }
 
 .spotlight-card::before {
@@ -4421,17 +4458,31 @@ details.development-stage-accordion[open] > summary::before {
 .spotlight-card--deals::before {
   background: linear-gradient(135deg, #FF8FAB 0%, #9B5DE5 100%);
 }
+.spotlight-card--ranking::before {
+  background: linear-gradient(135deg, #FF6B35 0%, #DC2626 100%);
+}
+.spotlight-card--diagnosis::before {
+  background: linear-gradient(135deg, #2EC4B6 0%, #06B6D4 100%);
+}
+
+/* dark mode は overlay 強めて差別化 (元の 0.06 だと暗背景で識別困難) */
+.dark .spotlight-card::before { opacity: 0.14; }
 
 .spotlight-card:hover {
   transform: translateY(-4px);
   box-shadow: var(--card-shadow-hover);
   border-color: rgba(255, 107, 53, 0.35);
 }
-.spotlight-card:hover::before { opacity: 0.12; }
+.spotlight-card:hover::before { opacity: 0.18; }
+.dark .spotlight-card:hover::before { opacity: 0.28; }
 
 .spotlight-card-icon {
   font-size: 2.4rem;
   line-height: 1;
+}
+.spotlight-grid--4col .spotlight-card-icon { font-size: 1.9rem; }
+@media (max-width: 700px) {
+  .spotlight-grid--4col .spotlight-card-icon { font-size: 1.6rem; }
 }
 
 .spotlight-card-body {
@@ -4446,6 +4497,32 @@ details.development-stage-accordion[open] > summary::before {
   margin: 0 0 0.35rem;
   color: var(--primary);
 }
+.spotlight-grid--4col .spotlight-card-name {
+  font-size: 1rem;
+  margin: 0 0 0.15rem;
+}
+@media (max-width: 700px) {
+  .spotlight-grid--4col .spotlight-card-name { font-size: 0.92rem; }
+}
+
+/* dark mode で確実に明るく */
+.dark .spotlight-card-name { color: #f3f3f5; }
+
+/* tagline — 役割を 1 言で示す sub-title (4 カード版のみ) */
+.spotlight-card-tagline {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--secondary);
+  margin: 0 0 0.45rem;
+  letter-spacing: 0.02em;
+}
+.dark .spotlight-card-tagline { color: #c0c1c3; }
+@media (max-width: 700px) {
+  .spotlight-grid--4col .spotlight-card-tagline {
+    font-size: 0.72rem;
+    margin: 0 0 0.3rem;
+  }
+}
 
 .spotlight-card-arrow {
   font-size: 1.4rem;
@@ -4453,12 +4530,13 @@ details.development-stage-accordion[open] > summary::before {
   font-weight: 700;
   transition: transform 0.25s ease;
 }
+.spotlight-grid--4col .spotlight-card-arrow { font-size: 1.1rem; }
 
 .spotlight-card:hover .spotlight-card-arrow {
   transform: translateX(4px);
 }
 
-/* 吹き出しカルーセル — 4 つを順次 fade で表示 */
+/* 吹き出しカルーセル — 3 つを順次 fade で表示 (9 秒で 1 周) */
 .spotlight-bubbles {
   position: relative;
   min-height: 2.6em;
@@ -4480,7 +4558,15 @@ details.development-stage-accordion[open] > summary::before {
   color: var(--primary);
   opacity: 0;
   transform: translateY(6px);
-  animation: spotlight-bubble-cycle 12s infinite;
+  animation: spotlight-bubble-cycle 9s infinite;
+}
+
+/* dark mode の bubble は border をやや明るくして輪郭を視認、
+   text は #f1f1f3 で確実な可読性。 */
+.dark .spotlight-bubble {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 138, 91, 0.5);
+  color: #f1f1f3;
 }
 
 .spotlight-bubble::before {
@@ -4495,19 +4581,41 @@ details.development-stage-accordion[open] > summary::before {
   border-top: 1px solid rgba(255, 107, 53, 0.25);
   transform: rotate(45deg);
 }
+.dark .spotlight-bubble::before {
+  background: #23232f;
+  border-color: rgba(255, 138, 91, 0.5);
+}
 
-/* 4 つを 3 秒ずつ表示、合計 12 秒で 1 周 */
+/* 3 つを 3 秒ずつ表示、合計 9 秒で 1 周 */
 .spotlight-bubble:nth-child(1) { animation-delay: 0s; }
 .spotlight-bubble:nth-child(2) { animation-delay: 3s; }
 .spotlight-bubble:nth-child(3) { animation-delay: 6s; }
+/* 4 つ目があった場合の保険 (旧 markup 互換) */
 .spotlight-bubble:nth-child(4) { animation-delay: 9s; }
 
 @keyframes spotlight-bubble-cycle {
   0%   { opacity: 0; transform: translateY(8px); }
   4%   { opacity: 1; transform: translateY(0); }
-  21%  { opacity: 1; transform: translateY(0); }
-  25%  { opacity: 0; transform: translateY(-8px); }
+  29%  { opacity: 1; transform: translateY(0); }
+  33%  { opacity: 0; transform: translateY(-8px); }
   100% { opacity: 0; transform: translateY(-8px); }
+}
+
+/* 4 カード版モバイル: 吹き出し領域は小さく、フォントも縮小して非邪魔 */
+.spotlight-grid--4col .spotlight-bubble {
+  font-size: 0.78rem;
+  padding: 0.35rem 0.55rem;
+  line-height: 1.35;
+}
+@media (max-width: 700px) {
+  .spotlight-grid--4col .spotlight-bubbles { min-height: 3.6em; }
+  .spotlight-grid--4col .spotlight-bubble {
+    font-size: 0.72rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 9px;
+  }
+  /* mobile では bubble の吹き出しチップを省略 (狭くてはみ出るため) */
+  .spotlight-grid--4col .spotlight-bubble::before { display: none; }
 }
 
 /* prefers-reduced-motion: 1 つ目だけ表示してアニメーション停止 */
