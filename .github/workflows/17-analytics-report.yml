@@ -118,6 +118,16 @@ jobs:
           head -60 /tmp/report.md
           echo "--- end ---"
 
+      - name: Detect low-CTR pages (A-1, epic #1356)
+        id: low_ctr
+        if: steps.gsc.outputs.available == 'true'
+        run: |
+          set -e
+          python scripts/detect_low_ctr_pages.py
+          COUNT=$(python -c "import json; print(len(json.load(open('data/analytics/low_ctr_pages.json'))['detected']))")
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "detected $COUNT low-CTR pages"
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -125,8 +135,18 @@ jobs:
           path: |
             data/analytics/ga4_weekly.json
             data/analytics/gsc_weekly.json
+            data/analytics/low_ctr_pages.json
           retention-days: 90
           if-no-files-found: warn
+
+      - name: Open rewrite Issues for low-CTR pages
+        if: steps.low_ctr.outputs.count != '0' && steps.low_ctr.outputs.count != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          python scripts/open_low_ctr_issues.py
 
       - name: Create weekly Issue
         env:
