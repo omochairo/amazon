@@ -260,3 +260,57 @@ body.dark .diagnosis-fallback-badge {
         grid-template-columns: repeat(3, 1fr);
     }
 }
+
+/* #1418 P2: 診断ページのモバイル最適化
+   iPhone 実機で wrapper の padding 2rem が過剰、絵文字・ボタンが大きすぎ
+   操作性を損ねていたため、余白とフォントを縮小する。 */
+@media (max-width: 720px) {
+    .diagnosis-wrapper {
+        padding: 1.25rem 1rem;
+        margin: 1rem auto;
+        border-radius: 12px;
+    }
+    .diagnosis-progress-container {
+        margin-bottom: 1.5rem;
+    }
+    .diagnosis-question {
+        font-size: 1.15rem;
+        margin-bottom: 1.25rem;
+        line-height: 1.45;
+    }
+    .diagnosis-options {
+        gap: 0.75rem;
+    }
+    .diagnosis-option-btn {
+        padding: 1rem 0.75rem;
+        min-height: 44px; /* Apple HIG */
+        border-radius: 10px;
+    }
+    .diagnosis-option-btn .emoji {
+        font-size: 1.75rem;
+        margin-bottom: 0.5rem;
+    }
+    .diagnosis-option-btn .label {
+        font-size: 0.98rem;
+    }
+    .diagnosis-option-btn .sublabel {
+        font-size: 0.74rem;
+    }
+    .diagnosis-navigation {
+        margin-top: 1.25rem;
+    }
+    .diagnosis-nav-btn {
+        min-height: 44px;
+        padding: 0.6rem 1rem;
+    }
+    .diagnosis-result-header h2 {
+        font-size: 1.4rem;
+    }
+    .diagnosis-result-header p {
+        font-size: 0.88rem;
+    }
+    .diagnosis-retry-btn {
+        min-height: 44px;
+        padding: 0.75rem 1.5rem;
+    }
+}

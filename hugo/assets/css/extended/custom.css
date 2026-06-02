@@ -156,9 +156,11 @@ header .logo a {
 
 @media (max-width: 600px) {
   .post-content h2 {
-    font-size: 1.18rem;
+    font-size: 1.1rem;
     padding: 12px 14px;
     line-height: 1.5;
+    word-break: break-word;
+    overflow-wrap: anywhere;
   }
 }
 
@@ -464,8 +466,19 @@ header .logo a {
     line-height: 1.85;
   }
 
+  /* #1418 P0: 予算別シーン対応ガイド等のテーブルで右側列が画面外に
+     切れる問題を解消。横スクロール可能にする。 */
   .post-content table {
     font-size: 0.88rem;
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+  .post-content table thead th,
+  .post-content table td {
+    white-space: normal;
+    word-break: break-word;
   }
 
   .post-content p a[href*="amazon.co.jp"] {
@@ -483,6 +496,12 @@ header .logo a {
     transform: scale(0.96) !important;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15) !important;
     transition: transform 0.08s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+  }
+
+  /* #1418 P1: cospa カード等の商品名がモバイルで画面を圧迫していた問題を解消 */
+  .product-card-title {
+    font-size: 0.88rem;
+    line-height: 1.4;
   }
 }
 
@@ -2519,6 +2538,42 @@ body.dark .product-card-age {
     margin-top: 0.5rem;
   }
   .ranking-thumb img { max-height: 220px; }
+  /* #1418 P0: 長い商品名 (例: 「3,000円以上で送料無料 おもち・きなこ...」) が
+     カード全体を圧迫していた問題を解消。3 行で line-clamp し、はみ出し防止。 */
+  .ranking-title {
+    font-size: 0.92rem;
+    line-height: 1.4;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .ranking-price { font-size: 1rem; }
+  .ranking-shop, .ranking-reviews { font-size: 0.78rem; }
+  /* #1418 P3: Apple HIG タップ領域 44px 確保 */
+  .ranking-cta-internal,
+  .ranking-cta-external,
+  .ranking-cta-amazon {
+    min-height: 44px;
+    padding: 0.55rem 0.9rem;
+  }
+}
+
+/* #1418 P0: 極小画面 (iPhone SE 等) では更に圧縮 */
+@media (max-width: 480px) {
+  .ranking-title {
+    font-size: 0.85rem;
+    -webkit-line-clamp: 2;
+  }
+  .ranking-badge { width: 48px; height: 48px; font-size: 1rem; }
+  .ranking-medal { font-size: 1.4rem; }
+  .ranking-item {
+    grid-template-columns: 48px 1fr;
+    gap: 0.6rem;
+    padding: 0.7rem;
+  }
 }
 
 /* Dark mode */
@@ -3206,6 +3261,24 @@ body.dark .cospa-band-tab-count {
 [data-theme="dark"] .cospa-band-tab.is-active .cospa-band-tab-count,
 body.dark .cospa-band-tab.is-active .cospa-band-tab-count {
   color: #fcd34d;
+}
+
+/* #1418 P2: モバイルでタブが折り返し窮屈になる問題を解消。
+   横スクロール化し、スクロールバーは隠して滑らかにスワイプできるようにする。 */
+@media (max-width: 720px) {
+  .cospa-band-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Firefox */
+    padding-bottom: 2px;
+  }
+  .cospa-band-tabs::-webkit-scrollbar { display: none; }
+  .cospa-band-tab {
+    flex: 0 0 auto;
+    padding: 8px 12px;
+    font-size: 0.86rem;
+  }
 }
 
 /* ==========================================
