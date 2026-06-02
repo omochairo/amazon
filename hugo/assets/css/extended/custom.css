@@ -2276,13 +2276,17 @@ body.dark .sort-btn:not(.active):hover {
   }
 }
 
-/* --- Age Badge (Top-Left overlay) ---
-   右上は 🆚 比較トグル (.compare-toggle, top:8px/right:8px) が占有するので
-   年齢バッジは左上に逃がす (#588 と #745 のレイアウト衝突解消)。 */
+/* --- Age Badge (Bottom-Right overlay) ---
+   トップ 4 隅の配置 (2026-06 #1366 follow-up):
+     top-left     = 🆚 .compare-toggle  (#1366 で右→左に移動)
+     top-right    = ♡ .fav-toggle       (#1366 で追加)
+     bottom-left  = 🏆 .product-card-badges (score / 最安値)
+     bottom-right = 👶 .product-card-age   ← ここに移動 (旧 top-left)
+   旧位置 (top-left) は compare-toggle と衝突して年齢が裏に隠れていた。 */
 .product-card-age {
   position: absolute;
-  top: 0.5rem;
-  left: 0.5rem;
+  bottom: 0.5rem;
+  right: 0.5rem;
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
