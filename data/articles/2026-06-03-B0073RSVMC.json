@@ -108,9 +108,7 @@
       "硬い素材のため、ぶつけると痛い場合がある"
     ],
     "target_age": "3歳〜12歳",
-    "certifications": [
-      "CE"
-    ],
+    "certifications": [],
     "edu_domains": [
       "想像"
     ],
@@ -133,10 +131,10 @@
     "ivs_detail": {
       "education": 0.2,
       "longevity": 0.2,
-      "safety": 0.3,
+      "safety": 0.2,
       "cost_performance": 0.3,
-      "total": 4.5,
-      "total_100": 90,
+      "total": 4.4,
+      "total_100": 88,
       "pattern": "A",
       "score_rationale": [
         {
@@ -151,8 +149,8 @@
         },
         {
           "factor": "安全性",
-          "delta": "+0.3",
-          "reason": "CEマークを取得しており、EUの安全基準をクリアしていることが明記されているため"
+          "delta": "+0.2",
+          "reason": "しっかりとした作りで自立するため、遊ぶ際の安定感が高く評価されているため"
         },
         {
           "factor": "コスパ",
@@ -276,17 +274,6 @@
       ],
       "cross_checked": false,
       "notes": "メーカー公式の機能説明"
-    },
-    {
-      "claim": "EUの安全基準であるCEマークを取得している",
-      "category": "safety",
-      "confidence": "high",
-      "supporting_source_ids": [
-        "src-1",
-        "src-4"
-      ],
-      "cross_checked": true,
-      "notes": "Amazon商品ページおよびメーカー情報でCEマークを明記"
     }
   ],
   "technical_specs": {
