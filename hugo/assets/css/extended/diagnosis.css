@@ -13,7 +13,7 @@
     transition: all 0.3s ease;
 }
 
-body.dark .diagnosis-wrapper {
+[data-theme="dark"] .diagnosis-wrapper {
     background: rgba(0, 0, 0, 0.2);
     border: 1px solid rgba(255, 255, 255, 0.05);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
@@ -29,7 +29,7 @@ body.dark .diagnosis-wrapper {
     overflow: hidden;
 }
 
-body.dark .diagnosis-progress-container {
+[data-theme="dark"] .diagnosis-progress-container {
     background: rgba(255, 255, 255, 0.08);
 }
 
@@ -109,7 +109,7 @@ body.dark .diagnosis-progress-container {
     width: 100%;
 }
 
-body.dark .diagnosis-option-btn {
+[data-theme="dark"] .diagnosis-option-btn {
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -121,7 +121,7 @@ body.dark .diagnosis-option-btn {
     box-shadow: 0 8px 20px rgba(79, 70, 229, 0.1);
 }
 
-body.dark .diagnosis-option-btn:hover {
+[data-theme="dark"] .diagnosis-option-btn:hover {
     background: rgba(124, 58, 237, 0.08);
     border-color: rgba(124, 58, 237, 0.4);
     box-shadow: 0 8px 20px rgba(124, 58, 237, 0.2);
@@ -174,7 +174,7 @@ body.dark .diagnosis-option-btn:hover {
     border-color: var(--secondary);
 }
 
-body.dark .diagnosis-nav-btn:hover {
+[data-theme="dark"] .diagnosis-nav-btn:hover {
     background: rgba(255, 255, 255, 0.08);
 }
 
@@ -219,7 +219,7 @@ body.dark .diagnosis-nav-btn:hover {
     color: #d97706;
 }
 
-body.dark .diagnosis-fallback-badge {
+[data-theme="dark"] .diagnosis-fallback-badge {
     background: rgba(245, 158, 11, 0.15);
     color: #fbbf24;
     border-color: rgba(245, 158, 11, 0.4);
