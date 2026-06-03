@@ -1818,7 +1818,27 @@ def _frontmatter_meta(
                 og_image_path = f"/og/{asin.lower()}.jpg"
         except Exception as e:
             print(f"build_og_image failed for {asin}: {e}")
-        meta["images"] = [og_image_path or image_url]
+        # Issue #1500: PR #1302 (#1300) で og:image を per-page 化した際、`meta["images"]`
+        # を 1 枚に固定したため、PaperMod の opengraph.html 既存仕様 (`.Params.images`
+        # の最大 6 枚を og:image として range emit) が活かされていなかった。
+        # _backfill_product_images() で build 時に組み立てた product["images"]
+        # (primary + PA-API variants 最大 6 枚) を残りの og:image 候補として併出する。
+        #
+        # platform 仕様: X (twitter:image) / Threads は単一画像しか採用しないが、
+        # Facebook は share dialog で選択肢化、LinkedIn は最初の 1 枚を採用。
+        # link preview UI の carousel 化は organic post の standard 仕様には無いが、
+        # 「実装側で 1 枚に絞る」boundary は外し、platform の挙動は live 観測する。
+        # 先頭は build-time 合成 OG (1200x630 brand band 化) を維持して X の
+        # summary_large_image の主画像はそのまま。
+        images_list: list[str] = []
+        if og_image_path:
+            images_list.append(og_image_path)
+        for u in (product.get("images") or [])[:6]:
+            if isinstance(u, str) and u and u not in images_list:
+                images_list.append(u)
+        if not images_list and image_url:
+            images_list.append(image_url)
+        meta["images"] = images_list[:6]   # PaperMod opengraph.html の `first 6` と一致
     # 2026-05-15 (@J Phase 1): data/brand_taxonomy.yaml に基づくブランド正規化。
     # raw brand (Jules / API 取得時の表記ゆれ含む) → canonical 名に統一して
     # Hugo /brands/<canonical>/ ページで集約検索できるようにする。
