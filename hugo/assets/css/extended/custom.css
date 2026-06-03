@@ -23,7 +23,7 @@
   --radius-sm: 8px;
 }
 
-.dark {
+[data-theme="dark"] {
   --brand-bg-warm: #1a1a2e;
 }
 
@@ -76,7 +76,7 @@ header .logo a {
   overflow: hidden;
 }
 
-.dark .post-entry {
+[data-theme="dark"] .post-entry {
   border: 1px solid rgba(255,255,255,0.08) !important;
 }
 
@@ -145,20 +145,42 @@ header .logo a {
   letter-spacing: 0.01em;
 }
 
-.dark .post-content h2 small {
+[data-theme="dark"] .post-content h2 small {
   color: rgba(255,255,255,0.7);
 }
 
-.dark .post-content h2 {
+[data-theme="dark"] .post-content h2 {
   background: linear-gradient(135deg, rgba(255,107,53,0.18), rgba(247,201,72,0.10));
   color: var(--brand-secondary);
 }
 
-@media (max-width: 600px) {
+/* #1418 follow-up: スマホで H2 が依然として大きく、border-left 6px と padding 14px の
+   存在感が読みにくさに直結していたため、フォント・余白・装飾を一段階圧縮する。 */
+@media (max-width: 720px) {
   .post-content h2 {
-    font-size: 1.18rem;
-    padding: 12px 14px;
-    line-height: 1.5;
+    font-size: 1.05rem !important;
+    line-height: 1.45;
+    padding: 8px 12px;
+    border-left-width: 4px;
+    margin-top: 1.8em;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+  .post-content h2 small {
+    font-size: 0.72em;
+  }
+  .post-content h3 {
+    font-size: 1rem;
+    margin-top: 1.5em;
+  }
+}
+@media (max-width: 480px) {
+  .post-content h2 {
+    font-size: 0.98rem !important;
+    padding: 7px 10px;
+  }
+  .post-content h3 {
+    font-size: 0.94rem;
   }
 }
 
@@ -182,7 +204,7 @@ header .logo a {
   letter-spacing: 0.01em;
 }
 
-.dark .post-content h3 small {
+[data-theme="dark"] .post-content h3 small {
   color: rgba(255,255,255,0.7);
 }
 
@@ -225,7 +247,7 @@ header .logo a {
   border-right: none !important;
 }
 
-.dark .post-content table td {
+[data-theme="dark"] .post-content table td {
   border-bottom: 1px solid rgba(255,255,255,0.08) !important;
 }
 
@@ -464,8 +486,19 @@ header .logo a {
     line-height: 1.85;
   }
 
+  /* #1418 P0: 予算別シーン対応ガイド等のテーブルで右側列が画面外に
+     切れる問題を解消。横スクロール可能にする。 */
   .post-content table {
     font-size: 0.88rem;
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+  .post-content table thead th,
+  .post-content table td {
+    white-space: normal;
+    word-break: break-word;
   }
 
   .post-content p a[href*="amazon.co.jp"] {
@@ -483,6 +516,12 @@ header .logo a {
     transform: scale(0.96) !important;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15) !important;
     transition: transform 0.08s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+  }
+
+  /* #1418 P1: cospa カード等の商品名がモバイルで画面を圧迫していた問題を解消 */
+  .product-card-title {
+    font-size: 0.88rem;
+    line-height: 1.4;
   }
 }
 
@@ -514,7 +553,7 @@ header .logo a {
   line-height: 1.5;
 }
 
-.dark .post-content .yt-caption {
+[data-theme="dark"] .post-content .yt-caption {
   color: rgba(255,255,255,0.75);
 }
 
@@ -583,12 +622,9 @@ header .logo a {
   opacity: 0.85;
 }
 
-[data-theme="dark"] .post-content .amazon-effective-price,
-body.dark .post-content .amazon-effective-price { color: #86efac; }
-[data-theme="dark"] .post-content .amazon-effective-price strong,
-body.dark .post-content .amazon-effective-price strong { color: #bbf7d0; }
-[data-theme="dark"] .post-content .price-card.is-outofstock .price-card-amount,
-body.dark .post-content .price-card.is-outofstock .price-card-amount { color: #64748b; }
+[data-theme="dark"] .post-content .amazon-effective-price { color: #86efac; }
+[data-theme="dark"] .post-content .amazon-effective-price strong { color: #bbf7d0; }
+[data-theme="dark"] .post-content .price-card.is-outofstock .price-card-amount { color: #64748b; }
 
 /* ---------- Print ---------- */
 @media print {
@@ -672,8 +708,8 @@ main.main:has(.card-grid) {
 .home-hero-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.14); }
 .home-hero-btn.primary { background: var(--brand-primary); color: #fff; }
 .home-hero-btn.outline { background: transparent; border: 1.5px solid var(--brand-primary); color: var(--brand-primary); }
-.dark .home-hero-btn { background: #2a2a3a; color: #eee; }
-.dark .home-hero-btn.primary { background: var(--brand-primary); color: #fff; }
+[data-theme="dark"] .home-hero-btn { background: #2a2a3a; color: #eee; }
+[data-theme="dark"] .home-hero-btn.primary { background: var(--brand-primary); color: #fff; }
 
 /* --- Section header --- */
 .home-section { margin: 2.2rem 0 0; }
@@ -730,7 +766,7 @@ main.main:has(.card-grid) {
   transform: translateY(-3px);
   box-shadow: var(--card-shadow-hover);
 }
-.dark .product-card { background: #1f1f2e; }
+[data-theme="dark"] .product-card { background: #1f1f2e; }
 
 .product-card-image {
   position: relative;
@@ -741,7 +777,7 @@ main.main:has(.card-grid) {
   justify-content: center;
   overflow: hidden;
 }
-.dark .product-card-image { background: #2a2a3a; }
+[data-theme="dark"] .product-card-image { background: #2a2a3a; }
 .product-card-image img {
   width: 100%;
   height: 100%;
@@ -749,7 +785,7 @@ main.main:has(.card-grid) {
   padding: 8%;
   background: #fff;
 }
-.dark .product-card-image img { background: #fafafa; }
+[data-theme="dark"] .product-card-image img { background: #fafafa; }
 .product-card-image-fallback {
   font-size: 3rem;
   opacity: 0.4;
@@ -819,7 +855,7 @@ main.main:has(.card-grid) {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.dark .product-card-title { color: #f0f0f0; }
+[data-theme="dark"] .product-card-title { color: #f0f0f0; }
 .product-card-meta {
   margin-top: auto;
   display: flex;
@@ -860,7 +896,7 @@ main.main:has(.card-grid) {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .tag-chip:hover { transform: translateY(-2px); box-shadow: var(--card-shadow-hover); }
-.dark .tag-chip { background: #1f1f2e; color: #eee !important; }
+[data-theme="dark"] .tag-chip { background: #1f1f2e; color: #eee !important; }
 .tag-chip-count {
   font-size: 0.72rem;
   font-weight: 700;
@@ -882,118 +918,99 @@ main.main:has(.card-grid) {
   text-align: center;
 }
 .home-credit a { color: var(--brand-primary); font-weight: 700; }
-.dark .home-credit { color: #ccc; }
+[data-theme="dark"] .home-credit { color: #ccc; }
 
 /* --- ホーム時は PaperMod の first-entry / post-entry を抑止 (homeInfoParams を消したので念のため) --- */
 .home-hero ~ .first-entry,
 .home-hero ~ .post-entry { display: none !important; }
 
 /* ==========================================
-   ダークモード コントラスト強化 (2026-05-15 修正)
-   PaperMod は `<html data-theme="dark">` と `body.dark` の両方を使うので
-   両 selector で確実に効かせる
+   ダークモード コントラスト強化 (2026-05-15 → 2026-06-03 統一)
+   PaperMod の inline script は `<html data-theme="dark">` 属性で
+   ダークモードを切り替える (body.class="dark" は付与しない)。
+   よって全 selector を `[data-theme="dark"]` に統一済 (#1399)。
    ========================================== */
 
-[data-theme="dark"] .product-card,
-body.dark .product-card {
+[data-theme="dark"] .product-card {
   background: #232334;
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
 }
-[data-theme="dark"] .product-card:hover,
-body.dark .product-card:hover {
+[data-theme="dark"] .product-card:hover {
   box-shadow: 0 8px 28px rgba(0,0,0,0.55);
 }
 
-[data-theme="dark"] .product-card-title,
-body.dark .product-card-title {
+[data-theme="dark"] .product-card-title {
   color: #ffffff !important;
   font-weight: 700;
   text-shadow: 0 1px 0 rgba(0,0,0,0.25);
 }
 
-[data-theme="dark"] .product-card-brand,
-body.dark .product-card-brand {
+[data-theme="dark"] .product-card-brand {
   color: #FFB57A !important;          /* オレンジを明度上げて視認性UP */
 }
 
-[data-theme="dark"] .product-card-meta,
-body.dark .product-card-meta {
+[data-theme="dark"] .product-card-meta {
   color: #c8c8d0 !important;
 }
 
-[data-theme="dark"] .product-card-tag,
-body.dark .product-card-tag {
+[data-theme="dark"] .product-card-tag {
   background: rgba(255, 181, 122, 0.15);
   color: #FFB57A;
 }
 
-[data-theme="dark"] .product-card-image,
-body.dark .product-card-image {
+[data-theme="dark"] .product-card-image {
   background: #1a1a2a;
 }
-[data-theme="dark"] .product-card-image img,
-body.dark .product-card-image img {
+[data-theme="dark"] .product-card-image img {
   background: #ffffff;                /* 商品画像の背景は白固定 (商品写真は白背景前提のものが多い) */
 }
 
-[data-theme="dark"] .tag-chip,
-body.dark .tag-chip {
+[data-theme="dark"] .tag-chip {
   background: #232334;
   color: #f0f0f0 !important;
   box-shadow: 0 2px 8px rgba(0,0,0,0.4);
 }
-[data-theme="dark"] .tag-chip-count,
-body.dark .tag-chip-count {
+[data-theme="dark"] .tag-chip-count {
   background: rgba(255, 181, 122, 0.18);
   color: #FFB57A;
 }
 
-[data-theme="dark"] .home-credit,
-body.dark .home-credit {
+[data-theme="dark"] .home-credit {
   background: #1a1a2a;
   color: #d0d0d8;
 }
-[data-theme="dark"] .home-credit a,
-body.dark .home-credit a {
+[data-theme="dark"] .home-credit a {
   color: #FFB57A;
 }
 
-[data-theme="dark"] .home-hero,
-body.dark .home-hero {
+[data-theme="dark"] .home-hero {
   background: linear-gradient(135deg, rgba(255,107,53,0.12) 0%, rgba(247,201,72,0.10) 50%, rgba(46,196,182,0.12) 100%);
 }
-[data-theme="dark"] .home-hero-subtitle,
-body.dark .home-hero-subtitle {
+[data-theme="dark"] .home-hero-subtitle {
   color: #f0f0f0;
 }
-[data-theme="dark"] .home-hero-lead,
-body.dark .home-hero-lead {
+[data-theme="dark"] .home-hero-lead {
   color: #d0d0d8;
 }
-[data-theme="dark"] .home-hero-btn,
-body.dark .home-hero-btn {
+[data-theme="dark"] .home-hero-btn {
   background: #2a2a3a;
   color: #f0f0f0;
   box-shadow: 0 2px 8px rgba(0,0,0,0.4);
 }
-[data-theme="dark"] .home-hero-btn.primary,
-body.dark .home-hero-btn.primary {
+[data-theme="dark"] .home-hero-btn.primary {
   background: var(--brand-primary);
   color: #fff;
 }
-[data-theme="dark"] .home-hero-btn.outline,
-body.dark .home-hero-btn.outline {
+[data-theme="dark"] .home-hero-btn.outline {
   background: transparent;
   border: 1.5px solid #FFB57A;
   color: #FFB57A;
 }
 
-[data-theme="dark"] .home-section-header h2,
-body.dark .home-section-header h2 {
+[data-theme="dark"] .home-section-header h2 {
   color: #f0f0f0;
 }
-[data-theme="dark"] .home-section-note,
-body.dark .home-section-note {
+[data-theme="dark"] .home-section-note {
   color: #b0b0b8;
 }
 
@@ -1091,32 +1108,25 @@ body.dark .home-section-note {
 }
 
 /* --- Dark mode for posts page extras --- */
-[data-theme="dark"] .posts-toolbar,
-body.dark .posts-toolbar {
+[data-theme="dark"] .posts-toolbar {
   background: rgba(255,255,255,0.04);
 }
-[data-theme="dark"] .posts-toolbar-label,
-body.dark .posts-toolbar-label { color: #c0c0c8; }
-[data-theme="dark"] .posts-toolbar-link,
-body.dark .posts-toolbar-link {
+[data-theme="dark"] .posts-toolbar-label { color: #c0c0c8; }
+[data-theme="dark"] .posts-toolbar-link {
   background: #232334;
   color: #f0f0f0 !important;
   box-shadow: 0 2px 8px rgba(0,0,0,0.35);
 }
-[data-theme="dark"] .posts-toolbar-link.is-active,
-body.dark .posts-toolbar-link.is-active {
+[data-theme="dark"] .posts-toolbar-link.is-active {
   background: var(--brand-primary);
   color: #fff !important;
 }
-[data-theme="dark"] .posts-pagination .pagination a,
-body.dark .posts-pagination .pagination a {
+[data-theme="dark"] .posts-pagination .pagination a {
   background: #232334;
   color: #f0f0f0 !important;
 }
-[data-theme="dark"] .posts-pagination .pagination-info,
-body.dark .posts-pagination .pagination-info { color: #c0c0c8; }
-[data-theme="dark"] .posts-grid-header .post-description,
-body.dark .posts-grid-header .post-description { color: #c8c8d0; }
+[data-theme="dark"] .posts-pagination .pagination-info { color: #c0c0c8; }
+[data-theme="dark"] .posts-grid-header .post-description { color: #c8c8d0; }
 
 /* ==========================================
    タクソノミー (tags / brands / categories) ハブ・term ページ
@@ -1293,32 +1303,22 @@ body.dark .posts-grid-header .post-description { color: #c8c8d0; }
 }
 
 /* --- Dark mode --- */
-[data-theme="dark"] .term-header,
-body.dark .term-header {
+[data-theme="dark"] .term-header {
   background: linear-gradient(135deg, rgba(255,107,53,0.12) 0%, rgba(247,201,72,0.10) 50%, rgba(46,196,182,0.12) 100%);
 }
-[data-theme="dark"] .term-header-eyebrow,
-body.dark .term-header-eyebrow { color: #FFB57A; }
-[data-theme="dark"] .term-header-description,
-body.dark .term-header-description { color: #c8c8d0; }
-[data-theme="dark"] .term-header-meta,
-body.dark .term-header-meta { color: #b0b0b8; }
-[data-theme="dark"] .term-header-link,
-body.dark .term-header-link { color: #FFB57A !important; }
+[data-theme="dark"] .term-header-eyebrow { color: #FFB57A; }
+[data-theme="dark"] .term-header-description { color: #c8c8d0; }
+[data-theme="dark"] .term-header-meta { color: #b0b0b8; }
+[data-theme="dark"] .term-header-link { color: #FFB57A !important; }
 
-[data-theme="dark"] .brand-card,
-body.dark .brand-card {
+[data-theme="dark"] .brand-card {
   background: #232334;
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
 }
-[data-theme="dark"] .brand-card-image,
-body.dark .brand-card-image { background: #1a1a2a; }
-[data-theme="dark"] .brand-card-image img,
-body.dark .brand-card-image img { background: #ffffff; }
-[data-theme="dark"] .brand-card-name,
-body.dark .brand-card-name { color: #ffffff; }
-[data-theme="dark"] .brand-card-score,
-body.dark .brand-card-score { color: #FFD93D; }
+[data-theme="dark"] .brand-card-image { background: #1a1a2a; }
+[data-theme="dark"] .brand-card-image img { background: #ffffff; }
+[data-theme="dark"] .brand-card-name { color: #ffffff; }
+[data-theme="dark"] .brand-card-score { color: #FFD93D; }
 
 /* ==========================================
    検索ページ — カードグリッド表示
@@ -1357,23 +1357,19 @@ body.dark .brand-card-score { color: #FFD93D; }
 /* PaperMod の旧 li スタイルは search.html を上書きしたので不要だが、念のため */
 .search-card-grid li { list-style: none; }
 
-[data-theme="dark"] .search-header,
-body.dark .search-header {
+[data-theme="dark"] .search-header {
   background: linear-gradient(135deg, rgba(255,107,53,0.12) 0%, rgba(247,201,72,0.10) 50%, rgba(46,196,182,0.12) 100%);
 }
-[data-theme="dark"] .searchbox-grid #searchInput,
-body.dark .searchbox-grid #searchInput {
+[data-theme="dark"] .searchbox-grid #searchInput {
   background: #232334;
   color: #f0f0f0;
   border-color: rgba(255,181,122,0.4);
 }
-[data-theme="dark"] .searchbox-grid #searchInput:focus,
-body.dark .searchbox-grid #searchInput:focus {
+[data-theme="dark"] .searchbox-grid #searchInput:focus {
   border-color: #FFB57A;
   box-shadow: 0 4px 18px rgba(255,181,122,0.25);
 }
-[data-theme="dark"] .search-summary,
-body.dark .search-summary { color: #c8c8d0; }
+[data-theme="dark"] .search-summary { color: #c8c8d0; }
 
 /* ---------- omcha 関連記事 (ブログカード) ---------- */
 /* おもちゃいろ (omcha.jp) の関連記事を画像付きカードで表示。YouTube セクションの直上 */
@@ -1441,19 +1437,16 @@ body.dark .search-summary { color: #c8c8d0; }
   min-height: 114px;
 }
 
-[data-theme="dark"] .post-content .omcha-card,
-body.dark .post-content .omcha-card {
+[data-theme="dark"] .post-content .omcha-card {
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.08);
 }
 
-[data-theme="dark"] .post-content .omcha-card-thumb,
-body.dark .post-content .omcha-card-thumb {
+[data-theme="dark"] .post-content .omcha-card-thumb {
   background: rgba(255,255,255,0.05);
 }
 
-[data-theme="dark"] .post-content .omcha-card-title,
-body.dark .post-content .omcha-card-title {
+[data-theme="dark"] .post-content .omcha-card-title {
   color: #f1f5f9;
 }
 
@@ -1588,24 +1581,24 @@ body.dark .post-content .omcha-card-title {
 }
 
 /* Dark mode */
-body.dark .post-content .product-slideshow,
+[data-theme="dark"] .post-content .product-slideshow,
 html[data-theme="dark"] .post-content .product-slideshow {
   background: #1f2937;
   border-color: #374151;
 }
-body.dark .post-content .product-slideshow .slideshow-stage,
+[data-theme="dark"] .post-content .product-slideshow .slideshow-stage,
 html[data-theme="dark"] .post-content .product-slideshow .slideshow-stage {
   background: #111827;
 }
-body.dark .post-content .product-slideshow .slide-thumb,
+[data-theme="dark"] .post-content .product-slideshow .slide-thumb,
 html[data-theme="dark"] .post-content .product-slideshow .slide-thumb {
   background: #1f2937;
 }
-body.dark .post-content .product-slideshow .slide-thumb:hover,
+[data-theme="dark"] .post-content .product-slideshow .slide-thumb:hover,
 html[data-theme="dark"] .post-content .product-slideshow .slide-thumb:hover {
   border-color: #4b5563;
 }
-body.dark .post-content .product-slideshow .slide-thumb.active,
+[data-theme="dark"] .post-content .product-slideshow .slide-thumb.active,
 html[data-theme="dark"] .post-content .product-slideshow .slide-thumb.active {
   border-color: #38bdf8;
   box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.3);
@@ -1651,17 +1644,17 @@ html[data-theme="dark"] .post-content .product-slideshow .slide-thumb.active {
   color: #374151;
 }
 /* dark mode */
-body.dark .post-content .price-cta-grid .price-badge--unverified,
+[data-theme="dark"] .post-content .price-cta-grid .price-badge--unverified,
 html[data-theme="dark"] .post-content .price-cta-grid .price-badge--unverified {
   background: #422006;
   color: #fcd34d;
   border-color: #92400e;
 }
-body.dark .post-content .price-cta-grid .price-search-fallback a,
+[data-theme="dark"] .post-content .price-cta-grid .price-search-fallback a,
 html[data-theme="dark"] .post-content .price-cta-grid .price-search-fallback a {
   color: #94a3b8;
 }
-body.dark .post-content .price-cta-grid .price-search-fallback a:hover,
+[data-theme="dark"] .post-content .price-cta-grid .price-search-fallback a:hover,
 html[data-theme="dark"] .post-content .price-cta-grid .price-search-fallback a:hover {
   color: #cbd5f5;
 }
@@ -1939,125 +1932,125 @@ html[data-theme="dark"] .post-content .price-cta-grid .price-search-fallback a:h
 }
 
 /* Dark mode overrides (v5.1: text-contrast 改善) */
-body.dark .post-content .hero-score,
+[data-theme="dark"] .post-content .hero-score,
 html[data-theme="dark"] .post-content .hero-score {
   background: linear-gradient(135deg, #3b2a16 0%, #4a3617 100%);
   border-color: #92400e;
   color: #fef3c7;
 }
-body.dark .post-content .hero-score .hero-total-badge,
+[data-theme="dark"] .post-content .hero-score .hero-total-badge,
 html[data-theme="dark"] .post-content .hero-score .hero-total-badge {
   background: #1f1209;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
-body.dark .post-content .hero-score .hero-total-label,
+[data-theme="dark"] .post-content .hero-score .hero-total-label,
 html[data-theme="dark"] .post-content .hero-score .hero-total-label {
   color: #fde68a;
 }
-body.dark .post-content .hero-score .hero-total-value,
+[data-theme="dark"] .post-content .hero-score .hero-total-value,
 html[data-theme="dark"] .post-content .hero-score .hero-total-value {
   color: #fdba74;
 }
-body.dark .post-content .hero-score .hero-total-value small,
+[data-theme="dark"] .post-content .hero-score .hero-total-value small,
 html[data-theme="dark"] .post-content .hero-score .hero-total-value small {
   color: #fde68a;
 }
-body.dark .post-content .hero-score .hero-verdict,
+[data-theme="dark"] .post-content .hero-score .hero-verdict,
 html[data-theme="dark"] .post-content .hero-score .hero-verdict {
   color: #fef3c7;
 }
-body.dark .post-content .hero-score .hero-total-bar-track,
+[data-theme="dark"] .post-content .hero-score .hero-total-bar-track,
 html[data-theme="dark"] .post-content .hero-score .hero-total-bar-track {
   background: #1f1209;
   border-color: #78350f;
 }
-body.dark .post-content .hero-score .hero-total-bar-caption,
+[data-theme="dark"] .post-content .hero-score .hero-total-bar-caption,
 html[data-theme="dark"] .post-content .hero-score .hero-total-bar-caption {
   color: #fef3c7;
 }
-body.dark .post-content .hero-score .hero-radar .radar-grid polygon,
+[data-theme="dark"] .post-content .hero-score .hero-radar .radar-grid polygon,
 html[data-theme="dark"] .post-content .hero-score .hero-radar .radar-grid polygon {
   stroke: #b45309;
   opacity: 0.45;
 }
-body.dark .post-content .hero-score .hero-radar .radar-axes line,
+[data-theme="dark"] .post-content .hero-score .hero-radar .radar-axes line,
 html[data-theme="dark"] .post-content .hero-score .hero-radar .radar-axes line {
   stroke: #b45309;
   opacity: 0.6;
 }
-body.dark .post-content .hero-score .hero-radar .radar-shape,
+[data-theme="dark"] .post-content .hero-score .hero-radar .radar-shape,
 html[data-theme="dark"] .post-content .hero-score .hero-radar .radar-shape {
   fill: rgba(251, 146, 60, 0.45);
   stroke: #fb923c;
 }
-body.dark .post-content .hero-score .hero-radar .radar-labels text,
+[data-theme="dark"] .post-content .hero-score .hero-radar .radar-labels text,
 html[data-theme="dark"] .post-content .hero-score .hero-radar .radar-labels text {
   fill: #fef3c7;
 }
-body.dark .post-content .hero-score .hero-pros,
-body.dark .post-content .hero-score .hero-cons,
+[data-theme="dark"] .post-content .hero-score .hero-pros,
+[data-theme="dark"] .post-content .hero-score .hero-cons,
 html[data-theme="dark"] .post-content .hero-score .hero-pros,
 html[data-theme="dark"] .post-content .hero-score .hero-cons {
   background: #1f1209;
   color: #fef3c7;
 }
-body.dark .post-content .hero-score .hero-pros strong,
+[data-theme="dark"] .post-content .hero-score .hero-pros strong,
 html[data-theme="dark"] .post-content .hero-score .hero-pros strong {
   color: #86efac;
 }
-body.dark .post-content .hero-score .hero-cons strong,
+[data-theme="dark"] .post-content .hero-score .hero-cons strong,
 html[data-theme="dark"] .post-content .hero-score .hero-cons strong {
   color: #fca5a5;
 }
-body.dark .post-content .hero-score .hero-meta,
+[data-theme="dark"] .post-content .hero-score .hero-meta,
 html[data-theme="dark"] .post-content .hero-score .hero-meta {
   border-top-color: #92400e;
   color: #fef3c7;
 }
-body.dark .post-content .hero-score .hero-meta-row strong,
+[data-theme="dark"] .post-content .hero-score .hero-meta-row strong,
 html[data-theme="dark"] .post-content .hero-score .hero-meta-row strong {
   color: #fdba74;
 }
-body.dark .post-content .score-rationale-list .score-delta,
+[data-theme="dark"] .post-content .score-rationale-list .score-delta,
 html[data-theme="dark"] .post-content .score-rationale-list .score-delta {
   color: #fdba74;
 }
-body.dark .post-content .score-recap-card,
+[data-theme="dark"] .post-content .score-recap-card,
 html[data-theme="dark"] .post-content .score-recap-card {
   background: #1f1209;
   border-color: #78350f;
 }
-body.dark .post-content .score-recap-axis,
+[data-theme="dark"] .post-content .score-recap-axis,
 html[data-theme="dark"] .post-content .score-recap-axis {
   color: #fde68a;
 }
-body.dark .post-content .score-recap-value,
+[data-theme="dark"] .post-content .score-recap-value,
 html[data-theme="dark"] .post-content .score-recap-value {
   color: #fdba74;
 }
-body.dark .post-content .score-recap-value small,
+[data-theme="dark"] .post-content .score-recap-value small,
 html[data-theme="dark"] .post-content .score-recap-value small {
   color: #fde68a;
 }
-body.dark .post-content .score-recap-note,
+[data-theme="dark"] .post-content .score-recap-note,
 html[data-theme="dark"] .post-content .score-recap-note {
   color: #d6d3d1;
 }
-body.dark .post-content .score-rationale-intro,
+[data-theme="dark"] .post-content .score-rationale-intro,
 html[data-theme="dark"] .post-content .score-rationale-intro {
   color: #fef3c7;
 }
-body.dark .post-content details.score-axes-doc,
+[data-theme="dark"] .post-content details.score-axes-doc,
 html[data-theme="dark"] .post-content details.score-axes-doc {
   background: #1f1209;
   border-color: #78350f;
   color: #fef3c7;
 }
-body.dark .post-content details.score-axes-doc summary,
+[data-theme="dark"] .post-content details.score-axes-doc summary,
 html[data-theme="dark"] .post-content details.score-axes-doc summary {
   color: #fde68a;
 }
-body.dark .post-content details.score-axes-doc .score-axes-note,
+[data-theme="dark"] .post-content details.score-axes-doc .score-axes-note,
 html[data-theme="dark"] .post-content details.score-axes-doc .score-axes-note {
   color: #d6d3d1;
 }
@@ -2197,7 +2190,7 @@ html[data-theme="dark"] .post-content details.score-axes-doc .score-axes-note {
 }
 
 /* --- Dark mode: shimmer 明度調整 --- */
-body.dark .post-content .price-cta-grid a[href][target="_blank"]::after,
+[data-theme="dark"] .post-content .price-cta-grid a[href][target="_blank"]::after,
 html[data-theme="dark"] .post-content .price-cta-grid a[href][target="_blank"]::after {
   background: linear-gradient(
     110deg,
@@ -2210,7 +2203,7 @@ html[data-theme="dark"] .post-content .price-cta-grid a[href][target="_blank"]::
   background-size: 200% 100%;
 }
 
-body.dark .post-content .competitor-grid .competitor-card a[href][style*="background"]::after,
+[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][style*="background"]::after,
 html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][style*="background"]::after {
   background: linear-gradient(
     110deg,
@@ -2255,14 +2248,12 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 }
 
 /* Dark mode support for sort-btn */
-[data-theme="dark"] .sort-btn:not(.active),
-body.dark .sort-btn:not(.active) {
+[data-theme="dark"] .sort-btn:not(.active) {
   background: #1f2937;
   color: #e5e7eb;
   border-color: #374151;
 }
-[data-theme="dark"] .sort-btn:not(.active):hover,
-body.dark .sort-btn:not(.active):hover {
+[data-theme="dark"] .sort-btn:not(.active):hover {
   background: #374151;
 }
 @media (prefers-color-scheme: dark) {
@@ -2304,8 +2295,7 @@ body.dark .sort-btn:not(.active):hover {
 }
 
 /* Dark mode adjust for age badge */
-[data-theme="dark"] .product-card-age,
-body.dark .product-card-age {
+[data-theme="dark"] .product-card-age {
   background: #0369a1;  /* Sky 700 - ダークモードでコントラスト比を考慮した濃いめのブルー */
   color: #ffffff;
   border-color: rgba(255,255,255,0.1);
@@ -2519,51 +2509,87 @@ body.dark .product-card-age {
     margin-top: 0.5rem;
   }
   .ranking-thumb img { max-height: 220px; }
+  /* #1418 P0 (follow-up 2): 当初 line-clamp 3 + overflow:hidden で短縮していたが、
+     .post-content h2 のグラデーション BG が line-clamp で計算される box height に
+     追随せず、テキストが BG 外に飛び出して見切れる事故を起こした。
+     根本対策として line-clamp を撤去し、フォント縮小 + word-break で自然折返しに
+     寄せる。長尺タイトルは縦に伸びるが視認性は明らかに向上する。 */
+  .ranking-title {
+    font-size: 0.92rem;
+    line-height: 1.4;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+  /* .post-content h2 のグラデ BG + border-left 4px + padding は読みづらさの主因。
+     ranking-title 用にコンパクト化する。 */
+  .post-content h2.ranking-title {
+    background: none !important;
+    border-left: 3px solid var(--brand-primary) !important;
+    border-radius: 0 !important;
+    padding: 2px 0 2px 10px !important;
+    margin: 0 0 6px !important;
+    font-family: inherit !important;
+    font-weight: 700;
+    color: inherit;
+  }
+  .ranking-price { font-size: 1rem; }
+  .ranking-shop, .ranking-reviews { font-size: 0.78rem; }
+  /* #1418 P3: Apple HIG タップ領域 44px 確保 */
+  .ranking-cta-internal,
+  .ranking-cta-external,
+  .ranking-cta-amazon {
+    min-height: 44px;
+    padding: 0.55rem 0.9rem;
+  }
+}
+
+/* #1418 P0: 極小画面 (iPhone SE 等) では更に圧縮 */
+@media (max-width: 480px) {
+  .ranking-title {
+    font-size: 0.88rem;
+  }
+  .ranking-badge { width: 48px; height: 48px; font-size: 1rem; }
+  .ranking-medal { font-size: 1.4rem; }
+  .ranking-item {
+    grid-template-columns: 48px 1fr;
+    gap: 0.6rem;
+    padding: 0.7rem;
+  }
 }
 
 /* Dark mode */
-[data-theme="dark"] .ranking-item,
-body.dark .ranking-item {
+[data-theme="dark"] .ranking-item {
   background: rgba(30, 41, 59, 0.6);
   border-color: rgba(71, 85, 105, 0.55);
   color: #e5e7eb;
 }
-[data-theme="dark"] .ranking-item--external-only,
-body.dark .ranking-item--external-only {
+[data-theme="dark"] .ranking-item--external-only {
   background: rgba(15, 23, 42, 0.5);
 }
-[data-theme="dark"] .ranking-empty,
-body.dark .ranking-empty {
+[data-theme="dark"] .ranking-empty {
   background: rgba(30, 41, 59, 0.5);
   color: #94a3b8;
   border-color: rgba(71, 85, 105, 0.6);
 }
-[data-theme="dark"] .ranking-shop,
-body.dark .ranking-shop {
+[data-theme="dark"] .ranking-shop {
   color: #94a3b8;
 }
-[data-theme="dark"] .ranking-reviews,
-body.dark .ranking-reviews {
+[data-theme="dark"] .ranking-reviews {
   color: #cbd5e1;
 }
-[data-theme="dark"] .ranking-price,
-body.dark .ranking-price {
+[data-theme="dark"] .ranking-price {
   color: #f87171;
 }
-[data-theme="dark"] .ranking-thumb,
-body.dark .ranking-thumb {
+[data-theme="dark"] .ranking-thumb {
   background: #1f2937;
 }
-[data-theme="dark"] .ranking-updated,
-body.dark .ranking-updated {
+[data-theme="dark"] .ranking-updated {
   color: #94a3b8;
 }
-[data-theme="dark"] .ranking-disclaimer,
-body.dark .ranking-disclaimer {
+[data-theme="dark"] .ranking-disclaimer {
   color: #64748b;
 }
-[data-theme="dark"] .ranking-title a:hover,
-body.dark .ranking-title a:hover {
+[data-theme="dark"] .ranking-title a:hover {
   color: #38bdf8;
 }
 
@@ -2590,8 +2616,7 @@ body.dark .ranking-title a:hover {
 }
 
 /* ダークモード時の最安値パルス設定 */
-[data-theme="dark"] .price-card.is-cheapest,
-body.dark .price-card.is-cheapest {
+[data-theme="dark"] .price-card.is-cheapest {
   border-color: #FFB57A !important;
   animation: cheapest-pulse-dark 3s infinite ease-in-out;
 }
@@ -2709,8 +2734,7 @@ body.dark .price-card.is-cheapest {
   white-space: nowrap;
 }
 
-[data-theme="dark"] .hub-banner-link,
-body.dark .hub-banner-link {
+[data-theme="dark"] .hub-banner-link {
   background: linear-gradient(135deg, rgba(14, 165, 233, 0.14), rgba(99, 102, 241, 0.14));
   border-color: rgba(14, 165, 233, 0.45);
 }
@@ -2983,22 +3007,19 @@ body.dark .hub-banner-link {
   border-color: #bbf7d0;
 }
 
-[data-theme="dark"] .cc-badge-price,
-body.dark .cc-badge-price {
+[data-theme="dark"] .cc-badge-price {
   background: rgba(180, 83, 9, 0.18);
   color: #fdba74;
   border-color: rgba(253, 186, 116, 0.3);
 }
 
-[data-theme="dark"] .cc-badge-age,
-body.dark .cc-badge-age {
+[data-theme="dark"] .cc-badge-age {
   background: rgba(29, 78, 216, 0.18);
   color: #93c5fd;
   border-color: rgba(147, 197, 253, 0.3);
 }
 
-[data-theme="dark"] .cc-badge-tag,
-body.dark .cc-badge-tag {
+[data-theme="dark"] .cc-badge-tag {
   background: rgba(21, 128, 61, 0.18);
   color: #86efac;
   border-color: rgba(134, 239, 172, 0.3);
@@ -3027,8 +3048,7 @@ body.dark .cc-badge-tag {
 }
 
 /* ダークモード時のカードの枠線微調整 */
-[data-theme="dark"] .carousel-card,
-body.dark .carousel-card {
+[data-theme="dark"] .carousel-card {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
 }
 
@@ -3099,22 +3119,18 @@ body.dark .carousel-card {
 }
 
 /* ダークモード調整 */
-[data-theme="dark"] .feature-discount-badge,
-body.dark .feature-discount-badge {
+[data-theme="dark"] .feature-discount-badge {
   background: rgba(220, 38, 38, 0.2);
   color: #fecaca;
 }
-[data-theme="dark"] .feature-cospa-badge,
-body.dark .feature-cospa-badge {
+[data-theme="dark"] .feature-cospa-badge {
   background: rgba(217, 119, 6, 0.2);
   color: #fde68a;
 }
-[data-theme="dark"] .feature-cospa-badge strong,
-body.dark .feature-cospa-badge strong {
+[data-theme="dark"] .feature-cospa-badge strong {
   color: #fed7aa;
 }
-[data-theme="dark"] .feature-platform,
-body.dark .feature-platform {
+[data-theme="dark"] .feature-platform {
   color: #94a3b8;
 }
 
@@ -3177,35 +3193,47 @@ body.dark .feature-platform {
 }
 
 /* ダークモード */
-[data-theme="dark"] .cospa-band-tabs,
-body.dark .cospa-band-tabs {
+[data-theme="dark"] .cospa-band-tabs {
   border-bottom-color: #334155;
 }
-[data-theme="dark"] .cospa-band-tab,
-body.dark .cospa-band-tab {
+[data-theme="dark"] .cospa-band-tab {
   background: #1e293b;
   border-color: #334155;
   color: #cbd5e1;
 }
-[data-theme="dark"] .cospa-band-tab:hover,
-body.dark .cospa-band-tab:hover {
+[data-theme="dark"] .cospa-band-tab:hover {
   background: rgba(217, 119, 6, 0.18);
   color: #fde68a;
 }
-[data-theme="dark"] .cospa-band-tab.is-active,
-body.dark .cospa-band-tab.is-active {
+[data-theme="dark"] .cospa-band-tab.is-active {
   background: rgba(217, 119, 6, 0.25);
   color: #fde68a;
   border-color: #d97706;
   border-bottom-color: rgba(217, 119, 6, 0.25);
 }
-[data-theme="dark"] .cospa-band-tab-count,
-body.dark .cospa-band-tab-count {
+[data-theme="dark"] .cospa-band-tab-count {
   color: #64748b;
 }
-[data-theme="dark"] .cospa-band-tab.is-active .cospa-band-tab-count,
-body.dark .cospa-band-tab.is-active .cospa-band-tab-count {
+[data-theme="dark"] .cospa-band-tab.is-active .cospa-band-tab-count {
   color: #fcd34d;
+}
+
+/* #1418 P2: モバイルでタブが折り返し窮屈になる問題を解消。
+   横スクロール化し、スクロールバーは隠して滑らかにスワイプできるようにする。 */
+@media (max-width: 720px) {
+  .cospa-band-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Firefox */
+    padding-bottom: 2px;
+  }
+  .cospa-band-tabs::-webkit-scrollbar { display: none; }
+  .cospa-band-tab {
+    flex: 0 0 auto;
+    padding: 8px 12px;
+    font-size: 0.86rem;
+  }
 }
 
 /* ==========================================
@@ -3259,14 +3287,12 @@ body.dark .cospa-band-tab.is-active .cospa-band-tab-count {
 }
 .post-content .auto-gen-notice strong { color: #d33; }
 
-[data-theme="dark"] .post-content .auto-gen-notice,
-body.dark .post-content .auto-gen-notice {
+[data-theme="dark"] .post-content .auto-gen-notice {
   background: #1e293b;
   border-color: #334155;
   color: #cbd5e1;
 }
-[data-theme="dark"] .post-content .auto-gen-notice strong,
-body.dark .post-content .auto-gen-notice strong { color: #fca5a5; }
+[data-theme="dark"] .post-content .auto-gen-notice strong { color: #fca5a5; }
 
 /* ---------- 正式商品名 ---------- */
 .post-content .product-full-name {
@@ -3274,8 +3300,7 @@ body.dark .post-content .auto-gen-notice strong { color: #fca5a5; }
   color: #666;
   margin: 0 0 12px;
 }
-[data-theme="dark"] .post-content .product-full-name,
-body.dark .post-content .product-full-name { color: #94a3b8; }
+[data-theme="dark"] .post-content .product-full-name { color: #94a3b8; }
 
 /* ---------- 商品ヒーロー画像 figure ---------- */
 .post-content .product-hero-image {
@@ -3298,8 +3323,7 @@ body.dark .post-content .product-full-name { color: #94a3b8; }
   margin-top: 8px;
   text-align: center;
 }
-[data-theme="dark"] .post-content .product-hero-image figcaption,
-body.dark .post-content .product-hero-image figcaption { color: #94a3b8; }
+[data-theme="dark"] .post-content .product-hero-image figcaption { color: #94a3b8; }
 
 /* ---------- ターゲット紹介 (persona-fit) ---------- */
 .post-content .persona-fit {
@@ -3320,14 +3344,12 @@ body.dark .post-content .product-hero-image figcaption { color: #94a3b8; }
   font-size: 0.9rem;
 }
 
-[data-theme="dark"] .post-content .persona-fit,
-body.dark .post-content .persona-fit {
+[data-theme="dark"] .post-content .persona-fit {
   background: #2a1f17;
   border-left-color: #fb923c;
   color: #fde68a;
 }
-[data-theme="dark"] .post-content .persona-fit > strong,
-body.dark .post-content .persona-fit > strong { color: #fdba74; }
+[data-theme="dark"] .post-content .persona-fit > strong { color: #fdba74; }
 
 /* ---------- 価格 3 サイト比較グリッド ---------- */
 .post-content .price-cta-grid {
@@ -3389,26 +3411,19 @@ body.dark .post-content .persona-fit > strong { color: #fdba74; }
 }
 .post-content .price-card .price-badge-row { margin: -4px 0 8px; }
 
-[data-theme="dark"] .post-content .price-cta-grid,
-body.dark .post-content .price-cta-grid { color: #e5e7eb; }
+[data-theme="dark"] .post-content .price-cta-grid { color: #e5e7eb; }
 
-[data-theme="dark"] .post-content .price-card,
-body.dark .post-content .price-card {
+[data-theme="dark"] .post-content .price-card {
   background: #1e293b;
   border-color: #334155;
   color: #e5e7eb;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
-[data-theme="dark"] .post-content .price-card .price-card-label,
-body.dark .post-content .price-card .price-card-label { color: #94a3b8; }
-[data-theme="dark"] .post-content .price-card .price-card-amount,
-body.dark .post-content .price-card .price-card-amount { color: #f9fafb; }
-[data-theme="dark"] .post-content .price-card .price-card-amount .price-card-tbd,
-body.dark .post-content .price-card .price-card-amount .price-card-tbd { color: #64748b; }
-[data-theme="dark"] .post-content .price-card .price-card-nolink,
-body.dark .post-content .price-card .price-card-nolink { color: #64748b; }
-[data-theme="dark"] .post-content .price-card .amazon-badge.badge-asuraku,
-body.dark .post-content .price-card .amazon-badge.badge-asuraku {
+[data-theme="dark"] .post-content .price-card .price-card-label { color: #94a3b8; }
+[data-theme="dark"] .post-content .price-card .price-card-amount { color: #f9fafb; }
+[data-theme="dark"] .post-content .price-card .price-card-amount .price-card-tbd { color: #64748b; }
+[data-theme="dark"] .post-content .price-card .price-card-nolink { color: #64748b; }
+[data-theme="dark"] .post-content .price-card .amazon-badge.badge-asuraku {
   background: #2d1b56;
   color: #c4b5fd;
   border-color: #4c1d95;
@@ -3426,8 +3441,7 @@ body.dark .post-content .price-card .amazon-badge.badge-asuraku {
   padding: 2px 4px;
   border-radius: 4px;
 }
-[data-theme="dark"] .post-content .link-report-flag,
-body.dark .post-content .link-report-flag { color: #64748b; }
+[data-theme="dark"] .post-content .link-report-flag { color: #64748b; }
 
 /* ---------- 最安値通知 (best-deal) ---------- */
 .post-content .best-deal {
@@ -3441,14 +3455,12 @@ body.dark .post-content .link-report-flag { color: #64748b; }
 }
 .post-content .best-deal strong.best-deal-price { color: #e65100; }
 
-[data-theme="dark"] .post-content .best-deal,
-body.dark .post-content .best-deal {
+[data-theme="dark"] .post-content .best-deal {
   background: #2a1f0a;
   border-left-color: #fb923c;
   color: #fde68a;
 }
-[data-theme="dark"] .post-content .best-deal strong.best-deal-price,
-body.dark .post-content .best-deal strong.best-deal-price { color: #fdba74; }
+[data-theme="dark"] .post-content .best-deal strong.best-deal-price { color: #fdba74; }
 
 /* ---------- Keepa 価格推移グラフ ---------- */
 .post-content .keepa-graph {
@@ -3476,16 +3488,13 @@ body.dark .post-content .best-deal strong.best-deal-price { color: #fdba74; }
   color: #6b7280;
 }
 
-[data-theme="dark"] .post-content .keepa-graph,
-body.dark .post-content .keepa-graph {
+[data-theme="dark"] .post-content .keepa-graph {
   background: #1e293b;
   border-color: #334155;
   color: #e5e7eb;
 }
-[data-theme="dark"] .post-content .keepa-graph .keepa-graph-label,
-body.dark .post-content .keepa-graph .keepa-graph-label { color: #f9fafb; }
-[data-theme="dark"] .post-content .keepa-graph p,
-body.dark .post-content .keepa-graph p { color: #94a3b8; }
+[data-theme="dark"] .post-content .keepa-graph .keepa-graph-label { color: #f9fafb; }
+[data-theme="dark"] .post-content .keepa-graph p { color: #94a3b8; }
 
 /* ---------- 競合比較カード (#1089: grid → carousel) ----------
    .competitor-grid は .carousel-track と同じ class に乗っているため、
@@ -3562,13 +3571,11 @@ body.dark .post-content .keepa-graph p { color: #94a3b8; }
   border-radius: 4px;
   margin-bottom: 6px;
 }
-[data-theme="dark"] .post-content .competitor-card--similar,
-body.dark .post-content .competitor-card--similar {
+[data-theme="dark"] .post-content .competitor-card--similar {
   background: linear-gradient(180deg, #1e3a5f 0%, #1e293b 60%);
   border-color: #3b82f6;
 }
-[data-theme="dark"] .post-content .competitor-card-similar-label,
-body.dark .post-content .competitor-card-similar-label {
+[data-theme="dark"] .post-content .competitor-card-similar-label {
   background: #1e3a5f;
   color: #93c5fd;
 }
@@ -3630,26 +3637,20 @@ body.dark .post-content .competitor-card-similar-label {
 .post-content .competitor-card .competitor-cta--internal { background: #0ea5e9; }
 .post-content .competitor-card .competitor-cta--amazon { background: #ff9900; }
 
-[data-theme="dark"] .post-content .competitor-grid,
-body.dark .post-content .competitor-grid { color: #e5e7eb; }
-[data-theme="dark"] .post-content .competitor-card,
-body.dark .post-content .competitor-card {
+[data-theme="dark"] .post-content .competitor-grid { color: #e5e7eb; }
+[data-theme="dark"] .post-content .competitor-card {
   background: #1e293b;
   border-color: #334155;
   color: #e5e7eb;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
-[data-theme="dark"] .post-content .competitor-card h3,
-body.dark .post-content .competitor-card h3 { color: #f9fafb; }
-[data-theme="dark"] .post-content .competitor-card .competitor-price-tag,
-body.dark .post-content .competitor-card .competitor-price-tag {
+[data-theme="dark"] .post-content .competitor-card h3 { color: #f9fafb; }
+[data-theme="dark"] .post-content .competitor-card .competitor-price-tag {
   background: #422006;
   color: #fcd34d;
 }
-[data-theme="dark"] .post-content .competitor-card details,
-body.dark .post-content .competitor-card details { color: #e5e7eb; }
-[data-theme="dark"] .post-content .competitor-card details summary,
-body.dark .post-content .competitor-card details summary { color: #94a3b8; }
+[data-theme="dark"] .post-content .competitor-card details { color: #e5e7eb; }
+[data-theme="dark"] .post-content .competitor-card details summary { color: #94a3b8; }
 
 /* ---------- 専門家評価 (expert-take) ---------- */
 .post-content .expert-take {
@@ -3662,14 +3663,12 @@ body.dark .post-content .competitor-card details summary { color: #94a3b8; }
 }
 .post-content .expert-take > strong { color: #6a1b9a; }
 
-[data-theme="dark"] .post-content .expert-take,
-body.dark .post-content .expert-take {
+[data-theme="dark"] .post-content .expert-take {
   background: #2d1b4e;
   border-left-color: #c084fc;
   color: #e9d5ff;
 }
-[data-theme="dark"] .post-content .expert-take > strong,
-body.dark .post-content .expert-take > strong { color: #d8b4fe; }
+[data-theme="dark"] .post-content .expert-take > strong { color: #d8b4fe; }
 
 /* ---------- 編集者コメント (editorial-comment) ---------- */
 .post-content .editorial-comment {
@@ -3682,14 +3681,12 @@ body.dark .post-content .expert-take > strong { color: #d8b4fe; }
 }
 .post-content .editorial-comment > strong { color: #1565c0; }
 
-[data-theme="dark"] .post-content .editorial-comment,
-body.dark .post-content .editorial-comment {
+[data-theme="dark"] .post-content .editorial-comment {
   background: #0c2540;
   border-left-color: #60a5fa;
   color: #dbeafe;
 }
-[data-theme="dark"] .post-content .editorial-comment > strong,
-body.dark .post-content .editorial-comment > strong { color: #93c5fd; }
+[data-theme="dark"] .post-content .editorial-comment > strong { color: #93c5fd; }
 
 /* ---------- ソース一覧 (sources-list) + 信頼度バッジ ---------- */
 .post-content .sources-list {
@@ -3710,12 +3707,9 @@ body.dark .post-content .editorial-comment > strong { color: #93c5fd; }
 .post-content .sources-list .source-author { color: #888; }
 .post-content .sources-list .source-notes { color: #999; }
 
-[data-theme="dark"] .post-content .sources-list .source-tier,
-body.dark .post-content .sources-list .source-tier { color: #1f2937; }
-[data-theme="dark"] .post-content .sources-list .source-author,
-body.dark .post-content .sources-list .source-author { color: #94a3b8; }
-[data-theme="dark"] .post-content .sources-list .source-notes,
-body.dark .post-content .sources-list .source-notes { color: #64748b; }
+[data-theme="dark"] .post-content .sources-list .source-tier { color: #1f2937; }
+[data-theme="dark"] .post-content .sources-list .source-author { color: #94a3b8; }
+[data-theme="dark"] .post-content .sources-list .source-notes { color: #64748b; }
 
 /* ---------- claims details ---------- */
 .post-content .claims-details {
@@ -3729,16 +3723,11 @@ body.dark .post-content .sources-list .source-notes { color: #64748b; }
 .post-content .claims-details .claim-meta .claim-cross-check { color: #2e7d32; }
 .post-content .claims-details .claim-notes { color: #888; }
 
-[data-theme="dark"] .post-content .claims-details,
-body.dark .post-content .claims-details { color: #e5e7eb; }
-[data-theme="dark"] .post-content .claims-details summary,
-body.dark .post-content .claims-details summary { color: #e5e7eb; }
-[data-theme="dark"] .post-content .claims-details .claim-meta,
-body.dark .post-content .claims-details .claim-meta { color: #94a3b8; }
-[data-theme="dark"] .post-content .claims-details .claim-meta .claim-cross-check,
-body.dark .post-content .claims-details .claim-meta .claim-cross-check { color: #86efac; }
-[data-theme="dark"] .post-content .claims-details .claim-notes,
-body.dark .post-content .claims-details .claim-notes { color: #64748b; }
+[data-theme="dark"] .post-content .claims-details { color: #e5e7eb; }
+[data-theme="dark"] .post-content .claims-details summary { color: #e5e7eb; }
+[data-theme="dark"] .post-content .claims-details .claim-meta { color: #94a3b8; }
+[data-theme="dark"] .post-content .claims-details .claim-meta .claim-cross-check { color: #86efac; }
+[data-theme="dark"] .post-content .claims-details .claim-notes { color: #64748b; }
 
 /* ---------- 同価格帯リンク (#586 / #1089 carousel 化) ----------
    .same-price-grid は .carousel-track 上に同居しているので flex 配置は track 側に任せ、
@@ -3773,16 +3762,11 @@ body.dark .post-content .claims-details .claim-notes { color: #64748b; }
 .post-content .same-price-more a { color: #1d4ed8; text-decoration: none; }
 .post-content .same-price-more a:hover { text-decoration: underline; }
 
-[data-theme="dark"] .post-content .same-price-card,
-body.dark .post-content .same-price-card { background: #1f2937; }
-[data-theme="dark"] .post-content .same-price-card-image,
-body.dark .post-content .same-price-card-image { background: #111827; }
-[data-theme="dark"] .post-content .same-price-card-meta,
-body.dark .post-content .same-price-card-meta { color: #cbd5e1; }
-[data-theme="dark"] .post-content .same-price-card-meta strong,
-body.dark .post-content .same-price-card-meta strong { color: #fbbf24; }
-[data-theme="dark"] .post-content .same-price-more a,
-body.dark .post-content .same-price-more a { color: #93c5fd; }
+[data-theme="dark"] .post-content .same-price-card { background: #1f2937; }
+[data-theme="dark"] .post-content .same-price-card-image { background: #111827; }
+[data-theme="dark"] .post-content .same-price-card-meta { color: #cbd5e1; }
+[data-theme="dark"] .post-content .same-price-card-meta strong { color: #fbbf24; }
+[data-theme="dark"] .post-content .same-price-more a { color: #93c5fd; }
 
 /* ---------- スコア内訳ミニチャート (#589) ---------- */
 /* 一覧カード (ホーム / /cospa/ / /deals/) に 4 軸を細バーで出す。
@@ -3829,12 +3813,9 @@ body.dark .post-content .same-price-more a { color: #93c5fd; }
   .score-minichart { grid-template-columns: 1fr; gap: 2px; }
 }
 
-[data-theme="dark"] .score-minichart,
-body.dark .score-minichart { color: #cbd5e1; }
-[data-theme="dark"] .score-minichart-bar,
-body.dark .score-minichart-bar { background: #374151; }
-[data-theme="dark"] .score-minichart-value,
-body.dark .score-minichart-value { color: #f1f5f9; }
+[data-theme="dark"] .score-minichart { color: #cbd5e1; }
+[data-theme="dark"] .score-minichart-bar { background: #374151; }
+[data-theme="dark"] .score-minichart-value { color: #f1f5f9; }
 
 /* ---------- 比較モード (#588) ---------- */
 /* 一覧カードの「🆚 比較」トグル。product-card は <a> なので preventDefault 必須 (JS 側で対応)。
@@ -4063,34 +4044,48 @@ body.dark .score-minichart-value { color: #f1f5f9; }
 }
 
 /* dark mode */
-[data-theme="dark"] .compare-toggle,
-body.dark .compare-toggle { background: rgba(31,41,55,.92); color: #f1f5f9; border-color: rgba(255,255,255,.12); }
-[data-theme="dark"] .compare-toggle.is-selected,
-body.dark .compare-toggle.is-selected { background: #1d4ed8; color: #fff; }
-[data-theme="dark"] .compare-floating-bar,
-body.dark .compare-floating-bar { background: linear-gradient(180deg, rgba(17,24,39,.92), #0f172a); border-top-color: rgba(255,255,255,.08); }
-[data-theme="dark"] .compare-floating-bar-clear,
-body.dark .compare-floating-bar-clear { color: #cbd5e1; border-color: rgba(255,255,255,.16); }
-[data-theme="dark"] .compare-page .compare-intro,
-body.dark .compare-page .compare-intro { background: #0c1b2a; border-left-color: #38bdf8; color: #e2e8f0; }
-[data-theme="dark"] .compare-page .compare-intro-chip,
-body.dark .compare-page .compare-intro-chip { background: #1e293b; border-color: rgba(255,255,255,.16); color: #f1f5f9; }
-[data-theme="dark"] .compare-table th[scope="row"],
-body.dark .compare-table th[scope="row"] { background: #0f172a; color: #cbd5e1; border-bottom-color: rgba(255,255,255,.08); }
-[data-theme="dark"] .compare-table td,
-body.dark .compare-table td { color: #e2e8f0; border-bottom-color: rgba(255,255,255,.08); }
-[data-theme="dark"] .compare-name-link,
-body.dark .compare-name-link { color: #f1f5f9; }
-[data-theme="dark"] .compare-help,
-body.dark .compare-help { background: #0f172a; color: #cbd5e1; }
+[data-theme="dark"] .compare-toggle { background: rgba(31,41,55,.92); color: #f1f5f9; border-color: rgba(255,255,255,.12); }
+[data-theme="dark"] .compare-toggle.is-selected { background: #1d4ed8; color: #fff; }
+[data-theme="dark"] .compare-floating-bar { background: linear-gradient(180deg, rgba(17,24,39,.92), #0f172a); border-top-color: rgba(255,255,255,.08); }
+[data-theme="dark"] .compare-floating-bar-clear { color: #cbd5e1; border-color: rgba(255,255,255,.16); }
+[data-theme="dark"] .compare-page .compare-intro { background: #0c1b2a; border-left-color: #38bdf8; color: #e2e8f0; }
+[data-theme="dark"] .compare-page .compare-intro-chip { background: #1e293b; border-color: rgba(255,255,255,.16); color: #f1f5f9; }
+[data-theme="dark"] .compare-table th[scope="row"] { background: #0f172a; color: #cbd5e1; border-bottom-color: rgba(255,255,255,.08); }
+[data-theme="dark"] .compare-table td { color: #e2e8f0; border-bottom-color: rgba(255,255,255,.08); }
+[data-theme="dark"] .compare-name-link { color: #f1f5f9; }
+[data-theme="dark"] .compare-help { background: #0f172a; color: #cbd5e1; }
 
 /* 2026-05-31 (#1143): 記事ページ H1 が大きすぎて記事タイトルだけで初期画面が
    埋まる問題を解消。PaperMod デフォルトの 40px から H2 (1.5rem) に近いサイズへ
-   縮小。clamp で widescreen でもダブつかないようにする。 */
+   縮小。clamp で widescreen でもダブつかないようにする。
+   2026-06-02 (#1418 follow-up): clamp 下限 1.4rem が iPhone 375px で発火しなかった
+   ため、明示的な media query で 720px 以下を更に縮小。 */
 .post-title {
   font-size: clamp(1.4rem, 3.2vw, 1.75rem) !important;
   line-height: 1.35 !important;
   margin-bottom: 0.6rem !important;
+}
+/* 2026-06-02 (#1418 follow-up 2): .post-title は単記事 (single.html) のみ。
+   /cospa/ /deals/ /楽天ランキング/ /tags/ などのリスト/特集ページは PaperMod の
+   .page-header h1 (デフォルト 40px) を使っており、前回 PR では未到達だった。
+   よって main 配下の全 h1 を mobile で強制縮小する。 */
+@media (max-width: 720px) {
+  .post-title,
+  .page-header h1,
+  main.main h1 {
+    font-size: 1.2rem !important;
+    line-height: 1.4 !important;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    margin-bottom: 0.5rem !important;
+  }
+}
+@media (max-width: 480px) {
+  .post-title,
+  .page-header h1,
+  main.main h1 {
+    font-size: 1.08rem !important;
+  }
 }
 .post-content .competitor-card h3 {
   /* 関連する比較レビューのタイトル: 0.9rem → carousel-card-title (0.78rem) と揃え。
@@ -4275,11 +4270,11 @@ details.development-stage-accordion[open] > summary::before {
   box-shadow: 0 4px 14px rgba(255, 107, 53, 0.32);
 }
 
-.dark #menu li a {
+[data-theme="dark"] #menu li a {
   background: rgba(255, 107, 53, 0.16);
   color: #ffe7d4;
 }
-.dark #menu li a:hover {
+[data-theme="dark"] #menu li a:hover {
   background: rgba(255, 107, 53, 0.28);
   border-color: rgba(255, 107, 53, 0.55);
 }
@@ -4328,7 +4323,7 @@ details.development-stage-accordion[open] > summary::before {
   border: 1px solid rgba(255, 107, 53, 0.25);
 }
 
-.dark .footer-editorial-label {
+[data-theme="dark"] .footer-editorial-label {
   background: #2a1f1a;
   color: #ffb89a;
 }
@@ -4380,8 +4375,10 @@ details.development-stage-accordion[open] > summary::before {
 }
 
 /* dark mode の title は --primary (#dadadb) でしっかり見せる
-   (元の --secondary だと #9b9c9d で薄かった指摘あり)。 */
-.dark .spotlight-title { color: #f1f1f3; }
+   (元の --secondary だと #9b9c9d で薄かった指摘あり)。
+   ⚠️ PaperMod は <html data-theme="dark"> で切替。`.dark` (body class)
+   セレクタは本コードベースで一切付与されないため死んでいる。 */
+[data-theme="dark"] .spotlight-title { color: #f1f1f3; }
 
 .spotlight-grid {
   display: grid;
@@ -4442,7 +4439,7 @@ details.development-stage-accordion[open] > summary::before {
   .spotlight-grid--4col .spotlight-card-arrow { display: none; }
 }
 
-.dark .spotlight-card {
+[data-theme="dark"] .spotlight-card {
   background: #23232f;
   border-color: rgba(255, 255, 255, 0.06);
 }
@@ -4470,7 +4467,7 @@ details.development-stage-accordion[open] > summary::before {
 }
 
 /* dark mode は overlay 強めて差別化 (元の 0.06 だと暗背景で識別困難) */
-.dark .spotlight-card::before { opacity: 0.14; }
+[data-theme="dark"] .spotlight-card::before { opacity: 0.14; }
 
 .spotlight-card:hover {
   transform: translateY(-4px);
@@ -4478,7 +4475,7 @@ details.development-stage-accordion[open] > summary::before {
   border-color: rgba(255, 107, 53, 0.35);
 }
 .spotlight-card:hover::before { opacity: 0.18; }
-.dark .spotlight-card:hover::before { opacity: 0.28; }
+[data-theme="dark"] .spotlight-card:hover::before { opacity: 0.28; }
 
 .spotlight-card-icon {
   font-size: 2.4rem;
@@ -4510,7 +4507,7 @@ details.development-stage-accordion[open] > summary::before {
 }
 
 /* dark mode で確実に明るく */
-.dark .spotlight-card-name { color: #f3f3f5; }
+[data-theme="dark"] .spotlight-card-name { color: #f3f3f5; }
 
 /* tagline — 役割を 1 言で示す sub-title (4 カード版のみ) */
 .spotlight-card-tagline {
@@ -4520,7 +4517,7 @@ details.development-stage-accordion[open] > summary::before {
   margin: 0 0 0.45rem;
   letter-spacing: 0.02em;
 }
-.dark .spotlight-card-tagline { color: #c0c1c3; }
+[data-theme="dark"] .spotlight-card-tagline { color: #c0c1c3; }
 @media (max-width: 700px) {
   .spotlight-grid--4col .spotlight-card-tagline {
     font-size: 0.72rem;
@@ -4567,7 +4564,7 @@ details.development-stage-accordion[open] > summary::before {
 
 /* dark mode の bubble は border をやや明るくして輪郭を視認、
    text は #f1f1f3 で確実な可読性。 */
-.dark .spotlight-bubble {
+[data-theme="dark"] .spotlight-bubble {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 138, 91, 0.5);
   color: #f1f1f3;
@@ -4585,7 +4582,7 @@ details.development-stage-accordion[open] > summary::before {
   border-top: 1px solid rgba(255, 107, 53, 0.25);
   transform: rotate(45deg);
 }
-.dark .spotlight-bubble::before {
+[data-theme="dark"] .spotlight-bubble::before {
   background: #23232f;
   border-color: rgba(255, 138, 91, 0.5);
 }
@@ -4694,10 +4691,10 @@ details.development-stage-accordion[open] > summary::before {
   color: #ff4d6d;
 }
 
-.dark .fav-toggle { background: rgba(35, 35, 50, 0.92); }
-.dark .fav-toggle-icon { color: #777; }
-.dark .fav-toggle.is-on { background: #2a1f25; }
-.dark .fav-toggle.is-on .fav-toggle-icon { color: #ff7a93; }
+[data-theme="dark"] .fav-toggle { background: rgba(35, 35, 50, 0.92); }
+[data-theme="dark"] .fav-toggle-icon { color: #777; }
+[data-theme="dark"] .fav-toggle.is-on { background: #2a1f25; }
+[data-theme="dark"] .fav-toggle.is-on .fav-toggle-icon { color: #ff7a93; }
 
 @keyframes fav-bump {
   0%   { transform: scale(1); }
@@ -4774,7 +4771,7 @@ details.development-stage-accordion[open] > summary::before {
   overflow: hidden;
   transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
-.dark .favorites-card { background: #1f1f2e; }
+[data-theme="dark"] .favorites-card { background: #1f1f2e; }
 .favorites-card:hover {
   transform: translateY(-3px);
   box-shadow: var(--card-shadow-hover);
@@ -4793,7 +4790,7 @@ details.development-stage-accordion[open] > summary::before {
   display: block;
   background: #f3f3f3;
 }
-.dark .favorites-card-image { background: #16161f; }
+[data-theme="dark"] .favorites-card-image { background: #16161f; }
 
 .favorites-card-image-fallback {
   width: 100%;
@@ -4970,7 +4967,7 @@ details.development-stage-accordion[open] > summary::before {
   color: inherit;
   transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
-.dark .recently-viewed-card { background: #1f1f2e; }
+[data-theme="dark"] .recently-viewed-card { background: #1f1f2e; }
 .recently-viewed-card:hover {
   transform: translateY(-3px);
   box-shadow: var(--card-shadow-hover);
@@ -4983,7 +4980,7 @@ details.development-stage-accordion[open] > summary::before {
   display: block;
   background: #f3f3f3;
 }
-.dark .recently-viewed-image { background: #16161f; }
+[data-theme="dark"] .recently-viewed-image { background: #16161f; }
 
 .recently-viewed-image-fallback {
   width: 100%;
@@ -5051,7 +5048,7 @@ details.development-stage-accordion[open] > summary::before {
   pointer-events: none;
 }
 
-.dark .mobile-sticky-cta {
+[data-theme="dark"] .mobile-sticky-cta {
   /* 96% → 99% で背景の透過を抑え、bar 上のテキストとアイコンの可読性を最優先。
      blur が裏側を ぼかすので、わずかな透過は維持。 */
   background: rgba(12, 14, 22, 0.99);
@@ -5099,10 +5096,10 @@ details.development-stage-accordion[open] > summary::before {
 
 /* Dark mode の active 色は brand-blue / brand-pink を明るく差し替えて
    AA 4.5:1 を満たす (#2563eb は dark bg で 3.18 と AA fail のため #60a5fa へ)。 */
-.dark .m-sticky-compare.is-on .m-sticky-icon { color: #60a5fa; }
-.dark .m-sticky-compare.is-on .m-sticky-label { color: #60a5fa; }
-.dark .m-sticky-fav.is-on .m-sticky-icon { color: #ff7a93; }
-.dark .m-sticky-fav.is-on .m-sticky-label { color: #ff7a93; }
+[data-theme="dark"] .m-sticky-compare.is-on .m-sticky-icon { color: #60a5fa; }
+[data-theme="dark"] .m-sticky-compare.is-on .m-sticky-label { color: #60a5fa; }
+[data-theme="dark"] .m-sticky-fav.is-on .m-sticky-icon { color: #ff7a93; }
+[data-theme="dark"] .m-sticky-fav.is-on .m-sticky-label { color: #ff7a93; }
 
 /* シェアボタン (#1374 follow-up) — Web Share API → clipboard → prompt の fallback。
    コピー完了時は label を 1.6 秒だけ「シェア済」「URLコピー済」に切り替え。 */
@@ -5119,9 +5116,9 @@ details.development-stage-accordion[open] > summary::before {
 }
 
 /* Dark mode: teal を明るく (2dd4bf, 5eead4) して可読性確保。 */
-.dark .m-sticky-share .m-sticky-icon { color: #2dd4bf; }
-.dark .m-sticky-share.is-flash .m-sticky-icon { color: #2dd4bf; }
-.dark .m-sticky-share.is-flash .m-sticky-label { color: #5eead4; }
+[data-theme="dark"] .m-sticky-share .m-sticky-icon { color: #2dd4bf; }
+[data-theme="dark"] .m-sticky-share.is-flash .m-sticky-icon { color: #2dd4bf; }
+[data-theme="dark"] .m-sticky-share.is-flash .m-sticky-label { color: #5eead4; }
 
 .m-sticky-buy {
   /* brand-gradient は中央が黄色 (#F7C948) なので、白文字 contrast 1.66 で

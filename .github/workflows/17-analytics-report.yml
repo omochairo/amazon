@@ -43,15 +43,13 @@ concurrency:
 jobs:
   report:
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: main
           fetch-depth: 1
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
@@ -149,7 +147,7 @@ jobs:
           echo "detected $COUNT brand taxonomy candidates"
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: analytics-weekly-${{ steps.summary.outputs.range_end }}
           path: |

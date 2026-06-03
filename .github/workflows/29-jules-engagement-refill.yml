@@ -1,0 +1,152 @@
+name: Jules Engagement Refill (X mama / Threads papa)
+# Issue #1495 P1 (session 91):
+#   - 月曜 03:00 UTC = 12:00 JST: X (いろママ) 用 daily drafts 10 本生成
+#   - 火曜 03:00 UTC = 12:00 JST: Threads (いろパパ) 用 daily drafts 10 本生成
+#   - Jules が data/engagement_queue_{x,threads}.jsonl に append-only で PR を作る
+#   - PR の auto-merge は 31-engagement-auto-merge.yml が担う
+#
+# 30-sns-engagement.yml (毎日 03:30 UTC) より 30 分早く dispatch することで、
+# queue 残量低下時に Jules 補充 → 同日の publish に間に合わせるのが目標。
+# (実際は Jules session は数十分かかるので「翌日以降に確実に間に合う」程度)
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: '補充 channel'
+        required: true
+        type: choice
+        options: [x, threads]
+        default: x
+  schedule:
+    - cron: '0 3 * * 1'  # Mon -> X (iromama)
+    - cron: '0 3 * * 2'  # Tue -> Threads (iropapa)
+
+jobs:
+  refill:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Decide channel
+        id: pick
+        run: |
+          set -e
+          if [ -n "${{ inputs.channel }}" ]; then
+            CHANNEL="${{ inputs.channel }}"
+          else
+            DOW=$(date -u +%u)  # Mon=1 Tue=2
+            if [ "$DOW" = "1" ]; then CHANNEL="x"
+            elif [ "$DOW" = "2" ]; then CHANNEL="threads"
+            else
+              echo "::error::cron fired on unexpected DOW=$DOW"
+              exit 1
+            fi
+          fi
+          if [ "$CHANNEL" = "x" ]; then
+            PROMPT_FILE="jules/PROMPT_ENGAGEMENT_X_IROMAMA_DAILY.md"
+            QUEUE_FILE="data/engagement_queue_x.jsonl"
+            PERSONA="iromama"
+          else
+            PROMPT_FILE="jules/PROMPT_ENGAGEMENT_THREADS_IROPAPA_DAILY.md"
+            QUEUE_FILE="data/engagement_queue_threads.jsonl"
+            PERSONA="iropapa"
+          fi
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "prompt_file=$PROMPT_FILE" >> "$GITHUB_OUTPUT"
+          echo "queue_file=$QUEUE_FILE" >> "$GITHUB_OUTPUT"
+          echo "persona=$PERSONA" >> "$GITHUB_OUTPUT"
+          echo "Channel=$CHANNEL persona=$PERSONA prompt=$PROMPT_FILE queue=$QUEUE_FILE"
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: List Jules sources
+        id: list-sources
+        run: |
+          set -e
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            'https://jules.googleapis.com/v1alpha/sources' \
+            -H "X-Goog-Api-Key: ${{ secrets.JULES_API_KEY }}")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::List sources HTTP $HTTP_CODE"
+            exit 1
+          fi
+          SOURCE_NAME=$(echo "$BODY" | jq -r '.sources[] | select(.githubRepo.owner=="omochairo" and .githubRepo.repo=="amazon") | .name' || echo "")
+          if [ -z "$SOURCE_NAME" ]; then SOURCE_NAME="sources/github/omochairo/amazon"; fi
+          echo "source_name=$SOURCE_NAME" >> "$GITHUB_OUTPUT"
+          echo "Source: $SOURCE_NAME"
+
+      - name: Create Jules session
+        env:
+          CHANNEL: ${{ steps.pick.outputs.channel }}
+          PERSONA: ${{ steps.pick.outputs.persona }}
+          PROMPT_FILE: ${{ steps.pick.outputs.prompt_file }}
+          QUEUE_FILE: ${{ steps.pick.outputs.queue_file }}
+          SOURCE_NAME: ${{ steps.list-sources.outputs.source_name }}
+        run: |
+          set -e
+          TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
+          INTRO="AGENTS.md を最初に必ず読み、その指示に厳密に従ってください。
+
+          【今回のタスク】: SNS engagement 投稿 draft を 10 本生成し、
+          ${QUEUE_FILE} に append-only で追加する。
+
+          【本日 (Asia/Tokyo)】: ${TODAY}
+          - 各 draft の created_at は本日の現在時刻 (+09:00)
+          - id 連番は本日付 + 001 から 010
+
+          【絶対守るリポジトリ保護ルール】:
+          - 最終 PR 差分は ${QUEUE_FILE} の追記 1 ファイルのみ
+          - 既存行は 1 文字も変更しない (append のみ)
+          - 他ファイル変更禁止 (.github/, scripts/, hugo/ 全て NG)
+          - 31-engagement-auto-merge.yml の scope guard が他ファイル混入を検知して
+            auto-merge を止めるので、混入させると人手介入が必要になる
+
+          === 以下、${PROMPT_FILE} の内容 ==="
+          PROMPT="$INTRO
+
+          $(cat "$PROMPT_FILE")"
+
+          REQUEST_BODY=$(jq -n \
+            --arg prompt "$PROMPT" \
+            --arg source "$SOURCE_NAME" \
+            --arg title "engagement: ${CHANNEL} ${PERSONA} daily drafts (${TODAY})" \
+            '{
+              prompt: $prompt,
+              sourceContext: {
+                source: $source,
+                githubRepoContext: { startingBranch: "main" }
+              },
+              automationMode: "AUTO_CREATE_PR",
+              title: $title
+            }')
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            'https://jules.googleapis.com/v1alpha/sessions' \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "X-Goog-Api-Key: ${{ secrets.JULES_API_KEY }}" \
+            -d "$REQUEST_BODY")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          echo "HTTP: $HTTP_CODE"
+          echo "$BODY" | jq -c '{name, id, status}' 2>/dev/null || echo "$BODY" | head -c 500
+          if [ "$HTTP_CODE" != "200" ]; then
+            # FAILED_PRECONDITION → memory: feedback_jules_api_failed_precondition.md
+            echo "::error::Create session HTTP $HTTP_CODE"
+            exit 1
+          fi
+          SESSION_ID=$(echo "$BODY" | jq -r '.id // empty')
+          if [ -z "$SESSION_ID" ]; then
+            echo "::error::No session id returned"
+            exit 1
+          fi
+          echo "Session created: $SESSION_ID (channel=$CHANNEL persona=$PERSONA)"
+
+      - name: Note on completion
+        run: |
+          echo "::notice::Jules session dispatched (AUTO_CREATE_PR). 完了後 31-engagement-auto-merge.yml が PR を auto-merge する。"
+          echo "::notice::配信は翌 12:30 JST (30-sns-engagement.yml) から開始される。"
