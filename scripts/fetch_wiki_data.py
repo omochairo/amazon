@@ -36,6 +36,22 @@ LICENSE_NOTE = "Wikipedia content under CC BY-SA 4.0 (https://creativecommons.or
 EXTRACT_MAX_CHARS = 280
 DEFAULT_SLEEP_SEC = 1.0
 
+# title!=target でも許容する既知の正しい redirect (#1363 ブランド誤接続調査)。
+# Wikipedia 側でブランド名 → 親会社/正式社名/字体異形 にリダイレクトされるが
+# 「同一エンティティ」として extract 内容が brand 説明として正しく機能する組。
+KNOWN_OK_REDIRECTS: dict[str, str] = {
+    "KUMON": "公文教育研究会",
+    "KUMON TOY": "公文教育研究会",
+    "くもん出版": "公文教育研究会",
+    "とらや": "虎屋",
+    "吉徳": "吉德",
+    "吉徳大光": "吉德",
+    'Toys"R"Us': "トイザらス",
+    "日本トイザらス": "トイザらス",
+    "トイザらス": "トイザらス",
+    "発達段階": "発達段階理論",
+}
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -64,8 +80,32 @@ def _trim_extract(text: str, limit: int = EXTRACT_MAX_CHARS) -> str:
     return (cut[: last + 1] if last >= 80 else cut.rstrip() + "…")
 
 
-def fetch_summary(target: str, session: requests.Session, timeout: float = 8.0) -> dict[str, Any] | None:
-    """Wikipedia 要約を 1 件取得。404/disambig/error は None を返す。"""
+def _is_acceptable_redirect(key: str, target: str, returned_title: str) -> bool:
+    """Wikipedia が target と異なる title を返したときに、その redirect が
+    ブランド説明として許容できるかを判定する (#1363)。
+
+    Strict allowlist 方式:
+    - title == target: そのまま OK
+    - KNOWN_OK_REDIRECTS に key:title が登録されていれば OK
+    - それ以外は False
+
+    NOTE: 'ブリオ' ⊂ 'ホンダ・ブリオ' のような部分一致は別エンティティの兆候
+    (Wikipedia が context prefix で disambig する) なので substring 判定は使わない。
+    """
+    if not returned_title or returned_title == target:
+        return True
+    if KNOWN_OK_REDIRECTS.get(key) == returned_title:
+        return True
+    return False
+
+
+def fetch_summary(target: str, session: requests.Session, timeout: float = 8.0,
+                  source_key: str | None = None) -> dict[str, Any] | None:
+    """Wikipedia 要約を 1 件取得。404/disambig/error は None を返す。
+
+    source_key は wiki_mapping のキー (brand 名)。title!=target の redirect が
+    関係ない記事かを判定するために使う (#1363)。
+    """
     url = WIKI_API.format(title=urllib.parse.quote(target, safe=""))
     try:
         resp = session.get(url, timeout=timeout, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
@@ -90,12 +130,21 @@ def fetch_summary(target: str, session: requests.Session, timeout: float = 8.0) 
     if not extract:
         logger.info("empty extract for %r", target)
         return None
+    returned_title = data.get("title") or target
+    if source_key is not None and not _is_acceptable_redirect(source_key, target, returned_title):
+        # ブランド名 → 関係ない記事への redirect (例: BRIO → ホンダ・ブリオ) を遮断。
+        # KNOWN_OK_REDIRECTS に正しい redirect を登録して許容判定する運用 (#1363)。
+        logger.warning(
+            "redirect mismatch dropped: key=%r target=%r -> title=%r",
+            source_key, target, returned_title,
+        )
+        return None
     page_url = (data.get("content_urls") or {}).get("desktop", {}).get("page") or \
         f"https://ja.wikipedia.org/wiki/{urllib.parse.quote(target)}"
     thumb = (data.get("thumbnail") or {}).get("source")
     return {
         "type": "wikipedia",
-        "title": data.get("title") or target,
+        "title": returned_title,
         "extract": extract,
         "url": page_url,
         "thumbnail": thumb,
@@ -143,7 +192,7 @@ def build_cache(
             else:
                 stats["wiki_skipped"] += 1
             continue
-        result = fetch_summary(target, session)
+        result = fetch_summary(target, session, source_key=key)
         fetched += 1
         if result is None:
             stats["wiki_skipped"] += 1

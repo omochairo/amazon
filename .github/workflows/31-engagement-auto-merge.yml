@@ -1,0 +1,101 @@
+name: Engagement Queue PR Auto-Merge
+# Issue #1495 P1 (session 91):
+#   Jules が data/engagement_queue_{x,threads}.jsonl に append した PR、または
+#   30-sns-engagement.yml が published_at/post_id を書き戻した PR に対して
+#   auto-merge を有効化する。
+#
+# scope guard: PR が data/engagement_queue_*.jsonl のみを触る場合に限り auto-merge。
+# 他ファイルが混入していたら eligible=false (Jules が prompt 違反した場合の人手介入トリガ)。
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    paths:
+      - 'data/engagement_queue_x.jsonl'
+      - 'data/engagement_queue_threads.jsonl'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: engagement-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  enable-auto-merge:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Inspect changed files
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -e
+          changed=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA")
+          echo "Changed files:"
+          echo "$changed"
+          # 許可: data/engagement_queue_{x,threads}.jsonl のみ。
+          out_of_scope=$(echo "$changed" | grep -v -E '^data/engagement_queue_(x|threads)\.jsonl$' || true)
+          if [ -n "$out_of_scope" ]; then
+            echo "PR touches files outside engagement queue jsonl; skipping auto-merge."
+            echo "out_of_scope<<EOF" >> "$GITHUB_OUTPUT"
+            echo "$out_of_scope" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -z "$changed" ]; then
+            echo "::warning::Empty diff; skipping."
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Engagement queue PR — eligible for auto-merge."
+          echo "eligible=true" >> "$GITHUB_OUTPUT"
+
+      - name: Validate jsonl shape
+        if: steps.scope.outputs.eligible == 'true'
+        run: |
+          set -e
+          python3 - <<'PY'
+          import json, sys, pathlib
+          REQUIRED = ('id', 'channel', 'persona', 'category', 'text', 'generator', 'created_at')
+          errs = 0
+          for fname in ('data/engagement_queue_x.jsonl', 'data/engagement_queue_threads.jsonl'):
+              path = pathlib.Path(fname)
+              if not path.exists():
+                  continue
+              for i, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
+                  s = line.strip()
+                  if not s:
+                      continue
+                  try:
+                      row = json.loads(s)
+                  except json.JSONDecodeError as e:
+                      print(f'::error file={path}::line {i}: invalid JSON: {e}')
+                      errs += 1
+                      continue
+                  for k in REQUIRED:
+                      if k not in row:
+                          print(f'::error file={path}::line {i}: missing key {k}')
+                          errs += 1
+          sys.exit(1 if errs else 0)
+          PY
+
+      - name: Enable native auto-merge (squash)
+        if: steps.scope.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -e
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge (squash + delete-branch) enabled on $PR_URL."
+          else
+            echo "::warning::Could not enable auto-merge. Confirm branch protection / repo-level 'Allow auto-merge' is configured."
+          fi

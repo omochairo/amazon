@@ -19,9 +19,18 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-<!-- Open Graph / SNS meta -->
-<meta property="og:site_name" content="おもちゃいろ 比較ナビ" />
-<meta name="twitter:card" content="summary_large_image" />
+<!-- Open Graph / SNS meta
+     - og:site_name と twitter:card は PaperMod の templates/opengraph.html
+       および templates/twitter_cards.html が emit するので重複定義しない。
+     - グローバル og-image (hugo/static/og-image.jpg) は 1200x630 (1.91:1)。
+       Twitter summary_large_image と Facebook/LINE/Slack の推奨 ratio。
+     - width/height/type/alt は PaperMod 標準 partial が出さないため追記:
+       LINE などはこれが無いと preview を諦めることがある。 -->
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:type" content="image/jpeg" />
+<meta property="og:image:alt" content="おもちゃいろ 比較ナビ — 知育玩具スコア × 3 サイト最安値" />
+<meta name="twitter:image:alt" content="おもちゃいろ 比較ナビ — 知育玩具スコア × 3 サイト最安値" />
 
 <!-- Product image slideshow initializer (PA-API variants gallery) -->
 <script>

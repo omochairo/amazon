@@ -58,6 +58,18 @@
     {{- partial "ranking-history-chart.html" (dict "asin" $asin "title" .Title) -}}
   {{- end }}
 
+  {{- /* #1368 モバイル sticky CTA bar (epic #1365 Layer 2-①) */ -}}
+  {{- partial "mobile_sticky_cta.html" . }}
+
+  {{- /* #1367 最近見た商品 carousel — recently_viewed.js が hydrate、空なら hidden */ -}}
+  <section class="recently-viewed-mount recently-viewed-mount--post" hidden aria-label="最近見た商品">
+    <header class="recently-viewed-header">
+      <h2>🕘 最近見た商品</h2>
+      <span class="recently-viewed-note">続きから検討できます</span>
+    </header>
+    <div class="recently-viewed-grid"></div>
+  </section>
+
   <footer class="post-footer">
     {{- $tags := .Language.Params.Taxonomies.tag | default "tags" }}
     <ul class="post-tags">

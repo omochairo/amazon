@@ -16,8 +16,6 @@ on:
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     # 2026-05-19 (session 29): GitHub App token に切替。GITHUB_TOKEN で作成した PR は
     # anti-recursion guard で pull_request event が発火せず validate (required check) が
     # 通らなかった (#382 #384 #386 の auto-merge stuck 事例)。App token なら通常 PR と
@@ -26,20 +24,20 @@ jobs:
     steps:
       - name: Generate App token
         id: app-token
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           token: ${{ steps.app-token.outputs.token }}
           ref: main
           fetch-depth: 0
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 

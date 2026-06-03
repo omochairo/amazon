@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "created": "2026-06-02",
+  "description": "B-0 (epic #1357): daily analytics history (GA4 / GSC) as append-only JSONL. Written by scripts/append_analytics_history.py from 18-analytics-daily.yml cron.",
+  "files": {
+    "gsc_by_query.jsonl": {
+      "description": "GSC Search Analytics by_query, 1 line per (date, query)",
+      "fields": ["date", "query", "clicks", "impressions", "ctr", "position"],
+      "key": ["date", "query"],
+      "source": "scripts/fetch_gsc.py --days 1"
+    },
+    "gsc_by_page.jsonl": {
+      "description": "GSC Search Analytics by_page, 1 line per (date, page)",
+      "fields": ["date", "page", "clicks", "impressions", "ctr", "position"],
+      "key": ["date", "page"],
+      "source": "scripts/fetch_gsc.py --days 1"
+    },
+    "gsc_totals.jsonl": {
+      "description": "GSC site totals, 1 line per date",
+      "fields": ["date", "clicks_sum", "impressions_sum", "queries_count", "pages_count"],
+      "key": ["date"],
+      "source": "scripts/fetch_gsc.py --days 1"
+    },
+    "ga4_pages.jsonl": {
+      "description": "GA4 by hostName x pagePath, 1 line per (date, hostName, pagePath)",
+      "fields": ["date", "hostName", "pagePath", "screenPageViews", "engagedSessions", "averageSessionDuration", "bounceRate"],
+      "key": ["date", "hostName", "pagePath"],
+      "source": "scripts/fetch_ga4.py --days 1"
+    },
+    "ga4_totals.jsonl": {
+      "description": "GA4 site totals, 1 line per date",
+      "fields": ["date", "screenPageViews_sum", "engagedSessions_sum", "rows_by_page"],
+      "key": ["date"],
+      "source": "scripts/fetch_ga4.py --days 1"
+    },
+    "crux_history.jsonl": {
+      "description": "Google Chrome UX Report monthly fetch, 1 line per (date, key_type, key_value, form_factor). LCP / CLS / INP / FCP / TTFB の p75 + histogram density 3 bin (good/ni/poor)",
+      "fields": ["date", "key_type", "key_value", "form_factor", "collection_period_start", "collection_period_end", "lcp_p75", "lcp_good_density", "lcp_ni_density", "lcp_poor_density", "cls_p75", "cls_good_density", "cls_ni_density", "cls_poor_density", "inp_p75", "inp_good_density", "inp_ni_density", "inp_poor_density", "fcp_p75", "fcp_good_density", "fcp_ni_density", "fcp_poor_density", "ttfb_p75", "ttfb_good_density", "ttfb_ni_density", "ttfb_poor_density"],
+      "key": ["date", "key_type", "key_value", "form_factor"],
+      "source": "scripts/fetch_crux.py (monthly, 19-cwv-monitor.yml)",
+      "notes": "key_type は origin | url。form_factor は PHONE | DESKTOP | TABLET。404 (低トラフィック URL のデータ不足) は行を書かないため、欠損 = データなし"
+    }
+  },
+  "idempotency": {
+    "sidecar": "seen_dates.json",
+    "structure": "{ gsc: { 'YYYY-MM-DD': true, ... }, ga4: { ... } }",
+    "note": "append_analytics_history.py marks (source, date) here. Re-running with the same date is a no-op."
+  },
+  "retention": {
+    "soft_limit_months": 18,
+    "rationale": "GSC Search Analytics API only returns ~16 months of history (hard limit). Keep 18 months locally as a safety margin.",
+    "vacuum_status": "not_implemented",
+    "vacuum_plan_issue": "see #1357 follow-up"
+  },
+  "estimated_volume": {
+    "current_navi_omcha_jp": "~1.8 MB/year (5 files combined)",
+    "ceiling_at_100x_traffic": "~18 MB/year",
+    "format": "UTF-8 JSONL, one JSON object per line, sort_keys=True"
+  },
+  "consumers_future": [
+    "trend analysis for A-1/A-2 detection (compare current week vs prior weeks)",
+    "Phase 3 GSC-driven brand narrative (#1329) — 4-week rolling top queries",
+    "B-1 Phase 2 (劣化検出): 2 ヶ月分以上の crux_history を読み、p75 が >20% 悪化した URL を Issue 起票"
+  ]
+}

@@ -1,5 +1,13 @@
 {{- if not (.Param "hideFooter") }}
 <footer class="footer">
+    {{- /* 運営情報 (PR #1363 follow-up: 編集部について をヘッダから footer に移動)。
+           ヘッダの導線を購買 CTA に絞り、運営情報の到達性は footer で担保する。 */ -}}
+    <div class="footer-editorial">
+        <span class="footer-editorial-label">運営</span>
+        <a href="{{ "about/" | relURL }}">📖 編集部について</a>
+        <a href="{{ "author/iropapa/" | relURL }}">👤 いろパパ</a>
+        <a href="{{ "author/iromama/" | relURL }}">👤 いろママ</a>
+    </div>
     <div class="footer-links" style="margin-bottom: 1rem; display: flex; justify-content: center; gap: 1.5rem; flex-wrap: wrap;">
         <a href="https://omcha.jp/" target="_blank" rel="noopener">🌐 おもちゃいろ公式</a>
         <a href="{{ "about-score/" | relURL }}">📊 スコアの仕組み</a>

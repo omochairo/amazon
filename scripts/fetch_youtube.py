@@ -35,6 +35,22 @@ def get_secret(name: str) -> str:
     return os.environ.get(name)
 
 
+def _load_prior_items(youtube_json_path: pathlib.Path) -> list | None:
+    """既存 youtube.json の items を返す。空/不在/壊れは None。
+
+    Issue #1481: API key 欠 / quota 切れで空 items を上書きすると、
+    /posts/ 中の YouTube 埋込が消える。prior が生きていれば温存する。
+    """
+    if not youtube_json_path.exists():
+        return None
+    try:
+        data = json.loads(youtube_json_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    prior = data.get("items") or []
+    return prior if prior else None
+
+
 # 複数 API key を順次フォールバックする state。
 # 各 key は別 Google Cloud project の YOUTUBE Data API key を想定 (project ごとに
 # daily quota 10,000 units を持つ)。secret 名は YOUTUBE_API_KEY,
@@ -267,10 +283,16 @@ def main():
 
     out_dir = pathlib.Path(args.out)
 
+    youtube_json_path = out_dir / "youtube.json"
+
     if not _API_KEYS:
         logger.warning("YouTube API key missing (no YOUTUBE_API_KEY{,2,3,4}). Skipping fetch.")
+        # Issue #1481: 空 items で上書きせず prior が生きていれば温存する
+        if _load_prior_items(youtube_json_path) is not None:
+            logger.warning("Preserving previous youtube.json (no API key available).")
+            return
         out_dir.mkdir(parents=True, exist_ok=True)
-        (out_dir / "youtube.json").write_text(
+        youtube_json_path.write_text(
             json.dumps({"items": []}, ensure_ascii=False, indent=4), encoding="utf-8")
         return
 
@@ -328,8 +350,17 @@ def main():
     if queried_asins:
         _fetch_targets.mark_queried(out_dir, "youtube", queried_asins)
 
+    # Issue #1481: items が空 (全 API key quota 切れ等) のときは prior を温存。
+    # per-ASIN raw (_fetch_targets.write_per_asin_raw) は target ごとに独立して
+    # 書かれるので、global pool 側 (youtube.json) だけ overwrite guard する。
+    if not items and _load_prior_items(youtube_json_path) is not None:
+        logger.warning(
+            "Preserving previous youtube.json (no new items; queried %d ASINs, all empty).",
+            len(queried_asins),
+        )
+        return
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "youtube.json").write_text(
+    youtube_json_path.write_text(
         json.dumps({"items": items}, ensure_ascii=False, indent=4), encoding="utf-8")
     logger.info(f"Saved {len(items)} videos to youtube.json (queried {len(queried_asins)} ASINs)")
 

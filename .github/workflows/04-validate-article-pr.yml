@@ -19,6 +19,9 @@ on:
       # 発火させる (workflow_dispatch では branch protection の required check に
       # ならないケースがあるため、pull_request 経由で確実に走らせる)。
       - 'scripts/build_post.py'
+      # Issue #1494: OG image (1200x630) 生成 helper。build_post から呼ばれる。
+      # 本体変更時 validate を required check として発火させる ([[04-validate-paths-trap]])。
+      - 'scripts/build_og_image.py'
       # 2026-05-31 (Issue #677): build_manifest.json 出力の smoke test と
       # score_calculator media-exposure counter test を validate (required check) に。
       - 'scripts/tests/test_build_post_manifest.py'
@@ -187,6 +190,40 @@ on:
       # 2026-06-01 (Issue #1316 Phase 2): GSC OAuth refresh token 方式の fetch / format。
       - 'scripts/fetch_gsc.py'
       - 'scripts/format_gsc_report.py'
+      # 2026-06-02 (session 78 / epic #1356 A-1): GSC データから低 CTR ページを抽出して
+      # Jules リライト Issue を自動起票するスクリプトと unit test を validate
+      # (required check) 対象に ([[04-validate-paths-trap]])。
+      - 'scripts/detect_low_ctr_pages.py'
+      - 'scripts/tests/test_detect_low_ctr_pages.py'
+      - 'scripts/open_low_ctr_issues.py'
+      - 'scripts/tests/test_open_low_ctr_issues.py'
+      # 2026-06-02 (session 78 / epic #1356 A-2): 2 ページ目に居る機会記事抽出 +
+      # Issue 自動起票スクリプトと unit test を validate (required check) 対象に。
+      - 'scripts/detect_opportunity_pages.py'
+      - 'scripts/tests/test_detect_opportunity_pages.py'
+      - 'scripts/open_opportunity_issues.py'
+      - 'scripts/tests/test_open_opportunity_issues.py'
+      # 2026-06-02 (session 78 / epic #1356 A-6): GSC unmatched brand から
+      # brand_taxonomy.yaml 追加候補を提案するスクリプトと unit test を validate
+      # (required check) 対象に。data/brand_taxonomy.yaml はこのスクリプトの入力。
+      - 'scripts/suggest_brand_taxonomy_additions.py'
+      - 'scripts/tests/test_suggest_brand_taxonomy_additions.py'
+      - 'scripts/open_brand_suggestion_issue.py'
+      - 'scripts/tests/test_open_brand_suggestion_issue.py'
+      # 2026-06-02 (session 78 / epic #1357 B-0): GA4/GSC 日次 history accumulator
+      # を validate (required check) 対象に。data/analytics/history/** は日次 PR で
+      # 更新されるため、auto-merge を成立させるために validate を発火させる必要がある
+      # ([[04-validate-paths-trap]])。
+      - 'scripts/append_analytics_history.py'
+      - 'scripts/tests/test_append_analytics_history.py'
+      - '.github/workflows/18-analytics-daily.yml'
+      - 'data/analytics/history/**'
+      # 2026-06-02 (session 78 / epic #1357 B-1 Phase 1): CrUX 月次 fetch script と
+      # workflow を validate (required check) 対象に。Phase 2 (劣化検出 → Issue 起票)
+      # は 2 ヶ月分蓄積後の follow-up PR。
+      - 'scripts/fetch_crux.py'
+      - 'scripts/tests/test_fetch_crux.py'
+      - '.github/workflows/19-cwv-monitor.yml'
       - '.github/workflows/17-analytics-report.yml'
       # requirements.txt は今回 google-analytics-data 追加で触る。
       # validate が pip install -r requirements.txt しているため、deps 追加 PR を
@@ -201,6 +238,33 @@ on:
       - 'README.md'
       - 'LICENSE'
       - '.github/workflows/04-validate-article-pr.yml'
+      # 2026-06-03 (session 85 / Issue #1420 path α): SNS publish (Buffer 単発
+      # post で X + Threads 配信) を required check として通すため paths に追加
+      # ([[04-validate-paths-trap]])。記事生成パイプラインから独立しているが
+      # validate は副作用ゼロで vacuous SUCCESS となる。
+      - 'scripts/notify_buffer.py'
+      - 'scripts/pick_sns_target.py'
+      - '.github/workflows/20-sns-publish.yml'
+      # 2026-06-03 (session 86 / Issue #1420 path A): Threads は Meta Graph API
+      # 直叩きで thread 2 投化 (Buffer が thread 非対応のため)。
+      - 'scripts/notify_threads.py'
+      # 2026-06-03 (session 87 / Issue #1486): SNS 配信 cron の履歴コミット PR
+      # (data/sns_published.json のみ更新) を required check `validate` で通すため
+      # paths に追加。validate は副作用ゼロで vacuous SUCCESS となる。これが無いと
+      # cron が作る履歴 PR が validate 発火せず auto-merge が永久 pending になる
+      # ([[04-validate-paths-trap]] の inverse: path 不一致で必須 check 不発)。
+      - 'data/sns_published.json'
+      # 2026-06-03 (session 87): Threads access token を weekly cron で refresh
+      # ([[feedback-omochairo-threads-token-diagnostic]])。token 自体は repository
+      # secret なので diff には乗らないが、script / workflow の変更 PR は paths
+      # 経由で validate を発火させる必要がある。
+      - 'scripts/refresh_threads_token.py'
+      - '.github/workflows/refresh_threads_token.yml'
+      # 2026-06-03 (session 87 / Issue #1481): fetch_yahoo / fetch_trends に
+      # empty-overwrite guard を横展開 ([[feedback-omochairo-rakuten-empty-overwrite-trap]])。
+      # fetch_youtube.py は既に上で paths 登録済。
+      - 'scripts/fetch_yahoo.py'
+      - 'scripts/fetch_trends.py'
   workflow_dispatch:
 
 permissions:
@@ -214,14 +278,12 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
