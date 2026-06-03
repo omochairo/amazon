@@ -1,0 +1,161 @@
+name: Jules Engagement News (Dual persona X mama + Threads papa)
+
+# Issue #1526 (session 93):
+#   毎日 06:00 JST に Jules セッション 1 つで X いろママ + Threads いろパパ の
+#   news draft (各 2-4 本) を一括生成する。
+#
+#   - 入力: data/engagement_trends/<today>.json (32-engagement-trend-fetch.yml 出力)
+#         + scripts/_engagement_recent_topics.py で 48h 重複避けリスト
+#   - 出力: data/engagement_queue_{x,threads}.jsonl に category="news" で append
+#   - PR の auto-merge: 31-engagement-auto-merge.yml が処理 (両 queue 触る scope 内)
+#
+# timing:
+#   - 32-engagement-trend-fetch (05:00 JST) の PR auto-merge 完了後に発火する想定
+#   - Jules session 自体は数十分かかる → 朝 07:00 JST 最初のスロット publish には
+#     ギリギリかもしれない。Issue #1539 (publisher 8 slot) で初回スロット時刻を
+#     最終調整するのが理想
+
+on:
+  schedule:
+    # 06:00 JST = 21:00 UTC (前日)
+    - cron: '0 21 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Prepare avoid topics (48h dedup)
+        id: prep
+        run: |
+          set -e
+          TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
+          TREND_FILE="data/engagement_trends/${TODAY}.json"
+          if [ ! -f "$TREND_FILE" ]; then
+            echo "::error::Trend file $TREND_FILE not found. Did 32-engagement-trend-fetch run today?"
+            exit 1
+          fi
+          mkdir -p /tmp/news-prep
+          python scripts/_engagement_recent_topics.py --window-hours 48 --out /tmp/news-prep/avoid.json
+          echo "today=$TODAY" >> "$GITHUB_OUTPUT"
+          echo "trend_file=$TREND_FILE" >> "$GITHUB_OUTPUT"
+          # 候補数で gate (空ならスキップ通知)
+          CANDIDATES=$(python -c "import json; d=json.load(open('$TREND_FILE',encoding='utf-8')); print(len(d['top_candidates']))")
+          echo "candidates=$CANDIDATES" >> "$GITHUB_OUTPUT"
+          echo "trend top_candidates=$CANDIDATES"
+          if [ "$CANDIDATES" = "0" ]; then
+            echo "::warning::No trend candidates today; Jules session will likely produce 0 drafts."
+          fi
+
+      - name: List Jules sources
+        id: list-sources
+        run: |
+          set -e
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            'https://jules.googleapis.com/v1alpha/sources' \
+            -H "X-Goog-Api-Key: ${{ secrets.JULES_API_KEY }}")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::List sources HTTP $HTTP_CODE"
+            exit 1
+          fi
+          SOURCE_NAME=$(echo "$BODY" | jq -r '.sources[] | select(.githubRepo.owner=="omochairo" and .githubRepo.repo=="amazon") | .name' || echo "")
+          if [ -z "$SOURCE_NAME" ]; then SOURCE_NAME="sources/github/omochairo/amazon"; fi
+          echo "source_name=$SOURCE_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Create Jules session
+        env:
+          TODAY: ${{ steps.prep.outputs.today }}
+          TREND_FILE: ${{ steps.prep.outputs.trend_file }}
+          SOURCE_NAME: ${{ steps.list-sources.outputs.source_name }}
+        run: |
+          set -e
+          PROMPT_FILE="jules/PROMPT_ENGAGEMENT_NEWS_DUAL.md"
+          AVOID_JSON=$(cat /tmp/news-prep/avoid.json)
+
+          INTRO="AGENTS.md を最初に必ず読み、その指示に厳密に従ってください。
+
+          【今回のタスク】: news engagement 投稿 draft を以下の通り生成し、
+          各 queue jsonl に append-only で追加する。
+
+          【本日 (Asia/Tokyo)】: ${TODAY}
+          【trend 入力ファイル (必読)】: ${TREND_FILE}
+          【48h dedup 避けるべき topic (recent_news_topics)】:
+          ${AVOID_JSON}
+
+          【生成本数】:
+            - data/engagement_queue_x.jsonl       に iromama news 2-4 本
+            - data/engagement_queue_threads.jsonl に iropapa news 2-4 本
+            - X と Threads で同じ subcategory (topic) を使わない
+            - 各 draft は category=\"news\"、subcategory に topic word を明記
+            - id 連番: news-x-${TODAY}-NNN / news-th-${TODAY}-NNN (既存 daily 系と prefix で分離)
+
+          【絶対守るリポジトリ保護ルール】:
+          - 最終 PR 差分は 上記 2 queue jsonl の追記のみ
+          - 既存行は 1 文字も変更しない (append のみ)
+          - 他ファイル変更禁止 (scripts/, .github/, hugo/, jules/ など)
+          - 31-engagement-auto-merge.yml が他ファイル混入で auto-merge を止める
+
+          === 以下、${PROMPT_FILE} の内容 ==="
+          PROMPT="$INTRO
+
+          $(cat "$PROMPT_FILE")"
+
+          REQUEST_BODY=$(jq -n \
+            --arg prompt "$PROMPT" \
+            --arg source "$SOURCE_NAME" \
+            --arg title "engagement-news: dual drafts (X+Threads) (${TODAY})" \
+            '{
+              prompt: $prompt,
+              sourceContext: {
+                source: $source,
+                githubRepoContext: { startingBranch: "main" }
+              },
+              automationMode: "AUTO_CREATE_PR",
+              title: $title
+            }')
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            'https://jules.googleapis.com/v1alpha/sessions' \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "X-Goog-Api-Key: ${{ secrets.JULES_API_KEY }}" \
+            -d "$REQUEST_BODY")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          echo "HTTP: $HTTP_CODE"
+          echo "$BODY" | jq -c '{name, id, status}' 2>/dev/null || echo "$BODY" | head -c 500
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Create session HTTP $HTTP_CODE"
+            exit 1
+          fi
+          SESSION_ID=$(echo "$BODY" | jq -r '.id // empty')
+          echo "Session created: $SESSION_ID"
+
+      - name: Note on completion
+        run: |
+          echo "::notice::Jules news session dispatched. AUTO_CREATE_PR → 31-engagement-auto-merge.yml が処理。"
+          echo "::notice::Publish は同日 (publisher 拡張完了後、#1539 範囲)。"
