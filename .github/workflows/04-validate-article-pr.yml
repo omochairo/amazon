@@ -257,6 +257,11 @@ on:
       # 経由で validate を発火させる必要がある。
       - 'scripts/refresh_threads_token.py'
       - '.github/workflows/refresh_threads_token.yml'
+      # 2026-06-03 (session 87 / Issue #1481): fetch_yahoo / fetch_trends に
+      # empty-overwrite guard を横展開 ([[feedback-omochairo-rakuten-empty-overwrite-trap]])。
+      # fetch_youtube.py は既に上で paths 登録済。
+      - 'scripts/fetch_yahoo.py'
+      - 'scripts/fetch_trends.py'
   workflow_dispatch:
 
 permissions:
