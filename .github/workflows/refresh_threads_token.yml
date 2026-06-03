@@ -63,6 +63,31 @@ jobs:
           echo "::add-mask::$NEW_TOKEN"
           echo "new_token=$NEW_TOKEN" >> "$GITHUB_OUTPUT"
 
+      # 安全装置: gh secret set の前に、新 token が実際に動作するか
+      # /v1.0/me で検証する。HTTP 200 + JSON に id が含まれることを必須に
+      # する。これで「refresh API は 200 返したが実は invalid token」
+      # 「Meta 側の transient bug で malformed token」「shell エスケープで
+      # 改行混入」等のシナリオで secret を破壊しない (現 token はそのまま)。
+      - name: Validate new token via /me before overwriting secret
+        env:
+          NEW_TOKEN: ${{ steps.refresh.outputs.new_token }}
+        run: |
+          set -euo pipefail
+          HTTP_CODE=$(curl -sS -o /tmp/me.json -w '%{http_code}' \
+            "https://graph.threads.net/v1.0/me?fields=id,username&access_token=${NEW_TOKEN}")
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::New token validation failed: HTTP $HTTP_CODE"
+            # response 内容は id/username しか期待しないので mask 不要だが念のため body は出さない
+            echo "::error::Aborting before secret overwrite — current token preserved"
+            exit 1
+          fi
+          if ! python -c "import json,sys; d=json.load(open('/tmp/me.json')); sys.exit(0 if d.get('id') else 1)"; then
+            echo "::error::New token /me response missing 'id' field"
+            echo "::error::Aborting before secret overwrite — current token preserved"
+            exit 1
+          fi
+          echo "::notice::New token validated via /me (200 + id present)"
+
       - name: Update repository secret
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
