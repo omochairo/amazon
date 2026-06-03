@@ -88,7 +88,9 @@ def build_payload(article: dict, base_url: str) -> tuple[str, str, str]:
     """(post1 hook, post2 url, canonical url) を返す。
 
     Threads は 500 文字制限なので X (280) より緩いが、視認性のため 1 投目を
-    480 文字で truncate。2 投目は URL のみ + 短い導線文。
+    480 文字で truncate。2 投目は URL のみ — Threads 側が link preview card
+    (OG image + 商品 title) を自前で描画するため、本文に「詳しくはこちら 👇」
+    のような導線を付けると preview card の title と二重表示になり冗長 (#1500)。
     """
     asin = article.get("slug", "").rsplit("-", 1)[-1].lower()
     title = article.get("title") or ""
@@ -97,7 +99,7 @@ def build_payload(article: dict, base_url: str) -> tuple[str, str, str]:
     hook = desc if desc else title
     if len(hook) > 480:
         hook = hook[:479].rstrip() + "…"
-    post2 = f"詳しくはこちら 👇\n{url}"
+    post2 = url
     return hook, post2, url
 
 
