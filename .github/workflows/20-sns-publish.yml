@@ -1,0 +1,119 @@
+name: SNS Publish (Buffer → X + Threads)
+# Issue #1420 path α: data/articles/ の最新未投稿 ASIN を Buffer queue に
+# 単発 post として投入し、published 履歴を main に PR + auto-merge で commit。
+#
+# Buffer は X (twitter) / Threads の両 channel に同一テキスト「hook + 改行 +
+# URL」を投げる。検証で thread 配信不可と判明したため (#1420 検証ログ参照)、
+# 両 channel とも単発に統一。X 公式 API 直叩きは pay-per-usage 単価が合わず
+# 見送り。日常投稿 (商品紹介以外) は Buffer ダッシュボード手動運用で並走。
+#
+# cron 2 本立て:
+#   02:00 UTC = 11:00 JST  (お昼前のリーチ取り)
+#   11:00 UTC = 20:00 JST  (夜のゴールデンタイム)
+on:
+  workflow_dispatch:
+    inputs:
+      asin:
+        description: '強制投稿する ASIN (空なら最新未投稿を自動選択)'
+        required: false
+        type: string
+      dry_run:
+        description: 'draft 投入のみで queue に流さない'
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    - cron: '0 2 * * *'
+    - cron: '0 11 * * *'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Pick target ASIN
+        id: pick
+        run: |
+          set -e
+          if [ -n "${{ inputs.asin }}" ]; then
+            ASIN=$(echo "${{ inputs.asin }}" | tr '[:lower:]' '[:upper:]')
+            echo "Manual ASIN override: $ASIN"
+          else
+            ASIN=$(python scripts/pick_sns_target.py) || {
+              echo "::notice::No unpublished article available; skipping."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            }
+            echo "Auto-picked ASIN: $ASIN"
+          fi
+          echo "asin=$ASIN" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Post to Buffer (X + Threads single post with URL)
+        if: steps.pick.outputs.skip != 'true'
+        env:
+          BUFFER_ACCESS_TOKEN: ${{ secrets.BUFFER_ACCESS_TOKEN }}
+          BUFFER_X_CHANNEL_ID: ${{ secrets.BUFFER_X_CHANNEL_ID }}
+          BUFFER_THREADS_CHANNEL_ID: ${{ secrets.BUFFER_THREADS_CHANNEL_ID }}
+        run: |
+          set -e
+          ASIN="${{ steps.pick.outputs.asin }}"
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "DRY RUN — draft 投入のみ"
+            python scripts/notify_buffer.py "$ASIN"
+          else
+            python scripts/notify_buffer.py "$ASIN" --live
+          fi
+
+      - name: Mark ASIN as published + commit via PR
+        if: steps.pick.outputs.skip != 'true' && inputs.dry_run != true
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+          ASIN="${{ steps.pick.outputs.asin }}"
+          python scripts/pick_sns_target.py --mark "$ASIN"
+
+          git add data/sns_published.json
+          if git diff --cached --quiet; then
+            echo "No change in sns_published.json; skipping commit."
+            exit 0
+          fi
+
+          BRANCH="sns-publish/${{ github.run_id }}"
+          git config user.name "omochairo-fetch-bot[bot]"
+          git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit -m "data: mark $ASIN as SNS-published (run ${{ github.run_id }})"
+          git push -u origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "data: mark $ASIN as SNS-published" \
+            --body "Automated SNS publish bookkeeping. Buffer queue にて X + Threads に \`$ASIN\` の単発 post を投入し、\`data/sns_published.json\` に履歴追記した記録。#1420" \
+            --base main \
+            --head "$BRANCH")
+          echo "Created: $PR_URL"
+
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge enabled on $PR_URL"
+          else
+            echo "::warning::Could not enable auto-merge on $PR_URL"
+          fi
