@@ -32,6 +32,34 @@ logger = logging.getLogger("fetch_rakuten")
 
 JAN_RE = re.compile(r"(?<!\d)(4\d{12}|4\d{7})(?!\d)")
 
+# Rakuten Webservice TPS=1。Search 5 連打 → Ranking で 429 を踏んだ過去あり
+# (run 26849869200, 2026-06-02)。Ranking call 前の最低保険として 1.5s 空ける。
+RAKUTEN_API_GAP_SEC = 1.5
+
+
+def _rakuten_get_with_retry(url: str, params: dict, headers: dict, label: str,
+                            max_retries: int = 1, backoff_sec: float = 3.0):
+    """楽天 API を 429 のときだけ 1 回リトライして返す。それ以外は素通し。
+
+    429 は TPS=1 制限超過なので backoff 後に通る確率が高い。リトライしないと
+    weekly.json が空で上書きされ /ranking/ が「お待ちください」状態になる
+    (Issue: #1454 で発生)。
+    """
+    for attempt in range(max_retries + 1):
+        try:
+            resp = requests.get(url, params=params, headers=headers, timeout=15)
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Rakuten {label} request failed (attempt {attempt + 1}): {e}")
+            return None
+        if resp.status_code == 429 and attempt < max_retries:
+            logger.warning(
+                f"Rakuten {label} got HTTP 429 — backing off {backoff_sec}s and retrying"
+            )
+            time.sleep(backoff_sec)
+            continue
+        return resp
+    return None
+
 
 def _build_itemcode_to_asin(matched_path: pathlib.Path) -> dict:
     if not matched_path.exists():
@@ -68,6 +96,25 @@ def _build_jan_to_asin(per_asin_root: pathlib.Path) -> dict:
     return index
 
 
+_ARTICLE_SLUG_RE = re.compile(r"\d{4}-\d{2}-\d{2}-([A-Z0-9]{10})\.md$", re.IGNORECASE)
+
+
+def _build_article_asins(posts_root: pathlib.Path) -> set:
+    """hugo/content/posts/YYYY-MM-DD-<ASIN>.md からレビュー記事が存在する ASIN 集合を構築。
+
+    Issue #1149: ランキング rematch で matched_asin が立っても /products/<asin>/ の
+    記事が無ければ 404 になる。マッチ段階で「記事ありき」に限定して 404 を防ぐ。
+    """
+    asins: set[str] = set()
+    if not posts_root.exists():
+        return asins
+    for md in posts_root.glob("*.md"):
+        m = _ARTICLE_SLUG_RE.search(md.name)
+        if m:
+            asins.add(m.group(1).upper())
+    return asins
+
+
 def _extract_jan_from_text(text: str) -> str:
     if not text:
         return ""
@@ -75,22 +122,119 @@ def _extract_jan_from_text(text: str) -> str:
     return m.group(1) if m else ""
 
 
-def _match_ranking_item(item: dict, itemcode_idx: dict, jan_idx: dict) -> tuple:
+def _match_ranking_item(
+    item: dict,
+    itemcode_idx: dict,
+    jan_idx: dict,
+    article_asins: set | None = None,
+) -> tuple:
     """ranking item を ASIN にマッチング。返り値: (matched_asin, match_stage)。
+
     match_stage は 'stage1' (itemCode 直接), 'stage2_jan' (JAN 抽出), '' (未マッチ)。
+
+    Issue #1149: ``article_asins`` を渡すと、マッチした ASIN がそこに含まれない
+    場合は未マッチ扱いにする (= /products/<asin>/ の 404 リンクを防ぐ)。None なら
+    従来通り全マッチを許可する (後方互換)。
     """
     code = (item.get("itemCode") or "").strip()
     if code:
         asin = itemcode_idx.get(code)
-        if asin:
+        if asin and (article_asins is None or asin.upper() in article_asins):
             return asin, "stage1"
     text = (item.get("itemCaption") or "") + " " + (item.get("title") or "")
     jan = _extract_jan_from_text(text)
     if jan:
         asin = jan_idx.get(jan)
-        if asin:
+        if asin and (article_asins is None or asin.upper() in article_asins):
             return asin, "stage2_jan"
     return "", ""
+
+
+def _match_all(rank_items: list, itemcode_idx: dict, jan_idx: dict, article_asins: set | None) -> tuple:
+    """rank_items を一括マッチングし、(stage1_n, stage2_n, unmatched_list) を返す。
+    rank_items の各 dict に matched_asin / match_stage を破壊的に書き込む。
+    """
+    stage1_n, stage2_n, unmatched = 0, 0, []
+    for it in rank_items:
+        asin, stage = _match_ranking_item(it, itemcode_idx, jan_idx, article_asins)
+        it["matched_asin"] = asin or None
+        it["match_stage"] = stage or None
+        if stage == "stage1":
+            stage1_n += 1
+        elif stage == "stage2_jan":
+            stage2_n += 1
+        else:
+            unmatched.append({
+                "rank": it.get("rank"),
+                "itemCode": it.get("itemCode"),
+                "title": it.get("title"),
+            })
+    return stage1_n, stage2_n, unmatched
+
+
+def _rematch_only(out_dir: pathlib.Path) -> int:
+    """Issue #1149: 既存 weekly.json を読み、API を叩かずに現行 indices で再マッチ。
+    返り値: 終了コード (0=成功, 2=weekly.json 不在)。
+    """
+    weekly_path = pathlib.Path("hugo/data/ranking/weekly.json")
+    if not weekly_path.exists():
+        logger.error(f"rematch-only: {weekly_path} not found")
+        return 2
+    payload = json.loads(weekly_path.read_text(encoding="utf-8"))
+    rank_items = payload.get("items", [])
+
+    # weekly.json が既に空 (= 直前の通常 fetch が API 失敗で空のまま flush された / 復旧前)
+    # の状態で rematch すると、空のまま rematched_at だけ更新して履歴を 1 周分塗り潰すので
+    # スキップする。fetch_rakuten 側の guard とセットで /ranking/ 表示を保護する。
+    if not rank_items:
+        logger.warning(
+            f"rematch-only: weekly.json has 0 items — skipping rematch to preserve previous state"
+        )
+        return 0
+
+    raw_root = pathlib.Path("data/raw")
+    itemcode_idx = _build_itemcode_to_asin(raw_root / "rakuten_matched.json")
+    jan_idx = _build_jan_to_asin(raw_root / "per_asin")
+    article_asins = _build_article_asins(pathlib.Path("hugo/content/posts"))
+    logger.info(
+        f"rematch-only indices: itemCode={len(itemcode_idx)}, jan={len(jan_idx)}, "
+        f"articles={len(article_asins)}"
+    )
+
+    stage1_n, stage2_n, unmatched = _match_all(rank_items, itemcode_idx, jan_idx, article_asins)
+
+    generated_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    payload["items"] = rank_items
+    payload["rematched_at"] = generated_at
+    manifest = {
+        "generated_at": generated_at,
+        "genre_id": payload.get("genre_id") or "566382",
+        "input_total": len(rank_items),
+        "stage1_matches": stage1_n,
+        "stage2_matches": stage2_n,
+        "unmatched": len(unmatched),
+        "unmatched_items": unmatched,
+        "rematch_only": True,
+    }
+    logger.info(
+        f"rematch-only result: total={len(rank_items)} "
+        f"stage1={stage1_n} stage2_jan={stage2_n} unmatched={len(unmatched)}"
+    )
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "rakuten_ranking.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=4), encoding="utf-8"
+    )
+    (out_dir / "_rakuten_ranking_manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    weekly_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    (weekly_path.parent / "_match_manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return 0
 
 def main():
     import argparse
@@ -100,7 +244,16 @@ def main():
     parser.add_argument("--search-pages", type=int, default=1,
                         help="Rakuten Ichiba Search pages to fetch (hits=30/page). #810 Phase 2: "
                              "sniper raises this to widen the JAN discovery pool beyond the 30-item ranking.")
+    parser.add_argument("--rematch-only", action="store_true",
+                        help="Issue #1149: skip API, re-match existing hugo/data/ranking/weekly.json "
+                             "against current per_asin / rakuten_matched / article indices. Used after "
+                             "sniper backfill so newly-created articles get linked from /ranking/ "
+                             "without waiting for next Tuesday's weekly cron.")
     args = parser.parse_args()
+
+    if args.rematch_only:
+        rc = _rematch_only(pathlib.Path(args.out))
+        sys.exit(rc)
 
     app_id = get_secret("RAKUTEN_APP_ID")
     access_key = get_secret("RAKUTEN_ACCESS_KEY")
@@ -166,7 +319,7 @@ def main():
             break  # ページ尽き
         raw_items.extend(page_items)
         if page < search_pages:
-            time.sleep(0.4)  # Rakuten TPS=1 safety margin
+            time.sleep(1.1)  # Rakuten TPS=1 (旧 0.4 は不足、429 を踏む)
     logger.info(f"Rakuten Search: fetched {len(raw_items)} items across up to {search_pages} page(s)")
 
     for item in raw_items:
@@ -209,9 +362,13 @@ def main():
     if aff_id: ranking_params["affiliateId"] = aff_id
 
     rank_items = []
+    # Search 連打の直後は TPS=1 を踏むので Ranking 前に空ける。
+    time.sleep(RAKUTEN_API_GAP_SEC)
     try:
-        rank_resp = requests.get(ranking_url, params=ranking_params, headers=headers)
-        if rank_resp.status_code == 200:
+        rank_resp = _rakuten_get_with_retry(
+            ranking_url, ranking_params, headers, label="Ranking"
+        )
+        if rank_resp is not None and rank_resp.status_code == 200:
             rank_data = rank_resp.json()
             raw_rank_items = rank_data.get("Items", [])
             if not isinstance(raw_rank_items, list):
@@ -241,8 +398,10 @@ def main():
                     "reviewCount": i.get("reviewCount", 0),
                     "shopName": i.get("shopName", ""),
                 })
-        else:
+        elif rank_resp is not None:
             logger.error(f"Rakuten Ranking API failed: HTTP {rank_resp.status_code} {rank_resp.text[:300]}")
+        else:
+            logger.error("Rakuten Ranking API failed: no response (network / retry exhausted)")
     except Exception as e:
         logger.error(f"Ranking API failed: {e}")
 
@@ -250,19 +409,13 @@ def main():
     raw_root = pathlib.Path("data/raw")
     itemcode_idx = _build_itemcode_to_asin(raw_root / "rakuten_matched.json")
     jan_idx = _build_jan_to_asin(raw_root / "per_asin")
-    logger.info(f"Match indices: itemCode={len(itemcode_idx)}, jan={len(jan_idx)}")
+    article_asins = _build_article_asins(pathlib.Path("hugo/content/posts"))
+    logger.info(
+        f"Match indices: itemCode={len(itemcode_idx)}, jan={len(jan_idx)}, "
+        f"articles={len(article_asins)}"
+    )
 
-    stage1_n, stage2_n, unmatched = 0, 0, []
-    for it in rank_items:
-        asin, stage = _match_ranking_item(it, itemcode_idx, jan_idx)
-        it["matched_asin"] = asin or None
-        it["match_stage"] = stage or None
-        if stage == "stage1":
-            stage1_n += 1
-        elif stage == "stage2_jan":
-            stage2_n += 1
-        else:
-            unmatched.append({"rank": it.get("rank"), "itemCode": it.get("itemCode"), "title": it.get("title")})
+    stage1_n, stage2_n, unmatched = _match_all(rank_items, itemcode_idx, jan_idx, article_asins)
 
     generated_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
     manifest = {
@@ -291,24 +444,34 @@ def main():
         "genre_id": "566382",
         "items": rank_items,
     }
-    with open(os.path.join(args.out, "rakuten_ranking.json"), "w", encoding="utf-8") as f:
-        json.dump(ranking_payload, f, ensure_ascii=False, indent=4)
 
-    # Observability: PR #677 と同方針の build/match manifest
-    with open(os.path.join(args.out, "_rakuten_ranking_manifest.json"), "w", encoding="utf-8") as f:
-        json.dump(manifest, f, ensure_ascii=False, indent=2)
-
-    # Hugo Data Templates 用に同データを hugo/data/ranking/ へも複製する。
-    # `/hugo` は .gitignore 対象だが weekly.json を 1 回 force-add で tracked にしておき、
-    # 以降は通常の git add で更新可能 (cron workflow は git add -f で初回作成も吸収)。
-    hugo_ranking_dir = pathlib.Path("hugo/data/ranking")
-    hugo_ranking_dir.mkdir(parents=True, exist_ok=True)
-    (hugo_ranking_dir / "weekly.json").write_text(
-        json.dumps(ranking_payload, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-    (hugo_ranking_dir / "_match_manifest.json").write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    # rank_items が空 (= Ranking API が 429/エラーで失敗 or 0 件返却) のとき weekly.json /
+    # _match_manifest.json / rakuten_ranking.json を上書きしない。これがないと /ranking/
+    # が「次回 cron をお待ちください」状態に陥り、復旧まで前回 cron run の間データ消失する
+    # (Issue: run 26849869200 = #1454 で実発生)。raw/ 側の rakuten_ranking.json と manifest
+    # は signal_detector / sniper の入力なので同じ保護を適用する。
+    if not rank_items:
+        logger.warning(
+            "Ranking API returned 0 items — preserving previous weekly.json / manifests "
+            "(no overwrite). /ranking/ will continue to show last successful snapshot."
+        )
+    else:
+        with open(os.path.join(args.out, "rakuten_ranking.json"), "w", encoding="utf-8") as f:
+            json.dump(ranking_payload, f, ensure_ascii=False, indent=4)
+        # Observability: PR #677 と同方針の build/match manifest
+        with open(os.path.join(args.out, "_rakuten_ranking_manifest.json"), "w", encoding="utf-8") as f:
+            json.dump(manifest, f, ensure_ascii=False, indent=2)
+        # Hugo Data Templates 用に同データを hugo/data/ranking/ へも複製する。
+        # `/hugo` は .gitignore 対象だが weekly.json を 1 回 force-add で tracked にしておき、
+        # 以降は通常の git add で更新可能 (cron workflow は git add -f で初回作成も吸収)。
+        hugo_ranking_dir = pathlib.Path("hugo/data/ranking")
+        hugo_ranking_dir.mkdir(parents=True, exist_ok=True)
+        (hugo_ranking_dir / "weekly.json").write_text(
+            json.dumps(ranking_payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        (hugo_ranking_dir / "_match_manifest.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
 
 if __name__ == "__main__":

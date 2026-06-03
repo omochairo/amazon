@@ -44,6 +44,17 @@ _KANJI_DIGIT_TOKEN = re.compile(r'^[一二三四五六七八九十]$')
 # 型番: 英大文字+数字を**両方**含む 4〜12 文字。BEYBLADE / TOMICA / T-SPARK 等の
 # 単語シリーズ名 (英字のみ) を誤検出しないように数字を必須にする。
 _MODEL_PATTERN = re.compile(r'^(?=[A-Z0-9\-]{4,12}$)(?=.*[A-Z])(?=.*[0-9])[A-Z0-9\-]+$')
+# Issue #1087 Phase 2: タイトル中盤の固有商品名 (e.g. メロディーゴーラウンド,
+# クラシックドラム) を product identifier として優先採用するための判定。長め (8 文字
+# 以上) の純カタカナ token は generic 修飾語ではなく商品/シリーズ名である確度が高い。
+_KATAKANA_PRODUCT_RE = re.compile(r'^[゠-ヿー・]+$')
+_KATAKANA_PRODUCT_MIN_LEN = 8
+# Issue #1087 Phase 2: noise 除去で「以上 / 以下 / 向け / から」等の age 修飾語が
+# 末尾に残ると kw 末尾が無意味なものになり、検索 noise を増やすので token として除去。
+_STOP_TOKENS = frozenset({
+    '以上', '以下', '前後', '向け', 'から', 'まで', '対応',
+    '入り', '入', '版', '用',
+})
 # Rakuten Stage3 で短縮した結果これだけになる場合、汎用過ぎてマッチが事故るため
 # 短縮検索を抑止するブランド/シリーズ語
 _GENERIC_BRAND_TOKENS = {
@@ -90,6 +101,14 @@ def extract_search_keyword(title):
     ブランド名 + 型番を最優先し、なければブランド名 + 商品シリーズ名にする。
     末尾が数字トークンで終わると Rakuten Ichiba が HTTP 400 を返すため、
     年齢を表す数字/数字+歳/漢数字単独トークンは除去する。
+
+    Issue #1087 Phase 2 改善:
+    - noise 除去を「トークン化後の完全一致」に変更 (旧 substring 置換は
+      "木製おもちゃのだいわ" のような noise 内包ブランドを破壊していた)。
+    - 型番が見つからないとき、タイトル中盤の長い純カタカナ token (8 文字以上)
+      を product identifier として優先採用 (例: メロディーゴーラウンド,
+      クラシックドラム, レインボーアバカス)。
+    - 末尾 "以上"/"以下"/"向け" 等の age 修飾語 token を除去。
     """
     # 1. 記号 ! と ！ やその他装飾記号をスペースに置換 (ノイズ記号のクリーンアップ)
     clean = re.sub(r'[!！?？♪]', ' ', title)
@@ -110,20 +129,38 @@ def extract_search_keyword(title):
     # - 単位付き数値: 15cm, 1.5kg, 500g, 2.4mm, 100ml, 1000ピース, 90pcs, 10個, 24色 など
     clean = re.sub(r'\d+(?:\.\d+)?\s*(?:cm|mm|m|kg|g|ml|l|pcs|ピース|個|色|枚|倍|pt|L|才|歳)(?=\s|$|[^a-zA-Z0-9])', ' ', clean, flags=re.IGNORECASE)
 
-    # 4. ノイズ語除去
-    noise = ['送料無料', 'ポイント10倍', '正規品', '公式', '最新', '予約',
-             'おまけ付き', 'ラッピング無料', 'あす楽', '即納', '税込',
-             '知育玩具', 'おもちゃ', 'プレゼント', '誕生日', 'ギフト',
-             '2個セット', '3歳から', '男の子', '女の子', '対象年齢']
-    for n in noise:
+    # 4a. substring で剥がしても誤爆しない short Latin / 記号系 noise は string-replace で除去
+    sub_noise = ['送料無料', 'ポイント10倍', '正規品', '公式', '最新', '予約',
+                 'おまけ付き', 'ラッピング無料', 'あす楽', '即納', '税込',
+                 '2個セット', '3歳から', '対象年齢',
+                 # Issue #1087 Phase 2: マーケ/受賞修飾語。B001A29UQW で
+                 # 'グッドデザイン賞 グッド・トイ賞 受賞' の 3 語が tokens[:4] を埋めて
+                 # 商品名 'アースカイト' を押し出す問題を緩和。
+                 'グッドデザイン賞', 'グッド・トイ賞', 'グッドトイ賞']
+    for n in sub_noise:
         clean = clean.replace(n, ' ')
 
     tokens = [t for t in clean.split() if t]
     if not tokens:
         return title[:40]
 
+    # 4b. トークン化後に「完全一致」だけ落とす noise (おもちゃ / 知育玩具 等)。
+    #     旧来の substring 除去は "木製おもちゃのだいわ" や "木のおもちゃ" のブランド
+    #     /シリーズ語内に紛れた noise を意図せず破壊していた (Issue #1087 Phase 2)。
+    token_noise = frozenset({
+        '知育玩具', 'おもちゃ', 'プレゼント', '誕生日', 'ギフト',
+        '男の子', '女の子', '子供', '子ども', '幼児', '赤ちゃん',
+        # Issue #1087 Phase 2: 受賞/人気フラグも brand+受賞 で kw が埋まる原因
+        '受賞', '人気',
+    })
+    tokens = [t for t in tokens if t not in token_noise]
+    if not tokens:
+        return title[:40]
+
     # 年齢を表すトークン (純数字 / 数字+歳 / 漢数字単独) は API が嫌うので全て除去
     tokens = [t for t in tokens if not _is_age_token(t)]
+    # 末尾装飾語 (以上/以下/向け) を除去
+    tokens = [t for t in tokens if t not in _STOP_TOKENS]
     if not tokens:
         return title[:40]
 
@@ -136,8 +173,20 @@ def extract_search_keyword(title):
         keyword_tokens = _dedupe_tokens(head + [models[0]])
         keyword = " ".join(keyword_tokens)
     else:
-        # フォールバック: 最初の方の単語をまとめる
-        keyword = " ".join(_dedupe_tokens(tokens[:4])).strip()
+        # 型番なし: タイトル中盤の長い純カタカナ token を product identifier として優先。
+        # Issue #1087 Phase 2: ブランド head + メロディーゴーラウンド のような商品名で
+        # B08DCHWRJC タイプの「楽器/音色 等の generic 語に流れて別商品マッチ」を回避。
+        head = tokens[:2]
+        katakana_long = [
+            t for t in tokens[2:]
+            if _KATAKANA_PRODUCT_RE.match(t) and len(t) >= _KATAKANA_PRODUCT_MIN_LEN
+        ]
+        if katakana_long:
+            keyword_tokens = _dedupe_tokens(head + [katakana_long[0]])
+        else:
+            # フォールバック: 最初の方の単語をまとめる
+            keyword_tokens = _dedupe_tokens(tokens[:4])
+        keyword = " ".join(keyword_tokens).strip()
         if len(keyword) < 3:
             keyword = " ".join(_dedupe_tokens(tokens[:6])).strip()
 
@@ -284,14 +333,28 @@ def _rakuten_books_by_isbnjan(jan_code, app_id, aff_id):
     return requests.get(url, params=params, timeout=10)
 
 
+def _classify_http_status(status_code: int) -> str:
+    """JAN stage の HTTP status を `_jan_attempt` ラベルに正規化する。"""
+    if status_code == 400:
+        return "jan_400"
+    if 500 <= status_code < 600:
+        return "jan_5xx"
+    return f"jan_http_{status_code}"
+
+
 def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""):
     """楽天で階層的検索を行う (JAN優先 → Books → Ichiba → Shortened Ichiba)
 
     `jan_code` が与えられた場合、まず Books の `isbnjan` 直引き、続いて Ichiba を
     `keyword=<JAN>` で叩く。どちらも 1 件目を即返却して `_select_median_priced_item`
     の中央値選択をバイパスする (JAN ヒット = 同一商品なので中央値選択は無意味)。
-    返り値 dict には診断用に `_match_method` を埋め込む。
+    返り値 dict には診断用に `_match_method` と `_jan_attempt` を埋め込む。
+    `_jan_attempt` の値: jan_books / jan_ichiba (hit) / jan_zero / jan_400 / jan_5xx /
+    jan_http_<code> / jan_error / no_jan (Issue #1087 Phase 1 observability)。
     """
+
+    # JAN フェーズの最終 outcome を tracking (manifest/log 用)
+    jan_attempt = "no_jan" if not jan_code else "jan_skipped"
 
     # Stage 0a: JAN 直引き (Rakuten Books `isbnjan`)
     if jan_code:
@@ -306,9 +369,20 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
                     best = parsed_items[0]
                     best["source"] = "Rakuten Books"
                     best["_match_method"] = "jan_books"
+                    best["_jan_attempt"] = "jan_books"
                     return best
+                else:
+                    jan_attempt = "jan_zero"
+                    logger.info(f"Rakuten Stage0a (Books isbnjan={jan_code}): 0 hits")
+            else:
+                jan_attempt = _classify_http_status(resp.status_code)
+                logger.warning(
+                    f"Rakuten Stage0a failed (Books isbnjan={jan_code}): "
+                    f"HTTP {resp.status_code} {resp.text[:200]}"
+                )
             time.sleep(0.5)
         except Exception as e:
+            jan_attempt = "jan_error"
             logger.error(f"Rakuten Stage0a error: {e}")
 
         # Stage 0b: JAN を Ichiba の keyword に投入
@@ -324,9 +398,17 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
                     best = parsed_items[0]
                     best["source"] = "Rakuten"
                     best["_match_method"] = "jan_ichiba"
+                    best["_jan_attempt"] = "jan_ichiba"
                     return best
+                else:
+                    jan_attempt = "jan_zero"
+                    logger.info(f"Rakuten Stage0b (keyword=JAN:{jan_code}): 0 hits")
+            else:
+                jan_attempt = _classify_http_status(resp.status_code)
+                logger.warning(f"Rakuten Stage0b failed (keyword=JAN:{jan_code}): HTTP {resp.status_code} {resp.text[:200]}")
             time.sleep(0.5)
         except Exception as e:
+            jan_attempt = "jan_error"
             logger.error(f"Rakuten Stage0b error: {e}")
 
     # Stage 1: Rakuten Books (公開 API のみ、accessKey 非対応)
@@ -352,6 +434,7 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
                 if best:
                     best["source"] = "Rakuten Books"
                     best["_match_method"] = "text"
+                    best["_jan_attempt"] = jan_attempt
                     return best
         time.sleep(0.5)
     except Exception as e:
@@ -379,6 +462,7 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
                 if best:
                     best["source"] = "Rakuten"
                     best["_match_method"] = "text"
+                    best["_jan_attempt"] = jan_attempt
                     return best
         else:
             logger.warning(f"Rakuten Stage2 failed for '{stage2_keyword}': HTTP {resp.status_code} - {resp.text[:200]}")
@@ -409,6 +493,7 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
                         if best:
                             best["source"] = "Rakuten"
                             best["_match_method"] = "text"
+                            best["_jan_attempt"] = jan_attempt
                             return best
             except Exception as e:
                 logger.error(f"Rakuten Stage3 error: {e}")
@@ -416,27 +501,42 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
     return None
 
 
-def _yahoo_query(keyword, client_id, sid="", pid="", jan_code=""):
+def _yahoo_query(keyword, client_id, sid="", pid="", jan_code="", out_status=None):
     """Yahoo Shopping API V3 itemSearch を 1 回叩いて parsed_items を返す。
 
     `jan_code` が指定された場合は `jan_code` パラメータで送信し、`query` は
     省略する (V3 仕様: 完全一致検索)。それ以外は従来通り `query` でテキスト検索。
+
+    `in_stock=true` フィルタは text search のみに適用する。JAN は unique ID
+    なので在庫切れでも商品ページ自体は valid (ユーザーが裏で入荷確認できる)。
+    かつ小規模 Yahoo Store はしばしば inStock メタを False で送ってくるため、
+    JAN 検索でこのフィルタを掛けると Yahoo Shopping カタログに実在する商品でも
+    0 hits で silent fall through する (Issue #1087 続き)。Rakuten 側に同等
+    フィルタが無く JAN hit 率が高い (93.5% vs Yahoo 87.2%) ことの主因と判明。
+    parsed_items 側で `inStock` field を見て availability=outofstock を立て
+    続けるので、availability 情報は失わない。
+
+    `out_status` (list, optional): 渡された場合 HTTP status code を 1 要素 append
+    する。例外時は append されないので caller は `len(out_status) == 0` で
+    network/parse error と区別できる (Issue #1087 Phase 1 observability)。
     """
     params = {
         "appid": client_id,
         "results": 15,
         "sort": "-score",
-        "in_stock": "true",
     }
     if jan_code:
         params["jan_code"] = jan_code
     else:
         params["query"] = keyword
+        params["in_stock"] = "true"
     if sid and pid:
         params["affiliate_type"] = "vc"
         params["affiliate_id"] = f"{VC_REFERRAL_BASE}?sid={sid}&pid={pid}&vc_url="
 
     resp = requests.get(YAHOO_SEARCH_URL, params=params, timeout=10)
+    if out_status is not None:
+        out_status.append(resp.status_code)
     if resp.status_code != 200:
         probe = f"JAN:{jan_code}" if jan_code else keyword
         logger.warning(f"Yahoo search failed for '{probe}': HTTP {resp.status_code}")
@@ -444,6 +544,9 @@ def _yahoo_query(keyword, client_id, sid="", pid="", jan_code=""):
     data = resp.json()
     hits = data.get("hits", [])
     if not hits:
+        # 0 hits も明示的に log してフォールスルー診断を可能にする。
+        probe = f"JAN:{jan_code}" if jan_code else keyword
+        logger.info(f"Yahoo search returned 0 hits for '{probe}'")
         return []
 
     parsed_items = []
@@ -493,9 +596,11 @@ def search_yahoo(keyword, client_id, sid="", pid="", jan_code=""):
     短縮候補が `_GENERIC_BRAND_TOKENS` のみで構成される場合 (例: 'タカラトミー トミカ',
     'タカラトミー' 単独) は無関係な人気商品にマッチするのでスキップする。
     """
+    jan_attempt = "no_jan" if not jan_code else "jan_skipped"
     if jan_code:
+        status_out: list[int] = []
         try:
-            items = _yahoo_query("", client_id, sid, pid, jan_code=jan_code)
+            items = _yahoo_query("", client_id, sid, pid, jan_code=jan_code, out_status=status_out)
         except Exception as e:
             logger.error(f"Yahoo JAN error for '{jan_code}': {e}")
             items = []
@@ -503,7 +608,15 @@ def search_yahoo(keyword, client_id, sid="", pid="", jan_code=""):
             logger.info(f"Yahoo Stage0 (jan_code={jan_code}): {len(items)} hits")
             best = items[0]
             best["_match_method"] = "jan"
+            best["_jan_attempt"] = "jan"
             return best
+        # JAN miss の原因を分類
+        if not status_out:
+            jan_attempt = "jan_error"
+        elif status_out[0] != 200:
+            jan_attempt = _classify_http_status(status_out[0])
+        else:
+            jan_attempt = "jan_zero"
         time.sleep(1.0)  # Yahoo rate limit: 1 query/sec
 
     tokens = keyword.split()
@@ -532,6 +645,7 @@ def search_yahoo(keyword, client_id, sid="", pid="", jan_code=""):
             best = _select_median_priced_item(items)
             if best:
                 best["_match_method"] = "text"
+                best["_jan_attempt"] = jan_attempt
                 return best
         if idx < len(candidates):
             time.sleep(1.0)  # Yahoo rate limit: 1 query/sec
@@ -933,6 +1047,59 @@ def main():
             f"rakuten_targets={r_low_conf_targets} (no_better={r_no_better}), "
             f"yahoo_targets={y_low_conf_targets} (no_better={y_no_better})"
         )
+
+    # Issue #1087 Phase 1: JAN 成否の per-ASIN manifest を出力
+    _write_cross_search_manifest(out_dir, rakuten_index, yahoo_index, targets, now_iso)
+
+
+def _write_cross_search_manifest(out_dir, rakuten_index, yahoo_index, targets, generated_at):
+    """ASIN ごとの JAN 成否 (_jan_attempt) を集計して manifest JSON を書き出す。
+
+    Issue #1087 Phase 1 observability: text fallback に落ちた残 6.5%/12.8% の
+    edge case 群が「なぜ JAN 直引きで落ちたか」を後追いできるようにする。
+    """
+    rakuten_summary: dict[str, int] = {}
+    yahoo_summary: dict[str, int] = {}
+    items: list[dict] = []
+
+    # targets に含まれる ASIN のみ (累積 index には古い ASIN も残るため)
+    for asin, (_title, _force, jan_code) in targets.items():
+        r_entry = rakuten_index.get(asin) or {}
+        y_entry = yahoo_index.get(asin) or {}
+        r_attempt = r_entry.get("_jan_attempt", "unknown")
+        y_attempt = y_entry.get("_jan_attempt", "unknown")
+        rakuten_summary[r_attempt] = rakuten_summary.get(r_attempt, 0) + 1
+        yahoo_summary[y_attempt] = yahoo_summary.get(y_attempt, 0) + 1
+        items.append({
+            "asin": asin,
+            "jan_code": jan_code or "",
+            "rakuten": {
+                "method": r_entry.get("_match_method", "none"),
+                "jan_attempt": r_attempt,
+            },
+            "yahoo": {
+                "method": y_entry.get("_match_method", "none"),
+                "jan_attempt": y_attempt,
+            },
+        })
+
+    manifest = {
+        "generated_at": generated_at,
+        "summary": {
+            "rakuten": dict(sorted(rakuten_summary.items())),
+            "yahoo": dict(sorted(yahoo_summary.items())),
+        },
+        "items": items,
+    }
+    manifest_path = out_dir / "_cross_search_manifest.json"
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    logger.info(
+        f"Cross-search manifest saved: {manifest_path} "
+        f"(rakuten={rakuten_summary}, yahoo={yahoo_summary})"
+    )
 
 
 if __name__ == "__main__":

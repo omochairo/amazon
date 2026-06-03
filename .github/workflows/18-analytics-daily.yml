@@ -1,0 +1,168 @@
+name: Analytics Daily History Accumulator (GA4 + GSC)
+
+# B-0 (epic #1357, session 78) — 日次 cron で GA4 / GSC を 1 日窓 fetch し、
+# data/analytics/history/*.jsonl に append する read-mostly workflow。
+# 17-analytics-report.yml (週次) とは目的が異なる:
+#   - 17 = 週次 7 日 window fetch + 検出 + Issue 起票 (現状の運用)
+#   - 18 = 日次 1 日 window fetch + JSONL append のみ (history 蓄積)
+#
+# 設計判断:
+#   - cron: 06:00 JST (= 21:00 UTC prev day)。GA4 前日 day-1 確定 / GSC delay=3
+#   - JSONL は append-only で git tracked (GSC 16 ヶ月 limit を活かす)
+#   - commit-back は App token (07-rakuten-ranking.yml と同パターン)、PR +
+#     auto-merge で main protection を回避 ([[silent_push_reject]] / [[hugo_output_cron_trio]])
+#   - secrets 未設定なら個別 step を skip して空 run で終了 (壊さない)
+#
+# 必須 secrets:
+#   - APP_ID, APP_PRIVATE_KEY            (commit-back 用 App token)
+#   - GA4_SA_JSON, GA4_PROPERTY_ID       (GA4 fetch)
+#
+# 任意 secrets (GSC):
+#   - GSC_OAUTH_CLIENT_ID / GSC_OAUTH_CLIENT_SECRET / GSC_OAUTH_REFRESH_TOKEN
+#   - GSC_SITE_URL
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 06:00 JST = 21:00 UTC (前日)。GA4 day-1 確定済、GSC は delay=3 で常に間に合う。
+    - cron: '0 21 * * *'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: analytics-daily-history
+  cancel-in-progress: false
+
+jobs:
+  accumulate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-analytics-data google-auth google-auth-oauthlib google-api-python-client pyyaml
+
+      - name: Fetch GA4 (1-day window)
+        id: ga4
+        env:
+          GA4_SA_JSON: ${{ secrets.GA4_SA_JSON }}
+          GA4_PROPERTY_ID: ${{ secrets.GA4_PROPERTY_ID }}
+        run: |
+          set +e
+          if [ -z "$GA4_SA_JSON" ] || [ -z "$GA4_PROPERTY_ID" ]; then
+            echo "::notice::GA4 secrets not set — skipping"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          python scripts/fetch_ga4.py --days 1
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            echo "::warning::GA4 fetch failed (rc=$rc)"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch GSC (1-day window)
+        id: gsc
+        env:
+          GSC_OAUTH_CLIENT_ID: ${{ secrets.GSC_OAUTH_CLIENT_ID }}
+          GSC_OAUTH_CLIENT_SECRET: ${{ secrets.GSC_OAUTH_CLIENT_SECRET }}
+          GSC_OAUTH_REFRESH_TOKEN: ${{ secrets.GSC_OAUTH_REFRESH_TOKEN }}
+          GSC_SITE_URL: ${{ secrets.GSC_SITE_URL }}
+        run: |
+          set +e
+          if [ -z "$GSC_OAUTH_REFRESH_TOKEN" ] || [ -z "$GSC_SITE_URL" ]; then
+            echo "::notice::GSC secrets not set — skipping"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          python scripts/fetch_gsc.py --days 1
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            echo "::warning::GSC fetch failed (rc=$rc)"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
+      - name: Append to history JSONL
+        if: steps.ga4.outputs.available == 'true' || steps.gsc.outputs.available == 'true'
+        run: |
+          set -e
+          GA4_ARG=""
+          GSC_ARG=""
+          if [ "${{ steps.ga4.outputs.available }}" = "true" ]; then
+            GA4_ARG="--ga4 data/analytics/ga4_weekly.json"
+          else
+            GA4_ARG="--ga4 "
+          fi
+          if [ "${{ steps.gsc.outputs.available }}" = "true" ]; then
+            GSC_ARG="--gsc data/analytics/gsc_weekly.json"
+          else
+            GSC_ARG="--gsc "
+          fi
+          python scripts/append_analytics_history.py $GA4_ARG $GSC_ARG
+
+      - name: Create history update PR + auto-merge
+        if: steps.ga4.outputs.available == 'true' || steps.gsc.outputs.available == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+          git add data/analytics/history/ || true
+
+          if git diff --cached --quiet; then
+            echo "No history changes to commit (already accumulated today?); skipping PR."
+            exit 0
+          fi
+
+          # 既存 open analytics-history PR があれば閉じる (日次重複防止)
+          echo "Closing any prior open analytics-history PRs..."
+          gh pr list --base main --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("analytics-history/")) | .number' | while read -r pr_num; do
+            if [ -n "$pr_num" ]; then
+              echo "Closing old PR #$pr_num and deleting branch..."
+              gh pr close "$pr_num" -d || true
+            fi
+          done
+
+          BRANCH="analytics-history/${{ github.run_id }}"
+          git config user.name "omochairo-fetch-bot[bot]"
+          git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit -m "data(analytics): daily history append (run ${{ github.run_id }})"
+          git push -u origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "data(analytics): daily history append (run ${{ github.run_id }})" \
+            --body "Automated daily GA4/GSC history accumulation. Adds JSONL rows for the previous fetched day under data/analytics/history/. Idempotent via seen_dates.json — re-runs for the same date are no-op. See data/analytics/history/schema.json for field documentation. Refs #1357 B-0." \
+            --base main \
+            --head "$BRANCH")
+          echo "Created: $PR_URL"
+
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge enabled on $PR_URL"
+          else
+            echo "::warning::Could not enable auto-merge on $PR_URL"
+          fi
+        continue-on-error: true

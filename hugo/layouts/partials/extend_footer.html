@@ -1,8 +1,25 @@
+{{- /* #1366 お気に入り (♡) — 全ページで読み込み (header badge + product card toggle)。 */ -}}
+{{- $fav := resources.Get "js/favorites.js" | resources.Minify | resources.Fingerprint "sha256" }}
+{{- if $fav }}
+<script defer src="{{ $fav.RelPermalink }}" integrity="{{ $fav.Data.Integrity }}" crossorigin="anonymous"></script>
+{{- end }}
+
+{{- /* #1367 最近見た商品 — 全ページで読み込み (商品ページで auto-push、home + post pages で render)。 */ -}}
+{{- $recent := resources.Get "js/recently_viewed.js" | resources.Minify | resources.Fingerprint "sha256" }}
+{{- if $recent }}
+<script defer src="{{ $recent.RelPermalink }}" integrity="{{ $recent.Data.Integrity }}" crossorigin="anonymous"></script>
+{{- end }}
+
 {{- /* Wikipedia 連携ボトムシート (Issue #683)
        記事ページのみで wiki_tooltip.js + wiki_tooltip.css を読み込む。
        CSS は assets/css/extended/wiki_tooltip.css が PaperMod の自動取り込みで
        バンドルされるため、ここでは JS のみ defer 読み込み + fingerprint で配信。 */ -}}
 {{- if and .IsPage (eq .Section "posts") }}
+  {{- /* #1368 モバイル sticky CTA bar — 商品ページ限定 */ -}}
+  {{- $stickyCta := resources.Get "js/mobile_sticky_cta.js" | resources.Minify | resources.Fingerprint "sha256" }}
+  {{- if $stickyCta }}
+<script defer src="{{ $stickyCta.RelPermalink }}" integrity="{{ $stickyCta.Data.Integrity }}" crossorigin="anonymous"></script>
+  {{- end }}
   {{- $wiki := resources.Get "js/wiki_tooltip.js" | resources.Minify | resources.Fingerprint "sha256" }}
   {{- if $wiki }}
 <script defer src="{{ $wiki.RelPermalink }}" integrity="{{ $wiki.Data.Integrity }}" crossorigin="anonymous"></script>
@@ -14,6 +31,16 @@
   {{- $carousel := resources.Get "js/carousel_swipe.js" | resources.Minify | resources.Fingerprint "sha256" }}
   {{- if $carousel }}
 <script defer src="{{ $carousel.RelPermalink }}" integrity="{{ $carousel.Data.Integrity }}" crossorigin="anonymous"></script>
+  {{- end }}
+
+  {{- /* Issue #600 Phase B: 楽天ランキング順位推移チャート。Chart.js (UMD) を CDN
+         から defer 読み込みし、renderer は assets パイプライン経由でバンドル。
+         該当 ASIN に履歴がなければ partial が <section> を出さないので、
+         renderer は探索のみで no-op になり描画コストは発生しない。 */ -}}
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4" crossorigin="anonymous"></script>
+  {{- $rankChart := resources.Get "js/ranking_history_chart.js" | resources.Minify | resources.Fingerprint "sha256" }}
+  {{- if $rankChart }}
+<script defer src="{{ $rankChart.RelPermalink }}" integrity="{{ $rankChart.Data.Integrity }}" crossorigin="anonymous"></script>
   {{- end }}
 
   <!-- スクロール進捗バー -->

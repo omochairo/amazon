@@ -123,6 +123,18 @@ def _safety_score(brand: NormalizedBrand, product: dict) -> tuple[int, str]:
 
 
 def _age_fit_score(product: dict) -> tuple[int, str, Optional[tuple[int, int]]]:
+    """対象年齢の明確さスコア (0-10) を返す。
+
+    玩具安全基準 / ST マーク制度では「対象年齢 = 下限のみ明示 (X歳以上)」が
+    業界標準フォーマット。これは「安全に遊び始められる年齢」を伝える正式表記で、
+    上限の有無は「子どもの成長次第で長く遊べる」ことを意味するため、買い手視点では
+    範囲表記 (X歳〜Y歳) と同等の情報量を持つ。よって両者を満点 (10) とする。
+    上限の有無は longevity 軸 (brand_tier + media_exposure) で別途評価済。
+
+    旧設計 (#1107 follow-up 以前) は下限のみ表記を AG=8 にしていたため、78.6%
+    (422/537 件) の記事が AG=10 に到達せず、サイト全体で実質 -2 raw の常時
+    ペナルティを抱えていた。
+    """
     # v5: product.target_age を優先 (Jules 出力の構造化フィールド)
     # 後方互換: なければ age / age_band もフォールバック対象
     raw = str(
@@ -132,7 +144,8 @@ def _age_fit_score(product: dict) -> tuple[int, str, Optional[tuple[int, int]]]:
         or ""
     )
     if not raw.strip():
-        return 5, "対象年齢の詳細は商品ページに準じます。お子さまの発達段階に合わせて選んでください。", None
+        # 対象年齢の記載が一切ない: 安全に与えられる下限が分からない真の情報不足
+        return 4, "対象年齢の詳細は商品ページに準じます。お子さまの発達段階に合わせて選んでください。", None
 
     # 範囲: "3歳〜7歳" / "6ヶ月〜2歳"
     # 月単位の場合は age_range タプルでは歳換算 (months/12, 小数切上げ) を返す
@@ -150,13 +163,16 @@ def _age_fit_score(product: dict) -> tuple[int, str, Optional[tuple[int, int]]]:
         return 10, f"対象年齢は{label}に明確に設定されており、その年齢帯のお子さまに最適化された遊び方ができます。", (lo, hi)
 
     # 下限のみ: "6歳以上" / "3歳〜" / "12ヶ月から"
+    # 玩具安全基準の標準表記。下限が parseable なら買い手は「安全に与えられる年齢」を
+    # 判断できる十分な情報を持つため満点とする (#1107 follow-up)。
     m = re.search(r"(\d+)\s*(歳|才|ヶ月)\s*(?:〜|~|から|以上|\+)", raw)
     if m:
         n, u = int(m.group(1)), m.group(2)
         lo = _to_years(n, u)
-        return 8, f"{n}{u}以上向けの設計で、{n}{u}前後〜小学生のお子さまに適しています。上限の指定はなく、興味があれば長く楽しめます。", (lo, lo + 5)
+        return 10, f"{n}{u}以上の対象年齢が明示されており、安全に遊び始められる年齢が明確です。上限の指定はなく、興味があれば長く楽しめる設計です。", (lo, lo + 5)
 
-    return 5, f"対象年齢の記載は『{raw[:20]}』です。お子さまの月齢・発達状況に合わせてご検討ください。", None
+    # 数値が抽出できない textual mention のみ ("幼児向け" 等)
+    return 6, f"対象年齢の記載は『{raw[:20]}』です。お子さまの月齢・発達状況に合わせてご検討ください。", None
 
 
 _EDU_DOMAIN_PHRASES = {
@@ -206,6 +222,50 @@ def _edu_value_score(article: dict, brand: NormalizedBrand) -> tuple[int, str]:
     return pts, reason
 
 
+@dataclass
+class _MediaExposureMetrics:
+    """Counter for ``_media_exposure_score`` data availability per ASIN.
+
+    Distinguishes between "fetch cycle未到達" (file absent) and "API returned 0
+    hits" (file present but empty). Issue #677.
+    """
+
+    total: int = 0
+    yt_missing: int = 0
+    yt_empty: int = 0
+    news_missing: int = 0
+    news_empty: int = 0
+    omcha_missing: int = 0
+    omcha_empty: int = 0
+
+    def as_dict(self) -> dict[str, int]:
+        return {
+            "total": self.total,
+            "yt_missing": self.yt_missing,
+            "yt_empty": self.yt_empty,
+            "news_missing": self.news_missing,
+            "news_empty": self.news_empty,
+            "omcha_missing": self.omcha_missing,
+            "omcha_empty": self.omcha_empty,
+        }
+
+
+_METRICS = _MediaExposureMetrics()
+
+
+def get_media_exposure_metrics() -> _MediaExposureMetrics:
+    """Snapshot of the missing/empty counters accumulated since import (or last
+    ``reset_media_exposure_metrics`` call). Consumed by build_post manifest
+    output (Issue #677)."""
+    return _METRICS
+
+
+def reset_media_exposure_metrics() -> None:
+    """Reset the module-level metrics counters. Useful for tests."""
+    global _METRICS
+    _METRICS = _MediaExposureMetrics()
+
+
 def _count_items(path: pathlib.Path) -> int:
     if not path.exists():
         return 0
@@ -215,6 +275,22 @@ def _count_items(path: pathlib.Path) -> int:
         return 0
     items = data.get("items") if isinstance(data, dict) else data
     return len(items) if isinstance(items, list) else 0
+
+
+def _file_state(path: pathlib.Path) -> str:
+    """Return ``"missing"`` / ``"empty"`` / ``"present"`` for an items-file
+    cache path. Reused by ``_media_exposure_score`` to distinguish
+    fetch-cycle-未到達 from API-returned-0-hits without re-reading the file."""
+    if not path.exists():
+        return "missing"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return "missing"
+    items = data.get("items") if isinstance(data, dict) else data
+    if isinstance(items, list) and items:
+        return "present"
+    return "empty"
 
 
 def _omcha_top_score(path: pathlib.Path) -> int:
@@ -249,9 +325,28 @@ def _media_exposure_score(
         reason = "ASIN 情報が不足しているため、メディア露出は中立評価としています。"
         return floor, reason
     d = repo_root / "data" / "raw" / "per_asin" / asin
-    yt = _count_items(d / "youtube.json")
-    nw = _count_items(d / "news.json")
-    om_top = _omcha_top_score(d / "omcha_related.json")
+    yt_path = d / "youtube.json"
+    news_path = d / "news.json"
+    omcha_path = d / "omcha_related.json"
+    yt_state = _file_state(yt_path)
+    news_state = _file_state(news_path)
+    omcha_state = _file_state(omcha_path)
+    _METRICS.total += 1
+    if yt_state == "missing":
+        _METRICS.yt_missing += 1
+    elif yt_state == "empty":
+        _METRICS.yt_empty += 1
+    if news_state == "missing":
+        _METRICS.news_missing += 1
+    elif news_state == "empty":
+        _METRICS.news_empty += 1
+    if omcha_state == "missing":
+        _METRICS.omcha_missing += 1
+    elif omcha_state == "empty":
+        _METRICS.omcha_empty += 1
+    yt = _count_items(yt_path)
+    nw = _count_items(news_path)
+    om_top = _omcha_top_score(omcha_path)
     yt_p = 6 if yt >= 3 else 3 if yt >= 1 else 0
     nw_p = 5 if nw >= 2 else 2 if nw >= 1 else 0
     om_p = 4 if om_top >= 30 else 3 if om_top >= 15 else 2 if om_top >= 10 else 0
@@ -388,12 +483,25 @@ def calculate(
     pv, pr = _price_value_score(product, age_range)
 
     # 各要素配点: brand_tier(25) + safety(10) + age(10) + edu(15) + media(15) + market(10) + price(15) = max 100
-    # 係数 0.4 でリマップ: 上位集中を抑制しつつ、D tier も floor 50 で下支え。
-    # マップ式: final = max(50, min(100, 50 + raw * 0.4))
-    #   raw 0 -> 50, raw 25 -> 60, raw 50 -> 70, raw 75 -> 80, raw 100 -> 90
-    # 2026-05-19: 110→100 / 0.5→0.4 に変更。raw cap が頻発し上位解像度が潰れる問題を解消
+    #
+    # 線形リマップ: total = max(50, min(100, round(50 + max(0, raw - 30) * 5/7)))
+    #   raw 30 -> 50 / raw 50 -> 64 / raw 65 -> 75 / raw 80 -> 86 / raw 100 -> 100
+    #
+    # 設計意図:
+    #   - 上限は raw 100 → total 100 を維持 (edu_value=15 を満たした S-tier 完璧記事の希少枠)
+    #   - 下限は実データ最弱記事 (raw≈30 = D-tier ノーブランド + 限定情報) を total 50 に対応付け、
+    #     旧 (50 + raw*0.5) で 65 に張り付いていた下端を 50 まで開放して分布を広げる
+    #   - 中域は (raw - 30) * 5/7 で線形に按分。raw 80 = 86 のように高評価記事に十分な解像度を維持
+    #
+    # 履歴:
+    #   2026-05-19: 旧 (raw_cap=110, 係数 0.5) → (raw_cap=100, 係数 0.4) に変更。raw cap 飽和は
+    #               解消したが係数まで下げたため total max が 90 に圧縮される副作用発生。
+    #   #1107 follow-up A: raw_cap=100 のまま係数 0.5 に戻し total max=100 を回復。ただし
+    #               実データ下限 raw≈30 が total 65 で頭打ちになり分布 65-99 と狭かった。
+    #   #1107 follow-up B (本変更): 下端を raw 30→50 に再マッピングし分布を 50-99 へ拡張。
+    #               上端は変更せず (ユーザー要望: 上限は現状維持で十分)。
     raw_total = max(0, min(100, bt + sf + ag + ev + me + mm + pv))
-    total = max(50, min(100, round(50 + raw_total * 0.4)))
+    total = max(50, min(100, round(50 + max(0, raw_total - 30) * 5 / 7)))
     return ScoreResult(
         total_100=total,
         ivs_score=round(total / 20.0, 2),
@@ -439,7 +547,7 @@ def _cli() -> None:
         for f in files
         if not f.endswith((".enrichment.json", ".quality.json", ".seo.json"))
     ]
-    print(f"{'ASIN':12} {'jules':>5} {'new':>5} {'/100':>5}  brand[tier]   breakdown")
+    print(f"{'ASIN':12} {'score':>5} {'/100':>5}  brand[tier]   breakdown")
     for f in files:
         d = json.loads(pathlib.Path(f).read_text(encoding="utf-8"))
         product = d.get("product") or {}
@@ -447,11 +555,20 @@ def _cli() -> None:
         m = re.search(r"(B0[A-Z0-9]{8})", f)
         asin = m.group(1) if m else ""
         r = calculate(d, b, asin=asin)
-        jules = product.get("ivs_score", "?")
         bd = r.breakdown
         bd_str = f"BT:{bd['brand_tier']} SF:{bd['safety_cert']} AG:{bd['age_fit']} EV:{bd['edu_value']} ME:{bd['media_exposure']} MK:{bd['multi_market']} PV:{bd['price_value']}"
         print(
-            f"{asin:12} {str(jules):>5} {r.ivs_score:>5} {r.total_100:>5}  {b.canonical}[{b.tier}]   {bd_str}"
+            f"{asin:12} {r.ivs_score:>5} {r.total_100:>5}  {b.canonical}[{b.tier}]   {bd_str}"
+        )
+
+    m = get_media_exposure_metrics()
+    if m.total:
+        print(
+            "score_calc media-exposure: "
+            f"yt_missing={m.yt_missing}/{m.total} (empty={m.yt_empty}), "
+            f"news_missing={m.news_missing}/{m.total} (empty={m.news_empty}), "
+            f"omcha_missing={m.omcha_missing}/{m.total} (empty={m.omcha_empty}). "
+            "missing=fetch サイクル未到達 / empty=API で 0 hit"
         )
 
 

@@ -1,0 +1,38 @@
+{{- /*
+  /favorites/ — お気に入り一覧 (#1366)
+  サーバ側で render しない。favorites.js が localStorage から読んで
+  #favorites-list に hydrate する。SSR でカード描画しないのは、選択状態が
+  ユーザーローカル (localStorage) で、SSR 値はキャッシュされ得るため。
+  (compare.html と同じ設計方針)
+*/ -}}
+{{- define "main" }}
+
+<header class="page-header">
+  <h1>{{ .Title }}</h1>
+  {{- if .Description }}
+  <div class="post-description">{{ .Description }}</div>
+  {{- end }}
+</header>
+
+<div class="favorites-wrapper">
+  <div id="favorites-list" class="favorites-list" role="region" aria-label="お気に入り商品一覧">
+    {{- /* favorites.js が localStorage から hydrate */ -}}
+  </div>
+
+  <div id="favorites-empty" class="favorites-empty" style="display:none;">
+    <div class="favorites-empty-icon" aria-hidden="true">♡</div>
+    <h2 class="favorites-empty-title">気になるおもちゃはまだありません</h2>
+    <p class="favorites-empty-lead">商品カードの <strong>♡</strong> アイコンをタップしてお気に入りに追加すると、ここで一覧できます。次回訪問時もブラウザに保存されるので、じっくり比較検討できます。</p>
+    <div class="favorites-empty-cta">
+      <a class="favorites-empty-btn primary" href="{{ "diagnosis/" | relURL }}">🧸 おもちゃ診断を試す</a>
+      <a class="favorites-empty-btn" href="{{ "ranking/" | relURL }}">🔥 楽天ランキングを見る</a>
+      <a class="favorites-empty-btn" href="{{ "posts/" | relURL }}">📚 記事一覧から探す</a>
+    </div>
+  </div>
+
+  <p class="favorites-note">
+    ※ お気に入りはお使いのブラウザに保存されます (localStorage)。別の端末では引き継がれません。プライベートブラウズ時は閉じると消えます。
+  </p>
+</div>
+
+{{- end }}

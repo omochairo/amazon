@@ -31,7 +31,7 @@ brands:
     region: JP
     safety_default: [ST]
   - canonical: タカラトミー
-    aliases: [タカラトミー(TAKARA TOMY), TAKARA TOMY, タカラトミーアーツ, タカラトミーマーケティング]
+    aliases: [タカラトミー(TAKARA TOMY), TAKARA TOMY, タカラトミーアーツ, タカラトミーマーケティング, トミカ, TOMICA, プラレール, PLARAIL, リカちゃん, ベイブレード, BEYBLADE, Beyblade, ベイブレードX, "ベイブレードx", ベイブレードバースト, ゾイド, ZOIDS, デュエル・マスターズ]
     tier: S
     region: JP
     safety_default: [ST]
@@ -40,13 +40,17 @@ brands:
     tier: S
     region: DK
   - canonical: マテル
-    aliases: [マテル(Mattel), Mattel, マテル・インターナショナル, フィッシャープライス, Fisher-Price, バービー, ホットウィール]
+    aliases: [マテル(Mattel), Mattel, マテル・インターナショナル, フィッシャープライス, Fisher-Price, バービー, ホットウィール, マテルゲーム, "メガ(MEGA)", MEGA, "メガ", Mega Bloks, メガブロック, マッチボックス, Matchbox]
     tier: S
     region: US
   - canonical: ハズブロ
-    aliases: [ハズブロ(Hasbro), Hasbro, ハズブロジャパン]
+    aliases: [ハズブロ(Hasbro), Hasbro, ハズブロジャパン, ナーフ, NERF, Nerf, プレイドー, Play-Doh, Play Doh]
     tier: S
     region: US
+  - canonical: 任天堂
+    aliases: [任天堂, Nintendo, ニンテンドー, NINTENDO]
+    tier: S
+    region: JP
 
   # ==========================================
   # Tier A: 国内中堅 + 海外有名
@@ -72,7 +76,7 @@ brands:
     region: JP
     safety_default: [ST]
   - canonical: パイロットコーポレーション
-    aliases: [パイロットコーポレーション, PILOT, メルちゃん, パイロットインキ]
+    aliases: [パイロットコーポレーション, PILOT, メルちゃん, パイロットインキ, パイロット]
     tier: A
     region: JP
     safety_default: [ST]
@@ -96,6 +100,11 @@ brands:
     tier: A
     region: JP
     safety_default: [ST]
+  - canonical: アイムトイ
+    aliases: [アイムトイ, アイムトイ(Im TOY), Im TOY, "I'm TOY", IM TOY, ImTOY, エデュテ, "エデュテ (Edute)", "エデュテ(Edute)", Edute, Edutē]
+    tier: A
+    region: JP
+    safety_default: [CE, 食品衛生法]
   - canonical: メガハウス
     aliases: [メガハウス(MegaHouse), MegaHouse]
     tier: A
@@ -208,6 +217,10 @@ brands:
     region: TH
   - canonical: ファットブレイントイズ
     aliases: [ファットブレイントイズ, Fat Brain Toys]
+    tier: A
+    region: US
+  - canonical: Osmo
+    aliases: [Osmo, OSMO, オズモ]
     tier: A
     region: US
 
@@ -543,13 +556,53 @@ brands:
     tier: B
     region: NL
   - canonical: BabyBus
-    aliases: [BabyBus, babybus, ベイビーバス]
+    aliases: [BabyBus, babybus, ベイビーバス, ベビーバス]
     tier: B
     region: CN
   - canonical: Apitor
     aliases: [Apitor, apitor, アピター]
     tier: B
     region: CN
+  - canonical: すごろくや
+    aliases: [すごろくや, スゴロクヤ, Sugorokuya]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: アークライト
+    aliases: [アークライト, "アークライト(Arclight)", Arclight, ARCLIGHT]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: ThinkFun
+    aliases: [ThinkFun, THINKFUN, シンクファン]
+    tier: B
+    region: US
+  - canonical: エレキット
+    aliases: [エレキット, Elekit, ELEKIT, イーケイジャパン]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: グッドスマイルカンパニー
+    # 2026-06-02 (session 77 / #1329 Phase 3.0): GSC で moderoid/モデロイド を確認、aliases 追加
+    aliases: [グッドスマイルカンパニー, Good Smile Company, GOOD SMILE COMPANY, グッスマ, GSC, グッスマカンパニー, MODEROID, moderoid, モデロイド, ねんどろいど, Nendoroid, figma, フィグマ]
+    tier: B
+    region: JP
+  - canonical: クロバー
+    aliases: [クロバー, "クロバー(Clover)", "クロバー (Clover)", Clover, CLOVER, クロバー手芸]
+    tier: B
+    region: JP
+  - canonical: Pinkfong
+    aliases: [Pinkfong, PINKFONG, ピンキッツ, Pinkfong Baby Shark]
+    tier: B
+    region: KR
+  - canonical: Goliath
+    aliases: [Goliath, GOLIATH, "Goliath(ゴライアス)", "Goliath (ゴライアス)", ゴライアス]
+    tier: B
+    region: NL
+  - canonical: LabelLabel
+    aliases: [LabelLabel, "Label Label", ラベルラベル]
+    tier: B
+    region: NL
 
   # ==========================================
   # Tier C: 地方問屋・特定卸・フックトイ・100均系他（すべてST有）
@@ -1137,3 +1190,7 @@ brands:
   - {canonical: Vanplay, tier: D, region: CN, aliases: [VANPLAY, VanPlay, vanplay]}
   - {canonical: Mamimami Home, tier: D, region: CN, aliases: [Mamimami Home, MamimamiHome, mamimami home, mamimamihome]}
   - {canonical: SHOP SHIMATARO, tier: D, region: JP, aliases: [SHOP SHIMATARO, おもちゃとホビー SHOP SHIMATARO, SHIMATARO]}
+  # 2026-06-02 (session 77 / #1329 Phase 3.0): GSC で imp=7 のブランド名指名
+  # (ロンビー / ロンビー おもちゃ) を確認 → canonical 追加。商品は B0875FV2BQ
+  # (ロンビー(Lon-Bi) ボードゲーム系)。製造拠点不明 = unknown / tier D。
+  - {canonical: ロンビー, tier: D, region: unknown, aliases: [ロンビー, "ロンビー(Lon-Bi)", Lon-Bi, LON-BI, "lon-bi", LonBi]}

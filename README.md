@@ -7,39 +7,7 @@
 
 ## 🏗️ アーキテクチャ
 
-システムの全体像は以下の通りです。
-データ収集から AI による記事執筆、静的サイト生成、そして GitHub Pages への自動デプロイまでが GitHub Actions を用いて連携しています。
-
-```mermaid
-graph TD
-    A[外部API<br/>Amazon/Rakuten/Yahoo/YouTube] -->|Fetch| B(data/raw/*.json)
-    B -->|Input| C{Jules<br/>AI Agent}
-    C -->|Generate| D(data/articles/*.json)
-    C -->|Enrichment| D2(data/articles/*.enrichment.json)
-    C -->|SEO| D3(data/articles/*.seo.json)
-    
-    D & D2 & D3 -->|Merge & Render| E[scripts/build_post.py]
-    E --> F[hugo/content/posts/*.md]
-    F -->|SSG| G[Hugo]
-    G -->|Deploy| H((GitHub Pages))
-    
-    subgraph Data Pipeline
-    B
-    end
-    
-    subgraph AI Content Generation
-    C
-    D
-    D2
-    D3
-    end
-    
-    subgraph Static Site Generation
-    E
-    F
-    G
-    end
-```
+外部 API からのデータ収集、AI エージェント (Jules) による記事生成、Hugo による静的サイトビルド、GitHub Pages への自動デプロイまでを GitHub Actions ベースの自動化パイプラインで運営しています。
 
 ---
 
@@ -120,6 +88,16 @@ GitHub Actions およびローカルでのデータ取得に以下の環境変�
 - **TODO リストはソースコード内やローカルファイル（メモリ内）に持たない** ことを原則とします。
 - 課題やタスクは全て **GitHub Issues** で一元管理します。
 - Jules 起動時は `SessionStart hook` 等を利用して Issue ベースで優先度を判断し、作業を進めます。
+
+---
+
+## 📄 ライセンス / 利用条件
+
+本リポジトリのソースコード・記事・データを含むすべての成果物は **All Rights Reserved (無断複製・転載・再配布禁止)** です。
+OSS ライセンスは付与していません。fork / コピー / 派生サイトの作成、商用利用、データの再利用等を希望される場合は、事前に下記までご相談ください。
+
+- お問い合わせ: [https://omcha.jp/contact/](https://omcha.jp/contact/)
+- もしくは本リポジトリの [GitHub Issues](https://github.com/omochairo/amazon/issues) にて
 
 ---
 <small>© omochairo Lab. All rights reserved.</small>

@@ -104,6 +104,59 @@ class FetchSummaryTest(unittest.TestCase):
         self.assertIsNone(fetch_wiki_data.fetch_summary("x", sess))
 
 
+class RedirectMismatchTest(unittest.TestCase):
+    """#1363 — Wikipedia が target と無関係な記事に redirect する事例を遮断。"""
+
+    def test_title_equals_target_is_ok(self):
+        self.assertTrue(fetch_wiki_data._is_acceptable_redirect("BRIO", "ブリオ", "ブリオ"))
+
+    def test_substring_redirect_is_rejected_when_not_in_allowlist(self):
+        # 'ブリオ' ⊂ 'ホンダ・ブリオ' のような subset 包含は別エンティティの兆候。
+        # 必要なら KNOWN_OK_REDIRECTS で個別許可する運用。
+        self.assertFalse(fetch_wiki_data._is_acceptable_redirect("LEGO", "レゴ", "レゴグループ"))
+
+    def test_known_ok_redirect_is_accepted(self):
+        self.assertTrue(
+            fetch_wiki_data._is_acceptable_redirect("KUMON", "くもん出版", "公文教育研究会")
+        )
+
+    def test_unrelated_redirect_is_rejected(self):
+        # BRIO (玩具) → ホンダ・ブリオ (自動車) のような事例
+        self.assertFalse(
+            fetch_wiki_data._is_acceptable_redirect("BRIO", "ブリオ", "ホンダ・ブリオ")
+        )
+        self.assertFalse(
+            fetch_wiki_data._is_acceptable_redirect("MIC", "エムアイシー", "Manaca")
+        )
+        self.assertFalse(
+            fetch_wiki_data._is_acceptable_redirect("YELLOW", "イエロー", "黄色")
+        )
+
+    def test_unrelated_redirect_drops_in_fetch_summary(self):
+        sess = MagicMock()
+        sess.get.return_value = _mock_response(200, {
+            "title": "ホンダ・ブリオ",
+            "extract": "ブリオ (BRIO) は本田技研工業がアジア新興国向けに生産・販売している自動車である。",
+            "content_urls": {"desktop": {"page": "https://ja.wikipedia.org/wiki/ホンダ・ブリオ"}},
+        })
+        # source_key 付きだとブランドのつもりの redirect として遮断
+        self.assertIsNone(
+            fetch_wiki_data.fetch_summary("ブリオ", sess, source_key="BRIO")
+        )
+
+    def test_source_key_absent_keeps_legacy_behavior(self):
+        # source_key を渡さない既存呼び出し (テスト互換) は redirect 判定を行わない
+        sess = MagicMock()
+        sess.get.return_value = _mock_response(200, {
+            "title": "ホンダ・ブリオ",
+            "extract": "ブリオは自動車である。",
+            "content_urls": {"desktop": {"page": "https://example.com"}},
+        })
+        result = fetch_wiki_data.fetch_summary("ブリオ", sess)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["title"], "ホンダ・ブリオ")
+
+
 class BuildCacheTest(unittest.TestCase):
     def test_local_entry_copied_directly(self):
         mapping = {"グッド・トイ": {"type": "local", "title": "グッド・トイ", "extract": "...", "url": "https://goodtoy.jp/"}}

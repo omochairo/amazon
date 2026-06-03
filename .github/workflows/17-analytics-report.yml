@@ -1,0 +1,206 @@
+name: Analytics Weekly Report (GA4 + GSC)
+
+# Issue #1316 Phase 1+2 — GA4 Data API + GSC Search Analytics API から週次データを
+# 取得し、analytics ラベル付き Issue として投稿する read-only 観察 workflow。
+#
+# 設計判断:
+#   - cron: 月曜 09:00 JST (= 日曜 00:00 UTC)。前週のおおよそをカバー
+#   - score / narrative / 記事生成パイプラインには一切影響しない
+#   - artifact upload のみ。main commit は App token 不要のため避ける
+#   - GA4 は SA JSON 認証 ([[omochairo-ga4-gsc-sa-add-bug]] の Admin API 経由で登録済)
+#   - GSC は OAuth refresh token 認証 (UI バグで SA が GSC に追加できないため)
+#   - GSC secrets 未設定なら GSC step は skip して GA4 のみで報告
+#
+# 必須 secrets (GA4):
+#   - GA4_SA_JSON                Service Account JSON 全文
+#   - GA4_PROPERTY_ID            GA4 property の数値 ID
+#
+# 任意 secrets (GSC, Phase 2 で追加):
+#   - GSC_OAUTH_CLIENT_ID        Desktop OAuth Client の Client ID
+#   - GSC_OAUTH_CLIENT_SECRET    同 Client Secret
+#   - GSC_OAUTH_REFRESH_TOKEN    OAuth Playground 経由で取得した refresh token
+#   - GSC_SITE_URL               例: https://navi.omcha.jp/ (URL-prefix) or sc-domain:omcha.jp
+
+on:
+  schedule:
+    # 月曜 09:00 JST = 日曜 00:00 UTC
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Lookback window in days (default 7)'
+        required: false
+        default: '7'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: analytics-weekly-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-analytics-data google-auth google-auth-oauthlib google-api-python-client
+
+      - name: Fetch GA4 data
+        env:
+          GA4_SA_JSON: ${{ secrets.GA4_SA_JSON }}
+          GA4_PROPERTY_ID: ${{ secrets.GA4_PROPERTY_ID }}
+          INPUT_DAYS: ${{ github.event.inputs.days }}
+        run: |
+          set -e
+          DAYS="${INPUT_DAYS:-7}"
+          if [ -z "$GA4_SA_JSON" ] || [ -z "$GA4_PROPERTY_ID" ]; then
+            echo "::error::GA4_SA_JSON or GA4_PROPERTY_ID secret is not set"
+            exit 1
+          fi
+          python scripts/fetch_ga4.py --days "$DAYS"
+
+      - name: Fetch GSC data (optional)
+        id: gsc
+        env:
+          GSC_OAUTH_CLIENT_ID: ${{ secrets.GSC_OAUTH_CLIENT_ID }}
+          GSC_OAUTH_CLIENT_SECRET: ${{ secrets.GSC_OAUTH_CLIENT_SECRET }}
+          GSC_OAUTH_REFRESH_TOKEN: ${{ secrets.GSC_OAUTH_REFRESH_TOKEN }}
+          GSC_SITE_URL: ${{ secrets.GSC_SITE_URL }}
+          INPUT_DAYS: ${{ github.event.inputs.days }}
+        run: |
+          set +e
+          DAYS="${INPUT_DAYS:-7}"
+          if [ -z "$GSC_OAUTH_REFRESH_TOKEN" ] || [ -z "$GSC_SITE_URL" ]; then
+            echo "::notice::GSC secrets not configured — skipping GSC fetch (Phase 1 only)"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          python scripts/fetch_gsc.py --days "$DAYS"
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            echo "::warning::GSC fetch failed (rc=$rc) — continuing with GA4-only report"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build markdown summary
+        id: summary
+        run: |
+          set -e
+          python scripts/format_ga4_report.py --input data/analytics/ga4_weekly.json > /tmp/report.md
+          if [ "${{ steps.gsc.outputs.available }}" = "true" ]; then
+            echo "" >> /tmp/report.md
+            echo "---" >> /tmp/report.md
+            echo "" >> /tmp/report.md
+            python scripts/format_gsc_report.py --input data/analytics/gsc_weekly.json >> /tmp/report.md
+          fi
+          START=$(python -c "import json; print(json.load(open('data/analytics/ga4_weekly.json'))['range']['start'])")
+          END=$(python -c "import json; print(json.load(open('data/analytics/ga4_weekly.json'))['range']['end'])")
+          echo "range_start=$START" >> "$GITHUB_OUTPUT"
+          echo "range_end=$END" >> "$GITHUB_OUTPUT"
+          echo "--- preview ---"
+          head -60 /tmp/report.md
+          echo "--- end ---"
+
+      - name: Detect low-CTR pages (A-1, epic #1356)
+        id: low_ctr
+        if: steps.gsc.outputs.available == 'true'
+        run: |
+          set -e
+          python scripts/detect_low_ctr_pages.py
+          COUNT=$(python -c "import json; print(len(json.load(open('data/analytics/low_ctr_pages.json'))['detected']))")
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "detected $COUNT low-CTR pages"
+
+      - name: Detect opportunity pages (A-2, epic #1356)
+        id: opportunity
+        if: steps.gsc.outputs.available == 'true'
+        run: |
+          set -e
+          python scripts/detect_opportunity_pages.py
+          COUNT=$(python -c "import json; print(len(json.load(open('data/analytics/opportunity_pages.json'))['detected']))")
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "detected $COUNT opportunity pages"
+
+      - name: Suggest brand_taxonomy additions (A-6, epic #1356)
+        id: brand_suggest
+        if: steps.gsc.outputs.available == 'true'
+        run: |
+          set -e
+          python scripts/suggest_brand_taxonomy_additions.py
+          COUNT=$(python -c "import json; print(len(json.load(open('data/analytics/brand_taxonomy_suggestions.json'))['candidates']))")
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "detected $COUNT brand taxonomy candidates"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: analytics-weekly-${{ steps.summary.outputs.range_end }}
+          path: |
+            data/analytics/ga4_weekly.json
+            data/analytics/gsc_weekly.json
+            data/analytics/low_ctr_pages.json
+            data/analytics/opportunity_pages.json
+            data/analytics/brand_taxonomy_suggestions.json
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Open rewrite Issues for low-CTR pages
+        if: steps.low_ctr.outputs.count != '0' && steps.low_ctr.outputs.count != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          python scripts/open_low_ctr_issues.py
+
+      - name: Open opportunity Issues
+        if: steps.opportunity.outputs.count != '0' && steps.opportunity.outputs.count != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          python scripts/open_opportunity_issues.py
+
+      - name: Open brand_taxonomy suggestion Issue
+        if: steps.brand_suggest.outputs.count != '0' && steps.brand_suggest.outputs.count != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          python scripts/open_brand_suggestion_issue.py
+
+      - name: Create weekly Issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RANGE_START: ${{ steps.summary.outputs.range_start }}
+          RANGE_END: ${{ steps.summary.outputs.range_end }}
+          GSC_AVAILABLE: ${{ steps.gsc.outputs.available }}
+        run: |
+          set -e
+          if [ "$GSC_AVAILABLE" = "true" ]; then
+            TITLE="Analytics weekly report ${RANGE_START} 〜 ${RANGE_END} (GA4+GSC)"
+          else
+            TITLE="GA4 weekly report ${RANGE_START} 〜 ${RANGE_END}"
+          fi
+          gh issue create \
+            -R "${{ github.repository }}" \
+            --title "$TITLE" \
+            --label "analytics,observation" \
+            --body-file /tmp/report.md

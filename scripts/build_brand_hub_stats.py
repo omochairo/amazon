@@ -46,7 +46,28 @@ GENERIC_TAG_STOPWORDS = {
     "カードゲーム",
     "ぬいぐるみ",
     "人形",
+    # 2026-06-01 #731 Part A follow-up: Mamimami Home の top_3_series が
+    # "出産祝い, 0歳, 1歳" になり narrative が generic tag を太字化した事例。
+    # ライフイベント / 性別 / 「子供」系を除外し、年齢タグは下の正規表現で弾く。
+    "出産祝い",
+    "誕生日",
+    "入園祝い",
+    "入学祝い",
+    "初節句",
+    "ハーフバースデー",
+    "クリスマス",
+    "クリスマスプレゼント",
+    "男の子",
+    "女の子",
+    "赤ちゃん",
+    "子供",
+    "子ども",
+    "幼児",
+    "乳児",
 }
+
+# 「0歳」「1歳半」「6ヶ月」等は商品シリーズではないので top_3_series から除外する。
+_AGE_TAG_STOPWORD_RE = re.compile(r"^\d+\s*(?:歳(?:半)?|ヶ月|か月|カ月|ヵ月)$")
 
 _AGE_RE_NEN = re.compile(r"(\d+)\s*歳(半)?")
 _AGE_RE_MONTH = re.compile(r"(\d+)\s*(?:ヶ月|か月|カ月|ヵ月)")
@@ -82,7 +103,7 @@ def _series_candidates(tags: Iterable[str] | None) -> list[str]:
     out: list[str] = []
     for t in list(tags)[1:]:
         t = (t or "").strip()
-        if not t or t in GENERIC_TAG_STOPWORDS:
+        if not t or t in GENERIC_TAG_STOPWORDS or _AGE_TAG_STOPWORD_RE.match(t):
             continue
         out.append(t)
     return out

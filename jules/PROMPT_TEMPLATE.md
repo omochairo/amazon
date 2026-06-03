@@ -163,23 +163,6 @@ narrative.lead の**冒頭 2 文**は「結論ファースト hook」を必須�
     "target_age": "3歳〜7歳",
     "certifications": ["ST"],
     "edu_domains": ["STEM", "運動", "想像"],
-    "ivs_score": 4.5,
-    "ivs_detail": {
-      "education": 4.5,
-      "longevity": 4.0,
-      "safety": 5.0,
-      "cost_performance": 4.0,
-      "total": 4.5,
-      "total_100": 90,
-      "score_rationale": [
-        {"factor": "education", "delta": "+0.4", "reason": "ブロックによる空間把握・色彩感覚への寄与"},
-        {"factor": "longevity", "delta": "+0.3", "reason": "対象年齢が3〜7歳と幅広い"},
-        {"factor": "safety", "delta": "+0.5", "reason": "STマーク取得 / 食品衛生法基準クリア"},
-        {"factor": "cost_performance", "delta": "+0.3", "reason": "3000円台で十分なピース数"},
-        {"factor": "trust", "delta": "+0.1", "reason": "レビュー500件超で評価が安定"}
-      ],
-      "pattern": "A"
-    },
     "prices": {
       "amazon": {"price": 3399, "url": "https://..."},
       "rakuten": {"price": 3200, "url": "https://..."},
@@ -339,36 +322,6 @@ narrative.lead の**冒頭 2 文**は「結論ファースト hook」を必須�
   - 例 3：「価格と安全認証の両立で同価格帯の最有力候補」
 - 強い断定の禁止は §5.B 準拠
 - まとめ H2「💡 まとめ：買うべき？」で展開する詳細結論とは別物。`headline` は**5 秒判断用の 1 行**として書く
-
-## 6. IVSスコアリング
-
-**基本点 70（ivs_score 3.5）から開始**し、独立した加減点を `score_rationale` 配列に**理由付きで列挙**します。
-
-### 加減点ルール（独立に適用）
-
-| factor | 加点 | 減点 |
-|---|---|---|
-| `education` | 「モンテッソーリ」「STEM」「思考力」「想像力」「空間把握」「言語」など各 +0.2〜+0.4 | 学習要素なし −0.3 |
-| `longevity` | 「成長に合わせて」「対象年齢が広い」「拡張パーツ」 +0.2〜+0.3 | 単機能 −0.3 |
-| `safety` | STマーク／食品衛生法／なめても安心 +0.3〜+0.5 | 小さい部品で年齢制限あり −0.2 |
-| `cost_performance` | 〜3000円 +0.3／3000〜7000円 ±0／7000〜12000円 −0.2／12000円〜 −0.4 | — |
-| `trust` | レビュー500件超 +0.1／100件超 +0.05 | — |
-
-> [!IMPORTANT]
-> **`longevity` ラベル統一**：`score_rationale` で `factor: "longevity"` の `reason` を書く時、ラベルは **「長く遊べる」** に統一してください。「長持ち」「耐久性」は素材/durability の概念であり longevity ではないため使用禁止。
-> - ✅ `"reason": "対象年齢が 3〜7 歳と幅広く、長く遊べる"`
-> - ❌ `"reason": "プラスチック製で長持ちする"`（= 素材耐久の話で longevity ではない）
-
-合算結果は最大5.0、小数点以下1桁まで。`total_100` は `total * 20` の整数化。
-
-### パターン判定
-
-- `pattern: "A"` — 一般玩具（上記そのまま）
-- `pattern: "B"` — 乳児向け・口に入れる可能性が高い：`safety` の delta を **1.5倍**、`cost_performance` を **0.7倍** に補正
-
-### バリエーション商品の警告
-
-容量違い・色違い・キャラ違いの商品でも、**スコアを機械的に同期しないでください**。商品ページごとの特徴差・価格差を反映させて個別に算出します。
 
 ## 6.4 構造化メタデータ（配点ドライバ）
 

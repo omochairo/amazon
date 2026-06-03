@@ -1,10 +1,24 @@
 baseURL = 'https://navi.omcha.jp/'
 languageCode = 'ja-jp'
+# Issue #1297 follow-up: PaperMod baseof.html は {{ site.Language }} (= Lang) を
+# <html lang="..."> に注入する。languageCode は RSS 専用なので defaultContentLanguage
+# を明示しないと Lang が "en" デフォルトに落ち、全ページが <html lang=en> + hreflang=en
+# として配信される (Google 言語認識・Screen reader・翻訳機能に悪影響)。
+defaultContentLanguage = "ja"
 title = 'おもちゃいろ 比較ナビ｜知育玩具スコア＆最安値チェッカー'
 theme = 'PaperMod'
 contentDir = 'content'
 canonifyURLs = false
 relativeURLs = false
+
+# Issue #1263 ①: robots.txt を Hugo が自動生成 (sitemap 位置を含む)
+enableRobotsTXT = true
+
+# Issue #1263 ②: 価格・記事が日次更新される動的サイトのため changefreq=daily を明示
+[sitemap]
+  changefreq = 'daily'
+  filename   = 'sitemap.xml'
+  priority   = 0.5
 
 [pagination]
   pagerSize = 10
@@ -13,6 +27,8 @@ relativeURLs = false
   env = "production"
   description = "知育玩具をスコアと価格で比較。Amazon・楽天・Yahoo!の3サイト価格を横断。元ソニーエンジニア×医療従事者のおもちゃいろのパパママが、20〜40代ファミリーの『今いちばんお得な買い方』を毎日更新します。"
   author = "おもちゃロボ 🤖"
+  # Global OGP image for social previews (Issue #605)
+  images = ["og-image.jpg"]
   defaultTheme = "auto"
   mainSections = ["posts"]
   ShowReadingTime = true
@@ -50,8 +66,85 @@ relativeURLs = false
   [params.label]
     text = "おもちゃいろ 比較ナビ"
 
+  # Issue #1263 ⑤: E-E-A-T 強化 — PaperMod 標準 schema_json.html が IsHome で出力する
+  # Organization JSON-LD の publisherType / sameAs / image を明示。
+  # sameAs は omcha.jp 本家 JSON-LD と統一 (ブランド整合)。
+  [params.schema]
+    publisherType = "Organization"
+    sameAs = [
+      "https://omcha.jp/",
+      "https://home.omcha.jp",
+      "https://lit.link/omochairo",
+      "https://linktr.ee/omochairo",
+      "https://bio.site/omochairo",
+      "https://potofu.me/omochairo",
+      "https://gravatar.com/omochairo",
+      "https://about.me/omochairo",
+      "https://omochairo.github.io",
+      "https://github.com/omochairo",
+      "https://omocha.gitlab.io",
+      "https://qiita.com/omochairo",
+      "https://zenn.dev/omochairo",
+      "https://medium.com/@omochairo",
+      "https://omocha.pages.dev",
+      "https://omocha.netlify.app",
+      "https://omochairo.vercel.app",
+      "https://omochairo.web.app",
+      "https://www.npmjs.com/package/omochairo-config",
+      "https://omochairo.connpass.com/",
+      "https://omochairo.peatix.com",
+      "https://www.producthunt.com/@omochairo",
+      "https://sites.google.com/view/omocha",
+      "https://www.behance.net/omochairo",
+      "https://www.figma.com/@omocha",
+      "https://note.com/omchairo",
+      "https://speakerdeck.com/omochairo",
+      "https://www.docswell.com/user/omochairo",
+      "https://podcasts.apple.com/us/podcast/id1859409617",
+      "https://open.spotify.com/show/2BSSc6QJwHYUKebyj3dE32",
+      "https://music.amazon.co.jp/podcasts/f3f1e848-e4db-489e-bcdf-54fa856064ff",
+      "https://www.youtube.com/@omochairo",
+      "https://room.rakuten.co.jp/omochairo/items",
+      "https://suzuri.jp/omochairo",
+      "https://store.line.me/stickershop/author/5800729/ja",
+      "https://ko-fi.com/omochairo",
+      "https://peing.net/ja/omochairo",
+      "https://marshmallow-qa.com/m0103ay8xfqm9ue",
+      "https://dic.nicovideo.jp/u/444102",
+      "https://x.com/omochairo",
+      "https://www.instagram.com/omochairo",
+      "https://www.facebook.com/p/-61572511841648/",
+      "https://bsky.app/profile/omochairo.bsky.social",
+      "https://jp.pinterest.com/omochairo/",
+    ]
+
+  # Issue #1263 ⑤: 著者プロフィール (E-E-A-T)。extend_head.html の Person/Organization
+  # JSON-LD で worksFor / jobTitle / description に展開する。
+  [params.authorProfile]
+    organizationName = "おもちゃいろ運営局（元ソニー技術者×医療従事者）"
+    organizationLogo = "https://omcha.jp/wp-content/uploads/2025/09/image-52.png"
+    organizationUrl  = "https://omcha.jp"
+    # Legacy single-founder fields (#1263 で導入)。複数 founder 化後も互換のため残置。
+    # extend_head.html は新規の founders 配列があれば優先採用する。
+    founderName      = "IroPapa & IroMama"
+    founderJobTitle  = "元ソニー技術者 × 医療従事者"
+    description      = "20〜40代ファミリーの『失敗しない知育玩具選び』をサポートする、元ソニー技術者と医療従事者の夫婦運営メディア。"
+    # Issue #1301 B4: founder を 2 人の Person に分割。/author/<slug>/ ページに対応する
+    # Person JSON-LD と @id で連携 (Hugo .Params がキーを小文字化するため key は小文字)。
+    founders = [
+      { name = "いろパパ", jobtitle = "元ソニー IT エンジニア / おもちゃ研究家", url = "/author/iropapa/", image = "https://omcha.jp/wp-content/uploads/2025/04/c22cd52e63323cfe98c0cb54c211d308.jpg" },
+      { name = "いろママ", jobtitle = "栄養士 / 臨床検査技師", url = "/author/iromama/", image = "https://omcha.jp/wp-content/uploads/2025/04/a5b0c622e23a862ce050186e940695a1.jpg" },
+    ]
+
   [params.assets]
-    favicon = "🏆"
+    favicon = "favicon.ico"
+    favicon16x16 = "favicon-16x16.png"
+    favicon32x32 = "favicon-32x32.png"
+    apple_touch_icon = "apple-touch-icon.png"
+    # Issue #1263 ③/⑥: PWA / Android スプラッシュと統一する dark UI 色
+    theme_color = "#2e2e33"
+    msapplication_TileColor = "#2e2e33"
+    disableFingerprinting = false
 
   # 検索機能
   [params.fuseOpts]
@@ -115,11 +208,6 @@ relativeURLs = false
     name = "📚 記事一覧"
     url = "posts/"
     weight = 8
-  [[menu.main]]
-    name = "📊 スコアの仕組み"
-    url = "about-score/"
-    weight = 9
-  [[menu.main]]
-    name = "🆚 比較"
-    url = "compare/"
-    weight = 10
+  # 📖 編集部について はフッターに移動 (#1363 follow-up)。
+  # ヘッダの導線を「比較・検索・購入」の主要 CTA に絞り、運営情報は
+  # hugo/layouts/partials/footer.html の footer-editorial ブロックに集約。

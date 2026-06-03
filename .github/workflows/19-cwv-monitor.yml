@@ -1,0 +1,117 @@
+name: CWV Monthly Monitor (CrUX API)
+
+# B-1 Phase 1 (epic #1357, session 78) — Chrome UX Report API から
+# origin + 主要 URL の実ユーザ CWV (LCP/CLS/INP) を月次取得し、
+# data/analytics/history/crux_history.jsonl に append する。
+# Phase 2 (劣化検出 → Issue 起票) は 2 ヶ月分蓄積後の follow-up PR で。
+#
+# 設計判断:
+#   - cron: 月初 (UTC 1 日 22:00 = JST 2 日 07:00)。CrUX は 28 日 rolling なので
+#     毎日 poll しても新規データほぼなし、月次で十分
+#   - commit-back は App token + PR auto-merge (18-analytics-daily.yml と同パターン)
+#   - secrets 未設定なら fetch step を skip して空 run
+#   - low-traffic site で CrUX が 404 を返すのは正常系 (next month で再試行)
+#
+# 必須 secrets:
+#   - APP_ID, APP_PRIVATE_KEY            (commit-back 用 App token)
+#   - CRUX_API_KEY                       (Google Cloud Console で CrUX API enable した key)
+#   - CRUX_ORIGIN                        (例: https://navi.omcha.jp)
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 毎月 1 日 22:00 UTC = 毎月 2 日 07:00 JST
+    - cron: '0 22 1 * *'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: cwv-monthly-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Fetch CrUX (origin + top URLs)
+        id: crux
+        env:
+          CRUX_API_KEY: ${{ secrets.CRUX_API_KEY }}
+          CRUX_ORIGIN: ${{ secrets.CRUX_ORIGIN }}
+        run: |
+          set +e
+          if [ -z "$CRUX_API_KEY" ] || [ -z "$CRUX_ORIGIN" ]; then
+            echo "::notice::CRUX_API_KEY or CRUX_ORIGIN not set — skipping"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          python scripts/fetch_crux.py
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            echo "::warning::CrUX fetch failed (rc=$rc)"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create CrUX history PR + auto-merge
+        if: steps.crux.outputs.available == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+          git add data/analytics/history/ || true
+
+          if git diff --cached --quiet; then
+            echo "No CrUX history changes to commit (already fetched this date?); skipping PR."
+            exit 0
+          fi
+
+          echo "Closing any prior open cwv-history PRs..."
+          gh pr list --base main --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("cwv-history/")) | .number' | while read -r pr_num; do
+            if [ -n "$pr_num" ]; then
+              echo "Closing old PR #$pr_num and deleting branch..."
+              gh pr close "$pr_num" -d || true
+            fi
+          done
+
+          BRANCH="cwv-history/${{ github.run_id }}"
+          git config user.name "omochairo-fetch-bot[bot]"
+          git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit -m "data(analytics): monthly CrUX history append (run ${{ github.run_id }})"
+          git push -u origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "data(analytics): monthly CrUX history append (run ${{ github.run_id }})" \
+            --body "Automated monthly CrUX (Chrome UX Report) fetch. Appends LCP / CLS / INP / FCP / TTFB p75 + histogram density for origin and top URLs (from GSC weekly) under data/analytics/history/crux_history.jsonl. Idempotent via seen_dates.json. Refs #1357 B-1." \
+            --base main \
+            --head "$BRANCH")
+          echo "Created: $PR_URL"
+
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge enabled on $PR_URL"
+          else
+            echo "::warning::Could not enable auto-merge on $PR_URL"
+          fi
+        continue-on-error: true

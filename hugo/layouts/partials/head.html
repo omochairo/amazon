@@ -34,8 +34,37 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-{{- if hugo.IsProduction | or (eq site.Params.env "production") | and (ne .Params.robotsNoIndex true) }}
+{{- /* B2 (Issue #1301): thin taxonomy term ページ (tags / brands / categories で
+       紐づく記事数が threshold 未満) を noindex,follow にする。
+       メーカー (brand) も同じゲートを通過するため、記事が増えれば自動で index,follow に戻る。
+       閾値は site.Params.thinTermNoindexThreshold で上書き可 (default 3)。 */ -}}
+{{- $isThinTerm := false -}}
+{{- if eq .Kind "term" -}}
+  {{- $threshold := int (site.Params.thinTermNoindexThreshold | default 3) -}}
+  {{- if lt (len .Pages) $threshold -}}
+    {{- $isThinTerm = true -}}
+  {{- end -}}
+{{- end -}}
+{{- /* B3 (Issue #1301): paginate 2 ページ目以降を noindex,follow に。
+       /posts/page/2-65/ などのパジネーション URL は canonical が /posts/ を指す
+       (PaperMod デフォルト) ため、index,follow のままだと canonical と矛盾し、
+       Google からは「重複コンテンツの紛らわしい挙動」とみなされる。
+       1 ページ目だけ index,follow、それ以降は noindex,follow が SEO 標準。
+       Hugo 0.146.0 以降は kind=page で .Paginator を呼ぶとビルドエラーになるため、
+       paginate 可能な kind に限定する (#1374 follow-up build break)。 */ -}}
+{{- $isPaginated := false -}}
+{{- if in (slice "home" "section" "taxonomy" "term") .Kind -}}
+  {{- with .Paginator -}}
+    {{- if gt .PageNumber 1 -}}
+      {{- $isPaginated = true -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $isProd := or hugo.IsProduction (eq site.Params.env "production") -}}
+{{- if and $isProd (ne .Params.robotsNoIndex true) (not $isThinTerm) (not $isPaginated) }}
 <meta name="robots" content="index, follow">
+{{- else if and $isProd (or $isThinTerm $isPaginated) (ne .Params.robotsNoIndex true) }}
+<meta name="robots" content="noindex, follow">
 {{- else }}
 <meta name="robots" content="noindex, nofollow">
 {{- end }}
@@ -131,7 +160,8 @@
 <link rel="icon" type="image/png" sizes="16x16" href="{{ site.Params.assets.favicon16x16 | default "favicon-16x16.png" | absURL }}">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ site.Params.assets.favicon32x32 | default "favicon-32x32.png" | absURL }}">
 <link rel="apple-touch-icon" href="{{ site.Params.assets.apple_touch_icon | default "apple-touch-icon.png" | absURL }}">
-<link rel="mask-icon" href="{{ site.Params.assets.safari_pinned_tab | default "safari-pinned-tab.svg" | absURL }}">
+{{- /* Issue #1297 follow-up: safari-pinned-tab.svg は配置していないため 404 回避で削除。
+       Safari pinned tab 用 SVG が必要になったら site.Params.assets.safari_pinned_tab を明示。 */ -}}
 <meta name="theme-color" content="{{ site.Params.assets.theme_color | default "#2e2e33" }}">
 <meta name="msapplication-TileColor" content="{{ site.Params.assets.msapplication_TileColor | default "#2e2e33" }}">
 

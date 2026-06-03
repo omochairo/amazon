@@ -10,13 +10,27 @@
 <!-- Google Search Console verification -->
 <meta name="google-site-verification" content="P6g6vzSBBm0bNsbjQ8kQgFhMVgo5c3d7pVEMw1UWDNs" />
 
-<!-- Google Fonts preconnect for performance -->
+<!-- Issue #1263 ③: PWA / Add to Home Screen -->
+<link rel="manifest" href="/site.webmanifest" />
+
+<!-- Issue #1263 ④: Preconnect — DNS / TLS を事前確立して LCP を改善 (商品画像 / Google Fonts) -->
+<link rel="preconnect" href="https://m.media-amazon.com" crossorigin>
+<link rel="dns-prefetch" href="https://m.media-amazon.com">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-<!-- Open Graph / SNS meta -->
-<meta property="og:site_name" content="おもちゃいろ 比較ナビ" />
-<meta name="twitter:card" content="summary_large_image" />
+<!-- Open Graph / SNS meta
+     - og:site_name と twitter:card は PaperMod の templates/opengraph.html
+       および templates/twitter_cards.html が emit するので重複定義しない。
+     - グローバル og-image (hugo/static/og-image.jpg) は 1200x630 (1.91:1)。
+       Twitter summary_large_image と Facebook/LINE/Slack の推奨 ratio。
+     - width/height/type/alt は PaperMod 標準 partial が出さないため追記:
+       LINE などはこれが無いと preview を諦めることがある。 -->
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:type" content="image/jpeg" />
+<meta property="og:image:alt" content="おもちゃいろ 比較ナビ — 知育玩具スコア × 3 サイト最安値" />
+<meta name="twitter:image:alt" content="おもちゃいろ 比較ナビ — 知育玩具スコア × 3 サイト最安値" />
 
 <!-- Product image slideshow initializer (PA-API variants gallery) -->
 <script>
@@ -69,43 +83,136 @@
 })();
 </script>
 
-<!-- Structured Data (JSON-LD) -->
+<!-- Structured Data (JSON-LD) — WebSite (Issue #1263: URL を本番ドメインに修正) -->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "WebSite",
   "name": "おもちゃいろ 比較ナビ",
   "alternateName": "おもちゃいろ Amazon比較ナビ",
-  "url": "https://omochairo.github.io/amazon/",
-  "description": "知育玩具を知育スコアでランキング。Amazon・楽天・Yahoo!の3サイトを横断比較。おもちゃいろのパパママが運営。",
+  "url": "{{ site.BaseURL }}",
+  "description": "知育玩具を知育スコアでランキング。Amazon・楽天・Yahoo!の3サイトを横断比較。元ソニー技術者×医療従事者の夫婦運営。",
+  "inLanguage": "ja-JP",
+  "potentialAction": {
+    "@type": "SearchAction",
+    "target": "{{ site.BaseURL }}search/?q={search_term_string}",
+    "query-input": "required name=search_term_string"
+  },
   "publisher": {
     "@type": "Organization",
-    "name": "おもちゃいろ",
-    "url": "https://omcha.jp/"
+    "name": "{{ with site.Params.authorProfile }}{{ .organizationName }}{{ else }}おもちゃいろ{{ end }}",
+    "url": "{{ with site.Params.authorProfile }}{{ .organizationUrl }}{{ else }}https://omcha.jp/{{ end }}",
+    "logo": "{{ with site.Params.authorProfile }}{{ .organizationLogo }}{{ end }}"
   }
 }
 </script>
 
+{{- /* Issue #1263 ⑤ + #1301 B4: E-E-A-T — Organization with founder(s) + sameAs.
+       founders 配列が定義されていれば Person 配列で emit し、各 Person は
+       /author/<slug>/ ページの Person schema と @id で連携。未定義時は
+       legacy 単一 founder にフォールバック。jsonify | safeJS は <script>
+       auto-escape を打ち消すための定石 (PR #1277 hotfix)。 */ -}}
+{{- with site.Params.authorProfile }}
+{{- $ap := . -}}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": {{ .organizationName | jsonify | safeJS }},
+  "url": {{ .organizationUrl | jsonify | safeJS }},
+  "logo": {{ .organizationLogo | jsonify | safeJS }},
+  "description": {{ .description | jsonify | safeJS }},
+  {{- if .founders }}
+  "founder": [
+    {{- range $i, $f := .founders }}{{ if $i }},{{ end }}
+    {
+      "@type": "Person",
+      "@id": {{ printf "%s%s#person" (site.BaseURL | strings.TrimRight "/") (index $f "url") | jsonify | safeJS }},
+      "name": {{ index $f "name" | jsonify | safeJS }},
+      "jobTitle": {{ index $f "jobtitle" | jsonify | safeJS }},
+      "url": {{ printf "%s%s" (site.BaseURL | strings.TrimRight "/") (index $f "url") | jsonify | safeJS }},
+      "image": {{ index $f "image" | jsonify | safeJS }},
+      "worksFor": {
+        "@type": "Organization",
+        "name": {{ $ap.organizationName | jsonify | safeJS }},
+        "url": {{ $ap.organizationUrl | jsonify | safeJS }}
+      }
+    }
+    {{- end }}
+  ]
+  {{- else }}
+  "founder": {
+    "@type": "Person",
+    "name": {{ .founderName | jsonify | safeJS }},
+    "jobTitle": {{ .founderJobTitle | jsonify | safeJS }},
+    "worksFor": {
+      "@type": "Organization",
+      "name": {{ .organizationName | jsonify | safeJS }},
+      "url": {{ .organizationUrl | jsonify | safeJS }}
+    }
+  }
+  {{- end }}{{ with site.Params.schema.sameAs }},
+  "sameAs": [
+    {{- range $i, $u := . }}{{ if $i }},{{ end }}
+    {{ $u | jsonify | safeJS }}
+    {{- end }}
+  ]
+  {{- end }}
+}
+</script>
+{{- end }}
+
 {{- /* #731 Part B: brand hub ItemList JSON-LD (term ページかつ narrative 対象のみ emit) */ -}}
 {{- partial "brand_hub_jsonld.html" . -}}
 
+{{- /* Issue #1297: Hugo の .Params map はキーを小文字化するため、build_post.py 側で
+       JSON 文字列としてシリアライズ済 (<>& は \uXXXX escape 済)。
+       ここでは jsonify を介さず safeJS のみで素通しして camelCase を保つ。 */ -}}
 {{ if .IsPage }}
   {{ if .Params.jsonld }}
     {{ if .Params.jsonld.product }}
 <script type="application/ld+json">
-{{ .Params.jsonld.product | jsonify | safeJS }}
+{{ .Params.jsonld.product | safeJS }}
 </script>
     {{ end }}
     {{ if .Params.jsonld.faq }}
 <script type="application/ld+json">
-{{ .Params.jsonld.faq | jsonify | safeJS }}
+{{ .Params.jsonld.faq | safeJS }}
 </script>
     {{ end }}
     {{ if .Params.jsonld.breadcrumb }}
 <script type="application/ld+json">
-{{ .Params.jsonld.breadcrumb | jsonify | safeJS }}
+{{ .Params.jsonld.breadcrumb | safeJS }}
+</script>
+    {{ end }}
+    {{ if .Params.jsonld.webpage }}
+<script type="application/ld+json">
+{{ .Params.jsonld.webpage | safeJS }}
+</script>
+    {{ end }}
+    {{/* Issue #1301 B5: 個別 Review JSON-LD (Product.aggregateRating と別 emit) */}}
+    {{ if .Params.jsonld.review }}
+<script type="application/ld+json">
+{{ .Params.jsonld.review | safeJS }}
+</script>
+    {{ end }}
+    {{/* Issue #1301 B6: HowTo JSON-LD (「選び方」確認ステップ) */}}
+    {{ if .Params.jsonld.howto }}
+<script type="application/ld+json">
+{{ .Params.jsonld.howto | safeJS }}
 </script>
     {{ end }}
   {{ end }}
 {{ end }}
+
+<!-- Google Analytics (G-D8ZQX1BT20) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-D8ZQX1BT20"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-D8ZQX1BT20');
+</script>
+
 

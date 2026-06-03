@@ -32,18 +32,26 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: main
           fetch-depth: 1
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+
+      # brand_normalizer.py が yaml を import する。requirements.txt には居ないので
+      # 単独 install (この workflow 以外は brand_normalizer を経由しない)。
+      - name: Install pyyaml
+        run: pip install pyyaml
+
+      # hugo/data/brand_hub.json は /hugo gitignore で repo に居ない。
+      # 両 path (cron selector / dispatch override) が読むので runtime で生成する。
+      - name: Build brand_hub.json
+        run: python scripts/build_brand_hub_stats.py
 
       - name: Select target brand
         id: select
@@ -190,11 +198,16 @@ jobs:
           HTTP_CODE=$(echo "$RESPONSE" | tail -1)
           BODY=$(echo "$RESPONSE" | sed '$d')
           echo "HTTP: $HTTP_CODE"
-          echo "$BODY" | jq -c '{name, id, status}' 2>/dev/null || echo "$BODY" | head -c 500
+          # Non-200: dump raw body. jq projection は error 系 body で nulls を返して
+          # 真因を隠す (HTTP 400 で {"error":{"message":...}} が見えなかった事例)。
           if [ "$HTTP_CODE" != "200" ]; then
+            echo "--- raw response body ---"
+            echo "$BODY"
+            echo "--------------------------"
             echo "::error::Failed to create Jules session (HTTP $HTTP_CODE)"
             exit 1
           fi
+          echo "$BODY" | jq -c '{name, id, status}' 2>/dev/null || echo "$BODY" | head -c 500
           SESSION_ID=$(echo "$BODY" | jq -r '.id // empty')
           if [ -z "$SESSION_ID" ]; then
             echo "::error::No session id returned"

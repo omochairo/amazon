@@ -9,7 +9,9 @@
 <section class="home-hero">
   <h1 class="home-hero-title">{{ .Title }}</h1>
   {{- with .Subtitle }}<p class="home-hero-subtitle">{{ . }}</p>{{ end }}
-  {{- with .Lead }}<div class="home-hero-lead">{{ . | markdownify }}</div>{{ end }}
+  <div class="home-hero-lead">
+    元ソニーエンジニア × 医療従事者の夫婦が運営する <a href="https://omcha.jp/" target="_blank" rel="noopener">おもちゃいろ</a> のパパママが、AI と一緒に毎日更新。<strong>{{ len $allPosts }}</strong> 種類の知育おもちゃをスコアランキングや対象年齢、価格から選べます。
+  </div>
   <div class="home-hero-cta">
     <a class="home-hero-btn primary" href="{{ "diagnosis/" | relURL }}">🧸 おもちゃ診断を試す</a>
     <a class="home-hero-btn" href="{{ "posts/" | relURL }}">📚 記事一覧から探す</a>
@@ -18,6 +20,74 @@
   </div>
 </section>
 {{- end }}
+
+{{- /* === Section: 特集スポットライト (#1363 / #1365 UX)
+       「こんな探し方ができます」— 4 つの探索軸 (予算 / 割引 / 人気 / 悩み相談)。
+       各カードは distinct な役割を持つ:
+         💎 コスパ最強 → /cospa/ … 予算 (価格帯) 軸で探す
+         🏷️ おトク特集 → /deals/ … Amazon 割引率軸で探す (実態は週次更新)
+         🔥 人気の今    → /ranking/ … 楽天で売れ筋から探す
+         🩺 処方箋診断  → /diagnosis/ … 5 問で AI が提案
+       説明吹き出しは CSS-only でカルーセル回転 (3 件 / 9 秒で 1 周)。
+       prefers-reduced-motion 時はアニメ停止 (最初の bubble を表示)。
+       モバイル (≤700px) は 2x2 グリッド + 吹き出しを縮小して非邪魔的。 */ -}}
+<section class="spotlight">
+  <h2 class="spotlight-title">こんな探し方ができます</h2>
+  <div class="spotlight-grid spotlight-grid--4col">
+    <a class="spotlight-card spotlight-card--cospa" href="{{ "cospa/" | relURL }}">
+      <div class="spotlight-card-icon">💎</div>
+      <div class="spotlight-card-body">
+        <h3 class="spotlight-card-name">コスパ最強</h3>
+        <p class="spotlight-card-tagline">予算から選ぶ</p>
+        <div class="spotlight-bubbles" role="list">
+          <span class="spotlight-bubble" role="listitem">¥1,000 / ¥3,000 / ¥5,000… 6 つの予算帯で絞り込み 🎯</span>
+          <span class="spotlight-bubble" role="listitem">各価格帯ごとに「スコア最強」の知育玩具を選定 💎</span>
+          <span class="spotlight-bubble" role="listitem">「安かろう悪かろう」をスコア基準で排除 🛡️</span>
+        </div>
+      </div>
+      <span class="spotlight-card-arrow" aria-hidden="true">→</span>
+    </a>
+    <a class="spotlight-card spotlight-card--deals" href="{{ "deals/" | relURL }}">
+      <div class="spotlight-card-icon">🏷️</div>
+      <div class="spotlight-card-body">
+        <h3 class="spotlight-card-name">おトク特集</h3>
+        <p class="spotlight-card-tagline">Amazon 割引率で選ぶ</p>
+        <div class="spotlight-bubbles" role="list">
+          <span class="spotlight-bubble" role="listitem">Amazon 割引率 20% 以上だけを自動抽出 🏷️</span>
+          <span class="spotlight-bubble" role="listitem">スコア基準を満たす良品にだけ絞り込み ✨</span>
+          <span class="spotlight-bubble" role="listitem">「安いだけ」を排除した本当に買い時の値下げ 🔥</span>
+        </div>
+      </div>
+      <span class="spotlight-card-arrow" aria-hidden="true">→</span>
+    </a>
+    <a class="spotlight-card spotlight-card--ranking" href="{{ "ranking/" | relURL }}">
+      <div class="spotlight-card-icon">🔥</div>
+      <div class="spotlight-card-body">
+        <h3 class="spotlight-card-name">人気の今</h3>
+        <p class="spotlight-card-tagline">売れ筋から選ぶ</p>
+        <div class="spotlight-bubbles" role="list">
+          <span class="spotlight-bubble" role="listitem">楽天で今売れているおもちゃ TOP30 🔥</span>
+          <span class="spotlight-bubble" role="listitem">順位の推移グラフで「急上昇」が分かる 📈</span>
+          <span class="spotlight-bubble" role="listitem">迷ったら「みんなが選んでいる」を参考に 👥</span>
+        </div>
+      </div>
+      <span class="spotlight-card-arrow" aria-hidden="true">→</span>
+    </a>
+    <a class="spotlight-card spotlight-card--diagnosis" href="{{ "diagnosis/" | relURL }}">
+      <div class="spotlight-card-icon">🩺</div>
+      <div class="spotlight-card-body">
+        <h3 class="spotlight-card-name">処方箋診断</h3>
+        <p class="spotlight-card-tagline">悩みから選ぶ</p>
+        <div class="spotlight-bubbles" role="list">
+          <span class="spotlight-bubble" role="listitem">5 つの質問に答えるだけで AI が提案 🩺</span>
+          <span class="spotlight-bubble" role="listitem">年齢・伸ばしたい力・予算で最適化 🎯</span>
+          <span class="spotlight-bubble" role="listitem">「何を選べばいいか分からない」をゼロに 💡</span>
+        </div>
+      </div>
+      <span class="spotlight-card-arrow" aria-hidden="true">→</span>
+    </a>
+  </div>
+</section>
 
 {{- /* === Section: 最新の比較レビュー === */ -}}
 {{- $latest := first 9 $allPosts }}
@@ -55,16 +125,17 @@
 {{- /* === Section: 人気タグ === */ -}}
 {{- $tags := site.Taxonomies.tags }}
 {{- if $tags }}
+{{- $topTags := first 20 $tags.ByCount }}
 <section class="home-section">
   <header class="home-section-header">
     <h2>🏷 人気タグから探す</h2>
     <a class="home-section-more" href="{{ "tags/" | relURL }}">すべて見る →</a>
   </header>
   <div class="tag-chips">
-    {{- range $name, $taxonomy := $tags }}
-      {{- if ge (len $taxonomy.Pages) 2 }}
-      <a class="tag-chip" href="{{ (printf "tags/%s/" (urlize $name)) | relURL }}">
-        #{{ $name }} <span class="tag-chip-count">{{ len $taxonomy.Pages }}</span>
+    {{- range $topTags }}
+      {{- if ge .Count 5 }}
+      <a class="tag-chip" href="{{ (printf "tags/%s/" (urlize .Name)) | relURL }}">
+        #{{ .Name }} <span class="tag-chip-count">{{ .Count }}</span>
       </a>
       {{- end }}
     {{- end }}
@@ -118,6 +189,16 @@
   </div>
 </section>
 {{- end }}
+
+{{- /* === Section: 最近見た商品 (#1367) — recently_viewed.js が localStorage から hydrate、
+       空なら hidden 属性で非表示。home / single 双方で同じ .recently-viewed-mount を使う。 */ -}}
+<section class="home-section recently-viewed-mount" hidden aria-label="最近見た商品">
+  <header class="home-section-header">
+    <h2>🕘 最近見た商品</h2>
+    <span class="home-section-note">続きから検討できます</span>
+  </header>
+  <div class="recently-viewed-grid"></div>
+</section>
 
 {{- /* === Footer credit === */ -}}
 <section class="home-credit">

@@ -16,6 +16,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import pathlib
 import re
@@ -28,64 +29,60 @@ import jinja2
 
 from brand_normalizer import normalize as normalize_brand
 from build_feature_lists import PRICE_BANDS
-from score_calculator import calculate as calculate_score, compute_ivs_axes
+from score_calculator import (
+    ScoreResult,
+    calculate as calculate_score,
+    compute_ivs_axes,
+    get_media_exposure_metrics,
+    reset_media_exposure_metrics,
+)
 
 
 SUFFIX_SKIP = (".enrichment", ".seo", ".quality")
 
 
-def _sync_ivs_for_render(data: dict[str, Any]) -> None:
-    """テンプレ参照用に product.ivs_detail を新スコアで上書きする。
-    本文の IVS 総合/知育効果/長く遊べる/安全性/コスパ と加減点根拠を
-    score_calculator の結果と同期させる (frontmatter とのズレ防止)。
+def _build_score_context(sr: ScoreResult) -> dict[str, Any]:
+    """Build the ``score`` dict consumed by ``post.md.j2`` (hero + recap blocks).
+
+    Pure: only reads ``sr`` and never mutates ``data`` / ``product``. Replaces
+    the legacy ``_sync_ivs_for_render`` which mutated ``product.ivs_detail`` in
+    place (#1111 / Phase 2/3 of #1107).
+
+    Coordinate convention: viewBox 400x280, center (200,140), radius cap 90.
+    Order = top (cost) / right (safety) / bottom (longevity) / left (education).
     """
-    product = data.get("product") if isinstance(data.get("product"), dict) else None
-    raw_brand = product.get("brand") if product else None
-    if not (product and raw_brand):
-        return
-    nb = normalize_brand(raw_brand)
-    sr = calculate_score(data, nb, asin=product.get("asin"))
     bd = sr.breakdown
-    product["ivs_score"] = sr.ivs_score
-    ivs = product.setdefault("ivs_detail", {})
-    ivs["total_100"] = sr.total_100
-    # 4 軸 (/5 表示) は 6 要素から再導出。スケール式は compute_ivs_axes に集約。
-    ivs.update(compute_ivs_axes(bd))
-    ivs["score_rationale"] = [
-        {"factor": "ブランド信頼度", "delta": f"+{bd['brand_tier']}/25", "reason": sr.rationale[0]},
-        {"factor": "安全認証", "delta": f"+{bd['safety_cert']}/10", "reason": sr.rationale[1]},
-        {"factor": "対象年齢", "delta": f"+{bd['age_fit']}/10", "reason": sr.rationale[2]},
-        {"factor": "知育価値", "delta": f"+{bd['edu_value']}/15", "reason": sr.rationale[3]},
-        {"factor": "メディア露出", "delta": f"+{bd['media_exposure']}/15", "reason": sr.rationale[4]},
-        {"factor": "正規流通", "delta": f"+{bd['multi_market']}/10", "reason": sr.rationale[5]},
-        {"factor": "コスパ", "delta": f"+{bd['price_value']}/15", "reason": sr.rationale[6]},
-    ]
-    # β テンプレ v5.1: レーダー軸 (上=コスパ / 下=長く遊べる / 左=知育 / 右=安全) を
-    # SVG 用座標で事前計算する。viewBox 400x280, 中心 (200,140), 半径上限 90。
-    # v5.0 比で横方向を大きく取り、軸ラベル「📚 知育効果 3.8」「🛡️ 安全性 4.4」等の
-    # 末尾の値併記がクリップしないようにする。
+    axes = compute_ivs_axes(bd)
     cx, cy, rmax = 200.0, 140.0, 90.0
-    axes = [
-        ("cost", ivs["cost_performance"], cx, cy - rmax),       # 上
-        ("safety", ivs["safety"], cx + rmax, cy),               # 右
-        ("longevity", ivs["longevity"], cx, cy + rmax),         # 下
-        ("education", ivs["education"], cx - rmax, cy),         # 左
+    radar = [
+        ("cost", axes["cost_performance"], cx, cy - rmax),     # 上
+        ("safety", axes["safety"], cx + rmax, cy),             # 右
+        ("longevity", axes["longevity"], cx, cy + rmax),       # 下
+        ("education", axes["education"], cx - rmax, cy),       # 左
     ]
     points = []
-    for _key, val, ex, ey in axes:
+    for _key, val, ex, ey in radar:
         ratio = max(0.0, min(1.0, float(val) / 5.0))
         px = round(cx + (ex - cx) * ratio, 1)
         py = round(cy + (ey - cy) * ratio, 1)
         points.append(f"{px},{py}")
-    ivs["radar_points"] = " ".join(points)
-    # 総合スコアの棒グラフ (1 本) は total_100 をそのまま % として使う。
-    # 4 軸ごとの bar_*_pct は v5.1 でレーダー一元化に統合し撤去。
-    # Amazon レビューアンカー URL (CTA 用)
-    asin = product.get("asin")
-    if asin:
-        product["amazon_review_url"] = (
-            f"https://www.amazon.co.jp/dp/{asin}/?tag=zefiransesu-22#customerReviews"
-        )
+    return {
+        "total_100": sr.total_100,
+        "education": axes["education"],
+        "longevity": axes["longevity"],
+        "safety": axes["safety"],
+        "cost_performance": axes["cost_performance"],
+        "radar_points": " ".join(points),
+        "score_rationale": [
+            {"factor": "ブランド信頼度", "delta": f"+{bd['brand_tier']}/25", "reason": sr.rationale[0]},
+            {"factor": "安全認証", "delta": f"+{bd['safety_cert']}/10", "reason": sr.rationale[1]},
+            {"factor": "対象年齢", "delta": f"+{bd['age_fit']}/10", "reason": sr.rationale[2]},
+            {"factor": "知育価値", "delta": f"+{bd['edu_value']}/15", "reason": sr.rationale[3]},
+            {"factor": "メディア露出", "delta": f"+{bd['media_exposure']}/15", "reason": sr.rationale[4]},
+            {"factor": "正規流通", "delta": f"+{bd['multi_market']}/10", "reason": sr.rationale[5]},
+            {"factor": "コスパ", "delta": f"+{bd['price_value']}/15", "reason": sr.rationale[6]},
+        ],
+    }
 
 BADGE_FIELDS = ("availability", "loyalty_points", "savings_percentage", "free_shipping")
 
@@ -244,6 +241,398 @@ def _parse_age_min_months(raw: Any) -> int:
     return 0
 
 
+# Issue #1301 B4 Stage 2: Article 単位 JSON-LD の reviewedBy / creator 用定数。
+# Person @id / URL は hugo/config.toml の authorProfile.founders と
+# hugo/content/author/<slug>.md の Person @id (#person fragment) と同期必須。
+# 変更時は 3 箇所同時更新。
+_SITE_BASE_URL = "https://navi.omcha.jp"
+
+PERSON_IROPAPA: dict[str, Any] = {
+    "@type": "Person",
+    "@id": f"{_SITE_BASE_URL}/author/iropapa/#person",
+    "name": "いろパパ",
+    "url": f"{_SITE_BASE_URL}/author/iropapa/",
+}
+PERSON_IROMAMA: dict[str, Any] = {
+    "@type": "Person",
+    "@id": f"{_SITE_BASE_URL}/author/iromama/#person",
+    "name": "いろママ",
+    "url": f"{_SITE_BASE_URL}/author/iromama/",
+}
+
+# 安全性 reviewer (いろママ) 判定のシグナル。
+_MAMA_NAME_TOKENS: tuple[str, ...] = (
+    "ままごと", "おままごと", "ぬいぐるみ", "歯固め", "おしゃぶり", "離乳",
+)
+_MAMA_TAG_TOKENS: frozenset[str] = frozenset({
+    "食育", "ベビー", "0歳", "1歳", "2歳", "ぬいぐるみ", "安全", "離乳",
+})
+
+# 分析 reviewer (いろパパ) 判定のシグナル。
+_PAPA_NAME_TOKENS: tuple[str, ...] = (
+    "プログラミング", "ロボット", "stem", "知育ロボ", "ドローン", "コーディング",
+)
+_PAPA_TAG_TOKENS: frozenset[str] = frozenset({
+    "stem", "プログラミング", "ロボット", "コスパ", "電子工作", "実験",
+})
+
+# 3 歳未満は安全性 reviewer (誤飲リスク年齢圏)。
+_AGE_MAMA_THRESHOLD_MONTHS: int = 36
+
+
+def _determine_reviewers(
+    product: dict[str, Any], tags: list[str] | None
+) -> list[dict[str, Any]]:
+    """商品特性に応じて記事の reviewer (Person) を判定する。
+
+    Issue #1301 B4 Stage 2: AI 下書き + 人間レビューを JSON-LD で分離するための
+    担当 founder ルーティング。
+
+    判定優先順位:
+        1. いろママ — 安全性が主軸: 36 ヶ月未満 / 安全性タグ / 食育系名
+        2. いろパパ — 分析が主軸: STEM / プログラミング / コスパ タグ・名
+        3. どちらでもない — 両者連名 (default = dual review で E-E-A-T 強)
+
+    Returns:
+        Person dict のリスト (要素数 1 or 2)。
+    """
+    try:
+        age_min = int(product.get("age_min_months") or 0)
+    except (TypeError, ValueError):
+        age_min = 0
+
+    name_lower = str(product.get("name") or "").lower()
+    tags_lower = {str(t).lower() for t in (tags or []) if t}
+    mama_tag_lower = {t.lower() for t in _MAMA_TAG_TOKENS}
+    papa_tag_lower = {t.lower() for t in _PAPA_TAG_TOKENS}
+
+    # いろママ判定 (誤飲リスク年齢 + 食育・安全タグ + 食/縫いぐるみ系名)
+    if (
+        (age_min and age_min < _AGE_MAMA_THRESHOLD_MONTHS)
+        or (tags_lower & mama_tag_lower)
+        or any(tok.lower() in name_lower for tok in _MAMA_NAME_TOKENS)
+    ):
+        return [PERSON_IROMAMA]
+
+    # いろパパ判定 (STEM・分析タグ + 機械系名)
+    if (
+        (tags_lower & papa_tag_lower)
+        or any(tok.lower() in name_lower for tok in _PAPA_NAME_TOKENS)
+    ):
+        return [PERSON_IROPAPA]
+
+    # default: 両者連名 (dual review)
+    return [PERSON_IROPAPA, PERSON_IROMAMA]
+
+
+# AI 下書き責任の Organization (creator) 定数。
+ORG_OMOCHAIRO_EDITORIAL: dict[str, Any] = {
+    "@type": "Organization",
+    "name": "おもちゃいろ編集部",
+    "url": f"{_SITE_BASE_URL}/about/",
+}
+ORG_AI_AGENT: dict[str, Any] = {
+    "@type": "Organization",
+    "name": "おもちゃロボ (AI 編集システム)",
+    "description": "Amazon・楽天・Yahoo! ショッピングの市場データを集約し、記事下書きとスコア計算を担当する AI エージェント。",
+}
+
+
+def _build_webpage_jsonld(
+    *,
+    product: dict[str, Any],
+    tags: list[str] | None,
+    title: str,
+    date: str,
+    lastmod: str,
+    asin: str,
+) -> dict[str, Any]:
+    """商品ページの WebPage JSON-LD を構築する。
+
+    Issue #1301 B4 Stage 2:
+        - author     = Organization (公開責任 = おもちゃいろ編集部)
+        - reviewedBy = Person (担当 founder、_determine_reviewers で判定)
+        - creator    = Organization (AI 編集システム / 下書き責任)
+
+    既存の Product / FAQ / Breadcrumb JSON-LD と並列で emit される (既存非破壊)。
+    """
+    reviewers = _determine_reviewers(product, tags)
+    page_url = f"{_SITE_BASE_URL}/products/{asin.lower()}/"
+    reviewed_by: Any = reviewers[0] if len(reviewers) == 1 else reviewers
+    return {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "@id": f"{page_url}#webpage",
+        "url": page_url,
+        "name": title,
+        "author": ORG_OMOCHAIRO_EDITORIAL,
+        "reviewedBy": reviewed_by,
+        "creator": ORG_AI_AGENT,
+        "datePublished": date,
+        "dateModified": lastmod,
+        "isPartOf": {
+            "@type": "WebSite",
+            "url": f"{_SITE_BASE_URL}/",
+        },
+    }
+
+
+# AI 編集システム (おもちゃロボ) を Review の author として利用する Person 定義。
+# Person 表現の理由: schema.org の Review.author は Person/Organization。
+# Google の Review snippet 適格条件で「author は識別可能な実体」が求められる。
+# Organization (ORG_AI_AGENT) ではなく Person 扱いで sameAs と organization 親で
+# 「AI 編集システムである」事実を示しつつ、Review snippet として認識される形にする。
+PERSON_OMOCHAIRO_BOT: dict[str, Any] = {
+    "@type": "Person",
+    "@id": f"{_SITE_BASE_URL}/about/#omochairo-bot",
+    "name": "おもちゃロボ",
+    "url": f"{_SITE_BASE_URL}/about/",
+    "description": (
+        "Amazon・楽天・Yahoo! ショッピングの市場データを集約し、"
+        "記事下書きとスコア計算を担当する AI 編集システム。"
+        "本サイトの全レビューは おもちゃロボ の独自スコア (知育価値 / 長寿命性 / 安全性 / コスパ) に基づく。"
+    ),
+}
+
+
+def _build_review_jsonld(
+    *,
+    product: dict[str, Any],
+    title: str,
+    date: str,
+    avg_rating: float | int | str,
+    review_body: str,
+    asin: str,
+) -> dict[str, Any] | None:
+    """Issue #1301 B5: Product.aggregateRating とは別に独立した Review JSON-LD を構築。
+
+    aggregateRating は「サイトの集約評価」を示すが、Google の Review snippet 適格には
+    「個別レビュー (Review エンティティ)」も必要。本関数は おもちゃロボ による
+    独自レビュー 1 件を Review として emit する。
+
+    - author: PERSON_OMOCHAIRO_BOT (AI 編集システム)
+    - itemReviewed: Product (name/image を最小限再掲)
+    - reviewRating: 1-5 スケール
+    - reviewBody: editorial_comment / verdict / closing から抽出
+    - datePublished: 記事公開日
+
+    review_body が空 (= 抽出失敗) の場合は None を返し、emit しない。
+    """
+    name = product.get("name") or title
+    image = product.get("image") or ""
+    if not name or not review_body:
+        return None
+    # rating を 1-5 スケールに正規化
+    try:
+        rv = float(avg_rating)
+    except (TypeError, ValueError):
+        rv = 4.0
+    if rv < 1.0:
+        rv = 1.0
+    elif rv > 5.0:
+        rv = 5.0
+    page_url = f"{_SITE_BASE_URL}/products/{asin.lower()}/"
+    item_reviewed: dict[str, Any] = {
+        "@type": "Product",
+        "name": name,
+    }
+    if image:
+        item_reviewed["image"] = image
+    raw_brand = product.get("brand")
+    if raw_brand:
+        item_reviewed["brand"] = {"@type": "Brand", "name": raw_brand}
+    return {
+        "@context": "https://schema.org",
+        "@type": "Review",
+        "@id": f"{page_url}#review",
+        "itemReviewed": item_reviewed,
+        "author": PERSON_OMOCHAIRO_BOT,
+        "reviewRating": {
+            "@type": "Rating",
+            "ratingValue": f"{rv:.1f}",
+            "bestRating": "5",
+            "worstRating": "1",
+        },
+        "reviewBody": review_body,
+        "datePublished": date,
+        "publisher": ORG_OMOCHAIRO_EDITORIAL,
+    }
+
+
+def _build_howto_jsonld(
+    *,
+    product: dict[str, Any],
+    data: dict[str, Any],
+    asin: str,
+) -> dict[str, Any] | None:
+    """Issue #1301 B6: 「{product} を選ぶ前の確認ステップ」HowTo schema を構築。
+
+    既存の narrative 構造 (lead / why_this_product / gift_appeal / daily_use /
+    safety_note / closing) から 4-5 ステップを programmatic に組み立てる。
+
+    HowTo schema は「複数ステップの手順」を要求するため、ナレーション本文を
+    そのまま流すのではなく、確認すべき観点を 4 ステップに固定化する:
+
+        Step 1: 対象年齢を確認 — age_min_months から月齢 / 歳を文字列化
+        Step 2: 何が伸びるかを確認 — narrative.why_this_product から抜粋
+        Step 3: 日常での使い方 — narrative.daily_use から抜粋
+        Step 4: 安全認証を確認 — narrative.safety_note から抜粋
+
+    各ステップ本文が空なら HowTo を emit しない (None 返し)。
+    """
+    name = product.get("name") or data.get("title") or ""
+    if not name:
+        return None
+    nar = data.get("narrative") or {}
+    if not isinstance(nar, dict):
+        return None
+
+    def _trim(text: Any, limit: int = 200) -> str:
+        if not isinstance(text, str):
+            return ""
+        s = re.sub(r"\s+", " ", text.strip())
+        if not s:
+            return ""
+        if len(s) <= limit:
+            return s
+        return s[: limit - 1].rstrip("、。・,. ") + "..."
+
+    steps: list[dict[str, Any]] = []
+
+    # Step 1: 対象年齢
+    age_min: int = 0
+    try:
+        age_min = int(product.get("age_min_months") or 0)
+    except (TypeError, ValueError):
+        age_min = 0
+    if age_min > 0:
+        if age_min < 12:
+            age_label = f"生後 {age_min} ヶ月以上"
+        else:
+            years = age_min // 12
+            age_label = f"{years} 歳以上"
+        steps.append({
+            "@type": "HowToStep",
+            "position": 1,
+            "name": "対象年齢を確認",
+            "text": f"{name}の対象年齢は {age_label}。お子さまの月齢/年齢が合うかを最初に確認してください。",
+        })
+
+    # Step 2: 何が伸びるか (why_this_product)
+    why_text = _trim(nar.get("why_this_product"))
+    if why_text:
+        steps.append({
+            "@type": "HowToStep",
+            "position": len(steps) + 1,
+            "name": "何が伸びるかを確認",
+            "text": why_text,
+        })
+
+    # Step 3: 日常での使い方
+    daily_text = _trim(nar.get("daily_use"))
+    if daily_text:
+        steps.append({
+            "@type": "HowToStep",
+            "position": len(steps) + 1,
+            "name": "日常での使い方をイメージ",
+            "text": daily_text,
+        })
+
+    # Step 4: 安全認証 / 安全性
+    safety_text = _trim(nar.get("safety_note"))
+    if safety_text:
+        steps.append({
+            "@type": "HowToStep",
+            "position": len(steps) + 1,
+            "name": "安全性を確認",
+            "text": safety_text,
+        })
+
+    # Step 5 (optional): 贈り物としての適性
+    gift_text = _trim(nar.get("gift_appeal"))
+    if gift_text:
+        steps.append({
+            "@type": "HowToStep",
+            "position": len(steps) + 1,
+            "name": "贈り物としての適性を確認",
+            "text": gift_text,
+        })
+
+    # 最低 2 ステップ無いと HowTo として弱い
+    if len(steps) < 2:
+        return None
+
+    page_url = f"{_SITE_BASE_URL}/products/{asin.lower()}/"
+    image = product.get("image") or ""
+    howto: dict[str, Any] = {
+        "@context": "https://schema.org",
+        "@type": "HowTo",
+        "@id": f"{page_url}#howto",
+        "name": f"{name} を選ぶ前に確認したい {len(steps)} つのポイント",
+        "description": (
+            f"{name} を購入する前にチェックすべき観点を、おもちゃロボが整理しました。"
+            "対象年齢・知育効果・日常での使い方・安全性を順番に確認することで、"
+            "ご家庭にぴったりかを判断できます。"
+        ),
+        "step": steps,
+    }
+    if image:
+        howto["image"] = image
+    return howto
+
+
+def _extract_review_body(data: dict[str, Any]) -> str:
+    """Issue #1301 B5: Review.reviewBody に流す本文を記事 JSON から抽出する。
+
+    優先順位:
+        1. editorial_comment (おもちゃロボの締め所感) — 簡潔・主観あり・最適
+        2. narrative.closing — narrative の締め
+        3. verdict — Stage 2 enrichment 後の結論
+        4. narrative.lead — fallback
+
+    280 文字以内に丸める (Google の Review snippet は短文を好む)。
+    """
+    candidates = [
+        data.get("editorial_comment"),
+    ]
+    nar = data.get("narrative")
+    if isinstance(nar, dict):
+        candidates.append(nar.get("closing"))
+        candidates.append(nar.get("lead"))
+    candidates.append(data.get("verdict"))
+
+    for c in candidates:
+        if isinstance(c, str) and c.strip():
+            s = re.sub(r"\s+", " ", c.strip())
+            if len(s) <= 280:
+                return s
+            return s[:277].rstrip("、。・,. ") + "..."
+    return ""
+
+
+def _get_development_stage(age_min_months: int, stages_data: dict[str, Any]) -> dict[str, Any] | None:
+    """最小月齢から、合致する最適な発達段階のデータを取り出す。"""
+    if not stages_data:
+        return None
+    stage_keys = []
+    for k in stages_data.keys():
+        if k.endswith('m'):
+            try:
+                stage_keys.append(int(k[:-1]))
+            except ValueError:
+                pass
+    stage_keys.sort()
+    
+    selected_key = 0
+    for sk in stage_keys:
+        if age_min_months >= sk:
+            selected_key = sk
+        else:
+            break
+            
+    return stages_data.get(f"{selected_key}m")
+
+
 _TRAILING_BRACKET_RE = re.compile(r"\s*[（(\[【][^）)\]】]*[）)\]】]\s*$")
 
 
@@ -282,6 +671,15 @@ def _build_article_index(src_path: pathlib.Path) -> dict[str, dict[str, Any]]:
     Used so competitor cards can deep-link to an existing internal article
     (with the article's IVS score badge) and so we can auto-recommend
     score-similar internal articles as additional competitor cards (#508).
+
+    Scores are recomputed via :func:`score_calculator.calculate` for every
+    article rather than read from ``product.ivs_detail.total_100``. The JSON
+    field is written by Jules at article creation and only refreshed in-memory
+    via the per-article ``data["score"]`` render context (built from a fresh
+    ``ScoreResult`` in the main loop, post enrichment + price backfill), so
+    cross-article references (similar / same-price-band cards) would otherwise
+    surface stale Jules-era values that disagree with the score on the target
+    article's own page (#1089).
     """
     index: dict[str, dict[str, Any]] = {}
     if not src_path.exists():
@@ -302,16 +700,37 @@ def _build_article_index(src_path: pathlib.Path) -> dict[str, dict[str, Any]]:
                 asin = m.group(1)
         if not asin or asin in index:
             continue
-        ivs_detail = product.get("ivs_detail") if isinstance(product.get("ivs_detail"), dict) else {}
         amazon_price_obj = (product.get("prices") or {}).get("amazon") or {}
         try:
             amazon_price = int(amazon_price_obj.get("price") or 0) if isinstance(amazon_price_obj, dict) else 0
         except (TypeError, ValueError):
             amazon_price = 0
+
+        ivs_score_100: int | None = None
+        ivs_score: float | None = None
+        raw_brand = product.get("brand")
+        if raw_brand:
+            try:
+                sr = calculate_score(meta, normalize_brand(raw_brand), asin=asin)
+                ivs_score_100 = int(sr.total_100)
+                ivs_score = float(sr.ivs_score)
+            except Exception:
+                # Fall through to JSON-cached value below if recompute fails.
+                ivs_score_100 = None
+                ivs_score = None
+        if ivs_score_100 is None:
+            ivs_detail = product.get("ivs_detail") if isinstance(product.get("ivs_detail"), dict) else {}
+            cached_100 = ivs_detail.get("total_100")
+            if isinstance(cached_100, (int, float)) and cached_100 > 0:
+                ivs_score_100 = int(cached_100)
+            cached_score = product.get("ivs_score")
+            if isinstance(cached_score, (int, float)) and cached_score > 0:
+                ivs_score = float(cached_score)
+
         index[asin] = {
             "slug": slug,
-            "ivs_score_100": ivs_detail.get("total_100"),
-            "ivs_score": product.get("ivs_score"),
+            "ivs_score_100": ivs_score_100,
+            "ivs_score": ivs_score,
             "name": product.get("name") or "",
             "image": product.get("image") or "",
             "amazon_price": amazon_price,
@@ -543,9 +962,9 @@ def _recommend_same_price_band(
         return
     candidates.sort(key=lambda t: (-t[0], t[1]))
 
-    items: list[dict[str, Any]] = []
+    cards: list[dict[str, Any]] = []
     for score, asin, meta in candidates[:limit]:
-        items.append({
+        cards.append({
             "asin": asin,
             "name": _shrink_competitor_name(meta.get("name") or ""),
             "image": meta.get("image") or "",
@@ -554,11 +973,15 @@ def _recommend_same_price_band(
             "price": meta.get("amazon_price") or 0,
         })
 
+    # NOTE: key は "cards" (not "items")。dict.items は Python の builtin method
+    # で、Jinja2 の getattr → __getitem__ 解決順だと
+    # ``same_price_band.items`` が bound method を返してしまい
+    # ``|length`` で TypeError になる (#1078 直後に検知)。
     data["same_price_band"] = {
         "band_key": band["key"],
         "band_label": band["label"],
         "band_url": f"{site_base_path}/cospa/#cospa-band-pane-{band['key']}",
-        "items": items,
+        "cards": cards,
     }
 
 
@@ -819,8 +1242,13 @@ def _backfill_amazon_badges(
 # 楽天/Yahoo cross-search 結果を本文の価格グリッドに流し込むときに、
 # 検索ヒットしただけで実商品とかけ離れた item (ふるさと納税の高額品など) を
 # 弾くためのガード閾値。Amazon 価格を anchor にする。
-_MARKET_PRICE_BAND_LOW = 0.5   # Amazon 価格の 50% 未満は除外
-_MARKET_PRICE_BAND_HIGH = 2.0  # Amazon 価格の 200% 超は除外
+# Issue #1072 Phase 3-B (2026-05-31): jan_unknown 58 ASIN を救済するため
+#   price band を [0.5, 2.0] → [0.4, 2.5] に、coverage を 0.7 → 0.5 に緩和。
+#   dry-run (scripts/analyze_threshold_relaxation.py) で +25 件救済を確認、
+#   FP の主因は閾値ではなく Mamimami Home 系 search_keyword の品質問題
+#   (別 Issue で対処予定)。relax_both preset 採用。
+_MARKET_PRICE_BAND_LOW = 0.4   # Amazon 価格の 40% 未満は除外
+_MARKET_PRICE_BAND_HIGH = 2.5  # Amazon 価格の 250% 超は除外
 # verified=False の existing として keep する場合でも、Amazon の 3.0x 超 / 1/3 未満
 # の極端な乖離は別商品確定として丸ごと破棄し、検索フォールバックのみ残す。
 # 例: B0F4X462WH (amazon 1579円) yahoo_matched が 14395 円 (9.12x) で Jules が同 URL
@@ -831,12 +1259,49 @@ _MARKET_PRICE_BAND_EXTREME = 3.0
 # verified=False に格下げ → ※確度低 badge + 検索 fallback 表示。
 # 例: kw='Hape ビーズコインドロップス E0328' vs title='Hape ビーズコインドロップス
 # E0327' は 2/3=0.67 で borderline (異モデル番号) として捕捉される。
-_MARKET_COVERAGE_RATIO = 0.7
+_MARKET_COVERAGE_RATIO = 0.5
 # search_keyword を title overlap 判定するときに、汎用すぎて根拠にならない語
 _MARKET_GENERIC_TOKENS = frozenset({
     "おもちゃ", "知育玩具", "プレゼント", "誕生日", "ギフト",
     "木製", "木のおもちゃ", "セット", "玩具",
 })
+
+# 型番ハイフン揺れを吸収 (例: 'RD-6' vs 'RD−6' / 'EH-2310' vs 'EH−2310').
+# title vs kw の substring 判定で false negative を防ぐ。Issue #1140 で
+# B09BQMCSFL (kw 'RD-6' vs title 'RD−6') が descriptor 不一致と誤判定された対応。
+_HYPHEN_VARIANTS_RE = re.compile(r"[‐‑‒–—―−ー]")
+# 中黒 (半角 ﾟ・ U+FF65 / 全角 ・ U+30FB / 半角 ･ U+FF65) を 1 文字に統一。
+# 'トイ・ストーリー' vs 'トイ･ストーリー' を同一視。
+_MIDDOT_VARIANTS_RE = re.compile(r"[･・]")
+
+
+def _normalize_for_match(s: str) -> str:
+    if not s:
+        return s
+    s = html.unescape(s)  # '&amp;' → '&' 等の HTML entity を吸収
+    s = _HYPHEN_VARIANTS_RE.sub("-", s)
+    s = _MIDDOT_VARIANTS_RE.sub("・", s)
+    return s
+
+
+def _descriptor_hits_title(descriptor: str, title_norm: str, title_tokens_norm: list) -> bool:
+    """Issue #1140: descriptor token が title に「実質的に」出現するか。
+
+    1. 正規化後の substring 一致 (タッチペン → 'タッチペン...' を含む title)
+    2. title token が descriptor の substring (タッチペン付 ⊃ タッチペン)
+       → suffix 表記揺れ (付/版/セット) を吸収
+    3. 先頭/末尾の punctuation を剥がして再判定 ('-Switch' → 'Switch')
+    """
+    d = _normalize_for_match(descriptor)
+    if d in title_norm:
+        return True
+    for tt in title_tokens_norm:
+        if len(tt) >= 3 and tt in d:
+            return True
+    d_stripped = d.strip("-_/.,;:!?()[]{}<>")
+    if d_stripped and d_stripped != d and len(d_stripped) >= 3 and d_stripped in title_norm:
+        return True
+    return False
 
 
 def _load_matched_index(path: pathlib.Path) -> dict[str, dict[str, Any]]:
@@ -883,7 +1348,8 @@ def _matched_passes_quality(matched: dict[str, Any], amazon_price: int) -> bool:
     meaningful = [t for t in kw_tokens if t not in _MARKET_GENERIC_TOKENS]
     if not meaningful:
         return True  # 区別語が無ければ cross-search 側 median band の選出を尊重
-    hits = sum(1 for t in meaningful if t in title)
+    title_norm = _normalize_for_match(title)
+    hits = sum(1 for t in meaningful if _normalize_for_match(t) in title_norm)
     threshold = 2 if len(meaningful) >= 2 else 1
     if hits < threshold:
         return False
@@ -891,6 +1357,29 @@ def _matched_passes_quality(matched: dict[str, Any], amazon_price: int) -> bool:
     # シリーズ違い/別モデルの誤マッチが多いため verified=False に格下げ。
     if hits / len(meaningful) < _MARKET_COVERAGE_RATIO:
         return False
+    # Issue #1140: 非ブランド descriptor 一致を必須化。
+    # search_keyword は extract_search_keyword で「brand head (先頭 1-2 token) +
+    # descriptor」の構造になる。Mamimami Home のようなカテゴリ横断ブランドだと
+    # brand head だけが title と一致して通過し、descriptor (ティッシュ/積み木/楽器)
+    # が別商品とずれていても FP として救済されてしまう (relax_both で 4 件確認)。
+    # kw と matched title の共通 leading token prefix を brand head とみなし、
+    # それ以外の descriptor から最低 1 token は title に含まれることを要求する。
+    title_tokens = [t for t in re.split(r"\s+", title) if t]
+    prefix_len = 0
+    for kt, tt in zip(kw_tokens, title_tokens):
+        if _normalize_for_match(kt) == _normalize_for_match(tt):
+            prefix_len += 1
+        else:
+            break
+    if prefix_len >= 1:
+        descriptor = [
+            t for t in kw_tokens[prefix_len:]
+            if len(t) >= 2 and t not in _MARKET_GENERIC_TOKENS
+        ]
+        if descriptor:
+            title_tokens_norm = [_normalize_for_match(t) for t in title_tokens if len(t) >= 2]
+            if not any(_descriptor_hits_title(d, title_norm, title_tokens_norm) for d in descriptor):
+                return False
     return True
 
 
@@ -1256,6 +1745,7 @@ def _frontmatter_meta(
     draft: bool,
     git_history: dict[str, dict[str, Any]],
     json_file_path: pathlib.Path,
+    score_result: ScoreResult | None = None,
 ) -> dict[str, Any]:
     title = data.get("title", "No Title")
     variants = data.get("title_variants") or []
@@ -1266,7 +1756,6 @@ def _frontmatter_meta(
     product = data.get("product") or {}
     asin = product.get("asin")
     if not asin:
-        import re
         m = re.search(r"-(B0[A-Z0-9]{8})$", slug, flags=re.IGNORECASE)
         if m:
             asin = m.group(1)
@@ -1305,6 +1794,51 @@ def _frontmatter_meta(
     image_url = product.get("image") or ""
     if image_url:
         meta["product_image"] = image_url
+        # Issue #1300 ②: og:image / twitter:image を商品画像で上書き。
+        # PaperMod の opengraph.html / twitter_cards.html は .Params.images が
+        # 設定されていれば _funcs/get-page-images 経由で最初の URL を採用する
+        # (未設定だと site.Params.images の /og-image.jpg 汎用画像に fallback)。
+        #
+        # Issue #1494: Amazon CDN の元画像が 500x455 程度しかない商品が多く、
+        # og:image:width=1200 を宣言しても X (summary_large_image) / Threads /
+        # FB で preview が劣化または抑止される。build 時に専用 1200x630 画像を
+        # 合成して /og/<asin>.jpg に出力 → og:image をそちらに差し替える。
+        # 失敗時は従来挙動 (Amazon 画像 URL を直接 og:image) に fallback。
+        og_image_path = None
+        try:
+            from build_og_image import build_og_image  # type: ignore
+
+            out = build_og_image(
+                asin=asin,
+                image_url=image_url,
+                title=title,
+                out_dir=pathlib.Path("hugo/static/og"),
+            )
+            if out:
+                og_image_path = f"/og/{asin.lower()}.jpg"
+        except Exception as e:
+            print(f"build_og_image failed for {asin}: {e}")
+        # Issue #1500: PR #1302 (#1300) で og:image を per-page 化した際、`meta["images"]`
+        # を 1 枚に固定したため、PaperMod の opengraph.html 既存仕様 (`.Params.images`
+        # の最大 6 枚を og:image として range emit) が活かされていなかった。
+        # _backfill_product_images() で build 時に組み立てた product["images"]
+        # (primary + PA-API variants 最大 6 枚) を残りの og:image 候補として併出する。
+        #
+        # platform 仕様: X (twitter:image) / Threads は単一画像しか採用しないが、
+        # Facebook は share dialog で選択肢化、LinkedIn は最初の 1 枚を採用。
+        # link preview UI の carousel 化は organic post の standard 仕様には無いが、
+        # 「実装側で 1 枚に絞る」boundary は外し、platform の挙動は live 観測する。
+        # 先頭は build-time 合成 OG (1200x630 brand band 化) を維持して X の
+        # summary_large_image の主画像はそのまま。
+        images_list: list[str] = []
+        if og_image_path:
+            images_list.append(og_image_path)
+        for u in (product.get("images") or [])[:6]:
+            if isinstance(u, str) and u and u not in images_list:
+                images_list.append(u)
+        if not images_list and image_url:
+            images_list.append(image_url)
+        meta["images"] = images_list[:6]   # PaperMod opengraph.html の `first 6` と一致
     # 2026-05-15 (@J Phase 1): data/brand_taxonomy.yaml に基づくブランド正規化。
     # raw brand (Jules / API 取得時の表記ゆれ含む) → canonical 名に統一して
     # Hugo /brands/<canonical>/ ページで集約検索できるようにする。
@@ -1354,32 +1888,85 @@ def _frontmatter_meta(
                 
     meta["age_min_months"] = _parse_age_min_months(raw_age)
 
-    # 2026-05-15 (@J Phase 2): Jules の ivs_score を破棄し、6要素から論理再計算する。
-    # Jules スコアはブランド信頼度を反映しないため (ノーブランド=4.7 等の不正)、
+    # #1124: Jules 側の ivs_score / ivs_detail 生成は廃止。スコアは
     # brand_tier(25) + safety(10) + age(10) + edu(15) + media(15) + market(10) + price(15)
-    # = total_100 を score_calculator で算出して上書きする。
-    # Jules の元値は ivs_score_jules に保持し、比較・デバッグに使う。
-    jules_ivs = product.get("ivs_score")
+    # を score_calculator で算出する一本化された source-of-truth に揃える。
     if raw_brand:
-        sr = calculate_score(data, nb, asin=product.get("asin"))
+        # #1107: 同記事の ScoreResult が事前計算済 (main loop が enrichment 後に算出) なら
+        # それを再利用し、calculate_score の重複呼出を避ける。
+        sr = score_result if score_result is not None else calculate_score(
+            data, nb, asin=product.get("asin")
+        )
         meta["ivs_score"] = sr.ivs_score
         meta["ivs_score_100"] = sr.total_100
         meta["score_breakdown"] = sr.breakdown
         # 4 軸 (#589) — カード一覧で簡易バーを描くために frontmatter に持たせる。
         # index.json / Hugo partial がここを読む。スケール定義は score_calculator 一元管理。
         meta["ivs_axes"] = compute_ivs_axes(sr.breakdown)
-        if isinstance(jules_ivs, (int, float)):
-            meta["ivs_score_jules"] = float(jules_ivs)
-    else:
-        # brand が空のレアケース: Jules の値を流用 (互換性)
-        if isinstance(jules_ivs, (int, float)):
-            meta["ivs_score"] = float(jules_ivs)
-        ivs_detail = product.get("ivs_detail") or {}
-        total_100 = ivs_detail.get("total_100")
-        if isinstance(total_100, (int, float)):
-            meta["ivs_score_100"] = int(total_100)
+    # Issue #1297: Hugo の .Params map はキーを小文字化するため、JSON-LD を
+    # ネスト dict のまま渡すと aggregateRating → aggregaterating のように
+    # schema.org キーが壊れる。各値を JSON 文字列としてシリアライズし、
+    # template 側は | safeJS で素通しする。
+    # `<` / `>` / `&` は HTML escape して </script> 衝突を防ぐ
+    # (Go encoding/json のデフォルト挙動と同等)。
+    meta_jsonld: dict[str, Any] = {}
     if data.get("jsonld"):
-        meta["jsonld"] = data["jsonld"]
+        for k, v in data["jsonld"].items():
+            if isinstance(v, (dict, list)):
+                s = json.dumps(v, ensure_ascii=False)
+                s = s.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+                meta_jsonld[k] = s
+            else:
+                meta_jsonld[k] = v
+    # Issue #1301 B4 Stage 2: WebPage JSON-LD (author / reviewedBy / creator)。
+    # AI 下書きと人間レビューを分離可視化する。既存 product/faq/breadcrumb と並列 emit。
+    if product and asin:
+        webpage_ld = _build_webpage_jsonld(
+            product=product,
+            tags=meta.get("tags") or [],
+            title=title,
+            date=str(data.get("date") or lastmod),
+            lastmod=lastmod,
+            asin=str(asin),
+        )
+        s = json.dumps(webpage_ld, ensure_ascii=False)
+        s = s.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+        meta_jsonld["webpage"] = s
+
+        # Issue #1301 B5: 個別 Review JSON-LD。Product.aggregateRating とは別に
+        # おもちゃロボの独自レビュー 1 件を Review として emit。
+        review_body = _extract_review_body(data)
+        if review_body:
+            avg_for_review: Any = 4.0
+            rs = data.get("review_summary")
+            if isinstance(rs, dict) and rs.get("avg_rating") is not None:
+                avg_for_review = rs["avg_rating"]
+            elif product.get("ivs_score") is not None:
+                avg_for_review = product["ivs_score"]
+            review_ld = _build_review_jsonld(
+                product=product,
+                title=title,
+                date=str(data.get("date") or lastmod),
+                avg_rating=avg_for_review,
+                review_body=review_body,
+                asin=str(asin),
+            )
+            if review_ld:
+                s = json.dumps(review_ld, ensure_ascii=False)
+                s = s.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+                meta_jsonld["review"] = s
+
+        # Issue #1301 B6: HowTo JSON-LD (「選び方」確認ステップ)。
+        # narrative の why_this_product / daily_use / safety_note / gift_appeal を
+        # 4-5 ステップに programmatic に組み立てる。
+        howto_ld = _build_howto_jsonld(product=product, data=data, asin=str(asin))
+        if howto_ld:
+            s = json.dumps(howto_ld, ensure_ascii=False)
+            s = s.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+            meta_jsonld["howto"] = s
+
+    if meta_jsonld:
+        meta["jsonld"] = meta_jsonld
     if data.get("breadcrumbs"):
         meta["breadcrumbs"] = data["breadcrumbs"]
         
@@ -1459,6 +2046,15 @@ def main() -> None:
     site_base_path = _site_base_path(pathlib.Path(args.hugo_config))
     git_history = _load_git_history(src_path)
 
+    # 年齢別発達段階目安データのロード
+    stages_path = pathlib.Path("hugo/data/development_stages.json")
+    stages_data = {}
+    if stages_path.exists():
+        try:
+            stages_data = json.loads(stages_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"Failed to load development_stages.json: {e}")
+
     template_file = pathlib.Path("scripts/templates/post.md.j2")
     if not template_file.exists():
         print("Template not found")
@@ -1482,6 +2078,13 @@ def main() -> None:
         "books": {"primary": 0, "fallback": 0, "missing": 0},
         "omcha": {"primary": 0, "fallback": 0, "missing": 0},
     }
+    # #677: per-ASIN fallback breakdown. ``manifest["by_asin"][asin]["fallbacks"]``
+    # records which path each media source took (primary / fallback_used / missing)
+    # for drill-down beyond the aggregate summary.
+    by_asin: dict[str, dict[str, Any]] = {}
+    # score_calculator の missing/empty counter は build_post 経由の calculate_score
+    # 呼出で蓄積されるため、明示的にリセットしてから loop を回す。
+    reset_media_exposure_metrics()
 
     for f in sorted(src_path.glob("*.json")):
         if f.stem.endswith(SUFFIX_SKIP):
@@ -1519,18 +2122,28 @@ def main() -> None:
             _fill_jsonld(data)
 
             # 統計データの集計
+            _po = data.get("product")
+            asin_for_manifest = _po.get("asin") if isinstance(_po, dict) else ""
+            per_article_fallbacks: dict[str, str] = {}
+
             def _update_stats(key: str, has_jules: bool, has_final: bool) -> None:
                 if has_jules:
                     stats[key]["primary"] += 1
+                    per_article_fallbacks[key] = "primary"
                 elif has_final:
                     stats[key]["fallback"] += 1
+                    per_article_fallbacks[key] = "fallback_used"
                 else:
                     stats[key]["missing"] += 1
+                    per_article_fallbacks[key] = "missing"
 
             _update_stats("youtube", has_jules_yt, bool(data.get("youtube_embeds")))
             _update_stats("news", has_jules_news, bool(data.get("news")))
             _update_stats("books", has_jules_books, bool(data.get("books")))
             _update_stats("omcha", has_jules_omcha, bool(data.get("omcha_related")))
+
+            if asin_for_manifest:
+                by_asin[asin_for_manifest] = {"fallbacks": per_article_fallbacks}
 
             _meta_re = re.compile(r"\s*[(（]\s*\d+\s*字\s*[)）]\s*$")
             if isinstance(data.get("narrative"), dict):
@@ -1543,17 +2156,61 @@ def main() -> None:
                 if isinstance(v, str):
                     data[top_key] = _meta_re.sub("", v).strip()
 
-            # 2026-05-15 (@J Phase 2): テンプレが参照する product.ivs_detail を
-            # 新スコアで上書きしてから render する (本文内 IVS 表示を frontmatter と同期)。
-            _sync_ivs_for_render(data)
+            # #1107: enrichment + 価格 backfill 後の data から ScoreResult を 1 回だけ算出し、
+            # 本文 (data["score"]) と frontmatter (_frontmatter_meta) で再利用する
+            # (本文 / frontmatter 用の calculate_score 呼出を 2 回 → 1 回に削減)。
+            # 注: _build_article_index 側は raw JSON 由来の cross-article カード用スコアを
+            # 別途算出しており、価格 backfill 前の値を持つため再利用不可。
+            fresh_sr: ScoreResult | None = None
+            product_obj = data.get("product")
+            if isinstance(product_obj, dict):
+                raw_brand_for_score = product_obj.get("brand")
+                if raw_brand_for_score:
+                    try:
+                        fresh_sr = calculate_score(
+                            data,
+                            normalize_brand(raw_brand_for_score),
+                            asin=product_obj.get("asin"),
+                        )
+                    except Exception:
+                        fresh_sr = None
+            # #1111: テンプレへは data["score"] を直接渡す (旧 product.ivs_detail の
+            # in-place mutation = _sync_ivs_for_render は廃止)。
+            # #1124: product.ivs_score の上書きも廃止 (frontmatter は
+            # _frontmatter_meta が fresh_sr を直接参照する)。残る副作用は
+            # レビュー CTA URL の付与のみ。
+            if fresh_sr is not None:
+                data["score"] = _build_score_context(fresh_sr)
+                if isinstance(product_obj, dict):
+                    asin_for_review = product_obj.get("asin")
+                    if asin_for_review:
+                        product_obj["amazon_review_url"] = (
+                            f"https://www.amazon.co.jp/dp/{asin_for_review}"
+                            "/?tag=zefiransesu-22#customerReviews"
+                        )
+            # 年齢別発達段階目安データのマッピング
+            target_age_raw = ""
+            if isinstance(product_obj, dict):
+                target_age_raw = product_obj.get("target_age")
+            if not target_age_raw and isinstance(data.get("persona_fit"), dict):
+                target_age_raw = data["persona_fit"].get("age_range")
+
+            age_months = _parse_age_min_months(target_age_raw)
+            development_stage = _get_development_stage(age_months, stages_data)
+            if development_stage:
+                data["development_stage"] = development_stage
+
             # Issue #515: link_report_flag macro が記事 URL 構築用に slug を参照する。
             data["slug"] = slug
             md_body = template.render(**data)
             draft = _quality_draft(slug, src_path, args.min_score)
-            post = frontmatter.Post(md_body, **_frontmatter_meta(data, slug, draft, git_history, f))
+            post = frontmatter.Post(
+                md_body,
+                **_frontmatter_meta(data, slug, draft, git_history, f, score_result=fresh_sr),
+            )
 
             out_file = dst_path / f"{slug}.md"
-            out_file.write_text(frontmatter.dumps(post), encoding="utf-8")
+            out_file.write_text(frontmatter.dumps(post, width=10000), encoding="utf-8")
             tag = "  [DRAFT: low quality]" if draft else ""
 
             if args.gate and evaluate_article is not None:
@@ -1569,7 +2226,7 @@ def main() -> None:
                 )
                 if args.min_score > 0 and report.total_score < args.min_score and not draft:
                     post.metadata["draft"] = True
-                    out_file.write_text(frontmatter.dumps(post), encoding="utf-8")
+                    out_file.write_text(frontmatter.dumps(post, width=10000), encoding="utf-8")
                     tag = f"  [DRAFT: score {report.total_score} < {args.min_score}]"
                 else:
                     tag += f"  [score {report.total_score}]"
@@ -1591,7 +2248,13 @@ def main() -> None:
             "news": stats["news"],
             "books": stats["books"],
             "omcha": stats["omcha"],
-        }
+            # #677: score_calculator が記録した missing (file 不在) と empty
+            # (file 有り API 0 hit) を分離して可視化。
+            "media_exposure_metrics": get_media_exposure_metrics().as_dict(),
+        },
+        # #677: per-ASIN の fallback breakdown。`gh run view` から個別 ASIN の
+        # 状態をドリルダウン確認するために残す。
+        "by_asin": by_asin,
     }
     try:
         (manifest_dir / "build_manifest.json").write_text(
@@ -1611,6 +2274,8 @@ def main() -> None:
         def _cov_pct(primary: int, fallback: int, total: int) -> str:
             return f"{(primary + fallback) / total * 100:.1f}%" if total > 0 else "0.0%"
 
+        me = get_media_exposure_metrics().as_dict()
+        me_total = me["total"] or rendered
         summary_md = f"""
 ## Build Manifest ({rendered} articles)
 
@@ -1620,6 +2285,16 @@ def main() -> None:
 | **News** | {_pct(stats['news']['primary'], rendered)} | {_pct(stats['news']['fallback'], rendered)} | {_pct(stats['news']['missing'], rendered)} | {_cov_pct(stats['news']['primary'], stats['news']['fallback'], rendered)} |
 | **Books** | {_pct(stats['books']['primary'], rendered)} | {_pct(stats['books']['fallback'], rendered)} | {_pct(stats['books']['missing'], rendered)} | {_cov_pct(stats['books']['primary'], stats['books']['fallback'], rendered)} |
 | **omcha** | {_pct(stats['omcha']['primary'], rendered)} | {_pct(stats['omcha']['fallback'], rendered)} | {_pct(stats['omcha']['missing'], rendered)} | {_cov_pct(stats['omcha']['primary'], stats['omcha']['fallback'], rendered)} |
+
+### Score calculator media-exposure ({me_total} ASIN)
+
+`missing` = per-ASIN cache file 不在 (fetch サイクル未到達) / `empty` = file 有り API 0 hit。Issue #677。
+
+| Source | missing | empty |
+| :--- | :---: | :---: |
+| YouTube | {_pct(me['yt_missing'], me_total)} | {_pct(me['yt_empty'], me_total)} |
+| News | {_pct(me['news_missing'], me_total)} | {_pct(me['news_empty'], me_total)} |
+| omcha | {_pct(me['omcha_missing'], me_total)} | {_pct(me['omcha_empty'], me_total)} |
 """
         try:
             with open(summary_env, "a", encoding="utf-8") as sf:

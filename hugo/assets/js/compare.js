@@ -206,6 +206,22 @@
     return min;
   }
 
+  // index.json は age_range が空文字のことが多い。product_card.html と同じ規則で
+  // age_min_months から「Nヶ月〜 / N歳〜 / N.5歳〜」を組み立てる。
+  function _formatAge(item) {
+    var range = (item.age_range || "").trim();
+    if (range) return range;
+    var m = Number(item.age_min_months || 0);
+    if (!m && m !== 0) return "—";
+    if (m <= 0) return "0歳〜";
+    if (m < 12) return m + "ヶ月〜";
+    var years = Math.floor(m / 12);
+    var rem = m % 12;
+    if (rem === 0) return years + "歳〜";
+    if (rem === 6) return years + ".5歳〜";
+    return (m / 12).toFixed(1) + "歳〜";
+  }
+
   function _axisBar(label, icon, value) {
     if (!value && value !== 0) return "";
     var pct = Math.round((value / 5) * 100);
@@ -256,10 +272,10 @@
     items.forEach(function (it) {
       var ax = it.ivs_axes || {};
       var html = "";
-      html += _axisBar("knowledge", "📚", Number(ax.education || 0));
-      html += _axisBar("longevity", "🧸", Number(ax.longevity || 0));
-      html += _axisBar("cost", "💴", Number(ax.cost_performance || 0));
-      html += _axisBar("safety", "🛡️", Number(ax.safety || 0));
+      html += _axisBar("知育", "📚", Number(ax.education || 0));
+      html += _axisBar("長く遊べる", "🧸", Number(ax.longevity || 0));
+      html += _axisBar("コスパ", "💴", Number(ax.cost_performance || 0));
+      html += _axisBar("安全性", "🛡️", Number(ax.safety || 0));
       rows.push('<td><div class="score-minichart compare-axes">' + html + "</div></td>");
     });
     rows.push("</tr>");
@@ -272,7 +288,7 @@
 
     rows.push('<tr class="compare-row compare-row--age"><th scope="row">対象年齢</th>');
     items.forEach(function (it) {
-      rows.push("<td>" + (it.age_range || "—") + "</td>");
+      rows.push("<td>" + _formatAge(it) + "</td>");
     });
     rows.push("</tr>");
 
