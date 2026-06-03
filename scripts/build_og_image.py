@@ -168,15 +168,19 @@ def build_og_image(
     domain_font = _load_font(TAGLINE_FONT_PX)
     if brand_font is not None:
         try:
-            # 左上に「おもちゃいろ 比較ナビ」(CJK 含む)
-            bbox = draw.textbbox((0, 0), BRAND_LINE, font=brand_font)
-            text_h = bbox[3] - bbox[1]
+            # 左上に brand 行を split rendering: 「おもちゃいろ」をブランドオレンジ、
+            # 「 比較ナビ」をダークグレーで描画。装飾 underline は削除 (#1500 follow-up:
+            # 固定 80px underline が brand 文字の途中まで → 視覚的にアンバランスとの指摘)。
+            brand_orange = "おもちゃいろ"
+            brand_dark = " 比較ナビ"
+            full_bbox = draw.textbbox((0, 0), BRAND_LINE, font=brand_font)
+            text_h = full_bbox[3] - full_bbox[1]
             bx = PADDING
-            by = (BRAND_BAND_TOP - text_h) // 2 - bbox[1]
-            draw.text((bx, by), BRAND_LINE, fill=BRAND_TEXT_COLOR, font=brand_font)
-            # 左下にオレンジのアクセント underline (brand 行の下 6px、幅 80px)
-            ul_y = by + text_h + 8
-            draw.rectangle([bx, ul_y, bx + 80, ul_y + 4], fill=BRAND_ACCENT_COLOR)
+            by = (BRAND_BAND_TOP - text_h) // 2 - full_bbox[1]
+            draw.text((bx, by), brand_orange, fill=BRAND_ACCENT_COLOR, font=brand_font)
+            orange_bbox = draw.textbbox((0, 0), brand_orange, font=brand_font)
+            orange_w = orange_bbox[2] - orange_bbox[0]
+            draw.text((bx + orange_w, by), brand_dark, fill=BRAND_TEXT_COLOR, font=brand_font)
         except Exception as e:
             print(f"build_og_image: brand line draw failed for {asin_l}: {e}",
                   file=sys.stderr)
