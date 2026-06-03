@@ -1,0 +1,76 @@
+name: Refresh THREADS_ACCESS_TOKEN
+# Issue #1486 follow-up (session 87): Meta Graph long-lived token (60 日寿命)
+# を期限前に weekly で renew する。
+#
+# 設計:
+#   - cron 週次 (毎週日曜 04:00 UTC = 13:00 JST 日曜)
+#   - `th_refresh_token` は 24 時間以上経過した long-lived token を対象
+#     ([[feedback-omochairo-threads-token-diagnostic]])
+#   - 新 token を gh API 経由で repository secret に上書き
+#     (gh secret set は libsodium で暗号化 → POST /actions/secrets/{name})
+#   - App token に **secrets: write** 権限が必要
+#     (omochairo-fetch-bot に未付与なら manual run が必要)
+#   - 失敗時は ::error:: で Issue/通知に上がるよう exit 1 で終わる
+#
+# 手動 dispatch も可能 (token 更新確認用)。
+on:
+  workflow_dispatch:
+  schedule:
+    # 毎週日曜 04:00 UTC = 13:00 JST。60 日寿命に対し週次で安全マージン
+    - cron: '0 4 * * 0'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refresh-threads-token
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Refresh token via Meta Graph
+        id: refresh
+        env:
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          NEW_TOKEN=$(python scripts/refresh_threads_token.py)
+          if [ -z "$NEW_TOKEN" ]; then
+            echo "::error::Empty new token returned"
+            exit 1
+          fi
+          # workflow log には出さない (sensitive)
+          echo "::add-mask::$NEW_TOKEN"
+          echo "new_token=$NEW_TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Update repository secret
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          NEW_TOKEN: ${{ steps.refresh.outputs.new_token }}
+        run: |
+          set -euo pipefail
+          # gh secret set は libsodium 暗号化を内部処理。`--body` 未指定で stdin
+          # から値を読む。`--body "$NEW_TOKEN"` は ps から漏れるので避ける。
+          printf '%s' "$NEW_TOKEN" | gh secret set THREADS_ACCESS_TOKEN \
+            --repo "${{ github.repository }}"
+          echo "::notice::THREADS_ACCESS_TOKEN refreshed successfully"
