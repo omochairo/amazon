@@ -1798,7 +1798,27 @@ def _frontmatter_meta(
         # PaperMod の opengraph.html / twitter_cards.html は .Params.images が
         # 設定されていれば _funcs/get-page-images 経由で最初の URL を採用する
         # (未設定だと site.Params.images の /og-image.jpg 汎用画像に fallback)。
-        meta["images"] = [image_url]
+        #
+        # Issue #1494: Amazon CDN の元画像が 500x455 程度しかない商品が多く、
+        # og:image:width=1200 を宣言しても X (summary_large_image) / Threads /
+        # FB で preview が劣化または抑止される。build 時に専用 1200x630 画像を
+        # 合成して /og/<asin>.jpg に出力 → og:image をそちらに差し替える。
+        # 失敗時は従来挙動 (Amazon 画像 URL を直接 og:image) に fallback。
+        og_image_path = None
+        try:
+            from build_og_image import build_og_image  # type: ignore
+
+            out = build_og_image(
+                asin=asin,
+                image_url=image_url,
+                title=title,
+                out_dir=pathlib.Path("hugo/static/og"),
+            )
+            if out:
+                og_image_path = f"/og/{asin.lower()}.jpg"
+        except Exception as e:
+            print(f"build_og_image failed for {asin}: {e}")
+        meta["images"] = [og_image_path or image_url]
     # 2026-05-15 (@J Phase 1): data/brand_taxonomy.yaml に基づくブランド正規化。
     # raw brand (Jules / API 取得時の表記ゆれ含む) → canonical 名に統一して
     # Hugo /brands/<canonical>/ ページで集約検索できるようにする。
