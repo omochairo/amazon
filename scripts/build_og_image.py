@@ -42,16 +42,24 @@ DEFAULT_OUT_DIR = REPO_ROOT / "hugo" / "static" / "og"
 
 CANVAS_W = 1200
 CANVAS_H = 630
-PRODUCT_BOX = 560               # 商品画像 contain-fit box (ほぼ canvas 縦幅まで)
-PADDING = 30
+# X (summary_large_image) は画像下部 80-100px に twitter:title を黒帯 overlay する
+# (#1500 / feedback_omochairo_x_card_title_overlay)。商品画像と brand watermark を
+# overlay 領域に当てないよう、上 100px に brand band、下 110px は safe zone として
+# 空ける。商品画像は中央 420px の縦帯に contain-fit。
+SAFE_ZONE_BOTTOM = 110
+BRAND_BAND_TOP = 100
+PRODUCT_AREA_H = CANVAS_H - BRAND_BAND_TOP - SAFE_ZONE_BOTTOM  # = 420
+PRODUCT_BOX = 420               # 中央エリアの最大表示サイズ
+PADDING = 36
 BG_COLOR = (255, 255, 255)
-BRAND_COLOR = (140, 140, 140)
-BRAND_FONT_PX = 22
-# 2026-06-03 (#1494 follow-up): X の summary_large_image は image area の下に
-# X 自身が twitter:title を別行で描画するため、画像内に title を焼き込むと二重
-# 表示になる。タイトル焼き込みを廃止し OG 画像は「視覚要素 (商品画像) + 控えめな
-# brand watermark」のみに統一。
-BRAND_LINE = "navi.omcha.jp"
+BRAND_TEXT_COLOR = (60, 60, 70)
+BRAND_ACCENT_COLOR = (255, 140, 80)   # 既存ブランドアクセント (omochairo orange)
+BRAND_FONT_PX = 30
+TAGLINE_COLOR = (130, 130, 140)
+TAGLINE_FONT_PX = 20
+# 2026-06-03 (#1500): brand line は top-left に移動。X の bottom overlay で潰されない。
+BRAND_LINE = "おもちゃいろ 比較ナビ"
+BRAND_DOMAIN = "navi.omcha.jp"
 HTTP_TIMEOUT = 20
 JPEG_QUALITY = 85
 
@@ -146,27 +154,44 @@ def build_og_image(
     src.thumbnail((PRODUCT_BOX, PRODUCT_BOX), Image.LANCZOS)
 
     canvas = Image.new("RGB", (CANVAS_W, CANVAS_H), BG_COLOR)
-    # canvas 全体の中央 (やや上寄せ) に商品画像を配置。brand watermark 分だけ上に詰める。
+    # 商品画像は brand band と safe zone の間 (PRODUCT_AREA_H=420px) の中央に配置。
     x = (CANVAS_W - src.width) // 2
-    y = (CANVAS_H - src.height) // 2 - 18
+    product_area_top = BRAND_BAND_TOP
+    y = product_area_top + (PRODUCT_AREA_H - src.height) // 2
     canvas.paste(src, (x, y))
 
-    # 右下隅に控えめな brand watermark。font が無い (CJK 不在環境) でも brand 文言は
-    # ASCII (navi.omcha.jp) なので Pillow default font に fallback して描画する。
     draw = ImageDraw.Draw(canvas)
+
+    # top-left に brand 行 + 右側に domain を配置 (X 下部 overlay の影響を受けない領域)。
+    # font が無い (CJK 不在環境) でも default font に fallback して何かしらは描画する。
     brand_font = _load_font(BRAND_FONT_PX)
+    domain_font = _load_font(TAGLINE_FONT_PX)
     if brand_font is not None:
         try:
+            # 左上に「おもちゃいろ 比較ナビ」(CJK 含む)
             bbox = draw.textbbox((0, 0), BRAND_LINE, font=brand_font)
+            text_h = bbox[3] - bbox[1]
+            bx = PADDING
+            by = (BRAND_BAND_TOP - text_h) // 2 - bbox[1]
+            draw.text((bx, by), BRAND_LINE, fill=BRAND_TEXT_COLOR, font=brand_font)
+            # 左下にオレンジのアクセント underline (brand 行の下 6px、幅 80px)
+            ul_y = by + text_h + 8
+            draw.rectangle([bx, ul_y, bx + 80, ul_y + 4], fill=BRAND_ACCENT_COLOR)
+        except Exception as e:
+            print(f"build_og_image: brand line draw failed for {asin_l}: {e}",
+                  file=sys.stderr)
+    if domain_font is not None:
+        try:
+            # 右上に navi.omcha.jp (ASCII、確実に描ける)
+            bbox = draw.textbbox((0, 0), BRAND_DOMAIN, font=domain_font)
             text_w = bbox[2] - bbox[0]
             text_h = bbox[3] - bbox[1]
-            bx = CANVAS_W - text_w - PADDING
-            by = CANVAS_H - text_h - PADDING
-            draw.text((bx, by), BRAND_LINE, fill=BRAND_COLOR, font=brand_font)
+            dx = CANVAS_W - text_w - PADDING
+            dy = (BRAND_BAND_TOP - text_h) // 2 - bbox[1]
+            draw.text((dx, dy), BRAND_DOMAIN, fill=TAGLINE_COLOR, font=domain_font)
         except Exception as e:
-            print(f"build_og_image: brand watermark draw failed for {asin_l}: {e}",
+            print(f"build_og_image: domain draw failed for {asin_l}: {e}",
                   file=sys.stderr)
-            # brand 無しでも継続 — 商品画像だけで OG として成立する
 
     out_dir.mkdir(parents=True, exist_ok=True)
     try:
