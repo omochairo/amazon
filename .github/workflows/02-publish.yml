@@ -46,6 +46,13 @@ jobs:
       - name: Install Dependencies
         run: pip install -r requirements.txt
 
+      # Issue #1494: build_og_image.py が hugo/static/og/<asin>.jpg (1200x630) を
+      # 合成する際に CJK font が必要。ubuntu-latest には未 preinstall なので
+      # noto-cjk を入れる。font 不在時は fail-soft で旧挙動 (Amazon 画像 URL を
+      # og:image に) に fallback するが、SNS preview 品質のために font ありを既定に。
+      - name: Install Noto CJK fonts (for OG image generation)
+        run: sudo apt-get update -y && sudo apt-get install -y --no-install-recommends fonts-noto-cjk
+
       # 2026-05-13: v3 旧エンジン (jules_article_engine.py) の自動実行を停止。
       # data/raw/ に居るが data/articles/ に v4 JSON が無い ASIN について、
       # 「【価格比較】〜｜どこで買うのが一番おトク？」型の低品質 v3 記事が
