@@ -1,0 +1,115 @@
+name: Engagement Trend Fetch (news source aggregator)
+
+# Issue #1526 (session 93):
+#   毎日 05:00 JST に 7 source の RSS を fetch、parent-relevance スコアで採点し、
+#   data/engagement_trends/YYYY-MM-DD.json に top 候補を書き出す。
+#   後段の 33-jules-engagement-news.yml (06:00 JST) がこの JSON を読んで
+#   news draft を生成する。
+#
+# commit 方針: App token で feature branch を切って PR 起票 → auto-merge。
+#   - main 直 push は [[silent-push-reject]] (GH006) で詰むので避ける
+#   - peter-evans/create-pull-request は App token 使わないと validate 不発のため CLI で起票
+#
+# timing 余裕:
+#   - 05:00 JST 発火、~05:05 までに PR 起票、~05:10 までに auto-merge 完了想定
+#   - 33-jules workflow は 06:00 JST 発火、十分なバッファ
+
+on:
+  schedule:
+    # 05:00 JST = 20:00 UTC (前日)
+    - cron: '0 20 * * *'
+  workflow_dispatch:
+    inputs:
+      date:
+        description: '出力日 (YYYY-MM-DD)、省略時は本日 JST'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: engagement-trend-fetch
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install feedparser requests
+
+      - name: Fetch and score trends
+        id: fetch
+        env:
+          INPUT_DATE: ${{ inputs.date }}
+        run: |
+          set -e
+          if [ -n "$INPUT_DATE" ]; then
+            DATE_ARG="--date $INPUT_DATE"
+          else
+            DATE_ARG=""
+          fi
+          python scripts/fetch_engagement_trends.py --out-dir data/engagement_trends $DATE_ARG
+          TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
+          OUT_FILE="data/engagement_trends/${INPUT_DATE:-$TODAY}.json"
+          if [ ! -f "$OUT_FILE" ]; then
+            echo "::error::Expected output file $OUT_FILE not created"
+            exit 1
+          fi
+          echo "out_file=$OUT_FILE" >> "$GITHUB_OUTPUT"
+          echo "today=${INPUT_DATE:-$TODAY}" >> "$GITHUB_OUTPUT"
+          # quick summary in log
+          python -c "import json; d=json.load(open('$OUT_FILE',encoding='utf-8')); print(f'top_candidates={len(d[\"top_candidates\"])} raw_trends={len(d[\"raw_trends\"])}')"
+
+      - name: Open PR with trend output
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          OUT_FILE: ${{ steps.fetch.outputs.out_file }}
+          TODAY: ${{ steps.fetch.outputs.today }}
+        run: |
+          set -e
+          BRANCH="bot/engagement-trends-${TODAY}-${{ github.run_id }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add -f "$OUT_FILE"
+          if git diff --cached --quiet; then
+            echo "::notice::No changes to commit (file unchanged)"
+            exit 0
+          fi
+          git commit -m "data: engagement trend fetch ${TODAY} (run ${{ github.run_id }})"
+          git push -u origin "$BRANCH"
+          PR_URL=$(gh pr create \
+            --title "data: engagement trend fetch ${TODAY}" \
+            --body "Automated daily trend aggregation for engagement news Jules. Refs #1526." \
+            --base main \
+            --head "$BRANCH")
+          echo "Created PR: $PR_URL"
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge enabled on $PR_URL"
+          else
+            echo "::warning::Could not enable auto-merge on $PR_URL — confirm branch protection allows it"
+          fi
