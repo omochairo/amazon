@@ -31,6 +31,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from _x_text import X_LIMIT, truncate_to_weight, x_weight
+
 GRAPHQL_URL = "https://api.buffer.com/"
 DEFAULT_X_CHANNEL_ID = "67a022e330a138f0dbdfadbd"
 DEFAULT_THREADS_CHANNEL_ID = "68c0f42b76363a8367bc5408"
@@ -65,38 +67,11 @@ def load_article(asin: str) -> dict:
         return json.load(f)
 
 
-def _x_weight(c: str) -> int:
-    """Twitter (X) の weighted character count。CJK / emoji は 2、Latin/punct 系は 1。
+# weighted char count ヘルパは scripts/_x_text.py に共有化 (session 95)。
+# 既存呼出 (_x_weight / _truncate_to_weight) は alias で互換維持。
+_x_weight = x_weight
+_truncate_to_weight = truncate_to_weight
 
-    参考: twitter-text の DEFAULT ranges。U+0000-U+10FF と一部 punct (U+2000-U+200D /
-    U+2010-U+201F / U+2032-U+2037) が weight 1。それ以外は 2。
-    """
-    cp = ord(c)
-    if cp <= 0x10FF:
-        return 1
-    if 0x2000 <= cp <= 0x200D:
-        return 1
-    if 0x2010 <= cp <= 0x201F:
-        return 1
-    if 0x2032 <= cp <= 0x2037:
-        return 1
-    return 2
-
-
-def _truncate_to_weight(s: str, max_weight: int) -> tuple[str, bool]:
-    """s を weight max_weight 以下に切る。切ったかどうかも返す。"""
-    weight = 0
-    out = []
-    for c in s:
-        w = _x_weight(c)
-        if weight + w > max_weight:
-            return "".join(out), True
-        out.append(c)
-        weight += w
-    return s, False
-
-
-X_LIMIT = 280
 # "\n\n→ " = 4 weight (Latin), 末尾「…」追加分 +2 (CJK weight 2 相当の安全枠)
 X_SEPARATOR_WEIGHT = 4
 X_ELLIPSIS_WEIGHT = 2
