@@ -235,6 +235,13 @@ on:
       - 'README.md'
       - 'LICENSE'
       - '.github/workflows/04-validate-article-pr.yml'
+      # 2026-06-03 (session 85 / Issue #1420 path α): SNS publish (Buffer 単発
+      # post で X + Threads 配信) を required check として通すため paths に追加
+      # ([[04-validate-paths-trap]])。記事生成パイプラインから独立しているが
+      # validate は副作用ゼロで vacuous SUCCESS となる。
+      - 'scripts/notify_buffer.py'
+      - 'scripts/pick_sns_target.py'
+      - '.github/workflows/20-sns-publish.yml'
   workflow_dispatch:
 
 permissions:
