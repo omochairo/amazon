@@ -245,6 +245,12 @@ on:
       # 2026-06-03 (session 86 / Issue #1420 path A): Threads は Meta Graph API
       # 直叩きで thread 2 投化 (Buffer が thread 非対応のため)。
       - 'scripts/notify_threads.py'
+      # 2026-06-03 (session 87 / Issue #1486): SNS 配信 cron の履歴コミット PR
+      # (data/sns_published.json のみ更新) を required check `validate` で通すため
+      # paths に追加。validate は副作用ゼロで vacuous SUCCESS となる。これが無いと
+      # cron が作る履歴 PR が validate 発火せず auto-merge が永久 pending になる
+      # ([[04-validate-paths-trap]] の inverse: path 不一致で必須 check 不発)。
+      - 'data/sns_published.json'
   workflow_dispatch:
 
 permissions:
