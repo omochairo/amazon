@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""Buffer API へ X / Threads の単発 post を作成する (Issue #1420 path α)。
+"""Buffer API へ X / Threads の単発 post を作成する (Issue #1420 path A)。
 
-#1420 検証で Buffer GraphQL は X (twitter) ・ Threads ともに thread 配信不可と
-判明したため、両 channel とも「hook + 改行 + URL」の単発 post に統一する。
-X 公式 API 直叩き経路は pay-per-usage 化 (URL 含み $0.20/req) でコスト合わず
-見送り。本スクリプトが商品 SNS 配信の唯一経路。
+path A 設計 (session 85 → 86):
+  - Buffer は **X 単発投稿のみ** を商品配信で使う (workflow から `--x-only`)
+  - Threads は scripts/notify_threads.py が Meta Graph API で 2 投 thread 化
+  - Buffer Threads channel は手動の日常投稿用に残置 (workflow からは投げない)
+
+ただし本スクリプト自体は X / Threads 両 channel への投稿を引き続きサポート
+する (`--threads-only` で Buffer Threads のみ等)。商品 cron は --x-only 固定。
 
 使い方:
     BUFFER_ACCESS_TOKEN=xxxx python scripts/notify_buffer.py B0DBTLH8ZM
-    BUFFER_ACCESS_TOKEN=xxxx python scripts/notify_buffer.py B0DBTLH8ZM --live   # draft でなく queue 投入
+    BUFFER_ACCESS_TOKEN=xxxx python scripts/notify_buffer.py B0DBTLH8ZM --live    # draft → queue
+    BUFFER_ACCESS_TOKEN=xxxx python scripts/notify_buffer.py B0DBTLH8ZM --x-only --live  # workflow が使う形
 
 env:
     BUFFER_ACCESS_TOKEN          必須

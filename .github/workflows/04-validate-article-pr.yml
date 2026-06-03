@@ -242,6 +242,9 @@ on:
       - 'scripts/notify_buffer.py'
       - 'scripts/pick_sns_target.py'
       - '.github/workflows/20-sns-publish.yml'
+      # 2026-06-03 (session 86 / Issue #1420 path A): Threads は Meta Graph API
+      # 直叩きで thread 2 投化 (Buffer が thread 非対応のため)。
+      - 'scripts/notify_threads.py'
   workflow_dispatch:
 
 permissions:

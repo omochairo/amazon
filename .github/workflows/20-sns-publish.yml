@@ -1,11 +1,13 @@
-name: SNS Publish (Buffer → X + Threads)
-# Issue #1420 path α: data/articles/ の最新未投稿 ASIN を Buffer queue に
-# 単発 post として投入し、published 履歴を main に PR + auto-merge で commit。
+name: SNS Publish (Buffer X + Meta Graph Threads)
+# Issue #1420 path A (session 86 で path α → path A に格上げ):
+#   - Buffer: X 単発投稿 (`notify_buffer.py --x-only`)
+#   - Meta Graph: Threads thread 2 投構成 (`notify_threads.py`)
+# 配信成功後に published 履歴を main に PR + auto-merge で commit。
 #
-# Buffer は X (twitter) / Threads の両 channel に同一テキスト「hook + 改行 +
-# URL」を投げる。検証で thread 配信不可と判明したため (#1420 検証ログ参照)、
-# 両 channel とも単発に統一。X 公式 API 直叩きは pay-per-usage 単価が合わず
-# 見送り。日常投稿 (商品紹介以外) は Buffer ダッシュボード手動運用で並走。
+# X 公式 API 直叩きは pay-per-usage 単価 (URL 含み $0.20/req) でコスト合わず
+# Buffer 経由を継続。Threads は Buffer の Threads channel が thread 非対応の
+# ため Meta Graph 直叩きで thread 化。Buffer Threads channel は日常投稿
+# (商品紹介以外) の手動運用で並走。
 #
 # cron 2 本立て:
 #   02:00 UTC = 11:00 JST  (お昼前のリーチ取り)
@@ -67,21 +69,39 @@ jobs:
           echo "asin=$ASIN" >> "$GITHUB_OUTPUT"
           echo "skip=false" >> "$GITHUB_OUTPUT"
 
-      - name: Post to Buffer (X + Threads single post with URL)
+      - name: Post to Buffer (X single post)
         if: steps.pick.outputs.skip != 'true'
         env:
           BUFFER_ACCESS_TOKEN: ${{ secrets.BUFFER_ACCESS_TOKEN }}
           BUFFER_X_CHANNEL_ID: ${{ secrets.BUFFER_X_CHANNEL_ID }}
-          BUFFER_THREADS_CHANNEL_ID: ${{ secrets.BUFFER_THREADS_CHANNEL_ID }}
         run: |
           set -e
           ASIN="${{ steps.pick.outputs.asin }}"
           if [ "${{ inputs.dry_run }}" = "true" ]; then
-            echo "DRY RUN — draft 投入のみ"
-            python scripts/notify_buffer.py "$ASIN"
+            echo "DRY RUN — Buffer draft 投入のみ"
+            python scripts/notify_buffer.py "$ASIN" --x-only
           else
-            python scripts/notify_buffer.py "$ASIN" --live
+            python scripts/notify_buffer.py "$ASIN" --x-only --live
           fi
+
+      - name: Post to Threads (Meta Graph API thread)
+        if: steps.pick.outputs.skip != 'true'
+        env:
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+        run: |
+          set -e
+          ASIN="${{ steps.pick.outputs.asin }}"
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "DRY RUN — Threads preview のみ"
+            python scripts/notify_threads.py "$ASIN" --dry-run
+          else
+            python scripts/notify_threads.py "$ASIN"
+          fi
+        # Threads が失敗しても X は既に投稿済みなので、bookkeeping は進める。
+        # 失敗は ::warning:: として残し、次回 cron で同 ASIN を再試行しない
+        # (mark まで進むため)。手動で対応が必要なら gh run logs で確認。
+        continue-on-error: true
 
       - name: Mark ASIN as published + commit via PR
         if: steps.pick.outputs.skip != 'true' && inputs.dry_run != true
@@ -107,7 +127,7 @@ jobs:
 
           PR_URL=$(gh pr create \
             --title "data: mark $ASIN as SNS-published" \
-            --body "Automated SNS publish bookkeeping. Buffer queue にて X + Threads に \`$ASIN\` の単発 post を投入し、\`data/sns_published.json\` に履歴追記した記録。#1420" \
+            --body "Automated SNS publish bookkeeping. Buffer (X 単発) + Meta Graph (Threads thread) で \`$ASIN\` を配信し、\`data/sns_published.json\` に履歴追記した記録。#1420" \
             --base main \
             --head "$BRANCH")
           echo "Created: $PR_URL"
