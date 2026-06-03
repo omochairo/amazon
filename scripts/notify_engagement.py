@@ -34,6 +34,8 @@ env:
     BUFFER_X_CHANNEL_ID    default: 67a022e330a138f0dbdfadbd
     THREADS_ACCESS_TOKEN   Threads 配信に必要 (long-lived 60 日)
     THREADS_USER_ID        Threads 配信に必要
+    X_POST_MODE            queue (default, Buffer addToQueue) | now (Buffer shareNow 即時)
+                           — X 公式 API は使わず、Buffer 経由のまま即時/キューを切替
 """
 from __future__ import annotations
 
@@ -48,6 +50,8 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from _x_text import X_LIMIT, truncate_to_weight, weighted_len
+
 try:
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
@@ -61,6 +65,13 @@ QUEUE_THREADS = REPO_ROOT / "data" / "engagement_queue_threads.jsonl"
 BUFFER_GRAPHQL_URL = "https://api.buffer.com/"
 BUFFER_DEFAULT_X_CHANNEL_ID = "67a022e330a138f0dbdfadbd"
 THREADS_GRAPH_BASE = "https://graph.threads.net/v1.0"
+
+# X_POST_MODE: Buffer 経由のままキュー投入か即時配信かを切替 (session 95)。
+#   queue (default) → mode=addToQueue (従来挙動、Buffer のキューに積む)
+#   now             → mode=shareNow   (キューを介さず即時配信。news 即時性 / キュー滞留回避)
+# X 公式 API は使わない。両モードとも Buffer createPost mutation を叩く。
+X_POST_MODE_BUFFER_MODE = {"queue": "addToQueue", "now": "shareNow"}
+DEFAULT_X_POST_MODE = "queue"
 
 # Threads container 作成後 publish までの settle wait。
 # [[feedback-omochairo-threads-publish-settle]]: 0s 即時 publish は 4279009 を踏む。
@@ -210,8 +221,14 @@ mutation CreatePost($input: CreatePostInput!) {
 """.strip()
 
 
-def post_x_via_buffer(text: str, live: bool) -> tuple[bool, str | None]:
-    """Buffer X 単発投稿。成功で (True, post_id) 返す。"""
+def post_x_via_buffer(text: str, live: bool,
+                      buffer_mode: str = "addToQueue") -> tuple[bool, str | None]:
+    """Buffer X 単発投稿。成功で (True, post_id) 返す。
+
+    buffer_mode: Buffer ShareMode。`addToQueue` (キュー積み) か `shareNow` (即時配信)。
+    shareNow は keyword=now (X_POST_MODE) のとき選択され、Buffer のキューを介さず
+    その場で X に流す (news 即時性 + キュー滞留回避)。X 公式 API は使わない。
+    """
     token = os.environ.get("BUFFER_ACCESS_TOKEN")
     if not token:
         print("BUFFER_ACCESS_TOKEN env var required for X channel", file=sys.stderr)
@@ -219,7 +236,7 @@ def post_x_via_buffer(text: str, live: bool) -> tuple[bool, str | None]:
     channel_id = os.environ.get("BUFFER_X_CHANNEL_ID", BUFFER_DEFAULT_X_CHANNEL_ID)
     variables = {"input": {
         "channelId": channel_id, "text": text, "assets": [],
-        "schedulingType": "automatic", "mode": "addToQueue",
+        "schedulingType": "automatic", "mode": buffer_mode,
         "saveToDraft": not live, "source": "omochairo-notify-engagement",
         "aiAssisted": False, "metadata": {"twitter": {"thread": []}},
     }}
@@ -288,7 +305,7 @@ def post_threads_top_level(text: str) -> tuple[bool, str | None]:
 
 
 def consume_one(queue_path: Path, channel: str, dry_run: bool, live: bool,
-                category: str | None = None) -> bool:
+                category: str | None = None, x_post_mode: str = DEFAULT_X_POST_MODE) -> bool:
     rows = _load_jsonl(queue_path)
     if not rows:
         print(f"[{channel}] queue empty: {queue_path.name}")
@@ -303,13 +320,26 @@ def consume_one(queue_path: Path, channel: str, dry_run: bool, live: bool,
     text = row["text"]
     print(f"--- [{channel}] picked id={row['id']} category={row.get('category')} subcategory={row.get('subcategory')} ---")
     print(text)
-    print(f"--- ({len(text)} chars) ---")
+
+    if channel == "x":
+        # X は weighted char (CJK=2) で 280 評価。超過分は配信前に切る
+        # ([[feedback-omochairo-x-cjk-weight]])。shareNow は即時配信で後修正不能なので必須。
+        buffer_mode = X_POST_MODE_BUFFER_MODE.get(x_post_mode, "addToQueue")
+        wlen = weighted_len(text)
+        print(f"--- ({len(text)} chars / {wlen} weighted, limit {X_LIMIT}) | X_POST_MODE={x_post_mode} -> {buffer_mode} ---")
+        if wlen > X_LIMIT:
+            text, _ = truncate_to_weight(text, X_LIMIT - 1)
+            text = text.rstrip() + "…"
+            print(f"::warning::[x] text over {X_LIMIT} weighted — truncated to {weighted_len(text)}")
+    else:
+        print(f"--- ({len(text)} chars) ---")
+
     if dry_run:
         print(f"[{channel}] DRY RUN — not posting, not mutating queue")
         return True
 
     if channel == "x":
-        ok, post_id = post_x_via_buffer(text, live=live)
+        ok, post_id = post_x_via_buffer(text, live=live, buffer_mode=buffer_mode)
     elif channel == "threads":
         ok, post_id = post_threads_top_level(text)
     else:
@@ -342,9 +372,17 @@ def main() -> int:
     category = args.category if args.category else None
     if category:
         print(f"[slot] category filter = {category}")
+
+    x_post_mode = (os.environ.get("X_POST_MODE") or DEFAULT_X_POST_MODE).strip().lower()
+    if x_post_mode not in X_POST_MODE_BUFFER_MODE:
+        print(f"::warning::unknown X_POST_MODE={x_post_mode!r}; falling back to {DEFAULT_X_POST_MODE}")
+        x_post_mode = DEFAULT_X_POST_MODE
+    print(f"[x] X_POST_MODE={x_post_mode} -> Buffer mode={X_POST_MODE_BUFFER_MODE[x_post_mode]}")
+
     ok = True
     if "x" in channels:
-        ok &= consume_one(QUEUE_X, "x", args.dry_run, args.live, category=category)
+        ok &= consume_one(QUEUE_X, "x", args.dry_run, args.live,
+                          category=category, x_post_mode=x_post_mode)
     if "threads" in channels:
         ok &= consume_one(QUEUE_THREADS, "threads", args.dry_run, args.live, category=category)
     return 0 if ok else 1

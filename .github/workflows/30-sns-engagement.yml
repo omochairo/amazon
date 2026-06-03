@@ -115,6 +115,9 @@ jobs:
           BUFFER_X_CHANNEL_ID: ${{ secrets.BUFFER_X_CHANNEL_ID }}
           THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          # X 投稿の Buffer mode 切替 (session 95): queue=addToQueue / now=shareNow 即時。
+          # repo variable X_POST_MODE を now にするだけで即時配信へ切替 (未設定なら queue)。
+          X_POST_MODE: ${{ vars.X_POST_MODE || 'queue' }}
         run: |
           set -e
           if [ "${{ inputs.dry_run }}" = "true" ]; then
