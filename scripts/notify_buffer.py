@@ -65,19 +65,63 @@ def load_article(asin: str) -> dict:
         return json.load(f)
 
 
+def _x_weight(c: str) -> int:
+    """Twitter (X) の weighted character count。CJK / emoji は 2、Latin/punct 系は 1。
+
+    参考: twitter-text の DEFAULT ranges。U+0000-U+10FF と一部 punct (U+2000-U+200D /
+    U+2010-U+201F / U+2032-U+2037) が weight 1。それ以外は 2。
+    """
+    cp = ord(c)
+    if cp <= 0x10FF:
+        return 1
+    if 0x2000 <= cp <= 0x200D:
+        return 1
+    if 0x2010 <= cp <= 0x201F:
+        return 1
+    if 0x2032 <= cp <= 0x2037:
+        return 1
+    return 2
+
+
+def _truncate_to_weight(s: str, max_weight: int) -> tuple[str, bool]:
+    """s を weight max_weight 以下に切る。切ったかどうかも返す。"""
+    weight = 0
+    out = []
+    for c in s:
+        w = _x_weight(c)
+        if weight + w > max_weight:
+            return "".join(out), True
+        out.append(c)
+        weight += w
+    return s, False
+
+
+X_LIMIT = 280
+# "\n\n→ " = 4 weight (Latin), 末尾「…」追加分 +2 (CJK weight 2 相当の安全枠)
+X_SEPARATOR_WEIGHT = 4
+X_ELLIPSIS_WEIGHT = 2
+# 余裕 5 weight を確保 (実測との誤差吸収)
+X_SAFETY = 5
+
+
 def build_single_payload(article: dict, base_url: str) -> tuple[str, str]:
     """単発 post 用に (本文, URL) を返す。本文には URL を末尾同梱する。
 
-    X の上限 280 文字に収めるため hook を 220 文字で truncate (URL + 改行2つ +
-    余白で約 60 文字消費するため)。Threads は 500 文字なので余裕。
+    Buffer は X URL を t.co 短縮 (23 chars) ではなく **actual chars** (例:
+    /products/{asin}/ = 43 chars) で数えるため、URL 長を動的に計算して
+    budget を決める。X 280 char 制限は CJK weight 2 で評価されるので
+    `_x_weight` ベースで hook を切る。
     """
     asin = article.get("slug", "").rsplit("-", 1)[-1].lower()
     title = article.get("title") or ""
     desc = (article.get("meta_description") or "").strip()
     url = f"{base_url}/products/{asin}/"
+    url_weight = sum(_x_weight(c) for c in url)
+    hook_budget = X_LIMIT - url_weight - X_SEPARATOR_WEIGHT - X_ELLIPSIS_WEIGHT - X_SAFETY
     hook = desc if desc else title
-    if len(hook) > 220:
-        hook = hook[:219].rstrip() + "…"
+    hook, truncated = _truncate_to_weight(hook, hook_budget)
+    if truncated:
+        hook = hook.rstrip() + "…"
     text = f"{hook}\n\n→ {url}"
     return text, url
 
