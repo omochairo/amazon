@@ -1,23 +1,33 @@
 #!/usr/bin/env python3
 """Engagement queue consumer: 1 件 pop して X (Buffer) / Threads (Meta Graph) 配信。
 
-Issue #1495 P1 (session 91):
+Issue #1495 P1 (session 91) + Issue #1539 (session 94: slot 別 category pick):
   - `data/engagement_queue_x.jsonl` から 1 件 → Buffer X 単発投稿
   - `data/engagement_queue_threads.jsonl` から 1 件 → Meta Graph Threads top-level 単発
   - link 含まない non-link engagement 投稿 (記事 promo は 20-sns-publish.yml が別途配信)
+  - --category news|daily で slot に応じた pick logic を切替
 
-選定ロジック:
-  1. published_at is null
-  2. earliest_publish_at <= now (null は即時可)
-  3. 直近 3 投稿と subcategory が同じものは後回し (rotation 多様性)
-  4. 最も id 順 (= created 順) で古いもの
+選定ロジック (--category=daily の場合、従来挙動):
+  1. category == "daily" (None=全カテゴリ許可、互換性 fallback)
+  2. published_at is null
+  3. earliest_publish_at <= now (null は即時可)
+  4. 直近 3 投稿と subcategory が同じものは後回し (rotation 多様性)
+  5. 最も id 順 (= created 順) で古いもの (FIFO)
+
+選定ロジック (--category=news の場合):
+  1. category == "news"
+  2. published_at is null
+  3. created_at が now-48h より新しいもの (古いトレンドは配信しない)
+  4. earliest_publish_at <= now
+  5. latest-first (最も created_at が新しいもの)
 
 配信成功で in-place 更新: published_at + post_id を書き戻し。
+候補 0 件の場合は穴開けで skip (queue 枯渇は健全な fail-safe)。
 
 使い方:
     BUFFER_ACCESS_TOKEN=... python scripts/notify_engagement.py --dry-run
     BUFFER_ACCESS_TOKEN=... THREADS_ACCESS_TOKEN=... THREADS_USER_ID=... \\
-        python scripts/notify_engagement.py --channels x,threads --live
+        python scripts/notify_engagement.py --channels x,threads --category daily --live
 
 env:
     BUFFER_ACCESS_TOKEN    X 配信に必要
@@ -35,7 +45,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 try:
@@ -66,6 +76,9 @@ THREADS_TRANSIENT_KEYS = (
 # rotation 多様性: 直近 N 件と同 subcategory を後回し
 ROTATION_LOOKBACK = 3
 
+# news スロット候補の鮮度上限 (古いトレンドは配信しない)
+NEWS_MAX_AGE_HOURS = 48
+
 
 def _load_jsonl(path: Path) -> list[dict]:
     if not path.exists():
@@ -92,36 +105,59 @@ def _write_jsonl(path: Path, rows: list[dict]) -> None:
     tmp.replace(path)
 
 
-def pick_next(rows: list[dict], now: datetime) -> int | None:
+def _parse_iso(s: str) -> datetime | None:
+    try:
+        return datetime.fromisoformat(s)
+    except (TypeError, ValueError):
+        return None
+
+
+def pick_next(rows: list[dict], now: datetime, category: str | None = None) -> int | None:
     """次に publish すべき row の index を返す。なければ None。
 
-    優先順:
-      1. published_at is None
-      2. earliest_publish_at <= now (null=即時可)
-      3. 直近 ROTATION_LOOKBACK 件の published と subcategory が違うものを優先
-      4. id 昇順 (= 古い順)
+    category 指定で挙動が変わる:
+      - "news"  : category=="news" AND created_at > now-48h、最新優先 (latest-first)
+      - "daily" : category=="daily"、FIFO + rotation 多様性ペナルティ
+      - None    : category 区別なし、従来 (FIFO + rotation) 挙動 (互換性)
+
+    共通条件:
+      - published_at is None
+      - earliest_publish_at is None or <= now
     """
     recent_subs = [
         r.get("subcategory") for r in rows
         if r.get("published_at")
     ][-ROTATION_LOOKBACK:]
 
+    news_cutoff = now - timedelta(hours=NEWS_MAX_AGE_HOURS)
+
     pending = []
     for i, r in enumerate(rows):
         if r.get("published_at"):
             continue
-        eap = r.get("earliest_publish_at")
-        if eap:
-            try:
-                if datetime.fromisoformat(eap) > now:
-                    continue
-            except ValueError:
-                pass
+        if category is not None and r.get("category") != category:
+            continue
+        eap = _parse_iso(r.get("earliest_publish_at") or "")
+        if eap and eap > now:
+            continue
+        if category == "news":
+            ca = _parse_iso(r.get("created_at") or "")
+            if ca is None or ca < news_cutoff:
+                continue
         pending.append((i, r))
 
     if not pending:
         return None
 
+    if category == "news":
+        # latest-first: created_at 降順 → tiebreak で id 降順
+        def news_key(item: tuple[int, dict]) -> tuple:
+            _, r = item
+            return (r.get("created_at", ""), r.get("id", ""))
+        pending.sort(key=news_key, reverse=True)
+        return pending[0][0]
+
+    # daily (or legacy None): FIFO + rotation ペナルティ
     def sort_key(item: tuple[int, dict]) -> tuple:
         _, r = item
         same_sub_penalty = 1 if r.get("subcategory") in recent_subs else 0
@@ -251,19 +287,21 @@ def post_threads_top_level(text: str) -> tuple[bool, str | None]:
     return True, pid
 
 
-def consume_one(queue_path: Path, channel: str, dry_run: bool, live: bool) -> bool:
+def consume_one(queue_path: Path, channel: str, dry_run: bool, live: bool,
+                category: str | None = None) -> bool:
     rows = _load_jsonl(queue_path)
     if not rows:
         print(f"[{channel}] queue empty: {queue_path.name}")
         return True
     now = datetime.now(timezone.utc)
-    idx = pick_next(rows, now)
+    idx = pick_next(rows, now, category=category)
     if idx is None:
-        print(f"[{channel}] no pending row in {queue_path.name} ({len(rows)} total)")
+        cat_label = f"category={category} " if category else ""
+        print(f"[{channel}] no pending row {cat_label}in {queue_path.name} ({len(rows)} total) — slot 穴開け")
         return True
     row = rows[idx]
     text = row["text"]
-    print(f"--- [{channel}] picked id={row['id']} subcategory={row.get('subcategory')} ---")
+    print(f"--- [{channel}] picked id={row['id']} category={row.get('category')} subcategory={row.get('subcategory')} ---")
     print(text)
     print(f"--- ({len(text)} chars) ---")
     if dry_run:
@@ -292,6 +330,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--channels", default="x,threads",
                         help="comma-separated channels: x / threads (default both)")
+    parser.add_argument("--category", default=None, choices=[None, "news", "daily", ""],
+                        help="restrict pick to this category. '' or omitted = no restriction (legacy).")
     parser.add_argument("--dry-run", action="store_true",
                         help="preview only, no API call, no queue mutation")
     parser.add_argument("--live", action="store_true",
@@ -299,11 +339,14 @@ def main() -> int:
     args = parser.parse_args()
 
     channels = [c.strip() for c in args.channels.split(",") if c.strip()]
+    category = args.category if args.category else None
+    if category:
+        print(f"[slot] category filter = {category}")
     ok = True
     if "x" in channels:
-        ok &= consume_one(QUEUE_X, "x", args.dry_run, args.live)
+        ok &= consume_one(QUEUE_X, "x", args.dry_run, args.live, category=category)
     if "threads" in channels:
-        ok &= consume_one(QUEUE_THREADS, "threads", args.dry_run, args.live)
+        ok &= consume_one(QUEUE_THREADS, "threads", args.dry_run, args.live, category=category)
     return 0 if ok else 1
 
 

@@ -1,13 +1,17 @@
 name: Jules Engagement Refill (X mama / Threads papa)
-# Issue #1495 P1 (session 91):
-#   - 月曜 03:00 UTC = 12:00 JST: X (いろママ) 用 daily drafts 10 本生成
-#   - 火曜 03:00 UTC = 12:00 JST: Threads (いろパパ) 用 daily drafts 10 本生成
+# Issue #1495 P1 (session 91) + Issue #1539 (session 94: 週 2 化):
+#   - 月曜 03:00 UTC = 12:00 JST: X (いろママ) 用 daily drafts 7-10 本生成
+#   - 火曜 03:00 UTC = 12:00 JST: Threads (いろパパ) 用 daily drafts 7-10 本生成
+#   - 木曜 03:00 UTC = 12:00 JST: X (いろママ) 用 2 回目補充
+#   - 金曜 03:00 UTC = 12:00 JST: Threads (いろパパ) 用 2 回目補充
+#   - 各 channel 週 14-20 本目安。8 slot publisher (#1539) で daily スロット 3/日 × 7 日
+#     = 21 件/週 のうち、queue 枯渇による穴開けが週 1-2 回以下になる想定。
 #   - Jules が data/engagement_queue_{x,threads}.jsonl に append-only で PR を作る
 #   - PR の auto-merge は 31-engagement-auto-merge.yml が担う
 #
-# 30-sns-engagement.yml (毎日 03:30 UTC) より 30 分早く dispatch することで、
-# queue 残量低下時に Jules 補充 → 同日の publish に間に合わせるのが目標。
-# (実際は Jules session は数十分かかるので「翌日以降に確実に間に合う」程度)
+# 30-sns-engagement.yml の最初の daily スロット (09:30 JST) より早く投入したいので
+# Jules 補充は 12:00 JST 開始 → 同日中の publish には間に合わないことが多い (Jules
+# session は 30 分〜数時間)。実際は「翌日以降に確実に間に合う」運用。
 on:
   workflow_dispatch:
     inputs:
@@ -18,8 +22,10 @@ on:
         options: [x, threads]
         default: x
   schedule:
-    - cron: '0 3 * * 1'  # Mon -> X (iromama)
-    - cron: '0 3 * * 2'  # Tue -> Threads (iropapa)
+    - cron: '0 3 * * 1'  # Mon -> X (iromama) #1 of week
+    - cron: '0 3 * * 2'  # Tue -> Threads (iropapa) #1 of week
+    - cron: '0 3 * * 4'  # Thu -> X (iromama) #2 of week
+    - cron: '0 3 * * 5'  # Fri -> Threads (iropapa) #2 of week
 
 jobs:
   refill:
@@ -32,13 +38,15 @@ jobs:
           if [ -n "${{ inputs.channel }}" ]; then
             CHANNEL="${{ inputs.channel }}"
           else
-            DOW=$(date -u +%u)  # Mon=1 Tue=2
-            if [ "$DOW" = "1" ]; then CHANNEL="x"
-            elif [ "$DOW" = "2" ]; then CHANNEL="threads"
-            else
-              echo "::error::cron fired on unexpected DOW=$DOW"
-              exit 1
-            fi
+            DOW=$(date -u +%u)  # Mon=1 Tue=2 Thu=4 Fri=5 (UTC 03:00 = JST 12:00 同日)
+            case "$DOW" in
+              1|4) CHANNEL="x" ;;        # Mon/Thu -> X (iromama)
+              2|5) CHANNEL="threads" ;;  # Tue/Fri -> Threads (iropapa)
+              *)
+                echo "::error::cron fired on unexpected DOW=$DOW"
+                exit 1
+                ;;
+            esac
           fi
           if [ "$CHANNEL" = "x" ]; then
             PROMPT_FILE="jules/PROMPT_ENGAGEMENT_X_IROMAMA_DAILY.md"
@@ -91,8 +99,10 @@ jobs:
           TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
           INTRO="AGENTS.md を最初に必ず読み、その指示に厳密に従ってください。
 
-          【今回のタスク】: SNS engagement 投稿 draft を 10 本生成し、
+          【今回のタスク】: SNS engagement 投稿 draft を 7〜10 本生成し、
           ${QUEUE_FILE} に append-only で追加する。
+          (週 2 回補充。本日が同 channel の 2 回目補充なら、既存 queue を踏まえて
+           モチーフ被りを最小化する。本数は 7 本でも可。)
 
           【本日 (Asia/Tokyo)】: ${TODAY}
           - 各 draft の created_at は本日の現在時刻 (+09:00)
@@ -149,4 +159,4 @@ jobs:
       - name: Note on completion
         run: |
           echo "::notice::Jules session dispatched (AUTO_CREATE_PR). 完了後 31-engagement-auto-merge.yml が PR を auto-merge する。"
-          echo "::notice::配信は翌 12:30 JST (30-sns-engagement.yml) から開始される。"
+          echo "::notice::配信は翌日以降の 09:30 / 15:00 / 19:30 JST daily スロット (30-sns-engagement.yml #1539) から消化される。"
