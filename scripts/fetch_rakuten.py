@@ -32,6 +32,34 @@ logger = logging.getLogger("fetch_rakuten")
 
 JAN_RE = re.compile(r"(?<!\d)(4\d{12}|4\d{7})(?!\d)")
 
+# Rakuten Webservice TPS=1。Search 5 連打 → Ranking で 429 を踏んだ過去あり
+# (run 26849869200, 2026-06-02)。Ranking call 前の最低保険として 1.5s 空ける。
+RAKUTEN_API_GAP_SEC = 1.5
+
+
+def _rakuten_get_with_retry(url: str, params: dict, headers: dict, label: str,
+                            max_retries: int = 1, backoff_sec: float = 3.0):
+    """楽天 API を 429 のときだけ 1 回リトライして返す。それ以外は素通し。
+
+    429 は TPS=1 制限超過なので backoff 後に通る確率が高い。リトライしないと
+    weekly.json が空で上書きされ /ranking/ が「お待ちください」状態になる
+    (Issue: #1454 で発生)。
+    """
+    for attempt in range(max_retries + 1):
+        try:
+            resp = requests.get(url, params=params, headers=headers, timeout=15)
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Rakuten {label} request failed (attempt {attempt + 1}): {e}")
+            return None
+        if resp.status_code == 429 and attempt < max_retries:
+            logger.warning(
+                f"Rakuten {label} got HTTP 429 — backing off {backoff_sec}s and retrying"
+            )
+            time.sleep(backoff_sec)
+            continue
+        return resp
+    return None
+
 
 def _build_itemcode_to_asin(matched_path: pathlib.Path) -> dict:
     if not matched_path.exists():
@@ -154,6 +182,15 @@ def _rematch_only(out_dir: pathlib.Path) -> int:
         return 2
     payload = json.loads(weekly_path.read_text(encoding="utf-8"))
     rank_items = payload.get("items", [])
+
+    # weekly.json が既に空 (= 直前の通常 fetch が API 失敗で空のまま flush された / 復旧前)
+    # の状態で rematch すると、空のまま rematched_at だけ更新して履歴を 1 周分塗り潰すので
+    # スキップする。fetch_rakuten 側の guard とセットで /ranking/ 表示を保護する。
+    if not rank_items:
+        logger.warning(
+            f"rematch-only: weekly.json has 0 items — skipping rematch to preserve previous state"
+        )
+        return 0
 
     raw_root = pathlib.Path("data/raw")
     itemcode_idx = _build_itemcode_to_asin(raw_root / "rakuten_matched.json")
@@ -282,7 +319,7 @@ def main():
             break  # ページ尽き
         raw_items.extend(page_items)
         if page < search_pages:
-            time.sleep(0.4)  # Rakuten TPS=1 safety margin
+            time.sleep(1.1)  # Rakuten TPS=1 (旧 0.4 は不足、429 を踏む)
     logger.info(f"Rakuten Search: fetched {len(raw_items)} items across up to {search_pages} page(s)")
 
     for item in raw_items:
@@ -325,9 +362,13 @@ def main():
     if aff_id: ranking_params["affiliateId"] = aff_id
 
     rank_items = []
+    # Search 連打の直後は TPS=1 を踏むので Ranking 前に空ける。
+    time.sleep(RAKUTEN_API_GAP_SEC)
     try:
-        rank_resp = requests.get(ranking_url, params=ranking_params, headers=headers)
-        if rank_resp.status_code == 200:
+        rank_resp = _rakuten_get_with_retry(
+            ranking_url, ranking_params, headers, label="Ranking"
+        )
+        if rank_resp is not None and rank_resp.status_code == 200:
             rank_data = rank_resp.json()
             raw_rank_items = rank_data.get("Items", [])
             if not isinstance(raw_rank_items, list):
@@ -357,8 +398,10 @@ def main():
                     "reviewCount": i.get("reviewCount", 0),
                     "shopName": i.get("shopName", ""),
                 })
-        else:
+        elif rank_resp is not None:
             logger.error(f"Rakuten Ranking API failed: HTTP {rank_resp.status_code} {rank_resp.text[:300]}")
+        else:
+            logger.error("Rakuten Ranking API failed: no response (network / retry exhausted)")
     except Exception as e:
         logger.error(f"Ranking API failed: {e}")
 
@@ -401,24 +444,34 @@ def main():
         "genre_id": "566382",
         "items": rank_items,
     }
-    with open(os.path.join(args.out, "rakuten_ranking.json"), "w", encoding="utf-8") as f:
-        json.dump(ranking_payload, f, ensure_ascii=False, indent=4)
 
-    # Observability: PR #677 と同方針の build/match manifest
-    with open(os.path.join(args.out, "_rakuten_ranking_manifest.json"), "w", encoding="utf-8") as f:
-        json.dump(manifest, f, ensure_ascii=False, indent=2)
-
-    # Hugo Data Templates 用に同データを hugo/data/ranking/ へも複製する。
-    # `/hugo` は .gitignore 対象だが weekly.json を 1 回 force-add で tracked にしておき、
-    # 以降は通常の git add で更新可能 (cron workflow は git add -f で初回作成も吸収)。
-    hugo_ranking_dir = pathlib.Path("hugo/data/ranking")
-    hugo_ranking_dir.mkdir(parents=True, exist_ok=True)
-    (hugo_ranking_dir / "weekly.json").write_text(
-        json.dumps(ranking_payload, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-    (hugo_ranking_dir / "_match_manifest.json").write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    # rank_items が空 (= Ranking API が 429/エラーで失敗 or 0 件返却) のとき weekly.json /
+    # _match_manifest.json / rakuten_ranking.json を上書きしない。これがないと /ranking/
+    # が「次回 cron をお待ちください」状態に陥り、復旧まで前回 cron run の間データ消失する
+    # (Issue: run 26849869200 = #1454 で実発生)。raw/ 側の rakuten_ranking.json と manifest
+    # は signal_detector / sniper の入力なので同じ保護を適用する。
+    if not rank_items:
+        logger.warning(
+            "Ranking API returned 0 items — preserving previous weekly.json / manifests "
+            "(no overwrite). /ranking/ will continue to show last successful snapshot."
+        )
+    else:
+        with open(os.path.join(args.out, "rakuten_ranking.json"), "w", encoding="utf-8") as f:
+            json.dump(ranking_payload, f, ensure_ascii=False, indent=4)
+        # Observability: PR #677 と同方針の build/match manifest
+        with open(os.path.join(args.out, "_rakuten_ranking_manifest.json"), "w", encoding="utf-8") as f:
+            json.dump(manifest, f, ensure_ascii=False, indent=2)
+        # Hugo Data Templates 用に同データを hugo/data/ranking/ へも複製する。
+        # `/hugo` は .gitignore 対象だが weekly.json を 1 回 force-add で tracked にしておき、
+        # 以降は通常の git add で更新可能 (cron workflow は git add -f で初回作成も吸収)。
+        hugo_ranking_dir = pathlib.Path("hugo/data/ranking")
+        hugo_ranking_dir.mkdir(parents=True, exist_ok=True)
+        (hugo_ranking_dir / "weekly.json").write_text(
+            json.dumps(ranking_payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        (hugo_ranking_dir / "_match_manifest.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
 
 if __name__ == "__main__":
