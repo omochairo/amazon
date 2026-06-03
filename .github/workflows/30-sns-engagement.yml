@@ -1,11 +1,18 @@
-name: SNS Engagement Publish (X + Threads non-link)
-# Issue #1495 P1 (session 91):
-#   - 毎日 1 本ずつ engagement_queue_x.jsonl / engagement_queue_threads.jsonl から
-#     pop して X (Buffer) / Threads (Meta Graph) に non-link 投稿
-#   - 20-sns-publish.yml の記事 URL 投稿と時間ズラし (12:30 JST 固定)
-#   - queue 補充は 29-jules-engagement-refill.yml が Jules で行う
-#
-# cron: 03:30 UTC = 12:30 JST (お昼休みのリーチ取り)
+name: SNS Engagement Publish (X + Threads non-link, 8-slot)
+# Issue #1495 P1 (session 91) + Issue #1539 (session 94: 8 スロット化):
+#   - X (Buffer) / Threads (Meta Graph) に 1 日 6 スロット non-link 投稿
+#     (記事 URL 投稿スロット 11:00 / 20:00 JST は 20-sns-publish.yml が担当、変更なし)
+#   - 各スロット時刻別に category (news / daily) を切替:
+#       07:00 JST news#1  | 09:30 JST daily#1
+#       11:00 JST  [article — 20-sns-publish.yml]
+#       13:00 JST news#2  | 15:00 JST daily#2
+#       17:00 JST news#3  | 19:30 JST daily#3
+#       20:00 JST  [article — 20-sns-publish.yml]
+#   → 1 日 8 投稿/ch (news 3 + daily 3 + article 2)、2 ch で 16 投稿/日
+#   - news スロット: category="news" AND created_at > now-48h で latest-first pick
+#   - daily スロット: category="daily" で FIFO (古い順) pick + rotation 多様性ペナルティ
+#   - queue 候補 0 件のスロットは穴開けで skip (健全)
+#   - queue 補充は 29-jules-engagement-refill.yml (daily) + 33-jules-engagement-news.yml (news)
 on:
   workflow_dispatch:
     inputs:
@@ -15,13 +22,26 @@ on:
         type: choice
         options: [both, x, threads]
         default: both
+      category:
+        description: 'category 強制 (空欄=now の JST 時刻で自動判定)'
+        required: false
+        type: choice
+        options: ['', news, daily]
+        default: ''
       dry_run:
         description: 'preview のみ (API 叩かない / queue 触らない)'
         required: false
         type: boolean
         default: false
   schedule:
-    - cron: '30 3 * * *'
+    # news スロット (07/13/17 JST)
+    - cron: '0 22 * * *'   # 07:00 JST (22:00 UTC 前日) news#1
+    - cron: '0 4 * * *'    # 13:00 JST (04:00 UTC)     news#2
+    - cron: '0 8 * * *'    # 17:00 JST (08:00 UTC)     news#3
+    # daily スロット (09:30/15:00/19:30 JST)
+    - cron: '30 0 * * *'   # 09:30 JST (00:30 UTC)     daily#1
+    - cron: '0 6 * * *'    # 15:00 JST (06:00 UTC)     daily#2
+    - cron: '30 10 * * *'  # 19:30 JST (10:30 UTC)     daily#3
 
 jobs:
   publish:
@@ -54,6 +74,41 @@ jobs:
           echo "channels=$CH" >> "$GITHUB_OUTPUT"
           echo "Publishing to: $CH"
 
+      - name: Resolve slot category
+        id: slot
+        env:
+          SCHED: ${{ github.event.schedule }}
+          CAT_OVERRIDE: ${{ inputs.category }}
+        run: |
+          set -e
+          # workflow_dispatch で category 指定があれば優先。
+          # それ以外は github.event.schedule の cron 文字列から判定。
+          # workflow_dispatch (空 category) は JST 時刻から推定する fallback。
+          if [ -n "$CAT_OVERRIDE" ]; then
+            CAT="$CAT_OVERRIDE"
+            SRC="input"
+          elif [ -n "$SCHED" ]; then
+            case "$SCHED" in
+              "0 22 * * *"|"0 4 * * *"|"0 8 * * *") CAT="news" ;;
+              "30 0 * * *"|"0 6 * * *"|"30 10 * * *") CAT="daily" ;;
+              *)
+                echo "::warning::Unknown schedule '$SCHED', defaulting to daily"
+                CAT="daily"
+                ;;
+            esac
+            SRC="schedule($SCHED)"
+          else
+            # workflow_dispatch で category 未指定: JST 時刻で推定
+            JST_HM=$(TZ=Asia/Tokyo date +%H%M)
+            case "$JST_HM" in
+              0700|1300|1700) CAT="news" ;;
+              *) CAT="daily" ;;
+            esac
+            SRC="JST_HM($JST_HM)"
+          fi
+          echo "category=$CAT" >> "$GITHUB_OUTPUT"
+          echo "Slot category=$CAT (source=$SRC)"
+
       - name: Publish engagement post
         env:
           BUFFER_ACCESS_TOKEN: ${{ secrets.BUFFER_ACCESS_TOKEN }}
@@ -63,9 +118,15 @@ jobs:
         run: |
           set -e
           if [ "${{ inputs.dry_run }}" = "true" ]; then
-            python scripts/notify_engagement.py --channels "${{ steps.resolve.outputs.channels }}" --dry-run
+            python scripts/notify_engagement.py \
+              --channels "${{ steps.resolve.outputs.channels }}" \
+              --category "${{ steps.slot.outputs.category }}" \
+              --dry-run
           else
-            python scripts/notify_engagement.py --channels "${{ steps.resolve.outputs.channels }}" --live
+            python scripts/notify_engagement.py \
+              --channels "${{ steps.resolve.outputs.channels }}" \
+              --category "${{ steps.slot.outputs.category }}" \
+              --live
           fi
         # 片方が失敗してももう片方は配信しておきたいので continue-on-error。
         # 失敗は ::warning:: に残し、queue 更新は notify_engagement.py が成功 channel
@@ -83,15 +144,15 @@ jobs:
             echo "No queue changes to commit."
             exit 0
           fi
-          BRANCH="sns-engagement-publish/${{ github.run_id }}"
+          BRANCH="sns-engagement-publish/${{ github.run_id }}-${{ github.run_attempt }}"
           git config user.name "omochairo-fetch-bot[bot]"
           git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
-          git commit -m "data: mark engagement drafts as published (run ${{ github.run_id }})"
+          git commit -m "data: mark engagement drafts as published (run ${{ github.run_id }} slot=${{ steps.slot.outputs.category }})"
           git push -u origin "$BRANCH"
           PR_URL=$(gh pr create \
-            --title "data: mark engagement drafts published (run ${{ github.run_id }})" \
-            --body "Engagement post bookkeeping (#1495). queue_x / queue_threads の published_at + post_id 更新。" \
+            --title "data: mark engagement drafts published (run ${{ github.run_id }} slot=${{ steps.slot.outputs.category }})" \
+            --body "Engagement post bookkeeping (#1495 / #1539). slot=${{ steps.slot.outputs.category }} の published_at + post_id 更新。" \
             --base main \
             --head "$BRANCH")
           echo "Created: $PR_URL"
@@ -105,13 +166,23 @@ jobs:
         if: always()
         run: |
           set -e
-          X_PENDING=$(python -c "import json,pathlib; \
-            rows=[json.loads(l) for l in pathlib.Path('data/engagement_queue_x.jsonl').read_text(encoding='utf-8').splitlines() if l.strip()]; \
-            print(sum(1 for r in rows if not r.get('published_at')))")
-          TH_PENDING=$(python -c "import json,pathlib; \
-            rows=[json.loads(l) for l in pathlib.Path('data/engagement_queue_threads.jsonl').read_text(encoding='utf-8').splitlines() if l.strip()]; \
-            print(sum(1 for r in rows if not r.get('published_at')))")
-          echo "Queue pending — X: $X_PENDING / Threads: $TH_PENDING"
-          if [ "$X_PENDING" -lt 5 ] || [ "$TH_PENDING" -lt 5 ]; then
-            echo "::notice::Queue low — schedule Jules refill via 29-jules-engagement-refill.yml"
-          fi
+          python3 - <<'PY'
+          import json, pathlib
+          for label, path in (("X", "data/engagement_queue_x.jsonl"),
+                              ("Threads", "data/engagement_queue_threads.jsonl")):
+              p = pathlib.Path(path)
+              if not p.exists():
+                  print(f"{label}: file missing")
+                  continue
+              rows = [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
+              pending = [r for r in rows if not r.get("published_at")]
+              by_cat = {"news": 0, "daily": 0, "other": 0}
+              for r in pending:
+                  c = r.get("category") or "other"
+                  by_cat[c if c in by_cat else "other"] += 1
+              print(f"{label} pending — total={len(pending)} news={by_cat['news']} daily={by_cat['daily']} other={by_cat['other']}")
+              if by_cat["daily"] < 5:
+                  print(f"::notice::{label} daily queue low ({by_cat['daily']}<5) — refill via 29-jules-engagement-refill.yml")
+              if by_cat["news"] < 2:
+                  print(f"::notice::{label} news queue low ({by_cat['news']}<2) — refill via 33-jules-engagement-news.yml")
+          PY
