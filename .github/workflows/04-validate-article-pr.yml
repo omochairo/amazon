@@ -251,6 +251,12 @@ on:
       # cron が作る履歴 PR が validate 発火せず auto-merge が永久 pending になる
       # ([[04-validate-paths-trap]] の inverse: path 不一致で必須 check 不発)。
       - 'data/sns_published.json'
+      # 2026-06-03 (session 87): Threads access token を weekly cron で refresh
+      # ([[feedback-omochairo-threads-token-diagnostic]])。token 自体は repository
+      # secret なので diff には乗らないが、script / workflow の変更 PR は paths
+      # 経由で validate を発火させる必要がある。
+      - 'scripts/refresh_threads_token.py'
+      - '.github/workflows/refresh_threads_token.yml'
   workflow_dispatch:
 
 permissions:
