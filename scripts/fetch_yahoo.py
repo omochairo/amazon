@@ -52,6 +52,23 @@ logging.basicConfig(
 logger = logging.getLogger("fetch_yahoo")
 
 
+def _load_prior_items(save_path: str) -> list | None:
+    """既存 yahoo_result.json の items を返す。空/不在/壊れは None。
+
+    Issue #1481: API key 欠 / quota 切れで空 items を上書きすると
+    /posts/ の Yahoo CTA が消えるため、prior が生きていれば温存する。
+    """
+    if not os.path.exists(save_path):
+        return None
+    try:
+        with open(save_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+    prior = data.get("items") or []
+    return prior if prior else None
+
+
 # ---------------------------------------------------------------------------
 # ヘルパー
 # ---------------------------------------------------------------------------
@@ -145,6 +162,12 @@ def fetch_yahoo(keyword: str) -> None:
         logger.warning("YAHOO_CLIENT_ID missing. Skipping Yahoo fetch.")
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         save_path = os.path.join(base_dir, "data", "raw", "yahoo_result.json")
+        # Issue #1481: 空 items で上書きせず prior が生きていれば温存する
+        if _load_prior_items(save_path) is not None:
+            logger.warning(
+                "Preserving previous yahoo_result.json (skip overwrite due to missing client_id)."
+            )
+            return
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         with open(save_path, "w", encoding="utf-8") as f:
             json.dump({"keyword": keyword, "items": []}, f, ensure_ascii=False, indent=4)
@@ -237,6 +260,13 @@ def fetch_yahoo(keyword: str) -> None:
     # --- 保存 (プロジェクトルートの data フォルダ) -------------------------
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     save_path = os.path.join(base_dir, "data", "raw", "yahoo_result.json")
+    # Issue #1481: items が空 (API 成功でも 0 件返却) のときは prior 温存
+    if not items and _load_prior_items(save_path) is not None:
+        logger.warning(
+            "Preserving previous yahoo_result.json (API returned 0 items for keyword=%s).",
+            keyword,
+        )
+        return
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     with open(save_path, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=4)

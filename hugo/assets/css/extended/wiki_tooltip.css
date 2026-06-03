@@ -31,13 +31,13 @@
   opacity: 0.75;
 }
 
-.dark .wiki-term {
+[data-theme="dark"] .wiki-term {
   color: #a5b4fc;
   border-bottom-color: rgba(165, 180, 252, 0.55);
 }
 
-.dark .wiki-term:hover,
-.dark .wiki-term:focus-visible {
+[data-theme="dark"] .wiki-term:hover,
+[data-theme="dark"] .wiki-term:focus-visible {
   color: #c7d2fe;
   border-bottom-color: #c7d2fe;
 }
@@ -92,7 +92,7 @@ body.wiki-scroll-lock {
   transition: none;
 }
 
-.dark .wiki-sheet {
+[data-theme="dark"] .wiki-sheet {
   background: rgba(28, 28, 36, 0.92);
   color: #e5e7eb;
   box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.5);
@@ -120,7 +120,7 @@ body.wiki-scroll-lock {
   background: rgba(0, 0, 0, 0.25);
 }
 
-.dark .wiki-sheet__bar {
+[data-theme="dark"] .wiki-sheet__bar {
   background: rgba(255, 255, 255, 0.3);
 }
 
@@ -133,7 +133,7 @@ body.wiki-scroll-lock {
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
-.dark .wiki-sheet__header {
+[data-theme="dark"] .wiki-sheet__header {
   border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
@@ -170,8 +170,8 @@ body.wiki-scroll-lock {
   outline: none;
 }
 
-.dark .wiki-sheet__close:hover,
-.dark .wiki-sheet__close:focus-visible {
+[data-theme="dark"] .wiki-sheet__close:hover,
+[data-theme="dark"] .wiki-sheet__close:focus-visible {
   background: rgba(255, 255, 255, 0.1);
 }
 
@@ -199,7 +199,7 @@ body.wiki-scroll-lock {
   color: rgba(0, 0, 0, 0.6);
 }
 
-.dark .wiki-sheet__footer {
+[data-theme="dark"] .wiki-sheet__footer {
   color: rgba(255, 255, 255, 0.55);
 }
 
@@ -215,7 +215,7 @@ body.wiki-scroll-lock {
   text-decoration: underline;
 }
 
-.dark .wiki-sheet__link {
+[data-theme="dark"] .wiki-sheet__link {
   color: #a5b4fc;
 }
 

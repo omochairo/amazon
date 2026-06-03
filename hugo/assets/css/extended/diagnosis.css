@@ -13,7 +13,7 @@
     transition: all 0.3s ease;
 }
 
-body.dark .diagnosis-wrapper {
+[data-theme="dark"] .diagnosis-wrapper {
     background: rgba(0, 0, 0, 0.2);
     border: 1px solid rgba(255, 255, 255, 0.05);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
@@ -29,7 +29,7 @@ body.dark .diagnosis-wrapper {
     overflow: hidden;
 }
 
-body.dark .diagnosis-progress-container {
+[data-theme="dark"] .diagnosis-progress-container {
     background: rgba(255, 255, 255, 0.08);
 }
 
@@ -109,7 +109,7 @@ body.dark .diagnosis-progress-container {
     width: 100%;
 }
 
-body.dark .diagnosis-option-btn {
+[data-theme="dark"] .diagnosis-option-btn {
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -121,7 +121,7 @@ body.dark .diagnosis-option-btn {
     box-shadow: 0 8px 20px rgba(79, 70, 229, 0.1);
 }
 
-body.dark .diagnosis-option-btn:hover {
+[data-theme="dark"] .diagnosis-option-btn:hover {
     background: rgba(124, 58, 237, 0.08);
     border-color: rgba(124, 58, 237, 0.4);
     box-shadow: 0 8px 20px rgba(124, 58, 237, 0.2);
@@ -174,7 +174,7 @@ body.dark .diagnosis-option-btn:hover {
     border-color: var(--secondary);
 }
 
-body.dark .diagnosis-nav-btn:hover {
+[data-theme="dark"] .diagnosis-nav-btn:hover {
     background: rgba(255, 255, 255, 0.08);
 }
 
@@ -219,7 +219,7 @@ body.dark .diagnosis-nav-btn:hover {
     color: #d97706;
 }
 
-body.dark .diagnosis-fallback-badge {
+[data-theme="dark"] .diagnosis-fallback-badge {
     background: rgba(245, 158, 11, 0.15);
     color: #fbbf24;
     border-color: rgba(245, 158, 11, 0.4);
@@ -258,5 +258,59 @@ body.dark .diagnosis-fallback-badge {
 @media (min-width: 768px) {
     .diagnosis-result-container .card-grid {
         grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* #1418 P2: 診断ページのモバイル最適化
+   iPhone 実機で wrapper の padding 2rem が過剰、絵文字・ボタンが大きすぎ
+   操作性を損ねていたため、余白とフォントを縮小する。 */
+@media (max-width: 720px) {
+    .diagnosis-wrapper {
+        padding: 1.25rem 1rem;
+        margin: 1rem auto;
+        border-radius: 12px;
+    }
+    .diagnosis-progress-container {
+        margin-bottom: 1.5rem;
+    }
+    .diagnosis-question {
+        font-size: 1.15rem;
+        margin-bottom: 1.25rem;
+        line-height: 1.45;
+    }
+    .diagnosis-options {
+        gap: 0.75rem;
+    }
+    .diagnosis-option-btn {
+        padding: 1rem 0.75rem;
+        min-height: 44px; /* Apple HIG */
+        border-radius: 10px;
+    }
+    .diagnosis-option-btn .emoji {
+        font-size: 1.75rem;
+        margin-bottom: 0.5rem;
+    }
+    .diagnosis-option-btn .label {
+        font-size: 0.98rem;
+    }
+    .diagnosis-option-btn .sublabel {
+        font-size: 0.74rem;
+    }
+    .diagnosis-navigation {
+        margin-top: 1.25rem;
+    }
+    .diagnosis-nav-btn {
+        min-height: 44px;
+        padding: 0.6rem 1rem;
+    }
+    .diagnosis-result-header h2 {
+        font-size: 1.4rem;
+    }
+    .diagnosis-result-header p {
+        font-size: 0.88rem;
+    }
+    .diagnosis-retry-btn {
+        min-height: 44px;
+        padding: 0.75rem 1.5rem;
     }
 }

@@ -29,24 +29,29 @@ jobs:
     # workflow_run の場合は成功時のみ実行
     if: (github.ref == 'refs/heads/main') && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
           ref: main
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
       - name: Install Dependencies
         run: pip install -r requirements.txt
+
+      # Issue #1494: build_og_image.py が hugo/static/og/<asin>.jpg (1200x630) を
+      # 合成する際に CJK font が必要。ubuntu-latest には未 preinstall なので
+      # noto-cjk を入れる。font 不在時は fail-soft で旧挙動 (Amazon 画像 URL を
+      # og:image に) に fallback するが、SNS preview 品質のために font ありを既定に。
+      - name: Install Noto CJK fonts (for OG image generation)
+        run: sudo apt-get update -y && sudo apt-get install -y --no-install-recommends fonts-noto-cjk
 
       # 2026-05-13: v3 旧エンジン (jules_article_engine.py) の自動実行を停止。
       # data/raw/ に居るが data/articles/ に v4 JSON が無い ASIN について、
@@ -85,10 +90,10 @@ jobs:
           cd hugo && hugo --minify --buildFuture --destination ../public
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: ./public
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
