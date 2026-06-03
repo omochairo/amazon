@@ -42,15 +42,16 @@ DEFAULT_OUT_DIR = REPO_ROOT / "hugo" / "static" / "og"
 
 CANVAS_W = 1200
 CANVAS_H = 630
-PRODUCT_BOX = 540               # 商品画像を contain-fit する正方形 box
-LEFT_PANE_W = 600               # 左半 = 商品画像用
+PRODUCT_BOX = 560               # 商品画像 contain-fit box (ほぼ canvas 縦幅まで)
 PADDING = 30
 BG_COLOR = (255, 255, 255)
-TITLE_COLOR = (40, 40, 40)
-BRAND_COLOR = (110, 110, 110)
-TITLE_FONT_PX = 44              # 3 行で約 14 文字/行 (CJK)
-BRAND_FONT_PX = 24
-BRAND_LINE = "おもちゃいろ 比較ナビ"
+BRAND_COLOR = (140, 140, 140)
+BRAND_FONT_PX = 22
+# 2026-06-03 (#1494 follow-up): X の summary_large_image は image area の下に
+# X 自身が twitter:title を別行で描画するため、画像内に title を焼き込むと二重
+# 表示になる。タイトル焼き込みを廃止し OG 画像は「視覚要素 (商品画像) + 控えめな
+# brand watermark」のみに統一。
+BRAND_LINE = "navi.omcha.jp"
 HTTP_TIMEOUT = 20
 JPEG_QUALITY = 85
 
@@ -101,38 +102,6 @@ def _fetch_image_bytes(url: str) -> bytes | None:
         return None
 
 
-def _wrap_title(draw, text: str, font, max_w: int, max_lines: int = 3) -> list[str]:
-    """CJK 対応の素朴な wrap。1 文字ずつ width を測って max_w を超えたら改行。
-
-    PIL の textbbox は font kerning も含むので空白を意識せず詰めて測定する。
-    """
-    lines: list[str] = []
-    buf = ""
-    for ch in text:
-        candidate = buf + ch
-        bbox = draw.textbbox((0, 0), candidate, font=font)
-        if bbox[2] - bbox[0] > max_w and buf:
-            lines.append(buf)
-            buf = ch
-            if len(lines) == max_lines - 1:
-                # 最終行: 残り全部詰めて末尾を ellipsis で truncate
-                rest = ch
-                for ch2 in text[text.index(ch) + 1:]:
-                    candidate2 = rest + ch2
-                    bbox2 = draw.textbbox((0, 0), candidate2 + "…", font=font)
-                    if bbox2[2] - bbox2[0] > max_w:
-                        rest = rest + "…"
-                        break
-                    rest = candidate2
-                lines.append(rest)
-                return lines
-        else:
-            buf = candidate
-    if buf:
-        lines.append(buf)
-    return lines
-
-
 def build_og_image(
     asin: str,
     image_url: str,
@@ -142,11 +111,14 @@ def build_og_image(
 ) -> Path | None:
     """1200x630 OG 画像を out_dir/<asin>.jpg に書き出し、Path を返す。
 
-    既に出力済みで force=False の場合は再生成せずパスのみ返す (build_post の
-    毎回 invocation を高速化)。
-    商品画像が低解像でも 540x540 box に contain-fit して中央配置 + 余白白塗りする
-    ので X / Threads の 1.91:1 要件を満たす。
+    既に出力済みで force=False の場合は再生成せずパスのみ返す。
+    商品画像が低解像でも 560x560 box に contain-fit して **中央配置 + 白塗り**で
+    1.91:1 を満たす。タイトルは焼き込まず、X / Threads の card UI に任せる
+    (#1494 初版で焼き込みが twitter:title と二重表示になる問題を受けて廃止)。
+
+    title 引数は API 互換性のため残置 (使用しない)。
     """
+    _ = title  # API 互換のため受け取るが使用しない
     if not asin or not image_url:
         return None
     asin_l = asin.lower()
@@ -174,37 +146,27 @@ def build_og_image(
     src.thumbnail((PRODUCT_BOX, PRODUCT_BOX), Image.LANCZOS)
 
     canvas = Image.new("RGB", (CANVAS_W, CANVAS_H), BG_COLOR)
-    # 左半 600px の中央に商品画像を配置
-    x = (LEFT_PANE_W - src.width) // 2
-    y = (CANVAS_H - src.height) // 2
+    # canvas 全体の中央 (やや上寄せ) に商品画像を配置。brand watermark 分だけ上に詰める。
+    x = (CANVAS_W - src.width) // 2
+    y = (CANVAS_H - src.height) // 2 - 18
     canvas.paste(src, (x, y))
 
+    # 右下隅に控えめな brand watermark。font が無い (CJK 不在環境) でも brand 文言は
+    # ASCII (navi.omcha.jp) なので Pillow default font に fallback して描画する。
     draw = ImageDraw.Draw(canvas)
-    title_font = _load_font(TITLE_FONT_PX)
     brand_font = _load_font(BRAND_FONT_PX)
-    if title_font is None or brand_font is None:
-        # CJK font が見つからない環境では日本語が tofu になるので OG 生成を諦め、
-        # caller (build_post) が Amazon 画像 URL に fallback する。
-        print(
-            f"build_og_image: no CJK font found (tried {len(FONT_CANDIDATES)} candidates); "
-            f"skipping {asin_l}",
-            file=sys.stderr,
-        )
-        return None
-
-    # 右半: タイトル wrap (max 3 行) + 下部に brand line
-    right_x = LEFT_PANE_W + PADDING
-    right_w = CANVAS_W - right_x - PADDING
-
-    lines = _wrap_title(draw, title or "", title_font, right_w, max_lines=3)
-    line_h = int(TITLE_FONT_PX * 1.35)
-    block_h = line_h * len(lines)
-    title_y = (CANVAS_H - block_h) // 2 - 30  # brand 用に少し上寄せ
-    for i, line in enumerate(lines):
-        draw.text((right_x, title_y + i * line_h), line, fill=TITLE_COLOR, font=title_font)
-
-    brand_y = CANVAS_H - BRAND_FONT_PX - PADDING - 10
-    draw.text((right_x, brand_y), BRAND_LINE, fill=BRAND_COLOR, font=brand_font)
+    if brand_font is not None:
+        try:
+            bbox = draw.textbbox((0, 0), BRAND_LINE, font=brand_font)
+            text_w = bbox[2] - bbox[0]
+            text_h = bbox[3] - bbox[1]
+            bx = CANVAS_W - text_w - PADDING
+            by = CANVAS_H - text_h - PADDING
+            draw.text((bx, by), BRAND_LINE, fill=BRAND_COLOR, font=brand_font)
+        except Exception as e:
+            print(f"build_og_image: brand watermark draw failed for {asin_l}: {e}",
+                  file=sys.stderr)
+            # brand 無しでも継続 — 商品画像だけで OG として成立する
 
     out_dir.mkdir(parents=True, exist_ok=True)
     try:

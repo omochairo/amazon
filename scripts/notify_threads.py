@@ -50,7 +50,25 @@ except Exception:
 
 GRAPH_BASE = "https://graph.threads.net/v1.0"
 DEFAULT_BASE_URL = "https://navi.omcha.jp"
-PUBLISH_RETRY_SECONDS = 2
+
+# 2026-06-03 (#1494 follow-up): Meta 公式 docs / コミュニティ報告では container
+# 作成後 publish まで **最低 30 秒** 待つことを推奨 (text-only でも eventual
+# consistency window あり)。reply container (reply_to_id 付き) は特に出やすい。
+# 旧実装は 0 秒待ち + 1 回 retry のみで session 89 run 26862829282 で
+# post2 が 4279009 "Media Not Found" で失敗した。
+PUBLISH_SETTLE_SECONDS = 32         # container 作成後 → publish 前の固定 sleep
+PUBLISH_RETRY_SECONDS = 10          # retry 間隔
+PUBLISH_MAX_RETRIES = 3             # 失敗時の最大 retry 回数
+# eventual consistency window 中に出る既知 error message variants (case-insensitive 含む)
+PUBLISH_TRANSIENT_ERROR_KEYS = (
+    "media id is not available",
+    "media not found",
+    "cannot be found",
+    "does not exist",
+    "the requested resource does not exist",
+    "4279009",
+    "4279019",
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ARTICLES_DIR = REPO_ROOT / "data" / "articles"
@@ -114,13 +132,32 @@ def create_container(user_id: str, token: str, text: str, reply_to_id: str | Non
     return _post(url, data)
 
 
+def _is_transient_publish_error(resp: dict) -> bool:
+    if "_http_error" not in resp:
+        return False
+    blob = json.dumps(resp, ensure_ascii=False).lower()
+    return any(key in blob for key in PUBLISH_TRANSIENT_ERROR_KEYS)
+
+
 def publish_container(user_id: str, token: str, creation_id: str) -> dict:
+    """container を publish。eventual consistency 失敗時は最大 3 回 retry。"""
     url = f"{GRAPH_BASE}/{user_id}/threads_publish"
     data = {"creation_id": creation_id, "access_token": token}
-    # Meta は container 作成直後の publish に対し稀に 30s の eventual
-    # consistency 待ちを要求する。1 回 retry で吸収。
+    # Meta 公式推奨に従い container 作成直後の publish は 30s 以上 settle 待ち。
+    # ここに到達した時点で create_container の往復で数秒経過しているが、明示的に
+    # 残り分を sleep する。
+    print(f"[publish] settle wait {PUBLISH_SETTLE_SECONDS}s before publish (creation_id={creation_id})",
+          flush=True)
+    time.sleep(PUBLISH_SETTLE_SECONDS)
     resp = _post(url, data)
-    if "_http_error" in resp and "Media ID is not available" in json.dumps(resp).lower():
+    for attempt in range(1, PUBLISH_MAX_RETRIES + 1):
+        if not _is_transient_publish_error(resp):
+            return resp
+        print(
+            f"[publish] transient error on attempt {attempt}/{PUBLISH_MAX_RETRIES}, "
+            f"sleeping {PUBLISH_RETRY_SECONDS}s and retrying: {json.dumps(resp, ensure_ascii=False)}",
+            flush=True,
+        )
         time.sleep(PUBLISH_RETRY_SECONDS)
         resp = _post(url, data)
     return resp
