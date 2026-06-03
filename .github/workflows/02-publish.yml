@@ -29,8 +29,6 @@ jobs:
     # workflow_run の場合は成功時のみ実行
     if: (github.ref == 'refs/heads/main') && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

@@ -25,8 +25,6 @@ on:
 jobs:
   backfill:
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     # 2026-05-19 (session 32): GitHub App token に切替。session 31 で peter-evans/
     # create-pull-request の GITHUB_TOKEN 由来 commit が anti-recursion guard で
     # pull_request event を発火させず、validate (required check) が走らないため
@@ -38,7 +36,7 @@ jobs:
     steps:
       - name: Generate App token
         id: app-token
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
