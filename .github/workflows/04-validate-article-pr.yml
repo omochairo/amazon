@@ -68,6 +68,11 @@ on:
       # paths 未登録だと inverse trap で validate 不発火→auto-merge 永久 BLOCKED
       # になるため登録 ([[04-validate-paths-inverse-trap]])。記事変更ゼロで vacuous SUCCESS。
       - 'scripts/report_jules_sessions.py'
+      # 2026-06-04 (#1600 Phase 1): per_asin 第三者情報量スコア。03-invoke-jules の
+      # ASIN 選定 defer + prompt 注記で使う。paths 未登録だと inverse trap で
+      # validate 不発火→auto-merge 永久 BLOCKED になるため登録 ([[04-validate-paths-inverse-trap]])。
+      - 'scripts/score_per_asin_info.py'
+      - 'scripts/tests/test_score_per_asin_info.py'
       - 'scripts/fetch_amazon.py'
       - 'scripts/fetch_youtube.py'
       # 2026-05-26 (session 60 PR #786): Creator API クライアント本体を触る PR も
