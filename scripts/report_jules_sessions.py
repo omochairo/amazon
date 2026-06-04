@@ -8,12 +8,14 @@ Jules API (`GET /v1alpha/sessions`) を直接叩いて **実セッションの s
   - daily は「セッション *作成* 数」を rolling 24h で数える → 作成から 24h で自然に枠が空く
     (#1353 の「PT/UTC midnight でリセット」仮説は両方誤り。体感「リセットが遅い」の正体は rolling window)
   - **session DELETE は API に存在しない** (create/get/list/approvePlan/sendMessage のみ)
-    → #1599 の「DELETE 自動化でログ退避→削除」は API 上不可能。スタック session は
-      terminal (COMPLETED/FAILED) になるまで concurrent 枠を占有し続ける = 真の浪費ベクトル
+  - concurrent 15 を食うのは実働中 (QUEUED/PLANNING/IN_PROGRESS) のみ。AWAITING_*/PAUSED の
+    人間待ち idle は concurrent を消費しない (2026-06-04 実測: 実働13+質問5=18 alive>cap15 許容)。
+    → 質問セッションは放置で OK (concurrent 非占有 + daily は 24h で aging out)。手動削除不要。
+      残コストは「記事が生成されない content gap」のみ = 予防 (#1600) の対象。
 
-このスクリプトは「枠の圧迫」を可視化する。daily 圧 (rolling 24h 作成数 / 100) と
-concurrent 圧 (active session 数 / 15)、および AWAITING_USER_FEEDBACK 等で詰まった
-スタック session の一覧を出す。caller (16-jules-daily-report.yml) が Issue にコメントする。
+このスクリプトは「枠の圧迫」を可視化する。daily 圧 (rolling 24h 作成数 / 100)、
+concurrent 圧 (実working / 15)、人間待ち放置数、AWAITING_USER_FEEDBACK 等の一覧を出す。
+caller (16-jules-daily-report.yml) が Issue にコメントする。
 
 使い方:
     JULES_API_KEY=... python scripts/report_jules_sessions.py
@@ -32,13 +34,13 @@ API_BASE = "https://jules.googleapis.com/v1alpha/sessions"
 DAILY_CAP = 100
 CONCURRENT_CAP = 15
 
-# terminal でない = concurrent 枠を占有する state。
-ACTIVE_STATES = {
-    "QUEUED", "PLANNING", "AWAITING_PLAN_APPROVAL",
-    "AWAITING_USER_FEEDBACK", "IN_PROGRESS", "PAUSED",
-}
-# 人手の介入なしには自力で進めず、concurrent 枠を無期限に占有しうる state。
-STUCK_STATES = {"AWAITING_USER_FEEDBACK", "AWAITING_PLAN_APPROVAL", "PAUSED"}
+# concurrent 15 枠を実際に消費するのは「実働中」state のみ。
+# 2026-06-04 dashboard 実測: 実働13 + 質問5 = 18 alive が cap15 を超えても許容された
+# → 人間待ち idle state (AWAITING_*/PAUSED) は concurrent 枠を消費しない。
+CONCURRENT_STATES = {"QUEUED", "PLANNING", "IN_PROGRESS"}
+# 人間待ちで自走しない state。concurrent も daily(24h で aging out) も食わないので
+# quota 上は放置で問題ないが、その ASIN の記事が生成されないまま残る (content gap)。
+WAITING_STATES = {"AWAITING_USER_FEEDBACK", "AWAITING_PLAN_APPROVAL", "PAUSED"}
 
 
 def _now() -> _dt.datetime:
@@ -89,6 +91,7 @@ def summarize(sessions: list[dict], *, stuck_hours: float) -> dict:
     by_state: dict[str, int] = {}
     created_24h = 0
     active = 0
+    waiting = 0
     stuck: list[dict] = []
     for s in sessions:
         st = _state_of(s)
@@ -96,9 +99,10 @@ def summarize(sessions: list[dict], *, stuck_hours: float) -> dict:
         created = _parse_ts(s.get("createTime"))
         if created and (now - created).total_seconds() <= 86400:
             created_24h += 1
-        if st in ACTIVE_STATES:
+        if st in CONCURRENT_STATES:
             active += 1
-        if st in STUCK_STATES:
+        if st in WAITING_STATES:
+            waiting += 1
             updated = _parse_ts(s.get("updateTime")) or created
             age_h = (now - updated).total_seconds() / 3600 if updated else 0.0
             if age_h >= stuck_hours:
@@ -114,6 +118,7 @@ def summarize(sessions: list[dict], *, stuck_hours: float) -> dict:
         "by_state": by_state,
         "created_24h": created_24h,
         "active": active,
+        "waiting": waiting,
         "stuck": stuck,
     }
 
@@ -134,9 +139,10 @@ def render(summary: dict, *, stuck_hours: float) -> str:
     date = _now().strftime("%Y-%m-%d %H:%M")
     L.append(f"## Jules sessions (live API) — {date} UTC")
     L.append("")
-    d, a = summary["created_24h"], summary["active"]
+    d, a, w = summary["created_24h"], summary["active"], summary["waiting"]
     L.append(f"- **daily 圧 (rolling 24h 作成): {d} / {DAILY_CAP}** {_pct_emoji(d, DAILY_CAP)}")
-    L.append(f"- **concurrent 圧 (active 枠占有): {a} / {CONCURRENT_CAP}** {_pct_emoji(a, CONCURRENT_CAP)}")
+    L.append(f"- **concurrent 圧 (実working 枠占有: QUEUED/PLANNING/IN_PROGRESS): {a} / {CONCURRENT_CAP}** {_pct_emoji(a, CONCURRENT_CAP)}")
+    L.append(f"- 人間待ち放置 (AWAITING_*/PAUSED): {w} _(quota 非占有・記事未生成)_")
     L.append(f"- total visible sessions: {summary['total']}")
     L.append("")
     L.append("### state 分布")
@@ -147,12 +153,13 @@ def render(summary: dict, *, stuck_hours: float) -> str:
         L.append(f"| {st} | {n} |")
     L.append("")
     stuck = summary["stuck"]
-    L.append(f"### スタック session (>{stuck_hours:g}h, concurrent 枠を占有)")
+    L.append(f"### 放置 session (>{stuck_hours:g}h 人間待ち)")
     L.append("")
     if not stuck:
-        L.append("_なし — concurrent 枠の無駄な占有は検出されず_")
+        L.append("_なし_")
     else:
-        L.append("⚠️ DELETE は API 非対応。terminal 化には sendMessage/approvePlan か Jules 側の timeout 待ち。")
+        L.append("ℹ️ quota は食わない (concurrent 非占有 / daily は 24h で aging out) ので削除不要。"
+                 "記事が生成されない content gap = #1600 の予防対象。")
         L.append("")
         L.append("| id | state | age(h) | title |")
         L.append("|---|---|---:|---|")
@@ -166,7 +173,7 @@ def render(summary: dict, *, stuck_hours: float) -> str:
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--stuck-hours", type=float, default=6.0,
-                   help="この時間以上更新の無い AWAITING_* / PAUSED をスタック扱い")
+                   help="この時間以上更新の無い AWAITING_* / PAUSED を放置扱い")
     args = p.parse_args()
     api_key = os.environ.get("JULES_API_KEY", "").strip()
     if not api_key:
