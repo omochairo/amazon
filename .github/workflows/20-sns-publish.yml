@@ -9,9 +9,10 @@ name: SNS Publish (Buffer X + Meta Graph Threads)
 # ため Meta Graph 直叩きで thread 化。Buffer Threads channel は日常投稿
 # (商品紹介以外) の手動運用で並走。
 #
-# cron 2 本立て:
-#   02:00 UTC = 11:00 JST  (お昼前のリーチ取り)
-#   11:00 UTC = 20:00 JST  (夜のゴールデンタイム)
+# cron 2 本立て (session 95: 記事を 07:00 JST に前出し。news パイプライン待ちの
+# ニュースを 11:00 JST 以降に回し、常に準備済みの記事を朝イチに置く):
+#   22:00 UTC = 07:00 JST (前日)  (朝イチ。記事は事前生成済で常に配信可能)
+#   11:00 UTC = 20:00 JST          (夜のゴールデンタイム)
 on:
   workflow_dispatch:
     inputs:
@@ -25,8 +26,8 @@ on:
         type: boolean
         default: false
   schedule:
-    - cron: '0 2 * * *'
-    - cron: '0 11 * * *'
+    - cron: '0 22 * * *'   # 07:00 JST (22:00 UTC 前日) 記事#1
+    - cron: '0 11 * * *'   # 20:00 JST (11:00 UTC)     記事#2
 
 jobs:
   publish:
