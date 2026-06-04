@@ -73,6 +73,11 @@ on:
       # validate 不発火→auto-merge 永久 BLOCKED になるため登録 ([[04-validate-paths-inverse-trap]])。
       - 'scripts/score_per_asin_info.py'
       - 'scripts/tests/test_score_per_asin_info.py'
+      # 2026-06-04 (#1600 Phase 2): Google CSE で非販売第三者ソースを pre-fetch する
+      # script + test + cron workflow。paths 未登録だと inverse trap で validate 不発火。
+      - 'scripts/fetch_third_party_sources.py'
+      - 'scripts/tests/test_fetch_third_party_sources.py'
+      - '.github/workflows/34-third-party-sources.yml'
       - 'scripts/fetch_amazon.py'
       - 'scripts/fetch_youtube.py'
       # 2026-05-26 (session 60 PR #786): Creator API クライアント本体を触る PR も

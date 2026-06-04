@@ -311,6 +311,10 @@ jobs:
               data/raw/rakuten.json と data/raw/yahoo_result.json はキーワード検索結果でありASIN単位のマッチではないため
               価格欄には**使わない**こと (sources の補助情報としては可)。
             - data/raw/youtube.json および data/raw/per_asin/${TARGET_ASIN}/ 配下の補助データも活用する
+            - data/raw/per_asin/${TARGET_ASIN}/third_party_sources.json が存在する場合 (#1600 Phase 2 で
+              事前収集した非販売の第三者候補 URL = レビュー/解説/メディア) は、sources 候補として優先的に
+              内容を確認すること。ただし候補に過ぎないので、実際に内容を読んで記述の裏取りに使えた URL のみを
+              article の sources に採用する (販売ページ・検索結果ページは出典に含めない)
 
             === 以下、jules/PROMPT_TEMPLATE.md の内容 ==="
             PROMPT="$INTRO
