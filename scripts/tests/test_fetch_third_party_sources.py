@@ -5,12 +5,14 @@
 from __future__ import annotations
 
 import datetime as dt
+import io
 import json
 import os
 import sys
 import tempfile
 import pathlib
 import unittest
+from unittest import mock
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS_DIR = os.path.dirname(THIS_DIR)
@@ -89,6 +91,36 @@ class FreshnessTest(unittest.TestCase):
 
     def test_missing_is_stale(self):
         self.assertFalse(F._is_fresh(self.p, 30))
+
+
+class TavilySearchTest(unittest.TestCase):
+    def test_results_normalized_to_cse_shape(self):
+        payload = {
+            "results": [
+                {"url": "https://a.example.com/1", "title": "A", "content": "snip a"},
+                {"url": "https://b.example.com/2", "title": "B", "content": "snip b"},
+                "not-a-dict",  # 異物は無視
+            ]
+        }
+        resp = io.BytesIO(json.dumps(payload).encode("utf-8"))
+        resp.__enter__ = lambda *a: resp  # type: ignore[attr-defined]
+        resp.__exit__ = lambda *a: False  # type: ignore[attr-defined]
+        with mock.patch.object(F.urllib.request, "urlopen", return_value=resp):
+            items = F.tavily_search("レゴ クラシック", "tvly-test", num=10)
+        self.assertEqual(len(items), 2)
+        self.assertEqual(items[0], {
+            "link": "https://a.example.com/1", "title": "A", "snippet": "snip a",
+        })
+        # _filter_sources に素通しできる shape であること
+        out = F._filter_sources(items, max_sources=5)
+        self.assertEqual([s["host"] for s in out], ["a.example.com", "b.example.com"])
+
+    def test_missing_results_key_yields_empty(self):
+        resp = io.BytesIO(json.dumps({}).encode("utf-8"))
+        resp.__enter__ = lambda *a: resp  # type: ignore[attr-defined]
+        resp.__exit__ = lambda *a: False  # type: ignore[attr-defined]
+        with mock.patch.object(F.urllib.request, "urlopen", return_value=resp):
+            self.assertEqual(F.tavily_search("x", "tvly-test"), [])
 
 
 if __name__ == "__main__":

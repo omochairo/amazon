@@ -1,7 +1,7 @@
 """
 fetch_third_party_sources.py  (#1600 Phase 2)
 
-Google Custom Search JSON API で per_asin の商品名キーワードを検索し、
+Tavily Search API で per_asin の商品名キーワードを検索し、
 非販売 (= レビュー / 解説 / メディア) の第三者ソース URL を pre-fetch して
 data/raw/per_asin/<ASIN>/third_party_sources.json に書き出す。
 
@@ -10,16 +10,20 @@ data/raw/per_asin/<ASIN>/third_party_sources.json に書き出す。
 書くこと。Phase 1 (score_per_asin_info) は真ゼロ品を defer するだけだが、本 Phase 2 は
 「実在し検証可能な非販売候補 URL」を先回りで収集し、Jules の裏取り精度を底上げする。
 
-quota: Custom Search JSON API は 100 query/日 無料。--max-queries で上限を切る。
-secret (GOOGLE_CSE_API_KEY / GOOGLE_CSE_CX) 未設定時は inert (no-op, exit 0)。
+検索 backend は当初 Google CSE を採用したが、2026-01-20 の仕様変更で新規エンジンの
+「ウェブ全体検索」が廃止されたため Tavily に切替 (#1600 session 102)。Tavily は
+エージェント/RAG 用途前提で GitHub Actions の共有 IP からも安定して叩ける。
+
+quota: Tavily 無料枠は 1,000 query/月 (≈ 33/日)。freshness skip (既定 30日) で
+定常呼び出しは thin/zero ASIN 数に収まる。--max-queries で日次上限を切る。
+secret (TAVILY_API_KEY) 未設定時は inert (no-op, exit 0)。
 
 env:
-  GOOGLE_CSE_API_KEY  Custom Search API キー (Google Cloud Console)
-  GOOGLE_CSE_CX       Programmable Search Engine の検索エンジン ID (cx)
+  TAVILY_API_KEY  Tavily Search API キー (https://app.tavily.com — CC 不要・無料枠)
 
 Usage:
   python scripts/fetch_third_party_sources.py B0FX2RNS7J          # 単一 ASIN
-  python scripts/fetch_third_party_sources.py --pool --max-queries 90
+  python scripts/fetch_third_party_sources.py --pool --max-queries 30
   python scripts/fetch_third_party_sources.py B0... --dry-run     # API を叩かず計画表示
 """
 
@@ -46,7 +50,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("fetch_third_party_sources")
 
 PER_ASIN_DIR = pathlib.Path("data/raw/per_asin")
-CSE_ENDPOINT = "https://www.googleapis.com/customsearch/v1"
+TAVILY_ENDPOINT = "https://api.tavily.com/search"
 OUT_NAME = "third_party_sources.json"
 
 # 販売/マーケットプレイス host (= 価格・購入ページ)。第三者「出典」には使わないので除外。
@@ -105,21 +109,44 @@ def _product_title(asin: str, base: pathlib.Path) -> str:
     return ""
 
 
-def cse_search(query: str, api_key: str, cx: str, num: int = 10) -> list[dict]:
-    """Custom Search JSON API を 1 回呼び、items(raw) を返す。429/4xx は例外送出。"""
-    params = {
-        "key": api_key, "cx": cx, "q": query,
-        "num": max(1, min(num, 10)), "hl": "ja", "gl": "jp", "lr": "lang_ja",
-    }
-    url = f"{CSE_ENDPOINT}?{urllib.parse.urlencode(params)}"
-    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+def tavily_search(query: str, api_key: str, num: int = 10) -> list[dict]:
+    """Tavily Search API を 1 回呼び、items(raw) を返す。429/4xx は例外送出。
+
+    戻り値は CSE 時代と同じ shape ({"link","title","snippet"}) に正規化し、
+    下流の _filter_sources / 既存テストを無改修で再利用する。
+    """
+    body = json.dumps({
+        "query": query,
+        "max_results": max(1, min(num, 20)),
+        "search_depth": "basic",
+        "topic": "general",
+        "include_answer": False,
+        "include_raw_content": False,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        TAVILY_ENDPOINT, data=body, method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+            "Accept": "application/json",
+        },
+    )
     with urllib.request.urlopen(req, timeout=20) as resp:
         data = json.load(resp)
-    return data.get("items", []) or []
+    items: list[dict] = []
+    for r in data.get("results", []) or []:
+        if not isinstance(r, dict):
+            continue
+        items.append({
+            "link": r.get("url", ""),
+            "title": r.get("title", ""),
+            "snippet": r.get("content", ""),
+        })
+    return items
 
 
 def _filter_sources(raw_items: list[dict], max_sources: int) -> list[dict]:
-    """CSE 生 items から非販売 distinct host を抽出 (host あたり 1 件、上位 max_sources)。"""
+    """検索 raw items から非販売 distinct host を抽出 (host あたり 1 件、上位 max_sources)。"""
     seen_hosts: set[str] = set()
     out: list[dict] = []
     for it in raw_items:
@@ -159,7 +186,7 @@ def _is_fresh(path: pathlib.Path, max_age_days: int) -> bool:
 
 
 def fetch_for_asin(
-    asin: str, api_key: str, cx: str, base: pathlib.Path,
+    asin: str, api_key: str, base: pathlib.Path,
     max_sources: int = 8, dry_run: bool = False,
 ) -> dict:
     """1 ASIN 分の第三者ソースを収集して書き出す。戻り値は要約 dict。"""
@@ -169,13 +196,13 @@ def fetch_for_asin(
     query = extract_search_keyword(title)
     if dry_run:
         return {"asin": asin, "status": "dry_run", "query": query, "sources": 0}
-    raw = cse_search(query, api_key, cx, num=10)
+    raw = tavily_search(query, api_key, num=10)
     sources = _filter_sources(raw, max_sources)
     payload = {
         "asin": asin,
         "fetched_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
         "query": query,
-        "engine": "google_cse",
+        "engine": "tavily",
         "raw_count": len(raw),
         "sources": sources,
     }
@@ -215,8 +242,8 @@ def _cli() -> int:
                     help="pick 母集合のうち band が薄い ASIN をまとめて収集")
     ap.add_argument("--bands", default="zero,thin",
                     help="--pool 対象 band (カンマ区切り, 既定 zero,thin)")
-    ap.add_argument("--max-queries", type=int, default=90,
-                    help="API 呼び出し上限 (quota=100/日, 既定 90)")
+    ap.add_argument("--max-queries", type=int, default=30,
+                    help="API 呼び出し日次上限 (Tavily 無料=1000/月≈33/日, 既定 30)")
     ap.add_argument("--max-sources", type=int, default=8, help="ASIN あたり保存 host 数")
     ap.add_argument("--max-age-days", type=int, default=30,
                     help="この日数以内に取得済なら skip (--force で無視)")
@@ -226,11 +253,10 @@ def _cli() -> int:
     args = ap.parse_args()
     base = pathlib.Path(args.base)
 
-    api_key = os.environ.get("GOOGLE_CSE_API_KEY", "").strip()
-    cx = os.environ.get("GOOGLE_CSE_CX", "").strip()
-    if not args.dry_run and (not api_key or not cx):
+    api_key = os.environ.get("TAVILY_API_KEY", "").strip()
+    if not args.dry_run and not api_key:
         # secret 未設定: inert に no-op で正常終了 (cron が落ちないように)
-        logger.warning("GOOGLE_CSE_API_KEY / GOOGLE_CSE_CX 未設定 — no-op で終了 (inert)")
+        logger.warning("TAVILY_API_KEY 未設定 — no-op で終了 (inert)")
         return 0
 
     if args.asin:
@@ -253,11 +279,11 @@ def _cli() -> int:
             logger.info("%s: fresh (<%dd) skip", asin, args.max_age_days)
             continue
         try:
-            r = fetch_for_asin(asin, api_key, cx, base,
+            r = fetch_for_asin(asin, api_key, base,
                                max_sources=args.max_sources, dry_run=args.dry_run)
         except urllib.error.HTTPError as e:
-            if e.code == 429:
-                logger.warning("HTTP 429 (quota) — 中断")
+            if e.code in (429, 432, 433):
+                logger.warning("HTTP %s (Tavily quota/plan limit) — 中断", e.code)
                 break
             logger.warning("%s: HTTP %s skip", asin, e.code)
             continue
@@ -268,7 +294,7 @@ def _cli() -> int:
         if r.get("status") in ("ok", "dry_run"):
             done += 1
         if not args.dry_run:
-            time.sleep(1)  # CSE への礼儀 (秒間 1 query)
+            time.sleep(1)  # Tavily への礼儀 (秒間 1 query)
     logger.info("完了: %d 件処理 (max %d)", done, args.max_queries)
     return 0
 
