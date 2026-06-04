@@ -345,14 +345,17 @@ jobs:
             HTTP_CODE=$(echo "$RESPONSE" | tail -1)
             BODY=$(echo "$RESPONSE" | sed '$d')
             echo "HTTP: $HTTP_CODE"
-            echo "$BODY" | jq -c '{name, id, status}' 2>/dev/null || echo "$BODY" | head -c 500
             if [ "$HTTP_CODE" != "200" ]; then
+              # エラー時はステータス/メッセージを必ず出す (FAILED_PRECONDITION=#1353 concurrent 枠枯渇/APIキー失効
+              # vs INVALID_ARGUMENT=payload 不正 を運用者が区別できるように)
+              echo "$BODY" | jq -r '.error.status // .error.message // .' 2>/dev/null || echo "$BODY" | head -c 800
               echo "::warning::Failed to create session for $TARGET_ASIN (HTTP $HTTP_CODE)"
               # FAILED_PRECONDITION が出たら memory: feedback_jules_api_failed_precondition.md
               # 参照 → 最優先で API キーを再発行 (jules.google.com → Settings → API keys)
               FAIL=$((FAIL + 1))
               continue
             fi
+            echo "$BODY" | jq -c '{name, id, status}' 2>/dev/null || echo "$BODY" | head -c 500
             SESSION_ID=$(echo "$BODY" | jq -r '.id // empty')
             if [ -z "$SESSION_ID" ]; then
               echo "::warning::No session id returned for $TARGET_ASIN"
