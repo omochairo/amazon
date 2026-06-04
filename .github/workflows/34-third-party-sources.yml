@@ -1,0 +1,101 @@
+name: Pre-fetch Third-Party Sources
+# #1600 Phase 2: per_asin の第三者ソース (非販売のレビュー/解説/メディア URL) を
+# Google Custom Search JSON API で pre-fetch し、data/raw/per_asin/<ASIN>/
+# third_party_sources.json に書き出して PR + auto-merge する。
+# Jules は記事生成時にこの候補 URL を裏取りソースとして活用できる (#1599 sources floor 対策)。
+#
+# secret (GOOGLE_CSE_API_KEY / GOOGLE_CSE_CX) 未設定時は script が inert に no-op するため
+# 差分ゼロ → PR 作成は skip される (安全に空振り)。quota=100 query/日 なので --max-queries 90。
+#
+# App token で PR 起票 (GITHUB_TOKEN だと anti-recursion guard で validate 不発火、
+# main 直 push は GH006 silent reject になるため PR + auto-merge 経路を採る)。
+on:
+  workflow_dispatch:
+    inputs:
+      bands:
+        description: '対象 band (カンマ区切り, 既定 zero,thin)'
+        required: false
+        default: 'zero,thin'
+      max_queries:
+        description: 'API 呼び出し上限 (quota=100/日)'
+        required: false
+        default: '90'
+  schedule:
+    # 毎日 21:30 UTC (06:30 JST) — 朝の記事生成スロットの前に候補を仕込む
+    - cron: '30 21 * * *'
+
+jobs:
+  prefetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Pre-fetch third-party sources
+        env:
+          GOOGLE_CSE_API_KEY: ${{ secrets.GOOGLE_CSE_API_KEY }}
+          GOOGLE_CSE_CX: ${{ secrets.GOOGLE_CSE_CX }}
+        run: |
+          python scripts/fetch_third_party_sources.py \
+            --pool \
+            --bands "${{ github.event.inputs.bands || 'zero,thin' }}" \
+            --max-queries "${{ github.event.inputs.max_queries || '90' }}"
+
+      - name: Create PR + enable auto-merge
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+          if [ -z "$(git status --porcelain -- 'data/raw/per_asin')" ]; then
+            echo "No third_party_sources changes (likely inert: secrets unset); skipping PR."
+            exit 0
+          fi
+          # 古い同種 PR を掃除
+          gh pr list --base main --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("third-party-sources/")) | .number' \
+            | while read -r pr_num; do
+            [ -n "$pr_num" ] && gh pr close "$pr_num" -d || true
+          done
+          BRANCH="third-party-sources/${{ github.run_id }}"
+          git config user.name "omochairo-fetch-bot[bot]"
+          git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add data/raw/per_asin
+          if git diff --cached --quiet; then
+            echo "Nothing staged; skipping."
+            exit 0
+          fi
+          git commit -m "data: pre-fetch third-party sources (#1600 run ${{ github.run_id }})"
+          git push -u origin "$BRANCH"
+          PR_URL=$(gh pr create \
+            --title "data: third-party source pre-fetch (#1600, run ${{ github.run_id }})" \
+            --body "Automated #1600 Phase 2 pre-fetch. data/raw/per_asin/**/third_party_sources.json only — no article changes." \
+            --base main \
+            --head "$BRANCH")
+          echo "Created: $PR_URL"
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge enabled on $PR_URL"
+          else
+            echo "::warning::Could not enable auto-merge on $PR_URL"
+          fi
+        continue-on-error: true
