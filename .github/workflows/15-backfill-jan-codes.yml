@@ -84,7 +84,7 @@ jobs:
             $APPLY_FLAG
 
       - name: Upload report artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: jan-backfill-report-${{ github.run_id }}
           path: scratch/jan_backfill_report.json
