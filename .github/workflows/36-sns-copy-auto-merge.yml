@@ -1,0 +1,129 @@
+name: SNS Copy PR Auto-Merge
+
+# Issue #1580 Part 2 (session 100):
+#   35-jules-sns-copy.yml が dispatch した Jules セッションが data/sns_copy/<ASIN>.json
+#   を追加した PR に対し auto-merge を有効化する。
+#
+# scope guard: PR が data/sns_copy/*.json のみを触る場合に限り auto-merge。
+# 他ファイルが混入していたら eligible=false (Jules が prompt 違反した場合の人手介入)。
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    paths:
+      - 'data/sns_copy/**'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sns-copy-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  enable-auto-merge:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Inspect changed files
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -e
+          changed=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA")
+          echo "Changed files:"
+          echo "$changed"
+          # 許可: data/sns_copy/<ASIN>.json のみ。
+          out_of_scope=$(echo "$changed" | grep -v -E '^data/sns_copy/[A-Z0-9]{10}\.json$' || true)
+          if [ -n "$out_of_scope" ]; then
+            echo "PR touches files outside data/sns_copy/; skipping auto-merge."
+            echo "out_of_scope<<EOF" >> "$GITHUB_OUTPUT"
+            echo "$out_of_scope" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -z "$changed" ]; then
+            echo "::warning::Empty diff; skipping."
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "SNS copy PR — eligible for auto-merge."
+          echo "eligible=true" >> "$GITHUB_OUTPUT"
+
+      - name: Validate sns_copy JSON shape
+        if: steps.scope.outputs.eligible == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -e
+          changed=$(git diff --name-only --diff-filter=AM "$BASE_SHA"..."$HEAD_SHA" -- 'data/sns_copy/*.json')
+          CHANGED_FILES="$changed" python3 - <<'PY'
+          import json, os, re, sys, pathlib
+          sys.path.insert(0, 'scripts')
+          try:
+              from _x_text import x_weight, X_LIMIT
+          except Exception:
+              x_weight = lambda c: 2 if ord(c) > 0x2000 else 1
+              X_LIMIT = 280
+          ASIN_RE = re.compile(r'^[A-Z0-9]{10}$')
+          # store hook はネイキッド本文 (URL は配信側が別途付与)。length は緩い
+          # 安全網に留める — notify_* は超過分を truncate するので、ここで弾くのは
+          # Jules が大きく逸脱した時のみ。prompt は X≤110字(=220 weight)/Threads≤460
+          # を指示しており、それに余裕を持たせた ceiling。URL 混入と hook 欠落は
+          # truncate で救えない真の不具合なので hard error。
+          X_HOOK_MAX = X_LIMIT - 40      # 240 weighted ≒ 120 CJK (prompt 110字 + 余裕)
+          THREADS_MAX = 480              # notify_threads の truncate 閾値に一致
+          errs = 0
+          for fname in os.environ['CHANGED_FILES'].splitlines():
+              fname = fname.strip()
+              if not fname:
+                  continue
+              path = pathlib.Path(fname)
+              asin = path.stem
+              if not ASIN_RE.match(asin):
+                  print(f'::error file={path}::filename stem is not a valid ASIN'); errs += 1; continue
+              try:
+                  row = json.loads(path.read_text(encoding='utf-8'))
+              except json.JSONDecodeError as e:
+                  print(f'::error file={path}::invalid JSON: {e}'); errs += 1; continue
+              if not isinstance(row, dict):
+                  print(f'::error file={path}::top-level is not an object'); errs += 1; continue
+              x = row.get('x'); th = row.get('threads')
+              has_x = isinstance(x, str) and x.strip()
+              has_th = isinstance(th, str) and th.strip()
+              if not (has_x or has_th):
+                  print(f'::error file={path}::neither x nor threads hook present'); errs += 1
+              if has_x:
+                  w = sum(x_weight(c) for c in x)
+                  if w > X_HOOK_MAX:
+                      print(f'::error file={path}::x hook weighted {w} > {X_HOOK_MAX}'); errs += 1
+                  if 'http' in x:
+                      print(f'::error file={path}::x hook must not contain a URL'); errs += 1
+              if has_th:
+                  if len(th) > THREADS_MAX:
+                      print(f'::error file={path}::threads hook {len(th)} chars > {THREADS_MAX}'); errs += 1
+                  if 'http' in th:
+                      print(f'::error file={path}::threads hook must not contain a URL'); errs += 1
+          sys.exit(1 if errs else 0)
+          PY
+
+      - name: Enable native auto-merge (squash)
+        if: steps.scope.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -e
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge (squash + delete-branch) enabled on $PR_URL."
+          else
+            echo "::warning::Could not enable auto-merge. Confirm branch protection / repo-level 'Allow auto-merge' is configured."
+          fi

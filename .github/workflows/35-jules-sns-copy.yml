@@ -1,0 +1,148 @@
+name: Jules SNS Copy (product post short copy)
+
+# Issue #1580 Part 2 (session 100):
+#   「知育×価格」ランキング (pick_sns_target) 上位の未投稿・未生成 ASIN に対し、
+#   Jules セッション 1 つで X / Threads 用の商品投稿訴求文を生成し
+#   data/sns_copy/<ASIN>.json に書き出す (1 ASIN = 1 ファイル)。
+#
+#   - 入力: scripts/select_sns_copy_targets.py が top-N の targets JSON を出力
+#   - 出力: data/sns_copy/<ASIN>.json (X/Threads コピー)
+#   - 消費: notify_buffer / notify_threads が store hook を優先採用 (PR #1635)
+#   - auto-merge: 36-sns-copy-auto-merge.yml (data/sns_copy/** scope)
+#
+# timing:
+#   - 02:00 JST に走らせ、商品スロット (20-sns-publish.yml 11:00/20:00 JST) より
+#     十分前にコピーを用意する。Jules session 数十分 + auto-merge を見込んでも余裕。
+
+on:
+  schedule:
+    # 02:00 JST = 17:00 UTC (前日)
+    - cron: '0 17 * * *'
+  workflow_dispatch:
+    inputs:
+      top:
+        description: "生成対象の最大件数 (default 6)"
+        required: false
+        default: "6"
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Select targets
+        id: prep
+        env:
+          TOP: ${{ github.event.inputs.top || '6' }}
+        run: |
+          set -e
+          mkdir -p /tmp/sns-copy
+          python scripts/select_sns_copy_targets.py --top "$TOP" --out /tmp/sns-copy/targets.json
+          COUNT=$(python -c "import json; print(json.load(open('/tmp/sns-copy/targets.json',encoding='utf-8'))['count'])")
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "targets count=$COUNT"
+          cat /tmp/sns-copy/targets.json
+
+      - name: List Jules sources
+        id: list-sources
+        if: steps.prep.outputs.count != '0'
+        run: |
+          set -e
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            'https://jules.googleapis.com/v1alpha/sources' \
+            -H "X-Goog-Api-Key: ${{ secrets.JULES_API_KEY }}")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::List sources HTTP $HTTP_CODE"
+            exit 1
+          fi
+          SOURCE_NAME=$(echo "$BODY" | jq -r '.sources[] | select(.githubRepo.owner=="omochairo" and .githubRepo.repo=="amazon") | .name' || echo "")
+          if [ -z "$SOURCE_NAME" ]; then SOURCE_NAME="sources/github/omochairo/amazon"; fi
+          echo "source_name=$SOURCE_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Create Jules session
+        if: steps.prep.outputs.count != '0'
+        env:
+          SOURCE_NAME: ${{ steps.list-sources.outputs.source_name }}
+        run: |
+          set -e
+          PROMPT_FILE="jules/PROMPT_SNS_COPY.md"
+          TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
+          TARGETS_JSON=$(cat /tmp/sns-copy/targets.json)
+
+          INTRO="AGENTS.md を最初に必ず読み、その指示に厳密に従ってください。
+
+          【今回のタスク】: 商品投稿コピー生成。下記 targets の各 ASIN について
+          data/articles/<filename> を読み、data/sns_copy/<ASIN>.json に X/Threads の
+          訴求文を生成する。詳細・文体・文字数・出力 schema は後述の ${PROMPT_FILE} に従う。
+
+          【本日 (Asia/Tokyo)】: ${TODAY}
+          【対象 targets (知育×価格 ランキング上位の未生成 ASIN)】:
+          ${TARGETS_JSON}
+
+          【絶対守るリポジトリ保護ルール】:
+          - 最終 PR 差分は data/sns_copy/<ASIN>.json の新規追加のみ
+          - 既存ファイル・他ディレクトリ (scripts/, .github/, hugo/, data/articles/ 等) は変更禁止
+          - 既に存在する data/sns_copy/<ASIN>.json は上書きしない
+          - 36-sns-copy-auto-merge.yml が他ファイル混入で auto-merge を止める
+
+          === 以下、${PROMPT_FILE} の内容 ==="
+          PROMPT="$INTRO
+
+          $(cat "$PROMPT_FILE")"
+
+          REQUEST_BODY=$(jq -n \
+            --arg prompt "$PROMPT" \
+            --arg source "$SOURCE_NAME" \
+            --arg title "sns-copy: product post drafts (${TODAY})" \
+            '{
+              prompt: $prompt,
+              sourceContext: {
+                source: $source,
+                githubRepoContext: { startingBranch: "main" }
+              },
+              automationMode: "AUTO_CREATE_PR",
+              title: $title
+            }')
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            'https://jules.googleapis.com/v1alpha/sessions' \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "X-Goog-Api-Key: ${{ secrets.JULES_API_KEY }}" \
+            -d "$REQUEST_BODY")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          echo "HTTP: $HTTP_CODE"
+          echo "$BODY" | jq -c '{name, id, status}' 2>/dev/null || echo "$BODY" | head -c 500
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Create session HTTP $HTTP_CODE"
+            exit 1
+          fi
+          echo "::notice::Jules SNS copy session dispatched. AUTO_CREATE_PR → 36-sns-copy-auto-merge.yml が処理。"
+
+      - name: No targets
+        if: steps.prep.outputs.count == '0'
+        run: echo "::notice::No SNS copy targets (all top-ranked ASINs already have store copy). Skipping Jules dispatch."
