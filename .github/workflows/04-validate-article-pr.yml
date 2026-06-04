@@ -64,6 +64,10 @@ on:
       # validate を required check として発火させる (vacuous SUCCESS)。
       - '.github/workflows/16-jules-daily-report.yml'
       - 'scripts/report_jules_usage.py'
+      # 2026-06-04 (#1353): Jules session live 集計 script (PR #1602 で追加)。
+      # paths 未登録だと inverse trap で validate 不発火→auto-merge 永久 BLOCKED
+      # になるため登録 ([[04-validate-paths-inverse-trap]])。記事変更ゼロで vacuous SUCCESS。
+      - 'scripts/report_jules_sessions.py'
       - 'scripts/fetch_amazon.py'
       - 'scripts/fetch_youtube.py'
       # 2026-05-26 (session 60 PR #786): Creator API クライアント本体を触る PR も
