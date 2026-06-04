@@ -48,6 +48,8 @@ try:
 except Exception:
     pass
 
+import sns_copy_store  # noqa: E402  (stdout reconfigure を先に済ませる)
+
 GRAPH_BASE = "https://graph.threads.net/v1.0"
 DEFAULT_BASE_URL = "https://navi.omcha.jp"
 
@@ -101,7 +103,9 @@ def build_payload(article: dict, base_url: str) -> tuple[str, str, str]:
     title = article.get("title") or ""
     desc = (article.get("meta_description") or "").strip()
     url = f"{base_url}/products/{asin}/"
-    hook = desc if desc else title
+    # #1580 Part 2: Jules 事前生成の SNS コピーが有れば優先。無ければ従来 fallback。
+    store_hook = sns_copy_store.get_hook(asin, "threads")
+    hook = store_hook or (desc if desc else title)
     if len(hook) > 480:
         hook = hook[:479].rstrip() + "…"
     post2 = url

@@ -31,6 +31,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+import sns_copy_store
 from _x_text import X_LIMIT, truncate_to_weight, x_weight
 
 GRAPHQL_URL = "https://api.buffer.com/"
@@ -98,7 +99,10 @@ def build_single_payload(article: dict, base_url: str) -> tuple[str, str]:
     url = f"{base_url}/products/{asin}/"
     url_weight = sum(_x_weight(c) for c in url)
     hook_budget = X_LIMIT - url_weight - X_SEPARATOR_WEIGHT - X_ELLIPSIS_WEIGHT - X_SAFETY
-    hook = desc if desc else title
+    # #1580 Part 2: Jules 事前生成の SNS コピーが有れば優先。無ければ従来 fallback。
+    # truncate は store コピーにも安全網として残す (限界超過時の保険)。
+    store_hook = sns_copy_store.get_hook(asin, "x")
+    hook = store_hook or (desc if desc else title)
     hook, truncated = _truncate_to_weight(hook, hook_budget)
     if truncated:
         hook = hook.rstrip() + "…"
