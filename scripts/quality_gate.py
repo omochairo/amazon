@@ -252,7 +252,14 @@ def check_faq(data: dict, product_name: str) -> CheckResult:
 
 
 def check_score_rationale(data: dict) -> CheckResult:
-    rationale = data.get("product", {}).get("ivs_detail", {}).get("score_rationale", [])
+    # v5: score_rationale は ivs_detail 内の任意フィールド (schema の
+    # ivs_detail.required にも含まれない)。完全除外された記事は skip (1.0)。
+    # target_age / certifications と同じ「field 欠如 → skip」慣用句に揃える。
+    # 存在する場合のみ ≥3 well-formed を要求する (#1599)。
+    ivs_detail = data.get("product", {}).get("ivs_detail")
+    if not isinstance(ivs_detail, dict) or "score_rationale" not in ivs_detail:
+        return CheckResult("score_rationale", True, 1.0, "field absent (v5 optional, skipped)")
+    rationale = ivs_detail.get("score_rationale")
     if not isinstance(rationale, list):
         return CheckResult("score_rationale", False, 0.0, "score_rationale not a list")
     count = len(rationale)
