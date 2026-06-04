@@ -136,11 +136,15 @@ jobs:
           HTTP_CODE=$(echo "$RESPONSE" | tail -1)
           BODY=$(echo "$RESPONSE" | sed '$d')
           echo "HTTP: $HTTP_CODE"
-          echo "$BODY" | jq -c '{name, id, status}' 2>/dev/null || echo "$BODY" | head -c 500
           if [ "$HTTP_CODE" != "200" ]; then
+            # 非 200 時は error body を surface (#1632 と同方針)。jq の {name,id,status}
+            # フィルタだと error object が null マスクされ真因が見えないため、
+            # error.status / error.message を優先表示。多くは #1353 Jules 枠枯渇。
+            echo "$BODY" | jq -r '.error.status // .error.message // .' 2>/dev/null || echo "$BODY" | head -c 800
             echo "::error::Create session HTTP $HTTP_CODE"
             exit 1
           fi
+          echo "$BODY" | jq -c '{name, id, status}' 2>/dev/null || echo "$BODY" | head -c 500
           echo "::notice::Jules SNS copy session dispatched. AUTO_CREATE_PR → 36-sns-copy-auto-merge.yml が処理。"
 
       - name: No targets
