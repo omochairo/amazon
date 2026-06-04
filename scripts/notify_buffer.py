@@ -60,7 +60,12 @@ mutation CreatePost($input: CreatePostInput!) {
 def load_article(asin: str) -> dict:
     asin_upper = asin.upper()
     pattern = str(ARTICLES_DIR / f"*-{asin_upper}.json")
-    matches = sorted(glob.glob(pattern))
+    # サイドカー (.quality/.enrichment/.seo.json) は product を持たず、かつ
+    # ".quality.json" > ".json" のため sorted()[-1] で本体を shadow する。除外必須。
+    matches = sorted(
+        m for m in glob.glob(pattern)
+        if not m.endswith((".enrichment.json", ".quality.json", ".seo.json"))
+    )
     if not matches:
         raise FileNotFoundError(f"No article JSON for ASIN={asin_upper} under {ARTICLES_DIR}")
     with open(matches[-1], "r", encoding="utf-8") as f:

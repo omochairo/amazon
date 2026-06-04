@@ -262,6 +262,10 @@ on:
       # 2026-06-03 (session 86 / Issue #1420 path A): Threads は Meta Graph API
       # 直叩きで thread 2 投化 (Buffer が thread 非対応のため)。
       - 'scripts/notify_threads.py'
+      # 2026-06-04 (session 99 / Issue #1580 Part1): pick_sns_target を「知育×価格」
+      # 加重ランキング化。スコアロジックの unit test も validate (required check)
+      # 対象に含める ([[04-validate-paths-trap]])。
+      - 'scripts/tests/test_pick_sns_target.py'
       # 2026-06-03 (session 87 / Issue #1486): SNS 配信 cron の履歴コミット PR
       # (data/sns_published.json のみ更新) を required check `validate` で通すため
       # paths に追加。validate は副作用ゼロで vacuous SUCCESS となる。これが無いと
