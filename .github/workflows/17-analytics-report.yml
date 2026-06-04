@@ -147,7 +147,7 @@ jobs:
           echo "detected $COUNT brand taxonomy candidates"
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: analytics-weekly-${{ steps.summary.outputs.range_end }}
           path: |
