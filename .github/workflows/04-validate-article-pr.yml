@@ -271,6 +271,17 @@ on:
       # module + 統合 test も validate 対象に ([[04-validate-paths-trap]])。
       - 'scripts/sns_copy_store.py'
       - 'scripts/tests/test_sns_copy_store.py'
+      # 2026-06-04 (session 100 / Issue #1580 Part2 生成側): Jules が
+      # data/sns_copy/<ASIN>.json を追加する PR を required check `validate` で
+      # 発火させ 36-sns-copy-auto-merge の --auto を成立させる。これが無いと
+      # store-only PR が validate 不発で永久 pending になる (inverse trap)。
+      # validate は副作用ゼロで vacuous SUCCESS。selector + test + dispatch/
+      # auto-merge workflow も paths 登録。
+      - 'data/sns_copy/**'
+      - 'scripts/select_sns_copy_targets.py'
+      - 'scripts/tests/test_select_sns_copy_targets.py'
+      - '.github/workflows/35-jules-sns-copy.yml'
+      - '.github/workflows/36-sns-copy-auto-merge.yml'
       # 2026-06-03 (session 87 / Issue #1486): SNS 配信 cron の履歴コミット PR
       # (data/sns_published.json のみ更新) を required check `validate` で通すため
       # paths に追加。validate は副作用ゼロで vacuous SUCCESS となる。これが無いと
