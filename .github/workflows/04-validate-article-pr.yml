@@ -265,6 +265,18 @@ on:
       # fetch_youtube.py は既に上で paths 登録済。
       - 'scripts/fetch_yahoo.py'
       - 'scripts/fetch_trends.py'
+      # 2026-06-04 (session 95): engagement パイプラインの cron PR を validate
+      # (required check) で発火させて auto-merge を成立させる。これが無いと
+      # 32 の trend PR / 33 由来の queue PR が必須 check 不発で永久 pending になり、
+      # 33 (06:00 JST) が main の trend file を読めず hard fail する
+      # ([[engagement-queue-pr-validate-paths-trap]] / inverse trap)。
+      # validate は副作用ゼロで vacuous SUCCESS となる。
+      - 'data/engagement_trends/**'
+      - 'data/engagement_queue_x.jsonl'
+      - 'data/engagement_queue_threads.jsonl'
+      - '.github/workflows/30-sns-engagement.yml'
+      - '.github/workflows/32-engagement-trend-fetch.yml'
+      - '.github/workflows/33-jules-engagement-news.yml'
   workflow_dispatch:
 
 permissions:
