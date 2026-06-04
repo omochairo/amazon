@@ -1,11 +1,13 @@
 name: Pre-fetch Third-Party Sources
 # #1600 Phase 2: per_asin の第三者ソース (非販売のレビュー/解説/メディア URL) を
-# Google Custom Search JSON API で pre-fetch し、data/raw/per_asin/<ASIN>/
+# Tavily Search API で pre-fetch し、data/raw/per_asin/<ASIN>/
 # third_party_sources.json に書き出して PR + auto-merge する。
 # Jules は記事生成時にこの候補 URL を裏取りソースとして活用できる (#1599 sources floor 対策)。
 #
-# secret (GOOGLE_CSE_API_KEY / GOOGLE_CSE_CX) 未設定時は script が inert に no-op するため
-# 差分ゼロ → PR 作成は skip される (安全に空振り)。quota=100 query/日 なので --max-queries 90。
+# backend は当初 Google CSE だったが 2026-01-20 仕様変更 (新規エンジンのウェブ全体検索廃止)
+# で Tavily に切替 (session 102)。Tavily は Actions 共有 IP からも安定して叩ける。
+# secret (TAVILY_API_KEY) 未設定時は script が inert に no-op するため
+# 差分ゼロ → PR 作成は skip される (安全に空振り)。無料枠 1000/月 ≈ 33/日 → --max-queries 30。
 #
 # App token で PR 起票 (GITHUB_TOKEN だと anti-recursion guard で validate 不発火、
 # main 直 push は GH006 silent reject になるため PR + auto-merge 経路を採る)。
@@ -17,9 +19,9 @@ on:
         required: false
         default: 'zero,thin'
       max_queries:
-        description: 'API 呼び出し上限 (quota=100/日)'
+        description: 'API 呼び出し日次上限 (Tavily 無料=1000/月≈33/日)'
         required: false
-        default: '90'
+        default: '30'
   schedule:
     # 毎日 21:30 UTC (06:30 JST) — 朝の記事生成スロットの前に候補を仕込む
     - cron: '30 21 * * *'
@@ -52,13 +54,12 @@ jobs:
 
       - name: Pre-fetch third-party sources
         env:
-          GOOGLE_CSE_API_KEY: ${{ secrets.GOOGLE_CSE_API_KEY }}
-          GOOGLE_CSE_CX: ${{ secrets.GOOGLE_CSE_CX }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
         run: |
           python scripts/fetch_third_party_sources.py \
             --pool \
             --bands "${{ github.event.inputs.bands || 'zero,thin' }}" \
-            --max-queries "${{ github.event.inputs.max_queries || '90' }}"
+            --max-queries "${{ github.event.inputs.max_queries || '30' }}"
 
       - name: Create PR + enable auto-merge
         if: ${{ always() }}
