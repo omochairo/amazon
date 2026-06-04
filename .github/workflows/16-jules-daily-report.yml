@@ -36,10 +36,14 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install deps
+        run: pip install --quiet requests
+
       - name: Generate report
         id: report
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
           INPUT_DATE: ${{ github.event.inputs.date }}
         run: |
           set -e
@@ -50,6 +54,12 @@ jobs:
           fi
           echo "Target date: $DATE"
           python scripts/report_jules_usage.py --date "$DATE" > /tmp/report.md
+          # #1353: gh PR 推定だけでなく Jules API の実 session state も併記する。
+          # daily=rolling 24h 圧 / concurrent=15 枠占有 / スタック session を可視化。
+          echo "" >> /tmp/report.md
+          echo "---" >> /tmp/report.md
+          echo "" >> /tmp/report.md
+          python scripts/report_jules_sessions.py >> /tmp/report.md
           echo "--- preview ---"
           cat /tmp/report.md
           echo "--- end ---"
