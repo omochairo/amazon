@@ -311,6 +311,12 @@ on:
       - '.github/workflows/30-sns-engagement.yml'
       - '.github/workflows/32-engagement-trend-fetch.yml'
       - '.github/workflows/33-jules-engagement-news.yml'
+      # 2026-06-04 (session 103 / Issue #1598): Bluesky 配信を 20-sns-publish の
+      # 3 つ目のチャネルとして追加。新規 script + test + workflow 本体を validate
+      # (required check) として発火させ auto-merge を成立させる (inverse trap 対策)。
+      - 'scripts/notify_bluesky.py'
+      - 'scripts/tests/test_notify_bluesky.py'
+      - '.github/workflows/20-sns-publish.yml'
   workflow_dispatch:
 
 permissions:

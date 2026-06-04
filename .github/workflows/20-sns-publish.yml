@@ -1,7 +1,9 @@
-name: SNS Publish (Buffer X + Meta Graph Threads)
+name: SNS Publish (Buffer X + Meta Graph Threads + Bluesky)
 # Issue #1420 path A (session 86 で path α → path A に格上げ):
 #   - Buffer: X 単発投稿 (`notify_buffer.py --x-only`)
 #   - Meta Graph: Threads thread 2 投構成 (`notify_threads.py`)
+#   - Bluesky: AT Protocol link card 投稿 (`notify_bluesky.py`、Issue #1598)。
+#     secret (BLUESKY_HANDLE / BLUESKY_APP_PASSWORD) 未設定なら inert no-op。
 # 配信成功後に published 履歴を main に PR + auto-merge で commit。
 #
 # X 公式 API 直叩きは pay-per-usage 単価 (URL 含み $0.20/req) でコスト合わず
@@ -102,6 +104,26 @@ jobs:
         # Threads が失敗しても X は既に投稿済みなので、bookkeeping は進める。
         # 失敗は ::warning:: として残し、次回 cron で同 ASIN を再試行しない
         # (mark まで進むため)。手動で対応が必要なら gh run logs で確認。
+        continue-on-error: true
+
+      - name: Post to Bluesky (AT Protocol link card)
+        if: steps.pick.outputs.skip != 'true'
+        env:
+          BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
+          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+        run: |
+          set -e
+          ASIN="${{ steps.pick.outputs.asin }}"
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "DRY RUN — Bluesky preview のみ"
+            python scripts/notify_bluesky.py "$ASIN" --dry-run
+          else
+            # secret 未設定なら notify_bluesky.py が exit 2 (inert no-op)。
+            # X/Threads は既に投稿済みなので bookkeeping を止めない。
+            python scripts/notify_bluesky.py "$ASIN"
+          fi
+        # Issue #1598: Bluesky は 3 つ目の補助チャネル。失敗 (secret 未設定の
+        # inert 含む) でも X/Threads の配信と mark を止めない。
         continue-on-error: true
 
       - name: Mark ASIN as published + commit via PR
