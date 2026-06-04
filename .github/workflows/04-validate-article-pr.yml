@@ -266,6 +266,11 @@ on:
       # 加重ランキング化。スコアロジックの unit test も validate (required check)
       # 対象に含める ([[04-validate-paths-trap]])。
       - 'scripts/tests/test_pick_sns_target.py'
+      # 2026-06-04 (session 100 / Issue #1580 Part2): SNS 投稿コピーの pre-fetch
+      # store。notify_buffer/notify_threads が hook を store から拾う。store
+      # module + 統合 test も validate 対象に ([[04-validate-paths-trap]])。
+      - 'scripts/sns_copy_store.py'
+      - 'scripts/tests/test_sns_copy_store.py'
       # 2026-06-03 (session 87 / Issue #1486): SNS 配信 cron の履歴コミット PR
       # (data/sns_published.json のみ更新) を required check `validate` で通すため
       # paths に追加。validate は副作用ゼロで vacuous SUCCESS となる。これが無いと
