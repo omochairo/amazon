@@ -348,11 +348,21 @@ jobs:
             if [ "$HTTP_CODE" != "200" ]; then
               # エラー時はステータス/メッセージを必ず出す (FAILED_PRECONDITION=#1353 concurrent 枠枯渇/APIキー失効
               # vs INVALID_ARGUMENT=payload 不正 を運用者が区別できるように)
+              ERR_STATUS=$(echo "$BODY" | jq -r '.error.status // empty' 2>/dev/null)
               echo "$BODY" | jq -r '.error.status // .error.message // .' 2>/dev/null || echo "$BODY" | head -c 800
-              echo "::warning::Failed to create session for $TARGET_ASIN (HTTP $HTTP_CODE)"
+              echo "::warning::Failed to create session for $TARGET_ASIN (HTTP $HTTP_CODE ${ERR_STATUS})"
               # FAILED_PRECONDITION が出たら memory: feedback_jules_api_failed_precondition.md
               # 参照 → 最優先で API キーを再発行 (jules.google.com → Settings → API keys)
               FAIL=$((FAIL + 1))
+              # #1353: FAILED_PRECONDITION / RESOURCE_EXHAUSTED / 429 は Jules 枠枯渇
+              # (rolling 24h: daily 100 / concurrent 15) か API キー失効で、いずれも ASIN 個別
+              # ではなく *グローバル* な条件。残り ASIN を試しても同じ理由で全部 400/429 になり、
+              # 無駄な session 作成試行で時間を浪費するだけなので、ここでループを打ち切る
+              # (INVALID_ARGUMENT 等の payload 系は個別要因なので continue のまま据え置く)。
+              if [ "$ERR_STATUS" = "FAILED_PRECONDITION" ] || [ "$ERR_STATUS" = "RESOURCE_EXHAUSTED" ] || [ "$HTTP_CODE" = "429" ]; then
+                echo "::warning::Jules quota/precondition 枠枯渇 ($ERR_STATUS) — 残り ASIN の session 作成をスキップ (#1353)"
+                break
+              fi
               continue
             fi
             echo "$BODY" | jq -c '{name, id, status}' 2>/dev/null || echo "$BODY" | head -c 500
