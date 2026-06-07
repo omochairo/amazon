@@ -83,18 +83,8 @@ jobs:
               fi
             fi
 
-            pending=$(python3 -c "
-import json
-n=0
-for l in open('$qf', encoding='utf-8'):
-    l=l.strip()
-    if not l:
-        continue
-    r=json.loads(l)
-    if r.get('category')=='daily' and not r.get('published_at'):
-        n+=1
-print(n)
-")
+            # JSONL を jq でストリーム処理: category=daily かつ published_at 未設定の行数。
+            pending=$(jq -c 'select(.category=="daily" and ((.published_at // "")==""))' "$qf" | wc -l | tr -d ' ')
             echo "[$ch] pending daily=$pending threshold=$THRESHOLD suppress=$suppress"
 
             if [ "$pending" -ge "$THRESHOLD" ]; then
