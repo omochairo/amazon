@@ -1,4 +1,4 @@
-name: SNS Engagement Publish (X + Threads non-link, 8-slot)
+name: SNS Engagement Publish (X + Threads + Bluesky non-link, 8-slot)
 # Issue #1495 P1 (session 91) + Issue #1539 (session 94: 8 スロット化):
 #   - X (Buffer) / Threads (Meta Graph) に 1 日 6 スロット non-link 投稿
 #     (記事 URL 投稿スロット 11:00 / 20:00 JST は 20-sns-publish.yml が担当、変更なし)
@@ -122,17 +122,23 @@ jobs:
           # X 投稿の Buffer mode 切替 (session 95): queue=addToQueue / now=shareNow 即時。
           # repo variable X_POST_MODE を now にするだけで即時配信へ切替 (未設定なら queue)。
           X_POST_MODE: ${{ vars.X_POST_MODE || 'queue' }}
+          # Bluesky mirror (session 104): X と同じ engagement テキストを Bluesky にも流す。
+          # secret 未設定なら notify_engagement 側で inert no-op (X は止めない)。
+          BLUESKY_IDENTIFIER: ${{ secrets.BLUESKY_IDENTIFIER }}
+          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
         run: |
           set -e
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             python scripts/notify_engagement.py \
               --channels "${{ steps.resolve.outputs.channels }}" \
               --category "${{ steps.slot.outputs.category }}" \
+              --bluesky-mirror \
               --dry-run
           else
             python scripts/notify_engagement.py \
               --channels "${{ steps.resolve.outputs.channels }}" \
               --category "${{ steps.slot.outputs.category }}" \
+              --bluesky-mirror \
               --live
           fi
         # 片方が失敗してももう片方は配信しておきたいので continue-on-error。

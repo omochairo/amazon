@@ -36,6 +36,13 @@ env:
     THREADS_USER_ID        Threads 配信に必要
     X_POST_MODE            queue (default, Buffer addToQueue) | now (Buffer shareNow 即時)
                            — X 公式 API は使わず、Buffer 経由のまま即時/キューを切替
+    BLUESKY_IDENTIFIER     --bluesky-mirror 時に必要 (handle / email / DID)。
+                           後方互換で BLUESKY_HANDLE も可
+    BLUESKY_APP_PASSWORD   --bluesky-mirror 時に必要 (App Password)
+    BLUESKY_PDS            default: https://bsky.social
+
+--bluesky-mirror を付けると、X に流したのと同じ engagement テキストを Bluesky にも
+plain text (embed なし) で投稿する。商品記事の link card 投稿は notify_bluesky.py が別途担当。
 """
 from __future__ import annotations
 
@@ -65,6 +72,11 @@ QUEUE_THREADS = REPO_ROOT / "data" / "engagement_queue_threads.jsonl"
 BUFFER_GRAPHQL_URL = "https://api.buffer.com/"
 BUFFER_DEFAULT_X_CHANNEL_ID = "67a022e330a138f0dbdfadbd"
 THREADS_GRAPH_BASE = "https://graph.threads.net/v1.0"
+
+# Bluesky (AT Protocol) mirror: X の non-link engagement 投稿と同じ内容を Bluesky に
+# plain text (embed なし) で流す。商品記事の link card 投稿は notify_bluesky.py が別途担当。
+BLUESKY_DEFAULT_PDS = "https://bsky.social"
+BLUESKY_TEXT_LIMIT = 300  # graphemes (日本語は概ね 1 文字 = 1 grapheme)
 
 # X_POST_MODE: Buffer 経由のままキュー投入か即時配信かを切替 (session 95)。
 #   queue (default) → mode=addToQueue (従来挙動、Buffer のキューに積む)
@@ -257,6 +269,59 @@ def post_x_via_buffer(text: str, live: bool,
     return False, None
 
 
+def post_bluesky_text(text: str) -> tuple[bool, str | None]:
+    """engagement テキストを Bluesky に plain text (embed なし) で投稿。成功で (True, uri)。
+
+    X の non-link engagement 投稿を Bluesky にも流す mirror 用。商品記事
+    (notify_bluesky.py) と違い URL/カードを持たないので embed は付けない。
+    creds 未設定なら inert no-op (False, None) — mirror は best-effort で X を止めない。
+
+    env: BLUESKY_IDENTIFIER (or BLUESKY_HANDLE) / BLUESKY_APP_PASSWORD / BLUESKY_PDS
+    """
+    ident = os.environ.get("BLUESKY_IDENTIFIER") or os.environ.get("BLUESKY_HANDLE")
+    pw = os.environ.get("BLUESKY_APP_PASSWORD")
+    pds = os.environ.get("BLUESKY_PDS", BLUESKY_DEFAULT_PDS).rstrip("/")
+    if not ident or not pw:
+        print("::notice::[bluesky] creds 未設定 — mirror skip (inert)")
+        return False, None
+
+    text = (text or "").strip()
+    if len(text) > BLUESKY_TEXT_LIMIT:
+        text = text[: BLUESKY_TEXT_LIMIT - 1].rstrip() + "…"
+
+    sess = _http_post_json(
+        f"{pds}/xrpc/com.atproto.server.createSession",
+        {"Content-Type": "application/json"},
+        {"identifier": ident, "password": pw},
+    )
+    if "errors" in sess:
+        print(f"[bluesky.createSession] FAIL: {sess['errors']}", file=sys.stderr)
+        return False, None
+    token = sess.get("accessJwt")
+    did = sess.get("did")
+    if not token or not did:
+        print(f"[bluesky.createSession] FAIL no accessJwt/did: {sess}", file=sys.stderr)
+        return False, None
+
+    record = {
+        "$type": "app.bsky.feed.post",
+        "text": text,
+        "createdAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+        "langs": ["ja"],
+    }
+    res = _http_post_json(
+        f"{pds}/xrpc/com.atproto.repo.createRecord",
+        {"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+        {"repo": did, "collection": "app.bsky.feed.post", "record": record},
+    )
+    if "errors" in res:
+        print(f"[bluesky.createRecord] FAIL: {res['errors']}", file=sys.stderr)
+        return False, None
+    uri = res.get("uri")
+    print(f"[bluesky] OK uri={uri}")
+    return True, uri
+
+
 def _is_threads_transient(resp: dict) -> bool:
     if "_http_error" not in resp:
         return False
@@ -305,7 +370,8 @@ def post_threads_top_level(text: str) -> tuple[bool, str | None]:
 
 
 def consume_one(queue_path: Path, channel: str, dry_run: bool, live: bool,
-                category: str | None = None, x_post_mode: str = DEFAULT_X_POST_MODE) -> bool:
+                category: str | None = None, x_post_mode: str = DEFAULT_X_POST_MODE,
+                bluesky_mirror: bool = False) -> bool:
     rows = _load_jsonl(queue_path)
     if not rows:
         print(f"[{channel}] queue empty: {queue_path.name}")
@@ -318,6 +384,7 @@ def consume_one(queue_path: Path, channel: str, dry_run: bool, live: bool,
         return True
     row = rows[idx]
     text = row["text"]
+    original_text = text  # X の weighted 切詰め前の原文 (Bluesky mirror はこちらを流用)
     print(f"--- [{channel}] picked id={row['id']} category={row.get('category')} subcategory={row.get('subcategory')} ---")
     print(text)
 
@@ -336,6 +403,8 @@ def consume_one(queue_path: Path, channel: str, dry_run: bool, live: bool,
 
     if dry_run:
         print(f"[{channel}] DRY RUN — not posting, not mutating queue")
+        if channel == "x" and bluesky_mirror:
+            print("[bluesky] DRY RUN — would mirror same text to Bluesky")
         return True
 
     if channel == "x":
@@ -350,6 +419,14 @@ def consume_one(queue_path: Path, channel: str, dry_run: bool, live: bool,
         return False
     row["published_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     row["post_id"] = post_id
+    # Bluesky mirror: X engagement と同じ内容を Bluesky にも流す (best-effort)。
+    # X は既に成功しているので Bluesky 失敗で consume を fail させない (queue は X 基準で更新)。
+    if channel == "x" and bluesky_mirror:
+        b_ok, b_uri = post_bluesky_text(original_text)
+        if b_ok:
+            row["bluesky_post_id"] = b_uri
+        else:
+            print("::warning::[bluesky] mirror 投稿失敗 — X は成功・queue は更新して継続")
     rows[idx] = row
     _write_jsonl(queue_path, rows)
     print(f"[{channel}] queue updated: {row['id']} -> published_at={row['published_at']}")
@@ -366,6 +443,9 @@ def main() -> int:
                         help="preview only, no API call, no queue mutation")
     parser.add_argument("--live", action="store_true",
                         help="Buffer X: addToQueue (default: saveToDraft). Threads: 常に live")
+    parser.add_argument("--bluesky-mirror", action="store_true",
+                        help="X engagement と同じ内容を Bluesky にも plain text で流す "
+                             "(creds 未設定なら inert no-op)")
     args = parser.parse_args()
 
     channels = [c.strip() for c in args.channels.split(",") if c.strip()]
@@ -379,10 +459,14 @@ def main() -> int:
         x_post_mode = DEFAULT_X_POST_MODE
     print(f"[x] X_POST_MODE={x_post_mode} -> Buffer mode={X_POST_MODE_BUFFER_MODE[x_post_mode]}")
 
+    if args.bluesky_mirror:
+        print("[bluesky] mirror enabled — X と同じ内容を Bluesky にも流す")
+
     ok = True
     if "x" in channels:
         ok &= consume_one(QUEUE_X, "x", args.dry_run, args.live,
-                          category=category, x_post_mode=x_post_mode)
+                          category=category, x_post_mode=x_post_mode,
+                          bluesky_mirror=args.bluesky_mirror)
     if "threads" in channels:
         ok &= consume_one(QUEUE_THREADS, "threads", args.dry_run, args.live, category=category)
     return 0 if ok else 1
