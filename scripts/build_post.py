@@ -403,6 +403,8 @@ def _build_review_jsonld(
     avg_rating: float | int | str,
     review_body: str,
     asin: str,
+    aggregate_rating: dict[str, Any] | None = None,
+    offers: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Issue #1301 B5: Product.aggregateRating とは別に独立した Review JSON-LD を構築。
 
@@ -441,6 +443,14 @@ def _build_review_jsonld(
     raw_brand = product.get("brand")
     if raw_brand:
         item_reviewed["brand"] = {"@type": "Brand", "name": raw_brand}
+    # GSC 商品スニペット要件: itemReviewed の Product 自体も
+    # offers / review / aggregateRating のいずれかを持たないと
+    # 「裸の Product」として無効判定される。メイン Product と同じ
+    # aggregateRating / offers を再掲し、独立した有効エンティティにする。
+    if isinstance(aggregate_rating, dict) and aggregate_rating:
+        item_reviewed["aggregateRating"] = aggregate_rating
+    if isinstance(offers, dict) and offers:
+        item_reviewed["offers"] = offers
     return {
         "@context": "https://schema.org",
         "@type": "Review",
@@ -1943,6 +1953,10 @@ def _frontmatter_meta(
                 avg_for_review = rs["avg_rating"]
             elif product.get("ivs_score") is not None:
                 avg_for_review = product["ivs_score"]
+            # _fill_jsonld が既に Product schema に aggregateRating/offers を
+            # 注入済み。itemReviewed の Product にも同じものを再掲して
+            # GSC「offers/review/aggregateRating が必要」エラーを防ぐ。
+            _prod_ld = (data.get("jsonld") or {}).get("product") or {}
             review_ld = _build_review_jsonld(
                 product=product,
                 title=title,
@@ -1950,6 +1964,10 @@ def _frontmatter_meta(
                 avg_rating=avg_for_review,
                 review_body=review_body,
                 asin=str(asin),
+                aggregate_rating=_prod_ld.get("aggregateRating")
+                if isinstance(_prod_ld, dict)
+                else None,
+                offers=_prod_ld.get("offers") if isinstance(_prod_ld, dict) else None,
             )
             if review_ld:
                 s = json.dumps(review_ld, ensure_ascii=False)
