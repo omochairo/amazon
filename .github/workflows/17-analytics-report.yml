@@ -56,7 +56,7 @@ jobs:
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          pip install google-analytics-data google-auth google-auth-oauthlib google-api-python-client
+          pip install google-analytics-data google-auth google-auth-oauthlib google-api-python-client pyyaml
 
       - name: Fetch GA4 data
         env:
@@ -119,6 +119,7 @@ jobs:
       - name: Detect low-CTR pages (A-1, epic #1356)
         id: low_ctr
         if: steps.gsc.outputs.available == 'true'
+        continue-on-error: true
         run: |
           set -e
           python scripts/detect_low_ctr_pages.py
@@ -129,6 +130,7 @@ jobs:
       - name: Detect opportunity pages (A-2, epic #1356)
         id: opportunity
         if: steps.gsc.outputs.available == 'true'
+        continue-on-error: true
         run: |
           set -e
           python scripts/detect_opportunity_pages.py
@@ -139,6 +141,7 @@ jobs:
       - name: Suggest brand_taxonomy additions (A-6, epic #1356)
         id: brand_suggest
         if: steps.gsc.outputs.available == 'true'
+        continue-on-error: true
         run: |
           set -e
           python scripts/suggest_brand_taxonomy_additions.py
