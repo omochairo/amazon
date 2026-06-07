@@ -302,6 +302,18 @@
 {% endfor %}
 {% endif %}
 
+{% if source_highlights %}
+<aside class="source-highlights">
+<strong>🔎 外部ソースからわかること</strong>
+<p class="source-highlights__intro">おもちゃロボが収集した第三者サイト（販売ページを除く）の記述です。出典はリンク先をご確認ください。</p>
+<ul class="source-highlights__list">
+{%- for h in source_highlights %}
+<li><blockquote>{{ h.snippet | e }}</blockquote><cite class="source-highlights__cite">出典：<a href="{{ h.url }}" target="_blank" rel="nofollow noopener noreferrer">{{ h.host | e }}</a></cite></li>
+{%- endfor %}
+</ul>
+</aside>
+{% endif %}
+
 {% if narrative.safety_note %}
 ## <small>{{ product.name }}の</small>🛡️ 安全性で気になること
 

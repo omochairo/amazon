@@ -1192,6 +1192,115 @@ def _attach_omcha_related(data: dict[str, Any], per_asin_root: pathlib.Path) -> 
     data["omcha_related"] = decorated
 
 
+# Marketplace / commerce listings carry no independent editorial value — they
+# echo the seller's own copy. Exclude them from the third-party highlights so the
+# block stays "外部の客観情報" rather than re-quoted sales copy.
+_HIGHLIGHT_HOST_DENY = (
+    "amazon.", "rakuten.", "yahoo.", "ebay.", "aliexpress.",
+    "mercari.", "paypay", "qoo10.", "wish.com",
+)
+# Hosts that tend to host genuine evaluation / discussion / institutional info.
+_HIGHLIGHT_HOST_PREFER = (
+    "reddit.com", "note.com", "ameblo.jp", "hatena", "mamari", "comolib",
+    "kakaku.com", "blog", "news", "library", ".gov", ".edu", "go.jp", "ac.jp",
+)
+# Parts-list / spec-dump markers — these read like a manual, not a评価.
+_HIGHLIGHT_JUNK_MARKERS = ("Item number", "Qty.", "Part #", "Quantity.", "Symbol Part")
+
+
+def _has_japanese(text: str) -> bool:
+    return any(
+        "぀" <= c <= "ヿ" or "一" <= c <= "鿿"
+        for c in (text or "")
+    )
+
+
+def _highlight_snippet_ok(snippet: str) -> bool:
+    """True when the snippet reads like prose a reader benefits from, not a
+    digit-dense parts list or a stub. Used to keep the highlights honest."""
+    s = (snippet or "").strip()
+    if len(s) < 30:
+        return False
+    if any(m in s for m in _HIGHLIGHT_JUNK_MARKERS):
+        return False
+    digits = sum(c.isdigit() for c in s)
+    return digits / len(s) <= 0.25
+
+
+def _highlight_score(src: dict[str, Any]) -> int:
+    """Rank a third-party source for the highlights block. Higher is better.
+    Japanese prose wins (reader-relevant), editorial/forum/institutional hosts
+    win, and a comfortable snippet length wins."""
+    host = (src.get("host") or "").lower()
+    snippet = src.get("snippet") or ""
+    score = 0
+    if _has_japanese(snippet):
+        score += 3
+    if any(h in host for h in _HIGHLIGHT_HOST_PREFER):
+        score += 2
+    if 60 <= len(snippet) <= 300:
+        score += 1
+    return score
+
+
+def _attach_source_highlights(
+    data: dict[str, Any],
+    per_asin_root: pathlib.Path,
+    limit: int = 3,
+) -> None:
+    """Populate ``data["source_highlights"]`` from the Tavily snapshot at
+    ``data/raw/per_asin/<ASIN>/third_party_sources.json``.
+
+    This is the honest reframe of #1370: rather than passing off product-page
+    copy as「購入者の声」(which the data does not actually contain — see #496:
+    review fetching is no-op'd), we surface what we *do* have — attributed
+    third-party snippets (forums, blogs, institutional pages) — clearly labelled
+    as external information with the source host shown. Commerce listings and
+    spec dumps are filtered out; one snippet per host keeps the block diverse.
+    Renders only when ≥1 usable snippet survives; the template skips otherwise.
+    Jules-authored ``source_highlights`` (future reservation) is preserved."""
+    if data.get("source_highlights"):
+        return
+    product = data.get("product") if isinstance(data.get("product"), dict) else None
+    asin = product.get("asin") if product else None
+    if not asin:
+        return
+    path = per_asin_root / asin / "third_party_sources.json"
+    if not path.exists():
+        return
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    sources = payload.get("sources") if isinstance(payload, dict) else None
+    if not isinstance(sources, list):
+        return
+    candidates = [
+        s for s in sources
+        if isinstance(s, dict) and s.get("url") and s.get("title")
+        and not any(d in (s.get("host") or "").lower() for d in _HIGHLIGHT_HOST_DENY)
+        and _highlight_snippet_ok(s.get("snippet") or "")
+    ]
+    candidates.sort(key=_highlight_score, reverse=True)
+    picked: list[dict[str, Any]] = []
+    seen_hosts: set[str] = set()
+    for s in candidates:
+        host = (s.get("host") or "").lower()
+        if host in seen_hosts:
+            continue
+        seen_hosts.add(host)
+        picked.append({
+            "title": s.get("title"),
+            "url": s.get("url"),
+            "snippet": (s.get("snippet") or "").strip(),
+            "host": s.get("host") or "",
+        })
+        if len(picked) >= limit:
+            break
+    if picked:
+        data["source_highlights"] = picked
+
+
 def _load_per_asin_amazon(per_asin_root: pathlib.Path, asin: str) -> dict[str, Any] | None:
     """Return the per-ASIN amazon snapshot dict, or None if absent/malformed.
 
@@ -2134,6 +2243,7 @@ def main() -> None:
             _fallback_news_books(data, per_asin_root)
             _fallback_youtube_embeds(data, per_asin_root)
             _attach_omcha_related(data, per_asin_root)
+            _attach_source_highlights(data, per_asin_root)
             _attach_internal_links(data, article_index, site_base_path)
             _recommend_nearby_competitors(data, article_index, site_base_path)
             _recommend_same_price_band(data, article_index, site_base_path)
