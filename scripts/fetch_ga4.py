@@ -79,7 +79,7 @@ def fetch(property_id: str, sa_json: str, days: int, top_n: int) -> dict[str, An
         client, property_id, start_s, end_s,
         dims=["hostName", "pagePath"],
         metrics=["screenPageViews", "engagedSessions",
-                 "averageSessionDuration", "bounceRate"],
+                 "averageSessionDuration", "bounceRate", "engagementRate"],
         limit=top_n,
     )
     by_page.sort(key=lambda r: r.get("screenPageViews", 0), reverse=True)
