@@ -170,6 +170,16 @@ jobs:
           echo "count=$COUNT" >> "$GITHUB_OUTPUT"
           echo "detected $COUNT engagement-drop pages"
 
+      - name: Detect internal-link orphans (A-5, epic #1356)
+        id: orphans
+        continue-on-error: true
+        run: |
+          set -e
+          python scripts/detect_orphan_pages.py
+          COUNT=$(python -c "import json; print(len(json.load(open('data/analytics/orphan_pages.json'))['detected']))")
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "detected $COUNT orphan pages"
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -182,6 +192,7 @@ jobs:
             data/analytics/brand_taxonomy_suggestions.json
             data/analytics/cannibalization.json
             data/analytics/engagement_drop.json
+            data/analytics/orphan_pages.json
           retention-days: 90
           if-no-files-found: warn
 
@@ -229,6 +240,15 @@ jobs:
         run: |
           set -e
           python scripts/open_engagement_drop_issues.py
+
+      - name: Open orphan-page Issues (A-5)
+        if: steps.orphans.outputs.count != '0' && steps.orphans.outputs.count != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          python scripts/open_orphan_issues.py
 
       - name: Create weekly Issue
         env:
