@@ -21,7 +21,8 @@ AT Protocol 投稿フロー (追加依存なし、urllib のみ):
     python scripts/notify_bluesky.py B0DBTLH8ZM --dry-run   # API は叩かない
 
 env:
-    BLUESKY_HANDLE         必須 (例: omochairo.bsky.social)
+    BLUESKY_IDENTIFIER     必須 (handle 例 omochairo.bsky.social / email / DID)。
+                           後方互換で BLUESKY_HANDLE も受け付ける
     BLUESKY_APP_PASSWORD   必須 (App Password。本体 PW ではなく専用発行のもの)
     BLUESKY_PDS            default: https://bsky.social
     OMOCHA_BASE_URL        default: https://navi.omcha.jp
@@ -213,7 +214,9 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="API は叩かず preview だけ")
     args = parser.parse_args()
 
-    handle = os.environ.get("BLUESKY_HANDLE")
+    # AT Protocol の createSession フィールド名は identifier。secret 名も
+    # BLUESKY_IDENTIFIER を正とし、旧 BLUESKY_HANDLE も後方互換で許容する。
+    identifier = os.environ.get("BLUESKY_IDENTIFIER") or os.environ.get("BLUESKY_HANDLE")
     password = os.environ.get("BLUESKY_APP_PASSWORD")
     pds = os.environ.get("BLUESKY_PDS", DEFAULT_PDS).rstrip("/")
     base_url = os.environ.get("OMOCHA_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
@@ -233,11 +236,12 @@ def main() -> int:
     if args.dry_run:
         return 0
 
-    if not handle or not password:
-        print("BLUESKY_HANDLE and BLUESKY_APP_PASSWORD env vars required", file=sys.stderr)
+    if not identifier or not password:
+        print("BLUESKY_IDENTIFIER (or BLUESKY_HANDLE) and BLUESKY_APP_PASSWORD env vars required",
+              file=sys.stderr)
         return 2
 
-    sess = create_session(pds, handle, password)
+    sess = create_session(pds, identifier, password)
     if not _report("createSession", sess):
         return 1
     token = sess.get("accessJwt")

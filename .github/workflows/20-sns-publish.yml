@@ -109,7 +109,7 @@ jobs:
       - name: Post to Bluesky (AT Protocol link card)
         if: steps.pick.outputs.skip != 'true'
         env:
-          BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
+          BLUESKY_IDENTIFIER: ${{ secrets.BLUESKY_IDENTIFIER }}
           BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
         run: |
           set -e
