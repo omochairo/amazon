@@ -13,13 +13,16 @@ name: Generate Brand Narrative
 # 4. NO auto-merge. The user reviews each narrative PR before it goes live
 #    (Jules hallucination on unfamiliar brands would otherwise reach prod).
 #
-# Cadence: monthly on day 1, 03:00 UTC (= 12:00 JST). 28 brands / monthly =
-# ~1 PR/week of review cost for the user, ~2.3 years to full coverage. If
-# Jules quality proves consistently good, the cron can be sped up later.
+# Cadence: weekly on Monday, 03:00 UTC (= 12:00 JST). Accelerated from monthly
+# in session 109 (#731 closeout): 16/38 active brands already have live
+# narratives generated this way and quality has proven consistent, so the slow
+# monthly trickle is no longer warranted. ~22 eligible brands remain → ~5.5
+# months to full coverage at 1 PR/week. NO auto-merge is retained — each PR is
+# still reviewed by hand before going live.
 
 on:
   schedule:
-    - cron: '0 3 1 * *'
+    - cron: '0 3 * * 1'
   workflow_dispatch:
     inputs:
       brand:
