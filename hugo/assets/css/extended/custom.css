@@ -626,16 +626,233 @@ header .logo a {
 [data-theme="dark"] .post-content .amazon-effective-price strong { color: #bbf7d0; }
 [data-theme="dark"] .post-content .price-card.is-outofstock .price-card-amount { color: #64748b; }
 
-/* ---------- Print ---------- */
+/* ---------- 画像 lightbox + ピンチズーム (epic #1365 Layer 4) ---------- */
+.post-content img.lightbox-trigger {
+  cursor: zoom-in;
+}
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.92);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+.lightbox-overlay.is-open { display: flex; }
+body.lightbox-lock { overflow: hidden; }
+.lightbox-figure {
+  margin: 0;
+  max-width: 96vw;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+.lightbox-img {
+  max-width: 96vw;
+  max-height: 84vh;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  touch-action: none;
+  cursor: grab;
+  pointer-events: auto;
+  transform-origin: center center;
+  transition: transform 0.08s linear;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.lightbox-overlay.is-zoomed .lightbox-img { cursor: grab; transition: none; }
+.lightbox-caption {
+  margin-top: 0.6rem;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.85rem;
+  text-align: center;
+  max-width: 90vw;
+}
+.lightbox-close,
+.lightbox-nav {
+  position: absolute;
+  z-index: 1;
+  border: none;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  cursor: pointer;
+  border-radius: 999px;
+  line-height: 1;
+  transition: background 0.15s ease;
+}
+.lightbox-close:hover,
+.lightbox-nav:hover { background: rgba(255, 255, 255, 0.3); }
+.lightbox-close {
+  top: 14px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  font-size: 1.7rem;
+}
+.lightbox-nav {
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 64px;
+  font-size: 2.2rem;
+}
+.lightbox-prev { left: 12px; }
+.lightbox-next { right: 12px; }
+.lightbox-nav[hidden],
+.lightbox-counter[hidden] { display: none; }
+.lightbox-counter {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.lightbox-hint {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.75rem;
+  pointer-events: none;
+}
+@media (max-width: 600px) {
+  .lightbox-hint { font-size: 0.68rem; bottom: 10px; }
+  .lightbox-nav { width: 40px; height: 54px; font-size: 1.8rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lightbox-img { transition: none; }
+}
+
+/* ---------- Print (epic #1365 Layer 4) ----------
+   祖父母世代がプレゼント検討時にプリントする実需。商品名・メイン画像・
+   知育スコア・価格表・仕様/本文だけを綺麗に残し、ナビ/CTA/カルーセル等の
+   画面専用要素を落とす。スコアの色は print-color-adjust で保持する。 */
+@page {
+  margin: 1.4cm;
+}
 @media print {
+  html, body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  /* 本文を紙幅いっぱいに */
+  main.main,
+  .post-single,
+  .post-content {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* --- 画面専用 chrome / インタラクションを非表示 --- */
+  header.header,
+  footer.footer,
+  #top-link,
+  #scroll-progress-bar,
+  #mobile-sticky-cta,
+  .mobile-sticky-cta,
+  .breadcrumbs,
+  .post-meta,
+  .toc,
+  #TableOfContents,
+  .paginav,
+  .post-tags,
+  .share-icons,
+  .social-icons,
+  #comments,
+  .comments,
+  .recently-viewed-mount,
+  .related-carousel-section,
+  .omcha-card-grid,
+  .ranking-history-section,
+  .yt-embed,
+  .keepa-graph,
+  .product-slideshow,
+  .link-report-flag,
+  .auto-gen-notice,
+  .price-card-cta,
+  .price-card-nolink,
+  .price-search-fallback,
+  .review-cta {
+    display: none !important;
+  }
+
+  /* --- <details> はすべて展開して内容を印刷 --- */
+  .post-content details > *:not(summary) { display: block !important; }
+  .post-content details summary {
+    list-style: none;
+    font-weight: 700;
+  }
+
+  /* --- 残す要素: 色と枠を保持 --- */
+  .post-content .hero-score,
+  .post-content .price-cta-grid,
+  .post-content .price-card,
+  .post-content .hero-total-bar-fill,
+  .post-content .score-recap-card,
+  .post-content .amazon-badge,
+  .post-content .hero-radar,
+  .post-content .radar-shape,
+  .post-content .best-deal {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* メイン画像はページに収まるサイズへ */
+  .post-content figure.product-hero-image {
+    text-align: center;
+    margin: 0.4cm auto;
+  }
+  .post-content figure.product-hero-image img {
+    max-height: 7cm;
+    width: auto;
+    cursor: default;
+  }
+
+  /* 価格表は 3 列を維持しつつ改ページで割れないように */
+  .post-content .price-cta-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 6px !important;
+  }
+
+  /* 改ページでカード・見出しが割れないように */
+  .post-content .price-card,
+  .post-content .hero-score,
+  .post-content .score-recap-card,
+  .post-content .persona-fit,
+  .post-content .best-deal,
+  .post-content figure.product-hero-image {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .post-content h2,
+  .post-content h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* リンクは下線のみ・装飾チップを除去 */
   .post-content p a[href*="amazon.co.jp"] {
     background: none;
-    color: #333 !important;
+    color: #000 !important;
     box-shadow: none;
     padding: 0;
     text-decoration: underline !important;
   }
-  .post-content .yt-embed { display: none; }
 }
 
 /* ==========================================
