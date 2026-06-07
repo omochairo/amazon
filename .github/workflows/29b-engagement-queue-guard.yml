@@ -1,0 +1,110 @@
+name: Engagement Queue Depth Guard
+# Issue #1486 follow-up (session 104):
+#   29-jules-engagement-refill.yml は X=月/木、Threads=火/金 の週2回しか daily
+#   ドラフトを補充しない。補充が 1 回でも Jules quota (HTTP 400 FAILED_PRECONDITION)
+#   等で失敗すると、その channel の daily queue が ~4 日間空になり自動回復しない
+#   (publish 側 30-sns-engagement.yml は穴開けを exit 0 で素通りするため検知されない)。
+#   実例: 2026-06-04(木) の X 補充が HTTP 400 で失敗 → 06-06〜06-08 の X daily が枯渇。
+#
+#   本 guard は毎日 queue の pending daily 本数を点検し、閾値未満の channel があれば
+#   29 refill を workflow_dispatch する。補充失敗時も翌日には自動で立て直り、最大穴開けを
+#   ~1 日に短縮する。queue が健全なら何もしない (no-op)。
+#
+#   二重補充の回避: 同 channel の scheduled 補充 (29) が当日中に走る「前夜」は dispatch を
+#   抑制する。本 guard は 20:00 UTC (≒翌 05:00 JST) 発火。29 は 03:00 UTC 発火なので、
+#   guard 発火時点の UTC 曜日 D に対し、scheduled 補充は D+1 UTC に走る。
+#     X (29: Mon/Thu) → D が Sun(7)/Wed(3) のとき翌日が補充日 → X を抑制
+#     Threads (29: Tue/Fri) → D が Mon(1)/Thu(4) のとき翌日が補充日 → Threads を抑制
+#   ※ 29 のスケジュールを変更したらここも同期すること。
+on:
+  workflow_dispatch:
+    inputs:
+      threshold:
+        description: 'pending daily 本数の下限 (これ未満で補充)'
+        required: false
+        default: '3'
+      force:
+        description: 'true で前夜抑制を無視して点検 (手動復旧用)'
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    - cron: '0 20 * * *'  # 毎日 05:00 JST。低下を検知したら早朝に補充 dispatch
+
+permissions:
+  contents: read
+
+concurrency:
+  group: engagement-queue-guard
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Check queue depth and dispatch refill if low
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          THRESHOLD: ${{ inputs.threshold || '3' }}
+          FORCE: ${{ inputs.force || 'false' }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          DOW=$(date -u +%u)  # Mon=1 .. Sun=7 (UTC)
+          echo "Guard run: UTC DOW=$DOW threshold=$THRESHOLD force=$FORCE"
+          for ch in x threads; do
+            qf="data/engagement_queue_${ch}.jsonl"
+            if [ ! -f "$qf" ]; then
+              echo "::warning::$qf missing; skipping $ch"
+              continue
+            fi
+
+            # 前夜抑制 (force=true なら無視)
+            suppress=false
+            if [ "$FORCE" != "true" ]; then
+              if [ "$ch" = "x" ] && { [ "$DOW" = "7" ] || [ "$DOW" = "3" ]; }; then
+                suppress=true
+              fi
+              if [ "$ch" = "threads" ] && { [ "$DOW" = "1" ] || [ "$DOW" = "4" ]; }; then
+                suppress=true
+              fi
+            fi
+
+            pending=$(python3 -c "
+import json
+n=0
+for l in open('$qf', encoding='utf-8'):
+    l=l.strip()
+    if not l:
+        continue
+    r=json.loads(l)
+    if r.get('category')=='daily' and not r.get('published_at'):
+        n+=1
+print(n)
+")
+            echo "[$ch] pending daily=$pending threshold=$THRESHOLD suppress=$suppress"
+
+            if [ "$pending" -ge "$THRESHOLD" ]; then
+              echo "[$ch] healthy -> no refill"
+              continue
+            fi
+            if [ "$suppress" = "true" ]; then
+              echo "[$ch] below threshold but scheduled refill is imminent -> skip (avoid double refill)"
+              continue
+            fi
+            echo "[$ch] below threshold -> dispatching 29 refill"
+            gh workflow run 29-jules-engagement-refill.yml -R "$REPO" -f channel="$ch"
+          done
