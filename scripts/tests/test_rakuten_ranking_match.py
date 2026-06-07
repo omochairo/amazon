@@ -162,23 +162,27 @@ class MatchRankingItemTest(unittest.TestCase):
 class ArticleAsinIndexTest(unittest.TestCase):
     """Issue #1149: _build_article_asins / 記事ありき gate のテスト。"""
 
-    def test_extracts_asin_from_post_filenames(self):
+    def test_extracts_asin_from_article_json(self):
+        # Issue #600 follow-up: ソースは data/articles/*.json (commit 済み)。
+        # hugo/content/posts/*.md (ビルド時生成・.gitignore) は CI に無いので読まない。
         with tempfile.TemporaryDirectory() as td:
             root = pathlib.Path(td)
             for name in [
-                "2026-05-31-B0FRMFZW29.md",  # 正規
-                "2026-05-30-b076zdqb15.md",  # 小文字でも拾う
-                "2026-01-01-B0XXXXXXXX.md",  # 別 ASIN
-                "_index.md",                 # 拾わない
-                "draft-note.md",             # 拾わない
+                "2026-05-31-B0FRMFZW29.json",            # 正規
+                "2026-05-30-b076zdqb15.json",            # 小文字でも拾う
+                "2026-01-01-B0XXXXXXXX.json",            # 別 ASIN
+                "2026-05-31-B0FRMFZW29.enrichment.json",  # サイドカー: 除外
+                "2026-05-31-B0FRMFZW29.seo.json",         # サイドカー: 除外
+                "2026-05-31-B0FRMFZW29.quality.json",     # サイドカー: 除外
+                "_index.json",                            # 拾わない
             ]:
-                (root / name).write_text("---\n---\n", encoding="utf-8")
+                (root / name).write_text("{}", encoding="utf-8")
             asins = fetch_rakuten._build_article_asins(root)
             self.assertEqual(asins, {"B0FRMFZW29", "B076ZDQB15", "B0XXXXXXXX"})
 
     def test_returns_empty_when_missing(self):
         self.assertEqual(
-            fetch_rakuten._build_article_asins(pathlib.Path("/no/such/posts")),
+            fetch_rakuten._build_article_asins(pathlib.Path("/no/such/articles")),
             set(),
         )
 
@@ -226,9 +230,9 @@ class RematchOnlyTest(unittest.TestCase):
             (root / "data/raw/rakuten_matched.json").write_text(
                 json.dumps({"items": []}), encoding="utf-8"
             )
-            (root / "hugo/content/posts").mkdir(parents=True)
-            (root / "hugo/content/posts/2026-05-31-B0NEW00001.md").write_text(
-                "---\n---\n", encoding="utf-8"
+            (root / "data/articles").mkdir(parents=True)
+            (root / "data/articles/2026-05-31-B0NEW00001.json").write_text(
+                "{}", encoding="utf-8"
             )
             weekly_dir = root / "hugo/data/ranking"
             weekly_dir.mkdir(parents=True)
@@ -266,7 +270,7 @@ class RematchOnlyTest(unittest.TestCase):
             (root / "data/raw/rakuten_matched.json").write_text(
                 json.dumps({"items": []}), encoding="utf-8"
             )
-            (root / "hugo/content/posts").mkdir(parents=True)  # 空 = 記事無し
+            (root / "data/articles").mkdir(parents=True)  # 空 = 記事無し
             weekly_dir = root / "hugo/data/ranking"
             weekly_dir.mkdir(parents=True)
             (weekly_dir / "weekly.json").write_text(json.dumps({

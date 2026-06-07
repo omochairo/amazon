@@ -96,20 +96,32 @@ def _build_jan_to_asin(per_asin_root: pathlib.Path) -> dict:
     return index
 
 
-_ARTICLE_SLUG_RE = re.compile(r"\d{4}-\d{2}-\d{2}-([A-Z0-9]{10})\.md$", re.IGNORECASE)
+# 記事スラッグ末尾 10 文字 ASIN (B0... / ISBN-10 数字 ASIN 両対応)。
+_ARTICLE_ASIN_RE = re.compile(r"-([A-Z0-9]{10})$", re.IGNORECASE)
+# サイドカー JSON (.enrichment/.seo/.quality) は記事本体ではないので除外する
+# ([[omochairo-sidecar-json-shadow]] / build_post の SUFFIX_SKIP と同方針)。
+_ARTICLE_SIDECAR_SUFFIXES = (".enrichment", ".seo", ".quality")
 
 
-def _build_article_asins(posts_root: pathlib.Path) -> set:
-    """hugo/content/posts/YYYY-MM-DD-<ASIN>.md からレビュー記事が存在する ASIN 集合を構築。
+def _build_article_asins(articles_root: pathlib.Path) -> set:
+    """data/articles/<YYYY-MM-DD-ASIN>.json から記事化済み ASIN 集合を構築。
 
     Issue #1149: ランキング rematch で matched_asin が立っても /products/<asin>/ の
-    記事が無ければ 404 になる。マッチ段階で「記事ありき」に限定して 404 を防ぐ。
+    記事が無ければ 404 になるため、内部リンクは「記事ありき」に gate する。
+
+    Issue #600 follow-up: 記事ソースは **commit 済みの data/articles/*.json** を読む。
+    ビルド時生成物の hugo/content/posts/*.md は .gitignore (/hugo) 対象で、fetch/sniper
+    workflow のランナー checkout には存在しない。そこを読んでいたため has_article が CI で
+    常に False になり、記事ゲートが全マッチを落として本番の Amazon CTA/内部リンク/履歴
+    チャートが恒常的に出ていなかった (resolve_ranking_asins._load_article_asins と同一規約)。
     """
     asins: set[str] = set()
-    if not posts_root.exists():
+    if not articles_root.is_dir():
         return asins
-    for md in posts_root.glob("*.md"):
-        m = _ARTICLE_SLUG_RE.search(md.name)
+    for p in articles_root.glob("*.json"):
+        if p.stem.endswith(_ARTICLE_SIDECAR_SUFFIXES):
+            continue
+        m = _ARTICLE_ASIN_RE.search(p.stem)
         if m:
             asins.add(m.group(1).upper())
     return asins
@@ -204,7 +216,7 @@ def _rematch_only(out_dir: pathlib.Path) -> int:
     raw_root = pathlib.Path("data/raw")
     itemcode_idx = _build_itemcode_to_asin(raw_root / "rakuten_matched.json")
     jan_idx = _build_jan_to_asin(raw_root / "per_asin")
-    article_asins = _build_article_asins(pathlib.Path("hugo/content/posts"))
+    article_asins = _build_article_asins(pathlib.Path("data/articles"))
     logger.info(
         f"rematch-only indices: itemCode={len(itemcode_idx)}, jan={len(jan_idx)}, "
         f"articles={len(article_asins)}"
@@ -419,7 +431,7 @@ def main():
     raw_root = pathlib.Path("data/raw")
     itemcode_idx = _build_itemcode_to_asin(raw_root / "rakuten_matched.json")
     jan_idx = _build_jan_to_asin(raw_root / "per_asin")
-    article_asins = _build_article_asins(pathlib.Path("hugo/content/posts"))
+    article_asins = _build_article_asins(pathlib.Path("data/articles"))
     logger.info(
         f"Match indices: itemCode={len(itemcode_idx)}, jan={len(jan_idx)}, "
         f"articles={len(article_asins)}"
