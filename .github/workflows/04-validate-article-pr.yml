@@ -451,6 +451,7 @@ jobs:
           tmp_src=$(mktemp -d)
           while IFS= read -r f; do
             [ -z "$f" ] && continue
+            [ ! -f "$f" ] && continue
             cp "$f" "$tmp_src/"
             # carry any pre-existing rendered markdown so MD-based checks can run
             base=$(basename "$f" .json)

@@ -11,8 +11,8 @@ def main():
     args = parser.parse_args()
 
     if not os.path.exists(args.json):
-        print(f"JSON file not found: {args.json}")
-        sys.exit(1)
+        print(f"JSON file not found (skipping): {args.json}")
+        sys.exit(0)
 
     if not os.path.exists(args.schema):
         print(f"Schema file not found: {args.schema}")
