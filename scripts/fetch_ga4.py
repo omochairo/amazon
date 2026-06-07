@@ -79,11 +79,34 @@ def fetch(property_id: str, sa_json: str, days: int, top_n: int) -> dict[str, An
         client, property_id, start_s, end_s,
         dims=["hostName", "pagePath"],
         metrics=["screenPageViews", "engagedSessions",
-                 "averageSessionDuration", "bounceRate", "engagementRate",
-                 "entrances"],
+                 "averageSessionDuration", "bounceRate", "engagementRate"],
         limit=top_n,
     )
     by_page.sort(key=lambda r: r.get("screenPageViews", 0), reverse=True)
+
+    # entrances は GA4 Data API に metric として存在しない (旧 UA 由来)。
+    # 「そのページがセッション開始 (着地) だった回数」は landing page 次元 + sessions で
+    # 取得し、(hostName, pagePath) に合算して by_page へ join する (A-5 孤児検出が利用)。
+    # landing query が失敗しても全体は止めず warning に留める
+    # (detect_orphan_pages.py は entrances 欠落行を skip するため degrade only)。
+    entrances_by_key: dict[tuple[str, str], int] = {}
+    try:
+        for row in _run_report(
+            client, property_id, start_s, end_s,
+            dims=["hostName", "landingPagePlusQueryString"],
+            metrics=["sessions"],
+            limit=top_n,
+        ):
+            host = row.get("hostName", "")
+            path = (row.get("landingPagePlusQueryString") or "").split("?", 1)[0]
+            key = (host, path)
+            entrances_by_key[key] = entrances_by_key.get(key, 0) + int(row.get("sessions", 0))
+    except Exception as e:  # noqa: BLE001
+        logger.warning("entrances (landing page) fetch failed; A-5 orphan detection will skip: %s", e)
+    for r in by_page:
+        key = (r.get("hostName", ""), r.get("pagePath", ""))
+        if key in entrances_by_key:
+            r["entrances"] = entrances_by_key[key]
 
     # サイト別合算 (cross-domain inflow/outflow の規模比較用)
     by_host = _run_report(
