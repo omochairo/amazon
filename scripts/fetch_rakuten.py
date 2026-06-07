@@ -128,26 +128,32 @@ def _match_ranking_item(
     jan_idx: dict,
     article_asins: set | None = None,
 ) -> tuple:
-    """ranking item を ASIN にマッチング。返り値: (matched_asin, match_stage)。
+    """ranking item を ASIN にマッチング。返り値: (matched_asin, match_stage, has_article)。
 
     match_stage は 'stage1' (itemCode 直接), 'stage2_jan' (JAN 抽出), '' (未マッチ)。
 
-    Issue #1149: ``article_asins`` を渡すと、マッチした ASIN がそこに含まれない
-    場合は未マッチ扱いにする (= /products/<asin>/ の 404 リンクを防ぐ)。None なら
-    従来通り全マッチを許可する (後方互換)。
+    Issue #600 follow-up: itemCode/JAN が解決できれば **記事が無くても** matched_asin を
+    返す。Amazon 外部 CTA (amazon.co.jp/dp/<asin>) は記事を必要としないため、記事化前でも
+    リンクを先行表示できる。``article_asins`` を渡した場合は ``has_article`` で記事有無を
+    区別し、内部 /products/<asin>/ リンク (= 404 リスク) は呼び出し側 (テンプレ) が
+    このフラグで gate する (#1149 の 404 防止意図はテンプレ側に移譲)。
+    ``article_asins=None`` なら has_article=True (後方互換)。
     """
+    def _has_article(asin: str) -> bool:
+        return article_asins is None or asin.upper() in article_asins
+
     code = (item.get("itemCode") or "").strip()
     if code:
         asin = itemcode_idx.get(code)
-        if asin and (article_asins is None or asin.upper() in article_asins):
-            return asin, "stage1"
+        if asin:
+            return asin, "stage1", _has_article(asin)
     text = (item.get("itemCaption") or "") + " " + (item.get("title") or "")
     jan = _extract_jan_from_text(text)
     if jan:
         asin = jan_idx.get(jan)
-        if asin and (article_asins is None or asin.upper() in article_asins):
-            return asin, "stage2_jan"
-    return "", ""
+        if asin:
+            return asin, "stage2_jan", _has_article(asin)
+    return "", "", False
 
 
 def _match_all(rank_items: list, itemcode_idx: dict, jan_idx: dict, article_asins: set | None) -> tuple:
@@ -156,9 +162,12 @@ def _match_all(rank_items: list, itemcode_idx: dict, jan_idx: dict, article_asin
     """
     stage1_n, stage2_n, unmatched = 0, 0, []
     for it in rank_items:
-        asin, stage = _match_ranking_item(it, itemcode_idx, jan_idx, article_asins)
+        asin, stage, has_article = _match_ranking_item(it, itemcode_idx, jan_idx, article_asins)
         it["matched_asin"] = asin or None
         it["match_stage"] = stage or None
+        # Issue #600 follow-up: 記事の有無を別フィールドで保持。テンプレは matched_asin で
+        # Amazon CTA を、has_article で内部 /products/<asin>/ リンクを gate する。
+        it["has_article"] = bool(asin) and has_article
         if stage == "stage1":
             stage1_n += 1
         elif stage == "stage2_jan":
@@ -212,6 +221,7 @@ def _rematch_only(out_dir: pathlib.Path) -> int:
         "input_total": len(rank_items),
         "stage1_matches": stage1_n,
         "stage2_matches": stage2_n,
+        "matched_with_article": sum(1 for it in rank_items if it.get("has_article")),
         "unmatched": len(unmatched),
         "unmatched_items": unmatched,
         "rematch_only": True,
@@ -424,6 +434,7 @@ def main():
         "input_total": len(rank_items),
         "stage1_matches": stage1_n,
         "stage2_matches": stage2_n,
+        "matched_with_article": sum(1 for it in rank_items if it.get("has_article")),
         "unmatched": len(unmatched),
         "unmatched_items": unmatched,
     }

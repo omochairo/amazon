@@ -32,8 +32,12 @@
     {{- $rank := int (.rank | default 0) }}
     {{- $asin := .matched_asin }}
     {{- $stage := .match_stage }}
+    {{- /* Issue #600 follow-up: matched_asin があれば Amazon 外部 CTA は記事不要で出す。
+           内部 /products/<asin>/ リンクは has_article が真のときだけ ($internal) — 記事の
+           無い ASIN へ内部リンクして 404 になるのを防ぐ (#1149 の意図をテンプレ側で担保)。 */}}
+    {{- $hasArticle := .has_article }}
     {{- $internal := "" }}
-    {{- if $asin }}{{ $internal = printf "/products/%s/" (lower $asin) }}{{ end }}
+    {{- if and $asin $hasArticle }}{{ $internal = printf "/products/%s/" (lower $asin) }}{{ end }}
     <li class="ranking-item ranking-item--rank-{{ $rank }}{{ if not $asin }} ranking-item--external-only{{ end }}" data-rank="{{ $rank }}"{{ with $stage }} data-match-stage="{{ . }}"{{ end }}>
       <div class="ranking-badge ranking-badge--rank-{{ $rank }}" aria-label="第 {{ $rank }} 位">
         {{- if eq $rank 1 }}<span class="ranking-medal">🥇</span>

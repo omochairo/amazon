@@ -121,8 +121,9 @@ class MatchRankingItemTest(unittest.TestCase):
 
     def test_stage1_direct_itemcode_match(self):
         item = {"itemCode": "shopa:123", "title": "...", "itemCaption": ""}
-        asin, stage = fetch_rakuten._match_ranking_item(item, self.itemcode_idx, self.jan_idx)
-        self.assertEqual((asin, stage), ("B0001", "stage1"))
+        result = fetch_rakuten._match_ranking_item(item, self.itemcode_idx, self.jan_idx)
+        # article_asins=None (default) → has_article=True (後方互換)
+        self.assertEqual(result, ("B0001", "stage1", True))
 
     def test_stage2_jan_via_caption(self):
         item = {
@@ -130,8 +131,8 @@ class MatchRankingItemTest(unittest.TestCase):
             "title": "知育ブロック",
             "itemCaption": "JAN 4904810642602 商品説明",
         }
-        asin, stage = fetch_rakuten._match_ranking_item(item, self.itemcode_idx, self.jan_idx)
-        self.assertEqual((asin, stage), ("B0003", "stage2_jan"))
+        result = fetch_rakuten._match_ranking_item(item, self.itemcode_idx, self.jan_idx)
+        self.assertEqual(result, ("B0003", "stage2_jan", True))
 
     def test_stage2_jan_via_title(self):
         item = {
@@ -139,13 +140,13 @@ class MatchRankingItemTest(unittest.TestCase):
             "title": "知育ブロック 4904810642602",
             "itemCaption": "",
         }
-        asin, stage = fetch_rakuten._match_ranking_item(item, self.itemcode_idx, self.jan_idx)
-        self.assertEqual((asin, stage), ("B0003", "stage2_jan"))
+        result = fetch_rakuten._match_ranking_item(item, self.itemcode_idx, self.jan_idx)
+        self.assertEqual(result, ("B0003", "stage2_jan", True))
 
     def test_unmatched_returns_empty(self):
         item = {"itemCode": "unknown:shop", "title": "未知の商品", "itemCaption": "説明文"}
-        asin, stage = fetch_rakuten._match_ranking_item(item, self.itemcode_idx, self.jan_idx)
-        self.assertEqual((asin, stage), ("", ""))
+        result = fetch_rakuten._match_ranking_item(item, self.itemcode_idx, self.jan_idx)
+        self.assertEqual(result, ("", "", False))
 
     def test_stage1_takes_precedence_over_jan(self):
         # itemCode が既知なら caption の JAN は見ない
@@ -154,8 +155,8 @@ class MatchRankingItemTest(unittest.TestCase):
             "title": "...",
             "itemCaption": "JAN 4904810642602",
         }
-        asin, stage = fetch_rakuten._match_ranking_item(item, self.itemcode_idx, self.jan_idx)
-        self.assertEqual((asin, stage), ("B0001", "stage1"))
+        result = fetch_rakuten._match_ranking_item(item, self.itemcode_idx, self.jan_idx)
+        self.assertEqual(result, ("B0001", "stage1", True))
 
 
 class ArticleAsinIndexTest(unittest.TestCase):
@@ -181,37 +182,39 @@ class ArticleAsinIndexTest(unittest.TestCase):
             set(),
         )
 
-    def test_match_filters_out_asin_without_article(self):
+    def test_match_returns_asin_without_article_but_flags_has_article_false(self):
+        # Issue #600 follow-up: itemCode は当たるが記事無し → matched_asin は返すが
+        # has_article=False (テンプレが内部リンクを抑止し Amazon CTA だけ出す)
         itemcode_idx = {"shopa:1": "B0001"}
         jan_idx = {"4904810642602": "B0002"}
         article_asins = {"B0002"}  # B0001 は記事無し
-        # itemCode は当たるが記事無し → unmatched
         item1 = {"itemCode": "shopa:1", "title": "x", "itemCaption": ""}
         self.assertEqual(
             fetch_rakuten._match_ranking_item(item1, itemcode_idx, jan_idx, article_asins),
-            ("", ""),
+            ("B0001", "stage1", False),
         )
-        # JAN は当たり記事あり → stage2_jan
+        # JAN は当たり記事あり → stage2_jan + has_article=True
         item2 = {"itemCode": "", "title": "x", "itemCaption": "JAN 4904810642602"}
         self.assertEqual(
             fetch_rakuten._match_ranking_item(item2, itemcode_idx, jan_idx, article_asins),
-            ("B0002", "stage2_jan"),
+            ("B0002", "stage2_jan", True),
         )
 
     def test_match_without_article_filter_is_backward_compatible(self):
-        # article_asins=None なら従来通り全マッチ許容
+        # article_asins=None なら has_article=True (後方互換)
         itemcode_idx = {"shopa:1": "B0001"}
         jan_idx = {}
         item = {"itemCode": "shopa:1", "title": "x", "itemCaption": ""}
         self.assertEqual(
             fetch_rakuten._match_ranking_item(item, itemcode_idx, jan_idx, None),
-            ("B0001", "stage1"),
+            ("B0001", "stage1", True),
         )
 
 
 class RematchOnlyTest(unittest.TestCase):
-    """Issue #1149: --rematch-only モードが既存 weekly.json を現行 indices で再マッチし、
-    記事の無い ASIN は unmatched 扱いにすることを検証する。"""
+    """Issue #1149 / #600 follow-up: --rematch-only モードが既存 weekly.json を現行 indices で
+    再マッチし、記事の有無を has_article フラグで区別することを検証する (記事無しでも
+    matched_asin は立てて Amazon 外部 CTA を出せるようにする)。"""
 
     def test_rematch_links_newly_added_article(self):
         with tempfile.TemporaryDirectory() as td:
@@ -249,10 +252,11 @@ class RematchOnlyTest(unittest.TestCase):
             after = json.loads((weekly_dir / "weekly.json").read_text(encoding="utf-8"))
             self.assertEqual(after["items"][0]["matched_asin"], "B0NEW00001")
             self.assertEqual(after["items"][0]["match_stage"], "stage2_jan")
+            self.assertTrue(after["items"][0]["has_article"])  # 記事あり
             self.assertIsNone(after["items"][1]["matched_asin"])
             self.assertIn("rematched_at", after)
 
-    def test_rematch_skips_asin_without_article(self):
+    def test_rematch_matches_asin_without_article_but_flags_has_article_false(self):
         with tempfile.TemporaryDirectory() as td:
             root = pathlib.Path(td)
             (root / "data/raw/per_asin/B0NOART0001").mkdir(parents=True)
@@ -279,8 +283,10 @@ class RematchOnlyTest(unittest.TestCase):
                 os.chdir(cwd)
             self.assertEqual(rc, 0)
             after = json.loads((weekly_dir / "weekly.json").read_text(encoding="utf-8"))
-            # per_asin にあっても記事が無いので /products/<asin>/ 404 防止で未マッチ
-            self.assertIsNone(after["items"][0]["matched_asin"])
+            # per_asin にあるので matched_asin は立つが、記事が無いので has_article=False
+            # (テンプレは Amazon 外部 CTA のみ出し、内部 /products/<asin>/ リンクは抑止)
+            self.assertEqual(after["items"][0]["matched_asin"], "B0NOART0001")
+            self.assertFalse(after["items"][0]["has_article"])
 
     def test_rematch_missing_weekly_returns_code_2(self):
         with tempfile.TemporaryDirectory() as td:
