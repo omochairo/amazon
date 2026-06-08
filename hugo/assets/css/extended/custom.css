@@ -2121,6 +2121,84 @@ html[data-theme="dark"] .post-content .price-cta-grid .price-search-fallback a:h
   color: #666;
   margin: 8px 0 0;
 }
+
+/* #1369 スコア根拠 inline 展開: 算出ロジック導線 + フィードバック widget
+   (score_explain.js が .score-breakdown-doc 直後に注入) */
+.post-content .score-explain-cta {
+  margin: 14px 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.post-content .score-explain-link {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 4px;
+  padding: 8px 16px;
+  border: 1px solid #fcd34d;
+  border-radius: 999px;
+  background: #fffbeb;
+  color: #92400e;
+  font-weight: 600;
+  font-size: 0.92rem;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.post-content .score-explain-link:hover {
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+.post-content .score-fb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+.post-content .score-fb-q {
+  color: #475569;
+  font-weight: 600;
+}
+.post-content .score-fb-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+.post-content .score-fb-btn {
+  cursor: pointer;
+  padding: 5px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #334155;
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+.post-content .score-fb-btn:hover:not(:disabled) {
+  background: #eef2ff;
+  border-color: #818cf8;
+}
+.post-content .score-fb-btn.is-chosen {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #fff;
+}
+.post-content .score-fb-btn:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.post-content .score-fb-btn.is-chosen:disabled {
+  opacity: 1;
+}
+.post-content .score-fb-thanks {
+  color: #15803d;
+  font-weight: 600;
+}
 .post-content .review-signals-list {
   margin: 8px 0 14px;
   padding-left: 20px;
@@ -2270,6 +2348,48 @@ html[data-theme="dark"] .post-content details.score-axes-doc summary {
 [data-theme="dark"] .post-content details.score-axes-doc .score-axes-note,
 html[data-theme="dark"] .post-content details.score-axes-doc .score-axes-note {
   color: #d6d3d1;
+}
+/* #1369 score_explain dark variants */
+[data-theme="dark"] .post-content .score-explain-link,
+html[data-theme="dark"] .post-content .score-explain-link {
+  background: #1f1209;
+  border-color: #78350f;
+  color: #fde68a;
+}
+[data-theme="dark"] .post-content .score-explain-link:hover,
+html[data-theme="dark"] .post-content .score-explain-link:hover {
+  background: #2a1a0c;
+  border-color: #92400e;
+}
+[data-theme="dark"] .post-content .score-fb,
+html[data-theme="dark"] .post-content .score-fb {
+  background: #1e293b;
+  border-color: #334155;
+}
+[data-theme="dark"] .post-content .score-fb-q,
+html[data-theme="dark"] .post-content .score-fb-q {
+  color: #cbd5e1;
+}
+[data-theme="dark"] .post-content .score-fb-btn,
+html[data-theme="dark"] .post-content .score-fb-btn {
+  background: #0f172a;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+[data-theme="dark"] .post-content .score-fb-btn:hover:not(:disabled),
+html[data-theme="dark"] .post-content .score-fb-btn:hover:not(:disabled) {
+  background: #312e81;
+  border-color: #818cf8;
+}
+[data-theme="dark"] .post-content .score-fb-btn.is-chosen,
+html[data-theme="dark"] .post-content .score-fb-btn.is-chosen {
+  background: #6366f1;
+  border-color: #6366f1;
+  color: #fff;
+}
+[data-theme="dark"] .post-content .score-fb-thanks,
+html[data-theme="dark"] .post-content .score-fb-thanks {
+  color: #86efac;
 }
 
 /* ==========================================
