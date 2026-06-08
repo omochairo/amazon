@@ -3881,12 +3881,22 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   font-size: 0.9rem;
 }
 
+.post-content .persona-fit__caution {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed #f0c4a3;
+}
+.post-content .persona-fit__caution > strong { color: #b45309; }
+.post-content .persona-fit__caution ul { margin: 8px 0 0; padding-left: 20px; }
+
 [data-theme="dark"] .post-content .persona-fit {
   background: #2a1f17;
   border-left-color: #fb923c;
   color: #fde68a;
 }
 [data-theme="dark"] .post-content .persona-fit > strong { color: #fdba74; }
+[data-theme="dark"] .post-content .persona-fit__caution { border-top-color: #5b4636; }
+[data-theme="dark"] .post-content .persona-fit__caution > strong { color: #fcd34d; }
 
 /* ---------- 価格 3 サイト比較グリッド ---------- */
 .post-content .price-cta-grid {

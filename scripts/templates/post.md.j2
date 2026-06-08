@@ -86,7 +86,7 @@
 {% endif %}
 
 {% if persona_fit %}
-<aside class="persona-fit"><strong>この記事はこんな方へ</strong><ul>{% for r in persona_fit.recommended_for %}<li>{{ r }}</li>{% endfor %}</ul>{% if persona_fit.age_range %}<p>対象年齢：<strong>{{ persona_fit.age_range }}</strong></p>{% endif %}</aside>
+<aside class="persona-fit"><strong>この記事はこんな方へ</strong><ul>{% for r in persona_fit.recommended_for %}<li>{{ r }}</li>{% endfor %}</ul>{% if persona_fit.not_recommended_for %}<div class="persona-fit__caution"><strong>🤔 逆に、こんな方は別の商品も検討を</strong><ul>{% for n in persona_fit.not_recommended_for %}<li>{{ n }}</li>{% endfor %}</ul></div>{% endif %}{% if persona_fit.age_range %}<p>対象年齢：<strong>{{ persona_fit.age_range }}</strong></p>{% endif %}</aside>
 {% endif %}
 
 {% if development_stage %}
