@@ -2431,6 +2431,103 @@ html[data-theme="dark"] .post-content .score-fb-thanks {
 }
 
 /* ==========================================
+   役立ち度フィードバック (epic #1365 Layer 3-②)
+   記事末尾の 😊/😐/😢 widget。記事下の余白を確保しつつ
+   score-fb と同系の淡色カードでまとめる。
+   ========================================== */
+.post-content .article-fb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin: 32px 0 12px;
+  padding: 16px 18px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 0.92rem;
+}
+.post-content .article-fb-q {
+  color: #334155;
+  font-weight: 700;
+}
+.post-content .article-fb-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.post-content .article-fb-btn {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #334155;
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+.post-content .article-fb-emoji {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.post-content .article-fb-btn:hover:not(:disabled) {
+  background: #eef2ff;
+  border-color: #818cf8;
+  transform: translateY(-1px);
+}
+.post-content .article-fb-btn.is-chosen {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #fff;
+}
+.post-content .article-fb-btn:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.post-content .article-fb-btn.is-chosen:disabled {
+  opacity: 1;
+}
+.post-content .article-fb-thanks {
+  flex-basis: 100%;
+  color: #15803d;
+  font-weight: 600;
+}
+[data-theme="dark"] .post-content .article-fb,
+html[data-theme="dark"] .post-content .article-fb {
+  background: #1e293b;
+  border-color: #334155;
+}
+[data-theme="dark"] .post-content .article-fb-q,
+html[data-theme="dark"] .post-content .article-fb-q {
+  color: #e2e8f0;
+}
+[data-theme="dark"] .post-content .article-fb-btn,
+html[data-theme="dark"] .post-content .article-fb-btn {
+  background: #0f172a;
+  border-color: #475569;
+  color: #cbd5e1;
+}
+[data-theme="dark"] .post-content .article-fb-btn:hover:not(:disabled),
+html[data-theme="dark"] .post-content .article-fb-btn:hover:not(:disabled) {
+  background: #312e81;
+  border-color: #818cf8;
+}
+[data-theme="dark"] .post-content .article-fb-btn.is-chosen,
+html[data-theme="dark"] .post-content .article-fb-btn.is-chosen {
+  background: #6366f1;
+  border-color: #6366f1;
+  color: #fff;
+}
+[data-theme="dark"] .post-content .article-fb-thanks,
+html[data-theme="dark"] .post-content .article-fb-thanks {
+  color: #86efac;
+}
+
+/* ==========================================
    #510 競合カード画像: 中央寄せ + サイズ改善
    (#1089: aspect-ratio 化に合わせ max-height 削除、画像は枠内 contain で表示)
    ========================================== */
