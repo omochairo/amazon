@@ -10,6 +10,14 @@
 <script defer src="{{ $recent.RelPermalink }}" integrity="{{ $recent.Data.Integrity }}" crossorigin="anonymous"></script>
 {{- end }}
 
+{{- /* #1371 PWA Service Worker — 全ページで登録。お気に入り/最近見た商品/診断結果を
+       オフライン閲覧可能にする。recently_viewed.js の後に置き OmochaRecent を参照して
+       最近見た商品の遷移先を precache させる。 */ -}}
+{{- $swReg := resources.Get "js/sw_register.js" | resources.Minify | resources.Fingerprint "sha256" }}
+{{- if $swReg }}
+<script defer src="{{ $swReg.RelPermalink }}" integrity="{{ $swReg.Data.Integrity }}" crossorigin="anonymous"></script>
+{{- end }}
+
 {{- /* #1365 Layer 1-③ 前回の診断バナー — ホーム限定 (mount は index.html のみ)。 */ -}}
 {{- if .IsHome }}
   {{- $lastDiag := resources.Get "js/last_diagnosis.js" | resources.Minify | resources.Fingerprint "sha256" }}
