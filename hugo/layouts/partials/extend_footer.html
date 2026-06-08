@@ -10,6 +10,14 @@
 <script defer src="{{ $recent.RelPermalink }}" integrity="{{ $recent.Data.Integrity }}" crossorigin="anonymous"></script>
 {{- end }}
 
+{{- /* #1365 Layer 1-③ 前回の診断バナー — ホーム限定 (mount は index.html のみ)。 */ -}}
+{{- if .IsHome }}
+  {{- $lastDiag := resources.Get "js/last_diagnosis.js" | resources.Minify | resources.Fingerprint "sha256" }}
+  {{- if $lastDiag }}
+<script defer src="{{ $lastDiag.RelPermalink }}" integrity="{{ $lastDiag.Data.Integrity }}" crossorigin="anonymous"></script>
+  {{- end }}
+{{- end }}
+
 {{- /* Wikipedia 連携ボトムシート (Issue #683)
        記事ページのみで wiki_tooltip.js + wiki_tooltip.css を読み込む。
        CSS は assets/css/extended/wiki_tooltip.css が PaperMod の自動取り込みで

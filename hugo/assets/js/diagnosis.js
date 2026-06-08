@@ -298,9 +298,56 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // 結果カードの動的生成
         resultGrid.innerHTML = "";
-        if (!renderProductCard) return;
-        recommendations.forEach(item => {
-            resultGrid.appendChild(renderProductCard(item));
-        });
+        if (renderProductCard) {
+            recommendations.forEach(item => {
+                resultGrid.appendChild(renderProductCard(item));
+            });
+        }
+
+        // #1365 Layer 1-③ 診断結果の永続化。次回訪問時にホーム上部の
+        // 「前回の診断」バナー (last_diagnosis.js) で再表示する。
+        // ASIN は index.json に無く、推薦は回答から決定的に再現できるため
+        // 回答そのものを保存し、再閲覧時 (?restore=1) はその場で再計算する。
+        // top はバナーのサムネ/タイトル表示用の軽量スナップショットのみ。
+        try {
+            const top = recommendations[0] || null;
+            localStorage.setItem("omcha_last_diagnosis", JSON.stringify({
+                answers: { q1: answers.q1, q2: answers.q2, q3: answers.q3, q4: answers.q4, q5: answers.q5 },
+                top: top ? {
+                    title: top.product_name || top.title || "",
+                    permalink: top.permalink || "",
+                    image: top.image || ""
+                } : null,
+                count: recommendations.length,
+                ts: new Date().toISOString()
+            }));
+        } catch (e) {
+            // localStorage が無効/満杯の環境では永続化を諦める (診断自体は成立)
+        }
     }
+
+    // #1365 Layer 1-③ 前回診断の再閲覧。ホームの「前回の診断」バナーから
+    // /diagnosis/?restore=1 で遷移してきた場合、保存済みの回答を復元して
+    // ウィザードを飛ばし結果だけ即再表示する (推薦は最新カタログで再計算)。
+    function restoreFromSaved() {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("restore") !== "1") return;
+        let saved;
+        try {
+            saved = JSON.parse(localStorage.getItem("omcha_last_diagnosis") || "null");
+        } catch (e) {
+            return;
+        }
+        if (!saved || !saved.answers || !saved.answers.q1) return;
+        answers.q1 = saved.answers.q1;
+        answers.q2 = saved.answers.q2;
+        answers.q3 = saved.answers.q3;
+        answers.q4 = saved.answers.q4;
+        answers.q5 = saved.answers.q5;
+        currentStep = 6;
+        updateStepUI();
+        progressText.textContent = "前回の結果";
+        showResults();
+    }
+    restoreFromSaved();
 });

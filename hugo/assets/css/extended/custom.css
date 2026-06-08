@@ -5482,3 +5482,93 @@ details.development-stage-accordion[open] > summary::before {
   color: #cbd5e1;
 }
 [data-theme="dark"] .post-content .source-highlights__cite a { color: #cbd5e1; }
+
+/* === 前回の診断バナー (#1365 Layer 1-③) ===
+   ホーム上部。last_diagnosis.js が localStorage から hydrate し hidden 解除。 */
+.last-diagnosis {
+  margin: 1.4rem 0 0;
+}
+.last-diagnosis[hidden] { display: none; }
+.last-diagnosis-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.8rem 1.2rem;
+  padding: 1rem 1.2rem;
+  border-radius: var(--radius-md, 14px);
+  border: 1.5px solid var(--brand-secondary, #ffd9b3);
+  background: linear-gradient(135deg, rgba(255, 247, 237, 0.9), rgba(255, 237, 220, 0.7));
+  box-shadow: var(--card-shadow, 0 2px 10px rgba(0, 0, 0, 0.06));
+}
+.last-diagnosis-eyebrow {
+  display: inline-block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--brand-primary, #e8743b);
+}
+.last-diagnosis-summary {
+  margin: 0.25rem 0 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--primary, #222);
+  line-height: 1.4;
+}
+.last-diagnosis-meta {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  color: var(--secondary, #777);
+}
+.last-diagnosis-top { margin-top: 0.5rem; }
+.last-diagnosis-top-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--primary, #333);
+  text-decoration: none;
+}
+.last-diagnosis-top-link img {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.last-diagnosis-top-link:hover .last-diagnosis-top-name { text-decoration: underline; }
+.last-diagnosis-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.last-diagnosis-btn {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  border: 1.5px solid var(--brand-primary, #e8743b);
+  color: var(--brand-primary, #e8743b);
+  background: #fff;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.last-diagnosis-btn.primary {
+  background: var(--brand-primary, #e8743b);
+  color: #fff;
+}
+.last-diagnosis-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+@media (max-width: 560px) {
+  .last-diagnosis-inner { flex-direction: column; align-items: stretch; }
+  .last-diagnosis-actions { justify-content: stretch; }
+  .last-diagnosis-btn { flex: 1; text-align: center; }
+}
+[data-theme="dark"] .last-diagnosis-inner {
+  border-color: #4a3a2a;
+  background: linear-gradient(135deg, #2a2422, #241f1d);
+}
+[data-theme="dark"] .last-diagnosis-btn { background: #2a2a3a; }
+[data-theme="dark"] .last-diagnosis-btn.primary { color: #fff; }
