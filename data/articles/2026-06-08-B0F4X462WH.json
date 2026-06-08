@@ -149,6 +149,50 @@
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
       "notes": "マグネットタイプでずれない仕様、360問収録、車を使ったごっこ遊びが可能、EU向けパッケージのため日本語説明書なし等の仕様を明記。"
+    },
+    {
+      "id": "src-tenyo",
+      "name": "TENYO 脳ブロック ラインナップ",
+      "url": "https://tenyo.jp/toyhobby/bb/lineup.html",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-06-07",
+      "author": "TENYO",
+      "conflict_of_interest": "none",
+      "notes": "同様の論理パズルが脳の普段使っていない部分をストレッチする効果があると解説。"
+    },
+    {
+      "id": "src-yomiuri",
+      "name": "よみぽランド くるま脱出パズル",
+      "url": "https://game.yomipo.yomiuri.co.jp/easygame/game/388",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-06-07",
+      "author": "読売新聞",
+      "conflict_of_interest": "none",
+      "notes": "くるま脱出パズルの基本ルール（車をスライドさせて自分の車を脱出させる）について一般的な遊び方を紹介。"
+    },
+    {
+      "id": "src-comp1",
+      "name": "Amazon 競合製品ページ (B0F4X5JQY6)",
+      "url": "https://www.amazon.co.jp/dp/B0F4X5JQY6/?tag=chk01-22",
+      "tier": "medium",
+      "evidence_type": "primary",
+      "published_at": "2026-06-07",
+      "author": "メーカー公式",
+      "conflict_of_interest": "possible",
+      "notes": "750問版の類似商品。同じスライドパズル形式で論理的思考力の発達をサポートすると記載。"
+    },
+    {
+      "id": "src-comp2",
+      "name": "Amazon 競合製品ページ (B0GV8Q8H9T)",
+      "url": "https://www.amazon.co.jp/dp/B0GV8Q8H9T/?tag=chk01-22",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-06-07",
+      "author": "他社メーカー",
+      "conflict_of_interest": "none",
+      "notes": "知育パズル全般におけるスピード勝負や論理的思考力の重要性について言及。"
     }
   ],
   "claims": [
@@ -157,7 +201,8 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-amazon",
+        "src-comp1"
       ],
       "cross_checked": false,
       "notes": "公式説明文に「どちらもマグネットタイプでずれない仕様になってます」と明記。"
@@ -167,7 +212,8 @@
       "category": "durability",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-amazon",
+        "src-comp2"
       ],
       "cross_checked": false,
       "notes": "公式説明文に「商品は３６０問」と明記。"
@@ -177,7 +223,8 @@
       "category": "comparative_advantage",
       "confidence": "medium",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-amazon",
+        "src-yomiuri"
       ],
       "cross_checked": false,
       "notes": "公式説明文に「様々な種類の車を使って、ごっこ遊びを楽しんだり」と明記。"
@@ -187,7 +234,8 @@
       "category": "quality",
       "confidence": "medium",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-amazon",
+        "src-tenyo"
       ],
       "cross_checked": false,
       "notes": "公式説明文に「EU向けパッケージの為日本語説明書はありませんが目で見て理解できる」と明記。"
