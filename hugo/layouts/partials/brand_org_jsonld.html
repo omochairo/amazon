@@ -1,0 +1,46 @@
+{{- /*
+  brand_org_jsonld.html — #1358 B-6 (E-E-A-T 独自データ層 / Wikidata)
+
+  /brands/<brand>/ のタクソノミー term ページに、その玩具ブランド自身の
+  schema.org/Organization JSON-LD を emit する。データは Wikidata SPARQL で
+  事前生成した site.Data.brand_wikidata.brands[<term>] を読むだけ
+  (in-band IO 無し)。Wikidata に一致しなかったブランドは出力しない。
+
+  サイト発行体 (おもちゃロボ Lab) の Organization は extend_head.html が別途
+  emit するため、こちらは @id を Wikidata エンティティ URI にして両者を区別する。
+
+  呼び出し元: hugo/layouts/partials/extend_head.html
+*/ -}}
+{{- if and (eq .Kind "term") (eq .Data.Plural "brands") -}}
+  {{- with site.Data.brand_wikidata -}}
+    {{- $rec := index .brands $.Title -}}
+    {{- if $rec -}}
+      {{- $qid := index $rec "qid" -}}
+      {{- $entity := printf "https://www.wikidata.org/entity/%s" $qid -}}
+      {{- $org := dict
+          "@context" "https://schema.org"
+          "@type" "Organization"
+          "@id" $entity
+          "name" $.Title
+          "mainEntityOfPage" $.Permalink
+      -}}
+      {{- with index $rec "website" -}}{{- $org = merge $org (dict "url" .) -}}{{- end -}}
+      {{- with index $rec "logo" -}}{{- $org = merge $org (dict "logo" .) -}}{{- end -}}
+      {{- /* JSON 数値は float64 → int coerce 必須 ([[hugo-json-int-coerce-trap]]) */ -}}
+      {{- with index $rec "inception" -}}{{- $org = merge $org (dict "foundingDate" (printf "%d" (int .))) -}}{{- end -}}
+      {{- with index $rec "founder" -}}
+        {{- $org = merge $org (dict "founder" (dict "@type" "Person" "name" .)) -}}
+      {{- end -}}
+      {{- with index $rec "hq" -}}
+        {{- $org = merge $org (dict "location" (dict "@type" "Place" "name" .)) -}}
+      {{- end -}}
+      {{- /* sameAs は常に Wikidata エンティティ、公式サイトがあれば追加 */ -}}
+      {{- $same := slice $entity -}}
+      {{- with index $rec "website" -}}{{- $same = $same | append . -}}{{- end -}}
+      {{- $org = merge $org (dict "sameAs" $same) -}}
+<script type="application/ld+json">
+{{ $org | jsonify (dict "indent" "  ") | safeJS }}
+</script>
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
