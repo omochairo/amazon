@@ -72,6 +72,11 @@ on:
       # paths 未登録だと inverse trap で validate 不発火→auto-merge 永久 BLOCKED
       # になるため登録 ([[04-validate-paths-inverse-trap]])。記事変更ゼロで vacuous SUCCESS。
       - 'scripts/report_jules_sessions.py'
+      # 2026-06-08 (session 114): Jules daily quota を実 session 作成数 (rolling-24h)
+      # でゲートする共有 script + test。03-invoke 等から create 前に呼ぶ。paths 未登録だと
+      # inverse trap で validate 不発火→auto-merge 永久 BLOCKED ([[04-validate-paths-inverse-trap]])。
+      - 'scripts/jules_quota_gate.py'
+      - 'scripts/tests/test_jules_quota_gate.py'
       # 2026-06-04 (#1600 Phase 1): per_asin 第三者情報量スコア。03-invoke-jules の
       # ASIN 選定 defer + prompt 注記で使う。paths 未登録だと inverse trap で
       # validate 不発火→auto-merge 永久 BLOCKED になるため登録 ([[04-validate-paths-inverse-trap]])。

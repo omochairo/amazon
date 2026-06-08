@@ -38,23 +38,25 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INPUT_ASIN: ${{ github.event.inputs.asin }}
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
         run: |
           set -e
           REPO=${{ github.repository }}
-          # 2026-05-31 (#1198): Jules daily PR cap。02-publish → invoke-jules → 8 PR
-          # の自己増殖ループで 2026-05-31 に Jules quota を 800 session 級まで溢れた。
-          # 当日 google-labs-jules[bot] が起票した PR 数を gh search で取得し、
-          # 上限超なら count=0 で early return (downstream は count != '0' gate で skip)。
-          # workflow_dispatch (手動 override) は cap を bypass — 緊急時の人手 dispatch を残す。
+          # 2026-06-08 (session 114): Jules daily quota ゲートを *PR 数* から
+          # *実 session 作成数 (rolling-24h)* ベースに是正。
+          # 旧実装は google-labs-jules[bot] の当日 PR 数を DAILY_CAP=30 と比較していたが、
+          # Jules の daily quota (100) を消費するのは PR ではなく **session 作成**。
+          # session が PR に変換されない state (PAUSED/FAILED/遅い IN_PROGRESS/AWAITING_*)
+          # のまま積もると PR=0 のまま作成数だけ 100 に到達し、cap は永久に発火しない盲点だった
+          # (2026-06-08 実測: PR 0/30=OK 表示のまま rolling-24h 作成 100/100 で枯渇)。
+          # jules_quota_gate.py が live API の rolling-24h 作成数を取得し、安全予算 (cap 80,
+          # 100 から 20 margin) に対するこの run の作成枠 (0..12) を返す。後段の MAX_LOCKS に使う。
+          # workflow_dispatch (手動 override) は従来どおり bypass (BUDGET 未設定 → MAX_LOCKS=12)。
           if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            DAILY_CAP=30
-            TODAY=$(date -u +%Y-%m-%d)
-            JULES_PR_TODAY=$(gh pr list -R "$REPO" --state all \
-              --search "author:app/google-labs-jules created:$TODAY" \
-              --json number --jq 'length' 2>/dev/null || echo 0)
-            echo "Jules PRs today: $JULES_PR_TODAY / cap $DAILY_CAP"
-            if [ "$JULES_PR_TODAY" -ge "$DAILY_CAP" ]; then
-              echo "Daily Jules PR cap reached; skipping pick + downstream."
+            BUDGET=$(python scripts/jules_quota_gate.py --cap 80 --max 12 || echo 0)
+            echo "Jules quota gate budget: $BUDGET (rolling-24h 作成数ベース)"
+            if [ "${BUDGET:-0}" -le 0 ]; then
+              echo "Jules daily quota gate: budget 0; skipping pick + downstream."
               echo "count=0" >> "$GITHUB_OUTPUT"
               echo "asins=" >> "$GITHUB_OUTPUT"
               exit 0
@@ -171,7 +173,9 @@ jobs:
           # 2026-05-17 Step C-1: MAX_LOCKS まで lock を取得し、picked.txt に列挙する。
           # 2026-06-01 Issue #967: supply 黒字確認 (remaining=71 >> 8 基準) 後 8 → 12 に拡張
           # (12-rewrite-idle-fill.yml も同値で揃える)
-          MAX_LOCKS=12
+          # 2026-06-08 session 114: workflow_run 時は quota ゲートの残り予算 ($BUDGET, 上で算出)
+          # で上限を絞る。workflow_dispatch (手動) は $BUDGET 未設定 → 従来どおり 12。
+          MAX_LOCKS=${BUDGET:-12}
           MAIN_SHA=$(gh api repos/$REPO/git/refs/heads/main --jq .object.sha)
           MAIN_TREE=$(gh api repos/$REPO/git/commits/$MAIN_SHA --jq .tree.sha)
           : > /tmp/picked.txt
