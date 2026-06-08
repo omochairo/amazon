@@ -47,6 +47,13 @@
 <script defer src="{{ $lightbox.RelPermalink }}" integrity="{{ $lightbox.Data.Integrity }}" crossorigin="anonymous"></script>
   {{- end }}
 
+  {{- /* #1369 スコア根拠 inline 展開 (epic #1365 Layer 2-②): 算出ロジック導線 +
+         「参考になった?」フィードバック widget を商品ページのスコア内訳直後に注入。 */ -}}
+  {{- $scoreExplain := resources.Get "js/score_explain.js" | resources.Minify | resources.Fingerprint "sha256" }}
+  {{- if $scoreExplain }}
+<script defer src="{{ $scoreExplain.RelPermalink }}" integrity="{{ $scoreExplain.Data.Integrity }}" crossorigin="anonymous"></script>
+  {{- end }}
+
   {{- /* Issue #600 Phase B: 楽天ランキング順位推移チャート。Chart.js (UMD) を CDN
          から defer 読み込みし、renderer は assets パイプライン経由でバンドル。
          該当 ASIN に履歴がなければ partial が <section> を出さないので、
