@@ -1403,6 +1403,20 @@ def _normalize_for_match(s: str) -> str:
     return s
 
 
+def _is_model_number(token: str) -> bool:
+    """ASCII 英数の型番トークン (E3209 / E0328 等) か判定する。
+
+    別 SKU 誤マッチ検出用。>=1 英字 + >=2 数字 + ASCII[英数ハイフン]のみ を満たす
+    ものだけ型番とみなす。RD-6 のような 1 桁や 2025 (数字のみ) / Lon-Bi (数字無し)
+    は除外し、明確なカタログ型番だけを対象にして false-trip を避ける。
+    """
+    if not re.fullmatch(r"[A-Za-z0-9\-]+", token):
+        return False
+    if not any(c.isalpha() for c in token):
+        return False
+    return sum(c.isdigit() for c in token) >= 2
+
+
 def _descriptor_hits_title(descriptor: str, title_norm: str, title_tokens_norm: list) -> bool:
     """Issue #1140: descriptor token が title に「実質的に」出現するか。
 
@@ -1464,6 +1478,21 @@ def _matched_passes_quality(matched: dict[str, Any], amazon_price: int) -> bool:
 
     kw = matched.get("search_keyword") or ""
     kw_tokens = [t for t in re.split(r"\s+", kw) if len(t) >= 2]
+
+    # 型番ガード: search_keyword に ASCII 型番 (E3209 等) があるのに matched title に
+    # 一つも存在しなければ別 SKU の誤マッチとして弾く。同ブランド別商品
+    # (Hape レジカウンター E3209 vs ファーマーズマーケットの食べ物セット) が
+    # カテゴリ語「ままごと」一致だけで通過し、quality_gate の reseller-pricing
+    # check を誤発火させる事故 (B0CDTQWRN1) を source で断つ。
+    model_tokens = [t for t in kw_tokens if _is_model_number(t)]
+    if model_tokens:
+        title_compact = re.sub(r"[-\s]", "", _normalize_for_match(title)).upper()
+        if not any(
+            re.sub(r"[-\s]", "", _normalize_for_match(m)).upper() in title_compact
+            for m in model_tokens
+        ):
+            return False
+
     meaningful = [t for t in kw_tokens if t not in _MARKET_GENERIC_TOKENS]
     if not meaningful:
         return True  # 区別語が無ければ cross-search 側 median band の選出を尊重
