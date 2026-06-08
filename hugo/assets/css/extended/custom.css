@@ -2676,6 +2676,37 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   border-color: rgba(255,255,255,0.1);
 }
 
+/* --- 編集者推し 👑 バッジ (Top-Center overlay / Layer 3-① #1365) ---
+   4 隅は 🆚/♡/🏆/👶 で埋まっているため、希少な編集者推しは上辺中央に配置。
+   curate された商品のみ表示されるため大半のカードには出ない。 */
+.product-card-editor-pick {
+  position: absolute;
+  top: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: calc(100% - 5rem);  /* 左右の compare/fav トグルを避ける */
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f6c344 0%, #e0a516 100%);  /* gold */
+  color: #4a3500;
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 2px 7px rgba(180,130,0,0.4);
+  border: 1px solid rgba(255,255,255,0.55);
+  z-index: 3;
+  pointer-events: none;
+}
+[data-theme="dark"] .product-card-editor-pick {
+  background: linear-gradient(135deg, #e6b53d 0%, #c79114 100%);
+  color: #2e2200;
+  border-color: rgba(255,255,255,0.3);
+}
+
 /* ==========================================
    楽天ランキング (/ranking/) — Issue #600 PR4 (初版は週次、現在は sniper による日次更新)
    ========================================== */
