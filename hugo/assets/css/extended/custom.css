@@ -251,6 +251,44 @@ header .logo a {
   border-bottom: 1px solid rgba(255,255,255,0.08) !important;
 }
 
+/* ---------- 基本スペック表 (Layer 2-③ spec table) ---------- */
+/* key-value 形式。thead を持たず行頭 th をラベル列として使う。
+   視線往復を減らすため素材/サイズ/原産国などを一覧化 (#1365)。*/
+.post-content table.spec-table {
+  margin: 1.2em 0;
+}
+.post-content table.spec-table th[scope="row"] {
+  width: 28%;
+  min-width: 5.5em;
+  text-align: left;
+  vertical-align: top;
+  font-weight: 700;
+  color: var(--brand-primary);
+  background: var(--brand-gradient-subtle);
+  padding: 11px 16px;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  white-space: nowrap;
+}
+.post-content table.spec-table td {
+  vertical-align: top;
+  line-height: 1.7;
+}
+[data-theme="dark"] .post-content table.spec-table th[scope="row"] {
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.post-content table.spec-table tbody tr:last-child th[scope="row"],
+.post-content table.spec-table tbody tr:last-child td {
+  border-bottom: none !important;
+}
+@media (max-width: 640px) {
+  .post-content table.spec-table th[scope="row"] {
+    width: 34%;
+    min-width: 4.5em;
+    padding: 9px 12px;
+    white-space: normal;
+  }
+}
+
 /* ---------- Blockquotes (装飾ボックス) ---------- */
 .post-content blockquote {
   border-left: 4px solid var(--brand-primary) !important;

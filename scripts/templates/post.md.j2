@@ -234,13 +234,26 @@
 {% if technical_specs %}
 ### <small>{{ product.name }}の</small>基本スペック
 
-{% if technical_specs.dimensions %}- **サイズ**：{% if technical_specs.dimensions.width %}幅 {{ technical_specs.dimensions.width }}{% endif %}{% if technical_specs.dimensions.height %} / 高さ {{ technical_specs.dimensions.height }}{% endif %}{% if technical_specs.dimensions.depth %} / 奥行 {{ technical_specs.dimensions.depth }}{% endif %}
-{% endif %}{% if technical_specs.weight %}- **重量**：{{ technical_specs.weight }}
-{% endif %}{% if technical_specs.material %}- **素材**：{{ technical_specs.material }}
-{% endif %}{% if technical_specs.origin %}- **原産国**：{{ technical_specs.origin }}
-{% endif %}{% if technical_specs.capacity %}- **容量**：{{ technical_specs.capacity }}
-{% endif %}{% if technical_specs.other %}{% for spec in technical_specs.other %}- {{ spec }}
-{% endfor %}{% endif %}
+<table class="spec-table"><tbody>
+{%- if technical_specs.dimensions and (technical_specs.dimensions.width or technical_specs.dimensions.height or technical_specs.dimensions.depth) %}
+<tr><th scope="row">サイズ</th><td>{% if technical_specs.dimensions.width %}幅 {{ technical_specs.dimensions.width }}{% endif %}{% if technical_specs.dimensions.height %} / 高さ {{ technical_specs.dimensions.height }}{% endif %}{% if technical_specs.dimensions.depth %} / 奥行 {{ technical_specs.dimensions.depth }}{% endif %}</td></tr>
+{%- endif %}
+{%- if technical_specs.weight %}
+<tr><th scope="row">重量</th><td>{{ technical_specs.weight }}</td></tr>
+{%- endif %}
+{%- if technical_specs.material %}
+<tr><th scope="row">素材</th><td>{{ technical_specs.material }}</td></tr>
+{%- endif %}
+{%- if technical_specs.origin %}
+<tr><th scope="row">原産国</th><td>{{ technical_specs.origin }}</td></tr>
+{%- endif %}
+{%- if technical_specs.capacity %}
+<tr><th scope="row">容量</th><td>{{ technical_specs.capacity }}</td></tr>
+{%- endif %}
+{%- if technical_specs.other %}
+<tr><th scope="row">その他</th><td>{% for spec in technical_specs.other %}{{ spec }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td></tr>
+{%- endif %}
+</tbody></table>
 {% endif %}
 
 {% if omcha_related %}
