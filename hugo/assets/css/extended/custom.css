@@ -3150,6 +3150,20 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   font-weight: 700;
 }
 
+/* 「半年〜1年後にこちら」成長先取りセクション (epic #1365 Layer 2-⑤) */
+.future-age-section .home-section-header {
+  border-bottom-color: #7cb342;
+}
+.future-age-section .home-section-header h2 {
+  color: #558b2f;
+}
+.future-age-lead {
+  margin: -0.5rem 0 1.1rem;
+  font-size: 0.9rem;
+  color: var(--secondary);
+  line-height: 1.6;
+}
+
 .carousel-nav-arrows {
   display: flex;
   gap: 0.5rem;
