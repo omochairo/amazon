@@ -108,6 +108,10 @@
   </div>
 </section>
 
+{{- /* === Section: 年齢タイムライン (#1365 Layer 3-③) — 横スクロールの年齢バンドから
+       /diagnosis/?age=<band> へ遷移し、その年齢帯のベスト10を即表示する。 */ -}}
+{{- partial "age_timeline.html" . }}
+
 {{- /* === Section: 最新の比較レビュー === */ -}}
 {{- $latest := first 9 $allPosts }}
 {{- if $latest }}

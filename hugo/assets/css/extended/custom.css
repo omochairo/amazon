@@ -5913,3 +5913,106 @@ details.development-stage-accordion[open] > summary::before {
 }
 [data-theme="dark"] .last-diagnosis-btn { background: #2a2a3a; }
 [data-theme="dark"] .last-diagnosis-btn.primary { color: #fff; }
+
+/* ============================================================
+   #1365 Layer 3-③ 年齢タイムライン (age_timeline.html)
+   ホームの横スクロール年齢バンド。タップで /diagnosis/?age=<band>
+   へ遷移しその年齢帯のベスト10を表示。spotlight と同系の温かい配色。
+   ============================================================ */
+.age-timeline {
+  margin: 32px 0;
+}
+.age-timeline-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.age-timeline-title {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+.age-timeline-note {
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+.age-timeline-track {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 6px 2px 14px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.age-timeline-track::-webkit-scrollbar { height: 6px; }
+.age-timeline-track::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 3px;
+}
+.age-timeline-card {
+  position: relative;
+  flex: 0 0 auto;
+  width: 168px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px 16px 16px;
+  border-radius: 16px;
+  border: 1px solid #f0d9c0;
+  background: linear-gradient(155deg, #fff8f0, #fff1e3);
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.age-timeline-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 18px rgba(214, 142, 64, 0.22);
+}
+.age-timeline-step {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #fff;
+  background: #e8923c;
+}
+.age-timeline-emoji {
+  font-size: 2rem;
+  line-height: 1;
+}
+.age-timeline-label {
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+.age-timeline-sub {
+  font-size: 0.78rem;
+  opacity: 0.72;
+  min-height: 2.2em;
+}
+.age-timeline-cta {
+  margin-top: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #d6792a;
+}
+@media (max-width: 560px) {
+  .age-timeline-card { width: 150px; }
+}
+[data-theme="dark"] .age-timeline-card {
+  border-color: #4a3a2a;
+  background: linear-gradient(155deg, #2a2422, #241f1d);
+}
+[data-theme="dark"] .age-timeline-cta { color: #f0a85a; }
+[data-theme="dark"] .age-timeline-track::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
