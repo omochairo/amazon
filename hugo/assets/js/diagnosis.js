@@ -349,5 +349,79 @@ document.addEventListener("DOMContentLoaded", () => {
         progressText.textContent = "前回の結果";
         showResults();
     }
-    restoreFromSaved();
+
+    // #1365 Layer 3-③ 年齢タイムライン。ホームの横スクロール年齢バンド
+    // (age_timeline.html) から /diagnosis/?age=0-1 等で遷移してきた場合、
+    // ウィザードを飛ばしてその年齢帯の知育スコア上位 (ベスト10) を即表示する
+    // (診断の簡易版)。バンド値は Q1 (data-value) / age_timeline.html と一致。
+    const AGE_BANDS = {
+        "0-1": { label: "0〜1歳", emoji: "👶" },
+        "1-2": { label: "1〜2歳", emoji: "🚶" },
+        "3-4": { label: "3〜4歳", emoji: "🧩" },
+        "5-6": { label: "5〜6歳", emoji: "🎒" }
+    };
+
+    // 指定年齢帯で適合する商品を IVS スコア順に上位 limit 件返す。
+    // scoreItem は年齢帯外を null で弾き、適合品には 10 + IVS*0.3 を返すため
+    // (q2-q5=null で keyword/予算ボーナスはゼロ)、score 降順 = IVS 降順になる。
+    function getAgeBest(items, q1, limit) {
+        return items
+            .map(item => {
+                const score = scoreItem(item, q1, null, null, null, null);
+                return score !== null ? { item, score } : null;
+            })
+            .filter(x => x !== null)
+            .sort((a, b) => {
+                if (b.score !== a.score) return b.score - a.score;
+                return (b.item.ivs_score_100 || 0) - (a.item.ivs_score_100 || 0);
+            })
+            .slice(0, limit)
+            .map(x => x.item);
+    }
+
+    function showAgeBest(q1) {
+        if (!itemsCache) {
+            setTimeout(() => showAgeBest(q1), 100);
+            return;
+        }
+        const band = AGE_BANDS[q1];
+        const items = getAgeBest(itemsCache, q1, 10);
+
+        wizardContainer.style.display = "none";
+        progressBar.parentElement.style.display = "none";
+        prevBtn.style.display = "none";
+        resultContainer.style.display = "block";
+        fallbackBadge.style.display = "none";
+
+        // 結果見出しを「年齢ベスト10」に差し替える。
+        const header = resultContainer.querySelector(".diagnosis-result-header");
+        if (header) {
+            const h = header.querySelector("h2");
+            const p = header.querySelector("p");
+            if (h) h.textContent = `${band.emoji} ${band.label}のベスト10`;
+            if (p) p.textContent = `${band.label}のお子さんに、知育スコアの高い定番おもちゃを集めました。もっと細かく選ぶなら下の「もう一度診断する」から 5 問診断もどうぞ。`;
+        }
+
+        resultGrid.innerHTML = "";
+        if (renderProductCard) {
+            items.forEach(item => resultGrid.appendChild(renderProductCard(item)));
+        }
+    }
+
+    function restoreFromAge() {
+        const params = new URLSearchParams(window.location.search);
+        const age = params.get("age");
+        if (!age || !AGE_BANDS[age]) return false;
+        answers.q1 = age;
+        currentStep = 6;
+        updateStepUI();
+        progressText.textContent = `${AGE_BANDS[age].label}のベスト10`;
+        showAgeBest(age);
+        return true;
+    }
+
+    // ?age=<band> が最優先。無効/未指定なら前回診断 (?restore=1) を試す。
+    if (!restoreFromAge()) {
+        restoreFromSaved();
+    }
 });

@@ -1,0 +1,27 @@
+{{- /* #1365 Layer 3-③ 年齢タイムライン。診断 (/diagnosis/) の簡易版として、
+       横スクロールの年齢バンド (0-1 / 1-2 / 3-4 / 5-6 歳) を提示する。
+       カードをタップすると /diagnosis/?age=<band> へ遷移し、diagnosis.js が
+       ウィザードを飛ばしてその年齢帯の知育スコア上位 (ベスト10) を即表示する。
+       バンド値 (0-1 等) は diagnosis.js の Q1 / AGE_BANDS と一致させること。 */ -}}
+{{- $bands := slice
+  (dict "v" "0-1" "emoji" "👶" "label" "0〜1歳" "sub" "ねんね・おすわり期")
+  (dict "v" "1-2" "emoji" "🚶" "label" "1〜2歳" "sub" "よちよち・あんよ期")
+  (dict "v" "3-4" "emoji" "🧩" "label" "3〜4歳" "sub" "ごっこ遊び・社会性発達期")
+  (dict "v" "5-6" "emoji" "🎒" "label" "5〜6歳" "sub" "創造・就学前準備期") -}}
+<section class="age-timeline" aria-label="年齢から探す">
+  <header class="age-timeline-header">
+    <h2 class="age-timeline-title">📅 年齢から探す</h2>
+    <span class="age-timeline-note">成長段階に合った知育おもちゃのベスト10へ</span>
+  </header>
+  <div class="age-timeline-track" role="list">
+    {{- range $i, $b := $bands }}
+    <a class="age-timeline-card" role="listitem" href="{{ "diagnosis/" | relURL }}?age={{ $b.v }}" aria-label="{{ $b.label }}のベスト10を見る">
+      <span class="age-timeline-step" aria-hidden="true">{{ add $i 1 }}</span>
+      <span class="age-timeline-emoji" aria-hidden="true">{{ $b.emoji }}</span>
+      <span class="age-timeline-label">{{ $b.label }}</span>
+      <span class="age-timeline-sub">{{ $b.sub }}</span>
+      <span class="age-timeline-cta" aria-hidden="true">ベスト10を見る →</span>
+    </a>
+    {{- end }}
+  </div>
+</section>
