@@ -316,15 +316,17 @@
 {% endif %}
 
 {% if source_highlights %}
-<aside class="source-highlights">
-<strong>🔎 外部ソースからわかること</strong>
-<p class="source-highlights__intro">おもちゃロボが収集した第三者サイト（販売ページを除く）の記述です。出典はリンク先をご確認ください。</p>
+<details class="source-highlights">
+<summary class="source-highlights__summary">🔎 外部ソースからわかること<span class="source-highlights__count">{{ source_highlights | length }}件</span></summary>
+<div class="source-highlights__body">
+<p class="source-highlights__intro">おもちゃロボが収集した第三者サイト（販売ページを除く）の記述です。原文ママのため外国語が含まれる場合があります。出典はリンク先をご確認ください。</p>
 <ul class="source-highlights__list">
 {%- for h in source_highlights %}
 <li><blockquote>{{ h.snippet | e }}</blockquote><cite class="source-highlights__cite">出典：<a href="{{ h.url }}" target="_blank" rel="nofollow noopener noreferrer">{{ h.host | e }}</a></cite></li>
 {%- endfor %}
 </ul>
-</aside>
+</div>
+</details>
 {% endif %}
 
 {% if narrative.safety_note %}
