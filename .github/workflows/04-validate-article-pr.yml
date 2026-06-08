@@ -51,6 +51,10 @@ on:
       # Jules プロンプト本体。CA 削除など Jules 出力に影響する変更を含む PR は
       # validate を pull_request 経由で発火させる (記事変更ゼロなら vacuous SUCCESS)
       - 'jules/PROMPT_TEMPLATE.md'
+      # 2026-06-08 (session 113): Jules 規律本体。提出フロー/データ偽装禁止など
+      # Jules 挙動に影響する変更を含む PR も validate を発火させる。paths 未登録だと
+      # inverse trap で validate 不発火→auto-merge 永久 BLOCKED ([[04-validate-paths-inverse-trap]])。
+      - 'AGENTS.md'
       # 2026-05-19 (session 29): fetch 系の workflow / script を触る PR も validate を
       # required check として発火させる ([[04-validate-paths-trap]] 対策)
       - '.github/workflows/01-fetch-products.yml'
