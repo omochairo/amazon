@@ -6123,3 +6123,59 @@ details.development-stage-accordion[open] > summary::before {
 [data-theme="dark"] .age-timeline-track::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.2);
 }
+
+/* #1358 B-5: おもちゃの安全とリコール確認パネル (toy_safety_panel.html) */
+.toy-safety {
+  margin: 32px 0 8px;
+  padding: 20px 22px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  background: var(--entry, #fff);
+}
+.toy-safety > h2 {
+  margin: 0 0 14px;
+  font-size: 1.2rem;
+  color: var(--primary, #222);
+}
+.toy-safety__block { margin: 0 0 16px; }
+.toy-safety__block:last-of-type { margin-bottom: 8px; }
+.toy-safety__h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  color: var(--primary, #333);
+}
+.toy-safety p {
+  margin: 6px 0;
+  font-size: 0.94rem;
+  line-height: 1.7;
+  color: var(--content, #444);
+}
+.toy-safety__src {
+  font-size: 0.82rem;
+  color: var(--secondary, #6b7280);
+  white-space: nowrap;
+}
+.toy-safety__alert {
+  margin-top: 8px;
+  padding: 12px 14px;
+  border-left: 4px solid #f59e0b;
+  border-radius: 6px;
+  background: #fff7ed;
+}
+.toy-safety__alert > p { margin: 0 0 6px; }
+.toy-safety__alert > p > strong { color: #b45309; }
+.toy-safety__alert ul { margin: 6px 0 0; padding-left: 20px; }
+.toy-safety__alert li { font-size: 0.9rem; line-height: 1.6; }
+.toy-safety__note {
+  font-size: 0.8rem !important;
+  color: var(--secondary, #9ca3af) !important;
+}
+[data-theme="dark"] .toy-safety {
+  border-color: #3a3a3a;
+  background: #1f1f1f;
+}
+[data-theme="dark"] .toy-safety__alert {
+  background: #2a1f12;
+  border-left-color: #fb923c;
+}
+[data-theme="dark"] .toy-safety__alert > p > strong { color: #fbbf24; }

@@ -58,6 +58,11 @@
     {{- partial "ranking-history-chart.html" (dict "asin" $asin "title" .Title) -}}
   {{- end }}
 
+  {{- /* #1358 B-5: おもちゃの安全とリコール確認パネル (商品ページのみ) */ -}}
+  {{- if $asin }}
+    {{- partial "toy_safety_panel.html" . -}}
+  {{- end }}
+
   {{- /* #1368 モバイル sticky CTA bar (epic #1365 Layer 2-①) */ -}}
   {{- partial "mobile_sticky_cta.html" . }}
 
