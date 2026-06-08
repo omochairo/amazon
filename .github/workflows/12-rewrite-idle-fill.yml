@@ -58,6 +58,7 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPO: ${{ github.repository }}
           INPUT_LIMIT: ${{ github.event.inputs.limit }}
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
         run: |
           set -e
           gh pr list --repo "$REPO" --state open --json title --jq '.[].title' > /tmp/open_titles.txt || echo "" > /tmp/open_titles.txt
@@ -70,6 +71,15 @@ jobs:
           SLACK=$((MAX_LOCKS - ACTIVE))
           [ "$SLACK" -lt 0 ] && SLACK=0
           if [ -n "$INPUT_LIMIT" ]; then SLACK="$INPUT_LIMIT"; fi
+          # 2026-06-08 (session 117 / #2008): Jules daily quota 共有ゲート。
+          # この workflow は ASIN を amazon.json へ注入し 02-publish→03-invoke-jules が
+          # session を作る "03 に次ぐ producer"。03 と同じ rolling-24h 実 quota を尊重し、
+          # 残り予算 (cap 80 = 100 から 20 margin) で SLACK を絞る。budget 0 なら count=0 で
+          # green skip ([[reference-omochairo-jules-api-limits]] / prevent 側 graceful skip)。
+          BUDGET=$(python scripts/jules_quota_gate.py --cap 80 --max "$SLACK" || echo 0)
+          echo "Jules quota gate budget: $BUDGET (rolling-24h 作成数ベース)"
+          if [ "${BUDGET:-0}" -lt "$SLACK" ]; then SLACK="${BUDGET:-0}"; fi
+          [ "$SLACK" -lt 0 ] && SLACK=0
           echo "active=$ACTIVE max=$MAX_LOCKS slack=$SLACK"
           if [ "$SLACK" -le 0 ]; then
             echo "No idle slots; skipping."
