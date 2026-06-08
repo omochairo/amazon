@@ -64,9 +64,32 @@ jobs:
           echo "targets count=$COUNT"
           cat /tmp/sns-copy/targets.json
 
+      # 2026-06-08 (session 117 / #2008): Jules daily quota 共有ゲート。
+      # この workflow は対象有り時に 1 run=1 session を作る。quota 枯渇 (rolling-24h
+      # 100/100) 時に従来は Create Jules session が HTTP 400 FAILED_PRECONDITION で
+      # hard-fail し、想定内の枠枯渇なのに赤通知 (noisy fail) になっていた。
+      # jules_quota_gate.py で live API の rolling-24h 作成数 (cap 80 = 100 から 20 margin)
+      # を確認し、残り予算 0 なら downstream を skip して green 終了する (prevent 側 graceful
+      # skip)。03-invoke と同じ共有予算を尊重 ([[reference-omochairo-jules-api-limits]])。
+      - name: Jules quota gate
+        id: gate
+        if: steps.prep.outputs.count != '0'
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+        run: |
+          set -e
+          BUDGET=$(python scripts/jules_quota_gate.py --cap 80 --max 1 || echo 0)
+          echo "Jules quota gate budget: $BUDGET (rolling-24h 作成数ベース)"
+          if [ "${BUDGET:-0}" -le 0 ]; then
+            echo "Jules daily quota gate: budget 0; skipping SNS copy session (枠枯渇は想定内、green 終了)."
+            echo "proceed=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "proceed=1" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: List Jules sources
         id: list-sources
-        if: steps.prep.outputs.count != '0'
+        if: steps.prep.outputs.count != '0' && steps.gate.outputs.proceed == '1'
         run: |
           set -e
           RESPONSE=$(curl -s -w "\n%{http_code}" \
@@ -83,7 +106,7 @@ jobs:
           echo "source_name=$SOURCE_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Create Jules session
-        if: steps.prep.outputs.count != '0'
+        if: steps.prep.outputs.count != '0' && steps.gate.outputs.proceed == '1'
         env:
           SOURCE_NAME: ${{ steps.list-sources.outputs.source_name }}
         run: |
