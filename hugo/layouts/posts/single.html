@@ -62,12 +62,18 @@
   {{- partial "mobile_sticky_cta.html" . }}
 
   {{- /* #1367 最近見た商品 carousel — recently_viewed.js が hydrate、空なら hidden */ -}}
-  <section class="recently-viewed-mount recently-viewed-mount--post" hidden aria-label="最近見た商品">
+  <section class="recently-viewed-mount recently-viewed-mount--post related-carousel-section" hidden aria-label="最近見た商品">
     <header class="recently-viewed-header">
       <h2>🕘 最近見た商品</h2>
       <span class="recently-viewed-note">続きから検討できます</span>
+      <div class="carousel-nav-arrows">
+        <button class="carousel-arrow prev" type="button" aria-label="左にスクロール" disabled>‹</button>
+        <button class="carousel-arrow next" type="button" aria-label="右にスクロール">›</button>
+      </div>
     </header>
-    <div class="recently-viewed-grid"></div>
+    <div class="carousel-wrapper">
+      <div class="recently-viewed-grid"></div>
+    </div>
   </section>
 
   <footer class="post-footer">

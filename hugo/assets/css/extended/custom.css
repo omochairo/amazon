@@ -5534,19 +5534,22 @@ details.development-stage-accordion[open] > summary::before {
   color: var(--secondary);
 }
 
+/* grid は flex track。横スクロール/scroll-snap は親 .carousel-wrapper が担当
+   (#1367 carousel_swipe.js 共通制御のため). */
 .recently-viewed-grid {
   display: flex;
   gap: 0.85rem;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 0.5rem;
-  scrollbar-width: thin;
+}
+
+.recently-viewed-item {
+  position: relative;
+  flex: 0 0 180px;
+  scroll-snap-align: start;
 }
 
 .recently-viewed-card {
-  flex: 0 0 180px;
-  scroll-snap-align: start;
+  display: block;
+  width: 100%;
   background: #fff;
   border-radius: var(--radius-md);
   box-shadow: var(--card-shadow);
@@ -5603,8 +5606,43 @@ details.development-stage-accordion[open] > summary::before {
 .recently-viewed-score { color: var(--brand-primary); font-weight: 700; }
 .recently-viewed-price { color: var(--secondary); font-weight: 600; }
 
+/* 個別削除 (×) — カード右上に重ねる。hover/focus で表示、touch 端末は常時表示。 */
+.recently-viewed-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+.recently-viewed-item:hover .recently-viewed-remove,
+.recently-viewed-remove:focus-visible { opacity: 1; }
+.recently-viewed-remove:hover { background: rgba(0, 0, 0, 0.8); }
+@media (hover: none) {
+  .recently-viewed-remove { opacity: 1; }
+}
+
+/* 最近見た商品ヘッダ内の矢印は常に右端へ (h2 + note と同居するため) */
+.recently-viewed-mount .carousel-nav-arrows {
+  margin-left: auto;
+  align-self: center;
+}
+
 @media (max-width: 600px) {
-  .recently-viewed-card { flex-basis: 150px; }
+  .recently-viewed-item { flex-basis: 150px; }
 }
 
 /* ==========================================

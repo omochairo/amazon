@@ -215,12 +215,18 @@
 
 {{- /* === Section: 最近見た商品 (#1367) — recently_viewed.js が localStorage から hydrate、
        空なら hidden 属性で非表示。home / single 双方で同じ .recently-viewed-mount を使う。 */ -}}
-<section class="home-section recently-viewed-mount" hidden aria-label="最近見た商品">
+<section class="home-section recently-viewed-mount related-carousel-section" hidden aria-label="最近見た商品">
   <header class="home-section-header">
     <h2>🕘 最近見た商品</h2>
     <span class="home-section-note">続きから検討できます</span>
+    <div class="carousel-nav-arrows">
+      <button class="carousel-arrow prev" type="button" aria-label="左にスクロール" disabled>‹</button>
+      <button class="carousel-arrow next" type="button" aria-label="右にスクロール">›</button>
+    </div>
   </header>
-  <div class="recently-viewed-grid"></div>
+  <div class="carousel-wrapper">
+    <div class="recently-viewed-grid"></div>
+  </div>
 </section>
 
 {{- /* === Footer credit === */ -}}

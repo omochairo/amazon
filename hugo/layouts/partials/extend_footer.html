@@ -10,6 +10,14 @@
 <script defer src="{{ $recent.RelPermalink }}" integrity="{{ $recent.Data.Integrity }}" crossorigin="anonymous"></script>
 {{- end }}
 
+{{- /* #1367 carousel 矢印/スワイプ/autoplay — 全ページで読み込み。.related-carousel-section
+       (商品ページの関連/成長先取り + home/post の最近見た商品) を共通制御。recently_viewed.js
+       の後に置き、render で注入されたカードを carousel init が拾えるようにする。 */ -}}
+{{- $carousel := resources.Get "js/carousel_swipe.js" | resources.Minify | resources.Fingerprint "sha256" }}
+{{- if $carousel }}
+<script defer src="{{ $carousel.RelPermalink }}" integrity="{{ $carousel.Data.Integrity }}" crossorigin="anonymous"></script>
+{{- end }}
+
 {{- /* #1371 PWA Service Worker — 全ページで登録。お気に入り/最近見た商品/診断結果を
        オフライン閲覧可能にする。recently_viewed.js の後に置き OmochaRecent を参照して
        最近見た商品の遷移先を precache させる。 */ -}}
@@ -44,11 +52,6 @@
   {{- if $reveal }}
 <script defer src="{{ $reveal.RelPermalink }}" integrity="{{ $reveal.Data.Integrity }}" crossorigin="anonymous"></script>
   {{- end }}
-  {{- $carousel := resources.Get "js/carousel_swipe.js" | resources.Minify | resources.Fingerprint "sha256" }}
-  {{- if $carousel }}
-<script defer src="{{ $carousel.RelPermalink }}" integrity="{{ $carousel.Data.Integrity }}" crossorigin="anonymous"></script>
-  {{- end }}
-
   {{- /* epic #1365 Layer 4: 商品画像 lightbox + ピンチズーム (商品ページ限定) */ -}}
   {{- $lightbox := resources.Get "js/lightbox.js" | resources.Minify | resources.Fingerprint "sha256" }}
   {{- if $lightbox }}
