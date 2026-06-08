@@ -67,6 +67,7 @@ jobs:
           AMAZON_CREATORS_CREDENTIAL_ID: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_ID }}
           AMAZON_CREATORS_CREDENTIAL_SECRET: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_SECRET }}
           AMAZON_PARTNER_TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
         run: |
           set -e
           # #810 Phase 2: --search-in で楽天 Search プール (rakuten.json) の JAN も mine する。
@@ -74,6 +75,19 @@ jobs:
             echo "DRY RUN: resolving up to $LIMIT JAN(s), no files written."
             python scripts/resolve_ranking_asins.py --limit "$LIMIT" --search-in data/raw/rakuten.json --dry-run
           else
+            # 2026-06-08 (session 117 / #2008): Jules daily quota 共有ゲート。
+            # 解決した新規 ASIN は per_asin に backfill され 02-publish→03-invoke-jules が
+            # session を作る。03 と同じ rolling-24h 実 quota (cap 80 = 100 から 20 margin)
+            # を尊重し、LIMIT = min(LIMIT, budget) に絞る。budget 0 なら 0 件解決で green
+            # ([[reference-omochairo-jules-api-limits]] / prevent 側 graceful skip)。
+            BUDGET=$(python scripts/jules_quota_gate.py --cap 80 --max "$LIMIT" || echo 0)
+            echo "Jules quota gate budget: $BUDGET (rolling-24h 作成数ベース)"
+            if [ "${BUDGET:-0}" -lt "$LIMIT" ]; then LIMIT="${BUDGET:-0}"; fi
+            if [ "${LIMIT:-0}" -le 0 ]; then
+              echo "Jules quota gate: budget 0; skipping ranking sniper resolve (枠枯渇は想定内、green 終了)."
+              : > data/raw/ranking_sniper_asins.csv
+              exit 0
+            fi
             python scripts/resolve_ranking_asins.py --limit "$LIMIT" --search-in data/raw/rakuten.json
           fi
 
