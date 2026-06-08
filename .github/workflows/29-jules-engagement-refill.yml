@@ -69,7 +69,30 @@ jobs:
           ref: main
           fetch-depth: 1
 
+      # 2026-06-08 (session 117 / #2008): Jules daily quota 共有ゲート。
+      # この daily cron は 1 run=1 session を作る。quota 枯渇 (rolling-24h 100/100) 時に
+      # 従来は Create Jules session が HTTP 400 FAILED_PRECONDITION で hard-fail し、
+      # 想定内の枠枯渇なのに workflow が赤通知 (noisy fail) になっていた。
+      # jules_quota_gate.py で live API の rolling-24h 作成数 (cap 80 = 100 から 20 margin)
+      # を確認し、残り予算 0 なら downstream を skip して green 終了する (prevent 側 graceful
+      # skip)。03-invoke-jules と同じ共有予算を尊重 ([[reference-omochairo-jules-api-limits]])。
+      - name: Jules quota gate
+        id: gate
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+        run: |
+          set -e
+          BUDGET=$(python scripts/jules_quota_gate.py --cap 80 --max 1 || echo 0)
+          echo "Jules quota gate budget: $BUDGET (rolling-24h 作成数ベース)"
+          if [ "${BUDGET:-0}" -le 0 ]; then
+            echo "Jules daily quota gate: budget 0; skipping engagement refill session (枠枯渇は想定内、green 終了)."
+            echo "proceed=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "proceed=1" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: List Jules sources
+        if: steps.gate.outputs.proceed == '1'
         id: list-sources
         run: |
           set -e
@@ -88,6 +111,7 @@ jobs:
           echo "Source: $SOURCE_NAME"
 
       - name: Create Jules session
+        if: steps.gate.outputs.proceed == '1'
         env:
           CHANNEL: ${{ steps.pick.outputs.channel }}
           PERSONA: ${{ steps.pick.outputs.persona }}
@@ -157,6 +181,7 @@ jobs:
           echo "Session created: $SESSION_ID (channel=$CHANNEL persona=$PERSONA)"
 
       - name: Note on completion
+        if: steps.gate.outputs.proceed == '1'
         run: |
           echo "::notice::Jules session dispatched (AUTO_CREATE_PR). 完了後 31-engagement-auto-merge.yml が PR を auto-merge する。"
           echo "::notice::配信は翌日以降の 09:30 / 15:00 / 19:30 JST daily スロット (30-sns-engagement.yml #1539) から消化される。"
