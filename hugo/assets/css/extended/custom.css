@@ -5048,6 +5048,47 @@ details.development-stage-accordion[open] > summary::before {
   font-weight: 600;
 }
 
+/* 値下げバッジ (#1365 Layer 1-④) — 登録時より 5% 以上下落した favorite に表示 */
+.price-drop-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: #fdecec;
+  color: #c0392b;
+  font-weight: 700;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+[data-theme="dark"] .price-drop-badge { background: #3a1f22; color: #ff8a80; }
+.favorites-card.has-price-drop { box-shadow: 0 0 0 2px rgba(192, 57, 43, 0.35); }
+[data-theme="dark"] .favorites-card.has-price-drop { box-shadow: 0 0 0 2px rgba(255, 138, 128, 0.4); }
+
+/* 商品ページ: お気に入り登録時より値下げした際のタイトル直下バナー */
+.price-drop-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.6rem 0 0.2rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #fff5f4, #fdecec);
+  border: 1px solid rgba(192, 57, 43, 0.25);
+  color: #a93226;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.price-drop-banner-icon { font-size: 1.1rem; }
+.price-drop-banner strong { color: #c0392b; font-weight: 800; }
+[data-theme="dark"] .price-drop-banner {
+  background: linear-gradient(135deg, #2a1416, #3a1f22);
+  border-color: rgba(255, 138, 128, 0.3);
+  color: #ffb3ab;
+}
+[data-theme="dark"] .price-drop-banner strong { color: #ff8a80; }
+
 .favorites-card-remove {
   position: absolute;
   top: 8px;
