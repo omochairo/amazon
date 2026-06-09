@@ -44,8 +44,19 @@ jobs:
   report:
     runs-on: ubuntu-latest
     steps:
+      # #1329: 週次 GSC スナップショット (by_combo 込み) を main に commit するため
+      # App token を生成する。GITHUB_TOKEN 直 push は main 保護で GH006 silent reject
+      # になる ([[feedback-omochairo-silent-push-reject]])。push は App token 経由。
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - uses: actions/checkout@v6
         with:
+          token: ${{ steps.app-token.outputs.token }}
           ref: main
           fetch-depth: 1
 
@@ -201,6 +212,66 @@ jobs:
           COUNT=$(python -c "import json; print(len(json.load(open('data/analytics/query_intent.json'))['detected']))")
           echo "count=$COUNT" >> "$GITHUB_OUTPUT"
           echo "classified $COUNT pages by query intent"
+
+      # #1329: gsc_weekly.json は by_combo (query×page) を含む。日次 JSONL history
+      # (data/analytics/history/, #1357 B-0) は by_query/by_page 分離で combo を落とす
+      # ため、14-brand-narrative への GSC クエリ注入 (page_path match) には使えない。
+      # 週次窓 (7日) の gsc_weekly.json を data/analytics/gsc_history/<YYYY-Www>.json に
+      # スナップショット保存し、App token + PR + auto-merge で main に積む
+      # ([[feedback-omochairo-analytics-history-no-bycombo]])。
+      - name: Snapshot GSC weekly (by_combo) for #1329
+        if: steps.gsc.outputs.available == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+          python - <<'PY'
+          import json, pathlib, datetime
+          d = json.load(open("data/analytics/gsc_weekly.json", encoding="utf-8"))
+          end = (d.get("range") or {}).get("end")
+          iso = datetime.date.fromisoformat(end).isocalendar()
+          name = f"{iso[0]}-W{iso[1]:02d}"
+          out = pathlib.Path("data/analytics/gsc_history") / f"{name}.json"
+          out.parent.mkdir(parents=True, exist_ok=True)
+          out.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
+          print("snapshot:", out)
+          PY
+
+          git add data/analytics/gsc_history/ || true
+          if git diff --cached --quiet; then
+            echo "No snapshot changes to commit (same week already accumulated?); skipping PR."
+            exit 0
+          fi
+
+          # 既存 open gsc-snapshot PR があれば閉じる (週次重複防止)
+          gh pr list --base main --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("gsc-snapshot/")) | .number' | while read -r pr_num; do
+            if [ -n "$pr_num" ]; then
+              echo "Closing old PR #$pr_num and deleting branch..."
+              gh pr close "$pr_num" -d || true
+            fi
+          done
+
+          BRANCH="gsc-snapshot/${{ github.run_id }}"
+          git config user.name "omochairo-fetch-bot[bot]"
+          git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit -m "data(analytics): GSC weekly snapshot (by_combo) for #1329"
+          git push -u origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "data(analytics): GSC weekly snapshot (by_combo) for #1329" \
+            --body "Automated weekly snapshot of data/analytics/gsc_weekly.json (includes by_combo = query×page) under data/analytics/gsc_history/<YYYY-Www>.json. The daily JSONL history (data/analytics/history/, #1357 B-0) splits by_query/by_page and drops the combo, which #1329 (GSC queries → 14-brand-narrative prompt, page_path match) needs. Refs #1329." \
+            --base main \
+            --head "$BRANCH")
+          echo "Created: $PR_URL"
+
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge enabled on $PR_URL"
+          else
+            echo "::warning::Could not enable auto-merge on $PR_URL"
+          fi
+        continue-on-error: true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
