@@ -36,7 +36,7 @@ brands:
     region: JP
     safety_default: [ST]
   - canonical: レゴ
-    aliases: [レゴ(LEGO), LEGO, レゴジャパン]
+    aliases: [レゴ(LEGO), LEGO, レゴジャパン, レゴ エデュケーション, レゴエデュケーション, LEGO Education, LEGO エデュケーション]
     tier: S
     region: DK
   - canonical: マテル
@@ -397,12 +397,14 @@ brands:
     region: JP
     safety_default: [ST]
   - canonical: ヨシリツ
-    aliases: [ヨシリツ, LaQ, ラキュー]
+    aliases: [ヨシリツ, LaQ, ラキュー, Yoshiritsu, YOSHIRITSU]
     tier: B
     region: JP
     safety_default: [ST]
   - canonical: ラベンスバーガージャパン
-    aliases: [ラベンスバーガージャパン, Ravensburger]
+    # 2026-06-09 (session 136 / #2126): raw "ラベンスバーガー" (ジャパン無し) と
+    # 製品ライン名 GraviTrax が全て unknown 化 → ノーブランド扱いだった (19商品)。
+    aliases: [ラベンスバーガージャパン, Ravensburger, ラベンスバーガー, GraviTrax, グラヴィトラックス, グラビトラックス]
     tier: B
     region: JP
   - canonical: ラングスジャパン
@@ -1146,6 +1148,112 @@ brands:
     aliases: [ワンダーランド]
     tier: C
     region: JP
+    safety_default: [ST]
+
+  # ==========================================
+  # session 136 (#2126): 「ノーブランド」に埋没していた有名メーカーの救済
+  # カタログ product.brand 全走査で unknown 判定だった 305商品から、確立した
+  # メーカーを同定し canonical 化。tier は scoring 影響を避け保守的に付与。
+  # ==========================================
+  - canonical: PicassoTiles
+    aliases: [PicassoTiles, "Picasso Tiles", PICASSOTILES, ピカソタイルズ]
+    tier: B
+    region: US
+  - canonical: Tegu
+    aliases: [Tegu, TEGU, テグ]
+    tier: B
+    region: US
+  - canonical: Snap Circuits
+    aliases: [Snap Circuits, SnapCircuits, スナップサーキット]
+    tier: B
+    region: US
+  - canonical: Connetix
+    aliases: [Connetix, CONNETIX, コネティックス]
+    tier: B
+    region: AU
+  - canonical: Geomag
+    aliases: [Geomag, GEOMAG, ゲオマグ, "ゲオマグ(Geomag)", ジオマグ]
+    tier: B
+    region: CH
+  - canonical: 河合楽器製作所
+    aliases: [河合楽器製作所, KAWAI, "KAWAI (河合楽器製作所)", "KAWAI(河合楽器製作所)", カワイ]
+    tier: A
+    region: JP
+    safety_default: [ST]
+  - canonical: サッシー
+    aliases: [サッシー, SASSY, Sassy]
+    tier: B
+    region: US
+  - canonical: キットウェル
+    # マグビルド (MagBuild) は キットウェル のブランド。Mag-Building 等の別ブランドとは区別。
+    aliases: [キットウェル, KitWell, "KitWell (キットウェル)", マグビルド, MagBuild]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: タミヤ
+    aliases: [タミヤ, TAMIYA, Tamiya]
+    tier: A
+    region: JP
+    safety_default: [ST]
+  - canonical: コンビ
+    aliases: [コンビ, Combi, combi]
+    tier: A
+    region: JP
+    safety_default: [ST]
+  - canonical: Janod
+    aliases: [Janod, JANOD, ジャノー]
+    tier: A
+    region: FR
+  - canonical: VILAC
+    aliases: [VILAC, Vilac, ヴィラック]
+    tier: B
+    region: FR
+  - canonical: Wooden Story
+    aliases: [Wooden Story, WoodenStory, ウドゥンストーリー, ウドゥン・ストーリー]
+    tier: B
+    region: PL
+  - canonical: Tinkertoy
+    aliases: [Tinkertoy, TINKERTOY, ティンカートイ]
+    tier: B
+    region: US
+  - canonical: Orchard Toys
+    aliases: [Orchard Toys, OrchardToys, オーチャードトイズ]
+    tier: B
+    region: GB
+  - canonical: アーリーラーニングセンター
+    aliases: [アーリーラーニングセンター, Early Learning Centre, ELC]
+    tier: B
+    region: GB
+  - canonical: ベビーアインシュタイン
+    aliases: [ベビーアインシュタイン, Baby Einstein, "Baby Einstein (ベビーアインシュタイン)"]
+    tier: B
+    region: US
+  - canonical: LEXiBOOK
+    aliases: [LEXiBOOK, Lexibook, レクシブック]
+    tier: B
+    region: FR
+  - canonical: オインクゲームズ
+    aliases: [オインクゲームズ, Oink Games, OinkGames]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: ホビージャパン
+    aliases: [ホビージャパン, Hobby Japan, HobbyJapan]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: ポーラービー
+    aliases: [ポーラービー, PolarB, "Polar B"]
+    tier: B
+    region: TH
+  - canonical: ハイメス
+    aliases: [ハイメス, HEIMESS, Heimess]
+    tier: B
+    region: DE
+  - canonical: ロディ
+    aliases: [ロディ, RODY, "RODY・ロディ", Rody]
+    tier: B
+    region: IT
     safety_default: [ST]
 
   # ==========================================
