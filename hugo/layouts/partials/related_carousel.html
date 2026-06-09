@@ -117,6 +117,13 @@
 </aside>
 {{- end }}
 
+{{- /* --- 年齢を起点にしたレコメンドであることを明示するリード文 (エンゲージメント改善) --- */ -}}
+{{- $ageText := "" -}}
+{{- if gt $selfAge 0 -}}
+  {{- if ge $selfAge 12 -}}{{- $ageText = printf "%d歳" (int (div $selfAge 12)) -}}
+  {{- else -}}{{- $ageText = printf "%dヶ月" $selfAge -}}{{- end -}}
+{{- end -}}
+
 {{- if gt (len $top) 0 }}
 <section class="related-carousel-section">
   <header class="home-section-header">
@@ -126,6 +133,11 @@
       <button class="carousel-arrow next" aria-label="右にスクロール">›</button>
     </div>
   </header>
+  {{- if ne $ageText "" }}
+  <p class="related-carousel-lead">👶 <strong>この商品と同じ {{ $ageText }}〜向けのおもちゃはこちら。</strong>対象年齢が近い商品を中心に、ブランド・価格帯・遊びのタイプが似た比較レビューを自動でピックアップしました。</p>
+  {{- else }}
+  <p class="related-carousel-lead">🔍 この商品とブランド・価格帯・遊びのタイプが近い比較レビューを自動でピックアップしました。</p>
+  {{- end }}
   <div class="carousel-wrapper">
     <div class="carousel-track">
       {{- range $top }}
