@@ -1,66 +1,96 @@
 {{- /*
-  category_dropdown.html (Issue #2164 #6)
+  category_dropdown.html (Issue #2164 #6 / session 144 usability fix)
   hugo/data/category_taxonomy.yaml の親グループ定義を読み、各子タグの件数 (.Count)
   と term ページ URL (.Page.RelPermalink) を site.Taxonomies.tags から解決する。
   - 公開記事 0 件のタグは `with` で skip、子が全滅したグループは描画しない。
   - URL は urlize ではなく .Page.RelPermalink を使う (taxonomy URL trap 回避)。
-  - ネイティブ <details> で JS 非依存。bfcache 復元時の開きっぱなし対策のみ JS。
+  - 親グループは button (tablist 風)。子タグパネルは absolute overlay ではなく
+    バー全体の「下」に full-width inline 展開する → 横スクロールコンテナの
+    overflow clip でドロップダウンが隠れる問題を回避 (旧実装の「押しても何も
+    起きない」原因)。JS で 1 グループずつ開閉 (アコーディオン)。
 */ -}}
 {{- with site.Data.category_taxonomy }}
 {{- $groups := slice }}
 {{- range .groups }}
   {{- $g := . }}
   {{- $children := slice }}
+  {{- $total := 0 }}
   {{- range $tag := .tags }}
     {{- /* Hugo は Latin の taxonomy キーを小文字化する (例: "LaQ" → "laq")。
            日本語はケース無しで素通し。exact → lower の順で引いて取りこぼし防止。 */}}
     {{- with (or (index site.Taxonomies.tags $tag) (index site.Taxonomies.tags (lower $tag))) }}
       {{- $children = $children | append (dict "name" $tag "count" .Count "url" .Page.RelPermalink) }}
+      {{- $total = add $total .Count }}
     {{- end }}
   {{- end }}
   {{- if gt (len $children) 0 }}
-    {{- $groups = $groups | append (dict "emoji" $g.emoji "name" $g.name "slug" $g.slug "children" $children) }}
+    {{- $groups = $groups | append (dict "emoji" $g.emoji "name" $g.name "slug" $g.slug "total" $total "children" $children) }}
   {{- end }}
 {{- end }}
 {{- if gt (len $groups) 0 }}
-<nav class="cat-nav" aria-label="おもちゃカテゴリから探す">
+<nav class="cat-nav" aria-label="おもちゃの種類から探す">
+    <p class="cat-nav-title"><span aria-hidden="true">🧸</span> おもちゃの種類から探す</p>
     <ul class="cat-nav-list">
         {{- range $groups }}
         <li class="cat-group">
-            <details class="cat-details" data-cat-slug="{{ .slug }}">
-                <summary class="cat-summary">{{ .emoji }}&nbsp;{{ .name }}</summary>
-                <ul class="cat-sublist">
-                    {{- range .children }}
-                    <li>
-                        <a class="cat-link" href="{{ .url }}">
-                            <span class="cat-link-name">{{ .name }}</span>
-                            <span class="cat-count" aria-label="{{ .count }}件の記事">{{ .count }}</span>
-                        </a>
-                    </li>
-                    {{- end }}
-                </ul>
-            </details>
+            <button type="button" class="cat-summary" aria-expanded="false"
+                aria-controls="cat-panel-{{ .slug }}" data-cat-target="cat-panel-{{ .slug }}">
+                <span class="cat-summary-emoji" aria-hidden="true">{{ .emoji }}</span>
+                <span class="cat-summary-name">{{ .name }}</span>
+                <span class="cat-summary-count">{{ .total }}</span>
+            </button>
         </li>
         {{- end }}
     </ul>
+    {{- range $groups }}
+    <div class="cat-panel" id="cat-panel-{{ .slug }}" role="region" aria-label="{{ .name }}のタグ一覧" hidden>
+        <ul class="cat-sublist">
+            {{- range .children }}
+            <li>
+                <a class="cat-link" href="{{ .url }}">
+                    <span class="cat-link-name">{{ .name }}</span>
+                    <span class="cat-count" aria-label="{{ .count }}件の記事">{{ .count }}</span>
+                </a>
+            </li>
+            {{- end }}
+        </ul>
+    </div>
+    {{- end }}
 </nav>
 <script>
-// bfcache (戻る/進む) 復元時に開いたままの <details> を閉じてレイアウト崩れを防ぐ。
-window.addEventListener("pageshow", function (e) {
-    if (e.persisted) {
-        document.querySelectorAll(".cat-details[open]").forEach(function (d) { d.open = false; });
+(function () {
+    var nav = document.querySelector(".cat-nav");
+    if (!nav) { return; }
+    var btns = Array.prototype.slice.call(nav.querySelectorAll(".cat-summary"));
+    function close(btn) {
+        btn.setAttribute("aria-expanded", "false");
+        var p = document.getElementById(btn.getAttribute("data-cat-target"));
+        if (p) { p.hidden = true; }
     }
-});
-// 同じカテゴリバー内で 1 つ開いたら他を閉じる (アコーディオン挙動)。
-document.querySelectorAll(".cat-nav .cat-details").forEach(function (d) {
-    d.addEventListener("toggle", function () {
-        if (d.open) {
-            document.querySelectorAll(".cat-nav .cat-details[open]").forEach(function (o) {
-                if (o !== d) { o.open = false; }
-            });
-        }
+    function closeAll(except) {
+        btns.forEach(function (b) { if (b !== except) { close(b); } });
+    }
+    btns.forEach(function (b) {
+        b.addEventListener("click", function () {
+            var open = b.getAttribute("aria-expanded") === "true";
+            closeAll(b);
+            if (open) {
+                close(b);
+            } else {
+                b.setAttribute("aria-expanded", "true");
+                var p = document.getElementById(b.getAttribute("data-cat-target"));
+                if (p) { p.hidden = false; }
+            }
+        });
     });
-});
+    // バー外クリック / bfcache 復元時は閉じる。
+    document.addEventListener("click", function (e) {
+        if (!nav.contains(e.target)) { closeAll(null); }
+    });
+    window.addEventListener("pageshow", function (e) {
+        if (e.persisted) { closeAll(null); }
+    });
+})();
 </script>
 {{- end }}
 {{- end }}
