@@ -337,7 +337,7 @@ jobs:
                   }
                 },
                 automationMode: "AUTO_CREATE_PR",
-                title: "記事生成: 商品深掘りガイド"
+                title: "[wf03] 記事生成: 商品深掘りガイド"
               }')
 
             RESPONSE=$(curl -s -w "\n%{http_code}" \

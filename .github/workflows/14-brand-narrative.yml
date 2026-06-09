@@ -202,7 +202,7 @@ jobs:
           REQUEST_BODY=$(jq -n \
             --arg prompt "$PROMPT" \
             --arg source "$SOURCE_NAME" \
-            --arg title "narrative: ${BRAND} (#731)" \
+            --arg title "[wf14] narrative: ${BRAND} (#731)" \
             '{
               prompt: $prompt,
               sourceContext: {
