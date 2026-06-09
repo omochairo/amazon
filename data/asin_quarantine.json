@@ -1,0 +1,5 @@
+{
+  "_doc": "リセラー高値の疑いがある Amazon ASIN の人間レビュー用 worklist。check_no_reseller_pricing が『同一新品商品なのに Amazon が cross-source 比 1.30x 超』と判定したとき、記事生成エージェント (Jules) が記事化をスキップしてここへ candidate を追記する。これは恒久ブロックではない (値の偽装を避けつつ Jules の concurrent 枠を即解放するための非ブロッキング退避)。人間がレビューし、真にリセラー転売と確認できたものだけを data/asin_blocklist.json の blocked へ昇格させる (昇格後は fetch_amazon が恒久 skip)。中古品・別商品・別SKUの誤マッチはここに入れず、当該プラットフォームを is_search:true 化して記事は通常どおり生成する (AGENTS.md §9 の決定木を参照)。",
+  "_fields": "asin / amazon_price / cross_src (rakuten|yahoo) / cross_price / ratio / reason / date (YYYY-MM-DD) / 任意 canonical_asin",
+  "candidates": []
+}
