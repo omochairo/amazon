@@ -10,8 +10,26 @@
 {{- $brand := .Params.brand | default "" -}}
 {{- $ageMonths := int (.Params.age_min_months | default 0) -}}
 {{- $srcs := $d.sources -}}
-<section class="toy-safety" aria-labelledby="toy-safety-h">
-  <h2 id="toy-safety-h">🛡 安全性とリコールの確認</h2>
+{{- /* session 145: パネルは必須ではないので <details> アコーディオンで既定 closed。
+       ただし検証済 brand_recalls にヒットした商品 (実リコール注意) はここで先に
+       判定し、その場合のみ open にして警告を埋もれさせない (E-E-A-T 安全優先)。
+       ASIN は slug 末尾 10 桁から抽出 (single.html と同方式)。 */ -}}
+{{- $asin := "" -}}
+{{- $base := .File.BaseFileName | default "" -}}
+{{- $am := findRE "[A-Z0-9]{10}$" (upper $base) 1 -}}
+{{- if $am }}{{ $asin = index $am 0 }}{{ end -}}
+{{- $recalls := false -}}
+{{- if and (ne $brand "") $d.brand_recalls }}{{ $recalls = index $d.brand_recalls $brand }}{{ end -}}
+{{- $applicable := slice -}}
+{{- range $recalls -}}
+  {{- if .asins -}}
+    {{- if and (ne $asin "") (in .asins $asin) }}{{ $applicable = $applicable | append . }}{{ end -}}
+  {{- else -}}
+    {{- $applicable = $applicable | append . -}}
+  {{- end -}}
+{{- end -}}
+<details class="toy-safety" aria-labelledby="toy-safety-h"{{ if gt (len $applicable) 0 }} open{{ end }}>
+  <summary class="toy-safety__summary"><h2 id="toy-safety-h">🛡 安全性とリコールの確認</h2></summary>
 
   {{- with $d.choking }}
   <div class="toy-safety__block">
@@ -43,21 +61,7 @@
     {{- /* #2134: brand_recalls の各事例は任意の `asins` を持てる。asins 指定時は
            その ASIN の商品ページにのみ表示し、無関係な同ブランド商品 (例: タカラ
            トミーのベイブレード等) への誤表示を防ぐ。asins 省略時は従来どおりブランド
-           全体に表示 (後方互換)。ASIN は slug 末尾から抽出 (single.html と同方式)。 */ -}}
-    {{- $asin := "" -}}
-    {{- $base := .File.BaseFileName | default "" -}}
-    {{- $am := findRE "[A-Z0-9]{10}$" (upper $base) 1 -}}
-    {{- if $am }}{{ $asin = index $am 0 }}{{ end -}}
-    {{- $recalls := false -}}
-    {{- if and (ne $brand "") $d.brand_recalls }}{{ $recalls = index $d.brand_recalls $brand }}{{ end -}}
-    {{- $applicable := slice -}}
-    {{- range $recalls -}}
-      {{- if .asins -}}
-        {{- if and (ne $asin "") (in .asins $asin) }}{{ $applicable = $applicable | append . }}{{ end -}}
-      {{- else -}}
-        {{- $applicable = $applicable | append . -}}
-      {{- end -}}
-    {{- end -}}
+           全体に表示 (後方互換)。$asin / $applicable はパネル冒頭で算出済み。 */ -}}
     {{- if gt (len $applicable) 0 }}
     <div class="toy-safety__alert" role="note">
       <p><strong>⚠ {{ $brand }} で過去に公表されたリコール情報があります。</strong>下記は当ブランドの事例で、必ずしもこの商品が対象とは限りません（対応済みの個体もあります）。詳細は出典をご確認ください。</p>
@@ -73,5 +77,5 @@
   </div>
 
   <p class="toy-safety__note">公的機関の一次情報をもとに編集部が整理しています（{{ $d.updated }} 時点）。</p>
-</section>
+</details>
 {{- end -}}
