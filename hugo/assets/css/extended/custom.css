@@ -6238,3 +6238,95 @@ details.development-stage-accordion[open] > summary::before {
   border-left-color: #fb923c;
 }
 [data-theme="dark"] .toy-safety__alert > p > strong { color: #fbbf24; }
+
+/* ---------- カテゴリ探索バー (Issue #2164 #6) ---------- */
+/* 主メニュー下の「おもちゃタイプ別」ナビ。親グループ chip を開くと子タグ
+   (既存 /tags/ term ページ) へのリンクが件数バッジ付きで dropdown 表示される。
+   モバイルは横スクロール、子パネルは absolute overlay でレイアウトを押し下げない。*/
+.cat-nav {
+  max-width: var(--main-width, 720px);
+  margin: 6px auto 0;
+  padding: 0 var(--gap, 24px);
+}
+.cat-nav-list {
+  list-style: none;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin: 0;
+  padding: 4px 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.cat-nav-list::-webkit-scrollbar { height: 4px; }
+.cat-nav-list::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 4px; }
+.cat-group { position: relative; flex: 0 0 auto; }
+.cat-details > summary.cat-summary {
+  list-style: none;
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--brand-gradient-subtle);
+  border: 1px solid rgba(255,107,53,0.25);
+  color: var(--primary, #2e2e33);
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+.cat-details > summary.cat-summary::-webkit-details-marker { display: none; }
+.cat-details > summary.cat-summary:hover { border-color: var(--brand-primary); }
+.cat-details[open] > summary.cat-summary {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+  color: #fff;
+}
+.cat-sublist {
+  list-style: none;
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 180px;
+  max-height: 60vh;
+  overflow-y: auto;
+  margin: 0;
+  padding: 6px;
+  background: var(--theme, #fff);
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: var(--radius-md);
+  box-shadow: var(--card-shadow-hover);
+}
+.cat-sublist li { margin: 0; }
+.cat-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.86rem;
+  text-decoration: none;
+  color: var(--primary, #2e2e33);
+}
+.cat-link:hover { background: var(--brand-gradient-subtle); }
+.cat-count {
+  flex: 0 0 auto;
+  min-width: 22px;
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(255,107,53,0.14);
+  color: var(--brand-primary);
+}
+[data-theme="dark"] .cat-details > summary.cat-summary { color: var(--primary, #dadadb); }
+[data-theme="dark"] .cat-sublist { background: #1f1f1f; border-color: #3a3a3a; }
+[data-theme="dark"] .cat-link { color: var(--primary, #dadadb); }
+[data-theme="dark"] .cat-nav-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); }
+@media (max-width: 768px) {
+  .cat-nav { padding: 0 12px; }
+  .cat-details > summary.cat-summary { font-size: 0.78rem; padding: 5px 10px; }
+}

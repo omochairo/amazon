@@ -1,0 +1,56 @@
+# カテゴリ階層定義 (Issue #2164 #6 カテゴリドロップダウン)
+#
+# 自社記事は `categories` taxonomy を populate せず `tags` (フラット) のみ持つため、
+# product-type 系の既存タグを親グループに手動マッピングして階層を「定義」する。
+# ブランド名 (例: レゴ/タカラトミー) は /brands/ で網羅済のため除外、
+# 超汎用語 (知育玩具/プレゼント) や transactional 語 (価格比較/出産祝い) も除外。
+#
+# このファイルは grouping の定義だけを持つ。各タグの「件数」と「URL」は
+# partials/category_dropdown.html が Hugo の site.Taxonomies.tags から解決する
+# (`.Count` = 公開記事数 / `.Page.RelPermalink` = term ページ URL)。
+# → ビルド時集計スクリプト不要。0 件 (公開記事なし) のタグ・グループは自動で隠れる。
+#
+# 子タグ名は記事 frontmatter の tags 文字列と完全一致させること (表記揺れ厳禁)。
+# site.Taxonomies.tags に存在しないタグは template 側で graceful skip される。
+# 新しい商品タイプのタグが増えたら、ここに子として追記するだけで dropdown に反映される。
+
+groups:
+  - slug: blocks
+    emoji: "🧱"
+    name: ブロック・組み立て
+    tags: [ブロック, マグネットブロック, 積み木, デュプロ, LaQ, マグ・フォーマー]
+
+  - slug: puzzle
+    emoji: "🧩"
+    name: パズル
+    tags: [パズル, ジグソーパズル, 知育パズル]
+
+  - slug: games
+    emoji: "🎲"
+    name: ゲーム
+    tags: [ボードゲーム, カードゲーム, パーティーゲーム, バランスゲーム]
+
+  - slug: vehicles
+    emoji: "🚗"
+    name: 乗り物
+    tags: [ミニカー, プラレール, 電車, 乗用玩具]
+
+  - slug: pretend
+    emoji: "🍳"
+    name: ごっこ遊び
+    tags: [ごっこ遊び, おままごと, シールブック]
+
+  - slug: stem
+    emoji: "🔬"
+    name: STEM・学習
+    tags: [プログラミング, モンテッソーリ, 算数, 英語学習, スロープトイ, ロボット]
+
+  - slug: music
+    emoji: "🎹"
+    name: 楽器
+    tags: [楽器, 楽器おもちゃ]
+
+  - slug: wooden
+    emoji: "🌳"
+    name: 木のおもちゃ
+    tags: [木のおもちゃ]
