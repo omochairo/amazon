@@ -1,0 +1,56 @@
+name: Quarantine Issue Monitor (reseller worklist)
+
+# #2186 P2 — `data/asin_quarantine.json` (check_no_reseller_pricing が退避したリセラー
+# 高値疑いの Amazon ASIN worklist) を週次で読み、人手検証用の Issue に起票/更新する
+# read-only 観察 workflow。
+#
+# 設計判断:
+#   - quarantine は Jules が main にコミット済の JSON を追記していく worklist なので、
+#     fetch せず checkout した committed データをそのまま読む (App token / commit 不要)。
+#   - 自動で asin_blocklist へ昇格しない。値の偽装ブロックは E-E-A-T を破壊しうるため、
+#     Issue は人手検証 worklist であり、昇格は人間が PR する (AGENTS.md §9 決定木)。
+#   - マーカー dedup + open があれば本文 refresh (open_quarantine_issue.py)。
+#   - candidates が空なら起票/更新しない。score / 記事生成には一切影響しない。
+
+on:
+  schedule:
+    # 毎週月曜 09:40 JST (= 00:40 UTC)。リセラー退避は稀なので週次で十分。
+    - cron: '40 0 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: quarantine-issue-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Count quarantine candidates
+        id: count
+        run: |
+          set -e
+          COUNT=$(python -c "import json; print(len(json.load(open('data/asin_quarantine.json')).get('candidates') or []))")
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "quarantine candidate count: $COUNT"
+
+      - name: Open / refresh quarantine Issue
+        if: steps.count.outputs.count != '0' && steps.count.outputs.count != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          python scripts/open_quarantine_issue.py
