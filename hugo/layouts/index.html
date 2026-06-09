@@ -157,7 +157,7 @@
   <div class="tag-chips">
     {{- range $topTags }}
       {{- if ge .Count 5 }}
-      <a class="tag-chip" href="{{ (printf "tags/%s/" (urlize .Name)) | relURL }}">
+      <a class="tag-chip" href="{{ .Page.RelPermalink }}">
         #{{ .Name }} <span class="tag-chip-count">{{ .Count }}</span>
       </a>
       {{- end }}
@@ -186,7 +186,7 @@
         {{- $thumb = .Params.product_image -}}
         {{- $maxScore = .Params.ivs_score_100 -}}
       {{- end }}
-      <a class="brand-card" href="{{ (printf "brands/%s/" (urlize $term)) | relURL }}">
+      <a class="brand-card" href="{{ .Page.RelPermalink }}">
         <div class="brand-card-image">
           {{- if $thumb }}
             <img src="{{ $thumb }}" alt="{{ $term }}" loading="lazy" referrerpolicy="no-referrer">

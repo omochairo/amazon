@@ -101,7 +101,10 @@
   {{- end -}}
 {{- end -}}
 {{- $hubMinSiblings := 3 -}}
-{{- if and $selfBrand (ge (len $brandSiblings) $hubMinSiblings) }}
+{{- /* ハブバナーは /brands/<brand>/ term ページが実在する場合のみ表示。
+       .Params.brands は exclude_from_taxonomy=false のブランドにのみ付与される
+       (ノーブランド等は付かない) → これを使わないと 404 リンクになる (session 135 修正)。 */ -}}
+{{- if and $selfBrand .Params.brands (ge (len $brandSiblings) $hubMinSiblings) }}
 <aside class="hub-banner" aria-label="{{ $selfBrand }} ブランドハブ">
   <a class="hub-banner-link" href="{{ (printf "brands/%s/" (urlize $selfBrand)) | relURL }}">
     <span class="hub-banner-icon" aria-hidden="true">📘</span>

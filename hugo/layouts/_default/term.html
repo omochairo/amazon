@@ -40,11 +40,18 @@
       {{- $low := index $entry "lowest_price" -}}
       {{- $series := index $entry "top_3_series" -}}
       {{- $repAsin := index $entry "representative_asin" -}}
+      {{- /* 代表商品ページが実在する場合のみリンク化 (未公開 ASIN への 404 防止, session 135)。
+             representative_asin は当該ブランドの商品から選ばれるため $.Pages 内照合で足りる。 */ -}}
+      {{- $repPage := "" -}}
+      {{- if $repAsin -}}
+        {{- $repURL := printf "/products/%s/" (lower $repAsin) -}}
+        {{- range $.Pages -}}{{- if eq .RelPermalink $repURL -}}{{- $repPage = . -}}{{- end -}}{{- end -}}
+      {{- end -}}
 <section class="brand-hub-hero" data-brand="{{ $.Title }}">
   {{- if $img }}
   <div class="brand-hub-hero-image">
-    {{- if $repAsin }}
-    <a href="{{ printf "/products/%s/" (lower $repAsin) | relURL }}" aria-label="{{ $.Title }} の代表商品を見る">
+    {{- if $repPage }}
+    <a href="{{ $repPage.RelPermalink }}" aria-label="{{ $.Title }} の代表商品を見る">
       <img src="{{ $img }}" alt="{{ $.Title }} 代表商品" loading="lazy" decoding="async">
     </a>
     {{- else }}
@@ -582,18 +589,7 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 </script>
 
-{{- if gt $paginator.TotalPages 1 }}
-<footer class="page-footer posts-pagination">
-  <nav class="pagination">
-    {{- if $paginator.HasPrev }}
-    <a class="prev" href="{{ $paginator.Prev.URL | absURL }}">« 前のページ</a>
-    {{- end }}
-    <span class="pagination-info">{{ $paginator.PageNumber }} / {{ $paginator.TotalPages }}</span>
-    {{- if $paginator.HasNext }}
-    <a class="next" href="{{ $paginator.Next.URL | absURL }}">次のページ »</a>
-    {{- end }}
-  </nav>
-</footer>
-{{- end }}
+{{- /* ページネーションは上部の #term-pagination-container 内で server-render + JS 制御。
+       ここに重複出力すると「次のページ」ボタンが 2 個並ぶ (session 135 修正)。 */ -}}
 
 {{- end }}{{- /* end main */ -}}
