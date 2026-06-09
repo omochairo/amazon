@@ -1,0 +1,30 @@
+{{- /*
+  著者プロフィールの参考文献 (epic #1358 B-9 / NDL)。
+  Usage: {{< author_references "iromama" >}} / {{< author_references "iropapa" >}}
+  hugo/data/author_references.json (scripts/fetch_ndl_references.py が生成) を読み、
+  国立国会図書館サーチの書誌へ出典 link 付きで一覧表示する。E-E-A-T (専門性・権威性) 補強。
+*/ -}}
+{{- $persona := .Get 0 -}}
+{{- $root := .Site.Data.author_references -}}
+{{- $meta := index $root "_meta" -}}
+{{- $refs := index $root $persona -}}
+{{- with $refs }}
+<section class="author-refs" aria-label="編集部が参考にしている書籍">
+  <h2>📚 編集部が参考にしている書籍</h2>
+  {{- with $meta }}<p class="author-refs-note">{{ .note }}</p>{{ end }}
+  <ul class="author-refs-list">
+    {{- range . }}
+    <li class="author-refs-item">
+      <span class="author-refs-topic">{{ .label }}</span>
+      <a class="author-refs-title" href="{{ .ndl_url }}" target="_blank" rel="noopener nofollow">{{ .title }}</a>
+      <span class="author-refs-meta">
+        {{- with .creator }}{{ . }}{{ end }}{{ with .year }}（{{ int . }}）{{ end -}}
+      </span>
+    </li>
+    {{- end }}
+  </ul>
+  {{- with $meta }}
+  <p class="author-refs-src">出典: <a href="{{ .source_url }}" target="_blank" rel="noopener nofollow">{{ .source_name }}</a></p>
+  {{- end }}
+</section>
+{{- end -}}
