@@ -1,0 +1,66 @@
+{{- /*
+  category_dropdown.html (Issue #2164 #6)
+  hugo/data/category_taxonomy.yaml の親グループ定義を読み、各子タグの件数 (.Count)
+  と term ページ URL (.Page.RelPermalink) を site.Taxonomies.tags から解決する。
+  - 公開記事 0 件のタグは `with` で skip、子が全滅したグループは描画しない。
+  - URL は urlize ではなく .Page.RelPermalink を使う (taxonomy URL trap 回避)。
+  - ネイティブ <details> で JS 非依存。bfcache 復元時の開きっぱなし対策のみ JS。
+*/ -}}
+{{- with site.Data.category_taxonomy }}
+{{- $groups := slice }}
+{{- range .groups }}
+  {{- $g := . }}
+  {{- $children := slice }}
+  {{- range $tag := .tags }}
+    {{- /* Hugo は Latin の taxonomy キーを小文字化する (例: "LaQ" → "laq")。
+           日本語はケース無しで素通し。exact → lower の順で引いて取りこぼし防止。 */}}
+    {{- with (or (index site.Taxonomies.tags $tag) (index site.Taxonomies.tags (lower $tag))) }}
+      {{- $children = $children | append (dict "name" $tag "count" .Count "url" .Page.RelPermalink) }}
+    {{- end }}
+  {{- end }}
+  {{- if gt (len $children) 0 }}
+    {{- $groups = $groups | append (dict "emoji" $g.emoji "name" $g.name "slug" $g.slug "children" $children) }}
+  {{- end }}
+{{- end }}
+{{- if gt (len $groups) 0 }}
+<nav class="cat-nav" aria-label="おもちゃカテゴリから探す">
+    <ul class="cat-nav-list">
+        {{- range $groups }}
+        <li class="cat-group">
+            <details class="cat-details" data-cat-slug="{{ .slug }}">
+                <summary class="cat-summary">{{ .emoji }}&nbsp;{{ .name }}</summary>
+                <ul class="cat-sublist">
+                    {{- range .children }}
+                    <li>
+                        <a class="cat-link" href="{{ .url }}">
+                            <span class="cat-link-name">{{ .name }}</span>
+                            <span class="cat-count" aria-label="{{ .count }}件の記事">{{ .count }}</span>
+                        </a>
+                    </li>
+                    {{- end }}
+                </ul>
+            </details>
+        </li>
+        {{- end }}
+    </ul>
+</nav>
+<script>
+// bfcache (戻る/進む) 復元時に開いたままの <details> を閉じてレイアウト崩れを防ぐ。
+window.addEventListener("pageshow", function (e) {
+    if (e.persisted) {
+        document.querySelectorAll(".cat-details[open]").forEach(function (d) { d.open = false; });
+    }
+});
+// 同じカテゴリバー内で 1 つ開いたら他を閉じる (アコーディオン挙動)。
+document.querySelectorAll(".cat-nav .cat-details").forEach(function (d) {
+    d.addEventListener("toggle", function () {
+        if (d.open) {
+            document.querySelectorAll(".cat-nav .cat-details[open]").forEach(function (o) {
+                if (o !== d) { o.open = false; }
+            });
+        }
+    });
+});
+</script>
+{{- end }}
+{{- end }}
