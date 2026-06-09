@@ -21,6 +21,25 @@
 </section>
 {{- end }}
 
+{{- /* === Section: 前回の診断 (#1365 Layer 1-③) — last_diagnosis.js が
+       localStorage("omcha_last_diagnosis") から hydrate して unhide。
+       未診断/データ無しなら hidden のまま (空状態は何も出さない)。
+       「前回の結果を見る」は ?restore=1 で diagnosis.js が結果だけ即再表示。 */ -}}
+<section class="last-diagnosis" data-last-diagnosis hidden aria-label="前回のおもちゃ診断">
+  <div class="last-diagnosis-inner">
+    <div class="last-diagnosis-body">
+      <span class="last-diagnosis-eyebrow">🧸 前回のおもちゃ診断</span>
+      <p class="last-diagnosis-summary"></p>
+      <p class="last-diagnosis-meta"></p>
+      <div class="last-diagnosis-top" hidden></div>
+    </div>
+    <div class="last-diagnosis-actions">
+      <a class="last-diagnosis-btn primary" href="{{ "diagnosis/" | relURL }}?restore=1">前回の結果を見る</a>
+      <a class="last-diagnosis-btn" href="{{ "diagnosis/" | relURL }}">もう一度診断する</a>
+    </div>
+  </div>
+</section>
+
 {{- /* === Section: 特集スポットライト (#1363 / #1365 UX)
        「こんな探し方ができます」— 4 つの探索軸 (予算 / 割引 / 人気 / 悩み相談)。
        各カードは distinct な役割を持つ:
@@ -89,6 +108,10 @@
   </div>
 </section>
 
+{{- /* === Section: 年齢タイムライン (#1365 Layer 3-③) — 横スクロールの年齢バンドから
+       /diagnosis/?age=<band> へ遷移し、その年齢帯のベスト10を即表示する。 */ -}}
+{{- partial "age_timeline.html" . }}
+
 {{- /* === Section: 最新の比較レビュー === */ -}}
 {{- $latest := first 9 $allPosts }}
 {{- if $latest }}
@@ -134,7 +157,7 @@
   <div class="tag-chips">
     {{- range $topTags }}
       {{- if ge .Count 5 }}
-      <a class="tag-chip" href="{{ (printf "tags/%s/" (urlize .Name)) | relURL }}">
+      <a class="tag-chip" href="{{ .Page.RelPermalink }}">
         #{{ .Name }} <span class="tag-chip-count">{{ .Count }}</span>
       </a>
       {{- end }}
@@ -163,7 +186,7 @@
         {{- $thumb = .Params.product_image -}}
         {{- $maxScore = .Params.ivs_score_100 -}}
       {{- end }}
-      <a class="brand-card" href="{{ (printf "brands/%s/" (urlize $term)) | relURL }}">
+      <a class="brand-card" href="{{ .Page.RelPermalink }}">
         <div class="brand-card-image">
           {{- if $thumb }}
             <img src="{{ $thumb }}" alt="{{ $term }}" loading="lazy" referrerpolicy="no-referrer">
@@ -192,12 +215,18 @@
 
 {{- /* === Section: 最近見た商品 (#1367) — recently_viewed.js が localStorage から hydrate、
        空なら hidden 属性で非表示。home / single 双方で同じ .recently-viewed-mount を使う。 */ -}}
-<section class="home-section recently-viewed-mount" hidden aria-label="最近見た商品">
+<section class="home-section recently-viewed-mount related-carousel-section" hidden aria-label="最近見た商品">
   <header class="home-section-header">
     <h2>🕘 最近見た商品</h2>
     <span class="home-section-note">続きから検討できます</span>
+    <div class="carousel-nav-arrows">
+      <button class="carousel-arrow prev" type="button" aria-label="左にスクロール" disabled>‹</button>
+      <button class="carousel-arrow next" type="button" aria-label="右にスクロール">›</button>
+    </div>
   </header>
-  <div class="recently-viewed-grid"></div>
+  <div class="carousel-wrapper">
+    <div class="recently-viewed-grid"></div>
+  </div>
 </section>
 
 {{- /* === Footer credit === */ -}}

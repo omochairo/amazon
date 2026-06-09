@@ -10,6 +10,30 @@
 <script defer src="{{ $recent.RelPermalink }}" integrity="{{ $recent.Data.Integrity }}" crossorigin="anonymous"></script>
 {{- end }}
 
+{{- /* #1367 carousel 矢印/スワイプ/autoplay — 全ページで読み込み。.related-carousel-section
+       (商品ページの関連/成長先取り + home/post の最近見た商品) を共通制御。recently_viewed.js
+       の後に置き、render で注入されたカードを carousel init が拾えるようにする。 */ -}}
+{{- $carousel := resources.Get "js/carousel_swipe.js" | resources.Minify | resources.Fingerprint "sha256" }}
+{{- if $carousel }}
+<script defer src="{{ $carousel.RelPermalink }}" integrity="{{ $carousel.Data.Integrity }}" crossorigin="anonymous"></script>
+{{- end }}
+
+{{- /* #1371 PWA Service Worker — 全ページで登録。お気に入り/最近見た商品/診断結果を
+       オフライン閲覧可能にする。recently_viewed.js の後に置き OmochaRecent を参照して
+       最近見た商品の遷移先を precache させる。 */ -}}
+{{- $swReg := resources.Get "js/sw_register.js" | resources.Minify | resources.Fingerprint "sha256" }}
+{{- if $swReg }}
+<script defer src="{{ $swReg.RelPermalink }}" integrity="{{ $swReg.Data.Integrity }}" crossorigin="anonymous"></script>
+{{- end }}
+
+{{- /* #1365 Layer 1-③ 前回の診断バナー — ホーム限定 (mount は index.html のみ)。 */ -}}
+{{- if .IsHome }}
+  {{- $lastDiag := resources.Get "js/last_diagnosis.js" | resources.Minify | resources.Fingerprint "sha256" }}
+  {{- if $lastDiag }}
+<script defer src="{{ $lastDiag.RelPermalink }}" integrity="{{ $lastDiag.Data.Integrity }}" crossorigin="anonymous"></script>
+  {{- end }}
+{{- end }}
+
 {{- /* Wikipedia 連携ボトムシート (Issue #683)
        記事ページのみで wiki_tooltip.js + wiki_tooltip.css を読み込む。
        CSS は assets/css/extended/wiki_tooltip.css が PaperMod の自動取り込みで
@@ -28,9 +52,24 @@
   {{- if $reveal }}
 <script defer src="{{ $reveal.RelPermalink }}" integrity="{{ $reveal.Data.Integrity }}" crossorigin="anonymous"></script>
   {{- end }}
-  {{- $carousel := resources.Get "js/carousel_swipe.js" | resources.Minify | resources.Fingerprint "sha256" }}
-  {{- if $carousel }}
-<script defer src="{{ $carousel.RelPermalink }}" integrity="{{ $carousel.Data.Integrity }}" crossorigin="anonymous"></script>
+  {{- /* epic #1365 Layer 4: 商品画像 lightbox + ピンチズーム (商品ページ限定) */ -}}
+  {{- $lightbox := resources.Get "js/lightbox.js" | resources.Minify | resources.Fingerprint "sha256" }}
+  {{- if $lightbox }}
+<script defer src="{{ $lightbox.RelPermalink }}" integrity="{{ $lightbox.Data.Integrity }}" crossorigin="anonymous"></script>
+  {{- end }}
+
+  {{- /* #1369 スコア根拠 inline 展開 (epic #1365 Layer 2-②): 算出ロジック導線 +
+         「参考になった?」フィードバック widget を商品ページのスコア内訳直後に注入。 */ -}}
+  {{- $scoreExplain := resources.Get "js/score_explain.js" | resources.Minify | resources.Fingerprint "sha256" }}
+  {{- if $scoreExplain }}
+<script defer src="{{ $scoreExplain.RelPermalink }}" integrity="{{ $scoreExplain.Data.Integrity }}" crossorigin="anonymous"></script>
+  {{- end }}
+
+  {{- /* 役立ち度フィードバック (epic #1365 Layer 3-②): 記事末尾に 😊/😐/😢 widget を
+         注入。localStorage per-path 記録 + GA4 article_feedback イベント送出。 */ -}}
+  {{- $articleFb := resources.Get "js/article_feedback.js" | resources.Minify | resources.Fingerprint "sha256" }}
+  {{- if $articleFb }}
+<script defer src="{{ $articleFb.RelPermalink }}" integrity="{{ $articleFb.Data.Integrity }}" crossorigin="anonymous"></script>
   {{- end }}
 
   {{- /* Issue #600 Phase B: 楽天ランキング順位推移チャート。Chart.js (UMD) を CDN

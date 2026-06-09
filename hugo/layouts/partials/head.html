@@ -60,10 +60,23 @@
     {{- end -}}
   {{- end -}}
 {{- end -}}
+{{- /* P4 (epic #2126): brand_taxonomy.yaml で noindex: true を付けたブランドの
+       /brands/ ページを noindex,follow にする。中華系・無名級など、商品の正しい
+       帰属 (正規化) はしたいが薄いハブページを検索インデックスに出したくない
+       ブランド向け。フラグは build_brand_hub_stats.py が brand_hub.json に出力する。 */ -}}
+{{- $isNoindexBrand := false -}}
+{{- if and (eq .Kind "term") (eq .Data.Plural "brands") -}}
+  {{- with site.Data.brand_hub -}}
+    {{- $entry := index .brands $.Title -}}
+    {{- if and $entry $entry.noindex -}}
+      {{- $isNoindexBrand = true -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
 {{- $isProd := or hugo.IsProduction (eq site.Params.env "production") -}}
-{{- if and $isProd (ne .Params.robotsNoIndex true) (not $isThinTerm) (not $isPaginated) }}
+{{- if and $isProd (ne .Params.robotsNoIndex true) (not $isThinTerm) (not $isPaginated) (not $isNoindexBrand) }}
 <meta name="robots" content="index, follow">
-{{- else if and $isProd (or $isThinTerm $isPaginated) (ne .Params.robotsNoIndex true) }}
+{{- else if and $isProd (or $isThinTerm $isPaginated $isNoindexBrand) (ne .Params.robotsNoIndex true) }}
 <meta name="robots" content="noindex, follow">
 {{- else }}
 <meta name="robots" content="noindex, nofollow">

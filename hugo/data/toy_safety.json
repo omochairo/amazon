@@ -1,0 +1,63 @@
+{
+  "_comment": "#1358 B-5 — おもちゃ安全 / リコール確認の curated 参照データ。出典は全て一次情報(公的機関 / 日本玩具協会)。build_post 描画専用原則に従い、ここは静的 curated データのみ。brand_recalls は検証済みの事例のみ手動追記する(誤検出=偽『この商品がリコール』は E-E-A-T を破壊するため、未検証の自動投入は禁止)。",
+  "updated": "2026-06",
+  "sources": {
+    "caa_recall_child": {
+      "name": "消費者庁 リコール情報サイト（こども向け商品一覧）",
+      "url": "https://www.recall.caa.go.jp/result/index.php?screenkbn=05",
+      "publisher": "消費者庁"
+    },
+    "caa_choke_report": {
+      "name": "消費者庁 事故等原因調査報告書「玩具による乳幼児の気道閉塞事故」",
+      "url": "https://www.caa.go.jp/policies/council/csic/report/report_013/",
+      "publisher": "消費者庁 消費者安全調査委員会"
+    },
+    "gov_online_choke": {
+      "name": "政府広報オンライン「赤ちゃんやこどもを誤飲・窒息事故から守る！」",
+      "url": "https://www.gov-online.go.jp/article/202408/entry-6450.html",
+      "publisher": "内閣府政府広報室"
+    },
+    "st_mark": {
+      "name": "一般社団法人 日本玩具協会 STマーク制度（玩具安全基準ST）",
+      "url": "https://www.toys.or.jp/jigyou_st_seido.html",
+      "publisher": "一般社団法人 日本玩具協会"
+    }
+  },
+  "standards": [
+    {
+      "key": "st_mark",
+      "label": "STマーク（玩具安全基準ST）",
+      "body": "日本玩具協会が定めた玩具安全基準（機械的・物理的特性／可燃性／化学的特性の3部構成）に適合した玩具に付くマークです。14歳以下を対象とした玩具の業界自主基準で、3歳未満向けには小さな部品の誤飲対策などより厳しい要件が課されます。",
+      "source": "st_mark"
+    }
+  ],
+  "choking": {
+    "small_parts_rule": {
+      "body": "トイレットペーパーの芯（直径約39mm）を通り抜ける大きさのものは、3歳未満の子どもが口に入れて誤飲・窒息する危険があります。小さな部品が外れないか、対象年齢を必ず確認しましょう。",
+      "source": "gov_online_choke"
+    },
+    "by_age": [
+      {
+        "max_months": 36,
+        "stat": "消費者庁によると、おもちゃ等を誤って飲み込み窒息死した0歳児は5年間で19人にのぼります。直径6mm〜2cm 程度の小さなおもちゃは特に気道をふさぎやすく、3歳未満は誤飲・窒息のリスクが高い年齢です。",
+        "source": "caa_choke_report"
+      },
+      {
+        "max_months": 9999,
+        "stat": "小さな部品やボタン電池・小型磁石は、対象年齢を過ぎていても年下のきょうだいが触れる場面では誤飲・窒息の原因になります。遊ぶ環境にあわせて保管・管理しましょう。",
+        "source": "gov_online_choke"
+      }
+    ]
+  },
+  "brand_recalls": {
+    "タカラトミー": [
+      {
+        "date": "2017-12",
+        "product": "トゥーンタウン リズム遊びいっぱいマジカルバンド",
+        "reason": "付属の「ラッパ」吹き口パーツが外れ、中の笛用の白い小さな部品がまれに出てくることがあり、誤飲の恐れがあるとして対象部品（ラッパ）の無償交換が告知されました（本体・その他部品は継続使用可）",
+        "url": "https://www.recall.caa.go.jp/result/detail.php?rcl=00000018992&screenkbn=05",
+        "asins": ["B003I4DTM6"]
+      }
+    ]
+  }
+}

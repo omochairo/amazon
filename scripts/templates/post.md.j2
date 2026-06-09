@@ -86,7 +86,7 @@
 {% endif %}
 
 {% if persona_fit %}
-<aside class="persona-fit"><strong>この記事はこんな方へ</strong><ul>{% for r in persona_fit.recommended_for %}<li>{{ r }}</li>{% endfor %}</ul>{% if persona_fit.age_range %}<p>対象年齢：<strong>{{ persona_fit.age_range }}</strong></p>{% endif %}</aside>
+<aside class="persona-fit"><strong>この記事はこんな方へ</strong><ul>{% for r in persona_fit.recommended_for %}<li>{{ r }}</li>{% endfor %}</ul>{% if persona_fit.not_recommended_for %}<div class="persona-fit__caution"><strong>🤔 逆に、こんな方は別の商品も検討を</strong><ul>{% for n in persona_fit.not_recommended_for %}<li>{{ n }}</li>{% endfor %}</ul></div>{% endif %}{% if persona_fit.age_range %}<p>対象年齢：<strong>{{ persona_fit.age_range }}</strong></p>{% endif %}</aside>
 {% endif %}
 
 {% if development_stage %}
@@ -234,13 +234,26 @@
 {% if technical_specs %}
 ### <small>{{ product.name }}の</small>基本スペック
 
-{% if technical_specs.dimensions %}- **サイズ**：{% if technical_specs.dimensions.width %}幅 {{ technical_specs.dimensions.width }}{% endif %}{% if technical_specs.dimensions.height %} / 高さ {{ technical_specs.dimensions.height }}{% endif %}{% if technical_specs.dimensions.depth %} / 奥行 {{ technical_specs.dimensions.depth }}{% endif %}
-{% endif %}{% if technical_specs.weight %}- **重量**：{{ technical_specs.weight }}
-{% endif %}{% if technical_specs.material %}- **素材**：{{ technical_specs.material }}
-{% endif %}{% if technical_specs.origin %}- **原産国**：{{ technical_specs.origin }}
-{% endif %}{% if technical_specs.capacity %}- **容量**：{{ technical_specs.capacity }}
-{% endif %}{% if technical_specs.other %}{% for spec in technical_specs.other %}- {{ spec }}
-{% endfor %}{% endif %}
+<table class="spec-table"><tbody>
+{%- if technical_specs.dimensions and (technical_specs.dimensions.width or technical_specs.dimensions.height or technical_specs.dimensions.depth) %}
+<tr><th scope="row">サイズ</th><td>{% if technical_specs.dimensions.width %}幅 {{ technical_specs.dimensions.width }}{% endif %}{% if technical_specs.dimensions.height %} / 高さ {{ technical_specs.dimensions.height }}{% endif %}{% if technical_specs.dimensions.depth %} / 奥行 {{ technical_specs.dimensions.depth }}{% endif %}</td></tr>
+{%- endif %}
+{%- if technical_specs.weight %}
+<tr><th scope="row">重量</th><td>{{ technical_specs.weight }}</td></tr>
+{%- endif %}
+{%- if technical_specs.material %}
+<tr><th scope="row">素材</th><td>{{ technical_specs.material }}</td></tr>
+{%- endif %}
+{%- if technical_specs.origin %}
+<tr><th scope="row">原産国</th><td>{{ technical_specs.origin }}</td></tr>
+{%- endif %}
+{%- if technical_specs.capacity %}
+<tr><th scope="row">容量</th><td>{{ technical_specs.capacity }}</td></tr>
+{%- endif %}
+{%- if technical_specs.other %}
+<tr><th scope="row">その他</th><td>{% for spec in technical_specs.other %}{{ spec }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td></tr>
+{%- endif %}
+</tbody></table>
 {% endif %}
 
 {% if omcha_related %}
@@ -300,6 +313,20 @@
 {{ uc.narrative }}
 
 {% endfor %}
+{% endif %}
+
+{% if source_highlights %}
+<details class="source-highlights">
+<summary class="source-highlights__summary">🔎 外部ソースからわかること<span class="source-highlights__count">{{ source_highlights | length }}件</span></summary>
+<div class="source-highlights__body">
+<p class="source-highlights__intro">おもちゃロボが収集した第三者サイト（販売ページを除く）の記述です。原文ママのため外国語が含まれる場合があります。出典はリンク先をご確認ください。</p>
+<ul class="source-highlights__list">
+{%- for h in source_highlights %}
+<li><blockquote>{{ h.snippet | e }}</blockquote><cite class="source-highlights__cite">出典：<a href="{{ h.url }}" target="_blank" rel="nofollow noopener noreferrer">{{ h.host | e }}</a></cite></li>
+{%- endfor %}
+</ul>
+</div>
+</details>
 {% endif %}
 
 {% if narrative.safety_note %}
@@ -363,6 +390,8 @@
 {% endif %}
 
 {% raw %}{{< related_carousel >}}{% endraw %}
+
+{% raw %}{{< future_age_carousel >}}{% endraw %}
 
 {% if expert_take %}
 <aside class="expert-take"><strong>おもちゃロボの見立て</strong><br>{{ expert_take }}</aside>

@@ -1,0 +1,94 @@
+{{- /*
+  「半年〜1年後にこちら」成長先取りレコメンド (epic #1365 Layer 2-⑤)。
+  現商品の age_min_months を起点に、対象年齢が「これから上がる」方向の商品だけを
+  前向きに抽出し、お子さまの成長に合わせた次のステップとして提示する。
+
+  related_carousel.html は年齢の近さを双方向 (±) でスコアするのに対し、本セクションは
+  forward-only (candAge > selfAge) に限定し「次に買うならこれ」という別の動機を作る。
+
+  設計判断 (session 122 トラップ): カタログから決定的に導ける静的レコメンドのため、
+  JS injection ではなく server-render。02-publish の全記事再ビルドで既存記事にも届き、
+  no-JS / SEO でも表示される。carousel の矢印・スワイプ・autoplay は
+  carousel_swipe.js が .related-carousel-section に束ねるため同クラスで再利用する。
+*/ -}}
+{{- $selfAge := int (.Params.age_min_months | default 0) -}}
+{{- if gt $selfAge 0 -}}
+{{- $pages := where site.RegularPages "Section" "posts" -}}
+{{- $pages = where $pages "Permalink" "!=" .Permalink -}}
+
+{{- /* --- forward-only 候補をスコア --- */ -}}
+{{- $scored := slice -}}
+{{- range $pages -}}
+  {{- $ca := int (.Params.age_min_months | default 0) -}}
+  {{- if gt $ca $selfAge -}}
+    {{- $gap := sub $ca $selfAge -}}
+    {{- /* band: 半年〜1年上 (+4..+14ヶ月) を最優先、次いで +14..+24、僅差上、遠方 */ -}}
+    {{- $band := 1 -}}
+    {{- if and (ge $gap 4) (le $gap 14) -}}{{- $band = 4 -}}
+    {{- else if and (gt $gap 14) (le $gap 24) -}}{{- $band = 3 -}}
+    {{- else if lt $gap 4 -}}{{- $band = 2 -}}{{- end -}}
+    {{- $score100 := int (.Params.ivs_score_100 | default 0) -}}
+    {{- $composite := add (mul $band 1000) $score100 -}}
+    {{- $scored = $scored | append (dict "page" . "composite" $composite "candAge" $ca "gap" $gap) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $sorted := sort $scored "composite" "desc" -}}
+{{- $top := first 6 $sorted -}}
+
+{{- if ge (len $top) 2 }}
+<section class="related-carousel-section future-age-section" aria-label="成長したらこちら">
+  <header class="home-section-header">
+    <h2>🌱 半年〜1年後にこちら</h2>
+    <div class="carousel-nav-arrows">
+      <button class="carousel-arrow prev" aria-label="左にスクロール" disabled>‹</button>
+      <button class="carousel-arrow next" aria-label="右にスクロール">›</button>
+    </div>
+  </header>
+  <p class="future-age-lead">お子さまの成長に合わせた「次のステップ」。今より対象年齢が少し上のおもちゃをまとめました。</p>
+  <div class="carousel-wrapper">
+    <div class="carousel-track">
+      {{- range $top }}
+        {{- $p := .page -}}
+        <a class="carousel-card" href="{{ $p.Permalink }}" aria-label="{{ $p.Title }} の比較レビューを読む">
+          <div class="carousel-card-image">
+            {{- if $p.Params.product_image }}
+              <img src="{{ $p.Params.product_image }}" alt="{{ $p.Title }}" loading="lazy" referrerpolicy="no-referrer">
+            {{- else }}
+              {{- $emojis := slice "🧸" "🎨" "🧩" "🪁" "🚂" "🤹" "🧱" "🪀" "🛹" "🎺" -}}
+              {{- $fallbackEmoji := index $emojis (mod (len $p.Title) (len $emojis)) -}}
+              <div class="carousel-card-image-fallback">{{ $fallbackEmoji }}</div>
+            {{- end }}
+            {{- if $p.Params.ivs_score_100 }}
+              <span class="carousel-card-score">🏆 {{ $p.Params.ivs_score_100 }}点</span>
+            {{- end }}
+          </div>
+          <div class="carousel-card-body">
+            {{- with $p.Params.brand }}<span class="carousel-card-brand">{{ . }}</span>{{ end }}
+            <h3 class="carousel-card-title">{{ $p.Title }}</h3>
+            <div class="carousel-card-badges">
+              {{- /* forward age badge: 対象年齢 + 現商品からの伸び幅 */ -}}
+              {{- $years := int (div .candAge 12) -}}
+              {{- $ageLabel := "" -}}
+              {{- if ge .candAge 12 -}}
+                {{- $ageLabel = printf "%d歳〜" $years -}}
+              {{- else -}}
+                {{- $ageLabel = printf "%dヶ月〜" .candAge -}}
+              {{- end -}}
+              {{- if ge .gap 12 -}}
+                {{- /* 12ヶ月単位で四捨五入して「約N歳上」表示 */ -}}
+                {{- $gapYears := int (div (add .gap 6) 12) -}}
+                {{- $ageLabel = printf "%s (約%d歳上)" $ageLabel $gapYears -}}
+              {{- else -}}
+                {{- $ageLabel = printf "%s (約%dヶ月上)" $ageLabel .gap -}}
+              {{- end -}}
+              <span class="carousel-card-badge cc-badge-age">🌱 {{ $ageLabel }}</span>
+            </div>
+          </div>
+        </a>
+      {{- end }}
+    </div>
+  </div>
+</section>
+{{- end }}
+{{- end -}}

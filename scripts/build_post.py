@@ -403,6 +403,8 @@ def _build_review_jsonld(
     avg_rating: float | int | str,
     review_body: str,
     asin: str,
+    aggregate_rating: dict[str, Any] | None = None,
+    offers: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Issue #1301 B5: Product.aggregateRating とは別に独立した Review JSON-LD を構築。
 
@@ -441,6 +443,14 @@ def _build_review_jsonld(
     raw_brand = product.get("brand")
     if raw_brand:
         item_reviewed["brand"] = {"@type": "Brand", "name": raw_brand}
+    # GSC 商品スニペット要件: itemReviewed の Product 自体も
+    # offers / review / aggregateRating のいずれかを持たないと
+    # 「裸の Product」として無効判定される。メイン Product と同じ
+    # aggregateRating / offers を再掲し、独立した有効エンティティにする。
+    if isinstance(aggregate_rating, dict) and aggregate_rating:
+        item_reviewed["aggregateRating"] = aggregate_rating
+    if isinstance(offers, dict) and offers:
+        item_reviewed["offers"] = offers
     return {
         "@context": "https://schema.org",
         "@type": "Review",
@@ -1182,6 +1192,115 @@ def _attach_omcha_related(data: dict[str, Any], per_asin_root: pathlib.Path) -> 
     data["omcha_related"] = decorated
 
 
+# Marketplace / commerce listings carry no independent editorial value — they
+# echo the seller's own copy. Exclude them from the third-party highlights so the
+# block stays "外部の客観情報" rather than re-quoted sales copy.
+_HIGHLIGHT_HOST_DENY = (
+    "amazon.", "rakuten.", "yahoo.", "ebay.", "aliexpress.",
+    "mercari.", "paypay", "qoo10.", "wish.com",
+)
+# Hosts that tend to host genuine evaluation / discussion / institutional info.
+_HIGHLIGHT_HOST_PREFER = (
+    "reddit.com", "note.com", "ameblo.jp", "hatena", "mamari", "comolib",
+    "kakaku.com", "blog", "news", "library", ".gov", ".edu", "go.jp", "ac.jp",
+)
+# Parts-list / spec-dump markers — these read like a manual, not a评価.
+_HIGHLIGHT_JUNK_MARKERS = ("Item number", "Qty.", "Part #", "Quantity.", "Symbol Part")
+
+
+def _has_japanese(text: str) -> bool:
+    return any(
+        "぀" <= c <= "ヿ" or "一" <= c <= "鿿"
+        for c in (text or "")
+    )
+
+
+def _highlight_snippet_ok(snippet: str) -> bool:
+    """True when the snippet reads like prose a reader benefits from, not a
+    digit-dense parts list or a stub. Used to keep the highlights honest."""
+    s = (snippet or "").strip()
+    if len(s) < 30:
+        return False
+    if any(m in s for m in _HIGHLIGHT_JUNK_MARKERS):
+        return False
+    digits = sum(c.isdigit() for c in s)
+    return digits / len(s) <= 0.25
+
+
+def _highlight_score(src: dict[str, Any]) -> int:
+    """Rank a third-party source for the highlights block. Higher is better.
+    Japanese prose wins (reader-relevant), editorial/forum/institutional hosts
+    win, and a comfortable snippet length wins."""
+    host = (src.get("host") or "").lower()
+    snippet = src.get("snippet") or ""
+    score = 0
+    if _has_japanese(snippet):
+        score += 3
+    if any(h in host for h in _HIGHLIGHT_HOST_PREFER):
+        score += 2
+    if 60 <= len(snippet) <= 300:
+        score += 1
+    return score
+
+
+def _attach_source_highlights(
+    data: dict[str, Any],
+    per_asin_root: pathlib.Path,
+    limit: int = 3,
+) -> None:
+    """Populate ``data["source_highlights"]`` from the Tavily snapshot at
+    ``data/raw/per_asin/<ASIN>/third_party_sources.json``.
+
+    This is the honest reframe of #1370: rather than passing off product-page
+    copy as「購入者の声」(which the data does not actually contain — see #496:
+    review fetching is no-op'd), we surface what we *do* have — attributed
+    third-party snippets (forums, blogs, institutional pages) — clearly labelled
+    as external information with the source host shown. Commerce listings and
+    spec dumps are filtered out; one snippet per host keeps the block diverse.
+    Renders only when ≥1 usable snippet survives; the template skips otherwise.
+    Jules-authored ``source_highlights`` (future reservation) is preserved."""
+    if data.get("source_highlights"):
+        return
+    product = data.get("product") if isinstance(data.get("product"), dict) else None
+    asin = product.get("asin") if product else None
+    if not asin:
+        return
+    path = per_asin_root / asin / "third_party_sources.json"
+    if not path.exists():
+        return
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    sources = payload.get("sources") if isinstance(payload, dict) else None
+    if not isinstance(sources, list):
+        return
+    candidates = [
+        s for s in sources
+        if isinstance(s, dict) and s.get("url") and s.get("title")
+        and not any(d in (s.get("host") or "").lower() for d in _HIGHLIGHT_HOST_DENY)
+        and _highlight_snippet_ok(s.get("snippet") or "")
+    ]
+    candidates.sort(key=_highlight_score, reverse=True)
+    picked: list[dict[str, Any]] = []
+    seen_hosts: set[str] = set()
+    for s in candidates:
+        host = (s.get("host") or "").lower()
+        if host in seen_hosts:
+            continue
+        seen_hosts.add(host)
+        picked.append({
+            "title": s.get("title"),
+            "url": s.get("url"),
+            "snippet": (s.get("snippet") or "").strip(),
+            "host": s.get("host") or "",
+        })
+        if len(picked) >= limit:
+            break
+    if picked:
+        data["source_highlights"] = picked
+
+
 def _load_per_asin_amazon(per_asin_root: pathlib.Path, asin: str) -> dict[str, Any] | None:
     """Return the per-ASIN amazon snapshot dict, or None if absent/malformed.
 
@@ -1284,6 +1403,20 @@ def _normalize_for_match(s: str) -> str:
     return s
 
 
+def _is_model_number(token: str) -> bool:
+    """ASCII 英数の型番トークン (E3209 / E0328 等) か判定する。
+
+    別 SKU 誤マッチ検出用。>=1 英字 + >=2 数字 + ASCII[英数ハイフン]のみ を満たす
+    ものだけ型番とみなす。RD-6 のような 1 桁や 2025 (数字のみ) / Lon-Bi (数字無し)
+    は除外し、明確なカタログ型番だけを対象にして false-trip を避ける。
+    """
+    if not re.fullmatch(r"[A-Za-z0-9\-]+", token):
+        return False
+    if not any(c.isalpha() for c in token):
+        return False
+    return sum(c.isdigit() for c in token) >= 2
+
+
 def _descriptor_hits_title(descriptor: str, title_norm: str, title_tokens_norm: list) -> bool:
     """Issue #1140: descriptor token が title に「実質的に」出現するか。
 
@@ -1345,6 +1478,21 @@ def _matched_passes_quality(matched: dict[str, Any], amazon_price: int) -> bool:
 
     kw = matched.get("search_keyword") or ""
     kw_tokens = [t for t in re.split(r"\s+", kw) if len(t) >= 2]
+
+    # 型番ガード: search_keyword に ASCII 型番 (E3209 等) があるのに matched title に
+    # 一つも存在しなければ別 SKU の誤マッチとして弾く。同ブランド別商品
+    # (Hape レジカウンター E3209 vs ファーマーズマーケットの食べ物セット) が
+    # カテゴリ語「ままごと」一致だけで通過し、quality_gate の reseller-pricing
+    # check を誤発火させる事故 (B0CDTQWRN1) を source で断つ。
+    model_tokens = [t for t in kw_tokens if _is_model_number(t)]
+    if model_tokens:
+        title_compact = re.sub(r"[-\s]", "", _normalize_for_match(title)).upper()
+        if not any(
+            re.sub(r"[-\s]", "", _normalize_for_match(m)).upper() in title_compact
+            for m in model_tokens
+        ):
+            return False
+
     meaningful = [t for t in kw_tokens if t not in _MARKET_GENERIC_TOKENS]
     if not meaningful:
         return True  # 区別語が無ければ cross-search 側 median band の選出を尊重
@@ -1943,6 +2091,10 @@ def _frontmatter_meta(
                 avg_for_review = rs["avg_rating"]
             elif product.get("ivs_score") is not None:
                 avg_for_review = product["ivs_score"]
+            # _fill_jsonld が既に Product schema に aggregateRating/offers を
+            # 注入済み。itemReviewed の Product にも同じものを再掲して
+            # GSC「offers/review/aggregateRating が必要」エラーを防ぐ。
+            _prod_ld = (data.get("jsonld") or {}).get("product") or {}
             review_ld = _build_review_jsonld(
                 product=product,
                 title=title,
@@ -1950,6 +2102,10 @@ def _frontmatter_meta(
                 avg_rating=avg_for_review,
                 review_body=review_body,
                 asin=str(asin),
+                aggregate_rating=_prod_ld.get("aggregateRating")
+                if isinstance(_prod_ld, dict)
+                else None,
+                offers=_prod_ld.get("offers") if isinstance(_prod_ld, dict) else None,
             )
             if review_ld:
                 s = json.dumps(review_ld, ensure_ascii=False)
@@ -2116,6 +2272,7 @@ def main() -> None:
             _fallback_news_books(data, per_asin_root)
             _fallback_youtube_embeds(data, per_asin_root)
             _attach_omcha_related(data, per_asin_root)
+            _attach_source_highlights(data, per_asin_root)
             _attach_internal_links(data, article_index, site_base_path)
             _recommend_nearby_competitors(data, article_index, site_base_path)
             _recommend_same_price_band(data, article_index, site_base_path)

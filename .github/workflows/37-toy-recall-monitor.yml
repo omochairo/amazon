@@ -1,0 +1,68 @@
+name: Toy Recall Monitor (CAA)
+
+# #2112 (epic #1358 B-5 follow-up) — 消費者庁リコール情報サイト「こども向け商品一覧」を
+# 月次で走査し、当サイト掲載ブランド (data/brand_taxonomy.yaml) に該当するリコール候補を
+# 抽出して Issue dump する read-only 観察 workflow。
+#
+# 設計判断:
+#   - brand_recalls への自動投入はしない。偽『この商品がリコール』は E-E-A-T を破壊するため、
+#     Issue は人手検証 worklist であり、反映は人間が toy_safety.json に手動 PR する。
+#   - 候補 JSON は artifact のみ (main commit しない → App token 不要)。
+#   - マーカー dedup (open_toy_recall_issue.py) で同一 open Issue があれば新規起票しない。
+#   - score / 記事生成 / narrative パイプラインには一切影響しない。
+
+on:
+  schedule:
+    # 毎月 1 日 09:30 JST (= 00:30 UTC)。玩具リコールは稀なので月次で十分。
+    - cron: '30 0 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: toy-recall-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml
+
+      - name: Fetch toy recall candidates
+        id: fetch
+        run: |
+          set -e
+          python scripts/fetch_toy_recalls.py
+          COUNT=$(python -c "import json; print(len(json.load(open('data/analytics/toy_recall_candidates.json'))['candidates']))")
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "candidate count: $COUNT"
+
+      - name: Upload candidates artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: toy-recall-candidates
+          path: data/analytics/toy_recall_candidates.json
+          if-no-files-found: ignore
+
+      - name: Open / refresh candidate Issue
+        if: steps.fetch.outputs.count != '0' && steps.fetch.outputs.count != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          python scripts/open_toy_recall_issue.py

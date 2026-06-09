@@ -36,7 +36,7 @@ brands:
     region: JP
     safety_default: [ST]
   - canonical: レゴ
-    aliases: [レゴ(LEGO), LEGO, レゴジャパン]
+    aliases: [レゴ(LEGO), LEGO, レゴジャパン, レゴ エデュケーション, レゴエデュケーション, LEGO Education, LEGO エデュケーション]
     tier: S
     region: DK
   - canonical: マテル
@@ -397,12 +397,14 @@ brands:
     region: JP
     safety_default: [ST]
   - canonical: ヨシリツ
-    aliases: [ヨシリツ, LaQ, ラキュー]
+    aliases: [ヨシリツ, LaQ, ラキュー, Yoshiritsu, YOSHIRITSU]
     tier: B
     region: JP
     safety_default: [ST]
   - canonical: ラベンスバーガージャパン
-    aliases: [ラベンスバーガージャパン, Ravensburger]
+    # 2026-06-09 (session 136 / #2126): raw "ラベンスバーガー" (ジャパン無し) と
+    # 製品ライン名 GraviTrax が全て unknown 化 → ノーブランド扱いだった (19商品)。
+    aliases: [ラベンスバーガージャパン, Ravensburger, ラベンスバーガー, GraviTrax, グラヴィトラックス, グラビトラックス]
     tier: B
     region: JP
   - canonical: ラングスジャパン
@@ -1149,6 +1151,112 @@ brands:
     safety_default: [ST]
 
   # ==========================================
+  # session 136 (#2126): 「ノーブランド」に埋没していた有名メーカーの救済
+  # カタログ product.brand 全走査で unknown 判定だった 305商品から、確立した
+  # メーカーを同定し canonical 化。tier は scoring 影響を避け保守的に付与。
+  # ==========================================
+  - canonical: PicassoTiles
+    aliases: [PicassoTiles, "Picasso Tiles", PICASSOTILES, ピカソタイルズ]
+    tier: B
+    region: US
+  - canonical: Tegu
+    aliases: [Tegu, TEGU, テグ]
+    tier: B
+    region: US
+  - canonical: Snap Circuits
+    aliases: [Snap Circuits, SnapCircuits, スナップサーキット]
+    tier: B
+    region: US
+  - canonical: Connetix
+    aliases: [Connetix, CONNETIX, コネティックス]
+    tier: B
+    region: AU
+  - canonical: Geomag
+    aliases: [Geomag, GEOMAG, ゲオマグ, "ゲオマグ(Geomag)", ジオマグ]
+    tier: B
+    region: CH
+  - canonical: 河合楽器製作所
+    aliases: [河合楽器製作所, KAWAI, "KAWAI (河合楽器製作所)", "KAWAI(河合楽器製作所)", カワイ]
+    tier: A
+    region: JP
+    safety_default: [ST]
+  - canonical: サッシー
+    aliases: [サッシー, SASSY, Sassy]
+    tier: B
+    region: US
+  - canonical: キットウェル
+    # マグビルド (MagBuild) は キットウェル のブランド。Mag-Building 等の別ブランドとは区別。
+    aliases: [キットウェル, KitWell, "KitWell (キットウェル)", マグビルド, MagBuild]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: タミヤ
+    aliases: [タミヤ, TAMIYA, Tamiya]
+    tier: A
+    region: JP
+    safety_default: [ST]
+  - canonical: コンビ
+    aliases: [コンビ, Combi, combi]
+    tier: A
+    region: JP
+    safety_default: [ST]
+  - canonical: Janod
+    aliases: [Janod, JANOD, ジャノー]
+    tier: A
+    region: FR
+  - canonical: VILAC
+    aliases: [VILAC, Vilac, ヴィラック]
+    tier: B
+    region: FR
+  - canonical: Wooden Story
+    aliases: [Wooden Story, WoodenStory, ウドゥンストーリー, ウドゥン・ストーリー]
+    tier: B
+    region: PL
+  - canonical: Tinkertoy
+    aliases: [Tinkertoy, TINKERTOY, ティンカートイ]
+    tier: B
+    region: US
+  - canonical: Orchard Toys
+    aliases: [Orchard Toys, OrchardToys, オーチャードトイズ]
+    tier: B
+    region: GB
+  - canonical: アーリーラーニングセンター
+    aliases: [アーリーラーニングセンター, Early Learning Centre, ELC]
+    tier: B
+    region: GB
+  - canonical: ベビーアインシュタイン
+    aliases: [ベビーアインシュタイン, Baby Einstein, "Baby Einstein (ベビーアインシュタイン)"]
+    tier: B
+    region: US
+  - canonical: LEXiBOOK
+    aliases: [LEXiBOOK, Lexibook, レクシブック]
+    tier: B
+    region: FR
+  - canonical: オインクゲームズ
+    aliases: [オインクゲームズ, Oink Games, OinkGames]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: ホビージャパン
+    aliases: [ホビージャパン, Hobby Japan, HobbyJapan]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: ポーラービー
+    aliases: [ポーラービー, PolarB, "Polar B"]
+    tier: B
+    region: TH
+  - canonical: ハイメス
+    aliases: [ハイメス, HEIMESS, Heimess]
+    tier: B
+    region: DE
+  - canonical: ロディ
+    aliases: [ロディ, RODY, "RODY・ロディ", Rody]
+    tier: B
+    region: IT
+    safety_default: [ST]
+
+  # ==========================================
   # Tier D: ノーブランド
   # ==========================================
   - canonical: ノーブランド
@@ -1178,19 +1286,30 @@ brands:
     region: unknown
 
   # ==========================================
-  # 中華系新興ブランド (固有名あり / 認証・信頼性不明 = Tier D)
+  # 中華系・無名級新興ブランド (固有名あり / 認証・信頼性不明 = Tier D)
+  #
+  # epic #2126 P4: ここは「商品の正しい帰属 (正規化 / dedup) はしたいが、
+  # 薄いハブページを検索インデックスに出したくない」クラス。各エントリに
+  # noindex: true を付け、/brands/ ページは生成しつつ head.html が noindex,follow
+  # にする (exclude_from_taxonomy=true でハブ自体を消すのとは別。商品ページの
+  # ブランド表記は正しく出る)。well-known な実ブランドはこのフラグを付けない。
   # ==========================================
-  - {canonical: Bajoy, tier: D, region: CN, aliases: [BAJOY, bajoy]}
-  - {canonical: Globaledutoy, tier: D, region: CN, aliases: [GLOBALEDUTOY, GlobalEduToy]}
-  - {canonical: HMshuo, tier: D, region: CN, aliases: [HMSHUO, hmshuo]}
-  - {canonical: JoyGrow, tier: D, region: CN, aliases: [JOYGROW, Joygrow, joygrow]}
-  - {canonical: Joyreal, tier: D, region: CN, aliases: [JOYREAL, JoyReal, joyreal]}
-  - {canonical: LumiLumi, tier: D, region: CN, aliases: [LUMILUMI, Lumilumi, lumilumi]}
-  - {canonical: TAETOE, tier: D, region: CN, aliases: [Taetoe, taetoe]}
-  - {canonical: Vanplay, tier: D, region: CN, aliases: [VANPLAY, VanPlay, vanplay]}
-  - {canonical: Mamimami Home, tier: D, region: CN, aliases: [Mamimami Home, MamimamiHome, mamimami home, mamimamihome]}
-  - {canonical: SHOP SHIMATARO, tier: D, region: JP, aliases: [SHOP SHIMATARO, おもちゃとホビー SHOP SHIMATARO, SHIMATARO]}
+  - {canonical: Bajoy, tier: D, region: CN, noindex: true, aliases: [BAJOY, bajoy]}
+  - {canonical: Globaledutoy, tier: D, region: CN, noindex: true, aliases: [GLOBALEDUTOY, GlobalEduToy]}
+  - {canonical: HMshuo, tier: D, region: CN, noindex: true, aliases: [HMSHUO, hmshuo]}
+  - {canonical: JoyGrow, tier: D, region: CN, noindex: true, aliases: [JOYGROW, Joygrow, joygrow]}
+  - {canonical: Joyreal, tier: D, region: CN, noindex: true, aliases: [JOYREAL, JoyReal, joyreal]}
+  - {canonical: LumiLumi, tier: D, region: CN, noindex: true, aliases: [LUMILUMI, Lumilumi, lumilumi]}
+  - {canonical: TAETOE, tier: D, region: CN, noindex: true, aliases: [Taetoe, taetoe]}
+  - {canonical: Vanplay, tier: D, region: CN, noindex: true, aliases: [VANPLAY, VanPlay, vanplay]}
+  - {canonical: Mamimami Home, tier: D, region: CN, noindex: true, aliases: [Mamimami Home, MamimamiHome, mamimami home, mamimamihome]}
+  - {canonical: SHOP SHIMATARO, tier: D, region: JP, noindex: true, aliases: [SHOP SHIMATARO, おもちゃとホビー SHOP SHIMATARO, SHIMATARO]}
   # 2026-06-02 (session 77 / #1329 Phase 3.0): GSC で imp=7 のブランド名指名
   # (ロンビー / ロンビー おもちゃ) を確認 → canonical 追加。商品は B0875FV2BQ
   # (ロンビー(Lon-Bi) ボードゲーム系)。製造拠点不明 = unknown / tier D。
-  - {canonical: ロンビー, tier: D, region: unknown, aliases: [ロンビー, "ロンビー(Lon-Bi)", Lon-Bi, LON-BI, "lon-bi", LonBi]}
+  - {canonical: ロンビー, tier: D, region: unknown, noindex: true, aliases: [ロンビー, "ロンビー(Lon-Bi)", Lon-Bi, LON-BI, "lon-bi", LonBi]}
+  # 2026-06-09 (session 137 / #2126 P3→P4): 供給側検出器
+  # (suggest_brand_taxonomy_from_catalog.py) が surfacing した実在中華系ブランド。
+  # 商品帰属のため登録するが薄いハブは出さない = noindex。
+  - {canonical: Jasonwell, tier: D, region: CN, noindex: true, aliases: [JASONWELL, jasonwell]}
+  - {canonical: beiens, tier: D, region: CN, noindex: true, aliases: [BEIENS, Beiens]}

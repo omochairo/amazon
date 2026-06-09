@@ -101,7 +101,10 @@
   {{- end -}}
 {{- end -}}
 {{- $hubMinSiblings := 3 -}}
-{{- if and $selfBrand (ge (len $brandSiblings) $hubMinSiblings) }}
+{{- /* ハブバナーは /brands/<brand>/ term ページが実在する場合のみ表示。
+       .Params.brands は exclude_from_taxonomy=false のブランドにのみ付与される
+       (ノーブランド等は付かない) → これを使わないと 404 リンクになる (session 135 修正)。 */ -}}
+{{- if and $selfBrand .Params.brands (ge (len $brandSiblings) $hubMinSiblings) }}
 <aside class="hub-banner" aria-label="{{ $selfBrand }} ブランドハブ">
   <a class="hub-banner-link" href="{{ (printf "brands/%s/" (urlize $selfBrand)) | relURL }}">
     <span class="hub-banner-icon" aria-hidden="true">📘</span>
@@ -117,6 +120,13 @@
 </aside>
 {{- end }}
 
+{{- /* --- 年齢を起点にしたレコメンドであることを明示するリード文 (エンゲージメント改善) --- */ -}}
+{{- $ageText := "" -}}
+{{- if gt $selfAge 0 -}}
+  {{- if ge $selfAge 12 -}}{{- $ageText = printf "%d歳" (int (div $selfAge 12)) -}}
+  {{- else -}}{{- $ageText = printf "%dヶ月" $selfAge -}}{{- end -}}
+{{- end -}}
+
 {{- if gt (len $top) 0 }}
 <section class="related-carousel-section">
   <header class="home-section-header">
@@ -126,6 +136,11 @@
       <button class="carousel-arrow next" aria-label="右にスクロール">›</button>
     </div>
   </header>
+  {{- if ne $ageText "" }}
+  <p class="related-carousel-lead">👶 <strong>この商品と同じ {{ $ageText }}〜向けのおもちゃはこちら。</strong>対象年齢が近い商品を中心に、ブランド・価格帯・遊びのタイプが似た比較レビューを自動でピックアップしました。</p>
+  {{- else }}
+  <p class="related-carousel-lead">🔍 この商品とブランド・価格帯・遊びのタイプが近い比較レビューを自動でピックアップしました。</p>
+  {{- end }}
   <div class="carousel-wrapper">
     <div class="carousel-track">
       {{- range $top }}

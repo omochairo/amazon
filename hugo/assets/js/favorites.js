@@ -247,12 +247,100 @@
     });
   }
 
+  // ------- 値下げ検出 (#1365 Layer 1-④) -------
+  // 登録時 snapshot.min_price と現在の最安値 (index.json の price_* 非ゼロ最小) を
+  // 比較し、DROP_THRESHOLD 以上下落していたら 🔻 バッジを描画する。リピート訪問の
+  // 動機を作る核心機能。snapshot は登録時価格で固定 (現価格は触らない)。
+  var CATALOG_URL = "/index.json";
+  var DROP_THRESHOLD = 0.05; // 5% 以上で値下げ扱い
+  var _catalogPromise = null;
+
+  // index.json は asin を持たない (permalink/title/image/price_* のみ)。
+  // permalink 末尾の /products/<asin>/ から asin を逆引きして price map を組む。
+  function _loadCatalog() {
+    if (_catalogPromise) return _catalogPromise;
+    if (typeof fetch !== "function") { _catalogPromise = Promise.resolve({}); return _catalogPromise; }
+    _catalogPromise = fetch(CATALOG_URL, { credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (rows) {
+        var map = {};
+        (rows || []).forEach(function (row) {
+          var m = (row.permalink || "").match(/\/products\/([a-z0-9]+)\/?/i);
+          if (!m) return;
+          var prices = [row.price_amazon, row.price_rakuten, row.price_yahoo]
+            .map(function (v) { return parseInt(v, 10) || 0; })
+            .filter(function (v) { return v > 0; });
+          if (prices.length) map[m[1].toUpperCase()] = Math.min.apply(null, prices);
+        });
+        return map;
+      })
+      .catch(function () { return {}; });
+    return _catalogPromise;
+  }
+
+  function _dropInfo(asin, currentMin) {
+    var snap = snapshot(asin);
+    var was = snap && Number(snap.min_price);
+    var now = Number(currentMin);
+    if (!(was > 0) || !(now > 0) || now >= was) return null;
+    var pct = (was - now) / was;
+    if (pct < DROP_THRESHOLD) return null;
+    return { was: was, now: now, pct: Math.round(pct * 100), diff: was - now };
+  }
+
+  function _yen(n) { return "¥" + Number(n).toLocaleString(); }
+
+  // favorites 一覧: 各カードの meta に 🔻 バッジを追記
+  function _decorateFavoritesDrops() {
+    if (!/\/favorites\/?$/.test(global.location.pathname)) return;
+    _loadCatalog().then(function (map) {
+      var cards = document.querySelectorAll(".favorites-card[data-asin]");
+      for (var i = 0; i < cards.length; i++) {
+        var card = cards[i];
+        var asin = card.getAttribute("data-asin");
+        var info = _dropInfo(asin, map[asin]);
+        if (!info) continue;
+        var meta = card.querySelector(".favorites-card-meta");
+        if (!meta || meta.querySelector(".price-drop-badge")) continue;
+        var badge = document.createElement("span");
+        badge.className = "price-drop-badge";
+        badge.title = "登録時 " + _yen(info.was) + " → 現在 " + _yen(info.now);
+        badge.textContent = "🔻 " + info.pct + "% 値下げ";
+        meta.appendChild(badge);
+        card.classList.add("has-price-drop");
+      }
+    });
+  }
+
+  // 商品ページ: 表示中の商品がお気に入り済 & 値下げ時、タイトル直下にバナー
+  function _decorateProductDrop() {
+    var m = global.location.pathname.match(/\/products\/([a-z0-9]+)\/?$/i);
+    if (!m) return;
+    var asin = m[1].toUpperCase();
+    if (!has(asin)) return;
+    _loadCatalog().then(function (map) {
+      var info = _dropInfo(asin, map[asin]);
+      if (!info) return;
+      var title = document.querySelector(".post-title");
+      if (!title || document.querySelector(".price-drop-banner")) return;
+      var banner = document.createElement("div");
+      banner.className = "price-drop-banner";
+      banner.setAttribute("role", "status");
+      banner.innerHTML = '<span class="price-drop-banner-icon" aria-hidden="true">🔻</span>' +
+        '<span class="price-drop-banner-text">お気に入り登録時より <strong>' + info.pct +
+        '%</strong> 値下げ（' + _yen(info.was) + ' → <strong>' + _yen(info.now) + '</strong>）</span>';
+      title.parentNode.insertBefore(banner, title.nextSibling);
+    });
+  }
+
   // ------- boot -------
   function boot() {
     try {
       mountToggles(document);
       mountHeaderBadge();
       hydrateFavoritesPage();
+      _decorateFavoritesDrops();
+      _decorateProductDrop();
     } catch (e) { /* never break page */ }
   }
 

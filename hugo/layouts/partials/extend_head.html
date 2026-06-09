@@ -165,6 +165,9 @@
 {{- /* #731 Part B: brand hub ItemList JSON-LD (term ページかつ narrative 対象のみ emit) */ -}}
 {{- partial "brand_hub_jsonld.html" . -}}
 
+{{- /* #1358 B-6: brand 自身の Organization JSON-LD (Wikidata 由来メタ, term ページのみ) */ -}}
+{{- partial "brand_org_jsonld.html" . -}}
+
 {{- /* Issue #1297: Hugo の .Params map はキーを小文字化するため、build_post.py 側で
        JSON 文字列としてシリアライズ済 (<>& は \uXXXX escape 済)。
        ここでは jsonify を介さず safeJS のみで素通しして camelCase を保つ。 */ -}}

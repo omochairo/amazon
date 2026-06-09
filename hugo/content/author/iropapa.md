@@ -44,6 +44,8 @@ searchHidden: false
 
 編集部の運営方針・AI 生成コンテンツの取扱いについては [編集部について](/about/) をご覧ください。
 
+{{< author_references "iropapa" >}}
+
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",

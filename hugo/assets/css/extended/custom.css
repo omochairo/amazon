@@ -251,6 +251,64 @@ header .logo a {
   border-bottom: 1px solid rgba(255,255,255,0.08) !important;
 }
 
+/* ---------- 基本スペック表 (Layer 2-③ spec table) ---------- */
+/* key-value 形式。thead を持たず行頭 th をラベル列として使う。
+   視線往復を減らすため素材/サイズ/原産国などを一覧化 (#1365)。*/
+.post-content table.spec-table {
+  width: 100%;
+  margin: 1.4em 0;
+  border-collapse: collapse;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: var(--radius-sm);
+  overflow: hidden;            /* 角丸でセルの隅をクリップ */
+  font-size: 0.95em;
+}
+.post-content table.spec-table th[scope="row"] {
+  width: 28%;
+  min-width: 5.5em;
+  text-align: left;
+  vertical-align: top;
+  font-weight: 700;
+  color: var(--brand-primary);
+  background: var(--brand-gradient-subtle);
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  border-right: 1px solid rgba(0,0,0,0.06);
+  white-space: nowrap;
+}
+.post-content table.spec-table td {
+  vertical-align: top;
+  line-height: 1.75;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+[data-theme="dark"] .post-content table.spec-table {
+  border-color: rgba(255,255,255,0.1);
+}
+[data-theme="dark"] .post-content table.spec-table th[scope="row"] {
+  border-bottom-color: rgba(255,255,255,0.08);
+  border-right-color: rgba(255,255,255,0.08);
+}
+[data-theme="dark"] .post-content table.spec-table td {
+  border-bottom-color: rgba(255,255,255,0.08);
+}
+.post-content table.spec-table tbody tr:last-child th[scope="row"],
+.post-content table.spec-table tbody tr:last-child td {
+  border-bottom: none !important;
+}
+@media (max-width: 640px) {
+  .post-content table.spec-table { font-size: 0.9em; }
+  .post-content table.spec-table th[scope="row"] {
+    width: 32%;
+    min-width: 4.5em;
+    padding: 10px 12px;
+    white-space: normal;
+  }
+  .post-content table.spec-table td {
+    padding: 10px 12px;
+  }
+}
+
 /* ---------- Blockquotes (装飾ボックス) ---------- */
 .post-content blockquote {
   border-left: 4px solid var(--brand-primary) !important;
@@ -626,16 +684,233 @@ header .logo a {
 [data-theme="dark"] .post-content .amazon-effective-price strong { color: #bbf7d0; }
 [data-theme="dark"] .post-content .price-card.is-outofstock .price-card-amount { color: #64748b; }
 
-/* ---------- Print ---------- */
+/* ---------- 画像 lightbox + ピンチズーム (epic #1365 Layer 4) ---------- */
+.post-content img.lightbox-trigger {
+  cursor: zoom-in;
+}
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.92);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+.lightbox-overlay.is-open { display: flex; }
+body.lightbox-lock { overflow: hidden; }
+.lightbox-figure {
+  margin: 0;
+  max-width: 96vw;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+.lightbox-img {
+  max-width: 96vw;
+  max-height: 84vh;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  touch-action: none;
+  cursor: grab;
+  pointer-events: auto;
+  transform-origin: center center;
+  transition: transform 0.08s linear;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.lightbox-overlay.is-zoomed .lightbox-img { cursor: grab; transition: none; }
+.lightbox-caption {
+  margin-top: 0.6rem;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.85rem;
+  text-align: center;
+  max-width: 90vw;
+}
+.lightbox-close,
+.lightbox-nav {
+  position: absolute;
+  z-index: 1;
+  border: none;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  cursor: pointer;
+  border-radius: 999px;
+  line-height: 1;
+  transition: background 0.15s ease;
+}
+.lightbox-close:hover,
+.lightbox-nav:hover { background: rgba(255, 255, 255, 0.3); }
+.lightbox-close {
+  top: 14px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  font-size: 1.7rem;
+}
+.lightbox-nav {
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 64px;
+  font-size: 2.2rem;
+}
+.lightbox-prev { left: 12px; }
+.lightbox-next { right: 12px; }
+.lightbox-nav[hidden],
+.lightbox-counter[hidden] { display: none; }
+.lightbox-counter {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.lightbox-hint {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.75rem;
+  pointer-events: none;
+}
+@media (max-width: 600px) {
+  .lightbox-hint { font-size: 0.68rem; bottom: 10px; }
+  .lightbox-nav { width: 40px; height: 54px; font-size: 1.8rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lightbox-img { transition: none; }
+}
+
+/* ---------- Print (epic #1365 Layer 4) ----------
+   祖父母世代がプレゼント検討時にプリントする実需。商品名・メイン画像・
+   知育スコア・価格表・仕様/本文だけを綺麗に残し、ナビ/CTA/カルーセル等の
+   画面専用要素を落とす。スコアの色は print-color-adjust で保持する。 */
+@page {
+  margin: 1.4cm;
+}
 @media print {
+  html, body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  /* 本文を紙幅いっぱいに */
+  main.main,
+  .post-single,
+  .post-content {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* --- 画面専用 chrome / インタラクションを非表示 --- */
+  header.header,
+  footer.footer,
+  #top-link,
+  #scroll-progress-bar,
+  #mobile-sticky-cta,
+  .mobile-sticky-cta,
+  .breadcrumbs,
+  .post-meta,
+  .toc,
+  #TableOfContents,
+  .paginav,
+  .post-tags,
+  .share-icons,
+  .social-icons,
+  #comments,
+  .comments,
+  .recently-viewed-mount,
+  .related-carousel-section,
+  .omcha-card-grid,
+  .ranking-history-section,
+  .yt-embed,
+  .keepa-graph,
+  .product-slideshow,
+  .link-report-flag,
+  .auto-gen-notice,
+  .price-card-cta,
+  .price-card-nolink,
+  .price-search-fallback,
+  .review-cta {
+    display: none !important;
+  }
+
+  /* --- <details> はすべて展開して内容を印刷 --- */
+  .post-content details > *:not(summary) { display: block !important; }
+  .post-content details summary {
+    list-style: none;
+    font-weight: 700;
+  }
+
+  /* --- 残す要素: 色と枠を保持 --- */
+  .post-content .hero-score,
+  .post-content .price-cta-grid,
+  .post-content .price-card,
+  .post-content .hero-total-bar-fill,
+  .post-content .score-recap-card,
+  .post-content .amazon-badge,
+  .post-content .hero-radar,
+  .post-content .radar-shape,
+  .post-content .best-deal {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* メイン画像はページに収まるサイズへ */
+  .post-content figure.product-hero-image {
+    text-align: center;
+    margin: 0.4cm auto;
+  }
+  .post-content figure.product-hero-image img {
+    max-height: 7cm;
+    width: auto;
+    cursor: default;
+  }
+
+  /* 価格表は 3 列を維持しつつ改ページで割れないように */
+  .post-content .price-cta-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 6px !important;
+  }
+
+  /* 改ページでカード・見出しが割れないように */
+  .post-content .price-card,
+  .post-content .hero-score,
+  .post-content .score-recap-card,
+  .post-content .persona-fit,
+  .post-content .best-deal,
+  .post-content figure.product-hero-image {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .post-content h2,
+  .post-content h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* リンクは下線のみ・装飾チップを除去 */
   .post-content p a[href*="amazon.co.jp"] {
     background: none;
-    color: #333 !important;
+    color: #000 !important;
     box-shadow: none;
     padding: 0;
     text-decoration: underline !important;
   }
-  .post-content .yt-embed { display: none; }
 }
 
 /* ==========================================
@@ -1904,6 +2179,84 @@ html[data-theme="dark"] .post-content .price-cta-grid .price-search-fallback a:h
   color: #666;
   margin: 8px 0 0;
 }
+
+/* #1369 スコア根拠 inline 展開: 算出ロジック導線 + フィードバック widget
+   (score_explain.js が .score-breakdown-doc 直後に注入) */
+.post-content .score-explain-cta {
+  margin: 14px 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.post-content .score-explain-link {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 4px;
+  padding: 8px 16px;
+  border: 1px solid #fcd34d;
+  border-radius: 999px;
+  background: #fffbeb;
+  color: #92400e;
+  font-weight: 600;
+  font-size: 0.92rem;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.post-content .score-explain-link:hover {
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+.post-content .score-fb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+.post-content .score-fb-q {
+  color: #475569;
+  font-weight: 600;
+}
+.post-content .score-fb-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+.post-content .score-fb-btn {
+  cursor: pointer;
+  padding: 5px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #334155;
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+.post-content .score-fb-btn:hover:not(:disabled) {
+  background: #eef2ff;
+  border-color: #818cf8;
+}
+.post-content .score-fb-btn.is-chosen {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #fff;
+}
+.post-content .score-fb-btn:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.post-content .score-fb-btn.is-chosen:disabled {
+  opacity: 1;
+}
+.post-content .score-fb-thanks {
+  color: #15803d;
+  font-weight: 600;
+}
 .post-content .review-signals-list {
   margin: 8px 0 14px;
   padding-left: 20px;
@@ -2053,6 +2406,145 @@ html[data-theme="dark"] .post-content details.score-axes-doc summary {
 [data-theme="dark"] .post-content details.score-axes-doc .score-axes-note,
 html[data-theme="dark"] .post-content details.score-axes-doc .score-axes-note {
   color: #d6d3d1;
+}
+/* #1369 score_explain dark variants */
+[data-theme="dark"] .post-content .score-explain-link,
+html[data-theme="dark"] .post-content .score-explain-link {
+  background: #1f1209;
+  border-color: #78350f;
+  color: #fde68a;
+}
+[data-theme="dark"] .post-content .score-explain-link:hover,
+html[data-theme="dark"] .post-content .score-explain-link:hover {
+  background: #2a1a0c;
+  border-color: #92400e;
+}
+[data-theme="dark"] .post-content .score-fb,
+html[data-theme="dark"] .post-content .score-fb {
+  background: #1e293b;
+  border-color: #334155;
+}
+[data-theme="dark"] .post-content .score-fb-q,
+html[data-theme="dark"] .post-content .score-fb-q {
+  color: #cbd5e1;
+}
+[data-theme="dark"] .post-content .score-fb-btn,
+html[data-theme="dark"] .post-content .score-fb-btn {
+  background: #0f172a;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+[data-theme="dark"] .post-content .score-fb-btn:hover:not(:disabled),
+html[data-theme="dark"] .post-content .score-fb-btn:hover:not(:disabled) {
+  background: #312e81;
+  border-color: #818cf8;
+}
+[data-theme="dark"] .post-content .score-fb-btn.is-chosen,
+html[data-theme="dark"] .post-content .score-fb-btn.is-chosen {
+  background: #6366f1;
+  border-color: #6366f1;
+  color: #fff;
+}
+[data-theme="dark"] .post-content .score-fb-thanks,
+html[data-theme="dark"] .post-content .score-fb-thanks {
+  color: #86efac;
+}
+
+/* ==========================================
+   役立ち度フィードバック (epic #1365 Layer 3-②)
+   記事末尾の 😊/😐/😢 widget。記事下の余白を確保しつつ
+   score-fb と同系の淡色カードでまとめる。
+   ========================================== */
+.post-content .article-fb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin: 32px 0 12px;
+  padding: 16px 18px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 0.92rem;
+}
+.post-content .article-fb-q {
+  color: #334155;
+  font-weight: 700;
+}
+.post-content .article-fb-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.post-content .article-fb-btn {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #334155;
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+.post-content .article-fb-emoji {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.post-content .article-fb-btn:hover:not(:disabled) {
+  background: #eef2ff;
+  border-color: #818cf8;
+  transform: translateY(-1px);
+}
+.post-content .article-fb-btn.is-chosen {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #fff;
+}
+.post-content .article-fb-btn:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.post-content .article-fb-btn.is-chosen:disabled {
+  opacity: 1;
+}
+.post-content .article-fb-thanks {
+  flex-basis: 100%;
+  color: #15803d;
+  font-weight: 600;
+}
+[data-theme="dark"] .post-content .article-fb,
+html[data-theme="dark"] .post-content .article-fb {
+  background: #1e293b;
+  border-color: #334155;
+}
+[data-theme="dark"] .post-content .article-fb-q,
+html[data-theme="dark"] .post-content .article-fb-q {
+  color: #e2e8f0;
+}
+[data-theme="dark"] .post-content .article-fb-btn,
+html[data-theme="dark"] .post-content .article-fb-btn {
+  background: #0f172a;
+  border-color: #475569;
+  color: #cbd5e1;
+}
+[data-theme="dark"] .post-content .article-fb-btn:hover:not(:disabled),
+html[data-theme="dark"] .post-content .article-fb-btn:hover:not(:disabled) {
+  background: #312e81;
+  border-color: #818cf8;
+}
+[data-theme="dark"] .post-content .article-fb-btn.is-chosen,
+html[data-theme="dark"] .post-content .article-fb-btn.is-chosen {
+  background: #6366f1;
+  border-color: #6366f1;
+  color: #fff;
+}
+[data-theme="dark"] .post-content .article-fb-thanks,
+html[data-theme="dark"] .post-content .article-fb-thanks {
+  color: #86efac;
 }
 
 /* ==========================================
@@ -2299,6 +2791,37 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   background: #0369a1;  /* Sky 700 - ダークモードでコントラスト比を考慮した濃いめのブルー */
   color: #ffffff;
   border-color: rgba(255,255,255,0.1);
+}
+
+/* --- 編集者推し 👑 バッジ (Top-Center overlay / Layer 3-① #1365) ---
+   4 隅は 🆚/♡/🏆/👶 で埋まっているため、希少な編集者推しは上辺中央に配置。
+   curate された商品のみ表示されるため大半のカードには出ない。 */
+.product-card-editor-pick {
+  position: absolute;
+  top: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: calc(100% - 5rem);  /* 左右の compare/fav トグルを避ける */
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f6c344 0%, #e0a516 100%);  /* gold */
+  color: #4a3500;
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 2px 7px rgba(180,130,0,0.4);
+  border: 1px solid rgba(255,255,255,0.55);
+  z-index: 3;
+  pointer-events: none;
+}
+[data-theme="dark"] .product-card-editor-pick {
+  background: linear-gradient(135deg, #e6b53d 0%, #c79114 100%);
+  color: #2e2200;
+  border-color: rgba(255,255,255,0.3);
 }
 
 /* ==========================================
@@ -2773,6 +3296,79 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   align-items: center;
   gap: 0.6rem;
   font-weight: 700;
+}
+
+/* 「半年〜1年後にこちら」成長先取りセクション (epic #1365 Layer 2-⑤) */
+.future-age-section .home-section-header {
+  border-bottom-color: #7cb342;
+}
+.future-age-section .home-section-header h2 {
+  color: #558b2f;
+}
+.future-age-lead,
+.related-carousel-lead {
+  margin: -0.5rem 0 1.1rem;
+  font-size: 0.9rem;
+  color: var(--secondary);
+  line-height: 1.6;
+}
+.related-carousel-lead strong {
+  color: var(--primary);
+}
+
+/* 著者プロフィールの参考文献 (epic #1358 B-9 / NDL) */
+.author-refs {
+  margin: 2.5rem 0 0;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(124, 179, 66, 0.05);
+}
+.author-refs h2 {
+  font-size: 1.15rem;
+  margin: 0 0 0.4rem;
+}
+.author-refs-note {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  color: var(--secondary);
+  line-height: 1.6;
+}
+.author-refs-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.author-refs-item {
+  padding: 0.6rem 0;
+  border-top: 1px dashed var(--border);
+}
+.author-refs-item:first-child {
+  border-top: none;
+}
+.author-refs-topic {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #558b2f;
+  background: rgba(124, 179, 66, 0.16);
+  border-radius: 999px;
+  padding: 0.1rem 0.6rem;
+  margin-right: 0.5rem;
+}
+.author-refs-title {
+  font-weight: 600;
+}
+.author-refs-meta {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--secondary);
+  margin-top: 0.15rem;
+}
+.author-refs-src {
+  margin: 1rem 0 0;
+  font-size: 0.8rem;
+  color: var(--secondary);
 }
 
 .carousel-nav-arrows {
@@ -3344,12 +3940,22 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   font-size: 0.9rem;
 }
 
+.post-content .persona-fit__caution {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed #f0c4a3;
+}
+.post-content .persona-fit__caution > strong { color: #b45309; }
+.post-content .persona-fit__caution ul { margin: 8px 0 0; padding-left: 20px; }
+
 [data-theme="dark"] .post-content .persona-fit {
   background: #2a1f17;
   border-left-color: #fb923c;
   color: #fde68a;
 }
 [data-theme="dark"] .post-content .persona-fit > strong { color: #fdba74; }
+[data-theme="dark"] .post-content .persona-fit__caution { border-top-color: #5b4636; }
+[data-theme="dark"] .post-content .persona-fit__caution > strong { color: #fcd34d; }
 
 /* ---------- 価格 3 サイト比較グリッド ---------- */
 .post-content .price-cta-grid {
@@ -4831,6 +5437,47 @@ details.development-stage-accordion[open] > summary::before {
   font-weight: 600;
 }
 
+/* 値下げバッジ (#1365 Layer 1-④) — 登録時より 5% 以上下落した favorite に表示 */
+.price-drop-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: #fdecec;
+  color: #c0392b;
+  font-weight: 700;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+[data-theme="dark"] .price-drop-badge { background: #3a1f22; color: #ff8a80; }
+.favorites-card.has-price-drop { box-shadow: 0 0 0 2px rgba(192, 57, 43, 0.35); }
+[data-theme="dark"] .favorites-card.has-price-drop { box-shadow: 0 0 0 2px rgba(255, 138, 128, 0.4); }
+
+/* 商品ページ: お気に入り登録時より値下げした際のタイトル直下バナー */
+.price-drop-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.6rem 0 0.2rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #fff5f4, #fdecec);
+  border: 1px solid rgba(192, 57, 43, 0.25);
+  color: #a93226;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.price-drop-banner-icon { font-size: 1.1rem; }
+.price-drop-banner strong { color: #c0392b; font-weight: 800; }
+[data-theme="dark"] .price-drop-banner {
+  background: linear-gradient(135deg, #2a1416, #3a1f22);
+  border-color: rgba(255, 138, 128, 0.3);
+  color: #ffb3ab;
+}
+[data-theme="dark"] .price-drop-banner strong { color: #ff8a80; }
+
 .favorites-card-remove {
   position: absolute;
   top: 8px;
@@ -4946,19 +5593,22 @@ details.development-stage-accordion[open] > summary::before {
   color: var(--secondary);
 }
 
+/* grid は flex track。横スクロール/scroll-snap は親 .carousel-wrapper が担当
+   (#1367 carousel_swipe.js 共通制御のため). */
 .recently-viewed-grid {
   display: flex;
   gap: 0.85rem;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 0.5rem;
-  scrollbar-width: thin;
+}
+
+.recently-viewed-item {
+  position: relative;
+  flex: 0 0 180px;
+  scroll-snap-align: start;
 }
 
 .recently-viewed-card {
-  flex: 0 0 180px;
-  scroll-snap-align: start;
+  display: block;
+  width: 100%;
   background: #fff;
   border-radius: var(--radius-md);
   box-shadow: var(--card-shadow);
@@ -5015,8 +5665,43 @@ details.development-stage-accordion[open] > summary::before {
 .recently-viewed-score { color: var(--brand-primary); font-weight: 700; }
 .recently-viewed-price { color: var(--secondary); font-weight: 600; }
 
+/* 個別削除 (×) — カード右上に重ねる。hover/focus で表示、touch 端末は常時表示。 */
+.recently-viewed-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+.recently-viewed-item:hover .recently-viewed-remove,
+.recently-viewed-remove:focus-visible { opacity: 1; }
+.recently-viewed-remove:hover { background: rgba(0, 0, 0, 0.8); }
+@media (hover: none) {
+  .recently-viewed-remove { opacity: 1; }
+}
+
+/* 最近見た商品ヘッダ内の矢印は常に右端へ (h2 + note と同居するため) */
+.recently-viewed-mount .carousel-nav-arrows {
+  margin-left: auto;
+  align-self: center;
+}
+
 @media (max-width: 600px) {
-  .recently-viewed-card { flex-basis: 150px; }
+  .recently-viewed-item { flex-basis: 150px; }
 }
 
 /* ==========================================
@@ -5214,3 +5899,342 @@ details.development-stage-accordion[open] > summary::before {
 @media (prefers-reduced-motion: reduce) {
   #top-link:hover { transform: none !important; }
 }
+
+/* ---------- 外部ソースハイライト (source-highlights / #1370) ----------
+   原文ママのため外国語が混じる場合があり、内容が安定するまで
+   <details> アコーディオンで既定折りたたみ (#1365 session128)。*/
+.post-content details.source-highlights {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #64748b;
+  border-radius: var(--radius-sm);
+  margin: 24px 0;
+  color: #1f2937;
+  overflow: hidden;
+}
+.post-content .source-highlights__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+  cursor: pointer;
+  padding: 13px 18px;
+  font-weight: 700;
+  color: #334155;
+  user-select: none;
+}
+.post-content .source-highlights__summary::-webkit-details-marker { display: none; }
+.post-content .source-highlights__summary::after {
+  content: "▾";
+  margin-left: auto;
+  font-size: 0.9em;
+  color: #64748b;
+  transition: transform 0.2s ease;
+}
+.post-content details.source-highlights[open] .source-highlights__summary::after {
+  transform: rotate(180deg);
+}
+.post-content .source-highlights__summary:hover { background: rgba(100,116,139,0.06); }
+.post-content .source-highlights__count {
+  font-size: 0.72em;
+  font-weight: 600;
+  color: #fff;
+  background: #94a3b8;
+  border-radius: 999px;
+  padding: 1px 9px;
+}
+.post-content .source-highlights__body {
+  padding: 0 18px 14px;
+}
+.post-content .source-highlights__intro {
+  font-size: 0.85em;
+  color: #64748b;
+  margin: 6px 0 12px;
+}
+.post-content .source-highlights__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.post-content .source-highlights__list > li { margin: 0 0 14px; }
+.post-content .source-highlights__list > li:last-child { margin-bottom: 0; }
+.post-content .source-highlights blockquote {
+  margin: 0;
+  padding: 0 0 0 12px;
+  border-left: 3px solid #cbd5e1;
+  font-style: normal;
+  color: #334155;
+}
+.post-content .source-highlights__cite {
+  display: block;
+  font-size: 0.8em;
+  color: #64748b;
+  margin-top: 4px;
+}
+.post-content .source-highlights__cite a { color: #475569; }
+
+[data-theme="dark"] .post-content details.source-highlights {
+  background: #1e293b;
+  border-color: #334155;
+  border-left-color: #94a3b8;
+  color: #e2e8f0;
+}
+[data-theme="dark"] .post-content .source-highlights__summary { color: #cbd5e1; }
+[data-theme="dark"] .post-content .source-highlights__summary:hover { background: rgba(148,163,184,0.1); }
+[data-theme="dark"] .post-content .source-highlights__count { background: #475569; }
+[data-theme="dark"] .post-content .source-highlights__intro,
+[data-theme="dark"] .post-content .source-highlights__cite { color: #94a3b8; }
+[data-theme="dark"] .post-content .source-highlights blockquote {
+  border-left-color: #475569;
+  color: #cbd5e1;
+}
+[data-theme="dark"] .post-content .source-highlights__cite a { color: #cbd5e1; }
+
+/* === 前回の診断バナー (#1365 Layer 1-③) ===
+   ホーム上部。last_diagnosis.js が localStorage から hydrate し hidden 解除。 */
+.last-diagnosis {
+  margin: 1.4rem 0 0;
+}
+.last-diagnosis[hidden] { display: none; }
+.last-diagnosis-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.8rem 1.2rem;
+  padding: 1rem 1.2rem;
+  border-radius: var(--radius-md, 14px);
+  border: 1.5px solid var(--brand-secondary, #ffd9b3);
+  background: linear-gradient(135deg, rgba(255, 247, 237, 0.9), rgba(255, 237, 220, 0.7));
+  box-shadow: var(--card-shadow, 0 2px 10px rgba(0, 0, 0, 0.06));
+}
+.last-diagnosis-eyebrow {
+  display: inline-block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--brand-primary, #e8743b);
+}
+.last-diagnosis-summary {
+  margin: 0.25rem 0 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--primary, #222);
+  line-height: 1.4;
+}
+.last-diagnosis-meta {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  color: var(--secondary, #777);
+}
+.last-diagnosis-top { margin-top: 0.5rem; }
+.last-diagnosis-top-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--primary, #333);
+  text-decoration: none;
+}
+.last-diagnosis-top-link img {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.last-diagnosis-top-link:hover .last-diagnosis-top-name { text-decoration: underline; }
+.last-diagnosis-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.last-diagnosis-btn {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  border: 1.5px solid var(--brand-primary, #e8743b);
+  color: var(--brand-primary, #e8743b);
+  background: #fff;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.last-diagnosis-btn.primary {
+  background: var(--brand-primary, #e8743b);
+  color: #fff;
+}
+.last-diagnosis-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+@media (max-width: 560px) {
+  .last-diagnosis-inner { flex-direction: column; align-items: stretch; }
+  .last-diagnosis-actions { justify-content: stretch; }
+  .last-diagnosis-btn { flex: 1; text-align: center; }
+}
+[data-theme="dark"] .last-diagnosis-inner {
+  border-color: #4a3a2a;
+  background: linear-gradient(135deg, #2a2422, #241f1d);
+}
+[data-theme="dark"] .last-diagnosis-btn { background: #2a2a3a; }
+[data-theme="dark"] .last-diagnosis-btn.primary { color: #fff; }
+
+/* ============================================================
+   #1365 Layer 3-③ 年齢タイムライン (age_timeline.html)
+   ホームの横スクロール年齢バンド。タップで /diagnosis/?age=<band>
+   へ遷移しその年齢帯のベスト10を表示。spotlight と同系の温かい配色。
+   ============================================================ */
+.age-timeline {
+  margin: 32px 0;
+}
+.age-timeline-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.age-timeline-title {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+.age-timeline-note {
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+.age-timeline-track {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 6px 2px 14px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.age-timeline-track::-webkit-scrollbar { height: 6px; }
+.age-timeline-track::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 3px;
+}
+.age-timeline-card {
+  position: relative;
+  flex: 0 0 auto;
+  width: 168px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px 16px 16px;
+  border-radius: 16px;
+  border: 1px solid #f0d9c0;
+  background: linear-gradient(155deg, #fff8f0, #fff1e3);
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.age-timeline-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 18px rgba(214, 142, 64, 0.22);
+}
+.age-timeline-step {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #fff;
+  background: #e8923c;
+}
+.age-timeline-emoji {
+  font-size: 2rem;
+  line-height: 1;
+}
+.age-timeline-label {
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+.age-timeline-sub {
+  font-size: 0.78rem;
+  opacity: 0.72;
+  min-height: 2.2em;
+}
+.age-timeline-cta {
+  margin-top: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #d6792a;
+}
+@media (max-width: 560px) {
+  .age-timeline-card { width: 150px; }
+}
+[data-theme="dark"] .age-timeline-card {
+  border-color: #4a3a2a;
+  background: linear-gradient(155deg, #2a2422, #241f1d);
+}
+[data-theme="dark"] .age-timeline-cta { color: #f0a85a; }
+[data-theme="dark"] .age-timeline-track::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* #1358 B-5: おもちゃの安全とリコール確認パネル (toy_safety_panel.html) */
+.toy-safety {
+  margin: 32px 0 8px;
+  padding: 20px 22px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  background: var(--entry, #fff);
+}
+.toy-safety > h2 {
+  margin: 0 0 14px;
+  font-size: 1.2rem;
+  color: var(--primary, #222);
+}
+.toy-safety__block { margin: 0 0 16px; }
+.toy-safety__block:last-of-type { margin-bottom: 8px; }
+.toy-safety__h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  color: var(--primary, #333);
+}
+.toy-safety p {
+  margin: 6px 0;
+  font-size: 0.94rem;
+  line-height: 1.7;
+  color: var(--content, #444);
+}
+.toy-safety__src {
+  font-size: 0.82rem;
+  color: var(--secondary, #6b7280);
+  white-space: nowrap;
+}
+.toy-safety__alert {
+  margin-top: 8px;
+  padding: 12px 14px;
+  border-left: 4px solid #f59e0b;
+  border-radius: 6px;
+  background: #fff7ed;
+}
+.toy-safety__alert > p { margin: 0 0 6px; }
+.toy-safety__alert > p > strong { color: #b45309; }
+.toy-safety__alert ul { margin: 6px 0 0; padding-left: 20px; }
+.toy-safety__alert li { font-size: 0.9rem; line-height: 1.6; }
+.toy-safety__note {
+  font-size: 0.8rem !important;
+  color: var(--secondary, #9ca3af) !important;
+}
+[data-theme="dark"] .toy-safety {
+  border-color: #3a3a3a;
+  background: #1f1f1f;
+}
+[data-theme="dark"] .toy-safety__alert {
+  background: #2a1f12;
+  border-left-color: #fb923c;
+}
+[data-theme="dark"] .toy-safety__alert > p > strong { color: #fbbf24; }

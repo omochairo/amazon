@@ -1,7 +1,10 @@
 """report_jules_usage.py — Jules 消費の日次集計 (#1200 dashboard)
 
 毎日 16-jules-daily-report.yml から実行される。`gh` CLI 経由で:
-  - app/google-labs-jules[bot] が当日起票した PR 件数 (= 実際の Jules session 数)
+  - app/google-labs-jules[bot] が当日起票した PR 件数 (= PR スループット目安。
+    **実 quota ではない** — 実 daily quota は session の *作成* 数で消費される。
+    PR=0 でも session 100 で枯渇しうる。実 quota 圧は report_jules_sessions.py の
+    rolling-24h を見ること。session 114 の真因参照)
   - 03/12/14 workflow の run 件数と conclusion 内訳
 
 を取得し、markdown を stdout に出力する。caller は `gh issue comment` で
@@ -27,7 +30,11 @@ import subprocess
 import sys
 
 REPO = "omochairo/amazon"
-DAILY_CAP = 30  # 03-invoke-jules.yml の DAILY_CAP と一致させる
+# PR スループットの目安バッジ用の参照値。**quota cap ではない**。
+# 実 quota gate は scripts/jules_quota_gate.py が live session の rolling-24h
+# 作成数 (cap 80) で行う (session 114)。旧 03-invoke の PR-count DAILY_CAP=30 は
+# 廃止済 → ここでは「1 日の PR 生成ペース目安」としてのみ流用する。
+PR_PACE_REF = 30
 
 # workflow id は gh api repos/.../actions/workflows で取得した固定値。
 WORKFLOWS = [
@@ -70,10 +77,12 @@ def workflow_runs_today(wf_id: int, date: str) -> list[dict]:
 
 
 def _status_emoji(pr_count: int) -> str:
-    if pr_count >= DAILY_CAP:
-        return "🔴 CAP HIT"
-    if pr_count >= int(DAILY_CAP * 0.8):
-        return "🟡 Warning (cap 接近)"
+    """PR スループットの目安バッジ。**quota 判定ではない** (高 PR = 生産的であって
+    枯渇ではない)。実 quota 圧は report_jules_sessions.py の rolling-24h を見る。"""
+    if pr_count >= PR_PACE_REF:
+        return "⚡ 高スループット"
+    if pr_count >= int(PR_PACE_REF * 0.8):
+        return "🟢 順調"
     return "🟢 OK"
 
 
@@ -88,7 +97,13 @@ def render(date: str) -> str:
     lines = []
     lines.append(f"## Jules usage — {date} UTC")
     lines.append("")
-    lines.append(f"**Jules PRs: {pr_count} / cap {DAILY_CAP}** &nbsp; {status}")
+    lines.append(f"**Jules 生成 PR: {pr_count} 本** &nbsp; {status} "
+                 f"_(PR スループット目安・参照ペース {PR_PACE_REF})_")
+    lines.append("")
+    lines.append("> ⚠️ これは **PR 件数であり実 quota ではない**。Jules daily quota は "
+                 "session の *作成* 数 (rolling-24h / 100) で消費される。PR=0 でも "
+                 "session 100 で枯渇しうる (session 114)。実 quota 圧は下段 "
+                 "「Jules sessions (live API)」を参照。")
     lines.append("")
     lines.append(f"- merged: {merged}")
     lines.append(f"- open: {open_count}")

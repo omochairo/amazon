@@ -40,11 +40,18 @@
       {{- $low := index $entry "lowest_price" -}}
       {{- $series := index $entry "top_3_series" -}}
       {{- $repAsin := index $entry "representative_asin" -}}
+      {{- /* 代表商品ページが実在する場合のみリンク化 (未公開 ASIN への 404 防止, session 135)。
+             representative_asin は当該ブランドの商品から選ばれるため $.Pages 内照合で足りる。 */ -}}
+      {{- $repPage := "" -}}
+      {{- if $repAsin -}}
+        {{- $repURL := printf "/products/%s/" (lower $repAsin) -}}
+        {{- range $.Pages -}}{{- if eq .RelPermalink $repURL -}}{{- $repPage = . -}}{{- end -}}{{- end -}}
+      {{- end -}}
 <section class="brand-hub-hero" data-brand="{{ $.Title }}">
   {{- if $img }}
   <div class="brand-hub-hero-image">
-    {{- if $repAsin }}
-    <a href="{{ printf "/products/%s/" (lower $repAsin) | relURL }}" aria-label="{{ $.Title }} の代表商品を見る">
+    {{- if $repPage }}
+    <a href="{{ $repPage.RelPermalink }}" aria-label="{{ $.Title }} の代表商品を見る">
       <img src="{{ $img }}" alt="{{ $.Title }} 代表商品" loading="lazy" decoding="async">
     </a>
     {{- else }}
@@ -90,6 +97,41 @@
     {{- end }}
   </div>
 </section>
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* #1358 B-6: ブランド情報パネル (Wikidata 由来, 出典 link を visible に) */ -}}
+{{- if eq $kind "brands" -}}
+  {{- with site.Data.brand_wikidata -}}
+    {{- $rec := index .brands $.Title -}}
+    {{- if $rec -}}
+      {{- $qid := index $rec "qid" -}}
+      {{- $entity := printf "https://www.wikidata.org/wiki/%s" $qid -}}
+      {{- $logo := index $rec "logo" -}}
+      {{- $web := index $rec "website" -}}
+      {{- $inc := index $rec "inception" -}}
+      {{- $hq := index $rec "hq" -}}
+      {{- $country := index $rec "country" -}}
+      {{- $founder := index $rec "founder" -}}
+      {{- if or $inc $hq $country $founder $web $logo -}}
+<section class="brand-wikidata" aria-label="{{ $.Title }} のメーカー情報">
+  <h2 class="brand-wikidata-title">🏢 {{ $.Title }} について</h2>
+  <div class="brand-wikidata-body">
+    {{- if $logo }}
+    <div class="brand-wikidata-logo"><img src="{{ $logo }}" alt="{{ $.Title }} ロゴ" loading="lazy" decoding="async"></div>
+    {{- end }}
+    <dl class="brand-wikidata-facts">
+      {{- if $inc }}<dt>設立</dt><dd>{{ $inc }}年</dd>{{ end }}
+      {{- if $founder }}<dt>創業者</dt><dd>{{ $founder }}</dd>{{ end }}
+      {{- if $hq }}<dt>本社</dt><dd>{{ $hq }}{{ with $country }}{{ if ne . $hq }}（{{ . }}）{{ end }}{{ end }}</dd>
+      {{- else if $country }}<dt>所在国</dt><dd>{{ $country }}</dd>{{ end }}
+      {{- if $web }}<dt>公式サイト</dt><dd><a href="{{ $web }}" target="_blank" rel="noopener nofollow">{{ $web }}</a></dd>{{ end }}
+    </dl>
+  </div>
+  <p class="brand-wikidata-source">出典: <a href="{{ $entity }}" target="_blank" rel="noopener nofollow">Wikidata（{{ $qid }}）</a></p>
+</section>
+      {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
@@ -202,6 +244,49 @@
     body:not([data-theme="light"]) .brand-hub-series-chip {
       background: #1f2937; color: #e5e7eb; border-color: #374151;
     }
+  }
+
+  /* #1358 B-6: Wikidata ブランド情報パネル */
+  .brand-wikidata {
+    margin: 0 0 24px;
+    padding: 16px 20px;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 12px;
+    background: var(--entry, #fff);
+  }
+  .brand-wikidata-title {
+    margin: 0 0 12px; font-size: 1.05rem; font-weight: 700;
+    color: var(--primary, #1f2937);
+  }
+  .brand-wikidata-body { display: flex; gap: 18px; align-items: flex-start; }
+  .brand-wikidata-logo {
+    flex: 0 0 auto; width: 88px; height: 88px;
+    display: flex; align-items: center; justify-content: center;
+    padding: 8px; border-radius: 8px; background: #fff;
+    border: 1px solid var(--border, #e5e7eb);
+  }
+  .brand-wikidata-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .brand-wikidata-facts {
+    flex: 1 1 auto; min-width: 0; margin: 0;
+    display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px;
+    font-size: 0.92rem;
+  }
+  .brand-wikidata-facts dt { font-weight: 700; color: var(--secondary, #6b7280); white-space: nowrap; }
+  .brand-wikidata-facts dd { margin: 0; color: var(--primary, #1f2937); word-break: break-word; }
+  .brand-wikidata-facts dd a { color: #0ea5e9; }
+  .brand-wikidata-source {
+    margin: 12px 0 0; font-size: 0.78rem; color: var(--secondary, #9ca3af);
+  }
+  .brand-wikidata-source a { color: var(--secondary, #6b7280); text-decoration: underline; }
+  @media (max-width: 600px) {
+    .brand-wikidata-body { flex-direction: column; gap: 12px; }
+    .brand-wikidata-facts { grid-template-columns: max-content 1fr; }
+  }
+  [data-theme="dark"] .brand-wikidata { background: #1f2937; border-color: #374151; }
+  [data-theme="dark"] .brand-wikidata-logo { background: #f9fafb; border-color: #374151; }
+  @media (prefers-color-scheme: dark) {
+    body:not([data-theme="light"]) .brand-wikidata { background: #1f2937; border-color: #374151; }
+    body:not([data-theme="light"]) .brand-wikidata-logo { background: #f9fafb; border-color: #374151; }
   }
 
   .term-sort-controls { margin-bottom: 20px; display: flex; gap: 10px; align-items: center; }
@@ -504,18 +589,7 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 </script>
 
-{{- if gt $paginator.TotalPages 1 }}
-<footer class="page-footer posts-pagination">
-  <nav class="pagination">
-    {{- if $paginator.HasPrev }}
-    <a class="prev" href="{{ $paginator.Prev.URL | absURL }}">« 前のページ</a>
-    {{- end }}
-    <span class="pagination-info">{{ $paginator.PageNumber }} / {{ $paginator.TotalPages }}</span>
-    {{- if $paginator.HasNext }}
-    <a class="next" href="{{ $paginator.Next.URL | absURL }}">次のページ »</a>
-    {{- end }}
-  </nav>
-</footer>
-{{- end }}
+{{- /* ページネーションは上部の #term-pagination-container 内で server-render + JS 制御。
+       ここに重複出力すると「次のページ」ボタンが 2 個並ぶ (session 135 修正)。 */ -}}
 
 {{- end }}{{- /* end main */ -}}

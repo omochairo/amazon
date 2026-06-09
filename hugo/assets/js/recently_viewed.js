@@ -36,6 +36,15 @@
   function list() { return _read(); }
   function clear() { _write([]); }
 
+  function remove(asin) {
+    if (!asin) return false;
+    var arr = _read();
+    var next = arr.filter(function (r) { return r.asin !== asin; });
+    if (next.length === arr.length) return false;
+    _write(next);
+    return true;
+  }
+
   function push(record) {
     if (!record || !record.asin) return false;
     var arr = _read();
@@ -98,10 +107,15 @@
     if (!grid) return;
     grid.innerHTML = "";
     arr.forEach(function (r) {
+      // item = card (<a>) + 個別削除 (×) ボタン。× は anchor の外側 sibling に置き
+      // (anchor 内 button は HTML 不正・遷移する) absolute 配置で右上に重ねる。
+      var item = document.createElement("div");
+      item.className = "recently-viewed-item";
+      item.setAttribute("data-asin", r.asin);
+
       var card = document.createElement("a");
       card.className = "recently-viewed-card";
       card.href = r.url || ("/products/" + r.asin.toLowerCase() + "/");
-      card.setAttribute("data-asin", r.asin);
       var price = r.min_price ? ('<span class="recently-viewed-price">最安 ¥' + Number(r.min_price).toLocaleString() + '</span>') : "";
       var score = r.score ? ('<span class="recently-viewed-score">🏆 ' + r.score + '点</span>') : "";
       card.innerHTML =
@@ -110,8 +124,31 @@
         '<div class="recently-viewed-title">' + (r.title || r.asin) + '</div>' +
         '<div class="recently-viewed-meta">' + score + price + '</div>' +
         '</div>';
-      grid.appendChild(card);
+
+      var del = document.createElement("button");
+      del.type = "button";
+      del.className = "recently-viewed-remove";
+      del.setAttribute("aria-label", "最近見た商品から削除");
+      del.setAttribute("data-asin", r.asin);
+      del.textContent = "×";
+
+      item.appendChild(card);
+      item.appendChild(del);
+      grid.appendChild(item);
     });
+
+    // × クリックの delegated handler は mount ごとに 1 回だけ束ねる
+    if (!mount._rvBound) {
+      mount._rvBound = true;
+      mount.addEventListener("click", function (ev) {
+        var btn = ev.target.closest ? ev.target.closest(".recently-viewed-remove") : null;
+        if (!btn) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        var asin = btn.getAttribute("data-asin");
+        if (remove(asin)) render(document);
+      });
+    }
   }
 
   function render(root) {
@@ -120,6 +157,9 @@
     for (var i = 0; i < mounts.length; i++) {
       _renderTo(mounts[i]);
     }
+    // carousel_swipe.js (同居) の矢印 disabled 状態を再計算させる。
+    // 件数変化や × 削除後に scrollWidth が変わるため resize を擬似発火。
+    try { global.dispatchEvent(new Event("resize")); } catch (e) { /* noop */ }
   }
 
   function boot() {
@@ -138,5 +178,5 @@
     boot();
   }
 
-  global.OmochaRecent = { push: push, list: list, clear: clear, render: render };
+  global.OmochaRecent = { push: push, list: list, clear: clear, remove: remove, render: render };
 })(typeof window !== "undefined" ? window : this);

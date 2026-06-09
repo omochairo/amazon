@@ -51,6 +51,10 @@ on:
       # Jules プロンプト本体。CA 削除など Jules 出力に影響する変更を含む PR は
       # validate を pull_request 経由で発火させる (記事変更ゼロなら vacuous SUCCESS)
       - 'jules/PROMPT_TEMPLATE.md'
+      # 2026-06-08 (session 113): Jules 規律本体。提出フロー/データ偽装禁止など
+      # Jules 挙動に影響する変更を含む PR も validate を発火させる。paths 未登録だと
+      # inverse trap で validate 不発火→auto-merge 永久 BLOCKED ([[04-validate-paths-inverse-trap]])。
+      - 'AGENTS.md'
       # 2026-05-19 (session 29): fetch 系の workflow / script を触る PR も validate を
       # required check として発火させる ([[04-validate-paths-trap]] 対策)
       - '.github/workflows/01-fetch-products.yml'
@@ -68,6 +72,11 @@ on:
       # paths 未登録だと inverse trap で validate 不発火→auto-merge 永久 BLOCKED
       # になるため登録 ([[04-validate-paths-inverse-trap]])。記事変更ゼロで vacuous SUCCESS。
       - 'scripts/report_jules_sessions.py'
+      # 2026-06-08 (session 114): Jules daily quota を実 session 作成数 (rolling-24h)
+      # でゲートする共有 script + test。03-invoke 等から create 前に呼ぶ。paths 未登録だと
+      # inverse trap で validate 不発火→auto-merge 永久 BLOCKED ([[04-validate-paths-inverse-trap]])。
+      - 'scripts/jules_quota_gate.py'
+      - 'scripts/tests/test_jules_quota_gate.py'
       # 2026-06-04 (#1600 Phase 1): per_asin 第三者情報量スコア。03-invoke-jules の
       # ASIN 選定 defer + prompt 注記で使う。paths 未登録だと inverse trap で
       # validate 不発火→auto-merge 永久 BLOCKED になるため登録 ([[04-validate-paths-inverse-trap]])。
@@ -232,6 +241,11 @@ on:
       - 'scripts/tests/test_append_analytics_history.py'
       - '.github/workflows/18-analytics-daily.yml'
       - 'data/analytics/history/**'
+      # 2026-06-09 (session 142 / #1329 Phase 3 infra): 17-analytics-report が週次で
+      # 積む GSC スナップショット (by_combo 込み)。data/analytics/gsc_history/** は
+      # 週次 auto-merge PR で更新されるため、paths 未登録だと inverse trap で validate
+      # 不発火→auto-merge 永久 BLOCKED になる ([[04-validate-paths-inverse-trap]])。
+      - 'data/analytics/gsc_history/**'
       # 2026-06-02 (session 78 / epic #1357 B-1 Phase 1): CrUX 月次 fetch script と
       # workflow を validate (required check) 対象に。Phase 2 (劣化検出 → Issue 起票)
       # は 2 ヶ月分蓄積後の follow-up PR。
@@ -311,6 +325,9 @@ on:
       - '.github/workflows/30-sns-engagement.yml'
       - '.github/workflows/32-engagement-trend-fetch.yml'
       - '.github/workflows/33-jules-engagement-news.yml'
+      # 2026-06-08 (session 117 / #2008): Jules quota 共有ゲート展開で 29 本体を触る
+      # PR も validate (required check) として発火させ auto-merge を成立 (inverse trap 対策)。
+      - '.github/workflows/29-jules-engagement-refill.yml'
       # 2026-06-04 (session 103 / Issue #1598): Bluesky 配信を 20-sns-publish の
       # 3 つ目のチャネルとして追加。新規 script + test + workflow 本体を validate
       # (required check) として発火させ auto-merge を成立させる (inverse trap 対策)。
@@ -455,9 +472,7 @@ jobs:
           tmp_src=$(mktemp -d)
           while IFS= read -r f; do
             [ -z "$f" ] && continue
-            if [ ! -f "$f" ]; then
-              continue
-            fi
+            [ ! -f "$f" ] && continue
             cp "$f" "$tmp_src/"
             # carry any pre-existing rendered markdown so MD-based checks can run
             base=$(basename "$f" .json)

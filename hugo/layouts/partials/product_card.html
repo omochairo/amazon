@@ -23,12 +23,26 @@
   {{- $m := findRE "/products/([a-z0-9]+)/" (.Params.url | default "") 1 -}}
   {{- if $m -}}{{- $asin = index (split (index $m 0) "/") 2 | upper -}}{{- end -}}
 {{- end -}}
+{{- /* 編集者推し 👑 (Layer 3-① / epic #1365): data/editor_picks.json で年齢帯×用途に各1件指定。
+       asin 一致時のみ label をバッジ tooltip に出す。データ未配置でも no-op。 */ -}}
+{{- $editorPick := "" -}}
+{{- with site.Data.editor_picks -}}
+  {{- if $asin -}}
+    {{- range .picks -}}
+      {{- if eq (upper .asin) $asin -}}{{- $editorPick = .label -}}{{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
 <a class="product-card" href="{{ .Permalink }}" aria-label="{{ $name }} の比較レビューを読む" data-asin="{{ $asin }}" data-ivs="{{ $score | default 0 }}" data-ivs100="{{ $score100 | default 0 }}" data-age-min="{{ .Params.age_min_months | default 0 }}">
   <div class="product-card-image">
     {{- if $img }}
       <img src="{{ $img }}" alt="{{ $name }}" loading="lazy" decoding="async" referrerpolicy="no-referrer">
     {{- else }}
       <div class="product-card-image-fallback">&#129528;</div>
+    {{- end }}
+
+    {{- if $editorPick }}
+      <span class="product-card-editor-pick" title="編集者の推し — {{ $editorPick }}">&#128081; 編集者の推し</span>
     {{- end }}
 
     {{- /* Score tier CSS class */ -}}

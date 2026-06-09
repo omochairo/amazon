@@ -100,6 +100,46 @@ class MatchedPassesQualityTest(unittest.TestCase):
             amazon_price=1800,
         ))
 
+    # === 型番ガード (B0CDTQWRN1 reseller false-positive 対策) ===
+
+    def test_rejects_model_number_mismatch(self):
+        """B0CDTQWRN1: kw 'E3209' (レジカウンター) vs title はファーマーズマーケット
+        (型番 E3209 無し) → 別 SKU の誤マッチとして弾く。"""
+        self.assertFalse(self._check(
+            title="HAPE ハペ おままごと 3歳 4歳 お店屋さんごっこ ファーマーズマーケット 食べ物 木製 セット バナナ スイカ",
+            price=10679,
+            kw="Hape おままごとレジカウンター E3209",
+            amazon_price=15950,
+        ))
+
+    def test_accepts_model_number_present(self):
+        """型番が title に存在すれば pass (E0328 が title に在る正規マッチ)。"""
+        self.assertTrue(self._check(
+            title="おもちゃ Hape ビーズコインドロップス E0328 木製",
+            price=3000,
+            kw="Hape ビーズコインドロップス E0328",
+            amazon_price=3000,
+        ))
+
+    def test_single_digit_code_not_treated_as_model(self):
+        """RD-6 等の 1 桁コードは型番扱いせず既存 coverage ロジックに委ねる
+        (>=2 数字要件で false-trip を避ける regression guard)。"""
+        self.assertTrue(self._check(
+            title="ハズブロ ナーフ エリート 2.0 コマンダー RD−6",
+            price=1775,
+            kw="ハズブロ ナーフ RD-6",
+            amazon_price=2302,
+        ))
+
+    def test_model_number_fullwidth_hyphen_accepted(self):
+        """型番 (>=2 数字) の全角ハイフン揺れを吸収して一致判定する。"""
+        self.assertTrue(self._check(
+            title="トミカ プレミアム TF−12 日産 スカイライン GT-R",
+            price=900,
+            kw="トミカ プレミアム TF-12 スカイライン",
+            amazon_price=880,
+        ))
+
 
 class NonBrandDescriptorGateTest(unittest.TestCase):
     """Issue #1140: brand head だけで通過する FP を非ブランド descriptor 一致で弾く。"""
