@@ -26,9 +26,24 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import os
+import re
 import sys
 
 API_BASE = "https://jules.googleapis.com/v1alpha/sessions"
+
+# create 系 workflow が session title 先頭に付ける machine-readable prefix `[wfNN]`
+# (#2024)。rolling-24h の作成数を workflow 別に group-by して「誰が枠を食ったか」を
+# 可視化する。prefix を付けない非ゲート workflow / 旧 session は UNTAGGED に集計。
+_WF_PREFIX_RE = re.compile(r"^\[(wf\d{2})\]")
+UNTAGGED = "(prefix なし)"
+# 内訳表の可読ラベル。prefix を増やしたらここも追記。
+WF_LABELS = {
+    "wf03": "記事生成 (商品深掘り)",
+    "wf14": "ブランド narrative",
+    "wf29": "engagement refill",
+    "wf33": "engagement news",
+    "wf35": "sns-copy",
+}
 
 # Jules Pro plan limits (2026-06 時点)。plan 変更時はここを更新。
 DAILY_CAP = 100
@@ -81,6 +96,29 @@ def fetch_sessions(api_key: str, *, max_pages: int = 30) -> list[dict]:
     return sessions
 
 
+def _wf_key(s: dict) -> str:
+    """session title 先頭の `[wfNN]` prefix を抽出。無ければ UNTAGGED。"""
+    m = _WF_PREFIX_RE.match((s.get("title") or "").strip())
+    return m.group(1) if m else UNTAGGED
+
+
+def group_created_24h_by_wf(sessions: list[dict], *, now: _dt.datetime | None = None) -> dict[str, int]:
+    """rolling-24h に作成された session を title の `[wfNN]` prefix で group-by (#2024)。
+
+    overshoot 日に「どの create workflow が rolling-24h 枠を食い潰したか」を特定するための内訳。
+    aging out した (24h 超) session は除外し、ゲートが見るのと同じ母数で数える。
+    """
+    ref = now or _now()
+    groups: dict[str, int] = {}
+    for s in sessions:
+        created = _parse_ts(s.get("createTime"))
+        if not (created and (ref - created).total_seconds() <= 86400):
+            continue
+        key = _wf_key(s)
+        groups[key] = groups.get(key, 0) + 1
+    return groups
+
+
 def _state_of(s: dict) -> str:
     # docs は `state`、03-invoke の monitor は `status` を読む。両対応。
     return (s.get("state") or s.get("status") or "STATE_UNSPECIFIED").upper()
@@ -117,6 +155,7 @@ def summarize(sessions: list[dict], *, stuck_hours: float) -> dict:
         "total": len(sessions),
         "by_state": by_state,
         "created_24h": created_24h,
+        "created_24h_by_wf": group_created_24h_by_wf(sessions, now=now),
         "active": active,
         "waiting": waiting,
         "stuck": stuck,
@@ -151,6 +190,23 @@ def render(summary: dict, *, stuck_hours: float) -> str:
     L.append("|---|---:|")
     for st, n in sorted(summary["by_state"].items(), key=lambda x: -x[1]):
         L.append(f"| {st} | {n} |")
+    L.append("")
+    L.append("### rolling-24h 作成の workflow 別内訳 (#2024)")
+    L.append("")
+    by_wf = summary.get("created_24h_by_wf") or {}
+    if not by_wf:
+        L.append("_直近 24h の作成なし_")
+    else:
+        total = summary["created_24h"] or 1
+        L.append("どの create workflow が daily 枠を食ったか (overshoot 主因特定用)。"
+                 f"`{UNTAGGED}` はゲート外 workflow / prefix 未付与の旧 session。")
+        L.append("")
+        L.append("| workflow | 用途 | 作成数 | 占有率 |")
+        L.append("|---|---|---:|---:|")
+        for key, n in sorted(by_wf.items(), key=lambda x: -x[1]):
+            label = WF_LABELS.get(key, "—" if key == UNTAGGED else "?")
+            disp = key if key != UNTAGGED else UNTAGGED
+            L.append(f"| `{disp}` | {label} | {n} | {n / total * 100:.0f}% |")
     L.append("")
     stuck = summary["stuck"]
     L.append(f"### 放置 session (>{stuck_hours:g}h 人間待ち)")

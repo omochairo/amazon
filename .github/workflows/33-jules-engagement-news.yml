@@ -151,7 +151,7 @@ jobs:
           REQUEST_BODY=$(jq -n \
             --arg prompt "$PROMPT" \
             --arg source "$SOURCE_NAME" \
-            --arg title "engagement-news: dual drafts (X+Threads) (${TODAY})" \
+            --arg title "[wf33] engagement-news: dual drafts (X+Threads) (${TODAY})" \
             '{
               prompt: $prompt,
               sourceContext: {

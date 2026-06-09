@@ -147,7 +147,7 @@ jobs:
           REQUEST_BODY=$(jq -n \
             --arg prompt "$PROMPT" \
             --arg source "$SOURCE_NAME" \
-            --arg title "engagement: ${CHANNEL} ${PERSONA} daily drafts (${TODAY})" \
+            --arg title "[wf29] engagement: ${CHANNEL} ${PERSONA} daily drafts (${TODAY})" \
             '{
               prompt: $prompt,
               sourceContext: {

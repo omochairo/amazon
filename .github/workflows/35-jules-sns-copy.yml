@@ -139,7 +139,7 @@ jobs:
           REQUEST_BODY=$(jq -n \
             --arg prompt "$PROMPT" \
             --arg source "$SOURCE_NAME" \
-            --arg title "sns-copy: product post drafts (${TODAY})" \
+            --arg title "[wf35] sns-copy: product post drafts (${TODAY})" \
             '{
               prompt: $prompt,
               sourceContext: {
