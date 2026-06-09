@@ -241,6 +241,11 @@ on:
       - 'scripts/tests/test_append_analytics_history.py'
       - '.github/workflows/18-analytics-daily.yml'
       - 'data/analytics/history/**'
+      # 2026-06-09 (session 142 / #1329 Phase 3 infra): 17-analytics-report が週次で
+      # 積む GSC スナップショット (by_combo 込み)。data/analytics/gsc_history/** は
+      # 週次 auto-merge PR で更新されるため、paths 未登録だと inverse trap で validate
+      # 不発火→auto-merge 永久 BLOCKED になる ([[04-validate-paths-inverse-trap]])。
+      - 'data/analytics/gsc_history/**'
       # 2026-06-02 (session 78 / epic #1357 B-1 Phase 1): CrUX 月次 fetch script と
       # workflow を validate (required check) 対象に。Phase 2 (劣化検出 → Issue 起票)
       # は 2 ヶ月分蓄積後の follow-up PR。
