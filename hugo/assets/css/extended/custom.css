@@ -6239,94 +6239,127 @@ details.development-stage-accordion[open] > summary::before {
 }
 [data-theme="dark"] .toy-safety__alert > p > strong { color: #fbbf24; }
 
-/* ---------- カテゴリ探索バー (Issue #2164 #6) ---------- */
-/* 主メニュー下の「おもちゃタイプ別」ナビ。親グループ chip を開くと子タグ
-   (既存 /tags/ term ページ) へのリンクが件数バッジ付きで dropdown 表示される。
-   モバイルは横スクロール、子パネルは absolute overlay でレイアウトを押し下げない。*/
+/* ---------- カテゴリ探索バー (Issue #2164 #6 / session 144 usability) ---------- */
+/* 主メニュー下の「おもちゃの種類から探す」ナビ。親グループ button を押すと
+   子タグ (既存 /tags/ term ページ) へのリンクが件数バッジ付きで、バー全体の
+   下に full-width inline 展開される。旧実装は absolute dropdown を横スクロール
+   コンテナ内に置いたため overflow clip で隠れて「押しても何も出ない」状態だった。*/
 .cat-nav {
   max-width: var(--main-width, 720px);
-  margin: 6px auto 0;
+  margin: 10px auto 0;
   padding: 0 var(--gap, 24px);
+}
+.cat-nav-title {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--secondary, #6b6b70);
 }
 .cat-nav-list {
   list-style: none;
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 8px;
   margin: 0;
-  padding: 4px 0;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
+  padding: 0;
 }
-.cat-nav-list::-webkit-scrollbar { height: 4px; }
-.cat-nav-list::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 4px; }
-.cat-group { position: relative; flex: 0 0 auto; }
-.cat-details > summary.cat-summary {
-  list-style: none;
+.cat-group { flex: 0 0 auto; }
+.cat-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   cursor: pointer;
   white-space: nowrap;
-  font-size: 0.82rem;
+  font-size: 0.84rem;
   font-weight: 600;
-  padding: 5px 12px;
+  padding: 7px 13px;
   border-radius: 999px;
-  background: var(--brand-gradient-subtle);
-  border: 1px solid rgba(255,107,53,0.25);
+  background: var(--entry, #fff);
+  border: 1.5px solid var(--border, rgba(0,0,0,0.12));
   color: var(--primary, #2e2e33);
-  transition: background 0.18s ease, border-color 0.18s ease;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
 }
-.cat-details > summary.cat-summary::-webkit-details-marker { display: none; }
-.cat-details > summary.cat-summary:hover { border-color: var(--brand-primary); }
-.cat-details[open] > summary.cat-summary {
-  background: var(--brand-primary);
-  border-color: var(--brand-primary);
-  color: #fff;
-}
-.cat-sublist {
-  list-style: none;
-  position: absolute;
-  z-index: 50;
-  top: calc(100% + 6px);
-  left: 0;
-  min-width: 180px;
-  max-height: 60vh;
-  overflow-y: auto;
-  margin: 0;
-  padding: 6px;
-  background: var(--theme, #fff);
-  border: 1px solid rgba(0,0,0,0.08);
-  border-radius: var(--radius-md);
-  box-shadow: var(--card-shadow-hover);
-}
-.cat-sublist li { margin: 0; }
-.cat-link {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 7px 10px;
-  border-radius: var(--radius-sm);
-  font-size: 0.86rem;
-  text-decoration: none;
-  color: var(--primary, #2e2e33);
-}
-.cat-link:hover { background: var(--brand-gradient-subtle); }
-.cat-count {
-  flex: 0 0 auto;
-  min-width: 22px;
-  text-align: center;
-  font-size: 0.72rem;
+.cat-summary-emoji { font-size: 1rem; line-height: 1; }
+.cat-summary-count {
+  font-size: 0.68rem;
   font-weight: 700;
-  padding: 1px 7px;
+  min-width: 18px;
+  text-align: center;
+  padding: 1px 6px;
   border-radius: 999px;
   background: rgba(255,107,53,0.14);
   color: var(--brand-primary);
 }
-[data-theme="dark"] .cat-details > summary.cat-summary { color: var(--primary, #dadadb); }
-[data-theme="dark"] .cat-sublist { background: #1f1f1f; border-color: #3a3a3a; }
-[data-theme="dark"] .cat-link { color: var(--primary, #dadadb); }
-[data-theme="dark"] .cat-nav-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); }
+.cat-summary:hover {
+  border-color: var(--brand-primary);
+  background: var(--brand-gradient-subtle);
+}
+.cat-summary[aria-expanded="true"] {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+  color: #fff;
+}
+.cat-summary[aria-expanded="true"] .cat-summary-count {
+  background: rgba(255,255,255,0.25);
+  color: #fff;
+}
+.cat-panel {
+  margin: 10px 0 0;
+  padding: 14px;
+  background: var(--code-bg, #f4f4f5);
+  border: 1px solid var(--border, rgba(0,0,0,0.08));
+  border-radius: var(--radius-md, 12px);
+}
+.cat-sublist {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+.cat-sublist li { margin: 0; }
+.cat-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-decoration: none;
+  background: var(--theme, #fff);
+  border: 1px solid var(--border, rgba(0,0,0,0.1));
+  color: var(--primary, #2e2e33);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.cat-link:hover {
+  border-color: var(--brand-primary);
+  transform: translateY(-1px);
+}
+.cat-count {
+  flex: 0 0 auto;
+  min-width: 20px;
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255,107,53,0.14);
+  color: var(--brand-primary);
+}
 @media (max-width: 768px) {
   .cat-nav { padding: 0 12px; }
-  .cat-details > summary.cat-summary { font-size: 0.78rem; padding: 5px 10px; }
+  /* モバイルは親 chip を横 1 列スクロールにして縦の場所を取らない。
+     子パネルはバー下の full-width なので overflow clip の影響を受けない。 */
+  .cat-nav-list {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .cat-nav-list::-webkit-scrollbar { display: none; }
+  .cat-summary { font-size: 0.8rem; padding: 6px 11px; }
 }
