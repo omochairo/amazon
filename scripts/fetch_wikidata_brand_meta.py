@@ -70,6 +70,11 @@ BRAND_OVERRIDES: dict[str, str | None] = {
     "VILAC": None,     # Q7930050 は韓国の乳業会社。仏 Vilac (木製玩具) は Wikidata に企業 entity 無し。
     "キューブ": None,   # Q442816 は独 Cube (自転車メーカー)。日本のキューブ (オタマトーン) は entity 無し。
     "トーヨー": None,   # Q53268 はトヨタ自動車 (founder=豊田喜一郎)。折り紙メーカー トーヨー は別。
+    # session 138: 有名海外/国内ブランドで katakana canonical 検索が当たらないものを
+    # 確証ある QID で curated pin (要 P31=企業)。
+    "メリッサ＆ダグ": "Q6812611",   # Melissa & Doug (米・玩具メーカー)
+    "プラントイ": "Q7200907",       # Plan Toys / Plan Creations (タイ・木製玩具)
+    "コンビ": "Q11303182",          # Combi Corporation (日・ベビー用品 combi.co.jp)
 }
 
 
