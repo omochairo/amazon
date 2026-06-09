@@ -4832,11 +4832,21 @@ details.development-stage-accordion[open] > summary::before {
    ========================================== */
 
 /* ---- ヘッダナビをボタン化 ---- */
+/* PaperMod 既定の .menu { overflow-x:auto; white-space:nowrap } は項目が
+   nav 幅 (1024px) を超えると横スクロールバーを出す。PC では折り返して
+   全項目を見せ、スクロールバーを廃止する。モバイルのみ横 1 列スクロール
+   (バー非表示) にして縦の場所を取らない。カテゴリ探索バーは outline chip +
+   見出し付きなので、こちらは filled CTA pill のまま差別化する。 */
 #menu {
   align-items: center;
-  gap: 0.4rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.45rem;
   padding: 0.3rem 0;
+  overflow-x: visible;
+  white-space: normal;
 }
+#menu li { flex: 0 0 auto; }
 
 #menu li a {
   display: inline-flex;
@@ -4896,7 +4906,18 @@ details.development-stage-accordion[open] > summary::before {
   background: linear-gradient(135deg, rgba(247, 201, 72, 0.4), rgba(255, 107, 53, 0.4));
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
+  /* モバイルは折り返すと縦に伸びすぎるため横 1 列スクロール (バー非表示)。
+     子パネル等は無いので overflow clip の心配なし。 */
+  #menu {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 0.2rem;
+  }
+  #menu::-webkit-scrollbar { display: none; }
   #menu li a {
     padding: 0.35rem 0.7rem;
     font-size: 13px;
