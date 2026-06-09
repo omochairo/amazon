@@ -24,6 +24,7 @@ import pathlib
 import argparse
 import requests
 import urllib.parse
+import collections
 from datetime import datetime, timezone
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -283,6 +284,77 @@ def _select_median_priced_item(items):
     return min(in_range, key=lambda x: abs(x.get("price", 0) - median))
 
 
+# --- prevent-side mismatch filter (#2186 P1) -------------------------------
+# 中古 / ジャンク / 訳あり 等のリセラー出品はタイトルでほぼ自己申告するので、
+# テキストマッチ候補から除外して check_no_reseller_pricing の偽陽性 (分岐1・2)
+# を上流で消す。半角/全角の表記ゆれを吸収するため lower + NFKC 相当の素引き。
+_USED_LISTING_RE = re.compile(
+    r"(中古|ジャンク|訳あり|わけあり|リユース|リファービッシュ|"
+    r"再生品|アウトレット|展示品|開封済|used\b|refurb)",
+    re.IGNORECASE,
+)
+
+# 上流マッチャの drop 内訳カウンタ ([[feedback-omochairo-reseller-drop-overfilter]]:
+# over-filter で unique 大量 drop した教訓を踏まえ、理由別件数を必ず残す)。
+_DROP_STATS: "collections.Counter[str]" = collections.Counter()
+
+
+def _is_used_listing(title: str) -> bool:
+    """タイトルが中古/ジャンク等のリセラー出品を自己申告しているか。"""
+    return bool(title) and bool(_USED_LISTING_RE.search(title))
+
+
+def _extract_model_tokens(title: str) -> set[str]:
+    """タイトルから型番 token (英大文字+数字 4〜12 文字) を抽出する。
+
+    `-` 入り型番 (EH-2310) は記号差を吸収するため除去版も併せて返す。
+    """
+    if not title:
+        return set()
+    tokens: set[str] = set()
+    for raw in re.split(r"[\s/／・,，、（）()\[\]【】]+", title.upper()):
+        raw = raw.strip()
+        if _MODEL_PATTERN.match(raw):
+            tokens.add(raw)
+            if "-" in raw:
+                tokens.add(raw.replace("-", ""))
+    return tokens
+
+
+def _title_model_consistent(amazon_title: str, candidate_title: str) -> bool:
+    """Amazon 側に型番があるとき、候補タイトルが同じ型番を含むか。
+
+    型番が無い商品 (純カタカナ名のみ等) では判定不能なので True を返し、
+    over-filter を避ける (型番ありの誤マッチ = 書籍/別商品 だけを高精度に弾く)。
+    """
+    amz_models = _extract_model_tokens(amazon_title)
+    if not amz_models:
+        return True
+    cand_norm = (candidate_title or "").upper().replace("-", "")
+    return any(m.replace("-", "") in cand_norm for m in amz_models)
+
+
+def _filter_text_candidates(items, amazon_title, source, asin):
+    """テキストマッチ候補から中古出品・型番不一致を除外する (#2186 P1 prevent)。
+
+    JAN 直引きと違いテキスト検索は別商品/中古を拾いやすいので、中央値選択の前に
+    かける。drop は理由別に `_DROP_STATS` へ計上し、各件 logger.info で残す。
+    """
+    kept = []
+    for it in items or []:
+        ctitle = it.get("title", "") or ""
+        if _is_used_listing(ctitle):
+            _DROP_STATS[f"{source}:used_listing"] += 1
+            logger.info(f"  ✕ drop [used] {source} {asin}: {ctitle[:50]}")
+            continue
+        if not _title_model_consistent(amazon_title, ctitle):
+            _DROP_STATS[f"{source}:model_mismatch"] += 1
+            logger.info(f"  ✕ drop [model] {source} {asin}: {ctitle[:50]}")
+            continue
+        kept.append(it)
+    return kept
+
+
 def _fetch_rakuten_ichiba(keyword, app_id, access_key, aff_id, hits=15):
     """Ichiba を access_key の有無で RMS or 公開 API に振り分けて呼び出す。"""
     if access_key:
@@ -342,7 +414,7 @@ def _classify_http_status(status_code: int) -> str:
     return f"jan_http_{status_code}"
 
 
-def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""):
+def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code="", amazon_title="", asin=""):
     """楽天で階層的検索を行う (JAN優先 → Books → Ichiba → Shortened Ichiba)
 
     `jan_code` が与えられた場合、まず Books の `isbnjan` 直引き、続いて Ichiba を
@@ -364,6 +436,7 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
                 data = resp.json()
                 raw_items = data.get("Items", [])
                 parsed_items = [it for it in [_parse_rakuten_item(ri, is_books=True) for ri in raw_items] if it]
+                parsed_items = _filter_text_candidates(parsed_items, "", "rakuten", asin)
                 if parsed_items:
                     logger.info(f"Rakuten Stage0a (Books isbnjan={jan_code}): {len(parsed_items)} hit(s)")
                     best = parsed_items[0]
@@ -392,6 +465,7 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
                 data = resp.json()
                 raw_items = data.get("Items", [])
                 parsed_items = [it for it in [_parse_rakuten_item(ri, is_books=False) for ri in raw_items] if it]
+                parsed_items = _filter_text_candidates(parsed_items, "", "rakuten", asin)
                 if parsed_items:
                     api_label = "Ichiba RMS" if access_key else "Ichiba"
                     logger.info(f"Rakuten Stage0b ({api_label} keyword=JAN:{jan_code}): {len(parsed_items)} hit(s)")
@@ -430,6 +504,7 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
             if raw_items:
                 logger.info(f"Rakuten Stage1 (Books): {len(raw_items)} hits for '{keyword}'")
                 parsed_items = [it for it in [_parse_rakuten_item(ri, is_books=True) for ri in raw_items] if it]
+                parsed_items = _filter_text_candidates(parsed_items, amazon_title, "rakuten", asin)
                 best = _select_median_priced_item(parsed_items)
                 if best:
                     best["source"] = "Rakuten Books"
@@ -458,6 +533,7 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
                 api_label = "Ichiba RMS" if access_key else "Ichiba"
                 logger.info(f"Rakuten Stage2 ({api_label}): {len(raw_items)} hits for '{stage2_keyword}'")
                 parsed_items = [it for it in [_parse_rakuten_item(ri, is_books=False) for ri in raw_items] if it]
+                parsed_items = _filter_text_candidates(parsed_items, amazon_title, "rakuten", asin)
                 best = _select_median_priced_item(parsed_items)
                 if best:
                     best["source"] = "Rakuten"
@@ -489,6 +565,7 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
                     if raw_items:
                         logger.info(f"Rakuten Stage3 (Shortened): {len(raw_items)} hits for '{short_keyword}'")
                         parsed_items = [it for it in [_parse_rakuten_item(ri, is_books=False) for ri in raw_items] if it]
+                        parsed_items = _filter_text_candidates(parsed_items, amazon_title, "rakuten", asin)
                         best = _select_median_priced_item(parsed_items)
                         if best:
                             best["source"] = "Rakuten"
@@ -588,7 +665,7 @@ def _yahoo_query(keyword, client_id, sid="", pid="", jan_code="", out_status=Non
     return parsed_items
 
 
-def search_yahoo(keyword, client_id, sid="", pid="", jan_code=""):
+def search_yahoo(keyword, client_id, sid="", pid="", jan_code="", amazon_title="", asin=""):
     """Yahooで階層的に検索する (JAN優先 → full keyword → 先頭2語 → 先頭1語)。
 
     `jan_code` が与えられた場合、V3 itemSearch の `jan_code` パラメータで完全一致を
@@ -604,6 +681,7 @@ def search_yahoo(keyword, client_id, sid="", pid="", jan_code=""):
         except Exception as e:
             logger.error(f"Yahoo JAN error for '{jan_code}': {e}")
             items = []
+        items = _filter_text_candidates(items, "", "yahoo", asin)
         if items:
             logger.info(f"Yahoo Stage0 (jan_code={jan_code}): {len(items)} hits")
             best = items[0]
@@ -640,6 +718,7 @@ def search_yahoo(keyword, client_id, sid="", pid="", jan_code=""):
         except Exception as e:
             logger.error(f"Yahoo Stage{idx} error for '{kw}': {e}")
             items = []
+        items = _filter_text_candidates(items, amazon_title, "yahoo", asin)
         if items:
             logger.info(f"Yahoo Stage{idx}: {len(items)} hits for '{kw}'")
             best = _select_median_priced_item(items)
@@ -920,7 +999,7 @@ def main():
 
         # 楽天検索
         if rakuten_app_id and need_rakuten:
-            r_result = search_rakuten_tiered(keyword, rakuten_app_id, rakuten_access_key, rakuten_aff_id, jan_code=jan_code)
+            r_result = search_rakuten_tiered(keyword, rakuten_app_id, rakuten_access_key, rakuten_aff_id, jan_code=jan_code, amazon_title=title, asin=asin)
             if r_result:
                 r_result["matched_asin"] = asin
                 r_result["search_keyword"] = keyword
@@ -971,7 +1050,7 @@ def main():
 
         # Yahoo検索
         if yahoo_client_id and need_yahoo:
-            y_result = search_yahoo(keyword, yahoo_client_id, vc_sid, vc_pid, jan_code=jan_code)
+            y_result = search_yahoo(keyword, yahoo_client_id, vc_sid, vc_pid, jan_code=jan_code, amazon_title=title, asin=asin)
             if y_result:
                 y_result["matched_asin"] = asin
                 y_result["search_keyword"] = keyword
@@ -1088,6 +1167,8 @@ def _write_cross_search_manifest(out_dir, rakuten_index, yahoo_index, targets, g
         "summary": {
             "rakuten": dict(sorted(rakuten_summary.items())),
             "yahoo": dict(sorted(yahoo_summary.items())),
+            # #2186 P1: 上流マッチャが弾いた中古/型番不一致の理由別件数。
+            "prevent_drops": dict(sorted(_DROP_STATS.items())),
         },
         "items": items,
     }
@@ -1100,6 +1181,8 @@ def _write_cross_search_manifest(out_dir, rakuten_index, yahoo_index, targets, g
         f"Cross-search manifest saved: {manifest_path} "
         f"(rakuten={rakuten_summary}, yahoo={yahoo_summary})"
     )
+    if _DROP_STATS:
+        logger.info(f"Prevent-side drops (used/model mismatch): {dict(sorted(_DROP_STATS.items()))}")
 
 
 if __name__ == "__main__":
