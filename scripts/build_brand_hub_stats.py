@@ -151,6 +151,7 @@ def aggregate(articles_dir: pathlib.Path | str) -> dict:
                 "ivs_100": ivs,
                 "best_price": product.get("best_price"),
                 "tier": norm.tier,
+                "noindex": norm.noindex,
                 "age_min_months": age,
                 "series_candidates": _series_candidates(d.get("tags")),
             }
@@ -159,8 +160,15 @@ def aggregate(articles_dir: pathlib.Path | str) -> dict:
     brands_out: dict[str, dict] = {}
     for brand, items in sorted(by_brand.items()):
         n = len(items)
+        # noindex はブランド単位で一定 (taxonomy 由来)。head.html が
+        # site.Data.brand_hub.brands[<brand>].noindex を見て /brands/ ページを
+        # noindex 化する (epic #2126 P4)。True のときだけ出力して JSON を軽く保つ。
+        brand_noindex = bool(items[0].get("noindex"))
         if n < NARRATIVE_MIN_COUNT:
-            brands_out[brand] = {"count": n}
+            entry = {"count": n}
+            if brand_noindex:
+                entry["noindex"] = True
+            brands_out[brand] = entry
             continue
 
         ivs_vals = [i["ivs_100"] for i in items if isinstance(i["ivs_100"], (int, float))]
@@ -191,6 +199,8 @@ def aggregate(articles_dir: pathlib.Path | str) -> dict:
             "representative_image": rep["image"],
             "lowest_price": min(price_vals) if price_vals else None,
         }
+        if brand_noindex:
+            brands_out[brand]["noindex"] = True
 
     return {
         "generated_at": _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),

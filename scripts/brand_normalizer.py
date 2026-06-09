@@ -32,6 +32,11 @@ class NormalizedBrand:
     tier: str  # S/A/B/C/D
     region: str
     exclude_from_taxonomy: bool = False
+    # noindex: ブランドとして登録 (正規化 / dedup / /brands/ ページ生成) はするが、
+    # その /brands/ ページを noindex にする (検索インデックス非掲載)。
+    # 中華系・無名級など、商品の正しい帰属はしたいが薄いハブページを Google に
+    # 出したくないブランド向け (epic #2126 P4)。exclude_from_taxonomy とは独立。
+    noindex: bool = False
     safety_default: tuple[str, ...] = ()
     matched_alias: Optional[str] = None
     match_type: str = "unknown"  # exact | fuzzy | unknown
@@ -87,6 +92,7 @@ class Taxonomy:
             tier=str(entry.get("tier", "D")),
             region=str(entry.get("region", "unknown")),
             exclude_from_taxonomy=bool(entry.get("exclude_from_taxonomy", False)),
+            noindex=bool(entry.get("noindex", False)),
             safety_default=tuple(entry.get("safety_default") or ()),
             matched_alias=raw,
             match_type=match_type,
