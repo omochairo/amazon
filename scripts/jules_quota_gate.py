@@ -28,9 +28,10 @@ caller 例 (bash):
     MAX_LOCKS=$BUDGET
 
 ## fail 挙動
-- JULES_API_KEY 未設定 / API 取得失敗時は **--fallback (既定 2)** を返す (fail-slow)。
+- JULES_API_KEY 未設定 / API 取得失敗時は **--fallback (既定 1)** を返す (fail-slow)。
   完全 fail-closed (0) はパイプライン全停止を招き、fail-open (full) は本バグの再発を招く。
-  間を取り「止めないが暴走もさせない」小さな予算を返す。
+  間を取り「止めないが暴走もさせない」小さな予算を返す。fetch 失敗が複数 workflow で
+  同時多発する日に fallback 分が合算で積み上がるため、2→1 に絞り累積を半減 (#2024 A)。
 """
 from __future__ import annotations
 
@@ -98,8 +99,8 @@ def main() -> int:
                    help="安全 daily 予算 (Jules 上限 100 に対し margin を残す。既定 80)")
     p.add_argument("--max", dest="per_run_max", type=int, default=12,
                    help="1 run あたりの作成上限 (既定 12 = 旧 MAX_LOCKS)")
-    p.add_argument("--fallback", type=int, default=2,
-                   help="API 取得失敗 / キー未設定時に返す保守的予算 (既定 2)")
+    p.add_argument("--fallback", type=int, default=1,
+                   help="API 取得失敗 / キー未設定時に返す保守的予算 (既定 1)")
     args = p.parse_args()
 
     api_key = os.environ.get("JULES_API_KEY", "").strip()
