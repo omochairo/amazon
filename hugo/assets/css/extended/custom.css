@@ -3305,11 +3305,15 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 .future-age-section .home-section-header h2 {
   color: #558b2f;
 }
-.future-age-lead {
+.future-age-lead,
+.related-carousel-lead {
   margin: -0.5rem 0 1.1rem;
   font-size: 0.9rem;
   color: var(--secondary);
   line-height: 1.6;
+}
+.related-carousel-lead strong {
+  color: var(--primary);
 }
 
 .carousel-nav-arrows {
