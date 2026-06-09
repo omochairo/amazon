@@ -46,7 +46,7 @@
       {{- $thumb = .Params.product_image -}}
       {{- $maxScore = .Params.ivs_score_100 -}}
     {{- end }}
-    <a class="brand-card" href="{{ (printf "%s/%s/" $plural (urlize $term)) | relURL }}">
+    <a class="brand-card" href="{{ .Page.RelPermalink }}">
       <div class="brand-card-image">
         {{- if $thumb }}
           <img src="{{ $thumb }}" alt="{{ $term }}" loading="lazy" referrerpolicy="no-referrer">
@@ -75,7 +75,7 @@
 
 <div class="tag-chips term-tag-chips">
   {{- range $terms }}
-    <a class="tag-chip" href="{{ (printf "%s/%s/" $plural (urlize .Name)) | relURL }}">
+    <a class="tag-chip" href="{{ .Page.RelPermalink }}">
       #{{ .Name }} <span class="tag-chip-count">{{ len .Pages }}</span>
     </a>
   {{- end }}
