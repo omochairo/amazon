@@ -64,6 +64,12 @@ HUMAN = "Q5"
 BRAND_OVERRIDES: dict[str, str | None] = {
     "Goliath": None,   # Q565128 はドイツの自動車メーカー Goliath-Werke
     "ジーピー": None,   # Q732503 はソニー・ミュージック (音楽会社)
+    # session 138: 104 ブランドへの refresh で auto-match が拾った同名別業種を是正。
+    "グリムス": "Q5609278",  # 正: Grimm's Spiel und Holz Design (独・木製玩具)。
+                              # auto-match は同名の gremz.co.jp (日本の環境/IT 企業) に誤マッチしていた。
+    "VILAC": None,     # Q7930050 は韓国の乳業会社。仏 Vilac (木製玩具) は Wikidata に企業 entity 無し。
+    "キューブ": None,   # Q442816 は独 Cube (自転車メーカー)。日本のキューブ (オタマトーン) は entity 無し。
+    "トーヨー": None,   # Q53268 はトヨタ自動車 (founder=豊田喜一郎)。折り紙メーカー トーヨー は別。
 }
 
 
