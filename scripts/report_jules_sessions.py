@@ -15,6 +15,8 @@ Jules API (`GET /v1alpha/sessions`) を直接叩いて **実セッションの s
 
 このスクリプトは「枠の圧迫」を可視化する。daily 圧 (rolling 24h 作成数 / 100)、
 concurrent 圧 (実working / 15)、人間待ち放置数、AWAITING_USER_FEEDBACK 等の一覧を出す。
+加えて #2024 で「直近 24h に作成され FAILED で終わった session の一覧 + 理由」を出す
+(quota か否かを毎回逆算調査しなくて済むように。FAILED は作成後の実行時失敗で quota 非関連)。
 caller (16-jules-daily-report.yml) が Issue にコメントする。
 
 使い方:
@@ -124,6 +126,35 @@ def _state_of(s: dict) -> str:
     return (s.get("state") or s.get("status") or "STATE_UNSPECIFIED").upper()
 
 
+# session が FAILED で終わったときに「なぜか」を運用者へ即返すための probe (#2024)。
+# Jules の LIST 応答に失敗理由がどのフィールドで載るかは plan/version で揺れるため、
+# 既知・推測される複数フィールドを順に拾い、最初に見つかった非空文字列を短縮して返す。
+# どれも無ければ空文字 (= ダッシュボードの activity ログ参照を促す)。
+# 追加 API 呼び出しはしない (report の堅牢性優先・list 応答だけで完結)。
+_REASON_FIELDS = (
+    "failureReason", "failure_reason", "errorMessage", "error_message",
+    "statusMessage", "status_message", "stateReason", "state_reason",
+)
+
+
+def _failure_reason(s: dict) -> str:
+    """FAILED session の理由を list 応答内の既知フィールドから best-effort 抽出。"""
+    # 1) error が Status object ({code,message,...}) または文字列のケース。
+    err = s.get("error")
+    if isinstance(err, dict):
+        msg = err.get("message") or err.get("status")
+        if msg:
+            return str(msg)
+    elif isinstance(err, str) and err.strip():
+        return err.strip()
+    # 2) フラットな理由フィールド群。
+    for k in _REASON_FIELDS:
+        v = s.get(k)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return ""
+
+
 def summarize(sessions: list[dict], *, stuck_hours: float) -> dict:
     now = _now()
     by_state: dict[str, int] = {}
@@ -131,12 +162,25 @@ def summarize(sessions: list[dict], *, stuck_hours: float) -> dict:
     active = 0
     waiting = 0
     stuck: list[dict] = []
+    failed_24h: list[dict] = []
     for s in sessions:
         st = _state_of(s)
         by_state[st] = by_state.get(st, 0) + 1
         created = _parse_ts(s.get("createTime"))
         if created and (now - created).total_seconds() <= 86400:
             created_24h += 1
+            # #2024: 直近 24h に *作成* され FAILED で終わったものを別建てで拾う。
+            # 「quota か?」と運用者を毎回悩ませないため、どの session がいつ・なぜ落ちたかを
+            # 即一覧化する (rolling-24h 窓 = 当日分の失敗を確実に捕捉)。aging out した古い
+            # FAILED は除外し by_state の総数とは母数を分ける。age は updateTime (≒失敗時刻) 起点。
+            if st == "FAILED":
+                updated = _parse_ts(s.get("updateTime")) or created
+                failed_24h.append({
+                    "id": s.get("id") or (s.get("name") or "").split("/")[-1],
+                    "title": (s.get("title") or "")[:50],
+                    "age_h": (now - updated).total_seconds() / 3600 if updated else 0.0,
+                    "reason": _failure_reason(s),
+                })
         if st in CONCURRENT_STATES:
             active += 1
         if st in WAITING_STATES:
@@ -151,6 +195,7 @@ def summarize(sessions: list[dict], *, stuck_hours: float) -> dict:
                     "age_h": age_h,
                 })
     stuck.sort(key=lambda x: x["age_h"], reverse=True)
+    failed_24h.sort(key=lambda x: x["age_h"])
     return {
         "total": len(sessions),
         "by_state": by_state,
@@ -159,6 +204,7 @@ def summarize(sessions: list[dict], *, stuck_hours: float) -> dict:
         "active": active,
         "waiting": waiting,
         "stuck": stuck,
+        "failed_24h": failed_24h,
     }
 
 
@@ -207,6 +253,24 @@ def render(summary: dict, *, stuck_hours: float) -> str:
             label = WF_LABELS.get(key, "—" if key == UNTAGGED else "?")
             disp = key if key != UNTAGGED else UNTAGGED
             L.append(f"| `{disp}` | {label} | {n} | {n / total * 100:.0f}% |")
+    L.append("")
+    failed = summary.get("failed_24h") or []
+    L.append("### 直近 24h の FAILED セッション (#2024)")
+    L.append("")
+    if not failed:
+        L.append("_なし (作成 24h 以内に FAILED で終わった session は無し)_")
+    else:
+        L.append("ℹ️ FAILED は **quota とは無関係**。quota 枯渇は session *作成*時に "
+                 "`FAILED_PRECONDITION`/HTTP400 で弾かれる (作成自体が失敗)。ここに出るのは "
+                 "**作成成功後に Jules 実行中に落ちた** もの = プラットフォーム側 transient が大半。"
+                 "lock は stale-cleanup で解放され次 cron で再 pick されるため通常は自己修復する。"
+                 "理由が空欄なら下記 id をダッシュボードで開き activity ログを確認。")
+        L.append("")
+        L.append("| id | age(h) | title | reason |")
+        L.append("|---|---:|---|---|")
+        for x in failed[:20]:
+            reason = x.get("reason") or "_(理由フィールドなし→dashboard 参照)_"
+            L.append(f"| `{x['id']}` | {x['age_h']:.1f} | {x['title']} | {reason} |")
     L.append("")
     stuck = summary["stuck"]
     L.append(f"### 放置 session (>{stuck_hours:g}h 人間待ち)")
