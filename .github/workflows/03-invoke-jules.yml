@@ -1,8 +1,12 @@
 name: Invoke Jules for Article
 on:
-  workflow_run:
-    workflows: ["Jules Publish Pipeline"]
-    types: [completed]
+  # 2026-06-09 (#2024 A): 旧来は workflow_run [Jules Publish Pipeline] 完了で発火していたが、
+  # 02-publish が data/articles/** push でも起動するため、03 が生む記事 PR の auto-merge が
+  # 02-publish→03 を再発火させる自己増幅ループになり rolling-24h が 100 に張り付いていた。
+  # 発火を 6 時間毎 (4 回/日) の固定スケジュールに切替え、run 回数そのものを上限化する。
+  # 1 run 最大 6 session × 4 回 = 理論上限 24/日 で cap 80 に十分収まる。
+  schedule:
+    - cron: '0 */6 * * *'
   workflow_dispatch:
     inputs:
       asin:
@@ -18,7 +22,7 @@ on:
 
 jobs:
   invoke-jules:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -54,7 +58,8 @@ jobs:
           # 2026-06-09 (#2024 A): 記事生成 (本 workflow) は最大単一消費源なので per-run 上限を
           # 12→6 に半減し overshoot ドリフトを抑える。枠が空いていれば次 run でまた 6 拾う。
           # workflow_dispatch (手動 override) は従来どおり bypass (BUDGET 未設定 → MAX_LOCKS=6)。
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+          # schedule (自動 6h 毎) は gate を通し rolling-24h 残予算で絞る。
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
             BUDGET=$(python scripts/jules_quota_gate.py --cap 80 --max 6 || echo 0)
             echo "Jules quota gate budget: $BUDGET (rolling-24h 作成数ベース)"
             if [ "${BUDGET:-0}" -le 0 ]; then
@@ -175,7 +180,7 @@ jobs:
           # 2026-05-17 Step C-1: MAX_LOCKS まで lock を取得し、picked.txt に列挙する。
           # 2026-06-01 Issue #967: supply 黒字確認 (remaining=71 >> 8 基準) 後 8 → 12 に拡張
           # (12-rewrite-idle-fill.yml も同値で揃える)
-          # 2026-06-08 session 114: workflow_run 時は quota ゲートの残り予算 ($BUDGET, 上で算出)
+          # 2026-06-08 session 114: schedule (自動) 時は quota ゲートの残り予算 ($BUDGET, 上で算出)
           # で上限を絞る。workflow_dispatch (手動) は $BUDGET 未設定 → 2026-06-09 (#2024 A) で 6。
           MAX_LOCKS=${BUDGET:-6}
           MAIN_SHA=$(gh api repos/$REPO/git/refs/heads/main --jq .object.sha)
