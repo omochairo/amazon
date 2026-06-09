@@ -418,6 +418,10 @@ jobs:
           fail=0
           while IFS= read -r f; do
             [ -z "$f" ] && continue
+            if [ ! -f "$f" ]; then
+              echo "File not found (likely deleted or renamed), skipping validation: $f"
+              continue
+            fi
             echo "::group::Validating $f"
             if ! python scripts/validate_json.py --json "$f" --schema data/schema/article.schema.json; then
               fail=1
