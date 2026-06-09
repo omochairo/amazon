@@ -3312,6 +3312,61 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   line-height: 1.6;
 }
 
+/* 著者プロフィールの参考文献 (epic #1358 B-9 / NDL) */
+.author-refs {
+  margin: 2.5rem 0 0;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(124, 179, 66, 0.05);
+}
+.author-refs h2 {
+  font-size: 1.15rem;
+  margin: 0 0 0.4rem;
+}
+.author-refs-note {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  color: var(--secondary);
+  line-height: 1.6;
+}
+.author-refs-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.author-refs-item {
+  padding: 0.6rem 0;
+  border-top: 1px dashed var(--border);
+}
+.author-refs-item:first-child {
+  border-top: none;
+}
+.author-refs-topic {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #558b2f;
+  background: rgba(124, 179, 66, 0.16);
+  border-radius: 999px;
+  padding: 0.1rem 0.6rem;
+  margin-right: 0.5rem;
+}
+.author-refs-title {
+  font-weight: 600;
+}
+.author-refs-meta {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--secondary);
+  margin-top: 0.15rem;
+}
+.author-refs-src {
+  margin: 1rem 0 0;
+  font-size: 0.8rem;
+  color: var(--secondary);
+}
+
 .carousel-nav-arrows {
   display: flex;
   gap: 0.5rem;
