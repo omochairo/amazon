@@ -184,7 +184,7 @@ brands:
     tier: A
     region: CH
   - canonical: ラーニングリソーシズ
-    aliases: [ラーニングリソーシズ, Learning Resources]
+    aliases: [ラーニングリソーシズ, Learning Resources, "ラーニング リソーシーズ", ラーニングリソーシーズ]
     tier: A
     region: US
   - canonical: ジェコ
@@ -605,6 +605,12 @@ brands:
     aliases: [LabelLabel, "Label Label", ラベルラベル]
     tier: B
     region: NL
+  # 2026-06-10 (session 149 / #2158 供給側検出): おままごと・木のおもちゃ定番。
+  # クリエイティブヨーコの自社ブランド、直営19店舗 + キャラ「しろたん」。
+  - canonical: マザーガーデン
+    aliases: [マザーガーデン, Mother garden, "mother garden", "Mother Garden"]
+    tier: B
+    region: JP
 
   # ==========================================
   # Tier C: 地方問屋・特定卸・フックトイ・100均系他（すべてST有）
@@ -1284,6 +1290,27 @@ brands:
     aliases: [Forest Lodge, フォレストロッジ(Forest Lodge)]
     tier: C
     region: unknown
+  # 2026-06-10 (session 149 / #2158 供給側検出): 実在の国内小ブランド/特定卸 4 件。
+  # リーバン=シールブック老舗 (株式会社リーバン, 1987, 累計1500万部)。
+  - canonical: リーバン
+    aliases: [リーバン, "リーバン(Liebam)", Liebam, LIEBAM]
+    tier: C
+    region: JP
+  # 人と木=木製の雛人形・五月人形・木のおもちゃ工房 (hito-to-ki.com)。
+  - canonical: 人と木
+    aliases: [人と木]
+    tier: C
+    region: JP
+  # ロボットプラザ=ロボット/ドローン玩具の輸入・販売 (robotplaza.jp, 公式ストア)。
+  - canonical: ロボットプラザ
+    aliases: [ロボットプラザ, "ロボットプラザ(ROBOT PLAZA)", ROBOT PLAZA, ROBOTPLAZA]
+    tier: C
+    region: JP
+  # omonogawa=有限会社雄物川印刷 (秋田県横手市)。「しりとりBINGO」商標登録の知育カード。
+  - canonical: omonogawa
+    aliases: [omonogawa, OMONOGAWA, 雄物川印刷]
+    tier: C
+    region: JP
 
   # ==========================================
   # 中華系・無名級新興ブランド (固有名あり / 認証・信頼性不明 = Tier D)
@@ -1313,3 +1340,9 @@ brands:
   # 商品帰属のため登録するが薄いハブは出さない = noindex。
   - {canonical: Jasonwell, tier: D, region: CN, noindex: true, aliases: [JASONWELL, jasonwell]}
   - {canonical: beiens, tier: D, region: CN, noindex: true, aliases: [BEIENS, Beiens]}
+  # 2026-06-10 (session 149 / #2158 供給側検出): 実在の Amazon ブランドだが薄いハブ不要 = noindex。
+  # 木玩社 (きがんしゃ)=木製モンテッソーリ玩具、SALUDABLE=幼児楽器 (Colorful Co.)、
+  # KaeKid=ロボット/ベビー知育 (US/AU/JP に brand store)。
+  - {canonical: 木玩社, tier: D, region: unknown, noindex: true, aliases: [木玩社, "木玩社(きがんしゃ)", きがんしゃ]}
+  - {canonical: SALUDABLE, tier: D, region: unknown, noindex: true, aliases: [SALUDABLE, Saludable, saludable]}
+  - {canonical: KaeKid, tier: D, region: CN, noindex: true, aliases: [KaeKid, KAEKID, Kaekid, kaekid]}
