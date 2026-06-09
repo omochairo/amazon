@@ -149,6 +149,17 @@ jobs:
           echo "count=$COUNT" >> "$GITHUB_OUTPUT"
           echo "detected $COUNT brand taxonomy candidates"
 
+      - name: Suggest brand_taxonomy additions from catalog (P3, epic #2126)
+        id: catalog_brand
+        # 供給側 (カタログ) 起点なので GSC の有無に依存せず常に走らせる。
+        continue-on-error: true
+        run: |
+          set -e
+          python scripts/suggest_brand_taxonomy_from_catalog.py
+          COUNT=$(python -c "import json; print(len(json.load(open('data/analytics/catalog_brand_candidates.json'))['candidates']))")
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "detected $COUNT catalog brand candidates"
+
       - name: Detect query cannibalization (A-3, epic #1356)
         id: cannibal
         if: steps.gsc.outputs.available == 'true'
@@ -201,6 +212,7 @@ jobs:
             data/analytics/low_ctr_pages.json
             data/analytics/opportunity_pages.json
             data/analytics/brand_taxonomy_suggestions.json
+            data/analytics/catalog_brand_candidates.json
             data/analytics/cannibalization.json
             data/analytics/engagement_drop.json
             data/analytics/orphan_pages.json
@@ -234,6 +246,15 @@ jobs:
         run: |
           set -e
           python scripts/open_brand_suggestion_issue.py
+
+      - name: Open catalog brand Issue (P3, epic #2126)
+        if: steps.catalog_brand.outputs.count != '0' && steps.catalog_brand.outputs.count != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          python scripts/open_catalog_brand_issue.py
 
       - name: Open cannibalization Issues (A-3)
         if: steps.cannibal.outputs.count != '0' && steps.cannibal.outputs.count != ''
