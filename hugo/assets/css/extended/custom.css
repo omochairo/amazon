@@ -6212,11 +6212,34 @@ details.development-stage-accordion[open] > summary::before {
   border-radius: 12px;
   background: var(--entry, #fff);
 }
-.toy-safety > h2 {
-  margin: 0 0 14px;
+/* session 145: <details> アコーディオン化。summary を見出し帯として使い、
+   既定 closed。検証済リコールヒット時のみ partial 側で open 属性が付く。 */
+.toy-safety__summary {
+  cursor: pointer;
+  list-style: none;
+  margin: -20px -22px 0;
+  padding: 16px 22px;
+}
+.toy-safety[open] > .toy-safety__summary {
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+}
+.toy-safety__summary::-webkit-details-marker { display: none; }
+.toy-safety__summary > h2 {
+  display: inline;
+  margin: 0;
   font-size: 1.2rem;
   color: var(--primary, #222);
 }
+.toy-safety__summary::before {
+  content: "▶";
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 0.78em;
+  color: var(--secondary, #9ca3af);
+  transition: transform 0.2s ease;
+}
+.toy-safety[open] > .toy-safety__summary::before { transform: rotate(90deg); }
 .toy-safety__block { margin: 0 0 16px; }
 .toy-safety__block:last-of-type { margin-bottom: 8px; }
 .toy-safety__h3 {
