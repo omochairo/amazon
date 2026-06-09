@@ -167,6 +167,41 @@ class TestAggregate(unittest.TestCase):
         # exclude_from_taxonomy=True for ノーブランド -> brand not in output
         self.assertEqual(payload["brand_count_total"], 0)
 
+    def test_noindex_brand_full_aggregate(self):
+        # Jasonwell は brand_taxonomy.yaml で noindex: true (epic #2126 P4)
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td) / "articles"
+            _write_articles(root, [
+                _article("J1", "Jasonwell", 80, 1000, "3歳以上", ["X"]),
+                _article("J2", "Jasonwell", 80, 1000, "3歳以上", ["X"]),
+                _article("J3", "Jasonwell", 80, 1000, "3歳以上", ["X"]),
+            ])
+            payload = bhs.aggregate(root)
+        rec = payload["brands"]["Jasonwell"]
+        self.assertTrue(rec["noindex"])
+
+    def test_noindex_brand_under_threshold(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td) / "articles"
+            _write_articles(root, [
+                _article("J1", "Jasonwell", 80, 1000, "3歳以上", ["X"]),
+                _article("J2", "Jasonwell", 80, 1000, "3歳以上", ["X"]),
+            ])
+            payload = bhs.aggregate(root)
+        self.assertEqual(payload["brands"]["Jasonwell"], {"count": 2, "noindex": True})
+
+    def test_non_noindex_brand_omits_flag(self):
+        # noindex でないブランドは noindex キーを出力しない (JSON を軽く保つ)
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td) / "articles"
+            _write_articles(root, [
+                _article("A1", "レゴ(LEGO)", 80, 1000, "3歳以上", ["レゴ"]),
+                _article("A2", "レゴ(LEGO)", 85, 2000, "5歳〜", ["レゴ"]),
+                _article("A3", "レゴ(LEGO)", 85, 999, "1歳半〜", ["レゴ"]),
+            ])
+            payload = bhs.aggregate(root)
+        self.assertNotIn("noindex", payload["brands"]["レゴ"])
+
     def test_empty_dir(self):
         with tempfile.TemporaryDirectory() as td:
             root = pathlib.Path(td) / "articles"

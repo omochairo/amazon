@@ -1286,19 +1286,30 @@ brands:
     region: unknown
 
   # ==========================================
-  # 中華系新興ブランド (固有名あり / 認証・信頼性不明 = Tier D)
+  # 中華系・無名級新興ブランド (固有名あり / 認証・信頼性不明 = Tier D)
+  #
+  # epic #2126 P4: ここは「商品の正しい帰属 (正規化 / dedup) はしたいが、
+  # 薄いハブページを検索インデックスに出したくない」クラス。各エントリに
+  # noindex: true を付け、/brands/ ページは生成しつつ head.html が noindex,follow
+  # にする (exclude_from_taxonomy=true でハブ自体を消すのとは別。商品ページの
+  # ブランド表記は正しく出る)。well-known な実ブランドはこのフラグを付けない。
   # ==========================================
-  - {canonical: Bajoy, tier: D, region: CN, aliases: [BAJOY, bajoy]}
-  - {canonical: Globaledutoy, tier: D, region: CN, aliases: [GLOBALEDUTOY, GlobalEduToy]}
-  - {canonical: HMshuo, tier: D, region: CN, aliases: [HMSHUO, hmshuo]}
-  - {canonical: JoyGrow, tier: D, region: CN, aliases: [JOYGROW, Joygrow, joygrow]}
-  - {canonical: Joyreal, tier: D, region: CN, aliases: [JOYREAL, JoyReal, joyreal]}
-  - {canonical: LumiLumi, tier: D, region: CN, aliases: [LUMILUMI, Lumilumi, lumilumi]}
-  - {canonical: TAETOE, tier: D, region: CN, aliases: [Taetoe, taetoe]}
-  - {canonical: Vanplay, tier: D, region: CN, aliases: [VANPLAY, VanPlay, vanplay]}
-  - {canonical: Mamimami Home, tier: D, region: CN, aliases: [Mamimami Home, MamimamiHome, mamimami home, mamimamihome]}
-  - {canonical: SHOP SHIMATARO, tier: D, region: JP, aliases: [SHOP SHIMATARO, おもちゃとホビー SHOP SHIMATARO, SHIMATARO]}
+  - {canonical: Bajoy, tier: D, region: CN, noindex: true, aliases: [BAJOY, bajoy]}
+  - {canonical: Globaledutoy, tier: D, region: CN, noindex: true, aliases: [GLOBALEDUTOY, GlobalEduToy]}
+  - {canonical: HMshuo, tier: D, region: CN, noindex: true, aliases: [HMSHUO, hmshuo]}
+  - {canonical: JoyGrow, tier: D, region: CN, noindex: true, aliases: [JOYGROW, Joygrow, joygrow]}
+  - {canonical: Joyreal, tier: D, region: CN, noindex: true, aliases: [JOYREAL, JoyReal, joyreal]}
+  - {canonical: LumiLumi, tier: D, region: CN, noindex: true, aliases: [LUMILUMI, Lumilumi, lumilumi]}
+  - {canonical: TAETOE, tier: D, region: CN, noindex: true, aliases: [Taetoe, taetoe]}
+  - {canonical: Vanplay, tier: D, region: CN, noindex: true, aliases: [VANPLAY, VanPlay, vanplay]}
+  - {canonical: Mamimami Home, tier: D, region: CN, noindex: true, aliases: [Mamimami Home, MamimamiHome, mamimami home, mamimamihome]}
+  - {canonical: SHOP SHIMATARO, tier: D, region: JP, noindex: true, aliases: [SHOP SHIMATARO, おもちゃとホビー SHOP SHIMATARO, SHIMATARO]}
   # 2026-06-02 (session 77 / #1329 Phase 3.0): GSC で imp=7 のブランド名指名
   # (ロンビー / ロンビー おもちゃ) を確認 → canonical 追加。商品は B0875FV2BQ
   # (ロンビー(Lon-Bi) ボードゲーム系)。製造拠点不明 = unknown / tier D。
-  - {canonical: ロンビー, tier: D, region: unknown, aliases: [ロンビー, "ロンビー(Lon-Bi)", Lon-Bi, LON-BI, "lon-bi", LonBi]}
+  - {canonical: ロンビー, tier: D, region: unknown, noindex: true, aliases: [ロンビー, "ロンビー(Lon-Bi)", Lon-Bi, LON-BI, "lon-bi", LonBi]}
+  # 2026-06-09 (session 137 / #2126 P3→P4): 供給側検出器
+  # (suggest_brand_taxonomy_from_catalog.py) が surfacing した実在中華系ブランド。
+  # 商品帰属のため登録するが薄いハブは出さない = noindex。
+  - {canonical: Jasonwell, tier: D, region: CN, noindex: true, aliases: [JASONWELL, jasonwell]}
+  - {canonical: beiens, tier: D, region: CN, noindex: true, aliases: [BEIENS, Beiens]}
