@@ -142,6 +142,50 @@
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
       "notes": "ワイドシリーズの概要として、全22ページ（カラー台紙4場面）、シール点数100枚以上、サイズ縦14cm×横20cmであること、楽しみながら指先を使い知恵をのばすコンセプトが記載されている。"
+    },
+    {
+      "id": "src-2",
+      "name": "子どもざっか屋 pine forest",
+      "url": "https://pineforest.hatenablog.com/entry/2019/07/14/000000",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2019-07-14",
+      "author": "第三者ライター",
+      "conflict_of_interest": "none",
+      "notes": "リーバンのシールブックのレビュー。お出かけ先での時間つぶしに重宝することや、種類が豊富でどうぶつシリーズが人気であることが言及されている。"
+    },
+    {
+      "id": "src-3",
+      "name": "キテミヨ-kitemiyo- レッツゴーどうぶつえんの評判・口コミ",
+      "url": "https://fashion.biglobe.ne.jp/kids/items/1155735/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-06-11",
+      "author": "レビューサイト",
+      "conflict_of_interest": "none",
+      "notes": "類似の「レッツゴーどうぶつえん」に対する口コミ。動物に親しみながら遊べる点や価格の手頃さが評価されている。同メーカーの動物シリーズ共通の傾向。"
+    },
+    {
+      "id": "src-4",
+      "name": "カウナラ リーバン レッツゴーどうぶつえん",
+      "url": "https://kaunara.cplaza.ne.jp/items/461715/",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-06-11",
+      "author": "レビューサイト",
+      "conflict_of_interest": "none",
+      "notes": "リーバンの動物シールブックに関する評価。手先の運動になり、お出かけにも便利という評価がある。"
+    },
+    {
+      "id": "src-5",
+      "name": "株式会社リーバン シールブックってなに？",
+      "url": "http://www.liebam.co.jp/aboutstickerbook",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2026-06-11",
+      "author": "メーカー公式",
+      "conflict_of_interest": "possible",
+      "notes": "シールブックの知育効果に関する公式説明。推理力・想像力を育むというメーカーの設計思想が記載されている。"
     }
   ],
   "claims": [
@@ -150,7 +194,8 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-5"
       ],
       "cross_checked": false,
       "notes": "公式サイトのワイドシリーズ共通仕様として確認"
@@ -160,7 +205,8 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-2"
       ],
       "cross_checked": false,
       "notes": "公式サイトのサイズ表記より"
@@ -170,9 +216,11 @@
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-2",
+        "src-5"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "公式サイトのシリーズコンセプトとして記載"
     },
     {
@@ -180,7 +228,8 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-2"
       ],
       "cross_checked": false,
       "notes": "公式サイトの遊び方の説明に記載"
