@@ -82,6 +82,8 @@ def render_body(data: dict) -> str:
     candidates = data.get("candidates") or []
     total_unknown = data.get("total_unknown_products", "?")
     total_groups = data.get("total_unknown_groups", "?")
+    total_rejected = data.get("total_rejected_products", 0)
+    rejected_brands = params.get("rejected_brands", 0)
 
     parts = [
         f"<!-- {MARKER} -->",
@@ -101,6 +103,8 @@ def render_body(data: dict) -> str:
         f"- 未登録 (unknown) 商品: **{total_unknown}** / グループ (fold 統合後): {total_groups}",
         f"- min_products: {params.get('min_products')} 以上の候補のみ掲載",
         f"- 走査記事数: {params.get('articles_scanned')}",
+        f"- reviewed-rejected denylist で除外: {rejected_brands} brand / "
+        f"{total_rejected} 商品 (`data/brand_rejected.yaml`, #2196)",
         "",
         f"## 追加候補 ({len(candidates)} 件)",
         "",
@@ -119,8 +123,9 @@ def render_body(data: dict) -> str:
         "1. 各 display が実在の玩具ブランドか調査 (公式サイト / Amazon ブランドストア / Wikipedia)",
         "2. **実ブランド** → `data/brand_taxonomy.yaml` に追加する PR (canonical + 表記ゆれ alias)。"
         "次回 full rebuild (02-publish) で `/brands/<canonical>/` が自動生成される (build_post L1994)",
-        "3. **中華無名・真の不明** (Ghbunuz / MOSYULO 等のランダム英字) → ノーブランドのまま据え置きが正。"
-        "本 Issue を close (P4: tier と exclude_from_taxonomy 分離設計で別途扱う)",
+        "3. **中華無名・真の不明 / 同名別業種 / カテゴリ外** (Ghbunuz / MOSYULO 等) → "
+        "`data/brand_rejected.yaml` に追記 (#2196)。次回 cron 以降この候補は除外され、"
+        "同じ顔ぶれの再起票が止まる (取消は当該行を消すだけ)",
         "",
         "## 自動運用",
         "",
