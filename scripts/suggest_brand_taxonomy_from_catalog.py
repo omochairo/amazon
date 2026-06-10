@@ -36,6 +36,8 @@ import pathlib
 import sys
 from typing import Any
 
+import yaml
+
 # brand_normalizer は同じ scripts/ ディレクトリに在る
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from brand_normalizer import _fold, get_taxonomy  # noqa: E402
@@ -45,6 +47,7 @@ logger = logging.getLogger("suggest_brand_taxonomy_from_catalog")
 
 DEFAULT_ARTICLES_GLOB = "data/articles/*.json"
 DEFAULT_OUT = "data/analytics/catalog_brand_candidates.json"
+DEFAULT_REJECTED = "data/brand_rejected.yaml"
 DEFAULT_MIN_PRODUCTS = 2
 DEFAULT_TOP_N = 40
 DEFAULT_EXAMPLES = 5
@@ -69,10 +72,35 @@ def iter_article_files(articles_glob: str) -> list[str]:
     return [f for f in files if not f.endswith(_SIDECAR_SUFFIXES)]
 
 
-def collect_candidates(files: list[str]) -> dict[str, Any]:
+def load_rejected_folded(path: str) -> set[str]:
+    """reviewed-rejected denylist (brand_rejected.yaml) を _fold 済み set で返す。
+
+    人手レビューで「実在するが登録しない / 同名別業種 / カテゴリ外」と判断した
+    brand を NON_BRAND_RAW_FOLDED と同じ層で候補から落とすため (#2196)。
+    ファイルが無ければ空 set (= 何も除外しない)。
+    """
+    p = pathlib.Path(path)
+    if not p.exists():
+        logger.info("rejected denylist not found (%s) — none excluded", path)
+        return set()
+    data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    folded: set[str] = set()
+    for entry in data.get("rejected", []) or []:
+        raw = (entry.get("brand") or "").strip() if isinstance(entry, dict) else str(entry)
+        f = _fold(raw)
+        if f:
+            folded.add(f)
+    logger.info("loaded %d rejected brand(s) from %s", len(folded), path)
+    return folded
+
+
+def collect_candidates(files: list[str],
+                       rejected_folded: set[str] | None = None) -> dict[str, Any]:
     tax = get_taxonomy()
+    rejected_folded = rejected_folded or set()
     groups: dict[str, dict[str, Any]] = {}
     total_unknown = 0
+    total_rejected = 0
 
     for f in files:
         try:
@@ -89,6 +117,9 @@ def collect_candidates(files: list[str]) -> dict[str, Any]:
             continue
         folded = _fold(raw)
         if not folded or folded in NON_BRAND_RAW_FOLDED:
+            continue
+        if folded in rejected_folded:
+            total_rejected += 1
             continue
 
         total_unknown += 1
@@ -109,7 +140,11 @@ def collect_candidates(files: list[str]) -> dict[str, Any]:
                 "raw": raw,
             })
 
-    return {"groups": groups, "total_unknown_products": total_unknown}
+    return {
+        "groups": groups,
+        "total_unknown_products": total_unknown,
+        "total_rejected_products": total_rejected,
+    }
 
 
 def finalize(groups: dict[str, dict[str, Any]], *,
@@ -133,9 +168,11 @@ def finalize(groups: dict[str, dict[str, Any]], *,
     return out[:top_n]
 
 
-def run(articles_glob: str, *, min_products: int, top_n: int) -> dict[str, Any]:
+def run(articles_glob: str, *, min_products: int, top_n: int,
+        rejected_path: str = DEFAULT_REJECTED) -> dict[str, Any]:
     files = iter_article_files(articles_glob)
-    collected = collect_candidates(files)
+    rejected_folded = load_rejected_folded(rejected_path)
+    collected = collect_candidates(files, rejected_folded)
     candidates = finalize(
         collected["groups"], min_products=min_products, top_n=top_n,
     )
@@ -145,8 +182,10 @@ def run(articles_glob: str, *, min_products: int, top_n: int) -> dict[str, Any]:
             "min_products": min_products,
             "top_n": top_n,
             "articles_scanned": len(files),
+            "rejected_brands": len(rejected_folded),
         },
         "total_unknown_products": collected["total_unknown_products"],
+        "total_rejected_products": collected["total_rejected_products"],
         "total_unknown_groups": len(collected["groups"]),
         "candidates": candidates,
     }
@@ -156,6 +195,8 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--articles-glob", default=DEFAULT_ARTICLES_GLOB)
     p.add_argument("--out", default=DEFAULT_OUT)
+    p.add_argument("--rejected", default=DEFAULT_REJECTED,
+                   help="reviewed-rejected denylist YAML (#2196)")
     p.add_argument("--min-products", type=int, default=DEFAULT_MIN_PRODUCTS)
     p.add_argument("--top-n", type=int, default=DEFAULT_TOP_N)
     args = p.parse_args()
@@ -164,15 +205,18 @@ def main() -> int:
         args.articles_glob,
         min_products=args.min_products,
         top_n=args.top_n,
+        rejected_path=args.rejected,
     )
 
     out = pathlib.Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     logger.info(
-        "wrote %s — %d unknown products in %d groups, %d candidates (min_products=%d)",
+        "wrote %s — %d unknown products in %d groups, %d candidates "
+        "(min_products=%d, %d products excluded by rejected denylist)",
         out, result["total_unknown_products"], result["total_unknown_groups"],
         len(result["candidates"]), args.min_products,
+        result["total_rejected_products"],
     )
     return 0
 

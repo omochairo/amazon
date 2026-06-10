@@ -1,0 +1,104 @@
+# brand_rejected.yaml — 供給側ブランド検出器の reviewed-rejected denylist
+#
+# `suggest_brand_taxonomy_from_catalog.py` が拾う「ノーブランドに埋没した未登録
+# brand 候補」のうち、人手レビューで **実在するが taxonomy に登録しない** /
+# **同名別業種の誤マッチ** / **カテゴリ外** と判断したものをここに記録する。
+# 検出器は各 brand を `_fold()` で正規化し、この denylist に在る候補を
+# (NON_BRAND_RAW_FOLDED と同じ層で) 候補から除外する。
+#
+# 設計意図:
+# - 登録 (brand_taxonomy.yaml 追加) と異なり、これは「登録しない」判断の記憶。
+#   該当 ASIN がカタログに残る限り、これが無いと close の度に同じ候補が再起票され
+#   恒久ノイズになる (#2196)。
+# - 据え置き判断は将来覆りうるため、コード埋め込みではなく削除容易な単一 YAML に集約。
+#   ここから 1 行消せば次回 cron で当該 brand が再び候補に浮上する。
+# - カタログから当該 ASIN が消えれば自然に候補から外れるので、ここは
+#   「実在/誤マッチだが登録しない」案件の再起票抑制が主目的。
+#
+# category: mismatch=同名別業種 / out_of_category=玩具カテゴリ外 /
+#           unverifiable_oem=ランダム英字 OEM で実体裏取り不可
+
+rejected:
+  # --- 同名別業種の誤マッチ ---
+  - brand: "キューフラ(Q-FLA)"
+    category: mismatch
+    reason: 九州フラワーサービスの入浴剤ブランド ≠ マジックねんど玩具
+    reviewed: 2026-06-09
+    source: "#2158"
+
+  # --- 玩具カテゴリ外 ---
+  - brand: ワークアップ
+    category: out_of_category
+    reason: 防犯シール (玩具ではない)
+    reviewed: 2026-06-09
+    source: "#2158"
+
+  # --- ランダム英字 OEM (実体裏取り不可・session 149 実査済) ---
+  - brand: Ghbunuz
+    category: unverifiable_oem
+    reviewed: 2026-06-09
+    source: "#2158"
+  - brand: MOSYULO
+    category: unverifiable_oem
+    reviewed: 2026-06-09
+    source: "#2158"
+  - brand: Nicheez
+    category: unverifiable_oem
+    reviewed: 2026-06-09
+    source: "#2158"
+  - brand: Apaeofl
+    category: unverifiable_oem
+    reviewed: 2026-06-09
+    source: "#2158"
+  - brand: Apricity
+    category: unverifiable_oem
+    reviewed: 2026-06-09
+    source: "#2158"
+  - brand: Caividom
+    category: unverifiable_oem
+    reviewed: 2026-06-09
+    source: "#2158"
+  - brand: DINORUN
+    category: unverifiable_oem
+    reviewed: 2026-06-09
+    source: "#2158"
+  - brand: Kadu
+    category: unverifiable_oem
+    reviewed: 2026-06-09
+    source: "#2158"
+  - brand: Loigohon
+    category: unverifiable_oem
+    reviewed: 2026-06-09
+    source: "#2158"
+  - brand: Neboka
+    category: unverifiable_oem
+    reviewed: 2026-06-09
+    source: "#2158"
+  - brand: PanKome
+    category: unverifiable_oem
+    reviewed: 2026-06-09
+    source: "#2158"
+  - brand: Radiant Party
+    category: unverifiable_oem
+    reviewed: 2026-06-09
+    source: "#2158"
+  - brand: SIzlaho
+    category: unverifiable_oem
+    reviewed: 2026-06-09
+    source: "#2158"
+  - brand: Startcan
+    category: unverifiable_oem
+    reviewed: 2026-06-09
+    source: "#2158"
+  - brand: Sunwards
+    category: unverifiable_oem
+    reviewed: 2026-06-09
+    source: "#2158"
+  - brand: VoSinrly
+    category: unverifiable_oem
+    reviewed: 2026-06-09
+    source: "#2158"
+  - brand: WYSWYG
+    category: unverifiable_oem
+    reviewed: 2026-06-09
+    source: "#2158"
