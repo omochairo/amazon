@@ -457,19 +457,16 @@ cert 名に言及する `claims[]` の `supporting_source_ids` には、**本文
 
 ## 8. 出力前セルフチェック
 
-下記は `quality_gate.py` で機械判定できない / 定性的な観点のみ列挙する。schema 違反・件数規律・cert 妥当性・URL 一意性などは gate が自動判定するので Jules 側で重ねて確認しない。
+下記は `quality_gate.py` で機械判定できない **定性的な観点のみ** 列挙する。schema 違反・**件数規律・文字数下限・lead hook 禁止フレーズ**・cert 妥当性・URL 一意性は gate が自動判定するので、ここでは**重ねて確認しない**（要件本体は §1.B / §5.A / §5.D / §5.E に記載済。gate が block するので自己確認は不要）。
 
 1. [ ] 画像 URL・アフィリエイト URL は raw JSON 由来のもののみ（gate 範囲外、Jules 自己責任）
 2. [ ] `persona_fit.primary_buyer` に「20〜40代女性」相当の表記がある
 3. [ ] `narrative` 内の主張（特に `why_this_product` `safety_note` の核となる訴求）が `claims` または `sources[].notes` で裏付けられている
 4. [ ] 一般化された口コミ表現（「集中して遊ぶ」「夢中になる」等）を使う場合、対応する `sources` が存在する
 5. [ ] `youtube_embeds` / `news` / `books` の各エントリは `data/raw/per_asin/<ASIN>/` 由来である（無関係なジャンル全体ファイルから拾っていない）。空配列でも可
-6. [ ] `narrative.lead` が §1.B 準拠（hook パターン A/B/C・3 要素構成）。禁止フレーズは `check_lead_hook` が PR を block するので併せて自己確認
-7. [ ] `narrative.why_this_product` / `gift_appeal` / `daily_use` / `safety_note` / `closing` の 5 セクションすべてが §5.A の 4-step 構造（問い→答え→根拠→締め）で書かれている
-8. [ ] `persona_fit.not_recommended_for` を 2〜3 件出力している（曖昧表現・侮蔑表現でなく実体的なミスマッチ要因）
-9. [ ] `narrative.daily_use` または `narrative.safety_note` の少なくともどちらか一方に、購入者レビューからの直接引用（「〜」との声があります 形式）が最低 1 つ含まれている。レビュー取得不能なら公式の具体引用で代替する
-10. [ ] 30 秒で記事をスキャンした読者が「自分は買うべきか / 買うべきでないか」を判断できる構成になっている（hook → recommended/not_recommended → 価格 → 締め の流れが追える）
-11. [ ] `review_signals.summary_one_line` を 50-100 字で出力している。集合受動表現で、個人特定（年齢+性別+職業の組合せ・固有名）を含まない
-12. [ ] `review_signals.{high_points, concerns, use_scenes}` の各エントリに 50-80 字の `text` と `supporting_source_ids` 1 件以上が紐付いている。件数レンジ（high_points 3〜5 / concerns 2〜4 / use_scenes 3〜5）を満たしている
-13. [ ] `review_signals.segment_voices` を最低 1 件出力している（最大 3 件）。`segment_label` は「○○層」型の集合名、`summary` は 1〜2 文の集合的傾向。個人擬人化（「○○さんは…」）や直接引用フォーマット（「『〜』との声」）を使っていない。`supporting_source_ids` 1 件以上必須
-14. [ ] `verdict.headline` を 50-80 字の 1 文で出力している。〈推奨条件〉+〈非推奨/躊躇条件〉構造で、スコアと `product.pros` / `product.cons` の整合が取れている（強い断定の禁止は §5.B / longevity ラベル統一は §6 参照）
+6. [ ] `narrative.why_this_product` / `gift_appeal` / `daily_use` / `safety_note` / `closing` の 5 セクションすべてが §5.A の 4-step 構造（問い→答え→根拠→締め）で書かれている
+7. [ ] `persona_fit.not_recommended_for` が曖昧表現・侮蔑表現でなく実体的なミスマッチ要因になっている
+8. [ ] `narrative.daily_use` または `narrative.safety_note` の少なくともどちらか一方に、購入者レビューからの直接引用（「〜」との声があります 形式）が最低 1 つ含まれている。レビュー取得不能なら公式の具体引用で代替する
+9. [ ] 30 秒で記事をスキャンした読者が「自分は買うべきか / 買うべきでないか」を判断できる構成になっている（hook → recommended/not_recommended → 価格 → 締め の流れが追える）
+10. [ ] `review_signals.summary_one_line` / `segment_voices` が集合受動・地の文で書かれている（個人特定や「○○さんは…」「『〜』との声」型の個人擬人化・直接引用フォーマットを使っていない）
+11. [ ] `verdict.headline` が〈推奨条件〉+〈非推奨/躊躇条件〉構造で、スコアと `product.pros` / `product.cons` の整合が取れている（強い断定の禁止は §5.B）
