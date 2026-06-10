@@ -246,6 +246,13 @@ on:
       # 週次 auto-merge PR で更新されるため、paths 未登録だと inverse trap で validate
       # 不発火→auto-merge 永久 BLOCKED になる ([[04-validate-paths-inverse-trap]])。
       - 'data/analytics/gsc_history/**'
+      # 2026-06-10 (session 152 / #1329 Phase 3A): 蓄積 GSC スナップショットから
+      # brand↔query コンテキストを組む read-only script + unit test。14-brand-narrative の
+      # prompt 注入 (Phase 3B) はこれを呼ぶ。paths 未登録だと inverse trap で validate
+      # 不発火→auto-merge 永久 BLOCKED ([[04-validate-paths-inverse-trap]])。記事変更ゼロで
+      # vacuous SUCCESS。
+      - 'scripts/build_brand_query_context.py'
+      - 'scripts/tests/test_build_brand_query_context.py'
       # 2026-06-02 (session 78 / epic #1357 B-1 Phase 1): CrUX 月次 fetch script と
       # workflow を validate (required check) 対象に。Phase 2 (劣化検出 → Issue 起票)
       # は 2 ヶ月分蓄積後の follow-up PR。
