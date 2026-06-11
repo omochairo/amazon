@@ -105,7 +105,9 @@
       "アナログな遊びのみで飽きやすい可能性"
     ],
     "target_age": "1歳〜3歳",
-    "certifications": [],
+    "certifications": [
+      "FSC"
+    ],
     "edu_domains": [
       "運動",
       "想像"
@@ -149,7 +151,7 @@
       "published_at": "2026-06-11",
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
-      "notes": "1歳からの知育玩具として、追視や指先の運動を促す設計。ボールが転がると鈴が鳴る仕組み。水性塗料使用。"
+      "notes": "1歳からの知育玩具として、追視や指先の運動を促す設計。ボールが転がると鈴が鳴る仕組み。"
     },
     {
       "id": "src-2",
@@ -171,40 +173,64 @@
       "published_at": "2026-06-11",
       "author": "レビューサイト",
       "conflict_of_interest": "none",
-      "notes": "レビューサイトへの掲載。ただし具体的なレビューテキストは確認できず。"
+      "notes": "商品が掲載されているが具体的な口コミ内容は確認できず。"
+    },
+    {
+      "id": "src-4",
+      "name": "Univers Jouets / Descendeur en bois Collection Pure – Janod",
+      "url": "https://www.universjouets.com/product/descendeur-en-bois-collection-pure-janod/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-06-11",
+      "author": "おもちゃ専門店",
+      "conflict_of_interest": "none",
+      "notes": "1歳からの木製知育玩具として、水性塗料の使用やFSC認証を受けた木材の使用について言及されている。"
+    },
+    {
+      "id": "src-5",
+      "name": "Janod US / Pure Collection",
+      "url": "https://www.janod.us/113-pure",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2026-06-11",
+      "author": "メーカー公式",
+      "conflict_of_interest": "possible",
+      "notes": "Pureコレクションが天然木を使用し、パステルカラーを採用している旨が記載されている。"
     }
   ],
   "claims": [
     {
       "claim": "1歳からの追視や指先の運動を促す知育効果がある",
       "category": "quality",
-      "confidence": "medium",
+      "confidence": "high",
       "supporting_source_ids": [
         "src-1",
-        "src-2"
+        "src-4"
       ],
       "cross_checked": true,
-      "notes": "1歳からの知育玩具として設計されている点について公式と販売サイトで一致。"
+      "notes": "メーカー公式と専門店で機能性について一致。"
     },
     {
       "claim": "水性塗料が使用されている",
       "category": "safety",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-4",
+        "src-5"
       ],
-      "cross_checked": false,
-      "notes": "メーカー公式ページで明記されている。"
+      "cross_checked": true,
+      "notes": "専門店とUS公式で言及がある。"
     },
     {
       "claim": "出産祝いや1歳の誕生日プレゼントとして適している",
       "category": "comparative_advantage",
       "confidence": "medium",
       "supporting_source_ids": [
-        "src-2"
+        "src-2",
+        "src-4"
       ],
-      "cross_checked": false,
-      "notes": "おもちゃ専門店での提案内容。"
+      "cross_checked": true,
+      "notes": "複数のおもちゃ専門店での提案内容として一致。"
     },
     {
       "claim": "ボールが最後まで転がると鈴が鳴る仕掛けがある",
@@ -212,10 +238,21 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-1",
-        "src-2"
+        "src-4"
       ],
       "cross_checked": true,
-      "notes": "ボールが転がると鈴が鳴る仕掛けについて両サイトで一致。"
+      "notes": "メーカー公式と専門店で仕様説明が一致。"
+    },
+    {
+      "claim": "FSC認証を受けた木材が使用されている",
+      "category": "safety",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-1",
+        "src-4"
+      ],
+      "cross_checked": true,
+      "notes": "メーカー公式と専門店でFSC認証について言及されている。"
     }
   ],
   "technical_specs": {
