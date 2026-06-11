@@ -178,6 +178,17 @@
       "author": "購入者レビュー",
       "conflict_of_interest": "none",
       "notes": "手先の器用さや集中力を養う点で「夢中になって遊んでいる」と評価されている。"
+    },
+    {
+      "id": "src-4",
+      "name": "楽天ビック（ビックカメラ×楽天） / アンパンマン まわすのだいすき",
+      "url": "https://biccamera.rakuten.co.jp/item/4971404323704",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-06-11",
+      "author": "楽天ビック",
+      "conflict_of_interest": "none",
+      "notes": "家電量販店ビックカメラの楽天ショップにて取り扱いがあり、アンパンマンのおもちゃとしてラインナップされている。"
     }
   ],
   "claims": [
@@ -223,6 +234,17 @@
       ],
       "cross_checked": false,
       "notes": "Amazon商品説明から推測される電池不要の仕様"
+    },
+    {
+      "claim": "家電量販店やオンラインショップなど幅広く取り扱われている定番品である",
+      "category": "quality",
+      "confidence": "medium",
+      "supporting_source_ids": [
+        "src-3",
+        "src-4"
+      ],
+      "cross_checked": true,
+      "notes": "Joshinとビックカメラの両方で販売されていることから"
     }
   ],
   "technical_specs": {
@@ -251,7 +273,7 @@
       {
         "text": "手頃な価格帯でちょっとしたプレゼントや自宅用として導入しやすい",
         "supporting_source_ids": [
-          "src-3"
+          "src-4"
         ]
       }
     ],
@@ -285,7 +307,7 @@
       {
         "text": "ちょっとしたお祝いや1歳の誕生日プレゼント",
         "supporting_source_ids": [
-          "src-3"
+          "src-4"
         ]
       }
     ],
