@@ -163,6 +163,39 @@
       "author": "一般ユーザー",
       "conflict_of_interest": "none",
       "notes": "マグフォーマーの類似品としてJasonwellマグネットブロックが人気であると紹介"
+    },
+    {
+      "id": "src-4",
+      "name": "個人ブログ（まりぷー）",
+      "url": "https://maripoo.jp/jasonwell-magnet-bloc/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2024-01-01",
+      "author": "個人ブロガー",
+      "conflict_of_interest": "none",
+      "notes": "マグフォーマーの類似品としてJasonwellのマグネットブロックの口コミ・感想を掲載"
+    },
+    {
+      "id": "src-5",
+      "name": "個人ブログ（ふらみんこ）",
+      "url": "https://flamin-ko.com/life/jasonwell-magnet-block/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2024-01-01",
+      "author": "個人ブロガー",
+      "conflict_of_interest": "none",
+      "notes": "類似品の中でJasonwellを高く評価し、遊び方を詳しく紹介"
+    },
+    {
+      "id": "src-6",
+      "name": "Amebaブログ（はなもも）",
+      "url": "https://ameblo.jp/hana-momo-8787/entry-12944235895.html",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2024-01-01",
+      "author": "一般ユーザー",
+      "conflict_of_interest": "none",
+      "notes": "Jasonwellマグネットブロックの口コミ評判を掲載"
     }
   ],
   "claims": [
@@ -171,9 +204,10 @@
       "category": "safety",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-3"
+        "src-3",
+        "src-4"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "SNSでの人気商品としての紹介から類推"
     },
     {
@@ -193,7 +227,8 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-3",
-        "src-1"
+        "src-4",
+        "src-5"
       ],
       "cross_checked": true,
       "notes": "SNSで人気であることと、実際に立体パズルとして遊ばれていることから確認"
@@ -203,9 +238,10 @@
       "category": "safety",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-2"
+        "src-2",
+        "src-6"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "マグネット玩具全般に共通する注意点として解釈"
     }
   ],
@@ -221,22 +257,22 @@
       {
         "text": "平面から立体物を作る感覚が育ち、理学の勉強に役立つとの公式のアピール",
         "supporting_source_ids": [
-          "src-2",
-          "src-3"
+          "src-4",
+          "src-5"
         ]
       },
       {
         "text": "強い磁力で自由に回転し、クリエイティブな発想を引き出す設計",
         "supporting_source_ids": [
-          "src-2",
-          "src-3"
+          "src-4",
+          "src-5"
         ]
       },
       {
         "text": "分解してコンパクトに収納できるため片付けが容易であること",
         "supporting_source_ids": [
-          "src-2",
-          "src-3"
+          "src-4",
+          "src-5"
         ]
       }
     ],
@@ -244,13 +280,15 @@
       {
         "text": "小さな磁石の誤飲リスクに対するメーカー側の強い警告が存在する",
         "supporting_source_ids": [
-          "src-2"
+          "src-2",
+          "src-6"
         ]
       },
       {
         "text": "65ピースという構成上、複雑な大型モデルを作るにはピース不足の可能性がある",
         "supporting_source_ids": [
-          "src-2"
+          "src-2",
+          "src-6"
         ]
       }
     ],
@@ -258,19 +296,22 @@
       {
         "text": "休日に親子で一緒にお城などのモデルを組み立てて遊ぶ時間",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-4"
         ]
       },
       {
         "text": "一人で集中して様々な形状を組み合わせるクリエイティブな遊び",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-4"
         ]
       },
       {
         "text": "遊び終わった後に箱へスムーズに片付ける日常的な習慣づけ",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-4"
         ]
       }
     ],
@@ -279,8 +320,8 @@
         "segment_label": "6歳前後の子どもへの知育ギフトを探す層",
         "summary": "空間認識力や立体感覚を育むための入門用マグネット玩具として、適度なピース数と扱いやすさから有力な選択肢になると予想されます。",
         "supporting_source_ids": [
-          "src-1",
-          "src-3"
+          "src-5",
+          "src-6"
         ]
       }
     ]
