@@ -105,9 +105,7 @@
       "ボールなどの小さなパーツを紛失しやすい"
     ],
     "target_age": "5歳以上",
-    "certifications": [
-      "ST"
-    ],
+    "certifications": [],
     "edu_domains": [
       "想像"
     ],
@@ -127,14 +125,14 @@
     },
     "best_platform": "Amazon",
     "best_price": 4018,
-    "ivs_score": 4.3,
+    "ivs_score": 4.0,
     "ivs_detail": {
       "education": 3.6,
       "longevity": 3.7,
-      "safety": 3.8,
+      "safety": 3.5,
       "cost_performance": 3.6,
-      "total": 4.3,
-      "total_100": 86,
+      "total": 4.0,
+      "total_100": 80,
       "score_rationale": [
         {
           "factor": "知育効果",
@@ -147,9 +145,9 @@
           "reason": "3Dピッチングや魔球など機能が豊富で、対戦ゲームとして飽きにくいため。"
         },
         {
-          "factor": "安全性",
-          "delta": "+0.3",
-          "reason": "STマークを取得しており、玩具としての安全基準を満たしているため。"
+          "factor": "コスパ",
+          "delta": "+0.1",
+          "reason": "Amazonにて約4000円と手に取りやすい価格帯で提供されているため。"
         }
       ]
     }
@@ -245,17 +243,6 @@
       "notes": "公式サイトとAmazonの記載で一致"
     },
     {
-      "claim": "STマークを取得しており安全性が高い",
-      "category": "safety",
-      "confidence": "high",
-      "supporting_source_ids": [
-        "src-2",
-        "src-3"
-      ],
-      "cross_checked": true,
-      "notes": "公式サイトとAmazonの仕様欄で一致"
-    },
-    {
       "claim": "プレゼントとして喜ばれる",
       "category": "comparative_advantage",
       "confidence": "high",
@@ -275,6 +262,16 @@
       ],
       "cross_checked": true,
       "notes": "公式サイトと公式PVで動作を確認"
+    },
+    {
+      "claim": "対象年齢5歳未満の小さな子どもには大人の見守りが必要",
+      "category": "safety",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-2"
+      ],
+      "cross_checked": false,
+      "notes": "公式サイトの対象年齢設定を根拠とする"
     }
   ],
   "technical_specs": {
@@ -285,8 +282,7 @@
     },
     "other": [
       "対象年齢5歳以上",
-      "プレイ人数2人",
-      "STマーク"
+      "プレイ人数2人"
     ]
   },
   "review_signals": {
