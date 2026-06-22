@@ -83,9 +83,14 @@
 
   <footer class="post-footer">
     {{- $tags := .Language.Params.Taxonomies.tag | default "tags" }}
+    {{- /* #2701 P2: 薄タグ (記事数 < threshold) はクロールバジェット希釈源なので
+           内部リンクエッジを張らない。閾値は head.html / sitemap.xml の noindex 条件と一致。 */}}
+    {{- $thinThreshold := int (site.Params.thinTermNoindexThreshold | default 3) }}
     <ul class="post-tags">
       {{- range ($.GetTerms $tags) }}
+      {{- if ge (len .Pages) $thinThreshold }}
       <li><a href="{{ .Permalink }}">{{ .LinkTitle }}</a></li>
+      {{- end }}
       {{- end }}
     </ul>
     {{- if (.Param "ShowPostNavLinks") }}

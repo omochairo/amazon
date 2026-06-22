@@ -27,7 +27,16 @@
   <p class="term-header-description">タグから関連するレビュー記事を探せます。</p>
   {{- end }}
   <div class="term-header-meta">
-    <span class="term-header-count">{{ len .Data.Terms }} {{ $label }}</span>
+    {{- /* #2701 P2: brands は curated 全件表示。tags/categories は薄タグ (記事数 < threshold)
+           を一覧から除外しクロールエッジを削減するため、表示件数も実数に合わせる。 */}}
+    {{- $shownCount := len .Data.Terms -}}
+    {{- if ne $plural "brands" -}}
+      {{- $threshold := int (site.Params.thinTermNoindexThreshold | default 3) -}}
+      {{- $n := 0 -}}
+      {{- range .Data.Terms.ByCount -}}{{- if ge (len .Pages) $threshold -}}{{- $n = add $n 1 -}}{{- end -}}{{- end -}}
+      {{- $shownCount = $n -}}
+    {{- end -}}
+    <span class="term-header-count">{{ $shownCount }} {{ $label }}</span>
   </div>
 </header>
 
@@ -73,11 +82,16 @@
 
 {{- else }}
 
+{{- /* #2701 P2: 薄タグ (記事数 < threshold) は noindex デッドエンドで、一覧から
+       リンクするとクロールバジェットを希釈する。一覧には index 対象タグのみ掲載する。 */}}
+{{- $threshold := int (site.Params.thinTermNoindexThreshold | default 3) -}}
 <div class="tag-chips term-tag-chips">
   {{- range $terms }}
+    {{- if ge (len .Pages) $threshold }}
     <a class="tag-chip" href="{{ .Page.RelPermalink }}">
       #{{ .Name }} <span class="tag-chip-count">{{ len .Pages }}</span>
     </a>
+    {{- end }}
   {{- end }}
 </div>
 
