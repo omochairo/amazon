@@ -1,0 +1,19 @@
+{{- /*
+  is_brand_tag.html (Issue #2701 P3)
+  引数: タグ名 (文字列)。site.Data.brand_hub.brands に同名 (curated ブランド) が
+  存在すれば "1" を、無ければ空文字を返す。ブランド名と一致する tag は curated な
+  /brands/ ハブを正本とするため、index/sitemap/内部リンクから抑制する判定に使う。
+  Hugo は Latin taxonomy の名前を小文字化しうるため exact → lower の順で照合する。
+*/ -}}
+{{- $name := . -}}
+{{- $match := "" -}}
+{{- with site.Data.brand_hub -}}
+  {{- if index .brands $name -}}
+    {{- $match = "1" -}}
+  {{- else -}}
+    {{- range $k, $v := .brands -}}
+      {{- if eq (lower $k) (lower $name) -}}{{- $match = "1" -}}{{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $match -}}

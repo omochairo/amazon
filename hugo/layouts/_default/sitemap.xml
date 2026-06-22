@@ -27,6 +27,10 @@
       {{- if and $entry $entry.noindex -}}{{- $skip = true -}}{{- end -}}
     {{- end -}}
   {{- end -}}
+  {{- /* #2701 P3: ブランド名と一致する tag は /brands/ を正本に noindex 化したため除外。 */ -}}
+  {{- if and (eq $p.Kind "term") (eq $p.Data.Plural "tags") (partial "is_brand_tag.html" $p.Title) -}}
+    {{- $skip = true -}}
+  {{- end -}}
   {{- if and (not $skip) $p.Permalink -}}
   <url>
     <loc>{{ $p.Permalink }}</loc>
