@@ -1,12 +1,11 @@
-"""Unit tests for apply_rewrite_targets.py (Issue #812 Phase 1).
+"""Unit tests for apply_rewrite_targets.py (Issue #812 / #2711 redesign).
 
 Coverage:
 1. _parse_targets - rejects malformed ASINs, strips whitespace.
 2. inject_targets - prepends per_asin snapshot items into pool, skips ASINs
    already in pool, skips ASINs without snapshot, tags source.
-3. delete_article_files - removes primary + sidecar files matching the slug pattern,
-   leaves unrelated files alone.
-4. Smoke test: end-to-end on a tmp tree.
+3. write_markers - records the current body slug, marks bodyless ASINs too.
+4. main() - injects AND writes markers but NEVER deletes the body (#2711).
 """
 from __future__ import annotations
 
@@ -22,6 +21,7 @@ if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
 import apply_rewrite_targets as art  # noqa: E402
+import rewrite_queue as rq  # noqa: E402
 
 
 def _write_json(path: str, data: dict) -> None:
@@ -102,81 +102,67 @@ class InjectTargetsTest(unittest.TestCase):
             self.assertEqual(got["items"][0]["source"], "Amazon (Target)")
 
 
-class DeleteArticleFilesTest(unittest.TestCase):
-    def test_removes_primary_and_sidecars(self) -> None:
+class WriteMarkersTest(unittest.TestCase):
+    def test_records_current_body_slug(self) -> None:
         with tempfile.TemporaryDirectory() as d:
-            articles = os.path.join(d, "data", "articles")
+            articles = os.path.join(d, "articles")
             os.makedirs(articles)
-            for name in (
-                "2026-05-11-B00I7JXEEA.json",
-                "2026-05-11-B00I7JXEEA.quality.json",
-                "2026-05-11-B00I7JXEEA.enrichment.json",
-                "2026-05-11-B00I7JXEEA.seo.json",
-                "2026-05-12-B0KEEP00000.json",  # unrelated, must survive
-                "2026-05-12-B0KEEP00000.quality.json",
-            ):
+            # Two dated bodies for the same ASIN → newest is the current one.
+            for name in ("2026-05-01-B00I7JXEEA.json", "2026-05-09-B00I7JXEEA.json"):
                 with open(os.path.join(articles, name), "w", encoding="utf-8") as f:
                     f.write("{}")
-            removed = art.delete_article_files(d, ["B00I7JXEEA"])
-            self.assertEqual(removed, 4)
-            survived = sorted(os.listdir(articles))
-            self.assertEqual(survived, ["2026-05-12-B0KEEP00000.json", "2026-05-12-B0KEEP00000.quality.json"])
+            queue = os.path.join(d, "queue")
+            n = art.write_markers(["B00I7JXEEA"], articles, queue)
+            self.assertEqual(n, 1)
+            with open(rq.marker_path("B00I7JXEEA", queue), encoding="utf-8") as f:
+                m = json.load(f)
+            self.assertEqual(m["old_slug"], "2026-05-09-B00I7JXEEA")
+            self.assertTrue(m["requested_at"])
 
-    def test_missing_files_returns_zero(self) -> None:
+    def test_marks_bodyless_asin_with_empty_slug(self) -> None:
         with tempfile.TemporaryDirectory() as d:
-            os.makedirs(os.path.join(d, "data", "articles"))
-            self.assertEqual(art.delete_article_files(d, ["B00I7JXEEA"]), 0)
+            articles = os.path.join(d, "articles")
+            os.makedirs(articles)
+            queue = os.path.join(d, "queue")
+            art.write_markers(["B00I7JXEEA"], articles, queue)
+            with open(rq.marker_path("B00I7JXEEA", queue), encoding="utf-8") as f:
+                self.assertEqual(json.load(f)["old_slug"], "")
 
 
-class MainDeleteGateTest(unittest.TestCase):
-    """Issue #2711 止血: main() must NOT delete bodies unless --enable-delete."""
+class MainNeverDeletesTest(unittest.TestCase):
+    """Issue #2711: main() injects + marks but must NEVER delete the body."""
 
-    def _setup_tree(self, d: str) -> tuple[str, str, str]:
-        pool = os.path.join(d, "amazon.json")
-        _write_json(pool, {"items": []})
-        per_asin = os.path.join(d, "per_asin")
-        _write_json(
-            os.path.join(per_asin, "B00I7JXEEA", "amazon.json"),
-            {"asin": "B00I7JXEEA", "item": {"asin": "B00I7JXEEA", "title": "x"}},
-        )
-        articles = os.path.join(d, "data", "articles")
-        os.makedirs(articles)
-        for name in ("2026-05-11-B00I7JXEEA.json", "2026-05-11-B00I7JXEEA.quality.json"):
-            with open(os.path.join(articles, name), "w", encoding="utf-8") as f:
+    def test_inject_and_mark_keep_body(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            pool = os.path.join(d, "amazon.json")
+            _write_json(pool, {"items": []})
+            per_asin = os.path.join(d, "per_asin")
+            _write_json(
+                os.path.join(per_asin, "B00I7JXEEA", "amazon.json"),
+                {"asin": "B00I7JXEEA", "item": {"asin": "B00I7JXEEA", "title": "x"}},
+            )
+            articles = os.path.join(d, "articles")
+            os.makedirs(articles)
+            body = os.path.join(articles, "2026-05-11-B00I7JXEEA.json")
+            with open(body, "w", encoding="utf-8") as f:
                 f.write("{}")
-        return pool, per_asin, articles
-
-    def _run_main(self, pool: str, per_asin: str, base: str, enable: bool) -> None:
-        argv = [
-            "apply_rewrite_targets.py",
-            "--asins", "B00I7JXEEA",
-            "--pool", pool,
-            "--per-asin-root", per_asin,
-            "--articles-base", base,
-        ]
-        if enable:
-            argv.append("--enable-delete")
-        old = sys.argv
-        sys.argv = argv
-        try:
-            self.assertEqual(art.main(), 0)
-        finally:
-            sys.argv = old
-
-    def test_default_does_not_delete(self) -> None:
-        with tempfile.TemporaryDirectory() as d:
-            pool, per_asin, articles = self._setup_tree(d)
-            self._run_main(pool, per_asin, d, enable=False)
-            # Bodies must survive; inject still happened.
-            self.assertEqual(len(os.listdir(articles)), 2)
+            queue = os.path.join(d, "queue")
+            argv = [
+                "apply_rewrite_targets.py", "--asins", "B00I7JXEEA",
+                "--pool", pool, "--per-asin-root", per_asin,
+                "--articles-dir", articles, "--queue-dir", queue,
+            ]
+            old = sys.argv
+            sys.argv = argv
+            try:
+                self.assertEqual(art.main(), 0)
+            finally:
+                sys.argv = old
+            # Body survives, item injected, marker written.
+            self.assertTrue(os.path.exists(body))
             with open(pool, encoding="utf-8") as f:
                 self.assertEqual(json.load(f)["items"][0]["asin"], "B00I7JXEEA")
-
-    def test_enable_delete_removes(self) -> None:
-        with tempfile.TemporaryDirectory() as d:
-            pool, per_asin, articles = self._setup_tree(d)
-            self._run_main(pool, per_asin, d, enable=True)
-            self.assertEqual(os.listdir(articles), [])
+            self.assertTrue(os.path.exists(rq.marker_path("B00I7JXEEA", queue)))
 
 
 if __name__ == "__main__":

@@ -3,30 +3,32 @@ name: Rewrite Idle Fill
 # Issue #812 Phase 1 — fill idle Jules slots with rewrites of low-quality / old-prompt
 # articles whenever new-ASIN fetch supply is below the 8-slot capacity.
 #
-# Flow:
+# Flow (Issue #2711 redesign — "replace, don't pre-delete"):
+# 0. Cleanup: rewrite_queue.py --cleanup removes the stale old body + marker for
+#    any PREVIOUS rewrite whose replacement body has already landed (safe: only
+#    deletes when a newer body exists).
 # 1. Compute exclude set = open PR titles + jules-lock/<ASIN> branches.
-# 2. slack = max(0, 8 - active). Manual `limit` input overrides.
+# 2. slack = max(0, 12 - active). Manual `limit` input overrides.
 # 3. select_rewrite_targets.py picks `slack` ASINs by (quality.total_score asc,
 #    slug date asc). Missing quality.json → top priority.
 # 4. fetch_amazon.py --asin <CSV> --competitors-only refreshes per_asin/<ASIN>/.
-# 5. Inject per_asin/<ASIN>/amazon.json items into data/raw/amazon.json items[]
-#    so 03-invoke-jules pick-asin sees them in candidates, and delete the
-#    existing data/articles/<slug>-<ASIN>.{json,quality.json,enrichment.json,seo.json}.
+# 5. apply_rewrite_targets.py injects per_asin/<ASIN>/amazon.json items into
+#    data/raw/amazon.json items[] AND writes a data/rewrite_queue/<ASIN>.json
+#    marker. It NO LONGER deletes the body — the body survives until step 0 of a
+#    later cycle removes it, and only once the replacement exists.
 # 6. Open PR + enable auto-merge. After merge, 02-publish → 03-invoke-jules
-#    chain naturally picks up the now-uncovered ASINs.
-
-# Issue #2711 (止血・2026-06-22): the scheduled cron is DISABLED. The
-# "delete body now, hope 03-invoke-jules regenerates later" flow lost ~338
-# article bodies to permanent 404 whenever regeneration silently failed.
-# apply_rewrite_targets.py now requires --enable-delete (default OFF) which
-# this workflow does NOT pass, so even manual_dispatch runs are non-destructive
-# (inject-only). Re-enable the cron only after the queue-based atomic
-# "replace, don't pre-delete" redesign lands (#2711).
+#    picks up the marked ASINs (pick-asin keeps a marked ASIN eligible while its
+#    replacement body has not landed). A silently-failed regeneration leaves the
+#    old body intact (no 404) and is retried next cycle.
+#
+# Issue #2711: the destructive pre-delete that lost ~338 bodies to permanent 404
+# is gone. build_post.py renders only the newest body per ASIN, so the transient
+# "old + new" window never produces a duplicate /products/<ASIN>/ URL.
 on:
-  # schedule:
-  #   # 02:00 + 14:00 UTC = 11:00 + 23:00 JST, ~2h after each fetch cron
-  #   # (fetch is at 00:00 + 09:00 UTC) so slack reflects latest supply.
-  #   - cron: '0 2,14 * * *'   # DISABLED — see #2711 止血 note above
+  schedule:
+    # 02:00 + 14:00 UTC = 11:00 + 23:00 JST, ~2h after each fetch cron
+    # (fetch is at 00:00 + 09:00 UTC) so slack reflects latest supply.
+    - cron: '0 2,14 * * *'
   workflow_dispatch:
     inputs:
       limit:
@@ -58,6 +60,14 @@ jobs:
 
       - name: Install Dependencies
         run: pip install -r requirements.txt
+
+      # #2711 step 0: tidy up rewrites from earlier cycles whose replacement body
+      # has already landed (remove the now-superseded old body + its marker).
+      # Safe by construction: cleanup_completed deletes only when a newer body
+      # exists, so this can never orphan a page. Deletions ride along in the PR
+      # created below (the commit step stages data/articles + data/rewrite_queue).
+      - name: Cleanup completed rewrites
+        run: python scripts/rewrite_queue.py --cleanup
 
       - name: Compute idle slack + select rewrite targets
         id: select
@@ -119,14 +129,16 @@ jobs:
             --competitors-only \
             --out data/raw/
 
-      - name: Inject targets into amazon.json + delete old article files
+      - name: Inject targets into amazon.json + write rewrite-queue markers
         if: steps.select.outputs.count != '0'
         env:
           ASINS_CSV: ${{ steps.select.outputs.asins }}
         run: python scripts/apply_rewrite_targets.py --asins "$ASINS_CSV"
 
+      # Not gated on select.count: a cleanup-only cycle (step 0 removed a
+      # superseded body + marker but found no new idle slots) still needs its
+      # tidy-up committed.
       - name: Create PR with auto-merge
-        if: steps.select.outputs.count != '0'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           ASINS_CSV: ${{ steps.select.outputs.asins }}
@@ -137,11 +149,16 @@ jobs:
             exit 0
           fi
           BRANCH="rewrite-idle/${{ github.run_id }}"
-          TITLE="chore(rewrite): idle-fill rewrite of ${ASINS_CSV} (#812)"
+          if [ -n "$ASINS_CSV" ]; then
+            TITLE="chore(rewrite): idle-fill rewrite of ${ASINS_CSV} (#812)"
+          else
+            TITLE="chore(rewrite): cleanup completed rewrites (#2711)"
+          fi
           git config user.name "omochairo-fetch-bot[bot]"
           git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
-          git add data/raw/amazon.json data/raw/per_asin/ data/articles/
+          # -A so step-0 cleanup deletions (old bodies + markers) are staged too.
+          git add -A data/raw/amazon.json data/raw/per_asin/ data/articles/ data/rewrite_queue/
           if git diff --cached --quiet; then
             echo "Nothing staged after git add; skipping."
             exit 0
@@ -156,15 +173,16 @@ jobs:
 
           **Targets**: \`${ASINS_CSV}\`
 
-          ## What this PR does
+          ## What this PR does (Issue #2711 "replace, don't pre-delete")
           - Refreshes \`data/raw/per_asin/<ASIN>/{amazon.json,competitors.json}\` via Creator API
           - Prepends each target's item record into \`data/raw/amazon.json\` items[] so 03-invoke-jules can pick them
-          - Deletes \`data/articles/<old-slug>-<ASIN>.{json,quality.json,enrichment.json,seo.json}\`
+          - Writes a \`data/rewrite_queue/<ASIN>.json\` marker (request), **without deleting the body**
+          - Cleanup: removes any old body + marker whose replacement already landed in an earlier cycle
 
           ## Why
           fetch_amazon new-ASIN supply was low at cron time, leaving Jules slots idle. Selected ASINs are the lowest \`quality.total_score\` / oldest articles (sidecar-missing articles ranked first as old-prompt revisions).
 
-          After merge, 02-publish → 03-invoke-jules naturally re-generates each ASIN with the current prompt.
+          After merge, 02-publish → 03-invoke-jules re-generates each marked ASIN. The old body survives until its replacement lands, so a failed regeneration never orphans the page into a 404 (the bug behind #2711).
           EOF
           )" \
             --base main \

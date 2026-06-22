@@ -40,6 +40,36 @@ from score_calculator import (
 
 SUFFIX_SKIP = (".enrichment", ".seo", ".quality")
 
+# Issue #2711: a rewrite produces a new ``YYYY-MM-DD-<ASIN>.json`` body alongside
+# the old one ("replace, don't pre-delete"); the stale body is removed only after
+# the replacement lands (rewrite_queue.cleanup_completed). During that window two
+# bodies share the same ``/products/<ASIN>/`` URL, so render only the newest-dated
+# body per ASIN to avoid a duplicate-URL collision. A not-yet-regenerated ASIN
+# keeps rendering its old body (no 404). Sorting by stem puts the newest date last.
+_PRIMARY_RE = re.compile(r"-(B0[A-Z0-9]{8})$")
+
+
+def _winning_stems(src_path: pathlib.Path) -> set[str]:
+    """Return the set of file stems that are the newest body per ASIN.
+
+    Files whose stem does not match ``*-<ASIN>`` (no parseable ASIN) always win
+    (kept as-is) so unrelated/legacy filenames are never dropped.
+    """
+    newest: dict[str, str] = {}
+    passthrough: set[str] = set()
+    for f in src_path.glob("*.json"):
+        if f.stem.endswith(SUFFIX_SKIP):
+            continue
+        m = _PRIMARY_RE.search(f.stem)
+        if not m:
+            passthrough.add(f.stem)
+            continue
+        asin = m.group(1)
+        # Stem is ``YYYY-MM-DD-<ASIN>``; lexical max == newest date.
+        if asin not in newest or f.stem > newest[asin]:
+            newest[asin] = f.stem
+    return set(newest.values()) | passthrough
+
 
 def _build_score_context(sr: ScoreResult) -> dict[str, Any]:
     """Build the ``score`` dict consumed by ``post.md.j2`` (hero + recap blocks).
@@ -694,8 +724,11 @@ def _build_article_index(src_path: pathlib.Path) -> dict[str, dict[str, Any]]:
     index: dict[str, dict[str, Any]] = {}
     if not src_path.exists():
         return index
+    winners = _winning_stems(src_path)  # #2711: newest body per ASIN only
     for f in src_path.glob("*.json"):
         if f.stem.endswith(SUFFIX_SKIP):
+            continue
+        if f.stem not in winners:
             continue
         try:
             meta = json.loads(f.read_text(encoding="utf-8"))
@@ -2242,8 +2275,12 @@ def main() -> None:
     # 呼出で蓄積されるため、明示的にリセットしてから loop を回す。
     reset_media_exposure_metrics()
 
+    render_winners = _winning_stems(src_path)  # #2711: newest body per ASIN only
     for f in sorted(src_path.glob("*.json")):
         if f.stem.endswith(SUFFIX_SKIP):
+            continue
+        if f.stem not in render_winners:
+            print(f"  SKIP (superseded by newer body, #2711): {f.name}")
             continue
         try:
             data = json.loads(f.read_text(encoding="utf-8"))

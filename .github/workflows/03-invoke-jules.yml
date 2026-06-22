@@ -106,11 +106,26 @@ jobs:
               existing = set()
               for path in glob.glob('data/articles/*.json'):
                   base = os.path.basename(path)
-                  if base.endswith('.enrichment.json') or base.endswith('.quality.json'):
+                  if base.endswith(('.enrichment.json', '.quality.json', '.seo.json')):
                       continue
                   m = re.search(r'(B0[A-Z0-9]{8})', base)
                   if m:
                       existing.add(m.group(1))
+              # #2711 redesign: a rewrite is requested via a data/rewrite_queue/<ASIN>
+              # marker, NOT by deleting the body. Keep such ASINs eligible while
+              # their replacement body has not landed yet (covered-but-pending).
+              # Must run BEFORE the open-PR/lock union below so an in-flight
+              # rewrite PR still excludes the ASIN (no double pick).
+              import sys as _rqs
+              _rqs.path.insert(0, 'scripts')
+              try:
+                  import rewrite_queue as _rq
+                  pending = _rq.eligible_rewrite_asins('data/articles')
+                  if pending:
+                      print(f"rewrite-pending (#2711): {len(pending)} e.g. {sorted(pending)[:10]}")
+                  existing -= pending
+              except Exception as _e:
+                  print(f"::warning::rewrite_queue eligibility skipped: {_e}")
               for fname in ('/tmp/open_titles.txt', '/tmp/locked.txt'):
                   try:
                       with open(fname, encoding='utf-8') as f:
