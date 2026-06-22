@@ -15,11 +15,18 @@ name: Rewrite Idle Fill
 # 6. Open PR + enable auto-merge. After merge, 02-publish → 03-invoke-jules
 #    chain naturally picks up the now-uncovered ASINs.
 
+# Issue #2711 (止血・2026-06-22): the scheduled cron is DISABLED. The
+# "delete body now, hope 03-invoke-jules regenerates later" flow lost ~338
+# article bodies to permanent 404 whenever regeneration silently failed.
+# apply_rewrite_targets.py now requires --enable-delete (default OFF) which
+# this workflow does NOT pass, so even manual_dispatch runs are non-destructive
+# (inject-only). Re-enable the cron only after the queue-based atomic
+# "replace, don't pre-delete" redesign lands (#2711).
 on:
-  schedule:
-    # 02:00 + 14:00 UTC = 11:00 + 23:00 JST, ~2h after each fetch cron
-    # (fetch is at 00:00 + 09:00 UTC) so slack reflects latest supply.
-    - cron: '0 2,14 * * *'
+  # schedule:
+  #   # 02:00 + 14:00 UTC = 11:00 + 23:00 JST, ~2h after each fetch cron
+  #   # (fetch is at 00:00 + 09:00 UTC) so slack reflects latest supply.
+  #   - cron: '0 2,14 * * *'   # DISABLED — see #2711 止血 note above
   workflow_dispatch:
     inputs:
       limit:

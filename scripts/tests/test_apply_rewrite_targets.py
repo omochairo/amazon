@@ -128,5 +128,56 @@ class DeleteArticleFilesTest(unittest.TestCase):
             self.assertEqual(art.delete_article_files(d, ["B00I7JXEEA"]), 0)
 
 
+class MainDeleteGateTest(unittest.TestCase):
+    """Issue #2711 止血: main() must NOT delete bodies unless --enable-delete."""
+
+    def _setup_tree(self, d: str) -> tuple[str, str, str]:
+        pool = os.path.join(d, "amazon.json")
+        _write_json(pool, {"items": []})
+        per_asin = os.path.join(d, "per_asin")
+        _write_json(
+            os.path.join(per_asin, "B00I7JXEEA", "amazon.json"),
+            {"asin": "B00I7JXEEA", "item": {"asin": "B00I7JXEEA", "title": "x"}},
+        )
+        articles = os.path.join(d, "data", "articles")
+        os.makedirs(articles)
+        for name in ("2026-05-11-B00I7JXEEA.json", "2026-05-11-B00I7JXEEA.quality.json"):
+            with open(os.path.join(articles, name), "w", encoding="utf-8") as f:
+                f.write("{}")
+        return pool, per_asin, articles
+
+    def _run_main(self, pool: str, per_asin: str, base: str, enable: bool) -> None:
+        argv = [
+            "apply_rewrite_targets.py",
+            "--asins", "B00I7JXEEA",
+            "--pool", pool,
+            "--per-asin-root", per_asin,
+            "--articles-base", base,
+        ]
+        if enable:
+            argv.append("--enable-delete")
+        old = sys.argv
+        sys.argv = argv
+        try:
+            self.assertEqual(art.main(), 0)
+        finally:
+            sys.argv = old
+
+    def test_default_does_not_delete(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            pool, per_asin, articles = self._setup_tree(d)
+            self._run_main(pool, per_asin, d, enable=False)
+            # Bodies must survive; inject still happened.
+            self.assertEqual(len(os.listdir(articles)), 2)
+            with open(pool, encoding="utf-8") as f:
+                self.assertEqual(json.load(f)["items"][0]["asin"], "B00I7JXEEA")
+
+    def test_enable_delete_removes(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            pool, per_asin, articles = self._setup_tree(d)
+            self._run_main(pool, per_asin, d, enable=True)
+            self.assertEqual(os.listdir(articles), [])
+
+
 if __name__ == "__main__":
     unittest.main()

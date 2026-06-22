@@ -11,6 +11,14 @@ For each target ASIN:
 
 Idempotent: ASINs already in amazon.json items[] are skipped (no duplicate
 prepend). Missing files are warned and skipped.
+
+Issue #2711 (止血): step 2 (delete) is destructive and irreversible. The old
+"delete now, hope 03-invoke-jules regenerates later" flow lost ~338 article
+bodies whenever regeneration silently failed (Jules quota, amazon.json daily
+overwrite, zero-defer, shuffle starvation) -> permanent 404. Deletion is now
+gated behind --enable-delete (default OFF). Until the queue-based atomic
+"replace, don't pre-delete" redesign lands (#2711), runs are inject-only and
+the destructive path cannot fire by accident.
 """
 from __future__ import annotations
 
@@ -113,13 +121,30 @@ def main() -> int:
         help="Optional path prefix prepended to the deletion glob patterns "
              "(default empty = relative to cwd).",
     )
+    ap.add_argument(
+        "--enable-delete",
+        action="store_true",
+        help="Opt in to the destructive article-body deletion (Issue #2711). "
+             "Default OFF: runs are inject-only so a silently-failed "
+             "regeneration can no longer orphan the page into a 404. Only pass "
+             "this once the queue-based atomic replace (#2711) guarantees the "
+             "body is restored.",
+    )
     args = ap.parse_args()
     targets = _parse_targets(args.asins)
     if not targets:
         print("No targets; nothing to do.")
         return 0
     injected = inject_targets(args.pool, args.per_asin_root, targets)
-    removed = delete_article_files(args.articles_base, targets)
+    if args.enable_delete:
+        removed = delete_article_files(args.articles_base, targets)
+    else:
+        removed = 0
+        print(
+            "SKIP delete: destructive deletion disabled (Issue #2711 止血). "
+            "Pass --enable-delete only when atomic replace guarantees the body "
+            "is restored; otherwise a failed regeneration orphans the page (404)."
+        )
     print(f"[apply_rewrite_targets] injected={injected} removed={removed} targets={len(targets)}")
     return 0
 
