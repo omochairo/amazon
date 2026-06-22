@@ -1,41 +1,39 @@
 #!/usr/bin/env python3
-"""Apply rewrite targets to the Jules pool (Issue #812 Phase 1).
+"""Apply rewrite targets to the Jules pool (Issue #812 / #2711 redesign).
 
 For each target ASIN:
 1. Read ``data/raw/per_asin/<ASIN>/amazon.json`` (single-item snapshot written
    by fetch_amazon --competitors-only) and prepend its ``item`` into
    ``data/raw/amazon.json`` items[]. This makes the ASIN visible to
    03-invoke-jules pick-asin candidates.
-2. Delete the existing primary article + sidecar files so the pick-asin
-   "already-covered" filter no longer excludes the ASIN.
+2. Write a rewrite-request marker ``data/rewrite_queue/<ASIN>.json`` recording
+   the current body's slug. pick-asin keeps the ASIN eligible while a marker is
+   present and no newer body exists (see ``rewrite_queue.eligible_rewrite_asins``).
+
+Issue #2711 redesign ("replace, don't pre-delete"): this step NO LONGER deletes
+the existing body. The old flow deleted the body up front and hoped
+03-invoke-jules would regenerate it; any silently-failed regeneration (Jules
+quota, amazon.json daily overwrite, zero-defer #1600, shuffle starvation) then
+left the page permanently 404 (~338 bodies lost). Now the body survives until
+``rewrite_queue.cleanup_completed`` removes it -- and that only fires once a
+newer body has actually landed. A failed regeneration therefore never orphans
+the page.
 
 Idempotent: ASINs already in amazon.json items[] are skipped (no duplicate
-prepend). Missing files are warned and skipped.
-
-Issue #2711 (止血): step 2 (delete) is destructive and irreversible. The old
-"delete now, hope 03-invoke-jules regenerates later" flow lost ~338 article
-bodies whenever regeneration silently failed (Jules quota, amazon.json daily
-overwrite, zero-defer, shuffle starvation) -> permanent 404. Deletion is now
-gated behind --enable-delete (default OFF). Until the queue-based atomic
-"replace, don't pre-delete" redesign lands (#2711), runs are inject-only and
-the destructive path cannot fire by accident.
+prepend); markers re-written for the same ASIN keep their original timestamp.
+Missing files are warned and skipped.
 """
 from __future__ import annotations
 
 import argparse
-import glob
 import json
 import os
 import re
 import sys
 
+import rewrite_queue
+
 _ASIN_RE = re.compile(r"^B0[A-Z0-9]{8}$")
-_SIDECAR_GLOBS = (
-    "data/articles/*-{asin}.json",
-    "data/articles/*-{asin}.quality.json",
-    "data/articles/*-{asin}.enrichment.json",
-    "data/articles/*-{asin}.seo.json",
-)
 
 
 def _load_json(path: str) -> dict | None:
@@ -80,22 +78,22 @@ def inject_targets(pool_path: str, per_asin_root: str, targets: list[str]) -> in
     return injected
 
 
-def delete_article_files(articles_glob_base: str, targets: list[str]) -> int:
-    """Remove primary + sidecar JSON files for each target ASIN. Returns count."""
-    removed = 0
+def write_markers(targets: list[str], articles_dir: str, queue_dir: str) -> int:
+    """Write a rewrite-request marker per target ASIN. Returns count written.
+
+    The marker records the ASIN's current (newest) body slug as ``old_slug`` so
+    cleanup can later remove exactly that body once a newer one lands. An ASIN
+    with no existing body is still marked (old_slug=None): it is simply an
+    uncovered ASIN that pick-asin would pick anyway, and the harmless marker is
+    cleared on the next cleanup pass.
+    """
+    written = 0
     for asin in targets:
-        for pattern_tpl in _SIDECAR_GLOBS:
-            pattern = pattern_tpl.format(asin=asin)
-            # articles_glob_base lets tests redirect the root; production uses cwd.
-            full_pattern = os.path.join(articles_glob_base, pattern) if articles_glob_base else pattern
-            for path in glob.glob(full_pattern):
-                try:
-                    os.remove(path)
-                    print(f"RM: {path}")
-                    removed += 1
-                except OSError as e:
-                    print(f"WARN: failed to remove {path}: {e}", file=sys.stderr)
-    return removed
+        old_slug = rewrite_queue.newest_body_slug(asin, articles_dir)
+        rewrite_queue.write_marker(asin, old_slug or "", queue_dir)
+        print(f"MARK: {asin} old_slug={old_slug}")
+        written += 1
+    return written
 
 
 def _parse_targets(csv: str) -> list[str]:
@@ -115,37 +113,16 @@ def main() -> int:
     ap.add_argument("--asins", required=True, help="CSV of target ASINs")
     ap.add_argument("--pool", default="data/raw/amazon.json")
     ap.add_argument("--per-asin-root", default="data/raw/per_asin")
-    ap.add_argument(
-        "--articles-base",
-        default="",
-        help="Optional path prefix prepended to the deletion glob patterns "
-             "(default empty = relative to cwd).",
-    )
-    ap.add_argument(
-        "--enable-delete",
-        action="store_true",
-        help="Opt in to the destructive article-body deletion (Issue #2711). "
-             "Default OFF: runs are inject-only so a silently-failed "
-             "regeneration can no longer orphan the page into a 404. Only pass "
-             "this once the queue-based atomic replace (#2711) guarantees the "
-             "body is restored.",
-    )
+    ap.add_argument("--articles-dir", default="data/articles")
+    ap.add_argument("--queue-dir", default=rewrite_queue.QUEUE_DIR)
     args = ap.parse_args()
     targets = _parse_targets(args.asins)
     if not targets:
         print("No targets; nothing to do.")
         return 0
     injected = inject_targets(args.pool, args.per_asin_root, targets)
-    if args.enable_delete:
-        removed = delete_article_files(args.articles_base, targets)
-    else:
-        removed = 0
-        print(
-            "SKIP delete: destructive deletion disabled (Issue #2711 止血). "
-            "Pass --enable-delete only when atomic replace guarantees the body "
-            "is restored; otherwise a failed regeneration orphans the page (404)."
-        )
-    print(f"[apply_rewrite_targets] injected={injected} removed={removed} targets={len(targets)}")
+    marked = write_markers(targets, args.articles_dir, args.queue_dir)
+    print(f"[apply_rewrite_targets] injected={injected} marked={marked} targets={len(targets)}")
     return 0
 
 

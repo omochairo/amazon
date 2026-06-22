@@ -1,0 +1,3 @@
+# Issue #2711: rewrite-request markers (<ASIN>.json) live here.
+# A marker means "this ASIN's body should be rewritten"; the body is NOT deleted
+# when the marker is written. See scripts/rewrite_queue.py.
