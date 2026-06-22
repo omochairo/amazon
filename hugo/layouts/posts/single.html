@@ -84,11 +84,13 @@
   <footer class="post-footer">
     {{- $tags := .Language.Params.Taxonomies.tag | default "tags" }}
     {{- /* #2701 P2: 薄タグ (記事数 < threshold) はクロールバジェット希釈源なので
-           内部リンクエッジを張らない。閾値は head.html / sitemap.xml の noindex 条件と一致。 */}}
+           内部リンクエッジを張らない。閾値は head.html / sitemap.xml の noindex 条件と一致。
+           #2701 P3: ブランド名と一致する tag は curated /brands/ ハブ (breadcrumb で既に
+           リンク済み) を正本とし、noindex な tag への重複リンクを張らない。 */}}
     {{- $thinThreshold := int (site.Params.thinTermNoindexThreshold | default 3) }}
     <ul class="post-tags">
       {{- range ($.GetTerms $tags) }}
-      {{- if ge (len .Pages) $thinThreshold }}
+      {{- if and (ge (len .Pages) $thinThreshold) (not (partial "is_brand_tag.html" .Title)) }}
       <li><a href="{{ .Permalink }}">{{ .LinkTitle }}</a></li>
       {{- end }}
       {{- end }}

@@ -15,6 +15,18 @@
   {{- $cardKind = "category" -}}
 {{- end -}}
 
+{{- /* #2701 P2/P3: tags/categories の表示対象を一度だけ算出 (header 件数とチップで共有)。
+       P2 = 薄タグ (記事数 < threshold) を一覧から除外。
+       P3 = ブランド名と一致する tag は curated /brands/ ハブを正本とするため一覧から除外。 */ -}}
+{{- $threshold := int (site.Params.thinTermNoindexThreshold | default 3) -}}
+{{- $visibleTerms := slice -}}
+{{- range .Data.Terms.ByCount -}}
+  {{- if ge (len .Pages) $threshold -}}
+    {{- $isBrandDup := and (eq $plural "tags") (partial "is_brand_tag.html" .Name) -}}
+    {{- if not $isBrandDup -}}{{- $visibleTerms = $visibleTerms | append . -}}{{- end -}}
+  {{- end -}}
+{{- end -}}
+
 <header class="page-header term-header">
   {{- partial "breadcrumbs.html" . }}
   <div class="term-header-eyebrow">{{ $icon }} {{ $label }}一覧</div>
@@ -27,15 +39,8 @@
   <p class="term-header-description">タグから関連するレビュー記事を探せます。</p>
   {{- end }}
   <div class="term-header-meta">
-    {{- /* #2701 P2: brands は curated 全件表示。tags/categories は薄タグ (記事数 < threshold)
-           を一覧から除外しクロールエッジを削減するため、表示件数も実数に合わせる。 */}}
-    {{- $shownCount := len .Data.Terms -}}
-    {{- if ne $plural "brands" -}}
-      {{- $threshold := int (site.Params.thinTermNoindexThreshold | default 3) -}}
-      {{- $n := 0 -}}
-      {{- range .Data.Terms.ByCount -}}{{- if ge (len .Pages) $threshold -}}{{- $n = add $n 1 -}}{{- end -}}{{- end -}}
-      {{- $shownCount = $n -}}
-    {{- end -}}
+    {{- /* brands は curated 全件表示。tags/categories は $visibleTerms (P2/P3 で絞込済) の実数。 */}}
+    {{- $shownCount := cond (eq $plural "brands") (len .Data.Terms) (len $visibleTerms) -}}
     <span class="term-header-count">{{ $shownCount }} {{ $label }}</span>
   </div>
 </header>
@@ -82,16 +87,11 @@
 
 {{- else }}
 
-{{- /* #2701 P2: 薄タグ (記事数 < threshold) は noindex デッドエンドで、一覧から
-       リンクするとクロールバジェットを希釈する。一覧には index 対象タグのみ掲載する。 */}}
-{{- $threshold := int (site.Params.thinTermNoindexThreshold | default 3) -}}
 <div class="tag-chips term-tag-chips">
-  {{- range $terms }}
-    {{- if ge (len .Pages) $threshold }}
+  {{- range $visibleTerms }}
     <a class="tag-chip" href="{{ .Page.RelPermalink }}">
       #{{ .Name }} <span class="tag-chip-count">{{ len .Pages }}</span>
     </a>
-    {{- end }}
   {{- end }}
 </div>
 

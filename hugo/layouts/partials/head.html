@@ -73,10 +73,20 @@
     {{- end -}}
   {{- end -}}
 {{- end -}}
+{{- /* P3 (Issue #2701): ブランド名と一致する tag term ページは、curated な /brands/
+       ハブ (narrative/JSON-LD 付き) を正本とし、tag 側を noindex,follow + canonical
+       → /brands/<slug>/ に倒す。低価値な tag を index し高価値な brand を抑制する
+       「逆転」を是正する。tag と brand は同一スラッグなので Permalink の置換で導出。 */ -}}
+{{- $isBrandDupTag := false -}}
+{{- $brandDupCanonical := "" -}}
+{{- if and (eq .Kind "term") (eq .Data.Plural "tags") (partial "is_brand_tag.html" .Title) -}}
+  {{- $isBrandDupTag = true -}}
+  {{- $brandDupCanonical = replace $.Permalink "/tags/" "/brands/" -}}
+{{- end -}}
 {{- $isProd := or hugo.IsProduction (eq site.Params.env "production") -}}
-{{- if and $isProd (ne .Params.robotsNoIndex true) (not $isThinTerm) (not $isPaginated) (not $isNoindexBrand) }}
+{{- if and $isProd (ne .Params.robotsNoIndex true) (not $isThinTerm) (not $isPaginated) (not $isNoindexBrand) (not $isBrandDupTag) }}
 <meta name="robots" content="index, follow">
-{{- else if and $isProd (or $isThinTerm $isPaginated $isNoindexBrand) (ne .Params.robotsNoIndex true) }}
+{{- else if and $isProd (or $isThinTerm $isPaginated $isNoindexBrand $isBrandDupTag) (ne .Params.robotsNoIndex true) }}
 <meta name="robots" content="noindex, follow">
 {{- else }}
 <meta name="robots" content="noindex, nofollow">
@@ -106,7 +116,7 @@
     {{- with site.Params.description }}{{ . }}{{- end }}{{- end }}{{- end -}}">
 {{- end }}
 <meta name="author" content="{{ (partial "author.html" . ) }}">
-<link rel="canonical" href="{{ if .Params.canonicalURL -}} {{ trim .Params.canonicalURL " " }} {{- else -}} {{ .Permalink }} {{- end }}">
+<link rel="canonical" href="{{ if .Params.canonicalURL -}} {{ trim .Params.canonicalURL " " }} {{- else if $brandDupCanonical -}} {{ $brandDupCanonical }} {{- else -}} {{ .Permalink }} {{- end }}">
 {{- if site.Params.analytics.google.SiteVerificationTag }}
 <meta name="google-site-verification" content="{{ site.Params.analytics.google.SiteVerificationTag }}">
 {{- end }}
