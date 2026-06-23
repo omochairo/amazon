@@ -31,9 +31,11 @@ _FILLER_WORDS = {
 }
 
 
-# 助詞切り離し処理で誤判定（副作用）を起こすひらがな固有名詞等の例外辞書
+# 助詞切り離し処理で誤判定（副作用）を起こすひらがな固有名詞等の例外辞書。
+# 「もの (物)」語尾の名詞は語尾「の」が助詞と同形のため分割で破壊される (#2722)。
 _EXCEPTION_WORDS = {
-    "のりもの", "おままごと", "いつまで", "おかいもの", "なに"
+    "のりもの", "おままごと", "いつまで", "おかいもの", "なに",
+    "たべもの", "くだもの", "えんぎもの",
 }
 
 _JOSHI_START = set("のでに")
@@ -55,7 +57,14 @@ def _normalize(text: str) -> str:
     # ただし、例外辞書に含まれる単語は切り離さない
     def split_joshi_hiragana(match: re.Match) -> str:
         word = match.group(0)
-        if word in _EXCEPTION_WORDS:
+        # 完全一致に加えて接尾一致もガードする (#2722)。「はじめてのおままごと」
+        # や「おいしいたべもの」のように例外語にプレフィックスが付くと、
+        # 完全一致だけでは末尾の助詞同形文字 (と/の) が切り離されてしまう。
+        # 「なに」のような 2 字語は接尾一致だと「おはなに」等を過剰ガードする
+        # ため、接尾一致は 3 字以上の例外語に限定する。
+        if word in _EXCEPTION_WORDS or any(
+            len(ew) >= 3 and word.endswith(ew) for ew in _EXCEPTION_WORDS
+        ):
             return word
         return f"{match.group(1)} {match.group(2)} "
 
