@@ -209,7 +209,11 @@ class CreatorsAPIClient:
                 msg = "Rate limited" if response.status_code == 429 else ""
                 return None, (msg or True)
 
-            return None, True
+            # #2744: 400/403/422/5xx 等の非リトライエラーはリトライしても結果が
+            # 変わらない (resource 名 invalid / param 不正など)。従来は True を返して
+            # 指数バックオフを挟みつつ max_retries まで同一リクエストを投げ続け、
+            # API を無駄に叩いた上で原因も埋もれていた。即座に中断する。
+            return None, False
 
         except requests.exceptions.RequestException as e:
             print(
