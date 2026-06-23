@@ -111,9 +111,16 @@
       {{- end }}
     </ol>
 
+    {{- if eq $type "deals" }}
     <p class="ranking-disclaimer">
       ※ 割引率・価格は Amazon から取得した時点のスナップショットです。リンク先での最新の価格・在庫をご確認ください。当ページのリンクは Amazon アソシエイトを含みます。
     </p>
+    {{- else }}
+    {{- /* テーマ別 category hub (#2687): 知育スコア順の編集型ランキング */}}
+    <p class="ranking-disclaimer">
+      ※ <a href="/about-score/">知育スコア</a>と実売価格は集計時点のものです。テーマに合う商品を知育スコアの高い順に並べています。価格・在庫はリンク先で必ずご確認ください。当ページのリンクは Amazon アソシエイトを含みます。
+    </p>
+    {{- end }}
     {{- end }}
   {{- end }}
 </div>
