@@ -32,6 +32,10 @@ on:
       # 副作用なしの dry-run analyzer なので vacuous SUCCESS で通過する。
       - 'scripts/analyze_*.py'
       - 'scripts/score_calculator.py'
+      # 2026-06-23 (#2722 / PR #2749): competitor_ranking.py を触る PR も validate を
+      # 必須 check として発火させる ([[04-validate-paths-inverse-trap]] = paths 未登録
+      # で required check `validate` が不発 → auto-merge 永久 pending)。
+      - 'scripts/competitor_ranking.py'
       - 'scripts/jules_article_engine.py'
       - 'scripts/templates/**'
       - 'hugo/assets/css/**'
