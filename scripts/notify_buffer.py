@@ -39,6 +39,14 @@ DEFAULT_X_CHANNEL_ID = "67a022e330a138f0dbdfadbd"
 DEFAULT_THREADS_CHANNEL_ID = "68c0f42b76363a8367bc5408"
 DEFAULT_BASE_URL = "https://navi.omcha.jp"
 
+# X_POST_MODE: notify_engagement.py と同じ規約 (Issue #2780)。
+#   queue (default) → mode=addToQueue (Buffer のキューに積む。無料枠 10 件上限)
+#   now             → mode=shareNow   (キューを介さず即時配信。LimitReachedError 回避)
+# 商品配信側は従来 addToQueue ハードコードでキューを食い潰し、上限到達で
+# LimitReachedError → 後続ステップ全スキップを誘発していた (#2780)。
+X_POST_MODE_BUFFER_MODE = {"queue": "addToQueue", "now": "shareNow"}
+DEFAULT_X_POST_MODE = "queue"
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ARTICLES_DIR = REPO_ROOT / "data" / "articles"
 
@@ -128,8 +136,10 @@ def graphql_request(token: str, query: str, variables: dict) -> dict:
         return {"errors": [{"message": f"HTTP {e.code}: {e.read().decode('utf-8', errors='replace')}"}]}
 
 
-def create_post(token: str, channel_id: str, service: str, text: str, live: bool) -> dict:
+def create_post(token: str, channel_id: str, service: str, text: str, live: bool,
+                buffer_mode: str = "addToQueue") -> dict:
     # X (twitter) / Threads とも単発 post。metadata は service 別に最低限。
+    # buffer_mode は X_POST_MODE 由来 (addToQueue=キュー積み / shareNow=即時配信)。
     if service == "twitter":
         metadata = {"twitter": {"thread": []}}
     elif service == "threads":
@@ -143,7 +153,7 @@ def create_post(token: str, channel_id: str, service: str, text: str, live: bool
             "text": text,
             "assets": [],
             "schedulingType": "automatic",
-            "mode": "addToQueue",
+            "mode": buffer_mode,
             "saveToDraft": not live,
             "source": "omochairo-notify-buffer",
             "aiAssisted": False,
@@ -183,20 +193,28 @@ def main() -> int:
     threads_id = os.environ.get("BUFFER_THREADS_CHANNEL_ID", DEFAULT_THREADS_CHANNEL_ID)
     base_url = os.environ.get("OMOCHA_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
 
+    x_post_mode = (os.environ.get("X_POST_MODE") or DEFAULT_X_POST_MODE).strip().lower()
+    if x_post_mode not in X_POST_MODE_BUFFER_MODE:
+        print(f"::warning::unknown X_POST_MODE={x_post_mode!r}; falling back to {DEFAULT_X_POST_MODE}",
+              file=sys.stderr)
+        x_post_mode = DEFAULT_X_POST_MODE
+    buffer_mode = X_POST_MODE_BUFFER_MODE[x_post_mode]
+
     article = load_article(args.asin)
     text, url = build_single_payload(article, base_url)
     print(f"--- preview (ASIN={args.asin.upper()}) ---")
     print(f"[X / Threads 単発]\n{text}\n")
     print(f"[URL] {url}")
     print(f"[chars] X={len(text)} (limit 280) / Threads={len(text)} (limit 500)")
-    print(f"[mode] {'LIVE (addToQueue)' if args.live else 'DRAFT'}")
+    mode_label = "DRAFT" if not args.live else f"LIVE ({buffer_mode})"
+    print(f"[mode] {mode_label} | X_POST_MODE={x_post_mode}")
     print("---")
 
     ok = True
     if not args.threads_only:
-        ok &= report(create_post(token, x_id, "twitter", text, args.live), "X")
+        ok &= report(create_post(token, x_id, "twitter", text, args.live, buffer_mode), "X")
     if not args.x_only:
-        ok &= report(create_post(token, threads_id, "threads", text, args.live), "Threads")
+        ok &= report(create_post(token, threads_id, "threads", text, args.live, buffer_mode), "Threads")
     return 0 if ok else 1
 
 
