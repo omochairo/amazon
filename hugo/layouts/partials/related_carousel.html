@@ -127,8 +127,8 @@
        いれば該当 hub へ送る (hub_for_tag.html を流用・exact → lower で照合)。 */ -}}
 {{- $catHubs := slice -}}
 {{- range $selfTags -}}
-  {{- $u := partial "hub_for_tag.html" . -}}
-  {{- if and $u (not (in $catHubs $u)) -}}{{- $catHubs = $catHubs | append $u -}}{{- end -}}
+  {{- $u := partial "hub_for_tag.html" . | string -}}
+  {{- if and (ne $u "") (not (in $catHubs $u)) -}}{{- $catHubs = $catHubs | append $u -}}{{- end -}}
 {{- end -}}
 {{- range $catHubs }}
   {{- $url := . -}}
