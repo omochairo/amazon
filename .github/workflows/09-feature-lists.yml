@@ -68,8 +68,10 @@ jobs:
             --out-manifest data/features/_build_manifest.json \
             --top-n 20
 
-      - name: Build category hubs (#2687 柱1 — english / programming / math)
+      - name: Build category hubs (#2687 柱1 — テーマ別 + 年齢別)
         run: |
+          # --themes / --age-hubs は既定で全件生成 (テーマ english/programming/math
+          # + 年齢 age-0/1/2/3/4/6)。
           python scripts/build_category_hubs.py \
             --articles-dir data/articles \
             --out-hugo hugo/data/features \
@@ -87,6 +89,13 @@ jobs:
           git add -f hugo/data/features/english.json \
                      hugo/data/features/programming.json \
                      hugo/data/features/math.json || true
+          # #2687 柱1: 年齢別 category hub データ。
+          git add -f hugo/data/features/age-0.json \
+                     hugo/data/features/age-1.json \
+                     hugo/data/features/age-2.json \
+                     hugo/data/features/age-3.json \
+                     hugo/data/features/age-4.json \
+                     hugo/data/features/age-6.json || true
           git add data/features/_build_manifest.json || true
 
           if git diff --cached --quiet; then
