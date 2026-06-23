@@ -1,0 +1,23 @@
+# low_value_tags.yaml (Issue #2719)
+#
+# 「≥3 記事あり (薄タグ <3 の noindex 対象外) だが、検索面で表示はされるものの
+#  0 クリックで、対応する curated hub も無く、高 DA 競合に勝ち目が薄い」
+# 低価値な bare tag term ページを noindex,follow にするための curated denylist。
+#
+# #2701 P1 (薄タグ <3 → noindex) / P3 (brand-tag → /brands/) / #2765 (hub-tag → hub)
+# でカバーされない残りの「中身は薄いが記事数だけ閾値を超える」タグを手当てする。
+# canonical 先は持たない (統合すべき正本 hub が無い = 純粋に index から落とすだけ)。
+#
+# 収録基準 (実データ計測 2026-06-23・session 161・GSC gsc_by_page):
+#   - Kind=term/tags かつ記事数 >= thinTermNoindexThreshold(3)
+#   - GSC で imp はあるが 0 クリック (bare term ページの UX が弱い)
+#   - 単一 hub に対応しない (対応するなら category_hub_tags.yaml へ)
+#   - 実需要が薄い or 高 DA 競合占有で勝ち目が低い
+#     (例: おままごと は Vol18100 の実需要クラスタゆえ収録せず #2687 hub 候補で温存)
+#
+# 照合は is_low_value_tag.html が exact → lower で行う (Hugo は Latin taxonomy を
+# 小文字化しうるため)。値は taxonomy term の表示名 (tag 文字列そのもの)。
+#
+# 将来この denylist に追加する際は、まず「hub 化で勝てる実需要クラスタでないか」を
+# 需要診断で確認すること ([[project-omochairo-invest-reverse-import]] 需要診断)。
+- タブレット
