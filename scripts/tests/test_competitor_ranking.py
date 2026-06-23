@@ -84,6 +84,27 @@ class BuildSearchKeywordTests(unittest.TestCase):
         self.assertIn("おかいもの", tokens)
         self.assertIn("なに", tokens)
 
+    def test_mono_suffix_nouns_not_split(self):
+        """#2722: 「もの (物)」語尾の名詞が末尾「の」を助詞と誤判定されない。"""
+        for word in ["たべもの", "くだもの", "えんぎもの"]:
+            kw = build_search_keyword(word, max_tokens=3)
+            self.assertIn(word, kw.split(), f"{word} should stay intact")
+            self.assertNotIn(word[:-1], kw.split(), f"{word} must not split to {word[:-1]}")
+
+    def test_prefixed_compound_exception_word_not_split(self):
+        """#2722: 例外語にプレフィックスが付いた複合語も接尾一致でガードされる。"""
+        # はじめてのおままごと -> 末尾「と」が切られて ...おままご になっていた
+        kw = build_search_keyword("はじめてのおままごと", max_tokens=3)
+        self.assertIn("はじめてのおままごと", kw.split())
+        # おいしいたべもの / くだものセット の接頭・接尾複合
+        self.assertIn("おいしいたべもの", build_search_keyword("おいしいたべもの").split())
+        self.assertIn("くだものセット", build_search_keyword("くだものセット").split())
+
+    def test_legitimate_joshi_still_split(self):
+        """#2722: ガード強化後も通常の助詞分割は維持される (過剰ガード防止)。"""
+        self.assertEqual(build_search_keyword("公園で遊ぶ", max_tokens=3), "公園 遊ぶ")
+        self.assertIn("読む", build_search_keyword("本を読む", max_tokens=3).split())
+
 
 class TitleSimilarityTests(unittest.TestCase):
 
