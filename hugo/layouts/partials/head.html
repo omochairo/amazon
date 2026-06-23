@@ -83,10 +83,23 @@
   {{- $isBrandDupTag = true -}}
   {{- $brandDupCanonical = replace $.Permalink "/tags/" "/brands/" -}}
 {{- end -}}
+{{- /* #2765: 情報型 category hub (#2687) と同一トピックの tag term ページは、
+       curated hub を正本とし、tag 側を noindex,follow + canonical → hub に倒す。
+       内部リンクを受ける tag と孤立 hub が同一検索意図を奪い合う cannibalization を
+       是正する。マッピングは site.Data.category_hub_tags (P3 brand-tag と同型)。 */ -}}
+{{- $isHubDupTag := false -}}
+{{- $hubDupCanonical := "" -}}
+{{- if and (eq .Kind "term") (eq .Data.Plural "tags") -}}
+  {{- $hubURL := partial "hub_for_tag.html" .Title -}}
+  {{- if $hubURL -}}
+    {{- $isHubDupTag = true -}}
+    {{- $hubDupCanonical = absURL $hubURL -}}
+  {{- end -}}
+{{- end -}}
 {{- $isProd := or hugo.IsProduction (eq site.Params.env "production") -}}
-{{- if and $isProd (ne .Params.robotsNoIndex true) (not $isThinTerm) (not $isPaginated) (not $isNoindexBrand) (not $isBrandDupTag) }}
+{{- if and $isProd (ne .Params.robotsNoIndex true) (not $isThinTerm) (not $isPaginated) (not $isNoindexBrand) (not $isBrandDupTag) (not $isHubDupTag) }}
 <meta name="robots" content="index, follow">
-{{- else if and $isProd (or $isThinTerm $isPaginated $isNoindexBrand $isBrandDupTag) (ne .Params.robotsNoIndex true) }}
+{{- else if and $isProd (or $isThinTerm $isPaginated $isNoindexBrand $isBrandDupTag $isHubDupTag) (ne .Params.robotsNoIndex true) }}
 <meta name="robots" content="noindex, follow">
 {{- else }}
 <meta name="robots" content="noindex, nofollow">
@@ -116,7 +129,7 @@
     {{- with site.Params.description }}{{ . }}{{- end }}{{- end }}{{- end -}}">
 {{- end }}
 <meta name="author" content="{{ (partial "author.html" . ) }}">
-<link rel="canonical" href="{{ if .Params.canonicalURL -}} {{ trim .Params.canonicalURL " " }} {{- else if $brandDupCanonical -}} {{ $brandDupCanonical }} {{- else -}} {{ .Permalink }} {{- end }}">
+<link rel="canonical" href="{{ if .Params.canonicalURL -}} {{ trim .Params.canonicalURL " " }} {{- else if $brandDupCanonical -}} {{ $brandDupCanonical }} {{- else if $hubDupCanonical -}} {{ $hubDupCanonical }} {{- else -}} {{ .Permalink }} {{- end }}">
 {{- if site.Params.analytics.google.SiteVerificationTag }}
 <meta name="google-site-verification" content="{{ site.Params.analytics.google.SiteVerificationTag }}">
 {{- end }}

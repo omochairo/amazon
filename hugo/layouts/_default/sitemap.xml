@@ -31,6 +31,10 @@
   {{- if and (eq $p.Kind "term") (eq $p.Data.Plural "tags") (partial "is_brand_tag.html" $p.Title) -}}
     {{- $skip = true -}}
   {{- end -}}
+  {{- /* #2765: 情報型 hub と同一トピックの tag は hub を正本に noindex 化したため除外。 */ -}}
+  {{- if and (eq $p.Kind "term") (eq $p.Data.Plural "tags") (partial "hub_for_tag.html" $p.Title) -}}
+    {{- $skip = true -}}
+  {{- end -}}
   {{- if and (not $skip) $p.Permalink -}}
   <url>
     <loc>{{ $p.Permalink }}</loc>

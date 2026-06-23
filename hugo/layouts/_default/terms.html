@@ -23,7 +23,9 @@
 {{- range .Data.Terms.ByCount -}}
   {{- if ge (len .Pages) $threshold -}}
     {{- $isBrandDup := and (eq $plural "tags") (partial "is_brand_tag.html" .Name) -}}
-    {{- if not $isBrandDup -}}{{- $visibleTerms = $visibleTerms | append . -}}{{- end -}}
+    {{- /* #2765: hub に寄せた tag は curated hub を正本とするため一覧から除外。 */ -}}
+    {{- $isHubDup := and (eq $plural "tags") (partial "hub_for_tag.html" .Name) -}}
+    {{- if not (or $isBrandDup $isHubDup) -}}{{- $visibleTerms = $visibleTerms | append . -}}{{- end -}}
   {{- end -}}
 {{- end -}}
 

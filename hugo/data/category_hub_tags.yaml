@@ -1,0 +1,24 @@
+# category_hub_tags.yaml (Issue #2765)
+#
+# 「tag term ページ」→「情報型 category hub」の正本マッピング。
+# ここに載せた tag は #2687 の curated hub と同一トピック/検索意図を奪い合う
+# (cannibalization) ため、hub を正本として:
+#   - tag term ページを noindex,follow + canonical → hub に倒す (head.html)
+#   - sitemap から除外する (sitemap.xml)
+#   - 記事フッタ/タグ一覧の重複リンクを張らない (single.html / terms.html)
+#   - global cat-nav の導線を tag → hub に張り替える (category_dropdown.html)
+# これにより数少ない自前レバー (内部リンク + index 枠) を hub に集約する。
+# #2701 P3 の brand-tag → /brands/ 一本化と同型のパターン。
+#
+# 収録基準: 記事数 >= thinTermNoindexThreshold(3) で現在 index される tag のうち、
+# 単一 hub に明確に対応するもの (実データ計測 2026-06-23・session 156)。
+# 値はサイト相対 URL (先頭/末尾スラッシュ付き)。Hugo は Latin taxonomy 名を
+# 小文字化しうるため、照合は hub_for_tag.html が exact → lower で行う。
+英語学習: /english-toys/
+英語: /english-toys/
+英語教育: /english-toys/
+プログラミング: /programming-toys/
+プログラミングおもちゃ: /programming-toys/
+プログラミング的思考: /programming-toys/
+算数: /math-toys/
+算数教材: /math-toys/

@@ -172,6 +172,10 @@ on:
       - 'hugo/content/cospa.md'
       - 'hugo/content/deals.md'
       - 'hugo/data/features/**'
+      # 2026-06-23 (session 156 / Issue #2765): tag → category hub の正本マッピング。
+      # この data 単独編集でも validate を required check として発火させる (paths 未登録だと
+      # inverse trap で validate 不発火→auto-merge 永久 BLOCKED [[04-validate-paths-inverse-trap]])。
+      - 'hugo/data/category_hub_tags.yaml'
       # 2026-05-25 (session 55 / Issue #745 follow-up): 知育スコア用語統一の一環で
       # /about-score/ 説明ページを新設、/privacy/ を併せて更新。両 top-level page を
       # validate (required check) として発火させる。

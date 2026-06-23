@@ -19,7 +19,13 @@
     {{- /* Hugo は Latin の taxonomy キーを小文字化する (例: "LaQ" → "laq")。
            日本語はケース無しで素通し。exact → lower の順で引いて取りこぼし防止。 */}}
     {{- with (or (index site.Taxonomies.tags $tag) (index site.Taxonomies.tags (lower $tag))) }}
-      {{- $children = $children | append (dict "name" $tag "count" .Count "url" .Page.RelPermalink) }}
+      {{- /* #2765: 情報型 hub を持つ tag は導線を hub に張り替える。global cat-nav は
+             全ページに出るため、これで孤立 hub に毎ページ内部リンクが入り、noindex 化した
+             tag への重複リンクも消える (authority を hub に集約)。 */ -}}
+      {{- $url := .Page.RelPermalink }}
+      {{- $hubURL := partial "hub_for_tag.html" $tag }}
+      {{- if $hubURL }}{{- $url = $hubURL }}{{- end }}
+      {{- $children = $children | append (dict "name" $tag "count" .Count "url" $url) }}
       {{- $total = add $total .Count }}
     {{- end }}
   {{- end }}

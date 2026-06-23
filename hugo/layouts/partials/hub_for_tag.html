@@ -1,0 +1,23 @@
+{{- /*
+  hub_for_tag.html (Issue #2765)
+  引数: タグ名 (文字列)。site.Data.category_hub_tags に同名のキーがあれば、その
+  curated category hub のサイト相対 URL (例 "/english-toys/") を返す。無ければ空文字。
+  ブランド版 is_brand_tag.html と同型。返り値が非空かどうかで「hub に寄せる tag か」
+  を判定でき、URL そのものを canonical / 内部リンク先に流用できる。
+  Hugo は Latin taxonomy 名を小文字化しうるため exact → lower の順で照合する。
+  ※ partial の中では $ は引数自身 (文字列) なので、データは site.Data から取得する。
+  ※ 空判定を壊さないため、空ケースでは空白を一切出力しないよう chomp を徹底する。
+*/ -}}
+{{- $name := . -}}
+{{- $url := "" -}}
+{{- $m := site.Data.category_hub_tags -}}
+{{- if $m -}}
+  {{- with (index $m $name) -}}
+    {{- $url = . -}}
+  {{- else -}}
+    {{- range $k, $v := $m -}}
+      {{- if eq (lower $k) (lower $name) -}}{{- $url = $v -}}{{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $url -}}
