@@ -238,16 +238,18 @@ def extract_features(item: dict) -> list:
     return _safe_get(item, "itemInfo", "features", "displayValues", default=[])
 
 def extract_jan(item: dict) -> str:
-    """Return the first EAN/JAN code if PA-API exposes it via externalIds.
+    """Return the first external identifier (EAN/ISBN/UPC) from externalIds.
 
-    Requires the `itemInfo.externalIds` resource to be requested. Returns ""
-    when the product has no registered EAN (common for some imported items),
-    which the downstream cross-search treats as "JAN unavailable → fall back
-    to text search".
+    Requires the `itemInfo.externalIds` resource to be requested. Falls back
+    eans → isbns → upcs so書籍 (ISBN13) や輸入品 (UPC12) でも識別子を拾える
+    (#2747: backfill_jan_codes.extract_jan_from_item と挙動を一致させる)。
+    Returns "" when none is registered, which the downstream cross-search
+    treats as "JAN unavailable → fall back to text search".
     """
-    eans = _safe_get(item, "itemInfo", "externalIds", "eans", "displayValues", default=[]) or []
-    if eans and isinstance(eans[0], str):
-        return eans[0].strip()
+    for key in ("eans", "isbns", "upcs"):
+        values = _safe_get(item, "itemInfo", "externalIds", key, "displayValues", default=[]) or []
+        if values and isinstance(values[0], str) and values[0].strip():
+            return values[0].strip()
     return ""
 
 def extract_price(item: dict) -> int:
