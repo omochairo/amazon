@@ -1,0 +1,14 @@
+{{- /*
+  is_low_value_tag.html (Issue #2719)
+  引数: タグ名 (文字列)。site.Data.low_value_tags (curated denylist) に同名が
+  存在すれば "1" を、無ければ空文字を返す。≥3 記事ありで薄タグ noindex の対象外
+  だが、0 クリックで対応 hub も無く勝ち目の薄い低価値 bare tag を index/sitemap から
+  抑制する判定に使う。Hugo は Latin taxonomy を小文字化しうるため lower で照合する。
+  データ未定義 (nil) の場合は range が 0 回で空文字を返す (誤適用なし)。
+*/ -}}
+{{- $name := . -}}
+{{- $match := "" -}}
+{{- range site.Data.low_value_tags -}}
+  {{- if eq (lower .) (lower $name) -}}{{- $match = "1" -}}{{- end -}}
+{{- end -}}
+{{- $match -}}

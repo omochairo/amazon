@@ -96,10 +96,17 @@
     {{- $hubDupCanonical = absURL $hubURL -}}
   {{- end -}}
 {{- end -}}
+{{- /* #2719: ≥3 記事ありで薄タグ noindex の対象外だが、0 クリックで対応 hub も
+       無く勝ち目の薄い低価値 tag term ページを noindex,follow にする (canonical 無し)。
+       denylist は site.Data.low_value_tags (#2701 P1/P3・#2765 でカバーされない残り)。 */ -}}
+{{- $isLowValueTag := false -}}
+{{- if and (eq .Kind "term") (eq .Data.Plural "tags") (partial "is_low_value_tag.html" .Title) -}}
+  {{- $isLowValueTag = true -}}
+{{- end -}}
 {{- $isProd := or hugo.IsProduction (eq site.Params.env "production") -}}
-{{- if and $isProd (ne .Params.robotsNoIndex true) (not $isThinTerm) (not $isPaginated) (not $isNoindexBrand) (not $isBrandDupTag) (not $isHubDupTag) }}
+{{- if and $isProd (ne .Params.robotsNoIndex true) (not $isThinTerm) (not $isPaginated) (not $isNoindexBrand) (not $isBrandDupTag) (not $isHubDupTag) (not $isLowValueTag) }}
 <meta name="robots" content="index, follow">
-{{- else if and $isProd (or $isThinTerm $isPaginated $isNoindexBrand $isBrandDupTag $isHubDupTag) (ne .Params.robotsNoIndex true) }}
+{{- else if and $isProd (or $isThinTerm $isPaginated $isNoindexBrand $isBrandDupTag $isHubDupTag $isLowValueTag) (ne .Params.robotsNoIndex true) }}
 <meta name="robots" content="noindex, follow">
 {{- else }}
 <meta name="robots" content="noindex, nofollow">

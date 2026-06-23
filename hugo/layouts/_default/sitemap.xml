@@ -35,6 +35,10 @@
   {{- if and (eq $p.Kind "term") (eq $p.Data.Plural "tags") (partial "hub_for_tag.html" $p.Title) -}}
     {{- $skip = true -}}
   {{- end -}}
+  {{- /* #2719: 低価値な tag (low_value_tags denylist) は head.html で noindex 化したため除外。 */ -}}
+  {{- if and (eq $p.Kind "term") (eq $p.Data.Plural "tags") (partial "is_low_value_tag.html" $p.Title) -}}
+    {{- $skip = true -}}
+  {{- end -}}
   {{- if and (not $skip) $p.Permalink -}}
   <url>
     <loc>{{ $p.Permalink }}</loc>
