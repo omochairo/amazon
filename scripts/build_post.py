@@ -1488,12 +1488,24 @@ def _load_matched_index(path: pathlib.Path) -> dict[str, dict[str, Any]]:
     return index
 
 
-def _matched_passes_quality(matched: dict[str, Any], amazon_price: int) -> bool:
+def _matched_passes_quality(
+    matched: dict[str, Any],
+    amazon_price: int,
+    *,
+    price_low: float = _MARKET_PRICE_BAND_LOW,
+    price_high: float = _MARKET_PRICE_BAND_HIGH,
+    coverage_ratio: float = _MARKET_COVERAGE_RATIO,
+    hits_threshold_multi: int = 2,
+) -> bool:
     """Phase 2 quality gate: 価格帯と検索語タイトル overlap で誤マッチを弾く。
 
-    - Amazon 価格 (>0) を anchor に [0.5x, 2.0x] 帯外を除外 (ふるさと納税対策)。
+    - Amazon 価格 (>0) を anchor に [price_low, price_high] 帯外を除外 (ふるさと納税対策)。
     - search_keyword のうち汎用語を除いた meaningful token が、matched title に
       閾値以上一致しているかを確認 (median band 選出後の無関係 hit 除外)。
+
+    閾値は keyword-only 引数で上書き可能 (デフォルト = 本番 `_MARKET_*` 定数)。
+    analyze_threshold_relaxation の dry-run がこの 1 関数を直接呼ぶことで、
+    判定ロジックのコピー drift (#2723) を構造的に排除する。
     """
     title = matched.get("title") or ""
     try:
@@ -1504,9 +1516,9 @@ def _matched_passes_quality(matched: dict[str, Any], amazon_price: int) -> bool:
         return False
 
     if amazon_price > 0:
-        if price < amazon_price * _MARKET_PRICE_BAND_LOW:
+        if price < amazon_price * price_low:
             return False
-        if price > amazon_price * _MARKET_PRICE_BAND_HIGH:
+        if price > amazon_price * price_high:
             return False
 
     kw = matched.get("search_keyword") or ""
@@ -1531,12 +1543,12 @@ def _matched_passes_quality(matched: dict[str, Any], amazon_price: int) -> bool:
         return True  # 区別語が無ければ cross-search 側 median band の選出を尊重
     title_norm = _normalize_for_match(title)
     hits = sum(1 for t in meaningful if _normalize_for_match(t) in title_norm)
-    threshold = 2 if len(meaningful) >= 2 else 1
+    threshold = hits_threshold_multi if len(meaningful) >= 2 else 1
     if hits < threshold:
         return False
     # 絶対 hits 数を満たしても、meaningful 全体に占める割合が低いマッチは
     # シリーズ違い/別モデルの誤マッチが多いため verified=False に格下げ。
-    if hits / len(meaningful) < _MARKET_COVERAGE_RATIO:
+    if hits / len(meaningful) < coverage_ratio:
         return False
     # Issue #1140: 非ブランド descriptor 一致を必須化。
     # search_keyword は extract_search_keyword で「brand head (先頭 1-2 token) +

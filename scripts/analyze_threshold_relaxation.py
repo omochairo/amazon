@@ -71,36 +71,20 @@ class ThresholdPreset:
 
 
 def _passes(matched: dict[str, Any], amazon_price: int, preset: ThresholdPreset) -> bool:
-    """`_matched_passes_quality` を preset 化したコピー。
+    """preset の閾値で本番ゲートを直接呼ぶ。
 
-    build_post 側のロジックを 1:1 で trace するため、変更時は両者同期必須。
+    かつては `_matched_passes_quality` を手でコピーしていたが、型番ガードや
+    descriptor (#1140) ガードが移植漏れして drift していた (#2723)。build_post
+    の関数を閾値引数付きで委譲することで、コピー drift を構造的に排除する。
     """
-    title = matched.get("title") or ""
-    try:
-        price = int(matched.get("price") or 0)
-    except (TypeError, ValueError):
-        price = 0
-    if not title or price <= 0:
-        return False
-
-    if amazon_price > 0:
-        if price < amazon_price * preset.price_low:
-            return False
-        if price > amazon_price * preset.price_high:
-            return False
-
-    kw = matched.get("search_keyword") or ""
-    kw_tokens = [t for t in re.split(r"\s+", kw) if len(t) >= 2]
-    meaningful = [t for t in kw_tokens if t not in build_post._MARKET_GENERIC_TOKENS]
-    if not meaningful:
-        return True
-    hits = sum(1 for t in meaningful if t in title)
-    threshold = preset.hits_threshold_when_multi if len(meaningful) >= 2 else 1
-    if hits < threshold:
-        return False
-    if hits / len(meaningful) < preset.coverage_ratio:
-        return False
-    return True
+    return build_post._matched_passes_quality(
+        matched,
+        amazon_price,
+        price_low=preset.price_low,
+        price_high=preset.price_high,
+        coverage_ratio=preset.coverage_ratio,
+        hits_threshold_multi=preset.hits_threshold_when_multi,
+    )
 
 
 def _why_fail(matched: dict[str, Any], amazon_price: int, preset: ThresholdPreset) -> str:
@@ -125,46 +109,59 @@ def _why_fail(matched: dict[str, Any], amazon_price: int, preset: ThresholdPrese
     meaningful = [t for t in kw_tokens if t not in build_post._MARKET_GENERIC_TOKENS]
     if not meaningful:
         return "no_meaningful_tokens (passed)"
-    hits = sum(1 for t in meaningful if t in title)
+    # build_post の _normalize_for_match を通して hits を数える (素の `in` だと
+    # 全角/半角・記号差で gate と食い違うため)。
+    norm = build_post._normalize_for_match
+    title_norm = norm(title)
+    hits = sum(1 for t in meaningful if norm(t) in title_norm)
     threshold = preset.hits_threshold_when_multi if len(meaningful) >= 2 else 1
     if hits < threshold:
         return f"hits_low (hits={hits}/{len(meaningful)}, thr={threshold})"
     cov = hits / len(meaningful)
     if cov < preset.coverage_ratio:
         return f"coverage_low (cov={cov:.2f}, thr={preset.coverage_ratio})"
+    # 価格/被覆では説明できないのに gate が落とす場合は型番/descriptor (#1140)
+    # ガード由来。レポートの誠実性のため明示する。
+    if not _passes(matched, amazon_price, preset):
+        return "guard (model/descriptor #1140)"
     return "passed"
 
 
 def _build_presets() -> list[ThresholdPreset]:
-    """評価対象プリセット一覧 (current + 段階緩和)。"""
+    """評価対象プリセット一覧 (current + 段階緩和)。
+
+    かつての relax_both (0.4x-2.5x / cov0.5) は本番に採用され、いまや
+    ``current`` がその値そのものになった (#2723)。そこで relax 群は新しい
+    current から「さらに」緩める方向で再ベースライン化し、ladder の退化を防ぐ。
+    """
     return [
         ThresholdPreset.current(),
         ThresholdPreset(
             name="relax_price",
-            price_low=0.4, price_high=2.5,
+            price_low=0.3, price_high=3.0,
             coverage_ratio=build_post._MARKET_COVERAGE_RATIO,
             hits_threshold_when_multi=2,
-            description="価格帯のみ緩め (0.4x-2.5x)",
+            description="価格帯のみさらに緩め (0.3x-3.0x)",
         ),
         ThresholdPreset(
             name="relax_coverage",
             price_low=build_post._MARKET_PRICE_BAND_LOW,
             price_high=build_post._MARKET_PRICE_BAND_HIGH,
-            coverage_ratio=0.5,
+            coverage_ratio=0.34,
             hits_threshold_when_multi=2,
-            description="coverage のみ緩め (0.7→0.5)",
+            description="coverage のみさらに緩め (0.5→0.34 = 1/3 許容)",
         ),
         ThresholdPreset(
             name="relax_both",
-            price_low=0.4, price_high=2.5,
-            coverage_ratio=0.5,
+            price_low=0.3, price_high=3.0,
+            coverage_ratio=0.34,
             hits_threshold_when_multi=2,
-            description="価格 + coverage 緩め",
+            description="価格 + coverage さらに緩め",
         ),
         ThresholdPreset(
             name="relax_aggressive",
-            price_low=0.3, price_high=3.0,
-            coverage_ratio=0.4,
+            price_low=0.25, price_high=4.0,
+            coverage_ratio=0.34,
             hits_threshold_when_multi=1,
             description="aggressive (FP リスク大、上限見極め用)",
         ),
