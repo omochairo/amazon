@@ -36,6 +36,10 @@ on:
       # 必須 check として発火させる ([[04-validate-paths-inverse-trap]] = paths 未登録
       # で required check `validate` が不発 → auto-merge 永久 pending)。
       - 'scripts/competitor_ranking.py'
+      # 2026-06-23 (#2687 柱1): 情報型 category hub 生成器。テーマ別 feature データを
+      # 出力する。script-only PR が required check 不発で詰まる inverse-trap を予防
+      # ([[04-validate-paths-inverse-trap]])。記事変更ゼロで vacuous SUCCESS。
+      - 'scripts/build_category_hubs.py'
       - 'scripts/jules_article_engine.py'
       - 'scripts/templates/**'
       - 'hugo/assets/css/**'
