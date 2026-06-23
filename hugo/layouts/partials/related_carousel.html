@@ -120,6 +120,41 @@
 </aside>
 {{- end }}
 
+{{- /* --- Category hub banner (#2687 柱1): サテライト商品 → 情報型 category hub (英語/
+       プログラミング/算数 等) への逆リンク。hub の孤立 (被リンク 0) を解消し、数少ない
+       内部リンク枠を「勝てる構造」の情報型 hub に集約する (#2765 で tag→hub に倒した
+       cannibalization 是正の続き)。商品の tag が category_hub_tags.yaml にマップされて
+       いれば該当 hub へ送る (hub_for_tag.html を流用・exact → lower で照合)。 */ -}}
+{{- $catHubs := slice -}}
+{{- range $selfTags -}}
+  {{- $u := partial "hub_for_tag.html" . -}}
+  {{- if and $u (not (in $catHubs $u)) -}}{{- $catHubs = $catHubs | append $u -}}{{- end -}}
+{{- end -}}
+{{- range $catHubs }}
+  {{- $url := . -}}
+  {{- $hubPg := site.GetPage $url -}}
+  {{- $htitle := "" -}}
+  {{- $hmeta := "" -}}
+  {{- with $hubPg -}}
+    {{- $parts := split (.Title | plainify) "｜" -}}
+    {{- $htitle = index $parts 0 -}}
+    {{- if gt (len $parts) 1 -}}{{- $hmeta = index $parts 1 -}}{{- end -}}
+  {{- end -}}
+  {{- if eq $htitle "" -}}{{- $htitle = "知育スコアで選ぶおすすめランキング" -}}{{- end }}
+<aside class="hub-banner" aria-label="{{ $htitle }}">
+  <a class="hub-banner-link" href="{{ $url | relURL }}">
+    <span class="hub-banner-icon" aria-hidden="true">🏆</span>
+    <span class="hub-banner-text">
+      <span class="hub-banner-title">{{ $htitle }}</span>
+      {{- if ne $hmeta "" }}
+      <span class="hub-banner-meta">{{ $hmeta }}</span>
+      {{- end }}
+    </span>
+    <span class="hub-banner-cta" aria-hidden="true">ランキングを見る →</span>
+  </a>
+</aside>
+{{- end }}
+
 {{- /* --- 年齢を起点にしたレコメンドであることを明示するリード文 (エンゲージメント改善) --- */ -}}
 {{- $ageText := "" -}}
 {{- if gt $selfAge 0 -}}
