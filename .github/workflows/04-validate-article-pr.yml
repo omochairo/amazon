@@ -59,6 +59,10 @@ on:
       # Jules プロンプト本体。CA 削除など Jules 出力に影響する変更を含む PR は
       # validate を pull_request 経由で発火させる (記事変更ゼロなら vacuous SUCCESS)
       - 'jules/PROMPT_TEMPLATE.md'
+      # 2026-06-23 (#2780): SNS コピー生成プロンプト。paths 未登録だと jules/ のみ
+      # 変更する PR で required check `validate` が不発 → auto-merge 永久 pending
+      # ([[04-validate-paths-inverse-trap]])。記事変更ゼロで vacuous SUCCESS。
+      - 'jules/PROMPT_SNS_COPY.md'
       # 2026-06-08 (session 113): Jules 規律本体。提出フロー/データ偽装禁止など
       # Jules 挙動に影響する変更を含む PR も validate を発火させる。paths 未登録だと
       # inverse trap で validate 不発火→auto-merge 永久 BLOCKED ([[04-validate-paths-inverse-trap]])。
