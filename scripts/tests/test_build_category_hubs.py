@@ -132,5 +132,85 @@ class RunTest(unittest.TestCase):
             self.assertEqual(data["items"][0]["asin"], "B0ENG1")
 
 
+class ParseMinMonthsTest(unittest.TestCase):
+    def test_years_variants(self):
+        self.assertEqual(bch.parse_min_months("3歳以上"), 36)
+        self.assertEqual(bch.parse_min_months("3歳〜"), 36)
+        self.assertEqual(bch.parse_min_months("3歳〜6歳"), 36)  # 最小を採る
+        self.assertEqual(bch.parse_min_months("3才"), 36)       # 才→歳
+
+    def test_half_year_variants(self):
+        self.assertEqual(bch.parse_min_months("1歳6ヶ月〜"), 18)
+        self.assertEqual(bch.parse_min_months("1.5歳〜"), 18)
+        self.assertEqual(bch.parse_min_months("1歳半〜"), 18)
+
+    def test_months_only(self):
+        self.assertEqual(bch.parse_min_months("0ヶ月〜"), 0)
+        self.assertEqual(bch.parse_min_months("6ヶ月〜"), 6)
+        self.assertEqual(bch.parse_min_months("18ヶ月〜"), 18)
+
+    def test_none_cases(self):
+        self.assertIsNone(bch.parse_min_months(None))
+        self.assertIsNone(bch.parse_min_months(""))
+        self.assertIsNone(bch.parse_min_months("対象年齢の記載なし"))
+
+
+class BuildAgeHubTest(unittest.TestCase):
+    def setUp(self):
+        # 1歳 hub = [12, 24)
+        self.hub = bch.AGE_HUBS["age-1"]
+        self.records = [
+            _rec("A", 4.5, 90, 2000),
+            _rec("B", 4.8, 95, 3000),
+            _rec("C", 3.0, 60, 1000),   # below min_ivs
+            _rec("D", 4.0, 95, 1500),   # ties B, cheaper
+            _rec("E", 4.2, 80, 500),    # min_months out of range
+            _rec("F", 4.2, 80, 700),    # no age data
+        ]
+        self.mm = {"A": 12, "B": 18, "C": 12, "D": 23, "E": 36, "F": None}
+
+    def test_range_and_floor_gate(self):
+        out = bch.build_age_hub(self.records, self.mm, self.hub,
+                                top_n=10, min_ivs=3.8)
+        asins = [r.asin for r in out]
+        self.assertNotIn("C", asins)  # below min_ivs
+        self.assertNotIn("E", asins)  # 36mo -> not in [12,24)
+        self.assertNotIn("F", asins)  # None age
+
+    def test_sort_price_tiebreak(self):
+        out = bch.build_age_hub(self.records, self.mm, self.hub,
+                                top_n=10, min_ivs=3.8)
+        self.assertEqual([r.asin for r in out], ["D", "B", "A"])
+
+
+class RunAgeHubTest(unittest.TestCase):
+    def test_end_to_end_writes_age_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            adir = pathlib.Path(tmp) / "articles"
+            adir.mkdir()
+            doc = {
+                "slug": "ichi-toy",
+                "title": "1歳のおもちゃ",
+                "persona_fit": {"age_range": "1歳〜"},
+                "product": {
+                    "asin": "B0AGE1",
+                    "name": "つみき",
+                    "ivs_score": 4.5,
+                    "best_price": 2000,
+                    "best_platform": "amazon",
+                    "prices": {"amazon": {"url": "https://amazon/B0AGE1"}},
+                },
+            }
+            (adir / "2026-06-01-B0AGE1.json").write_text(
+                json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+            out = pathlib.Path(tmp) / "features"
+            counts = bch.run(adir, out, top_n=24, min_ivs=0.0,
+                             themes=[], age_hubs=["age-1"])
+            self.assertEqual(counts["age-1"], 1)
+            data = json.loads((out / "age-1.json").read_text(encoding="utf-8"))
+            self.assertEqual(data["type"], "age-1")
+            self.assertEqual(data["items"][0]["asin"], "B0AGE1")
+
+
 if __name__ == "__main__":
     unittest.main()

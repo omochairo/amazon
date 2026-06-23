@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -65,6 +66,73 @@ THEMES: dict[str, dict[str, Any]] = {
         "exclude": [],
     },
 }
+
+
+# 年齢 hub 定義 (#2687 柱1・年齢軸)。テーマ hub と異なり数値軸 = persona_fit.age_range
+# から抽出した「最小推奨年齢 (月)」でバケットへ単一所属させる。範囲オーバーラップ
+# (3歳以上 を 3/4/5歳 hub に重複所属) させると隣接 age hub が near-duplicate 化し
+# #2765 で潰した hub カニバリを再発させるため、最小年齢アンカーで 1 商品 1 hub に限定。
+# min_months <= x < max_months。max=216 (18歳) で adult 玩具を全 hub から除外。
+AGE_HUBS: dict[str, dict[str, Any]] = {
+    "age-0": {"label": "0歳", "min_months": 0, "max_months": 12},
+    "age-1": {"label": "1歳", "min_months": 12, "max_months": 24},
+    "age-2": {"label": "2歳", "min_months": 24, "max_months": 36},
+    "age-3": {"label": "3歳", "min_months": 36, "max_months": 48},
+    "age-4": {"label": "4〜5歳", "min_months": 48, "max_months": 72},
+    "age-6": {"label": "6歳以上", "min_months": 72, "max_months": 216},
+}
+
+
+def parse_min_months(age_range: str | None) -> int | None:
+    """persona_fit.age_range 文字列から最小推奨年齢を月数で抽出。
+
+    例: "3歳以上"/"3歳〜"/"3歳" → 36, "1歳6ヶ月〜"/"1.5歳"/"1歳半" → 18,
+    "6ヶ月〜" → 6, "対象年齢の記載なし" → None。複数表記 (歳半=.5歳=6ヶ月) を吸収。
+    """
+    if not age_range:
+        return None
+    s = age_range.strip()
+    if "記載" in s or "なし" in s:
+        return None
+    s = s.replace("歳半", ".5歳").replace("才", "歳")
+    # 「N歳Mヶ月」形式
+    m = re.search(r"(\d+)\s*歳\s*(\d+)\s*[ヶか]?月", s)
+    if m:
+        return int(m.group(1)) * 12 + int(m.group(2))
+    # 「N歳」「N.5歳」形式
+    m = re.search(r"(\d+(?:\.\d+)?)\s*歳", s)
+    if m:
+        return int(round(float(m.group(1)) * 12))
+    # 「Nヶ月」形式
+    m = re.search(r"(\d+)\s*[ヶか]?月", s)
+    if m:
+        return int(m.group(1))
+    return None
+
+
+def build_min_months_index(articles_dir: Path) -> dict[str, int]:
+    """{asin: 最小推奨年齢(月)} を返す。同一 ASIN 複数ファイルは最小値を採用。"""
+    index: dict[str, int] = {}
+    if not articles_dir.exists():
+        logger.warning("articles_dir does not exist: %s", articles_dir)
+        return index
+    for path in sorted(articles_dir.glob("*.json")):
+        if not _is_article_json(path):
+            continue
+        try:
+            with path.open(encoding="utf-8") as f:
+                raw = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            continue
+        asin = (raw.get("product") or {}).get("asin")
+        if not asin:
+            continue
+        mm = parse_min_months((raw.get("persona_fit") or {}).get("age_range"))
+        if mm is None:
+            continue
+        prev = index.get(str(asin))
+        index[str(asin)] = mm if prev is None else min(prev, mm)
+    return index
 
 
 def build_theme_text_index(articles_dir: Path) -> dict[str, str]:
@@ -119,6 +187,21 @@ def build_hub(records, text_index, theme, *, top_n, min_ivs):
     return pool[:top_n]
 
 
+def build_age_hub(records, min_months_index, hub, *, top_n, min_ivs):
+    """最小推奨年齢が [min_months, max_months) に入る record を ivs_100 降順で束ねる。"""
+    lo, hi = hub["min_months"], hub["max_months"]
+    pool = []
+    for rec in records:
+        if rec.ivs_score is None or (rec.ivs_score < min_ivs):
+            continue
+        mm = min_months_index.get(rec.asin)
+        if mm is None or not (lo <= mm < hi):
+            continue
+        pool.append(rec)
+    pool.sort(key=lambda r: (-(r.ivs_100 or 0), r.best_price or 10**9))
+    return pool[:top_n]
+
+
 def serialize_hub(items, theme_key: str, generated_at: str) -> dict[str, Any]:
     payload_items = [
         _record_to_payload_common(rec, idx) for idx, rec in enumerate(items, start=1)
@@ -131,24 +214,37 @@ def serialize_hub(items, theme_key: str, generated_at: str) -> dict[str, Any]:
     }
 
 
+def _write_hub(out_hugo: Path, key: str, items, generated_at: str,
+               counts: dict[str, int], label: str) -> None:
+    payload = serialize_hub(items, key, generated_at)
+    (out_hugo / f"{key}.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    counts[key] = len(items)
+    logger.info("%s (%s): %d items", key, label, len(items))
+
+
 def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
-        themes: list[str]) -> dict[str, int]:
+        themes: list[str], age_hubs: list[str] | None = None) -> dict[str, int]:
     records = _dedupe_by_asin(load_articles(articles_dir))
-    text_index = build_theme_text_index(articles_dir)
     generated_at = _now_iso()
     out_hugo.mkdir(parents=True, exist_ok=True)
     counts: dict[str, int] = {}
-    for key in themes:
-        theme = THEMES[key]
-        items = build_hub(records, text_index, theme,
-                          top_n=top_n, min_ivs=min_ivs)
-        payload = serialize_hub(items, key, generated_at)
-        (out_hugo / f"{key}.json").write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
-        counts[key] = len(items)
-        logger.info("%s (%s): %d items", key, theme["label"], len(items))
+    if themes:
+        text_index = build_theme_text_index(articles_dir)
+        for key in themes:
+            theme = THEMES[key]
+            items = build_hub(records, text_index, theme,
+                              top_n=top_n, min_ivs=min_ivs)
+            _write_hub(out_hugo, key, items, generated_at, counts, theme["label"])
+    if age_hubs:
+        mm_index = build_min_months_index(articles_dir)
+        for key in age_hubs:
+            hub = AGE_HUBS[key]
+            items = build_age_hub(records, mm_index, hub,
+                                  top_n=top_n, min_ivs=min_ivs)
+            _write_hub(out_hugo, key, items, generated_at, counts, hub["label"])
     return counts
 
 
@@ -160,12 +256,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--min-ivs", type=float, default=3.8)
     parser.add_argument("--themes", nargs="*", default=list(THEMES.keys()),
                         choices=list(THEMES.keys()))
+    parser.add_argument("--age-hubs", nargs="*", default=list(AGE_HUBS.keys()),
+                        choices=list(AGE_HUBS.keys()),
+                        help="生成する年齢 hub キー (既定=全件)。")
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args(argv)
     logging.basicConfig(level=args.log_level,
                         format="%(levelname)s %(name)s: %(message)s")
     counts = run(args.articles_dir, args.out_hugo,
-                 top_n=args.top_n, min_ivs=args.min_ivs, themes=args.themes)
+                 top_n=args.top_n, min_ivs=args.min_ivs,
+                 themes=args.themes, age_hubs=args.age_hubs)
     print(json.dumps(counts, ensure_ascii=False))
     return 0
 
