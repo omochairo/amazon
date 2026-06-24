@@ -82,6 +82,16 @@ narrative.lead の**冒頭 2 文**は「結論ファースト hook」を必須�
 - **「調査不能」で終わらせない**：商品が極端に情報の少ない海外マイナーブランドであっても、「sources が集まりませんでした」という結論で止めない。**Amazon 商品ページの仕様欄を細かく読む / メーカー名で検索してメーカー公式を当てる / 類似モデルの一般評を間接情報として使う**などの工夫を尽くす
 - **誠実さの優先**：それでもどうしても sources が 3 件しか集まらなかった等の場合は、**水増しせず短くても正直な記事を書く**ことを優先する。空欄や根拠なしの抽象表現で字数を稼がない
 
+## 1.D 画像・アフィリエイト URL は自律補完の対象外（厳守）
+
+§1.C の自律補完は **prose / sources / claims** にのみ適用される。以下の URL は **必ず入力 `data/raw/per_asin/<ASIN>/amazon.json` の値をそのままコピー**し、Web 検索・HTML ソースから再構築・差し替えしてはならない。
+
+- `product.image` — amazon.json の `image` 値を**そのままコピー**（無い場合のみ `images[0]`）。`_AC_SX679_` 等のより高解像度な variant を Web から組み立てようとしない
+- `product.images` — amazon.json の `images` 配列をそのままコピー
+- アフィリエイト URL 全般
+
+**理由**: Amazon の画像 ID は `+` 等を含むことがあり、HTML からの再構築でパースを誤ると実在しない壊れた URL（404）になる事故が実際に発生した（例 B0G5DLSTS8）。低解像度でも **確実に表示される amazon.json の URL が常に正しい**。ビルド側（`scripts/build_post.py`）でも amazon.json の値で強制上書きするため、ここで別 URL を入れても本番には反映されない。
+
 ## 2. 出力ファイル
 
 `data/articles/{YYYY-MM-DD}-{ASIN}.json` （1ファイル / 商品）。**日付 / slug / 対象 ASIN / PR scope / 一時スクリプト除外** は INTRO（`03-invoke-jules.yml` が注入）で渡されるルールに従う。本テンプレートのスキーマ例にある日付や ASIN は例示なので流用しない。
@@ -149,7 +159,7 @@ narrative.lead の**冒頭 2 文**は「結論ファースト hook」を必須�
     "name": "ジスター 天才のはじまり",
     "name_full": "グッドトイ受賞 ジスター 天才のはじまり 知育玩具 ブロック",
     "brand": "ジスター",
-    "image": "https://...",
+    "image": "（入力 amazon.json の image 値をそのままコピー。Web 検索や HTML から再構築した URL で上書き禁止 → §1.D）",
     "features": ["特徴1", "特徴2"],
     "pros": ["手先が器用になる", "色彩感覚が育つ", "長く遊べる"],
     "cons": ["細かなパーツの紛失に注意"],
@@ -446,7 +456,7 @@ cert 名に言及する `claims[]` の `supporting_source_ids` には、**本文
 
 下記は `quality_gate.py` で機械判定できない **定性的な観点のみ** 列挙する。schema 違反・**件数規律・文字数下限・lead hook 禁止フレーズ**・cert 妥当性・URL 一意性は gate が自動判定するので、ここでは**重ねて確認しない**（要件本体は §1.B / §5.A / §5.D / §5.E に記載済。gate が block するので自己確認は不要）。
 
-1. [ ] 画像 URL・アフィリエイト URL は raw JSON 由来のもののみ（gate 範囲外、Jules 自己責任）
+1. [ ] 画像 URL・アフィリエイト URL は raw amazon.json 由来の値をそのままコピー（§1.D。Web 検索・HTML からの再構築は 404 事故のため厳禁）
 2. [ ] `persona_fit.primary_buyer` に「20〜40代女性」相当の表記がある
 3. [ ] `narrative` 内の主張（特に `why_this_product` `safety_note` の核となる訴求）が `claims` または `sources[].notes` で裏付けられている
 4. [ ] 一般化された口コミ表現（「集中して遊ぶ」「夢中になる」等）を使う場合、対応する `sources` が存在する

@@ -1708,6 +1708,64 @@ def _recompute_best_price(product: dict[str, Any]) -> None:
     product["best_platform"] = best[1]
 
 
+def _enforce_amazon_image(
+    data: dict[str, Any],
+    raw_index: dict[str, dict[str, Any]],
+    per_asin_root: pathlib.Path,
+) -> bool:
+    """#2812: 検証済み amazon.json の画像で ``product.image`` を強制上書きする。
+
+    Jules (AI) はプロンプトの自律補完指示に基づき、より高解像度な画像 URL
+    (``_AC_SX679_.jpg`` 等) を Web 検索から再構築して ``product.image`` を
+    上書きすることがある。その際 ``+`` を含む画像 ID のパースを誤り、実在しない
+    壊れた URL (404) を生成する事故が確認された (例 B0G5DLSTS8)。
+
+    対策: 唯一の真実源である ``data/raw/per_asin/<ASIN>/amazon.json`` の
+    ``image`` (無ければ ``images[0]``) で ``product.image`` を常に上書きする。
+    同時に Jules 由来の ``product.images`` ギャラリーも amazon.json の検証済み
+    配列で置き換え、ハルシネーション URL を本番から排除する。
+
+    amazon.json に画像が無い ASIN は Jules 由来値を温存する (上書きしない)。
+    上書きが発生したら True を返す (manifest 統計用)。
+    """
+    product = data.get("product") if isinstance(data.get("product"), dict) else None
+    if not product:
+        return False
+    asin = product.get("asin")
+    if not asin:
+        return False
+
+    authoritative_image = ""
+    authoritative_gallery: list[str] = []
+    for src in (raw_index.get(asin), _load_per_asin_amazon(per_asin_root, asin)):
+        if not isinstance(src, dict):
+            continue
+        img = src.get("image")
+        gallery = [u for u in (src.get("images") or []) if isinstance(u, str) and u]
+        if not authoritative_image and isinstance(img, str) and img:
+            authoritative_image = img
+        if not authoritative_image and gallery:
+            authoritative_image = gallery[0]
+        if not authoritative_gallery and gallery:
+            authoritative_gallery = gallery
+        if authoritative_image and authoritative_gallery:
+            break
+
+    if not authoritative_image:
+        return False
+
+    overwritten = product.get("image") != authoritative_image
+    product["image"] = authoritative_image
+    # ギャラリーも検証済み配列で置換 (主画像が先頭)。amazon.json に複数枚あれば
+    # ハルシネーション混入の可能性がある Jules 由来 images を捨てる。
+    if authoritative_gallery:
+        ordered = [authoritative_image] + [
+            u for u in authoritative_gallery if u != authoritative_image
+        ]
+        product["images"] = ordered
+    return overwritten
+
+
 def _backfill_product_images(
     data: dict[str, Any],
     raw_index: dict[str, dict[str, Any]],
@@ -2316,6 +2374,9 @@ def main() -> None:
             _merge(data, _load_optional_json(src_path / f"{slug}.seo.json"), SEO_KEYS)
             _backfill_amazon_badges(data, raw_amazon_index, per_asin_root)
             _attach_market_prices(data, rakuten_matched_index, yahoo_matched_index)
+            # #2812: Jules の画像ハルシネーション (404) を防ぐため、検証済み
+            # amazon.json の画像で product.image を強制上書きしてから gallery を補完。
+            image_overwritten = _enforce_amazon_image(data, raw_amazon_index, per_asin_root)
             _backfill_product_images(data, raw_amazon_index, per_asin_root)
             _override_competitive_analysis(data, per_asin_root)
             _fallback_news_books(data, per_asin_root)
@@ -2347,6 +2408,9 @@ def main() -> None:
             _update_stats("news", has_jules_news, bool(data.get("news")))
             _update_stats("books", has_jules_books, bool(data.get("books")))
             _update_stats("omcha", has_jules_omcha, bool(data.get("omcha_related")))
+            # #2812: amazon.json 検証済み画像で上書きが発生したら記録 (観察用)。
+            if image_overwritten:
+                per_article_fallbacks["image"] = "amazon_enforced"
 
             if asin_for_manifest:
                 by_asin[asin_for_manifest] = {"fallbacks": per_article_fallbacks}
