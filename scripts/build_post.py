@@ -1990,6 +1990,34 @@ def _load_git_history(src_path: pathlib.Path) -> dict[str, dict[str, Any]]:
     return history
 
 
+def _clamp_lastmod_to_date(lastmod: str, date_str: str) -> str:
+    """#2814: lastmod が公開日 (date) より過去なら date に同期して返す。
+
+    Jules は未来日ハルシネーション防止のため date を JST 当日 10 時に予約公開風
+    で設定するが、PR の auto-merge は UTC で走るため git commit 時刻 (=lastmod)
+    が date より数時間〜前日に巻き戻る。すると JSON-LD で dateModified <
+    datePublished、sitemap lastmod の逆転、post_meta の「最終更新: 前日」誤表示
+    を招く。実時点として lastmod < date のとき lastmod を date に丸める。
+
+    aware/naive の混在等でパースに失敗した場合は日付文字列 (YYYY-MM-DD) 比較に
+    fallback する (テンプレ post_meta.html が実際に比較するのも日付部分のため)。
+    どちらも判定不能なら lastmod を素通しする。
+    """
+    if not lastmod or not date_str:
+        return lastmod
+    try:
+        lm = datetime.fromisoformat(lastmod.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+        if (lm.tzinfo is None) != (dt.tzinfo is None):
+            raise TypeError("naive/aware mismatch")
+        return date_str if lm < dt else lastmod
+    except (ValueError, TypeError):
+        # 日付部分 (先頭 10 文字 YYYY-MM-DD) のみで比較
+        if lastmod[:10] and date_str[:10] and lastmod[:10] < date_str[:10]:
+            return date_str
+        return lastmod
+
+
 def _frontmatter_meta(
     data: dict[str, Any],
     slug: str,
@@ -2029,9 +2057,13 @@ def _frontmatter_meta(
             lastmod = data.get("date", datetime.now().isoformat())
         update_count = 1
 
+    # #2814: 公開日より過去の lastmod を date に同期 (UTC commit 時差の逆転是正)
+    article_date = data.get("date", datetime.now().isoformat())
+    lastmod = _clamp_lastmod_to_date(lastmod, article_date)
+
     meta: dict[str, Any] = {
         "title": title,
-        "date": data.get("date", datetime.now().isoformat()),
+        "date": article_date,
         "lastmod": lastmod,
         "update_count": update_count,
         "tags": [t.rstrip(". ") for t in data.get("tags", []) if t],
