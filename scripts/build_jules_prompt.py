@@ -143,7 +143,7 @@ def build_prompt(asin, today=None):
 - **sources は最低 5 件必須** (品質ゲートで機械検査されます)。
 
 【品質ゲートで機械検査される項目 (不合格になると公開されません・厳守)】
-- meta_description: **100〜160 字**
+- meta_description: **100〜160 字**、かつ**冒頭 40 字以内に商品名 (製品名) を含める**
 - product.ivs_detail は**数値スコアのオブジェクト**。以下の形を厳守 (説明文を値にしない):
   "ivs_detail": {{
     "education": 4.5, "longevity": 4.0, "safety": 4.5, "cost_performance": 4.0,
