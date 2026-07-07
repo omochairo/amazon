@@ -386,23 +386,40 @@ def _fetch_rakuten_ichiba(keyword, app_id, access_key, aff_id, hits=15):
     return requests.get(url, params=params, headers=headers, timeout=10)
 
 
-def _rakuten_books_by_isbnjan(jan_code, app_id, aff_id):
+def _rakuten_books_params(app_id, access_key, aff_id):
+    """BooksTotal/Search を access_key の有無で RMS or 公開 API に振り分ける。
+
+    _fetch_rakuten_ichiba と同型 (2026-07-07): RMS 紐付き applicationId は
+    旧 app.rakuten.co.jp ホストの BooksTotal に "specify valid applicationId"
+    (HTTP 400) で拒否される。openapi ホストは accessKey に加えて
+    Referer/Origin ヘッダが必須 (無いと 403 REFERRER_MISSING)。実キーで検証済。
+    """
+    if access_key:
+        url = "https://openapi.rakuten.co.jp/services/api/BooksTotal/Search/20170404"
+        params = {"applicationId": app_id, "accessKey": access_key}
+        headers = {
+            "Referer": "https://github.com/omochairo/amazon",
+            "Origin": "https://github.com/omochairo/amazon",
+        }
+    else:
+        url = "https://app.rakuten.co.jp/services/api/BooksTotal/Search/20170404"
+        params = {"applicationId": app_id}
+        headers = {}
+    if aff_id:
+        params["affiliateId"] = aff_id
+    return url, params, headers
+
+
+def _rakuten_books_by_isbnjan(jan_code, app_id, access_key, aff_id):
     """Rakuten Books の `isbnjan` パラメータで JAN/EAN/ISBN を直引きする。
 
     商品が Books カテゴリに存在する場合、これがユニーク識別での最高精度マッチ。
     keyword 検索とは別 endpoint パラメータなので、ヒットすればテキスト検索を
     完全にスキップできる。
     """
-    url = "https://app.rakuten.co.jp/services/api/BooksTotal/Search/20170404"
-    params = {
-        "applicationId": app_id,
-        "isbnjan": jan_code,
-        "formatVersion": 2,
-        "hits": 5,
-    }
-    if aff_id:
-        params["affiliateId"] = aff_id
-    return requests.get(url, params=params, timeout=10)
+    url, params, headers = _rakuten_books_params(app_id, access_key, aff_id)
+    params.update({"isbnjan": jan_code, "formatVersion": 2, "hits": 5})
+    return requests.get(url, params=params, headers=headers, timeout=10)
 
 
 def _classify_http_status(status_code: int) -> str:
@@ -431,7 +448,7 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
     # Stage 0a: JAN 直引き (Rakuten Books `isbnjan`)
     if jan_code:
         try:
-            resp = _rakuten_books_by_isbnjan(jan_code, app_id, aff_id)
+            resp = _rakuten_books_by_isbnjan(jan_code, app_id, access_key, aff_id)
             if resp.status_code == 200:
                 data = resp.json()
                 raw_items = data.get("Items", [])
@@ -485,19 +502,12 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
             jan_attempt = "jan_error"
             logger.error(f"Rakuten Stage0b error: {e}")
 
-    # Stage 1: Rakuten Books (公開 API のみ、accessKey 非対応)
-    books_url = "https://app.rakuten.co.jp/services/api/BooksTotal/Search/20170404"
-    books_params = {
-        "applicationId": app_id,
-        "keyword": keyword,
-        "formatVersion": 2,
-        "hits": 10,
-    }
-    if aff_id:
-        books_params["affiliateId"] = aff_id
+    # Stage 1: Rakuten Books (access_key の有無で RMS or 公開 API に振り分け)
+    books_url, books_params, books_headers = _rakuten_books_params(app_id, access_key, aff_id)
+    books_params.update({"keyword": keyword, "formatVersion": 2, "hits": 10})
 
     try:
-        resp = requests.get(books_url, params=books_params, timeout=10)
+        resp = requests.get(books_url, params=books_params, headers=books_headers, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
             raw_items = data.get("Items", [])
