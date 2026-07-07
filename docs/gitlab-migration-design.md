@@ -64,6 +64,11 @@ gitlab.com/omocha/navi (project id 84175362) へ移行する。サイト配信
 - **フェーズ2**: 03 移植 (invoke-jules job + build_jules_prompt.py + MR 作成スクリプト)
 - **フェーズ3**: 04/05/06 移植 (validate MR パイプライン + MWPS + lock cleanup)
 - **フェーズ4**: 01-fetch / 07-rakuten 等のデータ更新系 (別設計、Jules 非依存なので機械移植)
+  — **実装済 2026-07-07**: fetch-data / rakuten-ranking / third-party-sources job +
+  scripts/ci_fetch_data.sh + scripts/create_data_mr.py。schedule は
+  CI_PIPELINE_SCHEDULE_DESCRIPTION の前方一致で多重化 (bot がスケジュール変数を
+  追加できないため)。secrets 未設定の step は skip して inert に空振りする設計で、
+  旧 GitHub Secrets の API キー群 (§4.6) が CI/CD 変数に揃い次第フル稼働
 - 対象外 (当面停止のまま): SNS 系 (20/30/35/36)、分析系 (17/18/19)、engagement 系 (29-33)
 
 ## 4. コンポーネント詳細
@@ -142,7 +147,7 @@ repoless は repo を読めないため、現行プロンプトの「repo 内フ
 フェーズ4 で AMAZON_CREATORS_* / RAKUTEN_* 等を追加。GITHUB_TOKEN /
 APP_ID / APP_PRIVATE_KEY は GitLab では不要 (CI_JOB_TOKEN + project token で代替)。
 
-## 4.7 既知の品質課題 (フェーズ4 と同時に対処)
+## 4.7 既知の品質課題 (フェーズ4 と同時に対処) — **対処済 2026-07-07**
 
 **関連動画/ニュースの誤マッチ** (2026-07-07 ユーザー指摘)。per_asin の
 news/youtube は filter_raw_per_asin.py の関連度スコア (brand +5.0 / 型番 +10.0 /
@@ -150,6 +155,20 @@ series +3.0 / bigram +0.5, 閾値 3.0) で選別されるが、**ブランド一
 超える**ため「同ブランド別商品」の動画/ニュースが構造的に混入する。
 API 復旧 (フェーズ4) は鮮度とカバレッジしか直さないので、復旧時に併せて
 (a) 閾値の引き上げ or (b) 商品固有語 (product_term) の一致を必須化 を入れる。
+
+**対処内容 (フェーズ4 実装)**: youtube/news は strict=2 (商品同定判定) に改訂。
+- product_term は 4 文字以上のみカウント (「バケツ」型の汎用 3 文字語を排除)
+- ターゲット横断で 4 タイトル以上に出る語は「共有語」(未登録ブランド/商品ライン/
+  カテゴリ語: トイローヤル, GraviTrax, ブロック等) として動的判定し、単独では
+  商品同定に使わない
+- strong = model+brand / unique 2語 / unique 1語+(brand|series|shared 1語)。
+  series 単独・brand 単独・shared のみの組合せは不合格 (実測: リザードン記事の
+  カビゴン動画、よくばりバケツ記事の のりものブロックバケツ動画 等を排除)
+- アンカー無し ASIN の素通しを廃止 (誤マッチより空リストを優先)
+- books は旧判定 (strict=1) を維持 (指摘対象外・読み物はブランド関連で許容)
+効果 (対象 1483 ASIN): youtube 888→373 / news 626→194 ASIN に絞り込み
+(残存はサンプル検査で全件商品一致を確認)。既公開記事に焼き込まれた誤マッチの
+遡及クリーンアップは別タスク。
 
 ## 5. 未解決事項 (ユーザー判断待ち)
 
