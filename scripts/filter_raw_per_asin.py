@@ -28,6 +28,17 @@ logger = logging.getLogger("filter_raw_per_asin")
 
 SCORE_THRESHOLD = 3.0
 
+# strict 判定で product_term ヒットとして数える最小文字数 (§4.7, 2026-07-07)。
+# 3 文字の汎用語 (例: バケツ) は「よくばりバケツ」と「のりものブロックバケツ」を
+# 区別できず同ブランド別商品を通してしまうため、商品同定シグナルには使わない。
+STRONG_TERM_MIN_LEN = 4
+
+# この件数以上のターゲット ASIN タイトルに出現する product_term は「共有語」
+# (未登録ブランド名/商品ライン名/カテゴリ語: トイローヤル, GraviTrax, ブロック等)
+# とみなし、単独では商品同定シグナルにしない (§4.7)。KNOWN_BRANDS の手動辞書では
+# 追いつかないため、ターゲット集合 (~1500 タイトル) から動的に判定する。
+SHARED_TERM_DF = 4
+
 # コンテンツ種別ごとの top-N。youtube は本文に iframe で 1 件ずつ縦に並ぶので
 # 多すぎると記事が重くなる + 関連度の薄い候補を巻き込みやすいため少なめ。
 TOP_N_DEFAULT = 5
@@ -183,17 +194,22 @@ def tokenize(text: str) -> set:
 
 def score_item(item_text: str, asin_brands: set, asin_series: set,
                asin_model: str, asin_tokens: set,
-               asin_product_terms: set) -> tuple[float, dict]:
+               asin_product_terms: set,
+               shared_terms: set | None = None) -> tuple[float, dict]:
     """1 アイテムのテキストに対する関連度スコアと、どのシグナルが当たったかを返す。
 
-    signals = {brand, series, model, product_term, token_overlap} の bool/int。
+    signals = {brand, series, model, product_term, ..., token_overlap} の bool/int。
     呼び出し側 (filter_items) が strict モードで「ブランドだけ」を弾く判断に使う。
+    product_term_unique/shared は STRONG_TERM_MIN_LEN 以上の語のみ数え、
+    shared_terms (ターゲット横断で頻出する共有語) かどうかで分けて数える。
     """
     if not item_text:
         return 0.0, {}
+    shared_terms = shared_terms or set()
     score = 0.0
     signals: dict = {"brand": False, "series": False, "model": False,
-                     "product_term": 0, "token_overlap": 0}
+                     "product_term": 0, "product_term_unique": 0,
+                     "product_term_shared": 0, "token_overlap": 0}
     item_brands, item_series = extract_brand_series(item_text)
     if asin_brands & item_brands:
         score += 5.0
@@ -209,6 +225,12 @@ def score_item(item_text: str, asin_brands: set, asin_series: set,
         if hits:
             score += min(hits * 4.0, 8.0)
             signals["product_term"] = hits
+        for pt in asin_product_terms:
+            if len(pt) < STRONG_TERM_MIN_LEN or pt not in item_text:
+                continue
+            key = ("product_term_shared" if pt in shared_terms
+                   else "product_term_unique")
+            signals[key] += 1
     item_tokens = tokenize(item_text)
     overlap = len(asin_tokens & item_tokens)
     if overlap:
@@ -222,17 +244,37 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
                  asin_product_terms: set,
                  text_keys: list[str],
                  top_n: int = TOP_N_DEFAULT,
-                 strict: bool = False) -> list:
+                 strict: int = 0,
+                 shared_terms: set | None = None) -> list:
     """raw 配列をスコアリングして閾値以上を返す。
 
-    strict=True (youtube 用): ASIN タイトルから model か product_terms が抽出
-    できている場合、候補は強シグナルを満たさないと除外する:
-      - series 一致 / product_term 一致 のいずれか、または
-      - model 一致 **かつ** 同じ候補に ASIN のブランドも一致
+    strict=1 (books, 旧判定): ASIN にアンカー (model/terms/series) がある場合、
+    series / product_term (文字数不問) / model+brand のいずれかを要求。
+    アンカーが無い ASIN は素通し (ブランド一致のみで通る)。
 
-    model のみ単独 (例: ASIN model="94" が候補の "94 pcs" に偶然マッチ) を
-    弾くためブランド付帯を要求する。ブランド一致だけ (例: アンパンマン
-    ことばずかん 記事に「アンパンマンレジスター」動画) も弾く。
+    strict=2 (youtube/news, §4.7 2026-07-07 改訂): 候補は「商品を同定する」
+    強シグナルを満たさないと除外する。product_term は
+    STRONG_TERM_MIN_LEN 以上の語のみ数え、unique (この商品固有) と
+    shared (ターゲット横断頻出 = ブランド/ライン/カテゴリ語) を区別する:
+      - model 一致 **かつ** 同じ候補に ASIN のブランドも一致、または
+      - unique 2 語以上、または
+      - unique 1 語 **かつ** (brand / series / shared 1 語以上)
+
+    shared のみの組合せ (例: ナノブロック+ポケットモンスター) は strong に
+    しない: franchise+カテゴリ対が同シリーズ別商品 (リザードン記事に
+    カビゴン動画) を通すことを実測確認したため。unique が抽出できない
+    商品 (例: GraviTrax スターターセット) は空リストになるが許容する。
+
+    旧判定の穴 (2026-07-07 に本番記事で実測):
+      - series 単独 / series+brand を strong 扱い → 同シリーズ別商品が混入
+      - product_term に文字数下限なし → 「バケツ」等の汎用 3 文字語の一致だけで
+        別商品 (よくばりバケツ vs のりものブロックバケツ) が通過
+      - 1 語一致のみで strong → 商品ライン名 (GraviTrax) や カテゴリ語
+        (ブロック) だけ一致する別商品の動画/セール記事が通過
+      - アンカー (model/terms/series) が抽出できない ASIN は strict 自体を
+        バイパス → ブランド一致 +5.0 だけで閾値超え
+    誤マッチを載せるより空リストの方が良い (記事側は動画/ニュース無しで成立)
+    ため、strict=2 ではアンカー無し ASIN の素通しも廃止した。
     """
     has_strong_anchor = bool(asin_model or asin_product_terms or asin_series)
     scored = []
@@ -241,8 +283,19 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
             continue
         text = " ".join(str(item.get(k, "")) for k in text_keys)
         s, signals = score_item(text, asin_brands, asin_series, asin_model,
-                                asin_tokens, asin_product_terms)
-        if strict and has_strong_anchor:
+                                asin_tokens, asin_product_terms,
+                                shared_terms=shared_terms)
+        if strict >= 2:
+            uniq = signals.get("product_term_unique", 0)
+            shared = signals.get("product_term_shared", 0)
+            strong = ((signals.get("model") and signals.get("brand"))
+                      or uniq >= 2
+                      or (uniq == 1 and (signals.get("brand")
+                                         or signals.get("series")
+                                         or shared >= 1)))
+            if not strong:
+                continue
+        elif strict and has_strong_anchor:
             strong = (signals.get("series") or signals.get("product_term")
                       or (signals.get("model") and signals.get("brand")))
             if not strong:
@@ -339,15 +392,26 @@ def main():
             out.append(it)
         return out
 
-    summary = []
+    # §4.7: 全ターゲットの product_term の doc frequency を先に集計し、
+    # SHARED_TERM_DF 件以上のタイトルに出る語を「共有語」(単独では商品を
+    # 同定しない語) として filter_items に渡す。
+    extracted: dict[str, tuple] = {}
+    term_df: dict[str, int] = {}
     for asin, title in targets.items():
         if not asin:
             continue
-
         brands, series = extract_brand_series(title)
         model = extract_model_number(title)
         tokens = tokenize(title)
         product_terms = extract_product_terms(title, brands, series)
+        extracted[asin] = (title, brands, series, model, tokens, product_terms)
+        for t in product_terms:
+            term_df[t] = term_df.get(t, 0) + 1
+    shared_terms = {t for t, n in term_df.items() if n >= SHARED_TERM_DF}
+    logger.info(f"Shared terms (df>={SHARED_TERM_DF}): {len(shared_terms)}")
+
+    summary = []
+    for asin, (title, brands, series, model, tokens, product_terms) in extracted.items():
         logger.info(
             f"[{asin}] brands={brands or '-'} series={series or '-'} "
             f"model={model or '-'} product_terms={product_terms or '-'}"
@@ -364,18 +428,18 @@ def main():
         bk_pool = _dedupe_by_url(books_items +
                                  _fetch_targets.load_per_asin_raw_items(raw_dir, "books", asin))
 
-        # youtube / news / books とも strict: ブランドだけの一致や偶発 model
-        # ヒットを排除し、series / product_term / (model AND brand) のいずれかを
-        # 満たす候補のみ通す。
+        # youtube / news は §4.7 の商品同定判定 (strict=2)。
+        # books は関連読み物なので旧判定 (strict=1) のまま (§4.7 の指摘対象外)。
         yt = filter_items(yt_pool, brands, series, model, tokens,
                           product_terms, ["title"],
                           top_n=TOP_N_BY_KEY.get("youtube", TOP_N_DEFAULT),
-                          strict=True)
+                          strict=2, shared_terms=shared_terms)
         nw = filter_items(nw_pool, brands, series, model, tokens,
-                          product_terms, ["title"], strict=True)
+                          product_terms, ["title"], strict=2,
+                          shared_terms=shared_terms)
         bk = filter_items(bk_pool, brands, series, model, tokens,
                           product_terms, ["title", "description"],
-                          strict=True)
+                          strict=1, shared_terms=shared_terms)
 
         asin_dir = out_root / asin
         asin_dir.mkdir(parents=True, exist_ok=True)

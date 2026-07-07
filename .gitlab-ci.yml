@@ -48,10 +48,11 @@ invoke-jules:
   stage: generate
   image: python:3.11-bookworm
   rules:
-    # schedule はこの 1 本のみ (id 4326910)。project bot はスケジュール変数を追加
-    # できない (API 403) ため、source==schedule で発火させる。フェーズ3 で
-    # lock-cleanup schedule を足すときに SCHEDULE_JOB 変数方式へ再設計する。
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    # スケジュール多重化 (フェーズ4): project bot はスケジュール「変数」を追加
+    # できない (API 403) ため、description の前方一致でジョブを振り分ける
+    # (CI_PIPELINE_SCHEDULE_DESCRIPTION は GitLab 17.8+)。
+    # 既存 schedule id 4326910 の description は "invoke-jules (記事生成 6h毎)"。
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $CI_PIPELINE_SCHEDULE_DESCRIPTION =~ /^invoke-jules/'
     - if: '$SCHEDULE_JOB == "invoke-jules"'
   timeout: 75 minutes
   before_script:
@@ -60,6 +61,79 @@ invoke-jules:
     - mkdir -p hugo/content/posts
   script:
     - python scripts/invoke_jules_repoless.py
+
+# ---- データ更新系 (フェーズ4, 2026-07-07) --------------------------------
+# 旧 GitHub Actions 01-fetch / 07-rakuten / 34-third-party の移植。
+# いずれも「fetch → git add → branch push → MR → MWPS」で main に乗せる
+# (scripts/create_data_mr.py)。secrets 未設定の step は skip して安全に空振り。
+# 必要な CI/CD 変数 (旧 GitHub Secrets 対応表):
+#   fetch-data     : AMAZON_CREATORS_APPLICATION_ID / AMAZON_CREATORS_CREDENTIAL_ID /
+#                    AMAZON_CREATORS_CREDENTIAL_SECRET / AMAZON_PARTNER_TAG /
+#                    RAKUTEN_APP_ID / RAKUTEN_ACCESS_KEY / RAKUTEN_AFFILIATE_ID /
+#                    YOUTUBE_API_KEY(2-4) / YAHOO_CLIENT_ID / VALUECOMMERCE_SID /
+#                    VALUECOMMERCE_PID / GOOGLEBOOKS_API_KEY / OMCHA_API_KEY
+#   rakuten-ranking: RAKUTEN_APP_ID / RAKUTEN_ACCESS_KEY / RAKUTEN_AFFILIATE_ID
+#   third-party    : TAVILY_API_KEY
+
+# 日次データ更新 (旧 01-fetch-products.yml)。schedule 2 本 (朝/夕, 1h オフセットで
+# invoke-jules の 6h グリッドと衝突させない)。
+fetch-data:
+  stage: generate
+  image: python:3.11-bookworm
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $CI_PIPELINE_SCHEDULE_DESCRIPTION =~ /^fetch-data/'
+    - if: '$SCHEDULE_JOB == "fetch-data"'
+  timeout: 60 minutes
+  variables:
+    GIT_DEPTH: "0"
+  before_script:
+    - pip install -r requirements.txt
+  script:
+    - sh scripts/ci_fetch_data.sh
+
+# 週次楽天ランキング (旧 07-rakuten-ranking.yml)。火曜 06:00 JST = 月曜 21:00 UTC。
+# hugo/data/ranking/ は gitignore 配下 → create_data_mr が git add -f で stage する。
+rakuten-ranking:
+  stage: generate
+  image: python:3.11-bookworm
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $CI_PIPELINE_SCHEDULE_DESCRIPTION =~ /^rakuten-ranking/'
+    - if: '$SCHEDULE_JOB == "rakuten-ranking"'
+  timeout: 30 minutes
+  variables:
+    GIT_DEPTH: "0"
+  before_script:
+    - pip install -r requirements.txt
+  script:
+    - python scripts/fetch_rakuten.py --out data/raw/
+    - >
+      python scripts/create_data_mr.py
+      --prefix rakuten-ranking
+      --title "data: weekly rakuten ranking update"
+      --body "Automated weekly Rakuten ranking refresh (旧 07-rakuten-ranking.yml の GitLab 移植). /ranking/ ページ用 hugo/data/ranking/weekly.json と signal_detector 用 data/raw/rakuten_ranking.json を更新。"
+      --paths hugo/data/ranking/weekly.json hugo/data/ranking/_match_manifest.json data/raw/rakuten_ranking.json data/raw/_rakuten_ranking_manifest.json
+
+# 第三者ソース pre-fetch (旧 34-third-party-sources.yml, #1600 Phase 2)。
+# 毎日 21:30 UTC (06:30 JST)。TAVILY_API_KEY 未設定なら script が inert に no-op。
+third-party-sources:
+  stage: generate
+  image: python:3.11-bookworm
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $CI_PIPELINE_SCHEDULE_DESCRIPTION =~ /^third-party-sources/'
+    - if: '$SCHEDULE_JOB == "third-party-sources"'
+  timeout: 30 minutes
+  variables:
+    GIT_DEPTH: "0"
+  before_script:
+    - pip install -r requirements.txt
+  script:
+    - python scripts/fetch_third_party_sources.py --pool --bands zero,thin --max-queries 30
+    - >
+      python scripts/create_data_mr.py
+      --prefix third-party-sources
+      --title "data: third-party source pre-fetch (#1600)"
+      --body "Automated #1600 Phase 2 pre-fetch (旧 34-third-party-sources.yml の GitLab 移植). data/raw/per_asin/**/third_party_sources.json のみの更新。"
+      --paths data/raw/per_asin
 
 pages:
   stage: deploy
