@@ -54,7 +54,7 @@ def _load_prior_items(youtube_json_path: pathlib.Path) -> list | None:
 # 複数 API key を順次フォールバックする state。
 # 各 key は別 Google Cloud project の YOUTUBE Data API key を想定 (project ごとに
 # daily quota 10,000 units を持つ)。secret 名は YOUTUBE_API_KEY,
-# YOUTUBE_API_KEY2, YOUTUBE_API_KEY3, YOUTUBE_API_KEY4。未登録 (空文字) の slot は
+# YOUTUBE_API_KEY2 〜 YOUTUBE_API_KEY5。未登録 (空文字) の slot は
 # load 時に除外する。403 + body に "quota" or "exceeded" を含むレスポンスを
 # 受け取ったら、その key を exhausted として捨てて次の key に切替える。全 key
 # 枯渇した時点で youtube_search は [] を返し、以降のクエリも空で抜ける。
@@ -64,11 +64,11 @@ _EXHAUSTED_LOGGED: set[int] = set()
 
 
 def load_api_keys() -> list[str]:
-    """secret 名 YOUTUBE_API_KEY / *_KEY2 / *_KEY3 / *_KEY4 をこの順に読み、
+    """secret 名 YOUTUBE_API_KEY / *_KEY2 〜 *_KEY5 をこの順に読み、
     非空のものだけ list で返す。"""
     keys: list[str] = []
-    for name in ("YOUTUBE_API_KEY", "YOUTUBE_API_KEY2",
-                 "YOUTUBE_API_KEY3", "YOUTUBE_API_KEY4"):
+    for name in ("YOUTUBE_API_KEY", "YOUTUBE_API_KEY2", "YOUTUBE_API_KEY3",
+                 "YOUTUBE_API_KEY4", "YOUTUBE_API_KEY5"):
         v = get_secret(name)
         if v:
             keys.append(v)
@@ -286,7 +286,7 @@ def main():
     youtube_json_path = out_dir / "youtube.json"
 
     if not _API_KEYS:
-        logger.warning("YouTube API key missing (no YOUTUBE_API_KEY{,2,3,4}). Skipping fetch.")
+        logger.warning("YouTube API key missing (no YOUTUBE_API_KEY{,2,3,4,5}). Skipping fetch.")
         # Issue #1481: 空 items で上書きせず prior が生きていれば温存する
         if _load_prior_items(youtube_json_path) is not None:
             logger.warning("Preserving previous youtube.json (no API key available).")
