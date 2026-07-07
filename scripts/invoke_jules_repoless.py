@@ -95,6 +95,57 @@ class GitLab:
         except urllib.error.HTTPError as e:
             print(f"warning: lock release failed for {asin}: HTTP {e.code}", file=sys.stderr)
 
+    def cleanup_stale_locks(self, ttl_hours=1):
+        """旧 06-jules-lock-cleanup.yml の移植 (フェーズ3)。run 冒頭で TTL 超過 lock を回収。
+
+        独立 schedule にしない理由: project bot はスケジュール変数を追加できず (API 403)、
+        schedule 2 本を CI 側で見分けられないため、invoke-jules に相乗りさせる。
+        6h 毎 run 冒頭の掃除で TTL 1h は十分守れる (旧 06 は 30 分毎だったが、
+        lock は MR 作成/失敗時に即時解放されるようになったので残るのは異常系のみ)。"""
+        from datetime import datetime as _dt
+        try:
+            branches = self.call("/repository/branches?regex=" +
+                                 urllib.parse.quote("^jules-lock/") + "&per_page=100")
+        except urllib.error.HTTPError as e:
+            print(f"warning: lock cleanup list failed: HTTP {e.code}", file=sys.stderr)
+            return
+        now = _dt.now(timezone.utc)
+        for b in branches:
+            ts = (b.get("commit") or {}).get("committed_date")
+            if not ts:
+                continue
+            try:
+                age = (now - _dt.fromisoformat(ts)).total_seconds()
+            except ValueError:
+                continue
+            if age > ttl_hours * 3600:
+                asin = b["name"].split("/", 1)[1]
+                print(f"stale lock ({age / 3600:.1f}h > TTL {ttl_hours}h): releasing {b['name']}")
+                self.release_lock(asin)
+
+    def enable_auto_merge(self, mr_iid):
+        """MWPS (merge when pipeline succeeds) を設定 (旧 05 の gh pr merge --auto 相当)。
+
+        MR 直後は pipeline 未作成で 405/406 が返るため、リトライで待つ。
+        validate-article (MR パイプライン) 成功時に squash マージされる。"""
+        for attempt in range(12):  # 最大 ~2 分
+            try:
+                self.call(f"/merge_requests/{mr_iid}/merge",
+                          data={"merge_when_pipeline_succeeds": True,
+                                "squash": True, "should_remove_source_branch": True},
+                          method="PUT")
+                return True
+            except urllib.error.HTTPError as e:
+                if e.code in (405, 406):
+                    time.sleep(10)
+                    continue
+                print(f"warning: auto-merge setup failed for !{mr_iid}: HTTP {e.code}",
+                      file=sys.stderr)
+                return False
+        print(f"warning: auto-merge setup timed out for !{mr_iid} (要手動 merge)",
+              file=sys.stderr)
+        return False
+
     def create_article_mr(self, asin, today, content, session_url, score_line):
         branch = f"add-article-{asin}"
         try:
@@ -123,7 +174,7 @@ class GitLab:
             "squash": True,
             "remove_source_branch": True,
         })
-        return mr["web_url"]
+        return mr["web_url"], mr["iid"]
 
 
 class Jules:
@@ -286,6 +337,7 @@ def main():
     gl = GitLab()
     jules = Jules()
     today = datetime.now(JST).strftime("%Y-%m-%d")
+    gl.cleanup_stale_locks()  # 旧 06 の TTL 掃除 (run 冒頭に相乗り)
 
     input_asin = os.environ.get("INPUT_ASIN", "").strip()
     max_per_run = int(os.environ.get("INVOKE_MAX", "6"))
@@ -393,9 +445,11 @@ def main():
         if not ok:
             gl.release_lock(asin)
             continue
-        url = gl.create_article_mr(asin, today, body,
-                                   f"https://jules.google.com/session/{sid}", score_line)
+        url, iid = gl.create_article_mr(asin, today, body,
+                                        f"https://jules.google.com/session/{sid}", score_line)
         print(f"MR created: {asin} -> {url} ({score_line})")
+        if gl.enable_auto_merge(iid):
+            print(f"auto-merge (MWPS) enabled on !{iid}")
         gl.release_lock(asin)
         made += 1
 

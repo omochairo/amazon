@@ -142,6 +142,15 @@ repoless は repo を読めないため、現行プロンプトの「repo 内フ
 フェーズ4 で AMAZON_CREATORS_* / RAKUTEN_* 等を追加。GITHUB_TOKEN /
 APP_ID / APP_PRIVATE_KEY は GitLab では不要 (CI_JOB_TOKEN + project token で代替)。
 
+## 4.7 既知の品質課題 (フェーズ4 と同時に対処)
+
+**関連動画/ニュースの誤マッチ** (2026-07-07 ユーザー指摘)。per_asin の
+news/youtube は filter_raw_per_asin.py の関連度スコア (brand +5.0 / 型番 +10.0 /
+series +3.0 / bigram +0.5, 閾値 3.0) で選別されるが、**ブランド一致だけで閾値を
+超える**ため「同ブランド別商品」の動画/ニュースが構造的に混入する。
+API 復旧 (フェーズ4) は鮮度とカバレッジしか直さないので、復旧時に併せて
+(a) 閾値の引き上げ or (b) 商品固有語 (product_term) の一致を必須化 を入れる。
+
 ## 5. 未解決事項 (ユーザー判断待ち)
 
 1. **JULES_API_KEY の提供** — jules.google.com → Settings → API keys で確認/再発行

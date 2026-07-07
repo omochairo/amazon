@@ -11,6 +11,36 @@ stages:
   - generate
   - deploy
 
+# MR 検証 (旧 04-validate-article-pr.yml の移植, フェーズ3)。
+# すべての MR で走る。記事 JSON の変更が無ければ vacuous success。
+# スコープガード (自動マージ適格性) は旧 05 と違いここでは判定しない:
+# オーケストレータが patch 抽出時に「記事 1 ファイルのみ」を強制済みで、
+# 手動 MR (docs 等) を fail させると pipelines-must-succeed 設定下で merge 不能になるため。
+validate-article:
+  stage: generate
+  image: python:3.11-bookworm
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  variables:
+    GIT_DEPTH: "0"
+  script:
+    - |
+      set -e
+      base="$CI_MERGE_REQUEST_DIFF_BASE_SHA"
+      changed=$(git diff --name-only "$base"...HEAD)
+      echo "changed files:"; echo "$changed"
+      arts=$(echo "$changed" | grep -E '^data/articles/[^/]+\.json$' | grep -vE '\.(quality|enrichment|seo)\.json$' || true)
+      if [ -z "$arts" ]; then echo "no article JSON changes (vacuous success)"; exit 0; fi
+      pip install -r requirements.txt
+      mkdir -p hugo/content/posts
+      tmp=$(mktemp -d)
+      for f in $arts; do
+        [ -f "$f" ] || continue
+        python scripts/validate_json.py --json "$f" --schema data/schema/article.schema.json
+        cp "$f" "$tmp/"
+      done
+      python scripts/quality_gate.py --src "$tmp/" --posts hugo/content/posts/ --schema data/schema/article.schema.json --strict
+
 # 記事生成 (旧 03-invoke-jules.yml の移植, フェーズ2)。
 # schedule (6h 毎, SCHEDULE_JOB=invoke-jules) または API/web 起動の同変数指定で発火。
 # repoless Jules セッション → 検証 → MR 作成まで scripts/invoke_jules_repoless.py が行う。
