@@ -1,0 +1,35 @@
+# GitLab CI: サイトビルド & GitLab Pages デプロイ
+# GitHub Actions 02-publish.yml の移植 (GitHub アカウント凍結対応, 2026-07-07)。
+# ビルドに secrets は不要 (build_post.py / build_brand_hub_stats.py は
+# data/ 配下の JSON からレンダリングするだけ)。
+#
+# 注意: hugo/config.toml の baseURL は https://navi.omcha.jp/ 固定のため、
+# GitLab Pages のカスタムドメイン設定 + DNS 切替が完了するまで
+# *.gitlab.io の素の URL では CSS/リンクが崩れて見える (仕様通り)。
+
+stages:
+  - deploy
+
+pages:
+  stage: deploy
+  image: python:3.11-bookworm
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  variables:
+    # PaperMod テーマは submodule (public repo) なので recursive 取得が必須
+    GIT_SUBMODULE_STRATEGY: recursive
+    GIT_DEPTH: "0"
+    HUGO_VERSION: "0.146.0"
+  before_script:
+    # OG 画像合成 (build_og_image.py) に CJK フォントが必要。無いと Amazon 画像 URL への fallback になる
+    - apt-get update -y && apt-get install -y --no-install-recommends fonts-noto-cjk curl
+    - curl -fsSL "https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_linux-amd64.tar.gz" | tar -xz -C /usr/local/bin hugo
+    - hugo version
+    - pip install -r requirements.txt
+  script:
+    - python scripts/build_post.py
+    - python scripts/build_brand_hub_stats.py
+    - cd hugo && hugo --minify --buildFuture --destination ../public
+  artifacts:
+    paths:
+      - public
