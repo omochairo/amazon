@@ -136,7 +136,8 @@ class GitLab:
                           method="PUT")
                 return True
             except urllib.error.HTTPError as e:
-                if e.code in (405, 406):
+                # 405/406: pipeline 未作成。422: mergeability チェック中 (実測 MR !7)。
+                if e.code in (405, 406, 422):
                     time.sleep(10)
                     continue
                 print(f"warning: auto-merge setup failed for !{mr_iid}: HTTP {e.code}",
