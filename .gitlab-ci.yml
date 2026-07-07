@@ -18,6 +18,10 @@ invoke-jules:
   stage: generate
   image: python:3.11-bookworm
   rules:
+    # schedule はこの 1 本のみ (id 4326910)。project bot はスケジュール変数を追加
+    # できない (API 403) ため、source==schedule で発火させる。フェーズ3 で
+    # lock-cleanup schedule を足すときに SCHEDULE_JOB 変数方式へ再設計する。
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$SCHEDULE_JOB == "invoke-jules"'
   timeout: 75 minutes
   before_script:
