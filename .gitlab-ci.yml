@@ -83,7 +83,9 @@ fetch-data:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule" && $CI_PIPELINE_SCHEDULE_DESCRIPTION =~ /^fetch-data/'
     - if: '$SCHEDULE_JOB == "fetch-data"'
-  timeout: 60 minutes
+  # E2E 実測 (2026-07-07): fetch_amazon 18分 + cross_search が未マッチ対象を
+  # 毎回再検索するため 60 分では不足。TPS=1 sleep 込みで余裕を持たせる
+  timeout: 180 minutes
   variables:
     GIT_DEPTH: "0"
   before_script:
