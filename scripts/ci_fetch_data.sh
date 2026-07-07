@@ -64,9 +64,9 @@ if skip_unless "fetch_reviews" RAKUTEN_APP_ID; then
   step "fetch_reviews" python scripts/fetch_reviews.py
 fi
 
-if skip_unless "fetch_omcha_related" OMCHA_API_KEY; then
-  step "fetch_omcha_related" python scripts/fetch_omcha_related.py --out data/raw/
-fi
+# OMCHA_API_KEY は任意 (internal_links.py: 設定時のみ api_key query param を付与)。
+# omcha.jp API はキー無しでも動くため guard しない (2026-07-07 ユーザー確認済)
+step "fetch_omcha_related" python scripts/fetch_omcha_related.py --out data/raw/
 
 step "signal_detector" python scripts/signal_detector.py
 
