@@ -1354,6 +1354,99 @@ def _load_per_asin_amazon(per_asin_root: pathlib.Path, asin: str) -> dict[str, A
     return item if isinstance(item, dict) else None
 
 
+def _amazon_snapshot_status(per_asin_root: pathlib.Path, asin: str) -> str:
+    """per-ASIN snapshot の status ("gone" / "") を返す。
+
+    fetch_amazon.refresh_article_snapshots (2026-07-07) が GetItems 応答から
+    連続欠落した ASIN に status="gone" を書く。それ以外 (キー無し含む) は ""。
+    """
+    p = per_asin_root / asin / "amazon.json"
+    if not p.exists():
+        return ""
+    try:
+        snap = json.loads(p.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return ""
+    if not isinstance(snap, dict):
+        return ""
+    return snap.get("status") or ""
+
+
+_AMAZON_TAG_RE = re.compile(r"[?&]tag=([\w-]+)")
+
+
+def _apply_amazon_discontinued(
+    data: dict[str, Any],
+    per_asin_root: pathlib.Path,
+) -> bool:
+    """snapshot status=="gone" の ASIN を「Amazon 取り扱い終了」としてビルド時に
+    反映する。記事 JSON には焼き込まない (焼き込みは後から判定改修が入ったとき
+    全記事 backfill が必要になる — §4.7 youtube/news の轍)。
+
+      - prices.amazon: discontinued=True / price=0 / url="" (404 リンクを出さない)
+        / search_url=Amazon 検索 URL (アフィタグは旧 URL から継承)
+      - best_price / best_platform を残存プラットフォームで再計算 (全滅なら 0
+        → テンプレの最安値表示が消える)
+      - 楽天/Yahoo にも直リンクが無ければ data["purchase_unavailable"]=True
+        → テンプレ冒頭に販売終了 notice を出す
+
+    呼び出しは _attach_market_prices の後 (楽天/Yahoo の band 検証は焼き込み
+    済みの旧 Amazon 価格を anchor に使うため、ゼロ化はその後で行う)。
+    """
+    product = data.get("product") if isinstance(data.get("product"), dict) else None
+    if not product:
+        return False
+    asin = product.get("asin")
+    if not asin or _amazon_snapshot_status(per_asin_root, asin) != "gone":
+        return False
+    prices = product.setdefault("prices", {})
+    if not isinstance(prices, dict):
+        return False
+    amazon = prices.get("amazon") if isinstance(prices.get("amazon"), dict) else {}
+    old_url = amazon.get("url") or ""
+    m = _AMAZON_TAG_RE.search(old_url)
+    tag = m.group(1) if m else "zefiransesu-22"  # post.md.j2 affiliate_url macro と同じ既定
+    amazon["discontinued"] = True
+    amazon["price"] = 0
+    amazon["url"] = ""
+    # 在庫/還元系バッジは現存しない出品の情報なので全て落とす
+    amazon["availability"] = ""
+    amazon["loyalty_points"] = 0
+    amazon["savings_percentage"] = 0
+    amazon["free_shipping"] = False
+    name = product.get("name") or ""
+    if name:
+        amazon["search_url"] = (
+            f"https://www.amazon.co.jp/s?k={urllib.parse.quote(name)}&tag={tag}")
+    prices["amazon"] = amazon
+    # Amazon が唯一の価格だったケースでは _recompute_best_price は candidates
+    # 空で何もしないので、先に 0 に落としてから残存プラットフォームで再計算する。
+    product["best_price"] = 0
+    product["best_platform"] = ""
+    _recompute_best_price(product)
+
+    # 記事 JSON の product.amazon_review_url は使われないが、Jules が埋めて
+    # いた場合に備えてビルド時コンテキストからは落とす (dp が 404 のため)。
+    product.pop("amazon_review_url", None)
+    # 参考ソース欄の自商品 dp リンクも 404 になるので除外 (件数表示は
+    # sources|length なので自動で追従する)。
+    sources = data.get("sources")
+    if isinstance(sources, list):
+        data["sources"] = [
+            s for s in sources
+            if not (isinstance(s, dict) and "amazon.co.jp" in (s.get("url") or "")
+                    and asin in (s.get("url") or ""))]
+
+    def _has_direct_link(entry: Any) -> bool:
+        return (isinstance(entry, dict) and bool(entry.get("url"))
+                and not entry.get("is_search"))
+
+    if not (_has_direct_link(prices.get("rakuten"))
+            or _has_direct_link(prices.get("yahoo"))):
+        data["purchase_unavailable"] = True
+    return True
+
+
 def _backfill_amazon_badges(
     data: dict[str, Any],
     raw_index: dict[str, dict[str, Any]],
@@ -2361,6 +2454,7 @@ def main() -> None:
 
     rendered = 0
     skipped_legacy = 0
+    discontinued_count = 0
 
     # 充足率統計データの初期化
     stats = {
@@ -2406,6 +2500,7 @@ def main() -> None:
             _merge(data, _load_optional_json(src_path / f"{slug}.seo.json"), SEO_KEYS)
             _backfill_amazon_badges(data, raw_amazon_index, per_asin_root)
             _attach_market_prices(data, rakuten_matched_index, yahoo_matched_index)
+            amazon_discontinued = _apply_amazon_discontinued(data, per_asin_root)
             # #2812: Jules の画像ハルシネーション (404) を防ぐため、検証済み
             # amazon.json の画像で product.image を強制上書きしてから gallery を補完。
             image_overwritten = _enforce_amazon_image(data, raw_amazon_index, per_asin_root)
@@ -2443,6 +2538,10 @@ def main() -> None:
             # #2812: amazon.json 検証済み画像で上書きが発生したら記録 (観察用)。
             if image_overwritten:
                 per_article_fallbacks["image"] = "amazon_enforced"
+            # Amazon 消滅 ASIN (snapshot status=gone) の取り扱い終了表示 (2026-07-07)。
+            if amazon_discontinued:
+                per_article_fallbacks["amazon"] = "discontinued"
+                discontinued_count += 1
 
             if asin_for_manifest:
                 by_asin[asin_for_manifest] = {"fallbacks": per_article_fallbacks}
@@ -2485,7 +2584,9 @@ def main() -> None:
                 data["score"] = _build_score_context(fresh_sr)
                 if isinstance(product_obj, dict):
                     asin_for_review = product_obj.get("asin")
-                    if asin_for_review:
+                    # 取り扱い終了 (snapshot status=gone) の dp ページは 404 なので
+                    # レビュー CTA は付けない。
+                    if asin_for_review and not amazon_discontinued:
                         product_obj["amazon_review_url"] = (
                             f"https://www.amazon.co.jp/dp/{asin_for_review}"
                             "/?tag=zefiransesu-22#customerReviews"
@@ -2605,6 +2706,8 @@ def main() -> None:
             print(f"Failed to write GITHUB_STEP_SUMMARY: {e}")
 
     msg = f"\nDone. {rendered} post(s) rendered."
+    if discontinued_count:
+        msg += f" {discontinued_count} rendered as Amazon 取り扱い終了 (snapshot status=gone)."
     if skipped_legacy:
         msg += f" {skipped_legacy} rendered as legacy v3 fallback (regenerate via Jules)."
     print(msg)

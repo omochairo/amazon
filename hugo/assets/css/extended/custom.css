@@ -3890,6 +3890,24 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 }
 [data-theme="dark"] .post-content .auto-gen-notice strong { color: #fca5a5; }
 
+/* ---------- 販売終了 notice (2026-07-07: Amazon snapshot status=gone) ---------- */
+.post-content .discontinued-notice {
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin: 0 0 16px;
+  font-size: 0.88rem;
+  color: #7c2d12;
+  line-height: 1.6;
+}
+.post-content .discontinued-notice a { text-decoration: underline; }
+[data-theme="dark"] .post-content .discontinued-notice {
+  background: #431407;
+  border-color: #9a3412;
+  color: #fed7aa;
+}
+
 /* ---------- 正式商品名 ---------- */
 .post-content .product-full-name {
   font-size: 0.9rem;

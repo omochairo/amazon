@@ -34,6 +34,7 @@ resource 配列の真実の源:
 import os
 import re
 import json
+import pathlib
 import sys
 import time
 import random
@@ -41,6 +42,8 @@ import logging
 import argparse
 from datetime import datetime, timezone
 from typing import Any, Optional
+
+import _fetch_targets
 
 # #795 follow-up (session 62): 旧 DEFAULT_KEYWORDS は 10 件中 4 件が王道
 # (知育玩具/木のおもちゃ/パズル/レゴ) で、これらは Amazon search の top 100 が
@@ -216,6 +219,20 @@ SEARCH_ITEM_RESOURCES = [
     # extract_free_shipping を merchantInfo.name == Amazon 直販 ベースに切替済
     # (Amazon 直販なら Prime/2,000円以上 free shipping が保証されるため実質同義)。
 ]
+
+# 記事 ASIN 巡回 (2026-07-07) の GetItems 用 resources。SEARCH_ITEM_RESOURCES に
+# browseNodeInfo を足し、カテゴリを snapshot に残す (SearchIndex=Toys でも
+# 他カテゴリ商品が混入した実例 B0GJXXRWM5=車＆バイク があり、後段の genre 検査を
+# 可能にするため)。browseNodeInfo.browseNodes は creators_api_client.get_items /
+# search_items 両方のデフォルト resources に含まれており Creator API で valid。
+REFRESH_ITEM_RESOURCES = SEARCH_ITEM_RESOURCES + ["browseNodeInfo.browseNodes"]
+
+# 記事 ASIN 巡回で GetItems 応答から連続でこの回数欠落したら、その ASIN は
+# Amazon から消滅した (dp が 404) とみなし snapshot に status="gone" を書く。
+# 1 回の欠落は API の一時不調・throttle と区別できないため即断しない。
+# 未確定 (miss_count < threshold) の ASIN は mark_queried せず次 run で再チェック
+# するので、fetch-data 1日2run なら 半日〜1日で確定する。
+GONE_MISS_THRESHOLD = 2
 
 HAS_CREATORS_API = False
 try:
@@ -547,6 +564,8 @@ def _load_published_snapshots_pool(out_root: str, covered_asins: set, limit: int
                 snap = json.load(f)
         except (OSError, json.JSONDecodeError):
             continue
+        if isinstance(snap, dict) and snap.get("status") == "gone":
+            continue  # Amazon から消滅した商品を競合候補に出さない
         item = snap.get("item") if isinstance(snap, dict) else None
         if not isinstance(item, dict) or not item.get("asin") or not item.get("image"):
             continue
@@ -786,6 +805,159 @@ def _load_existing_parent_asins(out_root: str) -> set:
                 parents.add(p)
     return parents
 
+def extract_browse_nodes(item: dict) -> list:
+    """browseNodeInfo.browseNodes から [{id, name, root}] を返す。
+
+    root は ancestor チェーンを遡った最上位カテゴリ名 (例: おもちゃ / 車＆バイク)。
+    REFRESH_ITEM_RESOURCES でのみ取得される (search sweep では resource 未要求
+    なので空リスト → normalize_api_item はキー自体を省く)。
+    """
+    nodes = _safe_get(item, "browseNodeInfo", "browseNodes", default=[]) or []
+    out = []
+    for n in nodes:
+        if not isinstance(n, dict):
+            continue
+        root = None
+        anc = n.get("ancestor")
+        while isinstance(anc, dict):
+            root = anc.get("displayName") or root
+            anc = anc.get("ancestor")
+        out.append({"id": n.get("id"), "name": n.get("displayName"), "root": root})
+    return out
+
+
+def normalize_api_item(it: dict, tag: str, source: str) -> dict:
+    """Creator API の item response を amazon.json / snapshot の item 形式に整形。
+
+    sniper / search / 記事巡回 (refresh) の 3 経路で同一 shape を保証する。
+    """
+    asin = it.get("asin")
+    normalized = {
+        "asin": asin,
+        "title": _safe_get(it, "itemInfo", "title", "displayValue"),
+        "price": extract_price(it),
+        "features": extract_features(it),
+        "jan_code": extract_jan(it),
+        "url": f"https://www.amazon.co.jp/dp/{asin}/?tag={tag}",
+        "image": _safe_get(it, "images", "primary", "large", "url"),
+        "images": extract_images(it),
+        "availability": extract_availability(it),
+        "loyalty_points": extract_loyalty_points(it),
+        "savings_percentage": extract_savings_percentage(it),
+        "free_shipping": extract_free_shipping(it),
+        "seller": extract_seller(it),
+        "parent_asin": extract_parent_asin(it),
+        "source": source,
+    }
+    browse_nodes = extract_browse_nodes(it)
+    if browse_nodes:
+        normalized["browse_nodes"] = browse_nodes
+    return normalized
+
+
+def _record_snapshot_miss(out_root: str, asin: str) -> int:
+    """GetItems 応答から欠落した ASIN の snapshot に miss を記録し、更新後の
+    連続 miss 回数を返す。GONE_MISS_THRESHOLD 連続で status="gone" を確定する。
+
+    最後に取得できた item / fetched_at は参考情報としてそのまま保持する
+    (build_post の画像 backfill 等が最終既知データを使い続けられるように)。
+    ヒット時は write_per_asin_snapshot が {asin, fetched_at, item} で全書きする
+    ため miss_count / status は自然にリセットされる (再出品からの復帰経路)。
+    """
+    path = os.path.join(out_root, "per_asin", asin, "amazon.json")
+    snap: dict = {}
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+            if isinstance(loaded, dict):
+                snap = loaded
+        except (OSError, json.JSONDecodeError):
+            pass
+    snap.setdefault("asin", asin)
+    miss = int(snap.get("miss_count") or 0) + 1
+    now = datetime.now(timezone.utc).isoformat()
+    snap["miss_count"] = miss
+    snap["last_checked_at"] = now
+    if miss >= GONE_MISS_THRESHOLD:
+        snap["status"] = "gone"
+        snap.setdefault("gone_since", now)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(snap, f, ensure_ascii=False, indent=2)
+    except OSError as e:
+        logger.warning(f"Failed to record snapshot miss for {asin}: {e}")
+    return miss
+
+
+def refresh_article_snapshots(api, out_root: str, articles_dir: str, tag: str,
+                              max_per_run: int, stale_days: int) -> None:
+    """既掲載記事 ASIN の Amazon データを stale-first で巡回更新する (2026-07-07)。
+
+    背景: per_asin/<ASIN>/amazon.json snapshot は search sweep / sniper が偶然
+    触れた ASIN しか更新されず、記事化済み ASIN の価格・在庫・存在確認は記事
+    作成時のまま凍結していた。B0G5DLSTS8 のように Amazon から出品が消えても
+    検知できず、記事は古い価格と 404 リンクを出し続けた。
+
+    youtube/news/books と同じ _fetch_targets の stale-first 巡回を GetItems
+    (10 ASIN/call) で回す:
+      - ヒット → snapshot を最新 item で更新 (価格/在庫バッジも最新化)
+      - 欠落 → _record_snapshot_miss で miss を記録、連続 GONE_MISS_THRESHOLD
+        回で status="gone" 確定。未確定 miss は mark_queried しない = 次 run で
+        即再チェック。
+    status="gone" は build_post._apply_amazon_discontinued がビルド時に読んで
+    「取り扱い終了」表示に切り替える。
+
+    quota: fetch-data は 1 日 2 run。default cap 110 ASIN/run = +11 GetItems
+    call/run (~12秒) で、全記事 ~1420 ASIN を 7 日で一巡する。
+    """
+    picked = _fetch_targets.pick_target_asins(
+        pathlib.Path(out_root), "amazon_refresh", [],
+        pathlib.Path(articles_dir),
+        max_per_run=max_per_run, stale_after_days=stale_days)
+    if not picked:
+        logger.info("Article refresh: no stale targets")
+        return
+    asins = [a for a, _ in picked]
+    refreshed = gone_confirmed = pending = 0
+    queried: list = []
+    for i in range(0, len(asins), 10):
+        chunk = asins[i:i + 10]
+        if i:
+            time.sleep(1.1)  # PA-API TPS=1 safety margin
+        try:
+            res = api.get_items(chunk, resources=REFRESH_ITEM_RESOURCES)
+        except Exception as e:
+            logger.warning(f"Article refresh: GetItems failed for {chunk}: {e}")
+            continue
+        found_items = _safe_get(res, "itemsResult", "items")
+        if not isinstance(found_items, list):
+            # 応答形が想定外 (throttle 等)。欠落扱いにすると誤 gone 化するので skip。
+            logger.warning(f"Article refresh: unexpected response for {chunk}; skipped")
+            continue
+        found = {it.get("asin"): it for it in found_items if isinstance(it, dict)}
+        for asin in chunk:
+            it = found.get(asin)
+            if it is not None:
+                write_per_asin_snapshot(out_root, normalize_api_item(it, tag, "Amazon (Refresh)"))
+                refreshed += 1
+                queried.append(asin)
+            else:
+                miss = _record_snapshot_miss(out_root, asin)
+                if miss >= GONE_MISS_THRESHOLD:
+                    gone_confirmed += 1
+                    queried.append(asin)  # 確定後は通常周期 (週1) で復活チェック
+                else:
+                    pending += 1
+    if queried:
+        _fetch_targets.mark_queried(pathlib.Path(out_root), "amazon_refresh", queried)
+    logger.info(
+        f"Article refresh: {refreshed} refreshed, {gone_confirmed} gone-confirmed, "
+        f"{pending} pending-confirmation (picked {len(asins)})"
+    )
+
+
 # Global API client reference for summary logging on exit
 api = None
 
@@ -880,6 +1052,10 @@ def main():
                         help="Backfill mode helper: replace --asin with the full set of ASINs discovered under --articles-dir. Only valid together with --competitors-only. Useful for one-shot regeneration of every per_asin/<ASIN>/competitors.json after a ranking change (e.g. Plan D+).")
     parser.add_argument("--competitors-cache-ttl-days", type=float, default=7.0,
                         help="In non-sniper cron runs, skip per-target SearchItems if per_asin/<ASIN>/competitors.json is newer than this many days (default 7.0; #792). Pass 0 to force-refresh every target (legacy behaviour). Sniper (--asin) and --competitors-only backfill always force-refresh regardless of this flag.")
+    parser.add_argument("--refresh-max-per-run", type=int, default=110,
+                        help="Stale-first refresh of published-article ASIN snapshots via GetItems, this many ASINs per run (10/call). Detects vanished ASINs (status=gone after 2 consecutive misses) so build_post can render 取り扱い終了. 0 disables. Default 110 = full ~1400-article sweep per week on the 2-runs/day fetch-data schedule.")
+    parser.add_argument("--refresh-stale-days", type=int, default=7,
+                        help="Skip refresh for ASINs checked within this many days (default 7 = weekly cycle)")
     parser.add_argument("--keyword-sample-size", type=int, default=20,
                         help="Shuffle the keyword list each run and pick this many to actually search (#795: spreads search space across runs so new-ASIN hit rate stays high even when DEFAULT_KEYWORDS saturates). Default 20 = ~8%% of the 240-entry niche list per run, hitting each keyword ~once/3 months on weekly cron. Pass 0 to disable sampling (= search every keyword in shuffled order). Ignored when --keywords is set explicitly.")
     args = parser.parse_args()
@@ -940,24 +1116,7 @@ def main():
                 res = api.get_items(chunk, resources=resources)
                 found_items = _safe_get(res, "itemsResult", "items", default=[])
                 for it in found_items:
-                    asin = it.get("asin")
-                    items.append({
-                        "asin": asin,
-                        "title": _safe_get(it, "itemInfo", "title", "displayValue"),
-                        "price": extract_price(it),
-                        "features": extract_features(it),
-                        "jan_code": extract_jan(it),
-                        "url": f"https://www.amazon.co.jp/dp/{asin}/?tag={tag}",
-                        "image": _safe_get(it, "images", "primary", "large", "url"),
-                        "images": extract_images(it),
-                        "availability": extract_availability(it),
-                        "loyalty_points": extract_loyalty_points(it),
-                        "savings_percentage": extract_savings_percentage(it),
-                        "free_shipping": extract_free_shipping(it),
-                        "seller": extract_seller(it),
-                        "parent_asin": extract_parent_asin(it),
-                        "source": "Amazon (Target)"
-                    })
+                    items.append(normalize_api_item(it, tag, "Amazon (Target)"))
             except Exception as e:
                 logger.error(f"Failed to fetch target ASIN(s) {chunk}: {e}")
                 sys.exit(1)
@@ -1108,23 +1267,7 @@ def main():
                         continue
                     seen_parent_asins.add(parent)
                 seen_asins.add(asin)
-                normalized = {
-                    "asin": asin,
-                    "title": _safe_get(it, "itemInfo", "title", "displayValue"),
-                    "price": extract_price(it),
-                    "features": extract_features(it),
-                    "jan_code": extract_jan(it),
-                    "url": f"https://www.amazon.co.jp/dp/{asin}/?tag={tag}",
-                    "image": _safe_get(it, "images", "primary", "large", "url"),
-                    "images": extract_images(it),
-                    "availability": extract_availability(it),
-                    "loyalty_points": extract_loyalty_points(it),
-                    "savings_percentage": extract_savings_percentage(it),
-                    "free_shipping": extract_free_shipping(it),
-                    "seller": extract_seller(it),
-                    "parent_asin": parent,
-                    "source": "Amazon"
-                }
+                normalized = normalize_api_item(it, tag, "Amazon")
                 items.append(normalized)
                 if _is_jules_eligible(normalized):
                     new_for_jules += 1
@@ -1198,6 +1341,18 @@ def main():
 
     for it in items:
         write_per_asin_snapshot(args.out, it)
+
+    # 記事 ASIN 巡回 (2026-07-07): 既掲載記事の snapshot を stale-first で更新し、
+    # Amazon から消滅した ASIN に status="gone" を付ける。失敗しても pool 生成
+    # (amazon.json は書き込み済み) には影響させない。
+    if args.refresh_max_per_run > 0:
+        try:
+            refresh_article_snapshots(
+                api, args.out, args.articles_dir, tag,
+                max_per_run=args.refresh_max_per_run,
+                stale_days=args.refresh_stale_days)
+        except Exception as e:
+            logger.warning(f"Article refresh failed (non-fatal): {e}")
 
     # Write competitors.json for every ASIN in the pool so that whichever
     # ASIN Jules ends up picking from amazon.json has API-verified competitors
