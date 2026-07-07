@@ -377,7 +377,15 @@ def main():
         outs = sess.get("outputs", [])
         patch = (outs[0].get("changeSet", {}).get("gitPatch", {})
                  .get("unidiffPatch", "")) if outs else ""
-        body = extract_article(patch, asin, today) if patch else None
+        if not patch:
+            # 実測: activities 1 件だけで成果物ゼロのまま COMPLETED になる「空振り」
+            # セッションが存在する (2026-07-07, session 18046904765687026255)。
+            # lock を解放して次回 run の候補に戻す。
+            print(f"{asin}: COMPLETED but no outputs (空振りセッション) — skip",
+                  file=sys.stderr)
+            gl.release_lock(asin)
+            continue
+        body = extract_article(patch, asin, today)
         if body is None:
             gl.release_lock(asin)
             continue
