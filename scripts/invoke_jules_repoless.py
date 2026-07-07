@@ -145,10 +145,11 @@ class Jules:
 def quota_budget(max_per_run):
     """jules_quota_gate.py (H11: GitHub 非依存) で rolling-24h 残予算を取得。"""
     try:
+        # Jules の sessions 一覧 API は履歴が増えると遅い (実測 4 分超) ため長めに取る
         out = subprocess.run(
             [sys.executable, "scripts/jules_quota_gate.py", "--cap", "80",
              "--max", str(max_per_run)],
-            capture_output=True, text=True, timeout=120, check=True,
+            capture_output=True, text=True, timeout=600, check=True,
             env=os.environ.copy())
         return int(out.stdout.strip().splitlines()[-1])
     except Exception as e:
