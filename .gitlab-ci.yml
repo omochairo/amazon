@@ -8,13 +8,31 @@
 # *.gitlab.io の素の URL では CSS/リンクが崩れて見える (仕様通り)。
 
 stages:
+  - generate
   - deploy
+
+# 記事生成 (旧 03-invoke-jules.yml の移植, フェーズ2)。
+# schedule (6h 毎, SCHEDULE_JOB=invoke-jules) または API/web 起動の同変数指定で発火。
+# repoless Jules セッション → 検証 → MR 作成まで scripts/invoke_jules_repoless.py が行う。
+invoke-jules:
+  stage: generate
+  image: python:3.11-bookworm
+  rules:
+    - if: '$SCHEDULE_JOB == "invoke-jules"'
+  timeout: 75 minutes
+  before_script:
+    - pip install -r requirements.txt
+    # hugo/ は gitignore 配下で checkout に posts が無い。quality_gate の --posts 用に空で用意
+    - mkdir -p hugo/content/posts
+  script:
+    - python scripts/invoke_jules_repoless.py
 
 pages:
   stage: deploy
   image: python:3.11-bookworm
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    # push 起動のみ (schedule 起動の invoke-jules と分離する, 設計 H8)
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
   variables:
     # PaperMod テーマは submodule (public repo) なので recursive 取得が必須
     GIT_SUBMODULE_STRATEGY: recursive
