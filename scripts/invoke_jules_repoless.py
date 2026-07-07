@@ -264,16 +264,22 @@ def pick_candidates(gl, budget):
     rng.shuffle(remaining_kw)
     remaining = remaining_ranking + remaining_kw
 
-    # #1600 Phase 1: band=zero (真ゼロ素材) を defer (全滅時は無効化)
+    # #1600 Phase 1: band=zero (真ゼロ素材) を defer (全滅時は無効化)。
+    # repoless 移行で "unfetched" (第三者収集が未実行) も defer 対象に追加:
+    # 非販売ソース 2 件必須 (v5 §6.5.1) を満たす素材が存在せず、生成しても
+    # 品質ゲートに構造的不合格 (実測: B0GYCJC6DC が 5 session 空費)。
+    # フェーズ4 でデータ収集系が復旧しフェッチされれば自然に候補へ戻る。
     try:
         import score_per_asin_info as sc
-        kept = [a for a in remaining if sc.score_asin(a).get("band") != "zero"]
+        deferred_bands = ("zero", "unfetched")
+        kept = [a for a in remaining
+                if sc.score_asin(a).get("band") not in deferred_bands]
         if kept:
             if len(kept) < len(remaining):
-                print(f"info-zero deferred (#1600): {len(remaining) - len(kept)}")
+                print(f"info-zero/unfetched deferred (#1600): {len(remaining) - len(kept)}")
             remaining = kept
         elif remaining:
-            print("warning: all candidates band=zero; proceeding without defer",
+            print("warning: all candidates deferred band; proceeding without defer",
                   file=sys.stderr)
     except Exception as e:
         print(f"warning: info scoring skipped, no defer applied: {e}", file=sys.stderr)
