@@ -1,11 +1,12 @@
-"""generate_term_redirects.py の単体テスト (#2817 Phase 3)。
+"""generate_term_redirects.py の単体テスト (#2817 Phase 3/5)。
 
 カバレッジ:
 1. _indexed_slugs_by_kind: sitemap.xml から /tags/ /brands/ の slug 抽出
    (一覧ページ自体は除外)
 2. _reverse_slug_map: slug -> JP用語 の逆引き
-3. build_redirect_lines: 生UTF-8 + percent-encoded の両形式を出力、
-   term==slug (実質変化なし) は redirect 対象外
+3. build_redirect_lines: 生UTF-8 (percent-encode しない) の1行を出力、
+   term==slug (実質変化なし) は redirect 対象外、生の空白を含む term は
+   _redirects で表現不可能なためスキップ (#2817 Phase 5 実機検証)
 """
 from __future__ import annotations
 
@@ -60,13 +61,13 @@ class ReverseSlugMapTest(unittest.TestCase):
 
 
 class BuildRedirectLinesTest(unittest.TestCase):
-    def test_emits_raw_and_percent_encoded_forms(self):
+    def test_emits_single_raw_line_per_term(self):
+        # percent-encoded 形式は GitLab Pages の実マッチングでは一致しない
+        # ことを実機で確認済み (#2817 Phase 5)。raw (decode 済み) 形式のみ出す。
         indexed = {"tags": {"lego"}, "brands": set()}
         reverse = {"lego": "レゴ"}
         lines = gtr.build_redirect_lines(indexed, reverse)
-        self.assertIn("/tags/レゴ/ /tags/lego/ 301", lines)
-        self.assertIn("/tags/%E3%83%AC%E3%82%B4/ /tags/lego/ 301", lines)
-        self.assertEqual(len(lines), 2)
+        self.assertEqual(lines, ["/tags/レゴ/ /tags/lego/ 301"])
 
     def test_skips_when_term_equals_slug(self):
         # 実質変化なし (例: 元から ASCII で slug と同一) は redirect 不要
@@ -87,27 +88,29 @@ class BuildRedirectLinesTest(unittest.TestCase):
         lines = gtr.build_redirect_lines(indexed, reverse)
         self.assertIn("/brands/レゴ/ /brands/lego/ 301", lines)
 
-    def test_term_containing_whitespace_emits_percent_encoded_line_only(self):
+    def test_term_containing_whitespace_is_skipped_entirely(self):
         # 実機で確認された事故 (#2817 Phase 5): GitLab Pages の _redirects パーサ
         # (tj/go-redirects) は strings.Fields() で行を空白分割するため、term に
         # 生の空白を含む raw 行 (例: "/tags/LOTUS LIFE/ ...") を出すと3列に収まらず
-        # ファイル全体がパースエラーで丸ごと無効化される。空白を含む term は
-        # percent-encoded 行のみを出し、raw 行は出さない。
+        # ファイル全体がパースエラーで丸ごと無効化される。かつ percent-encoded
+        # 行は実際のマッチングでは一致しない (無意味) ことも実機で確認済みのため、
+        # この term は redirect 自体を生成しない (旧URLは404のまま=現状維持)。
         indexed = {"tags": {"lotus-life"}, "brands": set()}
         reverse = {"lotus-life": "LOTUS LIFE"}
         lines = gtr.build_redirect_lines(indexed, reverse)
-        self.assertEqual(lines, ["/tags/LOTUS%20LIFE/ /tags/lotus-life/ 301"])
+        self.assertEqual(lines, [])
 
-    def test_no_generated_line_contains_a_raw_whitespace_char(self):
-        # 上記事故の再発防止ガード。空白を含む term が複数あっても、生の
-        # 空白を含む行が一切生成されないことを保証する。
+    def test_whitespace_term_skipped_without_affecting_other_terms(self):
+        # 上記事故の再発防止ガード。空白を含む term が混ざっていても、
+        # 空白を含まない他の term は正常に redirect が生成されること。
         indexed = {"tags": {"a", "b"}, "brands": {"c"}}
         reverse = {
-            "a": "Baby curiosity",
-            "b": "BEYBLADE X",
-            "c": "LOTUS LIFE",
+            "a": "Baby curiosity",  # 空白あり -> スキップ
+            "b": "beyblade-x-alias",  # 空白なし (別名) -> 生成
+            "c": "LOTUS LIFE",  # 空白あり -> スキップ
         }
         lines = gtr.build_redirect_lines(indexed, reverse)
+        self.assertEqual(lines, ["/tags/beyblade-x-alias/ /tags/b/ 301"])
         for line in lines:
             from_path = line.split(" ", 1)[0]
             self.assertFalse(

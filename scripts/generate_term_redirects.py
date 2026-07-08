@@ -13,10 +13,21 @@ Python で再実装する代わりに、**既にビルド済みの hugo/public/s
 問題ない (#2817 Phase 2 で .Title は JP 表示のまま保たれることを検証済み)。
 
 ホスティングは GitLab Pages (Cloudflare ではない)。`_redirects` は Netlify 形式
-で本物の HTTP 301 をサポートする。非 ASCII (JP) パスのマッチングに使う内部
-エンコーディングの明確な一次情報が得られなかったため、**生 UTF-8 と
-percent-encoded の両方の形式を安全側で両方出力する** (二重化のコストは小さく、
-どちらの形式でマッチしても redirect が成立する)。
+で本物の HTTP 301 をサポートする。
+
+実機検証 (#2817 Phase 5) で確定した仕様:
+- GitLab Pages の `_redirects` パーサ (tj/go-redirects) は各行を
+  strings.Fields() (空白区切り) でトークナイズする。1行でも3列に収まらない
+  行があるとパースエラーとなり **ファイル全体のリダイレクトが丸ごと
+  無効化される** (最初のデプロイでこれを踏んだ実障害あり)。
+- マッチングは受信リクエストパスを decode した生の文字列と、ルール from列の
+  生の文字列 (percent-encode しない) を比較して行われる。percent-encoded
+  な from 列は実際には一致しない (無意味な行だったことを実機で確認済み)。
+- 上記2点の帰結として、term に生の空白を含む場合 ((a) raw 行だと3列に
+  収まらずファイル全体を壊す、(b) percent-encoded 行だと一致しない) は
+  `_redirects` では安全に表現する方法が無いため、その用語は redirect 生成を
+  スキップする (旧 URL は 404 のまま = 現状維持。対象は少数
+  ・#2817 コメント参照)。
 
 使い方:
     python scripts/generate_term_redirects.py [--sitemap hugo/public/sitemap.xml]
@@ -27,7 +38,6 @@ import argparse
 import pathlib
 import re
 import sys
-import urllib.parse
 
 import yaml
 
@@ -65,19 +75,13 @@ def build_redirect_lines(indexed: dict, reverse: dict) -> list:
             term = reverse.get(slug)
             if not term or term == slug:
                 continue
+            if any(ch.isspace() for ch in term):
+                # _redirects では表現不可能 (モジュール docstring 参照)。
+                # 旧 URL は 404 のまま (= 現状維持) にとどめる。
+                continue
             new_path = f"/{kind}/{slug}/"
-            raw_old = f"/{kind}/{term}/"
-            encoded_old = f"/{kind}/{urllib.parse.quote(term, safe='')}/"
-            has_whitespace = any(ch.isspace() for ch in term)
-            # GitLab Pages の _redirects パーサ (tj/go-redirects) は各行を
-            # strings.Fields() で空白区切りするため、term に生の空白 (例:
-            # "LOTUS LIFE") を含む raw 行を出すと3列に収まらずファイル全体が
-            # パースエラーで丸ごと無効化される (#2817 Phase 5, 実機で確認)。
-            # 空白を含む term は percent-encoded 行のみを出す。
-            if not has_whitespace:
-                lines.append(f"{raw_old} {new_path} 301")
-            if has_whitespace or encoded_old != raw_old:
-                lines.append(f"{encoded_old} {new_path} 301")
+            old_path = f"/{kind}/{term}/"
+            lines.append(f"{old_path} {new_path} 301")
     return lines
 
 
