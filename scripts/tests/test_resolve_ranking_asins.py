@@ -2,12 +2,14 @@
 
 Creator API は呼ばずに FakeAPI でモックする。カバレッジ:
 1. _collect_unmatched_jans: matched 済を除外し未マッチ JAN を rank 順・重複排除で抽出
-2. resolve_jan_to_asin: externalIds.eans の JAN 一致で ASIN 抽出 / 不一致は ""
+2. resolve_jan_to_asin: externalIds.eans/upcs の JAN 一致で ASIN 抽出 / 不一致は ""
 3. resolve_ranking_asins: resolved / unresolved / already-covered / 同 ASIN 重複の分岐
 4. --limit による解決上限
+5. #2818: itemNumber 優先抽出 / search_index 既定 "All" / upcs フォールバック
 """
 from __future__ import annotations
 
+import inspect
 import os
 import pathlib
 import sys
@@ -66,6 +68,17 @@ class CollectUnmatchedJansTest(unittest.TestCase):
         )
 
 
+class CollectUnmatchedJansItemNumberTest(unittest.TestCase):
+    def test_prefers_item_number_over_caption(self):
+        # #2818 対策1: itemNumber がある場合はそちらを優先して JAN を抽出する。
+        items = [
+            {"rank": 1, "matched_asin": None, "itemNumber": "4904810000002",
+             "itemCaption": "別の型番 4904810000001", "title": ""},
+        ]
+        jans = rr._collect_unmatched_jans(items)
+        self.assertEqual(jans, [("4904810000002", 1, "")])
+
+
 class ResolveJanToAsinTest(unittest.TestCase):
     def test_matches_via_externalids(self):
         api = FakeAPI({"4904810000002": "B0NEW002"})
@@ -80,6 +93,29 @@ class ResolveJanToAsinTest(unittest.TestCase):
             def search_items(self, **kw):
                 raise RuntimeError("boom")
         self.assertEqual(rr.resolve_jan_to_asin(BoomAPI(), "4904810000002"), "")
+
+    def test_matches_via_upc_when_eans_absent(self):
+        # #2818 対策3: UPC-A のみ登録された商品 (eans が空・upcs にだけ識別子がある) でも
+        # 解決できる (_external_ids_of が eans と upcs の両方を見るため)。
+        class UpcOnlyAPI:
+            def search_items(self, **kw):
+                return {"searchResult": {"items": [
+                    {"asin": "B0UPCONLY", "itemInfo": {"externalIds": {
+                        "upcs": {"displayValues": ["012345678905"]},
+                    }}},
+                ]}}
+        self.assertEqual(rr.resolve_jan_to_asin(UpcOnlyAPI(), "012345678905"), "B0UPCONLY")
+
+    def test_default_search_index_is_all(self):
+        # #2818 対策2: Toys 固定だとベビー/ホビー等の別カテゴリ商品を取りこぼすため All に緩和。
+        self.assertEqual(
+            inspect.signature(rr.resolve_jan_to_asin).parameters["search_index"].default,
+            "All",
+        )
+        self.assertEqual(
+            inspect.signature(rr.resolve_ranking_asins).parameters["search_index"].default,
+            "All",
+        )
 
 
 class ResolveRankingAsinsTest(unittest.TestCase):

@@ -50,7 +50,7 @@ THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 if THIS_DIR not in sys.path:
     sys.path.insert(0, THIS_DIR)
 
-from fetch_rakuten import _extract_jan_from_text  # noqa: E402
+from fetch_rakuten import _extract_jan_from_item  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("resolve_ranking_asins")
@@ -70,17 +70,31 @@ def _safe_get(obj, *attrs, default=None):
     return cur if cur is not None else default
 
 
-def _eans_of(item: dict) -> list:
-    """searchItems 応答 item の itemInfo.externalIds.eans.displayValues を返す。"""
-    vals = _safe_get(item, "itemInfo", "externalIds", "eans", "displayValues", default=[])
-    return [str(v).strip() for v in vals] if isinstance(vals, list) else []
+def _external_ids_of(item: dict) -> list:
+    """searchItems 応答 item の外部識別子 (eans + upcs) をまとめて返す。
+
+    #2818 対策3: eans のみ見ていると UPC-A で登録された商品 (isbns/upcs 側にしか
+    識別子が無い) を取りこぼす。fetch_amazon.extract_jan の eans→isbns→upcs
+    フォールバックと整合させ、eans/upcs の双方を照合対象にする。
+    """
+    out = []
+    for key in ("eans", "upcs"):
+        vals = _safe_get(item, "itemInfo", "externalIds", key, "displayValues", default=[])
+        if isinstance(vals, list):
+            out.extend(str(v).strip() for v in vals)
+    return out
 
 
-def resolve_jan_to_asin(api, jan: str, search_index: str = "Toys") -> str:
+def resolve_jan_to_asin(api, jan: str, search_index: str = "All") -> str:
     """Creator API searchItems(keyword=JAN) で JAN 一致 ASIN を 1 件返す (案A)。
 
-    externalIds.eans に問い合わせ JAN を含む item の ASIN を返す。JAN は世界一意
-    なので応答 top10 のどれかが一致すれば確定。一致なしは "" を返す。
+    externalIds (eans/upcs) に問い合わせ JAN を含む item の ASIN を返す。JAN は
+    世界一意なので応答 top10 のどれかが一致すれば確定。一致なしは "" を返す。
+
+    #2818 対策2: search_index は "Toys" 固定だとベビー用品・ホビー等 Amazon 側で
+    別カテゴリ登録された商品を取りこぼすため、既定を "All" に緩和する。JAN 完全一致で
+    照合するのでカテゴリを広げても誤マッチのリスクは無い (物理的に同一商品であることを
+    バーコードが保証する)。
     """
     try:
         res = api.search_items(
@@ -92,7 +106,7 @@ def resolve_jan_to_asin(api, jan: str, search_index: str = "Toys") -> str:
         return ""
     items = _safe_get(res, "searchResult", "items", default=[]) or []
     for it in items:
-        if jan in _eans_of(it):
+        if jan in _external_ids_of(it):
             asin = (it.get("asin") or "").strip()
             if asin:
                 return asin
@@ -106,8 +120,7 @@ def _collect_unmatched_jans(ranking_items: list) -> list:
     for it in ranking_items:
         if it.get("matched_asin"):
             continue
-        text = (it.get("itemCaption") or "") + " " + (it.get("title") or "")
-        jan = _extract_jan_from_text(text)
+        jan = _extract_jan_from_item(it)
         if jan and jan not in seen:
             seen.add(jan)
             out.append((jan, it.get("rank"), it.get("title")))
@@ -176,7 +189,7 @@ def update_ranking_pool(existing_asins, new_asins, article_covered) -> list:
     return merged
 
 
-def resolve_ranking_asins(ranking_items, api, covered, limit=0, search_index="Toys", sleep=1.1):
+def resolve_ranking_asins(ranking_items, api, covered, limit=0, search_index="All", sleep=1.1):
     """純粋ロジック: 未マッチ JAN を解決し manifest dict を返す (テスト driver)。"""
     jans = _collect_unmatched_jans(ranking_items)
     if limit and limit > 0:
@@ -217,7 +230,9 @@ def main():
     parser.add_argument("--per-asin-root", default="data/raw/per_asin")
     parser.add_argument("--pool", default="data/raw/ranking_pool.json",
                         help="Persistent ranking-discovered ASIN pool consumed by 03-invoke-jules pick-asin (#810 Phase 1.5).")
-    parser.add_argument("--search-index", default="Toys")
+    parser.add_argument("--search-index", default="All",
+                        help="#2818 対策2: 既定 All。JAN 完全一致で照合するため Toys 固定だと "
+                             "ベビー/ホビー等の別カテゴリ登録商品を取りこぼす。")
     parser.add_argument("--limit", type=int, default=0,
                         help="Resolve at most N unmatched JANs (0 = all). Use --limit 1 for a single-JAN dry-run verification of Option A.")
     parser.add_argument("--sleep", type=float, default=1.1,

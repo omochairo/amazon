@@ -30,7 +30,25 @@ def get_secret(name: str) -> str:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fetch_rakuten")
 
+# #2818 対策3: 従来は JP JAN (国コード先頭 "4") の 13桁/8桁のみ対象だったため、
+# 海外製玩具の EAN (他国コード) や UPC-A (12桁) の JAN が構造的に抽出できなかった。
+# JP パターンは無変更 (既存テスト資産・本番実績の後方互換性を守る)。
+# 4 以外で始まる 12/13 桁は新規許容するが、電話番号・管理番号との誤認識を防ぐため
+# _ean_checksum_ok() の EAN-13 チェックディジット検証を必須にする (JP パターンには
+# 適用しない = 既存の緩い一致を壊さない)。
 JAN_RE = re.compile(r"(?<!\d)(4\d{12}|4\d{7})(?!\d)")
+_INTL_CODE_RE = re.compile(r"(?<!\d)([0-35-9]\d{12}|[0-35-9]\d{11})(?!\d)")
+
+
+def _ean_checksum_ok(code: str) -> bool:
+    """EAN-13 チェックディジットを検証する。12桁 (UPC-A) は先頭に 0 を付けて検証する
+    (UPC-A のチェックディジット計算式は 0 パディングした EAN-13 と数学的に等価)。
+    """
+    digits = code if len(code) == 13 else "0" + code
+    if len(digits) != 13 or not digits.isdigit():
+        return False
+    total = sum(int(d) * (3 if i % 2 else 1) for i, d in enumerate(digits[:12]))
+    return (10 - total % 10) % 10 == int(digits[12])
 
 # Rakuten Webservice TPS=1。Search 5 連打 → Ranking で 429 を踏んだ過去あり
 # (run 26849869200, 2026-06-02)。Ranking call 前の最低保険として 1.5s 空ける。
@@ -131,7 +149,28 @@ def _extract_jan_from_text(text: str) -> str:
     if not text:
         return ""
     m = JAN_RE.search(text)
-    return m.group(1) if m else ""
+    if m:
+        return m.group(1)
+    for m in _INTL_CODE_RE.finditer(text):
+        code = m.group(1)
+        if _ean_checksum_ok(code):
+            return code
+    return ""
+
+
+def _extract_jan_from_item(item: dict) -> str:
+    """#2818 対策1: itemNumber (店舗の商品番号。JAN がそのまま入っていることが多い)
+    を itemCaption/title のフリーテキストより優先して JAN を抽出する。
+    楽天の itemCaption は説明文が長く、価格・型番等の紛らわしい数字が itemNumber
+    より前に出現しうるため、itemNumber は単独の文字列として先に照合する。
+    """
+    item_number = (item.get("itemNumber") or "").strip()
+    if item_number:
+        jan = _extract_jan_from_text(item_number)
+        if jan:
+            return jan
+    text = (item.get("itemCaption") or "") + " " + (item.get("title") or "")
+    return _extract_jan_from_text(text)
 
 
 def _match_ranking_item(
@@ -159,8 +198,7 @@ def _match_ranking_item(
         asin = itemcode_idx.get(code)
         if asin:
             return asin, "stage1", _has_article(asin)
-    text = (item.get("itemCaption") or "") + " " + (item.get("title") or "")
-    jan = _extract_jan_from_text(text)
+    jan = _extract_jan_from_item(item)
     if jan:
         asin = jan_idx.get(jan)
         if asin:
@@ -364,8 +402,11 @@ def main():
             "image": image_url,
             "itemCode": i.get("itemCode", ""),
             # #810 Phase 2: itemCaption は JAN/型番を含むことが多く、resolve_ranking_asins
-            # の _extract_jan_from_text が新規 ASIN 解決のためにここから JAN を抽出する。
+            # の _extract_jan_from_item が新規 ASIN 解決のためにここから JAN を抽出する。
             "itemCaption": i.get("itemCaption", ""),
+            # #2818 対策1: 店舗の商品番号フィールド。JAN がそのまま入っているケースが多く、
+            # itemCaption 内フリーテキストより優先して JAN 抽出に使う (_extract_jan_from_item)。
+            "itemNumber": i.get("itemNumber", ""),
             "reviewCount": i.get("reviewCount", 0),
             "source": "Rakuten"
         })
@@ -417,6 +458,8 @@ def main():
                     "image": image_url,
                     "itemCode": i.get("itemCode", ""),
                     "itemCaption": i.get("itemCaption", ""),
+                    # #2818 対策1: search 側と同じく itemNumber を JAN 抽出の優先ソースにする。
+                    "itemNumber": i.get("itemNumber", ""),
                     "reviewCount": i.get("reviewCount", 0),
                     "shopName": i.get("shopName", ""),
                 })

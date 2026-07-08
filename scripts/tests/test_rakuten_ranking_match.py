@@ -113,6 +113,70 @@ class JanExtractionTest(unittest.TestCase):
             "",
         )
 
+    def test_extracts_valid_intl_ean13_non_jp_prefix(self):
+        # #2818 対策3: 先頭 4 (JP) 以外の EAN-13 も、チェックディジットが正しければ抽出する。
+        # "5901234123457" はバーコードライブラリで広く使われる有効チェックディジットの例。
+        self.assertEqual(
+            fetch_rakuten._extract_jan_from_text("EAN 5901234123457 輸入品"),
+            "5901234123457",
+        )
+
+    def test_extracts_valid_intl_upc12(self):
+        # "012345678905" は有効チェックディジットを持つ代表的な UPC-A サンプル。
+        self.assertEqual(
+            fetch_rakuten._extract_jan_from_text("UPC 012345678905 海外製"),
+            "012345678905",
+        )
+
+    def test_rejects_invalid_checksum_non_jp_code(self):
+        # 末尾を 7→0 に変えてチェックディジットを崩す。4 始まりでないのでフォールバック
+        # 側 (_INTL_CODE_RE) しか候補が無く、checksum 不一致で "" になるべき。
+        self.assertEqual(
+            fetch_rakuten._extract_jan_from_text("コード 5901234123450 商品"),
+            "",
+        )
+
+    def test_jp_prefix_still_matches_without_checksum(self):
+        # JP パターン (先頭4) は従来どおり checksum 無しで通る (後方互換)。
+        # このテスト値は実チェックディジット的には無効な連番だが、それでも抽出されるべき。
+        self.assertEqual(
+            fetch_rakuten._extract_jan_from_text("商品番号 4904810000001"),
+            "4904810000001",
+        )
+
+
+class ExtractJanFromItemTest(unittest.TestCase):
+    """#2818 対策1: itemNumber 優先の JAN 抽出。"""
+
+    def test_prefers_item_number_over_caption_and_title(self):
+        item = {
+            "itemNumber": "4904810642602",
+            "itemCaption": "類似品番 4904810741398",
+            "title": "商品名",
+        }
+        self.assertEqual(fetch_rakuten._extract_jan_from_item(item), "4904810642602")
+
+    def test_falls_back_to_caption_when_item_number_has_no_jan(self):
+        item = {
+            "itemNumber": "SHOP-ABC-001",
+            "itemCaption": "JAN 4904810642602 です",
+            "title": "",
+        }
+        self.assertEqual(fetch_rakuten._extract_jan_from_item(item), "4904810642602")
+
+    def test_falls_back_to_title_when_no_item_number(self):
+        item = {"itemNumber": "", "itemCaption": "", "title": "商品 4904810642602"}
+        self.assertEqual(fetch_rakuten._extract_jan_from_item(item), "4904810642602")
+
+    def test_returns_empty_when_nothing_matches(self):
+        item = {"itemNumber": "", "itemCaption": "説明文", "title": "商品名"}
+        self.assertEqual(fetch_rakuten._extract_jan_from_item(item), "")
+
+    def test_missing_item_number_key_is_safe(self):
+        # 旧データ (itemNumber キー自体が無い dict) でも KeyError にならない。
+        item = {"itemCaption": "JAN 4904810642602", "title": ""}
+        self.assertEqual(fetch_rakuten._extract_jan_from_item(item), "4904810642602")
+
 
 class MatchRankingItemTest(unittest.TestCase):
     def setUp(self):
