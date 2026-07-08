@@ -373,6 +373,12 @@ on:
       - 'scripts/ensure_tag_slugs.py'
       - 'scripts/tests/test_ensure_tag_slugs.py'
       - '.github/workflows/21-ensure-tag-slugs.yml'
+      # 2026-07-08 (#2817 Phase 3 追加登録漏れ / Phase 5 hotfix PR #2832):
+      # generate_term_redirects.py 単体の修正PRが required check `validate` を
+      # 発火できず inverse trap で auto-merge/レビュー必須チェックが永久
+      # BLOCKED になっていたため paths に追加 ([[04-validate-paths-inverse-trap]])。
+      - 'scripts/generate_term_redirects.py'
+      - 'scripts/tests/test_generate_term_redirects.py'
   workflow_dispatch:
 
 permissions:
