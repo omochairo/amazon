@@ -364,6 +364,15 @@ on:
       - 'scripts/notify_bluesky.py'
       - 'scripts/tests/test_notify_bluesky.py'
       - '.github/workflows/20-sns-publish.yml'
+      # 2026-07-08 (#2817 Phase 4): 21-ensure-tag-slugs.yml が新規タグ/ブランド
+      # 用語を検出するたび data/term_slugs.yaml のみ更新した PR を作り auto-merge
+      # する。paths 未登録だと inverse trap で validate 不発火→auto-merge 永久
+      # BLOCKED になる ([[04-validate-paths-inverse-trap]])。記事変更ゼロで
+      # vacuous SUCCESS。
+      - 'data/term_slugs.yaml'
+      - 'scripts/ensure_tag_slugs.py'
+      - 'scripts/tests/test_ensure_tag_slugs.py'
+      - '.github/workflows/21-ensure-tag-slugs.yml'
   workflow_dispatch:
 
 permissions:

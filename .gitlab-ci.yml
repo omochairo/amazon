@@ -157,7 +157,12 @@ pages:
   script:
     - python scripts/build_post.py
     - python scripts/build_brand_hub_stats.py
-    - cd hugo && hugo --minify --buildFuture --destination ../public
+    - cd hugo && hugo --minify --buildFuture --destination ../public && cd ..
+    # #2817 Phase 3: 旧 JP タグ/ブランド URL からの 301 リダイレクト。
+    # public/sitemap.xml (直前の hugo build 産物) を真実源に redirect ルールを
+    # 生成し、Hugo の static コピーを経由せず public/_redirects に直接書き出す
+    # (二度目の hugo build は不要)。
+    - python scripts/generate_term_redirects.py --sitemap public/sitemap.xml --out public/_redirects
   artifacts:
     paths:
       - public
