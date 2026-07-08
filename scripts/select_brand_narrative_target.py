@@ -26,10 +26,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from term_slug import TermSlugMap
+
 # Ensure UTF-8 stdout on Windows runners (the workflow runs on ubuntu so this
 # is a no-op there, but local Windows dev/test would otherwise emit cp932).
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
+
+_TERM_SLUGS = TermSlugMap()
 
 
 REQUIRED_FIELDS = (
@@ -101,7 +105,12 @@ def select(brand_hub: dict, brands_dir: Path) -> Optional[Candidate]:
         if not _is_informational(top3, name):
             skipped_reasons.append(f"{name}: top_3_series all self-references")
             continue
-        index_path = brands_dir / name / "_index.md"
+        # #2817 Phase 2: hugo/content/brands/ は英語スラッグ名の物理ディレクトリに
+        # 移行済み。JP canonical (name) のままパスを組むと既存ディレクトリを
+        # 見失い (has_index=False 誤判定)、narrative を旧 JP パスに再生成して
+        # しまう。term_slugs.yaml のスラッグでパスを解決する。
+        slug = _TERM_SLUGS.get(name) or name
+        index_path = brands_dir / slug / "_index.md"
         fm = _read_frontmatter(index_path)
         if fm.get("auto_generated") is False:
             skipped_reasons.append(f"{name}: manual narrative (auto_generated:false)")

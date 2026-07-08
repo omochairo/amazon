@@ -60,6 +60,41 @@ class CollectBrandCanonicalsTest(unittest.TestCase):
         self.assertEqual(bts._collect_brand_canonicals("/no/such.yaml"), set())
 
 
+class BrandPriorityOrderingTest(unittest.TestCase):
+    def test_brand_canonical_claims_slug_before_colliding_raw_tag(self):
+        # 実データで発見された事故: "LEGO" (生タグ・表記ゆれ) と "レゴ" (brand
+        # canonical) は同じ base slug "lego" を狙うため、処理順序次第でどちらかが
+        # "-2" に回る。価値の高いブランドハブ側 ("レゴ") が素の "lego" を
+        # 取れなければならない。
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            articles = root / "articles"
+            articles.mkdir()
+            (articles / "2026-05-01-B0001.json").write_text(
+                json.dumps({"tags": ["LEGO", "レゴ"]}), encoding="utf-8"
+            )
+            taxonomy = root / "brand_taxonomy.yaml"
+            taxonomy.write_text(
+                "brands:\n  - canonical: レゴ\n    aliases: [レゴ(LEGO), LEGO]\n",
+                encoding="utf-8",
+            )
+            out = root / "term_slugs.yaml"
+            argv_backup = sys.argv
+            try:
+                sys.argv = [
+                    "backfill_term_slugs.py",
+                    "--articles-dir", str(articles),
+                    "--brand-taxonomy", str(taxonomy),
+                    "--out", str(out),
+                ]
+                self.assertEqual(bts.main(), 0)
+                result = yaml.safe_load(out.read_text(encoding="utf-8"))
+                self.assertEqual(result["レゴ"], "lego")
+                self.assertEqual(result["LEGO"], "lego-2")
+            finally:
+                sys.argv = argv_backup
+
+
 class MainIdempotencyTest(unittest.TestCase):
     def test_rerun_preserves_existing_slugs(self):
         with tempfile.TemporaryDirectory() as td:
