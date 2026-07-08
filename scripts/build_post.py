@@ -36,6 +36,23 @@ from score_calculator import (
     get_media_exposure_metrics,
     reset_media_exposure_metrics,
 )
+from term_slug import TermSlugMap
+
+# #2817 Phase 2: JP タグ/ブランド名を Hugo タクソノミー URL (tags/brands) に
+# 書き込む直前で英語スラッグへ変換する。data/articles/*.json (原本) は JP のまま
+# 触らない — 変換はこの Hugo content 生成の一点だけで起きる。
+_TERM_SLUGS = TermSlugMap()
+
+
+def _term_to_slug(term: str) -> str:
+    """data/term_slugs.yaml から引く。未登録の新規用語は get_or_create() で
+    その場生成する (brand alias 優先 → ASCII透過 → pykakasi ローマ字化の同じ
+    品質ロジック)。ただし build_post.py はこの新規割当を data/term_slugs.yaml
+    へ永続化しない (in-memory のみ) — 永続化は 04-validate-article-pr.yml の
+    ensure_tag_slugs.py (#2817 Phase 4) が PR 内で責任を持つ。build 時の
+    get_or_create() はそれが未実行の場合でも壊れた slug を出さない安全網。
+    """
+    return _TERM_SLUGS.get_or_create(term)
 
 
 SUFFIX_SKIP = (".enrichment", ".seo", ".quality")
@@ -2159,7 +2176,9 @@ def _frontmatter_meta(
         "date": article_date,
         "lastmod": lastmod,
         "update_count": update_count,
-        "tags": [t.rstrip(". ") for t in data.get("tags", []) if t],
+        # #2817 Phase 2: JP タグ文字列を英語スラッグへ変換して書き込む。表示名 (JP) は
+        # content/tags/<slug>/_index.md の title front matter が担う (Hugo .Title/.LinkTitle)。
+        "tags": [_term_to_slug(t.rstrip(". ")) for t in data.get("tags", []) if t],
         "slug": slug,
         "url": f"/products/{asin.lower()}/",
         "aliases": [f"/posts/{slug.lower()}/"],
@@ -2227,8 +2246,11 @@ def _frontmatter_meta(
         meta["brand_tier"] = nb.tier
         meta["brand_region"] = nb.region
         meta["brand_match_type"] = nb.match_type
+        # #2817 Phase 2: brands タクソノミー (Hugo /brands/<slug>/ の URL) だけ英語
+        # スラッグ化する。meta["brand"] (単数, 構造化データ/表示用) は JP canonical
+        # のまま維持する。
         if not nb.exclude_from_taxonomy:
-            meta["brands"] = [nb.canonical]
+            meta["brands"] = [_term_to_slug(nb.canonical)]
     if product.get("name"):
         meta["product_name"] = product["name"]
     if product.get("age_range"):

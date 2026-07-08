@@ -65,8 +65,12 @@ def main() -> int:
 
     tags = _collect_tags(args.articles_dir)
     brands = _collect_brand_canonicals(args.brand_taxonomy)
-    terms = sorted(tags | brands)
-    print(f"tags={len(tags)} brand_canonicals={len(brands)} union={len(terms)}", file=sys.stderr)
+    # ブランド canonical を先に処理する。同じ概念が「レゴ」(brand canonical) と
+    # "LEGO" (生タグ・表記ゆれ) の双方で存在するケースで、スラッグ base "lego" の
+    # 早い者勝ちにより価値の高いブランドハブ側が "-2" に回るのを防ぐため
+    # (ブランドの方を優先して素の slug を取らせる)。
+    terms = sorted(brands) + sorted(tags - brands)
+    print(f"tags={len(tags)} brand_canonicals={len(brands)} union={len(set(terms))}", file=sys.stderr)
 
     slug_map = TermSlugMap(path=args.out, brand_taxonomy_path=args.brand_taxonomy)
     new_count = 0

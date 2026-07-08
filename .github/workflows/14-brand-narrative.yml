@@ -156,6 +156,19 @@ jobs:
           TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
           TODAY_ISO=${TODAY}T10:00:00+09:00
           BRAND=$(python -c "import json; print(json.load(open('/tmp/brand.json', encoding='utf-8'))['brand'])")
+          # #2817 Phase 2: hugo/content/brands/ は英語スラッグ物理ディレクトリに
+          # 移行済み。出力パスはスラッグを使う (表示名/frontmatter title は引き続き
+          # JP の ${BRAND} を使う — content/tags,brands の title front matter が
+          # JP 表示を担うので Jules 側の生成内容は変更不要)。brand.json から直接
+          # 読む (シェル変数展開で JP 文字列を python リテラルに埋め込む経路は
+          # クォート崩れのリスクがあるため避ける)。
+          BRAND_SLUG=$(python -c "
+import json, sys
+sys.path.insert(0, 'scripts')
+from term_slug import TermSlugMap
+brand = json.load(open('/tmp/brand.json', encoding='utf-8'))['brand']
+print(TermSlugMap().get_or_create(brand))
+")
           COUNT=$(python -c "import json; print(json.load(open('/tmp/brand.json', encoding='utf-8'))['count'])")
           TIER=$(python -c "import json; print(json.load(open('/tmp/brand.json', encoding='utf-8'))['tier'])")
           AVG_IVS=$(python -c "import json; print(json.load(open('/tmp/brand.json', encoding='utf-8'))['avg_ivs_100'])")
@@ -172,7 +185,7 @@ jobs:
           すべて守ってください。
 
           【今回生成する brand】: ${BRAND}
-          【出力ファイル (新規作成のみ)】: hugo/content/brands/${BRAND}/_index.md
+          【出力ファイル (新規作成のみ)】: hugo/content/brands/${BRAND_SLUG}/_index.md
           【本日の日付 (frontmatter last_generated_at に使用)】: ${TODAY_ISO}
           【データ (これ以外の事実は書かない)】:
             - count = ${COUNT}
@@ -187,8 +200,8 @@ jobs:
           絶対守るリポジトリ保護ルール:
           - 新規ファイル追加 (または当該 _index.md の置き換え) のみ。他ファイルは触らない
           - .github/, scripts/, hugo/layouts/, data/ への変更は禁止
-          - hugo/content/brands/${BRAND}/_index.md 以外の hugo/content/ 配下も触らない
-          - **最終 PR の差分は hugo/content/brands/${BRAND}/_index.md の 1 ファイルのみ**
+          - hugo/content/brands/${BRAND_SLUG}/_index.md 以外の hugo/content/ 配下も触らない
+          - **最終 PR の差分は hugo/content/brands/${BRAND_SLUG}/_index.md の 1 ファイルのみ**
           - 作業中に作った fix_*.py / tmp_*.json 等は最終コミット前に必ず削除
           - frontmatter には title: "${BRAND}" / auto_generated: true / last_generated_at: "${TODAY_ISO}" を必ず含める
 
