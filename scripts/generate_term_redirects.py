@@ -67,10 +67,16 @@ def build_redirect_lines(indexed: dict, reverse: dict) -> list:
                 continue
             new_path = f"/{kind}/{slug}/"
             raw_old = f"/{kind}/{term}/"
-            lines.append(f"{raw_old} {new_path} 301")
-            encoded_term = urllib.parse.quote(term, safe="")
-            encoded_old = f"/{kind}/{encoded_term}/"
-            if encoded_old != raw_old:
+            encoded_old = f"/{kind}/{urllib.parse.quote(term, safe='')}/"
+            has_whitespace = any(ch.isspace() for ch in term)
+            # GitLab Pages の _redirects パーサ (tj/go-redirects) は各行を
+            # strings.Fields() で空白区切りするため、term に生の空白 (例:
+            # "LOTUS LIFE") を含む raw 行を出すと3列に収まらずファイル全体が
+            # パースエラーで丸ごと無効化される (#2817 Phase 5, 実機で確認)。
+            # 空白を含む term は percent-encoded 行のみを出す。
+            if not has_whitespace:
+                lines.append(f"{raw_old} {new_path} 301")
+            if has_whitespace or encoded_old != raw_old:
                 lines.append(f"{encoded_old} {new_path} 301")
     return lines
 
