@@ -1,0 +1,3 @@
+---
+title: "タカラトミー(TAKARA TOMY)"
+---
