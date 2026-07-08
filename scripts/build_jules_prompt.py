@@ -142,34 +142,8 @@ def build_prompt(asin, today=None):
 - Amazon の販売ページ URL は sources に 1 件だけ含めてよい (慣例)。楽天・Yahoo の販売ページは sources に入れない。
 - **sources は最低 5 件必須** (品質ゲートで機械検査されます)。
 
-【品質ゲートで機械検査される項目 (不合格になると公開されません・全項目厳守)】
-検査は**あなたが書く product.name / product.brand と完全一致する部分文字列**で機械照合されます。
-商品名・ブランド名は記事全体で一字一句同じ表記を使ってください (略称・表記ゆれは不一致扱い)。
-
-0. product.name は**短い通称 (最大 40 字、目安 20 字前後)** にする。Amazon の長い正式タイトル
-   (キャッチコピー・対象年齢・型番の羅列) をそのまま使うと、title 冒頭 60 字 /
-   meta_description 冒頭 40 字に商品名が収まらず**構造的に不合格**になる
-   (既存合格記事 1,416 本の実績は中央値 21 字・最大 40 字)。
-
-1. title: 全体 20〜80 字、**冒頭 60 字以内に product.name と同一表記の商品名**
-2. meta_description: **100〜160 字**、**冒頭 40 字以内に商品名**
-3. keywords: **5〜15 個**。うち少なくとも 1 個は**商品名を含み**、少なくとも 1 個は **product.brand と同一表記のブランド名を含む**
-4. narrative: **6 キー必須** (lead / why_this_product / gift_appeal / daily_use / safety_note / closing)。
-   最低文字数: lead 120 / why_this_product 150 / gift_appeal 120 / daily_use 150 / safety_note 120 / closing 120
-5. faq: **3 問以上**。うち **2 問以上は質問文に商品名を含める**。回答は各 30 字以上
-6. product.target_age: 「数字+歳/才/ヶ月」を含む文字列 (例 "1歳〜3歳")
-7. product.edu_domains: **STEM / 言語 / 運動 / 想像** のみからなる配列 (空配列可、他の語は不可)
-8. product.ivs_detail は**数値スコアのオブジェクト**。以下の形を厳守 (説明文を値にしない):
-  "ivs_detail": {{
-    "education": 4.5, "longevity": 4.0, "safety": 4.5, "cost_performance": 4.0,
-    "total": 17.0, "total_100": 85,
-    "score_rationale": [ {{"factor": "教育性", "delta": "+0.5", "reason": "10文字以上の根拠文"}}, ... 最低3件 ]
-  }}
-  (education/longevity/safety/cost_performance/total は number、total_100 は integer。
-   算出は業務規定 §6 IVS スコア算出ルールに従う)
-9. certifications フィールド: **第三者ソース (販売ページ以外) で裏取りできた認証だけ**を入れる。CE マーク等が販売ページにしか書かれていない場合は certifications を空配列 [] にし、本文でも認証を断定しない (「メーカーは CE 適合を掲げる」等の帰属表現も、裏取りできないなら書かない)
-10. sources: **最低 5 件** (上記ルール)。URL のドメインはなるべく重複させない
-11. narrative.lead にメタ語り (「本記事では」「〜を比較しました」等) を書かない、幼児口調 (「だよ」「みてね」等) を全文で使わない (詳細はテンプレート §1.B)
+【品質ゲートで機械検査される項目】
+product.name の通称ルール (最大 40 字) と機械検査 11 項目は、下記テンプレート §4 / §4.5 に明文化されています (不合格になると公開されません・全項目厳守)。
 
 === 業務規定 (AGENTS.md 全文) ===
 {_read("AGENTS.md")}
