@@ -87,15 +87,33 @@ class BuildRedirectLinesTest(unittest.TestCase):
         lines = gtr.build_redirect_lines(indexed, reverse)
         self.assertIn("/brands/レゴ/ /brands/lego/ 301", lines)
 
-    def test_ascii_case_change_does_not_double_encode_identically(self):
-        # percent-encode した結果が生の形式と同一 (=元々 ASCII) なら重複行を出さない
+    def test_term_containing_whitespace_emits_percent_encoded_line_only(self):
+        # 実機で確認された事故 (#2817 Phase 5): GitLab Pages の _redirects パーサ
+        # (tj/go-redirects) は strings.Fields() で行を空白分割するため、term に
+        # 生の空白を含む raw 行 (例: "/tags/LOTUS LIFE/ ...") を出すと3列に収まらず
+        # ファイル全体がパースエラーで丸ごと無効化される。空白を含む term は
+        # percent-encoded 行のみを出し、raw 行は出さない。
         indexed = {"tags": {"lotus-life"}, "brands": set()}
         reverse = {"lotus-life": "LOTUS LIFE"}
         lines = gtr.build_redirect_lines(indexed, reverse)
-        # スペースは quote() で %20 になるため生形式と percent-encoded 形式は異なる → 2行
-        self.assertEqual(len(lines), 2)
-        self.assertIn("/tags/LOTUS LIFE/ /tags/lotus-life/ 301", lines)
-        self.assertIn("/tags/LOTUS%20LIFE/ /tags/lotus-life/ 301", lines)
+        self.assertEqual(lines, ["/tags/LOTUS%20LIFE/ /tags/lotus-life/ 301"])
+
+    def test_no_generated_line_contains_a_raw_whitespace_char(self):
+        # 上記事故の再発防止ガード。空白を含む term が複数あっても、生の
+        # 空白を含む行が一切生成されないことを保証する。
+        indexed = {"tags": {"a", "b"}, "brands": {"c"}}
+        reverse = {
+            "a": "Baby curiosity",
+            "b": "BEYBLADE X",
+            "c": "LOTUS LIFE",
+        }
+        lines = gtr.build_redirect_lines(indexed, reverse)
+        for line in lines:
+            from_path = line.split(" ", 1)[0]
+            self.assertFalse(
+                any(ch.isspace() for ch in from_path),
+                f"raw whitespace leaked into a _redirects rule: {line!r}",
+            )
 
 
 if __name__ == "__main__":
