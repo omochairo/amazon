@@ -1,0 +1,35 @@
+name: Mirror main to GitLab
+# 2026-07-08: GitHub 復帰後の恒久構成 (docs/failover-to-gitlab.md 参照)。
+# GitHub = 開発・自動化の主戦場 / GitLab = Pages 配信 (navi.omcha.jp) + ホットスタンバイ。
+# main への push をそのまま GitLab main へ転送し、GitLab 側の pages ジョブが
+# サイトを再ビルド・配信する。GitHub Pages は使用しない (repo 設定でも無効化済)。
+#
+# 非 fast-forward で reject された場合は「GitLab 側 main が独自に前進している」
+# サイン (= フェイルオーバー運転の痕跡)。force push はせず、
+# docs/failover-to-gitlab.md の復帰手順で先に reconcile すること。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: mirror-to-gitlab
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Push main to GitLab
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: |
+          set -e
+          git push "https://oauth2:${GITLAB_TOKEN}@gitlab.com/omocha/navi.git" HEAD:main
