@@ -17,6 +17,7 @@ on:
         description: 'Max unmatched JANs to resolve this run (1 = single-JAN dry-run)'
         type: string
         default: '30'
+  # cron re-registered 2026-07-08 after unsuspension
   schedule:
     # #810 follow-up: 毎日 04:00 JST = 19:00 UTC。keyword×top100 saturation で
     # amazon.json の fresh 供給が枯れるため、楽天ランキング/サーチ由来の新規 ASIN

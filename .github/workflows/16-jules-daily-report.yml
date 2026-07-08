@@ -10,6 +10,7 @@ name: Jules Daily Usage Report
 #   - GITHUB_TOKEN で issue write 可能 (permissions: issues: write)。
 
 on:
+  # cron re-registered 2026-07-08 after unsuspension
   schedule:
     # 23:00 UTC = 08:00 JST 翌朝 (UTC date は前日のまま、JST date は翌朝)。
     - cron: '0 23 * * *'

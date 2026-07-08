@@ -14,6 +14,7 @@ name: Wikidata Brand Meta Refresh
 # - 同名別業種の誤マッチは BRAND_OVERRIDES (script 内 curated) で恒久ガード。
 
 on:
+  # cron re-registered 2026-07-08 after unsuspension
   schedule:
     - cron: '0 19 1 * *'  # 毎月 1 日 19:00 UTC = 2 日 04:00 JST
   workflow_dispatch:

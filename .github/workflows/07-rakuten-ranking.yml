@@ -9,6 +9,7 @@ name: Rakuten Weekly Ranking
 # ページ更新フローを担当する。
 on:
   workflow_dispatch:
+  # cron re-registered 2026-07-08 after unsuspension
   schedule:
     # 毎週火曜 06:00 JST = 毎週月曜 21:00 UTC。
     # 楽天ランキングは前週月〜日集計→月曜更新のため、火曜に取得して確定値を扱う。

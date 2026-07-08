@@ -5,6 +5,7 @@ on:
   # 02-publish→03 を再発火させる自己増幅ループになり rolling-24h が 100 に張り付いていた。
   # 発火を 6 時間毎 (4 回/日) の固定スケジュールに切替え、run 回数そのものを上限化する。
   # 1 run 最大 6 session × 4 回 = 理論上限 24/日 で cap 80 に十分収まる。
+  # cron re-registered 2026-07-08 after unsuspension
   schedule:
     - cron: '0 */6 * * *'
   workflow_dispatch:

@@ -9,6 +9,7 @@ name: Wiki Cache Refresh
 # - 失敗は continue-on-error にせず通知 (silent_push_reject_trap 教訓)
 
 on:
+  # cron re-registered 2026-07-08 after unsuspension
   schedule:
     - cron: '0 18 * * 0'  # Sun 18:00 UTC = Mon 03:00 JST
   workflow_dispatch:

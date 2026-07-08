@@ -19,6 +19,7 @@ name: CWV Monthly Monitor (CrUX API)
 
 on:
   workflow_dispatch:
+  # cron re-registered 2026-07-08 after unsuspension
   schedule:
     # 毎月 1 日 22:00 UTC = 毎月 2 日 07:00 JST
     - cron: '0 22 1 * *'

@@ -21,6 +21,7 @@ name: Generate Brand Narrative
 # still reviewed by hand before going live.
 
 on:
+  # cron re-registered 2026-07-08 after unsuspension
   schedule:
     - cron: '0 3 * * 1'
   workflow_dispatch:

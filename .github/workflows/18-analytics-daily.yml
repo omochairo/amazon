@@ -23,6 +23,7 @@ name: Analytics Daily History Accumulator (GA4 + GSC)
 
 on:
   workflow_dispatch:
+  # cron re-registered 2026-07-08 after unsuspension
   schedule:
     # 06:00 JST = 21:00 UTC (前日)。GA4 day-1 確定済、GSC は delay=3 で常に間に合う。
     - cron: '0 21 * * *'

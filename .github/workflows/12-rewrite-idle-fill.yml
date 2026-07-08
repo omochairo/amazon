@@ -25,6 +25,7 @@ name: Rewrite Idle Fill
 # is gone. build_post.py renders only the newest body per ASIN, so the transient
 # "old + new" window never produces a duplicate /products/<ASIN>/ URL.
 on:
+  # cron re-registered 2026-07-08 after unsuspension
   schedule:
     # 02:00 + 14:00 UTC = 11:00 + 23:00 JST, ~2h after each fetch cron
     # (fetch is at 00:00 + 09:00 UTC) so slack reflects latest supply.
