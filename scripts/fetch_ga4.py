@@ -63,12 +63,13 @@ def _run_report(client, property_id: str, start: str, end: str,
     return rows
 
 
-def fetch(property_id: str, sa_json: str, days: int, top_n: int) -> dict[str, Any]:
+def fetch(property_id: str, sa_json: str, days: int, top_n: int,
+          end_date: str | None = None) -> dict[str, Any]:
     from google.analytics.data_v1beta import BetaAnalyticsDataClient
     creds = _load_credentials(sa_json)
     client = BetaAnalyticsDataClient(credentials=creds)
 
-    end = date.today()
+    end = date.fromisoformat(end_date) if end_date else date.today()
     start = end - timedelta(days=days)
     start_s, end_s = start.isoformat(), end.isoformat()
     logger.info("range: %s .. %s (property=%s)", start_s, end_s, property_id)
@@ -154,6 +155,7 @@ def main() -> int:
     p.add_argument("--sa-json-file", help="SA JSON ファイルパス (ローカル debug 用)")
     p.add_argument("--days", type=int, default=DEFAULT_DAYS)
     p.add_argument("--top-n", type=int, default=TOP_N_DEFAULT)
+    p.add_argument("--end-date", help="range終端をtodayでなく指定日 (YYYY-MM-DD) に固定 (backfill用)")
     p.add_argument("--out", default=DEFAULT_OUT)
     args = p.parse_args()
 
@@ -168,7 +170,7 @@ def main() -> int:
         return 2
 
     try:
-        result = fetch(args.property_id, sa_json, args.days, args.top_n)
+        result = fetch(args.property_id, sa_json, args.days, args.top_n, args.end_date)
     except Exception as e:
         logger.exception("GA4 fetch failed: %s", e)
         return 1

@@ -74,10 +74,10 @@ def _query(service, site_url: str, start: str, end: str,
 
 
 def fetch(site_url: str, client_id: str, client_secret: str, refresh_token: str,
-          days: int, delay: int) -> dict[str, Any]:
+          days: int, delay: int, end_date: str | None = None) -> dict[str, Any]:
     service = _build_service(client_id, client_secret, refresh_token)
 
-    end = date.today() - timedelta(days=delay)
+    end = date.fromisoformat(end_date) if end_date else date.today() - timedelta(days=delay)
     start = end - timedelta(days=days)
     start_s, end_s = start.isoformat(), end.isoformat()
     logger.info("range: %s .. %s (site=%s, %d-day delay buffer)",
@@ -129,6 +129,7 @@ def main() -> int:
     p.add_argument("--refresh-token", default=os.environ.get("GSC_OAUTH_REFRESH_TOKEN"))
     p.add_argument("--days", type=int, default=DEFAULT_DAYS)
     p.add_argument("--delay", type=int, default=DEFAULT_DELAY)
+    p.add_argument("--end-date", help="range終端を(today - delay)でなく指定日 (YYYY-MM-DD) に固定 (backfill用、--delayは無視される)")
     p.add_argument("--out", default=DEFAULT_OUT)
     args = p.parse_args()
 
@@ -144,7 +145,7 @@ def main() -> int:
 
     try:
         result = fetch(args.site_url, args.client_id, args.client_secret,
-                       args.refresh_token, args.days, args.delay)
+                       args.refresh_token, args.days, args.delay, args.end_date)
     except Exception as e:
         logger.exception("GSC fetch failed: %s", e)
         return 1
