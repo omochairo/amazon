@@ -164,12 +164,12 @@ jobs:
           # 読む (シェル変数展開で JP 文字列を python リテラルに埋め込む経路は
           # クォート崩れのリスクがあるため避ける)。
           BRAND_SLUG=$(python -c "
-import json, sys
-sys.path.insert(0, 'scripts')
-from term_slug import TermSlugMap
-brand = json.load(open('/tmp/brand.json', encoding='utf-8'))['brand']
-print(TermSlugMap().get_or_create(brand))
-")
+          import json, sys
+          sys.path.insert(0, 'scripts')
+          from term_slug import TermSlugMap
+          brand = json.load(open('/tmp/brand.json', encoding='utf-8'))['brand']
+          print(TermSlugMap().get_or_create(brand))
+          ")
           COUNT=$(python -c "import json; print(json.load(open('/tmp/brand.json', encoding='utf-8'))['count'])")
           TIER=$(python -c "import json; print(json.load(open('/tmp/brand.json', encoding='utf-8'))['tier'])")
           AVG_IVS=$(python -c "import json; print(json.load(open('/tmp/brand.json', encoding='utf-8'))['avg_ivs_100'])")
