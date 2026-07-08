@@ -1,0 +1,93 @@
+name: Analytics Daily History Backfill
+
+# 18-analytics-daily.yml (#1357 B-0) は6/23 GitHubアカウント凍結でschedule停止し、
+# 7/8 復帰まで15日分の欠損 (GA4: 6/24〜、GSC: 6/21〜) が data/analytics/history/
+# に生じた (#2821 wave2 再開時に発見)。
+#
+# fetch_ga4.py / fetch_gsc.py は --days N (今日基準の相対窓) しか取れず date 次元を
+# 持たないため、複数日をまとめて1回で取ることができない。本 workflow は
+# scripts/backfill_analytics_history.py 経由で対象範囲を1日ずつ個別に fetch し、
+# 通常の 18-analytics-daily.yml と同じ idempotent な append (seen_dates.json 管理)
+# を使って history JSONL の穴を埋める。dispatch専用のワンショット運用ツール
+# (01b-backfill-competitors.yml と同パターン)。
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: 'backfill開始日 (YYYY-MM-DD, inclusive)'
+        required: true
+      end_date:
+        description: 'backfill終了日 (YYYY-MM-DD, inclusive)'
+        required: true
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-analytics-data google-auth google-auth-oauthlib google-api-python-client pyyaml
+
+      - name: Backfill GA4 + GSC history (per-day, idempotent)
+        env:
+          GA4_SA_JSON: ${{ secrets.GA4_SA_JSON }}
+          GA4_PROPERTY_ID: ${{ secrets.GA4_PROPERTY_ID }}
+          GSC_OAUTH_CLIENT_ID: ${{ secrets.GSC_OAUTH_CLIENT_ID }}
+          GSC_OAUTH_CLIENT_SECRET: ${{ secrets.GSC_OAUTH_CLIENT_SECRET }}
+          GSC_OAUTH_REFRESH_TOKEN: ${{ secrets.GSC_OAUTH_REFRESH_TOKEN }}
+          GSC_SITE_URL: ${{ secrets.GSC_SITE_URL }}
+        run: |
+          python scripts/backfill_analytics_history.py \
+            --start-date "${{ github.event.inputs.start_date }}" \
+            --end-date "${{ github.event.inputs.end_date }}"
+
+      - name: Create PR with backfilled history
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+          git add data/analytics/history/ || true
+
+          if git diff --cached --quiet; then
+            echo "No history changes to commit; skipping PR."
+            exit 0
+          fi
+
+          BRANCH="chore/analytics-backfill-${{ github.run_id }}"
+          git config user.name "omochairo-fetch-bot[bot]"
+          git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit -m "chore(analytics): backfill history ${{ github.event.inputs.start_date }}..${{ github.event.inputs.end_date }} (#2821)"
+          git push -u origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "chore(analytics): backfill history ${{ github.event.inputs.start_date }}..${{ github.event.inputs.end_date }}" \
+            --body "GitHub凍結期間中に18-analytics-daily.ymlが停止し欠けたGA4/GSC history JSONLを、対象範囲を1日ずつ個別fetchして埋め戻す。seen_dates.json経由でidempotent (既存日はskip)。Refs #2821." \
+            --base main \
+            --head "$BRANCH")
+          echo "Created: $PR_URL"
+
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge enabled on $PR_URL"
+          else
+            echo "::warning::Could not enable auto-merge on $PR_URL"
+          fi
