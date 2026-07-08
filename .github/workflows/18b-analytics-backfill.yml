@@ -56,7 +56,7 @@ jobs:
           GSC_OAUTH_REFRESH_TOKEN: ${{ secrets.GSC_OAUTH_REFRESH_TOKEN }}
           GSC_SITE_URL: ${{ secrets.GSC_SITE_URL }}
         run: |
-          python scripts/backfill_analytics_history.py \
+          python -m scripts.backfill_analytics_history \
             --start-date "${{ github.event.inputs.start_date }}" \
             --end-date "${{ github.event.inputs.end_date }}"
 
