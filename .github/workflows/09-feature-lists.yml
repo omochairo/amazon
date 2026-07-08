@@ -18,6 +18,7 @@ name: Feature Lists (cospa monthly / deals weekly)
 #   validate が発火しない trap を避ける)
 on:
   workflow_dispatch:
+  # cron re-registered 2026-07-08 after unsuspension
   schedule:
     # 月次 cospa: 毎月 1 日 19:00 UTC = 2 日 04:00 JST
     - cron: '0 19 1 * *'

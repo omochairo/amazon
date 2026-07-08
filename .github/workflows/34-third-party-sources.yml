@@ -22,6 +22,7 @@ on:
         description: 'API 呼び出し日次上限 (Tavily 無料=1000/月≈33/日)'
         required: false
         default: '30'
+  # cron re-registered 2026-07-08 after unsuspension
   schedule:
     # 毎日 21:30 UTC (06:30 JST) — 朝の記事生成スロットの前に候補を仕込む
     - cron: '30 21 * * *'

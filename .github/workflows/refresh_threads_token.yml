@@ -15,6 +15,7 @@ name: Refresh THREADS_ACCESS_TOKEN
 # 手動 dispatch も可能 (token 更新確認用)。
 on:
   workflow_dispatch:
+  # cron re-registered 2026-07-08 after unsuspension
   schedule:
     # 毎週日曜 04:00 UTC = 13:00 JST。60 日寿命に対し週次で安全マージン
     - cron: '0 4 * * 0'

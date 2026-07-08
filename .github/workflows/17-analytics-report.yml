@@ -22,6 +22,7 @@ name: Analytics Weekly Report (GA4 + GSC)
 #   - GSC_SITE_URL               例: https://navi.omcha.jp/ (URL-prefix) or sc-domain:omcha.jp
 
 on:
+  # cron re-registered 2026-07-08 after unsuspension
   schedule:
     # 月曜 09:00 JST = 日曜 00:00 UTC
     - cron: '0 0 * * 0'

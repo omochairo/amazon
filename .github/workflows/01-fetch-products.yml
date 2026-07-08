@@ -8,6 +8,7 @@ on:
       keyword:
         description: '検索キーワード'
         required: false
+  # cron re-registered 2026-07-08 after unsuspension
   schedule:
     # 1日2回: 朝9時(JST=0:00 UTC) と 夕方18時(JST=9:00 UTC)
     - cron: '0 0 * * *'

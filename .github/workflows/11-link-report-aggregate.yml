@@ -29,6 +29,7 @@ on:
         description: 'Aggregate only — do not dispatch / close issues'
         type: boolean
         default: false
+  # cron re-registered 2026-07-08 after unsuspension
   schedule:
     # 月曜 04:00 JST = 日曜 19:00 UTC。10-re-search は long-running なので
     # 週末ロー帯で発火させて月曜朝には結果が反映されている状態を作る。

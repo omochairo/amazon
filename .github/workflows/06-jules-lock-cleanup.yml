@@ -4,6 +4,7 @@ name: Jules Lock Cleanup
 # - pull_request closed (merged): merge 済 Jules PR の lock を即時解放
 # - workflow_dispatch: 手動 cleanup
 on:
+  # cron re-registered 2026-07-08 after unsuspension
   schedule:
     - cron: '*/30 * * * *'
   pull_request:
