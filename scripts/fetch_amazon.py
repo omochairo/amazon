@@ -225,7 +225,16 @@ SEARCH_ITEM_RESOURCES = [
 # 他カテゴリ商品が混入した実例 B0GJXXRWM5=車＆バイク があり、後段の genre 検査を
 # 可能にするため)。browseNodeInfo.browseNodes は creators_api_client.get_items /
 # search_items 両方のデフォルト resources に含まれており Creator API で valid。
-REFRESH_ITEM_RESOURCES = SEARCH_ITEM_RESOURCES + ["browseNodeInfo.browseNodes"]
+# 2026-07-08 (#2823): .ancestor を追加。無印 browseNodes だけでは ancestor チェーンが
+# 返らず、extract_browse_nodes の root が全件 null になっていた (per_asin 207 snapshot
+# で実測 ancestor 0 件)。root 無しでは #2823 のジャンル不一致検査が成立しない。
+# 注意: invalid resource だと fetch 全体が落ちる前例あり (PR #761→hotfix #783)。
+# マージ後は必ず workflow_dispatch で 1 run 実証し、raw に "ancestor" が入ること・
+# snapshot の root が非 null になることを確認する。
+REFRESH_ITEM_RESOURCES = SEARCH_ITEM_RESOURCES + [
+    "browseNodeInfo.browseNodes",
+    "browseNodeInfo.browseNodes.ancestor",
+]
 
 # 記事 ASIN 巡回で GetItems 応答から連続でこの回数欠落したら、その ASIN は
 # Amazon から消滅した (dp が 404) とみなし snapshot に status="gone" を書く。
