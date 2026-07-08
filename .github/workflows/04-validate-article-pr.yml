@@ -264,6 +264,12 @@ on:
       - 'scripts/tests/test_append_analytics_history.py'
       - '.github/workflows/18-analytics-daily.yml'
       - 'data/analytics/history/**'
+      # 2026-07-08 (#2821 followup / PR #2836-2837): 欠損日 backfill 専用 script +
+      # test + dispatch workflow。paths 未登録だと inverse trap で validate 不発火
+      # → auto-merge 永久 BLOCKED になる (PR #2837 で実際に踏んだ)。
+      - 'scripts/backfill_analytics_history.py'
+      - 'scripts/tests/test_backfill_analytics_history.py'
+      - '.github/workflows/18b-analytics-backfill.yml'
       # 2026-06-09 (session 142 / #1329 Phase 3 infra): 17-analytics-report が週次で
       # 積む GSC スナップショット (by_combo 込み)。data/analytics/gsc_history/** は
       # 週次 auto-merge PR で更新されるため、paths 未登録だと inverse trap で validate
