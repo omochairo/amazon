@@ -281,6 +281,12 @@ on:
       # 週次 auto-merge PR で更新されるため、paths 未登録だと inverse trap で validate
       # 不発火→auto-merge 永久 BLOCKED になる ([[04-validate-paths-inverse-trap]])。
       - 'data/analytics/gsc_history/**'
+      # 2026-07-11 (#1980): A-7 query intent 分類結果。build_post の CTA layout 切替の
+      # 入力で、17-analytics-report の週次 snapshot コミットに相乗りして更新される。
+      # gsc_history と同週で query_intent.json のみが差分の週は本ファイル未登録だと
+      # inverse trap で validate 不発火→auto-merge 永久 BLOCKED になる
+      # ([[04-validate-paths-inverse-trap]])。
+      - 'data/analytics/query_intent.json'
       # 2026-06-10 (session 152 / #1329 Phase 3A): 蓄積 GSC スナップショットから
       # brand↔query コンテキストを組む read-only script + unit test。14-brand-narrative の
       # prompt 注入 (Phase 3B) はこれを呼ぶ。paths 未登録だと inverse trap で validate

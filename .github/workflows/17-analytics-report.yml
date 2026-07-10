@@ -220,7 +220,9 @@ jobs:
       # 週次窓 (7日) の gsc_weekly.json を data/analytics/gsc_history/<YYYY-Www>.json に
       # スナップショット保存し、App token + PR + auto-merge で main に積む
       # ([[feedback-omochairo-analytics-history-no-bycombo]])。
-      - name: Snapshot GSC weekly (by_combo) for #1329
+      # #1980: query_intent.json (A-7 分類結果) も build_post の CTA layout 切替が
+      # 読む入力として同じコミットに相乗り (新規 step/PR パターンは作らない)。
+      - name: Snapshot GSC weekly (by_combo) for #1329 + query intent for #1980
         if: steps.gsc.outputs.available == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -239,6 +241,9 @@ jobs:
           PY
 
           git add data/analytics/gsc_history/ || true
+          if [ -f data/analytics/query_intent.json ]; then
+            git add data/analytics/query_intent.json || true
+          fi
           if git diff --cached --quiet; then
             echo "No snapshot changes to commit (same week already accumulated?); skipping PR."
             exit 0
@@ -257,12 +262,12 @@ jobs:
           git config user.name "omochairo-fetch-bot[bot]"
           git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
-          git commit -m "data(analytics): GSC weekly snapshot (by_combo) for #1329"
+          git commit -m "data(analytics): GSC weekly snapshot (by_combo) for #1329 + query_intent for #1980"
           git push -u origin "$BRANCH"
 
           PR_URL=$(gh pr create \
-            --title "data(analytics): GSC weekly snapshot (by_combo) for #1329" \
-            --body "Automated weekly snapshot of data/analytics/gsc_weekly.json (includes by_combo = query×page) under data/analytics/gsc_history/<YYYY-Www>.json. The daily JSONL history (data/analytics/history/, #1357 B-0) splits by_query/by_page and drops the combo, which #1329 (GSC queries → 14-brand-narrative prompt, page_path match) needs. Refs #1329." \
+            --title "data(analytics): GSC weekly snapshot (by_combo) for #1329 + query_intent for #1980" \
+            --body "Automated weekly snapshot of data/analytics/gsc_weekly.json (includes by_combo = query×page) under data/analytics/gsc_history/<YYYY-Www>.json, plus the current data/analytics/query_intent.json (A-7 classification, #1980 CTA layout switch input). The daily JSONL history (data/analytics/history/, #1357 B-0) splits by_query/by_page and drops the combo, which #1329 (GSC queries → 14-brand-narrative prompt, page_path match) needs. Refs #1329, #1980." \
             --base main \
             --head "$BRANCH")
           echo "Created: $PR_URL"
