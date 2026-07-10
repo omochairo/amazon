@@ -28,6 +28,10 @@ logger = logging.getLogger("fetch_ga4")
 DEFAULT_OUT = "data/analytics/ga4_weekly.json"
 DEFAULT_DAYS = 7
 TOP_N_DEFAULT = 100
+# #2710: omcha.jp/navi.omcha.jp 合算の単一レポートを TOP_N_DEFAULT で server-side
+# truncate すると、omcha.jp (数百ページ・日次PV数千) の陰で navi (1桁PV) がほぼ
+# 全て弾かれる。detect_orphan_pages.py の DEFAULT_TARGET_HOST と同値。
+NAVI_HOST = "navi.omcha.jp"
 
 
 def _load_credentials(sa_json: str):
@@ -40,18 +44,28 @@ def _load_credentials(sa_json: str):
 
 
 def _run_report(client, property_id: str, start: str, end: str,
-                dims: list[str], metrics: list[str], limit: int = 10000) -> list[dict]:
-    """1 リクエスト = 1 dim 組み合わせ。rows を dict 列に正規化して返す。"""
+                dims: list[str], metrics: list[str], limit: int = 10000,
+                dimension_filter=None, order_bys=None) -> list[dict]:
+    """1 リクエスト = 1 dim 組み合わせ。rows を dict 列に正規化して返す。
+
+    dimension_filter / order_bys は #2710 で追加 (navi 専用フィルタ取得 +
+    limit truncation の順序保証)。省略時は従来どおりフィルタなし・API 既定順。
+    """
     from google.analytics.data_v1beta.types import (
         DateRange, Dimension, Metric, RunReportRequest,
     )
-    req = RunReportRequest(
+    kwargs = dict(
         property=f"properties/{property_id}",
         dimensions=[Dimension(name=d) for d in dims],
         metrics=[Metric(name=m) for m in metrics],
         date_ranges=[DateRange(start_date=start, end_date=end)],
         limit=limit,
     )
+    if dimension_filter is not None:
+        kwargs["dimension_filter"] = dimension_filter
+    if order_bys:
+        kwargs["order_bys"] = order_bys
+    req = RunReportRequest(**kwargs)
     res = client.run_report(req)
     rows = []
     for r in res.rows:
@@ -61,6 +75,72 @@ def _run_report(client, property_id: str, start: str, end: str,
             row[m] = float(v) if "." in v or "e" in v.lower() else int(v)
         rows.append(row)
     return rows
+
+
+def _navi_dimension_filter():
+    """hostName == NAVI_HOST の EXACT match FilterExpression を構築する。"""
+    from google.analytics.data_v1beta.types import Filter, FilterExpression
+    return FilterExpression(
+        filter=Filter(
+            field_name="hostName",
+            string_filter=Filter.StringFilter(
+                value=NAVI_HOST,
+                match_type=Filter.StringFilter.MatchType.EXACT,
+            ),
+        )
+    )
+
+
+def _metric_order_by(metric_name: str, desc: bool = True):
+    """指定 metric の OrderBy を構築する。
+
+    #2710: limit=top_n で server-side truncate する際、GA4 Data API は orderBy
+    未指定時の順序を仕様上保証しない (実運用上 metric 降順に見えていたのは偶然)。
+    truncation 前にソート基準を明示し「top-N」を仕様として保証する。
+    """
+    from google.analytics.data_v1beta.types import OrderBy
+    return OrderBy(metric=OrderBy.MetricOrderBy(metric_name=metric_name), desc=desc)
+
+
+def _merge_unique_rows(base: list[dict], extra: list[dict],
+                        key_fields: tuple[str, ...]) -> list[dict]:
+    """extra のうち base に無い key の行だけを base に追加して返す (pure function)。
+
+    #2710: navi 専用フィルタ取得の結果を、既存の合算 top-N 結果にマージするための
+    dedup ロジック。GA4 API 呼び出しに依存しないため単体テスト可能。
+    """
+    existing_keys = {tuple(r.get(k, "") for k in key_fields) for r in base}
+    merged = list(base)
+    for r in extra:
+        key = tuple(r.get(k, "") for k in key_fields)
+        if key not in existing_keys:
+            merged.append(r)
+            existing_keys.add(key)
+    return merged
+
+
+def _build_entrances_by_key(rows: list[dict],
+                             navi_rows: list[dict] | None = None
+                             ) -> dict[tuple[str, str], int]:
+    """(hostName, path) -> sessions 合計の dict を構築する (pure function)。
+
+    navi_rows は #2710 の navi 専用フィルタ取得結果。rows (合算レポート) に
+    既に同じ key が含まれる場合は二重加算を避けるため skip する。
+    """
+    out: dict[tuple[str, str], int] = {}
+    for row in rows:
+        host = row.get("hostName", "")
+        path = (row.get("landingPagePlusQueryString") or "").split("?", 1)[0]
+        key = (host, path)
+        out[key] = out.get(key, 0) + int(row.get("sessions", 0))
+    for row in navi_rows or []:
+        host = row.get("hostName", "")
+        path = (row.get("landingPagePlusQueryString") or "").split("?", 1)[0]
+        key = (host, path)
+        if key in out:
+            continue
+        out[key] = int(row.get("sessions", 0))
+    return out
 
 
 def fetch(property_id: str, sa_json: str, days: int, top_n: int,
@@ -76,13 +156,28 @@ def fetch(property_id: str, sa_json: str, days: int, top_n: int,
 
     # hostName + pagePath で取得 (omcha.jp / navi.omcha.jp が同一 GA4 を共有しているため、
     # サイト識別のため hostName を必ず含める。Phase 4 score 連携時の filter にも使う)
+    by_page_metrics = ["screenPageViews", "engagedSessions",
+                        "averageSessionDuration", "bounceRate", "engagementRate"]
     by_page = _run_report(
         client, property_id, start_s, end_s,
         dims=["hostName", "pagePath"],
-        metrics=["screenPageViews", "engagedSessions",
-                 "averageSessionDuration", "bounceRate", "engagementRate"],
+        metrics=by_page_metrics,
         limit=top_n,
+        order_bys=[_metric_order_by("screenPageViews")],
     )
+    # #2710: 上の合算レポートは top_n で server-side truncate されており、
+    # omcha.jp (数百ページ規模) の陰で navi (1桁PV) がほぼ全て弾かれる
+    # (物的証拠: ga4_pages.jsonl 全38日が例外なく total_rows=100)。
+    # navi 専用の同型リクエストを追加取得し、上位N漏れの navi ページを補う。
+    navi_by_page = _run_report(
+        client, property_id, start_s, end_s,
+        dims=["hostName", "pagePath"],
+        metrics=by_page_metrics,
+        limit=top_n,
+        dimension_filter=_navi_dimension_filter(),
+        order_bys=[_metric_order_by("screenPageViews")],
+    )
+    by_page = _merge_unique_rows(by_page, navi_by_page, ("hostName", "pagePath"))
     by_page.sort(key=lambda r: r.get("screenPageViews", 0), reverse=True)
 
     # entrances は GA4 Data API に metric として存在しない (旧 UA 由来)。
@@ -90,18 +185,25 @@ def fetch(property_id: str, sa_json: str, days: int, top_n: int,
     # 取得し、(hostName, pagePath) に合算して by_page へ join する (A-5 孤児検出が利用)。
     # landing query が失敗しても全体は止めず warning に留める
     # (detect_orphan_pages.py は entrances 欠落行を skip するため degrade only)。
+    # #2710: by_page と同型の truncation があるため navi 専用フィルタも追加取得する。
     entrances_by_key: dict[tuple[str, str], int] = {}
     try:
-        for row in _run_report(
+        entrances_rows = _run_report(
             client, property_id, start_s, end_s,
             dims=["hostName", "landingPagePlusQueryString"],
             metrics=["sessions"],
             limit=top_n,
-        ):
-            host = row.get("hostName", "")
-            path = (row.get("landingPagePlusQueryString") or "").split("?", 1)[0]
-            key = (host, path)
-            entrances_by_key[key] = entrances_by_key.get(key, 0) + int(row.get("sessions", 0))
+            order_bys=[_metric_order_by("sessions")],
+        )
+        navi_entrances_rows = _run_report(
+            client, property_id, start_s, end_s,
+            dims=["hostName", "landingPagePlusQueryString"],
+            metrics=["sessions"],
+            limit=top_n,
+            dimension_filter=_navi_dimension_filter(),
+            order_bys=[_metric_order_by("sessions")],
+        )
+        entrances_by_key = _build_entrances_by_key(entrances_rows, navi_entrances_rows)
     except Exception as e:  # noqa: BLE001
         logger.warning("entrances (landing page) fetch failed; A-5 orphan detection will skip: %s", e)
     for r in by_page:
