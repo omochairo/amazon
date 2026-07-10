@@ -13,6 +13,12 @@ on:
       # 2026-05-31: brand 正規化マスター。新規 alias/canonical 追加 PR を
       # validate (build_post smoke test) で必須 check として発火させる。
       - 'data/brand_taxonomy.yaml'
+      # 2026-07-11 (#2821 wave2 監査 F6): 12-rewrite-idle-fill の rewrite marker。
+      # 通常 PR は data/raw / data/articles を伴うが、marker のみの diff になった
+      # 場合に required check `validate` が不発 → auto-merge 永久 pending になる
+      # inverse-trap を予防 ([[04-validate-paths-inverse-trap]])。記事変更ゼロなら
+      # vacuous SUCCESS で通過する。
+      - 'data/rewrite_queue/**'
       - 'scripts/validate_json.py'
       - 'scripts/quality_gate.py'
       # β v5.0: テンプレ / build_post / CSS を触る PR も validate を必須 check として
