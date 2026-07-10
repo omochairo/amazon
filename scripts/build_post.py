@@ -1598,6 +1598,32 @@ def _load_matched_index(path: pathlib.Path) -> dict[str, dict[str, Any]]:
     return index
 
 
+def _load_query_intent_map(path: pathlib.Path) -> dict[str, str]:
+    """data/analytics/query_intent.json (A-7, #1980) から
+    ``/products/<asin>/`` page path → 主要検索意図 ("commercial"/"informational") の
+    dict を返す。navigational や検出外ページ、ファイル不在・空・parse 失敗は無視し
+    空 dict を返す (呼び出し側は必ず現行レイアウトへ fallback する)。
+    """
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    out: dict[str, str] = {}
+    for row in payload.get("detected", []) if isinstance(payload, dict) else []:
+        if not isinstance(row, dict):
+            continue
+        page = row.get("page")
+        intent = row.get("dominant_intent")
+        if not page or intent not in ("commercial", "informational"):
+            continue
+        page_path = urllib.parse.urlparse(page).path.lower()
+        if page_path:
+            out[page_path] = intent
+    return out
+
+
 def _matched_passes_quality(
     matched: dict[str, Any],
     amazon_price: int,
@@ -2128,6 +2154,18 @@ def _clamp_lastmod_to_date(lastmod: str, date_str: str) -> str:
         return lastmod
 
 
+def _resolve_page_asin(product: dict[str, Any] | None, slug: str) -> str:
+    """product.asin があればそれを使い、無ければ slug 末尾の ASIN パターンから復元する。
+    front matter の url (``/products/<asin>/``) 生成と #1980 query_intent 照合キーの
+    両方で同じ解決ロジックを使うための共有ヘルパー。
+    """
+    asin = (product or {}).get("asin")
+    if asin:
+        return asin
+    m = re.search(r"-(B0[A-Z0-9]{8})$", slug, flags=re.IGNORECASE)
+    return m.group(1) if m else slug
+
+
 def _frontmatter_meta(
     data: dict[str, Any],
     slug: str,
@@ -2135,21 +2173,16 @@ def _frontmatter_meta(
     git_history: dict[str, dict[str, Any]],
     json_file_path: pathlib.Path,
     score_result: ScoreResult | None = None,
+    query_intent_map: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     title = data.get("title", "No Title")
     variants = data.get("title_variants") or []
     if variants and isinstance(variants[0], dict) and variants[0].get("title"):
         title = variants[0]["title"]
     description = data.get("meta_description_optimized") or data.get("meta_description", "")
-    
+
     product = data.get("product") or {}
-    asin = product.get("asin")
-    if not asin:
-        m = re.search(r"-(B0[A-Z0-9]{8})$", slug, flags=re.IGNORECASE)
-        if m:
-            asin = m.group(1)
-        else:
-            asin = slug
+    asin = _resolve_page_asin(product, slug)
 
     # git_history から値を取得する
     json_filename = json_file_path.name
@@ -2186,6 +2219,13 @@ def _frontmatter_meta(
         "description": description,
         "keywords": data.get("keywords", []),
     }
+    # #1980: A-7 (GSC query intent 分類, data/analytics/query_intent.json) がこの
+    # ページの主要検索意図を確定させている場合のみ CTA レイアウトを切替。未検出
+    # ページ・ファイル不在時は front matter に一切書かない = 現行レイアウト不変。
+    if query_intent_map:
+        cta_intent = query_intent_map.get(meta["url"])
+        if cta_intent:
+            meta["cta_layout"] = cta_intent
     image_url = product.get("image") or ""
     if image_url:
         meta["product_image"] = image_url
@@ -2422,6 +2462,8 @@ def main() -> None:
                         help="Directory holding per-ASIN amazon snapshots used as a back-fill fallback when raw/amazon.json no longer contains the ASIN")
     parser.add_argument("--hugo-config", default="hugo/config.toml",
                         help="Hugo config used to derive site base path for internal links on competitor cards")
+    parser.add_argument("--query-intent", default="data/analytics/query_intent.json",
+                        help="A-7 query intent classification (#1980); used to set cta_layout front matter")
     args = parser.parse_args()
 
     evaluate_article = None
@@ -2451,6 +2493,9 @@ def main() -> None:
     article_index = _build_article_index(src_path)
     site_base_path = _site_base_path(pathlib.Path(args.hugo_config))
     git_history = _load_git_history(src_path)
+    query_intent_map = _load_query_intent_map(pathlib.Path(args.query_intent))
+    if query_intent_map:
+        print(f"cta_layout: loaded {len(query_intent_map)} page(s) with classified query intent")
 
     # 年齢別発達段階目安データのロード
     stages_path = pathlib.Path("hugo/data/development_stages.json")
@@ -2477,6 +2522,7 @@ def main() -> None:
     rendered = 0
     skipped_legacy = 0
     discontinued_count = 0
+    cta_layout_applied = 0
 
     # 充足率統計データの初期化
     stats = {
@@ -2627,12 +2673,21 @@ def main() -> None:
 
             # Issue #515: link_report_flag macro が記事 URL 構築用に slug を参照する。
             data["slug"] = slug
+            # #1980: query_intent_map にこのページの主要検索意図があれば post.md.j2 の
+            # cta_layout 分岐 (購入 CTA の掲載位置) に渡す。未検出なら None のままで
+            # テンプレ側は従来位置に fallback する。
+            if query_intent_map:
+                page_asin = _resolve_page_asin(data.get("product"), slug)
+                data["cta_layout"] = query_intent_map.get(f"/products/{page_asin.lower()}/")
             md_body = template.render(**data)
             draft = _quality_draft(slug, src_path, args.min_score)
-            post = frontmatter.Post(
-                md_body,
-                **_frontmatter_meta(data, slug, draft, git_history, f, score_result=fresh_sr),
+            fm_meta = _frontmatter_meta(
+                data, slug, draft, git_history, f,
+                score_result=fresh_sr, query_intent_map=query_intent_map,
             )
+            if fm_meta.get("cta_layout"):
+                cta_layout_applied += 1
+            post = frontmatter.Post(md_body, **fm_meta)
 
             out_file = dst_path / f"{slug}.md"
             out_file.write_text(frontmatter.dumps(post, width=10000), encoding="utf-8")
@@ -2733,6 +2788,7 @@ def main() -> None:
     if skipped_legacy:
         msg += f" {skipped_legacy} rendered as legacy v3 fallback (regenerate via Jules)."
     print(msg)
+    print(f"cta_layout applied: {cta_layout_applied} page(s)")
 
 
 if __name__ == "__main__":
