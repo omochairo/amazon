@@ -16,7 +16,7 @@ name: Rewrite Idle Fill
 #    data/raw/amazon.json items[] AND writes a data/rewrite_queue/<ASIN>.json
 #    marker. It NO LONGER deletes the body — the body survives until step 0 of a
 #    later cycle removes it, and only once the replacement exists.
-# 6. Open PR + enable auto-merge. After merge, 02-publish → 03-invoke-jules
+# 6. Open PR + enable auto-merge. After merge, 03-invoke-jules (6h cron)
 #    picks up the marked ASINs (pick-asin keeps a marked ASIN eligible while its
 #    replacement body has not landed). A silently-failed regeneration leaves the
 #    old body intact (no 404) and is retried next cycle.
@@ -90,7 +90,7 @@ jobs:
           [ "$SLACK" -lt 0 ] && SLACK=0
           if [ -n "$INPUT_LIMIT" ]; then SLACK="$INPUT_LIMIT"; fi
           # 2026-06-08 (session 117 / #2008): Jules daily quota 共有ゲート。
-          # この workflow は ASIN を amazon.json へ注入し 02-publish→03-invoke-jules が
+          # この workflow は ASIN を amazon.json へ注入し 03-invoke-jules (6h cron) が
           # session を作る "03 に次ぐ producer"。03 と同じ rolling-24h 実 quota を尊重し、
           # 残り予算 (cap 80 = 100 から 20 margin) で SLACK を絞る。budget 0 なら count=0 で
           # green skip ([[reference-omochairo-jules-api-limits]] / prevent 側 graceful skip)。
@@ -183,7 +183,7 @@ jobs:
           ## Why
           fetch_amazon new-ASIN supply was low at cron time, leaving Jules slots idle. Selected ASINs are the lowest \`quality.total_score\` / oldest articles (sidecar-missing articles ranked first as old-prompt revisions).
 
-          After merge, 02-publish → 03-invoke-jules re-generates each marked ASIN. The old body survives until its replacement lands, so a failed regeneration never orphans the page into a 404 (the bug behind #2711).
+          After merge, 03-invoke-jules (6h cron) re-generates each marked ASIN. The old body survives until its replacement lands, so a failed regeneration never orphans the page into a 404 (the bug behind #2711).
           EOF
           )" \
             --base main \
