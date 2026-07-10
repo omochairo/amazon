@@ -192,6 +192,10 @@ def update_ranking_pool(existing_asins, new_asins, article_covered) -> list:
 def resolve_ranking_asins(ranking_items, api, covered, limit=0, search_index="All", sleep=1.1):
     """純粋ロジック: 未マッチ JAN を解決し manifest dict を返す (テスト driver)。"""
     jans = _collect_unmatched_jans(ranking_items)
+    # #2818 対策0: --limit で切り詰める前の候補プール総数を記録する。旧実装は
+    # limit 適用後の len(jans) しか manifest に残さず、smoke run (--limit 1) の
+    # ログが「候補は1件しかなかった」ように誤読された (実際は切り詰めの結果)。
+    jan_candidates_before_limit = len(jans)
     if limit and limit > 0:
         jans = jans[:limit]
     resolved, unresolved, skipped = [], [], []
@@ -210,6 +214,7 @@ def resolve_ranking_asins(ranking_items, api, covered, limit=0, search_index="Al
         if sleep and i < len(jans) - 1:
             time.sleep(sleep)
     return {
+        "jan_candidates_before_limit": jan_candidates_before_limit,
         "input_unmatched_jans": len(jans),
         "resolved": resolved,
         "unresolved": unresolved,
@@ -285,6 +290,7 @@ def main():
     manifest["generated_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     logger.info(
         f"Resolve: unmatched_jans={manifest['input_unmatched_jans']} "
+        f"(candidates_before_limit={manifest['jan_candidates_before_limit']}) "
         f"resolved={len(manifest['resolved'])} unresolved={len(manifest['unresolved'])} "
         f"skipped_covered={len(manifest['skipped_already_covered'])}"
     )

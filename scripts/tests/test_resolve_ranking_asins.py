@@ -165,6 +165,22 @@ class ResolveRankingAsinsTest(unittest.TestCase):
         self.assertEqual(m["new_asins"], ["B0NEW010"])
         self.assertEqual(api.calls, ["4904810000010"])
 
+    def test_limit_reports_pre_limit_candidate_count(self):
+        # #2818 対策0: --limit で切り詰める前の候補プール総数 (3件) を
+        # input_unmatched_jans (切り詰め後=1件) と区別して manifest に残す。
+        # 旧実装は candidates_before_limit が無く、smoke run (--limit 1) の
+        # ログから「候補は1件しか無かった」と誤読される事故があった。
+        api = FakeAPI({"4904810000010": "B0NEW010"})
+        m = rr.resolve_ranking_asins(self.items, api, set(), limit=1, sleep=0)
+        self.assertEqual(m["jan_candidates_before_limit"], 3)
+        self.assertEqual(m["input_unmatched_jans"], 1)
+
+    def test_no_limit_pre_and_post_counts_match(self):
+        api = FakeAPI({})
+        m = rr.resolve_ranking_asins(self.items, api, set(), limit=0, sleep=0)
+        self.assertEqual(m["jan_candidates_before_limit"], 3)
+        self.assertEqual(m["input_unmatched_jans"], 3)
+
 
 class LoadCoveredAsinsTest(unittest.TestCase):
     def test_articles_suffix_and_per_asin_dirs(self):
