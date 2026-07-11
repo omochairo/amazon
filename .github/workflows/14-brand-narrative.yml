@@ -104,6 +104,26 @@ jobs:
           echo "Picked: $BRAND"
           cat /tmp/brand.json
 
+      # #1329 Phase 3B: 蓄積 GSC 週次スナップショット (data/analytics/gsc_history/,
+      # #1329 infra) から選定 brand が実際に検索されている語を抽出し、後段の
+      # Jules prompt に「読者が実際に検索している語」として注入する材料を作る。
+      # build_brand_query_context.py は read-only・write IO なし。歩留まりは
+      # 低いブランドが大半 (実測 11/286, issuecomment-4940324426) だが
+      # global_seo_hints は毎回非空になりやすいため常時実行する。失敗・データ
+      # 欠如時は fallback:true として後段で graceful に扱う (workflow は落とさない)。
+      - name: Build GSC query context (#1329 Phase 3B)
+        if: steps.select.outputs.count == '1'
+        id: query_context
+        continue-on-error: true
+        run: |
+          BRAND=$(python -c "import json; print(json.load(open('/tmp/brand.json', encoding='utf-8'))['brand'])")
+          python scripts/build_brand_query_context.py --brand "$BRAND" --out /tmp/query_context.json || true
+          if [ -f /tmp/query_context.json ]; then
+            cat /tmp/query_context.json
+          else
+            echo "build_brand_query_context.py failed or produced no output; prompt injection will be skipped."
+          fi
+
       # 2026-06-08 (session 116 / #2008): Jules daily quota 共有ゲート。
       # この weekly cron は 1 run=1 session を作るが、quota 枯渇 (rolling-24h 100/100)
       # 時に従来は Create Jules session が HTTP 400 FAILED_PRECONDITION で hard-fail し、
@@ -178,6 +198,53 @@ jobs:
           TOP3=$(python -c "import json; print(json.load(open('/tmp/brand.json', encoding='utf-8'))['top_3_series_csv'])")
           IS_REFRESH=$(python -c "import json; print(json.load(open('/tmp/brand.json', encoding='utf-8'))['is_refresh'])")
 
+          # #1329 Phase 3B: query_context.json (前ステップ, 失敗時は未生成) から
+          # 「読者が実際に検索している語」セクションを組む。ファイル不在・fallback:true・
+          # 汎用擬似ブランド (brand_taxonomy.yaml の exclude_from_taxonomy: true、例
+          # 「ノーブランド」) はブランド個別クエリを注入せず global_seo_hints のみ
+          # (それも空なら空文字列 = プロンプト不変)。捏造禁止ルールを必ず同梱する。
+          QUERY_CONTEXT=$(python - <<'PY'
+          import json, pathlib
+          import yaml
+
+          section = ""
+          qc_path = pathlib.Path("/tmp/query_context.json")
+          if qc_path.exists():
+              try:
+                  qc = json.loads(qc_path.read_text(encoding="utf-8"))
+              except Exception:
+                  qc = {}
+              brand = qc.get("brand", "")
+              is_generic = False
+              try:
+                  tax = yaml.safe_load(open("data/brand_taxonomy.yaml", encoding="utf-8"))
+                  for b in tax.get("brands", []):
+                      if b.get("canonical") == brand:
+                          is_generic = bool(b.get("exclude_from_taxonomy"))
+                          break
+              except Exception:
+                  pass
+              lines = []
+              queries = qc.get("queries") or []
+              if queries and not qc.get("fallback") and not is_generic:
+                  lines.append(f"- {brand} 指名で検索されている語 (直近{qc.get('weeks_covered', 0)}週, GSC実データ):")
+                  for q in queries:
+                      lines.append(f"  - 「{q['query']}」(impressions計 {q['impressions_sum']})")
+              hints = qc.get("global_seo_hints") or {}
+              age = hints.get("age_keywords_seen") or []
+              intent = hints.get("intent_keywords_seen") or []
+              if age:
+                  lines.append(f"- サイト全体で観測される年齢層キーワード: {', '.join(age)}")
+              if intent:
+                  lines.append(f"- サイト全体で観測される購入意図キーワード: {', '.join(intent)}")
+              if lines:
+                  section = "\n【読者が実際に検索している語 (GSC実データ、言い回しの参考のみ)】\n"
+                  section += "\n".join(lines)
+                  section += "\n※ 上記は検索データの参考情報。データに無い年齢層・数値・事実を新たに創作してはならない(捏造禁止)。自然に盛り込めそうな箇所があれば言い回しの参考にする程度に留める。\n"
+          print(section)
+          PY
+          )
+
           # Build prompt: AGENTS.md preamble + variable injection + template body.
           INTRO=$(cat <<EOF
           AGENTS.md を最初に必ず読み、その指示に厳密に従ってください。
@@ -205,7 +272,7 @@ jobs:
           - **最終 PR の差分は hugo/content/brands/${BRAND_SLUG}/_index.md の 1 ファイルのみ**
           - 作業中に作った fix_*.py / tmp_*.json 等は最終コミット前に必ず削除
           - frontmatter には title: "${BRAND}" / auto_generated: true / last_generated_at: "${TODAY_ISO}" を必ず含める
-
+          ${QUERY_CONTEXT}
           === 以下、jules/BRAND_NARRATIVE_PROMPT.md の内容 ===
           EOF
           )
