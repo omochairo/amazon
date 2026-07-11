@@ -85,6 +85,18 @@ def test_suggest_skips_stopword_tokens():
     assert result["candidates"] == []
 
 
+def test_suggest_skips_beyblade_random_booster_vol_token():
+    # #2644: "ランダムブースターvol" はベイブレードX の商品シリーズ名でブランドではない。
+    # tokenizer は "." で分割するため "bx-50 ランダムブースターvol.11" は
+    # "ランダムブースターvol" + "11" にトークン化される。stopword で reject される。
+    gsc = _make_gsc(by_query=[
+        {"query": "bx-50 ランダムブースターvol.11", "impressions": 21, "clicks": 0, "ctr": 0.0, "position": 5.0},
+    ])
+    result = suggest(gsc, set())
+    tokens = [c["token"] for c in result["candidates"]]
+    assert "ランダムブースターvol" not in tokens
+
+
 def test_suggest_min_impressions_filter():
     gsc = _make_gsc(by_query=[
         {"query": "ロンビー", "impressions": 5, "clicks": 0, "ctr": 0.0, "position": 5.0},
