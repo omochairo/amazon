@@ -139,19 +139,43 @@ def test_check_no_reseller_pricing_fails_on_44pct_premium():
 
 
 def test_check_no_reseller_pricing_passes_on_normal_markup():
-    """Amazon が 10% 高い程度なら通す (送料込み等の正常範囲)."""
+    """Amazon が 10% 高い程度なら通す (送料込み等の正常範囲).
+
+    5000円閾値 skip と混同しないよう amazon_price は 5000 円超で検証する。
+    """
     article = {
         "product": {
             "asin": "B0XXXXXX",
             "prices": {
-                "amazon": {"price": 3300},
-                "rakuten": {"price": 3000},
-                "yahoo": {"price": 3100},
+                "amazon": {"price": 6600},
+                "rakuten": {"price": 6000},
+                "yahoo": {"price": 6200},
             },
         }
     }
     result = check_no_reseller_pricing(article)
     assert result.passed
+
+
+def test_check_no_reseller_pricing_skips_low_price_products():
+    """#2416: amazon_price が 5000円以下なら ratio に関わらず skip する.
+
+    Yahoo/Rakuten は送料別表示のことがあり、安価商品ほど送料が ratio に
+    与える影響が大きく誤検知しやすい。実例 B0DJQYL96C (Amazon ¥464 vs
+    Rakuten ¥220, ratio 2.11x) は人手検証で正規販売と確認済み (#2416)。
+    """
+    article = {
+        "product": {
+            "asin": "B0DJQYL96C",
+            "prices": {
+                "amazon": {"price": 464},
+                "rakuten": {"price": 220},
+            },
+        }
+    }
+    result = check_no_reseller_pricing(article)
+    assert result.passed
+    assert "5000" in result.message
 
 
 def test_check_no_reseller_pricing_no_cross_prices_is_ok():

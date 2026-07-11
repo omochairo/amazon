@@ -699,6 +699,13 @@ def check_no_reseller_pricing(data: dict) -> CheckResult:
     legitimate Amazon markup (1.0-1.15x typical) against clear reseller
     premiums (1.3x+). Only fires when at least one of rakuten/yahoo has a
     real price so the gate doesn't false-trip on niche products.
+
+    Skipped entirely when amazon_price <= 5000 JPY (#2416): Yahoo/Rakuten
+    listings sometimes display prices excluding shipping, and for cheap
+    items the shipping cost is a large fraction of the total, so the ratio
+    spikes even for legitimate, non-reseller pricing. Manual review of 5
+    quarantined ASINs confirmed the 3 under ¥5000 were false positives
+    while the 1 over ¥5000 (¥24699) was a confirmed reseller.
     """
     product = data.get("product") or {}
     prices = product.get("prices") or {}
@@ -709,6 +716,8 @@ def check_no_reseller_pricing(data: dict) -> CheckResult:
         a_price = 0
     if a_price <= 0:
         return CheckResult("no_reseller_pricing", True, 1.0, "no amazon price")
+    if a_price <= 5000:
+        return CheckResult("no_reseller_pricing", True, 1.0, "amazon price <= 5000 JPY, skipped (shipping-inclusive ratio noise)")
     cross_prices: list[tuple[str, int]] = []
     for src in ("rakuten", "yahoo"):
         entry = prices.get(src) or {}
