@@ -180,7 +180,9 @@
   </header>
   <div class="brand-grid">
     {{- range $topBrands }}
-      {{- $term := .Name -}}
+      {{- /* #2817 スラッグ移行後 .Name は英語スラッグ (例: takara-tomy)。表示は
+             brand stub の title front matter (JP canonical) を使う (#2893 と同パターン)。 */}}
+      {{- $term := .Page.Title -}}
       {{- $pages := .Pages -}}
       {{- $top := first 1 (sort $pages "Params.ivs_score" "desc") -}}
       {{- $thumb := "" -}}
