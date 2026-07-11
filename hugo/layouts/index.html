@@ -158,7 +158,10 @@
     {{- range $topTags }}
       {{- if ge .Count 5 }}
       <a class="tag-chip" href="{{ .Page.RelPermalink }}">
-        #{{ .Name }} <span class="tag-chip-count">{{ .Count }}</span>
+        {{- /* #2817 スラッグ移行後 .Name は英語スラッグ (例: burokku) になったため、
+               term stub の title front matter (日本語正規名) を表示に使う
+               (category_dropdown.html #2893 と同じ根本原因・同じ解決パターン)。 */}}
+        #{{ .Page.Title }} <span class="tag-chip-count">{{ .Count }}</span>
       </a>
       {{- end }}
     {{- end }}
