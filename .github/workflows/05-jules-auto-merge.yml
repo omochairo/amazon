@@ -156,6 +156,13 @@ jobs:
             if [ "$state" = "MERGED" ]; then
               echo "PR merged. Dispatching GitLab mirror to publish."
               gh workflow run "Mirror main to GitLab" -R "$REPO" --ref main
+              # 2026-07-12 (#2893 follow-up): この merge も GITHUB_TOKEN 起因のため
+              # 21-ensure-tag-slugs.yml の push トリガーが発火しない (同じ既知制約)。
+              # dispatch しないと新記事の tags が data/term_slugs.yaml に永久未登録の
+              # まま溜まり、カテゴリ探索バー・商品カードタグ・おもちゃ診断のタグ一致等が
+              # 日本語表示できずスラッグのまま出る (#2893 で発覚)。workflow_dispatch は
+              # 全記事再スキャンだが ensure_tag_slugs.py は冪等なので毎 merge 起動でも安全。
+              gh workflow run "Ensure Tag Slugs" -R "$REPO" --ref main
               echo "Dispatched."
               exit 0
             fi

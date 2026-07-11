@@ -125,7 +125,9 @@
 {{- else }}
 <meta name="keywords" content="{{ if .Params.keywords -}}
     {{- range $i, $e := .Params.keywords }}{{ if $i }}, {{ end }}{{ $e }}{{ end }} {{- else }}
-    {{- range $i, $e := .Params.tags }}{{ if $i }}, {{ end }}{{ $e }}{{ end }} {{- end -}}">
+    {{- /* #2817 スラッグ移行後 .Params.tags は英語スラッグを持つため、taxonomy 経由で
+           日本語正規名を引く (category_dropdown.html #2893 と同じパターン)。 */}}
+    {{- range $i, $e := .GetTerms "tags" }}{{ if $i }}, {{ end }}{{ $e.LinkTitle }}{{ end }} {{- end -}}">
 {{- end }}
 {{- /* BRAND-HUB SEO description override when applicable */ -}}
 {{- if $brandDesc }}

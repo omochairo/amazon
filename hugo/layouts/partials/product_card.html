@@ -110,9 +110,13 @@
     {{- with .Params.ivs_axes }}{{ partial "score_minichart.html" . }}{{- end }}
     <div class="product-card-meta">
       <time datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date.Format "2006-01-02" }}</time>
-      {{- with .Params.tags }}
+      {{- /* #2817 スラッグ移行後 .Params.tags は英語スラッグを持つため、taxonomy 経由で
+             term ページの title front matter (日本語正規名) を引いて表示する
+             (category_dropdown.html #2893 と同じ根本原因・同じ解決パターン)。 */}}
+      {{- $cardTags := .GetTerms "tags" }}
+      {{- with $cardTags }}
         <span class="product-card-tags">
-          {{- range first 2 . }}<span class="product-card-tag">#{{ . }}</span>{{ end }}
+          {{- range first 2 . }}<span class="product-card-tag">#{{ .LinkTitle }}</span>{{ end }}
         </span>
       {{- end }}
     </div>

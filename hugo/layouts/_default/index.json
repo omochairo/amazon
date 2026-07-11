@@ -1,6 +1,13 @@
 {{- $.Scratch.Add "index" slice -}}
 {{- range where site.RegularPages "Section" "posts" -}}
     {{- if and (not .Params.searchhidden) (not .Params.searchHidden) (ne .File.BaseFileName "privacy") (ne .Layout `archives`) (ne .Layout `search`) }}
+    {{- /* #2817 スラッグ移行後 .Params.tags は英語スラッグを持つため、diagnosis.js の
+           JP キーワード完全一致マッチングや product-card.js / fastsearch.js の表示が
+           サイレントに壊れていた (タグ由来のスコア加点が常に不発)。taxonomy 経由で
+           term ページの title front matter (日本語正規名) を index.json に載せる
+           (category_dropdown.html #2893 と同じ根本原因・同じ解決パターン)。 */}}
+    {{- $tagNames := slice -}}
+    {{- range .GetTerms "tags" }}{{ $tagNames = $tagNames | append .LinkTitle }}{{ end -}}
     {{- $.Scratch.Add "index" (dict
         "title"        .Title
         "content"      .Plain
@@ -20,7 +27,7 @@
         "unix_time"    .Date.Unix
         "age_range"    (.Params.age_range | default "")
         "age_min_months" (.Params.age_min_months | default 0)
-        "tags"         (.Params.tags | default slice)
+        "tags"         $tagNames
     ) -}}
     {{- end }}
 {{- end -}}
