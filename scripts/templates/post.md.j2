@@ -108,6 +108,7 @@
 </details>
 {% endif %}
 
+{% set price_comparison_md -%}
 ## <small>{{ product.name }}の</small>💴 価格を3サイトで比較
 
 執筆時点の価格をAmazon・楽天・Yahoo!ショッピングで横断比較しました。
@@ -130,6 +131,13 @@
 {% if product.asin %}
 <div class="keepa-graph"><div class="keepa-graph-label">📈 Amazon 価格推移グラフ（Keepa 提供）</div><img src="https://graph.keepa.com/pricehistory.png?domain=co.jp&asin={{ product.asin }}" alt="{{ product.name }} の Amazon 価格推移グラフ" loading="lazy" onerror="this.closest('.keepa-graph').style.display='none'"><p>※ グラフは <a href="https://keepa.com/" target="_blank" rel="noopener nofollow">Keepa</a> によって自動生成される画像です。記事執筆後の価格変動も反映されます。</p></div>
 {% endif %}
+{%- endset -%}
+{#- #1980: A-7 query intent (commercial/informational) で購入 CTA (価格比較+Keepa) の
+   掲載位置を切替。cta_layout 未設定 (大多数のページ) はここに従来どおり即出し、
+   informational のみ後段 (💭 レビュー傾向の分析の後) に遅延する。 -#}
+{%- if cta_layout != 'informational' -%}
+{{ price_comparison_md }}
+{%- endif %}
 
 ## <small>{{ product.name }}の</small>🌟 知育スコアの内訳
 
@@ -182,6 +190,11 @@
 <p class="review-cta"><a href="{{ product.amazon_review_url }}" target="_blank" rel="noopener nofollow sponsored">🛍️ Amazon のカスタマーレビューを見る →</a></p>
 {% endif %}
 {% endif %}
+
+{#- #1980: informational 意図ページはここ (レビュー傾向の分析の後) まで購入 CTA を遅延。 -#}
+{%- if cta_layout == 'informational' -%}
+{{ price_comparison_md }}
+{%- endif %}
 
 {% if product.images and product.images|length > 1 %}
 ## <small>{{ product.name }}の</small>📸 関連画像情報
