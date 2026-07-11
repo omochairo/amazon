@@ -1624,6 +1624,35 @@ def _load_query_intent_map(path: pathlib.Path) -> dict[str, str]:
     return out
 
 
+def _load_canonical_overrides(path: pathlib.Path) -> dict[str, str]:
+    """data/analytics/canonical_overrides.json (A-3 query cannibalization 統合,
+    epic #1356) から ``/products/<asin>/`` page path → 統合先 canonical URL の
+    dict を返す。カニバリ Issue (#2370 等) で「弱い方の記事を主役 URL へ
+    canonical 集約する」と編集判断した場合に、front matter の canonicalURL
+    (build_post.py が毎回再生成しても失われないよう data-driven にしたもの) を
+    決めるために使う。ファイル不在・空・parse 失敗は無視し空 dict を返す
+    (呼び出し側は自己 canonical のまま = 現行挙動へ fallback する)。
+    """
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    out: dict[str, str] = {}
+    for row in payload.get("overrides", []) if isinstance(payload, dict) else []:
+        if not isinstance(row, dict):
+            continue
+        page = row.get("page")
+        canonical = row.get("canonical")
+        if not page or not canonical:
+            continue
+        page_path = urllib.parse.urlparse(page).path.lower()
+        if page_path:
+            out[page_path] = canonical
+    return out
+
+
 def _matched_passes_quality(
     matched: dict[str, Any],
     amazon_price: int,
@@ -2174,6 +2203,7 @@ def _frontmatter_meta(
     json_file_path: pathlib.Path,
     score_result: ScoreResult | None = None,
     query_intent_map: dict[str, str] | None = None,
+    canonical_overrides: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     title = data.get("title", "No Title")
     variants = data.get("title_variants") or []
@@ -2226,6 +2256,14 @@ def _frontmatter_meta(
         cta_intent = query_intent_map.get(meta["url"])
         if cta_intent:
             meta["cta_layout"] = cta_intent
+    # #2370: A-3 query cannibalization 統合。編集判断で「弱い方の記事を主役
+    # URL へ集約する」と決めたページのみ canonicalURL を付与し、head.html の
+    # <link rel="canonical"> をそちらに向ける (post_canonical.html の可視
+    # "originally published at" リンクは ShowCanonicalLink 未設定のため出ない)。
+    if canonical_overrides:
+        canonical_target = canonical_overrides.get(meta["url"])
+        if canonical_target:
+            meta["canonicalURL"] = canonical_target
     image_url = product.get("image") or ""
     if image_url:
         meta["product_image"] = image_url
@@ -2464,6 +2502,8 @@ def main() -> None:
                         help="Hugo config used to derive site base path for internal links on competitor cards")
     parser.add_argument("--query-intent", default="data/analytics/query_intent.json",
                         help="A-7 query intent classification (#1980); used to set cta_layout front matter")
+    parser.add_argument("--canonical-overrides", default="data/analytics/canonical_overrides.json",
+                        help="A-3 query cannibalization canonical consolidation (#2370); used to set canonicalURL front matter")
     args = parser.parse_args()
 
     evaluate_article = None
@@ -2496,6 +2536,9 @@ def main() -> None:
     query_intent_map = _load_query_intent_map(pathlib.Path(args.query_intent))
     if query_intent_map:
         print(f"cta_layout: loaded {len(query_intent_map)} page(s) with classified query intent")
+    canonical_overrides = _load_canonical_overrides(pathlib.Path(args.canonical_overrides))
+    if canonical_overrides:
+        print(f"canonicalURL: loaded {len(canonical_overrides)} page(s) with A-3 canonical override")
 
     # 年齢別発達段階目安データのロード
     stages_path = pathlib.Path("hugo/data/development_stages.json")
@@ -2684,6 +2727,7 @@ def main() -> None:
             fm_meta = _frontmatter_meta(
                 data, slug, draft, git_history, f,
                 score_result=fresh_sr, query_intent_map=query_intent_map,
+                canonical_overrides=canonical_overrides,
             )
             if fm_meta.get("cta_layout"):
                 cta_layout_applied += 1

@@ -287,6 +287,12 @@ on:
       # inverse trap で validate 不発火→auto-merge 永久 BLOCKED になる
       # ([[04-validate-paths-inverse-trap]])。
       - 'data/analytics/query_intent.json'
+      # 2026-07-11 (#2370): A-3 query cannibalization の手動編集判断 (弱い方の記事を
+      # 主役 URL へ canonical 集約) を data-driven に保持するファイル。build_post.py が
+      # 毎回 frontmatter を全再生成するため、この override が無いと再生成のたびに
+      # canonicalURL が消える。データのみ変更する PR で inverse trap
+      # ([[04-validate-paths-inverse-trap]]) になるのを防ぐため登録。
+      - 'data/analytics/canonical_overrides.json'
       # 2026-06-10 (session 152 / #1329 Phase 3A): 蓄積 GSC スナップショットから
       # brand↔query コンテキストを組む read-only script + unit test。14-brand-narrative の
       # prompt 注入 (Phase 3B) はこれを呼ぶ。paths 未登録だと inverse trap で validate
