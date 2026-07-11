@@ -56,7 +56,9 @@
 
 <div class="brand-grid">
   {{- range $terms }}
-    {{- $term := .Name -}}
+    {{- /* #2817 スラッグ移行後 .Name は英語スラッグ (例: takara-tomy)。表示は
+           brand stub の title front matter (JP canonical) を使う (#2893 と同パターン)。 */}}
+    {{- $term := .Page.Title -}}
     {{- $pages := .Pages -}}
     {{- /* 各 brand の代表画像 = そのブランドの記事の中で知育スコア最大の記事のサムネ */ -}}
     {{- $top := first 1 (sort $pages "Params.ivs_score" "desc") -}}
@@ -96,7 +98,9 @@
 <div class="tag-chips term-tag-chips">
   {{- range $visibleTerms }}
     <a class="tag-chip" href="{{ .Page.RelPermalink }}">
-      #{{ .Name }} <span class="tag-chip-count">{{ len .Pages }}</span>
+      {{- /* #2817 スラッグ移行後 .Name は英語スラッグ。表示は term stub の
+             title front matter (JP正規名) を使う (#2893 と同パターン)。 */}}
+      #{{ .Page.Title }} <span class="tag-chip-count">{{ len .Pages }}</span>
     </a>
   {{- end }}
 </div>
