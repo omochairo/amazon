@@ -7,6 +7,10 @@
   Hugo は Latin taxonomy 名を小文字化しうるため exact → lower の順で照合する。
   ※ partial の中では $ は引数自身 (文字列) なので、データは site.Data から取得する。
   ※ 空判定を壊さないため、空ケースでは空白を一切出力しないよう chomp を徹底する。
+  #2817 スラッグ移行後、呼び出し元によっては (例: related_carousel.html が渡す
+  .Params.tags) 日本語正規名ではなくローマ字スラッグが渡ってくる。exact → lower の
+  照合で miss した場合、site.GetPage で term ページ (/tags/<slug>/) を引いて
+  その .Title (日本語正規名) で再度 exact → lower 照合するフォールバックを持つ。
 */ -}}
 {{- $name := . -}}
 {{- $url := "" -}}
@@ -17,6 +21,18 @@
   {{- else -}}
     {{- range $k, $v := $m -}}
       {{- if eq (lower $k) (lower $name) -}}{{- $url = $v -}}{{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if not $url -}}
+    {{- with site.GetPage (printf "/tags/%s" (lower $name)) -}}
+      {{- $title := .Title -}}
+      {{- with (index $m $title) -}}
+        {{- $url = . -}}
+      {{- else -}}
+        {{- range $k, $v := $m -}}
+          {{- if eq (lower $k) (lower $title) -}}{{- $url = $v -}}{{- end -}}
+        {{- end -}}
+      {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}

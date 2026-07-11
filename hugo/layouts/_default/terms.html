@@ -22,9 +22,13 @@
 {{- $visibleTerms := slice -}}
 {{- range .Data.Terms.ByCount -}}
   {{- if ge (len .Pages) $threshold -}}
-    {{- $isBrandDup := and (eq $plural "tags") (partial "is_brand_tag.html" .Name) -}}
+    {{- /* .Name ではなく .Page.Title を渡す (#2817 スラッグ移行後 .Name はスラッグになりうる。
+           .Page.Title は term ページ frontmatter の日本語正規名で決定的。他の呼び出し元
+           (head.html / sitemap.xml / single.html) も .Title (Page context) を渡す形に
+           揃える。ここは Data.Terms.ByCount = OrderedTaxonomyEntry なので .Page.Title)。 */ -}}
+    {{- $isBrandDup := and (eq $plural "tags") (partial "is_brand_tag.html" .Page.Title) -}}
     {{- /* #2765: hub に寄せた tag は curated hub を正本とするため一覧から除外。 */ -}}
-    {{- $isHubDup := and (eq $plural "tags") (partial "hub_for_tag.html" .Name) -}}
+    {{- $isHubDup := and (eq $plural "tags") (partial "hub_for_tag.html" .Page.Title) -}}
     {{- if not (or $isBrandDup $isHubDup) -}}{{- $visibleTerms = $visibleTerms | append . -}}{{- end -}}
   {{- end -}}
 {{- end -}}

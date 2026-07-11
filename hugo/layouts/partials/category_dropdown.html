@@ -8,28 +8,69 @@
     バー全体の「下」に full-width inline 展開する → 横スクロールコンテナの
     overflow clip でドロップダウンが隠れる問題を回避 (旧実装の「押しても何も
     起きない」原因)。JS で 1 グループずつ開閉 (アコーディオン)。
+  - #2817 (PR #2831) で build_post.py が記事 frontmatter の tags を日本語→ローマ字
+    スラッグに変換するようになったため、site.Taxonomies.tags のキーはスラッグ
+    (例: "burokku") になった。category_taxonomy.yaml は日本語表記 (「ブロック」) の
+    まま維持する設計なので、直接 index すると exact/lower とも miss する。
+    各 term ページ (hugo/content/tags/<slug>/_index.md) の frontmatter title は
+    日本語正規名を保持しているため、.Page.Title → taxonomy entry の逆引き map を
+    先に 1 パス構築し、それを主経路として解決する。
 */ -}}
 {{- with site.Data.category_taxonomy }}
+{{- /* 設定済みタグ名 (約34個) の集合。逆引き map を全 2620 term に対して作ると
+       重いので、この集合に該当する title だけを拾う。 */ -}}
+{{- $wanted := dict }}
+{{- range .groups }}
+  {{- range .tags }}
+    {{- $wanted = merge $wanted (dict . true) }}
+  {{- end }}
+{{- end }}
+{{- $byTitle := dict }}
+{{- range $key, $entry := site.Taxonomies.tags }}
+  {{- $title := $entry.Page.Title }}
+  {{- if index $wanted $title }}
+    {{- /* 同名 title が複数 slug に分裂しているケースは後勝ちで良い (稀・許容)。 */ -}}
+    {{- $byTitle = merge $byTitle (dict $title (dict "count" $entry.Count "page" $entry.Page)) }}
+  {{- end }}
+{{- end }}
 {{- $groups := slice }}
 {{- range .groups }}
   {{- $g := . }}
   {{- $children := slice }}
   {{- $total := 0 }}
   {{- range $tag := .tags }}
-    {{- /* Hugo は Latin の taxonomy キーを小文字化する (例: "LaQ" → "laq")。
-           日本語はケース無しで素通し。exact → lower の順で引いて取りこぼし防止。 */}}
-    {{- with (or (index site.Taxonomies.tags $tag) (index site.Taxonomies.tags (lower $tag))) }}
+    {{- /* 解決順: (1) title 逆引き (#2817 スラッグ移行後の主経路)
+           (2) site.Taxonomies.tags の exact key (後方互換)
+           (3) lower 化 key (Latin 表記、例: "LaQ" → "laq") */}}
+    {{- $resolved := index $byTitle $tag }}
+    {{- $entry := "" }}
+    {{- $count := 0 }}
+    {{- $page := "" }}
+    {{- if $resolved }}
+      {{- $count = $resolved.count }}
+      {{- $page = $resolved.page }}
+      {{- $entry = true }}
+    {{- else }}
+      {{- with (or (index site.Taxonomies.tags $tag) (index site.Taxonomies.tags (lower $tag))) }}
+        {{- $count = .Count }}
+        {{- $page = .Page }}
+        {{- $entry = true }}
+      {{- end }}
+    {{- end }}
+    {{- if $entry }}
       {{- /* #2765: 情報型 hub を持つ tag は導線を hub に張り替える。global cat-nav は
              全ページに出るため、これで孤立 hub に毎ページ内部リンクが入り、noindex 化した
              tag への重複リンクも消える (authority を hub に集約)。 */ -}}
-      {{- $url := .Page.RelPermalink }}
+      {{- $url := $page.RelPermalink }}
       {{- $hubURL := partial "hub_for_tag.html" $tag }}
       {{- if $hubURL }}{{- $url = $hubURL }}{{- end }}
-      {{- $children = $children | append (dict "name" $tag "count" .Count "url" $url) }}
-      {{- $total = add $total .Count }}
+      {{- $children = $children | append (dict "name" $tag "count" $count "url" $url) }}
+      {{- $total = add $total $count }}
     {{- end }}
   {{- end }}
   {{- if gt (len $children) 0 }}
+    {{- /* 子タグは記事件数の降順に表示 (グループ自体の並びはキュレーション順を維持)。 */ -}}
+    {{- $children = sort $children "count" "desc" }}
     {{- $groups = $groups | append (dict "emoji" $g.emoji "name" $g.name "slug" $g.slug "total" $total "children" $children) }}
   {{- end }}
 {{- end }}

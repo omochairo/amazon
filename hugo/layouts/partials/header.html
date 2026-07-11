@@ -112,5 +112,6 @@
         </ul>
     </nav>
     {{- /* Issue #2164 #6: 主メニュー下のカテゴリ探索バー (おもちゃタイプ別) */}}
-    {{- partial "category_dropdown.html" . }}
+    {{- /* category_dropdown.html の出力は site.* のみ依存でページ非依存のため全ページ共通キャッシュが安全。 */}}
+    {{- partialCached "category_dropdown.html" . }}
 </header>
