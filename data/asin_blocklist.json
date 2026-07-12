@@ -49,6 +49,62 @@
       "product_name": "Tegu(テグ)積み木 マグネットブロック 24ピース/ティント TYTU00401",
       "reason": "reseller ではなく Amazon 商品ページ消失 (2026-07-12 時点で https://www.amazon.co.jp/dp/B00FZE7WOI アクセス時に「ページが見つかりません」の404を確認)。#2416 で人手検証済み。",
       "added_at": "2026-07-12"
+    },
+    {
+      "asin": "B0GNPYZL5W",
+      "canonical_asin": "",
+      "product_name": "UK ダンスホール Kiko Bun Hard Time Special",
+      "reason": "ジャンル不一致 (音楽レコード。知育玩具ではない)。SearchIndex=Toys の search sweep に混入し記事化されていた。#2823 の部分棚卸し (browse_nodes 49% 蓄積時点) で検出/ユーザ目視で確認。",
+      "added_at": "2026-07-12"
+    },
+    {
+      "asin": "B09J81VQW2",
+      "canonical_asin": "",
+      "product_name": "DJI 65W ポータブル充電器",
+      "reason": "ジャンル不一致 (モバイルバッテリー/充電器。知育玩具ではない)。SearchIndex=Toys の search sweep に混入し記事化されていた。#2823 の部分棚卸し (browse_nodes 49% 蓄積時点) で検出/ユーザ目視で確認。",
+      "added_at": "2026-07-12"
+    },
+    {
+      "asin": "B01613HD6S",
+      "canonical_asin": "",
+      "product_name": "Clover ひも通し はさみ式 35-001",
+      "reason": "ジャンル不一致 (手芸用ひも通し道具。知育玩具ではない)。SearchIndex=Toys の search sweep に混入し記事化されていた。#2823 の部分棚卸し (browse_nodes 49% 蓄積時点) で検出/ユーザ目視で確認。",
+      "added_at": "2026-07-12"
+    },
+    {
+      "asin": "B00RF4FFRC",
+      "canonical_asin": "",
+      "product_name": "Clover スピードゴム通し クリップ式 35-114",
+      "reason": "ジャンル不一致 (実カテゴリ=糸通し・ひも通し(ホビー)。手芸用品で知育玩具ではない)。SearchIndex=Toys の search sweep に混入し記事化されていた。#2823 の genre_gate 判定で flag 検出。",
+      "added_at": "2026-07-12"
+    },
+    {
+      "asin": "B002KLX798",
+      "canonical_asin": "",
+      "product_name": "クロバー(Clover) Clover クロバー ひも通し 『幅広ひも通し 35-106』",
+      "reason": "ジャンル不一致 (実カテゴリ=糸通し・ひも通し(ホビー)。手芸用品で知育玩具ではない。おもちゃストア等の販促ノードのみおもちゃ扱いで実カテゴリは非該当)。SearchIndex=Toys の search sweep に混入し記事化されていた。#2823 の genre_gate 判定で flag 検出。",
+      "added_at": "2026-07-12"
+    },
+    {
+      "asin": "B0BZW5BXSZ",
+      "canonical_asin": "",
+      "product_name": "7RabbitRiogrande ロング紐通し 2個セット (約29cm 手芸・衣類の簡単ひも通し)",
+      "reason": "ジャンル不一致 (実カテゴリ=糸通し・ひも通し(ホビー)。手芸用品で知育玩具ではない)。SearchIndex=Toys の search sweep に混入し記事化されていた。#2823 の genre_gate 判定で flag 検出。",
+      "added_at": "2026-07-12"
+    },
+    {
+      "asin": "B07TL3JZGH",
+      "canonical_asin": "",
+      "product_name": "清原 KIYOHARA ループ返し 265mm SUN60-63 シルバー",
+      "reason": "ジャンル不一致 (実カテゴリ=手芸キット(ホビー)。裁縫道具で知育玩具ではない)。SearchIndex=Toys の search sweep に混入し記事化されていた。#2823 の genre_gate 判定で flag 検出。",
+      "added_at": "2026-07-12"
+    },
+    {
+      "asin": "B0H2WSFWKY",
+      "canonical_asin": "B0GNPYZL5W",
+      "product_name": "UK ダンスホール Kiko Bun Hard Time Special",
+      "reason": "ジャンル不一致 (音楽レコード。知育玩具ではない)。削除・blocklist 済みの B0GNPYZL5W とタイトル完全一致の同一商品の別 ASIN。#2823 の genre_gate 部分棚卸しで flag 検出 (実カテゴリ=カテゴリー別(ホビー))・ユーザ目視確認済み。",
+      "added_at": "2026-07-12"
     }
   ]
 }

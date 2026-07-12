@@ -44,6 +44,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 import _fetch_targets
+from genre_gate import classify_genre
 
 # #795 follow-up (session 62): 旧 DEFAULT_KEYWORDS は 10 件中 4 件が王道
 # (知育玩具/木のおもちゃ/パズル/レゴ) で、これらは Amazon search の top 100 が
@@ -195,6 +196,23 @@ logger = logging.getLogger("fetch_amazon")
 # 04-validate-article-pr.yml が scripts/fetch_amazon.py / creators_api_client.py
 # を触る PR で scripts/fetch_amazon_dry_run.py を呼んで実 API への 1 リクエストで
 # 200 OK + items[] を確認する (Issue #785)。
+#
+# 記事 ASIN 巡回 (2026-07-07) の GetItems で browseNodeInfo を追加していたが、
+# 2026-07-08 (#2823 前倒し) から search sweep でも同じ resources を使う。理由:
+# SearchIndex=Toys でも他カテゴリ商品が混入する実例 (B0GJXXRWM5=車＆バイク、
+# B002KLX798=Clover 糸通し 手芸用品) があり、#2823 のジャンル不一致検査ゲート
+# (scripts/genre_gate.py) を「search で拾った時点」で効かせるには search 応答
+# 自体に browse_nodes が要る (記事化されてからの棚卸しだけでは供給元を絞れない)。
+# browseNodeInfo.browseNodes / .ancestor は creators_api_client.get_items /
+# search_items 両方のデフォルト resources に含まれており Creator API で valid
+# (2026-07-08 時点 per_asin 207 snapshot で ancestor 取得を実証済)。.ancestor が
+# 無いと ancestor チェーンが返らず extract_browse_nodes の root が全件 null に
+# なり、ジャンル検査が成立しない (indeterminate 直行で fail-open のまま)。
+# 注意: invalid resource だと fetch 全体が落ちる前例あり (PR #761→hotfix #783)。
+# 再発防止として 04-validate-article-pr.yml の dry-run gate (Issue #785) が PR CI
+# で SEARCH_ITEM_RESOURCES を searchItems に投げて 200 + items[] != [] を確認する。
+# マージ後も workflow_dispatch で 1 run 実証し、raw に "ancestor" が入ること・
+# snapshot の root が非 null になることを確認すること。
 SEARCH_ITEM_RESOURCES = [
     "images.primary.large",
     "images.variants.large",
@@ -218,23 +236,16 @@ SEARCH_ITEM_RESOURCES = [
     # invalid だったため hotfix PR #783 で削除。Issue #784 (本 PR) で代替案として
     # extract_free_shipping を merchantInfo.name == Amazon 直販 ベースに切替済
     # (Amazon 直販なら Prime/2,000円以上 free shipping が保証されるため実質同義)。
-]
-
-# 記事 ASIN 巡回 (2026-07-07) の GetItems 用 resources。SEARCH_ITEM_RESOURCES に
-# browseNodeInfo を足し、カテゴリを snapshot に残す (SearchIndex=Toys でも
-# 他カテゴリ商品が混入した実例 B0GJXXRWM5=車＆バイク があり、後段の genre 検査を
-# 可能にするため)。browseNodeInfo.browseNodes は creators_api_client.get_items /
-# search_items 両方のデフォルト resources に含まれており Creator API で valid。
-# 2026-07-08 (#2823): .ancestor を追加。無印 browseNodes だけでは ancestor チェーンが
-# 返らず、extract_browse_nodes の root が全件 null になっていた (per_asin 207 snapshot
-# で実測 ancestor 0 件)。root 無しでは #2823 のジャンル不一致検査が成立しない。
-# 注意: invalid resource だと fetch 全体が落ちる前例あり (PR #761→hotfix #783)。
-# マージ後は必ず workflow_dispatch で 1 run 実証し、raw に "ancestor" が入ること・
-# snapshot の root が非 null になることを確認する。
-REFRESH_ITEM_RESOURCES = SEARCH_ITEM_RESOURCES + [
+    # #2823 前倒し (2026-07-08): search sweep でもカテゴリ判定を可能にするため
+    # browseNodeInfo を追加。上のブロックコメント参照。
     "browseNodeInfo.browseNodes",
     "browseNodeInfo.browseNodes.ancestor",
 ]
+
+# 変数名は互換のため残す (記事 ASIN 巡回の GetItems 用途で参照している箇所がある)。
+# #2823 前倒しで SEARCH_ITEM_RESOURCES 自体に browseNodeInfo を統合したので、
+# 現在は SEARCH_ITEM_RESOURCES と完全に同一。
+REFRESH_ITEM_RESOURCES = SEARCH_ITEM_RESOURCES
 
 # 記事 ASIN 巡回で GetItems 応答から連続でこの回数欠落したら、その ASIN は
 # Amazon から消滅した (dp が 404) とみなし snapshot に status="gone" を書く。
@@ -818,8 +829,9 @@ def extract_browse_nodes(item: dict) -> list:
     """browseNodeInfo.browseNodes から [{id, name, root}] を返す。
 
     root は ancestor チェーンを遡った最上位カテゴリ名 (例: おもちゃ / 車＆バイク)。
-    REFRESH_ITEM_RESOURCES でのみ取得される (search sweep では resource 未要求
-    なので空リスト → normalize_api_item はキー自体を省く)。
+    #2823 前倒し (2026-07-08) 以降は SEARCH_ITEM_RESOURCES に browseNodeInfo を
+    統合したため search sweep でも取得される。resource 未要求の古い応答では
+    空リスト → normalize_api_item はキー自体を省く。
     """
     nodes = _safe_get(item, "browseNodeInfo", "browseNodes", default=[]) or []
     out = []
@@ -1222,6 +1234,8 @@ def main():
             return False
         if is_low_stock_reseller_signal(it.get("availability") or ""):
             return False
+        if classify_genre(it.get("browse_nodes") or [])[0] == "flag":
+            return False
         return True
 
     new_for_jules = sum(1 for it in items if _is_jules_eligible(it))
@@ -1302,6 +1316,7 @@ def main():
     #      表記が出る ASIN は転売出品の確率が高い
     # sniper 指定された ASIN はユーザ意図を尊重して除外しない (=明示確認済み)
     reseller_dropped = 0
+    genre_dropped = 0
     items_for_jules: list = []
     for it in items:
         asin = it.get("asin") or ""
@@ -1320,11 +1335,18 @@ def main():
             logger.info(f"  reseller-drop {asin}: low-stock availability={availability!r}")
             reseller_dropped += 1
             continue
+        verdict, cat_nodes = classify_genre(it.get("browse_nodes") or [])
+        if verdict == "flag":
+            cats = ", ".join(f"{nd.get('name')}({nd.get('root')})" for nd in cat_nodes[:4])
+            logger.info(f"  genre-drop {asin}: 非対象カテゴリ [{cats}]")
+            genre_dropped += 1
+            continue
         items_for_jules.append(it)
     dropped = len(items) - len(items_for_jules)
     logger.info(
         f"Collected {len(items)} unique ASINs, {len(items_for_jules)} new for Jules "
-        f"(dropped {dropped} already-covered + {reseller_dropped} reseller-signal)"
+        f"(dropped {dropped} already-covered + {reseller_dropped} reseller-signal "
+        f"+ {genre_dropped} genre-mismatch)"
     )
     # #795: 親 ASIN dedup の効きを観察する。0 が続けば Creator API の productInfo
     # で parentAsin が取れていない可能性 → Issue を再起票して resource を再評価。
