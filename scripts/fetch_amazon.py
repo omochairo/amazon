@@ -1227,15 +1227,20 @@ def main():
 
     sampling_active = not args.keywords and not os.environ.get("AMAZON_SEARCH_KEYWORDS")
     if sampling_active:
-        effective_sample_size = max(0, args.keyword_sample_size - len(user_keywords))
-        if effective_sample_size > 0:
-            random_kws = parse_keywords(args.keywords, shuffle=True, sample_size=effective_sample_size)
+        if args.keyword_sample_size <= 0:
+            # --keyword-sample-size 0 = 明示的なサンプリング無効 (help に文書化
+            # された従来仕様)。ユーザキーワード数による削減はせず全件を検索する。
+            random_kws = parse_keywords(args.keywords, shuffle=True, sample_size=0)
         else:
-            # TRAP: parse_keywords(..., sample_size=0) means "no sampling ="
-            # return ALL keywords, NOT "return none". Once the reduced budget
-            # bottoms out at 0 we must skip the call and use [] explicitly,
-            # or we'd silently search the full ~240-entry DEFAULT_KEYWORDS list.
-            random_kws = []
+            effective_sample_size = max(0, args.keyword_sample_size - len(user_keywords))
+            if effective_sample_size > 0:
+                random_kws = parse_keywords(args.keywords, shuffle=True, sample_size=effective_sample_size)
+            else:
+                # TRAP: parse_keywords(..., sample_size=0) means "no sampling ="
+                # return ALL keywords, NOT "return none". Once the reduced budget
+                # bottoms out at 0 we must skip the call and use [] explicitly,
+                # or we'd silently search the full ~240-entry DEFAULT_KEYWORDS list.
+                random_kws = []
     else:
         # --keywords / $AMAZON_SEARCH_KEYWORDS explicit: user intent, no
         # reduction, shuffle order only (today's behaviour, unchanged).
