@@ -66,7 +66,7 @@ def render_body(data: dict) -> str:
         "即解放するための非ブロッキング退避です。各 ASIN を人間が検証し、"
         "**真にリセラー転売と確認できたものだけ** を `data/asin_blocklist.json` の `blocked` へ"
         "昇格してください。中古品・別商品・別SKU の誤マッチはここで除外し、当該 ASIN を"
-        "quarantine から削除します (AGENTS.md §9 の決定木を参照)。",
+        "quarantine から削除します (AGENTS.md §5 の決定木を参照)。",
         "",
         f"## 候補 ({len(rows)} 件 — プレミアム降順)",
         "",
