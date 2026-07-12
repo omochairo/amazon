@@ -1371,6 +1371,95 @@ def _load_per_asin_amazon(per_asin_root: pathlib.Path, asin: str) -> dict[str, A
     return item if isinstance(item, dict) else None
 
 
+_PRICE_HISTORY_MIN_POINTS = 3
+_PRICE_HISTORY_MIN_SPAN_DAYS = 14
+_PRICE_HISTORY_MAX_POINTS_SHOWN = 12
+
+
+def _load_price_history_points(price_history_root: pathlib.Path, asin: str) -> list[dict[str, Any]]:
+    """``data/price_history/<ASIN>.jsonl`` (price_history.append_price_point が
+    書く append-only ログ) から有効な観測点 (source="amazon", price>0) を
+    ts 昇順で返す。ファイルが無い/壊れた行は無視してベストエフォートで読む。
+    """
+    p = price_history_root / f"{asin.upper()}.jsonl"
+    if not p.exists():
+        return []
+    points: list[dict[str, Any]] = []
+    try:
+        for line in p.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(rec, dict):
+                continue
+            if rec.get("source") != "amazon":
+                continue
+            price = rec.get("price")
+            ts = rec.get("ts")
+            if not isinstance(price, int) or isinstance(price, bool) or price <= 0:
+                continue
+            if not isinstance(ts, str) or not ts:
+                continue
+            points.append({"ts": ts, "price": price})
+    except OSError:
+        return []
+    points.sort(key=lambda r: r["ts"])
+    return points
+
+
+def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path) -> bool:
+    """#2953 C案 (訂正版): 自前計測の価格履歴をゲート判定してテンプレコンテキスト
+    ``data["price_history"]`` に添付する。
+
+    描画ゲート: 有効点 (source=amazon, price>0) が 3 点以上 かつ 最古〜最新の
+    スパンが 14 日以上。蓄積開始 (2026-07-07) 直後はどの ASIN もスパン不足で
+    ゲートを通らないのが正しい挙動 (安全なロールアウト)。ゲートを通らなければ
+    ``data`` は一切変更しない (post.md.j2 は ``{% if price_history %}`` で
+    未設定時は何も描画しない)。
+
+    Returns:
+        ゲートを通って添付したら True。
+    """
+    product = data.get("product") if isinstance(data.get("product"), dict) else None
+    asin = product.get("asin") if product else None
+    if not asin:
+        return False
+    points = _load_price_history_points(price_history_root, asin)
+    if len(points) < _PRICE_HISTORY_MIN_POINTS:
+        return False
+    oldest_ts = points[0]["ts"]
+    newest_ts = points[-1]["ts"]
+    try:
+        oldest_dt = datetime.fromisoformat(oldest_ts.replace("Z", "+00:00"))
+        newest_dt = datetime.fromisoformat(newest_ts.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    span_days = (newest_dt - oldest_dt).days
+    if span_days < _PRICE_HISTORY_MIN_SPAN_DAYS:
+        return False
+
+    prices = [pt["price"] for pt in points]
+    min_price = min(prices)
+    max_price = max(prices)
+    min_price_point = next(pt for pt in points if pt["price"] == min_price)
+    latest_price = points[-1]["price"]
+    shown = points[-_PRICE_HISTORY_MAX_POINTS_SHOWN:]
+
+    data["price_history"] = {
+        "points": [{"date": pt["ts"][:10], "price": pt["price"]} for pt in shown],
+        "min_price": min_price,
+        "min_price_date": min_price_point["ts"][:10],
+        "max_price": max_price,
+        "latest_price": latest_price,
+        "span_days": span_days,
+    }
+    return True
+
+
 def _amazon_snapshot_status(per_asin_root: pathlib.Path, asin: str) -> str:
     """per-ASIN snapshot の status ("gone" / "") を返す。
 
@@ -2528,6 +2617,9 @@ def main() -> None:
     raw_amazon_index = _load_raw_amazon_index(pathlib.Path(args.raw_amazon))
     per_asin_root = pathlib.Path(args.per_asin_root)
     raw_root = pathlib.Path(args.raw_amazon).parent
+    # #2953 C案: fetch_amazon.write_per_asin_snapshot が out_root.parent/price_history
+    # に append する自前価格履歴。out_root は raw_root (通常 data/raw) と同じ基準。
+    price_history_root = raw_root.parent / "price_history"
     rakuten_matched_index = _load_matched_index(raw_root / "rakuten_matched.json")
     yahoo_matched_index = _load_matched_index(raw_root / "yahoo_matched.json")
     article_index = _build_article_index(src_path)
@@ -2612,6 +2704,7 @@ def main() -> None:
             _backfill_amazon_badges(data, raw_amazon_index, per_asin_root)
             _attach_market_prices(data, rakuten_matched_index, yahoo_matched_index)
             amazon_discontinued = _apply_amazon_discontinued(data, per_asin_root)
+            _attach_price_history(data, price_history_root)
             # #2812: Jules の画像ハルシネーション (404) を防ぐため、検証済み
             # amazon.json の画像で product.image を強制上書きしてから gallery を補完。
             image_overwritten = _enforce_amazon_image(data, raw_amazon_index, per_asin_root)

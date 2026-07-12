@@ -104,7 +104,7 @@ jobs:
           git config user.name "omochairo-fetch-bot[bot]"
           git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
-          git add data/raw/per_asin/
+          git add data/raw/per_asin/ data/price_history/
           if git diff --cached --quiet; then
             echo "Nothing staged after git add; skipping."
             exit 0

@@ -136,9 +136,11 @@ jobs:
         run: |
           set -e
 
-          # data/ は .gitignore 対象外。per_asin snapshot + manifest + csv + ranking_pool を stage。
+          # data/ は .gitignore 対象外。per_asin snapshot + manifest + csv + ranking_pool + price_history を stage。
           # ranking_pool.json は #810 Phase 1.5: 03-invoke-jules pick-asin が読む記事化候補プール。
-          git add data/raw/per_asin data/raw/_ranking_resolved_manifest.json data/raw/ranking_sniper_asins.csv data/raw/ranking_pool.json || true
+          # price_history は #2953 C案: --competitors-only 経由の write_per_asin_snapshot が
+          # 同時に data/price_history/<ASIN>.jsonl へ追記する。
+          git add data/raw/per_asin data/raw/_ranking_resolved_manifest.json data/raw/ranking_sniper_asins.csv data/raw/ranking_pool.json data/price_history || true
 
           # Issue #1149: rematch で更新された /ranking/ 用 weekly.json + manifest も同 PR で main 反映。
           # Issue #600: history.json も同 PR で日次更新 (90日 rotation, Chart.js / バッジ用)。
