@@ -399,6 +399,10 @@ on:
       # BLOCKED になっていたため paths に追加 ([[04-validate-paths-inverse-trap]])。
       - 'scripts/generate_term_redirects.py'
       - 'scripts/tests/test_generate_term_redirects.py'
+      # 2026-07-12 (#2953 D案): suggest 収集 script。script-only PR の inverse-trap 予防
+      # (vacuous SUCCESS)
+      - 'scripts/fetch_google_suggest.py'
+      - 'scripts/tests/test_fetch_google_suggest.py'
   workflow_dispatch:
 
 permissions:
