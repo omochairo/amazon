@@ -26,6 +26,7 @@ API利用制限:
 
 import os
 import json
+import re
 import sys
 import logging
 import urllib.parse
@@ -278,5 +279,9 @@ def fetch_yahoo(keyword: str) -> None:
 # エントリーポイント
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    keyword = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] else "知育玩具"
+    raw_keyword = sys.argv[1] if len(sys.argv) > 1 else ""
+    # workflow input カンマ区切り対応: 複数キーワード横断検索は Amazon 側のみ。
+    # Yahoo itemSearch は単一クエリの API なので先頭の1件だけを使う。
+    tokens = [t.strip() for t in re.split(r"[,，、\n]", raw_keyword) if t.strip()]
+    keyword = tokens[0] if tokens else "知育玩具"
     fetch_yahoo(keyword)

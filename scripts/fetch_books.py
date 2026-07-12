@@ -208,7 +208,9 @@ def main():
     import argparse
     parser = argparse.ArgumentParser()
     # sys.argv[1] 互換のための positional (旧呼出 `fetch_books.py "<keyword>"`)
-    parser.add_argument("keyword", nargs="?", default="知育")
+    parser.add_argument("keyword", nargs="?", default="知育",
+                        help="検索キーワード。カンマ/読点/改行区切りで複数渡された場合も "
+                             "先頭の1件だけを使う (複数キーワード横断検索は Amazon 側のみ)")
     parser.add_argument("--out", default=None,
                         help="出力先 (省略時は repo root/data/raw/)")
     parser.add_argument("--articles-dir", default=None,
@@ -218,7 +220,10 @@ def main():
     parser.add_argument("--stale-after-days", type=int, default=7,
                         help="この日数以内に query 済の ASIN はスキップ")
     args = parser.parse_args()
-    keyword = args.keyword or "知育"
+    # workflow input カンマ区切り対応: Google Books API は単一クエリなので
+    # 先頭のトークンだけを使う (multi-keyword sweep is Amazon-only)。
+    tokens = [t.strip() for t in re.split(r"[,，、\n]", args.keyword or "") if t.strip()]
+    keyword = tokens[0] if tokens else "知育"
 
     api_key = os.environ.get("GOOGLEBOOKS_API_KEY")
     base_dir = pathlib.Path(__file__).resolve().parent.parent

@@ -1055,7 +1055,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", default="daily_random")
     parser.add_argument("--asin", default="")
-    parser.add_argument("--keyword", default="知育玩具")
+    parser.add_argument("--keyword", default="知育玩具",
+                        help="Primary search keyword(s). Comma/読点/改行区切りで複数指定可 "
+                             "(workflow input カンマ区切り対応)。指定した各キーワードは優先 "
+                             "検索として全ページ検索され、--keyword-sample-size のランダム "
+                             "サンプル件数はその個数分だけ減らされる。")
     parser.add_argument("--out", default="data/raw/")
     parser.add_argument("--articles-dir", default="data/articles",
                         help="Directory scanned for already-published ASINs; matching items are excluded from amazon.json so Jules cannot pick a duplicate")
@@ -1205,16 +1209,44 @@ def main():
     # #795: 王道偏重を避けるため、shuffled + sampled キーワードで検索する。
     # --keywords 明示時は env/CLI が user 意図なのでシャッフルだけ (= 順序ランダム
     # 化のみ、件数は明示分を尊重)。Default keywords のときはサンプリングも有効。
-    sample_size = args.keyword_sample_size if not args.keywords and not os.environ.get("AMAZON_SEARCH_KEYWORDS") else 0
-    keywords = parse_keywords(args.keywords, shuffle=True, sample_size=sample_size)
-    # Surface the legacy --keyword as the first search term for back-compat
-    # (workflows pass it explicitly). Fall back to the AMAZON title slice
-    # when running Sniper Mode without an explicit keyword.
-    primary_kw = args.keyword
-    if not primary_kw and sniper_asins and items:
-        primary_kw = items[0]["title"][:20]
-    if primary_kw and primary_kw not in keywords:
-        keywords.insert(0, primary_kw)
+    #
+    # workflow input カンマ区切り対応: --keyword はカンマ/読点/改行区切りで複数
+    # 指定できる (例 "ビーチボール, 水鉄砲,折りたたみプール")。順序を保持したまま
+    # dedupe し、ユーザ指定分は「優先キーワード」として扱う (early-termination
+    # 対象外・全ページ検索)。サンプリングが有効なときはランダムキーワードの件数
+    # をユーザ指定分だけ減らし、検索コストの総量が跳ね上がらないようにする。
+    user_keywords: list = []
+    for kw in re.split(r"[,，、\n]", args.keyword or ""):
+        kw = kw.strip()
+        if kw and kw not in user_keywords:
+            user_keywords.append(kw)
+    # Sniper Mode fallback: no explicit keyword but sniper ASINs were resolved
+    # -> fall back to the AMAZON title slice (unchanged from before).
+    if not user_keywords and sniper_asins and items:
+        user_keywords = [items[0]["title"][:20]]
+
+    sampling_active = not args.keywords and not os.environ.get("AMAZON_SEARCH_KEYWORDS")
+    if sampling_active:
+        effective_sample_size = max(0, args.keyword_sample_size - len(user_keywords))
+        if effective_sample_size > 0:
+            random_kws = parse_keywords(args.keywords, shuffle=True, sample_size=effective_sample_size)
+        else:
+            # TRAP: parse_keywords(..., sample_size=0) means "no sampling ="
+            # return ALL keywords, NOT "return none". Once the reduced budget
+            # bottoms out at 0 we must skip the call and use [] explicitly,
+            # or we'd silently search the full ~240-entry DEFAULT_KEYWORDS list.
+            random_kws = []
+    else:
+        # --keywords / $AMAZON_SEARCH_KEYWORDS explicit: user intent, no
+        # reduction, shuffle order only (today's behaviour, unchanged).
+        random_kws = parse_keywords(args.keywords, shuffle=True, sample_size=0)
+
+    # User keywords first, in given order (not shuffled); random keywords
+    # fill the rest, deduped against the user list.
+    keywords = user_keywords + [k for k in random_kws if k not in user_keywords]
+    # Surface the first user keyword as the legacy primary_kw for the
+    # amazon.json "keyword" field (back-compat with downstream consumers).
+    primary_kw = user_keywords[0] if user_keywords else None
 
     def _is_jules_eligible(it: dict) -> bool:
         """Return True iff ``it`` would survive the post-loop reseller filter.
@@ -1241,17 +1273,22 @@ def main():
     new_for_jules = sum(1 for it in items if _is_jules_eligible(it))
 
     pages = max(1, min(args.pages, 10))
+    n_random = len(keywords) - len(user_keywords)
     logger.info(
-        f"Search Mode: {len(keywords)} keyword(s) × {pages} page(s), "
-        f"target new-for-Jules ASINs = {args.min_new}"
+        f"Search Mode: {len(user_keywords)} user keyword(s) + {n_random} sampled keyword(s) "
+        f"× {pages} page(s), target new-for-Jules ASINs = {args.min_new}"
     )
 
     done = False
-    for kw in keywords:
+    for idx, kw in enumerate(keywords):
         if done:
             break
+        # User-supplied keywords are mandatory: search every page regardless
+        # of min_new. Early termination only applies to the random/sampled
+        # tail (min_new is a floor/target, exceeding it via user keywords is fine).
+        mandatory = idx < len(user_keywords)
         for page in range(1, pages + 1):
-            if new_for_jules >= args.min_new:
+            if not mandatory and new_for_jules >= args.min_new:
                 done = True
                 break
             logger.info(f"  '{kw}' page={page} (new={new_for_jules}/{args.min_new})")
