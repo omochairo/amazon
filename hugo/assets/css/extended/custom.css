@@ -3929,6 +3929,10 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   max-width: 480px;
   width: 100%;
   height: auto;
+  /* 縦長画像対策: Amazon の _SL500_ は長辺500px固定なので縦長画像は幅が細く、
+     width:100% で 480px 幅まで拡大されると高さが数千pxまで暴走していた。 */
+  max-height: 480px;
+  object-fit: contain;
   border-radius: var(--radius-md);
 }
 .post-content .product-hero-image figcaption {
