@@ -8,7 +8,7 @@ name: Quarantine Issue Monitor (reseller worklist)
 #   - quarantine は Jules が main にコミット済の JSON を追記していく worklist なので、
 #     fetch せず checkout した committed データをそのまま読む (App token / commit 不要)。
 #   - 自動で asin_blocklist へ昇格しない。値の偽装ブロックは E-E-A-T を破壊しうるため、
-#     Issue は人手検証 worklist であり、昇格は人間が PR する (AGENTS.md §9 決定木)。
+#     Issue は人手検証 worklist であり、昇格は人間が PR する (AGENTS.md §5 決定木)。
 #   - マーカー dedup + open があれば本文 refresh (open_quarantine_issue.py)。
 #   - candidates が空なら起票/更新しない。score / 記事生成には一切影響しない。
 

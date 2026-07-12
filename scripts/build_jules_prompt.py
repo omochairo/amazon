@@ -14,7 +14,7 @@
   の item — 楽天ランキング由来 ASIN, #810 Phase 1.5)
 - rakuten_matched / yahoo_matched の matched_asin 一致エントリ
 - data/raw/per_asin/<ASIN>/*.json (*.raw.json は除く)
-- AGENTS.md 全文 (リポジトリ操作系の §1/2/9 は INTRO で置き換えを宣言)
+- AGENTS.md 全文 (リポジトリ操作系の §1/2/5 は INTRO で置き換えを宣言)
 - jules/PROMPT_TEMPLATE.md 全文
 
 注意: グローバル data/raw/youtube.json は ASIN 紐付けが無い (title/url のみ) ため
@@ -115,7 +115,7 @@ def build_prompt(asin, today=None):
 このセッションはリポジトリ非接続 (repoless) です。必要な入力データは本プロンプト末尾に全て同梱しています。
 
 【最重要・成果物ルール (リポジトリ規定の置き換え)】
-- 後述の「業務規定 (AGENTS.md)」の §1 リポジトリ保護ルール・§2 入力データ・§9 提出フローは、リポジトリ非接続のため以下で置き換えます:
+- 後述の「業務規定 (AGENTS.md)」の §1 リポジトリ保護ルール・§2 入力データ・§5 提出フローは、リポジトリ非接続のため以下で置き換えます:
   - 成果物はワークスペース直下に data/articles/{today}-{asin}.json の 1 ファイルのみ作成する
   - git 操作・PR 作成・ブランチ作成・検証スクリプト実行は不要 (システム側で実施する)
   - 入力データはファイルシステムではなく本プロンプト同梱の「入力データ」セクションを使う
