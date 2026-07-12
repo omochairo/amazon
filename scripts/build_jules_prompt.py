@@ -16,6 +16,8 @@
 - data/raw/per_asin/<ASIN>/*.json (*.raw.json は除く)
 - AGENTS.md 全文 (リポジトリ操作系の §1/2/5 は INTRO で置き換えを宣言)
 - jules/PROMPT_TEMPLATE.md 全文
+- GSC 実流入クエリ注記 (#2953 B案 / #1329 記事版, build_asin_query_context.py 経由。
+  03-invoke-jules.yml とのパリティ維持。取得失敗/データ無しは best-effort で空文字)
 
 注意: グローバル data/raw/youtube.json は ASIN 紐付けが無い (title/url のみ) ため
 同梱しない。per_asin/<ASIN>/youtube.json 側を使う。
@@ -69,6 +71,28 @@ def _info_note(asin):
 - sources には実在し検証可能な URL のみ記載。検索エンジンの結果ページ URL は出典にしないでください。"""
 
 
+def _gsc_note(asin):
+    """#2953 B案 (#1329 記事版): GSC 実流入クエリ注記 (03 の GSC_NOTE 移植・パリティ維持)。
+    取得失敗/データ無しは best-effort で空文字を返し、生成は止めない。"""
+    try:
+        import build_asin_query_context as bq
+        ctx = bq.build_context(asin)
+    except Exception as e:  # スコア計算失敗は生成を止めない (03 と同じ best-effort)
+        print(f"warning: gsc query context failed, skipping note: {e}", file=sys.stderr)
+        return ""
+    if ctx.get("fallback", True):
+        return ""
+    lines = "\n".join(
+        f"- 「{q['query']}」 (表示 {q['impressions']} 回 / 平均掲載順位 {q['position']})"
+        for q in ctx.get("queries", [])
+    )
+    return f"""【このページに実際に流入している検索クエリ (GSC 直近4週)】
+{lines}
+- これは読者が実際に検索窓に打った語です。title / meta_description の検索意図選定 (テンプレート §4 の意図差別化) では、このクエリ群を最優先のシグナルとして使ってください
+- faq のうち最低 1 問は、上記クエリが示す疑問への直接回答にしてください (クエリの語をそのまま質問文に活かす)
+- クエリが示す疑問 (例: 「○○ 対象年齢」「○○ 違い」) に本文が答えていない場合、narrative の該当セクションで必ず回答してください"""
+
+
 def _amazon_item(asin):
     raw = _jload("data/raw/amazon.json")
     for item in raw.get("items", []):
@@ -110,6 +134,7 @@ def build_prompt(asin, today=None):
             print(f"warning: skip unreadable {p}: {e}", file=sys.stderr)
 
     info_note = _info_note(asin)
+    gsc_note = _gsc_note(asin)
 
     prompt = f"""あなたは知育玩具メディア「おもちゃいろ」の記事生成エージェントです。
 このセッションはリポジトリ非接続 (repoless) です。必要な入力データは本プロンプト末尾に全て同梱しています。
@@ -125,6 +150,8 @@ def build_prompt(asin, today=None):
 このセッションで生成する記事は必ずこの ASIN を対象としてください。
 
 {info_note}
+
+{gsc_note}
 
 【本日の日付 (必ず使用)】: {today}
 - 出力ファイル名: data/articles/{today}-{asin}.json
