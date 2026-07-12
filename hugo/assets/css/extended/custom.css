@@ -838,6 +838,7 @@ body.lightbox-lock { overflow: hidden; }
   .ranking-history-section,
   .yt-embed,
   .keepa-graph,
+  .price-history-block,
   .product-slideshow,
   .link-report-flag,
   .auto-gen-notice,
@@ -4123,6 +4124,49 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 }
 [data-theme="dark"] .post-content .keepa-graph .keepa-graph-label { color: #f9fafb; }
 [data-theme="dark"] .post-content .keepa-graph p { color: #94a3b8; }
+
+/* #2953 C案: 自前計測の価格記録ブロック (.keepa-graph 直後、任意描画) */
+.post-content .price-history-block {
+  margin: 12px 0 18px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  color: #1f2937;
+  text-align: center;
+}
+.post-content .price-history-block .price-history-label {
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 10px;
+}
+.post-content .price-history-block p {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  color: #1f2937;
+  text-align: left;
+}
+.post-content .price-history-block .price-history-spark {
+  display: block;
+  margin: 0 auto;
+  color: #2563eb;
+}
+.post-content .price-history-block .price-history-note {
+  display: block;
+  margin: 10px 0 0;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+[data-theme="dark"] .post-content .price-history-block {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e5e7eb;
+}
+[data-theme="dark"] .post-content .price-history-block .price-history-label { color: #f9fafb; }
+[data-theme="dark"] .post-content .price-history-block p { color: #e5e7eb; }
+[data-theme="dark"] .post-content .price-history-block .price-history-spark { color: #60a5fa; }
+[data-theme="dark"] .post-content .price-history-block .price-history-note { color: #94a3b8; }
 
 /* ---------- 競合比較カード (#1089: grid → carousel) ----------
    .competitor-grid は .carousel-track と同じ class に乗っているため、
