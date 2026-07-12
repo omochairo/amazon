@@ -159,7 +159,9 @@ jobs:
           git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
           # -A so step-0 cleanup deletions (old bodies + markers) are staged too.
-          git add -A data/raw/amazon.json data/raw/per_asin/ data/articles/ data/rewrite_queue/
+          # price_history: #2953 C案。--competitors-only 経由の write_per_asin_snapshot が
+          # 同時に data/price_history/<ASIN>.jsonl へ追記する。
+          git add -A data/raw/amazon.json data/raw/per_asin/ data/articles/ data/rewrite_queue/ data/price_history/
           if git diff --cached --quiet; then
             echo "Nothing staged after git add; skipping."
             exit 0

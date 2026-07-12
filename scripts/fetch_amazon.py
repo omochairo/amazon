@@ -44,6 +44,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 import _fetch_targets
+import price_history
 from genre_gate import classify_genre
 
 # #795 follow-up (session 62): 旧 DEFAULT_KEYWORDS は 10 件中 4 件が王道
@@ -520,6 +521,12 @@ def _load_asin_blocklist(path: str = "data/asin_blocklist.json") -> set:
 def write_per_asin_snapshot(out_root: str, item: dict) -> None:
     """Persist per-ASIN amazon snapshot so build_post.py can back-fill badge
     fields for past articles even after data/raw/amazon.json gets overwritten.
+
+    #2953 C案 (訂正版): search sweep / sniper / 記事巡回 (refresh) の 3 経路が
+    すべてここを通る単一チョークポイントなので、スナップショット書き込み成功後に
+    price_history.append_price_point で自前の append-only 価格履歴も蓄積する
+    (追加 API 呼び出しはゼロ)。price_history 側はベストエフォートで例外を握り
+    つぶすため、ここが失敗してもフェッチ本体は止まらない。
     """
     asin = item.get("asin")
     if not asin:
@@ -536,6 +543,10 @@ def write_per_asin_snapshot(out_root: str, item: dict) -> None:
             json.dump(snapshot, f, ensure_ascii=False, indent=2)
     except OSError as e:
         logger.warning(f"Failed to write per_asin snapshot for {asin}: {e}")
+        return
+    price_history_dir = os.path.join(str(pathlib.Path(out_root).parent), "price_history")
+    price_history.append_price_point(
+        price_history_dir, asin, "amazon", item.get("price"), item.get("availability"))
 
 
 def _is_competitors_cache_fresh(out_root: str, asin: str, ttl_days: float) -> bool:
