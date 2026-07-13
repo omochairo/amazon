@@ -1,0 +1,145 @@
+name: Pages Cert Renew (navi.omcha.jp)
+# #3059 follow-up: Cloudflare プロキシ (orange cloud) 下では GitLab Pages の
+# Let's Encrypt 自動更新が通らない (gitlab-org/gitlab#356447)。
+# 「一時グレー雲 → LE 更新 → 再プロキシ」の手動ダンスを 60 日ごとに繰り返すのは
+# いつかミスるので、更新を完全自動化する:
+#
+#   1. 毎日 GitLab Pages API で navi.omcha.jp の証明書残存日数をチェック
+#   2. 残 30 日未満なら certbot の DNS-01 チャレンジ (Cloudflare DNS API) で
+#      新規取得 — DNS-01 はプロキシ状態に依存しないのでダウンタイムゼロ
+#   3. GitLab Pages API へ証明書+秘密鍵を PUT (auto_ssl_enabled=false で
+#      GitLab 側の壊れた LE 統合を恒久停止)
+#   4. 失敗したら GitHub Issue で通知 (既存 open issue があればコメント追記)
+#
+# 必要な Secrets:
+#   CF_DNS_TOKEN : Cloudflare API トークン (omcha.jp ゾーン限定, Zone:Zone:Read + Zone:DNS:Edit)
+#                  ※ cf-purge 用トークン (Zone.Cache Purge のみ) とは別に作る
+#   GITLAB_TOKEN : 既存の GitLab PAT。Pages domains API には api スコープが必要
+#                  (mirror 用が write_repository のみの場合は api 付きで作り直す)
+#
+# CF_DNS_TOKEN 未設定の間は何もせず成功する (プロキシ化前の事前マージが安全)。
+# 初回はプロキシ化当日に workflow_dispatch (force=true) で即時実行し、
+# GitLab の LE 統合を最初から自前証明書に切り替えておくこと。
+
+on:
+  schedule:
+    - cron: "17 3 * * *" # 毎日 12:17 JST。他 workflow の混雑時間帯を避ける
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "残存日数に関係なく今すぐ更新する"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: pages-cert-renew
+  cancel-in-progress: false
+
+env:
+  DOMAIN: navi.omcha.jp
+  GITLAB_PROJECT: omocha%2Fnavi
+  RENEW_THRESHOLD_DAYS: "30"
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check secrets
+        id: gate
+        env:
+          CF_DNS_TOKEN: ${{ secrets.CF_DNS_TOKEN }}
+        run: |
+          if [ -z "$CF_DNS_TOKEN" ]; then
+            echo "CF_DNS_TOKEN 未設定 → skip (プロキシ化前の no-op)"
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check certificate expiry via GitLab Pages API
+        id: expiry
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          FORCE: ${{ inputs.force && 'true' || 'false' }}
+        run: |
+          set -e
+          resp=$(curl -fsS --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+            "https://gitlab.com/api/v4/projects/${GITLAB_PROJECT}/pages/domains/${DOMAIN}")
+          echo "$resp" | jq '{domain: .domain, auto_ssl: .auto_ssl_enabled, cert: (.certificate | {subject, expired, expiration})}'
+          expiration=$(echo "$resp" | jq -r '.certificate.expiration // empty')
+          if [ -z "$expiration" ]; then
+            echo "証明書情報が取れない → 更新を実行する"
+            echo "renew=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          exp_epoch=$(date -d "$expiration" +%s)
+          now_epoch=$(date +%s)
+          days_left=$(( (exp_epoch - now_epoch) / 86400 ))
+          echo "残存日数: ${days_left} 日 (失効: ${expiration})"
+          if [ "$FORCE" = "true" ] || [ "$days_left" -lt "$RENEW_THRESHOLD_DAYS" ]; then
+            echo "renew=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "renew=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Obtain certificate (certbot DNS-01 via Cloudflare)
+        if: steps.gate.outputs.enabled == 'true' && steps.expiry.outputs.renew == 'true'
+        env:
+          CF_DNS_TOKEN: ${{ secrets.CF_DNS_TOKEN }}
+        run: |
+          set -e
+          pip install --quiet certbot certbot-dns-cloudflare
+          umask 077
+          printf 'dns_cloudflare_api_token = %s\n' "$CF_DNS_TOKEN" > cf.ini
+          certbot certonly \
+            --non-interactive --agree-tos --register-unsafely-without-email \
+            --dns-cloudflare --dns-cloudflare-credentials cf.ini \
+            --dns-cloudflare-propagation-seconds 30 \
+            -d "$DOMAIN" \
+            --config-dir ./le --work-dir ./le-work --logs-dir ./le-logs
+          rm -f cf.ini
+          test -s "./le/live/${DOMAIN}/fullchain.pem"
+          test -s "./le/live/${DOMAIN}/privkey.pem"
+
+      - name: Upload certificate to GitLab Pages
+        if: steps.gate.outputs.enabled == 'true' && steps.expiry.outputs.renew == 'true'
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: |
+          set -e
+          # certbot は runner ユーザー権限で ./le に書くため root 不要。live/ は archive/ への symlink
+          curl -fsS -X PUT --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+            --data-urlencode "certificate@./le/live/${DOMAIN}/fullchain.pem" \
+            --data-urlencode "key@./le/live/${DOMAIN}/privkey.pem" \
+            --data "auto_ssl_enabled=false" \
+            "https://gitlab.com/api/v4/projects/${GITLAB_PROJECT}/pages/domains/${DOMAIN}" \
+            | jq '{domain: .domain, auto_ssl: .auto_ssl_enabled, cert: (.certificate | {subject, expiration})}'
+          # 反映確認: 失効日が 60 日以上先になっていること
+          resp=$(curl -fsS --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+            "https://gitlab.com/api/v4/projects/${GITLAB_PROJECT}/pages/domains/${DOMAIN}")
+          expiration=$(echo "$resp" | jq -r '.certificate.expiration')
+          exp_epoch=$(date -d "$expiration" +%s)
+          days_left=$(( (exp_epoch - $(date +%s)) / 86400 ))
+          echo "更新後の残存日数: ${days_left} 日"
+          [ "$days_left" -ge 60 ]
+
+      - name: Alert on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          existing=$(gh issue list -R "${{ github.repository }}" --state open \
+            --search "in:title [cert-renew] navi.omcha.jp" --json number --jq '.[0].number // empty')
+          body="Pages Cert Renew workflow が失敗。navi.omcha.jp の証明書が失効すると 526 で全断するため要対応。run: ${run_url}"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" -R "${{ github.repository }}" --body "$body"
+          else
+            gh issue create -R "${{ github.repository }}" --label todo \
+              --title "[cert-renew] navi.omcha.jp 証明書自動更新の失敗" --body "$body"
+          fi

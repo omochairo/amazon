@@ -1,0 +1,90 @@
+/* 404 ページ (hugo/layouts/404.html) — リンク切れ流入を回遊に変換する導線 */
+.not-found-page {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px 16px 48px;
+    text-align: center;
+}
+
+.not-found-page .not-found {
+    margin: 16px 0 0;
+    font-size: 96px;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--secondary);
+    opacity: 0.35;
+}
+
+.not-found-title {
+    margin: 12px 0 8px;
+    font-size: 22px;
+    color: var(--primary);
+}
+
+.not-found-lead {
+    margin: 0 0 20px;
+    font-size: 14px;
+    line-height: 1.8;
+    color: var(--secondary);
+}
+
+.not-found-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 24px;
+}
+
+.not-found-action {
+    display: inline-block;
+    padding: 12px 20px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--entry);
+    color: var(--primary);
+    font-size: 15px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.not-found-action--primary {
+    background: var(--primary);
+    color: var(--theme);
+    border-color: var(--primary);
+}
+
+.not-found-action:hover {
+    opacity: 0.85;
+}
+
+.not-found-hubs {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.not-found-hub {
+    display: inline-block;
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--code-bg);
+    color: var(--secondary);
+    font-size: 13px;
+    text-decoration: none;
+}
+
+.not-found-hub:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+/* 最近見た商品レール: home-section 系の見た目は既存 CSS を再利用し、
+   404 では左寄せカードのまま中央ページ幅に収める */
+.not-found-recent {
+    margin-top: 32px;
+    text-align: left;
+}
