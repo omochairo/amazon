@@ -92,7 +92,7 @@ window.onload = function () {
     fuse = new Fuse(data, options);
     if (summary) summary.textContent = `${data.length} 件の記事から検索できます`;
   };
-  xhr.open('GET', '../index.json');
+  xhr.open('GET', '/search.json');
   xhr.send();
 };
 

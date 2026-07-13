@@ -1,6 +1,5 @@
-{{- /* #3055 E1: 全文 content/summary は /search.json (index.searchindex.json) に分離。
-       ここは compare/favorites/posts一覧/term が使う軽量カタログ */ -}}
-{{- /* Scratch は home の複数 output format 間で共有されキー衝突するため、ローカル変数で蓄積する */ -}}
+{{- /* 検索 (fastsearch/diagnosis) 専用。#3055 E1 で index.json から分離。content は先頭600文字 */ -}}
+{{- /* Scratch は home の複数 output format 間で共有されキー衝突する (index.json と二重蓄積) ため、ローカル変数で蓄積する */ -}}
 {{- $idx := slice -}}
 {{- range where site.RegularPages "Section" "posts" -}}
     {{- if and (not .Params.searchhidden) (not .Params.searchHidden) (ne .File.BaseFileName "privacy") (ne .Layout `archives`) (ne .Layout `search`) }}
@@ -13,7 +12,9 @@
     {{- range .GetTerms "tags" }}{{ $tagNames = $tagNames | append .LinkTitle }}{{ end -}}
     {{- $idx = $idx | append (dict
         "title"        .Title
+        "content"      (.Plain | truncate 600 "")
         "permalink"    .Permalink
+        "summary"      .Summary
         "image"        (.Params.product_image | default "")
         "brand"        (.Params.brand | default "")
         "brands"       (.Params.brands | default slice)

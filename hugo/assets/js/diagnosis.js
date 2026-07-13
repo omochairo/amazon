@@ -14,14 +14,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const resultGrid = document.getElementById("diagnosis-result-grid");
     const fallbackBadge = document.getElementById("diagnosis-fallback-badge");
 
-    // index.json の非同期フェッチ
-    fetch("/index.json")
+    // search.json の非同期フェッチ (#3055 E1: content を使うため index.json から分離した search.json 側)
+    fetch("/search.json")
         .then(res => res.json())
         .then(data => {
             itemsCache = data;
         })
         .catch(err => {
-            console.error("Failed to load index.json", err);
+            console.error("Failed to load search.json", err);
         });
 
     // カード描画は window.OmochaUtils.renderProductCard に集約済 (Issue #745 Phase 2)。
