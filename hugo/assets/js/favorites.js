@@ -204,10 +204,22 @@
   // ------- /favorites/ page hydration -------
   function hydrateFavoritesPage() {
     if (!/\/favorites\/?$/.test(global.location.pathname)) return;
+    // #3055 E3: ?share=<asin>.<asin>... が付いていれば共有ビューに切替え、
+    // 自分のお気に入り一覧 (localStorage 由来) は描画しない。
+    var shareAsins = _parseShareParam();
+    if (shareAsins) {
+      _renderSharedView(shareAsins);
+      return;
+    }
+    var sharedEl = document.getElementById("favorites-shared");
+    if (sharedEl) sharedEl.style.display = "none";
+
     var container = document.getElementById("favorites-list");
     var emptyEl = document.getElementById("favorites-empty");
     if (!container) return;
     var data = _read();
+    _wireShareButton();
+    _renderShareBar(data.asins.length);
     if (data.asins.length === 0) {
       container.style.display = "none";
       if (emptyEl) emptyEl.style.display = "";
@@ -247,6 +259,206 @@
     });
   }
 
+  // ------- 共有 URL (#3055 E3) -------
+  // ユースケース: プレゼント選び相談で候補リストを LINE 等で送る。バックエンド不要、
+  // URL パラメータ (小文字 ASIN を "." 区切り、先頭 40 件) + /index.json でメタ解決。
+  var SHARE_ASIN_MAX = 40;
+  var SHARE_ASIN_RE = /^[a-z0-9]{8,14}$/;
+  var _toastTimer = null;
+
+  function _showToast(msg) {
+    var el = document.getElementById("favorites-toast");
+    if (!el) return;
+    el.textContent = msg;
+    el.hidden = false;
+    el.classList.add("is-visible");
+    if (_toastTimer) clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(function () {
+      el.classList.remove("is-visible");
+      el.hidden = true;
+    }, 2000);
+  }
+
+  function _fallbackPrompt(url) {
+    try { global.prompt("URL をコピーしてください:", url); } catch (e) { /* ignore */ }
+  }
+
+  function _renderShareBar(n) {
+    var bar = document.getElementById("favorites-share-bar");
+    if (!bar) return;
+    bar.style.display = n > 0 ? "" : "none";
+  }
+
+  var _shareBtnWired = false;
+  function _wireShareButton() {
+    if (_shareBtnWired) return;
+    var btn = document.getElementById("favorites-share-btn");
+    if (!btn) return;
+    _shareBtnWired = true;
+    btn.addEventListener("click", function () {
+      var asins = list().slice(0, SHARE_ASIN_MAX).map(function (a) { return a.toLowerCase(); });
+      if (!asins.length) return;
+      var url = global.location.origin + "/favorites/?share=" + asins.join(".");
+      var title = "おもちゃいろ お気に入りリスト";
+
+      if (navigator.share) {
+        navigator.share({ title: title, url: url }).catch(function () { /* user cancelled, no-op */ });
+        return;
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(function () {
+          _showToast("リンクをコピーしました");
+        }).catch(function () {
+          _fallbackPrompt(url);
+        });
+        return;
+      }
+      _fallbackPrompt(url);
+    });
+  }
+
+  // 受信側: ?share=<asin>.<asin>... を parse。不正な要素は捨て、上限 SHARE_ASIN_MAX。
+  function _parseShareParam() {
+    var qs = global.location.search || "";
+    var m = qs.match(/[?&]share=([^&]*)/);
+    if (!m || !m[1]) return null;
+    var raw;
+    try { raw = decodeURIComponent(m[1]); } catch (e) { raw = m[1]; }
+    var asins = raw.split(".")
+      .map(function (s) { return s.toLowerCase(); })
+      .filter(function (s) { return SHARE_ASIN_RE.test(s); })
+      .slice(0, SHARE_ASIN_MAX)
+      .map(function (s) { return s.toUpperCase(); });
+    return asins.length ? asins : null;
+  }
+
+  function _renderSharedView(asins) {
+    var listContainer = document.getElementById("favorites-list");
+    var emptyEl = document.getElementById("favorites-empty");
+    var shareBar = document.getElementById("favorites-share-bar");
+    var shared = document.getElementById("favorites-shared");
+    var sharedList = document.getElementById("favorites-shared-list");
+    var titleEl = document.getElementById("favorites-shared-title");
+    if (!shared || !sharedList) return;
+
+    if (listContainer) listContainer.style.display = "none";
+    if (emptyEl) emptyEl.style.display = "none";
+    if (shareBar) shareBar.style.display = "none";
+    shared.style.display = "";
+    if (titleEl) titleEl.textContent = "共有されたお気に入りリスト (" + asins.length + "件)";
+
+    _loadCatalogEntries().then(function (map) {
+      sharedList.innerHTML = "";
+      asins.forEach(function (asin) {
+        sharedList.appendChild(_buildSharedCard(asin, map[asin]));
+      });
+      _wireSharedAddAll(asins);
+    });
+  }
+
+  // XSS 対策: title 等は必ず textContent で挿入する (favorites.js 既存の自分リスト側は
+  // innerHTML だが、共有側は他人が組み立てた URL から来る asin をキーに外部 JSON の値を
+  // 描画するため、新規コードでは escape 不要な DOM API のみを使う)。
+  function _buildSharedCard(asin, entry) {
+    var url = (entry && entry.url) || ("/products/" + asin.toLowerCase() + "/");
+    var title = (entry && entry.title) || asin;
+    var image = entry && entry.image;
+    var score = entry && entry.score;
+    var minPrice = entry && entry.min_price;
+
+    var card = document.createElement("article");
+    card.className = "favorites-card";
+    card.setAttribute("data-asin", asin);
+
+    var link = document.createElement("a");
+    link.className = "favorites-card-link";
+    link.setAttribute("href", url);
+
+    if (image) {
+      var img = document.createElement("img");
+      img.className = "favorites-card-image";
+      img.setAttribute("src", image);
+      img.setAttribute("alt", "");
+      img.setAttribute("loading", "lazy");
+      img.setAttribute("referrerpolicy", "no-referrer");
+      link.appendChild(img);
+    } else {
+      var fallback = document.createElement("div");
+      fallback.className = "favorites-card-image-fallback";
+      fallback.textContent = "🧸";
+      link.appendChild(fallback);
+    }
+
+    var body = document.createElement("div");
+    body.className = "favorites-card-body";
+
+    var h3 = document.createElement("h3");
+    h3.className = "favorites-card-title";
+    h3.textContent = title;
+    body.appendChild(h3);
+
+    var meta = document.createElement("div");
+    meta.className = "favorites-card-meta";
+    if (score) {
+      var scoreEl = document.createElement("span");
+      scoreEl.className = "favorites-card-score";
+      scoreEl.textContent = "🏆 " + score + "点";
+      meta.appendChild(scoreEl);
+    }
+    if (minPrice) {
+      var priceEl = document.createElement("span");
+      priceEl.className = "favorites-card-price";
+      priceEl.textContent = "最安 ¥" + Number(minPrice).toLocaleString();
+      meta.appendChild(priceEl);
+    }
+    body.appendChild(meta);
+    link.appendChild(body);
+    card.appendChild(link);
+
+    var addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.className = "favorites-card-add";
+    addBtn.setAttribute("data-asin", asin);
+    var already = has(asin);
+    addBtn.textContent = already ? "追加済み" : "♡ 自分のリストに追加";
+    addBtn.disabled = already;
+    addBtn.addEventListener("click", function () {
+      add(asin, { title: title, image: image || null, score: score || null, min_price: minPrice || null, url: url });
+      addBtn.textContent = "追加済み";
+      addBtn.disabled = true;
+      _renderHeaderBadge();
+    });
+    card.appendChild(addBtn);
+
+    return card;
+  }
+
+  function _wireSharedAddAll(asins) {
+    var btn = document.getElementById("favorites-shared-addall");
+    if (!btn) return;
+    btn.onclick = function () {
+      _loadCatalogEntries().then(function (map) {
+        asins.forEach(function (asin) {
+          var entry = map[asin] || {};
+          add(asin, {
+            title: entry.title || asin,
+            image: entry.image || null,
+            score: entry.score || null,
+            min_price: entry.min_price || null,
+            url: entry.url || ("/products/" + asin.toLowerCase() + "/")
+          });
+        });
+        var addButtons = document.querySelectorAll(".favorites-card-add");
+        for (var i = 0; i < addButtons.length; i++) {
+          addButtons[i].textContent = "追加済み";
+          addButtons[i].disabled = true;
+        }
+        _renderHeaderBadge();
+        _showToast("すべて自分のリストに追加しました");
+      });
+    };
+  }
+
   // ------- 値下げ検出 (#1365 Layer 1-④) -------
   // 登録時 snapshot.min_price と現在の最安値 (index.json の price_* 非ゼロ最小) を
   // 比較し、DROP_THRESHOLD 以上下落していたら 🔻 バッジを描画する。リピート訪問の
@@ -254,28 +466,71 @@
   var CATALOG_URL = "/index.json";
   var DROP_THRESHOLD = 0.05; // 5% 以上で値下げ扱い
   var _catalogPromise = null;
+  var _catalogEntriesPromise = null;
+  var _indexRowsPromise = null;
+
+  // index.json (全 rows) の fetch は 1 回だけ行い、_loadCatalog (最安値 map) と
+  // _loadCatalogEntries (共有リスト用の title/image/score 込みエントリ map) の
+  // 両方がこの Promise を共有する (#3055 E3: 二重 fetch 回避)。
+  function _fetchIndexRows() {
+    if (_indexRowsPromise) return _indexRowsPromise;
+    if (typeof fetch !== "function") { _indexRowsPromise = Promise.resolve([]); return _indexRowsPromise; }
+    _indexRowsPromise = fetch(CATALOG_URL, { credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .catch(function () { return []; });
+    return _indexRowsPromise;
+  }
 
   // index.json は asin を持たない (permalink/title/image/price_* のみ)。
-  // permalink 末尾の /products/<asin>/ から asin を逆引きして price map を組む。
+  // permalink 末尾の /products/<asin>/ から asin を逆引きする。
+  function _rowAsin(row) {
+    var m = (row.permalink || "").match(/\/products\/([a-z0-9]+)\/?/i);
+    return m ? m[1].toUpperCase() : null;
+  }
+
+  function _rowMinPrice(row) {
+    var prices = [row.price_amazon, row.price_rakuten, row.price_yahoo]
+      .map(function (v) { return parseInt(v, 10) || 0; })
+      .filter(function (v) { return v > 0; });
+    return prices.length ? Math.min.apply(null, prices) : null;
+  }
+
   function _loadCatalog() {
     if (_catalogPromise) return _catalogPromise;
-    if (typeof fetch !== "function") { _catalogPromise = Promise.resolve({}); return _catalogPromise; }
-    _catalogPromise = fetch(CATALOG_URL, { credentials: "same-origin" })
-      .then(function (r) { return r.ok ? r.json() : []; })
-      .then(function (rows) {
-        var map = {};
-        (rows || []).forEach(function (row) {
-          var m = (row.permalink || "").match(/\/products\/([a-z0-9]+)\/?/i);
-          if (!m) return;
-          var prices = [row.price_amazon, row.price_rakuten, row.price_yahoo]
-            .map(function (v) { return parseInt(v, 10) || 0; })
-            .filter(function (v) { return v > 0; });
-          if (prices.length) map[m[1].toUpperCase()] = Math.min.apply(null, prices);
-        });
-        return map;
-      })
-      .catch(function () { return {}; });
+    _catalogPromise = _fetchIndexRows().then(function (rows) {
+      var map = {};
+      (rows || []).forEach(function (row) {
+        var asin = _rowAsin(row);
+        if (!asin) return;
+        var min = _rowMinPrice(row);
+        if (min) map[asin] = min;
+      });
+      return map;
+    }).catch(function () { return {}; });
     return _catalogPromise;
+  }
+
+  // 共有リスト (#3055 E3) 用: asin -> {title, image, score, min_price, url} の
+  // エントリ全体を引ける map。_loadCatalog (最安値のみ) と別関数にしているが
+  // fetch は _fetchIndexRows 経由で共有する。
+  function _loadCatalogEntries() {
+    if (_catalogEntriesPromise) return _catalogEntriesPromise;
+    _catalogEntriesPromise = _fetchIndexRows().then(function (rows) {
+      var map = {};
+      (rows || []).forEach(function (row) {
+        var asin = _rowAsin(row);
+        if (!asin) return;
+        map[asin] = {
+          title: row.title || null,
+          image: row.image || null,
+          score: parseInt(row.ivs_score_100, 10) || null,
+          min_price: _rowMinPrice(row),
+          url: "/products/" + asin.toLowerCase() + "/"
+        };
+      });
+      return map;
+    }).catch(function () { return {}; });
+    return _catalogEntriesPromise;
   }
 
   function _dropInfo(asin, currentMin) {
