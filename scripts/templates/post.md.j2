@@ -53,7 +53,7 @@
 <p class="product-full-name">正式商品名：<strong>{{ product.name_full }}</strong></p>
 {% endif %}
 {% if product.image %}
-<figure class="product-hero-image"><img src="{{ product.image }}" alt="{{ product.name }}の商品画像" loading="lazy"><figcaption>出典：Amazon商品ページ</figcaption></figure>
+<figure class="product-hero-image"><img src="{{ product.image }}" alt="{{ product.name }}の商品画像" fetchpriority="high" decoding="async"><figcaption>出典：Amazon商品ページ</figcaption></figure>
 {% endif %}
 
 {% if narrative.lead %}{{ narrative.lead }}{% endif %}
