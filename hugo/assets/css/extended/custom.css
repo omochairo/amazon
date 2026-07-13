@@ -3604,6 +3604,12 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   border-color: #bbf7d0;
 }
 
+.cc-badge-sem {
+  background: #f5f3ff;
+  color: #6d28d9;
+  border-color: #ddd6fe;
+}
+
 [data-theme="dark"] .cc-badge-price {
   background: rgba(180, 83, 9, 0.18);
   color: #fdba74;
@@ -3620,6 +3626,12 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   background: rgba(21, 128, 61, 0.18);
   color: #86efac;
   border-color: rgba(134, 239, 172, 0.3);
+}
+
+[data-theme="dark"] .cc-badge-sem {
+  background: rgba(109, 40, 217, 0.18);
+  color: #c4b5fd;
+  border-color: rgba(196, 181, 253, 0.3);
 }
 
 /* PC等、画面が広い場合の調整 */
