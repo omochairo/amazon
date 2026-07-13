@@ -4,6 +4,9 @@
   #favorites-list に hydrate する。SSR でカード描画しないのは、選択状態が
   ユーザーローカル (localStorage) で、SSR 値はキャッシュされ得るため。
   (compare.html と同じ設計方針)
+
+  #3055 E3: 共有 URL (?share=<asin>.<asin>...) 対応。共有側/受信側とも
+  favorites.js が JS で hydrate する (SSR は静的キャッシュのため使わない)。
 */ -}}
 {{- define "main" }}
 
@@ -15,6 +18,10 @@
 </header>
 
 <div class="favorites-wrapper">
+  <div id="favorites-share-bar" class="favorites-share-bar" style="display:none;">
+    <button type="button" id="favorites-share-btn" class="favorites-share-btn">🔗 リストを共有</button>
+  </div>
+
   <div id="favorites-list" class="favorites-list" role="region" aria-label="お気に入り商品一覧">
     {{- /* favorites.js が localStorage から hydrate */ -}}
   </div>
@@ -30,9 +37,27 @@
     </div>
   </div>
 
+  {{- /* #3055 E3: ?share= 付きアクセス時のみ favorites.js が表示に切替。
+         通常時は非表示のまま (display:none) にしておく。 */}}
+  <div id="favorites-shared" class="favorites-shared" style="display:none;">
+    <div class="favorites-shared-header">
+      <h2 id="favorites-shared-title" class="favorites-shared-title">共有されたお気に入りリスト</h2>
+      <p class="favorites-shared-note">このリストは共有リンクから表示しています。</p>
+      <div class="favorites-shared-actions">
+        <button type="button" id="favorites-shared-addall" class="favorites-shared-addall-btn">すべて自分のリストに追加</button>
+        <a class="favorites-shared-own-link" href="{{ "favorites/" | relURL }}">自分のお気に入りを見る</a>
+      </div>
+    </div>
+    <div id="favorites-shared-list" class="favorites-list" role="region" aria-label="共有されたお気に入り商品一覧">
+      {{- /* favorites.js が /index.json から hydrate */ -}}
+    </div>
+  </div>
+
   <p class="favorites-note">
     ※ お気に入りはお使いのブラウザに保存されます (localStorage)。別の端末では引き継がれません。プライベートブラウズ時は閉じると消えます。
   </p>
 </div>
+
+<div id="favorites-toast" class="favorites-toast" role="status" aria-live="polite" hidden></div>
 
 {{- end }}
