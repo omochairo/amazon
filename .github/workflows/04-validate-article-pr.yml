@@ -411,6 +411,12 @@ on:
       # script-only PR の inverse-trap 予防 (vacuous SUCCESS)
       - 'scripts/compute_semantic_related.py'
       - 'scripts/tests/test_compute_semantic_related.py'
+      # 2026-07-13 (#2995): NAS レーンの data PR 出力先。data/raw/** と違い未登録
+      # だったため、初回 data PR (#3029) が required check 不発 → auto-merge 永久
+      # BLOCKED になった ([[04-validate-paths-inverse-trap]])。App token 起票の PR は
+      # pull_request イベントが発火するので paths 登録だけで足りる (vacuous SUCCESS)。
+      - 'data/site_audit/**'
+      - 'hugo/data/semantic_related.json'
   workflow_dispatch:
 
 permissions:
