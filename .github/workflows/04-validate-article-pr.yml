@@ -403,6 +403,10 @@ on:
       # (vacuous SUCCESS)
       - 'scripts/fetch_google_suggest.py'
       - 'scripts/tests/test_fetch_google_suggest.py'
+      # 2026-07-13 (#2995 案1): semantic related 埋め込み script + 消費側カルーセル。
+      # script-only PR の inverse-trap 予防 (vacuous SUCCESS)
+      - 'scripts/compute_semantic_related.py'
+      - 'scripts/tests/test_compute_semantic_related.py'
   workflow_dispatch:
 
 permissions:

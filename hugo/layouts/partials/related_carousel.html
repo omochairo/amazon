@@ -19,6 +19,16 @@
   {{- end -}}
 {{- end -}}
 
+{{- /* --- semantic axis (#2995 案1): NAS 埋め込みレーン由来の意味的近傍。
+       hugo/data/semantic_related.json 不在時は $semMap が空 = 完全に従来挙動 --- */ -}}
+{{- $selfAsin := path.Base .RelPermalink -}}
+{{- $semMap := dict -}}
+{{- with site.Data.semantic_related -}}
+  {{- range (index . $selfAsin | default slice) -}}
+    {{- $semMap = merge $semMap (dict .asin (float .score)) -}}
+  {{- end -}}
+{{- end -}}
+
 {{- /* --- score each candidate --- */ -}}
 {{- $scored := slice -}}
 {{- range $pages -}}
@@ -29,6 +39,15 @@
   {{- $tb := mul (len $common) 20 -}}
   {{- if gt $tb 80 -}}{{- $tb = 80 -}}{{- end -}}
   {{- $s = add $s $tb -}}
+
+  {{- $semScore := 0.0 -}}
+  {{- $candAsin := path.Base .Permalink -}}
+  {{- with index $semMap $candAsin -}}{{- $semScore = . -}}{{- end -}}
+  {{- if gt $semScore 0.0 -}}
+    {{- $sb := int (mul (sub $semScore 0.55) 150) -}}
+    {{- if gt $sb 60 -}}{{- $sb = 60 -}}{{- end -}}
+    {{- if gt $sb 0 -}}{{- $s = add $s $sb -}}{{- end -}}
+  {{- end -}}
 
   {{- $cp := 0 -}}
   {{- range slice (.Params.price_amazon | default 0) (.Params.price_rakuten | default 0) (.Params.price_yahoo | default 0) -}}
@@ -55,7 +74,7 @@
   {{- end -}}
 
   {{- if gt $s 0 -}}
-    {{- $scored = $scored | append (dict "page" . "score" $s "priceDiffPct" $priceDiffPct "candPrice" $cp "candAge" $ca "common" $common) -}}
+    {{- $scored = $scored | append (dict "page" . "score" $s "priceDiffPct" $priceDiffPct "candPrice" $cp "candAge" $ca "common" $common "semScore" $semScore) -}}
   {{- end -}}
 {{- end -}}
 
@@ -271,6 +290,10 @@
               {{- end -}}
               {{- if ne $sharedTag "" -}}
                 <span class="carousel-card-badge cc-badge-tag">🏷️ {{ $sharedTag }}</span>
+              {{- end -}}
+              {{- /* semantic badge (#2995 案1): shared tag が無い枠にだけ出す */ -}}
+              {{- if and (ge .semScore 0.7) (eq $sharedTag "") -}}
+                <span class="carousel-card-badge cc-badge-sem">🧠 内容が近い</span>
               {{- end -}}
             </div>
           </div>
