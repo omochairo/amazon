@@ -248,17 +248,23 @@
     box-shadow: 0 6px 20px rgba(79, 70, 229, 0.35);
 }
 
-/* 診断カードグリッド上書き */
-.diagnosis-result-container .card-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
+/* 診断結果ビューは wizard の狭い 700px 枠を外して main 幅いっぱいに広げる。
+   #3055 follow-up: 結果カードが 700px - padding の中で 3 列に詰め込まれ
+   1 枚 ≈196px まで細り、最安値バッジ (左下) と年齢バッジ (右下) が重なって
+   価格が隠れていた。JS が結果表示時にこのクラスを付与する。
+   card-grid の列数はベース .card-grid (custom.css: 3→2→1 のレスポンシブ) に
+   委ね、診断側では上書きしない (ホームと同じ折返し挙動に統一)。 */
+.diagnosis-wrapper.diagnosis-wrapper--results {
+    max-width: none;
+    padding: 0;
+    background: none;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
 }
-
-@media (min-width: 768px) {
-    .diagnosis-result-container .card-grid {
-        grid-template-columns: repeat(3, 1fr);
-    }
+.diagnosis-result-container .card-grid {
+    margin-top: 0.5rem;
 }
 
 /* #1418 P2: 診断ページのモバイル最適化

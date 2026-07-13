@@ -156,8 +156,12 @@ enableRobotsTXT = true
     shouldSort = true
     location = 0
     distance = 1000
-    threshold = 0.4
-    minMatchCharLength = 0
+    # #3055 follow-up: threshold 0.4 / minMatchCharLength 0 は緩すぎ、意味のない文字列
+    # (例「テストテス」) が content 全文のあいまい一致で 23 件ヒットしていた。
+    # 実データ 1478 件で検証: 0.3 + 2 文字下限にするとゴミ一致は 0 件、正当な
+    # クエリ (レゴ/くもん/トミカ 等) はトップ結果を維持したまま弱い一致だけ除去。
+    threshold = 0.3
+    minMatchCharLength = 2
     keys = ["title", "permalink", "summary", "content"]
 
 # Markdown表示設定

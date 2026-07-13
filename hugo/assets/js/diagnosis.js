@@ -10,6 +10,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const progressBar = document.getElementById("diagnosis-progress-bar");
     const progressText = document.getElementById("diagnosis-progress-text");
     const wizardContainer = document.getElementById("diagnosis-wizard");
+    const wrapper = document.querySelector(".diagnosis-wrapper");
     const resultContainer = document.getElementById("diagnosis-result-container");
     const resultGrid = document.getElementById("diagnosis-result-grid");
     const fallbackBadge = document.getElementById("diagnosis-fallback-badge");
@@ -254,7 +255,8 @@ document.addEventListener("DOMContentLoaded", () => {
         wizardContainer.style.display = "block";
         prevBtn.style.display = "none";
         progressBar.parentElement.style.display = "block"; // プログレスバーを再表示
-        
+        if (wrapper) wrapper.classList.remove("diagnosis-wrapper--results"); // 狭い wizard 枠へ戻す
+
         updateStepUI();
     });
 
@@ -279,6 +281,7 @@ document.addEventListener("DOMContentLoaded", () => {
         progressBar.parentElement.style.display = "none"; // プログレスバーを非表示に
         prevBtn.style.display = "none";
         resultContainer.style.display = "block";
+        if (wrapper) wrapper.classList.add("diagnosis-wrapper--results"); // 結果は main 幅いっぱいに
 
         // フォールバックバッジの表示
         if (fallbackType) {
@@ -392,6 +395,7 @@ document.addEventListener("DOMContentLoaded", () => {
         prevBtn.style.display = "none";
         resultContainer.style.display = "block";
         fallbackBadge.style.display = "none";
+        if (wrapper) wrapper.classList.add("diagnosis-wrapper--results"); // 年齢ベスト10 も main 幅いっぱいに
 
         // 結果見出しを「年齢ベスト10」に差し替える。
         const header = resultContainer.querySelector(".diagnosis-result-header");
