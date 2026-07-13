@@ -234,6 +234,25 @@
   </div>
 </section>
 
+{{- /* === Section: あなたにおすすめ (#3055 E2) — home_reco.js が商品ページの
+       related_carousel.html (semantic 近傍含む) 由来の候補を localStorage に集約し、
+       ホームでクライアント集計・描画する。新規データ転送ゼロ。カード構造は
+       recently-viewed と同一クラスを再利用 (CSS 追加は見出し調整のみ)。
+       3 件未満なら hidden のまま (レイアウトシフトなし)。 */ -}}
+<section class="home-section home-reco-mount related-carousel-section" hidden aria-label="あなたにおすすめ">
+  <header class="home-section-header">
+    <h2>✨ あなたにおすすめ</h2>
+    <span class="home-section-note">最近見たおもちゃに近いアイテムです</span>
+    <div class="carousel-nav-arrows">
+      <button class="carousel-arrow prev" type="button" aria-label="左にスクロール" disabled>‹</button>
+      <button class="carousel-arrow next" type="button" aria-label="右にスクロール">›</button>
+    </div>
+  </header>
+  <div class="carousel-wrapper">
+    <div class="recently-viewed-grid"></div>
+  </div>
+</section>
+
 {{- /* === Footer credit === */ -}}
 <section class="home-credit">
   <p>このサイトは <a href="https://omcha.jp/" target="_blank" rel="noopener">おもちゃいろ</a> のパパママ（元ソニーエンジニア × 医療従事者夫婦）が、AI と一緒に毎日更新している知育玩具の価格・スコア比較サイトです。</p>

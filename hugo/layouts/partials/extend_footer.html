@@ -10,6 +10,14 @@
 <script defer src="{{ $recent.RelPermalink }}" integrity="{{ $recent.Data.Integrity }}" crossorigin="anonymous"></script>
 {{- end }}
 
+{{- /* #3055 E2 あなたにおすすめ — 全ページで読み込み (商品ページで related_carousel.html
+       由来の候補を収集、ホームで render)。recently_viewed.js の後・carousel_swipe.js の前に
+       置き、render で注入されたカードを carousel init が拾えるようにする。 */ -}}
+{{- $homeReco := resources.Get "js/home_reco.js" | resources.Minify | resources.Fingerprint "sha256" }}
+{{- if $homeReco }}
+<script defer src="{{ $homeReco.RelPermalink }}" integrity="{{ $homeReco.Data.Integrity }}" crossorigin="anonymous"></script>
+{{- end }}
+
 {{- /* #1367 carousel 矢印/スワイプ/autoplay — 全ページで読み込み。.related-carousel-section
        (商品ページの関連/成長先取り + home/post の最近見た商品) を共通制御。recently_viewed.js
        の後に置き、render で注入されたカードを carousel init が拾えるようにする。 */ -}}

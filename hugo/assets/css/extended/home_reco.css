@@ -1,0 +1,13 @@
+/* ==========================================
+   あなたにおすすめ (#3055 E2 / home_reco.js)
+   カード自体は .recently-viewed-* クラスを再利用するため、ここでは
+   セクション見出しのレイアウト調整のみ (recently-viewed-mount の
+   .carousel-nav-arrows 調整と同じ意図)。
+   ========================================== */
+
+.home-reco-mount[hidden] { display: none !important; }
+
+.home-reco-mount .carousel-nav-arrows {
+  margin-left: auto;
+  align-self: center;
+}
