@@ -172,7 +172,16 @@ enableRobotsTXT = true
 
 # 出力フォーマット（検索用JSON）
 [outputs]
-  home = ["HTML", "RSS", "JSON"]
+  home = ["HTML", "RSS", "JSON", "SearchIndex"]
+
+# #3055 E1: index.json (44.6MB) を軽量カタログと検索専用 /search.json に分離するための
+# custom output format。fastsearch/diagnosis はこちらを fetch する
+[outputFormats]
+  [outputFormats.SearchIndex]
+    mediaType = "application/json"
+    baseName = "search"
+    isPlainText = true
+    notAlternative = true
 
 # ナビゲーションメニュー
 [menu]
