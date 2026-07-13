@@ -35,6 +35,10 @@
   ``scripts/fetch_amazon_dry_run.py`` (validate workflow の gate) で実 API
   検証されることを前提に設計すること。
 """
+# NAS runner (amazon-home-ops, Python 3.8) から import されるため、3.9+ の
+# 組み込みジェネリック注釈 (tuple[...] / list[...]) を遅延評価にする (#3046)。
+from __future__ import annotations
+
 import os
 import json
 import time
