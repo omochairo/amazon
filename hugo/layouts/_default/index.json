@@ -1,6 +1,7 @@
 {{- /* #3055 E1: 全文 content/summary は /search.json (index.searchindex.json) に分離。
        ここは compare/favorites/posts一覧/term が使う軽量カタログ */ -}}
-{{- $.Scratch.Add "index" slice -}}
+{{- /* Scratch は home の複数 output format 間で共有されキー衝突するため、ローカル変数で蓄積する */ -}}
+{{- $idx := slice -}}
 {{- range where site.RegularPages "Section" "posts" -}}
     {{- if and (not .Params.searchhidden) (not .Params.searchHidden) (ne .File.BaseFileName "privacy") (ne .Layout `archives`) (ne .Layout `search`) }}
     {{- /* #2817 スラッグ移行後 .Params.tags は英語スラッグを持つため、diagnosis.js の
@@ -10,7 +11,7 @@
            (category_dropdown.html #2893 と同じ根本原因・同じ解決パターン)。 */}}
     {{- $tagNames := slice -}}
     {{- range .GetTerms "tags" }}{{ $tagNames = $tagNames | append .LinkTitle }}{{ end -}}
-    {{- $.Scratch.Add "index" (dict
+    {{- $idx = $idx | append (dict
         "title"        .Title
         "permalink"    .Permalink
         "image"        (.Params.product_image | default "")
@@ -31,4 +32,4 @@
     ) -}}
     {{- end }}
 {{- end -}}
-{{- $.Scratch.Get "index" | jsonify -}}
+{{- $idx | jsonify -}}
