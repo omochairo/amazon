@@ -7,6 +7,12 @@
 }
 
 .not-found-page .not-found {
+    /* テーマ (PaperMod common/404.css) の .not-found は position:absolute +
+       height:80% でページの大半を覆う透明オーバーレイになり、下のボタン/チップの
+       クリックを吸ってしまう。通常フローに戻して完全に無効化する */
+    position: static;
+    height: auto;
+    display: block;
     margin: 16px 0 0;
     font-size: 96px;
     font-weight: 800;
