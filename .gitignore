@@ -16,6 +16,9 @@ public_test/
 !/hugo/data
 /hugo/data/*
 !/hugo/data/semantic_related.json
+# ソースディレクトリは丸ごと再 include (新規テンプレート/CSS/JS が add -f 無しで乗るように)
+!/hugo/layouts
+!/hugo/assets
 /hugo_server.log
 /hugo.tar.gz
 

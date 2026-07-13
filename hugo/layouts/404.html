@@ -1,0 +1,38 @@
+{{- define "main" }}
+{{- /* #3055 follow-up: 404 をリンク切れ流入の回遊起点に変換する。
+       - 検索/診断への大ボタン + 主要ハブ (site menu から動的生成)
+       - 「最近見た商品」レール: recently_viewed.js は全ページで読み込まれ
+         .recently-viewed-mount を hydrate する (home/single と同一マークアップ)。
+         初回訪問者には hidden のままでレイアウトシフトなし。 */ -}}
+<div class="not-found-page">
+  <div class="not-found">404</div>
+  <h1 class="not-found-title">お探しのページは見つかりませんでした</h1>
+  <p class="not-found-lead">
+    商品の取り扱い終了や URL の変更で、ページが移動・削除された可能性があります。<br>
+    お探しのおもちゃは検索・診断から見つかるかもしれません。
+  </p>
+  <div class="not-found-actions">
+    <a class="not-found-action not-found-action--primary" href="{{ "search/" | relURL }}">🔍 商品名・ブランドで検索</a>
+    <a class="not-found-action" href="{{ "diagnosis/" | relURL }}">🧸 3つの質問でおもちゃ診断</a>
+  </div>
+  <nav class="not-found-hubs" aria-label="人気の特集">
+    {{- range site.Menus.main }}
+    <a class="not-found-hub" href="{{ .URL | relURL }}">{{ .Name }}</a>
+    {{- end }}
+  </nav>
+
+  <section class="home-section recently-viewed-mount related-carousel-section not-found-recent" hidden aria-label="最近見た商品">
+    <header class="home-section-header">
+      <h2>🕘 最近見た商品</h2>
+      <span class="home-section-note">続きから検討できます</span>
+      <div class="carousel-nav-arrows">
+        <button class="carousel-arrow prev" type="button" aria-label="左にスクロール" disabled>‹</button>
+        <button class="carousel-arrow next" type="button" aria-label="右にスクロール">›</button>
+      </div>
+    </header>
+    <div class="carousel-wrapper">
+      <div class="recently-viewed-grid"></div>
+    </div>
+  </section>
+</div>
+{{- end }}{{/* end main */ -}}
