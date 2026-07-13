@@ -52,10 +52,10 @@
   <div class="brand-hub-hero-image">
     {{- if $repPage }}
     <a href="{{ $repPage.RelPermalink }}" aria-label="{{ $.Title }} の代表商品を見る">
-      <img src="{{ $img }}" alt="{{ $.Title }} 代表商品" loading="lazy" decoding="async">
+      <img src="{{ $img }}" alt="{{ $.Title }} 代表商品" fetchpriority="high" decoding="async">
     </a>
     {{- else }}
-    <img src="{{ $img }}" alt="{{ $.Title }} 代表商品" loading="lazy" decoding="async">
+    <img src="{{ $img }}" alt="{{ $.Title }} 代表商品" fetchpriority="high" decoding="async">
     {{- end }}
   </div>
   {{- end }}
