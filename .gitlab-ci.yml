@@ -10,6 +10,7 @@
 stages:
   - generate
   - deploy
+  - postdeploy
 
 # MR 検証 (旧 04-validate-article-pr.yml の移植, フェーズ3)。
 # すべての MR で走る。記事 JSON の変更が無ければ vacuous success。
@@ -169,3 +170,26 @@ pages:
   artifacts:
     paths:
       - public
+
+# #3059 Day2: Cloudflare エッジキャッシュの purge。
+# navi.omcha.jp プロキシ化 + Cache Rule (Edge TTL 1h) 稼働後、デプロイ反映を即時化する。
+# - postdeploy ステージに置く理由: gitlab.com では pages ジョブ成功後に特殊ジョブ
+#   pages:deploy (deploy ステージ) が実際の配信反映を行う。purge を GitHub 側
+#   40-mirror-to-gitlab.yml に置くと「push 直後・ビルド完了前」に走ってしまい
+#   古いコンテンツを再キャッシュするため、配信反映後のここが正位置。
+# - CF_ZONE_ID / CF_PURGE_TOKEN (Zone.Cache Purge 権限のみ) が CI/CD 変数に
+#   未設定の間はジョブ自体が生成されない (プロキシ化前は no-op)。
+# - Free プランは purge_everything か URL 個別指定のみ (hostname/prefix purge は
+#   Enterprise)。root omcha.jp は DNS only でエッジキャッシュを持たないため
+#   zone 全体 purge でも実害なし。
+cf-purge:
+  stage: postdeploy
+  image: curlimages/curl:latest
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main" && $CF_ZONE_ID && $CF_PURGE_TOKEN'
+  script:
+    - |
+      curl -fsS -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/purge_cache" \
+        -H "Authorization: Bearer ${CF_PURGE_TOKEN}" \
+        -H "Content-Type: application/json" \
+        --data '{"purge_everything":true}'

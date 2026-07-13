@@ -218,4 +218,12 @@
   gtag('config', 'G-D8ZQX1BT20');
 </script>
 
+{{- /* #3055 E4-B / #3059: Cloudflare Web Analytics (RUM)。LCP/CLS/INP の実測を無料で取得。
+       config.toml の params.cloudflareWebAnalyticsToken が未設定なら何も出さない。
+       JS スニペット版なのでプロキシ (orange cloud) に依存せず、GitHub Pages への
+       フェイルオーバー時も計測が継続する。 */ -}}
+{{- with site.Params.cloudflareWebAnalyticsToken }}
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "{{ . }}"}'></script>
+{{- end }}
+
 
