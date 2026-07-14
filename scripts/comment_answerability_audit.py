@@ -36,6 +36,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import time
 from typing import Any
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -46,8 +47,37 @@ LOW_CTR_MARKER_PREFIX = "a1-low-ctr:"
 AUDIT_MARKER_PREFIX = "answerability-audit:"
 LOW_CTR_SEARCH_LABELS = ("quality", "analytics")
 
+_SEARCH_MAX_ATTEMPTS = 3
+_SEARCH_RETRY_SLEEP_SECONDS = 3.0
 
-def find_low_ctr_issue_numbers(repo: str) -> dict[str, int]:
+
+def _search_issues(query: str, sleeper=time.sleep) -> list[dict]:
+    """`gh api search/issues` を実行し items を返す。
+
+    GitHub Search API はインデックス反映に数秒〜数十秒のラグがあり、直前の
+    書き込み (この workflow 自身が作る data PR 等) 直後は既存 issue が一時的に
+    ヒットしないことがある (2026-07-14 実運用で観測: 同一 run 内で data PR 作成
+    直後にこの検索を実行したところ 0 件を返した)。total_count=0 の場合のみ短い
+    間隔で再試行し (真に0件のケースは再試行しても変わらずそのまま受け入れる)、
+    それ以外は初回結果を返す。
+    """
+    items: list[dict] = []
+    for attempt in range(1, _SEARCH_MAX_ATTEMPTS + 1):
+        res = subprocess.run(
+            ["gh", "api", "-X", "GET", "search/issues",
+             "-f", f"q={query}", "-f", "per_page=100"],
+            check=True, capture_output=True, text=True,
+        )
+        items = json.loads(res.stdout).get("items", [])
+        if items or attempt == _SEARCH_MAX_ATTEMPTS:
+            return items
+        logger.info("search/issues returned 0 items (attempt %d/%d); retrying "
+                    "in case of search index lag", attempt, _SEARCH_MAX_ATTEMPTS)
+        sleeper(_SEARCH_RETRY_SLEEP_SECONDS)
+    return items
+
+
+def find_low_ctr_issue_numbers(repo: str, sleeper=time.sleep) -> dict[str, int]:
     """label=quality,analytics の open Issue から {URL: issue番号} を作る。
 
     scripts.open_low_ctr_issues.find_existing_taken_urls と同じ検索クエリ
@@ -56,12 +86,7 @@ def find_low_ctr_issue_numbers(repo: str) -> dict[str, int]:
     """
     labels = " ".join(f"label:{l}" for l in LOW_CTR_SEARCH_LABELS)
     query = f'repo:{repo} is:issue is:open {labels} in:body "{LOW_CTR_MARKER_PREFIX}"'
-    res = subprocess.run(
-        ["gh", "api", "-X", "GET", "search/issues",
-         "-f", f"q={query}", "-f", "per_page=100"],
-        check=True, capture_output=True, text=True,
-    )
-    items = json.loads(res.stdout).get("items", [])
+    items = _search_issues(query, sleeper=sleeper)
     mapping: dict[str, int] = {}
     for it in items:
         number = it.get("number")

@@ -76,12 +76,35 @@ def test_find_low_ctr_issue_numbers_extracts_marker_and_number():
 
 
 def test_find_low_ctr_issue_numbers_empty():
+    # 0件は search index ラグ疑いで最大 _SEARCH_MAX_ATTEMPTS 回リトライされる。
+    # sleeper を no-op に差し替えてテストを高速に保つ (実 sleep しない)。
     def fake_run(cmd, **kwargs):
         return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"items": []}), stderr="")
 
     with patch("scripts.comment_answerability_audit.subprocess.run", side_effect=fake_run):
-        mapping = find_low_ctr_issue_numbers("repo")
+        mapping = find_low_ctr_issue_numbers("repo", sleeper=lambda s: None)
     assert mapping == {}
+
+
+def test_find_low_ctr_issue_numbers_retries_on_transient_zero_then_succeeds():
+    # GitHub Search API のインデックス反映ラグで初回0件→再試行で見つかるケース
+    # (2026-07-14 amazon-home-ops answerability-audit workflow で実際に観測:
+    # 同一 run 内で data PR 作成直後にこの検索が0件を返した)。
+    fake_response = {"items": [{"number": 3001, "body": f"<!-- {LOW_CTR_MARKER_PREFIX}https://x/ -->"}]}
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if len(calls) < 2:
+            return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"items": []}), stderr="")
+        return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(fake_response), stderr="")
+
+    sleeps = []
+    with patch("scripts.comment_answerability_audit.subprocess.run", side_effect=fake_run):
+        mapping = find_low_ctr_issue_numbers("repo", sleeper=lambda s: sleeps.append(s))
+    assert mapping == {"https://x/": 3001}
+    assert len(calls) == 2
+    assert sleeps == [3.0]
 
 
 def test_has_existing_audit_comment_true_when_marker_present():
