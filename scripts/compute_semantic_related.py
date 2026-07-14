@@ -68,6 +68,9 @@ DEFAULT_MIN_SCORE = 0.60
 DEFAULT_BATCH_SIZE = 32
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
 DEFAULT_MODEL = "nomic-embed-text"
+DEFAULT_BACKEND = "ollama"
+DEFAULT_RURI_URL = "http://localhost:8000"
+DEFAULT_MODEL_RURI = "cl-nagoya/ruri-v3-310m"
 
 REQUEST_TIMEOUT = 120
 MAX_TEXT_LEN = 1200
@@ -247,6 +250,48 @@ def embed_batch(
     raise EmbeddingBatchError(str(last_err)) from last_err
 
 
+def embed_batch_ruri(
+    texts: list[str],
+    ruri_url: str,
+    session: requests.Session,
+    sleeper=time.sleep,
+) -> list[list[float]]:
+    """1 バッチ分のテキストを amazon-home-ops の Ruri v3 API (`/embed`) でベクトル化する。
+
+    #2995 案1 の K8 LLM ワーカー経路 (``http://ruri:8000``、compose 内部ネットワーク)。
+    リトライ挙動は ``embed_batch`` (Ollama 版) と同一。レスポンス形状のみ異なる
+    (``embeddings`` ではなく ``vectors``)。文書側の "検索文書: " プレフィックスは
+    ruri app.py 側が ``kind="document"`` から自動付与するため、ここでは生テキスト
+    をそのまま送る。
+    """
+    url = f"{ruri_url.rstrip('/')}/embed"
+    last_err: Exception | None = None
+    attempts = _MAX_EXTRA_RETRIES + 1
+    for attempt in range(1, attempts + 1):
+        try:
+            resp = session.post(
+                url, json={"texts": texts, "kind": "document"}, timeout=REQUEST_TIMEOUT
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+            vectors = payload.get("vectors") if isinstance(payload, dict) else None
+            if not isinstance(vectors, list) or len(vectors) != len(texts):
+                raise EmbeddingBatchError(
+                    f"unexpected /embed response shape (expected {len(texts)} vectors)"
+                )
+            return vectors
+        except (requests.RequestException, EmbeddingBatchError, ValueError) as e:
+            last_err = e
+            if attempt < attempts:
+                logger.warning(
+                    "ruri embed batch failed (attempt %d/%d): %s; retrying", attempt, attempts, e
+                )
+                sleeper(_RETRY_SLEEP_SECONDS)
+            else:
+                logger.error("ruri embed batch failed after %d attempt(s): %s", attempts, e)
+    raise EmbeddingBatchError(str(last_err)) from last_err
+
+
 # --------------------------------------------------------------------------
 # 類似度計算 (numpy があればベクトル化、無ければ純 Python フォールバック)
 # --------------------------------------------------------------------------
@@ -364,14 +409,24 @@ def run(
     dry_run: bool = False,
     ollama_url: str = DEFAULT_OLLAMA_URL,
     model: str = DEFAULT_MODEL,
+    backend: str = DEFAULT_BACKEND,
+    ruri_url: str = DEFAULT_RURI_URL,
     session: requests.Session | None = None,
     sleeper=time.sleep,
 ) -> dict[str, Any]:
     """全体を実行し、件数サマリを dict で返す (テスト・main 双方から呼べるように分離)。
 
+    ``backend="ollama"`` (既定) は ``ollama_url``/``model`` で Ollama の
+    `/api/embed` を叩く。``backend="ruri"`` は ``ruri_url`` で amazon-home-ops の
+    Ruri v3 API (`/embed`) を叩く (#2995 案1 K8 LLM ワーカー経路)。``model`` は
+    ruri 経路では出力 `_meta.model` のラベルにのみ使う (実モデルはコンテナ側で固定)。
+
     埋め込みバッチが最終的に失敗した場合は ``EmbeddingBatchError`` を送出し、
     出力ファイルへの書き込みは一切行わない (呼び出し元は非 0 終了させること)。
     """
+    if backend not in ("ollama", "ruri"):
+        raise ValueError(f"unknown backend: {backend!r} (expected 'ollama' or 'ruri')")
+
     items = load_article_index(articles_dir, limit)
     logger.info("articles after dedupe: %d (limit=%d)", len(items), limit)
 
@@ -387,7 +442,10 @@ def run(
     n_batches = (len(texts) + batch_size - 1) // batch_size
     for bi in range(n_batches):
         batch_texts = texts[bi * batch_size: (bi + 1) * batch_size]
-        batch_embeddings = embed_batch(batch_texts, ollama_url, model, session, sleeper)
+        if backend == "ruri":
+            batch_embeddings = embed_batch_ruri(batch_texts, ruri_url, session, sleeper)
+        else:
+            batch_embeddings = embed_batch(batch_texts, ollama_url, model, session, sleeper)
         embeddings.extend(batch_embeddings)
         if (bi + 1) % _BATCH_LOG_EVERY == 0:
             logger.info("embedding batches progress: %d/%d", bi + 1, n_batches)
@@ -417,16 +475,31 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=0, help="処理する記事数の上限 (0=全件、スモークテスト用)")
     ap.add_argument("--dry-run", action="store_true", help="計算のみ行い、出力ファイルへの書き込みは行わない")
     ap.add_argument(
+        "--backend",
+        choices=("ollama", "ruri"),
+        default=os.environ.get("EMBED_BACKEND", DEFAULT_BACKEND),
+        help="埋め込みバックエンド: ollama (既定) または ruri (#2995 案1 K8 LLM ワーカー)",
+    )
+    ap.add_argument(
         "--ollama-url",
         default=os.environ.get("OLLAMA_URL", DEFAULT_OLLAMA_URL),
-        help="Ollama サーバーの URL",
+        help="Ollama サーバーの URL (--backend ollama 時のみ使用)",
+    )
+    ap.add_argument(
+        "--ruri-url",
+        default=os.environ.get("RURI_URL", DEFAULT_RURI_URL),
+        help="Ruri v3 API の URL (--backend ruri 時のみ使用)",
     )
     ap.add_argument(
         "--model",
-        default=os.environ.get("EMBED_MODEL", DEFAULT_MODEL),
-        help="embeddings に使う Ollama モデル名",
+        default=os.environ.get("EMBED_MODEL"),
+        help="embeddings に使うモデル名 (ollama: リクエストに使用 / ruri: _meta ラベルのみ、未指定ならバックエンド別既定値)",
     )
     args = ap.parse_args()
+
+    model = args.model
+    if not model:
+        model = DEFAULT_MODEL_RURI if args.backend == "ruri" else DEFAULT_MODEL
 
     try:
         run(
@@ -438,7 +511,9 @@ def main() -> None:
             limit=args.limit,
             dry_run=args.dry_run,
             ollama_url=args.ollama_url,
-            model=args.model,
+            model=model,
+            backend=args.backend,
+            ruri_url=args.ruri_url,
         )
     except EmbeddingBatchError as e:
         logger.error("embedding computation failed: %s; aborting without writing output", e)
