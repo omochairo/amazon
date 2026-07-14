@@ -70,13 +70,18 @@ jobs:
           set -e
           resp=$(curl -fsS --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
             "https://gitlab.com/api/v4/projects/${GITLAB_PROJECT}/pages/domains/${DOMAIN}")
-          echo "$resp" | jq '{domain: .domain, auto_ssl: .auto_ssl_enabled, cert: (.certificate | {subject, expired, expiration})}'
-          expiration=$(echo "$resp" | jq -r '.certificate.expiration // empty')
-          if [ -z "$expiration" ]; then
-            echo "証明書情報が取れない → 更新を実行する"
+          echo "$resp" | jq '{domain: .domain, auto_ssl: .auto_ssl_enabled, cert: (.certificate | {subject, expired})}'
+          # 注意: GitLab API は .certificate.expiration を返さない (2026-07-14 実測)。
+          # PEM (.certificate.certificate) から openssl で失効日を取る。
+          # ここで失効日が取れないまま renew=true に倒すと cron が毎日発行して
+          # Let's Encrypt レート制限 (同一ドメイン 5枚/週) に到達するため、PEM 必須とする
+          pem=$(echo "$resp" | jq -r '.certificate.certificate // empty')
+          if [ -z "$pem" ]; then
+            echo "証明書 PEM が取れない (未設定ドメイン?) → 更新を実行する"
             echo "renew=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          expiration=$(echo "$pem" | openssl x509 -noout -enddate | cut -d= -f2)
           exp_epoch=$(date -d "$expiration" +%s)
           now_epoch=$(date +%s)
           days_left=$(( (exp_epoch - now_epoch) / 86400 ))
@@ -118,11 +123,12 @@ jobs:
             --data-urlencode "key@./le/live/${DOMAIN}/privkey.pem" \
             --data "auto_ssl_enabled=false" \
             "https://gitlab.com/api/v4/projects/${GITLAB_PROJECT}/pages/domains/${DOMAIN}" \
-            | jq '{domain: .domain, auto_ssl: .auto_ssl_enabled, cert: (.certificate | {subject, expiration})}'
+            | jq '{domain: .domain, auto_ssl: .auto_ssl_enabled, cert: (.certificate | {subject, expired})}'
           # 反映確認: 失効日が 60 日以上先になっていること
+          # (API は .certificate.expiration を返さないため PEM から openssl で取る)
           resp=$(curl -fsS --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
             "https://gitlab.com/api/v4/projects/${GITLAB_PROJECT}/pages/domains/${DOMAIN}")
-          expiration=$(echo "$resp" | jq -r '.certificate.expiration')
+          expiration=$(echo "$resp" | jq -r '.certificate.certificate' | openssl x509 -noout -enddate | cut -d= -f2)
           exp_epoch=$(date -d "$expiration" +%s)
           days_left=$(( (exp_epoch - $(date +%s)) / 86400 ))
           echo "更新後の残存日数: ${days_left} 日"
