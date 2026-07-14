@@ -417,6 +417,11 @@ on:
       # pull_request イベントが発火するので paths 登録だけで足りる (vacuous SUCCESS)。
       - 'data/site_audit/**'
       - 'hugo/data/semantic_related.json'
+      # 2026-07-14 (#2995 案1 A/B): K8 Ruri レーンの data PR 出力先。NAS/Ollama 版の
+      # semantic_related.json と別ファイルで並存させ近傍品質を比較する。未登録だと
+      # data PR の required check `validate` が不発 → auto-merge 永久 pending
+      # ([[04-validate-paths-inverse-trap]])。
+      - 'hugo/data/semantic_related_ruri.json'
       # 2026-07-13 (#3046 / #2995 案8 P1): NAS 日次価格観測レーンの出力先。
       # 未登録だと data PR の required check `validate` が不発 → auto-merge 永久
       # pending ([[04-validate-paths-inverse-trap]]、#3029/#3033 で再現済み)。
