@@ -287,6 +287,97 @@ class RunEndToEndTest(unittest.TestCase):
         self.assertTrue(first_call_args[0].endswith("/api/embed"))
 
 
+def _mock_ruri_response(vectors: list[list[float]]):
+    r = mock.Mock()
+    r.raise_for_status = mock.Mock()
+    r.json = mock.Mock(return_value={"dim": len(vectors[0]) if vectors else 0, "vectors": vectors})
+    return r
+
+
+class RunRuriBackendTest(unittest.TestCase):
+    """#2995 案1 K8 LLM ワーカー経路 (backend="ruri") のリクエスト形状・E2E テスト。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = pathlib.Path(self._tmp.name)
+        self.articles_dir = self.root / "articles"
+        self.articles_dir.mkdir()
+        self.out_path = self.root / "out" / "semantic_related.json"
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _write_three_articles(self):
+        _write_article(self.articles_dir, "2026-05-01-B0AAAAAAAA.json", {"title": "商品A"})
+        _write_article(self.articles_dir, "2026-05-01-B0BBBBBBBB.json", {"title": "商品B"})
+        _write_article(self.articles_dir, "2026-05-01-B0CCCCCCCC.json", {"title": "商品C"})
+
+    def test_ruri_request_payload_and_url(self):
+        self._write_three_articles()
+        embeddings_batch1 = [[1.0, 0.0], [0.0, 1.0]]
+        embeddings_batch2 = [[0.5, 0.5]]
+        session = mock.Mock()
+        session.post.side_effect = [
+            _mock_ruri_response(embeddings_batch1),
+            _mock_ruri_response(embeddings_batch2),
+        ]
+        C.run(
+            self.articles_dir, self.out_path,
+            top_k=8, min_score=0.0, batch_size=2, limit=0, dry_run=False,
+            backend="ruri", ruri_url="http://fake-ruri:8000", model="cl-nagoya/ruri-v3-310m",
+            session=session, sleeper=lambda _s: None,
+        )
+        self.assertEqual(session.post.call_count, 2)
+        first_call_args, first_call_kwargs = session.post.call_args_list[0]
+        self.assertEqual(first_call_kwargs["json"]["kind"], "document")
+        self.assertEqual(len(first_call_kwargs["json"]["texts"]), 2)
+        self.assertNotIn("model", first_call_kwargs["json"])
+        self.assertTrue(first_call_args[0].endswith("/embed"))
+        self.assertFalse(first_call_args[0].endswith("/api/embed"))
+
+    def test_ruri_end_to_end_output_shape_and_meta(self):
+        self._write_three_articles()
+        embeddings = [[1.0, 0.0], [0.99, 0.14], [0.0, 1.0]]
+        session = mock.Mock()
+        session.post.return_value = _mock_ruri_response(embeddings)
+
+        summary = C.run(
+            self.articles_dir, self.out_path,
+            top_k=8, min_score=0.6, batch_size=32, limit=0, dry_run=False,
+            backend="ruri", ruri_url="http://fake-ruri:8000", model="cl-nagoya/ruri-v3-310m",
+            session=session, sleeper=lambda _s: None,
+        )
+        self.assertTrue(summary["written"])
+        data = json.loads(self.out_path.read_text(encoding="utf-8"))
+        self.assertEqual(data["_meta"]["model"], "cl-nagoya/ruri-v3-310m")
+        neighbor_asins_a = [n["asin"] for n in data["b0aaaaaaaa"]]
+        self.assertIn("b0bbbbbbbb", neighbor_asins_a)
+
+    def test_ruri_connection_error_retries_then_raises_and_writes_nothing(self):
+        self._write_three_articles()
+        session = mock.Mock()
+        session.post.side_effect = requests.ConnectionError("boom")
+
+        with self.assertRaises(C.EmbeddingBatchError):
+            C.run(
+                self.articles_dir, self.out_path,
+                top_k=8, min_score=0.6, batch_size=32, limit=0, dry_run=False,
+                backend="ruri", ruri_url="http://fake-ruri:8000",
+                session=session, sleeper=lambda _s: None,
+            )
+        self.assertEqual(session.post.call_count, 3)
+        self.assertFalse(self.out_path.exists())
+
+    def test_unknown_backend_raises_value_error(self):
+        self._write_three_articles()
+        session = mock.Mock()
+        with self.assertRaises(ValueError):
+            C.run(
+                self.articles_dir, self.out_path,
+                backend="unknown-backend", session=session, sleeper=lambda _s: None,
+            )
+
+
 class RunAbortOnEmbeddingFailureTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
