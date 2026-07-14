@@ -16,6 +16,10 @@ public_test/
 !/hugo/data
 /hugo/data/*
 !/hugo/data/semantic_related.json
+# K8 Ruri レーン (#2995 案1 A/B) の成果物。NAS 版 semantic_related.json と別ファイルで
+# 並存させ近傍品質を比較する。whitelist しないと /hugo/data/* に飲まれ data PR に
+# 乗らない (2026-07-14 の初回 run #29335227906 で skipped を実測)。
+!/hugo/data/semantic_related_ruri.json
 # ソースディレクトリは丸ごと再 include (新規テンプレート/CSS/JS が add -f 無しで乗るように)
 !/hugo/layouts
 !/hugo/assets
