@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-14T15:19:39Z",
+  "generated_at": "2026-07-14T21:14:22Z",
   "model": "gemma4:26b-a4b-it-qat",
   "source_week": "2026-W28",
   "baseline_ctr": 0.05665024630541872,
@@ -34,6 +34,51 @@
             "実際のユーザーによる詳細な使用感やレビュー内容"
           ],
           "note": "対象年齢、価格、メンテナンス方法など、購入検討時に必要な主要情報は網羅されています。",
+          "error": null
+        }
+      ]
+    },
+    {
+      "page": "https://navi.omcha.jp/products/b0gwkwbxh3/",
+      "asin": "B0GWKWBXH3",
+      "page_coverage_avg": 0.433,
+      "queries": [
+        {
+          "query": "cx17",
+          "impressions": 2,
+          "position": 9.0,
+          "answered": true,
+          "coverage": 0.9,
+          "missing_aspects": [],
+          "note": "クエリが非常に抽象的ですが、商品名の一部として「CX-17」を特定し、その詳細（価格、内容、特徴、注意点）を網羅しているため、十分な回答と言えます。",
+          "error": null
+        },
+        {
+          "query": "ベイブレード 口コミ",
+          "impressions": 1,
+          "position": 15.0,
+          "answered": false,
+          "coverage": 0.2,
+          "missing_aspects": [
+            "ベイブレード全般に関する口コミ",
+            "具体的なユーザーの評価（良い点・悪い点）",
+            "製品の使用感や耐久性に関するレビュー"
+          ],
+          "note": "この記事は特定の製品「CX-17 ランダムブースター Vol.10」に特化した内容であり、広範な検索クエリである「ベイブレード 口コミ」に対しては情報が限定的すぎます。",
+          "error": null
+        },
+        {
+          "query": "ランダムブースターvol 10 当たり",
+          "impressions": 1,
+          "position": 14.0,
+          "answered": false,
+          "coverage": 0.2,
+          "missing_aspects": [
+            "当たり（レアベイ）の種類",
+            "当たりの確率や割合",
+            "何が当たれば嬉しいのかという具体的な情報"
+          ],
+          "note": "「当たり」が何を指すか（特定のパーツ名など）への直接的な回答がなく、中身の選択不可という仕様の説明に留まっています。",
           "error": null
         }
       ]
