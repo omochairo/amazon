@@ -427,6 +427,15 @@ on:
       # pending ([[04-validate-paths-inverse-trap]]、#3029/#3033 で再現済み)。
       - 'data/price_watch/**'
       - 'scripts/fetch_price_watch.py'
+      # 2026-07-14 (#2995 消費側②): GSC 回答性 entailment 監査 script + test。
+      # amazon-home-ops の K8/gemma judge が data/analytics/answerability_audit.json
+      # を data PR で還流する。未登録だと required check `validate` が不発
+      # → auto-merge 永久 pending ([[04-validate-paths-inverse-trap]])。
+      - 'scripts/audit_query_entailment.py'
+      - 'scripts/tests/test_audit_query_entailment.py'
+      - 'scripts/comment_answerability_audit.py'
+      - 'scripts/tests/test_comment_answerability_audit.py'
+      - 'data/analytics/answerability_audit.json'
   workflow_dispatch:
 
 permissions:
