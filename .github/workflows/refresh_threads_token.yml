@@ -37,6 +37,10 @@ jobs:
         with:
           client-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          # amazon-home-ops の 23-experience-mining (Threads keyword_search) にも
+          # 同じ token を同期するため、両リポジトリをスコープに含める (#3203 Phase 2)
+          owner: omochairo
+          repositories: amazon,amazon-home-ops
 
       - name: Checkout Repository
         uses: actions/checkout@v6
@@ -100,3 +104,18 @@ jobs:
           printf '%s' "$NEW_TOKEN" | gh secret set THREADS_ACCESS_TOKEN \
             --repo "${{ github.repository }}"
           echo "::notice::THREADS_ACCESS_TOKEN refreshed successfully"
+
+      # #3203 Phase 2: amazon-home-ops の 23-experience-mining (Threads
+      # keyword_search) も同じ token を使うため、home-ops 側 secret にも同期する。
+      # token は 60 日寿命 + 週次 rotate なので、単発コピーでは腐る — 毎回ここで
+      # 同期するのが唯一の恒久解。amazon 側の更新成功後に実行 (こちらが失敗しても
+      # amazon 側は更新済みのまま)。
+      - name: Sync secret to amazon-home-ops
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          NEW_TOKEN: ${{ steps.refresh.outputs.new_token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$NEW_TOKEN" | gh secret set THREADS_ACCESS_TOKEN \
+            --repo omochairo/amazon-home-ops
+          echo "::notice::THREADS_ACCESS_TOKEN synced to amazon-home-ops"
