@@ -31,7 +31,7 @@ Jules の記事設計仕様そのものに原因がある。
 | Phase | 内容 | 対象リポジトリ | 状態 |
 |---|---|---|---|
 | 1 | プロンプト v7: 比較・選び分けセクション解禁 + unique angle + 監査不足観点のリライト注入 | amazon | 本設計で実装 |
-| 2 | 体験談供給レーン (K8 gemma + YouTube 字幕 + third-party 本文マイニング) | amazon + amazon-home-ops | 設計のみ (§5) |
+| 2 | 体験談供給レーン (K8 gemma + Gemini grounding + Threads + third-party 本文 + Yahoo レビュー低速蓄積) | amazon + amazon-home-ops | 2026-07-15 方針確定 (§5) |
 | 3 | 凡庸度の定量監査 (Ruri embedding 類似度) | amazon-home-ops | 設計のみ (§6) |
 | 4 | 効果測定 (answerability coverage / CTR の前後比較) | amazon | 観察 |
 
@@ -123,33 +123,71 @@ Phase 1 だけでも gemma 指摘の「比較欠落」と「リライトが同�
 「具体的なユーザー体験談」はデータが無い限り書けない (創作禁止)。K8 LLM ワーカー
 (#2995) の新消費タスクとして供給側を作る。
 
-### 5.1 データソース (規約準拠のもののみ)
+**2026-07-15 owner 判断で確定した方針** (初版から変更):
 
-| ソース | 取得方法 | 含まれる体験情報 |
-|---|---|---|
-| YouTube レビュー/開封動画の字幕 | YouTube Data API (search, 無料 10k units/日) + 字幕取得 | 実使用の観察・不満・遊び方シーン (最有力) |
-| third_party_sources の本文 | 既存 #1600 Tavily URL を K8 側で本文 fetch | ブログ/メディアの使用レポート |
-| per_asin/news.json の本文 | 同上 | 受賞・イベント・体験会の記述 |
+- YouTube 広域検索レーンは**不採用** (玩具ジャンルはキッズ遊び動画が支配的でレビュー
+  動画のヒット率が低く、コストメリットが薄い — owner 指摘)。per_asin/youtube.json に
+  関連度一致済みの動画が既にある場合のみ字幕を拾う opportunistic 処理に降格
+- Amazon のレビュー情報 (「お客様のご意見」含む) は**当面見送り**。Conditions of Use /
+  Associates 規約が自動取得を禁止しており、収益根幹のアソシエイトアカウントを賭ける
+  リスクに見合わない。Lane 1+2 の充足率を見て不足が残る場合に有償代行 API
+  (Rainforest 等 $66/月〜) でのリスク外部化を再検討する
+- 楽天レビューは**不採用**。楽天はレビューを「テキストマイニング防止のため」API 非提供
+  とし、スクレイピング非推奨を明示回答した実績がある (グレー黙認ではなく明示的拒否)
+- Yahoo!ショッピングのレビューは owner 判断で**低速蓄積を採用** (Lane 2)。公式レビュー
+  API は 2021 年提供終了のため未ログイン・低負荷クロールで代替。法的整理: 未ログイン・
+  低頻度・情報解析目的は著作権法 30 条の 4 の範囲。**原文はサイトに出さない** (§5.3)
 
-Amazon/楽天レビューのスクレイピングは ToS 違反のため**採用しない**。
+### 5.1 Lane 1 (無料・規約準拠) — 主軸
 
-### 5.2 パイプライン (amazon-home-ops に `23-experience-mining.yml`)
+| ソース | 取得方法 | コスト | 含まれる体験情報 |
+|---|---|---|---|
+| Web 横断の評判要約 | **Gemini API + Google Search grounding** (`{商品名} 口コミ 評判` を grounded 生成 → 引用元 URL 付き要約) | 無料 5,000 prompts/月 (Gemini 3.x 系) | AI Overview 相当の Web 集合知 + 出典 URL (SERP スクレイピング不要の正攻法) |
+| third_party_sources の本文 | 既存 #1600 Tavily URL + grounding が返した URL を K8 側で本文 fetch | 無料 (fetch は自前) | ブログ/メディアの使用レポート (引用可) |
+| SNS の生の声 | **Threads keyword_search API** (公式・threads_keyword_search 権限・2,200 クエリ/日) | 無料 | 購入報告・使用感の生投稿 (#496 の答え) |
+| per_asin/news.json の本文 | K8 側で本文 fetch | 無料 | 受賞・イベント・体験会の記述 |
+| YouTube 字幕 (降格) | per_asin/youtube.json に既存エントリがある場合のみ字幕取得 | 無料 | レビュー動画の実使用観察 (0 件なら skip) |
 
-1. 対象 ASIN 選定: 翌日の生成予定 (新規 + rewrite_queue) + answerability_audit 対象
-2. YouTube 検索 (`{商品名} レビュー|開封|遊んでみた`) → 上位動画の字幕取得
-3. gemma で抽出: 字幕/本文 → `{aspect (体験談/比較/安全/シーン), text (60-120字要約),
-   source_url, source_type, confidence}`。**商品一致検証** (字幕中に商品名/ブランドが
-   実在するか entailment 判定) を通過したものだけ採用
+### 5.2 Lane 2 (owner 承認済み) — Yahoo レビュー低速蓄積
+
+設計条件 (すべて必須):
+
+1. 未ログイン・自宅回線 (K8/NAS レーン)・夜間スケジュール
+2. 1 リクエスト 15〜30 秒間隔 + ジッター、robots.txt 尊重、正直な UA
+   (連絡先 URL 入り)。bot 検知の回避策は実装しない
+3. 対象は監査対象/生成予定 ASIN に限定 (全カタログ巡回しない)、日次上限あり
+4. **原文はランナーのローカル保管のみ (リポジトリにコミットしない)**。リポジトリと
+   サイトに出るのは gemma で言い換えた集合傾向 (`usable_as: paraphrase`) と
+   評点分布の統計のみ。§5.D 集合声ルール・著作権の両面をクリアする
+
+### 5.3 パイプライン (amazon-home-ops に `23-experience-mining.yml`)
+
+1. 対象 ASIN 選定: answerability_audit 対象 + rewrite_queue + 新規生成予定。日次上限
+   (初期 20 ASIN)
+2. Lane 1 各アダプタでソース取得 (アダプタは環境変数の secret 有無で個別に有効化、
+   無い lane は warning + skip で止めない)
+3. gemma で抽出: 本文/投稿 → `{aspect (体験談/比較/安全/シーン/不満), text (60〜160 字),
+   source_type, source_url, usable_as (quote|paraphrase), confidence}`。**商品一致検証**
+   (本文中に商品名/ブランドが実在するか entailment 判定) を通過したものだけ採用
 4. `data/raw/per_asin/<ASIN>/experience.json` に出力 → data PR + auto-merge
    (04-validate paths と .gitignore whitelist の登録を忘れない —
-   [[04-validate-paths-inverse-trap]])
+   04-validate-paths-inverse-trap)
+5. usable_as の割当: EC レビュー由来 (yahoo_review_aggregate)・gemini grounded 要約 =
+   `paraphrase` 固定。Tavily/news の公開記事・Threads 公開投稿 = 出典明記の短引用可
+   (`quote`)
 
-### 5.3 プロンプト側の接続 (v7.1)
+必要 secret (ランナー .env / repo secret): `GEMINI_API_KEY` (grounding 用・新規)、
+`THREADS_ACCESS_TOKEN` (既存流用・threads_keyword_search 権限の付与状況は初回実行で
+要確認)。Tavily は既存 URL の再利用のため新規キー不要。
+
+### 5.4 プロンプト側の接続 (v7.1)
 
 - build_jules_prompt は per_asin/*.json を全同梱するため experience.json は自動同梱
 - PROMPT_TEMPLATE §6.5.4 のレビュー引用規則を改訂: 引用素材の優先順位を
-  experience.json > 組み込み検索 とし、「experience.json の text は出典 URL 付きで
-  『〜という使用レポートがあります (出典)』形式で使える」と明文化
+  experience.json > 組み込み検索 とし、`usable_as: quote` は「〜という使用レポートが
+  あります (出典)」形式の短引用可、`usable_as: paraphrase` は「〜という声が複数
+  見られます」型の集合表現のみ許可 (原文再現・「実際の購入者から」の断定は不可) と
+  明文化
 - 体験談要求の強化 (「daily_use に experience 由来の具体記述を最低 2 件」等の件数規律)
   は experience.json の充足率を 1〜2 週間観測してから決める (供給が無いのに規律だけ
   強化すると v6 の轍を踏む)

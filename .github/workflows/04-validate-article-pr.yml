@@ -436,6 +436,16 @@ on:
       - 'scripts/comment_answerability_audit.py'
       - 'scripts/tests/test_comment_answerability_audit.py'
       - 'data/analytics/answerability_audit.json'
+      # 2026-07-15 (#3203 Phase 2): 体験談供給レーン。K8/gemma が
+      # data/raw/per_asin/**/experience.json を data PR で還流する (data/raw/** で
+      # 既にカバー済みだが、script 単体の修正 PR が required check `validate` を
+      # 発火できず inverse trap で永久 BLOCKED になるのを予防するため script/test
+      # 本体も明示登録する ([[04-validate-paths-inverse-trap]])。記事変更ゼロの
+      # script-only PR は vacuous SUCCESS で通過する。
+      - 'scripts/mine_experience.py'
+      - 'scripts/tests/test_mine_experience.py'
+      - 'scripts/crawl_yahoo_reviews.py'
+      - 'scripts/tests/test_crawl_yahoo_reviews.py'
   workflow_dispatch:
 
 permissions:

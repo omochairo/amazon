@@ -1,0 +1,385 @@
+"""scripts/mine_experience.py unit tests (#3203 Phase 2)."""
+from __future__ import annotations
+
+import json
+import pathlib
+
+import pytest
+import requests
+
+from scripts.mine_experience import (
+    _USABLE_AS_MAP,
+    _yahoo_rating_stats,
+    extract_snippets,
+    gather_gemini_grounded,
+    gather_threads,
+    gather_third_party,
+    gather_yahoo_aggregate,
+    mine_asin,
+    resolve_product_identity,
+    run,
+    select_targets,
+    write_experience,
+)
+
+
+class _FakeResponse:
+    def __init__(self, json_body=None, status=200, text=""):
+        self._json = json_body
+        self.status_code = status
+        self.text = text
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"status {self.status_code}")
+
+    def json(self):
+        if self._json is None:
+            raise ValueError("no json body")
+        return self._json
+
+
+class _FakeSession:
+    """post()/get() をキューから返す fake session (audit_query_entailment のテストと同型)。"""
+
+    def __init__(self, responses=None):
+        self._responses = list(responses or [])
+        self.calls = 0
+
+    def _next(self):
+        self.calls += 1
+        resp = self._responses.pop(0)
+        if isinstance(resp, Exception):
+            raise resp
+        return resp
+
+    def post(self, url, json=None, params=None, timeout=None):
+        return self._next()
+
+    def get(self, url, headers=None, params=None, timeout=None):
+        return self._next()
+
+
+# --------------------------------------------------------------------------
+# select_targets
+# --------------------------------------------------------------------------
+
+def test_select_targets_merges_audit_and_rewrite_queue_and_dedupes(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    audit_dir = tmp_path / "data" / "analytics"
+    audit_dir.mkdir(parents=True)
+    (audit_dir / "answerability_audit.json").write_text(
+        json.dumps({"pages": [{"asin": "B0FNM4Y35G"}, {"asin": "B0AAAAAAAA"}]}), encoding="utf-8"
+    )
+    queue_dir = tmp_path / "data" / "rewrite_queue"
+    queue_dir.mkdir(parents=True)
+    (queue_dir / "1.json").write_text(json.dumps({"asin": "B0AAAAAAAA"}), encoding="utf-8")  # dup
+    (queue_dir / "2.json").write_text(json.dumps({"asin": "B0BBBBBBBB"}), encoding="utf-8")
+
+    targets = select_targets(
+        limit=0,
+        audit_path=audit_dir / "answerability_audit.json",
+        rewrite_queue_dir=queue_dir,
+    )
+    assert targets == ["B0FNM4Y35G", "B0AAAAAAAA", "B0BBBBBBBB"]
+
+
+def test_select_targets_appends_explicit_asins(tmp_path):
+    targets = select_targets(
+        limit=0, asins=["B0EXPLICI1", "B0EXPLICI1"],
+        audit_path=tmp_path / "missing.json",
+        rewrite_queue_dir=tmp_path / "missing_dir",
+    )
+    assert targets == ["B0EXPLICI1"]
+
+
+def test_select_targets_respects_limit(tmp_path):
+    targets = select_targets(
+        limit=2, asins=["B0AAAAAAAA", "B0BBBBBBBB", "B0CCCCCCCC"],
+        audit_path=tmp_path / "missing.json",
+        rewrite_queue_dir=tmp_path / "missing_dir",
+    )
+    assert targets == ["B0AAAAAAAA", "B0BBBBBBBB"]
+
+
+def test_select_targets_ignores_malformed_asin(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    audit_dir = tmp_path / "data" / "analytics"
+    audit_dir.mkdir(parents=True)
+    (audit_dir / "answerability_audit.json").write_text(
+        json.dumps({"pages": [{"asin": "not-an-asin"}, {"asin": "B0GOODGOOD"}]}), encoding="utf-8"
+    )
+    targets = select_targets(limit=0, audit_path=audit_dir / "answerability_audit.json",
+                              rewrite_queue_dir=tmp_path / "missing_dir")
+    assert targets == ["B0GOODGOOD"]
+
+
+# --------------------------------------------------------------------------
+# アダプタ: secret 無しで skip すること
+# --------------------------------------------------------------------------
+
+def test_gather_gemini_grounded_skips_without_api_key(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    assert gather_gemini_grounded("商品名", "ブランド", api_key="") == []
+
+
+def test_gather_threads_skips_without_token(monkeypatch):
+    monkeypatch.delenv("THREADS_ACCESS_TOKEN", raising=False)
+    assert gather_threads("商品名", token="") == []
+
+
+def test_gather_gemini_grounded_skips_on_model_not_found():
+    session = _FakeSession([_FakeResponse(status=404, text="model not found")])
+    result = gather_gemini_grounded("商品名", "ブランド", api_key="key", session=session)
+    assert result == []
+
+
+def test_gather_third_party_empty_when_no_sources(tmp_path):
+    base = tmp_path / "per_asin"
+    (base / "B0XXXXXXXX").mkdir(parents=True)
+    assert gather_third_party("B0XXXXXXXX", base=base, session=_FakeSession([])) == []
+
+
+def test_gather_yahoo_aggregate_empty_when_raw_dir_missing(tmp_path):
+    candidates, stats = gather_yahoo_aggregate("B0XXXXXXXX", raw_dir=tmp_path / "nope")
+    assert candidates == []
+    assert stats == {"count": 0, "average": 0.0, "distribution": {}}
+
+
+# --------------------------------------------------------------------------
+# gather_gemini_grounded: candidate 化 (テキスト + grounding URL)
+# --------------------------------------------------------------------------
+
+def test_gather_gemini_grounded_builds_candidate_with_grounding_url():
+    body = {
+        "candidates": [{
+            "content": {"parts": [{"text": "口コミ要約テキスト"}]},
+            "groundingMetadata": {
+                "groundingChunks": [{"web": {"uri": "https://example.com/review", "title": "レビュー記事"}}]
+            },
+        }]
+    }
+    session = _FakeSession([_FakeResponse(body)])
+    result = gather_gemini_grounded("商品名", "ブランド", api_key="key", session=session)
+    assert len(result) == 1
+    assert result[0]["text"] == "口コミ要約テキスト"
+    assert result[0]["source_type"] == "gemini_grounded"
+    assert result[0]["source_url"] == "https://example.com/review"
+
+
+def test_gather_gemini_grounded_empty_url_when_no_grounding():
+    body = {"candidates": [{"content": {"parts": [{"text": "テキスト"}]}}]}
+    session = _FakeSession([_FakeResponse(body)])
+    result = gather_gemini_grounded("商品名", "ブランド", api_key="key", session=session)
+    assert result[0]["source_url"] == ""
+
+
+# --------------------------------------------------------------------------
+# gather_threads
+# --------------------------------------------------------------------------
+
+def test_gather_threads_builds_candidates():
+    body = {"data": [
+        {"id": "1", "text": "買ってよかった", "permalink": "https://threads.net/p/1"},
+        {"id": "2", "text": "", "permalink": "https://threads.net/p/2"},  # 空テキストは捨てる
+    ]}
+    session = _FakeSession([_FakeResponse(body)])
+    result = gather_threads("商品名", token="tok", session=session)
+    assert len(result) == 1
+    assert result[0]["source_type"] == "threads"
+    assert result[0]["source_url"] == "https://threads.net/p/1"
+
+
+def test_gather_threads_skips_on_permission_error():
+    session = _FakeSession([_FakeResponse(status=403, text="missing threads_keyword_search")])
+    result = gather_threads("商品名", token="tok", session=session)
+    assert result == []
+
+
+# --------------------------------------------------------------------------
+# _yahoo_rating_stats
+# --------------------------------------------------------------------------
+
+def test_yahoo_rating_stats_computes_distribution():
+    reviews = [{"rating": 5}, {"rating": 5}, {"rating": 3}, {"rating": "not a number"}]
+    stats = _yahoo_rating_stats(reviews)
+    assert stats["count"] == 3
+    assert stats["average"] == pytest.approx((5 + 5 + 3) / 3, rel=1e-3)
+    assert stats["distribution"] == {"5": 2, "3": 1}
+
+
+def test_yahoo_rating_stats_empty():
+    assert _yahoo_rating_stats([]) == {"count": 0, "average": 0.0, "distribution": {}}
+
+
+def test_gather_yahoo_aggregate_reads_raw_dir(tmp_path):
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    (raw_dir / "B0XXXXXXXX.json").write_text(json.dumps({
+        "asin": "B0XXXXXXXX", "fetched_at": "2026-07-01T00:00:00Z",
+        "reviews": [{"rating": 4, "title": "良い", "body": "満足しています", "posted_at": "2026-06-01"}],
+    }), encoding="utf-8")
+    candidates, stats = gather_yahoo_aggregate("B0XXXXXXXX", raw_dir=raw_dir)
+    assert len(candidates) == 1
+    assert candidates[0]["source_type"] == "yahoo_review_aggregate"
+    assert candidates[0]["source_url"] == ""
+    assert "満足しています" in candidates[0]["text"]
+    assert stats["count"] == 1
+
+
+# --------------------------------------------------------------------------
+# extract_snippets: entailment 判定 + usable_as コード側固定割当
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("source_type,expected_usable_as", sorted(_USABLE_AS_MAP.items()))
+def test_extract_snippets_assigns_usable_as_by_source_type(source_type, expected_usable_as):
+    inner = json.dumps({
+        "entailed": True,
+        "snippets": [{"aspect": "体験談", "text": "使ってみて良かったという内容の要約文です", "confidence": "high"}],
+    })
+    session = _FakeSession([_FakeResponse({"response": inner})])
+    candidate = {"text": "本文", "source_type": source_type, "source_url": "https://example.com"}
+    snippets = extract_snippets(candidate, "商品名", "ブランド", "http://ollama", "gemma4",
+                                 session, sleeper=lambda s: None)
+    assert len(snippets) == 1
+    assert snippets[0]["usable_as"] == expected_usable_as
+    assert snippets[0]["source_type"] == source_type
+
+
+def test_extract_snippets_discards_when_not_entailed():
+    inner = json.dumps({"entailed": False, "snippets": []})
+    session = _FakeSession([_FakeResponse({"response": inner})])
+    candidate = {"text": "無関係の文章", "source_type": "blog", "source_url": ""}
+    result = extract_snippets(candidate, "商品名", "ブランド", "http://ollama", "gemma4",
+                               session, sleeper=lambda s: None)
+    assert result == []
+
+
+def test_extract_snippets_empty_text_returns_empty():
+    candidate = {"text": "", "source_type": "blog", "source_url": ""}
+    result = extract_snippets(candidate, "商品名", "ブランド", "http://ollama", "gemma4",
+                               _FakeSession([]), sleeper=lambda s: None)
+    assert result == []
+
+
+def test_extract_snippets_gives_up_after_retries_and_returns_empty():
+    candidate = {"text": "本文", "source_type": "blog", "source_url": ""}
+    session = _FakeSession([
+        requests.ConnectionError("boom1"),
+        requests.ConnectionError("boom2"),
+        requests.ConnectionError("boom3"),
+    ])
+    result = extract_snippets(candidate, "商品名", "ブランド", "http://ollama", "gemma4",
+                               session, sleeper=lambda s: None)
+    assert result == []
+
+
+# --------------------------------------------------------------------------
+# resolve_product_identity
+# --------------------------------------------------------------------------
+
+def test_resolve_product_identity_missing_returns_empty(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    title, product_name, brand = resolve_product_identity("B0NOTFOUND1", base=tmp_path / "per_asin")
+    assert (title, product_name, brand) == ("", "", "")
+
+
+# --------------------------------------------------------------------------
+# mine_asin / write_experience / run: 出力スキーマと 0 件時に書かないこと
+# --------------------------------------------------------------------------
+
+def test_mine_asin_returns_none_when_no_candidates(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    data_dir = tmp_path / "data" / "raw"
+    data_dir.mkdir(parents=True)
+    (data_dir / "amazon.json").write_text(json.dumps({"items": [
+        {"asin": "B0NOSOURCE1", "title": "テスト商品 テストブランド"},
+    ]}), encoding="utf-8")
+    base = data_dir / "per_asin"
+    (base / "B0NOSOURCE1").mkdir(parents=True)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("THREADS_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("EXPERIENCE_RAW_DIR", raising=False)
+
+    payload = mine_asin("B0NOSOURCE1", base=base, session=_FakeSession([]))
+    assert payload is None
+
+
+def test_mine_asin_builds_expected_schema(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    data_dir = tmp_path / "data" / "raw"
+    data_dir.mkdir(parents=True)
+    (data_dir / "amazon.json").write_text(json.dumps({"items": [
+        {"asin": "B0WITHBLOG1", "title": "テスト商品 テストブランド"},
+    ]}), encoding="utf-8")
+    base = data_dir / "per_asin"
+    asin_dir = base / "B0WITHBLOG1"
+    asin_dir.mkdir(parents=True)
+    (asin_dir / "third_party_sources.json").write_text(json.dumps({
+        "sources": [{"url": "https://blog.example.com/review", "title": "レビュー", "snippet": "s"}],
+    }), encoding="utf-8")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("THREADS_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("EXPERIENCE_RAW_DIR", raising=False)
+
+    fetch_resp = _FakeResponse(text="<html><body>実際に使ってみたレビュー本文です</body></html>")
+    inner = json.dumps({
+        "entailed": True,
+        "snippets": [{"aspect": "体験談", "text": "使い心地が良いという要約テキストです", "confidence": "high"}],
+    })
+    gemma_resp = _FakeResponse({"response": inner})
+    session = _FakeSession([fetch_resp, gemma_resp])
+
+    payload = mine_asin("B0WITHBLOG1", base=base, session=session)
+    assert payload is not None
+    assert payload["asin"] == "B0WITHBLOG1"
+    assert "generated_at" in payload
+    assert "model" in payload
+    assert payload["snippets"][0]["source_type"] == "blog"
+    assert payload["snippets"][0]["usable_as"] == "quote"
+    assert payload["rating_stats"] == {"yahoo": {"count": 0, "average": 0.0, "distribution": {}}}
+
+
+def test_write_experience_writes_file(tmp_path):
+    base = tmp_path / "per_asin"
+    payload = {"asin": "B0WRITE0001", "generated_at": "now", "model": "m", "snippets": [], "rating_stats": {}}
+    out_path = write_experience("B0WRITE0001", payload, base=base)
+    assert out_path.exists()
+    assert json.loads(out_path.read_text(encoding="utf-8"))["asin"] == "B0WRITE0001"
+
+
+def test_run_does_not_write_when_mine_asin_returns_none(tmp_path, monkeypatch):
+    import scripts.mine_experience as mod
+    monkeypatch.setattr(mod, "mine_asin", lambda asin, **kw: None)
+    base = tmp_path / "per_asin"
+    summary = mod.run(["B0EMPTY0001"], base=base)
+    assert summary["written"] == 0
+    assert summary["skipped"] == 1
+    assert not (base / "B0EMPTY0001").exists()
+
+
+def test_run_writes_when_mine_asin_returns_payload(tmp_path, monkeypatch):
+    import scripts.mine_experience as mod
+    payload = {"asin": "B0FULL00001", "generated_at": "now", "model": "m",
+               "snippets": [{"aspect": "体験談", "text": "t", "source_type": "blog",
+                              "source_url": "", "usable_as": "quote", "confidence": "high"}],
+               "rating_stats": {"yahoo": {"count": 0, "average": 0.0, "distribution": {}}}}
+    monkeypatch.setattr(mod, "mine_asin", lambda asin, **kw: payload)
+    base = tmp_path / "per_asin"
+    summary = mod.run(["B0FULL00001"], base=base)
+    assert summary["written"] == 1
+    out_path = base / "B0FULL00001" / "experience.json"
+    assert out_path.exists()
+    written = json.loads(out_path.read_text(encoding="utf-8"))
+    assert written["snippets"][0]["usable_as"] == "quote"
+
+
+def test_run_dry_run_writes_nothing(tmp_path, monkeypatch):
+    import scripts.mine_experience as mod
+    called = []
+    monkeypatch.setattr(mod, "mine_asin", lambda asin, **kw: called.append(asin))
+    base = tmp_path / "per_asin"
+    summary = mod.run(["B0DRYRUN001"], base=base, dry_run=True)
+    assert called == []
+    assert summary["written"] == 0
+    assert not base.exists() or not any(base.iterdir())

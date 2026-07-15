@@ -20,6 +20,8 @@
   03-invoke-jules.yml とのパリティ維持。取得失敗/データ無しは best-effort で空文字)
 - 監査不足観点注記 (#2995 消費側② Phase 3 / #3203 Phase 1-C, data/analytics/
   answerability_audit.json 経由。取得失敗/該当 ASIN 無しは best-effort で空文字)
+- 体験談供給レーン注記 (#3203 Phase 2, per_asin/<ASIN>/experience.json 経由。
+  snippets 0 件/ファイル無しは best-effort で空文字)
 
 注意: グローバル data/raw/youtube.json は ASIN 紐付けが無い (title/url のみ) ため
 同梱しない。per_asin/<ASIN>/youtube.json 側を使う。
@@ -126,6 +128,26 @@ def _audit_note(asin):
 - 裏取りできない観点は創作せず省いて構いません (創作禁止が優先)"""
 
 
+def _experience_note(asin):
+    """#3203 Phase 2: 体験談供給レーン (experience.json) の使い方注記。
+    同梱 per_asin/<ASIN>/experience.json が存在し snippets が 1 件以上のときのみ
+    ブロックを返す (03 系と同じ best-effort 規律: 読めない/0件は空文字)。"""
+    path = f"data/raw/per_asin/{asin}/experience.json"
+    if not os.path.exists(path):
+        return ""
+    try:
+        data = _jload(path)
+    except Exception as e:
+        print(f"warning: experience.json read failed, skipping note: {e}", file=sys.stderr)
+        return ""
+    snippets = data.get("snippets") if isinstance(data, dict) else None
+    if not isinstance(snippets, list) or not snippets:
+        return ""
+    return """【体験談素材 (experience.json) の使い方】
+- 同梱の per_asin/experience.json はシステムが Web/SNS/レビューから事前収集・検証した体験談素材です。narrative の根拠にはまずこれを使ってください (テンプレート §6.5.4)。
+- usable_as が "quote" の snippet は出典付き短引用可、"paraphrase" は集合表現への言い換えのみ可 (原文再現禁止)。"""
+
+
 def _amazon_item(asin):
     raw = _jload("data/raw/amazon.json")
     for item in raw.get("items", []):
@@ -169,6 +191,7 @@ def build_prompt(asin, today=None):
     info_note = _info_note(asin)
     gsc_note = _gsc_note(asin)
     audit_note = _audit_note(asin)
+    experience_note = _experience_note(asin)
 
     prompt = f"""あなたは知育玩具メディア「おもちゃいろ」の記事生成エージェントです。
 このセッションはリポジトリ非接続 (repoless) です。必要な入力データは本プロンプト末尾に全て同梱しています。
@@ -188,6 +211,8 @@ def build_prompt(asin, today=None):
 {gsc_note}
 
 {audit_note}
+
+{experience_note}
 
 【本日の日付 (必ず使用)】: {today}
 - 出力ファイル名: data/articles/{today}-{asin}.json
