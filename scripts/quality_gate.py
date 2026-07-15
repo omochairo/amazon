@@ -89,6 +89,11 @@ NARRATIVE_MIN_CHARS = {
     "closing": 120,
 }
 
+# #3203 Phase 1-A: narrative.how_to_choose (比較・選び分け) 施行日ゲート。
+# この日付以降の slug (YYYY-MM-DD-ASIN) のみ必須にする。既存記事には遡及しない。
+HOW_TO_CHOOSE_ENFORCE_FROM = "2026-07-16"
+HOW_TO_CHOOSE_MIN_CHARS = 150
+
 
 @dataclass
 class CheckResult:
@@ -231,6 +236,79 @@ def check_narrative(data: dict, product_name: str) -> CheckResult:
     total = char_score_sum / len(REQUIRED_NARRATIVE_KEYS)
     msg = "; ".join(issues) if issues else "OK"
     return CheckResult("narrative", total >= 0.7, total, msg)
+
+
+_ASIN_MENTION_RE = re.compile(r"\bB0[A-Z0-9]{8}\b")
+
+
+def _how_to_choose_enforced(data: dict) -> bool:
+    slug = data.get("slug") or ""
+    if not isinstance(slug, str) or len(slug) < 10:
+        # slug が無い/短すぎる (=施行日を判定できない) 場合は安全側で施行する
+        return True
+    return slug[:10] >= HOW_TO_CHOOSE_ENFORCE_FROM
+
+
+def check_how_to_choose(data: dict) -> CheckResult:
+    """#3203 Phase 1-A: narrative.how_to_choose (比較・選び分け) の機械検査。
+
+    1. 施行日ゲート: slug 先頭 10 文字 (YYYY-MM-DD) が HOW_TO_CHOOSE_ENFORCE_FROM
+       より前なら skip (既存記事の軽微修正 PR を落とさない)
+    2. 存在 + 合計 150 字以上 (NARRATIVE_MIN_CHARS と同じ枠組み)
+    3. ASIN 封じ込め: 本文中の B0[A-Z0-9]{8} は
+       data/raw/per_asin/<ASIN>/competitors.json の asin 集合の部分集合であること
+       (自商品の ASIN への言及は許可)。competitors.json が読めない場合は
+       ASIN 言及ゼロのみ合格 (安全側フォールバック)
+    """
+    if not _how_to_choose_enforced(data):
+        return CheckResult("how_to_choose", True, 1.0, "pre-v7 slug, skipped (施行日前)")
+
+    narrative = data.get("narrative", {})
+    value = narrative.get("how_to_choose") if isinstance(narrative, dict) else None
+    if not value:
+        return CheckResult("how_to_choose", False, 0.0, "narrative.how_to_choose missing/empty")
+    if not isinstance(value, (str, list)):
+        return CheckResult("how_to_choose", False, 0.0, "narrative.how_to_choose must be string or array of string")
+
+    chars = _count_chars(value)
+    if chars < HOW_TO_CHOOSE_MIN_CHARS:
+        return CheckResult(
+            "how_to_choose", False, chars / HOW_TO_CHOOSE_MIN_CHARS,
+            f"how_to_choose {chars}<{HOW_TO_CHOOSE_MIN_CHARS} chars",
+        )
+
+    blob = value if isinstance(value, str) else "\n".join(s for s in value if isinstance(s, str))
+    mentioned = set(_ASIN_MENTION_RE.findall(blob))
+
+    product = data.get("product") or {}
+    own_asin = product.get("asin") if isinstance(product, dict) else None
+    mentioned -= {own_asin} if own_asin else set()
+
+    if not mentioned:
+        return CheckResult("how_to_choose", True, 1.0, "OK")
+
+    asin = own_asin or ""
+    comp_path = pathlib.Path("data/raw/per_asin") / asin / "competitors.json"
+    try:
+        comp_data = json.loads(comp_path.read_text(encoding="utf-8"))
+        allowed = {
+            c.get("asin") for c in (comp_data.get("competitors") or [])
+            if isinstance(c, dict) and c.get("asin")
+        }
+    except Exception:
+        # competitors.json が読めない環境では ASIN 言及ゼロのみ合格 (安全側)
+        return CheckResult(
+            "how_to_choose", False, 0.0,
+            f"competitors.json unreadable ({comp_path}) but how_to_choose mentions ASIN(s): {sorted(mentioned)}",
+        )
+
+    hallucinated = mentioned - allowed
+    if hallucinated:
+        return CheckResult(
+            "how_to_choose", False, 0.0,
+            f"how_to_choose mentions ASIN(s) not in competitors.json: {sorted(hallucinated)}",
+        )
+    return CheckResult("how_to_choose", True, 1.0, "OK")
 
 
 def check_faq(data: dict, product_name: str) -> CheckResult:
@@ -901,6 +979,7 @@ def evaluate_article(
     report.checks.append(check_meta_description(data, product_name))
     report.checks.append(check_keywords(data, product_name, brand))
     report.checks.append(check_narrative(data, product_name))
+    report.checks.append(check_how_to_choose(data))
     report.checks.append(check_faq(data, product_name))
     report.checks.append(check_score_rationale(data))
     report.checks.append(check_target_age(data))

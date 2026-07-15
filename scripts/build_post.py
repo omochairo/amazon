@@ -2752,7 +2752,7 @@ def main() -> None:
 
             _meta_re = re.compile(r"\s*[(（]\s*\d+\s*字\s*[)）]\s*$")
             if isinstance(data.get("narrative"), dict):
-                for k in ("lead", "why_this_product", "gift_appeal", "daily_use", "safety_note", "closing"):
+                for k in ("lead", "why_this_product", "gift_appeal", "daily_use", "safety_note", "closing", "how_to_choose"):
                     v = data["narrative"].get(k)
                     if isinstance(v, str):
                         data["narrative"][k] = _meta_re.sub("", v).strip()

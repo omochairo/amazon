@@ -231,6 +231,12 @@
 </section>
 {% endif %}
 
+{% if narrative.how_to_choose %}
+## <small>{{ product.name }}の</small>🧭 選び方：似た商品とどう選び分ける？
+
+{{ narrative_section(narrative.how_to_choose) }}
+{% endif %}
+
 {% if same_price_band and same_price_band.cards %}
 ## <small>{{ product.name }}と</small>💴 同じ価格帯のおすすめ（{{ same_price_band.band_label }}）
 

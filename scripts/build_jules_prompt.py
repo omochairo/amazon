@@ -18,6 +18,8 @@
 - jules/PROMPT_TEMPLATE.md 全文
 - GSC 実流入クエリ注記 (#2953 B案 / #1329 記事版, build_asin_query_context.py 経由。
   03-invoke-jules.yml とのパリティ維持。取得失敗/データ無しは best-effort で空文字)
+- 監査不足観点注記 (#2995 消費側② Phase 3 / #3203 Phase 1-C, data/analytics/
+  answerability_audit.json 経由。取得失敗/該当 ASIN 無しは best-effort で空文字)
 
 注意: グローバル data/raw/youtube.json は ASIN 紐付けが無い (title/url のみ) ため
 同梱しない。per_asin/<ASIN>/youtube.json 側を使う。
@@ -93,6 +95,37 @@ def _gsc_note(asin):
 - クエリが示す疑問 (例: 「○○ 対象年齢」「○○ 違い」) に本文が答えていない場合、narrative の該当セクションで必ず回答してください"""
 
 
+def _audit_note(asin):
+    """#2995 消費側② Phase 3: answerability_audit の不足観点をリライトに注入する
+    (03 系と同じ best-effort 規律: 失敗/データ無しは stderr warning + 空文字)。"""
+    try:
+        audit = _jload("data/analytics/answerability_audit.json")
+    except Exception as e:
+        print(f"warning: answerability audit read failed, skipping note: {e}", file=sys.stderr)
+        return ""
+    page = None
+    for p in audit.get("pages", []):
+        if isinstance(p, dict) and p.get("asin") == asin:
+            page = p
+            break
+    if not page:
+        return ""
+    lines = []
+    for q in page.get("queries", []):
+        aspects = q.get("missing_aspects") or []
+        if not aspects:
+            continue
+        lines.append(f"- クエリ「{q.get('query', '')}」: {'、'.join(aspects)}")
+    if not lines:
+        return ""
+    joined = "\n".join(lines)
+    return f"""【前回記事に不足していた観点 (読者の実検索クエリ監査・必読)】
+この商品の既存記事は、実際に検索流入しているクエリに対し以下の観点が不足していると監査されました:
+{joined}
+- 同梱データ (competitors / news / youtube / books / third_party_sources) で裏取りできる範囲で、これらの観点を本文・FAQ で必ず埋めてください
+- 裏取りできない観点は創作せず省いて構いません (創作禁止が優先)"""
+
+
 def _amazon_item(asin):
     raw = _jload("data/raw/amazon.json")
     for item in raw.get("items", []):
@@ -135,6 +168,7 @@ def build_prompt(asin, today=None):
 
     info_note = _info_note(asin)
     gsc_note = _gsc_note(asin)
+    audit_note = _audit_note(asin)
 
     prompt = f"""あなたは知育玩具メディア「おもちゃいろ」の記事生成エージェントです。
 このセッションはリポジトリ非接続 (repoless) です。必要な入力データは本プロンプト末尾に全て同梱しています。
@@ -153,6 +187,8 @@ def build_prompt(asin, today=None):
 
 {gsc_note}
 
+{audit_note}
+
 【本日の日付 (必ず使用)】: {today}
 - 出力ファイル名: data/articles/{today}-{asin}.json
 - slug フィールド: "{today}-{asin}"
@@ -161,6 +197,10 @@ def build_prompt(asin, today=None):
 
 【価格データの扱い】
 - 楽天/Yahoo の価格・URL は同梱の rakuten_matched / yahoo_matched (対象 ASIN 抽出済み) を使い、product.prices.rakuten / product.prices.yahoo に {{ price, url }} を埋める。空配列ならば price=0 / url="" / is_search=true とする。
+
+【比較・選び分け (narrative.how_to_choose) の素材】
+- 同梱の per_asin/competitors.json は API 由来の検証済み競合データです。narrative.how_to_choose ではこのデータ内の商品に限り名前・価格・特徴に言及して比較して構いません (テンプレート §5.F)。
+- competitors.json に無い商品名・ASIN・価格を比較に持ち出すことは禁止します (品質ゲートで機械検査されます)。
 
 【sources のルール (リポジトリ非接続環境向けの明確化・必読)】
 - あなたの環境には google_search と view_text_website ツールがあります。まず対象商品について**必ず検索・URL閲覧で裏取りを試みてください**。

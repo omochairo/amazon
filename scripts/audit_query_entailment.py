@@ -169,7 +169,7 @@ def build_judge_text(article: dict[str, Any]) -> str:
 
     narrative = article.get("narrative")
     narrative = narrative if isinstance(narrative, dict) else {}
-    for key in ("lead", "why_this_product", "gift_appeal", "daily_use", "safety_note", "closing"):
+    for key in ("lead", "why_this_product", "gift_appeal", "daily_use", "safety_note", "closing", "how_to_choose"):
         v = narrative.get(key)
         if isinstance(v, str) and v.strip():
             parts.append(v.strip())
