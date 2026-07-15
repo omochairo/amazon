@@ -10,21 +10,27 @@ import requests
 from scripts.crawl_yahoo_reviews import (
     BotWallDetected,
     RequestBudget,
+    crawl_asin,
     default_raw_dir,
-    derive_review_urls,
     extract_reviews,
     fetch_with_retry,
+    get_jan_code,
     is_fresh,
-    resolve_product_url,
+    lookup_yahoo_review,
     run,
-    select_yahoo_url,
 )
 
 
 class _FakeResponse:
-    def __init__(self, status=200, text=""):
+    def __init__(self, json_body=None, status=200, text=""):
+        self._json = json_body
         self.status_code = status
         self.text = text
+
+    def json(self):
+        if self._json is None:
+            raise ValueError("no json body")
+        return self._json
 
 
 class _FakeSession:
@@ -32,7 +38,7 @@ class _FakeSession:
         self._responses = list(responses)
         self.calls = 0
 
-    def get(self, url, headers=None, timeout=None):
+    def get(self, url, headers=None, params=None, timeout=None):
         self.calls += 1
         resp = self._responses.pop(0)
         if isinstance(resp, Exception):
@@ -41,66 +47,76 @@ class _FakeSession:
 
 
 # --------------------------------------------------------------------------
-# resolve_product_url (ValueCommerce vc_url デコード)
+# get_jan_code
 # --------------------------------------------------------------------------
 
-def test_resolve_product_url_decodes_valuecommerce_referral():
-    raw = (
-        "https://ck.jp.ap.valuecommerce.com/servlet/referral?sid=1&pid=2&vc_url="
-        "https%3A%2F%2Fstore.shopping.yahoo.co.jp%2Feigokyouzai%2F848850121496.html"
-    )
-    assert resolve_product_url(raw) == "https://store.shopping.yahoo.co.jp/eigokyouzai/848850121496.html"
+def _write_amazon_json(base: pathlib.Path, asin: str, payload: dict) -> None:
+    d = base / asin
+    d.mkdir(parents=True)
+    (d / "amazon.json").write_text(json.dumps(payload), encoding="utf-8")
 
 
-def test_resolve_product_url_passes_through_direct_link():
-    direct = "https://store.shopping.yahoo.co.jp/somestore/item123.html"
-    assert resolve_product_url(direct) == direct
+def test_get_jan_code_from_flat_item(tmp_path):
+    _write_amazon_json(tmp_path, "B0JANFLAT1", {"asin": "B0JANFLAT1", "jan_code": "4901234567890"})
+    assert get_jan_code("B0JANFLAT1", tmp_path) == "4901234567890"
 
 
-def test_resolve_product_url_none_when_missing():
-    assert resolve_product_url(None) is None
-    assert resolve_product_url("") is None
+def test_get_jan_code_from_nested_item(tmp_path):
+    _write_amazon_json(tmp_path, "B0JANNEST1", {"item": {"asin": "B0JANNEST1", "jan_code": "4909876543210"}})
+    assert get_jan_code("B0JANNEST1", tmp_path) == "4909876543210"
 
 
-def test_select_yahoo_url_matches_asin(tmp_path):
-    matched_path = tmp_path / "yahoo_matched.json"
-    matched_path.write_text(json.dumps({"items": [
-        {"matched_asin": "B0OTHERASIN", "url": "https://store.shopping.yahoo.co.jp/x/other.html"},
-        {"matched_asin": "B0TARGETONE", "url": (
-            "https://ck.jp.ap.valuecommerce.com/servlet/referral?sid=1&pid=2&vc_url="
-            "https%3A%2F%2Fstore.shopping.yahoo.co.jp%2Fmystore%2Fitem456.html"
-        )},
-    ]}), encoding="utf-8")
-    url = select_yahoo_url("B0TARGETONE", matched_path)
-    assert url == "https://store.shopping.yahoo.co.jp/mystore/item456.html"
-
-
-def test_select_yahoo_url_none_when_no_match(tmp_path):
-    matched_path = tmp_path / "yahoo_matched.json"
-    matched_path.write_text(json.dumps({"items": []}), encoding="utf-8")
-    assert select_yahoo_url("B0NOMATCH01", matched_path) is None
+def test_get_jan_code_none_when_empty_or_missing(tmp_path):
+    _write_amazon_json(tmp_path, "B0JANEMPTY", {"asin": "B0JANEMPTY", "jan_code": ""})
+    assert get_jan_code("B0JANEMPTY", tmp_path) is None
+    assert get_jan_code("B0NOFILE01", tmp_path) is None
 
 
 # --------------------------------------------------------------------------
-# derive_review_urls
+# lookup_yahoo_review (itemSearch v3, mocked)
 # --------------------------------------------------------------------------
 
-def test_derive_review_urls_builds_paginated_urls():
-    urls = derive_review_urls("https://store.shopping.yahoo.co.jp/mystore/item456.html", max_pages=3)
-    assert urls == [
-        "https://store.shopping.yahoo.co.jp/mystore/review/item456.html",
-        "https://store.shopping.yahoo.co.jp/mystore/review/item456.html?p=2",
-        "https://store.shopping.yahoo.co.jp/mystore/review/item456.html?p=3",
-    ]
+def test_lookup_yahoo_review_returns_rate_count_url():
+    body = {"hits": [{"name": "商品", "review": {"rate": 4.35, "count": 12,
+                                                "url": "https://shopping.yahoo.co.jp/review/xyz"}}]}
+    session = _FakeSession([_FakeResponse(body)])
+    result = lookup_yahoo_review("4901234567890", "client-id", session, sleeper=lambda s: None)
+    assert result == {"rate": 4.35, "count": 12, "url": "https://shopping.yahoo.co.jp/review/xyz"}
 
 
-def test_derive_review_urls_empty_for_unrecognized_domain():
-    assert derive_review_urls("https://example.com/product/123") == []
+def test_lookup_yahoo_review_none_on_http_error():
+    session = _FakeSession([_FakeResponse(status=429, text="rate limited")])
+    assert lookup_yahoo_review("4901234567890", "cid", session, sleeper=lambda s: None) is None
 
 
-def test_derive_review_urls_respects_max_pages_one():
-    urls = derive_review_urls("https://store.shopping.yahoo.co.jp/s/i.html", max_pages=1)
-    assert urls == ["https://store.shopping.yahoo.co.jp/s/review/i.html"]
+def test_lookup_yahoo_review_none_on_network_error():
+    session = _FakeSession([requests.ConnectionError("boom")])
+    assert lookup_yahoo_review("4901234567890", "cid", session, sleeper=lambda s: None) is None
+
+
+def test_lookup_yahoo_review_none_when_no_hits():
+    session = _FakeSession([_FakeResponse({"hits": []})])
+    assert lookup_yahoo_review("4901234567890", "cid", session, sleeper=lambda s: None) is None
+
+
+def test_lookup_yahoo_review_none_when_hit_has_no_review():
+    session = _FakeSession([_FakeResponse({"hits": [{"name": "商品"}]})])
+    assert lookup_yahoo_review("4901234567890", "cid", session, sleeper=lambda s: None) is None
+
+
+def test_lookup_yahoo_review_sleeps_for_api_politeness():
+    sleeps = []
+    body = {"hits": [{"review": {"rate": 4.0, "count": 1, "url": "https://x/r"}}]}
+    session = _FakeSession([_FakeResponse(body)])
+    lookup_yahoo_review("4901234567890", "cid", session, sleeper=lambda s: sleeps.append(s))
+    assert sleeps == [1.0]
+
+
+def test_lookup_yahoo_review_coerces_malformed_rate_count():
+    body = {"hits": [{"review": {"rate": "not a number", "count": None, "url": "https://x/r"}}]}
+    session = _FakeSession([_FakeResponse(body)])
+    result = lookup_yahoo_review("4901234567890", "cid", session, sleeper=lambda s: None)
+    assert result == {"rate": 0.0, "count": 0, "url": "https://x/r"}
 
 
 # --------------------------------------------------------------------------
@@ -173,7 +189,7 @@ def test_fetch_with_retry_sleeps_between_15_and_30_seconds():
     session = _FakeSession([_FakeResponse(status=200, text="<html>ok</html>")])
     budget = RequestBudget(10)
     result = fetch_with_retry(
-        "https://store.shopping.yahoo.co.jp/s/review/i.html", session, budget,
+        "https://shopping.yahoo.co.jp/review/xyz", session, budget,
         sleeper=lambda s: sleep_calls.append(s),
     )
     assert result == "<html>ok</html>"
@@ -208,12 +224,95 @@ def test_fetch_with_retry_returns_none_on_404():
 
 def test_fetch_with_retry_stops_when_budget_exhausted():
     session = _FakeSession([])
-    budget = RequestBudget(0)
-    budget.max_requests = 1
+    budget = RequestBudget(1)
     budget.consumed = 1
     result = fetch_with_retry("https://x/y", session, budget, sleeper=lambda s: None)
     assert result is None
     assert session.calls == 0
+
+
+# --------------------------------------------------------------------------
+# crawl_asin: jan 無し skip / count 0 skip / API エラー skip / api_review のみ保存
+# --------------------------------------------------------------------------
+
+def test_crawl_asin_skips_when_no_jan(tmp_path):
+    _write_amazon_json(tmp_path, "B0NOJAN001", {"asin": "B0NOJAN001"})
+    result = crawl_asin("B0NOJAN001", client_id="cid", base=tmp_path,
+                        session=_FakeSession([]), budget=RequestBudget(10),
+                        sleeper=lambda s: None)
+    assert result is None
+
+
+def test_crawl_asin_skips_when_api_lookup_fails(tmp_path):
+    _write_amazon_json(tmp_path, "B0APIERR01", {"asin": "B0APIERR01", "jan_code": "490111"})
+    session = _FakeSession([requests.ConnectionError("api down")])
+    result = crawl_asin("B0APIERR01", client_id="cid", base=tmp_path,
+                        session=session, budget=RequestBudget(10), sleeper=lambda s: None)
+    assert result is None
+
+
+def test_crawl_asin_count_zero_saves_api_review_without_crawl(tmp_path):
+    _write_amazon_json(tmp_path, "B0ZEROCNT1", {"asin": "B0ZEROCNT1", "jan_code": "490222"})
+    body = {"hits": [{"review": {"rate": 0.0, "count": 0, "url": "https://x/review"}}]}
+    session = _FakeSession([_FakeResponse(body)])  # crawl fetch は積まない = 呼ばれない
+    budget = RequestBudget(10)
+    result = crawl_asin("B0ZEROCNT1", client_id="cid", base=tmp_path,
+                        session=session, budget=budget, sleeper=lambda s: None)
+    assert result is not None
+    assert result["api_review"]["count"] == 0
+    assert result["reviews"] == []
+    assert budget.consumed == 0  # レビューページを crawl していない
+
+
+def test_crawl_asin_bot_wall_keeps_api_review(tmp_path, monkeypatch):
+    import scripts.crawl_yahoo_reviews as mod
+    _write_amazon_json(tmp_path, "B0BOTWALL1", {"asin": "B0BOTWALL1", "jan_code": "490333"})
+    monkeypatch.setattr(mod, "robots_allowed", lambda url, ua=mod.HONEST_UA: True)
+    body = {"hits": [{"review": {"rate": 4.5, "count": 3, "url": "https://x/review"}}]}
+    session = _FakeSession([
+        _FakeResponse(body),                              # itemSearch v3
+        _FakeResponse(status=403, text="captcha here"),   # crawl → bot wall
+    ])
+    result = crawl_asin("B0BOTWALL1", client_id="cid", base=tmp_path,
+                        session=session, budget=RequestBudget(10), sleeper=lambda s: None)
+    assert result is not None
+    assert result["api_review"] == {"rate": 4.5, "count": 3, "url": "https://x/review"}
+    assert result["reviews"] == []  # 本文は取れなくても api_review が成果
+
+
+def test_crawl_asin_crawls_and_extracts_when_count_positive(tmp_path, monkeypatch):
+    import scripts.crawl_yahoo_reviews as mod
+    _write_amazon_json(tmp_path, "B0CRAWLOK1", {"asin": "B0CRAWLOK1", "jan_code": "490444"})
+    monkeypatch.setattr(mod, "robots_allowed", lambda url, ua=mod.HONEST_UA: True)
+    body = {"hits": [{"review": {"rate": 4.0, "count": 2, "url": "https://x/review"}}]}
+    html = ('<script type="application/ld+json">'
+            '{"@type": "Review", "reviewBody": "実際に良かったです", "reviewRating": {"ratingValue": "5"}}'
+            '</script>')
+    session = _FakeSession([
+        _FakeResponse(body),
+        _FakeResponse(status=200, text=html),
+    ])
+    result = crawl_asin("B0CRAWLOK1", client_id="cid", base=tmp_path,
+                        session=session, budget=RequestBudget(10), sleeper=lambda s: None)
+    assert result is not None
+    assert len(result["reviews"]) == 1
+    assert result["reviews"][0]["body"] == "実際に良かったです"
+    assert result["jan_code"] == "490444"
+
+
+def test_crawl_asin_robots_disallow_keeps_api_review(tmp_path, monkeypatch):
+    import scripts.crawl_yahoo_reviews as mod
+    _write_amazon_json(tmp_path, "B0ROBOTS01", {"asin": "B0ROBOTS01", "jan_code": "490555"})
+    monkeypatch.setattr(mod, "robots_allowed", lambda url, ua=mod.HONEST_UA: False)
+    body = {"hits": [{"review": {"rate": 3.8, "count": 7, "url": "https://x/review"}}]}
+    session = _FakeSession([_FakeResponse(body)])
+    budget = RequestBudget(10)
+    result = crawl_asin("B0ROBOTS01", client_id="cid", base=tmp_path,
+                        session=session, budget=budget, sleeper=lambda s: None)
+    assert result is not None
+    assert result["api_review"]["count"] == 7
+    assert result["reviews"] == []
+    assert budget.consumed == 0
 
 
 # --------------------------------------------------------------------------
@@ -238,8 +337,18 @@ def test_default_raw_dir_uses_env_override(monkeypatch, tmp_path):
 
 
 # --------------------------------------------------------------------------
-# run(): EXPERIENCE_RAW_DIR 外に書かないこと / refresh-days skip
+# run(): YAHOO_CLIENT_ID 無し lane skip / EXPERIENCE_RAW_DIR 外に書かない /
+#        refresh-days skip
 # --------------------------------------------------------------------------
+
+def test_run_skips_whole_lane_without_client_id(tmp_path, monkeypatch):
+    monkeypatch.delenv("YAHOO_CLIENT_ID", raising=False)
+    raw_dir = tmp_path / "raw"
+    summary = run(["B0A0000001", "B0B0000001"], raw_dir=raw_dir, client_id="",
+                  sleeper=lambda s: None)
+    assert summary == {"targets": 2, "written": 0, "skipped": 2, "requests_made": 0}
+    assert not raw_dir.exists()
+
 
 def test_run_writes_only_under_raw_dir(tmp_path, monkeypatch):
     import scripts.crawl_yahoo_reviews as mod
@@ -249,11 +358,12 @@ def test_run_writes_only_under_raw_dir(tmp_path, monkeypatch):
     repo_dir.mkdir()
     monkeypatch.chdir(repo_dir)
 
-    payload = {"asin": "B0CRAWL0001", "fetched_at": "2026-07-01T00:00:00Z",
+    payload = {"asin": "B0CRAWL0001", "jan_code": "4901", "fetched_at": "2026-07-01T00:00:00Z",
+               "api_review": {"rate": 4.2, "count": 5, "url": "https://x/r"},
                "reviews": [{"rating": 5, "title": "t", "body": "b", "posted_at": "2026-06-01"}]}
     monkeypatch.setattr(mod, "crawl_asin", lambda asin, **kw: payload)
 
-    summary = run(["B0CRAWL0001"], raw_dir=raw_dir, sleeper=lambda s: None)
+    summary = run(["B0CRAWL0001"], raw_dir=raw_dir, client_id="cid", sleeper=lambda s: None)
     assert summary["written"] == 1
     out_path = raw_dir / "B0CRAWL0001.json"
     assert out_path.exists()
@@ -270,18 +380,20 @@ def test_run_skips_fresh_asin(tmp_path, monkeypatch):
     (raw_dir / "B0FRESH0001.json").write_text(json.dumps({
         "asin": "B0FRESH0001",
         "fetched_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "api_review": {"rate": 4.0, "count": 1, "url": ""},
         "reviews": [],
     }), encoding="utf-8")
 
     called = []
     monkeypatch.setattr(mod, "crawl_asin", lambda asin, **kw: called.append(asin))
 
-    summary = run(["B0FRESH0001"], raw_dir=raw_dir, refresh_days=30, sleeper=lambda s: None)
+    summary = run(["B0FRESH0001"], raw_dir=raw_dir, client_id="cid",
+                  refresh_days=30, sleeper=lambda s: None)
     assert called == []
     assert summary["written"] == 0
 
 
-def test_run_stops_at_request_budget(tmp_path, monkeypatch):
+def test_run_processes_all_targets_within_budget(tmp_path, monkeypatch):
     import scripts.crawl_yahoo_reviews as mod
 
     calls = []
@@ -292,9 +404,7 @@ def test_run_stops_at_request_budget(tmp_path, monkeypatch):
 
     monkeypatch.setattr(mod, "crawl_asin", _fake_crawl)
     raw_dir = tmp_path / "raw"
-    # max_requests=0 は無制限扱いなので、明示的に budget を使い切らせるため 1 に設定し
-    # crawl_asin 呼び出し前に budget を消費させる代わりに、対象を複数与えて
-    # crawl_asin 自体が budget を消費しない (mock) ケースでは全件処理されることを確認する。
-    summary = run(["B0A0000001", "B0B0000001"], raw_dir=raw_dir, max_requests=100, sleeper=lambda s: None)
+    summary = run(["B0A0000001", "B0B0000001"], raw_dir=raw_dir, client_id="cid",
+                  max_requests=100, sleeper=lambda s: None)
     assert calls == ["B0A0000001", "B0B0000001"]
     assert summary["targets"] == 2

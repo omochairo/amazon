@@ -439,7 +439,11 @@ def gather_yahoo_aggregate(
     asin: str, *, raw_dir: pathlib.Path | None = None, max_reviews: int = 10,
 ) -> tuple[list[dict], dict]:
     """EXPERIENCE_RAW_DIR/<ASIN>.json (crawl_yahoo_reviews.py の出力) を読む。
-    無ければ ([], 空 rating_stats) を返す。生レビュー本文は gemma への入力にのみ使う。"""
+    無ければ ([], 空 rating_stats) を返す。生レビュー本文は gemma への入力にのみ使う。
+
+    rating_stats は **api_review (itemSearch v3 の rate/count 確定値) 優先**。
+    distribution はクロールで取れたレビュー本文がある場合のみ機械集計で補う
+    (API は分布を返さない)。api_review が無い旧形式は本文集計にフォールバック。"""
     raw_dir = raw_dir or pathlib.Path(
         os.environ.get("EXPERIENCE_RAW_DIR", str(DEFAULT_EXPERIENCE_RAW_DIR))
     )
@@ -448,7 +452,16 @@ def gather_yahoo_aggregate(
         return [], {"count": 0, "average": 0.0, "distribution": {}}
     reviews = data.get("reviews")
     reviews = reviews if isinstance(reviews, list) else []
-    rating_stats = _yahoo_rating_stats(reviews)
+
+    api_review = data.get("api_review")
+    if isinstance(api_review, dict) and isinstance(api_review.get("count"), (int, float)):
+        rating_stats = {
+            "count": int(api_review.get("count") or 0),
+            "average": round(float(api_review.get("rate") or 0.0), 2),
+            "distribution": _yahoo_rating_stats(reviews)["distribution"],
+        }
+    else:
+        rating_stats = _yahoo_rating_stats(reviews)
 
     candidates: list[dict] = []
     for r in reviews[:max_reviews]:
