@@ -71,7 +71,7 @@ OUT_NAME = "experience.json"
 
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
 DEFAULT_EXPERIENCE_MODEL = "gemma4:26b-a4b-it-qat"
-DEFAULT_GEMINI_MODEL = "gemini-3-flash"
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash"
 DEFAULT_EXPERIENCE_RAW_DIR = pathlib.Path.home() / ".omochairo" / "yahoo_reviews_raw"
 
 GEMINI_ENDPOINT_TMPL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
@@ -255,6 +255,14 @@ def gather_gemini_grounded(
         if resp.status_code == 404:
             logger.warning("Gemini model %s not found — gemini_grounded skip", model)
             return []
+        if resp.status_code >= 400:
+            # API key 自体は URL params 内で resp.text には含まれない (Google の
+            # エラー JSON は {"error": {"code","message","status"}} 形式)。
+            detail = (resp.text or "")[:200]
+            logger.warning(
+                "Gemini grounding call failed (HTTP %s): %s — skip", resp.status_code, detail,
+            )
+            return []
         resp.raise_for_status()
         payload = resp.json()
     except requests.RequestException as e:
@@ -351,8 +359,13 @@ def gather_threads(
             timeout=REQUEST_TIMEOUT,
         )
         if resp.status_code in (400, 401, 403):
+            # レスポンス本文 (Meta のエラー JSON は {"error": {"message": ...}} 形式で
+            # token 自体は含まない) を先頭 200 字だけログに出し、権限不足の原因
+            # (threads_keyword_search 未承認 / scope 不足等) を切り分けやすくする。
+            detail = (resp.text or "")[:200]
             logger.warning(
-                "Threads keyword_search permission/auth error (HTTP %s) — skip", resp.status_code,
+                "Threads keyword_search permission/auth error (HTTP %s): %s — skip",
+                resp.status_code, detail,
             )
             return []
         resp.raise_for_status()
