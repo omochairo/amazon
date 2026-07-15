@@ -14,6 +14,8 @@ data/raw/rakuten_matched.json, data/raw/yahoo_matched.json に保存する。
       ASIN を強制再検索。新結果が品質ガード不合格で旧結果が合格なら旧を保持。
 """
 
+from __future__ import annotations
+
 import os
 import sys
 import json
