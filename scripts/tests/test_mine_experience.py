@@ -227,6 +227,39 @@ def test_gather_yahoo_aggregate_reads_raw_dir(tmp_path):
     assert stats["count"] == 1
 
 
+def test_gather_yahoo_aggregate_prefers_api_review_for_rating_stats(tmp_path):
+    """新形式: rating_stats は itemSearch v3 の api_review (rate/count 確定値) 優先。
+    distribution はクロール本文があるときだけ補われる。"""
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    (raw_dir / "B0APIREV01.json").write_text(json.dumps({
+        "asin": "B0APIREV01", "jan_code": "4901234567890",
+        "fetched_at": "2026-07-01T00:00:00Z",
+        "api_review": {"rate": 4.35, "count": 12, "url": "https://x/review"},
+        "reviews": [{"rating": 5, "title": "t", "body": "良かったです", "posted_at": "2026-06-01"}],
+    }), encoding="utf-8")
+    candidates, stats = gather_yahoo_aggregate("B0APIREV01", raw_dir=raw_dir)
+    assert stats["count"] == 12          # API 由来 (本文は 1 件でも count は 12)
+    assert stats["average"] == 4.35      # API 由来
+    assert stats["distribution"] == {"5": 1}  # 本文由来の補完
+    assert len(candidates) == 1
+
+
+def test_gather_yahoo_aggregate_api_review_only_no_snippets(tmp_path):
+    """reviews が空でも api_review があれば rating_stats を出す (candidates は 0 件)。"""
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    (raw_dir / "B0APIONLY1.json").write_text(json.dumps({
+        "asin": "B0APIONLY1", "jan_code": "4900000000000",
+        "fetched_at": "2026-07-01T00:00:00Z",
+        "api_review": {"rate": 3.9, "count": 8, "url": "https://x/review"},
+        "reviews": [],
+    }), encoding="utf-8")
+    candidates, stats = gather_yahoo_aggregate("B0APIONLY1", raw_dir=raw_dir)
+    assert candidates == []
+    assert stats == {"count": 8, "average": 3.9, "distribution": {}}
+
+
 # --------------------------------------------------------------------------
 # extract_snippets: entailment 判定 + usable_as コード側固定割当
 # --------------------------------------------------------------------------

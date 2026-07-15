@@ -15,23 +15,29 @@ docs/article-quality-overhaul-design.md §5.2/§5.3)。
   4. 原文はランナーのローカル保管のみ。既取得 ASIN は --refresh-days (既定 30) 以内
      なら skip (冪等・蓄積型)
 
-URL 導出方式:
-  data/raw/yahoo_matched.json の matched_asin 一致エントリの `url` は
-  ValueCommerce のアフィリエイトリンク (`https://ck.jp.ap.valuecommerce.com/
-  servlet/referral?sid=...&pid=...&vc_url=<url-encoded 実 URL>`)。
-  `vc_url` パラメータをデコードすると実商品ページ
-  `https://store.shopping.yahoo.co.jp/<store>/<item_code>.html` が得られる
-  (scripts/fetch_yahoo.py の VC_REFERRAL_BASE と同じ仕組み)。
-  Yahoo!ショッピングの慣例では、この商品ページの `<item_code>.html` を
-  `review/<item_code>.html` に置き換えるとレビュー一覧ページになる。ページングは
-  `?p=<page>` クエリ (1 ASIN あたり最大 3 ページ)。この慣例に一致しない URL は
-  導出不能として ASIN を skip する。
+レビューページ URL 導出方式 (2026-07-15 改訂):
+  当初の推測規約 (`store.shopping.yahoo.co.jp/<store>/review/<item>.html`) は
+  実 URL 検証で 404 だったため廃止。**公式 itemSearch v3 API** (scripts/fetch_yahoo.py
+  と同じ https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch、env
+  `YAHOO_CLIENT_ID`) に `jan_code` (data/raw/per_asin/<ASIN>/amazon.json の
+  jan_code フィールド、backfill_jan_codes.py がカバレッジ約 96% で埋めている) を
+  渡し、レスポンス `hits[].review` の `{rate (平均), count (件数), url (レビュー
+  ページ URL)}` を取得する — 推測ゼロの正規導出。
+  - JAN が無い ASIN は warning + skip
+  - `YAHOO_CLIENT_ID` 未設定なら lane 全体を warning + skip
+  - API 呼び出しは 1 秒間隔 (公式 API なので低速クロール規律の対象外だが節度は守る)
+  - review.count == 0 の ASIN はレビューページを crawl しない (無駄リクエスト削減)。
+    api_review 自体は保存する (rate/count は API の確定値・refresh-days の冪等にも使う)
 
-レビュー抽出: Yahoo!ショッピングは検索エンジン向けリッチスニペット用に
-schema.org Review/AggregateRating を JSON-LD (`<script type="application/ld+json">`)
-で埋め込むことが多い。CSS セレクタは markup 変更に弱いため、比較的安定した
-JSON-LD を抽出戦略として採用する。見つからなければそのページのレビュー 0 件として
-扱う (クラッシュしない・次ページ探索も打ち切る)。
+レビュー本文の抽出は best-effort: review.url を既存の低速クロール規律で 1 ページ
+取得し、schema.org Review/AggregateRating の JSON-LD を探す (CSS セレクタより
+markup 変更に強い)。ただし Yahoo のレビューページは JS レンダリング依存で requests
+では本文が取れない可能性がある。**取れなくてもクラッシュせず、api_review だけでも
+成果として保存する** (mine_experience 側の rating_stats は api_review 優先で集計)。
+ページネーションは review.url のページ構造が不明のため 1 ページのみ。
+
+出力 (ローカル raw ファイル):
+  {asin, jan_code, fetched_at, api_review: {rate, count, url}, reviews: [...]}
 
 Usage:
     python scripts/crawl_yahoo_reviews.py --limit 20
@@ -61,19 +67,18 @@ from mine_experience import select_targets  # noqa: E402
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("crawl_yahoo_reviews")
 
-DEFAULT_MATCHED_PATH = pathlib.Path("data/raw/yahoo_matched.json")
+PER_ASIN_DIR = pathlib.Path("data/raw/per_asin")
 DEFAULT_RAW_DIR = pathlib.Path.home() / ".omochairo" / "yahoo_reviews_raw"
 DEFAULT_MAX_REQUESTS = 60
 DEFAULT_REFRESH_DAYS = 30
-MAX_PAGES_PER_ASIN = 3
 REQUEST_TIMEOUT = 20
+
+# 公式 itemSearch v3 (scripts/fetch_yahoo.py と同じエンドポイント・env 名)。
+YAHOO_API_URL = "https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch"
+API_SLEEP_SECONDS = 1.0  # 公式 API のレート節度 (1 query/sec)
 
 # 連絡先 URL 入りの正直な UA (bot 検知回避策は実装しない設計要件)。
 HONEST_UA = "omochairo-experience-bot/1.0 (+https://navi.omcha.jp/)"
-
-_PRODUCT_URL_RE = re.compile(
-    r"^https://store\.shopping\.yahoo\.co\.jp/([^/]+)/([^/?#]+?)(?:\.html)?/?(?:[?#].*)?$"
-)
 
 _BOT_WALL_MARKERS = (
     "captcha", "recaptcha", "are you a human", "unusual traffic",
@@ -86,7 +91,10 @@ class BotWallDetected(Exception):
 
 
 class RequestBudget:
-    """日次上限 (--max-requests) を横断的に消費する簡易カウンタ。"""
+    """日次上限 (--max-requests) を横断的に消費する簡易カウンタ。
+
+    公式 API (itemSearch v3) の呼び出しは対象外 — レビューページ crawl のみ数える。
+    """
 
     def __init__(self, max_requests: int) -> None:
         self.max_requests = max_requests
@@ -119,47 +127,69 @@ def default_raw_dir() -> pathlib.Path:
 
 
 # --------------------------------------------------------------------------
-# URL 導出
+# JAN 取得 + itemSearch v3 での review.url 導出 (推測ゼロの正規導出)
 # --------------------------------------------------------------------------
 
-def resolve_product_url(raw_url: str | None) -> str | None:
-    """yahoo_matched.json の `url` (ValueCommerce referral) から実商品ページ URL を
-    取り出す。既に store.shopping.yahoo.co.jp の直リンクならそのまま返す。"""
-    if not isinstance(raw_url, str) or not raw_url:
+def get_jan_code(asin: str, base: pathlib.Path = PER_ASIN_DIR) -> str | None:
+    """data/raw/per_asin/<ASIN>/amazon.json の item から jan_code を取り出す。
+    無い/空なら None (backfill_jan_codes.py のカバレッジ約 96%)。"""
+    data = _load(base / asin / "amazon.json")
+    if not isinstance(data, dict):
         return None
-    parsed = urllib.parse.urlparse(raw_url)
-    if "valuecommerce.com" in parsed.netloc:
-        qs = urllib.parse.parse_qs(parsed.query)
-        vc = qs.get("vc_url")
-        if vc and vc[0]:
-            return vc[0]
-        return None
-    return raw_url
-
-
-def select_yahoo_url(asin: str, matched_path: pathlib.Path = DEFAULT_MATCHED_PATH) -> str | None:
-    matched = _load(matched_path)
-    items = matched.get("items", []) if isinstance(matched, dict) else []
-    for it in items:
-        if isinstance(it, dict) and it.get("matched_asin") == asin:
-            resolved = resolve_product_url(it.get("url"))
-            if resolved:
-                return resolved
+    item = data.get("item") if isinstance(data.get("item"), dict) else data
+    jan = item.get("jan_code") if isinstance(item, dict) else None
+    if isinstance(jan, str) and jan.strip():
+        return jan.strip()
     return None
 
 
-def derive_review_urls(product_url: str, max_pages: int = MAX_PAGES_PER_ASIN) -> list[str]:
-    """商品ページ URL → レビューページ URL 群 (最大 max_pages 件) を導出する。
-    店舗慣例に一致しない URL は導出不能として空リストを返す。"""
-    m = _PRODUCT_URL_RE.match(product_url or "")
-    if not m:
-        return []
-    store, item = m.group(1), m.group(2)
-    base = f"https://store.shopping.yahoo.co.jp/{store}/review/{item}.html"
-    urls = [base]
-    for p in range(2, max_pages + 1):
-        urls.append(f"{base}?p={p}")
-    return urls
+def lookup_yahoo_review(
+    jan_code: str, client_id: str,
+    session: requests.Session, sleeper=time.sleep,
+) -> dict | None:
+    """itemSearch v3 を jan_code で叩き、最初の hit の review
+    {rate (平均), count (件数), url (レビューページURL)} を返す。
+    エラー/hit なし/review なしは None (warning + skip、lane を止めない)。"""
+    sleeper(API_SLEEP_SECONDS)  # 公式 API への節度 (1 query/sec)
+    try:
+        resp = session.get(
+            YAHOO_API_URL,
+            params={"appid": client_id, "jan_code": jan_code, "results": 1},
+            timeout=REQUEST_TIMEOUT,
+        )
+    except requests.RequestException as e:
+        logger.warning("itemSearch v3 failed for jan=%s: %s — skip", jan_code, e)
+        return None
+    if resp.status_code != 200:
+        snippet = resp.text[:200] if resp.text else ""
+        logger.warning("itemSearch v3 error for jan=%s (HTTP %s): %s — skip",
+                       jan_code, resp.status_code, snippet)
+        return None
+    try:
+        data = resp.json()
+    except ValueError as e:
+        logger.warning("itemSearch v3 response not JSON for jan=%s: %s — skip", jan_code, e)
+        return None
+
+    hits = data.get("hits") if isinstance(data, dict) else None
+    if not isinstance(hits, list) or not hits or not isinstance(hits[0], dict):
+        logger.info("itemSearch v3: no hits for jan=%s — skip", jan_code)
+        return None
+    review = hits[0].get("review")
+    if not isinstance(review, dict):
+        logger.info("itemSearch v3: hit has no review field for jan=%s — skip", jan_code)
+        return None
+
+    try:
+        count = int(review.get("count") or 0)
+    except (TypeError, ValueError):
+        count = 0
+    try:
+        rate = float(review.get("rate") or 0.0)
+    except (TypeError, ValueError):
+        rate = 0.0
+    url = review.get("url") if isinstance(review.get("url"), str) else ""
+    return {"rate": rate, "count": count, "url": url}
 
 
 # --------------------------------------------------------------------------
@@ -223,7 +253,7 @@ def fetch_with_retry(
 
 
 # --------------------------------------------------------------------------
-# レビュー抽出 (schema.org JSON-LD)
+# レビュー抽出 (schema.org JSON-LD, best-effort)
 # --------------------------------------------------------------------------
 
 def _parse_review_node(node: dict) -> dict | None:
@@ -313,57 +343,74 @@ def is_fresh(path: pathlib.Path, max_age_days: int) -> bool:
 
 def crawl_asin(
     asin: str, *,
-    matched_path: pathlib.Path = DEFAULT_MATCHED_PATH,
+    client_id: str,
+    base: pathlib.Path = PER_ASIN_DIR,
     session: requests.Session, budget: RequestBudget,
     sleeper=time.sleep, rng: random.Random | Any = random,
-    max_pages: int = MAX_PAGES_PER_ASIN,
 ) -> dict | None:
-    """1 ASIN 分を収集する。取得不能・bot wall・レビュー 0 件は None を返す。"""
-    product_url = select_yahoo_url(asin, matched_path)
-    if not product_url:
-        logger.info("%s: no matched Yahoo URL — skip", asin)
-        return None
-    review_urls = derive_review_urls(product_url, max_pages=max_pages)
-    if not review_urls:
-        logger.info("%s: could not derive review URL from %s — skip", asin, product_url)
-        return None
-    if not robots_allowed(review_urls[0]):
-        logger.info("%s: robots.txt disallows — skip", asin)
+    """1 ASIN 分を収集する。JAN 無し・API 導出不能は None。
+    api_review が取れれば、レビュー本文が 0 件でも payload を返す (保存対象)。"""
+    jan_code = get_jan_code(asin, base)
+    if not jan_code:
+        logger.warning("%s: no jan_code in per_asin amazon.json — skip", asin)
         return None
 
-    all_reviews: list[dict] = []
-    for url in review_urls:
-        if budget.exhausted():
-            break
-        try:
-            html = fetch_with_retry(url, session, budget, sleeper=sleeper, rng=rng)
-        except BotWallDetected:
-            logger.warning("%s: bot wall detected at %s — abandoning ASIN (no workaround)", asin, url)
-            return None
-        if html is None:
-            break
-        page_reviews = extract_reviews(html)
-        if not page_reviews:
-            break
-        all_reviews.extend(page_reviews)
-
-    if not all_reviews:
+    api_review = lookup_yahoo_review(jan_code, client_id, session, sleeper=sleeper)
+    if api_review is None:
         return None
-    return {"asin": asin, "fetched_at": _now_iso(), "reviews": all_reviews}
+
+    payload = {
+        "asin": asin,
+        "jan_code": jan_code,
+        "fetched_at": _now_iso(),
+        "api_review": api_review,
+        "reviews": [],
+    }
+
+    # count == 0 は crawl せず skip (無駄リクエスト削減)。api_review は保存する。
+    if api_review["count"] <= 0 or not api_review["url"]:
+        logger.info("%s: review count=%d url=%r — api_review only, no crawl",
+                    asin, api_review["count"], api_review["url"])
+        return payload
+
+    review_url = api_review["url"]
+    if not robots_allowed(review_url):
+        logger.info("%s: robots.txt disallows %s — api_review only", asin, review_url)
+        return payload
+    if budget.exhausted():
+        return payload
+
+    # ページ構造が不明のため 1 ページのみ・本文抽出は best-effort
+    # (JS レンダリング依存で取れない可能性あり — 取れなくても api_review は成果)。
+    try:
+        html = fetch_with_retry(review_url, session, budget, sleeper=sleeper, rng=rng)
+    except BotWallDetected:
+        logger.warning("%s: bot wall detected at %s — abandoning crawl (no workaround), keeping api_review",
+                       asin, review_url)
+        return payload
+    if html:
+        payload["reviews"] = extract_reviews(html)
+    return payload
 
 
 def run(
     targets: list[str], *,
-    matched_path: pathlib.Path = DEFAULT_MATCHED_PATH,
+    base: pathlib.Path = PER_ASIN_DIR,
     raw_dir: pathlib.Path | None = None,
+    client_id: str | None = None,
     max_requests: int = DEFAULT_MAX_REQUESTS,
     refresh_days: int = DEFAULT_REFRESH_DAYS,
-    max_pages: int = MAX_PAGES_PER_ASIN,
     session: requests.Session | None = None,
     sleeper=time.sleep, rng: random.Random | Any = random,
     dry_run: bool = False,
 ) -> dict:
     raw_dir = raw_dir or default_raw_dir()
+    client_id = client_id if client_id is not None else os.environ.get("YAHOO_CLIENT_ID", "").strip()
+    if not client_id and not dry_run:
+        # 公式 API キー無しでは正規導出ができない — lane 全体を warning + skip
+        logger.warning("YAHOO_CLIENT_ID 未設定 — Yahoo レビュー lane 全体を skip")
+        return {"targets": len(targets), "written": 0, "skipped": len(targets), "requests_made": 0}
+
     session = session or requests.Session()
     budget = RequestBudget(max_requests)
     written = 0
@@ -381,8 +428,8 @@ def run(
             logger.info("[dry-run] would crawl %s", asin)
             continue
         payload = crawl_asin(
-            asin, matched_path=matched_path, session=session, budget=budget,
-            sleeper=sleeper, rng=rng, max_pages=max_pages,
+            asin, client_id=client_id, base=base, session=session, budget=budget,
+            sleeper=sleeper, rng=rng,
         )
         if payload is None:
             skipped += 1
@@ -390,7 +437,8 @@ def run(
         raw_dir.mkdir(parents=True, exist_ok=True)
         out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         written += 1
-        logger.info("%s: wrote %s (%d reviews)", asin, out_path, len(payload["reviews"]))
+        logger.info("%s: wrote %s (api count=%d, %d review bodies)",
+                    asin, out_path, payload["api_review"]["count"], len(payload["reviews"]))
 
     summary = {
         "targets": len(targets), "written": written, "skipped": skipped,
@@ -404,7 +452,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--asins", default="", help="対象 ASIN をカンマ区切りで明示指定")
     ap.add_argument("--limit", type=int, default=20)
-    ap.add_argument("--max-requests", type=int, default=DEFAULT_MAX_REQUESTS, help="日次リクエスト上限")
+    ap.add_argument("--max-requests", type=int, default=DEFAULT_MAX_REQUESTS,
+                    help="日次リクエスト上限 (レビューページ crawl のみ・公式 API は対象外)")
     ap.add_argument("--refresh-days", type=int, default=DEFAULT_REFRESH_DAYS)
     ap.add_argument("--dry-run", action="store_true", help="取得せず対象/計画のみ表示")
     args = ap.parse_args()
