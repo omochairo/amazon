@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import subprocess
 
 import pytest
 import requests
@@ -11,7 +12,7 @@ from scripts.mine_experience import (
     _USABLE_AS_MAP,
     _yahoo_rating_stats,
     extract_snippets,
-    gather_gemini_grounded,
+    gather_antigravity,
     gather_threads,
     gather_third_party,
     gather_yahoo_aggregate,
@@ -118,20 +119,9 @@ def test_select_targets_ignores_malformed_asin(tmp_path, monkeypatch):
 # アダプタ: secret 無しで skip すること
 # --------------------------------------------------------------------------
 
-def test_gather_gemini_grounded_skips_without_api_key(monkeypatch):
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    assert gather_gemini_grounded("商品名", "ブランド", api_key="") == []
-
-
 def test_gather_threads_skips_without_token(monkeypatch):
     monkeypatch.delenv("THREADS_ACCESS_TOKEN", raising=False)
     assert gather_threads("商品名", token="") == []
-
-
-def test_gather_gemini_grounded_skips_on_model_not_found():
-    session = _FakeSession([_FakeResponse(status=404, text="model not found")])
-    result = gather_gemini_grounded("商品名", "ブランド", api_key="key", session=session)
-    assert result == []
 
 
 def test_gather_third_party_empty_when_no_sources(tmp_path):
@@ -147,31 +137,66 @@ def test_gather_yahoo_aggregate_empty_when_raw_dir_missing(tmp_path):
 
 
 # --------------------------------------------------------------------------
-# gather_gemini_grounded: candidate 化 (テキスト + grounding URL)
+# gather_antigravity: dbus-run-session -- agy --print のヘッドレス実行
 # --------------------------------------------------------------------------
 
-def test_gather_gemini_grounded_builds_candidate_with_grounding_url():
-    body = {
-        "candidates": [{
-            "content": {"parts": [{"text": "口コミ要約テキスト"}]},
-            "groundingMetadata": {
-                "groundingChunks": [{"web": {"uri": "https://example.com/review", "title": "レビュー記事"}}]
-            },
-        }]
-    }
-    session = _FakeSession([_FakeResponse(body)])
-    result = gather_gemini_grounded("商品名", "ブランド", api_key="key", session=session)
+class _FakeCompletedProcess:
+    def __init__(self, returncode=0, stdout="", stderr=""):
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+
+def test_gather_antigravity_builds_candidate_on_success(monkeypatch):
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["kwargs"] = kwargs
+        return _FakeCompletedProcess(returncode=0, stdout="口コミ要約テキスト\n")
+
+    monkeypatch.setattr("scripts.mine_experience.subprocess.run", fake_run)
+    result = gather_antigravity("商品名", "ブランド")
     assert len(result) == 1
     assert result[0]["text"] == "口コミ要約テキスト"
-    assert result[0]["source_type"] == "gemini_grounded"
-    assert result[0]["source_url"] == "https://example.com/review"
-
-
-def test_gather_gemini_grounded_empty_url_when_no_grounding():
-    body = {"candidates": [{"content": {"parts": [{"text": "テキスト"}]}}]}
-    session = _FakeSession([_FakeResponse(body)])
-    result = gather_gemini_grounded("商品名", "ブランド", api_key="key", session=session)
+    assert result[0]["source_type"] == "antigravity"
     assert result[0]["source_url"] == ""
+    assert captured["cmd"][:3] == ["dbus-run-session", "--", "agy"]
+    assert captured["cmd"][3] == "--print"
+    assert "商品名" in captured["cmd"][4]
+    assert "ブランド" in captured["cmd"][4]
+
+
+def test_gather_antigravity_skips_when_command_not_found(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        raise FileNotFoundError("agy not found")
+
+    monkeypatch.setattr("scripts.mine_experience.subprocess.run", fake_run)
+    assert gather_antigravity("商品名", "ブランド") == []
+
+
+def test_gather_antigravity_skips_on_timeout(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs.get("timeout", 120))
+
+    monkeypatch.setattr("scripts.mine_experience.subprocess.run", fake_run)
+    assert gather_antigravity("商品名", "ブランド") == []
+
+
+def test_gather_antigravity_skips_on_nonzero_returncode(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        return _FakeCompletedProcess(returncode=1, stdout="", stderr="boom")
+
+    monkeypatch.setattr("scripts.mine_experience.subprocess.run", fake_run)
+    assert gather_antigravity("商品名", "ブランド") == []
+
+
+def test_gather_antigravity_skips_on_empty_response(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        return _FakeCompletedProcess(returncode=0, stdout="   \n", stderr="")
+
+    monkeypatch.setattr("scripts.mine_experience.subprocess.run", fake_run)
+    assert gather_antigravity("商品名", "ブランド") == []
 
 
 # --------------------------------------------------------------------------
@@ -330,9 +355,13 @@ def test_mine_asin_returns_none_when_no_candidates(tmp_path, monkeypatch):
     ]}), encoding="utf-8")
     base = data_dir / "per_asin"
     (base / "B0NOSOURCE1").mkdir(parents=True)
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("THREADS_ACCESS_TOKEN", raising=False)
     monkeypatch.delenv("EXPERIENCE_RAW_DIR", raising=False)
+
+    def fake_run(cmd, **kwargs):
+        raise FileNotFoundError("agy not found")
+
+    monkeypatch.setattr("scripts.mine_experience.subprocess.run", fake_run)
 
     payload = mine_asin("B0NOSOURCE1", base=base, session=_FakeSession([]))
     assert payload is None
@@ -351,9 +380,13 @@ def test_mine_asin_builds_expected_schema(tmp_path, monkeypatch):
     (asin_dir / "third_party_sources.json").write_text(json.dumps({
         "sources": [{"url": "https://blog.example.com/review", "title": "レビュー", "snippet": "s"}],
     }), encoding="utf-8")
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("THREADS_ACCESS_TOKEN", raising=False)
     monkeypatch.delenv("EXPERIENCE_RAW_DIR", raising=False)
+
+    def fake_run(cmd, **kwargs):
+        raise FileNotFoundError("agy not found")
+
+    monkeypatch.setattr("scripts.mine_experience.subprocess.run", fake_run)
 
     fetch_resp = _FakeResponse(text="<html><body>実際に使ってみたレビュー本文です</body></html>")
     inner = json.dumps({

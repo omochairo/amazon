@@ -1,7 +1,7 @@
 """mine_experience.py
 
 Issue #3203 Phase 2: 体験談供給レーン。K8 LLM ワーカー上で実行され、
-Web 横断 (Gemini grounding) / third-party 本文 / Threads / YouTube (opportunistic) /
+Web 横断 (Antigravity CLI / agy) / third-party 本文 / Threads / YouTube (opportunistic) /
 Yahoo レビュー低速蓄積 (crawl_yahoo_reviews.py の出力) から体験談 snippet を抽出し、
 data/raw/per_asin/<ASIN>/experience.json に書き出す read-mostly スクリプト。
 
@@ -16,7 +16,11 @@ data/raw/per_asin/<ASIN>/experience.json に書き出す read-mostly スクリ�
 ソースアダプタ (各アダプタは candidate テキスト群 [{text, source_type, source_url}]
 を返す。**必要な env/secret が無い・API がエラーのときは stderr warning + 空リストで
 skip し、他レーンを止めない**):
-  - gather_gemini_grounded : GEMINI_API_KEY + Google Search grounding
+  - gather_antigravity     : agy (Antigravity CLI, K8 WSL2 ホスト側でファイルベース認証
+                              済み) のヘッドレス実行による Web 検索要約。当初は
+                              GEMINI_API_KEY + Google Search grounding だったが、無料枠
+                              クォータをすぐ使い切る問題が判明したため置換した
+                              (owner 判断、2026-07-15)
   - gather_third_party     : per_asin/third_party_sources.json + news.json の URL 本文 fetch
   - gather_threads         : THREADS_ACCESS_TOKEN + keyword_search API
   - gather_youtube_opportunistic : per_asin/youtube.json に既存エントリがある場合のみ字幕取得
@@ -29,8 +33,8 @@ gemma 抽出・検証 (extract_snippets):
   candidate は破棄する。
 
 usable_as の割当はコード側で固定 (gemma に任せない):
-  yahoo_review_aggregate / gemini_grounded -> "paraphrase"
-  blog / news / threads / youtube          -> "quote"
+  yahoo_review_aggregate / antigravity -> "paraphrase"
+  blog / news / threads / youtube      -> "quote"
 
 出力: data/raw/per_asin/<ASIN>/experience.json
   snippets 0 件の ASIN はファイルを書かない (空ファイルで per_asin を汚さない)。
@@ -48,6 +52,7 @@ import logging
 import os
 import pathlib
 import re
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -71,11 +76,11 @@ OUT_NAME = "experience.json"
 
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
 DEFAULT_EXPERIENCE_MODEL = "gemma4:26b-a4b-it-qat"
-DEFAULT_GEMINI_MODEL = "gemini-3.5-flash"
 DEFAULT_EXPERIENCE_RAW_DIR = pathlib.Path.home() / ".omochairo" / "yahoo_reviews_raw"
 
-GEMINI_ENDPOINT_TMPL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 THREADS_ENDPOINT = "https://graph.threads.net/v1.0/keyword_search"
+
+ANTIGRAVITY_TIMEOUT_S = 120
 
 _ASIN_RE = re.compile(r"^B0[A-Z0-9]{8}$")
 _YT_ID_RE = re.compile(r"(?:v=|youtu\.be/|/shorts/)([A-Za-z0-9_-]{11})")
@@ -91,7 +96,7 @@ HONEST_UA = "omochairo-experience-bot/1.0 (+https://navi.omcha.jp/)"
 # usable_as のコード側固定割当 (gemma には判定させない)
 _USABLE_AS_MAP = {
     "yahoo_review_aggregate": "paraphrase",
-    "gemini_grounded": "paraphrase",
+    "antigravity": "paraphrase",
     "blog": "quote",
     "news": "quote",
     "threads": "quote",
@@ -228,76 +233,51 @@ def resolve_product_identity(asin: str, base: pathlib.Path = PER_ASIN_DIR) -> tu
 # ソースアダプタ
 # --------------------------------------------------------------------------
 
-def gather_gemini_grounded(
-    product_name: str, brand: str, *,
-    api_key: str | None = None, model: str | None = None,
-    session: requests.Session | None = None,
+def gather_antigravity(
+    product_name: str, brand: str, *, timeout_s: int = ANTIGRAVITY_TIMEOUT_S,
 ) -> list[dict]:
-    api_key = api_key if api_key is not None else os.environ.get("GEMINI_API_KEY", "").strip()
-    if not api_key:
-        logger.warning("GEMINI_API_KEY 未設定 — gemini_grounded skip")
-        return []
-    model = model or os.environ.get("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
-    session = session or requests.Session()
-    url = GEMINI_ENDPOINT_TMPL.format(model=model)
+    """Antigravity CLI (`agy`) をヘッドレス実行し、Web 検索に基づく口コミ要約を取得する。
+
+    認証はファイルベース (K8 の WSL2 ホスト側で owner が事前に手動ブラウザ認証を
+    完了済み) で完結するため api_key 引数は無い。`agy` が PATH に無い・timeout・
+    非ゼロ終了・空応答はいずれも warning ログ + 空リストで skip し、他レーンを
+    止めない (gather_threads / gather_third_party と同じ graceful-skip 設計)。
+    """
     prompt = (
-        f"{product_name} ({brand}) の購入者の口コミ・使用感・不満点を、"
-        "Web 検索に基づき事実のみ日本語で箇条書き要約してください。"
+        f"Web検索ツールを使って『{product_name} ({brand})』という商品の購入者の"
+        "口コミ・評判・使用感を調べ、事実に基づき3〜5行の日本語箇条書きで要約して"
+        "ください。ファイル操作・コード編集は一切不要です。テキストで直接回答して"
+        "ください。"
     )
-    body = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "tools": [{"google_search": {}}],
-    }
     try:
-        resp = session.post(
-            url, params={"key": api_key}, json=body, timeout=REQUEST_TIMEOUT,
+        result = subprocess.run(
+            ["dbus-run-session", "--", "agy", "--print", prompt],
+            capture_output=True, text=True, timeout=timeout_s, encoding="utf-8",
         )
-        if resp.status_code == 404:
-            logger.warning("Gemini model %s not found — gemini_grounded skip", model)
-            return []
-        if resp.status_code >= 400:
-            # API key 自体は URL params 内で resp.text には含まれない (Google の
-            # エラー JSON は {"error": {"code","message","status"}} 形式)。
-            detail = (resp.text or "")[:200]
-            logger.warning(
-                "Gemini grounding call failed (HTTP %s): %s — skip", resp.status_code, detail,
-            )
-            return []
-        resp.raise_for_status()
-        payload = resp.json()
-    except requests.RequestException as e:
-        logger.warning("Gemini grounding call failed: %s — skip", e)
+    except FileNotFoundError:
+        logger.warning("agy (Antigravity CLI) が見つかりません — antigravity skip")
         return []
-    except ValueError as e:
-        logger.warning("Gemini grounding response not JSON: %s — skip", e)
+    except subprocess.TimeoutExpired:
+        logger.warning("agy 呼び出しが timeout (%ds) — antigravity skip", timeout_s)
         return []
 
-    candidates = payload.get("candidates") if isinstance(payload, dict) else None
-    if not isinstance(candidates, list) or not candidates:
-        return []
-    cand0 = candidates[0] if isinstance(candidates[0], dict) else {}
-    parts = (cand0.get("content") or {}).get("parts") if isinstance(cand0.get("content"), dict) else None
-    text = ""
-    if isinstance(parts, list):
-        text = "\n".join(p.get("text", "") for p in parts if isinstance(p, dict) and isinstance(p.get("text"), str))
-    if not text.strip():
+    if result.returncode != 0:
+        detail = (result.stderr or "")[:200]
+        logger.warning(
+            "agy 呼び出しが非ゼロ終了 (code %s): %s — antigravity skip",
+            result.returncode, detail,
+        )
         return []
 
-    source_url = ""
-    grounding = cand0.get("groundingMetadata")
-    if isinstance(grounding, dict):
-        chunks = grounding.get("groundingChunks")
-        if isinstance(chunks, list):
-            for c in chunks:
-                web = c.get("web") if isinstance(c, dict) else None
-                if isinstance(web, dict) and isinstance(web.get("uri"), str) and web["uri"]:
-                    source_url = web["uri"]
-                    break
+    text = (result.stdout or "").strip()
+    if not text:
+        logger.warning("agy から空応答 — antigravity skip")
+        return []
 
     return [{
-        "text": text.strip()[:MAX_CANDIDATE_TEXT_LEN],
-        "source_type": "gemini_grounded",
-        "source_url": source_url,
+        "text": text[:MAX_CANDIDATE_TEXT_LEN],
+        "source_type": "antigravity",
+        "source_url": "",
     }]
 
 
@@ -590,7 +570,7 @@ def mine_asin(
         return None
 
     candidates: list[dict] = []
-    candidates += gather_gemini_grounded(product_name, brand, session=session)
+    candidates += gather_antigravity(product_name, brand)
     candidates += gather_third_party(asin, base=base, session=session)
     candidates += gather_threads(product_name, session=session)
     candidates += gather_youtube_opportunistic(asin, base=base)
