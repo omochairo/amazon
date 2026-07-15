@@ -1,0 +1,3 @@
+---
+title: "Teacher's Manual"
+---
