@@ -1,0 +1,649 @@
+"""mine_experience.py
+
+Issue #3203 Phase 2: 体験談供給レーン。K8 LLM ワーカー上で実行され、
+Web 横断 (Gemini grounding) / third-party 本文 / Threads / YouTube (opportunistic) /
+Yahoo レビュー低速蓄積 (crawl_yahoo_reviews.py の出力) から体験談 snippet を抽出し、
+data/raw/per_asin/<ASIN>/experience.json に書き出す read-mostly スクリプト。
+
+設計: docs/article-quality-overhaul-design.md §5 (Phase 2)
+
+対象 ASIN 選定 (select_targets):
+  ① data/analytics/answerability_audit.json の pages[].asin
+  ② data/rewrite_queue/*.json の asin
+  ③ (あれば) 引数 --asins 明示指定
+  上記を順に合成・重複除去し --limit (既定 20) で切る。
+
+ソースアダプタ (各アダプタは candidate テキスト群 [{text, source_type, source_url}]
+を返す。**必要な env/secret が無い・API がエラーのときは stderr warning + 空リストで
+skip し、他レーンを止めない**):
+  - gather_gemini_grounded : GEMINI_API_KEY + Google Search grounding
+  - gather_third_party     : per_asin/third_party_sources.json + news.json の URL 本文 fetch
+  - gather_threads         : THREADS_ACCESS_TOKEN + keyword_search API
+  - gather_youtube_opportunistic : per_asin/youtube.json に既存エントリがある場合のみ字幕取得
+  - gather_yahoo_aggregate : EXPERIENCE_RAW_DIR (crawl_yahoo_reviews.py の出力) のローカル生データ
+
+gemma 抽出・検証 (extract_snippets):
+  各 candidate テキストを gemma (Ollama /api/generate, format=json, think=false) に渡し、
+  商品名/ブランドへの言及 (entailment) を判定した上で、体験談/比較/安全/シーン/不満の
+  観点 (aspect) ごとに 60〜160 字の日本語要約 snippet を抽出させる。商品一致しない
+  candidate は破棄する。
+
+usable_as の割当はコード側で固定 (gemma に任せない):
+  yahoo_review_aggregate / gemini_grounded -> "paraphrase"
+  blog / news / threads / youtube          -> "quote"
+
+出力: data/raw/per_asin/<ASIN>/experience.json
+  snippets 0 件の ASIN はファイルを書かない (空ファイルで per_asin を汚さない)。
+
+Usage:
+    python scripts/mine_experience.py --asins B0XXXXXXXX,B0YYYYYYYY
+    python scripts/mine_experience.py --limit 20
+    python scripts/mine_experience.py --dry-run
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import os
+import pathlib
+import re
+import sys
+import time
+from datetime import datetime, timezone
+from typing import Any
+
+import requests
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import brand_normalizer  # noqa: E402
+from fetch_cross_search import extract_search_keyword  # noqa: E402
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("mine_experience")
+
+PER_ASIN_DIR = pathlib.Path("data/raw/per_asin")
+DEFAULT_AUDIT_PATH = pathlib.Path("data/analytics/answerability_audit.json")
+DEFAULT_REWRITE_QUEUE_DIR = pathlib.Path("data/rewrite_queue")
+DEFAULT_AMAZON_JSON = pathlib.Path("data/raw/amazon.json")
+DEFAULT_LIMIT = 20
+OUT_NAME = "experience.json"
+
+DEFAULT_OLLAMA_URL = "http://localhost:11434"
+DEFAULT_EXPERIENCE_MODEL = "gemma4:26b-a4b-it-qat"
+DEFAULT_GEMINI_MODEL = "gemini-3-flash"
+DEFAULT_EXPERIENCE_RAW_DIR = pathlib.Path.home() / ".omochairo" / "yahoo_reviews_raw"
+
+GEMINI_ENDPOINT_TMPL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+THREADS_ENDPOINT = "https://graph.threads.net/v1.0/keyword_search"
+
+_ASIN_RE = re.compile(r"^B0[A-Z0-9]{8}$")
+_YT_ID_RE = re.compile(r"(?:v=|youtu\.be/|/shorts/)([A-Za-z0-9_-]{11})")
+
+REQUEST_TIMEOUT = 20
+GEMMA_REQUEST_TIMEOUT = 180
+MAX_CANDIDATE_TEXT_LEN = 4000
+_MAX_EXTRA_RETRIES = 2  # 初回 + 2 リトライ
+_RETRY_SLEEP_SECONDS = 2.0
+
+HONEST_UA = "omochairo-experience-bot/1.0 (+https://navi.omcha.jp/)"
+
+# usable_as のコード側固定割当 (gemma には判定させない)
+_USABLE_AS_MAP = {
+    "yahoo_review_aggregate": "paraphrase",
+    "gemini_grounded": "paraphrase",
+    "blog": "quote",
+    "news": "quote",
+    "threads": "quote",
+    "youtube": "quote",
+}
+
+EXTRACTION_PROMPT_TEMPLATE = """あなたは商品レビュー記事の素材抽出アシスタントです。
+
+# 商品名
+{product_name}
+
+# ブランド
+{brand}
+
+# 対象テキスト
+{text}
+
+上記テキストが、商品『{product_name}』(ブランド: {brand}) への言及を実際に含むかを判定してください。
+含む場合、体験談・比較・安全・シーン・不満のいずれかの観点 (aspect) ごとに、60〜160字の日本語要約
+snippet を抽出してください (該当する観点が無ければ省略してよい)。
+次の JSON スキーマだけを出力してください (他の説明文は一切含めない):
+{{"entailed": true または false, "snippets": [{{"aspect": "体験談|比較|安全|シーン|不満", "text": "60〜160字の日本語要約", "confidence": "high|medium|low"}}]}}
+"""
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _load(path: pathlib.Path) -> Any:
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
+
+
+def _items(data: Any) -> list:
+    if isinstance(data, dict):
+        v = data.get("items")
+        return v if isinstance(v, list) else []
+    return data if isinstance(data, list) else []
+
+
+def _html_to_text(html: str) -> str:
+    """本文 HTML → プレーンテキスト。bs4 があれば使い、無ければ正規表現で最小ストリップ。"""
+    try:
+        from bs4 import BeautifulSoup  # type: ignore
+
+        soup = BeautifulSoup(html, "html.parser")
+        for tag in soup(["script", "style", "noscript"]):
+            tag.decompose()
+        text = soup.get_text(separator="\n")
+    except ImportError:
+        text = re.sub(r"<script.*?</script>|<style.*?</style>", " ", html, flags=re.S | re.I)
+        text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n\s*\n+", "\n", text)
+    return text.strip()
+
+
+# --------------------------------------------------------------------------
+# 対象 ASIN 選定
+# --------------------------------------------------------------------------
+
+def select_targets(
+    limit: int = DEFAULT_LIMIT,
+    asins: list[str] | None = None,
+    audit_path: pathlib.Path = DEFAULT_AUDIT_PATH,
+    rewrite_queue_dir: pathlib.Path = DEFAULT_REWRITE_QUEUE_DIR,
+) -> list[str]:
+    """① answerability_audit.json ② rewrite_queue/*.json ③ 明示 --asins を合成し
+    重複除去したうえで limit (0以下なら無制限) で切る。"""
+    ordered: list[str] = []
+    seen: set[str] = set()
+
+    def _add(a: Any) -> None:
+        if isinstance(a, str) and _ASIN_RE.match(a) and a not in seen:
+            seen.add(a)
+            ordered.append(a)
+
+    audit = _load(audit_path)
+    if isinstance(audit, dict):
+        for p in audit.get("pages", []) or []:
+            if isinstance(p, dict):
+                _add(p.get("asin"))
+
+    if rewrite_queue_dir.is_dir():
+        for f in sorted(rewrite_queue_dir.glob("*.json")):
+            data = _load(f)
+            if isinstance(data, dict):
+                _add(data.get("asin"))
+
+    for a in (asins or []):
+        _add(a)
+
+    if limit and limit > 0:
+        ordered = ordered[:limit]
+    return ordered
+
+
+# --------------------------------------------------------------------------
+# 商品名/ブランド解決
+# --------------------------------------------------------------------------
+
+def resolve_product_identity(asin: str, base: pathlib.Path = PER_ASIN_DIR) -> tuple[str, str, str]:
+    """(title, product_name_query, brand_canonical) を返す。見つからなければ空文字。"""
+    item = None
+    raw = _load(DEFAULT_AMAZON_JSON)
+    if isinstance(raw, dict):
+        for i in raw.get("items", []) or []:
+            if isinstance(i, dict) and i.get("asin") == asin:
+                item = i
+                break
+    if item is None:
+        per = _load(base / asin / "amazon.json")
+        if isinstance(per, dict):
+            item = per.get("item") if isinstance(per.get("item"), dict) else per
+
+    title = ""
+    if isinstance(item, dict) and isinstance(item.get("title"), str):
+        title = item["title"]
+    if not title:
+        return "", "", ""
+    try:
+        product_name = extract_search_keyword(title)
+    except Exception:  # noqa: BLE001 — keyword 抽出失敗は best-effort
+        product_name = title
+    brand = brand_normalizer.normalize(title).canonical
+    return title, product_name, brand
+
+
+# --------------------------------------------------------------------------
+# ソースアダプタ
+# --------------------------------------------------------------------------
+
+def gather_gemini_grounded(
+    product_name: str, brand: str, *,
+    api_key: str | None = None, model: str | None = None,
+    session: requests.Session | None = None,
+) -> list[dict]:
+    api_key = api_key if api_key is not None else os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        logger.warning("GEMINI_API_KEY 未設定 — gemini_grounded skip")
+        return []
+    model = model or os.environ.get("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
+    session = session or requests.Session()
+    url = GEMINI_ENDPOINT_TMPL.format(model=model)
+    prompt = (
+        f"{product_name} ({brand}) の購入者の口コミ・使用感・不満点を、"
+        "Web 検索に基づき事実のみ日本語で箇条書き要約してください。"
+    )
+    body = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "tools": [{"google_search": {}}],
+    }
+    try:
+        resp = session.post(
+            url, params={"key": api_key}, json=body, timeout=REQUEST_TIMEOUT,
+        )
+        if resp.status_code == 404:
+            logger.warning("Gemini model %s not found — gemini_grounded skip", model)
+            return []
+        resp.raise_for_status()
+        payload = resp.json()
+    except requests.RequestException as e:
+        logger.warning("Gemini grounding call failed: %s — skip", e)
+        return []
+    except ValueError as e:
+        logger.warning("Gemini grounding response not JSON: %s — skip", e)
+        return []
+
+    candidates = payload.get("candidates") if isinstance(payload, dict) else None
+    if not isinstance(candidates, list) or not candidates:
+        return []
+    cand0 = candidates[0] if isinstance(candidates[0], dict) else {}
+    parts = (cand0.get("content") or {}).get("parts") if isinstance(cand0.get("content"), dict) else None
+    text = ""
+    if isinstance(parts, list):
+        text = "\n".join(p.get("text", "") for p in parts if isinstance(p, dict) and isinstance(p.get("text"), str))
+    if not text.strip():
+        return []
+
+    source_url = ""
+    grounding = cand0.get("groundingMetadata")
+    if isinstance(grounding, dict):
+        chunks = grounding.get("groundingChunks")
+        if isinstance(chunks, list):
+            for c in chunks:
+                web = c.get("web") if isinstance(c, dict) else None
+                if isinstance(web, dict) and isinstance(web.get("uri"), str) and web["uri"]:
+                    source_url = web["uri"]
+                    break
+
+    return [{
+        "text": text.strip()[:MAX_CANDIDATE_TEXT_LEN],
+        "source_type": "gemini_grounded",
+        "source_url": source_url,
+    }]
+
+
+def gather_third_party(
+    asin: str, *, base: pathlib.Path = PER_ASIN_DIR,
+    session: requests.Session | None = None,
+) -> list[dict]:
+    session = session or requests.Session()
+    urls: list[tuple[str, str]] = []  # (url, source_type)
+
+    tp = _load(base / asin / "third_party_sources.json")
+    if isinstance(tp, dict):
+        for s in tp.get("sources", []) or []:
+            if isinstance(s, dict) and isinstance(s.get("url"), str) and s["url"]:
+                urls.append((s["url"], "blog"))
+
+    news = _load(base / asin / "news.json")
+    for it in _items(news):
+        if isinstance(it, dict) and isinstance(it.get("url"), str) and it["url"]:
+            urls.append((it["url"], "news"))
+
+    out: list[dict] = []
+    for url, source_type in urls:
+        try:
+            resp = session.get(url, headers={"User-Agent": HONEST_UA}, timeout=REQUEST_TIMEOUT)
+            resp.raise_for_status()
+        except requests.RequestException as e:
+            logger.warning("third_party fetch failed for %s: %s — skip", url, e)
+            continue
+        text = _html_to_text(resp.text)
+        if not text:
+            continue
+        out.append({
+            "text": text[:MAX_CANDIDATE_TEXT_LEN],
+            "source_type": source_type,
+            "source_url": url,
+        })
+    return out
+
+
+def gather_threads(
+    product_name: str, *, token: str | None = None,
+    session: requests.Session | None = None,
+) -> list[dict]:
+    token = token if token is not None else os.environ.get("THREADS_ACCESS_TOKEN", "").strip()
+    if not token:
+        logger.warning("THREADS_ACCESS_TOKEN 未設定 — threads skip")
+        return []
+    session = session or requests.Session()
+    try:
+        resp = session.get(
+            THREADS_ENDPOINT,
+            params={
+                "q": product_name,
+                "media_type": "TEXT",
+                "fields": "id,text,permalink,timestamp",
+                "access_token": token,
+            },
+            timeout=REQUEST_TIMEOUT,
+        )
+        if resp.status_code in (400, 401, 403):
+            logger.warning(
+                "Threads keyword_search permission/auth error (HTTP %s) — skip", resp.status_code,
+            )
+            return []
+        resp.raise_for_status()
+        payload = resp.json()
+    except requests.RequestException as e:
+        logger.warning("Threads keyword_search call failed: %s — skip", e)
+        return []
+    except ValueError as e:
+        logger.warning("Threads keyword_search response not JSON: %s — skip", e)
+        return []
+
+    out: list[dict] = []
+    for item in (payload.get("data") or []) if isinstance(payload, dict) else []:
+        if not isinstance(item, dict):
+            continue
+        text = item.get("text")
+        if not isinstance(text, str) or not text.strip():
+            continue
+        out.append({
+            "text": text.strip()[:MAX_CANDIDATE_TEXT_LEN],
+            "source_type": "threads",
+            "source_url": item.get("permalink") or "",
+        })
+    return out
+
+
+def gather_youtube_opportunistic(asin: str, *, base: pathlib.Path = PER_ASIN_DIR) -> list[dict]:
+    yt = _load(base / asin / "youtube.json")
+    items = _items(yt)
+    if not items:
+        return []
+    try:
+        from youtube_transcript_api import YouTubeTranscriptApi  # type: ignore
+    except ImportError:
+        logger.warning("youtube-transcript-api 未インストール — youtube skip")
+        return []
+
+    out: list[dict] = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        video_url = it.get("url")
+        if not isinstance(video_url, str):
+            continue
+        m = _YT_ID_RE.search(video_url)
+        if not m:
+            continue
+        video_id = m.group(1)
+        try:
+            segments = YouTubeTranscriptApi.get_transcript(video_id, languages=["ja", "en"])
+        except Exception as e:  # noqa: BLE001 — 字幕無し等は 1 件失敗として skip
+            logger.warning("youtube transcript unavailable for %s: %s — skip", video_id, e)
+            continue
+        text = " ".join(seg.get("text", "") for seg in segments if isinstance(seg, dict))
+        if not text.strip():
+            continue
+        out.append({
+            "text": text.strip()[:MAX_CANDIDATE_TEXT_LEN],
+            "source_type": "youtube",
+            "source_url": video_url,
+        })
+    return out
+
+
+def _yahoo_rating_stats(reviews: list[dict]) -> dict:
+    ratings = [
+        r.get("rating") for r in reviews
+        if isinstance(r, dict) and isinstance(r.get("rating"), (int, float))
+    ]
+    if not ratings:
+        return {"count": 0, "average": 0.0, "distribution": {}}
+    distribution: dict[str, int] = {}
+    for r in ratings:
+        key = str(int(r))
+        distribution[key] = distribution.get(key, 0) + 1
+    return {
+        "count": len(ratings),
+        "average": round(sum(ratings) / len(ratings), 2),
+        "distribution": distribution,
+    }
+
+
+def gather_yahoo_aggregate(
+    asin: str, *, raw_dir: pathlib.Path | None = None, max_reviews: int = 10,
+) -> tuple[list[dict], dict]:
+    """EXPERIENCE_RAW_DIR/<ASIN>.json (crawl_yahoo_reviews.py の出力) を読む。
+    無ければ ([], 空 rating_stats) を返す。生レビュー本文は gemma への入力にのみ使う。"""
+    raw_dir = raw_dir or pathlib.Path(
+        os.environ.get("EXPERIENCE_RAW_DIR", str(DEFAULT_EXPERIENCE_RAW_DIR))
+    )
+    data = _load(raw_dir / f"{asin}.json")
+    if not isinstance(data, dict):
+        return [], {"count": 0, "average": 0.0, "distribution": {}}
+    reviews = data.get("reviews")
+    reviews = reviews if isinstance(reviews, list) else []
+    rating_stats = _yahoo_rating_stats(reviews)
+
+    candidates: list[dict] = []
+    for r in reviews[:max_reviews]:
+        if not isinstance(r, dict):
+            continue
+        parts = [
+            str(r.get(k, "")).strip() for k in ("title", "body") if r.get(k)
+        ]
+        text = "\n".join(p for p in parts if p)
+        if not text:
+            continue
+        candidates.append({
+            "text": text[:MAX_CANDIDATE_TEXT_LEN],
+            "source_type": "yahoo_review_aggregate",
+            "source_url": "",
+        })
+    return candidates, rating_stats
+
+
+# --------------------------------------------------------------------------
+# gemma 抽出・検証
+# --------------------------------------------------------------------------
+
+def extract_snippets(
+    candidate: dict, product_name: str, brand: str,
+    ollama_url: str, model: str, session: requests.Session,
+    sleeper=time.sleep,
+) -> list[dict]:
+    """1 candidate 分を gemma に投げ、entailment 通過分の snippet 群を返す。
+    失敗時は空リスト (1 件の失敗で全体を止めない)。"""
+    text = candidate.get("text", "")
+    if not text.strip():
+        return []
+    url = f"{ollama_url.rstrip('/')}/api/generate"
+    prompt = EXTRACTION_PROMPT_TEMPLATE.format(product_name=product_name, brand=brand, text=text)
+    body = {
+        "model": model,
+        "prompt": prompt,
+        "stream": False,
+        "think": False,
+        "format": "json",
+        "keep_alive": "30m",
+        "options": {"temperature": 0},
+    }
+
+    attempts = _MAX_EXTRA_RETRIES + 1
+    for attempt in range(1, attempts + 1):
+        try:
+            resp = session.post(url, json=body, timeout=GEMMA_REQUEST_TIMEOUT)
+            resp.raise_for_status()
+            payload = resp.json()
+            raw = payload.get("response") if isinstance(payload, dict) else None
+            if not isinstance(raw, str) or not raw.strip():
+                raise ValueError("empty /api/generate response")
+            parsed = json.loads(raw)
+            if not isinstance(parsed, dict):
+                raise ValueError("extraction response is not a JSON object")
+            break
+        except (requests.RequestException, ValueError, json.JSONDecodeError) as e:
+            if attempt < attempts:
+                logger.warning("extraction call failed (attempt %d/%d): %s", attempt, attempts, e)
+                sleeper(_RETRY_SLEEP_SECONDS)
+            else:
+                logger.error("extraction call failed after %d attempt(s): %s", attempts, e)
+                return []
+    else:  # pragma: no cover — for/else 到達しない防御
+        return []
+
+    if not parsed.get("entailed"):
+        return []
+    raw_snippets = parsed.get("snippets")
+    if not isinstance(raw_snippets, list):
+        return []
+
+    usable_as = _USABLE_AS_MAP.get(candidate.get("source_type", ""), "quote")
+    out: list[dict] = []
+    for s in raw_snippets:
+        if not isinstance(s, dict):
+            continue
+        aspect = s.get("aspect")
+        text_out = s.get("text")
+        if not isinstance(aspect, str) or not isinstance(text_out, str) or not text_out.strip():
+            continue
+        out.append({
+            "aspect": aspect,
+            "text": text_out.strip(),
+            "source_type": candidate.get("source_type", ""),
+            "source_url": candidate.get("source_url", ""),
+            "usable_as": usable_as,
+            "confidence": s.get("confidence") if s.get("confidence") in ("high", "medium", "low") else "medium",
+        })
+    return out
+
+
+# --------------------------------------------------------------------------
+# 実行本体
+# --------------------------------------------------------------------------
+
+def mine_asin(
+    asin: str, *,
+    base: pathlib.Path = PER_ASIN_DIR,
+    ollama_url: str = DEFAULT_OLLAMA_URL,
+    model: str = DEFAULT_EXPERIENCE_MODEL,
+    session: requests.Session | None = None,
+    sleeper=time.sleep,
+) -> dict | None:
+    """1 ASIN 分の候補収集 + gemma 抽出を行い、experience.json payload を返す
+    (snippets 0 件なら None)。"""
+    session = session or requests.Session()
+    title, product_name, brand = resolve_product_identity(asin, base)
+    if not title:
+        logger.warning("%s: amazon item not found — skip", asin)
+        return None
+
+    candidates: list[dict] = []
+    candidates += gather_gemini_grounded(product_name, brand, session=session)
+    candidates += gather_third_party(asin, base=base, session=session)
+    candidates += gather_threads(product_name, session=session)
+    candidates += gather_youtube_opportunistic(asin, base=base)
+    yahoo_candidates, rating_stats = gather_yahoo_aggregate(asin)
+    candidates += yahoo_candidates
+
+    snippets: list[dict] = []
+    for c in candidates:
+        snippets += extract_snippets(c, product_name, brand, ollama_url, model, session, sleeper)
+
+    if not snippets:
+        return None
+
+    return {
+        "asin": asin,
+        "generated_at": _now_iso(),
+        "model": model,
+        "snippets": snippets,
+        "rating_stats": {"yahoo": rating_stats},
+    }
+
+
+def write_experience(asin: str, payload: dict, base: pathlib.Path = PER_ASIN_DIR) -> pathlib.Path:
+    out_path = base / asin / OUT_NAME
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return out_path
+
+
+def run(
+    targets: list[str], *,
+    base: pathlib.Path = PER_ASIN_DIR,
+    ollama_url: str = DEFAULT_OLLAMA_URL,
+    model: str = DEFAULT_EXPERIENCE_MODEL,
+    dry_run: bool = False,
+) -> dict:
+    session = requests.Session()
+    written = 0
+    skipped = 0
+    for asin in targets:
+        if dry_run:
+            logger.info("[dry-run] would mine %s", asin)
+            continue
+        payload = mine_asin(asin, base=base, ollama_url=ollama_url, model=model, session=session)
+        if payload is None:
+            skipped += 1
+            logger.info("%s: 0 snippets — not written", asin)
+            continue
+        out_path = write_experience(asin, payload, base=base)
+        written += 1
+        logger.info("%s: wrote %s (%d snippets)", asin, out_path, len(payload["snippets"]))
+    summary = {"targets": len(targets), "written": written, "skipped": skipped}
+    logger.info("done: %s", json.dumps(summary, ensure_ascii=False))
+    return summary
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--asins", default="", help="対象 ASIN をカンマ区切りで明示指定")
+    ap.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
+    ap.add_argument("--base", default=str(PER_ASIN_DIR))
+    ap.add_argument("--ollama-url", default=os.environ.get("OLLAMA_HOST", DEFAULT_OLLAMA_URL))
+    ap.add_argument("--model", default=os.environ.get("EXPERIENCE_MODEL", DEFAULT_EXPERIENCE_MODEL))
+    ap.add_argument("--dry-run", action="store_true", help="出力せず stdout にサマリ")
+    args = ap.parse_args()
+
+    asins = [a.strip() for a in args.asins.split(",") if a.strip()] or None
+    targets = select_targets(limit=args.limit, asins=asins)
+    logger.info("対象 %d ASIN: %s", len(targets), targets)
+
+    run(
+        targets,
+        base=pathlib.Path(args.base),
+        ollama_url=args.ollama_url,
+        model=args.model,
+        dry_run=args.dry_run,
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
