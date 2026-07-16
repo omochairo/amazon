@@ -14,7 +14,15 @@
 <link rel="manifest" href="/site.webmanifest" />
 
 <!-- Issue #1263 ④: Preconnect — DNS / TLS を事前確立して LCP を改善 (商品画像 / Google Fonts) -->
-<link rel="preconnect" href="https://m.media-amazon.com" crossorigin>
+{{- /* m.media-amazon.com の preconnect に crossorigin を付けてはいけない。
+       LCP 要素の hero 画像 (post.md.j2 の figure.product-hero-image) は
+       crossorigin 属性なし = 非 CORS fetch で、crossorigin 付き preconnect が
+       張る匿名 CORS ソケットとは別プールになり TCP+TLS を再利用できない。
+       実測 (Chrome cold profile x9・画像 duration の median):
+         crossorigin 付き 107.5ms / 属性なし 38.2ms / preconnect なし 168.8ms
+       付いていても DNS だけは効くので「なし」よりはマシ、という中途半端な状態だった。
+       fonts.gstatic.com は font fetch が常に CORS なので crossorigin が必要 (下はそのまま)。 */ -}}
+<link rel="preconnect" href="https://m.media-amazon.com">
 <link rel="dns-prefetch" href="https://m.media-amazon.com">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

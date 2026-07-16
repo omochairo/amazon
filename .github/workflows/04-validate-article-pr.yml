@@ -460,6 +460,10 @@ on:
       - 'scripts/comment_uniqueness_audit.py'
       - 'scripts/tests/test_comment_uniqueness_audit.py'
       - 'data/analytics/uniqueness_audit.json'
+      # #2995 案6: self-hosted Lighthouse レーン (実行は amazon-home-ops の
+      # 41-lighthouse-lane.yml。出力先 data/analytics/history/** は登録済み)。
+      - 'scripts/run_lighthouse_lane.py'
+      - 'scripts/tests/test_run_lighthouse_lane.py'
   workflow_dispatch:
 
 permissions:
