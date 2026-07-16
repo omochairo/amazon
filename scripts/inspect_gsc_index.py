@@ -36,6 +36,10 @@ DEFAULT_QPS = 8.0
 # 1 URL あたり実測 6-7 秒かかるため、逐次だと 1500 件で 3 時間近い。
 # 12 並列 = 実効 ~1.8 URL/s で 1500 件が 15 分程度に収まる (レートは QPS 側で頭打ち)
 DEFAULT_WORKERS = 12
+# not_indexed_urls の保持件数。0 = 無制限。
+# #3331: 300 件上限だと未 index 470 件のうち 404 の 72 件中 44 件しか URL が残らず、
+# 打ち手を全件に適用できなかったため既定を無制限に変更。
+DEFAULT_MAX_NOT_INDEXED_URLS = 0
 
 
 def _build_service(client_id: str, client_secret: str, refresh_token: str):
@@ -224,6 +228,30 @@ def inspect_urls(
     return inspected_results, errors
 
 
+def build_not_indexed_urls(
+    inspected: list[dict[str, Any]], max_items: int = DEFAULT_MAX_NOT_INDEXED_URLS
+) -> list[dict[str, Any]]:
+    """verdict != "PASS" の URL を抽出する。max_items <= 0 なら無制限。"""
+    def _val(item: dict[str, Any], key: str) -> Any:
+        v = item.get(key)
+        return "(none)" if v is None else v
+
+    rows: list[dict[str, Any]] = []
+    for item in inspected:
+        if item.get("verdict") == "PASS":
+            continue
+        rows.append({
+            "url": item["url"],
+            "coverage_state": _val(item, "coverage_state"),
+            "verdict": _val(item, "verdict"),
+            "last_crawl_time": _val(item, "last_crawl_time"),
+            "google_canonical": _val(item, "google_canonical"),
+        })
+        if 0 < max_items <= len(rows):
+            break
+    return rows
+
+
 def main() -> int:
     # Windows cp932 での文字化け防止のため標準出力を UTF-8 に変更
     if hasattr(sys.stdout, "reconfigure"):
@@ -242,6 +270,8 @@ def main() -> int:
     p.add_argument("--qps", type=float, default=DEFAULT_QPS)
     p.add_argument("--workers", type=int, default=DEFAULT_WORKERS,
                    help="並列数。URL Inspection API は 1 URL 6-7 秒かかるため逐次では現実的でない")
+    p.add_argument("--max-not-indexed-urls", type=int, default=DEFAULT_MAX_NOT_INDEXED_URLS,
+                   help="not_indexed_urls に保持する最大件数。0 (既定) で無制限")
     p.add_argument("--out", default=DEFAULT_OUT)
     args = p.parse_args()
 
@@ -298,19 +328,7 @@ def main() -> int:
         by_robots_txt_state = process_counter("robots_txt_state")
         by_indexing_state = process_counter("indexing_state")
 
-        # verdict != "PASS" のものを最大 300 件まで
-        not_indexed_urls = []
-        for item in inspected:
-            if item.get("verdict") != "PASS":
-                not_indexed_urls.append({
-                    "url": item["url"],
-                    "coverage_state": item["coverage_state"] if item["coverage_state"] is not None else "(none)",
-                    "verdict": item["verdict"] if item["verdict"] is not None else "(none)",
-                    "last_crawl_time": item["last_crawl_time"] if item["last_crawl_time"] is not None else "(none)",
-                    "google_canonical": item["google_canonical"] if item["google_canonical"] is not None else "(none)",
-                })
-                if len(not_indexed_urls) >= 300:
-                    break
+        not_indexed_urls = build_not_indexed_urls(inspected, args.max_not_indexed_urls)
 
         result = {
             "fetched_at": datetime.now(timezone.utc).isoformat(),

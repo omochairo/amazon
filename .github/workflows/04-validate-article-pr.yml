@@ -51,6 +51,10 @@ on:
       # ([[04-validate-paths-inverse-trap]])。read-only fetch で記事変更ゼロ、
       # vacuous SUCCESS で通過する。
       - 'scripts/inspect_gsc_index.py'
+      # 2026-07-17 (#3331): not_indexed_urls の上限撤廃に伴う unit test。
+      # test だけを触る PR も required check `validate` を発火させる
+      # ([[04-validate-paths-inverse-trap]])。
+      - 'scripts/tests/test_inspect_gsc_index.py'
       # 22-gsc-index-census.yml が週次 data PR で還流する出力先。script だけ登録して
       # 出力先を忘れると、workflow 自身が作る data PR が required check 不発で
       # 永久 BLOCKED になる (PR #3329 で実際に踏んだ)。
