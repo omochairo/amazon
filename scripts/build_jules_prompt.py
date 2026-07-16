@@ -28,6 +28,13 @@
 
 使い方:
     python scripts/build_jules_prompt.py --asin B0XXXXXXXX [--out prompt.txt]
+
+--print-note {audit,experience} モード (#3203 未配線修正・2026-07-16):
+    03-invoke-jules.yml (GitHub 接続ありの主力ワークフロー・6時間毎 cron) から
+    高頻度に呼ばれる軽量 CLI。_audit_note(asin) / _experience_note(asin) の
+    戻り値だけを stdout に出力して即終了する (build_prompt() のフルパイプライン・
+    AGENTS.md / jules/PROMPT_TEMPLATE.md 読み込みは実行しない)。
+    例: python scripts/build_jules_prompt.py --asin B0XXXXXXXX --print-note audit
 """
 import argparse
 import glob
@@ -260,7 +267,29 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--asin", required=True)
     ap.add_argument("--out", help="出力先ファイル (省略時 stdout)")
+    ap.add_argument(
+        "--print-note",
+        choices=["audit", "experience"],
+        help=(
+            "指定時は _audit_note/_experience_note の戻り値のみを stdout に出力して終了する"
+            " (03-invoke-jules.yml から高頻度に呼ばれる軽量モード。--out は無視される)。"
+        ),
+    )
     args = ap.parse_args()
+
+    if args.print_note:
+        # best-effort: 03 系と同じく失敗時も空文字・exit 0 (呼び出し側の || echo '' と二重の安全網)
+        try:
+            if args.print_note == "audit":
+                note = _audit_note(args.asin)
+            else:
+                note = _experience_note(args.asin)
+        except Exception as e:
+            print(f"warning: --print-note {args.print_note} failed: {e}", file=sys.stderr)
+            note = ""
+        sys.stdout.write(note)
+        return 0
+
     prompt = build_prompt(args.asin)
     size = len(prompt.encode("utf-8"))
     print(f"prompt size: {size} bytes", file=sys.stderr)
