@@ -1,0 +1,156 @@
+name: GSC Index Census (URL Inspection API)
+
+# 柱0 #2701 P4 (効果測定) — sitemap の products/ を URL Inspection API で全数調査し、
+# index 実態 (coverageState 別) を data/analytics/gsc_index_census.json に記録する。
+#
+# なぜ必要か:
+#   #2701 P1〜P3 (sitemap から noindex 1832 件を除外) の効果は、GSC 管理画面の
+#   Coverage レポートを人間が目視するしか手段がないとされ 3 週間以上判定不能だった。
+#   URL Inspection API は URL 単位で coverageState を返すため、curated な products/
+#   が実際に index されたかを機械的に測れる。集計版 Coverage レポートの完全な代替では
+#   ないが、#2701 が測りたい「送信済み sitemap のうち何件 index されたか」には答えられる。
+#
+# 設計判断:
+#   - cron: 週次 (日次だと変化が観測できずクォータを焼くだけ)
+#   - URL Inspection API のクォータは 2000/日/プロパティ。products は現状 1532 件で
+#     全数調査が 1 日枠に収まる。--limit 1800 で安全マージンを取る
+#   - 副作用ゼロの read-only fetch + commit-back のみ (fetch_gsc.py と同じ観察フェーズ)
+#   - commit-back は App token + PR + auto-merge (main protection 回避。
+#     18-analytics-daily.yml と同パターン)
+#   - secrets 未設定なら skip して空 run で終了 (壊さない)
+#
+# 必須 secrets:
+#   - APP_ID, APP_PRIVATE_KEY   (commit-back 用 App token)
+#   - GSC_OAUTH_CLIENT_ID / GSC_OAUTH_CLIENT_SECRET / GSC_OAUTH_REFRESH_TOKEN
+#   - GSC_SITE_URL
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: '検査する URL 数の上限 (0=無制限。クォータ 2000/日に注意)'
+        required: false
+        default: '1800'
+  schedule:
+    # 毎週月曜 07:00 JST = 22:00 UTC (日曜)。18-analytics-daily (21:00 UTC) と 1h ずらす
+    - cron: '0 22 * * 0'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: gsc-index-census
+  cancel-in-progress: false
+
+jobs:
+  census:
+    runs-on: ubuntu-latest
+    # 1800 URL × (1/5 QPS + API 応答) で最大 ~30 分想定。余裕を持たせる
+    timeout-minutes: 60
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-auth google-auth-oauthlib google-api-python-client
+
+      - name: Inspect index coverage
+        id: census
+        env:
+          GSC_OAUTH_CLIENT_ID: ${{ secrets.GSC_OAUTH_CLIENT_ID }}
+          GSC_OAUTH_CLIENT_SECRET: ${{ secrets.GSC_OAUTH_CLIENT_SECRET }}
+          GSC_OAUTH_REFRESH_TOKEN: ${{ secrets.GSC_OAUTH_REFRESH_TOKEN }}
+          GSC_SITE_URL: ${{ secrets.GSC_SITE_URL }}
+        run: |
+          set +e
+          if [ -z "$GSC_OAUTH_REFRESH_TOKEN" ] || [ -z "$GSC_SITE_URL" ]; then
+            echo "::notice::GSC secrets not set — skipping"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          python scripts/inspect_gsc_index.py --limit "${{ github.event.inputs.limit || '1800' }}"
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            echo "::warning::GSC index census failed (rc=$rc)"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
+      - name: Summarize to job log
+        if: steps.census.outputs.available == 'true'
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          d = json.loads(pathlib.Path("data/analytics/gsc_index_census.json").read_text(encoding="utf-8"))
+          t = d["totals"]
+          print("## GSC Index Census (#2701 P4)\n")
+          print(f"- 対象: `{d['prefix']}` / sitemap {t['sitemap_urls']} 件中 {t['inspected']} 件を検査")
+          rate = (t["indexed"] / t["inspected"] * 100) if t["inspected"] else 0.0
+          print(f"- **index 済み: {t['indexed']} / {t['inspected']} ({rate:.1f}%)**")
+          print(f"- 未 index: {t['not_indexed']} / エラー: {t['errors']}\n")
+          print("### coverageState 別\n")
+          print("| coverageState | 件数 |\n|---|---:|")
+          for k, v in d["by_coverage_state"].items():
+              print(f"| {k} | {v} |")
+          PY
+
+      - name: Create census PR + auto-merge
+        if: steps.census.outputs.available == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+          git add data/analytics/gsc_index_census.json || true
+
+          if git diff --cached --quiet; then
+            echo "No census changes to commit; skipping PR."
+            exit 0
+          fi
+
+          # 既存 open census PR があれば閉じる (週次重複防止)
+          gh pr list --base main --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("gsc-index-census/")) | .number' | while read -r pr_num; do
+            if [ -n "$pr_num" ]; then
+              echo "Closing old PR #$pr_num and deleting branch..."
+              gh pr close "$pr_num" -d || true
+            fi
+          done
+
+          BRANCH="gsc-index-census/${{ github.run_id }}"
+          git config user.name "omochairo-fetch-bot[bot]"
+          git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit -m "data(analytics): GSC index census (run ${{ github.run_id }})"
+          git push -u origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "data(analytics): GSC index census (run ${{ github.run_id }})" \
+            --body "URL Inspection API による products/ の index 実態の週次全数調査。#2701 P4 (効果測定) の判定材料。read-only fetch のみで記事本文・URL 構造は不変。Refs #2701." \
+            --base main \
+            --head "$BRANCH")
+          echo "Created: $PR_URL"
+
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge enabled on $PR_URL"
+          else
+            echo "::warning::Could not enable auto-merge on $PR_URL"
+          fi
+        continue-on-error: true
