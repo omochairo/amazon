@@ -120,12 +120,15 @@
   {{- end -}}
 {{- end -}}
 {{- $hubMinSiblings := 3 -}}
-{{- /* ハブバナーは /brands/<brand>/ term ページが実在する場合のみ表示。
-       .Params.brands は exclude_from_taxonomy=false のブランドにのみ付与される
-       (ノーブランド等は付かない) → これを使わないと 404 リンクになる (session 135 修正)。 */ -}}
-{{- if and $selfBrand .Params.brands (ge (len $brandSiblings) $hubMinSiblings) }}
+{{- /* ハブバナーは /brands/<slug>/ term ページが実在する場合のみ表示。
+       term ページの URL は data/term_slugs.yaml による romaji slug (例: エド・インター →
+       /brands/ed-inter/) なので、urlize $selfBrand では 404 になる (#3030/#3195)。
+       .GetTerms で実在する term ページを引き、その RelPermalink を使う。 */ -}}
+{{- $brandTerms := .GetTerms "brands" -}}
+{{- if and $selfBrand $brandTerms (ge (len $brandSiblings) $hubMinSiblings) }}
+{{- $brandTerm := index $brandTerms 0 -}}
 <aside class="hub-banner" aria-label="{{ $selfBrand }} ブランドハブ">
-  <a class="hub-banner-link" href="{{ (printf "brands/%s/" (urlize $selfBrand)) | relURL }}">
+  <a class="hub-banner-link" href="{{ $brandTerm.RelPermalink }}">
     <span class="hub-banner-icon" aria-hidden="true">📘</span>
     <span class="hub-banner-text">
       <span class="hub-banner-title">「{{ $selfBrand }}」のおもちゃ完全ガイド</span>

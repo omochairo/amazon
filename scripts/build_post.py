@@ -1590,6 +1590,27 @@ def _backfill_amazon_badges(
                 break
 
 
+def _normalize_price_entries(data: dict[str, Any]) -> None:
+    """prices.<store> に price キーを必ず持たせる (#3030 / #3195)。
+
+    テンプレートは StrictUndefined で product.prices.amazon.price を直接読むため、
+    キーが欠けていると記事 1 本が丸ごとレンダリング失敗し、ページが生成されない。
+    それでも article_index には ASIN が載るので competitor カードだけが残り、
+    存在しない /products/<asin>/ への内部リンク 404 になる (site-audit r3 の実例)。
+
+    Amazon 取り扱いの無い商品 (楽天/Yahoo のみ) では prices に amazon キーが無く、
+    _backfill_amazon_badges が badge 用の空 dict を作るため price が欠ける。
+    price=0 はテンプレート側が「取り扱い確認」表示として正しく処理できる。
+    """
+    product = data.get("product") if isinstance(data.get("product"), dict) else None
+    if not product or not isinstance(product.get("prices"), dict):
+        return
+    for key in ("amazon", "rakuten", "yahoo"):
+        entry = product["prices"].get(key)
+        if isinstance(entry, dict):
+            entry.setdefault("price", 0)
+
+
 # 楽天/Yahoo cross-search 結果を本文の価格グリッドに流し込むときに、
 # 検索ヒットしただけで実商品とかけ離れた item (ふるさと納税の高額品など) を
 # 弾くためのガード閾値。Amazon 価格を anchor にする。
@@ -2718,6 +2739,9 @@ def main() -> None:
             _recommend_nearby_competitors(data, article_index, site_base_path)
             _recommend_same_price_band(data, article_index, site_base_path)
             _fill_jsonld(data)
+            # 価格を触る処理 (badges / market / discontinued / history) が
+            # 出揃った後に、テンプレートが読む price キーの欠損を埋める。
+            _normalize_price_entries(data)
 
             # 統計データの集計
             _po = data.get("product")
