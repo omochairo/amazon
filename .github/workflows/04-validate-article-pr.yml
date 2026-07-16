@@ -472,6 +472,15 @@ on:
       # 41-lighthouse-lane.yml。出力先 data/analytics/history/** は登録済み)。
       - 'scripts/run_lighthouse_lane.py'
       - 'scripts/tests/test_run_lighthouse_lane.py'
+      # 2026-07-17 (#3332 N1): FAQ 実需要拡張 + meta_description 刷新の供給側。
+      # data/articles/*.seo.json sidecar への read-modify-write を担う共通ヘルパと
+      # 本体 script。実行は amazon-home-ops の統合レーン (26-faq-seo-lane.yml 予定)。
+      # paths 未登録だと script-only PR が required check `validate` を発火できず
+      # inverse-trap で永久 BLOCKED になる ([[04-validate-paths-inverse-trap]])。
+      - 'scripts/_seo_sidecar.py'
+      - 'scripts/generate_faq_seo.py'
+      - 'scripts/tests/test_seo_sidecar.py'
+      - 'scripts/tests/test_generate_faq_seo.py'
   workflow_dispatch:
 
 permissions:
