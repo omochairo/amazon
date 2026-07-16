@@ -3176,7 +3176,9 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 
 /* ---------- スクロール連動ふわっと登場 (Scroll Reveal) ---------- */
 .scroll-reveal {
-  opacity: 0;
+  /* opacity: 0 の要素は Chrome の LCP 候補から完全に除外されるため 0.1 にする。
+     視覚差は知覚できず、LCP 計測から要素が消えるのを防げる。 */
+  opacity: 0.1;
   transform: translateY(24px);
   transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1), transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform, opacity;
