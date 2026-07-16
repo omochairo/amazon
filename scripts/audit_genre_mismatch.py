@@ -88,7 +88,7 @@ def main() -> int:
         if item is None or "browse_nodes" not in item:
             no_data_n += 1
             continue
-        verdict, cat_nodes = classify_genre(item.get("browse_nodes"))
+        verdict, cat_nodes = classify_genre(item.get("browse_nodes"), asin)
         if verdict == "pass":
             pass_n += 1
         elif verdict == "indeterminate":
