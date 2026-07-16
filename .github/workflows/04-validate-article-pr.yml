@@ -446,6 +446,15 @@ on:
       - 'scripts/tests/test_mine_experience.py'
       - 'scripts/crawl_yahoo_reviews.py'
       - 'scripts/tests/test_crawl_yahoo_reviews.py'
+      # 2026-07-16 (#3203 Phase 3): 凡庸度の定量監査 (Ruri embedding・週次)。
+      # amazon-home-ops の K8/Ruri が data/analytics/uniqueness_audit.json を
+      # data PR で還流する。未登録だと required check `validate` が不発
+      # → auto-merge 永久 pending ([[04-validate-paths-inverse-trap]])。
+      - 'scripts/audit_uniqueness.py'
+      - 'scripts/tests/test_audit_uniqueness.py'
+      - 'scripts/comment_uniqueness_audit.py'
+      - 'scripts/tests/test_comment_uniqueness_audit.py'
+      - 'data/analytics/uniqueness_audit.json'
   workflow_dispatch:
 
 permissions:
