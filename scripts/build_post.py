@@ -885,6 +885,11 @@ _INTERNAL_LINK_DYNAMIC_WORDS: tuple[str, ...] = (
 _INTERNAL_LINK_ANCHOR_MIN = 4
 _INTERNAL_LINK_ANCHOR_MAX = 30
 _INTERNAL_LINK_MAX_PER_ARTICLE = 3
+# anchor に含まれると `[anchor](url)` の markdown リンク構文自体を破壊する文字
+# (#3332 レビュー指摘: 例 anchor「テスト[注釈]付き」→ 壊れたリンクを生成する)。
+_INTERNAL_LINK_ANCHOR_FORBIDDEN_CHARS: tuple[str, ...] = (
+    "[", "]", "(", ")", "\n", "\r", "`",
+)
 
 _INTERNAL_LINK_MD_RE = re.compile(r"\[[^\]\n]*\]\([^)\n]*\)")
 _INTERNAL_LINK_TAG_RE = re.compile(r"<[^>\n]+>")
@@ -996,6 +1001,11 @@ def _inject_internal_links(
             dropped += 1
             continue
         if not (_INTERNAL_LINK_ANCHOR_MIN <= len(anchor) <= _INTERNAL_LINK_ANCHOR_MAX):
+            dropped += 1
+            continue
+        # markdown リンク構文を破壊する文字 ([ ] ( ) 改行 バッククォート) を含む
+        # anchor は壊れたリンクを生成するため drop (#3332 レビュー指摘)。
+        if any(ch in anchor for ch in _INTERNAL_LINK_ANCHOR_FORBIDDEN_CHARS):
             dropped += 1
             continue
         if anchor in _INTERNAL_LINK_DENYLIST:

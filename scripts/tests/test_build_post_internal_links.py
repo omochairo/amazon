@@ -253,6 +253,39 @@ class DropRuleTests(unittest.TestCase):
         result = _inject_internal_links(data, ARTICLE_INDEX, SITE_BASE)
         self.assertEqual(result, (0, 1))
 
+    def test_drops_anchor_with_markdown_breaking_brackets(self):
+        # anchor に [ ] を含むと `[テスト[注釈]付き](...)` という壊れた
+        # markdown を生成するため drop (#3332 レビュー指摘)。
+        data = _make_data(
+            {"why_this_product": "テスト[注釈]付きの商品です。"},
+            [{
+                "section": "why_this_product", "paragraph_index": 0,
+                "anchor_text": "テスト[注釈]付き", "target_asin": "B0TARGET01",
+            }],
+        )
+        result = _inject_internal_links(data, ARTICLE_INDEX, SITE_BASE)
+        self.assertEqual(result, (0, 1))
+        self.assertEqual(
+            data["narrative"]["why_this_product"], "テスト[注釈]付きの商品です。"
+        )
+
+    def test_drops_anchor_with_parens_or_backtick(self):
+        narrative = {
+            "why_this_product": "拡張性(高)が売りです。",
+            "daily_use": "`コード`風の表記もある本文です。",
+        }
+        suggestions = [
+            {"section": "why_this_product", "paragraph_index": 0,
+             "anchor_text": "拡張性(高)が売り", "target_asin": "B0TARGET01"},
+            {"section": "daily_use", "paragraph_index": 0,
+             "anchor_text": "`コード`風の表記", "target_asin": "B0TARGET02"},
+        ]
+        data = _make_data(narrative, suggestions)
+        result = _inject_internal_links(data, ARTICLE_INDEX, SITE_BASE)
+        self.assertEqual(result, (0, 2))
+        self.assertEqual(data["narrative"]["why_this_product"], "拡張性(高)が売りです。")
+        self.assertEqual(data["narrative"]["daily_use"], "`コード`風の表記もある本文です。")
+
     def test_drops_generic_denylist_anchor(self):
         data = _make_data(
             {"why_this_product": "こちらもおすすめです。"},
