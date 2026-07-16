@@ -46,6 +46,11 @@ on:
       # 出力する。script-only PR が required check 不発で詰まる inverse-trap を予防
       # ([[04-validate-paths-inverse-trap]])。記事変更ゼロで vacuous SUCCESS。
       - 'scripts/build_category_hubs.py'
+      # 2026-07-16 (#2701 P4): GSC URL Inspection API による index 実態調査。
+      # script-only PR が required check 不発で詰まる inverse-trap を予防
+      # ([[04-validate-paths-inverse-trap]])。read-only fetch で記事変更ゼロ、
+      # vacuous SUCCESS で通過する。
+      - 'scripts/inspect_gsc_index.py'
       - 'scripts/jules_article_engine.py'
       - 'scripts/templates/**'
       - 'hugo/assets/css/**'
