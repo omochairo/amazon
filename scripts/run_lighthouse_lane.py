@@ -82,7 +82,13 @@ logger = logging.getLogger("run_lighthouse_lane")
 DEFAULT_HISTORY_DIR = "data/analytics/history"
 LIGHTHOUSE_HISTORY_FILENAME = "lighthouse_history.jsonl"
 SEEN_DATES_FILENAME = "seen_dates.json"
+# GSC 上位 URL の入力元。main に実在するのは週次の
+# data/analytics/gsc_history/<ISO週>.json (by_page 付き) の方で、
+# gsc_weekly.json は存在しない。初回 run 29523140030 はこれを踏んで
+# --top-urls 10 を渡しているのに origin 1 件しか計測していなかった。
+# 明示パスが無ければ gsc_history の最新週に自動フォールバックする。
 DEFAULT_GSC_INPUT = "data/analytics/gsc_weekly.json"
+GSC_HISTORY_DIR = "data/analytics/gsc_history"
 DEFAULT_ORIGIN = "https://navi.omcha.jp"
 DEFAULT_RUNS = 3
 DEFAULT_TOP_URLS = 5
@@ -416,6 +422,18 @@ def render_report(alerts: List[Dict[str, Any]], target_date: str) -> str:
     return "\n".join(lines)
 
 
+def latest_gsc_history() -> Optional[pathlib.Path]:
+    """gsc_history/ の最新週の JSON を返す (無ければ None)。
+
+    ファイル名が ISO 週 (2026-W28.json) なので、名前順 = 時系列順になる。
+    """
+    d = pathlib.Path(GSC_HISTORY_DIR)
+    if not d.is_dir():
+        return None
+    files = sorted(d.glob("*.json"))
+    return files[-1] if files else None
+
+
 def get_targets(
     origin: str, gsc_path: pathlib.Path, top_urls: int, extra: Sequence[str]
 ) -> List[str]:
@@ -425,6 +443,12 @@ def get_targets(
     「実際に流入がある URL の劣化を早く知る」ことを優先する。
     """
     targets: List[str] = [origin.rstrip("/") + "/"]
+
+    if not gsc_path.exists():
+        latest = latest_gsc_history()
+        if latest is not None:
+            logger.info("gsc input %s not found — falling back to %s", gsc_path, latest)
+            gsc_path = latest
 
     if gsc_path.exists():
         try:
