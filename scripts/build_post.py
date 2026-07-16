@@ -871,6 +871,180 @@ def _attach_internal_links(
             c["internal_ivs_score"] = float(score)
 
 
+# Issue #3332 N3 消費側: SEO sidecar (`<slug>.seo.json`) が提案する
+# internal_link_suggestions を本文 (narrative) へ決定的に注入する。
+_INTERNAL_LINK_SECTIONS: frozenset[str] = frozenset({
+    "how_to_choose", "why_this_product", "daily_use", "gift_appeal",
+})
+_INTERNAL_LINK_DENYLIST: frozenset[str] = frozenset({
+    "この商品", "こちら", "詳しくは", "関連記事",
+})
+_INTERNAL_LINK_DYNAMIC_WORDS: tuple[str, ...] = (
+    "価格", "最安", "円", "ポイント", "在庫", "セール", "%オフ", "割引",
+)
+_INTERNAL_LINK_ANCHOR_MIN = 4
+_INTERNAL_LINK_ANCHOR_MAX = 30
+_INTERNAL_LINK_MAX_PER_ARTICLE = 3
+
+_INTERNAL_LINK_MD_RE = re.compile(r"\[[^\]\n]*\]\([^)\n]*\)")
+_INTERNAL_LINK_TAG_RE = re.compile(r"<[^>\n]+>")
+
+
+def _internal_link_overlaps_markup(text: str, start: int, end: int) -> bool:
+    """anchor の出現区間 ``[start, end)`` が既存の markdown リンクまたは HTML
+    タグの区間と重なっているかを判定する (#3332 検証規則6: 入れ子防止)。"""
+    for pattern in (_INTERNAL_LINK_MD_RE, _INTERNAL_LINK_TAG_RE):
+        for m in pattern.finditer(text):
+            if start < m.end() and end > m.start():
+                return True
+    return False
+
+
+def _inject_internal_links(
+    data: dict[str, Any],
+    article_index: dict[str, dict[str, Any]],
+    site_base_path: str,
+) -> tuple[int, int]:
+    """SEO sidecar (``<slug>.seo.json``) 由来の ``internal_link_suggestions`` を
+    narrative 本文へ決定的な文字列置換で注入する (#3332 N3 消費側)。
+
+    LLM 由来の提案は一切信用せず、逐語一致・許可セクション・実在確認などの
+    検証規則に一つでも落ちた提案は無条件 drop する (fail-closed)。1 件の drop
+    が他の提案の処理を妨げないよう提案ごとに独立して判定し、例外は投げない。
+
+    検証規則 (全て drop 判定):
+        1. anchor_text が対象段落の完全な部分文字列であること (逐語一致)
+        2. section が how_to_choose/why_this_product/daily_use/gift_appeal のみ
+        3. paragraph_index は対象セクションの範囲内 (str セクションは 0 のみ)
+        4. target_asin が article_index (公開記事 index) に実在すること
+        5. target_asin が自記事 ASIN でないこと (自己リンク禁止)
+        6. anchor の出現位置が既存の markdown リンク/HTML タグと重ならないこと
+        7. anchor 長が 4〜30 字であること
+        8. anchor が汎用語 denylist と完全一致しないこと
+        9. anchor に動的事実 (価格・在庫等) の禁止語を含まないこと
+        10. 1 記事 3 本まで / 1 段落 1 本 / 1 セクション 1 本 / 同一 target 重複禁止
+            (超過分は list 順で後のものを drop)
+
+    戻り値: ``(injected, dropped)`` の件数タプル (build manifest 集計用)。
+    """
+    suggestions = data.get("internal_link_suggestions")
+    if not isinstance(suggestions, list) or not suggestions:
+        return (0, 0)
+
+    narrative = data.get("narrative")
+    if not isinstance(narrative, dict):
+        return (0, len(suggestions))
+
+    product = data.get("product") if isinstance(data.get("product"), dict) else {}
+    self_asin = str(product.get("asin") or "").strip().upper()
+
+    injected = 0
+    dropped = 0
+    used_sections: set[str] = set()
+    used_paragraphs: set[tuple[str, int]] = set()
+    used_targets: set[str] = set()
+
+    for sugg in suggestions:
+        if injected >= _INTERNAL_LINK_MAX_PER_ARTICLE:
+            dropped += 1
+            continue
+        if not isinstance(sugg, dict):
+            dropped += 1
+            continue
+
+        section = sugg.get("section")
+        anchor = sugg.get("anchor_text")
+        target_asin_raw = sugg.get("target_asin")
+        paragraph_index_raw = sugg.get("paragraph_index")
+
+        # 規則2・10 (1 セクション 1 本): allowlist 外 or 既に使用済みのセクションは drop
+        if section not in _INTERNAL_LINK_SECTIONS or section in used_sections:
+            dropped += 1
+            continue
+        if not isinstance(paragraph_index_raw, int):
+            dropped += 1
+            continue
+        paragraph_index = paragraph_index_raw
+
+        # 規則3: paragraph_index の範囲チェック (str セクションは 0 のみ有効)
+        section_value = narrative.get(section)
+        if isinstance(section_value, str):
+            if paragraph_index != 0:
+                dropped += 1
+                continue
+            paragraph_text = section_value
+        elif isinstance(section_value, list):
+            if paragraph_index < 0 or paragraph_index >= len(section_value):
+                dropped += 1
+                continue
+            paragraph_text = section_value[paragraph_index]
+            if not isinstance(paragraph_text, str):
+                dropped += 1
+                continue
+        else:
+            dropped += 1
+            continue
+
+        # 規則10 (1 段落 1 本)
+        para_key = (section, paragraph_index)
+        if para_key in used_paragraphs:
+            dropped += 1
+            continue
+
+        # 規則7・8・9: anchor 自体の健全性チェック
+        if not isinstance(anchor, str) or not anchor:
+            dropped += 1
+            continue
+        if not (_INTERNAL_LINK_ANCHOR_MIN <= len(anchor) <= _INTERNAL_LINK_ANCHOR_MAX):
+            dropped += 1
+            continue
+        if anchor in _INTERNAL_LINK_DENYLIST:
+            dropped += 1
+            continue
+        if any(w in anchor for w in _INTERNAL_LINK_DYNAMIC_WORDS):
+            dropped += 1
+            continue
+
+        # 規則1: 逐語一致 (最初の1出現のみ対象)
+        pos = paragraph_text.find(anchor)
+        if pos < 0:
+            dropped += 1
+            continue
+        # 規則6: 入れ子防止
+        if _internal_link_overlaps_markup(paragraph_text, pos, pos + len(anchor)):
+            dropped += 1
+            continue
+
+        # 規則4・5・10: リンク先の実在・自己リンク・同一 target 重複禁止
+        if not isinstance(target_asin_raw, str) or not target_asin_raw.strip():
+            dropped += 1
+            continue
+        target_asin = target_asin_raw.strip().upper()
+        if not target_asin or target_asin == self_asin:
+            dropped += 1
+            continue
+        if target_asin in used_targets:
+            dropped += 1
+            continue
+        if target_asin not in article_index:
+            dropped += 1
+            continue
+
+        link_md = f"[{anchor}]({site_base_path}/products/{target_asin.lower()}/)"
+        new_text = paragraph_text[:pos] + link_md + paragraph_text[pos + len(anchor):]
+        if isinstance(section_value, str):
+            narrative[section] = new_text
+        else:
+            section_value[paragraph_index] = new_text
+
+        used_sections.add(section)
+        used_paragraphs.add(para_key)
+        used_targets.add(target_asin)
+        injected += 1
+
+    return (injected, dropped)
+
+
 _NEARBY_SCORE_WINDOW = 5
 _NEARBY_MAX_RECOMMENDATIONS = 2
 
@@ -2658,6 +2832,9 @@ def main() -> None:
     skipped_legacy = 0
     discontinued_count = 0
     cta_layout_applied = 0
+    # #3332 N3 消費側: internal_link_suggestions の注入/drop 件数を run 全体で合算。
+    internal_links_injected_total = 0
+    internal_links_dropped_total = 0
 
     # 充足率統計データの初期化
     stats = {
@@ -2760,6 +2937,14 @@ def main() -> None:
                 v = data.get(top_key)
                 if isinstance(v, str):
                     data[top_key] = _meta_re.sub("", v).strip()
+
+            # #3332 N3 消費側: 逐語一致検証はレンダリングされる最終テキストに対して
+            # 行う必要があるため、narrative クリーンアップの後・template.render の前に呼ぶ。
+            links_injected, links_dropped = _inject_internal_links(
+                data, article_index, site_base_path
+            )
+            internal_links_injected_total += links_injected
+            internal_links_dropped_total += links_dropped
 
             # #1107: enrichment + 価格 backfill 後の data から ScoreResult を 1 回だけ算出し、
             # 本文 (data["score"]) と frontmatter (_frontmatter_meta) で再利用する
@@ -2868,6 +3053,11 @@ def main() -> None:
             # #677: score_calculator が記録した missing (file 不在) と empty
             # (file 有り API 0 hit) を分離して可視化。
             "media_exposure_metrics": get_media_exposure_metrics().as_dict(),
+            # #3332 N3 消費側: internal_link_suggestions の注入/drop 集計。
+            "internal_links": {
+                "injected": internal_links_injected_total,
+                "dropped": internal_links_dropped_total,
+            },
         },
         # #677: per-ASIN の fallback breakdown。`gh run view` から個別 ASIN の
         # 状態をドリルダウン確認するために残す。
@@ -2926,6 +3116,10 @@ def main() -> None:
         msg += f" {skipped_legacy} rendered as legacy v3 fallback (regenerate via Jules)."
     print(msg)
     print(f"cta_layout applied: {cta_layout_applied} page(s)")
+    print(
+        f"internal_links: {internal_links_injected_total} injected / "
+        f"{internal_links_dropped_total} dropped"
+    )
 
 
 if __name__ == "__main__":
