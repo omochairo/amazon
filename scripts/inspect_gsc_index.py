@@ -15,10 +15,12 @@ import logging
 import os
 import pathlib
 import sys
+import threading
 import time
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Any
 
@@ -29,7 +31,11 @@ DEFAULT_OUT = "data/analytics/gsc_index_census.json"
 DEFAULT_SITEMAP = "https://navi.omcha.jp/sitemap.xml"
 DEFAULT_PREFIX = "/products/"
 DEFAULT_LIMIT = 1800
-DEFAULT_QPS = 5.0
+# API 上限 600/分 = 10 QPS。安全側に 8 QPS (480/分) で抑える
+DEFAULT_QPS = 8.0
+# 1 URL あたり実測 6-7 秒かかるため、逐次だと 1500 件で 3 時間近い。
+# 12 並列 = 実効 ~1.8 URL/s で 1500 件が 15 分程度に収まる (レートは QPS 側で頭打ち)
+DEFAULT_WORKERS = 12
 
 
 def _build_service(client_id: str, client_secret: str, refresh_token: str):
@@ -99,85 +105,122 @@ def fetch_sitemap_urls(sitemap_url: str, prefix: str) -> list[str]:
     return filtered_urls
 
 
+class _RateLimiter:
+    """全スレッド共通のレート制限。API 上限 600/分 を超えないようにする。"""
+
+    def __init__(self, qps: float):
+        self._min_interval = 1.0 / qps if qps > 0 else 0.0
+        self._lock = threading.Lock()
+        self._next_at = 0.0
+
+    def acquire(self) -> None:
+        if self._min_interval <= 0:
+            return
+        with self._lock:
+            now = time.monotonic()
+            wait = self._next_at - now
+            if wait > 0:
+                time.sleep(wait)
+                now = time.monotonic()
+            self._next_at = now + self._min_interval
+
+
 def inspect_urls(
-    service: Any,
+    creds: tuple[str, str, str],
     site_url: str,
     urls: list[str],
-    qps: float
+    qps: float,
+    workers: int,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """各 URL を URL Inspection API で検査する。"""
+    """各 URL を URL Inspection API で検査する。
+
+    URL Inspection API は 1 URL あたり実測 6-7 秒かかる (2026-07-16 実測: 逐次で
+    100 件 / 11 分)。1500 件超を逐次処理すると 3 時間近くかかり GitHub Actions の
+    job timeout に載らないため、スレッドで並列化する。API 上限は 600/分なので
+    数十並列でも余裕があるが、レートは _RateLimiter で全スレッド共通に絞る。
+    """
     from googleapiclient.errors import HttpError
 
-    inspected_results = []
-    errors = []
     total = len(urls)
+    logger.info("starting inspection of %d urls (workers=%d, qps=%.1f)", total, workers, qps)
 
-    logger.info("starting inspection of %d urls with QPS %.1f", total, qps)
+    limiter = _RateLimiter(qps)
+    # googleapiclient の service は thread-safe でないためスレッドごとに構築する
+    local = threading.local()
+    progress = {"done": 0}
+    progress_lock = threading.Lock()
 
-    interval = 1.0 / qps if qps > 0 else 0.0
+    def _service():
+        if not hasattr(local, "svc"):
+            local.svc = _build_service(*creds)
+        return local.svc
 
-    for i, url in enumerate(urls):
-        # 各リクエストの間にスロットリングを挟む
-        if i > 0 and interval > 0:
-            time.sleep(interval)
-
+    def _one(url: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
         max_retries = 3
         last_exception = None
-        res = None
 
         for attempt in range(max_retries + 1):
             try:
-                res = service.urlInspection().index().inspect(body={
+                limiter.acquire()
+                res = _service().urlInspection().index().inspect(body={
                     "inspectionUrl": url,
                     "siteUrl": site_url,
                     "languageCode": "ja-JP",
                 }).execute()
-                break  # 成功
+                idx = res.get("inspectionResult", {}).get("indexStatusResult", {})
+                return {
+                    "url": url,
+                    "verdict": idx.get("verdict"),
+                    "coverage_state": idx.get("coverageState"),
+                    "robots_txt_state": idx.get("robotsTxtState"),
+                    "indexing_state": idx.get("indexingState"),
+                    "page_fetch_state": idx.get("pageFetchState"),
+                    "last_crawl_time": idx.get("lastCrawlTime"),
+                    "google_canonical": idx.get("googleCanonical"),
+                    "user_canonical": idx.get("userCanonical"),
+                }, None
             except HttpError as e:
                 last_exception = e
                 # クォータ超過は 429 だけでなく 403 (reason=quotaExceeded 等) でも返るため両方リトライ対象
                 status = getattr(e.resp, "status", None)
                 retryable = status == 429 or (status == 403 and b"uota" in (e.content or b""))
                 if retryable and attempt < max_retries:
-                    logger.warning(
-                        "rate/quota limit (%s) hit at URL: %s. sleeping 60s (attempt %d/%d)",
-                        status, url, attempt + 1, max_retries
-                    )
+                    logger.warning("rate/quota limit (%s) at %s. sleeping 60s (attempt %d/%d)",
+                                   status, url, attempt + 1, max_retries)
                     time.sleep(60)
                     continue
-                break  # リトライ不能、あるいはリトライ上限超過
+                break
             except Exception as e:
                 last_exception = e
-                break  # その他のエラーは即時失敗
+                break
 
-        if res is not None:
-            r = res.get("inspectionResult", {})
-            idx = r.get("indexStatusResult", {})
+        error_msg = str(last_exception)[:200]
+        logger.error("failed to inspect URL %s: %s", url, error_msg)
+        return None, {"url": url, "error": error_msg}
 
-            result_item = {
-                "url": url,
-                "verdict": idx.get("verdict"),
-                "coverage_state": idx.get("coverageState"),
-                "robots_txt_state": idx.get("robotsTxtState"),
-                "indexing_state": idx.get("indexingState"),
-                "page_fetch_state": idx.get("pageFetchState"),
-                "last_crawl_time": idx.get("lastCrawlTime"),
-                "google_canonical": idx.get("googleCanonical"),
-                "user_canonical": idx.get("userCanonical"),
-            }
-            inspected_results.append(result_item)
-        else:
-            error_msg = str(last_exception)[:200]
-            logger.error("failed to inspect URL %s: %s", url, error_msg)
-            errors.append({
-                "url": url,
-                "error": error_msg
-            })
+    def _tracked(url: str):
+        out = _one(url)
+        with progress_lock:
+            progress["done"] += 1
+            done = progress["done"]
+        if done % 100 == 0 or done == total:
+            logger.info("progress: %d/%d URLs processed", done, total)
+        return out
 
-        # 100 件ごとに進捗を出力
-        if (i + 1) % 100 == 0 or (i + 1) == total:
-            logger.info("progress: %d/%d URLs processed", i + 1, total)
+    inspected_results: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futures = [ex.submit(_tracked, u) for u in urls]
+        for f in as_completed(futures):
+            ok, err = f.result()
+            if ok is not None:
+                inspected_results.append(ok)
+            else:
+                errors.append(err)
 
+    # 並列完了順に積まれるので、出力の安定のため URL 順に戻す
+    inspected_results.sort(key=lambda r: r["url"])
+    errors.sort(key=lambda r: r["url"])
     return inspected_results, errors
 
 
@@ -197,6 +240,8 @@ def main() -> int:
     p.add_argument("--prefix", default=DEFAULT_PREFIX)
     p.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
     p.add_argument("--qps", type=float, default=DEFAULT_QPS)
+    p.add_argument("--workers", type=int, default=DEFAULT_WORKERS,
+                   help="並列数。URL Inspection API は 1 URL 6-7 秒かかるため逐次では現実的でない")
     p.add_argument("--out", default=DEFAULT_OUT)
     args = p.parse_args()
 
@@ -221,9 +266,10 @@ def main() -> int:
         else:
             target_urls = sitemap_urls
 
-        service = _build_service(args.client_id, args.client_secret, args.refresh_token)
-
-        inspected, errors = inspect_urls(service, args.site_url, target_urls, args.qps)
+        creds = (args.client_id, args.client_secret, args.refresh_token)
+        inspected, errors = inspect_urls(
+            creds, args.site_url, target_urls, args.qps, args.workers
+        )
 
         # 集計処理
         total_sitemap_urls = sitemap_count
