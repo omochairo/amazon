@@ -6,6 +6,9 @@ on:
   # 発火を 6 時間毎 (4 回/日) の固定スケジュールに切替え、run 回数そのものを上限化する。
   # 1 run 最大 6 session × 4 回 = 理論上限 24/日 で cap 80 に十分収まる。
   # cron re-registered 2026-07-08 after unsuspension
+  # 2026-07-16 (#3203): build_jules_prompt.py の _audit_note/_experience_note が
+  # repoless 移行用スクリプトにのみ実装され主力ワークフローに未配線だったのを修正
+  # (AUDIT_NOTE/EXPERIENCE_NOTE を INFO_NOTE/GSC_NOTE と同じパターンで追加)。
   schedule:
     - cron: '0 */6 * * *'
   workflow_dispatch:
@@ -313,6 +316,12 @@ jobs:
             else
               GSC_NOTE=""
             fi
+            # #3203 Phase 1-C: answerability_audit の missing_aspects をリライトに注入
+            # (build_jules_prompt.py の _audit_note と同じロジックを CLI 経由で呼ぶ)。
+            AUDIT_NOTE=$(python3 scripts/build_jules_prompt.py --asin "$TARGET_ASIN" --print-note audit 2>/dev/null || echo "")
+
+            # #3203 Phase 2: 体験談供給レーン (experience.json) の使い方注記
+            EXPERIENCE_NOTE=$(python3 scripts/build_jules_prompt.py --asin "$TARGET_ASIN" --print-note experience 2>/dev/null || echo "")
             # 2026-05-13: 12行のハードコードプロンプトを廃止し、jules/PROMPT_TEMPLATE.md
             # を読み込む形に変更（記事品質向上のため出典・競合比較・cross-check ルールを
             # フルプロンプトとして渡す）。
@@ -329,6 +338,10 @@ jobs:
             ${INFO_NOTE}
 
             ${GSC_NOTE}
+
+            ${AUDIT_NOTE}
+
+            ${EXPERIENCE_NOTE}
 
             【本日の日付 (必ず使用)】: ${TODAY}
             - 出力ファイル名: data/articles/${TODAY}-${TARGET_ASIN}.json

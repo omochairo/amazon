@@ -9,7 +9,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from build_jules_prompt import _audit_note, _experience_note  # noqa: E402
+from build_jules_prompt import _audit_note, _experience_note, main  # noqa: E402
 
 
 def _write_audit(tmp_path, pages):
@@ -105,3 +105,61 @@ def test_experience_note_empty_when_malformed_json(tmp_path, monkeypatch):
     d.mkdir(parents=True)
     (d / "experience.json").write_text("{not valid json", encoding="utf-8")
     assert _experience_note("B0FNM4Y35G") == ""
+
+
+# --------------------------------------------------------------------------
+# --print-note CLI (#3203 未配線修正・2026-07-16: 03-invoke-jules.yml から呼ぶ軽量モード)
+# --------------------------------------------------------------------------
+
+def _run_main(monkeypatch, argv):
+    monkeypatch.setattr(sys, "argv", ["build_jules_prompt.py"] + argv)
+    return main()
+
+
+def test_print_note_audit_outputs_note_for_matching_asin(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _write_audit(tmp_path, [
+        {
+            "asin": "B0FNM4Y35G",
+            "queries": [
+                {"query": "ジェリーブロックス 口コミ", "missing_aspects": ["対象年齢の目安"]},
+            ],
+        },
+    ])
+    rc = _run_main(monkeypatch, ["--asin", "B0FNM4Y35G", "--print-note", "audit"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "前回記事に不足していた観点" in out
+    assert "対象年齢の目安" in out
+
+
+def test_print_note_audit_empty_for_non_matching_asin(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _write_audit(tmp_path, [
+        {"asin": "B0OTHERASIN", "queries": [{"query": "q", "missing_aspects": ["x"]}]},
+    ])
+    rc = _run_main(monkeypatch, ["--asin", "B0FNM4Y35G", "--print-note", "audit"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert out == ""
+
+
+def test_print_note_experience_outputs_note_when_snippets_exist(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _write_experience(tmp_path, "B0FNM4Y35G", [
+        {"aspect": "体験談", "text": "使い心地が良いという声", "source_type": "blog",
+         "source_url": "https://example.com", "usable_as": "quote", "confidence": "high"},
+    ])
+    rc = _run_main(monkeypatch, ["--asin", "B0FNM4Y35G", "--print-note", "experience"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "体験談素材" in out
+    assert "quote" in out and "paraphrase" in out
+
+
+def test_print_note_experience_empty_when_file_missing(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    rc = _run_main(monkeypatch, ["--asin", "B0FNM4Y35G", "--print-note", "experience"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert out == ""
