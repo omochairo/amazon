@@ -17,7 +17,7 @@ navi.omcha.jp の代表 URL 群に対して Lighthouse をローカル実行し�
 なぜ PSI API でなくセルフホストか:
   PSI API はクォータ (匿名だと即 429、key ありでも 25k/day・400/100s) があり
   全ページ級の毎日計測には足りない。self-hosted runner なら Actions 分数も
-  API 課金もゼロで、Lighthouse を無制限に回せる (#2995 の NAS レーン資産④)。
+  API 課金もゼロで、Lighthouse を無制限に回せる (#2995 の自宅レーン資産④)。
 
 なぜこのリポジトリにスクリプトだけ置くか:
   omochairo/amazon は public リポジトリで self-hosted runner を繋げない
@@ -40,11 +40,19 @@ navi.omcha.jp の代表 URL 群に対して Lighthouse をローカル実行し�
   ②baseline 比の相対悪化、の 2 条件で鳴らす。
 - 出力は data PR + auto-merge、報告は劣化時のみ 1 issue に集約 (バースト禁止規律)。
 
-runner 側の前提 (amazon-home-ops):
-- Node.js + `lighthouse` CLI (npx でも可) と Chrome/Chromium が必要。
-  `--lighthouse-cmd` / `LIGHTHOUSE_CMD`、`CHROME_PATH` で差し替えできる。
-- runner の python3 は 3.8 系なので `from __future__ import annotations` 必須
-  (3.9+ の組み込みジェネリック注釈は import 時に落ちる)。
+runner 側の前提 (amazon-home-ops の 41-lighthouse-lane.yml):
+- 実行先は **K8 Plus (label `home,llm`)** で NAS (`home,ollama`) ではない。
+  Chrome headless は 1GB 級を食うが、NAS (DXP4800) は RAM 7.7GB を ollama と
+  gitlab-runner で分け合い runner の mem_limit は 4g しかない。K8 (Ryzen 7
+  8845HS / 64GB, mem_limit 8g) が適地。#2995 は K8 稼働 (2026-07-14) より前に
+  書かれた「NAS レーン拡張」issue だが、案6 の実体は LLM ではなくブラウザ計測。
+- Node.js + `lighthouse` CLI と Chrome が必要。`--lighthouse-cmd` /
+  `LIGHTHOUSE_CMD`、`CHROME_PATH` で差し替えできる。
+- Lighthouse は PSI と同じメジャー版に固定する (audit id / errorMessage の
+  互換性のため。版が飛ぶと baseline が不連続になり誤検出の温床になる)。
+- `from __future__ import annotations` は維持する。NAS (python3.8) に載せ替えても
+  壊れないようにするための保険 ([[reference-omochairo-home-ops-repo]] の実績: 3.9+ の
+  組み込みジェネリック注釈は 3.8 の import 時に落ちる)。
 
 副作用:
 - data/analytics/history/lighthouse_history.jsonl への append
