@@ -1282,7 +1282,7 @@ def main():
             return False
         if is_low_stock_reseller_signal(it.get("availability") or ""):
             return False
-        if classify_genre(it.get("browse_nodes") or [])[0] == "flag":
+        if classify_genre(it.get("browse_nodes") or [], asin)[0] == "flag":
             return False
         return True
 
@@ -1388,7 +1388,7 @@ def main():
             logger.info(f"  reseller-drop {asin}: low-stock availability={availability!r}")
             reseller_dropped += 1
             continue
-        verdict, cat_nodes = classify_genre(it.get("browse_nodes") or [])
+        verdict, cat_nodes = classify_genre(it.get("browse_nodes") or [], asin)
         if verdict == "flag":
             cats = ", ".join(f"{nd.get('name')}({nd.get('root')})" for nd in cat_nodes[:4])
             logger.info(f"  genre-drop {asin}: 非対象カテゴリ [{cats}]")
