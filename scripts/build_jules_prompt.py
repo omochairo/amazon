@@ -264,6 +264,12 @@ product.name の通称ルール (最大 40 字) と機械検査 11 項目は、�
 
 
 def main():
+    # Windows (cp932 既定) で --print-note / --out 未指定の stdout 出力が壊れるのを防ぐ
+    # (03-invoke-jules.yml が動く GitHub Actions ubuntu-latest は元々 UTF-8 だが、
+    # ローカル Windows での手動デバッグ実行でも文字化けしないよう明示的に固定する)。
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--asin", required=True)
     ap.add_argument("--out", help="出力先ファイル (省略時 stdout)")
