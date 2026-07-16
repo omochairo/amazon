@@ -51,6 +51,10 @@ on:
       # ([[04-validate-paths-inverse-trap]])。read-only fetch で記事変更ゼロ、
       # vacuous SUCCESS で通過する。
       - 'scripts/inspect_gsc_index.py'
+      # 22-gsc-index-census.yml が週次 data PR で還流する出力先。script だけ登録して
+      # 出力先を忘れると、workflow 自身が作る data PR が required check 不発で
+      # 永久 BLOCKED になる (PR #3329 で実際に踏んだ)。
+      - 'data/analytics/gsc_index_census.json'
       - 'scripts/jules_article_engine.py'
       - 'scripts/templates/**'
       - 'hugo/assets/css/**'
