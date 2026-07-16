@@ -308,6 +308,43 @@ class DropRuleTests(unittest.TestCase):
         result = _inject_internal_links(data, ARTICLE_INDEX, SITE_BASE)
         self.assertEqual(result, (0, 1))
 
+    def test_drops_price_and_point_reward_anchors(self):
+        # 金額 (数字/漢数詞 + 円) と ポイント還元は静的アンカーとして腐るので drop。
+        for text, anchor in (
+            ("本体は3,520円で購入できます。", "3,520円で購入"),
+            ("差額は数百円ほどにおさまります。", "数百円ほどにおさまる"),
+            ("ポイント還元の対象になる商品です。", "ポイント還元の対象"),
+        ):
+            data = _make_data(
+                {"why_this_product": text},
+                [{
+                    "section": "why_this_product", "paragraph_index": 0,
+                    "anchor_text": anchor, "target_asin": "B0TARGET01",
+                }],
+            )
+            result = _inject_internal_links(data, ARTICLE_INDEX, SITE_BASE)
+            self.assertEqual(result, (0, 1), msg=f"anchor={anchor} should be dropped")
+
+    def test_keeps_static_yen_and_point_anchors(self):
+        # 「楕円形」(形状) や「着目ポイント」(要点) は動的事実ではないので注入する。
+        for text, anchor in (
+            ("楕円形のピースが入っています。", "楕円形のピース"),
+            ("選び方の着目ポイントを解説します。", "選び方の着目ポイント"),
+        ):
+            data = _make_data(
+                {"why_this_product": text},
+                [{
+                    "section": "why_this_product", "paragraph_index": 0,
+                    "anchor_text": anchor, "target_asin": "B0TARGET01",
+                }],
+            )
+            result = _inject_internal_links(data, ARTICLE_INDEX, SITE_BASE)
+            self.assertEqual(result, (1, 0), msg=f"anchor={anchor} should be injected")
+            self.assertIn(
+                f"[{anchor}]({SITE_BASE}/products/b0target01/)",
+                data["narrative"]["why_this_product"],
+            )
+
 
 class LimitTests(unittest.TestCase):
     def _suggestion(self, section: str, anchor: str, target: str) -> dict:

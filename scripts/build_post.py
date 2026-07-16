@@ -880,7 +880,15 @@ _INTERNAL_LINK_DENYLIST: frozenset[str] = frozenset({
     "この商品", "こちら", "詳しくは", "関連記事",
 })
 _INTERNAL_LINK_DYNAMIC_WORDS: tuple[str, ...] = (
-    "価格", "最安", "円", "ポイント", "在庫", "セール", "%オフ", "割引",
+    "価格", "最安", "在庫", "セール", "%オフ", "割引",
+)
+# 「円」「ポイント」は素の語で弾くと「楕円形のピース」(図形パズル/形合わせ商品の
+# 形状説明) や「着目ポイント」(= 要点) まで落ちるので、金額 (数字/漢数詞 + 円) と
+# ポイント還元の文脈でのみ弾く。generate_faq_seo.py の禁止規則と同じ意図
+# (動的事実 = 時間で変化する事実だけを禁止する)。
+_INTERNAL_LINK_PRICE_RE = re.compile(r"[\d０-９一二三四五六七八九十百千万数][\d,，]*\s*円")
+_INTERNAL_LINK_POINT_RE = re.compile(
+    r"ポイント(還元|付与|進呈|アップ|バック|倍)|ポイントが?(貯ま|付く|つく)|ポイ活"
 )
 _INTERNAL_LINK_ANCHOR_MIN = 4
 _INTERNAL_LINK_ANCHOR_MAX = 30
@@ -1011,7 +1019,9 @@ def _inject_internal_links(
         if anchor in _INTERNAL_LINK_DENYLIST:
             dropped += 1
             continue
-        if any(w in anchor for w in _INTERNAL_LINK_DYNAMIC_WORDS):
+        if (any(w in anchor for w in _INTERNAL_LINK_DYNAMIC_WORDS)
+                or _INTERNAL_LINK_PRICE_RE.search(anchor)
+                or _INTERNAL_LINK_POINT_RE.search(anchor)):
             dropped += 1
             continue
 
