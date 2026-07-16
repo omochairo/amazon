@@ -91,10 +91,17 @@ MIN_META_LEN = 60
 MAX_META_LEN = 140
 
 DYNAMIC_FACT_WORDS: tuple[str, ...] = (
-    "価格", "最安", "円", "ポイント", "在庫", "セール", "割引", "%オフ",
+    "価格", "最安", "在庫", "セール", "割引", "%オフ",
     "送料", "キャンペーン", "タイムセール",
 )
-_PRICE_NUMBER_RE = re.compile(r"\d[\d,]*\s*円")
+# 「円」「ポイント」は素の語で弾くと知育玩具の記事で誤検出が出る (実測: 既存 FAQ
+# 4,627 件中 12 件)。「楕円形・円盤・円が4個」(図形パズル/形合わせ商品の説明) や
+# 「着目ポイント」(= 要点の意味) は動的事実ではないので残す。禁止したいのは
+# 「2,955円」「数百円」のような金額と、Amazon のポイント還元のみ。
+_PRICE_NUMBER_RE = re.compile(r"[\d０-９一二三四五六七八九十百千万数][\d,，]*\s*円")
+_POINT_REWARD_RE = re.compile(
+    r"ポイント(還元|付与|進呈|アップ|バック|倍)|ポイントが?(貯ま|付く|つく)|ポイ活"
+)
 
 GENERATION_PROMPT_TEMPLATE = """あなたは記事の FAQ を実需要クエリで拡張し、meta_description を刷新するアシスタントです。
 
@@ -109,7 +116,7 @@ GENERATION_PROMPT_TEMPLATE = """あなたは記事の FAQ を実需要クエリ�
 
 ## 指示
 - 記事本文と商品データから回答できる質問のみを作ってください。答えが本文に無い質問は作らないでください。
-- 価格・最安値・在庫・ポイント・セール・割引など時間で変化する事実には一切言及しないでください。
+- 価格・金額・最安値・在庫・ポイント還元・セール・割引など時間で変化する事実には一切言及しないでください (「楕円形」のような形状の説明や「着目ポイント」のような要点の記述は問題ありません)。
 - FAQ は最大6問。既存FAQのうち有用なものは残してよいですが、動的事実に触れているものは必ず捨ててください。
 - meta_descriptionは80〜120字の日本語で、検索クエリを自然に織り込んでください。
 
@@ -127,10 +134,16 @@ class GenerationError(Exception):
 # --------------------------------------------------------------------------
 
 def _contains_dynamic_fact(text: str) -> bool:
-    """時間で変化する事実 (価格・在庫・セール等) の禁止語を含むかを判定する。"""
+    """時間で変化する事実 (価格・在庫・セール等) の禁止語を含むかを判定する。
+
+    「円」「ポイント」は金額・ポイント還元の文脈でのみ弾く (素の語で弾くと
+    「楕円形」「着目ポイント」のような静的な記述まで落ちるため)。
+    """
     if any(word in text for word in DYNAMIC_FACT_WORDS):
         return True
-    return bool(_PRICE_NUMBER_RE.search(text))
+    if _PRICE_NUMBER_RE.search(text):
+        return True
+    return bool(_POINT_REWARD_RE.search(text))
 
 
 def validate_faq(faq: Any, *, max_items: int = MAX_FAQ_ITEMS) -> list[dict[str, str]]:

@@ -49,10 +49,37 @@ class ValidateFaqTest(unittest.TestCase):
         self.assertEqual(validate_faq(faq), [])
 
     def test_drops_other_dynamic_words(self):
-        for word in ("最安", "ポイント", "在庫", "セール", "割引", "%オフ", "送料", "キャンペーン", "タイムセール"):
+        for word in ("最安", "在庫", "セール", "割引", "%オフ", "送料", "キャンペーン", "タイムセール"):
             answer = f"この商品は{word}に関する情報を含む説明文でありテスト用の文章です。"
             faq = [{"question": "この商品について教えてください", "answer": answer}]
             self.assertEqual(validate_faq(faq), [], msg=f"word={word} should be dropped")
+
+    def test_drops_kanji_numeral_yen(self):
+        # 「数百円」「三千円」のような漢数詞の金額も動的事実として弾く。
+        for amount in ("数百円", "三千円", "千円", "1万円"):
+            answer = f"この商品は{amount}ほどで購入できる知育玩具です。長く遊べる設計になっています。"
+            faq = [{"question": "この商品について教えてください", "answer": answer}]
+            self.assertEqual(validate_faq(faq), [], msg=f"amount={amount} should be dropped")
+
+    def test_drops_point_reward_context_only(self):
+        # Amazon のポイント還元は動的事実として弾く。
+        for phrase in ("ポイント還元", "ポイント付与", "ポイントアップ", "ポイントが貯まります", "ポイ活"):
+            answer = f"この商品は{phrase}の対象となる場合があります。詳細はご確認ください。"
+            faq = [{"question": "この商品について教えてください", "answer": answer}]
+            self.assertEqual(validate_faq(faq), [], msg=f"phrase={phrase} should be dropped")
+
+    def test_keeps_static_yen_and_point_usages(self):
+        # 「楕円形」(図形パズル/形合わせ商品の説明) と「着目ポイント」(= 要点) は
+        # 動的事実ではないので残す。素の「円」「ポイント」を弾くと実測 0.26% の
+        # 既存 FAQ が誤って落ちる (#3332 レビュー)。
+        faq = [
+            {"question": "どんな形が含まれていますか?",
+             "answer": "楕円形、円形、四角形、台形など12種類の異なる形が含まれています。円盤状のピースもあります。"},
+            {"question": "親が教えるのは難しくないですか?",
+             "answer": "説明書にステップごとの着目ポイントがまとめられているため、安心してサポートできます。"},
+        ]
+        result = validate_faq(faq)
+        self.assertEqual(len(result), 2)
 
     def test_answer_too_short_is_dropped(self):
         faq = [{"question": "何歳から使えますか?", "answer": "短い"}]
