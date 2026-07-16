@@ -46,8 +46,10 @@ concurrency:
 jobs:
   census:
     runs-on: ubuntu-latest
-    # 1800 URL × (1/5 QPS + API 応答) で最大 ~30 分想定。余裕を持たせる
-    timeout-minutes: 60
+    # 2026-07-16 実測: URL Inspection API は 1 URL 6-7 秒。逐次では 1500 件で 3 時間近くかかり
+    # 60 分 timeout で落ちた (run 29499392320)。並列化 (--workers) して ~15-20 分想定だが、
+    # API のレート次第で伸びるため timeout は実測の 3 倍以上を確保しておく
+    timeout-minutes: 120
     steps:
       - name: Generate App token
         id: app-token
