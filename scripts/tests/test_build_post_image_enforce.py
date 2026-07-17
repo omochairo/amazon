@@ -76,6 +76,62 @@ class EnforceAmazonImageTests(unittest.TestCase):
             _enforce_amazon_image({"product": {"image": HALLUCINATED}}, {}, pathlib.Path("/x"))
         )
 
+    # #3314: hero image width/height passthrough
+    def test_attaches_image_dimensions_from_raw_index(self):
+        data = {"product": {"asin": "B0G5DLSTS8", "image": HALLUCINATED}}
+        raw_index = {
+            "B0G5DLSTS8": {
+                "image": VERIFIED,
+                "images": [VERIFIED],
+                "image_width": 500,
+                "image_height": 375,
+            }
+        }
+        changed = _enforce_amazon_image(data, raw_index, pathlib.Path("/nonexistent"))
+        self.assertTrue(changed)
+        self.assertEqual(data["product"]["image_width"], 500)
+        self.assertEqual(data["product"]["image_height"], 375)
+
+    def test_falls_back_to_per_asin_snapshot_dimensions(self):
+        # raw_index has the image URL but no dims (e.g. freshly fetched this
+        # run, before write_per_asin_snapshot's cache backfill); per-ASIN
+        # snapshot has the same image URL plus dims.
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            (root / "B0G5DLSTS8").mkdir()
+            (root / "B0G5DLSTS8" / "amazon.json").write_text(
+                json.dumps({"item": {
+                    "image": VERIFIED,
+                    "image_width": 500,
+                    "image_height": 500,
+                }}),
+                encoding="utf-8",
+            )
+            data = {"product": {"asin": "B0G5DLSTS8", "image": HALLUCINATED}}
+            raw_index = {"B0G5DLSTS8": {"image": VERIFIED}}
+            changed = _enforce_amazon_image(data, raw_index, root)
+            self.assertTrue(changed)
+            self.assertEqual(data["product"]["image_width"], 500)
+            self.assertEqual(data["product"]["image_height"], 500)
+
+    def test_no_dimensions_leaves_attribute_unset(self):
+        data = {"product": {"asin": "B0G5DLSTS8", "image": HALLUCINATED, "image_width": 999}}
+        raw_index = {"B0G5DLSTS8": {"image": VERIFIED}}
+        changed = _enforce_amazon_image(data, raw_index, pathlib.Path("/nonexistent"))
+        self.assertTrue(changed)
+        self.assertNotIn("image_width", data["product"])
+        self.assertNotIn("image_height", data["product"])
+
+    def test_ignores_malformed_dimensions(self):
+        data = {"product": {"asin": "B0G5DLSTS8", "image": HALLUCINATED}}
+        raw_index = {
+            "B0G5DLSTS8": {"image": VERIFIED, "image_width": "500", "image_height": None}
+        }
+        changed = _enforce_amazon_image(data, raw_index, pathlib.Path("/nonexistent"))
+        self.assertTrue(changed)
+        self.assertNotIn("image_width", data["product"])
+        self.assertNotIn("image_height", data["product"])
+
 
 if __name__ == "__main__":
     unittest.main()

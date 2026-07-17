@@ -45,6 +45,7 @@ from typing import Any, Optional
 
 import _fetch_targets
 import price_history
+import image_dimensions
 from genre_gate import classify_genre
 
 # #795 follow-up (session 62): 旧 DEFAULT_KEYWORDS は 10 件中 4 件が王道
@@ -518,6 +519,42 @@ def _load_asin_blocklist(path: str = "data/asin_blocklist.json") -> set:
         return set()
 
 
+# #3314: 画像実寸取得の CDN への配慮レート (1 リクエスト/秒以下)。
+IMAGE_DIMENSIONS_FETCH_INTERVAL_SEC = 1.0
+
+
+def _attach_image_dimensions(out_root: str, item: dict) -> None:
+    """``item`` に ``image_width`` / ``image_height`` を付与する (#3314)。
+
+    既存 snapshot と ``image`` URL が一致すればキャッシュとして再利用し、
+    ネットワークを叩かない (通常運用では画像 URL が変わったときのみ 1 回
+    叩けば足りる)。取得できない場合はキー自体を付けない fail-soft。
+    """
+    image_url = item.get("image")
+    if not isinstance(image_url, str) or not image_url:
+        return
+    asin = item.get("asin")
+    existing_path = (
+        os.path.join(out_root, "per_asin", asin, "amazon.json") if asin else None
+    )
+    if existing_path and os.path.exists(existing_path):
+        try:
+            with open(existing_path, "r", encoding="utf-8") as f:
+                prev = json.load(f)
+            prev_item = prev.get("item") if isinstance(prev, dict) else None
+            if isinstance(prev_item, dict) and prev_item.get("image") == image_url:
+                w, h = prev_item.get("image_width"), prev_item.get("image_height")
+                if isinstance(w, int) and isinstance(h, int) and w > 0 and h > 0:
+                    item["image_width"], item["image_height"] = w, h
+                    return
+        except (OSError, json.JSONDecodeError):
+            pass
+    dims = image_dimensions.fetch_image_dimensions(image_url)
+    time.sleep(IMAGE_DIMENSIONS_FETCH_INTERVAL_SEC)
+    if dims:
+        item["image_width"], item["image_height"] = dims
+
+
 def write_per_asin_snapshot(out_root: str, item: dict) -> None:
     """Persist per-ASIN amazon snapshot so build_post.py can back-fill badge
     fields for past articles even after data/raw/amazon.json gets overwritten.
@@ -527,10 +564,14 @@ def write_per_asin_snapshot(out_root: str, item: dict) -> None:
     price_history.append_price_point で自前の append-only 価格履歴も蓄積する
     (追加 API 呼び出しはゼロ)。price_history 側はベストエフォートで例外を握り
     つぶすため、ここが失敗してもフェッチ本体は止まらない。
+
+    #3314: 同じチョークポイントで image_width/image_height も付与する
+    (キャッシュ優先・fail-soft。詳細は _attach_image_dimensions 参照)。
     """
     asin = item.get("asin")
     if not asin:
         return
+    _attach_image_dimensions(out_root, item)
     per_asin_dir = os.path.join(out_root, "per_asin", asin)
     try:
         os.makedirs(per_asin_dir, exist_ok=True)

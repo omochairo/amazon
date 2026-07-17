@@ -2205,6 +2205,12 @@ def _enforce_amazon_image(
 
     amazon.json に画像が無い ASIN は Jules 由来値を温存する (上書きしない)。
     上書きが発生したら True を返す (manifest 統計用)。
+
+    #3314: 併せて ``product.image_width`` / ``image_height`` も authoritative
+    image と同じ src から通す (fetch_amazon.py が per_asin snapshot に書く
+    実寸。無ければキー自体を付けない fail-soft — Amazon の ``_SL500_`` は
+    長辺500px指定で正方形とは限らないため、実寸が無い状態で固定値を出すと
+    CLS を悪化させる)。
     """
     product = data.get("product") if isinstance(data.get("product"), dict) else None
     if not product:
@@ -2215,6 +2221,8 @@ def _enforce_amazon_image(
 
     authoritative_image = ""
     authoritative_gallery: list[str] = []
+    authoritative_width: int | None = None
+    authoritative_height: int | None = None
     for src in (raw_index.get(asin), _load_per_asin_amazon(per_asin_root, asin)):
         if not isinstance(src, dict):
             continue
@@ -2226,14 +2234,27 @@ def _enforce_amazon_image(
             authoritative_image = gallery[0]
         if not authoritative_gallery and gallery:
             authoritative_gallery = gallery
-        if authoritative_image and authoritative_gallery:
-            break
+        if (
+            authoritative_width is None
+            and isinstance(img, str)
+            and img
+            and img == authoritative_image
+        ):
+            w, h = src.get("image_width"), src.get("image_height")
+            if isinstance(w, int) and isinstance(h, int) and w > 0 and h > 0:
+                authoritative_width, authoritative_height = w, h
 
     if not authoritative_image:
         return False
 
     overwritten = product.get("image") != authoritative_image
     product["image"] = authoritative_image
+    if authoritative_width and authoritative_height:
+        product["image_width"] = authoritative_width
+        product["image_height"] = authoritative_height
+    else:
+        product.pop("image_width", None)
+        product.pop("image_height", None)
     # ギャラリーも検証済み配列で置換 (主画像が先頭)。amazon.json に複数枚あれば
     # ハルシネーション混入の可能性がある Jules 由来 images を捨てる。
     if authoritative_gallery:
