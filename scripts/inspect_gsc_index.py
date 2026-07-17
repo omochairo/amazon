@@ -21,7 +21,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -40,6 +40,13 @@ DEFAULT_WORKERS = 12
 # #3331: 300 件上限だと未 index 470 件のうち 404 の 72 件中 44 件しか URL が残らず、
 # 打ち手を全件に適用できなかったため既定を無制限に変更。
 DEFAULT_MAX_NOT_INDEXED_URLS = 0
+# #3372: 直近 N 件の API 呼び出しが連続して 429/quotaExceeded だったら「日次クォータの完全枯渇」
+# とみなし、残り URL の 60s x3 リトライを打ち切る。単発の一時スロットリングとの区別は
+# 「連続失敗数」で近似する (完全な区別はできないが、無駄なリトライ連打は防げる)
+DEFAULT_CIRCUIT_BREAKER_THRESHOLD = 8
+# Google URL Inspection API のクォータリセットは Pacific 深夜。夏時間 (PDT, UTC-7) では UTC 07:00。
+# 冬時間 (PST, UTC-8) との誤差は安全側 (早め=まだリセットされていない扱い) に倒す
+DEFAULT_QUOTA_RESET_HOUR_UTC = 7
 
 
 def _build_service(client_id: str, client_secret: str, refresh_token: str):
@@ -135,18 +142,24 @@ def inspect_urls(
     urls: list[str],
     qps: float,
     workers: int,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    circuit_breaker_threshold: int = DEFAULT_CIRCUIT_BREAKER_THRESHOLD,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     """各 URL を URL Inspection API で検査する。
 
     URL Inspection API は 1 URL あたり実測 6-7 秒かかる (2026-07-16 実測: 逐次で
     100 件 / 11 分)。1500 件超を逐次処理すると 3 時間近くかかり GitHub Actions の
     job timeout に載らないため、スレッドで並列化する。API 上限は 600/分なので
     数十並列でも余裕があるが、レートは _RateLimiter で全スレッド共通に絞る。
+
+    #3372: circuit_breaker_threshold 件連続で 429/quotaExceeded を観測したら、
+    以降の URL は API を叩かずに即座にエラー扱いで打ち切る (日次クォータ完全枯渇時の
+    無駄なリトライ連打を防ぐ)。0 で無効化。
     """
     from googleapiclient.errors import HttpError
 
     total = len(urls)
-    logger.info("starting inspection of %d urls (workers=%d, qps=%.1f)", total, workers, qps)
+    logger.info("starting inspection of %d urls (workers=%d, qps=%.1f, circuit_breaker_threshold=%d)",
+                total, workers, qps, circuit_breaker_threshold)
 
     limiter = _RateLimiter(qps)
     # googleapiclient の service は thread-safe でないためスレッドごとに構築する
@@ -154,16 +167,37 @@ def inspect_urls(
     progress = {"done": 0}
     progress_lock = threading.Lock()
 
+    circuit_open = threading.Event()
+    quota_lock = threading.Lock()
+    quota_state = {"consecutive_failures": 0}
+
     def _service():
         if not hasattr(local, "svc"):
             local.svc = _build_service(*creds)
         return local.svc
 
+    def _circuit_enabled() -> bool:
+        return circuit_breaker_threshold > 0
+
+    def _trip_circuit() -> None:
+        if not circuit_open.is_set():
+            circuit_open.set()
+            logger.error(
+                "circuit breaker tripped: %d consecutive quota errors — aborting remaining "
+                "URL requests without further retries (#3372)", circuit_breaker_threshold
+            )
+
     def _one(url: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        if _circuit_enabled() and circuit_open.is_set():
+            return None, {"url": url, "error": "circuit_breaker_open: quota exhausted, request skipped"}
+
         max_retries = 3
         last_exception = None
 
         for attempt in range(max_retries + 1):
+            if _circuit_enabled() and circuit_open.is_set():
+                last_exception = last_exception or Exception("circuit breaker opened during retry wait")
+                break
             try:
                 limiter.acquire()
                 res = _service().urlInspection().index().inspect(body={
@@ -172,6 +206,9 @@ def inspect_urls(
                     "languageCode": "ja-JP",
                 }).execute()
                 idx = res.get("inspectionResult", {}).get("indexStatusResult", {})
+                if _circuit_enabled():
+                    with quota_lock:
+                        quota_state["consecutive_failures"] = 0
                 return {
                     "url": url,
                     "verdict": idx.get("verdict"),
@@ -188,7 +225,20 @@ def inspect_urls(
                 # クォータ超過は 429 だけでなく 403 (reason=quotaExceeded 等) でも返るため両方リトライ対象
                 status = getattr(e.resp, "status", None)
                 retryable = status == 429 or (status == 403 and b"uota" in (e.content or b""))
-                if retryable and attempt < max_retries:
+                if not retryable:
+                    if _circuit_enabled():
+                        with quota_lock:
+                            quota_state["consecutive_failures"] = 0
+                    break
+                if _circuit_enabled():
+                    with quota_lock:
+                        quota_state["consecutive_failures"] += 1
+                        should_trip = quota_state["consecutive_failures"] >= circuit_breaker_threshold
+                    if should_trip:
+                        _trip_circuit()
+                    if circuit_open.is_set():
+                        break
+                if attempt < max_retries:
                     logger.warning("rate/quota limit (%s) at %s. sleeping 60s (attempt %d/%d)",
                                    status, url, attempt + 1, max_retries)
                     time.sleep(60)
@@ -196,9 +246,12 @@ def inspect_urls(
                 break
             except Exception as e:
                 last_exception = e
+                if _circuit_enabled():
+                    with quota_lock:
+                        quota_state["consecutive_failures"] = 0
                 break
 
-        error_msg = str(last_exception)[:200]
+        error_msg = str(last_exception)[:200] if last_exception else "circuit_breaker_open: quota exhausted, request skipped"
         logger.error("failed to inspect URL %s: %s", url, error_msg)
         return None, {"url": url, "error": error_msg}
 
@@ -225,7 +278,11 @@ def inspect_urls(
     # 並列完了順に積まれるので、出力の安定のため URL 順に戻す
     inspected_results.sort(key=lambda r: r["url"])
     errors.sort(key=lambda r: r["url"])
-    return inspected_results, errors
+    circuit_info = {
+        "tripped": circuit_open.is_set(),
+        "threshold": circuit_breaker_threshold,
+    }
+    return inspected_results, errors, circuit_info
 
 
 def build_not_indexed_urls(
@@ -252,6 +309,47 @@ def build_not_indexed_urls(
     return rows
 
 
+def last_quota_reset_boundary(now: datetime, reset_hour_utc: int = DEFAULT_QUOTA_RESET_HOUR_UTC) -> datetime:
+    """`now` 以前で直近のクォータリセット時刻 (UTC) を返す。"""
+    boundary = now.replace(hour=reset_hour_utc, minute=0, second=0, microsecond=0)
+    if boundary > now:
+        boundary -= timedelta(days=1)
+    return boundary
+
+
+def check_quota_window(
+    out_path: pathlib.Path, reset_hour_utc: int, now: datetime
+) -> tuple[bool, str]:
+    """#3372 pre-flight ガード: 前回成功 run からクォータリセットウィンドウを跨いだかを判定する。
+
+    前回 run の記録が読めない場合は「跨いだ」扱いにして通す (壊さない側に倒す)。
+    """
+    if not out_path.exists():
+        return True, "no prior census file found — nothing to guard against"
+
+    try:
+        prev = json.loads(out_path.read_text(encoding="utf-8"))
+        last_fetched_at = datetime.fromisoformat(prev["fetched_at"])
+    except Exception as e:
+        return True, f"could not read/parse prior census file ({e}) — proceeding"
+
+    boundary = last_quota_reset_boundary(now, reset_hour_utc)
+    if last_fetched_at < boundary:
+        return True, (
+            f"quota window crossed (last run {last_fetched_at.isoformat()}, "
+            f"reset boundary {boundary.isoformat()})"
+        )
+
+    next_boundary = boundary + timedelta(days=1)
+    return False, (
+        f"quota window NOT crossed since last successful run ({last_fetched_at.isoformat()}). "
+        f"Google's URL Inspection API daily quota resets around Pacific midnight "
+        f"(≈ UTC {reset_hour_utc:02d}:00), next boundary ≈ {next_boundary.isoformat()}. "
+        f"Re-running now will likely hit 429 immediately. Pass --force (or workflow input "
+        f"force=true) to override."
+    )
+
+
 def main() -> int:
     # Windows cp932 での文字化け防止のため標準出力を UTF-8 に変更
     if hasattr(sys.stdout, "reconfigure"):
@@ -272,8 +370,28 @@ def main() -> int:
                    help="並列数。URL Inspection API は 1 URL 6-7 秒かかるため逐次では現実的でない")
     p.add_argument("--max-not-indexed-urls", type=int, default=DEFAULT_MAX_NOT_INDEXED_URLS,
                    help="not_indexed_urls に保持する最大件数。0 (既定) で無制限")
+    p.add_argument("--circuit-breaker-threshold", type=int, default=DEFAULT_CIRCUIT_BREAKER_THRESHOLD,
+                   help="連続クォータエラー N 件で残り URL のリトライを打ち切る (#3372)。0 で無効化")
     p.add_argument("--out", default=DEFAULT_OUT)
+    p.add_argument("--preflight-check", action="store_true",
+                   help="#3372: API を叩かず、前回成功 run からクォータリセットウィンドウを"
+                        "跨いだかだけを判定して終了する (0=OK / 1=ブロック)")
+    p.add_argument("--force", action="store_true",
+                   help="--preflight-check のブロックを無視して常に成功扱いにする")
+    p.add_argument("--quota-reset-hour-utc", type=int, default=DEFAULT_QUOTA_RESET_HOUR_UTC,
+                   help="クォータリセット時刻 (UTC 時)。既定は Pacific 深夜の近似値 07:00")
     args = p.parse_args()
+
+    if args.preflight_check:
+        if args.force:
+            logger.info("preflight check skipped: --force specified")
+            return 0
+        ok, msg = check_quota_window(pathlib.Path(args.out), args.quota_reset_hour_utc, datetime.now(timezone.utc))
+        if ok:
+            logger.info("preflight check passed: %s", msg)
+            return 0
+        logger.error("preflight check BLOCKED: %s", msg)
+        return 1
 
     missing = [n for n, v in [
         ("GSC_SITE_URL", args.site_url),
@@ -297,8 +415,9 @@ def main() -> int:
             target_urls = sitemap_urls
 
         creds = (args.client_id, args.client_secret, args.refresh_token)
-        inspected, errors = inspect_urls(
-            creds, args.site_url, target_urls, args.qps, args.workers
+        inspected, errors, circuit_info = inspect_urls(
+            creds, args.site_url, target_urls, args.qps, args.workers,
+            args.circuit_breaker_threshold,
         )
 
         # 集計処理
@@ -348,16 +467,24 @@ def main() -> int:
             "by_indexing_state": by_indexing_state,
             "not_indexed_urls": not_indexed_urls,
             "errors": errors,
+            "circuit_breaker": circuit_info,
         }
 
         out = pathlib.Path(args.out)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
 
-        logger.info(
-            "wrote %s (inspected=%d, indexed=%d, not_indexed=%d, errors=%d)",
-            out, total_inspected, total_indexed, total_not_indexed, total_errors
-        )
+        if circuit_info["tripped"]:
+            logger.warning(
+                "wrote %s (PARTIAL — circuit breaker tripped: inspected=%d, indexed=%d, "
+                "not_indexed=%d, errors=%d)",
+                out, total_inspected, total_indexed, total_not_indexed, total_errors
+            )
+        else:
+            logger.info(
+                "wrote %s (inspected=%d, indexed=%d, not_indexed=%d, errors=%d)",
+                out, total_inspected, total_indexed, total_not_indexed, total_errors
+            )
 
     except Exception as e:
         logger.exception("GSC index inspection failed: %s", e)
