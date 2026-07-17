@@ -486,6 +486,39 @@ class RenderMarkdownReportTest(unittest.TestCase):
         out = render_markdown_report([], generated_at="x", min_score=0.5, wp_total=0, navi_total=0)
         self.assertNotIn("投稿しました", out)
 
+    def test_entries_sorted_by_best_score_and_capped(self):
+        def entry(title, link, score):
+            return {
+                "wp_title": title,
+                "wp_link": link,
+                "candidates": [{"url": "/toys-age-0/", "title": "t", "anchor": "a", "score": score}],
+            }
+        entries = [
+            entry("低スコア", "https://omcha.jp/low/", 0.871),
+            entry("高スコア", "https://omcha.jp/high/", 0.943),
+            entry("中スコア", "https://omcha.jp/mid/", 0.902),
+        ]
+        out = render_markdown_report(
+            entries, generated_at="x", min_score=0.87, wp_total=3, navi_total=3, max_posts=2,
+        )
+        self.assertLess(out.index("高スコア"), out.index("中スコア"))
+        self.assertNotIn("低スコア", out)
+        self.assertIn("上位 2 記事のみ表示", out)
+        self.assertIn("候補あり全 3 記事", out)
+
+    def test_max_posts_zero_shows_all(self):
+        entries = [{
+            "wp_title": f"記事{i}",
+            "wp_link": f"https://omcha.jp/p{i}/",
+            "candidates": [{"url": "/toys-age-0/", "title": "t", "anchor": "a", "score": 0.9}],
+        } for i in range(3)]
+        out = render_markdown_report(
+            entries, generated_at="x", min_score=0.87, wp_total=3, navi_total=3, max_posts=0,
+        )
+        for i in range(3):
+            self.assertIn(f"記事{i}", out)
+        self.assertNotIn("のみ表示", out)
+
 
 # --------------------------------------------------------------------------
 # run() E2E (HTTP はモック)

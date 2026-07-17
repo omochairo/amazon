@@ -70,7 +70,13 @@ DEFAULT_RURI_URL = "http://localhost:8000"
 DEFAULT_OUT = "data/analytics/wp_navi_link_candidates.md"
 NAVI_BASE_URL = "https://navi.omcha.jp"
 
-DEFAULT_MIN_SCORE = 0.55  # 保守的な既定値 (要実データ較正・issue #3333 設計コメント)
+# 2026-07-18 初回 shadow run (n=2415 スコア) で較正済み: median 0.828 はノイズ帯
+# (無関係記事でも 0.82 前後が出る)、同一商品/同一ブランドの的中は 0.87 以上に集中。
+# Ruri v3 非対称埋め込みの cosine は高域圧縮されるため 0.5 台の閾値は機能しない。
+DEFAULT_MIN_SCORE = 0.87
+# レポートはオーナーが WP を手動編集するための資料なので、スコア上位に絞って
+# actionable に保つ (0 = 無制限)。
+DEFAULT_MAX_POSTS = 50
 DEFAULT_TOP_K = 3
 DEFAULT_PER_PAGE = 100
 DEFAULT_SLEEP_SECONDS = 1.0
@@ -553,8 +559,18 @@ def render_markdown_report(
     min_score: float,
     wp_total: int,
     navi_total: int,
+    max_posts: int = DEFAULT_MAX_POSTS,
 ) -> str:
-    """WP 記事ごとの navi 候補を markdown レポートにする。"""
+    """WP 記事ごとの navi 候補を markdown レポートにする。
+
+    エントリはベスト候補スコア降順に並べ、``max_posts`` 件 (0=無制限) に絞る —
+    オーナーが上から順に WP を手動編集する読み物として actionable に保つため。
+    """
+    ranked = sorted(
+        wp_entries,
+        key=lambda e: (-max(c["score"] for c in e["candidates"]), e["wp_link"]),
+    )
+    shown = ranked if max_posts <= 0 else ranked[:max_posts]
     lines = [
         "# WP → navi リンク候補レポート (Phase 1・issue #3333)",
         "",
@@ -568,11 +584,16 @@ def render_markdown_report(
         " navi へのリンク追記は、本レポートを見てオーナーが WP を手動編集してください。",
         "",
     ]
+    if len(shown) < len(ranked):
+        lines.append(
+            f"(ベスト候補スコア降順で上位 {len(shown)} 記事のみ表示。候補あり全 {len(ranked)} 記事は --max-posts 0 で出力可)"
+        )
+        lines.append("")
     if not wp_entries:
         lines.append("(類似度閾値以上の navi 候補が見つかった WP 記事はありませんでした)")
         return "\n".join(lines) + "\n"
 
-    for entry in wp_entries:
+    for entry in shown:
         lines.append(f"## {entry['wp_title']}")
         lines.append(f"- WP URL: {entry['wp_link']}")
         lines.append("- navi 候補:")
@@ -597,6 +618,7 @@ def run(
     ruri_url: str = DEFAULT_RURI_URL,
     out_path: pathlib.Path,
     min_score: float = DEFAULT_MIN_SCORE,
+    max_posts: int = DEFAULT_MAX_POSTS,
     top_k: int = DEFAULT_TOP_K,
     per_page: int = DEFAULT_PER_PAGE,
     sleep_seconds: float = DEFAULT_SLEEP_SECONDS,
@@ -666,6 +688,7 @@ def run(
         min_score=min_score,
         wp_total=len(wp_posts),
         navi_total=len(navi_candidates),
+        max_posts=max_posts,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(report, encoding="utf-8")
@@ -685,6 +708,7 @@ def main() -> int:
     ap.add_argument("--ruri-url", default=os.environ.get("RURI_URL", DEFAULT_RURI_URL), help="Ruri v3 API の URL")
     ap.add_argument("--out", default=DEFAULT_OUT, help="markdown レポートの出力先パス")
     ap.add_argument("--min-score", type=float, default=DEFAULT_MIN_SCORE, help="この cosine 類似度未満の候補は出さない")
+    ap.add_argument("--max-posts", type=int, default=DEFAULT_MAX_POSTS, help="レポートに載せる WP 記事数の上限 (ベスト候補スコア降順、0=無制限)")
     ap.add_argument("--top-k", type=int, default=DEFAULT_TOP_K, help="WP 記事あたりの navi 候補数上限")
     ap.add_argument("--per-page", type=int, default=DEFAULT_PER_PAGE, help="WP REST API の 1 ページあたり件数")
     ap.add_argument("--sleep-seconds", type=float, default=DEFAULT_SLEEP_SECONDS, help="WP ページ間の待機秒数 (低レート)")
@@ -699,6 +723,7 @@ def main() -> int:
         ruri_url=args.ruri_url,
         out_path=pathlib.Path(args.out),
         min_score=args.min_score,
+        max_posts=args.max_posts,
         top_k=args.top_k,
         per_page=args.per_page,
         sleep_seconds=args.sleep_seconds,
