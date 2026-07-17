@@ -102,3 +102,22 @@ rejected:
     category: unverifiable_oem
     reviewed: 2026-06-09
     source: "#2158"
+
+  # --- 玩具カテゴリ外 (#2931 実査) ---
+  - brand: Green_Lifes
+    category: out_of_category
+    reason: SDGsバッジ (企業・団体向け襟章ピン、玩具ではない)
+    reviewed: 2026-07-17
+    source: "#2931"
+
+  # --- ランダム英字 OEM (実体裏取り不可・#2931 実査) ---
+  - brand: Vollebo
+    category: unverifiable_oem
+    reason: 同名で全く無関係な商品カテゴリ (ベビージム/ベンチプレス台) に使われており独自ブランド実体を確認できず
+    reviewed: 2026-07-17
+    source: "#2931"
+  - brand: U.STAR
+    category: unverifiable_oem
+    reason: "「Happy Flowerが運営」との定型販促文言のみで独立した企業情報・ブランドストアを確認できず"
+    reviewed: 2026-07-17
+    source: "#2931"
