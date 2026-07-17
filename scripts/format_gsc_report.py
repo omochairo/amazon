@@ -126,6 +126,9 @@ def render(data: dict, top_query: int, top_page: int, top_opp: int) -> str:
 
 
 def main() -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--input", default="data/analytics/gsc_weekly.json")
     p.add_argument("--top-query", type=int, default=TOP_QUERY_DEFAULT)
