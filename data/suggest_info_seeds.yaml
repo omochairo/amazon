@@ -1,0 +1,70 @@
+# data/suggest_info_seeds.yaml
+#
+# Issue #3332 N2 Lane A: 情報型シードの定義データ。
+# scripts/fetch_suggest_info.py はここに定義された themes x modifiers から
+# 収集対象クエリを機械生成する (コード側にシード文字列をハードコードしない)。
+#
+# 由来:
+#   - themes (kind: age)      #2687 の年齢 hub (toys-age-0〜6)。ハブは
+#                              4〜5歳/6歳以上のようにグルーピングされているが、
+#                              実際の検索行動は単年齢が主 (#2690 実測でも
+#                              「2歳 おもちゃ」のように単年齢粒度) なので
+#                              0〜6歳の単年齢で定義する。
+#   - themes (kind: category)  #2690 で確定した Tier A 勝算リスト
+#                              (英語 / プログラミング / 算数) = #2687 の
+#                              テーマ別 category hub (english-toys / math-toys /
+#                              programming-toys) と対応。
+#   - themes (kind: method)    #3332 N2 設計コメントの例示
+#                              (「モンテッソーリ おもちゃ」) を踏襲。既存 hub には
+#                              まだ対応する専用ページは無いが、情報型の需要
+#                              サブクエリ供給という Lane A の目的には合致するため
+#                              先行して種に加える (将来 hub 化するかは Lane B の
+#                              判断)。
+#
+#   modifiers      base query 生成用の修飾語 (展開なし)。#2690 実測の
+#                  「テーマ + おもちゃ + ランキング/おすすめ」パターンを踏襲。
+#   expand_modifier a-z / 五十音 suffix 再帰展開の対象にする基準修飾語。
+#                  fetch_suggest_info.py の EXPANSION_SUFFIXES で
+#                  `<theme label> <expand_modifier> <suffix>` の形に展開する。
+
+themes:
+  - key: age-0
+    label: "0歳"
+    kind: age
+  - key: age-1
+    label: "1歳"
+    kind: age
+  - key: age-2
+    label: "2歳"
+    kind: age
+  - key: age-3
+    label: "3歳"
+    kind: age
+  - key: age-4
+    label: "4歳"
+    kind: age
+  - key: age-5
+    label: "5歳"
+    kind: age
+  - key: age-6
+    label: "6歳"
+    kind: age
+  - key: english
+    label: "英語"
+    kind: category
+  - key: programming
+    label: "プログラミング"
+    kind: category
+  - key: math
+    label: "算数"
+    kind: category
+  - key: montessori
+    label: "モンテッソーリ"
+    kind: method
+
+modifiers:
+  - "おもちゃ"
+  - "おもちゃ ランキング"
+  - "おもちゃ おすすめ"
+
+expand_modifier: "おもちゃ"
