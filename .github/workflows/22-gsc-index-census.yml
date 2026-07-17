@@ -18,6 +18,10 @@ name: GSC Index Census (URL Inspection API)
 #   - commit-back は App token + PR + auto-merge (main protection 回避。
 #     18-analytics-daily.yml と同パターン)
 #   - secrets 未設定なら skip して空 run で終了 (壊さない)
+#   - #3372: 手動 workflow_dispatch は前回成功 run からクォータリセットウィンドウを
+#     跨いだか pre-flight で確認し、跨いでいなければ install 前にブロックする
+#     (force=true で override 可)。加えてスクリプト側に circuit breaker があり、
+#     ガードをすり抜けても連続 429 で早期打ち切りする (二段構え)
 #
 # 必須 secrets:
 #   - APP_ID, APP_PRIVATE_KEY   (commit-back 用 App token)
@@ -31,6 +35,10 @@ on:
         description: '検査する URL 数の上限 (0=無制限。クォータ 2000/日に注意)'
         required: false
         default: '1800'
+      force:
+        description: '前回成功 run からクォータリセットウィンドウ (Pacific深夜≈UTC07:00) を跨いでいなくても強制実行する (#3372)'
+        required: false
+        default: 'false'
   schedule:
     # 毎週月曜 07:00 JST = 22:00 UTC (日曜)。18-analytics-daily (21:00 UTC) と 1h ずらす
     - cron: '0 22 * * 0'
@@ -68,6 +76,18 @@ jobs:
         with:
           python-version: '3.11'
 
+      # #3372: 直近の成功 run からクォータリセットウィンドウ (Pacific深夜≈UTC07:00) を
+      # 跨いでいない手動再実行を検知してブロックする。stdlib のみで完結するため
+      # google-* の pip install より前に置き、ブロック時は無駄な install も省く
+      - name: Pre-flight quota window guard
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            echo "::notice::force=true — skipping quota window guard (#3372)"
+            exit 0
+          fi
+          python scripts/inspect_gsc_index.py --preflight-check --out data/analytics/gsc_index_census.json
+
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
@@ -103,7 +123,10 @@ jobs:
           import json, pathlib
           d = json.loads(pathlib.Path("data/analytics/gsc_index_census.json").read_text(encoding="utf-8"))
           t = d["totals"]
+          cb = d.get("circuit_breaker", {})
           print("## GSC Index Census (#2701 P4)\n")
+          if cb.get("tripped"):
+              print(f"> ⚠️ **circuit breaker が発動し、途中で打ち切りました** (連続クォータエラー閾値={cb.get('threshold')}件)。データは部分的です (#3372)\n")
           print(f"- 対象: `{d['prefix']}` / sitemap {t['sitemap_urls']} 件中 {t['inspected']} 件を検査")
           rate = (t["indexed"] / t["inspected"] * 100) if t["inspected"] else 0.0
           print(f"- **index 済み: {t['indexed']} / {t['inspected']} ({rate:.1f}%)**")
