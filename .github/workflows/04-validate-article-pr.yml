@@ -553,13 +553,20 @@ jobs:
         id: list
         run: |
           set -e
+          # sidecar (記事本体でない派生 JSON) は article.schema.json の対象外。
+          # コードベース正準の除外集合は (enrichment|quality|seo) — 例えば
+          # scripts/notify_*.py / analyze_low_confidence_links.py / 03-invoke-jules.yml
+          # は 3 種すべてを endswith 除外している。ここは以前 quality のみ除外で
+          # .seo.json (#3332 N1/N3 レーンの sidecar) と .enrichment.json を取り
+          # こぼし、schema 検証で 'slug' required エラーになって毎晩の data PR を
+          # BLOCKED にしていた。新 sidecar 種別を足すときはこの集合も更新する。
           if [ "${{ steps.range.outputs.mode }}" = "full" ]; then
-            files=$(ls data/articles/*.json 2>/dev/null | grep -v '\.quality\.json$' || true)
+            files=$(ls data/articles/*.json 2>/dev/null | grep -vE '\.(enrichment|quality|seo)\.json$' || true)
           else
             files=$(git diff --name-only --diff-filter=AM \
                       "${{ steps.range.outputs.base }}" "${{ steps.range.outputs.head }}" \
                       -- 'data/articles/*.json' \
-                    | grep -v '\.quality\.json$' || true)
+                    | grep -vE '\.(enrichment|quality|seo)\.json$' || true)
           fi
           if [ -z "$files" ]; then
             echo "No article JSON changes detected; nothing to validate."
