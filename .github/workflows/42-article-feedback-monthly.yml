@@ -1,0 +1,132 @@
+name: Article Feedback Monthly Rollup
+
+# Issue #2051 ([#1365 Layer 3-2] article_feedback monthly rollup -> auto Issue dump)
+#
+# hugo/assets/js/article_feedback.js が送出する GA4 custom event
+# `article_feedback` (rating + page_path) を月次窓で集計し、bad (物足りない)
+# 比率が高いページ上位を「改善候補」として Issue にまとめて起票する
+# read-mostly workflow。
+#
+# 設計判断 (2 段階 shadow gate、このリポジトリの運用文化に従う):
+#   - workflow_dispatch のみで新設。schedule は付けない。
+#   - dry_run default は true (Issue 起票を常に抑止した状態が既定)。
+#     初回 shadow 実行でレポート品質・データ有無をオーナーが確認してから、
+#     schedule (月次 cron) 追加 + dry_run 既定 false 切り替えを別 PR で行う。
+#   - GA4 custom dimension `rating` が未登録の間は rating 内訳なしで
+#     event 件数のみのレポートに自動 degrade する (scripts/fetch_ga4_article_feedback.py)。
+#   - main への data commit は行わない (data/analytics/ 配下の他 detect_*.json と
+#     同様、artifact upload のみ。App token 不要)。
+#   - Issue 起票は「月 1 件」: 同月の open Issue があれば新規作成せずコメント追記
+#     (scripts/open_article_feedback_issue.py の marker guard)。
+#
+# 必須 secrets (GA4, 17/18 と共通):
+#   - GA4_SA_JSON            Service Account JSON 全文
+#   - GA4_PROPERTY_ID        GA4 property の数値 ID
+# 未設定ならこの workflow は何もせず終了する (壊さない)。
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'true = Issue起票/コメントを抑止 (shadow run, default)'
+        type: boolean
+        default: true
+      month:
+        description: '対象暦月 YYYY-MM (空なら直近30日窓)'
+        type: string
+        default: ''
+      min_total:
+        description: 'ワーストページ候補とする最小フィードバック件数'
+        type: string
+        default: '5'
+      max_results:
+        description: 'レポートに載せる上位ページ件数'
+        type: string
+        default: '15'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: article-feedback-monthly-report
+  cancel-in-progress: false
+
+jobs:
+  rollup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-analytics-data google-auth
+
+      - name: Fetch GA4 article_feedback (monthly window)
+        id: fetch
+        env:
+          GA4_SA_JSON: ${{ secrets.GA4_SA_JSON }}
+          GA4_PROPERTY_ID: ${{ secrets.GA4_PROPERTY_ID }}
+        run: |
+          set +e
+          if [ -z "$GA4_SA_JSON" ] || [ -z "$GA4_PROPERTY_ID" ]; then
+            echo "::error::GA4_SA_JSON or GA4_PROPERTY_ID secret is not set"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          MONTH_ARG=""
+          if [ -n "${{ inputs.month }}" ]; then
+            MONTH_ARG="--month ${{ inputs.month }}"
+          fi
+          python scripts/fetch_ga4_article_feedback.py $MONTH_ARG
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            echo "::error::GA4 article_feedback fetch failed (rc=$rc)"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
+      - name: Detect worst pages
+        id: detect
+        if: steps.fetch.outputs.available == 'true'
+        continue-on-error: true
+        run: |
+          set -e
+          python scripts/detect_article_feedback_worst_pages.py \
+            --min-total "${{ inputs.min_total }}" \
+            --max-results "${{ inputs.max_results }}"
+          echo "--- preview (data/analytics/article_feedback_worst_pages.json) ---"
+          python -c "import json; d=json.load(open('data/analytics/article_feedback_worst_pages.json',encoding='utf-8')); print(json.dumps(d, ensure_ascii=False, indent=2)[:2000])"
+          echo "--- end preview ---"
+
+      - name: Upload artifacts
+        if: steps.fetch.outputs.available == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: article-feedback-monthly-${{ github.run_id }}
+          path: |
+            data/analytics/article_feedback_monthly.json
+            data/analytics/article_feedback_worst_pages.json
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Open or update monthly Issue
+        if: steps.fetch.outputs.available == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          DRY_ARGS=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            DRY_ARGS="--dry-run"
+          fi
+          python scripts/open_article_feedback_issue.py $DRY_ARGS
