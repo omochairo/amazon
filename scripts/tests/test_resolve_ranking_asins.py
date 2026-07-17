@@ -278,5 +278,263 @@ class UpdateRankingPoolTest(unittest.TestCase):
         self.assertEqual(p2, [])
 
 
+# --------------------------------------------------------------------------
+# #2818 対策4c (title fuzzy) + #3332 N5-V1 (vision ゲート)
+# --------------------------------------------------------------------------
+
+def _fuzzy_candidate(asin, title, price, image="https://amazon/img.jpg"):
+    """Creator API searchItems 応答 item の最小構造を組み立てるヘルパ。"""
+    return {
+        "asin": asin,
+        "itemInfo": {"title": {"displayValue": title}},
+        "offersV2": {"listings": [{"price": {"money": {"amount": price}}}]},
+        "images": {"primary": {"large": {"url": image}}},
+    }
+
+
+class FakeFuzzyAPI:
+    """search_items(keywords=正規化タイトル) → 固定の候補リストを返す (title fuzzy 用)。
+
+    ``candidates`` は「検索クエリの部分文字列 → 候補 item リスト」のマップ。実際の
+    ``_normalize_title_for_search`` を通した後のクエリに対し、キーが含まれていれば
+    そのリストを返す (楽天タイトルの装飾除去を経ても引けることを検証するため)。
+    """
+
+    def __init__(self, candidates: dict):
+        self.candidates = candidates
+        self.calls = []
+
+    def search_items(self, keywords=None, search_index="All", item_count=10,
+                     item_page=1, resources=None):
+        self.calls.append(keywords)
+        for key, items in self.candidates.items():
+            if key in (keywords or ""):
+                return {"searchResult": {"items": items}}
+        return {"searchResult": {"items": []}}
+
+
+class FakeVisionClient:
+    """URL ペア → 類似度を固定で返すモック (image_similarity 経由で使う)。"""
+
+    def __init__(self, url_to_vector):
+        self.url_to_vector = url_to_vector
+
+    def embed_images(self, image_urls):
+        return [self.url_to_vector.get(u) for u in image_urls]
+
+
+class NormalizeTitleTest(unittest.TestCase):
+    def test_strips_decorations_and_truncates(self):
+        title = "【送料無料】レゴ (LEGO) デュプロ 10913 基礎ブロック"
+        out = rr._normalize_title_for_search(title)
+        self.assertNotIn("【", out)
+        self.assertNotIn("(", out)
+        self.assertIn("レゴ", out)
+        self.assertIn("10913", out)
+
+    def test_empty_returns_empty(self):
+        self.assertEqual(rr._normalize_title_for_search(""), "")
+
+
+class ModelTokensTest(unittest.TestCase):
+    def test_extracts_only_digit_bearing_tokens(self):
+        # "LEGO" (純アルファベット) は落ち、数字を含む型番トークンだけ残る。
+        self.assertEqual(rr._extract_model_tokens("LEGO 10913 N700 ab abc"), {"10913", "N700"})
+
+    def test_pure_alpha_tokens_excluded(self):
+        self.assertEqual(rr._extract_model_tokens("DUPLO CLASSIC"), set())
+
+    def test_none_returns_empty(self):
+        self.assertEqual(rr._extract_model_tokens(""), set())
+
+
+class EvaluateTitleFuzzyCandidateTest(unittest.TestCase):
+    def test_all_guardrails_pass(self):
+        cand = _fuzzy_candidate("B0LEGO0001", "レゴ LEGO デュプロ 10913", 3000)
+        evald = rr.evaluate_title_fuzzy_candidate(
+            "レゴ LEGO デュプロ 10913 基礎ブロックセット", 3200, cand
+        )
+        self.assertTrue(evald["passed_guardrails"])
+        self.assertTrue(evald["brand_match"])
+        self.assertTrue(evald["model_token_match"])
+        self.assertTrue(evald["price_ok"])
+        self.assertIn("10913", evald["common_tokens"])
+
+    def test_brand_mismatch_fails(self):
+        # 候補が別ブランド (タカラトミー) → brand_match False → 不採用。
+        cand = _fuzzy_candidate("B0OTHER001", "タカラトミー プラレール 10913", 3000)
+        evald = rr.evaluate_title_fuzzy_candidate("レゴ LEGO デュプロ 10913", 3000, cand)
+        self.assertFalse(evald["brand_match"])
+        self.assertFalse(evald["passed_guardrails"])
+
+    def test_model_token_mismatch_fails(self):
+        cand = _fuzzy_candidate("B0LEGO0002", "レゴ LEGO クラシック 99999", 3000)
+        evald = rr.evaluate_title_fuzzy_candidate("レゴ LEGO デュプロ 10913", 3000, cand)
+        self.assertTrue(evald["brand_match"])
+        self.assertFalse(evald["model_token_match"])
+        self.assertFalse(evald["passed_guardrails"])
+
+    def test_price_out_of_band_fails(self):
+        # 楽天 3000 円に対し候補 10000 円 (+233%) は ±40% 外 → price_ok False。
+        cand = _fuzzy_candidate("B0LEGO0003", "レゴ LEGO デュプロ 10913", 10000)
+        evald = rr.evaluate_title_fuzzy_candidate("レゴ LEGO デュプロ 10913", 3000, cand)
+        self.assertFalse(evald["price_ok"])
+        self.assertFalse(evald["passed_guardrails"])
+
+    def test_missing_price_fails_closed(self):
+        cand = _fuzzy_candidate("B0LEGO0004", "レゴ LEGO デュプロ 10913", 0)
+        evald = rr.evaluate_title_fuzzy_candidate("レゴ LEGO デュプロ 10913", 0, cand)
+        self.assertFalse(evald["price_ok"])
+        self.assertFalse(evald["passed_guardrails"])
+
+    def test_unknown_brand_both_sides_fails(self):
+        # 双方 unknown ブランドでは brand_match を成立させない (誤マッチ防止)。
+        cand = _fuzzy_candidate("B0NOBRAND1", "謎の知育玩具 ABCD1234", 3000)
+        evald = rr.evaluate_title_fuzzy_candidate("別の謎おもちゃ ABCD1234", 3000, cand)
+        self.assertFalse(evald["brand_match"])
+        self.assertFalse(evald["passed_guardrails"])
+
+
+class CollectUnmatchedNoJanTest(unittest.TestCase):
+    def test_selects_only_unmatched_without_jan(self):
+        items = [
+            {"rank": 1, "matched_asin": "B0EXIST", "title": "既存 4904810000001"},
+            {"rank": 2, "matched_asin": None, "title": "JAN あり 4904810000002"},
+            {"rank": 3, "matched_asin": None, "title": "JAN なし プール玩具"},
+            {"rank": 4, "matched_asin": None, "title": ""},  # title 空 → 除外
+        ]
+        out = rr._collect_unmatched_no_jan(items)
+        self.assertEqual([it["rank"] for it in out], [3])
+
+
+class ResolveTitleFuzzyTest(unittest.TestCase):
+    def setUp(self):
+        # JAN 抽出不可 (数字が JAN パターンでない)・未マッチの item。
+        self.items = [
+            {"rank": 1, "matched_asin": None,
+             "title": "レゴ LEGO デュプロ 10913 基礎ブロック", "price": 3200,
+             "image": "https://rakuten/lego.jpg"},
+        ]
+
+    def test_resolves_when_guardrails_pass_shadow_mode(self):
+        api = FakeFuzzyAPI({"10913": [_fuzzy_candidate("B0LEGO0001", "レゴ LEGO デュプロ 10913", 3000)]})
+        m = rr.resolve_title_fuzzy(self.items, api, covered=set(), seen_asins=set(), sleep=0)
+        self.assertEqual([e["asin"] for e in m["title_fuzzy_resolved"]], ["B0LEGO0001"])
+        entry = m["title_fuzzy_resolved"][0]
+        self.assertEqual(entry["match_method"], "title_fuzzy")
+        # shadow モード (vision_client 無し) では image_sim=None でも採用される。
+        self.assertIsNone(entry["image_sim"])
+        self.assertTrue(entry["vision_gate_passed"])
+
+    def test_rejects_when_no_guardrail_pass(self):
+        api = FakeFuzzyAPI({"10913": [_fuzzy_candidate("B0OTHER001", "タカラトミー プラレール 10913", 3000)]})
+        m = rr.resolve_title_fuzzy(self.items, api, covered=set(), seen_asins=set(), sleep=0)
+        self.assertEqual(m["title_fuzzy_resolved"], [])
+        self.assertEqual(m["title_fuzzy_rejected"][0]["reason"], "no_guardrail_pass")
+
+    def test_skips_already_covered_and_seen(self):
+        api = FakeFuzzyAPI({"10913": [_fuzzy_candidate("B0LEGO0001", "レゴ LEGO デュプロ 10913", 3000)]})
+        m = rr.resolve_title_fuzzy(self.items, api, covered={"B0LEGO0001"}, seen_asins=set(), sleep=0)
+        self.assertEqual(m["title_fuzzy_resolved"], [])
+
+    def test_vision_enforce_rejects_low_similarity(self):
+        api = FakeFuzzyAPI({"10913": [
+            _fuzzy_candidate("B0LEGO0001", "レゴ LEGO デュプロ 10913", 3000, image="https://amazon/lego.jpg")
+        ]})
+        # 楽天画像 ⟂ Amazon 画像 (直交) → 類似度 0.0 < 0.9 → enforce で不採用。
+        vc = FakeVisionClient({
+            "https://rakuten/lego.jpg": [1.0, 0.0],
+            "https://amazon/lego.jpg": [0.0, 1.0],
+        })
+        m = rr.resolve_title_fuzzy(
+            self.items, api, covered=set(), seen_asins=set(), sleep=0,
+            vision_client=vc, vision_gate_mode="enforce", vision_min_score=0.9,
+        )
+        self.assertEqual(m["title_fuzzy_resolved"], [])
+        self.assertEqual(m["title_fuzzy_rejected"][0]["reason"], "vision_gate_rejected")
+        self.assertAlmostEqual(m["title_fuzzy_rejected"][0]["image_sim"], 0.0)
+
+    def test_vision_enforce_accepts_high_similarity(self):
+        api = FakeFuzzyAPI({"10913": [
+            _fuzzy_candidate("B0LEGO0001", "レゴ LEGO デュプロ 10913", 3000, image="https://amazon/lego.jpg")
+        ]})
+        vc = FakeVisionClient({
+            "https://rakuten/lego.jpg": [1.0, 0.0],
+            "https://amazon/lego.jpg": [1.0, 0.0],  # 同一方向 → 類似度 1.0
+        })
+        m = rr.resolve_title_fuzzy(
+            self.items, api, covered=set(), seen_asins=set(), sleep=0,
+            vision_client=vc, vision_gate_mode="enforce", vision_min_score=0.9,
+        )
+        self.assertEqual([e["asin"] for e in m["title_fuzzy_resolved"]], ["B0LEGO0001"])
+        self.assertAlmostEqual(m["title_fuzzy_resolved"][0]["image_sim"], 1.0)
+
+    def test_vision_shadow_records_but_does_not_gate(self):
+        # shadow モードでは低類似度でも採用し、image_sim を記録するのみ。
+        api = FakeFuzzyAPI({"10913": [
+            _fuzzy_candidate("B0LEGO0001", "レゴ LEGO デュプロ 10913", 3000, image="https://amazon/lego.jpg")
+        ]})
+        vc = FakeVisionClient({
+            "https://rakuten/lego.jpg": [1.0, 0.0],
+            "https://amazon/lego.jpg": [0.0, 1.0],  # 直交 = 0.0
+        })
+        m = rr.resolve_title_fuzzy(
+            self.items, api, covered=set(), seen_asins=set(), sleep=0,
+            vision_client=vc, vision_gate_mode="shadow", vision_min_score=0.9,
+        )
+        self.assertEqual([e["asin"] for e in m["title_fuzzy_resolved"]], ["B0LEGO0001"])
+        self.assertAlmostEqual(m["title_fuzzy_resolved"][0]["image_sim"], 0.0)
+
+    def test_limit_caps_candidates_and_records_pre_limit(self):
+        items = [
+            dict(self.items[0], rank=1),
+            {"rank": 2, "matched_asin": None, "title": "レゴ LEGO クラシック 11717", "price": 4000},
+        ]
+        api = FakeFuzzyAPI({
+            "10913": [_fuzzy_candidate("B0LEGO0001", "レゴ LEGO デュプロ 10913", 3000)],
+            "11717": [_fuzzy_candidate("B0LEGO0002", "レゴ LEGO クラシック 11717", 4000)],
+        })
+        m = rr.resolve_title_fuzzy(items, api, covered=set(), seen_asins=set(), limit=1, sleep=0)
+        self.assertEqual(m["title_fuzzy_candidates_before_limit"], 2)
+        self.assertEqual(m["title_fuzzy_input"], 1)
+
+
+class ResolveRankingAsinsTitleFuzzyIntegrationTest(unittest.TestCase):
+    def test_disabled_by_default_no_title_fuzzy_key(self):
+        items = [{"rank": 1, "matched_asin": None, "title": "プール玩具 大型"}]
+        api = FakeAPI({})
+        m = rr.resolve_ranking_asins(items, api, set(), sleep=0)
+        self.assertNotIn("title_fuzzy", m)
+
+    def test_enabled_merges_fuzzy_new_asins(self):
+        # JAN あり item (JAN 経路) + JAN 無し item (fuzzy 経路) を混在させ、
+        # new_asins に両方が入ることを検証する。
+        items = [
+            {"rank": 1, "matched_asin": None, "title": "A 4904810000010"},  # JAN
+            {"rank": 2, "matched_asin": None, "title": "レゴ LEGO デュプロ 10913", "price": 3000},  # fuzzy
+        ]
+
+        class CombinedAPI:
+            """JAN 検索と title fuzzy 検索を 1 つの API で両対応する。"""
+
+            def search_items(self, keywords=None, **kw):
+                if keywords == "4904810000010":
+                    return {"searchResult": {"items": [
+                        {"asin": "B0JAN00010", "itemInfo": {
+                            "externalIds": {"eans": {"displayValues": ["4904810000010"]}}}},
+                    ]}}
+                if "10913" in (keywords or ""):
+                    return {"searchResult": {"items": [
+                        _fuzzy_candidate("B0LEGO0001", "レゴ LEGO デュプロ 10913", 3000)]}}
+                return {"searchResult": {"items": []}}
+
+        m = rr.resolve_ranking_asins(
+            items, CombinedAPI(), set(), sleep=0, enable_title_fuzzy=True,
+        )
+        self.assertIn("title_fuzzy", m)
+        self.assertIn("B0JAN00010", m["new_asins"])
+        self.assertIn("B0LEGO0001", m["new_asins"])
+
+
 if __name__ == "__main__":
     unittest.main()
