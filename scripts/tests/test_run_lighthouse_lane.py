@@ -10,6 +10,7 @@ import pathlib
 
 import pytest
 
+import scripts.run_lighthouse_lane as rll
 from scripts.run_lighthouse_lane import (
     LIGHTHOUSE_HISTORY_FILENAME,
     aggregate_runs,
@@ -233,7 +234,9 @@ def test_append_records_noop_on_empty(tmp_path: pathlib.Path):
 
 # ---------- targets ----------
 
-def test_get_targets_origin_only_without_gsc(tmp_path: pathlib.Path):
+def test_get_targets_origin_only_without_gsc(tmp_path: pathlib.Path, monkeypatch):
+    """gsc_path が無く、リポジトリの gsc_history フォールバックも無いケース。"""
+    monkeypatch.setattr(rll, "latest_gsc_history", lambda: None)
     t = get_targets("https://navi.omcha.jp", tmp_path / "missing.json", 5, [])
     assert t == ["https://navi.omcha.jp/"]
 
@@ -250,7 +253,8 @@ def test_get_targets_merges_gsc_top_and_extra(tmp_path: pathlib.Path):
     assert "https://navi.omcha.jp/extra/" in t
 
 
-def test_get_targets_dedupes(tmp_path: pathlib.Path):
+def test_get_targets_dedupes(tmp_path: pathlib.Path, monkeypatch):
+    monkeypatch.setattr(rll, "latest_gsc_history", lambda: None)
     t = get_targets("https://navi.omcha.jp", tmp_path / "x.json", 3,
                     ["https://navi.omcha.jp/", "https://navi.omcha.jp/"])
     assert len(t) == 1
