@@ -898,6 +898,9 @@ _INTERNAL_LINK_MAX_PER_ARTICLE = 3
 _INTERNAL_LINK_ANCHOR_FORBIDDEN_CHARS: tuple[str, ...] = (
     "[", "]", "(", ")", "\n", "\r", "`",
 )
+# 文末句読点で終わる anchor は一文まるごとのリンク化に見え不自然 (供給側
+# generate_internal_links.py と同じ規則を消費側でも独立実装。#3332 検証規則13)
+_INTERNAL_LINK_SENTENCE_FINAL_PUNCTUATION: tuple[str, ...] = ("。", "！", "？", ".", "!", "?")
 
 _INTERNAL_LINK_MD_RE = re.compile(r"\[[^\]\n]*\]\([^)\n]*\)")
 _INTERNAL_LINK_TAG_RE = re.compile(r"<[^>\n]+>")
@@ -937,6 +940,8 @@ def _inject_internal_links(
         9. anchor に動的事実 (価格・在庫等) の禁止語を含まないこと
         10. 1 記事 3 本まで / 1 段落 1 本 / 1 セクション 1 本 / 同一 target 重複禁止
             (超過分は list 順で後のものを drop)
+        11. anchor が文末句読点 (。！？.!?) で終わらないこと (一文まるごとの
+            リンク化を防ぐ)
 
     戻り値: ``(injected, dropped)`` の件数タプル (build manifest 集計用)。
     """
@@ -1014,6 +1019,10 @@ def _inject_internal_links(
         # markdown リンク構文を破壊する文字 ([ ] ( ) 改行 バッククォート) を含む
         # anchor は壊れたリンクを生成するため drop (#3332 レビュー指摘)。
         if any(ch in anchor for ch in _INTERNAL_LINK_ANCHOR_FORBIDDEN_CHARS):
+            dropped += 1
+            continue
+        # 規則11: 一文まるごとのリンク化防止
+        if anchor.endswith(_INTERNAL_LINK_SENTENCE_FINAL_PUNCTUATION):
             dropped += 1
             continue
         if anchor in _INTERNAL_LINK_DENYLIST:

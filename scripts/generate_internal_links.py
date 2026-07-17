@@ -148,6 +148,10 @@ _ANCHOR_MIN = 4
 _ANCHOR_MAX = 30
 MAX_LINKS_PER_ARTICLE = 3
 _ANCHOR_FORBIDDEN_CHARS: tuple[str, ...] = ("[", "]", "(", ")", "\n", "\r", "`")
+# 文末の句読点で終わるアンカーは「短いフレーズ」ではなく「一文まるごと」に見え、
+# リンクとして不自然。gemma がプロンプト指示を守らず文末込みで抜き出した場合に
+# fail-closed で弾く (プロンプト側の指示だけでは完全には防げないため二重の防御)
+_SENTENCE_FINAL_PUNCTUATION: tuple[str, ...] = ("。", "！", "？", ".", "!", "?")
 _MD_RE = re.compile(r"\[[^\]\n]*\]\([^)\n]*\)")
 _TAG_RE = re.compile(r"<[^>\n]+>")
 
@@ -166,6 +170,9 @@ GENERATION_PROMPT_TEMPLATE = """あなたは記事本文の中から、他記事
 
 ## 指示
 - anchor_text は必ず指定した段落からの逐語コピーにすること。1 文字も変えてはいけない。要約・言い換えは禁止。
+- anchor_text は文末の句点 (。！？) を含めないこと。1 文まるごとではなく、名詞句など
+  短く自然なフレーズを選ぶこと (例: 「空間認識力が育まれます」ではなく「空間認識力」
+  のように、文の主要部だけを切り出す)。
 - リンク先の商品に自然につながる語句だけを選ぶこと。関連が薄いなら links を空配列にしてよい。
 - 価格・在庫・ポイント還元など時間で変化する事実を含む語句はアンカーにしないこと。
 - 1 記事につき最大 3 件、1 段落につき 1 件、同じ target_asin の重複は不可。
@@ -567,6 +574,8 @@ def validate_link_suggestions(
         10. anchor に markdown 破壊文字 ([ ] ( ) 改行 バッククォート) を含まないこと
         11. 1 記事 3 本まで / 1 段落 1 本 / 1 セクション 1 本 / 同一 target 重複禁止
         12. target がpurchase_unavailable (販売終了) でないこと (供給側独自の追加防御)
+        13. anchor が文末句読点 (。！？.!?) で終わらないこと (一文まるごとの
+            リンク化を防ぐ。短いフレーズであることの目安)
     """
     if not isinstance(suggestions, list) or not suggestions:
         return [], 0
@@ -632,6 +641,9 @@ def validate_link_suggestions(
             dropped += 1
             continue
         if any(ch in anchor for ch in _ANCHOR_FORBIDDEN_CHARS):
+            dropped += 1
+            continue
+        if anchor.endswith(_SENTENCE_FINAL_PUNCTUATION):
             dropped += 1
             continue
         if anchor in _DENYLIST:
