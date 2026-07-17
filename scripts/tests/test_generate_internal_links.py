@@ -434,6 +434,24 @@ class ValidateLinkSuggestionsTest(unittest.TestCase):
         )
         self.assertEqual(len(kept_max), 1)
 
+    def test_anchor_ending_in_sentence_final_punctuation_dropped(self):
+        for punct in ("。", "！", "？", ".", "!", "?"):
+            anchor = "空間認識力が育まれます" + punct
+            narrative = self._narrative(why_this_product=anchor)
+            kept, dropped = validate_link_suggestions(
+                [self._sugg(anchor_text=anchor)], narrative, "AAAAAAAAAA", {"BBBBBBBBBB"}, set(),
+            )
+            self.assertEqual(kept, [], msg=f"punct={punct!r}")
+            self.assertEqual(dropped, 1)
+
+    def test_anchor_without_trailing_punctuation_accepted(self):
+        narrative = self._narrative(why_this_product="空間認識力が育まれます。")
+        kept, dropped = validate_link_suggestions(
+            [self._sugg(anchor_text="空間認識力が育まれます")], narrative, "AAAAAAAAAA", {"BBBBBBBBBB"}, set(),
+        )
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(dropped, 0)
+
     def test_denylist_generic_word_dropped(self):
         for word in ("この商品", "こちら", "詳しくは", "関連記事"):
             narrative = self._narrative(why_this_product=f"{word}の詳細をご確認ください。")

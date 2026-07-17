@@ -253,6 +253,30 @@ class DropRuleTests(unittest.TestCase):
         result = _inject_internal_links(data, ARTICLE_INDEX, SITE_BASE)
         self.assertEqual(result, (0, 1))
 
+    def test_drops_anchor_ending_in_sentence_final_punctuation(self):
+        for punct in ("。", "！", "？", ".", "!", "?"):
+            anchor = "空間認識力が育まれます" + punct
+            data = _make_data(
+                {"why_this_product": anchor},
+                [{
+                    "section": "why_this_product", "paragraph_index": 0,
+                    "anchor_text": anchor, "target_asin": "B0TARGET01",
+                }],
+            )
+            result = _inject_internal_links(data, ARTICLE_INDEX, SITE_BASE)
+            self.assertEqual(result, (0, 1), msg=f"punct={punct!r}")
+
+    def test_keeps_anchor_without_trailing_punctuation(self):
+        data = _make_data(
+            {"why_this_product": "空間認識力が育まれます。"},
+            [{
+                "section": "why_this_product", "paragraph_index": 0,
+                "anchor_text": "空間認識力が育まれます", "target_asin": "B0TARGET01",
+            }],
+        )
+        result = _inject_internal_links(data, ARTICLE_INDEX, SITE_BASE)
+        self.assertEqual(result, (1, 0))
+
     def test_drops_anchor_with_markdown_breaking_brackets(self):
         # anchor に [ ] を含むと `[テスト[注釈]付き](...)` という壊れた
         # markdown を生成するため drop (#3332 レビュー指摘)。
