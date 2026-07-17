@@ -357,7 +357,12 @@ def _record_to_payload_common(rec: ArticleRecord, rank: int) -> dict[str, Any]:
         "rank": rank,
         "asin": rec.asin,
         "slug": rec.slug,
-        "url_internal": f"/posts/{rec.slug.lower()}/",  # Hugo lowercases URLs
+        # URL 構造は #511 で /posts/{slug}/ -> /products/{asin}/ へ移行済み。
+        # build_post.py 側は一貫して /products/{asin.lower()}/ を使っており
+        # (build_post.py:407 等)、ここが legacy /posts/ のままだと内部リンクが
+        # 全件 301 (Hugo aliases) 経由になり、記事削除時は alias ごと消えて
+        # 404 化する (#3364)。
+        "url_internal": f"/products/{rec.asin.lower()}/",  # Hugo lowercases URLs
         "name": rec.name,
         "image": rec.image,
         "ivs_100": rec.ivs_100,

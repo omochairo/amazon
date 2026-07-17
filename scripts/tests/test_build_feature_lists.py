@@ -10,6 +10,9 @@ Coverage:
 5. serialize_*    - url_internal is lowercased; cospa includes score_cospa; deals includes
                     savings_percentage + fetched_at.
 6. run (end-to-end on a tmp fixture) - writes both hugo outputs + manifest.
+7. deleted article regen - re-running after an article json is removed drops it
+   from the next generation (#3364: /products/{asin}/ has no stale-alias 404,
+   unlike legacy /posts/{slug}/ whose Hugo alias disappears with the article).
 """
 from __future__ import annotations
 
@@ -441,8 +444,9 @@ class SerializeTest(unittest.TestCase):
         self.assertEqual(payload["bands"][0]["key"], "1000-2000")
         self.assertTrue(payload["bands"][0]["default"])
         entry = payload["bands"][0]["items"][0]
-        # Hugo lowercases URLs - slug.lower() must be applied (memory trap).
-        self.assertEqual(entry["url_internal"], "/posts/2026-05-13-b00abcxyz/")
+        # #3364: url_internal は /products/{asin}/ 形式 (build_post.py と同じ)。
+        # Hugo lowercases URLs - asin.lower() must be applied (memory trap).
+        self.assertEqual(entry["url_internal"], "/products/b00abcxyz/")
         self.assertEqual(entry["score_cospa"], 0.3333)  # rounded to 4dp
         self.assertNotIn("savings_percentage", entry)
 
@@ -605,6 +609,57 @@ class IvsAxesPropagationTest(unittest.TestCase):
         )
         entry = payload["bands"][0]["items"][0]
         self.assertNotIn("ivs_axes", entry)
+
+
+class DeletedArticleRegenTest(unittest.TestCase):
+    """#3364: 記事 json が削除された後の再生成で stale entry が落ちることを確認。
+
+    build_feature_lists は毎回 articles_dir を再走査するだけなので、削除済み
+    ASIN は次回生成で自然に除外される (追加の存在チェックは不要)。legacy
+    /posts/{slug}/ は Hugo alias が記事と一緒に消えて 404 になるが、
+    /products/{asin}/ 形式なら「記事が無い = リンク自体を出さない」で済む。
+    """
+
+    def test_deleted_article_dropped_from_next_generation(self):
+        with tempfile.TemporaryDirectory() as td:
+            d = pathlib.Path(td)
+            arts = d / "articles"
+            arts.mkdir()
+            per = d / "per_asin"
+            out_hugo = d / "hugo_features"
+            out_manifest = d / "manifest" / "_build_manifest.json"
+
+            path_keep = _write_article(arts, _make_article(
+                "B0KEEP1", ivs_score=4.8, ivs_100=96, best_price=1200,
+            ))
+            path_removed = _write_article(arts, _make_article(
+                "B0GONE1", ivs_score=4.5, ivs_100=90, best_price=1300,
+            ))
+
+            bfl.run(
+                articles_dir=arts, per_asin_dir=per,
+                out_hugo=out_hugo, out_manifest=out_manifest,
+            )
+            first = json.loads((out_hugo / "cospa.json").read_text(encoding="utf-8"))
+            first_asins = {
+                it["asin"] for b in first["bands"] for it in b["items"]
+            }
+            self.assertIn("B0GONE1", first_asins)
+
+            # 記事削除 (Jules cleanup 等) をシミュレート。
+            path_removed.unlink()
+
+            bfl.run(
+                articles_dir=arts, per_asin_dir=per,
+                out_hugo=out_hugo, out_manifest=out_manifest,
+            )
+            second = json.loads((out_hugo / "cospa.json").read_text(encoding="utf-8"))
+            second_asins = {
+                it["asin"] for b in second["bands"] for it in b["items"]
+            }
+            self.assertNotIn("B0GONE1", second_asins)
+            self.assertIn("B0KEEP1", second_asins)
+            self.assertTrue(path_keep.exists())
 
 
 if __name__ == "__main__":

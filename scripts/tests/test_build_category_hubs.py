@@ -96,7 +96,8 @@ class SerializeTest(unittest.TestCase):
         self.assertEqual(payload["count"], 1)
         it = payload["items"][0]
         self.assertEqual(it["rank"], 1)
-        self.assertEqual(it["url_internal"], "/posts/slug-one/")  # lowercased
+        # #3364: url_internal は /products/{asin}/ 形式 (slug ではなく asin)。
+        self.assertEqual(it["url_internal"], "/products/abc/")  # lowercased
 
 
 class RunTest(unittest.TestCase):
