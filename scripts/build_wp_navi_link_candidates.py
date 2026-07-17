@@ -55,7 +55,7 @@ import pathlib
 import re
 import time
 from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import Any, Callable, Dict, List, Optional
 
 import requests
 
@@ -488,7 +488,10 @@ def cosine_similarity_cross(a_vectors: list[list[float]], b_vectors: list[list[f
 # WP 記事ごとの navi 候補選定 (pure function; reranker は注入可能な callable)
 # --------------------------------------------------------------------------
 
-RerankerFn = Callable[[str, list[str]], "list[dict[str, Any]] | None"]
+# K8 runner は Python 3.8 (#3053 と同じ制約)。モジュールレベルの型エイリアスは
+# `from __future__ import annotations` の対象外で実行時評価されるため、
+# builtin generics (list[str]) ではなく typing generics を使う。
+RerankerFn = Callable[[str, List[str]], Optional[List[Dict[str, Any]]]]
 
 
 def select_navi_candidates_for_wp(
