@@ -626,7 +626,10 @@ brands:
     region: JP
     safety_default: [ST]
   - canonical: アイジュ
-    aliases: [アイジュ, AIJU]
+    # 2026-07-17 (#2931): 供給側検出器が拾った「AIJYU TOYS」は株式会社アイジュの
+    # 乗用玩具ストア名 (aijyu-shop.com / aijyutoys.com) の表記ゆれ。新規 canonical
+    # ではなく既存エントリへの alias 追加 (#2930 Goliath 方式と同じ判断)。
+    aliases: [アイジュ, AIJU, AIJYU TOYS]
     tier: C
     region: JP
     safety_default: [ST]
@@ -1351,3 +1354,36 @@ brands:
   - {canonical: 木玩社, tier: D, region: unknown, noindex: true, aliases: [木玩社, "木玩社(きがんしゃ)", きがんしゃ]}
   - {canonical: SALUDABLE, tier: D, region: unknown, noindex: true, aliases: [SALUDABLE, Saludable, saludable]}
   - {canonical: KaeKid, tier: D, region: CN, noindex: true, aliases: [KaeKid, KAEKID, Kaekid, kaekid]}
+  # 2026-07-17 (#2931): 供給側検出器 (suggest_brand_taxonomy_from_catalog.py)
+  # がカタログ未登録のまま浮上した14候補中、実データ検証で実在ブランドと確認できた8件。
+  # AIJYU TOYS (株式会社アイジュの表記ゆれ) は新規 canonical ではなく上の「アイジュ」
+  # エントリへ alias 追加した (#2930 Goliath と同じ判断)。
+  # hacomo=段ボール工作キット (hacomo株式会社、2010年設立、JETRO輸出支援事例あり)。
+  - canonical: hacomo
+    aliases: [hacomo, ハコモ, "hacomo(ハコモ)"]
+    tier: C
+    region: JP
+  # TRYCO(トライコ)=ベルギーの乳幼児玩具ブランド。国内はエデュテ(Edute)が2025年より取扱。
+  - canonical: TRYCO
+    aliases: [TRYCO, トライコ]
+    tier: B
+    region: BE
+  # エジソンクラブ=株式会社エジソンクラブ(2000年設立)。幼児・小学生向け学習教材、
+  # 全国2000教室規模の学習塾で導入実績。エジソン販売(EDISON mama)とは別法人。
+  - canonical: エジソンクラブ
+    aliases: [エジソンクラブ]
+    tier: B
+    region: JP
+  # ソニック=ソニック株式会社。文具・学用品メーカー(Wikipedia項目あり)。
+  # 本検出の「ピコトレ」学習教材シリーズもソニック製。
+  - canonical: ソニック
+    aliases: [ソニック]
+    tier: A
+    region: JP
+  # 以下は実在確認できたが薄いハブ不要 = noindex (既存 Jasonwell/beiens 等と同方針)。
+  - {canonical: All Bright, tier: D, region: JP, noindex: true, aliases: [All Bright, AllBright]}
+  - {canonical: CARLORBO, tier: D, region: CN, noindex: true, aliases: [CARLORBO]}
+  - {canonical: HannaBlock, tier: D, region: CN, noindex: true, aliases: [HannaBlock]}
+  # こまもの本舗=創業50年超のEC小売(プリンタスグループ)。hacomo等の正規販売代理店
+  # (komamono-honpo.com/zakka/toy_hobby/ に実在商品ページ確認済)。
+  - {canonical: こまもの本舗, tier: D, region: JP, noindex: true, aliases: [こまもの本舗]}
