@@ -6487,3 +6487,43 @@ details.development-stage-accordion[open] > summary::before {
   .cat-nav-list::-webkit-scrollbar { display: none; }
   .cat-summary { font-size: 0.8rem; padding: 6px 11px; }
 }
+
+/* ===== #3332 N4-P2 follow-up: グローバルナビの見やすさ改善 (PC/スマホ) ===== */
+/* 絵文字+日本語ラベルの多項目が全幅で折返して雑然としていたのを、全項目可視の
+   まま pill 化・中央寄せ・高さ圧縮・active 明示でラグさを解消する。項目は隠さない
+   (新規 /price/ の発見性を保つため横スクロールは使わない)。 */
+.header-nav #menu {
+  gap: 6px 8px;
+  align-items: center;
+}
+.header-nav #menu li a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+  color: var(--secondary);
+  transition: background .18s ease, color .18s ease;
+}
+.header-nav #menu li a:hover {
+  background: var(--brand-gradient-subtle);
+  color: var(--brand-primary);
+}
+.header-nav #menu li a span.active {
+  color: var(--brand-primary);
+  font-weight: 700;
+}
+.header-nav #menu li a:has(span.active) {
+  background: var(--brand-gradient-subtle);
+}
+@media (max-width: 768px) {
+  .header-nav #menu { justify-content: center; gap: 5px 6px; }
+  .header-nav #menu li a { font-size: 13px; padding: 5px 11px; }
+}
+@media (max-width: 380px) {
+  .header-nav #menu li a { font-size: 12.5px; padding: 5px 9px; }
+}
