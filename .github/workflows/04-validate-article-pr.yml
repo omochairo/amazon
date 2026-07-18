@@ -509,6 +509,12 @@ on:
       - 'scripts/fetch_suggest_info.py'
       - 'scripts/tests/test_fetch_suggest_info.py'
       - 'data/suggest_info_seeds.yaml'
+      # 2026-07-18 (#3332 N2 消費側 PR1): 需要ギャップ検出レポート script。
+      # PR1 は inert (cron 配線なし・CI 実行なし) だが script-only PR が
+      # required check `validate` を発火できないと inverse-trap で永久
+      # BLOCKED になる ([[04-validate-paths-inverse-trap]])。
+      - 'scripts/detect_demand_gaps.py'
+      - 'scripts/tests/test_detect_demand_gaps.py'
   workflow_dispatch:
 
 permissions:
