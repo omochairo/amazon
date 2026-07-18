@@ -1,0 +1,29 @@
+{{- /*
+  discount_badge.html (#3332 価格OFFバッジのサイト全面展開)
+
+  hugo/data/discounts.json (scripts/build_discounts.py がビルド時に生成する
+  savings_percentage 由来の集計。/hugo gitignore 配下の派生物で commit しない)
+  から ASIN 単位で「N% OFF」バッジを引いて出力する共有 partial。
+
+  入力 (context "."): ASIN 文字列 (大文字)。product_card.html の $asin /
+  related_carousel.html の候補 ASIN はいずれも upper 済みの値を渡すこと
+  (data/discounts.json のキーは大文字で統一されている)。
+
+  data 未配置 (`hugo/data/discounts.json` が無い) でも `with site.Data.discounts`
+  が nil ガードするため安全に no-op (空文字) になる。
+  ASIN 未該当・pct 欠損時も同様に no-op。
+
+  /deals/ (feature-item.html) と /price/ (price_dashboard_item.html) は既に
+  独自の OFF 表示を持つため、このバッジは挿入しない (二重表示回避)。
+*/ -}}
+{{- $asin := . -}}
+{{- if $asin -}}
+  {{- with site.Data.discounts -}}
+    {{- $items := .items | default dict -}}
+    {{- with (index $items $asin) -}}
+      {{- if .pct -}}
+<span class="discount-badge" title="定価から{{ .pct }}%OFF (Amazon調べ)">{{ .pct }}% OFF</span>
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}

@@ -76,6 +76,13 @@ jobs:
       - name: Build price dashboard
         run: python scripts/build_price_dashboard.py
 
+      # #3332 価格OFFバッジのサイト全面展開: /deals/ 限定だった OFF バッジを
+      # 全カードに供給する ASIN -> savings_percentage 集計。
+      # hugo/data/discounts.json も同じく /hugo gitignore 配下のビルド時派生物
+      # (whitelist しない = commit back 不要)。
+      - name: Build discount badges
+        run: python scripts/build_discounts.py
+
       - name: Debug Output
         run: |
           echo "=== Articles ==="
