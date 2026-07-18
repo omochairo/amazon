@@ -135,6 +135,24 @@ def extract_availability(item: dict) -> Optional[str]:
     return None
 
 
+def extract_savings_percentage(item: dict) -> int:
+    """offersV2.listings[0].price.savings.percentage を int で返す。取得不能なら 0。
+
+    ``PRICE_WATCH_RESOURCES`` は ``offersV2.listings.price`` のみを要求している
+    (fetch_amazon.py の REFRESH_ITEM_RESOURCES と同じキー) が、この resource の
+    応答には savings も既に含まれているため、新規 resource の追加は不要
+    (fetch_amazon.py の extract_savings_percentage と同じ抽出パス)。
+    """
+    listings = _safe_get(item, "offersV2", "listings", default=[])
+    if listings:
+        pct = _safe_get(listings[0], "price", "savings", "percentage")
+        try:
+            return int(pct) if pct is not None else 0
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
 def collect_published_asins(articles_dir: pathlib.Path) -> list[str]:
     """data/articles/*.json (STAGE-2/3 サイドカー除く) から公開 ASIN を列挙する。
 
@@ -237,10 +255,17 @@ def run(
             stats["found"] += 1
             price = extract_price(it)
             availability = extract_availability(it)
+            off = extract_savings_percentage(it)
             ts = datetime.now(timezone.utc)
             if price_history.append_price_point(str(history_dir), asin, "amazon", price, availability):
                 stats["history_appended"] += 1
-            items[asin] = {"p": price, "avail": availability, "ts": ts.isoformat()}
+            entry = {"p": price, "avail": availability, "ts": ts.isoformat()}
+            if off > 0:
+                # 0/欠損時はキー自体を出さない (latest.json を肥大させない・
+                # 後方互換の純粋な追加。build_discounts.py 側は off キーの
+                # 有無で price_watch 採否を判定する)。
+                entry["off"] = off
+            items[asin] = entry
 
     stats["missing"] = stats["requested"] - stats["found"]
 
