@@ -254,6 +254,11 @@
             {{- if $p.Params.ivs_score_100 }}
               <span class="carousel-card-score">🏆 {{ $p.Params.ivs_score_100 }}点</span>
             {{- end }}
+            {{- /* #3332 割引バッジ: score は右上固定・carousel-card には compare-toggle /
+                   fav-toggle が inject されない (compare.js / favorites.js の対象セレクタ外)
+                   ため左上が唯一の空きコーナー。 */ -}}
+            {{- $candAsin := upper (path.Base $p.RelPermalink) -}}
+            {{- if $candAsin }}{{ partial "discount_badge.html" $candAsin }}{{ end -}}
           </div>
           <div class="carousel-card-body">
             {{- with $p.Params.brand }}<span class="carousel-card-brand">{{ . }}</span>{{ end }}

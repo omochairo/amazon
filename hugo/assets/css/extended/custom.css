@@ -6537,3 +6537,44 @@ details.development-stage-accordion[open] > summary::before {
 @media (max-width: 380px) {
   .header-nav #menu li a { font-size: 12.5px; padding: 5px 9px; }
 }
+
+/* ==========================================
+   割引バッジ (#3332 価格OFFバッジのサイト全面展開)
+   /deals/ 限定だった savings_percentage 由来の「N% OFF」を discount_badge.html
+   partial 経由でトップページ各ブロック・ハブ・記事一覧・カルーセルにも表示する。
+   .product-card-image / .carousel-card-image は 4隅+top-centerが既存バッジで
+   埋まっているため、配置は呼び出し元のコンテキストに応じて後述の子孫セレクタで
+   切り替える (.discount-badge 自体は非絶対配置のプレーンなピル)。
+   ========================================== */
+.discount-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.15rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.35);
+  width: max-content;
+  white-space: nowrap;
+}
+[data-theme="dark"] .discount-badge {
+  background: linear-gradient(135deg, #f87171, #ef4444);
+  color: #2a0000;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.45);
+}
+
+/* carousel-card: score が top-right 固定で top-left が唯一の空きコーナーなので
+   絶対配置する (product_card.html は .product-card-badges の flex-column に
+   同居させるため素のピルのままで良い)。 */
+.carousel-card-image .discount-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  border-radius: 30px;
+  padding: 4px 10px;
+}

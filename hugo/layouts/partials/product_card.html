@@ -80,19 +80,28 @@
       {{- end -}}
     {{- end -}}
 
-    {{- if $score100 }}
+    {{- /* #3332 割引バッジ: 4隅 (compare-toggle top-left / fav-toggle top-right /
+           product-card-age bottom-right) と top-center (editor-pick) は既存要素で
+           埋まっているため、bottom-left の score バッジ用スタック (.product-card-badges,
+           元々 flex-column で複数バッジの積み上げを想定した構造) に同居させ、
+           絶対配置の新規コーナーを増やさずに重なりを避ける。 */ -}}
+    {{- $discountBadge := "" -}}
+    {{- if $asin }}{{ $discountBadge = partial "discount_badge.html" $asin }}{{ end -}}
+
+    {{- if or $score100 $score (ne $discountBadge "") }}
       <div class="product-card-badges">
+        {{- if ne $discountBadge "" }}{{ $discountBadge }}{{ end -}}
+        {{- if $score100 }}
         <span class="product-card-score {{ $tierClass }}" title="知育スコア (100点満点)">
           🏆 <strong>{{ $score100 }}</strong><span class="product-card-score-suffix">点</span>
           {{- if gt $minPrice 0 }}<span class="product-card-score-price">最安 &yen;{{ lang.FormatNumber 0 $minPrice }}</span>{{ end -}}
         </span>
-      </div>
-    {{- else if $score }}
-      <div class="product-card-badges">
+        {{- else if $score }}
         <span class="product-card-score score-bronze" title="知育スコア (5点満点)">
           🏆 <strong>{{ lang.FormatNumber 1 $score }}</strong><span class="product-card-score-suffix">/5</span>
           {{- if gt $minPrice 0 }}<span class="product-card-score-price">最安 &yen;{{ lang.FormatNumber 0 $minPrice }}</span>{{ end -}}
         </span>
+        {{- end }}
       </div>
     {{- end }}
 

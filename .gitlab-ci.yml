@@ -159,6 +159,7 @@ pages:
     - python scripts/build_post.py
     - python scripts/build_brand_hub_stats.py
     - python scripts/build_price_dashboard.py
+    - python scripts/build_discounts.py
     - cd hugo && hugo --minify --buildFuture --destination ../public && cd ..
     # #2817 Phase 3: 旧 JP タグ/ブランド URL からの 301 リダイレクト。
     # public/sitemap.xml (直前の hugo build 産物) を真実源に redirect ルールを
