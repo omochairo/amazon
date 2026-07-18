@@ -32,12 +32,14 @@ def _write_article(dir_path: pathlib.Path, filename: str, asin: str | None) -> p
     return p
 
 
-def _item(asin: str, price: int | None, availability: str | None) -> dict:
+def _item(asin: str, price: int | None, availability: str | None, savings_pct: int | None = None) -> dict:
     listings = []
-    if price is not None or availability is not None:
+    if price is not None or availability is not None or savings_pct is not None:
         listing: dict = {}
         if price is not None:
             listing["price"] = {"money": {"amount": price}}
+        if savings_pct is not None:
+            listing.setdefault("price", {})["savings"] = {"percentage": savings_pct}
         if availability is not None:
             listing["availability"] = {"message": availability}
         listings.append(listing)
@@ -112,6 +114,18 @@ class ExtractFieldsTest(unittest.TestCase):
         it = {"asin": "B1", "offersV2": {"listings": []}}
         self.assertIsNone(F.extract_availability(it))
 
+    def test_extract_savings_percentage_normal(self):
+        it = _item("B1", 1980, "在庫あり", savings_pct=20)
+        self.assertEqual(F.extract_savings_percentage(it), 20)
+
+    def test_extract_savings_percentage_missing(self):
+        it = {"asin": "B1", "offersV2": {"listings": []}}
+        self.assertEqual(F.extract_savings_percentage(it), 0)
+
+    def test_extract_savings_percentage_zero(self):
+        it = _item("B1", 1980, "在庫あり", savings_pct=0)
+        self.assertEqual(F.extract_savings_percentage(it), 0)
+
 
 class FakeApi:
     """CreatorsAPIClient の代わりに get_items だけを差し替えるテスト用スタブ。"""
@@ -173,6 +187,30 @@ class RunTest(unittest.TestCase):
         rec = json.loads(history_path.read_text(encoding="utf-8").splitlines()[0])
         self.assertEqual(rec["price"], 1980)
         self.assertEqual(rec["source"], "amazon")
+
+    def test_off_field_present_when_savings_positive(self):
+        _write_article(self.articles_dir, "a.json", "B0AAAAAAAA")
+        api = FakeApi(responses={
+            ("B0AAAAAAAA",): _response([_item("B0AAAAAAAA", 1980, "在庫あり", savings_pct=15)]),
+        })
+        result = F.run(api, self.articles_dir, self.out_dir, sleeper=lambda s: None)
+        self.assertEqual(result["items"]["B0AAAAAAAA"]["off"], 15)
+
+    def test_off_field_absent_when_savings_zero(self):
+        _write_article(self.articles_dir, "a.json", "B0AAAAAAAA")
+        api = FakeApi(responses={
+            ("B0AAAAAAAA",): _response([_item("B0AAAAAAAA", 1980, "在庫あり", savings_pct=0)]),
+        })
+        result = F.run(api, self.articles_dir, self.out_dir, sleeper=lambda s: None)
+        self.assertNotIn("off", result["items"]["B0AAAAAAAA"])
+
+    def test_off_field_absent_when_savings_missing(self):
+        _write_article(self.articles_dir, "a.json", "B0AAAAAAAA")
+        api = FakeApi(responses={
+            ("B0AAAAAAAA",): _response([_item("B0AAAAAAAA", 1980, "在庫あり")]),
+        })
+        result = F.run(api, self.articles_dir, self.out_dir, sleeper=lambda s: None)
+        self.assertNotIn("off", result["items"]["B0AAAAAAAA"])
 
     def test_missing_asin_counted_only_no_history(self):
         _write_article(self.articles_dir, "a.json", "B0AAAAAAAA")
