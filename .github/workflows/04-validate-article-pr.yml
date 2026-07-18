@@ -224,6 +224,11 @@ on:
       # ([[04-validate-paths-trap]])。
       - 'scripts/build_brand_hub_stats.py'
       - 'scripts/tests/test_build_brand_hub_stats.py'
+      # 2026-07-18 (#3332 N4-P2): 値下げ発見ダッシュボード (/price/) 集計スクリプト。
+      # paths 未登録だと script-only PR で required check `validate` が不発 →
+      # auto-merge 永久 pending ([[04-validate-paths-inverse-trap]])。
+      - 'scripts/build_price_dashboard.py'
+      - 'scripts/tests/test_build_price_dashboard.py'
       # 2026-05-25 (session 47 / Issue #590 PR-3): /cospa/ /deals/ 自動更新 workflow。
       # workflow 本体を触る PR も validate を required check として発火させる。
       - '.github/workflows/09-feature-lists.yml'

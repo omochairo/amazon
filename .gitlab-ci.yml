@@ -1,7 +1,7 @@
 # GitLab CI: サイトビルド & GitLab Pages デプロイ
 # GitHub Actions 02-publish.yml の移植 (GitHub アカウント凍結対応, 2026-07-07)。
-# ビルドに secrets は不要 (build_post.py / build_brand_hub_stats.py は
-# data/ 配下の JSON からレンダリングするだけ)。
+# ビルドに secrets は不要 (build_post.py / build_brand_hub_stats.py /
+# build_price_dashboard.py は data/ 配下の JSON からレンダリングするだけ)。
 #
 # 注意: hugo/config.toml の baseURL は https://navi.omcha.jp/ 固定のため、
 # GitLab Pages のカスタムドメイン設定 + DNS 切替が完了するまで
@@ -158,6 +158,7 @@ pages:
   script:
     - python scripts/build_post.py
     - python scripts/build_brand_hub_stats.py
+    - python scripts/build_price_dashboard.py
     - cd hugo && hugo --minify --buildFuture --destination ../public && cd ..
     # #2817 Phase 3: 旧 JP タグ/ブランド URL からの 301 リダイレクト。
     # public/sitemap.xml (直前の hugo build 産物) を真実源に redirect ルールを

@@ -1,0 +1,79 @@
+{{- /*
+  /price/ 値下げ発見ダッシュボード (#3332 N4-P2)。
+  hugo/data/price_dashboard.json (scripts/build_price_dashboard.py がビルド時に
+  生成する派生物、commit しない) を site.Data.price_dashboard から読む。
+  build_brand_hub_stats.py -> hugo/data/brand_hub.json -> site.Data.brand_hub
+  という既存パターン (term.html) と同じデータ流儀。
+  カード/リストの CSS クラスは /ranking/ /deals/ (ranking-list 系) を再利用し、
+  値下げ表示に必要な最小限のクラスだけ price-item-* として追加する
+  (外部アセット禁止・既存 CSS 流儀に乗る)。
+*/}}
+{{- define "main" }}
+
+<header class="page-header ranking-header feature-header feature-header--price">
+  <h1>{{ .Title }}</h1>
+  {{- if .Description }}
+  <div class="post-description">
+    {{ .Description }}
+  </div>
+  {{- end }}
+  {{- with site.Data.price_dashboard }}
+    {{- if .source_updated }}
+    <p class="ranking-updated">最終更新: <time datetime="{{ .source_updated }}">{{ dateFormat "2006-01-02 15:04" .source_updated }}</time></p>
+    {{- end }}
+  {{- end }}
+</header>
+
+<div class="post-content ranking-content feature-content feature-content--price">
+  {{ .Content }}
+
+  {{- $data := site.Data.price_dashboard }}
+  {{- $items := and $data $data.items }}
+  {{- if not $items }}
+  <p class="ranking-empty">現在値下げ情報はありません。次回の自動更新までしばらくお待ちください。</p>
+  {{- else }}
+  <ol class="ranking-list feature-list feature-list--price">
+    {{- range $items }}
+    {{- partial "price_dashboard_item.html" . }}
+    {{- end }}
+  </ol>
+
+  <p class="ranking-disclaimer">
+    ※ 価格・在庫は Amazon から自動観測した時点のスナップショットです。「以前の価格」は直近90日の観測範囲での最高値です。リンク先で最新の価格・在庫を必ずご確認ください。当ページのリンクは Amazon アソシエイトを含みます。
+  </p>
+  {{- end }}
+</div>
+
+<style>
+  .price-item-lowest-badge {
+    display: inline-block;
+    margin: 0 0 0.3rem;
+    padding: 0.2rem 0.6rem;
+    background: linear-gradient(135deg, #fde68a, #f59e0b);
+    color: #78350f;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    width: max-content;
+  }
+  .price-item-price {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .price-item-old {
+    color: #94a3b8;
+    text-decoration: line-through;
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+  .price-item-current {
+    color: #dc2626;
+    font-size: 1.15rem;
+    font-weight: 800;
+  }
+  [data-theme="dark"] .price-item-old { color: #64748b; }
+</style>
+
+{{- end }}

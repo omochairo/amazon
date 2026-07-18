@@ -23,6 +23,14 @@ public_test/
 # ソースディレクトリは丸ごと再 include (新規テンプレート/CSS/JS が add -f 無しで乗るように)
 !/hugo/layouts
 !/hugo/assets
+# 2026-07-18 (#3332 N4-P2): hugo/content も同じ罠 — hugo/content/price/_index.md
+# (新規ソースページ) が /hugo/* に飲まれて `git add` で乗らないことが発覚。
+# hugo/content 配下は hugo/content/posts/ (build_post.py が data/articles/ から
+# 生成する記事本体、commit しない) を除き全て手書きソースなので、posts/ 以外を
+# 再 include する。posts/_index.md だけは手書きソースなので個別に再 include。
+!/hugo/content
+/hugo/content/posts/*
+!/hugo/content/posts/_index.md
 /hugo_server.log
 /hugo.tar.gz
 

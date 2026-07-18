@@ -70,6 +70,12 @@ jobs:
       - name: Build brand hub stats
         run: python scripts/build_brand_hub_stats.py
 
+      # #3332 N4-P2: 値下げ発見ダッシュボード (/price/) 用の集計。
+      # hugo/data/price_dashboard.json も同じく /hugo gitignore 配下の
+      # ビルド時派生物 (whitelist しない = commit back 不要)。
+      - name: Build price dashboard
+        run: python scripts/build_price_dashboard.py
+
       - name: Debug Output
         run: |
           echo "=== Articles ==="
