@@ -6489,10 +6489,21 @@ details.development-stage-accordion[open] > summary::before {
 }
 
 /* ===== #3332 N4-P2 follow-up: グローバルナビの見やすさ改善 (PC/スマホ) ===== */
-/* 絵文字+日本語ラベルの多項目が全幅で折返して雑然としていたのを、全項目可視の
-   まま pill 化・中央寄せ・高さ圧縮・active 明示でラグさを解消する。項目は隠さない
-   (新規 /price/ の発見性を保つため横スクロールは使わない)。 */
+/* 絵文字+日本語ラベルの多項目 (10件) がロゴ横に詰め込まれ 3 行に折返して雑然として
+   いたのを改善。メニューをロゴ下の全幅行に落として中央寄せし、pill 化・余白圧縮で
+   PC(1280px) を 3行→2行 (196px→174px)、スマホは整った中央寄せ pill 2行 (134px) に
+   する。大画面 (>=1400px) では全幅化により自動的に 1 行に収まる。項目は隠さない
+   (新規 /price/ の発見性を保つため横スクロールは使わない)。ライブ実測で較正済み。
+   ※10項目+日本語ラベルは幅の都合で 1280px では 1 行に収まらない。単一行化はラベル
+   短縮 (content 判断) が必要なため、本 CSS では 2 行の整形に留める。 */
+.header-nav {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
 .header-nav #menu {
+  flex-basis: 100%;
+  width: 100%;
+  justify-content: center;
   gap: 6px 8px;
   align-items: center;
 }
@@ -6500,13 +6511,12 @@ details.development-stage-accordion[open] > summary::before {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 6px 13px;
+  padding: 6px 11px;
   border-radius: 999px;
-  font-size: 14.5px;
+  font-size: 13.5px;
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 1.2;
   white-space: nowrap;
-  color: var(--secondary);
   transition: background .18s ease, color .18s ease;
 }
 .header-nav #menu li a:hover {
@@ -6521,8 +6531,8 @@ details.development-stage-accordion[open] > summary::before {
   background: var(--brand-gradient-subtle);
 }
 @media (max-width: 768px) {
-  .header-nav #menu { justify-content: center; gap: 5px 6px; }
-  .header-nav #menu li a { font-size: 13px; padding: 5px 11px; }
+  .header-nav #menu { gap: 5px 6px; }
+  .header-nav #menu li a { font-size: 13px; padding: 5px 10px; }
 }
 @media (max-width: 380px) {
   .header-nav #menu li a { font-size: 12.5px; padding: 5px 9px; }
