@@ -214,17 +214,21 @@ enableRobotsTXT = true
     url = "deals/"
     weight = 5
   [[menu.main]]
+    name = "💰 値下げ"
+    url = "price/"
+    weight = 6
+  [[menu.main]]
     name = "🏢 メーカー別"
     url = "brands/"
-    weight = 6
+    weight = 7
   [[menu.main]]
     name = "🔍 検索"
     url = "search/"
-    weight = 7
+    weight = 8
   [[menu.main]]
     name = "📚 記事一覧"
     url = "posts/"
-    weight = 8
+    weight = 9
   # 📖 編集部について はフッターに移動 (#1363 follow-up)。
   # ヘッダの導線を「比較・検索・購入」の主要 CTA に絞り、運営情報は
   # hugo/layouts/partials/footer.html の footer-editorial ブロックに集約。
