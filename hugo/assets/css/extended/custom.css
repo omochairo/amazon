@@ -6578,3 +6578,68 @@ details.development-stage-accordion[open] > summary::before {
   border-radius: 30px;
   padding: 4px 10px;
 }
+
+/* ============================================================
+   /price/ 値下げ発見ページ 専用レイアウト修正
+   .ranking-item は badge(64px) + thumb(140px) + body の3列グリッドだが、
+   /price/ のカードにはバッジ列がなく thumb + body の2列構成のため崩れる。
+   .feature-item--price で上書きして正しいレイアウトを適用する。
+   ============================================================ */
+
+/* デスクトップ: thumb(120px) + body(1fr) の2列 */
+.feature-item--price.ranking-item {
+  grid-template-columns: 120px 1fr;
+  grid-template-areas: "thumb body";
+  align-items: start;
+}
+.feature-item--price .ranking-thumb {
+  grid-area: thumb;
+  width: 120px;
+  height: 120px;
+  align-self: start;
+}
+.feature-item--price .ranking-body {
+  grid-area: body;
+}
+
+/* モバイル: 縦積み（画像上・本文下）に切り替え */
+@media (max-width: 720px) {
+  .feature-item--price.ranking-item {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "thumb"
+      "body";
+    gap: 0.75rem;
+  }
+  .feature-item--price .ranking-thumb {
+    grid-area: thumb;
+    width: 100%;
+    height: auto;
+    max-height: 200px;
+    aspect-ratio: 1 / 1;
+    object-fit: contain;
+  }
+  .feature-item--price .ranking-thumb img {
+    max-height: 200px;
+    object-fit: contain;
+  }
+  .feature-item--price .ranking-body {
+    grid-area: body;
+  }
+}
+
+/* 極小画面 (iPhone SE 等) */
+@media (max-width: 480px) {
+  .feature-item--price .ranking-thumb {
+    max-height: 160px;
+  }
+  .feature-item--price .ranking-thumb img {
+    max-height: 160px;
+  }
+}
+
+/* ダークモード補完 */
+[data-theme="dark"] .feature-item--price.ranking-item {
+  background: rgba(30, 41, 59, 0.6);
+  border-color: rgba(71, 85, 105, 0.55);
+}
