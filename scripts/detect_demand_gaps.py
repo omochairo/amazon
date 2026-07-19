@@ -32,6 +32,10 @@ Issue #3332 N2 消費側 PR1「需要ギャップ検出」レポートスクリ�
      impressions 合算し --min-impressions 以上のもの (source="gsc") を正規化
      (NFKC + 空白圧縮 + strip) してマージする。1クエリが両方の source を
      持ちうる (sources リスト)。
+  1.5. 日本語 (ひらがな/カタカナ/漢字) を一切含まず ASCII 英数・記号のみの
+     クエリ (ASIN/型番のナビゲーショナル検索、例: "b0h1b5qdjk", "75445") を
+     母集団から除外する (is_code_like_query)。除外件数は summary に
+     excluded_code_queries として記録する。
   2. 記事コーパス (load_article_index) を Ruri で kind="document" 埋め込み。
   3. 需要クエリを Ruri で kind="query" 埋め込み。
   4. 各クエリについて全記事ベクトルとの最大コサイン類似度 (max_sim) と
@@ -40,7 +44,7 @@ Issue #3332 N2 消費側 PR1「需要ギャップ検出」レポートスクリ�
   6. ギャップ一覧を需要シグナル (suggest 出現を優先、次に gsc impressions) 降順
      で並べる。
   7. data/analytics/demand_gaps.json に summary (総需要クエリ数・ギャップ数・
-     テーマ別内訳) + gaps 一覧を書き出す。
+     除外コード系クエリ数・テーマ別内訳) + gaps 一覧を書き出す。
 
 エラー処理 (fail-closed, compute_semantic_related と同様):
   Ruri への embed リクエストが最終的に失敗した場合は EmbeddingBatchError を
@@ -91,9 +95,12 @@ DEFAULT_SUGGEST_DIR = "data/raw/suggest_info"
 DEFAULT_GSC_QUERY_PATH = "data/analytics/history/gsc_by_query.jsonl"
 DEFAULT_OUT = "data/analytics/demand_gaps.json"
 DEFAULT_RURI_URL = "http://localhost:8000"
-# 較正可能: 現状は初期値の当てずっぽう。実データ (PR2 shadow lane) で
-# max_sim の分布を見てから調整する想定。
-DEFAULT_GAP_THRESHOLD = 0.5
+# 2026-07-19 較正 (home-ops run 29685348953, 需要クエリ 2,056 件全数の
+# max_sim 分布): p0=0.786 p25=0.855 p50=0.868 p75=0.878 p95=0.894 p100=0.932
+# の狭帯域に圧縮される。0.5 には何も落ちない死んだ閾値だった。0.84 は
+# p50 をカバー済みの中心とし、p5〜p10 帯 (0.84 時点で自然文ギャップ 137 件、
+# コード系ノイズ 18 件) を review 対象にする較正値。
+DEFAULT_GAP_THRESHOLD = 0.84
 DEFAULT_MIN_IMPRESSIONS = 3
 
 SOURCE_SUGGEST = "suggest"
@@ -116,6 +123,21 @@ def normalize_query(text: Any) -> str:
         return ""
     t = unicodedata.normalize("NFKC", str(text)).lower()
     return _SPACE_RE.sub(" ", t).strip()
+
+
+def is_code_like_query(query: Any) -> bool:
+    """ASIN/型番のナビゲーショナル検索 (例: "b0h1b5qdjk", "75445", "hnw46-986q") を判定する。
+
+    日本語 (ひらがな/カタカナ/漢字) を一切含まず ASCII 文字のみで構成される
+    クエリはコンテンツギャップではなく型番のナビゲーショナル検索とみなし、
+    gap 判定の母集団から除外する対象。ASCII のみという条件は「日本語を
+    含まない」を自動的に含意する (日本語の各文字コードポイントは非 ASCII)
+    ため、判定はこの一条件のみで足りる。
+    """
+    q = str(query).strip() if query else ""
+    if not q:
+        return False
+    return all(ord(ch) < 128 for ch in q)
 
 
 # --------------------------------------------------------------------------
@@ -466,15 +488,17 @@ def run(
     embed_document_fn = embed_document_fn or C.embed_batch_ruri
     embed_query_fn = embed_query_fn or embed_batch_ruri_query
 
-    demand_queries = build_demand_queries(suggest_dir, gsc_query_path, min_impressions)
+    demand_queries_all = build_demand_queries(suggest_dir, gsc_query_path, min_impressions)
+    demand_queries = [q for q in demand_queries_all if not is_code_like_query(q["query"])]
+    excluded_code_queries = len(demand_queries_all) - len(demand_queries)
     total_demand_queries = len(demand_queries)
 
     article_items = C.load_article_index(articles_dir, limit_articles)
     titles = load_article_titles(articles_dir, limit_articles)
 
     logger.info(
-        "demand queries: %d, articles: %d (gap_threshold=%.3f, min_impressions=%d)",
-        total_demand_queries, len(article_items), gap_threshold, min_impressions,
+        "demand queries: %d (excluded %d code-like), articles: %d (gap_threshold=%.3f, min_impressions=%d)",
+        total_demand_queries, excluded_code_queries, len(article_items), gap_threshold, min_impressions,
     )
 
     params = {
@@ -491,7 +515,12 @@ def run(
         result = {
             "generated_at": _now_iso(),
             "params": params,
-            "summary": {"total_demand_queries": total_demand_queries, "gap_count": 0, "by_theme": {}},
+            "summary": {
+                "total_demand_queries": total_demand_queries,
+                "gap_count": 0,
+                "by_theme": {},
+                "excluded_code_queries": excluded_code_queries,
+            },
             "gaps": [],
         }
         if not dry_run:
@@ -542,6 +571,7 @@ def run(
             "total_demand_queries": total_demand_queries,
             "gap_count": len(gaps),
             "by_theme": by_theme,
+            "excluded_code_queries": excluded_code_queries,
         },
         "gaps": gaps,
     }
