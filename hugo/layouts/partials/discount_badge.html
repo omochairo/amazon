@@ -18,6 +18,11 @@
   このバッジは挿入しない (二重表示回避)。/cospa/ (feature-item.html cospa分岐)
   とテーマ/年齢 hub (同partial) は OFF% 自体を持たなかったため #3563 で本
   partial を採用し、カード情報統一の一環として OFF% バッジを追加した。
+
+  #3563 フィードバックB: /ranking/ (hugo/layouts/_default/ranking.html) は
+  意図的にこの partial を呼ばない。同ページの表示価格は楽天 API 取得の楽天価格
+  であり、そこに Amazon 定価比の OFF% を重ねると「楽天価格がその率で割引され
+  ている」と誤読させてしまうため (価格の基準通貨が違う)。
 */ -}}
 {{- $asin := . -}}
 {{- if $asin -}}
