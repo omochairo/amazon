@@ -9,6 +9,9 @@
 5. 空入力 (需要クエリ0 / 記事0) の graceful 終了 (Ruri を呼ばない)
 6. Ruri 失敗時の fail-closed (出力ファイルを書かない)
 7. embed_document_fn / embed_query_fn の DI が両方使われること (kind の出し分け)
+8. is_code_like_query: ASCII のみ (ASIN/型番) 判定・日本語混在は非該当
+9. コード系クエリが gap 判定の母集団から除外され、summary.excluded_code_queries
+   に記録されること
 """
 from __future__ import annotations
 
@@ -136,6 +139,35 @@ class BuildDemandQueriesTest(unittest.TestCase):
             self.suggest_dir / "does-not-exist", self.gsc_path / "missing.jsonl", min_impressions=3
         )
         self.assertEqual(out, [])
+
+
+# --------------------------------------------------------------------------
+# コード系クエリ (ASIN/型番) 判定
+# --------------------------------------------------------------------------
+
+class IsCodeLikeQueryTest(unittest.TestCase):
+    def test_ascii_alnum_query_is_code_like(self):
+        self.assertTrue(D.is_code_like_query("b0h1b5qdjk"))
+
+    def test_ascii_digits_query_is_code_like(self):
+        self.assertTrue(D.is_code_like_query("75445"))
+
+    def test_ascii_with_hyphen_query_is_code_like(self):
+        self.assertTrue(D.is_code_like_query("hnw46-986q"))
+
+    def test_japanese_query_is_not_code_like(self):
+        self.assertFalse(D.is_code_like_query("0歳 おもちゃ 知育"))
+
+    def test_mixed_ascii_and_japanese_is_not_code_like(self):
+        self.assertFalse(D.is_code_like_query("レゴ 75445"))
+
+    def test_empty_or_whitespace_only_is_not_code_like(self):
+        self.assertFalse(D.is_code_like_query(""))
+        self.assertFalse(D.is_code_like_query("   "))
+        self.assertFalse(D.is_code_like_query(None))
+
+    def test_ascii_query_with_surrounding_whitespace_is_code_like(self):
+        self.assertTrue(D.is_code_like_query("  b0aaaaaaaa  "))
 
 
 # --------------------------------------------------------------------------
@@ -282,6 +314,61 @@ class RunEndToEndTest(unittest.TestCase):
             ["suggest専用クエリ", "gsc専用クエリ高imp", "gsc専用クエリ低imp"],
         )
 
+    def test_code_like_queries_excluded_from_population_and_counted_in_summary(self):
+        _write_article(self.articles_dir, "2026-05-01-B0AAAAAAAA.json", {"title": "商品A"})
+        # suggest 側にコード系 (ASIN 風) + 自然文を混在させる
+        _write_suggest_theme(self.suggest_dir, "age-0", ["b0h1b5qdjk", "遠いクエリ"])
+        _write_gsc_lines(self.gsc_path, [
+            {"query": "75445", "impressions": 10, "date": "2026-06-01"},
+        ])
+
+        # 記事=[1,0]。自然文クエリ "遠いクエリ" のみ [0,0] で直交 (gap)。
+        # embed_query_fn は除外後に渡された順序 (["遠いクエリ"]) 分だけ返す。
+        def embed_document_fn(texts, ruri_url, session, sleeper):
+            return [[1.0, 0.0] for _ in texts]
+
+        captured_query_texts = []
+
+        def embed_query_fn(texts, ruri_url, session, sleeper):
+            captured_query_texts.append(list(texts))
+            return [[0.0, 0.0] for _ in texts]
+
+        summary = D.run(
+            self.articles_dir, self.suggest_dir, self.gsc_path, self.out_path,
+            gap_threshold=0.5, min_impressions=3, dry_run=False,
+            session=mock.Mock(), sleeper=lambda _s: None,
+            embed_document_fn=embed_document_fn, embed_query_fn=embed_query_fn,
+        )
+
+        # コード系2件 (b0h1b5qdjk, 75445) が母集団から除外され、残るのは自然文1件のみ
+        self.assertEqual(summary["total_demand_queries"], 1)
+        self.assertEqual(captured_query_texts, [["遠いクエリ"]])
+
+        data = json.loads(self.out_path.read_text(encoding="utf-8"))
+        self.assertEqual(data["summary"]["total_demand_queries"], 1)
+        self.assertEqual(data["summary"]["excluded_code_queries"], 2)
+        self.assertEqual(data["summary"]["gap_count"], 1)
+        self.assertEqual(data["gaps"][0]["query"], "遠いクエリ")
+
+    def test_all_code_like_queries_yields_empty_report_without_calling_ruri(self):
+        _write_article(self.articles_dir, "2026-05-01-B0BBBBBBBB.json", {"title": "商品B"})
+        _write_suggest_theme(self.suggest_dir, "age-0", ["b0h1b5qdjk", "75445"])
+        embed_document_fn = mock.Mock()
+        embed_query_fn = mock.Mock()
+
+        summary = D.run(
+            self.articles_dir, self.suggest_dir, self.gsc_path, self.out_path,
+            dry_run=False, session=mock.Mock(), sleeper=lambda _s: None,
+            embed_document_fn=embed_document_fn, embed_query_fn=embed_query_fn,
+        )
+        self.assertEqual(summary["total_demand_queries"], 0)
+        embed_document_fn.assert_not_called()
+        embed_query_fn.assert_not_called()
+
+        data = json.loads(self.out_path.read_text(encoding="utf-8"))
+        self.assertEqual(data["summary"]["excluded_code_queries"], 2)
+        self.assertEqual(data["summary"]["total_demand_queries"], 0)
+
     def test_empty_demand_queries_skips_ruri_and_writes_empty_report(self):
         _write_article(self.articles_dir, "2026-05-01-B0DDDDDDDD.json", {"title": "商品D"})
         # suggest_info も gsc も空
@@ -300,7 +387,10 @@ class RunEndToEndTest(unittest.TestCase):
         embed_query_fn.assert_not_called()
 
         data = json.loads(self.out_path.read_text(encoding="utf-8"))
-        self.assertEqual(data["summary"], {"total_demand_queries": 0, "gap_count": 0, "by_theme": {}})
+        self.assertEqual(
+            data["summary"],
+            {"total_demand_queries": 0, "gap_count": 0, "by_theme": {}, "excluded_code_queries": 0},
+        )
         self.assertEqual(data["gaps"], [])
 
     def test_empty_articles_skips_ruri_and_writes_empty_report(self):
