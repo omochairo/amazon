@@ -663,7 +663,7 @@ class DeletedArticleRegenTest(unittest.TestCase):
 
 
 class ParseMinMonthsTest(unittest.TestCase):
-    """#3389: parse_min_months は build_category_hubs.py から移動してきた関数。
+    """#3563: parse_min_months は build_category_hubs.py から移動してきた関数。
     build_category_hubs 側のテスト (ParseMinMonthsTest) と同じケースを
     移動元 (bfl) に対しても確認する。"""
 
@@ -688,7 +688,7 @@ class ParseMinMonthsTest(unittest.TestCase):
 
 
 class AgeMinMonthsFromArticleTest(unittest.TestCase):
-    """#3389: 優先順 product.target_age or product.age_range ->
+    """#3563: 優先順 product.target_age or product.age_range ->
     persona_fit.age_range -> technical_specs.age_range (build_post.py
     L2668-2699 と同じ)。"""
 
@@ -726,7 +726,7 @@ class AgeMinMonthsFromArticleTest(unittest.TestCase):
 
 
 class LoadArticlesAgeMinMonthsTest(unittest.TestCase):
-    """#3389: load_articles が age_min_months を ArticleRecord に伝播し、
+    """#3563: load_articles が age_min_months を ArticleRecord に伝播し、
     payload にも emit することを確認する。"""
 
     def test_load_articles_attaches_age_min_months(self):

@@ -1,5 +1,5 @@
 {{- /*
-  Renders a single <li> for the /price/ page (#3332 N4-P2 / #3389 カード情報統一)。
+  Renders a single <li> for the /price/ page (#3332 N4-P2 / #3563 カード情報統一)。
   Expected context: one item dict from site.Data.price_dashboard.items
   (asin, name, brand, image, url, current, reference, drop_yen, drop_pct,
   all_time_low, last_updated, age_min_months, amazon_url, ivs_100, ivs_axes).
@@ -25,7 +25,7 @@
     <h2 class="ranking-title"><a href="{{ $url }}">{{ $item.name }}</a></h2>
     {{- with $item.brand }}<p class="ranking-shop">{{ . }}</p>{{- end }}
 
-    {{- /* #3389: 他ページと表記統一のため先頭の "-" を削除 (「56% OFF」)。 */}}
+    {{- /* #3563: 他ページと表記統一のため先頭の "-" を削除 (「56% OFF」)。 */}}
     <p class="feature-discount-badge"><span class="feature-discount-pct">{{ printf "%.0f" (mul $pct 100) }}%</span> OFF</p>
 
     {{- with $item.ivs_100 }}

@@ -43,7 +43,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 # 知育スコア (ivs_100/ivs_axes) は build_feature_lists.py / build_post.py と同じ
-# score_calculator で再計算する (#3389 カード情報統一。/price/ にもスコア・年齢・
+# score_calculator で再計算する (#3563 カード情報統一。/price/ にもスコア・年齢・
 # Amazon リンクを表示するため)。採択後の最大 _TOP_N_CAP 件のみ enrich する
 # (全 1580 記事でスコア計算しないための fail-soft 2 段構え、enrich_items 参照)。
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -92,7 +92,7 @@ def _is_primary_article(path: str) -> bool:
 def load_article_meta(articles_dir: pathlib.Path | str) -> dict[str, dict[str, Any]]:
     """``data/articles/*.json`` (サイドカー除く) から ASIN(大文字) -> meta を返す。
 
-    meta = {"name", "brand", "image", "url", "path"}。``path`` は #3389 の
+    meta = {"name", "brand", "image", "url", "path"}。``path`` は #3563 の
     enrich_items が採択後の最大 _TOP_N_CAP 件だけ記事 json を再読込して
     age_min_months / amazon_url / ivs_100 / ivs_axes を計算するために使う
     (全 1580 記事でスコア計算しないための遅延評価)。同一 ASIN の記事が複数
@@ -246,7 +246,7 @@ def enrich_items(
     追加するフィールド: age_min_months / amazon_url / ivs_100 / ivs_axes。
     build_feature_lists.py と同一の式で計算する (score_calculator 再計算)。
     articles_meta に ``path`` が無い・記事 json が読めない・計算失敗のいずれ
-    でも fail-soft で None のまま残す (#3389: nil ガード必須)。全記事 (最大
+    でも fail-soft で None のまま残す (#3563: nil ガード必須)。全記事 (最大
     1580件) でスコアを計算しないよう、呼出し側は top_n_cap 適用後にのみ
     このフィールドを呼ぶこと。
     """
@@ -350,7 +350,7 @@ def build_items(
 
     out.sort(key=lambda e: e["drop_pct"], reverse=True)
     selected = out[:top_n_cap]
-    # #3389: スコア計算 (enrich_items) は採択後の最大 top_n_cap 件だけに適用する
+    # #3563: スコア計算 (enrich_items) は採択後の最大 top_n_cap 件だけに適用する
     # (全 1580 記事で毎回スコア再計算しないため top_n_cap 適用後に呼ぶ)。
     enrich_items(selected, article_meta)
     return selected

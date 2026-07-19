@@ -190,7 +190,7 @@ class TestBuildItems:
         assert items == []
 
     def test_build_items_output_is_enriched(self, dashboard_dirs, tmp_path: Path):
-        # #3389: build_items は最終的に top_n_cap 適用後の enrich_items 呼出しを
+        # #3563: build_items は最終的に top_n_cap 適用後の enrich_items 呼出しを
         # 経由するので、返る item に age_min_months 等が乗っていることを確認する。
         price_watch_dir, price_history_dir = dashboard_dirs
         articles_dir = tmp_path / "articles"
@@ -264,7 +264,7 @@ class TestLoadArticleMeta:
         assert meta == {}
 
     def test_meta_includes_path_for_later_enrichment(self, tmp_path: Path):
-        # #3389: path が meta に含まれることで enrich_items が採択後の item だけ
+        # #3563: path が meta に含まれることで enrich_items が採択後の item だけ
         # 記事 json を再読込してスコア計算できる (全記事でスコア計算しないため)。
         articles_dir = tmp_path / "articles"
         articles_dir.mkdir()
@@ -278,7 +278,7 @@ class TestLoadArticleMeta:
 
 
 # ---------------------------------------------------------------------------
-# enrich_items (#3389: age_min_months / amazon_url / ivs_100 / ivs_axes)
+# enrich_items (#3563: age_min_months / amazon_url / ivs_100 / ivs_axes)
 # ---------------------------------------------------------------------------
 
 class TestEnrichItems:

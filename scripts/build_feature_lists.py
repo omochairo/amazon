@@ -58,14 +58,14 @@ class ArticleRecord:
     fetched_at: str | None = None
     # 4 軸 0-5 (#589 — feature-item.html がカード上で簡易バーを描く)。
     ivs_axes: dict[str, float] | None = None
-    # 対象年齢の最小月数 (#3389 カード情報統一 / cospa・deals・テーマ hub 全ての
+    # 対象年齢の最小月数 (#3563 カード情報統一 / cospa・deals・テーマ hub 全ての
     # feature JSON に伝播する)。ソース優先順は build_post.py L2668-2699 と同じ。
     age_min_months: int | None = None
     score_cospa: float | None = field(default=None, init=False)
 
 
 # ---------------------------------------------------------------------------
-# Age parsing (#3389: build_category_hubs.py から移動。build_category_hubs は
+# Age parsing (#3563: build_category_hubs.py から移動。build_category_hubs は
 # こちらを import する形に変更済み。呼出元の挙動は不変)
 # ---------------------------------------------------------------------------
 
