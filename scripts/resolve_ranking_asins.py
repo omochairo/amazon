@@ -68,6 +68,12 @@ if THIS_DIR not in sys.path:
 
 from fetch_rakuten import _extract_jan_from_item  # noqa: E402
 from brand_normalizer import normalize as _normalize_brand  # noqa: E402
+from genre_gate import classify_genre  # noqa: E402
+# browse_nodes の抽出ロジックは fetch_amazon 側の実装を再利用する (同等ロジックを
+# 書き直すと ancestor チェーンの遡り方が二重管理になり、#2823 のジャンル判定が
+# 経路ごとにズレるため)。fetch_amazon の import は副作用なし (module 直下は
+# 定数定義と logging 設定のみ)。
+from fetch_amazon import extract_browse_nodes  # noqa: E402
 from vision_match import (  # noqa: E402
     DEFAULT_MIN_SCORE as VISION_DEFAULT_MIN_SCORE,
     image_similarity,
@@ -80,7 +86,18 @@ logger = logging.getLogger("resolve_ranking_asins")
 # searchItems で JAN→ASIN を引くための最小 resources。externalIds で JAN を
 # 照合し、title はログ可読性のため。fetch_amazon.SEARCH_ITEM_RESOURCES と矛盾
 # しない部分集合 (dry-run gate が本体の方を検証する)。
-RESOLVE_RESOURCES = ["itemInfo.title", "itemInfo.externalIds"]
+#
+# browseNodeInfo.browseNodes / .ancestor は #2823 のジャンルゲートを本スクリプトの
+# 解決経路にも効かせるために必要 (ancestor が無いと root が全件 null になり
+# classify_genre が indeterminate 直行で fail-open のまま = ゲートが成立しない)。
+# 両 resource とも fetch_amazon.SEARCH_ITEM_RESOURCES に既存で、04-validate の
+# dry-run gate (#785) が実 API で検証済み。
+RESOLVE_RESOURCES = [
+    "itemInfo.title",
+    "itemInfo.externalIds",
+    "browseNodeInfo.browseNodes",
+    "browseNodeInfo.browseNodes.ancestor",
+]
 
 # #2818 対策4c: title fuzzy 検索専用の resources。JAN 解決 (RESOLVE_RESOURCES) には
 # 影響させず、fuzzy 経路だけ価格・画像も要求する (既存 JAN 解決の payload/挙動を
@@ -129,6 +146,76 @@ def _external_ids_of(item: dict) -> list:
     return out
 
 
+# --------------------------------------------------------------------------
+# #2823 ジャンルゲート (解決経路版)
+#
+# fetch_amazon.py のゲートは search sweep 経路 (items_for_jules) にしか掛かって
+# おらず、本スクリプト → ``fetch_amazon.py --asin ... --competitors-only`` の
+# sniper 経路には一切効いていなかった。その穴を塞ぐ。
+#
+# 判定の向きはオーナー方針で確定 (2026-07-19):
+#   - "flag" のみ不採用
+#   - "indeterminate" (browse_nodes 欠落等) は **必ず通す** = fail-open 維持。
+#     ここを fail-closed にすると、水遊び・プール等の対象内商品や browse_nodes を
+#     返さない商品まで巻き込んで潰すため絶対に変えない。
+#   - プール・水遊びおもちゃは対象内 (夏季の季節需要として歓迎)。排除するのは
+#     ALLOWED_ROOTS から完全に外れた「おもちゃ外」だけ。
+# --------------------------------------------------------------------------
+
+def _genre_verdict_for_item(item: dict):
+    """searchItems 応答 item から (verdict, roots) を返す。
+
+    verdict は classify_genre と同じ "pass" | "flag" | "indeterminate"。
+    roots は判定に使った実カテゴリノードの root カテゴリ名 (manifest 記録用)。
+    """
+    item = item or {}
+    nodes = extract_browse_nodes(item)
+    asin = (item.get("asin") or "").strip()
+    verdict, cat_nodes = classify_genre(nodes, asin)
+    roots = sorted({nd.get("root") for nd in cat_nodes if nd.get("root")})
+    return verdict, roots
+
+
+def _is_genre_rejected(verdict: str) -> bool:
+    """不採用にすべき verdict か。"flag" のみ True (indeterminate は fail-open)。"""
+    return verdict == "flag"
+
+
+def _genre_drop_entry(item: dict, rank, title: str, roots, match_method: str) -> dict:
+    """ゲートで落とした候補の記録 1 件分 (manifest 用)。"""
+    return {
+        "asin": ((item or {}).get("asin") or "").strip(),
+        "rank": rank,
+        "title": (title or "")[:40],
+        "roots": roots,
+        "match_method": match_method,
+    }
+
+
+def resolve_jan_to_item(api, jan: str, search_index: str = "All") -> dict:
+    """Creator API searchItems(keyword=JAN) で JAN 一致 item を 1 件返す (案A の本体)。
+
+    ジャンルゲートには ASIN だけでなく応答 item 全体 (browse_nodes) が要るため、
+    照合結果を item のまま返す層を分けている。一致なしは {} を返す。
+    ``resolve_jan_to_asin`` は本関数の薄いラッパで、既存の呼び出し規約
+    (ASIN 文字列を返す) を維持する。
+    """
+    try:
+        res = api.search_items(
+            keywords=jan, search_index=search_index,
+            item_count=10, item_page=1, resources=RESOLVE_RESOURCES,
+        )
+    except Exception as e:
+        logger.warning(f"  searchItems failed for JAN {jan}: {e}")
+        return {}
+    items = _safe_get(res, "searchResult", "items", default=[]) or []
+    for it in items:
+        if jan in _external_ids_of(it):
+            if (it.get("asin") or "").strip():
+                return it
+    return {}
+
+
 def resolve_jan_to_asin(api, jan: str, search_index: str = "All") -> str:
     """Creator API searchItems(keyword=JAN) で JAN 一致 ASIN を 1 件返す (案A)。
 
@@ -140,21 +227,7 @@ def resolve_jan_to_asin(api, jan: str, search_index: str = "All") -> str:
     照合するのでカテゴリを広げても誤マッチのリスクは無い (物理的に同一商品であることを
     バーコードが保証する)。
     """
-    try:
-        res = api.search_items(
-            keywords=jan, search_index=search_index,
-            item_count=10, item_page=1, resources=RESOLVE_RESOURCES,
-        )
-    except Exception as e:
-        logger.warning(f"  searchItems failed for JAN {jan}: {e}")
-        return ""
-    items = _safe_get(res, "searchResult", "items", default=[]) or []
-    for it in items:
-        if jan in _external_ids_of(it):
-            asin = (it.get("asin") or "").strip()
-            if asin:
-                return asin
-    return ""
+    return (resolve_jan_to_item(api, jan, search_index=search_index).get("asin") or "").strip()
 
 
 # --------------------------------------------------------------------------
@@ -316,6 +389,8 @@ def resolve_title_fuzzy(
     vision_client=None,
     vision_gate_mode: str = "shadow",
     vision_min_score: float = VISION_DEFAULT_MIN_SCORE,
+    enable_genre_gate: bool = True,
+    genre_dropped: list = None,
 ) -> dict:
     """#2818 対策4c: JAN 抽出不可能な item を title fuzzy + vision ゲートで解決する (オプトイン)。
 
@@ -329,7 +404,14 @@ def resolve_title_fuzzy(
     ``vision_client`` が None (=--vision-embed-url 未指定) の場合、vision_gate_mode に
     関わらず image_sim は常に None (未評価) になり、"enforce" では全件不採用になる —
     実サービス未デプロイの間は "shadow" (既定) で運用すること。
+
+    ``enable_genre_gate=True`` (既定) のとき、ガードレール通過後・採用確定前に
+    #2823 ジャンルゲートを掛け、verdict が "flag" の候補は採用しない (次の候補へ
+    進む)。落とした候補は ``genre_dropped`` リストに追記する (呼び出し側が
+    manifest に載せる)。
     """
+    if genre_dropped is None:
+        genre_dropped = []
     candidates_before_limit = len(items)
     if limit and limit > 0:
         items = items[:limit]
@@ -356,6 +438,16 @@ def resolve_title_fuzzy(
             asin = evald["asin"]
             if not asin or asin.upper() in covered or asin in seen_asins:
                 continue
+            # #2823: ガードレール通過後・採用確定前にジャンルゲート。"flag" は
+            # 不採用にして次候補へ進む (covered/seen と同じ扱い)。"indeterminate"
+            # は fail-open で通す。
+            if enable_genre_gate:
+                verdict, roots = _genre_verdict_for_item(cand)
+                if _is_genre_rejected(verdict):
+                    genre_dropped.append(
+                        _genre_drop_entry(cand, rank, title, roots, "title_fuzzy")
+                    )
+                    continue
             best, best_raw = evald, cand
             break  # Creator API の関連度順を信頼し、最初にガードレール通過した候補を採用
 
@@ -494,6 +586,7 @@ def resolve_ranking_asins(
     vision_client=None,
     vision_gate_mode="shadow",
     vision_min_score=None,
+    enable_genre_gate=True,
 ):
     """純粋ロジック: 未マッチ JAN を解決し manifest dict を返す (テスト driver)。
 
@@ -501,7 +594,13 @@ def resolve_ranking_asins(
     解決に加えて #2818 対策4c (title fuzzy match + vision ゲート) も実行し、結果を
     manifest の ``"title_fuzzy"`` キーと ``new_asins`` に merge する。既定 False では
     このファイルの既存の挙動を一切変えない (#3332 スコープ: 既定挙動を後退させない)。
+
+    ``enable_genre_gate=True`` (既定) のとき、JAN 経路・title fuzzy 経路の**両方**で
+    Amazon 応答 item に #2823 ジャンルゲートを掛け、"flag" の候補を ``resolved`` /
+    ``new_asins`` に載せない (= ranking_pool にも入らない)。``False`` で無効化
+    (``--no-genre-gate``)。
     """
+    genre_dropped = []
     jans = _collect_unmatched_jans(ranking_items)
     # #2818 対策0: --limit で切り詰める前の候補プール総数を記録する。旧実装は
     # limit 適用後の len(jans) しか manifest に残さず、smoke run (--limit 1) の
@@ -512,9 +611,20 @@ def resolve_ranking_asins(
     resolved, unresolved, skipped = [], [], []
     seen_asins = set()
     for i, (jan, rank, title) in enumerate(jans):
-        asin = resolve_jan_to_asin(api, jan, search_index=search_index)
+        matched = resolve_jan_to_item(api, jan, search_index=search_index)
+        asin = (matched.get("asin") or "").strip()
+        # #2823: JAN 一致 item を採用確定する前にジャンルゲート。"flag" は resolved に
+        # 積まず genre_gate_dropped に回す (unresolved とは別枠 — 「解決できなかった」
+        # ではなく「解決できたが対象ジャンル外」なので混ぜると再試行判断を誤らせる)。
+        gate_verdict, gate_roots = ("indeterminate", [])
+        if asin and enable_genre_gate:
+            gate_verdict, gate_roots = _genre_verdict_for_item(matched)
         if not asin:
             unresolved.append({"jan": jan, "rank": rank, "title": title})
+        elif _is_genre_rejected(gate_verdict):
+            entry = _genre_drop_entry(matched, rank, title, gate_roots, "jan")
+            entry["jan"] = jan
+            genre_dropped.append(entry)
         elif asin.upper() in covered:
             skipped.append({"jan": jan, "asin": asin, "rank": rank})
         elif asin in seen_asins:
@@ -543,10 +653,16 @@ def resolve_ranking_asins(
             item_count=title_fuzzy_item_count, limit=title_fuzzy_limit, sleep=sleep,
             vision_client=vision_client, vision_gate_mode=vision_gate_mode,
             vision_min_score=vmin,
+            enable_genre_gate=enable_genre_gate, genre_dropped=genre_dropped,
         )
         manifest["title_fuzzy"] = fuzzy_result
         fuzzy_new_asins = [e["asin"] for e in fuzzy_result["title_fuzzy_resolved"]]
         manifest["new_asins"] = manifest["new_asins"] + fuzzy_new_asins
+
+    # #2823: 両経路のゲート除外をまとめて記録する (fuzzy 実行後に確定するのでここ)。
+    manifest["genre_gate_enabled"] = bool(enable_genre_gate)
+    manifest["genre_gate_dropped"] = len(genre_dropped)
+    manifest["genre_gate_dropped_items"] = genre_dropped
 
     return manifest
 
@@ -572,6 +688,11 @@ def main():
                         help="Seconds between searchItems calls (Creator API TPS safety).")
     parser.add_argument("--dry-run", action="store_true",
                         help="Resolve and log results but write no output files. For Actions verification of Option A.")
+    parser.add_argument("--no-genre-gate", dest="genre_gate", action="store_false",
+                        help="#2823: 解決した候補への知育玩具ジャンル検査を無効化する "
+                             "(既定は有効)。ゲートは verdict が flag の候補だけを落とし、"
+                             "indeterminate (browse_nodes 欠落) は fail-open で通す。"
+                             "緊急時の退避経路であり、常用しないこと。")
     parser.add_argument("--enable-title-fuzzy", action="store_true",
                         help="#2818 対策4c: JAN 抽出不可能な item に title fuzzy 解決を有効化する "
                              "(既定 off。既存の JAN 解決挙動は変えないオプトイン)。")
@@ -657,6 +778,7 @@ def main():
         vision_client=vision_client,
         vision_gate_mode=args.vision_gate_mode,
         vision_min_score=args.vision_min_score,
+        enable_genre_gate=args.genre_gate,
     )
     manifest["generated_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     logger.info(
@@ -667,6 +789,15 @@ def main():
     )
     for r in manifest["resolved"]:
         logger.info(f"  resolved JAN {r['jan']} → {r['asin']} (rank={r['rank']})")
+    logger.info(
+        f"Genre gate (#2823): enabled={manifest['genre_gate_enabled']} "
+        f"dropped={manifest['genre_gate_dropped']} (flag のみ除外・indeterminate は通す)"
+    )
+    for g in manifest["genre_gate_dropped_items"]:
+        logger.info(
+            f"  genre-drop {g['asin']} (rank={g['rank']}, via={g['match_method']}) "
+            f"roots={g['roots']} title={g['title']!r}"
+        )
     if "title_fuzzy" in manifest:
         tf = manifest["title_fuzzy"]
         logger.info(
