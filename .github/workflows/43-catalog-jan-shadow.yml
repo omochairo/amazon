@@ -1,0 +1,62 @@
+name: Catalog JAN Shadow Lane
+
+# Issue #3561 (2026-07-19 設計コメントで確定): title-fuzzy の代替経路の shadow レーン。
+# 楽天商品価格ナビ Product/Search 経由でカタログ候補を引き、G1-G4 ガードレール +
+# 既存 exact JAN 解決 (resolve_jan_to_item) + #2823 ジャンルゲートを通した採否を
+# manifest artifact に記録する。
+#
+# **書き込みはこのジョブの成果物 (アーティファクト) のみ**。既存データ
+# (per_asin / articles / ranking_pool / _ranking_resolved_manifest.json 等) には
+# 一切触れない。dispatch 専用・cron なし。較正 (issue #3561 進め方 1-3: 手動 spot
+# check → 誤マッチ0確認 → resolve_ranking_asins.py への第3経路統合) が済むまで
+# 本線には統合しない。
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Max shadow-population items to process this run (0 = all)'
+        type: string
+        default: '0'
+      hits:
+        description: 'Product/Search candidates per query (<=5 recommended)'
+        type: string
+        default: '5'
+
+jobs:
+  catalog-jan-shadow:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run catalog JAN shadow resolve (no writes to tracked data)
+        env:
+          RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
+          RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
+          AMAZON_CREATORS_APPLICATION_ID: ${{ secrets.AMAZON_CREATORS_APPLICATION_ID }}
+          AMAZON_CREATORS_CREDENTIAL_ID: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_ID }}
+          AMAZON_CREATORS_CREDENTIAL_SECRET: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_SECRET }}
+          AMAZON_PARTNER_TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
+        run: |
+          set -e
+          python scripts/resolve_catalog_jan_shadow.py \
+            --limit "${{ github.event.inputs.limit }}" \
+            --hits "${{ github.event.inputs.hits }}" \
+            --out data/raw/_catalog_jan_shadow_manifest.json
+
+      - name: Upload shadow manifest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-jan-shadow-manifest
+          path: data/raw/_catalog_jan_shadow_manifest.json
+          retention-days: 30
