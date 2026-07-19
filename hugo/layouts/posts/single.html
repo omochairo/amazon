@@ -30,12 +30,35 @@
       {{ .Description }}
     </div>
     {{- end }}
+    {{- /* #3568 E1: 記事ヒーローに OFF% バッジ (discounts.json 鮮度ガード込み・discount_badge.html
+           は該当なしなら空文字を返すため、キャプチャして空なら div ごと出さない) */ -}}
+    {{- if $asin }}
+    {{- $heroDiscountBadge := partial "discount_badge.html" $asin }}
+    {{- if $heroDiscountBadge }}
+    <div class="post-hero-badges">{{ $heroDiscountBadge }}</div>
+    {{- end }}
+    {{- end }}
     {{- if not (.Param "hideMeta") }}
     <div class="post-meta">
       {{- partial "post_meta.html" . -}}
       {{- partial "translation_list.html" . -}}
       {{- partial "edit_post.html" . -}}
       {{- partial "post_canonical.html" . -}}
+    </div>
+    {{- end }}
+    {{- /* #3568 E2: デスクトップ限定 お気に入り♡ / 比較📊 (モバイルは mobile_sticky_cta.html
+           が同機能を担うため ≤720px は CSS で非表示にして二重導線を避ける)。
+           $asin 無しページ (通常記事等) では出さない。 */ -}}
+    {{- if $asin }}
+    <div class="article-actions" data-asin="{{ $asin }}">
+      <button type="button" class="article-action-btn article-action-fav" data-action="fav" aria-pressed="false" aria-label="お気に入りに追加">
+        <span class="article-action-icon" aria-hidden="true">♡</span>
+        <span class="article-action-label">お気に入り</span>
+      </button>
+      <button type="button" class="article-action-btn article-action-compare" data-action="compare" aria-pressed="false" aria-label="比較リストに追加">
+        <span class="article-action-icon" aria-hidden="true">📊</span>
+        <span class="article-action-label">比較に追加</span>
+      </button>
     </div>
     {{- end }}
   </header>

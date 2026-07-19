@@ -16,6 +16,17 @@
   {{- if and . (gt . 0) (lt . $minPrice) -}}{{- $minPrice = . -}}{{- end -}}
 {{- end -}}
 {{- if eq $minPrice 99999999 }}{{ $minPrice = 0 }}{{ end -}}
+{{- /* #3568 E1: discounts.json (site.Data.discounts) から OFF% を直接 lookup する。
+       discount_badge.html partial の共有ピル (.discount-badge) は下メニューの極小
+       スペースには大きすぎるため、下メニュー専用の小型表示 (.m-sticky-off) にする。
+       鮮度ガードは discounts.json 生成時 (build_discounts.py) 側で担保済み。 */ -}}
+{{- $offPct := 0 -}}
+{{- with site.Data.discounts -}}
+  {{- $items := .items | default dict -}}
+  {{- with (index $items $asin) -}}
+    {{- if .pct }}{{ $offPct = .pct }}{{ end -}}
+  {{- end -}}
+{{- end -}}
 {{- /* 初期 href は ASIN ベースの Amazon 直リンク (chk01-22 タグ)。
        JS (_wireBuy) が is-cheapest CTA の URL に上書きするが、
        JS 失敗 / 旧キャッシュ / 早期タップでも必ず購入導線が機能する保険。 */ -}}
@@ -38,7 +49,12 @@
     <span class="m-sticky-icon" aria-hidden="true">🛒</span>
     <span class="m-sticky-label">
       <span class="m-sticky-buy-label">最安値で見る</span>
-      {{- if gt $minPrice 0 }}<span class="m-sticky-buy-price">&yen;{{ lang.FormatNumber 0 $minPrice }}</span>{{ end -}}
+      {{- if gt $minPrice 0 }}
+      <span class="m-sticky-buy-price-row">
+        <span class="m-sticky-buy-price">&yen;{{ lang.FormatNumber 0 $minPrice }}</span>
+        {{- if gt $offPct 0 }}<span class="m-sticky-off">{{ $offPct }}%OFF</span>{{ end -}}
+      </span>
+      {{- end -}}
     </span>
   </a>
 </aside>
