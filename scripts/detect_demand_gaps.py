@@ -275,6 +275,36 @@ def embed_batch_ruri_query(
     raise C.EmbeddingBatchError(str(last_err)) from last_err
 
 
+def _embed_chunked(
+    texts: list[str],
+    embed_fn: Callable[..., list[list[float]]],
+    ruri_url: str,
+    session: requests.Session,
+    sleeper,
+    batch_size: int = 0,
+    label: str = "document",
+) -> list[list[float]]:
+    """``texts`` を ``batch_size`` 件ずつに分割して ``embed_fn`` を呼び、結果を連結する。
+
+    embed_batch_ruri / embed_batch_ruri_query は「1 呼び出し = 1 HTTP リクエスト」の
+    低レベル関数で、バッチ分割は呼び出し側の責務
+    (compute_semantic_related.compute_embeddings と同じ役割分担)。全件を単一
+    リクエストに載せると記事 1,500 件超では Ruri のエンコードが REQUEST_TIMEOUT
+    (120s) を必ず超過し、リトライも同じ巨大リクエストを再送するだけで回復しない
+    (2026-07-19 初回 shadow run 29683020962 で実測)。
+    """
+    if batch_size <= 0:
+        batch_size = C.DEFAULT_BATCH_SIZE
+    vectors: list[list[float]] = []
+    n_batches = (len(texts) + batch_size - 1) // batch_size
+    for bi in range(n_batches):
+        chunk = texts[bi * batch_size: (bi + 1) * batch_size]
+        vectors.extend(embed_fn(chunk, ruri_url, session, sleeper))
+        if (bi + 1) % C._BATCH_LOG_EVERY == 0 or (bi + 1) == n_batches:
+            logger.info("%s embed: %d/%d batches done", label, bi + 1, n_batches)
+    return vectors
+
+
 # --------------------------------------------------------------------------
 # 記事コーパス (タイトル付き)
 # --------------------------------------------------------------------------
@@ -423,7 +453,9 @@ def run(
     ``embed_document_fn`` / ``embed_query_fn`` はテスト用の DI ポイント
     (既定はそれぞれ compute_semantic_related.embed_batch_ruri /
     embed_batch_ruri_query の実 HTTP 呼び出し)。シグネチャは
-    ``(texts, ruri_url, session, sleeper) -> list[list[float]]``。
+    ``(texts, ruri_url, session, sleeper) -> list[list[float]]``。いずれも
+    ``_embed_chunked`` 経由で最大 ``C.DEFAULT_BATCH_SIZE`` 件ずつに分割して
+    呼ばれる (1 呼び出し = 1 リクエスト)。
 
     需要クエリ 0 件、または記事コーパス 0 件の場合は Ruri を一切呼ばずに
     summary をゼロ件・gaps 空で書き出し正常終了する (--dry-run 時は書き込み
@@ -470,10 +502,14 @@ def run(
 
     asins = [a for a, _ in article_items]
     doc_texts = [t for _, t in article_items]
-    doc_vectors = embed_document_fn(doc_texts, ruri_url, session, sleeper)
+    doc_vectors = _embed_chunked(
+        doc_texts, embed_document_fn, ruri_url, session, sleeper, label="document"
+    )
 
     query_texts = [q["query"] for q in demand_queries]
-    query_vectors = embed_query_fn(query_texts, ruri_url, session, sleeper)
+    query_vectors = _embed_chunked(
+        query_texts, embed_query_fn, ruri_url, session, sleeper, label="query"
+    )
 
     sims = compute_max_similarity(query_vectors, doc_vectors)
 

@@ -365,6 +365,47 @@ class RunEndToEndTest(unittest.TestCase):
 # Ruri fail-closed (実の embed_batch_ruri / embed_batch_ruri_query 経路, session をモック)
 # --------------------------------------------------------------------------
 
+class EmbedChunkedTest(unittest.TestCase):
+    """_embed_chunked: 低レベル embed fn (1呼び出し=1リクエスト) へのバッチ分割。
+
+    全件を単一リクエストに載せると記事 1,500 件超で REQUEST_TIMEOUT を必ず
+    超過する (2026-07-19 初回 shadow run で実測) ことへの回帰テスト。
+    """
+
+    def test_splits_into_batches_and_preserves_order(self):
+        calls: list[int] = []
+
+        def fake_embed(texts, ruri_url, session, sleeper):
+            calls.append(len(texts))
+            return [[float(hash(t) % 100)] for t in texts]
+
+        texts = [f"t{i}" for i in range(70)]
+        vectors = D._embed_chunked(
+            texts, fake_embed, "http://ruri:8000", None, None, batch_size=32
+        )
+        self.assertEqual(calls, [32, 32, 6])
+        self.assertEqual(len(vectors), 70)
+        # 順序保存: 各テキストに対応するベクトルが同じ位置に来る
+        self.assertEqual(vectors[0], [float(hash("t0") % 100)])
+        self.assertEqual(vectors[69], [float(hash("t69") % 100)])
+
+    def test_default_batch_size_is_compute_semantic_related_default(self):
+        calls: list[int] = []
+
+        def fake_embed(texts, ruri_url, session, sleeper):
+            calls.append(len(texts))
+            return [[0.0]] * len(texts)
+
+        n = C.DEFAULT_BATCH_SIZE + 1
+        D._embed_chunked([f"t{i}" for i in range(n)], fake_embed, "u", None, None)
+        self.assertEqual(calls, [C.DEFAULT_BATCH_SIZE, 1])
+
+    def test_empty_input_no_calls(self):
+        fn = mock.Mock()
+        self.assertEqual(D._embed_chunked([], fn, "u", None, None), [])
+        fn.assert_not_called()
+
+
 class RuriFailClosedTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
