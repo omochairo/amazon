@@ -1574,6 +1574,34 @@ def _load_per_asin_amazon(per_asin_root: pathlib.Path, asin: str) -> dict[str, A
     return item if isinstance(item, dict) else None
 
 
+def _attach_price_freshness(data: dict[str, Any], per_asin_root: pathlib.Path) -> None:
+    """#3568 E5: 価格カードの近くに表示する「価格情報取得日」を
+    ``data["price_checked_at"]`` (YYYY-MM-DD) として添付する。
+
+    データ源は ``data/raw/per_asin/<ASIN>/amazon.json`` の ``fetched_at``
+    (_backfill_amazon_badges と同じ既読み込み済みソース。捏造防止のため
+    ビルド日時は使わない)。取得できなければ何も設定しない
+    (post.md.j2 は ``{% if price_checked_at %}`` で未設定時は非表示)。
+    """
+    product = data.get("product") if isinstance(data.get("product"), dict) else None
+    asin = product.get("asin") if product else None
+    if not asin:
+        return
+    p = per_asin_root / asin / "amazon.json"
+    if not p.exists():
+        return
+    try:
+        snap = json.loads(p.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return
+    if not isinstance(snap, dict):
+        return
+    fetched_at = snap.get("fetched_at")
+    if not isinstance(fetched_at, str) or len(fetched_at) < 10:
+        return
+    data["price_checked_at"] = fetched_at[:10]
+
+
 _PRICE_HISTORY_MIN_POINTS = 3
 _PRICE_HISTORY_MIN_SPAN_DAYS = 14
 _PRICE_HISTORY_MAX_POINTS_SHOWN = 12
@@ -2787,7 +2815,10 @@ def _frontmatter_meta(
         meta["jsonld"] = meta_jsonld
     if data.get("breadcrumbs"):
         meta["breadcrumbs"] = data["breadcrumbs"]
-        
+    # #3568 E5: 価格情報取得日 (_attach_price_freshness が設定済みの場合のみ)
+    if data.get("price_checked_at"):
+        meta["price_checked_at"] = data["price_checked_at"]
+
     # 2026-05-21 (#516): 価格ソート用のメタデータ追加
     if product and isinstance(product.get("prices"), dict):
         prices = product["prices"]
@@ -2950,6 +2981,7 @@ def main() -> None:
             _merge(data, _load_optional_json(src_path / f"{slug}.enrichment.json"), ENRICHMENT_KEYS)
             _merge(data, _load_optional_json(src_path / f"{slug}.seo.json"), SEO_KEYS)
             _backfill_amazon_badges(data, raw_amazon_index, per_asin_root)
+            _attach_price_freshness(data, per_asin_root)
             _attach_market_prices(data, rakuten_matched_index, yahoo_matched_index)
             amazon_discontinued = _apply_amazon_discontinued(data, per_asin_root)
             _attach_price_history(data, price_history_root)
