@@ -25,16 +25,20 @@
     <h2 class="ranking-title"><a href="{{ $url }}">{{ $item.name }}</a></h2>
     {{- with $item.brand }}<p class="ranking-shop">{{ . }}</p>{{- end }}
 
-    {{- /* #3563: 他ページと表記統一のため先頭の "-" を削除 (「56% OFF」)。 */}}
-    <p class="feature-discount-badge"><span class="feature-discount-pct">{{ printf "%.0f" (mul $pct 100) }}%</span> OFF</p>
+    {{- /* #3563 カード情報統一 (フィードバックA): OFF% → スコア → 年齢を
+           単一の .feature-badges 行にまとめる。表記統一のため先頭の "-" は削除
+           (「56% OFF」)。 */}}
+    <div class="feature-badges">
+    <span class="feature-discount-badge"><span class="feature-discount-pct">{{ printf "%.0f" (mul $pct 100) }}%</span> OFF</span>
 
     {{- with $item.ivs_100 }}
-    <p class="feature-cospa-badge"><a href="/about-score/" class="feature-cospa-badge-link">知育スコア</a> <strong>{{ int . }}</strong> / 100</p>
+    <span class="feature-cospa-badge"><a href="/about-score/" class="feature-cospa-badge-link">知育スコア</a> <strong>{{ int . }}</strong> / 100</span>
     {{- end }}
 
     {{- with $item.age_min_months }}
     <span class="feature-age-badge" title="対象年齢">&#128118; {{ partial "age_label.html" . }}</span>
     {{- end }}
+    </div>
 
     <p class="ranking-price price-item-price">
       {{- with $item.reference }}<span class="price-item-old">&yen;{{ lang.FormatNumberCustom 0 . }}</span>{{ end }}

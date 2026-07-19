@@ -245,7 +245,7 @@
 <section class="related-carousel-section same-price-carousel-section">
 <header class="home-section-header"><div class="carousel-nav-arrows"><button class="carousel-arrow prev" aria-label="左にスクロール" disabled>‹</button><button class="carousel-arrow next" aria-label="右にスクロール">›</button></div></header>
 <div class="carousel-wrapper"><div class="carousel-track same-price-grid">
-{% for s in same_price_band.cards %}<a class="same-price-card" href="{{ s.internal_url }}">{% if s.image %}<div class="same-price-card-image"><img src="{{ s.image }}" alt="{{ s.name }}" loading="lazy"></div>{% endif %}<div class="same-price-card-body"><div class="same-price-card-name">{{ s.name }}</div><div class="same-price-card-meta">🏆 <strong>{{ s.internal_ivs_score_100 }}</strong>点{% if s.price %}<span class="same-price-card-price">／￥{{ "{:,}".format(s.price) }}</span>{% endif %}</div></div></a>
+{% for s in same_price_band.cards %}<a class="same-price-card" href="{{ s.internal_url }}">{% if s.image %}<div class="same-price-card-image"><img src="{{ s.image }}" alt="{{ s.name }}" loading="lazy">{% if s.asin %}{{ '{{< discount_badge ' ~ s.asin ~ ' >}}' }}{% endif %}</div>{% endif %}<div class="same-price-card-body"><div class="same-price-card-name">{{ s.name }}</div><div class="same-price-card-meta">🏆 <strong>{{ s.internal_ivs_score_100 }}</strong>点{% if s.price %}<span class="same-price-card-price">／￥{{ "{:,}".format(s.price) }}</span>{% endif %}</div></div></a>
 {% endfor %}</div></div>
 </section>
 

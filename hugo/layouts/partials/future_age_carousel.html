@@ -62,6 +62,11 @@
             {{- if $p.Params.ivs_score_100 }}
               <span class="carousel-card-score">🏆 {{ $p.Params.ivs_score_100 }}点</span>
             {{- end }}
+            {{- /* #3563 フィードバックB: related_carousel.html と同じ OFF% バッジを表示し、
+                   記事内の商品カード面 (関連レビュー/成長先取り/同価格帯) 間で
+                   OFF 表示が揃うようにする。score は右上固定・左上が唯一の空きコーナー。 */ -}}
+            {{- $candAsin := upper (path.Base $p.RelPermalink) -}}
+            {{- if $candAsin }}{{ partial "discount_badge.html" $candAsin }}{{ end -}}
           </div>
           <div class="carousel-card-body">
             {{- with $p.Params.brand }}<span class="carousel-card-brand">{{ . }}</span>{{ end }}

@@ -3699,11 +3699,28 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   letter-spacing: 0.02em;
 }
 
-/* #3563: discount_badge.html partial は自己完結ピル (.discount-badge) を返す
-   ため、/cospa/ 分岐・/price/ ではこの無地ラッパーで改行だけ行う
-   (.feature-discount-badge のような独自背景は持たせない = 二重ピル回避)。 */
-.feature-discount-badge-wrap {
-  margin: 0.2rem 0;
+/* #3563 フィードバックA: OFF%・知育スコア・対象年齢の3バッジを縦積みではなく
+   1行の flex 行にまとめるコンテナ。中の各バッジ自体のピル見た目 (背景・角丸・
+   padding) は個別クラス側で維持し、ここでは行内配置と margin の相殺のみ行う。
+   .discount-badge (cospa 分岐で discount_badge.html partial がそのまま出力する
+   自己完結ピル) もこの行に同居するため合わせて margin を殺す。 */
+.feature-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.45rem;
+  margin: 0.35rem 0;
+}
+.feature-badges > *,
+.feature-badges .discount-badge {
+  margin: 0;
+}
+/* <p> だった要素を <span> 化すると既定 display は inline になるが、
+   ピル形状は inline-flex 前提のため明示しておく (.feature-cospa-badge は
+   inline-block のままで足りる)。 */
+.feature-badges .feature-discount-badge {
+  display: inline-flex;
+  align-items: center;
 }
 
 .feature-cospa-badge {
@@ -4464,8 +4481,20 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 .post-content .same-price-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,.08); }
 /* #1089: flex column 内の aspect-ratio が min-height:auto の影響で
    実画像の intrinsic 高さに引きずられ縦伸びするのを防ぐ */
-.post-content .same-price-card-image { aspect-ratio: 1 / 1; min-height: 0; flex-shrink: 0; background: #f6f6f8; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.post-content .same-price-card-image { position: relative; aspect-ratio: 1 / 1; min-height: 0; flex-shrink: 0; background: #f6f6f8; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .post-content .same-price-card-image img { width: 100%; height: 100%; object-fit: contain; }
+/* #3563 フィードバックB: same-price-card には score バッジが画像上に無く
+   左上が空いているため、.carousel-card-image .discount-badge (L6600) と
+   同等の絶対配置 overlay を適用する。配色/dark theme は .discount-badge 自体の
+   既存ルールがそのまま効くため配置のみ上書きする。 */
+.post-content .same-price-card-image .discount-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  border-radius: 30px;
+  padding: 4px 10px;
+}
 .post-content .same-price-card-body { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 4px; }
 .post-content .same-price-card-name { font-size: 0.85em; line-height: 1.35; font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .post-content .same-price-card-meta { font-size: 0.8em; color: #6b7280; }
