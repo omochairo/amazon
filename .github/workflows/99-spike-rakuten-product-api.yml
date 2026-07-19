@@ -1,0 +1,123 @@
+name: SPIKE Rakuten Product Search API (JAN 取得可否の疎通確認)
+
+# Issue #2818 / #3332 N5 の設計判断用の **使い捨て spike**。
+#
+# 目的: 商品価格ナビ製品検索API (openapi.rakuten.co.jp/ichibaproduct/.../20250801) が
+#   1. 新ホストで実際に疎通するか (旧 app.rakuten.co.jp 廃止後の後継があるか)
+#   2. ランキングの「JAN 抽出不可」item のタイトルから productCode (JAN) を引けるか
+# を実測する。引けるなら title-fuzzy + 画像ゲート (N5) は不要になり、exact JAN 経路に
+# 一本化できる = 誤アフィリエイトリンクのリスクを構造的にゼロにできる。
+#
+# **書き込み一切なし・PR なし・issue なし**。ログ出力のみ。判断がついたらこの
+# workflow ごと削除する。cron 禁止 (手動 dispatch のみ)。
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Product API を試すランキング item 数の上限'
+        required: false
+        default: '12'
+
+jobs:
+  spike:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install requests
+        run: pip install requests
+
+      - name: Probe Product Search API
+        env:
+          RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
+          RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
+          LIMIT: ${{ inputs.limit || '12' }}
+        run: |
+          python - <<'PY'
+          import os, re, json, time, requests
+
+          APP = os.environ["RAKUTEN_APP_ID"]
+          AK = os.environ.get("RAKUTEN_ACCESS_KEY") or ""
+          LIMIT = int(os.environ.get("LIMIT") or "12")
+          URL = "https://openapi.rakuten.co.jp/ichibaproduct/api/Product/Search/20250801"
+          JAN_RE = re.compile(r"(?<!\d)(\d{13})(?!\d)")
+
+          # ランキングの「itemCaption/title から JAN を抽出できない」item = title-fuzzy の母集団
+          items = json.load(open("hugo/data/ranking/weekly.json", encoding="utf-8"))["items"]
+          targets = [i for i in items
+                     if not JAN_RE.search((i.get("itemCaption") or "") + " " + (i.get("title") or ""))]
+          print(f"ランキング item={len(items)} / JAN抽出不可={len(targets)} / 今回試行={min(LIMIT,len(targets))}")
+          print("=" * 78)
+
+          def clean(t):
+              """楽天タイトルの販促ノイズを落として検索キーワードにする。"""
+              t = re.sub(r"[【\[（(].*?[】\])）]", " ", t or "")
+              t = re.sub(r"[／/\\|｜★☆●○◆■□▼▲]+", " ", t)
+              t = re.sub(r"\d+%\s*OFF", " ", t, flags=re.I)
+              t = re.sub(r"(送料無料|楽天\d+位|即納|予約販売|クーポン|正規品|公式)", " ", t)
+              return " ".join(t.split())[:60]
+
+          ok = jan_found = 0
+          first_error = None
+          dumped = False
+          for it in targets[:LIMIT]:
+              kw = clean(it.get("title"))
+              params = {"applicationId": APP, "keyword": kw, "hits": 3, "format": "json"}
+              headers = {"accessKey": AK} if AK else {}
+              try:
+                  r = requests.get(URL, params=params, headers=headers, timeout=20)
+                  status = r.status_code
+                  if status != 200:
+                      if first_error is None:
+                          first_error = f"HTTP {status}: {r.text[:300]}"
+                      print(f"[HTTP {status}] {kw[:50]}")
+                      time.sleep(1.0)
+                      continue
+                  ok += 1
+                  data = r.json()
+                  if not dumped:
+                      # レスポンス形状はドキュメントからの推定なので、初回だけ生 JSON を
+                      # 出して実際のキー構造を確認する (パーサをここに合わせて直す)。
+                      print("--- RAW RESPONSE (first success) ---")
+                      print(json.dumps(data, ensure_ascii=False)[:1200])
+                      print("--- END RAW ---")
+                      dumped = True
+                  products = data.get("Products") or data.get("products") or []
+                  if not products:
+                      print(f"[0件]  {kw[:50]}")
+                  else:
+                      p = products[0]
+                      p = p.get("Product", p)
+                      code = p.get("productCode") or ""
+                      if code:
+                          jan_found += 1
+                      print(f"[{'JAN=' + str(code) if code else 'JANなし':<20}] "
+                            f"productNo={str(p.get('productNo') or '')[:14]:<14} "
+                            f"maker={str(p.get('makerName') or p.get('makerCode') or '')[:10]:<10} "
+                            f"| {str(p.get('productName') or '')[:38]}")
+                      # 元タイトルも並べて人が目視照合できるようにする
+                      print(f"{'':22}  ← 楽天item: {kw[:52]}")
+              except Exception as e:
+                  if first_error is None:
+                      first_error = repr(e)
+                  print(f"[EXC] {kw[:50]} :: {e!r}")
+              time.sleep(1.0)
+
+          print("=" * 78)
+          print(f"疎通成功(HTTP200) : {ok}/{min(LIMIT,len(targets))}")
+          print(f"JAN(productCode)取得: {jan_found}/{min(LIMIT,len(targets))}")
+          if first_error:
+              print(f"最初のエラー: {first_error}")
+          print("判定: " + ("Product API 利用可能" if ok else "Product API 到達不可 — 設計変更なし"))
+          PY
