@@ -536,5 +536,174 @@ class ResolveRankingAsinsTitleFuzzyIntegrationTest(unittest.TestCase):
         self.assertIn("B0LEGO0001", m["new_asins"])
 
 
+# --------------------------------------------------------------------------
+# #2823 ジャンルゲート (解決経路版)
+#
+# オーナー方針 (2026-07-19): "flag" のみ不採用。"indeterminate" は必ず通す
+# (fail-open)。プール・水遊びおもちゃは ALLOWED_ROOTS 内なので対象内。
+# --------------------------------------------------------------------------
+
+def _browse_nodes(node_id, name, root):
+    """Creator API 応答の browseNodeInfo.browseNodes 断片 (ancestor チェーン付き)。"""
+    return {"browseNodeInfo": {"browseNodes": [
+        {"id": node_id, "displayName": name, "ancestor": {"displayName": root}},
+    ]}}
+
+
+def _jan_candidate(asin, jan, nodes=None):
+    """JAN 経路の searchItems 応答 item。nodes 未指定なら browse_nodes なし。"""
+    it = {
+        "asin": asin,
+        "itemInfo": {"externalIds": {"eans": {"displayValues": [jan]}}},
+    }
+    if nodes:
+        it.update(nodes)
+    return it
+
+
+class _JanAPI:
+    """JAN → 応答 item を固定で返す (browse_nodes 込みで組み立てられる)。"""
+
+    def __init__(self, jan_to_item):
+        self.jan_to_item = jan_to_item
+
+    def search_items(self, keywords=None, **kw):
+        it = self.jan_to_item.get(keywords)
+        return {"searchResult": {"items": [it] if it else []}}
+
+
+class GenreVerdictHelperTest(unittest.TestCase):
+    def test_flag_for_non_toy_root(self):
+        item = _jan_candidate("B0NG000001", "4904810000020",
+                              _browse_nodes("2189588051", "シール・ステッカー", "文房具・オフィス用品"))
+        self.assertEqual(rr._genre_verdict_for_item(item), ("flag", ["文房具・オフィス用品"]))
+
+    def test_pass_for_toy_root(self):
+        item = _jan_candidate("B0OK000001", "4904810000021",
+                              _browse_nodes("2039115051", "ブロック", "おもちゃ"))
+        self.assertEqual(rr._genre_verdict_for_item(item)[0], "pass")
+
+    def test_missing_browse_nodes_is_indeterminate(self):
+        self.assertEqual(rr._genre_verdict_for_item(_jan_candidate("B0X", "49048")),
+                         ("indeterminate", []))
+
+    def test_only_flag_is_rejected(self):
+        self.assertTrue(rr._is_genre_rejected("flag"))
+        self.assertFalse(rr._is_genre_rejected("pass"))
+        self.assertFalse(rr._is_genre_rejected("indeterminate"))
+
+
+class GenreGateJanPathTest(unittest.TestCase):
+    """JAN 経路: flag は resolved/new_asins に載らず genre_gate_dropped_items へ。"""
+
+    def _items(self):
+        return [{"rank": 1, "matched_asin": None, "title": "手芸用 シール 4904810000020"}]
+
+    def test_flag_candidate_is_dropped(self):
+        api = _JanAPI({"4904810000020": _jan_candidate(
+            "B0NG000001", "4904810000020",
+            _browse_nodes("2189588051", "シール・ステッカー", "文房具・オフィス用品"))})
+        m = rr.resolve_ranking_asins(self._items(), api, set(), sleep=0)
+        self.assertEqual(m["resolved"], [])
+        self.assertEqual(m["new_asins"], [])
+        self.assertEqual(m["genre_gate_dropped"], 1)
+        drop = m["genre_gate_dropped_items"][0]
+        self.assertEqual(drop["asin"], "B0NG000001")
+        self.assertEqual(drop["match_method"], "jan")
+        self.assertEqual(drop["jan"], "4904810000020")
+        self.assertEqual(drop["roots"], ["文房具・オフィス用品"])
+        # 「解決できなかった」ではないので unresolved には混ぜない。
+        self.assertEqual(m["unresolved"], [])
+
+    def test_toy_root_candidate_is_resolved(self):
+        api = _JanAPI({"4904810000020": _jan_candidate(
+            "B0OK000001", "4904810000020",
+            _browse_nodes("2039115051", "ブロック", "おもちゃ"))})
+        m = rr.resolve_ranking_asins(self._items(), api, set(), sleep=0)
+        self.assertEqual(m["new_asins"], ["B0OK000001"])
+        self.assertEqual(m["genre_gate_dropped"], 0)
+
+    def test_indeterminate_candidate_is_resolved(self):
+        """browse_nodes 欠落は fail-open で必ず通す (オーナー方針の要)。"""
+        api = _JanAPI({"4904810000020": _jan_candidate("B0IND00001", "4904810000020")})
+        m = rr.resolve_ranking_asins(self._items(), api, set(), sleep=0)
+        self.assertEqual(m["new_asins"], ["B0IND00001"])
+        self.assertEqual(m["genre_gate_dropped"], 0)
+
+    def test_pool_item_is_kept(self):
+        """プール・水遊びは対象内 (おもちゃ root なので pass)。"""
+        items = [{"rank": 1, "matched_asin": None, "title": "ビニールプール 4904810000030"}]
+        api = _JanAPI({"4904810000030": _jan_candidate(
+            "B0POOL0001", "4904810000030",
+            _browse_nodes("2039116051", "水遊び・プール", "おもちゃ"))})
+        m = rr.resolve_ranking_asins(items, api, set(), sleep=0)
+        self.assertEqual(m["new_asins"], ["B0POOL0001"])
+
+    def test_no_genre_gate_keeps_flagged_candidate(self):
+        api = _JanAPI({"4904810000020": _jan_candidate(
+            "B0NG000001", "4904810000020",
+            _browse_nodes("2189588051", "シール・ステッカー", "文房具・オフィス用品"))})
+        m = rr.resolve_ranking_asins(self._items(), api, set(), sleep=0,
+                                     enable_genre_gate=False)
+        self.assertEqual(m["new_asins"], ["B0NG000001"])
+        self.assertFalse(m["genre_gate_enabled"])
+        self.assertEqual(m["genre_gate_dropped"], 0)
+
+
+class GenreGateTitleFuzzyPathTest(unittest.TestCase):
+    """title fuzzy 経路にも同じゲートが効く (片方だけにしない)。"""
+
+    def _items(self):
+        return [{"rank": 2, "matched_asin": None,
+                 "title": "レゴ LEGO デュプロ 10913", "price": 3000}]
+
+    def _api(self, nodes=None):
+        cand = _fuzzy_candidate("B0LEGO0001", "レゴ LEGO デュプロ 10913", 3000)
+        if nodes:
+            cand.update(nodes)
+        return FakeFuzzyAPI({"10913": [cand]})
+
+    def test_flag_candidate_is_dropped(self):
+        m = rr.resolve_ranking_asins(
+            self._items(), self._api(
+                _browse_nodes("2189588051", "シール・ステッカー", "文房具・オフィス用品")),
+            set(), sleep=0, enable_title_fuzzy=True)
+        self.assertEqual(m["new_asins"], [])
+        self.assertEqual(m["title_fuzzy"]["title_fuzzy_resolved"], [])
+        self.assertEqual(m["genre_gate_dropped"], 1)
+        self.assertEqual(m["genre_gate_dropped_items"][0]["match_method"], "title_fuzzy")
+
+    def test_indeterminate_candidate_is_resolved(self):
+        """browse_nodes を返さない候補は fuzzy 経路でも通す (fail-open)。"""
+        m = rr.resolve_ranking_asins(self._items(), self._api(), set(), sleep=0,
+                                     enable_title_fuzzy=True)
+        self.assertEqual(m["new_asins"], ["B0LEGO0001"])
+        self.assertEqual(m["genre_gate_dropped"], 0)
+
+    def test_no_genre_gate_keeps_flagged_candidate(self):
+        m = rr.resolve_ranking_asins(
+            self._items(), self._api(
+                _browse_nodes("2189588051", "シール・ステッカー", "文房具・オフィス用品")),
+            set(), sleep=0, enable_title_fuzzy=True, enable_genre_gate=False)
+        self.assertEqual(m["new_asins"], ["B0LEGO0001"])
+
+
+class GenreGateResourcesTest(unittest.TestCase):
+    """ゲートが成立するには browse_nodes の resource が両経路で要求されていること。"""
+
+    def test_browse_node_resources_requested_on_both_paths(self):
+        for resources in (rr.RESOLVE_RESOURCES, rr.FUZZY_MATCH_RESOURCES):
+            self.assertIn("browseNodeInfo.browseNodes", resources)
+            # .ancestor が無いと root が全件 null → indeterminate 直行でゲートが死ぬ。
+            self.assertIn("browseNodeInfo.browseNodes.ancestor", resources)
+
+
+class GenreGateCliFlagTest(unittest.TestCase):
+    def test_no_genre_gate_flag_defaults_true(self):
+        src = inspect.getsource(rr.main)
+        self.assertIn("--no-genre-gate", src)
+        self.assertIn("enable_genre_gate=args.genre_gate", src)
+
+
 if __name__ == "__main__":
     unittest.main()
