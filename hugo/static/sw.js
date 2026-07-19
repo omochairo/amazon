@@ -15,7 +15,10 @@
 // バージョン更新: CACHE_VERSION を bump すると activate で旧 cache を全削除する。
 // 開発時の bypass: URL に ?nocache=1 を付けると SW は fetch を intercept しない。
 
-var CACHE_VERSION = "v1-2026-06-08";
+// v2 (2026-07-20): ASSET_CACHE の HTML 汚染を全ユーザーから一掃するための bump。
+// デプロイ伝播窓に指紋付き JS URL へ HTML (404/offline) が返り、それが
+// cache-first で恒久固定される事故を article_actions.min.*.js で実測 (#3568)。
+var CACHE_VERSION = "v2-2026-07-20";
 var SHELL_CACHE = "omcha-shell-" + CACHE_VERSION;
 var PAGE_CACHE = "omcha-pages-" + CACHE_VERSION;
 var ASSET_CACHE = "omcha-assets-" + CACHE_VERSION;
@@ -77,6 +80,34 @@ function cacheFirst(req, cacheName) {
         if (res && (res.ok || res.type === "opaque")) cache.put(req, res.clone());
         return res;
       });
+    });
+  });
+}
+
+// 同一オリジンの指紋付きアセット (script/style/font) 用 cache-first。
+// GitLab Pages のデプロイ伝播窓では、新しい指紋付き URL への初回リクエストに
+// 一時的に HTML (404/offline ページ) が 200 で返ることがあり、素の cache-first
+// だとその HTML が指紋 URL (内容不変) の下で恒久汚染として残り続ける
+// (2026-07-20 に article_actions.min.*.js で実測。nosniff により script は
+// 無音でブロックされ、機能だけが静かに死ぬ)。ここでは:
+//   1. HTML を返す応答は絶対にキャッシュしない
+//   2. 既存キャッシュヒットが HTML なら破棄して network へ落とす (自己修復)
+// 同一オリジン応答は opaque にならないため content-type 検査は常に可能。
+function isHtmlResponse(res) {
+  var ct = res && res.headers && res.headers.get("content-type");
+  return !!ct && ct.indexOf("text/html") !== -1;
+}
+
+function assetCacheFirst(req) {
+  return caches.open(ASSET_CACHE).then(function (cache) {
+    return cache.match(req).then(function (hit) {
+      if (hit && !isHtmlResponse(hit)) return hit;
+      var refetch = fetch(req).then(function (res) {
+        if (res && res.ok && !isHtmlResponse(res)) cache.put(req, res.clone());
+        return res;
+      });
+      if (hit) return cache.delete(req).then(function () { return refetch; });
+      return refetch;
     });
   });
 }
@@ -151,9 +182,10 @@ self.addEventListener("fetch", function (event) {
     return;
   }
 
-  // 同一オリジンの指紋付きアセット: cache-first。
+  // 同一オリジンの指紋付きアセット: cache-first + HTML 汚染ガード (上の
+  // assetCacheFirst コメント参照)。
   if (req.destination === "script" || req.destination === "style" || req.destination === "font") {
-    event.respondWith(cacheFirst(req, ASSET_CACHE));
+    event.respondWith(assetCacheFirst(req));
     return;
   }
 
