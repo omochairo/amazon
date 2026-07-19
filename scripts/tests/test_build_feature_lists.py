@@ -662,5 +662,109 @@ class DeletedArticleRegenTest(unittest.TestCase):
             self.assertTrue(path_keep.exists())
 
 
+class ParseMinMonthsTest(unittest.TestCase):
+    """#3563: parse_min_months は build_category_hubs.py から移動してきた関数。
+    build_category_hubs 側のテスト (ParseMinMonthsTest) と同じケースを
+    移動元 (bfl) に対しても確認する。"""
+
+    def test_years_variants(self):
+        self.assertEqual(bfl.parse_min_months("3歳以上"), 36)
+        self.assertEqual(bfl.parse_min_months("3歳〜"), 36)
+        self.assertEqual(bfl.parse_min_months("3才"), 36)
+
+    def test_half_year_variants(self):
+        self.assertEqual(bfl.parse_min_months("1歳6ヶ月〜"), 18)
+        self.assertEqual(bfl.parse_min_months("1.5歳〜"), 18)
+        self.assertEqual(bfl.parse_min_months("1歳半〜"), 18)
+
+    def test_months_only(self):
+        self.assertEqual(bfl.parse_min_months("0ヶ月〜"), 0)
+        self.assertEqual(bfl.parse_min_months("6ヶ月〜"), 6)
+
+    def test_none_cases(self):
+        self.assertIsNone(bfl.parse_min_months(None))
+        self.assertIsNone(bfl.parse_min_months(""))
+        self.assertIsNone(bfl.parse_min_months("対象年齢の記載なし"))
+
+
+class AgeMinMonthsFromArticleTest(unittest.TestCase):
+    """#3563: 優先順 product.target_age or product.age_range ->
+    persona_fit.age_range -> technical_specs.age_range (build_post.py
+    L2668-2699 と同じ)。"""
+
+    def test_prefers_product_target_age(self):
+        raw = {
+            "product": {"target_age": "3歳〜", "age_range": "5歳〜"},
+            "persona_fit": {"age_range": "1歳〜"},
+        }
+        self.assertEqual(bfl.age_min_months_from_article(raw), 36)
+
+    def test_falls_back_to_product_age_range(self):
+        raw = {
+            "product": {"age_range": "2歳〜"},
+            "persona_fit": {"age_range": "1歳〜"},
+        }
+        self.assertEqual(bfl.age_min_months_from_article(raw), 24)
+
+    def test_falls_back_to_persona_fit(self):
+        raw = {
+            "product": {},
+            "persona_fit": {"age_range": "1歳6ヶ月〜"},
+            "technical_specs": {"age_range": "5歳〜"},
+        }
+        self.assertEqual(bfl.age_min_months_from_article(raw), 18)
+
+    def test_falls_back_to_technical_specs(self):
+        raw = {
+            "product": {},
+            "technical_specs": {"age_range": "6ヶ月〜"},
+        }
+        self.assertEqual(bfl.age_min_months_from_article(raw), 6)
+
+    def test_returns_none_when_all_absent(self):
+        self.assertIsNone(bfl.age_min_months_from_article({"product": {}}))
+
+
+class LoadArticlesAgeMinMonthsTest(unittest.TestCase):
+    """#3563: load_articles が age_min_months を ArticleRecord に伝播し、
+    payload にも emit することを確認する。"""
+
+    def test_load_articles_attaches_age_min_months(self):
+        with tempfile.TemporaryDirectory() as td:
+            d = pathlib.Path(td)
+            article = _make_article("B0AGEPROP01")
+            article["product"]["target_age"] = "3歳〜"
+            _write_article(d, article)
+            records = bfl.load_articles(d)
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0].age_min_months, 36)
+
+    def test_load_articles_none_when_no_age_data(self):
+        with tempfile.TemporaryDirectory() as td:
+            d = pathlib.Path(td)
+            _write_article(d, _make_article("B0AGEPROP02"))
+            records = bfl.load_articles(d)
+        self.assertIsNone(records[0].age_min_months)
+
+    def test_payload_includes_age_min_months(self):
+        rec = bfl.ArticleRecord(
+            asin="B0AGEPROP03", slug="x", name="x", image=None,
+            ivs_score=4.5, ivs_100=90, best_price=2000,
+            best_platform="Amazon", amazon_url=None,
+            age_min_months=24,
+        )
+        payload = bfl._record_to_payload_common(rec, 1)
+        self.assertEqual(payload["age_min_months"], 24)
+
+    def test_payload_age_min_months_none_when_absent(self):
+        rec = bfl.ArticleRecord(
+            asin="B0AGEPROP04", slug="x", name="x", image=None,
+            ivs_score=4.5, ivs_100=90, best_price=2000,
+            best_platform="Amazon", amazon_url=None,
+        )
+        payload = bfl._record_to_payload_common(rec, 1)
+        self.assertIsNone(payload["age_min_months"])
+
+
 if __name__ == "__main__":
     unittest.main()

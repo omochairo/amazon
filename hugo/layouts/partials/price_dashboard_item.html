@@ -1,8 +1,11 @@
 {{- /*
-  Renders a single <li> for the /price/ page (#3332 N4-P2).
+  Renders a single <li> for the /price/ page (#3332 N4-P2 / #3563 カード情報統一)。
   Expected context: one item dict from site.Data.price_dashboard.items
   (asin, name, brand, image, url, current, reference, drop_yen, drop_pct,
-  all_time_low, last_updated).
+  all_time_low, last_updated, age_min_months, amazon_url, ivs_100, ivs_axes).
+  age_min_months/amazon_url/ivs_100/ivs_axes は build_price_dashboard.py の
+  enrich_items が採択後の最大150件だけに付与するフィールドなので、旧生成の
+  JSON (再生成前) でも壊れないよう全て nil ガードする。
 */ -}}
 {{- $item := . -}}
 {{- $url := $item.url -}}
@@ -22,15 +25,29 @@
     <h2 class="ranking-title"><a href="{{ $url }}">{{ $item.name }}</a></h2>
     {{- with $item.brand }}<p class="ranking-shop">{{ . }}</p>{{- end }}
 
-    <p class="feature-discount-badge"><span class="feature-discount-pct">-{{ printf "%.0f" (mul $pct 100) }}%</span> OFF</p>
+    {{- /* #3563: 他ページと表記統一のため先頭の "-" を削除 (「56% OFF」)。 */}}
+    <p class="feature-discount-badge"><span class="feature-discount-pct">{{ printf "%.0f" (mul $pct 100) }}%</span> OFF</p>
+
+    {{- with $item.ivs_100 }}
+    <p class="feature-cospa-badge"><a href="/about-score/" class="feature-cospa-badge-link">知育スコア</a> <strong>{{ int . }}</strong> / 100</p>
+    {{- end }}
+
+    {{- with $item.age_min_months }}
+    <span class="feature-age-badge" title="対象年齢">&#128118; {{ partial "age_label.html" . }}</span>
+    {{- end }}
 
     <p class="ranking-price price-item-price">
       {{- with $item.reference }}<span class="price-item-old">&yen;{{ lang.FormatNumberCustom 0 . }}</span>{{ end }}
       <span class="price-item-current">&yen;{{ lang.FormatNumberCustom 0 $item.current }}</span>
     </p>
 
+    {{- with $item.ivs_axes }}{{ partial "score_minichart.html" . }}{{- end }}
+
     <div class="ranking-cta">
       <a class="ranking-cta-internal" href="{{ $url }}">💡 徹底解説レビューを見る</a>
+      {{- with $item.amazon_url }}
+      <a class="ranking-cta-external feature-cta-external--amazon" href="{{ . }}" rel="sponsored nofollow noopener" target="_blank">🟠 Amazon で確認する</a>
+      {{- end }}
     </div>
   </div>
 </li>

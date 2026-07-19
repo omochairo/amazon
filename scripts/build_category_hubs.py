@@ -20,7 +20,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -32,6 +31,7 @@ from build_feature_lists import (  # noqa: E402
     _now_iso,
     _record_to_payload_common,
     load_articles,
+    parse_min_months,
 )
 
 logger = logging.getLogger("build_category_hubs")
@@ -81,33 +81,6 @@ AGE_HUBS: dict[str, dict[str, Any]] = {
     "age-4": {"label": "4〜5歳", "min_months": 48, "max_months": 72},
     "age-6": {"label": "6歳以上", "min_months": 72, "max_months": 216},
 }
-
-
-def parse_min_months(age_range: str | None) -> int | None:
-    """persona_fit.age_range 文字列から最小推奨年齢を月数で抽出。
-
-    例: "3歳以上"/"3歳〜"/"3歳" → 36, "1歳6ヶ月〜"/"1.5歳"/"1歳半" → 18,
-    "6ヶ月〜" → 6, "対象年齢の記載なし" → None。複数表記 (歳半=.5歳=6ヶ月) を吸収。
-    """
-    if not age_range:
-        return None
-    s = age_range.strip()
-    if "記載" in s or "なし" in s:
-        return None
-    s = s.replace("歳半", ".5歳").replace("才", "歳")
-    # 「N歳Mヶ月」形式
-    m = re.search(r"(\d+)\s*歳\s*(\d+)\s*[ヶか]?月", s)
-    if m:
-        return int(m.group(1)) * 12 + int(m.group(2))
-    # 「N歳」「N.5歳」形式
-    m = re.search(r"(\d+(?:\.\d+)?)\s*歳", s)
-    if m:
-        return int(round(float(m.group(1)) * 12))
-    # 「Nヶ月」形式
-    m = re.search(r"(\d+)\s*[ヶか]?月", s)
-    if m:
-        return int(m.group(1))
-    return None
 
 
 def build_min_months_index(articles_dir: Path) -> dict[str, int]:

@@ -61,23 +61,7 @@
 
     {{- $ageStr := "" -}}
     {{- if isset .Params "age_min_months" -}}
-      {{- $m := int .Params.age_min_months -}}
-      {{- if eq $m 0 -}}
-        {{- $ageStr = "0歳〜" -}}
-      {{- else if lt $m 12 -}}
-        {{- $ageStr = printf "%dヶ月〜" $m -}}
-      {{- else -}}
-        {{- $years := div $m 12 -}}
-        {{- $rem := mod $m 12 -}}
-        {{- if eq $rem 0 -}}
-          {{- $ageStr = printf "%d歳〜" $years -}}
-        {{- else if eq $rem 6 -}}
-          {{- $ageStr = printf "%d.5歳〜" $years -}}
-        {{- else -}}
-          {{- $yearsFloat := div (float $m) 12.0 -}}
-          {{- $ageStr = printf "%.1f歳〜" $yearsFloat -}}
-        {{- end -}}
-      {{- end -}}
+      {{- $ageStr = partial "age_label.html" .Params.age_min_months -}}
     {{- end -}}
 
     {{- /* #3332 割引バッジ: 4隅 (compare-toggle top-left / fav-toggle top-right /

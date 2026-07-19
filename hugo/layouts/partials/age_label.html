@@ -1,0 +1,36 @@
+{{- /*
+  age_label.html (#3563 カード情報統一)
+
+  最小推奨年齢 (月数) を表示用の日本語ラベルに整形して返す共有 partial。
+  product_card.html L62-80 (旧実装) のロジックをそのまま移植したもの。
+
+  入力 (context "."): 月数の int (0以上)。0 -> "0歳〜"、12未満 -> "Nヶ月〜"、
+  12の倍数 -> "N歳〜"、+6ヶ月 -> "N.5歳〜"、それ以外 -> "N.N歳〜"。
+
+  呼出し側は age_min_months が 0 より大きい (または isset で存在確認済み) 場合
+  にのみ呼ぶこと。0 は「0歳〜」を返す (nil とは区別する — nil ガードは呼出し側
+  の責務)。
+
+  Hugo の {{ return }} は単一の値 (変数) しか受け取れない (パイプライン式を
+  直接渡すと "wrong number of args for return" になる) ため、一度 $ageStr に
+  計算結果を代入してから return する。
+*/ -}}
+{{- $m := int . -}}
+{{- $ageStr := "" -}}
+{{- if eq $m 0 -}}
+  {{- $ageStr = "0歳〜" -}}
+{{- else if lt $m 12 -}}
+  {{- $ageStr = printf "%dヶ月〜" $m -}}
+{{- else -}}
+  {{- $years := div $m 12 -}}
+  {{- $rem := mod $m 12 -}}
+  {{- if eq $rem 0 -}}
+    {{- $ageStr = printf "%d歳〜" $years -}}
+  {{- else if eq $rem 6 -}}
+    {{- $ageStr = printf "%d.5歳〜" $years -}}
+  {{- else -}}
+    {{- $yearsFloat := div (float $m) 12.0 -}}
+    {{- $ageStr = printf "%.1f歳〜" $yearsFloat -}}
+  {{- end -}}
+{{- end -}}
+{{- return $ageStr -}}

@@ -31,14 +31,29 @@
       {{- end -}}
     </h2>
 
+    {{- /* #3563 カード情報統一: OFF% → スコア → 年齢の順で両分岐に揃える。
+           deals/cospa それぞれ元々持っていなかった軸を nil ガード付きで追加する。 */}}
     {{- if eq $type "deals" }}
       {{- with $item.savings_percentage }}
       <p class="feature-discount-badge"><span class="feature-discount-pct">{{ . }}%</span> OFF</p>
       {{- end }}
     {{- else }}
-      {{- with $item.ivs_100 }}
-      <p class="feature-cospa-badge"><a href="/about-score/" class="feature-cospa-badge-link">知育スコア</a> <strong>{{ int . }}</strong> / 100</p>
+      {{- $discountBadge := "" }}
+      {{- with $item.asin }}{{ $discountBadge = partial "discount_badge.html" (upper .) }}{{ end }}
+      {{- if ne $discountBadge "" }}
+      {{- /* discount_badge.html は既に自己完結したピル (.discount-badge) を返すため、
+             feature-discount-badge の背景ピルで二重包装しない。改行のためだけの
+             無地ラッパーに入れる。 */}}
+      <p class="feature-discount-badge-wrap">{{ $discountBadge }}</p>
       {{- end }}
+    {{- end }}
+
+    {{- with $item.ivs_100 }}
+    <p class="feature-cospa-badge"><a href="/about-score/" class="feature-cospa-badge-link">知育スコア</a> <strong>{{ int . }}</strong> / 100</p>
+    {{- end }}
+
+    {{- with $item.age_min_months }}
+    <span class="feature-age-badge" title="対象年齢">&#128118; {{ partial "age_label.html" . }}</span>
     {{- end }}
 
     {{- with $item.best_price }}

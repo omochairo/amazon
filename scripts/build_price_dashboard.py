@@ -38,8 +38,18 @@ import glob
 import json
 import logging
 import pathlib
+import sys
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
+
+# 知育スコア (ivs_100/ivs_axes) は build_feature_lists.py / build_post.py と同じ
+# score_calculator で再計算する (#3563 カード情報統一。/price/ にもスコア・年齢・
+# Amazon リンクを表示するため)。採択後の最大 _TOP_N_CAP 件のみ enrich する
+# (全 1580 記事でスコア計算しないための fail-soft 2 段構え、enrich_items 参照)。
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from brand_normalizer import normalize as normalize_brand  # noqa: E402
+from build_feature_lists import age_min_months_from_article  # noqa: E402
+from score_calculator import calculate as calculate_score, compute_ivs_axes  # noqa: E402
 
 logger = logging.getLogger("build_price_dashboard")
 
@@ -82,10 +92,13 @@ def _is_primary_article(path: str) -> bool:
 def load_article_meta(articles_dir: pathlib.Path | str) -> dict[str, dict[str, Any]]:
     """``data/articles/*.json`` (サイドカー除く) から ASIN(大文字) -> meta を返す。
 
-    meta = {"name", "brand", "image", "url"}。同一 ASIN の記事が複数あった
-    場合は後勝ち (glob のソート順で最後に読んだものが残る。再生成で新しい
-    ファイル名が辞書順で後ろに来るケースが多いため build_feature_lists 等と
-    同様「最後に見た記事を優先」で実用上問題ない)。
+    meta = {"name", "brand", "image", "url", "path"}。``path`` は #3563 の
+    enrich_items が採択後の最大 _TOP_N_CAP 件だけ記事 json を再読込して
+    age_min_months / amazon_url / ivs_100 / ivs_axes を計算するために使う
+    (全 1580 記事でスコア計算しないための遅延評価)。同一 ASIN の記事が複数
+    あった場合は後勝ち (glob のソート順で最後に読んだものが残る。再生成で
+    新しいファイル名が辞書順で後ろに来るケースが多いため build_feature_lists
+    等と同様「最後に見た記事を優先」で実用上問題ない)。
     """
     meta: dict[str, dict[str, Any]] = {}
     files = sorted(
@@ -111,6 +124,7 @@ def load_article_meta(articles_dir: pathlib.Path | str) -> dict[str, dict[str, A
             "brand": product.get("brand"),
             "image": product.get("image"),
             "url": f"/products/{asin.lower()}/",
+            "path": f,
         }
     return meta
 
@@ -223,6 +237,54 @@ def evaluate_drop(
     }
 
 
+def enrich_items(
+    items: list[dict[str, Any]],
+    article_meta: dict[str, dict[str, Any]],
+) -> None:
+    """採択済み ``items`` (最大 _TOP_N_CAP 件) を in-place で enrich する。
+
+    追加するフィールド: age_min_months / amazon_url / ivs_100 / ivs_axes。
+    build_feature_lists.py と同一の式で計算する (score_calculator 再計算)。
+    articles_meta に ``path`` が無い・記事 json が読めない・計算失敗のいずれ
+    でも fail-soft で None のまま残す (#3563: nil ガード必須)。全記事 (最大
+    1580件) でスコアを計算しないよう、呼出し側は top_n_cap 適用後にのみ
+    このフィールドを呼ぶこと。
+    """
+    for item in items:
+        item.setdefault("age_min_months", None)
+        item.setdefault("amazon_url", None)
+        item.setdefault("ivs_100", None)
+        item.setdefault("ivs_axes", None)
+
+        meta = article_meta.get(item["asin"]) or {}
+        path = meta.get("path")
+        if not path:
+            continue
+        try:
+            with open(path, encoding="utf-8") as f:
+                raw = json.load(f)
+        except (OSError, json.JSONDecodeError) as e:
+            logger.warning(f"enrich_items: skip unreadable article {path}: {e}")
+            continue
+        if not isinstance(raw, dict):
+            continue
+
+        item["age_min_months"] = age_min_months_from_article(raw)
+
+        product = raw.get("product") or {}
+        prices = product.get("prices") or {}
+        amazon_block = prices.get("amazon") or {}
+        item["amazon_url"] = amazon_block.get("url")
+
+        try:
+            brand = normalize_brand(product.get("brand") or "")
+            sr = calculate_score(raw, brand, asin=item["asin"])
+            item["ivs_100"] = sr.total_100
+            item["ivs_axes"] = compute_ivs_axes(sr.breakdown)
+        except Exception as e:  # noqa: BLE001 - fail-soft, スコア計算失敗で全体を落とさない
+            logger.warning(f"enrich_items: score calc failed for {item['asin']}: {e}")
+
+
 def is_unavailable(avail: Any) -> bool:
     """avail が「明確に購入不可」なら True。None・空文字も購入不可扱い。"""
     if not isinstance(avail, str) or not avail.strip():
@@ -287,7 +349,11 @@ def build_items(
         })
 
     out.sort(key=lambda e: e["drop_pct"], reverse=True)
-    return out[:top_n_cap]
+    selected = out[:top_n_cap]
+    # #3563: スコア計算 (enrich_items) は採択後の最大 top_n_cap 件だけに適用する
+    # (全 1580 記事で毎回スコア再計算しないため top_n_cap 適用後に呼ぶ)。
+    enrich_items(selected, article_meta)
+    return selected
 
 
 def load_latest(price_watch_dir: pathlib.Path | str) -> dict[str, Any]:

@@ -3699,6 +3699,13 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   letter-spacing: 0.02em;
 }
 
+/* #3563: discount_badge.html partial は自己完結ピル (.discount-badge) を返す
+   ため、/cospa/ 分岐・/price/ ではこの無地ラッパーで改行だけ行う
+   (.feature-discount-badge のような独自背景は持たせない = 二重ピル回避)。 */
+.feature-discount-badge-wrap {
+  margin: 0.2rem 0;
+}
+
 .feature-cospa-badge {
   display: inline-block;
   margin: 0.2rem 0;
@@ -3713,6 +3720,22 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 .feature-cospa-badge strong {
   font-size: 1rem;
   color: #78350f;
+}
+
+/* #3563 カード情報統一: /deals/ /cospa/ /price/ 共通の対象年齢バッジ。
+   .feature-cospa-badge の見た目 (チップ状ピル) に寄せつつ配色だけ変える。 */
+.feature-age-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  margin: 0.2rem 0.4rem 0.2rem 0;
+  padding: 0.25rem 0.65rem;
+  background: linear-gradient(135deg, #e0f2fe, #bae6fd);
+  color: #075985;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  width: max-content;
 }
 
 .feature-platform {
@@ -3740,6 +3763,10 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 }
 [data-theme="dark"] .feature-cospa-badge strong {
   color: #fed7aa;
+}
+[data-theme="dark"] .feature-age-badge {
+  background: rgba(2, 132, 199, 0.25);
+  color: #bae6fd;
 }
 [data-theme="dark"] .feature-platform {
   color: #94a3b8;
