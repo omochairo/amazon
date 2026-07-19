@@ -189,6 +189,36 @@ class TestBuildItems:
         items = bpd.build_items(latest, article_meta, price_watch_dir, price_history_dir)
         assert items == []
 
+    def test_build_items_output_is_enriched(self, dashboard_dirs, tmp_path: Path):
+        # #3389: build_items は最終的に top_n_cap 適用後の enrich_items 呼出しを
+        # 経由するので、返る item に age_min_months 等が乗っていることを確認する。
+        price_watch_dir, price_history_dir = dashboard_dirs
+        articles_dir = tmp_path / "articles"
+        articles_dir.mkdir()
+        asin = "B0ENRICHED001"
+        article = {
+            "product": {
+                "asin": asin, "name": "n", "brand": "レゴ",
+                "target_age": "4歳〜",
+                "prices": {"amazon": {"url": f"https://amazon.example/dp/{asin}"}},
+            }
+        }
+        (articles_dir / f"2026-01-01-{asin}.json").write_text(
+            json.dumps(article, ensure_ascii=False), encoding="utf-8",
+        )
+        article_meta = bpd.load_article_meta(articles_dir)
+        # load_article_meta の url は article JSON に brand/image が無い前提の
+        # デフォルトと違うため、build_items が要求する形に synth する必要はない
+        # (load_article_meta が既に name/brand/image/url/path を全部埋める)。
+        _write_history_file(price_watch_dir / "history" / f"{asin}.jsonl", [(_ts(30), 3000)])
+        latest = {"items": {asin: {"avail": "在庫あり。", "p": 2000, "ts": _iso(NOW)}}}
+        items = bpd.build_items(latest, article_meta, price_watch_dir, price_history_dir)
+        assert len(items) == 1
+        item = items[0]
+        assert item["age_min_months"] == 48
+        assert item["amazon_url"] == f"https://amazon.example/dp/{asin}"
+        assert isinstance(item["ivs_100"], int)
+
     def test_merges_both_history_dirs(self, dashboard_dirs):
         price_watch_dir, price_history_dir = dashboard_dirs
         asin = "MERGE00001"
@@ -232,6 +262,88 @@ class TestLoadArticleMeta:
     def test_missing_dir_returns_empty(self, tmp_path: Path):
         meta = bpd.load_article_meta(tmp_path / "does-not-exist")
         assert meta == {}
+
+    def test_meta_includes_path_for_later_enrichment(self, tmp_path: Path):
+        # #3389: path が meta に含まれることで enrich_items が採択後の item だけ
+        # 記事 json を再読込してスコア計算できる (全記事でスコア計算しないため)。
+        articles_dir = tmp_path / "articles"
+        articles_dir.mkdir()
+        path = articles_dir / "2026-01-01-B0WITHPATH1.json"
+        path.write_text(
+            json.dumps({"product": {"asin": "B0WITHPATH1", "name": "n"}}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        meta = bpd.load_article_meta(articles_dir)
+        assert meta["B0WITHPATH1"]["path"] == str(path)
+
+
+# ---------------------------------------------------------------------------
+# enrich_items (#3389: age_min_months / amazon_url / ivs_100 / ivs_axes)
+# ---------------------------------------------------------------------------
+
+class TestEnrichItems:
+    def _write_article(self, articles_dir: Path, asin: str, **product_extra) -> dict:
+        product = {"asin": asin, "name": "商品", "brand": "レゴ"}
+        product.update(product_extra)
+        article = {"product": product}
+        (articles_dir / f"2026-01-01-{asin}.json").write_text(
+            json.dumps(article, ensure_ascii=False), encoding="utf-8",
+        )
+        return article
+
+    def test_enriches_age_amazon_url_and_score(self, tmp_path: Path):
+        articles_dir = tmp_path / "articles"
+        articles_dir.mkdir()
+        asin = "B0ENRICH0001"
+        self._write_article(
+            articles_dir, asin,
+            target_age="3歳〜",
+            prices={"amazon": {"url": f"https://amazon.example/dp/{asin}"}},
+        )
+        meta = bpd.load_article_meta(articles_dir)
+        items = [{"asin": asin}]
+        bpd.enrich_items(items, meta)
+        item = items[0]
+        assert item["age_min_months"] == 36
+        assert item["amazon_url"] == f"https://amazon.example/dp/{asin}"
+        assert isinstance(item["ivs_100"], int)
+        assert set(item["ivs_axes"]) == {
+            "education", "safety", "cost_performance", "longevity",
+        }
+
+    def test_nil_guards_when_path_missing(self):
+        # article_meta に該当 ASIN が無い (path 解決不能) -> 4フィールドとも None。
+        items = [{"asin": "B0NOMETA0001"}]
+        bpd.enrich_items(items, {})
+        item = items[0]
+        assert item["age_min_months"] is None
+        assert item["amazon_url"] is None
+        assert item["ivs_100"] is None
+        assert item["ivs_axes"] is None
+
+    def test_nil_guards_when_article_unreadable(self, tmp_path: Path):
+        articles_dir = tmp_path / "articles"
+        articles_dir.mkdir()
+        path = articles_dir / "broken.json"
+        path.write_text("{not json", encoding="utf-8")
+        items = [{"asin": "B0BROKEN001"}]
+        bpd.enrich_items(items, {"B0BROKEN001": {"path": str(path)}})
+        item = items[0]
+        assert item["age_min_months"] is None
+        assert item["ivs_100"] is None
+
+    def test_only_enriches_given_items_not_all_meta(self, tmp_path: Path):
+        # enrich_items は渡された items のみ処理する (呼出し側が top_n_cap 適用後の
+        # リストだけを渡すことで、全 1580 記事のスコア計算を避ける設計)。
+        articles_dir = tmp_path / "articles"
+        articles_dir.mkdir()
+        self._write_article(articles_dir, "B0SELECTED01", target_age="2歳〜")
+        self._write_article(articles_dir, "B0NOTSELECTED01", target_age="5歳〜")
+        meta = bpd.load_article_meta(articles_dir)
+        items = [{"asin": "B0SELECTED01"}]
+        bpd.enrich_items(items, meta)
+        assert items[0]["age_min_months"] == 24
+        assert len(items) == 1  # B0NOTSELECTED01 never touched
 
 
 # ---------------------------------------------------------------------------

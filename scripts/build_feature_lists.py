@@ -20,6 +20,7 @@ import json
 import logging
 import math
 import os
+import re
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -57,7 +58,59 @@ class ArticleRecord:
     fetched_at: str | None = None
     # 4 軸 0-5 (#589 — feature-item.html がカード上で簡易バーを描く)。
     ivs_axes: dict[str, float] | None = None
+    # 対象年齢の最小月数 (#3389 カード情報統一 / cospa・deals・テーマ hub 全ての
+    # feature JSON に伝播する)。ソース優先順は build_post.py L2668-2699 と同じ。
+    age_min_months: int | None = None
     score_cospa: float | None = field(default=None, init=False)
+
+
+# ---------------------------------------------------------------------------
+# Age parsing (#3389: build_category_hubs.py から移動。build_category_hubs は
+# こちらを import する形に変更済み。呼出元の挙動は不変)
+# ---------------------------------------------------------------------------
+
+def parse_min_months(age_range: str | None) -> int | None:
+    """persona_fit.age_range 文字列から最小推奨年齢を月数で抽出。
+
+    例: "3歳以上"/"3歳〜"/"3歳" → 36, "1歳6ヶ月〜"/"1.5歳"/"1歳半" → 18,
+    "6ヶ月〜" → 6, "対象年齢の記載なし" → None。複数表記 (歳半=.5歳=6ヶ月) を吸収。
+    """
+    if not age_range:
+        return None
+    s = age_range.strip()
+    if "記載" in s or "なし" in s:
+        return None
+    s = s.replace("歳半", ".5歳").replace("才", "歳")
+    # 「N歳Mヶ月」形式
+    m = re.search(r"(\d+)\s*歳\s*(\d+)\s*[ヶか]?月", s)
+    if m:
+        return int(m.group(1)) * 12 + int(m.group(2))
+    # 「N歳」「N.5歳」形式
+    m = re.search(r"(\d+(?:\.\d+)?)\s*歳", s)
+    if m:
+        return int(round(float(m.group(1)) * 12))
+    # 「Nヶ月」形式
+    m = re.search(r"(\d+)\s*[ヶか]?月", s)
+    if m:
+        return int(m.group(1))
+    return None
+
+
+def age_min_months_from_article(raw: dict[str, Any]) -> int | None:
+    """記事 json (raw dict全体) から対象年齢の最小月数を抽出する。
+
+    フィールド優先順は build_post.py L2668-2699 (raw_age 抽出部) と同じ:
+    product.target_age or product.age_range -> persona_fit.age_range ->
+    technical_specs.age_range。build_post.py 自体は変更しない (仕様固定)。
+    """
+    product = raw.get("product") or {}
+    age_range = (
+        product.get("target_age")
+        or product.get("age_range")
+        or (raw.get("persona_fit") or {}).get("age_range")
+        or (raw.get("technical_specs") or {}).get("age_range")
+    )
+    return parse_min_months(age_range)
 
 
 # ---------------------------------------------------------------------------
@@ -119,6 +172,7 @@ def load_articles(articles_dir: Path) -> list[ArticleRecord]:
                 best_platform=prod.get("best_platform"),
                 amazon_url=amazon_block.get("url"),
                 ivs_axes=compute_ivs_axes(sr.breakdown),
+                age_min_months=age_min_months_from_article(raw),
             )
         )
 
@@ -370,6 +424,7 @@ def _record_to_payload_common(rec: ArticleRecord, rank: int) -> dict[str, Any]:
         "best_price": rec.best_price,
         "best_platform": rec.best_platform,
         "amazon_url": rec.amazon_url,
+        "age_min_months": rec.age_min_months,
     }
     if rec.ivs_axes:
         payload["ivs_axes"] = rec.ivs_axes
