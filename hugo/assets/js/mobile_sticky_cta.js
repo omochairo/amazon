@@ -13,6 +13,19 @@
   function _byId(id) { return document.getElementById(id); }
   function _q(sel, root) { return (root || document).querySelector(sel); }
 
+  // #3568 E8: 下メニュー4ボタンのタップ計測。has_off で「OFF%表示の有無で
+  // 購入タップ率が変わるか」の自然コホート比較ができる (#2051 と同じ集計手順)。
+  function _track(bar, action) {
+    try {
+      if (typeof global.gtag !== "function") return;
+      global.gtag("event", "m_sticky_tap", {
+        action: action,
+        asin: bar.getAttribute("data-asin"),
+        has_off: !!_q(".m-sticky-off", bar)
+      });
+    } catch (e) { /* analytics 失敗でボタン動作を止めない */ }
+  }
+
   function _extractBuyUrl() {
     // 1. .price-card.is-cheapest の CTA を最優先
     var cheapest = _q(".price-card.is-cheapest .price-card-cta[href]");
@@ -82,6 +95,7 @@
     if (!btn) return;
     btn.addEventListener("click", function (e) {
       e.preventDefault();
+      _track(bar, "fav");
       if (!global.OmochaFavorites) return;
       var asin = bar.getAttribute("data-asin");
       var meta = _buildMeta(bar);
@@ -112,6 +126,7 @@
     if (!btn) return;
     btn.addEventListener("click", function (e) {
       e.preventDefault();
+      _track(bar, "compare");
       if (!global.OmochaCompare) return;
       var asin = bar.getAttribute("data-asin");
       var arr = global.OmochaCompare.list();
@@ -142,6 +157,7 @@
     if (!btn) return;
     btn.addEventListener("click", function (e) {
       e.preventDefault();
+      _track(bar, "share");
       var meta = _buildMeta(bar);
       var title = meta.title || document.title || "おもちゃいろ 比較ナビ";
       var url = global.location.origin + meta.url;
@@ -189,6 +205,7 @@
   function _wireBuy(bar) {
     var anchor = _q(".m-sticky-buy", bar);
     if (!anchor) return;
+    anchor.addEventListener("click", function () { _track(bar, "buy"); });
     var info = _extractBuyUrl();
     // info が取れたら最安サイトの URL に上書き、なければ partial が埋めた
     // Amazon フォールバック URL をそのまま使う (preventDefault しない)。
