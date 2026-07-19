@@ -14,8 +14,14 @@
       const updateButtons = () => {
         const scrollLeft = wrapper.scrollLeft;
         const maxScroll = wrapper.scrollWidth - wrapper.clientWidth;
-        prevBtn.disabled = scrollLeft <= 2;
-        nextBtn.disabled = scrollLeft >= maxScroll - 2;
+        const atStart = scrollLeft <= 2;
+        const atEnd = scrollLeft >= maxScroll - 2;
+        prevBtn.disabled = atStart;
+        nextBtn.disabled = atEnd;
+        // #3568 E3: 端フェード (.carousel-wrapper::before/::after) を終端で消す。
+        // 矢印 disabled 判定にそのまま便乗するので追加コストはほぼゼロ。
+        carousel.classList.toggle('is-at-start', atStart);
+        carousel.classList.toggle('is-at-end', atEnd);
       };
       
       // Initialize button states

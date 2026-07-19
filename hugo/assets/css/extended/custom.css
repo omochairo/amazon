@@ -377,6 +377,96 @@ header .logo a {
   display: none;
 }
 
+/* ---------- #3568 E1: 記事ヒーロー OFF% バッジ ----------
+   discount_badge.html partial の共有ピル (.discount-badge) をそのまま出す。
+   非該当 ASIN は partial が空文字を返し single.html 側で div ごと出さないため、
+   ここでは余白のみ最小限に抑える。 */
+.post-hero-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.3rem 0 0.15rem;
+}
+
+/* ---------- #3568 E2: デスクトップ お気に入り♡ / 比較📊 ----------
+   モバイルは mobile_sticky_cta.html の下メニューが同じ役割を担うため、
+   ブレークポイントは下メニューと同じ 720px に揃えて ≤720px では非表示にし、
+   二重導線を避ける。 */
+.article-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin: 0.6rem 0 0.2rem;
+}
+.article-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.95rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--entry);
+  color: var(--primary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.article-action-btn:hover {
+  border-color: var(--tertiary);
+}
+.article-action-icon {
+  font-size: 1rem;
+  line-height: 1;
+  transition: transform 0.18s ease;
+}
+.article-action-fav.is-on {
+  border-color: #ff4d6d;
+  color: #ff4d6d;
+}
+.article-action-fav.is-on .article-action-icon {
+  transform: scale(1.08);
+}
+.article-action-compare.is-on {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+[data-theme="dark"] .article-action-btn {
+  background: #1f1f2e;
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #eee;
+}
+[data-theme="dark"] .article-action-fav.is-on {
+  border-color: #ff7a93;
+  color: #ff7a93;
+}
+[data-theme="dark"] .article-action-compare.is-on {
+  border-color: #60a5fa;
+  color: #60a5fa;
+}
+@keyframes article-action-flash {
+  0%, 100% { background: var(--entry); }
+  50% { background: rgba(37, 99, 235, 0.15); }
+}
+.article-action-btn.article-action-flash {
+  animation: article-action-flash 0.6s ease;
+}
+@media (max-width: 720px) {
+  /* モバイルは mobile_sticky_cta.html の下メニューに ♡/📊 があるため二重導線にしない */
+  .article-actions {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .article-action-fav.is-on .article-action-icon {
+    transform: none;
+  }
+  .article-action-btn.article-action-flash {
+    animation: none;
+  }
+}
+
 /* ---------- Price Tag ---------- */
 .post-content strong:has(+ strong) {
   color: var(--brand-primary);
@@ -3412,8 +3502,12 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 }
 
 .carousel-wrapper {
+  position: relative;
   overflow-x: auto;
-  scroll-snap-type: x mandatory;
+  /* #3568 E3: mandatory は carousel_swipe.js の矢印 scrollBy (中途半端な位置への
+     スクロール) と競合してカクつくため proximity に緩和。スワイプ操作の吸着感は
+     維持しつつ、JS 側の任意スクロールは邪魔しない。 */
+  scroll-snap-type: x proximity;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   margin: 0 -16px; /* スマホではみ出し（ピーク）を表現するためのネガティブマージン */
@@ -3424,6 +3518,35 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 
 .carousel-wrapper::-webkit-scrollbar {
   display: none;
+}
+
+/* #3568 E3: スワイプ可能な方向を示す端フェード。carousel_swipe.js の
+   updateButtons() が矢印 disabled と同時に .is-at-start / .is-at-end を
+   親 (.related-carousel-section) に切り替える。JS が付かない環境
+   (same-price 等、矢印を持たないカルーセル) では常時表示のままで害はない。 */
+.carousel-wrapper::before,
+.carousel-wrapper::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 16px;
+  width: 28px;
+  pointer-events: none;
+  z-index: 3;
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+.carousel-wrapper::before {
+  left: 0;
+  background: linear-gradient(90deg, var(--theme, #fff) 0%, rgba(0, 0, 0, 0) 100%);
+}
+.carousel-wrapper::after {
+  right: 0;
+  background: linear-gradient(270deg, var(--theme, #fff) 0%, rgba(0, 0, 0, 0) 100%);
+}
+.related-carousel-section.is-at-start .carousel-wrapper::before,
+.related-carousel-section.is-at-end .carousel-wrapper::after {
+  opacity: 0;
 }
 
 .carousel-track {
@@ -3644,6 +3767,24 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   }
   .carousel-card {
     flex: 0 0 280px; /* PCでは幅を広げる */
+  }
+}
+
+/* #3568 E3: モバイルは固定 px 幅だと「ちょうど整数枚収まって次カードの見切れ
+   (peek) が消える」ビューポート幅が存在する (250px カードは 536-556px、200px の
+   same-price カードは 436-456px / 656-676px で実測確認。540px = Surface Duo 等)。
+   vw ベースにすると 2枚目のカード右端が常に 36+2c > w (c=カード幅) で画面外に
+   はみ出すため、あらゆる幅で必ず端数が見える。375px では現行同等のサイズ感
+   (62vw=233px / 55vw=206px)。 */
+@media (max-width: 720px) {
+  .post-content a.carousel-card,
+  .carousel-card {
+    flex-basis: 62vw;
+  }
+  /* .same-price-grid を挟んで specificity (0,3,0) にし、後方の基底ルール
+     `.post-content .same-price-card { flex: 0 0 200px }` (0,2,0) に勝たせる */
+  .post-content .same-price-grid .same-price-card {
+    flex-basis: 55vw;
   }
 }
 
@@ -5992,6 +6133,30 @@ details.development-stage-accordion[open] > summary::before {
 .m-sticky-buy-price {
   font-size: 13px;
   font-weight: 700;
+}
+/* #3568 E1: 下メニュー専用の OFF% 小型表示。.discount-badge (共有ピル) は
+   このカラム幅には大きすぎるため、価格の隣に添える極小バッジにする。 */
+.m-sticky-buy-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+.m-sticky-off {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1.1;
+  padding: 1px 4px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+}
+[data-theme="dark"] .m-sticky-off {
+  background: linear-gradient(135deg, #f87171, #ef4444);
+  color: #2a0000;
+  border-color: rgba(0, 0, 0, 0.25);
 }
 .m-sticky-buy:active {
   background: linear-gradient(135deg, #e85a26 0%, #e0b03a 50%, #25aaa0 100%);

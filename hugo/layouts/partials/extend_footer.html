@@ -52,6 +52,12 @@
   {{- if $stickyCta }}
 <script defer src="{{ $stickyCta.RelPermalink }}" integrity="{{ $stickyCta.Data.Integrity }}" crossorigin="anonymous"></script>
   {{- end }}
+  {{- /* #3568 E2 デスクトップ お気に入り♡ / 比較📊 (商品ページ限定・mobile_sticky_cta.js の後に
+         置き OmochaFavorites/OmochaCompare 双方向同期の同じ流儀を踏襲) */ -}}
+  {{- $articleActions := resources.Get "js/article_actions.js" | resources.Minify | resources.Fingerprint "sha256" }}
+  {{- if $articleActions }}
+<script defer src="{{ $articleActions.RelPermalink }}" integrity="{{ $articleActions.Data.Integrity }}" crossorigin="anonymous"></script>
+  {{- end }}
   {{- $wiki := resources.Get "js/wiki_tooltip.js" | resources.Minify | resources.Fingerprint "sha256" }}
   {{- if $wiki }}
 <script defer src="{{ $wiki.RelPermalink }}" integrity="{{ $wiki.Data.Integrity }}" crossorigin="anonymous"></script>
