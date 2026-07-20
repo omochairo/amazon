@@ -1,65 +1,37 @@
 {
-  "generated_at": "2026-07-16T10:45:09Z",
+  "generated_at": "2026-07-20T11:41:02Z",
   "model": "cl-nagoya/ruri-v3-310m",
-  "source_week": "2026-W29",
-  "corpus_size": 50,
+  "source_week": "2026-W30",
+  "corpus_size": 1602,
   "thresholds": {
     "max_sim": 0.95,
     "centroid_sim": 0.9
   },
   "cohort_stats": {
     "pre_v7": {
-      "count": 50,
-      "max_sim_p50": 0.9179,
-      "max_sim_p90": 0.9612,
-      "centroid_sim_p50": 0.928,
-      "centroid_sim_p90": 0.9393
+      "count": 1501,
+      "max_sim_p50": 0.9416,
+      "max_sim_p90": 0.9693,
+      "centroid_sim_p50": 0.9241,
+      "centroid_sim_p90": 0.9389
     },
     "post_v7": {
-      "count": 0,
-      "max_sim_p50": null,
-      "max_sim_p90": null,
-      "centroid_sim_p50": null,
-      "centroid_sim_p90": null
+      "count": 101,
+      "max_sim_p50": 0.941,
+      "max_sim_p90": 0.9652,
+      "centroid_sim_p50": 0.9118,
+      "centroid_sim_p90": 0.9349
     }
   },
   "flagged": [
     {
-      "asin": "B0002AHQWS",
-      "slug_date": "2026-07-11",
+      "asin": "B0F43QB3DT",
+      "slug_date": "2026-06-04",
       "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0002ahqws/",
-      "max_sim": 0.9674,
-      "nearest_asin": "B000IXMP6Q",
-      "mean_top5_sim": 0.922,
-      "centroid_sim": 0.9219,
-      "reasons": [
-        "max_sim>0.95",
-        "centroid_sim>0.9"
-      ]
-    },
-    {
-      "asin": "B000IXMP6Q",
-      "slug_date": "2026-07-13",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b000ixmp6q/",
-      "max_sim": 0.9674,
-      "nearest_asin": "B0002AHQWS",
-      "mean_top5_sim": 0.9198,
-      "centroid_sim": 0.9251,
-      "reasons": [
-        "max_sim>0.95",
-        "centroid_sim>0.9"
-      ]
-    },
-    {
-      "asin": "B000TSMIU8",
-      "slug_date": "2026-06-01",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b000tsmiu8/",
-      "max_sim": 0.9655,
-      "nearest_asin": "B000TSTTUK",
-      "mean_top5_sim": 0.8983,
+      "page": "https://navi.omcha.jp/products/b0f43qb3dt/",
+      "max_sim": 0.9909,
+      "nearest_asin": "B0F43R6BGV",
+      "mean_top5_sim": 0.9528,
       "centroid_sim": 0.9315,
       "reasons": [
         "max_sim>0.95",
@@ -67,27 +39,277 @@
       ]
     },
     {
-      "asin": "B000TSTTUK",
-      "slug_date": "2026-06-02",
+      "asin": "B0F43R6BGV",
+      "slug_date": "2026-06-03",
       "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b000tsttuk/",
-      "max_sim": 0.9655,
-      "nearest_asin": "B000TSMIU8",
-      "mean_top5_sim": 0.8993,
-      "centroid_sim": 0.9341,
+      "page": "https://navi.omcha.jp/products/b0f43r6bgv/",
+      "max_sim": 0.9909,
+      "nearest_asin": "B0F43QB3DT",
+      "mean_top5_sim": 0.955,
+      "centroid_sim": 0.9311,
       "reasons": [
         "max_sim>0.95",
         "centroid_sim>0.9"
       ]
     },
     {
-      "asin": "B00031YGCO",
+      "asin": "B0CKYPW397",
+      "slug_date": "2026-05-29",
+      "cohort": "pre_v7",
+      "page": "https://navi.omcha.jp/products/b0ckypw397/",
+      "max_sim": 0.9901,
+      "nearest_asin": "B0CKYRJ4KY",
+      "mean_top5_sim": 0.9429,
+      "centroid_sim": 0.8873,
+      "reasons": [
+        "max_sim>0.95"
+      ]
+    },
+    {
+      "asin": "B0CKYRJ4KY",
+      "slug_date": "2026-05-30",
+      "cohort": "pre_v7",
+      "page": "https://navi.omcha.jp/products/b0ckyrj4ky/",
+      "max_sim": 0.9901,
+      "nearest_asin": "B0CKYPW397",
+      "mean_top5_sim": 0.9446,
+      "centroid_sim": 0.8899,
+      "reasons": [
+        "max_sim>0.95"
+      ]
+    },
+    {
+      "asin": "B0FPWZ9J99",
+      "slug_date": "2026-06-02",
+      "cohort": "pre_v7",
+      "page": "https://navi.omcha.jp/products/b0fpwz9j99/",
+      "max_sim": 0.9896,
+      "nearest_asin": "B0FPX6RPYR",
+      "mean_top5_sim": 0.9452,
+      "centroid_sim": 0.926,
+      "reasons": [
+        "max_sim>0.95",
+        "centroid_sim>0.9"
+      ]
+    },
+    {
+      "asin": "B0FPX6RPYR",
+      "slug_date": "2026-06-23",
+      "cohort": "pre_v7",
+      "page": "https://navi.omcha.jp/products/b0fpx6rpyr/",
+      "max_sim": 0.9896,
+      "nearest_asin": "B0FPWZ9J99",
+      "mean_top5_sim": 0.9429,
+      "centroid_sim": 0.9283,
+      "reasons": [
+        "max_sim>0.95",
+        "centroid_sim>0.9"
+      ]
+    },
+    {
+      "asin": "B0D5H414J7",
+      "slug_date": "2026-06-05",
+      "cohort": "pre_v7",
+      "page": "https://navi.omcha.jp/products/b0d5h414j7/",
+      "max_sim": 0.9876,
+      "nearest_asin": "B0F8T97T2N",
+      "mean_top5_sim": 0.9359,
+      "centroid_sim": 0.9391,
+      "reasons": [
+        "max_sim>0.95",
+        "centroid_sim>0.9"
+      ]
+    },
+    {
+      "asin": "B0F8T97T2N",
+      "slug_date": "2026-06-05",
+      "cohort": "pre_v7",
+      "page": "https://navi.omcha.jp/products/b0f8t97t2n/",
+      "max_sim": 0.9876,
+      "nearest_asin": "B0D5H414J7",
+      "mean_top5_sim": 0.9342,
+      "centroid_sim": 0.9327,
+      "reasons": [
+        "max_sim>0.95",
+        "centroid_sim>0.9"
+      ]
+    },
+    {
+      "asin": "B0FVBHT5TF",
+      "slug_date": "2026-06-07",
+      "cohort": "pre_v7",
+      "page": "https://navi.omcha.jp/products/b0fvbht5tf/",
+      "max_sim": 0.9865,
+      "nearest_asin": "B0GD2HFC7N",
+      "mean_top5_sim": 0.9623,
+      "centroid_sim": 0.9429,
+      "reasons": [
+        "max_sim>0.95",
+        "centroid_sim>0.9"
+      ]
+    },
+    {
+      "asin": "B0GD2HFC7N",
+      "slug_date": "2026-06-07",
+      "cohort": "pre_v7",
+      "page": "https://navi.omcha.jp/products/b0gd2hfc7n/",
+      "max_sim": 0.9865,
+      "nearest_asin": "B0FVBHT5TF",
+      "mean_top5_sim": 0.957,
+      "centroid_sim": 0.9426,
+      "reasons": [
+        "max_sim>0.95",
+        "centroid_sim>0.9"
+      ]
+    },
+    {
+      "asin": "B0F43S6J12",
+      "slug_date": "2026-06-04",
+      "cohort": "pre_v7",
+      "page": "https://navi.omcha.jp/products/b0f43s6j12/",
+      "max_sim": 0.9861,
+      "nearest_asin": "B0F43R6BGV",
+      "mean_top5_sim": 0.9453,
+      "centroid_sim": 0.9176,
+      "reasons": [
+        "max_sim>0.95",
+        "centroid_sim>0.9"
+      ]
+    },
+    {
+      "asin": "B08BJ72Z2B",
+      "slug_date": "2026-05-30",
+      "cohort": "pre_v7",
+      "page": "https://navi.omcha.jp/products/b08bj72z2b/",
+      "max_sim": 0.9844,
+      "nearest_asin": "B08BJ9MJXG",
+      "mean_top5_sim": 0.9502,
+      "centroid_sim": 0.927,
+      "reasons": [
+        "max_sim>0.95",
+        "centroid_sim>0.9"
+      ]
+    },
+    {
+      "asin": "B08BJ9MJXG",
+      "slug_date": "2026-06-06",
+      "cohort": "pre_v7",
+      "page": "https://navi.omcha.jp/products/b08bj9mjxg/",
+      "max_sim": 0.9844,
+      "nearest_asin": "B08BJ72Z2B",
+      "mean_top5_sim": 0.957,
+      "centroid_sim": 0.9256,
+      "reasons": [
+        "max_sim>0.95",
+        "centroid_sim>0.9"
+      ]
+    },
+    {
+      "asin": "B0CQY911ZP",
+      "slug_date": "2026-05-29",
+      "cohort": "pre_v7",
+      "page": "https://navi.omcha.jp/products/b0cqy911zp/",
+      "max_sim": 0.9844,
+      "nearest_asin": "B0FMJQVR5B",
+      "mean_top5_sim": 0.9497,
+      "centroid_sim": 0.9333,
+      "reasons": [
+        "max_sim>0.95",
+        "centroid_sim>0.9"
+      ]
+    },
+    {
+      "asin": "B0FMJQVR5B",
+      "slug_date": "2026-06-17",
+      "cohort": "pre_v7",
+      "page": "https://navi.omcha.jp/products/b0fmjqvr5b/",
+      "max_sim": 0.9844,
+      "nearest_asin": "B0CQY911ZP",
+      "mean_top5_sim": 0.9532,
+      "centroid_sim": 0.9424,
+      "reasons": [
+        "max_sim>0.95",
+        "centroid_sim>0.9"
+      ]
+    },
+    {
+      "asin": "B011IIJS50",
+      "slug_date": "2026-05-28",
+      "cohort": "pre_v7",
+      "page": "https://navi.omcha.jp/products/b011iijs50/",
+      "max_sim": 0.9842,
+      "nearest_asin": "B011IIJUB2",
+      "mean_top5_sim": 0.9497,
+      "centroid_sim": 0.9296,
+      "reasons": [
+        "max_sim>0.95",
+        "centroid_sim>0.9"
+      ]
+    },
+    {
+      "asin": "B011IIJUB2",
+      "slug_date": "2026-07-14",
+      "cohort": "pre_v7",
+      "page": "https://navi.omcha.jp/products/b011iijub2/",
+      "max_sim": 0.9842,
+      "nearest_asin": "B011IIJS50",
+      "mean_top5_sim": 0.948,
+      "centroid_sim": 0.9255,
+      "reasons": [
+        "max_sim>0.95",
+        "centroid_sim>0.9"
+      ]
+    },
+    {
+      "asin": "B07GJGQMK7",
       "slug_date": "2026-06-03",
       "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b00031ygco/",
-      "max_sim": 0.9612,
-      "nearest_asin": "B000WDVL5I",
-      "mean_top5_sim": 0.9131,
+      "page": "https://navi.omcha.jp/products/b07gjgqmk7/",
+      "max_sim": 0.9837,
+      "nearest_asin": "B089W6WFWZ",
+      "mean_top5_sim": 0.9587,
+      "centroid_sim": 0.9391,
+      "reasons": [
+        "max_sim>0.95",
+        "centroid_sim>0.9"
+      ]
+    },
+    {
+      "asin": "B089W6WFWZ",
+      "slug_date": "2026-06-01",
+      "cohort": "pre_v7",
+      "page": "https://navi.omcha.jp/products/b089w6wfwz/",
+      "max_sim": 0.9837,
+      "nearest_asin": "B07GJGQMK7",
+      "mean_top5_sim": 0.9592,
+      "centroid_sim": 0.9364,
+      "reasons": [
+        "max_sim>0.95",
+        "centroid_sim>0.9"
+      ]
+    },
+    {
+      "asin": "B0FPWRGWLC",
+      "slug_date": "2026-06-23",
+      "cohort": "pre_v7",
+      "page": "https://navi.omcha.jp/products/b0fpwrgwlc/",
+      "max_sim": 0.9832,
+      "nearest_asin": "B0FPWZ9J99",
+      "mean_top5_sim": 0.9442,
+      "centroid_sim": 0.9227,
+      "reasons": [
+        "max_sim>0.95",
+        "centroid_sim>0.9"
+      ]
+    },
+    {
+      "asin": "B0F197NNPV",
+      "slug_date": "2026-06-01",
+      "cohort": "pre_v7",
+      "page": "https://navi.omcha.jp/products/b0f197nnpv/",
+      "max_sim": 0.9826,
+      "nearest_asin": "B0F8JBDQMT",
+      "mean_top5_sim": 0.9586,
       "centroid_sim": 0.9378,
       "reasons": [
         "max_sim>0.95",
@@ -95,332 +317,128 @@
       ]
     },
     {
-      "asin": "B000WDVL5I",
-      "slug_date": "2026-06-03",
+      "asin": "B0F8JBDQMT",
+      "slug_date": "2026-06-21",
       "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b000wdvl5i/",
-      "max_sim": 0.9612,
-      "nearest_asin": "B00031YGCO",
-      "mean_top5_sim": 0.9082,
-      "centroid_sim": 0.9388,
+      "page": "https://navi.omcha.jp/products/b0f8jbdqmt/",
+      "max_sim": 0.9826,
+      "nearest_asin": "B0F197NNPV",
+      "mean_top5_sim": 0.9616,
+      "centroid_sim": 0.946,
       "reasons": [
         "max_sim>0.95",
         "centroid_sim>0.9"
       ]
     },
     {
-      "asin": "B00000IU6Z",
-      "slug_date": "2026-06-18",
+      "asin": "B009CMIFYA",
+      "slug_date": "2026-06-22",
       "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b00000iu6z/",
-      "max_sim": 0.957,
-      "nearest_asin": "B0001WGIBM",
-      "mean_top5_sim": 0.9176,
-      "centroid_sim": 0.9247,
+      "page": "https://navi.omcha.jp/products/b009cmifya/",
+      "max_sim": 0.9815,
+      "nearest_asin": "B0FNCTK56M",
+      "mean_top5_sim": 0.9492,
+      "centroid_sim": 0.9354,
       "reasons": [
         "max_sim>0.95",
         "centroid_sim>0.9"
       ]
     },
     {
-      "asin": "B0001WGIBM",
-      "slug_date": "2026-06-18",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0001wgibm/",
-      "max_sim": 0.957,
-      "nearest_asin": "B00000IU6Z",
-      "mean_top5_sim": 0.9185,
-      "centroid_sim": 0.9301,
-      "reasons": [
-        "max_sim>0.95",
-        "centroid_sim>0.9"
-      ]
-    },
-    {
-      "asin": "B000A0VYL4",
-      "slug_date": "2026-06-07",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b000a0vyl4/",
-      "max_sim": 0.955,
-      "nearest_asin": "B000HVJ9SG",
-      "mean_top5_sim": 0.9149,
-      "centroid_sim": 0.9459,
-      "reasons": [
-        "max_sim>0.95",
-        "centroid_sim>0.9"
-      ]
-    },
-    {
-      "asin": "B000HVJ9SG",
+      "asin": "B0FNCTK56M",
       "slug_date": "2026-06-12",
       "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b000hvj9sg/",
-      "max_sim": 0.955,
-      "nearest_asin": "B000A0VYL4",
-      "mean_top5_sim": 0.8963,
-      "centroid_sim": 0.9286,
+      "page": "https://navi.omcha.jp/products/b0fnctk56m/",
+      "max_sim": 0.9815,
+      "nearest_asin": "B009CMIFYA",
+      "mean_top5_sim": 0.9385,
+      "centroid_sim": 0.9208,
       "reasons": [
         "max_sim>0.95",
         "centroid_sim>0.9"
       ]
     },
     {
-      "asin": "B0000683A4",
-      "slug_date": "2026-07-11",
+      "asin": "B083BB66H9",
+      "slug_date": "2026-05-28",
       "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0000683a4/",
-      "max_sim": 0.9483,
-      "nearest_asin": "B0002AHQWS",
-      "mean_top5_sim": 0.9286,
-      "centroid_sim": 0.9415,
+      "page": "https://navi.omcha.jp/products/b083bb66h9/",
+      "max_sim": 0.9814,
+      "nearest_asin": "B083BC72GR",
+      "mean_top5_sim": 0.9606,
+      "centroid_sim": 0.9225,
       "reasons": [
+        "max_sim>0.95",
         "centroid_sim>0.9"
       ]
     },
     {
-      "asin": "B0002HWTOG",
-      "slug_date": "2026-06-04",
+      "asin": "B083BC72GR",
+      "slug_date": "2026-06-06",
       "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0002hwtog/",
-      "max_sim": 0.9467,
-      "nearest_asin": "B0002HWUNQ",
-      "mean_top5_sim": 0.9162,
-      "centroid_sim": 0.9351,
+      "page": "https://navi.omcha.jp/products/b083bc72gr/",
+      "max_sim": 0.9814,
+      "nearest_asin": "B083BB66H9",
+      "mean_top5_sim": 0.9564,
+      "centroid_sim": 0.9117,
       "reasons": [
+        "max_sim>0.95",
         "centroid_sim>0.9"
       ]
     },
     {
-      "asin": "B0002HWUNQ",
-      "slug_date": "2026-06-04",
+      "asin": "B0C27VXW8N",
+      "slug_date": "2026-05-30",
       "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0002hwunq/",
-      "max_sim": 0.9467,
-      "nearest_asin": "B0002HWTOG",
-      "mean_top5_sim": 0.9139,
-      "centroid_sim": 0.9313,
+      "page": "https://navi.omcha.jp/products/b0c27vxw8n/",
+      "max_sim": 0.9814,
+      "nearest_asin": "B0GFM8PKTN",
+      "mean_top5_sim": 0.9601,
+      "centroid_sim": 0.9363,
       "reasons": [
+        "max_sim>0.95",
         "centroid_sim>0.9"
       ]
     },
     {
-      "asin": "B000GG7XXK",
-      "slug_date": "2026-06-01",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b000gg7xxk/",
-      "max_sim": 0.9451,
-      "nearest_asin": "B0000683A4",
-      "mean_top5_sim": 0.9227,
-      "centroid_sim": 0.9468,
-      "reasons": [
-        "centroid_sim>0.9"
-      ]
-    },
-    {
-      "asin": "B000BYM7GK",
+      "asin": "B0GFM8PKTN",
       "slug_date": "2026-05-31",
       "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b000bym7gk/",
-      "max_sim": 0.9446,
-      "nearest_asin": "B000BYM7Q0",
-      "mean_top5_sim": 0.9032,
-      "centroid_sim": 0.9286,
+      "page": "https://navi.omcha.jp/products/b0gfm8pktn/",
+      "max_sim": 0.9814,
+      "nearest_asin": "B0C27VXW8N",
+      "mean_top5_sim": 0.964,
+      "centroid_sim": 0.9394,
       "reasons": [
+        "max_sim>0.95",
         "centroid_sim>0.9"
       ]
     },
     {
-      "asin": "B000BYM7Q0",
-      "slug_date": "2026-06-05",
+      "asin": "B0D7YJ2C3H",
+      "slug_date": "2026-06-08",
       "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b000bym7q0/",
-      "max_sim": 0.9446,
-      "nearest_asin": "B000BYM7GK",
-      "mean_top5_sim": 0.8976,
-      "centroid_sim": 0.9161,
+      "page": "https://navi.omcha.jp/products/b0d7yj2c3h/",
+      "max_sim": 0.9812,
+      "nearest_asin": "B0D7YVYHTN",
+      "mean_top5_sim": 0.9438,
+      "centroid_sim": 0.9338,
       "reasons": [
+        "max_sim>0.95",
         "centroid_sim>0.9"
       ]
     },
     {
-      "asin": "B0002HWULI",
-      "slug_date": "2026-06-04",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0002hwuli/",
-      "max_sim": 0.9389,
-      "nearest_asin": "B0002HWULS",
-      "mean_top5_sim": 0.9246,
-      "centroid_sim": 0.9314,
-      "reasons": [
-        "centroid_sim>0.9"
-      ]
-    },
-    {
-      "asin": "B0002HWULS",
-      "slug_date": "2026-06-04",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0002hwuls/",
-      "max_sim": 0.9389,
-      "nearest_asin": "B0002HWULI",
-      "mean_top5_sim": 0.9041,
-      "centroid_sim": 0.9119,
-      "reasons": [
-        "centroid_sim>0.9"
-      ]
-    },
-    {
-      "asin": "B0002HWQEE",
+      "asin": "B0D7YVYHTN",
       "slug_date": "2026-06-09",
       "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0002hwqee/",
-      "max_sim": 0.9286,
-      "nearest_asin": "B000I8SMZE",
-      "mean_top5_sim": 0.8992,
-      "centroid_sim": 0.9365,
+      "page": "https://navi.omcha.jp/products/b0d7yvyhtn/",
+      "max_sim": 0.9812,
+      "nearest_asin": "B0D7YJ2C3H",
+      "mean_top5_sim": 0.9462,
+      "centroid_sim": 0.9367,
       "reasons": [
-        "centroid_sim>0.9"
-      ]
-    },
-    {
-      "asin": "B000I8SMZE",
-      "slug_date": "2026-05-29",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b000i8smze/",
-      "max_sim": 0.9286,
-      "nearest_asin": "B0002HWQEE",
-      "mean_top5_sim": 0.8981,
-      "centroid_sim": 0.9356,
-      "reasons": [
-        "centroid_sim>0.9"
-      ]
-    },
-    {
-      "asin": "B0002U3LZO",
-      "slug_date": "2026-05-19",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0002u3lzo/",
-      "max_sim": 0.9243,
-      "nearest_asin": "B000SM165S",
-      "mean_top5_sim": 0.9105,
-      "centroid_sim": 0.9437,
-      "reasons": [
-        "centroid_sim>0.9"
-      ]
-    },
-    {
-      "asin": "B000SM165S",
-      "slug_date": "2026-06-05",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b000sm165s/",
-      "max_sim": 0.9243,
-      "nearest_asin": "B0002U3LZO",
-      "mean_top5_sim": 0.9103,
-      "centroid_sim": 0.9382,
-      "reasons": [
-        "centroid_sim>0.9"
-      ]
-    },
-    {
-      "asin": "B0007M4610",
-      "slug_date": "2026-06-14",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0007m4610/",
-      "max_sim": 0.9241,
-      "nearest_asin": "B000SM165S",
-      "mean_top5_sim": 0.9182,
-      "centroid_sim": 0.9428,
-      "reasons": [
-        "centroid_sim>0.9"
-      ]
-    },
-    {
-      "asin": "B00009YOQW",
-      "slug_date": "2026-06-18",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b00009yoqw/",
-      "max_sim": 0.9231,
-      "nearest_asin": "B001SF9LL0",
-      "mean_top5_sim": 0.8944,
-      "centroid_sim": 0.9242,
-      "reasons": [
-        "centroid_sim>0.9"
-      ]
-    },
-    {
-      "asin": "B001SF9LL0",
-      "slug_date": "2026-06-04",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b001sf9ll0/",
-      "max_sim": 0.9231,
-      "nearest_asin": "B00009YOQW",
-      "mean_top5_sim": 0.8959,
-      "centroid_sim": 0.931,
-      "reasons": [
-        "centroid_sim>0.9"
-      ]
-    },
-    {
-      "asin": "B000GTAX48",
-      "slug_date": "2026-05-19",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b000gtax48/",
-      "max_sim": 0.9127,
-      "nearest_asin": "B000PGZHPC",
-      "mean_top5_sim": 0.8902,
-      "centroid_sim": 0.9143,
-      "reasons": [
-        "centroid_sim>0.9"
-      ]
-    },
-    {
-      "asin": "B000PGZHPC",
-      "slug_date": "2026-05-19",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b000pgzhpc/",
-      "max_sim": 0.9127,
-      "nearest_asin": "B000GTAX48",
-      "mean_top5_sim": 0.8909,
-      "centroid_sim": 0.91,
-      "reasons": [
-        "centroid_sim>0.9"
-      ]
-    },
-    {
-      "asin": "B000G3LR9Y",
-      "slug_date": "2026-06-01",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b000g3lr9y/",
-      "max_sim": 0.9124,
-      "nearest_asin": "B000A0VYL4",
-      "mean_top5_sim": 0.9035,
-      "centroid_sim": 0.9389,
-      "reasons": [
-        "centroid_sim>0.9"
-      ]
-    },
-    {
-      "asin": "B001PIJ6LK",
-      "slug_date": "2026-05-19",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b001pij6lk/",
-      "max_sim": 0.9066,
-      "nearest_asin": "B0002U3LZO",
-      "mean_top5_sim": 0.8995,
-      "centroid_sim": 0.9244,
-      "reasons": [
-        "centroid_sim>0.9"
-      ]
-    },
-    {
-      "asin": "B000LVJSLK",
-      "slug_date": "2026-06-05",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b000lvjslk/",
-      "max_sim": 0.906,
-      "nearest_asin": "B00031YGCO",
-      "mean_top5_sim": 0.8894,
-      "centroid_sim": 0.918,
-      "reasons": [
+        "max_sim>0.95",
         "centroid_sim>0.9"
       ]
     }
