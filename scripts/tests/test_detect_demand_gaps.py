@@ -12,6 +12,8 @@
 8. is_code_like_query: ASCII のみ (ASIN/型番) 判定・日本語混在は非該当
 9. コード系クエリが gap 判定の母集団から除外され、summary.excluded_code_queries
    に記録されること
+10. theme_key=="english" のクエリが gap 判定の母集団から除外され、
+    summary.excluded_english_queries に記録されること (age 系/None テーマは対象外)
 """
 from __future__ import annotations
 
@@ -369,6 +371,86 @@ class RunEndToEndTest(unittest.TestCase):
         self.assertEqual(data["summary"]["excluded_code_queries"], 2)
         self.assertEqual(data["summary"]["total_demand_queries"], 0)
 
+    def test_english_theme_queries_excluded_from_population_and_counted_in_summary(self):
+        _write_article(self.articles_dir, "2026-05-01-B0AAAAAAAA.json", {"title": "商品A"})
+        # english テーマ (翻訳クエリ) + 自然文の age テーマを混在させる
+        _write_suggest_theme(self.suggest_dir, "age-0", ["遠いクエリ"])
+        _write_suggest_theme(
+            self.suggest_dir, "english", ["おもちゃ 英語", "おもちゃ が 壊れ た 英語"]
+        )
+
+        def embed_document_fn(texts, ruri_url, session, sleeper):
+            return [[1.0, 0.0] for _ in texts]
+
+        captured_query_texts = []
+
+        def embed_query_fn(texts, ruri_url, session, sleeper):
+            captured_query_texts.append(list(texts))
+            return [[0.0, 0.0] for _ in texts]
+
+        summary = D.run(
+            self.articles_dir, self.suggest_dir, self.gsc_path, self.out_path,
+            gap_threshold=0.5, min_impressions=3, dry_run=False,
+            session=mock.Mock(), sleeper=lambda _s: None,
+            embed_document_fn=embed_document_fn, embed_query_fn=embed_query_fn,
+        )
+
+        # english テーマ2件が母集団から除外され、残るのは age-0 の自然文1件のみ
+        self.assertEqual(summary["total_demand_queries"], 1)
+        self.assertEqual(captured_query_texts, [["遠いクエリ"]])
+
+        data = json.loads(self.out_path.read_text(encoding="utf-8"))
+        self.assertEqual(data["summary"]["total_demand_queries"], 1)
+        self.assertEqual(data["summary"]["excluded_code_queries"], 0)
+        self.assertEqual(data["summary"]["excluded_english_queries"], 2)
+        self.assertEqual(data["summary"]["gap_count"], 1)
+        self.assertEqual(data["gaps"][0]["query"], "遠いクエリ")
+
+    def test_all_english_theme_queries_yields_empty_report_without_calling_ruri(self):
+        _write_article(self.articles_dir, "2026-05-01-B0BBBBBBBB.json", {"title": "商品B"})
+        _write_suggest_theme(
+            self.suggest_dir, "english", ["おもちゃ 英語", "おもちゃ が 壊れ た 英語"]
+        )
+        embed_document_fn = mock.Mock()
+        embed_query_fn = mock.Mock()
+
+        summary = D.run(
+            self.articles_dir, self.suggest_dir, self.gsc_path, self.out_path,
+            dry_run=False, session=mock.Mock(), sleeper=lambda _s: None,
+            embed_document_fn=embed_document_fn, embed_query_fn=embed_query_fn,
+        )
+        self.assertEqual(summary["total_demand_queries"], 0)
+        embed_document_fn.assert_not_called()
+        embed_query_fn.assert_not_called()
+
+        data = json.loads(self.out_path.read_text(encoding="utf-8"))
+        self.assertEqual(data["summary"]["excluded_english_queries"], 2)
+        self.assertEqual(data["summary"]["total_demand_queries"], 0)
+
+    def test_non_english_theme_queries_are_not_excluded(self):
+        # age 系テーマや gsc 単独 (theme_key=None) のクエリは english 除外の対象外
+        _write_article(self.articles_dir, "2026-05-01-B0CCCCCCCC.json", {"title": "商品C"})
+        _write_suggest_theme(self.suggest_dir, "age-1", ["age系クエリ"])
+        _write_gsc_lines(self.gsc_path, [
+            {"query": "gsc単独クエリ", "impressions": 10, "date": "2026-06-01"},
+        ])
+        embed_document_fn, embed_query_fn, _, query_calls = self._fake_embed_fns(
+            [[1.0, 0.0]], [[0.0, 0.0], [0.0, 0.0]]
+        )
+
+        summary = D.run(
+            self.articles_dir, self.suggest_dir, self.gsc_path, self.out_path,
+            gap_threshold=0.5, min_impressions=3, dry_run=False,
+            session=mock.Mock(), sleeper=lambda _s: None,
+            embed_document_fn=embed_document_fn, embed_query_fn=embed_query_fn,
+        )
+        self.assertEqual(summary["total_demand_queries"], 2)
+        self.assertEqual(set(query_calls[0]), {"age系クエリ", "gsc単独クエリ"})
+
+        data = json.loads(self.out_path.read_text(encoding="utf-8"))
+        self.assertEqual(data["summary"]["excluded_english_queries"], 0)
+        self.assertEqual(data["summary"]["total_demand_queries"], 2)
+
     def test_empty_demand_queries_skips_ruri_and_writes_empty_report(self):
         _write_article(self.articles_dir, "2026-05-01-B0DDDDDDDD.json", {"title": "商品D"})
         # suggest_info も gsc も空
@@ -389,7 +471,13 @@ class RunEndToEndTest(unittest.TestCase):
         data = json.loads(self.out_path.read_text(encoding="utf-8"))
         self.assertEqual(
             data["summary"],
-            {"total_demand_queries": 0, "gap_count": 0, "by_theme": {}, "excluded_code_queries": 0},
+            {
+                "total_demand_queries": 0,
+                "gap_count": 0,
+                "by_theme": {},
+                "excluded_code_queries": 0,
+                "excluded_english_queries": 0,
+            },
         )
         self.assertEqual(data["gaps"], [])
 
