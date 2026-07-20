@@ -52,6 +52,13 @@ TRACKER_MARKER = "uniqueness-audit-tracker"
 WEEK_MARKER_PREFIX = "uniqueness-audit:"
 TRACKER_SEARCH_LABELS = ("observation", "quality")
 
+# owner が手動起票した恒久 tracker issue (#3300)。GitHub App installation token 経由の
+# Search API は「新規作成されたばかりの issue」を数日単位で 0 件のまま返し続けることがあり
+# (feedback-omochairo-gh-search-issues-index-lag)、search/issues で毎回探す設計だと
+# 自動ロールアップが恒久的に skip され続けてしまう。tracker は番号が固定なので、Search では
+# なく番号直指定を既定にする (コメント取得/投稿の REST API は App token でも正常に効く)。
+DEFAULT_TRACKER_ISSUE = 3300
+
 _SEARCH_MAX_ATTEMPTS = 3
 _SEARCH_RETRY_SLEEP_SECONDS = 3.0
 
@@ -70,7 +77,7 @@ def _search_issues(query: str, sleeper=time.sleep) -> list[dict]:
         res = subprocess.run(
             ["gh", "api", "-X", "GET", "search/issues",
              "-f", f"q={query}", "-f", "per_page=100"],
-            check=True, capture_output=True, text=True,
+            check=True, capture_output=True, text=True, encoding="utf-8",
         )
         items = json.loads(res.stdout).get("items", [])
         if items or attempt == _SEARCH_MAX_ATTEMPTS:
@@ -94,13 +101,28 @@ def find_tracker_issue_number(repo: str, sleeper=time.sleep) -> int | None:
     return min(numbers) if numbers else None
 
 
+def resolve_tracker_issue_number(
+    repo: str, issue_number: int | None, sleeper=time.sleep
+) -> int | None:
+    """使用する tracker issue 番号を決める。
+
+    正の ``issue_number`` が与えられていれば Search を介さずそれを直接使う (既定運用)。
+    ``issue_number`` が None/0 以下のときのみ、従来の marker Search
+    (:func:`find_tracker_issue_number`) にフォールバックする — issue 番号が将来
+    変わった場合の逃げ道として残す。
+    """
+    if issue_number and issue_number > 0:
+        return issue_number
+    return find_tracker_issue_number(repo, sleeper=sleeper)
+
+
 def has_existing_week_comment(repo: str, issue_number: int, source_week: str) -> bool:
     """指定 Issue の既存コメントに、この週用のマーカーが既にあるか。"""
     marker = f"<!-- {WEEK_MARKER_PREFIX}{source_week} -->"
     res = subprocess.run(
         ["gh", "api", "-X", "GET", f"repos/{repo}/issues/{issue_number}/comments",
          "-f", "per_page=100"],
-        check=True, capture_output=True, text=True,
+        check=True, capture_output=True, text=True, encoding="utf-8",
     )
     comments = json.loads(res.stdout)
     if not isinstance(comments, list):
@@ -180,7 +202,7 @@ def render_comment_body(payload: dict[str, Any]) -> str:
 def post_comment(repo: str, issue_number: int, body: str) -> None:
     subprocess.run(
         ["gh", "issue", "comment", str(issue_number), "-R", repo, "--body", body],
-        check=True, capture_output=True, text=True,
+        check=True, capture_output=True, text=True, encoding="utf-8",
     )
 
 
@@ -188,6 +210,12 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--input", default=DEFAULT_IN)
     p.add_argument("--repo", default=os.environ.get("REPO"))
+    p.add_argument(
+        "--issue-number", type=int, default=None,
+        help=f"コメント先の tracker issue 番号を直接指定する。省略時は $TRACKER_ISSUE、"
+             f"それも無ければ既定 #{DEFAULT_TRACKER_ISSUE}。0 以下を渡すと従来の "
+             f"marker Search による探索にフォールバックする。",
+    )
     p.add_argument("--dry-run", action="store_true",
                    help="投稿は行わず、コメント本文を stdout に出すのみ")
     args = p.parse_args()
@@ -207,7 +235,12 @@ def main() -> int:
         logger.error("input payload missing source_week — refusing to post ambiguous comment")
         return 2
 
-    issue_number = find_tracker_issue_number(args.repo)
+    requested = args.issue_number
+    if requested is None:
+        env_val = os.environ.get("TRACKER_ISSUE")
+        requested = int(env_val) if env_val else DEFAULT_TRACKER_ISSUE
+
+    issue_number = resolve_tracker_issue_number(args.repo, requested)
     if issue_number is None:
         logger.warning(
             "no open tracker issue found (marker=%r, labels=%r); skipping — "
@@ -215,6 +248,7 @@ def main() -> int:
             TRACKER_MARKER, TRACKER_SEARCH_LABELS,
         )
         return 0
+    logger.info("using tracker issue #%d", issue_number)
 
     if has_existing_week_comment(args.repo, issue_number, source_week):
         logger.info("skip (already commented for week %s): issue #%d", source_week, issue_number)
