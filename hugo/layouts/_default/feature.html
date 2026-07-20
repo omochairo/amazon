@@ -111,6 +111,10 @@
       {{- end }}
     </ol>
 
+    {{- if hasPrefix $type "age-" }}
+    {{- partial "age_concerns.html" (dict "type" $type) }}
+    {{- end }}
+
     {{- if eq $type "deals" }}
     <p class="ranking-disclaimer">
       ※ 割引率・価格は Amazon から取得した時点のスナップショットです。リンク先での最新の価格・在庫をご確認ください。当ページのリンクは Amazon アソシエイトを含みます。
