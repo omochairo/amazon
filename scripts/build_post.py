@@ -1652,6 +1652,10 @@ def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path
     ``data`` は一切変更しない (post.md.j2 は ``{% if price_history %}`` で
     未設定時は何も描画しない)。
 
+    ``all_time_low`` = 直近計測値 (latest_price) が全履歴の最安値 (min_price)
+    以下かどうか。/price/ ダッシュボードの判定 (build_price_dashboard.py
+    ``evaluate_drop``: ``current_price <= min(全履歴)``) と一致させる。
+
     Returns:
         ゲートを通って添付したら True。
     """
@@ -1687,6 +1691,7 @@ def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path
         "max_price": max_price,
         "latest_price": latest_price,
         "span_days": span_days,
+        "all_time_low": latest_price <= min_price,
     }
     return True
 

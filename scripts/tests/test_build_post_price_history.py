@@ -87,6 +87,42 @@ class GateTests(unittest.TestCase):
             self.assertEqual(len(ph["points"]), 4)
             # points は ts 昇順 (古い→新しい)
             self.assertEqual(ph["points"][-1]["price"], 2700)
+            # latest (2700) > min (2400) なので過去最安値ではない
+            self.assertFalse(ph["all_time_low"])
+
+    def test_all_time_low_true_when_latest_is_min(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            _write_jsonl(root, "B1", [
+                _rec(20, 2659),
+                _rec(13, 2800),  # max
+                _rec(6, 2500),
+                _rec(0, 2400),   # latest == min (過去最安値)
+            ])
+            data = {"product": {"asin": "B1"}}
+            ok = _attach_price_history(data, root)
+            self.assertTrue(ok)
+            ph = data["price_history"]
+            self.assertEqual(ph["min_price"], 2400)
+            self.assertEqual(ph["latest_price"], 2400)
+            self.assertTrue(ph["all_time_low"])
+
+    def test_all_time_low_false_when_latest_above_min(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            _write_jsonl(root, "B1", [
+                _rec(20, 2659),
+                _rec(13, 2400),  # min (過去にもっと安い点があった)
+                _rec(6, 2500),
+                _rec(0, 2600),   # latest > min
+            ])
+            data = {"product": {"asin": "B1"}}
+            ok = _attach_price_history(data, root)
+            self.assertTrue(ok)
+            ph = data["price_history"]
+            self.assertEqual(ph["min_price"], 2400)
+            self.assertEqual(ph["latest_price"], 2600)
+            self.assertFalse(ph["all_time_low"])
 
     def test_ignores_non_amazon_source_and_invalid_price(self):
         with tempfile.TemporaryDirectory() as tmp:
