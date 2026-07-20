@@ -2233,6 +2233,28 @@ html[data-theme="dark"] .post-content .price-cta-grid .price-search-fallback a:h
   color: #92400e;
   margin-left: 1px;
 }
+.post-content .score-recap-bar {
+  width: 100%;
+  height: 6px;
+  margin-top: 2px;
+  background: #fef3c7;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.post-content .score-recap-bar-fill {
+  display: block;
+  height: 100%;
+  width: var(--axis-w, 0%);
+  border-radius: 999px;
+  background: linear-gradient(90deg, #fbbf24, #f59e0b);
+}
+.post-content .score-recap.scroll-reveal .score-recap-bar-fill {
+  width: 0;
+}
+.post-content .score-recap.scroll-reveal.is-revealed .score-recap-bar-fill {
+  width: var(--axis-w, 0%);
+  transition: width 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
 .post-content .score-recap-note {
   font-size: 0.85rem;
   color: #6b7280;
@@ -2475,6 +2497,10 @@ html[data-theme="dark"] .post-content .score-recap-value {
 [data-theme="dark"] .post-content .score-recap-value small,
 html[data-theme="dark"] .post-content .score-recap-value small {
   color: #fde68a;
+}
+[data-theme="dark"] .post-content .score-recap-bar,
+html[data-theme="dark"] .post-content .score-recap-bar {
+  background: #3b2a16;
 }
 [data-theme="dark"] .post-content .score-recap-note,
 html[data-theme="dark"] .post-content .score-recap-note {
@@ -2769,6 +2795,15 @@ html[data-theme="dark"] .post-content .article-fb-thanks {
   .post-content .competitor-grid .competitor-card a[href][style*="background"]::after {
     animation: none;
     background: none;
+  }
+  .post-content .score-recap.scroll-reveal.is-revealed .score-recap-bar-fill,
+  .post-content .score-recap.scroll-reveal .score-recap-bar-fill {
+    transition: none;
+    width: var(--axis-w, 0%);
+  }
+  .post-content .hero-score .hero-total-bar-fill,
+  .post-content .hero-score .hero-radar .radar-shape {
+    animation: none;
   }
 }
 
