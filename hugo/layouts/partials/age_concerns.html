@@ -1,0 +1,29 @@
+{{- /*
+  age hub (/toys-age-N/) の「よくある悩み」ブロック (#3332 N2 / #2687 柱1)。
+  scripts/build_age_concerns.py が hugo/data/concerns/<type>.json を生成する
+  (demand_gaps.json 由来)。データが無い/count 0 なら何も出力しない
+  (graceful degradation: home-ops 42 の graduate が別 PR で demand_gaps.json
+  を commit するまでは常にこの状態)。
+
+  Expected context: dict "type" $type (feature.html の age hub key, 例 "age-2").
+*/}}
+{{- $type := .type }}
+{{- $c := index site.Data.concerns $type }}
+{{- if and $c $c.count }}
+<section class="age-concerns">
+  <h2>よくある悩み</h2>
+  <p class="age-concerns-lead">検索でよく寄せられる悩みと、参考になりそうな商品ページです。</p>
+  {{- range $c.groups }}
+  <h3 class="age-concerns-intent">{{ .intent }}</h3>
+  <ul class="age-concerns-list">
+    {{- range .concerns }}
+    {{- if .nearest_asin }}
+    <li><a href="/products/{{ lower .nearest_asin }}/">{{ .query }}</a></li>
+    {{- else }}
+    <li>{{ .query }}</li>
+    {{- end }}
+    {{- end }}
+  </ul>
+  {{- end }}
+</section>
+{{- end }}
