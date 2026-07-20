@@ -213,5 +213,150 @@ class RunAgeHubTest(unittest.TestCase):
             self.assertEqual(data["items"][0]["asin"], "B0AGE1")
 
 
+class BuildAgeLineupTest(unittest.TestCase):
+    """Slice A: 年齢hub 全ラインナップ節 (min_ivs ゲート無し・top-24 除外)。"""
+
+    def setUp(self):
+        # 1歳 hub = [12, 24)
+        self.hub = bch.AGE_HUBS["age-1"]
+        self.records = [
+            _rec("A", 4.5, 90, 2000),
+            _rec("B", 4.8, 95, 3000),
+            _rec("C", 1.0, 20, 1000),   # low ivs_score but still bucket member
+            _rec("D", 4.0, 95, 1500),   # ties B, cheaper
+            _rec("E", 4.2, 80, 500),    # out of age range
+            _rec("F", 4.2, 80, 700),    # no age data
+        ]
+        self.mm = {"A": 12, "B": 18, "C": 12, "D": 23, "E": 36, "F": None}
+
+    def test_no_min_ivs_gate_low_score_included(self):
+        out = bch.build_age_lineup(self.records, self.mm, self.hub, exclude_asins=set())
+        asins = [r.asin for r in out]
+        self.assertIn("C", asins)  # low ivs_score is NOT dropped (crawl discovery)
+        self.assertNotIn("E", asins)  # still gated by age range
+        self.assertNotIn("F", asins)  # still gated by missing age data
+
+    def test_excludes_top24_asins(self):
+        out = bch.build_age_lineup(self.records, self.mm, self.hub,
+                                   exclude_asins={"D", "B"})
+        asins = [r.asin for r in out]
+        self.assertNotIn("D", asins)
+        self.assertNotIn("B", asins)
+        self.assertIn("A", asins)
+        self.assertIn("C", asins)
+
+    def test_sort_ivs_desc_price_asc_tiebreak(self):
+        out = bch.build_age_lineup(self.records, self.mm, self.hub, exclude_asins=set())
+        self.assertEqual([r.asin for r in out], ["D", "B", "A", "C"])
+
+
+class LineupEntryTest(unittest.TestCase):
+    def test_minimal_fields_and_lowercased_url(self):
+        rec = _rec("AbC1", 4.5, 90, 2000)
+        entry = bch._lineup_entry(rec, 18)
+        self.assertEqual(entry, {
+            "asin": "AbC1",
+            "name": "name-AbC1",
+            "url_internal": "/products/abc1/",
+            "ivs_100": 90,
+            "age_min_months": 18,
+        })
+
+
+class SerializeHubLineupTest(unittest.TestCase):
+    def test_lineup_key_present_when_given(self):
+        items = [_rec("A", 4.5, 90, 2000)]
+        lineup = [bch._lineup_entry(_rec("B", 3.0, 40, 500), 12)]
+        payload = bch.serialize_hub(items, "age-1", "2026-07-20T00:00:00Z",
+                                    lineup=lineup)
+        self.assertEqual(payload["lineup"], lineup)
+
+    def test_lineup_key_absent_when_omitted(self):
+        items = [_rec("A", 4.5, 90, 2000)]
+        payload = bch.serialize_hub(items, "english", "2026-07-20T00:00:00Z")
+        self.assertNotIn("lineup", payload)
+
+
+class RunAgeHubLineupTest(unittest.TestCase):
+    def test_lineup_holds_top_n_overflow(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            adir = pathlib.Path(tmp) / "articles"
+            adir.mkdir()
+
+            def _doc(asin, price):
+                return {
+                    "slug": f"toy-{asin}",
+                    "title": "1歳のおもちゃ",
+                    "persona_fit": {"age_range": "1歳〜"},
+                    "product": {
+                        "asin": asin,
+                        "name": f"name-{asin}",
+                        "ivs_score": 4.5,
+                        "best_price": price,
+                        "best_platform": "amazon",
+                        "prices": {"amazon": {"url": f"https://amazon/{asin}"}},
+                    },
+                }
+
+            # 2 商品を投入し top_n=1 で強制的に 1 件だけ curated 入りさせる。
+            # price だけ差をつけて build_age_hub の同点タイブレーク (安価優先) で
+            # B0TOP1 (安い) が items に残り、B0TAIL1 が lineup に落ちる想定。
+            for asin, price in [("B0TOP1", 1000), ("B0TAIL1", 5000)]:
+                (adir / f"2026-06-01-{asin}.json").write_text(
+                    json.dumps(_doc(asin, price), ensure_ascii=False),
+                    encoding="utf-8")
+
+            out = pathlib.Path(tmp) / "features"
+            bch.run(adir, out, top_n=1, min_ivs=0.0, themes=[], age_hubs=["age-1"])
+            data = json.loads((out / "age-1.json").read_text(encoding="utf-8"))
+            self.assertEqual([it["asin"] for it in data["items"]], ["B0TOP1"])
+            lineup_asins = [e["asin"] for e in data["lineup"]]
+            self.assertEqual(lineup_asins, ["B0TAIL1"])
+            for entry in data["lineup"]:
+                self.assertEqual(
+                    set(entry.keys()),
+                    {"asin", "name", "url_internal", "ivs_100", "age_min_months"})
+
+
+class HubIndexTest(unittest.TestCase):
+    def test_write_hub_index_shape(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = pathlib.Path(tmp)
+            entries = [{"key": "english", "label": "英語", "url": "/english-toys/"}]
+            bch._write_hub_index(out, entries)
+            data = json.loads((out / "hub_index.json").read_text(encoding="utf-8"))
+            self.assertEqual(data, entries)
+
+    def test_run_writes_hub_index_for_themes_and_age_hubs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            adir = pathlib.Path(tmp) / "articles"
+            adir.mkdir()
+            doc = {
+                "slug": "eigo-toy",
+                "title": "英語のおもちゃ",
+                "tags": ["英語"],
+                "persona_fit": {"age_range": "1歳〜"},
+                "product": {
+                    "asin": "B0ENG1",
+                    "name": "英語トイ",
+                    "brand": "ACME",
+                    "ivs_score": 4.5,
+                    "best_price": 2000,
+                    "best_platform": "amazon",
+                    "prices": {"amazon": {"url": "https://amazon/B0ENG1"}},
+                },
+            }
+            (adir / "2026-06-01-B0ENG1.json").write_text(
+                json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+            out = pathlib.Path(tmp) / "features"
+            bch.run(adir, out, top_n=24, min_ivs=0.0,
+                   themes=["english"], age_hubs=["age-1"])
+            hub_index = json.loads((out / "hub_index.json").read_text(encoding="utf-8"))
+            self.assertEqual(hub_index, [
+                {"key": "english", "label": "英語", "url": "/english-toys/"},
+                {"key": "age-1", "label": "1歳", "url": "/toys-age-1/"},
+            ])
+
+
 if __name__ == "__main__":
     unittest.main()
