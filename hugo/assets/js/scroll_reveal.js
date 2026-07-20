@@ -9,6 +9,7 @@
       '.post-content h3, ' +
       '.hero-score, ' +
       '.hero-pros-cons, ' +
+      '.score-recap, ' +
       '.price-cta-grid, ' +
       '.keepa-graph, ' +
       '.competitor-grid, ' +
