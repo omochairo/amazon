@@ -16,6 +16,7 @@ from scripts.comment_uniqueness_audit import (
     render_cohort_rows,
     render_comment_body,
     render_flagged_rows,
+    resolve_tracker_issue_number,
 )
 
 
@@ -124,6 +125,27 @@ def test_find_tracker_issue_number_retries_on_transient_zero_then_succeeds():
     assert number == 3301
     assert len(calls) == 2
     assert sleeps == [3.0]
+
+
+def test_resolve_tracker_issue_number_uses_explicit_without_search():
+    # 正の番号が与えられたら search/issues を一切叩かず直接使う (App token の Search
+    # 可視性ラグを回避する既定経路)。
+    def fail_run(cmd, **kwargs):  # pragma: no cover - 呼ばれたら失敗させる
+        raise AssertionError("resolve should not call gh when issue_number is given")
+
+    with patch("scripts.comment_uniqueness_audit.subprocess.run", side_effect=fail_run):
+        assert resolve_tracker_issue_number("repo", 3300) == 3300
+
+
+def test_resolve_tracker_issue_number_falls_back_to_search_when_nonpositive():
+    fake_response = {"items": [{"number": 3300, "body": TRACKER_MARKER}]}
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(fake_response), stderr="")
+
+    with patch("scripts.comment_uniqueness_audit.subprocess.run", side_effect=fake_run):
+        assert resolve_tracker_issue_number("repo", 0, sleeper=lambda s: None) == 3300
+        assert resolve_tracker_issue_number("repo", None, sleeper=lambda s: None) == 3300
 
 
 def test_has_existing_week_comment_true_when_marker_present():
