@@ -1,0 +1,25 @@
+{{- /*
+  hub_siblings.html (#2687 柱1 Slice C)
+  情報型 category hub (テーマ別 english/programming/math/montessori + 年齢別
+  toys-age-N) 同士の相互リンク。build_category_hubs.py が生成する
+  hugo/data/features/hub_index.json (= site.Data.features.hub_index、生成した
+  全 info hub の [{key,label,url}] 平坦配列) を読み、自ページ以外への nav を
+  描画する。cluster 形成が目的 (#2690 実測: hub→hub 相互リンクが未形成)。
+
+  Expected context: dict "type" $type (呼び出し元 feature.html の feature_type)。
+  hub_index.json 未生成/空なら何も出力しない (graceful degradation)。
+*/ -}}
+{{- $type := .type -}}
+{{- $hubs := site.Data.features.hub_index -}}
+{{- if $hubs }}
+<nav class="hub-siblings" aria-label="関連ランキング">
+  <h2 class="hub-siblings-title">関連ランキングもチェック</h2>
+  <ul class="hub-siblings-list">
+    {{- range $hubs }}
+    {{- if ne .key $type }}
+    <li><a href="{{ .url }}">{{ .label }}</a></li>
+    {{- end }}
+    {{- end }}
+  </ul>
+</nav>
+{{- end }}

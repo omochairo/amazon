@@ -8,6 +8,14 @@
 {{- $type := .Params.feature_type | default "cospa" }}
 {{- $data := index site.Data.features $type }}
 
+{{- /* #2687 Slice C: $type が hub_index.json (build_category_hubs.py 生成) に
+       載っている = 情報型 hub (テーマ別/年齢別)。cospa/deals/price はここに
+       載らないので自然に対象外になる。 */ -}}
+{{- $isInfoHub := false -}}
+{{- range site.Data.features.hub_index -}}
+  {{- if eq .key $type -}}{{- $isInfoHub = true -}}{{- end -}}
+{{- end -}}
+
 <header class="page-header ranking-header feature-header feature-header--{{ $type }}">
   <h1>{{ .Title }}</h1>
   {{- if .Description }}
@@ -113,6 +121,21 @@
 
     {{- if hasPrefix $type "age-" }}
     {{- partial "age_concerns.html" (dict "type" $type) }}
+
+    {{- /* #2687 Slice A: 年齢hub 全ラインナップ節。top-24 curated には入らない
+           bucket 全 member への構造的リンク (crawl discovery)。lineup が空
+           (データ未生成 or 全件 top-24 内) なら節ごと出さない。 */ -}}
+    {{- $lineup := and $data $data.lineup }}
+    {{- if $lineup }}
+    <details class="hub-lineup" aria-label="この年齢の全ラインナップ">
+      <summary>この年齢の全ラインナップ（{{ len $lineup }}件）</summary>
+      <ul>
+        {{- range $lineup }}
+        <li><a href="{{ .url_internal }}">{{ .name }}</a></li>
+        {{- end }}
+      </ul>
+    </details>
+    {{- end }}
     {{- end }}
 
     {{- if eq $type "deals" }}
@@ -126,6 +149,12 @@
     </p>
     {{- end }}
     {{- end }}
+  {{- end }}
+
+  {{- /* #2687 Slice C: info hub 同士の相互リンク (cluster 形成)。cospa/deals/
+         price には $isInfoHub が false のまま = 出ない。 */ -}}
+  {{- if $isInfoHub }}
+  {{- partial "hub_siblings.html" (dict "type" $type) }}
   {{- end }}
 </div>
 

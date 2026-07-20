@@ -175,21 +175,59 @@ def build_age_hub(records, min_months_index, hub, *, top_n, min_ivs):
     return pool[:top_n]
 
 
-def serialize_hub(items, theme_key: str, generated_at: str) -> dict[str, Any]:
+def build_age_lineup(records, min_months_index, hub, exclude_asins):
+    """年齢hub の全ラインナップ節 (#2687 Slice A) 用に bucket 全 member を返す。
+
+    build_age_hub と異なり **min_ivs ゲートを適用しない** (低スコア長尾も網羅する
+    = crawl discovery が目的)。top-24 curated (``exclude_asins``) を除いた残りを
+    ivs_100 降順 (同点は best_price 昇順) で返す。discontinued フラグ (旧
+    ``is_purchase_unavailable`` 相当) は ArticleRecord に無いため適用しない
+    (対象は live 記事のみなので許容)。
+    """
+    lo, hi = hub["min_months"], hub["max_months"]
+    pool = []
+    for rec in records:
+        if rec.asin in exclude_asins:
+            continue
+        mm = min_months_index.get(rec.asin)
+        if mm is None or not (lo <= mm < hi):
+            continue
+        pool.append(rec)
+    pool.sort(key=lambda r: (-(r.ivs_100 or 0), r.best_price or 10**9))
+    return pool
+
+
+def _lineup_entry(rec, age_min_months: int | None) -> dict[str, Any]:
+    """全ラインナップ節用の最小 payload (カード用の重い項目は持たない)。"""
+    return {
+        "asin": rec.asin,
+        "name": rec.name,
+        "url_internal": f"/products/{rec.asin.lower()}/",
+        "ivs_100": rec.ivs_100,
+        "age_min_months": age_min_months,
+    }
+
+
+def serialize_hub(items, theme_key: str, generated_at: str,
+                   *, lineup: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     payload_items = [
         _record_to_payload_common(rec, idx) for idx, rec in enumerate(items, start=1)
     ]
-    return {
+    payload: dict[str, Any] = {
         "generated_at": generated_at,
         "type": theme_key,
         "count": len(payload_items),
         "items": payload_items,
     }
+    if lineup is not None:
+        payload["lineup"] = lineup
+    return payload
 
 
 def _write_hub(out_hugo: Path, key: str, items, generated_at: str,
-               counts: dict[str, int], label: str) -> None:
-    payload = serialize_hub(items, key, generated_at)
+               counts: dict[str, int], label: str,
+               *, lineup: list[dict[str, Any]] | None = None) -> None:
+    payload = serialize_hub(items, key, generated_at, lineup=lineup)
     (out_hugo / f"{key}.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -198,12 +236,27 @@ def _write_hub(out_hugo: Path, key: str, items, generated_at: str,
     logger.info("%s (%s): %d items", key, label, len(items))
 
 
+def _write_hub_index(out_hugo: Path, entries: list[dict[str, str]]) -> None:
+    """info hub 集合の単一 source of truth (#2687 Slice C)。
+
+    生成した全 info hub (THEMES + AGE_HUBS) の ``[{key, label, url}]`` を
+    平坦な JSON 配列で書く。hugo/layouts/partials/hub_siblings.html が
+    ``site.Data.features.hub_index`` として直接 range する。
+    """
+    (out_hugo / "hub_index.json").write_text(
+        json.dumps(entries, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    logger.info("hub_index: %d hubs", len(entries))
+
+
 def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
         themes: list[str], age_hubs: list[str] | None = None) -> dict[str, int]:
     records = _dedupe_by_asin(load_articles(articles_dir))
     generated_at = _now_iso()
     out_hugo.mkdir(parents=True, exist_ok=True)
     counts: dict[str, int] = {}
+    hub_index: list[dict[str, str]] = []
     if themes:
         text_index = build_theme_text_index(articles_dir)
         for key in themes:
@@ -211,13 +264,23 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
             items = build_hub(records, text_index, theme,
                               top_n=top_n, min_ivs=min_ivs)
             _write_hub(out_hugo, key, items, generated_at, counts, theme["label"])
+            hub_index.append({"key": key, "label": theme["label"],
+                              "url": f"/{key}-toys/"})
     if age_hubs:
         mm_index = build_min_months_index(articles_dir)
         for key in age_hubs:
             hub = AGE_HUBS[key]
             items = build_age_hub(records, mm_index, hub,
                                   top_n=top_n, min_ivs=min_ivs)
-            _write_hub(out_hugo, key, items, generated_at, counts, hub["label"])
+            lineup_recs = build_age_lineup(
+                records, mm_index, hub, exclude_asins={r.asin for r in items})
+            lineup = [_lineup_entry(r, mm_index.get(r.asin)) for r in lineup_recs]
+            _write_hub(out_hugo, key, items, generated_at, counts, hub["label"],
+                      lineup=lineup)
+            hub_index.append({"key": key, "label": hub["label"],
+                              "url": f"/toys-{key}/"})
+    if themes or age_hubs:
+        _write_hub_index(out_hugo, hub_index)
     return counts
 
 
