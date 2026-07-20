@@ -35,7 +35,10 @@ Issue #3332 N2 消費側 PR1「需要ギャップ検出」レポートスクリ�
   1.5. 日本語 (ひらがな/カタカナ/漢字) を一切含まず ASCII 英数・記号のみの
      クエリ (ASIN/型番のナビゲーショナル検索、例: "b0h1b5qdjk", "75445") を
      母集団から除外する (is_code_like_query)。除外件数は summary に
-     excluded_code_queries として記録する。
+     excluded_code_queries として記録する。同様に theme_key=="english"
+     (english.json シード由来の「〜を英語で？」翻訳/語学クエリ) も
+     コンテンツ機会でないノイズとして除外し、excluded_english_queries
+     として記録する。
   2. 記事コーパス (load_article_index) を Ruri で kind="document" 埋め込み。
   3. 需要クエリを Ruri で kind="query" 埋め込み。
   4. 各クエリについて全記事ベクトルとの最大コサイン類似度 (max_sim) と
@@ -489,8 +492,10 @@ def run(
     embed_query_fn = embed_query_fn or embed_batch_ruri_query
 
     demand_queries_all = build_demand_queries(suggest_dir, gsc_query_path, min_impressions)
-    demand_queries = [q for q in demand_queries_all if not is_code_like_query(q["query"])]
-    excluded_code_queries = len(demand_queries_all) - len(demand_queries)
+    after_code = [q for q in demand_queries_all if not is_code_like_query(q["query"])]
+    excluded_code_queries = len(demand_queries_all) - len(after_code)
+    demand_queries = [q for q in after_code if q.get("theme_key") != "english"]
+    excluded_english_queries = len(after_code) - len(demand_queries)
     total_demand_queries = len(demand_queries)
 
     article_items = C.load_article_index(articles_dir, limit_articles)
@@ -520,6 +525,7 @@ def run(
                 "gap_count": 0,
                 "by_theme": {},
                 "excluded_code_queries": excluded_code_queries,
+                "excluded_english_queries": excluded_english_queries,
             },
             "gaps": [],
         }
@@ -572,6 +578,7 @@ def run(
             "gap_count": len(gaps),
             "by_theme": by_theme,
             "excluded_code_queries": excluded_code_queries,
+            "excluded_english_queries": excluded_english_queries,
         },
         "gaps": gaps,
     }
