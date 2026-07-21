@@ -29,7 +29,8 @@
     "gift_scene": [
       "知育パッド本体とセットでのプレゼント"
     ],
-    "primary_buyer": "20〜40代女性（ママ・親戚・友人）"
+    "primary_buyer": "20〜40代女性（ママ・親戚・友人）",
+    "age_range": "3歳〜"
   },
   "narrative": {
     "lead": "知育パッドの電池があっという間になくなる……そんな悩みを持つご家庭へ。本記事の結論は、Punasi バンダイ用のACアダプター(Bタイプ)は乾電池代の節約に大きく貢献し、自宅での長時間プレイに強くおすすめできる一品です。価格は本記事執筆時点でAmazonが約1100円と最も手頃で、純正品よりも安価に導入できる点が評価されています。電池交換の手間を減らしたい保護者の方には、コストパフォーマンスに優れた選択肢といえます。",
@@ -242,20 +243,20 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-docode",
-        "src-amazon"
+        "src-cloudse"
       ],
       "cross_checked": true,
       "notes": "検証メディアや販売ページの情報から、互換品であるため自己責任での利用となることが確認できる。"
     },
     {
-      "claim": "PSE認証や多重保護設計を備えている",
+      "claim": "過電流や過熱から機器を守る多重保護設計が採用されている",
       "category": "safety",
-      "confidence": "high",
+      "confidence": "medium",
       "supporting_source_ids": [
         "src-amazon"
       ],
       "cross_checked": false,
-      "notes": "公式仕様記載。"
+      "notes": "公式仕様記載。互換品のため安全性は製品仕様に基づく。"
     }
   ],
   "technical_specs": {
@@ -266,7 +267,7 @@
     ]
   },
   "review_signals": {
-    "summary_one_line": "乾電池の消費が激しい知育パッドのコストダウンアイテムとして評価されています。",
+    "summary_one_line": "乾電池の消費が激しい知育パッドにおいて、継続的な電池代と交換の手間を削減できるコストダウンアイテムとして保護者から評価されています。",
     "high_points": [
       {
         "text": "純正品よりも安く購入でき、初期費用が抑えられる",
@@ -279,6 +280,12 @@
         "supporting_source_ids": [
           "src-aupay"
         ]
+      },
+      {
+        "text": "コードが180cmと長く、コンセントから離れても使いやすい",
+        "supporting_source_ids": [
+          "src-amazon"
+        ]
       }
     ],
     "concerns": [
@@ -287,6 +294,12 @@
         "supporting_source_ids": [
           "src-docode"
         ]
+      },
+      {
+        "text": "コンセントがない場所（車内など）では使用できない",
+        "supporting_source_ids": [
+          "src-amazon"
+        ]
       }
     ],
     "use_scenes": [
@@ -294,6 +307,18 @@
         "text": "自宅のリビングテーブルで、コンセントに繋ぎながらじっくり知育アプリに取り組む場面",
         "supporting_source_ids": [
           "src-amazon"
+        ]
+      },
+      {
+        "text": "外出前に知育パッドのバッテリーをフル充電しておく場面",
+        "supporting_source_ids": [
+          "src-amazon"
+        ]
+      },
+      {
+        "text": "兄弟で長時間順番に遊ぶ際の電源確保として利用する場面",
+        "supporting_source_ids": [
+          "src-aupay"
         ]
       }
     ],
