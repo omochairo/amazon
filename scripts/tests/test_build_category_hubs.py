@@ -69,6 +69,17 @@ class MatchesTest(unittest.TestCase):
         self.assertFalse(bch._matches("木製 型はめ レゴ 互換", theme))
         self.assertFalse(bch._matches("木製 型はめ 電子 メロディ", theme))
 
+    def test_shape_include_and_deny(self):
+        # #2687/#2690: 図形・空間 hub。図形語で合格、キャラ/乗り物 DENY で veto。
+        theme = bch.THEMES["shape"]
+        self.assertTrue(bch._matches("マグ・フォーマー 空間認識 図形", theme))
+        self.assertTrue(bch._matches("タングラム 立体パズル", theme))
+        # 妖怪ウォッチ立体パズル等のキャラ立体は編集品質のため除外。
+        self.assertFalse(bch._matches("妖怪ウォッチ 立体パズル", theme))
+        self.assertFalse(bch._matches("レゴ 図形 セット", theme))
+        # shape は min_ivs override を持たない (供給潤沢で既定 3.8 で足りる)。
+        self.assertNotIn("min_ivs", bch.THEMES["shape"])
+
 
 class ThemeMinIvsOverrideTest(unittest.TestCase):
     def test_montessori_override_present(self):
