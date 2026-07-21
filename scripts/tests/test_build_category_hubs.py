@@ -51,6 +51,43 @@ class MatchesTest(unittest.TestCase):
     def test_no_match(self):
         self.assertFalse(bch._matches("ただの積み木", bch.THEMES["english"]))
 
+    def test_all_of_second_path(self):
+        # #3654: montessori は明示語が無くても「木製 AND 教具形態」で合格する。
+        theme = bch.THEMES["montessori"]
+        self.assertTrue(bch._matches("木製 の 型はめ パズル", theme))
+        # 形態だけ / 素材だけでは all_of 不成立。
+        self.assertFalse(bch._matches("プラスチックの型はめ", theme))
+        self.assertFalse(bch._matches("木製の楽器", theme))
+
+    def test_include_beats_missing_all_of(self):
+        # 明示語 (include) 単独で合格 = all_of を満たさなくてもよい。
+        self.assertTrue(bch._matches("モンテッソーリ の 教材", bch.THEMES["montessori"]))
+
+    def test_montessori_deny_veto(self):
+        # 木製 AND 教具形態でも DENY 語 (量産プラ/電子) があれば fail-closed。
+        theme = bch.THEMES["montessori"]
+        self.assertFalse(bch._matches("木製 型はめ レゴ 互換", theme))
+        self.assertFalse(bch._matches("木製 型はめ 電子 メロディ", theme))
+
+
+class ThemeMinIvsOverrideTest(unittest.TestCase):
+    def test_montessori_override_present(self):
+        # #3654: montessori だけ 3.4 に緩和され、他テーマは既定を継承する。
+        self.assertEqual(bch.THEMES["montessori"]["min_ivs"], 3.4)
+        self.assertNotIn("min_ivs", bch.THEMES["english"])
+
+    def test_run_uses_theme_min_ivs(self):
+        # ivs=3.5 の木製教具は既定 3.8 では落ち、montessori override 3.4 で拾われる。
+        records = [_rec("W1", 3.5, 70, 1200)]
+        text = {"W1": "木製 の 紐通し おもちゃ"}
+        theme = bch.THEMES["montessori"]
+        got = bch.build_hub(records, text, theme,
+                            top_n=10, min_ivs=theme.get("min_ivs", 3.8))
+        self.assertEqual([r.asin for r in got], ["W1"])
+        # 既定 3.8 なら同じ record は落ちる (override が効いている証明)。
+        dropped = bch.build_hub(records, text, theme, top_n=10, min_ivs=3.8)
+        self.assertEqual(dropped, [])
+
 
 class BuildHubTest(unittest.TestCase):
     def setUp(self):

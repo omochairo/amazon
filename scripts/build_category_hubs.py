@@ -37,9 +37,30 @@ from build_feature_lists import (  # noqa: E402
 logger = logging.getLogger("build_category_hubs")
 
 
-# テーマ定義。include のいずれかにマッチし exclude のいずれにもマッチしない商品が
-# 候補。マッチは title+name+tags+keywords+features+edu_domains を結合した小文字
-# テキストへの部分文字列照合。keyword は #2690 の spoke 実測を踏まえ精度優先。
+# モンテッソーリ hub 用の signal 群 (#3654)。「モンテッソーリ」tag を持たない木製
+# 教具 (積み木/型はめ/紐通し等) が多数取りこぼされる実態 (実測: 語彙一致 40 件中
+# ivs>=3.8 は 2 件だが、木製 AND モンテ的教具形態の高スコア商品が別に 6 件埋もれる)
+# に対応するため、明示語 (include) に加えて「天然素材 AND 教具形態」の両群一致を
+# 第 2 の合格経路 (all_of) として持つ。過剰マッチ (量産プラ/キャラ/電子玩具) は
+# _MONTESSORI_DENY で fail-closed。
+_MONTESSORI_WOOD = [
+    "木製", "木のおもちゃ", "無垢", "ブナ材", "ぶな材", "beech", "天然木",
+]
+_MONTESSORI_FORM = [
+    "型はめ", "型落とし", "紐通し", "ひもとおし", "ペグ", "スタッキング",
+    "日常生活", "はさみの練習", "ボタンかけ", "分類", "並べ替え",
+    "感覚教育", "実物大", "自己教育", "円柱", "はめ込みパズル",
+]
+_MONTESSORI_DENY = [
+    "lego", "レゴ", "デュプロ", "duplo", "アンパンマン", "フィッシャープライス",
+    "fisher", "ディズニー", "disney", "トミカ", "プラレール", "電子", "光る",
+]
+
+
+# テーマ定義。exclude のいずれにもマッチせず、かつ include のいずれかにマッチする
+# (または all_of の全群にマッチする) 商品が候補。マッチは title+name+tags+keywords
+# +features+edu_domains を結合した小文字テキストへの部分文字列照合。keyword は
+# #2690 の spoke 実測を踏まえ精度優先。min_ivs は省略時 CLI 既定 (3.8) を使う。
 THEMES: dict[str, dict[str, Any]] = {
     "english": {
         "label": "英語",
@@ -64,6 +85,18 @@ THEMES: dict[str, dict[str, Any]] = {
             "足し算", "引き算", "数の概念", "数量感覚", "アバカス",
         ],
         "exclude": [],
+    },
+    "montessori": {
+        "label": "モンテッソーリ",
+        # 明示語 (単独で合格) — merchant が「モンテッソーリ」を自称する商品を拾う。
+        "include": ["モンテッソーリ", "montessori", "モンテ", "教具"],
+        # 第 2 経路: 天然素材群 AND 教具形態群 の両方にマッチ (取りこぼし回収)。
+        "all_of": [_MONTESSORI_WOOD, _MONTESSORI_FORM],
+        "exclude": _MONTESSORI_DENY,
+        # テーマ既定 (3.8) だと適格 2 件で thin hub になるため 3.4 に個別緩和し 10 件
+        # 確保 (#3654 owner 承認)。閾値感度で 3.3 だと 21 件へ低スコアクラスタが流入
+        # するため 3.4 が「勝てるゾーンの品質」を保てる上限。
+        "min_ivs": 3.4,
     },
 }
 
@@ -143,7 +176,14 @@ def build_theme_text_index(articles_dir: Path) -> dict[str, str]:
 def _matches(text: str, theme: dict[str, Any]) -> bool:
     if any(kw in text for kw in theme.get("exclude", [])):
         return False
-    return any(kw in text for kw in theme["include"])
+    if any(kw in text for kw in theme.get("include", [])):
+        return True
+    # all_of: 第 2 の合格経路。指定した全群それぞれで 1 語以上マッチしたら合格
+    # (#3654 モンテッソーリ = 木製 AND 教具形態)。未指定テーマは従来どおり include のみ。
+    all_of = theme.get("all_of")
+    if all_of:
+        return all(any(kw in text for kw in group) for group in all_of)
+    return False
 
 
 def build_hub(records, text_index, theme, *, top_n, min_ivs):
@@ -261,8 +301,10 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
         text_index = build_theme_text_index(articles_dir)
         for key in themes:
             theme = THEMES[key]
+            # テーマ個別 min_ivs があれば優先 (#3654 montessori=3.4)。
+            theme_min_ivs = theme.get("min_ivs", min_ivs)
             items = build_hub(records, text_index, theme,
-                              top_n=top_n, min_ivs=min_ivs)
+                              top_n=top_n, min_ivs=theme_min_ivs)
             _write_hub(out_hugo, key, items, generated_at, counts, theme["label"])
             hub_index.append({"key": key, "label": theme["label"],
                               "url": f"/{key}-toys/"})
