@@ -69,6 +69,14 @@ jobs:
           ref: main
           fetch-depth: 1
 
+      # jules/ プロンプトは private repo (amazon-navi-brain) に分離済み。実行時に overlay checkout。
+      - name: Checkout prompt brain (private) into jules/
+        uses: actions/checkout@v6
+        with:
+          repository: omochairo/amazon-navi-brain
+          token: ${{ secrets.NAVI_BRAIN_PAT }}
+          path: jules
+
       # 2026-06-08 (session 117 / #2008): Jules daily quota 共有ゲート。
       # この daily cron は 1 run=1 session を作る。quota 枯渇 (rolling-24h 100/100) 時に
       # 従来は Create Jules session が HTTP 400 FAILED_PRECONDITION で hard-fail し、
