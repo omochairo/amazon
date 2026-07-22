@@ -1,0 +1,31 @@
+name: Brain Checkout Smoke
+
+# navi-brain split (docs/navi-brain-split.md) の疎通確認用。
+# NAVI_BRAIN_PAT で private repo amazon-navi-brain を jules/ へ overlay checkout できるか
+# 手動確認する。副作用なし (Jules 呼び出し・PR 作成・データ変更なし)。
+# PAT ローテーション後や生成が空プロンプトで失敗したときの切り分けにも再利用する。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Checkout prompt brain (private) into jules/
+        uses: actions/checkout@v6
+        with:
+          repository: omochairo/amazon-navi-brain
+          token: ${{ secrets.NAVI_BRAIN_PAT }}
+          path: jules
+
+      - name: Assert prompts present
+        run: |
+          test -f jules/PROMPT_TEMPLATE.md || { echo "::error::jules/PROMPT_TEMPLATE.md missing — brain checkout failed (PAT/権限を確認)"; exit 1; }
+          echo "brain checkout OK: $(ls jules/*.md | wc -l) prompt files at jules/"
+          ls -1 jules/
