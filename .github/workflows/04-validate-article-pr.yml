@@ -59,6 +59,11 @@ on:
       # 出力先を忘れると、workflow 自身が作る data PR が required check 不発で
       # 永久 BLOCKED になる (PR #3329 で実際に踏んだ)。
       - 'data/analytics/gsc_index_census.json'
+      # K8 Ruri v3 demand-gap detector (scripts/detect_demand_gaps.py) が定期還流
+      # する出力先。script/test だけ登録して出力先を忘れると、K8 が作る data PR が
+      # required check 不発で永久 BLOCKED になる (PR #3676 で実際に踏んだ、
+      # #3329 gsc_index_census.json と同型の [[04-validate-paths-inverse-trap]])。
+      - 'data/analytics/demand_gaps.json'
       - 'scripts/jules_article_engine.py'
       - 'scripts/templates/**'
       - 'hugo/assets/css/**'
