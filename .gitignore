@@ -5,6 +5,11 @@ __pycache__/
 public/
 public_test/
 .hugo_build.lock
+
+# 2026-07-22: jules/ プロンプト(編集IP)は private repo omochairo/amazon-navi-brain に分離。
+# public repo では追跡しない。CI は実行時に overlay checkout、ローカルは brain を jules/ へ
+# clone して運用する。詳細: docs/navi-brain-split.md
+/jules/
 # ルート直下の hugo バイナリ (hugo.tar.gz 展開物) を ignore する意図のパターンだが、
 # `/hugo` は hugo/ ディレクトリも飲み込み、hugo/ 配下の「新規」ファイルが git add
 # 不能になる (#2995 案1 で hugo/data/semantic_related.json が data PR に乗れなかった)。

@@ -27,6 +27,7 @@
        "https://gitlab.com/api/v4/projects/84175362/pipeline_schedules/$id?active=true"; done
    ```
 2. 以後、repoless Jules パイプライン (scripts/invoke_jules_repoless.py + scripts/build_jules_prompt.py) と fetch 系 (scripts/ci_fetch_data.sh + scripts/create_data_mr.py) が GitLab MR + MWPS で無人運転する (2026-07-07 に E2E 実証済)
+   - **⚠️ 2026-07-22 以降の前提**: `jules/` プロンプトは private repo `omochairo/amazon-navi-brain` に分離済み (public repo では .gitignore・非追跡)。GitLab/NAS 側で生成を再開する場合、`build_jules_prompt.py` が `jules/PROMPT_TEMPLATE.md` を要求するため、**NAS runner に amazon-navi-brain を `jules/` へ取得させる必要がある** (GitLab CI 変数に github read PAT を置き、invoke-jules ジョブの before_script で clone するか、NAS 上に常設 clone を bind mount)。GitHub 側の overlay checkout に相当する処理を GitLab 側にも用意しないと生成が空プロンプトで失敗する。詳細: docs/navi-brain-split.md
 3. ミラー workflow は GitHub 側が止まるので自然停止。手動で止める必要なし
 
 ## 復帰手順 (GitHub が回復したとき)
