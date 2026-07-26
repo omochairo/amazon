@@ -20,6 +20,20 @@ on:
       end_date:
         description: 'backfill終了日 (YYYY-MM-DD, inclusive)'
         required: true
+      lanes:
+        # backfill は日付ごとに fetch を呼ぶため、不要なレーンを走らせると
+        # その分だけ外部 API を無駄に叩く (append 側は seen_dates で skip されるが
+        # fetch 自体は先に実行されてしまう)。WP レーンだけ遡りたい、のような
+        # ケースのために対象を絞れるようにする。
+        description: 'backfill するレーン'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - ga4
+          - gsc
+          - gsc_wp
 
 jobs:
   backfill:
@@ -55,7 +69,20 @@ jobs:
           GSC_OAUTH_CLIENT_SECRET: ${{ secrets.GSC_OAUTH_CLIENT_SECRET }}
           GSC_OAUTH_REFRESH_TOKEN: ${{ secrets.GSC_OAUTH_REFRESH_TOKEN }}
           GSC_SITE_URL: ${{ secrets.GSC_SITE_URL }}
+          # WP (omcha.jp) レーン。未設定ならスクリプト側で skip される
+          GSC_SITE_URL_WP: ${{ secrets.GSC_SITE_URL_WP }}
+          LANES: ${{ github.event.inputs.lanes }}
         run: |
+          set -e
+          # backfill_analytics_history はレーンごとに「credentials / site-url が
+          # 揃っているか」で実行要否を決めるので、対象外レーンは環境変数を落とす。
+          case "$LANES" in
+            ga4)    unset GSC_SITE_URL GSC_SITE_URL_WP ;;
+            gsc)    unset GA4_SA_JSON GA4_PROPERTY_ID GSC_SITE_URL_WP ;;
+            gsc_wp) unset GA4_SA_JSON GA4_PROPERTY_ID GSC_SITE_URL ;;
+            all|"") : ;;
+            *) echo "::error::unknown lanes value: $LANES"; exit 1 ;;
+          esac
           python -m scripts.backfill_analytics_history \
             --start-date "${{ github.event.inputs.start_date }}" \
             --end-date "${{ github.event.inputs.end_date }}"
