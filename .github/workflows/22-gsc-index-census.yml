@@ -171,7 +171,11 @@ jobs:
           git config user.name "omochairo-fetch-bot[bot]"
           git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
-          git add data/analytics/gsc_index_census.json data/analytics/history/gsc_index_census.jsonl
+          git add data/analytics/gsc_index_census.json
+          # history 側は append がスキップされた場合 (census に fetched_at が無い等) に
+          # 未作成でありうる。その 1 ファイルの欠如で census 本体のコミットまで
+          # 落とさないよう、こちらだけ寛容に add する
+          git add data/analytics/history/gsc_index_census.jsonl 2>/dev/null || true
           git commit -m "data(analytics): GSC index census (run ${{ github.run_id }})"
           git push -u origin "$BRANCH"
 
