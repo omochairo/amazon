@@ -137,15 +137,23 @@ jobs:
               print(f"| {k} | {v} |")
           PY
 
+      # B-3 (#3988): census は毎週上書きされる単一スナップショットのため、
+      # #3331/#3333 の効果判定に使える時系列を history/ に別途蓄積する
+      - name: Append census to history
+        if: steps.census.outputs.available == 'true'
+        run: |
+          python -m scripts.append_census_history
+
       - name: Create census PR + auto-merge
         if: steps.census.outputs.available == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -e
-          git add data/analytics/gsc_index_census.json || true
 
-          if git diff --cached --quiet; then
+          # checkout -b の前に変更有無を判定する (staged 状態で checkout -b すると
+          # 一部ファイルが失われることがあるため、branch 作成前は git add しない)
+          if ! git status --porcelain -- data/analytics/gsc_index_census.json data/analytics/history/gsc_index_census.jsonl | grep -q .; then
             echo "No census changes to commit; skipping PR."
             exit 0
           fi
@@ -163,6 +171,11 @@ jobs:
           git config user.name "omochairo-fetch-bot[bot]"
           git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
+          git add data/analytics/gsc_index_census.json
+          # history 側は append がスキップされた場合 (census に fetched_at が無い等) に
+          # 未作成でありうる。その 1 ファイルの欠如で census 本体のコミットまで
+          # 落とさないよう、こちらだけ寛容に add する
+          git add data/analytics/history/gsc_index_census.jsonl 2>/dev/null || true
           git commit -m "data(analytics): GSC index census (run ${{ github.run_id }})"
           git push -u origin "$BRANCH"
 
