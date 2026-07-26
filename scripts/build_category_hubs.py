@@ -31,6 +31,7 @@ from build_feature_lists import (  # noqa: E402
     _now_iso,
     _record_to_payload_common,
     load_articles,
+    overlay_current_prices,
     parse_min_months,
 )
 
@@ -314,8 +315,14 @@ def _write_hub_index(out_hugo: Path, entries: list[dict[str, str]]) -> None:
 
 
 def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
-        themes: list[str], age_hubs: list[str] | None = None) -> dict[str, int]:
+        themes: list[str], age_hubs: list[str] | None = None,
+        per_asin_dir: Path | None = None) -> dict[str, int]:
     records = _dedupe_by_asin(load_articles(articles_dir))
+    # #4007: hub カードも記事ページ・/deals/ /cospa/ と同じ日次観測の価格を出す。
+    # per_asin_dir=None のときは price_overlay の既定 (data/raw/per_asin) を使う。
+    stats = overlay_current_prices(records, per_asin_dir)
+    logger.info("price_overlay: %d price_watch / %d per_asin / %d no observation",
+                stats["price_watch"], stats["per_asin"], stats["none"])
     generated_at = _now_iso()
     out_hugo.mkdir(parents=True, exist_ok=True)
     counts: dict[str, int] = {}
@@ -360,13 +367,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--age-hubs", nargs="*", default=list(AGE_HUBS.keys()),
                         choices=list(AGE_HUBS.keys()),
                         help="生成する年齢 hub キー (既定=全件)。")
+    # #4007: 価格を日次観測で上書きするための per_asin スナップショット置き場。
+    parser.add_argument("--per-asin-dir", default=Path("data/raw/per_asin"), type=Path)
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args(argv)
     logging.basicConfig(level=args.log_level,
                         format="%(levelname)s %(name)s: %(message)s")
     counts = run(args.articles_dir, args.out_hugo,
                  top_n=args.top_n, min_ivs=args.min_ivs,
-                 themes=args.themes, age_hubs=args.age_hubs)
+                 themes=args.themes, age_hubs=args.age_hubs,
+                 per_asin_dir=args.per_asin_dir)
     print(json.dumps(counts, ensure_ascii=False))
     return 0
 

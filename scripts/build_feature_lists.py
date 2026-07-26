@@ -7,9 +7,17 @@ Reads:
     data/raw/per_asin/<ASIN>/amazon.json      (savings_percentage / fetched_at)
 
 Writes:
-    hugo/data/features/cospa.json             (monthly: IVS x best_price efficiency TOP N)
-    hugo/data/features/deals.json             (weekly: savings_percentage TOP N, stale-guarded)
+    hugo/data/features/cospa.json             (IVS x best_price efficiency TOP N / 価格帯別)
+    hugo/data/features/deals.json             (savings_percentage TOP N, stale-guarded)
     data/features/_build_manifest.json        (pool sizes / drop reasons, ref #677)
+
+更新頻度 (2026-07-26 / #4007 で変更):
+    以前は GitHub 09-feature-lists.yml の cron (cospa=月次 / deals=週次) が
+    hugo/data/features/*.json を commit する唯一の更新経路で、入力データ
+    (per_asin 中央値2日 / price_watch 0.6日) よりページの方が古かった。現在は
+    .gitlab-ci.yml の pages job (配信ビルド) が毎デプロイこのスクリプトを走らせる
+    ビルド時派生であり、commit 済み JSON は step 失敗時の fallback として残す。
+    価格は price_overlay 経由で日次観測 (price_watch) を優先して上書きする。
 
 Pure aggregation only - no external API calls (ref feedback: build_post no in-band I/O).
 """
@@ -33,6 +41,7 @@ from typing import Any, Iterable
 # 再計算されている。/cospa/ /deals/ がここを読まず Jules 生値を出していたため
 # 「list 100 / 詳細 81」の乖離が出ていた (session 58)。同じ algorithm で再計算する。
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import price_overlay  # noqa: E402
 from brand_normalizer import normalize as normalize_brand  # noqa: E402
 from score_calculator import calculate as calculate_score, compute_ivs_axes  # noqa: E402
 
@@ -56,6 +65,11 @@ class ArticleRecord:
     amazon_url: str | None
     savings_percentage: int | None = None
     fetched_at: str | None = None
+    # #4007: プラットフォーム別価格。best_price を Amazon の最新観測で再計算する
+    # ために保持する (記事 JSON の best_price は記事生成時のまま凍結している)。
+    price_amazon: int | None = None
+    price_rakuten: int | None = None
+    price_yahoo: int | None = None
     # 4 軸 0-5 (#589 — feature-item.html がカード上で簡易バーを描く)。
     ivs_axes: dict[str, float] | None = None
     # 対象年齢の最小月数 (#3563 カード情報統一 / cospa・deals・テーマ hub 全ての
@@ -173,6 +187,9 @@ def load_articles(articles_dir: Path) -> list[ArticleRecord]:
                 amazon_url=amazon_block.get("url"),
                 ivs_axes=compute_ivs_axes(sr.breakdown),
                 age_min_months=age_min_months_from_article(raw),
+                price_amazon=_safe_int(amazon_block.get("price")),
+                price_rakuten=_safe_int((prices.get("rakuten") or {}).get("price")),
+                price_yahoo=_safe_int((prices.get("yahoo") or {}).get("price")),
             )
         )
 
@@ -193,11 +210,87 @@ def _safe_int(value: Any) -> int | None:
         return None
 
 
-def attach_amazon_meta(records: list[ArticleRecord], per_asin_dir: Path) -> None:
+_BEST_PLATFORM_LABELS = (
+    ("price_amazon", "Amazon"),
+    ("price_rakuten", "楽天市場"),
+    ("price_yahoo", "Yahoo!ショッピング"),
+)
+
+
+def _recompute_best_price(rec: ArticleRecord) -> None:
+    """全プラットフォーム最安を ``best_price`` / ``best_platform`` に反映する。
+
+    build_post._recompute_best_price と同じラベル・同じ規則 (0/None は候補外)。
+    """
+    candidates = [
+        (getattr(rec, attr), label)
+        for attr, label in _BEST_PLATFORM_LABELS
+        if isinstance(getattr(rec, attr), int) and getattr(rec, attr) > 0
+    ]
+    if not candidates:
+        return
+    best = min(candidates, key=lambda x: x[0])
+    rec.best_price = best[0]
+    rec.best_platform = best[1]
+
+
+def overlay_current_prices(
+    records: list[ArticleRecord],
+    per_asin_dir: Path,
+    *,
+    watch_index: dict[str, price_overlay.PriceObservation] | None = None,
+    now: datetime | None = None,
+) -> dict[str, int]:
+    """#4007: Amazon 価格を日次観測で上書きし ``best_price`` を再計算する。
+
+    記事 JSON の ``product.best_price`` は記事生成時のまま凍結しており、実測で
+    価格帯バケットが変わるものが 98 件 (6.5%) あった。/deals/ /cospa/ と年齢/
+    テーマ hub のカードは記事ページと同じ観測を出す必要があるため、
+    build_post.py と同じ price_overlay (price_watch 日次 → per_asin 週次) を
+    通す。観測が無い ASIN は記事 JSON の値のまま (fail-soft)。
+
+    楽天/Yahoo 側は記事 JSON の値のまま (build_post は matched JSON で毎ビルド
+    上書きするが、こちらは matched を読まない。#4007 の follow-up)。
+
+    戻り値は source 別の適用件数 (観測なしは ``"none"``)。
+    """
+    if watch_index is None:
+        watch_index = price_overlay.load_watch_index(now=now)
+    stats = {"price_watch": 0, "per_asin": 0, "none": 0}
+
+    for rec in records:
+        obs = price_overlay.resolve(
+            rec.asin, watch_index=watch_index, per_asin_root=per_asin_dir, now=now
+        )
+        if obs is None:
+            stats["none"] += 1
+            continue
+        stats[obs.source] += 1
+        if obs.price is not None:
+            rec.price_amazon = obs.price
+            _recompute_best_price(rec)
+        if obs.savings_percentage is not None:
+            rec.savings_percentage = obs.savings_percentage
+        if obs.observed_at:
+            rec.fetched_at = obs.observed_at
+
+    return stats
+
+
+def attach_amazon_meta(
+    records: list[ArticleRecord],
+    per_asin_dir: Path,
+    *,
+    watch_index: dict[str, price_overlay.PriceObservation] | None = None,
+    now: datetime | None = None,
+) -> None:
     """Mutate ``records`` in place, filling ``savings_percentage`` / ``fetched_at``.
 
     Missing per_asin/<ASIN>/amazon.json files are silently skipped - the deals
     builder simply won't include those records.
+
+    #4007: per_asin (週次) を読んだうえで、より新しい観測があれば
+    ``overlay_current_prices`` で価格・割引率・観測時刻を上書きする。
     """
     for rec in records:
         meta_path = per_asin_dir / rec.asin / "amazon.json"
@@ -212,6 +305,12 @@ def attach_amazon_meta(records: list[ArticleRecord], per_asin_dir: Path) -> None
         item = meta.get("item") or {}
         rec.savings_percentage = _safe_int(item.get("savings_percentage"))
         rec.fetched_at = meta.get("fetched_at")
+
+    stats = overlay_current_prices(records, per_asin_dir, watch_index=watch_index, now=now)
+    logger.info(
+        "price_overlay: %d price_watch / %d per_asin / %d no observation",
+        stats["price_watch"], stats["per_asin"], stats["none"],
+    )
 
 
 # ---------------------------------------------------------------------------

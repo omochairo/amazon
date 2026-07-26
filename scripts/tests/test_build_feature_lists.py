@@ -207,6 +207,80 @@ class AttachAmazonMetaTest(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# overlay_current_prices (#4007 価格の日次化)
+# ---------------------------------------------------------------------------
+
+class OverlayCurrentPricesTest(unittest.TestCase):
+    """記事 JSON の凍結価格を日次観測で上書きし best_price を再計算する。"""
+
+    def _records(self, articles_dir: pathlib.Path, payload: dict):
+        _write_article(articles_dir, payload)
+        return bfl.load_articles(articles_dir)
+
+    def test_amazon_price_is_refreshed_and_best_price_recomputed(self):
+        with tempfile.TemporaryDirectory() as td:
+            d = pathlib.Path(td)
+            arts = d / "articles"
+            arts.mkdir()
+            art = _make_article("B00000020", best_price=2518)
+            records = self._records(arts, art)
+            self.assertEqual(records[0].best_price, 2518)
+
+            obs = bfl.price_overlay.PriceObservation(
+                asin="B00000020", price=7927, savings_percentage=26,
+                availability="在庫あり。", observed_at="2026-07-25T21:11:27Z",
+                source="price_watch",
+            )
+            stats = bfl.overlay_current_prices(
+                records, d / "per_asin", watch_index={"B00000020": obs}
+            )
+
+            self.assertEqual(stats["price_watch"], 1)
+            self.assertEqual(records[0].price_amazon, 7927)
+            self.assertEqual(records[0].best_price, 7927)
+            self.assertEqual(records[0].best_platform, "Amazon")
+            self.assertEqual(records[0].savings_percentage, 26)
+            self.assertEqual(records[0].fetched_at, "2026-07-25T21:11:27Z")
+
+    def test_best_platform_flips_when_rakuten_becomes_cheapest(self):
+        """Amazon 値上がりで楽天が最安になったら best_platform も反転する。
+
+        #4007 実測で 109 件 (7.3%) が反転し、うち 83 件は Amazon を誤って最安表示。
+        """
+        with tempfile.TemporaryDirectory() as td:
+            d = pathlib.Path(td)
+            arts = d / "articles"
+            arts.mkdir()
+            art = _make_article("B00000021", best_price=2518)
+            art["product"]["prices"]["rakuten"] = {"price": 3000, "url": "https://r.invalid/"}
+            records = self._records(arts, art)
+            self.assertEqual(records[0].best_platform, "Amazon")
+
+            obs = bfl.price_overlay.PriceObservation(
+                asin="B00000021", price=7927, savings_percentage=None,
+                availability=None, observed_at="2026-07-25T21:11:27Z",
+                source="price_watch",
+            )
+            bfl.overlay_current_prices(records, d / "per_asin",
+                                       watch_index={"B00000021": obs})
+
+            self.assertEqual(records[0].best_price, 3000)
+            self.assertEqual(records[0].best_platform, "楽天市場")
+
+    def test_no_observation_keeps_article_json_values(self):
+        with tempfile.TemporaryDirectory() as td:
+            d = pathlib.Path(td)
+            arts = d / "articles"
+            arts.mkdir()
+            records = self._records(arts, _make_article("B00000022", best_price=2518))
+            stats = bfl.overlay_current_prices(records, d / "per_asin", watch_index={})
+
+            self.assertEqual(stats["none"], 1)
+            self.assertEqual(records[0].best_price, 2518)
+            self.assertEqual(records[0].best_platform, "Amazon")
+
+
+# ---------------------------------------------------------------------------
 # build_cospa
 # ---------------------------------------------------------------------------
 
