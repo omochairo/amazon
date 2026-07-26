@@ -239,6 +239,12 @@ on:
       # auto-merge 永久 pending ([[04-validate-paths-inverse-trap]])。
       - 'scripts/build_discounts.py'
       - 'scripts/tests/test_build_discounts.py'
+      # 2026-07-26 (#4007 価格の日次化): 「現在の Amazon 価格」解決の共有モジュール。
+      # build_post / build_feature_lists / build_category_hubs が全部これを通すので
+      # paths 未登録だと script-only PR で required check `validate` が不発 →
+      # auto-merge 永久 pending ([[04-validate-paths-inverse-trap]])。
+      - 'scripts/price_overlay.py'
+      - 'scripts/tests/test_price_overlay.py'
       # 2026-05-25 (session 47 / Issue #590 PR-3): /cospa/ /deals/ 自動更新 workflow。
       # workflow 本体を触る PR も validate を required check として発火させる。
       - '.github/workflows/09-feature-lists.yml'

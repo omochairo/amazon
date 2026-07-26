@@ -87,7 +87,7 @@
 {% endif %}
 <div class="hero-meta">
 {% if persona_fit and persona_fit.age_range %}<div class="hero-meta-row">💡 対象年齢：<strong>{{ persona_fit.age_range }}</strong></div>{% endif %}
-{% if product.best_price > 0 %}<div class="hero-meta-row">🏷️ 執筆時点の最安値：<strong>￥{{ "{:,}".format(product.best_price) }}</strong>（{{ product.best_platform }}）</div>{% endif %}
+{% if product.best_price > 0 %}<div class="hero-meta-row">🏷️ 最新観測時点の最安値：<strong>￥{{ "{:,}".format(product.best_price) }}</strong>（{{ product.best_platform }}）</div>{% endif %}
 </div>
 </div>
 {% endif %}
@@ -111,7 +111,7 @@
 {% set price_comparison_md -%}
 ## <small>{{ product.name }}の</small>💴 価格を3サイトで比較
 
-執筆時点の価格をAmazon・楽天・Yahoo!ショッピングで横断比較しました。
+当サイトが自動観測した最新価格をAmazon・楽天・Yahoo!ショッピングで横断比較しました。
 
 {% set is_amazon_best = product.prices.amazon.price > 0 and product.prices.amazon.price == product.best_price %}
 {% set is_rakuten_best = product.prices.rakuten.price > 0 and product.prices.rakuten.price == product.best_price %}
@@ -126,9 +126,12 @@
 {% if price_checked_at %}
 <p><small>💹 価格情報: {{ price_checked_at }} 時点</small></p>
 {% endif %}
+{%- if price_body_stale %}
+<p class="price-body-stale-note"><small>⚠️ 本文中に書かれた価格は執筆時点のものです。その後 Amazon 側で価格が大きく変動したため、上の価格カード（最新観測値）と食い違っています。ご購入前に必ず販売ページで最新価格をご確認ください。</small></p>
+{%- endif %}
 
 {% if product.best_price > 0 %}
-<div class="best-deal">💰 <strong>本記事執筆時点での最安値</strong>：{{ product.best_platform }} <strong class="best-deal-price">￥{{ "{:,}".format(product.best_price) }}</strong>（在庫や送料により変動する場合があります）</div>
+<div class="best-deal">💰 <strong>最新観測時点での最安値</strong>：{{ product.best_platform }} <strong class="best-deal-price">￥{{ "{:,}".format(product.best_price) }}</strong>（在庫や送料により変動する場合があります）</div>
 {% endif %}
 
 {% if product.asin %}
@@ -471,4 +474,4 @@
 
 ---
 
-<small>※ 価格・在庫情報は本記事執筆時点のものです。ご購入の際は必ず販売ページで最新情報をご確認ください。本記事のリンクから商品をご購入いただくと、当サイトに少額の収益が入る場合があります（読者の負担はありません）。</small>
+<small>※ 価格・在庫情報は当サイトが自動観測した時点のスナップショットです。ご購入の際は必ず販売ページで最新情報をご確認ください。本記事のリンクから商品をご購入いただくと、当サイトに少額の収益が入る場合があります（読者の負担はありません）。</small>

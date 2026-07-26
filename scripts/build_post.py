@@ -27,6 +27,7 @@ from typing import Any
 import frontmatter
 import jinja2
 
+import price_overlay
 from brand_normalizer import normalize as normalize_brand
 from build_feature_lists import PRICE_BANDS
 from score_calculator import (
@@ -1587,6 +1588,15 @@ def _attach_price_freshness(data: dict[str, Any], per_asin_root: pathlib.Path) -
     asin = product.get("asin") if product else None
     if not asin:
         return
+
+    # #4007: _apply_price_overlay が実際に採用した観測の時刻を優先する。表示日付を
+    # 価格と別ソースにすると「2日前の日付 + 凍結価格」という矛盾表示になるため、
+    # 必ず表示中の価格と同じ観測の時刻を出す。
+    observed = ((product.get("prices") or {}).get("amazon") or {}).get("price_observed_at")
+    if isinstance(observed, str) and len(observed) >= 10:
+        data["price_checked_at"] = observed[:10]
+        return
+
     p = per_asin_root / asin / "amazon.json"
     if not p.exists():
         return
@@ -1824,6 +1834,66 @@ def _backfill_amazon_badges(
             if val:
                 amazon[field] = val
                 break
+
+
+# #4007: 本文 (Jules 生成テキスト) の 99.4% が価格リテラルを含むため、カード価格を
+# 日次化すると乖離が大きいものは本文と目視で矛盾する。この割合を超えたら注記を出す。
+_PRICE_BODY_STALE_PCT = 0.20
+
+
+def _apply_price_overlay(
+    data: dict[str, Any],
+    watch_index: dict[str, price_overlay.PriceObservation],
+    per_asin_root: pathlib.Path,
+) -> str | None:
+    """``product.prices.amazon`` の価格・在庫・割引率を最新観測で上書きする (#4007)。
+
+    記事 JSON の Amazon 価格は記事生成時のまま凍結しており (``_backfill_amazon_badges``
+    は BADGE_FIELDS しか埋めず、しかも既存値が勝つ)、2026-07-26 の実測では比較可能
+    1499 件のうち 45% が現在価格とズレていた。楽天/Yahoo は ``_attach_market_prices``
+    が matched JSON (日次) で毎ビルド上書きしているため、Amazon だけが凍結して
+    「最安」表示が 109 件で反転していた。
+
+    price_watch (日次) → per_asin (週次) の優先順は price_overlay に一本化してある。
+    本関数は ``_attach_market_prices`` (末尾で ``_recompute_best_price`` を呼ぶ) より
+    **前**に呼ぶこと。それで最安バッジ・front matter・JSON-LD の AggregateOffer まで
+    同じ観測で整合する。
+
+    戻り値は採用した観測の source ("price_watch" / "per_asin")。観測が無ければ None
+    (記事 JSON の値をそのまま使う = 従来挙動のまま fail-soft)。
+    """
+    product = data.get("product") if isinstance(data.get("product"), dict) else None
+    if not product:
+        return None
+    asin = product.get("asin")
+    if not asin:
+        return None
+
+    obs = price_overlay.resolve(
+        asin, watch_index=watch_index, per_asin_root=per_asin_root
+    )
+    if obs is None:
+        return None
+
+    prices = product.setdefault("prices", {})
+    amazon = prices.get("amazon")
+    if not isinstance(amazon, dict):
+        amazon = {}
+        prices["amazon"] = amazon
+
+    frozen_price = amazon.get("price")
+    price_overlay.apply_to_amazon_entry(amazon, obs)
+
+    # 本文中の価格リテラル (執筆時点の価格 = 上書き前の値) との乖離判定。
+    try:
+        old = int(frozen_price or 0)
+    except (TypeError, ValueError):
+        old = 0
+    new = obs.price or 0
+    if old > 0 and new > 0 and abs(new - old) / old >= _PRICE_BODY_STALE_PCT:
+        data["price_body_stale"] = True
+
+    return obs.source
 
 
 def _normalize_price_entries(data: dict[str, Any]) -> None:
@@ -2935,6 +3005,12 @@ def main() -> None:
     env.filters["amazon_stock_state"] = amazon_stock_state
     template = env.get_template(template_file.name)
 
+    # #4007: 「現在の Amazon 価格」の日次観測 index。latest.json を 1 回読んで
+    # 全記事で使い回す (無い/古い場合は per_asin 週次レーンへ自動フォールバック)。
+    price_watch_index = price_overlay.load_watch_index()
+    print(f"price_overlay: price_watch index = {len(price_watch_index)} ASIN")
+    price_overlay_stats = {"price_watch": 0, "per_asin": 0, "none": 0, "body_stale": 0}
+
     rendered = 0
     skipped_legacy = 0
     discontinued_count = 0
@@ -2986,6 +3062,15 @@ def main() -> None:
             _merge(data, _load_optional_json(src_path / f"{slug}.enrichment.json"), ENRICHMENT_KEYS)
             _merge(data, _load_optional_json(src_path / f"{slug}.seo.json"), SEO_KEYS)
             _backfill_amazon_badges(data, raw_amazon_index, per_asin_root)
+            # #4007: 凍結した Amazon 価格を日次観測で上書き (_attach_market_prices の
+            # _recompute_best_price より前に置くことで最安バッジまで整合する)。
+            overlay_src = _apply_price_overlay(data, price_watch_index, per_asin_root)
+            if overlay_src:
+                price_overlay_stats[overlay_src] += 1
+            else:
+                price_overlay_stats["none"] += 1
+            if data.get("price_body_stale"):
+                price_overlay_stats["body_stale"] += 1
             _attach_price_freshness(data, per_asin_root)
             _attach_market_prices(data, rakuten_matched_index, yahoo_matched_index)
             amazon_discontinued = _apply_amazon_discontinued(data, per_asin_root)
@@ -3169,6 +3254,9 @@ def main() -> None:
                 "injected": internal_links_injected_total,
                 "dropped": internal_links_dropped_total,
             },
+            # #4007: Amazon 価格をどの観測レーンで上書きしたかの内訳。
+            # none が増えたら日次レーン (price_watch) の停止を疑う。
+            "price_overlay": price_overlay_stats,
         },
         # #677: per-ASIN の fallback breakdown。`gh run view` から個別 ASIN の
         # 状態をドリルダウン確認するために残す。
@@ -3230,6 +3318,12 @@ def main() -> None:
     print(
         f"internal_links: {internal_links_injected_total} injected / "
         f"{internal_links_dropped_total} dropped"
+    )
+    print(
+        f"price_overlay: {price_overlay_stats['price_watch']} price_watch / "
+        f"{price_overlay_stats['per_asin']} per_asin / "
+        f"{price_overlay_stats['none']} no observation "
+        f"({price_overlay_stats['body_stale']} flagged 本文価格乖離)"
     )
 
 

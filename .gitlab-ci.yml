@@ -161,6 +161,15 @@ pages:
     - python scripts/build_price_dashboard.py
     - python scripts/build_discounts.py
     - python scripts/build_age_concerns.py
+    # #4007: /deals/ /cospa/ とテーマ/年齢 hub もビルド時派生にする。従来は
+    # GitHub 側 09-feature-lists.yml の cron (deals=週次 / cospa=月次) が commit した
+    # hugo/data/features/*.json を配信ビルドがそのまま使っており、入力データ
+    # (per_asin 中央値2日 / price_watch 0.6日) より**ページの方が古い**状態だった。
+    # 両方あわせて実測 3.4 秒・外部 API 呼び出しゼロなので毎デプロイ回す。
+    # commit 済み JSON は残してあるので、この 2 step が落ちても直近 commit 版で
+    # fail-soft する (git checkout 時点の features/*.json がそのまま使われる)。
+    - python scripts/build_feature_lists.py --top-n 20
+    - python scripts/build_category_hubs.py --top-n 24
     - cd hugo && hugo --minify --buildFuture --destination ../public && cd ..
     # #2817 Phase 3: 旧 JP タグ/ブランド URL からの 301 リダイレクト。
     # public/sitemap.xml (直前の hugo build 産物) を真実源に redirect ルールを

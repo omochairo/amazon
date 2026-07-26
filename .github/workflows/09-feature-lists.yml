@@ -1,4 +1,4 @@
-name: Feature Lists (cospa monthly / deals weekly)
+name: Feature Lists (fallback commit lane / 通常は配信ビルドが毎回再生成)
 # Issue #590 PR-3: /cospa/ 月次 + /deals/ 週次 の特集ページに自動生成データを反映する
 # 専用 workflow。scripts/build_feature_lists.py で data/articles/*.json と
 # data/raw/per_asin/<ASIN>/amazon.json を集計し、hugo/data/features/{cospa,deals}.json
@@ -16,15 +16,15 @@ name: Feature Lists (cospa monthly / deals weekly)
 #   App token + 通常の git commit + gh pr create で PR を経由させる
 # - APP token は actions/create-github-app-token で発行 (peter-evans/create-pr では
 #   validate が発火しない trap を避ける)
+# 2026-07-26 (#4007): cron を撤去した。/deals/ /cospa/ と hub は
+# .gitlab-ci.yml の pages job (配信ビルド) が build_feature_lists.py /
+# build_category_hubs.py を毎回走らせるビルド時派生になったため、cron で
+# 週次/月次に commit する必要がなくなった (cron の方が遅く、ページが入力
+# データより古くなる原因だった)。
+# この workflow は commit 済み fallback の更新と data/features/_build_manifest.json
+# (pool サイズ・drop 理由の観測用 / #677) の採取のために手動起動で残す。
 on:
   workflow_dispatch:
-  # cron re-registered 2026-07-08 after unsuspension
-  schedule:
-    # 月次 cospa: 毎月 1 日 19:00 UTC = 2 日 04:00 JST
-    - cron: '0 19 1 * *'
-    # 週次 deals: 毎週火曜 19:00 UTC = 水曜 04:00 JST。火曜の楽天ランキング
-    # workflow (07) と日をずらして同時刻 push の衝突を避ける。
-    - cron: '0 19 * * 2'
 
 permissions:
   contents: write
@@ -125,7 +125,7 @@ jobs:
 
           PR_URL=$(gh pr create \
             --title "data: refresh /cospa/ + /deals/ feature lists (run ${{ github.run_id }})" \
-            --body "Automated refresh of \`hugo/data/features/cospa.json\` and \`hugo/data/features/deals.json\` by \`scripts/build_feature_lists.py\`. Triggered by schedule \`${{ github.event.schedule }}\` (workflow run ${{ github.run_id }}). Refs #590." \
+            --body "Automated refresh of \`hugo/data/features/cospa.json\` and \`hugo/data/features/deals.json\` by \`scripts/build_feature_lists.py\` (workflow run ${{ github.run_id }}). 通常は配信ビルド (.gitlab-ci.yml pages job) が毎デプロイ再生成するため、これは commit 済み fallback の更新と _build_manifest.json 採取用の手動レーン。Refs #590 #4007." \
             --base main \
             --head "$BRANCH")
           echo "Created: $PR_URL"
