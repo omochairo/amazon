@@ -57,6 +57,13 @@
       "key": ["date", "key_type", "key_value", "form_factor"],
       "source": "scripts/fetch_crux.py (monthly, 19-cwv-monitor.yml)",
       "notes": "key_type は origin | url。form_factor は PHONE | DESKTOP | TABLET。404 (低トラフィック URL のデータ不足) は行を書かないため、欠損 = データなし"
+    },
+    "gsc_index_census.jsonl": {
+      "description": "URL Inspection API による products/ の週次全数調査 (data/analytics/gsc_index_census.json) を蓄積した history、1 line per date。census 本体は毎週上書きされる単一スナップショットで時系列を持たないため、#3331/#3333 の効果判定・品質ゲートのために別途 append する (#3988 B-3)",
+      "fields": ["date", "sitemap_urls", "inspected", "indexed", "not_indexed", "errors", "indexed_rate", "submitted_and_indexed", "discovered_not_indexed", "unknown_to_google", "crawled_not_indexed", "not_found_404", "excluded_by_noindex", "other", "circuit_breaker_tripped", "unmapped"],
+      "key": ["date"],
+      "source": "scripts/append_census_history.py (data/analytics/gsc_index_census.json, 22-gsc-index-census.yml)",
+      "notes": "date は census の fetched_at の UTC 日付部分。coverageState は API のローカライズ表示文字列 (日本語・ロケール依存) なので、そのまま列名にせず scripts/append_census_history.py の COVERAGE_STATE_SLUGS で ASCII slug に固定マッピングしてから列化している。未知の raw 文字列は other に集計しつつ unmapped ({raw: count}) に原文保存し無言で捨てない (Google の言い回し変更に将来 retroactive 対応するため)。circuit_breaker_tripped=true の行は quota エラーで打ち切られた部分集計 (#3372) なので、trend 比較からは除外すること"
     }
   },
   "idempotency": {
