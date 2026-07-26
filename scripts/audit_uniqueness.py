@@ -39,10 +39,19 @@ cohort 比較:
   して再利用する (計算ロジックの重複を避ける)。既定は backend="ruri"
   (#2995 案1 の K8 LLM ワーカー経路、canonical)。
 
+しきい値 (2026-07-26 に固定値 → 分布ベースへ変更):
+  flagged 判定は既定で **コーパス分布の百分位** (--threshold-mode percentile,
+  既定 p95) を実効しきい値にする。旧来の固定値 (max_sim>0.95 / centroid_sim>0.90)
+  は 2026-W30 実測でコーパス中央値 (0.9416 / 0.9241) に対して較正が合っておらず、
+  centroid 側は中央値より下にあって過半数が常時該当していた。詳細は
+  DEFAULT_THRESHOLD_MODE のコメントを参照。
+
 出力:
-  data/analytics/uniqueness_audit.json に cohort_stats (集計値のみ) + flagged
-  (閾値超えを max_sim 降順で --top-flagged 件に切ったもの) を書き出す。全記事の
-  生データは出力しない (ファイル肥大・コメント肥大を避けるため)。
+  data/analytics/uniqueness_audit.json に thresholds (実効値 + absolute_reference の
+  超過件数) + cohort_stats (pre_v7 / post_v7 / all の p25・p50・p75・p90) +
+  flagged_total (切り詰め前件数) + flagged (max_sim 降順で --top-flagged 件に
+  切ったもの) を書き出す。全記事の生データは出力しない (ファイル肥大・コメント肥大を
+  避けるため)。
 
 呼び出し元:
   omochairo/amazon-home-ops リポジトリの週次 workflow
@@ -86,10 +95,38 @@ logger = logging.getLogger("audit_uniqueness")
 
 DEFAULT_OUT = "data/analytics/uniqueness_audit.json"
 DEFAULT_BACKEND = "ruri"
+
+# flagged 判定のしきい値モード。
+#
+# 既定を "percentile" にしている理由 (2026-07-26 の週次分析で判明した較正ずれ):
+# 2026-W30 実測でコーパス (1,602 記事) の max_sim 中央値は 0.9416、centroid_sim
+# 中央値は 0.9241 だった。旧固定しきい値 (max_sim>0.95 / centroid_sim>0.90) は
+#   - max_sim 側: 中央値 0.9416 のすぐ上に張り付いており、コーパス全体が近似重複に
+#     寄っているという事実そのものを検出できない
+#   - centroid_sim 側: 中央値 0.9241 より **下** にあるため過半数が常に該当し、
+#     ゲートとして機能していない
+# という状態だった。固定値だと「コーパスが改善したか」も「今どれが最悪か」も
+# 読み取れないため、以下のように 2 つの関心を分離する:
+#   - flagged (リライト候補の作業リスト) = percentile ベースの相対しきい値。
+#     コーパスが良くなればしきい値の絶対値自体が下がり、それが進捗シグナルになる。
+#   - cohort_stats の百分位 + absolute_reference の超過件数 = 絶対基準の進捗追跡。
+# Issue #3203 Phase 3 / #3300
+DEFAULT_THRESHOLD_MODE = "percentile"
+DEFAULT_MAX_SIM_PERCENTILE = 95.0
+DEFAULT_CENTROID_PERCENTILE = 95.0
+
+# 旧固定しきい値。--threshold-mode absolute の既定値であり、percentile モードでも
+# 「絶対基準では何件超えているか」を absolute_reference として併記するために残す
+# (相対しきい値だけだと改善しても flagged 件数が一定になり進捗が見えないため)。
 DEFAULT_MAX_SIM_THRESHOLD = 0.95
 DEFAULT_CENTROID_THRESHOLD = 0.90
+
 DEFAULT_TOP_FLAGGED = 30
 DEFAULT_TOP_NEIGHBORS_FOR_MEAN = 5
+
+# cohort_stats / corpus_stats で出す百分位。p25/p75 は分布の広がり (個性化が
+# 進むと裾が下に伸びる) を見るために p50/p90 に加えて記録する。
+STAT_PERCENTILES = (25, 50, 75, 90)
 
 MAX_UNIQUENESS_TEXT_LEN = 3000
 _SLUG_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}")
@@ -305,27 +342,109 @@ def _percentile(values: list[float], pct: float) -> float | None:
     return round(d0 + d1, 4)
 
 
+def _stats_for_subset(subset: list[dict[str, Any]]) -> dict[str, Any]:
+    """1 グループ分の count + max_sim/centroid_sim の百分位を組み立てる。
+
+    空グループでも同じキー集合を None 埋めで返す (下流のレンダラが
+    キー存在を前提にできるようにするため)。
+    """
+    out: dict[str, Any] = {"count": len(subset)}
+    max_sims = [e["max_sim"] for e in subset]
+    centroid_sims = [e["centroid_sim"] for e in subset]
+    for pct in STAT_PERCENTILES:
+        out[f"max_sim_p{pct}"] = _percentile(max_sims, pct) if subset else None
+        out[f"centroid_sim_p{pct}"] = _percentile(centroid_sims, pct) if subset else None
+    return out
+
+
 def compute_cohort_stats(entries: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    """pre_v7 / post_v7 cohort ごとに max_sim / centroid_sim の p50・p90 を集計する。"""
+    """cohort ごと + コーパス全体の max_sim / centroid_sim 百分位を集計する。
+
+    ``all`` はコーパス全体 (pre_v7 + post_v7)。cohort 別だけだと「サイト全体が
+    どれだけ近似重複に寄っているか」という単一の追跡可能な数値が無く、
+    週次で進捗を追えないため追加している (#3300)。
+    """
     stats: dict[str, dict[str, Any]] = {}
     for cohort in ("pre_v7", "post_v7"):
-        subset = [e for e in entries if e["cohort"] == cohort]
-        if not subset:
-            stats[cohort] = {
-                "count": 0, "max_sim_p50": None, "max_sim_p90": None,
-                "centroid_sim_p50": None, "centroid_sim_p90": None,
-            }
-            continue
-        max_sims = [e["max_sim"] for e in subset]
-        centroid_sims = [e["centroid_sim"] for e in subset]
-        stats[cohort] = {
-            "count": len(subset),
-            "max_sim_p50": _percentile(max_sims, 50),
-            "max_sim_p90": _percentile(max_sims, 90),
-            "centroid_sim_p50": _percentile(centroid_sims, 50),
-            "centroid_sim_p90": _percentile(centroid_sims, 90),
-        }
+        stats[cohort] = _stats_for_subset([e for e in entries if e["cohort"] == cohort])
+    stats["all"] = _stats_for_subset(list(entries))
     return stats
+
+
+def resolve_thresholds(
+    entries: list[dict[str, Any]],
+    *,
+    mode: str = DEFAULT_THRESHOLD_MODE,
+    max_sim_percentile: float = DEFAULT_MAX_SIM_PERCENTILE,
+    centroid_percentile: float = DEFAULT_CENTROID_PERCENTILE,
+    max_sim_absolute: float = DEFAULT_MAX_SIM_THRESHOLD,
+    centroid_absolute: float = DEFAULT_CENTROID_THRESHOLD,
+) -> dict[str, Any]:
+    """flagged 判定に使う実効しきい値を決め、メタ情報込みの dict で返す。
+
+    mode="percentile" では今回のコーパス分布の百分位を実効しきい値にする
+    (相対評価)。mode="absolute" では固定値をそのまま使う。
+
+    どちらのモードでも ``absolute_reference`` に固定基準での超過件数を入れる。
+    percentile モードは定義上ほぼ一定件数が flagged されるため、絶対基準での
+    超過件数を併記しないと改善したかどうかが判定できない。
+
+    ``max_sim`` / ``centroid_sim`` キーは実効しきい値 (float) であり、旧スキーマと
+    同じ意味を保つ (下流の comment_uniqueness_audit がそのまま読める)。
+    """
+    if mode not in ("absolute", "percentile"):
+        raise ValueError(f"unknown threshold mode: {mode!r} (expected 'absolute' or 'percentile')")
+
+    max_sims = [e["max_sim"] for e in entries]
+    centroid_sims = [e["centroid_sim"] for e in entries]
+
+    if mode == "percentile" and entries:
+        eff_max = _percentile(max_sims, max_sim_percentile)
+        eff_centroid = _percentile(centroid_sims, centroid_percentile)
+    else:
+        # entries が空なら百分位を取れないので固定値にフォールバックする
+        eff_max = max_sim_absolute
+        eff_centroid = centroid_absolute
+
+    resolved: dict[str, Any] = {
+        "mode": mode,
+        "max_sim": eff_max,
+        "centroid_sim": eff_centroid,
+        "absolute_reference": {
+            "max_sim": max_sim_absolute,
+            "centroid_sim": centroid_absolute,
+            "max_sim_exceeded": sum(1 for v in max_sims if v > max_sim_absolute),
+            "centroid_sim_exceeded": sum(1 for v in centroid_sims if v > centroid_absolute),
+        },
+    }
+    if mode == "percentile":
+        resolved["max_sim_percentile"] = max_sim_percentile
+        resolved["centroid_sim_percentile"] = centroid_percentile
+    return resolved
+
+
+def flag_entries(
+    entries: list[dict[str, Any]],
+    max_sim_threshold: float,
+    centroid_threshold: float,
+) -> list[dict[str, Any]]:
+    """閾値超えのエントリ **全件** を max_sim 降順 (同点は asin 昇順) で返す。
+
+    切り詰めはしない。出力の切り詰め前件数 (flagged_total) を記録するために
+    select_flagged から分離してある — 旧実装は上限 30 件で切った結果しか
+    残さなかったため、「何件が閾値を超えているか」が復元できなかった。
+    """
+    flagged: list[dict[str, Any]] = []
+    for e in entries:
+        reasons = []
+        if e["max_sim"] > max_sim_threshold:
+            reasons.append(f"max_sim>{max_sim_threshold}")
+        if e["centroid_sim"] > centroid_threshold:
+            reasons.append(f"centroid_sim>{centroid_threshold}")
+        if reasons:
+            flagged.append({**e, "reasons": reasons})
+    flagged.sort(key=lambda e: (-e["max_sim"], e["asin"]))
+    return flagged
 
 
 def select_flagged(
@@ -338,16 +457,7 @@ def select_flagged(
 
     週次コメントの肥大・GitHub API 負荷を避けるための上限 (バースト回避)。
     """
-    flagged: list[dict[str, Any]] = []
-    for e in entries:
-        reasons = []
-        if e["max_sim"] > max_sim_threshold:
-            reasons.append(f"max_sim>{max_sim_threshold}")
-        if e["centroid_sim"] > centroid_threshold:
-            reasons.append(f"centroid_sim>{centroid_threshold}")
-        if reasons:
-            flagged.append({**e, "reasons": reasons})
-    flagged.sort(key=lambda e: (-e["max_sim"], e["asin"]))
+    flagged = flag_entries(entries, max_sim_threshold, centroid_threshold)
     return flagged[:top_flagged] if top_flagged and top_flagged > 0 else flagged
 
 
@@ -365,6 +475,9 @@ def run(
     model: str | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
     limit: int = 0,
+    threshold_mode: str = DEFAULT_THRESHOLD_MODE,
+    max_sim_percentile: float = DEFAULT_MAX_SIM_PERCENTILE,
+    centroid_percentile: float = DEFAULT_CENTROID_PERCENTILE,
     max_sim_threshold: float = DEFAULT_MAX_SIM_THRESHOLD,
     centroid_threshold: float = DEFAULT_CENTROID_THRESHOLD,
     top_flagged: int = DEFAULT_TOP_FLAGGED,
@@ -425,22 +538,49 @@ def run(
         })
 
     cohort_stats = compute_cohort_stats(entries)
-    flagged = select_flagged(entries, max_sim_threshold, centroid_threshold, top_flagged)
+    thresholds = resolve_thresholds(
+        entries,
+        mode=threshold_mode,
+        max_sim_percentile=max_sim_percentile,
+        centroid_percentile=centroid_percentile,
+        max_sim_absolute=max_sim_threshold,
+        centroid_absolute=centroid_threshold,
+    )
+    all_flagged = flag_entries(entries, thresholds["max_sim"], thresholds["centroid_sim"])
+    flagged = all_flagged[:top_flagged] if top_flagged and top_flagged > 0 else all_flagged
 
     payload: dict[str, Any] = {
         "generated_at": _now_iso(),
         "model": model,
         "source_week": _iso_week_label(datetime.now(timezone.utc)),
         "corpus_size": len(entries),
-        "thresholds": {"max_sim": max_sim_threshold, "centroid_sim": centroid_threshold},
+        "thresholds": thresholds,
+        # 切り詰め前の該当件数。flagged は表示用に top_flagged で切られるため、
+        # 「実際に何件が閾値を超えたか」はこちらを見る。
+        "flagged_total": len(all_flagged),
+        "flagged_truncated": len(all_flagged) > len(flagged),
         "cohort_stats": cohort_stats,
         "flagged": flagged,
     }
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    logger.info("wrote %s: corpus=%d flagged=%d", out_path, len(entries), len(flagged))
-    return {"articles": len(entries), "written": True, "flagged": len(flagged), "payload": payload}
+    logger.info(
+        "wrote %s: corpus=%d mode=%s thresholds(max_sim=%s, centroid_sim=%s) "
+        "flagged_total=%d (shown=%d) abs_exceeded(max_sim=%d, centroid_sim=%d)",
+        out_path, len(entries), thresholds["mode"],
+        thresholds["max_sim"], thresholds["centroid_sim"],
+        len(all_flagged), len(flagged),
+        thresholds["absolute_reference"]["max_sim_exceeded"],
+        thresholds["absolute_reference"]["centroid_sim_exceeded"],
+    )
+    return {
+        "articles": len(entries),
+        "written": True,
+        "flagged": len(flagged),
+        "flagged_total": len(all_flagged),
+        "payload": payload,
+    }
 
 
 def main() -> int:
@@ -451,8 +591,20 @@ def main() -> int:
     ap.add_argument("--out", default=DEFAULT_OUT, help="出力先 JSON パス")
     ap.add_argument("--limit", type=int, default=0, help="処理する記事数の上限 (0=全件、スモークテスト用)")
     ap.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE, help="embed API へのバッチサイズ")
-    ap.add_argument("--max-sim-threshold", type=float, default=DEFAULT_MAX_SIM_THRESHOLD, help="flagged 判定の max_sim 閾値")
-    ap.add_argument("--centroid-threshold", type=float, default=DEFAULT_CENTROID_THRESHOLD, help="flagged 判定の centroid_sim 閾値")
+    ap.add_argument(
+        "--threshold-mode",
+        choices=("percentile", "absolute"),
+        default=DEFAULT_THRESHOLD_MODE,
+        help="flagged 判定のしきい値モード: percentile (既定, コーパス分布の百分位) / absolute (固定値)",
+    )
+    ap.add_argument("--max-sim-percentile", type=float, default=DEFAULT_MAX_SIM_PERCENTILE,
+                    help="percentile モードでの max_sim しきい値の百分位")
+    ap.add_argument("--centroid-percentile", type=float, default=DEFAULT_CENTROID_PERCENTILE,
+                    help="percentile モードでの centroid_sim しきい値の百分位")
+    ap.add_argument("--max-sim-threshold", type=float, default=DEFAULT_MAX_SIM_THRESHOLD,
+                    help="absolute モードの max_sim 閾値 / percentile モードでは absolute_reference の基準値")
+    ap.add_argument("--centroid-threshold", type=float, default=DEFAULT_CENTROID_THRESHOLD,
+                    help="absolute モードの centroid_sim 閾値 / percentile モードでは absolute_reference の基準値")
     ap.add_argument("--top-flagged", type=int, default=DEFAULT_TOP_FLAGGED, help="flagged に残す最大件数 (max_sim 降順)")
     ap.add_argument(
         "--backend",
@@ -479,6 +631,9 @@ def main() -> int:
             model=args.model,
             batch_size=args.batch_size,
             limit=args.limit,
+            threshold_mode=args.threshold_mode,
+            max_sim_percentile=args.max_sim_percentile,
+            centroid_percentile=args.centroid_percentile,
             max_sim_threshold=args.max_sim_threshold,
             centroid_threshold=args.centroid_threshold,
             top_flagged=args.top_flagged,

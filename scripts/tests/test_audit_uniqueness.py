@@ -14,6 +14,8 @@ from scripts.audit_uniqueness import (
     cohort_for_slug,
     compute_centroid_similarities,
     compute_cohort_stats,
+    flag_entries,
+    resolve_thresholds,
     compute_uniqueness_metrics,
     load_article_records,
     run,
@@ -213,6 +215,96 @@ class CohortStatsAndFlaggedTest(unittest.TestCase):
         entries = [{"asin": "A", "cohort": "post_v7", "max_sim": 0.1, "centroid_sim": 0.95}]
         flagged = select_flagged(entries, max_sim_threshold=0.95, centroid_threshold=0.90, top_flagged=30)
         self.assertEqual(flagged[0]["reasons"], ["centroid_sim>0.9"])
+
+    def test_cohort_stats_includes_all_cohort_and_quartiles(self):
+        entries = [
+            {"asin": "A", "cohort": "pre_v7", "max_sim": 0.9, "centroid_sim": 0.8},
+            {"asin": "B", "cohort": "post_v7", "max_sim": 0.8, "centroid_sim": 0.7},
+        ]
+        stats = compute_cohort_stats(entries)
+        self.assertEqual(stats["all"]["count"], 2)
+        for key in ("max_sim_p25", "max_sim_p75", "centroid_sim_p25", "centroid_sim_p75"):
+            self.assertIn(key, stats["all"])
+        self.assertEqual(stats["all"]["max_sim_p50"], 0.85)
+
+    def test_flag_entries_returns_all_without_truncation(self):
+        entries = [
+            {"asin": f"A{i}", "cohort": "post_v7", "max_sim": 0.96, "centroid_sim": 0.5}
+            for i in range(50)
+        ]
+        self.assertEqual(len(flag_entries(entries, 0.95, 0.90)), 50)
+        self.assertEqual(len(select_flagged(entries, 0.95, 0.90, top_flagged=30)), 30)
+
+
+# --------------------------------------------------------------------------
+# resolve_thresholds (分布ベースしきい値, 2026-07-26)
+# --------------------------------------------------------------------------
+
+class ResolveThresholdsTest(unittest.TestCase):
+    def _entries(self):
+        # max_sim = 0.90..0.99 の 10 件、centroid_sim = 0.80..0.89
+        return [
+            {"asin": f"A{i}", "cohort": "post_v7",
+             "max_sim": round(0.90 + i * 0.01, 4),
+             "centroid_sim": round(0.80 + i * 0.01, 4)}
+            for i in range(10)
+        ]
+
+    def test_percentile_mode_uses_corpus_distribution(self):
+        t = resolve_thresholds(self._entries(), mode="percentile",
+                               max_sim_percentile=90, centroid_percentile=90)
+        self.assertEqual(t["mode"], "percentile")
+        # p90 of 0.90..0.99 (linear interpolation) = 0.981
+        self.assertAlmostEqual(t["max_sim"], 0.981, places=3)
+        self.assertAlmostEqual(t["centroid_sim"], 0.881, places=3)
+        self.assertEqual(t["max_sim_percentile"], 90)
+
+    def test_absolute_mode_keeps_fixed_values(self):
+        t = resolve_thresholds(self._entries(), mode="absolute",
+                               max_sim_absolute=0.95, centroid_absolute=0.90)
+        self.assertEqual(t["mode"], "absolute")
+        self.assertEqual(t["max_sim"], 0.95)
+        self.assertEqual(t["centroid_sim"], 0.90)
+        self.assertNotIn("max_sim_percentile", t)
+
+    def test_absolute_reference_counts_present_in_percentile_mode(self):
+        """相対しきい値でも、絶対基準の超過件数は進捗追跡用に必ず記録される。"""
+        t = resolve_thresholds(self._entries(), mode="percentile",
+                               max_sim_absolute=0.95, centroid_absolute=0.85)
+        ref = t["absolute_reference"]
+        self.assertEqual(ref["max_sim"], 0.95)
+        # 0.96, 0.97, 0.98, 0.99 の 4 件
+        self.assertEqual(ref["max_sim_exceeded"], 4)
+        # 0.86..0.89 の 4 件
+        self.assertEqual(ref["centroid_sim_exceeded"], 4)
+
+    def test_empty_corpus_falls_back_to_absolute(self):
+        t = resolve_thresholds([], mode="percentile",
+                               max_sim_absolute=0.95, centroid_absolute=0.90)
+        self.assertEqual(t["max_sim"], 0.95)
+        self.assertEqual(t["centroid_sim"], 0.90)
+        self.assertEqual(t["absolute_reference"]["max_sim_exceeded"], 0)
+
+    def test_unknown_mode_raises(self):
+        with self.assertRaises(ValueError):
+            resolve_thresholds(self._entries(), mode="nope")
+
+    def test_percentile_mode_flags_a_bounded_slice_where_absolute_flags_everything(self):
+        """旧固定値が過半数を flag してしまう分布でも、percentile なら上位のみに絞られる。"""
+        entries = [
+            {"asin": f"A{i}", "cohort": "post_v7",
+             "max_sim": round(0.93 + (i % 5) * 0.005, 4),
+             "centroid_sim": round(0.92 + (i % 5) * 0.002, 4)}
+            for i in range(100)
+        ]
+        abs_t = resolve_thresholds(entries, mode="absolute",
+                                   max_sim_absolute=0.95, centroid_absolute=0.90)
+        pct_t = resolve_thresholds(entries, mode="percentile",
+                                   max_sim_percentile=95, centroid_percentile=95)
+        n_abs = len(flag_entries(entries, abs_t["max_sim"], abs_t["centroid_sim"]))
+        n_pct = len(flag_entries(entries, pct_t["max_sim"], pct_t["centroid_sim"]))
+        self.assertEqual(n_abs, 100)  # centroid_sim>0.90 に全件該当
+        self.assertLess(n_pct, 30)
 
 
 # --------------------------------------------------------------------------

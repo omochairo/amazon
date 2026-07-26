@@ -21,6 +21,24 @@
       "key": ["date"],
       "source": "scripts/fetch_gsc.py --days 1"
     },
+    "gsc_wp_by_query.jsonl": {
+      "description": "WP (omcha.jp) GSC Search Analytics by_query, 1 line per (date, query). Same schema as gsc_by_query.jsonl but a separate property lane.",
+      "fields": ["date", "query", "clicks", "impressions", "ctr", "position"],
+      "key": ["date", "query"],
+      "source": "scripts/fetch_gsc.py --days 1 --site-url $GSC_SITE_URL_WP"
+    },
+    "gsc_wp_by_page.jsonl": {
+      "description": "WP (omcha.jp) GSC Search Analytics by_page, 1 line per (date, page)",
+      "fields": ["date", "page", "clicks", "impressions", "ctr", "position"],
+      "key": ["date", "page"],
+      "source": "scripts/fetch_gsc.py --days 1 --site-url $GSC_SITE_URL_WP"
+    },
+    "gsc_wp_totals.jsonl": {
+      "description": "WP (omcha.jp) GSC site totals, 1 line per date. Added 2026-07-26: GSC previously covered navi.omcha.jp only, so the property holding ~97% of traffic had no impressions/position data and traffic drops could not be attributed to ranking vs demand.",
+      "fields": ["date", "clicks_sum", "impressions_sum", "queries_count", "pages_count"],
+      "key": ["date"],
+      "source": "scripts/fetch_gsc.py --days 1 --site-url $GSC_SITE_URL_WP"
+    },
     "ga4_pages.jsonl": {
       "description": "GA4 by hostName x pagePath, 1 line per (date, hostName, pagePath)",
       "fields": ["date", "hostName", "pagePath", "screenPageViews", "engagedSessions", "averageSessionDuration", "bounceRate"],
@@ -43,8 +61,8 @@
   },
   "idempotency": {
     "sidecar": "seen_dates.json",
-    "structure": "{ gsc: { 'YYYY-MM-DD': true, ... }, ga4: { ... } }",
-    "note": "append_analytics_history.py marks (source, date) here. Re-running with the same date is a no-op."
+    "structure": "{ gsc: { 'YYYY-MM-DD': true, ... }, gsc_wp: { ... }, ga4: { ... } }",
+    "note": "append_analytics_history.py marks (source, date) here. Re-running with the same date is a no-op. The gsc (navi) and gsc_wp (omcha.jp) lanes are marked independently."
   },
   "retention": {
     "soft_limit_months": 18,

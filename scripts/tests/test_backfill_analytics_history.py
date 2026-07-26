@@ -13,6 +13,7 @@ from scripts.append_analytics_history import (
     GA4_PAGES_FILE,
     GA4_TOTALS_FILE,
     GSC_TOTALS_FILE,
+    GSC_WP_TOTALS_FILE,
 )
 
 
@@ -25,7 +26,7 @@ def _read_jsonl(path: pathlib.Path) -> list[dict]:
 def _args(**overrides) -> argparse.Namespace:
     base = dict(
         property_id="123", sa_json="{}", top_n=100,
-        site_url="https://navi.omcha.jp/", client_id="cid",
+        site_url="https://navi.omcha.jp/", site_url_wp=None, client_id="cid",
         client_secret="csecret", refresh_token="rtoken",
         sleep_seconds=0,
     )
@@ -109,6 +110,35 @@ def test_run_continues_after_one_day_failure(tmp_path, monkeypatch):
 
     ga4_totals = _read_jsonl(tmp_path / GA4_TOTALS_FILE)
     assert {r["date"] for r in ga4_totals} == {"2026-06-25"}  # 24日だけ欠けて25日は成功
+
+
+def test_run_backfills_wp_lane_into_separate_files(tmp_path, monkeypatch):
+    """--site-url-wp を渡すと WP レーンが gsc_wp_*.jsonl に別途 backfill される。"""
+    seen_site_urls = []
+
+    def recording_gsc(site_url, *a, **kw):
+        seen_site_urls.append(site_url)
+        return _fake_gsc(site_url, *a, **kw)
+
+    monkeypatch.setattr(backfill, "fetch_ga4", _fake_ga4)
+    monkeypatch.setattr(backfill, "fetch_gsc", recording_gsc)
+
+    backfill.run(date(2026, 6, 24), date(2026, 6, 24), tmp_path,
+                 _args(site_url_wp="https://omcha.jp/"))
+
+    assert seen_site_urls == ["https://navi.omcha.jp/", "https://omcha.jp/"]
+    assert {r["date"] for r in _read_jsonl(tmp_path / GSC_TOTALS_FILE)} == {"2026-06-24"}
+    assert {r["date"] for r in _read_jsonl(tmp_path / GSC_WP_TOTALS_FILE)} == {"2026-06-24"}
+
+
+def test_run_skips_wp_lane_when_site_url_wp_absent(tmp_path, monkeypatch):
+    monkeypatch.setattr(backfill, "fetch_ga4", _fake_ga4)
+    monkeypatch.setattr(backfill, "fetch_gsc", _fake_gsc)
+
+    backfill.run(date(2026, 6, 24), date(2026, 6, 24), tmp_path, _args())
+
+    assert (tmp_path / GSC_TOTALS_FILE).exists()
+    assert not (tmp_path / GSC_WP_TOTALS_FILE).exists()
 
 
 def test_main_rejects_start_after_end(monkeypatch, capsys):
