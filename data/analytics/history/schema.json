@@ -17,9 +17,10 @@
     },
     "gsc_totals.jsonl": {
       "description": "GSC site totals, 1 line per date",
-      "fields": ["date", "clicks_sum", "impressions_sum", "queries_count", "pages_count"],
+      "fields": ["date", "clicks_sum", "impressions_sum", "queries_count", "pages_count", "clicks_sitewide", "impressions_sitewide", "ctr_sitewide", "position_sitewide", "truncated_pages", "truncated_queries"],
       "key": ["date"],
-      "source": "scripts/fetch_gsc.py --days 1"
+      "source": "scripts/fetch_gsc.py --days 1",
+      "notes": "clicks_sum/impressions_sum are sums over the top-N pages only (TOP_PAGE_DEFAULT, see scripts/fetch_gsc.py) and may be truncated — check truncated_pages. *_sitewide are the true site-wide aggregates from a dimensionless Search Analytics query and are the authoritative totals; they are absent/None for rows written before 2026-07-26 (pre-#3988 B-1 schema)."
     },
     "gsc_wp_by_query.jsonl": {
       "description": "WP (omcha.jp) GSC Search Analytics by_query, 1 line per (date, query). Same schema as gsc_by_query.jsonl but a separate property lane.",
@@ -35,9 +36,10 @@
     },
     "gsc_wp_totals.jsonl": {
       "description": "WP (omcha.jp) GSC site totals, 1 line per date. Added 2026-07-26: GSC previously covered navi.omcha.jp only, so the property holding ~97% of traffic had no impressions/position data and traffic drops could not be attributed to ranking vs demand.",
-      "fields": ["date", "clicks_sum", "impressions_sum", "queries_count", "pages_count"],
+      "fields": ["date", "clicks_sum", "impressions_sum", "queries_count", "pages_count", "clicks_sitewide", "impressions_sitewide", "ctr_sitewide", "position_sitewide", "truncated_pages", "truncated_queries"],
       "key": ["date"],
-      "source": "scripts/fetch_gsc.py --days 1 --site-url $GSC_SITE_URL_WP"
+      "source": "scripts/fetch_gsc.py --days 1 --site-url $GSC_SITE_URL_WP",
+      "notes": "clicks_sum/impressions_sum are sums over the top-N pages only (TOP_PAGE_DEFAULT, see scripts/fetch_gsc.py) and may be truncated — check truncated_pages. This lane's first real run (2026-07-23) hit the cap (queries_count=100, pages_count=100), which is exactly why *_sitewide was added (#3988 B-1): *_sitewide are the true site-wide aggregates from a dimensionless Search Analytics query and are the authoritative totals for this WP lane. They are absent/None for rows written before 2026-07-26; the 2026-07-23 row was reset (removed) rather than left inconsistent so the backfill produces one consistent series."
     },
     "ga4_pages.jsonl": {
       "description": "GA4 by hostName x pagePath, 1 line per (date, hostName, pagePath)",

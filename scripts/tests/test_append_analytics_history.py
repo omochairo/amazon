@@ -107,6 +107,12 @@ def test_process_gsc_writes_three_files(tmp_path, gsc_fixture):
         "impressions_sum": 150,
         "queries_count": 2,
         "pages_count": 1,
+        "clicks_sitewide": None,
+        "impressions_sitewide": None,
+        "ctr_sitewide": None,
+        "position_sitewide": None,
+        "truncated_pages": False,
+        "truncated_queries": False,
     }]
 
 
@@ -177,6 +183,63 @@ def test_save_and_load_seen_dates_roundtrip(tmp_path):
 
 def test_load_seen_dates_missing_returns_empty(tmp_path):
     assert load_seen_dates(tmp_path / "nope.json") == {}
+
+
+def test_process_gsc_carries_sitewide_fields_navi(tmp_path, gsc_fixture):
+    """#3988 B-1: totals.*_sitewide / truncated_* が totals_row にそのまま伝播する (navi レーン)。"""
+    gsc_fixture["totals"].update({
+        "clicks_sitewide": 42,
+        "impressions_sitewide": 999,
+        "ctr_sitewide": 0.042,
+        "position_sitewide": 7.5,
+        "truncated_pages": True,
+        "truncated_queries": False,
+    })
+    seen = {}
+    process_gsc(gsc_fixture, tmp_path, seen)
+    totals = _read_jsonl(tmp_path / GSC_TOTALS_FILE)
+    assert totals[0]["clicks_sitewide"] == 42
+    assert totals[0]["impressions_sitewide"] == 999
+    assert totals[0]["ctr_sitewide"] == 0.042
+    assert totals[0]["position_sitewide"] == 7.5
+    assert totals[0]["truncated_pages"] is True
+    assert totals[0]["truncated_queries"] is False
+
+
+def test_process_gsc_carries_sitewide_fields_wp(tmp_path, gsc_fixture):
+    """同上、WP レーン。"""
+    gsc_fixture["totals"].update({
+        "clicks_sitewide": 100,
+        "impressions_sitewide": 2000,
+        "ctr_sitewide": 0.05,
+        "position_sitewide": 3.2,
+        "truncated_pages": True,
+        "truncated_queries": True,
+    })
+    seen = {}
+    process_gsc(gsc_fixture, tmp_path, seen, GSC_LANE_WP)
+    totals = _read_jsonl(tmp_path / GSC_WP_TOTALS_FILE)
+    assert totals[0]["clicks_sitewide"] == 100
+    assert totals[0]["impressions_sitewide"] == 2000
+    assert totals[0]["ctr_sitewide"] == 0.05
+    assert totals[0]["position_sitewide"] == 3.2
+    assert totals[0]["truncated_pages"] is True
+    assert totals[0]["truncated_queries"] is True
+
+
+def test_process_gsc_missing_sitewide_keys_default_none_and_false(tmp_path, gsc_fixture):
+    """旧スキーマ (sitewide キー無し) の入力でもクラッシュせず None / False にデフォルトする。"""
+    # gsc_fixture の totals には元々 *_sitewide / truncated_* キーが無い
+    assert "clicks_sitewide" not in gsc_fixture["totals"]
+    seen = {}
+    process_gsc(gsc_fixture, tmp_path, seen)
+    totals = _read_jsonl(tmp_path / GSC_TOTALS_FILE)
+    assert totals[0]["clicks_sitewide"] is None
+    assert totals[0]["impressions_sitewide"] is None
+    assert totals[0]["ctr_sitewide"] is None
+    assert totals[0]["position_sitewide"] is None
+    assert totals[0]["truncated_pages"] is False
+    assert totals[0]["truncated_queries"] is False
 
 
 def test_process_gsc_handles_missing_optional_fields(tmp_path):
