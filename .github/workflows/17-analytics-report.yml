@@ -430,3 +430,17 @@ jobs:
             --title "$TITLE" \
             --label "analytics,observation" \
             --body-file /tmp/report.md
+
+      # C-1 (#3988) / 対象 #3333: WP omcha.jp → navi.omcha.jp への文脈リンク追加を
+      # 実施してよいかのゲート判定。この workflow は日曜 00:00 UTC に走るが、
+      # 判定に使う data/analytics/history/gsc_index_census.jsonl は
+      # 22-gsc-index-census.yml (日曜 22:00 UTC) が積む。つまり本 step は常に
+      # "前週分" の census を読むことになる (最大 1 週間のラグ)。週次トレンドゲート
+      # としてはこのラグは許容範囲 — 直近の 1 行が古くても、trend window
+      # (既定直近3行) は依然として週次の推移を表す。
+      # 読み取り専用の観察 step。新規 Issue/コメントは作らず、GITHUB_STEP_SUMMARY
+      # に判定結果を追記するのみ (GitHub API バースト禁止規律)。
+      - name: WP → navi link gate check (C-1, #3988 / 対象 #3333)
+        continue-on-error: true
+        run: |
+          python scripts/check_wp_navi_link_gate.py >> "$GITHUB_STEP_SUMMARY"
