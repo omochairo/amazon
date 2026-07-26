@@ -5,16 +5,25 @@ analytics history を恒久蓄積する read-mostly スクリプト。
 
 入力:
 - `data/analytics/ga4_weekly.json` (fetch_ga4.py --days 1 出力を想定)
-- `data/analytics/gsc_weekly.json` (fetch_gsc.py --days 1 出力を想定)
+- `data/analytics/gsc_weekly.json` (fetch_gsc.py --days 1 出力を想定 / navi プロパティ)
+- `data/analytics/gsc_weekly_wp.json` (--gsc-wp 指定時のみ / WP omcha.jp プロパティ)
 
 出力 (data/analytics/history/):
 - gsc_by_query.jsonl   {date, query, clicks, impressions, ctr, position}
 - gsc_by_page.jsonl    {date, page, clicks, impressions, ctr, position}
 - gsc_totals.jsonl     {date, clicks_sum, impressions_sum, queries_count, pages_count}
+- gsc_wp_by_query.jsonl / gsc_wp_by_page.jsonl / gsc_wp_totals.jsonl
+                       上記と同スキーマの WP (omcha.jp) レーン
 - ga4_pages.jsonl      {date, hostName, pagePath, screenPageViews, engagedSessions,
                         averageSessionDuration, bounceRate}
 - ga4_totals.jsonl     {date, screenPageViews_sum, engagedSessions_sum, rows_by_page}
-- seen_dates.json      {gsc: {YYYY-MM-DD: true, ...}, ga4: {...}}  (idempotency sidecar)
+- seen_dates.json      {gsc: {...}, gsc_wp: {...}, ga4: {...}}  (idempotency sidecar)
+
+GSC の 2 レーン構成 (2026-07-26 追加):
+  従来 GSC は navi.omcha.jp のみを計測しており、トラフィックの ~97% を占める
+  WP (omcha.jp) の検索データがパイプラインに存在しなかった。そのため
+  「順位が落ちたのか検索需要が減ったのか」を切り分ける手段が無い状態だった。
+  既存 navi 時系列の連続性を壊さないため、同じ jsonl に混ぜず別レーンとして追加する。
 
 設計判断:
 - JSONL append-only。git diff 軽量、pandas / jq / awk で直接解析可能
@@ -43,6 +52,7 @@ logger = logging.getLogger("append_analytics_history")
 
 DEFAULT_GA4 = "data/analytics/ga4_weekly.json"
 DEFAULT_GSC = "data/analytics/gsc_weekly.json"
+DEFAULT_GSC_WP = "data/analytics/gsc_weekly_wp.json"
 DEFAULT_HISTORY_DIR = "data/analytics/history"
 SEEN_DATES_FILENAME = "seen_dates.json"
 
@@ -52,6 +62,32 @@ GSC_BY_PAGE_FILE = "gsc_by_page.jsonl"
 GSC_TOTALS_FILE = "gsc_totals.jsonl"
 GA4_PAGES_FILE = "ga4_pages.jsonl"
 GA4_TOTALS_FILE = "ga4_totals.jsonl"
+
+# WP (omcha.jp) 用の GSC レーン。navi 側と **別ファイル・別 seen キー** に分ける。
+# 同じ jsonl に混ぜると既存の navi 時系列 (2026-06 以降の連続データ) の意味が
+# 変わってしまい、#3300 等の週次比較が壊れるため。
+GSC_WP_BY_QUERY_FILE = "gsc_wp_by_query.jsonl"
+GSC_WP_BY_PAGE_FILE = "gsc_wp_by_page.jsonl"
+GSC_WP_TOTALS_FILE = "gsc_wp_totals.jsonl"
+
+
+class GscLane:
+    """GSC 1 プロパティ分の出力先 (seen キー + JSONL ファイル名) をまとめたもの。"""
+
+    __slots__ = ("seen_key", "by_query_file", "by_page_file", "totals_file", "label")
+
+    def __init__(self, seen_key: str, by_query_file: str, by_page_file: str,
+                 totals_file: str, label: str):
+        self.seen_key = seen_key
+        self.by_query_file = by_query_file
+        self.by_page_file = by_page_file
+        self.totals_file = totals_file
+        self.label = label
+
+
+GSC_LANE_NAVI = GscLane("gsc", GSC_BY_QUERY_FILE, GSC_BY_PAGE_FILE, GSC_TOTALS_FILE, "gsc")
+GSC_LANE_WP = GscLane("gsc_wp", GSC_WP_BY_QUERY_FILE, GSC_WP_BY_PAGE_FILE,
+                      GSC_WP_TOTALS_FILE, "gsc(wp)")
 
 
 def load_seen_dates(seen_path: pathlib.Path) -> dict[str, dict[str, bool]]:
@@ -85,14 +121,15 @@ def _date_from_range(data: dict) -> str | None:
 
 
 def process_gsc(gsc: dict, history_dir: pathlib.Path,
-                seen: dict[str, dict[str, bool]]) -> int:
+                seen: dict[str, dict[str, bool]],
+                lane: GscLane = GSC_LANE_NAVI) -> int:
     target_date = _date_from_range(gsc)
     if not target_date:
-        logger.warning("gsc input has no range.end — skipping")
+        logger.warning("%s input has no range.end — skipping", lane.label)
         return 0
-    seen_gsc = seen.setdefault("gsc", {})
+    seen_gsc = seen.setdefault(lane.seen_key, {})
     if seen_gsc.get(target_date):
-        logger.info("gsc date %s already in history — skip", target_date)
+        logger.info("%s date %s already in history — skip", lane.label, target_date)
         return 0
 
     by_query_rows = [
@@ -126,14 +163,14 @@ def process_gsc(gsc: dict, history_dir: pathlib.Path,
         "pages_count": totals.get("pages", 0),
     }
 
-    n1 = append_jsonl(history_dir / GSC_BY_QUERY_FILE, by_query_rows)
-    n2 = append_jsonl(history_dir / GSC_BY_PAGE_FILE, by_page_rows)
-    n3 = append_jsonl(history_dir / GSC_TOTALS_FILE, [totals_row])
+    n1 = append_jsonl(history_dir / lane.by_query_file, by_query_rows)
+    n2 = append_jsonl(history_dir / lane.by_page_file, by_page_rows)
+    n3 = append_jsonl(history_dir / lane.totals_file, [totals_row])
     total = n1 + n2 + n3
 
     seen_gsc[target_date] = True
-    logger.info("gsc %s: appended %d rows (by_query=%d, by_page=%d, totals=%d)",
-                target_date, total, n1, n2, n3)
+    logger.info("%s %s: appended %d rows (by_query=%d, by_page=%d, totals=%d)",
+                lane.label, target_date, total, n1, n2, n3)
     return total
 
 
@@ -183,7 +220,10 @@ def main() -> int:
     p.add_argument("--ga4", default=DEFAULT_GA4,
                    help="GA4 fetch 出力 JSON path (空文字または存在しない場合 skip)")
     p.add_argument("--gsc", default=DEFAULT_GSC,
-                   help="GSC fetch 出力 JSON path (空文字または存在しない場合 skip)")
+                   help="GSC fetch 出力 JSON path / navi レーン (空文字または存在しない場合 skip)")
+    p.add_argument("--gsc-wp", default="",
+                   help="GSC fetch 出力 JSON path / WP (omcha.jp) レーン。"
+                        "gsc_wp_*.jsonl に append する (空文字または存在しない場合 skip)")
     p.add_argument("--history-dir", default=DEFAULT_HISTORY_DIR)
     args = p.parse_args()
 
@@ -200,12 +240,13 @@ def main() -> int:
     elif args.ga4:
         logger.info("ga4 input not found: %s — skip", ga4_path)
 
-    gsc_path = pathlib.Path(args.gsc) if args.gsc else None
-    if gsc_path and gsc_path.exists():
-        gsc = json.loads(gsc_path.read_text(encoding="utf-8"))
-        total_appended += process_gsc(gsc, history_dir, seen)
-    elif args.gsc:
-        logger.info("gsc input not found: %s — skip", gsc_path)
+    for arg_value, lane in ((args.gsc, GSC_LANE_NAVI), (args.gsc_wp, GSC_LANE_WP)):
+        gsc_path = pathlib.Path(arg_value) if arg_value else None
+        if gsc_path and gsc_path.exists():
+            gsc = json.loads(gsc_path.read_text(encoding="utf-8"))
+            total_appended += process_gsc(gsc, history_dir, seen, lane)
+        elif arg_value:
+            logger.info("%s input not found: %s — skip", lane.label, gsc_path)
 
     save_seen_dates(seen_path, seen)
     logger.info("done. total rows appended: %d", total_appended)

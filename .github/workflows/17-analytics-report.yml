@@ -20,6 +20,10 @@ name: Analytics Weekly Report (GA4 + GSC)
 #   - GSC_OAUTH_CLIENT_SECRET    同 Client Secret
 #   - GSC_OAUTH_REFRESH_TOKEN    OAuth Playground 経由で取得した refresh token
 #   - GSC_SITE_URL               例: https://navi.omcha.jp/ (URL-prefix) or sc-domain:omcha.jp
+#   - GSC_SITE_URL_WP            WP 本体 omcha.jp の property。例: https://omcha.jp/
+#                                未設定なら WP 節を skip して従来どおり navi のみで報告する。
+#                                (2026-07-26 追加: GA4 上 ~97% のトラフィックを持つ WP の
+#                                 検索データが無く、順位落ち/需要減の切り分けができなかったため)
 
 on:
   # cron re-registered 2026-07-08 after unsuspension
@@ -109,6 +113,37 @@ jobs:
           fi
           echo "available=true" >> "$GITHUB_OUTPUT"
 
+      # WP (omcha.jp) は GA4 上でトラフィックの ~97% を占めるが、長らく GSC 側の
+      # 計測対象が navi のみだったため impressions / position が取れず、
+      # アクセス減が「順位落ち」か「検索需要減」かを切り分けられなかった。
+      # navi レーンとは独立の optional secret + 別出力ファイルで並走させる。
+      - name: Fetch GSC data for WP omcha.jp (optional)
+        id: gsc_wp
+        env:
+          GSC_OAUTH_CLIENT_ID: ${{ secrets.GSC_OAUTH_CLIENT_ID }}
+          GSC_OAUTH_CLIENT_SECRET: ${{ secrets.GSC_OAUTH_CLIENT_SECRET }}
+          GSC_OAUTH_REFRESH_TOKEN: ${{ secrets.GSC_OAUTH_REFRESH_TOKEN }}
+          GSC_SITE_URL_WP: ${{ secrets.GSC_SITE_URL_WP }}
+          INPUT_DAYS: ${{ github.event.inputs.days }}
+        run: |
+          set +e
+          DAYS="${INPUT_DAYS:-7}"
+          if [ -z "$GSC_OAUTH_REFRESH_TOKEN" ] || [ -z "$GSC_SITE_URL_WP" ]; then
+            echo "::notice::GSC_SITE_URL_WP not configured — skipping WP GSC lane"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          python scripts/fetch_gsc.py --days "$DAYS" \
+            --site-url "$GSC_SITE_URL_WP" \
+            --out data/analytics/gsc_weekly_wp.json
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            echo "::warning::WP GSC fetch failed (rc=$rc) — continuing without the WP section"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
       - name: Build markdown summary
         id: summary
         run: |
@@ -118,7 +153,15 @@ jobs:
             echo "" >> /tmp/report.md
             echo "---" >> /tmp/report.md
             echo "" >> /tmp/report.md
-            python scripts/format_gsc_report.py --input data/analytics/gsc_weekly.json >> /tmp/report.md
+            python scripts/format_gsc_report.py --input data/analytics/gsc_weekly.json \
+              --label "navi.omcha.jp" >> /tmp/report.md
+          fi
+          if [ "${{ steps.gsc_wp.outputs.available }}" = "true" ]; then
+            echo "" >> /tmp/report.md
+            echo "---" >> /tmp/report.md
+            echo "" >> /tmp/report.md
+            python scripts/format_gsc_report.py --input data/analytics/gsc_weekly_wp.json \
+              --label "WP omcha.jp" >> /tmp/report.md
           fi
           START=$(python -c "import json; print(json.load(open('data/analytics/ga4_weekly.json'))['range']['start'])")
           END=$(python -c "import json; print(json.load(open('data/analytics/ga4_weekly.json'))['range']['end'])")

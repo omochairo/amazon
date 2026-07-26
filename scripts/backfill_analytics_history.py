@@ -10,8 +10,15 @@
 1日単位で個別に fetch_ga4 / fetch_gsc を呼び出し、append_analytics_history の
 process_ga4 / process_gsc (idempotent, seen_dates.json 管理) にそのまま乗せる。
 
-GA4 と GSC は互いに独立して backfill 可能 (どちらかの credentials が無ければそちらは
-skip)。個別日の fetch が例外を投げても他の日には影響させず、ログを残して続行する。
+GA4 / GSC(navi) / GSC(WP omcha.jp) の 3 レーンは互いに独立して backfill 可能
+(該当の credentials / site-url が無ければそのレーンだけ skip)。個別日の fetch が例外を
+投げても他の日・他のレーンには影響させず、ログを残して続行する。
+
+WP レーンの用途 (2026-07-26 追加):
+  GSC を navi のみで計測していた期間は、トラフィックの ~97% を占める omcha.jp の
+  impressions / position が一切残っていない。GSC Search Analytics API は約16ヶ月
+  遡れるので、GSC_SITE_URL_WP を設定したあと --site-url-wp でまとめて過去分を取得すれば、
+  過去のアクセス変動を「順位落ち / 需要減」に事後的に切り分けられる。
 """
 from __future__ import annotations
 
@@ -25,6 +32,8 @@ from datetime import date, timedelta
 
 from scripts.append_analytics_history import (
     DEFAULT_HISTORY_DIR,
+    GSC_LANE_NAVI,
+    GSC_LANE_WP,
     SEEN_DATES_FILENAME,
     load_seen_dates,
     process_ga4,
@@ -50,12 +59,16 @@ def run(start: date, end: date, history_dir: pathlib.Path, args: argparse.Namesp
     seen_path = history_dir / SEEN_DATES_FILENAME
     seen = load_seen_dates(seen_path)
 
+    have_gsc_auth = bool(args.client_id and args.client_secret and args.refresh_token)
     do_ga4 = bool(args.property_id and args.sa_json)
-    do_gsc = bool(args.site_url and args.client_id and args.client_secret and args.refresh_token)
+    do_gsc = bool(args.site_url and have_gsc_auth)
+    do_gsc_wp = bool(args.site_url_wp and have_gsc_auth)
     if not do_ga4:
         logger.warning("GA4 credentials missing — GA4 backfill will be skipped")
     if not do_gsc:
-        logger.warning("GSC credentials missing — GSC backfill will be skipped")
+        logger.warning("GSC credentials missing — GSC (navi) backfill will be skipped")
+    if not do_gsc_wp:
+        logger.info("--site-url-wp not given — WP (omcha.jp) GSC backfill will be skipped")
 
     dates = list(_date_range(start, end))
     total = 0
@@ -71,9 +84,16 @@ def run(start: date, end: date, history_dir: pathlib.Path, args: argparse.Namesp
             try:
                 gsc = fetch_gsc(args.site_url, args.client_id, args.client_secret,
                                 args.refresh_token, 1, 0, end_date=d_iso)
-                total += process_gsc(gsc, history_dir, seen)
+                total += process_gsc(gsc, history_dir, seen, GSC_LANE_NAVI)
             except Exception:
                 logger.exception("gsc backfill failed for %s — skipping this date", d_iso)
+        if do_gsc_wp:
+            try:
+                gsc_wp = fetch_gsc(args.site_url_wp, args.client_id, args.client_secret,
+                                   args.refresh_token, 1, 0, end_date=d_iso)
+                total += process_gsc(gsc_wp, history_dir, seen, GSC_LANE_WP)
+            except Exception:
+                logger.exception("gsc(wp) backfill failed for %s — skipping this date", d_iso)
         # 途中で中断されても直前までの日付が失われないよう都度保存
         save_seen_dates(seen_path, seen)
         if args.sleep_seconds and i < len(dates) - 1:
@@ -94,7 +114,12 @@ def main() -> int:
     p.add_argument("--sa-json", default=os.environ.get("GA4_SA_JSON"))
     p.add_argument("--top-n", type=int, default=100)
 
-    p.add_argument("--site-url", default=os.environ.get("GSC_SITE_URL"))
+    p.add_argument("--site-url", default=os.environ.get("GSC_SITE_URL"),
+                   help="GSC property / navi レーン (gsc_*.jsonl)")
+    p.add_argument("--site-url-wp", default=os.environ.get("GSC_SITE_URL_WP"),
+                   help="GSC property / WP omcha.jp レーン (gsc_wp_*.jsonl)。"
+                        "未指定なら WP レーンのみ skip。GSC API は約16ヶ月遡れるため、"
+                        "secret 設定後にここから過去分をまとめて取得できる")
     p.add_argument("--client-id", default=os.environ.get("GSC_OAUTH_CLIENT_ID"))
     p.add_argument("--client-secret", default=os.environ.get("GSC_OAUTH_CLIENT_SECRET"))
     p.add_argument("--refresh-token", default=os.environ.get("GSC_OAUTH_REFRESH_TOKEN"))
@@ -107,7 +132,8 @@ def main() -> int:
         return 2
 
     if not (args.property_id and args.sa_json) and not (
-        args.site_url and args.client_id and args.client_secret and args.refresh_token
+        (args.site_url or args.site_url_wp)
+        and args.client_id and args.client_secret and args.refresh_token
     ):
         logger.error("Neither GA4 nor GSC credentials provided — nothing to backfill")
         return 2

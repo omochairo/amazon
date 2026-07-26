@@ -134,16 +134,69 @@ def _fmt_pct(v: float | None) -> str:
     return f"{v * 100:.1f}%" if isinstance(v, (int, float)) else "n/a"
 
 
+def _fmt_num(v) -> str:
+    """百分位の表示用。95.0 → "95"、95.5 → "95.5"。"""
+    if not isinstance(v, (int, float)):
+        return "?"
+    return str(int(v)) if float(v).is_integer() else f"{v:g}"
+
+
 def render_cohort_rows(cohort_stats: dict[str, Any]) -> str:
     rows = []
-    for cohort, label in (("pre_v7", "pre_v7 (施行前)"), ("post_v7", "post_v7 (施行後)")):
-        s = cohort_stats.get(cohort) or {}
+    for cohort, label in (
+        ("pre_v7", "pre_v7 (施行前)"),
+        ("post_v7", "post_v7 (施行後)"),
+        ("all", "**all (コーパス全体)**"),
+    ):
+        s = cohort_stats.get(cohort)
+        if s is None:
+            # pre_v7 / post_v7 は欠けていても 0 行として出す (既存の契約)。
+            # all は旧スキーマの JSON には存在しないので、その場合だけ行を省く。
+            if cohort == "all":
+                continue
+            s = {}
         rows.append(
             f"| {label} | {s.get('count', 0)} | {_fmt_pct(s.get('max_sim_p50'))} | "
             f"{_fmt_pct(s.get('max_sim_p90'))} | {_fmt_pct(s.get('centroid_sim_p50'))} | "
             f"{_fmt_pct(s.get('centroid_sim_p90'))} |"
         )
     return "\n".join(rows)
+
+
+def render_threshold_line(payload: dict[str, Any]) -> str:
+    """しきい値の説明行。percentile モードでは実効値と絶対基準の超過件数を併記する。"""
+    thresholds = payload.get("thresholds") or {}
+    mode = thresholds.get("mode", "absolute")
+    corpus_size = payload.get("corpus_size", 0) or 0
+    flagged_total = payload.get("flagged_total")
+
+    eff = (
+        f"flagged 実効閾値: max_sim>{thresholds.get('max_sim')}, "
+        f"centroid_sim>{thresholds.get('centroid_sim')}"
+    )
+    if mode == "percentile":
+        eff += (
+            f" (分布ベース: それぞれコーパスの p{_fmt_num(thresholds.get('max_sim_percentile'))} / "
+            f"p{_fmt_num(thresholds.get('centroid_sim_percentile'))})"
+        )
+    if flagged_total is not None:
+        eff += f" — 該当 {flagged_total} 件"
+
+    ref = thresholds.get("absolute_reference") or {}
+    if ref:
+        def _pct_of(n) -> str:
+            if not isinstance(n, int) or not corpus_size:
+                return ""
+            return f" ({n / corpus_size * 100:.1f}%)"
+
+        eff += (
+            f"\n\n絶対基準での超過件数 (進捗追跡用・閾値固定): "
+            f"max_sim>{ref.get('max_sim')} → {ref.get('max_sim_exceeded')} 件"
+            f"{_pct_of(ref.get('max_sim_exceeded'))}, "
+            f"centroid_sim>{ref.get('centroid_sim')} → {ref.get('centroid_sim_exceeded')} 件"
+            f"{_pct_of(ref.get('centroid_sim_exceeded'))}"
+        )
+    return eff
 
 
 def render_flagged_rows(flagged: list[dict[str, Any]]) -> str:
@@ -163,9 +216,9 @@ def render_comment_body(payload: dict[str, Any]) -> str:
     source_week = payload.get("source_week", "")
     model = payload.get("model", "")
     corpus_size = payload.get("corpus_size", 0)
-    thresholds = payload.get("thresholds") or {}
     cohort_stats = payload.get("cohort_stats") or {}
     flagged = payload.get("flagged") or []
+    flagged_total = payload.get("flagged_total")
 
     parts = [
         f"<!-- {WEEK_MARKER_PREFIX}{source_week} -->",
@@ -176,8 +229,9 @@ def render_comment_body(payload: dict[str, Any]) -> str:
         "v7 プロンプト (#3203 Phase 1) 施行前後で記事の個性化が進んでいるか、"
         "および near-duplicate/最も平均的な記事をリライト候補選定の参考として提示します。",
         "",
-        f"モデル: `{model}` / 週: `{source_week}` / コーパスサイズ: {corpus_size} 記事 / "
-        f"flagged 閾値: max_sim>{thresholds.get('max_sim')}, centroid_sim>{thresholds.get('centroid_sim')}",
+        f"モデル: `{model}` / 週: `{source_week}` / コーパスサイズ: {corpus_size} 記事",
+        "",
+        render_threshold_line(payload),
         "",
         "### cohort 比較 (v7 施行前後の類似度分布)",
         "",
@@ -185,7 +239,12 @@ def render_comment_body(payload: dict[str, Any]) -> str:
         "|---|---:|---:|---:|---:|---:|",
         render_cohort_rows(cohort_stats),
         "",
-        f"### flagged 記事 (閾値超え、max_sim 降順・上位{len(flagged)}件)",
+        "> **all 行が週次で下がっているか**が #3203 の効果判定の主指標です。"
+        "flagged は分布ベースの相対閾値なので件数はほぼ一定になります — "
+        "改善の有無は上記「絶対基準での超過件数」と all 行の百分位で見てください。",
+        "",
+        f"### flagged 記事 (閾値超え {flagged_total if flagged_total is not None else len(flagged)} 件中、"
+        f"max_sim 降順・上位{len(flagged)}件)",
         "",
         "| 記事 | cohort | max_sim | centroid_sim | reasons |",
         "|---|---|---:|---:|---|",

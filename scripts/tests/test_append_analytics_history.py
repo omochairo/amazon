@@ -11,7 +11,11 @@ from scripts.append_analytics_history import (
     GA4_TOTALS_FILE,
     GSC_BY_PAGE_FILE,
     GSC_BY_QUERY_FILE,
+    GSC_LANE_WP,
     GSC_TOTALS_FILE,
+    GSC_WP_BY_PAGE_FILE,
+    GSC_WP_BY_QUERY_FILE,
+    GSC_WP_TOTALS_FILE,
     SEEN_DATES_FILENAME,
     append_jsonl,
     load_seen_dates,
@@ -194,3 +198,42 @@ def test_process_gsc_handles_missing_optional_fields(tmp_path):
     }
     assert by_page[0]["page"] == ""
     assert totals[0]["clicks_sum"] == 0
+
+
+# ---------------------------------------------------------------------------
+# WP (omcha.jp) レーン — navi レーンと独立していることの担保
+# ---------------------------------------------------------------------------
+
+def test_process_gsc_wp_lane_writes_separate_files(tmp_path, gsc_fixture):
+    seen = {}
+    process_gsc(gsc_fixture, tmp_path, seen, GSC_LANE_WP)
+
+    assert _read_jsonl(tmp_path / GSC_WP_BY_QUERY_FILE)
+    assert _read_jsonl(tmp_path / GSC_WP_BY_PAGE_FILE)
+    assert _read_jsonl(tmp_path / GSC_WP_TOTALS_FILE)
+    # navi 側のファイルは作られない
+    assert not (tmp_path / GSC_BY_QUERY_FILE).exists()
+    assert not (tmp_path / GSC_TOTALS_FILE).exists()
+    assert seen["gsc_wp"]["2026-05-30"] is True
+    assert "gsc" not in seen
+
+
+def test_process_gsc_both_lanes_same_date_do_not_block_each_other(tmp_path, gsc_fixture):
+    """同じ日付でも navi / WP はそれぞれ独立に append される (seen キーが別)。"""
+    seen = {}
+    n_navi = process_gsc(gsc_fixture, tmp_path, seen)
+    n_wp = process_gsc(gsc_fixture, tmp_path, seen, GSC_LANE_WP)
+
+    assert n_navi > 0 and n_wp > 0
+    assert len(_read_jsonl(tmp_path / GSC_TOTALS_FILE)) == 1
+    assert len(_read_jsonl(tmp_path / GSC_WP_TOTALS_FILE)) == 1
+    assert seen["gsc"]["2026-05-30"] is True
+    assert seen["gsc_wp"]["2026-05-30"] is True
+
+
+def test_process_gsc_wp_lane_is_idempotent(tmp_path, gsc_fixture):
+    seen = {}
+    process_gsc(gsc_fixture, tmp_path, seen, GSC_LANE_WP)
+    n = process_gsc(gsc_fixture, tmp_path, seen, GSC_LANE_WP)
+    assert n == 0
+    assert len(_read_jsonl(tmp_path / GSC_WP_TOTALS_FILE)) == 1

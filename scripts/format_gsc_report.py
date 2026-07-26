@@ -41,7 +41,7 @@ def _truncate(s: str, n: int) -> str:
     return s if len(s) <= n else s[: n - 3] + "..."
 
 
-def render(data: dict, top_query: int, top_page: int, top_opp: int) -> str:
+def render(data: dict, top_query: int, top_page: int, top_opp: int, label: str = "") -> str:
     r = data.get("range", {})
     t = data.get("totals", {})
     by_query = data.get("by_query", [])[:top_query]
@@ -49,8 +49,11 @@ def render(data: dict, top_query: int, top_page: int, top_opp: int) -> str:
     by_device = data.get("by_device", [])
     opportunity = data.get("opportunity_pages", [])[:top_opp]
 
+    # 1 Issue に複数プロパティ (navi / WP) の節を並べるため、見出しに識別子を挟めるようにする
+    suffix = f" — {label}" if label else ""
+
     lines: list[str] = []
-    lines.append(f"## GSC 週次レポート ({r.get('start', '?')} 〜 {r.get('end', '?')})")
+    lines.append(f"## GSC 週次レポート{suffix} ({r.get('start', '?')} 〜 {r.get('end', '?')})")
     lines.append("")
     lines.append(f"- 取得時刻: `{data.get('fetched_at', '')}`")
     lines.append(f"- Site: `{data.get('site_url', '')}`")
@@ -134,6 +137,8 @@ def main() -> int:
     p.add_argument("--top-query", type=int, default=TOP_QUERY_DEFAULT)
     p.add_argument("--top-page", type=int, default=TOP_PAGE_DEFAULT)
     p.add_argument("--top-opp", type=int, default=TOP_OPP_DEFAULT)
+    p.add_argument("--label", default="",
+                   help="見出しに付ける識別子 (例: 'WP omcha.jp')。複数プロパティを 1 Issue に並べる用")
     args = p.parse_args()
 
     src = pathlib.Path(args.input)
@@ -141,7 +146,7 @@ def main() -> int:
         sys.stderr.write(f"input not found: {src}\n")
         return 1
     data = json.loads(src.read_text(encoding="utf-8"))
-    sys.stdout.write(render(data, args.top_query, args.top_page, args.top_opp))
+    sys.stdout.write(render(data, args.top_query, args.top_page, args.top_opp, args.label))
     return 0
 
 
