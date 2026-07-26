@@ -54,13 +54,18 @@ def _build_service(client_id: str, client_secret: str, refresh_token: str):
 
 def _query(service, site_url: str, start: str, end: str,
            dims: list[str], row_limit: int = 1000) -> list[dict]:
-    """Search Analytics query 1 発。row を dict 列に正規化。"""
+    """Search Analytics query 1 発。row を dict 列に正規化。
+
+    dims が空 (dimensionless / site-wide query) の場合、"dimensions" キー自体を
+    body から省略する。API が空リストを許容するかに依存しないための安全策。
+    """
     body = {
         "startDate": start,
         "endDate": end,
-        "dimensions": dims,
         "rowLimit": row_limit,
     }
+    if dims:
+        body["dimensions"] = dims
     res = service.searchanalytics().query(siteUrl=site_url, body=body).execute()
     rows = []
     for r in res.get("rows", []):
@@ -94,6 +99,26 @@ def fetch(site_url: str, client_id: str, client_secret: str, refresh_token: str,
 
     by_device = _query(service, site_url, start_s, end_s, ["device"], 10)
 
+    # site-wide totals: dimensionless query (row_limit=1) で真のサイト全体集計を取得。
+    # by_page は TOP_PAGE_DEFAULT 件で打ち切られるため clicks_sum/impressions_sum は
+    # 「上位ページの合計」にすぎず、position に至っては site-wide の値がどこにも
+    # 存在しなかった (#3988 B-1)。ranking loss と検索需要減を切り分けるには
+    # 真のサイト全体 impressions / 平均 position が必要。
+    sitewide_rows = _query(service, site_url, start_s, end_s, [], 1)
+    if sitewide_rows:
+        sitewide = sitewide_rows[0]
+        clicks_sitewide = sitewide["clicks"]
+        impressions_sitewide = sitewide["impressions"]
+        ctr_sitewide = sitewide["ctr"]
+        position_sitewide = sitewide["position"]
+    else:
+        # データなしの日を "0" と区別する。0 は「本当にクリックゼロ」と見分けが
+        # つかず、position=0 は無意味な値になるため None のままにする。
+        clicks_sitewide = None
+        impressions_sitewide = None
+        ctr_sitewide = None
+        position_sitewide = None
+
     # 機会記事: 2 ページ目 (position 11-20) で impressions が多い page を抽出
     # → tiny tuning で 1 ページ目に押し上げ可能な候補
     opportunity = [
@@ -103,6 +128,9 @@ def fetch(site_url: str, client_id: str, client_secret: str, refresh_token: str,
     opportunity.sort(key=lambda r: r["impressions"], reverse=True)
     opportunity = opportunity[:30]
 
+    truncated_pages = len(by_page) >= TOP_PAGE_DEFAULT
+    truncated_queries = len(by_query) >= TOP_QUERY_DEFAULT
+
     return {
         "fetched_at": datetime.now(timezone.utc).isoformat(),
         "site_url": site_url,
@@ -110,8 +138,17 @@ def fetch(site_url: str, client_id: str, client_secret: str, refresh_token: str,
         "totals": {
             "queries": len(by_query),
             "pages": len(by_page),
+            # NOTE: clicks_sum / impressions_sum は by_page (上位 TOP_PAGE_DEFAULT 件)
+            # の合計であり、truncated_pages が True の場合サイト全体の値ではない。
+            # 真のサイト全体値は *_sitewide を使うこと。
             "clicks_sum": sum(r["clicks"] for r in by_page),
             "impressions_sum": sum(r["impressions"] for r in by_page),
+            "clicks_sitewide": clicks_sitewide,
+            "impressions_sitewide": impressions_sitewide,
+            "ctr_sitewide": ctr_sitewide,
+            "position_sitewide": position_sitewide,
+            "truncated_pages": truncated_pages,
+            "truncated_queries": truncated_queries,
         },
         "by_query": by_query,
         "by_page": by_page,
@@ -153,9 +190,15 @@ def main() -> int:
     out = pathlib.Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    logger.info("wrote %s (%d queries, %d pages, %d total clicks, %d opportunity)",
-                out, result["totals"]["queries"], result["totals"]["pages"],
-                result["totals"]["clicks_sum"], len(result["opportunity_pages"]))
+    t = result["totals"]
+    logger.info(
+        "wrote %s (%d queries, %d pages, %d top-page clicks, %d opportunity; "
+        "sitewide clicks=%s impressions=%s ctr=%s position=%s "
+        "truncated_pages=%s truncated_queries=%s)",
+        out, t["queries"], t["pages"], t["clicks_sum"], len(result["opportunity_pages"]),
+        t["clicks_sitewide"], t["impressions_sitewide"], t["ctr_sitewide"], t["position_sitewide"],
+        t["truncated_pages"], t["truncated_queries"],
+    )
     return 0
 
 

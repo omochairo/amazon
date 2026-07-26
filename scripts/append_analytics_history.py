@@ -161,6 +161,14 @@ def process_gsc(gsc: dict, history_dir: pathlib.Path,
         "impressions_sum": totals.get("impressions_sum", 0),
         "queries_count": totals.get("queries", 0),
         "pages_count": totals.get("pages", 0),
+        # site-wide totals (#3988 B-1)。旧スキーマの入力 JSON にはキー自体が無いため
+        # None / False をデフォルトにし、欠損と「本当に 0/false」を区別する
+        "clicks_sitewide": totals.get("clicks_sitewide"),
+        "impressions_sitewide": totals.get("impressions_sitewide"),
+        "ctr_sitewide": totals.get("ctr_sitewide"),
+        "position_sitewide": totals.get("position_sitewide"),
+        "truncated_pages": totals.get("truncated_pages", False),
+        "truncated_queries": totals.get("truncated_queries", False),
     }
 
     n1 = append_jsonl(history_dir / lane.by_query_file, by_query_rows)

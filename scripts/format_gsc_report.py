@@ -57,8 +57,30 @@ def render(data: dict, top_query: int, top_page: int, top_opp: int, label: str =
     lines.append("")
     lines.append(f"- 取得時刻: `{data.get('fetched_at', '')}`")
     lines.append(f"- Site: `{data.get('site_url', '')}`")
-    lines.append(f"- 合計 clicks: **{_fmt_int(t.get('clicks_sum'))}**")
-    lines.append(f"- 合計 impressions: **{_fmt_int(t.get('impressions_sum'))}**")
+
+    clicks_sw = t.get("clicks_sitewide")
+    impressions_sw = t.get("impressions_sitewide")
+    ctr_sw = t.get("ctr_sitewide")
+    position_sw = t.get("position_sitewide")
+    lines.append(
+        f"- サイト全体 clicks: **{_fmt_int(clicks_sw) if clicks_sw is not None else 'n/a'}**"
+    )
+    lines.append(
+        f"- サイト全体 impressions: **{_fmt_int(impressions_sw) if impressions_sw is not None else 'n/a'}**"
+    )
+    lines.append(
+        f"- サイト全体 CTR: **{_fmt_ctr(ctr_sw) if ctr_sw is not None else 'n/a'}**"
+    )
+    lines.append(
+        f"- サイト全体 平均順位: **{_fmt_pos(position_sw) if position_sw is not None else 'n/a'}**"
+    )
+    lines.append(f"- 上位ページ合計 clicks: **{_fmt_int(t.get('clicks_sum'))}**")
+    lines.append(f"- 上位ページ合計 impressions: **{_fmt_int(t.get('impressions_sum'))}**")
+    if t.get("truncated_pages"):
+        lines.append(
+            "  > ⚠️ 上位ページ合計は上位ページ (cap) までの合計で打ち切られています。"
+            "サイト全体の値は上記「サイト全体」行を参照してください。"
+        )
     lines.append(f"- GSC データ遅延: {r.get('delay_days', '?')} 日 (range は今日-{r.get('delay_days', '?')} 日まで)")
     lines.append("")
 
