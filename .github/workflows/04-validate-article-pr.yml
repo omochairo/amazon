@@ -186,6 +186,12 @@ on:
       # validate (required check) として発火させる。
       - '.github/workflows/08-wiki-cache.yml'
       - 'hugo/static/wiki_cache.json'
+      # 2026-07-27 (#4007 follow-up 3 / PR #4065): unit test 用の独立 workflow。
+      # workflow ファイルだけを触る PR は他のどの paths にも一致せず required
+      # check `validate` が不発 → auto-merge 永久 BLOCKED になる
+      # ([[04-validate-paths-inverse-trap]]、PR #4065 で実際に踏んだ)。記事変更
+      # ゼロなので vacuous SUCCESS で通過する。
+      - '.github/workflows/44-unit-tests.yml'
       # 2026-05-25 (session 44 / Issue #682): .gitignore 変更 PR で validate を
       # 発火させ required check を通す。
       - '.gitignore'
