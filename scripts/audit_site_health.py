@@ -35,7 +35,11 @@ time.sleep(--delay) する。個別 URL の例外は status=0 として記録し
 
 出力:
   --out-dir/latest.json  : 直近実行の regression 系一覧のみ (全クロールページの
-    ダンプはしない。diff を小さく保つため)。
+    ダンプはしない。diff を小さく保つため)。canonical_mismatch / noindex_inlinked
+    は件数と pattern 集計のみを summary に含め、明細は latest_details.json 側に
+    出す (#3727)。
+  --out-dir/latest_details.json: canonical_mismatch / noindex_inlinked の全件明細
+    (上限なし)。latest.json を肥大化させないための別ファイル (#3727)。
   --out-dir/history.jsonl: 1 行 = 1 回の実行サマリを追記。
 
 呼び出し:
@@ -361,6 +365,40 @@ def fetch_stragglers(
     return set(stragglers)
 
 
+def _classify_canonical_mismatch(final_url: str, canonical: str) -> str:
+    """canonical_mismatch 明細の pattern 分類 (#3727)。優先順位: scheme > host > query >
+    trailing_slash > path > other。"""
+    f = urlsplit(final_url)
+    c = urlsplit(canonical)
+    if f.scheme != c.scheme:
+        return "scheme"
+    if f.netloc != c.netloc:
+        return "host"
+    if f.path == c.path:
+        if f.query != c.query:
+            return "query"
+        return "other"
+    if f.path.rstrip("/") == c.path.rstrip("/"):
+        return "trailing_slash"
+    return "path"
+
+
+def _classify_noindex_inlinked(url: str) -> str:
+    """noindex_inlinked 明細の pattern 分類: path の第1セグメント + '/' (#3727)。"""
+    path = urlsplit(url).path
+    segment = path.strip("/").split("/", 1)[0]
+    return f"{segment}/" if segment else "(root)"
+
+
+def _pattern_counts(patterns: list[str]) -> dict[str, int]:
+    """pattern 別件数を件数降順・同数なら pattern 名昇順で並べた dict にする。"""
+    counts: dict[str, int] = defaultdict(int)
+    for p in patterns:
+        counts[p] += 1
+    ordered = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    return dict(ordered)
+
+
 def compute_inbound(records: dict[str, PageRecord], straggler_urls: set[str]) -> dict[str, set[str]]:
     """クロール済みページ間の内部リンクグラフから被リンク元集合を計算する (自己リンク除外)。
 
@@ -438,12 +476,30 @@ def run(
 
     r5_orphans = sorted(u for u in sitemap_urls if u != homepage and len(inbound.get(u, ())) == 0)
 
-    canonical_mismatch_count = sum(
-        1 for rec in records.values() if rec.canonical and rec.canonical != rec.final_url
-    )
-    noindex_inlinked_count = sum(
-        1 for u, rec in records.items() if rec.noindex and len(inbound.get(u, ())) > 0
-    )
+    canonical_mismatch_details = []
+    for rec in records.values():
+        if rec.canonical and rec.canonical != rec.final_url:
+            canonical_mismatch_details.append({
+                "url": rec.final_url,
+                "canonical": rec.canonical,
+                "pattern": _classify_canonical_mismatch(rec.final_url, rec.canonical),
+            })
+    canonical_mismatch_details.sort(key=lambda x: x["url"])
+    canonical_mismatch_count = len(canonical_mismatch_details)
+    canonical_mismatch_patterns = _pattern_counts([d["pattern"] for d in canonical_mismatch_details])
+
+    noindex_inlinked_details = []
+    for u, rec in records.items():
+        if rec.noindex and len(inbound.get(u, ())) > 0:
+            noindex_inlinked_details.append({
+                "url": u,
+                "inbound_count": len(inbound[u]),
+                "sources": sorted(inbound[u])[:5],
+                "pattern": _classify_noindex_inlinked(u),
+            })
+    noindex_inlinked_details.sort(key=lambda x: x["url"])
+    noindex_inlinked_count = len(noindex_inlinked_details)
+    noindex_inlinked_patterns = _pattern_counts([d["pattern"] for d in noindex_inlinked_details])
 
     has_regressions = (
         len(r1_sitemap_broken) + len(r2_sitemap_noindex) + len(r3_broken_internal) + len(r4_server_errors)
@@ -463,6 +519,8 @@ def run(
             "r5_orphans": len(r5_orphans),
             "canonical_mismatch_count": canonical_mismatch_count,
             "noindex_inlinked_count": noindex_inlinked_count,
+            "canonical_mismatch_patterns": canonical_mismatch_patterns,
+            "noindex_inlinked_patterns": noindex_inlinked_patterns,
         },
         "r1_sitemap_broken": r1_sitemap_broken,
         "r2_sitemap_noindex": r2_sitemap_noindex,
@@ -471,17 +529,35 @@ def run(
         "r5_orphans": r5_orphans,
     }
 
-    write_outputs(out_dir, result, now)
+    details = {
+        "canonical_mismatch": canonical_mismatch_details,
+        "noindex_inlinked": noindex_inlinked_details,
+    }
+
+    write_outputs(out_dir, result, now, details)
     print_summary(result)
     return result
 
 
-def write_outputs(out_dir: pathlib.Path, result: dict, now: datetime) -> None:
+def write_outputs(out_dir: pathlib.Path, result: dict, now: datetime, details: dict | None = None) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     latest_path = out_dir / "latest.json"
     latest_path.write_text(
         json.dumps(result, ensure_ascii=False, indent=1, sort_keys=True),
+        encoding="utf-8",
+    )
+
+    details = details or {"canonical_mismatch": [], "noindex_inlinked": []}
+    latest_details = {
+        "generated_at": result["generated_at"],
+        "base_url": result["base_url"],
+        "canonical_mismatch": details["canonical_mismatch"],
+        "noindex_inlinked": details["noindex_inlinked"],
+    }
+    details_path = out_dir / "latest_details.json"
+    details_path.write_text(
+        json.dumps(latest_details, ensure_ascii=False, indent=1, sort_keys=True),
         encoding="utf-8",
     )
 

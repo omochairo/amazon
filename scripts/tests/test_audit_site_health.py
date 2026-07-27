@@ -12,6 +12,8 @@
 8. latest.json の形状 と history.jsonl の追記 (2 回実行で 2 行)
 9. URL 単位の例外 -> status 0 として記録され、実行が継続すること (R4 に計上)
 10. --fail-on-regression で exit code 2、デフォルトは exit 0
+11. canonical_mismatch / noindex_inlinked の pattern 分類・pattern 集計の並び順・
+    latest_details.json への全件書き出し・latest.json に明細が含まれないこと (#3727)
 """
 from __future__ import annotations
 
@@ -548,6 +550,181 @@ class RunPerUrlExceptionIntegrationTest(unittest.TestCase):
         self.assertTrue(result["has_regressions"])
         r4_urls = {e["url"]: e["status"] for e in result["r4_server_errors"]}
         self.assertEqual(r4_urls.get(bad), 0)
+
+
+class CanonicalMismatchPatternTest(unittest.TestCase):
+    def test_scheme_mismatch(self):
+        self.assertEqual(
+            A._classify_canonical_mismatch("https://test.example/a/", "http://test.example/a/"),
+            "scheme",
+        )
+
+    def test_host_mismatch(self):
+        self.assertEqual(
+            A._classify_canonical_mismatch("https://test.example/a/", "https://other.example/a/"),
+            "host",
+        )
+
+    def test_query_mismatch_same_path(self):
+        self.assertEqual(
+            A._classify_canonical_mismatch(
+                "https://test.example/a/?x=1", "https://test.example/a/?x=2"
+            ),
+            "query",
+        )
+
+    def test_trailing_slash_only(self):
+        self.assertEqual(
+            A._classify_canonical_mismatch("https://test.example/a", "https://test.example/a/"),
+            "trailing_slash",
+        )
+
+    def test_path_mismatch(self):
+        self.assertEqual(
+            A._classify_canonical_mismatch("https://test.example/a/", "https://test.example/b/"),
+            "path",
+        )
+
+    def test_other_fragment_only(self):
+        self.assertEqual(
+            A._classify_canonical_mismatch(
+                "https://test.example/a/#foo", "https://test.example/a/#bar"
+            ),
+            "other",
+        )
+
+    def test_priority_scheme_wins_over_path(self):
+        """scheme と path が同時に違う場合は scheme が優先される。"""
+        self.assertEqual(
+            A._classify_canonical_mismatch("https://test.example/a/", "http://test.example/b/"),
+            "scheme",
+        )
+
+    def test_priority_host_wins_over_query(self):
+        self.assertEqual(
+            A._classify_canonical_mismatch(
+                "https://test.example/a/?x=1", "https://other.example/a/?x=2"
+            ),
+            "host",
+        )
+
+    def test_priority_path_wins_over_query_when_both_differ(self):
+        self.assertEqual(
+            A._classify_canonical_mismatch(
+                "https://test.example/a/?x=1", "https://test.example/b/?x=2"
+            ),
+            "path",
+        )
+
+
+class NoindexInlinkedPatternTest(unittest.TestCase):
+    def test_first_segment_used(self):
+        self.assertEqual(
+            A._classify_noindex_inlinked("https://test.example/search/foo/"), "search/",
+        )
+        self.assertEqual(
+            A._classify_noindex_inlinked("https://test.example/products/b0x/"), "products/",
+        )
+
+    def test_root_url(self):
+        self.assertEqual(A._classify_noindex_inlinked("https://test.example/"), "(root)")
+
+
+class PatternCountsOrderingTest(unittest.TestCase):
+    def test_ordered_by_count_desc_then_name_asc(self):
+        patterns = ["path", "query", "path", "host", "query", "path"]
+        result = A._pattern_counts(patterns)
+        self.assertEqual(list(result.items()), [("path", 3), ("query", 2), ("host", 1)])
+
+    def test_tie_broken_by_name_ascending(self):
+        patterns = ["zeta", "alpha", "zeta", "alpha"]
+        result = A._pattern_counts(patterns)
+        self.assertEqual(list(result.items()), [("alpha", 2), ("zeta", 2)])
+
+
+class CanonicalNoindexDetailsTest(unittest.TestCase):
+    """canonical_mismatch / noindex_inlinked の明細出力まわり (#3727)。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.out_dir = pathlib.Path(self._tmp.name) / "out"
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _run_fixture(self):
+        pages, urls = _build_regression_fixture()
+        fetcher = make_pages_fetcher(pages)
+        result = A.run(
+            base_url=BASE_URL, max_pages=100, delay=0, timeout=15,
+            out_dir=self.out_dir, user_agent="ua", limit=0,
+            session=mock.Mock(), fetch_fn=fetcher, sleeper=_noop_sleeper,
+            now=datetime(2026, 7, 13, tzinfo=timezone.utc),
+        )
+        return result, urls
+
+    def test_summary_counts_match_details_length(self):
+        result, _ = self._run_fixture()
+        latest_details = json.loads((self.out_dir / "latest_details.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            result["summary"]["canonical_mismatch_count"],
+            len(latest_details["canonical_mismatch"]),
+        )
+        self.assertEqual(
+            result["summary"]["noindex_inlinked_count"],
+            len(latest_details["noindex_inlinked"]),
+        )
+
+    def test_patterns_present_in_summary(self):
+        result, _ = self._run_fixture()
+        self.assertIn("canonical_mismatch_patterns", result["summary"])
+        self.assertIn("noindex_inlinked_patterns", result["summary"])
+        # fixture: /b/'s canonical is /a/ -> same host/scheme, different path -> "path"
+        self.assertEqual(result["summary"]["canonical_mismatch_patterns"], {"path": 1})
+        # noindex-meta and noindex-header are both first-segment matches of themselves
+        self.assertEqual(
+            result["summary"]["noindex_inlinked_patterns"],
+            {"noindex-header/": 1, "noindex-meta/": 1},
+        )
+
+    def test_latest_details_file_has_full_entries(self):
+        result, urls = self._run_fixture()
+        latest_details = json.loads((self.out_dir / "latest_details.json").read_text(encoding="utf-8"))
+        self.assertEqual(latest_details["generated_at"], result["generated_at"])
+        self.assertEqual(latest_details["base_url"], result["base_url"])
+
+        cm = latest_details["canonical_mismatch"]
+        self.assertEqual(len(cm), 1)
+        self.assertEqual(cm[0]["url"], urls["b"])
+        self.assertEqual(cm[0]["canonical"], urls["a"])
+        self.assertEqual(cm[0]["pattern"], "path")
+
+        ni = latest_details["noindex_inlinked"]
+        self.assertEqual(len(ni), 2)
+        ni_urls = {e["url"] for e in ni}
+        self.assertEqual(ni_urls, {urls["noindex_meta"], urls["noindex_header"]})
+        for entry in ni:
+            self.assertIn("inbound_count", entry)
+            self.assertIn("sources", entry)
+            self.assertIn("pattern", entry)
+
+    def test_latest_json_excludes_details(self):
+        self._run_fixture()
+        latest = json.loads((self.out_dir / "latest.json").read_text(encoding="utf-8"))
+        self.assertNotIn("canonical_mismatch", latest)
+        self.assertNotIn("noindex_inlinked", latest)
+        summary = latest["summary"]
+        self.assertIn("canonical_mismatch_count", summary)
+        self.assertIn("noindex_inlinked_count", summary)
+        self.assertIn("canonical_mismatch_patterns", summary)
+        self.assertIn("noindex_inlinked_patterns", summary)
+
+    def test_details_sorted_by_url(self):
+        """明細は url 昇順であること (noindex 側で複数件を確認)。"""
+        result, urls = self._run_fixture()
+        latest_details = json.loads((self.out_dir / "latest_details.json").read_text(encoding="utf-8"))
+        ni_urls = [e["url"] for e in latest_details["noindex_inlinked"]]
+        self.assertEqual(ni_urls, sorted(ni_urls))
 
 
 class MainExitCodeTest(unittest.TestCase):
