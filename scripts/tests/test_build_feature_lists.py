@@ -124,6 +124,14 @@ def _write_per_asin(
     )
 
 
+def _write_matched(raw_root: pathlib.Path, platform: str, items: list[dict]) -> None:
+    """#4007 follow-up 1: data/raw/{rakuten,yahoo}_matched.json 相当の fixture。"""
+    raw_root.mkdir(parents=True, exist_ok=True)
+    (raw_root / f"{platform}_matched.json").write_text(
+        json.dumps({"items": items}, ensure_ascii=False), encoding="utf-8"
+    )
+
+
 # ---------------------------------------------------------------------------
 # load_articles
 # ---------------------------------------------------------------------------
@@ -278,6 +286,111 @@ class OverlayCurrentPricesTest(unittest.TestCase):
             self.assertEqual(stats["none"], 1)
             self.assertEqual(records[0].best_price, 2518)
             self.assertEqual(records[0].best_platform, "Amazon")
+
+
+# ---------------------------------------------------------------------------
+# overlay_current_prices market overlay (#4007 follow-up 1: raw_root)
+# ---------------------------------------------------------------------------
+
+class MarketPriceOverlayTest(unittest.TestCase):
+    """楽天/Yahoo を matched JSON (raw_root) で更新する経路。"""
+
+    def _records(self, articles_dir: pathlib.Path, payload: dict):
+        _write_article(articles_dir, payload)
+        return bfl.load_articles(articles_dir)
+
+    def test_raw_root_none_leaves_rakuten_yahoo_unchanged(self):
+        """raw_root 未指定 (既定) では従来どおり記事 JSON の値のまま変化しない。"""
+        with tempfile.TemporaryDirectory() as td:
+            d = pathlib.Path(td)
+            arts = d / "articles"
+            arts.mkdir()
+            art = _make_article("B0RAW0001", best_price=2000)
+            art["product"]["prices"]["rakuten"] = {"price": 9999, "url": "https://r.invalid/"}
+            records = self._records(arts, art)
+
+            stats = bfl.overlay_current_prices(records, d / "per_asin", watch_index={})
+
+            self.assertEqual(records[0].price_rakuten, 9999)
+            self.assertEqual(records[0].best_price, 2000)  # amazon のまま
+            # raw_root=None: market overlay 自体が走らないので更新件数は 0 のまま
+            self.assertEqual(stats["market_rakuten"], 0)
+            self.assertEqual(stats["market_extreme_dropped"], 0)
+
+    def test_raw_root_updates_stale_rakuten_price_and_best_price(self):
+        """記事 JSON の凍結楽天価格が matched JSON の新値で更新され、best_price/platform も反映する。"""
+        with tempfile.TemporaryDirectory() as td:
+            d = pathlib.Path(td)
+            arts = d / "articles"
+            arts.mkdir()
+            raw_root = d / "raw"
+            art = _make_article("B0RAW0002", best_price=3000)  # amazon=3000 が最安
+            # 記事生成時点で凍結された楽天旧価格 (今はもっと安くなっている想定)
+            art["product"]["prices"]["rakuten"] = {"price": 3500, "url": "https://r.invalid/"}
+            records = self._records(arts, art)
+            self.assertEqual(records[0].price_rakuten, 3500)
+
+            _write_matched(raw_root, "rakuten", [
+                {"asin": "B0RAW0002", "price": 1980, "title": "テスト商品 新価格",
+                 "search_keyword": "", "url": "https://r.invalid/new"},
+            ])
+
+            stats = bfl.overlay_current_prices(
+                records, d / "per_asin", watch_index={}, raw_root=raw_root,
+            )
+
+            self.assertEqual(records[0].price_rakuten, 1980)
+            self.assertEqual(records[0].best_price, 1980)
+            self.assertEqual(records[0].best_platform, "楽天市場")
+            self.assertEqual(stats["market_rakuten"], 1)
+
+    def test_raw_root_drops_extreme_outlier_existing_price(self):
+        """matched が無く、既存の楽天価格が Amazon の 3.0x 超の extreme outlier なら破棄し
+        best_price が Amazon (最安) のままになる。"""
+        with tempfile.TemporaryDirectory() as td:
+            d = pathlib.Path(td)
+            arts = d / "articles"
+            arts.mkdir()
+            raw_root = d / "raw"  # rakuten_matched.json を置かない = 空 index
+            art = _make_article("B0RAW0003", best_price=1579)
+            art["product"]["prices"]["yahoo"] = {"price": 14395, "url": "https://y.invalid/"}
+            records = self._records(arts, art)
+            self.assertEqual(records[0].price_yahoo, 14395)
+
+            stats = bfl.overlay_current_prices(
+                records, d / "per_asin", watch_index={}, raw_root=raw_root,
+            )
+
+            self.assertEqual(records[0].price_yahoo, 0)
+            self.assertEqual(records[0].best_price, 1579)
+            self.assertEqual(records[0].best_platform, "Amazon")
+            self.assertEqual(stats["market_extreme_dropped"], 1)
+
+    def test_raw_root_matched_failing_gate_keeps_existing_rakuten(self):
+        """matched はあるが quality gate 落ち (price band 外) → 既存の楽天価格を維持する。"""
+        with tempfile.TemporaryDirectory() as td:
+            d = pathlib.Path(td)
+            arts = d / "articles"
+            arts.mkdir()
+            raw_root = d / "raw"
+            art = _make_article("B0RAW0004", best_price=2302)
+            art["product"]["prices"]["rakuten"] = {"price": 2200, "url": "https://r.invalid/"}
+            records = self._records(arts, art)
+
+            # amazon=2302 の band 下限は 920.8。399 は band 外で gate 落ち。
+            _write_matched(raw_root, "rakuten", [
+                {"asin": "B0RAW0004", "price": 399,
+                 "title": "ハズブロ ナーフ エリート 2.0 コマンダー",
+                 "search_keyword": "ハズブロ ナーフ コマンダー"},
+            ])
+
+            stats = bfl.overlay_current_prices(
+                records, d / "per_asin", watch_index={}, raw_root=raw_root,
+            )
+
+            self.assertEqual(records[0].price_rakuten, 2200)  # 既存値を維持
+            self.assertEqual(stats["market_rakuten"], 0)
+            self.assertEqual(stats["market_extreme_dropped"], 0)  # extreme ではなく単なる gate 落ち
 
 
 # ---------------------------------------------------------------------------

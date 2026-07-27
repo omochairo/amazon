@@ -65,6 +65,7 @@ jobs:
           python scripts/build_feature_lists.py \
             --articles-dir data/articles \
             --per-asin-dir data/raw/per_asin \
+            --raw-root data/raw \
             --out-hugo hugo/data/features \
             --out-manifest data/features/_build_manifest.json \
             --top-n 20
@@ -76,6 +77,7 @@ jobs:
           python scripts/build_category_hubs.py \
             --articles-dir data/articles \
             --out-hugo hugo/data/features \
+            --raw-root data/raw \
             --top-n 24
 
       - name: Create feature lists update PR + enable auto-merge

@@ -5,6 +5,7 @@ Refs: GitHub issue #590
 Reads:
     data/articles/*.json                      (article body; excludes *.quality.json etc.)
     data/raw/per_asin/<ASIN>/amazon.json      (savings_percentage / fetched_at)
+    data/raw/{rakuten,yahoo}_matched.json     (#4007 follow-up 1: 楽天/Yahoo 現在価格)
 
 Writes:
     hugo/data/features/cospa.json             (IVS x best_price efficiency TOP N / 価格帯別)
@@ -41,6 +42,7 @@ from typing import Any, Iterable
 # 再計算されている。/cospa/ /deals/ がここを読まず Jules 生値を出していたため
 # 「list 100 / 詳細 81」の乖離が出ていた (session 58)。同じ algorithm で再計算する。
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import market_prices  # noqa: E402
 import price_overlay  # noqa: E402
 from brand_normalizer import normalize as normalize_brand  # noqa: E402
 from score_calculator import calculate as calculate_score, compute_ivs_axes  # noqa: E402
@@ -234,14 +236,50 @@ def _recompute_best_price(rec: ArticleRecord) -> None:
     rec.best_platform = best[1]
 
 
+def _apply_market_price(
+    rec: ArticleRecord,
+    platform: str,
+    index: dict[str, dict[str, Any]] | None,
+    amazon_price: int,
+    stats: dict[str, int],
+) -> bool:
+    """1 プラットフォーム分の楽天/Yahoo 価格を matched JSON で解決し ``rec`` を更新する。
+
+    build_post._attach_market_prices と同じ優先順位 (market_prices.resolve_price)
+    を使う。``index`` が None (raw_root 未指定) のときは何もしない。
+
+    戻り値は価格が変わったか (呼び出し側の best_price 再計算要否判定に使う)。
+    """
+    if index is None:
+        return False
+    field = f"price_{platform}"
+    existing_price = getattr(rec, field) or 0
+    matched = index.get(rec.asin)
+    new_price = market_prices.resolve_price(existing_price, matched, amazon_price)
+
+    if matched and market_prices.matched_passes_quality(matched, amazon_price):
+        stats[f"market_{platform}"] += 1
+    elif existing_price > 0 and new_price == 0:
+        # matched が無い/gate 落ちで、かつ既存値が Amazon 価格の 3.0x 超 / 1/3 未満の
+        # extreme outlier として破棄された (market_prices.PRICE_BAND_EXTREME)。
+        stats["market_extreme_dropped"] += 1
+
+    if new_price != existing_price:
+        setattr(rec, field, new_price)
+        return True
+    return False
+
+
 def overlay_current_prices(
     records: list[ArticleRecord],
     per_asin_dir: Path,
     *,
     watch_index: dict[str, price_overlay.PriceObservation] | None = None,
     now: datetime | None = None,
+    raw_root: Path | None = None,
 ) -> dict[str, int]:
-    """#4007: Amazon 価格を日次観測で上書きし ``best_price`` を再計算する。
+    """#4007: Amazon/楽天/Yahoo 価格を日次観測・matched JSON で上書きし
+    ``best_price`` を再計算する。
 
     記事 JSON の ``product.best_price`` は記事生成時のまま凍結しており、実測で
     価格帯バケットが変わるものが 98 件 (6.5%) あった。/deals/ /cospa/ と年齢/
@@ -249,30 +287,61 @@ def overlay_current_prices(
     build_post.py と同じ price_overlay (price_watch 日次 → per_asin 週次) を
     通す。観測が無い ASIN は記事 JSON の値のまま (fail-soft)。
 
-    楽天/Yahoo 側は記事 JSON の値のまま (build_post は matched JSON で毎ビルド
-    上書きするが、こちらは matched を読まない。#4007 の follow-up)。
+    ``raw_root`` を渡したときのみ、build_post.py と同じ ``data/raw/
+    {rakuten,yahoo}_matched.json`` (#4007 follow-up 1: market_prices モジュール
+    共有) で楽天/Yahoo 価格を検証/上書きする。上書き後の Amazon 価格
+    (``rec.price_amazon``) を anchor に quality gate を通し、gate 落ち・
+    extreme outlier は既存値を維持または破棄する (build_post と同じ規則)。
+    ``raw_root=None`` (既定) では従来どおり楽天/Yahoo は記事 JSON の値のまま
+    変更しない (既存呼び出し元・テストの挙動を壊さないため)。
 
-    戻り値は source 別の適用件数 (観測なしは ``"none"``)。
+    戻り値は source 別の適用件数 (price_watch / per_asin / 観測なし ``none``、
+    matched で更新した ``market_rakuten`` / ``market_yahoo``、extreme outlier
+    として既存値を破棄した ``market_extreme_dropped``)。
     """
     if watch_index is None:
         watch_index = price_overlay.load_watch_index(now=now)
-    stats = {"price_watch": 0, "per_asin": 0, "none": 0}
+    stats = {
+        "price_watch": 0,
+        "per_asin": 0,
+        "none": 0,
+        "market_rakuten": 0,
+        "market_yahoo": 0,
+        "market_extreme_dropped": 0,
+    }
+
+    rakuten_index: dict[str, dict[str, Any]] | None = None
+    yahoo_index: dict[str, dict[str, Any]] | None = None
+    if raw_root is not None:
+        rakuten_index = market_prices.load_matched_index(raw_root / "rakuten_matched.json")
+        yahoo_index = market_prices.load_matched_index(raw_root / "yahoo_matched.json")
 
     for rec in records:
         obs = price_overlay.resolve(
             rec.asin, watch_index=watch_index, per_asin_root=per_asin_dir, now=now
         )
+        needs_recompute = False
         if obs is None:
             stats["none"] += 1
-            continue
-        stats[obs.source] += 1
-        if obs.price is not None:
-            rec.price_amazon = obs.price
+        else:
+            stats[obs.source] += 1
+            if obs.price is not None:
+                rec.price_amazon = obs.price
+                needs_recompute = True
+            if obs.savings_percentage is not None:
+                rec.savings_percentage = obs.savings_percentage
+            if obs.observed_at:
+                rec.fetched_at = obs.observed_at
+
+        if rakuten_index is not None or yahoo_index is not None:
+            amazon_price = rec.price_amazon or 0
+            if _apply_market_price(rec, "rakuten", rakuten_index, amazon_price, stats):
+                needs_recompute = True
+            if _apply_market_price(rec, "yahoo", yahoo_index, amazon_price, stats):
+                needs_recompute = True
+
+        if needs_recompute:
             _recompute_best_price(rec)
-        if obs.savings_percentage is not None:
-            rec.savings_percentage = obs.savings_percentage
-        if obs.observed_at:
-            rec.fetched_at = obs.observed_at
 
     return stats
 
@@ -283,6 +352,7 @@ def attach_amazon_meta(
     *,
     watch_index: dict[str, price_overlay.PriceObservation] | None = None,
     now: datetime | None = None,
+    raw_root: Path | None = None,
 ) -> None:
     """Mutate ``records`` in place, filling ``savings_percentage`` / ``fetched_at``.
 
@@ -291,6 +361,7 @@ def attach_amazon_meta(
 
     #4007: per_asin (週次) を読んだうえで、より新しい観測があれば
     ``overlay_current_prices`` で価格・割引率・観測時刻を上書きする。
+    ``raw_root`` を渡すと楽天/Yahoo も matched JSON で更新する (follow-up 1)。
     """
     for rec in records:
         meta_path = per_asin_dir / rec.asin / "amazon.json"
@@ -306,10 +377,17 @@ def attach_amazon_meta(
         rec.savings_percentage = _safe_int(item.get("savings_percentage"))
         rec.fetched_at = meta.get("fetched_at")
 
-    stats = overlay_current_prices(records, per_asin_dir, watch_index=watch_index, now=now)
+    stats = overlay_current_prices(
+        records, per_asin_dir, watch_index=watch_index, now=now, raw_root=raw_root
+    )
     logger.info(
         "price_overlay: %d price_watch / %d per_asin / %d no observation",
         stats["price_watch"], stats["per_asin"], stats["none"],
+    )
+    logger.info(
+        "market_prices: %d rakuten / %d yahoo updated from matched JSON, "
+        "%d extreme outlier dropped",
+        stats["market_rakuten"], stats["market_yahoo"], stats["market_extreme_dropped"],
     )
 
 
@@ -633,10 +711,11 @@ def run(
     min_savings: int = 20,
     stale_days: int = 14,
     now: datetime | None = None,
+    raw_root: Path | None = None,
 ) -> dict[str, Any]:
     """Run the full pipeline. Returns the manifest dict for testability."""
     records = load_articles(articles_dir)
-    attach_amazon_meta(records, per_asin_dir)
+    attach_amazon_meta(records, per_asin_dir, raw_root=raw_root)
 
     cospa_bands = build_cospa_bands(
         records,
@@ -716,6 +795,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--min-savings", type=int, default=20)
     parser.add_argument("--stale-days", type=int, default=14)
     parser.add_argument(
+        "--raw-root",
+        default="data/raw",
+        type=Path,
+        help="#4007 follow-up 1: data/raw/{rakuten,yahoo}_matched.json の親ディレクトリ。"
+             "楽天/Yahoo 価格を build_post.py と同じ matched JSON で更新するために使う。",
+    )
+    parser.add_argument(
         "--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"]
     )
     args = parser.parse_args(argv)
@@ -736,6 +822,7 @@ def main(argv: list[str] | None = None) -> int:
         price_max=args.price_max,
         min_savings=args.min_savings,
         stale_days=args.stale_days,
+        raw_root=args.raw_root,
     )
     cospa_total = sum(manifest["cospa"].get("bands", {}).values())
     logger.info(

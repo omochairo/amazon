@@ -316,13 +316,20 @@ def _write_hub_index(out_hugo: Path, entries: list[dict[str, str]]) -> None:
 
 def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
         themes: list[str], age_hubs: list[str] | None = None,
-        per_asin_dir: Path | None = None) -> dict[str, int]:
+        per_asin_dir: Path | None = None,
+        raw_root: Path | None = None) -> dict[str, int]:
     records = _dedupe_by_asin(load_articles(articles_dir))
     # #4007: hub カードも記事ページ・/deals/ /cospa/ と同じ日次観測の価格を出す。
     # per_asin_dir=None のときは price_overlay の既定 (data/raw/per_asin) を使う。
-    stats = overlay_current_prices(records, per_asin_dir)
+    # raw_root を渡すと楽天/Yahoo も matched JSON で更新する (follow-up 1)。
+    stats = overlay_current_prices(records, per_asin_dir, raw_root=raw_root)
     logger.info("price_overlay: %d price_watch / %d per_asin / %d no observation",
                 stats["price_watch"], stats["per_asin"], stats["none"])
+    logger.info(
+        "market_prices: %d rakuten / %d yahoo updated from matched JSON, "
+        "%d extreme outlier dropped",
+        stats["market_rakuten"], stats["market_yahoo"], stats["market_extreme_dropped"],
+    )
     generated_at = _now_iso()
     out_hugo.mkdir(parents=True, exist_ok=True)
     counts: dict[str, int] = {}
@@ -369,6 +376,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="生成する年齢 hub キー (既定=全件)。")
     # #4007: 価格を日次観測で上書きするための per_asin スナップショット置き場。
     parser.add_argument("--per-asin-dir", default=Path("data/raw/per_asin"), type=Path)
+    # #4007 follow-up 1: data/raw/{rakuten,yahoo}_matched.json の親ディレクトリ。
+    # 楽天/Yahoo 価格を build_post.py と同じ matched JSON で更新するために使う。
+    parser.add_argument("--raw-root", default=Path("data/raw"), type=Path)
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args(argv)
     logging.basicConfig(level=args.log_level,
@@ -376,7 +386,8 @@ def main(argv: list[str] | None = None) -> int:
     counts = run(args.articles_dir, args.out_hugo,
                  top_n=args.top_n, min_ivs=args.min_ivs,
                  themes=args.themes, age_hubs=args.age_hubs,
-                 per_asin_dir=args.per_asin_dir)
+                 per_asin_dir=args.per_asin_dir,
+                 raw_root=args.raw_root)
     print(json.dumps(counts, ensure_ascii=False))
     return 0
 
