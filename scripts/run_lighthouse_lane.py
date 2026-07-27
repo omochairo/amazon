@@ -37,7 +37,10 @@ navi.omcha.jp の代表 URL 群に対して Lighthouse をローカル実行し�
   `*_error` 列を持たせ、error 行は劣化判定から除外して別枠で報告する。
 - **回帰判定は「直近 baseline の median」対比**: 絶対閾値 (CWV good) だけだと
   元から悪い指標が毎回鳴り続けてノイズになるので、①CWV 閾値をまたいだ悪化
-  ②baseline 比の相対悪化、の 2 条件で鳴らす。
+  ②baseline 比の相対悪化、の 2 条件で鳴らす。**baseline が育っていない URL は
+  何も鳴らさない** (2026-07-27 修正): 計測対象は GSC 週次上位なので週替わりで
+  URL が入れ替わり、旧実装はその新規 URL に対して絶対閾値だけで判定していたため
+  「商品ページは元から LCP 5.4s」という既知の遅さを毎週報告し続けていた。
 - 出力は data PR + auto-merge、報告は劣化時のみ 1 issue に集約 (バースト禁止規律)。
 
 runner 側の前提 (amazon-home-ops の 41-lighthouse-lane.yml):
@@ -124,6 +127,11 @@ MIN_ABS_DELTA = {
 }
 # perf score がこれ以上落ちたら鳴らす (0-100 換算)。
 SCORE_DROP_POINTS = 5.0
+# baseline としてこの件数未満しか履歴が無い URL は、まだ比較しない (= 鳴らさない)。
+# 実測 (2026-07-16〜26) でホームの mobile LCP は 2.4s〜5.0s と実行ごとに倍近く
+# 振れており、3 回 median でも収束していない。1〜2 件しかない baseline はこの
+# 揺れをそのまま基準値にしてしまい、翌日 1.25x を軽く超えて誤検出になる。
+MIN_BASELINE_SAMPLES = 3
 
 
 def build_lighthouse_argv(
@@ -280,9 +288,20 @@ def load_history(history_path: pathlib.Path) -> List[Dict[str, Any]]:
 
 
 def baseline_for(
-    history: List[Dict[str, Any]], url: str, form_factor: str, short: str, window: int
+    history: List[Dict[str, Any]],
+    url: str,
+    form_factor: str,
+    short: str,
+    window: int,
+    min_samples: int = MIN_BASELINE_SAMPLES,
 ) -> Optional[float]:
-    """直近 `window` 件の履歴から baseline (median) を作る。値のない行は無視。"""
+    """直近 `window` 件の履歴から baseline (median) を作る。値のない行は無視。
+
+    `min_samples` 未満しか集まらなければ None を返す (= 判定を見送る)。計測対象は
+    GSC 週次上位から採るので週替わりで URL が入れ替わり、入れ替わった直後は
+    必ず履歴が薄い。薄い baseline で比較を始めると、劣化ではなく計測揺れを
+    拾ってしまう。
+    """
     values: List[float] = []
     for row in reversed(history):
         if row.get("url") != url or row.get("form_factor") != form_factor:
@@ -292,7 +311,7 @@ def baseline_for(
             values.append(float(v))
         if len(values) >= window:
             break
-    if not values:
+    if len(values) < min_samples:
         return None
     return statistics.median(values)
 
@@ -307,6 +326,9 @@ def detect_regressions(
       2. CWV good 閾値を「跨いで」悪化した                     → kind="threshold"
       3. baseline 比 REGRESSION_RATIO 以上 かつ 絶対差が十分   → kind="relative"
       4. perf score が SCORE_DROP_POINTS 以上落ちた            → kind="score"
+
+    2〜4 はいずれも baseline が MIN_BASELINE_SAMPLES 件以上ある URL だけが対象。
+    履歴が足りない URL は「絶対値が悪い」だけでは鳴らさない (baseline_for 参照)。
     """
     alerts: List[Dict[str, Any]] = []
     for row in current:
@@ -337,13 +359,13 @@ def detect_regressions(
             good = GOOD_THRESHOLDS.get(short)
 
             if base is None:
-                # 初回計測: baseline が無いので閾値超えだけ拾う
-                if good is not None and value > good:
-                    alerts.append({
-                        "kind": "threshold", "url": url, "form_factor": ff,
-                        "metric": short, "value": value, "baseline": None,
-                        "detail": "{} = {} (CWV good 閾値 {} 超・初回計測)".format(short, value, good),
-                    })
+                # baseline が育つまでは鳴らさない (記録だけ残す)。
+                # 旧実装はここで「閾値超え」を鳴らしていたが、navi の商品ページは
+                # mobile LCP 5.4s / FCP 2.0s が常態で good 閾値を恒常的に超えている。
+                # 計測対象は GSC 週次上位なので週替わりで URL が入れ替わり、その
+                # たびに全新規 URL 分の閾値アラートが一斉に出ていた (2026-07-26 の
+                # 10 件がこれ)。これは「回帰」ではなく既知の遅さなので、このレーン
+                # ではなく #1301 (CWV 改善) の領分。
                 continue
 
             min_delta = MIN_ABS_DELTA.get(short, 0.0)

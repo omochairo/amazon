@@ -154,16 +154,39 @@ def test_detect_regressions_flags_relative_regression_when_already_bad():
     assert any(a["kind"] == "relative" for a in alerts)
 
 
-def test_detect_regressions_first_run_flags_only_threshold():
-    """baseline が無い初回計測では、閾値超えだけ拾う。"""
-    alerts = detect_regressions([], [_row(lcp=6000.0)])
-    assert len(alerts) == 1
-    assert alerts[0]["kind"] == "threshold"
-    assert alerts[0]["baseline"] is None
+def test_detect_regressions_first_run_is_silent_even_when_bad():
+    """baseline が無い初回計測は、絶対値が悪くても鳴らさない。
+
+    商品ページの mobile LCP 5.4s は既知の遅さであって回帰ではない。GSC 週次上位の
+    入れ替わりで新規 URL が入るたびに一斉に鳴っていたのを止める (#4034)。
+    """
+    assert detect_regressions([], [_row(lcp=6000.0)]) == []
 
 
 def test_detect_regressions_first_run_quiet_when_good():
     assert detect_regressions([], [_row(lcp=1500.0)]) == []
+
+
+def test_detect_regressions_silent_while_baseline_too_thin():
+    """履歴 2 件だけの URL では、大きく振れても比較を始めない。"""
+    history = [_row(lcp=2500.0), _row(lcp=2600.0)]
+    current = [_row(lcp=6000.0)]
+    assert detect_regressions(history, current) == []
+
+
+def test_detect_regressions_starts_alerting_once_baseline_is_thick_enough():
+    """MIN_BASELINE_SAMPLES 件そろえば通常どおり鳴る (抑制が恒久化しない)。"""
+    history = [_row(lcp=2500.0), _row(lcp=2600.0), _row(lcp=2550.0)]
+    current = [_row(lcp=6000.0)]
+    alerts = detect_regressions(history, current)
+    assert any(a["kind"] == "relative" for a in alerts)
+
+
+def test_detect_regressions_score_drop_needs_thick_baseline():
+    """perf score 側も薄い baseline では鳴らない。"""
+    history = [_row(lcp=2000.0, perf_score=95.0)]
+    current = [_row(lcp=2000.0, perf_score=70.0)]
+    assert detect_regressions(history, current) == []
 
 
 def test_detect_regressions_flags_score_drop():
@@ -205,6 +228,18 @@ def test_baseline_for_uses_window_and_skips_nulls():
 
 def test_baseline_for_returns_none_without_data():
     assert baseline_for([], "https://x/", "mobile", "lcp", window=5) is None
+
+
+def test_baseline_for_returns_none_below_min_samples():
+    history = [_row(lcp=1000.0), _row(lcp=2000.0)]
+    assert baseline_for(history, "https://x/", "mobile", "lcp", window=5) is None
+
+
+def test_baseline_for_min_samples_is_overridable():
+    history = [_row(lcp=1000.0), _row(lcp=2000.0)]
+    assert baseline_for(
+        history, "https://x/", "mobile", "lcp", window=5, min_samples=2
+    ) == 1500.0
 
 
 # ---------- history io ----------
