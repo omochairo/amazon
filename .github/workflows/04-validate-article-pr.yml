@@ -502,6 +502,17 @@ on:
       - 'scripts/comment_uniqueness_audit.py'
       - 'scripts/tests/test_comment_uniqueness_audit.py'
       - 'data/analytics/uniqueness_audit.json'
+      # 2026-07-28 (#4098): uniqueness_audit.json の週次スナップショットを
+      # data/analytics/history/uniqueness_audit_history.jsonl に蓄積する history
+      # accumulator (append_census_history.py の B-3 と同型)。script/test だけ
+      # 登録して出力先を忘れると、K8/Ruri が還流する data PR が required check
+      # 不発で永久 BLOCKED になる ([[04-validate-paths-inverse-trap]]、
+      # #3329 gsc_index_census.json / #3676 demand_gaps.json と同型)。出力先は
+      # data/analytics/history/** に既に含まれるが、他の history accumulator と
+      # 同じ形式で明示登録しておく。
+      - 'scripts/append_uniqueness_audit_history.py'
+      - 'scripts/tests/test_append_uniqueness_audit_history.py'
+      - 'data/analytics/history/uniqueness_audit_history.jsonl'
       # #2995 案6: self-hosted Lighthouse レーン (実行は amazon-home-ops の
       # 41-lighthouse-lane.yml。出力先 data/analytics/history/** は登録済み)。
       - 'scripts/run_lighthouse_lane.py'

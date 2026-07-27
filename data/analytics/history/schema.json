@@ -66,6 +66,13 @@
       "key": ["date"],
       "source": "scripts/append_census_history.py (data/analytics/gsc_index_census.json, 22-gsc-index-census.yml)",
       "notes": "date は census の fetched_at の UTC 日付部分。coverageState は API のローカライズ表示文字列 (日本語・ロケール依存) なので、そのまま列名にせず scripts/append_census_history.py の COVERAGE_STATE_SLUGS で ASCII slug に固定マッピングしてから列化している。未知の raw 文字列は other に集計しつつ unmapped ({raw: count}) に原文保存し無言で捨てない (Google の言い回し変更に将来 retroactive 対応するため)。circuit_breaker_tripped=true の行は quota エラーで打ち切られた部分集計 (#3372) なので、trend 比較からは除外すること。cohort (#2687): sitemap 増加 (週+100URL超) による新規流入が絶対件数の悪化として誤認されるのを防ぐため、URL単位のコホート遷移を追加した object。{previous_date, previous_not_indexed, transitions: {'{from_slug}->{to_slug}': count, ...} (件数降順→キー昇順), exited_not_indexed, exited_indexed, exited_dropped, entered_not_indexed}。前回スナップショット (census_url_states.json) が無い初回は {previous_date: null} のみ。exited_indexed/exited_dropped は articles dir が読めない場合キー自体を省略 (不明を indexed に潰さない)"
+    },
+    "uniqueness_audit_history.jsonl": {
+      "description": "凡庸度定量監査 (data/analytics/uniqueness_audit.json、#3203 Phase 3) の週次スナップショットを蓄積した history、1 line per source_week。audit 本体は amazon-home-ops の K8/Ruri が data PR で還流するたびに上書きされる単一スナップショットで時系列を持たないため、#4098 で history accumulator を追加した (append_census_history.py の B-3 と同型)。",
+      "fields": ["date", "generated_at", "model", "corpus_size", "flagged_total", "max_sim_exceeded", "centroid_sim_exceeded", "threshold_mode", "threshold_max_sim", "threshold_centroid_sim", "cohort_stats"],
+      "key": ["date"],
+      "source": "scripts/append_uniqueness_audit_history.py (data/analytics/uniqueness_audit.json)。呼び出し配線は現状このリポジトリ内に無い (#4098 調査時点、amazon-home-ops 側の追加配線待ち)",
+      "notes": "date 列は実日付ではなく audit の source_week (ISO 週、例 '2026-W30') をそのまま格納する。max_sim_exceeded/centroid_sim_exceeded は thresholds.absolute_reference (固定の絶対しきい値 max_sim>0.95 / centroid_sim>0.9 を超えた件数) から取り、週をまたいで比較可能な主指標として独立列に昇格させている (threshold_max_sim/threshold_centroid_sim は percentile ベースの実効しきい値で毎週分布に応じて動くため単純比較不可)。corpus_size/flagged_total/max_sim_exceeded/centroid_sim_exceeded/threshold_* は欠損・型不正の場合 null (0 に潰すと『0件で健全』という偽シグナルになるため、unknown != pass)。cohort_stats は {pre_v7, post_v7, all} を毎行必ず持ち (欠損 cohort は count=0, percentile系=null で埋める)、各 cohort は {count, max_sim_p25/p50/p75/p90, centroid_sim_p25/p50/p75/p90} を持つ。"
     }
   },
   "sidecar_files": {
