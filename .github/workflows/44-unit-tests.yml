@@ -72,6 +72,13 @@ jobs:
 
       - name: Install Dependencies
         run: pip install -r requirements.txt
+        # requirements.txt はプロダクション実行依存 (fetch/build 系) のみを
+        # 管理しており pytest を含まない。CI 専用の test runner なのでここで
+        # 個別に入れる (requirements.txt に足すと本番実行環境にも
+        # 不要な test 依存が付く)。
+
+      - name: Install pytest
+        run: pip install pytest
 
       - name: Run unit tests
         run: python -m pytest scripts/tests -q
