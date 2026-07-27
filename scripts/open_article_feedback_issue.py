@@ -30,6 +30,8 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 
+from scripts import gh_rest
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("open_article_feedback_issue")
 
@@ -198,11 +200,12 @@ def create_issue(repo: str, title: str, body: str) -> str:
 
 
 def add_comment(repo: str, issue_number: int, body: str) -> str:
-    res = subprocess.run(
-        ["gh", "issue", "comment", str(issue_number), "-R", repo, "--body", body],
-        check=True, capture_output=True, text=True,
-    )
-    return res.stdout.strip()
+    """REST 経由で Issue にコメントを投稿する (`gh issue comment` の GraphQL 経路は
+    GitHub App installation token で失敗するため使わない — scripts/gh_rest.py 参照)。
+
+    `create_issue`/`gh issue create` はもともと REST を使うため無変更。
+    """
+    return gh_rest.post_issue_comment(repo, issue_number, body)
 
 
 def main() -> int:

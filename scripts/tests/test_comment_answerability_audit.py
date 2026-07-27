@@ -67,7 +67,7 @@ def test_find_low_ctr_issue_numbers_extracts_marker_and_number():
     def fake_run(cmd, **kwargs):
         return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(fake_response), stderr="")
 
-    with patch("scripts.comment_answerability_audit.subprocess.run", side_effect=fake_run):
+    with patch("scripts.gh_rest.subprocess.run", side_effect=fake_run):
         mapping = find_low_ctr_issue_numbers("omochairo/amazon")
     assert mapping == {
         "https://navi.omcha.jp/products/b0aaa/": 2928,
@@ -81,7 +81,7 @@ def test_find_low_ctr_issue_numbers_empty():
     def fake_run(cmd, **kwargs):
         return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"items": []}), stderr="")
 
-    with patch("scripts.comment_answerability_audit.subprocess.run", side_effect=fake_run):
+    with patch("scripts.gh_rest.subprocess.run", side_effect=fake_run):
         mapping = find_low_ctr_issue_numbers("repo", sleeper=lambda s: None)
     assert mapping == {}
 
@@ -100,7 +100,7 @@ def test_find_low_ctr_issue_numbers_retries_on_transient_zero_then_succeeds():
         return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(fake_response), stderr="")
 
     sleeps = []
-    with patch("scripts.comment_answerability_audit.subprocess.run", side_effect=fake_run):
+    with patch("scripts.gh_rest.subprocess.run", side_effect=fake_run):
         mapping = find_low_ctr_issue_numbers("repo", sleeper=lambda s: sleeps.append(s))
     assert mapping == {"https://x/": 3001}
     assert len(calls) == 2
@@ -114,7 +114,7 @@ def test_has_existing_audit_comment_true_when_marker_present():
     def fake_run(cmd, **kwargs):
         return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(comments), stderr="")
 
-    with patch("scripts.comment_answerability_audit.subprocess.run", side_effect=fake_run):
+    with patch("scripts.gh_rest.subprocess.run", side_effect=fake_run):
         assert has_existing_audit_comment("repo", 2928, url) is True
 
 
@@ -124,7 +124,7 @@ def test_has_existing_audit_comment_false_when_absent():
     def fake_run(cmd, **kwargs):
         return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(comments), stderr="")
 
-    with patch("scripts.comment_answerability_audit.subprocess.run", side_effect=fake_run):
+    with patch("scripts.gh_rest.subprocess.run", side_effect=fake_run):
         assert has_existing_audit_comment("repo", 2928, "https://navi.omcha.jp/products/x/") is False
 
 
@@ -136,5 +136,5 @@ def test_has_existing_audit_comment_false_for_different_url_marker():
     def fake_run(cmd, **kwargs):
         return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(comments), stderr="")
 
-    with patch("scripts.comment_answerability_audit.subprocess.run", side_effect=fake_run):
+    with patch("scripts.gh_rest.subprocess.run", side_effect=fake_run):
         assert has_existing_audit_comment("repo", 2928, "https://navi.omcha.jp/products/x/") is False

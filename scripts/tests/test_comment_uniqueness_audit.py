@@ -93,7 +93,7 @@ def test_find_tracker_issue_number_extracts_marker_and_picks_min():
     def fake_run(cmd, **kwargs):
         return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(fake_response), stderr="")
 
-    with patch("scripts.comment_uniqueness_audit.subprocess.run", side_effect=fake_run):
+    with patch("scripts.gh_rest.subprocess.run", side_effect=fake_run):
         number = find_tracker_issue_number("omochairo/amazon")
     assert number == 3250
 
@@ -102,7 +102,7 @@ def test_find_tracker_issue_number_returns_none_when_absent():
     def fake_run(cmd, **kwargs):
         return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"items": []}), stderr="")
 
-    with patch("scripts.comment_uniqueness_audit.subprocess.run", side_effect=fake_run):
+    with patch("scripts.gh_rest.subprocess.run", side_effect=fake_run):
         number = find_tracker_issue_number("repo", sleeper=lambda s: None)
     assert number is None
 
@@ -120,7 +120,7 @@ def test_find_tracker_issue_number_retries_on_transient_zero_then_succeeds():
         return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(fake_response), stderr="")
 
     sleeps = []
-    with patch("scripts.comment_uniqueness_audit.subprocess.run", side_effect=fake_run):
+    with patch("scripts.gh_rest.subprocess.run", side_effect=fake_run):
         number = find_tracker_issue_number("repo", sleeper=lambda s: sleeps.append(s))
     assert number == 3301
     assert len(calls) == 2
@@ -133,7 +133,7 @@ def test_resolve_tracker_issue_number_uses_explicit_without_search():
     def fail_run(cmd, **kwargs):  # pragma: no cover - 呼ばれたら失敗させる
         raise AssertionError("resolve should not call gh when issue_number is given")
 
-    with patch("scripts.comment_uniqueness_audit.subprocess.run", side_effect=fail_run):
+    with patch("scripts.gh_rest.subprocess.run", side_effect=fail_run):
         assert resolve_tracker_issue_number("repo", 3300) == 3300
 
 
@@ -143,7 +143,7 @@ def test_resolve_tracker_issue_number_falls_back_to_search_when_nonpositive():
     def fake_run(cmd, **kwargs):
         return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(fake_response), stderr="")
 
-    with patch("scripts.comment_uniqueness_audit.subprocess.run", side_effect=fake_run):
+    with patch("scripts.gh_rest.subprocess.run", side_effect=fake_run):
         assert resolve_tracker_issue_number("repo", 0, sleeper=lambda s: None) == 3300
         assert resolve_tracker_issue_number("repo", None, sleeper=lambda s: None) == 3300
 
@@ -154,7 +154,7 @@ def test_has_existing_week_comment_true_when_marker_present():
     def fake_run(cmd, **kwargs):
         return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(comments), stderr="")
 
-    with patch("scripts.comment_uniqueness_audit.subprocess.run", side_effect=fake_run):
+    with patch("scripts.gh_rest.subprocess.run", side_effect=fake_run):
         assert has_existing_week_comment("repo", 3250, "2026-W29") is True
 
 
@@ -164,7 +164,7 @@ def test_has_existing_week_comment_false_when_absent():
     def fake_run(cmd, **kwargs):
         return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(comments), stderr="")
 
-    with patch("scripts.comment_uniqueness_audit.subprocess.run", side_effect=fake_run):
+    with patch("scripts.gh_rest.subprocess.run", side_effect=fake_run):
         assert has_existing_week_comment("repo", 3250, "2026-W29") is False
 
 
@@ -175,5 +175,5 @@ def test_has_existing_week_comment_false_for_different_week_marker():
     def fake_run(cmd, **kwargs):
         return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(comments), stderr="")
 
-    with patch("scripts.comment_uniqueness_audit.subprocess.run", side_effect=fake_run):
+    with patch("scripts.gh_rest.subprocess.run", side_effect=fake_run):
         assert has_existing_week_comment("repo", 3250, "2026-W29") is False
