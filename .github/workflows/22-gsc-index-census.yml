@@ -153,7 +153,7 @@ jobs:
 
           # checkout -b の前に変更有無を判定する (staged 状態で checkout -b すると
           # 一部ファイルが失われることがあるため、branch 作成前は git add しない)
-          if ! git status --porcelain -- data/analytics/gsc_index_census.json data/analytics/history/gsc_index_census.jsonl | grep -q .; then
+          if ! git status --porcelain -- data/analytics/gsc_index_census.json data/analytics/history/gsc_index_census.jsonl data/analytics/history/census_url_states.json | grep -q .; then
             echo "No census changes to commit; skipping PR."
             exit 0
           fi
@@ -176,6 +176,10 @@ jobs:
           # 未作成でありうる。その 1 ファイルの欠如で census 本体のコミットまで
           # 落とさないよう、こちらだけ寛容に add する
           git add data/analytics/history/gsc_index_census.jsonl 2>/dev/null || true
+          # census_url_states.json (#2687): コホート遷移計算用の前回スナップショット。
+          # これを add し忘れると新規データが自動 PR に載らず、次回 run の遷移計算が
+          # 永久に初回状態のまま (previous_date=None) になってしまう
+          git add data/analytics/history/census_url_states.json 2>/dev/null || true
           git commit -m "data(analytics): GSC index census (run ${{ github.run_id }})"
           git push -u origin "$BRANCH"
 

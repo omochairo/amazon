@@ -62,10 +62,16 @@
     },
     "gsc_index_census.jsonl": {
       "description": "URL Inspection API による products/ の週次全数調査 (data/analytics/gsc_index_census.json) を蓄積した history、1 line per date。census 本体は毎週上書きされる単一スナップショットで時系列を持たないため、#3331/#3333 の効果判定・品質ゲートのために別途 append する (#3988 B-3)",
-      "fields": ["date", "sitemap_urls", "inspected", "indexed", "not_indexed", "errors", "indexed_rate", "submitted_and_indexed", "discovered_not_indexed", "unknown_to_google", "crawled_not_indexed", "not_found_404", "excluded_by_noindex", "other", "circuit_breaker_tripped", "unmapped"],
+      "fields": ["date", "sitemap_urls", "inspected", "indexed", "not_indexed", "errors", "indexed_rate", "submitted_and_indexed", "discovered_not_indexed", "unknown_to_google", "crawled_not_indexed", "not_found_404", "excluded_by_noindex", "other", "circuit_breaker_tripped", "unmapped", "cohort"],
       "key": ["date"],
       "source": "scripts/append_census_history.py (data/analytics/gsc_index_census.json, 22-gsc-index-census.yml)",
-      "notes": "date は census の fetched_at の UTC 日付部分。coverageState は API のローカライズ表示文字列 (日本語・ロケール依存) なので、そのまま列名にせず scripts/append_census_history.py の COVERAGE_STATE_SLUGS で ASCII slug に固定マッピングしてから列化している。未知の raw 文字列は other に集計しつつ unmapped ({raw: count}) に原文保存し無言で捨てない (Google の言い回し変更に将来 retroactive 対応するため)。circuit_breaker_tripped=true の行は quota エラーで打ち切られた部分集計 (#3372) なので、trend 比較からは除外すること"
+      "notes": "date は census の fetched_at の UTC 日付部分。coverageState は API のローカライズ表示文字列 (日本語・ロケール依存) なので、そのまま列名にせず scripts/append_census_history.py の COVERAGE_STATE_SLUGS で ASCII slug に固定マッピングしてから列化している。未知の raw 文字列は other に集計しつつ unmapped ({raw: count}) に原文保存し無言で捨てない (Google の言い回し変更に将来 retroactive 対応するため)。circuit_breaker_tripped=true の行は quota エラーで打ち切られた部分集計 (#3372) なので、trend 比較からは除外すること。cohort (#2687): sitemap 増加 (週+100URL超) による新規流入が絶対件数の悪化として誤認されるのを防ぐため、URL単位のコホート遷移を追加した object。{previous_date, previous_not_indexed, transitions: {'{from_slug}->{to_slug}': count, ...} (件数降順→キー昇順), exited_not_indexed, exited_indexed, exited_dropped, entered_not_indexed}。前回スナップショット (census_url_states.json) が無い初回は {previous_date: null} のみ。exited_indexed/exited_dropped は articles dir が読めない場合キー自体を省略 (不明を indexed に潰さない)"
+    }
+  },
+  "sidecar_files": {
+    "census_url_states.json": {
+      "description": "gsc_index_census.jsonl の cohort 計算用、直近 run 時点の not-indexed URL 状態スナップショット (#2687)。history として積まず毎 run 上書き。{date, states: {url: slug, ...}}。states の値は COVERAGE_STATE_SLUGS で変換した ASCII slug (未知は other)。gsc_index_census.jsonl の append が idempotency でスキップされた場合はこのファイルも上書きしない",
+      "written_by": "scripts/append_census_history.py"
     }
   },
   "idempotency": {
