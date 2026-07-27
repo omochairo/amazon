@@ -1,19 +1,47 @@
 {
-  "jan_candidates_before_limit": 1,
-  "input_unmatched_jans": 1,
-  "resolved": [],
-  "unresolved": [
+  "jan_candidates_before_limit": 4,
+  "input_unmatched_jans": 4,
+  "resolved": [
     {
-      "jan": "4944121548637",
+      "jan": "4521718558943",
+      "asin": "B0828H7K3X",
       "rank": null,
-      "title": "くもん 学習ポスター かず【2023新】　クリスマス"
+      "title": "おえかき陶器貯金箱 ゆきだるま 手作り お絵描き アーテック55894 パーティ お祝い 誕生日会 ハロウィン クリスマス イベント"
+    },
+    {
+      "jan": "4521718025674",
+      "asin": "B018LJHZYU",
+      "rank": null,
+      "title": "ことわざカードかるた　　アーテック 知育玩具 　2567 パーティ お祝い 誕生日会 ハロウィン クリスマス イベント"
+    },
+    {
+      "jan": "4971404318700",
+      "asin": "B09CPNJ6GR",
+      "rank": null,
+      "title": "ねんDo! おおきなねんど版のきほんセット グリーン"
     }
   ],
+  "unresolved": [],
   "skipped_already_covered": [],
-  "new_asins": [],
+  "new_asins": [
+    "B0828H7K3X",
+    "B018LJHZYU",
+    "B09CPNJ6GR"
+  ],
   "genre_gate_enabled": true,
-  "genre_gate_dropped": 0,
-  "genre_gate_dropped_items": [],
-  "generated_at": "2026-07-26T20:12:31.950930+00:00",
-  "ranking_pool_size": 2
+  "genre_gate_dropped": 1,
+  "genre_gate_dropped_items": [
+    {
+      "asin": "4099416771",
+      "rank": null,
+      "title": "タッチペンで音が聞ける！ はじめてずかん1000 3点セット 英語つき ワクワク",
+      "roots": [
+        "本"
+      ],
+      "match_method": "jan",
+      "jan": "9784099416775"
+    }
+  ],
+  "generated_at": "2026-07-27T20:25:23.319843+00:00",
+  "ranking_pool_size": 5
 }
