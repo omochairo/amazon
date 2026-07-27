@@ -167,6 +167,24 @@ class LoadArticlesTest(unittest.TestCase):
             records = bfl.load_articles(d)
             self.assertEqual([r.asin for r in records], ["B00000004"])
 
+    def test_missing_ivs_score_is_included_in_pool(self):
+        """#4007 follow-up 4: 生 JSON の ivs_score presence check は gate から撤去済み。
+
+        ivs_score は score_calculator で再計算して捨てるだけの値 (Jules 推定で
+        stale) なので、欠落していてもプールから除外されない。asin / best_price
+        が無い記事は従来どおり除外されることは test_skips_missing_required_fields
+        で確認済み。
+        """
+        with tempfile.TemporaryDirectory() as td:
+            d = pathlib.Path(td)
+            no_ivs = _make_article("B00000006")
+            no_ivs["product"].pop("ivs_score")
+            no_ivs["product"].pop("ivs_detail")
+            _write_article(d, no_ivs)
+
+            records = bfl.load_articles(d)
+            self.assertEqual([r.asin for r in records], ["B00000006"])
+
     def test_unreadable_json_is_skipped(self):
         with tempfile.TemporaryDirectory() as td:
             d = pathlib.Path(td)
@@ -178,6 +196,29 @@ class LoadArticlesTest(unittest.TestCase):
     def test_missing_dir_returns_empty(self):
         records = bfl.load_articles(pathlib.Path("/does/not/exist/articles"))
         self.assertEqual(records, [])
+
+    def test_calculate_score_exception_is_skipped_not_fatal(self):
+        """#4007 follow-up 4: ivs_score gate 撤去でプール対象が全記事に広がるため、
+        calculate_score が想定外の例外を投げても他の記事の集計を止めない (fail-soft)。
+        """
+        with tempfile.TemporaryDirectory() as td:
+            d = pathlib.Path(td)
+            _write_article(d, _make_article("B00000007"))
+            _write_article(d, _make_article("B00000008"))
+
+            def _raising_calculate_score(article, brand, asin=None):
+                if asin == "B00000007":
+                    raise ValueError("boom")
+                return _stub_calculate_score(article, brand, asin=asin)
+
+            original = bfl.calculate_score
+            bfl.calculate_score = _raising_calculate_score
+            try:
+                records = bfl.load_articles(d)
+            finally:
+                bfl.calculate_score = original
+
+            self.assertEqual([r.asin for r in records], ["B00000008"])
 
 
 # ---------------------------------------------------------------------------
@@ -607,6 +648,93 @@ class BuildDealsTest(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# build_deals_with_stale_fallback (#4007 follow-up 2)
+# ---------------------------------------------------------------------------
+
+class BuildDealsStaleFallbackTest(unittest.TestCase):
+    def _rec(self, asin, savings, fetched_at, *, ivs_score=4.5, ivs_100=90):
+        return bfl.ArticleRecord(
+            asin=asin, slug=asin.lower(), name="x", image=None,
+            ivs_score=ivs_score, ivs_100=ivs_100, best_price=2000,
+            best_platform="Amazon", amazon_url=None,
+            savings_percentage=savings, fetched_at=fetched_at,
+        )
+
+    def test_all_within_3days_uses_base_window(self):
+        """全件が 3 日以内に観測されていれば base window (既定 3日) がそのまま
+        採用され、フォールバックは発動しない。"""
+        now = datetime(2026, 7, 27, tzinfo=timezone.utc)
+        fresh = (now - timedelta(days=1)).isoformat()
+        recs = [self._rec(f"A{i}", 30, fresh) for i in range(10)]
+
+        items, drops, used = bfl.build_deals_with_stale_fallback(
+            recs, now=now, stale_days=3, stale_min_cards=8, top_n=20,
+        )
+        self.assertEqual(used, 3)
+        self.assertEqual(len(items), 10)
+        self.assertEqual(drops["stale_or_unknown_fetch"], 0)
+
+    def test_widens_to_7days_when_below_min_cards(self):
+        """全件が 5 日前 (3日 window では 0 件) → 3日で下限割れ → 7日 window に
+        広がり、採用 window が呼び出し側から取得できる。"""
+        now = datetime(2026, 7, 27, tzinfo=timezone.utc)
+        five_days_ago = (now - timedelta(days=5)).isoformat()
+        recs = [self._rec(f"A{i}", 30, five_days_ago) for i in range(10)]
+
+        items, drops, used = bfl.build_deals_with_stale_fallback(
+            recs, now=now, stale_days=3, stale_min_cards=8, top_n=20,
+        )
+        self.assertEqual(used, 7)
+        self.assertEqual(len(items), 10)
+
+    def test_widens_to_14days_but_stays_empty_when_all_30days_old(self):
+        """全件が 30 日前 → 14 日まで広げても stale_min_cards に届かず空になる
+        ことを許容する (14 日を超えては広げない)。"""
+        now = datetime(2026, 7, 27, tzinfo=timezone.utc)
+        thirty_days_ago = (now - timedelta(days=30)).isoformat()
+        recs = [self._rec(f"A{i}", 30, thirty_days_ago) for i in range(10)]
+
+        items, drops, used = bfl.build_deals_with_stale_fallback(
+            recs, now=now, stale_days=3, stale_min_cards=8, top_n=20,
+        )
+        self.assertEqual(used, 14)
+        self.assertEqual(items, [])
+        self.assertEqual(drops["stale_or_unknown_fetch"], 10)
+
+    def test_below_min_cards_but_nonzero_still_widens_and_can_stay_below(self):
+        """下限に届かない件数 (0 件超) でも widen は続き、14 日まで広げても
+        届かなければそのまま (widen を止めた時点の) 結果を返す。"""
+        now = datetime(2026, 7, 27, tzinfo=timezone.utc)
+        fresh = (now - timedelta(days=1)).isoformat()
+        stale30 = (now - timedelta(days=30)).isoformat()
+        # 3日以内に観測があるのは 2 件だけ (stale_min_cards=8 を満たさない)。
+        recs = [self._rec(f"FRESH{i}", 30, fresh) for i in range(2)]
+        recs += [self._rec(f"STALE{i}", 30, stale30) for i in range(5)]
+
+        items, drops, used = bfl.build_deals_with_stale_fallback(
+            recs, now=now, stale_days=3, stale_min_cards=8, top_n=20,
+        )
+        # 30日前の記事は 14日 window でも stale のまま拾われないので
+        # 最終的に 2 件のまま (8 件には届かない) が widen は 14 まで行われる。
+        self.assertEqual(used, 14)
+        self.assertEqual(len(items), 2)
+
+    def test_custom_stale_days_above_7_skips_7day_rung(self):
+        """--stale-days に 10 を指定した場合、フォールバックの梯子は
+        [10, 14] のみ (7 は base より狭いので候補に入らない)。"""
+        now = datetime(2026, 7, 27, tzinfo=timezone.utc)
+        stale12 = (now - timedelta(days=12)).isoformat()
+        recs = [self._rec(f"A{i}", 30, stale12) for i in range(10)]
+
+        items, drops, used = bfl.build_deals_with_stale_fallback(
+            recs, now=now, stale_days=10, stale_min_cards=8, top_n=20,
+        )
+        # 12日前は 10日 window では stale だが 14日 window では拾われる。
+        self.assertEqual(used, 14)
+        self.assertEqual(len(items), 10)
+
+
+# ---------------------------------------------------------------------------
 # Serialization
 # ---------------------------------------------------------------------------
 
@@ -689,12 +817,18 @@ class RunEndToEndTest(unittest.TestCase):
                 savings=50, fetched_at=(now - timedelta(days=60)).isoformat(),
             )
 
+            # stale_min_cards=1: このテストは低母数 (記事3件) なので、既定の
+            # stale_min_cards=8 だと 3日 window の 1 件では届かず 14日 まで
+            # 自動で広がってしまう (#4007 follow-up 2 のフォールバック挙動)。
+            # ここでは base window (3日) がそのまま採用されることを検証したいので
+            # 下限を 1 に下げて widen が発動しないようにする。
             manifest = bfl.run(
                 articles_dir=arts,
                 per_asin_dir=per,
                 out_hugo=out_hugo,
                 out_manifest=out_manifest,
                 now=now,
+                stale_min_cards=1,
             )
 
             cospa = json.loads((out_hugo / "cospa.json").read_text(encoding="utf-8"))
@@ -723,6 +857,10 @@ class RunEndToEndTest(unittest.TestCase):
             self.assertEqual(
                 saved_manifest["deals"]["drops"]["stale_or_unknown_fetch"], 1
             )
+            # #4007 follow-up 2: stale_min_cards=1 なので base window (3日) の
+            # ままウィジェンしないことを確認する。
+            self.assertEqual(saved_manifest["deals"]["stale_window_used"], 3)
+            self.assertEqual(saved_manifest["deals"]["filter"]["stale_days"], 3)
             # cospa manifest は band 別 dict
             self.assertEqual(manifest["cospa"]["bands"]["1000-2000"], 1)
             self.assertEqual(manifest["cospa"]["bands"]["2000-3000"], 1)

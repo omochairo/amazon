@@ -143,8 +143,8 @@ def _is_article_json(path: Path) -> bool:
 def load_articles(articles_dir: Path) -> list[ArticleRecord]:
     """Read every article json under ``articles_dir`` into an ArticleRecord list.
 
-    Articles missing required fields (asin, ivs_score, best_price) are skipped
-    with a debug log; the caller can rely on every returned record being usable.
+    Articles missing required fields (asin, best_price) are skipped with a
+    debug log; the caller can rely on every returned record being usable.
     """
     records: list[ArticleRecord] = []
     if not articles_dir.exists():
@@ -164,7 +164,16 @@ def load_articles(articles_dir: Path) -> list[ArticleRecord]:
         prod = raw.get("product") or {}
         asin = prod.get("asin")
         best_price = prod.get("best_price")
-        if not asin or prod.get("ivs_score") is None or best_price is None:
+        # #4007 follow-up 4: ここでは asin と best_price のみを必須にする。
+        # 従来は `prod.get("ivs_score") is None` も gate に入れていたが、その
+        # raw ivs_score はすぐ下の calculate_score() で再計算して捨てるだけの
+        # 値であり (Jules 推定で stale)、「使わない値の presence check」で記事を
+        # 除外していた。実測 (2026-07-27): 1713 記事中 1113 件がこの check だけで
+        # 特集ページ (/cospa/ /deals/ + hub) の候補プールから外れており、うち
+        # 全件が asin/best_price を保有していた。除外 1113 件を calculate_score
+        # に通すと全件成功し (例外 0)、ivs_score の分布 (median 4.00) も現行
+        # プール (4.15) とほぼ同じで、--min-ivs 4.0 を 569 件が通過した。
+        if not asin or best_price is None:
             logger.debug("skip article missing required fields: %s", path.name)
             continue
 
@@ -173,8 +182,15 @@ def load_articles(articles_dir: Path) -> list[ArticleRecord]:
 
         # 記事ページと同じ式で再計算 (score_calculator)。生 JSON の ivs_score は
         # Jules 推定で stale。brand が無い場合は normalize_brand("") が unknown を返す。
+        # ivs_score gate 撤去でプール対象が 1713 記事全体に広がるため、
+        # calculate_score が想定外の例外を投げた場合に備えて防御する
+        # (実測では 0 件だが、母数が増えるので fail-soft にしておく)。
         brand = normalize_brand(prod.get("brand") or "")
-        sr = calculate_score(raw, brand, asin=asin)
+        try:
+            sr = calculate_score(raw, brand, asin=asin)
+        except Exception as exc:  # noqa: BLE001 - fail-soft, log and skip
+            logger.debug("skip article: calculate_score raised for %s: %s", path.name, exc)
+            continue
 
         records.append(
             ArticleRecord(
@@ -536,15 +552,27 @@ def build_deals(
     *,
     min_ivs: float = 4.0,
     min_savings: int = 20,
-    stale_days: int = 14,
+    stale_days: int = 3,
     top_n: int = 20,
     now: datetime | None = None,
 ) -> tuple[list[ArticleRecord], dict[str, int]]:
     """Select TOP-N discount picks.
 
-    Stale guard: per_asin/amazon.json's ``fetched_at`` must be within
-    ``stale_days`` of ``now``. Without this, a deal that ended weeks ago
-    could keep appearing on /deals/.
+    Stale guard: per_asin/amazon.json's ``fetched_at`` (overwritten by
+    ``overlay_current_prices`` with price_watch's ``observed_at`` when a
+    fresher observation exists) must be within ``stale_days`` of ``now``.
+    Without this, a deal that ended weeks ago could keep appearing on
+    /deals/.
+
+    ``stale_days`` default is 3, not 14 (#4007 follow-up 2). 14 日は
+    price_overlay 導入前 (per_asin 週次巡回のみ) の名残で、日次観測
+    (price_watch) が入力になった現在は分布の遥か外側にあり選別として
+    機能していなかった: 実測 (2026-07-27) で deals 対象 (savings>=20%) 155
+    件中、fetched_at が観測 1 日以内のもの 154 件・3 日以内も同じく 154
+    件・14 日以内も 155 件 — 14 日ガードは 1 件も除外していなかった。
+    3 日に締めても減るのは 1 件のみ。呼び出し側は通常この関数を直接では
+    なく ``build_deals_with_stale_fallback`` 経由で使い、NAS 日次観測レーン
+    (price_watch) が数日止まって pool が薄くなった場合に窓を自動で広げる。
     """
     drops = {
         "low_ivs": 0,
@@ -577,6 +605,68 @@ def build_deals(
         key=lambda r: (-(r.savings_percentage or 0), -(r.ivs_100 or 0)),
     )
     return survivors[:top_n], drops
+
+
+# 段階的 stale window フォールバック (#4007 follow-up 2)。base window (既定 3日) を
+# 締めた副作用として「NAS レーン (price_watch) が数日止まると /deals/ が空になる」
+# 失敗モードが出るのを避けるため、採用カード数が下限を割ったら 7日 -> 14日 と
+# 順に広げて再試行する。ユーザが --stale-days で base を 7 や 20 に変えた場合は
+# 7/14 のうち base 以上のものだけを候補にする (base より狭い窓には戻さない)。
+_STALE_FALLBACK_LADDER_ANCHORS = (7, 14)
+
+
+def build_deals_with_stale_fallback(
+    records: Iterable[ArticleRecord],
+    *,
+    min_ivs: float = 4.0,
+    min_savings: int = 20,
+    stale_days: int = 3,
+    stale_min_cards: int = 8,
+    top_n: int = 20,
+    now: datetime | None = None,
+) -> tuple[list[ArticleRecord], dict[str, int], int]:
+    """``build_deals`` を stale window を段階的に広げながら呼び出す。
+
+    まず ``stale_days`` (既定 3) で pool を作る。採用カード数
+    (top_n 適用後の枚数) が ``stale_min_cards`` (既定 8、``top_n`` より
+    小さい値を想定) を割ったら、7日 -> 14日 の順に窓を広げて再試行する
+    (``stale_days`` が既に 7 や 14 以上ならその値は候補から外す)。
+    14 日まで広げても ``stale_min_cards`` に届かない場合はそれ以上は広げず、
+    14 日窓の結果をそのまま返す (空を許容する — 無限に広げて明らかに古い
+    値上げ前の「割引」を出し続けるほうが害が大きい)。
+
+    records は ``_dedupe_by_asin`` を含む ``build_deals`` を複数回呼ぶために
+    list 化して使い回す (Iterable が使い捨てジェネレータの場合に備える)。
+
+    戻り値は ``(items, drops, used_stale_days)``。``used_stale_days`` は
+    実際に採用された window (呼び出し側が manifest / log に記録して、
+    「どの窓で作られたページなのか」を後から追跡できるようにする)。
+    """
+    records_list = list(records)
+    ladder = sorted({stale_days, *(w for w in _STALE_FALLBACK_LADDER_ANCHORS if w >= stale_days)})
+
+    items: list[ArticleRecord] = []
+    drops: dict[str, int] = {}
+    used_stale_days = ladder[0]
+    for window in ladder:
+        items, drops = build_deals(
+            records_list,
+            min_ivs=min_ivs,
+            min_savings=min_savings,
+            stale_days=window,
+            top_n=top_n,
+            now=now,
+        )
+        used_stale_days = window
+        if len(items) >= stale_min_cards:
+            break
+        logger.info(
+            "deals stale window %dd yielded %d cards (< stale_min_cards=%d)%s",
+            window, len(items), stale_min_cards,
+            "" if window == ladder[-1] else "; widening",
+        )
+
+    return items, drops, used_stale_days
 
 
 # ---------------------------------------------------------------------------
@@ -709,7 +799,8 @@ def run(
     price_min: int = 500,
     price_max: int = 5000,
     min_savings: int = 20,
-    stale_days: int = 14,
+    stale_days: int = 3,
+    stale_min_cards: int = 8,
     now: datetime | None = None,
     raw_root: Path | None = None,
 ) -> dict[str, Any]:
@@ -722,14 +813,20 @@ def run(
         min_ivs=min_ivs,
         top_n_per_band=top_n,
     )
-    deals_items, deals_drops = build_deals(
+    deals_items, deals_drops, deals_stale_window = build_deals_with_stale_fallback(
         records,
         min_ivs=min_ivs,
         min_savings=min_savings,
         stale_days=stale_days,
+        stale_min_cards=stale_min_cards,
         top_n=top_n,
         now=now,
     )
+    if deals_stale_window != stale_days:
+        logger.info(
+            "deals: widened stale window %dd -> %dd to reach stale_min_cards=%d (%d cards)",
+            stale_days, deals_stale_window, stale_min_cards, len(deals_items),
+        )
 
     generated_at = _now_iso()
     cospa_filter = {
@@ -743,7 +840,11 @@ def run(
     deals_filter = {
         "min_ivs": min_ivs,
         "min_savings": min_savings,
+        # stale_days: CLI/呼び出し元が指定した base window。実際に採用された
+        # window (フォールバックで広がった場合はそれ以上) は stale_window_used。
         "stale_days": stale_days,
+        "stale_min_cards": stale_min_cards,
+        "stale_window_used": deals_stale_window,
         "top_n": top_n,
     }
 
@@ -765,6 +866,10 @@ def run(
             "count": len(deals_items),
             "filter": deals_filter,
             "drops": deals_drops,
+            # #4007 follow-up 2: どの stale window で採用されたページなのかを
+            # 常に manifest から追える形で残す (フォールバックで 3->7->14 と
+            # 広がった場合、ページが古くなった原因を後から追跡できるように)。
+            "stale_window_used": deals_stale_window,
         },
     }
 
@@ -793,7 +898,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--price-min", type=int, default=500)
     parser.add_argument("--price-max", type=int, default=5000)
     parser.add_argument("--min-savings", type=int, default=20)
-    parser.add_argument("--stale-days", type=int, default=14)
+    parser.add_argument(
+        "--stale-days",
+        type=int,
+        default=3,
+        help="#4007 follow-up 2: deals の base stale window (日)。既定 14 -> 3。"
+             "採用カード数が --stale-min-cards を割ったら 7日 -> 14日 へ自動で"
+             "広げる (build_deals_with_stale_fallback)。",
+    )
+    parser.add_argument(
+        "--stale-min-cards",
+        type=int,
+        default=8,
+        help="#4007 follow-up 2: stale window フォールバックの下限カード数。"
+             "--top-n より小さい値を想定。",
+    )
     parser.add_argument(
         "--raw-root",
         default="data/raw",
@@ -822,14 +941,16 @@ def main(argv: list[str] | None = None) -> int:
         price_max=args.price_max,
         min_savings=args.min_savings,
         stale_days=args.stale_days,
+        stale_min_cards=args.stale_min_cards,
         raw_root=args.raw_root,
     )
     cospa_total = sum(manifest["cospa"].get("bands", {}).values())
     logger.info(
-        "built: cospa=%d (across %d bands) deals=%d (from %d articles)",
+        "built: cospa=%d (across %d bands) deals=%d window=%dd (from %d articles)",
         cospa_total,
         len(manifest["cospa"].get("bands", {})),
         manifest["deals"]["count"],
+        manifest["deals"]["stale_window_used"],
         manifest["articles_loaded"],
     )
     return 0
