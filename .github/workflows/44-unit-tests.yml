@@ -1,0 +1,70 @@
+name: Unit Tests
+
+# #4007 follow-up 3: scripts/tests/ の unit test (1700+ ケース) はこれまで CI で
+# 実行されておらず、ローカル実行のみだった。
+#
+# なぜ既存の `validate` job (04-validate-article-pr.yml) に相乗りさせず独立
+# workflow にしたか:
+#   1. main の branch protection の required check は `validate` 1 本のみ。
+#      04-validate-article-pr.yml の `paths` allowlist は肥大しており、
+#      script-only PR で paths 未登録だと required check `validate` が不発 →
+#      auto-merge が永久 pending になる inverse-trap を過去に複数回踏んでいる
+#      (04-validate-article-pr.yml 内コメント多数)。pytest step をそこに追加
+#      すると、その trap の再発時に「記事データのみの Jules PR」まで unit
+#      test 失敗の巻き添えで全停止するリスクを負う。
+#   2. `validate` は記事 JSON の schema 検証 + quality gate + (対象ファイル
+#      変更時のみ) Creator API dry-run という「記事 PR 用」の性質を持つ。
+#      scripts/ 全体の unit test はその関心事と別物であり、独立させたほうが
+#      失敗時の切り分けが速い。
+#
+# なぜ required check にしないか:
+#   まずこの workflow が数週間グリーンで安定することを観察してから、
+#   required check への昇格 (branch protection 設定変更) を判断する。
+#   いきなり必須化すると、既存の未検出フレーク/環境差異があった場合に
+#   全 PR がブロックされるリスクがある。
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'scripts/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unit-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # jules/ プロンプトは private repo (amazon-navi-brain) に分離済み。
+      # scripts/tests/test_build_jules_prompt.py が jules/PROMPT_TEMPLATE.md を
+      # 要求するため、04-validate-article-pr.yml と同じ overlay checkout を行う。
+      - name: Checkout prompt brain (private) into jules/
+        uses: actions/checkout@v6
+        with:
+          repository: omochairo/amazon-navi-brain
+          token: ${{ secrets.NAVI_BRAIN_PAT }}
+          path: jules
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: python -m pytest scripts/tests -q
