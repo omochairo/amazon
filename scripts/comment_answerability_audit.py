@@ -34,10 +34,11 @@ import json
 import logging
 import os
 import pathlib
-import subprocess
 import sys
 import time
 from typing import Any
+
+from scripts import gh_rest
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("comment_answerability_audit")
@@ -63,10 +64,9 @@ def _search_issues(query: str, sleeper=time.sleep) -> list[dict]:
     """
     items: list[dict] = []
     for attempt in range(1, _SEARCH_MAX_ATTEMPTS + 1):
-        res = subprocess.run(
-            ["gh", "api", "-X", "GET", "search/issues",
+        res = gh_rest.run_gh(
+            ["api", "-X", "GET", "search/issues",
              "-f", f"q={query}", "-f", "per_page=100"],
-            check=True, capture_output=True, text=True,
         )
         items = json.loads(res.stdout).get("items", [])
         if items or attempt == _SEARCH_MAX_ATTEMPTS:
@@ -104,10 +104,9 @@ def find_low_ctr_issue_numbers(repo: str, sleeper=time.sleep) -> dict[str, int]:
 def has_existing_audit_comment(repo: str, issue_number: int, url: str) -> bool:
     """指定 Issue の既存コメントに、この URL 用の audit marker が既にあるか。"""
     marker = f"<!-- {AUDIT_MARKER_PREFIX}{url} -->"
-    res = subprocess.run(
-        ["gh", "api", "-X", "GET", f"repos/{repo}/issues/{issue_number}/comments",
+    res = gh_rest.run_gh(
+        ["api", "-X", "GET", f"repos/{repo}/issues/{issue_number}/comments",
          "-f", "per_page=100"],
-        check=True, capture_output=True, text=True,
     )
     comments = json.loads(res.stdout)
     if not isinstance(comments, list):
@@ -169,10 +168,10 @@ def render_comment_body(page_entry: dict[str, Any], *, model: str, source_week: 
 
 
 def post_comment(repo: str, issue_number: int, body: str) -> None:
-    subprocess.run(
-        ["gh", "issue", "comment", str(issue_number), "-R", repo, "--body", body],
-        check=True, capture_output=True, text=True,
-    )
+    """REST 経由で Issue にコメントを投稿する (`gh issue comment` の GraphQL 経路は
+    GitHub App installation token で失敗するため使わない — scripts/gh_rest.py 参照)。
+    """
+    gh_rest.post_issue_comment(repo, issue_number, body)
 
 
 def main() -> int:
