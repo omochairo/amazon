@@ -27,6 +27,13 @@ on:
   pull_request:
     paths:
       - 'scripts/**'
+      # 自身の変更 PR でも unit-tests を発火させる (04-validate-article-pr.yml が
+      # 同じ理由で自身を paths に self-listing しているのと同じパターン)。
+      # これが無いと workflow 本体だけを触る PR で `pull_request` イベントが
+      # 発火せず、workflow_dispatch もデフォルトブランチに merge 後でないと
+      # 呼び出せない (workflow ファイルがまだ main に無いため) ので、
+      # merge 前にこの job の成否を検証する手段が無くなる。
+      - '.github/workflows/44-unit-tests.yml'
   push:
     branches:
       - main
