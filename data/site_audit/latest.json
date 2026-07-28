@@ -1,14 +1,15 @@
 {
  "base_url": "https://navi.omcha.jp",
- "generated_at": "2026-07-21T20:04:38Z",
+ "generated_at": "2026-07-28T20:04:21Z",
  "has_regressions": true,
- "pages_crawled": 2742,
+ "pages_crawled": 2927,
  "r1_sitemap_broken": [],
  "r2_sitemap_noindex": [],
  "r3_broken_internal": [
   {
    "sources": [
-    "https://navi.omcha.jp/products/b0fwk6ffn7/"
+    "https://navi.omcha.jp/products/b0fwk6ffn7/",
+    "https://navi.omcha.jp/products/b0fwqtldqp/"
    ],
    "status": 404,
    "url": "https://navi.omcha.jp/cdn-cgi/l/email-protection/"
@@ -19,10 +20,18 @@
   "https://navi.omcha.jp/categories/",
   "https://navi.omcha.jp/favorites/"
  ],
- "sitemap_urls": 2036,
+ "sitemap_urls": 2168,
  "summary": {
-  "canonical_mismatch_count": 648,
-  "noindex_inlinked_count": 703,
+  "canonical_mismatch_count": 702,
+  "canonical_mismatch_patterns": {
+   "path": 702
+  },
+  "noindex_inlinked_count": 757,
+  "noindex_inlinked_patterns": {
+   "brands/": 147,
+   "posts/": 173,
+   "tags/": 437
+  },
   "r1_sitemap_broken": 0,
   "r2_sitemap_noindex": 0,
   "r3_broken_internal": 1,
