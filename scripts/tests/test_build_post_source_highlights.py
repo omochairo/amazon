@@ -44,6 +44,39 @@ class SnippetGateTests(unittest.TestCase):
             )
         )
 
+    def test_accepts_prose_with_incidental_numbers(self):
+        # #4150 regression guard: age ranges / dimensions must not be
+        # mistaken for phone numbers or trip the digit-density gate.
+        self.assertTrue(
+            _highlight_snippet_ok(
+                "対象年齢は3-5歳向けで、組み立てると全長30cmほどになる大きめのブロック作品です。"
+            )
+        )
+
+    def test_rejects_real_contact_block(self):
+        # #4150: actual dougukan.com snippet that produced the 404 on
+        # /cdn-cgi/l/email-protection/ in the site audit.
+        self.assertFalse(
+            _highlight_snippet_ok(
+                "ベビーギフトフルセットの内容 具館へのご連絡は 電話 03-3744-0909 / "
+                "FAX 03-3744-0988 / Eメール mail@dougukan.com"
+            )
+        )
+
+    def test_rejects_email_only(self):
+        self.assertFalse(
+            _highlight_snippet_ok(
+                "ご質問やご不明点がございましたら遠慮なくご連絡ください support@example.co.jp"
+            )
+        )
+
+    def test_rejects_phone_only(self):
+        self.assertFalse(
+            _highlight_snippet_ok(
+                "お問い合わせは受付時間内にお願いいたします。077-555-1234 までどうぞ。"
+            )
+        )
+
 
 class ScoreTests(unittest.TestCase):
     def test_japanese_prose_outranks_english_listing(self):
