@@ -501,6 +501,65 @@ class OutputFilesTest(unittest.TestCase):
             for key in ("date", "pages_crawled", "sitemap_urls", "r1", "r2", "r3", "r4", "orphans", "has_regressions"):
                 self.assertIn(key, entry)
 
+    def test_inbound_links_json_written_with_provenance(self):
+        good = "https://test.example/good/"
+        sitemap_xml = f"""<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<url><loc>{HOME}</loc></url>
+<url><loc>{good}</loc></url>
+</urlset>"""
+        pages = {
+            "https://test.example/sitemap.xml": {"content_type": "application/xml", "text": sitemap_xml},
+            HOME: {"text": '<a href="/good/">good</a>'},
+            good: {"text": ""},
+        }
+        fetcher = make_pages_fetcher(pages)
+
+        A.run(
+            base_url=BASE_URL, max_pages=100, delay=0, timeout=15,
+            out_dir=self.out_dir, user_agent="ua", limit=0,
+            session=mock.Mock(), fetch_fn=fetcher, sleeper=_noop_sleeper,
+            now=datetime(2026, 7, 1, tzinfo=timezone.utc),
+        )
+
+        inbound_path = self.out_dir / "inbound_links.json"
+        self.assertTrue(inbound_path.exists())
+        payload = json.loads(inbound_path.read_text(encoding="utf-8"))
+        for key in ("generated_at", "base_url", "pages_crawled", "sitemap_urls", "sources_cap", "links"):
+            self.assertIn(key, payload)
+        self.assertEqual(payload["generated_at"], "2026-07-01T00:00:00Z")
+        self.assertEqual(payload["base_url"], BASE_URL)
+        self.assertEqual(payload["sources_cap"], A.INBOUND_LINKS_SOURCES_CAP)
+        self.assertEqual(payload["links"][good]["inbound_count"], 1)
+        self.assertEqual(payload["links"][good]["sources"], [HOME])
+        # latest.json は変更されない (肥大化させない設計)
+        latest = json.loads((self.out_dir / "latest.json").read_text(encoding="utf-8"))
+        self.assertNotIn("links", latest)
+
+
+class BuildInboundLinksOutputTest(unittest.TestCase):
+    def test_inbound_count_accurate_even_when_sources_capped(self):
+        url = "https://test.example/target/"
+        sources = {f"https://test.example/src{i}/" for i in range(15)}
+        inbound = {url: sources}
+        links = A.build_inbound_links_output(inbound, sitemap_urls={url}, sources_cap=5)
+        self.assertEqual(links[url]["inbound_count"], 15)
+        self.assertEqual(len(links[url]["sources"]), 5)
+        # sources は inbound の昇順ソート先頭5件
+        self.assertEqual(links[url]["sources"], sorted(sources)[:5])
+
+    def test_sitemap_url_with_zero_inbound_included(self):
+        url = "https://test.example/orphan/"
+        links = A.build_inbound_links_output({}, sitemap_urls={url})
+        self.assertEqual(links[url]["inbound_count"], 0)
+        self.assertEqual(links[url]["sources"], [])
+
+    def test_non_sitemap_url_with_inbound_still_included(self):
+        url = "https://test.example/not-in-sitemap/"
+        inbound = {url: {"https://test.example/other/"}}
+        links = A.build_inbound_links_output(inbound, sitemap_urls=set())
+        self.assertIn(url, links)
+        self.assertEqual(links[url]["inbound_count"], 1)
+
 
 class FetchUrlExceptionTest(unittest.TestCase):
     def test_fetch_url_catches_connection_error(self):
