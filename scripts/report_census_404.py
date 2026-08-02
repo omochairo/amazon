@@ -20,29 +20,37 @@ Refs #3331, #3988 — GSC index census の「404 認識 URL」棚卸しレポー
      partial run だが除外せずフラグ付きで表示する — #3372 の偽改善検出回避)
   2. 現行 census (data/analytics/gsc_index_census.json) の 404 認識 URL 全件
      (URL / last_crawl_time / google_canonical) + last_crawl_time の年月別分布
-  3. 各 URL への sidecar 内部リンク候補の被参照数 (少ない順)。
-     scripts/generate_internal_links.py が書く sidecar
-     (``data/articles/<stem>.seo.json`` の ``internal_link_suggestions``) を
-     数える。リンク生成ロジック自体は再実装せず、
-     scripts/audit_query_entailment.py の discover_articles /
-     extract_asin_from_page と scripts/_seo_sidecar.py の
-     load_sidecar / sidecar_path を import して使う
-     (scripts/generate_internal_links.py も同じヘルパを使っている)。
+  3. 各 URL への被リンク数 (少ない順)。二つの供給源があり、優先順位は:
 
-     **注意 (重要・誤読しやすい点)**: これは build_post.py が実際にページへ
-     描画した内部リンクグラフではない。26-faq-seo-lane (generate_internal_links.py)
-     が出した「リンク候補 (suggestions)」の被参照数に過ぎない。かつ実測の
-     結果、この sidecar 供給源はコーパスの一部しかカバーしていない
-     (2026-08 時点で all articles 中 internal_link_suggestions を持つのは
-     3.6% 程度)。カバレッジが低い状態では個別 ASIN の「0」は「被リンクが
-     無い」ではなく「未測定」であり、閾値未満のときは 0 を "unknown" として
-     出す (INBOUND_SUGGESTION_COVERAGE_LOW_THRESHOLD 参照)。
-     算出不能な URL (ASIN が URL から抽出できない等) も "unknown" とする。
-     navi の実際の内部リンクグラフ (rendered graph) はリポジトリ内に
-     永続化されていない (amazon-home-ops の site-audit が r5_orphans 算出の
-     ためにクロール時にグラフを作っているが保存していない)。案3 の対象選定
-     には link graph の永続化が別途必要 — 本レポートの被参照数はその代替には
-     ならない。
+     a. **一次ソース (優先)**: ``data/site_audit/inbound_links.json``
+        (scripts/audit_site_health.py が週次 site-audit で実際にクロールして
+        構築した内部リンクグラフ。#3331 案3 で永続化)。これは build_post.py が
+        実際にページへ描画したリンクを辿って得た被リンク数そのものであり、
+        存在すればこれを使う。ただし **マージ直後は必ず不在**であり、次回の
+        週次 site-audit (火 18:37 UTC 実行) が完走して data PR がマージされる
+        まで生成されない。不在時にエラーにせず (b) へフォールバックする。
+
+     b. **フォールバック**: sidecar 内部リンク候補
+        (scripts/generate_internal_links.py が書く
+        ``data/articles/<stem>.seo.json`` の ``internal_link_suggestions``)
+        の被参照数。リンク生成ロジック自体は再実装せず、
+        scripts/audit_query_entailment.py の discover_articles /
+        extract_asin_from_page と scripts/_seo_sidecar.py の
+        load_sidecar / sidecar_path を import して使う。
+
+     **注意 (重要・誤読しやすい点、(b) 使用時のみ該当)**: sidecar は
+     build_post.py が実際にページへ描画した内部リンクグラフではない。
+     26-faq-seo-lane (generate_internal_links.py) が出した「リンク候補
+     (suggestions)」の被参照数に過ぎない。かつ実測の結果、この sidecar
+     供給源はコーパスの一部しかカバーしていない (2026-08 時点で all articles
+     中 internal_link_suggestions を持つのは 3.6% 程度)。カバレッジが低い
+     状態では個別 ASIN の「0」は「被リンクが無い」ではなく「未測定」であり、
+     閾値未満のときは 0 を "unknown" として出す
+     (INBOUND_SUGGESTION_COVERAGE_LOW_THRESHOLD 参照)。算出不能な URL (ASIN が
+     URL から抽出できない等) も "unknown" とする。
+
+     どちらのソースを使ったかはレポート・JSON 双方に必ず明示する
+     (``inbound_source`` フィールド / render_report 内の注記)。
 
 coverage_state の扱い:
   census の coverage_state はロケール依存の日本語表示文字列。
@@ -74,6 +82,14 @@ from scripts.append_analytics_history import DEFAULT_HISTORY_DIR
 from scripts.audit_query_entailment import discover_articles, extract_asin_from_page
 
 NOT_FOUND_404_SLUG = "not_found_404"
+
+# #3331 案3: 一次ソース (実クロールのリンクグラフ)。存在すればこれを使い、
+# 不在ならフォールバックする。マージ直後は次回の週次 site-audit が完走する
+# まで必ず不在。
+DEFAULT_INBOUND_LINKS_JSON = "data/site_audit/inbound_links.json"
+
+INBOUND_SOURCE_PRIMARY_GRAPH = "data/site_audit/inbound_links.json (実クロールのリンクグラフ)"
+INBOUND_SOURCE_SIDECAR = "sidecar internal_link_suggestions (リンク候補・低カバレッジ)"
 
 # 供給源カバレッジの下限閾値 (§3 コメント参照)。実測 (2026-08-02):
 # data/articles/*.json 全 2,359 件のうち sidecar 保有 564 件、
@@ -275,6 +291,57 @@ def count_inbound_suggestions(
     return counts, coverage_stats, None
 
 
+def load_inbound_links_graph(path: pathlib.Path) -> dict[str, Any] | None:
+    """data/site_audit/inbound_links.json (audit_site_health.py が書く一次ソース)
+    を読む。不在・壊れている場合は None を返し、呼び出し側はフォールバックする
+    (マージ直後は次回 site-audit が回るまで必ず不在なので、これは通常運用の
+    一部であってエラー扱いしない)。
+    """
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("links"), dict):
+        return None
+    return data
+
+
+def build_inbound_report_from_graph(
+    urls: list[dict[str, Any]],
+    graph: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """一次ソース (実クロールのリンクグラフ) から 404 URL ごとの被リンク数を
+    突き合わせる。graph["links"] に無い URL (クロール後に URL が変わった等) は
+    0 に潰さず "unknown" とする。inbound_count は graph 側で既に切り詰め前の
+    正確な値になっている (audit_site_health.build_inbound_links_output 参照)。
+    """
+    links = graph.get("links", {})
+    out: list[dict[str, Any]] = []
+    for row in urls:
+        url = row.get("url")
+        entry = links.get(url) if isinstance(url, str) else None
+        if isinstance(entry, dict) and isinstance(entry.get("inbound_count"), int):
+            inbound: int | str = entry["inbound_count"]
+        else:
+            inbound = "unknown"
+        out.append({
+            "url": url,
+            "asin": extract_asin_from_page(url or ""),
+            "inbound_suggestions": inbound,
+        })
+
+    def sort_key(r: dict[str, Any]) -> tuple[int, int, str]:
+        v = r["inbound_suggestions"]
+        if v == "unknown":
+            return (1, 0, r["url"] or "")
+        return (0, v, r["url"] or "")
+
+    out.sort(key=sort_key)
+    return out
+
+
 def build_inbound_report(
     urls: list[dict[str, Any]],
     inbound_counts: dict[str, int] | None,
@@ -332,6 +399,7 @@ def render_report(
     inbound_report: list[dict[str, Any]],
     inbound_error: str | None,
     inbound_coverage: dict[str, Any],
+    inbound_source: str = INBOUND_SOURCE_SIDECAR,
 ) -> str:
     lines: list[str] = []
     lines.append("# GSC index census — 404 認識 URL 棚卸しレポート")
@@ -376,14 +444,25 @@ def render_report(
         lines.append(f"(...他 {len(urls) - 200} 件、--json で全件出力)")
     lines.append("")
 
-    lines.append("## 3. sidecar 内部リンク候補の被参照数 (少ない順)")
-    lines.append("⚠️ これは build_post.py が実際にページへ描画した内部リンクグラフ**ではない**。"
-                 "26-faq-seo-lane (scripts/generate_internal_links.py) が出したリンク候補 "
-                 "(internal_link_suggestions) の被参照数。navi の実際の内部リンクグラフは"
-                 "リポジトリ内に永続化されていない。")
+    lines.append("## 3. 被リンク数 (少ない順)")
+    lines.append(f"source: {inbound_source}")
+    if inbound_source == INBOUND_SOURCE_PRIMARY_GRAPH:
+        lines.append("実際にクロールして構築した内部リンクグラフ (audit_site_health.py の週次実行由来)。"
+                      "被リンク数の昇順ソートがそのまま案3の着手対象リスト。")
+    else:
+        lines.append("⚠️ これは build_post.py が実際にページへ描画した内部リンクグラフ**ではない**。"
+                     "26-faq-seo-lane (scripts/generate_internal_links.py) が出したリンク候補 "
+                     "(internal_link_suggestions) の被参照数。data/site_audit/inbound_links.json "
+                     "(実クロールのリンクグラフ、#3331 案3) が不在のため sidecar へフォールバックした。")
     lines.append("")
     lines.append("### 供給源カバレッジ")
-    if inbound_error:
+    if inbound_source == INBOUND_SOURCE_PRIMARY_GRAPH:
+        c = inbound_coverage or {}
+        lines.append(f"- generated_at: {c.get('generated_at')}")
+        lines.append(f"- pages_crawled: {c.get('pages_crawled')}")
+        lines.append(f"- sitemap_urls: {c.get('sitemap_urls')}")
+        lines.append(f"- sources_cap: {c.get('sources_cap')}")
+    elif inbound_error:
         lines.append(f"⚠️ 算出できませんでした: {inbound_error}")
     elif not inbound_coverage:
         lines.append("(カバレッジ統計なし)")
@@ -412,7 +491,8 @@ def render_report(
         if unknown_count:
             lines.append(f"⚠️ {unknown_count} 件は unknown (ASIN 抽出不能、または低カバレッジ下の 0)")
         lines.append("")
-        lines.append("| url | asin | inbound_suggestions (sidecar) |")
+        col_label = "inbound_count (graph)" if inbound_source == INBOUND_SOURCE_PRIMARY_GRAPH else "inbound_suggestions (sidecar)"
+        lines.append(f"| url | asin | {col_label} |")
         lines.append("|---|---|---:|")
         for row in inbound_report[:200]:
             lines.append(f"| {row['url']} | {row['asin'] or '(unknown)'} | {row['inbound_suggestions']} |")
@@ -430,6 +510,7 @@ def run(
     census_path: pathlib.Path,
     history_dir: pathlib.Path,
     articles_dir: pathlib.Path,
+    inbound_links_path: pathlib.Path | None = None,
 ) -> dict[str, Any]:
     history_rows = load_history_rows(history_dir / CENSUS_HISTORY_FILE)
     trend = summarize_404_trend(history_rows)
@@ -441,9 +522,25 @@ def run(
     urls, unknown_states = extract_404_urls(census)
     crawl_distribution = summarize_last_crawl_distribution(urls)
 
-    inbound_counts, inbound_coverage, inbound_error = count_inbound_suggestions(articles_dir)
-    low_coverage = bool(inbound_coverage.get("low_coverage")) if inbound_coverage else False
-    inbound_report = build_inbound_report(urls, inbound_counts, low_coverage)
+    inbound_links_path = inbound_links_path if inbound_links_path is not None else pathlib.Path(DEFAULT_INBOUND_LINKS_JSON)
+    graph = load_inbound_links_graph(inbound_links_path)
+    if graph is not None:
+        # 一次ソース (#3331 案3): 実クロールのリンクグラフが存在する。
+        inbound_source = INBOUND_SOURCE_PRIMARY_GRAPH
+        inbound_report = build_inbound_report_from_graph(urls, graph)
+        inbound_coverage = {
+            "generated_at": graph.get("generated_at"),
+            "pages_crawled": graph.get("pages_crawled"),
+            "sitemap_urls": graph.get("sitemap_urls"),
+            "sources_cap": graph.get("sources_cap"),
+        }
+        inbound_error = None
+    else:
+        # フォールバック: 一次ソース不在 (マージ直後・次回 site-audit 未実行など)。
+        inbound_source = INBOUND_SOURCE_SIDECAR
+        inbound_counts, inbound_coverage, inbound_error = count_inbound_suggestions(articles_dir)
+        low_coverage = bool(inbound_coverage.get("low_coverage")) if inbound_coverage else False
+        inbound_report = build_inbound_report(urls, inbound_counts, low_coverage)
 
     result: dict[str, Any] = {
         "trend": trend,
@@ -454,6 +551,7 @@ def run(
         "inbound_suggestions": inbound_report,
         "inbound_suggestions_coverage": inbound_coverage,
         "inbound_suggestions_error": inbound_error,
+        "inbound_source": inbound_source,
     }
     return result
 
@@ -470,7 +568,10 @@ def main() -> int:
     p.add_argument("--history-dir", default=DEFAULT_HISTORY_DIR,
                    help="週次 history ディレクトリ (data/analytics/history)")
     p.add_argument("--articles-dir", default=DEFAULT_ARTICLES_DIR,
-                   help="記事ディレクトリ (data/articles) — 被リンク数算出用")
+                   help="記事ディレクトリ (data/articles) — 被リンク数算出用 (フォールバック時のみ使用)")
+    p.add_argument("--inbound-links-json", default=DEFAULT_INBOUND_LINKS_JSON,
+                   help="一次ソースの内部リンクグラフ (data/site_audit/inbound_links.json)。"
+                        "不在ならフォールバックする")
     p.add_argument("--json", default=None, help="機械可読 JSON の出力先パス (任意)")
     args = p.parse_args()
 
@@ -478,6 +579,7 @@ def main() -> int:
         pathlib.Path(args.census),
         pathlib.Path(args.history_dir),
         pathlib.Path(args.articles_dir),
+        pathlib.Path(args.inbound_links_json),
     )
 
     print(render_report(
@@ -488,6 +590,7 @@ def main() -> int:
         result["inbound_suggestions"],
         result["inbound_suggestions_error"],
         result["inbound_suggestions_coverage"],
+        result["inbound_source"],
     ))
 
     if args.json:

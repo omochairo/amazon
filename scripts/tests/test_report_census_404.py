@@ -8,11 +8,16 @@ import pytest
 
 from scripts.append_census_history import CENSUS_HISTORY_FILE
 from scripts.report_census_404 import (
+    INBOUND_SOURCE_PRIMARY_GRAPH,
+    INBOUND_SOURCE_SIDECAR,
     INBOUND_SUGGESTION_COVERAGE_LOW_THRESHOLD,
     build_inbound_report,
+    build_inbound_report_from_graph,
     count_inbound_suggestions,
     extract_404_urls,
     load_history_rows,
+    load_inbound_links_graph,
+    render_report,
     run,
     summarize_404_trend,
     summarize_last_crawl_distribution,
@@ -297,3 +302,138 @@ def test_run_history_single_line_does_not_crash(tmp_path):
     assert result["trend"] == [
         {"date": "2026-07-26", "not_found_404": 73, "circuit_breaker_tripped": False},
     ]
+
+
+# ---------------------------------------------------------------------------
+# 一次ソース (data/site_audit/inbound_links.json) の優先 / フォールバック
+# ---------------------------------------------------------------------------
+
+def test_load_inbound_links_graph_missing_file_returns_none(tmp_path):
+    assert load_inbound_links_graph(tmp_path / "nope.json") is None
+
+
+def test_load_inbound_links_graph_malformed_json_returns_none(tmp_path):
+    path = tmp_path / "inbound_links.json"
+    path.write_text("not json", encoding="utf-8")
+    assert load_inbound_links_graph(path) is None
+
+
+def test_load_inbound_links_graph_missing_links_key_returns_none(tmp_path):
+    path = tmp_path / "inbound_links.json"
+    path.write_text(json.dumps({"generated_at": "2026-08-02T00:00:00Z"}), encoding="utf-8")
+    assert load_inbound_links_graph(path) is None
+
+
+def test_load_inbound_links_graph_valid_file_returns_dict(tmp_path):
+    path = tmp_path / "inbound_links.json"
+    payload = {
+        "generated_at": "2026-08-02T00:00:00Z",
+        "base_url": "https://navi.omcha.jp",
+        "pages_crawled": 100,
+        "sitemap_urls": 100,
+        "sources_cap": 10,
+        "links": {"https://navi.omcha.jp/products/b00005bhog/": {"inbound_count": 3, "sources": []}},
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    graph = load_inbound_links_graph(path)
+    assert graph == payload
+
+
+def test_build_inbound_report_from_graph_uses_inbound_count():
+    urls = [
+        {"url": "https://navi.omcha.jp/products/b00005bhog/"},
+        {"url": "https://navi.omcha.jp/products/b0899jmq7f/"},
+    ]
+    graph = {
+        "links": {
+            "https://navi.omcha.jp/products/b00005bhog/": {"inbound_count": 5, "sources": []},
+            "https://navi.omcha.jp/products/b0899jmq7f/": {"inbound_count": 0, "sources": []},
+        }
+    }
+    report = build_inbound_report_from_graph(urls, graph)
+    assert [r["inbound_suggestions"] for r in report] == [0, 5]
+
+
+def test_build_inbound_report_from_graph_missing_url_is_unknown():
+    urls = [{"url": "https://navi.omcha.jp/products/not-in-graph/"}]
+    graph = {"links": {}}
+    report = build_inbound_report_from_graph(urls, graph)
+    assert report == [{
+        "url": "https://navi.omcha.jp/products/not-in-graph/",
+        "asin": None,
+        "inbound_suggestions": "unknown",
+    }]
+
+
+def test_run_uses_primary_graph_when_present(tmp_path):
+    census_path = tmp_path / "gsc_index_census.json"
+    census_path.write_text(json.dumps({
+        "fetched_at": "2026-07-26T23:08:05+00:00",
+        "totals": {"sitemap_urls": 1, "inspected": 1, "indexed": 0, "not_indexed": 1, "errors": 0},
+        "not_indexed_urls": [
+            {
+                "url": "https://navi.omcha.jp/products/b0899jmq7f/",
+                "coverage_state": "見つかりませんでした（404）",
+                "last_crawl_time": "2026-06-05T09:16:21Z",
+                "google_canonical": "(none)",
+            },
+        ],
+    }), encoding="utf-8")
+
+    inbound_links_path = tmp_path / "inbound_links.json"
+    inbound_links_path.write_text(json.dumps({
+        "generated_at": "2026-08-02T00:00:00Z",
+        "base_url": "https://navi.omcha.jp",
+        "pages_crawled": 1900,
+        "sitemap_urls": 1900,
+        "sources_cap": 10,
+        "links": {
+            "https://navi.omcha.jp/products/b0899jmq7f/": {"inbound_count": 2, "sources": ["https://navi.omcha.jp/"]},
+        },
+    }), encoding="utf-8")
+
+    result = run(census_path, tmp_path / "history", tmp_path / "articles", inbound_links_path)
+    assert result["inbound_source"] == INBOUND_SOURCE_PRIMARY_GRAPH
+    assert result["inbound_suggestions"] == [{
+        "url": "https://navi.omcha.jp/products/b0899jmq7f/",
+        "asin": "B0899JMQ7F",
+        "inbound_suggestions": 2,
+    }]
+    assert result["inbound_suggestions_coverage"]["sitemap_urls"] == 1900
+    assert result["inbound_suggestions_coverage"]["sources_cap"] == 10
+
+
+def test_run_falls_back_to_sidecar_when_graph_absent(tmp_path):
+    census_path = tmp_path / "gsc_index_census.json"
+    census_path.write_text(json.dumps({
+        "fetched_at": "2026-07-26T23:08:05+00:00",
+        "totals": {"sitemap_urls": 10, "inspected": 10, "indexed": 10, "not_indexed": 0, "errors": 0},
+        "not_indexed_urls": [],
+    }), encoding="utf-8")
+    articles_dir = tmp_path / "articles"
+    _write_article(articles_dir, "2026-07-01-B0899JMQ7F")
+
+    # inbound_links.json をあえて作らない (マージ直後を模す)
+    absent_path = tmp_path / "inbound_links.json"
+    result = run(census_path, tmp_path / "history", articles_dir, absent_path)
+    assert result["inbound_source"] == INBOUND_SOURCE_SIDECAR
+
+
+def test_render_report_shows_primary_graph_source_note():
+    text = render_report(
+        trend=[], urls=[], unknown_states={}, crawl_distribution={},
+        inbound_report=[], inbound_error=None, inbound_coverage={},
+        inbound_source=INBOUND_SOURCE_PRIMARY_GRAPH,
+    )
+    assert "data/site_audit/inbound_links.json" in text
+    assert "実クロールのリンクグラフ" in text
+
+
+def test_render_report_shows_sidecar_source_note():
+    text = render_report(
+        trend=[], urls=[], unknown_states={}, crawl_distribution={},
+        inbound_report=[], inbound_error=None, inbound_coverage={},
+        inbound_source=INBOUND_SOURCE_SIDECAR,
+    )
+    assert "sidecar" in text
+    assert "internal_link_suggestions" in text

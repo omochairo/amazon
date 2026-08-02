@@ -41,6 +41,13 @@ time.sleep(--delay) する。個別 URL の例外は status=0 として記録し
   --out-dir/latest_details.json: canonical_mismatch / noindex_inlinked の全件明細
     (上限なし)。latest.json を肥大化させないための別ファイル (#3727)。
   --out-dir/history.jsonl: 1 行 = 1 回の実行サマリを追記。
+  --out-dir/inbound_links.json: 内部リンクグラフ (被リンク数) の永続化 (#3331 案3)。
+    compute_inbound() は元々 r5_orphans / r3_broken_internal の判定にしか使われて
+    おらずグラフ本体は捨てられていたが、案3 (内部リンクで再クロール優先度を上げる)
+    の対象選定には「どの URL に被リンクが何本あるか」の一覧が別途必要なため、
+    このファイルとして書き出す。URL ごとに inbound_count (正確な値) と sources
+    (上限 INBOUND_LINKS_SOURCES_CAP 件、切り詰め) を持つ。latest.json 同様
+    肥大化を避けるため既存 3 ファイルとは分離した 4 本目とする。
 
 呼び出し:
   `python scripts/audit_site_health.py` / `python -m scripts.audit_site_health`
@@ -75,6 +82,16 @@ DEFAULT_TIMEOUT = 15
 DEFAULT_OUT_DIR = "data/site_audit"
 DEFAULT_USER_AGENT = "navi-site-audit/1.0 (+https://navi.omcha.jp)"
 LOG_EVERY = 200
+
+# inbound_links.json の sources 上限 (#3331 案3)。sitemap URL は約 1,900 件あり、
+# sources を無制限に持つと毎週の data PR の diff が肥大化して読めなくなる。
+# 見積り (2026-08 時点の実測件数ベース): 1,900 URL 全件が cap 件ずつ source を
+# 持つ最悪ケースで 1,900 * 10 sources * 約60byte/source (URL文字列 + JSON構造の
+# インデント/カンマ/改行) ≒ 1.1MB。これに url/inbound_count 等のフィールド
+# オーバーヘッドを足しても 2MB を十分下回る。10 件あれば「案3 の対象選定に
+# 十分な代表 source」を残せると判断し、この値を採用する (超過するようなら
+# 下げること、という運用指示に基づき最初から余裕を持たせた値にしている)。
+INBOUND_LINKS_SOURCES_CAP = 10
 
 # 内部リンク / sitemap urlset <loc> の正規化時に除外する典型的なアセット拡張子。
 ASSET_EXTENSIONS = (
@@ -415,6 +432,56 @@ def compute_inbound(records: dict[str, PageRecord], straggler_urls: set[str]) ->
     return inbound
 
 
+def build_inbound_links_output(
+    inbound: dict[str, set[str]],
+    sitemap_urls: set[str],
+    sources_cap: int = INBOUND_LINKS_SOURCES_CAP,
+) -> dict[str, dict]:
+    """compute_inbound() の結果を inbound_links.json の "links" 部分に変換する。
+
+    対象 URL は sitemap_urls ∪ inbound の全キー (被リンクを 1 件以上持つ URL は
+    sitemap 未掲載でも含める)。inbound_count は常に正確な値 (切り詰め前の件数)
+    を残す。sources は sources_cap 件に切り詰めるが、切り詰めた事実自体は
+    inbound_count と len(sources) の差分から常に復元できる。
+    """
+    all_urls = set(sitemap_urls) | set(inbound.keys())
+    links: dict[str, dict] = {}
+    for url in all_urls:
+        sources = sorted(inbound.get(url, ()))
+        links[url] = {
+            "inbound_count": len(sources),
+            "sources": sources[:sources_cap],
+        }
+    return links
+
+
+def write_inbound_links(
+    out_dir: pathlib.Path,
+    inbound: dict[str, set[str]],
+    sitemap_urls: set[str],
+    base_url: str,
+    pages_crawled: int,
+    now: datetime,
+    sources_cap: int = INBOUND_LINKS_SOURCES_CAP,
+) -> None:
+    """inbound_links.json を書き出す (#3331 案3)。latest.json とは別ファイル。"""
+    links = build_inbound_links_output(inbound, sitemap_urls, sources_cap)
+    payload = {
+        "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "base_url": base_url,
+        "pages_crawled": pages_crawled,
+        "sitemap_urls": len(sitemap_urls),
+        "sources_cap": sources_cap,
+        "links": links,
+    }
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / "inbound_links.json"
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=1, sort_keys=True),
+        encoding="utf-8",
+    )
+
+
 def run(
     base_url: str = DEFAULT_BASE_URL,
     max_pages: int = DEFAULT_MAX_PAGES,
@@ -535,6 +602,7 @@ def run(
     }
 
     write_outputs(out_dir, result, now, details)
+    write_inbound_links(out_dir, inbound, sitemap_urls, base_url, len(records), now)
     print_summary(result)
     return result
 
