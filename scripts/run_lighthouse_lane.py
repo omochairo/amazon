@@ -99,7 +99,14 @@ LIGHTHOUSE_TIMEOUT = 300
 # PSI と同じメジャー版に固定する (module docstring の設計判断)。バージョンを
 # 固定せず npx --yes lighthouse のままにしていたため実装が伴っていなかった
 # (#4160 で追加)。環境変数 LIGHTHOUSE_CMD での差し替えは従来どおり効く。
-DEFAULT_LIGHTHOUSE_VERSION = "13.4.1"
+#
+# 値は cron が実際に使う版と一致させること (#4384)。cron は
+# omochairo/amazon-home-ops の 41-lighthouse-lane.yml で global CLI を
+# LIGHTHOUSE_VERSION=13.4.0 に exact 固定し、`LIGHTHOUSE_CMD: lighthouse` を
+# 渡してくるので、この既定値が効くのは手元/手動実行のときだけ。ここが
+# ずれていると手動実行の値だけ別版で測られ、同じ JSONL に混ざって baseline を
+# 静かに汚す。上げるときは home-ops 側と同時に、履歴の断点を承知の上で。
+DEFAULT_LIGHTHOUSE_VERSION = "13.4.0"
 DEFAULT_LIGHTHOUSE_CMD = "npx --yes lighthouse@{}".format(DEFAULT_LIGHTHOUSE_VERSION)
 
 # Lighthouse audit id → JSONL 列名 prefix。numericValue (ms / 無次元) を採る。

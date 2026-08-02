@@ -5,13 +5,11 @@ name: Unit Tests
 #
 # なぜ既存の `validate` job (04-validate-article-pr.yml) に相乗りさせず独立
 # workflow にしたか:
-#   1. main の branch protection の required check は `validate` 1 本のみ。
-#      04-validate-article-pr.yml の `paths` allowlist は肥大しており、
-#      script-only PR で paths 未登録だと required check `validate` が不発 →
-#      auto-merge が永久 pending になる inverse-trap を過去に複数回踏んでいる
-#      (04-validate-article-pr.yml 内コメント多数)。pytest step をそこに追加
-#      すると、その trap の再発時に「記事データのみの Jules PR」まで unit
-#      test 失敗の巻き添えで全停止するリスクを負う。
+#   1. (2026-08-02 #4384 で解消済み) 当時 04-validate-article-pr.yml の `paths`
+#      allowlist が 224 件まで肥大し、script-only PR で登録漏れがあると required
+#      check `validate` が不発 → auto-merge 永久 pending になる inverse-trap を
+#      繰り返し踏んでいた。#4384 で paths を撤廃したのでこの理由はもう成立しない。
+#      分離の根拠は下の 2 のみ。
 #   2. `validate` は記事 JSON の schema 検証 + quality gate + (対象ファイル
 #      変更時のみ) Creator API dry-run という「記事 PR 用」の性質を持つ。
 #      scripts/ 全体の unit test はその関心事と別物であり、独立させたほうが
