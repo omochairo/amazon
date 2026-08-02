@@ -37,6 +37,14 @@ on:
       # させる ([[04-validate-paths-trap]] / PR #1133 で踏んだ)。
       # 副作用なしの dry-run analyzer なので vacuous SUCCESS で通過する。
       - 'scripts/analyze_*.py'
+      # 2026-08-02 (#3331 / PR #4381): 棚卸し・レポート専用 script (report_*) と
+      # その test も glob で登録する。個別登録は inverse-trap を繰り返し踏んでおり
+      # (PR #1133 / #2749 / #3329 / #3676 / #4065、そして PR #4381 自身)、
+      # report_* は analyze_* と同じ read-only な dry-run レポータなので
+      # glob で先回りするほうが予防になる ([[04-validate-paths-inverse-trap]])。
+      # 記事変更ゼロで vacuous SUCCESS で通過する。
+      - 'scripts/report_*.py'
+      - 'scripts/tests/test_report_*.py'
       - 'scripts/score_calculator.py'
       # 2026-06-23 (#2722 / PR #2749): competitor_ranking.py を触る PR も validate を
       # 必須 check として発火させる ([[04-validate-paths-inverse-trap]] = paths 未登録
