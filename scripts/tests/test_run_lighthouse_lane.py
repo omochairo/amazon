@@ -21,6 +21,7 @@ from scripts.run_lighthouse_lane import (
     extract_metrics,
     get_targets,
     load_history,
+    mad_for,
     render_report,
 )
 
@@ -37,6 +38,30 @@ def _lh_json(lcp=2000.0, cls=0.01, tbt=100.0, score=0.95, lcp_error=None):
     if lcp_error:
         audits["largest-contentful-paint"] = {"errorMessage": lcp_error}
     return {"categories": {"performance": {"score": score}}, "audits": audits}
+
+
+def _lh13_json(
+    observed_lcp=1450.0,
+    observed_fcp=1450.0,
+    lcp_selector="body#top > main.main > section.home-hero > div.home-hero-lead",
+    lh_version="13.4.1",
+    throttling="simulate",
+    **kw
+):
+    """LH13 形式 (#4160): observed 値 / lcp-breakdown-insight / configSettings 付き。"""
+    lh = _lh_json(**kw)
+    lh["lighthouseVersion"] = lh_version
+    lh["configSettings"] = {"throttlingMethod": throttling}
+    lh["audits"]["metrics"] = {
+        "details": {"items": [{
+            "observedLargestContentfulPaint": observed_lcp,
+            "observedFirstContentfulPaint": observed_fcp,
+        }]}
+    }
+    lh["audits"]["lcp-breakdown-insight"] = {
+        "details": {"items": [{"type": "node", "selector": lcp_selector}]}
+    }
+    return lh
 
 
 # ---------- extract_metrics ----------
@@ -76,6 +101,38 @@ def test_extract_metrics_ignores_no_error_sentinel():
     assert "runtime_error" not in extract_metrics(lh)
 
 
+# ---------- extract_metrics: observed / lcp_element (#4160) ----------
+
+def test_extract_metrics_reads_observed_and_lcp_element_lh13():
+    """LH13 形式: metrics audit の observed 値と lcp-breakdown-insight の selector。"""
+    m = extract_metrics(_lh13_json())
+    assert m["observed_lcp"] == 1450.0
+    assert m["observed_fcp"] == 1450.0
+    assert m["lcp_element"] == "body#top > main.main > section.home-hero > div.home-hero-lead"
+    assert m["throttling_method"] == "simulate"
+    assert m["lh_version"] == "13.4.1"
+
+
+def test_extract_metrics_lcp_element_legacy_fallback():
+    """旧版 largest-contentful-paint-element (lcp-breakdown-insight 無し) にフォールバック。"""
+    lh = _lh_json()
+    lh["audits"]["largest-contentful-paint-element"] = {
+        "details": {"items": [{"node": {"type": "node", "selector": "div.legacy-lcp"}}]}
+    }
+    m = extract_metrics(lh)
+    assert m["lcp_element"] == "div.legacy-lcp"
+
+
+def test_extract_metrics_observed_and_element_default_none():
+    """LH13 拡張 audit が無い旧版そのままの JSON では None のまま。"""
+    m = extract_metrics(_lh_json())
+    assert m["observed_lcp"] is None
+    assert m["observed_fcp"] is None
+    assert m["lcp_element"] is None
+    assert m["throttling_method"] is None
+    assert m["lh_version"] is None
+
+
 # ---------- aggregate_runs ----------
 
 def test_aggregate_runs_takes_median():
@@ -109,6 +166,32 @@ def test_aggregate_runs_empty():
     assert aggregate_runs([]) == {}
 
 
+def test_aggregate_runs_takes_median_of_observed():
+    runs = [extract_metrics(_lh13_json(observed_lcp=v)) for v in (1400.0, 1500.0, 1600.0)]
+    agg = aggregate_runs(runs)
+    assert agg["observed_lcp"] == 1500.0
+
+
+def test_aggregate_runs_uses_first_run_value_for_element_and_version():
+    runs = [extract_metrics(_lh13_json()), extract_metrics(_lh13_json())]
+    agg = aggregate_runs(runs)
+    assert agg["lcp_element"] == "body#top > main.main > section.home-hero > div.home-hero-lead"
+    assert agg["throttling_method"] == "simulate"
+    assert agg["lh_version"] == "13.4.1"
+
+
+def test_aggregate_runs_warns_when_element_differs_across_runs(caplog):
+    """run 間で selector が割れたら最初の run 値を採るが、追跡用に warning を残す。"""
+    runs = [
+        extract_metrics(_lh13_json(lcp_selector="div.a")),
+        extract_metrics(_lh13_json(lcp_selector="div.b")),
+    ]
+    with caplog.at_level("WARNING"):
+        agg = aggregate_runs(runs)
+    assert agg["lcp_element"] == "div.a"
+    assert "lcp_element" in caplog.text
+
+
 # ---------- detect_regressions ----------
 
 def _row(url="https://x/", ff="mobile", **kw):
@@ -118,14 +201,15 @@ def _row(url="https://x/", ff="mobile", **kw):
 
 
 def test_detect_regressions_quiet_when_stable():
-    history = [_row(lcp=2000.0, perf_score=95.0) for _ in range(3)]
+    # MIN_BASELINE_SAMPLES が 3→7 (#4160) になったため 7 件そろえる
+    history = [_row(lcp=2000.0, perf_score=95.0) for _ in range(7)]
     current = [_row(lcp=2050.0, perf_score=95.0)]
     assert detect_regressions(history, current) == []
 
 
 def test_detect_regressions_flags_threshold_crossing():
     """good 閾値 (LCP 2500) を跨いだら鳴る。"""
-    history = [_row(lcp=2000.0) for _ in range(3)]
+    history = [_row(lcp=2000.0) for _ in range(7)]  # MIN_BASELINE_SAMPLES=7 (#4160)
     current = [_row(lcp=4000.0)]
     alerts = detect_regressions(history, current)
     kinds = {a["kind"] for a in alerts}
@@ -140,15 +224,19 @@ def test_detect_regressions_flags_audit_error():
 
 
 def test_detect_regressions_ignores_small_noise_above_threshold():
-    """元から閾値超えでも、微小な揺れでは鳴らさない (誤検出で issue を湧かせない)。"""
-    history = [_row(lcp=5000.0) for _ in range(3)]
+    """元から閾値超えでも、微小な揺れでは鳴らさない (誤検出で issue を湧かせない)。
+
+    baseline が全部同値 (MAD=0) のケースでもあり、MIN_ABS_DELTA が下限として
+    効くことの確認も兼ねる (#4160)。
+    """
+    history = [_row(lcp=5000.0) for _ in range(7)]  # MIN_BASELINE_SAMPLES=7
     current = [_row(lcp=5100.0)]
     assert detect_regressions(history, current) == []
 
 
 def test_detect_regressions_flags_relative_regression_when_already_bad():
     """元から悪くても、baseline 比で大きく悪化したら鳴る。"""
-    history = [_row(lcp=5000.0) for _ in range(3)]
+    history = [_row(lcp=5000.0) for _ in range(7)]  # MIN_BASELINE_SAMPLES=7
     current = [_row(lcp=8000.0)]
     alerts = detect_regressions(history, current)
     assert any(a["kind"] == "relative" for a in alerts)
@@ -175,8 +263,8 @@ def test_detect_regressions_silent_while_baseline_too_thin():
 
 
 def test_detect_regressions_starts_alerting_once_baseline_is_thick_enough():
-    """MIN_BASELINE_SAMPLES 件そろえば通常どおり鳴る (抑制が恒久化しない)。"""
-    history = [_row(lcp=2500.0), _row(lcp=2600.0), _row(lcp=2550.0)]
+    """MIN_BASELINE_SAMPLES (=7, #4160) 件そろえば通常どおり鳴る (抑制が恒久化しない)。"""
+    history = [_row(lcp=v) for v in (2500.0, 2600.0, 2550.0, 2500.0, 2600.0, 2550.0, 2500.0)]
     current = [_row(lcp=6000.0)]
     alerts = detect_regressions(history, current)
     assert any(a["kind"] == "relative" for a in alerts)
@@ -190,7 +278,7 @@ def test_detect_regressions_score_drop_needs_thick_baseline():
 
 
 def test_detect_regressions_flags_score_drop():
-    history = [_row(lcp=2000.0, perf_score=95.0) for _ in range(3)]
+    history = [_row(lcp=2000.0, perf_score=95.0) for _ in range(7)]  # MIN_BASELINE_SAMPLES=7
     current = [_row(lcp=2000.0, perf_score=80.0)]
     alerts = detect_regressions(history, current)
     assert any(a["kind"] == "score" for a in alerts)
@@ -217,13 +305,84 @@ def test_detect_regressions_flags_runtime_error():
     assert any(a["metric"] == "runtime" for a in alerts)
 
 
+# ---------- detect_regressions: MAD 分散ゲート / observed 裏取り (#4160) ----------
+
+def test_detect_regressions_no_alert_for_replayed_home_series_4160():
+    """#4160 の実測回帰テスト本体。
+
+    navi ホーム (mobile) の実履歴 (2026-07-16〜26 の JSONL から抽出、simulated
+    LCP, ms) を baseline として replay する。旧ゲート (window=5,
+    MIN_BASELINE_SAMPLES=3, ratio のみ) では baseline(median)=3549.2 に対し
+    current=4530.5 で relative 発火していたが、この系列は stdev=957 相当と
+    分散が大きく、新ゲート (MAD ベース) では鳴らないことを確認する。
+    """
+    lcps = [2857.1, 4871.1, 4500.9, 4486.3, 3549.2, 4942.6, 2665.4, 5007.9, 2714.2]
+    history = [_row(lcp=v) for v in lcps]
+    current = [_row(lcp=4530.5)]
+    alerts = detect_regressions(history, current)
+    assert not any(a["kind"] == "relative" and a["metric"] == "lcp" for a in alerts)
+
+
+def test_detect_regressions_still_flags_real_regression_despite_dispersion():
+    """同じ分散の大きい系列でも、本物の劣化 (9000ms) は検出できる。"""
+    lcps = [2857.1, 4871.1, 4500.9, 4486.3, 3549.2, 4942.6, 2665.4, 5007.9, 2714.2]
+    history = [_row(lcp=v) for v in lcps]
+    current = [_row(lcp=9000.0)]
+    alerts = detect_regressions(history, current)
+    assert any(a["metric"] == "lcp" for a in alerts)
+
+
+def test_detect_regressions_lcp_simulated_only_worse_stays_quiet_when_observed_flat():
+    """simulated だけ悪化・observed が横ばいなら observed 側が裏取りできず鳴らない。"""
+    history = [
+        _row(lcp=v, observed_lcp=1450.0)
+        for v in (2900.0, 2950.0, 3000.0, 3000.0, 3050.0, 3100.0, 3100.0)
+    ]
+    current = [_row(lcp=6000.0, observed_lcp=1460.0)]
+    alerts = detect_regressions(history, current)
+    assert not any(a["metric"] == "lcp" for a in alerts)
+
+
+def test_detect_regressions_lcp_fires_when_observed_also_worse():
+    """simulated と observed の両方が悪化していれば鳴る。"""
+    history = [
+        _row(lcp=v, observed_lcp=1450.0)
+        for v in (2900.0, 2950.0, 3000.0, 3000.0, 3050.0, 3100.0, 3100.0)
+    ]
+    current = [_row(lcp=6000.0, observed_lcp=3000.0)]
+    alerts = detect_regressions(history, current)
+    assert any(a["metric"] == "lcp" for a in alerts)
+
+
+def test_detect_regressions_lcp_degrades_to_simulated_only_without_observed_history():
+    """observed の履歴がまだ無い期間は、従来どおり simulated だけで判定する (degrade)。"""
+    history = [_row(lcp=v) for v in (2900.0, 2950.0, 3000.0, 3000.0, 3050.0, 3100.0, 3100.0)]
+    current = [_row(lcp=6000.0)]  # observed_lcp キー自体が無い
+    alerts = detect_regressions(history, current)
+    assert any(a["metric"] == "lcp" for a in alerts)
+
+
+# ---------- mad_for ----------
+
+def test_mad_for_zero_for_constant_series():
+    history = [_row(lcp=2000.0) for _ in range(7)]
+    assert mad_for(history, "https://x/", "mobile", "lcp", window=10) == 0.0
+
+
+def test_mad_for_none_below_min_samples():
+    history = [_row(lcp=2000.0), _row(lcp=2100.0)]
+    assert mad_for(history, "https://x/", "mobile", "lcp", window=10) is None
+
+
 # ---------- baseline_for ----------
 
 def test_baseline_for_uses_window_and_skips_nulls():
+    # MIN_BASELINE_SAMPLES が 3→7 (#4160) になったため有効値 7 件そろえる
     history = [
         _row(lcp=1000.0), _row(lcp=None), _row(lcp=2000.0), _row(lcp=3000.0),
+        _row(lcp=4000.0), _row(lcp=5000.0), _row(lcp=6000.0), _row(lcp=7000.0),
     ]
-    assert baseline_for(history, "https://x/", "mobile", "lcp", window=5) == 2000.0
+    assert baseline_for(history, "https://x/", "mobile", "lcp", window=8) == 4000.0
 
 
 def test_baseline_for_returns_none_without_data():

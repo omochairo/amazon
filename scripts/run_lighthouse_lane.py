@@ -96,6 +96,11 @@ DEFAULT_ORIGIN = "https://navi.omcha.jp"
 DEFAULT_RUNS = 3
 DEFAULT_TOP_URLS = 5
 LIGHTHOUSE_TIMEOUT = 300
+# PSI と同じメジャー版に固定する (module docstring の設計判断)。バージョンを
+# 固定せず npx --yes lighthouse のままにしていたため実装が伴っていなかった
+# (#4160 で追加)。環境変数 LIGHTHOUSE_CMD での差し替えは従来どおり効く。
+DEFAULT_LIGHTHOUSE_VERSION = "13.4.1"
+DEFAULT_LIGHTHOUSE_CMD = "npx --yes lighthouse@{}".format(DEFAULT_LIGHTHOUSE_VERSION)
 
 # Lighthouse audit id → JSONL 列名 prefix。numericValue (ms / 無次元) を採る。
 METRIC_MAP = (
@@ -128,10 +133,19 @@ MIN_ABS_DELTA = {
 # perf score がこれ以上落ちたら鳴らす (0-100 換算)。
 SCORE_DROP_POINTS = 5.0
 # baseline としてこの件数未満しか履歴が無い URL は、まだ比較しない (= 鳴らさない)。
-# 実測 (2026-07-16〜26) でホームの mobile LCP は 2.4s〜5.0s と実行ごとに倍近く
-# 振れており、3 回 median でも収束していない。1〜2 件しかない baseline はこの
-# 揺れをそのまま基準値にしてしまい、翌日 1.25x を軽く超えて誤検出になる。
-MIN_BASELINE_SAMPLES = 3
+#
+# #4160 (2026-08-02) で MIN_BASELINE_SAMPLES=3 / window=5 のまま実履歴を replay
+# したところ誤検出だった: navi ホーム (mobile) の LCP 系列は n=20 で
+# median=4674 / min=2425 / max=5748 / **stdev=957**。REGRESSION_RATIO=1.25 が
+# 効くのは「baseline の 1.25 倍」であり、この分散下ではだいたい 1.2σ 相当しか
+# ない (= 実行ごとの揺れの範囲内で簡単に踏む)。3 回 median でも収束しないほど
+# 元々振れる指標なので、母数を増やして安定させる: window 5→10, 最小サンプル数
+# 3→7。あわせて後述の MAD ゲートで「分散に対して十分外れているか」も見る。
+MIN_BASELINE_SAMPLES = 7
+# 分散対応ゲート (#4160): baseline の MAD (median absolute deviation) に対して
+# K 倍以上外れていることを relative/score 判定の必須条件にする。ratio 条件
+# だけだと分散の大きい指標 (ホーム mobile LCP など) を毎回誤検出するため。
+REGRESSION_MAD_K = 3.0
 
 
 def build_lighthouse_argv(
@@ -165,12 +179,44 @@ def build_lighthouse_argv(
     return argv
 
 
+def _find_node_selector(node: Any) -> Optional[str]:
+    """Lighthouse details ツリーを再帰的に走査して最初の node selector を返す。
+
+    LH13 (`lcp-breakdown-insight`) は details.items に直接
+    `{"type": "node", "selector": ...}` を持つが、旧版
+    (`largest-contentful-paint-element`) は details.items[].node や
+    details.items[].items[] にネストされた table 形式で持つ。両対応するため
+    dict/list を再帰的に潜って最初に見つかった node.selector を返す。
+    """
+    if isinstance(node, dict):
+        if node.get("type") == "node" and node.get("selector"):
+            return node.get("selector")
+        for key in ("node", "items"):
+            found = _find_node_selector(node.get(key))
+            if found:
+                return found
+        return None
+    if isinstance(node, list):
+        for item in node:
+            found = _find_node_selector(item)
+            if found:
+                return found
+    return None
+
+
 def extract_metrics(lh: Dict[str, Any]) -> Dict[str, Any]:
     """Lighthouse JSON から metric 値と *_error を flat dict に抽出する。
 
     値と error を明確に分けるのが肝 (module docstring の設計判断を参照)。
     audit が errorMessage を持つ場合 (例: NO_LCP) は値を None にして
     `<short>_error` にメッセージを入れる。
+
+    #4160 で observed 値 / LCP 要素 / throttling 方式 / LH 版も追加で拾う。
+    JSONL に記録している `lcp` は `throttlingMethod=simulate` (Lantern) の
+    推定値であり、実描画の遅れとは限らない (simulated LCP が simulated TTI に
+    引っ張られるケースを実測で確認済み)。observed 値と要素を残しておけば、
+    次回以降はライブ再計測なしに「本当に描画が遅いのか」を JSONL だけで
+    判別できる。
     """
     out: Dict[str, Any] = {}
 
@@ -196,6 +242,30 @@ def extract_metrics(lh: Dict[str, Any]) -> Dict[str, Any]:
             out[short] = round(value, 3) if short == "cls" else round(value, 1)
         else:
             out[short] = None
+
+    # observed 値 (simulate/lantern 推定でなく実描画タイムスタンプ)。
+    # `metrics` audit の details.items[0] に observedXxx 系がまとまっている。
+    metrics_items = (((audits.get("metrics") or {}).get("details") or {}).get("items") or [])
+    first_item = metrics_items[0] if metrics_items else {}
+    for key, short in (
+        ("observedLargestContentfulPaint", "observed_lcp"),
+        ("observedFirstContentfulPaint", "observed_fcp"),
+    ):
+        v = first_item.get(key)
+        out[short] = round(v, 1) if isinstance(v, (int, float)) else None
+
+    # LCP 要素の selector。LH13 は lcp-breakdown-insight、旧版は
+    # largest-contentful-paint-element にある。前者が無ければ後者にフォール
+    # バックする。
+    lcp_element = _find_node_selector((audits.get("lcp-breakdown-insight") or {}).get("details"))
+    if lcp_element is None:
+        lcp_element = _find_node_selector(
+            (audits.get("largest-contentful-paint-element") or {}).get("details")
+        )
+    out["lcp_element"] = lcp_element
+
+    out["throttling_method"] = (lh.get("configSettings") or {}).get("throttlingMethod")
+    out["lh_version"] = lh.get("lighthouseVersion")
     return out
 
 
@@ -268,6 +338,24 @@ def aggregate_runs(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
             # 何回中何回 error だったかは誤検出の切り分けに効くので残す
             out[short + "_error"] = errors[0]
             out[short + "_error_runs"] = len(errors)
+
+    # observed 系も数値 metric と同じく median を採る。
+    for short in ("observed_lcp", "observed_fcp"):
+        values = [r[short] for r in runs if isinstance(r.get(short), (int, float))]
+        out[short] = round(statistics.median(values), 1) if values else None
+
+    # lcp_element / throttling_method / lh_version は run 間で変わらない前提
+    # (同一 URL・同一 form_factor を同一コマンドで N 回叩くだけなので)。最初の
+    # run の値を代表として持つ。もし run 間で割れていたら、集計せず追跡だけ
+    # できるよう警告に残す (原因調査の手がかりを消さない)。
+    for key in ("lcp_element", "throttling_method", "lh_version"):
+        values = [r.get(key) for r in runs if r.get(key) is not None]
+        if values:
+            out[key] = values[0]
+            if any(v != values[0] for v in values):
+                logger.warning("%s differs across runs: %s", key, values)
+        else:
+            out[key] = None
     return out
 
 
@@ -287,6 +375,26 @@ def load_history(history_path: pathlib.Path) -> List[Dict[str, Any]]:
     return rows
 
 
+def _collect_baseline_values(
+    history: List[Dict[str, Any]],
+    url: str,
+    form_factor: str,
+    short: str,
+    window: int,
+) -> List[float]:
+    """直近 `window` 件の履歴から対象 URL/form_factor/metric の値列を集める。"""
+    values: List[float] = []
+    for row in reversed(history):
+        if row.get("url") != url or row.get("form_factor") != form_factor:
+            continue
+        v = row.get(short)
+        if isinstance(v, (int, float)):
+            values.append(float(v))
+        if len(values) >= window:
+            break
+    return values
+
+
 def baseline_for(
     history: List[Dict[str, Any]],
     url: str,
@@ -302,33 +410,93 @@ def baseline_for(
     必ず履歴が薄い。薄い baseline で比較を始めると、劣化ではなく計測揺れを
     拾ってしまう。
     """
-    values: List[float] = []
-    for row in reversed(history):
-        if row.get("url") != url or row.get("form_factor") != form_factor:
-            continue
-        v = row.get(short)
-        if isinstance(v, (int, float)):
-            values.append(float(v))
-        if len(values) >= window:
-            break
+    values = _collect_baseline_values(history, url, form_factor, short, window)
     if len(values) < min_samples:
         return None
     return statistics.median(values)
 
 
+def mad_for(
+    history: List[Dict[str, Any]],
+    url: str,
+    form_factor: str,
+    short: str,
+    window: int,
+    min_samples: int = MIN_BASELINE_SAMPLES,
+) -> Optional[float]:
+    """baseline と同じ値列から MAD (median absolute deviation) を作る (#4160)。
+
+    baseline_for と同じ min_samples ガードを使う (baseline が None なのに MAD
+    だけ出るのは筋が悪い)。
+    """
+    values = _collect_baseline_values(history, url, form_factor, short, window)
+    if len(values) < min_samples:
+        return None
+    med = statistics.median(values)
+    return statistics.median([abs(v - med) for v in values])
+
+
+def _ratio_regression(value: float, base: float, min_delta: float) -> bool:
+    """REGRESSION_RATIO 条件 + 絶対差条件 (MAD ゲートより手前の素朴な判定)。"""
+    return value > base * REGRESSION_RATIO and (value - base) >= min_delta
+
+
+def _observed_lcp_confirms(
+    history: List[Dict[str, Any]], row: Dict[str, Any], url: Any, ff: Any, window: int
+) -> bool:
+    """simulated LCP の悪化を observed LCP でも裏付けられるか判定する (#4160)。
+
+    実測で判明した問題: JSONL に記録している `lcp` は throttlingMethod=simulate
+    (Lantern) の推定値で、navi ホームでは simulated LCP が simulated TTI と
+    ほぼ一致していた (= LCP 要素でなく JS/ネットワークの末端を追っていた)。一方
+    `observedLargestContentfulPaint` (実描画) は 1424〜1497ms で observedFCP と
+    同値のまま安定していた。simulated だけが動いた場合に鳴らすと、この種の
+    「計測アーティファクト」を回帰として誤検出する。
+
+    observed 側の履歴・当日値が両方揃っている場合だけ「observed 側も baseline
+    比で悪化しているか」を追加条件にする。observed の記録は #4160 以降の行にしか
+    無いため、揃うまでは判定できない → その間は degrade して simulated だけの
+    従来判定を維持する (揃っていない = False を返さない = 呼び出し側で無条件許可)。
+    """
+    cur_observed = row.get("observed_lcp")
+    if not isinstance(cur_observed, (int, float)):
+        return True  # degrade: observed が無ければ simulated だけで判定
+    base_observed = baseline_for(history, url, ff, "observed_lcp", window)
+    if base_observed is None:
+        return True  # degrade: observed の履歴がまだ育っていない
+    min_delta = MIN_ABS_DELTA.get("lcp", 0.0)
+    return _ratio_regression(float(cur_observed), base_observed, min_delta)
+
+
 def detect_regressions(
-    history: List[Dict[str, Any]], current: List[Dict[str, Any]], window: int = 5
+    history: List[Dict[str, Any]], current: List[Dict[str, Any]], window: int = 10
 ) -> List[Dict[str, Any]]:
     """current の各行を履歴 baseline と比べて劣化を列挙する。
 
     鳴らす条件:
       1. audit error (NO_LCP など) が出た                     → kind="error"
       2. CWV good 閾値を「跨いで」悪化した                     → kind="threshold"
-      3. baseline 比 REGRESSION_RATIO 以上 かつ 絶対差が十分   → kind="relative"
-      4. perf score が SCORE_DROP_POINTS 以上落ちた            → kind="score"
+      3. baseline 比 REGRESSION_RATIO 以上 かつ 絶対差/MAD 差が十分 → kind="relative"
+      4. perf score が SCORE_DROP_POINTS (or MAD 由来の閾値) 以上落ちた → kind="score"
 
     2〜4 はいずれも baseline が MIN_BASELINE_SAMPLES 件以上ある URL だけが対象。
     履歴が足りない URL は「絶対値が悪い」だけでは鳴らさない (baseline_for 参照)。
+
+    #4160 (2026-08-02) の分散対応:
+      実履歴を replay したところ、baseline (median) と REGRESSION_RATIO=1.25 だけ
+      では誤検出だった。ホーム (mobile) の LCP 系列は n=20 で stdev=957
+      (min=2425 / max=5748) と実行ごとの揺れが大きく、1.25x はこの分散に対して
+      1.2σ 相当にしかならない。そこで baseline の MAD (median absolute
+      deviation) を計算し、`value > baseline + REGRESSION_MAD_K * MAD` を
+      relative/score 判定の追加の必須条件にする (AND)。MAD が小さい/0 の指標
+      まで緩めないよう、下限として既存の MIN_ABS_DELTA / SCORE_DROP_POINTS を
+      使う (`max(固定値, MAD由来)`)。
+      さらに `lcp` については simulated (Lantern 推定) 単独の悪化では鳴らさず、
+      observed 値 (実描画) が揃っていればそちらも悪化していることを要求する
+      (_observed_lcp_confirms 参照)。observed の履歴が無い期間は degrade して
+      従来どおり simulated だけで判定する。
+      `kind="error"` (audit error / runtime error) は計測基盤の失敗検出であり
+      分散の話とは無関係なので、これらのゲートを通さず無条件で鳴らし続ける。
     """
     alerts: List[Dict[str, Any]] = []
     for row in current:
@@ -369,8 +537,19 @@ def detect_regressions(
                 continue
 
             min_delta = MIN_ABS_DELTA.get(short, 0.0)
+            mad = mad_for(history, url, ff, short, window)
+            # MAD が拾えない/0 のときは MIN_ABS_DELTA を下限にする
+            # (MAD=0 のまま K 倍しても 0 になり、ゲートが機能しなくなるのを防ぐ)。
+            required_delta = max(min_delta, REGRESSION_MAD_K * mad) if mad else min_delta
+
             crossed = good is not None and base <= good < value
-            worse = value > base * REGRESSION_RATIO and (value - base) >= min_delta
+            worse = value > base * REGRESSION_RATIO and (value - base) >= required_delta
+
+            if (crossed or worse) and short == "lcp":
+                # simulated だけの悪化は鳴らさない (揃っていなければ degrade)。
+                if not _observed_lcp_confirms(history, row, url, ff, window):
+                    crossed = False
+                    worse = False
 
             if crossed:
                 alerts.append({
@@ -390,12 +569,15 @@ def detect_regressions(
         score = row.get("perf_score")
         if isinstance(score, (int, float)):
             base_score = baseline_for(history, url, ff, "perf_score", window)
-            if base_score is not None and (base_score - score) >= SCORE_DROP_POINTS:
-                alerts.append({
-                    "kind": "score", "url": url, "form_factor": ff, "metric": "perf_score",
-                    "value": score, "baseline": base_score,
-                    "detail": "performance score が {} → {} に低下".format(base_score, score),
-                })
+            if base_score is not None:
+                score_mad = mad_for(history, url, ff, "perf_score", window)
+                required_drop = max(SCORE_DROP_POINTS, REGRESSION_MAD_K * score_mad) if score_mad else SCORE_DROP_POINTS
+                if (base_score - score) >= required_drop:
+                    alerts.append({
+                        "kind": "score", "url": url, "form_factor": ff, "metric": "perf_score",
+                        "value": score, "baseline": base_score,
+                        "detail": "performance score が {} → {} に低下".format(base_score, score),
+                    })
     return alerts
 
 
@@ -539,10 +721,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     p.add_argument("--form-factors", nargs="+", default=["mobile"],
                    choices=["mobile", "desktop"])
     p.add_argument("--lighthouse-cmd",
-                   default=os.environ.get("LIGHTHOUSE_CMD", "npx --yes lighthouse"))
+                   default=os.environ.get("LIGHTHOUSE_CMD", DEFAULT_LIGHTHOUSE_CMD))
     p.add_argument("--history-dir", default=DEFAULT_HISTORY_DIR)
     p.add_argument("--target-date", default=date.today().isoformat())
-    p.add_argument("--baseline-window", type=int, default=5)
+    p.add_argument("--baseline-window", type=int, default=10)
     p.add_argument("--report-out", default=None,
                    help="劣化があったとき Markdown を書き出すパス")
     p.add_argument("--dry-run", action="store_true",
