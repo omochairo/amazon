@@ -1,7 +1,7 @@
 {
   "source_range": {
-    "start": "2026-07-16",
-    "end": "2026-07-23",
+    "start": "2026-07-23",
+    "end": "2026-07-30",
     "days": 7,
     "delay_days": 3
   },
@@ -10,54 +10,5 @@
     "min_dominant_share": 0.6,
     "max_results": 10
   },
-  "detected": [
-    {
-      "page": "https://navi.omcha.jp/products/b0875fv2bq/",
-      "dominant_intent": "informational",
-      "dominant_share": 0.965,
-      "total_impressions": 85,
-      "intent_breakdown": {
-        "informational": 82,
-        "commercial": 3
-      },
-      "cta_recommendation": "冒頭で結論/答えを先出しし、比較表・関連記事で滞在を伸ばす。購入 CTA は本文中盤以降に控えめに配置 (情報目的の離脱を防ぐ)。",
-      "top_queries": [
-        {
-          "query": "ロンビー",
-          "intent": "informational",
-          "impressions": 72,
-          "clicks": 1,
-          "position": 9.180555555555555
-        },
-        {
-          "query": "ロンビー おもちゃ",
-          "intent": "informational",
-          "impressions": 6,
-          "clicks": 0,
-          "position": 11.5
-        },
-        {
-          "query": "ろんびー",
-          "intent": "informational",
-          "impressions": 3,
-          "clicks": 0,
-          "position": 9.0
-        },
-        {
-          "query": "ロンビー 口コミ",
-          "intent": "commercial",
-          "impressions": 3,
-          "clicks": 0,
-          "position": 8.0
-        },
-        {
-          "query": "ロンビーとは",
-          "intent": "informational",
-          "impressions": 1,
-          "clicks": 0,
-          "position": 5.0
-        }
-      ]
-    }
-  ]
+  "detected": []
 }
