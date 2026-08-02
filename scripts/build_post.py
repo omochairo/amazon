@@ -1461,6 +1461,32 @@ _HIGHLIGHT_HOST_PREFER = (
 # Parts-list / spec-dump markers — these read like a manual, not a评価.
 _HIGHLIGHT_JUNK_MARKERS = ("Item number", "Qty.", "Part #", "Quantity.", "Symbol Part")
 
+# Contact-info detectors (#4150 / Refs #2995): third-party snippets sometimes
+# *are* a seller's contact block (電話/FAX/Eメール) rather than editorial
+# content. Cloudflare rewrites any literal email address it renders into
+# /cdn-cgi/l/email-protection, which 404s on GitLab Pages (no Cloudflare
+# Worker there) — so quoting one breaks the page *and* republishes a third
+# party's phone/fax/email as if it were our own content. Detection keys off
+# the *entity itself* (an actual email address or a hyphen-grouped Japanese
+# phone/fax number) rather than label words like "FAX" or "お問い合わせ先":
+# label-only matching risks false positives on unrelated prose that happens
+# to mention "TEL" or "FAX" in passing, whereas the entity pattern is
+# unambiguous and also catches label-less numbers. Partial-masking (redacting
+# just the number) was considered and rejected — it breaks quote fidelity and
+# a stripped contact block has zero reader value anyway, so dropping the
+# whole snippet is simpler and safer than trying to repair it.
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+# Japanese phone/fax numbers: three hyphen-separated digit groups starting
+# with 0 (03-3744-0909 / 0120-123-456 / 090-1234-5678), or the parenthesised
+# area-code form ((03)3744-0909). Matching on digit *count and grouping*
+# rather than digit density means genuine review figures like "対象年齢
+# 3-5歳" or "全長 30cm" never match — no leading 0, no three-group hyphen
+# chain.
+_PHONE_RE = re.compile(
+    r"(?<!\d)0\d{1,4}-\d{1,4}-\d{3,4}(?!\d)"
+    r"|(?<!\d)\(0\d{1,4}\)\d{1,4}-?\d{3,4}(?!\d)"
+)
+
 
 def _has_japanese(text: str) -> bool:
     return any(
@@ -1469,13 +1495,24 @@ def _has_japanese(text: str) -> bool:
     )
 
 
+def _highlight_has_contact_info(text: str) -> bool:
+    """True when the snippet contains an email address or a Japanese
+    phone/fax number, i.e. it reads like a business's contact block rather
+    than editorial content."""
+    s = text or ""
+    return bool(_EMAIL_RE.search(s) or _PHONE_RE.search(s))
+
+
 def _highlight_snippet_ok(snippet: str) -> bool:
     """True when the snippet reads like prose a reader benefits from, not a
-    digit-dense parts list or a stub. Used to keep the highlights honest."""
+    digit-dense parts list, a contact block, or a stub. Used to keep the
+    highlights honest."""
     s = (snippet or "").strip()
     if len(s) < 30:
         return False
     if any(m in s for m in _HIGHLIGHT_JUNK_MARKERS):
+        return False
+    if _highlight_has_contact_info(s):
         return False
     digits = sum(c.isdigit() for c in s)
     return digits / len(s) <= 0.25
