@@ -15,23 +15,48 @@ name: Unit Tests
 #      scripts/ 全体の unit test はその関心事と別物であり、独立させたほうが
 #      失敗時の切り分けが速い。
 #
-# なぜ required check にしないか:
+# なぜ required check にしないか (#4069):
 #   まずこの workflow が数週間グリーンで安定することを観察してから、
 #   required check への昇格 (branch protection 設定変更) を判断する。
 #   いきなり必須化すると、既存の未検出フレーク/環境差異があった場合に
 #   全 PR がブロックされるリスクがある。
+#
+#   2026-08-02 時点の実績: run 22 本 (07-27〜08-02) で 21 success / 1 failure。
+#   唯一の failure は開発中ブランチ ci/4007-unit-tests の初回 run (07-27T12:46)
+#   で、同ブランチの 2 分後・4 分後は success。マージ後の失敗とフレークはゼロ。
+#   ただし run が集中しているのは 07-27 と 08-02 の 2 日だけで、昇格条件の
+#   「数週間」には届いていない。本 PR (ステップ1) で全 PR 発火にしたので、
+#   data のみの PR でもグリーンを保つかを 2 週間観察してから昇格を判断する。
+#
+#   昇格時に併せて要検討: fork からの PR では secrets.NAVI_BRAIN_PAT が渡らず
+#   下の overlay checkout が落ちるため、required 化すると fork PR が構造的に
+#   マージ不能になる (現在 external contributor はいないので実害なし)。
 
 on:
+  # 2026-08-02 (#4069 ステップ1): pull_request 側の paths を撤廃した。
+  #
+  # 撤廃前は `scripts/**` にしか反応しなかったため、この workflow を required
+  # check に昇格させると **`scripts/` を触らない PR が全て永久 pending =
+  # マージ不能**になる。PR 流量の大半は cron が作る `data/**` のみの PR
+  # (記事生成 / price watch / engagement drafts / fetch update、25〜47 件/日)
+  # なので、昇格した瞬間にコンテンツパイプライン全体が止まる。#4384 で
+  # `validate` から paths を撤廃したのと同じ inverse-trap で、昇格の前提条件。
+  #
+  # pytest をガードせず全 PR で無条件に走らせるのは意図的。「どのファイルが
+  # テストに影響するか」を判定する条件を書いた瞬間、#4384 で消したばかりの
+  # allowlist を小さく作り直すことになる。実際その穴は既にあり、
+  # requirements.txt の bump や data/schema の変更はテスト結果を動かしうるのに
+  # `scripts/**` に一致しない (test_rakuten_ranking_match.py は実 data/raw を
+  # 読む)。無条件実行なら穴ごと消える。
+  #
+  # コストは 1 PR あたり ~52 秒 (ほぼ pip install の時間。pytest 本体は
+  # 1,812 ケースで 8 秒台)。public repo なので Actions 分は無料で、
+  # 下の concurrency が in-progress を打ち切る。
+  #
+  # なお push 側の paths は残している。pull_request 側で全 PR がテストを
+  # 通っているため、main への push で再実行する価値があるのは scripts/ が
+  # 動いたときだけ。
   pull_request:
-    paths:
-      - 'scripts/**'
-      # 自身の変更 PR でも unit-tests を発火させる (04-validate-article-pr.yml が
-      # 同じ理由で自身を paths に self-listing しているのと同じパターン)。
-      # これが無いと workflow 本体だけを触る PR で `pull_request` イベントが
-      # 発火せず、workflow_dispatch もデフォルトブランチに merge 後でないと
-      # 呼び出せない (workflow ファイルがまだ main に無いため) ので、
-      # merge 前にこの job の成否を検証する手段が無くなる。
-      - '.github/workflows/44-unit-tests.yml'
   push:
     branches:
       - main
