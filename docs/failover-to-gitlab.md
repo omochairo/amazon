@@ -14,7 +14,10 @@
 - GitLab 側スケジュール5本は **inactive で温存** (フェイルオーバー時に active 化するだけで生成が再開する):
   - 4326910 invoke-jules (6h毎) / 4327609・4327610 fetch-data (01:00/10:00 UTC) / 4327611 rakuten-ranking (月 21:00 UTC) / 4327612 third-party-sources (21:30 UTC)
 - GitLab の CI/CD 変数 18個・NAS runner (UGREEN DXP4800Plus, 192.168.68.62, runner id 54145618) は登録・常駐のまま維持
-- GITLAB_TOKEN (project access token, Maintainer/api, **2027-06-30 期限**) は GitHub Secrets と `amazon-main/.env` の両方に保持。期限前に更新すること
+- GITLAB_TOKEN (omocha/navi の project access token `clodecode` id 25434570, Maintainer/api, **2027-07-07 期限**) は GitHub Secrets と `amazon-main/.env` の両方に保持。期限前に更新すること
+  - 旧 `clode` (id 25434376, 2027-06-30 期限) は既に inactive。参照しないこと
+  - 別系統として `vscode/.env` の GITLAB_TOKEN は **omocha/writer** (project id 84200456) の project access token `clodecode` id 25455442 (api, 2027-07-07 期限)。navi のフェイルオーバーには無関係
+  - 手元の glab CLI は K 本人アカウントの personal access token `claude` id 26140733 (api, **2027-07-31 期限**、2026-07-31 に rotate 済) を `AppData\Local\glab-cli\config.yml` に保持。CI とは無関係だが、フェイルオーバー時の GitLab 側調査に使うので切らさないこと
 
 ## フェイルオーバー手順 (GitHub が再び使えなくなったとき)
 
