@@ -8,8 +8,9 @@ import pytest
 
 from scripts.append_census_history import CENSUS_HISTORY_FILE
 from scripts.report_census_404 import (
+    INBOUND_SUGGESTION_COVERAGE_LOW_THRESHOLD,
     build_inbound_report,
-    count_inbound_links,
+    count_inbound_suggestions,
     extract_404_urls,
     load_history_rows,
     run,
@@ -136,7 +137,13 @@ def test_summarize_last_crawl_distribution_handles_none_and_unparsable():
 
 
 # ---------------------------------------------------------------------------
-# 3. 内部被リンク数
+# 3. sidecar 内部リンク候補の被参照数 + 供給源カバレッジ
+#
+# #4381 レビュー指摘: internal_links.py (omcha.jp WP REST API クライアント。
+# navi 側の内部リンクグラフとは無関係) は使わない。sidecar
+# (internal_link_suggestions) が正しい供給源だが、実測でコーパスの一部しか
+# カバーしていないため、カバレッジが低い状態での「0」は「未測定」として
+# unknown 扱いする (0 に潰さない)。
 # ---------------------------------------------------------------------------
 
 def _write_article(articles_dir: pathlib.Path, stem: str, data: dict | None = None) -> None:
@@ -144,13 +151,14 @@ def _write_article(articles_dir: pathlib.Path, stem: str, data: dict | None = No
     (articles_dir / f"{stem}.json").write_text(json.dumps(data or {"narrative": {}}), encoding="utf-8")
 
 
-def test_count_inbound_links_missing_dir_returns_none_error(tmp_path):
-    counts, error = count_inbound_links(tmp_path / "nope")
+def test_count_inbound_suggestions_missing_dir_returns_none_error(tmp_path):
+    counts, coverage, error = count_inbound_suggestions(tmp_path / "nope")
     assert counts is None
+    assert coverage == {}
     assert error is not None
 
 
-def test_count_inbound_links_tallies_target_asin(tmp_path):
+def test_count_inbound_suggestions_tallies_target_asin_and_coverage_stats(tmp_path):
     articles_dir = tmp_path / "articles"
     _write_article(articles_dir, "2026-07-01-B0899JMQ7F")
     _write_article(articles_dir, "2026-07-01-B0BY2HLW37")
@@ -159,27 +167,78 @@ def test_count_inbound_links_tallies_target_asin(tmp_path):
             {"target_asin": "B0BY2HLW37", "anchor_text": "x"},
         ]}), encoding="utf-8",
     )
-    counts, error = count_inbound_links(articles_dir)
+    counts, coverage, error = count_inbound_suggestions(articles_dir)
     assert error is None
     assert counts["B0BY2HLW37"] == 1
-    assert counts["B0899JMQ7F"] == 0  # 記事として存在するが被リンクは 0
+    assert counts["B0899JMQ7F"] == 0  # 記事として存在するが被参照は 0
+    assert coverage["total_articles"] == 2
+    assert coverage["sidecars_with_suggestions"] == 1
+    assert coverage["suggestion_total"] == 1
+    assert coverage["distinct_target_asins"] == 1
+    assert coverage["coverage_ratio"] == 0.5  # 1/2 は閾値 10% を上回る
+    assert coverage["low_coverage"] is False
 
 
-def test_build_inbound_report_zero_when_no_suggestions(census_fixture, tmp_path):
+def test_count_inbound_suggestions_flags_low_coverage(tmp_path):
+    articles_dir = tmp_path / "articles"
+    # 20 記事中 1 記事だけ suggestions あり (5%) -> 閾値 10% 未満
+    for i in range(20):
+        _write_article(articles_dir, f"2026-07-01-B{i:09d}")
+    (articles_dir / "2026-07-01-B000000000.seo.json").write_text(
+        json.dumps({"internal_link_suggestions": [
+            {"target_asin": "B000000001", "anchor_text": "x"},
+        ]}), encoding="utf-8",
+    )
+    counts, coverage, error = count_inbound_suggestions(articles_dir)
+    assert error is None
+    assert coverage["coverage_ratio"] == pytest.approx(0.05)
+    assert coverage["low_coverage"] is True
+    assert coverage["coverage_ratio"] < INBOUND_SUGGESTION_COVERAGE_LOW_THRESHOLD
+
+
+def test_build_inbound_report_zero_becomes_unknown_under_low_coverage(census_fixture, tmp_path):
     articles_dir = tmp_path / "articles"
     _write_article(articles_dir, "2026-07-01-B0899JMQ7F")
     _write_article(articles_dir, "2026-07-01-B0BY2HLW37")
-    counts, error = count_inbound_links(articles_dir)
+    counts, coverage, error = count_inbound_suggestions(articles_dir)
     assert error is None
+    assert coverage["low_coverage"] is True  # 0/2 sidecar に suggestions あり
     urls, _ = extract_404_urls(census_fixture)
-    report = build_inbound_report(urls, counts)
-    assert all(r["inbound_links"] == 0 for r in report)
+    report = build_inbound_report(urls, counts, coverage["low_coverage"])
+    assert all(r["inbound_suggestions"] == "unknown" for r in report)
+
+
+def test_build_inbound_report_keeps_real_number_when_coverage_sufficient(census_fixture, tmp_path):
+    articles_dir = tmp_path / "articles"
+    _write_article(articles_dir, "2026-07-01-B0899JMQ7F")
+    _write_article(articles_dir, "2026-07-01-B0BY2HLW37")
+    (articles_dir / "2026-07-01-B0899JMQ7F.seo.json").write_text(
+        json.dumps({"internal_link_suggestions": [
+            {"target_asin": "B0BY2HLW37", "anchor_text": "x"},
+        ]}), encoding="utf-8",
+    )
+    counts, coverage, error = count_inbound_suggestions(articles_dir)
+    assert error is None
+    assert coverage["low_coverage"] is False  # 1/2 は閾値を上回る
+    urls, _ = extract_404_urls(census_fixture)
+    report = build_inbound_report(urls, counts, coverage["low_coverage"])
+    by_asin = {r["asin"]: r["inbound_suggestions"] for r in report}
+    assert by_asin["B0BY2HLW37"] == 1
+    assert by_asin["B0899JMQ7F"] == 0  # 実測 0 (カバレッジ十分なので unknown にしない)
 
 
 def test_build_inbound_report_unknown_when_counts_unavailable(census_fixture):
     urls, _ = extract_404_urls(census_fixture)
-    report = build_inbound_report(urls, None)
-    assert all(r["inbound_links"] == "unknown" for r in report)
+    report = build_inbound_report(urls, None, low_coverage=False)
+    assert all(r["inbound_suggestions"] == "unknown" for r in report)
+
+
+def test_build_inbound_report_positive_count_survives_low_coverage():
+    """low_coverage=True でも実測値が 1 件以上あれば unknown に潰さない。"""
+    urls = [{"url": "https://navi.omcha.jp/products/b0899jmq7f/"}]
+    counts = {"B0899JMQ7F": 2}
+    report = build_inbound_report(urls, counts, low_coverage=True)
+    assert report[0]["inbound_suggestions"] == 2
 
 
 def test_build_inbound_report_sorted_ascending_by_count():
@@ -188,7 +247,7 @@ def test_build_inbound_report_sorted_ascending_by_count():
         {"url": "https://navi.omcha.jp/products/b0by2hlw37/"},
     ]
     counts = {"B0899JMQ7F": 3, "B0BY2HLW37": 0}
-    report = build_inbound_report(urls, counts)
+    report = build_inbound_report(urls, counts, low_coverage=False)
     assert [r["asin"] for r in report] == ["B0BY2HLW37", "B0899JMQ7F"]
 
 
@@ -210,15 +269,15 @@ def test_run_zero_404_urls_completes_normally(tmp_path):
     result = run(census_path, history_dir, articles_dir)
     assert result["count_404"] == 0
     assert result["urls_404"] == []
-    assert result["inbound_links"] == []
-    assert result["inbound_links_error"] is None
+    assert result["inbound_suggestions"] == []
+    assert result["inbound_suggestions_error"] is None
     assert result["trend"] == []  # history 未作成
 
 
 def test_run_missing_census_file_completes_normally(tmp_path):
     result = run(tmp_path / "nope.json", tmp_path / "history", tmp_path / "articles")
     assert result["count_404"] == 0
-    assert result["inbound_links_error"] is not None  # articles dir も無いので算出不能
+    assert result["inbound_suggestions_error"] is not None  # articles dir も無いので算出不能
 
 
 def test_run_history_single_line_does_not_crash(tmp_path):

@@ -20,17 +20,29 @@ Refs #3331, #3988 — GSC index census の「404 認識 URL」棚卸しレポー
      partial run だが除外せずフラグ付きで表示する — #3372 の偽改善検出回避)
   2. 現行 census (data/analytics/gsc_index_census.json) の 404 認識 URL 全件
      (URL / last_crawl_time / google_canonical) + last_crawl_time の年月別分布
-  3. 各 URL への内部被リンク数 (少ない順)。scripts/generate_internal_links.py が
-     書く sidecar (``data/articles/<stem>.seo.json`` の
-     ``internal_link_suggestions``) を数える — build_post.py の
-     ``_inject_internal_links`` が本文へ注入する実リンクの供給源であり、
-     これがそのまま「現在張られている(張られる予定の)内部被リンク数」に対応する。
-     リンク生成ロジック自体は再実装せず、scripts/audit_query_entailment.py の
-     discover_articles / extract_asin_from_page と
-     scripts/_seo_sidecar.py の load_sidecar / sidecar_path を import して使う
+  3. 各 URL への sidecar 内部リンク候補の被参照数 (少ない順)。
+     scripts/generate_internal_links.py が書く sidecar
+     (``data/articles/<stem>.seo.json`` の ``internal_link_suggestions``) を
+     数える。リンク生成ロジック自体は再実装せず、
+     scripts/audit_query_entailment.py の discover_articles /
+     extract_asin_from_page と scripts/_seo_sidecar.py の
+     load_sidecar / sidecar_path を import して使う
      (scripts/generate_internal_links.py も同じヘルパを使っている)。
-     算出不能な URL (ASIN が URL から抽出できない等) は 0 と断定せず
-     "unknown" として区別する。
+
+     **注意 (重要・誤読しやすい点)**: これは build_post.py が実際にページへ
+     描画した内部リンクグラフではない。26-faq-seo-lane (generate_internal_links.py)
+     が出した「リンク候補 (suggestions)」の被参照数に過ぎない。かつ実測の
+     結果、この sidecar 供給源はコーパスの一部しかカバーしていない
+     (2026-08 時点で all articles 中 internal_link_suggestions を持つのは
+     3.6% 程度)。カバレッジが低い状態では個別 ASIN の「0」は「被リンクが
+     無い」ではなく「未測定」であり、閾値未満のときは 0 を "unknown" として
+     出す (INBOUND_SUGGESTION_COVERAGE_LOW_THRESHOLD 参照)。
+     算出不能な URL (ASIN が URL から抽出できない等) も "unknown" とする。
+     navi の実際の内部リンクグラフ (rendered graph) はリポジトリ内に
+     永続化されていない (amazon-home-ops の site-audit が r5_orphans 算出の
+     ためにクロール時にグラフを作っているが保存していない)。案3 の対象選定
+     には link graph の永続化が別途必要 — 本レポートの被参照数はその代替には
+     ならない。
 
 coverage_state の扱い:
   census の coverage_state はロケール依存の日本語表示文字列。
@@ -62,6 +74,18 @@ from scripts.append_analytics_history import DEFAULT_HISTORY_DIR
 from scripts.audit_query_entailment import discover_articles, extract_asin_from_page
 
 NOT_FOUND_404_SLUG = "not_found_404"
+
+# 供給源カバレッジの下限閾値 (§3 コメント参照)。実測 (2026-08-02):
+# data/articles/*.json 全 2,359 件のうち sidecar 保有 564 件、
+# internal_link_suggestions を実際に持つのは 84 件 (≒3.6%)。distinct
+# target_asin は 76 件のみ。この状態でカバレッジ比が低いまま個別 ASIN の
+# カウントが 0 でも「被リンクが無い」と断定できない (単に生成 lane がまだ
+# 対象記事を処理していないだけの可能性が高い)。10% を閾値とする根拠は
+# 「サイト全体の 1 割未満しか候補生成が回っていない状態では、0 の大半が
+# 未処理由来になる」という判断 (実測 3.6% はこれを大きく下回る)。値は
+# 恣意的だが、コーパスの大半をカバーしない限り 0 を信頼しないという
+# 保守的な側に倒す意図のみ確定させている。
+INBOUND_SUGGESTION_COVERAGE_LOW_THRESHOLD = 0.10
 
 
 # --------------------------------------------------------------------------
@@ -178,32 +202,55 @@ def summarize_last_crawl_distribution(urls: list[dict[str, Any]]) -> dict[str, i
 
 
 # --------------------------------------------------------------------------
-# 3. 内部被リンク数 (少ない順)
+# 3. sidecar 内部リンク候補の被参照数 (少ない順)
 # --------------------------------------------------------------------------
 
-def count_inbound_links(articles_dir: pathlib.Path) -> tuple[dict[str, int] | None, str | None]:
+def count_inbound_suggestions(
+    articles_dir: pathlib.Path,
+) -> tuple[dict[str, int] | None, dict[str, Any], str | None]:
     """全記事の sidecar (internal_link_suggestions) から target_asin ごとの
-    被リンク数を数える。
+    被参照数を数え、供給源カバレッジ統計も併せて返す。
 
     scripts/generate_internal_links.py が書く sidecar キー
     ``internal_link_suggestions`` (各要素 {"target_asin": ..., ...}) を数える。
     生成ロジック自体は再実装せず、discover_articles (記事一覧) +
     load_sidecar/sidecar_path (sidecar 読み込み) という既存ヘルパのみを使う。
 
-    戻り値は (asin -> count, error_reason)。articles_dir が読めない場合は
-    (None, 理由) を返し、呼び出し側は 0 に潰さず "unknown" 扱いする。
+    これは「実際にページへ描画された内部リンクグラフ」ではなく、あくまで
+    lane が出した候補の被参照数である (モジュール docstring 参照)。
+
+    戻り値は (asin -> count, coverage_stats, error_reason)。
+    articles_dir が読めない場合は (None, {}, 理由) を返し、呼び出し側は
+    0 に潰さず "unknown" 扱いする。
+
+    coverage_stats:
+      - total_articles: 記事総数
+      - sidecars_with_suggestions: internal_link_suggestions を実際に持つ記事数
+      - suggestion_total: suggestion の総数 (延べ)
+      - distinct_target_asins: target_asin の distinct 件数
+      - coverage_ratio: sidecars_with_suggestions / total_articles
+      - low_coverage: coverage_ratio < INBOUND_SUGGESTION_COVERAGE_LOW_THRESHOLD
     """
     article_index = discover_articles(articles_dir)
     if not article_index:
-        return None, f"記事ディレクトリ {articles_dir} が読めないか記事が 0 件だったため、被リンク数を算出できません"
+        return (
+            None, {},
+            f"記事ディレクトリ {articles_dir} が読めないか記事が 0 件だったため、"
+            "被参照数を算出できません",
+        )
 
     counts: dict[str, int] = {asin: 0 for asin in article_index}
+    sidecars_with_suggestions = 0
+    suggestion_total = 0
+    distinct_targets: set[str] = set()
+
     for stem_path in article_index.values():
         sc_path = sidecar_path(articles_dir, stem_path.stem)
         sidecar = load_sidecar(sc_path)
         suggestions = sidecar.get("internal_link_suggestions")
-        if not isinstance(suggestions, list):
+        if not isinstance(suggestions, list) or not suggestions:
             continue
+        sidecars_with_suggestions += 1
         for sugg in suggestions:
             if not isinstance(sugg, dict):
                 continue
@@ -212,33 +259,59 @@ def count_inbound_links(articles_dir: pathlib.Path) -> tuple[dict[str, int] | No
                 continue
             asin = target_asin.strip().upper()
             counts[asin] = counts.get(asin, 0) + 1
-    return counts, None
+            suggestion_total += 1
+            distinct_targets.add(asin)
+
+    total_articles = len(article_index)
+    coverage_ratio = (sidecars_with_suggestions / total_articles) if total_articles else 0.0
+    coverage_stats: dict[str, Any] = {
+        "total_articles": total_articles,
+        "sidecars_with_suggestions": sidecars_with_suggestions,
+        "suggestion_total": suggestion_total,
+        "distinct_target_asins": len(distinct_targets),
+        "coverage_ratio": round(coverage_ratio, 4),
+        "low_coverage": coverage_ratio < INBOUND_SUGGESTION_COVERAGE_LOW_THRESHOLD,
+    }
+    return counts, coverage_stats, None
 
 
 def build_inbound_report(
-    urls: list[dict[str, Any]], inbound_counts: dict[str, int] | None,
+    urls: list[dict[str, Any]],
+    inbound_counts: dict[str, int] | None,
+    low_coverage: bool,
 ) -> list[dict[str, Any]]:
-    """404 URL ごとに被リンク数を突き合わせ、少ない順にソートする。
+    """404 URL ごとに sidecar 被参照数を突き合わせ、少ない順にソートする。
 
-    ASIN が URL から抽出できない、または inbound_counts が None (算出不能) の
-    場合は "unknown" とし 0 断定を避ける。ソートは (unknown を最後、それ以外は
-    昇順) → url 昇順。
+    "unknown" (0 と区別する) になるケース:
+      - ASIN が URL から抽出できない
+      - inbound_counts が None (算出不能)
+      - low_coverage=True かつ実測値が 0 (供給源がコーパスをほぼカバーして
+        いない状態での 0 は「被リンクが無い」ではなく「未測定」— #4381
+        レビュー指摘)。実測値が 1 件以上ある場合はカバレッジが低くても
+        そのまま実数を採用する (少なくとも 1 件の候補生成という事実は
+        観測されているため)。
+
+    ソートは (unknown を最後、それ以外は昇順) → url 昇順。
     """
     out: list[dict[str, Any]] = []
     for row in urls:
         asin = extract_asin_from_page(row.get("url") or "")
         if asin is None or inbound_counts is None:
-            inbound = "unknown"
+            inbound: int | str = "unknown"
         else:
-            inbound = inbound_counts.get(asin, 0)
+            raw_count = inbound_counts.get(asin, 0)
+            if low_coverage and raw_count == 0:
+                inbound = "unknown"
+            else:
+                inbound = raw_count
         out.append({
             "url": row.get("url"),
             "asin": asin,
-            "inbound_links": inbound,
+            "inbound_suggestions": inbound,
         })
 
     def sort_key(r: dict[str, Any]) -> tuple[int, int, str]:
-        v = r["inbound_links"]
+        v = r["inbound_suggestions"]
         if v == "unknown":
             return (1, 0, r["url"] or "")
         return (0, v, r["url"] or "")
@@ -258,6 +331,7 @@ def render_report(
     crawl_distribution: dict[str, int],
     inbound_report: list[dict[str, Any]],
     inbound_error: str | None,
+    inbound_coverage: dict[str, Any],
 ) -> str:
     lines: list[str] = []
     lines.append("# GSC index census — 404 認識 URL 棚卸しレポート")
@@ -302,20 +376,46 @@ def render_report(
         lines.append(f"(...他 {len(urls) - 200} 件、--json で全件出力)")
     lines.append("")
 
-    lines.append("## 3. 内部被リンク数 (少ない順)")
+    lines.append("## 3. sidecar 内部リンク候補の被参照数 (少ない順)")
+    lines.append("⚠️ これは build_post.py が実際にページへ描画した内部リンクグラフ**ではない**。"
+                 "26-faq-seo-lane (scripts/generate_internal_links.py) が出したリンク候補 "
+                 "(internal_link_suggestions) の被参照数。navi の実際の内部リンクグラフは"
+                 "リポジトリ内に永続化されていない。")
+    lines.append("")
+    lines.append("### 供給源カバレッジ")
     if inbound_error:
-        lines.append(f"⚠️ 被リンク数は算出できませんでした: {inbound_error}")
+        lines.append(f"⚠️ 算出できませんでした: {inbound_error}")
+    elif not inbound_coverage:
+        lines.append("(カバレッジ統計なし)")
+    else:
+        c = inbound_coverage
+        lines.append(f"- 記事総数: {c.get('total_articles')}")
+        lines.append(f"- internal_link_suggestions を持つ sidecar 数: "
+                     f"{c.get('sidecars_with_suggestions')} "
+                     f"({c.get('coverage_ratio', 0) * 100:.1f}%)")
+        lines.append(f"- suggestion 総数 (延べ): {c.get('suggestion_total')}")
+        lines.append(f"- distinct target ASIN 数: {c.get('distinct_target_asins')}")
+        if c.get("low_coverage"):
+            lines.append(
+                f"- ⚠️ カバレッジ閾値 ({INBOUND_SUGGESTION_COVERAGE_LOW_THRESHOLD * 100:.0f}%) 未満。"
+                "個別 ASIN の被参照数が 0 の場合は「被リンクが無い」ではなく「未測定」と"
+                "みなし unknown として出力する (実測値が 1 件以上ある場合はそのまま採用)。"
+            )
+    lines.append("")
+
+    if inbound_error:
+        pass
     elif not inbound_report:
         lines.append("(404 URL が 0 件のため対象なし)")
     else:
-        unknown_count = sum(1 for r in inbound_report if r["inbound_links"] == "unknown")
+        unknown_count = sum(1 for r in inbound_report if r["inbound_suggestions"] == "unknown")
         if unknown_count:
-            lines.append(f"⚠️ {unknown_count} 件は ASIN 抽出不能のため unknown (0 扱いにしていません)")
+            lines.append(f"⚠️ {unknown_count} 件は unknown (ASIN 抽出不能、または低カバレッジ下の 0)")
         lines.append("")
-        lines.append("| url | asin | inbound_links |")
+        lines.append("| url | asin | inbound_suggestions (sidecar) |")
         lines.append("|---|---|---:|")
         for row in inbound_report[:200]:
-            lines.append(f"| {row['url']} | {row['asin'] or '(unknown)'} | {row['inbound_links']} |")
+            lines.append(f"| {row['url']} | {row['asin'] or '(unknown)'} | {row['inbound_suggestions']} |")
         if len(inbound_report) > 200:
             lines.append(f"(...他 {len(inbound_report) - 200} 件、--json で全件出力)")
 
@@ -341,8 +441,9 @@ def run(
     urls, unknown_states = extract_404_urls(census)
     crawl_distribution = summarize_last_crawl_distribution(urls)
 
-    inbound_counts, inbound_error = count_inbound_links(articles_dir)
-    inbound_report = build_inbound_report(urls, inbound_counts)
+    inbound_counts, inbound_coverage, inbound_error = count_inbound_suggestions(articles_dir)
+    low_coverage = bool(inbound_coverage.get("low_coverage")) if inbound_coverage else False
+    inbound_report = build_inbound_report(urls, inbound_counts, low_coverage)
 
     result: dict[str, Any] = {
         "trend": trend,
@@ -350,8 +451,9 @@ def run(
         "urls_404": urls,
         "unknown_coverage_states": unknown_states,
         "last_crawl_time_distribution": crawl_distribution,
-        "inbound_links": inbound_report,
-        "inbound_links_error": inbound_error,
+        "inbound_suggestions": inbound_report,
+        "inbound_suggestions_coverage": inbound_coverage,
+        "inbound_suggestions_error": inbound_error,
     }
     return result
 
@@ -383,8 +485,9 @@ def main() -> int:
         result["urls_404"],
         result["unknown_coverage_states"],
         result["last_crawl_time_distribution"],
-        result["inbound_links"],
-        result["inbound_links_error"],
+        result["inbound_suggestions"],
+        result["inbound_suggestions_error"],
+        result["inbound_suggestions_coverage"],
     ))
 
     if args.json:
