@@ -76,6 +76,26 @@ jobs:
           fi
           echo "eligible=true" >> "$GITHUB_OUTPUT"
 
+      # 2026-08-04 (#4469): スコープガード自体は正しい (任意のファイルを触る PR を
+      # 無条件 auto-merge するほうが危険) が、skip が exit 0 = check pass 表示のまま
+      # 無言だったため PR #4280 が 4 日間放置され記事 1 本の公開が遅れた。
+      # ここでは判定を変えず「手動マージが要る」ことを PR 上に残すだけにする。
+      # ラベルは 45-stale-pr-sweeper.yml の滞留レポートで理由表示に使う。
+      # なお eligible=false のもう一方の分岐 (記事形の JSON が無い = sidecar のみの PR 等)
+      # は他レーンの通常フローなので、ここでは out_of_scope のときだけ印を付ける。
+      - name: Mark out-of-scope PR as needing manual merge
+        if: steps.scope.outputs.eligible == 'false' && steps.scope.outputs.out_of_scope != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          OUT_OF_SCOPE: ${{ steps.scope.outputs.out_of_scope }}
+        run: |
+          files=$(echo "$OUT_OF_SCOPE" | tr '\n' ' ')
+          echo "::warning::auto-merge skipped (out of scope). Manual merge required. Out-of-scope files: ${files}"
+          # ラベル付与に失敗しても auto-merge の判定には影響しないので非致命。
+          gh pr edit "$PR_URL" --add-label auto-merge-skipped \
+            || echo "::warning::could not add 'auto-merge-skipped' label (does the label exist?)"
+
       - name: Enable native auto-merge (squash)
         if: steps.scope.outputs.eligible == 'true'
         env:
