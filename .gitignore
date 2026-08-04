@@ -58,6 +58,10 @@ data/build_manifest.json
 /debug_*.json
 /scratch_*.py
 /scratch_*.json
+# 2026-08-04 (#4469): Jules が作業計画として吐く残骸。PR #4280 でこれが記事 JSON と
+# 一緒にコミットされ、05-jules-auto-merge のスコープガードに引っかかって
+# auto-merge されず 4 日間放置された。混入経路そのものを塞ぐ。
+/plan.md
 
 # 2026-08-03: repomix (リポジトリ全体を 1 ファイルに固める LLM 入力用ダンプ) の出力。
 # 7.7MB の生成物が public repo の root に 2 ヶ月半放置されていたので削除した。

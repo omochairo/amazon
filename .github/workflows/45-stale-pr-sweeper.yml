@@ -1,0 +1,60 @@
+name: Stale PR Sweeper
+
+# #4469: open のまま滞留している PR を毎日 1 本の Issue に集約する。
+#
+# 経緯 (#4280):
+#   05-jules-auto-merge.yml のスコープガードで skip された記事 PR が、check pass 表示
+#   かつ mergeable_state=clean のまま 4 日間 open で残り、記事 1 本の公開が遅れた。
+#   skip 自体は run ログに出ていたので、これは logging ではなく monitoring の欠落。
+#   よって「skip を可視化する」(05 側のラベル/警告) は補助であり、実際に気づける
+#   仕組みはこちら。原因非依存なので、スコープ外 skip 以外 (validate 赤 / Jules
+#   途中終了 / lock 詰まり / auto-merge 未設定) も同じ網で拾う。
+#
+# 起票規律 (CLAUDE.md: GitHub API バースト禁止):
+#   PR 1 件につき 1 issue を立てない。マーカーで単一 issue を特定して body を更新し、
+#   滞留ゼロになったら close する。1 run あたりの書き込みは最大 1 回。
+
+on:
+  schedule:
+    # 毎日 10:20 JST (= 01:20 UTC)。夜間の cron レーン (記事生成・data 更新) が
+    # 出す PR は当日中にマージされるので、朝の時点で 24h 残っていれば異常。
+    - cron: '20 1 * * *'
+  workflow_dispatch:
+    inputs:
+      threshold_hours:
+        description: '滞留とみなす経過時間 (h)'
+        required: false
+        default: '24'
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+
+concurrency:
+  group: stale-pr-sweeper
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Sweep stale PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          # schedule 起動では inputs が空文字になる。既定値 (24h) は
+          # open_stale_pr_issue.py の DEFAULT_THRESHOLD_HOURS 一箇所に置き、
+          # ここでは上書きしたいときだけ値が入る。
+          THRESHOLD_HOURS: ${{ inputs.threshold_hours }}
+        run: |
+          python scripts/open_stale_pr_issue.py
