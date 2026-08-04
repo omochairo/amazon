@@ -12,6 +12,25 @@ stages:
   - deploy
   - postdeploy
 
+# 冗長パイプラインの自動キャンセル (2026-08-05)。
+# main への push は 1 日 53 本あり、runner は NAS 1 台の concurrent=1。同じサイトを
+# 1 日 53 回ビルドし直していたため、実測で作成→完了の中央値 53 分・最大 3.4 時間の
+# 滞留が発生し (デプロイが 1〜2 時間遅れる)、その間 NAS が周期的に 97% CPU / 85-88℃ まで
+# 上がって heartbeat の温度アラートを鳴らしていた。
+#
+# pages はリポジトリの状態から丸ごと生成する冪等ジョブなので、古いコミット用の
+# ビルドを完走させる価値はない (次のビルドが上位互換の成果物を出す)。
+#   - on_new_commit: interruptible → **新しいコミットが来たときだけ**・
+#     **interruptible: true のジョブだけ**キャンセルする。
+#   - schedule 起動 (invoke-jules 6h 毎) は新規コミットではないので発火しない。
+#     加えて invoke-jules / fetch-data 等は interruptible を付けていない (既定 false) ため
+#     二重に保護されている。記事生成が途中で殺されることはない。
+# 併せて project 設定 auto_cancel_pending_pipelines も enabled にしてある
+# (この keyword はプロジェクト側のマスタースイッチが前提)。
+workflow:
+  auto_cancel:
+    on_new_commit: interruptible
+
 # MR 検証 (旧 04-validate-article-pr.yml の移植, フェーズ3)。
 # すべての MR で走る。記事 JSON の変更が無ければ vacuous success。
 # スコープガード (自動マージ適格性) は旧 05 と違いここでは判定しない:
@@ -141,6 +160,10 @@ third-party-sources:
 pages:
   stage: deploy
   image: python:3.11-bookworm
+  # 新しいコミットが来たら、走行中/待機中の古い pages ビルドは捨ててよい
+  # (成果物は git の状態から丸ごと再生成されるので、新しい方が常に上位互換)。
+  # 上の workflow.auto_cancel と対で効く。詳細はそちらのコメント参照。
+  interruptible: true
   rules:
     # push 起動のみ (schedule 起動の invoke-jules と分離する, 設計 H8)
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
