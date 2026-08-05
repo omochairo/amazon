@@ -123,6 +123,45 @@ def test_extract_metrics_lcp_element_legacy_fallback():
     assert m["lcp_element"] == "div.legacy-lcp"
 
 
+def test_extract_metrics_lcp_element_reason_none_when_found():
+    """selector が取れたときは理由を残さない (None)。"""
+    assert extract_metrics(_lh13_json())["lcp_element_reason"] is None
+
+
+def test_extract_metrics_lcp_element_reason_not_applicable():
+    """#4441 実測形: audit はあるが notApplicable で details=null。
+
+    product ページは trace に largestContentfulPaint::Candidate が無く
+    (Invalidate のみ)、LH13 はこの形の audit を出す。parser 側の不具合と
+    区別できるよう scoreDisplayMode をそのまま理由に残す。
+    """
+    lh = _lh13_json()
+    lh["audits"]["lcp-breakdown-insight"] = {
+        "score": None, "scoreDisplayMode": "notApplicable", "details": None,
+    }
+    m = extract_metrics(lh)
+    assert m["lcp_element"] is None
+    assert m["lcp_element_reason"] == "notApplicable"
+
+
+def test_extract_metrics_lcp_element_reason_audit_missing():
+    """LH12 以前の JSON (insight audit 自体が無い)。"""
+    m = extract_metrics(_lh_json())
+    assert m["lcp_element_reason"] == "audit-missing"
+
+
+def test_extract_metrics_lcp_element_reason_no_node():
+    """details はあるのに node が無い = 真に parser を疑うべきケース。"""
+    lh = _lh13_json()
+    lh["audits"]["lcp-breakdown-insight"] = {
+        "scoreDisplayMode": "informative",
+        "details": {"items": [{"type": "table", "items": []}]},
+    }
+    m = extract_metrics(lh)
+    assert m["lcp_element"] is None
+    assert m["lcp_element_reason"] == "no-node-in-details"
+
+
 def test_extract_metrics_observed_and_element_default_none():
     """LH13 拡張 audit が無い旧版そのままの JSON では None のまま。"""
     m = extract_metrics(_lh_json())
@@ -178,6 +217,17 @@ def test_aggregate_runs_uses_first_run_value_for_element_and_version():
     assert agg["lcp_element"] == "body#top > main.main > section.home-hero > div.home-hero-lead"
     assert agg["throttling_method"] == "simulate"
     assert agg["lh_version"] == "13.4.1"
+
+
+def test_aggregate_runs_carries_lcp_element_reason(caplog):
+    """selector が全 run で取れない場合、理由は集計行にも残る (#4441)。"""
+    lh = _lh13_json()
+    lh["audits"]["lcp-breakdown-insight"] = {
+        "scoreDisplayMode": "notApplicable", "details": None,
+    }
+    agg = aggregate_runs([extract_metrics(lh), extract_metrics(lh)])
+    assert agg["lcp_element"] is None
+    assert agg["lcp_element_reason"] == "notApplicable"
 
 
 def test_aggregate_runs_warns_when_element_differs_across_runs(caplog):
