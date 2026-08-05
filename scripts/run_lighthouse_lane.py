@@ -211,6 +211,29 @@ def _find_node_selector(node: Any) -> Optional[str]:
     return None
 
 
+def _lcp_element_reason(audits: Dict[str, Any]) -> str:
+    """`lcp_element` が None のとき、その理由を短い文字列で返す (#4441)。
+
+    2026-08-06 の probe (lighthouse@13.4.0 をローカル実測) で確定した機構:
+    product ページの trace には `largestContentfulPaint::Candidate` が **1 件も無く**
+    (Invalidate の UKM だけ)、trace engine が NO_LCP → `subparts` 未定義 →
+    audit が `notApplicable` かつ `details: null` になる。つまり selector が取れない
+    のは parser 側の問題ではなく **ページ側で LCP 候補が確定していない**ため。
+    行にこの区別を残さないと、次に見た人がまた `_find_node_selector` を疑う。
+
+    戻り値は集計しやすいよう短い固定語彙にする:
+      - `audit-missing`      … lcp-breakdown-insight 自体が無い (LH12 以前)
+      - `notApplicable` 等   … audit はあるが details が null (scoreDisplayMode をそのまま)
+      - `no-node-in-details` … details はあるが type=node が見つからない (真の parser 案件)
+    """
+    audit = audits.get("lcp-breakdown-insight")
+    if not audit:
+        return "audit-missing"
+    if audit.get("details") is None:
+        return audit.get("scoreDisplayMode") or "no-details"
+    return "no-node-in-details"
+
+
 def extract_metrics(lh: Dict[str, Any]) -> Dict[str, Any]:
     """Lighthouse JSON から metric 値と *_error を flat dict に抽出する。
 
@@ -266,10 +289,15 @@ def extract_metrics(lh: Dict[str, Any]) -> Dict[str, Any]:
     # バックする。
     lcp_element = _find_node_selector((audits.get("lcp-breakdown-insight") or {}).get("details"))
     if lcp_element is None:
+        # LH13 の lcp-breakdown-insight は meta に replacesAudits:
+        # ['largest-contentful-paint-element'] を持ち、13.x の JSON にこの audit は
+        # 存在しない (2026-08-06 実測)。過去に採取した 12.x 以前の JSON を再解析する
+        # ときのためだけに残している。
         lcp_element = _find_node_selector(
             (audits.get("largest-contentful-paint-element") or {}).get("details")
         )
     out["lcp_element"] = lcp_element
+    out["lcp_element_reason"] = None if lcp_element else _lcp_element_reason(audits)
 
     out["throttling_method"] = (lh.get("configSettings") or {}).get("throttlingMethod")
     out["lh_version"] = lh.get("lighthouseVersion")
@@ -355,7 +383,7 @@ def aggregate_runs(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     # (同一 URL・同一 form_factor を同一コマンドで N 回叩くだけなので)。最初の
     # run の値を代表として持つ。もし run 間で割れていたら、集計せず追跡だけ
     # できるよう警告に残す (原因調査の手がかりを消さない)。
-    for key in ("lcp_element", "throttling_method", "lh_version"):
+    for key in ("lcp_element", "lcp_element_reason", "throttling_method", "lh_version"):
         values = [r.get(key) for r in runs if r.get(key) is not None]
         if values:
             out[key] = values[0]
