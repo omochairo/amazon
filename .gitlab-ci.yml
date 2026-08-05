@@ -164,6 +164,15 @@ pages:
   # (成果物は git の状態から丸ごと再生成されるので、新しい方が常に上位互換)。
   # 上の workflow.auto_cancel と対で効く。詳細はそちらのコメント参照。
   interruptible: true
+  # **実行先は K8 (Ryzen 7 8845HS)。ここに tags を書かないのは意図的**
+  # (2026-08-05・責務分掌: NAS=I/O と常時稼働 / K8=計算 → omochairo/amazon#4528)。
+  # どちらの箱に流すかは runner 側の `run_untagged` フラグ 1 つで決めており、
+  # CI ファイルを触らずに切り戻せるようにしてある。
+  #   K8 が止まって配信を戻したいとき:
+  #     glab api --method PUT "runners/54145618?run_untagged=true"   # NAS runner を復帰
+  #   特定ジョブだけ NAS に固定したいとき: そのジョブに tags: [omocha-docker]
+  # NAS で回していた頃の実測は 1 回 13.1 分 (build_post 301s / hugo 159s /
+  # brotli 174s / pip 71s / artifacts 63s)。スループット比は K8 が 4.3 倍。
   rules:
     # push 起動のみ (schedule 起動の invoke-jules と分離する, 設計 H8)
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
