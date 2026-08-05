@@ -6,6 +6,7 @@ import pathlib
 
 import pytest
 
+from scripts import report_census_404
 from scripts.append_census_history import CENSUS_HISTORY_FILE
 from scripts.report_census_404 import (
     INBOUND_SOURCE_PRIMARY_GRAPH,
@@ -22,6 +23,32 @@ from scripts.report_census_404 import (
     summarize_404_trend,
     summarize_last_crawl_distribution,
 )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_inbound_links_default(tmp_path, monkeypatch):
+    """run() の inbound_links_path 既定値を、リポジトリ実体から切り離す。
+
+    run() は第4引数省略時に DEFAULT_INBOUND_LINKS_JSON
+    ("data/site_audit/inbound_links.json") をカレントディレクトリ基準で読む。
+    このため引数を渡さない run() テストは「CI の cwd = リポジトリ root に
+    その実ファイルがあるか」に結果が左右される。
+
+    2026-08-04 の cb138f1860 (#4516 weekly site health audit) で当該ファイルが
+    初めてリポジトリにコミットされ、以降 CI では一次ソース (graph) 分岐が
+    常に選ばれるようになった。結果 inbound_suggestions_error が常に None と
+    なり test_run_missing_census_file_completes_normally が全ブランチで fail
+    (#4069)。実装の退行ではなく、テストが実データを読んでいたのが原因。
+
+    存在しないパスへ倒すことで、引数を省略した run() は必ず sidecar
+    フォールバック分岐を通る (= 各テストが宣言した前提どおりになる)。
+    一次ソース分岐を検証するテストは明示的に第4引数を渡しており影響しない。
+    """
+    monkeypatch.setattr(
+        report_census_404,
+        "DEFAULT_INBOUND_LINKS_JSON",
+        str(tmp_path / "absent" / "inbound_links.json"),
+    )
 
 
 @pytest.fixture()
