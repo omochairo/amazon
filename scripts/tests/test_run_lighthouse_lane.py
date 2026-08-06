@@ -20,6 +20,7 @@ from scripts.run_lighthouse_lane import (
     detect_regressions,
     extract_metrics,
     get_targets,
+    lcp_is_unmeasured,
     load_history,
     mad_for,
     render_report,
@@ -534,3 +535,115 @@ def test_render_report_separates_errors_from_regressions():
     assert "パフォーマンス劣化" in md
     assert "NO_LCP" in md
     assert "#2995" in md
+
+
+# ---------- chrome_version (#4583) ----------
+
+def test_extract_metrics_reads_chrome_version():
+    lh = _lh13_json()
+    lh["environment"] = {"hostUserAgent": (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+        "HeadlessChrome/151.0.0.0 Safari/537.36"
+    )}
+    assert extract_metrics(lh)["chrome_version"] == "151.0.0.0"
+
+
+def test_extract_metrics_reads_chrome_version_non_headless():
+    lh = _lh13_json()
+    lh["environment"] = {"hostUserAgent": "Mozilla/5.0 Chrome/150.0.7871.128 Safari/537.36"}
+    assert extract_metrics(lh)["chrome_version"] == "150.0.7871.128"
+
+
+def test_extract_metrics_chrome_version_none_when_absent():
+    """environment が無い過去 JSON でも落ちない (列は None で埋める)。"""
+    assert extract_metrics(_lh13_json())["chrome_version"] is None
+
+
+def test_aggregate_runs_carries_chrome_version():
+    lh = _lh13_json()
+    lh["environment"] = {"hostUserAgent": "HeadlessChrome/151.0.0.0"}
+    agg = aggregate_runs([extract_metrics(lh), extract_metrics(lh)])
+    assert agg["chrome_version"] == "151.0.0.0"
+
+
+# ---------- LCP ゲートの除外 (#4441) ----------
+
+def test_lcp_is_unmeasured_flags_not_applicable():
+    assert lcp_is_unmeasured(_row(lcp_element_reason="notApplicable")) is True
+
+
+def test_lcp_is_unmeasured_ignores_parser_case_and_missing_key():
+    """details がある (= 実 Candidate があった) 行と、reason 列が無い過去行は除外しない。"""
+    assert lcp_is_unmeasured(_row(lcp_element_reason="no-node-in-details")) is False
+    assert lcp_is_unmeasured(_row(lcp_element_reason="audit-missing")) is False
+    assert lcp_is_unmeasured(_row()) is False
+
+
+def test_detect_regressions_skips_lcp_when_unmeasured():
+    """LCP 候補が確定していない行の lcp は合成値なので比較しない (#4441)。
+
+    baseline 2000 → 8000 は本来 threshold + relative の両方を踏む値。
+    """
+    history = [_row(lcp=2000.0, lcp_element_reason="notApplicable") for _ in range(7)]
+    current = [_row(lcp=8000.0, lcp_element_reason="notApplicable")]
+    assert [a for a in detect_regressions(history, current) if a["metric"] == "lcp"] == []
+
+
+def test_detect_regressions_still_flags_lcp_when_measured():
+    """同じ悪化でも、LCP 要素が取れている行は従来どおり鳴る (除外が効きすぎない)。"""
+    history = [_row(lcp=2000.0, lcp_element_reason=None) for _ in range(7)]
+    current = [_row(lcp=8000.0, lcp_element_reason=None)]
+    alerts = detect_regressions(history, current)
+    assert any(a["metric"] == "lcp" for a in alerts)
+
+
+def test_detect_regressions_unmeasured_lcp_does_not_mute_other_metrics():
+    """除外するのは lcp アームだけ。tbt などは同じ行でも従来どおり鳴る。
+
+    2026-08-05 の #4583 が tbt 131→398 で鳴った実例に相当する。
+    """
+    history = [_row(lcp=2000.0, tbt=130.0, lcp_element_reason="notApplicable")
+               for _ in range(7)]
+    current = [_row(lcp=8000.0, tbt=398.0, lcp_element_reason="notApplicable")]
+    metrics = {a["metric"] for a in detect_regressions(history, current)}
+    assert "tbt" in metrics
+    assert "lcp" not in metrics
+
+
+def test_detect_regressions_unmeasured_lcp_still_reports_audit_error():
+    """kind="error" は計測基盤の失敗検出なので除外の対象外。"""
+    history = [_row(lcp=2000.0, lcp_element_reason="notApplicable") for _ in range(7)]
+    current = [_row(lcp=None, lcp_error="NO_LCP", lcp_error_runs=3,
+                    lcp_element_reason="notApplicable")]
+    alerts = detect_regressions(history, current)
+    assert any(a["kind"] == "error" and a["metric"] == "lcp" for a in alerts)
+
+
+def test_detect_regressions_logs_when_lcp_gate_skipped(caplog):
+    """無音で消さない: 除外したことを必ずログに残す。"""
+    history = [_row(lcp=2000.0, lcp_element_reason="notApplicable") for _ in range(7)]
+    current = [_row(lcp=8000.0, lcp_element_reason="notApplicable")]
+    with caplog.at_level("WARNING"):
+        detect_regressions(history, current)
+    assert "lcp gate skipped" in caplog.text
+
+
+def test_render_report_notes_unmeasured_lcp_urls():
+    alerts = [
+        {"kind": "relative", "url": "https://x/", "form_factor": "mobile",
+         "metric": "tbt", "value": 398.0, "baseline": 130.5, "detail": "d"},
+    ]
+    md = render_report(alerts, "2026-08-05", [
+        {"url": "https://x/", "form_factor": "mobile",
+         "lcp_element_reason": "notApplicable"},
+    ])
+    assert "LCP を判定していない URL" in md
+    assert "notApplicable" in md
+
+
+def test_render_report_omits_unmeasured_section_when_empty():
+    alerts = [
+        {"kind": "threshold", "url": "https://y/", "form_factor": "mobile",
+         "metric": "lcp", "value": 4000.0, "baseline": 2000.0, "detail": "d"},
+    ]
+    assert "LCP を判定していない URL" not in render_report(alerts, "2026-08-05")

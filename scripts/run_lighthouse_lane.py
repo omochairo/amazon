@@ -72,6 +72,7 @@ import json
 import logging
 import os
 import pathlib
+import re
 import statistics
 import subprocess
 import sys
@@ -154,6 +155,31 @@ MIN_BASELINE_SAMPLES = 7
 # だけだと分散の大きい指標 (ホーム mobile LCP など) を毎回誤検出するため。
 REGRESSION_MAD_K = 3.0
 
+# `lcp_element_reason` がこれらのときは、その行の LCP は「計測できていない」。
+#
+# 2026-08-06 の probe (#4441) で確定した機構: product ページの trace には
+# `largestContentfulPaint::Candidate` が 1 件も無い。この状態で lighthouse 13.4.0 は
+# NO_LCP で落とさず、**最後の `NavStartToLargestContentfulPaint::Invalidate::AllFrames::UKM`
+# の ts で偽の Candidate を合成する** (core/lib/tracehouse/trace-processor.js、
+# コード内コメントいわく "Not ideal since they are 1 paint behind"、`size` は 1 のモック)。
+# その結果 `lcp` (Lantern 推定) も `observed_lcp` も値は入るが、中身は「最後に LCP が
+# 無効化された時刻」であって LCP ではない。
+#
+# 実測 (2026-08-04 の 11 行) では 9 行が product = 9/11 がこの状態。ここを素通しすると
+# ゲートの lcp アームは毎日 9/11 の URL で「LCP でない数字」を LCP として比べ続ける。
+# → [[feedback-omochairo-psi-no-lcp-vs-real-lcp]] の「値だけ持つと『計測失敗』と
+#   『本当に遅い』が区別できず追跡不能になる」の再来なので、lcp 判定から外す。
+#
+# 外すのは lcp の relative/threshold 判定だけ。`lcp_error` (NO_LCP など) の
+# kind="error" は計測基盤の失敗検出なので従来どおり無条件で鳴らす。
+# fcp/cls/tbt/si は実 Candidate の有無と無関係なので影響しない。
+#
+# `no-node-in-details` は details が存在する = 実 Candidate はあったので除外しない。
+# `audit-missing` (LH12 以前) は判断材料が無いので除外しない (degrade して従来判定)。
+# #4577 マージ前の行には `lcp_element_reason` キー自体が無く None になるため、
+# 過去行も自動的に degrade 側に落ちる。
+LCP_UNMEASURED_REASONS = frozenset({"notApplicable", "no-details"})
+
 
 def build_lighthouse_argv(
     cmd: str, url: str, out_path: str, form_factor: str
@@ -234,6 +260,27 @@ def _lcp_element_reason(audits: Dict[str, Any]) -> str:
     return "no-node-in-details"
 
 
+_CHROME_UA_RE = re.compile(r"(?:Headless)?Chrome/([\d.]+)")
+
+
+def _chrome_version(lh: Dict[str, Any]) -> Optional[str]:
+    """計測に使われた Chrome の版を `environment.hostUserAgent` から拾う (#4583)。
+
+    なぜ要るか: 2026-08-05 の run で b0fjw7gq8x mobile の TBT が 131 → 398 に跳ねた
+    (perf_score 76 → 66)。LCP/FCP/SI/CLS は動いておらず observed_lcp はむしろ改善して
+    いたため描画は健全で、同 run の他 URL も軽く上振れしていた。原因調査で唯一動いて
+    いた変数が Chrome 150.0.7871.128 → 151.0.7922.75 だったが、**これは JSONL には
+    残っておらず home-ops の run ログを 22 本さかのぼって初めて分かった**。
+    lh_version と違って Chrome 版は行に無かったのが調査コストの正体なので、残す。
+
+    UA が持つのは major だけ (`HeadlessChrome/151.0.0.0`) だが、baseline を不連続に
+    するのは major 更新なので、この粒度で用は足りる。
+    """
+    ua = ((lh.get("environment") or {}).get("hostUserAgent")) or ""
+    m = _CHROME_UA_RE.search(ua)
+    return m.group(1) if m else None
+
+
 def extract_metrics(lh: Dict[str, Any]) -> Dict[str, Any]:
     """Lighthouse JSON から metric 値と *_error を flat dict に抽出する。
 
@@ -301,6 +348,7 @@ def extract_metrics(lh: Dict[str, Any]) -> Dict[str, Any]:
 
     out["throttling_method"] = (lh.get("configSettings") or {}).get("throttlingMethod")
     out["lh_version"] = lh.get("lighthouseVersion")
+    out["chrome_version"] = _chrome_version(lh)
     return out
 
 
@@ -383,7 +431,8 @@ def aggregate_runs(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     # (同一 URL・同一 form_factor を同一コマンドで N 回叩くだけなので)。最初の
     # run の値を代表として持つ。もし run 間で割れていたら、集計せず追跡だけ
     # できるよう警告に残す (原因調査の手がかりを消さない)。
-    for key in ("lcp_element", "lcp_element_reason", "throttling_method", "lh_version"):
+    for key in ("lcp_element", "lcp_element_reason", "throttling_method",
+                "lh_version", "chrome_version"):
         values = [r.get(key) for r in runs if r.get(key) is not None]
         if values:
             out[key] = values[0]
@@ -474,6 +523,14 @@ def mad_for(
 def _ratio_regression(value: float, base: float, min_delta: float) -> bool:
     """REGRESSION_RATIO 条件 + 絶対差条件 (MAD ゲートより手前の素朴な判定)。"""
     return value > base * REGRESSION_RATIO and (value - base) >= min_delta
+
+
+def lcp_is_unmeasured(row: Dict[str, Any]) -> bool:
+    """その行の `lcp` / `observed_lcp` が合成値 (= LCP を計測できていない) か (#4441)。
+
+    判定は `lcp_element_reason` だけを見る。LCP_UNMEASURED_REASONS の定義を参照。
+    """
+    return row.get("lcp_element_reason") in LCP_UNMEASURED_REASONS
 
 
 def _observed_lcp_confirms(
@@ -581,8 +638,20 @@ def detect_regressions(
             worse = value > base * REGRESSION_RATIO and (value - base) >= required_delta
 
             if (crossed or worse) and short == "lcp":
+                if lcp_is_unmeasured(row):
+                    # LCP 候補が確定していない行 (#4441)。値は入っているが LCP では
+                    # ないので比較しない。無音で消すと「鳴らないから健全」に見えるので
+                    # 必ずログに残す。
+                    logger.warning(
+                        "lcp gate skipped (LCP unmeasured, reason=%s): %s [%s] "
+                        "lcp=%s observed_lcp=%s",
+                        row.get("lcp_element_reason"), url, ff,
+                        value, row.get("observed_lcp"),
+                    )
+                    crossed = False
+                    worse = False
                 # simulated だけの悪化は鳴らさない (揃っていなければ degrade)。
-                if not _observed_lcp_confirms(history, row, url, ff, window):
+                elif not _observed_lcp_confirms(history, row, url, ff, window):
                     crossed = False
                     worse = False
 
@@ -616,8 +685,17 @@ def detect_regressions(
     return alerts
 
 
-def render_report(alerts: List[Dict[str, Any]], target_date: str) -> str:
-    """劣化レポート Markdown。1 issue に集約する前提で全 URL 分を 1 本にまとめる。"""
+def render_report(
+    alerts: List[Dict[str, Any]],
+    target_date: str,
+    lcp_unmeasured: Optional[List[Dict[str, Any]]] = None,
+) -> str:
+    """劣化レポート Markdown。1 issue に集約する前提で全 URL 分を 1 本にまとめる。
+
+    `lcp_unmeasured` を渡すと、その run で LCP ゲートを外した URL を脚注に出す
+    (#4441)。issue を読む人が「この URL は LCP を見ていない」を知らずに
+    「LCP は鳴っていない = LCP は健全」と読むのを防ぐため。
+    """
     lines = [
         "## Lighthouse ラボ計測 劣化検出 ({})".format(target_date),
         "",
@@ -655,6 +733,23 @@ def render_report(alerts: List[Dict[str, Any]], target_date: str) -> str:
             lines.append("| {} | {} | {} | {} | {} | {} |".format(
                 a["url"], a["form_factor"], a["metric"],
                 "-" if base is None else base, a.get("value", "-"), a["kind"]))
+        lines.append("")
+
+    if lcp_unmeasured:
+        lines += [
+            "### LCP を判定していない URL ({} 件)".format(len(lcp_unmeasured)),
+            "",
+            "これらの URL は trace に LCP 候補が 1 件も無く、`lcp` / `observed_lcp` は",
+            "lighthouse が UKM の Invalidate から合成した値です (#4441)。LCP としては",
+            "比較できないのでゲートから外しています。**「LCP が鳴っていない = LCP が健全」",
+            "とは読めません。**",
+            "",
+            "| URL | form factor | reason |",
+            "| --- | --- | --- |",
+        ]
+        for r in lcp_unmeasured:
+            lines.append("| {} | {} | {} |".format(
+                r.get("url"), r.get("form_factor"), r.get("lcp_element_reason")))
         lines.append("")
 
     lines += ["Refs #2995 (案6) / #1357 (epic E2)"]
@@ -818,9 +913,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     seen["_meta"] = meta
     save_seen(seen_path, seen)
 
+    unmeasured = [r for r in current if lcp_is_unmeasured(r)]
+    if unmeasured:
+        logger.warning(
+            "LCP unmeasured on %d/%d rows (gate skipped): %s",
+            len(unmeasured), len(current),
+            ", ".join(sorted({str(r.get("url")) for r in unmeasured})),
+        )
+
     if alerts:
         logger.warning("%d regression alert(s) detected", len(alerts))
-        report = render_report(alerts, args.target_date)
+        report = render_report(alerts, args.target_date, unmeasured)
         if args.report_out:
             pathlib.Path(args.report_out).write_text(report, encoding="utf-8")
             logger.info("wrote report to %s", args.report_out)
