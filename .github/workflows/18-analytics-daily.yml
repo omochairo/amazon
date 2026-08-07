@@ -20,8 +20,10 @@ name: Analytics Daily History Accumulator (GA4 + GSC)
 # 任意 secrets (GSC):
 #   - GSC_OAUTH_CLIENT_ID / GSC_OAUTH_CLIENT_SECRET / GSC_OAUTH_REFRESH_TOKEN
 #   - GSC_SITE_URL       navi property (gsc_*.jsonl レーン)
-#   - GSC_SITE_URL_WP    WP omcha.jp property (gsc_wp_*.jsonl レーン、2026-07-26 追加)
-#                        未設定なら WP レーンのみ skip。navi レーンには影響しない
+#
+# WP omcha.jp の GSC 取得は 2026-08-07 に omochairo/omcha-ops (private) の
+# 専用 workflow (10-gsc-wp-daily.yml) へ移設した。理由は公開分析の非公開化
+# ([[project-omcha-ops]])。本 workflow に WP レーンは存在しない。
 
 on:
   workflow_dispatch:
@@ -108,40 +110,12 @@ jobs:
           fi
           echo "available=true" >> "$GITHUB_OUTPUT"
 
-      # WP (omcha.jp) レーン。GSC_SITE_URL_WP 未設定なら skip され、
-      # 既存の navi 時系列には一切影響しない (別ファイル gsc_wp_*.jsonl)。
-      - name: Fetch GSC for WP omcha.jp (1-day window, optional)
-        id: gsc_wp
-        env:
-          GSC_OAUTH_CLIENT_ID: ${{ secrets.GSC_OAUTH_CLIENT_ID }}
-          GSC_OAUTH_CLIENT_SECRET: ${{ secrets.GSC_OAUTH_CLIENT_SECRET }}
-          GSC_OAUTH_REFRESH_TOKEN: ${{ secrets.GSC_OAUTH_REFRESH_TOKEN }}
-          GSC_SITE_URL_WP: ${{ secrets.GSC_SITE_URL_WP }}
-        run: |
-          set +e
-          if [ -z "$GSC_OAUTH_REFRESH_TOKEN" ] || [ -z "$GSC_SITE_URL_WP" ]; then
-            echo "::notice::GSC_SITE_URL_WP not set — skipping WP lane"
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          python scripts/fetch_gsc.py --days 1 \
-            --site-url "$GSC_SITE_URL_WP" \
-            --out data/analytics/gsc_weekly_wp.json
-          rc=$?
-          if [ $rc -ne 0 ]; then
-            echo "::warning::WP GSC fetch failed (rc=$rc)"
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "available=true" >> "$GITHUB_OUTPUT"
-
       - name: Append to history JSONL
-        if: steps.ga4.outputs.available == 'true' || steps.gsc.outputs.available == 'true' || steps.gsc_wp.outputs.available == 'true'
+        if: steps.ga4.outputs.available == 'true' || steps.gsc.outputs.available == 'true'
         run: |
           set -e
           GA4_ARG=""
           GSC_ARG=""
-          GSC_WP_ARG=""
           if [ "${{ steps.ga4.outputs.available }}" = "true" ]; then
             GA4_ARG="--ga4 data/analytics/ga4_weekly.json"
           else
@@ -152,15 +126,10 @@ jobs:
           else
             GSC_ARG="--gsc "
           fi
-          if [ "${{ steps.gsc_wp.outputs.available }}" = "true" ]; then
-            GSC_WP_ARG="--gsc-wp data/analytics/gsc_weekly_wp.json"
-          else
-            GSC_WP_ARG="--gsc-wp "
-          fi
-          python scripts/append_analytics_history.py $GA4_ARG $GSC_ARG $GSC_WP_ARG
+          python scripts/append_analytics_history.py $GA4_ARG $GSC_ARG
 
       - name: Create history update PR + auto-merge
-        if: steps.ga4.outputs.available == 'true' || steps.gsc.outputs.available == 'true' || steps.gsc_wp.outputs.available == 'true'
+        if: steps.ga4.outputs.available == 'true' || steps.gsc.outputs.available == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
