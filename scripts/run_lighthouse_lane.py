@@ -59,7 +59,8 @@ runner 側の前提 (amazon-home-ops の 41-lighthouse-lane.yml):
 
 副作用:
 - data/analytics/history/lighthouse_history.jsonl への append
-- data/analytics/history/seen_dates.json の `lighthouse` key 更新
+- data/analytics/history/seen_dates.json の `lighthouse` key 更新、および
+  計測が飛んだ日を見つけたときの `_meta.lighthouse_missing_dates` 追記 (#4785)
 - --report-out 指定時、劣化レポート Markdown の書き出し
 - 記事生成 / score / narrative には触れない
 
@@ -77,7 +78,7 @@ import statistics
 import subprocess
 import sys
 import tempfile
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -86,6 +87,18 @@ logger = logging.getLogger("run_lighthouse_lane")
 DEFAULT_HISTORY_DIR = "data/analytics/history"
 LIGHTHOUSE_HISTORY_FILENAME = "lighthouse_history.jsonl"
 SEEN_DATES_FILENAME = "seen_dates.json"
+# 計測日を UTC の壁時計から取らず、offset だけ戻した「論理日」で決める (#4785)。
+#
+# lane の cron は home-ops の 41-lighthouse-lane.yml で `40 21 * * *` (21:40 UTC)。
+# ところが GitHub の schedule dispatch は恒常的に 50-60 分遅れており (実測:
+# 07-28〜08-08 の起動は 22:32-22:42 UTC)、真夜中 UTC までの実質余裕は 1 時間強
+# しかない。2026-08-07 の run は 01:04 UTC に起動し、date.today() が翌日を返した
+# 結果 **2026-08-06 の 11 行が丸ごと欠測し、2026-08-07 が 2 バッチ**になった。
+# (#4772 は後者の重複を後勝ちで潰したが、欠測する側は手当てされていなかった)
+#
+# 6 時間戻すと「その日の 06:00 UTC 〜 翌 06:00 UTC に起動した run」が同じ論理日に
+# なる。21:40 の cron に対して 8 時間 20 分の遅延耐性ができる。
+DEFAULT_DAY_OFFSET_HOURS = float(os.environ.get("LH_DAY_OFFSET_HOURS", "6"))
 # GSC 上位 URL の入力元。main に実在するのは週次の
 # data/analytics/gsc_history/<ISO週>.json (by_page 付き) の方で、
 # gsc_weekly.json は存在しない。初回 run 29523140030 はこれを踏んで
@@ -894,6 +907,51 @@ def append_records(
     return len(records)
 
 
+def logical_date(now: datetime, offset_hours: float) -> str:
+    """壁時計から offset だけ戻した「計測日」を ISO 文字列で返す (#4785)。
+
+    now は tz-aware を想定 (naive なら UTC とみなす)。cron の予定時刻が真夜中の
+    手前にあると、schedule dispatch の遅延がそのまま日付のズレになるので、
+    境界を実行時刻から十分離れたところへ動かす。
+    """
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    return (now.astimezone(timezone.utc) - timedelta(hours=offset_hours)).date().isoformat()
+
+
+def missing_dates(history: Sequence[Dict[str, Any]], target_date: str,
+                  cap: int = 30) -> List[str]:
+    """履歴の最終計測日と target_date の間で計測が飛んだ日を返す (#4785)。
+
+    lane が 1 日走らなかったこと自体は run が存在しないので気づけず、
+    lighthouse_history.jsonl にも「無い」という痕跡が残らない (実際に 2026-08-06 が
+    欠測していたが誰も気づかなかった)。ここで検出して _meta に残す。
+
+    履歴が空 / 日付が壊れている / target が最終日以前 (再計測) のときは空を返す。
+    cap は初回投入や長期停止で戻り値が暴れないための上限。
+    """
+    seen: List[date] = []
+    for row in history:
+        raw = row.get("date")
+        if not isinstance(raw, str):
+            continue
+        try:
+            seen.append(date.fromisoformat(raw))
+        except ValueError:
+            continue
+    if not seen:
+        return []
+    try:
+        target = date.fromisoformat(target_date)
+    except (TypeError, ValueError):
+        return []
+    last = max(seen)
+    if target <= last:
+        return []
+    gap = [(last + timedelta(days=i)).isoformat() for i in range(1, (target - last).days)]
+    return gap[:cap]
+
+
 def load_seen(seen_path: pathlib.Path) -> Dict[str, Any]:
     if not seen_path.exists():
         return {}
@@ -925,13 +983,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     p.add_argument("--lighthouse-cmd",
                    default=os.environ.get("LIGHTHOUSE_CMD", DEFAULT_LIGHTHOUSE_CMD))
     p.add_argument("--history-dir", default=DEFAULT_HISTORY_DIR)
-    p.add_argument("--target-date", default=date.today().isoformat())
+    # 既定は None。実際の値は論理日 (#4785) から引数解析後に決める。
+    # module import 時に date.today() を固定していた旧既定は、長寿命プロセスで
+    # 日付が固まる潜在バグでもあった。
+    p.add_argument("--target-date", default=None,
+                   help="計測日を明示する (既定: 論理日 = UTC 現在時刻 - --day-offset-hours)")
+    p.add_argument("--day-offset-hours", type=float, default=DEFAULT_DAY_OFFSET_HOURS,
+                   help="論理日の境界を壁時計から何時間戻すか "
+                        f"(既定 {DEFAULT_DAY_OFFSET_HOURS}, env LH_DAY_OFFSET_HOURS)")
     p.add_argument("--baseline-window", type=int, default=10)
     p.add_argument("--report-out", default=None,
                    help="劣化があったとき Markdown を書き出すパス")
     p.add_argument("--dry-run", action="store_true",
                    help="JSONL に書かず結果を stdout に出すだけ")
     args = p.parse_args(argv)
+
+    target_date = args.target_date or logical_date(
+        datetime.now(timezone.utc), args.day_offset_hours)
+    logger.info("target date: %s (offset %.1fh)", target_date, args.day_offset_hours)
 
     history_dir = pathlib.Path(args.history_dir)
     history_path = history_dir / LIGHTHOUSE_HISTORY_FILENAME
@@ -944,6 +1013,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 len(targets), args.form_factors, args.runs)
 
     history = load_history(history_path)
+    # 論理日にしても runner 停止などで日が飛ぶことはある。飛んだこと自体は
+    # 「run が存在しない」ので後から気づけないため、痕跡を seen_dates.json に残す
+    # (#4785)。ここでは報告だけで、計測は通常どおり続ける。
+    gap = missing_dates(history, target_date)
+    if gap:
+        logger.warning("::warning::lighthouse history gap: %d day(s) with no "
+                       "measurement before %s: %s",
+                       len(gap), target_date, ", ".join(gap))
     current: List[Dict[str, Any]] = []
 
     for url in targets:
@@ -959,7 +1036,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 logger.warning("all runs failed for %s (%s) — skipping row", url, ff)
                 continue
             current.append({
-                "date": args.target_date, "url": url, "form_factor": ff, **agg,
+                "date": target_date, "url": url, "form_factor": ff, **agg,
             })
 
     if not current:
@@ -979,9 +1056,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     logger.info("appended %d rows to %s", n, history_path)
 
     seen = load_seen(seen_path)
-    seen.setdefault("lighthouse", {})[args.target_date] = True
+    seen.setdefault("lighthouse", {})[target_date] = True
     meta = seen.get("_meta") or {}
     meta["lighthouse_last_run_utc"] = datetime.now(timezone.utc).isoformat()
+    # 欠測日を累積で持つ (#4785)。これが空でない = 計測が飛んだ日がある、を
+    # 独立レーンから監査できるようにするための痕跡。
+    if gap:
+        known = meta.get("lighthouse_missing_dates")
+        known = known if isinstance(known, list) else []
+        meta["lighthouse_missing_dates"] = sorted(set(known) | set(gap))
     seen["_meta"] = meta
     save_seen(seen_path, seen)
 
@@ -995,7 +1078,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if alerts:
         logger.warning("%d regression alert(s) detected", len(alerts))
-        report = render_report(alerts, args.target_date, unmeasured)
+        report = render_report(alerts, target_date, unmeasured)
         if args.report_out:
             pathlib.Path(args.report_out).write_text(report, encoding="utf-8")
             logger.info("wrote report to %s", args.report_out)
