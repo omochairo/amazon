@@ -113,6 +113,46 @@ jobs:
           echo "category=$CAT" >> "$GITHUB_OUTPUT"
           echo "Slot category=$CAT (source=$SRC)"
 
+      # Issue #4765: 配信済みマーカーの書き戻し PR がマージされないと、main 上は
+      # published_at=null のままなので次スロットが同じ本文を再選定して二重投稿する
+      # (2026-08-08 の #4715 滞留で Threads/X/Bluesky に実害)。publish 前に open な
+      # sns-engagement-publish/* ブランチのマーカーを取り込んでおけば、PR がマージ
+      # されなくても次の run が bookkeeping を引き継ぐので重複が起きない。
+      - name: Absorb bookkeeping from stale publish PRs
+        id: absorb
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+          STALE=$(gh pr list --state open --limit 50 \
+            --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("sns-engagement-publish/")) | "\(.number) \(.headRefName)"')
+          if [ -z "$STALE" ]; then
+            echo "No stale publish PRs."
+            echo "prs=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Stale publish PRs:"; echo "$STALE"
+          mkdir -p /tmp/absorb
+          NUMS=""
+          ARGS_X=""; ARGS_TH=""
+          while read -r num branch; do
+            [ -n "$num" ] || continue
+            git fetch --no-tags origin "$branch"
+            for q in x threads; do
+              out="/tmp/absorb/${num}-${q}.jsonl"
+              if git show "FETCH_HEAD:data/engagement_queue_${q}.jsonl" > "$out" 2>/dev/null; then
+                if [ "$q" = "x" ]; then ARGS_X="$ARGS_X --source $out"; else ARGS_TH="$ARGS_TH --source $out"; fi
+              fi
+            done
+            NUMS="$NUMS $num"
+          done <<< "$STALE"
+          python scripts/absorb_engagement_bookkeeping.py \
+            --target data/engagement_queue_x.jsonl $ARGS_X
+          python scripts/absorb_engagement_bookkeeping.py \
+            --target data/engagement_queue_threads.jsonl $ARGS_TH
+          echo "prs=$(echo $NUMS)" >> "$GITHUB_OUTPUT"
+
       - name: Publish engagement post
         env:
           BUFFER_ACCESS_TOKEN: ${{ secrets.BUFFER_ACCESS_TOKEN }}
@@ -174,6 +214,14 @@ jobs:
           else
             echo "::warning::Could not enable auto-merge on $PR_URL"
           fi
+
+          # 取り込み元の滞留 PR は、この PR が同じマーカーを含んでいるので close する
+          # (#4765)。放置すると後続 run の再投稿で dirty 化してマージ不能になり、
+          # stale-pr-sweeper (#4469) の滞留カウントだけが積み上がる。
+          for n in ${{ steps.absorb.outputs.prs }}; do
+            gh pr comment "$n" --body "Superseded by $PR_URL — この PR の published_at / post_id は取り込み済みです (#4765)。" || true
+            gh pr close "$n" --delete-branch || echo "::warning::Could not close stale PR #$n"
+          done
 
       - name: Queue health check
         if: always()
