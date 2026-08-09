@@ -380,7 +380,11 @@ def consume_one(queue_path: Path, channel: str, dry_run: bool, live: bool,
     idx = pick_next(rows, now, category=category)
     if idx is None:
         cat_label = f"category={category} " if category else ""
-        print(f"[{channel}] no pending row {cat_label}in {queue_path.name} ({len(rows)} total) — slot 穴開け")
+        # 穴開け自体は fail-safe だが、**スロットを 1 つ落としたという実害**なので
+        # notice ではなく warning で残す (#4791)。exit code は変えない: ここで落とすと
+        # 在庫切れと投稿失敗が run の成否で区別できなくなる。
+        print(f"::warning::[{channel}] no pending row {cat_label}in {queue_path.name} "
+              f"({len(rows)} total) — slot skipped")
         return True
     row = rows[idx]
     text = row["text"]

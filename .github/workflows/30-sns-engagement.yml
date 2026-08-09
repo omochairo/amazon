@@ -154,6 +154,7 @@ jobs:
           echo "prs=$(echo $NUMS)" >> "$GITHUB_OUTPUT"
 
       - name: Publish engagement post
+        id: publish
         env:
           BUFFER_ACCESS_TOKEN: ${{ secrets.BUFFER_ACCESS_TOKEN }}
           BUFFER_X_CHANNEL_ID: ${{ secrets.BUFFER_X_CHANNEL_ID }}
@@ -181,9 +182,16 @@ jobs:
               --bluesky-mirror \
               --live
           fi
-        # 片方が失敗してももう片方は配信しておきたいので continue-on-error。
-        # 失敗は ::warning:: に残し、queue 更新は notify_engagement.py が成功 channel
-        # の分だけ in-place 書き戻すので、次回 cron で同 row を再選定はしない。
+        # queue 更新は notify_engagement.py が成功 channel の分だけ in-place 書き戻す
+        # ので、失敗した channel の row は pending のまま残り再選定される。
+        # continue-on-error は「後続の bookkeeping commit を落とさない」ためだけに要る
+        # (両 channel の試行自体は notify_engagement.py が 1 プロセス内で完了させる)。
+        #
+        # #4791: ただし握りつぶしたままだと run が緑になり、実害が見えなくなる。
+        # 2026-08-08 は Buffer が重複として拒否して x の daily 投稿が 0/3 になったが、
+        # run は success のままだった。continue-on-error のステップは REST の
+        # steps[].conclusion も success を返すので、run 一覧でも step 一覧でも見えない。
+        # → bookkeeping を済ませたあとの "Surface publish failure" で run を赤にする。
         continue-on-error: true
 
       - name: Commit queue updates via PR
@@ -223,27 +231,21 @@ jobs:
             gh pr close "$n" --delete-branch || echo "::warning::Could not close stale PR #$n"
           done
 
+      # 閾値は scripts/check_engagement_queue_health.py 一箇所に置く。
+      # 旧実装 (在庫の生数 news<2 / daily<5) は直近 30 run 中 28 run で発火しており、
+      # 分布の中央付近に閾値があるゲート = 何も選別していなかった (#4791)。
       - name: Queue health check
         if: always()
         run: |
-          set -e
-          python3 - <<'PY'
-          import json, pathlib
-          for label, path in (("X", "data/engagement_queue_x.jsonl"),
-                              ("Threads", "data/engagement_queue_threads.jsonl")):
-              p = pathlib.Path(path)
-              if not p.exists():
-                  print(f"{label}: file missing")
-                  continue
-              rows = [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
-              pending = [r for r in rows if not r.get("published_at")]
-              by_cat = {"news": 0, "daily": 0, "other": 0}
-              for r in pending:
-                  c = r.get("category") or "other"
-                  by_cat[c if c in by_cat else "other"] += 1
-              print(f"{label} pending — total={len(pending)} news={by_cat['news']} daily={by_cat['daily']} other={by_cat['other']}")
-              if by_cat["daily"] < 5:
-                  print(f"::notice::{label} daily queue low ({by_cat['daily']}<5) — refill via 29-jules-engagement-refill.yml")
-              if by_cat["news"] < 2:
-                  print(f"::notice::{label} news queue low ({by_cat['news']}<2) — refill via 33-jules-engagement-news.yml")
-          PY
+          python3 scripts/check_engagement_queue_health.py
+
+      # #4791: bookkeeping を済ませてから、投稿が落ちていれば run を赤にする。
+      # ここを最後に置くのは、成功した channel の published_at commit と
+      # 滞留 PR の close (#4765) を先に完了させるため。
+      - name: Surface publish failure
+        if: always() && steps.publish.outcome == 'failure'
+        run: |
+          echo "::error::engagement post failed for at least one channel "\
+          "(slot=${{ steps.slot.outputs.category }}, channels=${{ steps.resolve.outputs.channels }}). "\
+          "失敗した channel の row は pending のまま残るので次回 cron で再試行されます。"
+          exit 1
