@@ -18,7 +18,11 @@ THIS_DIR = pathlib.Path(__file__).resolve().parent
 REPO_ROOT = THIS_DIR.parent.parent  # amazon-clone/
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from absorb_sns_published import absorb, main  # type: ignore[import-not-found]
+from absorb_sns_published import (  # type: ignore[import-not-found]
+    absorb,
+    absorb_channel_results,
+    main,
+)
 
 
 class AbsorbTests(unittest.TestCase):
@@ -109,6 +113,44 @@ class CliTests(unittest.TestCase):
             sys.argv = ["absorb", "--target", str(target), "--source", str(d / "nope.json")]
             self.assertEqual(main(), 0)
             self.assertEqual(json.loads(target.read_text(encoding="utf-8"))["published"], ["A1"])
+
+
+class ChannelResultsAbsorbTests(unittest.TestCase):
+    """#4783 — 滞留 PR を取り込むとき channel_results が落ちると痕跡が消える。"""
+
+    def test_source_only_entry_is_absorbed(self):
+        out = absorb_channel_results({}, {"A1": {"x": "success"}}, {"A1"})
+        self.assertEqual(out, {"A1": {"x": "success"}})
+
+    def test_target_wins_on_conflict(self):
+        out = absorb_channel_results(
+            {"A1": {"x": "success"}}, {"A1": {"x": "failure"}}, {"A1"})
+        self.assertEqual(out, {"A1": {"x": "success"}})
+
+    def test_entries_outside_published_are_dropped(self):
+        out = absorb_channel_results(
+            {"A1": {"x": "success"}}, {"A2": {"x": "success"}}, {"A2"})
+        self.assertEqual(out, {"A2": {"x": "success"}})
+
+    def test_malformed_entries_ignored(self):
+        out = absorb_channel_results({"A1": "nope"}, {"A2": {"x": "success"}}, {"A1", "A2"})
+        self.assertEqual(out, {"A2": {"x": "success"}})
+
+    def test_cli_absorbs_channel_results(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = pathlib.Path(d)
+            target, source = d / "state.json", d / "src.json"
+            target.write_text(json.dumps({"published": ["A1"]}), encoding="utf-8")
+            source.write_text(json.dumps({
+                "published": ["A2"],
+                "channel_results": {"A2": {"x": "success", "threads": "failure"}},
+            }), encoding="utf-8")
+            sys.argv = ["absorb", "--target", str(target), "--source", str(source)]
+            self.assertEqual(main(), 0)
+            state = json.loads(target.read_text(encoding="utf-8"))
+            self.assertEqual(state["published"], ["A1", "A2"])
+            self.assertEqual(state["channel_results"],
+                             {"A2": {"x": "success", "threads": "failure"}})
 
 
 if __name__ == "__main__":

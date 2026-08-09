@@ -79,6 +79,23 @@ def absorb(target: list[str], source: list[str], limit: int | None = None) -> tu
     return out, added
 
 
+def absorb_channel_results(target: dict, source: dict, alive: set[str]) -> dict:
+    """channel_results を union する (#4783)。target 側の記録を優先する。
+
+    滞留 PR を取り込むときに published だけを union すると、その ASIN の
+    「どのチャネルに出たか」が落ちて痕跡が消える。published と同じ寿命に
+    揃えるため alive (取り込み後の published) に無い ASIN は捨てる。
+    """
+    out: dict = {}
+    for src in (source, target):
+        if not isinstance(src, dict):
+            continue
+        for asin, res in src.items():
+            if isinstance(asin, str) and isinstance(res, dict) and asin in alive:
+                out[asin] = res
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -94,11 +111,14 @@ def main() -> int:
     state = _load_state(args.target)
     published = state["published"]
     all_added: list[str] = []
+    src_channels: list[dict] = []
     for src_path in args.source:
         if not src_path.exists():
             print(f"::warning::source not found, skipping: {src_path}")
             continue
-        published, added = absorb(published, _load_state(src_path)["published"], args.limit)
+        src_state = _load_state(src_path)
+        published, added = absorb(published, src_state["published"], args.limit)
+        src_channels.append(src_state.get("channel_results") or {})
         if added:
             print(f"{src_path}: absorbed {len(added)}: {', '.join(added)}")
         all_added.extend(added)
@@ -111,6 +131,12 @@ def main() -> int:
         return 0
 
     state["published"] = published
+    alive = set(published)
+    merged = state.get("channel_results") or {}
+    for sc in src_channels:
+        merged = absorb_channel_results(merged, sc, alive)
+    if merged:
+        state["channel_results"] = merged
     _save_state(args.target, state)
     # cp932 な Windows ローカルでも落ちないよう、標準出力は ASCII に留める。
     print(f"::notice::{args.target.name}: absorbed {len(all_added)} published ASIN(s) "
