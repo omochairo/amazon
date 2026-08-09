@@ -53,6 +53,41 @@ jobs:
         with:
           python-version: '3.11'
 
+      # Issue #4765 の水平展開 (#4769 は engagement 側)。配信済み ASIN の書き戻し PR が
+      # マージされないと main 上は未配信のままなので、次の cron が同じ記事リンクを
+      # 再投稿する。X は shareNow で即時配信、かつ published は set 管理で痕跡が
+      # 残らないため、起きても気づけない。選定前に open な sns-publish/* ブランチの
+      # 配信済み ASIN を取り込んでおけば、PR がマージされなくても再投稿は起きない。
+      - name: Absorb published ASINs from stale publish PRs
+        id: absorb
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+          STALE=$(gh pr list --state open --limit 50 \
+            --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("sns-publish/")) | "\(.number) \(.headRefName)"')
+          if [ -z "$STALE" ]; then
+            echo "No stale sns-publish PRs."
+            echo "prs=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Stale sns-publish PRs:"; echo "$STALE"
+          mkdir -p /tmp/absorb
+          NUMS=""
+          ARGS=""
+          while read -r num branch; do
+            [ -n "$num" ] || continue
+            git fetch --no-tags origin "$branch"
+            out="/tmp/absorb/${num}-sns_published.json"
+            if git show "FETCH_HEAD:data/sns_published.json" > "$out" 2>/dev/null; then
+              ARGS="$ARGS --source $out"
+            fi
+            NUMS="$NUMS $num"
+          done <<< "$STALE"
+          python scripts/absorb_sns_published.py --target data/sns_published.json $ARGS
+          echo "prs=$(echo $NUMS)" >> "$GITHUB_OUTPUT"
+
       - name: Pick target ASIN
         id: pick
         run: |
@@ -166,3 +201,10 @@ jobs:
           else
             echo "::warning::Could not enable auto-merge on $PR_URL"
           fi
+
+          # 取り込み元の滞留 PR は、この PR が同じ ASIN 履歴を含んでいるので close する
+          # (#4765)。放置すると stale-pr-sweeper (#4469) の滞留カウントが積み上がる。
+          for n in ${{ steps.absorb.outputs.prs }}; do
+            gh pr comment "$n" --body "Superseded by $PR_URL — この PR の配信済み ASIN は取り込み済みです (#4765)。" || true
+            gh pr close "$n" --delete-branch || echo "::warning::Could not close stale PR #$n"
+          done
