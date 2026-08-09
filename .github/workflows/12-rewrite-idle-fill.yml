@@ -9,8 +9,10 @@ name: Rewrite Idle Fill
 #    deletes when a newer body exists).
 # 1. Compute exclude set = open PR titles + jules-lock/<ASIN> branches.
 # 2. slack = max(0, 12 - active). Manual `limit` input overrides.
-# 3. select_rewrite_targets.py picks `slack` ASINs by (quality.total_score asc,
-#    slug date asc). Missing quality.json → top priority.
+# 3. select_rewrite_targets.py picks `slack` ASINs by (pre-v7 first, slug date asc).
+#    2026-08-09 まではここが (quality.total_score asc, missing→top priority) だったが、
+#    quality sidecar が 2026-05-28 で生成停止しており、実際には「sidecar 生成が
+#    止まった日」で並べていた (最古 233 件が新しい 1,669 件の後ろに回っていた)。
 # 4. fetch_amazon.py --asin <CSV> --competitors-only refreshes per_asin/<ASIN>/.
 # 5. apply_rewrite_targets.py injects per_asin/<ASIN>/amazon.json items into
 #    data/raw/amazon.json items[] AND writes a data/rewrite_queue/<ASIN>.json

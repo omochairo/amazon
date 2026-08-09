@@ -4,8 +4,10 @@ Coverage:
 1. collect_candidates - parses primary article JSONs, skips .quality/.enrichment/.seo
    sidecars and slugs that don't match YYYY-MM-DD-ASIN.
 2. _load_quality - reads total_score + passed; missing/bad files → (None, None).
-3. select - priority key: missing quality.json (None) ranks ABOVE numeric scores;
-   within same score, older date wins; exclude-set filters ASINs.
+3. select - priority key: pre-v7 (slug date < HOW_TO_CHOOSE_ENFORCE_FROM) ranks
+   above post-v7; within the same generation, older date wins; total_score は
+   順序に影響しない (2026-08-09 に外した。理由は select_rewrite_targets の docstring);
+   exclude-set filters ASINs.
 """
 from __future__ import annotations
 
@@ -86,17 +88,34 @@ class LoadQualityTest(unittest.TestCase):
 
 
 class SelectTest(unittest.TestCase):
-    def test_missing_score_outranks_numeric(self) -> None:
-        """A missing quality.json (score=None) should rank above any numeric score."""
+    def test_score_does_not_affect_order(self) -> None:
+        """total_score は順序に影響しない (2026-08-09 に順序キーから外した)。
+
+        旧実装は「sidecar 欠落 = score None → -1 で最優先」だったが、sidecar は
+        2026-05-28 を最後に生成が止まっており、実際に並べていたのは品質ではなく
+        sidecar 生成が止まった日だった。sidecar を持つ最古の 233 件が、より新しい
+        1,669 件の後ろへ回されていた。
+        """
         candidates = [
-            {"slug": "2026-05-12-B0AAAAAAAA", "asin": "B0AAAAAAAA", "date": "2026-05-12", "score": 50, "passed": False},
+            {"slug": "2026-05-12-B0AAAAAAAA", "asin": "B0AAAAAAAA", "date": "2026-05-12", "score": 98, "passed": True},
             {"slug": "2026-05-20-B0BBBBBBBB", "asin": "B0BBBBBBBB", "date": "2026-05-20", "score": None, "passed": None},
-            {"slug": "2026-05-11-B0CCCCCCCC", "asin": "B0CCCCCCCC", "date": "2026-05-11", "score": 98, "passed": True},
+            {"slug": "2026-05-11-B0CCCCCCCC", "asin": "B0CCCCCCCC", "date": "2026-05-11", "score": 50, "passed": False},
         ]
         picked = srt.select(candidates, excluded=set(), limit=10)
-        self.assertEqual([c["asin"] for c in picked], ["B0BBBBBBBB", "B0AAAAAAAA", "B0CCCCCCCC"])
+        self.assertEqual([c["asin"] for c in picked], ["B0CCCCCCCC", "B0AAAAAAAA", "B0BBBBBBBB"])
 
-    def test_score_tie_broken_by_date(self) -> None:
+    def test_pre_v7_outranks_post_v7_even_when_newer_has_no_sidecar(self) -> None:
+        """v7 施行日より前の記事が先。新しい記事は sidecar が無くても後回し。"""
+        candidates = [
+            {"slug": "2026-08-01-B0AAAAAAAA", "asin": "B0AAAAAAAA", "date": "2026-08-01", "score": None, "passed": None},
+            {"slug": "2026-07-16-B0BBBBBBBB", "asin": "B0BBBBBBBB", "date": "2026-07-16", "score": None, "passed": None},
+            {"slug": "2026-05-14-B0CCCCCCCC", "asin": "B0CCCCCCCC", "date": "2026-05-14", "score": 97, "passed": True},
+        ]
+        picked = srt.select(candidates, excluded=set(), limit=10)
+        # 2026-07-16 は施行日ちょうど = post_v7 (quality_gate._how_to_choose_enforced と同じ境界)
+        self.assertEqual([c["asin"] for c in picked], ["B0CCCCCCCC", "B0BBBBBBBB", "B0AAAAAAAA"])
+
+    def test_same_generation_tie_broken_by_date(self) -> None:
         candidates = [
             {"slug": "2026-05-20-B0AAAAAAAA", "asin": "B0AAAAAAAA", "date": "2026-05-20", "score": 80, "passed": False},
             {"slug": "2026-05-11-B0BBBBBBBB", "asin": "B0BBBBBBBB", "date": "2026-05-11", "score": 80, "passed": False},
@@ -104,6 +123,15 @@ class SelectTest(unittest.TestCase):
         ]
         picked = srt.select(candidates, excluded=set(), limit=10)
         self.assertEqual([c["asin"] for c in picked], ["B0BBBBBBBB", "B0CCCCCCCC", "B0AAAAAAAA"])
+
+    def test_undated_candidate_is_treated_as_post_v7(self) -> None:
+        """日付不明は安全側 (post_v7 = 後回し)。優先枠を不明な候補に食わせない。"""
+        candidates = [
+            {"slug": "bogus", "asin": "B0AAAAAAAA", "date": "", "score": None, "passed": None},
+            {"slug": "2026-06-01-B0BBBBBBBB", "asin": "B0BBBBBBBB", "date": "2026-06-01", "score": None, "passed": None},
+        ]
+        picked = srt.select(candidates, excluded=set(), limit=10)
+        self.assertEqual([c["asin"] for c in picked], ["B0BBBBBBBB", "B0AAAAAAAA"])
 
     def test_exclude_filters_asin(self) -> None:
         candidates = [
