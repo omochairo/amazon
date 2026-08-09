@@ -23,15 +23,32 @@ data/articles/ の未投稿 ASIN を「知育 × 価格」加重スコアでラ�
     同点は date 降順 (新しい記事優先) → ASIN で決定的に解決。
 
 state file:  data/sns_published.json
-    {"published": ["B0DBTLH8ZM", "B0XXXXXXXX", ...], "updated": "2026-06-03T..."}
+    {"published": ["B0DBTLH8ZM", "B0XXXXXXXX", ...],
+     "channel_results": {"B0DBTLH8ZM": {"x": "success", "threads": "failure"}},
+     "updated": "2026-06-03T..."}
 
 呼び出し例:
     python scripts/pick_sns_target.py                       # 選定のみ (state 未更新)
     python scripts/pick_sns_target.py --debug               # 上位ランキングを stderr 表示
     python scripts/pick_sns_target.py --mark B0DBTLH8ZM     # state に追記
+    python scripts/pick_sns_target.py --mark B0DBTLH8ZM \
+        --channel x=success --channel threads=failure       # チャネル結果つきで追記
 
 workflow では先に「選定 → notify_buffer.py 成功 → --mark で commit」の順で
 失敗時に同じ ASIN を再試行できる作りにする。
+
+チャネル結果ゲート (#4783):
+    3 つの投稿ステップは continue-on-error なので、全滅しても後続の --mark が走り
+    「配信済み」として二度と選定されなくなる = その記事の SNS 露出が恒久ゼロになる。
+    run は緑のままで、published が ASIN の平坦な配列なので**データにも痕跡が残らない**。
+    そこで --channel で各ステップの outcome を渡し、
+
+      - 1 つも success が無ければ mark せず exit 2 (workflow を赤くする)。
+        state を触らないので翌日の cron が同じ ASIN を自然にリトライする。
+      - 1 つ以上 success なら従来どおり mark するが、チャネル別の結果を
+        channel_results に残す (部分失敗を後から遡って特定できるようにする)。
+
+    --channel を 1 つも渡さなければ従来の無条件 mark (後方互換)。
 """
 from __future__ import annotations
 
@@ -99,6 +116,53 @@ def save_state(state: dict) -> None:
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(state, f, ensure_ascii=False, indent=2, sort_keys=True)
         f.write("\n")
+
+
+# --- チャネル結果ゲート (#4783) -----------------------------------------
+# GitHub Actions の steps.<id>.outcome が取る値。cancelled も「配信されていない」
+# 側に倒す (成功と数えるのは success のみ)。
+DELIVERED_OUTCOME = "success"
+
+
+def parse_channel_args(pairs: list[str]) -> dict[str, str]:
+    """`--channel x=success` の並びを {channel: outcome} にする。
+
+    値が空 (`x=`) の指定は「ステップが存在しなかった」として無視する。workflow の
+    `${{ steps.foo.outcome }}` は step 自体が skip されると空文字になるため。
+    """
+    out: dict[str, str] = {}
+    for raw in pairs:
+        name, sep, outcome = raw.partition("=")
+        if not sep:
+            raise ValueError(f"--channel は name=outcome の形式で指定してください: {raw!r}")
+        name = name.strip().lower()
+        outcome = outcome.strip().lower()
+        if not name:
+            raise ValueError(f"--channel のチャネル名が空です: {raw!r}")
+        if not outcome:
+            continue
+        out[name] = outcome
+    return out
+
+
+def any_delivered(channels: dict[str, str]) -> bool:
+    return any(o == DELIVERED_OUTCOME for o in channels.values())
+
+
+def record_channel_results(state: dict, asin: str, channels: dict[str, str]) -> None:
+    """channel_results に asin の結果を書き、published に残っていない ASIN を掃除する。
+
+    published は --limit で古い側から切られるので、放置すると channel_results だけが
+    無限に伸びる。published と同じ寿命に揃えておく。
+    """
+    if not channels:
+        return
+    results = state.get("channel_results")
+    if not isinstance(results, dict):
+        results = {}
+    results[asin] = dict(channels)
+    alive = set(state.get("published") or [])
+    state["channel_results"] = {k: v for k, v in results.items() if k in alive}
 
 
 def list_articles_desc() -> list[tuple[str, str]]:
@@ -216,6 +280,9 @@ def main() -> int:
     parser.add_argument("--debug", action="store_true",
                         help="上位ランキングを stderr に表示 (選定 ASIN は通常通り stdout)")
     parser.add_argument("--top", type=int, default=15, help="--debug 表示件数 (default 15)")
+    parser.add_argument("--channel", action="append", default=[], metavar="NAME=OUTCOME",
+                        help="--mark と併用。投稿ステップの outcome (success/failure/skipped)。"
+                             "1 つも success が無ければ mark せず exit 2 (#4783)")
     args = parser.parse_args()
 
     state = load_state()
@@ -223,6 +290,21 @@ def main() -> int:
 
     if args.mark:
         asin = args.mark.strip().upper()
+        try:
+            channels = parse_channel_args(args.channel)
+        except ValueError as e:
+            print(f"[error] {e}", file=sys.stderr)
+            return 2
+        # #4783: 1 チャネルも配信できていないのに mark すると、その ASIN は二度と
+        # 選定されず SNS 露出が恒久ゼロになる。state を触らずに落とし、翌日の cron に
+        # 同じ ASIN を再試行させる。
+        if channels and not any_delivered(channels):
+            detail = ", ".join(f"{k}={v}" for k, v in sorted(channels.items()))
+            # cp932 な Windows ローカルでも落ちないよう、標準出力は ASCII に留める
+            # (absorb_sns_published.py と同方針)。
+            print(f"::error::{asin} was not delivered to any channel ({detail}); "
+                  "not marking as published so the next cron retries the same ASIN.")
+            return 2
         if asin in published:
             print(f"[skip] {asin} already in published", file=sys.stderr)
             return 0
@@ -230,8 +312,13 @@ def main() -> int:
         # 上限を超えたら古い側 (先頭) を削る
         if len(state["published"]) > args.limit:
             state["published"] = state["published"][-args.limit:]
+        record_channel_results(state, asin, channels)
         save_state(state)
         print(f"[mark] {asin} added (total={len(state['published'])})", file=sys.stderr)
+        failed = sorted(k for k, v in channels.items() if v != DELIVERED_OUTCOME)
+        if failed:
+            print(f"::warning::{asin} partially delivered; failed channels: "
+                  f"{', '.join(failed)} (recorded in channel_results)")
         return 0
 
     ranked = rank_candidates(published)

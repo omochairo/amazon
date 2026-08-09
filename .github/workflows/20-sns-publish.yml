@@ -107,6 +107,7 @@ jobs:
           echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - name: Post to Buffer (X single post)
+        id: post-x
         if: steps.pick.outputs.skip != 'true'
         env:
           BUFFER_ACCESS_TOKEN: ${{ secrets.BUFFER_ACCESS_TOKEN }}
@@ -124,11 +125,13 @@ jobs:
             python scripts/notify_buffer.py "$ASIN" --x-only --live
           fi
         # #2780: 万一 Buffer が失敗 (LimitReached 等) しても Threads/Bluesky の
-        # 配信と published 履歴の commit を止めない (catch 側の防御)。失敗は
-        # ::warning:: として残り、次回 cron で同 ASIN を再試行しない (mark 進行)。
+        # 配信と published 履歴の commit を止めない (catch 側の防御)。
+        # #4783: outcome は mark ステップに渡り channel_results に残る。他チャネルが
+        # 成功していれば mark 進行 (再投稿しない)、全滅なら mark せず run を赤にする。
         continue-on-error: true
 
       - name: Post to Threads (Meta Graph API thread)
+        id: post-threads
         if: steps.pick.outputs.skip != 'true'
         env:
           THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
@@ -143,11 +146,12 @@ jobs:
             python scripts/notify_threads.py "$ASIN"
           fi
         # Threads が失敗しても X は既に投稿済みなので、bookkeeping は進める。
-        # 失敗は ::warning:: として残し、次回 cron で同 ASIN を再試行しない
-        # (mark まで進むため)。手動で対応が必要なら gh run logs で確認。
+        # #4783: 失敗は channel_results に残る。全チャネル失敗のときだけ mark を
+        # 止めて run を赤にする。
         continue-on-error: true
 
       - name: Post to Bluesky (AT Protocol link card)
+        id: post-bluesky
         if: steps.pick.outputs.skip != 'true'
         env:
           BLUESKY_IDENTIFIER: ${{ secrets.BLUESKY_IDENTIFIER }}
@@ -165,6 +169,8 @@ jobs:
           fi
         # Issue #1598: Bluesky は 3 つ目の補助チャネル。失敗 (secret 未設定の
         # inert 含む) でも X/Threads の配信と mark を止めない。
+        # #4783: inert no-op (exit 2) も outcome=failure として記録される。X/Threads の
+        # どちらかが成功していれば mark は進むので、運用上の影響はない。
         continue-on-error: true
 
       - name: Mark ASIN as published + commit via PR
@@ -174,24 +180,50 @@ jobs:
         run: |
           set -e
           ASIN="${{ steps.pick.outputs.asin }}"
-          python scripts/pick_sns_target.py --mark "$ASIN"
 
+          # #4783: 3 つの投稿ステップは continue-on-error なので、全滅しても以前は
+          # ここで無条件に mark していた = その ASIN が二度と選定されず SNS 露出が
+          # 恒久ゼロになり、run は緑のままでデータにも痕跡が残らなかった。
+          # outcome を渡し、1 つも success が無ければ mark させない (exit 2)。
+          # state を触らないので次回 cron が同じ ASIN を再試行する。
+          MARK_RC=0
+          python scripts/pick_sns_target.py --mark "$ASIN" \
+            --channel "x=${{ steps.post-x.outcome }}" \
+            --channel "threads=${{ steps.post-threads.outcome }}" \
+            --channel "bluesky=${{ steps.post-bluesky.outcome }}" || MARK_RC=$?
+          if [ "$MARK_RC" -ne 0 ] && [ "$MARK_RC" -ne 2 ]; then
+            exit "$MARK_RC"
+          fi
+
+          # MARK_RC=2 (全チャネル失敗) でも、absorb ステップが取り込んだ他 run 分の
+          # 書き戻しは commit しておく (#4769 の自己修復を落とさない)。
           git add data/sns_published.json
           if git diff --cached --quiet; then
             echo "No change in sns_published.json; skipping commit."
+            [ "$MARK_RC" -eq 0 ] || exit 1
             exit 0
+          fi
+
+          # MARK_RC=2 のとき差分は absorb 分だけで $ASIN は含まれない。
+          # 「配信済みとして記録した」と読める題名を付けない (#4783)。
+          if [ "$MARK_RC" -eq 0 ]; then
+            SUBJECT="data: mark $ASIN as SNS-published"
+            PR_BODY="Automated SNS publish bookkeeping. Buffer (X 単発) + Meta Graph (Threads thread) で \`$ASIN\` を配信し、\`data/sns_published.json\` に履歴追記した記録。#1420"
+          else
+            SUBJECT="data: absorb SNS-published history (delivery of $ASIN failed on all channels)"
+            PR_BODY="全チャネル配信失敗のため \`$ASIN\` は published に記録していません (#4783)。この PR は滞留 PR から取り込んだ他 run 分の書き戻しのみです。\`$ASIN\` は次回 cron で再試行されます。"
           fi
 
           BRANCH="sns-publish/${{ github.run_id }}"
           git config user.name "omochairo-fetch-bot[bot]"
           git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
-          git commit -m "data: mark $ASIN as SNS-published (run ${{ github.run_id }})"
+          git commit -m "$SUBJECT (run ${{ github.run_id }})"
           git push -u origin "$BRANCH"
 
           PR_URL=$(gh pr create \
-            --title "data: mark $ASIN as SNS-published" \
-            --body "Automated SNS publish bookkeeping. Buffer (X 単発) + Meta Graph (Threads thread) で \`$ASIN\` を配信し、\`data/sns_published.json\` に履歴追記した記録。#1420" \
+            --title "$SUBJECT" \
+            --body "$PR_BODY" \
             --base main \
             --head "$BRANCH")
           echo "Created: $PR_URL"
@@ -208,3 +240,7 @@ jobs:
             gh pr comment "$n" --body "Superseded by $PR_URL — この PR の配信済み ASIN は取り込み済みです (#4765)。" || true
             gh pr close "$n" --delete-branch || echo "::warning::Could not close stale PR #$n"
           done
+
+          # 全チャネル失敗は run を赤くして気づけるようにする (#4783)。bookkeeping は
+          # 上で済ませてあるので、ここで落としても取りこぼしは出ない。
+          [ "$MARK_RC" -eq 0 ] || exit 1

@@ -113,5 +113,117 @@ class RankingTest(unittest.TestCase):
         self.assertEqual(ranked[0].asin, "B000000008")
 
 
+class ChannelGateTest(unittest.TestCase):
+    """#4783 — 全チャネル失敗で mark すると SNS 露出が恒久ゼロになる。
+
+    成り立つべき条件:
+      1. 1 つも success が無ければ state を一切書き換えず exit 2 (翌日 cron が再試行)。
+      2. 1 つでも success があれば従来どおり mark し、失敗チャネルを記録に残す。
+      3. --channel 無指定は従来の無条件 mark (後方互換)。
+    """
+
+    def test_parse_channel_args(self):
+        self.assertEqual(
+            pst.parse_channel_args(["x=success", " Threads = Failure "]),
+            {"x": "success", "threads": "failure"},
+        )
+
+    def test_parse_channel_args_drops_empty_outcome(self):
+        # step 自体が skip されると ${{ steps.foo.outcome }} は空文字になる
+        self.assertEqual(pst.parse_channel_args(["x=success", "bluesky="]), {"x": "success"})
+
+    def test_parse_channel_args_rejects_malformed(self):
+        with self.assertRaises(ValueError):
+            pst.parse_channel_args(["x"])
+        with self.assertRaises(ValueError):
+            pst.parse_channel_args(["=success"])
+
+    def test_any_delivered(self):
+        self.assertTrue(pst.any_delivered({"x": "failure", "threads": "success"}))
+        self.assertFalse(pst.any_delivered({"x": "failure", "threads": "skipped"}))
+        self.assertFalse(pst.any_delivered({}))
+
+    def test_channel_results_trimmed_to_published(self):
+        state = {"published": ["A2", "A3"], "channel_results": {"A1": {"x": "success"}}}
+        pst.record_channel_results(state, "A3", {"x": "success"})
+        # published から溢れた A1 は捨て、A3 だけが残る
+        self.assertEqual(state["channel_results"], {"A3": {"x": "success"}})
+
+
+class MarkCliTest(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.state_file = pathlib.Path(self._tmp.name) / "sns_published.json"
+        self._orig = pst.STATE_FILE
+        pst.STATE_FILE = self.state_file
+        self.state_file.write_text(
+            json.dumps({"published": ["B0OLD00001"], "updated": None}), encoding="utf-8")
+        self._orig_argv = sys.argv
+
+    def tearDown(self):
+        pst.STATE_FILE = self._orig
+        sys.argv = self._orig_argv
+        self._tmp.cleanup()
+
+    def _run(self, *argv):
+        sys.argv = ["pick_sns_target.py", *argv]
+        return pst.main()
+
+    def _state(self):
+        return json.loads(self.state_file.read_text(encoding="utf-8"))
+
+    def test_all_channels_failed_does_not_mark(self):
+        before = self.state_file.read_text(encoding="utf-8")
+        rc = self._run("--mark", "B0NEW00001",
+                       "--channel", "x=failure",
+                       "--channel", "threads=failure",
+                       "--channel", "bluesky=failure")
+        self.assertEqual(rc, 2)
+        # state はバイト単位で不変 = 翌日の cron が同じ ASIN を再選定できる
+        self.assertEqual(self.state_file.read_text(encoding="utf-8"), before)
+
+    def test_all_channels_skipped_does_not_mark(self):
+        rc = self._run("--mark", "B0NEW00001",
+                       "--channel", "x=skipped", "--channel", "threads=cancelled")
+        self.assertEqual(rc, 2)
+        self.assertNotIn("B0NEW00001", self._state()["published"])
+
+    def test_partial_success_marks_and_records_failures(self):
+        rc = self._run("--mark", "B0NEW00001",
+                       "--channel", "x=failure",
+                       "--channel", "threads=success",
+                       "--channel", "bluesky=failure")
+        self.assertEqual(rc, 0)
+        state = self._state()
+        self.assertIn("B0NEW00001", state["published"])
+        self.assertEqual(
+            state["channel_results"]["B0NEW00001"],
+            {"x": "failure", "threads": "success", "bluesky": "failure"},
+        )
+
+    def test_no_channel_args_keeps_legacy_behaviour(self):
+        rc = self._run("--mark", "B0NEW00002")
+        self.assertEqual(rc, 0)
+        state = self._state()
+        self.assertIn("B0NEW00002", state["published"])
+        self.assertNotIn("channel_results", state)
+
+    def test_already_published_is_still_a_no_op(self):
+        rc = self._run("--mark", "B0OLD00001", "--channel", "x=success")
+        self.assertEqual(rc, 0)
+        self.assertEqual(self._state()["published"], ["B0OLD00001"])
+
+    def test_limit_trim_also_trims_channel_results(self):
+        self.state_file.write_text(json.dumps({
+            "published": ["A1", "A2"],
+            "channel_results": {"A1": {"x": "success"}, "A2": {"x": "success"}},
+        }), encoding="utf-8")
+        rc = self._run("--mark", "A3", "--channel", "x=success", "--limit", "2")
+        self.assertEqual(rc, 0)
+        state = self._state()
+        self.assertEqual(state["published"], ["A2", "A3"])
+        self.assertEqual(sorted(state["channel_results"]), ["A2", "A3"])
+
+
 if __name__ == "__main__":
     unittest.main()
