@@ -105,3 +105,12 @@ jobs:
 
       - name: Run unit tests
         run: python -m pytest scripts/tests -q
+
+      # hugo/static/sw.js (Service Worker) は Python から検証できないため node の
+      # 標準 test runner で回す。ubuntu-latest には node が同梱されており
+      # setup-node も依存インストールも要らない (実行 0.1 秒台)。
+      # ここを別 workflow に切らないのは #4069 と同じ理由 — required check 昇格の
+      # 判断対象を増やすと、また「どの PR で発火するか」の allowlist を作り直す
+      # ことになるため。
+      - name: Run service worker tests
+        run: node --test "tests/js/*.test.mjs"

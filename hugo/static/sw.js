@@ -18,7 +18,11 @@
 // v2 (2026-07-20): ASSET_CACHE の HTML 汚染を全ユーザーから一掃するための bump。
 // デプロイ伝播窓に指紋付き JS URL へ HTML (404/offline) が返り、それが
 // cache-first で恒久固定される事故を article_actions.min.*.js で実測 (#3568)。
-var CACHE_VERSION = "v2-2026-07-20";
+//
+// v3 (2026-08-09): 「久しぶりに開くと古いトップが出て F5 で初めて最新になる」
+// の実機再現を受けた bump。PAGE_CACHE の内容は互換性が無い (timestamp header 付き)
+// ため、旧 cache は activate で破棄させる。
+var CACHE_VERSION = "v3-2026-08-09";
 var SHELL_CACHE = "omcha-shell-" + CACHE_VERSION;
 var PAGE_CACHE = "omcha-pages-" + CACHE_VERSION;
 var ASSET_CACHE = "omcha-assets-" + CACHE_VERSION;
@@ -40,8 +44,21 @@ var SHELL_URLS = [
 
 // network-first で扱う = stale を出したくない鮮度必須パス。
 var FRESH_PREFIXES = ["/ranking", "/cospa", "/deals", "/search"];
+// 前方一致では表現できない鮮度必須パス (トップは "/" なので prefix 一致だと全 URL に当たる)。
+// トップは新着記事・おすすめ・価格カードの入口で、毎デプロイ内容が変わる。
+var FRESH_EXACT = ["/", "/index.html"];
+
+// PAGE_CACHE の stale 許容上限。これを超えた cache hit は「即返し」に使わず
+// ネットワークを待つ (失敗すればフォールバックとして返す)。
+// SWR は本来「1 世代遅れ」を常態にする戦略で、上限が無いと数日ぶりの訪問でも
+// 前回訪問時の HTML がそのまま出る (2026-08-09 に実機で再現)。
+var PAGE_MAX_STALE_MS = 6 * 60 * 60 * 1000; // 6h
+var CACHED_AT_HEADER = "x-omcha-cached-at";
 
 function isFresh(path) {
+  for (var e = 0; e < FRESH_EXACT.length; e++) {
+    if (path === FRESH_EXACT[e]) return true;
+  }
   for (var i = 0; i < FRESH_PREFIXES.length; i++) {
     if (path.indexOf(FRESH_PREFIXES[i]) === 0) return true;
   }
@@ -112,24 +129,65 @@ function assetCacheFirst(req) {
   });
 }
 
+// PAGE_CACHE へ入れる応答には保存時刻を打つ。stale 判定はこれだけを根拠にする
+// (Date / Age ヘッダは Cloudflare のエッジ滞留時間が乗るので保存時刻の代わりに
+// ならない)。同一オリジンの HTML なので body を読み直して詰め替えられる。
+function stampCachedAt(res) {
+  return res.blob().then(function (body) {
+    var headers = new Headers(res.headers);
+    headers.set(CACHED_AT_HEADER, String(Date.now()));
+    return new Response(body, {
+      status: res.status,
+      statusText: res.statusText,
+      headers: headers
+    });
+  });
+}
+
+// timestamp が無い応答 (旧バージョンの cache が残っていた場合) は期限切れ扱い。
+// 「不明」を pass 側に潰すと、まさに直したい無期限 stale が生き残る。
+function isStale(res, now) {
+  if (!res) return true;
+  var at = Number(res.headers && res.headers.get(CACHED_AT_HEADER));
+  if (!at) return true;
+  return (now - at) > PAGE_MAX_STALE_MS;
+}
+
+// SW からの取り直しは必ず HTTP キャッシュを迂回する。
+// 素の fetch(req) は既定 cache モードなので、HTML に付いている
+// Cache-Control: max-age=14400 (実測 2026-08-09) の下ではブラウザ HTTP キャッシュの
+// コピーが返り、「裏で取り直した最新」自体が最大 4 時間古くなる。
+// SWR の 1 世代遅れと直列に積み上がるのを防ぐ。
+function fetchFresh(req) {
+  return fetch(req.url, { cache: "no-cache", credentials: "same-origin" });
+}
+
+function revalidate(cache, req) {
+  return fetchFresh(req).then(function (res) {
+    if (!res || !res.ok) return res;
+    return stampCachedAt(res.clone()).then(function (stamped) {
+      return cache.put(req, stamped).then(function () { return res; });
+    });
+  });
+}
+
 function staleWhileRevalidate(req, cacheName) {
   return caches.open(cacheName).then(function (cache) {
     return cache.match(req).then(function (hit) {
-      var net = fetch(req).then(function (res) {
-        if (res && res.ok) cache.put(req, res.clone());
-        return res;
-      }).catch(function () { return hit; });
-      return hit || net;
+      var net = revalidate(cache, req);
+      if (hit && !isStale(hit, Date.now())) {
+        net.catch(function () {}); // 裏更新の失敗は表示に影響させない
+        return hit;
+      }
+      // 初回 / 期限切れはネットワークを待つ。落ちたときだけ古い cache を出す。
+      return net.catch(function () { return hit; });
     });
   });
 }
 
 function networkFirst(req, cacheName) {
   return caches.open(cacheName).then(function (cache) {
-    return fetch(req).then(function (res) {
-      if (res && res.ok) cache.put(req, res.clone());
-      return res;
-    }).catch(function () {
+    return revalidate(cache, req).catch(function () {
       return cache.match(req).then(function (hit) {
         return hit || caches.match("/offline/");
       });
