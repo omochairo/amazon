@@ -465,11 +465,26 @@ def _collect_baseline_values(
     form_factor: str,
     short: str,
     window: int,
+    chrome_version: Optional[str] = None,
 ) -> List[float]:
-    """直近 `window` 件の履歴から対象 URL/form_factor/metric の値列を集める。"""
+    """直近 `window` 件の履歴から対象 URL/form_factor/metric の値列を集める。
+
+    `chrome_version` を渡すと、同じ Chrome major で測られた行だけを使う (#4765)。
+    module docstring が「版が飛ぶと baseline が不連続になり誤検出の温床になる」と
+    書いているとおりで、実際 2026-08-05 の #4583 は Chrome 150→151 が原因だった
+    (それが chrome_version を JSONL に残すようにした理由)。しかし記録するだけで
+    baseline 側が版を跨いだままだったため、2026-08-07 に mobile SI が全 11 URL
+    同時に 2849→4421 と跳ね、サイト側の資産変更が無いのに #4652 が鳴った。
+
+    版が変わった直後は同版のサンプルが MIN_BASELINE_SAMPLES に届かないので
+    baseline は None になり、育つまで鳴らない (baseline_for 参照)。これは
+    「URL が入れ替わった直後は鳴らさない」既存の degrade と同じ挙動。
+    """
     values: List[float] = []
     for row in reversed(history):
         if row.get("url") != url or row.get("form_factor") != form_factor:
+            continue
+        if chrome_version is not None and row.get("chrome_version") != chrome_version:
             continue
         v = row.get(short)
         if isinstance(v, (int, float)):
@@ -486,15 +501,17 @@ def baseline_for(
     short: str,
     window: int,
     min_samples: int = MIN_BASELINE_SAMPLES,
+    chrome_version: Optional[str] = None,
 ) -> Optional[float]:
     """直近 `window` 件の履歴から baseline (median) を作る。値のない行は無視。
 
     `min_samples` 未満しか集まらなければ None を返す (= 判定を見送る)。計測対象は
     GSC 週次上位から採るので週替わりで URL が入れ替わり、入れ替わった直後は
     必ず履歴が薄い。薄い baseline で比較を始めると、劣化ではなく計測揺れを
-    拾ってしまう。
+    拾ってしまう。Chrome major が変わった直後も同じ扱いになる (#4765)。
     """
-    values = _collect_baseline_values(history, url, form_factor, short, window)
+    values = _collect_baseline_values(history, url, form_factor, short, window,
+                                      chrome_version=chrome_version)
     if len(values) < min_samples:
         return None
     return statistics.median(values)
@@ -507,13 +524,15 @@ def mad_for(
     short: str,
     window: int,
     min_samples: int = MIN_BASELINE_SAMPLES,
+    chrome_version: Optional[str] = None,
 ) -> Optional[float]:
     """baseline と同じ値列から MAD (median absolute deviation) を作る (#4160)。
 
-    baseline_for と同じ min_samples ガードを使う (baseline が None なのに MAD
-    だけ出るのは筋が悪い)。
+    baseline_for と同じ min_samples / chrome_version ガードを使う (baseline が
+    None なのに MAD だけ出るのは筋が悪い)。
     """
-    values = _collect_baseline_values(history, url, form_factor, short, window)
+    values = _collect_baseline_values(history, url, form_factor, short, window,
+                                      chrome_version=chrome_version)
     if len(values) < min_samples:
         return None
     med = statistics.median(values)
@@ -553,7 +572,8 @@ def _observed_lcp_confirms(
     cur_observed = row.get("observed_lcp")
     if not isinstance(cur_observed, (int, float)):
         return True  # degrade: observed が無ければ simulated だけで判定
-    base_observed = baseline_for(history, url, ff, "observed_lcp", window)
+    base_observed = baseline_for(history, url, ff, "observed_lcp", window,
+                                 chrome_version=row.get("chrome_version"))
     if base_observed is None:
         return True  # degrade: observed の履歴がまだ育っていない
     min_delta = MIN_ABS_DELTA.get("lcp", 0.0)
@@ -594,6 +614,11 @@ def detect_regressions(
     for row in current:
         url = row.get("url")
         ff = row.get("form_factor")
+        # baseline は同じ Chrome major で測った行だけから作る (#4765)。
+        # None (抽出失敗 / chrome_version 導入前の行) のときは版で絞らず従来
+        # 挙動に degrade する — 抽出が一時的にコケただけでゲートが恒久的に
+        # 黙るほうが、版跨ぎの誤検出より悪い。
+        cur_chrome = row.get("chrome_version")
 
         if row.get("runtime_error"):
             alerts.append({
@@ -615,7 +640,8 @@ def detect_regressions(
             value = row.get(short)
             if not isinstance(value, (int, float)):
                 continue
-            base = baseline_for(history, url, ff, short, window)
+            base = baseline_for(history, url, ff, short, window,
+                                chrome_version=cur_chrome)
             good = GOOD_THRESHOLDS.get(short)
 
             if base is None:
@@ -629,7 +655,8 @@ def detect_regressions(
                 continue
 
             min_delta = MIN_ABS_DELTA.get(short, 0.0)
-            mad = mad_for(history, url, ff, short, window)
+            mad = mad_for(history, url, ff, short, window,
+                          chrome_version=cur_chrome)
             # MAD が拾えない/0 のときは MIN_ABS_DELTA を下限にする
             # (MAD=0 のまま K 倍しても 0 になり、ゲートが機能しなくなるのを防ぐ)。
             required_delta = max(min_delta, REGRESSION_MAD_K * mad) if mad else min_delta
@@ -672,9 +699,11 @@ def detect_regressions(
 
         score = row.get("perf_score")
         if isinstance(score, (int, float)):
-            base_score = baseline_for(history, url, ff, "perf_score", window)
+            base_score = baseline_for(history, url, ff, "perf_score", window,
+                                      chrome_version=cur_chrome)
             if base_score is not None:
-                score_mad = mad_for(history, url, ff, "perf_score", window)
+                score_mad = mad_for(history, url, ff, "perf_score", window,
+                                    chrome_version=cur_chrome)
                 required_drop = max(SCORE_DROP_POINTS, REGRESSION_MAD_K * score_mad) if score_mad else SCORE_DROP_POINTS
                 if (base_score - score) >= required_drop:
                     alerts.append({
@@ -809,12 +838,55 @@ def get_targets(
     return targets
 
 
+def _record_key(row: Dict[str, Any]) -> Tuple[Any, Any, Any]:
+    return (row.get("date"), row.get("url"), row.get("form_factor"))
+
+
 def append_records(
     history_path: pathlib.Path, records: List[Dict[str, Any]]
 ) -> int:
+    """`(date, url, form_factor)` につき 1 行だけを保つように append する (#4765)。
+
+    素の append だと同じ日にレーンが 2 回走った分がそのまま二重に積まれる。
+    2026-08-07 が実際にそれで、通常 11 行のところ 22 行入っていた。害は 2 つ:
+
+      1. `detect_regressions` は current の全行を回すので、遅かった方のバッチが
+         そのまま劣化として鳴る。#4652 の 8 件はこれ (翌 08-08 は Chrome 151 の
+         まま si 平均 2825 と平常値に戻っており、サイト側の劣化ではない)。
+      2. baseline の window は「直近 N 件 ≒ N 日」を前提にしているのに、1 日 2 行
+         入ると期間が半分になり、しかも悪いバッチが median を汚す。
+
+    再計測は「やり直し」なので後勝ちにする (同じキーの古い行を落として append)。
+    """
     if not records:
         return 0
     history_path.parent.mkdir(parents=True, exist_ok=True)
+
+    incoming = {_record_key(r) for r in records}
+    if history_path.exists():
+        kept = []
+        dropped = 0
+        for line in history_path.read_text(encoding="utf-8").splitlines():
+            s = line.strip()
+            if not s:
+                continue
+            try:
+                row = json.loads(s)
+            except ValueError:
+                kept.append(s)  # 壊れた行は判断材料が無いので触らない
+                continue
+            if _record_key(row) in incoming:
+                dropped += 1
+                continue
+            kept.append(s)
+        if dropped:
+            logger.warning(
+                "同じ (date, url, form_factor) の既存行 %d 件を再計測で置き換えます", dropped
+            )
+            history_path.write_text(
+                "".join(s + "\n" for s in kept), encoding="utf-8"
+            )
+
     with history_path.open("a", encoding="utf-8") as f:
         for r in records:
             f.write(json.dumps(r, ensure_ascii=False, sort_keys=True))
