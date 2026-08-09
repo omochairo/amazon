@@ -1,0 +1,51 @@
+{
+  "asin": "B07BKFKW31",
+  "fetched_at": "2026-08-09T21:57:03.371394+00:00",
+  "query": "セレクタ SELECTA SE61008",
+  "engine": "tavily",
+  "raw_count": 7,
+  "sources": [
+    {
+      "title": "セレクタと疑似クラス < CSS ｜ HTML+CSSまとめページ",
+      "url": "https://cc.musabi.ac.jp/kenkyu/cl1/html5/css_selecta.html",
+      "snippet": "セレクタ CSSの基本は、要素名に続けて { } を記述し、その { } 内にその要素の見た目を記すことである。",
+      "host": "cc.musabi.ac.jp"
+    },
+    {
+      "title": "CSSのセレクタとは？覚えておきたい25種類と書き方",
+      "url": "https://saruwakakun.com/html-css/reference/selector",
+      "snippet": "Feb 7, 2019 — 今回はCSSの便利なセレクタを一挙にまとめていきます。セレクタをマスターしておくと、効率的なCSSを書くことができ後々ラクになるはずです。Read more",
+      "host": "saruwakakun.com"
+    },
+    {
+      "title": "CSSセレクタ | 2.33 | Axe Auditor - Deque Docs",
+      "url": "https://docs.deque.com/auditor/2.33/ja/css-selector-process",
+      "snippet": "バーチャルクリップボードからコピーしたセレクターを、 Selector フィールドに貼り付けます。 ターゲットにしたコンポーネントやページ領域で見つかった結果の問題を確認 ...Read more",
+      "host": "docs.deque.com"
+    },
+    {
+      "title": "基本的な CSS セレクター - ウェブ開発の学習 | MDN",
+      "url": "https://developer.mozilla.org/ja/docs/Learn_web_development/Core/Styling_basics/Basic_selectors",
+      "snippet": "CSS において、スタイル設定したいウェブページ上の HTML 要素を対象とするためにセレクターを使用する方法については、すでに説明しました。 CSS セレクターにはさまざまな種類があり、スタイル設定する要素を選択する際にきめ細かい精度を実現できます。次のいくつかの記事では、さまざまな種類について詳しく見ていきます。この記事では、基本的な型、クラスおよび ID セレクター、セレクターリストなど、セレクターの基本についておさらいします。また、全称セレクターについても紹介します。\n\n|  |  |\n --- |\n| 前提知識: | HTML の基本（ 基本的な HTML の構文を学んでいること）。 |\n| 学習成果: |  基本的なセレクター型（要素型、クラス、ID）。  ID は文書内の固有であるため、特定の要素を 1 つ選択するには ID を使用すべきであることを理解すること。  それぞれの要素に複数のクラスを指定することができ、必要に応じてスタイルのレイヤーとして使用することができること。  セレクターリスト。  全称セレクター。 |\n\n## セレクターとは [...] ## セレクターとは\n\nCSS セレクターは、CSS ルール (CSS Rule) の最初の部分です。CSS セレクターは要素やその他の用語の組み合わせであり、どの HTML 要素にルール内の CSS プロパティ値 (property value) を適用するかをブラウザーに伝えます。セレクターによって選択された要素を、選択対象 (subject of the selector) と呼びます。\n\n以前の記事では、様々なセレクターに出会い、様々な方法で文書を対象にするセレクターがあることを学びました。例えば、`h1` のような要素や、`.special` のようなクラスを選択する方法です。まずは、これまでに学んだ主なセレクターを復習しましょう。\n\n## 要素型セレクター\n\n要素型セレクターは、文書内の HTML のタグや要素を選択するものであるため、タグ名セレクターまたは要素セレクターと呼ばれることもあります。例えば、下記では `span`、`em`、`strong` セレクターを使用しています。 [...] css\n\n```\narticle :first-child { font-weight: bold; } \n```\n\nしかし、この記事のセレクターは article:first-child、すうなわち他の要素の最初の子であるすべての  要素を選択するセレクターと混同される可能性があります。\n\nこの混乱を避けるために、全称セレクターを :first-child 擬似クラスに追加すると、セレクターが何をしているのかがより明確になるようにします。これは、  要素の最初の子である、または  の任意の子孫要素の最初の子である、任意の要素を選択します。\n\ncss\n\n```\narticle :first-child { font-weight: bold; } \n```\n\nどちらも同等ですが、2 つ目の方が読みやすいと感じる人もいます。\n\nメモ: この手法が公開されたウェブサイトで頻繁に使用されることはまずないでしょう。例えば MDN でもあまり使用していません。ただし、理解しやすいと感じる場合は、自身のコードでこの手法を使用することを考えてみるべきです。\n\n## まとめ",
+      "host": "developer.mozilla.org"
+    },
+    {
+      "title": "CSSリファレンス(セレクタ)",
+      "url": "https://www.tohoho-web.com/css/selector.htm",
+      "snippet": "May 31, 2026 — 指定した要素の直前を意味します。要素の前に文字や画像を追加する際に用いられます。下記の例では、すべての h2要素の先頭に文字「□」を追加します。Read more",
+      "host": "tohoho-web.com"
+    },
+    {
+      "title": "CSSセレクタのチートシート｜37パターンを一覧で解説",
+      "url": "https://webliker.info/css-selector-cheat-sheet",
+      "snippet": "CSSセレクタのチートシートでは、要素セレクタ / classセレクタ / idセレクタ / 属性セレクタ / 複数セレクタ / 子孫セレクタ / 兄弟セレクタ / 隣接セレクタ / 擬似 ...Read more",
+      "host": "ebliker.info"
+    },
+    {
+      "title": "CSSの便利な新セレクタ :has() / :is() / :where() の使い方解説",
+      "url": "https://b-risk.jp/blog/2023/06/new-selector",
+      "snippet": "Jun 23, 2023 — :is()セレクタは、指定した要素に一致する場合にCSSを適用できます。",
+      "host": "b-risk.jp"
+    }
+  ]
+}
