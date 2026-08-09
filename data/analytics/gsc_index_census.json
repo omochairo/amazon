@@ -1,40 +1,41 @@
 {
-  "fetched_at": "2026-08-02T23:04:28.144338+00:00",
+  "fetched_at": "2026-08-09T22:45:04.550095+00:00",
   "site_url": "https://navi.omcha.jp/",
   "sitemap": "https://navi.omcha.jp/sitemap.xml",
   "prefix": "/products/",
   "totals": {
-    "sitemap_urls": 1803,
+    "sitemap_urls": 1903,
     "inspected": 1800,
-    "errors": 0,
-    "indexed": 1412,
-    "not_indexed": 388
+    "errors": 35,
+    "indexed": 1421,
+    "not_indexed": 344
   },
   "by_coverage_state": {
-    "送信して登録されました": 1412,
-    "クロール済み - インデックス未登録": 130,
-    "検出 - インデックス未登録": 128,
-    "見つかりませんでした（404）": 68,
-    "URL が Google に認識されていません": 61,
-    "noindex タグによって除外されました": 1
+    "送信して登録されました": 1421,
+    "クロール済み - インデックス未登録": 140,
+    "検出 - インデックス未登録": 119,
+    "見つかりませんでした（404）": 63,
+    "URL が Google に認識されていません": 20,
+    "noindex タグによって除外されました": 1,
+    "代替ページ（適切な canonical タグあり）": 1
   },
   "by_verdict": {
-    "PASS": 1412,
-    "NEUTRAL": 388
+    "PASS": 1421,
+    "NEUTRAL": 344
   },
   "by_robots_txt_state": {
-    "ALLOWED": 1611,
-    "ROBOTS_TXT_STATE_UNSPECIFIED": 189
+    "ALLOWED": 1626,
+    "ROBOTS_TXT_STATE_UNSPECIFIED": 139
   },
   "by_indexing_state": {
-    "INDEXING_ALLOWED": 1520,
-    "INDEXING_STATE_UNSPECIFIED": 279,
+    "INDEXING_ALLOWED": 1554,
+    "INDEXING_STATE_UNSPECIFIED": 210,
     "BLOCKED_BY_META_TAG": 1
   },
   "not_indexed_urls": [
     {
       "url": "https://navi.omcha.jp/products/b00005bhog/",
-      "coverage_state": "検出 - インデックス未登録",
+      "coverage_state": "URL が Google に認識されていません",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
@@ -68,34 +69,6 @@
       "google_canonical": "https://navi.omcha.jp/products/b0002hwuls/"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0002hxpa8/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0002u3lzo/",
-      "coverage_state": "見つかりませんでした（404）",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-06-10T15:17:52Z",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b000301z24/",
-      "coverage_state": "クロール済み - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-08-02T21:49:50Z",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b00031ygco/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b000bym7gk/",
       "coverage_state": "見つかりませんでした（404）",
       "verdict": "NEUTRAL",
@@ -110,13 +83,6 @@
       "google_canonical": "https://navi.omcha.jp/products/b000i8smze/"
     },
     {
-      "url": "https://navi.omcha.jp/products/b000ixmp6q/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b000lvjslk/",
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
@@ -128,20 +94,6 @@
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "2026-07-27T04:53:03Z",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b000wdvl5i/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0019jnc5q/",
-      "coverage_state": "見つかりませんでした（404）",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-06-06T02:46:00Z",
       "google_canonical": "(none)"
     },
     {
@@ -167,27 +119,13 @@
     },
     {
       "url": "https://navi.omcha.jp/products/b003avmuu4/",
-      "coverage_state": "検出 - インデックス未登録",
+      "coverage_state": "URL が Google に認識されていません",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b003i4dtm6/",
-      "coverage_state": "クロール済み - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-07-21T09:13:06Z",
-      "google_canonical": "https://navi.omcha.jp/products/b003i4dtm6/"
     },
     {
       "url": "https://navi.omcha.jp/products/b0041nbpni/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0041nbuco/",
       "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
@@ -215,13 +153,6 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0041nd5iq/",
-      "coverage_state": "クロール済み - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-08-02T19:40:09Z",
-      "google_canonical": "https://navi.omcha.jp/products/b0041nd5iq/"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b0041nekoe/",
       "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
@@ -243,13 +174,6 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0041nh6i6/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b0041nh7da/",
       "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
@@ -257,21 +181,7 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0041nh7su/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b0041nim7a/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0041nj2qk/",
       "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
@@ -285,35 +195,7 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0041nj6lg/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b0041x6seo/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b004bw8tyc/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b004uor82a/",
-      "coverage_state": "クロール済み - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-07-10T09:00:39Z",
-      "google_canonical": "https://navi.omcha.jp/products/b004uor82a/"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b006iocmgm/",
       "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
@@ -356,14 +238,7 @@
     },
     {
       "url": "https://navi.omcha.jp/products/b008dc0gss/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b00dlx5qb6/",
-      "coverage_state": "URL が Google に認識されていません",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
@@ -390,11 +265,18 @@
       "google_canonical": "https://navi.omcha.jp/products/b00iif2ays/"
     },
     {
-      "url": "https://navi.omcha.jp/products/b00judmgxm/",
-      "coverage_state": "検出 - インデックス未登録",
+      "url": "https://navi.omcha.jp/products/b00jl5yeqq/",
+      "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
+      "last_crawl_time": "2026-08-05T17:38:23Z",
+      "google_canonical": "https://navi.omcha.jp/products/b00jl5yeqq/"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b00judmgxm/",
+      "coverage_state": "クロール済み - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "2026-08-06T16:12:38Z",
+      "google_canonical": "https://navi.omcha.jp/products/b00judmgxm/"
     },
     {
       "url": "https://navi.omcha.jp/products/b00ksaw6ig/",
@@ -439,29 +321,29 @@
       "google_canonical": "(none)"
     },
     {
+      "url": "https://navi.omcha.jp/products/b00wtdxsdm/",
+      "coverage_state": "検出 - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "(none)",
+      "google_canonical": "(none)"
+    },
+    {
       "url": "https://navi.omcha.jp/products/b010cqdg02/",
-      "coverage_state": "URL が Google に認識されていません",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b016fyd722/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b016ny042k/",
+      "url": "https://navi.omcha.jp/products/b010cqeucu/",
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-08-02T06:39:59Z",
-      "google_canonical": "(none)"
+      "last_crawl_time": "2026-08-06T17:08:55Z",
+      "google_canonical": "https://navi.omcha.jp/products/b010cqeucu/"
     },
     {
       "url": "https://navi.omcha.jp/products/b016ny056a/",
-      "coverage_state": "URL が Google に認識されていません",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
@@ -475,7 +357,7 @@
     },
     {
       "url": "https://navi.omcha.jp/products/b01b5j8240/",
-      "coverage_state": "検出 - インデックス未登録",
+      "coverage_state": "URL が Google に認識されていません",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
@@ -486,13 +368,6 @@
       "verdict": "NEUTRAL",
       "last_crawl_time": "2026-07-17T20:08:00Z",
       "google_canonical": "https://navi.omcha.jp/products/b01b7qhigo/"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b01cfjafk8/",
-      "coverage_state": "クロール済み - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-08-02T22:12:56Z",
-      "google_canonical": "https://navi.omcha.jp/products/b01cfjafk8/"
     },
     {
       "url": "https://navi.omcha.jp/products/b01ei48pl4/",
@@ -510,6 +385,27 @@
     },
     {
       "url": "https://navi.omcha.jp/products/b01g4z6e6s/",
+      "coverage_state": "URL が Google に認識されていません",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "(none)",
+      "google_canonical": "(none)"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b01hxiq55a/",
+      "coverage_state": "検出 - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "(none)",
+      "google_canonical": "(none)"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b01j4qwm9w/",
+      "coverage_state": "クロール済み - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "2026-08-07T14:42:56Z",
+      "google_canonical": "https://navi.omcha.jp/products/b01j4qwm9w/"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b01kt4kvb4/",
       "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
@@ -530,13 +426,6 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b01mtwbppi/",
-      "coverage_state": "クロール済み - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-08-02T22:50:27Z",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b01mz0c0ud/",
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
@@ -551,18 +440,25 @@
       "google_canonical": "(none)"
     },
     {
+      "url": "https://navi.omcha.jp/products/b01n9da50w/",
+      "coverage_state": "クロール済み - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "2026-08-06T11:16:18Z",
+      "google_canonical": "https://navi.omcha.jp/products/b01n9da50w/"
+    },
+    {
       "url": "https://navi.omcha.jp/products/b01nad9hd9/",
-      "coverage_state": "URL が Google に認識されていません",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b01naekpww/",
-      "coverage_state": "検出 - インデックス未登録",
+      "url": "https://navi.omcha.jp/products/b06y13fhdm/",
+      "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
+      "last_crawl_time": "2026-08-06T09:23:06Z",
+      "google_canonical": "https://navi.omcha.jp/products/b06y13fhdm/"
     },
     {
       "url": "https://navi.omcha.jp/products/b06y14ccw3/",
@@ -600,18 +496,18 @@
       "google_canonical": "(none)"
     },
     {
+      "url": "https://navi.omcha.jp/products/b074vfv9n5/",
+      "coverage_state": "クロール済み - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "2026-08-06T21:10:10Z",
+      "google_canonical": "https://navi.omcha.jp/products/b074vfv9n5/"
+    },
+    {
       "url": "https://navi.omcha.jp/products/b077qnbjpp/",
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "2026-07-19T14:05:09Z",
       "google_canonical": "https://navi.omcha.jp/products/b077qnbjpp/"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b079lpz23j/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
     },
     {
       "url": "https://navi.omcha.jp/products/b079nwgd9z/",
@@ -621,14 +517,14 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b07b6b83nd/",
+      "url": "https://navi.omcha.jp/products/b07b4ylqms/",
       "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b07bb7d6q2/",
+      "url": "https://navi.omcha.jp/products/b07b6b83nd/",
       "coverage_state": "URL が Google に認識されていません",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
@@ -636,13 +532,6 @@
     },
     {
       "url": "https://navi.omcha.jp/products/b07c2w6p7z/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b07c2y9gbl/",
       "coverage_state": "URL が Google に認識されていません",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
@@ -663,31 +552,10 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b07fsb18hn/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b07g9r7rzq/",
       "coverage_state": "見つかりませんでした（404）",
       "verdict": "NEUTRAL",
       "last_crawl_time": "2026-06-29T02:41:20Z",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b07gjfy6q4/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b07h2xd5m8/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
       "google_canonical": "(none)"
     },
     {
@@ -699,31 +567,17 @@
     },
     {
       "url": "https://navi.omcha.jp/products/b07hkccp2n/",
-      "coverage_state": "URL が Google に認識されていません",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b07jg3nq8t/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b07jg53fl4/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b07jqqjsxd/",
+      "url": "https://navi.omcha.jp/products/b07hkccp38/",
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-08-02T18:35:56Z",
-      "google_canonical": "(none)"
+      "last_crawl_time": "2026-08-06T08:06:25Z",
+      "google_canonical": "https://navi.omcha.jp/products/b07hkccp38/"
     },
     {
       "url": "https://navi.omcha.jp/products/b07kxsr5lx/",
@@ -733,25 +587,11 @@
       "google_canonical": "https://navi.omcha.jp/products/b07kxsr5lx/"
     },
     {
-      "url": "https://navi.omcha.jp/products/b07mzm9zkd/",
-      "coverage_state": "クロール済み - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-06-07T15:45:57Z",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b07qpzk3ts/",
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "2026-07-11T22:09:52Z",
       "google_canonical": "https://navi.omcha.jp/products/b07qpzk3ts/"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b07s4ksjm1/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
     },
     {
       "url": "https://navi.omcha.jp/products/b07ssrnt67/",
@@ -789,13 +629,6 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b07wr2r8wy/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b07y2szn8y/",
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
@@ -817,6 +650,13 @@
       "google_canonical": "(none)"
     },
     {
+      "url": "https://navi.omcha.jp/products/b07yym8r7d/",
+      "coverage_state": "検出 - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "(none)",
+      "google_canonical": "(none)"
+    },
+    {
       "url": "https://navi.omcha.jp/products/b081rxzpdv/",
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
@@ -824,8 +664,22 @@
       "google_canonical": "https://navi.omcha.jp/products/b081rxzpdv/"
     },
     {
+      "url": "https://navi.omcha.jp/products/b082xfz1b4/",
+      "coverage_state": "検出 - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "(none)",
+      "google_canonical": "(none)"
+    },
+    {
       "url": "https://navi.omcha.jp/products/b083692b1x/",
       "coverage_state": "検出 - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "(none)",
+      "google_canonical": "(none)"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0837kskk9/",
+      "coverage_state": "URL が Google に認識されていません",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
@@ -850,6 +704,13 @@
       "verdict": "NEUTRAL",
       "last_crawl_time": "2026-07-25T03:55:45Z",
       "google_canonical": "https://navi.omcha.jp/products/b083bgs615/"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0842gqrtd/",
+      "coverage_state": "クロール済み - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "2026-08-06T16:43:21Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0842gqrtd/"
     },
     {
       "url": "https://navi.omcha.jp/products/b08482fz8l/",
@@ -880,10 +741,10 @@
       "google_canonical": "https://navi.omcha.jp/products/b086hf27zf/"
     },
     {
-      "url": "https://navi.omcha.jp/products/b087wkp87n/",
-      "coverage_state": "クロール済み - インデックス未登録",
+      "url": "https://navi.omcha.jp/products/b087pd2cz8/",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-06-18T20:44:59Z",
+      "last_crawl_time": "(none)",
       "google_canonical": "(none)"
     },
     {
@@ -909,17 +770,17 @@
     },
     {
       "url": "https://navi.omcha.jp/products/b089jycqkc/",
-      "coverage_state": "URL が Google に認識されていません",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b08bp492jw/",
-      "coverage_state": "検出 - インデックス未登録",
+      "url": "https://navi.omcha.jp/products/b08bj72z2b/",
+      "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
+      "last_crawl_time": "2026-08-06T14:09:21Z",
+      "google_canonical": "https://navi.omcha.jp/products/b08bj72z2b/"
     },
     {
       "url": "https://navi.omcha.jp/products/b08bprkj6q/",
@@ -929,18 +790,18 @@
       "google_canonical": "https://navi.omcha.jp/products/b08bprkj6q/"
     },
     {
-      "url": "https://navi.omcha.jp/products/b08fzjms7k/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b08g4jyyv1/",
       "coverage_state": "見つかりませんでした（404）",
       "verdict": "NEUTRAL",
       "last_crawl_time": "2026-06-07T07:53:51Z",
       "google_canonical": "(none)"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b08hvfcvcf/",
+      "coverage_state": "クロール済み - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "2026-08-06T10:40:10Z",
+      "google_canonical": "https://navi.omcha.jp/products/b08hvfcvcf/"
     },
     {
       "url": "https://navi.omcha.jp/products/b08jcmqyv3/",
@@ -978,18 +839,18 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b08tx7764z/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b08v8m219j/",
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "2026-08-02T06:52:23Z",
       "google_canonical": "https://navi.omcha.jp/products/b08v8m219j/"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b08wqw66q5/",
+      "coverage_state": "クロール済み - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "2026-08-06T15:13:56Z",
+      "google_canonical": "https://navi.omcha.jp/products/b08wqw66q5/"
     },
     {
       "url": "https://navi.omcha.jp/products/b0924rby3l/",
@@ -1013,11 +874,11 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b093xqcj87/",
-      "coverage_state": "検出 - インデックス未登録",
+      "url": "https://navi.omcha.jp/products/b096twpgwv/",
+      "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
+      "last_crawl_time": "2026-08-09T13:17:07Z",
+      "google_canonical": "https://navi.omcha.jp/products/b096twpgwv/"
     },
     {
       "url": "https://navi.omcha.jp/products/b0975vqsph/",
@@ -1035,7 +896,7 @@
     },
     {
       "url": "https://navi.omcha.jp/products/b09b67flpp/",
-      "coverage_state": "検出 - インデックス未登録",
+      "coverage_state": "URL が Google に認識されていません",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
@@ -1055,13 +916,6 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b09cyq7gkl/",
-      "coverage_state": "クロール済み - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-08-02T20:42:14Z",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b09g5n37yc/",
       "coverage_state": "見つかりませんでした（404）",
       "verdict": "NEUTRAL",
@@ -1076,6 +930,13 @@
       "google_canonical": "(none)"
     },
     {
+      "url": "https://navi.omcha.jp/products/b09m73vgt7/",
+      "coverage_state": "URL が Google に認識されていません",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "(none)",
+      "google_canonical": "(none)"
+    },
+    {
       "url": "https://navi.omcha.jp/products/b09pfj4vtf/",
       "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
@@ -1085,13 +946,6 @@
     {
       "url": "https://navi.omcha.jp/products/b09pfjm21g/",
       "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b09qbph8wt/",
-      "coverage_state": "URL が Google に認識されていません",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
@@ -1164,13 +1018,6 @@
       "coverage_state": "見つかりませんでした（404）",
       "verdict": "NEUTRAL",
       "last_crawl_time": "2026-06-07T01:39:01Z",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0b5mgwl26/",
-      "coverage_state": "クロール済み - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-08-02T08:23:14Z",
       "google_canonical": "(none)"
     },
     {
@@ -1258,15 +1105,15 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0blp8mcql/",
-      "coverage_state": "検出 - インデックス未登録",
+      "url": "https://navi.omcha.jp/products/b0bkksv834/",
+      "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
+      "last_crawl_time": "2026-08-06T11:27:14Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0bkksv834/"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0bpsrt9sk/",
-      "coverage_state": "URL が Google に認識されていません",
+      "url": "https://navi.omcha.jp/products/b0blp8mcql/",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
@@ -1293,6 +1140,20 @@
       "google_canonical": "https://navi.omcha.jp/products/b0bqyk7vvv/"
     },
     {
+      "url": "https://navi.omcha.jp/products/b0brrfcvld/",
+      "coverage_state": "検出 - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "(none)",
+      "google_canonical": "(none)"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0brx67s4v/",
+      "coverage_state": "検出 - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "(none)",
+      "google_canonical": "(none)"
+    },
+    {
       "url": "https://navi.omcha.jp/products/b0bskn2r7f/",
       "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
@@ -1301,7 +1162,7 @@
     },
     {
       "url": "https://navi.omcha.jp/products/b0bskzclnv/",
-      "coverage_state": "検出 - インデックス未登録",
+      "coverage_state": "URL が Google に認識されていません",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
@@ -1314,27 +1175,6 @@
       "google_canonical": "https://navi.omcha.jp/products/b0bsl7xwpc/"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0bstrwwf5/",
-      "coverage_state": "クロール済み - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-07-10T08:31:09Z",
-      "google_canonical": "https://navi.omcha.jp/products/b0bstrwwf5/"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0bsxdrt7r/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0bvr7hmzh/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b0bvyhj2cw/",
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
@@ -1342,15 +1182,8 @@
       "google_canonical": "https://navi.omcha.jp/products/b0bvyhj2cw/"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0bvzh52yh/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b0bw2l5wvc/",
-      "coverage_state": "URL が Google に認識されていません",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
@@ -1370,13 +1203,6 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0bx6mbzw6/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b0by2hlw37/",
       "coverage_state": "見つかりませんでした（404）",
       "verdict": "NEUTRAL",
@@ -1385,7 +1211,7 @@
     },
     {
       "url": "https://navi.omcha.jp/products/b0byrjvzr7/",
-      "coverage_state": "URL が Google に認識されていません",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
@@ -1417,6 +1243,13 @@
       "verdict": "NEUTRAL",
       "last_crawl_time": "2026-07-10T06:57:58Z",
       "google_canonical": "https://navi.omcha.jp/products/b0c1rfm5v6/"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0c27tnfbg/",
+      "coverage_state": "クロール済み - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "2026-08-07T08:26:27Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0c27tnfbg/"
     },
     {
       "url": "https://navi.omcha.jp/products/b0c4y72dbx/",
@@ -1461,18 +1294,18 @@
       "google_canonical": "(none)"
     },
     {
+      "url": "https://navi.omcha.jp/products/b0c7mby3sg/",
+      "coverage_state": "検出 - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "(none)",
+      "google_canonical": "(none)"
+    },
+    {
       "url": "https://navi.omcha.jp/products/b0c7q1kxlz/",
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "2026-07-16T16:23:09Z",
       "google_canonical": "https://navi.omcha.jp/products/b0c7q1kxlz/"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0c88mz421/",
-      "coverage_state": "見つかりませんでした（404）",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-06-26T11:54:02Z",
-      "google_canonical": "(none)"
     },
     {
       "url": "https://navi.omcha.jp/products/b0c8hk543g/",
@@ -1489,6 +1322,13 @@
       "google_canonical": "(none)"
     },
     {
+      "url": "https://navi.omcha.jp/products/b0c8yj7ry4/",
+      "coverage_state": "クロール済み - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "2026-08-06T18:05:09Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0c8yj7ry4/"
+    },
+    {
       "url": "https://navi.omcha.jp/products/b0c9sg1kmy/",
       "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
@@ -1496,10 +1336,10 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0c9tjqpwj/",
-      "coverage_state": "URL が Google に認識されていません",
+      "url": "https://navi.omcha.jp/products/b0c9thfsq4/",
+      "coverage_state": "見つかりませんでした（404）",
       "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
+      "last_crawl_time": "2026-06-11T14:15:26Z",
       "google_canonical": "(none)"
     },
     {
@@ -1515,20 +1355,6 @@
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0cf97kxj3/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0cfxk6kg2/",
-      "coverage_state": "クロール済み - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-08-02T20:42:20Z",
-      "google_canonical": "https://navi.omcha.jp/products/b0cfxk6kg2/"
     },
     {
       "url": "https://navi.omcha.jp/products/b0cgh9743c/",
@@ -1566,8 +1392,8 @@
       "google_canonical": "https://navi.omcha.jp/products/b0ch1jgz9b/"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0chm2zdkb/",
-      "coverage_state": "検出 - インデックス未登録",
+      "url": "https://navi.omcha.jp/products/b0chlydsdh/",
+      "coverage_state": "URL が Google に認識されていません",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
@@ -1636,29 +1462,29 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0cpxdnk97/",
-      "coverage_state": "URL が Google に認識されていません",
+      "url": "https://navi.omcha.jp/products/b0cpln5fdq/",
+      "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
+      "last_crawl_time": "2026-08-06T16:49:56Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0cpln5fdq/"
     },
     {
       "url": "https://navi.omcha.jp/products/b0cqtl6s9s/",
-      "coverage_state": "URL が Google に認識されていません",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
     },
     {
       "url": "https://navi.omcha.jp/products/b0cqtnnnby/",
-      "coverage_state": "URL が Google に認識されていません",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
     },
     {
       "url": "https://navi.omcha.jp/products/b0cs9nm5yp/",
-      "coverage_state": "URL が Google に認識されていません",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
@@ -1669,13 +1495,6 @@
       "verdict": "NEUTRAL",
       "last_crawl_time": "2026-07-19T21:00:50Z",
       "google_canonical": "https://navi.omcha.jp/products/b0csf9vs6n/"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0csy92yd4/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
     },
     {
       "url": "https://navi.omcha.jp/products/b0cv9tbhh3/",
@@ -1697,6 +1516,13 @@
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0cyslhp85/",
+      "coverage_state": "クロール済み - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "2026-08-07T18:59:47Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0cyslhp85/"
     },
     {
       "url": "https://navi.omcha.jp/products/b0cysqbrxl/",
@@ -1721,7 +1547,7 @@
     },
     {
       "url": "https://navi.omcha.jp/products/b0d1hdxz99/",
-      "coverage_state": "検出 - インデックス未登録",
+      "coverage_state": "URL が Google に認識されていません",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
@@ -1753,6 +1579,13 @@
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0d5cgcg7t/",
+      "coverage_state": "クロール済み - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "2026-06-16T19:21:07Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0d5cgcg7t/"
     },
     {
       "url": "https://navi.omcha.jp/products/b0d5qc527w/",
@@ -1790,6 +1623,13 @@
       "google_canonical": "(none)"
     },
     {
+      "url": "https://navi.omcha.jp/products/b0d9kqdh1q/",
+      "coverage_state": "クロール済み - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "2026-08-06T13:28:24Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0d9kqdh1q/"
+    },
+    {
       "url": "https://navi.omcha.jp/products/b0d9rsj79r/",
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
@@ -1798,28 +1638,28 @@
     },
     {
       "url": "https://navi.omcha.jp/products/b0d9xg6rhm/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0d9xmrq11/",
-      "coverage_state": "検出 - インデックス未登録",
+      "coverage_state": "URL が Google に認識されていません",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
     },
     {
       "url": "https://navi.omcha.jp/products/b0d9xqmz7g/",
-      "coverage_state": "URL が Google に認識されていません",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
     },
     {
+      "url": "https://navi.omcha.jp/products/b0db13r3gd/",
+      "coverage_state": "クロール済み - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "2026-08-06T12:58:18Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0db13r3gd/"
+    },
+    {
       "url": "https://navi.omcha.jp/products/b0db1x66bz/",
-      "coverage_state": "URL が Google に認識されていません",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
@@ -1853,18 +1693,18 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0ddt3x162/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b0df1vzy4s/",
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "2026-07-22T03:10:40Z",
       "google_canonical": "https://navi.omcha.jp/products/b0df1vzy4s/"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0df22vfqh/",
+      "coverage_state": "クロール済み - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "2026-08-06T22:14:26Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0df22vfqh/"
     },
     {
       "url": "https://navi.omcha.jp/products/b0df724wkx/",
@@ -1902,6 +1742,20 @@
       "google_canonical": "(none)"
     },
     {
+      "url": "https://navi.omcha.jp/products/b0dgwsbnsj/",
+      "coverage_state": "クロール済み - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "2026-08-06T11:24:10Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0dgwsbnsj/"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0dh5tnnnn/",
+      "coverage_state": "検出 - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "(none)",
+      "google_canonical": "(none)"
+    },
+    {
       "url": "https://navi.omcha.jp/products/b0dhx7kcjz/",
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
@@ -1910,7 +1764,7 @@
     },
     {
       "url": "https://navi.omcha.jp/products/b0djqyl96c/",
-      "coverage_state": "URL が Google に認識されていません",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
@@ -1937,24 +1791,10 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0dldnymjz/",
-      "coverage_state": "クロール済み - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-08-01T11:36:34Z",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b0dljfft89/",
       "coverage_state": "見つかりませんでした（404）",
       "verdict": "NEUTRAL",
       "last_crawl_time": "2026-06-29T06:14:43Z",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0dm9ycv8t/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
       "google_canonical": "(none)"
     },
     {
@@ -1965,18 +1805,25 @@
       "google_canonical": "https://navi.omcha.jp/products/b0dmnd157s/"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0dmvj9dk2/",
+      "url": "https://navi.omcha.jp/products/b0dnq64mqc/",
+      "coverage_state": "クロール済み - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "2026-08-05T14:25:13Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0dnq64mqc/"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0dqpfb213/",
       "coverage_state": "URL が Google に認識されていません",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0dqcldqn1/",
-      "coverage_state": "検出 - インデックス未登録",
+      "url": "https://navi.omcha.jp/products/b0dqsqg9ms/",
+      "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
+      "last_crawl_time": "2026-08-06T15:15:07Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0dqsqg9ms/"
     },
     {
       "url": "https://navi.omcha.jp/products/b0dqwbtfqs/",
@@ -1987,13 +1834,6 @@
     },
     {
       "url": "https://navi.omcha.jp/products/b0dr852bpf/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0dsf7832x/",
       "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
@@ -2014,18 +1854,11 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0dt9cmsdr/",
+      "url": "https://navi.omcha.jp/products/b0dtjwqbms/",
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-07-27T04:42:05Z",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0dtjy5g9j/",
-      "coverage_state": "クロール済み - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-08-02T21:06:09Z",
-      "google_canonical": "https://navi.omcha.jp/products/b0dtjy5g9j/"
+      "last_crawl_time": "2026-08-05T04:19:10Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0dtjwqbms/"
     },
     {
       "url": "https://navi.omcha.jp/products/b0dtjyly64/",
@@ -2042,11 +1875,11 @@
       "google_canonical": "https://navi.omcha.jp/products/b0dv8zf9jv/"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0dw3wtgcc/",
-      "coverage_state": "検出 - インデックス未登録",
+      "url": "https://navi.omcha.jp/products/b0dwdqgxlf/",
+      "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
+      "last_crawl_time": "2026-08-06T23:23:07Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0dwdqgxlf/"
     },
     {
       "url": "https://navi.omcha.jp/products/b0dwdrwj2p/",
@@ -2070,7 +1903,7 @@
       "google_canonical": "https://navi.omcha.jp/products/b0dwdt11rk/"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0dxk4p87c/",
+      "url": "https://navi.omcha.jp/products/b0dwdt3y89/",
       "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
@@ -2098,13 +1931,6 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0dynv64cj/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b0dz6v86fz/",
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
@@ -2112,11 +1938,11 @@
       "google_canonical": "https://navi.omcha.jp/products/b0dz6v86fz/"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0dzl6qjt6/",
+      "url": "https://navi.omcha.jp/products/b0dzxrdcc1/",
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-08-02T06:05:31Z",
-      "google_canonical": "(none)"
+      "last_crawl_time": "2026-08-07T08:56:56Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0dzxrdcc1/"
     },
     {
       "url": "https://navi.omcha.jp/products/b0f12rk1f4/",
@@ -2124,6 +1950,13 @@
       "verdict": "NEUTRAL",
       "last_crawl_time": "2026-06-28T15:23:45Z",
       "google_canonical": "(none)"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0f1mkntdn/",
+      "coverage_state": "クロール済み - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "2026-08-07T18:57:36Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0f1mkntdn/"
     },
     {
       "url": "https://navi.omcha.jp/products/b0f1tqblld/",
@@ -2155,7 +1988,7 @@
     },
     {
       "url": "https://navi.omcha.jp/products/b0f53ry9jw/",
-      "coverage_state": "URL が Google に認識されていません",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
@@ -2175,17 +2008,24 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0f8t97t2n/",
-      "coverage_state": "検出 - インデックス未登録",
+      "url": "https://navi.omcha.jp/products/b0f8hrzqw9/",
+      "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
+      "last_crawl_time": "2026-08-06T17:57:55Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0f8hrzqw9/"
     },
     {
       "url": "https://navi.omcha.jp/products/b0f99n8ctd/",
       "coverage_state": "見つかりませんでした（404）",
       "verdict": "NEUTRAL",
       "last_crawl_time": "2026-06-24T16:24:52Z",
+      "google_canonical": "(none)"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0fb2dxdf3/",
+      "coverage_state": "検出 - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "(none)",
       "google_canonical": "(none)"
     },
     {
@@ -2203,18 +2043,18 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0fclcc3dk/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b0fd97kfhx/",
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "2026-07-07T08:29:10Z",
       "google_canonical": "https://navi.omcha.jp/products/b0fd97kfhx/"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0fd99f68m/",
+      "coverage_state": "クロール済み - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "2026-08-06T14:51:37Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0fd99f68m/"
     },
     {
       "url": "https://navi.omcha.jp/products/b0ffg5cbdq/",
@@ -2245,13 +2085,6 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0fgcj8l1r/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b0fh6496b5/",
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
@@ -2266,8 +2099,15 @@
       "google_canonical": "(none)"
     },
     {
+      "url": "https://navi.omcha.jp/products/b0fj1n4k58/",
+      "coverage_state": "クロール済み - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "2026-08-07T00:12:46Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0fj1n4k58/"
+    },
+    {
       "url": "https://navi.omcha.jp/products/b0flccg2k5/",
-      "coverage_state": "URL が Google に認識されていません",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
@@ -2294,8 +2134,15 @@
       "google_canonical": "https://navi.omcha.jp/products/b0fmwts227/"
     },
     {
+      "url": "https://navi.omcha.jp/products/b0fnm3s4wv/",
+      "coverage_state": "クロール済み - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "2026-08-06T14:05:12Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0fnm3s4wv/"
+    },
+    {
       "url": "https://navi.omcha.jp/products/b0fpc3b85m/",
-      "coverage_state": "URL が Google に認識されていません",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
@@ -2308,6 +2155,13 @@
       "google_canonical": "(none)"
     },
     {
+      "url": "https://navi.omcha.jp/products/b0fpqqxx7v/",
+      "coverage_state": "検出 - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "(none)",
+      "google_canonical": "(none)"
+    },
+    {
       "url": "https://navi.omcha.jp/products/b0fpwrjcd1/",
       "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
@@ -2315,53 +2169,46 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0fpxfbp42/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0fpxg1h81/",
+      "url": "https://navi.omcha.jp/products/b0fpxgph6p/",
       "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0fpxgph6p/",
-      "coverage_state": "URL が Google に認識されていません",
+      "url": "https://navi.omcha.jp/products/b0fqlrjlkj/",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0fqlrjlkj/",
-      "coverage_state": "URL が Google に認識されていません",
+      "url": "https://navi.omcha.jp/products/b0frd8q1p5/",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0fsrtjpv3/",
+      "coverage_state": "クロール済み - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "2026-08-06T20:54:32Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0fsrtjpv3/"
     },
     {
       "url": "https://navi.omcha.jp/products/b0ft3w4kkh/",
-      "coverage_state": "URL が Google に認識されていません",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
     },
     {
       "url": "https://navi.omcha.jp/products/b0ft6t2xzm/",
-      "coverage_state": "URL が Google に認識されていません",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0ftfn1knd/",
-      "coverage_state": "クロール済み - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-07-22T00:02:59Z",
-      "google_canonical": "https://navi.omcha.jp/products/b0ftfn1knd/"
     },
     {
       "url": "https://navi.omcha.jp/products/b0ftfs6j3d/",
@@ -2378,28 +2225,7 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0fvvcpgjy/",
-      "coverage_state": "クロール済み - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-06-03T13:30:01Z",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b0fwcdkfvw/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0fwcdyxrq/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0fwqtldqp/",
       "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
@@ -2427,24 +2253,10 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0g1xd77fp/",
-      "coverage_state": "URL が Google に認識されていません",
+      "url": "https://navi.omcha.jp/products/b0g22yr1j7/",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0g22xy655/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0g23m4dgq/",
-      "coverage_state": "クロール済み - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-06-18T22:39:37Z",
       "google_canonical": "(none)"
     },
     {
@@ -2462,6 +2274,13 @@
       "google_canonical": "(none)"
     },
     {
+      "url": "https://navi.omcha.jp/products/b0g5g6dfg7/",
+      "coverage_state": "検出 - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "(none)",
+      "google_canonical": "(none)"
+    },
+    {
       "url": "https://navi.omcha.jp/products/b0g63zzvdn/",
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
@@ -2469,11 +2288,11 @@
       "google_canonical": "https://navi.omcha.jp/products/b0g63zzvdn/"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0g8vnqgr1/",
-      "coverage_state": "URL が Google に認識されていません",
+      "url": "https://navi.omcha.jp/products/b0g8hxw6r3/",
+      "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
+      "last_crawl_time": "2026-07-19T03:52:42Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0g8hxw6r3/"
     },
     {
       "url": "https://navi.omcha.jp/products/b0g9hkjtyg/",
@@ -2511,11 +2330,18 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0gh62vrs4/",
-      "coverage_state": "検出 - インデックス未登録",
+      "url": "https://navi.omcha.jp/products/b0gfvtpdbm/",
+      "coverage_state": "代替ページ（適切な canonical タグあり）",
       "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
+      "last_crawl_time": "2026-08-06T20:18:52Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0gl815n6k/"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0gjrhktyw/",
+      "coverage_state": "クロール済み - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "2026-08-06T21:49:23Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0gjrhktyw/"
     },
     {
       "url": "https://navi.omcha.jp/products/b0gjrxnwr3/",
@@ -2539,15 +2365,8 @@
       "google_canonical": "https://navi.omcha.jp/products/b0gkq9znkv/"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0gkx1httl/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b0gkxdz9r7/",
-      "coverage_state": "URL が Google に認識されていません",
+      "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
       "google_canonical": "(none)"
@@ -2561,6 +2380,13 @@
     },
     {
       "url": "https://navi.omcha.jp/products/b0gl25513w/",
+      "coverage_state": "検出 - インデックス未登録",
+      "verdict": "NEUTRAL",
+      "last_crawl_time": "(none)",
+      "google_canonical": "(none)"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0glf2xmlm/",
       "coverage_state": "検出 - インデックス未登録",
       "verdict": "NEUTRAL",
       "last_crawl_time": "(none)",
@@ -2588,13 +2414,6 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0gmlrz5n4/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
       "url": "https://navi.omcha.jp/products/b0gmxcxxk2/",
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
@@ -2616,140 +2435,155 @@
       "google_canonical": "(none)"
     },
     {
-      "url": "https://navi.omcha.jp/products/b0gs1pylqm/",
-      "coverage_state": "見つかりませんでした（404）",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-06-26T16:35:29Z",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0gs93xlgs/",
+      "url": "https://navi.omcha.jp/products/b0gr3g1vrs/",
       "coverage_state": "クロール済み - インデックス未登録",
       "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-07-10T11:13:12Z",
-      "google_canonical": "https://navi.omcha.jp/products/b0gs93xlgs/"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0gsvtrrnh/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0gt7nkxkz/",
-      "coverage_state": "クロール済み - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-07-11T13:42:08Z",
-      "google_canonical": "https://navi.omcha.jp/products/b0gt7nkxkz/"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0gvcpwnjc/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0gvpvm23z/",
-      "coverage_state": "見つかりませんでした（404）",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-06-27T06:49:32Z",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0gvxzrsfv/",
-      "coverage_state": "クロール済み - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-07-21T17:45:25Z",
-      "google_canonical": "https://navi.omcha.jp/products/b0gvxzrsfv/"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0gwc47xn6/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0gxd9f831/",
-      "coverage_state": "見つかりませんでした（404）",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-06-28T15:26:45Z",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0gyc3ry4q/",
-      "coverage_state": "クロール済み - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-08-02T06:03:54Z",
-      "google_canonical": "https://navi.omcha.jp/products/b0gyc3ry4q/"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0h2xgrn73/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0h35p78m3/",
-      "coverage_state": "クロール済み - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-07-10T07:51:55Z",
-      "google_canonical": "https://navi.omcha.jp/products/b0h35p78m3/"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0h395wrl1/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0h5qxzlvd/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0h65bvdw1/",
-      "coverage_state": "URL が Google に認識されていません",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0h6frtl3w/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0h7gnjgj6/",
-      "coverage_state": "クロール済み - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "2026-08-02T03:41:56Z",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0h861y9y3/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
-    },
-    {
-      "url": "https://navi.omcha.jp/products/b0h9w6b6rc/",
-      "coverage_state": "検出 - インデックス未登録",
-      "verdict": "NEUTRAL",
-      "last_crawl_time": "(none)",
-      "google_canonical": "(none)"
+      "last_crawl_time": "2026-08-05T07:04:23Z",
+      "google_canonical": "https://navi.omcha.jp/products/b0gr3g1vrs/"
     }
   ],
-  "errors": [],
+  "errors": [
+    {
+      "url": "https://navi.omcha.jp/products/b075k686f2/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b079lpz23j/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b07c9w1xw7/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b07h33lj3y/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0bjqvtd82/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0blh6ghkj/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0blk2x8sv/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0bstrwwf5/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0bt4hh264/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0c27x4nmj/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0c2zfzl8t/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0c64vccvm/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0c9tjqpwj/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0cccng9cd/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0ck7r7537/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0cpxdnk97/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0ctjdmtr8/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0cwg579qk/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0fpxcxr17/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0fpxddtdb/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0fpxfbp42/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0frs5zr6x/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0fvbht5tf/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0fx1q9fz2/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0fx45q7g7/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0g3w7cdkn/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0g4klt9tn/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0g8vnqgr1/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0gg8qm8ys/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0ggqxz3yz/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0gj8stgdg/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0gkx1httl/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0gmlrz5n4/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0gpphzr1g/",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://navi.omcha.jp/products/b0gpq7676t/",
+      "error": "The read operation timed out"
+    }
+  ],
   "circuit_breaker": {
     "tripped": false,
     "threshold": 8
