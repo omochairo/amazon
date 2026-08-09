@@ -22,7 +22,9 @@ from scripts.run_lighthouse_lane import (
     get_targets,
     lcp_is_unmeasured,
     load_history,
+    logical_date,
     mad_for,
+    missing_dates,
     render_report,
 )
 
@@ -740,3 +742,81 @@ def test_append_records_is_plain_append_for_new_keys(tmp_path):
     assert append_records(p, [_row(date="2026-08-07", si=2810.0)]) == 1
     rows = [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
     assert [r["date"] for r in rows] == ["2026-08-06", "2026-08-07"]
+
+
+# --- 論理日と欠測検出 (#4785) ------------------------------------------
+# 実測: home-ops の cron は 21:40 UTC だが schedule dispatch が恒常的に 50-60 分
+# 遅れ、2026-08-07 の run は 01:04 UTC に起動した。date.today() だと 08-06 が
+# 丸ごと欠測して 08-07 が 2 バッチになる (#4652 の残り半分)。
+
+def _utc(s):
+    from datetime import datetime, timezone
+    return datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
+
+
+@pytest.mark.parametrize("started,expected", [
+    # 平常運転: 22:32-22:42 UTC の起動はその日に落ちる
+    ("2026-08-08T22:38:34", "2026-08-08"),
+    ("2026-08-08T21:40:00", "2026-08-08"),
+    # 遅延して真夜中 UTC を越えた run も前日に戻る (これが 08-06 欠測の再現)
+    ("2026-08-07T01:04:05", "2026-08-06"),
+    ("2026-08-07T05:59:59", "2026-08-06"),
+    # 境界: 06:00 UTC 以降は当日
+    ("2026-08-07T06:00:00", "2026-08-07"),
+])
+def test_logical_date_absorbs_schedule_delay(started, expected):
+    assert logical_date(_utc(started), 6) == expected
+
+
+def test_logical_date_offset_zero_is_wall_clock():
+    assert logical_date(_utc("2026-08-07T01:04:05"), 0) == "2026-08-07"
+
+
+def test_logical_date_treats_naive_as_utc():
+    from datetime import datetime
+    assert logical_date(datetime(2026, 8, 7, 1, 4, 5), 6) == "2026-08-06"
+
+
+def test_logical_date_normalizes_other_timezone():
+    from datetime import datetime, timedelta, timezone
+    jst = timezone(timedelta(hours=9))
+    # JST 10:04 on 08-07 = 01:04 UTC → 論理日は 08-06
+    assert logical_date(datetime(2026, 8, 7, 10, 4, 5, tzinfo=jst), 6) == "2026-08-06"
+
+
+def test_missing_dates_detects_skipped_day():
+    hist = [{"date": "2026-08-05"}, {"date": "2026-08-05"}]
+    assert missing_dates(hist, "2026-08-07") == ["2026-08-06"]
+
+
+def test_missing_dates_empty_on_consecutive_day():
+    assert missing_dates([{"date": "2026-08-08"}], "2026-08-09") == []
+
+
+def test_missing_dates_empty_on_remeasure_of_same_day():
+    # 同日再計測 (#4772 の後勝ち経路) を欠測扱いしない
+    assert missing_dates([{"date": "2026-08-08"}], "2026-08-08") == []
+
+
+def test_missing_dates_empty_when_target_is_older():
+    assert missing_dates([{"date": "2026-08-08"}], "2026-08-01") == []
+
+
+def test_missing_dates_empty_history_is_not_a_gap():
+    # 初回投入で 30 日分の警告が出ないこと
+    assert missing_dates([], "2026-08-09") == []
+
+
+def test_missing_dates_ignores_malformed_rows():
+    hist = [{"date": "not-a-date"}, {"date": None}, {}, {"date": "2026-08-05"}]
+    assert missing_dates(hist, "2026-08-07") == ["2026-08-06"]
+
+
+def test_missing_dates_capped():
+    gap = missing_dates([{"date": "2026-01-01"}], "2026-08-09", cap=5)
+    assert len(gap) == 5
+    assert gap[0] == "2026-01-02"
+
+
+def test_missing_dates_invalid_target_is_not_a_gap():
+    assert missing_dates([{"date": "2026-08-05"}], "garbage") == []
