@@ -1,0 +1,77 @@
+name: Prune Stale Branches
+# Issue #4765 follow-up:
+#   repo 設定 delete_branch_on_merge が長く false だったため、squash merge された
+#   PR のブランチが 4,200 本以上たまった。設定は 2026-08-09 に true にしたので今後は
+#   増えないが、既存分は残る。実害は fetch と `gh pr list` が重いことだけなので、
+#   急いで消す理由は無い。
+#
+#   一括削除しないのは CLAUDE.md の GitHub API バースト禁止規律のため
+#   (2026-06-25 の凍結は自動化経由の大量 API 発行と時期が一致)。1 日 limit 本ずつ、
+#   削除ごとに sleep を入れて回す。対象が尽きたら no-op になり、そのまま放置できる。
+#
+#   消すのは「PR が MERGED/CLOSED」「open PR の head でない」「min_age_days 以上
+#   経過」「PROTECT_PREFIXES に非該当」を全部満たすものだけ。jules-lock/* (Jules の
+#   運用ロック) と gitlab/* は PR を持たないので構造的に対象外。
+#   削除後も PR ページの "Restore branch" から復元できる。
+#
+#   既定値は scripts/prune_stale_branches.py の argparse だけが持つ。ここに
+#   default: を書くと dispatch では input default が常に入る一方 schedule では
+#   null になり、既定値が 2 箇所に分かれて静かにズレる (#4765 で踏んだ罠)。
+#   空欄のまま dispatch すればスクリプトの既定値が使われる。
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: '1 回に削除する上限 (空欄=スクリプト既定の 200)'
+        required: false
+      min_age_days:
+        description: 'この日数より新しいブランチは触らない (空欄=既定の 7)'
+        required: false
+      dry_run:
+        description: 'true で削除せず対象だけ出す'
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    - cron: '40 18 * * *'  # 03:40 JST。他レーンと重ならない時間帯
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prune-stale-branches
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # for-each-ref でリモートブランチの最終コミット日時を見るので全 ref が要る
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Prune
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          # schedule では inputs.* が null になり空文字として入る。空なら渡さず、
+          # スクリプト側の既定値をそのまま使う。
+          IN_LIMIT: ${{ inputs.limit }}
+          IN_MIN_AGE: ${{ inputs.min_age_days }}
+          IN_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -e
+          ARGS="--repo $REPO"
+          if [ -n "$IN_LIMIT" ]; then ARGS="$ARGS --limit $IN_LIMIT"; fi
+          if [ -n "$IN_MIN_AGE" ]; then ARGS="$ARGS --min-age-days $IN_MIN_AGE"; fi
+          # null == false が true になる GHA 式は使わず、文字列比較で判定する。
+          if [ "$IN_DRY_RUN" = "true" ]; then ARGS="$ARGS --dry-run"; fi
+          echo "args: $ARGS"
+          python scripts/prune_stale_branches.py $ARGS
