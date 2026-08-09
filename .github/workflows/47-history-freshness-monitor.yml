@@ -1,0 +1,64 @@
+name: History Freshness Monitor
+
+# #4789: data/analytics/history/ の計測レーンが**無言で止まっていないか**を毎日見る。
+#
+# なぜ各 lane に警告を足すのでは足りないか (#4469 と同じ論点):
+#   計測レーンが止まる経路は 3 つあり、どれも run が緑のまま終わる。
+#     1. secret 未設定の無言 no-op。実測: 19-cwv-monitor の 2026-08-01 run は
+#        CRUX_API_KEY が空のまま `::notice::skipping` で緑終了しデータ 0 件。
+#     2. commit-back ステップの握りつぶし。`continue-on-error: true` が
+#        `git push` + `gh pr create` を含むステップ全体に付いており (13 workflow)、
+#        落ちるとその run のデータ更新が丸ごと消える。しかも continue-on-error の
+#        ステップは REST の `steps[].conclusion` が success を返すので、run 一覧
+#        でも step 一覧でも失敗が見えない (annotations にしか出ない)。
+#     3. lane がそもそも起動しない。run が存在しないので run 一覧にも現れない
+#        (#4785 の Lighthouse 2026-08-06 欠測)。
+#   つまり lane 側にいくら warning を足しても「誰も見ない run ログ」が増えるだけ。
+#   データが進んでいるかだけを見る原因非依存の網を外側に 1 本置く。
+#
+# 起票規律 (CLAUDE.md: GitHub API バースト禁止):
+#   レーン 1 件につき 1 issue を立てない。マーカー `<!-- history-freshness-monitor -->`
+#   で単一 issue を特定して body を更新し、全部健全に戻ったら close する。
+#   1 run あたりの書き込みは最大 1 回。
+#
+# 較正:
+#   閾値は cadence + そのレーン固有の報告遅延に余裕を足した絶対値で、導入時点
+#   (2026-08-09) の実経過 (ga4=1d / gsc=4d / gsc_wp=5d / lighthouse=1d /
+#   census=7d / crux=3d) はすべて下回る = 入れた日に鳴らない。
+#   閾値は scripts/check_history_freshness.py の LANES 一箇所に置く。
+
+on:
+  schedule:
+    # 毎日 11:00 JST (= 02:00 UTC)。18-analytics-daily (21:00 UTC) と
+    # lighthouse lane (21:40 UTC) の書き戻し PR が auto-merge される時間帯より
+    # 十分あとに置き、当日の更新を取りこぼさない。
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: history-freshness-monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Check history freshness
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          python scripts/check_history_freshness.py
