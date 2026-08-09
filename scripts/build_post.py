@@ -1616,37 +1616,26 @@ def _attach_price_freshness(data: dict[str, Any], per_asin_root: pathlib.Path) -
     """#3568 E5: 価格カードの近くに表示する「価格情報取得日」を
     ``data["price_checked_at"]`` (YYYY-MM-DD) として添付する。
 
-    データ源は ``data/raw/per_asin/<ASIN>/amazon.json`` の ``fetched_at``
-    (_backfill_amazon_badges と同じ既読み込み済みソース。捏造防止のため
-    ビルド日時は使わない)。取得できなければ何も設定しない
+    データ源は ``_apply_price_overlay`` が実際に採用した観測の時刻
+    (``prices.amazon.price_observed_at``) **だけ**。取得できなければ何も設定しない
     (post.md.j2 は ``{% if price_checked_at %}`` で未設定時は非表示)。
+
+    per_asin snapshot の ``fetched_at`` への fallback は 2026-08-09 に廃止した。
+    表示日付を価格と別ソースにすると「新しい日付 + 凍結価格」という矛盾表示になる
+    (#4007 のコメントが禁じていたのはまさにこれ)。しかも fallback が実際に発火するのは
+    **overlay が観測を採用できなかったときだけ**で、それは「その取得で価格が得られ
+    なかった」ことを意味する。つまりこの経路は構造上、常に「価格が取れなかった取得の
+    日付を、記事作成時の凍結価格に貼る」動作しかしない。実データ 1900 件の replay で
+    87 件が該当し、価格の古さは中央値 62 日・最大 84 日だった。
     """
     product = data.get("product") if isinstance(data.get("product"), dict) else None
     asin = product.get("asin") if product else None
     if not asin:
         return
 
-    # #4007: _apply_price_overlay が実際に採用した観測の時刻を優先する。表示日付を
-    # 価格と別ソースにすると「2日前の日付 + 凍結価格」という矛盾表示になるため、
-    # 必ず表示中の価格と同じ観測の時刻を出す。
     observed = ((product.get("prices") or {}).get("amazon") or {}).get("price_observed_at")
     if isinstance(observed, str) and len(observed) >= 10:
         data["price_checked_at"] = observed[:10]
-        return
-
-    p = per_asin_root / asin / "amazon.json"
-    if not p.exists():
-        return
-    try:
-        snap = json.loads(p.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return
-    if not isinstance(snap, dict):
-        return
-    fetched_at = snap.get("fetched_at")
-    if not isinstance(fetched_at, str) or len(fetched_at) < 10:
-        return
-    data["price_checked_at"] = fetched_at[:10]
 
 
 _PRICE_HISTORY_MIN_POINTS = 3
@@ -1833,6 +1822,63 @@ def _apply_amazon_discontinued(
     if not (_has_direct_link(prices.get("rakuten"))
             or _has_direct_link(prices.get("yahoo"))):
         data["purchase_unavailable"] = True
+    return True
+
+
+def _apply_amazon_unpriced(data: dict[str, Any], per_asin_root: pathlib.Path) -> bool:
+    """最新 snapshot が価格を返さない ASIN の凍結価格を落とす (2026-08-09)。
+
+    在庫切れ・一時的な取り扱い不可の出品は GetItems が価格を返さない。
+    ``price_overlay`` は price>=1 を要求するので観測を採用せず、記事 JSON に凍結された
+    **記事作成時の価格**がそのまま価格カードに残る。status="gone" ではないので
+    ``_apply_amazon_discontinued`` にも掛からない。結果として「2ヶ月前の価格 +
+    🔴在庫切れバッジ」が現在価格として出る (実データ 1900 件中 87 件、中央値 62 日)。
+
+    価格が取れなかったのだから現在価格は不明である。0 に落として
+    「取り扱い確認」表示に倒し、最安値の候補からも外す。availability と url は
+    今回の snapshot 由来の事実なので残す (在庫切れバッジと「再入荷を確認」CTA)。
+
+    ``_apply_amazon_discontinued`` と同じ理由で ``_attach_market_prices`` の **後**に
+    呼ぶこと (楽天/Yahoo の band 検証が旧 Amazon 価格を anchor に使うため)。
+    """
+    product = data.get("product") if isinstance(data.get("product"), dict) else None
+    if not product:
+        return False
+    asin = product.get("asin")
+    if not asin:
+        return False
+    prices = product.get("prices")
+    if not isinstance(prices, dict):
+        return False
+    amazon = prices.get("amazon")
+    if not isinstance(amazon, dict):
+        return False
+    if amazon.get("discontinued"):
+        return False  # 取り扱い終了は専用処理が済んでいる
+    # overlay が観測を採用していれば price は最新。触らない。
+    if amazon.get("price_observed_at"):
+        return False
+    try:
+        frozen = int(amazon.get("price") or 0)
+    except (TypeError, ValueError):
+        frozen = 0
+    if frozen <= 0:
+        return False  # 既に「取り扱い確認」表示
+
+    item = _load_per_asin_amazon(per_asin_root, asin)
+    if item is None:
+        return False  # snapshot 自体が無いなら現況を知らない。従来どおり据え置く
+    try:
+        observed_price = int(item.get("price") or 0)
+    except (TypeError, ValueError):
+        observed_price = 0
+    if observed_price > 0:
+        return False  # 価格は取れている (stale guard で弾かれただけ) ので据え置く
+
+    amazon["price"] = 0
+    product["best_price"] = 0
+    product["best_platform"] = ""
+    _recompute_best_price(product)
     return True
 
 
@@ -2884,7 +2930,8 @@ def main() -> None:
     # 全記事で使い回す (無い/古い場合は per_asin 週次レーンへ自動フォールバック)。
     price_watch_index = price_overlay.load_watch_index()
     print(f"price_overlay: price_watch index = {len(price_watch_index)} ASIN")
-    price_overlay_stats = {"price_watch": 0, "per_asin": 0, "none": 0, "body_stale": 0}
+    price_overlay_stats = {"price_watch": 0, "per_asin": 0, "none": 0, "body_stale": 0,
+                           "unpriced_cleared": 0}
 
     rendered = 0
     skipped_legacy = 0
@@ -2949,6 +2996,10 @@ def main() -> None:
             _attach_price_freshness(data, per_asin_root)
             _attach_market_prices(data, rakuten_matched_index, yahoo_matched_index)
             amazon_discontinued = _apply_amazon_discontinued(data, per_asin_root)
+            # 最新 snapshot が価格を返さない出品の凍結価格を落とす (2026-08-09)。
+            # _attach_market_prices の後・_apply_amazon_discontinued と同じ位置。
+            if _apply_amazon_unpriced(data, per_asin_root):
+                price_overlay_stats["unpriced_cleared"] += 1
             _attach_price_history(data, price_history_root)
             # #2812: Jules の画像ハルシネーション (404) を防ぐため、検証済み
             # amazon.json の画像で product.image を強制上書きしてから gallery を補完。
@@ -3198,7 +3249,8 @@ def main() -> None:
         f"price_overlay: {price_overlay_stats['price_watch']} price_watch / "
         f"{price_overlay_stats['per_asin']} per_asin / "
         f"{price_overlay_stats['none']} no observation "
-        f"({price_overlay_stats['body_stale']} flagged 本文価格乖離)"
+        f"({price_overlay_stats['body_stale']} flagged 本文価格乖離, "
+        f"{price_overlay_stats['unpriced_cleared']} 凍結価格を無価格化)"
     )
 
 
