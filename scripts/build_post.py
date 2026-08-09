@@ -1825,6 +1825,50 @@ def _apply_amazon_discontinued(
     return True
 
 
+# 読者向け本文に混じった生の ASIN コードを落とすための正規表現 (2026-08-09)。
+# narrative.how_to_choose (#3203 v7 で追加された「選び分け」節) に
+# 『ベーシックプラスセット』（B0BD3WZG32）のような Amazon 内部コードがそのまま出ており、
+# 実測で公開 1913 ページ中 107 ページ・144 箇所が該当した。quality_gate の
+# check_how_to_choose は「competitors.json に載っている ASIN か」を検査する封じ込め
+# チェックで、**言及すること自体は許可**しているため、この表示は素通りしていた。
+_INLINE_ASIN_RE = re.compile(r"\bB0[A-Z0-9]{8}\b")
+_ASIN_WITH_LABEL_RE = re.compile(r"(?:ASIN\s*[:：]?\s*)?\bB0[A-Z0-9]{8}\b")
+_PAREN_GROUP_RE = re.compile(r"[（(]([^（()）]*)[）)]")
+_PAREN_FILLER_RE = re.compile(r"^[\s、,・]*(?:など|等)?[\s、,・]*$")
+
+
+def _strip_inline_asin_codes(value: Any) -> Any:
+    """本文テキストから生の ASIN コードを取り除く (str / list[str] 対応)。
+
+    括弧ごと消してよいのは「括弧の中身が ASIN (と『など』等の助辞) だけ」のとき。
+    括弧に商品名などの実質的な情報が入っている場合はコードだけ抜いて括弧は残す。
+    文中に地の文として埋め込まれた裸のコード (「同じ 3 種セットの B0XXXXXXXX は…」)
+    は、消すと日本語が壊れるのでここでは触らない (生成側で禁じるべき事象)。
+    """
+    if isinstance(value, list):
+        return [_strip_inline_asin_codes(v) if isinstance(v, str) else v for v in value]
+    if not isinstance(value, str) or "B0" not in value:
+        return value
+
+    def _clean_paren(m: re.Match[str]) -> str:
+        inner = m.group(1)
+        if not _INLINE_ASIN_RE.search(inner):
+            return m.group(0)
+        cleaned = _ASIN_WITH_LABEL_RE.sub("", inner)
+        cleaned = re.sub(r"[:：]\s*(?=[\s、,・]|$)", "", cleaned)
+        cleaned = re.sub(r"[ 　]{2,}", " ", cleaned).strip()
+        if _PAREN_FILLER_RE.match(cleaned):
+            return ""
+        return f"（{cleaned}）"
+
+    out = _PAREN_GROUP_RE.sub(_clean_paren, value)
+    # 「迷宮ボール B0G4R9XVY6」のように閉じ鉤括弧の直前に置かれた形
+    out = re.sub(r"[ 　]+\bB0[A-Z0-9]{8}\b(?=[」』])", "", out)
+    # 括弧の外に出た「ASIN: B0XXXXXXXX」ラベル形
+    out = re.sub(r"[ 　]*ASIN\s*[:：]\s*\bB0[A-Z0-9]{8}\b", "", out)
+    return re.sub(r"[ 　]{2,}", " ", out).strip()
+
+
 def _apply_amazon_unpriced(data: dict[str, Any], per_asin_root: pathlib.Path) -> bool:
     """最新 snapshot が価格を返さない ASIN の凍結価格を落とす (2026-08-09)。
 
@@ -3054,7 +3098,13 @@ def main() -> None:
                 for k in ("lead", "why_this_product", "gift_appeal", "daily_use", "safety_note", "closing", "how_to_choose"):
                     v = data["narrative"].get(k)
                     if isinstance(v, str):
-                        data["narrative"][k] = _meta_re.sub("", v).strip()
+                        v = _meta_re.sub("", v).strip()
+                    # 生の ASIN コードは読者に意味がないので落とす (str/list 両対応)。
+                    # how_to_choose は配列で来ることが多く、上の 字数メタ除去は
+                    # str しか見ていなかったため配列側は素通りしていた。
+                    v = _strip_inline_asin_codes(v)
+                    if v is not None and k in data["narrative"]:
+                        data["narrative"][k] = v
             for top_key in ("editorial_comment", "expert_take"):
                 v = data.get(top_key)
                 if isinstance(v, str):
