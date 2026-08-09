@@ -21,6 +21,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import price_overlay  # type: ignore[import-not-found]  # noqa: E402
 from build_post import (  # type: ignore[import-not-found]  # noqa: E402
+    _apply_amazon_unpriced,
     _apply_price_overlay,
     _attach_price_freshness,
     _recompute_best_price,
@@ -153,15 +154,98 @@ class PriceFreshnessSourceTest(unittest.TestCase):
 
             self.assertEqual(data["price_checked_at"], "2026-07-25")
 
-    def test_falls_back_to_per_asin_fetched_at_without_overlay(self):
+    def test_no_overlay_means_no_date_at_all(self):
+        """overlay が無いときに snapshot の fetched_at を代用しない (2026-08-09)。
+
+        旧実装はここで per_asin の fetched_at を表示日付にしていた。だが overlay が
+        観測を採用できなかったということは「その取得で価格が得られなかった」であり、
+        表示される価格は記事作成時の凍結値のまま。新しい日付を貼ると、古い価格が
+        当日検証済みに見える。実データ 1900 件中 87 件が該当していた。
+        """
         with tempfile.TemporaryDirectory() as td:
             root = pathlib.Path(td)
-            _write_per_asin(root, "B00000030", price=3149,
-                            fetched_at="2026-07-20T10:00:00+00:00")
+            _write_per_asin(root, "B00000030", price=0,
+                            fetched_at="2026-08-09T10:00:00+00:00")
             data = _article()
             _attach_price_freshness(data, root)
 
-            self.assertEqual(data["price_checked_at"], "2026-07-20")
+            self.assertNotIn("price_checked_at", data)
+
+
+class AmazonUnpricedTest(unittest.TestCase):
+    """最新 snapshot が価格を返さない出品の凍結価格を落とす (2026-08-09)。"""
+
+    def test_out_of_stock_snapshot_clears_frozen_price(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            _write_per_asin(root, "B00000030", price=0,
+                            fetched_at="2026-08-09T10:00:00+00:00")
+            data = _article(price=12685)
+            self.assertTrue(_apply_amazon_unpriced(data, root))
+
+            self.assertEqual(data["product"]["prices"]["amazon"]["price"], 0)
+            self.assertEqual(data["product"]["best_price"], 0)
+
+    def test_other_platform_becomes_best_price(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            _write_per_asin(root, "B00000030", price=0,
+                            fetched_at="2026-08-09T10:00:00+00:00")
+            data = _article(price=12685)
+            data["product"]["prices"]["rakuten"] = {"price": 10810, "url": "https://r/"}
+            _apply_amazon_unpriced(data, root)
+
+            self.assertEqual(data["product"]["best_price"], 10810)
+
+    def test_url_and_availability_survive(self):
+        """在庫切れバッジと「再入荷を確認」CTA は今回の snapshot 由来の事実なので残す。"""
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            _write_per_asin(root, "B00000030", price=0,
+                            fetched_at="2026-08-09T10:00:00+00:00")
+            data = _article(price=12685)
+            data["product"]["prices"]["amazon"]["availability"] = "現在在庫切れです。"
+            _apply_amazon_unpriced(data, root)
+
+            amazon = data["product"]["prices"]["amazon"]
+            self.assertEqual(amazon["availability"], "現在在庫切れです。")
+            self.assertTrue(amazon["url"])
+
+    def test_priced_snapshot_is_left_alone(self):
+        """価格が取れている (stale guard で弾かれただけ) 場合は据え置く。"""
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            _write_per_asin(root, "B00000030", price=3149,
+                            fetched_at="2026-06-01T10:00:00+00:00")
+            data = _article(price=12685)
+            self.assertFalse(_apply_amazon_unpriced(data, root))
+            self.assertEqual(data["product"]["prices"]["amazon"]["price"], 12685)
+
+    def test_overlay_applied_is_left_alone(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            _write_per_asin(root, "B00000030", price=0,
+                            fetched_at="2026-08-09T10:00:00+00:00")
+            data = _article()
+            _apply_price_overlay(data, {"B00000030": _obs()}, root)
+            self.assertFalse(_apply_amazon_unpriced(data, root))
+            self.assertEqual(data["product"]["prices"]["amazon"]["price"], 7927)
+
+    def test_missing_snapshot_is_noop(self):
+        """snapshot が無いなら現況を知らない。凍結価格を消す根拠がない。"""
+        with tempfile.TemporaryDirectory() as td:
+            data = _article(price=12685)
+            self.assertFalse(_apply_amazon_unpriced(data, pathlib.Path(td)))
+            self.assertEqual(data["product"]["prices"]["amazon"]["price"], 12685)
+
+    def test_discontinued_is_left_to_its_own_handler(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            _write_per_asin(root, "B00000030", price=0,
+                            fetched_at="2026-08-09T10:00:00+00:00")
+            data = _article(price=12685)
+            data["product"]["prices"]["amazon"]["discontinued"] = True
+            self.assertFalse(_apply_amazon_unpriced(data, root))
 
 
 if __name__ == "__main__":
