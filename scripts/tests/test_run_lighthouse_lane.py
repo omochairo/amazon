@@ -647,3 +647,96 @@ def test_render_report_omits_unmeasured_section_when_empty():
          "metric": "lcp", "value": 4000.0, "baseline": 2000.0, "detail": "d"},
     ]
     assert "LCP を判定していない URL" not in render_report(alerts, "2026-08-05")
+
+
+# ---------- chrome_version による baseline 分割 (#4765) ----------
+
+def test_baseline_for_segments_by_chrome_version():
+    """同じ Chrome major で測った行だけを baseline に使う。"""
+    history = [_row(si=2800.0, chrome_version="150.0.0.0") for _ in range(7)]
+    history += [_row(si=4400.0, chrome_version="151.0.0.0") for _ in range(7)]
+    assert baseline_for(history, "https://x/", "mobile", "si", 10,
+                        chrome_version="151.0.0.0") == 4400.0
+    assert baseline_for(history, "https://x/", "mobile", "si", 10,
+                        chrome_version="150.0.0.0") == 2800.0
+
+
+def test_baseline_for_returns_none_right_after_chrome_bump():
+    """版が変わった直後は同版のサンプルが薄いので判定を見送る。"""
+    history = [_row(si=2800.0, chrome_version="150.0.0.0") for _ in range(20)]
+    history += [_row(si=4400.0, chrome_version="151.0.0.0")]
+    assert baseline_for(history, "https://x/", "mobile", "si", 10,
+                        chrome_version="151.0.0.0") is None
+
+
+def test_baseline_for_unsegmented_when_chrome_version_is_none():
+    """chrome_version を渡さなければ従来どおり版を跨いで集める (degrade)。"""
+    history = [_row(si=2800.0, chrome_version="150.0.0.0") for _ in range(7)]
+    assert baseline_for(history, "https://x/", "mobile", "si", 10) == 2800.0
+
+
+def test_mad_for_segments_by_chrome_version():
+    history = [_row(si=2800.0, chrome_version="150.0.0.0") for _ in range(7)]
+    history += [_row(si=4400.0, chrome_version="151.0.0.0") for _ in range(7)]
+    assert mad_for(history, "https://x/", "mobile", "si", 10,
+                   chrome_version="151.0.0.0") == 0.0
+
+
+def test_detect_is_quiet_across_chrome_major_bump():
+    """#4652 の機構: Chrome 版が上がった当日の一斉悪化では鳴らさない。
+
+    2026-08-07 に mobile SI が全 11 URL 同時に 2849→4421 と跳ねたが、hugo の
+    layouts/assets/static には一切変更が無く、動いていたのは Chrome 150→151
+    だけだった。版を跨いだ baseline と比べる限りこれは必ず鳴る。
+    """
+    history = [_row(si=2800.0, perf_score=78.0, chrome_version="150.0.0.0")
+               for _ in range(10)]
+    current = [_row(si=4400.0, perf_score=70.0, chrome_version="151.0.0.0")]
+    assert detect_regressions(history, current) == []
+
+
+def test_detect_still_flags_regression_within_same_chrome_version():
+    """版を分けても、同じ版の中で起きた本物の劣化は従来どおり鳴る。"""
+    history = [_row(si=2800.0, perf_score=78.0, chrome_version="151.0.0.0")
+               for _ in range(10)]
+    current = [_row(si=4400.0, perf_score=70.0, chrome_version="151.0.0.0")]
+    kinds = {a["kind"] for a in detect_regressions(history, current)}
+    assert kinds  # 何かしら鳴る
+    assert "threshold" in kinds or "relative" in kinds
+
+
+def test_detect_degrades_when_history_has_no_chrome_version():
+    """chrome_version 導入前の行しか無い期間は従来挙動を維持する。"""
+    history = [_row(si=2800.0, perf_score=78.0) for _ in range(10)]
+    current = [_row(si=4400.0, perf_score=70.0)]
+    assert detect_regressions(history, current) != []
+
+
+# ---------- 同日再計測の後勝ち (#4765 / #4652) ----------
+
+def test_append_records_replaces_same_date_url_form_factor(tmp_path):
+    """同じ日にレーンが 2 回走っても 1 行しか残さない (後勝ち)。"""
+    p = tmp_path / LIGHTHOUSE_HISTORY_FILENAME
+    append_records(p, [_row(date="2026-08-07", si=2830.0)])
+    append_records(p, [_row(date="2026-08-07", si=4430.0)])
+    rows = [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
+    assert len(rows) == 1
+    assert rows[0]["si"] == 4430.0
+
+
+def test_append_records_keeps_other_dates_and_form_factors(tmp_path):
+    p = tmp_path / LIGHTHOUSE_HISTORY_FILENAME
+    append_records(p, [_row(date="2026-08-06", si=2800.0),
+                       _row(date="2026-08-07", ff="desktop", si=1200.0)])
+    append_records(p, [_row(date="2026-08-07", si=4430.0)])
+    rows = [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
+    keys = {(r["date"], r["form_factor"]) for r in rows}
+    assert keys == {("2026-08-06", "mobile"), ("2026-08-07", "desktop"), ("2026-08-07", "mobile")}
+
+
+def test_append_records_is_plain_append_for_new_keys(tmp_path):
+    p = tmp_path / LIGHTHOUSE_HISTORY_FILENAME
+    assert append_records(p, [_row(date="2026-08-06", si=2800.0)]) == 1
+    assert append_records(p, [_row(date="2026-08-07", si=2810.0)]) == 1
+    rows = [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
+    assert [r["date"] for r in rows] == ["2026-08-06", "2026-08-07"]
