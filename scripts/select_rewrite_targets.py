@@ -1,16 +1,30 @@
 #!/usr/bin/env python3
-"""Select articles to rewrite, ordered by quality score asc + slug date asc.
+"""Select articles to rewrite, ordered by prompt generation + slug date asc.
 
 Used by .github/workflows/12-rewrite-idle-fill.yml to fill idle Jules slots
 with rewrites of low-quality / old-prompt articles when new-ASIN fetch supply
 is low (Issue #812).
 
 Priority key (lower = higher priority):
-1. ``total_score`` from ``data/articles/<slug>.quality.json`` ascending.
-   Sidecar missing → treated as -1 (= top priority). A missing quality.json
-   usually means the article was generated before quality_gate sidecar output
-   landed, i.e. an early-prompt article that benefits most from a rewrite.
-2. slug date ascending (older articles first within the same score).
+1. pre-v7 (slug date < ``quality_gate.HOW_TO_CHOOSE_ENFORCE_FROM``) before post-v7.
+   「古いプロンプトで書かれた記事ほどリライトの価値が高い」という #812 の意図を、
+   実在するシグナル (施行日) で表す。
+2. slug date ascending (older first) within each generation.
+
+2026-08-09 に ``total_score`` 昇順をやめた理由 (実データ 1,903 記事の実測):
+
+  - quality_gate の total_score は min=92 / p50=97 / max=99 で、20 check 中 19 が
+    コーパス全体で一度も失敗していない。既定の ``--min-score 60`` は分布の最小値より
+    32 点低く、閾値として何も選別していない。順序付けの材料にできる分散が無い。
+  - ``<slug>.quality.json`` sidecar は 2026-05-28 を最後に 1 件も生成されていない
+    (1,903 記事中 233 件のみ保持。04-validate は mktemp した一時ディレクトリに書いて
+    捨てており、commit される経路が無い)。
+  - 結果として「sidecar 欠落 → -1 で最優先」の規則が実際に並べていたのは品質ではなく
+    **sidecar 生成が止まった日**だった。sidecar を持つ 233 件 (2026-05-14〜05-28 =
+    サイト最古の pre-v7 記事) が、より新しい 1,669 件 (post-v7 を含む) の**後ろ**に
+    回されていた。実測ペース 12 件/日 では約 140 日後にしか着手されない。
+
+``total_score`` / ``passed`` は観察用に引き続き読み、stderr のログに出す。
 
 Excludes ASINs that are already being processed: jules-lock branches + open PR
 titles. The exclude-file is produced by the workflow with a `gh api` call and
@@ -25,6 +39,10 @@ import os
 import re
 import sys
 from typing import Iterable
+
+# v7 施行日は quality_gate を単一情報源とする (audit_uniqueness.cohort_for_slug と
+# 同じ定数を見ることで pre/post v7 の線引きが 2 箇所でずれないようにする)。
+from quality_gate import HOW_TO_CHOOSE_ENFORCE_FROM
 
 _ASIN_RE = re.compile(r"(B0[A-Z0-9]{8})")
 _SLUG_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-(B0[A-Z0-9]{8})$")
@@ -98,16 +116,15 @@ def select(
     excluded: set[str],
     limit: int,
 ) -> list[dict]:
-    """Sort by (score asc with None→-1, date asc) and return up to ``limit``.
+    """Sort by (pre-v7 first, date asc) and return up to ``limit``.
 
-    None-score articles come first because a missing quality.json sidecar is
-    a stronger signal of "old prompt revision" than any numeric score.
+    ``total_score`` は順序付けに使わない (理由はモジュール docstring)。日付が読めない
+    候補は安全側で post-v7 扱いにする (quality_gate._how_to_choose_enforced と同じ方針)。
     """
-    def key(c: dict) -> tuple[float, str]:
-        score = c.get("score")
-        if score is None:
-            return (-1.0, c.get("date", ""))
-        return (float(score), c.get("date", ""))
+    def key(c: dict) -> tuple[int, str]:
+        date = c.get("date") or ""
+        generation = 0 if date and date < HOW_TO_CHOOSE_ENFORCE_FROM else 1
+        return (generation, date)
 
     available = [c for c in candidates if c["asin"] not in excluded]
     available.sort(key=key)
