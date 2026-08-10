@@ -210,6 +210,25 @@ def test_end_to_end_verdict_via_probe_keyword_legit_product():
     assert r["verdict"] == "product"
 
 
+def test_sample_titles_keeps_all_hits_not_just_first_five():
+    """sample_titles は先頭5件でなく全件 (最大 item_count 件) を保存すること。
+
+    5件しか保存していなかったため、実データ200語の --recompute で
+    「ウッディー」「玩具」が product → non_product に後退した。原因は
+    coverage=1.0 を成立させた一致タイトルが6〜10件目にあり、再採点では
+    見えなくなっていたこと。同じ情報欠落は後続 (#2686 案2) のローカル
+    LLM 判定でも起きる (LLM に5件しか渡せなければ LLM も同じ誤判定をする)。
+    """
+    api = FakeAPI({"トミカ": _response(
+        *[_item(f"B0T{i:04d}", f"タカラトミー トミカ No.{i} ミニカー") for i in range(10)]
+    )})
+    r = P.probe_keyword(api, "トミカ", "トミカ", 368000, ["takaratomymall.jp"], "Toys", 10)
+    assert r["hits"] == 10
+    assert len(r["sample_titles"]) == 10
+    # 6件目以降が確かに残っている (先頭5件打ち切りなら消えていた分)
+    assert "タカラトミー トミカ No.9 ミニカー" in r["sample_titles"]
+
+
 # --------------------------------------------------------------------------
 # 形態素解析ベースのタイトル照合 (#2686 PR-E)
 # --------------------------------------------------------------------------
@@ -285,6 +304,28 @@ def test_nakaguro_separator_does_not_glue_words_together():
     words = P.content_words("マグ・フォーマー")
     assert "マグ" in words
     assert "・" not in "".join(words)
+
+
+def test_katakana_missplit_is_symmetric_and_harmless():
+    """_split_katakana_blob は既知語アンカーを貪欲に切り出すため、固有名詞を
+    誤分割する (実測: ベイブレード→[ベイ, ブレード] / ボーネルンド→
+    [ボーネ, ルンド] / トランスフォーマー→[トランス, フォーマー])。
+
+    これが実害にならないのは compute_title_overlap が **クエリ側とタイトル側の
+    両方に同じ content_words をかけている**ため。誤分割は対称に起きるので
+    断片同士が一致し、coverage は正しく 1.0 になる。この対称性が壊れると
+    (片側だけ分割方法を変える等) 誤分割が直ちに誤判定になるので、性質を
+    テストで固定しておく。
+    """
+    assert P.content_words("ベイブレードx") == ["ベイ", "ブレード", "x"]
+    assert P.content_words("ボーネルンド") == ["ボーネ", "ルンド"]
+    # 誤分割していても、タイトル側が同じ分割を受けるので一致する
+    assert P.compute_title_overlap(
+        "ベイブレードx", ["タカラトミー ベイブレードX スターター ドランザースパイラル"]
+    ) == 1.0
+    assert P.compute_title_overlap(
+        "ボーネルンド", ["ボーネルンド ルーピング フリズル 知育玩具"]
+    ) == 1.0
 
 
 def test_split_katakana_blob_gives_up_without_anchor():
@@ -364,6 +405,31 @@ def test_recompute_has_before_and_after_verdicts_and_recovers_premium_tomica(tmp
     assert report["changed_count"] == 1
     assert report["summary_before"]["non_product"] == 1
     assert report["summary_after"]["product"] == 1
+
+
+def test_recompute_reads_legacy_five_title_format(tmp_path):
+    """旧フォーマット (sample_titles が先頭5件だけ) の JSON も再採点できること。
+
+    data/analytics/ubersuggest_product_probe.json (#4894 でマージ済み) は
+    5件保存で生成されている。probe_keyword を全件保存に変えた後も、この
+    既存ファイルを --recompute で読めなくなってはいけない。
+    """
+    src = tmp_path / "probe.json"
+    _write_probe_json(src, [_probe_json_entry(
+        query="プレミアムトミカ", raw_query="プレミアムトミカ", volume=40500,
+        hits=10, genre_pass_hits=10, title_overlap=0.0,
+        verdict="non_product", verdict_reason="zero_title_overlap",
+        # hits=10 なのに 5 件しか無い = 旧フォーマット
+        sample_titles=[
+            f"タカラトミー(TAKARA TOMY) トミカプレミアム {i:02d} ミニカー おもちゃ 6歳以上"
+            for i in range(5)
+        ],
+    )])
+    report = P.recompute_verdicts(src)
+    row = report["results"][0]
+    assert len(row["sample_titles"]) == 5
+    assert row["verdict_before"] == "non_product"
+    assert row["verdict_after"] == "product"
 
 
 def test_recompute_leaves_api_error_entries_unchanged(tmp_path):

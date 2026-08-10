@@ -116,14 +116,31 @@ verdict の判定基準 (2026-08-10 設計、2026-08-10 owner レビューで pa
   #4893 の設計をそのまま維持する (触っていない)。供給ゲート・ジャンル
   ゲート (hits/genre_pass_hits) も本 PR では変更しない。
 
+sample_titles の全件保存 (2026-08-10 owner レビューで items[:5] から変更):
+  probe_keyword は SearchItems が返した hits 件 (items[:5] ではなく items
+  全件、item_count 既定10件なので最大10件) の商品タイトルを sample_titles に
+  保存する。当初は先頭5件だけを保存していたが、実データ (200語) の
+  --recompute で「ウッディー」「玩具」が product → non_product に後退する
+  事故が判明し、原因調査で「元の実行時に coverage=1.0 を成立させた一致
+  タイトルが6〜10件目にあり、5件しか保存していなかったせいで再採点では
+  見えなくなっていた」ことを特定した。これは --recompute だけでなく
+  **後続 (#2686 案2: ローカル LLM 判定) でも同じ情報欠落を起こす**
+  (LLM に渡せるタイトルが5件しか無ければ LLM も同じ誤判定をする)。
+  したがって全件保存に変更し、情報欠落を再採点・LLM 判定の両方から
+  取り除いた。フィールド名は sample_titles のまま据え置く (実データ
+  data/analytics/ubersuggest_product_probe.json は5件保存の旧フォーマットで
+  既にマージ済みだが、キー名を変えていないので recompute_verdicts はそのまま
+  読める。旧フォーマットの語は引き続き5件分の情報でしか再採点できない
+  ことに変わりはない)。
+
 オフライン再採点 (--recompute):
   data/analytics/ubersuggest_product_probe.json には各語の sample_titles が
   既に保存されているので、API を1回も呼ばずに新しい coverage ロジックで
-  採点し直せる。ただし sample_titles は実行時の item_count 件 (既定10件)
-  のヒットのうち **先頭5件しか保存されていない** (実測: 200語中187語が
-  5件・9語が0件)。したがって再採点の coverage は実際より低めに出る
-  可能性がある (一致機会がタイトルの数だけ減るため)。確定は workflow 50
-  の再実行 (API 実行) で行うこと。recompute_verdicts の docstring も参照。
+  採点し直せる。ただし同ファイルは上記の5件保存の旧フォーマットで生成
+  されているため、再採点の coverage は実際 (item_count 件全体) より低めに
+  出る可能性がある (一致機会がタイトルの数だけ減るため。実測: 200語中
+  187語が5件・9語が0件)。確定は workflow 50 の再実行 (API 実行、今後は
+  全件保存になる) で行うこと。recompute_verdicts の docstring も参照。
 
   後続 (#2686 案2: ローカル LLM 判定) で ambiguous と判定された語を再度
   API を叩かずに判定できるよう、sample_titles は probe_keyword の結果にも
@@ -401,7 +418,16 @@ def probe_keyword(api, query: str, raw_query: str, volume: float, sites: list[st
         "hits": hits, "genre_pass_hits": genre_pass_hits,
         "title_overlap": round(coverage, 3),
         "verdict": verdict, "verdict_reason": reason,
-        "sample_titles": [it["title"] for it in items[:5]],
+        # 2026-08-10 #2686 PR-E owner レビューで items[:5] (先頭5件のみ) から
+        # 全件保存に変更した。5件しか保存しないと --recompute (このモジュール)
+        # だけでなく後続の案2 (ambiguous のローカル LLM 判定) でも同じ情報
+        # 欠落が起きる (6〜10件目にしか無い一致タイトルを LLM も見られない)。
+        # item_count は既定10件なので最大10件になる。フィールド名は
+        # sample_titles のまま据え置く (実データ data/analytics/
+        # ubersuggest_product_probe.json は5件保存の旧フォーマットで既に
+        # マージ済みだが、recompute_verdicts はキー名を変えていないので
+        # そのまま読める)。
+        "sample_titles": [it["title"] for it in items],
     }
 
 
