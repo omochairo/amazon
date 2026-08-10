@@ -133,10 +133,29 @@ jobs:
           print(f"- 供給はあるが全部既出: {s['hits_but_all_known']} 語")
           print(f"- ヒット 0 件 (Amazon に商品が無い): {s['zero_hit']} 語")
           print(f"- API エラー: {s['error_count']} 語\n")
+          if s.get("suspicious_all_zero"):
+              print("> **警告**: 全語が 0 件でエラーも無い。供給の実態ではなく")
+              print("> レスポンス解釈のバグを疑うこと (2026-08-10 に searchResult.items の")
+              print("> 読み違いで 98/98 が 0 件になった実績あり)。\n")
           print("| 需要 imp | keyword | hits | new |")
           print("|---:|---|---:|---:|")
           for r in d["results"][:30]:
               print(f"| {r.get('wp_impressions', 0)} | {r['keyword']} | {r['hits']} | {len(r['new_asins'])} |")
+          PY
+
+      # 誤った結論 (「需要語に商品が無い」) を静かに commit させない。
+      # 観測レーンなので記事は動かないが、レポートは後続の判断材料になるため落とす。
+      - name: Fail on suspicious all-zero result
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          set -e
+          python - <<'PY'
+          import json, pathlib, sys
+          d = json.loads(pathlib.Path("data/analytics/demand_supply_probe.json").read_text(encoding="utf-8"))
+          if d["summary"].get("suspicious_all_zero"):
+              print("::error::all keywords returned 0 hits with no API errors — suspect a "
+                    "response-parsing bug, not an actual supply gap")
+              sys.exit(1)
           PY
 
       - name: Commit back report

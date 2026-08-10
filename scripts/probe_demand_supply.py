@@ -50,6 +50,8 @@ DEFAULT_OUT = "data/analytics/demand_supply_probe.json"
 DEFAULT_SEARCH_INDEX = "Toys"
 DEFAULT_ITEM_COUNT = 10
 SLEEP_SECONDS = 1.1
+# これ以上の語数で「全語 0 件・エラーなし」なら実装バグを疑う (summarize 参照)。
+SUSPICIOUS_MIN_KEYWORDS = 10
 
 _SLUG_RE = re.compile(r"^\d{4}-\d{2}-\d{2}-(B0[A-Z0-9]{8})$")
 _SIDECAR = (".enrichment", ".seo", ".quality")
@@ -76,11 +78,22 @@ def load_existing_asins(articles_dir: pathlib.Path) -> set[str]:
 def extract_asins(response: Any) -> list[str]:
     """SearchItems レスポンスから ASIN を順序どおり取り出す。
 
+    Creators API の SearchItems は **searchResult.items** に返す
+    (fetch_amazon.py も `_safe_get(res, "searchResult", "items")` で読んでいる)。
+    2026-08-10 の初版はトップレベルの ``items`` を見ており、98 語すべてが
+    「hits=0 / error なし」= あたかも Amazon に商品が無いかのように見えていた。
+    FakeAPI のテストを自分の誤った構造で書いたので単体テストは通っていた。
+    実レスポンス構造の回帰テスト (test_real_search_response_shape) を必ず残すこと。
+
     形が違う/空のときは空リストを返す (例外にしない)。
     """
     if not isinstance(response, dict):
         return []
-    items = response.get("items")
+    items = response.get("searchResult", {})
+    items = items.get("items") if isinstance(items, dict) else None
+    if not isinstance(items, list):
+        # 念のためトップレベルも見る (クライアント側で平坦化された場合)
+        items = response.get("items")
     if not isinstance(items, list):
         return []
     out = []
@@ -116,13 +129,19 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     no_new = [r for r in results if not r["error"] and r["hits"] > 0 and not r["new_asins"]]
     usable = [r for r in results if not r["error"] and r["new_asins"]]
     errors = [r for r in results if r["error"]]
+    probed = len(results)
     return {
-        "keywords_probed": len(results),
+        "keywords_probed": probed,
         "zero_hit": len(zero),
         "hits_but_all_known": len(no_new),
         "usable": len(usable),
         "error_count": len(errors),
         "new_asin_total": len({a for r in usable for a in r["new_asins"]}),
+        # 「全語 0 件かつエラーなし」は供給の実態ではなくレスポンス解釈のバグを疑う。
+        # 2026-08-10 に実際に踏んだ (searchResult.items を items と誤読して 98/98 が 0)。
+        # 観測レーンが誤った結論 (「需要語に商品が無い」) を静かに出さないための番人。
+        "suspicious_all_zero": probed >= SUSPICIOUS_MIN_KEYWORDS and len(zero) == probed
+                               and not errors,
     }
 
 
@@ -166,6 +185,10 @@ def run(keywords_path: pathlib.Path, articles_dir: pathlib.Path, out_path: pathl
     logger.info("供給あり(新規ASINあり) %d 語 / 既出のみ %d 語 / 0 件 %d 語 / エラー %d 語",
                 summary["usable"], summary["hits_but_all_known"],
                 summary["zero_hit"], summary["error_count"])
+    if summary["suspicious_all_zero"]:
+        logger.error("全 %d 語が 0 件でエラーも無い。供給の実態ではなくレスポンス解釈の"
+                     "バグを疑うこと (searchResult.items の読み違いを 2026-08-10 に踏んだ)",
+                     summary["keywords_probed"])
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
