@@ -10,7 +10,12 @@ meta description / jsonld / breadcrumbs), falling back to STAGE-1 fields.
 Usage:
     python scripts/build_post.py
     python scripts/build_post.py --src data/articles/ --dst hugo/content/posts/
-    python scripts/build_post.py --min-score 70   # mark below-threshold as draft
+    python scripts/build_post.py --gate --min-score 70   # mark below-threshold as draft
+
+``--min-score`` now requires ``--gate``: the article is scored in-place at render
+time. The old path that read a ``<slug>.quality.json`` sidecar was retired in
+#4826 (the sidecar was .gitignore'd and never existed in CI, so that path was
+dead there anyway).
 """
 
 from __future__ import annotations

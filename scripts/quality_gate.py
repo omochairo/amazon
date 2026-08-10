@@ -9,10 +9,13 @@ Checks article JSON (and rendered Markdown if available) against:
 - Forbidden childish tone tokens
 - FAQ completeness
 
-Outputs a per-article quality score JSON next to each input file:
-  data/articles/{slug}.quality.json
+Prints a per-article verdict and exits non-zero if ANY article fails the
+configured minimum.
 
-Exits non-zero if ANY article fails the configured minimum.
+Note (#4826, 2026-08-10): the <slug>.quality.json sidecar this script used to
+write next to each input file has been retired. Corpus-wide quality is observed
+by .github/workflows/48-quality-census.yml, which aggregates into a single
+data/analytics/quality_census.json instead of one derived file per article.
 
 Usage:
     python scripts/quality_gate.py
