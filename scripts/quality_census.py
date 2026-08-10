@@ -1,0 +1,316 @@
+"""quality_census.py
+
+#4826 項目 3: main 全量に quality_gate を当てて「後から腐ったゲート」を検出する観察レーン。
+
+なぜ必要か (2026-08-10 実測):
+  ``quality_gate`` は 04-validate-article-pr.yml から **PR で変更されたファイルにしか**
+  当たらない (mktemp した一時ディレクトリに変更分だけ cp して --src に渡す)。
+  ところが ``check_how_to_choose`` が参照する ``data/raw/per_asin/<ASIN>/competitors.json``
+  は日次で更新されるため、**マージ時に合格した記事が後から不合格に転じる**。
+  main を再評価する経路が無いので、この腐りは誰にも見えない。
+
+  実測: main 全量 1903 記事に当てると 10 件が不合格で、10/10 すべて how_to_choose。
+  参照先はいずれも実在 ASIN で捏造ではなく、競合セットの入れ替わりで落ちたもの。
+
+このレーンの位置づけ:
+  **観察のみ。CI を落とさないし記事も直さない。** 週次で全量評価し、前回との差分
+  (新規不合格 / 回復 / 継続) を tracker issue にコメントするところまで。
+  「作業リスト」ではなく「進捗追跡」なので、件数は相対閾値で切らず絶対値で出す
+  (feedback-metric-gate-calibration: 出力を上限で切ると機能不全が不可視になる)。
+
+cert fetch を無効にしている理由 (owner 判断・2026-08-10):
+  ``check_cert_sources_content`` は証明書ページへ実 HTTP fetch する。週次で 1903 記事分を
+  舐めると外部サイトへの負荷が大きく、タイムアウト由来のフレークがそのまま「不合格」として
+  観測に乗る (誤検出)。census は ``--no-cert-fetch`` 相当で走らせ、レポートに
+  ``cert_fetch: false`` を明記して PR 時 CI との 1 チェック分の乖離を可視化する。
+
+sidecar を書かない理由 (owner 判断・2026-08-10):
+  ``<slug>.quality.json`` sidecar は廃止方針。本スクリプトは記事ディレクトリに
+  派生ファイルを 1 つも作らず、集計 JSON 1 本 + history jsonl 1 行だけを出力する。
+
+出力:
+  - data/analytics/quality_census.json           単一スナップショット (最新 run のみ)
+  - data/analytics/history/quality_census.jsonl  1 run 1 行の時系列 (append)
+
+idempotency:
+  append_census_history.py と同じく共有サイドカーを使わず、jsonl 自体を毎回スキャンして
+  対象 date の行が既にあるかで判定する (年間 ~52 行なので全件スキャンで足りる)。
+  既存行があれば既定では上書きせず skip する (--force で置換)。
+
+副作用: 上記 2 ファイルの書き込みのみ。ネットワーク・Issue 操作は行わない
+        (Issue へのサーフェシングは comment_quality_census.py の担当)。
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import pathlib
+import sys
+from typing import Any
+
+_HERE = pathlib.Path(__file__).resolve().parent
+if str(_HERE) not in sys.path:
+    sys.path.insert(0, str(_HERE))
+
+import quality_gate as qg  # noqa: E402
+
+DEFAULT_SRC = pathlib.Path("data/articles")
+DEFAULT_SCHEMA = pathlib.Path("data/schema/article.schema.json")
+DEFAULT_SNAPSHOT = pathlib.Path("data/analytics/quality_census.json")
+DEFAULT_HISTORY = pathlib.Path("data/analytics/history/quality_census.jsonl")
+
+# quality_gate.main と同じ除外。sidecar の種別追加時はここも更新すること
+# (claude-traps-analytics-data.md: sidecar 除外は正準 3 種)。
+SIDECAR_SUFFIXES = (".enrichment", ".seo", ".quality")
+
+
+def iter_article_paths(src: pathlib.Path) -> list[pathlib.Path]:
+    """記事本体 JSON のみを列挙する (sidecar 除外)。"""
+    return sorted(
+        p for p in src.glob("*.json")
+        if not any(p.stem.endswith(s) for s in SIDECAR_SUFFIXES)
+    )
+
+
+def load_matched_indexes(
+    rakuten_path: pathlib.Path = pathlib.Path("data/raw/rakuten_matched.json"),
+    yahoo_path: pathlib.Path = pathlib.Path("data/raw/yahoo_matched.json"),
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """quality_gate.main と同じ楽天/Yahoo の matched index を読む。
+
+    ``_derive_verified_status`` がこれを使って ``check_prices_verified`` の判定を
+    変えるため、読まずに評価すると PR 時 CI と別条件の census になる
+    (cert_fetch 以外の乖離を作らないこと)。
+    """
+    loader = getattr(qg, "_bp_load_matched_index", None)
+    if loader is None:
+        return None, None
+    rakuten = loader(rakuten_path) if rakuten_path.exists() else None
+    yahoo = loader(yahoo_path) if yahoo_path.exists() else None
+    return rakuten, yahoo
+
+
+def evaluate_corpus(
+    src: pathlib.Path,
+    schema: dict,
+    *,
+    posts: pathlib.Path | None = None,
+    cert_fetch: bool = False,
+    rakuten_idx: dict[str, Any] | None = None,
+    yahoo_idx: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """全記事を評価し、不合格チェック名つきの軽量レコード列を返す。
+
+    レポート全文 (checks 20 件分) は 1903 記事ぶん保持すると数 MB になるため、
+    集計に要る最小限 (slug / total_score / passed / 落ちた check) だけを残す。
+    """
+    out: list[dict[str, Any]] = []
+    for jp in iter_article_paths(src):
+        md = None
+        if posts is not None:
+            cand = posts / f"{jp.stem}.md"
+            md = cand if cand.exists() else None
+        report = qg.evaluate_article(
+            jp, schema, md,
+            rakuten_idx=rakuten_idx, yahoo_idx=yahoo_idx,
+            cert_fetch=cert_fetch,
+        )
+        out.append({
+            "slug": report.slug,
+            "total_score": report.total_score,
+            "passed": report.passed,
+            "md": md is not None,
+            "failed_checks": sorted(
+                {c.name: c.message for c in report.checks if not c.passed}.items()
+            ),
+        })
+    return out
+
+
+def summarize(records: list[dict[str, Any]], *, cert_fetch: bool, date: str) -> dict[str, Any]:
+    """census スナップショットを組み立てる。"""
+    failing = [r for r in records if not r["passed"]]
+    by_check: dict[str, int] = {}
+    for r in failing:
+        for name, _msg in r["failed_checks"]:
+            by_check[name] = by_check.get(name, 0) + 1
+
+    scores = sorted(r["total_score"] for r in records)
+    return {
+        "date": date,
+        "articles": len(records),
+        "failing": len(failing),
+        "failing_rate": round(len(failing) / len(records), 5) if records else 0.0,
+        "by_check": dict(sorted(by_check.items(), key=lambda kv: (-kv[1], kv[0]))),
+        "score_min": scores[0] if scores else None,
+        "score_median": scores[len(scores) // 2] if scores else None,
+        "score_max": scores[-1] if scores else None,
+        # PR 時 CI との乖離を明示する。false のとき cert_sources_content は
+        # fetch 無しで評価されており、CI と 1 チェック分条件が違う。
+        "cert_fetch": cert_fetch,
+        # heading_hierarchy / body_word_count は MD が無いと passed=True score=1.0 を
+        # 返す (unknown を pass に潰す既存挙動)。hugo/content/posts/* は gitignore で
+        # CI では常に MD 無しだが、**ローカルにはビルド済み MD が残っている**ため、
+        # 件数を記録しないと環境差で時系列が無言でずれる (実測: MD 有ならスコア
+        # 中央値 -1 点)。合否は変わらないが、記録しないと差の出所が追えない。
+        "md_evaluated": sum(1 for r in records if r.get("md")),
+        "failing_slugs": sorted(
+            (
+                {"slug": r["slug"], "total_score": r["total_score"],
+                 "failed_checks": [{"name": n, "message": m} for n, m in r["failed_checks"]]}
+                for r in failing
+            ),
+            key=lambda d: d["slug"],
+        ),
+    }
+
+
+def diff_against(previous: dict[str, Any] | None, current: dict[str, Any]) -> dict[str, Any]:
+    """前回スナップショットとの差分 (新規不合格 / 回復 / 継続) を返す。
+
+    前回が無い初回は previous_date=None を返し、このレーンを fail させない
+    (append_census_history.py の cohort と同じ扱い)。
+    """
+    cur = {d["slug"] for d in current.get("failing_slugs", [])}
+    if previous is None:
+        return {"previous_date": None, "new": sorted(cur), "recovered": [], "persisting": []}
+    prev = {d["slug"] for d in previous.get("failing_slugs", [])}
+    return {
+        "previous_date": previous.get("date"),
+        "new": sorted(cur - prev),
+        "recovered": sorted(prev - cur),
+        "persisting": sorted(cur & prev),
+    }
+
+
+def history_has_date(history_path: pathlib.Path, date: str) -> bool:
+    if not history_path.exists():
+        return False
+    for line in history_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            if json.loads(line).get("date") == date:
+                return True
+        except json.JSONDecodeError:
+            # 壊れた行は無視する (履歴全体を落とさない)
+            continue
+    return False
+
+
+def append_history(history_path: pathlib.Path, row: dict[str, Any], *, force: bool) -> bool:
+    """jsonl に 1 行 append する。同 date が既にあれば force 指定時のみ置換。"""
+    date = row["date"]
+    exists = history_has_date(history_path, date)
+    if exists and not force:
+        return False
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    if exists:
+        kept = [
+            ln for ln in history_path.read_text(encoding="utf-8").splitlines()
+            if ln.strip() and _row_date(ln) != date
+        ]
+        kept.append(json.dumps(row, ensure_ascii=False))
+        history_path.write_text("\n".join(kept) + "\n", encoding="utf-8")
+    else:
+        with history_path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    return True
+
+
+def _row_date(line: str) -> str | None:
+    try:
+        return json.loads(line).get("date")
+    except json.JSONDecodeError:
+        return None
+
+
+def history_row(snapshot: dict[str, Any], diff: dict[str, Any]) -> dict[str, Any]:
+    """時系列として列集合を安定させた 1 行を作る (append_census_history と同方針)。"""
+    return {
+        "date": snapshot["date"],
+        "articles": snapshot["articles"],
+        "failing": snapshot["failing"],
+        "failing_rate": snapshot["failing_rate"],
+        "by_check": snapshot["by_check"],
+        "score_min": snapshot["score_min"],
+        "score_median": snapshot["score_median"],
+        "score_max": snapshot["score_max"],
+        "cert_fetch": snapshot["cert_fetch"],
+        "md_evaluated": snapshot["md_evaluated"],
+        "new": len(diff["new"]),
+        "recovered": len(diff["recovered"]),
+        "persisting": len(diff["persisting"]),
+        "previous_date": diff["previous_date"],
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--src", type=pathlib.Path, default=DEFAULT_SRC)
+    parser.add_argument("--posts", type=pathlib.Path, default=None,
+                        help="レンダリング済み Markdown の場所 (省略時は MD 依存 check を skip)")
+    parser.add_argument("--schema", type=pathlib.Path, default=DEFAULT_SCHEMA)
+    parser.add_argument("--snapshot", type=pathlib.Path, default=DEFAULT_SNAPSHOT)
+    parser.add_argument("--history", type=pathlib.Path, default=DEFAULT_HISTORY)
+    parser.add_argument("--date", default=None, help="既定は UTC の当日 (YYYY-MM-DD)")
+    parser.add_argument("--cert-fetch", action="store_true",
+                        help="証明書ページへの実 HTTP fetch を有効にする (既定 無効)")
+    parser.add_argument("--force", action="store_true",
+                        help="同 date の history 行が既にあっても置換する")
+    parser.add_argument("--quiet", action="store_true")
+    args = parser.parse_args(argv)
+
+    if not args.src.exists():
+        print(f"[quality_census] src not found: {args.src}")
+        return 1
+    if not args.schema.exists():
+        print(f"[quality_census] schema not found: {args.schema}")
+        return 1
+
+    schema = json.loads(args.schema.read_text(encoding="utf-8"))
+    date = args.date or dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")
+
+    previous: dict[str, Any] | None = None
+    if args.snapshot.exists():
+        try:
+            previous = json.loads(args.snapshot.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            print(f"[quality_census] ! previous snapshot unreadable, treating as first run")
+
+    rakuten_idx, yahoo_idx = load_matched_indexes()
+    records = evaluate_corpus(
+        args.src, schema, posts=args.posts, cert_fetch=args.cert_fetch,
+        rakuten_idx=rakuten_idx, yahoo_idx=yahoo_idx,
+    )
+    if not records:
+        print("[quality_census] no articles to check")
+        return 1
+
+    snapshot = summarize(records, cert_fetch=args.cert_fetch, date=date)
+    diff = diff_against(previous, snapshot)
+    snapshot["diff"] = diff
+
+    args.snapshot.parent.mkdir(parents=True, exist_ok=True)
+    args.snapshot.write_text(
+        json.dumps(snapshot, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    appended = append_history(args.history, history_row(snapshot, diff), force=args.force)
+
+    if not args.quiet:
+        print(f"[quality_census] {date} articles={snapshot['articles']} "
+              f"failing={snapshot['failing']} ({snapshot['failing_rate']:.2%}) "
+              f"cert_fetch={snapshot['cert_fetch']} md={snapshot['md_evaluated']}")
+        for name, n in snapshot["by_check"].items():
+            print(f"    {name}: {n}")
+        print(f"    diff vs {diff['previous_date']}: "
+              f"new={len(diff['new'])} recovered={len(diff['recovered'])} "
+              f"persisting={len(diff['persisting'])}")
+        if not appended:
+            print(f"    history: {date} は既に存在するため skip (--force で置換)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
