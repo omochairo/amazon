@@ -351,6 +351,85 @@ def test_run_does_not_touch_network(tmp_path, monkeypatch):
 
 
 # --------------------------------------------------------------------------
+# 誤除外の回帰テスト (2026-08-10 owner レビューで発覚、L1 は保守的に倒す)
+#
+# 「図鑑」「ランド」「パーク」「幼稚園」「保育園」の断片トークン/広すぎる語が
+# 実在商品・商品になりうる語を subject_exclusions で誤除外していた。
+# 誤除外は L2 実査で回復できない (非対称なコスト) ので、二度と混入しないよう
+# 実ルールファイルに対して固定する。
+# --------------------------------------------------------------------------
+
+def test_randoseru_is_not_dropped_by_facility_rule():
+    """「ランド」断片が「ランドセル」(商品カテゴリそのもの) を誤爆させていた回帰。"""
+    rules = U.load_rules(REAL_RULES)
+    raw_rows = [
+        {"site": "a.com", "raw_query": "アクタスランドセル", "volume": 100, "position": 1, "seo_difficulty": 10},
+        {"site": "a.com", "raw_query": "ランドセルリメイク 後悔", "volume": 100, "position": 1, "seo_difficulty": 10},
+    ]
+    rep = U.build(raw_rows, rules)
+    dropped_queries = {d["query"] for d in rep["dropped_subject"]}
+    assert "アクタスランドセル" not in dropped_queries
+    assert "ランドセルリメイク 後悔" not in dropped_queries
+
+
+def test_papercraft_is_not_dropped_by_facility_rule():
+    """「パーク」断片が「ペーパークラフト」を誤爆させていた回帰。"""
+    rules = U.load_rules(REAL_RULES)
+    raw_rows = [
+        {"site": "a.com", "raw_query": "ペーパークラフト作り方", "volume": 100, "position": 1, "seo_difficulty": 10},
+    ]
+    rep = U.build(raw_rows, rules)
+    # 「作り方」は diy カテゴリで別途落ちるので、facility カテゴリで落ちて
+    # いないことをカテゴリ単位で確認する。
+    d = next((d for d in rep["dropped_subject"] if d["query"] == "ペーパークラフト作り方"), None)
+    assert d is not None, "作り方 (diy) では落ちる想定"
+    assert "facility" not in d["categories"]
+
+
+def test_product_name_containing_zukan_is_not_dropped():
+    """「図鑑」トークンが実在商品「アンパンマンことば図鑑プレミアム」を誤除外していた回帰。"""
+    rules = U.load_rules(REAL_RULES)
+    raw_rows = [
+        {"site": "a.com", "raw_query": "アンパンマンことば図鑑プレミアム", "volume": 1000,
+         "position": 1, "seo_difficulty": 10},
+        {"site": "a.com", "raw_query": "英語ことば図鑑5000", "volume": 500,
+         "position": 1, "seo_difficulty": 10},
+    ]
+    rep = U.build(raw_rows, rules)
+    kept = {k["raw_query"] for k in rep["keywords"]}
+    assert "アンパンマンことば図鑑プレミアム" in kept
+    assert "英語ことば図鑑5000" in kept
+
+
+def test_hoikuen_query_is_not_dropped():
+    """「保育園」が「保育園 シール貼り」のような玩具需要語を誤除外していた回帰。"""
+    rules = U.load_rules(REAL_RULES)
+    raw_rows = [
+        {"site": "a.com", "raw_query": "保育園 シール貼り", "volume": 100, "position": 1, "seo_difficulty": 10},
+        {"site": "a.com", "raw_query": "カレンダー保育園", "volume": 50, "position": 1, "seo_difficulty": 10},
+    ]
+    rep = U.build(raw_rows, rules)
+    kept = {k["raw_query"] for k in rep["keywords"]}
+    assert "保育園 シール貼り" in kept
+    assert "カレンダー保育園" in kept
+
+
+def test_facility_rule_still_drops_specific_facility_names():
+    """断片トークンを削っても、具体名の施設クエリは引き続き落ちること。"""
+    rules = U.load_rules(REAL_RULES)
+    raw_rows = [
+        {"site": "a.com", "raw_query": "レゴランド大阪 名古屋 違い", "volume": 100,
+         "position": 1, "seo_difficulty": 10},
+        {"site": "a.com", "raw_query": "アンパンマンミュージアム 名古屋", "volume": 100,
+         "position": 1, "seo_difficulty": 10},
+    ]
+    rep = U.build(raw_rows, rules)
+    dropped_queries = {d["query"] for d in rep["dropped_subject"]}
+    assert "レゴランド大阪 名古屋 違い" in dropped_queries
+    assert "アンパンマンミュージアム 名古屋" in dropped_queries
+
+
+# --------------------------------------------------------------------------
 # 実データの語彙ルールで既知パターンを固定する (存在すれば)
 # --------------------------------------------------------------------------
 
