@@ -8,6 +8,10 @@ on:
       keyword:
         description: '検索キーワード (カンマ区切りで複数可。指定分は優先で全ページ検索し、ランダム検索ワードを同数減らす)'
         required: false
+      demand_slots:
+        description: 'keyword 枠 60 のうち需要側 (data/demand_keywords.json) に割り当てる件数。0 で従来の供給側のみ (#2686)'
+        required: false
+        default: '20'
   # cron re-registered 2026-07-08 after unsuspension
   schedule:
     # 1日2回: 朝9時(JST=0:00 UTC) と 夕方18時(JST=9:00 UTC)
@@ -52,10 +56,20 @@ jobs:
           #   --keyword-sample-size 60 : 231 keyword から 60 件サンプル (was 20)
           #   --pages 3                : 深い page ほど未記事化の mid-tail に当たる (was 2)
           #   --min-new 80             : fresh ASIN 目標を倍増 (was 40)
+          #
+          # #2686 (2026-08-10): 60 枠のうち 20 枠を **需要側** キーワードに割り当てる。
+          # DEFAULT_KEYWORDS は「どんなおもちゃが存在するか」から引いた供給側リストで、
+          # 実測では navi は 554 記事中 417 (75%) が平均 10 位以内なのにサイト全体で
+          # 376 impressions/日 しかない = 誰も検索しない語で 1 位を取っている状態。
+          # 需要側 (omcha.jp の GSC 実需要) を data/demand_keywords.json から入れる。
+          # 全面切替にしないのは供給側のロングテール探索を止めないため。
+          #   --demand-slots 20 : 60 枠中 20 枠 (残り 40 枠は従来の供給側ランダム)
+          # 枠内に収めるので SearchItems の総リクエスト数は増えない。
           python scripts/fetch_amazon.py \
             --asin "${{ github.event.inputs.asins }}" \
             --keyword "${{ github.event.inputs.keyword }}" \
             --keyword-sample-size 60 \
+            --demand-slots "${{ github.event.inputs.demand_slots || '20' }}" \
             --pages 3 \
             --min-new 80 \
             --out data/raw/
