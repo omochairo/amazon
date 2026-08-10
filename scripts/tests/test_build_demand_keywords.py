@@ -353,6 +353,29 @@ def test_broken_history_file_fails_open(tmp_path):
     assert B.load_wp_rank_stats(bad) == {}
 
 
+def test_spacing_variant_source_queries_are_not_double_counted(tmp_path):
+    """同じ需要語に空白違いの source_query が2件あっても imp/clicks は1件分。
+
+    「ぷにるんず サンリオ」と「ぷにるんずサンリオ」は normalize_key で同じキーに潰れる。
+    wp_rank_stats はキー単位で集計済みなので、source_queries 側で重複加算すると
+    2倍になる (2026-08-10 実データで発覚した回帰)。
+    """
+    history = _wp_history_file(tmp_path, [
+        {"query": "ぷにるんずサンリオ", "impressions": 2617, "clicks": 1085, "position": 2.1},
+    ])
+    stats = B.load_wp_rank_stats(history)
+    # to_search_keyword で同一キーワードに集約される2つの元クエリ (空白揺れ違い)。
+    topics = {"rows": [
+        {"query": "ぷにるんず サンリオ", "wp_impressions": 300, "bucket": "toy"},
+        {"query": "ぷにるんずサンリオ", "wp_impressions": 200, "bucket": "toy"},
+    ]}
+    rep = B.build(topics, [], {}, ("toy",), wp_rank_stats=stats)
+    assert rep["summary"]["dropped_wp_ranked"] == 1
+    d = rep["dropped_wp_ranked"][0]
+    assert d["wp_impressions"] == 2617, "2倍 (5234) になっていたら重複加算のバグ"
+    assert d["wp_clicks"] == 1085, "2倍 (2170) になっていたら重複加算のバグ"
+
+
 def test_no_rank_guard_flag_disables_guard_even_with_qualifying_stats(tmp_path):
     history = _wp_history_file(tmp_path, [
         {"query": "アンパンマンシール", "impressions": 500, "clicks": 220, "position": 1.1},

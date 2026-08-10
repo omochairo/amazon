@@ -307,8 +307,18 @@ def build(
             imp_sum = 0.0
             clicks_sum = 0.0
             pos_weighted_sum = 0.0
+            seen_norm: set[str] = set()
             for q in entry["source_queries"]:
-                stat = wp_rank_stats.get(normalize_key(q))
+                nk = normalize_key(q)
+                # source_queries は空白揺れ違いの別クエリを複数持つことがあるが、
+                # wp_rank_stats は normalize_key で正規化済みに集計されている。
+                # 同じ正規化キーに落ちる source_query を重複加算すると二重計上になる
+                # (2026-08-10 実データで発覚: 「ぷにるんず サンリオ」「ぷにるんずサンリオ」
+                # が同じキーに潰れて2倍になっていた)。正規化キー単位で1回だけ加算する。
+                if nk in seen_norm:
+                    continue
+                seen_norm.add(nk)
+                stat = wp_rank_stats.get(nk)
                 if not stat:
                     continue
                 imp_sum += stat["imp"]
