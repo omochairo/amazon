@@ -1,0 +1,4768 @@
+{
+  "generated_at": "2026-08-10T10:32:14Z",
+  "source": "data\\analytics\\ubersuggest_product_probe.json",
+  "note": "sample_titles は先頭5件のみ保存されているため、この再採点は実測より低めに出る可能性がある暫定値。確定は workflow 50 のAPI 再実行で行うこと (recompute_verdicts の docstring参照)。",
+  "summary_before": {
+    "product": 104,
+    "non_product": 51,
+    "ambiguous": 45
+  },
+  "summary_after": {
+    "product": 115,
+    "non_product": 19,
+    "ambiguous": 66
+  },
+  "changed_count": 46,
+  "results": [
+    {
+      "query": "たまごっち",
+      "raw_query": "たまごっち",
+      "volume": 1000000.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 9,
+      "sample_titles": [
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - White Glacier 対象年齢 6 才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Orange Tropics 対象年齢 6 才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Purple Sky 【日本おもちゃ大賞2025デジタル部門大賞】 対象年齢 6才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Blue Water 【日本おもちゃ大賞2025デジタル部門大賞】 対象年齢 6才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Original Tamagotchi Angel Carousel 対象年齢 6 才以上 たまごっち"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "知育村",
+      "raw_query": "知育 村",
+      "volume": 1000000.0,
+      "sites": [
+        "ouchi-iku.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "【専門家推薦×TV放送で話題】プッシュポップ ゲーム スクリーン付【人気雑誌掲載】知育玩具【児童館に導入】正規品 （柴犬）",
+        "レゴ(LEGO) ディズニープリンセス 村のおうちと小ぶね 43282 おもちゃ 男の子 女の子",
+        "【専門家推薦×TV放送で話題】プッシュポップ ゲーム スクリーン付【人気雑誌掲載】知育玩具【児童館に導入】正規品 （熊）",
+        "【専門家推薦×TV放送で話題】プッシュポップ ゲーム【人気保育雑誌掲載】知育玩具【児童館に導入】正規品 （柴犬）",
+        "【専門家推薦×TV放送で話題】プッシュポップ ゲーム スクリーン付【人気雑誌掲載】知育玩具【児童館に導入】正規品 （アヒル）"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": false
+    },
+    {
+      "query": "ピカチュウ",
+      "raw_query": "ピカチュウ",
+      "volume": 550000.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ポケモン30周年記念 おかえり!ピカチュウ1/1 高さ40cm",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ぴょこぷにゅ ピカチュウ 【日本おもちゃ大賞2025 バラエティ部門 優秀賞】",
+        "ポケットモンスター おうちにポケモン PIKACHU",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター てのひらピカチュウ ぽけふわ 高さ13cm",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター モンコレ なかよしおへやバッグ ピカチュウ"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "たまごっちパラダイス",
+      "raw_query": "たまごっちパラダイス",
+      "volume": 450000.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - White Glacier 対象年齢 6 才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Orange Tropics 対象年齢 6 才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Blue Water 【日本おもちゃ大賞2025デジタル部門大賞】 対象年齢 6才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - White Glacier Premium Set 対象年齢 6 才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Orange Tropics Premium Set 対象年齢 6 才以上 たまごっちパラダイス"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "トミカ",
+      "raw_query": "トミカ",
+      "volume": 368000.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) トミカプレミアムunlimited 頭文字D 日産 スカイライン GT-R (BNR32) (中里 毅) ミニカー おもちゃ 6歳以上",
+        "タカラトミー(TAKARA TOMY) トミカプレミアムunlimited 頭文字D ホンダ シビック SiR-II (EG6) (庄司 慎吾) ミニカー おもちゃ 6歳以上",
+        "タカラトミー(TAKARA TOMY) トミカプレミアム 13 トヨタ カローラ レビン (AE92) ミニカー おもちゃ 6歳以上",
+        "タカラトミー(TAKARA TOMY) トミカ tomica custom works BK26 Honda NSX ミニカー おもちゃ 6歳以上",
+        "タカラトミー(TAKARA TOMY) トミカ tomica custom works WH26 NISSAN SILVIA ミニカー おもちゃ 6歳以上"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "ベイブレードx",
+      "raw_query": "ベイブレードx",
+      "volume": 246000.0,
+      "sites": [
+        "takaratomymall.jp",
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) CX-13 スターター バハムートブリッツBK1-50I",
+        "タカラトミー(TAKARA TOMY) BEYBLADE X ベイブレードX BX-50 ランダムブースターVol.11",
+        "タカラトミー(TAKARA TOMY) BEYBLADE X ベイブレードX UX-20 スターター グローリーワルキューレ LF",
+        "タカラトミー(TAKARA TOMY) BEYBLADE X ベイブレードX BX-49 スターター ドランストライク4-50FF",
+        "タカラトミー(TAKARA TOMY) CX-15 ブースター ラグナレイジFE4-55Y"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "おもちゃ",
+      "raw_query": "おもちゃ",
+      "volume": 201000.0,
+      "sites": [
+        "takaratomymall.jp",
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "メガハウス(megahouse) じゃがりこショック",
+        "アンパンマン ばいきんまんとだだんだん ドキドキアンパンチ!",
+        "マグネットブロック 64 ピース 磁石ブロック 磁石おもち マグネットおもちゃ 知育玩具 男の子女の子 学習教育用 建設玩具 誕生日",
+        "キューブ(Cube) オタマトーン ブラック 0942",
+        "トイオブザイヤー2026 受賞【知育のプロ推薦×人気保育雑誌掲載】チュービック モンテッソーリ 知育玩具【子ども家庭庁管轄施設に導入】日本正規品"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "レゴ",
+      "raw_query": "レゴ",
+      "volume": 201000.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "レゴ(LEGO) スーパーマリオ LEGO Game Boy 72046 おもちゃ 男性 女性",
+        "レゴ(LEGO) クラシック まほうのアイデアボックス＜クリアカラー＞ 11040 おもちゃ 女の子 男の子",
+        "レゴ(LEGO) クラシック アイデアパーツ＜収納ケースつき＞ 10713 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) ミニフィギュア シリーズ29 71052 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) クラシック クリエイティブビークル カラフルな組み立てブロック 組み立てキット アイスクリームトラック パトカー おもちゃ モデルシティカーなど ギフト 車のおもちゃ 男の子 女の子 子供用 5歳以上 11036"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "ポケモンフレンダ",
+      "raw_query": "ポケモン フレンダ",
+      "volume": 165000.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ポケットモンスター ポケモン ポケモンフレンダ フレンダフォルダーセットDX",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター 超連動! ポケモン ダイマックスバンド",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ポケットモンスター ポケモン ポケモンフレンダ フレンダキャリー",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ポケットモンスター ポケモンフレンダ フレンダボックス マスタークリアバージョン",
+        "ポケットモンスター ポケモンフレンダ フレンダトランク"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "ベイブレード",
+      "raw_query": "ベイブレード",
+      "volume": 135000.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) BEYBLADE X ベイブレードX BX-50 ランダムブースターVol.11",
+        "タカラトミー(TAKARA TOMY) CX-13 スターター バハムートブリッツBK1-50I",
+        "BEYBLADE X ベイブレードX UX-08 スターター シルバーウルフ 3-80FB",
+        "タカラトミー(TAKARA TOMY) BEYBLADE X ベイブレードX BX-49 スターター ドランストライク4-50FF",
+        "タカラトミー(TAKARA TOMY) BEYBLADE X ベイブレードX UX-20 スターター グローリーワルキューレ LF"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "トランスフォーマー",
+      "raw_query": "トランスフォーマー",
+      "volume": 110000.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) T-SPARK トランスフォーマー Dramatic Capture Series ジェットファイヤーコンバイン 可動フィギュア",
+        "タカラトミー(TAKARA TOMY) T-SPARK トランスフォーマー OG-03 オプティマスプライム",
+        "タカラトミー(TAKARA TOMY) T-SPARK トランスフォーマー ニューレジェンズ NL-05 ガルバトロン (BWII) 可動フィギュア",
+        "タカラトミー(TAKARA TOMY) T-SPARK STUDIOSERIES スタジオシリーズ トランスフォーマー TS-37 スタースクリーム MTMTEコレクション 可動フィギュア",
+        "タカラトミー(TAKARA TOMY) T-SPARK エイジ・オブ・ザ・プライム トランスフォーマー AOTP-43 スインドル 可動フィギュア"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "プラレール",
+      "raw_query": "プラレール",
+      "volume": 110000.0,
+      "sites": [
+        "takaratomymall.jp",
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "【2026年モデル】タカラトミー(TAKARA TOMY) プラレール ワクワクつながる! プラレール ベストセレクション セット 電車 列車 おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) プラレール 20のレイアウトでかっこよく走らせよう! DXレールキット 電車 おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) 『 プラレール 10のレイアウトがつくれる ! ベーシックレールセット 』 電車 列車 おもちゃ 3歳以上 玩具安全基準合格 STマーク認証 PLARAIL",
+        "タカラトミー(TAKARA TOMY) 『 プラレール 乗車確認! 出発進行! まるごと鉄道体験! E5系 はやぶさコントロールセット 』 電車 列車 おもちゃ 3歳以上 男女両用 玩具安全基準合格 STマーク認証 PLARAIL TAKARA TOMY",
+        "タカラトミー(TAKARA TOMY) プラレール S-07 ライト付923形 ドクターイエローT4編成"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "メルちゃん",
+      "raw_query": "メルちゃん",
+      "volume": 110000.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "【Amazon.co.jp限定】パイロット おせわだいすきメルちゃん(おせわてちょうつき) 1.5歳以上",
+        "パイロット メルちゃん おせわパーツ おせわいっぱい10てんセット　3歳以上 プレゼント",
+        "パイロット メルちゃん お人形セット きほんのおせわセット",
+        "パイロット メルちゃん おせわパーツ メルちゃんのキッズプレート 3歳以上 女の子",
+        "パイロット メルちゃん おせわパーツ 牧場の朝ヨーグルト 3歳以上"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "lego",
+      "raw_query": "lego",
+      "volume": 90500.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "レゴ(LEGO) スーパーマリオ LEGO Game Boy 72046 おもちゃ 男性 女性",
+        "レゴ(LEGO) エディション FIFAワールドカップ 公式トロフィー 43020 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) クラシック まほうのアイデアボックス＜クリアカラー＞ 11040 おもちゃ 女の子 男の子",
+        "レゴ(LEGO) ミニフィギュア シリーズ29 71052 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) テクニック Mercedes-AMG F1 W14 E Performance Pull-Back おもちゃ 玩具 誕生日 プレゼント ブロック 男の子 女の子 子供 7歳 8歳 9歳 小学生 乗り物 車 ミニカー 42165"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "タカラトミー",
+      "raw_query": "タカラトミー",
+      "volume": 90500.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー ２つのコースをいったりきたり！ツインコースやまみちドライブ",
+        "タカラトミー コースがのび～る！２ＷＡＹにぎやか高速どうろ",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー リアルサイズトーキングフィギュア バズ･ライトイヤー",
+        "【2025年モデル】タカラトミー(TAKARA TOMY) ディズニー えらべる回転 6WAYジムにへんしんメリー プラス くまのプーさん",
+        "タカラトミー(TAKARA TOMY) PixTube ピクチューブ クリアパープル"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "デュエルマスターズ",
+      "raw_query": "デュエルマスターズ",
+      "volume": 90500.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) デュエル・マスターズ TCG DM26-EX3 キャラプレミアムパック ドラゴン娘になりたくないっ! 文化祭だョ!全員集合!!ドラ娘100％パック BOX",
+        "タカラトミー(TAKARA TOMY) デュエル･マスターズTCG DM26-RP2 逆札篇 第2弾 燃えろ禁断! 逆転のドギラゴン革命!! BOX",
+        "タカラトミー(TAKARA TOMY) デュエル･マスターズ TCG DM26-EX2 悪感謝祭 カリスマBEST BOX",
+        "タカラトミー(TAKARA TOMY) DM26-SD1 デュエル・マスターズTCG ドキドキつよいデッキ 25の王道",
+        "タカラトミー(TAKARA TOMY) デュエル・マスターズ TCG DM26-EX1 ますますつよいパック 25の援軍 BOX"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": true
+    },
+    {
+      "query": "トミカ新車",
+      "raw_query": "トミカ 新車",
+      "volume": 90500.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) トミカプレミアムunlimited 頭文字D ホンダ シビック SiR-II (EG6) (庄司 慎吾) ミニカー おもちゃ 6歳以上",
+        "タカラトミー(TAKARA TOMY) トミカプレミアム 24 トヨタ マークX 覆面パトロールカー ミニカー おもちゃ 6歳以上",
+        "タカラトミー(TAKARA TOMY) トミカ ロングタイプトミカ No.132 モリタ 小型オフロード消防車 レッドレディバグ ＆ 搬送車 ミニカー おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) トミカ tomica custom works TQ26 NISSAN SILVIA ミニカー おもちゃ 6歳以上",
+        "タカラトミー(TAKARA TOMY) トミカ No.84 カルピス ボトルカー ミニカー おもちゃ 3歳以上"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": false
+    },
+    {
+      "query": "babytoys",
+      "raw_query": "baby toys",
+      "volume": 74000.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "ブライトスターツ Bright Starts Oball オーボールラトル【0ヶ月~】 ベビーカー用おもちゃ 歯固め ガラガラ ソフトボール 出産祝い ライトブルー 11486",
+        "KILGICO 赤ちゃん ティッシュ おもちゃ 布製 0-1歳 知育玩具 ベビー 誕生日プレゼント",
+        "SASSY カミカミみつばち ピンク TYSA80779",
+        "Dr.Rapeti 赤ちゃん布絵本 日本語 二ヶ国語 6冊セット ベビー布おもちゃ 音鳴る絵本 布ブック ソフトブック ベービーブック 早期知育玩具",
+        "トイローヤル まわしてクルクルサウンド ( 知育玩具 / 指先遊び ) おもちゃ 楽しく学べる ( 音が出る / 光る ) 赤ちゃん ベビー"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "non_product",
+      "verdict_reason_after": "zero_title_overlap",
+      "title_overlap_after": 0.0,
+      "changed": false
+    },
+    {
+      "query": "みみっち",
+      "raw_query": "みみっち",
+      "volume": 74000.0,
+      "sites": [
+        "czech.hatenablog.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "カミオジャパン KAMIO JAPAN たまごっち マスコット キーホルダー みみっち 215309",
+        "たまごっち みみっち Chibiぬいぐるみマスコット",
+        "たまごっち みみっち ぷりぬいBIG Tamagotchi Paradise",
+        "カミオジャパン KAMIO JAPAN たまごっち おすわり ぬいぐるみ みみっち 220020",
+        "クラックス タマゴッチ ニコぬい キーホルダー ミミッチ ヤングミミッチ 131143"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "ウッディ",
+      "raw_query": "ウッディ",
+      "volume": 74000.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー リアルサイズトーキングフィギュア ウッディ",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー おしゃべりフレンズ ウッディ",
+        "マテル ディズニー ピクサー トイ・ストーリー 5 ウッディ 7インチ フィギュア Mattel Disney and Pixar Toy Story 5",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー リアルサイズトーキングフィギュア バズ･ライトイヤー",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー 30周年 リアルサイズトーキングフィギュア ウッディ KABUTO ver."
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "ウッディー",
+      "raw_query": "ウッディー",
+      "volume": 74000.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー 30周年 リアルサイズトーキングフィギュア ウッディ KABUTO ver.",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー 30周年 リアルサイズトーキングフィギュア ウッディ ウッディのラウンドアップ ver.",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー 30周年 ダイキャストコレクション ウッディ",
+        "タカラトミー(TAKARA TOMY) トイ・ストーリー4 英語と日本語! おしゃべりフレンズ ウッディ",
+        "BANDAI SPIRITS(バンダイ スピリッツ) トイ・ストーリー4 ウッディ 色分け済みプラモデル"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "non_product",
+      "verdict_reason_after": "zero_title_overlap",
+      "title_overlap_after": 0.0,
+      "changed": true
+    },
+    {
+      "query": "ピグレット",
+      "raw_query": "ピグレット",
+      "volume": 74000.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 8,
+      "sample_titles": [
+        "ディズニーフェイスヘアバンド　Ｐｏｏｈ／ピグレット",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ディズニー ディズニーキャラクター ぷりっこもーど ぬいぐるみS ピグレット ぬいぐるみ 高さ約17cm",
+        "SAZAC(サザック) キャラクター フリース 着ぐるみ フリーサイズ ディズニー ピグレット",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ディズニーキャラクター Nuiパン ぬいぐるみS キャラクターパン (すわり) ピグレット ぬいぐるみ高さ約18cm",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ディズニーキャラクター/プチポップ/ボールチェーンマスコット/ピグレット"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "リカちゃん",
+      "raw_query": "リカちゃん",
+      "volume": 74000.0,
+      "sites": [
+        "takaratomymall.jp",
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) リカちゃん ドール レトロリカ 日焼けしたキティとバカンス 着せ替え おままごと おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) リカちゃん ドール LD-00 はじめよう! マイファーストリカちゃん 着せ替え おままごと おもちゃ 3歳以上",
+        "【Amazon.co.jp限定】タカラトミー(TAKARA TOMY) リカちゃん ドール I Love Hello Kitty リカちゃん 1weekコーデギフトセット 着せ替え おままごと おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) リカちゃん ドール LD-03 リカちゃん1weekコーデギフトセット 着せ替え おままごと おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) リカちゃん ドール LD-29 スポーティチェック 着せ替え おままごと おもちゃ 8歳以上"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "おもちゃのアンパンマン",
+      "raw_query": "おもちゃの アンパンマン",
+      "volume": 60500.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "ジョイパレット(JOYPALETTE) アンパンマン NEW! にぎって! おとして! 光るくるコロタワー",
+        "セガフェイブ (SEGA FAVE) アンパンマン おさつスイスイ! セルフでピピッ アンパンマンレジスター",
+        "アガツマ(AGATSUMA) アンパンマン 天才脳つみかさねカップ 1~3歳",
+        "アンパンマン ばいきんまんとだだんだん ドキドキアンパンチ!",
+        "ジョイパレット(JOYPALETTE) アンパンマン こんがり焼けたよ！いろがわりオーブンレンジDX"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": false
+    },
+    {
+      "query": "おもちゃ屋",
+      "raw_query": "おもちゃ屋",
+      "volume": 60500.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "ROKR 立体パズル 3D木製パズル くまのおもちゃ屋さん 光の効果と音楽付き インテリア装飾 ミニチュアハウス 可動式モデル 雰囲気作り 玄関 工作キット DIY 組み立て オルゴール 暇つぶし 知育玩具 中学生 大人向け 初心者に最適 ギフト バレンタインデー 誕生日 公式 EAM01",
+        "Briskyjp LULU子豚 レトロテディーのおもちゃ屋シリーズ ブラインドドール 1個ボックス 高約14cm ソフトビニール&ポリエステル製 かわいい ぬいぐるみキーホルダー 塗装済み ペンダント プレゼント（ランダム1個）",
+        "Briskyjp LULU子豚 レトロテディーのおもちゃ屋シリーズ ブラインドドール 2個ボックス（繰り返しなし） 高約14cm ソフトビニール&ポリエステル製 かわいい ぬいぐるみキーホルダー 塗装済み ペンダント プレゼント (ランダム2個)",
+        "46 センチメートル大バブル西洋形状スティック子供石鹸おもちゃ屋外バブルマシン子供のためのプラグイン",
+        "Briskyjp LULU子豚 レトロテディーのおもちゃ屋シリーズ ブラインドドール 3個ボックス（繰り返しなし） 高約14cm ソフトビニール&ポリエステル製 かわいい ぬいぐるみキーホルダー 塗装済み ペンダント プレゼント (ランダム3個)"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "トイストーリーキャラ",
+      "raw_query": "トイストーリー キャラ",
+      "volume": 60500.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 9,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー リアルサイズトーキングフィギュア バズ･ライトイヤー",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー リアルサイズトーキングフィギュア ウッディ",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー リアルサイズトーキングフィギュア ジェシー",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー おしゃべりフレンズ ハム",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー おしゃべりフレンズ レックス"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": false
+    },
+    {
+      "query": "ヌオー",
+      "raw_query": "ヌオー",
+      "volume": 60500.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "三英貿易(Sanei Boeki) ポケットモンスター ALL STAR COLLECTION マスコット ヌオー マスコット W6.5×D11×H10.5cm ぬいぐるみ PM48",
+        "三英貿易(Sanei Boeki) ポケットモンスター ALL STAR COLLECTION ヌオー (S) W12×D20.5×H18cm ぬいぐるみ ポケモン PP203",
+        "ポケットモンスター　めちゃもふぐっとぬいぐるみ〜ヌオー〜",
+        "ポケットモンスター めちゃもふぐっとぬいぐるみ ～ヌオー～ のほほんver.",
+        "ポケモンセンターオリジナル ぬいぐるみ Pokémon fit ヌオー 13×13×7(H×W×D:㎝)"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "モンスターボール",
+      "raw_query": "モンスターボール",
+      "volume": 60500.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ぴょこぷにゅ ピカチュウ 【日本おもちゃ大賞2025 バラエティ部門 優秀賞】",
+        "タカラトミー ポケットモンスター モンコレ MB-04 マスターボール ポケモン おもちゃ 4歳以上",
+        "ハナヤマ(HANAYAMA) はずる ポケットモンスター モンスターボール",
+        "ポケットモンスター ポケモン バトルでゲット!モンスターボール",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ポケモン ポケなで モンスターボール"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "tomix",
+      "raw_query": "tomix",
+      "volume": 49500.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 1,
+      "sample_titles": [
+        "トミーテック (TOMYTEC) 国鉄 9600形 北海道型 鉄道模型 蒸気機関車 2013",
+        "トミーテック (TOMYTEC) 国鉄 北海道貨物列車 黄帯車 セットB 鉄道模型 貨車 97623",
+        "トミーテック (TOMYTEC) TOMIX Nゲージ JR キハ400系 利尻 セット 鉄道模型 ディーゼルカー 97240",
+        "トミーテック (TOMYTEC) JR キハ47 0形 JR四国色 セット 鉄道模型 ディーゼルカー 98169",
+        "トミーテック (TOMYTEC) 特別企画品 JR キハ120 0形 関西線・お茶の京都ラッピング車 セット 鉄道模型 ディーゼルカー 97992"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "デュエマ新弾",
+      "raw_query": "デュエマ 新弾",
+      "volume": 49500.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) デュエル・マスターズ TCG DM26-EX3 キャラプレミアムパック ドラゴン娘になりたくないっ! 文化祭だョ!全員集合!!ドラ娘100％パック BOX",
+        "タカラトミー(TAKARA TOMY) デュエル･マスターズ TCG DM26-EX2 悪感謝祭 カリスマBEST BOX",
+        "タカラトミー(TAKARA TOMY) デュエル･マスターズTCG DM26-RP2 逆札篇 第2弾 燃えろ禁断! 逆転のドギラゴン革命!! BOX",
+        "【未開封BOX】 デュエル･マスターズ TCG DM26-RP2 逆札篇 第2弾 燃えろ禁断! 逆転のドギラゴン革命!! BOX 【12BOXにつき未開封カートンにて出荷】",
+        "タカラトミー(TAKARA TOMY) DM26-SD1 デュエル・マスターズTCG ドキドキつよいデッキ 25の王道"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": true
+    },
+    {
+      "query": "ホットウィール",
+      "raw_query": "ホットウィール",
+      "volume": 49500.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "ホットウィール(Hot Wheels) ブールバード エンツォ・フェラーリ ミニカー 1:64スケール 3歳から JHW22",
+        "ホットウィール(Hot Wheels) ブールバード 1989メルセデス・ベンツ 560SEC AMG ミニカー 3歳から JHW37",
+        "ホットウィール(Hot Wheels) ブールバード '66 スーパーノヴァ ミニカー 1:64スケール 3歳から JHW35",
+        "ホットウィール(Hot Wheels) ブールバード '71 エルカミーノ ミニカー 1:64スケール 3歳から JHW38",
+        "ホットウィール(Hot Wheels) ブールバード アストンマーティン DBS ミニカー 1:64スケール 3歳から JHW36"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "人生ゲーム",
+      "raw_query": "人生 ゲーム",
+      "volume": 49500.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) 人生ゲーム （2023年ver.）",
+        "タカラトミー(TAKARA TOMY) サンリオキャラクターズ 人生ゲーム",
+        "人生ゲーム FIRE (ファイヤー)",
+        "タカラトミー(TAKARA TOMY) おもちゃ ポケット人生ゲーム",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー 人生ゲーム"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "人生ゲー無",
+      "raw_query": "人生ゲー無",
+      "volume": 49500.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 8,
+      "genre_pass_hits": 8,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) 人生ゲーム （2023年ver.）",
+        "タカラトミー(TAKARA TOMY) 大逆転人生ゲーム",
+        "人生ゲームプラス 令和版 (初回版)【日本おもちゃ大賞2019 コミュニケーション・トイ部門 優秀賞】",
+        "タカラトミー(TAKARA TOMY) 人生ゲーム ゴールデンドリーム",
+        "タカラトミー(TAKARA TOMY) おもちゃ ポケット大逆転人生ゲーム"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": true
+    },
+    {
+      "query": "おもちゃ店",
+      "raw_query": "おもちゃ　店",
+      "volume": 40500.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "セガフェイブ(SEGA FAVE) アンパンマン かまどでぷく~ ジャムおじさんのやきたてパン工場",
+        "シルバニアファミリー お店 家具セット 【 スイートパティシエ はじめてのケーキ屋さんセット 】 ミ-92 STマーク認証 3歳以上 おもちゃ ドールハウス Sylvanian Families エポック社 EPOCH",
+        "ラーニング リソーシズ(Learning Resources) おもちゃ キャッシュレジスター ピンク USドル付 LER2629P 正規品",
+        "石川玩具 Gokko!わくわくフレーバーアイスクリーム屋さん ピンク",
+        "レゴ(LEGO) どうぶつの森 レイジの旅する園芸店 77054 おもちゃ 女の子 男の子"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "トミカプレミアム",
+      "raw_query": "トミカプレミアム",
+      "volume": 40500.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) トミカプレミアムunlimited 頭文字D 日産 スカイライン GT-R (BNR32) (中里 毅) ミニカー おもちゃ 6歳以上",
+        "タカラトミー(TAKARA TOMY) トミカプレミアムunlimited 頭文字D ホンダ シビック SiR-II (EG6) (庄司 慎吾) ミニカー おもちゃ 6歳以上",
+        "タカラトミー(TAKARA TOMY) トミカプレミアム 13 トヨタ カローラ レビン (AE92) ミニカー おもちゃ 6歳以上",
+        "タカラトミー(TAKARA TOMY) トミカプレミアム tomicaトランスポーター グッドスマイル 初音ミク AMG 2024 Ver. ミニカー おもちゃ 6歳以上",
+        "タカラトミー(TAKARA TOMY) トミカプレミアム 05 ランボルギーニ ミウラ P400S ミニカー おもちゃ 6歳以上"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "パルクール",
+      "raw_query": "パルクール",
+      "volume": 40500.0,
+      "sites": [
+        "www.bornelund.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 3,
+      "sample_titles": [
+        "SAKAMOTO DAYS 描き下ろしアクリルスタンド 神々廻 パルクール ver.",
+        "SAKAMOTO DAYS 描き下ろしポラロイド風アクリルキーホルダー 朝倉シン パルクール ver.",
+        "SAKAMOTO DAYS 描き下ろしトレーディングミニ色紙 パルクール ver.（12枚入り1BOX）",
+        "パルクールパーティーバナー - ランニングやジャンプスポーツをテーマにしたパーティー用品用のDIY不要のパルクール誕生日デコレーション。",
+        "SAKAMOTO DAYS 描き下ろしポラロイド風アクリルキーホルダー 神々廻 パルクール ver."
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "プレミアムトミカ",
+      "raw_query": "プレミアムトミカ",
+      "volume": 40500.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) トミカプレミアムunlimited 頭文字D 日産 スカイライン GT-R (BNR32) (中里 毅) ミニカー おもちゃ 6歳以上",
+        "タカラトミー(TAKARA TOMY) トミカプレミアムunlimited 頭文字D ホンダ シビック SiR-II (EG6) (庄司 慎吾) ミニカー おもちゃ 6歳以上",
+        "タカラトミー(TAKARA TOMY) トミカプレミアム 05 ランボルギーニ ミウラ P400S ミニカー おもちゃ 6歳以上",
+        "タカラトミー(TAKARA TOMY) トミカプレミアム 24 トヨタ マークX 覆面パトロールカー ミニカー おもちゃ 6歳以上",
+        "タカラトミー(TAKARA TOMY) トミカプレミアムRacing マツダ 787B 18号車 ミニカー おもちゃ 6歳以上"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": true
+    },
+    {
+      "query": "リカちゃん人形",
+      "raw_query": "リカちゃん人形",
+      "volume": 40500.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) リカちゃん ドール LD-00 はじめよう! マイファーストリカちゃん 着せ替え おままごと おもちゃ 3歳以上",
+        "タカラトミー リカちゃん ドール KATE LICCA -Make My Color- 着せ替え おままごと おもちゃ 5歳以上",
+        "タカラトミー リカちゃん ドール LD-01 ゆめみるリカちゃん ギフトセット 着せ替え おままごと おもちゃ 3歳以上",
+        "タカラトミー リカちゃん ドール LD-10 おとなっぽリカちゃん 着せ替え おままごと おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) リカちゃん ドール LD-03 リカちゃん1weekコーデギフトセット 着せ替え おままごと おもちゃ 3歳以上"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": true
+    },
+    {
+      "query": "玩具",
+      "raw_query": "玩具",
+      "volume": 40500.0,
+      "sites": [
+        "takaratomymall.jp",
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "Gimamaフライングボール 「TV・SNS・ブログで 正規品」 ジャイロ 飛行ボールトイ UFOおもちゃ ブーメランスピナー LEDライト付き クリスマス 人気を集めているプレゼント (ブルー)…",
+        "エポック(EPOCH) 社のポカポンゲーム ミニオンズ",
+        "ハズブロ(Hasbro)ハズブロ公式ジェンガ(2025)Webアプリでいろんな遊び方 木製ブロック スタッキングタワー パーティーゲーム 6才以上 1人~用 G1499 正規品",
+        "アガツマ(AGATSUMA) アンパンマンが上手に描けちゃう! 天才脳らくがき教室 対象年齢1.5才～ お絵描き おもちゃ",
+        "アンパンマン ばいきんまんとだだんだん ドキドキアンパンチ!"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "non_product",
+      "verdict_reason_after": "zero_title_overlap",
+      "title_overlap_after": 0.0,
+      "changed": true
+    },
+    {
+      "query": "砂場",
+      "raw_query": "砂場",
+      "volume": 40500.0,
+      "sites": [
+        "www.bornelund.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "Little Tikes 亀砂場 男の子と女の子向け 1~6歳",
+        "天然木製 砂場 蓋付き ベンチ 2 脚付き お子様用砂遊びボックス 48 インチ 屋外庭園・バックヤード・パティオ・アウトドア",
+        "アガツマ(AGATSUMA) アンパンマン 遊びいっぱいどこでもすなば",
+        "OAFNLWU 木製 サンドボックス 木製砂場 子供用 サンド プレイ 背もたれ付きストライプ屋根 日よけ付き 高さ調節可能 防水シート付 子供の遊び場 砂遊び キッズ 子ども用 庭用 幼稚園 屋外遊具 組立式 大型 兄弟で遊べる 広め イエロー・ブルー",
+        "koolsoo 【新登場•日よけ傘付き】亀砂場セット 子供用砂場 プレイサンドトレー 2in1 パラソル 蓋付き 砂遊びおもちゃ サンドボックス ポータブル 水&砂遊びセット 感覚遊び 子供向け ビーチ プール海公園旅行用 親子遊び 屋内 屋外 ベランダ 庭 夏のギフト 知育玩具 保育園 幼稚園 男の子 女の子 3歳以上, カメ"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "1歳誕生日プレゼント",
+      "raw_query": "1歳 誕生日プレゼント",
+      "volume": 33100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "ジョイパレット(JOYPALETTE) アンパンマン NEW! にぎって! おとして! 光るくるコロタワー",
+        "パイロット スイスイおえかき miffyはじめてのスイスイおえかき 1歳以上 知育",
+        "Edutē エデュテ Tryco トライコ スキッピー ベージュ 1歳からの誕生日プレゼントに!室内で体幹を鍛える乗用バランストイ",
+        "アガツマ(AGATSUMA) アンパンマン 自然の恵 お米からうまれたつみきDX （対象年齢:0ヶ月以上）",
+        "アガツマ(AGATSUMA) アンパンマン たっちしてタッチ！テーブル 対象年齢10ヶ月から"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "ふらわっち",
+      "raw_query": "ふら わっ ち",
+      "volume": 33100.0,
+      "sites": [
+        "czech.hatenablog.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 0,
+      "sample_titles": [
+        "帽 子 用 ア イ ロ ン ワ ッ ペ ン 、 洋 服 用 ワ ッ ペ ン ア イ ロ ン 接 着 - 衣 類 修 理 ア イ ロ ン 接 着 パ ッ",
+        "Hozilen 衣 類 用 ワ ッ ペ ン ア イ ロ ン 接 着, 衣 類 用 ア イ ロ ン 接 着 ワ ッ ペ ン | 衣 類 用 ワ ッ ペ",
+        "レ ジ ン 用 バ タ フ ラ イ シ リ コ ン モ ー ル ド 、 バ タ フ ラ イ シ リ コ ン モ ー ル ド | レ リ ー フ 蝶 の",
+        "Wuasrgih シ リ コ ン 製 動 物 型 | ハ ン ド メ イ ド 立 体 フ ク ロ ウ エ ポ キ シ レ ジ ン 型 | 多 用 途",
+        "Wuasrgih レ ジ ン 動 物 型 | ハ ン ド メ イ ド 立 体 フ ク ロ ウ エ ポ キ シ レ ジ ン 型 | 多 用 途 ク ラ"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "no_genre_pass",
+      "title_overlap_before": 0.0,
+      "verdict_after": "non_product",
+      "verdict_reason_after": "no_genre_pass",
+      "title_overlap_after": 0.0,
+      "changed": false
+    },
+    {
+      "query": "アニア",
+      "raw_query": "アニア",
+      "volume": 33100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) アニア パッとおかたづけ! 恐竜大乱闘ワールド 動物 恐竜 おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) アニア 恐竜バトルキングダム W385×H280×D220mm",
+        "タカラトミー(TAKARA TOMY) アニア アニアがあるくゾ! ぐるぐるマウンテン 動物 恐竜 おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) アニア AL-13 ホホジロザメ (水に浮くVer.) 動物 恐竜 おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) アニア サウンドいっぱい!おかたづけ動物王国マップ 動物 恐竜 おもちゃ 3歳以上"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "クオン",
+      "raw_query": "クオン",
+      "volume": 33100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 8,
+      "sample_titles": [
+        "タカラトミー トミカ ロングタイプトミカ No.147 UDトラックス クオン トレーラーダンプ ミニカー おもちゃ 3歳以上",
+        "タカラトミー トミカ No.31 UDトラックス クオン (箱) ミニカー おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) トミカ ロングタイプトミカ No.136 UDトラックス クオン タンクローリー ミニカー おもちゃ 3歳以上",
+        "マジック:ザ・ギャザリング 久遠の終端 プレイ・ブースター 日本語版(BOX30パック入り)MTG トレカ ウィザーズ・オブ・ザ・コースト EOE D44471400",
+        "トミカ 31 UDトラックス クオン ミニカー (並行輸入品) [並行輸入品]"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "モンコレ",
+      "raw_query": "モンコレ",
+      "volume": 33100.0,
+      "sites": [
+        "takaratomymall.jp",
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) ポケットモンスター モンコレ 黒いメガレックウザ",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター モンコレ MS-26 ゲンガー",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ポケモン30周年記念 モンコレ旅立ちの3匹セット カントー地方",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター モンコレ リザードン(キョダイマックスのすがた)",
+        "ポケットモンスター モンコレ ゲンシカイオーガ"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "レゴブロック",
+      "raw_query": "レゴ ブロック",
+      "volume": 33100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "レゴ(LEGO) クラシック アイデアパーツ＜収納ケースつき＞ 10713 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) クラシック まほうのアイデアボックス＜クリアカラー＞ 11040 おもちゃ 女の子 男の子",
+        "WYSWYG 1200ピース クラシックブロックおもちゃセット 主要ブロックブランド 互換 基本ブロック おもちゃ 10色 14形状6歳以上適用",
+        "【ブロック買い増しに】 レゴ互換サイズ Sunwards-mini レゴクラシック互換 260ピース ブロック ブロックおもちゃ 基本ブロック おもちゃ レゴ互換 知育 (通常カラー)",
+        "レゴ(LEGO) デュプロ デュプロのカラフルコンテナ 10479 おもちゃ 男の子 女の子"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "三輪車",
+      "raw_query": "三輪車",
+      "volume": 33100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "BTM 子供用三輪車 折りたたみカバー 手押し棒付き 7in1 バイク 安全ベルト 三輪車のりもの 超軽量 座面回転 ハンドル調整可能 自転車 おもちゃ 乗用玩具 幼児用 赤ちゃん 組み立て簡単 誕生日プレゼント",
+        "*安心の日本企業*SFUN 三輪車 子供用 3 in1 自転車 ペタルなし三輪車 ベビーウォーカー 1-5歳子供用 高さ調整可能 (ホワイト)",
+        "Bacany 子供用三輪車 7in1 三輪車 ステップ付き 折りたたみ 手押し棒 おしゃれ 1歳-6歳 子供バイク コンパクト 自転車 おもちゃ 乗用玩具 幼児用 キッズバイク プレゼント おもちゃ 調整可能 お祝い ギフト シートベルト付き (ホワイト)",
+        "Nijakise 子供用 三輪車 5in1三輪車 ベビーカー 手押し棒付き 手押し棒調整可能 サンシェード付き 組み立て式 6ヶ月～6歳 おもちゃ プレゼント",
+        "Nijakise 子供用 三輪車 ベビーカー 手押し棒付き 手押し棒調整可能 組み立て式 2～6歳 おもちゃ プレゼント ベージュ"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "2歳の誕生日プレゼント",
+      "raw_query": "2歳の誕生日プレゼント",
+      "volume": 27100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "アガツマ(AGATSUMA) おうたもあいうえおも! アンパンマン はじめてのキッズタブレット 【日本おもちゃ大賞2023共有玩具部門優秀賞】(対象年齢:1歳半以上)",
+        "アンパンマン ばいきんまんとだだんだん ドキドキアンパンチ!",
+        "グッドトイ受賞 ジスター (GESTAR) 天才のはじまり (混合カラー) 知育玩具 ブロック おもちゃ (3歳～12歳対応 / 男の子 女の子) 480ピース＋40枚増量中 / LOTUS LIFE",
+        "アガツマ(AGATSUMA) アンパンマン スティックスイスイそうじき",
+        "セガフェイブ(SEGA FAVE) アンパンマン にほんご えいご 二語文も! あそぼう! しゃべろう! ことばずかんPremium【日本おもちゃ大賞2021 エデュケーショナル・トイ部門 大賞】"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.25,
+      "changed": true
+    },
+    {
+      "query": "2歳誕生日プレゼント",
+      "raw_query": "2歳 誕生日プレゼント",
+      "volume": 27100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "アガツマ(AGATSUMA) おうたもあいうえおも! アンパンマン はじめてのキッズタブレット 【日本おもちゃ大賞2023共有玩具部門優秀賞】(対象年齢:1歳半以上)",
+        "アガツマ(AGATSUMA) アンパンマン スティックスイスイそうじき",
+        "[バンダイ(BANDAI)] まねっこするよ♪ぴょこぴょこアンパンマン 対象年齢 2 才以上",
+        "セガフェイブ(SEGA FAVE) アンパンマン にほんご えいご 二語文も! あそぼう! しゃべろう! ことばずかんPremium【日本おもちゃ大賞2021 エデュケーショナル・トイ部門 大賞】",
+        "アンパンマン ばいきんまんとだだんだん ドキドキアンパンチ!"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.25,
+      "changed": false
+    },
+    {
+      "query": "mitsuioutletparkyokohamabayside",
+      "raw_query": "mitsui outlet park yokohama bayside",
+      "volume": 27100.0,
+      "sites": [
+        "www.bornelund.co.jp"
+      ],
+      "hits": 0,
+      "genre_pass_hits": 0,
+      "sample_titles": [],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "no_hits",
+      "title_overlap_before": 0.0,
+      "verdict_after": "non_product",
+      "verdict_reason_after": "no_hits",
+      "title_overlap_after": 0.0,
+      "changed": false
+    },
+    {
+      "query": "toys",
+      "raw_query": "toys",
+      "volume": 27100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "Tecnock 子供向け スタント おもちゃ ラジコンカー 360度回転 両面走行 USB Type-C充電式 4WD オフロード RCカー 男の子 誕生日 プレゼント (ブルー)",
+        "タカラトミー(TAKARA TOMY) トミカワールド トミカを運転! ハンドルドライバー",
+        "60PCS ミニマグネットプロック 磁石おもちゃ ブリキ箱入りマグネット おもちゃ知育玩具誕生日プレゼントクリスマスプレゼント",
+        "Emoin 踊るサボテン おもちゃ サボテン 踊る/ダンシング/動く/歌う/録音 真似するぬいぐるみ 日本語説明書付き音量調節可能 箱詰め talking cactus toy for kids バレンタイン 子供の日 誕生日 ひな祭り クリスマス プレゼント 子供向け 電池式 インテリア飾り（童謡 10 曲）",
+        "Gimamaフライングボール 「TV・SNS・ブログで 正規品」 ジャイロ 飛行ボールトイ UFOおもちゃ ブーメランスピナー LEDライト付き クリスマス 人気を集めているプレゼント (ブルー)…"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "non_product",
+      "verdict_reason_after": "zero_title_overlap",
+      "title_overlap_after": 0.0,
+      "changed": false
+    },
+    {
+      "query": "おやすみたまご",
+      "raw_query": "おやすみたまご",
+      "volume": 27100.0,
+      "sites": [
+        "czech.hatenablog.com"
+      ],
+      "hits": 6,
+      "genre_pass_hits": 6,
+      "sample_titles": [
+        "フィッシャープライス(fisher price) おやすみラッコ 日本正規品 寝かしつけ 赤ちゃんおもちゃ 0ヶ月から GHL41",
+        "びっくらたまご クレヨンしんちゃん ぐっすりおやすみだゾ！",
+        "シャオール 鈴付き わっかボール (０歳 / めろん/グッド・トイ2022 受賞) 知育玩具 赤ちゃん 出産祝い 洗濯可能 S11003",
+        "[lalarimi]変身恐竜卵ぬいぐるみ ミルク 翼付き 抱き枕 もちもち手触り 癒し 子供プレゼント ギフト ソフト ベッドタイム おやすみ相棒 恐竜と卵",
+        "プッパプーポ サニーマット ベビー タッセル ラグ フリンジ 月齢フォト ごろ寝アート 寝相アート よちよち ベビー 円形 はいはい 赤ちゃん 出産祝い プレゼント ギフト04ショコラ"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "non_product",
+      "verdict_reason_after": "zero_title_overlap",
+      "title_overlap_after": 0.0,
+      "changed": false
+    },
+    {
+      "query": "かっこいいポケモン",
+      "raw_query": "かっこいい ポケモン",
+      "volume": 27100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "クラシックポケモンテーマパーティーデコセット - 人気ポケモンキャラクター仕様：18 個入りテーマバルーン + 13 個入りケーキトッパー + 1 本装飾用フラットリボン パーティー雰囲気一気に UP",
+        "ポケモンカードゲーム 100枚 つめあわせセット ミニ福袋 お楽しみパック RRカード確定封入 【安心安全のAmazon倉庫管理発送】",
+        "マテルゲーム(Mattel Game) ブロックス(Blokus) ブロックスシャッフル ポケモンエディション ボードゲーム 知育ゲーム 2~4人用 7歳から HHM20",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ポケットモンスター ポケモン ポケモンフレンダ フレンダキャリー",
+        "ポケモンババ抜き＆ポケモンタルカセット"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": false
+    },
+    {
+      "query": "たまごっちパラダイス",
+      "raw_query": "たまごっちパラダイス定価",
+      "volume": 27100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - White Glacier 対象年齢 6 才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Purple Sky 【日本おもちゃ大賞2025デジタル部門大賞】 対象年齢 6才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Blue Water 【日本おもちゃ大賞2025デジタル部門大賞】 対象年齢 6才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Orange Tropics 対象年齢 6 才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Pink Land 【日本おもちゃ大賞2025デジタル部門大賞】 対象年齢 6才以上 たまごっちパラダイス"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": true
+    },
+    {
+      "query": "カッコいいポケモン",
+      "raw_query": "カッコいい ポケモン",
+      "volume": 27100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "ポケットモンスター モンコレ ML-18 ザシアン",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター 超連動!ポケモン テラスタルオーブRV (ライジングボルテッカーズ)",
+        "イガラシ ポケモン70cmウキワ ブルー(ロープ付き) 膨らんだ状態のウキワの内周は約95~100cm AHD-70D",
+        "イガラシ ポケモン80cmウキワブルー（ロープ付き） 膨らんだ状態の浮輪の内周が約105～110cm AHD-80E",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ポケモンぬいぐるみ キャプテンピカチュウ ゴーグルver."
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": false
+    },
+    {
+      "query": "カッコ良いポケモン",
+      "raw_query": "カッコ良いポケモン",
+      "volume": 27100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "ポケモンセンターオリジナル ぬいぐるみ Pokémon fit レジアイス 12.5×12.7×9.5(H×W×D:㎝)",
+        "nanoblock ナノブロック ポケットモンスター ヒトカゲ NBPM-002",
+        "nanoblockナノブロック ポケットモンスター ゼニガメ NBPM-004",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター モンコレ ぽこ あ ポケモン コレクション ピカチュウ (うすいろ)",
+        "カワダ(Kawada) ナノブロック ポケットモンスター グラードン NBPM_062"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": true
+    },
+    {
+      "query": "トミックス",
+      "raw_query": "トミックス",
+      "volume": 27100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 0,
+      "sample_titles": [
+        "トミーテック (TOMYTEC) 国鉄 9600形 北海道型 鉄道模型 蒸気機関車 2013",
+        "トミーテック (TOMYTEC) TOMIX Nゲージ JR キハ400系 利尻 セット 鉄道模型 ディーゼルカー 97240",
+        "トミーテック (TOMYTEC) TOMIX Nゲージ JR 205系通勤電車 (横浜線・新製車) セット 鉄道模型 電車 97618",
+        "トミーテック (TOMYTEC) TOMIX Nゲージ JR E3 0系秋田新幹線 (こまち・前期型) セット 鉄道模型 電車 97644",
+        "トミーテック (TOMYTEC) 国鉄 北海道貨物列車 黄帯車 セットB 鉄道模型 貨車 97623"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "no_genre_pass",
+      "title_overlap_before": 0.0,
+      "verdict_after": "non_product",
+      "verdict_reason_after": "no_genre_pass",
+      "title_overlap_after": 0.0,
+      "changed": false
+    },
+    {
+      "query": "ドキドキ強いデッキ",
+      "raw_query": "ドキドキ強いデッキ",
+      "volume": 27100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) DM26-SD1 デュエル・マスターズTCG ドキドキつよいデッキ 25の王道",
+        "【発売日前日出荷】デュエル・マスターズ DM26-SD1 ドキドキつよいデッキ 25の王道※48個ご注文でカートン発送",
+        "デュエル・マスターズTCG DM26-SD1 ドキドキつよいデッキ 25の王道",
+        "DM26-SD1 ドキドキつよいデッキ 25の王道 デュエマ",
+        "4月発売 予約 1パック 3パック DM26-SD1 デュエル・マスターズTCG ドキドキつよいデッキ 25の王道 (1)"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": true
+    },
+    {
+      "query": "パウパトロールおもちゃ",
+      "raw_query": "パウパトロール おもちゃ",
+      "volume": 27100.0,
+      "sites": [
+        "takaratomymall.jp",
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) パウ・パトロール パウっと出動! DXパウステーション",
+        "タカラトミー(TAKARA TOMY) パウ・パトロール ダイキャストビークル ギフトパック",
+        "タカラトミー(TAKARA TOMY) パウ・パトロール パウっと出動! パウパトローラー 3歳以上",
+        "タカラトミー(TAKARA TOMY) パウ・パトロール にほんご・えいご・クイズも! おしゃべりパウフェクトずかん",
+        "タカラトミー(TAKARA TOMY) パウ・パトロール あそびもまなびもパウっとかいけつ! ワンダフルパウパッド"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": true
+    },
+    {
+      "query": "ビーダマン",
+      "raw_query": "ビーダマン",
+      "volume": 27100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 9,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) 国内:タカラトミーモール限定 LEGACYSOUL ビーダマン大福箱'27",
+        "【予約期間は終了しました】タカラトミー(TAKARA TOMY) 国内:タカラトミーモール限定 LEGACYSOUL スーパービーダマン・OSギア・伊集院スペシャル ケーニッヒケルベロス＋コンテナケースセット",
+        "T-SPARK TOYRISE トイライズ DMB-01 ホワイトブロス 可動フィギュア",
+        "タカラトミー(TAKARA TOMY) 国内:タカラトミーモール限定 LEGACYSOUL 福箱'27 ビーダマン富パック",
+        "タカラトミー(TAKARA TOMY) 国内:タカラトミーモール限定 LEGACYSOUL 福箱'27 ビーダマン宝パック"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "プリキュアおもちゃ",
+      "raw_query": "プリキュア おもちゃ",
+      "volume": 27100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "[バンダイ(BANDAI)] 名探偵プリキュア！ Pretty Holic トップオブリリーフレグランス スペシャルセット 対象年齢 6 才以上",
+        "[バンダイ(BANDAI)] 名探偵プリキュア！ くるっと変身！ジュエルキュアウォッチ スペシャルセット 対象年齢 3 才以上",
+        "[バンダイ(BANDAI)] 名探偵プリキュア！ のぞいてみつめてジュエルで浄化♪ プリキットミラールーペ キュアエクレールver. 対象年齢 3 才以上",
+        "[バンダイ(BANDAI)] 名探偵プリキュア！ まわして変身！ ティアアルカナロッド 対象年齢 3 才以上",
+        "[バンダイ(BANDAI)] 名探偵プリキュア！ ジュエルキュアウォッチ＆プリキットミラールーペセット 対象年齢 3 才以上"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.75,
+      "changed": false
+    },
+    {
+      "query": "ベビーカーb型",
+      "raw_query": "ベビーカー b型",
+      "volume": 27100.0,
+      "sites": [
+        "czech.hatenablog.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "Nijakise 子供用 三輪車 5in1三輪車 ベビーカー 手押し棒付き 手押し棒調整可能 サンシェード付き 組み立て式 6ヶ月～6歳 おもちゃ プレゼント",
+        "Lascal ラスカル バギーボード 【ヨーロッパ安全基準適合品】 静音ラバータイヤとサスペンションで快適乗り心地 上の子も下の子も一度にお迎えできる 【総輸入販売元】 グレー",
+        "Jopsavm ベビーカー、軽量コンパクトな、お出かけ用ベビーカー、 折りたたみ リクライニング 、サンキャノピー付き、コンパクト、通気性がある、新生児ギフト、ベビーシャワーギフト、出産お祝 (シャンパン)",
+        "Vifxucyベビーカー B型 4輪 おでかけバギーカプセルカー ベビーウォーカー 折りたたみ式 軽量 自立式 超軽量 3kg 10か月~36か月 軽量 コンパクト バギー 丸洗い可 新生児 出産お祝い（1～6歳） (コーヒー色)",
+        "Vifxucy ベビーカー両対面 多機能 軽量 衝撃吸収に 折りたたみ式 新生児から36ヶ月まで使用可能 座面、背もたれ調節可能 屋内、屋外兼用 旅行、自宅、ベビーシャワーギフトにも最適 (グレー)"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "ポケモンぬいぐるみ",
+      "raw_query": "ポケモン ぬいぐるみ",
+      "volume": 27100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ポケモン ぬいぐるみ ロイの色違いのメガルカリオZ 高さ 約34cm",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ポケモン30周年記念 おかえり!ピカチュウ1/1 高さ40cm",
+        "三英貿易(Sanei Boeki) ポケットモンスター ALL STAR COLLECTION ゼニガメ (S) W11×D14×H16cm ぬいぐるみ ポケモン PP19",
+        "ポケモン すやすやフレンド ぬいぐるみL ピカチュウ 全長約49cm",
+        "三英貿易(Sanei Boeki) ポケットモンスター ALL STAR COLLECTION メガリザードンX (S) W30×D27×H26cm ぬいぐるみ PP281"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "ポケモンのピカチュウ",
+      "raw_query": "ポケモンのピカチュウ",
+      "volume": 27100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ポケモン30周年記念 おかえり!ピカチュウ1/1 高さ40cm",
+        "三英貿易 ポケットモンスター ALL STAR COLLECTION ピカチュウ(メスのすがた) (S) W17×D12×H19cm ぬいぐるみ ポケモン PP165",
+        "[公式] POKEMON AIR ポケモンエアー 正規品 (空気入れ用ポンプ付き) 乗用玩具 3歳 4歳 5歳 プレゼント 誕生日 ギフトピカチュウ 3才 4才 5才 クリスマス",
+        "ポケットモンスター おうちにポケモン PIKACHU",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ぴょこぷにゅ ピカチュウ 【日本おもちゃ大賞2025 バラエティ部門 優秀賞】"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": true
+    },
+    {
+      "query": "ポケモングッズ",
+      "raw_query": "ポケモングッズ",
+      "volume": 27100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 9,
+      "sample_titles": [
+        "シャイン(Shine) NEW イーブイバンク",
+        "ウボンゴ ポケモン",
+        "マテルゲーム(Mattel Game) ウノ(UNO) ウノ ポケットモンスター カードゲーム パーティーゲーム 2~10人用 7歳から ポケモン GNH17",
+        "エンスカイ(ENSKY) ポケットモンスター ピカチュウとゲンガーのリバーシゲーム 15.8×15.8cm 2人用 PVS-19 6才以上",
+        "メガハウス(megahouse) ポケットモンスター ルービックキューブ ver.BLUE 8才以上"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": true
+    },
+    {
+      "query": "レゴニンジャゴー",
+      "raw_query": "レゴ ニンジャ ゴー",
+      "volume": 27100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "レゴ(LEGO) ニンジャゴー カオスドラゴン：サンダーファング 71832 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) ニンジャゴー ジルヴァーとドラゴン・ビースト 71863 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) ニンジャゴー ワイルドファイヤの変形メカドラゴン 71868 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) ニンジャゴー ロイドのドラゴンメカスーツ バトルパック 71862 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) ニンジャゴー コールのドラゴン・メガチタンメカ おもちゃ 玩具 誕生日 プレゼント ブロック 男の子 女の子 子供 12歳 13歳 14歳 小学生 対戦 ロボット 71821"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "誕生日2歳プレゼント",
+      "raw_query": "誕生日 2歳 プレゼント",
+      "volume": 27100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "セガフェイブ(SEGA FAVE) アンパンマン にほんご えいご 二語文も! あそぼう! しゃべろう! ことばずかんPremium【日本おもちゃ大賞2021 エデュケーショナル・トイ部門 大賞】",
+        "アガツマ(AGATSUMA) アンパンマン スティックスイスイそうじき",
+        "Joyreal モンテッソーリ ビジーボード 知育玩具 1 2 3歳誕生日プレゼント男の子 女の子 知育玩具 LED おもちゃ 指先知育 早期開発 (スタンダード・エディション)",
+        "誕生日 飾り付け2歳男の子 乗り物バルーンセット Happy Birthdayバースデーバナー 交通バナー王冠 重機バルーンセット 星風船2歳 男の子 誕生日プレゼント飾り",
+        "[バンダイ(BANDAI)] BlockLabo ブロックラボ アンパンマン SLマンと1 2 3!すうじブロックセット 対象年齢 1.5 才以上 それいけ！アンパンマン"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "amazonらくらくベビー",
+      "raw_query": "amazon らくらくベビー",
+      "volume": 22200.0,
+      "sites": [
+        "daivoy.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "GU MODE プレイマット ベビーマット 抗菌 ベビープレイマット シームレスプレイマット 折りたたみ 持ち手が付く 厚み4cm 収納しやすい 厚手 折りたたみ ノンホルム 防水 防音 マット【グレー・ホワイト/140×200】",
+        "GU MODE プレイマット ベビーマット 抗菌 ベビープレイマット シームレスプレイマット 折りたたみ 持ち手が付く 厚み4cm 収納しやすい 厚手 折りたたみ ノンホルム 防水 防音 マット【グレー・ホワイト/180x200】",
+        "プッパプーポ サニーマット ベビー タッセル ラグ フリンジ 月齢フォト ごろ寝アート 寝相アート よちよち ベビー 円形 はいはい 赤ちゃん 出産祝い プレゼント ギフト04ショコラ",
+        "Edutē エデュテ I'mTOY アイムトイ ベビーファーストウォーカー 1歳からの誕生日プレゼントに!歩く練習を支える木製手押し車",
+        "Little Bot Baby ベビープレーマット (禅線+三角形、大), 200x140x1.5cm, 赤ちゃん用ソフトフォームマット,"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.333,
+      "changed": false
+    },
+    {
+      "query": "スティッチぬいぐるみ",
+      "raw_query": "スティッチ ぬいぐるみ",
+      "volume": 22200.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "スティッチ 抱きまくら ぬいぐるみ クッション リロ＆スティッチ 【東京ディズニーリゾート限定】",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ディズニーキャラクター のこのこフレンズ ぬいぐるみM スティッチ ぬいぐるみ幅約23cm",
+        "ディズニー洗えるビーンズコレクション スティッチ",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ディズニーキャラクター 実写映画 リロ&スティッチ ぬいぐるみS スティッチ ぬいぐるみ高さ約23cm",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ディズニーキャラクター 実写映画 リロ&スティッチ ぬいぐるみM スティッチ ぬいぐるみ高さ約31cm"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "トイストーリーのジェシー",
+      "raw_query": "トイ ストーリー の ジェシー",
+      "volume": 22200.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー リアルサイズトーキングフィギュア ジェシー",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー おしゃべりフレンズ ジェシー",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー 30周年 リアルサイズトーキングフィギュア ジェシー KIMONO ver.",
+        "ディズニーストア公式 トイ・ストーリー ジェシー インタラクティブ トーキングアクションフィギュア、映画の音声とフレーズ付き、他のフィギュアやおもちゃと対話可能",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー 30周年 リアルサイズトーキングフィギュア ジェシー ウッディのラウンドアップ ver."
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "ポケなで",
+      "raw_query": "ポケなで",
+      "volume": 22200.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ポケモン ポケなで モンスターボール",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ポケモン ポケなで モンスターボール ピカチュウふれんずセット",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ポケモン ポケなで ピカチュウふれんずポーチ 幅 約14cm",
+        "ポケット モンスタ― ポケなで",
+        "PDA工房 ポケットモンスター ポケモン ポケなで モンスターボール 対応 Flexible Shield[光沢] 保護 フィルム 曲面対応 日本製"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "ポケモンボール",
+      "raw_query": "ポケモン ボール",
+      "volume": 22200.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "ポケットモンスター ポケモン バトルでゲット!モンスターボール",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ぴょこぷにゅ ピカチュウ 【日本おもちゃ大賞2025 バラエティ部門 優秀賞】",
+        "タカラトミー ポケットモンスター モンコレ MB-04 マスターボール ポケモン おもちゃ 4歳以上",
+        "トイローヤル モンポケ ふわふわボール ( ピカチュウ / ポケモン ) ベビートイ あたっても痛くない 音が鳴る 柔らかい ボール 赤ちゃん ベビー",
+        "イガラシ ポケモンビーチボール マスターボール 40cm AHB-MA4 膨らましサイズ約27cm"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "リオル",
+      "raw_query": "リオル",
+      "volume": 22200.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ポケモン くたくたたった ! ぬいぐるみS リオル 高さ約 25cm",
+        "ポケモン すやすやフレンド ぬいぐるみS リオル 幅約25cm",
+        "三英貿易(Sanei Boeki) ポケットモンスター ALL STAR COLLECTION リオル (S) W12×D9.5×H25.5cm ぬいぐるみ ポケモン PP174",
+        "エスケイジャパン キャラクター・ファンシー事業部(skjapan characterfancy section) ポケットモンスター キラキラメタルキーチェーン リオル",
+        "[バンダイ(BANDAI)] ポケモンチェンジ リオル／ルカリオ 対象年齢 6 才以上"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "レゴのスターウォーズ",
+      "raw_query": "レゴ のスターウォーズ",
+      "volume": 22200.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "レゴ(LEGO) スター・ウォーズ クローン・トルーパー501部隊バトルパック 75345 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) スター・ウォーズ クローン・トルーパーとバトル・ドロイド バトルパック 75372 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) スター・ウォーズ AT-RTの攻撃 75444 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) スター・ウォーズ スター・ウォーズ ロゴ 75407 おもちゃ 男性 女性",
+        "レゴ(LEGO) スター・ウォーズ デス・トルーパーとナイト・トルーパー バトルパック 75412 おもちゃ 男の子 女の子"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": false
+    },
+    {
+      "query": "dレックス",
+      "raw_query": "dレックス",
+      "volume": 18100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "マテル ジュラシックワールド(JURASSIC WORLD) バトルアクション！ほえるディストータス・レックス 子供向けフィギュア 恐竜 おもちゃ 全長:約50cm 4歳から ブラウン JGB58",
+        "マテル ジュラシックワールド(JURASSIC WORLD) かみつき！ディストータス・レックス 子供向けフィギュア 恐竜 おもちゃ 全長:約42cm 4歳から ブラウン JMC73",
+        "マテル ジュラシックワールド(JURASSIC WORLD) スーパービッグ！ディストータス・レックス 子供向けフィギュア 恐竜 おもちゃ 全長:約78cm 4歳から ブラウン JKG95",
+        "マテル ジュラシックワールド(JURASSIC WORLD) ハモンド・コレクション インドミナス・レックス 可動フィギュア 全長:約73cm 交換パーツ付き コレクター向け 8歳から ブラウン JKG98",
+        "マテル ジュラシックワールド(JURASSIC WORLD) ダメージ！ひかる ほえる インドミナス・レックス 子供向けフィギュア 恐竜 おもちゃ 全長:約45cm 4歳から グレー JLD20"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": true
+    },
+    {
+      "query": "おままごとキッチン",
+      "raw_query": "おままごとキッチン",
+      "volume": 18100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "おままごと キッチン 木製 台所 ライト付き 調理器具付き 調味料 食材 ミニキッチン おもちゃキッチン 知育玩具 コンロ 電子レンジ 家事 おもちゃ キッズ 誕生日 プレゼント (ダークグレー)",
+        "おままごと キッチンセット 木製 調理器具付き 台所 おもちゃ 収納付き 知育玩具 誕生日プレゼント 子供用 ミニキッチン キッズギフト (ホワイト)",
+        "ROBUD おままごと キッチン 木製 台所 調理器具付き 21点セット 製氷機 オーブン 電子レンジ パン焼き機 黒板 調味料 野菜 切れる ナイフ コンロミニキッチン 知育玩具 磁石埋め込み式 収納スペース おもちゃキッチン 日本語説明書付き ギフト 3歳以上 子供 玩具 ごっこ遊び プレゼント 誕生日",
+        "LOWYA ロウヤ おままごとセット おもちゃ お飯事セット ナチュラル/ホワイト",
+        "【はじめてのお料理台】 DIYELL おままごと キッチン 木製 ごっこ遊び 台所 ままごと お店屋さん おもちゃキッチン 収納 付属品付 調理器具のおもちゃ 料理ピース 食材ピース 要組立 【日本企業】"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "こども自転車",
+      "raw_query": "こども 自転車",
+      "volume": 18100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "CHACHAYAYA 子供 自転車 14インチ 男の子 女の子 小学生街乗り かっこいい BMX 補助輪 キックスタンド付き （シルバー，14インチ）",
+        "Qiani ペダルなし自転車 子供用自転車 キックバイク 2-in-1 2 3 4 5 6 7歳の男の子女の子適し12 14 16インチ ペダルとハンドブレーキ付き 青赤ピンク (14インチ, ブルー)",
+        "【AVASTA】Gemini 14インチ子供用BMX自転車 かっこいい街乗りBMX自転車 3歳 4歳 5歳 幼児 小学生 男の子 女の子 こども乗り練習 補助輪付き 前後輪ブレーキ付き 保護クッション付き 青 あお ほし星柄 艶消しスターブルー",
+        "【AVASTA】Gemini 16インチ子供用BMX自転車 かっこいい街乗りBMX自転車 4歳 5歳 6歳 7歳 8歳 幼児 小学生 男の子 女の子 こども乗り練習 補助輪付き サイトスタント キックスタンド 前後輪ブレーキ付き 保護クッション付き 白しろホワイト",
+        "JOYSTAR 子供用自転車 Marigold 12 16 20インチ 愛い 乗り練習 幼児小学生高学年 キッズ・ジュニア用 おしゃれ 補助輪付 高さ調節可能 手編み藤カゴ付き ブルー グリーン ピンク パープル イエロー"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "すいちゃんみいつけた",
+      "raw_query": "すいちゃん みい つけた",
+      "volume": 18100.0,
+      "sites": [
+        "czech.hatenablog.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 7,
+      "sample_titles": [
+        "みいつけた!マスコットぬいぐるみボールチェーン スイちゃん(337192)",
+        "みいつけた！ ピカッとネームマスコット ［5.コッシー＆スイちゃん＆サボさん］(単品)",
+        "サンアロー(Sun Arrow) みいつけた！ コッシー S ぬいぐるみ K9544 サイズ：H17×W6×D10cm",
+        "サンアロー(Sun Arrow) みいつけた！ コッシー マスコット K9543 サイズ：H10×W4×D6cm",
+        "みいつけた！ バスボール4 せっけんのかおり 75g 1回分"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.667,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.75,
+      "changed": false
+    },
+    {
+      "query": "たまごっちみみっち",
+      "raw_query": "たまごっち みみっち",
+      "volume": 18100.0,
+      "sites": [
+        "czech.hatenablog.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "カミオジャパン KAMIO JAPAN たまごっち マスコット キーホルダー みみっち 215309",
+        "たまごっち みみっち Chibiぬいぐるみマスコット",
+        "[カミオジャパン] たまごっち ダイカット巾着 みみっち",
+        "たまごっちカチューシャキーホルダー みみっち",
+        "カミオジャパン KAMIO JAPAN たまごっち おすわり ぬいぐるみ みみっち 220020"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "たまごっち種類",
+      "raw_query": "たまごっち 種類",
+      "volume": 18100.0,
+      "sites": [
+        "czech.hatenablog.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 8,
+      "sample_titles": [
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - White Glacier 対象年齢 6 才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Orange Tropics 対象年齢 6 才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Blue Water 【日本おもちゃ大賞2025デジタル部門大賞】 対象年齢 6才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Original Tamagotchi Angel Carousel 対象年齢 6 才以上 たまごっち",
+        "[バンダイ(BANDAI)] たまごっち にゅー! ごっちカード3 (パック)(1BOX20個入り)"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": false
+    },
+    {
+      "query": "みみっちたまごっち",
+      "raw_query": "みみっち たまごっち",
+      "volume": 18100.0,
+      "sites": [
+        "czech.hatenablog.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "カミオジャパン KAMIO JAPAN たまごっち マスコット キーホルダー みみっち 215309",
+        "[カミオジャパン] たまごっち ダイカット巾着 みみっち",
+        "たまごっち みみっち Chibiぬいぐるみマスコット",
+        "たまごっちフロッキーマスコット みみっち",
+        "たまごっち みみっち ぷりぬいマスコット"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "らくらくベビー",
+      "raw_query": "らくらくベビー",
+      "volume": 18100.0,
+      "sites": [
+        "daivoy.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "GU MODE プレイマット ベビーマット 抗菌 ベビープレイマット シームレスプレイマット 折りたたみ 持ち手が付く 厚み4cm 収納しやすい 厚手 折りたたみ ノンホルム 防水 防音 マット【グレー・ホワイト/180x200】",
+        "GU MODE プレイマット ベビーマット 抗菌 ベビープレイマット シームレスプレイマット 折りたたみ 持ち手が付く 厚み4cm 収納しやすい 厚手 折りたたみ ノンホルム 防水 防音 マット【グレー・ホワイト/140×200】",
+        "(ケラッタ) プレイマット シームレス 折りたたみ 赤ちゃん すき間ゼロでお手入れらくらく 1級防音 防水 厚手",
+        "(ケラッタ) プレイマット シームレス 折りたたみ 赤ちゃん すき間ゼロでお手入れらくらく 1級防音 防水 厚手",
+        "Tomekaベビーカー 四人乗りベビーカー ーワゴン 折りたたみ可 キャリーワゴン 保育園 屋根付き レインカバー付き 運動会 幼稚園 保育園 組み立て不要 らくらく運べる (ブラック,2席)"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": true
+    },
+    {
+      "query": "チョロq",
+      "raw_query": "チョロq",
+      "volume": 18100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "水陸両用カー パトロールカー",
+        "チョロQ e-02 日産 スカイライン GT-R (R32) 初回特典チョロQコイン付き 【日本おもちゃ大賞2022 アクション・トイ部門 大賞】",
+        "タカラトミー(TAKARA TOMY) チョロQ きかんしゃトーマス 01 トーマス",
+        "チョロQ e-09 フォルクスワーゲン タイプ 1",
+        "チョロQ チョロQチャレンジ!Q極対戦セット/日産"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "パウパトロールキャラ",
+      "raw_query": "パウパトロール キャラ",
+      "volume": 18100.0,
+      "sites": [
+        "czech.hatenablog.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "丸昌(Marusho) みずぬりえパウ・パトロール",
+        "サンスター文具 パズル45P パウ･パトロール 6372278A",
+        "高波クリエイト ポケットポーチ パウ・パトロール ブルー 【137545】",
+        "高波クリエイト 巾着Ｍ パウ パトロール ブルー 【138061】 学童 幼児 子供 入園 入学 遠足 習い事",
+        "サンスター文具(Sun-Star Stationery) おかたづけバッグ パウ・パトロール 6072278B"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": false
+    },
+    {
+      "query": "ピカチュウぬいぐるみ",
+      "raw_query": "ピカチュウ ぬいぐるみ",
+      "volume": 18100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ポケモン30周年記念 おかえり!ピカチュウ1/1 高さ40cm",
+        "三英貿易 ポケットモンスター ALL STAR COLLECTION ピカチュウ(メスのすがた) (S) W17×D12×H19cm ぬいぐるみ ポケモン PP165",
+        "三英貿易(Sanei Boeki) ポケットモンスター ALL STAR COLLECTION ピカチュウ (S) W14×D10.5×H19cm ぬいぐるみ ポケモン PP01",
+        "ポケットモンスター おうちにポケモン PIKACHU",
+        "三英貿易 ポケットモンスター ぽてはぐクッション ピカチュウ W36×D22×H38cm ぬいぐるみ雑貨 ポケモン PZ60"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "ピカチューぬいぐるみ",
+      "raw_query": "ピカチュー ぬいぐるみ",
+      "volume": 18100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "三英貿易(Sanei Boeki) ポケットモンスター ALL STAR COLLECTION ピカチュウ (S) W14×D10.5×H19cm ぬいぐるみ ポケモン PP01",
+        "三英貿易 ポケットモンスター ALL STAR COLLECTION ピカチュウ(メスのすがた) (S) W17×D12×H19cm ぬいぐるみ ポケモン PP165",
+        "三英貿易 ポケットモンスター ALL STAR COLLECTION ピカチュウ マスコット W9×D6.5×H11cm ぬいぐるみマスコット ポケモン PM04",
+        "ポケットモンスター おうちにポケモン PIKACHU",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ポケモン30周年記念 おかえり!ピカチュウ1/1 高さ40cm"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.333,
+      "changed": false
+    },
+    {
+      "query": "ブルズアイ",
+      "raw_query": "ブルズアイ",
+      "volume": 18100.0,
+      "sites": [
+        "takaratomymall.jp",
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "トイストーリー ブルズアイ デラックス フィギュア 【約40cm、日本未発売、USディズニーストア】並行輸入品 ぬいぐるみ 英語版",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー5 ダイキャストコレクション ブルズアイ",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ピクサーキャラクター トイ･ストーリー5 洗えるビーンズコレクション ブルズアイ 奥行 約18cm",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ピクサーキャラクター トイ･ストーリー5 ぬいぐるみ ブルズアイ 奥行 約23.5cm",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ピクサーキャラクター トイ･ストーリー5 ウォーキングブルズアイ 高さ 約30cm"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "ホットウィールにわか",
+      "raw_query": "ホットウィール にわか",
+      "volume": 18100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "ホットウィール(Hot Wheels) ベーシックカー '90 ホンダ シビック EF 乗り物おもちゃ ミニカー 3歳から グリーン JFN66",
+        "ホットウィール(Hot Wheels) ブールバード '71 エルカミーノ ミニカー 1:64スケール 3歳から JHW38",
+        "Hot Wheels Cars、プレミアムFast & Furious 1:64スケールダイキャストカー。Fast & Furious映画フランチャイズに触発されたコレクター向け。",
+        "ホットウィール(Hot Wheels) ブールバード 日産 ローレル C33 乗り物おもちゃ ミニカー 3歳から ブラック JBL10",
+        "ホットウィール(Hot Wheels) ブールバード 2002 ポンティアック ファイヤーバード 乗り物おもちゃ ミニカー 3歳から オレンジ JHW17"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": false
+    },
+    {
+      "query": "ポケモンかっこいい",
+      "raw_query": "ポケモン かっこいい",
+      "volume": 18100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) ポケットモンスター 超連動! ポケモン ダイマックスバンド",
+        "ポケモンババ抜き＆ポケモンタルカセット",
+        "マテルゲーム(Mattel Game) ブロックス(Blokus) ブロックスシャッフル ポケモンエディション ボードゲーム 知育ゲーム 2~4人用 7歳から HHM20",
+        "ポケモンカードゲーム デッキシールド メガダークライ",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター 超連動! ポケモン テラスタルオーブ EX"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": false
+    },
+    {
+      "query": "マイクロペット",
+      "raw_query": "マイクロペット",
+      "volume": 18100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) マイクロペット キャット",
+        "タカラトミー(TAKARA TOMY) マイクロペット パピー",
+        "タカラトミー(TAKARA TOMY) マイクロペット バニー",
+        "タカラトミー(TAKARA TOMY) マイクロペット GEN2 キャット",
+        "タカラトミー(TAKARA TOMY) マイクロペット GEN2 ウーパールーパー"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "マグビルド",
+      "raw_query": "マグビルド",
+      "volume": 18100.0,
+      "sites": [
+        "ouchi-iku.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "グッド・トイ 受賞 知育玩具 キットウェル マグビルド カラーズ 130ピース 13色 インテリア マグネットブロック",
+        "グッド・トイ 受賞 キットウェル マグビルド ベーシックセット 70ピース 知育玩具 マグネット ブロック おもちゃ",
+        "グッド・トイ 受賞 キットウェル マグビルド スロープセット 72ピース 知育玩具 マグネット ブロック おもちゃ 玉の道",
+        "グッド・トイ 受賞 マグビルド スローププラス 100ピース 知育玩具 スロープトイ マグネットブロック おもちゃ 玉の道",
+        "グッド・トイ 受賞 キットウェル マグビルド スクエアセット 84ピース 知育玩具 マグネット ブロック おもちゃ"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "一歳の誕生日プレゼント",
+      "raw_query": "一歳の誕生日プレゼント",
+      "volume": 18100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "ジョイパレット(JOYPALETTE) アンパンマン NEW! にぎって! おとして! 光るくるコロタワー",
+        "Joyreal モンテッソーリ ビジーボード 知育玩具 1 2 3歳誕生日プレゼント男の子 女の子 知育玩具 LED おもちゃ 指先知育 早期開発 (スタンダード・エディション)",
+        "【公式】アイデス トミカ 乗用玩具 変形ドライブピット｜足けり 車 室内遊び 収納付き｜1〜5歳未満 誕生日プレゼント 男の子 幼児向け",
+        "Kabeila ピアノマット おもちゃ ドラムセット 子供 男の子 女の子 誕生日 プレゼント 人気 おもちゃ ピアノ 楽器 ミュージックマット 幼児",
+        "アガツマ(AGATSUMA) アンパンマンといっしょにドライブ! 3STEPよくばりビジーカー 押し棒+ガード付き (対象年齢:10ヶ月～5歳)"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": true
+    },
+    {
+      "query": "おウチ",
+      "raw_query": "お ウチ",
+      "volume": 14800.0,
+      "sites": [
+        "ouchi-iku.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 8,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) ブルーイ かぐがいっぱい! 2かいだて! ブルーイファミリーのおうち",
+        "雑貨の国のアリス カラーボール ボールプール キッズテント 秘密基地 (おうち型ボールハウス)",
+        "中日本陶器(ナカニホントウキ) ちょこっと飾れる ガラスの 精霊馬セット",
+        "パイロット メルちゃん おせわパーツ ひろ～いおへやの みんなであそぼ！なかよしハウス 3歳以上",
+        "[Ｆｌｙｉｎｇ　Ｅｇｇ] お地蔵さん 前掛け 頭巾 エプロン 帽子 地蔵 お彼岸 よだれかけ 奉納 お供え (ゴム入, 帽子（中）)"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "non_product",
+      "verdict_reason_after": "zero_title_overlap",
+      "title_overlap_after": 0.0,
+      "changed": true
+    },
+    {
+      "query": "こども新聞",
+      "raw_query": "こども新聞",
+      "volume": 14800.0,
+      "sites": [
+        "ouchi-iku.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 7,
+      "sample_titles": [
+        "ピープル かしゃかしゃ 音と感触をたしかめたい! 赤ちゃん専用新聞第7版 Baby curiosity BC-013",
+        "テンヨー(Tenyo) 手品 マジック よみがえる新聞紙 破いても一瞬で元通り 世界からやってきた不思議 ワールドグレイテストマジック 初心者向け はじめてでもできるマジック かんたん手品 6歳以上",
+        "子供向け雑誌 読売KODOMO新聞",
+        "【2個セット】フジコン 標本LABO（6点セット）簡易的 子ども向け 実験 観察 夏休み 自由研究 テーマ 生物実験 観察日記 標本キット コーティング加工 カブトムシ クワガタムシ",
+        "ディーピーグループ(DP GROUP)新聞紙と幻の水 (× 2)"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": true
+    },
+    {
+      "query": "たまごっち",
+      "raw_query": "たまごっち 値段",
+      "volume": 14800.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 9,
+      "sample_titles": [
+        "[バンダイ(BANDAI)] Original Tamagotchi Caramel Nuts 対象年齢 6 才以上 たまごっち",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - White Glacier 対象年齢 6 才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Pink Land 【日本おもちゃ大賞2025デジタル部門大賞】 対象年齢 6才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Blue Water 【日本おもちゃ大賞2025デジタル部門大賞】 対象年齢 6才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Original Tamagotchi Angel Carousel 対象年齢 6 才以上 たまごっち"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": false
+    },
+    {
+      "query": "たまごっちパラダイス",
+      "raw_query": "たまごっちパラダイス 予約",
+      "volume": 14800.0,
+      "sites": [
+        "czech.hatenablog.com",
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - White Glacier 対象年齢 6 才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - White Glacier Premium Set 対象年齢 6 才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Orange Tropics 対象年齢 6 才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - White Glacier（特典：『たまラボステッカー：おこじょっち』＆『たまラボステッカー：ぱろろっち』付き） 対象年齢 6 才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Orange Tropics（特典：『たまラボステッカー：おこじょっち』＆『たまラボステッカー：ぱろろっち』付き） 対象年齢 6 才以上 たまごっちパラダイス"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": false
+    },
+    {
+      "query": "オプティマスプライム",
+      "raw_query": "オプティマスプライム",
+      "volume": 14800.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) T-SPARK トランスフォーマー OG-03 オプティマスプライム",
+        "タカラトミー(TAKARA TOMY) T-SPARK トランスフォーマー Dramatic Capture Series ジェットファイヤーコンバイン 可動フィギュア",
+        "タカラトミー(TAKARA TOMY) T-SPARK トランスフォーマー マスターピースGシリーズ MPG-17 オプティマスプライム Style Gen.",
+        "トランスフォーマー アイコン オプティマスプライム 6.75インチ ボイジャー クラスアクションフィギュア オートボットロゴシンボルに変換 ディスプレイスタンド ロボットおもちゃ 対象年齢8歳以上",
+        "トランスフォーマー SS-142 オプティマスプライム 可動フィギュア"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "トミカ新作",
+      "raw_query": "トミカ 新作",
+      "volume": 14800.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) トミカ ロングタイプトミカ No.132 モリタ 小型オフロード消防車 レッドレディバグ ＆ 搬送車 ミニカー おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) トミカ No.24 キャンピングカー ミニカー おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) トミカプレミアム 05 ランボルギーニ ミウラ P400S ミニカー おもちゃ 6歳以上",
+        "タカラトミー(TAKARA TOMY) トミカプレミアム 24 トヨタ マークX 覆面パトロールカー ミニカー おもちゃ 6歳以上",
+        "タカラトミー(TAKARA TOMY) トミカ No.57 化石運搬車 ミニカー おもちゃ 3歳以上"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": false
+    },
+    {
+      "query": "ナーフ銃",
+      "raw_query": "ナーフ 銃",
+      "volume": 14800.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "ハズブロ(HASBRO) ナーフ エリート2.0 イーグルポイント RD-8 ダーツブラスター、8ダーツドラム、ナーフスコープ&タンク、ボルトアクション、8才以上の男児・女児向けのアウトドアおもちゃ",
+        "ハズブロ(HASBRO) ナーフ エリート2.0 コマンダー RD-6 手動ブラスター 連射 対象年齢8才以上 ナーフ公式エリートダーツ12本付属 ダーツ6本装填可能な回転ドラム搭載 男児・女児向けのアウトドアおもちゃ E9485 正規品",
+        "ハズブロ(HASBRO) ナーフ エリート2.0 エコー CS-10 手動ブラスター 連射 対象年齢8才以上 公式ダーツ24本+ダーツ10本格納可能なクリップ付属 取り外し可能なストック&バレル付 アウトドアおもちゃ E9533 正規品",
+        "ZURU XSHOT Excel Micro 2.0 エックスショット エクセル マイクロ2.0 ダーツ8本付き ブラスター玩具 的当て スポンジダーツ 36726TQ1 正規品",
+        "ハズブロ(HASBRO) ナーフ エリート2.0 ショックウェーブ RD-15 手動ブラスター 連射 対象年齢8才以上 公式エリートダーツ30本付属 ダーツ15本装填可能な回転式ドラム+タクティカルレール搭載 E9527 正規品"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": false
+    },
+    {
+      "query": "ポケモンおもちゃ",
+      "raw_query": "ポケモン おもちゃ",
+      "volume": 14800.0,
+      "sites": [
+        "takaratomymall.jp",
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ポケモン ポケなで モンスターボール",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター モンコレ なかよしおへやバッグ ピカチュウ",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター モンコレ モンスターボールでゲット!ひろがる!エリアアドベンチャー",
+        "カワダ(Kawada) パーラービーズ ポケットモンスター いっぱいセット ポケットモンスター 5才以上 アイロンビーズ おもちゃ ホビー 80-57079",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ポケモン スマホロトムSHAKE (シェイク) 【日本おもちゃ大賞2025 キャラクター部門 優秀賞】"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "マイクラのレゴ",
+      "raw_query": "マイクラ のレゴ",
+      "volume": 14800.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "レゴ(LEGO) マインクラフト スティーブのタイガの冒険 21583 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) マインクラフト ウォーデン出現 21274 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) マインクラフト TNT ジャングルハウス 21275 おもちゃ 女の子 男の子",
+        "レゴ(LEGO) マインクラフト 赤ちゃんブタのおうち 21268 おもちゃ 女の子 男の子",
+        "レゴ(LEGO) マインクラフト ウィザーバトル 21590 おもちゃ 男の子 女の子"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.333,
+      "changed": true
+    },
+    {
+      "query": "マイクラレゴ",
+      "raw_query": "マイクラ レゴ",
+      "volume": 14800.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "レゴ(LEGO) マインクラフト スティーブのタイガの冒険 21583 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) マインクラフト ウォーデン出現 21274 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) マインクラフト TNT ジャングルハウス 21275 おもちゃ 女の子 男の子",
+        "レゴ(LEGO) マインクラフト ウィザーバトル 21590 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) マインクラフト ネザーとエンドポータルの旅 21584 おもちゃ 男の子 女の子"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.333,
+      "changed": false
+    },
+    {
+      "query": "マグフォーマー",
+      "raw_query": "マグ フォー マー",
+      "volume": 14800.0,
+      "sites": [
+        "www.bornelund.co.jp"
+      ],
+      "hits": 2,
+      "genre_pass_hits": 2,
+      "sample_titles": [
+        "ボーネルンド (BorneLund) マグ・フォーマー (MAGFORMERS) ディスカバリーBOX [ 71ピース/あそび方冊子付き ] 3歳頃から 知育玩具 磁石 マグネット ブロック MF797014",
+        "ボーネルンド マグ・フォーマー ( MAGFORMERS ) 台形 [12ピース] 3歳頃 MF713013J"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.333,
+      "changed": true
+    },
+    {
+      "query": "誕生日3歳プレゼント",
+      "raw_query": "誕生日 3歳 プレゼント",
+      "volume": 14800.0,
+      "sites": [
+        "ouchi-iku.com",
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "アガツマ(AGATSUMA) きょうはなに撮る？アンパンマンキッズカメラ (対象年齢：3歳以上)【日本おもちゃ大賞2025デジタル部門優秀賞】",
+        "タカラトミー(TAKARA TOMY) 『 トミカ かんたんおかたづけ! にぎやかサウンドタウン 』 ミニカー 車 おもちゃ unisex 3歳以上 玩具安全基準合格 STマーク認証 TOMICA",
+        "Bajoy モンテッソーリ玩具 知育玩具 3歳4歳5歳6歳 独特のロック式型はめパズル 64ピース4種類シリーズ 脳トレ 空間認識力 手先の器用さ",
+        "グッドトイ受賞 ジスター (GESTAR) 天才のはじまり (混合カラー) 知育玩具 ブロック おもちゃ (3歳～12歳対応 / 男の子 女の子) 480ピース＋40枚増量中 / LOTUS LIFE",
+        "Joyreal 車 おもちゃ - 建設車両セット 1台収納車 6台ミニカーセット 車 玩具 はたらくくるま 3 4 5 6歳 働く車 子供 男の子 女の子 誕生日 プレゼント 子供 の 車 おもちゃ 知育玩具"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "beybladex",
+      "raw_query": "beyblade x",
+      "volume": 12100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) BEYBLADE X ベイブレードX BX-50 ランダムブースターVol.11",
+        "タカラトミー(TAKARA TOMY) BEYBLADE X ベイブレードX UX-20 スターター グローリーワルキューレ LF",
+        "タカラトミー(TAKARA TOMY) CX-13 スターター バハムートブリッツBK1-50I",
+        "タカラトミー(TAKARA TOMY) BEYBLADE X ベイブレードX CX-18 ランダムブースター ブラキオウィップセレクト",
+        "タカラトミー(TAKARA TOMY) CX-16 スタートダッシュセットC"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "おもちゃの恐竜",
+      "raw_query": "おもちゃの 恐竜",
+      "volume": 12100.0,
+      "sites": [
+        "takaratomymall.jp",
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) アニア 最強恐竜対決セット 動物 恐竜 おもちゃ 3歳以上 AA-03",
+        "タカラトミー(TAKARA TOMY) アニア モンスターラボ ハイブリッド ダイナソーエッグ 動物 恐竜 おもちゃ 5歳以上",
+        "パイロット かえちゃOhワールド 最強恐竜まほうのスピノサウルス おふろ 色変わり 3歳以上",
+        "Funk Doggie恐竜 おもちゃ リアル模型 恐竜フィギュア 53点セット美しい収納ボックス付き 樹木 化石ティラノサウルス レックス ヴェロキラプトル 収納ボックス 子どもおもちゃ 男の子 女の子誕生日プレゼント",
+        "FRUSE 恐竜のおもちゃ 26個の恐竜フィギュア のジャンボ演劇 マット及び情報の本が付いている 図おもちゃ 収納ボ 男の子および女の子のため"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": true
+    },
+    {
+      "query": "おもちゃの車",
+      "raw_query": "おもちゃの車",
+      "volume": 12100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "アンパンマン おしゃべり消防車",
+        "アガツマ(AGATSUMA) アンパンマン おしゃべりパトカー",
+        "マルカ(Maruka) ドライブタウン NO.5 ダイハツ ハイゼットトラック おもちゃ 車 3歳以上 173686",
+        "マルカ(Maruka) おしゃべりピカピカ救急車 おもちゃ 車 3才以上 190479",
+        "タカラトミー(TAKARA TOMY) トミカ トミカビークルタウン 変形はしご消防車 (トミカ付き) ミニカー おもちゃ 3歳以上"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": true
+    },
+    {
+      "query": "たまごっちの進化",
+      "raw_query": "たまごっちの進化",
+      "volume": 12100.0,
+      "sites": [
+        "czech.hatenablog.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 9,
+      "sample_titles": [
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - White Glacier 対象年齢 6 才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Blue Water 【日本おもちゃ大賞2025デジタル部門大賞】 対象年齢 6才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Orange Tropics 対象年齢 6 才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] たまごっち にゅー! ごっちカード3 (パック)(1BOX20個入り)",
+        "[バンダイ(BANDAI)] Original Tamagotchi Angel Carousel 対象年齢 6 才以上 たまごっち"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": true
+    },
+    {
+      "query": "たまごっちキャラ初代",
+      "raw_query": "たまごっち キャラ 初代",
+      "volume": 12100.0,
+      "sites": [
+        "czech.hatenablog.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 9,
+      "sample_titles": [
+        "バンダイ 初代 たまごっち 水色（時計柄）",
+        "初代 たまごっち（ホワイト） BANDAI1996",
+        "バンダイ(BANDAI) 初代　たまごっち",
+        "たまごっち ネイルステッカー 初代 カミオジャパン",
+        "[バンダイ(BANDAI)] たまもりしーるリフィル30th　初代たまごっちセット 対象年齢 6 才以上 たまごっち"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.667,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": false
+    },
+    {
+      "query": "たまごっちパラダイス店頭販売",
+      "raw_query": "たまごっちパラダイス店頭販売",
+      "volume": 12100.0,
+      "sites": [
+        "czech.hatenablog.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - White Glacier 対象年齢 6 才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Orange Tropics 対象年齢 6 才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Blue Water 【日本おもちゃ大賞2025デジタル部門大賞】 対象年齢 6才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Purple Sky 【日本おもちゃ大賞2025デジタル部門大賞】 対象年齢 6才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - White Glacier Premium Set 対象年齢 6 才以上 たまごっちパラダイス"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": true
+    },
+    {
+      "query": "たまごっち初代キャラ",
+      "raw_query": "たまごっち初代 キャラ",
+      "volume": 12100.0,
+      "sites": [
+        "czech.hatenablog.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 9,
+      "sample_titles": [
+        "たまごっち ネイルステッカー 初代 カミオジャパン",
+        "初代 たまごっち（ホワイト） BANDAI1996",
+        "バンダイ 初代 たまごっち 水色（時計柄）",
+        "バンダイ(BANDAI) 初代　たまごっち",
+        "[バンダイ(BANDAI)] たまもりしーるリフィル30th　初代たまごっちセット 対象年齢 6 才以上 たまごっち"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": true
+    },
+    {
+      "query": "たまごっち進化",
+      "raw_query": "たまごっち　進化",
+      "volume": 12100.0,
+      "sites": [
+        "czech.hatenablog.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - White Glacier 対象年齢 6 才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Blue Water 【日本おもちゃ大賞2025デジタル部門大賞】 対象年齢 6才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Orange Tropics 対象年齢 6 才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Original Tamagotchi Angel Carousel 対象年齢 6 才以上 たまごっち",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Orange Tropics Premium Set 対象年齢 6 才以上 たまごっちパラダイス"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": false
+    },
+    {
+      "query": "ぬいぐるみ可愛い",
+      "raw_query": "ぬいぐるみ 可愛い",
+      "volume": 12100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "40㎝/50㎝/60㎝/80㎝/100㎝巨大特大サイズ 豚 ぶた ブタ アニマル ぬいぐるみ 抱き枕 腹ばい枕 クッション ソファー背当て まくら 座布団 おもちゃ 人形 ベッドルーム寝具 寝室添寝枕 車飾り リビング置物 部屋装飾 インテリア もちもち ふわふわ 人気 癒し系 可愛い 快適 萌えグッズ プレゼント ギフト 贈り物 (丸い目をする, 40㎝ 約450g) [並行輸入品]",
+        "MIHI ぬいぐるみ 【正規品 PSC基準適合・食品衛生法適合】 動物 アニマル ふわふわ もこもこ おもちゃ ファーストトイ 贈り物 ギフト 出産祝い ニューボンフォト こどもの日 バレンタイン ホワイトデー 母の日 約38㎝ いぬ イヌ 犬 DOG",
+        "不二貿易 ぬいぐるみ いぬ 25cm 動物 抱き枕 ふわふわ 優しい手触り 18717",
+        "三英貿易 ポケットモンスター ALL STAR COLLECTION ピカチュウ(メスのすがた) (S) W17×D12×H19cm ぬいぐるみ ポケモン PP165",
+        "ディズニー洗えるビーンズコレクション ウッディ"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "シルバニアオンライン",
+      "raw_query": "シルバニア オンライン",
+      "volume": 12100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "シルバニアファミリー 人形 【 ビスケットクマのみつごちゃん すこやかセット 】 FS-63 STマーク認証 3歳以上 おもちゃ ドールハウス Sylvanian Families エポック社 EPOCH",
+        "《オンライン限定》シルバニアファミリー赤ちゃんトリオ（フルーツ）",
+        "シルバニアファミリー 【 モグラファミリー 地下の大冒険セット 】 C-86 STマーク認証 3歳以上 おもちゃ ドールハウス Sylvanian Families エポック社 EPOCH",
+        "シルバニアファミリー お家 【 赤い屋根の大きなお家 -屋根裏はひみつのお部屋- 】 ハー51 STマーク認証 3歳以上 おもちゃ ドールハウス Sylvanian Families エポック社 EPOCH",
+        "シルバニアファミリー 【 サボテンハウスのゆかいなショータイム 】 ｺ-84 STマーク認証 3歳以上 おもちゃ ドールハウス Sylvanian Families エポック社 EPOCH"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "スティッチ可愛い",
+      "raw_query": "スティッチ 可愛い",
+      "volume": 12100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "TOP TOY ディズニー \"ミニ・スティッチ(Mini Fluffy Stitch)\" シリーズ【3ピース】ブラインドボックス フィギュア",
+        "ノルコーポレーション スティッチバスボール DIZ5901",
+        "ディズニー洗えるビーンズコレクション スティッチ",
+        "スティッチ 抱きまくら ぬいぐるみ クッション リロ＆スティッチ 【東京ディズニーリゾート限定】",
+        "ディズニーフェイスヘアバンド　スティッチ"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": false
+    },
+    {
+      "query": "デュエマ25の王道",
+      "raw_query": "デュエマ 25の王道",
+      "volume": 12100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) DM26-SD1 デュエル・マスターズTCG ドキドキつよいデッキ 25の王道",
+        "【発売日前日出荷】デュエル・マスターズ DM26-SD1 ドキドキつよいデッキ 25の王道※48個ご注文でカートン発送",
+        "4月発売 予約 1パック 3パック DM26-SD1 デュエル・マスターズTCG ドキドキつよいデッキ 25の王道 (1)",
+        "DM26-SD1 ドキドキつよいデッキ 25の王道 デュエマ",
+        "【発売日前日出荷】デュエル・マスターズ DM26-SD1 ドキドキつよいデッキ 25の王道【48個ご注文でカートン発送】"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "トイストーリー1",
+      "raw_query": "トイストーリー 1",
+      "volume": 12100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー リアルサイズトーキングフィギュア バズ･ライトイヤー",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー リモートコントロールビークル バズ･ライトイヤー＆RC",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー リアルサイズトーキングフィギュア ジェシー",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー リアルサイズトーキングフィギュア ウッディ",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー おしゃべりフレンズ レックス"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "トイストーリーおもちゃ",
+      "raw_query": "トイストーリー おもちゃ",
+      "volume": 12100.0,
+      "sites": [
+        "takaratomymall.jp",
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー リアルサイズトーキングフィギュア バズ･ライトイヤー",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー リアルサイズトーキングフィギュア ウッディ",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー おしゃべりフレンズ レックス",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー リアルサイズトーキングフィギュア ジェシー",
+        "Toy Story 5 キッズカメラ SDカードと三脚付き ビデオ録画と内蔵デジタルステッカー付き子供用デジタルカメラ"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": false
+    },
+    {
+      "query": "トイストーリーのハム",
+      "raw_query": "トイストーリーのハム",
+      "volume": 12100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー おしゃべりフレンズ ハム",
+        "可愛い 豚 貯金箱 おもちゃ トイストーリー ハム豚（ピンク）",
+        "ディズニーピクサー 「 トイ・ストーリー 」 ハム 貯金箱 SAN2526",
+        "タカラトミー(TAKARA TOMY) トミカ ディズニーモータース ドリームトミカ ライドオン トイ･ストーリー SP ハム＆アンディのイス ミニカー おもちゃ 3歳以上",
+        "ディズニー　トイストーリー　ハム　ペンケース　ぬいぐるみ　東京ディズニーリゾート　TDR　トイ・ストーリー"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": true
+    },
+    {
+      "query": "トランスフォーマー新着",
+      "raw_query": "トランスフォーマー 新着",
+      "volume": 12100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "トランスフォーマー TRA CYBERWOLRD CC Primal Classic。",
+        "タカラトミー(TAKARA TOMY) トランスフォーマー ビースト覚醒 覚醒オプティマスプライマル",
+        "タカラトミー(TAKARA TOMY) トランスフォーマー SS-103 バンブルビー",
+        "タカラトミー(TAKARA TOMY) トランスフォーマー トランスフォーマー SS-113 ライノックス",
+        "タカラトミー(TAKARA TOMY) T-SPARK トランスフォーマー ミッシングリンク C-01N ネメシスプライム 可動フィギュア"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": false
+    },
+    {
+      "query": "ハムトイストーリー",
+      "raw_query": "ハム トイストーリー",
+      "volume": 12100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー おしゃべりフレンズ ハム",
+        "可愛い 豚 貯金箱 おもちゃ トイストーリー ハム豚（ピンク）",
+        "ディズニーピクサー 「 トイ・ストーリー 」 ハム 貯金箱 SAN2526",
+        "タカラトミー(TAKARA TOMY) トミカ ディズニーモータース ドリームトミカ ライドオン トイ･ストーリー SP ハム＆アンディのイス ミニカー おもちゃ 3歳以上",
+        "可愛い 豚 貯金箱 トイストーリー ハム豚 ギフト 子供 おもちゃ ピンク"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "プラレール新製品",
+      "raw_query": "プラレール 新製品",
+      "volume": 12100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) プラレール キミの街のヒーローシリーズ 京阪電車8000系 (ダブルデッカー) 電車 列車 おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) プラレール キミの街のヒーローシリーズ E233系南武線 電車 列車 おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) プラレール キミの街のヒーローシリーズ E231系武蔵野線 電車 列車 おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) 『 プラレール 乗車確認! 出発進行! まるごと鉄道体験! E5系 はやぶさコントロールセット 』 電車 列車 おもちゃ 3歳以上 男女両用 玩具安全基準合格 STマーク認証 PLARAIL TAKARA TOMY",
+        "【2026年モデル】タカラトミー(TAKARA TOMY) プラレール ワクワクつながる! プラレール ベストセレクション セット 電車 列車 おもちゃ 3歳以上"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": false
+    },
+    {
+      "query": "レゴシティ",
+      "raw_query": "レゴ シティ",
+      "volume": 12100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "レゴ(LEGO) シティ ポリスステーション 60316 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) シティ ポリスボートチェイス 60456 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) シティ 消防レスキューボート 60373 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) シティ フライドポテトトラック 60488 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) シティ 宅配ピザ屋 60496 おもちゃ 男の子 女の子"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "レゴテクニック",
+      "raw_query": "レゴ テクニック",
+      "volume": 12100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "レゴ(LEGO) テクニック パワーマシン 42233 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) テクニック Batmobile Tumbler 42239 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) テクニック Mercedes-AMG F1 W14 E Performance Pull-Back おもちゃ 玩具 誕生日 プレゼント ブロック 男の子 女の子 子供 7歳 8歳 9歳 小学生 乗り物 車 ミニカー 42165",
+        "レゴ(LEGO) テクニック Ferrari FXX K 42212 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) テクニック ワイルド・スピード Dodge Charger R/T カー 42231 おもちゃ 男性 女性"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "レゴマイクラ",
+      "raw_query": "レゴ マイクラ",
+      "volume": 12100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "レゴ(LEGO) マインクラフト ウォーデン出現 21274 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) マインクラフト スティーブのタイガの冒険 21583 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) マインクラフト TNT ジャングルハウス 21275 おもちゃ 女の子 男の子",
+        "レゴ(LEGO) マインクラフト 赤ちゃんブタのおうち 21268 おもちゃ 女の子 男の子",
+        "レゴ(LEGO) マインクラフト ウィザーバトル 21590 おもちゃ 男の子 女の子"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.333,
+      "changed": false
+    },
+    {
+      "query": "初代たまごっちキャラ",
+      "raw_query": "初代たまごっち キャラ",
+      "volume": 12100.0,
+      "sites": [
+        "czech.hatenablog.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 9,
+      "sample_titles": [
+        "たまごっち ネイルステッカー 初代 カミオジャパン",
+        "[バンダイ(BANDAI)] たまもりしーるリフィル30th　初代たまごっちセット 対象年齢 6 才以上 たまごっち",
+        "バンダイ(BANDAI) たまごっち カスタム!!リップ＆チーク 初代透明ピンク 対象年齢 15才～",
+        "バンダイ 初代 たまごっち 水色（時計柄）",
+        "初代 たまごっち（ホワイト） BANDAI1996"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": false
+    },
+    {
+      "query": "恐竜おもちゃ",
+      "raw_query": "恐竜 おもちゃ",
+      "volume": 12100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "ハピネット(Happinet)RC ジュラシック・ワールド T-レックス",
+        "タカラトミー(TAKARA TOMY) アニア たまごをキャッチ! 恐竜クレーン 動物 恐竜 おもちゃ 3歳以上",
+        "Cute Stone 恐竜 おもちゃ 40点リアルフィギュア ダイナソーセット",
+        "FRUSE 恐竜おもちゃ 12個恐竜フィギュア きょうりゅう おもちゃ 収納ボックス ディノブック 子供 フィギュア 男の子 女の子 誕生日プレゼント",
+        "Smiim 恐竜 トリケラトプス 乗り物 おもちゃ 乗用玩具 バランスボール 男の子 女の子 3歳 4歳 5歳 6歳 誕生日 プレゼント ホッピング"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "新製品プラレール",
+      "raw_query": "新製品プラレール",
+      "volume": 12100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) プラレール キミの街のヒーローシリーズ 京阪電車8000系 (ダブルデッカー) 電車 列車 おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) プラレール キミの街のヒーローシリーズ E233系南武線 電車 列車 おもちゃ 3歳以上",
+        "【2026年モデル】タカラトミー(TAKARA TOMY) プラレール ワクワクつながる! プラレール ベストセレクション セット 電車 列車 おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) プラレール 動くぞ!変形! ギガデカドクターイエロー 電車 列車 おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) プラレール 103系京浜東北線 電車 列車 おもちゃ 3歳以上"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": true
+    },
+    {
+      "query": "点つなぎ",
+      "raw_query": "点つなぎ",
+      "volume": 12100.0,
+      "sites": [
+        "czech.hatenablog.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 6,
+      "sample_titles": [
+        "Bffcnl 塗り絵本 点つなぎ子供向けワーク アクティビティ教育帳 学習カートゥーンノート ドローイング練習教材 数字認識強化 手指発達支援 創造性拡大 親子共有時間 小学生低学年に適用, 恐竜",
+        "ロンドン自然史博物館 恐竜点つなぎワーク 32p 英語教材",
+        "TISHITA 子供向けの点つなぎ塗り絵、絵描き、数えアクティビティブック、簡単なパズル, 恐竜",
+        "脳トレ 点つなぎライフ VOL.20",
+        "点つなぎ 上級編 ビジョントレーニング"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "車おもちゃ",
+      "raw_query": "車 おもちゃ",
+      "volume": 12100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) トミカ トミカビークルタウン 変形はしご消防車 (トミカ付き) ミニカー おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) トミカワールド トミカと走ろう！ぐるぐるバスタウン",
+        "アンパンマン おしゃべり消防車",
+        "タカラトミー(TAKARA TOMY) トミカワールド ポリスキャリアカーセット",
+        "ミニサウンド エルグランド救急車"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": true
+    },
+    {
+      "query": "4歳の誕生日プレゼント",
+      "raw_query": "4歳の誕生日 プレゼント",
+      "volume": 9900.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "[Ｌｕｘｕｒｅｕｘ] ヘアアクセサリー キッズ ジュエリーボックス 子供 豪華なアクセサリー付き ヘアゴム アクセサリー 収納 大容量 カラフル ヘアクリップ 髪ゴム 髪留め おしゃれ キッズ 髪飾り カラフル かわいい 誕生日 クリスマス 入学式 卒業式 子供の日 七五三 ギフト プレゼント（ピンク）",
+        "カチューシャキット メイキングトイ 工作キット 手作りキット ヘアアクセサリー 手芸キット おもちゃ 子供 小学生 女の子 誕生日 プレゼント",
+        "BlueSwan 7色LEDライト付き描画ボード、汚れのないアート玩具、女の子・男の子への誕生日プレゼント",
+        "モンテッソーリ磁石おもちゃ 磁性カラーと数字迷路玩具 木製磁力球 知育玩具 3歳 知育玩具 4歳 精細運動スキル活動 3から6歳女の子向け モンテッソーリギフト センサー玩具",
+        "TENGEE プッシュポップ ゲーム 電動 【最新5代目正規品】 知育玩具 男の子 女の子 誕生日プレゼント 5歳6歳7歳 小学生 おもちゃ 人気 早押し スクリーン付 6モード 999＋レベル 日本語説明書付 ストレス解消 グッズ (ウサギ)"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": true
+    },
+    {
+      "query": "4歳誕生日プレゼント",
+      "raw_query": "4歳誕生日 プレゼント",
+      "volume": 9900.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "[Ｌｕｘｕｒｅｕｘ] ヘアアクセサリー キッズ ジュエリーボックス 子供 豪華なアクセサリー付き ヘアゴム アクセサリー 収納 大容量 カラフル ヘアクリップ 髪ゴム 髪留め おしゃれ キッズ 髪飾り カラフル かわいい 誕生日 クリスマス 入学式 卒業式 子供の日 七五三 ギフト プレゼント（ピンク）",
+        "カチューシャキット メイキングトイ 工作キット 手作りキット ヘアアクセサリー 手芸キット おもちゃ 子供 小学生 女の子 誕生日 プレゼント",
+        "BlueSwan 7色LEDライト付き描画ボード、汚れのないアート玩具、女の子・男の子への誕生日プレゼント",
+        "モンテッソーリ磁石おもちゃ 磁性カラーと数字迷路玩具 木製磁力球 知育玩具 3歳 知育玩具 4歳 精細運動スキル活動 3から6歳女の子向け モンテッソーリギフト センサー玩具",
+        "Tecnock 子供向け スタント おもちゃ ラジコンカー 360度回転 両面走行 USB Type-C充電式 4WD オフロード RCカー 男の子 誕生日 プレゼント (ブルー)"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.75,
+      "changed": false
+    },
+    {
+      "query": "tomica",
+      "raw_query": "tomica",
+      "volume": 9900.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) トミカプレミアムunlimited 頭文字D ホンダ シビック SiR-II (EG6) (庄司 慎吾) ミニカー おもちゃ 6歳以上",
+        "タカラトミー(TAKARA TOMY) トミカプレミアム tomicaトランスポーター グッドスマイル 初音ミク AMG 2024 Ver. ミニカー おもちゃ 6歳以上",
+        "タカラトミー(TAKARA TOMY) トミカプレミアム tomica GARAGE Smart STONE GRAY Standard Edition ミニカー おもちゃ 6歳以上",
+        "タカラトミー(TAKARA TOMY) トミカ No.102 DHL 配送車 ミニカー おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) トミカプレミアムRacing マツダ 787B 18号車 ミニカー おもちゃ 6歳以上"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "toysstore",
+      "raw_query": "toys store",
+      "volume": 9900.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "Disney(ディズニー) トイストーリー ザーグ トーキング アクション フィギュア 38cm ［並行輸入品］",
+        "Disney Store公式レックスインタラクティブトーキングアクションフィギュア トイストーリーのサウンドとフレーズ 他のフィギュアやおもちゃと相互作用します",
+        "Toy Store - ハリーポッター ハードカバー 限定版 箱入りセット:全7冊",
+        "ディズニーストア公式 トイ・ストーリー ジェシー インタラクティブ トーキングアクションフィギュア、映画の音声とフレーズ付き、他のフィギュアやおもちゃと対話可能",
+        "クオッカストア 【3D 造景 シーンシール】 ステッカー ハウスステッカー 手帳 可愛い 趣味 3D 立体 おもちゃ 紙素材 パズル ミニチュア (シーンシールブック5.0(12種類))"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": true
+    },
+    {
+      "query": "うーたん三輪車なぜ",
+      "raw_query": "うーたん三輪車 なぜ",
+      "volume": 9900.0,
+      "sites": [
+        "czech.hatenablog.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "ズーブリー 三輪車 2-6歳子供用 5in1キッズバイク 折りたたみ ハンドル・シート高さ調整可能 へんしんバイク 子供自転車 ベビーバイク 持ち運び便利",
+        "ズーブリー 三輪車 2-6歳子供用 5in1キッズバイク 折りたたみ ハンドル・シート高さ調整可能 へんしんバイク 子供自転車 ベビーバイク 持ち運び便利",
+        "アガツマ(AGATSUMA) アンパンマン ゴー!ゴー!バギー 46 x 25 x 16 cm 1.6kg",
+        "ジョイパレット おでかけ三輪車アンパンマンSP ブザー付 0210 アンパンマン 三輪車 1.5歳から カジキリ押棒 サンシェード フル装備 フリーペダル",
+        "キャプテンスタッグ(CAPTAIN STAG) 三輪車 ステッピ三輪車 対象年齢1歳半～5歳 足載せステップ付 EVAタイヤ 工具不要 組立簡単 レッド YG-1600"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": true
+    },
+    {
+      "query": "こどもちゃれんじベビー",
+      "raw_query": "こどもちゃれんじベビー",
+      "volume": 9900.0,
+      "sites": [
+        "ouchi-iku.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "こどもちゃれんじ しまじろうの知育えほん (めいろ) 迷路 幼児 迷路ドリル ワーク",
+        "こどもちゃれんじ しまじろうの知育えほん (こうさく) 幼児 工作ブック 工作 ワーク",
+        "こどもちゃれんじ しまじろうの知育えほん (めいろ) 迷路 幼児 迷路ドリル ワーク (× 2)",
+        "ノーブランド品三輪車ペダルなし自転車子供用超軽量ベビーカーバランス三輪車バイク1歳から6歳までコンパクト前後4輪倒れにくいペダルなしこども乗り物ベビーバイク組み立て簡単チャレンジバイクキッズバイク男の子女の子お祝い誕生日ブルー",
+        "Xgdsnly カラーマッチングゲーム 記憶訓練 木製知育玩具 色合わせチャレンジ 感覚統合発達 手指運動 論理思考促進 パーティー旅行 家庭遊び 子供大人に適用, 毛虫"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": true
+    },
+    {
+      "query": "ぬいぐるみかわいい",
+      "raw_query": "ぬいぐるみ かわいい",
+      "volume": 9900.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "MIHI ぬいぐるみ 【正規品 PSC基準適合・食品衛生法適合】 動物 アニマル ふわふわ もこもこ おもちゃ ファーストトイ 贈り物 ギフト 出産祝い ニューボンフォト こどもの日 バレンタイン ホワイトデー 母の日 約38㎝ いぬ イヌ 犬 DOG",
+        "お祈りひつじぬいぐるみ しーちゃん ふわふわ やわらか 白色",
+        "りぶはあと マスコット マシュマロアクアミエ タコ (全長約8.5cm) ぬいぐるみ ふわふわ 28210-22",
+        "Amuse アミュファン(AMUFUN) カワウソうそやんSTうそやん おさかな:703177",
+        "三英貿易(Sanei Boeki) もごもごはむすた~ さふぁいあさん W6×D7×H7.5cm ぬいぐるみ MGH02"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": false
+    },
+    {
+      "query": "オプティマス",
+      "raw_query": "オプティマス",
+      "volume": 9900.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) T-SPARK トランスフォーマー OG-03 オプティマスプライム",
+        "トランスフォーマー アイコン オプティマスプライム 6.75インチ ボイジャー クラスアクションフィギュア オートボットロゴシンボルに変換 ディスプレイスタンド ロボットおもちゃ 対象年齢8歳以上",
+        "国内:タカラトミーモール限定 トランスフォーマー AOTP-EX エネルゴン オプティマスプライム&エネルゴン サイバートレッド",
+        "タカラトミー(TAKARA TOMY) T-SPARK トランスフォーマー トランスフォーマータイムライン (オプティマスプライム＆スタースクリーム)",
+        "トランスフォーマー/ONE ブレイブコマンダー オプティマスプライム"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "カーズトミカ",
+      "raw_query": "カーズ トミカ",
+      "volume": 9900.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) ディズニー カーズ トミカ ライトニング･マックィーン ピストン･カップ付き (ライトニング･マックィーンデイ 2026) ミニカー おもちゃ 3歳以上",
+        "タカラトミー ディズニー カーズ トミカ C-01 ライトニング マックィーン (スタンダードタイプ) ミニカー おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) ディズニー カーズ トミカ C-14 メーター (20周年記念タイプ) ミニカー おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) 『 ディズニー ピクサー トミカコレクション ゲイル・ビューフォート 』 ミニカー 車 おもちゃ 3歳以上 箱入り 玩具安全基準合格 STマーク認証 TOMICA",
+        "タカラトミー(TAKARA TOMY) 『 ディズニー ピクサー トミカコレクション マック (カーズ3タイプ) 』 ミニカー 車 おもちゃ unisex 3歳以上 箱入り 玩具安全基準合格 STマーク認証 TOMICA"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "タカラトミーアーツ",
+      "raw_query": "タカラトミーアーツ",
+      "volume": 9900.0,
+      "sites": [
+        "takaratomymall.jp",
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) どうぶつの森 Mocchi-Mocchi-GameStyle ぬいぐるみ L かせき 幅 約36cm",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ポケットモンスター ポケモン ポケモンフレンダ フレンダフォルダーセットDX",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) どうぶつの森 Mocchi-Mocchi-GameStyle ぬいぐるみ L まめきち＆つぶきち 幅 約35cm",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ポケットモンスター ポケモン ポケモンフレンダ フレンダキャリー",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) マリオカート Mocchi-Mocchi-GameStyle ボールチェーンマスコット トゲゾーこうら ぬいぐるみ幅約10cm"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "デュプロ",
+      "raw_query": "デュプロ",
+      "volume": 9900.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "レゴ(LEGO) デュプロ デュプロのカラフルコンテナ 10479 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) デュプロ はじめてのデュプロ のりものをつくろう 10474 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) デュプロ デュプロのまち 3in1 スタントチャレンジ 10478 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) デュプロ デュプロ 基礎板（緑） 10460 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) デュプロ アナと雪の女王 エルサとオラフのアイデアボックス 10462 おもちゃ 男の子 女の子"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "トミカ収納",
+      "raw_query": "トミカ 収納",
+      "volume": 9900.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) トミカワールド でるでるバケツ",
+        "タカラトミー(TAKARA TOMY) トミカ おかたづけコンボイ ミニカー おもちゃ 3歳以上",
+        "タカラトミー『 トミカ パーキングケース24 』 ミニカー 車 おもちゃ 収納 3歳以上 玩具安全基準合格 STマーク認証 TOMICA TAKARA TOMY プラスチック ホワイト",
+        "タカラトミー『 トミカワールド パノラマケース 』 ミニカー 車 おもちゃ 3歳以上 玩具安全基準合格 STマーク認証 TOMICA TAKARA TOMY",
+        "タカラトミー(TAKARA TOMY) トミカ スライダーパーキング50 ミニカー おもちゃ 3歳以上"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "ドッカトット",
+      "raw_query": "ドッカトット",
+      "volume": 9900.0,
+      "sites": [
+        "czech.hatenablog.com"
+      ],
+      "hits": 4,
+      "genre_pass_hits": 4,
+      "sample_titles": [
+        "ボーネルンド マンハッタントーイ (MANHATTAN TOY) スクイッシュ 0ヶ月頃から MAN200982",
+        "【2025年モデル】タカラトミー(TAKARA TOMY) ディズニー えらべる回転 6WAYジムにへんしんメリー プラス くまのプーさん",
+        "【ひよこクラブ掲載】popomi（ポポミ） 抗菌プレイマット CLEAN (ベージュ, 120×160cm)",
+        "【ひよこクラブ掲載】popomi（ポポミ） 抗菌プレイマット CLEAN (アイボリー, 180×200cm)"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "non_product",
+      "verdict_reason_after": "zero_title_overlap",
+      "title_overlap_after": 0.0,
+      "changed": false
+    },
+    {
+      "query": "ベイブレードスタジアム",
+      "raw_query": "ベイブレード スタジアム",
+      "volume": 9900.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) BEYBLADE X ベイブレードX BX-10 エクストリームスタジアム",
+        "BEYBLADE X ベイブレードX BX-37 ダブルエクストリームスタジアムセット",
+        "BEYBLADE X ベイブレードX CX-04 バトルエントリーセットC",
+        "BBX スタジアムトレーニングセット",
+        "Xスタジアムバトルアリーナセット、メタルフュージョンアタックトップおもちゃ4個、ランチャー2個付き。"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "ポケモンのクレーンゲーム",
+      "raw_query": "ポケモン のクレーンゲーム",
+      "volume": 9900.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "【2026年度版】 タカラトミー(TAKARA TOMY) ポケットモンスター ポケモン クレーンゲーム",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ポケモン クレーンゲーム",
+        "ポケットモンスター ポケモンクレーン (おもちゃ屋が選んだクリスマスおもちゃ2020「ゲーム・パズル」部門3位選出商品)",
+        "ポケットモンスター ポケモンクレーンゲーム",
+        "タカラトミー(TAKARA TOMY) トミカ クレーンゲーム"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": true
+    },
+    {
+      "query": "ポケモンクレーンゲーム",
+      "raw_query": "ポケモン クレーンゲーム",
+      "volume": 9900.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "【2026年度版】 タカラトミー(TAKARA TOMY) ポケットモンスター ポケモン クレーンゲーム",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ポケモン クレーンゲーム",
+        "ポケットモンスター ポケモンクレーン (おもちゃ屋が選んだクリスマスおもちゃ2020「ゲーム・パズル」部門3位選出商品)",
+        "タカラトミー(TAKARA TOMY) トミカ クレーンゲーム",
+        "タカラトミー(TAKARA TOMY) すみっコぐらし すみっコクレーンゲーム"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "マイクラグッズ",
+      "raw_query": "マイクラ グッズ",
+      "volume": 9900.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 8,
+      "sample_titles": [
+        "マインクラフト ぷっくりったいシール モチーフ ぷっくり シール キャラクター 立体 立体シール 可愛い かわいい ぷくぷく",
+        "ケイカンパニー(K Company) Minecraft 卓上チェスト TNT火薬 MCT-TCH2-TN H18×W18×D18cm",
+        "ケイカンパニー マイクラ キラキラダイヤカップ モチーフ MCT-KD3-MF",
+        "マテルゲーム(Mattel Game) ウノ マインクラフト UNO Minecraft ゲーム パーティーグッズ 知育ゲーム カードゲーム 112枚 2-10人用 7歳から グリーン FPD61",
+        "レゴ(LEGO) マインクラフト スティーブのタイガの冒険 21583 おもちゃ 男の子 女の子"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": false
+    },
+    {
+      "query": "メルちゃんおもちゃ",
+      "raw_query": "メルちゃん おもちゃ",
+      "volume": 9900.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "パイロット メルちゃん おせわパーツ おせわだいすきバスタブ 3歳以上",
+        "パイロットコーポレーション(PILOT CORPORATION) メルちゃん おせわパーツ たのしくれんしゅう！いっしょにおトイレ",
+        "メルちゃん おせわパーツ くまさんベビーチェア 1851582 ピンク色 & メルちゃん おせわパーツ メルちゃんのキッズプレート【セット買い】",
+        "パイロット メルちゃん おせわパーツ おせわいっぱい10てんセット　3歳以上 プレゼント",
+        "【Amazon.co.jp限定】パイロット おせわだいすきメルちゃん(おせわてちょうつき) 1.5歳以上"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": false
+    },
+    {
+      "query": "モンコレポケモン",
+      "raw_query": "モンコレ ポケモン",
+      "volume": 9900.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) ポケットモンスター モンコレ MS-08 ゲッコウガ",
+        "ポケットモンスター モンコレ MS-12 キャプテンピカチュウ",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ポケモン30周年記念 モンコレ旅立ちの3匹セット カロス地方",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター モンコレ ML-30 ミライドン",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター モンコレ ML-31 黒いレックウザ"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "リカちゃんのハウス",
+      "raw_query": "リカちゃんのハウス",
+      "volume": 9900.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) リカちゃん おしゃべりオートロック 2階建てのグラン･メゾン (初回限定版) 着せ替え おままごと おもちゃ 3歳以上 【日本おもちゃ大賞2025 共遊玩具部門 大賞】",
+        "タカラトミー リカちゃん ロフトのある! ゆめみるリカちゃんのおへや 着せ替え おままごと おもちゃ 3歳以上",
+        "タカラトミー リカちゃん クールなクロミ リカちゃんルーム 着せ替え おままごと おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) リカちゃん わんにゃんシェアハウス DX 着せ替え おままごと おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) リカちゃん ブランコとすべりだいのある ラ･メゾン 着せ替え おままごと おもちゃ 3歳以上"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": true
+    },
+    {
+      "query": "リカちゃんハウス",
+      "raw_query": "リカ ちゃん ハウス",
+      "volume": 9900.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) リカちゃん おしゃべりオートロック 2階建てのグラン･メゾン (初回限定版) 着せ替え おままごと おもちゃ 3歳以上 【日本おもちゃ大賞2025 共遊玩具部門 大賞】",
+        "タカラトミー リカちゃん ロフトのある! ゆめみるリカちゃんのおへや 着せ替え おままごと おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) リカちゃん わんにゃんシェアハウス DX 着せ替え おままごと おもちゃ 3歳以上",
+        "タカラトミー リカちゃん クールなクロミ リカちゃんルーム 着せ替え おままごと おもちゃ 3歳以上",
+        "リカちゃん わんにゃんシェアハウス"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "レゴフレンズ",
+      "raw_query": "レゴ フレンズ",
+      "volume": 9900.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "レゴ(LEGO) フレンズ ハートレイクシティのマンションとお店 42670 おもちゃ 女の子 男の子",
+        "レゴ(LEGO) フレンズ フレンズのうきうきハッピー・バス 41395",
+        "レゴ (LEGO) フレンズ ハートレイクシティのうきうきショッピングモール おもちゃ 玩具 誕生日 プレゼント ブロック 女の子 男の子 子供 8歳 9歳 10歳 小学生 ごっこ遊び おままごと 42604",
+        "レゴ(LEGO) フレンズ ゆめいっぱいのユニコーンカフェ 42684 おもちゃ 女の子 男の子",
+        "レゴ(LEGO) フレンズ 子犬のプレイパーク 42665 おもちゃ 男の子 女の子"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "レゴマインクラフト",
+      "raw_query": "レゴ マインクラフト",
+      "volume": 9900.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "レゴ(LEGO) マインクラフト スティーブのタイガの冒険 21583 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) マインクラフト ウォーデン出現 21274 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) マインクラフト TNT ジャングルハウス 21275 おもちゃ 女の子 男の子",
+        "レゴ(LEGO) マインクラフト スケルトン 21594 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) マインクラフト ペールガーデン 21586 おもちゃ 男の子 女の子"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "レゴワンピース",
+      "raw_query": "レゴ ワンピース",
+      "volume": 9900.0,
+      "sites": [
+        "daivoy.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "レゴ(LEGO) ワンピース 海賊船 ゴーイングメリー号 75639 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) ワンピース ガープ中将の海軍戦艦 75646 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) ワンピース アーロンパークの戦い 75638 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) ワンピース Dr.ヒルルクの隠れ家 75641 おもちゃ 男の子 女の子",
+        "レゴ(LEGO) ワンピース 道化のバギーのサーカス小屋 75637 おもちゃ 男の子 女の子"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "レックストイストーリー",
+      "raw_query": "レックス トイストーリー",
+      "volume": 9900.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 9,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー おしゃべりフレンズ レックス",
+        "トイストーリー　トーキングレックス　デラックスフィギュア　US　ディズニー　Disney Rex Talking Action Figure - Toy Story",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー5 ダイキャストコレクション レックス",
+        "Disney Store公式レックスインタラクティブトーキングアクションフィギュア トイストーリーのサウンドとフレーズ 他のフィギュアやおもちゃと相互作用します",
+        "Mattel ディズニー ピクサー トイストーリー レックス フィギュア"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "レールキューブ",
+      "raw_query": "レールキューブ",
+      "volume": 9900.0,
+      "sites": [
+        "daivoy.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "【正規品】サンスマイル レールキューブ デラックスセット",
+        "【正規品】サンスマイル レールキューブ スターターセット",
+        "【正規品】サンスマイル レールキューブ クリアメカ エレベーターセット",
+        "レールキューブ デラックスセット",
+        "キューブレール ミニトレイン 立体軌道 無限レール DIY 81PCS"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "子ども医療センター",
+      "raw_query": "子ども医療センター",
+      "volume": 9900.0,
+      "sites": [
+        "www.bornelund.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "ふり遊びおもちゃ、リトルドクターキット、病院ポータブル プレイセット、子供のための医療センター教育ドクターおもちゃ Homechen",
+        "JUNENTER 市立病院建物セット レゴ対応 1350ピース モジュール式3階建て医療センター LED照明付き 建物セット 10歳以上の大人と子供向け 男の子と女の子へのギフト",
+        "小児科外来で診る 子どものこころプライマリ診療ガイドブック大谷良子(編者),獨協医科大学埼玉医療センター子",
+        "NEWABWN 市立病院ビルディングセット レゴ1350個LED照明対応",
+        "15pcs子供ドクターナースごっこ おままごと プレイセット ポータブルスーツケース メディカルツールポータブル 医療センター 病院ブルー 22x 19x 5センチメートル"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": true
+    },
+    {
+      "query": "誕生日4歳プレゼント",
+      "raw_query": "誕生日 4歳 プレゼント",
+      "volume": 9900.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "[Ｌｕｘｕｒｅｕｘ] ヘアアクセサリー キッズ ジュエリーボックス 子供 豪華なアクセサリー付き ヘアゴム アクセサリー 収納 大容量 カラフル ヘアクリップ 髪ゴム 髪留め おしゃれ キッズ 髪飾り カラフル かわいい 誕生日 クリスマス 入学式 卒業式 子供の日 七五三 ギフト プレゼント（ピンク）",
+        "BlueSwan 7色LEDライト付き描画ボード、汚れのないアート玩具、女の子・男の子への誕生日プレゼント",
+        "カチューシャキット メイキングトイ 工作キット 手作りキット ヘアアクセサリー 手芸キット おもちゃ 子供 小学生 女の子 誕生日 プレゼント",
+        "トイオブザイヤー2025受賞 はじめてエンジニア バズビルダー 大工さん おもちゃ 知育玩具 3歳 以上 4歳 5歳 6歳 小学生 男の子 プレゼント 工具",
+        "トイオブザイヤー2025受賞 ロンビー (Lon-Bi) 自分でつくる屋内遊具 (7色 / 560ピース) おもちゃ 知育玩具 室内遊び (4歳～ / 小学生/女の子 男の子) ギフト プレゼント LOTUS LIFE"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.667,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.75,
+      "changed": false
+    },
+    {
+      "query": "誕生日プレゼント4歳",
+      "raw_query": "誕生日プレゼント4歳",
+      "volume": 9900.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "[Ｌｕｘｕｒｅｕｘ] ヘアアクセサリー キッズ ジュエリーボックス 子供 豪華なアクセサリー付き ヘアゴム アクセサリー 収納 大容量 カラフル ヘアクリップ 髪ゴム 髪留め おしゃれ キッズ 髪飾り カラフル かわいい 誕生日 クリスマス 入学式 卒業式 子供の日 七五三 ギフト プレゼント（ピンク）",
+        "BlueSwan 7色LEDライト付き描画ボード、汚れのないアート玩具、女の子・男の子への誕生日プレゼント",
+        "カチューシャキット メイキングトイ 工作キット 手作りキット ヘアアクセサリー 手芸キット おもちゃ 子供 小学生 女の子 誕生日 プレゼント",
+        "トイオブザイヤー2025受賞 ロンビー (Lon-Bi) 自分でつくる屋内遊具 (7色 / 560ピース) おもちゃ 知育玩具 室内遊び (4歳～ / 小学生/女の子 男の子) ギフト プレゼント LOTUS LIFE",
+        "Tecnock 子供向け スタント おもちゃ ラジコンカー 360度回転 両面走行 USB Type-C充電式 4WD オフロード RCカー 男の子 誕生日 プレゼント (ブルー)"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.75,
+      "changed": true
+    },
+    {
+      "query": "郡山ペップキッズ",
+      "raw_query": "郡山 ペップキッズ",
+      "volume": 9900.0,
+      "sites": [
+        "www.bornelund.co.jp"
+      ],
+      "hits": 0,
+      "genre_pass_hits": 0,
+      "sample_titles": [],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "no_hits",
+      "title_overlap_before": 0.0,
+      "verdict_after": "non_product",
+      "verdict_reason_after": "no_hits",
+      "title_overlap_after": 0.0,
+      "changed": false
+    },
+    {
+      "query": "野球盤",
+      "raw_query": "野球盤",
+      "volume": 9900.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "エポック(EPOCH) 社 野球盤 3Dエース スーパーコントロール",
+        "エポック社(EPOCH) 野球盤 3Dエーススタンダード STマーク認証 5歳以上 おもちゃ ゲーム プレイ人数:2人 EPOCH",
+        "エポック社(EPOCH) 野球盤3Dエース モンスターコントロール STマーク認証 5歳以上 おもちゃ ゲーム プレイ人数:2人 EPOCH",
+        "エポック社(EPOCH) 野球盤 3Dエーススタンダード 侍ジャパン 野球日本代表ver. STマーク認証 5歳以上 おもちゃ ゲーム プレイ人数:2人 EPOCH",
+        "エポック社(EPOCH) スーパーマリオ 野球盤 3Dスタジアム STマーク認証 5歳以上 おもちゃ ゲーム プレイ人数:2人 EPOCH"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "黒ヒゲ",
+      "raw_query": "黒 ヒゲ",
+      "volume": 9900.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 4,
+      "sample_titles": [
+        "クリアストーン(Clearstone) 宴会の達人 コスプレ ハロウィン 文豪のひげ ユニセックス ブラック",
+        "XSAJU 付け髭 黒 6種類 12個セット フェルト生地 両面テープ式 コスプレ ハロウィン 宴会 演劇小道具",
+        "ハマナカ フェルト羊毛 材料 動物用 の ヒゲ 黒 3ｍ巻 H441-073",
+        "HGG コスプレ 白 ひげ 黒 ひげ 髭 パーティー グッズ 仮装 変装 なりきり アイテム 余興 宴会 (黒ひげ)",
+        "ぬいぐるみ 原毛フェルト作品用 ひげ 黒 極太タイプ ３本セット 髭 ヒゲ 大きな作品づくりに 材料 資材 素材 テディベア 道具 アニマル"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "switchトモダチコレクション",
+      "raw_query": "switch トモダチコレクション",
+      "volume": 8100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 2,
+      "genre_pass_hits": 1,
+      "sample_titles": [
+        "SwitchBot スイッチボット スイッチ ボタンに適用 指ロボット スマートスイッチ スマートホーム ワイヤレス タイマー スマホで遠隔操作 Alexa, Google Home, Siri, IFTTTなどに対応(ハブ必要) ホワイト",
+        "DEEMO (ディーモ) - Switch"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.25,
+      "changed": false
+    },
+    {
+      "query": "toystorenearme",
+      "raw_query": "toy store near me",
+      "volume": 8100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 0,
+      "genre_pass_hits": 0,
+      "sample_titles": [],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "no_hits",
+      "title_overlap_before": 0.0,
+      "verdict_after": "non_product",
+      "verdict_reason_after": "no_hits",
+      "title_overlap_after": 0.0,
+      "changed": false
+    },
+    {
+      "query": "uniqlopark",
+      "raw_query": "uniqlo park",
+      "volume": 8100.0,
+      "sites": [
+        "www.bornelund.co.jp"
+      ],
+      "hits": 0,
+      "genre_pass_hits": 0,
+      "sample_titles": [],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "no_hits",
+      "title_overlap_before": 0.0,
+      "verdict_after": "non_product",
+      "verdict_reason_after": "no_hits",
+      "title_overlap_after": 0.0,
+      "changed": false
+    },
+    {
+      "query": "たまごっちの名前",
+      "raw_query": "たまごっちの名前",
+      "volume": 8100.0,
+      "sites": [
+        "czech.hatenablog.com"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "たまごっち[ネームクリップ]ネームバッジキーホルダー/みみっち",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Purple Sky 【日本おもちゃ大賞2025デジタル部門大賞】 対象年齢 6才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - White Glacier 対象年齢 6 才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Tamagotchi Paradise - Pink Land 【日本おもちゃ大賞2025デジタル部門大賞】 対象年齢 6才以上 たまごっちパラダイス",
+        "[バンダイ(BANDAI)] Original Tamagotchi Angel Carousel 対象年齢 6 才以上 たまごっち"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": true
+    },
+    {
+      "query": "エイリアントイストーリー",
+      "raw_query": "エイリアン トイ ストーリー",
+      "volume": 8100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 7,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー リアルサイズトーキングフィギュア エイリアン",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー おしゃべりフレンズ エイリアン",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー5 ダイキャストコレクション エイリアン",
+        "トイ ストーリー5 エイリアン バッグキーリング 8203 702",
+        "Hallmark(ホールマーク) ホールマーク ディズニー トイ ストーリー バースデーカード オルゴールカード エイリアン 815158"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "カビゴンぬいぐるみ",
+      "raw_query": "カビゴン ぬいぐるみ",
+      "volume": 8100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "ポケモンセンターオリジナル ふわふわ抱きぬいぐるみ カビゴン 42×36×16(H×W×D:㎝)",
+        "三英貿易 ポケットモンスター もちふわクッション カビゴン W31×D27×H35cm ぬいぐるみ雑貨 ポケモン PZ04",
+        "ポケモン くたくたたった! ぬいぐるみM カビゴン 高さ約 27cm",
+        "ポケットモンスター めちゃもふぐっとくつろぎタイムぬいぐるみ～カビゴン～",
+        "ポケモンセンターオリジナル ぬいぐるみ カビゴンOA 本体サイズ:49×46×30(H×W×D:cm) 181264"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "ガンダムアッセンブル",
+      "raw_query": "ガンダムアッセンブル",
+      "volume": 8100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "BANDAI SPIRITS(バンダイ スピリッツ) GUNDAM ASSEMBLE DELUXE SET 01 [DX01] ガンダムアッセンブル デラックスセット 01 [DX01]",
+        "バンダイ(BANDAI) ガンダムカードゲーム プレミアムカードコレクション ガンダムアッセンブルセット -機動戦士Gundam GQuuuuuuX-[PC02A]",
+        "バンダイ(BANDAI) ガンダムカードゲーム スタートデッキ ガンダムアッセンブルセット Heroic Beginnings 【ST01A】",
+        "BANDAI SPIRITS(バンダイ スピリッツ) GUNDAM ASSEMBLE EXPANSION PACK 01 [EX01] ガンダムアッセンブル エキスパンションパック 01 [EX01]",
+        "BANDAI SPIRITS(バンダイ スピリッツ) GUNDAM ASSEMBLE DELUXE SET 02 [DX02]ガンダムアッセンブル デラックスセット 02 [DX02]"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "クロミスマホ",
+      "raw_query": "クロミ スマホ",
+      "volume": 8100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) クロミ スマホ ワイド",
+        "[バンダイ(BANDAI)] ずっと×2なかよしケータイ サンリオキャラクターズ KUROMI Ver. 対象年齢 6 才以上",
+        "タカラトミー(TAKARA TOMY) FUNSHOT (ファンショット) クロミ",
+        "ビバリー【BEVERLY】 パチェリエ クロミ スマホショルダー【クロミのバッグチャームつき】【みせポケットで推し活にも！】",
+        "タカラトミー(TAKARA TOMY) クロミ スマホ ワイド キッズスマホ ラッピング済 クロミスマホ クロミちゃんグッズ サンリオ くろみ おもちゃ プレゼント ギフト クリスマスプレゼント 女の子 男の子 子供 子供携帯 [並行輸入品]"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "シミュラクラ現象",
+      "raw_query": "シミュラクラ 現象",
+      "volume": 8100.0,
+      "sites": [
+        "www.bornelund.co.jp"
+      ],
+      "hits": 0,
+      "genre_pass_hits": 0,
+      "sample_titles": [],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "no_hits",
+      "title_overlap_before": 0.0,
+      "verdict_after": "non_product",
+      "verdict_reason_after": "no_hits",
+      "title_overlap_after": 0.0,
+      "changed": false
+    },
+    {
+      "query": "スマイルパーク",
+      "raw_query": "スマイル パーク",
+      "volume": 8100.0,
+      "sites": [
+        "www.bornelund.co.jp"
+      ],
+      "hits": 9,
+      "genre_pass_hits": 6,
+      "sample_titles": [
+        "荷物スマイル 玄関前 お知らせ【置き配OKです 玄関前】ダイカット マグネットステッカー 水色",
+        "ムラオカ(Muraoka) どこでもあそべる!プルバックシリーズ 走れ!パンダくろしお「Smileアドベンチャートレイン｣ 4395",
+        "荷物スマイル 玄関前 お知らせ【置き配OKです 玄関前】ダイカット マグネットステッカー ピンク",
+        "POP UP PARADE スーパークルックス グラディエーター ノンスケール プラスチック製 塗装済み完成品フィギュア",
+        "荷物スマイル 宅配BOX お知らせ【置き配OKです 宅配ボックス】ダイカット マグネットステッカー 緑"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": true
+    },
+    {
+      "query": "ズートピアぬいぐるみ",
+      "raw_query": "ズートピア ぬいぐるみ",
+      "volume": 8100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "ディズニーキャラクター 洗えるビーンズコレクション ニック ぬいぐるみ 高さ約18cm",
+        "ディズニー洗えるビーンズコレクション ジュディ",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ディズニーキャラクター/ズートピア/ぬいぐるみS/ニック・ワイルド",
+        "TOP TOY ディズニー(Disney) ズートピア2「新たなる旅立ち」ぬいぐるみ シリーズ【1ピース】ガチャガチャ ブラインド ボックス",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ディズニーキャラクター/ズートピア/ぽたっとくたっと/ぬいぐるみM/ニック・ワイルド"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "トイザらスswitch2",
+      "raw_query": "トイザらス switch2",
+      "volume": 8100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 1,
+      "genre_pass_hits": 0,
+      "sample_titles": [
+        "DEEMO (ディーモ) - Switch"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "no_genre_pass",
+      "title_overlap_before": 0.0,
+      "verdict_after": "non_product",
+      "verdict_reason_after": "no_genre_pass",
+      "title_overlap_after": 0.5,
+      "changed": false
+    },
+    {
+      "query": "トイストーリーウッディー",
+      "raw_query": "トイストーリー ウッディー",
+      "volume": 8100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー リアルサイズトーキングフィギュア ウッディ",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー 30周年 リアルサイズトーキングフィギュア ウッディ KABUTO ver.",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー おしゃべりフレンズ ウッディ",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー 30周年 リアルサイズトーキングフィギュア ウッディ ウッディのラウンドアップ ver.",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー リアルサイズトーキングフィギュア ジェシー"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": true
+    },
+    {
+      "query": "トイストーリーエイリアン",
+      "raw_query": "トイストーリー エイリアン",
+      "volume": 8100.0,
+      "sites": [
+        "takaratomymall.jp",
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 8,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー リアルサイズトーキングフィギュア エイリアン",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー おしゃべりフレンズ エイリアン",
+        "タカラトミー(TAKARA TOMY) トイ･ストーリー5 ダイキャストコレクション エイリアン",
+        "フチドリシール トイ・ストーリー 3種セット(仲間Ⅱ/エイリアンⅡ/Mr.＆Mrs. ポテトヘッド 仲間Ⅱ)各1＋ロコネコ試筆カード",
+        "eyeup（アイアップ） トイ・ストーリー ピザタワーゲーム"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": true
+    },
+    {
+      "query": "トイストーリーロッツォ",
+      "raw_query": "トイストーリー ロッツォ",
+      "volume": 8100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "52TOYS BLINDBOX LOTSO IT'S ME 2シリーズ第二弾 ブラインドボックス トレーディングフィギュア コレクションフィギュア 映画「トイ・ストーリー 3」コラボグッズ ロッツォ・ハグベア おもちゃ 植毛フィギュア フロッキー仕上げ 塗装済み ガチャガチャ デスクトップデコレーション 人形 ディズニーアニメファン・子供・コレクター・誕生日・クリスマスのギフトに最適 (一個入り)",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ピクサーキャラクター トイ･ストーリー 30周年 ぬいぐるみS ロッツォ 悪代官 ぬいぐるみ高さ約17cm",
+        "カミオジャパン トイストーリー プチドロップステッカー ロッツォ 070300",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ピクサーキャラクター トイ･ストーリー ぬいぐるみバッジ ロッツォ 幅 約7.5cm",
+        "52TOYS x TOY STORY：LOTSO 「ロッツォ：チャーミング・ボス」シリーズ ブラインドボックス Blind Box コレクションフィギュア トレディングフィギュア 9cm フロッキー素材 人気キャラクター ガチャガチャ 塗装済み 子供・コレクター・誕生日・クリスマス・彼女のギフトに最適 (BOX購入)"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "トミカリミテッドヴィンテージネオ",
+      "raw_query": "トミカリミテッドヴィンテージネオ",
+      "volume": 8100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "トミーテック (TOMYTEC) トミカリミテッドヴィンテージ ネオ 1/64 LV-N304d トヨタ カローラレビン 2ドア GT-APEX RSワタナベホイール装着車 (白/黒) 85年式 完成品 342069",
+        "トミーテック (TOMYTEC) トミカリミテッドヴィンテージ ネオ 1/64 LV-N361b レクサス LFA ニュルブルクリンクパッケージ (マットブラック) 完成品 339724",
+        "トミーテック (TOMYTEC) トミカリミテッドヴィンテージ ネオ 1/64 LV-N379a 日産 PAO (アクアグレー) 1989年式 完成品 340027",
+        "トミーテック (TOMYTEC) トミカリミテッドヴィンテージ ネオ 1/64 LV-N385a 日産 180SX Type X (銀) 1997年式 完成品 341109",
+        "トミーテック (TOMYTEC) トミカリミテッドヴィンテージ ネオ 1/64 LV-N360b レクサス LFA (黄) 完成品 339717"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": true
+    },
+    {
+      "query": "バハムートブリッツ",
+      "raw_query": "バハムートブリッツ",
+      "volume": 8100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) CX-13 スターター バハムートブリッツBK1-50I",
+        "【単品】バハムートブリッツBK1-50I スペシャルVer.のみ(CX-16封入品)(簡易包装) ベイ",
+        "【単品】 バハムートブリッツBK1-50I(CX-13封入品)(簡易包装) 単品 [ベイコード付属] ※ワインダーランチャーは付属しません ベイ おもちゃ",
+        "CX-13 バハムートブリッツBK1-50I ベイ おもちゃ",
+        "CX-13 スターター バハムートブリッツ BK1-50I"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "バボカハイキュー",
+      "raw_query": "バボカ ハイキュー",
+      "volume": 8100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 9,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) HV-P03 ハイキュー!! バボカ!! BREAK ブースターパック ユース＆選抜強化合宿 BOX",
+        "タカラトミー(TAKARA TOMY) HV-D02 ハイキュー!! バボカ!! BREAK スターターデッキ 音駒高校",
+        "タカラトミー(TAKARA TOMY) HV-D01 ハイキュー!! バボカ!! BREAK スターターデッキ 烏野高校",
+        "【正規未開封BOX】HV-P03 ハイキュー!! バボカ!! BREAK ブースターパック ユース＆選抜強化合宿 16box購入時未開封カートン発送",
+        "タカラトミー(TAKARA TOMY) ハイキュー!! バボカ!! BREAK DXカードスリーブ Vol.2「コンコン!稲荷崎アニマルズ集合～!!」"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "ヒッパーズサンリオ",
+      "raw_query": "ヒッパーズ サンリオ",
+      "volume": 8100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 0,
+      "genre_pass_hits": 0,
+      "sample_titles": [],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "no_hits",
+      "title_overlap_before": 0.0,
+      "verdict_after": "non_product",
+      "verdict_reason_after": "no_hits",
+      "title_overlap_after": 0.0,
+      "changed": false
+    },
+    {
+      "query": "ピカチュウかわいい",
+      "raw_query": "ピカチュウ かわいい",
+      "volume": 8100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ポケモン30周年記念 おかえり!ピカチュウ1/1 高さ40cm",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ポケモン ポケピース ふわもこたいむ ～ピカチュウとゆったり～",
+        "三英貿易 ポケットモンスター ALL STAR COLLECTION ピカチュウ(メスのすがた) (S) W17×D12×H19cm ぬいぐるみ ポケモン PP165",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター ぴょこぷにゅ ピカチュウ 【日本おもちゃ大賞2025 バラエティ部門 優秀賞】",
+        "タカラトミー(TAKARA TOMY) ポケットモンスター てのひらピカチュウ ぽけふわ 高さ13cm"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": false
+    },
+    {
+      "query": "プーさんぬいぐるみ",
+      "raw_query": "プーさん ぬいぐるみ",
+      "volume": 8100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "ディズニー洗えるビーンズコレクション くまのプーさん",
+        "ディズニーキャラクター ファニーポーズ ぬいぐるみS くまのプーさんA ぬいぐるみ高さ約20cm",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ディズニー ディズニーキャラクター ファニーフェイス ぬいぐるみS くまのプーさんJ ぬいぐるみ 高さ約20cm",
+        "ディズニー グッドルック ぬいぐるみ 2L くまのプーさん 座高50cm",
+        "セキグチ(Sekiguchi) あそんで! クラシックプー ぬいぐるみ 長さ35cm"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "ベイサイド横浜",
+      "raw_query": "ベイサイド 横浜",
+      "volume": 8100.0,
+      "sites": [
+        "www.bornelund.co.jp"
+      ],
+      "hits": 0,
+      "genre_pass_hits": 0,
+      "sample_titles": [],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "no_hits",
+      "title_overlap_before": 0.0,
+      "verdict_after": "non_product",
+      "verdict_reason_after": "no_hits",
+      "title_overlap_after": 0.0,
+      "changed": false
+    },
+    {
+      "query": "ベイマックスぬいぐるみ",
+      "raw_query": "ベイマックス ぬいぐるみ",
+      "volume": 8100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "ベイマックス ぬいぐるみ Baymax お土産 ギフト 【ディズニーリゾート限定】",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ディズニーキャラクター 洗えるビーンズコレクション ベイマックス 高さ約16cm",
+        "ベイマックス ハンドパペット ぬいぐるみ グッズ お土産【パーク限定】",
+        "ディズニー ベイマックス ぬいぐるみ–ビッグヒーロー 6–12 ½インチ",
+        "セキグチ(Sekiguchi) ベイマックス あそんで！マスコット 641239 H14.5×W10×D8.5cm"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "ボーネルンドおもちゃ",
+      "raw_query": "ボーネルンド おもちゃ",
+      "volume": 8100.0,
+      "sites": [
+        "www.bornelund.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "ボーネルンド アンビトーイ (ambitoys) アクティビティ・ケース 6ヶ月頃 AM31103J",
+        "ボーネルンド (BorneLund) アンビトーイ (ambi toys) Play&Grow 4 種のベビー知育セット 6ヶ月頃から AM115040",
+        "ボーネルンド ケルチェッティ (Quercetti) ベビーブロック・デイジーボックス (紙BOX入り) 1歳頃 QR0270",
+        "ボーネルンド マンハッタントーイ (MANHATTAN TOY) スクイッシュ 0ヶ月頃から MAN200982",
+        "ボーネルンド(Bornelund) ケルチェッティ (Quercetti) カラフルギアー [ 55ピース ] 3歳頃 QR2341"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": false
+    },
+    {
+      "query": "ボーネルンドのおもちゃ",
+      "raw_query": "ボーネルンド の おもちゃ",
+      "volume": 8100.0,
+      "sites": [
+        "www.bornelund.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "ボーネルンド アンビトーイ (ambitoys) アクティビティ・ケース 6ヶ月頃 AM31103J",
+        "ボーネルンド マンハッタントーイ (MANHATTAN TOY) スクイッシュ 0ヶ月頃から MAN200982",
+        "ボーネルンド (BorneLund) アンビトーイ (ambi toys) Play&Grow 4 種のベビー知育セット 6ヶ月頃から AM115040",
+        "ボーネルンド ケルチェッティ (Quercetti) ベビーブロック・デイジーボックス (紙BOX入り) 1歳頃 QR0270",
+        "ボーネルンド (BorneLund) ハリリット (Halilit) ミニレインボーメーカー 6ヶ月頃から RP200BR"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.667,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.667,
+      "changed": false
+    },
+    {
+      "query": "ランボルギーニテメラリオ",
+      "raw_query": "ランボルギーニ テメラリオ",
+      "volume": 8100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "タカラトミー(TAKARA TOMY) トミカ No.43 ランボルギーニ テメラリオ ミニカー おもちゃ 3歳以上",
+        "タカラトミー(TAKARA TOMY) トミカ No.43 ランボルギーニ テメラリオ (初回版) ミニカー おもちゃ 3歳以上",
+        "京商 (Kyosho) Bburago 1/18 ランボルギーニ テメラリオ ブルー 完成品 BUR11052BL",
+        "京商 (Kyosho) WELLY 1/24 ランボルギーニ テメラリオ メタリックグリーン 完成品 WE24135G",
+        "京商 (Kyosho) WELLY 1/24 ランボルギーニ テメラリオ ダークブルー 完成品 WE24135BL"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "レゴクラシック",
+      "raw_query": "レゴクラシック",
+      "volume": 8100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "レゴ(LEGO) クラシック クリエイティブビークル カラフルな組み立てブロック 組み立てキット アイスクリームトラック パトカー おもちゃ モデルシティカーなど ギフト 車のおもちゃ 男の子 女の子 子供用 5歳以上 11036",
+        "レゴ(LEGO) クラシック まほうのアイデアボックス＜クリアカラー＞ 11040 おもちゃ 女の子 男の子",
+        "レゴ(LEGO) クラシック きょうりゅうをつくろう 11041 おもちゃ 男の子 女の子",
+        "LEGO tbd-11044",
+        "レゴ(LEGO) クラシック アイデアパーツ＜収納ケースつき＞ 10713 おもちゃ 男の子 女の子"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": true
+    },
+    {
+      "query": "レゴディズニー",
+      "raw_query": "レゴ ディズニー",
+      "volume": 8100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "レゴ(LEGO) ディズニープリンセス エルサのアイスパレス 43244 おもちゃ 女の子 男の子",
+        "レゴ(LEGO) ディズニープリンセス アリエルの魔法のミニパレス 43285 おもちゃ 女の子 男の子",
+        "レゴ(LEGO) アイデア ディズニー・ピクサー ルクソーJr. 21357 おもちゃ 男性 女性",
+        "レゴ(LEGO) ディズニープリンセス ラプンツェルの塔＜ミニ＞ 43294 おもちゃ 女の子 男の子",
+        "レゴ(LEGO) ディズニープリンセス プリンセスのお城とペット 43267 おもちゃ 女の子 男の子"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "ロッツォトイストーリー",
+      "raw_query": "ロッツォ トイストーリー",
+      "volume": 8100.0,
+      "sites": [
+        "takaratomymall.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "52TOYS BLINDBOX LOTSO IT'S ME 2シリーズ第二弾 ブラインドボックス トレーディングフィギュア コレクションフィギュア 映画「トイ・ストーリー 3」コラボグッズ ロッツォ・ハグベア おもちゃ 植毛フィギュア フロッキー仕上げ 塗装済み ガチャガチャ デスクトップデコレーション 人形 ディズニーアニメファン・子供・コレクター・誕生日・クリスマスのギフトに最適 (一個入り)",
+        "カミオジャパン トイストーリー プチドロップステッカー ロッツォ 070300",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ピクサーキャラクター トイ･ストーリー 30周年 ぬいぐるみS ロッツォ 悪代官 ぬいぐるみ高さ約17cm",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ピクサーキャラクター トイ･ストーリー 30周年 ボールチェーンマスコット ロッツォ 悪代官 ぬいぐるみ高さ約14cm",
+        "タカラトミーアーツ(TAKARATOMY A.R.T.S) ピクサーキャラクター トイ･ストーリー ぬいぐるみバッジ ロッツォ 幅 約7.5cm"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "体温新生児",
+      "raw_query": "体温 新生児",
+      "volume": 8100.0,
+      "sites": [
+        "www.bornelund.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 2,
+      "sample_titles": [
+        "COLORFUL CANDY STYLE おくるみ ※お名前シール付き 男の子 ベビー 新生児 出産祝 綿100% パイル生地 ジェントルマン B3200400-NVL2603",
+        "[Dnxskt] 着ぐるみ パジャマ 子供 キッズ コスチューム 仮装 きぐるみ クマ 動物柄 暖かい 可愛い フランネル 男女兼用 キグルミ フード付き もこもこ フリース 子供服 男の子 女の子 ベビー 新生児 長袖 前開き 厚手 新年 プレゼント",
+        "ベビー服 半袖ロンパース 綿素材 通気性設計 新生児向け 夏用 73cm",
+        "ベビーフォトスーツ 新生児用ジャンプスーツ ロンパース 帽子付き ニット素材 写真撮影向け 黄",
+        "ベビーフォトスーツ ニット生地 写真撮影用 2個 青 ベビー用"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.5,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": false
+    },
+    {
+      "query": "家庭用プール",
+      "raw_query": "家庭用プール",
+      "volume": 8100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "レクタングラー・フレームプール220",
+        "INTEX(インテックス) ダイナソアプレーセンター249×191×109cm 57444 [日本正規品]",
+        "OMATA 2026新改良 折りたたみプール 大型 長方形 ビニールプール 空気入れ不要 1秒高速オープン 超簡単設置 家庭用・子供用 屋内・屋外兼用 耐高温・耐摩擦・安全無毒 水遊び・猛暑対策・夏休み必須 簡単排水・折り畳み収納 日本語説明書付き（内径253*133*51CM,外径295*165*51CM)",
+        "INTEX(インテックス) スイムセンターファミリープール ブルー 203x152x48cm #57180 [日本正規品]",
+        "【2026年オリジナル限定カラー】 tecopeco プール 大型 260×170cm 子供用 ビニールプール 家庭用 (タイルチェック/単品)"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": true
+    },
+    {
+      "query": "木戸木戸",
+      "raw_query": "木戸木戸",
+      "volume": 8100.0,
+      "sites": [
+        "www.bornelund.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 2,
+      "sample_titles": [
+        "シャチハタ 印鑑 ハンコ ネーム9 XL-9 印面9.5ミリ 木戸",
+        "[Rvicos] カゲロウプロジェクト 木戸つぼみ コスプレシューズ 男女兼用 ハロウィン対応",
+        "【映画パンフレット】モブ子の恋 監督 風間太樹 キャスト 桜田ひより 木戸大 早瀬憩",
+        "実物撮影 コスプレ衣装 カゲロウプロジェクト - キド 木戸つぼみ オーダーサイズ可能",
+        "[Rvicos] カゲロウプロジェクト 木戸つぼみ コスプレシューズ 男女兼用 ハロウィン対応"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": true
+    },
+    {
+      "query": "横浜ベイサイド",
+      "raw_query": "横浜ベイサイド",
+      "volume": 8100.0,
+      "sites": [
+        "www.bornelund.co.jp"
+      ],
+      "hits": 0,
+      "genre_pass_hits": 0,
+      "sample_titles": [],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "no_hits",
+      "title_overlap_before": 0.0,
+      "verdict_after": "non_product",
+      "verdict_reason_after": "no_hits",
+      "title_overlap_after": 0.0,
+      "changed": false
+    },
+    {
+      "query": "湘南蔦屋書店",
+      "raw_query": "湘南 蔦 屋 書店",
+      "volume": 8100.0,
+      "sites": [
+        "www.bornelund.co.jp"
+      ],
+      "hits": 0,
+      "genre_pass_hits": 0,
+      "sample_titles": [],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "no_hits",
+      "title_overlap_before": 0.0,
+      "verdict_after": "non_product",
+      "verdict_reason_after": "no_hits",
+      "title_overlap_after": 0.0,
+      "changed": false
+    },
+    {
+      "query": "滑り台室内",
+      "raw_query": "滑り台 室内",
+      "volume": 8100.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "アイリスプラザ すべり台 折りたたみ キッズスライダー 室内 安全 頑丈 幅約46.3×奥行約134×高さ約76.6㎝ ホワイト×グレー PZ90112 [並行輸入品]",
+        "SFUN 折りたたみすべり台 160cm 室内 簡単組立 コンパクト室内遊具 ベビー 幼児 子供 誕生日プレゼント",
+        "アイリスプラザ すべり台 折りたたみ キッズスライダー ミニ 室内 幅約36×奥行約116.5×高さ約50.5㎝ ホワイト×グレー [並行輸入品]",
+        "アガツマ(AGATSUMA) アンパンマン うちの子天才 ジャングルパーク (対象年齢:2~5歳 制限体重:25kg)",
+        "【アワード受賞・人気ブランド】 YouTen(ユーテン) すべり台 ロング 160cm 室内 室内用 折りたたみすべり台 スライダー キッズスライダー ロングスライダー 室内遊具 おもちゃ 簡単組立 コンパクト 遊具 クリスマス 折りたたみ すべりだい キッズ 滑り台 折り畳み おもちゃ 子供用 子ども おしゃれ (クリームイエロー)"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    },
+    {
+      "query": "1歳のおもちゃ",
+      "raw_query": "1歳のおもちゃ",
+      "volume": 6600.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "ジョイパレット(JOYPALETTE) アンパンマン 育脳まるまるパズル",
+        "アガツマ(AGATSUMA) アンパンマン 天才脳つみかさねカップ 1~3歳",
+        "ジョイパレット(JOYPALETTE) アンパンマン NEW! にぎって! おとして! 光るくるコロタワー",
+        "パイロット スイスイおえかき miffyはじめてのスイスイおえかき 1歳以上 知育",
+        "Joyreal モンテッソーリ ビジーボード 知育玩具 1 2 3歳誕生日プレゼント男の子 女の子 知育玩具 LED おもちゃ 指先知育 早期開発 (スタンダード・エディション)"
+      ],
+      "verdict_before": "non_product",
+      "verdict_reason_before": "zero_title_overlap",
+      "title_overlap_before": 0.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": true
+    },
+    {
+      "query": "1歳までのおもちゃ",
+      "raw_query": "1 歳 まで の おもちゃ",
+      "volume": 6600.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "学研 きかんしゃトーマス 10までつなげて (対象年齢2歳以上) 83693",
+        "ジョイパレット(JOYPALETTE) アンパンマン 育脳まるまるパズル",
+        "アガツマ(AGATSUMA) アンパンマン バケツでばっしゃ～ん！おふろスプラッシュ (対象年齢:1.5歳以上)",
+        "パイロット スイスイおえかき miffyはじめてのスイスイおえかき 1歳以上 知育",
+        "アンパンマン 3モードでにこにこスマートフォン"
+      ],
+      "verdict_before": "ambiguous",
+      "verdict_reason_before": "partial_title_overlap",
+      "title_overlap_before": 0.6,
+      "verdict_after": "ambiguous",
+      "verdict_reason_after": "partial_title_overlap",
+      "title_overlap_after": 0.5,
+      "changed": false
+    },
+    {
+      "query": "45歳",
+      "raw_query": "4 5歳",
+      "volume": 6600.0,
+      "sites": [
+        "www.toysrus.co.jp"
+      ],
+      "hits": 10,
+      "genre_pass_hits": 10,
+      "sample_titles": [
+        "カチューシャキット メイキングトイ 工作キット 手作りキット ヘアアクセサリー 手芸キット おもちゃ 子供 小学生 女の子 誕生日 プレゼント",
+        "バランスゲーム ぐらぐらブロック【知育のプロ推薦】立体ブロック おもちゃ【日本正規品】知育玩具【食品衛生法試験合格】（日本語カード付 64個）",
+        "HOMESTEC AstroDraw お絵かきボード 高輝度 カラフルスクリーン 繰り返し書いて消せるボード 知育玩具 おもちゃ パープル/ピンク",
+        "子供向け工作セット、DIY布製ブーケおもちゃ、フラワープレス織物キット、女の子向けのプレスアート＆手作りのギフト・誕生日プレゼント",
+        "エポック社(EPOCH) 【アポロのピクチュアパズル】 のりもの/くるま くるまだいしゅうごう 75ピース 25-236 こども向け台紙つきパズル 5歳以上 おもちゃ STマーク認証"
+      ],
+      "verdict_before": "product",
+      "verdict_reason_before": "full_title_overlap",
+      "title_overlap_before": 1.0,
+      "verdict_after": "product",
+      "verdict_reason_after": "full_title_overlap",
+      "title_overlap_after": 1.0,
+      "changed": false
+    }
+  ]
+}
