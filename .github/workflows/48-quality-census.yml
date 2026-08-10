@@ -1,0 +1,162 @@
+name: Quality Gate Census (main 全量)
+
+# #4826 項目 3 — quality_gate が main を再評価しない問題の観察レーン。
+#
+# なぜ必要か (2026-08-10 実測):
+#   quality_gate は 04-validate-article-pr.yml から **PR で変更されたファイルにしか**
+#   当たらない (mktemp した一時ディレクトリに変更分だけ cp して --src に渡す)。
+#   ところが check_how_to_choose が参照する data/raw/per_asin/<ASIN>/competitors.json は
+#   日次で更新されるため、マージ時に合格した記事が後から不合格に転じる。
+#   main 全量に当てると 10 件が不合格で、10/10 すべて how_to_choose だった。
+#   この腐りを見る目が現状どこにも無い。
+#
+# 設計判断:
+#   - **観察のみ**。CI を落とさず記事も自動修正しない (uniqueness / answerability 監査と同じ規律)
+#   - cron: 週次。competitors.json は日次更新だが、日次で回しても差分は誤差に埋もれる
+#   - cert_sources_content の外部 HTTP fetch は無効 (owner 判断 2026-08-10)。週次で
+#     1903 記事分の証明書ページを舐めると外部負荷が大きく、タイムアウト由来のフレークが
+#     そのまま「不合格」として観測に乗る。条件差は snapshot の cert_fetch=false と
+#     issue コメントに明記する
+#   - 外部 API 呼び出しゼロ・secrets は commit-back とコメント用の App token のみ
+#   - Issue へは **専用 tracker issue 1 本へのコメント追記**。新規起票はしない
+#     (CLAUDE.md 2026-07-08 GitHub API バースト禁止規律)
+#   - 記事ディレクトリに sidecar (<slug>.quality.json) は書かない (廃止方針)
+#
+# 必須 secrets:
+#   - APP_ID, APP_PRIVATE_KEY   (commit-back PR + Issue コメント用 App token)
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: '同じ日付の history 行が既にあっても置換する'
+        required: false
+        default: 'false'
+  schedule:
+    # 毎週月曜 11:00 JST = 02:00 UTC。22-gsc-index-census (日曜 22:00 UTC) と
+    # 18-analytics-daily (毎日 21:00 UTC) のどちらとも重ならない枠に置く
+    - cron: '0 2 * * 1'
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: quality-census
+  cancel-in-progress: false
+
+jobs:
+  census:
+    runs-on: ubuntu-latest
+    # 2026-08-10 ローカル実測: 1903 記事を cert fetch 無しで約 1 分。
+    # 記事数の増加と runner の遅さを見込んで十分な余裕を取る
+    timeout-minutes: 30
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+          # 全量評価は作業ツリーの現状だけを見るので履歴は不要
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run quality census
+        id: census
+        run: |
+          set -e
+          FORCE=""
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            FORCE="--force"
+          fi
+          python scripts/quality_census.py $FORCE
+
+      - name: Summarize to job log
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          d = json.loads(pathlib.Path("data/analytics/quality_census.json").read_text(encoding="utf-8"))
+          diff = d.get("diff") or {}
+          print("## quality_gate main 全量 census (#4826 項目 3)\n")
+          print(f"- 記事 {d['articles']} 件中 **{d['failing']} 件が不合格** ({d['failing_rate']*100:.2f}%)")
+          print(f"- 前回 {diff.get('previous_date') or '初回'} との差分: "
+                f"新規 {len(diff.get('new') or [])} / 回復 {len(diff.get('recovered') or [])} "
+                f"/ 継続 {len(diff.get('persisting') or [])}")
+          print(f"- cert_fetch={d['cert_fetch']} / MD 評価済み {d['md_evaluated']} 件\n")
+          if d.get("by_check"):
+              print("### check 別\n")
+              print("| check | 件数 |\n|---|---:|")
+              for k, v in d["by_check"].items():
+                  print(f"| {k} | {v} |")
+          PY
+
+      # 観察 issue への追記は commit-back の成否と独立に行う。
+      # PR マージという失敗しうる非同期経路に「実施済み」の記録をぶら下げない
+      # (feedback-side-effect-completion-marker)。重複防止は本文に埋め込む
+      # <!-- quality-census:<date> --> マーカーで自己完結している。
+      - name: Comment to tracker issue
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          python -m scripts.comment_quality_census
+
+      - name: Create census PR + auto-merge
+        id: pr
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+          TARGETS="data/analytics/quality_census.json data/analytics/history/quality_census.jsonl"
+
+          # checkout -b の前に変更有無を判定する (staged 状態で checkout -b すると
+          # 一部ファイルが失われることがあるため、branch 作成前は git add しない)
+          if ! git status --porcelain -- $TARGETS | grep -q .; then
+            echo "No census changes to commit; skipping PR."
+            exit 0
+          fi
+
+          # 既存 open census PR があれば閉じる (週次重複防止)
+          gh pr list --base main --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("quality-census/")) | .number' | while read -r pr_num; do
+            if [ -n "$pr_num" ]; then
+              echo "Closing old PR #$pr_num and deleting branch..."
+              gh pr close "$pr_num" -d || true
+            fi
+          done
+
+          BRANCH="quality-census/${{ github.run_id }}"
+          git config user.name "omochairo-fetch-bot[bot]"
+          git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add $TARGETS
+          git commit -m "data(analytics): quality gate census (run ${{ github.run_id }})"
+          git push -u origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "data(analytics): quality gate census (run ${{ github.run_id }})" \
+            --body "main 全量に quality_gate を当てた週次 census。観察のみで記事・CI には影響しない。Refs #4826." \
+            --base main \
+            --head "$BRANCH")
+          echo "Created: $PR_URL"
+
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge enabled on $PR_URL"
+          else
+            echo "::warning::Could not enable auto-merge on $PR_URL"
+          fi
