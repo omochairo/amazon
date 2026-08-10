@@ -100,10 +100,26 @@ def evaluate_corpus(
     rakuten_idx: dict[str, Any] | None = None,
     yahoo_idx: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """全記事を評価し、不合格チェック名つきの軽量レコード列を返す。
+    """全記事を評価し、不合格・減点チェック名つきの軽量レコード列を返す。
 
     レポート全文 (checks 20 件分) は 1903 記事ぶん保持すると数 MB になるため、
-    集計に要る最小限 (slug / total_score / passed / 落ちた check) だけを残す。
+    集計に要る最小限 (slug / total_score / passed / 落ちた check / 減点された
+    check) だけを残す。
+
+    ``deducted_checks`` を持つ理由 (#4826・2026-08-10 実測):
+      20 check 中 **15 は全コーパスで一度も減点も不合格も出していない**。
+      信号があるのは keywords / narrative / faq / prices_verified の 4 つで、
+      これらは **passed=True のまま score だけ下がる**「減点のみ」の check。
+      total_score に丸められた時点で個別の理由は失われ、誰も見ていなかった。
+
+      実測の中身は当初設計 (2026-05-12 e96a74d8b0「指名検索SEO適合 —
+      title/meta/keywords/narrative 全箇所に商品名」) が未達な記事そのもの:
+        keywords 512 件 (うち 258 件は商品名がどのキーワードにも無い)
+        faq 595 件 (商品名を含む質問が推奨数に足りない)
+        narrative 363 件 (closing 等の字数不足)
+        prices_verified 573 件 (楽天/Yahoo が未検証・warn-only)
+
+      合否だけ見ていると全件 OK に見えるので、ここで拾って census に残す。
     """
     out: list[dict[str, Any]] = []
     for jp in iter_article_paths(src):
@@ -124,8 +140,24 @@ def evaluate_corpus(
             "failed_checks": sorted(
                 {c.name: c.message for c in report.checks if not c.passed}.items()
             ),
+            # passed=True だが満点でない check (減点のみ)。合否には出ない soft signal。
+            "deducted_checks": sorted(
+                {c.name: c.message for c in report.checks
+                 if c.passed and c.score < 1.0}.items()
+            ),
         })
     return out
+
+
+# 減点理由メッセージから件数を数えるとき、埋め込まれた数値
+# ("closing 92<120" / "only 1 questions ...") で無限に分岐するのを防ぐ。
+_DIGITS = str.maketrans("0123456789", "N" * 10)
+
+
+def normalize_reason(message: str) -> str:
+    """減点メッセージを集計キーに落とす (先頭の 1 理由・数値は N に潰す)。"""
+    head = (message or "").split(";")[0].strip()
+    return head.translate(_DIGITS)
 
 
 def summarize(records: list[dict[str, Any]], *, cert_fetch: bool, date: str) -> dict[str, Any]:
@@ -136,6 +168,16 @@ def summarize(records: list[dict[str, Any]], *, cert_fetch: bool, date: str) -> 
         for name, _msg in r["failed_checks"]:
             by_check[name] = by_check.get(name, 0) + 1
 
+    # 減点のみ (passed=True かつ score<1.0) の集計。合否には現れない soft signal。
+    by_deduction: dict[str, int] = {}
+    reasons: dict[str, dict[str, int]] = {}
+    for r in records:
+        for name, msg in r.get("deducted_checks") or []:
+            by_deduction[name] = by_deduction.get(name, 0) + 1
+            key = normalize_reason(msg)
+            reasons.setdefault(name, {})
+            reasons[name][key] = reasons[name].get(key, 0) + 1
+
     scores = sorted(r["total_score"] for r in records)
     return {
         "date": date,
@@ -143,6 +185,13 @@ def summarize(records: list[dict[str, Any]], *, cert_fetch: bool, date: str) -> 
         "failing": len(failing),
         "failing_rate": round(len(failing) / len(records), 5) if records else 0.0,
         "by_check": dict(sorted(by_check.items(), key=lambda kv: (-kv[1], kv[0]))),
+        "by_deduction": dict(sorted(by_deduction.items(), key=lambda kv: (-kv[1], kv[0]))),
+        # 減点の内訳。各 check につき上位理由を件数つきで残す (全件は出さないが、
+        # by_deduction 側に総数があるので切り詰めても機能不全は隠れない)。
+        "deduction_reasons": {
+            name: dict(sorted(rs.items(), key=lambda kv: (-kv[1], kv[0]))[:5])
+            for name, rs in sorted(reasons.items())
+        },
         "score_min": scores[0] if scores else None,
         "score_median": scores[len(scores) // 2] if scores else None,
         "score_max": scores[-1] if scores else None,
@@ -235,6 +284,7 @@ def history_row(snapshot: dict[str, Any], diff: dict[str, Any]) -> dict[str, Any
         "failing": snapshot["failing"],
         "failing_rate": snapshot["failing_rate"],
         "by_check": snapshot["by_check"],
+        "by_deduction": snapshot["by_deduction"],
         "score_min": snapshot["score_min"],
         "score_median": snapshot["score_median"],
         "score_max": snapshot["score_max"],
@@ -303,7 +353,9 @@ def main(argv: list[str] | None = None) -> int:
               f"failing={snapshot['failing']} ({snapshot['failing_rate']:.2%}) "
               f"cert_fetch={snapshot['cert_fetch']} md={snapshot['md_evaluated']}")
         for name, n in snapshot["by_check"].items():
-            print(f"    {name}: {n}")
+            print(f"    NG {name}: {n}")
+        for name, n in snapshot["by_deduction"].items():
+            print(f"    減点 {name}: {n}")
         print(f"    diff vs {diff['previous_date']}: "
               f"new={len(diff['new'])} recovered={len(diff['recovered'])} "
               f"persisting={len(diff['persisting'])}")
