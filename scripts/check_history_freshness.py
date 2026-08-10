@@ -88,6 +88,8 @@ LANES: Sequence[Lane] = (
          "毎週日曜 22:00 UTC (実測 7d)"),
     Lane("crux_history.jsonl", "monthly", 45, "19-cwv-monitor.yml",
          "CrUX は 28 日 rolling。月初のみ (実測 3d)"),
+    Lane("quality_census.jsonl", "weekly", 12, "48-quality-census.yml",
+         "毎週月曜 02:00 UTC (#4826 項目3。初回計測 2026-08-10)"),
 )
 
 # 監視対象外。**理由つきで明示する** (未知として鳴らさないための逃げ道ではなく、
