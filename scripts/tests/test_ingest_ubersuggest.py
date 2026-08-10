@@ -433,6 +433,170 @@ def test_facility_rule_still_drops_specific_facility_names():
 # 実データの語彙ルールで既知パターンを固定する (存在すれば)
 # --------------------------------------------------------------------------
 
+# --------------------------------------------------------------------------
+# サイト単位の採否 (excluded_sites, #2686 PR-D)
+# --------------------------------------------------------------------------
+
+def test_excluded_site_row_is_dropped_and_reported():
+    rules = _rules()
+    rules["excluded_sites"] = {"p-bandai.jp": {"reason": "バンダイ系除外 (owner判断)"}}
+    raw_rows = [
+        {"site": "p-bandai.jp", "raw_query": "鬼滅の刃 フィギュア", "volume": 1830000,
+         "position": 1, "seo_difficulty": 10},
+    ]
+    excluded_report = U.compute_excluded_sites_report(raw_rows, rules)
+    assert excluded_report == [{
+        "site": "p-bandai.jp",
+        "reason": "バンダイ系除外 (owner判断)",
+        "keyword_rows": 1,
+        "volume_sum": 1830000,
+    }]
+    filtered = U.filter_excluded_site_rows(raw_rows, {"p-bandai.jp"})
+    assert filtered == []
+    rep = U.build(filtered, rules)
+    assert rep["keywords"] == []
+
+
+def test_word_surviving_via_non_excluded_site_is_kept():
+    """「ベイブレードx」型の回帰: takaratomymall (採用) と toysrus (採用) の
+    両方に出る語は、bandai-hobby (除外) にも出ていたとしても残る。"""
+    rules = _rules()
+    rules["excluded_sites"] = {"bandai-hobby.net": {"reason": "バンダイ系除外"}}
+    raw_rows = [
+        {"site": "bandai-hobby.net", "raw_query": "ガンプラ", "volume": 368000,
+         "position": 1, "seo_difficulty": 10},
+        {"site": "p-bandai.jp", "raw_query": "ガンプラ", "volume": 300000,
+         "position": 2, "seo_difficulty": 10},
+        {"site": "www.toysrus.co.jp", "raw_query": "ガンプラ", "volume": 5000,
+         "position": 5, "seo_difficulty": 10},
+    ]
+    filtered = U.filter_excluded_site_rows(raw_rows, {"bandai-hobby.net"})
+    rep = U.build(filtered, rules)
+    assert len(rep["keywords"]) == 1
+    k = rep["keywords"][0]
+    # bandai-hobby (Volume最大368000) は除外されているので、残った行のうち
+    # 最大 (p-bandai の300000) が採用される。p-bandai は excluded_sites に
+    # 無いのでこのテストでは採用サイト扱い。
+    assert k["volume"] == 300000
+    assert "bandai-hobby.net" not in k["sites"]
+
+
+def test_word_fully_from_excluded_sites_disappears_entirely():
+    """全出典が除外サイトだった語 (「仮面ライダー」型) は grouped から消える。"""
+    rules = _rules()
+    rules["excluded_sites"] = {
+        "p-bandai.jp": {"reason": "除外"},
+        "bandai-hobby.net": {"reason": "除外"},
+    }
+    raw_rows = [
+        {"site": "p-bandai.jp", "raw_query": "仮面ライダー", "volume": 450000,
+         "position": 1, "seo_difficulty": 10},
+        {"site": "bandai-hobby.net", "raw_query": "仮面ライダー", "volume": 400000,
+         "position": 1, "seo_difficulty": 10},
+    ]
+    filtered = U.filter_excluded_site_rows(raw_rows, {"p-bandai.jp", "bandai-hobby.net"})
+    rep = U.build(filtered, rules)
+    assert rep["keywords"] == []
+    assert rep["dropped_subject"] == []  # 主題除外ではなくサイト除外で消えた
+
+
+def test_run_wires_excluded_sites_into_output(tmp_path):
+    """run() が excluded_sites を握り潰さず出力 JSON に記録すること。"""
+    csv_dir = tmp_path / "csv"
+    csv_dir.mkdir()
+    _write_csv(csv_dir / "ubersuggest https_p-bandai.jp.csv",
+               ["No", "Keywords", "Volume", "Position", "Est. Visits", "Seo Difficulty", "Ranking Url"],
+               [["1", "鬼滅の刃 フィギュア", "1830000", "1", "50", "20", "http://p-bandai.jp/x"]])
+    _write_csv(csv_dir / "ubersuggest https_www.toysrus.co.jp.csv",
+               ["No", "Keywords", "Volume", "Position", "Est. Visits", "Seo Difficulty", "Ranking Url"],
+               [["1", "トミカ", "1000", "3", "50", "20", "http://toysrus/x"]])
+    rules_data = _rules()
+    rules_data["excluded_sites"] = {"p-bandai.jp": {"reason": "バンダイ系除外 (owner判断)"}}
+    rules_path = tmp_path / "rules.yaml"
+    rules_path.write_text(yaml.safe_dump(rules_data, allow_unicode=True), encoding="utf-8")
+    out_path = tmp_path / "out.json"
+
+    result = U.run(csv_dir, rules_path, out_path, wp_history_path=None, dry_run=True)
+    assert result["excluded_sites"] == [{
+        "site": "p-bandai.jp",
+        "reason": "バンダイ系除外 (owner判断)",
+        "keyword_rows": 1,
+        "volume_sum": 1830000,
+    }]
+    kept = {k["raw_query"] for k in result["keywords"]}
+    assert "鬼滅の刃 フィギュア" not in kept
+    assert "トミカ" in kept
+
+
+# --------------------------------------------------------------------------
+# 店舗ナビゲーショナル (store_navigational, #2686 PR-D)
+# --------------------------------------------------------------------------
+
+def test_store_navigational_drops_store_admin_queries():
+    rules = U.load_rules(REAL_RULES)
+    raw_rows = [
+        {"site": "www.toysrus.co.jp", "raw_query": "トイザらス クーポン", "volume": 2900,
+         "position": 1, "seo_difficulty": 10},
+        {"site": "www.toysrus.co.jp", "raw_query": "トイザらス営業時間", "volume": 1600,
+         "position": 1, "seo_difficulty": 10},
+        {"site": "www.bornelund.co.jp", "raw_query": "ボーネルンド 店舗", "volume": 1300,
+         "position": 1, "seo_difficulty": 10},
+    ]
+    rep = U.build(raw_rows, rules)
+    dropped_queries = {d["query"] for d in rep["dropped_subject"]}
+    assert "トイザらス クーポン" in dropped_queries
+    assert "トイザらス営業時間" in dropped_queries
+    assert "ボーネルンド 店舗" in dropped_queries
+    for d in rep["dropped_subject"]:
+        assert "store_navigational" in d["categories"]
+
+
+def test_store_navigational_fragment_does_not_misfire_inside_product_name():
+    """短い断片ではなくサイト名/運営語そのものなので、商品名の内側で誤爆しないこと。"""
+    rules = U.load_rules(REAL_RULES)
+    raw_rows = [
+        {"site": "www.toysrus.co.jp", "raw_query": "アンパンマン 砂場 セット", "volume": 1600,
+         "position": 1, "seo_difficulty": 10},
+        {"site": "www.toysrus.co.jp", "raw_query": "たまごっちパラダイス みみっち", "volume": 100,
+         "position": 1, "seo_difficulty": 10},
+    ]
+    rep = U.build(raw_rows, rules)
+    kept = {k["raw_query"] for k in rep["keywords"]}
+    assert "アンパンマン 砂場 セット" in kept
+    assert "たまごっちパラダイス みみっち" in kept
+
+
+# --------------------------------------------------------------------------
+# 施設語の拡充 (facility, #2686 PR-D)
+# --------------------------------------------------------------------------
+
+def test_facility_additions_drop_bornelund_park_queries():
+    rules = U.load_rules(REAL_RULES)
+    raw_rows = [
+        {"site": "www.bornelund.co.jp", "raw_query": "デンパーク 水遊び", "volume": 390,
+         "position": 1, "seo_difficulty": 10},
+        {"site": "www.bornelund.co.jp", "raw_query": "ペップキッズ郡山", "volume": 9900,
+         "position": 1, "seo_difficulty": 10},
+    ]
+    rep = U.build(raw_rows, rules)
+    dropped_queries = {d["query"] for d in rep["dropped_subject"]}
+    assert "デンパーク 水遊び" in dropped_queries
+    assert "ペップキッズ郡山" in dropped_queries
+
+
+def test_sandbox_set_product_is_not_dropped_by_facility_rule():
+    """「砂場」は実在商品 (アンパンマン砂場セット) と共起するため facility に
+    入れていない (L2 に送る判断)。誤除外していないことを固定する。"""
+    rules = U.load_rules(REAL_RULES)
+    raw_rows = [
+        {"site": "www.toysrus.co.jp", "raw_query": "アンパンマン砂場セット", "volume": 1600,
+         "position": 1, "seo_difficulty": 10},
+    ]
+    rep = U.build(raw_rows, rules)
+    kept = {k["raw_query"] for k in rep["keywords"]}
+    assert "アンパンマン砂場セット" in kept
+
+
 def test_real_rules_file_is_loadable_and_two_tier():
     if not REAL_RULES.exists():
         pytest.skip("real rules file not present")
