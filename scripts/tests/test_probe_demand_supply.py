@@ -31,7 +31,15 @@ class FakeAPI:
 
 
 def _items(*asins):
-    return {"items": [{"asin": a, "itemInfo": {"title": {"displayValue": a}}} for a in asins]}
+    """Creators API SearchItems の**実レスポンス構造** (searchResult.items)。
+
+    2026-08-10: 初版はここを {"items": [...]} と書いており、実装側の誤読
+    (searchResult を見ていない) をテストがそのまま追認していた。結果 98 語すべてが
+    hits=0 になり「需要語に Amazon 商品が無い」という誤った結論が出た。
+    偽 API を作るときは実レスポンスの形に合わせること。
+    """
+    return {"searchResult": {"items": [
+        {"asin": a, "itemInfo": {"title": {"displayValue": a}}} for a in asins]}}
 
 
 def _keywords_file(tmp_path, entries):
@@ -68,9 +76,23 @@ def test_missing_articles_dir_returns_empty(tmp_path):
 # レスポンス解釈
 # --------------------------------------------------------------------------
 
-@pytest.mark.parametrize("response", [None, {}, {"items": None}, {"items": [1, 2]}, "文字列"])
+@pytest.mark.parametrize("response", [
+    None, {}, {"items": None}, {"items": [1, 2]}, "文字列",
+    {"searchResult": None}, {"searchResult": {}}, {"searchResult": {"items": None}},
+])
 def test_malformed_response_yields_no_asins_without_raising(response):
     assert P.extract_asins(response) == []
+
+
+def test_real_search_response_shape_is_parsed():
+    """fetch_amazon.py と同じく searchResult.items から読むこと (回帰)。"""
+    res = {"searchResult": {"items": [{"asin": "B0REAL0001"}, {"asin": "B0REAL0002"}]}}
+    assert P.extract_asins(res) == ["B0REAL0001", "B0REAL0002"]
+
+
+def test_flattened_items_shape_still_works():
+    """クライアント側で平坦化された場合のフォールバック。"""
+    assert P.extract_asins({"items": [{"asin": "B0FLAT0001"}]}) == ["B0FLAT0001"]
 
 
 def test_asins_are_extracted_in_order():
@@ -118,7 +140,8 @@ def test_summary_separates_zero_hit_from_all_known():
     ]
     s = P.summarize(results)
     assert s == {"keywords_probed": 4, "zero_hit": 1, "hits_but_all_known": 1,
-                 "usable": 1, "error_count": 1, "new_asin_total": 1}
+                 "usable": 1, "error_count": 1, "new_asin_total": 1,
+                 "suspicious_all_zero": False}
 
 
 def test_new_asin_total_is_deduped_across_keywords():
@@ -189,3 +212,35 @@ def test_sleep_between_calls_but_not_after_last(tmp_path):
     P.run(kw, arts, tmp_path / "o.json", 0, "Toys", 10, False,
           api=FakeAPI({}), sleeper=slept.append)
     assert slept == [P.SLEEP_SECONDS, P.SLEEP_SECONDS]
+
+# --------------------------------------------------------------------------
+# 「全語 0 件」の番人 (2026-08-10 に踏んだ事故の再発防止)
+# --------------------------------------------------------------------------
+
+def test_all_zero_without_errors_is_flagged_as_suspicious():
+    """供給の実態でなくレスポンス解釈のバグを疑わせる。静かに誤結論を出さない。"""
+    results = [{"keyword": f"語{i}", "error": None, "hits": 0, "new_asins": [], "known_asins": []}
+               for i in range(P.SUSPICIOUS_MIN_KEYWORDS)]
+    assert P.summarize(results)["suspicious_all_zero"] is True
+
+
+def test_all_zero_with_errors_is_not_flagged():
+    """API 障害で 0 件なのは別の話 (error_count で分かる)。"""
+    results = [{"keyword": f"語{i}", "error": None, "hits": 0, "new_asins": [], "known_asins": []}
+               for i in range(P.SUSPICIOUS_MIN_KEYWORDS)]
+    results[0]["error"] = "boom"
+    assert P.summarize(results)["suspicious_all_zero"] is False
+
+
+def test_small_sample_all_zero_is_not_flagged():
+    """--limit 3 のような小さい試行で誤警報を出さない。"""
+    results = [{"keyword": f"語{i}", "error": None, "hits": 0, "new_asins": [], "known_asins": []}
+               for i in range(P.SUSPICIOUS_MIN_KEYWORDS - 1)]
+    assert P.summarize(results)["suspicious_all_zero"] is False
+
+
+def test_one_hit_clears_the_flag():
+    results = [{"keyword": f"語{i}", "error": None, "hits": 0, "new_asins": [], "known_asins": []}
+               for i in range(P.SUSPICIOUS_MIN_KEYWORDS)]
+    results[0].update(hits=1, new_asins=["B0X"])
+    assert P.summarize(results)["suspicious_all_zero"] is False
