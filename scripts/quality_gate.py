@@ -96,6 +96,9 @@ NARRATIVE_MIN_CHARS = {
 # この日付以降の slug (YYYY-MM-DD-ASIN) のみ必須にする。既存記事には遡及しない。
 HOW_TO_CHOOSE_ENFORCE_FROM = "2026-07-16"
 HOW_TO_CHOOSE_MIN_CHARS = 150
+# #4826 項目2: 本文に生の ASIN コードを書かない規律の soft スコア。
+# 合否 (passed) は変えず、census の「減点のみ」に発火率を出すためだけの値。
+HOW_TO_CHOOSE_INLINE_ASIN_SOFT_SCORE = 0.8
 
 
 @dataclass
@@ -252,16 +255,44 @@ def _how_to_choose_enforced(data: dict) -> bool:
     return slug[:10] >= HOW_TO_CHOOSE_ENFORCE_FROM
 
 
+def _inline_asin_soft(mentioned_all: set[str], hard_ok_message: str = "OK") -> CheckResult:
+    """表記規律の soft signal: 本文に生の ASIN コードを書かない (#4826 項目2)。
+
+    合否は変えず score だけ下げる。quality_census が「減点のみ (passed=True かつ
+    score<1.0)」として拾うので、hard 化の判断材料になる発火率が観測できる。
+    """
+    if not mentioned_all:
+        return CheckResult("how_to_choose", True, 1.0, hard_ok_message)
+    return CheckResult(
+        "how_to_choose", True, HOW_TO_CHOOSE_INLINE_ASIN_SOFT_SCORE,
+        f"how_to_choose に生の ASIN コード: {sorted(mentioned_all)} "
+        "(soft: 表記規律。読者に意味がないので生成側で書かないこと)",
+    )
+
+
 def check_how_to_choose(data: dict) -> CheckResult:
     """#3203 Phase 1-A: narrative.how_to_choose (比較・選び分け) の機械検査。
 
     1. 施行日ゲート: slug 先頭 10 文字 (YYYY-MM-DD) が HOW_TO_CHOOSE_ENFORCE_FROM
        より前なら skip (既存記事の軽微修正 PR を落とさない)
     2. 存在 + 合計 150 字以上 (NARRATIVE_MIN_CHARS と同じ枠組み)
-    3. ASIN 封じ込め: 本文中の B0[A-Z0-9]{8} は
+    3. ASIN 封じ込め (hard): 本文中の B0[A-Z0-9]{8} は
        data/raw/per_asin/<ASIN>/competitors.json の asin 集合の部分集合であること
        (自商品の ASIN への言及は許可)。competitors.json が読めない場合は
        ASIN 言及ゼロのみ合格 (安全側フォールバック)
+    4. 生 ASIN 表記 (soft, #4826 項目2): 3 を通っても本文に生の ASIN コードが
+       あれば score のみ下げる。自商品の ASIN も対象 (読者に意味がないのは同じ)。
+
+    3 と 4 を分けている理由 (2026-08-10 実測):
+      封じ込め (3) は「実在する競合か」の**捏造検査**であって、ASIN コードを
+      読者に見せてよいかは見ていない。実際 main 全量 1913 件のうち 3 で落ちるのは
+      11 件だが、生 ASIN が本文に出ているのは 107 件ある (build_post の
+      _strip_inline_asin_codes が拾ったのと同じ 107 件)。レンダリング側の除去は
+      catch であって prevent ではなく、地の文に埋まった裸のコードは日本語が壊れる
+      ので除去できない。そこで生成側を縛るのがここ。
+      いきなり hard にすると新規記事の発火率が未知のまま Jules PR を落としうる
+      (v7.2 後の実測は 10/10 で言及ゼロだが n=10 では 95% 上限が約 30%)。
+      まず soft で 1 週間観測し、census の発火が 0 に近ければ hard へ昇格する。
     """
     if not _how_to_choose_enforced(data):
         return CheckResult("how_to_choose", True, 1.0, "pre-v7 slug, skipped (施行日前)")
@@ -281,14 +312,16 @@ def check_how_to_choose(data: dict) -> CheckResult:
         )
 
     blob = value if isinstance(value, str) else "\n".join(s for s in value if isinstance(s, str))
-    mentioned = set(_ASIN_MENTION_RE.findall(blob))
+    mentioned_all = set(_ASIN_MENTION_RE.findall(blob))
 
     product = data.get("product") or {}
     own_asin = product.get("asin") if isinstance(product, dict) else None
-    mentioned -= {own_asin} if own_asin else set()
+    # hard 判定 (捏造検査) は従来どおり自商品を除外した集合で行う。
+    # soft 判定 (表記規律) は自商品も含めた mentioned_all を使う。
+    mentioned = mentioned_all - ({own_asin} if own_asin else set())
 
     if not mentioned:
-        return CheckResult("how_to_choose", True, 1.0, "OK")
+        return _inline_asin_soft(mentioned_all)
 
     asin = own_asin or ""
     comp_path = pathlib.Path("data/raw/per_asin") / asin / "competitors.json"
@@ -311,7 +344,7 @@ def check_how_to_choose(data: dict) -> CheckResult:
             "how_to_choose", False, 0.0,
             f"how_to_choose mentions ASIN(s) not in competitors.json: {sorted(hallucinated)}",
         )
-    return CheckResult("how_to_choose", True, 1.0, "OK")
+    return _inline_asin_soft(mentioned_all)
 
 
 def check_faq(data: dict, product_name: str) -> CheckResult:
