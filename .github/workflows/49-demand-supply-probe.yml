@@ -1,0 +1,162 @@
+name: Demand Supply Probe (shadow)
+
+# #2686 — 需要キーワードに Amazon の商品供給があるかを **観測だけ** する shadow レーン。
+#
+# なぜ必要か (2026-08-10 実測):
+#   navi は 554 記事中 417 (75%) が平均 10 位以内で順位は取れているのに、サイト全体で
+#   376 impressions/日 しかない。誰も検索しない語で 1 位を取っている = 供給駆動
+#   (Amazon の売れ筋 ASIN 起点) の構造的な帰結。omcha.jp (WP 本家) の GSC には同領域で
+#   51 倍の実需要があり、PR #4863 でそれを Amazon 検索キーワード 98 語に変換した。
+#
+#   ただし需要があっても商品が無ければ navi の記事型 (Amazon 商品ページ) にならない。
+#   実例として最大クラスタのメロジョイ (約 111,000 imp) は Amazon 非販売で、これは
+#   owner 確認により事前除外した。**残りの供給有無は SearchItems を叩くまで分からない**。
+#   本番のキーワードプールを触る前にここを実測する。
+#
+# 設計判断:
+#   - **観測のみ**。data/raw/amazon.json を書かないので Jules の生成プールに一切
+#     入らない = 記事は 1 本も作られない (quality census / uniqueness 監査と同じ規律)
+#   - cron を張らない。workflow_dispatch のみ。まず 1 回の実測結果を見てから配線を決める
+#   - 1 keyword あたり SearchItems 1 回・1.1 秒間隔 (fetch_amazon と同じ)。98 語で約 2 分
+#   - レポートは commit-back する。issue への自動起票はしない
+#     (CLAUDE.md 2026-07-08 GitHub API バースト禁止規律)
+#
+# 必須 secrets:
+#   - AMAZON_CREATORS_APPLICATION_ID / _CREDENTIAL_ID / _CREDENTIAL_SECRET
+#   - AMAZON_PARTNER_TAG
+#   - APP_ID / APP_PRIVATE_KEY (commit-back PR 用)
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: '上位 N 語だけ叩く (0=全件 98 語)'
+        required: false
+        default: '0'
+      dry_run:
+        description: 'true なら API を一切呼ばず対象語の確認だけ'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: demand-supply-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # secrets 欠落を無言 skip にしない (#4793 の規律)。
+      - name: Assert secrets present
+        if: github.event.inputs.dry_run != 'true'
+        env:
+          APP: ${{ secrets.AMAZON_CREATORS_APPLICATION_ID }}
+          CID: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_ID }}
+          SEC: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_SECRET }}
+          TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
+        run: |
+          missing=""
+          [ -z "$APP" ] && missing="$missing AMAZON_CREATORS_APPLICATION_ID"
+          [ -z "$CID" ] && missing="$missing AMAZON_CREATORS_CREDENTIAL_ID"
+          [ -z "$SEC" ] && missing="$missing AMAZON_CREATORS_CREDENTIAL_SECRET"
+          [ -z "$TAG" ] && missing="$missing AMAZON_PARTNER_TAG"
+          if [ -n "$missing" ]; then
+            echo "::error::required secrets missing:$missing"
+            exit 1
+          fi
+
+      - name: Probe demand keyword supply
+        env:
+          AMAZON_CREATORS_APPLICATION_ID: ${{ secrets.AMAZON_CREATORS_APPLICATION_ID }}
+          AMAZON_CREATORS_CREDENTIAL_ID: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_ID }}
+          AMAZON_CREATORS_CREDENTIAL_SECRET: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_SECRET }}
+          AMAZON_PARTNER_TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
+        run: |
+          set -e
+          FLAGS="--limit ${{ github.event.inputs.limit || '0' }}"
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            FLAGS="$FLAGS --dry-run"
+          fi
+          python scripts/probe_demand_supply.py $FLAGS
+
+      # 生成プールに触れていないことを機械で確認する (観測レーンの契約)。
+      - name: Assert no article pool mutation
+        run: |
+          set -e
+          if ! git diff --quiet -- data/raw/ data/articles/ data/rewrite_queue/; then
+            echo "::error::observation lane must not modify data/raw, data/articles or data/rewrite_queue"
+            git status --short -- data/raw/ data/articles/ data/rewrite_queue/
+            exit 1
+          fi
+          echo "OK: no mutation in article-generation inputs"
+
+      - name: Summarize to job log
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          p = pathlib.Path("data/analytics/demand_supply_probe.json")
+          if not p.exists():
+              print("no report"); raise SystemExit(0)
+          d = json.loads(p.read_text(encoding="utf-8"))
+          s = d["summary"]
+          print("## 需要キーワードの Amazon 供給 (#2686 shadow)\n")
+          print(f"- 観測 {s['keywords_probed']} 語")
+          print(f"- 供給あり (新規 ASIN あり): **{s['usable']}** 語 / 新規 ASIN {s['new_asin_total']} 件")
+          print(f"- 供給はあるが全部既出: {s['hits_but_all_known']} 語")
+          print(f"- ヒット 0 件 (Amazon に商品が無い): {s['zero_hit']} 語")
+          print(f"- API エラー: {s['error_count']} 語\n")
+          print("| 需要 imp | keyword | hits | new |")
+          print("|---:|---|---:|---:|")
+          for r in d["results"][:30]:
+              print(f"| {r.get('wp_impressions', 0)} | {r['keyword']} | {r['hits']} | {len(r['new_asins'])} |")
+          PY
+
+      - name: Commit back report
+        if: github.event.inputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+          if git diff --quiet -- data/analytics/demand_supply_probe.json; then
+            echo "no change; nothing to commit"
+            exit 0
+          fi
+          BRANCH="data/demand-supply-probe-${{ github.run_id }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add data/analytics/demand_supply_probe.json
+          git commit -m "data(analytics): demand keyword supply probe (run ${{ github.run_id }})"
+          git push origin "$BRANCH"
+          gh pr create --base main --head "$BRANCH" \
+            --title "data(analytics): demand keyword supply probe (run ${{ github.run_id }})" \
+            --body "需要キーワードの Amazon 供給観測 (#2686 shadow レーン)。観測のみで記事・CI には影響しない。" \
+            --repo "${{ github.repository }}"
