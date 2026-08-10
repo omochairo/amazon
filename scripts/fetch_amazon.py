@@ -186,6 +186,39 @@ def parse_keywords(cli_value: Optional[str], shuffle: bool = False, sample_size:
         kws = kws[:sample_size]
     return kws
 
+def load_demand_keywords(path: str, slots: int) -> list:
+    """需要側キーワード (#2686) を imp 上位から slots 件返す。
+
+    data/demand_keywords.json は build_demand_keywords.py の出力で、omcha.jp (WP 本家)
+    の GSC 実需要を Amazon 検索語に変換したもの。既に (1) Amazon 非販売品と実店舗名の
+    除外、(2) 供給 probe で 0 件だった情報クエリの除去、を通してあるので、ここでは
+    上から取るだけでよい。
+
+    なぜ必要か (2026-08-10 実測): DEFAULT_KEYWORDS は 231 件の**供給側**リストで
+    「どんなおもちゃが存在するか」から引いている。結果 navi は 554 記事中 417 (75%) が
+    平均 10 位以内なのにサイト全体で 376 impressions/日 しかない。誰も検索しない語で
+    1 位を取っている状態。
+
+    slots<=0・ファイル無し・壊れている場合は空リストを返す (従来動作のまま)。
+    """
+    if slots <= 0 or not path:
+        return []
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        logger.warning(f"demand keywords unreadable ({path}): {e}; falling back to supply-side only")
+        return []
+    out = []
+    for e in (data.get("keywords") or []):
+        kw = e.get("keyword") if isinstance(e, dict) else None
+        if isinstance(kw, str) and kw.strip():
+            out.append(kw.strip())
+        if len(out) >= slots:
+            break
+    return out
+
+
 def get_secret(name: str) -> str:
     return os.environ.get(name)
 
@@ -1121,6 +1154,10 @@ def main():
                         help="PA-API search pages per keyword (1-10, each up to 10 items)")
     parser.add_argument("--min-new", type=int, default=40,
                         help="Stop searching once this many ASINs not in articles-dir are collected")
+    parser.add_argument("--demand-keywords", default="data/demand_keywords.json",
+                        help="需要側キーワード JSON (build_demand_keywords.py の出力, #2686)")
+    parser.add_argument("--demand-slots", type=int, default=0,
+                        help="keyword サンプル枠のうち需要側に割り当てる件数 (0=無効・従来動作)")
     parser.add_argument("--search-index", default="Toys",
                         help="PA-API SearchIndex / category (e.g. 'Toys', 'Baby', 'All'). 'All' disables ItemPage on JP marketplace; pick a concrete category to use pagination.")
     parser.add_argument("--competitors-only", action="store_true",
@@ -1277,6 +1314,11 @@ def main():
     if not user_keywords and sniper_asins and items:
         user_keywords = [items[0]["title"][:20]]
 
+    # #2686: 需要側キーワードを優先枠で確保する。供給側のロングテール探索を止めない
+    # ため全面切替はせず、sample 枠の一部だけを需要側に割り当てる。枠内に収めるので
+    # SearchItems の総リクエスト数は増えない (レート的に従来と同じ)。
+    demand_kws = load_demand_keywords(args.demand_keywords, args.demand_slots)
+
     sampling_active = not args.keywords and not os.environ.get("AMAZON_SEARCH_KEYWORDS")
     if sampling_active:
         if args.keyword_sample_size <= 0:
@@ -1284,7 +1326,8 @@ def main():
             # された従来仕様)。ユーザキーワード数による削減はせず全件を検索する。
             random_kws = parse_keywords(args.keywords, shuffle=True, sample_size=0)
         else:
-            effective_sample_size = max(0, args.keyword_sample_size - len(user_keywords))
+            effective_sample_size = max(
+                0, args.keyword_sample_size - len(user_keywords) - len(demand_kws))
             if effective_sample_size > 0:
                 random_kws = parse_keywords(args.keywords, shuffle=True, sample_size=effective_sample_size)
             else:
@@ -1298,9 +1341,17 @@ def main():
         # reduction, shuffle order only (today's behaviour, unchanged).
         random_kws = parse_keywords(args.keywords, shuffle=True, sample_size=0)
 
-    # User keywords first, in given order (not shuffled); random keywords
-    # fill the rest, deduped against the user list.
-    keywords = user_keywords + [k for k in random_kws if k not in user_keywords]
+    # User keywords first, in given order (not shuffled); then the demand-side
+    # keywords (#2686); random supply-side keywords fill the rest. Dedupe keeps
+    # the earliest occurrence so the priority order above is what survives.
+    keywords = list(user_keywords)
+    for k in demand_kws + list(random_kws):
+        if k not in keywords:
+            keywords.append(k)
+    if demand_kws:
+        logger.info(f"keyword mix: user={len(user_keywords)} demand={len(demand_kws)} "
+                    f"supply={len([k for k in random_kws if k not in demand_kws])} "
+                    f"total={len(keywords)}")
     # Surface the first user keyword as the legacy primary_kw for the
     # amazon.json "keyword" field (back-compat with downstream consumers).
     primary_kw = user_keywords[0] if user_keywords else None
