@@ -248,3 +248,142 @@ def test_real_probe_drops_only_informational_residue():
         assert B.normalize_key(kw) not in zero, f"商品名 {kw} が供給なし扱いになっている"
     # 情報クエリ残骸が落ちていること
     assert B.normalize_key("食玩法律") in zero
+
+
+# --------------------------------------------------------------------------
+# WPランクガード (#2686): WP が既に上位で取っている語のカニバリ防止
+# --------------------------------------------------------------------------
+
+def _wp_history_file(tmp_path, rows):
+    """実レコード構造 ({"clicks","ctr","date","impressions","position","query"}) の JSONL を書く。"""
+    p = tmp_path / "gsc_wp_by_query.jsonl"
+    lines = []
+    for r in rows:
+        rec = {
+            "query": r["query"],
+            "date": r.get("date", "2026-05-01"),
+            "impressions": r["impressions"],
+            "clicks": r["clicks"],
+            "position": r["position"],
+            "ctr": (r["clicks"] / r["impressions"]) if r["impressions"] else 0.0,
+        }
+        lines.append(json.dumps(rec, ensure_ascii=False))
+    p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return p
+
+
+def test_position_is_impression_weighted_not_simple_average(tmp_path):
+    """日次 position の単純平均と impression 加重平均で結果が変わるケース。
+
+    1日目: imp=1000, pos=1.0 (支配的) / 2日目: imp=10, pos=20.0 (少数の閑散日)。
+    単純平均なら (1.0+20.0)/2 = 10.5 (pos_max=3.0 の対象外) だが、
+    imp 加重なら (1000*1.0 + 10*20.0)/1010 ≈ 1.19 (pos_max=3.0 の対象内)。
+    """
+    history = _wp_history_file(tmp_path, [
+        {"query": "テスト語", "date": "2026-05-01", "impressions": 1000, "clicks": 200, "position": 1.0},
+        {"query": "テスト語", "date": "2026-05-02", "impressions": 10, "clicks": 1, "position": 20.0},
+    ])
+    stats = B.load_wp_rank_stats(history)
+    q = B.normalize_key("テスト語")
+    assert stats[q]["imp"] == 1010
+    assert stats[q]["clicks"] == 201
+    assert abs(stats[q]["pos"] - ((1000 * 1.0 + 10 * 20.0) / 1010)) < 1e-9
+    assert stats[q]["pos"] < 3.0  # 単純平均 (10.5) なら閾値を超えて残ってしまう
+
+
+def test_wp_ranked_keyword_is_dropped_when_pos_and_clicks_both_qualify(tmp_path):
+    history = _wp_history_file(tmp_path, [
+        {"query": "アンパンマンシール", "impressions": 500, "clicks": 220, "position": 1.1},
+    ])
+    stats = B.load_wp_rank_stats(history)
+    topics = {"rows": [
+        {"query": "アンパンマンシール", "wp_impressions": 500, "bucket": "toy"},
+    ]}
+    rep = B.build(topics, [], {}, ("toy",), wp_rank_stats=stats)
+    assert rep["keywords"] == []
+    assert rep["summary"]["dropped_wp_ranked"] == 1
+    assert rep["summary"]["dropped_wp_ranked_clicks"] == 220
+    d = rep["dropped_wp_ranked"][0]
+    assert d["keyword"] == "アンパンマンシール"
+    assert d["wp_position"] == 1.1
+    assert d["wp_clicks"] == 220
+    assert d["reason"]
+
+
+def test_low_clicks_keyword_is_kept_even_if_pos_qualifies(tmp_path):
+    """pos<=3.0 でも clicks<100 なら AND 条件を満たさず残る。"""
+    history = _wp_history_file(tmp_path, [
+        {"query": "低クリック語", "impressions": 50, "clicks": 5, "position": 1.5},
+    ])
+    stats = B.load_wp_rank_stats(history)
+    topics = {"rows": [{"query": "低クリック語", "wp_impressions": 50, "bucket": "toy"}]}
+    rep = B.build(topics, [], {}, ("toy",), wp_rank_stats=stats)
+    assert [k["keyword"] for k in rep["keywords"]] == ["低クリック語"]
+    assert rep["summary"]["dropped_wp_ranked"] == 0
+
+
+def test_low_position_keyword_is_kept_even_with_many_clicks(tmp_path):
+    """clicks>=100 でも pos>3.0 なら AND 条件を満たさず残る (スクイーズ型)。"""
+    history = _wp_history_file(tmp_path, [
+        {"query": "スクイーズ", "impressions": 18290, "clicks": 500, "position": 11.4},
+    ])
+    stats = B.load_wp_rank_stats(history)
+    topics = {"rows": [{"query": "スクイーズ", "wp_impressions": 18290, "bucket": "toy"}]}
+    rep = B.build(topics, [], {}, ("toy",), wp_rank_stats=stats)
+    assert [k["keyword"] for k in rep["keywords"]] == ["スクイーズ"]
+    assert rep["summary"]["dropped_wp_ranked"] == 0
+
+
+def test_missing_history_file_fails_open(tmp_path):
+    """JSONL 不在時はガードを適用せず従来動作のまま (件数が減らない)。"""
+    stats = B.load_wp_rank_stats(tmp_path / "nope.jsonl")
+    assert stats == {}
+    topics = {"rows": [
+        {"query": "アンパンマンシール", "wp_impressions": 500, "bucket": "toy"},
+    ]}
+    without_guard = B.build(topics, [], {}, ("toy",))
+    with_missing_history = B.build(topics, [], {}, ("toy",), wp_rank_stats=stats)
+    assert len(with_missing_history["keywords"]) == len(without_guard["keywords"]) == 1
+    assert with_missing_history["summary"]["dropped_wp_ranked"] == 0
+
+
+def test_broken_history_file_fails_open(tmp_path):
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text("not json\n", encoding="utf-8")
+    assert B.load_wp_rank_stats(bad) == {}
+
+
+def test_spacing_variant_source_queries_are_not_double_counted(tmp_path):
+    """同じ需要語に空白違いの source_query が2件あっても imp/clicks は1件分。
+
+    「ぷにるんず サンリオ」と「ぷにるんずサンリオ」は normalize_key で同じキーに潰れる。
+    wp_rank_stats はキー単位で集計済みなので、source_queries 側で重複加算すると
+    2倍になる (2026-08-10 実データで発覚した回帰)。
+    """
+    history = _wp_history_file(tmp_path, [
+        {"query": "ぷにるんずサンリオ", "impressions": 2617, "clicks": 1085, "position": 2.1},
+    ])
+    stats = B.load_wp_rank_stats(history)
+    # to_search_keyword で同一キーワードに集約される2つの元クエリ (空白揺れ違い)。
+    topics = {"rows": [
+        {"query": "ぷにるんず サンリオ", "wp_impressions": 300, "bucket": "toy"},
+        {"query": "ぷにるんずサンリオ", "wp_impressions": 200, "bucket": "toy"},
+    ]}
+    rep = B.build(topics, [], {}, ("toy",), wp_rank_stats=stats)
+    assert rep["summary"]["dropped_wp_ranked"] == 1
+    d = rep["dropped_wp_ranked"][0]
+    assert d["wp_impressions"] == 2617, "2倍 (5234) になっていたら重複加算のバグ"
+    assert d["wp_clicks"] == 1085, "2倍 (2170) になっていたら重複加算のバグ"
+
+
+def test_no_rank_guard_flag_disables_guard_even_with_qualifying_stats(tmp_path):
+    history = _wp_history_file(tmp_path, [
+        {"query": "アンパンマンシール", "impressions": 500, "clicks": 220, "position": 1.1},
+    ])
+    stats = B.load_wp_rank_stats(history)
+    topics = {"rows": [
+        {"query": "アンパンマンシール", "wp_impressions": 500, "bucket": "toy"},
+    ]}
+    rep = B.build(topics, [], {}, ("toy",), wp_rank_stats=stats, rank_guard_enabled=False)
+    assert [k["keyword"] for k in rep["keywords"]] == ["アンパンマンシール"]
+    assert rep["summary"]["dropped_wp_ranked"] == 0
