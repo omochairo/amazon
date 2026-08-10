@@ -60,6 +60,34 @@ WP順位ガード (dropped_wp_ranked, #2686):
   --no-rank-guard で無効化できる。gsc_wp_by_query.jsonl が無い/壊れている場合は
   fail-open (ガード無効のまま従来動作) で進み、summary に記録する。
 
+Ubersuggest 由来の需要語の合流 (#2686 PR1・2026-08-10 実測):
+  WP (omcha.jp GSC) だけでなく、競合サイトの Ubersuggest 由来語も需要側の入力に
+  合流する。実測パイプライン (競合9サイト CSV → L1 語彙ゲート → Amazon 実査
+  → ambiguous のローカル LLM 判定) の結果:
+    - ubersuggest_product_probe.json: 200 語実査、product 126 / non_product 18 /
+      ambiguous 56
+    - ubersuggest_llm_judge.json: ambiguous 56 語を gemma で判定、is_product 21 /
+      is_not_product 35。正解ラベルとの突き合わせで正答率 83.9% / precision 85.7% /
+      recall 75.0%
+    - 使える語は最大 126 + 21 = 147 語
+  confidence は選別に使わない: ambiguous 56 語中 54 語が confidence 0.9〜1.0 に
+  張り付き、その帯の正答率は 87% で confidence の値そのものが判別に効いていない
+  (2026-08-10 実測)。閾値ゲートを入れても高 confidence の誤判定は残り、低
+  confidence の正しい判定を捨てるだけなので入れない。
+
+  WP順位ガードは Ubersuggest 由来の語にも適用する。omcha.jp が既に上位で取って
+  いる語なら出所に関わらずカニバるため。実測では 2,532 語中 omcha.jp と重なるのは
+  44 語・うちガード該当は 9 語で影響は小さいが、原理として全ソースに通す。
+
+  WP と Ubersuggest は単位が違う (WP: 90 日間表示回数 wp_impressions /
+  Ubersuggest: 月間検索数 volume) ため、数値を直接比較して 1 本のリストに
+  ソートしてはいけない。各ソース内でそれぞれ降順に並べ、1 件ずつ交互に取り出す
+  「ランクのラウンドロビン」で合流する (round_robin_merge)。
+
+  入力ファイル (ubersuggest_product_probe.json / ubersuggest_llm_judge.json) は
+  どちらか欠けていても fail-open で従来動作 (WP のみ) のまま進み、summary の
+  ubersuggest_missing_inputs に記録する。
+
 使い方:
     python scripts/build_demand_keywords.py
     python scripts/build_demand_keywords.py --buckets toy,baby_goods --limit 100
@@ -85,6 +113,8 @@ DEFAULT_TOPICS_PATH = "data/analytics/demand_topics.json"
 DEFAULT_OUT = "data/demand_keywords.json"
 DEFAULT_SUPPLY_PROBE_PATH = "data/analytics/demand_supply_probe.json"
 DEFAULT_WP_QUERY_HISTORY_PATH = "data/analytics/history/gsc_wp_by_query.jsonl"
+DEFAULT_UBERSUGGEST_PROBE_PATH = "data/analytics/ubersuggest_product_probe.json"
+DEFAULT_UBERSUGGEST_LLM_JUDGE_PATH = "data/analytics/ubersuggest_llm_judge.json"
 DEFAULT_BUCKETS = ("toy",)
 # SearchItems に投げる意味のある最短長。1 文字の残骸を弾く。
 MIN_KEYWORD_CHARS = 2
@@ -244,6 +274,151 @@ def load_wp_rank_stats(history_path: pathlib.Path | None) -> dict[str, dict[str,
     return out
 
 
+def load_ubersuggest_keywords(
+    probe_path: pathlib.Path | None,
+    llm_judge_path: pathlib.Path | None,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Ubersuggest 由来の需要語のうち商品語だけを集める (#2686 PR1)。
+
+    2 つの入力ソースを統合する:
+      - ubersuggest_product_probe.json: verdict == "product" (L1 実査で商品と
+        確定した語)
+      - ubersuggest_llm_judge.json: is_product_query == true (ambiguous 56 語を
+        gemma で判定した結果)
+    2026-08-10 実測: probe 200 語中 product 126 / non_product 18 / ambiguous 56。
+    ambiguous 56 語の LLM 判定は正答率 83.9% / precision 85.7% / recall 75.0%。
+    confidence は使わない (モジュール docstring 参照。選別に使える精度が無い)。
+
+    重複 (両ソースに同じ語が出るケース) は normalize_key で排除し 1 件にまとめる。
+    Amazon に投げる keyword は **raw_query** (空白を保持した元表記) を使う。
+    実査でヒットを確認したのはこの表記であり、query は重複排除用に空白を
+    完全除去した別物なので検索語には使わない。
+
+    入力ファイルが無い/壊れている場合はそのソースを fail-open でスキップし、
+    2 つ目の戻り値 (missing) にラベルを積む。両方欠けていれば空リストを返し、
+    呼び出し側は WP のみの従来動作のまま進む。
+    """
+    out: dict[str, dict[str, Any]] = {}
+    missing: list[str] = []
+    sources = (("probe", probe_path), ("llm_judge", llm_judge_path))
+    for label, path in sources:
+        if path is None or not path.exists():
+            missing.append(label)
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            logger.warning("ubersuggest %s を読めないのでスキップ (fail-open): %s", label, e)
+            missing.append(label)
+            continue
+        for r in data.get("results") or []:
+            if not isinstance(r, dict):
+                continue
+            if label == "probe":
+                is_product = r.get("verdict") == "product"
+            else:
+                is_product = r.get("is_product_query") is True
+            if not is_product:
+                continue
+            query = r.get("query") or ""
+            raw_query = (r.get("raw_query") or query or "").strip()
+            key = normalize_key(query)
+            if not key or not raw_query:
+                continue
+            entry = out.setdefault(key, {
+                "keyword": raw_query,
+                "volume": 0,
+                "sites": [],
+                "source_queries": [],
+                "source": "ubersuggest",
+            })
+            volume = r.get("volume") or 0
+            entry["volume"] = max(entry["volume"], volume)
+            for s in (r.get("sites") or []):
+                if s not in entry["sites"]:
+                    entry["sites"].append(s)
+            if query not in entry["source_queries"]:
+                entry["source_queries"].append(query)
+    return list(out.values()), missing
+
+
+def round_robin_merge(a: list[dict[str, Any]], b: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """2 つの降順ソート済みリストを 1 件ずつ交互に取り出して合流する (#2686 PR1)。
+
+    WP (wp_impressions = 90 日間表示回数) と Ubersuggest (volume = 月間検索数) は
+    単位が違うので、数値の大小を直接比較して 1 本のリストにソートしてはいけない
+    (imp 数千〜数万 vs volume は月間検索数のオーダーが違い、比較すれば常に片方の
+    ソースに支配される)。各ソース内の「良い順」だけを信用し、出所を均等に混ぜる
+    ラウンドロビンで合流する。a・b はどちらも呼び出し側で既に降順ソート済みの前提。
+    """
+    merged: list[dict[str, Any]] = []
+    for i in range(max(len(a), len(b))):
+        if i < len(a):
+            merged.append(a[i])
+        if i < len(b):
+            merged.append(b[i])
+    return merged
+
+
+def apply_rank_guard(
+    entries: list[dict[str, Any]],
+    wp_rank_stats: dict[str, dict[str, float]],
+    guard_pos_max: float,
+    guard_min_clicks: float,
+    rank_guard_enabled: bool,
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
+    """WPランクガードを 1 組の需要語エントリ群に適用する (#2686 PR1 で共通化)。
+
+    元は WP 由来の語にしか効いていなかったが、omcha.jp が既にその語の元クエリで
+    上位表示を得ているなら、需要語の出所 (WP/Ubersuggest) を問わずカニバる。
+    entries は {"keyword", "source_queries", ...} を持つ辞書のリスト。各 entry の
+    source_queries を WP 実績 (wp_rank_stats) と突き合わせ、
+    pos<=guard_pos_max **かつ** clicks>=guard_min_clicks なら落とす。
+    """
+    if not rank_guard_enabled or not wp_rank_stats:
+        return entries, {}
+    kept: list[dict[str, Any]] = []
+    dropped: dict[str, dict[str, Any]] = {}
+    for entry in entries:
+        imp_sum = 0.0
+        clicks_sum = 0.0
+        pos_weighted_sum = 0.0
+        seen_norm: set[str] = set()
+        for q in entry["source_queries"]:
+            nk = normalize_key(q)
+            # 空白揺れ違いの重複 source_query を二重加算しない (build() の既存ロジックと同じ)。
+            if nk in seen_norm:
+                continue
+            seen_norm.add(nk)
+            stat = wp_rank_stats.get(nk)
+            if not stat:
+                continue
+            imp_sum += stat["imp"]
+            clicks_sum += stat["clicks"]
+            pos_weighted_sum += stat["pos"] * stat["imp"]
+        if imp_sum <= 0:
+            kept.append(entry)
+            continue
+        pos = pos_weighted_sum / imp_sum
+        if pos <= guard_pos_max and clicks_sum >= guard_min_clicks:
+            dropped[entry["keyword"]] = {
+                "keyword": entry["keyword"],
+                "source": entry.get("source", "unknown"),
+                "wp_impressions": round(imp_sum, 1),
+                "wp_clicks": round(clicks_sum, 1),
+                "wp_position": round(pos, 1),
+                "reason": (
+                    f"omcha.jp が既にこの語の元クエリで pos {round(pos, 1)}"
+                    f" (clicks {round(clicks_sum)}) を獲得済み。navi の商品ページを"
+                    f"出すと host crowding で WP の枠を食い合う恐れがあるため除外"
+                    f" (guard_pos_max={guard_pos_max}, guard_min_clicks={guard_min_clicks})。"
+                ),
+            }
+        else:
+            kept.append(entry)
+    return kept, dropped
+
+
 def build(
     topics: dict[str, Any],
     modifiers: list[str],
@@ -255,12 +430,17 @@ def build(
     guard_pos_max: float = DEFAULT_GUARD_POS_MAX,
     guard_min_clicks: float = DEFAULT_GUARD_MIN_CLICKS,
     rank_guard_enabled: bool = True,
+    ubersuggest_keywords: list[dict[str, Any]] | None = None,
+    ubersuggest_missing_inputs: list[str] | None = None,
 ) -> dict[str, Any]:
-    """検索語ごとに需要 impressions を合算したランキングを返す。
+    """検索語ごとに需要 impressions/volume を合算したランキングを返す。
 
     同じ検索語に落ちる需要クエリ (「メロジョイ 偽物」「メロジョイ 定価」) は
     1 件にまとめ、impressions を合算する。合算するのは**同一サイト内の同一語**
     なので意味が通る (別サイトの合算をしないのとは別の話)。
+
+    WP (wp_impressions) と Ubersuggest (volume) の 2 ソースは round_robin_merge で
+    合流する (#2686 PR1、理由はモジュール docstring・round_robin_merge 参照)。
     """
     agg: dict[str, dict[str, Any]] = {}
     skipped_excluded: dict[str, dict[str, Any]] = {}
@@ -294,55 +474,31 @@ def build(
             d["source_queries"].append(query)
             continue
 
-        entry = agg.setdefault(kw, {"keyword": kw, "wp_impressions": 0, "source_queries": []})
+        entry = agg.setdefault(
+            kw, {"keyword": kw, "wp_impressions": 0, "source_queries": [], "source": "wp_gsc"})
         entry["wp_impressions"] += imp
         entry["source_queries"].append(query)
 
-    # WPランクガード: 需要語の元クエリ (source_queries) を WP 実績と突き合わせ、
-    # pos<=guard_pos_max かつ clicks>=guard_min_clicks の語を落とす (#2686)。
-    dropped_wp_ranked: dict[str, dict[str, Any]] = {}
     wp_rank_stats = wp_rank_stats or {}
-    if rank_guard_enabled and wp_rank_stats:
-        for kw, entry in list(agg.items()):
-            imp_sum = 0.0
-            clicks_sum = 0.0
-            pos_weighted_sum = 0.0
-            seen_norm: set[str] = set()
-            for q in entry["source_queries"]:
-                nk = normalize_key(q)
-                # source_queries は空白揺れ違いの別クエリを複数持つことがあるが、
-                # wp_rank_stats は normalize_key で正規化済みに集計されている。
-                # 同じ正規化キーに落ちる source_query を重複加算すると二重計上になる
-                # (2026-08-10 実データで発覚: 「ぷにるんず サンリオ」「ぷにるんずサンリオ」
-                # が同じキーに潰れて2倍になっていた)。正規化キー単位で1回だけ加算する。
-                if nk in seen_norm:
-                    continue
-                seen_norm.add(nk)
-                stat = wp_rank_stats.get(nk)
-                if not stat:
-                    continue
-                imp_sum += stat["imp"]
-                clicks_sum += stat["clicks"]
-                pos_weighted_sum += stat["pos"] * stat["imp"]
-            if imp_sum <= 0:
-                continue
-            pos = pos_weighted_sum / imp_sum
-            if pos <= guard_pos_max and clicks_sum >= guard_min_clicks:
-                del agg[kw]
-                dropped_wp_ranked[kw] = {
-                    "keyword": kw,
-                    "wp_impressions": round(imp_sum, 1),
-                    "wp_clicks": round(clicks_sum, 1),
-                    "wp_position": round(pos, 1),
-                    "reason": (
-                        f"omcha.jp が既にこの語の元クエリで pos {round(pos, 1)}"
-                        f" (clicks {round(clicks_sum)}) を獲得済み。navi の商品ページを"
-                        f"出すと host crowding で WP の枠を食い合う恐れがあるため除外"
-                        f" (guard_pos_max={guard_pos_max}, guard_min_clicks={guard_min_clicks})。"
-                    ),
-                }
+    ubersuggest_keywords = ubersuggest_keywords or []
+    ubersuggest_missing_inputs = ubersuggest_missing_inputs or []
 
-    keywords = sorted(agg.values(), key=lambda e: (-e["wp_impressions"], e["keyword"]))
+    # WPランクガード (#2686): 需要語の元クエリ (source_queries) を WP 実績と突き合わせ、
+    # pos<=guard_pos_max かつ clicks>=guard_min_clicks の語を落とす。
+    # WP由来・Ubersuggest由来の両方に同じガードを適用する (apply_rank_guard で共通化)。
+    wp_entries_sorted = sorted(agg.values(), key=lambda e: (-e["wp_impressions"], e["keyword"]))
+    wp_kept, dropped_wp_ranked = apply_rank_guard(
+        wp_entries_sorted, wp_rank_stats, guard_pos_max, guard_min_clicks, rank_guard_enabled)
+
+    uber_entries_sorted = sorted(
+        ubersuggest_keywords, key=lambda e: (-e["volume"], e["keyword"]))
+    uber_kept, dropped_uber_ranked = apply_rank_guard(
+        uber_entries_sorted, wp_rank_stats, guard_pos_max, guard_min_clicks, rank_guard_enabled)
+
+    dropped_wp_ranked_all: dict[str, dict[str, Any]] = {**dropped_wp_ranked, **dropped_uber_ranked}
+
+    # 単位が違う (imp vs volume) ので数値比較で1本のリストにソートせず、ラウンドロビンで合流する。
+    keywords = round_robin_merge(wp_kept, uber_kept)
     if limit > 0:
         keywords = keywords[:limit]
 
@@ -351,21 +507,26 @@ def build(
         "params": {"buckets": list(buckets), "limit": limit},
         "summary": {
             "keywords": len(keywords),
-            "wp_impressions": sum(k["wp_impressions"] for k in keywords),
+            "wp_impressions": sum(k.get("wp_impressions", 0) for k in keywords),
             "excluded_terms": len(skipped_excluded),
             "excluded_wp_impressions": sum(e["wp_impressions"] for e in skipped_excluded.values()),
             "dropped_empty_after_strip": skipped_empty,
             "dropped_no_supply": len(dropped_no_supply),
             "dropped_no_supply_wp_impressions": sum(
                 d["wp_impressions"] for d in dropped_no_supply.values()),
-            "dropped_wp_ranked": len(dropped_wp_ranked),
+            "dropped_wp_ranked": len(dropped_wp_ranked_all),
             "dropped_wp_ranked_clicks": round(
-                sum(d["wp_clicks"] for d in dropped_wp_ranked.values()), 1),
+                sum(d["wp_clicks"] for d in dropped_wp_ranked_all.values()), 1),
+            "wp_keywords": len(wp_kept),
+            "ubersuggest_keywords": len(uber_kept),
+            "ubersuggest_volume": sum(k.get("volume", 0) for k in uber_kept),
+            "ubersuggest_dropped_wp_ranked": len(dropped_uber_ranked),
+            "ubersuggest_missing_inputs": ubersuggest_missing_inputs,
         },
         "excluded": sorted(skipped_excluded.values(), key=lambda e: -e["wp_impressions"]),
         "dropped_no_supply": sorted(dropped_no_supply.values(),
                                     key=lambda d: -d["wp_impressions"]),
-        "dropped_wp_ranked": sorted(dropped_wp_ranked.values(),
+        "dropped_wp_ranked": sorted(dropped_wp_ranked_all.values(),
                                     key=lambda d: -d["wp_impressions"]),
         "keywords": keywords,
     }
@@ -377,15 +538,21 @@ def run(terms_path: pathlib.Path, topics_path: pathlib.Path, out_path: pathlib.P
         wp_history_path: pathlib.Path | None = None,
         guard_pos_max: float = DEFAULT_GUARD_POS_MAX,
         guard_min_clicks: float = DEFAULT_GUARD_MIN_CLICKS,
-        rank_guard_enabled: bool = True) -> dict[str, Any]:
+        rank_guard_enabled: bool = True,
+        ubersuggest_probe_path: pathlib.Path | None = None,
+        ubersuggest_llm_judge_path: pathlib.Path | None = None) -> dict[str, Any]:
     modifiers, excluded = load_vocab(terms_path)
     topics = json.loads(topics_path.read_text(encoding="utf-8"))
     zero_supply = load_zero_supply_keywords(supply_probe_path)
     wp_rank_stats = load_wp_rank_stats(wp_history_path) if rank_guard_enabled else {}
+    ubersuggest_keywords, ubersuggest_missing = load_ubersuggest_keywords(
+        ubersuggest_probe_path, ubersuggest_llm_judge_path)
     result = build(topics, modifiers, build_excluded_terms(excluded), buckets, limit,
                    zero_supply=zero_supply, wp_rank_stats=wp_rank_stats,
                    guard_pos_max=guard_pos_max, guard_min_clicks=guard_min_clicks,
-                   rank_guard_enabled=rank_guard_enabled)
+                   rank_guard_enabled=rank_guard_enabled,
+                   ubersuggest_keywords=ubersuggest_keywords,
+                   ubersuggest_missing_inputs=ubersuggest_missing)
 
     s = result["summary"]
     logger.info("検索キーワード %d 件 / 需要 %d imp (buckets=%s)",
@@ -400,6 +567,12 @@ def run(terms_path: pathlib.Path, topics_path: pathlib.Path, out_path: pathlib.P
     else:
         logger.info("  WP順位ガードで除外 %d 語 (WP保護クリック %d)",
                     s["dropped_wp_ranked"], s["dropped_wp_ranked_clicks"])
+    logger.info("  Ubersuggest 由来 %d 語 (volume 合計 %d, ガード除外 %d)",
+                s["ubersuggest_keywords"], s["ubersuggest_volume"],
+                s["ubersuggest_dropped_wp_ranked"])
+    if s["ubersuggest_missing_inputs"]:
+        logger.warning("  Ubersuggest 入力欠損 (fail-open): %s",
+                       ",".join(s["ubersuggest_missing_inputs"]))
 
     if not dry_run:
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -429,6 +602,12 @@ def main() -> int:
                     help="WP順位ガードのクリック数しきい値 (これ以上で保護対象、既定 100)")
     ap.add_argument("--no-rank-guard", action="store_true",
                     help="WP順位ガードを無効化する")
+    ap.add_argument("--ubersuggest-probe", default=DEFAULT_UBERSUGGEST_PROBE_PATH,
+                    help="Ubersuggest 語の Amazon 実査 probe (#2686 PR1)。verdict==product を合流")
+    ap.add_argument("--ubersuggest-llm-judge", default=DEFAULT_UBERSUGGEST_LLM_JUDGE_PATH,
+                    help="Ubersuggest ambiguous 語の LLM 判定。is_product_query==true を合流")
+    ap.add_argument("--no-ubersuggest", action="store_true",
+                    help="Ubersuggest 由来の需要語合流を無効化する (WP のみの従来動作)")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     buckets = tuple(b.strip() for b in args.buckets.split(",") if b.strip())
@@ -438,7 +617,11 @@ def main() -> int:
         wp_history_path=pathlib.Path(args.wp_history),
         guard_pos_max=args.guard_pos_max,
         guard_min_clicks=args.guard_min_clicks,
-        rank_guard_enabled=not args.no_rank_guard)
+        rank_guard_enabled=not args.no_rank_guard,
+        ubersuggest_probe_path=(
+            None if args.no_ubersuggest else pathlib.Path(args.ubersuggest_probe)),
+        ubersuggest_llm_judge_path=(
+            None if args.no_ubersuggest else pathlib.Path(args.ubersuggest_llm_judge)))
     return 0
 
 

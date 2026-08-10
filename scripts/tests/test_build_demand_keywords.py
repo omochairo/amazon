@@ -387,3 +387,179 @@ def test_no_rank_guard_flag_disables_guard_even_with_qualifying_stats(tmp_path):
     rep = B.build(topics, [], {}, ("toy",), wp_rank_stats=stats, rank_guard_enabled=False)
     assert [k["keyword"] for k in rep["keywords"]] == ["アンパンマンシール"]
     assert rep["summary"]["dropped_wp_ranked"] == 0
+
+
+# --------------------------------------------------------------------------
+# Ubersuggest 由来の需要語の合流 (#2686 PR1)
+# --------------------------------------------------------------------------
+
+def _uber_probe_file(tmp_path, results, name="uber_probe.json"):
+    p = tmp_path / name
+    p.write_text(json.dumps({"results": results}, ensure_ascii=False), encoding="utf-8")
+    return p
+
+
+def _uber_llm_judge_file(tmp_path, results, name="uber_llm.json"):
+    p = tmp_path / name
+    p.write_text(json.dumps({"results": results}, ensure_ascii=False), encoding="utf-8")
+    return p
+
+
+def test_ubersuggest_probe_product_verdicts_are_kept(tmp_path):
+    probe = _uber_probe_file(tmp_path, [
+        {"query": "たまごっち", "raw_query": "たまごっち", "volume": 1000000, "sites": ["a.jp"],
+         "verdict": "product"},
+        {"query": "ねこ道", "raw_query": "ねこ 道", "volume": 500, "sites": ["b.jp"],
+         "verdict": "non_product"},
+        {"query": "あいまい語", "raw_query": "あいまい語", "volume": 100, "sites": ["c.jp"],
+         "verdict": "ambiguous"},
+    ], name="probe_only.json")
+    kws, missing = B.load_ubersuggest_keywords(probe, tmp_path / "nope_llm.json")
+    assert missing == ["llm_judge"]
+    assert [k["keyword"] for k in kws] == ["たまごっち"]
+    assert kws[0]["source"] == "ubersuggest"
+    assert kws[0]["volume"] == 1000000
+
+
+def test_ubersuggest_llm_judge_is_product_query_true_is_kept(tmp_path):
+    llm = _uber_llm_judge_file(tmp_path, [
+        {"query": "商品A", "raw_query": "商品 A", "volume": 200, "sites": ["x.jp"],
+         "is_product_query": True, "confidence": 0.55},
+        {"query": "情報語B", "raw_query": "情報語B", "volume": 300, "sites": ["y.jp"],
+         "is_product_query": False, "confidence": 0.99},
+    ])
+    kws, missing = B.load_ubersuggest_keywords(tmp_path / "nope_probe.json", llm)
+    assert missing == ["probe"]
+    assert [k["keyword"] for k in kws] == ["商品 A"]
+
+
+def test_ubersuggest_confidence_is_not_used_for_selection(tmp_path):
+    """回帰テスト: is_product_query==true なら confidence の値によらず採用される。
+
+    実測 (2026-08-10): ambiguous 56語中54語が confidence 0.9-1.0 に張り付き、
+    その帯の正答率は87%で confidence 自体が判別に効いていない。閾値ゲートを
+    入れてはいけない。
+    """
+    llm = _uber_llm_judge_file(tmp_path, [
+        {"query": "低confidence商品", "raw_query": "低confidence商品", "volume": 10,
+         "sites": [], "is_product_query": True, "confidence": 0.1},
+        {"query": "高confidence非商品", "raw_query": "高confidence非商品", "volume": 10,
+         "sites": [], "is_product_query": False, "confidence": 0.99},
+    ])
+    kws, _ = B.load_ubersuggest_keywords(tmp_path / "nope.json", llm)
+    assert [k["keyword"] for k in kws] == ["低confidence商品"]
+
+
+def test_ubersuggest_dedup_across_probe_and_llm_judge(tmp_path):
+    """同じ語が probe (product) と llm_judge (is_product_query) の両方に出ても1件になる。"""
+    probe = _uber_probe_file(tmp_path, [
+        {"query": "重複語", "raw_query": "重複語", "volume": 50, "sites": ["a.jp"],
+         "verdict": "product"},
+    ])
+    llm = _uber_llm_judge_file(tmp_path, [
+        {"query": "重複語", "raw_query": "重複語", "volume": 50, "sites": ["b.jp"],
+         "is_product_query": True, "confidence": 0.9},
+    ])
+    kws, missing = B.load_ubersuggest_keywords(probe, llm)
+    assert missing == []
+    assert len(kws) == 1
+    assert set(kws[0]["sites"]) == {"a.jp", "b.jp"}
+
+
+def test_ubersuggest_raw_query_with_space_is_used_as_keyword(tmp_path):
+    """query は重複排除で空白除去済みなので使わない。raw_query (空白保持) を使う。"""
+    probe = _uber_probe_file(tmp_path, [
+        {"query": "トミカシール", "raw_query": "トミカ シール", "volume": 10, "sites": [],
+         "verdict": "product"},
+    ])
+    kws, _ = B.load_ubersuggest_keywords(probe, tmp_path / "nope.json")
+    assert kws[0]["keyword"] == "トミカ シール"
+
+
+def test_ubersuggest_missing_both_inputs_fails_open(tmp_path):
+    kws, missing = B.load_ubersuggest_keywords(
+        tmp_path / "nope_probe.json", tmp_path / "nope_llm.json")
+    assert kws == []
+    assert set(missing) == {"probe", "llm_judge"}
+
+
+def test_ubersuggest_broken_input_fails_open(tmp_path):
+    bad = tmp_path / "bad.json"
+    bad.write_text("not json", encoding="utf-8")
+    kws, missing = B.load_ubersuggest_keywords(bad, tmp_path / "nope_llm.json")
+    assert kws == []
+    assert "probe" in missing
+
+
+def test_round_robin_merge_interleaves_by_rank_not_by_value():
+    """単位が違う2ソースの数値を混ぜてソートせず、各ソース内の順位を保って交互に出す。"""
+    wp = [{"keyword": f"wp{i}"} for i in range(3)]  # 既に降順ソート済みという前提
+    uber = [{"keyword": f"uber{i}"} for i in range(5)]
+    merged = B.round_robin_merge(wp, uber)
+    assert [m["keyword"] for m in merged] == [
+        "wp0", "uber0", "wp1", "uber1", "wp2", "uber2", "uber3", "uber4",
+    ]
+
+
+def test_build_merges_wp_and_ubersuggest_via_round_robin(tmp_path):
+    mods = _mods(tmp_path, [])
+    topics = {"rows": [
+        {"query": "WP語1", "wp_impressions": 100, "bucket": "toy"},
+        {"query": "WP語2", "wp_impressions": 50, "bucket": "toy"},
+    ]}
+    uber_kws = [
+        {"keyword": "uber語1", "volume": 900000, "sites": [], "source_queries": ["uber語1"],
+         "source": "ubersuggest"},
+        {"keyword": "uber語2", "volume": 500, "sites": [], "source_queries": ["uber語2"],
+         "source": "ubersuggest"},
+    ]
+    rep = B.build(topics, mods, {}, ("toy",), ubersuggest_keywords=uber_kws)
+    # WP は wp_impressions (imp) 降順、Ubersuggest は volume 降順、で交互。
+    # volume (900000) が wp_impressions (100) よりずっと大きくても、
+    # 数値比較でソートしないので先頭に来るのは wp_impressions 最大の WP語1 のまま。
+    # (WP側のkeywordはto_search_keywordのnormalize()でlowercaseされる)
+    assert [k["keyword"] for k in rep["keywords"]] == ["wp語1", "uber語1", "wp語2", "uber語2"]
+    assert rep["summary"]["ubersuggest_keywords"] == 2
+    assert rep["summary"]["wp_keywords"] == 2
+
+
+def test_ubersuggest_entries_get_wp_rank_guard_too(tmp_path):
+    """WP 順位ガードは出所を問わず適用される。"""
+    history = _wp_history_file(tmp_path, [
+        {"query": "既にWP上位の語", "impressions": 500, "clicks": 220, "position": 1.1},
+    ])
+    stats = B.load_wp_rank_stats(history)
+    topics = {"rows": []}
+    uber_kws = [
+        {"keyword": "既にWP上位の語", "volume": 1000, "sites": [],
+         "source_queries": ["既にWP上位の語"], "source": "ubersuggest"},
+    ]
+    rep = B.build(topics, [], {}, ("toy",), wp_rank_stats=stats, ubersuggest_keywords=uber_kws)
+    assert rep["keywords"] == []
+    assert rep["summary"]["ubersuggest_dropped_wp_ranked"] == 1
+    assert rep["summary"]["dropped_wp_ranked"] == 1
+
+
+def test_ubersuggest_missing_inputs_recorded_in_summary(tmp_path):
+    topics = {"rows": []}
+    rep = B.build(topics, [], {}, ("toy",), ubersuggest_missing_inputs=["probe", "llm_judge"])
+    assert rep["summary"]["ubersuggest_missing_inputs"] == ["probe", "llm_judge"]
+
+
+def test_run_fails_open_when_ubersuggest_inputs_absent(tmp_path):
+    """入力ファイルが無いとき run() 全体が従来の WP 70語相当動作のまま壊れないこと。"""
+    terms = _terms_file(tmp_path, modifiers=[], excluded=[])
+    topics_path = tmp_path / "topics.json"
+    topics_path.write_text(json.dumps({"rows": [
+        {"query": "語A", "wp_impressions": 10, "bucket": "toy"},
+    ]}, ensure_ascii=False), encoding="utf-8")
+    out_path = tmp_path / "out.json"
+    result = B.run(
+        terms, topics_path, out_path, ("toy",), 0, dry_run=True,
+        supply_probe_path=None, wp_history_path=tmp_path / "nope_history.jsonl",
+        rank_guard_enabled=False,
+        ubersuggest_probe_path=tmp_path / "nope_probe.json",
+        ubersuggest_llm_judge_path=tmp_path / "nope_llm.json",
+    )
+    assert [k["keyword"] for k in result["keywords"]] == ["語a"]  # normalize() で lowercase
+    assert set(result["summary"]["ubersuggest_missing_inputs"]) == {"probe", "llm_judge"}
