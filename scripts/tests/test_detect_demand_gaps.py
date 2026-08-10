@@ -142,6 +142,80 @@ class BuildDemandQueriesTest(unittest.TestCase):
         )
         self.assertEqual(out, [])
 
+    # ---- WP (omcha.jp) 需要ソース (2026-08-10 追加) ----
+
+    def test_wp_impressions_kept_in_separate_field_not_summed(self):
+        """別サイトの数字なので合算しない (意味が違う)。"""
+        wp = self.root / "gsc_wp_by_query.jsonl"
+        _write_gsc_lines(self.gsc_path, [{"query": "メルちゃん 服", "impressions": 4}])
+        _write_gsc_lines(wp, [{"query": "メルちゃん 服", "impressions": 14863}])
+        out = D.build_demand_queries(
+            self.suggest_dir, self.gsc_path, min_impressions=3,
+            gsc_wp_query_path=wp, min_wp_impressions=50,
+        )
+        self.assertEqual(len(out), 1)
+        q = out[0]
+        self.assertEqual(q["impressions"], 4)
+        self.assertEqual(q["wp_impressions"], 14863)
+        self.assertEqual(set(q["sources"]), {"gsc", "gsc_wp"})
+
+    def test_wp_only_query_is_picked_up(self):
+        """navi に実績ゼロでも WP に需要があれば拾う (これが導入の目的)。"""
+        wp = self.root / "gsc_wp_by_query.jsonl"
+        _write_gsc_lines(self.gsc_path, [])
+        _write_gsc_lines(wp, [{"query": "ぷにるんず", "impressions": 6930}])
+        out = D.build_demand_queries(
+            self.suggest_dir, self.gsc_path, min_impressions=3,
+            gsc_wp_query_path=wp, min_wp_impressions=50,
+        )
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["sources"], ["gsc_wp"])
+        self.assertEqual(out[0]["impressions"], 0)
+        self.assertEqual(out[0]["wp_impressions"], 6930)
+
+    def test_wp_min_impressions_threshold_is_independent(self):
+        wp = self.root / "gsc_wp_by_query.jsonl"
+        _write_gsc_lines(self.gsc_path, [])
+        _write_gsc_lines(wp, [
+            {"query": "採用される", "impressions": 50},
+            {"query": "裾のノイズ", "impressions": 49},
+        ])
+        out = D.build_demand_queries(
+            self.suggest_dir, self.gsc_path, min_impressions=3,
+            gsc_wp_query_path=wp, min_wp_impressions=50,
+        )
+        self.assertEqual([q["query"] for q in out], ["採用される"])
+
+    def test_wp_source_disabled_reproduces_previous_behaviour(self):
+        """--no-wp-demand 相当 (gsc_wp_query_path=None) で旧挙動に戻ること。"""
+        _write_gsc_lines(self.gsc_path, [{"query": "従来クエリ", "impressions": 5}])
+        out = D.build_demand_queries(self.suggest_dir, self.gsc_path, min_impressions=3)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["sources"], ["gsc"])
+        self.assertEqual(out[0]["wp_impressions"], 0)
+
+
+class DemandRankKeyTest(unittest.TestCase):
+    """需要シグナルの順位付け (2026-08-10 に WP impressions を一次キーへ)。"""
+
+    def test_wp_impressions_outrank_suggest_presence(self):
+        big_wp = {"query": "メルちゃん 服", "sources": ["gsc_wp"], "impressions": 0,
+                  "wp_impressions": 14863}
+        suggest_only = {"query": "0歳 おもちゃ", "sources": ["suggest"], "impressions": 0,
+                        "wp_impressions": 0}
+        self.assertEqual(
+            sorted([suggest_only, big_wp], key=D._demand_rank_key)[0]["query"], "メルちゃん 服")
+
+    def test_suggest_still_outranks_navi_impressions_when_wp_ties(self):
+        suggest_only = {"query": "b", "sources": ["suggest"], "impressions": 0, "wp_impressions": 0}
+        navi_only = {"query": "a", "sources": ["gsc"], "impressions": 999, "wp_impressions": 0}
+        self.assertEqual(sorted([navi_only, suggest_only], key=D._demand_rank_key)[0]["query"], "b")
+
+    def test_missing_wp_field_is_treated_as_zero(self):
+        """旧フォーマットのレコード (wp_impressions なし) でも落ちないこと。"""
+        legacy = {"query": "旧", "sources": ["gsc"], "impressions": 10}
+        self.assertEqual(D._demand_rank_key(legacy)[0], 0)
+
 
 # --------------------------------------------------------------------------
 # コード系クエリ (ASIN/型番) 判定

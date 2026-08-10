@@ -28,10 +28,12 @@ Issue #3332 N2 消費側 PR1「需要ギャップ検出」レポートスクリ�
 
 アルゴリズム:
   1. 需要クエリ集合を構築する: suggest_info 全ファイルの suggestions[].query
-     (source="suggest", theme_key 付与) と、gsc_by_query.jsonl をクエリ単位で
-     impressions 合算し --min-impressions 以上のもの (source="gsc") を正規化
-     (NFKC + 空白圧縮 + strip) してマージする。1クエリが両方の source を
-     持ちうる (sources リスト)。
+     (source="suggest", theme_key 付与)、gsc_by_query.jsonl (navi 自身、
+     source="gsc", --min-impressions 以上)、gsc_wp_by_query.jsonl (omcha.jp
+     本家、source="gsc_wp", --min-wp-impressions 以上) を正規化
+     (NFKC + 空白圧縮 + strip) してマージする。1クエリが複数の source を
+     持ちうる (sources リスト)。impressions は **サイトごとに別フィールド**
+     (impressions / wp_impressions) に持ち、合算しない。
   1.5. 日本語 (ひらがな/カタカナ/漢字) を一切含まず ASCII 英数・記号のみの
      クエリ (ASIN/型番のナビゲーショナル検索、例: "b0h1b5qdjk", "75445") を
      母集団から除外する (is_code_like_query)。除外件数は summary に
@@ -44,10 +46,19 @@ Issue #3332 N2 消費側 PR1「需要ギャップ検出」レポートスクリ�
   4. 各クエリについて全記事ベクトルとの最大コサイン類似度 (max_sim) と
      その記事 (nearest_asin/nearest_title) を求める。
   5. max_sim < --gap-threshold をギャップと判定する。
-  6. ギャップ一覧を需要シグナル (suggest 出現を優先、次に gsc impressions) 降順
-     で並べる。
+  6. ギャップ一覧を需要シグナル (WP impressions → suggest 出現 → navi
+     impressions) 降順で並べる。
   7. data/analytics/demand_gaps.json に summary (総需要クエリ数・ギャップ数・
      除外コード系クエリ数・テーマ別内訳) + gaps 一覧を書き出す。
+
+なぜ WP (omcha.jp) の GSC を需要の一次シグナルにするか (2026-08-10 実測):
+  navi 自身の GSC は 30 日で 239 クエリ / 2,202 impressions しかなく、これを
+  需要の定義に使うと「既に記事があって露出している語」しか出てこない (供給駆動の
+  循環参照)。同領域の omcha.jp は 30 日 526 クエリ / 112,205 impressions = 51 倍
+  あり、上位は「メルちゃん 服」(imp 14,863) 「ぷにるんず」(6,930) のように
+  **navi に在庫が無い語**で立っている。実際 WP で imp>=200 の 90 クエリのうち
+  navi にブランド在庫があるのは 8 件 (imp 6,198) で、残り 82 件 (imp 87,507 =
+  93%) は記事が無い。需要はここにあって navi の実績側には無い。
 
 エラー処理 (fail-closed, compute_semantic_related と同様):
   Ruri への embed リクエストが最終的に失敗した場合は EmbeddingBatchError を
@@ -96,6 +107,14 @@ logger = logging.getLogger("detect_demand_gaps")
 DEFAULT_ARTICLES_DIR = "data/articles"
 DEFAULT_SUGGEST_DIR = "data/raw/suggest_info"
 DEFAULT_GSC_QUERY_PATH = "data/analytics/history/gsc_by_query.jsonl"
+# 2026-08-10: 需要ソースに omcha.jp (WordPress 本家) の GSC を足した。
+# navi 自身の gsc_by_query は 30 日で 239 クエリ / 2,202 impressions しかなく、
+# 「需要」を測る母数として小さすぎる (サイト全体で 376 imp/日)。同じ知育玩具領域で
+# omcha.jp は 30 日 526 クエリ / 112,205 impressions = **51 倍**あり、しかも
+# 「メルちゃん 服」「ぷにるんず」のように navi に在庫が無い語で需要が立っている。
+# 需要を navi 自身の実績だけで定義すると、既に記事がある語しか出てこない
+# (供給駆動の循環参照) ので、本家側の実測需要を一次シグナルにする。
+DEFAULT_GSC_WP_QUERY_PATH = "data/analytics/history/gsc_wp_by_query.jsonl"
 DEFAULT_OUT = "data/analytics/demand_gaps.json"
 DEFAULT_RURI_URL = "http://localhost:8000"
 # 2026-07-19 較正 (home-ops run 29685348953, 需要クエリ 2,056 件全数の
@@ -105,9 +124,13 @@ DEFAULT_RURI_URL = "http://localhost:8000"
 # コード系ノイズ 18 件) を review 対象にする較正値。
 DEFAULT_GAP_THRESHOLD = 0.84
 DEFAULT_MIN_IMPRESSIONS = 3
+# WP 側は母数が 51 倍あるので下限も別に持つ。3 のままだと裾のノイズを大量に拾う。
+# 実測 (30 日): imp>=200 で 90 クエリ、imp>=50 で 214 クエリ。
+DEFAULT_MIN_WP_IMPRESSIONS = 50
 
 SOURCE_SUGGEST = "suggest"
 SOURCE_GSC = "gsc"
+SOURCE_GSC_WP = "gsc_wp"
 
 _SPACE_RE = re.compile(r"\s+")
 
@@ -216,16 +239,31 @@ def load_gsc_impressions(gsc_query_path: pathlib.Path, min_impressions: int) -> 
     return {k: v for k, v in agg.items() if v["impressions"] >= min_impressions}
 
 
+def _new_demand_entry(query: str) -> dict[str, Any]:
+    return {"query": query, "sources": [], "impressions": 0, "wp_impressions": 0, "theme_key": None}
+
+
 def build_demand_queries(
     suggest_dir: pathlib.Path,
     gsc_query_path: pathlib.Path,
     min_impressions: int,
+    gsc_wp_query_path: pathlib.Path | None = None,
+    min_wp_impressions: int = DEFAULT_MIN_WP_IMPRESSIONS,
 ) -> list[dict[str, Any]]:
-    """suggest_info と gsc_by_query を正規化キーでマージした需要クエリ一覧を返す。
+    """suggest_info と 2 系統の GSC を正規化キーでマージした需要クエリ一覧を返す。
 
-    1クエリが両方の source を持ちうる (sources に両方積む)。impressions は
-    gsc 側の合算値のみを持つ (suggest 単独ヒットは 0)。theme_key は suggest
+    1クエリが複数の source を持ちうる (sources に全部積む)。theme_key は suggest
     側からのみ得られる (gsc 単独ヒットは None)。
+
+    impressions は **サイトごとに別フィールドに持つ**:
+
+    - ``impressions``    … navi (navi.omcha.jp) 自身の GSC 実績
+    - ``wp_impressions`` … omcha.jp (WordPress 本家) の GSC 実績
+
+    合算しないのは別サイトの数字だからで、意味が違う。navi 側は「既に記事があって
+    露出している」ことの実績 (=供給の裏返し) だが、WP 側は「この領域に需要がある」
+    ことの証拠で、navi に記事があるかどうかと独立している。ギャップ検出で効かせたい
+    のは後者なので _demand_rank_key は wp_impressions を第一キーにしている。
     """
     merged: dict[str, dict[str, Any]] = {}
 
@@ -233,9 +271,7 @@ def build_demand_queries(
         key = normalize_query(item["query"])
         if not key:
             continue
-        entry = merged.setdefault(
-            key, {"query": item["query"], "sources": [], "impressions": 0, "theme_key": None}
-        )
+        entry = merged.setdefault(key, _new_demand_entry(item["query"]))
         if SOURCE_SUGGEST not in entry["sources"]:
             entry["sources"].append(SOURCE_SUGGEST)
         if entry["theme_key"] is None:
@@ -243,12 +279,18 @@ def build_demand_queries(
 
     gsc_agg = load_gsc_impressions(gsc_query_path, min_impressions)
     for key, g in gsc_agg.items():
-        entry = merged.setdefault(
-            key, {"query": g["query"], "sources": [], "impressions": 0, "theme_key": None}
-        )
+        entry = merged.setdefault(key, _new_demand_entry(g["query"]))
         if SOURCE_GSC not in entry["sources"]:
             entry["sources"].append(SOURCE_GSC)
         entry["impressions"] = g["impressions"]
+
+    if gsc_wp_query_path is not None:
+        wp_agg = load_gsc_impressions(gsc_wp_query_path, min_wp_impressions)
+        for key, g in wp_agg.items():
+            entry = merged.setdefault(key, _new_demand_entry(g["query"]))
+            if SOURCE_GSC_WP not in entry["sources"]:
+                entry["sources"].append(SOURCE_GSC_WP)
+            entry["wp_impressions"] = g["impressions"]
 
     return list(merged.values())
 
@@ -437,16 +479,24 @@ def compute_max_similarity(
 # ランク付け・出力
 # --------------------------------------------------------------------------
 
-def _demand_rank_key(q: dict[str, Any]) -> tuple[int, float, str]:
+def _demand_rank_key(q: dict[str, Any]) -> tuple[float, int, float, str]:
     """需要シグナル降順のソートキー。
 
-    優先順位: (1) suggest 出現の有無 (出現あり優先)、(2) gsc impressions
-    降順、(3) query 昇順 (決定的な同点順序)。較正可能: 現状は「suggest 出現を
-    最優先」という単純な二値優先。実データを見て加重合成に変える余地がある。
+    優先順位: (1) omcha.jp (WP) の impressions 降順、(2) suggest 出現の有無、
+    (3) navi の impressions 降順、(4) query 昇順 (決定的な同点順序)。
+
+    2026-08-10 に (1) を最上位へ変更した。旧実装は「suggest 出現あり」を最優先の
+    二値にしていたが、suggest は Google サジェストの出現有無であって**量が付いて
+    いない**ため、上位が数百件の同点で埋まり実質 query 昇順になっていた
+    (docstring 自身が「実データを見て加重合成に変える余地がある」としていた箇所)。
+    実データが揃った結果、量つきで最も強い需要シグナルは WP の impressions だった
+    ので、これを一次キーにする。navi 側 impressions を一次キーにしない理由は
+    build_demand_queries の docstring を参照 (供給の裏返しなので循環参照になる)。
     """
+    wp_impressions = q.get("wp_impressions") or 0
     has_suggest = 1 if SOURCE_SUGGEST in q["sources"] else 0
     impressions = q.get("impressions") or 0
-    return (-has_suggest, -impressions, q["query"])
+    return (-wp_impressions, -has_suggest, -impressions, q["query"])
 
 
 def _write_output(out_path: pathlib.Path, payload: dict[str, Any]) -> None:
@@ -465,6 +515,8 @@ def run(
     out_path: pathlib.Path,
     gap_threshold: float = DEFAULT_GAP_THRESHOLD,
     min_impressions: int = DEFAULT_MIN_IMPRESSIONS,
+    gsc_wp_query_path: pathlib.Path | None = None,
+    min_wp_impressions: int = DEFAULT_MIN_WP_IMPRESSIONS,
     limit_articles: int = 0,
     dry_run: bool = False,
     ruri_url: str = DEFAULT_RURI_URL,
@@ -491,7 +543,10 @@ def run(
     embed_document_fn = embed_document_fn or C.embed_batch_ruri
     embed_query_fn = embed_query_fn or embed_batch_ruri_query
 
-    demand_queries_all = build_demand_queries(suggest_dir, gsc_query_path, min_impressions)
+    demand_queries_all = build_demand_queries(
+        suggest_dir, gsc_query_path, min_impressions,
+        gsc_wp_query_path=gsc_wp_query_path, min_wp_impressions=min_wp_impressions,
+    )
     after_code = [q for q in demand_queries_all if not is_code_like_query(q["query"])]
     excluded_code_queries = len(demand_queries_all) - len(after_code)
     demand_queries = [q for q in after_code if q.get("theme_key") != "english"]
@@ -509,6 +564,8 @@ def run(
     params = {
         "gap_threshold": gap_threshold,
         "min_impressions": min_impressions,
+        "min_wp_impressions": min_wp_impressions,
+        "wp_demand_enabled": gsc_wp_query_path is not None,
         "ruri_url": ruri_url,
     }
 
@@ -560,6 +617,7 @@ def run(
             "query": q["query"],
             "sources": list(q["sources"]),
             "impressions": q["impressions"],
+            "wp_impressions": q.get("wp_impressions", 0),
             "theme_key": q["theme_key"],
             "max_sim": max_sim,
             "nearest_asin": nearest_asin,
@@ -614,7 +672,13 @@ def main() -> None:
         default=DEFAULT_GAP_THRESHOLD,
         help="max_sim がこれ未満をギャップと判定する閾値 (較正可能、既定は初期値の当てずっぽう)",
     )
-    ap.add_argument("--min-impressions", type=int, default=DEFAULT_MIN_IMPRESSIONS, help="GSC 需要とみなす impressions の下限")
+    ap.add_argument("--min-impressions", type=int, default=DEFAULT_MIN_IMPRESSIONS, help="navi GSC を需要とみなす impressions の下限")
+    ap.add_argument("--gsc-wp-query", default=DEFAULT_GSC_WP_QUERY_PATH,
+                    help="omcha.jp (WP 本家) の GSC クエリ別履歴 jsonl のパス")
+    ap.add_argument("--min-wp-impressions", type=int, default=DEFAULT_MIN_WP_IMPRESSIONS,
+                    help="WP GSC を需要とみなす impressions の下限")
+    ap.add_argument("--no-wp-demand", action="store_true",
+                    help="WP 側の需要ソースを無効化する (旧挙動: navi 自身の GSC + suggest のみ)")
     ap.add_argument("--limit-articles", type=int, default=0, help="処理する記事数の上限 (0=全件、テスト/デバッグ用)")
     ap.add_argument("--dry-run", action="store_true", help="計算とログ出力のみ行い、出力ファイルへの書き込みは行わない")
     args = ap.parse_args()
@@ -624,6 +688,8 @@ def main() -> None:
             articles_dir=pathlib.Path(args.articles_dir),
             suggest_dir=pathlib.Path(args.suggest_dir),
             gsc_query_path=pathlib.Path(args.gsc_query),
+            gsc_wp_query_path=(None if args.no_wp_demand else pathlib.Path(args.gsc_wp_query)),
+            min_wp_impressions=args.min_wp_impressions,
             out_path=pathlib.Path(args.out),
             gap_threshold=args.gap_threshold,
             min_impressions=args.min_impressions,
