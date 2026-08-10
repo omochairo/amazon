@@ -58,6 +58,15 @@ verdict の判定基準 (2026-08-10 設計、2026-08-10 owner レビューで pa
       目視レビューに回す。
   - API 例外                          → ambiguous (api_error)
       判定材料が無いので不明。product にも non_product にも潰さない。
+  - coverage == 1.0 だが genre_pass_hits/hits < WEAK_GENRE_EVIDENCE_RATIO
+                                      → ambiguous (weak_genre_evidence)
+      2026-08-10 #2686 案2 追加。coverage が満点でも、その一致が genre_pass
+      した商品のごく一部でしか成立していなければジャンル的な裏付けが弱い
+      (実測: 「パルクール」hits=10/genre_pass=3、「黒 ヒゲ」hits=10/
+      genre_pass=4、「木戸木戸」hits=10/genre_pass=2。木戸木戸は
+      「キドキド」の誤変換でボーネルンドの施設名、単体商品ではない)。
+      ここでも non_product には落とさず、案2 のローカル LLM 判定に委ねる
+      (judge_verdict の docstring 参照)。
 
   この非対称設計 (「ambiguous を product にも non_product にも潰さない」) は
   #4892 の L1 gate と同じ規律に従う。断定できない語は次の判断者 (人間) に
@@ -192,6 +201,22 @@ SEARCH_RESOURCES = FA.SEARCH_ITEM_RESOURCES
 
 FULL_COVERAGE = 1.0
 DEFAULT_RECOMPUTE_OUT = "data/analytics/ubersuggest_product_probe_recompute.json"
+
+# ジャンル証拠の弱さのしきい値 (#2686 案2, 2026-08-10 追加)。
+# coverage が 1.0 (全トークンがタイトルに一致) でも、その一致が genre_pass
+# したごく一部の商品でしか成立していない場合は「product と断定できるほど
+# ジャンル的な裏付けが無い」とみなす。実測 (workflow 50 run 31392220870、
+# 200語) で以下の語が genre_pass_hits/hits < 0.6 のまま product と断定
+# されていた:
+#   パルクール     hits=10 genre_pass_hits=3
+#   黒 ヒゲ        hits=10 genre_pass_hits=4
+#   木戸木戸       hits=10 genre_pass_hits=2 (「キドキド」の誤変換、
+#                  ボーネルンドの施設名でありおもちゃ単体商品ではない)
+# 0.6 は上記実測に基づく暫定値であり、機械的に確定した最適値ではない
+# (owner レビューでの再調整を妨げないよう定数として切り出す)。この
+# しきい値を下回っても non_product には落とさない (案2の LLM 判定に送る、
+# owner 方針: セッションコストを抑えたいので機械側で無理に減らさない)。
+WEAK_GENRE_EVIDENCE_RATIO = 0.6
 
 # 内容語として残す品詞 (名詞・動詞・形容詞・副詞)。それ以外 (助詞・助動詞・
 # 記号・接続詞・フィラー・感動詞・連体詞・接頭詞) は coverage の分母から
@@ -374,12 +399,21 @@ def judge_verdict(hits: int, genre_pass_hits: int, coverage: float) -> tuple[str
       - 0 < coverage < 1.0 (一部だけ一致) → ambiguous
         (表記揺れ・語順違いで一致しなかった実在商品を巻き込みうるため、
         断定せず人間のレビューに回す)
+
+    2026-08-10 #2686 案2 追加: coverage == 1.0 でも genre_pass_hits/hits が
+    WEAK_GENRE_EVIDENCE_RATIO 未満なら product と断定しない (「パルクール」
+    「黒 ヒゲ」「木戸木戸」の実測、定数の docstring 参照)。ここでも
+    non_product には落とさず ambiguous (weak_genre_evidence) にして
+    案2 のローカル LLM 判定に委ねる (機械側でこれ以上削り込まない、
+    owner 方針)。
     """
     if hits == 0:
         return "non_product", "no_hits"
     if genre_pass_hits == 0:
         return "non_product", "no_genre_pass"
     if coverage >= FULL_COVERAGE:
+        if (genre_pass_hits / hits) < WEAK_GENRE_EVIDENCE_RATIO:
+            return "ambiguous", "weak_genre_evidence"
         return "product", "full_title_overlap"
     if coverage <= 0.0:
         return "non_product", "zero_title_overlap"

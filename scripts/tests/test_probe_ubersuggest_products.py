@@ -173,6 +173,37 @@ def test_ambiguous_is_a_distinct_value_not_collapsed_into_product_or_non_product
     assert reason == "partial_title_overlap"
 
 
+def test_weak_genre_evidence_is_ambiguous_not_product_or_non_product():
+    """coverage=1.0 でも genre_pass_hits/hits が閾値未満なら product と断定
+    せず ambiguous (weak_genre_evidence) にする (#2686 案2)。実測:
+    「パルクール」hits=10 genre_pass_hits=3 → 0.3 < 0.6。non_product には
+    落とさない (LLM 判定に送る、owner 方針)。"""
+    verdict, reason = P.judge_verdict(hits=10, genre_pass_hits=3, coverage=1.0)
+    assert verdict == "ambiguous"
+    assert reason == "weak_genre_evidence"
+
+
+def test_weak_genre_evidence_threshold_boundary_kidokido():
+    """「木戸木戸」実測: hits=10 genre_pass_hits=2 → 0.2 < 0.6 → ambiguous。"""
+    verdict, reason = P.judge_verdict(hits=10, genre_pass_hits=2, coverage=1.0)
+    assert verdict == "ambiguous"
+    assert reason == "weak_genre_evidence"
+
+
+def test_strong_genre_evidence_at_or_above_threshold_stays_product():
+    """genre_pass_hits/hits が閾値以上なら従来どおり product のまま。"""
+    verdict, reason = P.judge_verdict(hits=10, genre_pass_hits=6, coverage=1.0)
+    assert verdict == "product"
+    assert reason == "full_title_overlap"
+
+
+def test_weak_genre_evidence_never_falls_to_non_product():
+    """coverage=1.0・genre_pass_hits が非常に低くても non_product には
+    落ちないこと (判断は LLM に送る、機械側で無理に減らさない)。"""
+    verdict, _ = P.judge_verdict(hits=10, genre_pass_hits=1, coverage=1.0)
+    assert verdict != "non_product"
+
+
 def test_zero_hits_is_non_product():
     assert P.judge_verdict(hits=0, genre_pass_hits=0, coverage=0.0) == \
         ("non_product", "no_hits")
