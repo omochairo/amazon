@@ -198,6 +198,26 @@ def test_render_body_flags_md_less_run_as_pass_collapsed():
     assert "unknown を pass に潰す" in body
 
 
+def test_tracker_issue_is_pinned_not_searched():
+    """番号が pin されていないと Search のインデックスラグで週次投稿が恒久 skip される。"""
+    import comment_quality_census as cqc
+    assert cqc.DEFAULT_TRACKER_ISSUE > 0
+
+
+def test_resolve_tracker_prefers_explicit_number_over_search():
+    import comment_quality_census as cqc
+
+    def _boom(_repo):  # Search が呼ばれたら失敗させる
+        raise AssertionError("Search API should not be called when a number is pinned")
+
+    orig = cqc.find_tracker_issue_number
+    cqc.find_tracker_issue_number = _boom
+    try:
+        assert cqc.resolve_tracker_issue_number("o/r", 4828) == 4828
+    finally:
+        cqc.find_tracker_issue_number = orig
+
+
 def test_render_body_survives_missing_diff():
     import comment_quality_census as cqc
     body = cqc.render_body(_snapshot("2026-08-10", ["a"]))

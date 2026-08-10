@@ -48,10 +48,13 @@ TRACKER_MARKER = "quality-census-tracker"
 DATE_MARKER_PREFIX = "quality-census:"
 TRACKER_SEARCH_LABELS = ("observation", "quality")
 
-# tracker issue の番号を pin する (Search API のインデックス反映ラグ対策 —
-# comment_uniqueness_audit.py の DEFAULT_TRACKER_ISSUE と同じ理由)。
-# 0 のあいだは marker Search にフォールバックする。
-DEFAULT_TRACKER_ISSUE = 0
+# owner が起票した恒久 tracker issue (#4828)。GitHub App installation token 経由の
+# Search API は「新規作成されたばかりの issue」を数日単位で 0 件のまま返し続けることが
+# あり、search/issues で毎回探す設計だと自動ロールアップが恒久的に skip され続ける
+# (comment_uniqueness_audit.py の DEFAULT_TRACKER_ISSUE=3300 と同じ理由)。
+# tracker は番号が固定なので Search ではなく番号直指定を既定にする。
+# 0 以下を明示的に渡したときだけ marker Search にフォールバックする。
+DEFAULT_TRACKER_ISSUE = 4828
 
 # 1 コメントに列挙する slug の上限。**切り詰めた場合は必ず総数を併記する**
 # (feedback-metric-gate-calibration: 上限で切ると機能不全が不可視になる)。
