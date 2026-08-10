@@ -164,15 +164,20 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -e
-          if git diff --quiet -- data/analytics/demand_supply_probe.json; then
-            echo "no change; nothing to commit"
-            exit 0
-          fi
+          REPORT=data/analytics/demand_supply_probe.json
           BRANCH="data/demand-supply-probe-${{ github.run_id }}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
-          git add data/analytics/demand_supply_probe.json
+          # `git diff --quiet -- <path>` は **未追跡ファイルを検知しない**ので、
+          # レポートがまだ main に無い初回 run では必ず「差分なし」になり、
+          # レポートが永久に commit されない (2026-08-10 の run 31354476552 で発生)。
+          # add してから --cached で判定する。
+          git add "$REPORT"
+          if git diff --cached --quiet -- "$REPORT"; then
+            echo "no change; nothing to commit"
+            exit 0
+          fi
           git commit -m "data(analytics): demand keyword supply probe (run ${{ github.run_id }})"
           git push origin "$BRANCH"
           gh pr create --base main --head "$BRANCH" \
