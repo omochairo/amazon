@@ -1,6 +1,6 @@
 {
   "date": "2026-08-10",
-  "articles": 1913,
+  "articles": 1914,
   "failing": 11,
   "failing_rate": 0.00575,
   "by_check": {
@@ -10,11 +10,19 @@
     "faq": 595,
     "prices_verified": 578,
     "keywords": 512,
-    "narrative": 363
+    "narrative": 363,
+    "how_to_choose": 96
   },
   "deduction_reasons": {
     "faq": {
       "only N questions contain product name (recommend >=N)": 595
+    },
+    "how_to_choose": {
+      "how_to_choose に生の ASIN コード: ['BNCNHNLNNW', 'BNCVKMNNNZ'] (soft: 表記規律。読者に意味がないので生成側で書かないこと)": 2,
+      "how_to_choose に生の ASIN コード: ['BNBLPNMCQL'] (soft: 表記規律。読者に意味がないので生成側で書かないこと)": 1,
+      "how_to_choose に生の ASIN コード: ['BNBNCDNGSB'] (soft: 表記規律。読者に意味がないので生成側で書かないこと)": 1,
+      "how_to_choose に生の ASIN コード: ['BNBNNRVNNF', 'BNFPQQXXNV'] (soft: 表記規律。読者に意味がないので生成側で書かないこと)": 1,
+      "how_to_choose に生の ASIN コード: ['BNBQYKNVVV'] (soft: 表記規律。読者に意味がないので生成側で書かないこと)": 1
     },
     "keywords": {
       "product name not in any keyword": 258,
@@ -156,8 +164,10 @@
     }
   ],
   "diff": {
-    "previous_date": null,
-    "new": [
+    "previous_date": "2026-08-10",
+    "new": [],
+    "recovered": [],
+    "persisting": [
       "2026-07-16-B08WRPSMMR",
       "2026-07-21-B01C9AP64I",
       "2026-07-26-B085TTFQTH",
@@ -169,8 +179,6 @@
       "2026-08-01-B0H2XGRN73",
       "2026-08-02-B0041X6SEO",
       "2026-08-06-B0FB2DXDF3"
-    ],
-    "recovered": [],
-    "persisting": []
+    ]
   }
 }
