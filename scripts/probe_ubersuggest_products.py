@@ -81,9 +81,58 @@ verdict の判定基準 (2026-08-10 設計、2026-08-10 owner レビューで pa
   resources も fetch_amazon.SEARCH_ITEM_RESOURCES (dry-run gate で実証済み)
   をそのまま使う。
 
+タイトル照合の再設計 (2026-08-10 #2686 PR-E):
+  #4893/#4894 で実施した workflow 50 の 200 語実査 (run 31377655321、API
+  エラー 0) で、当初の「クエリを空白 split したトークンの部分文字列一致」
+  による coverage が 1.0 / 0.5 / 0.0 の3値に張り付き (104/40/51件)、
+  非商品として落ちた51語のうち37語は genre_pass_hits>=5 (Amazon がおもちゃを
+  返している) という機能不全が実測された。原因は日本語に空白区切りが無い
+  ことで、「プレミアムトミカ」(Volume 40,500) のような複合語が1トークンに
+  なり、実タイトル「トミカプレミアム 05 …」と語順が逆なだけで一致しない
+  誤判定が起きていた (「リカちゃん人形」も同様)。
+
+  この PR では compute_title_overlap を形態素解析ベースに作り直した
+  (janome 採用理由: 純 Python・辞書同梱・CI で C 拡張のビルド問題が出ない)。
+  クエリ・タイトルの両方を content_words() で内容語 (名詞・動詞・形容詞・
+  副詞。助詞・助動詞・記号・接続詞・フィラー・感動詞・連体詞・接頭詞、
+  および単独の数字 (品詞細分類「数」) は除外、品詞名は unit test で固定) に
+  分解し、**集合として** (語順を問わず) 一致数を数える。
+
+  IPADIC の既知の限界: 「トミカ」のような片仮名の商品名・略称は辞書に
+  無いことが多く、未知語処理で隣接する片仮名を丸ごと1トークンにまとめて
+  しまう (「プレミアムトミカ」も「トミカプレミアム」もそれぞれ1トークン
+  になり、両者は文字列として不一致のまま)。この丸呑みを検出する目印は
+  janome の reading フィールドが '*' (未知語推定、辞書ヒットではない) に
+  なること。_split_katakana_blob はこの丸呑みトークンの中から「reading が
+  埋まっている (=辞書に実在する) 最長の部分文字列」をアンカーとして探し、
+  前後の残り (辞書ヒットではないが非空) も別の内容語として切り出す。
+  「プレミアムトミカ」→ アンカー「プレミアム」(辞書ヒット) + 残り「トミカ」
+  → [プレミアム, トミカ]。「トミカプレミアム 05 …」も同じアンカーで
+  [トミカ, プレミアム] に分かれ、集合が一致して coverage=1.0 になる。
+  アンカーが見つからない場合は丸呑みトークンのまま1語として扱う (誤爆に
+  よる過分割を避けるため、分割を諦める側に倒す)。
+
+  judge_verdict の3値 (product/non_product/ambiguous) としきい値の考え方は
+  #4893 の設計をそのまま維持する (触っていない)。供給ゲート・ジャンル
+  ゲート (hits/genre_pass_hits) も本 PR では変更しない。
+
+オフライン再採点 (--recompute):
+  data/analytics/ubersuggest_product_probe.json には各語の sample_titles が
+  既に保存されているので、API を1回も呼ばずに新しい coverage ロジックで
+  採点し直せる。ただし sample_titles は実行時の item_count 件 (既定10件)
+  のヒットのうち **先頭5件しか保存されていない** (実測: 200語中187語が
+  5件・9語が0件)。したがって再採点の coverage は実際より低めに出る
+  可能性がある (一致機会がタイトルの数だけ減るため)。確定は workflow 50
+  の再実行 (API 実行) で行うこと。recompute_verdicts の docstring も参照。
+
+  後続 (#2686 案2: ローカル LLM 判定) で ambiguous と判定された語を再度
+  API を叩かずに判定できるよう、sample_titles は probe_keyword の結果にも
+  recompute の結果にも必ず残す。
+
 使い方:
     python scripts/probe_ubersuggest_products.py --dry-run --limit 200
     python scripts/probe_ubersuggest_products.py --limit 200   # secrets が要る
+    python scripts/probe_ubersuggest_products.py --recompute data/analytics/ubersuggest_product_probe.json
 """
 from __future__ import annotations
 
@@ -97,6 +146,8 @@ import time
 import unicodedata
 from datetime import datetime, timezone
 from typing import Any
+
+from janome.tokenizer import Tokenizer
 
 _SCRIPTS_DIR = pathlib.Path(__file__).resolve().parent
 if str(_SCRIPTS_DIR) not in sys.path:
@@ -123,6 +174,26 @@ SLEEP_SECONDS = 1.1
 SEARCH_RESOURCES = FA.SEARCH_ITEM_RESOURCES
 
 FULL_COVERAGE = 1.0
+DEFAULT_RECOMPUTE_OUT = "data/analytics/ubersuggest_product_probe_recompute.json"
+
+# 内容語として残す品詞 (名詞・動詞・形容詞・副詞)。それ以外 (助詞・助動詞・
+# 記号・接続詞・フィラー・感動詞・連体詞・接頭詞) は coverage の分母から
+# 除外する。品詞名は scripts/tests/test_probe_ubersuggest_products.py で
+# 固定 (janome (IPADIC) の品詞体系: 品詞細分類1 が "数" の名詞 = 単独の数字
+# も別途除外する)。
+_CONTENT_POS_MAIN = {"名詞", "動詞", "形容詞", "副詞"}
+# 片仮名の Unicode ブロック (U+30A0-U+30FF) には中黒「・」(U+30FB) や
+# 濁点等の記号も含まれる。IPADIC の未知語処理は「同じ文字種の連続」を
+# 丸呑みするため、「マグ・フォーマー」のような中黒入りの表記が中黒ごと
+# 1トークンになってしまう。ここでは語を構成する片仮名だけ (ァ-ヶ・ー) に
+# 絞り、中黒は _SEPARATOR_RE 側で別語の区切りとして扱う (実測: 「マグ
+# フォーマー」で発覚、#2686 PR-E)。
+_KATAKANA_RE = re.compile(r"^[ァ-ヺー-ヾ]+$")
+_SEPARATOR_RE = re.compile(r"[・･/／]+")
+_KATAKANA_SPLIT_MIN_LEN = 4  # これ未満は分割してもコストに見合わないので諦める
+
+_tokenizer = Tokenizer()
+_dictionary_hit_cache: dict[str, bool] = {}
 
 
 def _now_iso() -> str:
@@ -131,6 +202,96 @@ def _now_iso() -> str:
 
 def _normalize_text(s: str) -> str:
     return unicodedata.normalize("NFKC", s or "").casefold()
+
+
+def _is_number_token(tok) -> bool:
+    parts = tok.part_of_speech.split(",")
+    return parts[0] == "名詞" and len(parts) > 1 and parts[1] == "数"
+
+
+def _has_real_dictionary_reading(surface: str) -> bool:
+    """surface 全体を1トークンとして解釈でき、かつ janome の reading が
+    '*' でない (=IPADIC の辞書に実在する語であり、未知語処理による丸呑み
+    ではない) ときに True を返す。_split_katakana_blob のアンカー探索で
+    使う (モジュール docstring 「タイトル照合の再設計」参照)。"""
+    if surface in _dictionary_hit_cache:
+        return _dictionary_hit_cache[surface]
+    toks = list(_tokenizer.tokenize(surface))
+    result = len(toks) == 1 and toks[0].surface == surface and toks[0].reading != "*"
+    _dictionary_hit_cache[surface] = result
+    return result
+
+
+def _split_katakana_blob(blob: str, _depth: int = 0) -> list[str]:
+    """IPADIC が未知語処理で丸呑みした片仮名の連続 (「トミカプレミアム」等)
+    を、辞書に実在する部分語 (reading が埋まっている) をアンカーに分割する。
+
+    アンカーが見つからない場合は分割を諦めて blob をそのまま1語として返す
+    (誤爆による過分割を避ける側に倒す)。再帰は深さ4まで (クエリ・タイトルの
+    語は短いのでこれで十分)。"""
+    if _depth > 4 or len(blob) < _KATAKANA_SPLIT_MIN_LEN or not _KATAKANA_RE.match(blob):
+        return [blob] if blob else []
+
+    n = len(blob)
+    best: tuple[int, int, int] | None = None  # (length, start, end)
+    for start in range(n):
+        for end in range(n, start + 1, -1):  # 長い候補から (最長一致)
+            piece = blob[start:end]
+            if _has_real_dictionary_reading(piece):
+                length = end - start
+                if best is None or length > best[0]:
+                    best = (length, start, end)
+                break  # この start ではこれより長い piece は無い
+    if best is None:
+        return [blob]
+
+    _, start, end = best
+    pieces: list[str] = []
+    if blob[:start]:
+        pieces.extend(_split_katakana_blob(blob[:start], _depth + 1))
+    pieces.append(blob[start:end])
+    if blob[end:]:
+        pieces.extend(_split_katakana_blob(blob[end:], _depth + 1))
+    return pieces
+
+
+def _expand_unknown_surface(surface: str) -> list[str]:
+    """未知語処理で丸呑みされたトークンの surface を、まず中黒等の区切り
+    記号 (_SEPARATOR_RE) で分割し、そのうえで各断片が長い片仮名の連続なら
+    _split_katakana_blob でさらに分割する。"""
+    pieces: list[str] = []
+    for part in _SEPARATOR_RE.split(surface):
+        if not part:
+            continue
+        if len(part) >= _KATAKANA_SPLIT_MIN_LEN and _KATAKANA_RE.match(part):
+            pieces.extend(_split_katakana_blob(part))
+        else:
+            pieces.append(part)
+    return pieces
+
+
+def content_words(text: str) -> list[str]:
+    """text を janome で分かち書きし、内容語 (名詞・動詞・形容詞・副詞。
+    単独の数字を除く) だけを取り出す。活用のある語は base_form (辞書形) を
+    使う。未知語処理で丸呑みされたトークン (片仮名の連続、中黒入りの表記
+    「マグ・フォーマー」等) は _expand_unknown_surface でさらに分割を試みる
+    (モジュール docstring 参照)。"""
+    words: list[str] = []
+    for tok in _tokenizer.tokenize(text or ""):
+        pos_main = tok.part_of_speech.split(",")[0]
+        if pos_main not in _CONTENT_POS_MAIN:
+            continue
+        if _is_number_token(tok):
+            continue
+        surface = tok.surface
+        if not surface or not surface.strip():
+            continue
+        if tok.reading == "*":
+            words.extend(_expand_unknown_surface(surface))
+            continue
+        base = tok.base_form if tok.base_form and tok.base_form != "*" else surface
+        words.append(base)
+    return [w for w in words if w and w.strip()]
 
 
 def extract_items(response: Any) -> list[dict[str, Any]]:
@@ -164,24 +325,27 @@ def extract_items(response: Any) -> list[dict[str, Any]]:
 
 
 def compute_title_overlap(raw_query: str, titles: list[str]) -> float:
-    """raw_query のトークン (空白区切り) が titles (genre_pass_hits のタイトル
-    のみ) のうちどれか1つにどれだけ含まれるかを 0.0〜1.0 で返す。
+    """raw_query の内容語 (content_words、語順不問) が titles (genre_pass_hits
+    のタイトルのみ) のうちどれか1つにどれだけ含まれるかを 0.0〜1.0 で返す。
 
-    titles が空 (genre_pass_hits=0) なら 0.0。NFKC + casefold で正規化した
-    うえで部分一致を見る。judge_verdict のしきい値と対で使うこと。
+    2026-08-10 #2686 PR-E で空白区切りの部分文字列一致から形態素解析ベースの
+    集合一致に作り直した (モジュール docstring 「タイトル照合の再設計」
+    参照)。titles が空 (genre_pass_hits=0)、または raw_query に内容語が
+    無ければ 0.0。judge_verdict のしきい値と対で使うこと。
     """
-    tokens = [t for t in re.split(r"\s+", (raw_query or "").strip()) if t]
-    if not tokens or not titles:
+    query_words = [_normalize_text(w) for w in content_words(raw_query)]
+    query_words = [w for w in query_words if w]
+    if not query_words or not titles:
         return 0.0
     best = 0
     for title in titles:
-        norm_title = _normalize_text(title)
-        matched = sum(1 for t in tokens if _normalize_text(t) in norm_title)
+        title_word_set = {_normalize_text(w) for w in content_words(title)}
+        matched = sum(1 for w in query_words if w in title_word_set)
         if matched > best:
             best = matched
-        if best == len(tokens):
+        if best == len(query_words):
             break
-    return best / len(tokens)
+    return best / len(query_words)
 
 
 def judge_verdict(hits: int, genre_pass_hits: int, coverage: float) -> tuple[str, str]:
@@ -256,6 +420,82 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _tally_verdicts(results: list[dict[str, Any]], key: str) -> dict[str, int]:
+    tally: dict[str, int] = {"product": 0, "non_product": 0, "ambiguous": 0}
+    for r in results:
+        v = r.get(key)
+        if v in tally:
+            tally[v] += 1
+    return tally
+
+
+def recompute_verdicts(probe_path: pathlib.Path) -> dict[str, Any]:
+    """既存の実査 JSON (probe_ubersuggest_products.py --limit N の出力) を
+    API を一切呼ばずに新しい compute_title_overlap で再採点する
+    (#2686 PR-E)。
+
+    **制約 (必ず読むこと)**: sample_titles は probe_keyword 実行時の
+    item_count 件 (既定10件) のヒットのうち items[:5] (先頭5件、
+    genre_pass_hits で絞り込む前) しか保存されていない (実測: 実データ
+    200 語中187語が5件・9語が0件)。したがってここで出る coverage は
+    実際に item_count 件全体・genre_pass_hits 絞り込み後で再検索した
+    場合より **低めに出る可能性がある** (一致機会がタイトルの数だけ減る
+    ため)。hits/genre_pass_hits 自体は再検索していないので元の値を
+    そのまま流用する (供給・ジャンルゲートはこの PR では変更していない)。
+    これは「改善の方向と規模」を確認するための暫定値であり、確定は
+    workflow 50 の再実行 (API 実行) で行うこと。
+
+    verdict_reason が api_error (判定材料が無い) の語は再採点せず、
+    verdict_before をそのまま verdict_after にも入れる (hits=0 のまま
+    judge_verdict に通すと no_hits に誤って倒れてしまうため)。
+
+    後続 (#2686 案2: ローカル LLM 判定) で ambiguous の語を再度 API を
+    叩かずに判定できるよう、sample_titles は結果にそのまま残す。
+    """
+    payload = json.loads(probe_path.read_text(encoding="utf-8"))
+    old_results = payload.get("results") or []
+
+    new_results: list[dict[str, Any]] = []
+    for r in old_results:
+        verdict_before = r.get("verdict")
+        reason_before = r.get("verdict_reason")
+        overlap_before = r.get("title_overlap")
+        sample_titles = r.get("sample_titles") or []
+        hits = r.get("hits") or 0
+        genre_pass_hits = r.get("genre_pass_hits") or 0
+
+        if r.get("error") or reason_before == "api_error":
+            verdict_after, reason_after, overlap_after = verdict_before, reason_before, overlap_before
+        else:
+            overlap_after = round(compute_title_overlap(r.get("raw_query", ""), sample_titles), 3)
+            verdict_after, reason_after = judge_verdict(hits, genre_pass_hits, overlap_after)
+
+        new_results.append({
+            "query": r.get("query"), "raw_query": r.get("raw_query"), "volume": r.get("volume"),
+            "sites": r.get("sites"),
+            "hits": hits, "genre_pass_hits": genre_pass_hits,
+            "sample_titles": sample_titles,
+            "verdict_before": verdict_before, "verdict_reason_before": reason_before,
+            "title_overlap_before": overlap_before,
+            "verdict_after": verdict_after, "verdict_reason_after": reason_after,
+            "title_overlap_after": overlap_after,
+            "changed": verdict_before != verdict_after,
+        })
+
+    changed = [r for r in new_results if r["changed"]]
+    return {
+        "generated_at": _now_iso(),
+        "source": str(probe_path),
+        "note": ("sample_titles は先頭5件のみ保存されているため、この再採点は"
+                 "実測より低めに出る可能性がある暫定値。確定は workflow 50 の"
+                 "API 再実行で行うこと (recompute_verdicts の docstring参照)。"),
+        "summary_before": _tally_verdicts(old_results, "verdict"),
+        "summary_after": _tally_verdicts(new_results, "verdict_after"),
+        "changed_count": len(changed),
+        "results": new_results,
+    }
+
+
 def load_targets(demand_path: pathlib.Path, limit: int) -> list[dict[str, Any]]:
     payload = json.loads(demand_path.read_text(encoding="utf-8"))
     entries = payload.get("keywords") or []
@@ -318,14 +558,28 @@ def run(demand_path: pathlib.Path, out_path: pathlib.Path, limit: int, search_in
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="Ubersuggest 需要語の Amazon 実査 (観測のみ, #2686 PR-D)")
+        description="Ubersuggest 需要語の Amazon 実査 (観測のみ, #2686 PR-D/PR-E)")
     ap.add_argument("--demand", default=DEFAULT_DEMAND_PATH)
     ap.add_argument("--out", default=DEFAULT_OUT)
     ap.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="Volume上位N語 (0=全件)")
     ap.add_argument("--search-index", default=DEFAULT_SEARCH_INDEX)
     ap.add_argument("--item-count", type=int, default=DEFAULT_ITEM_COUNT)
     ap.add_argument("--dry-run", action="store_true", help="API を一切呼ばない")
+    ap.add_argument("--recompute", metavar="PROBE_JSON", default=None,
+                     help="既存の実査 JSON を API を呼ばず新しいタイトル照合ロジックで"
+                          "再採点する (#2686 PR-E)。指定時は他の実査系引数は無視される")
+    ap.add_argument("--recompute-out", default=DEFAULT_RECOMPUTE_OUT)
     args = ap.parse_args()
+
+    if args.recompute:
+        report = recompute_verdicts(pathlib.Path(args.recompute))
+        out_path = pathlib.Path(args.recompute_out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        logger.info("recompute: before=%s after=%s changed=%d wrote %s",
+                    report["summary_before"], report["summary_after"],
+                    report["changed_count"], out_path)
+        return 0
 
     run(pathlib.Path(args.demand), pathlib.Path(args.out), args.limit, args.search_index,
         args.item_count, args.dry_run)
