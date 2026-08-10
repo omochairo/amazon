@@ -109,15 +109,26 @@ jobs:
       # PR マージという失敗しうる非同期経路に「実施済み」の記録をぶら下げない
       # (feedback-side-effect-completion-marker)。重複防止は本文に埋め込む
       # <!-- quality-census:<date> --> マーカーで自己完結している。
+      # Issue 操作は GITHUB_TOKEN を使う (17-analytics-report.yml と同じ)。
+      # App token だと 403 "Resource not accessible by integration" になる —
+      # この workflow の permissions: issues: write は GITHUB_TOKEN に効くもので、
+      # App installation 側の Issues 権限までは付与しない (run 31345131686 で実証)。
+      # App token は commit-back PR 側だけで使う。
       - name: Comment to tracker issue
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
           python -m scripts.comment_quality_census
 
+      # コメント投稿が落ちても census データの commit-back までは行う。
+      # 逆に、コメント失敗そのものは run を落として可視化したままにする
+      # (continue-on-error を付けると REST の steps[].conclusion が success を
+      # 返し、失敗が run 一覧からも step 一覧からも見えなくなる)。
+      # census 自体が失敗しているときは commit するものが無いので走らせない。
       - name: Create census PR + auto-merge
         id: pr
+        if: always() && steps.census.outcome == 'success'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
