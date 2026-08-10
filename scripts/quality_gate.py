@@ -9,10 +9,13 @@ Checks article JSON (and rendered Markdown if available) against:
 - Forbidden childish tone tokens
 - FAQ completeness
 
-Outputs a per-article quality score JSON next to each input file:
-  data/articles/{slug}.quality.json
+Prints a per-article verdict and exits non-zero if ANY article fails the
+configured minimum.
 
-Exits non-zero if ANY article fails the configured minimum.
+Note (#4826, 2026-08-10): the <slug>.quality.json sidecar this script used to
+write next to each input file has been retired. Corpus-wide quality is observed
+by .github/workflows/48-quality-census.yml, which aggregates into a single
+data/analytics/quality_census.json instead of one derived file per article.
 
 Usage:
     python scripts/quality_gate.py
@@ -1004,7 +1007,11 @@ def main() -> int:
     parser.add_argument("--schema", default="data/schema/article.schema.json")
     parser.add_argument("--min-score", type=int, default=60, help="minimum total score (0-100) to pass")
     parser.add_argument("--strict", action="store_true", help="exit non-zero if any article fails any check")
-    parser.add_argument("--write-reports", action="store_true", default=True, help="write {slug}.quality.json")
+    # #4826 項目 4: <slug>.quality.json sidecar は廃止した。
+    # 旧 --write-reports は action="store_true" かつ default=True で **無効化する手段が
+    # 無く**、--src を指した先に必ず 1 記事 1 ファイルの派生物を書いていた
+    # (04-validate は mktemp に書いて捨てており commit 経路も無かった)。
+    # main 全量の品質は 48-quality-census.yml (集計 JSON 1 本) が観測する。
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument(
         "--no-cert-fetch", action="store_true",
@@ -1053,9 +1060,6 @@ def main() -> int:
             cert_fetch=not args.no_cert_fetch,
         )
         all_reports.append(report)
-        if args.write_reports:
-            out = jp.with_suffix(".quality.json")
-            out.write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
         if not args.quiet:
             status = "OK" if report.passed and report.total_score >= args.min_score else "NG"
             print(f"[{status}] {report.slug} score={report.total_score} ({sum(1 for c in report.checks if c.passed)}/{len(report.checks)} checks)")

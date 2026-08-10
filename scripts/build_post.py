@@ -10,7 +10,12 @@ meta description / jsonld / breadcrumbs), falling back to STAGE-1 fields.
 Usage:
     python scripts/build_post.py
     python scripts/build_post.py --src data/articles/ --dst hugo/content/posts/
-    python scripts/build_post.py --min-score 70   # mark below-threshold as draft
+    python scripts/build_post.py --gate --min-score 70   # mark below-threshold as draft
+
+``--min-score`` now requires ``--gate``: the article is scored in-place at render
+time. The old path that read a ``<slug>.quality.json`` sidecar was retired in
+#4826 (the sidecar was .gitignore'd and never existed in CI, so that path was
+dead there anyway).
 """
 
 from __future__ import annotations
@@ -2875,28 +2880,15 @@ def _frontmatter_meta(
     return meta
 
 
-def _quality_draft(slug: str, src_path: pathlib.Path, min_score: int) -> bool:
-    if min_score <= 0:
-        return False
-    qpath = src_path / f"{slug}.quality.json"
-    if not qpath.exists():
-        return False
-    try:
-        q = json.loads(qpath.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return False
-    score = q.get("total_score", q.get("score", 0))
-    return int(score) < min_score
-
-
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--src", default="data/articles/")
     parser.add_argument("--dst", default="hugo/content/posts/")
     parser.add_argument("--min-score", type=int, default=0,
-                        help="If >0, set draft=true when quality total_score < value")
+                        help="If >0, set draft=true when quality total_score < value (requires --gate)")
     parser.add_argument("--gate", action="store_true",
-                        help="Run quality_gate after each render and write {slug}.quality.json")
+                        help="Run quality_gate after each render (scores the article in-place; "
+                             "no sidecar is written)")
     parser.add_argument("--schema", default="data/schema/article.schema.json",
                         help="Schema path used when --gate is set")
     parser.add_argument("--raw-amazon", default="data/raw/amazon.json",
@@ -3173,7 +3165,9 @@ def main() -> None:
                 page_asin = _resolve_page_asin(data.get("product"), slug)
                 data["cta_layout"] = query_intent_map.get(f"/products/{page_asin.lower()}/")
             md_body = template.render(**data)
-            draft = _quality_draft(slug, src_path, args.min_score)
+            # #4826 項目 4: 旧 <slug>.quality.json sidecar による draft 判定は廃止。
+            # draft は --gate で**その場で評価した**スコアだけで決める (下記)。
+            draft = False
             fm_meta = _frontmatter_meta(
                 data, slug, draft, git_history, f,
                 score_result=fresh_sr, query_intent_map=query_intent_map,
@@ -3192,11 +3186,6 @@ def main() -> None:
                     f, schema, out_file,
                     rakuten_idx=rakuten_matched_index,
                     yahoo_idx=yahoo_matched_index,
-                )
-                qpath = src_path / f"{slug}.quality.json"
-                qpath.write_text(
-                    json.dumps(report.to_dict(), ensure_ascii=False, indent=2),
-                    encoding="utf-8",
                 )
                 if args.min_score > 0 and report.total_score < args.min_score and not draft:
                     post.metadata["draft"] = True

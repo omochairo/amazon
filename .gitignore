@@ -39,7 +39,10 @@ public_test/
 /hugo_server.log
 /hugo.tar.gz
 
-# quality_gate.py / build_post.py が毎回生成する派生物
+# #4826 項目 4: <slug>.quality.json sidecar は 2026-08-10 に廃止し、
+# quality_gate.py / build_post.py の生成経路を除去した。**もう誰も作らない**。
+# 古い checkout で旧コードを回した際の取りこぼしが誤って commit されないよう
+# 無視指定だけ残す (main の tree に入ったことは一度も無い)。
 data/articles/*.quality.json
 data/build_manifest.json
 
