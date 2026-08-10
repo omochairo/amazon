@@ -166,6 +166,25 @@ def render_body(payload: dict[str, Any]) -> str:
         )
         lines.append("")
 
+    by_ded = payload.get("by_deduction") or {}
+    if by_ded:
+        lines.append("### 減点のみ (合否には出ない soft signal)")
+        lines.append("")
+        lines.append(
+            "`passed=True` のままスコアだけ下がっている件数。合否だけ見ていると "
+            "全件 OK に見えるが、当初設計 (指名検索 SEO = title/meta/keywords/narrative "
+            "全箇所に商品名) の未達がここに出る。"
+        )
+        lines.append("")
+        lines.append("| check | 件数 | 主な理由 |")
+        lines.append("|---|---:|---|")
+        reasons = payload.get("deduction_reasons") or {}
+        for name, n in by_ded.items():
+            top = reasons.get(name) or {}
+            detail = " / ".join(f"{k} ({v})" for k, v in list(top.items())[:2]) or "-"
+            lines.append(f"| `{name}` | {n} | {detail} |")
+        lines.append("")
+
     md_n = payload.get("md_evaluated")
     if isinstance(md_n, int):
         total = payload.get("articles", 0)

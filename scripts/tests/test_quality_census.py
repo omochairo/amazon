@@ -21,6 +21,8 @@ def _snapshot(date: str, failing: list[str], by_check: dict | None = None) -> di
         "failing": len(failing),
         "failing_rate": len(failing) / 100,
         "by_check": by_check or {"how_to_choose": len(failing)},
+        "by_deduction": {},
+        "deduction_reasons": {},
         "score_min": 90,
         "score_median": 98,
         "score_max": 100,
@@ -177,6 +179,69 @@ def test_render_body_reports_total_when_slug_list_truncated():
     snap["diff"] = qc.diff_against(None, snap)
     body = cqc.render_body(snap)
     assert f"総数 {len(many)} 件" in body
+
+
+def test_summarize_counts_deductions_separately_from_failures():
+    """減点のみ (passed=True かつ score<1.0) は合否に出ないので別に数える。"""
+    records = [
+        {"slug": "a", "total_score": 98, "passed": True, "failed_checks": [],
+         "deducted_checks": [("faq", "only 1 questions contain product name (recommend >=2)")]},
+        {"slug": "b", "total_score": 97, "passed": True, "failed_checks": [],
+         "deducted_checks": [("faq", "only 2 questions contain product name (recommend >=3)"),
+                             ("keywords", "product name not in any keyword")]},
+        {"slug": "c", "total_score": 94, "passed": False,
+         "failed_checks": [("how_to_choose", "x")], "deducted_checks": []},
+    ]
+    s = qc.summarize(records, cert_fetch=False, date="2026-08-10")
+    assert s["failing"] == 1
+    assert s["by_check"] == {"how_to_choose": 1}
+    assert s["by_deduction"] == {"faq": 2, "keywords": 1}
+
+
+def test_deduction_reasons_collapse_embedded_numbers():
+    """理由に埋まった数値で無限に分岐させない ("only 1 ..." と "only 2 ..." は同一理由)。"""
+    assert (qc.normalize_reason("only 1 questions contain product name (recommend >=2)")
+            == qc.normalize_reason("only 2 questions contain product name (recommend >=3)"))
+    assert qc.normalize_reason("closing 92<120; daily_use 40<150") == "closing NN<NNN"
+
+
+def test_summarize_keeps_deduction_reason_counts():
+    records = [
+        {"slug": f"a{i}", "total_score": 98, "passed": True, "failed_checks": [],
+         "deducted_checks": [("keywords", "product name not in any keyword")]}
+        for i in range(3)
+    ] + [
+        {"slug": "b", "total_score": 98, "passed": True, "failed_checks": [],
+         "deducted_checks": [("keywords", "brand 'レゴ' not in any keyword")]},
+    ]
+    s = qc.summarize(records, cert_fetch=False, date="2026-08-10")
+    assert s["by_deduction"]["keywords"] == 4
+    assert s["deduction_reasons"]["keywords"]["product name not in any keyword"] == 3
+
+
+def test_summarize_tolerates_records_without_deducted_checks():
+    """旧スキーマのレコード (deducted_checks 無し) でも落ちない。"""
+    records = [{"slug": "a", "total_score": 98, "passed": True, "failed_checks": []}]
+    assert qc.summarize(records, cert_fetch=False, date="2026-08-10")["by_deduction"] == {}
+
+
+def test_render_body_surfaces_deductions():
+    import comment_quality_census as cqc
+    snap = _snapshot("2026-08-10", ["a"])
+    snap["by_deduction"] = {"faq": 595, "keywords": 512}
+    snap["deduction_reasons"] = {"keywords": {"product name not in any keyword": 258}}
+    snap["diff"] = qc.diff_against(None, snap)
+    body = cqc.render_body(snap)
+    assert "減点のみ" in body
+    assert "595" in body and "512" in body
+    assert "product name not in any keyword (258)" in body
+
+
+def test_history_row_includes_deductions():
+    snap = _snapshot("2026-08-10", ["a"])
+    snap["by_deduction"] = {"faq": 595}
+    row = qc.history_row(snap, qc.diff_against(None, snap))
+    assert row["by_deduction"] == {"faq": 595}
 
 
 def test_summarize_counts_md_evaluated_articles():
