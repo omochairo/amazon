@@ -1,0 +1,169 @@
+name: Ubersuggest Product Probe (shadow)
+
+# #2686 PR-D — Ubersuggest 需要語 (L1 通過分) が Amazon の商品として成立するかを
+# **観測だけ** する shadow レーン。
+#
+# なぜ必要か:
+#   PR-C (scripts/ingest_ubersuggest.py) の語彙ゲート (data/demand_query_rules.yaml)
+#   だけでは商品抽出はできない。実測で L1 通過後も上位に非商品が残る
+#   (「知育 村」「みみっち」「すいちゃん みいつけた」「こども新聞」
+#   「たまごっち 種類」等)。scripts/probe_ubersuggest_products.py が
+#   Amazon SearchItems + genre_gate.py + タイトル照合で verdict
+#   (product / non_product / ambiguous) を判定する。
+#
+# **観測専用であることの契約**:
+#   - data/raw/amazon.json / data/articles/ / data/rewrite_queue/ を一切書かない
+#     = Jules の生成プールに一切入らない = **記事は1本も作られない**
+#   - data/demand_keywords.json への合流・fetch_amazon.py への配線も行わない
+#     (本 workflow のスコープ外)
+#   - cron を張らない。workflow_dispatch のみ
+#   - レポートは commit-back する。issue への自動起票はしない
+#     (CLAUDE.md 2026-07-08 GitHub API バースト禁止規律)
+#
+# 49-demand-supply-probe.yml を雛形にした (secrets 名・commit-back PR の作り方・
+# concurrency・permissions を踏襲)。
+#
+# 必須 secrets:
+#   - AMAZON_CREATORS_APPLICATION_ID / _CREDENTIAL_ID / _CREDENTIAL_SECRET
+#   - AMAZON_PARTNER_TAG
+#   - APP_ID / APP_PRIVATE_KEY (commit-back PR 用)
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Volume上位 N 語だけ叩く (既定 200)'
+        required: false
+        default: '200'
+      dry_run:
+        description: 'true なら API を一切呼ばず対象語の確認だけ'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ubersuggest-product-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # secrets 欠落を無言 skip にしない (#4793 の規律)。
+      - name: Assert secrets present
+        if: github.event.inputs.dry_run != 'true'
+        env:
+          APP: ${{ secrets.AMAZON_CREATORS_APPLICATION_ID }}
+          CID: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_ID }}
+          SEC: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_SECRET }}
+          TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
+        run: |
+          missing=""
+          [ -z "$APP" ] && missing="$missing AMAZON_CREATORS_APPLICATION_ID"
+          [ -z "$CID" ] && missing="$missing AMAZON_CREATORS_CREDENTIAL_ID"
+          [ -z "$SEC" ] && missing="$missing AMAZON_CREATORS_CREDENTIAL_SECRET"
+          [ -z "$TAG" ] && missing="$missing AMAZON_PARTNER_TAG"
+          if [ -n "$missing" ]; then
+            echo "::error::required secrets missing:$missing"
+            exit 1
+          fi
+
+      - name: Probe Ubersuggest demand keyword products
+        env:
+          AMAZON_CREATORS_APPLICATION_ID: ${{ secrets.AMAZON_CREATORS_APPLICATION_ID }}
+          AMAZON_CREATORS_CREDENTIAL_ID: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_ID }}
+          AMAZON_CREATORS_CREDENTIAL_SECRET: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_SECRET }}
+          AMAZON_PARTNER_TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
+        run: |
+          set -e
+          FLAGS="--limit ${{ github.event.inputs.limit || '200' }}"
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            FLAGS="$FLAGS --dry-run"
+          fi
+          python scripts/probe_ubersuggest_products.py $FLAGS
+
+      # 生成プールに触れていないことを機械で確認する (観測レーンの契約)。
+      - name: Assert no article pool mutation
+        run: |
+          set -e
+          if ! git diff --quiet -- data/raw/ data/articles/ data/rewrite_queue/; then
+            echo "::error::observation lane must not modify data/raw, data/articles or data/rewrite_queue"
+            git status --short -- data/raw/ data/articles/ data/rewrite_queue/
+            exit 1
+          fi
+          echo "OK: no mutation in article-generation inputs"
+
+      - name: Summarize to job log
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          p = pathlib.Path("data/analytics/ubersuggest_product_probe.json")
+          if not p.exists():
+              print("no report"); raise SystemExit(0)
+          d = json.loads(p.read_text(encoding="utf-8"))
+          s = d["summary"]
+          print("## Ubersuggest 需要語の Amazon 実査 (#2686 shadow)\n")
+          print(f"- 観測 {s['keywords_probed']} 語")
+          print(f"- product: **{s['product']}** 語 (volume合計 {s['product_volume_sum']})")
+          print(f"- non_product: {s['non_product']} 語")
+          print(f"- ambiguous: {s['ambiguous']} 語 (owner レビュー対象)")
+          print(f"- API エラー: {s['error_count']} 語\n")
+          print("| volume | query | verdict | reason |")
+          print("|---:|---|---|---|")
+          for r in d["results"][:30]:
+              print(f"| {r['volume']} | {r['query']} | {r['verdict']} | {r['verdict_reason']} |")
+          PY
+
+      - name: Commit back report
+        if: github.event.inputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+          REPORT=data/analytics/ubersuggest_product_probe.json
+          BRANCH="data/ubersuggest-product-probe-${{ github.run_id }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          # `git diff --quiet -- <path>` は未追跡ファイルを検知しないので、
+          # レポートがまだ main に無い初回 run では必ず「差分なし」になり、
+          # レポートが永久に commit されない (49-demand-supply-probe.yml で
+          # 2026-08-10 に踏んだ実績あり)。add してから --cached で判定する。
+          git add "$REPORT"
+          if git diff --cached --quiet -- "$REPORT"; then
+            echo "no change; nothing to commit"
+            exit 0
+          fi
+          git commit -m "data(analytics): ubersuggest product probe (run ${{ github.run_id }})"
+          git push origin "$BRANCH"
+          gh pr create --base main --head "$BRANCH" \
+            --title "data(analytics): ubersuggest product probe (run ${{ github.run_id }})" \
+            --body "Ubersuggest 需要語の Amazon 実査観測 (#2686 shadow レーン)。観測のみで記事・CI には影響しない。" \
+            --repo "${{ github.repository }}"

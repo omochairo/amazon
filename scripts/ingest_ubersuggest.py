@@ -69,6 +69,22 @@ WP (omcha.jp) とのカニバリ計測 (レポートのみ、ここでは除外�
   pos<=3.0 かつ clicks>=100) を後続 PR で configure する想定なので、
   ここでは wp_rank_guard フラグを立てるだけにとどめ、語は落とさない。
 
+サイト単位の採否 (#2686 PR-D, 2026-08-10 追加):
+  owner が新たに9サイト分の CSV を投入し、サイト別の質を実測した結果、
+  p-bandai.jp / bandai-hobby.net の2サイトを owner 判断で除外した (大人向け
+  キャラクターグッズ・プラモデル中心で navi の対象外。Volume上位100語中64語を
+  占め、良質な語を押し出す実害があるため)。data/demand_query_rules.yaml の
+  excluded_sites にサイト名と理由を列挙する。CSV ファイルは owner の資産
+  なので削除しない (読み飛ばすだけ)。
+
+  1つの語が複数サイトに出ることがある (「ガンプラ」は bandai-hobby と
+  p-bandai の両方、「ベイブレードx」は takaratomymall と toysrus の両方)。
+  除外は **行 (site, keyword) 単位**で dedupe_rows に渡す前に行うので、
+  除外サイト由来の出典だけが落ち、採用サイトにも出ている語はそちらの行で
+  残る。全出典が除外サイトだった語だけが grouped から消える。
+  除外サイトごとの (reason / keyword_rows / volume_sum) は握り潰さず
+  出力 JSON の excluded_sites に記録する (フィルタ前の raw_rows から集計)。
+
 本 PR のスコープ外 (L1 だけでは商品抽出できない):
   実測で、この語彙ルールを通しても残り約1,878語の上位には非商品が残る
   (「知育 村」「みみっち」「すいちゃん みいつけた」「こども新聞」
@@ -234,6 +250,62 @@ def match_subject_exclusions(
     return matched
 
 
+def _flatten_brand_composite(
+    section: dict[str, Any],
+) -> list[tuple[str, str, list[str], list[str]]]:
+    """(category_key, label, brands, modifiers) のリストを返す。
+
+    subject_exclusions のカテゴリのうち "brand_composite" キーを持つものだけ
+    拾う (store_navigational 用)。通常の contains/suffix とは別扱い。
+    """
+    out: list[tuple[str, str, list[str], list[str]]] = []
+    for cat_key, cat in (section or {}).items():
+        if not isinstance(cat, dict) or "brand_composite" not in cat:
+            continue
+        label = cat.get("label") or cat_key
+        bc = cat["brand_composite"] or {}
+        brands = [bdk.normalize_key(b) for b in (bc.get("brands") or [])]
+        brands = [b for b in brands if b]
+        modifiers = [bdk.normalize_key(m) for m in (bc.get("modifiers") or [])]
+        modifiers = [m for m in modifiers if m]
+        if brands:
+            out.append((cat_key, label, brands, modifiers))
+    return out
+
+
+def match_brand_composite(
+    key: str, brand_composite_defs: list[tuple[str, str, list[str], list[str]]]
+) -> list[dict[str, str]]:
+    """店名トークンの複合条件マッチ (2026-08-10 owner レビューで追加)。
+
+    店名は「店名である前に玩具ブランド」であることがあり (ボーネルンド・
+    タカラトミー等)、単純 contains で落とすと「ボーネルンド おもちゃ」
+    「ボーネルンドルーピング」のような実在商品需要語まで誤除外する
+    (data/demand_keywords.json に「ボーネルンドルーピング」が WP GSC 由来の
+    正規需要語として既に存在しており、単純 contains は既存の正規語と衝突する)。
+
+    複合条件 (誤除外を避けるため厳しめに倒す):
+      1. クエリ全体が店名そのもの (key == brand) → 落とす
+      2. 店名 + modifiers のどれか (実データにある店舗運営語) → 落とす
+      3. それ以外の「店名 + 何か」(地名・商品語等) → **マッチさせない**
+         (呼び出し側で dropped_subject に入れない = L2 実査に送る)
+    """
+    matched: list[dict[str, str]] = []
+    for cat_key, label, brands, modifiers in brand_composite_defs:
+        for brand in brands:
+            if brand not in key:
+                continue
+            if key == brand:
+                matched.append({"category": cat_key, "label": label, "term": brand})
+                break
+            if any(m in key for m in modifiers):
+                matched.append({"category": cat_key, "label": label, "term": brand})
+                break
+            # brand はあるが exact でも modifier 付きでもない
+            # (例:「ボーネルンド 大阪」「ボーネルンド おもちゃ」) → L2 に送る。
+    return matched
+
+
 def strip_trailing_modifiers(key: str, suffix_terms: list[tuple[str, str, str]]) -> tuple[str, list[str]]:
     """末尾の修飾語を繰り返し剥ぐ。
 
@@ -292,6 +364,45 @@ def collect_csv_rows(csv_dir: pathlib.Path) -> tuple[list[dict[str, Any]], list[
     return raw_rows, skipped_files
 
 
+def compute_excluded_sites_report(
+    raw_rows: list[dict[str, Any]], rules: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """excluded_sites 設定にあるサイトの記述統計を返す (握り潰さない)。
+
+    フィルタ**前**の raw_rows (全 CSV 行) から、そのサイト自身の生の行数と
+    Volume 合計を集計する。「そのサイトがフィルタ前どんな量だったか」の記録
+    であり、他サイトとの重複排除後に実際に落ちた語数ではない (重複除外は
+    dedupe_rows 後の summary.total_unique_queries 等で別途分かる)。
+    """
+    excluded_cfg = rules.get("excluded_sites") or {}
+    out: list[dict[str, Any]] = []
+    for site, cfg in excluded_cfg.items():
+        reason = cfg.get("reason") if isinstance(cfg, dict) else str(cfg)
+        site_rows = [r for r in raw_rows if r["site"] == site]
+        out.append({
+            "site": site,
+            "reason": reason,
+            "keyword_rows": len(site_rows),
+            "volume_sum": sum(r["volume"] or 0 for r in site_rows),
+        })
+    out.sort(key=lambda d: d["site"])
+    return out
+
+
+def filter_excluded_site_rows(
+    raw_rows: list[dict[str, Any]], excluded_site_names: set[str]
+) -> list[dict[str, Any]]:
+    """excluded_site_names に属する行を落とす。
+
+    同じ語が他の採用サイトにも出ていれば、その行はここでは削られないので
+    dedupe_rows でそのまま拾われる (「全出典が除外サイトだった語だけが落ちる」
+    という要件はこの前段フィルタだけで満たされる。dedupe 側の変更は不要)。
+    """
+    if not excluded_site_names:
+        return raw_rows
+    return [r for r in raw_rows if r["site"] not in excluded_site_names]
+
+
 def dedupe_rows(raw_rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """空白除去キーで重複排除する。Volume 最大の行の position/seo_difficulty/
     raw_query を採用し、出現した全サイト名を集約する。
@@ -339,6 +450,7 @@ def build(
 
     subject_contains = _flatten_gate_terms(rules.get("subject_exclusions"), "contains")
     subject_suffix = _flatten_gate_terms(rules.get("subject_exclusions"), "suffix")
+    brand_composite_defs = _flatten_brand_composite(rules.get("subject_exclusions"))
     modifier_suffix = _flatten_gate_terms(rules.get("trailing_modifiers"), "suffix")
 
     grouped = dedupe_rows(raw_rows)
@@ -354,6 +466,7 @@ def build(
 
     for key, entry in grouped.items():
         matched = match_subject_exclusions(key, subject_contains, subject_suffix)
+        matched += match_brand_composite(key, brand_composite_defs)
         if matched:
             dropped_subject.append({
                 "query": entry["raw_query"],
@@ -440,8 +553,13 @@ def run(
     rules = load_rules(rules_path)
     wp_rank_stats = bdk.load_wp_rank_stats(wp_history_path) if wp_history_path else {}
 
-    result = build(raw_rows, rules, wp_rank_stats, guard_pos_max, guard_min_clicks)
+    excluded_sites_report = compute_excluded_sites_report(raw_rows, rules)
+    excluded_site_names = set((rules.get("excluded_sites") or {}).keys())
+    filtered_raw_rows = filter_excluded_site_rows(raw_rows, excluded_site_names)
+
+    result = build(filtered_raw_rows, rules, wp_rank_stats, guard_pos_max, guard_min_clicks)
     result["skipped_files"] = skipped_files
+    result["excluded_sites"] = excluded_sites_report
 
     s = result["summary"]
     logger.info("ユニーク需要語 %d 件 / 採用 %d 件 (skipped_files=%d)",
@@ -451,6 +569,9 @@ def run(
                 s["modifier_stripped"], s["dropped_empty_after_strip"])
     logger.info("  WP 重複 %d 語 (うち順位ガード該当 %d 語)", s["wp_duplicate"], s["wp_rank_guard_flagged"])
     logger.info("  suspect_volume %d 語", s["suspect_volume"])
+    if excluded_sites_report:
+        logger.info("  除外サイト %d 件: %s", len(excluded_sites_report),
+                    ", ".join(f"{e['site']}(rows={e['keyword_rows']})" for e in excluded_sites_report))
 
     if not dry_run:
         out_path.parent.mkdir(parents=True, exist_ok=True)
