@@ -1,6 +1,7 @@
 """需要クエリ → Amazon 検索キーワード変換 (#2686) の検査。"""
 from __future__ import annotations
 
+import json
 import pathlib
 import sys
 
@@ -174,3 +175,76 @@ def test_summary_counts_only_kept_keywords(tmp_path):
 def test_real_vocabulary_end_to_end(query, expected):
     mods, _ = B.load_vocab(REAL_TERMS)
     assert B.to_search_keyword(query, mods) == expected
+
+
+# --------------------------------------------------------------------------
+# 供給 probe による情報クエリの排除 (owner 指示 2026-08-10)
+# --------------------------------------------------------------------------
+
+def _probe_file(tmp_path, results):
+    p = tmp_path / "probe.json"
+    p.write_text(json.dumps({"results": results}, ensure_ascii=False), encoding="utf-8")
+    return p
+
+
+def test_zero_hit_keywords_are_dropped_with_their_demand_recorded(tmp_path):
+    """商品が 1 件も返らない語 = 商品名として通らない情報クエリ。落とす。"""
+    probe = _probe_file(tmp_path, [
+        {"keyword": "食玩法律", "hits": 0, "error": None},
+        {"keyword": "トミカ収納", "hits": 10, "error": None},
+    ])
+    zero = B.load_zero_supply_keywords(probe)
+    topics = {"rows": [
+        {"query": "食玩 法律", "wp_impressions": 192, "bucket": "toy"},
+        {"query": "トミカ 収納", "wp_impressions": 21365, "bucket": "toy"},
+    ]}
+    rep = B.build(topics, [], {}, ("toy",), zero_supply=zero)
+    assert [k["keyword"] for k in rep["keywords"]] == ["トミカ収納"]
+    assert rep["summary"]["dropped_no_supply"] == 1
+    assert rep["summary"]["dropped_no_supply_wp_impressions"] == 192
+    assert rep["dropped_no_supply"][0]["keyword"] == "食玩法律"
+
+
+def test_api_error_keywords_are_not_dropped(tmp_path):
+    """測れていないだけの語を「供給なし」と混同しない。"""
+    probe = _probe_file(tmp_path, [{"keyword": "トミカ収納", "hits": 0, "error": "boom"}])
+    assert B.load_zero_supply_keywords(probe) == set()
+
+
+def test_keywords_absent_from_probe_are_kept(tmp_path):
+    """新しい需要は未測定なので通す (probe に無い = 落とす、にしない)。"""
+    probe = _probe_file(tmp_path, [{"keyword": "旧い語", "hits": 0, "error": None}])
+    zero = B.load_zero_supply_keywords(probe)
+    topics = {"rows": [{"query": "新しい商品名", "wp_impressions": 100, "bucket": "toy"}]}
+    rep = B.build(topics, [], {}, ("toy",), zero_supply=zero)
+    assert [k["keyword"] for k in rep["keywords"]] == ["新しい商品名"]
+
+
+def test_missing_or_broken_probe_disables_the_filter(tmp_path):
+    assert B.load_zero_supply_keywords(None) == set()
+    assert B.load_zero_supply_keywords(tmp_path / "nope.json") == set()
+    bad = tmp_path / "bad.json"
+    bad.write_text("not json", encoding="utf-8")
+    assert B.load_zero_supply_keywords(bad) == set()
+
+
+def test_probe_keyword_matching_ignores_spacing(tmp_path):
+    """probe 側と build 側で分かち書きが違っても同じ語として扱う。"""
+    probe = _probe_file(tmp_path, [{"keyword": "食玩 法律", "hits": 0, "error": None}])
+    zero = B.load_zero_supply_keywords(probe)
+    topics = {"rows": [{"query": "食玩法律", "wp_impressions": 10, "bucket": "toy"}]}
+    rep = B.build(topics, [], {}, ("toy",), zero_supply=zero)
+    assert rep["keywords"] == []
+
+
+def test_real_probe_drops_only_informational_residue():
+    """実 probe を当てて、落ちるのが情報クエリだけであることを固定する。"""
+    probe = ROOT.parent / "data" / "analytics" / "demand_supply_probe.json"
+    if not probe.exists():
+        pytest.skip("probe report not present")
+    zero = B.load_zero_supply_keywords(probe)
+    # 商品名の語が巻き込まれていないこと
+    for kw in ["トミカ収納", "スクイーズ", "ジョブレイバー", "知育ボックス", "ナーフ"]:
+        assert B.normalize_key(kw) not in zero, f"商品名 {kw} が供給なし扱いになっている"
+    # 情報クエリ残骸が落ちていること
+    assert B.normalize_key("食玩法律") in zero

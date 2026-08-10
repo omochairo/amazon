@@ -30,6 +30,13 @@ WP の実需要クエリを Amazon SearchItems 用の検索キーワードに変
   ここで落とせるのは「事前に分かっている」分だけである点に注意。残りの供給有無は
   実際に SearchItems を叩くまで分からない。ヒット 0 件の記録は配線側 (後続) の仕事。
 
+情報クエリの排除 (owner 指示 2026-08-10):
+  「説明が分からない情報クエリは入れず、商品名なら入れる」。判定は人手のラベルでは
+  なく **供給 probe の実測** (data/analytics/demand_supply_probe.json) で行う。
+  Amazon が商品を 1 件も返さなかった語を落とす。実測では 0 件 8 語がすべて変換の
+  残骸 (「食玩法律」「はじめてずかん1000と1500」等) で、商品名の語は 1 つも
+  0 件になっていない。--no-supply-filter で無効化できる。
+
 本スクリプトは **inert** (外部 API を呼ばず cron にも繋がない)。出力を見てから
 fetch_amazon.py への配線を決める。
 
@@ -56,6 +63,7 @@ logger = logging.getLogger("build_demand_keywords")
 DEFAULT_TERMS_PATH = "data/demand_topic_terms.yaml"
 DEFAULT_TOPICS_PATH = "data/analytics/demand_topics.json"
 DEFAULT_OUT = "data/demand_keywords.json"
+DEFAULT_SUPPLY_PROBE_PATH = "data/analytics/demand_supply_probe.json"
 DEFAULT_BUCKETS = ("toy",)
 # SearchItems に投げる意味のある最短長。1 文字の残骸を弾く。
 MIN_KEYWORD_CHARS = 2
@@ -132,12 +140,46 @@ def to_search_keyword(query: str, modifiers: list[str]) -> str:
     return s
 
 
+def load_zero_supply_keywords(probe_path: pathlib.Path | None) -> set[str]:
+    """供給 probe で hits=0 だった検索語 (= 商品名として通らなかった語) を返す。
+
+    「情報クエリを入れず、商品名だけ入れる」(owner 指示 2026-08-10) の機械的な判定に
+    probe の実測を使う。人手のラベルではなく Amazon が商品を返すかどうかで決める。
+
+    2026-08-10 の実測 (98 語) では 0 件が 8 語あり、すべて変換の残骸だった:
+      はじめてずかん1000と1500 / ジョブロイド名前 / 食玩法律 / 食玩にするメリット /
+      食玩メリット / 中古絵本買わない / 点つなぎ難しい300 / はじめてずかん15001000
+    いずれも情報クエリで商品名ではない。逆に商品名の語は 1 つも 0 件になっていない。
+
+    **API エラーだった語は落とさない** (供給が無いのではなく測れていない)。
+    probe に載っていない語も落とさない (新しい需要は未測定なので通す)。
+    probe が無ければ空集合を返し、フィルタは一切かからない。
+    """
+    if probe_path is None or not probe_path.exists():
+        return set()
+    try:
+        data = json.loads(probe_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        logger.warning("supply probe を読めないのでフィルタしない: %s", e)
+        return set()
+    out: set[str] = set()
+    for r in data.get("results") or []:
+        if not isinstance(r, dict):
+            continue
+        if r.get("error"):
+            continue
+        if r.get("hits") == 0 and isinstance(r.get("keyword"), str):
+            out.add(normalize_key(r["keyword"]))
+    return out
+
+
 def build(
     topics: dict[str, Any],
     modifiers: list[str],
     excluded_terms: dict[str, str],
     buckets: tuple[str, ...],
     limit: int = 0,
+    zero_supply: set[str] | None = None,
 ) -> dict[str, Any]:
     """検索語ごとに需要 impressions を合算したランキングを返す。
 
@@ -147,6 +189,8 @@ def build(
     """
     agg: dict[str, dict[str, Any]] = {}
     skipped_excluded: dict[str, dict[str, Any]] = {}
+    dropped_no_supply: dict[str, dict[str, Any]] = {}
+    zero_supply = zero_supply or set()
     skipped_empty = 0
 
     for row in topics.get("rows") or []:
@@ -168,6 +212,13 @@ def build(
             skipped_empty += 1
             continue
 
+        if normalize_key(kw) in zero_supply:
+            d = dropped_no_supply.setdefault(
+                kw, {"keyword": kw, "wp_impressions": 0, "source_queries": []})
+            d["wp_impressions"] += imp
+            d["source_queries"].append(query)
+            continue
+
         entry = agg.setdefault(kw, {"keyword": kw, "wp_impressions": 0, "source_queries": []})
         entry["wp_impressions"] += imp
         entry["source_queries"].append(query)
@@ -185,17 +236,25 @@ def build(
             "excluded_terms": len(skipped_excluded),
             "excluded_wp_impressions": sum(e["wp_impressions"] for e in skipped_excluded.values()),
             "dropped_empty_after_strip": skipped_empty,
+            "dropped_no_supply": len(dropped_no_supply),
+            "dropped_no_supply_wp_impressions": sum(
+                d["wp_impressions"] for d in dropped_no_supply.values()),
         },
         "excluded": sorted(skipped_excluded.values(), key=lambda e: -e["wp_impressions"]),
+        "dropped_no_supply": sorted(dropped_no_supply.values(),
+                                    key=lambda d: -d["wp_impressions"]),
         "keywords": keywords,
     }
 
 
 def run(terms_path: pathlib.Path, topics_path: pathlib.Path, out_path: pathlib.Path,
-        buckets: tuple[str, ...], limit: int, dry_run: bool = False) -> dict[str, Any]:
+        buckets: tuple[str, ...], limit: int, dry_run: bool = False,
+        supply_probe_path: pathlib.Path | None = None) -> dict[str, Any]:
     modifiers, excluded = load_vocab(terms_path)
     topics = json.loads(topics_path.read_text(encoding="utf-8"))
-    result = build(topics, modifiers, build_excluded_terms(excluded), buckets, limit)
+    zero_supply = load_zero_supply_keywords(supply_probe_path)
+    result = build(topics, modifiers, build_excluded_terms(excluded), buckets, limit,
+                   zero_supply=zero_supply)
 
     s = result["summary"]
     logger.info("検索キーワード %d 件 / 需要 %d imp (buckets=%s)",
@@ -203,6 +262,8 @@ def run(terms_path: pathlib.Path, topics_path: pathlib.Path, out_path: pathlib.P
     logger.info("  除外 %d 語 / %d imp (Amazon 非販売など)",
                 s["excluded_terms"], s["excluded_wp_impressions"])
     logger.info("  修飾語を落として空になった需要クエリ: %d 件", s["dropped_empty_after_strip"])
+    logger.info("  供給 probe で 0 件だった語 (商品名として通らない): %d 語 / %d imp",
+                s["dropped_no_supply"], s["dropped_no_supply_wp_impressions"])
 
     if not dry_run:
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -220,11 +281,16 @@ def main() -> int:
     ap.add_argument("--buckets", default=",".join(DEFAULT_BUCKETS),
                     help="対象 bucket の CSV (既定 toy)。範囲決定が変わったらここを変える")
     ap.add_argument("--limit", type=int, default=0, help="出力する検索語の上限 (0=全件)")
+    ap.add_argument("--supply-probe", default=DEFAULT_SUPPLY_PROBE_PATH,
+                    help="供給 probe レポート。hits=0 の語 (商品名として通らない情報クエリ) を落とす")
+    ap.add_argument("--no-supply-filter", action="store_true",
+                    help="供給 probe によるフィルタを無効化する")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     buckets = tuple(b.strip() for b in args.buckets.split(",") if b.strip())
     run(pathlib.Path(args.terms), pathlib.Path(args.topics), pathlib.Path(args.out),
-        buckets, args.limit, args.dry_run)
+        buckets, args.limit, args.dry_run,
+        supply_probe_path=(None if args.no_supply_filter else pathlib.Path(args.supply_probe)))
     return 0
 
 
