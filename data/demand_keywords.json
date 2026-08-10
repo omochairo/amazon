@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-10T07:58:17Z",
+  "generated_at": "2026-08-10T08:20:44Z",
   "params": {
     "buckets": [
       "toy"
@@ -7,13 +7,15 @@
     "limit": 0
   },
   "summary": {
-    "keywords": 90,
-    "wp_impressions": 103845,
+    "keywords": 70,
+    "wp_impressions": 80771,
     "excluded_terms": 9,
     "excluded_wp_impressions": 130376,
     "dropped_empty_after_strip": 0,
     "dropped_no_supply": 8,
-    "dropped_no_supply_wp_impressions": 3664
+    "dropped_no_supply_wp_impressions": 3664,
+    "dropped_wp_ranked": 20,
+    "dropped_wp_ranked_clicks": 9645.0
   },
   "excluded": [
     {
@@ -129,6 +131,148 @@
       ]
     }
   ],
+  "dropped_wp_ranked": [
+    {
+      "keyword": "アンパンマンシール",
+      "wp_impressions": 6415.0,
+      "wp_clicks": 2818.0,
+      "wp_position": 1.1,
+      "reason": "omcha.jp が既にこの語の元クエリで pos 1.1 (clicks 2818) を獲得済み。navi の商品ページを出すと host crowding で WP の枠を食い合う恐れがあるため除外 (guard_pos_max=3.0, guard_min_clicks=100)。"
+    },
+    {
+      "keyword": "はじめてずかん1000",
+      "wp_impressions": 5538.0,
+      "wp_clicks": 441.0,
+      "wp_position": 2.5,
+      "reason": "omcha.jp が既にこの語の元クエリで pos 2.5 (clicks 441) を獲得済み。navi の商品ページを出すと host crowding で WP の枠を食い合う恐れがあるため除外 (guard_pos_max=3.0, guard_min_clicks=100)。"
+    },
+    {
+      "keyword": "ぷにるんずサンリオ",
+      "wp_impressions": 5234.0,
+      "wp_clicks": 2170.0,
+      "wp_position": 2.1,
+      "reason": "omcha.jp が既にこの語の元クエリで pos 2.1 (clicks 2170) を獲得済み。navi の商品ページを出すと host crowding で WP の枠を食い合う恐れがあるため除外 (guard_pos_max=3.0, guard_min_clicks=100)。"
+    },
+    {
+      "keyword": "ディズニーシートミカ",
+      "wp_impressions": 2545.0,
+      "wp_clicks": 1121.0,
+      "wp_position": 2.6,
+      "reason": "omcha.jp が既にこの語の元クエリで pos 2.6 (clicks 1121) を獲得済み。navi の商品ページを出すと host crowding で WP の枠を食い合う恐れがあるため除外 (guard_pos_max=3.0, guard_min_clicks=100)。"
+    },
+    {
+      "keyword": "どうぶつしょうぎ",
+      "wp_impressions": 2242.0,
+      "wp_clicks": 252.0,
+      "wp_position": 1.9,
+      "reason": "omcha.jp が既にこの語の元クエリで pos 1.9 (clicks 252) を獲得済み。navi の商品ページを出すと host crowding で WP の枠を食い合う恐れがあるため除外 (guard_pos_max=3.0, guard_min_clicks=100)。"
+    },
+    {
+      "keyword": "ボーネルンドルーピング",
+      "wp_impressions": 1345.0,
+      "wp_clicks": 435.0,
+      "wp_position": 2.2,
+      "reason": "omcha.jp が既にこの語の元クエリで pos 2.2 (clicks 435) を獲得済み。navi の商品ページを出すと host crowding で WP の枠を食い合う恐れがあるため除外 (guard_pos_max=3.0, guard_min_clicks=100)。"
+    },
+    {
+      "keyword": "ダイヤブロック",
+      "wp_impressions": 1118.0,
+      "wp_clicks": 183.0,
+      "wp_position": 2.1,
+      "reason": "omcha.jp が既にこの語の元クエリで pos 2.1 (clicks 183) を獲得済み。navi の商品ページを出すと host crowding で WP の枠を食い合う恐れがあるため除外 (guard_pos_max=3.0, guard_min_clicks=100)。"
+    },
+    {
+      "keyword": "こえだちゃん",
+      "wp_impressions": 945.0,
+      "wp_clicks": 115.0,
+      "wp_position": 2.5,
+      "reason": "omcha.jp が既にこの語の元クエリで pos 2.5 (clicks 115) を獲得済み。navi の商品ページを出すと host crowding で WP の枠を食い合う恐れがあるため除外 (guard_pos_max=3.0, guard_min_clicks=100)。"
+    },
+    {
+      "keyword": "ジョブレイバーキャラクター",
+      "wp_impressions": 820.0,
+      "wp_clicks": 233.0,
+      "wp_position": 2.5,
+      "reason": "omcha.jp が既にこの語の元クエリで pos 2.5 (clicks 233) を獲得済み。navi の商品ページを出すと host crowding で WP の枠を食い合う恐れがあるため除外 (guard_pos_max=3.0, guard_min_clicks=100)。"
+    },
+    {
+      "keyword": "ミッケ",
+      "wp_impressions": 752.0,
+      "wp_clicks": 265.0,
+      "wp_position": 2.2,
+      "reason": "omcha.jp が既にこの語の元クエリで pos 2.2 (clicks 265) を獲得済み。navi の商品ページを出すと host crowding で WP の枠を食い合う恐れがあるため除外 (guard_pos_max=3.0, guard_min_clicks=100)。"
+    },
+    {
+      "keyword": "食玩",
+      "wp_impressions": 734.0,
+      "wp_clicks": 194.0,
+      "wp_position": 2.0,
+      "reason": "omcha.jp が既にこの語の元クエリで pos 2.0 (clicks 194) を獲得済み。navi の商品ページを出すと host crowding で WP の枠を食い合う恐れがあるため除外 (guard_pos_max=3.0, guard_min_clicks=100)。"
+    },
+    {
+      "keyword": "ぷにるんずサンリオ進化",
+      "wp_impressions": 689.0,
+      "wp_clicks": 194.0,
+      "wp_position": 2.3,
+      "reason": "omcha.jp が既にこの語の元クエリで pos 2.3 (clicks 194) を獲得済み。navi の商品ページを出すと host crowding で WP の枠を食い合う恐れがあるため除外 (guard_pos_max=3.0, guard_min_clicks=100)。"
+    },
+    {
+      "keyword": "トミカケース",
+      "wp_impressions": 598.0,
+      "wp_clicks": 278.0,
+      "wp_position": 2.4,
+      "reason": "omcha.jp が既にこの語の元クエリで pos 2.4 (clicks 278) を獲得済み。navi の商品ページを出すと host crowding で WP の枠を食い合う恐れがあるため除外 (guard_pos_max=3.0, guard_min_clicks=100)。"
+    },
+    {
+      "keyword": "花はじき",
+      "wp_impressions": 488.0,
+      "wp_clicks": 171.0,
+      "wp_position": 1.2,
+      "reason": "omcha.jp が既にこの語の元クエリで pos 1.2 (clicks 171) を獲得済み。navi の商品ページを出すと host crowding で WP の枠を食い合う恐れがあるため除外 (guard_pos_max=3.0, guard_min_clicks=100)。"
+    },
+    {
+      "keyword": "アンパンマン知育パッド",
+      "wp_impressions": 435.0,
+      "wp_clicks": 125.0,
+      "wp_position": 2.1,
+      "reason": "omcha.jp が既にこの語の元クエリで pos 2.1 (clicks 125) を獲得済み。navi の商品ページを出すと host crowding で WP の枠を食い合う恐れがあるため除外 (guard_pos_max=3.0, guard_min_clicks=100)。"
+    },
+    {
+      "keyword": "ナーフ2026",
+      "wp_impressions": 315.0,
+      "wp_clicks": 131.0,
+      "wp_position": 2.5,
+      "reason": "omcha.jp が既にこの語の元クエリで pos 2.5 (clicks 131) を獲得済み。navi の商品ページを出すと host crowding で WP の枠を食い合う恐れがあるため除外 (guard_pos_max=3.0, guard_min_clicks=100)。"
+    },
+    {
+      "keyword": "トミカブロックレゴ互換性",
+      "wp_impressions": 269.0,
+      "wp_clicks": 198.0,
+      "wp_position": 1.1,
+      "reason": "omcha.jp が既にこの語の元クエリで pos 1.1 (clicks 198) を獲得済み。navi の商品ページを出すと host crowding で WP の枠を食い合う恐れがあるため除外 (guard_pos_max=3.0, guard_min_clicks=100)。"
+    },
+    {
+      "keyword": "トミカプラレールブロックレゴ互換性",
+      "wp_impressions": 180.0,
+      "wp_clicks": 115.0,
+      "wp_position": 1.6,
+      "reason": "omcha.jp が既にこの語の元クエリで pos 1.6 (clicks 115) を獲得済み。navi の商品ページを出すと host crowding で WP の枠を食い合う恐れがあるため除外 (guard_pos_max=3.0, guard_min_clicks=100)。"
+    },
+    {
+      "keyword": "ブリオプラレール互換性",
+      "wp_impressions": 178.0,
+      "wp_clicks": 102.0,
+      "wp_position": 1.2,
+      "reason": "omcha.jp が既にこの語の元クエリで pos 1.2 (clicks 102) を獲得済み。navi の商品ページを出すと host crowding で WP の枠を食い合う恐れがあるため除外 (guard_pos_max=3.0, guard_min_clicks=100)。"
+    },
+    {
+      "keyword": "プラレールブリオ互換性",
+      "wp_impressions": 172.0,
+      "wp_clicks": 104.0,
+      "wp_position": 1.2,
+      "reason": "omcha.jp が既にこの語の元クエリで pos 1.2 (clicks 104) を獲得済み。navi の商品ページを出すと host crowding で WP の枠を食い合う恐れがあるため除外 (guard_pos_max=3.0, guard_min_clicks=100)。"
+    }
+  ],
   "keywords": [
     {
       "keyword": "トミカ収納",
@@ -155,15 +299,6 @@
       ]
     },
     {
-      "keyword": "はじめてずかん1000",
-      "wp_impressions": 5538,
-      "source_queries": [
-        "はじめて ず かん 1000 販売休止 理由",
-        "はじめて ず かん 1000 何歳から",
-        "はじめてずかん1000"
-      ]
-    },
-    {
       "keyword": "ジョブレイバー",
       "wp_impressions": 4768,
       "source_queries": [
@@ -182,37 +317,10 @@
       ]
     },
     {
-      "keyword": "アンパンマンシール",
-      "wp_impressions": 2632,
-      "source_queries": [
-        "アンパンマンシール 100均",
-        "アンパンマンシール ダイソー",
-        "アンパンマン シール 100均",
-        "アンパンマン シール どこに 売ってる",
-        "アンパンマンシール 100 均",
-        "アンパンマンシール どこに 売ってる"
-      ]
-    },
-    {
-      "keyword": "ぷにるんずサンリオ",
-      "wp_impressions": 2617,
-      "source_queries": [
-        "ぷにる ん ず サンリオ 攻略",
-        "ぷにるんず サンリオ 攻略"
-      ]
-    },
-    {
       "keyword": "スプランキーグッズ",
       "wp_impressions": 2564,
       "source_queries": [
         "スプランキー グッズ"
-      ]
-    },
-    {
-      "keyword": "ディズニーシートミカ",
-      "wp_impressions": 2522,
-      "source_queries": [
-        "ディズニーシー トミカ 売り場"
       ]
     },
     {
@@ -266,14 +374,6 @@
       ]
     },
     {
-      "keyword": "ボーネルンドルーピング",
-      "wp_impressions": 1345,
-      "source_queries": [
-        "ボーネルンド ルーピング販売終了 理由",
-        "ボーネルンド ルーピング"
-      ]
-    },
-    {
       "keyword": "ナーフ",
       "wp_impressions": 1260,
       "source_queries": [
@@ -281,36 +381,6 @@
         "ナーフ 最強 ランキング",
         "ナーフ 種類",
         "ナーフ おすすめ"
-      ]
-    },
-    {
-      "keyword": "どうぶつしょうぎ",
-      "wp_impressions": 1121,
-      "source_queries": [
-        "どうぶつ しょう ぎ 販売中止 理由",
-        "どうぶつしょうぎ 販売中止 理由"
-      ]
-    },
-    {
-      "keyword": "ダイヤブロック",
-      "wp_impressions": 1118,
-      "source_queries": [
-        "ダイヤブロック 生産終了 なぜ"
-      ]
-    },
-    {
-      "keyword": "こえだちゃん",
-      "wp_impressions": 945,
-      "source_queries": [
-        "こえだちゃん 販売休止 理由"
-      ]
-    },
-    {
-      "keyword": "ジョブレイバーキャラクター",
-      "wp_impressions": 782,
-      "source_queries": [
-        "ジョブ レイバー キャラクター 一覧",
-        "ジョブレイバー キャラクター"
       ]
     },
     {
@@ -322,28 +392,6 @@
         "アンパンマン 何歳まで",
         "アンパンマン 100均",
         "100均 アンパンマン"
-      ]
-    },
-    {
-      "keyword": "ミッケ",
-      "wp_impressions": 752,
-      "source_queries": [
-        "ミッケ 難易度 ランキング"
-      ]
-    },
-    {
-      "keyword": "食玩",
-      "wp_impressions": 734,
-      "source_queries": [
-        "食玩 なぜ",
-        "食玩 理由"
-      ]
-    },
-    {
-      "keyword": "ぷにるんずサンリオ進化",
-      "wp_impressions": 665,
-      "source_queries": [
-        "ぷにる ん ず サンリオ 進化 一覧"
       ]
     },
     {
@@ -376,13 +424,6 @@
       ]
     },
     {
-      "keyword": "花はじき",
-      "wp_impressions": 488,
-      "source_queries": [
-        "花はじき ダイソー"
-      ]
-    },
-    {
       "keyword": "シャボン玉電動",
       "wp_impressions": 449,
       "source_queries": [
@@ -394,13 +435,6 @@
       "wp_impressions": 437,
       "source_queries": [
         "赤ちゃん ハンドスピナー おすすめ"
-      ]
-    },
-    {
-      "keyword": "アンパンマン知育パッド",
-      "wp_impressions": 435,
-      "source_queries": [
-        "アンパンマン知育パッド 目に悪い"
       ]
     },
     {
@@ -440,25 +474,10 @@
       ]
     },
     {
-      "keyword": "ナーフ2026",
-      "wp_impressions": 315,
-      "source_queries": [
-        "ナーフ 新作 2026"
-      ]
-    },
-    {
       "keyword": "ジョブレイバーおもちゃ",
       "wp_impressions": 302,
       "source_queries": [
         "ジョブ レイバー おもちゃ 一覧"
-      ]
-    },
-    {
-      "keyword": "トミカケース",
-      "wp_impressions": 299,
-      "source_queries": [
-        "トミカケース 100均",
-        "トミカ ケース 100均"
       ]
     },
     {
@@ -481,13 +500,6 @@
       "wp_impressions": 265,
       "source_queries": [
         "キネティックサンド 後悔"
-      ]
-    },
-    {
-      "keyword": "トミカブロックレゴ互換性",
-      "wp_impressions": 236,
-      "source_queries": [
-        "トミカ ブロック レゴ 互換性"
       ]
     },
     {
@@ -523,27 +535,6 @@
       "wp_impressions": 184,
       "source_queries": [
         "紫外線 ビーズ 100 均"
-      ]
-    },
-    {
-      "keyword": "トミカプラレールブロックレゴ互換性",
-      "wp_impressions": 180,
-      "source_queries": [
-        "トミカ プラレールブロック レゴ 互換性"
-      ]
-    },
-    {
-      "keyword": "ブリオプラレール互換性",
-      "wp_impressions": 178,
-      "source_queries": [
-        "ブリオ プラレール 互換性"
-      ]
-    },
-    {
-      "keyword": "プラレールブリオ互換性",
-      "wp_impressions": 172,
-      "source_queries": [
-        "プラレール ブリオ 互換性"
       ]
     },
     {

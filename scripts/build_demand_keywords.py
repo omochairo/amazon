@@ -40,6 +40,26 @@ WP の実需要クエリを Amazon SearchItems 用の検索キーワードに変
 本スクリプトは **inert** (外部 API を呼ばず cron にも繋がない)。出力を見てから
 fetch_amazon.py への配線を決める。
 
+WP順位ガード (dropped_wp_ranked, #2686):
+  需要語の元クエリを omcha.jp の実 GSC 順位 (data/analytics/history/gsc_wp_by_query.jsonl)
+  と突き合わせると、需要語90件・imp合計103,845・clicks合計13,321 (CTR 12.8%・
+  imp加重平均 pos 6.2) のうち imp の 25% (26,083) が既に 1-3 位で WP が獲得済みだった。
+  fetch_amazon.py の load_demand_keywords は imp 上位から機械的に20件取るため、需要枠20の
+  うち約10件が WP で pos<=3・CTR 40%超の語に向いていた
+  (アンパンマンシール pos 1.1/CTR 44.4%、ディズニーシートミカ pos 2.6/43.8%、
+  ぷにるんずサンリオ pos 2.1/41.5%、どうぶつしょうぎ pos 1.9、ダイヤブロック pos 2.1 など)。
+
+  Google は同一サイトの host crowding をかけるため、ここで navi の商品ページが出ると
+  「露出が増える」のでなく「WP の枠が置き換わる」おそれがある。置き換わった先が商品
+  ページなら CTR は落ちる公算が高い。一方 スクイーズ (18,290 imp @ pos 11.4) のような
+  「需要はあるが WP が取れていない」語は純増余地で全くカニバらない。
+
+  そこで各需要語の元クエリ (source_queries) を WP 実績と突き合わせ、
+  pos<=--guard-pos-max (既定 3.0) **かつ** clicks>=--guard-min-clicks (既定 100) の語を
+  除外する (dropped_wp_ranked)。pos だけで切ると低 imp の語まで巻き込むので AND にする。
+  --no-rank-guard で無効化できる。gsc_wp_by_query.jsonl が無い/壊れている場合は
+  fail-open (ガード無効のまま従来動作) で進み、summary に記録する。
+
 使い方:
     python scripts/build_demand_keywords.py
     python scripts/build_demand_keywords.py --buckets toy,baby_goods --limit 100
@@ -64,9 +84,13 @@ DEFAULT_TERMS_PATH = "data/demand_topic_terms.yaml"
 DEFAULT_TOPICS_PATH = "data/analytics/demand_topics.json"
 DEFAULT_OUT = "data/demand_keywords.json"
 DEFAULT_SUPPLY_PROBE_PATH = "data/analytics/demand_supply_probe.json"
+DEFAULT_WP_QUERY_HISTORY_PATH = "data/analytics/history/gsc_wp_by_query.jsonl"
 DEFAULT_BUCKETS = ("toy",)
 # SearchItems に投げる意味のある最短長。1 文字の残骸を弾く。
 MIN_KEYWORD_CHARS = 2
+# WP順位ガードの既定閾値 (#2686 の docstring 参照)。
+DEFAULT_GUARD_POS_MAX = 3.0
+DEFAULT_GUARD_MIN_CLICKS = 100
 
 _SPACE_RE = re.compile(r"[\s　]+")
 # 末尾に残る助詞 1 文字 (修飾語を落とした残骸)。「…1000と1500の」→「…1000と1500」
@@ -173,6 +197,53 @@ def load_zero_supply_keywords(probe_path: pathlib.Path | None) -> set[str]:
     return out
 
 
+def load_wp_rank_stats(history_path: pathlib.Path | None) -> dict[str, dict[str, float]]:
+    """omcha.jp (WP) の日次クエリ実績を集計する。
+
+    gsc_wp_by_query.jsonl は 1 行 1 レコード (1 クエリ×1日) の JSONL。
+    クエリ単位 (normalize_key) で全期間の impressions・clicks を合算し、
+    position は **impression 加重平均**で出す (日次 position の単純平均は誤り。
+    日によって imp が大きく偏るため、単純平均だと閑散日の順位に引きずられる)。
+
+    ファイルが無い/壊れている場合は空 dict を返し、呼び出し側は fail-open する。
+    """
+    if history_path is None:
+        return {}
+    if not history_path.exists():
+        logger.warning("WP順位履歴 %s が無いのでガードを適用しない (fail-open)", history_path)
+        return {}
+    agg: dict[str, dict[str, float]] = {}
+    try:
+        with history_path.open(encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                row = json.loads(line)
+                q = normalize_key(row.get("query"))
+                if not q:
+                    continue
+                imp = row.get("impressions") or 0
+                clicks = row.get("clicks") or 0
+                pos = row.get("position") or 0
+                e = agg.setdefault(q, {"imp": 0.0, "clicks": 0.0, "pos_weighted_sum": 0.0})
+                e["imp"] += imp
+                e["clicks"] += clicks
+                e["pos_weighted_sum"] += pos * imp
+    except (OSError, json.JSONDecodeError) as e:
+        logger.warning("WP順位履歴を読めないのでガードを適用しない (fail-open): %s", e)
+        return {}
+
+    out: dict[str, dict[str, float]] = {}
+    for q, e in agg.items():
+        out[q] = {
+            "imp": e["imp"],
+            "clicks": e["clicks"],
+            "pos": (e["pos_weighted_sum"] / e["imp"]) if e["imp"] else 0.0,
+        }
+    return out
+
+
 def build(
     topics: dict[str, Any],
     modifiers: list[str],
@@ -180,6 +251,10 @@ def build(
     buckets: tuple[str, ...],
     limit: int = 0,
     zero_supply: set[str] | None = None,
+    wp_rank_stats: dict[str, dict[str, float]] | None = None,
+    guard_pos_max: float = DEFAULT_GUARD_POS_MAX,
+    guard_min_clicks: float = DEFAULT_GUARD_MIN_CLICKS,
+    rank_guard_enabled: bool = True,
 ) -> dict[str, Any]:
     """検索語ごとに需要 impressions を合算したランキングを返す。
 
@@ -223,6 +298,40 @@ def build(
         entry["wp_impressions"] += imp
         entry["source_queries"].append(query)
 
+    # WPランクガード: 需要語の元クエリ (source_queries) を WP 実績と突き合わせ、
+    # pos<=guard_pos_max かつ clicks>=guard_min_clicks の語を落とす (#2686)。
+    dropped_wp_ranked: dict[str, dict[str, Any]] = {}
+    wp_rank_stats = wp_rank_stats or {}
+    if rank_guard_enabled and wp_rank_stats:
+        for kw, entry in list(agg.items()):
+            imp_sum = 0.0
+            clicks_sum = 0.0
+            pos_weighted_sum = 0.0
+            for q in entry["source_queries"]:
+                stat = wp_rank_stats.get(normalize_key(q))
+                if not stat:
+                    continue
+                imp_sum += stat["imp"]
+                clicks_sum += stat["clicks"]
+                pos_weighted_sum += stat["pos"] * stat["imp"]
+            if imp_sum <= 0:
+                continue
+            pos = pos_weighted_sum / imp_sum
+            if pos <= guard_pos_max and clicks_sum >= guard_min_clicks:
+                del agg[kw]
+                dropped_wp_ranked[kw] = {
+                    "keyword": kw,
+                    "wp_impressions": round(imp_sum, 1),
+                    "wp_clicks": round(clicks_sum, 1),
+                    "wp_position": round(pos, 1),
+                    "reason": (
+                        f"omcha.jp が既にこの語の元クエリで pos {round(pos, 1)}"
+                        f" (clicks {round(clicks_sum)}) を獲得済み。navi の商品ページを"
+                        f"出すと host crowding で WP の枠を食い合う恐れがあるため除外"
+                        f" (guard_pos_max={guard_pos_max}, guard_min_clicks={guard_min_clicks})。"
+                    ),
+                }
+
     keywords = sorted(agg.values(), key=lambda e: (-e["wp_impressions"], e["keyword"]))
     if limit > 0:
         keywords = keywords[:limit]
@@ -239,9 +348,14 @@ def build(
             "dropped_no_supply": len(dropped_no_supply),
             "dropped_no_supply_wp_impressions": sum(
                 d["wp_impressions"] for d in dropped_no_supply.values()),
+            "dropped_wp_ranked": len(dropped_wp_ranked),
+            "dropped_wp_ranked_clicks": round(
+                sum(d["wp_clicks"] for d in dropped_wp_ranked.values()), 1),
         },
         "excluded": sorted(skipped_excluded.values(), key=lambda e: -e["wp_impressions"]),
         "dropped_no_supply": sorted(dropped_no_supply.values(),
+                                    key=lambda d: -d["wp_impressions"]),
+        "dropped_wp_ranked": sorted(dropped_wp_ranked.values(),
                                     key=lambda d: -d["wp_impressions"]),
         "keywords": keywords,
     }
@@ -249,12 +363,19 @@ def build(
 
 def run(terms_path: pathlib.Path, topics_path: pathlib.Path, out_path: pathlib.Path,
         buckets: tuple[str, ...], limit: int, dry_run: bool = False,
-        supply_probe_path: pathlib.Path | None = None) -> dict[str, Any]:
+        supply_probe_path: pathlib.Path | None = None,
+        wp_history_path: pathlib.Path | None = None,
+        guard_pos_max: float = DEFAULT_GUARD_POS_MAX,
+        guard_min_clicks: float = DEFAULT_GUARD_MIN_CLICKS,
+        rank_guard_enabled: bool = True) -> dict[str, Any]:
     modifiers, excluded = load_vocab(terms_path)
     topics = json.loads(topics_path.read_text(encoding="utf-8"))
     zero_supply = load_zero_supply_keywords(supply_probe_path)
+    wp_rank_stats = load_wp_rank_stats(wp_history_path) if rank_guard_enabled else {}
     result = build(topics, modifiers, build_excluded_terms(excluded), buckets, limit,
-                   zero_supply=zero_supply)
+                   zero_supply=zero_supply, wp_rank_stats=wp_rank_stats,
+                   guard_pos_max=guard_pos_max, guard_min_clicks=guard_min_clicks,
+                   rank_guard_enabled=rank_guard_enabled)
 
     s = result["summary"]
     logger.info("検索キーワード %d 件 / 需要 %d imp (buckets=%s)",
@@ -264,6 +385,11 @@ def run(terms_path: pathlib.Path, topics_path: pathlib.Path, out_path: pathlib.P
     logger.info("  修飾語を落として空になった需要クエリ: %d 件", s["dropped_empty_after_strip"])
     logger.info("  供給 probe で 0 件だった語 (商品名として通らない): %d 語 / %d imp",
                 s["dropped_no_supply"], s["dropped_no_supply_wp_impressions"])
+    if rank_guard_enabled and not wp_rank_stats:
+        logger.warning("  WP順位ガード: 履歴データが無いため無効 (fail-open)")
+    else:
+        logger.info("  WP順位ガードで除外 %d 語 (WP保護クリック %d)",
+                    s["dropped_wp_ranked"], s["dropped_wp_ranked_clicks"])
 
     if not dry_run:
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -285,12 +411,24 @@ def main() -> int:
                     help="供給 probe レポート。hits=0 の語 (商品名として通らない情報クエリ) を落とす")
     ap.add_argument("--no-supply-filter", action="store_true",
                     help="供給 probe によるフィルタを無効化する")
+    ap.add_argument("--wp-history", default=DEFAULT_WP_QUERY_HISTORY_PATH,
+                    help="WP (omcha.jp) の日次クエリ実績 JSONL。WP順位ガードの入力")
+    ap.add_argument("--guard-pos-max", type=float, default=DEFAULT_GUARD_POS_MAX,
+                    help="WP順位ガードの順位しきい値 (これ以下で保護対象、既定 3.0)")
+    ap.add_argument("--guard-min-clicks", type=float, default=DEFAULT_GUARD_MIN_CLICKS,
+                    help="WP順位ガードのクリック数しきい値 (これ以上で保護対象、既定 100)")
+    ap.add_argument("--no-rank-guard", action="store_true",
+                    help="WP順位ガードを無効化する")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     buckets = tuple(b.strip() for b in args.buckets.split(",") if b.strip())
     run(pathlib.Path(args.terms), pathlib.Path(args.topics), pathlib.Path(args.out),
         buckets, args.limit, args.dry_run,
-        supply_probe_path=(None if args.no_supply_filter else pathlib.Path(args.supply_probe)))
+        supply_probe_path=(None if args.no_supply_filter else pathlib.Path(args.supply_probe)),
+        wp_history_path=pathlib.Path(args.wp_history),
+        guard_pos_max=args.guard_pos_max,
+        guard_min_clicks=args.guard_min_clicks,
+        rank_guard_enabled=not args.no_rank_guard)
     return 0
 
 
