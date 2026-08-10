@@ -116,6 +116,43 @@ def test_dedupe_keeps_max_volume_rows_position_and_difficulty():
 
 
 # --------------------------------------------------------------------------
+# 店名複合条件マッチ (match_brand_composite) 単体
+# --------------------------------------------------------------------------
+
+def _brand_composite_defs():
+    section = {
+        "store_navigational": {
+            "label": "店舗ナビゲーショナル",
+            "brand_composite": {
+                "brands": ["ボーネルンド"],
+                "modifiers": ["店舗", "クーポン"],
+            },
+        },
+    }
+    return U._flatten_brand_composite(section)
+
+
+def test_match_brand_composite_exact_brand_matches():
+    defs = _brand_composite_defs()
+    assert U.match_brand_composite(U.bdk.normalize_key("ボーネルンド"), defs) != []
+
+
+def test_match_brand_composite_brand_plus_modifier_matches():
+    defs = _brand_composite_defs()
+    assert U.match_brand_composite(U.bdk.normalize_key("ボーネルンド 店舗"), defs) != []
+
+
+def test_match_brand_composite_brand_plus_other_word_does_not_match():
+    defs = _brand_composite_defs()
+    assert U.match_brand_composite(U.bdk.normalize_key("ボーネルンド おもちゃ"), defs) == []
+
+
+def test_match_brand_composite_no_brand_does_not_match():
+    defs = _brand_composite_defs()
+    assert U.match_brand_composite(U.bdk.normalize_key("トミカ おもちゃ"), defs) == []
+
+
+# --------------------------------------------------------------------------
 # 主題除外 (subject_exclusions) — 語ごと落とす
 # --------------------------------------------------------------------------
 
@@ -567,6 +604,88 @@ def test_store_navigational_fragment_does_not_misfire_inside_product_name():
 
 
 # --------------------------------------------------------------------------
+# 店名の複合条件 (brand_composite, 2026-08-10 owner レビューで単純 contains
+# から変更。ボーネルンド/タカラトミーは「店名である前に玩具ブランド」)
+# --------------------------------------------------------------------------
+
+def test_brand_alone_is_dropped():
+    """クエリ全体が店名だけ → 落とす。"""
+    rules = U.load_rules(REAL_RULES)
+    raw_rows = [
+        {"site": "www.bornelund.co.jp", "raw_query": "ボーネルンド", "volume": 60500,
+         "position": 1, "seo_difficulty": 10},
+    ]
+    rep = U.build(raw_rows, rules)
+    dropped_queries = {d["query"] for d in rep["dropped_subject"]}
+    assert "ボーネルンド" in dropped_queries
+
+
+def test_brand_plus_product_word_is_not_dropped():
+    """「ボーネルンド おもちゃ」型の回帰: 店名+商品語は落とさず L2 に送る
+    (単純 contains だった初版はこれを誤除外していた)。"""
+    rules = U.load_rules(REAL_RULES)
+    raw_rows = [
+        {"site": "www.bornelund.co.jp", "raw_query": "ボーネルンド おもちゃ", "volume": 8100,
+         "position": 1, "seo_difficulty": 10},
+        {"site": "www.bornelund.co.jp", "raw_query": "ボーネルンド の おもちゃ", "volume": 8100,
+         "position": 1, "seo_difficulty": 10},
+    ]
+    rep = U.build(raw_rows, rules)
+    kept = {k["raw_query"] for k in rep["keywords"]}
+    assert "ボーネルンド おもちゃ" in kept
+    assert "ボーネルンド の おもちゃ" in kept
+
+
+def test_bornelund_looping_matches_existing_wp_demand_keyword():
+    """data/demand_keywords.json に「ボーネルンドルーピング」が WP GSC 由来の
+    正規需要語として既に存在する。Ubersuggest 側から同じ語が来ても落とさない
+    こと (誤除外が既存の正規需要語と衝突しないことの回帰)。"""
+    rules = U.load_rules(REAL_RULES)
+    # 空白の有無は dedupe_rows で同一キーに正規化される (normalize_key が空白を
+    # 除去する) ので、片方だけでも落ちないことを確認すれば十分。
+    raw_rows = [
+        {"site": "www.bornelund.co.jp", "raw_query": "ボーネルンド ルーピング", "volume": 1000,
+         "position": 1, "seo_difficulty": 10},
+    ]
+    rep = U.build(raw_rows, rules)
+    assert len(rep["keywords"]) == 1
+    assert rep["keywords"][0]["query"] == U.bdk.normalize_key("ボーネルンドルーピング")
+    assert not rep["dropped_subject"]
+
+
+def test_brand_plus_store_modifier_is_dropped():
+    """「トイザらス 店舗」「近くのトイザらス」「トイザらス ブラックフライデー」
+    のような店名+店舗運営語は引き続き落ちること。"""
+    rules = U.load_rules(REAL_RULES)
+    raw_rows = [
+        {"site": "www.toysrus.co.jp", "raw_query": "トイザらス 店舗", "volume": 1300,
+         "position": 1, "seo_difficulty": 10},
+        {"site": "www.toysrus.co.jp", "raw_query": "近くのトイザらス", "volume": 1000,
+         "position": 1, "seo_difficulty": 10},
+        {"site": "www.toysrus.co.jp", "raw_query": "トイザらス ブラックフライデー", "volume": 1000,
+         "position": 1, "seo_difficulty": 10},
+    ]
+    rep = U.build(raw_rows, rules)
+    dropped_queries = {d["query"] for d in rep["dropped_subject"]}
+    assert "トイザらス 店舗" in dropped_queries
+    assert "近くのトイザらス" in dropped_queries
+    assert "トイザらス ブラックフライデー" in dropped_queries
+
+
+def test_brand_plus_place_name_is_not_dropped_sent_to_l2():
+    """「ボーネルンド 大阪」型: 地名は modifiers に含めていないので落とさず
+    L2 に送る (施設クエリの可能性が高いが、L1 では断定しない)。"""
+    rules = U.load_rules(REAL_RULES)
+    raw_rows = [
+        {"site": "www.bornelund.co.jp", "raw_query": "ボーネルンド 大阪", "volume": 4400,
+         "position": 1, "seo_difficulty": 10},
+    ]
+    rep = U.build(raw_rows, rules)
+    kept = {k["raw_query"] for k in rep["keywords"]}
+    assert "ボーネルンド 大阪" in kept
+
+
+# --------------------------------------------------------------------------
 # 施設語の拡充 (facility, #2686 PR-D)
 # --------------------------------------------------------------------------
 
@@ -582,6 +701,24 @@ def test_facility_additions_drop_bornelund_park_queries():
     dropped_queries = {d["query"] for d in rep["dropped_subject"]}
     assert "デンパーク 水遊び" in dropped_queries
     assert "ペップキッズ郡山" in dropped_queries
+
+
+def test_kidokido_facility_brand_is_dropped():
+    """「キドキド」はボーネルンドの屋内遊び場プログラム名。facility で落ちる
+    こと (store_navigational の brand_composite ではなく facility 側)。"""
+    rules = U.load_rules(REAL_RULES)
+    raw_rows = [
+        {"site": "www.bornelund.co.jp", "raw_query": "キドキド", "volume": 2900,
+         "position": 1, "seo_difficulty": 10},
+        {"site": "www.bornelund.co.jp", "raw_query": "ボーネルンド キドキド", "volume": 2900,
+         "position": 1, "seo_difficulty": 10},
+    ]
+    rep = U.build(raw_rows, rules)
+    dropped = {d["query"]: d for d in rep["dropped_subject"]}
+    assert "キドキド" in dropped
+    assert "facility" in dropped["キドキド"]["categories"]
+    assert "ボーネルンド キドキド" in dropped
+    assert "facility" in dropped["ボーネルンド キドキド"]["categories"]
 
 
 def test_sandbox_set_product_is_not_dropped_by_facility_rule():

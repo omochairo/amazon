@@ -250,6 +250,62 @@ def match_subject_exclusions(
     return matched
 
 
+def _flatten_brand_composite(
+    section: dict[str, Any],
+) -> list[tuple[str, str, list[str], list[str]]]:
+    """(category_key, label, brands, modifiers) のリストを返す。
+
+    subject_exclusions のカテゴリのうち "brand_composite" キーを持つものだけ
+    拾う (store_navigational 用)。通常の contains/suffix とは別扱い。
+    """
+    out: list[tuple[str, str, list[str], list[str]]] = []
+    for cat_key, cat in (section or {}).items():
+        if not isinstance(cat, dict) or "brand_composite" not in cat:
+            continue
+        label = cat.get("label") or cat_key
+        bc = cat["brand_composite"] or {}
+        brands = [bdk.normalize_key(b) for b in (bc.get("brands") or [])]
+        brands = [b for b in brands if b]
+        modifiers = [bdk.normalize_key(m) for m in (bc.get("modifiers") or [])]
+        modifiers = [m for m in modifiers if m]
+        if brands:
+            out.append((cat_key, label, brands, modifiers))
+    return out
+
+
+def match_brand_composite(
+    key: str, brand_composite_defs: list[tuple[str, str, list[str], list[str]]]
+) -> list[dict[str, str]]:
+    """店名トークンの複合条件マッチ (2026-08-10 owner レビューで追加)。
+
+    店名は「店名である前に玩具ブランド」であることがあり (ボーネルンド・
+    タカラトミー等)、単純 contains で落とすと「ボーネルンド おもちゃ」
+    「ボーネルンドルーピング」のような実在商品需要語まで誤除外する
+    (data/demand_keywords.json に「ボーネルンドルーピング」が WP GSC 由来の
+    正規需要語として既に存在しており、単純 contains は既存の正規語と衝突する)。
+
+    複合条件 (誤除外を避けるため厳しめに倒す):
+      1. クエリ全体が店名そのもの (key == brand) → 落とす
+      2. 店名 + modifiers のどれか (実データにある店舗運営語) → 落とす
+      3. それ以外の「店名 + 何か」(地名・商品語等) → **マッチさせない**
+         (呼び出し側で dropped_subject に入れない = L2 実査に送る)
+    """
+    matched: list[dict[str, str]] = []
+    for cat_key, label, brands, modifiers in brand_composite_defs:
+        for brand in brands:
+            if brand not in key:
+                continue
+            if key == brand:
+                matched.append({"category": cat_key, "label": label, "term": brand})
+                break
+            if any(m in key for m in modifiers):
+                matched.append({"category": cat_key, "label": label, "term": brand})
+                break
+            # brand はあるが exact でも modifier 付きでもない
+            # (例:「ボーネルンド 大阪」「ボーネルンド おもちゃ」) → L2 に送る。
+    return matched
+
+
 def strip_trailing_modifiers(key: str, suffix_terms: list[tuple[str, str, str]]) -> tuple[str, list[str]]:
     """末尾の修飾語を繰り返し剥ぐ。
 
@@ -394,6 +450,7 @@ def build(
 
     subject_contains = _flatten_gate_terms(rules.get("subject_exclusions"), "contains")
     subject_suffix = _flatten_gate_terms(rules.get("subject_exclusions"), "suffix")
+    brand_composite_defs = _flatten_brand_composite(rules.get("subject_exclusions"))
     modifier_suffix = _flatten_gate_terms(rules.get("trailing_modifiers"), "suffix")
 
     grouped = dedupe_rows(raw_rows)
@@ -409,6 +466,7 @@ def build(
 
     for key, entry in grouped.items():
         matched = match_subject_exclusions(key, subject_contains, subject_suffix)
+        matched += match_brand_composite(key, brand_composite_defs)
         if matched:
             dropped_subject.append({
                 "query": entry["raw_query"],

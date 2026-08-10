@@ -28,29 +28,42 @@ Ubersuggest 需要語 (L1 通過分) が Amazon の商品として成立する�
   4. genre_pass_hits の商品タイトルとクエリ語の重なりを見て (下記
      compute_title_overlap)、verdict を確定する。
 
-verdict の判定基準 (2026-08-10 実データで設計・docstring 固定・unit test で担保):
+verdict の判定基準 (2026-08-10 設計、2026-08-10 owner レビューで partial/zero を
+入れ替え・docstring 固定・unit test で担保):
   - hits == 0                        → non_product (no_hits)   Amazon に何も無い
   - genre_pass_hits == 0             → non_product (no_genre_pass)
       供給はあるがおもちゃ/ベビー領域ではない
   - coverage == 1.0 (クエリの全トークンが同一タイトル内に見つかる)
                                       → product (full_title_overlap)
-  - 0 < coverage < 1.0               → non_product (partial_title_overlap)
-      実例:「たまごっち 種類」はジャンル判定を通る (たまごっち本体がおもちゃ
-      ジャンルなので)。しかし返るタイトルは「たまごっち本体」を指すだけで、
-      「種類」というトークンはどのタイトルにも現れない → coverage=0.5。
-      主題 (たまごっち) は商品だが、クエリが指す対象 (種類の一覧) は商品その
-      ものではないので non_product とする。
   - coverage == 0.0 (どのタイトルにも1トークンも見つからない)
-                                      → ambiguous (zero_title_overlap)
-      ジャンルは通ったが検索語との関連を1つも確認できない。非商品と断定する
-      根拠が無いので (Amazon のタイトルは短く、ブランド名だけで通称を含まない
-      ことがある) **product に潰さず、non_product にも倒さず** ambiguous にする。
-      owner の目視レビュー対象。
+                                      → non_product (zero_title_overlap)
+      ジャンルは通ったが検索語との関連が1つも確認できない = 返っているのは
+      クエリと無関係な商品だけ、という強いシグナル。実例:「みみっち」で
+      返る商品がすべて「たまごっち本体」を指すタイトルで、「みみっち」という
+      トークンがどれにも現れない場合。
+  - 0 < coverage < 1.0               → ambiguous (partial_title_overlap)
+      一部のトークンだけ一致。初版 (2026-08-10) はここを non_product に固定
+      していたが、owner レビューで「一部のトークンがタイトル表記と揺れる
+      正当な商品語 (語順違い・別表記の複合語等) を誤って non_product に落とす
+      おそれがある」との指摘を受けて変更した。coverage の根拠は「クエリを
+      空白区切りにした表層トークン」であり、意味的な同義語・語順違い
+      (例: 「オルゴールメリー」というクエリ語に対しタイトルが「メリー
+      オルゴール」と逆順の複合語で書かれている場合) を検出できない。この
+      検出限界がある以上、部分一致は「たまごっち 種類」のような真の非商品
+      パターンと、表記揺れで一部だけ一致しなかった真の商品パターンの
+      **両方を含みうる**。区別する根拠が無い状態で non_product に倒すと、
+      表記揺れ側の実在商品を機械的に握り潰すことになり、これは L1 の
+      store_navigational で「ボーネルンド おもちゃ」を誤除外していたのと
+      同じ種類の事故になる。したがって部分一致は ambiguous にして owner の
+      目視レビューに回す。
   - API 例外                          → ambiguous (api_error)
-      判定材料が無いので不明。product に潰さない。
+      判定材料が無いので不明。product にも non_product にも潰さない。
 
-  この非対称設計 (「ambiguous を product に潰さない」) は #4892 の L1 gate と
-  同じ規律に従う。不明を pass 扱いにすると機能不全が見えなくなる。
+  この非対称設計 (「ambiguous を product にも non_product にも潰さない」) は
+  #4892 の L1 gate と同じ規律に従う。断定できない語は次の判断者 (人間) に
+  渡す。verdict のうち non_product だけが「確認材料が十分にある」場合
+  (hits=0 / genre_pass_hits=0 / coverage=0 の3パターン) に限定されている
+  ことに注意 (部分一致は確認材料が不十分なので non_product ではない)。
 
 制約 (scripts/probe_demand_supply.py の流儀を踏襲):
   - 1 keyword あたり SearchItems 1 回、1.1 秒間隔
@@ -172,7 +185,15 @@ def compute_title_overlap(raw_query: str, titles: list[str]) -> float:
 
 
 def judge_verdict(hits: int, genre_pass_hits: int, coverage: float) -> tuple[str, str]:
-    """(verdict, reason) を返す。しきい値の根拠はモジュール docstring 参照。"""
+    """(verdict, reason) を返す。しきい値の根拠はモジュール docstring 参照。
+
+    2026-08-10 owner レビューで partial/zero の割り当てを入れ替えた:
+      - coverage == 0.0 (どのタイトルにも1トークンも無い) → non_product
+        (無関係な商品しか返っていない、という強いシグナル)
+      - 0 < coverage < 1.0 (一部だけ一致) → ambiguous
+        (表記揺れ・語順違いで一致しなかった実在商品を巻き込みうるため、
+        断定せず人間のレビューに回す)
+    """
     if hits == 0:
         return "non_product", "no_hits"
     if genre_pass_hits == 0:
@@ -180,8 +201,8 @@ def judge_verdict(hits: int, genre_pass_hits: int, coverage: float) -> tuple[str
     if coverage >= FULL_COVERAGE:
         return "product", "full_title_overlap"
     if coverage <= 0.0:
-        return "ambiguous", "zero_title_overlap"
-    return "non_product", "partial_title_overlap"
+        return "non_product", "zero_title_overlap"
+    return "ambiguous", "partial_title_overlap"
 
 
 def probe_keyword(api, query: str, raw_query: str, volume: float, sites: list[str],

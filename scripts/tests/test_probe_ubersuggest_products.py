@@ -135,29 +135,42 @@ def test_full_title_overlap_is_product():
         ("product", "full_title_overlap")
 
 
-def test_tamagotchi_shurui_type_is_non_product():
+def test_tamagotchi_shurui_type_is_ambiguous_not_asserted_non_product():
     """「たまごっち 種類」型: 主題 (たまごっち) はタイトルに現れるが「種類」は
-    現れない → 一部一致 (0 < coverage < 1) は non_product にする。"""
+    現れない → 一部一致 (0 < coverage < 1) は ambiguous にする。
+
+    2026-08-10 owner レビュー: 初版は partial を non_product に固定していたが、
+    部分一致は表記揺れ・語順違いで一致しなかった実在商品も含みうる
+    (「アンパンマン レジスターdx」のような語がタイトル表記の揺れで一部
+    トークンだけ一致しない場合と区別できない)。断定材料が無いので non_product
+    にも product にも倒さず ambiguous にして owner レビューへ回す。"""
     coverage = P.compute_title_overlap(
         "たまごっち 種類", ["バンダイ たまごっち スペシャルセット", "たまごっち にじいろ"])
     assert 0 < coverage < 1
     assert P.judge_verdict(hits=2, genre_pass_hits=2, coverage=coverage) == \
-        ("non_product", "partial_title_overlap")
+        ("ambiguous", "partial_title_overlap")
 
 
-def test_no_overlap_at_all_is_ambiguous_not_product_nor_non_product():
-    """ジャンルは通ったがタイトルにクエリ語が1つも現れない → 断定材料が無いので
-    ambiguous (product にも non_product にも潰さない)。"""
+def test_no_overlap_at_all_is_non_product():
+    """ジャンルは通ったがタイトルにクエリ語が1つも現れない → 返っているのは
+    クエリと無関係な商品だけ、という強いシグナルなので non_product にする。
+
+    2026-08-10 owner レビュー: 初版はここを ambiguous にしていたが、
+    「タイトルに1トークンも無い」は判定材料ゼロではなく、むしろ
+    non_product 寄りの強いシグナルだという指摘を受けて変更した。"""
     coverage = P.compute_title_overlap("みみっち", ["バンダイ たまごっち スペシャルセット"])
     assert coverage == 0.0
     assert P.judge_verdict(hits=1, genre_pass_hits=1, coverage=coverage) == \
-        ("ambiguous", "zero_title_overlap")
+        ("non_product", "zero_title_overlap")
 
 
-def test_ambiguous_is_a_distinct_value_not_collapsed_into_product():
-    verdict, _ = P.judge_verdict(hits=3, genre_pass_hits=2, coverage=0.0)
+def test_ambiguous_is_a_distinct_value_not_collapsed_into_product_or_non_product():
+    """部分一致 (0 < coverage < 1) は product にも non_product にも潰れない
+    独立した値であること。"""
+    verdict, reason = P.judge_verdict(hits=3, genre_pass_hits=2, coverage=0.5)
     assert verdict == "ambiguous"
-    assert verdict != "product"
+    assert verdict not in ("product", "non_product")
+    assert reason == "partial_title_overlap"
 
 
 def test_zero_hits_is_non_product():
@@ -176,8 +189,17 @@ def test_end_to_end_verdict_via_probe_keyword_tamagotchi_shurui():
     )})
     r = P.probe_keyword(api, "たまごっち種類", "たまごっち 種類", 18100, ["czech.hatenablog.com"],
                         "Toys", 10)
-    assert r["verdict"] == "non_product"
+    assert r["verdict"] == "ambiguous"
     assert r["verdict_reason"] == "partial_title_overlap"
+
+
+def test_end_to_end_verdict_via_probe_keyword_zero_overlap_is_non_product():
+    api = FakeAPI({"みみっち": _response(
+        _item("B0M0001", "バンダイ たまごっち スペシャルセット"),
+    )})
+    r = P.probe_keyword(api, "みみっち", "みみっち", 74000, ["czech.hatenablog.com"], "Toys", 10)
+    assert r["verdict"] == "non_product"
+    assert r["verdict_reason"] == "zero_title_overlap"
 
 
 def test_end_to_end_verdict_via_probe_keyword_legit_product():
