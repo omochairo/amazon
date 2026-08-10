@@ -113,6 +113,28 @@ def test_build_prompt_handles_empty_sample_titles():
     assert "該当商品なし" in prompt
 
 
+def test_prompt_forbids_using_hit_existence_as_evidence():
+    """初版プロンプトの誤通過7件は「Amazon に商品がヒットするから商品クエリ」
+    という循環論法だった (run 31394640877 実測)。ambiguous に回ってくる語は
+    定義上すべて商品が返っているので、ヒットの有無は全語共通の定数であって
+    証拠にならない。この禁止をプロンプトから落とすと同じ誤りが再発するため
+    固定する。
+    """
+    prompt = build_prompt("すいちゃん みい つけた", ["みいつけた!マスコットぬいぐるみ スイちゃん"])
+    assert "判断材料にしてはいけない" in prompt
+    assert "クエリの語そのものが商品を指しているか" in prompt
+
+
+def test_prompt_limits_character_name_rule_to_missing_product_type():
+    """「キャラクター名単体」ルールの過剰適用で「ポケモングッズ」
+    「トイストーリー ウッディー」「dレックス」を落としていた (実測)。
+    商品種別を伴う語・実在商品名は product 側とみなす旨を固定する。
+    """
+    prompt = build_prompt("ポケモングッズ", ["シャイン NEW イーブイバンク"])
+    assert "商品種別を伴わないキャラクター名" in prompt
+    assert "実在する商品名・シリーズ名" in prompt
+
+
 def test_build_prompt_truncates_to_max_titles():
     titles = [f"タイトル{i}" for i in range(15)]
     prompt = build_prompt("語", titles)
