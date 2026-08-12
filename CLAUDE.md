@@ -14,8 +14,25 @@ Claude Code / 人間の開発者がこのリポジトリで作業するときの
 |---|---|---|
 | `omochairo/amazon`（本リポジトリ） | public | navi のソース + 自動化 + 共通スクリプト |
 | `omochairo/amazon-navi-brain` | private | Jules の生成プロンプト（`jules/` に overlay checkout される） |
-| `omochairo/omcha-ops` | private | omcha.jp（WordPress 本家）の分析・改善 |
-| `omochairo/amazon-home-ops` | private | 自宅 self-hosted runner レーン |
+| `omochairo/omcha-ops` | private | omcha.jp（WordPress 本家）の分析・改善 + ファイル受け渡し用 `exchange/` |
+
+## 共同開発の会話は private 側でやる
+
+このリポジトリは複数人がそれぞれの Claude Code から触る。**相談・判断・数値のやりとりは `omochairo/amazon-navi-brain` の Issues で行う。**
+
+```bash
+gh issue view 2 -R omochairo/amazon-navi-brain --comments   # レーンと作法の定義
+```
+
+本リポジトリは public で、Issue / PR コメント / コミットメッセージは全世界に公開され、第三者ミラーに永久保存される（後から消しても消えない）。ここに書かないもの:
+
+- GSC / GA4 の実数値、収益、順位、狙っているキーワード、これから打つ施策
+- 個人情報・生活情報
+- 生ログ、API レスポンス、環境変数、スクリーンショット
+
+**特に事故りやすいのは「貼り付け」。** 診断のためにログを貼るのは自然な動作なので、そもそも会話レーンを private 側に置くこと自体が防御になる。secret scanning は自分のキーは守るが、数値や第三者の個人情報は検知しない。
+
+複数人が同時に触るときは、ブランチを `<担当者>/*` で prefix 分離する（`add-article-*` 等の自動ブランチと混ざらないように）。
 
 ## TODO は Issues に置く
 
