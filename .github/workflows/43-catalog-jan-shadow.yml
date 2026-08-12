@@ -61,7 +61,7 @@ jobs:
             --out data/raw/_catalog_jan_shadow_manifest.json
 
       - name: Upload shadow manifest artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: catalog-jan-shadow-manifest
           path: data/raw/_catalog_jan_shadow_manifest.json
