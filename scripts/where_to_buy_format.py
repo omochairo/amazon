@@ -47,7 +47,8 @@ _STATE_LABELS = {
 }
 
 PRICE_HISTORY_WINDOW_DAYS = 30
-# 過去 30 日窓の最安値メモを出すために最低限必要な観測点数 (窓内)。
+# 過去 30 日の最安値メモを出すために最低限必要な観測点数 (ever・窓内外問わず)。
+# 1 点しか無い場合は「価格推移」を語れる材料が無いとみなして出さない。
 PRICE_HISTORY_MIN_POINTS = 2
 
 
@@ -240,13 +241,15 @@ def build_rows(
 # 価格推移 (過去30日最安値)
 # ---------------------------------------------------------------------------
 
-def _load_amazon_price_points(price_history_root: pathlib.Path | str, asin: str) -> list[dict[str, Any]]:
-    """``data/price_history/<ASIN>.jsonl`` から source=amazon, price>0 の観測点
-    を ts 昇順で返す。無い/壊れていればベストエフォートで空を返す。
+def _load_amazon_price_points(root: pathlib.Path | str, asin: str) -> list[dict[str, Any]]:
+    """``<root>/<ASIN>.jsonl`` から source=amazon, price>0 の観測点を ts 昇順で
+    返す。無い/壊れていればベストエフォートで空を返す。``root`` は
+    ``data/price_watch/history/`` (日次) と ``data/price_history/`` (週次)
+    のどちらでも呼べる (レコード形式は両レーン同一)。
     """
     if not asin:
         return []
-    p = pathlib.Path(price_history_root) / f"{asin.upper()}.jsonl"
+    p = pathlib.Path(root) / f"{asin.upper()}.jsonl"
     if not p.exists():
         return []
     points: list[dict[str, Any]] = []
@@ -276,31 +279,48 @@ def _load_amazon_price_points(price_history_root: pathlib.Path | str, asin: str)
 
 def build_price_history_note(
     asin: str,
-    price_history_root: pathlib.Path | str,
+    price_history_root: pathlib.Path | str | None = None,
     *,
+    price_watch_root: pathlib.Path | str | None = None,
     now: Optional[datetime] = None,
 ) -> Optional[str]:
     """過去 30 日の最安値メモ。ファイルが無い/窓内の点が足りない場合は None
     (テンプレ側はこの行を出さない)。
+
+    #5011: 2 レーンの読み分け。``data/price_watch/history/`` (日次・密度高、
+    76.1% が5行以上) を第一参照にし、そこに ASIN のファイルが無いときだけ
+    ``data/price_history/`` (週次・薄い方) にフォールバックする。ファイル
+    単位の選択で両者をマージはしない (single-writer 原則の read 側鏡像)。
     """
-    points = _load_amazon_price_points(price_history_root, asin)
-    if not points:
+    points: list[dict[str, Any]] = []
+    if price_watch_root is not None:
+        points = _load_amazon_price_points(price_watch_root, asin)
+    if not points and price_history_root is not None:
+        points = _load_amazon_price_points(price_history_root, asin)
+    if len(points) < PRICE_HISTORY_MIN_POINTS:
+        # 観測点そのものが少なすぎる (=単発の値しか知らない) ときは、
+        # 「価格推移」を語れるだけの材料が無いので出さない。
         return None
     ref_now = now if now is not None else datetime.now(timezone.utc)
     if ref_now.tzinfo is None:
         ref_now = ref_now.replace(tzinfo=timezone.utc)
     cutoff = ref_now - timedelta(days=PRICE_HISTORY_WINDOW_DAYS)
 
-    recent: list[int] = []
-    for pt in points:
-        dt = _parse_iso(pt["ts"])
-        if dt is None:
-            continue
-        if dt >= cutoff:
-            recent.append(pt["price"])
-    if len(recent) < PRICE_HISTORY_MIN_POINTS:
+    # #5011: 記録は price_history.append_price_point の dedupe (同一価格が
+    # 6日未満続く場合は書かない) を通っているため、各行は「日次サンプル」
+    # ではなく「価格の変化点」。過去30日の最安値を出すには階段関数として
+    # 解釈する必要がある — 窓の開始時点で有効だった価格は、窓より前の
+    # 直近の変化点 (=carry) にあることが多い。それを候補に含め忘れると、
+    # 「窓の直前に安くなって窓の間ずっとその値段だった」ケースを取りこぼす。
+    before_window = [pt for pt in points if (_parse_iso(pt["ts"]) or cutoff) < cutoff]
+    within_window = [pt for pt in points if (_parse_iso(pt["ts"]) or cutoff) >= cutoff]
+
+    candidates: list[int] = [pt["price"] for pt in within_window]
+    if before_window:
+        candidates.append(before_window[-1]["price"])  # carry: 窓開始時点で有効だった価格
+    if not candidates:
         return None
-    min_price = min(recent)
+    min_price = min(candidates)
     return f"過去{PRICE_HISTORY_WINDOW_DAYS}日間の本サイト計測では、Amazon 最安値は ￥{min_price:,} でした。"
 
 
@@ -322,20 +342,44 @@ def build_low_stock_note(stock_obs: stock_status.StockObservation) -> Optional[s
 # 実店舗についての注記 (オンライン在庫しか確認していない、という限界表明)
 # ---------------------------------------------------------------------------
 
-def build_offline_note(product_name: str) -> str:
-    """実店舗の在庫は確認していない旨を明記し、各社の在庫検索への案内リンクを
-    置く。特定チェーンの在庫を断定する文言は絶対に含めない。
+# #5011 オーナー指摘: Google 検索への導線はアフィリエイトを産まず、検索から
+# 検索へ送り返すだけの無駄な導線になる。Amazon/楽天/Yahoo のいずれかで取扱が
+# 確認できていればテーブル (アフィリエイトリンク付き) に読者を戻し、外部
+# 検索エンジンへのリンクは一切置かない。3 サイトとも取扱が確認できないとき
+# だけ、消極的な受け皿としてトイザらスの在庫検索へリンクする
+# (https://www.toysrus.co.jp/search/?q=<keyword> — 到達確認済み。他チェーンは
+# URL を確認できていないため追加しない)。
+_TOYSRUS_SEARCH_URL = "https://www.toysrus.co.jp/search/?q={q}"
 
-    リンク先は商品名で検索するだけの汎用ページ (実店舗を騙る/アフィリエイト
-    タグ付与は一切しない)。
+
+def build_offline_note(product_name: str, purchase_options: dict[str, dict] | None = None) -> str:
+    """実店舗の在庫は確認していない旨を明記する。
+
+    - Amazon/楽天/Yahoo のいずれかで取扱が確認できている場合: 外部検索リンクは
+      置かず、上の在庫・価格テーブルに戻るよう案内する。
+    - 3 サイトとも取扱が確認できない場合のみ: 消極的な受け皿としてトイザらスの
+      在庫検索へリンクする (アフィリエイトタグなし、rel=noopener nofollow)。
+
+    どちらの分岐でも、特定チェーンの在庫を断定する文言 (「〜に在庫あり」等)
+    は絶対に含めない。
     """
-    q = urllib.parse.quote(f"{product_name} 在庫 店舗")
-    url = f"https://www.google.com/search?q={q}"
-    return (
+    purchase_options = purchase_options or {}
+    any_available = any((purchase_options.get(site) or {}).get("available") for site in _SITE_ORDER)
+
+    base = (
         "本サイトはオンラインストア（Amazon・楽天市場・Yahoo!ショッピング）の在庫のみを"
         "確認しています。トイザらス・イオンなど実店舗の在庫データは持っていないため、"
-        f"実店舗の在庫は各社の在庫検索でご確認ください（<a href=\"{url}\" target=\"_blank\" "
-        "rel=\"noopener nofollow\">店舗の在庫を検索する →</a>）。"
+        "実店舗の在庫は各店舗へ直接お問い合わせください。"
+    )
+    if any_available:
+        return base + "オンラインでの購入は上記の在庫・価格の一覧からご確認いただけます。"
+
+    q = urllib.parse.quote(product_name or "")
+    url = _TOYSRUS_SEARCH_URL.format(q=q)
+    return (
+        base
+        + f"（<a href=\"{url}\" target=\"_blank\" rel=\"noopener nofollow\">"
+        "トイザらス オンラインストアで検索する →</a>）"
     )
 
 
@@ -349,19 +393,27 @@ def build_stock_block(
     purchase_options: dict[str, dict],
     *,
     price_history_root: pathlib.Path | str | None = None,
+    price_watch_root: pathlib.Path | str | None = None,
     asin: str = "",
     now: Optional[datetime] = None,
 ) -> dict[str, Any]:
-    """テンプレート ``stock_where_to_buy`` コンテキストを組み立てる。"""
+    """テンプレート ``stock_where_to_buy`` コンテキストを組み立てる。
+
+    #5011: ``price_watch_root`` (``data/price_watch/history/`` 日次レーン) を
+    渡すとそちらを優先して読み、無ければ ``price_history_root`` (週次レーン)
+    にフォールバックする。``price_watch_root`` を渡さない呼び出し元は従来
+    通り ``price_history_root`` のみで動く (後方互換)。
+    """
     block: dict[str, Any] = {
         "conclusion": build_conclusion(product_name, stock_obs, purchase_options),
         "rows": build_rows(stock_obs, purchase_options),
         "price_history_note": None,
         "low_stock_note": build_low_stock_note(stock_obs),
-        "offline_note": build_offline_note(product_name),
+        "offline_note": build_offline_note(product_name, purchase_options),
     }
-    if price_history_root is not None and asin:
+    if (price_history_root is not None or price_watch_root is not None) and asin:
         block["price_history_note"] = build_price_history_note(
-            asin, price_history_root, now=now,
+            asin, price_history_root,
+            price_watch_root=price_watch_root, now=now,
         )
     return block

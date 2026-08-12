@@ -1,12 +1,14 @@
-"""Unit tests for where_to_buy_format.py (#2686 / #4964)。
+"""Unit tests for where_to_buy_format.py (#2686 / #4964 / #5011)。
 
 Coverage:
 1. 5 state それぞれの結論ブロック文面。
 2. Amazon のみ取扱ありのときタイトル括弧が「（Amazon）」に縮む。
 3. ロールアウト日より前の記事は is_stock_format_eligible が False (既存記事保護)。
-4. 過去30日の価格履歴メモ (十分な点/不足/ファイル無し)。
+4. 過去30日の価格履歴メモ (十分な点/不足/ファイル無し/階段関数としての窓端の扱い/
+   price_watch 優先・price_history フォールバック)。
 5. 品薄サイン (low_stock/out_of_stock/それ以外)。
-6. 実店舗注記に断定表現が含まれない。
+6. 実店舗注記 (#5011): Google 検索リンクが完全に無いこと、いずれかのサイトで
+   取扱ありならテーブルへの導線のみ、3サイト全滅のときだけトイザらス導線。
 """
 from __future__ import annotations
 
@@ -202,10 +204,10 @@ def test_price_history_note_none_when_file_missing(tmp_path):
     assert note is None
 
 
-def test_price_history_note_none_when_too_few_points_in_window(tmp_path):
+def test_price_history_note_none_when_only_one_point_ever(tmp_path):
     root = tmp_path / "price_history"
-    # 1点しか30日以内に無い (もう1点は60日以上前)
-    _write_jsonl(root, "B001", [_rec(90, 2000), _rec(5, 1200)])
+    # 観測点が生涯 1 点しか無い場合は「推移」を語れないので出さない。
+    _write_jsonl(root, "B001", [_rec(5, 1200)])
     note = wtb.build_price_history_note("B001", root, now=NOW)
     assert note is None
 
@@ -215,6 +217,58 @@ def test_price_history_note_ignores_non_amazon_source(tmp_path):
     _write_jsonl(root, "B001", [_rec(10, 999, source="rakuten"), _rec(5, 1050, source="rakuten")])
     note = wtb.build_price_history_note("B001", root, now=NOW)
     assert note is None
+
+
+def test_price_history_note_carries_forward_price_from_before_window(tmp_path):
+    """#5011: 記録は価格の変化点であり日次サンプルではない。窓の開始時点で
+    有効だった価格は窓より前の最後の変化点にあるので、そこも最安値候補に
+    含める (階段関数としての解釈)。"""
+    root = tmp_path / "price_history"
+    # 90日前に2000円になり、5日前に1200円へ値下げ。窓(30日)の間は
+    # 「2000円 → (5日前に)1200円」と推移しており、最安は1200円。
+    _write_jsonl(root, "B001", [_rec(90, 2000), _rec(5, 1200)])
+    note = wtb.build_price_history_note("B001", root, now=NOW)
+    assert note is not None
+    assert "￥1,200" in note
+
+
+def test_price_history_note_uses_carry_only_price_when_no_change_in_window(tmp_path):
+    """窓の間に値動きが無くても (=窓内の変化点が0でも)、窓開始時点の carry
+    価格がそのまま窓全体の最安値として使える。"""
+    root = tmp_path / "price_history"
+    _write_jsonl(root, "B001", [_rec(90, 3000), _rec(60, 1500)])
+    note = wtb.build_price_history_note("B001", root, now=NOW)
+    assert note is not None
+    assert "￥1,500" in note
+
+
+# ---------------------------------------------------------------------------
+# 4b: price_watch (日次) 優先・price_history (週次) フォールバック (#5011)
+# ---------------------------------------------------------------------------
+
+def test_price_history_note_prefers_price_watch_over_price_history(tmp_path):
+    watch_root = tmp_path / "price_watch" / "history"
+    hist_root = tmp_path / "price_history"
+    _write_jsonl(watch_root, "B001", [_rec(20, 1111), _rec(2, 999)])
+    _write_jsonl(hist_root, "B001", [_rec(15, 5000), _rec(3, 4800)])
+    note = wtb.build_price_history_note(
+        "B001", hist_root, price_watch_root=watch_root, now=NOW,
+    )
+    assert note is not None
+    assert "￥999" in note
+    assert "5,000" not in note and "4,800" not in note
+
+
+def test_price_history_note_falls_back_to_price_history_when_watch_file_missing(tmp_path):
+    watch_root = tmp_path / "price_watch" / "history"
+    hist_root = tmp_path / "price_history"
+    watch_root.mkdir(parents=True, exist_ok=True)  # ディレクトリはあるがこの ASIN のファイルは無い
+    _write_jsonl(hist_root, "B001", [_rec(20, 5000), _rec(3, 4800)])
+    note = wtb.build_price_history_note(
+        "B001", hist_root, price_watch_root=watch_root, now=NOW,
+    )
+    assert note is not None
+    assert "￥4,800" in note
 
 
 # ---------------------------------------------------------------------------
@@ -239,15 +293,62 @@ def test_low_stock_note_none_for_in_stock():
 
 
 # ---------------------------------------------------------------------------
-# 6: 実店舗注記 — 断定表現を含まない・在庫データを持たない旨を明記
+# 6: 実店舗注記 (#5011) — Google 検索リンクは完全撤廃、受け皿は
+#    在庫確認済みならテーブル導線、全滅ならトイザらス在庫検索のみ。
+#    断定表現は含めない・在庫データを持たない旨は両分岐で明記する。
 # ---------------------------------------------------------------------------
 
+def test_offline_note_never_links_to_google_search():
+    """回帰防止: どちらの分岐でも google.com/search は絶対に出ない。"""
+    for opts in (
+        _options(amazon=True, rakuten=False, yahoo=False),
+        _options(amazon=False, rakuten=False, yahoo=False),
+        None,
+    ):
+        note = wtb.build_offline_note("テスト商品", opts)
+        assert "google.com/search" not in note
+
+
+def test_offline_note_when_some_site_available_has_no_external_search_link():
+    """Amazon/楽天/Yahoo のいずれかで取扱ありなら、外部検索エンジンへのリンクを
+    置かず、既出の在庫・価格テーブルへ戻る案内にする。"""
+    note = wtb.build_offline_note("テスト商品", _options(amazon=True, rakuten=False, yahoo=False))
+    assert "<a href" not in note
+    assert "在庫・価格の一覧" in note
+    assert "オンラインストア" in note or "在庫のみを" in note
+
+
+def test_offline_note_when_all_sites_unavailable_links_to_toysrus_search():
+    """3サイトとも取扱不明のときだけ、消極的な受け皿としてトイザらスの
+    在庫検索へリンクする。アフィリエイトタグは付けない。"""
+    note = wtb.build_offline_note("テスト商品", _options(amazon=False, rakuten=False, yahoo=False))
+    assert "toysrus.co.jp/search" in note
+    assert "tag=" not in note
+    assert 'rel="noopener nofollow"' in note
+
+
 def test_offline_note_does_not_assert_physical_stock():
-    note = wtb.build_offline_note("テスト商品")
-    assert "在庫のみを" in note or "オンラインストア" in note
-    for forbidden in ("トイザらスで買えます", "に在庫あり", "で購入できます"):
-        assert forbidden not in note
-    assert "google.com/search" in note
+    for opts in (
+        _options(amazon=True, rakuten=False, yahoo=False),
+        _options(amazon=False, rakuten=False, yahoo=False),
+    ):
+        note = wtb.build_offline_note("テスト商品", opts)
+        assert "在庫のみを" in note or "オンラインストア" in note
+        for forbidden in ("トイザらスで買えます", "に在庫あり", "で購入できます", "で買える"):
+            assert forbidden not in note
+
+
+def test_offline_note_passes_quality_gate_physical_store_check():
+    """quality_gate.check_no_physical_store_claims が、新しいトイザらス導線を
+    実店舗在庫の断定として誤検出しないこと。"""
+    import quality_gate as qg  # noqa: E402 (local import, avoids test-collection cost when unused)
+
+    for opts in (
+        _options(amazon=True, rakuten=False, yahoo=False),
+        _options(amazon=False, rakuten=False, yahoo=False),
+    ):
+        note = wtb.build_offline_note("テスト商品", opts)
+        assert qg.check_no_physical_store_claims(note) == []
 
 
 # ---------------------------------------------------------------------------
@@ -274,3 +375,16 @@ def test_build_stock_block_aggregates_all_fields(tmp_path):
     assert block["price_history_note"] is not None
     assert block["low_stock_note"] is None
     assert block["offline_note"]
+
+
+def test_build_stock_block_prefers_price_watch_root_when_given(tmp_path):
+    watch_root = tmp_path / "price_watch" / "history"
+    hist_root = tmp_path / "price_history"
+    _write_jsonl(watch_root, "B001", [_rec(10, 111), _rec(2, 100)])
+    _write_jsonl(hist_root, "B001", [_rec(10, 999), _rec(2, 1050)])
+    block = wtb.build_stock_block(
+        "テスト商品", _obs(ss.STATE_IN_STOCK), _options(),
+        price_history_root=hist_root, price_watch_root=watch_root, asin="B001", now=NOW,
+    )
+    assert block["price_history_note"] is not None
+    assert "￥100" in block["price_history_note"]
