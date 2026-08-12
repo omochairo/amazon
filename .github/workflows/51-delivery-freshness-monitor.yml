@@ -1,0 +1,91 @@
+name: Delivery Freshness Monitor
+
+# #5042: **公開サイトが更新され続けているか**を外側から見る。
+#
+# なぜ必要か:
+#   配信は 2 つの CI をまたいで成立している。
+#
+#       main へ push → 40-mirror-to-gitlab.yml が git push
+#                    → GitLab CI の pages ジョブ → navi.omcha.jp
+#
+#   GitHub 側の責務は `git push` が成功するところで終わっており、GitLab の
+#   パイプライン結果を見に行くコードはリポジトリ内に無い (gitlab.com/api/v4 を
+#   叩くのは 41-pages-cert-renew のドメイン証明書チェックだけ)。したがって
+#   **GitLab 側の pages が落ちても GitHub の run は全部緑のまま、Issue も立たず、
+#   記事だけが増え続けてサイトが凍る。**
+#
+#   #4789 (47-history-freshness-monitor) が「run が緑のまま止まる 3 経路」に
+#   原因非依存の網を張ったのと同じ話で、そこに 4 本目 —— 別 CI に投げっぱなしで
+#   結果を見ていない —— が空いていた。
+#
+# なぜ audit_site_health では代替できないか:
+#   あちらは sitemap 掲載 URL の 200 / noindex / 孤立を見る「配信された後の
+#   サイト」の道具。配信そのものが止まると監視対象の sitemap ごと古い状態で
+#   固まるため、R1〜R5 はどれも鳴らない (古いページは古いまま 200 を返す)。
+#
+# なぜ GitHub Actions 側に置くか:
+#   監視は配信と別のインフラに置く。GitLab 側に置くと GitLab が死んだとき
+#   監視も一緒に死ぬ。
+#
+# なぜ commit-back しないか:
+#   履歴 JSONL に書き戻すと #4793 の「commit-back 全体を覆う continue-on-error」を
+#   新しく 1 本増やすことになり、しかもその新レーン自体が
+#   check_history_freshness.py の監視対象漏れになる。判定は毎回その場で取り直せる
+#   ので状態を持つ必要が無い。
+#
+# 起票規律 (CLAUDE.md: GitHub API バースト禁止):
+#   マーカー `<!-- delivery-freshness-monitor -->` で単一 issue を特定して body を
+#   更新し、健全に戻ったら close する。1 run あたりの書き込みは最大 1 回。
+#
+# 較正:
+#   2026-08-12 14:00 UTC 実測で sitemap の最大 lastmod は同日 13:48 UTC ——
+#   その 12 分前に main へマージされたコミットの時刻 (配信ラグは分単位) だった。
+#   記事マージは 25〜47 件/日で配信は事実上毎日走るので、閾値 36h は
+#   **入れた日に鳴らない** = 鳴ったら必ず異常。閾値は
+#   scripts/check_delivery_freshness.py の DEFAULT_MAX_AGE_HOURS 一箇所に置く。
+
+on:
+  schedule:
+    # 6 時間ごと。閾値が 36h なので発火頻度を上げても誤報は増えず、
+    # 実障害の検知だけが早くなる (書き込みは異常時のみ・最大 1 回/run)。
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      max_age_hours:
+        description: '異常とみなす経過時間 (既定 36)'
+        required: false
+        default: '36'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: delivery-freshness-monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      # requirements.txt 全部は要らない (この script が使う外部依存は requests
+      # だけ)。監視レーンの起動を本番依存の解決に巻き込まないため個別に入れる。
+      - name: Install requests
+        run: pip install requests
+
+      - name: Check delivery freshness
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          python scripts/check_delivery_freshness.py \
+            --max-age-hours "${{ github.event.inputs.max_age_hours || 36 }}"
