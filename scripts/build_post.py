@@ -33,6 +33,8 @@ import jinja2
 
 import market_prices
 import price_overlay
+import stock_status
+import where_to_buy_format
 from brand_normalizer import normalize as normalize_brand
 from build_feature_lists import PRICE_BANDS
 from score_calculator import (
@@ -2611,11 +2613,19 @@ def _frontmatter_meta(
     score_result: ScoreResult | None = None,
     query_intent_map: dict[str, str] | None = None,
     canonical_overrides: dict[str, str] | None = None,
+    stock_title_override: str | None = None,
 ) -> dict[str, Any]:
-    title = data.get("title", "No Title")
-    variants = data.get("title_variants") or []
-    if variants and isinstance(variants[0], dict) and variants[0].get("title"):
-        title = variants[0]["title"]
+    # #2686 / #4964: 「どこで買える/在庫」型が適用された記事は決定的生成の
+    # タイトルを最優先で使う (元 JSON の title / title_variants は書き換えず、
+    # build 時にだけ差し替える)。ロールアウト日以降 かつ 在庫状態が確定した
+    # 記事だけがここに入るので、既存記事の title は一切影響を受けない。
+    if stock_title_override:
+        title = stock_title_override
+    else:
+        title = data.get("title", "No Title")
+        variants = data.get("title_variants") or []
+        if variants and isinstance(variants[0], dict) and variants[0].get("title"):
+            title = variants[0]["title"]
     description = data.get("meta_description_optimized") or data.get("meta_description", "")
 
     product = data.get("product") or {}
@@ -2969,6 +2979,13 @@ def main() -> None:
     price_overlay_stats = {"price_watch": 0, "per_asin": 0, "none": 0, "body_stale": 0,
                            "unpriced_cleared": 0}
 
+    # #2686 / #4964: 「どこで買える/在庫」記事型。stock_index は price_watch の
+    # latest.json を 1 回読んで全記事で使い回す (price_watch_index と別読み
+    # だが同じ小さいファイルなのでコスト無視できる — stock_status.py 側の
+    # 設計判断: avail 文言は price_overlay の価格 index に無いので別途読む)。
+    stock_index = stock_status.load_stock_index()
+    stock_title_applied = 0
+
     rendered = 0
     skipped_legacy = 0
     discontinued_count = 0
@@ -3158,12 +3175,34 @@ def main() -> None:
 
             # Issue #515: link_report_flag macro が記事 URL 構築用に slug を参照する。
             data["slug"] = slug
+            page_asin = _resolve_page_asin(data.get("product"), slug)
             # #1980: query_intent_map にこのページの主要検索意図があれば post.md.j2 の
             # cta_layout 分岐 (購入 CTA の掲載位置) に渡す。未検出なら None のままで
             # テンプレ側は従来位置に fallback する。
             if query_intent_map:
-                page_asin = _resolve_page_asin(data.get("product"), slug)
                 data["cta_layout"] = query_intent_map.get(f"/products/{page_asin.lower()}/")
+
+            # #2686 / #4964: 「どこで買える/在庫」記事型。ロールアウト日以降 かつ
+            # 在庫文言が classify 可能な記事だけ新型 (決定的生成) を適用する。
+            # 既存記事は is_stock_format_eligible が False を返すため一切変化しない。
+            stock_title_override: str | None = None
+            data["stock_where_to_buy"] = None
+            if page_asin and where_to_buy_format.is_stock_format_eligible(
+                page_asin, data.get("date"), stock_index,
+            ):
+                stock_obs = stock_status.resolve_stock(
+                    page_asin, stock_index, per_asin_root=per_asin_root,
+                )
+                product_prices = (data.get("product") or {}).get("prices")
+                purchase_options = stock_status.resolve_purchase_options(product_prices, stock_obs)
+                product_name = (data.get("product") or {}).get("name") or data.get("title") or ""
+                data["stock_where_to_buy"] = where_to_buy_format.build_stock_block(
+                    product_name, stock_obs, purchase_options,
+                    price_history_root=price_history_root, asin=page_asin,
+                )
+                stock_title_override = where_to_buy_format.build_title(product_name, purchase_options)
+                stock_title_applied += 1
+
             md_body = template.render(**data)
             # #4826 項目 4: 旧 <slug>.quality.json sidecar による draft 判定は廃止。
             # draft は --gate で**その場で評価した**スコアだけで決める (下記)。
@@ -3172,6 +3211,7 @@ def main() -> None:
                 data, slug, draft, git_history, f,
                 score_result=fresh_sr, query_intent_map=query_intent_map,
                 canonical_overrides=canonical_overrides,
+                stock_title_override=stock_title_override,
             )
             if fm_meta.get("cta_layout"):
                 cta_layout_applied += 1
@@ -3291,6 +3331,7 @@ def main() -> None:
         f"({price_overlay_stats['body_stale']} flagged 本文価格乖離, "
         f"{price_overlay_stats['unpriced_cleared']} 凍結価格を無価格化)"
     )
+    print(f"stock_title (#2686): {stock_title_applied} page(s) rendered with 「どこで買える」format")
 
 
 if __name__ == "__main__":

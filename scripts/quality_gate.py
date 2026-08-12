@@ -50,6 +50,13 @@ try:
 except ImportError:
     Draft7Validator = None  # type: ignore
 
+try:
+    import frontmatter  # type: ignore
+except ImportError:  # pragma: no cover - best-effort fallback
+    frontmatter = None  # type: ignore
+
+import stock_status
+
 
 # 幼児口調・子ども向け演出は禁止（女性誌調をキープするため）。
 # 「おもちゃロボ」はサイト公式キャラ（AI編集ロボの名称）として narrative や
@@ -953,6 +960,139 @@ def check_body_word_count(md_text: str | None) -> CheckResult:
     return CheckResult("body_word_count", chars >= 1600, score, msg)
 
 
+# ---------------------------------------------------------------------------
+# #2686 / #4964: 「どこで買える/在庫」記事型の検証ゲート
+#
+# where_to_buy_format.py (build_post.py が使う決定的レンダリング層) の出力を
+# 検証する。タイトルで「在庫を毎日チェック」と約束しても本文に答えが無い、
+# という事故が B0H4PQ29JS で実際に発生し、Google のインデックスから記事が
+# 消えた実績があるため、build 後の rendered markdown をここで機械的に検査する。
+# ---------------------------------------------------------------------------
+
+_STOCK_TITLE_KEYWORDS = ("どこで買える", "在庫", "取扱店")
+
+# 「YYYY-MM-DD 時点」形式の取得日時。where_to_buy_format.build_conclusion が
+# 必ずこの形式で日付を書く前提 (単独の在庫断定を防ぐ安全装置)。
+_STOCK_DATE_STAMP_RE = re.compile(r"\d{4}-\d{2}-\d{2}\s*時点")
+
+# 在庫状況に触れている語 (取得日時の近傍にこれが無いと「日付はあるが在庫の
+# 話をしていない」ケースを見逃すため、日付とは別に存在確認する)。
+_STOCK_MENTION_RE = re.compile(r"(在庫あり|在庫切れ|残り\d+点|取扱|発送)")
+
+# 実店舗の在庫を断定する表現。チェーン名 + 断定語がセットで出たら fail する。
+_PHYSICAL_STORE_NAMES = (
+    "トイザらス", "トイザらす", "イオン", "西松屋", "ヨドバシ", "ビックカメラ",
+    "ヤマダ電機", "イトーヨーカドー", "babiesＲus", "babiesRus", "ベビーザらス",
+)
+_PHYSICAL_STORE_CLAIM_RE = re.compile(
+    r"(" + "|".join(re.escape(n) for n in _PHYSICAL_STORE_NAMES) + r")"
+    r"[^\n。]{0,8}(で買えます|に在庫あり|で購入できます|で買える|在庫があります|で取り扱っています|に在庫があります)"
+)
+
+_STOCK_ASIN_FROM_URL_RE = re.compile(r"/products/([A-Za-z0-9]{10})/")
+
+
+def check_stock_title_has_dated_conclusion(title: str, body_md: str) -> list[str]:
+    """タイトルが在庫系キーワードを含むのに、本文に取得日時付きの在庫記述が
+    無ければ違反を返す。"""
+    violations: list[str] = []
+    if not any(k in (title or "") for k in _STOCK_TITLE_KEYWORDS):
+        return violations
+
+    body = body_md or ""
+    if not _STOCK_DATE_STAMP_RE.search(body):
+        violations.append(
+            "stock-title-missing-dated-conclusion: タイトルが在庫系キーワードを含むが、"
+            "本文に「YYYY-MM-DD 時点」形式の取得日時付き記述が見つからない"
+        )
+        return violations
+    if not _STOCK_MENTION_RE.search(body):
+        violations.append(
+            "stock-title-missing-stock-mention: タイトルが在庫系キーワードを含むが、"
+            "本文に在庫状況の記述が見つからない"
+        )
+    return violations
+
+
+def check_no_physical_store_claims(body_md: str) -> list[str]:
+    """実店舗の在庫を断定する表現を検出する。"""
+    violations: list[str] = []
+    m = _PHYSICAL_STORE_CLAIM_RE.search(body_md or "")
+    if m:
+        violations.append(
+            f"physical-store-claim: 実店舗の在庫を断定する表現を検出しました: {m.group(0)!r}"
+        )
+    return violations
+
+
+def check_no_unknown_state_stock_title(title: str, state: str | None) -> list[str]:
+    """在庫状態が unknown なのに在庫系タイトルが付いていたら違反にする。"""
+    violations: list[str] = []
+    if state == stock_status.STATE_UNKNOWN and any(
+        k in (title or "") for k in _STOCK_TITLE_KEYWORDS
+    ):
+        violations.append(
+            "unknown-state-with-stock-title: 在庫状態が unknown なのに在庫系タイトルが"
+            "付与されています"
+        )
+    return violations
+
+
+def _resolve_rendered_title_and_body(
+    data: dict, md_text: str | None,
+) -> tuple[str, str, str | None]:
+    """rendered markdown があれば frontmatter からタイトル/asin を取る
+    (build_post の stock_title_override は JSON には書き戻らず、frontmatter
+    にしか出ないため)。md が無ければ JSON の title に fallback する。"""
+    if md_text and frontmatter is not None:
+        try:
+            post = frontmatter.loads(md_text)
+        except Exception:
+            post = None
+        if post is not None:
+            title = post.get("title") or data.get("title", "")
+            body = post.content or ""
+            url = post.get("url") or ""
+            m = _STOCK_ASIN_FROM_URL_RE.search(url)
+            asin = m.group(1) if m else None
+            return title, body, asin
+
+    title = data.get("title", "")
+    body = md_text or ""
+    product = data.get("product") or {}
+    asin = product.get("asin") if isinstance(product, dict) else None
+    return title, body, asin
+
+
+def check_stock_where_to_buy(
+    data: dict,
+    md_text: str | None,
+    stock_index: "stock_status.StockIndex | None" = None,
+) -> CheckResult:
+    """#2686 / #4964 の 3 検証をまとめて実行する。
+
+    1. タイトルが在庫系キーワードを含む記事は、本文に取得日時付きの在庫
+       記述を持たなければならない。
+    2. 実店舗の在庫を断定する表現を検出したら fail する。
+    3. stock_index が渡されているとき、``state`` が unknown の記事に新型
+       タイトルが付いていたら fail する
+       (stock_status.can_use_stock_title のゲート漏れを検出する最終防波堤)。
+    """
+    title, body, asin = _resolve_rendered_title_and_body(data, md_text)
+
+    violations: list[str] = []
+    violations += check_stock_title_has_dated_conclusion(title, body)
+    violations += check_no_physical_store_claims(body)
+
+    if stock_index is not None and asin:
+        obs = stock_status.resolve_stock(asin, stock_index)
+        violations += check_no_unknown_state_stock_title(title, obs.state)
+
+    if violations:
+        return CheckResult("stock_where_to_buy", False, 0.0, "; ".join(violations))
+    return CheckResult("stock_where_to_buy", True, 1.0, "OK")
+
+
 def _derive_verified_status(
     data: dict,
     rakuten_idx: dict[str, Any] | None,
@@ -996,6 +1136,7 @@ def evaluate_article(
     rakuten_idx: dict[str, Any] | None = None,
     yahoo_idx: dict[str, Any] | None = None,
     cert_fetch: bool = True,
+    stock_index: "stock_status.StockIndex | None" = None,
 ) -> ArticleReport:
     data = json.loads(json_path.read_text(encoding="utf-8"))
     slug = data.get("slug", json_path.stem)
@@ -1030,6 +1171,7 @@ def evaluate_article(
     report.checks.append(check_tone(data))
     report.checks.append(check_heading_hierarchy(md_text))
     report.checks.append(check_body_word_count(md_text))
+    report.checks.append(check_stock_where_to_buy(data, md_text, stock_index=stock_index))
     return report
 
 
@@ -1049,6 +1191,10 @@ def main() -> int:
     parser.add_argument(
         "--no-cert-fetch", action="store_true",
         help="cert HTML content check の HTTP fetch を無効化 (local dryrun 用)",
+    )
+    parser.add_argument(
+        "--price-watch", default=None,
+        help="#2686: data/price_watch/latest.json への override path (テスト用)",
     )
     args = parser.parse_args()
 
@@ -1074,6 +1220,14 @@ def main() -> int:
             rakuten_idx = _bp_load_matched_index(rakuten_matched_path)
         if yahoo_matched_path.exists():
             yahoo_idx = _bp_load_matched_index(yahoo_matched_path)
+
+    # #2686 / #4964: 「どこで買える/在庫」記事型のゲート用 (state=unknown で
+    # 新型タイトルが付いている記事を検出する)。latest.json が無い/壊れている
+    # 場合 load_stock_index は空 index を返し fail-soft で扱う。
+    if args.price_watch:
+        stock_index = stock_status.load_stock_index(args.price_watch)
+    else:
+        stock_index = stock_status.load_stock_index()
 
     json_files = sorted(p for p in src.glob("*.json") if not p.stem.endswith(".enrichment") and not p.stem.endswith(".seo") and not p.stem.endswith(".quality"))
 

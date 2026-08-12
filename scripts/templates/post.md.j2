@@ -49,6 +49,29 @@
 <aside class="discontinued-notice">🚫 <strong>この商品は現在、Amazon・楽天・Yahoo!ショッピングで販売ページを確認できません。</strong>販売終了または取り扱い停止の可能性があります。記事内の価格・仕様は執筆時点の情報です。{% if competitive_analysis %}<a href="#alternatives">類似のおすすめ商品を見る ↓</a>{% endif %}</aside>
 {% endif %}
 
+{#- #2686 / #4964: 「どこで買える/在庫」記事型。build_post.py が
+    where_to_buy_format.build_stock_block() で決定的に組み立てた
+    stock_where_to_buy がある記事だけ、結論ブロック→在庫テーブル→
+    価格推移メモ→品薄サイン→実店舗注記を記事冒頭に出す。
+    この型が付かない記事 (ロールアウト日より前 / state=unknown) では
+    stock_where_to_buy は None のままなので、既存記事の描画は一切変化しない。 -#}
+{% if stock_where_to_buy %}
+<section class="where-to-buy-block" aria-label="在庫と価格のまとめ">
+<p class="where-to-buy-conclusion">{{ stock_where_to_buy.conclusion }}</p>
+<div class="where-to-buy-table-wrap">
+<table class="where-to-buy-table">
+<thead><tr><th>販売サイト</th><th>価格</th><th>在庫状況</th><th>取得日時</th><th>リンク</th></tr></thead>
+<tbody>
+{% for row in stock_where_to_buy.rows %}<tr><td>{{ row.site }}</td><td>{% if row.price %}￥{{ "{:,}".format(row.price) }}{% else %}—{% endif %}</td><td>{{ row.state_label }}</td><td>{{ row.observed_at_label }}</td><td>{% if row.url %}<a href="{{ row.url }}" target="_blank" rel="noopener nofollow sponsored">見る →</a>{% else %}—{% endif %}</td></tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% if stock_where_to_buy.price_history_note %}<p class="where-to-buy-price-history">📉 {{ stock_where_to_buy.price_history_note }}</p>{% endif %}
+{% if stock_where_to_buy.low_stock_note %}<p class="where-to-buy-low-stock">{{ stock_where_to_buy.low_stock_note }}</p>{% endif %}
+<p class="where-to-buy-offline-note"><small>{{ stock_where_to_buy.offline_note }}</small></p>
+</section>
+{% endif %}
+
 {% if product.name_full and product.name_full != product.name %}
 <p class="product-full-name">正式商品名：<strong>{{ product.name_full }}</strong></p>
 {% endif %}
