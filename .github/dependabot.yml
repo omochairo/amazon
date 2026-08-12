@@ -1,0 +1,53 @@
+# 依存の更新を PR として可視化する (#5043)。
+#
+# なぜ要るか:
+#   requirements.txt はバージョン制約が実質 0 で、CI は毎 run 素で
+#   `pip install -r requirements.txt` を叩いている。つまり同じコミットを 2 回流すと
+#   入る依存が違いうる。上流が破壊的リリースを出せば全レーンが同じ日に同時に落ち、
+#   上流が乗っ取られれば「次の cron でそのまま入る」。このリポジトリは public で、
+#   job には PA-API / Jules / SNS / GA4 / GSC の認証情報が env で入るので、
+#   依存が黙って差し替わる経路を開けておく理由が無い。
+#
+#   Dependabot 自体は固定ではなく「変更をレビュー機会に変える」道具。lock 化
+#   (pip-compile + requirements.lock) は #5043 の follow-up で、そこまで行けば
+#   ここが本来の意味で効く。
+#
+# マージ運用:
+#   bump PR は data/articles/ 配下を触らないので 05-jules-auto-merge のスコープ
+#   ガードに引っかかり、`auto-merge-skipped` が付いて手動マージ待ちになる (仕様通り。
+#   依存の更新を無人でマージしたら Dependabot を入れた意味が無い)。滞留すると
+#   45-stale-pr-sweeper が拾うので、放置せず週次で捌くこと。
+#
+# 頻度:
+#   weekly。daily にすると PR 流量 (記事 PR で 25〜47 件/日) に埋もれる。
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Tokyo"
+    open-pull-requests-limit: 5
+    labels:
+      - "tech-debt"
+    commit-message:
+      prefix: "deps"
+
+  # actions/* は現状すべてメジャータグ参照 (@v6 等) なので、パッチ更新は勝手に
+  # 入る。ここで拾えるのはメジャー更新の通知。third-party action を足すときは
+  # SHA ピンにすること (タグは書き換え可能で、ピンでなければ供給側が任意の
+  # コードを後から差し込める)。
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Tokyo"
+    open-pull-requests-limit: 5
+    labels:
+      - "tech-debt"
+    commit-message:
+      prefix: "ci"
