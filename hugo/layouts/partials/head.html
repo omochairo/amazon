@@ -105,7 +105,7 @@
 {{- end -}}
 {{- $isProd := or hugo.IsProduction (eq site.Params.env "production") -}}
 {{- if and $isProd (ne .Params.robotsNoIndex true) (not $isThinTerm) (not $isPaginated) (not $isNoindexBrand) (not $isBrandDupTag) (not $isHubDupTag) (not $isLowValueTag) }}
-<meta name="robots" content="index, follow">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
 {{- else if and $isProd (or $isThinTerm $isPaginated $isNoindexBrand $isBrandDupTag $isHubDupTag $isLowValueTag) (ne .Params.robotsNoIndex true) }}
 <meta name="robots" content="noindex, follow">
 {{- else }}
