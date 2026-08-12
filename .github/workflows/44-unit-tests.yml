@@ -118,7 +118,7 @@ jobs:
           token: ${{ secrets.NAVI_BRAIN_PAT }}
           path: jules
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           # #5043: この workflow は全 PR で無条件に走り (PR 流量は記事 PR だけで
