@@ -6,7 +6,18 @@ Claude Code / 人間の開発者がこのリポジトリで作業するときの
 
 ## このリポジトリの位置づけ
 
-`navi.omcha.jp`（知育玩具比較サイト）のソース。市場データ収集 → Jules が記事生成 → Hugo でビルド → GitHub Pages 配信、までを GitHub Actions で自動化している。**public** なのは Actions の無料枠を使うため。
+`navi.omcha.jp`（知育玩具比較サイト）のソース。市場データ収集 → Jules が記事生成 → Hugo でビルド → 配信、までを自動化している。**public** なのは Actions の無料枠を使うため。
+
+**配信は GitLab Pages。GitHub Pages は使っていない**（リポジトリ設定でも無効化済み）。`main` への push を `40-mirror-to-gitlab.yml` が GitLab へ転送し、GitLab 側の `pages` ジョブ（`.gitlab-ci.yml`）がビルドして配信する。経緯と復帰手順は [docs/failover-to-gitlab.md](./docs/failover-to-gitlab.md)。
+
+```
+GitHub Actions（開発・自動化・データ収集・記事生成）
+        │ main へ push
+        ▼
+40-mirror-to-gitlab.yml ──► GitLab main ──► .gitlab-ci.yml の pages ジョブ ──► navi.omcha.jp
+```
+
+この分離のせいで **GitHub 側の run が全部緑でもサイトが凍りうる**（GitHub の責務は `git push` の成功まで）。外形監視は #5042。
 
 関連リポジトリ:
 
@@ -78,7 +89,7 @@ python scripts/build_post.py
 cd hugo && hugo server -D
 ```
 
-Hugo は **Extended v0.146.0**（`02-publish.yml` の指定に合わせる）。`http://localhost:1313/`。
+Hugo は **Extended v0.146.0**（本番ビルドの SSOT は `.gitlab-ci.yml` の `HUGO_VERSION`。上げるときはそちらに合わせる）。`http://localhost:1313/`。
 
 ## 触ってよい / いけない
 
