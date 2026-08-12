@@ -129,4 +129,8 @@ jobs:
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             DRY_ARGS="--dry-run"
           fi
-          python scripts/open_article_feedback_issue.py $DRY_ARGS
+          # `python scripts/xxx.py` だと sys.path[0] が scripts/ になりリポジトリ
+          # ルートが入らないため、このモジュールの `from scripts import gh_rest`
+          # (#4059 で追加) が ModuleNotFoundError で落ちる。パッケージとして呼ぶ。
+          # 他レーン (18b / 22 / 48) も同じ理由で `python -m scripts.X` にしている。
+          python -m scripts.open_article_feedback_issue $DRY_ARGS
