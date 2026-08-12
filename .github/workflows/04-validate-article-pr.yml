@@ -181,10 +181,6 @@ jobs:
             [ -z "$f" ] && continue
             [ ! -f "$f" ] && continue
             cp "$f" "$tmp_src/"
-            # carry any pre-existing rendered markdown so MD-based checks can run
-            base=$(basename "$f" .json)
-            md="hugo/content/posts/${base}.md"
-            [ -f "$md" ] || true
           done <<< "${{ steps.list.outputs.files }}"
           python scripts/quality_gate.py \
             --src "$tmp_src/" \
