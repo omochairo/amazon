@@ -1,6 +1,13 @@
 """check_history_freshness.py
 
-#4789: `data/analytics/history/` の各レーンが**無言で止まっていないか**を検査する。
+#4789: 各計測レーンが**無言で止まっていないか**を検査する。
+
+対象は 2 種類:
+  - `LANES` … `data/analytics/history/<name>.jsonl` (1 ファイル = 1 レーン)
+  - `DIR_LANES` … ディレクトリ配下にエンティティ単位で分かれる履歴。現状は価格観測の
+    2 レーン (`data/price_watch/history/` / `data/price_history/`。#5015)。
+    ここは `data/analytics/history/` の外にあるため走査対象から漏れており、
+    **止まっても検出できない状態が続いていた**。
 
 なぜ必要か:
   計測レーンは止まっても run が緑のままになる経路が 3 つある。
@@ -92,6 +99,46 @@ LANES: Sequence[Lane] = (
          "毎週月曜 02:00 UTC (#4826 項目3。初回計測 2026-08-10)"),
 )
 
+class DirLane:
+    """1 ディレクトリ配下に **エンティティ単位で分かれた** 履歴 jsonl を持つレーン。
+
+    ``Lane`` が「1 ファイル = 1 レーン」なのに対し、価格観測は 1 ASIN 1 ファイルで
+    数千本になるため、ディレクトリ配下の **最新観測日** をレーンの代表値にする。
+
+    個別 ASIN は dedupe (同一価格が 6 日未満なら書かない) のせいで何週間も行が
+    増えないことがあるが、ディレクトリ全体では毎日数百行が積まれる (実測:
+    price_watch 357 行/日 / price_history 604 行/日) ので、代表値は日次で進む。
+    """
+
+    def __init__(self, path: str, cadence: str, max_age_days: int,
+                 lane: str, note: str = "") -> None:
+        self.path = path
+        self.filename = path  # 表示・レンダリングは Lane と同じ扱いにする
+        self.cadence = cadence
+        self.max_age_days = max_age_days
+        self.lane = lane
+        self.note = note
+
+
+# 価格観測の 2 レーン (#5015)。``data/analytics/history/`` の外にあるため、
+# DEFAULT_HISTORY_DIR の走査では拾えず、これまで **止まっても検出されなかった**。
+#
+# しきい値のキャリブレーション (2026-08-12 に観測窓全域を replay):
+#   price_watch   窓 2026-07-13〜08-11 (30日) の age 分布 = {0:29, 1:1}、最大 1
+#   price_history 窓 2026-05-30〜08-12 (75日) の age 分布 = 0 が 58 日で、
+#                 2〜13 は 2026-06-24〜07-06 の 13 日欠測 (GitHub 凍結期間) のみ
+# 監視は 02:00 UTC で、price_watch の cron は 20:23 UTC (= 通常 age 1)、
+# price_history は 00:00/09:00 UTC (= 通常 age 0〜1)。max_age=3 なら通常運転では
+# 鳴らず、1 run の取りこぼしも吸収し、凍結相当の実障害では 3 日目に鳴る。
+DIR_LANES: Sequence[DirLane] = (
+    DirLane("data/price_watch/history", "daily", 3,
+            "amazon-home-ops/40-price-watch.yml",
+            "自宅 NAS runner・20:23 UTC 日次 (実測 age 1)"),
+    DirLane("data/price_history", "daily", 3,
+            "01-fetch-products.yml",
+            "write_per_asin_snapshot の hook。1日2run (実測 age 0〜1)"),
+)
+
 # 監視対象外。**理由つきで明示する** (未知として鳴らさないための逃げ道ではなく、
 # 「見ないと決めた」ことを記録に残すため)。
 UNMONITORED: Dict[str, str] = {
@@ -101,7 +148,11 @@ UNMONITORED: Dict[str, str] = {
 
 
 def _date_of(row: Dict[str, Any]) -> Optional[dt.date]:
+    # 価格レーンは日付を ``ts`` (ISO datetime) に持つ。``date`` を優先し、
+    # 無ければ ``ts`` を見る (どちらも先頭 10 文字が YYYY-MM-DD)。
     value = row.get("date")
+    if not isinstance(value, str) or len(value) < 10:
+        value = row.get("ts")
     if not isinstance(value, str) or len(value) < 10:
         return None
     try:
@@ -135,6 +186,45 @@ def last_date(path: pathlib.Path) -> Optional[dt.date]:
             if d is not None:
                 found.append(d)
     return max(found) if found else None
+
+
+def last_date_in_dir(root: pathlib.Path) -> Optional[dt.date]:
+    """ディレクトリ配下の ``*.jsonl`` 全体で最新の観測日を返す。
+
+    1 本でも読めれば代表値になるので、壊れたファイルは飛ばす (freshness の網で
+    あってスキーマ検証ではない)。
+    """
+    if not root.is_dir():
+        return None
+    found: Optional[dt.date] = None
+    for path in root.glob("*.jsonl"):
+        d = last_date(path)
+        if d is not None and (found is None or d > found):
+            found = d
+    return found
+
+
+def check_dirs(repo_root: pathlib.Path, today: dt.date,
+               dir_lanes: Sequence[DirLane] = DIR_LANES) -> List[Dict[str, Any]]:
+    """ディレクトリ単位レーンの状態を返す。行の形は ``check`` と揃える。"""
+    rows: List[Dict[str, Any]] = []
+    for lane in dir_lanes:
+        root = repo_root / lane.path
+        if not root.is_dir():
+            rows.append({"filename": lane.filename, "status": "missing",
+                         "last": None, "age_days": None, "lane": lane})
+            continue
+        last = last_date_in_dir(root)
+        if last is None:
+            # ディレクトリはあるが日付を 1 つも読めない (空 / 全部壊れている)。
+            rows.append({"filename": lane.filename, "status": "unknown",
+                         "last": None, "age_days": None, "lane": lane})
+            continue
+        age = (today - last).days
+        rows.append({"filename": lane.filename,
+                     "status": "stale" if age > lane.max_age_days else "ok",
+                     "last": last.isoformat(), "age_days": age, "lane": lane})
+    return rows
 
 
 def check(history_dir: pathlib.Path, today: dt.date,
@@ -192,7 +282,7 @@ def render_body(rows: Sequence[Dict[str, Any]], unregistered: Sequence[str],
     parts = [
         f"<!-- {MARKER} -->",
         "",
-        f"`data/analytics/history/` に{'、'.join(headline)}があります "
+        f"計測レーンに{'、'.join(headline)}があります "
         f"(計 {total} 件・{today.isoformat()} 時点)。",
         "",
         "計測レーンは止まっても run が緑のままになる経路が 3 つあり "
@@ -221,7 +311,8 @@ def render_body(rows: Sequence[Dict[str, Any]], unregistered: Sequence[str],
             "## 監視表に無い履歴ファイル",
             "",
             "`LANES` にも `UNMONITORED` にも登録されていないため、止まっても検出できません。"
-            "`scripts/check_history_freshness.py` に cadence を足してください。",
+            "`scripts/check_history_freshness.py` に cadence を足してください "
+            "(ディレクトリ配下にエンティティ単位で分かれる履歴なら `DIR_LANES` 側)。",
             "",
         ]
         parts += [f"- `{name}`" for name in unregistered]
@@ -288,6 +379,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     p.add_argument("--repo", default=os.environ.get("REPO"))
     p.add_argument("--history-dir", type=pathlib.Path,
                    default=pathlib.Path(DEFAULT_HISTORY_DIR))
+    p.add_argument("--repo-root", type=pathlib.Path, default=pathlib.Path("."),
+                   help="DIR_LANES (価格観測レーン等) の解決基準。既定はカレント")
     p.add_argument("--today", default=None,
                    help="判定基準日 (既定: UTC 今日)。replay 検証用")
     p.add_argument("--dry-run", action="store_true",
@@ -296,7 +389,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     today = (dt.date.fromisoformat(args.today) if args.today
              else dt.datetime.now(dt.timezone.utc).date())
-    rows = check(args.history_dir, today)
+    rows = check(args.history_dir, today) + check_dirs(args.repo_root, today)
     unregistered = unregistered_files(args.history_dir)
 
     for r in rows:
