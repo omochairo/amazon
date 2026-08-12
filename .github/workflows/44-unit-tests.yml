@@ -75,9 +75,19 @@ jobs:
   unit-tests:
     runs-on: ubuntu-latest
     steps:
+      # #5047: fetch-depth を既定 (=1) に戻した。この job は pytest を回すだけで、
+      # git 履歴を読む操作 (git log / rev-list / merge-base) も push も無いので
+      # 全履歴を引く理由が無い。リポジトリは約 190MB (data/raw だけで 49,000
+      # ファイル超) で、記事・価格・SEO データが毎日積み上がるため単調増加する。
+      # ここは全 PR で無条件に走る = 流量が最大なので、fetch-depth 見直しの
+      # パイロットとして最も効果と安全性の比が良い。
+      #
+      # 他 22 workflow の fetch-depth: 0 は据え置き。大半が commit-back して
+      # push するのでレーンごとに base の取り方が違い、一律置換は危険。
+      # 特に 40-mirror-to-gitlab は GitLab へ HEAD:main を丸ごと転送するので
+      # 全履歴が必須 (外すと非 fast-forward reject になり、フェイルオーバー
+      # 痕跡の判定と区別が付かなくなる)。恒久的に対象外。
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       # jules/ プロンプトは private repo (amazon-navi-brain) に分離済み。
       # scripts/tests/test_build_jules_prompt.py が jules/PROMPT_TEMPLATE.md を
