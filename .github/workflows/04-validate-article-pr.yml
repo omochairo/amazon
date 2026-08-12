@@ -43,15 +43,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # jules/ プロンプトは private repo (amazon-navi-brain) に分離済み。実行時に overlay checkout。
-      # test_build_jules_prompt.py が jules/PROMPT_TEMPLATE.md を要求するため検証前に取得。
-      - name: Checkout prompt brain (private) into jules/
-        uses: actions/checkout@v6
-        with:
-          repository: omochairo/amazon-navi-brain
-          token: ${{ secrets.NAVI_BRAIN_PAT }}
-          path: jules
-
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -117,6 +108,34 @@ jobs:
             echo "$files"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
+
+      # jules/ プロンプトは private repo (amazon-navi-brain) に分離済み。実行時に overlay checkout。
+      #
+      # 2026-08-12: この step を「記事 JSON が変更された PR」限定に後ろ倒しした。
+      # 以前は steps の 2 番目で無条件に走っており、**secrets が渡らない PR で
+      # `Input required and not supplied: token` で job ごと落ちていた**。
+      # required check なので、落ちた PR は構造的にマージ不能になる。
+      # 実際に #5051 で Dependabot を入れた直後、bump PR 4 本 (#5056〜#5059) が
+      # これで一斉にブロックされた (fork からの PR も同じ経路で踏む)。
+      #
+      # ここを `if: secrets != ''` で条件化する案もあるが、それだと記事 PR が
+      # fork から来たときに jules/ 無しで検証が進んでしまう。**記事の有無**で
+      # ゲートするほうが、本物の記事 PR の検証を一切弱めずに済む
+      # (Dependabot / 依存更新 / docs PR は data/articles/*.json を触らない)。
+      #
+      # なお 44-unit-tests.yml (#5054) は `secrets != ''` で条件化している。
+      # あちらは pytest を回すので jules/ の有無が実際に効くレーンであり、
+      # 「jules/ 無しでも 2,354 passed」という実測が根拠になっている。
+      # こちらの job が走らせるのは validate_json.py / quality_gate.py /
+      # fetch_amazon_dry_run.py の 3 本で、いずれも jules/ を読まない
+      # (grep 済み)。将来 jules/ を要する step を足すならこの if: の下に置くこと。
+      - name: Checkout prompt brain (private) into jules/
+        if: steps.list.outputs.files != ''
+        uses: actions/checkout@v6
+        with:
+          repository: omochairo/amazon-navi-brain
+          token: ${{ secrets.NAVI_BRAIN_PAT }}
+          path: jules
 
       - name: Validate against article.schema.json
         if: steps.list.outputs.files != ''
