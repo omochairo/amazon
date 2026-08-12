@@ -54,7 +54,7 @@ jobs:
           echo "candidate count: $COUNT"
 
       - name: Upload candidates artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: toy-recall-candidates
           path: data/analytics/toy_recall_candidates.json
