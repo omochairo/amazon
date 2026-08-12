@@ -37,6 +37,21 @@ on:
 # 締めれば黙って壊れる。どちらの向きにも動かないよう固定する。
 permissions:
   contents: read
+# 同じレーンの run を同時に走らせない (#5044)。
+#
+# 二重投稿の防止は published_at の bookkeeping に依存しているが、その
+# bookkeeping は投稿の**あと**に commit -> PR -> auto-merge されて初めて main に
+# 反映される。つまり「前の run の bookkeeping PR がまだマージされていない間に
+# 次の run が始まる」と、同じ本文が再選定されて二重投稿になる (この窓は
+# 30-sns-engagement.yml のコメントが元から書いていたもの)。#4782 は個別事象を
+# 潰したが、CI 層の構造ガードが無いままだった。
+#
+# cancel-in-progress: false が必須。true にすると「投稿は済んだが bookkeeping
+# 前」の run を殺すことになり、いちばん避けたい状態 (投稿されたのに
+# published_at が付かない = 次スロットが再投稿する) を自分で作る。
+concurrency:
+  group: sns-publish
+  cancel-in-progress: false
 
 jobs:
   publish:
