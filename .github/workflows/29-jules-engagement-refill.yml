@@ -27,6 +27,13 @@ on:
     - cron: '0 3 * * 4'  # Thu -> X (iromama) #2 of week
     - cron: '0 3 * * 5'  # Fri -> Threads (iropapa) #2 of week
 
+# GITHUB_TOKEN の権限を明記する (#5045)。このレーンは Jules への dispatch と
+# 生成物の受け取りだけで、GITHUB_TOKEN による書き込みは無い (private repo の
+# overlay checkout は secrets.NAVI_BRAIN_PAT が担う)。宣言が無いとリポジトリ既定に
+# 引きずられ、既定が write なら不要な書き込み権限を持って走る。
+permissions:
+  contents: read
+
 jobs:
   refill:
     runs-on: ubuntu-latest

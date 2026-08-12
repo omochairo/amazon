@@ -39,6 +39,14 @@ on:
         required: false
         default: ''
 
+# GITHUB_TOKEN の権限を明記する (#5045)。このレーンの書き込み (branch push /
+# PR 作成 / auto-merge) は actions/create-github-app-token の App token で
+# 行っており、GITHUB_TOKEN は checkout が読むだけ。宣言が無いとリポジトリ既定に
+# 引きずられ、既定が write なら不要な書き込み権限を持って走り、read-only に
+# 締めれば黙って壊れる。どちらの向きにも動かないよう固定する。
+permissions:
+  contents: read
+
 jobs:
   rewrite:
     runs-on: ubuntu-latest
