@@ -92,4 +92,3 @@ jobs:
           else
             echo "::warning::Could not enable auto-merge on $PR_URL"
           fi
-        continue-on-error: true
