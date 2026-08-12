@@ -67,7 +67,7 @@ jobs:
           # 全量評価は作業ツリーの現状だけを見るので履歴は不要
           fetch-depth: 1
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
