@@ -92,6 +92,13 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+          # #5043: この workflow は全 PR で無条件に走り (PR 流量は記事 PR だけで
+          # 25〜47 件/日)、実行時間 ~52 秒のほぼ全部が下の pip install。
+          # requirements.txt の hash をキーに wheel をキャッシュする。
+          # キャッシュ miss / 復元失敗は fail にならないので、入れて壊れる方向が無い。
+          # 他の 38 箇所の setup-python にも同じ効果があるが、まずここだけで
+          # 実測してから広げる。
+          cache: 'pip'
 
       - name: Install Dependencies
         run: pip install -r requirements.txt
