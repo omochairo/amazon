@@ -277,6 +277,21 @@ def _load_amazon_price_points(root: pathlib.Path | str, asin: str) -> list[dict[
     return points
 
 
+def _merge_price_points(*lanes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """複数レーンの観測点を (ts, price) 一致で dedupe して ts 昇順で返す。"""
+    seen: set[tuple[str, int]] = set()
+    merged: list[dict[str, Any]] = []
+    for lane in lanes:
+        for pt in lane:
+            key = (pt["ts"], pt["price"])
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(pt)
+    merged.sort(key=lambda r: r["ts"])
+    return merged
+
+
 def build_price_history_note(
     asin: str,
     price_history_root: pathlib.Path | str | None = None,
@@ -287,16 +302,30 @@ def build_price_history_note(
     """過去 30 日の最安値メモ。ファイルが無い/窓内の点が足りない場合は None
     (テンプレ側はこの行を出さない)。
 
-    #5011: 2 レーンの読み分け。``data/price_watch/history/`` (日次・密度高、
-    76.1% が5行以上) を第一参照にし、そこに ASIN のファイルが無いときだけ
-    ``data/price_history/`` (週次・薄い方) にフォールバックする。ファイル
-    単位の選択で両者をマージはしない (single-writer 原則の read 側鏡像)。
+    2 レーン (``data/price_watch/history/`` 日次 / ``data/price_history/``
+    週次) を **マージ** して読む。
+
+    #5011 では「watch を第一参照にし、無いときだけ history へフォールバック」
+    という file 単位の選択にしていた (single-writer 原則の read 側鏡像のつもり
+    だった)。これは誤り。single-writer は *書き込み* 先を分ける制約であって、
+    読む側が片方を捨てる理由にはならない。
+
+    実測 (2026-08-12): 共通 1,854 ASIN のうち 1,826 で 2 レーンの (日付, 価格)
+    集合が食い違う。dedupe (同一価格が 6 日未満なら書かない) が両レーンで独立に
+    効くため位相がずれ、日付ベースで watch 専用 8,754 点 / history 専用 6,945 点 /
+    共通 1,542 点と、両者はほぼ相補だった。フォールバックは片側の観測点を丸ごと
+    捨てており、実データ replay では 96 ASIN で実際より高い最安値を出し、
+    129 ASIN で出せるはずの note を落としていた (逆向き = マージで最安値が
+    上がるケースは 0 件)。
+
+    マージの dedupe は (ts, price) の完全一致のみ。同一観測点が両ディレクトリに
+    独立に書かれることは無いはずだが、``build_price_dashboard.load_merged_history``
+    と同じ保険を掛けて挙動を揃える。
     """
-    points: list[dict[str, Any]] = []
-    if price_watch_root is not None:
-        points = _load_amazon_price_points(price_watch_root, asin)
-    if not points and price_history_root is not None:
-        points = _load_amazon_price_points(price_history_root, asin)
+    points = _merge_price_points(
+        _load_amazon_price_points(price_watch_root, asin) if price_watch_root is not None else [],
+        _load_amazon_price_points(price_history_root, asin) if price_history_root is not None else [],
+    )
     if len(points) < PRICE_HISTORY_MIN_POINTS:
         # 観測点そのものが少なすぎる (=単発の値しか知らない) ときは、
         # 「価格推移」を語れるだけの材料が無いので出さない。
@@ -399,10 +428,9 @@ def build_stock_block(
 ) -> dict[str, Any]:
     """テンプレート ``stock_where_to_buy`` コンテキストを組み立てる。
 
-    #5011: ``price_watch_root`` (``data/price_watch/history/`` 日次レーン) を
-    渡すとそちらを優先して読み、無ければ ``price_history_root`` (週次レーン)
-    にフォールバックする。``price_watch_root`` を渡さない呼び出し元は従来
-    通り ``price_history_root`` のみで動く (後方互換)。
+    ``price_watch_root`` (日次レーン) と ``price_history_root`` (週次レーン) は
+    両方渡してよく、``build_price_history_note`` 側でマージされる。片方だけを
+    渡す呼び出し元はそのレーンのみで動く (後方互換)。
     """
     block: dict[str, Any] = {
         "conclusion": build_conclusion(product_name, stock_obs, purchase_options),
