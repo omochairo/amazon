@@ -15,11 +15,15 @@ import pathlib
 import pytest
 
 from scripts.check_history_freshness import (
+    DIR_LANES,
     LANES,
     UNMONITORED,
+    DirLane,
     Lane,
     check,
+    check_dirs,
     last_date,
+    last_date_in_dir,
     problems,
     render_body,
     unregistered_files,
@@ -169,7 +173,7 @@ def test_real_history_all_lanes_registered():
 def test_thresholds_have_headroom_over_cadence():
     """cadence より短い上限を置かない (毎回鳴るゲートを作らない)。"""
     floor = {"daily": 2, "weekly": 8, "monthly": 32}
-    for lane in LANES:
+    for lane in (*LANES, *DIR_LANES):
         assert lane.max_age_days >= floor[lane.cadence], lane.filename
 
 
@@ -209,3 +213,103 @@ def test_body_headline_counts_both_kinds(hist):
     body = render_body(rows, ["mystery.jsonl"], D("2026-08-09"))
     assert "計 2 件" in body
     assert "| `a.jsonl` | stale |" in body
+
+
+# ---------- DIR_LANES: ディレクトリ単位レーン (価格観測。#5015) ----------
+
+DIR_LANE = (DirLane("data/price_watch/history", "daily", 3, "wf.yml"),)
+
+
+def _write_ts(path: pathlib.Path, timestamps) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "\n".join(json.dumps({"ts": t, "source": "amazon", "price": 100})
+                  for t in timestamps) + "\n",
+        encoding="utf-8")
+
+
+def test_last_date_reads_ts_field(tmp_path):
+    """価格レーンは日付を ``date`` ではなく ``ts`` に持つ。"""
+    p = tmp_path / "B1.jsonl"
+    _write_ts(p, ["2026-08-05T21:10:00+00:00"])
+    assert last_date(p) == D("2026-08-05")
+
+
+def test_last_date_prefers_date_over_ts(tmp_path):
+    """両方あるレコードでは既存の ``date`` を優先する (既存レーンの挙動を変えない)。"""
+    p = tmp_path / "a.jsonl"
+    p.write_text(json.dumps({"date": "2026-08-05", "ts": "2026-01-01T00:00:00+00:00"}) + "\n",
+                 encoding="utf-8")
+    assert last_date(p) == D("2026-08-05")
+
+
+def test_last_date_in_dir_takes_max_across_files(tmp_path):
+    """個別 ASIN は dedupe で何週も止まりうるので、代表値はディレクトリ全体の最新。"""
+    root = tmp_path / "price_watch" / "history"
+    _write_ts(root / "B1.jsonl", ["2026-07-01T00:00:00+00:00"])
+    _write_ts(root / "B2.jsonl", ["2026-08-11T21:10:00+00:00"])
+    _write_ts(root / "B3.jsonl", ["2026-08-02T21:10:00+00:00"])
+    assert last_date_in_dir(root) == D("2026-08-11")
+
+
+def test_last_date_in_dir_none_when_dir_absent(tmp_path):
+    assert last_date_in_dir(tmp_path / "nope") is None
+
+
+def test_dir_lane_ok_within_threshold(tmp_path):
+    _write_ts(tmp_path / "data" / "price_watch" / "history" / "B1.jsonl",
+              ["2026-08-11T21:10:00+00:00"])
+    rows = check_dirs(tmp_path, D("2026-08-12"), DIR_LANE)
+    assert [r["status"] for r in rows] == ["ok"]
+    assert rows[0]["age_days"] == 1
+
+
+def test_dir_lane_stale_when_lane_stops(tmp_path):
+    """NAS runner が落ちて追記が止まったら鳴る (これまで検出できなかったケース)。"""
+    _write_ts(tmp_path / "data" / "price_watch" / "history" / "B1.jsonl",
+              ["2026-08-05T21:10:00+00:00"])
+    rows = check_dirs(tmp_path, D("2026-08-12"), DIR_LANE)
+    assert rows[0]["status"] == "stale"
+    assert rows[0]["age_days"] == 7
+
+
+def test_dir_lane_missing_when_dir_absent(tmp_path):
+    rows = check_dirs(tmp_path, D("2026-08-12"), DIR_LANE)
+    assert rows[0]["status"] == "missing"
+
+
+def test_dir_lane_unknown_when_no_readable_date(tmp_path):
+    """ディレクトリはあるが日付が 1 つも読めない状態を ok に潰さない。"""
+    root = tmp_path / "data" / "price_watch" / "history"
+    root.mkdir(parents=True)
+    (root / "B1.jsonl").write_text("not json\n", encoding="utf-8")
+    rows = check_dirs(tmp_path, D("2026-08-12"), DIR_LANE)
+    assert rows[0]["status"] == "unknown"
+
+
+def test_dir_lane_rows_render_like_file_lanes(tmp_path):
+    _write_ts(tmp_path / "data" / "price_watch" / "history" / "B1.jsonl",
+              ["2026-08-05T21:10:00+00:00"])
+    rows = check_dirs(tmp_path, D("2026-08-12"), DIR_LANE)
+    body = render_body(rows, [], D("2026-08-12"))
+    assert "| `data/price_watch/history` | stale |" in body
+    assert problems(rows, []) == ["data/price_watch/history"]
+
+
+def test_registered_dir_lanes_cover_both_price_lanes():
+    """価格 2 レーンが両方登録されていること (片方だけ足して安心しない)。"""
+    assert {l.path for l in DIR_LANES} == {
+        "data/price_watch/history", "data/price_history"}
+
+
+def test_dir_lanes_do_not_fire_on_real_data_today():
+    """導入時点の実データで鳴らない = 鳴りっぱなしゲートにしない (既存 LANES と同じ規律)。
+
+    キャリブレーション (2026-08-12 replay): price_watch は 30 日窓で age 最大 1、
+    price_history は 75 日窓で age 0 が 58 日 (2 以上は GitHub 凍結期間の 13 日欠測のみ)。
+    """
+    repo_root = pathlib.Path(__file__).resolve().parent.parent.parent
+    if not (repo_root / "data" / "price_watch" / "history").is_dir():
+        pytest.skip("価格レーンのデータが無い環境")
+    rows = check_dirs(repo_root, dt.datetime.now(dt.timezone.utc).date())
+    assert [r["status"] for r in rows] == ["ok", "ok"], rows
