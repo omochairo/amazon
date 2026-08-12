@@ -2938,6 +2938,9 @@ def main() -> None:
     # #2953 C案: fetch_amazon.write_per_asin_snapshot が out_root.parent/price_history
     # に append する自前価格履歴。out_root は raw_root (通常 data/raw) と同じ基準。
     price_history_root = raw_root.parent / "price_history"
+    # #5011: 日次レーン (price_watch, 76.1% が5行以上) を第一参照にし、無ければ
+    # 週次レーン (price_history, 18.4%) にフォールバックする。
+    price_watch_history_root = raw_root.parent / "price_watch" / "history"
     rakuten_matched_index = _load_matched_index(raw_root / "rakuten_matched.json")
     yahoo_matched_index = _load_matched_index(raw_root / "yahoo_matched.json")
     article_index = _build_article_index(src_path)
@@ -3198,7 +3201,8 @@ def main() -> None:
                 product_name = (data.get("product") or {}).get("name") or data.get("title") or ""
                 data["stock_where_to_buy"] = where_to_buy_format.build_stock_block(
                     product_name, stock_obs, purchase_options,
-                    price_history_root=price_history_root, asin=page_asin,
+                    price_history_root=price_history_root,
+                    price_watch_root=price_watch_history_root, asin=page_asin,
                 )
                 stock_title_override = where_to_buy_format.build_title(product_name, purchase_options)
                 stock_title_applied += 1
