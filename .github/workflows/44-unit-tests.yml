@@ -74,15 +74,34 @@ concurrency:
 jobs:
   unit-tests:
     runs-on: ubuntu-latest
+    env:
+      # #4069: fork からの PR には secrets が渡らない。secrets コンテキストは
+      # if: で直接評価できないので、job の env に真偽値として写して下の step で
+      # 参照する。
+      HAS_BRAIN_PAT: ${{ secrets.NAVI_BRAIN_PAT != '' }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       # jules/ プロンプトは private repo (amazon-navi-brain) に分離済み。
-      # scripts/tests/test_build_jules_prompt.py が jules/PROMPT_TEMPLATE.md を
-      # 要求するため、04-validate-article-pr.yml と同じ overlay checkout を行う。
+      # 04-validate-article-pr.yml と同じ overlay checkout を行う。
+      #
+      # #4069: fork からの PR では secrets.NAVI_BRAIN_PAT が空になり、この step が
+      # 落ちて job ごと失敗する。required check に昇格させると **fork PR が構造的に
+      # マージ不能**になるため、昇格の前提としてここを条件付きにする。
+      #
+      # skip して安全な根拠 (2026-08-12 実測): jules/ が無い状態で
+      # `python -m pytest scripts/tests -q` は 2,354 passed / 2 skipped で完走する。
+      # build_jules_prompt の PROMPT_TEMPLATE.md 読み込みは fail-soft で、テストは
+      # そこに依存していない。将来 jules/ 必須のテストを足すなら、この step を
+      # 戻すのではなく **そのテスト側で skip 条件を持つ**こと (ここを無条件必須に
+      # 戻すと fork PR のマージ不能が復活する)。
+      #
+      # continue-on-error は使わない。#4793 のとおり、握りつぶすと失効した token が
+      # 緑のまま放置される。条件で「そもそも走らせない」ほうが状態が明示的。
       - name: Checkout prompt brain (private) into jules/
+        if: env.HAS_BRAIN_PAT == 'true'
         uses: actions/checkout@v6
         with:
           repository: omochairo/amazon-navi-brain
