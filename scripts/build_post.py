@@ -26,7 +26,7 @@ import pathlib
 import re
 import urllib.parse
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 import frontmatter
 import jinja2
@@ -1685,9 +1685,35 @@ def _load_price_history_points(price_history_root: pathlib.Path, asin: str) -> l
     return points
 
 
-def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path) -> bool:
+def _merge_price_points(*lanes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """複数レーンの観測点を (ts, price) 一致で dedupe して ts 昇順で返す。
+
+    ``build_price_dashboard.load_merged_history`` /
+    ``where_to_buy_format._merge_price_points`` と同じ流儀。
+    """
+    seen: set[tuple[str, int]] = set()
+    merged: list[dict[str, Any]] = []
+    for lane in lanes:
+        for pt in lane:
+            key = (pt["ts"], pt["price"])
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(pt)
+    merged.sort(key=lambda r: r["ts"])
+    return merged
+
+
+def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path,
+                          price_watch_root: Optional[pathlib.Path] = None) -> bool:
     """#2953 C案 (訂正版): 自前計測の価格履歴をゲート判定してテンプレコンテキスト
     ``data["price_history"]`` に添付する。
+
+    2 レーン (週次 ``price_history_root`` / 日次 ``price_watch_root``) を
+    マージして読む。``price_watch_root`` 省略時は週次のみ (後方互換)。
+    ここが週次だけを読んでいた頃、``all_time_low`` は「/price/ ダッシュボードの
+    判定と一致させる」と謳いながら、実際にはダッシュボード
+    (``load_merged_history`` = マージ済み) と別の点列を見ていて一致していなかった。
 
     描画ゲート: 有効点 (source=amazon, price>0) が 3 点以上 かつ 最古〜最新の
     スパンが 14 日以上。蓄積開始 (2026-07-07) 直後はどの ASIN もスパン不足で
@@ -1706,7 +1732,10 @@ def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path
     asin = product.get("asin") if product else None
     if not asin:
         return False
-    points = _load_price_history_points(price_history_root, asin)
+    points = _merge_price_points(
+        _load_price_history_points(price_history_root, asin),
+        _load_price_history_points(price_watch_root, asin) if price_watch_root is not None else [],
+    )
     if len(points) < _PRICE_HISTORY_MIN_POINTS:
         return False
     oldest_ts = points[0]["ts"]
@@ -2938,8 +2967,10 @@ def main() -> None:
     # #2953 C案: fetch_amazon.write_per_asin_snapshot が out_root.parent/price_history
     # に append する自前価格履歴。out_root は raw_root (通常 data/raw) と同じ基準。
     price_history_root = raw_root.parent / "price_history"
-    # #5011: 日次レーン (price_watch, 76.1% が5行以上) を第一参照にし、無ければ
-    # 週次レーン (price_history, 18.4%) にフォールバックする。
+    # 日次レーン (price_watch)。週次レーン (price_history) とは書き込み元が別
+    # リポジトリ (single-writer) だが、読む側は両方をマージする。2 レーンは
+    # dedupe が独立に効いて位相がずれるため実測でほぼ相補で、片方を捨てると
+    # 観測点を落とす。詳細は where_to_buy_format.build_price_history_note。
     price_watch_history_root = raw_root.parent / "price_watch" / "history"
     rakuten_matched_index = _load_matched_index(raw_root / "rakuten_matched.json")
     yahoo_matched_index = _load_matched_index(raw_root / "yahoo_matched.json")
@@ -3056,7 +3087,7 @@ def main() -> None:
             # _attach_market_prices の後・_apply_amazon_discontinued と同じ位置。
             if _apply_amazon_unpriced(data, per_asin_root):
                 price_overlay_stats["unpriced_cleared"] += 1
-            _attach_price_history(data, price_history_root)
+            _attach_price_history(data, price_history_root, price_watch_history_root)
             # #2812: Jules の画像ハルシネーション (404) を防ぐため、検証済み
             # amazon.json の画像で product.image を強制上書きしてから gallery を補完。
             image_overwritten = _enforce_amazon_image(data, raw_amazon_index, per_asin_root)

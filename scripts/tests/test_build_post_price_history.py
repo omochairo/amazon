@@ -170,5 +170,73 @@ class GateTests(unittest.TestCase):
             self.assertEqual(len(data["price_history"]["points"]), 3)
 
 
+class TwoLaneMergeTests(unittest.TestCase):
+    """週次 (price_history) と日次 (price_watch) をマージして読む。
+
+    2 レーンは dedupe が独立に効いて位相がずれ、実測でほぼ相補だった。片方だけを
+    読むと min_price を高く見積もり、all_time_low を誤って True にしていた
+    (実データ replay で 138 記事の min_price が下がり、120 記事で all_time_low
+    の真偽が反転)。
+    """
+
+    def test_watch_lane_lowers_min_price(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            hist = pathlib.Path(tmp) / "price_history"
+            watch = pathlib.Path(tmp) / "price_watch"
+            _write_jsonl(hist, "B1", [_rec(20, 2000), _rec(12, 1900), _rec(2, 1800)])
+            _write_jsonl(watch, "B1", [_rec(15, 1500), _rec(6, 1700)])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, hist, watch))
+            self.assertEqual(data["price_history"]["min_price"], 1500)
+
+    def test_watch_lane_falsifies_all_time_low(self):
+        """週次だけ見ると「最新が過去最安」に見えるが、日次にもっと安い点がある。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            hist = pathlib.Path(tmp) / "price_history"
+            watch = pathlib.Path(tmp) / "price_watch"
+            _write_jsonl(hist, "B1", [_rec(20, 2000), _rec(12, 1900), _rec(2, 1800)])
+            only_hist = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(only_hist, hist))
+            self.assertTrue(only_hist["price_history"]["all_time_low"])
+
+            _write_jsonl(watch, "B1", [_rec(9, 1600)])
+            merged = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(merged, hist, watch))
+            self.assertFalse(merged["price_history"]["all_time_low"])
+
+    def test_gate_passes_only_after_merge(self):
+        """各レーン単独ではスパン 14 日に届かないが、合算すれば届く。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            hist = pathlib.Path(tmp) / "price_history"
+            watch = pathlib.Path(tmp) / "price_watch"
+            _write_jsonl(hist, "B1", [_rec(20, 2000), _rec(18, 1950)])
+            _write_jsonl(watch, "B1", [_rec(2, 1800)])
+            self.assertFalse(_attach_price_history({"product": {"asin": "B1"}}, hist))
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, hist, watch))
+            self.assertGreaterEqual(data["price_history"]["span_days"], 14)
+
+    def test_identical_points_deduped_across_lanes(self):
+        """両レーンに同一 (ts, price) があっても点数を水増ししない。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            hist = pathlib.Path(tmp) / "price_history"
+            watch = pathlib.Path(tmp) / "price_watch"
+            recs = [_rec(20, 2000), _rec(12, 1900), _rec(2, 1800)]
+            _write_jsonl(hist, "B1", recs)
+            _write_jsonl(watch, "B1", recs)
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, hist, watch))
+            self.assertEqual(len(data["price_history"]["points"]), 3)
+
+    def test_missing_watch_dir_is_backward_compatible(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            hist = pathlib.Path(tmp) / "price_history"
+            watch = pathlib.Path(tmp) / "price_watch"  # 作らない
+            _write_jsonl(hist, "B1", [_rec(20, 2000), _rec(12, 1900), _rec(2, 1800)])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, hist, watch))
+            self.assertEqual(data["price_history"]["min_price"], 1800)
+
+
 if __name__ == "__main__":
     unittest.main()

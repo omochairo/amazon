@@ -5,7 +5,7 @@ Coverage:
 2. Amazon のみ取扱ありのときタイトル括弧が「（Amazon）」に縮む。
 3. ロールアウト日より前の記事は is_stock_format_eligible が False (既存記事保護)。
 4. 過去30日の価格履歴メモ (十分な点/不足/ファイル無し/階段関数としての窓端の扱い/
-   price_watch 優先・price_history フォールバック)。
+   price_watch (日次) と price_history (週次) 2 レーンのマージと dedupe)。
 5. 品薄サイン (low_stock/out_of_stock/それ以外)。
 6. 実店舗注記 (#5011): Google 検索リンクが完全に無いこと、いずれかのサイトで
    取扱ありならテーブルへの導線のみ、3サイト全滅のときだけトイザらス導線。
@@ -243,26 +243,70 @@ def test_price_history_note_uses_carry_only_price_when_no_change_in_window(tmp_p
 
 
 # ---------------------------------------------------------------------------
-# 4b: price_watch (日次) 優先・price_history (週次) フォールバック (#5011)
+# 4b: price_watch (日次) と price_history (週次) の 2 レーンをマージして読む
+#
+# 2 レーンは dedupe が独立に効いて位相がずれるため、実測でほぼ相補 (共通
+# 1,854 ASIN のうち 1,826 で (日付,価格) 集合が食い違う)。片側を捨てる
+# フォールバックは観測点を落として実際より高い最安値を出していた。
 # ---------------------------------------------------------------------------
 
-def test_price_history_note_prefers_price_watch_over_price_history(tmp_path):
+def test_price_history_note_uses_cheaper_point_from_history_lane(tmp_path):
+    """history 側にしかない安値を拾う (watch 優先だと取りこぼしていたケース)。"""
     watch_root = tmp_path / "price_watch" / "history"
     hist_root = tmp_path / "price_history"
-    _write_jsonl(watch_root, "B001", [_rec(20, 1111), _rec(2, 999)])
-    _write_jsonl(hist_root, "B001", [_rec(15, 5000), _rec(3, 4800)])
+    _write_jsonl(watch_root, "B001", [_rec(20, 1111), _rec(2, 1050)])
+    _write_jsonl(hist_root, "B001", [_rec(15, 1200), _rec(9, 999)])
     note = wtb.build_price_history_note(
         "B001", hist_root, price_watch_root=watch_root, now=NOW,
     )
     assert note is not None
     assert "￥999" in note
-    assert "5,000" not in note and "4,800" not in note
 
 
-def test_price_history_note_falls_back_to_price_history_when_watch_file_missing(tmp_path):
+def test_price_history_note_uses_cheaper_point_from_watch_lane(tmp_path):
+    """逆向き: watch 側にしかない安値も拾う (マージが片側に寄っていないこと)。"""
     watch_root = tmp_path / "price_watch" / "history"
     hist_root = tmp_path / "price_history"
-    watch_root.mkdir(parents=True, exist_ok=True)  # ディレクトリはあるがこの ASIN のファイルは無い
+    _write_jsonl(watch_root, "B001", [_rec(20, 1111), _rec(2, 888)])
+    _write_jsonl(hist_root, "B001", [_rec(15, 1200), _rec(9, 999)])
+    note = wtb.build_price_history_note(
+        "B001", hist_root, price_watch_root=watch_root, now=NOW,
+    )
+    assert note is not None
+    assert "￥888" in note
+
+
+def test_price_history_note_reaches_min_points_only_after_merge(tmp_path):
+    """各レーン単独では MIN_POINTS 未満でも、合算で満たせば note を出す。"""
+    watch_root = tmp_path / "price_watch" / "history"
+    hist_root = tmp_path / "price_history"
+    _write_jsonl(watch_root, "B001", [_rec(20, 1200)])
+    _write_jsonl(hist_root, "B001", [_rec(5, 990)])
+    note = wtb.build_price_history_note(
+        "B001", hist_root, price_watch_root=watch_root, now=NOW,
+    )
+    assert note is not None
+    assert "￥990" in note
+
+
+def test_price_history_note_dedupes_identical_points_across_lanes(tmp_path):
+    """両レーンに同一 (ts, price) があっても MIN_POINTS を水増ししない。"""
+    watch_root = tmp_path / "price_watch" / "history"
+    hist_root = tmp_path / "price_history"
+    same = _rec(5, 990)
+    _write_jsonl(watch_root, "B001", [same])
+    _write_jsonl(hist_root, "B001", [same])
+    note = wtb.build_price_history_note(
+        "B001", hist_root, price_watch_root=watch_root, now=NOW,
+    )
+    assert note is None
+
+
+def test_price_history_note_works_when_watch_file_missing(tmp_path):
+    """watch 側にこの ASIN のファイルが無くても history 単独で成立する。"""
+    watch_root = tmp_path / "price_watch" / "history"
+    hist_root = tmp_path / "price_history"
+    watch_root.mkdir(parents=True, exist_ok=True)
     _write_jsonl(hist_root, "B001", [_rec(20, 5000), _rec(3, 4800)])
     note = wtb.build_price_history_note(
         "B001", hist_root, price_watch_root=watch_root, now=NOW,
