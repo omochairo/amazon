@@ -7,7 +7,9 @@
 
 ## 🏗️ アーキテクチャ
 
-外部 API からのデータ収集、AI エージェント (Jules) による記事生成、Hugo による静的サイトビルド、GitHub Pages への自動デプロイまでを GitHub Actions ベースの自動化パイプラインで運営しています。
+外部 API からのデータ収集、AI エージェント (Jules) による記事生成、Hugo による静的サイトビルド、自動デプロイまでを自動化パイプラインで運営しています。
+
+データ収集と記事生成は **GitHub Actions**、サイトの配信は **GitLab Pages** (`.gitlab-ci.yml`) が担当します。`main` への push が `40-mirror-to-gitlab.yml` で GitLab へ転送され、そこでビルド・配信されます。GitHub Pages は使用していません。
 
 ---
 
@@ -48,8 +50,8 @@ hugo server -D
 
 - **`01-fetch-products.yml`**
   - 市場データの定期取得。`scripts/fetch_*.py` 群を実行し、Amazon/楽天/Yahoo等の最新データ・レビュー・トレンドを `data/raw/` に JSON 形式で保存します。
-- **`02-publish.yml`**
-  - 記事データのビルドおよびサイトの公開。`build_post.py` を用いて JSON から Markdown を生成し、Hugo でビルド後、GitHub Pages へデプロイします。
+- **`40-mirror-to-gitlab.yml`**
+  - サイトの公開。`main` への push を GitLab へ転送し、GitLab 側の `pages` ジョブ (`.gitlab-ci.yml`) が `build_post.py` で JSON から Markdown を生成 → Hugo でビルド → GitLab Pages へデプロイします。
 - **`03-invoke-jules.yml`**
   - Jules（AIエージェント）の起動。新しい未処理データがある場合に AI に記事執筆を依頼します。
 - **`04-validate-article-pr.yml`**

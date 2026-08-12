@@ -104,7 +104,7 @@ jobs:
               --description "Auto-aggregated and dispatched to 10-re-search (#722)" || true
           fi
 
-          MSG="ご報告ありがとうございます。同一 ASIN x EC サイトの通報が閾値 (${THRESHOLD} 件) を超えたため、10-re-search-low-confidence workflow を自動 dispatch しました (run ID: ${{ github.run_id }})。次回 02-publish で記事に反映されます (最大 7 日)。経過: #722"
+          MSG="ご報告ありがとうございます。同一 ASIN x EC サイトの通報が閾値 (${THRESHOLD} 件) を超えたため、10-re-search-low-confidence workflow を自動 dispatch しました (run ID: ${{ github.run_id }})。次回のサイトビルドで記事に反映されます (最大 7 日)。経過: #722"
           for n in $(echo "$ISSUE_NUMBERS" | tr ',' ' '); do
             [ -z "$n" ] && continue
             echo "Processing issue #$n"
