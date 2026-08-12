@@ -15,10 +15,10 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Checkout prompt brain (private) into jules/
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: omochairo/amazon-navi-brain
           token: ${{ secrets.NAVI_BRAIN_PAT }}

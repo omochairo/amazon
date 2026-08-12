@@ -92,7 +92,7 @@ jobs:
       # 特に 40-mirror-to-gitlab は GitLab へ HEAD:main を丸ごと転送するので
       # 全履歴が必須 (外すと非 fast-forward reject になり、フェイルオーバー
       # 痕跡の判定と区別が付かなくなる)。恒久的に対象外。
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # jules/ プロンプトは private repo (amazon-navi-brain) に分離済み。
       # 04-validate-article-pr.yml と同じ overlay checkout を行う。
@@ -112,7 +112,7 @@ jobs:
       # 緑のまま放置される。条件で「そもそも走らせない」ほうが状態が明示的。
       - name: Checkout prompt brain (private) into jules/
         if: env.HAS_BRAIN_PAT == 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: omochairo/amazon-navi-brain
           token: ${{ secrets.NAVI_BRAIN_PAT }}

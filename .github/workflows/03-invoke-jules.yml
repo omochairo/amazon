@@ -39,14 +39,14 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
 
       # jules/ プロンプトは private repo (amazon-navi-brain) に分離済み。実行時に overlay checkout。
       - name: Checkout prompt brain (private) into jules/
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: omochairo/amazon-navi-brain
           token: ${{ secrets.NAVI_BRAIN_PAT }}

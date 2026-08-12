@@ -43,7 +43,7 @@ jobs:
           repositories: amazon,amazon-home-ops
 
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 1

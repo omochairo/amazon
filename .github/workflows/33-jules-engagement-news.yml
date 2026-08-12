@@ -46,7 +46,7 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           token: ${{ steps.app-token.outputs.token }}
           ref: main
@@ -54,7 +54,7 @@ jobs:
 
       # jules/ プロンプトは private repo (amazon-navi-brain) に分離済み。実行時に overlay checkout。
       - name: Checkout prompt brain (private) into jules/
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: omochairo/amazon-navi-brain
           token: ${{ secrets.NAVI_BRAIN_PAT }}
