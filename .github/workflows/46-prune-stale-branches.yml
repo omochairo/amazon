@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # for-each-ref でリモートブランチの最終コミット日時を見るので全 ref が要る
           fetch-depth: 0
