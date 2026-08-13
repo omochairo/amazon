@@ -1,9 +1,13 @@
 baseURL = 'https://navi.omcha.jp/'
-languageCode = 'ja-jp'
+languageCode = 'ja-JP'
 # Issue #1297 follow-up: PaperMod baseof.html は {{ site.Language }} (= Lang) を
 # <html lang="..."> に注入する。languageCode は RSS 専用なので defaultContentLanguage
 # を明示しないと Lang が "en" デフォルトに落ち、全ページが <html lang=en> + hreflang=en
 # として配信される (Google 言語認識・Screen reader・翻訳機能に悪影響)。
+# Issue #5084: 上記コメントは不正確 — PaperMod の templates/opengraph.html は
+# og:locale にも `replace (site.Language.LanguageCode) "-" "_"` の結果をそのまま使う。
+# RSS/og:locale とも大文字小文字が意味を持つ (xx_XX 形式) ので 'ja-JP' と大文字国コードで
+# 書く。小文字のままだと og:locale が仕様外の "ja_jp" になる。
 defaultContentLanguage = "ja"
 title = 'おもちゃいろ 比較ナビ｜知育玩具スコア＆最安値チェッカー'
 theme = 'PaperMod'

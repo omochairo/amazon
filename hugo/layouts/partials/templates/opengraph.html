@@ -1,0 +1,108 @@
+{{/*
+  Project override of PaperMod templates/opengraph.html (Issue #5084).
+  差分は og:image の件数のみ:
+    - テーマ原本は get-page-images の結果を `first 6` で range し、.Params.images に
+      並ぶ画像を全部 og:image として emit する。build_post.py は images[0] に
+      build-time 合成の専用 OG 画像 (1200x630, /og/<asin>.jpg) を置き、images[1:] に
+      Amazon CDN の商品画像 (寸法バラバラ・width/height/type/alt 情報なし) を続ける
+      ため、1 ページに og:image が最大 6 枚出て消費側の「最大画像を採用」実装だと
+      専用 OG 画像より商品画像が選ばれてしまう。
+    - ここでは `first 1` にして og:image を先頭 1 枚 (= 専用 OG 画像。無ければ
+      get-page-images 自身のフォールバック順で featured resource → site.Params.images
+      の /og-image.jpg) に絞る。extend_head.html の og:image:width/height/type/alt は
+      元々この 1 枚目にしか対応していないため、絞ったことで齟齬も解消する。
+    - フォールバック経路 (.Params.images 未設定ページ) は get-page-images.html 側の
+      ロジックで、そもそも 1 枚しか返らない分岐なので `first 6`→`first 1` にしても
+      挙動は変わらない = 0 枚化する退行は無い。
+  それ以外 (og:url / site_name / title / description / og:locale / og:type /
+  article:* / audio / video / og:see_also / fb:app_id 等) はテーマ原本と同一。
+  get-page-images の呼び出しはテーマ原本が `templates/` prefix を欠いていた
+  ("_funcs/get-page-images") のを、同ディレクトリの twitter_cards.html に合わせて
+  `templates/_funcs/get-page-images` に修正。
+*/}}
+<meta property="og:url" content="{{ .Permalink }}">
+
+{{- with or site.Title site.Params.title | plainify }}
+  <meta property="og:site_name" content="{{ . }}">
+{{- end }}
+
+{{- with or .Title site.Title site.Params.title | plainify }}
+  <meta property="og:title" content="{{ . }}">
+{{- end }}
+
+{{- with or .Description .Summary site.Params.description | plainify | htmlUnescape }}
+  <meta property="og:description" content="{{ trim . "\n\r\t " }}">
+{{- end }}
+
+{{- with or .Params.locale site.Language.LanguageCode }}
+  <meta property="og:locale" content="{{ replace . `-` `_` }}">
+{{- end }}
+
+{{- if .IsPage }}
+  <meta property="og:type" content="article">
+  {{- with .Section }}
+    <meta property="article:section" content="{{ . }}">
+  {{- end }}
+  {{- $ISO8601 := "2006-01-02T15:04:05-07:00" }}
+  {{- with .PublishDate }}
+    <meta property="article:published_time" {{ .Format $ISO8601 | printf "content=%q" | safeHTMLAttr }}>
+  {{- end }}
+  {{- with .Lastmod }}
+    <meta property="article:modified_time" {{ .Format $ISO8601 | printf "content=%q" | safeHTMLAttr }}>
+  {{- end }}
+  {{- range .GetTerms "tags" | first 6 }}
+    <meta property="article:tag" content="{{ .Page.Title | plainify }}">
+  {{- end }}
+{{- else }}
+  <meta property="og:type" content="website">
+{{- end }}
+
+{{- if .Params.cover.image -}}
+  {{- if (ne .Params.cover.relative true) }}
+    <meta property="og:image" content="{{ .Params.cover.image | absURL }}">
+  {{- else}}
+    <meta property="og:image" content="{{ (path.Join .RelPermalink .Params.cover.image ) | absURL }}">
+  {{- end}}
+{{- else }}
+  {{- with partial "templates/_funcs/get-page-images" . }}
+    {{- range . | first 1 }}
+      <meta property="og:image" content="{{ .Permalink }}">
+    {{- end }}
+  {{- end }}
+{{- end }}
+
+{{- with .Params.audio }}
+  {{- range . | first 6  }}
+    <meta property="og:audio" content="{{ . | absURL }}">
+  {{- end }}
+{{- end }}
+
+{{- with .Params.videos }}
+  {{- range . | first 6 }}
+    <meta property="og:video" content="{{ . | absURL }}">
+  {{- end }}
+{{- end }}
+
+{{- range .GetTerms "series" }}
+  {{- range .Pages | first 7 }}
+    {{- if ne $ . }}
+      <meta property="og:see_also" content="{{ .Permalink }}">
+    {{- end }}
+  {{- end }}
+{{- end }}
+
+{{- with site.Params.social }}
+  {{- if reflect.IsMap . }}
+    {{- with .facebook_app_id }}
+      <meta property="fb:app_id" content="{{ . }}">
+    {{- else }}
+      {{- with .facebook_admin }}
+        <meta property="fb:admins" content="{{ . }}">
+      {{- end }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+
+{{- with (.Param "social.fediverse_creator") }}
+  <meta name="fediverse:creator" content="{{ . }}">
+{{- end }}
