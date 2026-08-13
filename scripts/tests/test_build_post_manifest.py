@@ -73,10 +73,19 @@ class BuildManifestSmokeTest(unittest.TestCase):
             "--raw-amazon", str(self.data_dir / "raw" / "amazon.json"),
             "--per-asin-root", str(self.data_dir / "raw" / "per_asin"),
         ]
-        # Provide a minimal hugo/config.toml in cwd so build_post doesn't error
+        # Provide a minimal hugo/config.toml in cwd so build_post doesn't error.
+        # #5087: [params].amazonPartnerTag is the committed SSOT for the Amazon
+        # affiliate tag; _resolve_amazon_partner_tag() hard-fails without it
+        # (no secret is set in this test either, matching the GitLab pages
+        # deploy build that has no secrets at all).
         cfg_dir = self.tmp_path / "hugo"
         cfg_dir.mkdir()
-        (cfg_dir / "config.toml").write_text('baseURL = "https://example.com/"\n', encoding="utf-8")
+        (cfg_dir / "config.toml").write_text(
+            'baseURL = "https://example.com/"\n'
+            "[params]\n"
+            '  amazonPartnerTag = "chk01-22"\n',
+            encoding="utf-8",
+        )
         # Copy templates dir so relative path scripts/templates/post.md.j2
         # resolves from cwd.
         (self.tmp_path / "scripts").mkdir(exist_ok=True)
