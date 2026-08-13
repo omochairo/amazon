@@ -538,5 +538,47 @@ class CheckedDailyTests(unittest.TestCase):
             self.assertIsNone(data["price_history"]["last_checked_date"])
 
 
+class ChangeCountTests(unittest.TestCase):
+    """#5120 追補: change_count = 隣接する記録間で価格が変わった回数。
+
+    「N回計測しました」ではなく「N回の値動きをとらえました」という、記録から
+    厳密に言える主張だけを支える数値。records (jsonl の行数) とは別物。
+    """
+
+    def test_change_count_matches_number_of_price_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            # 1000 -> 1000 (変化なし) -> 1200 (変化) -> 1200 (変化なし) -> 1300 (変化)
+            _write_jsonl(root, "B1", [
+                _rec(20, 1000), _rec(15, 1000), _rec(10, 1200), _rec(5, 1200), _rec(0, 1300),
+            ])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            self.assertEqual(data["price_history"]["change_count"], 2)
+
+    def test_change_count_zero_when_all_prices_equal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            _write_jsonl(root, "B1", [_rec(20, 1500), _rec(10, 1500), _rec(0, 1500)])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            self.assertEqual(data["price_history"]["change_count"], 0)
+
+    def test_change_count_records_records_not_records_count(self):
+        """records (jsonl 行数) が多くても change_count はそれと独立に数える。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            # 5レコードだが価格変化は1回だけ
+            _write_jsonl(root, "B1", [
+                _rec(20, 1000), _rec(16, 1000), _rec(12, 1000), _rec(6, 1000), _rec(0, 1100),
+            ])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            ph = data["price_history"]
+            self.assertEqual(len(ph["points"]), 5)
+            self.assertEqual(ph["change_count"], 1)
+            self.assertNotEqual(ph["change_count"], len(ph["points"]))
+
+
 if __name__ == "__main__":
     unittest.main()

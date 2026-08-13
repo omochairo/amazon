@@ -2051,6 +2051,16 @@ def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path
     if price_watch_latest_path is not None:
         checked_daily, last_checked_date = _load_price_watch_latest(price_watch_latest_path, asin)
 
+    # #5120 追補: 「N回計測しました」とは書かない。records (jsonl の行数) は
+    # _DEDUPE_MIN_DAYS=6 の間引きを通った「記録数」であって「計測回数」では
+    # ない (実際の計測は毎日行われ、records よりずっと多い)。一方
+    # change_count = 隣接する記録間で価格が変わった回数 は、間引きの対象外
+    # (値が変わったら経過日数によらず即記録される) なので記録から厳密に
+    # 数えられる、確定的に言える唯一の「回数」。
+    change_count = sum(
+        1 for prev, cur in zip(points, points[1:]) if prev["price"] != cur["price"]
+    )
+
     data["price_history"] = {
         # #5120: 直近12点への切り詰めをやめ、グラフの窓 = 文章の窓 (span_days /
         # min_price / max_price と同じ全履歴) にする。切り詰めていた頃は
@@ -2070,6 +2080,7 @@ def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path
         # 「毎日巡回」表記に切り替える。
         "checked_daily": checked_daily,
         "last_checked_date": last_checked_date,
+        "change_count": change_count,
     }
     return True
 
