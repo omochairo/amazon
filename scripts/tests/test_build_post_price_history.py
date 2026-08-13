@@ -158,8 +158,9 @@ class GateTests(unittest.TestCase):
             all_points_str = " ".join(seg["points"] for seg in ph["spark"]["segments"])
             coords = [tuple(map(float, xy.split(","))) for xy in all_points_str.split(" ")]
             xs = [c[0] for c in coords]
-            self.assertAlmostEqual(min(xs), 2.0, places=1)
-            self.assertAlmostEqual(max(xs), 298.0, places=1)
+            # #5120 追補: プロット領域は x=52〜296 (左52pxはy軸ラベル用の余白)
+            self.assertAlmostEqual(min(xs), 52.0, places=1)
+            self.assertAlmostEqual(max(xs), 296.0, places=1)
 
     def test_corrupted_lines_are_skipped(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -253,9 +254,10 @@ class SparkGeometryTests(unittest.TestCase):
     def test_x_is_time_proportional_not_equally_spaced(self):
         # 0日, 20日, 40日 (span=40日) の3点。中点が 1/2 でなく "1/4" 相当の
         # 位置に来るよう、間隔を極端に不揃いにする: 0日, 30日, 40日 (span=40日)。
-        # 30日時点は 30/40 = 0.75 -> x = 2 + 0.75*296 = 224.0。
-        # 等間隔レイアウトなら中点の index は 1/2 -> x = 150.0 になるはずなので、
-        # 224.0 ではなく 150.0 に近ければ現行の等間隔バグ、224.0 に近ければ正しい。
+        # プロット領域は x=52〜296 (幅244)。30日時点は 30/40 = 0.75 ->
+        # x = 52 + 0.75*244 = 235.0。等間隔レイアウトなら中点の index は
+        # 1/2 -> x = 52 + 0.5*244 = 174.0 になるはずなので、235.0 ではなく
+        # 174.0 に近ければ現行の等間隔バグ、235.0 に近ければ正しい。
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
             _write_jsonl(root, "B1", [_rec(40, 1000), _rec(10, 1100), _rec(0, 1200)])
@@ -264,14 +266,14 @@ class SparkGeometryTests(unittest.TestCase):
             segs = data["price_history"]["spark"]["segments"]
             all_xy = " ".join(s["points"] for s in segs).split(" ")
             xs = [float(p.split(",")[0]) for p in all_xy]
-            # 等間隔 (150.0) には無く、時間比例 (224.0 近傍) の x が現れる
-            self.assertTrue(any(abs(x - 224.0) < 1.0 for x in xs), xs)
-            self.assertFalse(any(abs(x - 150.0) < 1.0 for x in xs), xs)
+            # 等間隔 (174.0) には無く、時間比例 (235.0 近傍) の x が現れる
+            self.assertTrue(any(abs(x - 235.0) < 1.0 for x in xs), xs)
+            self.assertFalse(any(abs(x - 174.0) < 1.0 for x in xs), xs)
 
     def test_quarter_span_point_lands_near_expected_x(self):
         # 4点を 0, 10, 30, 40日前に配置 (span=40日)。10日前の点は
-        # 経過時間 30/40 = 0.75 -> x = 2 + 0.75*296 = 224.0 に来るはず
-        # (等間隔なら index 2/3 -> x ≈ 199.3 になる)。
+        # 経過時間 30/40 = 0.75 -> x = 52 + 0.75*244 = 235.0 に来るはず
+        # (等間隔なら index 2/3 -> x ≈ 214.7 になる)。
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
             _write_jsonl(root, "B1", [_rec(40, 1000), _rec(30, 1050), _rec(10, 1100), _rec(0, 1200)])
@@ -280,9 +282,9 @@ class SparkGeometryTests(unittest.TestCase):
             segs = data["price_history"]["spark"]["segments"]
             all_xy = " ".join(s["points"] for s in segs).split(" ")
             xs = sorted(set(float(p.split(",")[0]) for p in all_xy))
-            self.assertTrue(any(abs(x - 224.0) < 1.0 for x in xs), xs)
+            self.assertTrue(any(abs(x - 235.0) < 1.0 for x in xs), xs)
 
-    def test_all_equal_prices_give_y_24_and_no_crash(self):
+    def test_all_equal_prices_give_y_mid_and_no_crash(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
             _write_jsonl(root, "B1", [_rec(20, 1500), _rec(10, 1500), _rec(0, 1500)])
@@ -291,7 +293,8 @@ class SparkGeometryTests(unittest.TestCase):
             segs = data["price_history"]["spark"]["segments"]
             all_xy = " ".join(s["points"] for s in segs).split(" ")
             ys = [float(p.split(",")[1]) for p in all_xy]
-            self.assertTrue(all(y == 24.0 for y in ys), ys)
+            # プロット領域 y=8〜56 の中点は 32.0
+            self.assertTrue(all(y == 32.0 for y in ys), ys)
 
     def test_long_gap_produces_unobserved_segment(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -329,11 +332,11 @@ class SparkGeometryTests(unittest.TestCase):
             segs = data["price_history"]["spark"]["segments"]
             all_xy = " ".join(s["points"] for s in segs).split(" ")
             coords = [tuple(map(float, p.split(","))) for p in all_xy]
-            # 最後の観測点 (最新, price=2000 -> y=4.0) の x と同じ x に、
-            # 直前の価格 (1000 -> y=44.0) を保持した頂点があるはず
+            # 最後の観測点 (最新, price=2000 -> y=8.0) の x と同じ x に、
+            # 直前の価格 (1000 -> y=56.0) を保持した頂点があるはず
             last_x = coords[-1][0]
             self.assertTrue(
-                any(abs(x - last_x) < 0.01 and abs(y - 44.0) < 0.01 for x, y in coords[:-1]),
+                any(abs(x - last_x) < 0.01 and abs(y - 56.0) < 0.01 for x, y in coords[:-1]),
                 coords,
             )
 
@@ -394,6 +397,145 @@ class SparkGeometryTests(unittest.TestCase):
                     self.assertNotEqual(coords[i], coords[i + 1], (seg, coords))
                 # セグメントは最低2頂点 (単一頂点の polyline は出力しない)
                 self.assertGreaterEqual(len(coords), 2)
+
+    def test_y_labels_have_yen_formatted_max_and_min(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            _write_jsonl(root, "B1", [_rec(20, 1680), _rec(10, 2000), _rec(0, 1900)])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            y_labels = data["price_history"]["spark"]["y_labels"]
+            self.assertEqual(len(y_labels), 2)
+            texts = {label["text"] for label in y_labels}
+            self.assertEqual(texts, {"¥1,680", "¥2,000"})
+            for label in y_labels:
+                self.assertEqual(label["anchor"], "end")
+                self.assertEqual(label["x"], 48.0)
+
+    def test_y_label_single_when_all_prices_equal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            _write_jsonl(root, "B1", [_rec(20, 1500), _rec(10, 1500), _rec(0, 1500)])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            y_labels = data["price_history"]["spark"]["y_labels"]
+            self.assertEqual(len(y_labels), 1)
+            self.assertEqual(y_labels[0]["text"], "¥1,500")
+
+    def test_x_labels_are_oldest_and_newest_dates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            recs = [_rec(20, 1000), _rec(10, 1100), _rec(0, 1200)]
+            _write_jsonl(root, "B1", recs)
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            x_labels = data["price_history"]["spark"]["x_labels"]
+            self.assertEqual(len(x_labels), 2)
+            self.assertEqual(x_labels[0]["text"], recs[0]["ts"][:10])
+            self.assertEqual(x_labels[0]["anchor"], "start")
+            self.assertEqual(x_labels[1]["text"], recs[-1]["ts"][:10])
+            self.assertEqual(x_labels[1]["anchor"], "end")
+
+    def test_dots_match_observed_points_not_step_vertices(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            # 価格が横ばい→ジャンプ: step-after で水平保持の中間頂点が入るが、
+            # dots は実観測点 (3点) だけを持つべき。
+            _write_jsonl(root, "B1", [_rec(20, 1000), _rec(10, 1000), _rec(0, 2000)])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            dots = data["price_history"]["spark"]["dots"]
+            self.assertEqual(len(dots), 3)
+
+    def test_legend_absent_without_gap(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            _write_jsonl(root, "B1", [_rec(20, 1000), _rec(14, 1050), _rec(7, 1100), _rec(0, 1200)])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            self.assertIsNone(data["price_history"]["spark"]["legend"])
+
+    def test_legend_present_with_gap(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            _write_jsonl(root, "B1", [_rec(25, 1000), _rec(20, 1050), _rec(5, 1100), _rec(0, 1200)])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            legend = data["price_history"]["spark"]["legend"]
+            self.assertIsNotNone(legend)
+            self.assertEqual(legend["text"], "破線＝未観測期間")
+
+
+def _write_latest_json(path: pathlib.Path, items: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"generated_at": "2026-08-13T00:00:00+00:00", "items": items,
+                     "source": "creators-api", "stats": {}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
+class CheckedDailyTests(unittest.TestCase):
+    """#5120 追補: latest.json (日次レーンの最新スナップショット) を読んで
+    「今日も見た」かどうかを ``checked_daily`` / ``last_checked_date`` に
+    反映する。latest.json 側の異常はすべて従来の週次表記へ静かにフォールバック
+    する (例外で落とさない)。
+    """
+
+    def test_missing_latest_json_falls_back_to_weekly(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "price_history"
+            latest = pathlib.Path(tmp) / "price_watch" / "latest.json"  # 作らない
+            _write_jsonl(root, "B1", [_rec(20, 1000), _rec(10, 1100), _rec(0, 1200)])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root, price_watch_latest_path=latest))
+            self.assertFalse(data["price_history"]["checked_daily"])
+            self.assertIsNone(data["price_history"]["last_checked_date"])
+
+    def test_asin_present_in_latest_json_sets_checked_daily_true(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "price_history"
+            latest = pathlib.Path(tmp) / "price_watch" / "latest.json"
+            _write_jsonl(root, "B1", [_rec(20, 1000), _rec(10, 1100), _rec(0, 1200)])
+            _write_latest_json(latest, {"B1": {"p": 1200, "ts": "2026-08-13T01:00:00+00:00"}})
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root, price_watch_latest_path=latest))
+            self.assertTrue(data["price_history"]["checked_daily"])
+            self.assertEqual(data["price_history"]["last_checked_date"], "2026-08-13")
+
+    def test_asin_missing_from_latest_json_items_falls_back(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "price_history"
+            latest = pathlib.Path(tmp) / "price_watch" / "latest.json"
+            _write_jsonl(root, "B1", [_rec(20, 1000), _rec(10, 1100), _rec(0, 1200)])
+            _write_latest_json(latest, {"OTHERASIN": {"p": 500, "ts": "2026-08-13T01:00:00+00:00"}})
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root, price_watch_latest_path=latest))
+            self.assertFalse(data["price_history"]["checked_daily"])
+            self.assertIsNone(data["price_history"]["last_checked_date"])
+
+    def test_corrupted_latest_json_falls_back_without_raising(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "price_history"
+            latest = pathlib.Path(tmp) / "price_watch" / "latest.json"
+            _write_jsonl(root, "B1", [_rec(20, 1000), _rec(10, 1100), _rec(0, 1200)])
+            latest.parent.mkdir(parents=True, exist_ok=True)
+            latest.write_text("{not valid json", encoding="utf-8")
+            data = {"product": {"asin": "B1"}}
+            # 例外を投げず False にフォールバックすること自体がテスト対象
+            self.assertTrue(_attach_price_history(data, root, price_watch_latest_path=latest))
+            self.assertFalse(data["price_history"]["checked_daily"])
+            self.assertIsNone(data["price_history"]["last_checked_date"])
+
+    def test_no_latest_path_given_defaults_to_weekly(self):
+        """後方互換: price_watch_latest_path 省略時は checked_daily=False。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "price_history"
+            _write_jsonl(root, "B1", [_rec(20, 1000), _rec(10, 1100), _rec(0, 1200)])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            self.assertFalse(data["price_history"]["checked_daily"])
+            self.assertIsNone(data["price_history"]["last_checked_date"])
 
 
 if __name__ == "__main__":
