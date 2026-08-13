@@ -703,5 +703,72 @@ class GraphExtensionTests(unittest.TestCase):
             self.assertEqual(len(ph["table_rows"]), 3)  # 表にも行を足さない
 
 
+class SpanDaysExtensionTests(unittest.TestCase):
+    """#5120 追補3: 延長が適用されたページでは表示用 span_days を延長後の
+    終端 (x軸右端ラベル) と一致させる。ただし描画ゲート
+    (_PRICE_HISTORY_MIN_SPAN_DAYS) は記録ベースのスパンから絶対に動かさない
+    (延長によるゲート回避を防ぐ)。
+    """
+
+    def _future_ts(self, days: int) -> str:
+        return (datetime.now(timezone.utc) + timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+
+    def test_span_days_matches_x_axis_when_extended(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "price_history"
+            latest = pathlib.Path(tmp) / "price_watch" / "latest.json"
+            recs = [_rec(20, 1000), _rec(10, 1200), _rec(0, 1500)]
+            _write_jsonl(root, "B1", recs)
+            future_ts = self._future_ts(5)
+            _write_latest_json(latest, {"B1": {"p": 1500, "ts": future_ts}})
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root, price_watch_latest_path=latest))
+            ph = data["price_history"]
+
+            oldest_dt = datetime.fromisoformat(recs[0]["ts"])
+            # span_days は日付どうしの引き算 (x_labels の calendar date 文字列と
+            # 機械的に一致させるため、時刻を持つ .days floor は使わない)。
+            end_date = datetime.fromisoformat(f"{future_ts[:10]}T12:00:00+00:00").date()
+            expected_span = (end_date - oldest_dt.date()).days
+            self.assertEqual(ph["span_days"], expected_span)
+            # 記録ベースのスパン (20日) とは異なる = ちゃんと延長後の値になっている
+            self.assertNotEqual(ph["span_days"], 20)
+            # x軸ラベルの開始/終了日と本文の日数が一致する
+            x_labels = ph["spark"]["x_labels"]
+            label_start = datetime.fromisoformat(x_labels[0]["text"] + "T00:00:00+00:00")
+            label_end = datetime.fromisoformat(x_labels[-1]["text"] + "T00:00:00+00:00")
+            self.assertEqual((label_end - label_start).days, ph["span_days"])
+
+    def test_span_days_unchanged_when_not_extended(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "price_history"
+            recs = [_rec(20, 1000), _rec(10, 1200), _rec(0, 1500)]
+            _write_jsonl(root, "B1", recs)
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))  # 延長なし (latest_path 省略)
+            ph = data["price_history"]
+            oldest_dt = datetime.fromisoformat(recs[0]["ts"])
+            newest_dt = datetime.fromisoformat(recs[-1]["ts"])
+            self.assertEqual(ph["span_days"], (newest_dt - oldest_dt).days)
+
+    def test_gate_not_bypassed_by_extension(self):
+        """記録ベースのスパンが14日未満のページは、延長対象になり得ても
+        (=latest.json 上は先の日付・同一価格) ゲートを通過してはいけない。
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "price_history"
+            latest = pathlib.Path(tmp) / "price_watch" / "latest.json"
+            # 記録ベースのスパンは 8日 (<14) — 延長を考慮しなければゲート未達
+            recs = [_rec(8, 1000), _rec(4, 1000), _rec(0, 1000)]
+            _write_jsonl(root, "B1", recs)
+            # 30日先まで同一価格が続くという latest.json (延長条件は満たす)
+            future_ts = self._future_ts(30)
+            _write_latest_json(latest, {"B1": {"p": 1000, "ts": future_ts}})
+            data = {"product": {"asin": "B1"}}
+            ok = _attach_price_history(data, root, price_watch_latest_path=latest)
+            self.assertFalse(ok)
+            self.assertNotIn("price_history", data)
+
+
 if __name__ == "__main__":
     unittest.main()
