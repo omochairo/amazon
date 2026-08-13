@@ -76,6 +76,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       # requirements.txt 全部は要らない (この script が使う外部依存は requests
       # だけ)。監視レーンの起動を本番依存の解決に巻き込まないため個別に入れる。
