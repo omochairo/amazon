@@ -24,6 +24,7 @@ import argparse
 import json
 import pathlib
 import re
+import tomllib
 import urllib.parse
 from datetime import datetime
 from typing import Any, Optional
@@ -47,22 +48,51 @@ from score_calculator import (
 )
 from term_slug import TermSlugMap
 
-# #5087: アフィリエイトタグの SSOT は AMAZON_PARTNER_TAG secret (fetch_amazon.py が
-# PA-API/Creator API 由来の URL に付与しているのと同じ経路)。以前はここと
-# post.md.j2 が旧トラッキング ID を個別にハードコードしており、同一ページ内で
-# リンクごとに ID が食い違っていた。secret 未設定時に旧 ID へ黙って落ちると
-# #4793 (無言 skip で間違った値のまま緑になる) の再発になるので、未設定なら
-# 警告ログを出したうえで空文字を返す (tag= なしの URL になる。テスト環境で
-# secret が無いまま既存テストを通すため例外は投げない)。
-def _resolve_amazon_partner_tag() -> str:
-    tag = get_secret("AMAZON_PARTNER_TAG")
-    if not tag:
-        print(
-            "WARNING: AMAZON_PARTNER_TAG is not set; Amazon affiliate links will be "
-            "rendered without tag= instead of falling back to a hardcoded ID (see #5087)"
+# #5087: アフィリエイトタグの SSOT は commit 済みの hugo/config.toml の
+# [params].amazonPartnerTag。以前はここと post.md.j2 が旧トラッキング ID を
+# 個別にハードコードしており、同一ページ内でリンクごとに ID が食い違っていた。
+#
+# secret (AMAZON_PARTNER_TAG) を SSOT にしなかったのは、この関数を呼ぶ
+# build_post.py が **secret の無い環境で走るレンダリング経路**だから。
+# navi.omcha.jp への実配信は .gitlab-ci.yml の pages ジョブが担っており
+# (README/CLAUDE.md 参照: GitHub Actions は main へ push するだけで配信しない)、
+# 同ファイルの冒頭コメントに明記されている通りこのビルドに secret は渡していない。
+# secret を SSOT にすると配信ビルドで未設定 → 誤った既定へ落ちる/警告がログに
+# 埋もれて誰も気付かない、という #4793 と同型の退行を生む。
+# secret はあくまで任意のオーバーライドとして残す (設定されていれば優先)。
+#
+# commit 済み SSOT からも読めない場合は例外で落とす。設定ファイルの破損か
+# 読み込みバグ以外に起こり得ないので、空文字や旧 ID へ黙って落ちる経路は残さない。
+_HUGO_CONFIG_DEFAULT = pathlib.Path("hugo/config.toml")
+
+
+def _load_committed_amazon_partner_tag(hugo_config_path: pathlib.Path = _HUGO_CONFIG_DEFAULT) -> str:
+    if not hugo_config_path.exists():
+        raise RuntimeError(
+            f"amazonPartnerTag SSOT missing (#5087): {hugo_config_path} not found"
         )
-        return ""
+    try:
+        with hugo_config_path.open("rb") as f:
+            config = tomllib.load(f)
+    except tomllib.TOMLDecodeError as e:
+        raise RuntimeError(
+            f"amazonPartnerTag SSOT unreadable (#5087): failed to parse {hugo_config_path}: {e}"
+        ) from e
+    params = config.get("params")
+    tag = params.get("amazonPartnerTag") if isinstance(params, dict) else None
+    if not tag or not isinstance(tag, str):
+        raise RuntimeError(
+            f"amazonPartnerTag SSOT missing (#5087): [params].amazonPartnerTag "
+            f"not set in {hugo_config_path}"
+        )
     return tag
+
+
+def _resolve_amazon_partner_tag(hugo_config_path: pathlib.Path = _HUGO_CONFIG_DEFAULT) -> str:
+    tag = get_secret("AMAZON_PARTNER_TAG")
+    if tag:
+        return tag
+    return _load_committed_amazon_partner_tag(hugo_config_path)
 
 # #2817 Phase 2: JP タグ/ブランド名を Hugo タクソノミー URL (tags/brands) に
 # 書き込む直前で英語スラッグへ変換する。data/articles/*.json (原本) は JP のまま
@@ -1108,6 +1138,7 @@ def _recommend_nearby_competitors(
     data: dict[str, Any],
     article_index: dict[str, dict[str, Any]],
     site_base_path: str,
+    amazon_partner_tag: str = "",
     window: int = _NEARBY_SCORE_WINDOW,
     limit: int = _NEARBY_MAX_RECOMMENDATIONS,
 ) -> None:
@@ -1160,7 +1191,6 @@ def _recommend_nearby_competitors(
 
     candidates.sort(key=lambda t: (t[0], t[1]))
 
-    amazon_partner_tag = _resolve_amazon_partner_tag()
     for delta, asin, meta in candidates[:limit]:
         ca.append({
             "asin": asin,
@@ -1811,6 +1841,7 @@ _AMAZON_TAG_RE = re.compile(r"[?&]tag=([\w-]+)")
 def _apply_amazon_discontinued(
     data: dict[str, Any],
     per_asin_root: pathlib.Path,
+    amazon_partner_tag: str = "",
 ) -> bool:
     """snapshot status=="gone" の ASIN を「Amazon 取り扱い終了」としてビルド時に
     反映する。記事 JSON には焼き込まない (焼き込みは後から判定改修が入ったとき
@@ -1838,7 +1869,7 @@ def _apply_amazon_discontinued(
     amazon = prices.get("amazon") if isinstance(prices.get("amazon"), dict) else {}
     old_url = amazon.get("url") or ""
     m = _AMAZON_TAG_RE.search(old_url)
-    tag = m.group(1) if m else _resolve_amazon_partner_tag()  # post.md.j2 affiliate_url macro と同じ既定 (#5087)
+    tag = m.group(1) if m else amazon_partner_tag  # post.md.j2 affiliate_url macro と同じ既定 (#5087)
     amazon["discontinued"] = True
     amazon["price"] = 0
     amazon["url"] = ""
@@ -2961,6 +2992,11 @@ def main() -> None:
                         help="A-3 query cannibalization canonical consolidation (#2370); used to set canonicalURL front matter")
     args = parser.parse_args()
 
+    # #5087: 他の処理より先に解決し、失敗するなら早期に落とす。テンプレへは
+    # data["amazon_partner_tag"] として注入する (post.md.j2 の affiliate_url
+    # マクロと competitor-card の既定が参照する)。
+    amazon_partner_tag = _resolve_amazon_partner_tag(pathlib.Path(args.hugo_config))
+
     evaluate_article = None
     schema: dict[str, Any] = {}
     if args.gate:
@@ -3062,10 +3098,6 @@ def main() -> None:
     # 呼出で蓄積されるため、明示的にリセットしてから loop を回す。
     reset_media_exposure_metrics()
 
-    # #5087: run 全体で 1 回だけ解決し、テンプレへは data["amazon_partner_tag"] として
-    # 注入する (post.md.j2 の affiliate_url マクロと competitor-card の既定が参照する)。
-    amazon_partner_tag = _resolve_amazon_partner_tag()
-
     render_winners = _winning_stems(src_path)  # #2711: newest body per ASIN only
     for f in sorted(src_path.glob("*.json")):
         if f.stem.endswith(SUFFIX_SKIP):
@@ -3105,7 +3137,7 @@ def main() -> None:
                 price_overlay_stats["body_stale"] += 1
             _attach_price_freshness(data, per_asin_root)
             _attach_market_prices(data, rakuten_matched_index, yahoo_matched_index)
-            amazon_discontinued = _apply_amazon_discontinued(data, per_asin_root)
+            amazon_discontinued = _apply_amazon_discontinued(data, per_asin_root, amazon_partner_tag)
             # 最新 snapshot が価格を返さない出品の凍結価格を落とす (2026-08-09)。
             # _attach_market_prices の後・_apply_amazon_discontinued と同じ位置。
             if _apply_amazon_unpriced(data, per_asin_root):
@@ -3121,7 +3153,7 @@ def main() -> None:
             _attach_omcha_related(data, per_asin_root)
             _attach_source_highlights(data, per_asin_root)
             _attach_internal_links(data, article_index, site_base_path)
-            _recommend_nearby_competitors(data, article_index, site_base_path)
+            _recommend_nearby_competitors(data, article_index, site_base_path, amazon_partner_tag)
             _recommend_same_price_band(data, article_index, site_base_path)
             _fill_jsonld(data)
             # 価格を触る処理 (badges / market / discontinued / history) が
