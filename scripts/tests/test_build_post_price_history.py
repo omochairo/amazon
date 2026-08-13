@@ -338,5 +338,63 @@ class SparkGeometryTests(unittest.TestCase):
             )
 
 
+    def test_gap_vertical_move_is_observed_not_dashed(self):
+        """#5120 追補: ギャップ辺の垂直移動 (新観測時点の実測変化) は破線に
+        含めない。破線は「水平の未観測ホールド」だけを覆うべき。
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            # 0-5日: 密な観測。5日->25日: 20日ギャップ (>14日)。ギャップの
+            # 終端 (25日前=最古側) で価格が 1100 -> 1000 に実測変化する。
+            _write_jsonl(root, "B1", [
+                _rec(25, 1000), _rec(20, 1100),
+                _rec(5, 1200), _rec(0, 1300),
+            ])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            segs = data["price_history"]["spark"]["segments"]
+            dashed = [s for s in segs if not s["observed"]]
+            observed = [s for s in segs if s["observed"]]
+            self.assertEqual(len(dashed), 1)
+            dashed_coords = [tuple(map(float, p.split(","))) for p in dashed[0]["points"].split(" ")]
+            # 破線セグメントは水平ホールドのみ = 全頂点の y が同一
+            ys = {y for _, y in dashed_coords}
+            self.assertEqual(len(ys), 1, dashed_coords)
+            # 破線の終端 x と、いずれかの観測(実線)セグメントの先頭 x が
+            # 一致する (垂直移動がそこから観測済みとして続く)
+            dashed_end_x = dashed_coords[-1][0]
+            observed_start_xs = [tuple(map(float, s["points"].split(" ")[0].split(",")))[0] for s in observed]
+            self.assertIn(dashed_end_x, observed_start_xs)
+            # 垂直移動 (y が変わる辺) が観測セグモートのどこかに存在する
+            all_observed_coords = []
+            for s in observed:
+                all_observed_coords.append([tuple(map(float, p.split(","))) for p in s["points"].split(" ")])
+            found_vertical_at_dashed_end = False
+            for coords_list in all_observed_coords:
+                for i in range(len(coords_list) - 1):
+                    if coords_list[i][0] == dashed_end_x and coords_list[i][1] != coords_list[i + 1][1] \
+                            and coords_list[i + 1][0] == dashed_end_x:
+                        found_vertical_at_dashed_end = True
+            self.assertTrue(found_vertical_at_dashed_end, all_observed_coords)
+
+    def test_no_consecutive_duplicate_coords_in_any_segment(self):
+        """#5120 追補: 価格が変わらない辺で step 頂点=実観測点となり、丸め後
+        座標が直前と同一になる場合は追加しない (無駄なマークアップ削減)。
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            recs = [_rec(30 - i, 1000 if i % 3 else 1000 + i) for i in range(15)]
+            _write_jsonl(root, "B1", recs)
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            segs = data["price_history"]["spark"]["segments"]
+            for seg in segs:
+                coords = [tuple(map(float, p.split(","))) for p in seg["points"].split(" ")]
+                for i in range(len(coords) - 1):
+                    self.assertNotEqual(coords[i], coords[i + 1], (seg, coords))
+                # セグメントは最低2頂点 (単一頂点の polyline は出力しない)
+                self.assertGreaterEqual(len(coords), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

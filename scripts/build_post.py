@@ -1829,27 +1829,45 @@ def _build_price_history_spark(points: list[dict[str, Any]], min_price: int, max
         gap_days = (parsed[i][0] - parsed[i - 1][0]).total_seconds() / 86400.0
         edges.append((coords[i - 1], coords[i], gap_days > _PRICE_HISTORY_GAP_DAYS))
 
+    def _append_coord(coords_list: list[tuple[float, float]], xy: tuple[float, float]) -> None:
+        # #5120 追補: 丸め後の座標が直前と完全一致するなら追加しない。価格が
+        # 変わらない辺では step 頂点と実観測点が同一座標になり、そのまま積むと
+        # 冗長な重複頂点 (3,979 ページ分の無駄なマークアップ) が大量発生する。
+        if coords_list and coords_list[-1] == xy:
+            return
+        coords_list.append(xy)
+
+    def _flush(segs: list[dict[str, Any]], coords_list: list[tuple[float, float]], observed: bool) -> None:
+        # 頂点1つの polyline は線として描けないので出力しない。
+        if len(coords_list) < 2:
+            return
+        segs.append({
+            "points": " ".join(f"{x},{y}" for x, y in coords_list),
+            "observed": observed,
+        })
+
     segments: list[dict[str, Any]] = []
-    seg_coords: list[tuple[float, float]] = [edges[0][0]]
-    seg_observed = not edges[0][2]
+    # #5120 追補: 14日超ギャップの辺は「未観測の水平ホールド」と「観測済みの
+    # 垂直移動」の2つを含む。前者だけが未観測なので、辺の途中 (step_xy) で
+    # 分割し、水平部分のみを破線セグメントに、垂直部分は次の観測済み
+    # セグメントの先頭として続ける。このため cur_seg は常に「観測済み」の
+    # 累積であり、破線セグメントはギャップ辺ごとに単発で挟まれる。
+    cur_seg: list[tuple[float, float]] = [coords[0]]
 
     for prev_xy, cur_xy, is_gap in edges:
-        observed = not is_gap
         step_xy = (cur_xy[0], prev_xy[1])  # 前の価格を次の x まで水平に保持 (step-after)
-        if observed != seg_observed:
-            segments.append({
-                "points": " ".join(f"{x},{y}" for x, y in seg_coords),
-                "observed": seg_observed,
-            })
-            seg_coords = [prev_xy]  # 直前セグメントの終端から連続させる
-            seg_observed = observed
-        seg_coords.append(step_xy)
-        seg_coords.append(cur_xy)
+        if is_gap:
+            _flush(segments, cur_seg, True)
+            dashed: list[tuple[float, float]] = [prev_xy]
+            _append_coord(dashed, step_xy)
+            _flush(segments, dashed, False)
+            cur_seg = [step_xy]
+            _append_coord(cur_seg, cur_xy)
+        else:
+            _append_coord(cur_seg, step_xy)
+            _append_coord(cur_seg, cur_xy)
 
-    segments.append({
-        "points": " ".join(f"{x},{y}" for x, y in seg_coords),
-        "observed": seg_observed,
-    })
+    _flush(segments, cur_seg, True)
 
     return {"width": width, "height": height, "segments": segments}
 
