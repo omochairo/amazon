@@ -50,12 +50,15 @@
 <section class="brand-hub-hero" data-brand="{{ $.Title }}">
   {{- if $img }}
   <div class="brand-hub-hero-image">
+    {{- /* #5082: $img は article json の product_image と同じ m.media-amazon.com
+           _SL500_ 系 URL (build_brand_hub_stats.py の representative_image ソースを
+           確認済み)。正方形枠なので他カードと同じ 200x200 の慣習に合わせる。 */ -}}
     {{- if $repPage }}
     <a href="{{ $repPage.RelPermalink }}" aria-label="{{ $.Title }} の代表商品を見る">
-      <img src="{{ $img }}" alt="{{ $.Title }} 代表商品" fetchpriority="high" decoding="async">
+      <img src="{{ $img }}" alt="{{ $.Title }} 代表商品" fetchpriority="high" decoding="async" width="200" height="200">
     </a>
     {{- else }}
-    <img src="{{ $img }}" alt="{{ $.Title }} 代表商品" fetchpriority="high" decoding="async">
+    <img src="{{ $img }}" alt="{{ $.Title }} 代表商品" fetchpriority="high" decoding="async" width="200" height="200">
     {{- end }}
   </div>
   {{- end }}
@@ -119,7 +122,12 @@
   <h2 class="brand-wikidata-title">🏢 {{ $.Title }} について</h2>
   <div class="brand-wikidata-body">
     {{- if $logo }}
-    <div class="brand-wikidata-logo"><img src="{{ $logo }}" alt="{{ $.Title }} ロゴ" loading="lazy" decoding="async"></div>
+    {{- /* #5082: $logo は Wikimedia Commons FilePath (fetch_wikidata_brand_meta.py) で、
+           上の代表商品画像と違いブランドごとに実アスペクト比が不定 (ロゴは正方形とは限らない)。
+           .brand-wikidata-logo は width/height:88px 固定 + object-fit:contain の箱なので
+           実サイズは CSS が決め、この属性は寸法確保のヒントに過ぎない。真の比率は build 時に
+           取得できないため、箱と同じ 1:1 (88x88) を当てて box とのズレを避ける。 */ -}}
+    <div class="brand-wikidata-logo"><img src="{{ $logo }}" alt="{{ $.Title }} ロゴ" loading="lazy" decoding="async" width="88" height="88"></div>
     {{- end }}
     <dl class="brand-wikidata-facts">
       {{- if $inc }}<dt>設立</dt><dd>{{ $inc }}年</dd>{{ end }}

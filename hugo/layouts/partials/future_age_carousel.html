@@ -53,7 +53,7 @@
         <a class="carousel-card" href="{{ $p.Permalink }}" aria-label="{{ $p.Title }} の比較レビューを読む">
           <div class="carousel-card-image">
             {{- if $p.Params.product_image }}
-              <img src="{{ $p.Params.product_image }}" alt="{{ $p.Title }}" loading="lazy" referrerpolicy="no-referrer">
+              <img src="{{ $p.Params.product_image }}" alt="{{ $p.Title }}" loading="lazy" referrerpolicy="no-referrer" width="200" height="200">
             {{- else }}
               {{- $emojis := slice "🧸" "🎨" "🧩" "🪁" "🚂" "🤹" "🧱" "🪀" "🛹" "🎺" -}}
               {{- $fallbackEmoji := index $emojis (mod (len $p.Title) (len $emojis)) -}}
