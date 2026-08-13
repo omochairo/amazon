@@ -4107,11 +4107,26 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 
 /* ---------- 自動生成記事の冒頭通知 ---------- */
 /* #PR表記改修 (2026-08-13): [PR] を strong から独立した pr-badge に切り出し、
-   通知ボックス内で右上に配置する (space-between)。記事タイトルは post-content の
-   外 (post-single header) にあるためタイトルと衝突しない。720px 未満では
-   folded せず改行のみ許可し、視認性を落とさない (小さくしない/隠さない)。 */
+   通知ボックス内で右上に配置する。記事タイトルは post-content の外
+   (post-single header) にあるためタイトルと衝突しない。
+
+   DOM 順は pr-badge → auto-gen-notice-text (スクリーンリーダー/CSS無効時は
+   [PR] を先に読ませる)。flex-direction: row-reverse で見た目の並びだけ反転
+   させ、視覚的には badge が右・text が左になる: row-reverse は主軸の
+   start/end を左右反転するため、DOM 先頭の pr-badge が主軸 start = 画面右へ、
+   後続の auto-gen-notice-text が主軸 end = 画面左へ運ばれる。
+   justify-content: space-between は「両端に開いて中間を余白にする」効果を保つ。
+
+   720px 未満 (このリポジトリの主要ブレークポイント。直下の .cospa-band-tabs
+   等と同じ値) では flex-wrap: wrap で折り返しを許可する。row-reverse の
+   状態でラップすると、1行に収まる pr-badge は単独でも主軸 start = 画面右に
+   留まり (1要素のみの行では justify-content は事実上 flex-start 相当)、
+   収まらない auto-gen-notice-text だけが2行目に落ちる。つまり [PR] は
+   折り返しても常に1行目の右に残り、本文の後ろに回り込まない。
+   視認性を落とさない (縮小・低コントラスト・スクロール必須にしない)。 */
 .post-content .auto-gen-notice {
   display: flex;
+  flex-direction: row-reverse;
   justify-content: space-between;
   align-items: flex-start;
   gap: 10px;
@@ -4139,7 +4154,7 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 }
 [data-theme="dark"] .post-content .pr-badge { color: #fca5a5; }
 
-@media (max-width: 480px) {
+@media (max-width: 720px) {
   .post-content .auto-gen-notice {
     flex-wrap: wrap;
   }
