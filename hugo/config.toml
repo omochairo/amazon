@@ -47,6 +47,13 @@ enableRobotsTXT = true
   # 見出し末尾に表示される # アンカーリンクを非表示
   disableAnchoredHeadings = true
 
+  # Issue #5083 項目1: 商品ページ(記事ページ)の <title> サイト名サフィックス短縮版。
+  # 日本語 SERP のタイトル表示は全角30〜35文字程度で切れ、フルサフィックス(31文字)は
+  # 表示されずブランディングに寄与しない。商品ページ (hugo/layouts/partials/head.html
+  # で .Section "posts" 判定) のみこちらを使う。トップ・一覧・タグ・ブランド等は
+  # site.Title (フルネーム) のまま維持する。
+  productTitleSuffix = "比較ナビ"
+
   # カスタムホームレイアウト用のヒーロー設定 (homeInfoParams は使わずに layouts/index.html で描画)
   [params.hero]
     Title = "おもちゃいろ 比較ナビ"
