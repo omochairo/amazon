@@ -75,6 +75,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       # #3372: 直近の成功 run からクォータリセットウィンドウ (Pacific深夜≈UTC07:00) を
       # 跨いでいない手動再実行を検知してブロックする。stdlib のみで完結するため

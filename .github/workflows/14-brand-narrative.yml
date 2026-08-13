@@ -54,6 +54,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       # brand_normalizer.py が yaml を import する。requirements.txt には居ないので
       # 単独 install (この workflow 以外は brand_normalizer を経由しない)。
