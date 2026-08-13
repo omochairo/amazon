@@ -37,6 +37,7 @@ import stock_status
 import where_to_buy_format
 from brand_normalizer import normalize as normalize_brand
 from build_feature_lists import PRICE_BANDS
+from fetch_amazon import get_secret
 from score_calculator import (
     ScoreResult,
     calculate as calculate_score,
@@ -45,6 +46,23 @@ from score_calculator import (
     reset_media_exposure_metrics,
 )
 from term_slug import TermSlugMap
+
+# #5087: アフィリエイトタグの SSOT は AMAZON_PARTNER_TAG secret (fetch_amazon.py が
+# PA-API/Creator API 由来の URL に付与しているのと同じ経路)。以前はここと
+# post.md.j2 が旧トラッキング ID を個別にハードコードしており、同一ページ内で
+# リンクごとに ID が食い違っていた。secret 未設定時に旧 ID へ黙って落ちると
+# #4793 (無言 skip で間違った値のまま緑になる) の再発になるので、未設定なら
+# 警告ログを出したうえで空文字を返す (tag= なしの URL になる。テスト環境で
+# secret が無いまま既存テストを通すため例外は投げない)。
+def _resolve_amazon_partner_tag() -> str:
+    tag = get_secret("AMAZON_PARTNER_TAG")
+    if not tag:
+        print(
+            "WARNING: AMAZON_PARTNER_TAG is not set; Amazon affiliate links will be "
+            "rendered without tag= instead of falling back to a hardcoded ID (see #5087)"
+        )
+        return ""
+    return tag
 
 # #2817 Phase 2: JP タグ/ブランド名を Hugo タクソノミー URL (tags/brands) に
 # 書き込む直前で英語スラッグへ変換する。data/articles/*.json (原本) は JP のまま
@@ -1142,12 +1160,13 @@ def _recommend_nearby_competitors(
 
     candidates.sort(key=lambda t: (t[0], t[1]))
 
+    amazon_partner_tag = _resolve_amazon_partner_tag()
     for delta, asin, meta in candidates[:limit]:
         ca.append({
             "asin": asin,
             "name": _shrink_competitor_name(meta.get("name") or ""),
             "image": meta.get("image") or "",
-            "url": f"https://www.amazon.co.jp/dp/{asin}/?tag=zefiransesu-22",
+            "url": f"https://www.amazon.co.jp/dp/{asin}/?tag={amazon_partner_tag}",
             "internal_url": f"{site_base_path}/products/{asin.lower()}/",
             "internal_ivs_score_100": int(meta.get("ivs_score_100") or 0),
             "internal_ivs_score": float(meta.get("ivs_score") or 0) if meta.get("ivs_score") else None,
@@ -1819,7 +1838,7 @@ def _apply_amazon_discontinued(
     amazon = prices.get("amazon") if isinstance(prices.get("amazon"), dict) else {}
     old_url = amazon.get("url") or ""
     m = _AMAZON_TAG_RE.search(old_url)
-    tag = m.group(1) if m else "zefiransesu-22"  # post.md.j2 affiliate_url macro と同じ既定
+    tag = m.group(1) if m else _resolve_amazon_partner_tag()  # post.md.j2 affiliate_url macro と同じ既定 (#5087)
     amazon["discontinued"] = True
     amazon["price"] = 0
     amazon["url"] = ""
@@ -3043,6 +3062,10 @@ def main() -> None:
     # 呼出で蓄積されるため、明示的にリセットしてから loop を回す。
     reset_media_exposure_metrics()
 
+    # #5087: run 全体で 1 回だけ解決し、テンプレへは data["amazon_partner_tag"] として
+    # 注入する (post.md.j2 の affiliate_url マクロと competitor-card の既定が参照する)。
+    amazon_partner_tag = _resolve_amazon_partner_tag()
+
     render_winners = _winning_stems(src_path)  # #2711: newest body per ASIN only
     for f in sorted(src_path.glob("*.json")):
         if f.stem.endswith(SUFFIX_SKIP):
@@ -3193,7 +3216,7 @@ def main() -> None:
                     if asin_for_review and not amazon_discontinued:
                         product_obj["amazon_review_url"] = (
                             f"https://www.amazon.co.jp/dp/{asin_for_review}"
-                            "/?tag=zefiransesu-22#customerReviews"
+                            f"/?tag={amazon_partner_tag}#customerReviews"
                         )
             # 年齢別発達段階目安データのマッピング
             target_age_raw = ""
@@ -3238,6 +3261,7 @@ def main() -> None:
                 stock_title_override = where_to_buy_format.build_title(product_name, purchase_options)
                 stock_title_applied += 1
 
+            data["amazon_partner_tag"] = amazon_partner_tag
             md_body = template.render(**data)
             # #4826 項目 4: 旧 <slug>.quality.json sidecar による draft 判定は廃止。
             # draft は --gate で**その場で評価した**スコアだけで決める (下記)。

@@ -80,7 +80,7 @@
           {{- /* Issue #600 Phase C: matched_asin がある = 自社で扱っている商品なので
                  Amazon CTA を楽天 CTA の隣に並列表示し、読者の EC 選択肢を増やす。 */ -}}
           {{- if $asin }}
-          <a class="ranking-cta-external ranking-cta-amazon" href="https://www.amazon.co.jp/dp/{{ upper $asin }}/?tag=zefiransesu-22" rel="sponsored nofollow noopener" target="_blank">🟠 Amazonで見る</a>
+          <a class="ranking-cta-external ranking-cta-amazon" href="https://www.amazon.co.jp/dp/{{ upper $asin }}/?tag={{ site.Params.amazonPartnerTag }}" rel="sponsored nofollow noopener" target="_blank">🟠 Amazonで見る</a>
           {{- end }}
         </div>
       </div>
