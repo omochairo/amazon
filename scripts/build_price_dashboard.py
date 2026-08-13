@@ -50,6 +50,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from brand_normalizer import normalize as normalize_brand  # noqa: E402
 from build_feature_lists import age_min_months_from_article  # noqa: E402
 from score_calculator import calculate as calculate_score, compute_ivs_axes  # noqa: E402
+from price_spark import build_card_spark  # noqa: E402
 
 logger = logging.getLogger("build_price_dashboard")
 
@@ -240,6 +241,8 @@ def evaluate_drop(
 def enrich_items(
     items: list[dict[str, Any]],
     article_meta: dict[str, dict[str, Any]],
+    price_watch_dir: pathlib.Path | None = None,
+    price_history_dir: pathlib.Path | None = None,
 ) -> None:
     """採択済み ``items`` (最大 _TOP_N_CAP 件) を in-place で enrich する。
 
@@ -255,6 +258,19 @@ def enrich_items(
         item.setdefault("amazon_url", None)
         item.setdefault("ivs_100", None)
         item.setdefault("ivs_axes", None)
+
+        # カード用スパークラインは価格履歴だけに依存し、記事 json とは無関係。
+        # 下の「記事メタが無ければ continue」より前に置くこと (後ろに置くと、
+        # 記事 json が読めないアイテムで spark まで巻き添えで消える)。
+        # 履歴ディレクトリが渡されたときだけ計算する (旧シグネチャの呼び出しでも落ちない)。
+        if price_watch_dir is not None and price_history_dir is not None:
+            try:
+                history = load_merged_history(item["asin"], price_watch_dir, price_history_dir)
+                spark = build_card_spark(history)
+                if spark is not None:
+                    item["spark"] = spark
+            except Exception as e:  # noqa: BLE001 - fail-soft, spark 失敗で全体を落とさない
+                logger.warning(f"enrich_items: spark calc failed for {item['asin']}: {e}")
 
         meta = article_meta.get(item["asin"]) or {}
         path = meta.get("path")
@@ -352,7 +368,7 @@ def build_items(
     selected = out[:top_n_cap]
     # #3563: スコア計算 (enrich_items) は採択後の最大 top_n_cap 件だけに適用する
     # (全 1580 記事で毎回スコア再計算しないため top_n_cap 適用後に呼ぶ)。
-    enrich_items(selected, article_meta)
+    enrich_items(selected, article_meta, price_watch_dir, price_history_dir)
     return selected
 
 

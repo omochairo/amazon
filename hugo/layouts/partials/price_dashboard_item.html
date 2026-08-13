@@ -46,6 +46,7 @@
     </p>
 
     {{- with $item.ivs_axes }}{{ partial "score_minichart.html" . }}{{- end }}
+    {{- with $item.spark }}{{ partial "price_sparkline.html" . }}{{- end }}
 
     <div class="ranking-cta">
       <a class="ranking-cta-internal" href="{{ $url }}">💡 徹底解説レビューを見る</a>

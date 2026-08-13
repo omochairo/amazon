@@ -49,6 +49,12 @@ from score_calculator import (
 )
 from term_slug import TermSlugMap
 
+import sys
+import pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from price_spark import build_spark, empty_spark, parse_ts, ARTICLE_GEOM
+
+
 logger = logging.getLogger(__name__)
 
 # #5087: アフィリエイトタグの SSOT は commit 済みの hugo/config.toml の
@@ -1704,20 +1710,20 @@ _PRICE_HISTORY_GAP_DAYS = 14  # #5120: この日数を超える観測間隔は�
 # #5120 追補: SVG スパークラインのジオメトリ定数。マジックナンバーをテンプレ
 # 側に散らさず、ここ (Python) 1箇所にまとめる。プロット領域は左に軸ラベル用の
 # 余白 (52px) を確保するため x 方向だけ非対称。
-_PRICE_HISTORY_SPARK_WIDTH = 300
-_PRICE_HISTORY_SPARK_HEIGHT = 90
-_PRICE_HISTORY_PLOT_X_MIN = 52.0
-_PRICE_HISTORY_PLOT_X_MAX = 296.0
-_PRICE_HISTORY_PLOT_Y_TOP = 8.0
-_PRICE_HISTORY_PLOT_Y_BOTTOM = 56.0
-_PRICE_HISTORY_Y_LABEL_X = 48.0
-_PRICE_HISTORY_Y_LABEL_MAX_Y = 11.0    # 最高値ラベルのベースライン
-_PRICE_HISTORY_Y_LABEL_MIN_Y = 59.0    # 最安値ラベルのベースライン
-_PRICE_HISTORY_X_LABEL_Y = 74.0
-_PRICE_HISTORY_LEGEND_Y = 86.0
-_PRICE_HISTORY_LEGEND_DASH_LEN = 16.0
-_PRICE_HISTORY_LEGEND_TEXT_GAP = 4.0
-_PRICE_HISTORY_LEGEND_TEXT = "破線＝未観測期間"
+_PRICE_HISTORY_SPARK_WIDTH = ARTICLE_GEOM.width
+_PRICE_HISTORY_SPARK_HEIGHT = ARTICLE_GEOM.height
+_PRICE_HISTORY_PLOT_X_MIN = ARTICLE_GEOM.plot_x_min
+_PRICE_HISTORY_PLOT_X_MAX = ARTICLE_GEOM.plot_x_max
+_PRICE_HISTORY_PLOT_Y_TOP = ARTICLE_GEOM.plot_y_top
+_PRICE_HISTORY_PLOT_Y_BOTTOM = ARTICLE_GEOM.plot_y_bottom
+_PRICE_HISTORY_Y_LABEL_X = ARTICLE_GEOM.y_label_x
+_PRICE_HISTORY_Y_LABEL_MAX_Y = ARTICLE_GEOM.y_label_max_y
+_PRICE_HISTORY_Y_LABEL_MIN_Y = ARTICLE_GEOM.y_label_min_y
+_PRICE_HISTORY_X_LABEL_Y = ARTICLE_GEOM.x_label_y
+_PRICE_HISTORY_LEGEND_Y = ARTICLE_GEOM.legend_y
+_PRICE_HISTORY_LEGEND_DASH_LEN = ARTICLE_GEOM.legend_dash_len
+_PRICE_HISTORY_LEGEND_TEXT_GAP = ARTICLE_GEOM.legend_text_gap
+_PRICE_HISTORY_LEGEND_TEXT = ARTICLE_GEOM.legend_text
 
 
 def _load_price_history_points(price_history_root: pathlib.Path, asin: str) -> list[dict[str, Any]]:
@@ -1779,15 +1785,11 @@ def _price_history_parse_ts(ts: str) -> Optional[datetime]:
 
     失敗したら None（呼び出し側でその点をスパーク描画から除外する）。
     """
-    try:
-        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
-    except ValueError:
-        return None
+    return parse_ts(ts)
 
 
 def _price_history_empty_spark(width: int, height: int) -> dict[str, Any]:
-    return {"width": width, "height": height, "segments": [], "dots": [],
-            "y_labels": [], "x_labels": [], "legend": None}
+    return empty_spark(ARTICLE_GEOM)
 
 
 def _build_price_history_spark(points: list[dict[str, Any]], min_price: int, max_price: int,
@@ -1795,174 +1797,9 @@ def _build_price_history_spark(points: list[dict[str, Any]], min_price: int, max
                                 height: int = _PRICE_HISTORY_SPARK_HEIGHT,
                                 extend_to_dt: Optional[datetime] = None) -> dict[str, Any]:
     """#5120: SVG スパークラインの座標・軸ラベル・観測ドット・凡例をテンプレの
-    外 (Python) で計算する。テンプレは受け取った文字列/座標をそのまま描画する
-    だけにして、算術をテンプレ側に持たせない。
-
-    x を「経過日数 (date, 日単位)」でなく秒解像度の ``ts`` に比例させる必要が
-    あるのは、週1巡回 + 変化即追記のマージ実データで 335/1219 (27%) のページが
-    同一日に 2 点以上の観測を持つため。date だけでは同日内の順序・間隔を
-    復元できず点が重なる。#5120 の実測では等間隔描画が本来の位置から最大
-    209px (描画幅296px中) ずれていた。
-
-    折れ線を直線補間でなく階段 (step-after: 前の点の価格を次の観測まで
-    水平に保持し、観測が来た瞬間に垂直移動) で描くのは、jsonl が dedupe を
-    通った「価格の変化点」ログであり、観測点間の連続的な変化は記録されて
-    いないため。``where_to_buy_format.build_price_history_note`` も同じ前提
-    (階段関数) で最安値を解釈している。直線補間は記録にない変化を描いて
-    しまう。
-
-    観測間隔が ``_PRICE_HISTORY_GAP_DAYS`` (14日) を超える区間は「未観測」
-    として別セグメントに分け、破線・低不透明度で描く。ただしギャップ辺の
-    垂直移動 (新観測時点で実際に変わった価格) は未観測ではないので、水平
-    ホールド部分だけを破線側に、垂直部分は次の観測済みセグメントの先頭に
-    入れる (#5120 追補)。
-
-    ``dots`` は実観測点のみ (step-after で挿入した水平保持の中間頂点には
-    打たない) — 読者が「これは実測した点」と「線を保持するためだけの頂点」
-    を区別できるようにする。
-
-    ``extend_to_dt`` (#5120 追補2): 呼び出し側 (_attach_price_history) が
-    「最終確認日まで価格が変わっていないことが latest.json で確定している」
-    と判定した場合にだけ渡される。渡されたら x 軸ドメインの終端をこの日時
-    まで延ばし、最後の観測点から x 右端まで実線 (常に observed=True。未観測
-    ではなく確定した継続なので 14日ギャップ判定の対象外) で水平に延長する。
-    延長区間には dots も table 行も追加しない (観測点ではないため)。
+    外 (Python) で計算する。
     """
-    x_min, x_max = _PRICE_HISTORY_PLOT_X_MIN, _PRICE_HISTORY_PLOT_X_MAX
-    draw_w = x_max - x_min
-    y_top, y_bottom = _PRICE_HISTORY_PLOT_Y_TOP, _PRICE_HISTORY_PLOT_Y_BOTTOM
-    draw_h = y_bottom - y_top
-
-    parsed: list[tuple[datetime, int]] = []
-    for pt in points:
-        dt = _price_history_parse_ts(pt["ts"])
-        if dt is None:
-            continue
-        parsed.append((dt, pt["price"]))
-
-    if not parsed:
-        return _price_history_empty_spark(width, height)
-
-    n = len(parsed)
-    oldest_dt = parsed[0][0]
-    newest_dt = parsed[-1][0]
-    # 延長は「最終観測より後」のときだけ意味を持つ。呼び出し側で既に
-    # 判定済みのはずだが、ジオメトリ関数単体でも自己完結させるため
-    # ここでも再確認する (壊れた呼び出しで domain が縮む事故を防ぐ)。
-    extend = extend_to_dt is not None and extend_to_dt > newest_dt
-    domain_end_dt = extend_to_dt if extend else newest_dt
-    total_seconds = (domain_end_dt - oldest_dt).total_seconds()
-    price_range = max_price - min_price
-
-    def _y(price: int) -> float:
-        if price_range == 0:
-            return round((y_top + y_bottom) / 2, 1)
-        return round(y_top + (1 - (price - min_price) / price_range) * draw_h, 1)
-
-    def _x(index: int, dt: datetime) -> float:
-        # 合計スパンが 0 秒 (理論上、>=14日ゲートの後段では起きないが
-        # ゼロ割り防止のガードとして残す) のときだけ等間隔に落とす。
-        if total_seconds <= 0:
-            return round(x_min + (index / (n - 1) * draw_w if n > 1 else 0.0), 1)
-        return round(x_min + (dt - oldest_dt).total_seconds() / total_seconds * draw_w, 1)
-
-    coords = [(_x(i, dt), _y(price)) for i, (dt, price) in enumerate(parsed)]
-    dots = [{"x": x, "y": y} for x, y in coords]
-
-    if price_range == 0:
-        y_labels = [{
-            "x": _PRICE_HISTORY_Y_LABEL_X,
-            "y": round((y_top + y_bottom) / 2, 1),
-            "text": f"¥{min_price:,}",
-            "anchor": "end",
-        }]
-    else:
-        y_labels = [
-            {"x": _PRICE_HISTORY_Y_LABEL_X, "y": _PRICE_HISTORY_Y_LABEL_MAX_Y,
-             "text": f"¥{max_price:,}", "anchor": "end"},
-            {"x": _PRICE_HISTORY_Y_LABEL_X, "y": _PRICE_HISTORY_Y_LABEL_MIN_Y,
-             "text": f"¥{min_price:,}", "anchor": "end"},
-        ]
-
-    x_labels = [
-        {"x": x_min, "y": _PRICE_HISTORY_X_LABEL_Y, "text": oldest_dt.strftime("%Y-%m-%d"), "anchor": "start"},
-        {"x": x_max, "y": _PRICE_HISTORY_X_LABEL_Y, "text": domain_end_dt.strftime("%Y-%m-%d"), "anchor": "end"},
-    ]
-
-    def _append_coord(coords_list: list[tuple[float, float]], xy: tuple[float, float]) -> None:
-        # #5120 追補: 丸め後の座標が直前と完全一致するなら追加しない。価格が
-        # 変わらない辺では step 頂点と実観測点が同一座標になり、そのまま積むと
-        # 冗長な重複頂点 (3,979 ページ分の無駄なマークアップ) が大量発生する。
-        if coords_list and coords_list[-1] == xy:
-            return
-        coords_list.append(xy)
-
-    if n < 2:
-        cur_seg: list[tuple[float, float]] = [coords[0]]
-        if extend:
-            _append_coord(cur_seg, (x_max, coords[0][1]))
-        segments = [{"points": " ".join(f"{x},{y}" for x, y in cur_seg), "observed": True}] \
-            if len(cur_seg) >= 2 else [{"points": f"{coords[0][0]},{coords[0][1]}", "observed": True}]
-        return {"width": width, "height": height, "segments": segments,
-                "dots": dots, "y_labels": y_labels, "x_labels": x_labels, "legend": None}
-
-    edges = []
-    for i in range(1, n):
-        gap_days = (parsed[i][0] - parsed[i - 1][0]).total_seconds() / 86400.0
-        edges.append((coords[i - 1], coords[i], gap_days > _PRICE_HISTORY_GAP_DAYS))
-
-    def _flush(segs: list[dict[str, Any]], coords_list: list[tuple[float, float]], observed: bool) -> None:
-        # 頂点1つの polyline は線として描けないので出力しない。
-        if len(coords_list) < 2:
-            return
-        segs.append({
-            "points": " ".join(f"{x},{y}" for x, y in coords_list),
-            "observed": observed,
-        })
-
-    segments: list[dict[str, Any]] = []
-    # #5120 追補: 14日超ギャップの辺は「未観測の水平ホールド」と「観測済みの
-    # 垂直移動」の2つを含む。前者だけが未観測なので、辺の途中 (step_xy) で
-    # 分割し、水平部分のみを破線セグメントに、垂直部分は次の観測済み
-    # セグメントの先頭として続ける。このため cur_seg は常に「観測済み」の
-    # 累積であり、破線セグメントはギャップ辺ごとに単発で挟まれる。
-    cur_seg = [coords[0]]
-
-    for prev_xy, cur_xy, is_gap in edges:
-        step_xy = (cur_xy[0], prev_xy[1])  # 前の価格を次の x まで水平に保持 (step-after)
-        if is_gap:
-            _flush(segments, cur_seg, True)
-            dashed: list[tuple[float, float]] = [prev_xy]
-            _append_coord(dashed, step_xy)
-            _flush(segments, dashed, False)
-            cur_seg = [step_xy]
-            _append_coord(cur_seg, cur_xy)
-        else:
-            _append_coord(cur_seg, step_xy)
-            _append_coord(cur_seg, cur_xy)
-
-    if extend:
-        # 最終観測の価格を x 右端 (最終確認日) まで水平に延長する。cur_seg は
-        # 常に「観測済み」の累積なのでここに足すだけで実線として続く。
-        # 14日ギャップ判定は経由しない (未観測ではなく確定した継続のため)。
-        _append_coord(cur_seg, (x_max, cur_seg[-1][1]))
-
-    _flush(segments, cur_seg, True)
-
-    legend = None
-    if any(not seg["observed"] for seg in segments):
-        dash_x1 = x_min
-        dash_x2 = x_min + _PRICE_HISTORY_LEGEND_DASH_LEN
-        legend = {
-            "dash_x1": dash_x1,
-            "dash_x2": dash_x2,
-            "y": _PRICE_HISTORY_LEGEND_Y,
-            "text_x": dash_x2 + _PRICE_HISTORY_LEGEND_TEXT_GAP,
-            "text": _PRICE_HISTORY_LEGEND_TEXT,
-        }
-
-    return {"width": width, "height": height, "segments": segments,
-            "dots": dots, "y_labels": y_labels, "x_labels": x_labels, "legend": legend}
+    return build_spark(points, min_price, max_price, ARTICLE_GEOM, extend_to_dt)
 
 
 def _load_price_watch_latest(latest_path: pathlib.Path, asin: str) -> tuple[bool, Optional[str], Optional[int]]:
