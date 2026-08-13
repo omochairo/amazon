@@ -41,7 +41,7 @@
 {%- set title_default = '[link-report] ' ~ product.asin ~ ' ' ~ ec_site ~ ' のリンクが違う' -%}
 <a class="link-report-flag" href="https://github.com/omochairo/amazon/issues/new?template=link_report.yml&title={{ title_default|urlencode }}&article_url={{ article_url|urlencode }}&asin={{ product.asin|urlencode }}&ec_site={{ ec_site|urlencode }}&wrong_url={{ (wrong_url or '')|urlencode }}" target="_blank" rel="noopener nofollow" title="このリンクが違うと報告" aria-label="{{ ec_site }} のリンクを誤報告">🚩</a>
 {%- endmacro -%}
-<aside class="auto-gen-notice"><strong>[PR]</strong>　この記事はおもちゃロボが市場データから自動生成しています。詳細は記事末尾の参考ソース欄をご覧ください。</aside>
+<aside class="auto-gen-notice"><span class="auto-gen-notice-text">おもちゃロボが市場データから自動生成しています。</span><span class="pr-badge">[PR]</span></aside>
 
 {#- 販売終了 notice (2026-07-07): build_post._apply_amazon_discontinued が
     snapshot status=gone かつ 楽天/Yahoo にも直リンク無しのとき

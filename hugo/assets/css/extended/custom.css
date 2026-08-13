@@ -4106,7 +4106,15 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
    ========================================== */
 
 /* ---------- 自動生成記事の冒頭通知 ---------- */
+/* #PR表記改修 (2026-08-13): [PR] を strong から独立した pr-badge に切り出し、
+   通知ボックス内で右上に配置する (space-between)。記事タイトルは post-content の
+   外 (post-single header) にあるためタイトルと衝突しない。720px 未満では
+   folded せず改行のみ許可し、視認性を落とさない (小さくしない/隠さない)。 */
 .post-content .auto-gen-notice {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
   background: #fafafa;
   border: 1px solid #e0e0e0;
   border-radius: var(--radius-sm);
@@ -4116,14 +4124,26 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   color: #666;
   line-height: 1.5;
 }
-.post-content .auto-gen-notice strong { color: #d33; }
+.post-content .auto-gen-notice-text { flex: 1 1 auto; }
+.post-content .pr-badge {
+  flex: 0 0 auto;
+  font-weight: 700;
+  color: #d33;
+  white-space: nowrap;
+}
 
 [data-theme="dark"] .post-content .auto-gen-notice {
   background: #1e293b;
   border-color: #334155;
   color: #cbd5e1;
 }
-[data-theme="dark"] .post-content .auto-gen-notice strong { color: #fca5a5; }
+[data-theme="dark"] .post-content .pr-badge { color: #fca5a5; }
+
+@media (max-width: 480px) {
+  .post-content .auto-gen-notice {
+    flex-wrap: wrap;
+  }
+}
 
 /* ---------- 販売終了 notice (2026-07-07: Amazon snapshot status=gone) ---------- */
 .post-content .discontinued-notice {
