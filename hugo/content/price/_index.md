@@ -1,7 +1,12 @@
 ---
-title: "値下げ発見 | Omochairo"
-description: "知育スコアで選んだ知育玩具のうち、直近90日の観測で値下げが確認できた商品をまとめて掲載。毎日の自動観測データをもとに更新します。"
+title: "値下がり中のおもちゃ一覧｜Amazon価格推移"
+description: "Amazon のおもちゃ価格を毎日自動観測し、直近90日で値下がりした知育玩具だけを掲載。以前の価格・現在価格・過去最安値かどうかが分かるので、買い時を逃さず一番安いタイミングで購入できます。"
 draft: false
+params:
+  # <title> 末尾に【YYYY年M月更新】を付与 (head.html)。価格観測が日次で回るページ。
+  title_monthly: true
+  # <title> のサイト名サフィックスを site.Params.brandShort に短縮 (head.html)。
+  title_suffix_short: true
 ShowToc: false
 ShowBreadCrumbs: true
 hidemeta: false

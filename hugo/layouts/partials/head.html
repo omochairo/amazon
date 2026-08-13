@@ -112,6 +112,16 @@
 <meta name="robots" content="noindex, nofollow">
 {{- end }}
 
+{{- /* SEO: 日次更新ページの鮮度シグナル。front matter に title_monthly: true を
+       置いたページだけ <title> 末尾に【YYYY年M月更新】を付ける。価格・割引が毎日
+       自動更新される /deals/ /price/ 向けで、実際に当月更新されているページにしか
+       付けないこと (付けた時点で「更新されている」という主張になるため)。
+       <h1> は各レイアウトの .Title をそのまま使うので月表記は入らない。 */ -}}
+{{- $pageTitle := .Title -}}
+{{- if and (not .IsHome) (eq .Params.title_monthly true) -}}
+  {{- $pageTitle = printf "%s【%s更新】" $pageTitle (now.Format "2006年1月") -}}
+{{- end -}}
+
 {{- /* Title — BRAND-HUB SEO override when applicable */}}
 {{- /* Issue #5083 項目1: 商品ページ(記事ページ, .Section "posts")だけサイト名サフィックスを
        短縮する。日本語 SERP のタイトル表示は全角30〜35文字程度で切れ、フルサフィックス
@@ -121,11 +131,20 @@
 {{- $titleSuffix := site.Title -}}
 {{- if and .IsPage (eq .Section "posts") site.Params.productTitleSuffix }}
   {{- $titleSuffix = site.Params.productTitleSuffix }}
+{{- /* SEO: 上の #5083 項目1 が「商品ページのみ短縮、一覧はフルネーム維持」という
+       範囲で線を引いているのを尊重しつつ、個別の一覧ページ単位でオプトインできる
+       逃げ道を用意する。front matter に title_suffix_short: true を置いたページ
+       だけ site.Params.brandShort を使う。デフォルトは従来どおり site.Title なので、
+       明示的にオプトインしていないページの挙動は一切変わらない。
+       一覧ページ全体に広げるかどうかは #5083 の議論マター (このフラグを外すだけで
+       いつでも撤回できる)。 */ -}}
+{{- else if and (not .IsHome) (eq .Params.title_suffix_short true) site.Params.brandShort }}
+  {{- $titleSuffix = site.Params.brandShort }}
 {{- end }}
 {{- if $brandTitle }}
-<title>{{ $brandTitle }} | {{ site.Title }}</title>
+<title>{{ $brandTitle }} | {{ $titleSuffix }}</title>
 {{- else }}
-<title>{{ if .IsHome }}{{ else }}{{ if .Title }}{{ .Title }} | {{ end }}{{ end }}{{ $titleSuffix }}</title>
+<title>{{ if .IsHome }}{{ else }}{{ if $pageTitle }}{{ $pageTitle }} | {{ end }}{{ end }}{{ $titleSuffix }}</title>
 {{- end }}
 
 {{- /* Meta */}}

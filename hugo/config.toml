@@ -29,6 +29,13 @@ enableRobotsTXT = true
 
 [params]
   env = "production"
+  # SEO: 一覧ページ用の <title> サイト名サフィックス短縮版 (#5083 項目1 の続き)。
+  # 商品ページ用の productTitleSuffix ("比較ナビ") とは別に、ブランド名を残したい
+  # ハブ/一覧ページ向けの中間の長さ。front matter に title_suffix_short: true を
+  # 置いたページだけが使う (head.html)。オプトイン方式なので、#5083 で「フルネーム
+  # 維持」と決めた一覧ページ群の挙動はフラグを立てない限り変わらない。
+  # schema_json.html / OGP の site.Title は変更しない (ブランド表記の一貫性)。
+  brandShort = "おもちゃいろ比較ナビ"
   # #3055 E4-B: Cloudflare Web Analytics (RUM) のサイトトークン。
   # CF ダッシュボード > Web Analytics でトークン発行後にコメントを外す。
   # 未設定の間は extend_head.html がビーコンを一切出力しない。
