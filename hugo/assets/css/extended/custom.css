@@ -4435,6 +4435,50 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   font-size: 0.8rem;
   color: #6b7280;
 }
+/* #5120 追補: 観測点を表として出す (score-breakdown-doc と同じ折り畳みの
+   流儀)。SVG の座標はスクリーンリーダーで読めず検索エンジンにも解釈され
+   ないため、同じ情報をテキスト (table) でも持たせる。折り畳みなので既定
+   では読者の可読性を圧迫しない。 */
+.post-content .price-history-block .price-history-table {
+  display: block;
+  margin: 10px 0 0;
+  text-align: left;
+  font-size: 0.82rem;
+  color: #1f2937;
+}
+.post-content .price-history-block .price-history-table > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #1f2937;
+  list-style: none;
+}
+.post-content .price-history-block .price-history-table > summary::-webkit-details-marker { display: none; }
+/* score-breakdown-doc (custom.css 5105行付近) と同じ流儀: ネイティブの
+   マーカーを消す代わりに ▶ を自前で出し、開閉できることを示す。 */
+.post-content .price-history-block .price-history-table > summary::before {
+  content: "▶ ";
+  display: inline-block;
+  margin-right: 4px;
+  font-size: 0.8em;
+  transition: transform 0.2s ease;
+}
+.post-content .price-history-block .price-history-table[open] > summary::before { transform: rotate(90deg); }
+.post-content .price-history-block .price-history-table table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  font-size: 0.8rem;
+}
+.post-content .price-history-block .price-history-table th,
+.post-content .price-history-block .price-history-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+}
+.post-content .price-history-block .price-history-table th {
+  color: #6b7280;
+  font-weight: 600;
+}
 
 [data-theme="dark"] .post-content .price-history-block {
   background: #1e293b;
@@ -4445,6 +4489,11 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 [data-theme="dark"] .post-content .price-history-block p { color: #e5e7eb; }
 [data-theme="dark"] .post-content .price-history-block .price-history-spark { color: #60a5fa; }
 [data-theme="dark"] .post-content .price-history-block .price-history-note { color: #94a3b8; }
+[data-theme="dark"] .post-content .price-history-block .price-history-table { color: #e5e7eb; }
+[data-theme="dark"] .post-content .price-history-block .price-history-table > summary { color: #f9fafb; }
+[data-theme="dark"] .post-content .price-history-block .price-history-table th,
+[data-theme="dark"] .post-content .price-history-block .price-history-table td { border-color: #334155; }
+[data-theme="dark"] .post-content .price-history-block .price-history-table th { color: #94a3b8; }
 
 /* ---------- 競合比較カード (#1089: grid → carousel) ----------
    .competitor-grid は .carousel-track と同じ class に乗っているため、
