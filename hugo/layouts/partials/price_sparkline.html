@@ -1,0 +1,29 @@
+{{- /*
+  一覧カード用の価格推移スパークライン。/price/ (price_dashboard_item.html) と
+  /deals/ (feature-item.html) の両方から呼ばれる。
+
+  Expects context = build_price_dashboard.py / build_feature_lists.py が
+  price_spark.build_card_spark で作った spark dict
+  (width / height / segments / min_price / max_price)。
+  カード版は軸ラベル・凡例・観測ドットを持たない (CARD_GEOM で無効化済み) ので、
+  ここでは segments だけを描く。
+
+  描画に値しない履歴では Python 側が spark を付けないので、ここに来る時点で
+  segments はある。それでも nil ガードするのは、旧生成の JSON が残っていても
+  壊れないようにするため (price_dashboard_item.html の他フィールドと同じ流儀)。
+
+  外部リクエストは増やさない (インライン SVG のみ)。width/height を明示するのは
+  CLS を出さないため。CSS は assets/css/extended/custom.css 側。
+*/ -}}
+{{- $spark := . -}}
+{{- if and $spark (gt (len $spark.segments) 0) -}}
+<div class="price-sparkline">
+  <svg class="price-sparkline-svg" viewBox="0 0 {{ $spark.width }} {{ $spark.height }}" width="{{ $spark.width }}" height="{{ $spark.height }}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="価格推移スパークライン（横軸: 日付、縦軸: 価格）">
+    <title>価格推移スパークライン</title>
+    <desc>縦軸は価格（円）、横軸は日付（実際の経過日数に比例）を表す折れ線グラフです。破線区間は未観測期間です。{{ with $spark.min_price }}期間中の最安は &yen;{{ lang.FormatNumberCustom 0 . }}{{ end }}{{ with $spark.max_price }}、最高は &yen;{{ lang.FormatNumberCustom 0 . }} です。{{ end }}</desc>
+    {{- range $spark.segments }}
+    <polyline fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"{{ if not .observed }} stroke-dasharray="3 3" stroke-opacity="0.45"{{ end }} points="{{ .points }}" />
+    {{- end }}
+  </svg>
+</div>
+{{- end -}}

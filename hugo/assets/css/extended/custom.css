@@ -4828,6 +4828,24 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 [data-theme="dark"] .score-minichart-bar { background: #374151; }
 [data-theme="dark"] .score-minichart-value { color: #f1f5f9; }
 
+/* ---------- 一覧カードの価格推移スパークライン ---------- */
+/* /price/ (price_dashboard_item.html) と /deals/ (feature-item.html) の両方から
+   partial "price_sparkline.html" で呼ばれる。CSS をどちらかのレイアウトの
+   <style> に置くと片方のページで無スタイルになるため、score-minichart と同じく
+   共通 CSS 側に置く。線色は SVG 側が stroke="currentColor" なのでここの color で決まる。 */
+.price-sparkline {
+  margin: 6px 0 8px;
+  color: #94a3b8;
+}
+.price-sparkline-svg {
+  display: block;
+  width: 160px;
+  max-width: 100%;
+  height: auto;
+}
+/* dark では背景が暗くなるぶん線を明るい側に振る (score-minichart と同じ方向)。 */
+[data-theme="dark"] .price-sparkline { color: #94a3b8; }
+
 /* ---------- 比較モード (#588) ---------- */
 /* 一覧カードの「🆚 比較」トグル。product-card は <a> なので preventDefault 必須 (JS 側で対応)。
    absolute で右上に貼り付けて画像 score badge と衝突しないよう top: 8px / right: 8px。 */
