@@ -2073,12 +2073,15 @@ def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path
     延長は「確定していること」だけを主張するための機能であり、不確かな
     継続を主張してはいけない。
 
-    ``span_days`` (#5120 追補3) は延長が適用されたページでは延長後の終端で
-    数え直し、x軸ラベル (開始日〜終了日) と一致させる。延長しないページは
-    従来どおり記録ベース。**ゲート判定 (``_PRICE_HISTORY_MIN_SPAN_DAYS``)
-    には絶対にこの延長後の値を使わない** — 記録ベースのスパンが 14 日未満の
-    ページが延長だけでゲートを通ってしまう事故を防ぐため、ゲート判定用の
-    ``gate_span_days`` と表示用の ``span_days`` を明確に分けている。
+    ``span_days`` (#5120 追補3・追補4) は延長の有無によらず常に x軸ラベル
+    (開始日〜終了日) とカレンダー日付ベースで一致させる (終端は延長適用時は
+    最終確認日、そうでなければ最新の記録日)。本文の「過去N日間」と x軸は
+    同じ窓を指しているので同じ数でなければならない。**ゲート判定
+    (``_PRICE_HISTORY_MIN_SPAN_DAYS``) には絶対にこのカレンダーベースの値を
+    使わない** — 記録ベースのスパンが 14 日未満のページが延長だけでゲートを
+    通ってしまう事故を防ぐため、ゲート判定用の ``gate_span_days``
+    (timestamp ベース) と表示用の ``span_days`` (カレンダー日付ベース) を
+    明確に分けている。
 
     Returns:
         ゲートを通って添付したら True。
@@ -2133,20 +2136,21 @@ def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path
             and watch_latest_price == latest_price):
         extend_to_dt = _price_history_parse_ts(f"{last_checked_date}T12:00:00+00:00")
 
-    # #5120 追補3: 表示用 span_days は、延長が適用されたページでは延長後の
-    # 終端 (x軸右端ラベルと同じ日付) で数える。延長しないページは
-    # gate_span_days のまま。最安・最高・直近は記録から出しているので、
-    # 窓を広げてもそれらの主張とは矛盾しない (延長区間は価格が変わって
-    # いないことが確定しているため)。ゲート判定には gate_span_days しか
-    # 使わない (このブロックより前で既に判定済み)。
+    # #5120 追補3・追補4: 表示用 span_days は、延長の有無によらず常に
+    # 「x軸ラベルと同じカレンダー日付どうしの引き算」で数える。ゲート判定
+    # (_PRICE_HISTORY_MIN_SPAN_DAYS) には引き続き gate_span_days (timestamp
+    # ベースの floor) しか使わない (このブロックより前で既に判定済み) —
+    # ここを変えると描画されるページの集合が変わってしまう。
     #
-    # 延長時は日付のみの差分で数える (.date() どうしの引き算)。x_labels は
-    # oldest_dt / extend_to_dt を strftime("%Y-%m-%d") した「時刻を持たない
-    # 日付文字列」なので、span_days 側も時刻を持ったまま (newest_dt -
-    # oldest_dt).days で floor すると、oldest_dt の時刻が正午より後のときに
-    # x軸ラベルの日数差より 1 日少なくなる (実測で延長ページの 14% が該当)。
-    # 日付どうしの引き算にすれば x_labels と機械的に一致する。
-    span_days = (extend_to_dt.date() - oldest_dt.date()).days if extend_to_dt is not None else gate_span_days
+    # 当初「延長しないページは記録ベースの (newest_dt - oldest_dt).days の
+    # まま」にしていたが、それだと本文の「過去N日間」と x軸ラベル (calendar
+    # date の文字列) の日数差が oldest_dt の時刻次第で最大1日ずれる
+    # (実測で延長しないページの 188/503 件が該当)。本文と x軸は同じ窓を
+    # 指しているのに数が違う、というのは #5120 で潰した「文章の窓とグラフの
+    # 窓が別物」と同じ種類の不整合であり、x軸ラベルを追加した今回のPRで
+    # 初めて読者に見える形になった以上、延長の有無によらず統一して閉じる。
+    domain_end_dt = extend_to_dt if extend_to_dt is not None else newest_dt
+    span_days = (domain_end_dt.date() - oldest_dt.date()).days
 
     # #5120 追補: 「N回計測しました」とは書かない。records (jsonl の行数) は
     # _DEDUPE_MIN_DAYS=6 の間引きを通った「記録数」であって「計測回数」では

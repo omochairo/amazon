@@ -739,7 +739,10 @@ class SpanDaysExtensionTests(unittest.TestCase):
             label_end = datetime.fromisoformat(x_labels[-1]["text"] + "T00:00:00+00:00")
             self.assertEqual((label_end - label_start).days, ph["span_days"])
 
-    def test_span_days_unchanged_when_not_extended(self):
+    def test_span_days_matches_calendar_diff_when_not_extended(self):
+        """#5120 追補4: 延長しないページでも span_days は x_labels と同じ
+        カレンダー日付どうしの差にする (timestamp の floor は使わない)。
+        """
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp) / "price_history"
             recs = [_rec(20, 1000), _rec(10, 1200), _rec(0, 1500)]
@@ -749,7 +752,58 @@ class SpanDaysExtensionTests(unittest.TestCase):
             ph = data["price_history"]
             oldest_dt = datetime.fromisoformat(recs[0]["ts"])
             newest_dt = datetime.fromisoformat(recs[-1]["ts"])
-            self.assertEqual(ph["span_days"], (newest_dt - oldest_dt).days)
+            self.assertEqual(ph["span_days"], (newest_dt.date() - oldest_dt.date()).days)
+
+    def test_span_days_matches_calendar_diff_at_time_of_day_boundary(self):
+        """#5120 追補4 の回帰テスト: 実データで 188/503 件が該当した「最古の
+        観測が正午より後の時刻」の境界ケースを時刻を作り込んで固定する。
+
+        最古 07-01 20:00, 最新 07-20 02:00 は exact な経過時間では
+        18日6時間 (floor で18日) だが、カレンダー日付の差 (07-20 - 07-01)
+        は19日。#5120 修正前はここが 18 と 19 でずれていた (文章とグラフの
+        窓が一致しない)。
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "price_history"
+            recs = [
+                {"ts": "2026-07-01T20:00:00+00:00", "source": "amazon", "price": 1000, "availability": None},
+                {"ts": "2026-07-10T12:00:00+00:00", "source": "amazon", "price": 1100, "availability": None},
+                {"ts": "2026-07-20T02:00:00+00:00", "source": "amazon", "price": 1200, "availability": None},
+            ]
+            _write_jsonl(root, "B1", recs)
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            ph = data["price_history"]
+            # timestamp floor なら 18 になってしまう箇所が、カレンダー日付
+            # どうしの差である 19 になっていること。
+            self.assertEqual(ph["span_days"], 19)
+            self.assertNotEqual(ph["span_days"], 18)
+            # x_labels の日数差とも一致する
+            x_labels = ph["spark"]["x_labels"]
+            label_start = datetime.fromisoformat(x_labels[0]["text"] + "T00:00:00+00:00")
+            label_end = datetime.fromisoformat(x_labels[-1]["text"] + "T00:00:00+00:00")
+            self.assertEqual((label_end - label_start).days, ph["span_days"])
+
+    def test_span_days_matches_x_axis_when_extended_time_of_day_boundary(self):
+        """延長ありでも同じ境界ケース (最古の時刻が正午より後) で一致すること。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "price_history"
+            latest = pathlib.Path(tmp) / "price_watch" / "latest.json"
+            recs = [
+                {"ts": "2026-07-01T20:00:00+00:00", "source": "amazon", "price": 1000, "availability": None},
+                {"ts": "2026-07-10T12:00:00+00:00", "source": "amazon", "price": 1100, "availability": None},
+                {"ts": "2026-07-20T02:00:00+00:00", "source": "amazon", "price": 1200, "availability": None},
+            ]
+            _write_jsonl(root, "B1", recs)
+            _write_latest_json(latest, {"B1": {"p": 1200, "ts": "2026-08-05T09:00:00+00:00"}})
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root, price_watch_latest_path=latest))
+            ph = data["price_history"]
+            x_labels = ph["spark"]["x_labels"]
+            self.assertEqual(x_labels[-1]["text"], "2026-08-05")
+            label_start = datetime.fromisoformat(x_labels[0]["text"] + "T00:00:00+00:00")
+            label_end = datetime.fromisoformat(x_labels[-1]["text"] + "T00:00:00+00:00")
+            self.assertEqual((label_end - label_start).days, ph["span_days"])
 
     def test_gate_not_bypassed_by_extension(self):
         """記録ベースのスパンが14日未満のページは、延長対象になり得ても
@@ -766,6 +820,28 @@ class SpanDaysExtensionTests(unittest.TestCase):
             _write_latest_json(latest, {"B1": {"p": 1000, "ts": future_ts}})
             data = {"product": {"asin": "B1"}}
             ok = _attach_price_history(data, root, price_watch_latest_path=latest)
+            self.assertFalse(ok)
+            self.assertNotIn("price_history", data)
+
+    def test_gate_still_uses_timestamp_span_not_calendar_span(self):
+        """#5120 追補4 の回帰テスト: 表示用 span_days をカレンダー日付ベースに
+        統一しても、ゲート判定 (gate_span_days) は timestamp ベースの floor
+        のまま。カレンダー日付差では14日ちょうどだが exact な経過時間では
+        14日未満、という境界を作ってゲートが落ちることを確認する
+        (=ゲートが誤ってカレンダーベースの値を使っていない証拠)。
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "price_history"
+            # カレンダー日付差: 07-15 - 07-01 = 14日。
+            # exact な経過時間: 07-01 20:00 -> 07-15 10:00 = 13日14時間 (floor=13)。
+            recs = [
+                {"ts": "2026-07-01T20:00:00+00:00", "source": "amazon", "price": 1000, "availability": None},
+                {"ts": "2026-07-08T12:00:00+00:00", "source": "amazon", "price": 1100, "availability": None},
+                {"ts": "2026-07-15T10:00:00+00:00", "source": "amazon", "price": 1200, "availability": None},
+            ]
+            _write_jsonl(root, "B1", recs)
+            data = {"product": {"asin": "B1"}}
+            ok = _attach_price_history(data, root)
             self.assertFalse(ok)
             self.assertNotIn("price_history", data)
 
