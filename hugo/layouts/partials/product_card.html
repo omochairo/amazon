@@ -36,7 +36,7 @@
 <a class="product-card" href="{{ .Permalink }}" aria-label="{{ $name }} の比較レビューを読む" data-asin="{{ $asin }}" data-ivs="{{ $score | default 0 }}" data-ivs100="{{ $score100 | default 0 }}" data-age-min="{{ .Params.age_min_months | default 0 }}">
   <div class="product-card-image">
     {{- if $img }}
-      <img src="{{ $img }}" alt="{{ $name }}" loading="lazy" decoding="async" referrerpolicy="no-referrer">
+      <img src="{{ $img }}" alt="{{ $name }}" loading="lazy" decoding="async" referrerpolicy="no-referrer" width="200" height="200">
     {{- else }}
       <div class="product-card-image-fallback">&#129528;</div>
     {{- end }}

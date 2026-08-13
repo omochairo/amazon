@@ -194,7 +194,7 @@
       <a class="brand-card" href="{{ .Page.RelPermalink }}">
         <div class="brand-card-image">
           {{- if $thumb }}
-            <img src="{{ $thumb }}" alt="{{ $term }}" loading="lazy" referrerpolicy="no-referrer">
+            <img src="{{ $thumb }}" alt="{{ $term }}" loading="lazy" referrerpolicy="no-referrer" width="200" height="200">
           {{- else }}
             {{- $emojis := slice "🧸" "🎨" "🧩" "🪁" "🚂" "🤹" "🧱" "🪀" "🛹" "🎺" -}}
             {{- $emojiIndex := mod (len $term) (len $emojis) -}}
