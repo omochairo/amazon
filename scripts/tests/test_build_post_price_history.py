@@ -140,7 +140,8 @@ class GateTests(unittest.TestCase):
             # only 3 valid amazon points (18, 10, 1 days ago)
             self.assertEqual(len(data["price_history"]["points"]), 3)
 
-    def test_points_capped_at_twelve(self):
+    def test_chart_window_equals_full_history(self):
+        """#5120: 直近12点への切り詰めを撤廃。グラフの窓 = 文章の窓 (全履歴)。"""
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
             recs = [_rec(30 - i, 1000 + i * 10) for i in range(20)]
@@ -148,9 +149,17 @@ class GateTests(unittest.TestCase):
             data = {"product": {"asin": "B1"}}
             ok = _attach_price_history(data, root)
             self.assertTrue(ok)
-            self.assertEqual(len(data["price_history"]["points"]), 12)
-            # 直近12点なので最新の値が末尾に残っているはず
-            self.assertEqual(data["price_history"]["points"][-1]["price"], recs[-1]["price"])
+            ph = data["price_history"]
+            self.assertEqual(len(ph["points"]), 20)
+            self.assertEqual(ph["points"][-1]["price"], recs[-1]["price"])
+            # spark のセグメントに含まれる頂点数も全20点ぶんの経路を覆う
+            # (step-after で各観測につき水平+垂直の2頂点を追加するので、
+            # 単純な点数一致ではなく「最初と最後の座標が全区間を覆う」ことを見る)
+            all_points_str = " ".join(seg["points"] for seg in ph["spark"]["segments"])
+            coords = [tuple(map(float, xy.split(","))) for xy in all_points_str.split(" ")]
+            xs = [c[0] for c in coords]
+            self.assertAlmostEqual(min(xs), 2.0, places=1)
+            self.assertAlmostEqual(max(xs), 298.0, places=1)
 
     def test_corrupted_lines_are_skipped(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -236,6 +245,97 @@ class TwoLaneMergeTests(unittest.TestCase):
             data = {"product": {"asin": "B1"}}
             self.assertTrue(_attach_price_history(data, hist, watch))
             self.assertEqual(data["price_history"]["min_price"], 1800)
+
+
+class SparkGeometryTests(unittest.TestCase):
+    """#5120: x を経過時間に比例させ、階段線 + 未観測ギャップの破線分割を検証する。"""
+
+    def test_x_is_time_proportional_not_equally_spaced(self):
+        # 0日, 20日, 40日 (span=40日) の3点。中点が 1/2 でなく "1/4" 相当の
+        # 位置に来るよう、間隔を極端に不揃いにする: 0日, 30日, 40日 (span=40日)。
+        # 30日時点は 30/40 = 0.75 -> x = 2 + 0.75*296 = 224.0。
+        # 等間隔レイアウトなら中点の index は 1/2 -> x = 150.0 になるはずなので、
+        # 224.0 ではなく 150.0 に近ければ現行の等間隔バグ、224.0 に近ければ正しい。
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            _write_jsonl(root, "B1", [_rec(40, 1000), _rec(10, 1100), _rec(0, 1200)])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            segs = data["price_history"]["spark"]["segments"]
+            all_xy = " ".join(s["points"] for s in segs).split(" ")
+            xs = [float(p.split(",")[0]) for p in all_xy]
+            # 等間隔 (150.0) には無く、時間比例 (224.0 近傍) の x が現れる
+            self.assertTrue(any(abs(x - 224.0) < 1.0 for x in xs), xs)
+            self.assertFalse(any(abs(x - 150.0) < 1.0 for x in xs), xs)
+
+    def test_quarter_span_point_lands_near_expected_x(self):
+        # 4点を 0, 10, 30, 40日前に配置 (span=40日)。10日前の点は
+        # 経過時間 30/40 = 0.75 -> x = 2 + 0.75*296 = 224.0 に来るはず
+        # (等間隔なら index 2/3 -> x ≈ 199.3 になる)。
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            _write_jsonl(root, "B1", [_rec(40, 1000), _rec(30, 1050), _rec(10, 1100), _rec(0, 1200)])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            segs = data["price_history"]["spark"]["segments"]
+            all_xy = " ".join(s["points"] for s in segs).split(" ")
+            xs = sorted(set(float(p.split(",")[0]) for p in all_xy))
+            self.assertTrue(any(abs(x - 224.0) < 1.0 for x in xs), xs)
+
+    def test_all_equal_prices_give_y_24_and_no_crash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            _write_jsonl(root, "B1", [_rec(20, 1500), _rec(10, 1500), _rec(0, 1500)])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            segs = data["price_history"]["spark"]["segments"]
+            all_xy = " ".join(s["points"] for s in segs).split(" ")
+            ys = [float(p.split(",")[1]) for p in all_xy]
+            self.assertTrue(all(y == 24.0 for y in ys), ys)
+
+    def test_long_gap_produces_unobserved_segment(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            # 0-5日: 密な観測。5日->25日: 20日ギャップ (>14日, 未観測)。
+            _write_jsonl(root, "B1", [
+                _rec(25, 1000), _rec(20, 1050),
+                _rec(5, 1100), _rec(0, 1200),
+            ])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            segs = data["price_history"]["spark"]["segments"]
+            observed_flags = [s["observed"] for s in segs]
+            self.assertIn(False, observed_flags)
+            self.assertIn(True, observed_flags)
+
+    def test_normal_interval_stays_observed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            _write_jsonl(root, "B1", [_rec(20, 1000), _rec(14, 1050), _rec(7, 1100), _rec(0, 1200)])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            segs = data["price_history"]["spark"]["segments"]
+            self.assertTrue(all(s["observed"] for s in segs))
+            self.assertEqual(len(segs), 1)
+
+    def test_step_after_vertex_exists_before_price_change(self):
+        # step-after: 価格が変わる直前に、同じ y (直前の価格) を保ったまま
+        # 新しい x まで水平移動する頂点が入る。
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            _write_jsonl(root, "B1", [_rec(20, 1000), _rec(10, 1000), _rec(0, 2000)])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            segs = data["price_history"]["spark"]["segments"]
+            all_xy = " ".join(s["points"] for s in segs).split(" ")
+            coords = [tuple(map(float, p.split(","))) for p in all_xy]
+            # 最後の観測点 (最新, price=2000 -> y=4.0) の x と同じ x に、
+            # 直前の価格 (1000 -> y=44.0) を保持した頂点があるはず
+            last_x = coords[-1][0]
+            self.assertTrue(
+                any(abs(x - last_x) < 0.01 and abs(y - 44.0) < 0.01 for x, y in coords[:-1]),
+                coords,
+            )
 
 
 if __name__ == "__main__":

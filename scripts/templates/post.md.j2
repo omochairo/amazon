@@ -161,12 +161,7 @@
 {% if product.asin %}
 <div class="keepa-graph"><div class="keepa-graph-label">📈 Amazon 価格推移グラフ（Keepa 提供）</div><img src="https://graph.keepa.com/pricehistory.png?domain=co.jp&asin={{ product.asin }}" alt="{{ product.name }} の Amazon 価格推移グラフ" loading="lazy" onerror="this.closest('.keepa-graph').style.display='none'"><p>※ グラフは <a href="https://keepa.com/" target="_blank" rel="noopener nofollow">Keepa</a> によって自動生成される画像です。記事執筆後の価格変動も反映されます。</p></div>
 {%- if price_history %}
-{%- set ph_prices = price_history.points|map(attribute='price')|list %}
-{%- set ph_pmin = ph_prices|min %}
-{%- set ph_pmax = ph_prices|max %}
-{%- set ph_range = (ph_pmax - ph_pmin) if ph_pmax != ph_pmin else 1 %}
-{%- set ph_n = price_history.points|length %}
-<div class="price-history-block"><div class="price-history-label">📉 本サイト計測の価格記録（週1巡回）{% if price_history.all_time_low %} <span class="price-history-lowest-badge">🏅 過去最安値</span>{% endif %}</div><p>過去{{ price_history.span_days }}日間の計測では、Amazon 価格は最安 ¥{{ "{:,}".format(price_history.min_price) }}（{{ price_history.min_price_date }}）〜最高 ¥{{ "{:,}".format(price_history.max_price) }} で推移し、直近の計測値は ¥{{ "{:,}".format(price_history.latest_price) }} です。</p><svg class="price-history-spark" viewBox="0 0 300 48" width="300" height="48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="価格推移スパークライン"><polyline fill="none" stroke="currentColor" stroke-width="2" points="{% for pt in price_history.points %}{{ ((loop.index0 / ((ph_n - 1) if ph_n > 1 else 1)) * 296 + 2)|round(1) }},{{ (24 if ph_pmax == ph_pmin else (4 + (1 - ((pt.price - ph_pmin) / ph_range)) * 40))|round(1) }}{% if not loop.last %} {% endif %}{% endfor %}" /></svg><small class="price-history-note">※ 本サイトが約週1回の巡回で記録した参考値です。最新価格は上の各ストアでご確認ください。</small></div>
+<div class="price-history-block"><div class="price-history-label">📉 本サイト計測の価格記録（週1巡回）{% if price_history.all_time_low %} <span class="price-history-lowest-badge">🏅 過去最安値</span>{% endif %}</div><p>過去{{ price_history.span_days }}日間の計測では、Amazon 価格は最安 ¥{{ "{:,}".format(price_history.min_price) }}（{{ price_history.min_price_date }}）〜最高 ¥{{ "{:,}".format(price_history.max_price) }} で推移し、直近の計測値は ¥{{ "{:,}".format(price_history.latest_price) }} です。</p><svg class="price-history-spark" viewBox="0 0 300 48" width="300" height="48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="価格推移スパークライン">{% for seg in price_history.spark.segments %}<polyline fill="none" stroke="currentColor" stroke-width="2"{% if not seg.observed %} stroke-dasharray="3 3" stroke-opacity="0.45"{% endif %} points="{{ seg.points }}" />{% endfor %}</svg><small class="price-history-note">※ 本サイトが約週1回の巡回で記録した参考値です。最新価格は上の各ストアでご確認ください。</small></div>
 {%- endif %}
 {% endif %}
 {%- endset -%}

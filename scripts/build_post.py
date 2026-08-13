@@ -1696,7 +1696,7 @@ def _attach_price_freshness(data: dict[str, Any], per_asin_root: pathlib.Path) -
 
 _PRICE_HISTORY_MIN_POINTS = 3
 _PRICE_HISTORY_MIN_SPAN_DAYS = 14
-_PRICE_HISTORY_MAX_POINTS_SHOWN = 12
+_PRICE_HISTORY_GAP_DAYS = 14  # #5120: この日数を超える観測間隔は「未観測」として破線で描く
 
 
 def _load_price_history_points(price_history_root: pathlib.Path, asin: str) -> list[dict[str, Any]]:
@@ -1753,6 +1753,107 @@ def _merge_price_points(*lanes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return merged
 
 
+def _price_history_parse_ts(ts: str) -> Optional[datetime]:
+    """観測点の ``ts`` (ISO8601, ``Z`` 表記あり) を aware datetime にパースする。
+
+    失敗したら None（呼び出し側でその点をスパーク描画から除外する）。
+    """
+    try:
+        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _build_price_history_spark(points: list[dict[str, Any]], min_price: int, max_price: int,
+                                width: int = 300, height: int = 48) -> dict[str, Any]:
+    """#5120: SVG スパークラインの座標をテンプレの外 (Python) で計算する。
+
+    x を「経過日数 (date, 日単位)」でなく秒解像度の ``ts`` に比例させる必要が
+    あるのは、週1巡回 + 変化即追記のマージ実データで 335/1219 (27%) のページが
+    同一日に 2 点以上の観測を持つため。date だけでは同日内の順序・間隔を
+    復元できず点が重なる。#5120 の実測では等間隔描画が本来の位置から最大
+    209px (描画幅296px中) ずれていた。
+
+    折れ線を直線補間でなく階段 (step-after: 前の点の価格を次の観測まで
+    水平に保持し、観測が来た瞬間に垂直移動) で描くのは、jsonl が dedupe を
+    通った「価格の変化点」ログであり、観測点間の連続的な変化は記録されて
+    いないため。``where_to_buy_format.build_price_history_note`` も同じ前提
+    (階段関数) で最安値を解釈している。直線補間は記録にない変化を描いて
+    しまう。
+
+    観測間隔が ``_PRICE_HISTORY_GAP_DAYS`` (14日) を超える区間は「未観測」
+    として別セグメントに分け、破線・低不透明度で描く。
+    """
+    margin_x = 2.0
+    draw_w = width - 2 * margin_x
+    y_top, y_bottom = 4.0, float(height) - 4.0
+    draw_h = y_bottom - y_top
+
+    parsed: list[tuple[datetime, int]] = []
+    for pt in points:
+        dt = _price_history_parse_ts(pt["ts"])
+        if dt is None:
+            continue
+        parsed.append((dt, pt["price"]))
+
+    if not parsed:
+        return {"width": width, "height": height, "segments": []}
+
+    n = len(parsed)
+    oldest_dt = parsed[0][0]
+    newest_dt = parsed[-1][0]
+    total_seconds = (newest_dt - oldest_dt).total_seconds()
+    price_range = max_price - min_price
+
+    def _y(price: int) -> float:
+        if price_range == 0:
+            return 24.0
+        return round(y_top + (1 - (price - min_price) / price_range) * draw_h, 1)
+
+    def _x(index: int, dt: datetime) -> float:
+        # 合計スパンが 0 秒 (理論上、>=14日ゲートの後段では起きないが
+        # ゼロ割り防止のガードとして残す) のときだけ等間隔に落とす。
+        if total_seconds <= 0:
+            return round(margin_x + (index / (n - 1) * draw_w if n > 1 else 0.0), 1)
+        return round(margin_x + (dt - oldest_dt).total_seconds() / total_seconds * draw_w, 1)
+
+    coords = [(_x(i, dt), _y(price)) for i, (dt, price) in enumerate(parsed)]
+
+    if n < 2:
+        x0, y0 = coords[0]
+        return {"width": width, "height": height,
+                "segments": [{"points": f"{x0},{y0}", "observed": True}]}
+
+    edges = []
+    for i in range(1, n):
+        gap_days = (parsed[i][0] - parsed[i - 1][0]).total_seconds() / 86400.0
+        edges.append((coords[i - 1], coords[i], gap_days > _PRICE_HISTORY_GAP_DAYS))
+
+    segments: list[dict[str, Any]] = []
+    seg_coords: list[tuple[float, float]] = [edges[0][0]]
+    seg_observed = not edges[0][2]
+
+    for prev_xy, cur_xy, is_gap in edges:
+        observed = not is_gap
+        step_xy = (cur_xy[0], prev_xy[1])  # 前の価格を次の x まで水平に保持 (step-after)
+        if observed != seg_observed:
+            segments.append({
+                "points": " ".join(f"{x},{y}" for x, y in seg_coords),
+                "observed": seg_observed,
+            })
+            seg_coords = [prev_xy]  # 直前セグメントの終端から連続させる
+            seg_observed = observed
+        seg_coords.append(step_xy)
+        seg_coords.append(cur_xy)
+
+    segments.append({
+        "points": " ".join(f"{x},{y}" for x, y in seg_coords),
+        "observed": seg_observed,
+    })
+
+    return {"width": width, "height": height, "segments": segments}
+
+
 def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path,
                           price_watch_root: Optional[pathlib.Path] = None) -> bool:
     """#2953 C案 (訂正版): 自前計測の価格履歴をゲート判定してテンプレコンテキスト
@@ -1803,16 +1904,20 @@ def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path
     max_price = max(prices)
     min_price_point = next(pt for pt in points if pt["price"] == min_price)
     latest_price = points[-1]["price"]
-    shown = points[-_PRICE_HISTORY_MAX_POINTS_SHOWN:]
 
     data["price_history"] = {
-        "points": [{"date": pt["ts"][:10], "price": pt["price"]} for pt in shown],
+        # #5120: 直近12点への切り詰めをやめ、グラフの窓 = 文章の窓 (span_days /
+        # min_price / max_price と同じ全履歴) にする。切り詰めていた頃は
+        # 9.3% のページでグラフが文章より短い期間しか描かず、うち 3.6% は
+        # 文中の最安値/最高値がグラフ上に存在しないという不整合があった。
+        "points": [{"date": pt["ts"][:10], "price": pt["price"]} for pt in points],
         "min_price": min_price,
         "min_price_date": min_price_point["ts"][:10],
         "max_price": max_price,
         "latest_price": latest_price,
         "span_days": span_days,
         "all_time_low": latest_price <= min_price,
+        "spark": _build_price_history_spark(points, min_price, max_price),
     }
     return True
 
