@@ -41,6 +41,17 @@ jobs:
           changed=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA")
           echo "Changed files:"
           echo "$changed"
+          # Eligibility: PR must add/modify at least one of
+          #   (a) data/articles/YYYY-MM-DD-B0XXXXXXXX.json (Jules article PR)
+          #   (b) hugo/content/brands/*/_index.md          (brand narrative PR, e.g. PR #1355)
+          # 2026-08-14 (#5165): out-of-scope 判定より前に出した。下の自動修復の可否
+          # 判定が「そもそも記事 PR なのか」を知る必要があるため。
+          added_article=$(git diff --name-only --diff-filter=AM "$BASE_SHA"..."$HEAD_SHA" \
+                    -- 'data/articles/*.json' \
+                  | grep -v '\.quality\.json$' \
+                  | grep -E 'data/articles/[0-9]{4}-[0-9]{2}-[0-9]{2}-B0[A-Z0-9]{8}\.json$' || true)
+          added_brand=$(git diff --name-only --diff-filter=AM "$BASE_SHA"..."$HEAD_SHA" \
+                    -- 'hugo/content/brands/*/_index.md' || true)
           # Safety: every changed file must be under data/articles/, data/raw/per_asin/,
           # or hugo/content/brands/*/_index.md (brand narrative Markdown).
           out_of_scope=$(echo "$changed" | grep -v -E '^(data/articles/|data/raw/per_asin/|hugo/content/brands/[^/]+/_index\.md$)' || true)
@@ -50,17 +61,39 @@ jobs:
             echo "$out_of_scope" >> "$GITHUB_OUTPUT"
             echo "EOF" >> "$GITHUB_OUTPUT"
             echo "eligible=false" >> "$GITHUB_OUTPUT"
+
+            # 2026-08-14 (#5165): 自動修復の可否を判定する。Jules は記事の出典調査に
+            # 使った使い捨てスクリプトをルート直下にコミットすることがあり
+            # (#5117 の get_sources.py、#5035 でマージ済みの get_rakuten.py)、
+            # そのたびに auto-merge が黙って止まる。スコープ外が「この PR が新規追加
+            # しただけのファイル」なら、消しても失われる作業は無いので機械的に外す。
+            #
+            # 自動修復しない条件 (従来どおりラベルを付けて人間に回す):
+            #   - 記事 JSON / ブランド narrative の追加が無い     … そもそも記事レーンでない
+            #   - スコープ外に既存ファイルの変更・削除が混ざる     … 消すと作業が失われる
+            #   - スコープ外に .github/ 配下が含まれる            … ワークフロー自体の
+            #     書き換えを機械的に扱わない (安全側に倒す)
+            added_all=$(git diff --name-only --diff-filter=A "$BASE_SHA"..."$HEAD_SHA" || true)
+            printf '%s\n' "$out_of_scope" | sed '/^$/d' | sort -u > /tmp/oos.txt
+            printf '%s\n' "$added_all"    | sed '/^$/d' | sort -u > /tmp/added.txt
+            repairable=true
+            if [ -z "$added_article" ] && [ -z "$added_brand" ]; then
+              echo "not repairable: no article/brand file in this PR"
+              repairable=false
+            fi
+            if grep -q '^\.github/' /tmp/oos.txt; then
+              echo "not repairable: touches .github/"
+              repairable=false
+            fi
+            not_added=$(comm -23 /tmp/oos.txt /tmp/added.txt)
+            if [ -n "$not_added" ]; then
+              echo "not repairable: out-of-scope files are not all newly added:"
+              echo "$not_added"
+              repairable=false
+            fi
+            echo "repairable=$repairable" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # Eligibility: PR must add/modify at least one of
-          #   (a) data/articles/YYYY-MM-DD-B0XXXXXXXX.json (Jules article PR)
-          #   (b) hugo/content/brands/*/_index.md          (brand narrative PR, e.g. PR #1355)
-          added_article=$(git diff --name-only --diff-filter=AM "$BASE_SHA"..."$HEAD_SHA" \
-                    -- 'data/articles/*.json' \
-                  | grep -v '\.quality\.json$' \
-                  | grep -E 'data/articles/[0-9]{4}-[0-9]{2}-[0-9]{2}-B0[A-Z0-9]{8}\.json$' || true)
-          added_brand=$(git diff --name-only --diff-filter=AM "$BASE_SHA"..."$HEAD_SHA" \
-                    -- 'hugo/content/brands/*/_index.md' || true)
           if [ -z "$added_article" ] && [ -z "$added_brand" ]; then
             echo "No Jules-shaped article JSON or brand _index.md added; skipping auto-merge."
             echo "eligible=false" >> "$GITHUB_OUTPUT"
@@ -76,6 +109,45 @@ jobs:
           fi
           echo "eligible=true" >> "$GITHUB_OUTPUT"
 
+      # 2026-08-14 (#5165): スコープ外が「この PR が新規追加しただけのファイル」なら
+      # 機械的に取り除いて記事 PR 単体に戻す。可否判定は scope ステップ側。
+      #
+      # 修復後に auto-merge を有効化するのは同じ run の後続ステップ (下の
+      # `steps.repair.outputs.repaired == 'true'` 条件)。GITHUB_TOKEN による push は
+      # workflow を再トリガしないため (このファイル下部に既出の GHA cascade 制約)、
+      # push 後に「もう一度 05 が走って有効化してくれる」ことを当てにできない。
+      - name: Auto-remove stray files added by the agent
+        id: repair
+        if: steps.scope.outputs.repairable == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          OUT_OF_SCOPE: ${{ steps.scope.outputs.out_of_scope }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # actions/checkout は pull_request では merge ref を detached で見るので、
+          # push できるように head ブランチを明示的に取り直す。
+          # refspec を明示するのは、actions/checkout が remote.origin.fetch を
+          # チェックアウトした ref だけに絞るため。`git fetch origin <branch>` だけだと
+          # 結果が FETCH_HEAD にしか入らず、origin/<branch> は "unknown revision" になる。
+          git fetch origin "+refs/heads/${HEAD_REF}:refs/remotes/origin/${HEAD_REF}"
+          git checkout -B "$HEAD_REF" "refs/remotes/origin/${HEAD_REF}"
+          printf '%s\n' "$OUT_OF_SCOPE" | sed '/^$/d' > /tmp/strays.txt
+          echo "Removing:"
+          cat /tmp/strays.txt
+          xargs -a /tmp/strays.txt -d '\n' git rm -q --
+          git commit -q \
+            -m "chore: エージェントが残した作業用ファイルを削除 (#5165)" \
+            -m "$(cat /tmp/strays.txt)"
+          git push origin "HEAD:$HEAD_REF"
+          echo "repaired=true" >> "$GITHUB_OUTPUT"
+          # 何を消したかを PR 上に残す (失敗しても auto-merge は続行させる)。
+          gh pr comment "$PR_URL" --body "$(printf 'auto-merge のスコープ外だった以下のファイルを自動で取り除きました (#5165)。いずれもこの PR が新規追加しただけのファイルなので、失われた作業はありません。\n\n```\n%s\n```\n' "$(cat /tmp/strays.txt)")" \
+            || echo "::warning::could not comment on $PR_URL"
+
       # 2026-08-04 (#4469): スコープガード自体は正しい (任意のファイルを触る PR を
       # 無条件 auto-merge するほうが危険) が、skip が exit 0 = check pass 表示のまま
       # 無言だったため PR #4280 が 4 日間放置され記事 1 本の公開が遅れた。
@@ -83,8 +155,10 @@ jobs:
       # ラベルは 45-stale-pr-sweeper.yml の滞留レポートで理由表示に使う。
       # なお eligible=false のもう一方の分岐 (記事形の JSON が無い = sidecar のみの PR 等)
       # は他レーンの通常フローなので、ここでは out_of_scope のときだけ印を付ける。
+      # 2026-08-14 (#5165): 自動修復が走った場合はここに来ない (repairable != 'true')。
+      # 自動修復の対象外だった PR だけが従来どおりラベル付きで人間に回る。
       - name: Mark out-of-scope PR as needing manual merge
-        if: steps.scope.outputs.eligible == 'false' && steps.scope.outputs.out_of_scope != ''
+        if: steps.scope.outputs.eligible == 'false' && steps.scope.outputs.out_of_scope != '' && steps.scope.outputs.repairable != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
@@ -97,7 +171,7 @@ jobs:
             || echo "::warning::could not add 'auto-merge-skipped' label (does the label exist?)"
 
       - name: Enable native auto-merge (squash)
-        if: steps.scope.outputs.eligible == 'true'
+        if: steps.scope.outputs.eligible == 'true' || steps.repair.outputs.repaired == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
@@ -118,7 +192,7 @@ jobs:
       # 安全性: この時点で Jules PR が open 状態で存在し、03-invoke-jules.yml の pick-asin が
       # /tmp/open_titles.txt でも ASIN を除外するため、lock を消しても同 ASIN の再 pick は起きない。
       - name: Release jules-lock branch
-        if: steps.scope.outputs.eligible == 'true'
+        if: steps.scope.outputs.eligible == 'true' || steps.repair.outputs.repaired == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_TITLE: ${{ github.event.pull_request.title }}
@@ -160,7 +234,7 @@ jobs:
       # アーキテクチャ上で復元できる (未 dispatch でも次の cascade push で相乗り
       # mirror されるが、それだと数時間遅延する)。
       - name: Wait for merge and dispatch GitLab mirror
-        if: steps.scope.outputs.eligible == 'true'
+        if: steps.scope.outputs.eligible == 'true' || steps.repair.outputs.repaired == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
