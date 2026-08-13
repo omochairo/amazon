@@ -113,10 +113,19 @@
 {{- end }}
 
 {{- /* Title — BRAND-HUB SEO override when applicable */}}
+{{- /* Issue #5083 項目1: 商品ページ(記事ページ, .Section "posts")だけサイト名サフィックスを
+       短縮する。日本語 SERP のタイトル表示は全角30〜35文字程度で切れ、フルサフィックス
+       (31文字)は一度も表示されずブランディングに寄与しないため。トップ・一覧・タグ・
+       ブランド等の非商品ページはフルネーム(site.Title)のまま維持し退行させない。
+       .Section での判定は extend_footer.html の既存慣習 (eq .Section "posts") に合わせる。 */ -}}
+{{- $titleSuffix := site.Title -}}
+{{- if and .IsPage (eq .Section "posts") site.Params.productTitleSuffix }}
+  {{- $titleSuffix = site.Params.productTitleSuffix }}
+{{- end }}
 {{- if $brandTitle }}
 <title>{{ $brandTitle }} | {{ site.Title }}</title>
 {{- else }}
-<title>{{ if .IsHome }}{{ else }}{{ if .Title }}{{ .Title }} | {{ end }}{{ end }}{{ site.Title }}</title>
+<title>{{ if .IsHome }}{{ else }}{{ if .Title }}{{ .Title }} | {{ end }}{{ end }}{{ $titleSuffix }}</title>
 {{- end }}
 
 {{- /* Meta */}}
