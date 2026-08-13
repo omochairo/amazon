@@ -4453,6 +4453,16 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   list-style: none;
 }
 .post-content .price-history-block .price-history-table > summary::-webkit-details-marker { display: none; }
+/* score-breakdown-doc (custom.css 5105行付近) と同じ流儀: ネイティブの
+   マーカーを消す代わりに ▶ を自前で出し、開閉できることを示す。 */
+.post-content .price-history-block .price-history-table > summary::before {
+  content: "▶ ";
+  display: inline-block;
+  margin-right: 4px;
+  font-size: 0.8em;
+  transition: transform 0.2s ease;
+}
+.post-content .price-history-block .price-history-table[open] > summary::before { transform: rotate(90deg); }
 .post-content .price-history-block .price-history-table table {
   width: 100%;
   border-collapse: collapse;

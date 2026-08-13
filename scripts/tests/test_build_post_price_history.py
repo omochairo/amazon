@@ -580,5 +580,128 @@ class ChangeCountTests(unittest.TestCase):
             self.assertNotEqual(ph["change_count"], len(ph["points"]))
 
 
+class TableRowDedupeTests(unittest.TestCase):
+    """#5120 追補: 週次/日次2レーンが同じ日に同じ価格を別時刻で記録すると、
+    日付単位に丸めて出す表には完全に同じ行が2つ並ぶ (読者にはバグに見える)。
+    表だけ間引き、SVG の座標・ドット・生の points は一切変更しない。
+    """
+
+    def test_duplicate_date_price_rows_are_deduped_in_table_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            recs = [
+                _rec(20, 1000),
+                _rec(10, 1200),
+                _rec(10, 1200),  # 同日・同価格 (別レーンの重複を模す)
+                _rec(0, 1300),
+            ]
+            _write_jsonl(root, "B1", recs)
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            ph = data["price_history"]
+            self.assertEqual(len(ph["points"]), 4)  # 生の points は間引かない
+            self.assertEqual(len(ph["table_rows"]), 3)  # table だけ間引く
+            self.assertEqual(len(ph["spark"]["dots"]), 4)  # SVG のドットも間引かない
+
+    def test_same_date_different_price_rows_are_kept(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            recs = [_rec(20, 1000), _rec(10, 1680), _rec(10, 1980), _rec(0, 1980)]
+            _write_jsonl(root, "B1", recs)
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            ph = data["price_history"]
+            # 10日前の2行 (1680 -> 1980) は同日でも価格が違うので両方残る
+            self.assertEqual(len(ph["table_rows"]), 4)
+
+
+class GraphExtensionTests(unittest.TestCase):
+    """#5120 追補2: 「最終確認日まで価格が変わっていない」ことが latest.json
+    で確定しているときだけ、階段線を最終確認日まで水平に延長する。
+    """
+
+    def _future_ts(self, days: int = 2) -> str:
+        return (datetime.now(timezone.utc) + timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+
+    def test_extends_when_daily_and_price_matches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "price_history"
+            latest = pathlib.Path(tmp) / "price_watch" / "latest.json"
+            recs = [_rec(20, 1000), _rec(10, 1200), _rec(0, 1500)]
+            _write_jsonl(root, "B1", recs)
+            future_ts = self._future_ts()
+            _write_latest_json(latest, {"B1": {"p": 1500, "ts": future_ts}})
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root, price_watch_latest_path=latest))
+            spark = data["price_history"]["spark"]
+            self.assertEqual(spark["x_labels"][-1]["text"], future_ts[:10])
+            all_xy = " ".join(s["points"] for s in spark["segments"]).split(" ")
+            xs = [float(p.split(",")[0]) for p in all_xy]
+            self.assertAlmostEqual(max(xs), 296.0, places=1)
+
+    def test_no_extension_when_watch_price_is_null(self):
+        """latest.json に p が無い (在庫切れ等、#5130 で別途起票済み) は延長しない。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "price_history"
+            latest = pathlib.Path(tmp) / "price_watch" / "latest.json"
+            recs = [_rec(20, 1000), _rec(10, 1200), _rec(0, 1500)]
+            _write_jsonl(root, "B1", recs)
+            future_ts = self._future_ts()
+            _write_latest_json(latest, {"B1": {"ts": future_ts}})  # p 無し
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root, price_watch_latest_path=latest))
+            spark = data["price_history"]["spark"]
+            self.assertEqual(spark["x_labels"][-1]["text"], recs[-1]["ts"][:10])
+
+    def test_no_extension_when_watch_price_mismatches_last_record(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "price_history"
+            latest = pathlib.Path(tmp) / "price_watch" / "latest.json"
+            recs = [_rec(20, 1000), _rec(10, 1200), _rec(0, 1500)]
+            _write_jsonl(root, "B1", recs)
+            future_ts = self._future_ts()
+            _write_latest_json(latest, {"B1": {"p": 1600, "ts": future_ts}})  # 価格不一致
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root, price_watch_latest_path=latest))
+            spark = data["price_history"]["spark"]
+            self.assertEqual(spark["x_labels"][-1]["text"], recs[-1]["ts"][:10])
+
+    def test_no_extension_when_not_checked_daily(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "price_history"
+            recs = [_rec(20, 1000), _rec(10, 1200), _rec(0, 1500)]
+            _write_jsonl(root, "B1", recs)
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))  # latest_path 省略
+            spark = data["price_history"]["spark"]
+            self.assertEqual(spark["x_labels"][-1]["text"], recs[-1]["ts"][:10])
+
+    def test_no_extension_when_last_checked_date_not_after_last_record(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "price_history"
+            latest = pathlib.Path(tmp) / "price_watch" / "latest.json"
+            recs = [_rec(20, 1000), _rec(10, 1200), _rec(0, 1500)]
+            _write_jsonl(root, "B1", recs)
+            _write_latest_json(latest, {"B1": {"p": 1500, "ts": recs[-1]["ts"]}})  # 最終記録と同日
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root, price_watch_latest_path=latest))
+            spark = data["price_history"]["spark"]
+            self.assertEqual(spark["x_labels"][-1]["text"], recs[-1]["ts"][:10])
+
+    def test_extension_adds_no_dots_or_table_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "price_history"
+            latest = pathlib.Path(tmp) / "price_watch" / "latest.json"
+            recs = [_rec(20, 1000), _rec(10, 1200), _rec(0, 1500)]
+            _write_jsonl(root, "B1", recs)
+            future_ts = self._future_ts()
+            _write_latest_json(latest, {"B1": {"p": 1500, "ts": future_ts}})
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root, price_watch_latest_path=latest))
+            ph = data["price_history"]
+            self.assertEqual(len(ph["spark"]["dots"]), 3)  # 観測点3件のまま (延長分は追加しない)
+            self.assertEqual(len(ph["table_rows"]), 3)  # 表にも行を足さない
+
+
 if __name__ == "__main__":
     unittest.main()

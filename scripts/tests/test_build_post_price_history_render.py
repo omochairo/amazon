@@ -181,7 +181,8 @@ class PriceHistoryBlockRenderTest(_RenderFixtureMixin, unittest.TestCase):
         # 観測点テーブル: <details> の中に古い順で全4行。
         details_start = block.find('<details class="price-history-table">')
         self.assertNotEqual(details_start, -1)
-        self.assertIn("計測した4件の記録を表で見る", block)
+        self.assertIn("記録した4件の価格を表で見る", block)
+        self.assertNotIn("計測した", block)  # 「計測回数」と誤読される言い方をしない
         table_html = block[details_start:]
         rows = re.findall(r"<tr><td>([\d-]+)</td><td>¥([\d,]+)</td></tr>", table_html)
         self.assertEqual(len(rows), 4)
@@ -222,6 +223,18 @@ class PriceHistoryBlockRenderTest(_RenderFixtureMixin, unittest.TestCase):
         self.assertIn("週1巡回", block)
         self.assertNotIn("とらえました", block)
         self.assertNotIn("値動きは", block)
+
+    def test_duplicate_date_price_rows_are_deduped_in_rendered_table(self):
+        # 週次/日次2レーンが同じ日に同じ価格を別時刻で記録した状態を模す
+        # (5日前の行を2つ、同日・同価格)。SVG のドットは4つのまま、表だけ
+        # 3行に間引かれ、<summary> の件数も間引き後の行数と一致すること。
+        recs = [_rec(20, 1000), _rec(5, 1200), _rec(5, 1200), _rec(0, 1300)]
+        block = self._run_and_extract_block(recs, None)
+
+        self.assertIn("記録した3件の価格を表で見る", block)
+        self.assertEqual(block.count("<circle"), 4)  # SVG 側は間引かない
+        rows = re.findall(r"<tr><td>([\d-]+)</td><td>¥([\d,]+)</td></tr>", block)
+        self.assertEqual(len(rows), 3)
 
 
 if __name__ == "__main__":

@@ -1792,7 +1792,8 @@ def _price_history_empty_spark(width: int, height: int) -> dict[str, Any]:
 
 def _build_price_history_spark(points: list[dict[str, Any]], min_price: int, max_price: int,
                                 width: int = _PRICE_HISTORY_SPARK_WIDTH,
-                                height: int = _PRICE_HISTORY_SPARK_HEIGHT) -> dict[str, Any]:
+                                height: int = _PRICE_HISTORY_SPARK_HEIGHT,
+                                extend_to_dt: Optional[datetime] = None) -> dict[str, Any]:
     """#5120: SVG スパークラインの座標・軸ラベル・観測ドット・凡例をテンプレの
     外 (Python) で計算する。テンプレは受け取った文字列/座標をそのまま描画する
     だけにして、算術をテンプレ側に持たせない。
@@ -1819,6 +1820,13 @@ def _build_price_history_spark(points: list[dict[str, Any]], min_price: int, max
     ``dots`` は実観測点のみ (step-after で挿入した水平保持の中間頂点には
     打たない) — 読者が「これは実測した点」と「線を保持するためだけの頂点」
     を区別できるようにする。
+
+    ``extend_to_dt`` (#5120 追補2): 呼び出し側 (_attach_price_history) が
+    「最終確認日まで価格が変わっていないことが latest.json で確定している」
+    と判定した場合にだけ渡される。渡されたら x 軸ドメインの終端をこの日時
+    まで延ばし、最後の観測点から x 右端まで実線 (常に observed=True。未観測
+    ではなく確定した継続なので 14日ギャップ判定の対象外) で水平に延長する。
+    延長区間には dots も table 行も追加しない (観測点ではないため)。
     """
     x_min, x_max = _PRICE_HISTORY_PLOT_X_MIN, _PRICE_HISTORY_PLOT_X_MAX
     draw_w = x_max - x_min
@@ -1838,7 +1846,12 @@ def _build_price_history_spark(points: list[dict[str, Any]], min_price: int, max
     n = len(parsed)
     oldest_dt = parsed[0][0]
     newest_dt = parsed[-1][0]
-    total_seconds = (newest_dt - oldest_dt).total_seconds()
+    # 延長は「最終観測より後」のときだけ意味を持つ。呼び出し側で既に
+    # 判定済みのはずだが、ジオメトリ関数単体でも自己完結させるため
+    # ここでも再確認する (壊れた呼び出しで domain が縮む事故を防ぐ)。
+    extend = extend_to_dt is not None and extend_to_dt > newest_dt
+    domain_end_dt = extend_to_dt if extend else newest_dt
+    total_seconds = (domain_end_dt - oldest_dt).total_seconds()
     price_range = max_price - min_price
 
     def _y(price: int) -> float:
@@ -1873,19 +1886,8 @@ def _build_price_history_spark(points: list[dict[str, Any]], min_price: int, max
 
     x_labels = [
         {"x": x_min, "y": _PRICE_HISTORY_X_LABEL_Y, "text": oldest_dt.strftime("%Y-%m-%d"), "anchor": "start"},
-        {"x": x_max, "y": _PRICE_HISTORY_X_LABEL_Y, "text": newest_dt.strftime("%Y-%m-%d"), "anchor": "end"},
+        {"x": x_max, "y": _PRICE_HISTORY_X_LABEL_Y, "text": domain_end_dt.strftime("%Y-%m-%d"), "anchor": "end"},
     ]
-
-    if n < 2:
-        x0, y0 = coords[0]
-        return {"width": width, "height": height,
-                "segments": [{"points": f"{x0},{y0}", "observed": True}],
-                "dots": dots, "y_labels": y_labels, "x_labels": x_labels, "legend": None}
-
-    edges = []
-    for i in range(1, n):
-        gap_days = (parsed[i][0] - parsed[i - 1][0]).total_seconds() / 86400.0
-        edges.append((coords[i - 1], coords[i], gap_days > _PRICE_HISTORY_GAP_DAYS))
 
     def _append_coord(coords_list: list[tuple[float, float]], xy: tuple[float, float]) -> None:
         # #5120 追補: 丸め後の座標が直前と完全一致するなら追加しない。価格が
@@ -1894,6 +1896,20 @@ def _build_price_history_spark(points: list[dict[str, Any]], min_price: int, max
         if coords_list and coords_list[-1] == xy:
             return
         coords_list.append(xy)
+
+    if n < 2:
+        cur_seg: list[tuple[float, float]] = [coords[0]]
+        if extend:
+            _append_coord(cur_seg, (x_max, coords[0][1]))
+        segments = [{"points": " ".join(f"{x},{y}" for x, y in cur_seg), "observed": True}] \
+            if len(cur_seg) >= 2 else [{"points": f"{coords[0][0]},{coords[0][1]}", "observed": True}]
+        return {"width": width, "height": height, "segments": segments,
+                "dots": dots, "y_labels": y_labels, "x_labels": x_labels, "legend": None}
+
+    edges = []
+    for i in range(1, n):
+        gap_days = (parsed[i][0] - parsed[i - 1][0]).total_seconds() / 86400.0
+        edges.append((coords[i - 1], coords[i], gap_days > _PRICE_HISTORY_GAP_DAYS))
 
     def _flush(segs: list[dict[str, Any]], coords_list: list[tuple[float, float]], observed: bool) -> None:
         # 頂点1つの polyline は線として描けないので出力しない。
@@ -1910,7 +1926,7 @@ def _build_price_history_spark(points: list[dict[str, Any]], min_price: int, max
     # 分割し、水平部分のみを破線セグメントに、垂直部分は次の観測済み
     # セグメントの先頭として続ける。このため cur_seg は常に「観測済み」の
     # 累積であり、破線セグメントはギャップ辺ごとに単発で挟まれる。
-    cur_seg: list[tuple[float, float]] = [coords[0]]
+    cur_seg = [coords[0]]
 
     for prev_xy, cur_xy, is_gap in edges:
         step_xy = (cur_xy[0], prev_xy[1])  # 前の価格を次の x まで水平に保持 (step-after)
@@ -1924,6 +1940,12 @@ def _build_price_history_spark(points: list[dict[str, Any]], min_price: int, max
         else:
             _append_coord(cur_seg, step_xy)
             _append_coord(cur_seg, cur_xy)
+
+    if extend:
+        # 最終観測の価格を x 右端 (最終確認日) まで水平に延長する。cur_seg は
+        # 常に「観測済み」の累積なのでここに足すだけで実線として続く。
+        # 14日ギャップ判定は経由しない (未観測ではなく確定した継続のため)。
+        _append_coord(cur_seg, (x_max, cur_seg[-1][1]))
 
     _flush(segments, cur_seg, True)
 
@@ -1943,10 +1965,10 @@ def _build_price_history_spark(points: list[dict[str, Any]], min_price: int, max
             "dots": dots, "y_labels": y_labels, "x_labels": x_labels, "legend": legend}
 
 
-def _load_price_watch_latest(latest_path: pathlib.Path, asin: str) -> tuple[bool, Optional[str]]:
+def _load_price_watch_latest(latest_path: pathlib.Path, asin: str) -> tuple[bool, Optional[str], Optional[int]]:
     """#5120 追補: ``data/price_watch/latest.json`` (40-price-watch.yml が毎日
     JST 05:23 に書く日次スナップショット) から、当該 ASIN を「今日も見た」か
-    どうかと最終確認日を返す。
+    どうか・最終確認日・その時点の価格を返す。
 
     週次巡回レーン (price_history.py) は ``_DEDUPE_MIN_DAYS = 6`` により
     価格が動かない限り記録しない (=「週1巡回」のように見える) が、実際の
@@ -1955,33 +1977,58 @@ def _load_price_watch_latest(latest_path: pathlib.Path, asin: str) -> tuple[bool
     ので、保存量を増やさずに「毎日見ている」ことを示せる。
 
     ファイルが無い/壊れている/当該 ASIN が items に無い場合は例外を投げず
-    ``(False, None)`` にフォールバックし、テンプレは従来の「週1巡回」表記の
-    ままにする。読み込み自体の失敗 (壊れた JSON 等、ASIN 未収録とは別の
-    異常) のときだけ warning を出す — 無言 skip が壊れた latest.json を
+    ``(False, None, None)`` にフォールバックし、テンプレは従来の「週1巡回」
+    表記のままにする。読み込み自体の失敗 (壊れた JSON 等、ASIN 未収録とは
+    別の異常) のときだけ warning を出す — 無言 skip が壊れた latest.json を
     ずっと放置する事態を防ぐため。
 
+    ``latest_price`` (#5120 追補2) はグラフを最終確認日まで延長してよいかの
+    判定材料。``p`` が欠けている/正の int でない (在庫切れ等) 場合は None
+    にする — 呼び出し側はこれを「延長してはいけない」の合図として使う。
+
     Returns:
-        (checked_daily, last_checked_date) の tuple。``last_checked_date`` は
-        ``YYYY-MM-DD`` 文字列、無ければ None。
+        (checked_daily, last_checked_date, latest_price) の tuple。
+        ``last_checked_date`` は ``YYYY-MM-DD`` 文字列、無ければ None。
     """
     if not latest_path.exists():
-        return False, None
+        return False, None, None
     try:
         payload = json.loads(latest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as e:
         logger.warning("price_watch latest.json の読み込みに失敗 (%s): %s", latest_path, e)
-        return False, None
+        return False, None, None
     if not isinstance(payload, dict):
-        return False, None
+        return False, None, None
     items = payload.get("items")
     if not isinstance(items, dict):
-        return False, None
+        return False, None, None
     rec = items.get(asin) or items.get(asin.upper()) or items.get(asin.lower())
     if not isinstance(rec, dict):
-        return False, None
+        return False, None, None
     ts = rec.get("ts")
     last_checked_date = ts[:10] if isinstance(ts, str) and len(ts) >= 10 else None
-    return True, last_checked_date
+    price = rec.get("p")
+    # bool は int のサブクラスなので明示的に弾く (price_overlay._int_or_none と同じ流儀)。
+    latest_price = price if isinstance(price, int) and not isinstance(price, bool) and price > 0 else None
+    return True, last_checked_date, latest_price
+
+
+def _dedupe_price_history_table_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """#5120 追補: 表示用テーブルの行から「直前と日付・価格が両方一致」する
+    行を間引く。
+
+    週次レーンと日次レーンが同じ日に同じ価格を別々の時刻で記録すると、日付
+    単位に丸めて表示するテーブルには完全に同じ行が2つ並ぶ (読者にはバグに
+    見える)。SVG 側は秒解像度の ts をそのまま使うので座標は重ならず、この
+    間引きは表示用テキストにしか影響しない — 座標・ドットは一切変更しない。
+    同じ日でも価格が違う行 (日中の値動き) は意味のある情報なので残す。
+    """
+    deduped: list[dict[str, Any]] = []
+    for row in rows:
+        if deduped and deduped[-1]["date"] == row["date"] and deduped[-1]["price"] == row["price"]:
+            continue
+        deduped.append(row)
+    return deduped
 
 
 def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path,
@@ -2016,6 +2063,16 @@ def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path
     「最新1件」のみを持つ非 append-only なスナップショットなので、保存量を
     増やさずに「毎日見ている」事実を示せる。
 
+    グラフの延長 (#5120 追補2): ``checked_daily`` かつ ``last_checked_date``
+    が最終記録日より後、かつ latest.json の価格 (在庫切れ等で欠けていない
+    こと) が最終記録の価格と一致するときだけ、階段線を最終確認日まで水平に
+    延長する (「価格が変わったら必ず記録される」ため、最後の記録日から
+    最終確認日まで同じ価格が続いたことは確定できる)。価格が欠けている
+    (#5130 で別途起票済みの既知の欠陥) ASIN や、latest.json の価格が最終
+    記録と食い違う (データ同期がずれている) ASIN は絶対に延長しない —
+    延長は「確定していること」だけを主張するための機能であり、不確かな
+    継続を主張してはいけない。
+
     Returns:
         ゲートを通って添付したら True。
     """
@@ -2048,8 +2105,22 @@ def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path
 
     checked_daily = False
     last_checked_date: Optional[str] = None
+    watch_latest_price: Optional[int] = None
     if price_watch_latest_path is not None:
-        checked_daily, last_checked_date = _load_price_watch_latest(price_watch_latest_path, asin)
+        checked_daily, last_checked_date, watch_latest_price = _load_price_watch_latest(
+            price_watch_latest_path, asin
+        )
+
+    # #5120 追補2: 階段線を最終確認日まで延長してよいかの判定。3条件すべて
+    # 満たすときだけ延長する (詳細は docstring)。日付だけの比較で十分
+    # (last_checked_date は YYYY-MM-DD、newest_ts[:10] も同形式なので文字列
+    # 比較で安全)。
+    extend_to_dt: Optional[datetime] = None
+    if (checked_daily and last_checked_date is not None
+            and last_checked_date > newest_ts[:10]
+            and watch_latest_price is not None
+            and watch_latest_price == latest_price):
+        extend_to_dt = _price_history_parse_ts(f"{last_checked_date}T12:00:00+00:00")
 
     # #5120 追補: 「N回計測しました」とは書かない。records (jsonl の行数) は
     # _DEDUPE_MIN_DAYS=6 の間引きを通った「記録数」であって「計測回数」では
@@ -2061,19 +2132,27 @@ def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path
         1 for prev, cur in zip(points, points[1:]) if prev["price"] != cur["price"]
     )
 
+    table_rows = _dedupe_price_history_table_rows(
+        [{"date": pt["ts"][:10], "price": pt["price"]} for pt in points]
+    )
+
     data["price_history"] = {
         # #5120: 直近12点への切り詰めをやめ、グラフの窓 = 文章の窓 (span_days /
         # min_price / max_price と同じ全履歴) にする。切り詰めていた頃は
         # 9.3% のページでグラフが文章より短い期間しか描かず、うち 3.6% は
         # 文中の最安値/最高値がグラフ上に存在しないという不整合があった。
         "points": [{"date": pt["ts"][:10], "price": pt["price"]} for pt in points],
+        # #5120 追補: 表示用テーブルは日付単位に丸めるため、週次/日次2レーン
+        # が同日に同じ価格を別時刻で記録すると完全重複行になる。表だけ
+        # 間引く (座標・ドットは秒解像度のまま変更しない)。
+        "table_rows": table_rows,
         "min_price": min_price,
         "min_price_date": min_price_point["ts"][:10],
         "max_price": max_price,
         "latest_price": latest_price,
         "span_days": span_days,
         "all_time_low": latest_price <= min_price,
-        "spark": _build_price_history_spark(points, min_price, max_price),
+        "spark": _build_price_history_spark(points, min_price, max_price, extend_to_dt=extend_to_dt),
         # #5120 追補: jsonl の記録間隔だけを見ると「週1巡回」に見えるが、
         # 日次レーンは毎日取得している (記録が _DEDUPE_MIN_DAYS で間引かれる
         # だけ)。latest.json でその事実を示せるページはラベル/注記を
