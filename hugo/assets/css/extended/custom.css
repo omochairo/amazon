@@ -2975,6 +2975,44 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   line-height: 1.5;
 }
 
+/* #5227: 一覧系ページ (partials/pr_disclosure.html) のファーストビュー広告表記。
+   商品ページの .auto-gen-notice と同じ「[PR] は右・補足文は左」の並びに揃える
+   (row-reverse は主軸 start/end を左右反転するので、DOM 先頭の .pr-badge が
+   画面右へ運ばれる。DOM 順は読み上げ順に合わせて badge → text のまま)。
+   #5225 でカードの情報量が増えているため、枠や背景は付けず1行 (実測 20px 前後)
+   に収める。ただし [PR] は太字 + 赤系で視認性を落とさない。 */
+.page-pr-notice {
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 10px;
+  margin: 0.35rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  /* light の色は #f5f5f5 背景に対して本文 7.4:1 / [PR] 6.0:1 (実測)。
+     商品ページの #d33 は light だと 4.19:1 で AA (4.5:1) に届かないため、
+     一覧側は赤みを保ったまま #b91c1c まで濃くしている。 */
+  color: #475569;
+}
+.page-pr-notice-text { flex: 1 1 auto; }
+.page-pr-notice .pr-badge {
+  flex: 0 0 auto;
+  font-weight: 700;
+  color: #b91c1c;
+  white-space: nowrap;
+}
+[data-theme="dark"] .page-pr-notice { color: #94a3b8; }
+[data-theme="dark"] .page-pr-notice .pr-badge { color: #fca5a5; }
+
+/* 360px 以下では 0.82rem のままだと文言が [PR] と同じ行にぎりぎり
+   (320px 幅で実測 292px / 余白 0px) で、フォント差で2行に落ちる。
+   1行を保つため 0.78rem まで下げる (商品ページ下部の注記と同じ大きさ)。 */
+@media (max-width: 360px) {
+  .page-pr-notice { font-size: 0.78rem; }
+}
+
 .ranking-list {
   list-style: none;
   padding: 0;

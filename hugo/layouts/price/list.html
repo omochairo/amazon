@@ -12,6 +12,8 @@
 
 <header class="page-header ranking-header feature-header feature-header--price">
   <h1>{{ .Title }}</h1>
+  {{- /* #5227: 広告表記はファーストビュー (h1 直下)。詳細は下部 .ranking-disclaimer */ -}}
+  {{- partial "pr_disclosure.html" (dict "network" "amazon") }}
   {{- if .Description }}
   <div class="post-description">
     {{ .Description }}
@@ -39,7 +41,7 @@
   </ol>
 
   <p class="ranking-disclaimer">
-    ※ 価格・在庫は Amazon から自動観測した時点のスナップショットです。「以前の価格」は直近90日の観測範囲での最高値です。リンク先で最新の価格・在庫を必ずご確認ください。当ページのリンクは Amazon アソシエイトを含みます。
+    ※ 価格・在庫は Amazon から自動観測した時点のスナップショットです。「以前の価格」は直近90日の観測範囲での最高値です。リンク先で最新の価格・在庫を必ずご確認ください。
   </p>
   {{- end }}
 </div>

@@ -1,0 +1,26 @@
+{{- /*
+  #5227: 一覧系ページ (/deals/ /price/ /cospa/ ・テーマ/年齢 hub) のファースト
+  ビューに広告表記を出す共通 partial。
+
+  景表法のステマ規制 (2023-10 施行) は「事業者の表示であることが一般消費者に
+  明瞭に判別できる」ことを求めており、ページ最下部の .ranking-disclaimer だけ
+  ではカードを見て離脱する読者に届かない。
+
+  表記は商品ページ (scripts/templates/post.md.j2 の .auto-gen-notice) と同じ
+  「[PR] を右、補足文を左」の並びに揃える。1行・0.78rem に収め、#5225 で増えた
+  カードの情報量を圧迫しないようにしている (実測 PC/mobile とも約 19px)。
+
+  文言は 375px 幅でも [PR] と同じ行に収まる長さにしてある (これより伸ばすと
+  mobile で本文が2行目に落ち、[PR] だけの行ができて占有が 56px に増える)。
+
+  引数 (dict):
+    network — "amazon" (既定) / "rakuten"。/ranking/ は楽天アフィリエイトなので
+              水平展開時に "rakuten" を渡す。
+*/ -}}
+{{- $network := "amazon" -}}
+{{- if reflect.IsMap . -}}{{- $network = .network | default "amazon" -}}{{- end -}}
+{{- $text := "Amazon アソシエイトの広告を含みます" -}}
+{{- if eq $network "rakuten" -}}{{- $text = "楽天アフィリエイトの広告を含みます" -}}{{- end -}}
+{{- /* span 間の空白は flex コンテナでは無視されるが、CSS 無効時に
+       「[PR]Amazon…」と繋がって読めるのを防ぐために入れてある。 */ -}}
+<p class="page-pr-notice"><span class="pr-badge">[PR]</span> <span class="page-pr-notice-text">{{ $text }}</span></p>
