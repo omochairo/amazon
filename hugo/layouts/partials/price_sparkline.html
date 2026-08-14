@@ -31,11 +31,15 @@
 <figure class="price-spark">
   {{- /* aria-labelledby は使わない。1ページに最大150枚並ぶので id が衝突する
          (重複 id は不正な HTML)。role="img" + aria-label なら id を作らずに済む。 */ -}}
-  <svg class="price-spark-svg" viewBox="0 0 {{ $spark.width }} {{ $spark.height }}" width="{{ $spark.width }}" height="{{ $spark.height }}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="価格推移グラフ{{ with $spark.x_labels }}（{{ (index . 0).text }}〜{{ (index . 1).text }}）{{ end }}">
-    <title>価格推移{{ with $spark.x_labels }}（{{ (index . 0).text }}〜{{ (index . 1).text }}）{{ end }}</title>
-    <desc>縦軸は価格、横軸は日付です。{{ with $spark.min_price }}期間中の最安は &yen;{{ lang.FormatNumberCustom 0 . }}{{ end }}{{ with $spark.max_price }}、最高は &yen;{{ lang.FormatNumberCustom 0 . }}{{ end }}。折れ線は観測した価格が次の観測まで続いたことを表す階段状で、破線の区間は価格を観測できていない期間です。</desc>
+  <svg class="price-spark-svg" viewBox="0 0 {{ $spark.width }} {{ $spark.height }}" width="{{ $spark.width }}" height="{{ $spark.height }}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Amazon価格の推移グラフ{{ with $spark.x_labels }}（{{ (index . 0).text }}〜{{ (index . 1).text }}）{{ end }}">
+    <title>Amazon価格の推移{{ with $spark.x_labels }}（{{ (index . 0).text }}〜{{ (index . 1).text }}）{{ end }}</title>
+    <desc>Amazon での観測価格です。縦軸は価格、横軸は日付。{{ with $spark.min_price }}期間中の最安は &yen;{{ lang.FormatNumberCustom 0 . }}{{ end }}{{ with $spark.max_price }}、最高は &yen;{{ lang.FormatNumberCustom 0 . }}{{ end }}。折れ線は観測した価格が次の観測まで続いたことを表す階段状で、破線の区間は価格を観測できていない期間です。</desc>
 
-    <text class="price-spark-caption" x="3" y="9">価格推移</text>
+    {{- /* #5225: 図の名前は「Amazon価格」と明示する。観測データは Amazon のみ
+           (price_history.py が source="amazon" しか記録しない) なのに対し、
+           /ranking/ は楽天ランキング由来で楽天価格を併記しており、単に「価格推移」だと
+           どちらの価格の話か読者が誤解する。 */ -}}
+    <text class="price-spark-caption" x="3" y="9">Amazon価格の推移</text>
 
     {{- /* 価格帯の上端・下端を示す薄い基準線。目盛りは刻まない (小さい図で潰れる)。 */}}
     <line class="price-spark-grid" x1="3" y1="13" x2="163" y2="13" />

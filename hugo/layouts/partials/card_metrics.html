@@ -1,0 +1,25 @@
+{{- /*
+  カードの指標エリア (知育スコア + Amazon価格の推移) をまとめて描く (#5225)。
+
+  Expects context = dict
+    axes … 知育スコアの4軸 (ivs_axes)。無ければスコアは描かない
+    asin … ASIN 文字列。price_sparks.json に該当があればチャートを描く
+
+  呼び出し側:
+    product_card.html         … home / /posts/ / /brands/ / /tags/ / /categories/
+    feature-item.html         … /cospa/ / /deals/ / テーマ・年齢 hub
+    price_dashboard_item.html … /price/
+    _default/ranking.html     … /ranking/
+
+  中身が両方とも空なら <div> ごと出さない。空の .card-metrics を置くと gap と
+  margin だけがカードに残るため。中身の有無は partial の戻り値を見て判断する
+  (チャートの有無は price_sparks.json 次第で、呼び出し側からは分からない)。
+*/ -}}
+{{- $score := "" -}}
+{{- with .axes }}{{ $score = partial "score_minichart.html" . }}{{ end -}}
+{{- $spark := "" -}}
+{{- with .asin }}{{ $spark = partial "price_spark_for.html" . }}{{ end -}}
+{{- $inner := printf "%s%s" $score $spark -}}
+{{- if ne (trim $inner " \n\t\r") "" -}}
+<div class="card-metrics">{{ $inner | safeHTML }}</div>
+{{- end -}}

@@ -56,13 +56,10 @@
     <p class="ranking-price">¥{{ lang.FormatNumberCustom 0 . }}{{- with $item.best_platform }} <span class="feature-platform">（{{ . }} 最安）</span>{{- end -}}</p>
     {{- end }}
 
-    {{- /* #5167: スコアと価格推移を横並びにして、カードを縦に伸ばさずに情報を増やす。 */ -}}
-    {{- if or $item.ivs_axes $item.spark }}
-    <div class="card-metrics">
-      {{- with $item.ivs_axes }}{{ partial "score_minichart.html" . }}{{- end }}
-      {{- with $item.spark }}{{ partial "price_sparkline.html" . }}{{- end }}
-    </div>
-    {{- end }}
+    {{- /* #5167: スコアと価格推移を横並びにして、カードを縦に伸ばさずに情報を増やす。
+           #5225: チャートを ASIN 引きにしたことで、/deals/ だけでなく /cospa/ と
+           テーマ・年齢 hub (同じ partial を使う) にも同時に出るようになった。 */ -}}
+    {{- partial "card_metrics.html" (dict "axes" $item.ivs_axes "asin" $item.asin) }}
 
     <div class="ranking-cta">
       {{- if $internal }}

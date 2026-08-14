@@ -72,6 +72,11 @@
         <p class="ranking-reviews">★ レビュー {{ . }} 件</p>
           {{- end }}
         {{- end }}
+        {{- /* #5225: matched_asin がある = 自社で価格観測している商品なので、
+               Amazon価格の推移を出せる。楽天価格を併記するページなので、チャート側は
+               図中に「Amazon価格の推移」と明示している (price_sparkline.html)。
+               未マッチ商品では ASIN が無く、partial は何も出さない。 */ -}}
+        {{- with $asin }}{{ partial "card_metrics.html" (dict "asin" .) }}{{ end }}
         <div class="ranking-cta">
           {{- if $internal }}
           <a class="ranking-cta-internal" href="{{ $internal }}">💡 徹底解説レビューを見る</a>

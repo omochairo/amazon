@@ -56,6 +56,11 @@ class SparkGeom:
     show_area: bool = False
     # 最新観測点にマーカーを打つか (「今どこにいるか」を示す)。
     show_last_marker: bool = False
+    # 座標の小数桁数 (#5225)。カードは全ページに最大150枚並ぶので、points 文字列が
+    # そのままページ重量になる。viewBox 220x72 を 220px で描くので 1 単位 = 約1px、
+    # 整数に丸めても誤差は 0.5px 未満で見た目に影響しない。商品ページ (300x90、
+    # 1ページ1枚) は従来どおり小数1桁のままにして出力を変えない。
+    coord_precision: int = 1
 
 
 ARTICLE_GEOM = SparkGeom(
@@ -115,6 +120,7 @@ CARD_GEOM = SparkGeom(
     date_style="short",
     show_area=True,
     show_last_marker=True,
+    coord_precision=0,
 )
 
 
@@ -195,16 +201,22 @@ def build_spark(points: list[dict[str, Any]], min_price: int, max_price: int,
     total_seconds = (domain_end_dt - oldest_dt).total_seconds()
     price_range = max_price - min_price
 
+    def _round(value: float) -> float | int:
+        """#5225: geom.coord_precision に従って丸める。0 なら int にして
+        points 文字列から不要な ".0" を消す (ページ重量が直接減る)。"""
+        rounded = round(value, geom.coord_precision)
+        return int(rounded) if geom.coord_precision == 0 else rounded
+
     def _y(price: int) -> float:
         if price_range == 0:
-            return round((y_top + y_bottom) / 2, 1)
-        return round(y_top + (1 - (price - min_price) / price_range) * draw_h, 1)
+            return _round((y_top + y_bottom) / 2)
+        return _round(y_top + (1 - (price - min_price) / price_range) * draw_h)
 
     def _x(index: int, dt: datetime) -> float:
         # 合計スパンが 0 秒のときだけ等間隔に落とす (ゼロ割り防止のガード)。
         if total_seconds <= 0:
-            return round(x_min + (index / (n - 1) * draw_w if n > 1 else 0.0), 1)
-        return round(x_min + (dt - oldest_dt).total_seconds() / total_seconds * draw_w, 1)
+            return _round(x_min + (index / (n - 1) * draw_w if n > 1 else 0.0))
+        return _round(x_min + (dt - oldest_dt).total_seconds() / total_seconds * draw_w)
 
     coords = [(_x(i, dt), _y(price)) for i, (dt, price) in enumerate(parsed)]
     dots = [{"x": x, "y": y} for x, y in coords] if geom.show_dots else []
@@ -252,14 +264,16 @@ def build_spark(points: list[dict[str, Any]], min_price: int, max_price: int,
         if not geom.show_area or len(path) < 2:
             return ""
         pts = list(path)
-        pts.append((pts[-1][0], y_bottom))
-        pts.append((pts[0][0], y_bottom))
+        # 底辺も同じ精度で丸める (float のままだと "47.0" が出て points が伸びる)。
+        bottom = _round(y_bottom)
+        pts.append((pts[-1][0], bottom))
+        pts.append((pts[0][0], bottom))
         return " ".join(f"{x},{y}" for x, y in pts)
 
     if n < 2:
         cur_seg: list[tuple[float, float]] = [coords[0]]
         if extend:
-            _append_coord(cur_seg, (x_max, coords[0][1]))
+            _append_coord(cur_seg, (_round(x_max), coords[0][1]))
         segments = [{"points": " ".join(f"{x},{y}" for x, y in cur_seg), "observed": True}] \
             if len(cur_seg) >= 2 else [{"points": f"{coords[0][0]},{coords[0][1]}", "observed": True}]
         last = {"x": cur_seg[-1][0], "y": cur_seg[-1][1]} if geom.show_last_marker else None
@@ -302,8 +316,8 @@ def build_spark(points: list[dict[str, Any]], min_price: int, max_price: int,
             _append_coord(cur_seg, cur_xy)
 
     if extend:
-        _append_coord(cur_seg, (x_max, cur_seg[-1][1]))
-        _append_coord(full_path, (x_max, full_path[-1][1]))
+        _append_coord(cur_seg, (_round(x_max), cur_seg[-1][1]))
+        _append_coord(full_path, (_round(x_max), full_path[-1][1]))
 
     _flush(segments, cur_seg, True)
 

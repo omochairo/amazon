@@ -46,7 +46,6 @@ import market_prices  # noqa: E402
 import price_overlay  # noqa: E402
 from brand_normalizer import normalize as normalize_brand  # noqa: E402
 from score_calculator import calculate as calculate_score, compute_ivs_axes  # noqa: E402
-from price_spark import build_card_spark  # noqa: E402
 
 logger = logging.getLogger("build_feature_lists")
 
@@ -741,31 +740,15 @@ def serialize_deals(
     filter_params: dict[str, Any],
     generated_at: str,
 ) -> dict[str, Any]:
-    # #3332 の価格履歴マージは build_price_dashboard 側が唯一の実装。関数内 import
-    # なのは、build_price_dashboard が module 冒頭で本モジュールを import しており
-    # (age_min_months_from_article)、module レベルだと循環参照になるため。
-    from build_price_dashboard import load_merged_history
-
-    _repo_root = Path(__file__).resolve().parent.parent
-    price_watch_dir = _repo_root / "data" / "price_watch"
-    price_history_dir = _repo_root / "data" / "price_history"
-
+    # #5225: 価格推移チャートはここで埋め込まない。build_price_sparks.py が
+    # ASIN キーの hugo/data/price_sparks.json を作り、Hugo 側が partial
+    # "price_spark_for.html" で引く。/deals/ だけでなく /cospa/ や hub、
+    # product_card を使う全ページで同じチャートが出る。
     payload_items = []
     for idx, rec in enumerate(items, start=1):
         entry = _record_to_payload_common(rec, idx)
         entry["savings_percentage"] = rec.savings_percentage
         entry["fetched_at"] = rec.fetched_at
-
-        # カード用スパークライン。採択条件は price_spark.build_card_spark 側に
-        # 集約しているので /price/ と一致する。
-        try:
-            history = load_merged_history(rec.asin, price_watch_dir, price_history_dir)
-            spark = build_card_spark(history)
-            if spark is not None:
-                entry["spark"] = spark
-        except Exception as e:  # noqa: BLE001 - fail-soft, spark 失敗で全体を落とさない
-            logger.warning("serialize_deals: spark calc failed for %s: %s", rec.asin, e)
-
         payload_items.append(entry)
     return {
         "generated_at": generated_at,

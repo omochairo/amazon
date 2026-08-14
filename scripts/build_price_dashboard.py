@@ -50,7 +50,6 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from brand_normalizer import normalize as normalize_brand  # noqa: E402
 from build_feature_lists import age_min_months_from_article  # noqa: E402
 from score_calculator import calculate as calculate_score, compute_ivs_axes  # noqa: E402
-from price_spark import build_card_spark  # noqa: E402
 
 logger = logging.getLogger("build_price_dashboard")
 
@@ -259,19 +258,11 @@ def enrich_items(
         item.setdefault("ivs_100", None)
         item.setdefault("ivs_axes", None)
 
-        # カード用スパークラインは価格履歴だけに依存し、記事 json とは無関係。
-        # 下の「記事メタが無ければ continue」より前に置くこと (後ろに置くと、
-        # 記事 json が読めないアイテムで spark まで巻き添えで消える)。
-        # 履歴ディレクトリが渡されたときだけ計算する (旧シグネチャの呼び出しでも落ちない)。
-        if price_watch_dir is not None and price_history_dir is not None:
-            try:
-                history = load_merged_history(item["asin"], price_watch_dir, price_history_dir)
-                spark = build_card_spark(history)
-                if spark is not None:
-                    item["spark"] = spark
-            except Exception as e:  # noqa: BLE001 - fail-soft, spark 失敗で全体を落とさない
-                logger.warning(f"enrich_items: spark calc failed for {item['asin']}: {e}")
-
+        # #5225: 価格推移チャートはここで埋め込まない。build_price_sparks.py が
+        # ASIN キーの hugo/data/price_sparks.json を作り、Hugo 側が partial
+        # "price_spark_for.html" で引く。一覧を作るスクリプトごとに enrich を
+        # 増やさないための SSOT 化 (/price/ /deals/ /cospa/ /brands/ /tags/ ...
+        # で採択条件がズレる事故も同時に防げる)。
         meta = article_meta.get(item["asin"]) or {}
         path = meta.get("path")
         if not path:

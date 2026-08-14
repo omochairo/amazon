@@ -191,6 +191,9 @@ pages:
     - python scripts/build_post.py
     - python scripts/build_brand_hub_stats.py
     - python scripts/build_price_dashboard.py
+    # #5225: 全ページのカードに出す「Amazon価格の推移」チャート (ASIN キーの辞書)。
+    # 落ちても partial 側が fail-soft でチャートを出さないだけなのでページは焼ける。
+    - python scripts/build_price_sparks.py
     - python scripts/build_discounts.py
     - python scripts/build_age_concerns.py
     # #4007: /deals/ /cospa/ とテーマ/年齢 hub もビルド時派生にする。従来は

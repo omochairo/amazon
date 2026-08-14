@@ -45,13 +45,9 @@
       <span class="price-item-current">&yen;{{ lang.FormatNumberCustom 0 $item.current }}</span>
     </p>
 
-    {{- /* #5167: スコアと価格推移を横並びにして、カードを縦に伸ばさずに情報を増やす。 */ -}}
-    {{- if or $item.ivs_axes $item.spark }}
-    <div class="card-metrics">
-      {{- with $item.ivs_axes }}{{ partial "score_minichart.html" . }}{{- end }}
-      {{- with $item.spark }}{{ partial "price_sparkline.html" . }}{{- end }}
-    </div>
-    {{- end }}
+    {{- /* #5167: スコアと価格推移を横並びにして、カードを縦に伸ばさずに情報を増やす。
+           #5225: チャートは ASIN 引き (hugo/data/price_sparks.json) に統一した。 */ -}}
+    {{- partial "card_metrics.html" (dict "axes" $item.ivs_axes "asin" $item.asin) }}
 
     <div class="ranking-cta">
       <a class="ranking-cta-internal" href="{{ $url }}">💡 徹底解説レビューを見る</a>
