@@ -26,6 +26,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import collections
 import json
 import pathlib
 import re
@@ -106,6 +107,52 @@ HOW_TO_CHOOSE_MIN_CHARS = 150
 # #4826 項目2: 本文に生の ASIN コードを書かない規律の soft スコア。
 # 合否 (passed) は変えず、census の「減点のみ」に発火率を出すためだけの値。
 HOW_TO_CHOOSE_INLINE_ASIN_SOFT_SCORE = 0.8
+
+# #5088 タグ粒度。data/articles 全 1,977 本の実測 (2026-08-14) で校正した:
+#   - 記事あたりの「他記事に 1 本も無いタグ」の比率は中央値 0.2 (5 個中 1 個)。
+#     0.4 に置くと 22.8% が発火して選別にならないので、0.6 (発火 5.9%) を採る。
+#   - tag == product.name/name_full は全体 12.4%・直近 (2026-07 以降) 20.4% と
+#     増加傾向。しきい値の要らない決定的な違反なので個数で減点する。
+#   - 「タグが同一記事内の別タグの部分文字列 かつ corpus 新出」は 2.2% (44 本)。
+#     「イト」(商品名 "アークライト ito(イト)レインボー" 由来) を捕まえるのは
+#     この規則だけ。断片の疑いとして warn する。
+# 文字数ベースの規則 (例: len<=2 を断片とみなす) は採らない。実測 101 種の
+# 2 文字タグはレゴ/学研/恐竜/1歳のような正当な束ね語で、断片は 1 種だけだった。
+TAG_NOVEL_RATIO_WARN = 0.6
+
+
+def _normalize_tag(value: Any) -> str:
+    """空白差・大小文字差を吸収したタグ比較キー。"""
+    return re.sub(r"\s+", "", str(value or "")).lower()
+
+
+def load_tag_corpus(src: pathlib.Path) -> collections.Counter | None:
+    """記事 JSON 群から「タグ -> それを持つ記事数」を作る。
+
+    PR 検証時 (04-validate-article-pr.yml) の ``--src`` は変更分だけを
+    コピーした mktemp なので、束ね能力の判定には使えない。corpus は常に
+    リポジトリの data/articles/ を別途読む (存在しなければ None = skip)。
+    """
+    if not src.exists() or not src.is_dir():
+        return None
+    counter: collections.Counter = collections.Counter()
+    files = [
+        p for p in src.glob("*.json")
+        if not p.stem.endswith((".enrichment", ".seo", ".quality"))
+    ]
+    if not files:
+        return None
+    for path in files:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        tags = data.get("tags")
+        if not isinstance(tags, list):
+            continue
+        for tag in {_normalize_tag(t) for t in tags if str(t).strip()}:
+            counter[tag] += 1
+    return counter or None
 
 
 @dataclass
@@ -769,6 +816,73 @@ def check_edu_domains(data: dict) -> CheckResult:
     return CheckResult("edu_domains_v5", True, 1.0, "OK")
 
 
+def check_tag_granularity(
+    data: dict, tag_corpus: collections.Counter | None = None
+) -> CheckResult:
+    """#5088 Warn-only: タグが「複数記事を束ねる軸」になっているかを見る。
+
+    タグは 3,295 種のうち 77% が 1 記事にしか付いておらず、その 84% は
+    product.name の部分文字列だった (実測)。原因は文字列処理のバグではなく、
+    生成側が商品固有の固有名詞をタグに書いていること。ページ化されない
+    (= 404 も出ない) ので実害はまだ無く、**合否は変えない**。census で
+    発火率を追い、AGENTS.md の粒度規約が効いているかを観測するための check。
+
+    tag_corpus が None (corpus 不明) のときは束ね能力の判定だけを skip し、
+    corpus 非依存の 2 規則は評価する。
+    """
+    tags = data.get("tags")
+    if not isinstance(tags, list) or not tags:
+        return CheckResult("tag_granularity", True, 1.0, "no tags")
+    tags = [str(t) for t in tags if str(t).strip()]
+    if not tags:
+        return CheckResult("tag_granularity", True, 1.0, "no tags")
+
+    product = data.get("product") or {}
+    product_names = {
+        _normalize_tag(product.get("name")),
+        _normalize_tag(product.get("name_full")),
+    } - {""}
+
+    def _is_novel(tag: str) -> bool:
+        if tag_corpus is None:
+            return False
+        return tag_corpus.get(_normalize_tag(tag), 0) <= 1
+
+    # 規則1: 商品名そのもの。定義上その 1 記事しか持てない。
+    product_name_tags = [t for t in tags if _normalize_tag(t) in product_names]
+    # 規則2: 同一記事内の別タグの部分文字列で、かつどの記事とも共有していない。
+    #        「イト」⊂「アークライト」型の断片を拾う。
+    fragment_tags = [
+        t for t in tags
+        if _is_novel(t) and any(t != other and t in other for other in tags)
+    ]
+    novel_ratio = None
+    if tag_corpus is not None:
+        novel_ratio = sum(1 for t in tags if _is_novel(t)) / len(tags)
+
+    notes: list[str] = []
+    score = 1.0
+    if product_name_tags:
+        score -= 0.1 * len(product_name_tags)
+        notes.append(f"product-name tags={product_name_tags[:3]}")
+    if fragment_tags:
+        score -= 0.1 * len(fragment_tags)
+        notes.append(f"fragment suspects={fragment_tags[:3]}")
+    if novel_ratio is not None and novel_ratio >= TAG_NOVEL_RATIO_WARN:
+        score -= 0.2
+        notes.append(
+            f"unshared tags {novel_ratio:.0%} >= {TAG_NOVEL_RATIO_WARN:.0%} "
+            f"(median 20%)"
+        )
+    if not notes:
+        detail = "corpus unavailable" if tag_corpus is None else f"unshared {novel_ratio:.0%}"
+        return CheckResult("tag_granularity", True, 1.0, f"OK ({detail})")
+    return CheckResult(
+        "tag_granularity", True, max(0.5, score),
+        "; ".join(notes) + " (warn-only, #5088)",
+    )
+
+
 def check_prices_verified(data: dict) -> CheckResult:
     """Warn-only: count rakuten/yahoo price entries that have a clickable URL
     but lack deterministic cross_search verification. Build_post tags entries
@@ -1137,6 +1251,7 @@ def evaluate_article(
     yahoo_idx: dict[str, Any] | None = None,
     cert_fetch: bool = True,
     stock_index: "stock_status.StockIndex | None" = None,
+    tag_corpus: collections.Counter | None = None,
 ) -> ArticleReport:
     data = json.loads(json_path.read_text(encoding="utf-8"))
     slug = data.get("slug", json_path.stem)
@@ -1165,6 +1280,7 @@ def evaluate_article(
     report.checks.append(check_sources_v5(data))
     report.checks.append(check_cert_sources_content(data, fetch_enabled=cert_fetch))
     report.checks.append(check_edu_domains(data))
+    report.checks.append(check_tag_granularity(data, tag_corpus))
     report.checks.append(check_prices_verified(data))
     report.checks.append(check_no_reseller_pricing(data))
     report.checks.append(check_lead_hook(data))
@@ -1191,6 +1307,11 @@ def main() -> int:
     parser.add_argument(
         "--no-cert-fetch", action="store_true",
         help="cert HTML content check の HTTP fetch を無効化 (local dryrun 用)",
+    )
+    parser.add_argument(
+        "--tag-corpus", default="data/articles/",
+        help="#5088: タグの束ね能力を測る母集団 (--src が mktemp の PR 検証でも "
+             "リポジトリ全記事を見るため独立指定。存在しなければ判定を skip)",
     )
     parser.add_argument(
         "--price-watch", default=None,
@@ -1235,6 +1356,10 @@ def main() -> int:
         print("[quality_gate] no articles to check")
         return 0
 
+    tag_corpus = load_tag_corpus(pathlib.Path(args.tag_corpus)) if args.tag_corpus else None
+    if tag_corpus is None:
+        print(f"[quality_gate] tag corpus not available at {args.tag_corpus}; tag_granularity partially skipped")
+
     failures: list[ArticleReport] = []
     below_threshold: list[ArticleReport] = []
     all_reports: list[ArticleReport] = []
@@ -1245,6 +1370,7 @@ def main() -> int:
             jp, schema, md_candidate if md_candidate.exists() else None,
             rakuten_idx=rakuten_idx, yahoo_idx=yahoo_idx,
             cert_fetch=not args.no_cert_fetch,
+            tag_corpus=tag_corpus,
         )
         all_reports.append(report)
         if not args.quiet:
@@ -1253,6 +1379,11 @@ def main() -> int:
             for c in report.checks:
                 if not c.passed:
                     print(f"    - {c.name}: {c.message}")
+                elif c.score < 1.0:
+                    # warn-only の check (tag_granularity #5088 等) は passed のまま
+                    # 減点だけする。ここで出さないと PR ログから完全に消え、
+                    # 「黙って死ぬゲート」になる。
+                    print(f"    ! {c.name}: {c.message}")
         if not report.passed:
             failures.append(report)
         if report.total_score < args.min_score:
