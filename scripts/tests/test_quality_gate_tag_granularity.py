@@ -20,6 +20,7 @@ if str(ROOT) not in sys.path:
 
 from quality_gate import (  # noqa: E402
     TAG_NOVEL_RATIO_WARN,
+    TagCorpus,
     check_tag_granularity,
     load_tag_corpus,
 )
@@ -34,7 +35,8 @@ def _article(tags, name="ジスター 天才のはじまり", name_full=""):
 
 
 def _corpus(**counts):
-    return collections.Counter(counts)
+    """記事はまだ corpus に無い (= PR 検証) 前提の corpus。"""
+    return TagCorpus(counts=collections.Counter(counts), slugs=set())
 
 
 SHARED = _corpus(**{"知育玩具": 500, "プレゼント": 400, "ブロック": 200, "レゴ": 89})
@@ -119,6 +121,35 @@ def test_tag_appearing_in_exactly_one_other_article_is_shared():
     assert result.message.startswith("OK")
 
 
+def test_verdict_is_identical_before_and_after_the_article_joins_the_corpus():
+    """merge 前後で判定が変わってはいけない (自己カウントの引き算)。
+
+    実際に #5088 の検証中、同じ記事が PR 時 60% 未共有 → merge 後 20% と
+    判定が動いた。母集団に自分が入るかどうかを見ていなかったため。
+    """
+    article = _article(["GOKEI", "保護ケース", "電子玩具アクセサリー", "たまごっちパラダイス", "プレゼント"])
+    before = TagCorpus(
+        counts=collections.Counter({"gokei": 1, "保護ケース": 1, "たまごっちパラダイス": 9, "プレゼント": 400}),
+        slugs=set(),
+    )
+    after = TagCorpus(
+        counts=collections.Counter({"gokei": 2, "保護ケース": 2, "電子玩具アクセサリー": 1, "たまごっちパラダイス": 10, "プレゼント": 401}),
+        slugs={article["slug"]},
+    )
+    assert check_tag_granularity(article, before).message == check_tag_granularity(article, after).message
+    assert check_tag_granularity(article, before).score == 1.0
+
+
+def test_fragment_rule_also_uses_others_only_count():
+    """「ベイブレード」⊂「ベイブレードX」でも、他に 1 本でも使っていれば断片ではない。"""
+    article = _article(["ベイブレード", "ベイブレードX", "プレゼント"], name="ベイブレードX CX-19")
+    corpus = TagCorpus(
+        counts=collections.Counter({"ベイブレード": 2, "ベイブレードx": 16, "プレゼント": 400}),
+        slugs={article["slug"]},
+    )
+    assert "fragment" not in check_tag_granularity(article, corpus).message
+
+
 def test_corpus_none_skips_only_the_ratio_rule():
     article = _article(["ジスター 天才のはじまり", "固有A", "固有B"])
     result = check_tag_granularity(article, None)
@@ -142,8 +173,8 @@ def test_load_tag_corpus_counts_articles_not_occurrences(tmp_path):
         json.dumps({"tags": ["レゴ", "レゴ"]}, ensure_ascii=False), encoding="utf-8"
     )
     corpus = load_tag_corpus(tmp_path)
-    assert corpus["レゴ"] == 3
-    assert corpus["知育玩具"] == 1
+    assert corpus.counts["レゴ"] == 3
+    assert corpus.counts["知育玩具"] == 1
 
 
 def test_load_tag_corpus_skips_sidecars_and_broken_json(tmp_path):
@@ -155,8 +186,8 @@ def test_load_tag_corpus_skips_sidecars_and_broken_json(tmp_path):
     )
     (tmp_path / "2026-08-11-B0Z.json").write_text("{ broken", encoding="utf-8")
     corpus = load_tag_corpus(tmp_path)
-    assert corpus["レゴ"] == 1
-    assert "混入してはいけない" not in corpus
+    assert corpus.counts["レゴ"] == 1
+    assert "混入してはいけない" not in corpus.counts
 
 
 def test_load_tag_corpus_returns_none_when_missing(tmp_path):

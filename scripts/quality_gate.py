@@ -126,8 +126,34 @@ def _normalize_tag(value: Any) -> str:
     return re.sub(r"\s+", "", str(value or "")).lower()
 
 
-def load_tag_corpus(src: pathlib.Path) -> collections.Counter | None:
-    """記事 JSON 群から「タグ -> それを持つ記事数」を作る。
+@dataclass
+class TagCorpus:
+    """「タグ -> それを持つ記事数」と、数えた記事の slug 集合。
+
+    slug 集合が要るのは自己カウントを引くため。判定したいのは常に
+    「**自分以外に**このタグを持つ記事があるか」で、母集団に自分が
+    含まれるかは文脈で変わる:
+
+    - census (main 全量): 記事は corpus に入っている → 自分の 1 を引く
+    - PR 検証: 記事はまだ corpus に無い → 引かない
+
+    これを区別しないと、PR 時だけ「既存 1 本と共有しているタグ」が
+    未共有に見え、同じ記事が merge 前後で違う判定になる。
+    """
+
+    counts: collections.Counter
+    slugs: set[str]
+
+    def others(self, tag: Any, slug: str | None) -> int:
+        """slug の記事を除いて、このタグを持つ記事数。"""
+        n = self.counts.get(_normalize_tag(tag), 0)
+        if slug is not None and slug in self.slugs:
+            n -= 1
+        return max(0, n)
+
+
+def load_tag_corpus(src: pathlib.Path) -> TagCorpus | None:
+    """記事 JSON 群から TagCorpus を作る。
 
     PR 検証時 (04-validate-article-pr.yml) の ``--src`` は変更分だけを
     コピーした mktemp なので、束ね能力の判定には使えない。corpus は常に
@@ -136,6 +162,7 @@ def load_tag_corpus(src: pathlib.Path) -> collections.Counter | None:
     if not src.exists() or not src.is_dir():
         return None
     counter: collections.Counter = collections.Counter()
+    slugs: set[str] = set()
     files = [
         p for p in src.glob("*.json")
         if not p.stem.endswith((".enrichment", ".seo", ".quality"))
@@ -150,9 +177,12 @@ def load_tag_corpus(src: pathlib.Path) -> collections.Counter | None:
         tags = data.get("tags")
         if not isinstance(tags, list):
             continue
+        slugs.add(str(data.get("slug") or path.stem))
         for tag in {_normalize_tag(t) for t in tags if str(t).strip()}:
             counter[tag] += 1
-    return counter or None
+    if not counter:
+        return None
+    return TagCorpus(counts=counter, slugs=slugs)
 
 
 @dataclass
@@ -817,7 +847,7 @@ def check_edu_domains(data: dict) -> CheckResult:
 
 
 def check_tag_granularity(
-    data: dict, tag_corpus: collections.Counter | None = None
+    data: dict, tag_corpus: "TagCorpus | None" = None
 ) -> CheckResult:
     """#5088 Warn-only: タグが「複数記事を束ねる軸」になっているかを見る。
 
@@ -843,10 +873,14 @@ def check_tag_granularity(
         _normalize_tag(product.get("name_full")),
     } - {""}
 
+    slug = data.get("slug")
+    slug = str(slug) if slug else None
+
     def _is_novel(tag: str) -> bool:
+        """自分以外にこのタグを持つ記事が 1 本も無いか。"""
         if tag_corpus is None:
             return False
-        return tag_corpus.get(_normalize_tag(tag), 0) <= 1
+        return tag_corpus.others(tag, slug) == 0
 
     # 規則1: 商品名そのもの。定義上その 1 記事しか持てない。
     product_name_tags = [t for t in tags if _normalize_tag(t) in product_names]
