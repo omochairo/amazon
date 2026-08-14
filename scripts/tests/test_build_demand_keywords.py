@@ -563,3 +563,68 @@ def test_run_fails_open_when_ubersuggest_inputs_absent(tmp_path):
     )
     assert [k["keyword"] for k in result["keywords"]] == ["語a"]  # normalize() で lowercase
     assert set(result["summary"]["ubersuggest_missing_inputs"]) == {"probe", "llm_judge"}
+
+
+# ---------- WP順位履歴の鮮度 (fail-closed, #5107) ----------
+
+def test_stale_wp_history_aborts_instead_of_guarding_on_old_ranks(tmp_path):
+    """古いだけのファイルは「壊れている」に入らず正常なガードとして通ってしまう。
+
+    #5107 の実害そのもの: 収集が omcha-ops へ移設された後も public 側の凍結
+    スナップショットで判定が続き、出力を見ても気づけない。
+    """
+    history = _wp_history_file(tmp_path, [
+        {"query": "テスト語", "date": "2026-08-04", "impressions": 500, "clicks": 220,
+         "position": 1.1},
+    ])
+    with pytest.raises(SystemExit) as e:
+        B.assert_wp_history_fresh(history, 8, today=B.date.fromisoformat("2026-08-25"))
+    assert "2026-08-04" in str(e.value)
+
+
+def test_fresh_wp_history_passes_and_returns_last_date(tmp_path):
+    history = _wp_history_file(tmp_path, [
+        {"query": "テスト語", "date": "2026-08-04", "impressions": 500, "clicks": 220,
+         "position": 1.1},
+        {"query": "テスト語", "date": "2026-08-10", "impressions": 400, "clicks": 100,
+         "position": 1.2},
+    ])
+    assert B.assert_wp_history_fresh(
+        history, 8, today=B.date.fromisoformat("2026-08-15")) == "2026-08-10"
+
+
+def test_max_age_zero_disables_the_freshness_check(tmp_path):
+    history = _wp_history_file(tmp_path, [
+        {"query": "テスト語", "date": "2020-01-01", "impressions": 5, "clicks": 1,
+         "position": 1.1},
+    ])
+    assert B.assert_wp_history_fresh(
+        history, 0, today=B.date.fromisoformat("2026-08-15")) is None
+
+
+def test_absent_history_still_fails_open_not_closed(tmp_path):
+    """「無い」は従来どおり fail-open。ここを塞ぐと初回導入時に動かせなくなる。"""
+    assert B.assert_wp_history_fresh(
+        tmp_path / "nope.jsonl", 8, today=B.date.fromisoformat("2026-08-15")) is None
+
+
+def test_run_aborts_when_rank_guard_reads_stale_history(tmp_path):
+    """run() 経由でも止まること (ガード有効時のみ)。"""
+    terms = _terms_file(tmp_path, modifiers=[], excluded=[])
+    topics_path = tmp_path / "topics.json"
+    topics_path.write_text(json.dumps({"rows": [
+        {"query": "語A", "wp_impressions": 10, "bucket": "toy"},
+    ]}, ensure_ascii=False), encoding="utf-8")
+    history = _wp_history_file(tmp_path, [
+        {"query": "語A", "date": "2020-01-01", "impressions": 5, "clicks": 1, "position": 1.1},
+    ])
+    kwargs = dict(
+        supply_probe_path=None, wp_history_path=history,
+        ubersuggest_probe_path=None, ubersuggest_llm_judge_path=None,
+    )
+    with pytest.raises(SystemExit):
+        B.run(terms, topics_path, tmp_path / "out.json", ("toy",), 0, dry_run=True, **kwargs)
+    # --no-rank-guard なら従来どおり通る
+    result = B.run(terms, topics_path, tmp_path / "out.json", ("toy",), 0, dry_run=True,
+                   rank_guard_enabled=False, **kwargs)
+    assert [k["keyword"] for k in result["keywords"]] == ["語a"]

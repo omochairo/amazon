@@ -60,6 +60,12 @@ WP順位ガード (dropped_wp_ranked, #2686):
   --no-rank-guard で無効化できる。gsc_wp_by_query.jsonl が無い/壊れている場合は
   fail-open (ガード無効のまま従来動作) で進み、summary に記録する。
 
+  ただし **古いだけ** のファイルは fail-open に入らない (#5107)。2026-08-07 の #4654 で
+  WP の GSC 収集は private の omochairo/omcha-ops へ移設され、public 側のこのファイルは
+  2026-08-04 で凍結している。壊れていないので正常なガードとして通り、古い順位で
+  カニバリ判定を続けてしまう。assert_wp_history_fresh が最終計測日を見て
+  --wp-history-max-age-days (既定 8) を超えたら **中断する** (fail-closed)。
+
 Ubersuggest 由来の需要語の合流 (#2686 PR1・2026-08-10 実測):
   WP (omcha.jp GSC) だけでなく、競合サイトの Ubersuggest 由来語も需要側の入力に
   合流する。実測パイプライン (競合9サイト CSV → L1 語彙ゲート → Amazon 実査
@@ -100,7 +106,7 @@ import logging
 import pathlib
 import re
 import unicodedata
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 import yaml
@@ -121,6 +127,11 @@ MIN_KEYWORD_CHARS = 2
 # WP順位ガードの既定閾値 (#2686 の docstring 参照)。
 DEFAULT_GUARD_POS_MAX = 3.0
 DEFAULT_GUARD_MIN_CLICKS = 100
+# WP順位履歴の許容鮮度 (日)。0 で無効化。ガードは「今 WP が取れている語」を守るための
+# ものなので、古い順位で判定すると守る対象がずれる (#5107 の docstring 参照)。
+# 8d は check_history_freshness.py が退役まで gsc_wp_* に使っていた上限と同じ
+# (日次 cadence + GSC の確定遅延 3d に余裕を足した値)。
+DEFAULT_WP_HISTORY_MAX_AGE_DAYS = 8
 
 _SPACE_RE = re.compile(r"[\s　]+")
 # 末尾に残る助詞 1 文字 (修飾語を落とした残骸)。「…1000と1500の」→「…1000と1500」
@@ -272,6 +283,68 @@ def load_wp_rank_stats(history_path: pathlib.Path | None) -> dict[str, dict[str,
             "pos": (e["pos_weighted_sum"] / e["imp"]) if e["imp"] else 0.0,
         }
     return out
+
+
+def wp_history_last_date(history_path: pathlib.Path | None) -> str | None:
+    """WP順位履歴の最終計測日 (YYYY-MM-DD) を返す。読めなければ None。
+
+    load_wp_rank_stats とは別パスにしてある。あちらの戻り値の型は
+    ingest_ubersuggest.py が再利用しているので変えない (#2686 PR1)。
+    """
+    if history_path is None or not history_path.exists():
+        return None
+    last: str | None = None
+    try:
+        with history_path.open(encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                value = json.loads(line).get("date")
+                if isinstance(value, str) and len(value) >= 10:
+                    day = value[:10]
+                    if last is None or day > last:
+                        last = day
+    except (OSError, json.JSONDecodeError) as e:
+        logger.warning("WP順位履歴の日付を読めない: %s", e)
+        return None
+    return last
+
+
+def assert_wp_history_fresh(history_path: pathlib.Path | None, max_age_days: int,
+                            today: date | None = None) -> str | None:
+    """WP順位履歴が古すぎたら **止める** (fail-closed)。最終計測日を返す。
+
+    なぜ fail-open にしないか (#5107):
+      2026-08-07 の #4654 で WP (omcha.jp) の GSC 収集は private の omochairo/omcha-ops
+      へ移設され、public 側の gsc_wp_by_query.jsonl は 2026-08-04 で凍結した。
+      ファイルは壊れておらず**ただ古いだけ**なので、load_wp_rank_stats の
+      「無い / 壊れている」fail-open のどちらにも入らず、正常なガードとして通ってしまう。
+
+      ガードは host crowding によるカニバリ回避が目的なので、順位が古いと
+      両方向に静かに外れる: WP が既に落とした語を除外し続ける (機会損失) 一方、
+      WP が新たに取った語は除外できない (カニバリ)。どちらも出力を見ても分からない。
+      ここは「黙って間違った答えを出す」より「止まって人に決めさせる」が正しい。
+
+    ガード無効時 (--no-rank-guard) と max_age_days<=0 では何も見ない。
+    """
+    if max_age_days <= 0:
+        return None
+    last = wp_history_last_date(history_path)
+    if last is None:
+        # 無い / 壊れている は従来どおり load_wp_rank_stats 側の fail-open に委ねる。
+        return None
+    age = ((today or datetime.now(timezone.utc).date()) - date.fromisoformat(last)).days
+    if age > max_age_days:
+        raise SystemExit(
+            f"WP順位履歴 {history_path} の最終計測日が {last} ({age}d 前) で "
+            f"上限 {max_age_days}d を超えている。古い順位でガードすると "
+            f"カニバリ回避が静かに外れるので中断する (#5107)。\n"
+            f"  - 収集は omochairo/omcha-ops (private) の data/gsc/ に移設済み。"
+            f"そこから最新の gsc_wp_by_query.jsonl を持ってきて --wp-history に渡すか、\n"
+            f"  - ガードの是非を判断した上で --no-rank-guard "
+            f"(または --wp-history-max-age-days 0) を明示すること")
+    return last
 
 
 def load_ubersuggest_keywords(
@@ -540,10 +613,13 @@ def run(terms_path: pathlib.Path, topics_path: pathlib.Path, out_path: pathlib.P
         guard_min_clicks: float = DEFAULT_GUARD_MIN_CLICKS,
         rank_guard_enabled: bool = True,
         ubersuggest_probe_path: pathlib.Path | None = None,
-        ubersuggest_llm_judge_path: pathlib.Path | None = None) -> dict[str, Any]:
+        ubersuggest_llm_judge_path: pathlib.Path | None = None,
+        wp_history_max_age_days: int = DEFAULT_WP_HISTORY_MAX_AGE_DAYS) -> dict[str, Any]:
     modifiers, excluded = load_vocab(terms_path)
     topics = json.loads(topics_path.read_text(encoding="utf-8"))
     zero_supply = load_zero_supply_keywords(supply_probe_path)
+    wp_history_last = (assert_wp_history_fresh(wp_history_path, wp_history_max_age_days)
+                       if rank_guard_enabled else None)
     wp_rank_stats = load_wp_rank_stats(wp_history_path) if rank_guard_enabled else {}
     ubersuggest_keywords, ubersuggest_missing = load_ubersuggest_keywords(
         ubersuggest_probe_path, ubersuggest_llm_judge_path)
@@ -565,8 +641,9 @@ def run(terms_path: pathlib.Path, topics_path: pathlib.Path, out_path: pathlib.P
     if rank_guard_enabled and not wp_rank_stats:
         logger.warning("  WP順位ガード: 履歴データが無いため無効 (fail-open)")
     else:
-        logger.info("  WP順位ガードで除外 %d 語 (WP保護クリック %d)",
-                    s["dropped_wp_ranked"], s["dropped_wp_ranked_clicks"])
+        logger.info("  WP順位ガードで除外 %d 語 (WP保護クリック %d, WP順位履歴 最終 %s)",
+                    s["dropped_wp_ranked"], s["dropped_wp_ranked_clicks"],
+                    wp_history_last or "-")
     logger.info("  Ubersuggest 由来 %d 語 (volume 合計 %d, ガード除外 %d)",
                 s["ubersuggest_keywords"], s["ubersuggest_volume"],
                 s["ubersuggest_dropped_wp_ranked"])
@@ -602,6 +679,9 @@ def main() -> int:
                     help="WP順位ガードのクリック数しきい値 (これ以上で保護対象、既定 100)")
     ap.add_argument("--no-rank-guard", action="store_true",
                     help="WP順位ガードを無効化する")
+    ap.add_argument("--wp-history-max-age-days", type=int,
+                    default=DEFAULT_WP_HISTORY_MAX_AGE_DAYS,
+                    help="WP順位履歴の許容鮮度 (日, 既定 8)。超えたら中断する (0=検査しない)")
     ap.add_argument("--ubersuggest-probe", default=DEFAULT_UBERSUGGEST_PROBE_PATH,
                     help="Ubersuggest 語の Amazon 実査 probe (#2686 PR1)。verdict==product を合流")
     ap.add_argument("--ubersuggest-llm-judge", default=DEFAULT_UBERSUGGEST_LLM_JUDGE_PATH,
@@ -621,7 +701,8 @@ def main() -> int:
         ubersuggest_probe_path=(
             None if args.no_ubersuggest else pathlib.Path(args.ubersuggest_probe)),
         ubersuggest_llm_judge_path=(
-            None if args.no_ubersuggest else pathlib.Path(args.ubersuggest_llm_judge)))
+            None if args.no_ubersuggest else pathlib.Path(args.ubersuggest_llm_judge)),
+        wp_history_max_age_days=args.wp_history_max_age_days)
     return 0
 
 
