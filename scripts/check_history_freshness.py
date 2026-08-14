@@ -82,12 +82,6 @@ LANES: Sequence[Lane] = (
          "GSC は delay=3 で確定 (実測 4d)"),
     Lane("gsc_by_query.jsonl", "daily", 7, "18-analytics-daily.yml",
          "GSC は delay=3 で確定 (実測 4d)"),
-    Lane("gsc_wp_totals.jsonl", "daily", 8, "18-analytics-daily.yml",
-         "omcha.jp (WP) 側。実測 5d"),
-    Lane("gsc_wp_by_page.jsonl", "daily", 8, "18-analytics-daily.yml",
-         "omcha.jp (WP) 側。実測 5d"),
-    Lane("gsc_wp_by_query.jsonl", "daily", 8, "18-analytics-daily.yml",
-         "omcha.jp (WP) 側。実測 5d"),
     Lane("lighthouse_history.jsonl", "daily", 3,
          "amazon-home-ops/41-lighthouse-lane.yml",
          "self-hosted (K8)。#4785 で論理日に是正済 (実測 1d)"),
@@ -144,6 +138,18 @@ DIR_LANES: Sequence[DirLane] = (
 UNMONITORED: Dict[str, str] = {
     "uniqueness_audit_history.jsonl":
         "日付フィールドを持たない集計スナップショット (#3300)。cadence 判定の対象外",
+    # 2026-08-07 の 4aa0c4d (#4654) で WP omcha.jp の GSC 取得は private の
+    # omochairo/omcha-ops (10-gsc-wp-daily.yml → data/gsc/) へ移設した。public 側に
+    # 残る 3 ファイルは移設時点で止まった**凍結スナップショット**で、供給元が無い。
+    # ここを LANES に残していたため #5107 が誤検知で鳴った (2026-08-14)。
+    # 収集が生きているかの監視は omcha-ops 側 (11-gsc-freshness.yml) が持つ。
+    # 凍結データを黙って使わないための歯止めは build_demand_keywords.py 側にある。
+    "gsc_wp_totals.jsonl":
+        "omcha-ops へ移設済み (#4654)。供給元の無い凍結スナップショット",
+    "gsc_wp_by_page.jsonl":
+        "omcha-ops へ移設済み (#4654)。供給元の無い凍結スナップショット",
+    "gsc_wp_by_query.jsonl":
+        "omcha-ops へ移設済み (#4654)。供給元の無い凍結スナップショット",
 }
 
 
