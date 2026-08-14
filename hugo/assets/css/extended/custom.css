@@ -3023,7 +3023,10 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 
 .ranking-item {
   display: grid;
-  grid-template-columns: 64px 140px 1fr;
+  /* #5227: サムネは 140px → 160px。カード内の情報量が #5225 で増えて文字が勝ち
+     すぎていたので、本文幅を大きく削らない範囲で画像を持ち上げる。/price/ の
+     .feature-item--price も同じ 160px に揃えた。 */
+  grid-template-columns: 64px 160px 1fr;
   align-items: center;
   gap: 1.1rem;
   padding: 1rem 1.25rem;
@@ -3077,8 +3080,8 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 
 .ranking-thumb {
   display: block;
-  width: 140px;
-  height: 140px;
+  width: 160px;
+  height: 160px;
   border-radius: 10px;
   overflow: hidden;
   background: #f1f5f9;
@@ -3177,25 +3180,35 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 }
 
 @media (max-width: 720px) {
+  /* #5227: 画像がカード最下部 ("thumb thumb" を body の後ろに置いていた) だと、
+     /price/ (画像が先頭) と並び順が食い違い、同じサイトで2種類の読み順ができて
+     いた。順位バッジの右に画像を置き、本文をその下に流すことで、バッジの無い
+     /price/ の「画像 → 本文」と読み順を揃える。バッジをカード左上に絶対配置
+     しない (=独立した列に置く) のは、その位置が既に比較トグル (left:8px) と
+     お気に入り♡ (right:10px) に取られているため。 */
   .ranking-item {
     grid-template-columns: 56px 1fr;
     grid-template-areas:
-      "badge body"
-      "thumb thumb";
+      "badge thumb"
+      "body  body";
+    align-items: start;
     gap: 0.75rem;
     padding: 0.85rem;
   }
   .ranking-badge { grid-area: badge; width: 56px; height: 56px; font-size: 1.15rem; }
   .ranking-medal { font-size: 1.6rem; }
   .ranking-body { grid-area: body; }
+  /* 商品画像はほぼ正方形なので、枠を 4:3 にすると object-fit: contain の結果
+     高さ = 枠幅×3/4 までしか使えず、横に余白が出るだけで画像は小さくなる
+     (375px 幅で実測 199px)。枠を 1:1 にして高さ上限で頭を押さえる。 */
   .ranking-thumb {
     grid-area: thumb;
     width: 100%;
     height: auto;
-    max-height: 220px;
-    margin-top: 0.5rem;
+    aspect-ratio: 1 / 1;
+    max-height: 260px;
   }
-  .ranking-thumb img { max-height: 220px; }
+  .ranking-thumb img { max-height: 260px; }
   /* #1418 P0 (follow-up 2): 当初 line-clamp 3 + overflow:hidden で短縮していたが、
      .post-content h2 のグラデーション BG が line-clamp で計算される box height に
      追随せず、テキストが BG 外に飛び出して見切れる事故を起こした。
@@ -7070,16 +7083,26 @@ details.development-stage-accordion[open] > summary::before {
    .feature-item--price で上書きして正しいレイアウトを適用する。
    ============================================================ */
 
-/* デスクトップ: thumb(120px) + body(1fr) の2列 */
+/* デスクトップ: thumb(240px) + body(1fr) の2列。
+   #5227 follow-up: 他ページと同じ 160px にすると /price/ だけ画像が小さく見える。
+   /ranking/ /deals/ は 64px の順位バッジ列が左に付いて視覚的な重みを補うのに対し、
+   /price/ はバッジが無く、カードも縦に長い (1280px 幅で実測 440〜479px) ため、
+   160px のサムネの下に 280〜319px の空白が残っていた。列幅を最大 240px まで
+   広げてバランスを取る (1280px 幅で本文 961px → 881px)。
+
+   固定 240px にすると 720〜800px の狭いデスクトップで本文が 394px まで削られ、
+   .feature-badges (OFF% / 知育スコア / 年齢) が2行に折り返してしまうため、
+   clamp で画面幅に追従させる。720px 直上では従来どおり 160px に戻る。 */
 .feature-item--price.ranking-item {
-  grid-template-columns: 120px 1fr;
+  grid-template-columns: clamp(160px, 22vw, 240px) 1fr;
   grid-template-areas: "thumb body";
   align-items: start;
 }
 .feature-item--price .ranking-thumb {
   grid-area: thumb;
-  width: 120px;
-  height: 120px;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
   align-self: start;
 }
 .feature-item--price .ranking-body {
@@ -7095,30 +7118,22 @@ details.development-stage-accordion[open] > summary::before {
       "body";
     gap: 0.75rem;
   }
+  /* #5227: バッジ付きカード (ranking/deals/cospa/hub) と同じ 1:1 / 260px に
+     合わせる。同じ商品画像がページによって違う大きさで出ていたのを揃える。 */
   .feature-item--price .ranking-thumb {
     grid-area: thumb;
     width: 100%;
     height: auto;
-    max-height: 200px;
+    max-height: 260px;
     aspect-ratio: 1 / 1;
     object-fit: contain;
   }
   .feature-item--price .ranking-thumb img {
-    max-height: 200px;
+    max-height: 260px;
     object-fit: contain;
   }
   .feature-item--price .ranking-body {
     grid-area: body;
-  }
-}
-
-/* 極小画面 (iPhone SE 等) */
-@media (max-width: 480px) {
-  .feature-item--price .ranking-thumb {
-    max-height: 160px;
-  }
-  .feature-item--price .ranking-thumb img {
-    max-height: 160px;
   }
 }
 

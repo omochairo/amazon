@@ -2,6 +2,9 @@
 
 <header class="page-header ranking-header">
   <h1>{{ .Title }}</h1>
+  {{- /* #5227: 広告表記はファーストビュー (h1 直下)。このページのリンクは
+         楽天アフィリエイトなので network に "rakuten" を渡す。 */ -}}
+  {{- partial "pr_disclosure.html" (dict "network" "rakuten") }}
   {{- if .Description }}
   <div class="post-description">
     {{ .Description }}
@@ -93,7 +96,7 @@
     {{- end }}
   </ol>
 
-  <p class="ranking-disclaimer">※ 順位・価格・在庫は楽天 API 取得時点のもので、リンク先と異なる場合があります。当ページのリンクは楽天アフィリエイトを含みます。</p>
+  <p class="ranking-disclaimer">※ 順位・価格・在庫は楽天 API 取得時点のもので、リンク先と異なる場合があります。</p>
   {{- end }}
 </div>
 
