@@ -7,6 +7,12 @@ append_price_point の挙動を検証する:
     - 同一価格・6日超は追記
     - 不正な price (非 int / 0 以下 / bool) はスキップ
     - 壊れた既存行があっても落ちずに追記できる
+
+#5130 で追加:
+    - 在庫メッセージがある価格なし観測は price=null の行として残す
+    - 根拠 (在庫メッセージ) の無い欠測は従来どおりスキップ
+    - 在庫切れの継続は 6 日で間引き、状態変化は即記録
+    - 新しい行が既存の読み側の集計に混ざらない
 """
 from __future__ import annotations
 
@@ -138,6 +144,83 @@ class AppendPricePointTests(unittest.TestCase):
                 str(root), "B1", "amazon", 1000, None,
                 ts=now + timedelta(minutes=1))
             self.assertTrue(ok)
+
+
+class OutOfStockObservationTests(unittest.TestCase):
+    """#5130: 価格が取れない日を 1 行も残さないと、階段線が「最後に価格が取れた日の値が
+    今日まで続いた」と嘘をつく。在庫メッセージという根拠があるときだけ行を残す。
+    """
+
+    def test_out_of_stock_is_recorded_with_null_price(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            ok = append_price_point(str(root), "B1", "amazon", None, "現在在庫切れです。")
+            self.assertTrue(ok)
+            recs = _read_records(root / "B1.jsonl")
+            self.assertEqual(len(recs), 1)
+            self.assertIsNone(recs[0]["price"])
+            self.assertEqual(recs[0]["availability"], "現在在庫切れです。")
+
+    def test_missing_price_without_evidence_is_still_skipped(self):
+        """在庫メッセージも無い欠測は API エラーと区別できない。捏造しない。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            self.assertFalse(append_price_point(str(root), "B1", "amazon", None, None))
+            self.assertFalse(append_price_point(str(root), "B1", "amazon", None, "   "))
+            self.assertFalse((root / "B1.jsonl").exists())
+
+    def test_continued_out_of_stock_is_deduped_then_appended(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            now = datetime.now(timezone.utc)
+            append_price_point(str(root), "B1", "amazon", None, "現在在庫切れです。", ts=now)
+            self.assertFalse(append_price_point(
+                str(root), "B1", "amazon", None, "現在在庫切れです。",
+                ts=now + timedelta(days=5)))
+            self.assertTrue(append_price_point(
+                str(root), "B1", "amazon", None, "現在在庫切れです。",
+                ts=now + timedelta(days=7)))
+            self.assertEqual(len(_read_records(root / "B1.jsonl")), 2)
+
+    def test_availability_change_appends_immediately(self):
+        """「在庫切れ」→「お取り扱いできません」は状態変化なので間引かない。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            now = datetime.now(timezone.utc)
+            append_price_point(str(root), "B1", "amazon", None, "現在在庫切れです。", ts=now)
+            self.assertTrue(append_price_point(
+                str(root), "B1", "amazon", None, "この商品は現在お取り扱いできません。",
+                ts=now + timedelta(hours=1)))
+
+    def test_transitions_between_priced_and_out_of_stock_are_immediate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            now = datetime.now(timezone.utc)
+            append_price_point(str(root), "B1", "amazon", 2827, "在庫あり", ts=now)
+            # 価格あり → 在庫切れ
+            self.assertTrue(append_price_point(
+                str(root), "B1", "amazon", None, "現在在庫切れです。",
+                ts=now + timedelta(hours=1)))
+            # 在庫切れ → 価格あり (同じ価格に戻っても、状態が変わったので残す)
+            self.assertTrue(append_price_point(
+                str(root), "B1", "amazon", 2827, "在庫あり", ts=now + timedelta(hours=2)))
+            recs = _read_records(root / "B1.jsonl")
+            self.assertEqual([r["price"] for r in recs], [2827, None, 2827])
+
+    def test_null_price_rows_are_inert_for_readers(self):
+        """既存の読み側 3 本は price が正の int でない行を捨てる。新しい行が
+        最安値や描画ゲートに混ざらないことを、実際の reader で確かめる (#5130)。
+        """
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        from build_post import _load_price_history_points  # type: ignore[import-not-found]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            now = datetime.now(timezone.utc)
+            append_price_point(str(root), "B1", "amazon", 2827, "在庫あり", ts=now)
+            append_price_point(str(root), "B1", "amazon", None, "現在在庫切れです。",
+                               ts=now + timedelta(days=1))
+            points = _load_price_history_points(root, "B1")
+            self.assertEqual([p["price"] for p in points], [2827])
 
 
 if __name__ == "__main__":
