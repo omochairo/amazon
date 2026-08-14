@@ -10,7 +10,6 @@ import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
-from unittest.mock import patch
 
 THIS_DIR = pathlib.Path(__file__).resolve().parent
 REPO_ROOT = THIS_DIR.parent.parent
@@ -22,8 +21,7 @@ from price_spark import (  # noqa: E402
     build_card_spark,
     build_spark,
 )
-from build_price_dashboard import enrich_items  # noqa: E402
-from build_feature_lists import serialize_deals, ArticleRecord  # noqa: E402
+from build_price_sparks import build_sparks  # noqa: E402
 
 
 def _rec(days_ago: int, price: int) -> dict:
@@ -148,79 +146,70 @@ class BuildCardSparkTests(unittest.TestCase):
         self.assertEqual(spark["width"], CARD_GEOM.width)
 
 
-class SparkIntegrationTests(unittest.TestCase):
-    """/price/ (enrich_items) と /deals/ (serialize_deals) で採択条件が一致すること。"""
+class BuildPriceSparksTests(unittest.TestCase):
+    """#5225: 全ページ共通の ASIN -> チャート辞書 (hugo/data/price_sparks.json)。
 
-    def _dashboard_items(self, records: list[dict]) -> list[dict]:
+    /price/ や /deals/ の一覧 JSON に個別に埋め込むのをやめ、ここを SSOT にした。
+    テンプレート側は partial "price_spark_for.html" で ASIN 引きする。
+    """
+
+    def _build(self, files: dict[str, list[dict]]) -> dict[str, dict]:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = pathlib.Path(tmp)
             pw, ph = tmp_path / "price_watch", tmp_path / "price_history"
-            _write_jsonl(ph, "B1", records)
-            items = [{"asin": "B1"}]
-            enrich_items(items, {}, pw, ph)
-            return items
+            for asin, records in files.items():
+                _write_jsonl(ph, asin, records)
+            return build_sparks(pw, ph)
 
     def _iso(self, days_ago: int) -> str:
         return (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat()
 
-    def test_enrich_items_skips_spark_if_only_one_price(self):
-        items = self._dashboard_items([
-            {"ts": self._iso(20), "price": 1000, "source": "amazon"},
-            {"ts": self._iso(10), "price": 1000, "source": "amazon"},
-            {"ts": self._iso(0), "price": 1000, "source": "amazon"},
-        ])
-        self.assertNotIn("spark", items[0])
-
-    def test_enrich_items_skips_spark_if_less_than_3_points(self):
-        items = self._dashboard_items([
-            {"ts": self._iso(10), "price": 1000, "source": "amazon"},
-            {"ts": self._iso(0), "price": 1200, "source": "amazon"},
-        ])
-        self.assertNotIn("spark", items[0])
-
-    def test_enrich_items_adds_spark_when_price_varies(self):
-        items = self._dashboard_items([
+    def _varying(self) -> list[dict]:
+        return [
             {"ts": self._iso(20), "price": 1000, "source": "amazon"},
             {"ts": self._iso(10), "price": 1200, "source": "amazon"},
             {"ts": self._iso(0), "price": 900, "source": "amazon"},
-        ])
-        self.assertIn("spark", items[0])
-        self.assertTrue(items[0]["spark"]["segments"])
+        ]
 
-    def test_enrich_items_without_history_dirs_adds_no_spark(self):
-        """履歴ディレクトリを渡さない旧シグネチャの呼び出しでも落ちない。"""
-        items = [{"asin": "B1"}]
-        enrich_items(items, {})
-        self.assertNotIn("spark", items[0])
+    def _flat(self) -> list[dict]:
+        return [
+            {"ts": self._iso(20), "price": 1000, "source": "amazon"},
+            {"ts": self._iso(10), "price": 1000, "source": "amazon"},
+            {"ts": self._iso(0), "price": 1000, "source": "amazon"},
+        ]
 
-    def _deal_item(self, history: list[tuple[datetime, int]]) -> dict:
-        rec = ArticleRecord(asin="B1", slug="b1", name="B1", image=None, ivs_score=None,
-                            ivs_100=None, best_price=1000, best_platform=None, amazon_url=None)
-        with patch("build_price_dashboard.load_merged_history", return_value=history):
-            res = serialize_deals([rec], filter_params={}, generated_at="2026-08-13T00:00:00Z")
-        return res["items"][0]
+    def test_includes_asin_with_varying_price(self):
+        sparks = self._build({"B0AAAAAAAA": self._varying()})
+        self.assertIn("B0AAAAAAAA", sparks)
+        self.assertTrue(sparks["B0AAAAAAAA"]["segments"])
+        self.assertEqual(sparks["B0AAAAAAAA"]["width"], CARD_GEOM.width)
 
-    def test_serialize_deals_skips_spark_if_only_one_price(self):
-        item = self._deal_item(_hist((20, 1000), (10, 1000), (0, 1000)))
-        self.assertNotIn("spark", item)
+    def test_omits_asin_whose_price_never_changed(self):
+        """描画に値しない ASIN はキーごと入れない (テンプレは引けたら描くだけ)。"""
+        sparks = self._build({"B0AAAAAAAA": self._flat()})
+        self.assertNotIn("B0AAAAAAAA", sparks)
 
-    def test_serialize_deals_skips_spark_if_less_than_3_points(self):
-        item = self._deal_item(_hist((10, 1000), (0, 1200)))
-        self.assertNotIn("spark", item)
+    def test_omits_asin_with_too_few_points(self):
+        sparks = self._build({"B0AAAAAAAA": [
+            {"ts": self._iso(10), "price": 1000, "source": "amazon"},
+            {"ts": self._iso(0), "price": 1200, "source": "amazon"},
+        ]})
+        self.assertNotIn("B0AAAAAAAA", sparks)
 
-    def test_serialize_deals_adds_spark_when_price_varies(self):
-        item = self._deal_item(_hist((20, 1000), (10, 1200), (0, 900)))
-        self.assertIn("spark", item)
-        self.assertEqual(item["spark"]["min_price"], 900)
+    def test_mixed_set_keeps_only_qualifying(self):
+        sparks = self._build({"B0AAAAAAAA": self._varying(), "B0BBBBBBBB": self._flat()})
+        self.assertEqual(sorted(sparks), ["B0AAAAAAAA"])
 
-    def test_serialize_deals_survives_history_load_failure(self):
-        """fail-soft: 履歴読み込みが落ちても deals 全体は生成される。"""
-        rec = ArticleRecord(asin="B1", slug="b1", name="B1", image=None, ivs_score=None,
-                            ivs_100=None, best_price=1000, best_platform=None, amazon_url=None)
-        with patch("build_price_dashboard.load_merged_history", side_effect=OSError("boom")):
-            res = serialize_deals([rec], filter_params={}, generated_at="2026-08-13T00:00:00Z")
-        self.assertEqual(len(res["items"]), 1)
-        self.assertNotIn("spark", res["items"][0])
+    def test_keys_are_uppercase_asins(self):
+        """テンプレート側は upper した ASIN で引くので、キーも大文字で揃える。"""
+        sparks = self._build({"b0aaaaaaaa": self._varying()})
+        self.assertEqual(sorted(sparks), ["B0AAAAAAAA"])
+
+    def test_no_history_dirs_returns_empty(self):
+        """履歴ディレクトリが無くても落ちない (fail-soft)。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            self.assertEqual(build_sparks(tmp_path / "nope", tmp_path / "nada"), {})
 
 
 if __name__ == "__main__":

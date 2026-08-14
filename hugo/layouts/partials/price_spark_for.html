@@ -1,0 +1,26 @@
+{{- /*
+  ASIN から価格推移ミニチャートを引いて描く (#5225)。
+
+  Expects context = ASIN 文字列 (大小どちらでもよい)。
+  データは scripts/build_price_sparks.py が作る hugo/data/price_sparks.json。
+
+  カードを描くテンプレートはどれも ASIN を持っているので、この partial 1つで
+  home / /posts/ / /brands/ / /tags/ / /categories/ / /cospa/ / hub / /ranking/ /
+  /deals/ / /price/ の全部に同じチャートを出せる。
+
+  引けなければ何も出さない (fail-soft):
+    - price_sparks.json が未生成 (このステップが落ちてもページはビルドできる)
+    - その ASIN の観測が足りない (3点未満 / 価格の種類が1種類)
+    - ASIN が無いカード (楽天ランキングの未マッチ商品など)
+
+  商品ページ (/products/<asin>/) はこれを使わない。あちらは build_post.py が
+  ARTICLE_GEOM で別に描く (目的が違う。#5167 参照)。
+*/ -}}
+{{- $asin := upper (. | default "") -}}
+{{- if $asin -}}
+  {{- with site.Data.price_sparks -}}
+    {{- with index (.sparks | default dict) $asin -}}
+      {{- partial "price_sparkline.html" . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}

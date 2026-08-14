@@ -4851,6 +4851,21 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
    上限を付けて棒を短くし、代わりに数値を読ませる。 */
 .card-metrics .score-minichart-row { grid-template-columns: 5.6em minmax(36px, 76px) 1.8em; }
 
+/* #5225: product_card (home グリッド / /posts/ / /brands/ / /tags/ / /categories/) は
+   カード幅が狭く、上の max-content 2列だと溢れる。ここだけスコアを従来の 2列 1fr に
+   戻し、チャートはその下にカード幅いっぱいで置く (横に並べる幅が無いため)。 */
+.product-card .card-metrics { display: block; }
+.product-card .card-metrics > .score-minichart {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin: 0 0 4px;
+}
+.product-card .card-metrics .score-minichart-row { grid-template-columns: 4.6em minmax(20px, 1fr) 1.8em; }
+/* カード幅いっぱいに伸ばさない。viewBox 比のまま高さも増え、home のカードで
+   72px のはずのチャートが 110px になってカードが 37px 伸びていた (実測)。
+   カードが 220px より狭い環境では max-width が効いて縮む。 */
+.product-card .price-spark-svg { width: 220px; max-width: 100%; }
+
 /* ---------- 一覧カードの価格推移ミニチャート ---------- */
 /* /price/ (price_dashboard_item.html) と /deals/ (feature-item.html) の両方から
    partial "price_sparkline.html" で呼ばれる。CSS をどちらかのレイアウトの

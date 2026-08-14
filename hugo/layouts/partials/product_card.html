@@ -100,7 +100,10 @@
       <div class="product-card-brand">{{ $brand }}</div>
     {{- end }}
     <h3 class="product-card-title">{{ .Title }}</h3>
-    {{- with .Params.ivs_axes }}{{ partial "score_minichart.html" . }}{{- end }}
+    {{- /* #5225: 知育スコアと Amazon価格の推移。ASIN は上で url から導出済み。
+           このカードは home / /posts/ / /brands/ / /tags/ / /categories/ の全部で
+           使われるので、ここ1箇所でそれら全ページにチャートが乗る。 */ -}}
+    {{- partial "card_metrics.html" (dict "axes" .Params.ivs_axes "asin" $asin) }}
     <div class="product-card-meta">
       <time datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date.Format "2006-01-02" }}</time>
       {{- /* #2817 スラッグ移行後 .Params.tags は英語スラッグを持つため、taxonomy 経由で
