@@ -7083,17 +7083,26 @@ details.development-stage-accordion[open] > summary::before {
    .feature-item--price で上書きして正しいレイアウトを適用する。
    ============================================================ */
 
-/* デスクトップ: thumb(160px) + body(1fr) の2列。#5227 でバッジ付きカード側の
-   サムネも 160px に揃えたので、ページをまたいで画像の大きさが一致する。 */
+/* デスクトップ: thumb(240px) + body(1fr) の2列。
+   #5227 follow-up: 他ページと同じ 160px にすると /price/ だけ画像が小さく見える。
+   /ranking/ /deals/ は 64px の順位バッジ列が左に付いて視覚的な重みを補うのに対し、
+   /price/ はバッジが無く、カードも縦に長い (1280px 幅で実測 440〜479px) ため、
+   160px のサムネの下に 280〜319px の空白が残っていた。列幅を最大 240px まで
+   広げてバランスを取る (1280px 幅で本文 961px → 881px)。
+
+   固定 240px にすると 720〜800px の狭いデスクトップで本文が 394px まで削られ、
+   .feature-badges (OFF% / 知育スコア / 年齢) が2行に折り返してしまうため、
+   clamp で画面幅に追従させる。720px 直上では従来どおり 160px に戻る。 */
 .feature-item--price.ranking-item {
-  grid-template-columns: 160px 1fr;
+  grid-template-columns: clamp(160px, 22vw, 240px) 1fr;
   grid-template-areas: "thumb body";
   align-items: start;
 }
 .feature-item--price .ranking-thumb {
   grid-area: thumb;
-  width: 160px;
-  height: 160px;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
   align-self: start;
 }
 .feature-item--price .ranking-body {
