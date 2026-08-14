@@ -45,16 +45,48 @@ def _write_jsonl(root: pathlib.Path, asin: str, records: list[dict]) -> None:
 
 
 class PriceSparkGeometryTests(unittest.TestCase):
-    def test_card_geom_omits_labels_dots_and_legend(self):
-        """カード版は線だけ。軸ラベル・ドット・凡例を持たない。"""
+    def test_card_geom_has_axes_area_and_now_marker(self):
+        """#5167: カード版は「線だけ」ではなく、軸ラベル・面塗り・最新点を持つ。
+
+        初版 (#5143) は軸ラベルを全て落としていたが、カード上では意味の分からない
+        線が1本あるだけに見えて読者に何も伝わっていなかった。読める図に必要な
+        要素が揃っていることを固定する。
+        """
         spark = build_spark([_rec(20, 1000), _rec(10, 1200), _rec(0, 1500)],
                             1000, 1500, CARD_GEOM)
+        self.assertEqual(len(spark["y_labels"]), 2, "価格帯の上下が読めること")
+        self.assertEqual(len(spark["x_labels"]), 2, "期間の始点と終点が読めること")
+        self.assertTrue(spark["area"], "折れ線の下が塗られること (線1本に見せない)")
+        self.assertIsNotNone(spark["last_point"], "最新点のマーカーがあること")
+        # 全観測点のドットは打たない (小さい図で潰れるため)。凡例も持たない。
         self.assertEqual(spark["dots"], [])
-        self.assertEqual(spark["y_labels"], [])
-        self.assertEqual(spark["x_labels"], [])
         self.assertIsNone(spark["legend"])
-        self.assertEqual(spark["width"], 160)
-        self.assertEqual(spark["height"], 40)
+        self.assertEqual(spark["width"], 220)
+        self.assertEqual(spark["height"], 72)
+
+    def test_card_geom_uses_short_date_labels(self):
+        """カードの x 軸は M/D。小さい図で ISO 日付は読めないし場所も食う。"""
+        spark = build_spark([_rec(20, 1000), _rec(10, 1200), _rec(0, 1500)],
+                            1000, 1500, CARD_GEOM)
+        for label in spark["x_labels"]:
+            self.assertRegex(label["text"], r"^\d{1,2}/\d{1,2}$")
+
+    def test_card_geom_y_labels_show_price_range(self):
+        spark = build_spark([_rec(20, 1000), _rec(10, 1200), _rec(0, 1500)],
+                            1000, 1500, CARD_GEOM)
+        texts = [label["text"] for label in spark["y_labels"]]
+        self.assertIn("¥1,500", texts)
+        self.assertIn("¥1,000", texts)
+
+    def test_article_geom_keeps_iso_dates_and_no_area(self):
+        """商品ページ側は従来どおり。目的が違う (Keepa の隣に置く観測の証跡)。"""
+        spark = build_spark([_rec(20, 1000), _rec(10, 1200), _rec(0, 1500)],
+                            1000, 1500, ARTICLE_GEOM)
+        for label in spark["x_labels"]:
+            self.assertRegex(label["text"], r"^\d{4}-\d{2}-\d{2}$")
+        self.assertEqual(spark["area"], "")
+        self.assertIsNone(spark["last_point"])
+        self.assertEqual([label["anchor"] for label in spark["y_labels"]], ["end", "end"])
 
     def test_article_geom_keeps_plot_bounds(self):
         """抽出リファクタで商品ページ側のプロット範囲がズレていないこと。
@@ -78,7 +110,8 @@ class PriceSparkGeometryTests(unittest.TestCase):
         spark = build_spark([_rec(20, 1000), _rec(0, 1500)], 1000, 1500, ARTICLE_GEOM)
         self.assertEqual(
             set(spark),
-            {"width", "height", "segments", "dots", "y_labels", "x_labels", "legend"},
+            {"width", "height", "segments", "dots", "y_labels", "x_labels", "legend",
+             "area", "last_point"},
         )
 
     def test_gap_over_14_days_produces_unobserved_segment(self):

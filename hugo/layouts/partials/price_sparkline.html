@@ -1,29 +1,64 @@
 {{- /*
-  一覧カード用の価格推移スパークライン。/price/ (price_dashboard_item.html) と
+  一覧カード用の価格推移ミニチャート。/price/ (price_dashboard_item.html) と
   /deals/ (feature-item.html) の両方から呼ばれる。
 
-  Expects context = build_price_dashboard.py / build_feature_lists.py が
-  price_spark.build_card_spark で作った spark dict
-  (width / height / segments / min_price / max_price)。
-  カード版は軸ラベル・凡例・観測ドットを持たない (CARD_GEOM で無効化済み) ので、
-  ここでは segments だけを描く。
+  #5167: 初版 (#5143) は「線だけ・軸ラベルなし」で、カード上では意味の分からない線が
+  1本あるだけに見えていた。目的が商品ページのグラフと違うことを踏まえて描き直した。
 
-  描画に値しない履歴では Python 側が spark を付けないので、ここに来る時点で
-  segments はある。それでも nil ガードするのは、旧生成の JSON が残っていても
-  壊れないようにするため (price_dashboard_item.html の他フィールドと同じ流儀)。
+    商品ページ (post.md.j2) … Keepa グラフの隣に置き、「自前で価格を観測している」
+                              事実を示す証跡。絶対日付・全観測点・凡例が要る
+    一覧カード (ここ)       … 「価格がどう動いて今いくらか」を一目で伝える。
+                              限られた面積で、価格帯・推移の形・現在位置が読めればよい
+
+  そのための構成:
+    - 図の名前を図中に置く    … 何のグラフか単体で分かる (カードには他の図もある)
+    - y 軸は最高値/最安値だけ … 目盛りを刻まず、価格帯の上下だけ示す。図の右に置いて
+                                横幅を稼ぐ
+    - x 軸は開始/終了の M/D  … 「いつからいつまでの話か」が分かれば足りる
+    - 折れ線の下を塗る        … 線1本だと図に見えない。塗ると価格帯の形が読める
+    - 最新点にマーカー        … 「今どこにいるか」を示す。全観測点は打たない (潰れる)
+    - 破線区間                … 未観測期間 (14日超のギャップ)。商品ページと同じ表現
+
+  Expects context = price_spark.build_card_spark が作った spark dict
+  (width / height / segments / area / last_point / y_labels / x_labels /
+   min_price / max_price)。座標計算は全て Python 側。
 
   外部リクエストは増やさない (インライン SVG のみ)。width/height を明示するのは
   CLS を出さないため。CSS は assets/css/extended/custom.css 側。
 */ -}}
 {{- $spark := . -}}
 {{- if and $spark (gt (len $spark.segments) 0) -}}
-<div class="price-sparkline">
-  <svg class="price-sparkline-svg" viewBox="0 0 {{ $spark.width }} {{ $spark.height }}" width="{{ $spark.width }}" height="{{ $spark.height }}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="価格推移スパークライン（横軸: 日付、縦軸: 価格）">
-    <title>価格推移スパークライン</title>
-    <desc>縦軸は価格（円）、横軸は日付（実際の経過日数に比例）を表す折れ線グラフです。破線区間は未観測期間です。{{ with $spark.min_price }}期間中の最安は &yen;{{ lang.FormatNumberCustom 0 . }}{{ end }}{{ with $spark.max_price }}、最高は &yen;{{ lang.FormatNumberCustom 0 . }} です。{{ end }}</desc>
+<figure class="price-spark">
+  {{- /* aria-labelledby は使わない。1ページに最大150枚並ぶので id が衝突する
+         (重複 id は不正な HTML)。role="img" + aria-label なら id を作らずに済む。 */ -}}
+  <svg class="price-spark-svg" viewBox="0 0 {{ $spark.width }} {{ $spark.height }}" width="{{ $spark.width }}" height="{{ $spark.height }}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="価格推移グラフ{{ with $spark.x_labels }}（{{ (index . 0).text }}〜{{ (index . 1).text }}）{{ end }}">
+    <title>価格推移{{ with $spark.x_labels }}（{{ (index . 0).text }}〜{{ (index . 1).text }}）{{ end }}</title>
+    <desc>縦軸は価格、横軸は日付です。{{ with $spark.min_price }}期間中の最安は &yen;{{ lang.FormatNumberCustom 0 . }}{{ end }}{{ with $spark.max_price }}、最高は &yen;{{ lang.FormatNumberCustom 0 . }}{{ end }}。折れ線は観測した価格が次の観測まで続いたことを表す階段状で、破線の区間は価格を観測できていない期間です。</desc>
+
+    <text class="price-spark-caption" x="3" y="9">価格推移</text>
+
+    {{- /* 価格帯の上端・下端を示す薄い基準線。目盛りは刻まない (小さい図で潰れる)。 */}}
+    <line class="price-spark-grid" x1="3" y1="13" x2="163" y2="13" />
+    <line class="price-spark-grid" x1="3" y1="47" x2="163" y2="47" />
+
+    {{- with $spark.area }}
+    <polygon class="price-spark-area" points="{{ . }}" />
+    {{- end }}
+
     {{- range $spark.segments }}
-    <polyline fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"{{ if not .observed }} stroke-dasharray="3 3" stroke-opacity="0.45"{{ end }} points="{{ .points }}" />
+    <polyline class="price-spark-line{{ if not .observed }} is-unobserved{{ end }}" points="{{ .points }}" />
+    {{- end }}
+
+    {{- with $spark.last_point }}
+    <circle class="price-spark-now" cx="{{ .x }}" cy="{{ .y }}" r="2.6" />
+    {{- end }}
+
+    {{- range $spark.y_labels }}
+    <text class="price-spark-ylabel" x="{{ .x }}" y="{{ .y }}" text-anchor="{{ .anchor }}">{{ .text }}</text>
+    {{- end }}
+    {{- range $spark.x_labels }}
+    <text class="price-spark-xlabel" x="{{ .x }}" y="{{ .y }}" text-anchor="{{ .anchor }}">{{ .text }}</text>
     {{- end }}
   </svg>
-</div>
+</figure>
 {{- end -}}

@@ -4828,23 +4828,87 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 [data-theme="dark"] .score-minichart-bar { background: #374151; }
 [data-theme="dark"] .score-minichart-value { color: #f1f5f9; }
 
-/* ---------- 一覧カードの価格推移スパークライン ---------- */
+/* ---------- 一覧カードの指標エリア (スコア + 価格推移) ---------- */
+/* #5167: スコアの棒グラフと価格推移チャートを横並びにする。
+   縦に積むとカードが伸びて一覧の一覧性が落ちるため、余っている横幅を使って
+   「面積を増やさずに情報を増やす」。狭い画面では flex-wrap で自然に段落ちする。 */
+.card-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px 18px;
+  margin: 6px 0 8px;
+}
+/* 棒に上限を付けた分、列を 1fr のままにすると行の右に間延びした余白が残る。
+   両ブロックとも内容幅にして左に寄せ、余白はカードの右に逃がす。 */
+.card-metrics > .score-minichart {
+  margin: 0;
+  flex: 0 1 auto;
+  grid-template-columns: repeat(2, max-content);
+}
+.card-metrics > .price-spark { flex: 0 1 auto; }
+/* #5167: 棒が横幅いっぱいまで伸びると、4軸の差より「長い棒」の印象だけが残る。
+   上限を付けて棒を短くし、代わりに数値を読ませる。 */
+.card-metrics .score-minichart-row { grid-template-columns: 5.6em minmax(36px, 76px) 1.8em; }
+
+/* ---------- 一覧カードの価格推移ミニチャート ---------- */
 /* /price/ (price_dashboard_item.html) と /deals/ (feature-item.html) の両方から
    partial "price_sparkline.html" で呼ばれる。CSS をどちらかのレイアウトの
    <style> に置くと片方のページで無スタイルになるため、score-minichart と同じく
-   共通 CSS 側に置く。線色は SVG 側が stroke="currentColor" なのでここの color で決まる。 */
-.price-sparkline {
-  margin: 6px 0 8px;
-  color: #94a3b8;
-}
-.price-sparkline-svg {
+   共通 CSS 側に置く。 */
+.price-spark { margin: 0; }
+.price-spark-svg {
   display: block;
-  width: 160px;
+  width: 220px;
   max-width: 100%;
   height: auto;
+  overflow: visible;
 }
-/* dark では背景が暗くなるぶん線を明るい側に振る (score-minichart と同じ方向)。 */
-[data-theme="dark"] .price-sparkline { color: #94a3b8; }
+.price-spark-line {
+  fill: none;
+  stroke: #2563eb;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+/* 未観測期間。商品ページ (#5120) と同じ「破線 = 記録が無い」表現に揃える。 */
+.price-spark-line.is-unobserved { stroke-dasharray: 3 3; stroke-opacity: 0.4; }
+.price-spark-area { fill: #2563eb; fill-opacity: 0.1; }
+.price-spark-grid { stroke: #e5e7eb; stroke-width: 1; }
+.price-spark-now { fill: #dc2626; }
+.price-spark-caption { font-size: 9px; fill: #6b7280; font-weight: 600; }
+.price-spark-ylabel,
+.price-spark-xlabel {
+  font-size: 9px;
+  fill: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+
+/* mobile では横並びに必要な幅 (約570px) が取れないので段落ちさせる。ただし
+   「そのまま縦に積む」と占有が増えてしまうので、積む代わりに次を効かせる:
+     - スコアは 1 列 4 行ではなく 2 列 2 行に畳む (縦を半分にする)
+     - チャートは親幅いっぱいに伸ばさない。伸ばすと viewBox の比率のまま
+       高さも増え、小さい図のはずが 100px 超になる
+   結果、mobile でもカードの縦は増えない。 */
+@media (max-width: 540px) {
+  .card-metrics { gap: 6px 12px; }
+  .card-metrics > .score-minichart {
+    flex: 1 1 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2px 10px;
+  }
+  .card-metrics .score-minichart-row { grid-template-columns: 4.8em minmax(24px, 1fr) 1.8em; }
+  .card-metrics > .price-spark { flex: 0 1 auto; }
+  .price-spark-svg { width: 220px; }
+}
+
+[data-theme="dark"] .price-spark-line { stroke: #60a5fa; }
+[data-theme="dark"] .price-spark-area { fill: #60a5fa; fill-opacity: 0.14; }
+[data-theme="dark"] .price-spark-grid { stroke: #374151; }
+[data-theme="dark"] .price-spark-now { fill: #f87171; }
+[data-theme="dark"] .price-spark-caption,
+[data-theme="dark"] .price-spark-ylabel,
+[data-theme="dark"] .price-spark-xlabel { fill: #9ca3af; }
 
 /* ---------- 比較モード (#588) ---------- */
 /* 一覧カードの「🆚 比較」トグル。product-card は <a> なので preventDefault 必須 (JS 側で対応)。
