@@ -44,6 +44,18 @@ class SparkGeom:
     legend_dash_len: float
     legend_text_gap: float
     legend_text: str
+    # --- 以下は #5167 で追加。既定値は商品ページ (ARTICLE_GEOM) の従来挙動 ---
+    # y 軸ラベルの寄せ。商品ページはプロット左に置くので "end"、カードは右に
+    # 置いて横幅を稼ぐので "start"。
+    y_label_anchor: str = "end"
+    # x 軸ラベルの日付書式。"iso" = 2026-08-14 (商品ページ)、
+    # "short" = 8/14 (カード。桁数を削って小さい図でも読めるようにする)。
+    # strftime の %-m はプラットフォーム依存なので自前で組む。
+    date_style: str = "iso"
+    # 折れ線の下を塗るか。カードでは「線が1本あるだけ」に見えるのを避けるため塗る。
+    show_area: bool = False
+    # 最新観測点にマーカーを打つか (「今どこにいるか」を示す)。
+    show_last_marker: bool = False
 
 
 ARTICLE_GEOM = SparkGeom(
@@ -67,25 +79,42 @@ ARTICLE_GEOM = SparkGeom(
     legend_text="破線＝未観測期間",
 )
 
+# 一覧カード用 (#5167 で再設計)。
+#
+# 初版 (#5143) は「線だけ・軸ラベルなし・160x40」だった。これは失敗で、カード上では
+# 意味の分からない線が1本あるだけに見え、読者に何も伝わっていなかった。
+#
+# 商品ページのグラフ (#5120) と一覧カードのグラフは目的が違う:
+#   商品ページ … Keepa グラフの隣に置き、「このサイトは自前で価格を観測している」
+#                という事実を検索エンジンと読者に示す証跡。日付も絶対値も要る
+#   一覧カード … 「この商品の価格がどう動いて今いくらか」を一目で伝える。
+#                カード内の限られた面積で、価格の上下と現在位置が読めればよい
+#
+# そこでカード版は「軸ラベルは残すが最小限、面で塗って形を読ませ、最新点を打つ」に
+# する。y ラベルはプロットの右に置いて横幅を稼ぎ、日付は M/D に詰める。
 CARD_GEOM = SparkGeom(
-    width=160,
-    height=40,
-    plot_x_min=2.0,
-    plot_x_max=158.0,
-    plot_y_top=4.0,
-    plot_y_bottom=36.0,
+    width=220,
+    height=72,
+    plot_x_min=3.0,
+    plot_x_max=163.0,
+    plot_y_top=13.0,
+    plot_y_bottom=47.0,
     gap_days=14,
-    show_dots=False,
-    show_labels=False,
-    show_legend=False,
-    y_label_x=0.0,
-    y_label_max_y=0.0,
-    y_label_min_y=0.0,
-    x_label_y=0.0,
+    show_dots=False,          # 観測点を全部打つと小さい図では潰れるので最新点だけ
+    show_labels=True,
+    show_legend=False,        # 凡例の代わりに破線区間の説明は <desc> に持たせる
+    y_label_x=168.0,
+    y_label_max_y=17.0,
+    y_label_min_y=51.0,
+    x_label_y=63.0,
     legend_y=0.0,
     legend_dash_len=0.0,
     legend_text_gap=0.0,
     legend_text="",
+    y_label_anchor="start",
+    date_style="short",
+    show_area=True,
+    show_last_marker=True,
 )
 
 
@@ -102,7 +131,14 @@ def parse_ts(ts: str) -> Optional[datetime]:
 
 def empty_spark(geom: SparkGeom) -> dict[str, Any]:
     return {"width": geom.width, "height": geom.height, "segments": [], "dots": [],
-            "y_labels": [], "x_labels": [], "legend": None}
+            "y_labels": [], "x_labels": [], "legend": None, "area": "", "last_point": None}
+
+
+def _format_axis_date(dt: datetime, style: str) -> str:
+    """x 軸の日付ラベル。``%-m`` 等はプラットフォーム依存なので自前で組む。"""
+    if style == "short":
+        return f"{dt.month}/{dt.day}"
+    return dt.strftime("%Y-%m-%d")
 
 
 def build_spark(points: list[dict[str, Any]], min_price: int, max_price: int,
@@ -180,21 +216,23 @@ def build_spark(points: list[dict[str, Any]], min_price: int, max_price: int,
                 "x": geom.y_label_x,
                 "y": round((y_top + y_bottom) / 2, 1),
                 "text": f"¥{min_price:,}",
-                "anchor": "end",
+                "anchor": geom.y_label_anchor,
             }]
         else:
             y_labels = [
                 {"x": geom.y_label_x, "y": geom.y_label_max_y,
-                 "text": f"¥{max_price:,}", "anchor": "end"},
+                 "text": f"¥{max_price:,}", "anchor": geom.y_label_anchor},
                 {"x": geom.y_label_x, "y": geom.y_label_min_y,
-                 "text": f"¥{min_price:,}", "anchor": "end"},
+                 "text": f"¥{min_price:,}", "anchor": geom.y_label_anchor},
             ]
 
     x_labels = []
     if geom.show_labels:
         x_labels = [
-            {"x": x_min, "y": geom.x_label_y, "text": oldest_dt.strftime("%Y-%m-%d"), "anchor": "start"},
-            {"x": x_max, "y": geom.x_label_y, "text": domain_end_dt.strftime("%Y-%m-%d"), "anchor": "end"},
+            {"x": x_min, "y": geom.x_label_y,
+             "text": _format_axis_date(oldest_dt, geom.date_style), "anchor": "start"},
+            {"x": x_max, "y": geom.x_label_y,
+             "text": _format_axis_date(domain_end_dt, geom.date_style), "anchor": "end"},
         ]
 
     def _append_coord(coords_list: list[tuple[float, float]], xy: tuple[float, float]) -> None:
@@ -205,14 +243,29 @@ def build_spark(points: list[dict[str, Any]], min_price: int, max_price: int,
             return
         coords_list.append(xy)
 
+    def _area(path: list[tuple[float, float]]) -> str:
+        """折れ線の下を塗る polygon の points。線を y 下端まで落として閉じる。
+
+        破線 (未観測) 区間も含めた連続パスで塗る。塗りは「価格がどのあたりを
+        推移したか」の形を読ませるためのもので、観測の有無は線種側で示す。
+        """
+        if not geom.show_area or len(path) < 2:
+            return ""
+        pts = list(path)
+        pts.append((pts[-1][0], y_bottom))
+        pts.append((pts[0][0], y_bottom))
+        return " ".join(f"{x},{y}" for x, y in pts)
+
     if n < 2:
         cur_seg: list[tuple[float, float]] = [coords[0]]
         if extend:
             _append_coord(cur_seg, (x_max, coords[0][1]))
         segments = [{"points": " ".join(f"{x},{y}" for x, y in cur_seg), "observed": True}] \
             if len(cur_seg) >= 2 else [{"points": f"{coords[0][0]},{coords[0][1]}", "observed": True}]
+        last = {"x": cur_seg[-1][0], "y": cur_seg[-1][1]} if geom.show_last_marker else None
         return {"width": geom.width, "height": geom.height, "segments": segments,
-                "dots": dots, "y_labels": y_labels, "x_labels": x_labels, "legend": None}
+                "dots": dots, "y_labels": y_labels, "x_labels": x_labels, "legend": None,
+                "area": _area(cur_seg), "last_point": last}
 
     edges = []
     for i in range(1, n):
@@ -230,9 +283,13 @@ def build_spark(points: list[dict[str, Any]], min_price: int, max_price: int,
     segments: list[dict[str, Any]] = []
     # cur_seg は常に「観測済み」の累積。破線セグメントはギャップ辺ごとに単発で挟まれる。
     cur_seg = [coords[0]]
+    # full_path は破線区間も含めた1本の連続パス。面塗り (_area) 用に別途ためる。
+    full_path: list[tuple[float, float]] = [coords[0]]
 
     for prev_xy, cur_xy, is_gap in edges:
         step_xy = (cur_xy[0], prev_xy[1])  # 前の価格を次の x まで水平に保持 (step-after)
+        _append_coord(full_path, step_xy)
+        _append_coord(full_path, cur_xy)
         if is_gap:
             _flush(segments, cur_seg, True)
             dashed: list[tuple[float, float]] = [prev_xy]
@@ -246,6 +303,7 @@ def build_spark(points: list[dict[str, Any]], min_price: int, max_price: int,
 
     if extend:
         _append_coord(cur_seg, (x_max, cur_seg[-1][1]))
+        _append_coord(full_path, (x_max, full_path[-1][1]))
 
     _flush(segments, cur_seg, True)
 
@@ -261,8 +319,10 @@ def build_spark(points: list[dict[str, Any]], min_price: int, max_price: int,
             "text": geom.legend_text,
         }
 
+    last = {"x": full_path[-1][0], "y": full_path[-1][1]} if geom.show_last_marker else None
     return {"width": geom.width, "height": geom.height, "segments": segments,
-            "dots": dots, "y_labels": y_labels, "x_labels": x_labels, "legend": legend}
+            "dots": dots, "y_labels": y_labels, "x_labels": x_labels, "legend": legend,
+            "area": _area(full_path), "last_point": last}
 
 
 def build_card_spark(history: list[tuple[datetime, int]]) -> Optional[dict[str, Any]]:

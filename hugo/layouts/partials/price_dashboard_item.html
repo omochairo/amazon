@@ -45,8 +45,13 @@
       <span class="price-item-current">&yen;{{ lang.FormatNumberCustom 0 $item.current }}</span>
     </p>
 
-    {{- with $item.ivs_axes }}{{ partial "score_minichart.html" . }}{{- end }}
-    {{- with $item.spark }}{{ partial "price_sparkline.html" . }}{{- end }}
+    {{- /* #5167: スコアと価格推移を横並びにして、カードを縦に伸ばさずに情報を増やす。 */ -}}
+    {{- if or $item.ivs_axes $item.spark }}
+    <div class="card-metrics">
+      {{- with $item.ivs_axes }}{{ partial "score_minichart.html" . }}{{- end }}
+      {{- with $item.spark }}{{ partial "price_sparkline.html" . }}{{- end }}
+    </div>
+    {{- end }}
 
     <div class="ranking-cta">
       <a class="ranking-cta-internal" href="{{ $url }}">💡 徹底解説レビューを見る</a>
