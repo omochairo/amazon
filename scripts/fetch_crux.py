@@ -14,8 +14,12 @@ CrUX API:
 設計判断:
 - form_factor は PHONE + DESKTOP を別行で取得 (mobile-first だが desktop も流入元)
 - origin-level + top N URLs (default 3、GSC by_page 上位)
+- **複数 origin 対応** (#5080 項目3)。navi と omcha.jp を 1 回の実行で回す。
+  env `CRUX_ORIGIN` はカンマ / 空白区切りを受けるので、単一値のままでも動く
 - JSONL 1 行 = (date, key_type, key_value, form_factor, *metrics) で flat
-- idempotency: data/analytics/history/seen_dates.json の `crux` key に date を marking
+- idempotency: data/analytics/history/seen_dates.json の `crux` key に
+  (date, origin) を marking。date だけで見ていた頃は origin ごとに 2 回叩く
+  回避策が取れなかった (2 回目が丸ごと skip された)
 - 月次 cron (19-cwv-monitor.yml) から呼び出される。daily run は意味なし
   (CrUX は 28 日集計、毎日 poll しても新規データほぼなし)
 - Phase 2 (劣化検出 → Issue 起票) は 2 ヶ月分蓄積後の follow-up PR で実装
@@ -48,7 +52,16 @@ CRUX_ENDPOINT = "https://chromeuxreport.googleapis.com/v1/records:queryRecord"
 DEFAULT_HISTORY_DIR = "data/analytics/history"
 CRUX_HISTORY_FILENAME = "crux_history.jsonl"
 SEEN_DATES_FILENAME = "seen_dates.json"
-DEFAULT_GSC_INPUT = "data/analytics/gsc_weekly.json"
+# top URL の抽出元。旧実装は実行時中間ファイルの `data/analytics/gsc_weekly.json`
+# を見ていたが、このファイルはコミットされたことが無く、19-cwv-monitor は
+# fetch_gsc.py を走らせないので**常に存在せず**、top URL 経路は一度も動いて
+# いなかった (#5080 項目3)。コミット済みの履歴 JSONL に向け直す。
+# navi と WP で系列が分かれているが、どちらも `page` が絶対 URL なので、
+# origin ごとにファイルを対応づけず「全部読んで origin で絞る」で足りる。
+DEFAULT_GSC_INPUTS = (
+    "data/analytics/history/gsc_by_page.jsonl",     # navi.omcha.jp
+    "data/analytics/history/gsc_wp_by_page.jsonl",  # omcha.jp (WordPress 本家)
+)
 DEFAULT_TOP_URLS = 3
 DEFAULT_FORM_FACTORS = ("PHONE", "DESKTOP")
 HTTP_TIMEOUT = 30
@@ -140,30 +153,101 @@ def fetch_for_target(api_key: str, target: dict, form_factors: tuple[str, ...]) 
     return records
 
 
-def get_top_urls_from_gsc(gsc_path: pathlib.Path, origin: str, n: int) -> list[str]:
-    """gsc_weekly.json の by_page から impressions 上位 N URL を抽出して絶対 URL に正規化。"""
-    if not gsc_path.exists():
-        logger.info("gsc input %s not found — origin only", gsc_path)
+def normalize_origin(origin: str) -> str:
+    """末尾スラッシュを落とした origin 文字列。CrUX の origin キーもこの形。"""
+    return origin.strip().rstrip("/")
+
+
+def parse_origins(raw: str | None) -> list[str]:
+    """`CRUX_ORIGIN` / `--origin` の生値を origin のリストに (#5080 項目3)。
+
+    単一 secret のままでも動くよう、カンマ区切りと空白区切りの両方を受ける。
+    順序は維持し、重複は落とす (同じ origin を 2 回問い合わせて quota を捨てない)。
+    """
+    if not raw:
         return []
-    try:
-        data = json.loads(gsc_path.read_text(encoding="utf-8"))
-    except Exception as e:
-        logger.warning("failed to read gsc_weekly.json: %s — origin only", e)
-        return []
-    pages = data.get("by_page", []) or []
-    pages = sorted(pages, key=lambda r: r.get("impressions", 0), reverse=True)
-    urls: list[str] = []
-    for p in pages:
-        path = p.get("page")
-        if not path:
+    out: list[str] = []
+    for chunk in raw.replace(",", " ").split():
+        o = normalize_origin(chunk)
+        if o and o not in out:
+            out.append(o)
+    return out
+
+
+def get_top_urls_from_gsc(paths: list[pathlib.Path], origin: str, n: int) -> list[str]:
+    """GSC の by_page 履歴 JSONL から、その origin の impressions 上位 N URL を返す。
+
+    入力は `{date, page, impressions, ...}` の行が日付ぶん積まれた履歴なので、
+    まず **その origin について最新の date** に絞ってから上位を採る (全期間を
+    混ぜると古い日の行が重複して順位を歪める)。`page` は絶対 URL なので、
+    origin による前方一致でファイルを跨いだ振り分けもできる。
+    """
+    origin = normalize_origin(origin)
+    rows: list[dict] = []
+    for path in paths:
+        if not path.exists():
+            logger.info("gsc input %s not found — skipping this input", path)
             continue
-        if path.startswith("http"):
-            urls.append(path)
-        else:
-            urls.append(origin.rstrip("/") + "/" + path.lstrip("/"))
+        try:
+            with path.open(encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    r = json.loads(line)
+                    page = r.get("page") or ""
+                    # "https://navi.omcha.jp" が "https://navi.omcha.jpx" に
+                    # 誤マッチしないよう、区切りまで含めて判定する
+                    if page == origin or page.startswith(origin + "/"):
+                        rows.append(r)
+        except Exception as e:
+            logger.warning("failed to read %s: %s — skipping this input", path, e)
+            continue
+    if not rows:
+        logger.info("no gsc rows for %s — origin only", origin)
+        return []
+    latest = max(r.get("date") or "" for r in rows)
+    rows = [r for r in rows if (r.get("date") or "") == latest]
+    rows.sort(key=lambda r: r.get("impressions") or 0, reverse=True)
+    urls: list[str] = []
+    for r in rows:
+        page = r.get("page")
+        if page and page not in urls:
+            urls.append(page)
         if len(urls) >= n:
             break
+    logger.info("gsc top urls for %s (date=%s): %d", origin, latest, len(urls))
     return urls
+
+
+def crux_is_done(seen_crux: dict, target_date: str, origin: str) -> bool:
+    """その (date, origin) を既に取得済みか (#5080 項目3)。
+
+    旧形式は `seen["crux"][date] = True` で origin を持っていなかった。単一
+    origin 時代の記録なので、`True` は「その日は取得済み」= 全 origin 済みと
+    みなす (二重 append を増やさない側に倒す)。新形式は date → {origin: True}。
+    """
+    v = seen_crux.get(target_date)
+    if v is True:
+        return True
+    if isinstance(v, dict):
+        return bool(v.get(normalize_origin(origin)))
+    return False
+
+
+def mark_crux_done(seen_crux: dict, target_date: str, origin: str) -> None:
+    """(date, origin) を取得済みとして記録する。
+
+    旧形式の `True` (= その日は全 origin 済み) は潰さない。dict に置き換えると
+    記録していない origin が「未取得」に見えて二重 append を招く。
+    """
+    v = seen_crux.get(target_date)
+    if v is True:
+        return
+    if not isinstance(v, dict):
+        v = {}
+        seen_crux[target_date] = v
+    v[normalize_origin(origin)] = True
 
 
 def load_seen(seen_path: pathlib.Path) -> dict:
@@ -195,10 +279,12 @@ def append_records(history_path: pathlib.Path, target_date: str, records: list[d
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--api-key", default=os.environ.get("CRUX_API_KEY"))
-    p.add_argument("--origin", default=os.environ.get("CRUX_ORIGIN"),
-                   help="例: https://navi.omcha.jp")
-    p.add_argument("--gsc-input", default=DEFAULT_GSC_INPUT,
-                   help="top URL 抽出元 (best-effort、なくても origin だけで動く)")
+    p.add_argument("--origin", nargs="+", default=None,
+                   help="例: https://navi.omcha.jp https://omcha.jp "
+                        "(env CRUX_ORIGIN はカンマ / 空白区切りで複数可)")
+    p.add_argument("--gsc-input", nargs="+", default=list(DEFAULT_GSC_INPUTS),
+                   help="top URL 抽出元の by_page 履歴 JSONL "
+                        "(best-effort、なくても origin だけで動く)")
     p.add_argument("--top-urls", type=int, default=DEFAULT_TOP_URLS)
     p.add_argument("--form-factors", nargs="+", default=list(DEFAULT_FORM_FACTORS),
                    help="PHONE / DESKTOP / TABLET から選択")
@@ -210,7 +296,11 @@ def main() -> int:
     if not args.api_key:
         logger.error("CRUX_API_KEY missing (env or --api-key)")
         return 2
-    if not args.origin:
+    # --origin を明示したときはそれを、無ければ env CRUX_ORIGIN を使う。
+    # env 側は単一 secret に複数 origin を入れられるよう split する。
+    origins = (parse_origins(" ".join(args.origin)) if args.origin
+               else parse_origins(os.environ.get("CRUX_ORIGIN")))
+    if not origins:
         logger.error("CRUX_ORIGIN / --origin missing")
         return 2
 
@@ -220,20 +310,28 @@ def main() -> int:
 
     seen = load_seen(seen_path)
     seen_crux = seen.setdefault("crux", {})
-    if seen_crux.get(args.target_date):
-        logger.info("crux date %s already in history — skip", args.target_date)
+    # 冪等キーは (date, origin)。date だけで見ていた頃は、origin ごとに 2 回
+    # 叩くという回避策が取れなかった (2 回目が丸ごと skip されていた)。
+    pending = [o for o in origins if not crux_is_done(seen_crux, args.target_date, o)]
+    for o in origins:
+        if o not in pending:
+            logger.info("crux %s / %s already in history — skip", args.target_date, o)
+    if not pending:
+        logger.info("all origins already fetched for %s — nothing to do", args.target_date)
         return 0
 
     form_factors = tuple(args.form_factors)
+    gsc_inputs = [pathlib.Path(p) for p in args.gsc_input]
 
     all_records: list[dict] = []
-    logger.info("fetch origin: %s", args.origin)
-    all_records.extend(fetch_for_target(args.api_key, {"origin": args.origin}, form_factors))
+    for origin in pending:
+        logger.info("fetch origin: %s", origin)
+        all_records.extend(
+            fetch_for_target(args.api_key, {"origin": origin}, form_factors))
 
-    top_urls = get_top_urls_from_gsc(pathlib.Path(args.gsc_input), args.origin, args.top_urls)
-    for url in top_urls:
-        logger.info("fetch url: %s", url)
-        all_records.extend(fetch_for_target(args.api_key, {"url": url}, form_factors))
+        for url in get_top_urls_from_gsc(gsc_inputs, origin, args.top_urls):
+            logger.info("fetch url: %s", url)
+            all_records.extend(fetch_for_target(args.api_key, {"url": url}, form_factors))
 
     n = append_records(history_path, args.target_date, all_records)
     if n == 0:
@@ -242,7 +340,10 @@ def main() -> int:
     else:
         logger.info("appended %d records for %s to %s", n, args.target_date, history_path)
 
-    seen_crux[args.target_date] = True
+    # 取得を試みた origin は、CrUX がデータを返さなかった場合も含めて済みにする
+    # (掲載閾値未満の origin を月内に何度も叩いても結果は変わらない)。
+    for origin in pending:
+        mark_crux_done(seen_crux, args.target_date, origin)
     seen["_meta"] = {
         "crux_last_fetch_utc": datetime.now(timezone.utc).isoformat(),
         **(seen.get("_meta") or {}),
