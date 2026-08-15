@@ -1,0 +1,34 @@
+# 直接依存の宣言 (#5043 項目3)。
+#
+# ここは「このリポジトリが直接 import するもの」だけを書く。実際に CI が入れるのは
+# pip-compile が生成した requirements.txt (推移的依存まで含めて全部ピン留めされている)。
+# 役割を分けているのは、同じコミットを 2 回流したときに入る依存が違う状態を無くすため。
+#
+# 再生成 (依存を足す・上げるとき):
+#
+#     docker run --rm -v "$(pwd):/w" -w /w python:3.11-slim \
+#       sh -c "pip install pip-tools && pip-compile --output-file=requirements.txt requirements.in"
+#
+# **Linux の Python 3.11 で生成すること**。Windows で生成すると win32 限定の依存や
+# 環境マーカーが混ざり、ubuntu-latest の CI と食い違う。
+#
+# ファイル名を requirements.lock にしていないのは Dependabot のため。pip ecosystem は
+# requirements.in → requirements.txt の pip-compile 構成を認識して**出力側も再生成する**が、
+# .lock という拡張子は見ない。lock を認識させられないと bump PR が入力だけ書き換えて
+# CI は古いピンを入れ続ける (レビュー機会を作るという Dependabot 導入の目的が消える)。
+#
+# hash 固定 (--generate-hashes) は #5043 項目4。lock 運用が定着してから。
+beautifulsoup4
+feedparser
+google-analytics-data
+google-api-python-client
+jinja2
+python-frontmatter
+pytrends
+rakuten-ws
+requests
+jsonschema
+Pillow
+pykakasi
+youtube-transcript-api
+janome

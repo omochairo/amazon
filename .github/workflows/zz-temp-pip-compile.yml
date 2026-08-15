@@ -1,0 +1,45 @@
+name: TEMP pip-compile (remove before merge)
+
+# #5043 項目3 の requirements.txt を **CI と同一環境 (ubuntu-latest / Python 3.11)** で
+# 生成するための一時 workflow。ローカル (Windows) で生成すると win32 限定の依存や
+# 環境マーカーが混ざるため。生成物をこのブランチへ push したら、このファイルは
+# マージ前に削除する。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: pip-compile
+        run: |
+          set -e
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet pip-tools
+          pip-compile --output-file=requirements.txt requirements.in
+          cat requirements.txt
+
+      - name: Commit to this branch
+        run: |
+          set -e
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add requirements.txt
+          if git diff --cached --quiet; then
+            echo "No changes."
+            exit 0
+          fi
+          git commit -m "chore(deps): compile requirements.txt on ubuntu/py3.11 (#5043 項目3)"
+          git push
