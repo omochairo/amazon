@@ -65,6 +65,14 @@ node --test "tests/js/*.test.mjs"          # Service Worker 8 件（0.3秒）
 
 `requirements.txt` は本番実行依存だけを管理していて pytest を含まない。テスト依存は個別に入れる（本番環境に不要な依存を持ち込まないため）。
 
+**依存は 2 ファイルで役割が分かれている（#5043 項目3）。** 直接依存を書くのは `requirements.in` で、`requirements.txt` は `pip-compile` が生成した推移的依存まで全部ピン留め済みのファイル。**`requirements.txt` を手で編集しない。** 依存を足す・上げるときは `requirements.in` を編集して再生成する:
+
+```bash
+docker run --rm -v "$(pwd):/w" -w /w python:3.11-slim sh -c "pip install pip-tools && pip-compile --output-file=requirements.txt requirements.in"
+```
+
+**Linux の Python 3.11 で生成すること。** Windows で生成すると win32 限定の依存や環境マーカーが混ざり、`ubuntu-latest` の CI と食い違う。インストール側（CI・手元）の手順は変わらず `pip install -r requirements.txt` のまま。
+
 CI の Python は 3.11。3.14 でも全件パスすることは確認済みだが、落ちたときはまずバージョン差を疑う。
 
 `scripts/tests/test_build_jules_prompt.py` は private repo 側の `jules/PROMPT_TEMPLATE.md` を要求する。手元に `jules/` が無い状態でも他のテストは通る。
