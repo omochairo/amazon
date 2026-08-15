@@ -6,7 +6,11 @@ name: TEMP pip-compile (remove before merge)
 # マージ前に削除する。
 
 on:
-  workflow_dispatch:
+  # workflow_dispatch は default branch に存在しないと呼べないため、このブランチへの
+  # push で起動する。他の push トリガの workflow はすべて branches: [main] 限定なので、
+  # このブランチへの push が他レーンを動かすことはない (確認済み)。
+  push:
+    branches: [omochairo/requirements-lock-5043]
 
 permissions:
   contents: write
