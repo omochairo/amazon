@@ -115,11 +115,27 @@ function isHtmlResponse(res) {
   return !!ct && ct.indexOf("text/html") !== -1;
 }
 
+// 指紋付きアセットの取得。失敗したときだけ HTTP キャッシュを迂回して 1 回だけ
+// 取り直す (#5260)。
+// デプロイ入れ替え窓に掴んだ 404 は `Cache-Control: max-age=31536000` を伴って
+// 返ることが実測されており (2026-08-15)、素の fetch(req) は既定 cache モードなので
+// **その 404 のコピーが 1 年間返り続ける** (ネットワークに出ないのでリロードでも
+// 直らない。curl は 200 なのにブラウザだけスタイル無し = #5260 の症状)。
+// 指紋付き URL は内容不変なので、成功応答は HTTP キャッシュに任せたまま、
+// 失敗したときだけ reload で取り直せば副作用なく自己修復できる。
+function fetchAsset(req) {
+  return fetch(req).then(function (res) {
+    if (res && res.ok && !isHtmlResponse(res)) return res;
+    return fetch(req.url, { cache: "reload", credentials: "same-origin" })
+      .catch(function () { return res; });
+  });
+}
+
 function assetCacheFirst(req) {
   return caches.open(ASSET_CACHE).then(function (cache) {
     return cache.match(req).then(function (hit) {
       if (hit && !isHtmlResponse(hit)) return hit;
-      var refetch = fetch(req).then(function (res) {
+      var refetch = fetchAsset(req).then(function (res) {
         if (res && res.ok && !isHtmlResponse(res)) cache.put(req, res.clone());
         return res;
       });

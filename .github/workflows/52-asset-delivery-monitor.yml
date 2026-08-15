@@ -1,0 +1,79 @@
+name: Asset Delivery Monitor
+
+# #5260: **HTML と、その HTML が参照している指紋付きアセットが噛み合っているか**を
+# 外から見る。51 (delivery freshness) が「サイトの時刻が進んでいるか」を見るのに対し、
+# こちらは「配信されているものが自己整合しているか」を見る。両方 200 でも
+# 噛み合っていない状態がありうる。
+#
+# 2026-08-15 実測 (このレーンを入れた動機):
+#
+#   $ curl -sSI https://navi.omcha.jp/assets/css/stylesheet.<存在しない指紋>.css
+#   HTTP/1.1 404 Not Found
+#   Cache-Control: max-age=31536000     ← 1 年
+#   $ curl -sSI https://navi.omcha.jp/no-such-page/
+#   HTTP/1.1 404 Not Found
+#   Cache-Control: max-age=300          ← HTML の 404 は 5 分
+#
+# 「指紋付きだから 1 年キャッシュしてよい」という設定が 404 にも当たっており、
+# デプロイ入れ替え窓の一瞬の 404 を掴んだブラウザはそれを 1 年保持する
+# (実体が配信された後も取りに行かないのでリロードでも直らない)。
+#
+# このレーンの主目的は **その設定が戻っていないことの回帰ガード**。Cloudflare 側の
+# 設定はリポジトリの外にあり、ダッシュボードから誰でも変えられるうえ、変えても
+# CI は緑のままなので、外形から見張る以外に固定する方法が無い。
+#
+# なぜ 51 に相乗りしないか:
+#   51 は sitemap の lastmod 1 点で判定する原因非依存の網で、判定材料も閾値も
+#   別物。1 本にまとめると「時刻は進んでいるがアセットが壊れている」を
+#   表現できなくなる (どちらか一方の issue しか立たない)。
+#
+# なぜ GitHub Actions 側に置くか:
+#   51 と同じ。監視は配信と別のインフラに置く。
+
+on:
+  schedule:
+    # 1 時間ごと。書き込みは異常時のみ・最大 1 回/run なので API バーストにならない。
+    # デプロイは 1 日 50 本前後あるため、入れ替え窓の実害 (R1〜R3) を掴むには
+    # 51 の 6h では粗すぎる。回帰ガード (R4) は頻度に依存しない。
+    - cron: '20 * * * *'
+  workflow_dispatch:
+    inputs:
+      max_negative_ttl:
+        description: '404 に許す最大 max-age 秒 (既定 300)'
+        required: false
+        default: '300'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: asset-delivery-monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      # requirements.txt 全部は要らない (この script が使う外部依存は requests だけ)。
+      # 監視レーンの起動を本番依存の解決に巻き込まないため個別に入れる (51 と同じ)。
+      - name: Install requests
+        run: pip install requests
+
+      - name: Check asset delivery
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          python scripts/check_asset_delivery.py \
+            --max-negative-ttl "${{ github.event.inputs.max_negative_ttl || 300 }}"

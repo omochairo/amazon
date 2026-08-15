@@ -31,6 +31,7 @@ const ORIGIN = "https://navi.omcha.jp";
 
 const CACHE_VERSION = /var CACHE_VERSION = "([^"]+)"/.exec(SW_SRC)[1];
 const PAGE_CACHE = "omcha-pages-" + CACHE_VERSION;
+const ASSET_CACHE = "omcha-assets-" + CACHE_VERSION;
 const MAX_STALE_MS = 6 * 60 * 60 * 1000;
 
 function keyOf(req) {
@@ -111,6 +112,29 @@ function loadSW({ network }) {
     fetchCalls,
     async store() {
       return caches.open(PAGE_CACHE);
+    },
+    async assetStore() {
+      return caches.open(ASSET_CACHE);
+    },
+    /** 指紋付きアセット (destination: style/script) を 1 本流す。 */
+    async asset(pathname, destination = "style") {
+      const req = {
+        method: "GET",
+        url: ORIGIN + pathname,
+        mode: "no-cors",
+        destination,
+        headers: new Headers()
+      };
+      let responded;
+      listeners.get("fetch")({
+        request: req,
+        respondWith: (p) => {
+          responded = p;
+        },
+        waitUntil: () => {}
+      });
+      assert.ok(responded, "SW が respondWith しなかった: " + pathname);
+      return await responded;
     },
     /** navigation リクエストを 1 本流し、SW が返す Response を得る。 */
     async navigate(pathname) {
@@ -217,6 +241,79 @@ test("取り直しは常に HTTP キャッシュを迂回する (層2 の再発�
       "既定 cache モードだと max-age=14400 の HTTP キャッシュが返る: " + call.url
     );
   }
+});
+
+// ---- 指紋付きアセットの焼き付き (#5260) ---------------------------------
+// デプロイ入れ替え窓に掴んだ /assets/** の 404 は Cache-Control: max-age=31536000 を
+// 伴って返る (2026-08-15 実測)。素の fetch(req) は既定 cache モードなので、その
+// 404 のコピーが 1 年間ネットワークに出ないまま返り続ける。SW 側は「失敗したら
+// HTTP キャッシュを迂回して 1 回だけ取り直す」ことで自力で剥がす。
+
+const CSS_PATH = "/assets/css/stylesheet.deadbeef.css";
+
+/** 1 回目は poisoned な 404、cache: "reload" のときだけ実体を返すネットワーク。 */
+function poisonedThenFresh(body) {
+  return async (url, init) => {
+    if (init.cache === "reload") {
+      return new Response(body, {
+        status: 200,
+        headers: { "content-type": "text/css" }
+      });
+    }
+    return new Response("not found", {
+      status: 404,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "max-age=31536000"
+      }
+    });
+  };
+}
+
+test("焼き付いた 404 は HTTP キャッシュを迂回して取り直す (#5260)", async () => {
+  const sw = loadSW({ network: poisonedThenFresh("body{color:red}") });
+  const res = await sw.asset(CSS_PATH);
+  assert.equal(res.status, 200, "404 のまま返している = 焼き付きを剥がせていない");
+  assert.equal(await res.text(), "body{color:red}");
+  assert.equal(sw.fetchCalls.length, 2, "取り直しが飛んでいない");
+  assert.equal(sw.fetchCalls[1].init.cache, "reload",
+    "既定 cache モードだと max-age=31536000 の 404 が返り続ける");
+});
+
+test("取り直しで得た実体は ASSET_CACHE に入る (次回はネットワーク不要)", async () => {
+  const sw = loadSW({ network: poisonedThenFresh("body{color:red}") });
+  await sw.asset(CSS_PATH);
+  const cache = await sw.assetStore();
+  const hit = await cache.match(CSS_PATH);
+  assert.ok(hit, "取り直した実体がキャッシュされていない");
+  assert.equal(await hit.text(), "body{color:red}");
+});
+
+test("成功時は取り直さない (毎回 2 往復させない)", async () => {
+  const sw = loadSW({
+    network: async () =>
+      new Response("body{color:blue}", {
+        status: 200,
+        headers: { "content-type": "text/css" }
+      })
+  });
+  await sw.asset(CSS_PATH);
+  assert.equal(sw.fetchCalls.length, 1, "成功しているのに再取得している");
+});
+
+test("取り直しても駄目なら 404 を返す (offline HTML を style として掴ませない)", async () => {
+  const sw = loadSW({
+    network: async () =>
+      new Response("not found", {
+        status: 404,
+        headers: { "content-type": "text/html; charset=utf-8" }
+      })
+  });
+  const res = await sw.asset(CSS_PATH);
+  assert.equal(res.status, 404);
+  const cache = await sw.assetStore();
+  assert.equal(await cache.match(CSS_PATH), undefined,
+    "壊れた応答をキャッシュしている (#3568 の再発)");
 });
 
 test("PAGE_CACHE に保存される応答には保存時刻が打たれる", async () => {
