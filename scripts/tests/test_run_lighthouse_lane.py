@@ -247,6 +247,66 @@ def test_aggregate_runs_warns_when_element_differs_across_runs(caplog):
     assert "lcp_element" in caplog.text
 
 
+def _lh13_no_candidate():
+    """LCP 候補が確定しなかった run (element=None / reason=notApplicable)。"""
+    lh = _lh13_json()
+    lh["audits"]["lcp-breakdown-insight"] = {
+        "scoreDisplayMode": "notApplicable", "details": None,
+    }
+    return lh
+
+
+def test_aggregate_runs_keeps_element_and_reason_exclusive(caplog):
+    """間欠取得でも element と reason は排他のまま (#5081 項目2)。
+
+    per-run の不変条件 (片方が入れば他方は None) を集約でも保つ。2 キーを独立に
+    畳んでいた頃は両方入った行ができ、lcp_is_unmeasured() が reason だけを見る
+    せいで「3 回中 2 回は LCP が取れていた行」が無音で LCP ゲートから外れていた。
+    """
+    runs = [
+        extract_metrics(_lh13_no_candidate()),
+        extract_metrics(_lh13_json()),
+        extract_metrics(_lh13_no_candidate()),
+    ]
+    with caplog.at_level("WARNING"):
+        agg = aggregate_runs(runs)
+    assert agg["lcp_element"] == "body#top > main.main > section.home-hero > div.home-hero-lead"
+    assert agg["lcp_element_reason"] is None
+    # 3 回中 1 回しか取れていないことが JSONL から追える
+    assert agg["lcp_element_runs"] == 1
+    assert agg["runs"] == 3
+    # element が 1 種類しか無いので selector 割れの警告は出さない
+    assert "differs across runs" not in caplog.text
+    # 集約行が LCP ゲートの対象に残る
+    assert lcp_is_unmeasured(agg) is False
+
+
+def test_aggregate_runs_all_runs_without_candidate_stay_unmeasured():
+    """全 run で候補が取れなければ従来どおり reason を残しゲートから外す。"""
+    agg = aggregate_runs([extract_metrics(_lh13_no_candidate()) for _ in range(3)])
+    assert agg["lcp_element"] is None
+    assert agg["lcp_element_reason"] == "notApplicable"
+    assert "lcp_element_runs" not in agg
+    assert lcp_is_unmeasured(agg) is True
+
+
+def test_aggregate_runs_records_element_runs_when_all_runs_have_it():
+    agg = aggregate_runs([extract_metrics(_lh13_json()) for _ in range(3)])
+    assert agg["lcp_element_runs"] == 3
+    assert agg["lcp_element_reason"] is None
+
+
+def test_aggregate_runs_warns_when_reason_differs_across_runs(caplog):
+    """候補ゼロでも理由が run 間で割れたら追跡用に warning を残す。"""
+    missing = _lh13_json()
+    del missing["audits"]["lcp-breakdown-insight"]
+    runs = [extract_metrics(_lh13_no_candidate()), extract_metrics(missing)]
+    with caplog.at_level("WARNING"):
+        agg = aggregate_runs(runs)
+    assert agg["lcp_element_reason"] == "notApplicable"
+    assert "lcp_element_reason differs across runs" in caplog.text
+
+
 # ---------- detect_regressions ----------
 
 def _row(url="https://x/", ff="mobile", **kw):
@@ -581,6 +641,16 @@ def test_lcp_is_unmeasured_ignores_parser_case_and_missing_key():
     assert lcp_is_unmeasured(_row(lcp_element_reason="no-node-in-details")) is False
     assert lcp_is_unmeasured(_row(lcp_element_reason="audit-missing")) is False
     assert lcp_is_unmeasured(_row()) is False
+
+
+def test_lcp_is_unmeasured_false_when_element_present():
+    """element が入っていれば reason が残っていても計測済み扱い (#5081 項目2)。
+
+    2026-08-07〜08-15 の集約バグで両方入った行が JSONL に残っているため、履歴を
+    書き換えずに読み出し側で救う。
+    """
+    row = _row(lcp_element="div.hero", lcp_element_reason="notApplicable")
+    assert lcp_is_unmeasured(row) is False
 
 
 def test_detect_regressions_skips_lcp_when_unmeasured():

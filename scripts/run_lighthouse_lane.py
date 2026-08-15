@@ -471,12 +471,35 @@ def aggregate_runs(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         values = [r[short] for r in runs if isinstance(r.get(short), (int, float))]
         out[short] = round(statistics.median(values), 1) if values else None
 
-    # lcp_element / throttling_method / lh_version は run 間で変わらない前提
+    # lcp_element と lcp_element_reason は per-run では排他 (extract_metrics が
+    # element を取れなかったときだけ reason を入れる)。この排他は集約でも保た
+    # ないといけないので、2 キーを独立に畳まず 1 組で扱う (#5081 項目2)。
+    # 商品ページの LCP 候補は間欠取得なので、run ごとに element / reason が割れ
+    # る。片方ずつ拾うと両方入った行ができ、lcp_is_unmeasured() が reason だけ
+    # を見るせいで「LCP が取れていた行」まで無音でゲートから外れていた。
+    # 「1 回でも実 Candidate があれば計測できている」に倒す。
+    elements = [r.get("lcp_element") for r in runs if r.get("lcp_element") is not None]
+    if elements:
+        out["lcp_element"] = elements[0]
+        out["lcp_element_reason"] = None
+        # 何回中何回で取れたかを残し、間欠であること自体を JSONL から追える
+        # ようにする (`<metric>_error_runs` / `<metric>_spread` と同じ方針)。
+        out["lcp_element_runs"] = len(elements)
+        if any(v != elements[0] for v in elements):
+            logger.warning("lcp_element differs across runs: %s", elements)
+    else:
+        out["lcp_element"] = None
+        reasons = [r.get("lcp_element_reason") for r in runs
+                   if r.get("lcp_element_reason") is not None]
+        out["lcp_element_reason"] = reasons[0] if reasons else None
+        if reasons and any(v != reasons[0] for v in reasons):
+            logger.warning("lcp_element_reason differs across runs: %s", reasons)
+
+    # throttling_method / lh_version / chrome_version は run 間で変わらない前提
     # (同一 URL・同一 form_factor を同一コマンドで N 回叩くだけなので)。最初の
     # run の値を代表として持つ。もし run 間で割れていたら、集計せず追跡だけ
     # できるよう警告に残す (原因調査の手がかりを消さない)。
-    for key in ("lcp_element", "lcp_element_reason", "throttling_method",
-                "lh_version", "chrome_version"):
+    for key in ("throttling_method", "lh_version", "chrome_version"):
         values = [r.get(key) for r in runs if r.get(key) is not None]
         if values:
             out[key] = values[0]
@@ -646,8 +669,13 @@ def _ratio_regression(value: float, base: float, min_delta: float) -> bool:
 def lcp_is_unmeasured(row: Dict[str, Any]) -> bool:
     """その行の `lcp` / `observed_lcp` が合成値 (= LCP を計測できていない) か (#4441)。
 
-    判定は `lcp_element_reason` だけを見る。LCP_UNMEASURED_REASONS の定義を参照。
+    判定は `lcp_element_reason` を見る (LCP_UNMEASURED_REASONS の定義を参照)。
+    ただし `lcp_element` が入っている行は、実 LCP 候補が取れている以上「計測でき
+    ていない」ではない。2026-08-07〜08-15 の集約バグ (#5081 項目2) で両方が入っ
+    た行が JSONL に残っているので、element 優先で判定して過去行もその場で救う。
     """
+    if row.get("lcp_element"):
+        return False
     return row.get("lcp_element_reason") in LCP_UNMEASURED_REASONS
 
 
