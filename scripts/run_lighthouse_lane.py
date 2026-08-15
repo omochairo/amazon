@@ -35,6 +35,10 @@ navi.omcha.jp の代表 URL 群に対して Lighthouse をローカル実行し�
   ローカルで回すと LCP=5.0s と正常に出た (= 計測基盤側の失敗)。metric 値だけを
   JSONL に持つと、この 2 つが区別できず追跡不能になる。よって各 metric に
   `*_error` 列を持たせ、error 行は劣化判定から除外して別枠で報告する。
+- **分散の見かたは MAD と分位の 2 本立て** (#4160 / #5264): MAD は単発の外れ値に
+  頑健だが、外れ値が**再発する第 2 のクラスタ**である系列 (ホーム mobile の TBT)
+  では、多数派クラスタの幅しか測らずゲートが許容すべき幅を見落とす。baseline 窓の
+  Tukey fence (Q3 + 1.5*IQR) を超えることを必須条件に足して塞ぐ。
 - **回帰判定は「直近 baseline の median」対比**: 絶対閾値 (CWV good) だけだと
   元から悪い指標が毎回鳴り続けてノイズになるので、①CWV 閾値をまたいだ悪化
   ②baseline 比の相対悪化、の 2 条件で鳴らす。**baseline が育っていない URL は
@@ -167,6 +171,27 @@ MIN_BASELINE_SAMPLES = 7
 # K 倍以上外れていることを relative/score 判定の必須条件にする。ratio 条件
 # だけだと分散の大きい指標 (ホーム mobile LCP など) を毎回誤検出するため。
 REGRESSION_MAD_K = 3.0
+
+# 二峰性対応ゲート (#5264): baseline 窓の Tukey fence (Q3 + K*IQR) を超えることを
+# metric 判定の必須条件にする。
+#
+# なぜ MAD だけでは足りないか (2026-08-14 の #5259 が実例):
+#   ホーム mobile の TBT の baseline 窓は 85 / 51 / 44.5 / 48 / 231.5 / 46.5 / 272.5 で、
+#   median=51.0 に対し **MAD=6.5** だった。MAD は外れ値に頑健なので多数派クラスタ
+#   (44〜85) の幅しか測らず、窓の中にある 231.5 と 272.5 を無視する。その結果ゲートは
+#   「51 ± 6.5」だと信じ、窓の実測レンジ (44.5〜272.5) の内側である 150 で鳴った。
+#
+#   MAD が「外れ値を無視する」道具であること自体は #4160 の意図どおりで、単発の
+#   外れ値には正しく効いている。問題は、この系列では高い側が**単発ではなく再発する
+#   第 2 のクラスタ**である点。ゲートが許容すべき幅そのものを MAD が見落とす。
+#
+#   分位なら再発クラスタが Q3 に乗るので幅に反映される。分布が締まっている系列では
+#   IQR が小さく fence も締まるため、感度は落ちない (CLS のようにほぼ定数の系列では
+#   fence ≒ Q3 ≒ baseline)。実履歴 28 日の replay では、現行が鳴らす 3 件のうち
+#   誤検出寄りの 2 件 (2026-07-27 ホーム 105 / baseline 50.8、2026-08-14 ホーム 150 /
+#   baseline 51.0) が消え、大きい 1 件 (2026-08-05 商品 398 / baseline 130.5・
+#   fence 141.6) は残った。
+REGRESSION_FENCE_K = 1.5
 
 # `lcp_element_reason` がこれらのときは、その行の LCP は「計測できていない」。
 #
@@ -427,6 +452,12 @@ def aggregate_runs(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         if values:
             med = statistics.median(values)
             out[short] = round(med, 3) if short == "cls" else round(med, 1)
+            # #5264: run 間のばらつき (max-min) を残す。median だけだと「3 回とも
+            # 遅い」と「1 回だけ暴れた」を後から区別できず、誤検出の切り分けに
+            # 使える材料が JSONL 側に何も残らない。ゲートでの利用は履歴が
+            # 溜まってから (今ある行は全部このキーを持たないため)。
+            spread = max(values) - min(values)
+            out[short + "_spread"] = round(spread, 3) if short == "cls" else round(spread, 1)
         else:
             out[short] = None
         errors = [r[short + "_error"] for r in runs if r.get(short + "_error")]
@@ -550,6 +581,61 @@ def mad_for(
         return None
     med = statistics.median(values)
     return statistics.median([abs(v - med) for v in values])
+
+
+def upper_fence_for(
+    history: List[Dict[str, Any]],
+    url: str,
+    form_factor: str,
+    short: str,
+    window: int,
+    min_samples: int = MIN_BASELINE_SAMPLES,
+    chrome_version: Optional[str] = None,
+) -> Optional[float]:
+    """baseline と同じ値列から Tukey の上側 fence (Q3 + K*IQR) を作る (#5264)。
+
+    baseline_for / mad_for と同じ min_samples / chrome_version ガードを使う。
+    値が 2 件未満で四分位が計算できないときは None (= この条件を課さない)。
+    """
+    values = _collect_baseline_values(history, url, form_factor, short, window,
+                                      chrome_version=chrome_version)
+    if len(values) < min_samples or len(values) < 2:
+        return None
+    q1, _, q3 = statistics.quantiles(values, n=4)
+    return q3 + REGRESSION_FENCE_K * (q3 - q1)
+
+
+def warmup_gates(
+    history: List[Dict[str, Any]], current: List[Dict[str, Any]], window: int = 10
+) -> List[Dict[str, Any]]:
+    """baseline が育っておらず**判定を見送っている** (url, form_factor, metric) を返す。
+
+    なぜ要るか (#5264):
+      baseline は同一 Chrome major の行だけで作る (#4765) ので、Chrome の major が
+      上がるたびに `MIN_BASELINE_SAMPLES` 日ぶんゲートが沈黙する。2026-08-07 の
+      major 更新では 8/14 まで沈黙し、系列で最大の 2 スパイク (231.5 / 272.5) は
+      一度も鳴らないまま、それより小さい 150 が「ウォームアップ明けの初日」だから
+      鳴った。Chrome major は約 4 週ごとに上がるので、この盲点は定常的に出る。
+
+      沈黙そのものは設計どおり (薄い baseline で比べると計測揺れを拾う) なので
+      変えない。**沈黙していることを見えるようにする**のがここの役割で、
+      「鳴っていない = 健全」と読まれるのを防ぐ (#4789 と同じ思想)。
+    """
+    out: List[Dict[str, Any]] = []
+    for row in current:
+        url, ff = row.get("url"), row.get("form_factor")
+        for _, short in METRIC_MAP:
+            if row.get(short + "_error") or not isinstance(row.get(short), (int, float)):
+                continue
+            values = _collect_baseline_values(history, url, ff, short, window,
+                                              chrome_version=row.get("chrome_version"))
+            if len(values) < MIN_BASELINE_SAMPLES:
+                out.append({
+                    "url": url, "form_factor": ff, "metric": short,
+                    "samples": len(values), "needed": MIN_BASELINE_SAMPLES,
+                    "chrome_version": row.get("chrome_version"),
+                })
+    return out
 
 
 def _ratio_regression(value: float, base: float, min_delta: float) -> bool:
@@ -677,6 +763,23 @@ def detect_regressions(
             crossed = good is not None and base <= good < value
             worse = value > base * REGRESSION_RATIO and (value - base) >= required_delta
 
+            # #5264: baseline 窓の Tukey fence を超えないなら、その値は「窓の中で
+            # 既に起きている振れ幅の内側」であって劣化の証拠にならない。threshold
+            # (good 閾値跨ぎ) にも同じ条件を課す — 二峰性の系列では高い側のクラスタが
+            # 再発するたびに閾値を跨ぐので、relative だけ塞いでも同じ日に threshold で
+            # 鳴り直すだけになる。
+            fence = upper_fence_for(history, url, ff, short, window,
+                                    chrome_version=cur_chrome)
+            if (crossed or worse) and fence is not None and value <= fence:
+                # 無音で消すと「鳴らないから健全」に見えるので必ずログに残す。
+                logger.warning(
+                    "gate suppressed (within baseline spread, fence=%.1f): %s [%s] "
+                    "%s baseline=%s value=%s",
+                    fence, url, ff, short, base, value,
+                )
+                crossed = False
+                worse = False
+
             if (crossed or worse) and short == "lcp":
                 if lcp_is_unmeasured(row):
                     # LCP 候補が確定していない行 (#4441)。値は入っているが LCP では
@@ -731,6 +834,7 @@ def render_report(
     alerts: List[Dict[str, Any]],
     target_date: str,
     lcp_unmeasured: Optional[List[Dict[str, Any]]] = None,
+    warmup: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     """劣化レポート Markdown。1 issue に集約する前提で全 URL 分を 1 本にまとめる。
 
@@ -792,6 +896,24 @@ def render_report(
         for r in lcp_unmeasured:
             lines.append("| {} | {} | {} |".format(
                 r.get("url"), r.get("form_factor"), r.get("lcp_element_reason")))
+        lines.append("")
+
+    if warmup:
+        by_metric: Dict[str, int] = {}
+        for w in warmup:
+            by_metric[w["metric"]] = by_metric.get(w["metric"], 0) + 1
+        lines += [
+            "### baseline が育っておらず判定を見送っている項目 ({} 件)".format(len(warmup)),
+            "",
+            "baseline は**同一 Chrome major の行だけ**から作る (#4765) ため、Chrome の",
+            "major が上がるたびに {} 日ぶんゲートが沈黙します。**「鳴っていない = 健全」".format(MIN_BASELINE_SAMPLES),
+            "とは読めません** (#5264)。",
+            "",
+            "| metric | 件数 |",
+            "| --- | --- |",
+        ]
+        for metric in sorted(by_metric):
+            lines.append("| {} | {} |".format(metric, by_metric[metric]))
         lines.append("")
 
     lines += ["Refs #2995 (案6) / #1357 (epic E2)"]
@@ -1044,6 +1166,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 1
 
     alerts = detect_regressions(history, current, window=args.baseline_window)
+    warmup = warmup_gates(history, current, window=args.baseline_window)
+    if warmup:
+        # 沈黙を可視化する (#5264)。Chrome major が上がるたびに必ず出るので
+        # ::warning:: にはせず info で残す。
+        logger.info("gate warm-up: %d (url, form_factor, metric) not compared yet "
+                    "(need %d samples on the same Chrome major)",
+                    len(warmup), MIN_BASELINE_SAMPLES)
 
     if args.dry_run:
         for row in current:
@@ -1078,7 +1207,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if alerts:
         logger.warning("%d regression alert(s) detected", len(alerts))
-        report = render_report(alerts, target_date, unmeasured)
+        report = render_report(alerts, target_date, unmeasured, warmup)
         if args.report_out:
             pathlib.Path(args.report_out).write_text(report, encoding="utf-8")
             logger.info("wrote report to %s", args.report_out)
