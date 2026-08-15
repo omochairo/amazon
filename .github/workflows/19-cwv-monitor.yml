@@ -9,13 +9,17 @@ name: CWV Monthly Monitor (CrUX API)
 #   - cron: 月初 (UTC 1 日 22:00 = JST 2 日 07:00)。CrUX は 28 日 rolling なので
 #     毎日 poll しても新規データほぼなし、月次で十分
 #   - commit-back は App token + PR auto-merge (18-analytics-daily.yml と同パターン)
-#   - secrets 未設定なら fetch step を skip して空 run
+#   - secrets 未設定なら **落とす**。以前は ::notice::skipping して緑終了していたが、
+#     それだと secret 失効時にレーンが黙って死ぬ (#4793)。実際 2026-08-01 の
+#     schedule 実行は secret 未設定のまま緑で終わっており、データ 0 件だったことに
+#     誰も気づいていなかった。設定漏れは月 1 回しか鳴らないので、鳴らす側に倒す
 #   - low-traffic site で CrUX が 404 を返すのは正常系 (next month で再試行)
 #
 # 必須 secrets:
 #   - APP_ID, APP_PRIVATE_KEY            (commit-back 用 App token)
 #   - CRUX_API_KEY                       (Google Cloud Console で CrUX API enable した key)
-#   - CRUX_ORIGIN                        (例: https://navi.omcha.jp)
+#   - CRUX_ORIGIN                        (計測する origin。**カンマ or 空白区切りで複数可**。
+#                                         例: https://navi.omcha.jp,https://omcha.jp)
 
 on:
   workflow_dispatch:
@@ -54,28 +58,31 @@ jobs:
           python-version: '3.11'
 
       - name: Fetch CrUX (origin + top URLs)
-        id: crux
         env:
           CRUX_API_KEY: ${{ secrets.CRUX_API_KEY }}
           CRUX_ORIGIN: ${{ secrets.CRUX_ORIGIN }}
         run: |
+          # secret 未設定・fetch 失敗はどちらも run を落とす。緑で終わらせると
+          # 月次レーンが黙って死ぬ (#4793)。CrUX がデータを返さないこと自体は
+          # 正常系で、その場合 fetch_crux.py は 0 を返す (append 0 件で warning)。
           set +e
-          if [ -z "$CRUX_API_KEY" ] || [ -z "$CRUX_ORIGIN" ]; then
-            echo "::notice::CRUX_API_KEY or CRUX_ORIGIN not set — skipping"
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            exit 0
+          missing=""
+          [ -z "$CRUX_API_KEY" ] && missing="$missing CRUX_API_KEY"
+          [ -z "$CRUX_ORIGIN" ] && missing="$missing CRUX_ORIGIN"
+          if [ -n "$missing" ]; then
+            echo "::error::required secret not set —$missing"
+            exit 1
           fi
           python scripts/fetch_crux.py
           rc=$?
           if [ $rc -ne 0 ]; then
-            echo "::warning::CrUX fetch failed (rc=$rc)"
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error::CrUX fetch failed (rc=$rc)"
+            exit 1
           fi
-          echo "available=true" >> "$GITHUB_OUTPUT"
 
+      # fetch が失敗すれば上の step で run ごと落ちるので、ここに到達する時点で
+      # fetch は成功している。差分が無い場合の skip はこの step 自身が見る。
       - name: Create CrUX history PR + auto-merge
-        if: steps.crux.outputs.available == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
