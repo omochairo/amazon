@@ -48,6 +48,23 @@ concurrency:
 jobs:
   report:
     runs-on: ubuntu-latest
+    env:
+      # #4793 follow-up: GA4 / GSC の実数値を含む Issue は **private リポジトリ**へ立てる。
+      #
+      # 本リポジトリは public で、Issue のタイトル・本文は全世界に公開され第三者ミラーに
+      # 永久保存される (後から消しても消えない)。CLAUDE.md「共同開発の会話は private 側で
+      # やる」が「ここに書かないもの」の筆頭に挙げているのが GSC / GA4 の実数値・順位で、
+      # このレーンはそれを毎週自動で public に投稿していた (例: 週次レポートの PV 実数、
+      # `[A-1] CTR low: <URL> (imp=..., ctr=...%, pos=...)` というタイトル)。
+      #
+      # 宛先は amazon-navi-brain。navi の「相談・判断・数値」のレーンとして
+      # CLAUDE.md と同リポジトリ Issue #2 で定義済みで、collaborator も 2 名に限定されている。
+      #
+      # **実数値を含まない Issue はこれまでどおり public に立てる。** A-6
+      # (brand_taxonomy 追加候補) と P3 (カタログ未登録ブランド候補) は件数と ASIN だけで
+      # GA4 / GSC 由来の指標を持たず、かつ「TODO は Issues に置く」で一次管理する作業項目
+      # なので、private に移すと公開側の TODO 一覧から消えて追跡できなくなる。
+      ANALYTICS_ISSUE_REPO: omochairo/amazon-navi-brain
     steps:
       # #1329: 週次 GSC スナップショット (by_combo 込み) を main に commit するため
       # App token を生成する。GITHUB_TOKEN 直 push は main 保護で GH006 silent reject
@@ -303,11 +320,37 @@ jobs:
           retention-days: 90
           if-no-files-found: warn
 
+      # 以降の Issue 起票の前に、private 側へ書ける資格情報があることを確かめる。
+      #
+      # ここを **黙って skip させない**のが要点 (#4793)。skip して緑終了させると、
+      # PAT が失効した週から「実数値の Issue が 1 件も立たない」状態が無音で続き、
+      # レーンが死んでいることに誰も気づけない。逆に握りつぶさず落とせば、
+      # 週次で赤が出るので必ず気づく。
+      #
+      # データ側 (GSC スナップショットの commit-back) は既に上で完了しているので、
+      # ここで落ちても収集済みデータは失われない。落ちるのは起票だけ。
+      - name: Preflight — private Issue 先への書き込み資格を確認
+        env:
+          GH_TOKEN: ${{ secrets.NAVI_BRAIN_PAT }}
+        run: |
+          set -e
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::NAVI_BRAIN_PAT が未設定です。GA4/GSC の実数値を含む Issue は"
+            echo "::error::public リポジトリには立てられないため、ここで停止します。"
+            echo "::error::PAT には ${ANALYTICS_ISSUE_REPO} への issues:write が必要です。"
+            exit 1
+          fi
+          if ! gh api "repos/${ANALYTICS_ISSUE_REPO}" --jq .full_name >/dev/null; then
+            echo "::error::NAVI_BRAIN_PAT で ${ANALYTICS_ISSUE_REPO} にアクセスできません。"
+            echo "::error::PAT の失効かスコープ不足です (issues:write が必要)。"
+            exit 1
+          fi
+
       - name: Open rewrite Issues for low-CTR pages
         if: steps.low_ctr.outputs.count != '0' && steps.low_ctr.outputs.count != ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.NAVI_BRAIN_PAT }}
+          REPO: ${{ env.ANALYTICS_ISSUE_REPO }}
         run: |
           set -e
           python scripts/open_low_ctr_issues.py
@@ -315,8 +358,8 @@ jobs:
       - name: Open opportunity Issues
         if: steps.opportunity.outputs.count != '0' && steps.opportunity.outputs.count != ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.NAVI_BRAIN_PAT }}
+          REPO: ${{ env.ANALYTICS_ISSUE_REPO }}
         run: |
           set -e
           python scripts/open_opportunity_issues.py
@@ -342,8 +385,8 @@ jobs:
       - name: Open cannibalization Issues (A-3)
         if: steps.cannibal.outputs.count != '0' && steps.cannibal.outputs.count != ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.NAVI_BRAIN_PAT }}
+          REPO: ${{ env.ANALYTICS_ISSUE_REPO }}
         run: |
           set -e
           python scripts/open_cannibalization_issues.py
@@ -351,8 +394,8 @@ jobs:
       - name: Open engagement-drop Issues (A-4)
         if: steps.engagement_drop.outputs.count != '0' && steps.engagement_drop.outputs.count != ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.NAVI_BRAIN_PAT }}
+          REPO: ${{ env.ANALYTICS_ISSUE_REPO }}
         run: |
           set -e
           python scripts/open_engagement_drop_issues.py
@@ -360,8 +403,8 @@ jobs:
       - name: Open orphan-page Issues (A-5)
         if: steps.orphans.outputs.count != '0' && steps.orphans.outputs.count != ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.NAVI_BRAIN_PAT }}
+          REPO: ${{ env.ANALYTICS_ISSUE_REPO }}
         run: |
           set -e
           python scripts/open_orphan_issues.py
@@ -369,15 +412,16 @@ jobs:
       - name: Open query-intent Issues (A-7)
         if: steps.query_intent.outputs.count != '0' && steps.query_intent.outputs.count != ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.NAVI_BRAIN_PAT }}
+          REPO: ${{ env.ANALYTICS_ISSUE_REPO }}
         run: |
           set -e
           python scripts/open_query_intent_issues.py
 
+      # 週次レポート本体は PV / 表示回数 / CTR / 掲載順位の実数値そのものなので private へ。
       - name: Create weekly Issue
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.NAVI_BRAIN_PAT }}
           RANGE_START: ${{ steps.summary.outputs.range_start }}
           RANGE_END: ${{ steps.summary.outputs.range_end }}
           GSC_AVAILABLE: ${{ steps.gsc.outputs.available }}
@@ -389,7 +433,7 @@ jobs:
             TITLE="GA4 weekly report ${RANGE_START} 〜 ${RANGE_END}"
           fi
           gh issue create \
-            -R "${{ github.repository }}" \
+            -R "$ANALYTICS_ISSUE_REPO" \
             --title "$TITLE" \
             --label "analytics,observation" \
             --body-file /tmp/report.md
