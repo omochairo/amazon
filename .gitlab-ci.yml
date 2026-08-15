@@ -229,11 +229,23 @@ pages:
 # - Free プランは purge_everything か URL 個別指定のみ (hostname/prefix purge は
 #   Enterprise)。root omcha.jp は DNS only でエッジキャッシュを持たないため
 #   zone 全体 purge でも実害なし。
+#
+# #5260: purge の前に「参照アセットがオリジンから返る」ことを確認する。
+#   purge は全クライアントに新しい HTML を配る操作なので、ファイル入れ替えが
+#   終わる前に撃つと、まだ存在しない指紋付き CSS を一斉に取りに行かせることになる。
+#   /assets/** の 404 は長期キャッシュされうる (2026-08-15 実測: max-age=31536000) ため、
+#   その一瞬が読者のブラウザに焼き付く。確認できないまま時間切れになったら
+#   purge せずに落とす (古い HTML がエッジに残る方が、無スタイル表示より軽い)。
 cf-purge:
   stage: postdeploy
   image: curlimages/curl:latest
+  # pages ジョブの public/ を受け取る (参照アセットの真実源は生成物側)。
+  dependencies:
+    - pages
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main" && $CF_ZONE_ID && $CF_PURGE_TOKEN'
+  before_script:
+    - sh scripts/ci_wait_for_assets.sh public/index.html https://navi.omcha.jp
   script:
     - |
       curl -fsS -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/purge_cache" \
