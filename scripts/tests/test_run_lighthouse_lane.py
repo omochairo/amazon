@@ -26,6 +26,8 @@ from scripts.run_lighthouse_lane import (
     mad_for,
     missing_dates,
     render_report,
+    upper_fence_for,
+    warmup_gates,
 )
 
 
@@ -820,3 +822,100 @@ def test_missing_dates_capped():
 
 def test_missing_dates_invalid_target_is_not_a_gap():
     assert missing_dates([{"date": "2026-08-05"}], "garbage") == []
+
+
+# ---------- #5264: 二峰性に対する分位ゲート ----------
+
+# #5259 の実データ。ホーム (mobile) TBT の baseline 窓 (同一 Chrome major の 7 件)。
+# median=51.0 だが MAD=6.5 しかなく、窓の中に 231.5 / 272.5 がある。
+_BIMODAL_TBT = [85.0, 51.0, 44.5, 48.0, 231.5, 46.5, 272.5]
+
+
+def test_upper_fence_reflects_recurring_high_cluster_unlike_mad():
+    """MAD は多数派クラスタの幅しか測らないが、fence は再発クラスタを織り込む。"""
+    history = [_row(tbt=v) for v in _BIMODAL_TBT]
+    mad = mad_for(history, "https://x/", "mobile", "tbt", window=10)
+    fence = upper_fence_for(history, "https://x/", "mobile", "tbt", window=10)
+    assert mad < 10           # 231.5 / 272.5 を無視している
+    assert fence > 150        # fence は窓の実測レンジを反映する
+
+
+def test_no_alert_when_value_is_inside_baseline_spread_5259():
+    """#5259 の再現: baseline 51.0 に対する 150 は窓 (44.5〜272.5) の内側。鳴らさない。"""
+    history = [_row(tbt=v) for v in _BIMODAL_TBT]
+    alerts = detect_regressions(history, [_row(tbt=150.0)])
+    assert not any(a["metric"] == "tbt" for a in alerts)
+
+
+def test_threshold_arm_is_also_gated_by_fence():
+    """relative だけ塞ぐと、同じ日に good 閾値跨ぎ (threshold) で鳴り直してしまう。"""
+    history = [_row(tbt=v) for v in _BIMODAL_TBT]
+    # good 閾値 200 を跨ぐが、窓の中で既に起きている振れ幅の内側。
+    alerts = detect_regressions(history, [_row(tbt=240.0)])
+    assert not any(a["metric"] == "tbt" for a in alerts)
+
+
+def test_large_excursion_beyond_the_spread_still_fires():
+    """窓の振れ幅を超える悪化は従来どおり鳴る (2026-08-05 の商品 398 相当)。"""
+    history = [_row(tbt=v) for v in _BIMODAL_TBT]
+    alerts = detect_regressions(history, [_row(tbt=900.0)])
+    assert any(a["metric"] == "tbt" for a in alerts)
+
+
+def test_fence_does_not_dull_gate_on_tight_series():
+    """分布が締まっている系列では fence も締まるので、小さめの劣化でも鳴る。"""
+    history = [_row(tbt=v) for v in (48.0, 50.0, 49.0, 51.0, 50.0, 49.5, 50.5)]
+    alerts = detect_regressions(history, [_row(tbt=110.0)])
+    assert any(a["metric"] == "tbt" for a in alerts)
+
+
+# ---------- #5264: ウォームアップの可視化 ----------
+
+def test_warmup_gates_lists_metrics_without_enough_baseline():
+    history = [_row(tbt=50.0) for _ in range(3)]  # MIN_BASELINE_SAMPLES=7 に届かない
+    out = warmup_gates(history, [_row(tbt=50.0)])
+    assert [w["metric"] for w in out] == ["tbt"]
+    assert out[0]["samples"] == 3 and out[0]["needed"] == rll.MIN_BASELINE_SAMPLES
+
+
+def test_warmup_gates_empty_when_baseline_is_grown():
+    history = [_row(tbt=50.0) for _ in range(7)]
+    assert warmup_gates(history, [_row(tbt=50.0)]) == []
+
+
+def test_warmup_gates_counts_chrome_major_bump_as_warm_up():
+    """Chrome major が変わると baseline がリセットされ、再び沈黙する (#4765)。"""
+    history = [_row(tbt=50.0, chrome_version="150.0.0.0") for _ in range(10)]
+    out = warmup_gates(history, [_row(tbt=50.0, chrome_version="151.0.0.0")])
+    assert [w["metric"] for w in out] == ["tbt"]
+    assert out[0]["samples"] == 0
+
+
+def test_render_report_shows_warmup_section():
+    alerts = [{"kind": "relative", "url": "https://x/", "form_factor": "mobile",
+               "metric": "tbt", "value": 900, "baseline": 50, "detail": "x"}]
+    md = render_report(alerts, "2026-08-14", None,
+                       [{"url": "https://x/", "form_factor": "mobile", "metric": "lcp",
+                         "samples": 2, "needed": 7, "chrome_version": "151.0.0.0"}])
+    assert "baseline が育っておらず判定を見送っている項目 (1 件)" in md
+    assert "健全" in md  # 「鳴っていない = 健全」とは読めない、の注記
+
+
+# ---------- #5264: run 間のばらつきを残す ----------
+
+def test_aggregate_runs_records_spread_between_runs():
+    runs = [
+        {"tbt": 40.0, "lcp": 2000.0, "cls": 0.01, "fcp": 1000.0, "si": 1500.0},
+        {"tbt": 300.0, "lcp": 2100.0, "cls": 0.02, "fcp": 1010.0, "si": 1600.0},
+        {"tbt": 50.0, "lcp": 2050.0, "cls": 0.015, "fcp": 1005.0, "si": 1550.0},
+    ]
+    out = aggregate_runs(runs)
+    assert out["tbt"] == 50.0            # median は従来どおり
+    assert out["tbt_spread"] == 260.0    # 「1 回だけ暴れた」が後から分かる
+    assert out["cls_spread"] == 0.01
+
+
+def test_aggregate_runs_has_no_spread_when_metric_is_missing():
+    out = aggregate_runs([{"tbt": None}, {"tbt": None}])
+    assert out["tbt"] is None
+    assert "tbt_spread" not in out
