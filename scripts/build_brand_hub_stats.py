@@ -36,7 +36,11 @@ import re
 from collections import Counter, defaultdict
 from typing import Iterable
 
-from brand_normalizer import _fold, normalize as normalize_brand
+from brand_normalizer import (
+    _fold,
+    name_variants as brand_name_variants,
+    normalize as normalize_brand,
+)
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 _DEFAULT_ARTICLES = _REPO_ROOT / "data" / "articles"
@@ -118,15 +122,26 @@ def _series_candidates(tags: Iterable[str] | None,
     突き合わせは ``_fold`` した**表記の一致**で行う (全半角・大小の差は吸収する)。
     normalize の canonical 一致にすると「プラレール」のようにブランドの alias
     としても登録されているシリーズ名まで落ちてしまうため。
+
+    #5343 follow-up: 表記一致だけだと **同じ名前の別スクリプト表記**が残る
+    (BabyBus の "ベビーバス"、学研の "Gakken" など。実測で 32 件)。これも自己言及
+    でしかないので落としたいが、alias 照合に広げると「トミカ」「ナノブロック」
+    「ナーフ」「ラキュー」のような**実在シリーズ名**を巻き添えにする (これらは
+    正規化のために意図して alias に入っている)。文字列からは判別できないので、
+    brand_taxonomy.yaml の ``name_variants`` に**人が明示したものだけ**を落とす。
+    キーが無いブランドでは canonical だけが返るため、従来の挙動と変わらない。
     """
     if not tags:
         return []
+    # taxonomy に載っていないブランド (ノーブランド等) では name_variants が空に
+    # なるので、canonical 自身は常に足しておく (#5322 の挙動を落とさない)。
+    variants = (brand_name_variants(canonical) | {_fold(canonical)}) if canonical else frozenset()
     out: list[str] = []
     for t in list(tags)[1:]:
         t = (t or "").strip()
         if not t or t in GENERIC_TAG_STOPWORDS or _AGE_TAG_STOPWORD_RE.match(t):
             continue
-        if canonical and _fold(t) == _fold(canonical):
+        if canonical and _fold(t) in variants:
             continue
         out.append(t)
     return out

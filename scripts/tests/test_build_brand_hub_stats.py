@@ -73,6 +73,32 @@ class TestAgeParser(unittest.TestCase):
         self.assertIsNone(bhs.parse_age_min_months(None))
 
 
+class TestBrandNameVariants(unittest.TestCase):
+    """brand_normalizer.name_variants (#5343 follow-up)。
+
+    _series_candidates の挙動は上のクラスで見るので、ここは API 単体の契約
+    (canonical 自身を含む / 未登録は空 / 傘下シリーズは含まない) だけを見る。
+    """
+
+    def test_includes_canonical_itself(self):
+        from brand_normalizer import _fold, name_variants
+        self.assertIn(_fold("BabyBus"), name_variants("BabyBus"))
+
+    def test_includes_declared_variants(self):
+        from brand_normalizer import _fold, name_variants
+        self.assertIn(_fold("ベビーバス"), name_variants("BabyBus"))
+
+    def test_excludes_series_aliases(self):
+        from brand_normalizer import _fold, name_variants
+        # トミカは alias だが name_variants ではない (実在シリーズ名)
+        self.assertNotIn(_fold("トミカ"), name_variants("タカラトミー"))
+
+    def test_unknown_brand_is_empty(self):
+        from brand_normalizer import name_variants
+        self.assertEqual(name_variants("存在しないブランド名XYZ"), frozenset())
+        self.assertEqual(name_variants(None), frozenset())
+
+
 class TestSeriesCandidates(unittest.TestCase):
     def test_skips_first_tag_as_brand(self):
         out = bhs._series_candidates(["レゴ", "デュプロ", "クラシック"])
@@ -116,6 +142,28 @@ class TestSeriesCandidates(unittest.TestCase):
             ["ミニカー", "デュプロ", "レゴ"], "レゴ"
         )
         self.assertEqual(out, ["デュプロ"])
+
+    def test_drops_declared_name_variants(self):
+        # #5343 follow-up: brand_taxonomy.yaml の name_variants に書かれた
+        # 「同じ名前の別表記」は落とす。BabyBus の "ベビーバス" が実データの例。
+        out = bhs._series_candidates(
+            ["はじめてのちいくずかん", "ベビータッチペン", "ベビーバス"], "BabyBus"
+        )
+        self.assertEqual(out, ["ベビータッチペン"])
+
+    def test_keeps_real_series_that_are_also_aliases(self):
+        # name_variants を見るようにしても、alias に入っている**実在シリーズ名**は
+        # 残らなければならない。ここが崩れると #5343 follow-up の変更は失敗。
+        for canonical, series in (
+            ("タカラトミー", "トミカ"),
+            ("カワダ", "ナノブロック"),
+            ("ハズブロ", "ナーフ"),
+            ("ヨシリツ", "ラキュー"),
+            ("学研", "ニューブロック"),
+        ):
+            with self.subTest(canonical=canonical):
+                out = bhs._series_candidates(["ミニカー", series], canonical)
+                self.assertIn(series, out)
 
     def test_keeps_series_registered_as_brand_alias(self):
         # 「プラレール」はタカラトミーの alias でもあるが実在のシリーズ名。

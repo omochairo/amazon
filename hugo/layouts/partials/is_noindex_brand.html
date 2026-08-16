@@ -1,0 +1,26 @@
+{{- /*
+  is_noindex_brand.html (epic #2126 P4 / #5343 follow-up)
+  引数: ブランド名 (文字列)。brand_taxonomy.yaml で noindex: true が付いたブランド
+  (= build_brand_hub_stats.py が brand_hub.json の brands[<名前>].noindex に出力)
+  なら "1" を、そうでなければ空文字を返す。
+
+  head.html (meta robots) / terms.html (/brands/ 一覧のリンク) が同じ判定を
+  それぞれ手書きしていたのを 1 箇所に寄せたもの。判定がズレると「noindex なのに
+  内部リンクは張り続ける」という #5343 で塞いだ類の漏れがまた生まれる。
+
+  照合は is_brand_tag.html と同じ exact → lower の順。Hugo は Latin taxonomy の
+  名前を小文字化しうるため、呼び出し元が term の .Title を渡すか記事 front matter の
+  .Params.brand を渡すかで大文字小文字が食い違いうる。
+*/ -}}
+{{- $name := . -}}
+{{- $match := "" -}}
+{{- with site.Data.brand_hub -}}
+  {{- $entry := index .brands $name -}}
+  {{- if not $entry -}}
+    {{- range $k, $v := .brands -}}
+      {{- if eq (lower $k) (lower $name) -}}{{- $entry = $v -}}{{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if and $entry $entry.noindex -}}{{- $match = "1" -}}{{- end -}}
+{{- end -}}
+{{- $match -}}
