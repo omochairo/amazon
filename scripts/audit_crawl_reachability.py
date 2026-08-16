@@ -78,11 +78,10 @@ logger = logging.getLogger("audit_crawl_reachability")
 DEFAULT_PUBLIC_DIR = "hugo/public"
 DEFAULT_SITEMAP = "sitemap.xml"
 
-# URL パスからセクションを決める。前から順に見て最初に当たったものを採る
-# (`/tags/x/page/2/` は tags ではなく tags-pagination に入れたいので、
-#  ページネーション判定を先に置く)。
+# URL パスからセクションを決める。前から順に見て最初に当たったものを採る。
+# ページネーション (`/tags/x/page/2/`) は section_of が `/page/` の手前を切ってから
+# ここに当て、`tags-pagination` の形に組み立てる。
 SECTION_RULES = (
-    ("/page/", "pagination-home"),
     ("/posts/", "posts"),
     ("/products/", "products"),
     ("/tags/", "tags"),
@@ -226,14 +225,18 @@ def section_of(url: str) -> str:
     if path in ("/", ""):
         return "home"
     if "/page/" in path:
-        head = path.split("/page/", 1)[0]
+        # `/page/` の手前を切ると末尾のスラッシュも落ちる (`/posts/page/2/` →
+        # `/posts`)。SECTION_RULES の prefix はスラッシュ終わりなので、補ってから
+        # 当てないとセクション直下のページャだけが取りこぼされて home 扱いになる。
+        # 実測 (2026-08-17) では /posts/page/N/ の 85 本が posts-pagination ではなく
+        # home-pagination に計上されており、セクション別に読むと誤読していた。
+        head = path.split("/page/", 1)[0] + "/"
         for prefix, name in SECTION_RULES:
-            if prefix != "/page/" and head.startswith(prefix):
+            if head.startswith(prefix):
                 return name + "-pagination"
+        # ルート直下 (`/page/2/`) はどの prefix にも当たらない = ホームのページャ。
         return "home-pagination"
     for prefix, name in SECTION_RULES:
-        if prefix == "/page/":
-            continue
         if path.startswith(prefix):
             return name
     return "other"
