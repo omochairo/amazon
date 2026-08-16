@@ -1,0 +1,25 @@
+{{- /*
+  brand_term_page.html (#5330)
+
+  引数: ブランド名 (site.Data.brand_hub.brands のキー = 日本語 canonical)。
+  該当する /brands/<slug>/ の term ページ (Page) を返す。見つからなければ何も
+  返さない。
+
+  brand_hub.json は canonical 名しか持たず slug を持たないため、taxonomy を
+  引いて突き合わせる。#2817 のスラッグ移行後 .Page.Title が日本語正規名で、
+  他の呼び出し元 (head.html / sitemap.xml / terms.html) も .Title を鍵にして
+  いるのでそれに揃える。
+
+  呼び出し側は partialCached でブランド名をキーにして包むこと (1 ページに
+  複数回引かれるうえ、taxonomy 全走査になるため)。
+*/ -}}
+{{- $name := . -}}
+{{- $found := "" -}}
+{{- range $slug, $taxonomy := site.Taxonomies.brands -}}
+  {{- if not $found -}}
+    {{- with $taxonomy.Page -}}
+      {{- if eq .Title $name -}}{{- $found = . -}}{{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- return $found -}}

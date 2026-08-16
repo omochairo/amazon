@@ -148,6 +148,10 @@
 <div class="post-content md-content">{{ .Content }}</div>
 {{- end }}
 
+{{- /* #5330: narrative の固定 CTA 段落は本文ではなくここで出す (84 本すべてで
+       同一文だったため本文から外した)。 */ -}}
+{{- partial "brand_hub_cta.html" . }}
+
 {{- partial "age_filter.html" . }}
 
 {{- $pages := (.Pages.ByParam "ivs_score_100").Reverse -}}
@@ -180,6 +184,10 @@
 </footer>
 {{- end }}
 </div>
+
+{{- /* #5330: ハブ同士を繋ぐ内部リンク。商品カードだけだとブランドハブが
+       回遊・クロールの行き止まりになる。 */ -}}
+{{- partial "brand_related.html" . }}
 
 <style>
   /* #731 Part D: brand hub hero */
@@ -321,6 +329,44 @@
     body:not([data-theme="light"]) .sort-btn:not(.active):hover {
       background: #374151;
     }
+  }
+
+  /* #5330: narrative から本文に含めるのをやめた固定 CTA */
+  .brand-hub-cta {
+    margin: 0 0 24px;
+    font-size: 0.95rem;
+    line-height: 1.8;
+    color: var(--secondary, #6b7280);
+  }
+
+  /* #5330: 近いメーカー (ハブ同士の内部リンク) */
+  .brand-related { margin: 32px 0 8px; }
+  .brand-related-title {
+    margin: 0 0 12px;
+    font-size: 1.1rem;
+  }
+  .brand-related-list {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+  .brand-related-link {
+    display: flex; flex-direction: column; gap: 4px;
+    padding: 12px 14px;
+    border: 1px solid var(--border, #e5e7eb); border-radius: 10px;
+    background: var(--entry, #fff);
+    text-decoration: none;
+  }
+  .brand-related-link:hover { border-color: #0ea5e9; }
+  .brand-related-name { font-weight: 700; color: var(--primary, #1f2937); }
+  .brand-related-meta { font-size: 0.82rem; color: var(--secondary, #6b7280); }
+  .brand-related-note { margin: 12px 0 0; font-size: 0.85rem; }
+  .brand-related-note a { color: var(--secondary, #6b7280); text-decoration: underline; }
+  [data-theme="dark"] .brand-related-link { background: #1f2937; border-color: #374151; }
+  [data-theme="dark"] .brand-related-name { color: #e5e7eb; }
+  @media (prefers-color-scheme: dark) {
+    body:not([data-theme="light"]) .brand-related-link { background: #1f2937; border-color: #374151; }
+    body:not([data-theme="light"]) .brand-related-name { color: #e5e7eb; }
   }
 </style>
 

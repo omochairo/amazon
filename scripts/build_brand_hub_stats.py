@@ -215,6 +215,76 @@ def build_seo_description(brand: str, entry: dict) -> str:
     return f"{head}{body}{tail}"
 
 
+RELATED_BRANDS_MAX = 3
+
+# related_brands のスコア重み。シリーズの重なりが最も強い関連 (同じ遊びの
+# カテゴリ) で、次に年齢帯、tier は最後の tie-break 程度に効かせる。
+_REL_W_SERIES = 10
+_REL_W_TIER = 3
+_REL_AGE_NEAR_MONTHS = 12
+
+
+def _related_score(a: dict, b: dict) -> tuple[int, str]:
+    """ブランド a から見た b の関連スコアと、UI に出す理由ラベルを返す。"""
+    score = 0
+    reason = ""
+
+    shared = [s for s in (a.get("top_3_series") or [])
+              if s in (b.get("top_3_series") or [])]
+    if shared:
+        score += _REL_W_SERIES * len(shared)
+        reason = f"{shared[0]}つながり"
+
+    a_age, b_age = a.get("avg_age_min_months"), b.get("avg_age_min_months")
+    if isinstance(a_age, (int, float)) and isinstance(b_age, (int, float)):
+        diff = abs(float(a_age) - float(b_age))
+        if diff <= _REL_AGE_NEAR_MONTHS:
+            # 12ヶ月差で 0、同じなら満点。年齢帯の近さを線形に効かせる。
+            score += int(round(6 * (1 - diff / _REL_AGE_NEAR_MONTHS)))
+            if not reason:
+                label = age_band_label(b_age)
+                reason = f"{label}〜が中心" if label else "対象年齢が近い"
+
+    if a.get("tier") and a.get("tier") == b.get("tier"):
+        score += _REL_W_TIER
+        if not reason:
+            reason = "近いポジション"
+
+    return score, reason
+
+
+def build_related_brands(brands: dict[str, dict]) -> None:
+    """各 brand entry に ``related_brands`` を書き込む (in-place)。
+
+    ブランドハブから出る内部リンクが商品カードだけで、ハブ同士が繋がって
+    いなかったため回遊もクロール導線も途切れていた (#5330)。
+
+    リンク先は **noindex でない count>=3 のブランドに限る**。noindex ブランドへ
+    リンクしても読者には薄いページ、クローラには行き止まりにしかならない。
+    """
+    pool = {
+        name: e for name, e in brands.items()
+        if int(e.get("count") or 0) >= NARRATIVE_MIN_COUNT and not e.get("noindex")
+    }
+    for name, entry in brands.items():
+        if int(entry.get("count") or 0) < NARRATIVE_MIN_COUNT:
+            continue
+        scored = []
+        for other, cand in pool.items():
+            if other == name:
+                continue
+            score, reason = _related_score(entry, cand)
+            if score <= 0:
+                continue
+            # 決定的な順序: スコア降順 → 記事数降順 → 名前昇順
+            scored.append((-score, -int(cand.get("count") or 0), other, reason))
+        scored.sort()
+        entry["related_brands"] = [
+            {"name": other, "reason": reason}
+            for _, _, other, reason in scored[:RELATED_BRANDS_MAX]
+        ]
+
+
 def _load_article(path: str) -> dict | None:
     try:
         with open(path, encoding="utf-8") as f:
@@ -322,6 +392,9 @@ def aggregate(articles_dir: pathlib.Path | str) -> dict:
         brands_out[brand] = entry
         if brand_noindex:
             brands_out[brand]["noindex"] = True
+
+    # related_brands は全ブランドの集計が出そろってからでないと決まらない。
+    build_related_brands(brands_out)
 
     return {
         "generated_at": _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),

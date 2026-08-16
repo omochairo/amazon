@@ -226,6 +226,97 @@ class TestSeoDescription(unittest.TestCase):
         self.assertNotIn("〜の商品", d)
 
 
+class TestRelatedBrands(unittest.TestCase):
+    def _brands(self, **overrides) -> dict:
+        base = {
+            "A": {"count": 5, "tier": "B", "avg_age_min_months": 36.0,
+                  "top_3_series": ["ブロック玩具", "のりもの"]},
+            "B": {"count": 5, "tier": "B", "avg_age_min_months": 36.0,
+                  "top_3_series": ["ブロック玩具"]},
+            "C": {"count": 5, "tier": "D", "avg_age_min_months": 96.0,
+                  "top_3_series": ["実験キット"]},
+        }
+        base.update(overrides)
+        return base
+
+    def test_shared_series_beats_age_and_tier(self):
+        brands = self._brands()
+        # D: シリーズ共有なし・年齢も tier も一致
+        brands["D"] = {"count": 99, "tier": "B", "avg_age_min_months": 36.0,
+                       "top_3_series": ["ぬり絵"]}
+        bhs.build_related_brands(brands)
+        names = [r["name"] for r in brands["A"]["related_brands"]]
+        self.assertEqual(names[0], "B")
+
+    def test_reason_prefers_shared_series(self):
+        brands = self._brands()
+        bhs.build_related_brands(brands)
+        rel = brands["A"]["related_brands"][0]
+        self.assertEqual(rel["reason"], "ブロック玩具つながり")
+
+    def test_never_links_to_noindex_brand(self):
+        brands = self._brands()
+        brands["B"]["noindex"] = True
+        bhs.build_related_brands(brands)
+        names = [r["name"] for r in brands["A"]["related_brands"]]
+        self.assertNotIn("B", names)
+
+    def test_never_links_to_thin_brand(self):
+        brands = self._brands()
+        brands["B"]["count"] = 2
+        bhs.build_related_brands(brands)
+        names = [r["name"] for r in brands["A"]["related_brands"]]
+        self.assertNotIn("B", names)
+
+    def test_never_links_to_self(self):
+        brands = self._brands()
+        bhs.build_related_brands(brands)
+        for name, entry in brands.items():
+            self.assertNotIn(name, [r["name"] for r in entry["related_brands"]])
+
+    def test_caps_at_max(self):
+        brands = {
+            f"B{i}": {"count": 5, "tier": "B", "avg_age_min_months": 36.0,
+                      "top_3_series": ["ブロック玩具"]}
+            for i in range(8)
+        }
+        bhs.build_related_brands(brands)
+        self.assertEqual(
+            len(brands["B0"]["related_brands"]), bhs.RELATED_BRANDS_MAX
+        )
+
+    def test_thin_brand_gets_no_related_key(self):
+        brands = self._brands()
+        brands["T"] = {"count": 2}
+        bhs.build_related_brands(brands)
+        self.assertNotIn("related_brands", brands["T"])
+
+    def test_deterministic_order_on_score_tie(self):
+        brands = {
+            "A": {"count": 5, "tier": "B", "avg_age_min_months": 36.0,
+                  "top_3_series": ["S"]},
+            "Y": {"count": 5, "tier": "B", "avg_age_min_months": 36.0,
+                  "top_3_series": ["S"]},
+            "X": {"count": 9, "tier": "B", "avg_age_min_months": 36.0,
+                  "top_3_series": ["S"]},
+        }
+        bhs.build_related_brands(brands)
+        # 同スコアなら記事数の多い方を先に
+        self.assertEqual(
+            [r["name"] for r in brands["A"]["related_brands"]], ["X", "Y"]
+        )
+
+    def test_unrelated_brand_is_dropped(self):
+        brands = {
+            "A": {"count": 5, "tier": "B", "avg_age_min_months": 12.0,
+                  "top_3_series": ["S1"]},
+            "Z": {"count": 5, "tier": "S", "avg_age_min_months": 120.0,
+                  "top_3_series": ["S2"]},
+        }
+        bhs.build_related_brands(brands)
+        self.assertEqual(brands["A"]["related_brands"], [])
+
+
 class TestAggregate(unittest.TestCase):
     def test_threshold_under_three_returns_count_only(self):
         with tempfile.TemporaryDirectory() as td:
