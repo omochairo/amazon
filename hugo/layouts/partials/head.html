@@ -19,12 +19,17 @@
       {{- $count := int (index $entry "count") -}}
       {{- $threshold := int (.narrative_min_count | default 3) -}}
       {{- if ge $count $threshold -}}
-        {{- $avg := index $entry "avg_ivs_100" -}}
-        {{- $low := index $entry "lowest_price" -}}
-        {{- $brandTitle = printf "%s の知育玩具完全ガイド | 全 %d 件のレビューと最高スコア" $.Title $count -}}
-        {{- if and $avg $low -}}
-          {{- $brandDesc = printf "%s の知育玩具%d件を編集部が比較。平均知育スコア%.1f点、最安%d円〜。年齢別レビュー・スコア順並べ替えで、後悔しない選び方をサポートします。" $.Title $count $avg (int $low) -}}
-        {{- else -}}
+        {{- /* #5322: 文型の選択は build_brand_hub_stats.py 側 (pytest がある場所) へ移した。
+               ここで printf 1 種類に組んでいた結果、93 ページの description が
+               「ブランド名と数値だけ違う同じ 1 文」になっていた。seo_title /
+               seo_description が無い brand_hub.json (旧版) でも壊れないよう、
+               従来の printf を fallback として残す。 */ -}}
+        {{- with index $entry "seo_title" -}}{{- $brandTitle = . -}}{{- end -}}
+        {{- with index $entry "seo_description" -}}{{- $brandDesc = . -}}{{- end -}}
+        {{- if not $brandTitle -}}
+          {{- $brandTitle = printf "%s の知育玩具完全ガイド | 全 %d 件のレビューと最高スコア" $.Title $count -}}
+        {{- end -}}
+        {{- if not $brandDesc -}}
           {{- $brandDesc = printf "%s の知育玩具%d件のレビューを編集部が独自スコアで比較。年齢・価格でフィルタでき、後悔しない選び方をサポートします。" $.Title $count -}}
         {{- end -}}
       {{- end -}}
@@ -139,6 +144,13 @@
        一覧ページ全体に広げるかどうかは #5083 の議論マター (このフラグを外すだけで
        いつでも撤回できる)。 */ -}}
 {{- else if and (not .IsHome) (eq .Params.title_suffix_short true) site.Params.brandShort }}
+  {{- $titleSuffix = site.Params.brandShort }}
+{{- end }}
+{{- /* BRAND-HUB SEO: #5322。ブランドハブは $brandTitle 自体が 20 文字前後あり、
+       フルサフィックス (31文字) を足すと合計 60 文字超で SERP に一度も表示されない。
+       #5083 項目1 と同じ理由で brandShort (10文字) に短縮する。brand stub の front
+       matter を 294 枚書き換えずに済むよう、front matter フラグではなくここで倒す。 */ -}}
+{{- if and $brandTitle site.Params.brandShort }}
   {{- $titleSuffix = site.Params.brandShort }}
 {{- end }}
 {{- if $brandTitle }}
