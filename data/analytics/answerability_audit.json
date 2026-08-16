@@ -1,18 +1,18 @@
 {
-  "generated_at": "2026-08-08T20:46:18Z",
+  "generated_at": "2026-08-16T20:35:54Z",
   "model": "gemma4:26b-a4b-it-qat",
-  "source_week": "2026-W31",
-  "baseline_ctr": 0.11401869158878504,
+  "source_week": "2026-W33",
+  "baseline_ctr": 0.08099688473520249,
   "pages": [
     {
       "page": "https://navi.omcha.jp/products/b0fnm3r45c/",
       "asin": "B0FNM3R45C",
-      "page_coverage_avg": 0.55,
+      "page_coverage_avg": 0.5,
       "queries": [
         {
           "query": "ジェリーブロックス 口コミ",
-          "impressions": 34,
-          "position": 7.676470588235294,
+          "impressions": 15,
+          "position": 7.066666666666666,
           "answered": false,
           "coverage": 0.3,
           "missing_aspects": [
@@ -24,17 +24,30 @@
           "error": null
         },
         {
-          "query": "ジェリーブロックス ボックスセット",
-          "impressions": 2,
-          "position": 9.0,
+          "query": "ジェリーブロックス 安い",
+          "impressions": 3,
+          "position": 9.333333333333334,
           "answered": true,
-          "coverage": 0.8,
+          "coverage": 0.9,
           "missing_aspects": [
-            "具体的な口コミの内容（ユーザーの声）",
-            "ボックスセットに含まれるピースの詳細な種類や形状",
-            "他のジェリーブロックス製品との違い"
+            "送料の有無",
+            "セール情報やクーポン情報の有無"
           ],
-          "note": "商品概要、価格、対象年齢、メンテナンス方法といった基本情報は網羅されていますが、タイトルにある「口コミ」の具体的な内容が不足しています。",
+          "note": "最安値がAmazonであることと、具体的な価格比較が示されており、ユーザーの「どこで買うのが安いか」という疑問に直接回答しています。",
+          "error": null
+        },
+        {
+          "query": "ジェリー ブロックス 口コミ",
+          "impressions": 1,
+          "position": 8.0,
+          "answered": false,
+          "coverage": 0.3,
+          "missing_aspects": [
+            "具体的なユーザーによる使用感（良い点・悪い点）",
+            "実際の購入者のレビュー内容",
+            "組み立てやすさや遊び方のバリエーションに関する意見"
+          ],
+          "note": "記事タイトルには「口コミ」とありますが、本文内には執筆者による特徴のまとめやQ&Aがあるのみで、実際の利用者の具体的な声（口コミ）が一切含まれていません。",
           "error": null
         }
       ]
