@@ -1,0 +1,21 @@
+{{- /*
+  brand_hub_cta.html (#5330)
+
+  ブランドハブ narrative の最終段落 (本サイト CTA) をテンプレート側に移したもの。
+
+  経緯: この段落は BRAND_NARRATIVE_PROMPT.md の「段落 4: 本サイト CTA (固定文)」
+  として Jules が毎回書いており、84 本すべてがブランド名だけ違う同一文だった。
+  本文に置いておく限り「narrative の中身」の何割かが固定文になり、記事ごとの
+  ユニークさを薄める。文言を直したくなったときに 84 ファイル書き換えが必要に
+  なる問題もあった。
+
+  narrative 本文 (.Content) を持つブランドにだけ出す。本文が無いハブでは
+  hero と商品カードが直に続くので、CTA だけ浮くのを避ける。
+
+  呼び出し元: hugo/layouts/_default/term.html
+*/ -}}
+{{- if and (eq .Kind "term") (eq .Data.Plural "brands") .Content -}}
+<p class="brand-hub-cta">
+  本サイトでは、編集部独自の知育スコア (教育性 / 長寿命性 / 安全性 / コストパフォーマンスの 4 軸) で{{ .Title }}商品を横断比較。お子さまの年齢にぴったりの 1 点を Amazon・楽天・Yahoo! の最安値で見つけられます。
+</p>
+{{- end -}}

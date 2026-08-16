@@ -1,0 +1,50 @@
+{{- /*
+  brand_related.html (#5330)
+
+  /brands/<brand>/ の下に「近いメーカー」3 件を出す。ブランドハブから出る内部
+  リンクが商品カードだけで、ハブ同士が繋がっていなかった (回遊もクロール導線も
+  ハブで途切れる) ため。
+
+  候補と理由は build_brand_hub_stats.py が related_brands に事前計算する
+  (共有シリーズ > 年齢帯の近さ > 同 tier)。リンク先は noindex でない count>=3
+  のブランドだけに絞ってあるので、ここでは term ページの実在確認だけを行う。
+
+  呼び出し元: hugo/layouts/_default/term.html
+*/ -}}
+{{- if and (eq .Kind "term") (eq .Data.Plural "brands") -}}
+  {{- with site.Data.brand_hub -}}
+    {{- $entry := index .brands $.Title -}}
+    {{- with $entry -}}
+      {{- $related := index . "related_brands" -}}
+      {{- if $related -}}
+        {{- /* term ページが実在するものだけ (未公開ブランドへの 404 防止) */ -}}
+        {{- $items := slice -}}
+        {{- range $related -}}
+          {{- $reason := .reason -}}
+          {{- $page := partialCached "brand_term_page.html" .name .name -}}
+          {{- with $page -}}
+            {{- $items = $items | append (dict "page" . "reason" $reason) -}}
+          {{- end -}}
+        {{- end -}}
+        {{- if $items }}
+<section class="brand-related" aria-label="{{ $.Title }} に近いメーカー">
+  {{- /* 見出しで閲覧行動を主張しないこと。related_brands はカタログの
+         シリーズ/年齢帯の重なりであって、行動データではない。 */ -}}
+  <h2 class="brand-related-title">🔎 {{ $.Title }} に近いメーカー</h2>
+  <ul class="brand-related-list">
+    {{- range $items }}
+    <li class="brand-related-item">
+      <a class="brand-related-link" href="{{ .page.RelPermalink }}">
+        <span class="brand-related-name">{{ .page.Title }}</span>
+        <span class="brand-related-meta">{{ len .page.Pages }} 件{{ with .reason }} ・ {{ . }}{{ end }}</span>
+      </a>
+    </li>
+    {{- end }}
+  </ul>
+  <p class="brand-related-note"><a href="{{ "brands/" | relURL }}">メーカー一覧をすべて見る →</a></p>
+</section>
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
