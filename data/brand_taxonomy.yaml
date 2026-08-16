@@ -16,6 +16,14 @@
 #   - canonical はユーザー検索で表示される正式名 (Hugo /brands/<canonical>/)
 #   - aliases に括弧形 (例: "タカラトミー(TAKARA TOMY)") を含めること
 #   - 表記ゆれは aliases に足すだけで正規化される
+#   - name_variants (任意) は aliases のうち「同じ名前の別表記」だけを再掲する。
+#     aliases には正規化のために傘下シリーズ名も入れている (タカラトミーの
+#     "トミカ"、カワダの "ナノブロック"、ハズブロの "ナーフ"、ヨシリツの "ラキュー")
+#     が、それらは /brands/ ハブの「人気シリーズ」としては実在する情報なので
+#     消してはいけない。一方 BabyBus の "ベビーバス"、学研の "Gakken" のような
+#     別表記はシリーズ欄に出ると自己言及にしかならない。両者は文字列からは
+#     判別できない (#5343 follow-up) ため、落としてよいものだけをここに書く。
+#     未指定なら従来どおり canonical との表記一致だけで判定する。
 #   - データソース: toy.md (200+ JP/海外ブランド) + 既存記事の中華系/暫定 C
 
 version: 1
@@ -77,6 +85,7 @@ brands:
     safety_default: [ST]
   - canonical: パイロットコーポレーション
     aliases: [パイロットコーポレーション, PILOT, メルちゃん, パイロットインキ, パイロット]
+    name_variants: [PILOT, パイロットインキ, パイロット]
     tier: A
     region: JP
     safety_default: [ST]
@@ -87,11 +96,13 @@ brands:
     safety_default: [ST]
   - canonical: くもん出版
     aliases: [くもん出版(KUMON TOY), KUMON, 公文, くもん]
+    name_variants: [KUMON, 公文, くもん]
     tier: A
     region: JP
     safety_default: [ST]
   - canonical: 学研
     aliases: [学研(Gakken), Gakken, 学研ステイフル, ニューブロック]
+    name_variants: [Gakken]
     tier: A
     region: JP
     safety_default: [ST]
@@ -169,6 +180,7 @@ brands:
     region: US
   - canonical: ハペ
     aliases: [ハペ, Hape]
+    name_variants: [Hape]
     tier: A
     region: CH
   - canonical: グリムス
@@ -177,6 +189,7 @@ brands:
     region: DE
   - canonical: ハバ
     aliases: [ハバ, HABA]
+    name_variants: [HABA]
     tier: A
     region: DE
   - canonical: ネフ
@@ -201,6 +214,7 @@ brands:
     region: CH
   - canonical: メリッサ＆ダグ
     aliases: [メリッサ＆ダグ, Melissa & Doug, メリッサアンドダグ]
+    name_variants: [Melissa & Doug, メリッサアンドダグ]
     tier: A
     region: US
   - canonical: マグフォーマー
@@ -213,6 +227,7 @@ brands:
     region: US
   - canonical: プラントイ
     aliases: [プラントイ, PlanToys, プラントイジャパン]
+    name_variants: [PlanToys, プラントイジャパン]
     tier: A
     region: TH
   - canonical: ファットブレイントイズ
@@ -221,6 +236,7 @@ brands:
     region: US
   - canonical: Osmo
     aliases: [Osmo, OSMO, オズモ]
+    name_variants: [オズモ]
     tier: A
     region: US
 
@@ -405,6 +421,7 @@ brands:
     # 2026-06-09 (session 136 / #2126): raw "ラベンスバーガー" (ジャパン無し) と
     # 製品ライン名 GraviTrax が全て unknown 化 → ノーブランド扱いだった (19商品)。
     aliases: [ラベンスバーガージャパン, Ravensburger, ラベンスバーガー, GraviTrax, グラヴィトラックス, グラビトラックス]
+    name_variants: [Ravensburger, ラベンスバーガー]
     tier: B
     region: JP
   - canonical: ラングスジャパン
@@ -559,10 +576,12 @@ brands:
     region: NL
   - canonical: BabyBus
     aliases: [BabyBus, babybus, ベイビーバス, ベビーバス]
+    name_variants: [ベイビーバス, ベビーバス]
     tier: B
     region: CN
   - canonical: Apitor
     aliases: [Apitor, apitor, アピター]
+    name_variants: [アピター]
     tier: B
     region: CN
   - canonical: すごろくや
@@ -577,6 +596,7 @@ brands:
     safety_default: [ST]
   - canonical: ThinkFun
     aliases: [ThinkFun, THINKFUN, シンクファン]
+    name_variants: [シンクファン]
     tier: B
     region: US
   - canonical: エレキット
@@ -1171,10 +1191,12 @@ brands:
   # ==========================================
   - canonical: PicassoTiles
     aliases: [PicassoTiles, "Picasso Tiles", PICASSOTILES, ピカソタイルズ]
+    name_variants: [ピカソタイルズ]
     tier: B
     region: US
   - canonical: Tegu
     aliases: [Tegu, TEGU, テグ]
+    name_variants: [テグ]
     tier: B
     region: US
   - canonical: Snap Circuits
@@ -1187,15 +1209,18 @@ brands:
     region: AU
   - canonical: Geomag
     aliases: [Geomag, GEOMAG, ゲオマグ, "ゲオマグ(Geomag)", ジオマグ]
+    name_variants: [ゲオマグ, ジオマグ]
     tier: B
     region: CH
   - canonical: 河合楽器製作所
     aliases: [河合楽器製作所, KAWAI, "KAWAI (河合楽器製作所)", "KAWAI(河合楽器製作所)", カワイ]
+    name_variants: [KAWAI, カワイ]
     tier: A
     region: JP
     safety_default: [ST]
   - canonical: サッシー
     aliases: [サッシー, SASSY, Sassy]
+    name_variants: [SASSY, Sassy]
     tier: B
     region: US
   - canonical: キットウェル
@@ -1338,7 +1363,7 @@ brands:
   - {canonical: TAETOE, tier: D, region: CN, noindex: true, aliases: [Taetoe, taetoe]}
   - {canonical: Vanplay, tier: D, region: CN, noindex: true, aliases: [VANPLAY, VanPlay, vanplay]}
   - {canonical: Mamimami Home, tier: D, region: CN, noindex: true, aliases: [Mamimami Home, MamimamiHome, mamimami home, mamimamihome]}
-  - {canonical: SHOP SHIMATARO, tier: D, region: JP, noindex: true, aliases: [SHOP SHIMATARO, おもちゃとホビー SHOP SHIMATARO, SHIMATARO]}
+  - {canonical: SHOP SHIMATARO, tier: D, region: JP, noindex: true, aliases: [SHOP SHIMATARO, おもちゃとホビー SHOP SHIMATARO, SHIMATARO], name_variants: [SHIMATARO, おもちゃとホビー SHOP SHIMATARO]}
   # 2026-06-02 (session 77 / #1329 Phase 3.0): GSC で imp=7 のブランド名指名
   # (ロンビー / ロンビー おもちゃ) を確認 → canonical 追加。商品は B0875FV2BQ
   # (ロンビー(Lon-Bi) ボードゲーム系)。製造拠点不明 = unknown / tier D。
@@ -1361,6 +1386,7 @@ brands:
   # hacomo=段ボール工作キット (hacomo株式会社、2010年設立、JETRO輸出支援事例あり)。
   - canonical: hacomo
     aliases: [hacomo, ハコモ, "hacomo(ハコモ)"]
+    name_variants: [ハコモ]
     tier: C
     region: JP
   # TRYCO(トライコ)=ベルギーの乳幼児玩具ブランド。国内はエデュテ(Edute)が2025年より取扱。

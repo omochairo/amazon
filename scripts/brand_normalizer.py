@@ -61,8 +61,16 @@ class Taxonomy:
         self._exact: dict[str, dict] = {}
         # (folded_key, entry, original) for fuzzy contains-match
         self._fuzzy_keys: list[tuple[str, dict]] = []
+        # folded(canonical) -> そのブランド名の別表記 (folded) 集合。canonical 自身を含む。
+        self._name_variants: dict[str, frozenset[str]] = {}
         for entry in self._brands:
             canon = entry["canonical"]
+            variants = {_fold(canon)}
+            for v in entry.get("name_variants") or []:
+                folded_v = _fold(str(v))
+                if folded_v:
+                    variants.add(folded_v)
+            self._name_variants[_fold(canon)] = frozenset(variants)
             keys = [canon] + list(entry.get("aliases") or [])
             for k in keys:
                 folded = _fold(k)
@@ -98,6 +106,26 @@ class Taxonomy:
             match_type=match_type,
         )
 
+    def name_variants(self, canonical: str | None) -> frozenset[str]:
+        """`canonical` と同じブランド名を指す別表記の folded 集合 (canonical 自身を含む)。
+
+        `aliases` との違いが肝 (#5343 follow-up)。aliases は「この文字列を見たらこの
+        ブランドに寄せる」ための正規化キーで、**傘下シリーズ名が意図的に混ざっている**
+        (タカラトミーの "トミカ" / カワダの "ナノブロック" / ハズブロの "ナーフ" /
+        ヨシリツの "ラキュー")。それらは商品の帰属を決めるには正しいが、
+        「このブランドの人気シリーズ」としては**実在する情報**なので消してはいけない。
+
+        一方で "BabyBus" に対する "ベビーバス"、"学研" に対する "Gakken" のような
+        **同じ名前の別表記**は、シリーズ欄に出ると自己言及になるだけで情報量がゼロ。
+
+        両者は文字列からは判別できない (ローマ字化しても "ベビーバス"→bebiibasu は
+        "BabyBus" と一致せず、alias 照合では "トミカ" を巻き込む)。よって
+        **データ側で明示する**: brand_taxonomy.yaml の任意キー `name_variants` に
+        書かれたものだけを別表記として扱う。未指定のブランドは canonical のみが
+        返るので、キーを足すまで挙動は変わらない。
+        """
+        return self._name_variants.get(_fold(canonical or ""), frozenset())
+
     def _unknown(self, raw: str) -> NormalizedBrand:
         return NormalizedBrand(
             canonical="ノーブランド",
@@ -121,6 +149,10 @@ def get_taxonomy() -> Taxonomy:
 
 def normalize(raw: str | None) -> NormalizedBrand:
     return get_taxonomy().lookup(raw)
+
+
+def name_variants(canonical: str | None) -> frozenset[str]:
+    return get_taxonomy().name_variants(canonical)
 
 
 def _cli() -> None:
