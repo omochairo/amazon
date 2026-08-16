@@ -40,6 +40,12 @@
 </div>
 
 {{- /* === Card grid (server renders 新着順. クライアント側でスコア順に並べ替え) === */ -}}
+{{- /* 注意 (#5343 follow-up): この where は現状 効いていない。head.html が Kind=section で
+       素の .Paginator を先に呼ぶため、ページャは .RegularPages 全体で確定してしまう
+       (Hugo のページャは 1 ページに 1 つで先勝ち)。term 側は同じ理由で並び順と件数上限が
+       無効化されていたので partials/term_list_pages.html に集合を寄せて直したが、
+       ここは hiddenInHomeList を持つ記事が 0 件で挙動が変わらないため据え置いている。
+       このフラグを実際に使い始めるときは、term と同じく head.html と集合を共有すること。 */ -}}
 {{- $pages := where .RegularPages "Params.hiddenInHomeList" "!=" "true" -}}
 {{- $paginator := .Paginate $pages -}}
 

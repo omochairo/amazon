@@ -154,7 +154,37 @@
 
 {{- partial "age_filter.html" . }}
 
-{{- $pages := (.Pages.ByParam "ivs_score_100").Reverse -}}
+{{- /* #5343 follow-up: term 一覧の掲載件数に上限を設ける。ページャ URL の枚数は
+       記事数 / pagerSize に比例するので、記事の多い term が noindex な page/N を
+       大量に生む。実測 (2026-08-17 の main ビルド) では到達 noindex 284 本が全て
+       ページネーションで、うち tags 168 / brands 31。tags 168 のうち 123 本が
+       「知育玩具」(全記事の 77.7%) と「プレゼント」(64.9%) の 2 タグに集中していた。
+       この 2 つは事実上の全記事タグで、term ページの中身が /posts/ とほぼ同じ。
+
+       pagerSize (config.toml) を下げるのではなく件数上限で切る理由:
+       pagerSize は 1 ページの重さと URL 枚数のトレードオフで全ページに一律に効く。
+       ここで潰したいのは「巨大 term だけが長い尾を引く」ことなので、上限で切る方が
+       他の term に副作用が無い。
+
+       240 (= 24 x 10 ページ) にした根拠は実測。全 48 term のうち上限に当たるのは
+       知育玩具 / プレゼント / ブロック の 3 タグだけで、brands は最大の
+       takara-tomy が 8 ページなので 1 本も減らない。ブランドハブは「そのメーカーの
+       全カタログ」として全件見せる価値があるため、そこを削らない値を選んでいる。
+       上限 5 ページ (120 件) なら -119 本だが brands も 11 本削れる。-103 本との差
+       16 本のためにハブを削る取引にはしない。
+
+       商品への到達性は失わない: 全 2,046 記事は /posts/page/N/ (85 本) から
+       到達でき、sitemap にも全件載っている。切られるのは term ページ経由の
+       重複した経路だけ (受入条件として audit_crawl_reachability.py の indexable が
+       不変であることを確認する)。並びは ivs_score_100 降順なので、落ちるのは
+       スコア下位から。同じ理由で /posts/ (新着順・全記事への唯一の網羅導線) には
+       この上限を当てていない。
+
+       集合の組み立ては partials/term_list_pages.html に置いてある。head.html も
+       同じものを .Paginate に渡す必要があるため (理由はそちらのコメント)。 */ -}}
+{{- $termMax := int (site.Params.termListMaxItems | default 240) -}}
+{{- $termTotal := len .Pages -}}
+{{- $pages := partial "term_list_pages.html" . -}}
 {{- $paginator := .Paginate $pages -}}
 <div class="term-sort-controls">
   <span class="sort-label">並び替え:</span>
@@ -185,11 +215,29 @@
 {{- end }}
 </div>
 
+{{- /* 上限で切ったときだけ、その事実と続きの導線を出す。黙って打ち切ると
+       「このタグには 240 件しかない」と読めてしまうため。 */ -}}
+{{- if gt $termTotal $termMax }}
+<p class="term-list-cap-note">
+  全 {{ $termTotal }} 件のうち、知育スコアの高い順に {{ $termMax }} 件を表示しています。
+  <a href="{{ "posts/" | absURL }}">記事一覧</a>ならすべての商品を新着順で、
+  <a href="{{ "ranking/" | absURL }}">ランキング</a>ならスコア順で見られます。
+</p>
+{{- end }}
+
 {{- /* #5330: ハブ同士を繋ぐ内部リンク。商品カードだけだとブランドハブが
        回遊・クロールの行き止まりになる。 */ -}}
 {{- partial "brand_related.html" . }}
 
 <style>
+  /* #5343 follow-up: 掲載件数を上限で切ったときの注記 */
+  .term-list-cap-note {
+    margin: 8px 0 24px;
+    font-size: 0.9em;
+    line-height: 1.7;
+    color: var(--secondary, #6b7280);
+  }
+
   /* #731 Part D: brand hub hero */
   .brand-hub-hero {
     display: flex; gap: 20px; align-items: center;

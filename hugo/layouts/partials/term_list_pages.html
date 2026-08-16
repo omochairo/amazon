@@ -1,0 +1,28 @@
+{{- /*
+  term_list_pages.html (#5343 follow-up)
+  引数: term ページ (Kind=term)。一覧に出すページ集合を返す。
+
+  **head.html と _default/term.html の両方がこれを .Paginate に渡す。**
+  Hugo のページャは 1 ページにつき 1 つで、最初に .Paginator / .Paginate が
+  呼ばれた時点の内容で確定し、2 回目以降の引数は黙って捨てられる。head.html は
+  baseof の中で main より先に評価されるので、そこで素の .Paginator に触ると
+  「.Pages をデフォルト順のまま割ったページャ」が固定され、term.html 側の
+  ソートと件数上限が無効化される。実際にそうなっていた (実測 2026-08-17):
+
+    - term 一覧のカードがスコア順に並んでいなかった。/tags/chiikugangu/ の
+      1 ページ目の data-ivs が 4.2, 4.75, 4.25, 3.3, ... と降順でない
+    - termListMaxItems を入れてもページャ枚数が変わらなかった
+
+  なので「ページャの元になる集合」をここに 1 本化し、両方から同じものを渡す。
+  ページ番号の判定 (noindex) に .Paginator を使うこと自体は問題ない。問題なのは
+  **中身の違うページャを 2 箇所で作ろうとすること**。
+
+  件数上限 (termListMaxItems, 既定 240) の根拠は config.toml のコメント参照。
+  並びが ivs_score_100 降順なので、上限で落ちるのはスコア下位から。
+*/ -}}
+{{- $pages := (.Pages.ByParam "ivs_score_100").Reverse -}}
+{{- $max := int (site.Params.termListMaxItems | default 240) -}}
+{{- if and (gt $max 0) (gt (len $pages) $max) -}}
+  {{- $pages = first $max $pages -}}
+{{- end -}}
+{{- return $pages -}}
