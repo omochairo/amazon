@@ -29,7 +29,31 @@
     {{- $isBrandDup := and (eq $plural "tags") (partial "is_brand_tag.html" .Page.Title) -}}
     {{- /* #2765: hub に寄せた tag は curated hub を正本とするため一覧から除外。 */ -}}
     {{- $isHubDup := and (eq $plural "tags") (partial "hub_for_tag.html" .Page.Title) -}}
-    {{- if not (or $isBrandDup $isHubDup) -}}{{- $visibleTerms = $visibleTerms | append . -}}{{- end -}}
+    {{- /* #5343: #2719 の低価値 tag denylist は head.html / sitemap.xml では効いて
+           いたが一覧からは漏れており、noindex tag への内部リンクが残っていた。 */ -}}
+    {{- $isLowValue := and (eq $plural "tags") (partial "is_low_value_tag.html" .Page.Title) -}}
+    {{- if not (or $isBrandDup $isHubDup $isLowValue) -}}{{- $visibleTerms = $visibleTerms | append . -}}{{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* #5343: /brands/ は従来 curated 全件表示で、記事のある 135 ブランドを全部
+       リンクしていた。うち 51 件 (38%) は noindex (3記事未満 42 / taxonomy の
+       noindex 指定 19) で、実績の少ないサイトではクロールバジェットがそこへ
+       流れる。noindex ページへのリンクだけを落とし、index されるハブに集中させる。
+       判定は head.html / sitemap.xml の noindex 条件と同じものを使う。 */ -}}
+{{- $visibleBrands := slice -}}
+{{- if eq $plural "brands" -}}
+  {{- range .Data.Terms.ByCount -}}
+    {{- $termTitle := .Page.Title -}}
+    {{- $isThin := lt (len .Pages) $threshold -}}
+    {{- $isNoindexBrand := false -}}
+    {{- with site.Data.brand_hub -}}
+      {{- $entry := index .brands $termTitle -}}
+      {{- if and $entry $entry.noindex -}}{{- $isNoindexBrand = true -}}{{- end -}}
+    {{- end -}}
+    {{- if not (or $isThin $isNoindexBrand) -}}
+      {{- $visibleBrands = $visibleBrands | append . -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 
@@ -45,8 +69,8 @@
   <p class="term-header-description">タグから関連するレビュー記事を探せます。</p>
   {{- end }}
   <div class="term-header-meta">
-    {{- /* brands は curated 全件表示。tags/categories は $visibleTerms (P2/P3 で絞込済) の実数。 */}}
-    {{- $shownCount := cond (eq $plural "brands") (len .Data.Terms) (len $visibleTerms) -}}
+    {{- /* #5343: brands も noindex 分を落とした実数を出す (tags/categories と同じ扱い)。 */}}
+    {{- $shownCount := cond (eq $plural "brands") (len $visibleBrands) (len $visibleTerms) -}}
     <span class="term-header-count">{{ $shownCount }} {{ $label }}</span>
   </div>
 </header>
@@ -55,7 +79,7 @@
 {{- if eq $plural "brands" }}
 
 <div class="brand-grid">
-  {{- range $terms }}
+  {{- range $visibleBrands }}
     {{- /* #2817 スラッグ移行後 .Name は英語スラッグ (例: takara-tomy)。表示は
            brand stub の title front matter (JP canonical) を使う (#2893 と同パターン)。 */}}
     {{- $term := .Page.Title -}}

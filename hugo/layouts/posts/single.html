@@ -115,7 +115,9 @@
       {{- /* #2765: hub に寄せた tag (cannibalization 是正で noindex 化) への重複リンクも
              張らない。global cat-nav から hub への導線は別途確保される。 */}}
       {{- range ($.GetTerms $tags) }}
-      {{- if and (ge (len .Pages) $thinThreshold) (not (partial "is_brand_tag.html" .Title)) (not (partial "hub_for_tag.html" .Title)) }}
+      {{- /* #5343: #2719 の低価値 tag denylist もここに揃える (head.html /
+             sitemap.xml では効いていたが内部リンクだけ張り続けていた)。 */}}
+      {{- if and (ge (len .Pages) $thinThreshold) (not (partial "is_brand_tag.html" .Title)) (not (partial "hub_for_tag.html" .Title)) (not (partial "is_low_value_tag.html" .Title)) }}
       <li><a href="{{ .Permalink }}">{{ .LinkTitle }}</a></li>
       {{- end }}
       {{- end }}

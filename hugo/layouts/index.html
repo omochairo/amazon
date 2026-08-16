@@ -156,7 +156,13 @@
   </header>
   <div class="tag-chips">
     {{- range $topTags }}
-      {{- if ge .Count 5 }}
+      {{- /* #5343: noindex な tag へのリンクをトップから外す。ブランド名と一致する
+             tag (#2701 P3) / hub に寄せた tag (#2765) / 低価値 denylist (#2719) は
+             head.html で noindex 化済みで、リンクを張ってもクロールを浪費するだけ。
+             商品ページのタグ欄 (posts/single.html) と同じ除外条件に揃えた。
+             トップの pagination は 207 ページあり、同じチップが全ページに載る。 */}}
+      {{- $t := .Page.Title }}
+      {{- if and (ge .Count 5) (not (partial "is_brand_tag.html" $t)) (not (partial "hub_for_tag.html" $t)) (not (partial "is_low_value_tag.html" $t)) }}
       <a class="tag-chip" href="{{ .Page.RelPermalink }}">
         {{- /* #2817 スラッグ移行後 .Name は英語スラッグ (例: burokku) になったため、
                term stub の title front matter (日本語正規名) を表示に使う

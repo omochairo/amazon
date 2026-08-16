@@ -25,7 +25,15 @@ enableRobotsTXT = true
   priority   = 0.5
 
 [pagination]
-  pagerSize = 10
+  # Issue #5343: クロールバジェット集中。pagerSize は「1ページあたりの重さ」と
+  # 「page/N URL の枚数」のトレードオフで、URL 枚数は記事数 / pagerSize に比例する。
+  # 10 のとき、クロール到達可能な noindex URL 897 本のうち 839 本 (94%) が
+  # page/N だった (実測)。24 にすると 839 -> 299 本 (-64%)。
+  # 併せて、一覧 1 ページ目から直接リンクされる商品が 10 -> 24 件に増えるので、
+  # 深い位置の商品への内部リンクも太くなる (page/N を消すのではなく減らす理由)。
+  # 代償は一覧ページの HTML が 98KB -> 150KB (実測、gzip 前。カード 1 枚 3.7KB)。
+  # 画像は lazy-load なので LCP には乗らない。CWV が悪化するようならまずここを戻す。
+  pagerSize = 24
 
 [params]
   env = "production"
