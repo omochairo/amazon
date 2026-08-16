@@ -46,11 +46,7 @@
   {{- range .Data.Terms.ByCount -}}
     {{- $termTitle := .Page.Title -}}
     {{- $isThin := lt (len .Pages) $threshold -}}
-    {{- $isNoindexBrand := false -}}
-    {{- with site.Data.brand_hub -}}
-      {{- $entry := index .brands $termTitle -}}
-      {{- if and $entry $entry.noindex -}}{{- $isNoindexBrand = true -}}{{- end -}}
-    {{- end -}}
+    {{- $isNoindexBrand := partial "is_noindex_brand.html" $termTitle -}}
     {{- if not (or $isThin $isNoindexBrand) -}}
       {{- $visibleBrands = $visibleBrands | append . -}}
     {{- end -}}

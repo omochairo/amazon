@@ -125,7 +125,14 @@
        /brands/ed-inter/) なので、urlize $selfBrand では 404 になる (#3030/#3195)。
        .GetTerms で実在する term ページを引き、その RelPermalink を使う。 */ -}}
 {{- $brandTerms := .GetTerms "brands" -}}
-{{- if and $selfBrand $brandTerms (ge (len $brandSiblings) $hubMinSiblings) }}
+{{- /* #5343 follow-up: brand_taxonomy.yaml で noindex 指定されたブランドのハブへは
+       バナーを出さない。#5343 で /brands/ 一覧とタグ側のリンクは落としたが、この
+       バナーだけが残り、noindex ブランドハブ 6 件が商品ページ 60 本から張られたまま
+       クロール到達していた (実測)。BreadcrumbList 構造化データはセクション階層
+       (ホーム → 記事一覧 → 商品) だけで組まれておりブランドを含まないので、ここを
+       落としても壊れるものは無い。 */ -}}
+{{- $brandIsNoindex := and $selfBrand (partial "is_noindex_brand.html" $selfBrand) -}}
+{{- if and $selfBrand $brandTerms (not $brandIsNoindex) (ge (len $brandSiblings) $hubMinSiblings) }}
 {{- $brandTerm := index $brandTerms 0 -}}
 <aside class="hub-banner" aria-label="{{ $selfBrand }} ブランドハブ">
   <a class="hub-banner-link" href="{{ $brandTerm.RelPermalink }}">

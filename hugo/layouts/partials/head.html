@@ -71,11 +71,8 @@
        ブランド向け。フラグは build_brand_hub_stats.py が brand_hub.json に出力する。 */ -}}
 {{- $isNoindexBrand := false -}}
 {{- if and (eq .Kind "term") (eq .Data.Plural "brands") -}}
-  {{- with site.Data.brand_hub -}}
-    {{- $entry := index .brands $.Title -}}
-    {{- if and $entry $entry.noindex -}}
-      {{- $isNoindexBrand = true -}}
-    {{- end -}}
+  {{- if partial "is_noindex_brand.html" .Title -}}
+    {{- $isNoindexBrand = true -}}
   {{- end -}}
 {{- end -}}
 {{- /* P3 (Issue #2701): ブランド名と一致する tag term ページは、curated な /brands/
