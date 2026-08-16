@@ -10,6 +10,16 @@ tier を `hugo/data/brand_hub.json` に書き出す。
 記事数 < 3 のブランドは ``{"count": N}`` のみを出力する。template 側で
 narrative を省略するシグナルとして使う。
 
+記事数 >= 3 のブランドには ``seo_title`` / ``seo_description`` も出力する
+(#5322)。head.html が printf で 1 種類のテンプレを組んでいた結果、93 ページの
+description が「ブランド名と数値だけ違う同じ 1 文」になっていたため、文型の
+選択をここ (テストできる場所) に移した。文型は手元にある事実 (top_3_series /
+avg_age_min_months / count) の有無で分岐する。
+
+**価格は description に入れない。** best_price は日次更新だが meta は full
+rebuild 時点で凍るため、SERP のスニペットと実ページの価格が食い違う。価格の
+鮮度を主張しないほうが安全 (#5322)。
+
 CLI:
     python scripts/build_brand_hub_stats.py                       # 既定パス
     python scripts/build_brand_hub_stats.py --articles-dir X --out Y
@@ -26,7 +36,7 @@ import re
 from collections import Counter, defaultdict
 from typing import Iterable
 
-from brand_normalizer import normalize as normalize_brand
+from brand_normalizer import _fold, normalize as normalize_brand
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 _DEFAULT_ARTICLES = _REPO_ROOT / "data" / "articles"
@@ -92,11 +102,22 @@ def parse_age_min_months(age_range: str | None) -> int | None:
     return None
 
 
-def _series_candidates(tags: Iterable[str] | None) -> list[str]:
+def _series_candidates(tags: Iterable[str] | None,
+                       canonical: str | None = None) -> list[str]:
     """tags から series-like な候補を返す。
 
     ``tags[0]`` はブランド名扱いで除外し、残りから汎用ストップワードを抜く。
     順序は元の tags 順を保つ。
+
+    ``canonical`` を渡すと、2 番目以降に再出現したブランド名も落とす (#5322)。
+    tags[0] だけを見る実装だと「タカラトミー」がタグ列の後方にも入っている記事で
+    top_3_series が ``["タカラトミー", "ミニカー", ...]`` になり、hero の
+    「人気シリーズ」や description が「タカラトミーの知育玩具…タカラトミー・
+    ミニカーなどのシリーズ」と自己言及していた。
+
+    突き合わせは ``_fold`` した**表記の一致**で行う (全半角・大小の差は吸収する)。
+    normalize の canonical 一致にすると「プラレール」のようにブランドの alias
+    としても登録されているシリーズ名まで落ちてしまうため。
     """
     if not tags:
         return []
@@ -105,8 +126,93 @@ def _series_candidates(tags: Iterable[str] | None) -> list[str]:
         t = (t or "").strip()
         if not t or t in GENERIC_TAG_STOPWORDS or _AGE_TAG_STOPWORD_RE.match(t):
             continue
+        if canonical and _fold(t) == _fold(canonical):
+            continue
         out.append(t)
     return out
+
+
+def age_band_label(avg_age_min_months: float | int | None) -> str | None:
+    """avg_age_min_months (下限月齢の平均) を SERP 向けの年齢帯ラベルにする。
+
+    平均値なので「N歳から」と言い切らず、呼び出し側で「〜の商品が中心」と
+    幅のある表現にして使う。12ヶ月未満は "0歳"、24ヶ月未満は "1歳" に丸める
+    (0.8歳/1.3歳のような偽の精度を出さないため)。
+    """
+    if not isinstance(avg_age_min_months, (int, float)):
+        return None
+    m = float(avg_age_min_months)
+    if m < 0:
+        return None
+    if m < 12:
+        return "0歳"
+    if m < 24:
+        return "1歳"
+    return f"{int(m // 12)}歳"
+
+
+# count がこの値以上のときだけ <title> に件数を出す。少ない件数を title に
+# 出すのは「品揃えが N 件しかない」という自己申告になり CTR に効かないため
+# (#5322)。24 ブランドが該当する規模で線を引いている。
+TITLE_COUNT_MIN = 20
+
+
+def build_seo_title(brand: str, entry: dict) -> str:
+    """/brands/<brand>/ の <title> 本体 (サイト名サフィックスは template 側)。
+
+    日本語 SERP の title 表示は全角 30〜35 文字程度で切れるので、サフィックス
+    込みで収まる長さに抑える。件数は TITLE_COUNT_MIN 以上のときだけ出す。
+    """
+    n = int(entry.get("count") or 0)
+    series = list(entry.get("top_3_series") or [])
+    age = age_band_label(entry.get("avg_age_min_months"))
+
+    if n >= TITLE_COUNT_MIN:
+        return f"{brand}の知育玩具{n}選｜スコアと価格で比較"
+    if age:
+        return f"{brand}の知育玩具レビュー｜{age}から選ぶ比較ガイド"
+    if series:
+        return f"{brand}の知育玩具レビュー｜{series[0]}をスコアで比較"
+    return f"{brand}の知育玩具レビュー｜スコアと価格で比較"
+
+
+def build_seo_description(brand: str, entry: dict) -> str:
+    """/brands/<brand>/ の meta description。
+
+    top_3_series / avg_age_min_months / count の有無で文型を選ぶ。シリーズ名は
+    ブランドごとに固有で、"ブランド名 シリーズ名" の検索意図に直接当たるため
+    最優先で入れる。価格は入れない (module docstring 参照)。
+    """
+    n = int(entry.get("count") or 0)
+    series = [s for s in (entry.get("top_3_series") or []) if s]
+    age = age_band_label(entry.get("avg_age_min_months"))
+
+    # 件数帯で訴求を変える。品揃えの広いブランドは「横断比較できること」が、
+    # 数点しかないブランドは「1点ずつ見ていること」が読者にとっての価値なので、
+    # 文型を分けるのは体裁合わせではなく中身の違いに対応している。
+    if series and age:
+        detail = f"{'・'.join(series[:2])}など、{age}〜"
+    elif series:
+        detail = f"{'・'.join(series[:2])}など"
+    elif age:
+        detail = f"{age}〜"
+    else:
+        detail = ""
+
+    if n >= TITLE_COUNT_MIN:
+        head = f"{brand}の知育玩具{n}件を横断比較。"
+        tail = "教育性・安全性・コスパの知育スコアで並べ替えて選べます。"
+        body = f"{detail}の商品を掲載しています。" if detail else ""
+    elif n >= 10:
+        head = f"{brand}の知育玩具{n}件をレビュー。"
+        tail = "知育スコアと価格で並べ替えて比較できます。"
+        body = f"{detail}の商品が中心です。" if detail else ""
+    else:
+        head = f"{brand}の知育玩具{n}件を1点ずつレビュー。"
+        tail = "教育性・安全性・コスパを独自スコアで採点しています。"
+        body = f"{detail}の商品を掲載。" if detail else ""
+
+    return f"{head}{body}{tail}"
 
 
 def _load_article(path: str) -> dict | None:
@@ -153,7 +259,9 @@ def aggregate(articles_dir: pathlib.Path | str) -> dict:
                 "tier": norm.tier,
                 "noindex": norm.noindex,
                 "age_min_months": age,
-                "series_candidates": _series_candidates(d.get("tags")),
+                "series_candidates": _series_candidates(
+                    d.get("tags"), norm.canonical
+                ),
             }
         )
 
@@ -187,9 +295,18 @@ def aggregate(articles_dir: pathlib.Path | str) -> dict:
         for it in items:
             for s in it["series_candidates"]:
                 series_counter[s] += 1
-        top_series = [s for s, _ in series_counter.most_common(3)]
+        # 「プログラミングおもちゃ」と「プログラミング」のように片方が他方の
+        # 部分文字列になる tag を 2 枠使わせない (#5322)。先に来た = 出現数の
+        # 多いほうを残す。
+        top_series: list[str] = []
+        for s, _ in series_counter.most_common():
+            if len(top_series) >= 3:
+                break
+            if any(s in kept or kept in s for kept in top_series):
+                continue
+            top_series.append(s)
 
-        brands_out[brand] = {
+        entry = {
             "count": n,
             "tier": items[0]["tier"],
             "avg_ivs_100": round(sum(ivs_vals) / len(ivs_vals), 1) if ivs_vals else None,
@@ -199,6 +316,10 @@ def aggregate(articles_dir: pathlib.Path | str) -> dict:
             "representative_image": rep["image"],
             "lowest_price": min(price_vals) if price_vals else None,
         }
+        # seo_* は上の集計結果から導出するので entry を組んだ後に足す。
+        entry["seo_title"] = build_seo_title(brand, entry)
+        entry["seo_description"] = build_seo_description(brand, entry)
+        brands_out[brand] = entry
         if brand_noindex:
             brands_out[brand]["noindex"] = True
 

@@ -110,6 +110,121 @@ class TestSeriesCandidates(unittest.TestCase):
         # tags[0] only -> nothing left after brand exclusion
         self.assertEqual(bhs._series_candidates(["レゴ"]), [])
 
+    def test_filters_brand_name_reappearing_later(self):
+        # #5322: tags[0] 以外の位置に再出現したブランド名を落とす。
+        out = bhs._series_candidates(
+            ["ミニカー", "デュプロ", "レゴ"], "レゴ"
+        )
+        self.assertEqual(out, ["デュプロ"])
+
+    def test_keeps_series_registered_as_brand_alias(self):
+        # 「プラレール」はタカラトミーの alias でもあるが実在のシリーズ名。
+        # canonical 一致で落とすと消えてしまうので、表記一致でのみ落とす。
+        out = bhs._series_candidates(
+            ["ミニカー", "プラレール", "タカラトミー"], "タカラトミー"
+        )
+        self.assertEqual(out, ["プラレール"])
+
+    def test_brand_name_match_is_case_and_width_insensitive(self):
+        out = bhs._series_candidates(["X", "デュプロ", "ＬＥＧＯ"], "LEGO")
+        self.assertEqual(out, ["デュプロ"])
+
+    def test_canonical_omitted_keeps_previous_behaviour(self):
+        # canonical 未指定なら従来どおり tags[0] しか落とさない。
+        out = bhs._series_candidates(["ミニカー", "プラレール", "タカラトミー"])
+        self.assertEqual(out, ["プラレール", "タカラトミー"])
+
+
+class TestAgeBandLabel(unittest.TestCase):
+    def test_under_one_year(self):
+        self.assertEqual(bhs.age_band_label(10.0), "0歳")
+
+    def test_one_year_band(self):
+        self.assertEqual(bhs.age_band_label(18.0), "1歳")
+
+    def test_floors_to_year(self):
+        # 80ヶ月 = 6.67歳 -> 偽の精度を出さず 6歳 に丸める
+        self.assertEqual(bhs.age_band_label(80.0), "6歳")
+
+    def test_exact_year_boundary(self):
+        self.assertEqual(bhs.age_band_label(24), "2歳")
+
+    def test_none_and_negative(self):
+        self.assertIsNone(bhs.age_band_label(None))
+        self.assertIsNone(bhs.age_band_label("3歳"))
+        self.assertIsNone(bhs.age_band_label(-1))
+
+
+class TestSeoTitle(unittest.TestCase):
+    def test_large_brand_shows_count(self):
+        t = bhs.build_seo_title("タカラトミー", {
+            "count": 61, "top_3_series": ["ミニカー"], "avg_age_min_months": 36.0,
+        })
+        self.assertEqual(t, "タカラトミーの知育玩具61選｜スコアと価格で比較")
+
+    def test_small_brand_hides_count(self):
+        # #5322: 少ない件数を title に出すと「3 件しかない」の自己申告になる
+        t = bhs.build_seo_title("4M", {
+            "count": 3, "top_3_series": ["実験キット"], "avg_age_min_months": 80.0,
+        })
+        self.assertNotIn("3", t)
+        self.assertEqual(t, "4Mの知育玩具レビュー｜6歳から選ぶ比較ガイド")
+
+    def test_threshold_boundary(self):
+        entry = {"count": bhs.TITLE_COUNT_MIN, "top_3_series": [],
+                 "avg_age_min_months": 36.0}
+        self.assertIn(str(bhs.TITLE_COUNT_MIN), bhs.build_seo_title("B", entry))
+        entry["count"] = bhs.TITLE_COUNT_MIN - 1
+        self.assertNotIn(str(bhs.TITLE_COUNT_MIN - 1), bhs.build_seo_title("B", entry))
+
+    def test_falls_back_to_series_then_generic(self):
+        self.assertEqual(
+            bhs.build_seo_title("B", {"count": 3, "top_3_series": ["S1"]}),
+            "Bの知育玩具レビュー｜S1をスコアで比較",
+        )
+        self.assertEqual(
+            bhs.build_seo_title("B", {"count": 3, "top_3_series": []}),
+            "Bの知育玩具レビュー｜スコアと価格で比較",
+        )
+
+
+class TestSeoDescription(unittest.TestCase):
+    def _d(self, count, series, age=36.0):
+        return bhs.build_seo_description("B", {
+            "count": count, "top_3_series": series, "avg_age_min_months": age,
+        })
+
+    def test_never_contains_price(self):
+        # #5322: best_price は日次更新、meta は full rebuild 時点で凍るため
+        # SERP と実ページが食い違う。価格は description に入れない。
+        d = bhs.build_seo_description("B", {
+            "count": 5, "top_3_series": ["S1"], "avg_age_min_months": 36.0,
+            "lowest_price": 1980,
+        })
+        self.assertNotIn("1980", d)
+        self.assertNotIn("円", d)
+
+    def test_includes_series_and_age(self):
+        d = self._d(5, ["デュプロ", "クラシック"])
+        self.assertIn("デュプロ", d)
+        self.assertIn("クラシック", d)
+        self.assertIn("3歳", d)
+
+    def test_uses_at_most_two_series(self):
+        d = self._d(5, ["S1", "S2", "S3"])
+        self.assertNotIn("S3", d)
+
+    def test_count_bands_differ(self):
+        # 件数帯ごとに訴求が変わる (同じ 1 文型を全ブランドで使わない)
+        small, mid, large = self._d(3, ["S1"]), self._d(12, ["S1"]), self._d(40, ["S1"])
+        self.assertEqual(len({small, mid, large}), 3)
+
+    def test_survives_missing_series_and_age(self):
+        d = bhs.build_seo_description("B", {"count": 4, "top_3_series": [],
+                                            "avg_age_min_months": None})
+        self.assertTrue(d.startswith("Bの知育玩具4件"))
+        self.assertNotIn("〜の商品", d)
+
 
 class TestAggregate(unittest.TestCase):
     def test_threshold_under_three_returns_count_only(self):
@@ -154,6 +269,39 @@ class TestAggregate(unittest.TestCase):
         # series: デュプロ x2, クラシック x1 -> top3 in count order
         self.assertEqual(rec["top_3_series"][0], "デュプロ")
         self.assertIn("クラシック", rec["top_3_series"])
+        # #5322: seo_* は count >= 3 のときだけ出る
+        self.assertIn("レゴ", rec["seo_title"])
+        self.assertIn("デュプロ", rec["seo_description"])
+
+    def test_seo_fields_absent_under_threshold(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td) / "articles"
+            _write_articles(root, [
+                _article("A1", "レゴ(LEGO)", 80, 1000, "3歳以上", ["レゴ", "デュプロ"]),
+                _article("A2", "レゴ(LEGO)", 85, 2000, "5歳〜", ["レゴ", "クラシック"]),
+            ])
+            payload = bhs.aggregate(root)
+        # noindex なので description は不要 (JSON を軽く保つ)
+        self.assertNotIn("seo_title", payload["brands"]["レゴ"])
+        self.assertNotIn("seo_description", payload["brands"]["レゴ"])
+
+    def test_top_series_drops_substring_duplicates(self):
+        # #5322: 「プログラミングおもちゃ」と「プログラミング」で 2 枠使わない
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td) / "articles"
+            _write_articles(root, [
+                _article("A1", "レゴ(LEGO)", 80, 1000, "3歳以上",
+                         ["レゴ", "プログラミングおもちゃ", "プログラミング", "ロボット"]),
+                _article("A2", "レゴ(LEGO)", 85, 2000, "5歳〜",
+                         ["レゴ", "プログラミングおもちゃ", "プログラミング", "ロボット"]),
+                _article("A3", "レゴ(LEGO)", 85, 999, "1歳半〜",
+                         ["レゴ", "プログラミングおもちゃ", "プログラミング", "ロボット"]),
+            ])
+            payload = bhs.aggregate(root)
+        self.assertEqual(
+            payload["brands"]["レゴ"]["top_3_series"],
+            ["プログラミングおもちゃ", "ロボット"],
+        )
 
     def test_excludes_no_brand(self):
         with tempfile.TemporaryDirectory() as td:
