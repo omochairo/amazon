@@ -1,21 +1,22 @@
 {
-  "date": "2026-08-10",
-  "articles": 1914,
-  "failing": 11,
-  "failing_rate": 0.00575,
+  "date": "2026-08-17",
+  "articles": 2053,
+  "failing": 12,
+  "failing_rate": 0.00585,
   "by_check": {
-    "how_to_choose": 11
+    "how_to_choose": 12
   },
   "by_deduction": {
-    "faq": 595,
-    "prices_verified": 578,
-    "keywords": 512,
-    "narrative": 363,
-    "how_to_choose": 96
+    "prices_verified": 614,
+    "faq": 594,
+    "keywords": 510,
+    "narrative": 369,
+    "tag_granularity": 250,
+    "how_to_choose": 95
   },
   "deduction_reasons": {
     "faq": {
-      "only N questions contain product name (recommend >=N)": 595
+      "only N questions contain product name (recommend >=N)": 594
     },
     "how_to_choose": {
       "how_to_choose に生の ASIN コード: ['BNCNHNLNNW', 'BNCVKMNNNZ'] (soft: 表記規律。読者に意味がないので生成側で書かないこと)": 2,
@@ -25,28 +26,35 @@
       "how_to_choose に生の ASIN コード: ['BNBQYKNVVV'] (soft: 表記規律。読者に意味がないので生成側で書かないこと)": 1
     },
     "keywords": {
-      "product name not in any keyword": 258,
+      "product name not in any keyword": 256,
       "brand 'レゴ(LEGO)' not in any keyword": 20,
       "brand 'タカラトミー(TAKARA TOMY)' not in any keyword": 17,
       "brand 'タカラトミー' not in any keyword": 15,
       "brand 'アガツマ(AGATSUMA)' not in any keyword": 11
     },
     "narrative": {
-      "closing NN<NNN": 142,
-      "closing NNN<NNN": 131,
-      "daily_use NNN<NNN": 42,
-      "why_this_product NNN<NNN": 41,
+      "closing NN<NNN": 143,
+      "closing NNN<NNN": 133,
+      "daily_use NNN<NNN": 43,
+      "why_this_product NNN<NNN": 42,
       "gift_appeal NNN<NNN": 4
     },
     "prices_verified": {
-      "unverified=rakuten,yahoo verified=none (warn-only": 224,
-      "unverified=yahoo verified=rakuten (warn-only": 199,
-      "unverified=rakuten verified=yahoo (warn-only": 99,
-      "unverified=yahoo verified=none (warn-only": 43,
-      "unverified=rakuten verified=none (warn-only": 13
+      "unverified=rakuten,yahoo verified=none (warn-only": 237,
+      "unverified=yahoo verified=rakuten (warn-only": 213,
+      "unverified=rakuten verified=yahoo (warn-only": 106,
+      "unverified=yahoo verified=none (warn-only": 44,
+      "unverified=rakuten verified=none (warn-only": 14
+    },
+    "tag_granularity": {
+      "product-name tags=['いろいろドミノDX'] (warn-only, #NNNN)": 3,
+      "product-name tags=['たまごっちパラダイス'] (warn-only, #NNNN)": 3,
+      "product-name tags=['リップスティックデラックスミニ'] (warn-only, #NNNN)": 3,
+      "product-name tags=['ふんわりえほん'] (warn-only, #NNNN)": 2,
+      "product-name tags=['一頭買い!! 黒豚パズル'] (warn-only, #NNNN)": 2
     }
   },
-  "score_min": 94,
+  "score_min": 95,
   "score_median": 99,
   "score_max": 100,
   "cert_fetch": false,
@@ -54,7 +62,7 @@
   "failing_slugs": [
     {
       "slug": "2026-07-16-B08WRPSMMR",
-      "total_score": 94,
+      "total_score": 95,
       "failed_checks": [
         {
           "name": "how_to_choose",
@@ -93,8 +101,18 @@
       ]
     },
     {
+      "slug": "2026-07-28-B09TR1XYP3",
+      "total_score": 95,
+      "failed_checks": [
+        {
+          "name": "how_to_choose",
+          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0C8YJ7RY4']"
+        }
+      ]
+    },
+    {
       "slug": "2026-07-28-B0CS9NM5YP",
-      "total_score": 94,
+      "total_score": 95,
       "failed_checks": [
         {
           "name": "how_to_choose",
@@ -114,7 +132,7 @@
     },
     {
       "slug": "2026-07-29-B0CGLNPRHF",
-      "total_score": 94,
+      "total_score": 95,
       "failed_checks": [
         {
           "name": "how_to_choose",
@@ -124,7 +142,7 @@
     },
     {
       "slug": "2026-07-31-B08152B7W1",
-      "total_score": 94,
+      "total_score": 95,
       "failed_checks": [
         {
           "name": "how_to_choose",
@@ -144,7 +162,7 @@
     },
     {
       "slug": "2026-08-02-B0041X6SEO",
-      "total_score": 94,
+      "total_score": 95,
       "failed_checks": [
         {
           "name": "how_to_choose",
@@ -165,7 +183,9 @@
   ],
   "diff": {
     "previous_date": "2026-08-10",
-    "new": [],
+    "new": [
+      "2026-07-28-B09TR1XYP3"
+    ],
     "recovered": [],
     "persisting": [
       "2026-07-16-B08WRPSMMR",
