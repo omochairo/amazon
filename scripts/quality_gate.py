@@ -6,6 +6,7 @@ Checks article JSON (and rendered Markdown if available) against:
 - Heading hierarchy (h1 -> h2 -> h3)
 - Required sections in narrative
 - SEO: product-name occurrence in title/meta/h1/h2/body
+- SERP fit: 商品名 + 検索意図語 1 つが title の先頭 30 字に収まるか (#5083 項目2)
 - Forbidden childish tone tokens
 - FAQ completeness
 
@@ -119,6 +120,48 @@ HOW_TO_CHOOSE_INLINE_ASIN_SOFT_SCORE = 0.8
 # 文字数ベースの規則 (例: len<=2 を断片とみなす) は採らない。実測 101 種の
 # 2 文字タグはレゴ/学研/恐竜/1歳のような正当な束ね語で、断片は 1 種だけだった。
 TAG_NOVEL_RATIO_WARN = 0.6
+
+# #5083 項目2: SERP に表示される先頭だけで「商品名 + 検索意図」が読めること。
+#
+# 日本語 SERP の title は全角 30〜35 字あたりで打ち切られる。ここで見えている
+# 範囲に「どの商品か」と「その検索意図に答えているか」の両方が入っていないと、
+# 読者は自分のクエリに対する答えだと判断できない。項目1 (サフィックス短縮) で
+# title 全体は 78 → 53 字まで縮んだが、**縮んだのは切れる位置より後ろ**なので
+# 見える範囲は 1 文字も変わっていない。
+#
+# 実測 (data/articles 2,061 本、2026-08-17):
+#   - 先頭 30 字に product.name が同一表記で入る … 85.0%
+#   - 先頭 30 字に検索意図語が入る             … 53.3%
+#   - 両方                                    … 53.3%
+#   束縛条件は意図語だけで、識別性はほぼ無料。**直近 (2026-07-16 以降) の 571 本
+#   では 45.0% と corpus 全体より低い**ので、放っておいて改善する類ではない。
+#
+# 落ちている 1,002 本を読むと原因は 2 つに分かれる:
+#   A. product.name 自体が長い (26 字超が 19.4%)。意図語を置く余地が無い
+#   B. title が product.name の周りに語を足している。product.name が 11 字
+#      ("くもんの日本地図パズル") なのに title は "くもん出版(KUMON PUBLISHING)
+#      くもんの日本地図パズル 日本の世界遺産すごろく付きの…" と Amazon の
+#      正式タイトル由来の型番・シリーズ・英字併記を盛り直していて、意図語が
+#      50 字目に押し出される
+# メッセージで A と B を撃ち分ける (生成側が直す場所が違うため)。
+#
+# 30 字にしたのは、切り詰め位置が端末・クエリで揺れるなかで最も保守的に見える
+# 下限だから。28 字だと発火 59.7% で「ほぼ全部鳴る」に寄り、32 字だと 37.8% まで
+# 落ちて切れる直前を許してしまう。
+TITLE_SERP_HEAD_CHARS = 30
+# product.name がこれを超えると、意図語 (最短 "の最安値" = 4 字) を先頭 30 字に
+# 置けない。この場合は title ではなく product.name 側 (§4 の「短い通称」) の問題。
+TITLE_SERP_MAX_NAME_CHARS = TITLE_SERP_HEAD_CHARS - len("の最安値")
+# 検索意図語。読者が商品名に添えて打つクエリ語で、#5083 の計測もこの語彙で数えた。
+# 「何歳」は「対象年齢」の口語形なので同じ意図として数える。
+TITLE_SERP_INTENT_WORDS = (
+    "口コミ", "最安値", "対象年齢", "何歳", "比較", "評判",
+    "レビュー", "徹底", "価格", "遊び方", "選び方", "安い",
+)
+# 合否は変えず score だけ下げる (#4826 項目2 / #5088 と同じ warn-only の流儀)。
+# 施行日ゲートは置かない — census (#4828) が main 全量で発火率を出すので、
+# 既存記事も含めて数えないと項目3 の before/after が測れない。
+TITLE_SERP_FIT_SOFT_SCORE = 0.8
 
 
 def _normalize_tag(value: Any) -> str:
@@ -271,6 +314,66 @@ def check_title_seo(data: dict, product_name: str) -> CheckResult:
     if not length_ok:
         msg.append(f"length {len(title)} not in 20-80")
     return CheckResult("title_seo", score >= 0.7, score, "; ".join(msg) or "OK")
+
+
+def check_title_serp_fit(data: dict, product_name: str) -> CheckResult:
+    """#5083 項目2: title の先頭 30 字だけで「商品名 + 検索意図語 1 つ」が読めるか。
+
+    `check_title_seo` が見ているのは「冒頭 60 字以内に商品名」で、SERP で実際に
+    表示される範囲 (全角 30〜35 字) より広い。つまり既存のゲートを満点で通っても、
+    読者が見る範囲には商品名しか無く**検索意図語が切れている**という状態が通る。
+    実測ではそれが半数近くで起きていた。
+
+    warn-only (`passed` は True のまま score を下げる)。理由は 2 つ:
+      - 記事生成レーンは auto-merge で回っているので、既存の 46.7% を一斉に
+        hard fail にすると生成が止まる
+      - quality_census (#4828) が「減点のみ」を週次で拾うので、hard 化の判断材料に
+        なる発火率と、項目3 が求める before/after がそのまま取れる
+
+    意図語を **1 つだけ**前半に置けば足りる。現状 1 タイトルあたり平均 3.89 語を
+    並べていて、そのほとんどが切れる位置より後ろにあるだけなので、増やす必要は
+    無い (#2717 の「定型句だけで済ませない」とも衝突しない — 残りの枠はその商品
+    固有の差別化シグナルに使える)。
+    """
+    title = data.get("title", "")
+    if not title:
+        # 空 title は check_title_seo が hard fail で拾う。二重に鳴らさない。
+        return CheckResult("title_serp_fit", True, 1.0, "skipped (empty title)")
+
+    head = title[:TITLE_SERP_HEAD_CHARS]
+    name_ok = bool(product_name) and product_name in head
+    intent_hits = [w for w in TITLE_SERP_INTENT_WORDS if w in head]
+    if name_ok and intent_hits:
+        return CheckResult("title_serp_fit", True, 1.0,
+                           f"OK ({intent_hits[0]} @ head{TITLE_SERP_HEAD_CHARS})")
+
+    notes: list[str] = []
+    if not name_ok:
+        if len(product_name) > TITLE_SERP_MAX_NAME_CHARS:
+            # 原因A: 名前が長すぎて意図語の余地が無い。直す場所は product.name。
+            notes.append(
+                f"product.name が {len(product_name)} 字 "
+                f"(先頭 {TITLE_SERP_HEAD_CHARS} 字に意図語を置くには "
+                f"{TITLE_SERP_MAX_NAME_CHARS} 字以下): §4 の「短い通称」に寄せる"
+            )
+        else:
+            # 原因B: 名前は短いのに title 側で語を盛り直している。
+            notes.append(
+                f"先頭 {TITLE_SERP_HEAD_CHARS} 字に product.name が無い "
+                f"(name={len(product_name)} 字): title で型番・シリーズ・"
+                "ブランドの英字併記などを足し直さない"
+            )
+    if not intent_hits:
+        first = next((title.find(w) for w in TITLE_SERP_INTENT_WORDS if w in title), -1)
+        where = f"{first} 字目" if first >= 0 else "タイトル全体に無し"
+        notes.append(
+            f"検索意図語が先頭 {TITLE_SERP_HEAD_CHARS} 字に無い ({where}): "
+            "商品名の直後に 1 つ置く"
+        )
+    return CheckResult(
+        "title_serp_fit", True, TITLE_SERP_FIT_SOFT_SCORE,
+        "; ".join(notes) + " (warn-only, #5083 項目2)",
+    )
 
 
 def check_meta_description(data: dict, product_name: str) -> CheckResult:
@@ -1302,6 +1405,7 @@ def evaluate_article(
     report = ArticleReport(slug=slug, path=str(json_path))
     report.checks.append(check_schema(data, schema))
     report.checks.append(check_title_seo(data, product_name))
+    report.checks.append(check_title_serp_fit(data, product_name))
     report.checks.append(check_meta_description(data, product_name))
     report.checks.append(check_keywords(data, product_name, brand))
     report.checks.append(check_narrative(data, product_name))
