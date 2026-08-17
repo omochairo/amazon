@@ -109,7 +109,7 @@ class PriceSparkGeometryTests(unittest.TestCase):
         self.assertEqual(
             set(spark),
             {"width", "height", "segments", "dots", "y_labels", "x_labels", "legend",
-             "area", "last_point"},
+             "legends", "area", "last_point", "has_out_of_stock"},
         )
 
     def test_gap_over_14_days_produces_unobserved_segment(self):
@@ -214,3 +214,111 @@ class BuildPriceSparksTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _oos(days_ago: int, message: str = "現在在庫切れです。") -> dict:
+    ts = (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat()
+    return {"ts": ts, "availability": message}
+
+
+class OutOfStockSegmentTests(unittest.TestCase):
+    """#5130 項目2: 在庫切れ区間を線種で区別する。
+
+    在庫切れを区別しないと、階段線は「最後に価格が取れた日の値が在庫切れ期間も
+    続いた」と主張してしまう (= 記録にない価格の継続の主張)。
+    """
+
+    def _states(self, spark) -> list[str]:
+        return [s["state"] for s in spark["segments"]]
+
+    def test_no_out_of_stock_keeps_previous_output_exactly(self):
+        """在庫切れが無ければ #5120 の出力と 1 バイトも変わらない。"""
+        points = [_rec(30, 1000), _rec(20, 1100), _rec(0, 1200)]
+        before = build_spark(points, 1000, 1200, ARTICLE_GEOM)
+        after = build_spark(points, 1000, 1200, ARTICLE_GEOM, out_of_stock=[])
+        self.assertEqual(before["segments"], after["segments"])
+        self.assertEqual(before["area"], after["area"])
+        self.assertFalse(after["has_out_of_stock"])
+
+    def test_interior_out_of_stock_splits_the_hold(self):
+        """価格観測にはさまれた在庫切れは、その水平ホールドだけが点線になる。"""
+        spark = build_spark([_rec(30, 1000), _rec(20, 1000), _rec(10, 1200)],
+                            1000, 1200, ARTICLE_GEOM, out_of_stock=[_oos(25)])
+        self.assertIn("out_of_stock", self._states(spark))
+        self.assertTrue(spark["has_out_of_stock"])
+
+    def test_interior_out_of_stock_wins_over_gap(self):
+        """gap にも在庫切れにも該当する区間は「在庫切れ」と描く (実際に観測した事実)。"""
+        spark = build_spark([_rec(60, 1000), _rec(0, 1200)],
+                            1000, 1200, ARTICLE_GEOM, out_of_stock=[_oos(30)])
+        self.assertIn("out_of_stock", self._states(spark))
+        self.assertNotIn("unobserved", self._states(spark))
+
+    def test_gap_without_out_of_stock_is_still_unobserved(self):
+        """在庫切れの記録が無い長い空白は従来どおり破線 (未観測)。"""
+        spark = build_spark([_rec(60, 1000), _rec(0, 1200)], 1000, 1200, ARTICLE_GEOM)
+        self.assertIn("unobserved", self._states(spark))
+        self.assertNotIn("out_of_stock", self._states(spark))
+
+    def test_trailing_out_of_stock_extends_the_axis_with_a_dotted_run(self):
+        """今も在庫切れなら、最後の価格観測から最新の在庫切れ観測まで点線を伸ばす。"""
+        spark = build_spark([_rec(40, 1000), _rec(30, 1100), _rec(20, 1200)],
+                            1000, 1200, ARTICLE_GEOM, out_of_stock=[_oos(10), _oos(2)])
+        self.assertEqual(self._states(spark)[-1], "out_of_stock")
+        # x 軸の右端ラベルは最新の在庫切れ観測日 (その日に観測したのは事実)。
+        self.assertEqual(spark["x_labels"][-1]["text"],
+                         (datetime.now(timezone.utc) - timedelta(days=2)).strftime("%Y-%m-%d"))
+
+    def test_trailing_out_of_stock_does_not_extend_area_or_last_marker(self):
+        """面塗りと最新点マーカーは価格観測点で止める (価格の無い区間に広げない)。"""
+        points = [_rec(40, 1000), _rec(30, 1100), _rec(20, 1200)]
+        card = build_spark(points, 1000, 1200, CARD_GEOM, out_of_stock=[_oos(2)])
+        priced_xs = [float(p.split(",")[0]) for p in card["area"].split()]
+        last_seg_x = float(card["segments"][-1]["points"].split()[-1].split(",")[0])
+        self.assertLess(max(priced_xs), last_seg_x)
+        self.assertLess(card["last_point"]["x"], last_seg_x)
+
+    def test_trailing_out_of_stock_beats_extend_to_dt(self):
+        """延長 (価格の継続が確定) と末尾在庫切れが両方来たら在庫切れを採る。"""
+        spark = build_spark([_rec(40, 1000), _rec(20, 1200)], 1000, 1200, ARTICLE_GEOM,
+                            extend_to_dt=datetime.now(timezone.utc),
+                            out_of_stock=[_oos(2)])
+        self.assertEqual(self._states(spark)[-1], "out_of_stock")
+
+    def test_out_of_stock_before_first_price_is_ignored(self):
+        """最初の価格観測より前の在庫切れは描く場所が無いので捨てる。"""
+        spark = build_spark([_rec(20, 1000), _rec(0, 1200)], 1000, 1200, ARTICLE_GEOM,
+                            out_of_stock=[_oos(40)])
+        self.assertFalse(spark["has_out_of_stock"])
+
+    def test_legend_lists_only_states_that_are_drawn(self):
+        """図に無い凡例は出さない。両方あれば横に 2 つ並べる。"""
+        only_oos = build_spark([_rec(30, 1000), _rec(20, 1000), _rec(10, 1200)],
+                               1000, 1200, ARTICLE_GEOM, out_of_stock=[_oos(25)])
+        self.assertEqual([lg["state"] for lg in only_oos["legends"]], ["out_of_stock"])
+        # 未観測しか無い図では従来どおり破線の凡例だけ。
+        only_gap = build_spark([_rec(60, 1000), _rec(0, 1200)], 1000, 1200, ARTICLE_GEOM)
+        self.assertEqual([lg["state"] for lg in only_gap["legends"]], ["unobserved"])
+        both = build_spark([_rec(90, 1000), _rec(50, 1000), _rec(20, 1200)],
+                           1000, 1200, ARTICLE_GEOM, out_of_stock=[_oos(35)])
+        self.assertEqual([lg["state"] for lg in both["legends"]],
+                         ["unobserved", "out_of_stock"])
+        self.assertLess(both["legends"][0]["dash_x1"], both["legends"][1]["dash_x1"])
+        # 凡例が SVG の幅からはみ出さない。
+        self.assertLess(both["legends"][-1]["text_x"], ARTICLE_GEOM.width)
+
+    def test_legacy_legend_key_still_serves_unobserved_only(self):
+        """#5120 の単数 legend キーは残す。在庫切れしか無い図では None。"""
+        gap = build_spark([_rec(60, 1000), _rec(0, 1200)], 1000, 1200, ARTICLE_GEOM)
+        self.assertIsNotNone(gap["legend"])
+        self.assertNotIn("state", gap["legend"])
+        oos = build_spark([_rec(30, 1000), _rec(20, 1000), _rec(10, 1200)],
+                          1000, 1200, ARTICLE_GEOM, out_of_stock=[_oos(25)])
+        self.assertIsNone(oos["legend"])
+
+    def test_observed_bool_stays_for_backward_compatibility(self):
+        """既存テンプレの `not seg.observed` が在庫切れでも実線にならない。"""
+        spark = build_spark([_rec(30, 1000), _rec(20, 1000), _rec(10, 1200)],
+                            1000, 1200, ARTICLE_GEOM, out_of_stock=[_oos(25)])
+        for seg in spark["segments"]:
+            self.assertEqual(seg["observed"], seg["state"] == "observed")

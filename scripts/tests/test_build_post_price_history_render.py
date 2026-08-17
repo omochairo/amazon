@@ -239,3 +239,50 @@ class PriceHistoryBlockRenderTest(_RenderFixtureMixin, unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _oos_rec(days_ago: int, message: str = "現在在庫切れです。") -> dict:
+    ts = (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat()
+    return {"ts": ts, "source": "amazon", "price": None, "availability": message}
+
+
+class OutOfStockRenderTest(_RenderFixtureMixin, unittest.TestCase):
+    """#5130 項目2/3: 在庫切れ期間が実際の markdown で区別されて出ること。"""
+
+    def test_trailing_out_of_stock_renders_dotted_run_and_honest_prose(self):
+        recs = [_rec(25, 1680), _rec(20, 1750), _rec(6, 1900), _oos_rec(1)]
+        # latest.json は在庫切れなので価格を持たない (延長の 3 条件は成立しない)。
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+        block = self._run_and_extract_block(recs, {_ASIN: {"ts": today}})
+
+        # 本文: 「直近の計測値は ¥X です」と言い切らない。
+        self.assertNotIn("直近の計測値は", block)
+        self.assertIn("を最後に価格が記録できていません", block)
+        self.assertIn("現在在庫切れです。", block)
+        # 「今の価格が過去最安」の主張はしない。
+        self.assertNotIn("過去最安値", block)
+        # 図: 在庫切れの点線セグメントと凡例。
+        self.assertIn('stroke-dasharray="1 3"', block)
+        self.assertIn("点線＝在庫切れ期間", block)
+        self.assertIn("点線区間は在庫切れが観測された期間", block)
+        # 表には在庫切れ行を出さない (価格の表なので)。
+        self.assertIn("記録した3件の価格を表で見る", block)
+
+    def test_in_stock_block_is_unchanged(self):
+        """在庫切れが無いページは #5120 の出力のまま (点線も在庫切れ文言も出ない)。"""
+        recs = [_rec(25, 1680), _rec(20, 1750), _rec(5, 1900), _rec(0, 1900)]
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+        block = self._run_and_extract_block(recs, {_ASIN: {"p": 1900, "ts": today}})
+        self.assertIn("直近の計測値は", block)
+        self.assertNotIn('stroke-dasharray="1 3"', block)
+        self.assertNotIn("在庫切れ", block)
+        self.assertIn("破線＝未観測期間", block)
+
+    def test_interior_out_of_stock_marks_the_hold_but_keeps_prose(self):
+        """復帰済みの在庫切れは線種だけで示し、本文は従来どおり。"""
+        recs = [_rec(25, 1680), _oos_rec(20), _rec(12, 1750), _rec(0, 1900)]
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+        block = self._run_and_extract_block(recs, {_ASIN: {"p": 1900, "ts": today}})
+        self.assertIn("直近の計測値は", block)
+        self.assertIn('stroke-dasharray="1 3"', block)
+        self.assertIn("点線＝在庫切れ期間", block)

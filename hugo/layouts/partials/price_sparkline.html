@@ -50,7 +50,9 @@
     {{- end }}
 
     {{- range $spark.segments }}
-    <polyline class="price-spark-line{{ if not .observed }} is-unobserved{{ end }}" points="{{ .points }}" />
+    {{- /* state (#5130 項目2) は observed / unobserved / out_of_stock の 3 値。
+           #5120 時点の bool しか無い spark にも耐えるよう observed へフォールバックする。 */}}
+    <polyline class="price-spark-line{{ with .state }}{{ if ne . "observed" }} is-{{ replace . "_" "-" }}{{ end }}{{ else }}{{ if not .observed }} is-unobserved{{ end }}{{ end }}" points="{{ .points }}" />
     {{- end }}
 
     {{- with $spark.last_point }}

@@ -44,6 +44,12 @@ class SparkGeom:
     legend_dash_len: float
     legend_text_gap: float
     legend_text: str
+    # --- 以下は #5130 項目2 で追加 ---
+    # 在庫切れ区間の凡例テキスト。未観測 (legend_text) と同時に出ることがある。
+    legend_text_out_of_stock: str = "点線＝在庫切れ期間"
+    # 凡例を横に並べるときの 1 エントリぶんの送り幅。テキスト長は font-size 9 の
+    # 日本語 8 文字ぶん (約 72px) を上限に見ておく。
+    legend_advance: float = 108.0
     # --- 以下は #5167 で追加。既定値は商品ページ (ARTICLE_GEOM) の従来挙動 ---
     # y 軸ラベルの寄せ。商品ページはプロット左に置くので "end"、カードは右に
     # 置いて横幅を稼ぐので "start"。
@@ -135,9 +141,20 @@ def parse_ts(ts: str) -> Optional[datetime]:
         return None
 
 
+# セグメントの状態 (#5130 項目2)。#5120 の observed:bool を 3 値に広げたもの。
+#   observed     … 観測点どうしを結ぶ実線 (価格が記録されている)
+#   unobserved   … gap_days を超えて観測が無い区間。破線
+#   out_of_stock … 在庫切れが観測されている区間。点線
+# `observed` キーは後方互換のため残す (= state == "observed")。
+SEG_OBSERVED = "observed"
+SEG_UNOBSERVED = "unobserved"
+SEG_OUT_OF_STOCK = "out_of_stock"
+
+
 def empty_spark(geom: SparkGeom) -> dict[str, Any]:
     return {"width": geom.width, "height": geom.height, "segments": [], "dots": [],
-            "y_labels": [], "x_labels": [], "legend": None, "area": "", "last_point": None}
+            "y_labels": [], "x_labels": [], "legend": None, "legends": [],
+            "area": "", "last_point": None, "has_out_of_stock": False}
 
 
 def _format_axis_date(dt: datetime, style: str) -> str:
@@ -147,9 +164,53 @@ def _format_axis_date(dt: datetime, style: str) -> str:
     return dt.strftime("%Y-%m-%d")
 
 
+def _build_legends(geom: SparkGeom, segments: list[dict[str, Any]],
+                   x_min: float) -> list[dict[str, Any]]:
+    """凡例エントリを、実際に描かれた状態のぶんだけ横に並べて返す (#5130 項目2)。
+
+    未観測 (破線) と在庫切れ (点線) は同じ図に同時に出うるので、単数の
+    ``legend`` から複数エントリに広げた。存在しない状態の凡例は出さない
+    (凡例に書いてあるのに図に無い、を避ける)。
+    """
+    if not geom.show_legend:
+        return []
+    present = {s["state"] for s in segments}
+    out: list[dict[str, Any]] = []
+    for state, text in ((SEG_UNOBSERVED, geom.legend_text),
+                        (SEG_OUT_OF_STOCK, geom.legend_text_out_of_stock)):
+        if state not in present or not text:
+            continue
+        dash_x1 = x_min + len(out) * geom.legend_advance
+        dash_x2 = dash_x1 + geom.legend_dash_len
+        out.append({
+            "state": state,
+            "dash_x1": dash_x1,
+            "dash_x2": dash_x2,
+            "y": geom.legend_y,
+            "text_x": dash_x2 + geom.legend_text_gap,
+            "text": text,
+        })
+    return out
+
+
+def _legacy_legend(geom: SparkGeom, segments: list[dict[str, Any]],
+                   x_min: float) -> Optional[dict[str, Any]]:
+    """#5120 の単数 ``legend`` キー。未観測の凡例だけを従来の形で返す。
+
+    ``legends`` へ移行済みのテンプレは見ないが、キーを消すと外部の呼び出し側が
+    静かに凡例を失うので残す。在庫切れしか無い図では None (従来の
+    「破線＝未観測期間」を出すと図に無い凡例になるため)。
+    """
+    for entry in _build_legends(geom, segments, x_min):
+        if entry["state"] == SEG_UNOBSERVED:
+            return {k: v for k, v in entry.items() if k != "state"}
+    return None
+
+
 def build_spark(points: list[dict[str, Any]], min_price: int, max_price: int,
                 geom: SparkGeom,
-                extend_to_dt: Optional[datetime] = None) -> dict[str, Any]:
+                extend_to_dt: Optional[datetime] = None,
+                out_of_stock: Optional[list[dict[str, Any]]] = None) -> dict[str, Any]:
     """#5120: SVG スパークラインの座標・軸ラベル・観測ドット・凡例をテンプレの
     外 (Python) で計算する。テンプレは受け取った文字列/座標をそのまま描画する
     だけにして、算術をテンプレ側に持たせない。
@@ -177,6 +238,31 @@ def build_spark(points: list[dict[str, Any]], min_price: int, max_price: int,
     確定している」と呼び出し側が判定した場合にだけ渡される。渡されたら x 軸
     ドメインの終端をこの日時まで延ばし、最後の観測点から x 右端まで実線で
     水平に延長する (未観測ではなく確定した継続なので 14日ギャップ判定の対象外)。
+
+    ``out_of_stock`` (#5130 項目2): 価格が取れなかった観測 (``price: null`` +
+    ``availability``) の ``ts`` のリスト。#5130 項目1 で jsonl に残るように
+    なったもの。
+
+    在庫切れを線種で区別しないと、階段線は「最後に価格が取れた日の値が在庫切れ
+    期間もずっと続いた」と主張してしまう。これは #5120 で潰した「直線補間が記録に
+    ない連続変化を主張する」のと同じ種類の誤りで、今度は**記録にない価格の継続**を
+    主張している。実測 (2026-08-13) では日次レーンの 123/1,890 ASIN (6.5%) が価格を
+    取れておらず、うち 69 記事で価格履歴ブロックが描画されていた。
+
+    2 つの形がある (2026-08-17 時点の実データでは 54 ASIN 中 50 が後者):
+
+      - 区間型 … 価格観測にはさまれた在庫切れ。その区間の**水平ホールド部分**を
+        out_of_stock セグメントに分ける (gap 判定と同じ仕組み。両方に該当する
+        ときは在庫切れを採る — より具体的で、実際に観測された事実だから)
+      - 末尾型 … 最後の価格観測より後がずっと在庫切れ (= 今も在庫切れ)。最後の
+        価格観測から最新の在庫切れ観測まで out_of_stock セグメントを伸ばし、
+        x 軸ドメインの終端もそこまで延ばす (その日に観測したことは事実なので、
+        軸を伸ばすこと自体は嘘にならない)
+
+    末尾型で伸ばすのは ``segments`` だけで、面塗り (``area``) と最新点マーカー
+    (``last_point``) は最後の**価格**観測点で止める。面塗りは「価格がこのあたりを
+    推移した」を示す図形なので価格の無い区間に広げてはいけないし、マーカーは
+    「今いくらか」を示すものなので在庫切れの右端に置くと読者を誤らせる。
     """
     x_min, x_max = geom.plot_x_min, geom.plot_x_max
     draw_w = x_max - x_min
@@ -196,8 +282,24 @@ def build_spark(points: list[dict[str, Any]], min_price: int, max_price: int,
     n = len(parsed)
     oldest_dt = parsed[0][0]
     newest_dt = parsed[-1][0]
+
+    # 在庫切れ観測 (#5130 項目2)。最初の価格観測より前のものは描く場所が無いので捨てる。
+    oos_dts: list[datetime] = []
+    for pt in (out_of_stock or []):
+        dt = parse_ts(pt["ts"]) if isinstance(pt.get("ts"), str) else None
+        if dt is not None and dt > oldest_dt:
+            oos_dts.append(dt)
+    oos_dts.sort()
+    # 末尾型: 最後の価格観測より後にある在庫切れ観測の最新。
+    oos_tail_dt = next((d for d in reversed(oos_dts) if d > newest_dt), None)
+
     extend = extend_to_dt is not None and extend_to_dt > newest_dt
-    domain_end_dt = extend_to_dt if extend else newest_dt
+    # extend (価格が続いたことが確定) と末尾在庫切れは両立しない。呼び出し側は
+    # 在庫切れ ASIN に extend_to_dt を渡さない (build_post の 3 条件) が、万一
+    # 両方来たら在庫切れを優先する — 「確定した継続」の主張のほうが強いため。
+    if oos_tail_dt is not None:
+        extend = False
+    domain_end_dt = oos_tail_dt or (extend_to_dt if extend else newest_dt)
     total_seconds = (domain_end_dt - oldest_dt).total_seconds()
     price_range = max_price - min_price
 
@@ -270,29 +372,57 @@ def build_spark(points: list[dict[str, Any]], min_price: int, max_price: int,
         pts.append((pts[0][0], bottom))
         return " ".join(f"{x},{y}" for x, y in pts)
 
+    def _seg(coords_list: list[tuple[float, float]], state: str) -> dict[str, Any]:
+        return {
+            "points": " ".join(f"{x},{y}" for x, y in coords_list),
+            "state": state,
+            # 後方互換 (#5120 の bool)。既存テンプレの `not seg.observed` は
+            # 未観測・在庫切れの両方で真になり、少なくとも実線にはならない。
+            "observed": state == SEG_OBSERVED,
+        }
+
+    def _flush(segs: list[dict[str, Any]], coords_list: list[tuple[float, float]],
+               state: str) -> None:
+        if len(coords_list) < 2:
+            return
+        segs.append(_seg(coords_list, state))
+
+    def _oos_tail_segment(segs: list[dict[str, Any]], from_xy: tuple[float, float]) -> None:
+        """末尾在庫切れ: 最後の価格観測から x 右端まで点線で水平に伸ばす。"""
+        tail: list[tuple[float, float]] = [from_xy]
+        _append_coord(tail, (_round(x_max), from_xy[1]))
+        _flush(segs, tail, SEG_OUT_OF_STOCK)
+
     if n < 2:
         cur_seg: list[tuple[float, float]] = [coords[0]]
         if extend:
             _append_coord(cur_seg, (_round(x_max), coords[0][1]))
-        segments = [{"points": " ".join(f"{x},{y}" for x, y in cur_seg), "observed": True}] \
-            if len(cur_seg) >= 2 else [{"points": f"{coords[0][0]},{coords[0][1]}", "observed": True}]
+        segments = [_seg(cur_seg, SEG_OBSERVED)] if len(cur_seg) >= 2 else [
+            _seg([coords[0]], SEG_OBSERVED)]
+        # 面塗りと最新点マーカーは価格観測点で止める (在庫切れ区間には広げない)。
         last = {"x": cur_seg[-1][0], "y": cur_seg[-1][1]} if geom.show_last_marker else None
+        area = _area(cur_seg)
+        if oos_tail_dt is not None:
+            _oos_tail_segment(segments, coords[0])
         return {"width": geom.width, "height": geom.height, "segments": segments,
                 "dots": dots, "y_labels": y_labels, "x_labels": x_labels, "legend": None,
-                "area": _area(cur_seg), "last_point": last}
+                "legends": _build_legends(geom, segments, x_min),
+                "area": area, "last_point": last,
+                "has_out_of_stock": oos_tail_dt is not None}
 
     edges = []
     for i in range(1, n):
-        gap_days_val = (parsed[i][0] - parsed[i - 1][0]).total_seconds() / 86400.0
-        edges.append((coords[i - 1], coords[i], gap_days_val > geom.gap_days))
-
-    def _flush(segs: list[dict[str, Any]], coords_list: list[tuple[float, float]], observed: bool) -> None:
-        if len(coords_list) < 2:
-            return
-        segs.append({
-            "points": " ".join(f"{x},{y}" for x, y in coords_list),
-            "observed": observed,
-        })
+        prev_dt, cur_dt = parsed[i - 1][0], parsed[i][0]
+        # 在庫切れ観測が 2 つの価格観測のあいだにあれば、その水平ホールドは
+        # 「価格が続いた」ではなく「在庫切れだった」。gap 判定より優先する
+        # (実際に観測された事実のほうが具体的なので)。
+        if any(prev_dt < d <= cur_dt for d in oos_dts):
+            hold_state = SEG_OUT_OF_STOCK
+        elif (cur_dt - prev_dt).total_seconds() / 86400.0 > geom.gap_days:
+            hold_state = SEG_UNOBSERVED
+        else:
+            hold_state = SEG_OBSERVED
+        edges.append((coords[i - 1], coords[i], hold_state))
 
     segments: list[dict[str, Any]] = []
     # cur_seg は常に「観測済み」の累積。破線セグメントはギャップ辺ごとに単発で挟まれる。
@@ -300,43 +430,43 @@ def build_spark(points: list[dict[str, Any]], min_price: int, max_price: int,
     # full_path は破線区間も含めた1本の連続パス。面塗り (_area) 用に別途ためる。
     full_path: list[tuple[float, float]] = [coords[0]]
 
-    for prev_xy, cur_xy, is_gap in edges:
+    for prev_xy, cur_xy, hold_state in edges:
         step_xy = (cur_xy[0], prev_xy[1])  # 前の価格を次の x まで水平に保持 (step-after)
         _append_coord(full_path, step_xy)
         _append_coord(full_path, cur_xy)
-        if is_gap:
-            _flush(segments, cur_seg, True)
-            dashed: list[tuple[float, float]] = [prev_xy]
-            _append_coord(dashed, step_xy)
-            _flush(segments, dashed, False)
-            cur_seg = [step_xy]
+        if hold_state == SEG_OBSERVED:
+            _append_coord(cur_seg, step_xy)
             _append_coord(cur_seg, cur_xy)
         else:
-            _append_coord(cur_seg, step_xy)
+            # 水平ホールド部分だけを別セグメントに分ける。ギャップ辺の垂直移動
+            # (新観測時点で実際に変わった価格) は未観測でも在庫切れでもないので、
+            # 次の観測済みセグメントの先頭に入れる。
+            _flush(segments, cur_seg, SEG_OBSERVED)
+            hold: list[tuple[float, float]] = [prev_xy]
+            _append_coord(hold, step_xy)
+            _flush(segments, hold, hold_state)
+            cur_seg = [step_xy]
             _append_coord(cur_seg, cur_xy)
 
     if extend:
         _append_coord(cur_seg, (_round(x_max), cur_seg[-1][1]))
         _append_coord(full_path, (_round(x_max), full_path[-1][1]))
 
-    _flush(segments, cur_seg, True)
+    _flush(segments, cur_seg, SEG_OBSERVED)
 
-    legend = None
-    if geom.show_legend and any(not seg["observed"] for seg in segments):
-        dash_x1 = x_min
-        dash_x2 = x_min + geom.legend_dash_len
-        legend = {
-            "dash_x1": dash_x1,
-            "dash_x2": dash_x2,
-            "y": geom.legend_y,
-            "text_x": dash_x2 + geom.legend_text_gap,
-            "text": geom.legend_text,
-        }
-
+    # 面塗りと最新点マーカーは価格観測点で止める (在庫切れ区間には広げない)。
+    area = _area(full_path)
     last = {"x": full_path[-1][0], "y": full_path[-1][1]} if geom.show_last_marker else None
+
+    if oos_tail_dt is not None:
+        _oos_tail_segment(segments, coords[-1])
+
     return {"width": geom.width, "height": geom.height, "segments": segments,
-            "dots": dots, "y_labels": y_labels, "x_labels": x_labels, "legend": legend,
-            "area": _area(full_path), "last_point": last}
+            "dots": dots, "y_labels": y_labels, "x_labels": x_labels,
+            "legend": _legacy_legend(geom, segments, x_min),
+            "legends": _build_legends(geom, segments, x_min),
+            "area": area, "last_point": last,
+            "has_out_of_stock": any(s["state"] == SEG_OUT_OF_STOCK for s in segments)}
 
 
 def build_card_spark(history: list[tuple[datetime, int]]) -> Optional[dict[str, Any]]:

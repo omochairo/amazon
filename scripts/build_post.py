@@ -1761,6 +1761,63 @@ def _load_price_history_points(price_history_root: pathlib.Path, asin: str) -> l
     return points
 
 
+def _load_out_of_stock_points(price_history_root: pathlib.Path, asin: str) -> list[dict[str, Any]]:
+    """#5130 項目2: 在庫切れ観測 (``price: null`` + ``availability``) を ts 昇順で返す。
+
+    #5130 項目1 (PR #5262) から jsonl に残るようになった行。価格観測を読む
+    ``_load_price_history_points`` は「``price`` が正の int でない行は捨てる」
+    ままにしてある — 最安値・最高値・変化回数・表など、価格の統計は在庫切れ行が
+    混ざると壊れる。在庫切れは**描画のためだけ**に別で読む。
+
+    ``availability`` が無い行は読まない。price_history.append_price_point は
+    在庫メッセージという根拠があるときだけ ``price: null`` を書くが、読み側でも
+    同じ条件を課しておく (根拠のない欠測を「在庫切れだった」と描かないため)。
+    """
+    p = price_history_root / f"{asin.upper()}.jsonl"
+    if not p.exists():
+        return []
+    points: list[dict[str, Any]] = []
+    try:
+        for line in p.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(rec, dict) or rec.get("source") != "amazon":
+                continue
+            price = rec.get("price")
+            if isinstance(price, int) and not isinstance(price, bool) and price > 0:
+                continue
+            ts = rec.get("ts")
+            availability = rec.get("availability")
+            if not isinstance(ts, str) or not ts:
+                continue
+            if not isinstance(availability, str) or not availability.strip():
+                continue
+            points.append({"ts": ts, "availability": availability.strip()})
+    except OSError:
+        return []
+    points.sort(key=lambda r: r["ts"])
+    return points
+
+
+def _merge_out_of_stock_points(*lanes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """在庫切れ観測を ts 一致で dedupe して ts 昇順で返す (2 レーンぶん)。"""
+    seen: set[str] = set()
+    merged: list[dict[str, Any]] = []
+    for lane in lanes:
+        for pt in lane:
+            if pt["ts"] in seen:
+                continue
+            seen.add(pt["ts"])
+            merged.append(pt)
+    merged.sort(key=lambda r: r["ts"])
+    return merged
+
+
 def _merge_price_points(*lanes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """複数レーンの観測点を (ts, price) 一致で dedupe して ts 昇順で返す。
 
@@ -1795,11 +1852,13 @@ def _price_history_empty_spark(width: int, height: int) -> dict[str, Any]:
 def _build_price_history_spark(points: list[dict[str, Any]], min_price: int, max_price: int,
                                 width: int = _PRICE_HISTORY_SPARK_WIDTH,
                                 height: int = _PRICE_HISTORY_SPARK_HEIGHT,
-                                extend_to_dt: Optional[datetime] = None) -> dict[str, Any]:
+                                extend_to_dt: Optional[datetime] = None,
+                                out_of_stock: Optional[list[dict[str, Any]]] = None) -> dict[str, Any]:
     """#5120: SVG スパークラインの座標・軸ラベル・観測ドット・凡例をテンプレの
-    外 (Python) で計算する。
+    外 (Python) で計算する。``out_of_stock`` は #5130 項目2 の在庫切れ区間。
     """
-    return build_spark(points, min_price, max_price, ARTICLE_GEOM, extend_to_dt)
+    return build_spark(points, min_price, max_price, ARTICLE_GEOM, extend_to_dt,
+                       out_of_stock=out_of_stock)
 
 
 def _load_price_watch_latest(latest_path: pathlib.Path, asin: str) -> tuple[bool, Optional[str], Optional[int]]:
@@ -1933,6 +1992,12 @@ def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path
     )
     if len(points) < _PRICE_HISTORY_MIN_POINTS:
         return False
+    # #5130 項目2: 在庫切れ観測は描画専用に別で読む (価格の統計には混ぜない)。
+    # ゲート判定より後に読むのは、ゲートを通らないページで無駄な I/O をしないため。
+    out_of_stock = _merge_out_of_stock_points(
+        _load_out_of_stock_points(price_history_root, asin),
+        _load_out_of_stock_points(price_watch_root, asin) if price_watch_root is not None else [],
+    )
     oldest_ts = points[0]["ts"]
     newest_ts = points[-1]["ts"]
     try:
@@ -1986,7 +2051,18 @@ def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path
     # 指しているのに数が違う、というのは #5120 で潰した「文章の窓とグラフの
     # 窓が別物」と同じ種類の不整合であり、x軸ラベルを追加した今回のPRで
     # 初めて読者に見える形になった以上、延長の有無によらず統一して閉じる。
-    domain_end_dt = extend_to_dt if extend_to_dt is not None else newest_dt
+    # #5130 項目2: 末尾在庫切れ (= 今も在庫切れ) のときはグラフの x 軸が最新の
+    # 在庫切れ観測日まで伸びるので、本文の「過去N日間」も同じ窓を指すように
+    # 合わせる。#5120 追補3・追補4 と同じ理由 (本文の窓と x 軸の窓は同じもの)。
+    # なお extend_to_dt はここでは必ず None になる — latest.json の価格が欠けて
+    # いる (= 在庫切れ) ASIN には延長の 3 条件が成立しないため。
+    oos_tail_dt = None
+    for pt in reversed(out_of_stock):
+        dt = _price_history_parse_ts(pt["ts"])
+        if dt is not None and dt > newest_dt:
+            oos_tail_dt = dt
+            break
+    domain_end_dt = oos_tail_dt or (extend_to_dt if extend_to_dt is not None else newest_dt)
     span_days = (domain_end_dt.date() - oldest_dt.date()).days
 
     # #5120 追補: 「N回計測しました」とは書かない。records (jsonl の行数) は
@@ -2018,8 +2094,22 @@ def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path
         "max_price": max_price,
         "latest_price": latest_price,
         "span_days": span_days,
-        "all_time_low": latest_price <= min_price,
-        "spark": _build_price_history_spark(points, min_price, max_price, extend_to_dt=extend_to_dt),
+        # #5130 項目3: 「🏅 過去最安値」バッジは「今の価格が過去最安」の主張なので、
+        # 今も在庫切れ (= 今の価格が無い) ページでは立てない。latest_price は
+        # 在庫があった最後の日の値であって現在値ではない。
+        "all_time_low": latest_price <= min_price and oos_tail_dt is None,
+        "spark": _build_price_history_spark(points, min_price, max_price,
+                                            extend_to_dt=extend_to_dt,
+                                            out_of_stock=out_of_stock),
+        # #5130 項目3: 「直近の計測値は ¥X です」は、今も在庫切れなら嘘に近い
+        # (X は在庫があった最後の日の値であって、今の値ではない)。テンプレが
+        # 文言を切り替えられるように、末尾在庫切れかどうかとその観測日・在庫
+        # メッセージを渡す。区間型 (既に復帰済み) は本文を変える必要が無いので
+        # ここでは立てない — グラフの線種だけで足りる。
+        "out_of_stock_now": oos_tail_dt is not None,
+        "out_of_stock_since": points[-1]["ts"][:10] if oos_tail_dt is not None else None,
+        "out_of_stock_checked_date": out_of_stock[-1]["ts"][:10] if oos_tail_dt is not None else None,
+        "out_of_stock_message": out_of_stock[-1]["availability"] if oos_tail_dt is not None else None,
         # #5120 追補: jsonl の記録間隔だけを見ると「週1巡回」に見えるが、
         # 日次レーンは毎日取得している (記録が _DEDUPE_MIN_DAYS で間引かれる
         # だけ)。latest.json でその事実を示せるページはラベル/注記を

@@ -848,3 +848,118 @@ class SpanDaysExtensionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _oos_rec(days_ago: int, message: str = "現在在庫切れです。", source: str = "amazon") -> dict:
+    """#5130 項目1 で jsonl に残るようになった在庫切れ観測 (price=None)。"""
+    ts = (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat()
+    return {"ts": ts, "source": source, "price": None, "availability": message}
+
+
+class OutOfStockContextTests(unittest.TestCase):
+    """#5130 項目2/3: 在庫切れ観測をグラフと本文に反映する。"""
+
+    def test_out_of_stock_rows_do_not_pollute_price_stats(self):
+        """在庫切れ行は最安値・最高値・記録表・変化回数のどれにも混ざらない。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            _write_jsonl(root, "B1", [
+                _rec(20, 2659), _rec(13, 2400), _rec(6, 2800),
+                _oos_rec(2),
+            ])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            ph = data["price_history"]
+            self.assertEqual(ph["min_price"], 2400)
+            self.assertEqual(ph["max_price"], 2800)
+            self.assertEqual(ph["latest_price"], 2800)
+            self.assertEqual(len(ph["points"]), 3)
+            self.assertTrue(all(isinstance(r["price"], int) for r in ph["table_rows"]))
+
+    def test_trailing_out_of_stock_is_reported_in_context(self):
+        """今も在庫切れなら本文を切り替えるためのフラグと日付が入る。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            _write_jsonl(root, "B1", [
+                _rec(20, 2659), _rec(13, 2400), _rec(6, 2800),
+                _oos_rec(2, "この商品は現在お取り扱いできません。"),
+            ])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            ph = data["price_history"]
+            self.assertTrue(ph["out_of_stock_now"])
+            self.assertEqual(ph["out_of_stock_message"], "この商品は現在お取り扱いできません。")
+            self.assertEqual(
+                ph["out_of_stock_checked_date"],
+                (datetime.now(timezone.utc) - timedelta(days=2)).strftime("%Y-%m-%d"))
+            self.assertEqual(
+                ph["out_of_stock_since"],
+                (datetime.now(timezone.utc) - timedelta(days=6)).strftime("%Y-%m-%d"))
+            self.assertTrue(ph["spark"]["has_out_of_stock"])
+
+    def test_span_days_matches_the_extended_axis(self):
+        """本文の「過去N日間」と x 軸の窓は同じもの (#5120 追補3・追補4 と同じ規律)。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            _write_jsonl(root, "B1", [
+                _rec(20, 2659), _rec(13, 2400), _rec(6, 2800), _oos_rec(2),
+            ])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            ph = data["price_history"]
+            self.assertEqual(ph["span_days"], 18)   # 20 日前 → 2 日前
+            self.assertEqual(ph["spark"]["x_labels"][-1]["text"],
+                             ph["out_of_stock_checked_date"])
+
+    def test_all_time_low_badge_is_dropped_while_out_of_stock(self):
+        """「今の価格が過去最安」の主張は、今の価格が無いページでは立てない。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            records = [_rec(20, 2800), _rec(13, 2700), _rec(6, 2400)]
+            _write_jsonl(root, "B1", records)
+            in_stock = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(in_stock, root))
+            self.assertTrue(in_stock["price_history"]["all_time_low"])
+
+            _write_jsonl(root, "B1", records + [_oos_rec(2)])
+            out = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(out, root))
+            self.assertFalse(out["price_history"]["all_time_low"])
+
+    def test_interior_out_of_stock_does_not_flag_current_state(self):
+        """既に復帰済みの在庫切れは本文を変えない (グラフの線種だけで足りる)。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            _write_jsonl(root, "B1", [
+                _rec(20, 2659), _oos_rec(13), _rec(6, 2800), _rec(0, 2700),
+            ])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            ph = data["price_history"]
+            self.assertFalse(ph["out_of_stock_now"])
+            self.assertTrue(ph["spark"]["has_out_of_stock"])
+
+    def test_unpriced_row_without_availability_is_ignored(self):
+        """在庫メッセージという根拠が無い欠測は「在庫切れだった」と描かない。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            _write_jsonl(root, "B1", [
+                _rec(20, 2659), _rec(13, 2400), _rec(6, 2800),
+                {"ts": (datetime.now(timezone.utc) - timedelta(days=2)).isoformat(),
+                 "source": "amazon", "price": None, "availability": None},
+            ])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            self.assertFalse(data["price_history"]["out_of_stock_now"])
+            self.assertFalse(data["price_history"]["spark"]["has_out_of_stock"])
+
+    def test_out_of_stock_is_merged_across_both_lanes(self):
+        """週次レーンと日次レーンの在庫切れ観測を両方読む。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            hist = pathlib.Path(tmp) / "price_history"
+            watch = pathlib.Path(tmp) / "price_watch"
+            _write_jsonl(hist, "B1", [_rec(20, 2659), _rec(13, 2400), _rec(6, 2800)])
+            _write_jsonl(watch, "B1", [_oos_rec(2)])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, hist, watch))
+            self.assertTrue(data["price_history"]["out_of_stock_now"])
