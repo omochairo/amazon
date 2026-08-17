@@ -4939,6 +4939,13 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 }
 /* 未観測期間。商品ページ (#5120) と同じ「破線 = 記録が無い」表現に揃える。 */
 .price-spark-line.is-unobserved { stroke-dasharray: 3 3; stroke-opacity: 0.4; }
+/* 在庫切れ期間 (#5130 項目2)。「記録が無い」(破線) と「在庫が無いと分かっている」
+   (点線) は別の状態なので、線種を分けて区別できるようにする。 */
+.price-spark-line.is-out-of-stock {
+  stroke-dasharray: 1 3;
+  stroke-opacity: 0.35;
+  stroke-linecap: round;
+}
 .price-spark-area { fill: #2563eb; fill-opacity: 0.1; }
 .price-spark-grid { stroke: #e5e7eb; stroke-width: 1; }
 .price-spark-now { fill: #dc2626; }
