@@ -56,10 +56,35 @@
        Google からは「重複コンテンツの紛らわしい挙動」とみなされる。
        1 ページ目だけ index,follow、それ以降は noindex,follow が SEO 標準。
        Hugo 0.146.0 以降は kind=page で .Paginator を呼ぶとビルドエラーになるため、
-       paginate 可能な kind に限定する (#1374 follow-up build break)。 */ -}}
+       paginate 可能な kind に限定する (#1374 follow-up build break)。
+
+       **term では素の .Paginator を呼んではいけない** (#5343 follow-up で判明)。
+       Hugo のページャは 1 ページにつき 1 つで、最初に .Paginator / .Paginate が
+       呼ばれた時点の内容で確定し、2 回目以降の引数は黙って捨てられる。head.html は
+       baseof の中で main より先に評価されるため、ここで素の .Paginator に触ると
+       「.Pages をデフォルト順のまま pagerSize で割ったページャ」が固定され、後から
+       _default/term.html が呼ぶ .Paginate が無効化されていた。実害は 2 つ:
+         1. term 一覧 (/tags/<t>/ /brands/<b>/) のカードがスコア順に並んでいなかった。
+            実測 (2026-08-17): /tags/chiikugangu/ の 1 ページ目の data-ivs は
+            4.2, 4.75, 4.25, 3.3, ... で降順になっていない
+         2. term.html 側でページ対象を絞っても (termListMaxItems) ページャ枚数が
+            変わらなかった
+       そこで term では term.html と同じ集合 (partials/term_list_pages.html) を渡して
+       ページャを作る。どちらが先に評価されても同じページャになる。
+
+       ページ番号を URL から取る手は使えない。Hugo は paginator の各ページを
+       「同じ Page を別のページャ状態でレンダリングしたもの」として扱うので、
+       /page/2/ をレンダリング中でも .RelPermalink は元 term の URL を返す。
+       ページ番号は .Paginator 経由でしか取れない。 */ -}}
 {{- $isPaginated := false -}}
 {{- if in (slice "home" "section" "taxonomy" "term") .Kind -}}
-  {{- with .Paginator -}}
+  {{- $pager := "" -}}
+  {{- if eq .Kind "term" -}}
+    {{- $pager = .Paginate (partial "term_list_pages.html" .) -}}
+  {{- else -}}
+    {{- $pager = .Paginator -}}
+  {{- end -}}
+  {{- with $pager -}}
     {{- if gt .PageNumber 1 -}}
       {{- $isPaginated = true -}}
     {{- end -}}
@@ -105,10 +130,16 @@
 {{- if and (eq .Kind "term") (eq .Data.Plural "tags") (partial "is_low_value_tag.html" .Title) -}}
   {{- $isLowValueTag = true -}}
 {{- end -}}
+{{- /* #5343 follow-up: term が 1 つも無い taxonomy 一覧ページ (実測では
+       /categories/) を noindex,follow にする。判定は sitemap.xml と共有する。 */ -}}
+{{- $isEmptyTaxonomy := false -}}
+{{- if partial "is_empty_taxonomy.html" . -}}
+  {{- $isEmptyTaxonomy = true -}}
+{{- end -}}
 {{- $isProd := or hugo.IsProduction (eq site.Params.env "production") -}}
-{{- if and $isProd (ne .Params.robotsNoIndex true) (not $isThinTerm) (not $isPaginated) (not $isNoindexBrand) (not $isBrandDupTag) (not $isHubDupTag) (not $isLowValueTag) }}
+{{- if and $isProd (ne .Params.robotsNoIndex true) (not $isThinTerm) (not $isPaginated) (not $isNoindexBrand) (not $isBrandDupTag) (not $isHubDupTag) (not $isLowValueTag) (not $isEmptyTaxonomy) }}
 <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
-{{- else if and $isProd (or $isThinTerm $isPaginated $isNoindexBrand $isBrandDupTag $isHubDupTag $isLowValueTag) (ne .Params.robotsNoIndex true) }}
+{{- else if and $isProd (or $isThinTerm $isPaginated $isNoindexBrand $isBrandDupTag $isHubDupTag $isLowValueTag $isEmptyTaxonomy) (ne .Params.robotsNoIndex true) }}
 <meta name="robots" content="noindex, follow">
 {{- else }}
 <meta name="robots" content="noindex, nofollow">

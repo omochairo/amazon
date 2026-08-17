@@ -37,6 +37,17 @@ enableRobotsTXT = true
 
 [params]
   env = "production"
+  # #5343 follow-up: term 一覧 (/tags/<t>/ /brands/<b>/) の掲載件数の上限。
+  # pagerSize と対で効く運用ノブなので隣に置いてある。24 x 10 ページ ぶん。
+  # pagerSize が全ページに一律に効くのに対し、こちらは「記事数の多い term だけが
+  # noindex な page/N の長い尾を引く」のを潰す。実測 (2026-08-17) では到達 noindex
+  # 284 本が全てページネーションで、tags 168 のうち 123 本が「知育玩具」(全記事の
+  # 77.7%) と「プレゼント」(64.9%) の 2 タグ由来だった。
+  # 240 は「brands を 1 本も削らない」値。最大の takara-tomy が 8 ページなので、
+  # ブランドハブは全カタログを従来どおり出したまま tags の尾だけが切れる。
+  # 下げるほど page/N は減るが、term ページから直接リンクされる商品も減る。
+  # 0 を入れると上限なし (従来の挙動) に戻る。詳細は _default/term.html のコメント。
+  termListMaxItems = 240
   # SEO: 一覧ページ用の <title> サイト名サフィックス短縮版 (#5083 項目1 の続き)。
   # 商品ページ用の productTitleSuffix ("比較ナビ") とは別に、ブランド名を残したい
   # ハブ/一覧ページ向けの中間の長さ。front matter に title_suffix_short: true を

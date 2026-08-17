@@ -120,6 +120,21 @@ class TestHelpers(unittest.TestCase):
         self.assertEqual(A.section_of(BASE_URL + "/page/4/"), "home-pagination")
         self.assertEqual(A.section_of(BASE_URL + "/whatever/"), "other")
 
+    def test_section_of_section_root_pagination(self):
+        """セクション直下のページャを home に取りこぼさない。
+
+        `/page/` の手前を切ると `/posts/page/2/` → `/posts` とスラッシュが落ち、
+        prefix `/posts/` に startswith で当たらない。実測 (2026-08-17) では
+        /posts/page/N/ の 85 本が home-pagination に計上されていた。
+        """
+        self.assertEqual(A.section_of(BASE_URL + "/posts/page/2/"),
+                         "posts-pagination")
+        self.assertEqual(A.section_of(BASE_URL + "/price/page/3/"),
+                         "price-pagination")
+        # term 配下 (スラッシュが残る側) は従来どおり
+        self.assertEqual(A.section_of(BASE_URL + "/tags/t/page/9/"),
+                         "tags-pagination")
+
 
 class TestSitemap(unittest.TestCase):
     def test_collect_urlset(self):

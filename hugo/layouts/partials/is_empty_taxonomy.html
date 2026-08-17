@@ -1,0 +1,24 @@
+{{- /*
+  is_empty_taxonomy.html (#5343 follow-up)
+  引数: ページ (Page context)。taxonomy 一覧ページ (/tags/ /brands/ /categories/) で
+  term が 1 つも無いなら "1"、そうでなければ空文字を返す。
+
+  実測 (2026-08-17 の main ビルド): /categories/ がこれに当たっていた。記事の
+  front matter に `categories:` を持つものが 1 件も無いので term はゼロ、内部リンクも
+  ゼロ (site_audit の inbound_links.json で inbound_count=0) なのに、
+  `index, follow` を出して sitemap にも載り、page/1 エイリアスまで出力していた。
+  中身は「📂 カテゴリから探す」の見出しだけで、<title> も英語のまま `Categories | …`。
+
+  taxonomies から category を外して URL ごと消す手もあるが、それだと 404 が増える。
+  #3331 で「sitemap 上の URL が Google に 404 認識されたまま戻らない」を追っている
+  最中に別種の 404 を足す取引はしない。#2701 / #2719 と同じく、低価値なページは
+  消さずに noindex にして sitemap から落とす。
+
+  term ページ個別の薄さ (記事数 < threshold) は head.html の $isThinTerm が見る。
+  こちらが見るのは 1 段上の taxonomy 一覧ページ (Kind=taxonomy) の空。
+*/ -}}
+{{- $match := "" -}}
+{{- if eq .Kind "taxonomy" -}}
+  {{- if eq (len .Data.Terms) 0 -}}{{- $match = "1" -}}{{- end -}}
+{{- end -}}
+{{- $match -}}
