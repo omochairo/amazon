@@ -103,6 +103,12 @@ COVERAGE_STATE_SLUGS: dict[str, str] = {
     "クロール済み - インデックス未登録": "crawled_not_indexed",
     "見つかりませんでした（404）": "not_found_404",
     "noindex タグによって除外されました": "excluded_by_noindex",
+    # 2026-08-09 census で初出。#2370 A-3 の canonical 統合 (build_post.py が
+    # data/analytics/canonical_overrides.json から .Params.canonicalURL を付ける) を
+    # Google 側が受け入れると、統合元の URL がこの状態になる。登録前は "other" に
+    # 落ちて report_census_404.py が毎回「未知の coverage_state」と警告していた。
+    # 括弧は全角 (U+FF08 / U+FF09)、canonical の前後は半角スペース。
+    "代替ページ（適切な canonical タグあり）": "alternate_page_with_canonical",
 }
 
 KNOWN_SLUGS: tuple[str, ...] = tuple(COVERAGE_STATE_SLUGS.values())
