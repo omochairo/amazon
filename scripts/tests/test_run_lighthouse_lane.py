@@ -26,6 +26,7 @@ from scripts.run_lighthouse_lane import (
     mad_for,
     missing_dates,
     render_report,
+    run_wide_shift,
     upper_fence_for,
     warmup_gates,
 )
@@ -989,3 +990,119 @@ def test_aggregate_runs_has_no_spread_when_metric_is_missing():
     out = aggregate_runs([{"tbt": None}, {"tbt": None}])
     assert out["tbt"] is None
     assert "tbt_spread" not in out
+
+
+# ---------- #5320: run 全体汚染ガード ----------
+
+# 2026-08-15 の形を縮めたもの: 6 URL の SI が一斉に ~1.6x 沈む。
+_RUN_URLS = ["https://x/a/", "https://x/b/", "https://x/c/",
+             "https://x/d/", "https://x/e/", "https://x/f/"]
+
+
+def _stable_history(metric, value, urls=_RUN_URLS, n=7):
+    return [_row(url=u, **{metric: value}) for u in urls for _ in range(n)]
+
+
+def _run(metric, values, urls=_RUN_URLS):
+    return [_row(url=u, **{metric: v}) for u, v in zip(urls, values)]
+
+
+def test_run_wide_shift_detects_uniform_slowdown():
+    """全 URL が同じ幅で沈んだ run は計測環境由来と判定する。"""
+    history = _stable_history("si", 2800.0)
+    shifted = run_wide_shift(history, _run("si", [4700.0] * 6))
+    assert "si" in shifted
+    assert shifted["si"]["median_ratio"] == pytest.approx(4700.0 / 2800.0, rel=1e-3)
+    assert shifted["si"]["over"] == 6 and shifted["si"]["samples"] == 6
+
+
+def test_run_wide_shift_ignores_single_url_regression():
+    """1 本だけ沈んだ run は汚染ではない (= 本物の劣化として通す)。"""
+    history = _stable_history("si", 2800.0)
+    assert run_wide_shift(history, _run("si", [4700.0] + [2800.0] * 5)) == {}
+
+
+def test_run_wide_shift_needs_both_median_and_fraction():
+    """中央比は届いていても、1.25x 超が半数に満たなければ汚染としない。
+
+    #5264 の TBT の裾 (2026-07-24 は run 中央比 1.01 なのに 2/5 が 1.25x 超) を
+    汚染と誤判定しないための条件。
+    """
+    history = _stable_history("tbt", 50.0)
+    # 3/6 が大きく飛ぶが中央比は 1.0 付近 = (URL x 日) 単位の裾
+    assert run_wide_shift(history, _run("tbt", [300.0, 50.0, 300.0, 50.0, 300.0, 50.0]))
+    assert run_wide_shift(history, _run("tbt", [300.0, 50.0, 50.0, 50.0, 50.0, 50.0])) == {}
+
+
+def test_run_wide_shift_ignores_uniform_improvement():
+    """全 URL が一斉に速くなった run は疑わない (片側だけ見る)。"""
+    history = _stable_history("si", 4000.0)
+    assert run_wide_shift(history, _run("si", [1500.0] * 6)) == {}
+
+
+def test_run_wide_shift_needs_minimum_samples():
+    """baseline を持つ URL が少なすぎる run では run 単位の統計を作らない。"""
+    urls = _RUN_URLS[:3]
+    history = _stable_history("si", 2800.0, urls=urls)
+    assert run_wide_shift(history, _run("si", [4700.0] * 3, urls=urls)) == {}
+
+
+def test_contaminated_run_suppresses_alerts_5320():
+    """#5320 の再現: 全 URL の SI が一斉に沈んだ run では SI で鳴らさない。"""
+    history = _stable_history("si", 2800.0)
+    alerts = detect_regressions(history, _run("si", [4700.0] * 6))
+    assert not any(a["metric"] == "si" for a in alerts)
+
+
+def test_contaminated_run_still_fires_on_uncontaminated_metric():
+    """汚染は metric ごとに独立。SI が汚染されていても TBT の本物は残る。
+
+    2026-08-15 の実データがこの形で、SI/FCP は run 全体が沈んでいたが TBT の
+    run 中央比は 0.90 だった (= TBT の 1 件は本物として残すべき)。
+    """
+    history = [_row(url=u, si=2800.0, tbt=50.0) for u in _RUN_URLS for _ in range(7)]
+    current = [_row(url=u, si=4700.0, tbt=50.0) for u in _RUN_URLS]
+    current[0]["tbt"] = 900.0
+    alerts = detect_regressions(history, current)
+    assert not any(a["metric"] == "si" for a in alerts)
+    assert [a["url"] for a in alerts if a["metric"] == "tbt"] == [_RUN_URLS[0]]
+
+
+def test_contaminated_run_suppresses_perf_score_alerts():
+    """perf_score は素の metric の加重合成なので、汚染時は巻き添えで落ちる。"""
+    history = [_row(url=u, si=2800.0, perf_score=85.0) for u in _RUN_URLS for _ in range(7)]
+    current = [_row(url=u, si=4700.0, perf_score=64.0) for u in _RUN_URLS]
+    assert detect_regressions(history, current) == []
+
+
+def test_uncontaminated_run_keeps_perf_score_alerts():
+    """汚染が無ければ perf_score は従来どおり鳴る。"""
+    history = [_row(url=u, si=2800.0, perf_score=85.0) for u in _RUN_URLS for _ in range(7)]
+    current = [_row(url=u, si=2800.0, perf_score=85.0) for u in _RUN_URLS]
+    current[0]["perf_score"] = 64.0
+    alerts = detect_regressions(history, current)
+    assert [a["metric"] for a in alerts] == ["perf_score"]
+
+
+def test_contaminated_run_is_logged_not_silently_dropped(caplog):
+    """無音で消すと「鳴らないから健全」に見えるので、必ずログに残す。"""
+    history = _stable_history("si", 2800.0)
+    with caplog.at_level("WARNING"):
+        detect_regressions(history, _run("si", [4700.0] * 6))
+    assert "run-wide shift" in caplog.text
+
+
+def test_render_report_shows_run_shift_section():
+    alerts = [{"kind": "threshold", "url": "https://x/", "form_factor": "mobile",
+               "metric": "tbt", "value": 900.0, "baseline": 50.0, "detail": "d"}]
+    md = render_report(alerts, "2026-08-15", None, None,
+                       {"si": {"median_ratio": 1.59, "fraction": 0.83,
+                               "samples": 6, "over": 5}})
+    assert "run 全体が沈んでいて判定を見送った metric" in md
+    assert "1.59x" in md and "5/6" in md
+
+
+def test_render_report_omits_run_shift_section_when_clean():
+    alerts = [{"kind": "threshold", "url": "https://x/", "form_factor": "mobile",
+               "metric": "tbt", "value": 900.0, "baseline": 50.0, "detail": "d"}]
+    assert "run 全体が沈んでいて" not in render_report(alerts, "2026-08-15", None, None, {})
