@@ -39,6 +39,10 @@ navi.omcha.jp の代表 URL 群に対して Lighthouse をローカル実行し�
   頑健だが、外れ値が**再発する第 2 のクラスタ**である系列 (ホーム mobile の TBT)
   では、多数派クラスタの幅しか測らずゲートが許容すべき幅を見落とす。baseline 窓の
   Tukey fence (Q3 + 1.5*IQR) を超えることを必須条件に足して塞ぐ。
+- **run 単位の汚染は run 単位でしか見えない** (#5320): 上の 2 本はどちらも
+  「その URL の履歴」の中で外れ値を測るので、self-hosted runner が重かった日の
+  ように **run 全体が一様に沈む** 汚染は原理的に見抜けない (各 URL から見れば
+  全員が正しく外れている)。run 全体の中央比で別途判定して metric ごとに外す。
 - **回帰判定は「直近 baseline の median」対比**: 絶対閾値 (CWV good) だけだと
   元から悪い指標が毎回鳴り続けてノイズになるので、①CWV 閾値をまたいだ悪化
   ②baseline 比の相対悪化、の 2 条件で鳴らす。**baseline が育っていない URL は
@@ -192,6 +196,41 @@ REGRESSION_MAD_K = 3.0
 #   baseline 51.0) が消え、大きい 1 件 (2026-08-05 商品 398 / baseline 130.5・
 #   fence 141.6) は残った。
 REGRESSION_FENCE_K = 1.5
+
+# run 全体汚染ガード (#5320): その run の全 URL がまとめて同じ向きに沈んでいるときは、
+# サイトの劣化ではなく計測環境 (self-hosted runner) の劣化として扱い、その metric の
+# 判定を見送る。
+#
+# なぜ要るか (2026-08-15 の #5320 が実例):
+#   その日の mobile 11 URL の SI 中央値は 2856 → 4734 (+66%)、11 本中 10 本が
+#   4000ms を超えた。ホーム・cospa・商品ページが**同時に同じ幅で**沈み、翌 8/16 には
+#   11 本とも元の水準へ完全復帰している (中央値 2779)。Chrome major も lighthouse 版も
+#   同一。同じ形は 7/16 と 7/19 にも出ていて、いずれも翌日に復帰している。
+#   デプロイでこの形にはならない (共通アセットの劣化なら翌日も続く)。runner 側が
+#   その run のあいだだけ重かった、と読むのが素直。
+#
+# なぜ URL 単位のゲートでは防げないか:
+#   MAD も Tukey fence も「その URL の履歴」の中でしか外れ値を測らない。run 全体が
+#   一様に沈むと、各 URL から見れば単独で大きく外れた値なので、全 URL が正しく鳴る。
+#   汚染は run 単位の量なので、run 単位で測らないと見えない。
+#
+# なぜ #5264 の「同日 URL 中央値で正規化」とは別物か:
+#   #5264 が扱ったのは TBT の (URL × 日) 単位でランダムに乗る裾で、日効果ではないので
+#   正規化が効かなかった。こちらは日効果そのもの (fcp / si は run 単位で動く)。
+#   metric ごとに独立して判定するので、#5264 の TBT の裾はここでは抑制されない。
+#
+# 較正 (実履歴 31 日の replay):
+#   baseline が育っている 17 日ぶんの run 中央比は lcp/fcp/cls/si が p90 ≤ 1.04、
+#   最も裾の重い tbt でも最大 1.20 (2026-08-05 = #5264 が残すべきとした本物)。
+#   1.25 を超えるのは 2026-08-15 の fcp 1.35 / si 1.59 だけ。さらに「1.25 を超えた
+#   URL が半数以上」を AND で課すと、tbt の裾 (2026-07-24 は中央比 1.01 なのに 2/5 が
+#   1.25 超) を確実に外せる。両条件を満たすのは 2026-08-15 の fcp (3/6) と si (5/6)
+#   のみで、2026-08-05 の本物 (中央比 1.20 / 1件) は残る。
+RUN_SHIFT_RATIO = 1.25
+RUN_SHIFT_FRACTION = 0.5
+# run 単位の統計なので、比較できる URL がこれ未満のときは判定しない
+# (Chrome major 更新直後は baseline を持つ URL が数本まで減る)。
+MIN_RUN_SHIFT_SAMPLES = 4
 
 # `lcp_element_reason` がこれらのときは、その行の LCP は「計測できていない」。
 #
@@ -661,6 +700,54 @@ def warmup_gates(
     return out
 
 
+def run_wide_shift(
+    history: List[Dict[str, Any]], current: List[Dict[str, Any]], window: int = 10
+) -> Dict[str, Dict[str, Any]]:
+    """その run 全体が一様に悪化している metric を返す (#5320)。
+
+    metric ごとに、baseline を持つ全 (url, form_factor) の `value / baseline` を集め、
+
+      - 中央比 >= RUN_SHIFT_RATIO   (run 全体が沈んでいる)
+      - かつ 比 >= RUN_SHIFT_RATIO の URL が RUN_SHIFT_FRACTION 以上 (一様である)
+
+    の両方を満たすものを「計測環境由来」と判定する。中央比だけだと tbt のように
+    裾の重い metric で 1 本の外れ値に引かれ、割合だけだと (URL × 日) 単位で飛ぶ
+    #5264 の裾を拾う。両方を課してはじめて「run 全体が同じ幅で沈んだ」だけが残る。
+
+    戻り値は metric → {median_ratio, fraction, samples}。**空 dict = 汚染なし**。
+    値は 1 方向 (悪化側) だけ見る — 全 URL が一斉に速くなった run を疑う理由は無い。
+    """
+    shifted: Dict[str, Dict[str, Any]] = {}
+    for _, short in METRIC_MAP:
+        ratios: List[float] = []
+        for row in current:
+            if row.get(short + "_error"):
+                continue
+            value = row.get(short)
+            if not isinstance(value, (int, float)):
+                continue
+            base = baseline_for(history, row.get("url"), row.get("form_factor"),
+                                short, window,
+                                chrome_version=row.get("chrome_version"))
+            # base が 0 (CLS が常時 0 の URL など) は比を作れないので除く。
+            if not base:
+                continue
+            ratios.append(value / base)
+        if len(ratios) < MIN_RUN_SHIFT_SAMPLES:
+            continue
+        median_ratio = statistics.median(ratios)
+        over = sum(1 for r in ratios if r >= RUN_SHIFT_RATIO)
+        fraction = over / len(ratios)
+        if median_ratio >= RUN_SHIFT_RATIO and fraction >= RUN_SHIFT_FRACTION:
+            shifted[short] = {
+                "median_ratio": round(median_ratio, 3),
+                "fraction": round(fraction, 3),
+                "samples": len(ratios),
+                "over": over,
+            }
+    return shifted
+
+
 def _ratio_regression(value: float, base: float, min_delta: float) -> bool:
     """REGRESSION_RATIO 条件 + 絶対差条件 (MAD ゲートより手前の素朴な判定)。"""
     return value > base * REGRESSION_RATIO and (value - base) >= min_delta
@@ -708,7 +795,8 @@ def _observed_lcp_confirms(
 
 
 def detect_regressions(
-    history: List[Dict[str, Any]], current: List[Dict[str, Any]], window: int = 10
+    history: List[Dict[str, Any]], current: List[Dict[str, Any]], window: int = 10,
+    shifted: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """current の各行を履歴 baseline と比べて劣化を列挙する。
 
@@ -736,7 +824,15 @@ def detect_regressions(
       従来どおり simulated だけで判定する。
       `kind="error"` (audit error / runtime error) は計測基盤の失敗検出であり
       分散の話とは無関係なので、これらのゲートを通さず無条件で鳴らし続ける。
+
+    #5320 (2026-08-15) の run 全体汚染ガード:
+      run 全体が一様に沈んだ metric (run_wide_shift 参照) は、その run では判定を
+      見送る。metric ごとに独立して外すので、汚染されていない metric のアラートは
+      そのまま残る。`shifted` を渡さなければここで計算する (呼び出し側が report に
+      出すために先に計算しているときは渡す)。
     """
+    if shifted is None:
+        shifted = run_wide_shift(history, current, window=window)
     alerts: List[Dict[str, Any]] = []
     for row in current:
         url = row.get("url")
@@ -790,6 +886,21 @@ def detect_regressions(
 
             crossed = good is not None and base <= good < value
             worse = value > base * REGRESSION_RATIO and (value - base) >= required_delta
+
+            # #5320: run 全体が一様に沈んでいる metric は、この run では判定しない。
+            # URL 単位のゲート (MAD / fence) は run 単位の汚染を原理的に見抜けない
+            # ので、その手前で外す。無音で消すと「鳴らないから健全」に見えるので
+            # 必ずログに残す (report にも run_shift セクションとして出る)。
+            if (crossed or worse) and short in shifted:
+                info = shifted[short]
+                logger.warning(
+                    "gate suppressed (run-wide shift, median=%.2fx on %d/%d URLs): "
+                    "%s [%s] %s baseline=%s value=%s",
+                    info["median_ratio"], info["over"], info["samples"],
+                    url, ff, short, base, value,
+                )
+                crossed = False
+                worse = False
 
             # #5264: baseline 窓の Tukey fence を超えないなら、その値は「窓の中で
             # 既に起きている振れ幅の内側」であって劣化の証拠にならない。threshold
@@ -849,7 +960,16 @@ def detect_regressions(
                 score_mad = mad_for(history, url, ff, "perf_score", window,
                                     chrome_version=cur_chrome)
                 required_drop = max(SCORE_DROP_POINTS, REGRESSION_MAD_K * score_mad) if score_mad else SCORE_DROP_POINTS
-                if (base_score - score) >= required_drop:
+                # perf_score は fcp/si/lcp/tbt/cls の加重合成なので、素の metric が
+                # run 全体で汚染されていればスコアも必ず巻き添えで落ちる (#5320)。
+                # 2026-08-15 の score 3 件は fcp/si の汚染の写像だった。
+                if (base_score - score) >= required_drop and shifted:
+                    logger.warning(
+                        "score gate suppressed (run-wide shift on %s): %s [%s] "
+                        "baseline=%s value=%s",
+                        ", ".join(sorted(shifted)), url, ff, base_score, score,
+                    )
+                elif (base_score - score) >= required_drop:
                     alerts.append({
                         "kind": "score", "url": url, "form_factor": ff, "metric": "perf_score",
                         "value": score, "baseline": base_score,
@@ -863,12 +983,16 @@ def render_report(
     target_date: str,
     lcp_unmeasured: Optional[List[Dict[str, Any]]] = None,
     warmup: Optional[List[Dict[str, Any]]] = None,
+    run_shift: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> str:
     """劣化レポート Markdown。1 issue に集約する前提で全 URL 分を 1 本にまとめる。
 
     `lcp_unmeasured` を渡すと、その run で LCP ゲートを外した URL を脚注に出す
     (#4441)。issue を読む人が「この URL は LCP を見ていない」を知らずに
     「LCP は鳴っていない = LCP は健全」と読むのを防ぐため。
+
+    `run_shift` を渡すと、run 全体の汚染で判定を見送った metric を脚注に出す
+    (#5320)。同じく「鳴っていない = 健全」と読まれるのを防ぐため。
     """
     lines = [
         "## Lighthouse ラボ計測 劣化検出 ({})".format(target_date),
@@ -924,6 +1048,26 @@ def render_report(
         for r in lcp_unmeasured:
             lines.append("| {} | {} | {} |".format(
                 r.get("url"), r.get("form_factor"), r.get("lcp_element_reason")))
+        lines.append("")
+
+    if run_shift:
+        lines += [
+            "### run 全体が沈んでいて判定を見送った metric ({} 件)".format(len(run_shift)),
+            "",
+            "計測対象の**大半の URL が同時に同じ幅で**悪化しています。デプロイでこの形には",
+            "ならない (共通アセットの劣化なら翌日も続く) ので、self-hosted runner 側が",
+            "この run のあいだだけ重かったと判断し、これらの metric は判定から外しました",
+            "(#5320)。**「鳴っていない = 健全」とは読めません。**",
+            "",
+            "翌日の run で元の水準に戻らない場合は、本当にサイト側が劣化しています。",
+            "",
+            "| metric | run 中央比 | 1.25x 超の URL |",
+            "| --- | --- | --- |",
+        ]
+        for m in sorted(run_shift):
+            info = run_shift[m]
+            lines.append("| {} | {:.2f}x | {}/{} |".format(
+                m, info["median_ratio"], info["over"], info["samples"]))
         lines.append("")
 
     if warmup:
@@ -1193,7 +1337,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         logger.error("no successful measurements — leaving history untouched")
         return 1
 
-    alerts = detect_regressions(history, current, window=args.baseline_window)
+    # run 全体の汚染は先に測る — detect_regressions に渡すのと、alerts が 0 件に
+    # なって report が出ない場合でも痕跡を残すのと、両方に要る (#5320)。
+    run_shift = run_wide_shift(history, current, window=args.baseline_window)
+    if run_shift:
+        logger.warning(
+            "::warning::lighthouse run-wide shift on %s — these metrics were not "
+            "judged this run (suspected runner-side slowdown, #5320): %s",
+            target_date,
+            "; ".join("{} median={:.2f}x on {}/{} URLs".format(
+                m, run_shift[m]["median_ratio"], run_shift[m]["over"],
+                run_shift[m]["samples"]) for m in sorted(run_shift)),
+        )
+    alerts = detect_regressions(history, current, window=args.baseline_window,
+                                shifted=run_shift)
     warmup = warmup_gates(history, current, window=args.baseline_window)
     if warmup:
         # 沈黙を可視化する (#5264)。Chrome major が上がるたびに必ず出るので
@@ -1222,6 +1379,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         known = meta.get("lighthouse_missing_dates")
         known = known if isinstance(known, list) else []
         meta["lighthouse_missing_dates"] = sorted(set(known) | set(gap))
+    # run 全体の汚染も痕跡を残す (#5320)。alerts が全部抑制されると report も issue も
+    # 出ないので、ここに残さないと「その日は健全だった」と区別が付かなくなる。
+    # 汚染が特定曜日や特定時間帯に偏っていないかを後から監査するための材料でもある。
+    if run_shift:
+        known_shift = meta.get("lighthouse_run_shifts")
+        known_shift = known_shift if isinstance(known_shift, dict) else {}
+        known_shift[target_date] = run_shift
+        meta["lighthouse_run_shifts"] = known_shift
     seen["_meta"] = meta
     save_seen(seen_path, seen)
 
@@ -1235,7 +1400,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if alerts:
         logger.warning("%d regression alert(s) detected", len(alerts))
-        report = render_report(alerts, target_date, unmeasured, warmup)
+        report = render_report(alerts, target_date, unmeasured, warmup, run_shift)
         if args.report_out:
             pathlib.Path(args.report_out).write_text(report, encoding="utf-8")
             logger.info("wrote report to %s", args.report_out)
