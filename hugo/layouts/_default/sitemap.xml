@@ -11,6 +11,13 @@
     - 薄タグ: Kind=="term" かつ len(.Pages) < thinTermNoindexThreshold (default 3)
     - noindex ブランド: Kind=="term" かつ Data.Plural=="brands" かつ brand_hub[Title].noindex
     - 空 taxonomy: Kind=="taxonomy" かつ term ゼロ (#5343 follow-up。実測では /categories/)
+
+  加えて noindex ではないが「index されない URL」も落とす:
+    - canonical を他 URL に向けたページ (.Params.canonicalURL が自分と違う)
+  こちらは head.html に対応する条件が無い (canonical と noindex は併用しないのが
+  定石なので、統合先へ寄せたページも robots は index,follow のまま出す)。それでも
+  sitemap は「index してほしい URL」を伝える場所なので、自分で「正本は別だ」と
+  宣言した URL を載せるのは矛盾しており、上と同じ理由でクロールバジェットを削る。
   ※ paginate 2ページ目以降 ($isPaginated) は sitemap に Page として現れないため対象外。
   本文・URL 構造・既存 noindex 意図は不変 (sitemap 出力のみを絞る)。
 */ -}}
@@ -44,6 +51,16 @@
          head.html と同じ判定を使う。 */ -}}
   {{- if partial "is_empty_taxonomy.html" $p -}}
     {{- $skip = true -}}
+  {{- end -}}
+  {{- /* #2370 A-3: canonical を他 URL に寄せたページ (build_post.py が
+         data/analytics/canonical_overrides.json から .Params.canonicalURL を付ける)。
+         実測 (2026-08-17): /products/b0gfvtpdbm/ が /products/b0gl815n6k/ へ統合済み
+         なのに sitemap に載ったままで、GSC 側も「代替ページ (適切な canonical タグ
+         あり)」1 件として計上していた。末尾スラッシュの有無だけの差は同一とみなす。 */ -}}
+  {{- with $p.Params.canonicalURL -}}
+    {{- if ne (strings.TrimSuffix "/" .) (strings.TrimSuffix "/" $p.Permalink) -}}
+      {{- $skip = true -}}
+    {{- end -}}
   {{- end -}}
   {{- if and (not $skip) $p.Permalink -}}
   <url>
