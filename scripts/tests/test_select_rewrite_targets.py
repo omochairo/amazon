@@ -2,9 +2,11 @@
 
 Coverage:
 1. collect_candidates - parses primary article JSONs, skips .quality/.enrichment/.seo
-   sidecars and slugs that don't match YYYY-MM-DD-ASIN.
-2. _load_quality - reads total_score + passed; missing/bad files → (None, None).
-3. select - priority key: pre-v7 (slug date < HOW_TO_CHOOSE_ENFORCE_FROM) ranks
+   sidecars and slugs that don't match YYYY-MM-DD-ASIN。
+   #4826 項目4: quality sidecar の読み取り (_load_quality) は削除した。sidecar の
+   生成は quality_gate 側で廃止済みで実体も 0 件、読んでも必ず (None, None) が
+   返るだけの経路だった。順序への影響は 2026-08-09 に既に外してある。
+2. select - priority key: pre-v7 (slug date < HOW_TO_CHOOSE_ENFORCE_FROM) ranks
    above post-v7; within the same generation, older date wins; total_score は
    順序に影響しない (2026-08-09 に外した。理由は select_rewrite_targets の docstring);
    exclude-set filters ASINs.
@@ -52,12 +54,9 @@ class CollectCandidatesTest(unittest.TestCase):
             asins = sorted(c["asin"] for c in got)
             self.assertEqual(asins, ["B00I7JXEEA", "B073W9V2WB", "B0CQY911ZP"])
 
+            # #4826 項目4: 候補レコードに score / passed は載らなくなった。
             by_asin = {c["asin"]: c for c in got}
-            self.assertEqual(by_asin["B00I7JXEEA"]["score"], 92)
-            self.assertFalse(by_asin["B00I7JXEEA"]["passed"])
-            self.assertEqual(by_asin["B0CQY911ZP"]["score"], 98)
-            self.assertIsNone(by_asin["B073W9V2WB"]["score"])
-            self.assertIsNone(by_asin["B073W9V2WB"]["passed"])
+            self.assertEqual(sorted(by_asin["B00I7JXEEA"]), ["asin", "date", "slug"])
 
     def test_duplicate_asin_kept_once(self) -> None:
         """Two article files referencing the same ASIN: only the earlier one is kept."""
@@ -67,24 +66,6 @@ class CollectCandidatesTest(unittest.TestCase):
             got = srt.collect_candidates(d)
             self.assertEqual(len(got), 1)
             self.assertEqual(got[0]["slug"], "2026-05-11-B00I7JXEEA")
-
-
-class LoadQualityTest(unittest.TestCase):
-    def test_missing_returns_none(self) -> None:
-        with tempfile.TemporaryDirectory() as d:
-            self.assertEqual(srt._load_quality("ghost", d), (None, None))
-
-    def test_bad_json_returns_none(self) -> None:
-        with tempfile.TemporaryDirectory() as d:
-            with open(os.path.join(d, "x.quality.json"), "w", encoding="utf-8") as f:
-                f.write("not json {")
-            self.assertEqual(srt._load_quality("x", d), (None, None))
-
-    def test_non_numeric_score_is_dropped(self) -> None:
-        with tempfile.TemporaryDirectory() as d:
-            with open(os.path.join(d, "x.quality.json"), "w", encoding="utf-8") as f:
-                json.dump({"total_score": "high", "passed": "yes"}, f)
-            self.assertEqual(srt._load_quality("x", d), (None, None))
 
 
 class SelectTest(unittest.TestCase):
