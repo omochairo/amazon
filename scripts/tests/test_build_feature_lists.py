@@ -30,6 +30,7 @@ if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
 import build_feature_lists as bfl  # noqa: E402
+import price_overlay  # noqa: E402
 
 
 # build_feature_lists.load_articles() は brand_normalizer + score_calculator で
@@ -563,12 +564,14 @@ class BuildCospaTest(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class BuildDealsTest(unittest.TestCase):
-    def _rec(self, asin, savings, fetched_at, *, ivs_score=4.5, ivs_100=90):
+    def _rec(self, asin, savings, fetched_at, *, ivs_score=4.5, ivs_100=90,
+             availability=None):
         return bfl.ArticleRecord(
             asin=asin, slug=asin.lower(), name="x", image=None,
             ivs_score=ivs_score, ivs_100=ivs_100, best_price=2000,
             best_platform="Amazon", amazon_url=None,
             savings_percentage=savings, fetched_at=fetched_at,
+            availability=availability,
         )
 
     def test_drops_low_ivs(self):
@@ -1093,3 +1096,94 @@ class LoadArticlesAgeMinMonthsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# 在庫ガード (#5130 残件3)
+# ---------------------------------------------------------------------------
+
+class UnavailableGateTest(unittest.TestCase):
+    """買えない商品を /deals/ /cospa/ の母数から外す。
+
+    stale ガードでは代われない。**価格が取れているのに在庫が無い**観測が実在し
+    (2026-08-18 実測で 15 ASIN が `一時的に在庫切れ; 入荷時期は未定です。` と価格を
+    同時に持つ)、その形は毎日新しく観測されるので fetched_at が一生新鮮なままに
+    なるため。
+    """
+
+    def _rec(self, asin, availability, *, savings=40, fetched_at=None,
+             best_price=2000):
+        return bfl.ArticleRecord(
+            asin=asin, slug=asin.lower(), name="x", image=None,
+            ivs_score=4.5, ivs_100=90, best_price=best_price,
+            best_platform="Amazon", amazon_url=None,
+            savings_percentage=savings, fetched_at=fetched_at,
+            availability=availability,
+        )
+
+    def test_deals_drops_out_of_stock_even_when_observation_is_fresh(self):
+        now = datetime(2026, 8, 18, tzinfo=timezone.utc)
+        fresh = (now - timedelta(hours=12)).isoformat()
+        items, drops = bfl.build_deals(
+            [
+                self._rec("OOS", "一時的に在庫切れ; 入荷時期は未定です。", fetched_at=fresh),
+                self._rec("OK", "在庫あり。", fetched_at=fresh),
+            ],
+            now=now,
+        )
+        self.assertEqual([r.asin for r in items], ["OK"])
+        self.assertEqual(drops["unavailable"], 1)
+        # stale ガードでは 1 件も落ちていない = 在庫ガードでしか防げない形。
+        self.assertEqual(drops["stale_or_unknown_fetch"], 0)
+
+    def test_deals_keeps_records_without_any_observation(self):
+        """観測が無い (availability=None) 記録は落とさない。
+
+        「観測が無い」と「在庫が無いと観測した」は別物。倒すと観測を持たない
+        記事 (2026-08-18 実測で 212 件) が一覧からまとめて消える。
+        """
+        now = datetime(2026, 8, 18, tzinfo=timezone.utc)
+        fresh = (now - timedelta(hours=12)).isoformat()
+        items, drops = bfl.build_deals([self._rec("NOOBS", None, fetched_at=fresh)], now=now)
+        self.assertEqual([r.asin for r in items], ["NOOBS"])
+        self.assertEqual(drops["unavailable"], 0)
+
+    def test_deals_keeps_low_stock_wording(self):
+        """「残りN点」「N〜N日以内に発送」は購入可なので落とさない。"""
+        now = datetime(2026, 8, 18, tzinfo=timezone.utc)
+        fresh = (now - timedelta(hours=12)).isoformat()
+        items, _ = bfl.build_deals(
+            [
+                self._rec("A1", "残り1点 ご注文はお早めに", fetched_at=fresh),
+                self._rec("A2", "1～2日以内に発送します。", fetched_at=fresh),
+            ],
+            now=now,
+        )
+        self.assertEqual(sorted(r.asin for r in items), ["A1", "A2"])
+
+    def test_cospa_drops_out_of_stock(self):
+        items, drops = bfl.build_cospa(
+            [
+                self._rec("OOS", "現在在庫切れです。"),
+                self._rec("OK", "在庫あり。"),
+            ],
+        )
+        self.assertEqual([r.asin for r in items], ["OK"])
+        self.assertEqual(drops["unavailable"], 1)
+
+    def test_overlay_carries_availability_even_when_price_is_none(self):
+        """価格を上書きしない観測でも在庫状態は運ぶ。
+
+        これを price の有無で条件分けすると、「価格は per_asin 由来のまま、
+        在庫は最新の在庫切れ」というケースを取りこぼす。
+        """
+        rec = self._rec("A1", None, fetched_at=None)
+        obs = price_overlay.PriceObservation(
+            asin="A1", price=None, savings_percentage=None,
+            availability="一時的に在庫切れ; 入荷時期は未定です。",
+            observed_at="2026-08-18T00:00:00+00:00", source="price_watch",
+        )
+        bfl.overlay_current_prices([rec], pathlib.Path("nonexistent"),
+                                   watch_index={"A1": obs})
+        self.assertEqual(rec.availability, "一時的に在庫切れ; 入荷時期は未定です。")
+        self.assertEqual(rec.best_price, 2000, "価格は上書きされない")
