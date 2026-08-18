@@ -74,10 +74,12 @@ jobs:
           GA4_PROPERTY_ID: ${{ secrets.GA4_PROPERTY_ID }}
         run: |
           set +e
+          # #4793: secret 未設定は緑で skip しない。日次レーンなので、失効しても
+          # 毎日緑のまま何ヶ月でもデータが増えない状態になりうる。fetch 失敗
+          # (rc != 0) は一時的な API 失敗なので下の warning のまま残す。
           if [ -z "$GA4_SA_JSON" ] || [ -z "$GA4_PROPERTY_ID" ]; then
-            echo "::notice::GA4 secrets not set — skipping"
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error::required secret not set — GA4_SA_JSON / GA4_PROPERTY_ID"
+            exit 1
           fi
           python scripts/fetch_ga4.py --days 1
           rc=$?
@@ -97,10 +99,10 @@ jobs:
           GSC_SITE_URL: ${{ secrets.GSC_SITE_URL }}
         run: |
           set +e
+          # #4793: 上の GA4 と同じ。secret 未設定は run を落とす。
           if [ -z "$GSC_OAUTH_REFRESH_TOKEN" ] || [ -z "$GSC_SITE_URL" ]; then
-            echo "::notice::GSC secrets not set — skipping"
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error::required secret not set — GSC_OAUTH_REFRESH_TOKEN / GSC_SITE_URL"
+            exit 1
           fi
           python scripts/fetch_gsc.py --days 1
           rc=$?

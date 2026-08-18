@@ -103,10 +103,12 @@ jobs:
           GSC_SITE_URL: ${{ secrets.GSC_SITE_URL }}
         run: |
           set +e
+          # #4793: secret 未設定は緑で skip しない。週次レーンなので、失効に
+          # 気付くまでの空白がそのまま census の欠測になる。inspect 失敗
+          # (rc != 0) は一時的な API 失敗なので下の warning のまま残す。
           if [ -z "$GSC_OAUTH_REFRESH_TOKEN" ] || [ -z "$GSC_SITE_URL" ]; then
-            echo "::notice::GSC secrets not set — skipping"
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error::required secret not set — GSC_OAUTH_REFRESH_TOKEN / GSC_SITE_URL"
+            exit 1
           fi
           python scripts/inspect_gsc_index.py --limit "${{ github.event.inputs.limit || '1800' }}"
           rc=$?

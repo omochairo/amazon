@@ -77,10 +77,11 @@ jobs:
           GA4_PROPERTY_ID: ${{ secrets.GA4_PROPERTY_ID }}
         run: |
           set +e
+          # #4793: ::error:: は出していたが exit 0 だったので run は緑だった。
+          # annotation は run 一覧に出ないので、月次レーンでは実質見えない。
           if [ -z "$GA4_SA_JSON" ] || [ -z "$GA4_PROPERTY_ID" ]; then
-            echo "::error::GA4_SA_JSON or GA4_PROPERTY_ID secret is not set"
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error::required secret not set — GA4_SA_JSON / GA4_PROPERTY_ID"
+            exit 1
           fi
           MONTH_ARG=""
           if [ -n "${{ inputs.month }}" ]; then

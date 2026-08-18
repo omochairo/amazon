@@ -122,4 +122,9 @@ jobs:
           else
             echo "::warning::Could not enable auto-merge on $PR_URL"
           fi
-        continue-on-error: true
+        # #4793: continue-on-error を外した。auto-merge の有効化だけは上の
+        # if/else で握りつぶしてあるので、ここに残っていたのは **git push と
+        # gh pr create の失敗** を飲む効果だけだった。それが落ちるとその run の
+        # データ更新が丸ごと消えるのに、continue-on-error のステップは REST の
+        # steps[].conclusion も success を返すため run 一覧でも step 一覧でも
+        # 見えない (#4793 項目2 の方針 (c))。
