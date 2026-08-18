@@ -2801,6 +2801,21 @@ def _fill_jsonld(data: dict[str, Any]) -> None:
             "priceCurrency": "JPY",
             "offerCount": str(offer_count),
         })
+    else:
+        # #4826 項目6: 有効価格ゼロのときは offers を **消す**。
+        #
+        # 従来はこの分岐が無く、offer_count == 0 の記事では offers を更新しないまま
+        # 抜けていた。記事 JSON が `jsonld.product.offers` を持っていれば、表示は
+        # 「取り扱い確認」なのに構造化データだけが古い価格を主張する、という形に
+        # なりうる。#5130 で潰した「買えないものを買えるかのように出さない」と
+        # 同じクラスで、しかも構造化データ側は読者に見えないぶん気付けない。
+        #
+        # 2026-08-18 実測ではこの経路は発火しない。build 時点で有効価格ゼロに
+        # なる記事は 67 件あるが、**2,085 記事のいずれも `jsonld.product.offers`
+        # を持っていない** (offers を作るのはこの関数だけ)。つまり今は到達不能で、
+        # 生成側が offers を書き始めた瞬間に初めて成立する穴だった。
+        # 「偶然そうなっている」に頼らないためのガードとして置く。
+        product_ld.pop("offers", None)
 
     # 2. FAQ スキーマの動的生成
     faq = data.get("faq_extended") or data.get("faq") or []
