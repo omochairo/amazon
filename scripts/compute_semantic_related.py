@@ -78,7 +78,11 @@ _MAX_EXTRA_RETRIES = 2  # 初回 + 2 リトライ = 最大 3 回試行
 _RETRY_SLEEP_SECONDS = 2.0
 _BATCH_LOG_EVERY = 10
 
-_QUALITY_SUFFIX = ".quality.json"
+# #4826 項目6: 除外していたのは .quality.json だけだった。あの sidecar は
+# 廃止されて実体が 0 件になった一方、実在するのは .seo.json / .enrichment.json で、
+# それらが素通りしないのは下の _ASIN_RE が `<stem>.seo` を弾くから **だけ** だった。
+# 偶然の防波堤 1 枚に頼る形なので、除外そのものを実体に合わせる。
+_SIDECAR_SUFFIXES = (".quality.json", ".seo.json", ".enrichment.json")
 _ASIN_RE = re.compile(r"^[A-Z0-9]{10}$")
 
 
@@ -107,7 +111,7 @@ def discover_articles(articles_dir: pathlib.Path) -> dict[str, pathlib.Path]:
     winners: dict[str, str] = {}
     paths: dict[str, pathlib.Path] = {}
     for f in sorted(articles_dir.glob("*.json")):
-        if f.name.endswith(_QUALITY_SUFFIX):
+        if f.name.endswith(_SIDECAR_SUFFIXES):
             continue
         stem = f.stem
         parts = stem.split("-")

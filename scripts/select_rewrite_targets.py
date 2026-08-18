@@ -34,7 +34,6 @@ from __future__ import annotations
 
 import argparse
 import glob
-import json
 import os
 import re
 import sys
@@ -47,24 +46,6 @@ from quality_gate import HOW_TO_CHOOSE_ENFORCE_FROM
 _ASIN_RE = re.compile(r"(B0[A-Z0-9]{8})")
 _SLUG_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-(B0[A-Z0-9]{8})$")
 _SIDECAR_SUFFIXES = (".quality.json", ".enrichment.json", ".seo.json")
-
-
-def _load_quality(slug: str, base_dir: str) -> tuple[int | None, bool | None]:
-    p = os.path.join(base_dir, f"{slug}.quality.json")
-    if not os.path.exists(p):
-        return None, None
-    try:
-        with open(p, encoding="utf-8") as f:
-            d = json.load(f)
-        score = d.get("total_score")
-        passed = d.get("passed")
-        if not isinstance(score, (int, float)):
-            score = None
-        if not isinstance(passed, bool):
-            passed = None
-        return score, passed
-    except (OSError, json.JSONDecodeError):
-        return None, None
 
 
 def collect_candidates(articles_dir: str) -> list[dict]:
@@ -89,13 +70,16 @@ def collect_candidates(articles_dir: str) -> list[dict]:
         if asin in seen_asin:
             continue
         seen_asin.add(asin)
-        score, passed = _load_quality(slug, articles_dir)
+        # #4826 項目4: 旧 <slug>.quality.json sidecar の読み取りを外した。
+        # sidecar の生成は quality_gate 側で廃止済み (main 全量の品質は
+        # 48-quality-census.yml が集計 JSON 1 本で観測する) で、リポジトリに
+        # 実体も 1 件も残っていない。読んでも必ず (None, None) が返るだけの
+        # 経路だったので、選定ロジックからも消す。リライト優先度が sidecar に
+        # 依存しないことは #4822 で既に確認済み。
         out.append({
             "slug": slug,
             "asin": asin,
             "date": date,
-            "score": score,
-            "passed": passed,
         })
     return out
 
@@ -169,11 +153,7 @@ def main() -> int:
         file=sys.stderr,
     )
     for c in picked:
-        print(
-            f"  -> {c['asin']} slug={c['slug']} "
-            f"score={c['score']} passed={c['passed']}",
-            file=sys.stderr,
-        )
+        print(f"  -> {c['asin']} slug={c['slug']}", file=sys.stderr)
     return 0
 
 
