@@ -49,6 +49,7 @@ from typing import Any, Optional
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from brand_normalizer import normalize as normalize_brand  # noqa: E402
 from build_feature_lists import age_min_months_from_article  # noqa: E402
+import price_overlay  # noqa: E402
 from score_calculator import calculate as calculate_score, compute_ivs_axes  # noqa: E402
 
 logger = logging.getLogger("build_price_dashboard")
@@ -70,14 +71,11 @@ _DROP_YEN_THRESHOLD = 100        # 値下げ幅 100円 未満は採択しない 
 _WINDOW_DAYS = 90                # 「以前の価格」を探す直近日数
 _TOP_N_CAP = 150                 # JSON / ページ肥大回避の上限件数
 
-# 在庫: 以下の部分文字列を含む avail は「明確に購入不可」として skip する。
-# 「在庫あり。」「残りN点 ご注文はお早めに」「残りN点（入荷予定あり）」
-# 「通常N〜N日以内に発送します。」等はここに該当しないので対象のまま残る。
-_UNAVAILABLE_MARKERS = (
-    "在庫切れ",
-    "入荷未定",
-    "取り扱いできません",
-)
+# 在庫: 「明確に購入不可」と読めるマーカーの一覧は price_overlay に移した
+# (#5130 残件3)。/deals/ /cospa/ 側 (build_feature_lists) でも同じ判定を使うので、
+# 在庫の意味を決める場所を 1 つにする。ここでの再エクスポートは既存の
+# import 元 (テスト含む) を壊さないため。
+_UNAVAILABLE_MARKERS = price_overlay.UNAVAILABLE_MARKERS
 
 
 # ------------------------------------------------------------------------
@@ -293,10 +291,16 @@ def enrich_items(
 
 
 def is_unavailable(avail: Any) -> bool:
-    """avail が「明確に購入不可」なら True。None・空文字も購入不可扱い。"""
+    """avail が「明確に購入不可」なら True。None・空文字も購入不可扱い。
+
+    None を購入不可に倒すのはここだけ。入力が latest.json の観測レコードそのもの
+    なので、「観測はあるのに avail が無い」= その観測の取得に失敗した、と読める
+    ため。観測を持たない ASIN が入りうる /deals/ 側は
+    ``price_overlay.is_explicitly_unavailable`` (明示だけを見る) を使う。
+    """
     if not isinstance(avail, str) or not avail.strip():
         return True
-    return any(marker in avail for marker in _UNAVAILABLE_MARKERS)
+    return price_overlay.is_explicitly_unavailable(avail)
 
 
 # ------------------------------------------------------------------------

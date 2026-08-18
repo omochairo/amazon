@@ -60,6 +60,41 @@ DEFAULT_WATCH_STALE_DAYS = 3       # price_watch: 日次レーンなので短い
 DEFAULT_PER_ASIN_STALE_DAYS = 21   # per_asin: 週次巡回なので緩いガード
 
 
+# ------------------------------------------------------------------------
+# 在庫状態の判定 (SSOT)
+# ------------------------------------------------------------------------
+# 「明確に購入不可」と読める avail 文字列の部分一致マーカー。
+# 「在庫あり。」「残りN点 ご注文はお早めに」「残りN点（入荷予定あり）」
+# 「通常N〜N日以内に発送します。」等はここに該当しないので購入可のまま残る。
+#
+# build_price_dashboard (/price/) が持っていたものをここへ移した (#5130 残件3)。
+# 同じ判定を build_feature_lists (/deals/ /cospa/) でも使うため、在庫の意味を
+# 決める場所は 1 つにする。availability は PriceObservation が既に運んでいるので、
+# 観測を読む側であるこのモジュールが持つのが素直。
+UNAVAILABLE_MARKERS = (
+    "在庫切れ",
+    "入荷未定",
+    "取り扱いできません",
+)
+
+
+def is_explicitly_unavailable(avail: Any) -> bool:
+    """avail が「購入不可」と**明示している**なら True。
+
+    None・空文字は False (= 判定しない)。「観測が無い」ことと「在庫が無いと
+    観測した」ことは別で、前者を購入不可に倒すと観測の無い記事が一覧から
+    まとめて消える。観測を持たない ASIN が 183 件ある (2026-08-18 実測) ので
+    実害が出る。
+
+    /price/ (build_price_dashboard) だけは None も購入不可に倒している。
+    あちらの入力は latest.json の観測レコードそのもので、「観測はあるが avail が
+    無い」= 取得に失敗した観測、と読めるため。入力の意味が違うので判定も分ける。
+    """
+    if not isinstance(avail, str) or not avail.strip():
+        return False
+    return any(marker in avail for marker in UNAVAILABLE_MARKERS)
+
+
 @dataclass(frozen=True)
 class PriceObservation:
     """1 ASIN 分の「現在価格」観測点。

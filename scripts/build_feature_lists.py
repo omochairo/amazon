@@ -77,6 +77,9 @@ class ArticleRecord:
     # 対象年齢の最小月数 (#3563 カード情報統一 / cospa・deals・テーマ hub 全ての
     # feature JSON に伝播する)。ソース優先順は build_post.py L2668-2699 と同じ。
     age_min_months: int | None = None
+    # 最新観測の在庫文字列 (#5130 残件3)。overlay_current_prices が
+    # price_overlay の観測から埋める。観測が無ければ None のまま。
+    availability: str | None = None
     score_cospa: float | None = field(default=None, init=False)
 
 
@@ -348,6 +351,12 @@ def overlay_current_prices(
                 rec.savings_percentage = obs.savings_percentage
             if obs.observed_at:
                 rec.fetched_at = obs.observed_at
+            # #5130 残件3: 在庫状態を運ぶ。価格を上書きするかどうか
+            # (obs.price is not None) とは独立に、観測があれば必ず更新する
+            # ——「価格は取れたが在庫は無い」観測が実在するため
+            # (2026-08-18 実測で 15 ASIN が `一時的に在庫切れ; 入荷時期は未定です。`
+            # と価格を同時に持っていた)。
+            rec.availability = obs.availability
 
         if rakuten_index is not None or yahoo_index is not None:
             amazon_price = rec.price_amazon or 0
@@ -466,6 +475,10 @@ def build_cospa(
 ) -> tuple[list[ArticleRecord], dict[str, int]]:
     """Select TOP-N cospa picks.
 
+    在庫ガード (#5130 残件3): 最新観測が「明確に購入不可」と言っている記録は
+    採択しない。/cospa/ は「この価格で買えるならお得」を主張する一覧なので、
+    買えない商品を並べると主張が成立しない。
+
     ``sort_key`` controls ordering:
       - ``"cospa"`` (default): cospa efficiency (ivs_100 / log(price)) 降順。
         帯横断 TOP-N で「IVS と価格のバランス」を見たいときに使う。
@@ -474,7 +487,8 @@ def build_cospa(
         「知育スコアの高い順」と一致させるために使う (帯内 cospa 順だと
         IVS が高いのに安くないせいで下位になり、文言と矛盾する)。
     """
-    drops = {"low_ivs": 0, "price_out_of_band": 0, "missing_ivs_100": 0}
+    drops = {"low_ivs": 0, "price_out_of_band": 0, "missing_ivs_100": 0,
+             "unavailable": 0}
     survivors: list[ArticleRecord] = []
     for rec in _dedupe_by_asin(records):
         if rec.ivs_score is None or rec.ivs_score < min_ivs:
@@ -485,6 +499,11 @@ def build_cospa(
             continue
         if rec.ivs_100 is None:
             drops["missing_ivs_100"] += 1
+            continue
+        # #5130 残件3: /cospa/ は「この価格で買えるならお得」を主張する一覧なので、
+        # 買えない商品を並べると主張そのものが成立しない。
+        if price_overlay.is_explicitly_unavailable(rec.availability):
+            drops["unavailable"] += 1
             continue
         rec.score_cospa = _cospa_score(rec.ivs_100, rec.best_price)
         survivors.append(rec)
@@ -558,6 +577,17 @@ def build_deals(
 ) -> tuple[list[ArticleRecord], dict[str, int]]:
     """Select TOP-N discount picks.
 
+    在庫ガード (#5130 残件3): 最新観測が「明確に購入不可」と言っている記録は
+    採択しない。買えない商品を「値下がり中」として並べると、割引率そのものが
+    読者に対する嘘になる。/price/ (build_price_dashboard) は起票時から同じ
+    ガードを持っており、こちらだけが持っていなかった。
+
+    stale ガードでは代われない。**価格が取れているのに在庫が無い**観測が実在
+    するため (2026-08-18 実測: 15 ASIN が `一時的に在庫切れ; 入荷時期は未定です。`
+    と価格を同時に持つ)。この形は price_watch の観測として毎日新しくなるので
+    fetched_at は常に新鮮で、stale 窓には一生かからない。現状 /deals/ に出て
+    いないのは savings/ivs のしきい値に届いていないからで、偶然にすぎない。
+
     Stale guard: per_asin/amazon.json's ``fetched_at`` (overwritten by
     ``overlay_current_prices`` with price_watch's ``observed_at`` when a
     fresher observation exists) must be within ``stale_days`` of ``now``.
@@ -579,6 +609,7 @@ def build_deals(
         "no_savings_data": 0,
         "savings_below_threshold": 0,
         "stale_or_unknown_fetch": 0,
+        "unavailable": 0,
     }
     if now is None:
         now = datetime.now(timezone.utc)
@@ -598,6 +629,10 @@ def build_deals(
         fetched = _parse_iso8601(rec.fetched_at)
         if fetched is None or fetched < cutoff:
             drops["stale_or_unknown_fetch"] += 1
+            continue
+        # #5130 残件3: 買えない商品を「値下がり中」として並べない。
+        if price_overlay.is_explicitly_unavailable(rec.availability):
+            drops["unavailable"] += 1
             continue
         survivors.append(rec)
 
