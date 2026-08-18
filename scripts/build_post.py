@@ -52,7 +52,9 @@ from term_slug import TermSlugMap
 import sys
 import pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from price_spark import build_spark, empty_spark, parse_ts, ARTICLE_GEOM
+from price_spark import (build_spark, empty_spark, parse_ts, ARTICLE_GEOM,
+                         load_out_of_stock_points as _load_out_of_stock_points,
+                         merge_out_of_stock_points as _merge_out_of_stock_points)
 
 
 logger = logging.getLogger(__name__)
@@ -1759,63 +1761,6 @@ def _load_price_history_points(price_history_root: pathlib.Path, asin: str) -> l
         return []
     points.sort(key=lambda r: r["ts"])
     return points
-
-
-def _load_out_of_stock_points(price_history_root: pathlib.Path, asin: str) -> list[dict[str, Any]]:
-    """#5130 項目2: 在庫切れ観測 (``price: null`` + ``availability``) を ts 昇順で返す。
-
-    #5130 項目1 (PR #5262) から jsonl に残るようになった行。価格観測を読む
-    ``_load_price_history_points`` は「``price`` が正の int でない行は捨てる」
-    ままにしてある — 最安値・最高値・変化回数・表など、価格の統計は在庫切れ行が
-    混ざると壊れる。在庫切れは**描画のためだけ**に別で読む。
-
-    ``availability`` が無い行は読まない。price_history.append_price_point は
-    在庫メッセージという根拠があるときだけ ``price: null`` を書くが、読み側でも
-    同じ条件を課しておく (根拠のない欠測を「在庫切れだった」と描かないため)。
-    """
-    p = price_history_root / f"{asin.upper()}.jsonl"
-    if not p.exists():
-        return []
-    points: list[dict[str, Any]] = []
-    try:
-        for line in p.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(rec, dict) or rec.get("source") != "amazon":
-                continue
-            price = rec.get("price")
-            if isinstance(price, int) and not isinstance(price, bool) and price > 0:
-                continue
-            ts = rec.get("ts")
-            availability = rec.get("availability")
-            if not isinstance(ts, str) or not ts:
-                continue
-            if not isinstance(availability, str) or not availability.strip():
-                continue
-            points.append({"ts": ts, "availability": availability.strip()})
-    except OSError:
-        return []
-    points.sort(key=lambda r: r["ts"])
-    return points
-
-
-def _merge_out_of_stock_points(*lanes: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """在庫切れ観測を ts 一致で dedupe して ts 昇順で返す (2 レーンぶん)。"""
-    seen: set[str] = set()
-    merged: list[dict[str, Any]] = []
-    for lane in lanes:
-        for pt in lane:
-            if pt["ts"] in seen:
-                continue
-            seen.add(pt["ts"])
-            merged.append(pt)
-    merged.sort(key=lambda r: r["ts"])
-    return merged
 
 
 def _merge_price_points(*lanes: list[dict[str, Any]]) -> list[dict[str, Any]]:
