@@ -11,6 +11,8 @@ build_feature_lists.py (CARD_GEOM)。
 """
 from __future__ import annotations
 
+import json
+import pathlib
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Optional
@@ -205,6 +207,73 @@ def _legacy_legend(geom: SparkGeom, segments: list[dict[str, Any]],
         if entry["state"] == SEG_UNOBSERVED:
             return {k: v for k, v in entry.items() if k != "state"}
     return None
+
+
+# ------------------------------------------------------------------------
+# 在庫切れ観測の読み込み (#5130 項目2 / 残件1)
+# ------------------------------------------------------------------------
+# build_post.py から移設した。商品ページ (build_post) と一覧カード
+# (build_price_sparks) の両方が同じ jsonl を同じ条件で読む必要があり、
+# 読み条件が 2 箇所に分かれると「商品ページでは点線なのにカードでは実線」
+# という食い違いが起きる。描画の SSOT である本モジュールに置く。
+
+
+def load_out_of_stock_points(root: pathlib.Path, asin: str) -> list[dict[str, Any]]:
+    """在庫切れ観測 (``price: null`` + ``availability``) を ts 昇順で返す。
+
+    #5130 項目1 (PR #5262) から jsonl に残るようになった行。価格観測を読む側
+    (``build_post._load_price_history_points`` /
+    ``build_price_dashboard.load_merged_history``) は「``price`` が正の int で
+    ない行は捨てる」ままにしてある — 最安値・最高値・変化回数・表など、価格の
+    統計は在庫切れ行が混ざると壊れる。在庫切れは**描画のためだけ**に別で読む。
+
+    ``availability`` が無い行は読まない。price_history.append_price_point は
+    在庫メッセージという根拠があるときだけ ``price: null`` を書くが、読み側でも
+    同じ条件を課しておく (根拠のない欠測を「在庫切れだった」と描かないため)。
+    """
+    p = root / f"{asin.upper()}.jsonl"
+    if not p.exists():
+        return []
+    points: list[dict[str, Any]] = []
+    try:
+        for line in p.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(rec, dict) or rec.get("source") != "amazon":
+                continue
+            price = rec.get("price")
+            if isinstance(price, int) and not isinstance(price, bool) and price > 0:
+                continue
+            ts = rec.get("ts")
+            availability = rec.get("availability")
+            if not isinstance(ts, str) or not ts:
+                continue
+            if not isinstance(availability, str) or not availability.strip():
+                continue
+            points.append({"ts": ts, "availability": availability.strip()})
+    except OSError:
+        return []
+    points.sort(key=lambda r: r["ts"])
+    return points
+
+
+def merge_out_of_stock_points(*lanes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """在庫切れ観測を ts 一致で dedupe して ts 昇順で返す (2 レーンぶん)。"""
+    seen: set[str] = set()
+    merged: list[dict[str, Any]] = []
+    for lane in lanes:
+        for pt in lane:
+            if pt["ts"] in seen:
+                continue
+            seen.add(pt["ts"])
+            merged.append(pt)
+    merged.sort(key=lambda r: r["ts"])
+    return merged
 
 
 def build_spark(points: list[dict[str, Any]], min_price: int, max_price: int,
@@ -469,13 +538,24 @@ def build_spark(points: list[dict[str, Any]], min_price: int, max_price: int,
             "has_out_of_stock": any(s["state"] == SEG_OUT_OF_STOCK for s in segments)}
 
 
-def build_card_spark(history: list[tuple[datetime, int]]) -> Optional[dict[str, Any]]:
-    """一覧カード (/price/ /deals/) 用のスパークラインを作る。描画に値しない
+def build_card_spark(history: list[tuple[datetime, int]],
+                     out_of_stock: Optional[list[dict[str, Any]]] = None,
+                     ) -> Optional[dict[str, Any]]:
+    """一覧カード (/price/ /deals/ ほか) 用のスパークラインを作る。描画に値しない
     履歴なら None を返す (呼び出し側は item に ``spark`` キーを付けない)。
 
     引数は ``build_price_dashboard.load_merged_history`` の戻り値そのまま
     (``list[tuple[datetime, int]]``、ts 昇順)。build_spark が期待する dict 列への
     変換をここ1箇所に閉じ込め、/price/ と /deals/ で採択条件がズレないようにする。
+
+    ``out_of_stock`` (#5130 残件1): 在庫切れ観測。商品ページ側は #5401 で入った
+    が、カード側は history が価格点しか運ばないため、階段線が「最後に取れた価格が
+    今も続いている」と主張したままだった。**同じ ASIN について商品ページとカードで
+    別のことを言っている**状態なので、供給をここで揃える。
+
+    採択条件 (CARD_MIN_POINTS / CARD_MIN_DISTINCT_PRICES) は価格観測だけで判定する
+    ままにしてある。在庫切れ観測で条件を満たさせると「価格が 2 点しか無いのに図が
+    出る」ことになり、#5167 で潰した「意味の分からない線が 1 本」に戻る。
     """
     if len(history) < CARD_MIN_POINTS:
         return None
@@ -484,7 +564,8 @@ def build_card_spark(history: list[tuple[datetime, int]]) -> Optional[dict[str, 
         return None
     min_price, max_price = min(prices), max(prices)
     points = [{"ts": dt.isoformat(), "price": price} for dt, price in history]
-    spark = build_spark(points, min_price, max_price, CARD_GEOM)
+    spark = build_spark(points, min_price, max_price, CARD_GEOM,
+                        out_of_stock=out_of_stock)
     # カードの文脈 (値下げ幅・現在価格の隣) で縦軸の範囲を示せるよう、
     # 描画には使わないが min/max を添える。
     spark["min_price"] = min_price

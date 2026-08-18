@@ -322,3 +322,87 @@ class OutOfStockSegmentTests(unittest.TestCase):
                             1000, 1200, ARTICLE_GEOM, out_of_stock=[_oos(25)])
         for seg in spark["segments"]:
             self.assertEqual(seg["observed"], seg["state"] == "observed")
+
+
+class CardOutOfStockSupplyTests(unittest.TestCase):
+    """#5130 残件1: 一覧カードにも在庫切れを供給する。
+
+    #5401 で商品ページ側は点線を描くようになったが、カード側の入力
+    (``load_merged_history``) は価格観測しか返さないため、同じ ASIN について
+    **商品ページは「在庫切れ」・カードは「この価格が今も続いている」**と別のことを
+    言っている状態だった。ここは供給が届いていることを固定する。
+    """
+
+    def _iso(self, days_ago: int) -> str:
+        return (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat()
+
+    def _priced(self) -> list[dict]:
+        return [
+            {"ts": self._iso(40), "price": 1000, "source": "amazon"},
+            {"ts": self._iso(30), "price": 1200, "source": "amazon"},
+            {"ts": self._iso(20), "price": 900, "source": "amazon"},
+        ]
+
+    def _oos_rec(self, days_ago: int) -> dict:
+        return {"ts": self._iso(days_ago), "price": None, "source": "amazon",
+                "availability": "現在在庫切れです。"}
+
+    def _build(self, history: list[dict] | None = None,
+               watch: list[dict] | None = None) -> dict[str, dict]:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            pw, ph = tmp_path / "price_watch", tmp_path / "price_history"
+            if history:
+                _write_jsonl(ph, "B0AAAAAAAA", history)
+            if watch:
+                _write_jsonl(pw / "history", "B0AAAAAAAA", watch)
+            return build_sparks(pw, ph)
+
+    def test_card_spark_takes_out_of_stock(self):
+        spark = build_card_spark(_hist((40, 1000), (30, 1200), (20, 900)),
+                                 out_of_stock=[_oos(2)])
+        self.assertTrue(spark["has_out_of_stock"])
+        self.assertEqual([s["state"] for s in spark["segments"]][-1], "out_of_stock")
+
+    def test_card_spark_without_out_of_stock_is_unchanged(self):
+        """在庫切れが無ければ #5225 の出力と完全に同じ。"""
+        hist = _hist((40, 1000), (30, 1200), (20, 900))
+        self.assertEqual(build_card_spark(hist), build_card_spark(hist, out_of_stock=[]))
+
+    def test_out_of_stock_is_not_counted_toward_adoption(self):
+        """在庫切れ観測で採択条件を満たさせない (価格 2 点の図を出さない)。
+
+        満たさせると #5167 で潰した「意味の分からない線が1本」に戻る。
+        """
+        spark = build_card_spark(_hist((40, 1000), (20, 1200)), out_of_stock=[_oos(2)])
+        self.assertIsNone(spark)
+
+    def test_build_sparks_reads_out_of_stock_from_weekly_lane(self):
+        sparks = self._build(history=self._priced() + [self._oos_rec(2)])
+        self.assertTrue(sparks["B0AAAAAAAA"]["has_out_of_stock"])
+
+    def test_build_sparks_reads_out_of_stock_from_daily_lane(self):
+        """日次レーン (price_watch/history) 側だけに在庫切れがある形。
+
+        #5130 の実測ではこちらが主。週次レーンしか読まないと 6.5% の ASIN を
+        取りこぼす。
+        """
+        sparks = self._build(history=self._priced(), watch=[self._oos_rec(2)])
+        self.assertTrue(sparks["B0AAAAAAAA"]["has_out_of_stock"])
+
+    def test_build_sparks_without_out_of_stock_has_flag_false(self):
+        sparks = self._build(history=self._priced())
+        self.assertFalse(sparks["B0AAAAAAAA"]["has_out_of_stock"])
+
+    def test_out_of_stock_row_does_not_become_a_price_point(self):
+        """在庫切れ行 (price: null) が価格統計に混ざらない。"""
+        sparks = self._build(history=self._priced() + [self._oos_rec(2)])
+        self.assertEqual(sparks["B0AAAAAAAA"]["min_price"], 900)
+        self.assertEqual(sparks["B0AAAAAAAA"]["max_price"], 1200)
+
+    def test_row_without_availability_is_not_drawn_as_out_of_stock(self):
+        """根拠 (在庫メッセージ) の無い欠測を「在庫切れだった」と描かない。"""
+        sparks = self._build(history=self._priced() + [
+            {"ts": self._iso(2), "price": None, "source": "amazon"},
+        ])
+        self.assertFalse(sparks["B0AAAAAAAA"]["has_out_of_stock"])

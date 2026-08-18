@@ -29,6 +29,14 @@ partial で引ける。データの持ち方が1箇所になるので、/price/ 
 以上)。条件を満たさない ASIN はキーごと入らないので、テンプレート側は
 「引けたら描く」だけでよい。
 
+在庫切れ観測 (#5130 残件1) は価格観測とは別に読んで build_card_spark に渡す。
+load_merged_history が返すのは価格が付いた行だけ (在庫切れ行を混ぜると最安値・
+変化回数などの統計が壊れるので意図的にそうしてある) なので、ここで補わないと
+カードの階段線だけが「最後に取れた価格が今も続いている」と言い続ける。
+実測 (2026-08-18) では 2,502 ASIN 中 75 件が該当し、うち 66 件が末尾型 (= 今も
+在庫切れ)。採択条件は価格観測だけで判定するので、この変更で描かれる図の枚数は
+変わらない (75 件の線種と x 軸の右端だけが変わる)。
+
 商品ページ (/products/<asin>/) のグラフはこのファイルを使わない。あちらは
 build_post.py が ARTICLE_GEOM で別に描く (Keepa の隣に置く観測の証跡であり、
 目的も必要な情報量も違う。#5167 参照)。
@@ -48,7 +56,8 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from build_price_dashboard import load_merged_history  # noqa: E402
-from price_spark import build_card_spark  # noqa: E402
+from price_spark import (build_card_spark, load_out_of_stock_points,  # noqa: E402
+                         merge_out_of_stock_points)
 
 logger = logging.getLogger("build_price_sparks")
 
@@ -78,7 +87,16 @@ def build_sparks(price_watch_dir: pathlib.Path,
     for asin in collect_asins(price_watch_dir, price_history_dir):
         try:
             history = load_merged_history(asin, price_watch_dir, price_history_dir)
-            spark = build_card_spark(history)
+            # #5130 残件1: 在庫切れ観測は価格点と別に読む。load_merged_history は
+            # `price` が正の int の行しか返さない (最安値・変化回数などの統計が
+            # 壊れるため意図的にそうしてある) ので、ここを足さないとカードの階段線
+            # だけが「最後に取れた価格が今も続いている」と言い続ける。
+            # 商品ページ (#5401) と同じ 2 レーンを同じ条件で読む。
+            out_of_stock = merge_out_of_stock_points(
+                load_out_of_stock_points(price_history_dir, asin),
+                load_out_of_stock_points(price_watch_dir / "history", asin),
+            )
+            spark = build_card_spark(history, out_of_stock=out_of_stock)
         except Exception as e:  # noqa: BLE001 - fail-soft, 1 ASIN の失敗で全体を落とさない
             logger.warning(f"build_sparks: skip {asin}: {e}")
             continue

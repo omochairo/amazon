@@ -18,6 +18,10 @@
     - 折れ線の下を塗る        … 線1本だと図に見えない。塗ると価格帯の形が読める
     - 最新点にマーカー        … 「今どこにいるか」を示す。全観測点は打たない (潰れる)
     - 破線区間                … 未観測期間 (14日超のギャップ)。商品ページと同じ表現
+    - 点線区間                … 在庫切れ期間 (#5130 残件1)。カードは凡例を持たない
+                                (show_legend=False) ので、線種の意味は <desc> に書く。
+                                「記録が無い」(破線) と「在庫が無いと分かっている」
+                                (点線) は別の状態なので読み上げでも区別する
 
   Expects context = price_spark.build_card_spark が作った spark dict
   (width / height / segments / area / last_point / y_labels / x_labels /
@@ -33,7 +37,7 @@
          (重複 id は不正な HTML)。role="img" + aria-label なら id を作らずに済む。 */ -}}
   <svg class="price-spark-svg" viewBox="0 0 {{ $spark.width }} {{ $spark.height }}" width="{{ $spark.width }}" height="{{ $spark.height }}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Amazon価格の推移グラフ{{ with $spark.x_labels }}（{{ (index . 0).text }}〜{{ (index . 1).text }}）{{ end }}">
     <title>Amazon価格の推移{{ with $spark.x_labels }}（{{ (index . 0).text }}〜{{ (index . 1).text }}）{{ end }}</title>
-    <desc>Amazon での観測価格です。縦軸は価格、横軸は日付。{{ with $spark.min_price }}期間中の最安は &yen;{{ lang.FormatNumberCustom 0 . }}{{ end }}{{ with $spark.max_price }}、最高は &yen;{{ lang.FormatNumberCustom 0 . }}{{ end }}。折れ線は観測した価格が次の観測まで続いたことを表す階段状で、破線の区間は価格を観測できていない期間です。</desc>
+    <desc>Amazon での観測価格です。縦軸は価格、横軸は日付。{{ with $spark.min_price }}期間中の最安は &yen;{{ lang.FormatNumberCustom 0 . }}{{ end }}{{ with $spark.max_price }}、最高は &yen;{{ lang.FormatNumberCustom 0 . }}{{ end }}。折れ線は観測した価格が次の観測まで続いたことを表す階段状で、破線の区間は価格を観測できていない期間です。{{ if $spark.has_out_of_stock }}点線の区間は在庫切れを観測していた期間で、価格は付いていません。{{ end }}</desc>
 
     {{- /* #5225: 図の名前は「Amazon価格」と明示する。観測データは Amazon のみ
            (price_history.py が source="amazon" しか記録しない) なのに対し、
