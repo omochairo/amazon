@@ -82,7 +82,7 @@ class SelectTest(unittest.TestCase):
             {"slug": "2026-05-20-B0BBBBBBBB", "asin": "B0BBBBBBBB", "date": "2026-05-20", "score": None, "passed": None},
             {"slug": "2026-05-11-B0CCCCCCCC", "asin": "B0CCCCCCCC", "date": "2026-05-11", "score": 50, "passed": False},
         ]
-        picked = srt.select(candidates, excluded=set(), limit=10)
+        picked, _ = srt.select(candidates, excluded=set(), limit=10, generatable=lambda a: True)
         self.assertEqual([c["asin"] for c in picked], ["B0CCCCCCCC", "B0AAAAAAAA", "B0BBBBBBBB"])
 
     def test_pre_v7_outranks_post_v7_even_when_newer_has_no_sidecar(self) -> None:
@@ -92,7 +92,7 @@ class SelectTest(unittest.TestCase):
             {"slug": "2026-07-16-B0BBBBBBBB", "asin": "B0BBBBBBBB", "date": "2026-07-16", "score": None, "passed": None},
             {"slug": "2026-05-14-B0CCCCCCCC", "asin": "B0CCCCCCCC", "date": "2026-05-14", "score": 97, "passed": True},
         ]
-        picked = srt.select(candidates, excluded=set(), limit=10)
+        picked, _ = srt.select(candidates, excluded=set(), limit=10, generatable=lambda a: True)
         # 2026-07-16 は施行日ちょうど = post_v7 (quality_gate._how_to_choose_enforced と同じ境界)
         self.assertEqual([c["asin"] for c in picked], ["B0CCCCCCCC", "B0BBBBBBBB", "B0AAAAAAAA"])
 
@@ -102,7 +102,7 @@ class SelectTest(unittest.TestCase):
             {"slug": "2026-05-11-B0BBBBBBBB", "asin": "B0BBBBBBBB", "date": "2026-05-11", "score": 80, "passed": False},
             {"slug": "2026-05-15-B0CCCCCCCC", "asin": "B0CCCCCCCC", "date": "2026-05-15", "score": 80, "passed": False},
         ]
-        picked = srt.select(candidates, excluded=set(), limit=10)
+        picked, _ = srt.select(candidates, excluded=set(), limit=10, generatable=lambda a: True)
         self.assertEqual([c["asin"] for c in picked], ["B0BBBBBBBB", "B0CCCCCCCC", "B0AAAAAAAA"])
 
     def test_undated_candidate_is_treated_as_post_v7(self) -> None:
@@ -111,7 +111,7 @@ class SelectTest(unittest.TestCase):
             {"slug": "bogus", "asin": "B0AAAAAAAA", "date": "", "score": None, "passed": None},
             {"slug": "2026-06-01-B0BBBBBBBB", "asin": "B0BBBBBBBB", "date": "2026-06-01", "score": None, "passed": None},
         ]
-        picked = srt.select(candidates, excluded=set(), limit=10)
+        picked, _ = srt.select(candidates, excluded=set(), limit=10, generatable=lambda a: True)
         self.assertEqual([c["asin"] for c in picked], ["B0BBBBBBBB", "B0AAAAAAAA"])
 
     def test_exclude_filters_asin(self) -> None:
@@ -119,7 +119,7 @@ class SelectTest(unittest.TestCase):
             {"slug": "2026-05-12-B0AAAAAAAA", "asin": "B0AAAAAAAA", "date": "2026-05-12", "score": 50, "passed": False},
             {"slug": "2026-05-13-B0BBBBBBBB", "asin": "B0BBBBBBBB", "date": "2026-05-13", "score": 60, "passed": False},
         ]
-        picked = srt.select(candidates, excluded={"B0AAAAAAAA"}, limit=10)
+        picked, _ = srt.select(candidates, excluded={"B0AAAAAAAA"}, limit=10, generatable=lambda a: True)
         self.assertEqual([c["asin"] for c in picked], ["B0BBBBBBBB"])
 
     def test_limit_caps_output(self) -> None:
@@ -127,12 +127,15 @@ class SelectTest(unittest.TestCase):
             {"slug": f"2026-05-{i:02d}-B0{i:08d}", "asin": f"B0{i:08d}", "date": f"2026-05-{i:02d}", "score": 50, "passed": False}
             for i in range(1, 11)
         ]
-        picked = srt.select(candidates, excluded=set(), limit=3)
+        picked, _ = srt.select(candidates, excluded=set(), limit=3, generatable=lambda a: True)
         self.assertEqual(len(picked), 3)
 
     def test_limit_zero_returns_empty(self) -> None:
         candidates = [{"slug": "2026-05-12-B0AAAAAAAA", "asin": "B0AAAAAAAA", "date": "2026-05-12", "score": 50, "passed": False}]
-        self.assertEqual(srt.select(candidates, excluded=set(), limit=0), [])
+        self.assertEqual(
+            srt.select(candidates, excluded=set(), limit=0, generatable=lambda a: True),
+            ([], []),
+        )
 
 
 class ReadExcludeTest(unittest.TestCase):
@@ -154,3 +157,65 @@ class ReadExcludeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeferredBandTest(unittest.TestCase):
+    """#5490: 生成側が defer する ASIN を選ばない。
+
+    `03-invoke-jules` は band=zero / unfetched を生成対象から外す。選定側がそれを
+    知らないと、マーカーだけが永久に残り、次の選定でも同じ ASIN がキュー先頭に
+    来続ける。実測 (2026-08-18) では 11 件が band=zero のまま滞留し、最古 56 日・
+    中央値 30 日だった。
+    """
+
+    def _candidates(self, *slugs: str) -> list[dict]:
+        out = []
+        for slug in slugs:
+            date, asin = slug[:10], slug[11:]
+            out.append({"slug": slug, "asin": asin, "date": date})
+        return out
+
+    def test_deferred_asins_are_skipped_and_reported(self) -> None:
+        candidates = self._candidates(
+            "2026-05-01-B0AAAAAAAA", "2026-05-02-B0BBBBBBBB", "2026-05-03-B0CCCCCCCC",
+        )
+        picked, deferred = self._select(candidates, limit=10, bad={"B0AAAAAAAA"})
+        self.assertEqual([c["asin"] for c in picked], ["B0BBBBBBBB", "B0CCCCCCCC"])
+        self.assertEqual(deferred, ["B0AAAAAAAA"])
+
+    def test_deferred_do_not_consume_the_limit(self) -> None:
+        """defer した分だけ後ろから繰り上がる (limit が目減りしない)。
+
+        目減りすると「先頭が詰まっている日は 1 件も回らない」形になり、詰まりが
+        そのままスループット低下になる。
+        """
+        candidates = self._candidates(
+            "2026-05-01-B0AAAAAAAA", "2026-05-02-B0BBBBBBBB",
+            "2026-05-03-B0CCCCCCCC", "2026-05-04-B0DDDDDDDD",
+        )
+        picked, deferred = self._select(
+            candidates, limit=2, bad={"B0AAAAAAAA", "B0BBBBBBBB"},
+        )
+        self.assertEqual([c["asin"] for c in picked], ["B0CCCCCCCC", "B0DDDDDDDD"])
+        self.assertEqual(deferred, ["B0AAAAAAAA", "B0BBBBBBBB"])
+
+    def test_limit_stops_scanning_so_deferred_list_is_not_the_whole_corpus(self) -> None:
+        """limit を満たしたらそこで止める。deferred は「見た範囲」だけを報告する。"""
+        candidates = self._candidates(
+            "2026-05-01-B0AAAAAAAA", "2026-05-02-B0BBBBBBBB", "2026-05-03-B0CCCCCCCC",
+        )
+        picked, deferred = self._select(candidates, limit=1, bad={"B0CCCCCCCC"})
+        self.assertEqual([c["asin"] for c in picked], ["B0AAAAAAAA"])
+        self.assertEqual(deferred, [])
+
+    def test_all_deferred_returns_empty_pick(self) -> None:
+        candidates = self._candidates("2026-05-01-B0AAAAAAAA")
+        picked, deferred = self._select(candidates, limit=5, bad={"B0AAAAAAAA"})
+        self.assertEqual(picked, [])
+        self.assertEqual(deferred, ["B0AAAAAAAA"])
+
+    def _select(self, candidates, *, limit, bad):
+        return srt.select(
+            candidates, excluded=set(), limit=limit,
+            generatable=lambda a: a not in bad,
+        )
