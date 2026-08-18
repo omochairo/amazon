@@ -556,3 +556,64 @@ def test_build_stock_block_prefers_price_watch_root_when_given(tmp_path):
     )
     assert block["price_history_note"] is not None
     assert "￥100" in block["price_history_note"]
+
+
+# ---------------------------------------------------------------------------
+# 5: 予約 / 長納期の表示 (#5483)
+# ---------------------------------------------------------------------------
+
+def _obs5483(state: str, raw_avail: str, price: int | None = 1200):
+    return ss.StockObservation(
+        asin="B001", state=state, remaining=None, raw_avail=raw_avail,
+        price=price, observed_at=NOW.isoformat(),
+    )
+
+
+def _po5483(price: int | None = 1200):
+    return {"amazon": {"price": price, "available": True, "url": "#"},
+            "rakuten": {}, "yahoo": {}}
+
+
+def test_conclusion_preorder_shows_release_date():
+    """予約は在庫の言葉で語らない。読者の判断材料は「いつ届くか」なので日付を出す。"""
+    obs = _obs5483(ss.STATE_PREORDER, "この商品の発売予定日は2026年9月19日です。")
+    text = wtb.build_conclusion("テスト商品", obs, _po5483())
+    assert "予約受付中" in text
+    assert "2026年9月19日" in text
+    assert "在庫あり" not in text
+    assert "在庫切れ" not in text
+
+
+def test_conclusion_preorder_without_parsable_date():
+    """日付が読めなければ日付なしの文に落とす (fail-soft)。"""
+    obs = _obs5483(ss.STATE_PREORDER, "発売予定日は近日公開です。")
+    text = wtb.build_conclusion("テスト商品", obs, _po5483())
+    assert "予約受付中" in text
+    assert "発売前" in text
+
+
+def test_conclusion_delayed_long_lead_uses_observed_range():
+    """月単位の長納期を「数日」と言わない。観測した幅をそのまま出す。"""
+    obs = _obs5483(ss.STATE_DELAYED, "通常1～2か月以内に発送します。")
+    text = wtb.build_conclusion("テスト商品", obs, _po5483())
+    assert "発送まで1～2か月かかります" in text
+
+
+def test_conclusion_delayed_days_wording_is_unchanged():
+    """日単位の既存 89 件は 1 文字も変えない。"""
+    obs = _obs5483(ss.STATE_DELAYED, "通常4～5日以内に発送します。")
+    text = wtb.build_conclusion("テスト商品", obs, _po5483())
+    assert "発送までお時間をいただく場合があります" in text
+    assert "か月" not in text
+
+
+def test_row_label_for_delayed_reflects_lead_time():
+    rows_long = wtb.build_rows(_obs5483(ss.STATE_DELAYED, "通常1～2か月以内に発送します。"), _po5483())
+    assert rows_long[0]["state_label"] == "発送に1～2か月"
+    rows_days = wtb.build_rows(_obs5483(ss.STATE_DELAYED, "通常4～5日以内に発送します。"), _po5483())
+    assert rows_days[0]["state_label"] == "発送に数日"
+
+
+def test_row_label_for_preorder():
+    rows = wtb.build_rows(_obs5483(ss.STATE_PREORDER, "この商品の発売予定日は2026年9月19日です。"), _po5483())
+    assert rows[0]["state_label"] == "予約受付中"
