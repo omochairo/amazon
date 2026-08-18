@@ -113,7 +113,12 @@ def test_competitor_asin_in_competitors_json_passes(tmp_path, monkeypatch):
 
 
 def test_inline_asin_soft_does_not_flip_passed(tmp_path, monkeypatch):
-    """soft 減点は合否を変えない (hard 化する前の観測フェーズの契約)。"""
+    """施行日 (2026-08-11) より前の slug では合否を変えない。
+
+    #4826 項目2 の hard 昇格後も、既存 94 本 (2026-07-16〜08-10 = v7 施行後・
+    プロンプト v7.2 前の窓) はこの経路に残る。census の「減点のみ」で消化の
+    進み方を追い続けるため、soft のまま観測対象にしておく。
+    """
     monkeypatch.chdir(tmp_path)
     comp_dir = tmp_path / "data" / "raw" / "per_asin" / "B0XXXXXXXX"
     comp_dir.mkdir(parents=True)
@@ -162,3 +167,76 @@ def test_competitors_json_missing_with_asin_mention_fails_safe(tmp_path, monkeyp
     result = check_how_to_choose(article)
     assert not result.passed
     assert "unreadable" in result.message
+
+
+# ---------------------------------------------------------------------------
+# 生 ASIN 表記の hard 昇格 (#4826 項目2)
+#
+# プロンプト v7.2 (2026-08-10T01:00Z) 以降に生成された 163 本で発火 0 だったため、
+# soft 導入時 (#4855) に置いた昇格条件を満たした。既存 94 本を巻き込まないよう、
+# 封じ込め検査とは別の施行日 (HOW_TO_CHOOSE_INLINE_ASIN_ENFORCE_FROM) で切る。
+# ---------------------------------------------------------------------------
+
+def test_inline_asin_hard_fails_after_enforce_date(tmp_path, monkeypatch):
+    """施行日以降の slug では生 ASIN が hard 不合格になる。"""
+    monkeypatch.chdir(tmp_path)
+    comp_dir = tmp_path / "data" / "raw" / "per_asin" / "B0XXXXXXXX"
+    comp_dir.mkdir(parents=True)
+    (comp_dir / "competitors.json").write_text(
+        json.dumps({"asin": "B0XXXXXXXX", "competitors": [{"asin": "B0REALCOMP", "name": "実在競合"}]}),
+        encoding="utf-8",
+    )
+    article = _article(
+        slug="2026-08-11-B0XXXXXXXX",
+        how_to_choose=HOW_TO_CHOOSE_OK + ["競合の B0REALCOMP は組みやすさ重視です。"],
+        asin="B0XXXXXXXX",
+    )
+    result = check_how_to_choose(article)
+    assert result.passed is False
+    assert "B0REALCOMP" in result.message
+    # 捏造 (score 0.0) とは区別できる。実在競合を名前で呼んでいないだけ。
+    assert result.score == HOW_TO_CHOOSE_INLINE_ASIN_SOFT_SCORE
+
+
+def test_inline_own_asin_also_hard_after_enforce_date(tmp_path, monkeypatch):
+    """自商品の ASIN も対象。読者に意味がないのは競合と同じ。"""
+    monkeypatch.chdir(tmp_path)
+    article = _article(
+        slug="2026-08-11-B0XXXXXXXX",
+        how_to_choose=HOW_TO_CHOOSE_OK + ["B0XXXXXXXX は完成形の自由度が高い代表例です。"],
+        asin="B0XXXXXXXX",
+    )
+    result = check_how_to_choose(article)
+    assert result.passed is False
+    assert "B0XXXXXXXX" in result.message
+
+
+def test_inline_asin_day_before_enforce_date_stays_soft(tmp_path, monkeypatch):
+    """施行日の前日はまだ soft (既存 94 本を落とさない境界)。"""
+    monkeypatch.chdir(tmp_path)
+    article = _article(
+        slug="2026-08-10-B0XXXXXXXX",
+        how_to_choose=HOW_TO_CHOOSE_OK + ["B0XXXXXXXX は…。"],
+        asin="B0XXXXXXXX",
+    )
+    result = check_how_to_choose(article)
+    assert result.passed is True
+    assert result.score == HOW_TO_CHOOSE_INLINE_ASIN_SOFT_SCORE
+
+
+def test_no_inline_asin_after_enforce_date_still_passes():
+    """施行日以降でも、ASIN を書いていなければ従来どおり満点。"""
+    result = check_how_to_choose(_article(slug="2026-08-11-B0XXXXXXXX"))
+    assert result.passed is True
+    assert result.score == 1.0
+    assert result.message == "OK"
+
+
+def test_missing_slug_enforces_on_the_safe_side():
+    """slug が無い場合は施行する (施行日ゲートと同じ流儀)。"""
+    article = {
+        "narrative": {"how_to_choose": HOW_TO_CHOOSE_OK + ["B0XXXXXXXX は…。"]},
+        "product": {"asin": "B0XXXXXXXX"},
+    }
+    result = check_how_to_choose(article)
+    assert result.passed is False

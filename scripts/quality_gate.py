@@ -33,7 +33,7 @@ import pathlib
 import re
 import sys
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Optional
 
 try:
     # Reuse build_post's verification logic so quality_gate and the actual
@@ -45,7 +45,7 @@ try:
 except ImportError:  # pragma: no cover - best-effort fallback
     _bp_load_matched_index = None
     _bp_matched_passes_quality = None
-from typing import Any
+from typing import Any, Optional
 
 try:
     from jsonschema import Draft7Validator
@@ -106,8 +106,28 @@ NARRATIVE_MIN_CHARS = {
 HOW_TO_CHOOSE_ENFORCE_FROM = "2026-07-16"
 HOW_TO_CHOOSE_MIN_CHARS = 150
 # #4826 項目2: 本文に生の ASIN コードを書かない規律の soft スコア。
-# 合否 (passed) は変えず、census の「減点のみ」に発火率を出すためだけの値。
+# 施行日より前の slug では合否 (passed) を変えず、census の「減点のみ」に
+# 発火率を出すためだけの値として残す。
 HOW_TO_CHOOSE_INLINE_ASIN_SOFT_SCORE = 0.8
+# 生 ASIN 表記を hard にする施行日 (#4826 項目2 の昇格)。
+#
+# プロンプト v7.2 (amazon-navi-brain、commit 2026-08-10T01:00Z) が入ったあとに
+# 生成された記事の実測:
+#
+#   2026-08-11 以降の 163 本 … hard 不合格 0 / soft 減点 **0**
+#   2026-08-10 当日の 24 本  … soft 減点 1 (v7.2 の前後が混在する日)
+#
+# soft 導入時 (#4855) に置いた昇格条件「施行後に新規追加された記事の発火が 0 なら
+# hard へ」を満たしている。n=10 だった当時は 95% 上限が約 30% だったが、n=163 では
+# 約 1.8% (rule of three) まで締まった。
+#
+# 既存 94 本 (2026-07-16〜08-10 = v7 施行後・v7.2 前の窓) を巻き込まないよう、
+# HOW_TO_CHOOSE_ENFORCE_FROM とは別の施行日を持つ。ゲートは PR の変更ファイルに
+# しか当たらず、リライトは新 slug で追加される (#2711) ので、既存 94 本が発火する
+# のはアドホックな一括修正 PR (実測で月 1 回未満) のときだけ。そこで落ちると
+# 無関係な修正が止まるので、施行日で切る — `HOW_TO_CHOOSE_ENFORCE_FROM` を
+# 置いたときと同じ理由。
+HOW_TO_CHOOSE_INLINE_ASIN_ENFORCE_FROM = "2026-08-11"
 
 # #5088 タグ粒度。data/articles 全 1,977 本の実測 (2026-08-14) で校正した:
 #   - 記事あたりの「他記事に 1 本も無いタグ」の比率は中央値 0.2 (5 個中 1 個)。
@@ -442,17 +462,36 @@ def _how_to_choose_enforced(data: dict) -> bool:
     return slug[:10] >= HOW_TO_CHOOSE_ENFORCE_FROM
 
 
-def _inline_asin_soft(mentioned_all: set[str], hard_ok_message: str = "OK") -> CheckResult:
-    """表記規律の soft signal: 本文に生の ASIN コードを書かない (#4826 項目2)。
+def _inline_asin_enforced(data: dict) -> bool:
+    """生 ASIN 表記を hard で判定してよい slug か (#4826 項目2 の昇格)。"""
+    slug = data.get("slug") or ""
+    if not isinstance(slug, str) or len(slug) < 10:
+        # slug が無い/短すぎる場合は安全側で施行する (施行日ゲートと同じ流儀)。
+        return True
+    return slug[:10] >= HOW_TO_CHOOSE_INLINE_ASIN_ENFORCE_FROM
 
-    合否は変えず score だけ下げる。quality_census が「減点のみ (passed=True かつ
-    score<1.0)」として拾うので、hard 化の判断材料になる発火率が観測できる。
+
+def _inline_asin_soft(mentioned_all: set[str], hard_ok_message: str = "OK",
+                      *, data: Optional[dict] = None) -> CheckResult:
+    """本文に生の ASIN コードを書かない規律 (#4826 項目2)。
+
+    施行日 (HOW_TO_CHOOSE_INLINE_ASIN_ENFORCE_FROM) 以降の slug では **hard**。
+    それより前の slug では従来どおり合否を変えず score だけ下げ、quality_census が
+    「減点のみ (passed=True かつ score<1.0)」として拾えるようにしておく
+    (既存 94 本の残存が census で見えなくなると、消化の進み方が追えなくなる)。
     """
     if not mentioned_all:
         return CheckResult("how_to_choose", True, 1.0, hard_ok_message)
+    codes = sorted(mentioned_all)
+    if data is not None and _inline_asin_enforced(data):
+        return CheckResult(
+            "how_to_choose", False, HOW_TO_CHOOSE_INLINE_ASIN_SOFT_SCORE,
+            f"how_to_choose に生の ASIN コード: {codes} "
+            "(読者に意味がないので商品名か特徴で書くこと)",
+        )
     return CheckResult(
         "how_to_choose", True, HOW_TO_CHOOSE_INLINE_ASIN_SOFT_SCORE,
-        f"how_to_choose に生の ASIN コード: {sorted(mentioned_all)} "
+        f"how_to_choose に生の ASIN コード: {codes} "
         "(soft: 表記規律。読者に意味がないので生成側で書かないこと)",
     )
 
@@ -508,7 +547,7 @@ def check_how_to_choose(data: dict) -> CheckResult:
     mentioned = mentioned_all - ({own_asin} if own_asin else set())
 
     if not mentioned:
-        return _inline_asin_soft(mentioned_all)
+        return _inline_asin_soft(mentioned_all, data=data)
 
     asin = own_asin or ""
     comp_path = pathlib.Path("data/raw/per_asin") / asin / "competitors.json"
@@ -531,7 +570,7 @@ def check_how_to_choose(data: dict) -> CheckResult:
             "how_to_choose", False, 0.0,
             f"how_to_choose mentions ASIN(s) not in competitors.json: {sorted(hallucinated)}",
         )
-    return _inline_asin_soft(mentioned_all)
+    return _inline_asin_soft(mentioned_all, data=data)
 
 
 def check_faq(data: dict, product_name: str) -> CheckResult:
