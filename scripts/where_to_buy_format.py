@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
@@ -44,8 +45,19 @@ _STATE_LABELS = {
     stock_status.STATE_LOW_STOCK: "残りわずか",
     stock_status.STATE_OUT_OF_STOCK: "在庫切れ",
     stock_status.STATE_DELAYED: "発送に数日",
+    stock_status.STATE_PREORDER: "予約受付中",
     stock_status.STATE_UNKNOWN: "確認できず",
 }
+
+# 「この商品の発売予定日は2026年9月19日です。」から発売予定日を抜く (#5483)。
+# 予約商品では「いつ届くか」が読者の判断材料そのものなので、状態だけでなく
+# 日付まで出す。取れなければ日付なしの文に落とす (fail-soft)。
+_RE_RELEASE_DATE = re.compile(r"発売予定日は\s*(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日")
+
+# delayed のうち「日」より長い単位のもの (#5483)。既存の delayed 文言は
+# 「発送に数日」で正しかったが、`通常1～2か月以内に発送します。` を delayed に
+# 入れた結果、数日と言い切ると嘘になるケースが出た。観測した幅をそのまま出す。
+_RE_DELAYED_LONG = re.compile(r"通常(\d+[~〜～\-−]\d+(?:週間|か月|ヶ月|カ月))以内に発送")
 
 PRICE_HISTORY_WINDOW_DAYS = 30
 # 過去 30 日の最安値メモを出すために最低限必要な観測点数 (ever・窓内外問わず)。
@@ -152,6 +164,29 @@ def to_jst_datetime(ts: Optional[str]) -> Optional[str]:
 # 結論ブロック
 # ---------------------------------------------------------------------------
 
+def _delayed_lead_label(raw_avail: Optional[str]) -> Optional[str]:
+    """delayed のうち日単位を超えるものだけ、観測した所要幅 (例 "1～2か月") を返す。
+
+    日単位 (`通常2～3日以内に発送します。`) は None を返し、従来の「数日」表現を
+    そのまま使う — 既存 89 件の文言を 1 文字も変えないため。
+    """
+    if not isinstance(raw_avail, str):
+        return None
+    m = _RE_DELAYED_LONG.search(raw_avail)
+    return m.group(1) if m else None
+
+
+def _release_date_label(raw_avail: Optional[str]) -> Optional[str]:
+    """``avail`` から発売予定日を「2026年9月19日」形式で返す。取れなければ None。"""
+    if not isinstance(raw_avail, str):
+        return None
+    m = _RE_RELEASE_DATE.search(raw_avail)
+    if not m:
+        return None
+    year, month, day = m.groups()
+    return f"{year}年{int(month)}月{int(day)}日"
+
+
 def build_conclusion(
     product_name: str,
     stock_obs: stock_status.StockObservation,
@@ -172,9 +207,21 @@ def build_conclusion(
         remain = f"残り{stock_obs.remaining}点" if stock_obs.remaining else "残りわずか"
         head = f"{date_label} 時点、Amazon は{remain}{price_part}。"
     elif state == stock_status.STATE_DELAYED:
-        head = f"{date_label} 時点、Amazon に在庫あり（発送までお時間をいただく場合があります）{price_part}。"
+        lead = _delayed_lead_label(stock_obs.raw_avail)
+        if lead:
+            head = f"{date_label} 時点、Amazon に在庫あり（発送まで{lead}かかります）{price_part}。"
+        else:
+            head = f"{date_label} 時点、Amazon に在庫あり（発送までお時間をいただく場合があります）{price_part}。"
     elif state == stock_status.STATE_OUT_OF_STOCK:
         head = f"{date_label} 時点、Amazon は在庫切れです。"
+    elif state == stock_status.STATE_PREORDER:
+        # 予約は「買えるが、まだ手元には来ない」。在庫の言葉で語ると必ずどちらかに
+        # 嘘が混じるので、発売予定日を主語にする (#5483)。
+        release = _release_date_label(stock_obs.raw_avail)
+        if release:
+            head = f"{date_label} 時点、Amazon は予約受付中です（発売予定日 {release}）{price_part}。"
+        else:
+            head = f"{date_label} 時点、Amazon は予約受付中です（発売前）{price_part}。"
     else:  # unknown — 実運用ゲート経由では到達しないが、単体呼び出し用に完備しておく。
         head = f"{date_label} 時点、Amazon の在庫状況は確認できませんでした。"
 
@@ -204,7 +251,11 @@ def build_conclusion(
 # 在庫・価格テーブル
 # ---------------------------------------------------------------------------
 
-def _amazon_state_label(state: str) -> str:
+def _amazon_state_label(state: str, raw_avail: Optional[str] = None) -> str:
+    if state == stock_status.STATE_DELAYED:
+        lead = _delayed_lead_label(raw_avail)
+        if lead:
+            return f"発送に{lead}"
     return _STATE_LABELS.get(state, _STATE_LABELS[stock_status.STATE_UNKNOWN])
 
 
@@ -225,7 +276,7 @@ def build_rows(
     for site in _SITE_ORDER:
         opt = purchase_options.get(site) or {}
         if site == "amazon":
-            state_label = _amazon_state_label(stock_obs.state)
+            state_label = _amazon_state_label(stock_obs.state, stock_obs.raw_avail)
         else:
             state_label = _other_state_label(opt)
         rows.append({

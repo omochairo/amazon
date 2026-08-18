@@ -65,14 +65,37 @@ STATE_IN_STOCK = "in_stock"
 STATE_LOW_STOCK = "low_stock"
 STATE_OUT_OF_STOCK = "out_of_stock"
 STATE_DELAYED = "delayed"
+# #5483: 発売前で予約を受け付けている状態。in_stock でも out_of_stock でもない。
+# 「まだ発売していない」のに在庫ありと言うのも、予約できるのに在庫切れと言うのも
+# 誤りなので、独立した状態にする。
+STATE_PREORDER = "preorder"
 STATE_UNKNOWN = "unknown"
 
-# Amazon の「購入できる」とみなす在庫状態。delayed (発送に数日かかる) は
-# 購入自体は可能なので available 扱いにする。unknown / out_of_stock は不可。
-_AMAZON_AVAILABLE_STATES = frozenset({STATE_IN_STOCK, STATE_LOW_STOCK, STATE_DELAYED})
+# Amazon の「購入できる」とみなす在庫状態。delayed (発送に数日かかる) と
+# preorder (発売日に届く) は購入操作そのものは可能なので available 扱いにする。
+# unknown / out_of_stock は不可。
+_AMAZON_AVAILABLE_STATES = frozenset(
+    {STATE_IN_STOCK, STATE_LOW_STOCK, STATE_DELAYED, STATE_PREORDER}
+)
+
+# 「どこで買える」型タイトル + 在庫ブロックを適用してよい状態 (#5483)。
+# preorder を外しているのは、発売前の商品に「どこで買える？在庫と価格を毎日
+# チェック」という枠を当てても、読者に返せる中身が「まだ売っていない」しか
+# 無いため。分類として正しく preorder と持つことと、その枠を当てることは別。
+_STOCK_TITLE_STATES = frozenset(
+    {STATE_IN_STOCK, STATE_LOW_STOCK, STATE_DELAYED, STATE_OUT_OF_STOCK}
+)
 
 _RE_LOW_STOCK = re.compile(r"残り\s*(\d+)\s*点")
-_RE_DELAYED = re.compile(r"通常\d+[~〜～\-−]\d+日以内に発送")
+# 「通常N〜N日以内に発送」に加えて 週間 / か月 も拾う (#5483)。実データに
+# 「通常1～2か月以内に発送します。」が 3 件あり、日単位の正規表現から漏れて
+# unknown に落ちていた。買えることに変わりはないので delayed が正しい。
+_RE_DELAYED = re.compile(r"通常\d+[~〜～\-−]\d+(?:日|週間|か月|ヶ月|カ月)以内に発送")
+# 「この商品の発売予定日は2026年9月19日です。」(#5483)
+_RE_PREORDER = re.compile(r"発売予定日")
+# 「一時的に在庫切れ」「この商品は現在お取り扱いできません。」(#5483)。
+# どちらも買えない状態で、既存の「現在在庫切れです」と読者にとっての意味は同じ。
+_RE_OUT_OF_STOCK = re.compile(r"在庫切れ|入荷時期は未定|お取り扱いできません|取り扱いできません")
 
 
 def classify_availability(raw_avail: Any) -> tuple[str, Optional[int]]:
@@ -94,8 +117,19 @@ def classify_availability(raw_avail: Any) -> tuple[str, Optional[int]]:
     if s.startswith("在庫あり"):
         return STATE_IN_STOCK, None
 
-    if s.startswith("現在在庫切れです"):
+    # #5483: 従来は `現在在庫切れです` で始まる文字列だけを out_of_stock にして
+    # いたため、`一時的に在庫切れ; 入荷時期は未定です。` (17 件) と
+    # `この商品は現在お取り扱いできません。` (6 件) が unknown に落ち、記事には
+    # 「在庫状況は確認できませんでした」と出ていた。**在庫が無いと分かっている**
+    # のに「分からない」と書くのは、#5130 で潰した「記録にないことを主張する」の
+    # 裏返し (分かっていることを黙る) にあたる。
+    if _RE_OUT_OF_STOCK.search(s):
         return STATE_OUT_OF_STOCK, None
+
+    # 予約は out_of_stock より先に判定しない。`発売予定日` と在庫切れ文言が
+    # 同時に出る形は実データに無いが、両方に当たったら「買えない」を優先する。
+    if _RE_PREORDER.search(s):
+        return STATE_PREORDER, None
 
     if _RE_DELAYED.search(s):
         return STATE_DELAYED, None
@@ -288,7 +322,11 @@ def can_use_stock_title(asin: str, index: StockIndex) -> bool:
     次を全て満たすときだけ True:
       - 当該 ASIN が price_watch (``index.items``) に存在する
       - ``avail`` が取れており、classify_availability の state が
-        unknown でない
+        ``_STOCK_TITLE_STATES`` に入っている (unknown と preorder を除く)
+
+    #5483: 判定を「unknown でない」から allowlist に変えた。分類が増えたときに
+    「新しい state が黙って対象に入る」のを防ぐため。preorder を外している理由は
+    ``_STOCK_TITLE_STATES`` のコメントを参照。
 
     価格の有無は問わない (在庫文言だけを見るゲート)。この関数はフラグを
     返すだけで、記事出力には一切使わない (呼び出し側=後続 PR の責務)。
@@ -304,4 +342,4 @@ def can_use_stock_title(asin: str, index: StockIndex) -> bool:
     av = entry.get("avail")
     raw_avail = av if isinstance(av, str) and av.strip() else None
     state, _ = classify_availability(raw_avail)
-    return state != STATE_UNKNOWN
+    return state in _STOCK_TITLE_STATES

@@ -75,13 +75,74 @@ def test_classify_delayed():
 
 
 def test_classify_unknown_missing_or_unrecognized():
+    """unknown に落とすのは「観測が取れていない」ときだけ (#5483)。
+
+    以前はここに `この商品は現在お取り扱いできません` も入っていたが、あれは
+    **買えないと分かっている**観測なので out_of_stock に移した
+    (test_classify_out_of_stock_variants)。unknown は「分からない」専用にする。
+    """
     assert ss.classify_availability(None) == (ss.STATE_UNKNOWN, None)
     assert ss.classify_availability("") == (ss.STATE_UNKNOWN, None)
     assert ss.classify_availability("   ") == (ss.STATE_UNKNOWN, None)
     assert ss.classify_availability(12345) == (ss.STATE_UNKNOWN, None)
-    assert ss.classify_availability("この商品は現在お取り扱いできません") == (
-        ss.STATE_UNKNOWN, None,
+    # 実データに無い未知文言は従来どおり unknown。
+    assert ss.classify_availability("なにかの新しい文言") == (ss.STATE_UNKNOWN, None)
+
+
+# ---------------------------------------------------------------------------
+# 1b: unknown に落ちていた実文言の再分類 (#5483)
+#
+# latest.json 2,001 件のうち 69 件が unknown だった。内訳は avail 欠落 24 件と、
+# **意味が読み取れるのに拾えていない 45 件**。後者は記事に「在庫状況は確認でき
+# ませんでした」と出ており、分かっていることを黙る形になっていた。
+# ---------------------------------------------------------------------------
+
+def test_classify_out_of_stock_variants():
+    """「買えない」と読める文言は全て out_of_stock (実データ 23 件)。"""
+    for raw in (
+        "現在在庫切れです。",                        # 従来から拾えていた
+        "一時的に在庫切れ; 入荷時期は未定です。",    # 実データ 15 件
+        "一時的に在庫切れ",                          # 実データ 2 件
+        "この商品は現在お取り扱いできません。",      # 実データ 6 件
+    ):
+        assert ss.classify_availability(raw) == (ss.STATE_OUT_OF_STOCK, None), raw
+
+
+def test_classify_preorder():
+    """発売予定日つきの文言は preorder (実データ 19 件)。
+
+    予約は「買えるが、まだ発売していない」。in_stock にすると発売前の商品を
+    在庫ありと言うことになり、out_of_stock にすると予約できるのに買えないと
+    言うことになるので、独立した状態にする。
+    """
+    assert ss.classify_availability("この商品の発売予定日は2026年9月19日です。") == (
+        ss.STATE_PREORDER, None,
     )
+
+
+def test_classify_delayed_accepts_units_longer_than_days():
+    """`通常N〜Nか月以内に発送` も delayed (実データ 3 件)。
+
+    従来の正規表現は日単位だけを見ていたため unknown に落ちていた。発送に
+    時間がかかるだけで購入自体はできるので delayed が正しい。
+    """
+    assert ss.classify_availability("通常1～2か月以内に発送します。") == (
+        ss.STATE_DELAYED, None,
+    )
+    assert ss.classify_availability("通常2～3週間以内に発送します。") == (
+        ss.STATE_DELAYED, None,
+    )
+    # 日単位は従来どおり。
+    assert ss.classify_availability("通常4～5日以内に発送します。") == (
+        ss.STATE_DELAYED, None,
+    )
+
+
+def test_out_of_stock_wins_over_preorder():
+    """両方に当たったら「買えない」を優先する。"""
+    assert ss.classify_availability(
+        "この商品の発売予定日は2026年9月19日です。現在在庫切れです。"
+    ) == (ss.STATE_OUT_OF_STOCK, None)
 
 
 # ---------------------------------------------------------------------------
@@ -314,3 +375,30 @@ def test_asin_lowercase_input_is_normalized(tmp_path):
     assert obs.asin == "B0875FV2BQ"
     assert obs.state == ss.STATE_IN_STOCK
     assert ss.can_use_stock_title("b0875fv2bq", idx) is True
+
+
+# ---------------------------------------------------------------------------
+# 1c: タイトル適用の allowlist 化 (#5483)
+# ---------------------------------------------------------------------------
+
+def test_stock_title_states_exclude_preorder(tmp_path):
+    """preorder は分類としては正しく持つが、「どこで買える」枠は当てない。
+
+    発売前の商品にその枠を当てても、読者に返せる中身が「まだ売っていない」しか
+    無い。分類の正しさと、枠を当てるかは別の判断。
+    """
+    latest = tmp_path / "latest.json"
+    latest.write_text(json.dumps({"items": {
+        "B0IN": {"avail": "在庫あり。", "p": 1000, "ts": NOW.isoformat()},
+        "B0OOS": {"avail": "一時的に在庫切れ; 入荷時期は未定です。", "p": 1000, "ts": NOW.isoformat()},
+        "B0PRE": {"avail": "この商品の発売予定日は2026年9月19日です。", "p": 1000, "ts": NOW.isoformat()},
+        "B0DLY": {"avail": "通常1～2か月以内に発送します。", "p": 1000, "ts": NOW.isoformat()},
+        "B0UNK": {"avail": None, "p": 1000, "ts": NOW.isoformat()},
+    }}, ensure_ascii=False), encoding="utf-8")
+    idx = ss.load_stock_index(latest, now=NOW)
+    assert ss.can_use_stock_title("B0IN", idx) is True
+    assert ss.can_use_stock_title("B0DLY", idx) is True
+    # 在庫切れは「買えない」と書く枠として成立するので対象のまま。
+    assert ss.can_use_stock_title("B0OOS", idx) is True
+    assert ss.can_use_stock_title("B0PRE", idx) is False
+    assert ss.can_use_stock_title("B0UNK", idx) is False
