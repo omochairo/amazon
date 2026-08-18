@@ -117,10 +117,14 @@ jobs:
         run: |
           set +e
           DAYS="${INPUT_DAYS:-7}"
+          # #4793: secret 未設定は緑で skip しない。GA4 側 (上のステップ) は既に
+          # exit 1 なのに GSC だけ緑 skip だと、token が失効した週から
+          # 「GA4 だけのレポート」が黙って出続け、誰も気付かない。fetch 失敗
+          # (rc != 0) は別クラスなので下の warning のまま残す — あれは一時的な
+          # API 失敗で、GA4 だけのレポートを出すのが正しい縮退。
           if [ -z "$GSC_OAUTH_REFRESH_TOKEN" ] || [ -z "$GSC_SITE_URL" ]; then
-            echo "::notice::GSC secrets not configured — skipping GSC fetch (Phase 1 only)"
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error::required secret not set — GSC_OAUTH_REFRESH_TOKEN / GSC_SITE_URL"
+            exit 1
           fi
           python scripts/fetch_gsc.py --days "$DAYS"
           rc=$?
