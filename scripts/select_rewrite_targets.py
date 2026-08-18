@@ -42,6 +42,10 @@ from typing import Iterable
 # v7 施行日は quality_gate を単一情報源とする (audit_uniqueness.cohort_for_slug と
 # 同じ定数を見ることで pre/post v7 の線引きが 2 箇所でずれないようにする)。
 from quality_gate import HOW_TO_CHOOSE_ENFORCE_FROM
+# #5490: 生成側 (03-invoke-jules) が defer する ASIN を選ばないための適格性判定。
+# 判定は rewrite_queue が SSOT (詳細は rewrite_queue.is_generatable の docstring)。
+import rewrite_queue
+from rewrite_queue import is_generatable, load_markers
 
 _ASIN_RE = re.compile(r"(B0[A-Z0-9]{8})")
 _SLUG_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-(B0[A-Z0-9]{8})$")
@@ -99,11 +103,21 @@ def select(
     candidates: Iterable[dict],
     excluded: set[str],
     limit: int,
-) -> list[dict]:
-    """Sort by (pre-v7 first, date asc) and return up to ``limit``.
+    generatable=None,
+) -> tuple[list[dict], list[str]]:
+    """Sort by (pre-v7 first, date asc) and return ``(picked, deferred)``.
 
     ``total_score`` は順序付けに使わない (理由はモジュール docstring)。日付が読めない
     候補は安全側で post-v7 扱いにする (quality_gate._how_to_choose_enforced と同じ方針)。
+
+    #5490: **生成側が defer する ASIN は選ばない。** `03-invoke-jules` は
+    band=zero / unfetched を生成対象から外すので、それを選ぶとマーカーだけが
+    永久に残り、次の選定でも同じ ASIN が先頭に来る (実測で最古 56 日・中央値
+    30 日の滞留)。判定は rewrite_queue.is_generatable が SSOT。
+
+    除外した ASIN は捨てずに第 2 戻り値で返す。**黙って落とすと「選ばれないから
+    気付かない」状態になる**ので、呼び出し側がログに出せるようにしておく
+    (#4789 の「鳴っていない = 健全とは読めない」と同じ)。
     """
     def key(c: dict) -> tuple[int, str]:
         date = c.get("date") or ""
@@ -112,7 +126,22 @@ def select(
 
     available = [c for c in candidates if c["asin"] not in excluded]
     available.sort(key=key)
-    return available[: max(limit, 0)]
+
+    # 既定は実データの band 判定。テストは per_asin ディレクトリを作らずに
+    # 順序だけを確かめたいので差し替えられるようにしておく (per_asin が無い ASIN は
+    # band=unfetched = defer 対象になり、順序のテストが書けなくなるため)。
+    check = generatable if generatable is not None else is_generatable
+
+    picked: list[dict] = []
+    deferred: list[str] = []
+    for c in available:
+        if len(picked) >= max(limit, 0):
+            break
+        if check(c["asin"]):
+            picked.append(c)
+        else:
+            deferred.append(c["asin"])
+    return picked, deferred
 
 
 def main() -> int:
@@ -133,11 +162,26 @@ def main() -> int:
         default="",
         help="Write CSV (one ASIN per line) to this path. Default: stdout.",
     )
+    ap.add_argument(
+        "--queue-dir",
+        default=rewrite_queue.QUEUE_DIR,
+        help="#5490: 既に依頼済み (マーカーあり) の ASIN を選び直さないために読む。",
+    )
     args = ap.parse_args()
 
     candidates = collect_candidates(args.articles_dir)
     excluded = _read_exclude(args.exclude_file)
-    picked = select(candidates, excluded, args.limit)
+    # #5490 対処D: 既にマーカーがある ASIN は「依頼済みで生成待ち」なので選び直さない。
+    #
+    # 呼び出し側が渡す exclude は open PR タイトル + lock ブランチだけで、idle-fill の
+    # PR がマージされた瞬間に外れる。一方マーカーは生成が着地するまで残るので、
+    # 従来は **同じ ASIN を半日ごとに prepend し直す** 形になっていた。実際 #5358 と
+    # #5428 は対象 12 件が完全一致し、後者は日次 fetch の書き換えとコンフリクトして
+    # 止まっていた。
+    pending = set(load_markers(args.queue_dir))
+    if pending:
+        excluded = excluded | pending
+    picked, deferred = select(candidates, excluded, args.limit)
 
     body = "\n".join(c["asin"] for c in picked)
     if args.out:
@@ -149,11 +193,22 @@ def main() -> int:
 
     print(
         f"[select_rewrite_targets] candidates={len(candidates)} "
-        f"excluded={len(excluded)} picked={len(picked)} limit={args.limit}",
+        f"excluded={len(excluded)} pending_markers={len(pending)} "
+        f"deferred={len(deferred)} "
+        f"picked={len(picked)} limit={args.limit}",
         file=sys.stderr,
     )
     for c in picked:
         print(f"  -> {c['asin']} slug={c['slug']}", file=sys.stderr)
+    if deferred:
+        # #5490: 黙って落とさない。ここに出続ける ASIN は「素材が無くてリライト
+        # できない記事」であり、放置すると古いまま配信され続ける (対処は #5490 案B の
+        # 収集レーン)。件数が増え続けるなら、それ自体が別の問題の信号になる。
+        print(
+            f"  deferred (band=zero/unfetched, 生成側が見送るので選ばない): "
+            f"{', '.join(deferred)}",
+            file=sys.stderr,
+        )
     return 0
 
 

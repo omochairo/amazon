@@ -17,6 +17,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS_DIR = os.path.dirname(THIS_DIR)
@@ -104,3 +105,58 @@ class SuccessfulRegenInvariantTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# #5490: 生成側が defer するマーカーの取り下げ
+# ---------------------------------------------------------------------------
+
+class WithdrawDeferredTest(unittest.TestCase):
+    """`cleanup_completed` は新しい本体が着地したときだけ消すので、**生成されようが
+    無い ASIN のマーカーは永久に残る**。実測 (2026-08-18) で 11 件が band=zero のまま
+    滞留し、最古は 56 日だった。
+    """
+
+    def _queue(self, tmp: str, *asins: str) -> str:
+        qdir = os.path.join(tmp, "queue")
+        for a in asins:
+            rq.write_marker(a, f"2026-05-01-{a}", qdir)
+        return qdir
+
+    def test_withdraws_only_deferred_markers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            qdir = self._queue(tmp, "B0AAAAAAAA", "B0BBBBBBBB")
+            with mock.patch.object(rq, "is_generatable", lambda a: a != "B0AAAAAAAA"):
+                withdrawn = rq.withdraw_deferred(qdir)
+            self.assertEqual(withdrawn, ["B0AAAAAAAA"])
+            self.assertFalse(os.path.exists(rq.marker_path("B0AAAAAAAA", qdir)))
+            self.assertTrue(os.path.exists(rq.marker_path("B0BBBBBBBB", qdir)))
+
+    def test_withdrawing_does_not_touch_article_bodies(self) -> None:
+        """取り下げても本体は消さない。
+
+        リライトを諦めるだけで記事は今のまま配信され続ける。旧本体を消してよいのは
+        置き換えが着地したときだけ、という #2711 の不変条件を壊さないこと。
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            qdir = self._queue(tmp, "B0AAAAAAAA")
+            adir = os.path.join(tmp, "articles")
+            os.makedirs(adir)
+            body = os.path.join(adir, "2026-05-01-B0AAAAAAAA.json")
+            with open(body, "w", encoding="utf-8") as f:
+                f.write("{}")
+            with mock.patch.object(rq, "is_generatable", lambda a: False):
+                rq.withdraw_deferred(qdir)
+            self.assertTrue(os.path.exists(body), "本体が消えてはいけない")
+
+    def test_nothing_to_withdraw_is_a_noop(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            qdir = self._queue(tmp, "B0AAAAAAAA")
+            with mock.patch.object(rq, "is_generatable", lambda a: True):
+                self.assertEqual(rq.withdraw_deferred(qdir), [])
+            self.assertTrue(os.path.exists(rq.marker_path("B0AAAAAAAA", qdir)))
+
+    def test_is_generatable_is_permissive_when_scoring_fails(self) -> None:
+        """判定できないことを理由に候補を減らさない (生成側の defer が独立に効く)。"""
+        with mock.patch.dict("sys.modules", {"score_per_asin_info": None}):
+            self.assertTrue(rq.is_generatable("B0AAAAAAAA"))

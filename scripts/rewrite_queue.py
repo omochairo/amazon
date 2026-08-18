@@ -135,6 +135,63 @@ def eligible_rewrite_asins(
     return out
 
 
+# #5490: 03-invoke-jules が生成を見送る band。invoke_jules_repoless.pick_candidates の
+# `deferred_bands` と同じ値で、こちらが SSOT。
+#
+# band=="zero" は「非販売ソース 2 件必須 (v5 §6.5.1) を満たす素材が fetch 済みで
+# 真にゼロ」= 生成しても品質ゲートに構造的不合格、という信号 (#1600 Phase 1)。
+# "unfetched" は第三者収集そのものが未実行。どちらも生成側が defer する。
+DEFERRED_BANDS = ("zero", "unfetched")
+
+
+def is_generatable(asin: str) -> bool:
+    """`03-invoke-jules` がこの ASIN の生成に進むか (#5490)。
+
+    リライトの選定 (select_rewrite_targets) と生成の選定
+    (invoke_jules_repoless.pick_candidates) が別々の適格性ルールを持っていたため、
+    **生成できない ASIN をリライト対象に選び続ける**ループが起きていた:
+
+      1. select_rewrite_targets が pre-v7 の最古から 12 件選ぶ
+      2. idle-fill が prepend + マーカーを書き PR を作る
+      3. pick_candidates が band=zero で defer → 生成されない
+      4. マーカーが消えない → 1 に戻る (同じ 12 件)
+
+    実測 (2026-08-18): キュー先頭の 12 件は band=zero が 11 件で、最古のマーカーは
+    56 日・中央値 30 日ぶん滞留していた。判定をここに集約して両側から呼ぶ。
+
+    スコアリングが失敗したら **True を返す** (判定できないことを理由に候補を
+    減らさない)。生成側の defer は独立に効くので、取りこぼしても二重に落ちるだけ。
+    """
+    try:
+        import score_per_asin_info as sc
+        return sc.score_asin(asin).get("band") not in DEFERRED_BANDS
+    except Exception:
+        return True
+
+
+def deferred_markers(queue_dir: str = QUEUE_DIR) -> list[str]:
+    """マーカーはあるが生成側が defer する ASIN (= 消化されようがない) を返す。"""
+    return sorted(a for a in load_markers(queue_dir) if not is_generatable(a))
+
+
+def withdraw_deferred(queue_dir: str = QUEUE_DIR) -> list[str]:
+    """defer 対象のマーカーを取り下げる (#5490 対処C)。
+
+    `cleanup_completed` は「新しい本体が着地したとき」だけ消すので、生成されない
+    ASIN のマーカーは永久に残る。取り下げても**本体は消さない** — リライトを
+    諦めるだけで、記事は今のまま配信され続ける (`cleanup_completed` が旧本体を
+    消すのは置き換えが着地した後だけ、という #2711 の不変条件は保つ)。
+
+    素材が埋まって band が上がれば、次の選定で普通に選ばれ直す。
+    """
+    withdrawn = deferred_markers(queue_dir)
+    for asin in withdrawn:
+        path = marker_path(asin, queue_dir)
+        if os.path.exists(path):
+            os.remove(path)
+    return withdrawn
+
+
 def cleanup_completed(
     articles_dir: str = "data/articles", queue_dir: str = QUEUE_DIR
 ) -> tuple[int, int]:
@@ -180,6 +237,12 @@ def main() -> int:
         "Safe: deletes only when a newer body already exists.",
     )
     ap.add_argument(
+        "--withdraw-deferred",
+        action="store_true",
+        help="#5490: 生成側が defer する band (zero/unfetched) のマーカーを取り下げる。"
+        "本体は消さない (リライトを諦めるだけで記事は今のまま配信される)。",
+    )
+    ap.add_argument(
         "--list-eligible",
         action="store_true",
         help="Print ASINs still awaiting a fresh body (one per line).",
@@ -188,6 +251,13 @@ def main() -> int:
     if args.cleanup:
         files, markers = cleanup_completed(args.articles_dir, args.queue_dir)
         print(f"[rewrite_queue] cleanup removed_files={files} cleared_markers={markers}")
+    if args.withdraw_deferred:
+        withdrawn = withdraw_deferred(args.queue_dir)
+        print(f"[rewrite_queue] withdrew_deferred={len(withdrawn)}")
+        if withdrawn:
+            # 黙って消さない。ここに出る ASIN は「素材が無くてリライトできない記事」で、
+            # 放置すると古いまま配信され続ける (#5490 案B の収集レーンの対象)。
+            print(f"  withdrawn: {', '.join(withdrawn)}")
     if args.list_eligible:
         for asin in sorted(eligible_rewrite_asins(args.articles_dir, args.queue_dir)):
             print(asin)

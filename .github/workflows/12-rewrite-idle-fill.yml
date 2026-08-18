@@ -81,6 +81,20 @@ jobs:
       - name: Cleanup completed rewrites
         run: python scripts/rewrite_queue.py --cleanup
 
+      # #5490 step 0b: 生成側 (03-invoke-jules) が band=zero / unfetched で見送る
+      # ASIN のマーカーを取り下げる。
+      #
+      # --cleanup は「新しい本体が着地したとき」だけ消すので、**生成されようが無い
+      # ASIN のマーカーは永久に残る**。実測 (2026-08-18) で 11 件が band=zero のまま
+      # 滞留し、最古は 56 日・中央値 30 日だった。マーカーが残る限り
+      # select_rewrite_targets はキュー先頭でそれを見続け、同じ 12 件の PR を
+      # 半日ごとに作り直していた (#5358 と #5428 は対象が完全一致)。
+      #
+      # 取り下げても本体は消さない。リライトを諦めるだけで記事は今のまま配信され、
+      # 素材が埋まって band が上がれば次の選定で普通に選ばれ直す。
+      - name: Withdraw markers the generator will never pick up
+        run: python scripts/rewrite_queue.py --withdraw-deferred
+
       - name: Compute idle slack + select rewrite targets
         id: select
         env:
