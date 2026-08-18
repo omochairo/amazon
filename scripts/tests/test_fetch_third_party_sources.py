@@ -48,6 +48,26 @@ class HostFilterTest(unittest.TestCase):
         ):
             self.assertFalse(F._is_excluded(u), u)
 
+    def test_price_comparison_search_pages_excluded(self):
+        # #5490 案B: 汎用エンジンだけを列挙していたため、価格比較/EC の検索 URL が
+        # 素通りしていた (実測 2026-08-18: 収集済み 6,577 URL 中 search.kakaku.com が
+        # 409 件で全 host 中 3 位)。検索語を URL に埋めただけのページは出典ではない。
+        for u in (
+            "https://search.kakaku.com/gravitrax",
+            "https://www.yamada-denkiweb.com/search/%E3%82%A2%E3%82%AC%E3%83%84",
+            "https://www.biccamera.com/bc/category?q=x",
+            "https://giftmall.co.jp/search/x",
+        ):
+            self.assertTrue(F._is_excluded(u), u)
+
+    def test_review_pages_of_same_sites_kept(self):
+        # 検索 URL は落とすが、レビュー本体は第三者ソースとして残す。
+        for u in (
+            "https://review.kakaku.com/review/K0001234/",
+            "https://mokutopia.com/products/rocket-puzzle-box",
+        ):
+            self.assertFalse(F._is_excluded(u), u)
+
     def test_non_http_excluded(self):
         self.assertTrue(F._is_excluded("ftp://example.com/x"))
         self.assertTrue(F._is_excluded(""))

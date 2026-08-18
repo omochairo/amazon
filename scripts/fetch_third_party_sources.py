@@ -64,6 +64,11 @@ _RETAIL_HOST_SUBSTR = (
     "shop", "store.", "cart",  # 汎用 EC サブドメイン (緩め)
 )
 # 検索エンジンの結果ページ (#1599 で弾く対象)。出典 URL にしてはいけない。
+#
+# #5490 案B: この tuple は汎用エンジンしか列挙しておらず、価格比較/EC の検索 URL が
+# 素通りしていた (実測 2026-08-18: 収集済み 6,577 URL のうち search.kakaku.com が
+# 409 件で全 host 中 3 位、path/query 型と併せて約 510 件 = 7.7%)。構造で判定する
+# score_per_asin_info.is_search_result_url を併用して塞ぐ (判定の SSOT は向こう側)。
 _SEARCH_ENGINE_SUBSTR = (
     "google.com/search", "google.co.jp/search", "bing.com/search",
     "search.yahoo", "duckduckgo.com",
@@ -84,6 +89,8 @@ def _host(url: str) -> str:
 def _is_excluded(url: str) -> bool:
     low = (url or "").lower()
     if not low.startswith("http"):
+        return True
+    if _sc.is_search_result_url(low):  # #5490 案B: 検索結果ページを構造で弾く
         return True
     for grp in (_RETAIL_HOST_SUBSTR, _SEARCH_ENGINE_SUBSTR, _OWN_SITE_SUBSTR):
         for sub in grp:
