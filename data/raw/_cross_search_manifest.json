@@ -1,26 +1,26 @@
 {
-  "generated_at": "2026-08-17T09:49:43.698352+00:00",
+  "generated_at": "2026-08-18T01:17:14.865028+00:00",
   "summary": {
     "rakuten": {
-      "jan_400": 6,
-      "jan_books": 70,
-      "jan_http_429": 56,
+      "jan_400": 7,
+      "jan_books": 72,
+      "jan_http_429": 54,
       "jan_ichiba": 1132,
-      "jan_zero": 150,
-      "no_jan": 133,
-      "unknown": 595
+      "jan_zero": 153,
+      "no_jan": 135,
+      "unknown": 600
     },
     "yahoo": {
-      "jan": 1224,
+      "jan": 1229,
       "jan_5xx": 1,
-      "jan_zero": 222,
-      "no_jan": 149,
-      "unknown": 546
+      "jan_zero": 229,
+      "no_jan": 152,
+      "unknown": 542
     },
     "prevent_drops": {
       "rakuten:model_mismatch": 10,
-      "yahoo:model_mismatch": 502,
-      "yahoo:used_listing": 12
+      "yahoo:model_mismatch": 412,
+      "yahoo:used_listing": 19
     }
   },
   "items": [
@@ -37,18 +37,6 @@
       }
     },
     {
-      "asin": "B0DM1JDN52",
-      "jan_code": "4582716625891",
-      "rakuten": {
-        "method": "jan_ichiba",
-        "jan_attempt": "jan_ichiba"
-      },
-      "yahoo": {
-        "method": "jan",
-        "jan_attempt": "jan"
-      }
-    },
-    {
       "asin": "B0F26B63Y8",
       "jan_code": "",
       "rakuten": {
@@ -61,11 +49,35 @@
       }
     },
     {
+      "asin": "B0F8HCR6H4",
+      "jan_code": "4582769733352",
+      "rakuten": {
+        "method": "jan_books",
+        "jan_attempt": "jan_books"
+      },
+      "yahoo": {
+        "method": "jan",
+        "jan_attempt": "jan"
+      }
+    },
+    {
       "asin": "B0FC682S35",
       "jan_code": "4550432271494",
       "rakuten": {
         "method": "jan_ichiba",
         "jan_attempt": "jan_ichiba"
+      },
+      "yahoo": {
+        "method": "jan",
+        "jan_attempt": "jan"
+      }
+    },
+    {
+      "asin": "B0H1KZBCRB",
+      "jan_code": "4907953781696",
+      "rakuten": {
+        "method": "text",
+        "jan_attempt": "jan_400"
       },
       "yahoo": {
         "method": "jan",
@@ -109,35 +121,47 @@
       }
     },
     {
-      "asin": "B09V897K6V",
-      "jan_code": "0725432269855",
-      "rakuten": {
-        "method": "text",
-        "jan_attempt": "jan_http_429"
-      },
-      "yahoo": {
-        "method": "text",
-        "jan_attempt": "jan_zero"
-      }
-    },
-    {
-      "asin": "B0H454H35H",
-      "jan_code": "0742085329248",
-      "rakuten": {
-        "method": "text",
-        "jan_attempt": "jan_zero"
-      },
-      "yahoo": {
-        "method": "text",
-        "jan_attempt": "jan_zero"
-      }
-    },
-    {
       "asin": "B0H6J47YN8",
       "jan_code": "4525636362460",
       "rakuten": {
         "method": "jan_ichiba",
         "jan_attempt": "jan_ichiba"
+      },
+      "yahoo": {
+        "method": "text",
+        "jan_attempt": "jan_zero"
+      }
+    },
+    {
+      "asin": "B0H4LFCQL5",
+      "jan_code": "0717929704925",
+      "rakuten": {
+        "method": "text",
+        "jan_attempt": "jan_zero"
+      },
+      "yahoo": {
+        "method": "text",
+        "jan_attempt": "jan_zero"
+      }
+    },
+    {
+      "asin": "B0GXG929TF",
+      "jan_code": "5410500988961",
+      "rakuten": {
+        "method": "jan_ichiba",
+        "jan_attempt": "jan_ichiba"
+      },
+      "yahoo": {
+        "method": "text",
+        "jan_attempt": "jan_zero"
+      }
+    },
+    {
+      "asin": "B0GV4WZ8XV",
+      "jan_code": "0765611598567",
+      "rakuten": {
+        "method": "text",
+        "jan_attempt": "jan_zero"
       },
       "yahoo": {
         "method": "text",
@@ -186,18 +210,6 @@
       "rakuten": {
         "method": "jan_ichiba",
         "jan_attempt": "jan_ichiba"
-      },
-      "yahoo": {
-        "method": "jan",
-        "jan_attempt": "jan"
-      }
-    },
-    {
-      "asin": "B0H1KPL4KY",
-      "jan_code": "4907953781689",
-      "rakuten": {
-        "method": "text",
-        "jan_attempt": "jan_400"
       },
       "yahoo": {
         "method": "jan",
@@ -265,8 +277,20 @@
       }
     },
     {
-      "asin": "B0HBVMVWXS",
-      "jan_code": "4904810078906",
+      "asin": "B0HBVLH5VT",
+      "jan_code": "4904810092360",
+      "rakuten": {
+        "method": "none",
+        "jan_attempt": "unknown"
+      },
+      "yahoo": {
+        "method": "jan",
+        "jan_attempt": "jan"
+      }
+    },
+    {
+      "asin": "B0FNM231DK",
+      "jan_code": "4904810950400",
       "rakuten": {
         "method": "jan_ichiba",
         "jan_attempt": "jan_ichiba"
@@ -277,8 +301,8 @@
       }
     },
     {
-      "asin": "B0FNM231DK",
-      "jan_code": "4904810950400",
+      "asin": "B0HBVMVWXS",
+      "jan_code": "4904810078906",
       "rakuten": {
         "method": "jan_ichiba",
         "jan_attempt": "jan_ichiba"
@@ -301,6 +325,18 @@
       }
     },
     {
+      "asin": "B0HBVLM13G",
+      "jan_code": "4904810091905",
+      "rakuten": {
+        "method": "none",
+        "jan_attempt": "unknown"
+      },
+      "yahoo": {
+        "method": "jan",
+        "jan_attempt": "jan"
+      }
+    },
+    {
       "asin": "B0F9YGNZGY",
       "jan_code": "",
       "rakuten": {
@@ -313,15 +349,27 @@
       }
     },
     {
-      "asin": "B0GMFHY6ZV",
-      "jan_code": "4904810097273",
+      "asin": "B0FDQXZ39P",
+      "jan_code": "",
       "rakuten": {
-        "method": "jan_ichiba",
-        "jan_attempt": "jan_ichiba"
+        "method": "text",
+        "jan_attempt": "no_jan"
       },
       "yahoo": {
-        "method": "jan",
-        "jan_attempt": "jan"
+        "method": "text",
+        "jan_attempt": "no_jan"
+      }
+    },
+    {
+      "asin": "B0DQHFMQ6J",
+      "jan_code": "",
+      "rakuten": {
+        "method": "text",
+        "jan_attempt": "no_jan"
+      },
+      "yahoo": {
+        "method": "text",
+        "jan_attempt": "no_jan"
       }
     },
     {
@@ -337,23 +385,11 @@
       }
     },
     {
-      "asin": "B0H4PK66SN",
-      "jan_code": "4904810096504",
+      "asin": "B0FH4FD9NB",
+      "jan_code": "4904810982432",
       "rakuten": {
-        "method": "text",
-        "jan_attempt": "jan_http_429"
-      },
-      "yahoo": {
-        "method": "jan",
-        "jan_attempt": "jan"
-      }
-    },
-    {
-      "asin": "B0DJQQDFPS",
-      "jan_code": "4904810939535",
-      "rakuten": {
-        "method": "jan_ichiba",
-        "jan_attempt": "jan_ichiba"
+        "method": "none",
+        "jan_attempt": "unknown"
       },
       "yahoo": {
         "method": "jan",
@@ -493,32 +529,8 @@
       }
     },
     {
-      "asin": "B0CFVYZRN1",
-      "jan_code": "5702017600864",
-      "rakuten": {
-        "method": "jan_ichiba",
-        "jan_attempt": "jan_ichiba"
-      },
-      "yahoo": {
-        "method": "jan",
-        "jan_attempt": "jan"
-      }
-    },
-    {
       "asin": "B0BBRXB8S8",
       "jan_code": "5702017416335",
-      "rakuten": {
-        "method": "jan_ichiba",
-        "jan_attempt": "jan_ichiba"
-      },
-      "yahoo": {
-        "method": "jan",
-        "jan_attempt": "jan"
-      }
-    },
-    {
-      "asin": "B0DHSC99W6",
-      "jan_code": "5702017812427",
       "rakuten": {
         "method": "jan_ichiba",
         "jan_attempt": "jan_ichiba"
@@ -618,18 +630,6 @@
       "rakuten": {
         "method": "jan_ichiba",
         "jan_attempt": "jan_ichiba"
-      },
-      "yahoo": {
-        "method": "jan",
-        "jan_attempt": "jan"
-      }
-    },
-    {
-      "asin": "B0FCLPKSNC",
-      "jan_code": "4904810958758",
-      "rakuten": {
-        "method": "text",
-        "jan_attempt": "jan_400"
       },
       "yahoo": {
         "method": "jan",
@@ -781,18 +781,6 @@
       }
     },
     {
-      "asin": "B08CZ77T6H",
-      "jan_code": "4582548240606",
-      "rakuten": {
-        "method": "jan_ichiba",
-        "jan_attempt": "jan_ichiba"
-      },
-      "yahoo": {
-        "method": "jan",
-        "jan_attempt": "jan"
-      }
-    },
-    {
       "asin": "B0F66XDL6Q",
       "jan_code": "",
       "rakuten": {
@@ -853,18 +841,6 @@
       }
     },
     {
-      "asin": "B0G1TYVLKY",
-      "jan_code": "5010996399632",
-      "rakuten": {
-        "method": "text",
-        "jan_attempt": "jan_400"
-      },
-      "yahoo": {
-        "method": "jan",
-        "jan_attempt": "jan"
-      }
-    },
-    {
       "asin": "B0HCT3B45V",
       "jan_code": "4934054088102",
       "rakuten": {
@@ -889,83 +865,47 @@
       }
     },
     {
-      "asin": "B0FZBG22MD",
+      "asin": "4910762191",
+      "jan_code": "9784910762197",
+      "rakuten": {
+        "method": "jan_ichiba",
+        "jan_attempt": "jan_ichiba"
+      },
+      "yahoo": {
+        "method": "text",
+        "jan_attempt": "jan_zero"
+      }
+    },
+    {
+      "asin": "4910762183",
+      "jan_code": "9784910762180",
+      "rakuten": {
+        "method": "jan_ichiba",
+        "jan_attempt": "jan_ichiba"
+      },
+      "yahoo": {
+        "method": "text",
+        "jan_attempt": "jan_zero"
+      }
+    },
+    {
+      "asin": "B0FND3DRMT",
       "jan_code": "",
       "rakuten": {
+        "method": "none",
+        "jan_attempt": "unknown"
+      },
+      "yahoo": {
         "method": "text",
         "jan_attempt": "no_jan"
-      },
-      "yahoo": {
-        "method": "text",
-        "jan_attempt": "no_jan"
       }
     },
     {
-      "asin": "B0C888VS54",
-      "jan_code": "4905426701004",
+      "asin": "B08X42NDXV",
+      "jan_code": "4580052625254",
       "rakuten": {
-        "method": "text",
-        "jan_attempt": "jan_http_429"
-      },
-      "yahoo": {
-        "method": "jan",
-        "jan_attempt": "jan"
-      }
-    },
-    {
-      "asin": "B07P1D5GM2",
-      "jan_code": "0871772000273",
-      "rakuten": {
-        "method": "none",
-        "jan_attempt": "unknown"
-      },
-      "yahoo": {
         "method": "text",
         "jan_attempt": "jan_zero"
-      }
-    },
-    {
-      "asin": "B0G9B8MZMG",
-      "jan_code": "0871772003106",
-      "rakuten": {
-        "method": "none",
-        "jan_attempt": "unknown"
-      },
-      "yahoo": {
-        "method": "text",
-        "jan_attempt": "jan_zero"
-      }
-    },
-    {
-      "asin": "B0862H91QM",
-      "jan_code": "0871772002758",
-      "rakuten": {
-        "method": "none",
-        "jan_attempt": "unknown"
-      },
-      "yahoo": {
-        "method": "text",
-        "jan_attempt": "jan_zero"
-      }
-    },
-    {
-      "asin": "B09NYKBFQ6",
-      "jan_code": "4595644355013",
-      "rakuten": {
-        "method": "jan_ichiba",
-        "jan_attempt": "jan_ichiba"
-      },
-      "yahoo": {
-        "method": "jan",
-        "jan_attempt": "jan"
-      }
-    },
-    {
-      "asin": "B0GWM9ZTYX",
-      "jan_code": "4979817140437",
-      "rakuten": {
-        "method": "jan_ichiba",
-        "jan_attempt": "jan_ichiba"
       },
       "yahoo": {
         "method": "jan",
@@ -978,6 +918,66 @@
       "rakuten": {
         "method": "none",
         "jan_attempt": "unknown"
+      },
+      "yahoo": {
+        "method": "jan",
+        "jan_attempt": "jan"
+      }
+    },
+    {
+      "asin": "B0FX3XP67T",
+      "jan_code": "7071216127709",
+      "rakuten": {
+        "method": "text",
+        "jan_attempt": "jan_400"
+      },
+      "yahoo": {
+        "method": "text",
+        "jan_attempt": "jan_zero"
+      }
+    },
+    {
+      "asin": "B0DB572GLR",
+      "jan_code": "",
+      "rakuten": {
+        "method": "text",
+        "jan_attempt": "no_jan"
+      },
+      "yahoo": {
+        "method": "text",
+        "jan_attempt": "no_jan"
+      }
+    },
+    {
+      "asin": "B0FPQQPYRW",
+      "jan_code": "4971404323575",
+      "rakuten": {
+        "method": "jan_books",
+        "jan_attempt": "jan_books"
+      },
+      "yahoo": {
+        "method": "jan",
+        "jan_attempt": "jan"
+      }
+    },
+    {
+      "asin": "B0CM962C94",
+      "jan_code": "4901123223740",
+      "rakuten": {
+        "method": "none",
+        "jan_attempt": "unknown"
+      },
+      "yahoo": {
+        "method": "text",
+        "jan_attempt": "jan_zero"
+      }
+    },
+    {
+      "asin": "B0D78Q64H1",
+      "jan_code": "4580060031733",
+      "rakuten": {
+        "method": "jan_ichiba",
+        "jan_attempt": "jan_ichiba"
       },
       "yahoo": {
         "method": "jan",
@@ -3200,8 +3200,8 @@
         "jan_attempt": "jan_books"
       },
       "yahoo": {
-        "method": "none",
-        "jan_attempt": "unknown"
+        "method": "jan",
+        "jan_attempt": "jan"
       }
     },
     {
@@ -3524,8 +3524,8 @@
         "jan_attempt": "jan_books"
       },
       "yahoo": {
-        "method": "none",
-        "jan_attempt": "unknown"
+        "method": "jan",
+        "jan_attempt": "jan"
       }
     },
     {
@@ -4635,6 +4635,18 @@
     {
       "asin": "B0DJFQVZ4K",
       "jan_code": "4952907008879",
+      "rakuten": {
+        "method": "jan_ichiba",
+        "jan_attempt": "jan_ichiba"
+      },
+      "yahoo": {
+        "method": "jan",
+        "jan_attempt": "jan"
+      }
+    },
+    {
+      "asin": "B0DHSC99W6",
+      "jan_code": "5702017812427",
       "rakuten": {
         "method": "jan_ichiba",
         "jan_attempt": "jan_ichiba"
@@ -9116,8 +9128,8 @@
         "jan_attempt": "jan_ichiba"
       },
       "yahoo": {
-        "method": "none",
-        "jan_attempt": "unknown"
+        "method": "jan",
+        "jan_attempt": "jan"
       }
     },
     {
@@ -10834,6 +10846,18 @@
       "yahoo": {
         "method": "text",
         "jan_attempt": "jan_zero"
+      }
+    },
+    {
+      "asin": "B08CZ77T6H",
+      "jan_code": "4582548240606",
+      "rakuten": {
+        "method": "jan_ichiba",
+        "jan_attempt": "jan_ichiba"
+      },
+      "yahoo": {
+        "method": "jan",
+        "jan_attempt": "jan"
       }
     },
     {
@@ -14737,6 +14761,18 @@
       }
     },
     {
+      "asin": "B0H454H35H",
+      "jan_code": "0742085329248",
+      "rakuten": {
+        "method": "text",
+        "jan_attempt": "jan_zero"
+      },
+      "yahoo": {
+        "method": "text",
+        "jan_attempt": "jan_zero"
+      }
+    },
+    {
       "asin": "B07FFT8P4V",
       "jan_code": "",
       "rakuten": {
@@ -14878,6 +14914,18 @@
       "yahoo": {
         "method": "jan",
         "jan_attempt": "jan"
+      }
+    },
+    {
+      "asin": "B09V897K6V",
+      "jan_code": "0725432269855",
+      "rakuten": {
+        "method": "text",
+        "jan_attempt": "jan_http_429"
+      },
+      "yahoo": {
+        "method": "text",
+        "jan_attempt": "jan_zero"
       }
     },
     {
@@ -15330,6 +15378,18 @@
       "rakuten": {
         "method": "text",
         "jan_attempt": "jan_zero"
+      },
+      "yahoo": {
+        "method": "text",
+        "jan_attempt": "jan_zero"
+      }
+    },
+    {
+      "asin": "B0862H91QM",
+      "jan_code": "0871772002758",
+      "rakuten": {
+        "method": "none",
+        "jan_attempt": "unknown"
       },
       "yahoo": {
         "method": "text",
@@ -16789,6 +16849,18 @@
       }
     },
     {
+      "asin": "B0G9B8MZMG",
+      "jan_code": "0871772003106",
+      "rakuten": {
+        "method": "none",
+        "jan_attempt": "unknown"
+      },
+      "yahoo": {
+        "method": "text",
+        "jan_attempt": "jan_zero"
+      }
+    },
+    {
       "asin": "B0D6QN4YXV",
       "jan_code": "4535304730996",
       "rakuten": {
@@ -16875,6 +16947,18 @@
     {
       "asin": "B0CH1HX19R",
       "jan_code": "4059433837994",
+      "rakuten": {
+        "method": "jan_ichiba",
+        "jan_attempt": "jan_ichiba"
+      },
+      "yahoo": {
+        "method": "jan",
+        "jan_attempt": "jan"
+      }
+    },
+    {
+      "asin": "B0GWM9ZTYX",
+      "jan_code": "4979817140437",
       "rakuten": {
         "method": "jan_ichiba",
         "jan_attempt": "jan_ichiba"
@@ -18013,6 +18097,18 @@
       }
     },
     {
+      "asin": "B0FCLPKSNC",
+      "jan_code": "4904810958758",
+      "rakuten": {
+        "method": "text",
+        "jan_attempt": "jan_400"
+      },
+      "yahoo": {
+        "method": "jan",
+        "jan_attempt": "jan"
+      }
+    },
+    {
       "asin": "B0C6TK6H7Y",
       "jan_code": "4521718067254",
       "rakuten": {
@@ -19126,6 +19222,18 @@
       "yahoo": {
         "method": "text",
         "jan_attempt": "no_jan"
+      }
+    },
+    {
+      "asin": "B0DJQQDFPS",
+      "jan_code": "4904810939535",
+      "rakuten": {
+        "method": "jan_ichiba",
+        "jan_attempt": "jan_ichiba"
+      },
+      "yahoo": {
+        "method": "jan",
+        "jan_attempt": "jan"
       }
     },
     {
@@ -20566,6 +20674,18 @@
       "yahoo": {
         "method": "text",
         "jan_attempt": "no_jan"
+      }
+    },
+    {
+      "asin": "B0H1KPL4KY",
+      "jan_code": "4907953781689",
+      "rakuten": {
+        "method": "text",
+        "jan_attempt": "jan_400"
+      },
+      "yahoo": {
+        "method": "jan",
+        "jan_attempt": "jan"
       }
     },
     {
@@ -22669,6 +22789,18 @@
       }
     },
     {
+      "asin": "B07P1D5GM2",
+      "jan_code": "0871772000273",
+      "rakuten": {
+        "method": "none",
+        "jan_attempt": "unknown"
+      },
+      "yahoo": {
+        "method": "text",
+        "jan_attempt": "jan_zero"
+      }
+    },
+    {
       "asin": "B076563PC9",
       "jan_code": "4526324517438",
       "rakuten": {
@@ -23972,8 +24104,8 @@
         "jan_attempt": "jan_books"
       },
       "yahoo": {
-        "method": "none",
-        "jan_attempt": "unknown"
+        "method": "jan",
+        "jan_attempt": "jan"
       }
     },
     {
