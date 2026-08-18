@@ -243,6 +243,130 @@ def test_price_history_note_uses_carry_only_price_when_no_change_in_window(tmp_p
 
 
 # ---------------------------------------------------------------------------
+# 4b: 在庫切れ期間の扱い (#5130 残件2)
+#
+# 最安値 = 「実際に買えた時点の価格の最小値」。買えなかった期間の価格は
+# 無限に高い価格が付いていたのと同じ扱いにする。ただし 30 日のうち 1 日しか
+# 買えなかった商品でも、その 1 日の価格は候補に残す (需要が高いだけで、
+# その値段で買えたことは事実だから)。
+# ---------------------------------------------------------------------------
+
+def _oos_rec(days_ago: int, price: int | None = None,
+             availability: str = "一時的に在庫切れ; 入荷時期は未定です。") -> dict:
+    """在庫切れ観測。``price`` を渡すと「価格はあるが買えない」形になる
+    (実データで 38,666 行中 163 行を占める形)。"""
+    ts = (NOW - timedelta(days=days_ago)).isoformat()
+    return {"ts": ts, "source": "amazon", "price": price, "availability": availability}
+
+
+def test_price_history_note_excludes_cheaper_price_while_out_of_stock(tmp_path):
+    """在庫切れ中に付いた安い価格は最安値にしない。
+
+    実例 (B0D7LBBD88): 7/19 に ￥1,800 (通常発送) → 8/6 に ￥1,264 が付くが
+    `一時的に在庫切れ`。旧実装は ￥1,264 を出しており、誰も買えなかった価格を
+    最安値として提示していた。
+    """
+    root = tmp_path / "price_history"
+    _write_jsonl(root, "B001", [_rec(25, 1800), _oos_rec(10, 1264)])
+    note = wtb.build_price_history_note("B001", root, now=NOW)
+    assert note is not None
+    assert "￥1,800" in note
+    assert "￥1,264" not in note
+    assert "在庫切れを確認した期間は除いています" in note
+
+
+def test_price_history_note_keeps_single_day_of_availability(tmp_path):
+    """30 日のうち 1 点しか買えなくても、その価格は最安値として出す。
+
+    短時間で売り切れる商品はそれだけ需要が高い。「その値段で買えた」ことは
+    事実なので、買えた期間の長さでは重み付けしない。
+    """
+    root = tmp_path / "price_history"
+    _write_jsonl(root, "B001", [
+        _oos_rec(28, 3000), _rec(15, 1200), _oos_rec(14, 2900), _oos_rec(2, 2900),
+    ])
+    note = wtb.build_price_history_note("B001", root, now=NOW)
+    assert note is not None
+    assert "￥1,200" in note
+
+
+def test_price_history_note_omits_qualifier_when_exclusion_changes_nothing(tmp_path):
+    """除外した価格が最安値より高いなら注記は出さない。
+
+    注記は「なぜ表より高い数字が出ているのか」を説明するためのもの。説明する
+    食い違いが無いのに付けると、実測 8,824 ASIN のうち 132 件で文が伸びるだけ。
+    """
+    root = tmp_path / "price_history"
+    _write_jsonl(root, "B001", [_rec(25, 1200), _oos_rec(10, 3000)])
+    note = wtb.build_price_history_note("B001", root, now=NOW)
+    assert note is not None
+    assert "￥1,200" in note
+    assert "除いています" not in note
+
+
+def test_price_history_note_none_when_never_buyable_in_window(tmp_path):
+    """窓内に買えた記録が 1 つも無ければ note ごと出さない。
+
+    在庫が無いこと自体は conclusion 行が取得日つきで述べているので、ここで
+    代わりに何かを書く必要は無い。実データで 8 ASIN が該当。
+    """
+    root = tmp_path / "price_history"
+    _write_jsonl(root, "B001", [_oos_rec(40, 2900), _oos_rec(20, 2939), _oos_rec(5, 2932)])
+    note = wtb.build_price_history_note("B001", root, now=NOW)
+    assert note is None
+
+
+def test_price_history_note_drops_carry_when_out_of_stock_at_window_start(tmp_path):
+    """窓に入る前から在庫が無ければ carry を使わない。
+
+    carry を足すと「窓の間ずっとこの値段で売っていた」という、記録と正反対の
+    主張になる。
+    """
+    root = tmp_path / "price_history"
+    _write_jsonl(root, "B001", [_rec(90, 1500), _oos_rec(40, 1400), _rec(3, 2200)])
+    note = wtb.build_price_history_note("B001", root, now=NOW)
+    assert note is not None
+    assert "￥2,200" in note
+    assert "在庫切れを確認した期間は除いています" in note
+
+
+def test_price_history_note_treats_null_price_row_as_unbuyable(tmp_path):
+    """価格の無い在庫切れ行 (#5130 項目1 の記録) も carry を無効化する。"""
+    root = tmp_path / "price_history"
+    _write_jsonl(root, "B001", [_rec(90, 1500), _oos_rec(40, None), _rec(3, 2200)])
+    note = wtb.build_price_history_note("B001", root, now=NOW)
+    assert note is not None
+    assert "￥2,200" in note
+
+
+def test_price_history_note_keeps_low_stock_and_delayed_shipping(tmp_path):
+    """「残りN点」「N〜N日以内に発送します。」は買えるので除外しない。"""
+    root = tmp_path / "price_history"
+    _write_jsonl(root, "B001", [
+        {"ts": (NOW - timedelta(days=20)).isoformat(), "source": "amazon",
+         "price": 1500, "availability": "残り1点 ご注文はお早めに"},
+        {"ts": (NOW - timedelta(days=5)).isoformat(), "source": "amazon",
+         "price": 1100, "availability": "通常2～3日以内に発送します。"},
+    ])
+    note = wtb.build_price_history_note("B001", root, now=NOW)
+    assert note is not None
+    assert "￥1,100" in note
+    assert "除いています" not in note
+
+
+def test_price_history_note_min_points_gate_counts_all_priced_rows(tmp_path):
+    """門番 (PRICE_HISTORY_MIN_POINTS) の母数は在庫と無関係に価格観測の全件。
+
+    在庫で母数を絞ると、記録は厚いのに「推移を語れない」と判定されてしまう。
+    """
+    root = tmp_path / "price_history"
+    _write_jsonl(root, "B001", [_oos_rec(20, 3000), _rec(5, 1200)])
+    note = wtb.build_price_history_note("B001", root, now=NOW)
+    assert note is not None
+    assert "￥1,200" in note
+
+
+# ---------------------------------------------------------------------------
 # 4b: price_watch (日次) と price_history (週次) の 2 レーンをマージして読む
 #
 # 2 レーンは dedupe が独立に効いて位相がずれるため、実測でほぼ相補 (共通

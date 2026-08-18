@@ -27,6 +27,7 @@ import urllib.parse
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
+import price_overlay
 import stock_status
 
 # #2686: この日付以降の date を持つ記事にのみ新型を適用する。既存記事保護の
@@ -241,11 +242,23 @@ def build_rows(
 # 価格推移 (過去30日最安値)
 # ---------------------------------------------------------------------------
 
-def _load_amazon_price_points(root: pathlib.Path | str, asin: str) -> list[dict[str, Any]]:
-    """``<root>/<ASIN>.jsonl`` から source=amazon, price>0 の観測点を ts 昇順で
+def _load_amazon_observations(root: pathlib.Path | str, asin: str) -> list[dict[str, Any]]:
+    """``<root>/<ASIN>.jsonl`` から source=amazon の観測を **在庫状態ごと** ts 昇順で
     返す。無い/壊れていればベストエフォートで空を返す。``root`` は
     ``data/price_watch/history/`` (日次) と ``data/price_history/`` (週次)
     のどちらでも呼べる (レコード形式は両レーン同一)。
+
+    各要素は ``{"ts", "price" (int|None), "availability" (str|None), "buyable"}``。
+
+    ``buyable`` = 「その時点で、その価格で実際に買えたと確認できた」。#5130 残件2 で
+    追加した。価格の有無だけでは足りない 2 つの形があるため:
+
+      - ``price: null`` + ``availability`` … 在庫切れ観測 (#5130 項目1 から記録)
+      - **価格はあるが在庫が無い** … `一時的に在庫切れ; 入荷時期は未定です。` と
+        価格が同時に載る形。実測 (2026-08-18) で全 38,666 行中 163 行
+
+    後者が本 issue の核心で、価格だけ見ると「安くなった」ように読めるが誰も買え
+    ない。判定は price_overlay に集約した SSOT を使う (/price/ /deals/ と同じ)。
     """
     if not asin:
         return []
@@ -264,22 +277,45 @@ def _load_amazon_price_points(root: pathlib.Path | str, asin: str) -> list[dict[
                 continue
             if not isinstance(rec, dict) or rec.get("source") != "amazon":
                 continue
-            price = rec.get("price")
             ts = rec.get("ts")
-            if not isinstance(price, int) or isinstance(price, bool) or price <= 0:
-                continue
             if not isinstance(ts, str) or not ts:
                 continue
-            points.append({"ts": ts, "price": price})
+            price = rec.get("price")
+            if not isinstance(price, int) or isinstance(price, bool) or price <= 0:
+                price = None
+            availability = rec.get("availability")
+            if not isinstance(availability, str) or not availability.strip():
+                availability = None
+            if price is None and availability is None:
+                # 価格も在庫根拠も無い行は、何も主張していないので読まない。
+                continue
+            points.append({
+                "ts": ts,
+                "price": price,
+                "availability": availability,
+                "buyable": price is not None
+                and not price_overlay.is_explicitly_unavailable(availability),
+            })
     except OSError:
         return []
     points.sort(key=lambda r: r["ts"])
     return points
 
 
+def _load_amazon_price_points(root: pathlib.Path | str, asin: str) -> list[dict[str, Any]]:
+    """価格が付いている観測点だけを ts 昇順で返す (在庫状態は見ない)。
+
+    「価格推移を語れるだけの観測があるか」の門番 (PRICE_HISTORY_MIN_POINTS) に
+    使う。門番は在庫と無関係な「記録の厚み」の判定なので、母数は従来どおり
+    価格観測の全件にしておく。
+    """
+    return [{"ts": pt["ts"], "price": pt["price"]}
+            for pt in _load_amazon_observations(root, asin) if pt["price"] is not None]
+
+
 def _merge_price_points(*lanes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """複数レーンの観測点を (ts, price) 一致で dedupe して ts 昇順で返す。"""
-    seen: set[tuple[str, int]] = set()
+    seen: set[tuple[str, Any]] = set()
     merged: list[dict[str, Any]] = []
     for lane in lanes:
         for pt in lane:
@@ -302,6 +338,21 @@ def build_price_history_note(
     """過去 30 日の最安値メモ。ファイルが無い/窓内の点が足りない場合は None
     (テンプレ側はこの行を出さない)。
 
+    #5130 残件2: ここでいう最安値は **実際に買えた時点の価格の最小値**。在庫が
+    無かった期間の価格は候補に入れない (無限に高い価格が付いていたのと同じ扱い)。
+    30 日のうち 1 日しか買えなかった商品でも、その 1 日の価格は候補に残す —
+    短時間で売り切れるのは需要が高いからで、「その値段で買えた」ことは事実だから。
+
+    実データ replay (2026-08-18, 8,824 ASIN):
+
+      最安値が変わる …  3 ASIN (例 B0D7LBBD88: ￥1,264 → ￥1,800)
+      note が消える  …  8 ASIN (窓内に買えた記録が 1 つも無い)
+      変化なし       … 5,921 ASIN
+
+    B0D7LBBD88 は 7/19 に ￥1,800 (通常発送) で観測されたあと、8/6 に ￥1,264 が
+    付いたが `一時的に在庫切れ; 入荷時期は未定です。` だった。旧実装はこの
+    ￥1,264 を最安値として出しており、**誰も買えなかった価格**を提示していた。
+
     2 レーン (``data/price_watch/history/`` 日次 / ``data/price_history/``
     週次) を **マージ** して読む。
 
@@ -322,13 +373,14 @@ def build_price_history_note(
     独立に書かれることは無いはずだが、``build_price_dashboard.load_merged_history``
     と同じ保険を掛けて挙動を揃える。
     """
-    points = _merge_price_points(
-        _load_amazon_price_points(price_watch_root, asin) if price_watch_root is not None else [],
-        _load_amazon_price_points(price_history_root, asin) if price_history_root is not None else [],
+    observations = _merge_price_points(
+        _load_amazon_observations(price_watch_root, asin) if price_watch_root is not None else [],
+        _load_amazon_observations(price_history_root, asin) if price_history_root is not None else [],
     )
-    if len(points) < PRICE_HISTORY_MIN_POINTS:
+    if sum(1 for pt in observations if pt["price"] is not None) < PRICE_HISTORY_MIN_POINTS:
         # 観測点そのものが少なすぎる (=単発の値しか知らない) ときは、
-        # 「価格推移」を語れるだけの材料が無いので出さない。
+        # 「価格推移」を語れるだけの材料が無いので出さない。門番は在庫と無関係な
+        # 「記録の厚み」の判定なので、母数は価格観測の全件のまま。
         return None
     ref_now = now if now is not None else datetime.now(timezone.utc)
     if ref_now.tzinfo is None:
@@ -341,16 +393,50 @@ def build_price_history_note(
     # 解釈する必要がある — 窓の開始時点で有効だった価格は、窓より前の
     # 直近の変化点 (=carry) にあることが多い。それを候補に含め忘れると、
     # 「窓の直前に安くなって窓の間ずっとその値段だった」ケースを取りこぼす。
-    before_window = [pt for pt in points if (_parse_iso(pt["ts"]) or cutoff) < cutoff]
-    within_window = [pt for pt in points if (_parse_iso(pt["ts"]) or cutoff) >= cutoff]
+    before_window = [pt for pt in observations if (_parse_iso(pt["ts"]) or cutoff) < cutoff]
+    within_window = [pt for pt in observations if (_parse_iso(pt["ts"]) or cutoff) >= cutoff]
 
-    candidates: list[int] = [pt["price"] for pt in within_window]
+    # #5130 残件2: 「買えなかった期間は最安値の母数に入れない」。
+    #
+    # 在庫が無い期間の価格は、階段関数として素直に伸ばすと「その値段で売っていた」
+    # という主張になるが、誰も買えていない。読者にとっての最安値は **実際に買えた
+    # 時点の価格の最小値** なので、買えない観測は候補から外す (= 無限に高い価格が
+    # 付いていたのと同じ扱いにする)。
+    #
+    # 逆に、30 日のうち 1 日しか買えなかった商品でも、その 1 日の価格は候補に残す。
+    # 短時間で売り切れる商品はそれだけ需要が高く、「その値段で買えた」ことは事実
+    # だから。窓内の買えた観測は期間の長さに関係なく全て数える。
+    candidates: list[int] = [pt["price"] for pt in within_window if pt["buyable"]]
+    # 除外した価格 = 「買えていれば最安値になりえた」もの。注記を出すかの判定に使う。
+    rejected: list[int] = [pt["price"] for pt in within_window
+                           if not pt["buyable"] and pt["price"] is not None]
     if before_window:
-        candidates.append(before_window[-1]["price"])  # carry: 窓開始時点で有効だった価格
+        last_before = before_window[-1]
+        if last_before["buyable"]:
+            candidates.append(last_before["price"])  # carry: 窓開始時点で有効だった価格
+        elif last_before["price"] is not None:
+            # 窓に入る前から買えない状態が続いていた。carry を足すと「窓の間ずっと
+            # この値段で売っていた」という、記録と正反対の主張になる。
+            rejected.append(last_before["price"])
     if not candidates:
+        # 窓内に「買えた」と言える記録が 1 つも無い。出せる最安値が無いので黙る。
+        # 在庫が無いこと自体は conclusion 行が取得日つきで述べているので、
+        # ここで代わりに何かを書く必要は無い。
         return None
     min_price = min(candidates)
-    return f"過去{PRICE_HISTORY_WINDOW_DAYS}日間の本サイト計測では、Amazon 最安値は ￥{min_price:,} でした。"
+    if not any(price < min_price for price in rejected):
+        # 除外した価格が全て最安値以上なら、除外の有無で読者に見える数字は変わらない。
+        # 注記は「なぜ表より高い数字が出ているのか」を説明するためのものなので、
+        # 説明する食い違いが無いときは出さない (実測 8,824 ASIN 中 132 件がこれ)。
+        return (f"過去{PRICE_HISTORY_WINDOW_DAYS}日間の本サイト計測では、"
+                f"Amazon 最安値は ￥{min_price:,} でした。")
+    # ここに来るのは「在庫切れ中により安い価格が付いていた」ケース。注記を書かないと、
+    # 表に出ている価格 (在庫切れでも価格は載る) より最安値のほうが高いという一見
+    # 矛盾した並びになり、読者が理由を追えない。
+    # 実例 (B0D7LBBD88): 表は ￥1,264 / 在庫切れ、最安値は買えた最後の ￥1,800。
+    return (f"過去{PRICE_HISTORY_WINDOW_DAYS}日間の本サイト計測では、"
+            f"Amazon 最安値は ￥{min_price:,} でした"
+            f"（在庫切れを確認した期間は除いています）。")
 
 
 # ---------------------------------------------------------------------------
