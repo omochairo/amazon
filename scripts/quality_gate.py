@@ -760,7 +760,11 @@ def _undeclared_cert_claims(data: dict) -> dict:
             # 検出では自分以外の cert 名を alias として使わない。EN71 は EN71 として
             # 数える。裏取り側 (check_cert_sources_content) は「CE の根拠として EN71
             # の記述を認める」ために持っている対応なので、あちらは変えない。
-            probes = [t for t in tokens if t == cert or t not in _CERT_HTML_TOKENS]
+            probes = [
+                t for t in tokens
+                if (t == cert or t not in _CERT_HTML_TOKENS)
+                and t not in _CERT_CLAIM_GENERIC_TOKENS
+            ]
             if any(tok in text for tok in probes):
                 found[cert] = text
     return found
@@ -884,17 +888,28 @@ def check_sources_v5(data: dict) -> CheckResult:
 # 記事の soft スコア。certifications が空だと check_certifications は "OK (empty)" で
 # 素通りするため、「STマーク取得済で安全」のような claim が一度も裏取りされない。
 #
-# 実測 (2026-08-19, 記事 2,064 件): 41 件 (2.0%) が該当。
+# 実測 (2026-08-19, 記事 2,064 件): 26 件 (1.3%) が該当。
 #   例) B0DC6GCTTN「舐めても安心な安全設計とPSC基準適合」  certifications=None
 #       B0875FV2BQ「食品衛生法等の…検査基準に準拠した塗料を使用している」 certifications=[]
 # 無名ブランド品にも出ており、子ども向け玩具の安全性主張が裏取りされないまま
 # 配信されるのは E-E-A-T 上いちばん出してはいけない類のもの。
 #
-# soft で入れる理由: 発火率 2.0% は #4826 項目2 の前例 (soft 導入 → 発火 0 を確認 →
+# soft で入れる理由: 発火率 1.3% は #4826 項目2 の前例 (soft 導入 → 発火 0 を確認 →
 # hard 昇格) でいう「まだ 0 ではない」段階。いきなり hard にすると既存記事に触る
 # PR が落ちる。quality_census が「減点のみ」を週次で拾うので、プロンプト側で
 # certifications を書かせる改訂が入ったあとに発火率を見て昇格を判断する。
 CERT_CLAIM_UNDECLARED_SOFT_SCORE = 0.8
+
+# 認証の「一般カテゴリ語」。裏取り (check_cert_sources_content) では
+# 「ST の根拠として本文に 玩具安全基準 と書いてあれば可」としたいので
+# _CERT_HTML_TOKENS には残すが、**主張の検出には使わない**。
+#
+# 「欧米の玩具安全基準に合わせて作られており」は欧州/米国の規格を指す一般表現で、
+# 日本玩具協会の ST マーク取得の主張ではない。これを ST 主張として数えると
+# 誤検出になる。実測 (2026-08-19): 発火 41 件のうち 15 件 (37%) がこれだった。
+#
+# 「日本玩具協会」は ST を発行する団体そのものを指すので一般語ではない (残す)。
+_CERT_CLAIM_GENERIC_TOKENS = frozenset({"玩具安全基準"})
 
 # 「STマークの記載はありません」のような否定文を主張と誤認しないためのガード。
 # claim 1 件のテキスト全体に対して見る (claims は 1 文が基本のため)。

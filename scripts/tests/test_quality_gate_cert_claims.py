@@ -3,7 +3,7 @@
 背景 (実測 2026-08-19, 記事 2,064 件):
 - `check_certifications` は certifications が空だと "OK (empty)" で抜ける。
   つまり **申告しなければ裏取りを免れる**抜け道が残っていた。
-- claims 側で認証を主張しながら未申告の記事が 41 件 (2.0%)。うち band=zero の
+- claims 側で認証を主張しながら未申告の記事が 26 件 (1.3%)。うち band=zero の
   無名ブランド品が 4 件。子ども向け玩具の安全性主張が裏取りされないまま配信される
   のは E-E-A-T 上いちばん出してはいけない類のもの。
 
@@ -97,6 +97,25 @@ def test_en71_is_counted_as_en71_not_ce():
 
     ce = check_cert_claims_declared(_article([_claim("CEマーク取得済")]))
     assert "['CE']" in ce.message, "CE 自身の alias は従来どおり効く"
+
+
+def test_generic_standard_phrase_is_not_an_st_claim():
+    # 「欧米の玩具安全基準に合わせて作られており」は欧州/米国の規格を指す一般表現で、
+    # 日本玩具協会の ST マーク取得の主張ではない。_CERT_HTML_TOKENS は裏取り用に
+    # "玩具安全基準" を ST の alias に持つが、検出に使うと誤検出になる
+    # (実測: 発火 41 件のうち 15 件 = 37% がこれだった)。
+    for text in (
+        "欧米の厳しい玩具安全基準に合わせて作られており耐久性が高い",
+        "欧州または米国の玩具安全基準を満たし、赤ちゃんが口に入れても安全",
+        "海外の玩具安全基準に準拠して作られており安全に配慮されている",
+    ):
+        r = check_cert_claims_declared(_article([_claim(text)]))
+        assert r.score == 1.0, text
+
+    # 一方 ST を名指しする語や、発行団体名は従来どおり主張として数える。
+    for text in ("STマーク取得済み", "日本玩具協会のST基準に適合"):
+        r = check_cert_claims_declared(_article([_claim(text)]))
+        assert "['ST']" in r.message, text
 
 
 def test_negation_is_not_a_claim():
