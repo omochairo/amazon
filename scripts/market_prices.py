@@ -87,6 +87,16 @@ def _is_model_number(token: str) -> bool:
     return sum(c.isdigit() for c in token) >= 2
 
 
+def _compact_for_model_match(s: str) -> str:
+    """型番比較用の正規化: hyphen variants を畳んでから空白/ハイフンを除去し大文字化。
+
+    楽天/Yahoo は Amazon と型番の区切りを変えて載せる (`SMX310` / `SMX 310`、
+    `CH-060` / `CH060`、`6381254A` / `CN−6381254−A`)。この比較を型番ガードと
+    件数カウントの両方で使い、同じ関数内で判定が食い違わないようにする。
+    """
+    return re.sub(r"[-\s]", "", _normalize_for_match(s or "")).upper()
+
+
 def _descriptor_hits_title(descriptor: str, title_norm: str, title_tokens_norm: list) -> bool:
     """Issue #1140: descriptor token が title に「実質的に」出現するか。
 
@@ -166,20 +176,35 @@ def matched_passes_quality(
     # (Hape レジカウンター E3209 vs ファーマーズマーケットの食べ物セット) が
     # カテゴリ語「ままごと」一致だけで通過し、quality_gate の reseller-pricing
     # check を誤発火させる事故 (B0CDTQWRN1) を source で断つ。
+    title_compact = _compact_for_model_match(title)
     model_tokens = [t for t in kw_tokens if _is_model_number(t)]
     if model_tokens:
-        title_compact = re.sub(r"[-\s]", "", _normalize_for_match(title)).upper()
-        if not any(
-            re.sub(r"[-\s]", "", _normalize_for_match(m)).upper() in title_compact
-            for m in model_tokens
-        ):
+        if not any(_compact_for_model_match(m) in title_compact for m in model_tokens):
             return False
 
     meaningful = [t for t in kw_tokens if t not in GENERIC_TOKENS]
     if not meaningful:
         return True  # 区別語が無ければ cross-search 側 median band の選出を尊重
     title_norm = _normalize_for_match(title)
-    hits = sum(1 for t in meaningful if _normalize_for_match(t) in title_norm)
+
+    def _token_hits_title(token: str) -> bool:
+        """token が title に出現するか。
+
+        型番だけは上の型番ガードと**同じ比較** (空白/ハイフン除去) を使う。
+        揃えないと、同じ関数の中で同じ型番が「ガードでは一致・件数では不一致」に
+        なる。実際に楽天/Yahoo は型番の区切りを Amazon と変えて載せるため
+        (`SMX310` を `SMX 310`、`CH-060` を `CH060`、`6381254A` を `CN−6381254−A`)、
+        正しいマッチが hits に数えられず verified=False へ落ちていた。
+        実測 (2026-08-19): 未検証リンク 864 件中 9 件がこれで、いずれも目視で
+        同一商品。逆に落ちるものは 0 件。
+        """
+        if _normalize_for_match(token) in title_norm:
+            return True
+        if _is_model_number(token):
+            return _compact_for_model_match(token) in title_compact
+        return False
+
+    hits = sum(1 for t in meaningful if _token_hits_title(t))
     threshold = hits_threshold_multi if len(meaningful) >= 2 else 1
     if hits < threshold:
         return False
