@@ -236,5 +236,69 @@ class NonBrandDescriptorGateTest(unittest.TestCase):
         ))
 
 
+
+class ModelNumberSeparatorTest(unittest.TestCase):
+    """型番の区切り違いで正しいマッチを落とさないこと (#5490 調査)。
+
+    楽天/Yahoo は Amazon と型番の区切りを変えて載せる。旧実装は型番ガードだけが
+    空白/ハイフンを除去して比較し、meaningful token の件数カウントは除去せずに
+    比較していたため、**同じ関数の中で同じ型番が「ガードでは一致・件数では不一致」**
+    になり、正しいマッチが verified=False へ落ちていた。
+
+    実測 (2026-08-19): 未検証リンク 864 件のうち 9 件がこれ。いずれも目視で同一商品、
+    逆に落ちるものは 0 件だった。下記は実データから採った代表ケース。
+    """
+
+    def _matched(self, title, price, keyword):
+        return {"title": title, "price": price, "search_keyword": keyword}
+
+    def test_space_inserted_model_number(self):
+        # SMX310 (Amazon) vs "SMX 310" (楽天/Yahoo)
+        self.assertTrue(build_post._matched_passes_quality(
+            self._matched(
+                "SMART MAX スマートマックス ビルド スタータープラス 30ピース SMX 310",
+                8778, "スマートマックス 幼児向け SMX310"),
+            5038,
+        ))
+
+    def test_hyphen_dropped_model_number(self):
+        # CH-060 (Amazon) vs "CH060" (楽天)
+        self.assertTrue(build_post._matched_passes_quality(
+            self._matched(
+                "じぶんでキラッ！クルッ！ドーム CH060 対象年齢4か月以上 知育玩具",
+                3100, "ピープル じぶんでキラッ CH-060"),
+            2864,
+        ))
+
+    def test_fullwidth_minus_and_prefix_in_title(self):
+        # 6381254A (Amazon) vs "CN−6381254−A" (全角マイナス + prefix)
+        self.assertTrue(build_post._matched_passes_quality(
+            self._matched(
+                "セイカ　 パズル80Pスミッコグラシ CN−6381254−A 4901771315446",
+                566, "サンスター文具 パズル80P 6381254A"),
+            445,
+        ))
+
+    def test_different_model_number_still_rejected(self):
+        # 区切り違いを吸収しても、別 SKU は従来どおり落とす
+        self.assertFalse(build_post._matched_passes_quality(
+            self._matched(
+                "SMART MAX スマートマックス アニマルトレイン 22ピース SMX 410",
+                6798, "スマートマックス 幼児向け SMX310"),
+            5038,
+        ))
+
+    def test_compact_helper_is_shared_by_guard_and_count(self):
+        # ガードと件数カウントが同じ正規化を使っていること (drift 検知)
+        import market_prices
+        self.assertEqual(
+            market_prices._compact_for_model_match("SMX310"),
+            market_prices._compact_for_model_match("smx 310"),
+        )
+        self.assertEqual(
+            market_prices._compact_for_model_match("CN−6381254−A"),
+            market_prices._compact_for_model_match("CN6381254A"),
+        )
+
 if __name__ == "__main__":
     unittest.main()
