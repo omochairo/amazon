@@ -733,6 +733,69 @@ def check_certifications(data: dict) -> CheckResult:
     return CheckResult("certifications_v5", True, 1.0, "OK")
 
 
+def _undeclared_cert_claims(data: dict) -> dict:
+    """claims で主張されているのに product.certifications に無い cert を返す。
+
+    戻り値は {cert 名: 最初に見つかった claim テキスト}。判定語彙は
+    _CERT_HTML_TOKENS を再利用する (check_cert_sources_content が HTML 裏取りに
+    使うものと同じにして、主張の検出と検証の語彙がずれないようにする)。
+    """
+    declared = {
+        c for c in ((data.get("product") or {}).get("certifications") or [])
+        if isinstance(c, str) and c
+    }
+    found: dict = {}
+    for cl in data.get("claims") or []:
+        if not isinstance(cl, dict):
+            continue
+        text = cl.get("claim")
+        if not isinstance(text, str) or not text:
+            continue
+        if any(neg in text for neg in _CERT_CLAIM_NEGATIONS):
+            continue  # 「STマークの記載はありません」等は主張ではない
+        for cert, tokens in _CERT_HTML_TOKENS.items():
+            if cert in declared or cert in found:
+                continue
+            # 別の cert 名そのものを alias に持つ組があるので (CE の alias に "EN71")、
+            # 検出では自分以外の cert 名を alias として使わない。EN71 は EN71 として
+            # 数える。裏取り側 (check_cert_sources_content) は「CE の根拠として EN71
+            # の記述を認める」ために持っている対応なので、あちらは変えない。
+            probes = [t for t in tokens if t == cert or t not in _CERT_HTML_TOKENS]
+            if any(tok in text for tok in probes):
+                found[cert] = text
+    return found
+
+
+def check_cert_claims_declared(data: dict) -> CheckResult:
+    """claims の認証主張が product.certifications に申告されているか (soft)。
+
+    check_certifications は certifications が空なら "OK (empty)" で抜けるので、
+    **申告しなければ裏取りを免れる**という抜け道が残っていた (#5490 信頼レーン)。
+    ここは「主張したなら申告しろ」だけを見る。申告されれば check_certifications と
+    check_cert_sources_content が従来どおり裏取りする。
+
+    まだ soft (passed=True, score<1.0)。昇格の判断材料は quality_census が拾う。
+    """
+    if "claims" not in data or _is_legacy_article(data):
+        return CheckResult("cert_claims_declared", True, 1.0,
+                           "field absent or legacy article (skipped)")
+    if not isinstance(data.get("claims"), list):
+        return CheckResult("cert_claims_declared", True, 1.0, "claims is not a list (skipped)")
+    undeclared = _undeclared_cert_claims(data)
+    if not undeclared:
+        return CheckResult("cert_claims_declared", True, 1.0, "OK")
+    certs = sorted(undeclared)
+    # quality_census.normalize_reason は ";" より前を集計キーにする。記事ごとに違う
+    # claim 本文を頭に入れると理由が 44 通りに散るので、可変部は ";" の後ろに置く。
+    return CheckResult(
+        "cert_claims_declared", True, CERT_CLAIM_UNDECLARED_SOFT_SCORE,
+        f"claim が {certs} を主張しているが product.certifications 未申告 "
+        f"→ 裏取りが走らない"
+        f"; claim='{undeclared[certs[0]][:60]}' "
+        "(soft: 主張するなら certifications に載せ、非販売ソースで裏を取ること)",
+    )
+
+
 def check_source_uniqueness(data: dict) -> CheckResult:
     """sources 構造健全性チェック (v5 §6.5.1 補強):
     1. 検索エンジン結果ページ URL (DuckDuckGo/Google 等) は src に不可
@@ -815,6 +878,30 @@ def check_sources_v5(data: dict) -> CheckResult:
             f"(v5 §6.5.1 第三者 2 件以上必須)",
         )
     return CheckResult("sources_v5", True, 1.0, f"OK (total={total}, non_sales={len(non_sales)})")
+
+
+# #5490 信頼レーン: claims で認証を主張しながら product.certifications に載せない
+# 記事の soft スコア。certifications が空だと check_certifications は "OK (empty)" で
+# 素通りするため、「STマーク取得済で安全」のような claim が一度も裏取りされない。
+#
+# 実測 (2026-08-19, 記事 2,064 件): 41 件 (2.0%) が該当。
+#   例) B0DC6GCTTN「舐めても安心な安全設計とPSC基準適合」  certifications=None
+#       B0875FV2BQ「食品衛生法等の…検査基準に準拠した塗料を使用している」 certifications=[]
+# 無名ブランド品にも出ており、子ども向け玩具の安全性主張が裏取りされないまま
+# 配信されるのは E-E-A-T 上いちばん出してはいけない類のもの。
+#
+# soft で入れる理由: 発火率 2.0% は #4826 項目2 の前例 (soft 導入 → 発火 0 を確認 →
+# hard 昇格) でいう「まだ 0 ではない」段階。いきなり hard にすると既存記事に触る
+# PR が落ちる。quality_census が「減点のみ」を週次で拾うので、プロンプト側で
+# certifications を書かせる改訂が入ったあとに発火率を見て昇格を判断する。
+CERT_CLAIM_UNDECLARED_SOFT_SCORE = 0.8
+
+# 「STマークの記載はありません」のような否定文を主張と誤認しないためのガード。
+# claim 1 件のテキスト全体に対して見る (claims は 1 文が基本のため)。
+_CERT_CLAIM_NEGATIONS = (
+    "ありません", "ありませんが", "ございません", "記載はな", "記載がな",
+    "取得していな", "未取得", "確認できま", "不明", "対象外", "非対象",
+)
 
 
 # cert 名と HTML 本文内で許容するトークン (alias) の対応
@@ -1453,6 +1540,7 @@ def evaluate_article(
     report.checks.append(check_score_rationale(data))
     report.checks.append(check_target_age(data))
     report.checks.append(check_certifications(data))
+    report.checks.append(check_cert_claims_declared(data))
     report.checks.append(check_source_uniqueness(data))
     report.checks.append(check_sources_v5(data))
     report.checks.append(check_cert_sources_content(data, fetch_enabled=cert_fetch))
