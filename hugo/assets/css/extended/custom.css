@@ -2002,6 +2002,22 @@ html[data-theme="dark"] .post-content .product-slideshow .slide-thumb.active {
   color: #92400e;
   border: 1px solid #fcd34d;
 }
+/* 最安カードが未検証のときだけ出す明示警告 (#5490)。
+   「※確度低」バッジは title 属性のツールチップ頼みで、最安の
+   is-cheapest パルスに視線を持っていかれると気づかれない。実測 (2026-08-19)
+   で配信 2,052 本のうち 197 本 (9.6%) が「最安カードに確度低バッジ」だった。 */
+.post-content .price-cta-grid .price-unverified-best {
+  margin-top: 4px;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  padding: 4px 6px;
+  text-align: center;
+  word-break: break-word;
+}
 .post-content .price-cta-grid .price-search-fallback a {
   color: #6b7280;
   text-decoration: underline;
@@ -2014,6 +2030,12 @@ html[data-theme="dark"] .post-content .product-slideshow .slide-thumb.active {
 html[data-theme="dark"] .post-content .price-cta-grid .price-badge--unverified {
   background: #422006;
   color: #fcd34d;
+  border-color: #92400e;
+}
+[data-theme="dark"] .post-content .price-cta-grid .price-unverified-best,
+html[data-theme="dark"] .post-content .price-cta-grid .price-unverified-best {
+  color: #fcd34d;
+  background: #422006;
   border-color: #92400e;
 }
 [data-theme="dark"] .post-content .price-cta-grid .price-search-fallback a,
