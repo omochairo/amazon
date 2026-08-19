@@ -800,6 +800,126 @@ def check_cert_claims_declared(data: dict) -> CheckResult:
     )
 
 
+# #5490 信頼レーン: v5 拡張フィールドの規律 soft スコア。
+#
+# `review_signals` / `verdict` / `claims` / `persona_fit.not_recommended_for` /
+# `technical_specs` は **schema にも gate にも無い**「スキーマ未定義の v5 拡張」で、
+# プロンプト §5.C / §5.D / §5.E / §6.5.2 が件数・字数を厳守と書いているのに
+# 機械的には誰も見ていなかった。しかもプロンプト §8 は「件数規律は gate が
+# 自動判定するので自己確認は不要」と書いており、**gate が見ていない側を名指しで
+# gate に任せていた** (amazon-navi-brain#12 で §8 を訂正済み)。
+#
+# ここは合否を変えない soft。quality_census の「減点のみ」に発火率を出し、
+# プロンプト改訂後に 0 へ寄ったら #4826 項目2 の手順で hard 昇格を検討する。
+V5_EXTENSION_SOFT_SCORE = 0.8
+
+# §5.D の件数レンジ (プロンプト v7.3)。
+_REVIEW_SIGNAL_RANGES = {
+    "high_points": (3, 5),
+    "concerns": (2, 4),
+    "use_scenes": (3, 5),
+    "segment_voices": (1, 3),
+}
+_SUMMARY_ONE_LINE_RANGE = (35, 70)   # §5.D.1 (v7.3 で 50-100 から改定)
+_VERDICT_HEADLINE_RANGE = (25, 50)   # §5.E   (v7.3 で 50-80 から改定)
+_NOT_RECOMMENDED_RANGE = (2, 3)      # §5.C
+_CLAIMS_MIN = 4                      # §6.5.2
+_CROSS_CHECKED_MIN = 2               # §6.5.2
+
+
+def _v5_soft(name: str, issues: list[str], ok_message: str = "OK") -> CheckResult:
+    """v5 拡張フィールドの soft 判定を組み立てる。
+
+    census の normalize_reason は ";" より前を集計キーにするので、可変部
+    (実際の件数など) は 1 つ目の issue に閉じ込め、以降を ";" で連結する。
+    """
+    if not issues:
+        return CheckResult(name, True, 1.0, ok_message)
+    return CheckResult(name, True, V5_EXTENSION_SOFT_SCORE, "; ".join(issues))
+
+
+def check_review_signals(data: dict) -> CheckResult:
+    """§5.D: review_signals の件数レンジ・字数・supporting_source_ids。"""
+    if _is_legacy_article(data):
+        return CheckResult("review_signals", True, 1.0, "legacy article (skipped)")
+    rs = data.get("review_signals")
+    if rs is None:
+        return _v5_soft("review_signals", ["review_signals 欠落 (§5.D 必須)"])
+    if not isinstance(rs, dict):
+        return _v5_soft("review_signals", ["review_signals が dict でない"])
+
+    issues: list[str] = []
+    lo, hi = _SUMMARY_ONE_LINE_RANGE
+    summary = rs.get("summary_one_line")
+    if not isinstance(summary, str) or not (lo <= _count_chars(summary) <= hi):
+        issues.append(f"summary_one_line が {lo}-{hi} 字でない")
+    for key, (klo, khi) in _REVIEW_SIGNAL_RANGES.items():
+        val = rs.get(key)
+        n = len(val) if isinstance(val, list) else 0
+        if not (klo <= n <= khi):
+            issues.append(f"{key} が {klo}-{khi} 件でない")
+    missing = [
+        key for key in _REVIEW_SIGNAL_RANGES
+        for e in (rs.get(key) or [])
+        if isinstance(e, dict) and not (e.get("supporting_source_ids") or [])
+    ]
+    if missing:
+        issues.append(f"supporting_source_ids が空のエントリ: {sorted(set(missing))}")
+    return _v5_soft("review_signals", issues)
+
+
+def check_verdict_headline(data: dict) -> CheckResult:
+    """§5.E: verdict.headline は 5 秒判断用の 1 行。"""
+    if _is_legacy_article(data):
+        return CheckResult("verdict_headline", True, 1.0, "legacy article (skipped)")
+    headline = (data.get("verdict") or {}).get("headline")
+    lo, hi = _VERDICT_HEADLINE_RANGE
+    if not isinstance(headline, str) or not headline:
+        return _v5_soft("verdict_headline", ["verdict.headline 欠落 (§5.E 必須)"])
+    n = _count_chars(headline)
+    if n < lo:
+        return _v5_soft("verdict_headline", [f"verdict.headline が短い ({lo} 字未満)"])
+    if n > hi:
+        return _v5_soft(
+            "verdict_headline",
+            [f"verdict.headline が長い ({hi} 字超) = 1 行の結論ではなく説明文になっている"],
+        )
+    return CheckResult("verdict_headline", True, 1.0, "OK")
+
+
+def check_claims_discipline(data: dict) -> CheckResult:
+    """§6.5.2: claims の件数と cross_checked 件数。"""
+    if "claims" not in data or _is_legacy_article(data):
+        return CheckResult("claims_discipline", True, 1.0,
+                           "field absent or legacy article (skipped)")
+    claims = data.get("claims")
+    if not isinstance(claims, list):
+        return _v5_soft("claims_discipline", ["claims が list でない"])
+    issues: list[str] = []
+    if len(claims) < _CLAIMS_MIN:
+        issues.append(f"claims が {_CLAIMS_MIN} 件未満")
+    crossed = sum(
+        1 for c in claims
+        if isinstance(c, dict) and c.get("cross_checked") is True
+    )
+    if crossed < _CROSS_CHECKED_MIN:
+        issues.append(f"cross_checked=true が {_CROSS_CHECKED_MIN} 件未満")
+    return _v5_soft("claims_discipline", issues)
+
+
+def check_persona_fit_counts(data: dict) -> CheckResult:
+    """§5.C: persona_fit.not_recommended_for は 2〜3 件。"""
+    if _is_legacy_article(data):
+        return CheckResult("persona_fit_counts", True, 1.0, "legacy article (skipped)")
+    nr = (data.get("persona_fit") or {}).get("not_recommended_for")
+    lo, hi = _NOT_RECOMMENDED_RANGE
+    if not isinstance(nr, list):
+        return _v5_soft("persona_fit_counts", ["not_recommended_for 欠落 (§5.C 必須)"])
+    if not (lo <= len(nr) <= hi):
+        return _v5_soft("persona_fit_counts", [f"not_recommended_for が {lo}-{hi} 件でない"])
+    return CheckResult("persona_fit_counts", True, 1.0, "OK")
+
+
 def check_source_uniqueness(data: dict) -> CheckResult:
     """sources 構造健全性チェック (v5 §6.5.1 補強):
     1. 検索エンジン結果ページ URL (DuckDuckGo/Google 等) は src に不可
@@ -1556,6 +1676,10 @@ def evaluate_article(
     report.checks.append(check_target_age(data))
     report.checks.append(check_certifications(data))
     report.checks.append(check_cert_claims_declared(data))
+    report.checks.append(check_review_signals(data))
+    report.checks.append(check_verdict_headline(data))
+    report.checks.append(check_claims_discipline(data))
+    report.checks.append(check_persona_fit_counts(data))
     report.checks.append(check_source_uniqueness(data))
     report.checks.append(check_sources_v5(data))
     report.checks.append(check_cert_sources_content(data, fetch_enabled=cert_fetch))
