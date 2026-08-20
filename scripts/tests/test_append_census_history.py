@@ -447,3 +447,35 @@ def test_run_idempotent_rerun_does_not_touch_snapshot_or_jsonl(tmp_path, census_
     assert target_date == "2026-07-19"
     assert (tmp_path / CENSUS_URL_STATES_FILE).read_text(encoding="utf-8") == snapshot_before
     assert (tmp_path / CENSUS_HISTORY_FILE).read_text(encoding="utf-8") == jsonl_before
+
+
+def test_build_row_carries_rich_result_columns():
+    """#5085: リッチリザルトの失効を時系列で検出できること。"""
+    import append_census_history as A
+    row = A.build_row({
+        "fetched_at": "2026-08-20T00:00:00+00:00",
+        "totals": {"sitemap_urls": 10, "inspected": 10, "indexed": 9,
+                   "not_indexed": 1, "errors": 0},
+        "by_coverage_state": {},
+        "by_rich_verdict": {"PASS": 7, "PARTIAL": 2, "(none)": 1},
+        "rich_issues": {"Product snippets / WARNING: x": 2},
+    })
+    assert row["rich_pass"] == 7
+    assert row["rich_other"] == 2
+    assert row["rich_none"] == 1
+    assert row["rich_issue_kinds"] == 1
+
+
+def test_build_row_rich_columns_default_to_zero_for_old_census():
+    """リッチリザルト導入前の census を読んでも列は落ちない。"""
+    import append_census_history as A
+    row = A.build_row({
+        "fetched_at": "2026-08-20T00:00:00+00:00",
+        "totals": {"sitemap_urls": 10, "inspected": 10, "indexed": 9,
+                   "not_indexed": 1, "errors": 0},
+        "by_coverage_state": {},
+    })
+    assert row["rich_pass"] == 0
+    assert row["rich_other"] == 0
+    assert row["rich_none"] == 0
+    assert row["rich_issue_kinds"] == 0
