@@ -168,6 +168,85 @@ def test_extract_metrics_lcp_element_reason_no_node():
     assert m["lcp_element_reason"] == "no-node-in-details"
 
 
+# ---------- extract_metrics: lcp_subparts (#5081 やること2) ----------
+
+def _lh13_with_subparts(rows):
+    """lcp-breakdown-insight を「table + node」の実測形にした LH13 JSON。
+
+    2026-08-20 に lighthouse@13.4.0 を navi のハブページへ当てて採取した形
+    (details.type == "list" / items[0]=table / items[1]=node)。
+    """
+    lh = _lh13_json()
+    lh["audits"]["lcp-breakdown-insight"] = {
+        "scoreDisplayMode": "informative",
+        "details": {
+            "type": "list",
+            "items": [
+                {"type": "table",
+                 "headings": [{"key": "label"}, {"key": "duration"}],
+                 "items": rows},
+                {"type": "node", "selector": "body#top > main.main > header > h1"},
+            ],
+        },
+    }
+    return lh
+
+
+def test_extract_metrics_lcp_subparts_text_lcp_has_two_phases():
+    """テキストが LCP のときは ttfb / render delay の 2 つしか出ない (実測形)。"""
+    lh = _lh13_with_subparts([
+        {"subpart": "timeToFirstByte", "label": "Time to first byte", "duration": 47.385},
+        {"subpart": "elementRenderDelay", "label": "Element render delay", "duration": 356.852},
+    ])
+    m = extract_metrics(lh)
+    assert m["lcp_subparts"] == {"timeToFirstByte": 47.4, "elementRenderDelay": 356.9}
+    assert m["lcp_subparts_reason"] is None
+
+
+def test_extract_metrics_lcp_subparts_image_lcp_has_four_phases():
+    """画像が LCP なら 4 分割になる。固定キーを期待せず出たぶんだけ拾う。"""
+    lh = _lh13_with_subparts([
+        {"subpart": "timeToFirstByte", "duration": 100.0},
+        {"subpart": "resourceLoadDelay", "duration": 50.0},
+        {"subpart": "resourceLoadDuration", "duration": 200.0},
+        {"subpart": "elementRenderDelay", "duration": 30.0},
+    ])
+    assert extract_metrics(lh)["lcp_subparts"] == {
+        "timeToFirstByte": 100.0, "resourceLoadDelay": 50.0,
+        "resourceLoadDuration": 200.0, "elementRenderDelay": 30.0,
+    }
+
+
+def test_extract_metrics_lcp_subparts_shares_reason_with_element():
+    """details が null の行では element と subparts が同じ理由で同時に落ちる。
+
+    商品ページの実測形 (#4441)。独立した 2 つの欠測に見えないよう語彙を揃える。
+    """
+    lh = _lh13_json()
+    lh["audits"]["lcp-breakdown-insight"] = {
+        "score": None, "scoreDisplayMode": "notApplicable", "details": None,
+    }
+    m = extract_metrics(lh)
+    assert m["lcp_subparts"] is None
+    assert m["lcp_subparts_reason"] == "notApplicable"
+    assert m["lcp_element_reason"] == "notApplicable"
+
+
+def test_extract_metrics_lcp_subparts_audit_missing_on_lh12():
+    """LH12 以前は insight audit 自体が無い。"""
+    m = extract_metrics(_lh_json())
+    assert m["lcp_subparts"] is None
+    assert m["lcp_subparts_reason"] == "audit-missing"
+
+
+def test_extract_metrics_lcp_subparts_node_only_details():
+    """node はあるが table が無い = subparts だけ独自の理由になる。"""
+    m = extract_metrics(_lh13_json())
+    assert m["lcp_element"] is not None
+    assert m["lcp_subparts"] is None
+    assert m["lcp_subparts_reason"] == "no-subparts-in-details"
+
+
 def test_extract_metrics_observed_and_element_default_none():
     """LH13 拡張 audit が無い旧版そのままの JSON では None のまま。"""
     m = extract_metrics(_lh_json())
@@ -234,6 +313,38 @@ def test_aggregate_runs_carries_lcp_element_reason(caplog):
     agg = aggregate_runs([extract_metrics(lh), extract_metrics(lh)])
     assert agg["lcp_element"] is None
     assert agg["lcp_element_reason"] == "notApplicable"
+
+
+def test_aggregate_runs_takes_median_per_subpart():
+    """subpart ごとに median を採る (run 間で内訳が割れるため)。"""
+    runs = [
+        extract_metrics(_lh13_with_subparts([{"subpart": "timeToFirstByte", "duration": v}]))
+        for v in (100.0, 300.0, 200.0)
+    ]
+    agg = aggregate_runs(runs)
+    assert agg["lcp_subparts"] == {"timeToFirstByte": 200.0}
+    assert agg["lcp_subparts_runs"] == 3
+    assert agg["lcp_subparts_reason"] is None
+
+
+def test_aggregate_runs_keeps_subparts_when_only_one_run_has_them():
+    """1 回でも取れたら取れている扱い (lcp_element と同じ排他)。"""
+    ok = extract_metrics(_lh13_with_subparts([{"subpart": "timeToFirstByte", "duration": 50.0}]))
+    lh = _lh13_json()
+    lh["audits"]["lcp-breakdown-insight"] = {"scoreDisplayMode": "notApplicable", "details": None}
+    agg = aggregate_runs([extract_metrics(lh), ok, extract_metrics(lh)])
+    assert agg["lcp_subparts"] == {"timeToFirstByte": 50.0}
+    assert agg["lcp_subparts_runs"] == 1
+    assert agg["lcp_subparts_reason"] is None
+
+
+def test_aggregate_runs_carries_subparts_reason_when_never_available():
+    """全 run で取れなければ理由を集計行に残す。"""
+    lh = _lh13_json()
+    lh["audits"]["lcp-breakdown-insight"] = {"scoreDisplayMode": "notApplicable", "details": None}
+    agg = aggregate_runs([extract_metrics(lh), extract_metrics(lh)])
+    assert agg["lcp_subparts"] is None
+    assert agg["lcp_subparts_reason"] == "notApplicable"
 
 
 def test_aggregate_runs_warns_when_element_differs_across_runs(caplog):
