@@ -63,13 +63,29 @@ name: Unit Tests
 #     エスケープハッチは admin による bypass merge しかないので、
 #     required 化は owner (admin 権限保持者) の判断で行うこと。
 #
-#   昇格の手順 (admin 権限が要る。write では branch protection を読むことも
-#   できない):
+#   昇格の手順 (2026-08-20 に write 権限で実行を試みて 404。**admin 権限が要る**):
 #
-#     gh api -X PATCH repos/omochairo/amazon/branches/main/protection/required_status_checks #       -f 'checks[][context]=validate' #       -f 'checks[][context]=unit-tests'
+#     ENDPOINT=repos/omochairo/amazon/branches/main/protection/required_status_checks
+#     gh api -X PATCH "$ENDPOINT" --input - <<'JSON'
+#     {"checks":[{"context":"validate","app_id":15368},
+#                {"context":"unit-tests","app_id":15368}]}
+#     JSON
 #
-#   context 名は job id の `unit-tests` (job に name: を付けていないため)。
-#   既存の required check を消さないよう、validate も併記すること。
+#   - context 名は job id の `unit-tests` (job に name: を付けていないため)
+#   - このエンドポイントは checks を**置換**する。現在の required check は
+#     `validate` 1 本 (app_id 15368 = GitHub Actions) なので、消さないよう併記する
+#   - app_id を指定すると「GitHub Actions が報告した validate / unit-tests」しか
+#     required を満たせなくなる。省略すると任意の App が同名 context を報告できる
+#   - strict (= merge 前に main へ追従させる) は指定しなければ現状維持
+#
+#   現状の確認は admin でなくてもできる。protection エンドポイントは write では
+#   404 (権限不足でも 404 が返るので「保護が無い」と読まないこと) だが、
+#   branches エンドポイントは required_status_checks を返す:
+#
+#     gh api repos/omochairo/amazon/branches/main -q '.protection.required_status_checks'
+#
+#   enforcement_level は non_admins。下記の data 起因で詰まった窓が長引いた
+#   場合は、admin による bypass merge がエスケープハッチになる。
 
 on:
   # 2026-08-02 (#4069 ステップ1): pull_request 側の paths を撤廃した。
