@@ -14,6 +14,21 @@ data/raw/per_asin/<ASIN>/third_party_sources.json に書き出す。
 「ウェブ全体検索」が廃止されたため Tavily に切替 (#1600 session 102)。Tavily は
 エージェント/RAG 用途前提で GitHub Actions の共有 IP からも安定して叩ける。
 
+レーンは 2 本ある。母集合が違うだけで、収集・保存の処理は共通:
+
+  --pool     新規候補レーン。母集合は「まだ記事になっていない ASIN」(_pickable_pool)
+             で、そこから band が薄いものを拾う。既存の挙動。
+  --from-gsc 既存記事レーン (#5490 案B / brain#13 2-3)。母集合を GSC の需要
+             (直近 4 週の imp) で差し替える。_pickable_pool は `cand - existing` で
+             既存記事を除外しているため、リライト対象には Tavily が一度も走らない
+             状態だった。ここで単に `- existing` を外すと母集合が 1 本のプールに
+             融合し、既存記事が --max-queries を食い尽くして新規候補レーンが飢える
+             (デッドロックではないので気づきにくい)。なので母集合ごと差し替える
+             別フラグにし、--max-queries も別に持たせる。
+
+  band を抽出条件にしないのは、thin がコーパスの 3/4 を占めていて選別になって
+  いないため。需要 (imp) で並べれば zero も自然に上位へ入る。
+
 quota: Tavily 無料枠は 1,000 query/月 (≈ 33/日)。freshness skip (既定 30日) で
 定常呼び出しは thin/zero ASIN 数に収まる。--max-queries で日次上限を切る。
 secret (TAVILY_API_KEY) 未設定時は inert (no-op, exit 0)。
@@ -24,6 +39,7 @@ env:
 Usage:
   python scripts/fetch_third_party_sources.py B0FX2RNS7J          # 単一 ASIN
   python scripts/fetch_third_party_sources.py --pool --max-queries 30
+  python scripts/fetch_third_party_sources.py --from-gsc --max-queries 20
   python scripts/fetch_third_party_sources.py B0... --dry-run     # API を叩かず計画表示
 """
 
@@ -52,6 +68,7 @@ logger = logging.getLogger("fetch_third_party_sources")
 PER_ASIN_DIR = pathlib.Path("data/raw/per_asin")
 TAVILY_ENDPOINT = "https://api.tavily.com/search"
 OUT_NAME = "third_party_sources.json"
+GSC_BY_PAGE = pathlib.Path("data/analytics/history/gsc_by_page.jsonl")
 
 # 販売/マーケットプレイス host (= 価格・購入ページ)。第三者「出典」には使わないので除外。
 # レビュー価値のある価格比較 (kakaku 等) は残す: ユーザーレビューが裏取りに有用。
@@ -77,6 +94,8 @@ _SEARCH_ENGINE_SUBSTR = (
 _OWN_SITE_SUBSTR = ("navi.omcha.jp", "omcha.jp")
 
 _ASIN_RE = re.compile(r"^B0[A-Z0-9]{8}$")
+# 商品ページ URL から ASIN を復元する (slug は小文字)。ハブ/一覧は対象外。
+_PRODUCT_PAGE_RE = re.compile(r"/products/(b0[a-z0-9]{8})/?(?:[?#]|$)", re.IGNORECASE)
 
 
 def _host(url: str) -> str:
@@ -242,6 +261,79 @@ def _pickable_pool() -> list[str]:
     return sorted(cand - existing)
 
 
+def _gsc_page_impressions(
+    history: pathlib.Path, days: int, anchor: str | None = None,
+) -> dict[str, int]:
+    """gsc_by_page.jsonl の直近 `days` 日を ASIN 単位で imp 合計する。
+
+    窓の右端は「今日」ではなくデータ側の最新日 (GSC は 2〜3 日遅れて届くので、
+    今日を基準にすると窓の右端が常に空になる)。`anchor` で明示指定もできる。
+    """
+    rows: list[dict] = []
+    try:
+        with open(history, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    r = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(r, dict) and isinstance(r.get("date"), str):
+                    rows.append(r)
+    except FileNotFoundError:
+        logger.warning("GSC history が無い: %s", history)
+        return {}
+    if not rows:
+        return {}
+    end = anchor or max(r["date"] for r in rows)
+    try:
+        start = (_dt.date.fromisoformat(end) - _dt.timedelta(days=max(1, days) - 1)).isoformat()
+    except ValueError:
+        logger.warning("anchor 日付が不正: %s", end)
+        return {}
+    imps: dict[str, int] = {}
+    for r in rows:
+        if not (start <= r["date"] <= end):
+            continue
+        m = _PRODUCT_PAGE_RE.search(r.get("page") or "")
+        if not m:
+            continue
+        try:
+            imp = int(r.get("impressions") or 0)
+        except (TypeError, ValueError):
+            continue
+        asin = m.group(1).upper()
+        imps[asin] = imps.get(asin, 0) + imp
+    logger.info("GSC 窓 %s〜%s: 商品ページ %d 件", start, end, len(imps))
+    return imps
+
+
+def _gsc_demand_pool(
+    base: pathlib.Path,
+    history: pathlib.Path = GSC_BY_PAGE,
+    days: int = 28,
+    min_impressions: int = 10,
+    anchor: str | None = None,
+) -> list[str]:
+    """需要 (GSC imp) を持ち、まだ第三者ソースを持っていない ASIN を imp 降順で返す。
+
+    band では絞らない (thin がコーパスの 3/4 で選別になっていない)。imp で並べれば
+    zero 帯も上位に入るし、tp_hosts>=2 になった zero は #5499 の配線で thin へ上がる。
+    """
+    imps = _gsc_page_impressions(history, days, anchor=anchor)
+    ranked = sorted(
+        ((a, v) for a, v in imps.items() if v >= min_impressions),
+        key=lambda kv: (-kv[1], kv[0]),
+    )
+    out = [a for a, _ in ranked
+           if _sc.score_asin(a, base).get("third_party_hosts", 0) < _sc._THIRD_PARTY_MIN_HOSTS]
+    logger.info("GSC 需要 (imp>=%d, 直近 %d 日): %d 件 / うち第三者ソース未保有 %d 件",
+                min_impressions, days, len(ranked), len(out))
+    return out
+
+
 def _cli() -> int:
     ap = argparse.ArgumentParser(description="per_asin 第三者ソース pre-fetch (#1600 Phase 2)")
     ap.add_argument("asin", nargs="?", help="単一 ASIN")
@@ -249,6 +341,16 @@ def _cli() -> int:
                     help="pick 母集合のうち band が薄い ASIN をまとめて収集")
     ap.add_argument("--bands", default="zero,thin",
                     help="--pool 対象 band (カンマ区切り, 既定 zero,thin)")
+    ap.add_argument("--from-gsc", action="store_true",
+                    help="母集合を GSC 需要 (既存記事) に差し替える。--pool とは排他")
+    ap.add_argument("--gsc-history", default=str(GSC_BY_PAGE),
+                    help="--from-gsc が読む gsc_by_page.jsonl")
+    ap.add_argument("--gsc-days", type=int, default=28,
+                    help="--from-gsc の集計窓 (日, 既定 28 = 直近 4 週)")
+    ap.add_argument("--gsc-min-impressions", type=int, default=10,
+                    help="--from-gsc の imp しきい値 (既定 10)")
+    ap.add_argument("--gsc-anchor", default=None,
+                    help="--from-gsc の窓の右端 (既定: データ側の最新日)")
     ap.add_argument("--max-queries", type=int, default=30,
                     help="API 呼び出し日次上限 (Tavily 無料=1000/月≈33/日, 既定 30)")
     ap.add_argument("--max-sources", type=int, default=8, help="ASIN あたり保存 host 数")
@@ -266,15 +368,28 @@ def _cli() -> int:
         logger.warning("TAVILY_API_KEY 未設定 — no-op で終了 (inert)")
         return 0
 
+    if args.pool and args.from_gsc:
+        # 母集合が融合すると、既存記事が --max-queries を食い尽くして新規候補レーンが
+        # 飢える。レーンは必ず別々に (別 --max-queries で) 起動する。
+        ap.error("--pool と --from-gsc は同時に指定できません (レーンを分けてください)")
+
     if args.asin:
         targets = [args.asin]
+    elif args.from_gsc:
+        targets = _gsc_demand_pool(
+            base,
+            history=pathlib.Path(args.gsc_history),
+            days=args.gsc_days,
+            min_impressions=args.gsc_min_impressions,
+            anchor=args.gsc_anchor,
+        )
     elif args.pool:
         want = {b.strip() for b in args.bands.split(",") if b.strip()}
         targets = [a for a in _pickable_pool()
                    if _sc.score_asin(a, base).get("band") in want]
         logger.info("pool 対象 (band in %s): %d 件", sorted(want), len(targets))
     else:
-        ap.error("ASIN または --pool が必要です")
+        ap.error("ASIN / --pool / --from-gsc のいずれかが必要です")
 
     done = 0
     for asin in targets:

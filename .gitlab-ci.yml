@@ -149,7 +149,11 @@ third-party-sources:
   before_script:
     - pip install -r requirements.txt
   script:
+    # レーン1: 新規候補 (まだ記事になっていない ASIN)。
     - python scripts/fetch_third_party_sources.py --pool --bands zero,thin --max-queries 30
+    # レーン2: 既存記事 (リライト対象)。母集合を GSC 需要へ差し替える (brain#13 2-3)。
+    # 枠は別に持つ。共有すると母集合の大きい既存記事が新規候補レーンを飢えさせる。
+    - python scripts/fetch_third_party_sources.py --from-gsc --max-age-days 90 --max-queries 20
     - >
       python scripts/create_data_mr.py
       --prefix third-party-sources

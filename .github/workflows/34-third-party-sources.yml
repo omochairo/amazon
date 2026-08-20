@@ -7,7 +7,12 @@ name: Pre-fetch Third-Party Sources
 # backend は当初 Google CSE だったが 2026-01-20 仕様変更 (新規エンジンのウェブ全体検索廃止)
 # で Tavily に切替 (session 102)。Tavily は Actions 共有 IP からも安定して叩ける。
 # secret (TAVILY_API_KEY) 未設定時は script が inert に no-op するため
-# 差分ゼロ → PR 作成は skip される (安全に空振り)。無料枠 1000/月 ≈ 33/日 → --max-queries 30。
+# 差分ゼロ → PR 作成は skip される (安全に空振り)。無料枠 1000/月 ≈ 33/日。
+#
+# レーンは 2 本ある。母集合が違うだけで、収集・保存の処理は共通:
+#   1. 新規候補 (--pool --bands zero,thin / 30 件/日) — まだ記事になっていない ASIN
+#   2. 既存記事 (--from-gsc / 20 件/日) — GSC の直近 4 週 imp>=10 かつ第三者ソース未保有
+# 枠は共有させない。2 が 1 の枠を食い尽くすと新規候補レーンが黙って飢える。
 #
 # App token で PR 起票 (GITHUB_TOKEN だと anti-recursion guard で validate 不発火、
 # main 直 push は GH006 silent reject になるため PR + auto-merge 経路を採る)。
@@ -19,9 +24,17 @@ on:
         required: false
         default: 'zero,thin'
       max_queries:
-        description: 'API 呼び出し日次上限 (Tavily 無料=1000/月≈33/日)'
+        description: '新規候補レーンの日次上限 (Tavily 無料=1000/月≈33/日)'
         required: false
         default: '30'
+      gsc_max_queries:
+        description: '既存記事レーン (--from-gsc) の日次上限。0 で無効'
+        required: false
+        default: '20'
+      gsc_min_impressions:
+        description: '既存記事レーンの imp しきい値 (直近 4 週)'
+        required: false
+        default: '10'
   # cron re-registered 2026-07-08 after unsuspension
   schedule:
     # 毎日 21:30 UTC (06:30 JST) — 朝の記事生成スロットの前に候補を仕込む
@@ -62,7 +75,8 @@ jobs:
       - name: Install Dependencies
         run: pip install -r requirements.txt
 
-      - name: Pre-fetch third-party sources
+      # レーン1: 新規候補 (まだ記事になっていない ASIN)。従来どおり。
+      - name: Pre-fetch third-party sources (new candidates)
         env:
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
         run: |
@@ -70,6 +84,23 @@ jobs:
             --pool \
             --bands "${{ github.event.inputs.bands || 'zero,thin' }}" \
             --max-queries "${{ github.event.inputs.max_queries || '30' }}"
+
+      # レーン2: 既存記事 (リライト対象)。母集合は GSC の需要で、band では絞らない。
+      # レーン1 とは別プロセス・別 --max-queries で回す。枠を共有させると、母集合が
+      # 桁違いに大きい既存記事が先に食い尽くして新規候補レーンが黙って飢える。
+      #
+      # --max-age-days を 90 にしているのは、Tavily が非販売 host を 2 件返せない ASIN が
+      # 母集合に残り続けるため。既定の 30 日だと同じ空振りを毎月引き直すことになる。
+      - name: Pre-fetch third-party sources (existing articles, GSC demand)
+        if: ${{ (github.event.inputs.gsc_max_queries || '20') != '0' }}
+        env:
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+        run: |
+          python scripts/fetch_third_party_sources.py \
+            --from-gsc \
+            --gsc-min-impressions "${{ github.event.inputs.gsc_min_impressions || '10' }}" \
+            --max-age-days 90 \
+            --max-queries "${{ github.event.inputs.gsc_max_queries || '20' }}"
 
       - name: Create PR + enable auto-merge
         if: ${{ always() }}
