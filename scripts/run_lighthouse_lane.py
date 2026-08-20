@@ -337,6 +337,43 @@ def _lcp_element_reason(audits: Dict[str, Any]) -> str:
     return "no-node-in-details"
 
 
+def _lcp_subparts(audits: Dict[str, Any]) -> Tuple[Optional[Dict[str, float]], Optional[str]]:
+    """LCP の内訳 (subpart 別の所要 ms) と、取れないときの理由を返す (#5081 やること2)。
+
+    出どころは `lcp_element` と **同じ** `lcp-breakdown-insight` の details。
+    LH13 では details.type == "list" で、items に
+      - `{"type": "table", ...}`  … subpart 別の内訳
+      - `{"type": "node", ...}`   … LCP 要素そのもの (`_find_node_selector` が拾う)
+    が並ぶ (2026-08-20 に lighthouse@13.4.0 で実測)。
+
+    **subpart の数は LCP 要素の種類で変わる。** テキストが LCP なら
+    `timeToFirstByte` / `elementRenderDelay` の 2 つしか出ない。4 分割
+    (resourceLoadDelay / resourceLoadDuration が加わる) になるのは画像が LCP の
+    ときだけなので、固定 4 キーを期待せず出てきたぶんだけ入れる。
+
+    理由の語彙は `_lcp_element_reason` と揃える。**同じ audit を見ているので、
+    details が無い行では element も subparts も同時に落ちる** (別々の障害では
+    ない)。details はあるのに table だけ無い場合だけ独自の語彙を返す。
+    """
+    details = (audits.get("lcp-breakdown-insight") or {}).get("details")
+    if details is None:
+        return None, _lcp_element_reason(audits)
+    out: Dict[str, float] = {}
+    for item in (details.get("items") or []) if isinstance(details, dict) else []:
+        if not isinstance(item, dict) or item.get("type") != "table":
+            continue
+        for row in item.get("items") or []:
+            if not isinstance(row, dict):
+                continue
+            name = row.get("subpart")
+            value = row.get("duration")
+            if isinstance(name, str) and isinstance(value, (int, float)):
+                out[name] = round(float(value), 1)
+    if not out:
+        return None, "no-subparts-in-details"
+    return out, None
+
+
 _CHROME_UA_RE = re.compile(r"(?:Headless)?Chrome/([\d.]+)")
 
 
@@ -422,6 +459,11 @@ def extract_metrics(lh: Dict[str, Any]) -> Dict[str, Any]:
         )
     out["lcp_element"] = lcp_element
     out["lcp_element_reason"] = None if lcp_element else _lcp_element_reason(audits)
+
+    # LCP の内訳 (#5081 やること2)。element と同じ audit なので、商品ページのように
+    # details が null の行では両方 None になる (details が無い = LCP 候補が確定して
+    # いない、という 1 つの事象の別の面であって、独立した 2 つの欠測ではない)。
+    out["lcp_subparts"], out["lcp_subparts_reason"] = _lcp_subparts(audits)
 
     out["throttling_method"] = (lh.get("configSettings") or {}).get("throttlingMethod")
     out["lh_version"] = lh.get("lighthouseVersion")
@@ -533,6 +575,26 @@ def aggregate_runs(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         out["lcp_element_reason"] = reasons[0] if reasons else None
         if reasons and any(v != reasons[0] for v in reasons):
             logger.warning("lcp_element_reason differs across runs: %s", reasons)
+
+    # lcp_subparts も element と同じく「1 回でも取れたら取れている」に倒す。
+    # 値は subpart ごとに median を採る (run 間で内訳が割れるため)。取れた run が
+    # 1 つも無いときだけ reason を入れる (element/reason と同じ排他)。
+    subparts_runs = [r.get("lcp_subparts") for r in runs if isinstance(r.get("lcp_subparts"), dict)]
+    if subparts_runs:
+        merged: Dict[str, float] = {}
+        for name in sorted({k for sp in subparts_runs for k in sp}):
+            values = [sp[name] for sp in subparts_runs
+                      if isinstance(sp.get(name), (int, float))]
+            if values:
+                merged[name] = round(statistics.median(values), 1)
+        out["lcp_subparts"] = merged
+        out["lcp_subparts_reason"] = None
+        out["lcp_subparts_runs"] = len(subparts_runs)
+    else:
+        out["lcp_subparts"] = None
+        reasons = [r.get("lcp_subparts_reason") for r in runs
+                   if r.get("lcp_subparts_reason") is not None]
+        out["lcp_subparts_reason"] = reasons[0] if reasons else None
 
     # throttling_method / lh_version / chrome_version は run 間で変わらない前提
     # (同一 URL・同一 form_factor を同一コマンドで N 回叩くだけなので)。最初の
