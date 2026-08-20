@@ -462,13 +462,26 @@ def _how_to_choose_enforced(data: dict) -> bool:
     return slug[:10] >= HOW_TO_CHOOSE_ENFORCE_FROM
 
 
-def _inline_asin_enforced(data: dict) -> bool:
-    """生 ASIN 表記を hard で判定してよい slug か (#4826 項目2 の昇格)。"""
+def _enforced_from(data: dict, enforce_from: str) -> bool:
+    """slug 日付が施行日以降か (soft → hard 昇格の共通ゲート)。
+
+    #4826 項目2 で置いた流儀をそのまま使う: slug 先頭 10 文字 (YYYY-MM-DD) を
+    施行日と文字列比較し、**施行日より前の既存記事は soft のまま**にする。
+    ゲートは PR の変更ファイルにしか当たらず、リライトは新 slug で追加される
+    (#2711) ので、既存記事が発火するのはアドホックな一括修正 PR のときだけ。
+    そこで落ちると無関係な修正が止まるため施行日で切る。
+
+    slug が無い/短すぎて日付を判定できない場合は安全側 (= 施行する) に倒す。
+    """
     slug = data.get("slug") or ""
     if not isinstance(slug, str) or len(slug) < 10:
-        # slug が無い/短すぎる場合は安全側で施行する (施行日ゲートと同じ流儀)。
         return True
-    return slug[:10] >= HOW_TO_CHOOSE_INLINE_ASIN_ENFORCE_FROM
+    return slug[:10] >= enforce_from
+
+
+def _inline_asin_enforced(data: dict) -> bool:
+    """生 ASIN 表記を hard で判定してよい slug か (#4826 項目2 の昇格)。"""
+    return _enforced_from(data, HOW_TO_CHOOSE_INLINE_ASIN_ENFORCE_FROM)
 
 
 def _inline_asin_soft(mentioned_all: set[str], hard_ok_message: str = "OK",
@@ -778,7 +791,9 @@ def check_cert_claims_declared(data: dict) -> CheckResult:
     ここは「主張したなら申告しろ」だけを見る。申告されれば check_certifications と
     check_cert_sources_content が従来どおり裏取りする。
 
-    まだ soft (passed=True, score<1.0)。昇格の判断材料は quality_census が拾う。
+    施行日 (CERT_CLAIM_UNDECLARED_ENFORCE_FROM) 以降の slug では **hard**。
+    それより前の slug では従来どおり合否を変えず score だけ下げ、quality_census が
+    「減点のみ」として既存 26 件の消化を追えるようにしておく。
     """
     if "claims" not in data or _is_legacy_article(data):
         return CheckResult("cert_claims_declared", True, 1.0,
@@ -791,12 +806,20 @@ def check_cert_claims_declared(data: dict) -> CheckResult:
     certs = sorted(undeclared)
     # quality_census.normalize_reason は ";" より前を集計キーにする。記事ごとに違う
     # claim 本文を頭に入れると理由が 44 通りに散るので、可変部は ";" の後ろに置く。
-    return CheckResult(
-        "cert_claims_declared", True, CERT_CLAIM_UNDECLARED_SOFT_SCORE,
+    head = (
         f"claim が {certs} を主張しているが product.certifications 未申告 "
         f"→ 裏取りが走らない"
-        f"; claim='{undeclared[certs[0]][:60]}' "
-        "(soft: 主張するなら certifications に載せ、非販売ソースで裏を取ること)",
+    )
+    tail = f"; claim='{undeclared[certs[0]][:60]}'"
+    if _enforced_from(data, CERT_CLAIM_UNDECLARED_ENFORCE_FROM):
+        return CheckResult(
+            "cert_claims_declared", False, CERT_CLAIM_UNDECLARED_SOFT_SCORE,
+            head + tail + " (主張するなら certifications に載せ、非販売ソースで裏を取ること)",
+        )
+    return CheckResult(
+        "cert_claims_declared", True, CERT_CLAIM_UNDECLARED_SOFT_SCORE,
+        head + tail
+        + " (soft: 施行日前の slug。主張するなら certifications に載せ、非販売ソースで裏を取ること)",
     )
 
 
@@ -809,8 +832,14 @@ def check_cert_claims_declared(data: dict) -> CheckResult:
 # 自動判定するので自己確認は不要」と書いており、**gate が見ていない側を名指しで
 # gate に任せていた** (amazon-navi-brain#12 で §8 を訂正済み)。
 #
-# ここは合否を変えない soft。quality_census の「減点のみ」に発火率を出し、
+# 導入時は 4 つとも合否を変えない soft。quality_census の「減点のみ」に発火率を出し、
 # プロンプト改訂後に 0 へ寄ったら #4826 項目2 の手順で hard 昇格を検討する。
+#
+# 2026-08-20 の再測 (全 2,106 本・amazon-navi-brain#13 2-1) での昇格状況:
+#   persona_fit_counts … 直近 300 本で発火 0 → **施行日つき hard へ昇格**
+#   review_signals     … 直近 100 本で 26% 発火 (むしろ全体 12% より悪化) → soft 据え置き
+#   verdict_headline   … 直近 100 本で 3% (全体 16%)。0 ではないので soft 据え置き
+#   claims_discipline  … 直近 100 本で 7% (全体 7.5%)。横ばいなので soft 据え置き
 V5_EXTENSION_SOFT_SCORE = 0.8
 
 # §5.D の件数レンジ (プロンプト v7.3)。
@@ -825,6 +854,17 @@ _VERDICT_HEADLINE_RANGE = (25, 50)   # §5.E   (v7.3 で 50-80 から改定)
 _NOT_RECOMMENDED_RANGE = (2, 3)      # §5.C
 _CLAIMS_MIN = 4                      # §6.5.2
 _CROSS_CHECKED_MIN = 2               # §6.5.2
+
+# §5.C の persona_fit_counts を hard にする施行日 (#5490 信頼レーンの昇格)。
+#
+# 判断根拠 (2026-08-20 実測・全 2,106 本):
+#
+#   発火 2 件 (0.1%)。2026-06-15-B0DTB1GDXH / 2026-07-27-B0CGH9743C の 2 本だけ
+#   直近 300 本 … 発火 **0** (rule of three で 95% 上限 1.0%)
+#
+# 他の 3 つ (review_signals / verdict_headline / claims_discipline) は直近 100 本でも
+# 26% / 3% / 7% 発火しており soft のまま据え置く (amazon-navi-brain#13 に測定値)。
+_PERSONA_FIT_COUNTS_ENFORCE_FROM = "2026-08-20"
 
 
 def _v5_soft(name: str, issues: list[str], ok_message: str = "OK") -> CheckResult:
@@ -908,16 +948,25 @@ def check_claims_discipline(data: dict) -> CheckResult:
 
 
 def check_persona_fit_counts(data: dict) -> CheckResult:
-    """§5.C: persona_fit.not_recommended_for は 2〜3 件。"""
+    """§5.C: persona_fit.not_recommended_for は 2〜3 件。
+
+    施行日 (_PERSONA_FIT_COUNTS_ENFORCE_FROM) 以降の slug では **hard**。
+    それより前の slug では soft のまま (既存 2 件を census から見えなくしない)。
+    """
     if _is_legacy_article(data):
         return CheckResult("persona_fit_counts", True, 1.0, "legacy article (skipped)")
     nr = (data.get("persona_fit") or {}).get("not_recommended_for")
     lo, hi = _NOT_RECOMMENDED_RANGE
     if not isinstance(nr, list):
-        return _v5_soft("persona_fit_counts", ["not_recommended_for 欠落 (§5.C 必須)"])
-    if not (lo <= len(nr) <= hi):
-        return _v5_soft("persona_fit_counts", [f"not_recommended_for が {lo}-{hi} 件でない"])
-    return CheckResult("persona_fit_counts", True, 1.0, "OK")
+        issues = ["not_recommended_for 欠落 (§5.C 必須)"]
+    elif not (lo <= len(nr) <= hi):
+        issues = [f"not_recommended_for が {lo}-{hi} 件でない"]
+    else:
+        return CheckResult("persona_fit_counts", True, 1.0, "OK")
+    if _enforced_from(data, _PERSONA_FIT_COUNTS_ENFORCE_FROM):
+        return CheckResult(
+            "persona_fit_counts", False, V5_EXTENSION_SOFT_SCORE, "; ".join(issues))
+    return _v5_soft("persona_fit_counts", issues)
 
 
 def check_source_uniqueness(data: dict) -> CheckResult:
@@ -1019,6 +1068,23 @@ def check_sources_v5(data: dict) -> CheckResult:
 # PR が落ちる。quality_census が「減点のみ」を週次で拾うので、プロンプト側で
 # certifications を書かせる改訂が入ったあとに発火率を見て昇格を判断する。
 CERT_CLAIM_UNDECLARED_SOFT_SCORE = 0.8
+
+# 未申告の認証主張を hard にする施行日 (#5490 信頼レーンの昇格・amazon-navi-brain#13 2-1)。
+#
+# 判断根拠 (2026-08-20 実測・配信物 hugo/content/posts/ を --posts に渡した census):
+#
+#   全 2,106 本での発火 … 26 件 (1.2%)。最後の発火は 2026-08-07-B01778NPQI
+#   直近 200 本 (2026-08-08 以降) … 発火 **0** (rule of three で 95% 上限 1.5%)
+#   直近 100 本                   … 発火 0
+#
+# #4826 項目2 を昇格したときの根拠は n=163 / 上限 1.8% だったので、これは同等以上。
+# プロンプト v7.3 (amazon-navi-brain#12) が §6.4.2 を認証ルールの正典に一本化して
+# 「主張と申告を一致させる」を明示したのも同じ向きに効く。
+#
+# 施行日を 2026-08-20 に置く理由: 既存 26 件はいずれも 2026-08-07 以前の slug で、
+# 施行日以降の slug (実測 4 本) は 1 件も発火していない。#4826 項目2 と同じく
+# **既存記事を巻き込まない**ため、slug 日付で切る。
+CERT_CLAIM_UNDECLARED_ENFORCE_FROM = "2026-08-20"
 
 # 認証の「一般カテゴリ語」。裏取り (check_cert_sources_content) では
 # 「ST の根拠として本文に 玩具安全基準 と書いてあれば可」としたいので

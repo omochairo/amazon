@@ -195,3 +195,43 @@ def test_malformed_inputs_do_not_crash():
         for fn in (check_review_signals, check_verdict_headline,
                    check_claims_discipline, check_persona_fit_counts):
             assert fn(d).passed
+
+
+# --- persona_fit_counts の施行日ゲート (#5490 昇格 / brain#13 2-1) ------------
+#
+# 全 2,106 本での発火は 2 件のみ・直近 300 本で 0 だったため hard へ昇格した。
+# 既存 2 件 (2026-06-15 / 2026-07-27) を巻き込まないよう施行日で切る。
+
+def test_persona_fit_counts_is_hard_on_or_after_enforce_date():
+    d = _art(persona_fit={"not_recommended_for": []})
+    d["slug"] = "2026-08-20-B0XXXXXXXX"
+    r = check_persona_fit_counts(d)
+    assert not r.passed, "施行日以降は hard"
+    assert r.score == V5_EXTENSION_SOFT_SCORE
+
+
+def test_persona_fit_counts_stays_soft_before_enforce_date():
+    d = _art(persona_fit={"not_recommended_for": []})
+    d["slug"] = "2026-08-19-B0XXXXXXXX"
+    r = check_persona_fit_counts(d)
+    assert r.passed and r.score == V5_EXTENSION_SOFT_SCORE
+
+
+def test_persona_fit_counts_ok_after_enforce_date():
+    d = _art(persona_fit={"not_recommended_for": ["a", "b"]})
+    d["slug"] = "2026-08-20-B0XXXXXXXX"
+    r = check_persona_fit_counts(d)
+    assert r.passed and r.score == 1.0
+
+
+def test_other_three_stay_soft_after_enforce_date():
+    # review_signals / verdict_headline / claims_discipline は据え置き。
+    # 施行日以降の slug でも合否を変えないこと。
+    d = _art(review_signals={"summary_one_line": "短い"},
+             verdict={"headline": "短"},
+             claims=[])
+    d["slug"] = "2026-08-20-B0XXXXXXXX"
+    for fn in (check_review_signals, check_verdict_headline, check_claims_discipline):
+        r = fn(d)
+        assert r.passed, fn.__name__
+        assert r.score == V5_EXTENSION_SOFT_SCORE, fn.__name__
