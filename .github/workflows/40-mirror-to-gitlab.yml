@@ -7,9 +7,42 @@ name: Mirror main to GitLab
 # 非 fast-forward で reject された場合は「GitLab 側 main が独自に前進している」
 # サイン (= フェイルオーバー運転の痕跡)。force push はせず、
 # docs/failover-to-gitlab.md の復帰手順で先に reconcile すること。
+#
+# --- 2026-08-20: bot コミットの転送を 30 分毎にまとめる ------------------------
+# 自宅ワーカー K8 は pages ビルドに **1 日 5.0〜6.4 時間 (1 日の 21〜27%)** を使っており、
+# うち **キャンセルされたビルドだけで 49〜149 分/日** が「殺されるまで全力で回った」
+# 無駄になっていた (auto_cancel は待ち行列は消せても、それまでに出た熱は消せない)。
+# 8/19 実測: 成功 30 本 / キャンセル 24 本。
+#
+# **束ねるのはマージではなくビルド**。PR のマージは今まで通り 1 PR = 1 マージで独立させ、
+# ここ (GitLab への転送) だけを間引く。pages は main の状態から丸ごと再生成する冪等
+# ジョブなので、1 本落ちても次の転送で作り直されるだけで**失敗が伝播しない**。
+# 「1 個落ちたら全部のビルドが止まる」形 (マージ列を作る等) は意図的に採らない。
+#
+#   - コード/テンプレート/CI を触る push → **即時転送** (自分の PR の反映は待たされない)
+#   - 記事・データだけの push            → 転送せず、30 分毎の schedule 実行にまとめる
+#   - 手動即時が要るとき                 → `gh workflow run 40-mirror-to-gitlab.yml -R omochairo/amazon`
+#
+# **author では判定できない** (2026-08-20 に実測して分かった罠):
+#   squash merge のコミット author は PR 作成者になるが、Jules は owner のトークンで
+#   PR を作るため、**Jules の記事コミットと owner 自身の PR がどちらも同じ表示名
+#   (`IroPapa Omochairo Lab`) になる**。author で bot を弾くと owner の PR まで
+#   30 分待たされる。そこで「誰が」ではなく「何を変えたか」で判定する。
+#   実測: 直近 40 コミットのうち即時判定になるのは 2 本 (CI 修正 1 + scripts 修正 1) だけで、
+#   残り 38 本 (記事・データ・タグ stub) はまとめられる。
+#
+# `git push` は冪等なので、schedule 実行時に転送すべきものが無ければ
+# "Everything up-to-date" で終わり GitLab にパイプラインは作られない
+# (= 「変更が無いのに 30 分毎にビルドする」空振りは構造的に起きない)。
+#
+# ⚠️ GitHub の cron はベストエフォートで数分〜十数分遅れることがある。
+#    bot コミットの配信反映は最悪 30 分 + その遅れを見込むこと。
 on:
   push:
     branches: [main]
+  schedule:
+    # 30 分毎に「溜まった bot コミット」をまとめて転送する。
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 concurrency:
@@ -19,6 +52,16 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # 「まとめてよい = コンテンツの追加更新」とみなすパス。
+  #   data/          : 記事 JSON・sidecar・分析データ (bot と Jules の出力はほぼ全部ここ)
+  #   hugo/content/  : タグ/ブランドの term stub (data(seo) レーンが生成)
+  #   hugo/data/     : semantic_related / ranking manifest / features など生成物
+  # **ここに載らないパスが 1 つでも含まれれば即時転送する** (fail-safe: 迷ったら今まで通り)。
+  # layouts/ や config.toml、scripts/、.github/、.gitlab-ci.yml はサイト全体の見た目や
+  # ビルド自体を変えるので、確認を待たせない。
+  BATCHABLE_PATHS_ERE: '^(data/|hugo/content/|hugo/data/)'
+
 jobs:
   mirror:
     runs-on: ubuntu-latest
@@ -27,7 +70,39 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Decide whether to mirror now
+        id: gate
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" != "push" ]; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::${EVENT} 起動のため即時転送する"
+            exit 0
+          fi
+
+          # push で来たコミット範囲の変更パスを見る。before が取れない (force push や
+          # 初回) ときは tip 1 本だけで判定する。
+          if [ -n "${BEFORE:-}" ] && git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            files="$(git diff --name-only "${BEFORE}..${SHA}")"
+          else
+            files="$(git diff --name-only "${SHA}^..${SHA}")"
+          fi
+          urgent="$(printf '%s\n' "$files" | grep -v '^$' | grep -vE "${BATCHABLE_PATHS_ERE}" || true)"
+
+          if [ -n "$urgent" ]; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::コンテンツ以外の変更を含むため即時転送する: $(printf '%s\n' "$urgent" | head -3 | tr '\n' ' ')"
+          else
+            echo "go=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::記事・データのみの push。30 分毎の schedule 実行にまとめる (配信は最大 30 分遅延)。今すぐ配信したいときは本 workflow を workflow_dispatch で起動する"
+          fi
+
       - name: Push main to GitLab
+        if: steps.gate.outputs.go == 'true'
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
         run: |
