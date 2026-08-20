@@ -40,6 +40,7 @@ import where_to_buy_format
 from brand_normalizer import normalize as normalize_brand
 from build_feature_lists import PRICE_BANDS
 from fetch_amazon import get_secret
+from score_per_asin_info import is_search_result_url
 from score_calculator import (
     ScoreResult,
     calculate as calculate_score,
@@ -1636,6 +1637,12 @@ def _attach_source_highlights(
     candidates = [
         s for s in sources
         if isinstance(s, dict) and s.get("url") and s.get("title")
+        # #5490 案B: 検索語を URL に埋めただけのページは出典ではない。収集側
+        # (fetch_third_party_sources._is_excluded) は塞いだが、**それ以前に集めた
+        # 行が store に残っており、ここには防波堤が無かった** (2026-08-20 実測:
+        # 配信物 157 ページが「出典：search.kakaku.com」等を表示)。判定は
+        # score_per_asin_info が SSOT で、band 採点側は元から除外している。
+        and not is_search_result_url(s.get("url") or "")
         and not any(d in (s.get("host") or "").lower() for d in _HIGHLIGHT_HOST_DENY)
         and _highlight_snippet_ok(s.get("snippet") or "")
     ]

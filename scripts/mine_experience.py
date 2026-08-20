@@ -63,6 +63,7 @@ import requests
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import brand_normalizer  # noqa: E402
 from fetch_cross_search import extract_search_keyword  # noqa: E402
+from score_per_asin_info import is_search_result_url  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("mine_experience")
@@ -292,6 +293,11 @@ def gather_third_party(
     if isinstance(tp, dict):
         for s in tp.get("sources", []) or []:
             if isinstance(s, dict) and isinstance(s.get("url"), str) and s["url"]:
+                # #5490 案B: 検索結果ページを fetch しても体験談は取れない。収集側は
+                # 塞いだが、それ以前の行が store に残っている (2026-08-20 実測 498 行)。
+                # 外部への無駄なリクエストにもなるのでここで落とす。
+                if is_search_result_url(s["url"]):
+                    continue
                 urls.append((s["url"], "blog"))
 
     news = _load(base / asin / "news.json")
