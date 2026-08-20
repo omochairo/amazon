@@ -326,6 +326,18 @@ def build_row(census: dict) -> dict[str, Any] | None:
             "comparisons.", target_date
         )
 
+    # #5085: リッチリザルトの現況を時系列に残す。この Issue の懸念は
+    # 「リッチリザルトが黙って失効する」ことなので、スナップショット 1 点では
+    # 検出できない。rich_pass が落ちた日が分かる形にしておく。
+    # 列を 4 つに畳んでいるのは、verdict の種類 (PASS/PARTIAL/FAIL/NEUTRAL) が
+    # 増減しても history の列集合を安定させるため。内訳は census 本体の
+    # by_rich_verdict / by_rich_type / rich_issues に残っている。
+    rich_verdicts = census.get("by_rich_verdict", {}) or {}
+    rich_pass = int(rich_verdicts.get("PASS", 0) or 0)
+    rich_none = int(rich_verdicts.get("(none)", 0) or 0)
+    rich_other = sum(int(v or 0) for k, v in rich_verdicts.items()
+                     if k not in ("PASS", "(none)"))
+
     row: dict[str, Any] = {
         "date": target_date,
         "sitemap_urls": sitemap_urls,
@@ -335,6 +347,10 @@ def build_row(census: dict) -> dict[str, Any] | None:
         "errors": errors,
         "indexed_rate": indexed_rate,
         "circuit_breaker_tripped": tripped,
+        "rich_pass": rich_pass,
+        "rich_other": rich_other,
+        "rich_none": rich_none,
+        "rich_issue_kinds": len(census.get("rich_issues", {}) or {}),
         "unmapped": unmapped,
     }
     row.update(slug_counts)

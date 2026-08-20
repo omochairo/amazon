@@ -138,6 +138,26 @@ jobs:
           print("| coverageState | 件数 |\n|---|---:|")
           for k, v in d["by_coverage_state"].items():
               print(f"| {k} | {v} |")
+          # #5085: リッチリザルトの現況。richResultsResult は元から同じ API
+          # レスポンスに入っており、拾うのに追加の呼び出しは発生しない。
+          rv = d.get("by_rich_verdict") or {}
+          if rv:
+              print("")
+              print("### リッチリザルト (#5085)")
+              print("")
+              print("- verdict: " + " / ".join(f"{k}={v}" for k, v in rv.items()))
+              rt = d.get("by_rich_type") or {}
+              print("- 検出された種別: " + (
+                  " / ".join(f"{k}={v}" for k, v in rt.items()) or "**なし**"))
+              issues = d.get("rich_issues") or {}
+              if issues:
+                  print("")
+                  print("| 課題 | 件数 |")
+                  print("|---|---:|")
+                  for k, v in issues.items():
+                      print(f"| {k} | {v} |")
+              else:
+                  print("- 課題: なし")
           PY
 
       # B-3 (#3988): census は毎週上書きされる単一スナップショットのため、

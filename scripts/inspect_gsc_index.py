@@ -205,7 +205,13 @@ def inspect_urls(
                     "siteUrl": site_url,
                     "languageCode": "ja-JP",
                 }).execute()
-                idx = res.get("inspectionResult", {}).get("indexStatusResult", {})
+                inspection = res.get("inspectionResult", {})
+                idx = inspection.get("indexStatusResult", {})
+                # #5085: richResultsResult は同じレスポンスに既に入っており、
+                # 拾っても **API 呼び出しは 1 件も増えない** (クォータ影響ゼロ)。
+                # ここまで捨てていたため「Product / レビュースニペットが実際に
+                # 有効か」を GSC UI を人が見に行く以外に確かめる手段が無かった。
+                rich = _summarize_rich_results(inspection.get("richResultsResult", {}))
                 if _circuit_enabled():
                     with quota_lock:
                         quota_state["consecutive_failures"] = 0
@@ -219,6 +225,9 @@ def inspect_urls(
                     "last_crawl_time": idx.get("lastCrawlTime"),
                     "google_canonical": idx.get("googleCanonical"),
                     "user_canonical": idx.get("userCanonical"),
+                    "rich_verdict": rich["verdict"],
+                    "rich_types": rich["types"],
+                    "rich_issues": rich["issues"],
                 }, None
             except HttpError as e:
                 last_exception = e
@@ -283,6 +292,50 @@ def inspect_urls(
         "threshold": circuit_breaker_threshold,
     }
     return inspected_results, errors, circuit_info
+
+
+def _summarize_rich_results(rich: dict[str, Any] | None) -> dict[str, Any]:
+    """URL Inspection の ``richResultsResult`` を集計しやすい形に潰す (#5085)。
+
+    API の形:
+
+        {"verdict": "PASS",
+         "detectedItems": [{"richResultType": "Product snippets",
+                            "items": [{"name": "...",
+                                       "issues": [{"issueMessage": "...",
+                                                   "severity": "WARNING"}]}]}]}
+
+    URL 1 本ぶんの生データをそのまま持つと census が肥大するので、
+    ``verdict`` / 検出された rich result 種別 / 課題メッセージ (severity 付き)
+    の 3 つだけ残す。**課題が 1 件も無いことと、そもそも検出されていないことを
+    区別できるようにする**のが要点で、``types`` が空なら後者。
+
+    リッチリザルトが無効化されていても GSC は 404 を返さず単に
+    ``richResultsResult`` を欠くため、``verdict`` は "(none)" になる。
+    """
+    if not isinstance(rich, dict) or not rich:
+        return {"verdict": "(none)", "types": [], "issues": []}
+    types: list[str] = []
+    issues: list[str] = []
+    for det in rich.get("detectedItems") or []:
+        if not isinstance(det, dict):
+            continue
+        rtype = det.get("richResultType") or "(unnamed)"
+        types.append(rtype)
+        for item in det.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            for iss in item.get("issues") or []:
+                if not isinstance(iss, dict):
+                    continue
+                sev = iss.get("severity") or "(none)"
+                msg = iss.get("issueMessage") or "(no message)"
+                issues.append(f"{rtype} / {sev}: {msg}")
+    return {
+        "verdict": rich.get("verdict") or "(none)",
+        "types": sorted(set(types)),
+        "issues": sorted(set(issues)),
+    }
 
 
 def build_not_indexed_urls(
@@ -447,6 +500,22 @@ def main() -> int:
         by_robots_txt_state = process_counter("robots_txt_state")
         by_indexing_state = process_counter("indexing_state")
 
+        # #5085: リッチリザルトの現況。by_rich_verdict は URL 単位 (1 URL 1 票)、
+        # by_rich_type / rich_issues は 1 URL が複数種別・複数課題を持つので
+        # 延べ数になる。分母が違うので合計は一致しない。
+        by_rich_verdict = process_counter("rich_verdict")
+        rich_type_counter: collections.Counter = collections.Counter()
+        rich_issue_counter: collections.Counter = collections.Counter()
+        for item in inspected:
+            rich_type_counter.update(item.get("rich_types") or [])
+            rich_issue_counter.update(item.get("rich_issues") or [])
+        by_rich_type = dict(sorted(rich_type_counter.items(),
+                                   key=lambda x: (-x[1], x[0])))
+        # 課題メッセージは種類が増えても全部残す。上限で切ると
+        # 「1 種類だけ大量に出ている」のか「多品種が少しずつ」なのかが消える。
+        rich_issues = dict(sorted(rich_issue_counter.items(),
+                                  key=lambda x: (-x[1], x[0])))
+
         not_indexed_urls = build_not_indexed_urls(inspected, args.max_not_indexed_urls)
 
         result = {
@@ -465,6 +534,9 @@ def main() -> int:
             "by_verdict": by_verdict,
             "by_robots_txt_state": by_robots_txt_state,
             "by_indexing_state": by_indexing_state,
+            "by_rich_verdict": by_rich_verdict,
+            "by_rich_type": by_rich_type,
+            "rich_issues": rich_issues,
             "not_indexed_urls": not_indexed_urls,
             "errors": errors,
             "circuit_breaker": circuit_info,

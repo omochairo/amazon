@@ -68,3 +68,70 @@ class TestBuildNotIndexedUrls(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SummarizeRichResultsTest(unittest.TestCase):
+    """#5085: richResultsResult を集計形に潰す。"""
+
+    def test_missing_rich_results_is_none_not_empty_pass(self):
+        """リッチリザルトが無効なとき GSC は richResultsResult ごと返さない。
+        これを PASS や「課題リスト空」と混同すると「有効」と誤読する。"""
+        for empty in (None, {}, "not a dict"):
+            got = I._summarize_rich_results(empty)
+            self.assertEqual(got["verdict"], "(none)")
+            self.assertEqual(got["types"], [])
+            self.assertEqual(got["issues"], [])
+
+    def test_detected_types_are_collected(self):
+        got = I._summarize_rich_results({
+            "verdict": "PASS",
+            "detectedItems": [
+                {"richResultType": "Product snippets", "items": [{"name": "x"}]},
+                {"richResultType": "Merchant listings", "items": [{"name": "y"}]},
+            ],
+        })
+        self.assertEqual(got["verdict"], "PASS")
+        self.assertEqual(got["types"], ["Merchant listings", "Product snippets"])
+        self.assertEqual(got["issues"], [])
+
+    def test_issues_carry_type_and_severity(self):
+        got = I._summarize_rich_results({
+            "verdict": "PARTIAL",
+            "detectedItems": [{
+                "richResultType": "Product snippets",
+                "items": [{"name": "x", "issues": [
+                    {"issueMessage": "Invalid object type for field 'review'",
+                     "severity": "ERROR"},
+                    {"issueMessage": "Missing field 'aggregateRating'",
+                     "severity": "WARNING"},
+                ]}],
+            }],
+        })
+        self.assertEqual(got["verdict"], "PARTIAL")
+        self.assertIn("Product snippets / ERROR: Invalid object type for field 'review'",
+                      got["issues"])
+        self.assertIn("Product snippets / WARNING: Missing field 'aggregateRating'",
+                      got["issues"])
+
+    def test_duplicate_issues_are_deduped_per_url(self):
+        """同じ課題が複数 item に出ても URL 1 本ぶんとして数える。"""
+        got = I._summarize_rich_results({
+            "verdict": "PARTIAL",
+            "detectedItems": [{
+                "richResultType": "Product snippets",
+                "items": [
+                    {"issues": [{"issueMessage": "same", "severity": "WARNING"}]},
+                    {"issues": [{"issueMessage": "same", "severity": "WARNING"}]},
+                ],
+            }],
+        })
+        self.assertEqual(len(got["issues"]), 1)
+
+    def test_malformed_entries_do_not_raise(self):
+        got = I._summarize_rich_results({
+            "verdict": "FAIL",
+            "detectedItems": [None, {"items": "nope"}, {"richResultType": "T",
+                                                        "items": [None]}],
+        })
+        self.assertEqual(got["verdict"], "FAIL")
+        self.assertEqual(got["types"], ["(unnamed)", "T"])
