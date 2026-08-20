@@ -15,12 +15,15 @@ name: Unit Tests
 #      scripts/ 全体の unit test はその関心事と別物であり、独立させたほうが
 #      失敗時の切り分けが速い。
 #
-# required check への昇格 (#4069):
-#   観察レーンとして始めた workflow で、branch protection の required check には
-#   まだ入れていない。いきなり必須化すると、未検出のフレーク/環境差異があった
-#   場合に全 PR がブロックされるため、まず数週間グリーンで安定することを見る
-#   という条件を置いた。
+# required check への昇格 (#4069) — **2026-08-20 に昇格済み**:
+#   観察レーンとして始めた workflow だが、下の観察 3 項目を満たしたので
+#   2026-08-20 に branch protection の required status check へ追加した
+#   (`contexts: ["validate", "unit-tests"]`)。**この job が落ちると main への
+#   マージは全 PR で止まる。** 詰まったときの対処は下の「残る唯一のリスク」を
+#   読むこと (テストの無効化で回避しない)。
 #
+#   昇格前に置いていた条件は「いきなり必須化すると、未検出のフレーク/環境差異が
+#   あった場合に全 PR がブロックされるため、まず数週間グリーンで安定すること」。
 #   2026-08-20 実測 (paths 撤廃の 08-02 から 18 日・全期間 run 1,235 本) で
 #   観察 3 項目はすべて満たした:
 #
@@ -60,10 +63,11 @@ name: Unit Tests
 #
 #     詰まったときの正しい直し方は「テストを無効化する」ではなく
 #     「レーンを登録する / 実データの前提を直す」。詰まりが長引く場合の
-#     エスケープハッチは admin による bypass merge しかないので、
-#     required 化は owner (admin 権限保持者) の判断で行うこと。
+#     エスケープハッチは admin による bypass merge しかない
+#     (enforcement_level = non_admins のため admin だけが押し通せる)。
 #
-#   昇格の手順 (2026-08-20 に write 権限で実行を試みて 404。**admin 権限が要る**):
+#   昇格に使ったコマンド (2026-08-20 実行済み。**admin 権限が要る**。write 権限で
+#   叩くと中身が正しくても 404 になる):
 #
 #     ENDPOINT=repos/omochairo/amazon/branches/main/protection/required_status_checks
 #     gh api -X PATCH "$ENDPOINT" --input - <<'JSON'
@@ -71,12 +75,16 @@ name: Unit Tests
 #                {"context":"unit-tests","app_id":15368}]}
 #     JSON
 #
+#   次に required check を足す/外すときも同じ注意が要る:
 #   - context 名は job id の `unit-tests` (job に name: を付けていないため)
-#   - このエンドポイントは checks を**置換**する。現在の required check は
-#     `validate` 1 本 (app_id 15368 = GitHub Actions) なので、消さないよう併記する
-#   - app_id を指定すると「GitHub Actions が報告した validate / unit-tests」しか
-#     required を満たせなくなる。省略すると任意の App が同名 context を報告できる
-#   - strict (= merge 前に main へ追従させる) は指定しなければ現状維持
+#   - このエンドポイントは checks を**置換**する。既存の context を消さないよう
+#     必ず全部併記する (2026-08-20 時点で `validate` と `unit-tests` の 2 本)
+#   - app_id 15368 = GitHub Actions。指定すると「GitHub Actions が報告した
+#     context」しか required を満たせない。省略すると任意の App が同名 context を
+#     報告できる状態に緩むので落とさない
+#   - strict (= merge 前に main へ追従させる) は指定しなければ現状維持。
+#     **有効にしないこと。** cron が 1 日 25〜47 件の PR を作るため、main が動く
+#     たびに全 PR が再実行待ちになって auto-merge が詰まる
 #
 #   現状の確認は admin でなくてもできる。protection エンドポイントは write では
 #   404 (権限不足でも 404 が返るので「保護が無い」と読まないこと) だが、
@@ -84,8 +92,10 @@ name: Unit Tests
 #
 #     gh api repos/omochairo/amazon/branches/main -q '.protection.required_status_checks'
 #
-#   enforcement_level は non_admins。下記の data 起因で詰まった窓が長引いた
-#   場合は、admin による bypass merge がエスケープハッチになる。
+#   2026-08-20 昇格直後の実測値 (これが期待値):
+#     {"checks":[{"app_id":15368,"context":"validate"},
+#                {"app_id":15368,"context":"unit-tests"}],
+#      "contexts":["validate","unit-tests"],"enforcement_level":"non_admins"}
 
 on:
   # 2026-08-02 (#4069 ステップ1): pull_request 側の paths を撤廃した。
