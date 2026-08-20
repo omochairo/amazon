@@ -212,8 +212,22 @@ pages:
     # (二度目の hugo build は不要)。
     - python scripts/generate_term_redirects.py --sitemap public/sitemap.xml --out public/_redirects
     # #3055 E1: GitLab Pages は .gz/.br 併置で自動圧縮配信する。テキスト系を precompress
-    - find public -type f -regextype posix-extended -iregex '.*\.(html|css|js|json|xml|svg|txt|webmanifest)$' -print0 | xargs -0 -r -n1 -P4 gzip -kf9
-    - find public -type f -regextype posix-extended -iregex '.*\.(html|css|js|json|xml|svg|txt|webmanifest)$' -print0 | xargs -0 -r -n1 -P4 brotli -f -q 10
+    #
+    # **並列度を 4 → 2 に落としている (2026-08-20)**。K8 の実測 (5 秒粒度のハード
+    # ウェアログ, amazon-home-ops#65) で、pages ビルド中に CPU が最も熱くなるのは
+    # 全コアを使う hugo ではなく**この圧縮フェーズ**だと分かった:
+    #   hugo (16 スレッド / 54W)      → Tctl 87→92.5℃ を約 45 秒で通過
+    #   圧縮 (-P4 = 4 プロセス / 49W) → **Tctl 93.0℃ に張り付いたまま 1〜2 分**
+    # 少数スレッドだと Ryzen がブースト clock を上げるため、コア数が 1/4 でも
+    # パッケージ電力はほぼ同じ (54W → 49W) になり、時間が長いぶん熱くなる。
+    # そして 93℃ は EC のファンカーブの段差で、ここに張り付くとファンが
+    # **2,150 ⇄ 3,325 rpm を数十秒周期で往復**して唸る (owner が居室で聞いた音)。
+    # -P2 にすると同フェーズの電力が ~33W まで下がり段差に届かない。
+    # 代償は圧縮フェーズが約 2 倍 (実測 ~90 秒 → ~180 秒、ビルド全体 440 秒 → 約 530 秒)。
+    # **圧縮率は一切変えない** (q10 のまま。q9 は page.html -5.0% / index.json -8.1% と
+    # 有意に大きくなるため不採用、という 2026-08-05 の判断を維持する)。
+    - find public -type f -regextype posix-extended -iregex '.*\.(html|css|js|json|xml|svg|txt|webmanifest)$' -print0 | xargs -0 -r -n1 -P2 gzip -kf9
+    - find public -type f -regextype posix-extended -iregex '.*\.(html|css|js|json|xml|svg|txt|webmanifest)$' -print0 | xargs -0 -r -n1 -P2 brotli -f -q 10
   artifacts:
     paths:
       - public
