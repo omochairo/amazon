@@ -15,22 +15,77 @@ name: Unit Tests
 #      scripts/ 全体の unit test はその関心事と別物であり、独立させたほうが
 #      失敗時の切り分けが速い。
 #
-# なぜ required check にしないか (#4069):
-#   まずこの workflow が数週間グリーンで安定することを観察してから、
-#   required check への昇格 (branch protection 設定変更) を判断する。
-#   いきなり必須化すると、既存の未検出フレーク/環境差異があった場合に
-#   全 PR がブロックされるリスクがある。
+# required check への昇格 (#4069):
+#   観察レーンとして始めた workflow で、branch protection の required check には
+#   まだ入れていない。いきなり必須化すると、未検出のフレーク/環境差異があった
+#   場合に全 PR がブロックされるため、まず数週間グリーンで安定することを見る
+#   という条件を置いた。
 #
-#   2026-08-02 時点の実績: run 22 本 (07-27〜08-02) で 21 success / 1 failure。
-#   唯一の failure は開発中ブランチ ci/4007-unit-tests の初回 run (07-27T12:46)
-#   で、同ブランチの 2 分後・4 分後は success。マージ後の失敗とフレークはゼロ。
-#   ただし run が集中しているのは 07-27 と 08-02 の 2 日だけで、昇格条件の
-#   「数週間」には届いていない。本 PR (ステップ1) で全 PR 発火にしたので、
-#   data のみの PR でもグリーンを保つかを 2 週間観察してから昇格を判断する。
+#   2026-08-20 実測 (paths 撤廃の 08-02 から 18 日・全期間 run 1,235 本) で
+#   観察 3 項目はすべて満たした:
 #
-#   昇格時に併せて要検討: fork からの PR では secrets.NAVI_BRAIN_PAT が渡らず
-#   下の overlay checkout が落ちるため、required 化すると fork PR が構造的に
-#   マージ不能になる (現在 external contributor はいないので実害なし)。
+#   1. 安定性 … success 1,218 (98.6%) / failure 15 (1.2%) / cancelled 2。
+#      **フレークは 0**。同一ブランチを再実行して結果が割れた例が無く、
+#      failure 15 本はすべて実際のコード状態に起因する (内訳は下の「残る
+#      唯一のリスク」参照)。
+#   2. 取りこぼし … pull_request 側の paths は撤廃済みなので構造的に発生しない。
+#      直近 merged PR 150 本 (App bot 87 / omochairo 46 / iromama 17) の
+#      **150/150 に unit-tests の check が付いている**。PR を作る 25 workflow は
+#      すべて GitHub App token を使っており、GITHUB_TOKEN 由来の PR が
+#      pull_request workflow を起こさない罠 (= required check が永久 pending)
+#      には当たらない。
+#   3. run 時間 … 直近 30 run で 82〜109 秒 (中央値 92 秒)。テストが
+#      1,812 → 2,805 ケースに増えた分で伸びているが許容範囲。
+#
+#   fork PR の懸念は解消済み: 下の overlay checkout は 2026-08-12 から
+#   `if: env.HAS_BRAIN_PAT == 'true'` で条件付きになっており、secrets が
+#   渡らない fork PR でも job は完走する。
+#
+#   残る唯一のリスク — 実データを読むテストが data PR で赤くなる経路:
+#     failure 15 本の内訳は 08-04 に 11 本 (test_report_census_404 のコード
+#     バグで main が約 3.5 時間壊れた窓)、08-10 に 2 本、08-13 に 1 本、
+#     07-27 に 1 本 (この workflow 自身の開発中ブランチ)。
+#
+#     このうち **08-10 の 2 本だけが性質が違う**。
+#     test_check_history_freshness.py::test_real_history_all_lanes_registered が
+#     実 data/analytics/history/ を読んでおり、quality_census.jsonl が初めて
+#     書かれた時点で「レーン未登録」として赤くなった。無関係な 2 ブランチが
+#     同時に落ちている = **コード PR ではなく data の増加が原因**。
+#
+#     required 化すると、この型の窓では全 PR (bot の data PR を含む) が止まる。
+#     ただし (a) 24 日で 1 回・同日の他 131 run は success なので窓は短く、
+#     (b) 修正 = レーン登録のコード変更なので**修正 PR 自体は緑になり**
+#     デッドロックしない。実データを読むテストは他にも約 20 本あるが、
+#     この経路で赤くなった実績はこの 1 件だけ。
+#
+#     詰まったときの正しい直し方は「テストを無効化する」ではなく
+#     「レーンを登録する / 実データの前提を直す」。詰まりが長引く場合の
+#     エスケープハッチは admin による bypass merge しかないので、
+#     required 化は owner (admin 権限保持者) の判断で行うこと。
+#
+#   昇格の手順 (2026-08-20 に write 権限で実行を試みて 404。**admin 権限が要る**):
+#
+#     ENDPOINT=repos/omochairo/amazon/branches/main/protection/required_status_checks
+#     gh api -X PATCH "$ENDPOINT" --input - <<'JSON'
+#     {"checks":[{"context":"validate","app_id":15368},
+#                {"context":"unit-tests","app_id":15368}]}
+#     JSON
+#
+#   - context 名は job id の `unit-tests` (job に name: を付けていないため)
+#   - このエンドポイントは checks を**置換**する。現在の required check は
+#     `validate` 1 本 (app_id 15368 = GitHub Actions) なので、消さないよう併記する
+#   - app_id を指定すると「GitHub Actions が報告した validate / unit-tests」しか
+#     required を満たせなくなる。省略すると任意の App が同名 context を報告できる
+#   - strict (= merge 前に main へ追従させる) は指定しなければ現状維持
+#
+#   現状の確認は admin でなくてもできる。protection エンドポイントは write では
+#   404 (権限不足でも 404 が返るので「保護が無い」と読まないこと) だが、
+#   branches エンドポイントは required_status_checks を返す:
+#
+#     gh api repos/omochairo/amazon/branches/main -q '.protection.required_status_checks'
+#
+#   enforcement_level は non_admins。下記の data 起因で詰まった窓が長引いた
+#   場合は、admin による bypass merge がエスケープハッチになる。
 
 on:
   # 2026-08-02 (#4069 ステップ1): pull_request 側の paths を撤廃した。
