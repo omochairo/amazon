@@ -130,6 +130,25 @@ def test_gather_third_party_empty_when_no_sources(tmp_path):
     assert gather_third_party("B0XXXXXXXX", base=base, session=_FakeSession([])) == []
 
 
+def test_gather_third_party_skips_search_result_urls(tmp_path):
+    # #5490 案B: 検索結果ページを fetch しても体験談は取れない。収集側は塞いだが、
+    # それ以前の行が store に残っている (2026-08-20 実測 498 行)。外部への無駄な
+    # リクエストになるので、ここで落とす。_FakeSession は空キューなので、
+    # 1 件でも fetch しようとすれば IndexError で落ちる = 呼んでいないことの証明。
+    base = tmp_path / "per_asin"
+    (base / "B0XXXXXXXX").mkdir(parents=True)
+    (base / "B0XXXXXXXX" / "third_party_sources.json").write_text(
+        json.dumps({"sources": [
+            {"url": "https://search.kakaku.com/gravitrax", "host": "search.kakaku.com"},
+            {"url": "https://www.biccamera.com/bc/category?q=x", "host": "biccamera.com"},
+        ]}),
+        encoding="utf-8",
+    )
+    session = _FakeSession([])
+    assert gather_third_party("B0XXXXXXXX", base=base, session=session) == []
+    assert session.calls == 0
+
+
 def test_gather_yahoo_aggregate_empty_when_raw_dir_missing(tmp_path):
     candidates, stats = gather_yahoo_aggregate("B0XXXXXXXX", raw_dir=tmp_path / "nope")
     assert candidates == []

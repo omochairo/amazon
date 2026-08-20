@@ -142,6 +142,26 @@ class AttachTests(unittest.TestCase):
             _attach_source_highlights(data, root)
             self.assertNotIn("source_highlights", data)
 
+    def test_search_result_pages_are_not_sources(self):
+        # #5490 案B: 検索語を URL に埋めただけのページは出典ではない。収集側は
+        # 塞いだが、それ以前に集めた行が store に残っており、描画側に防波堤が
+        # 無かった (2026-08-20 実測: 配信物 157 ページが表示していた)。
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            self._write(root, "B3", [
+                {"title": "kakaku 検索", "url": "https://search.kakaku.com/gravitrax",
+                 "snippet": "グラビトラックスの検索結果です。価格や在庫を比較して選べます。",
+                 "host": "search.kakaku.com"},
+                {"title": "レビュー本体", "url": "https://review.kakaku.com/review/K0001/",
+                 "snippet": "子どもが夢中で遊んでいます。知育効果も高く親子で長く楽しめています。",
+                 "host": "review.kakaku.com"},
+            ])
+            data = {"product": {"asin": "B3"}}
+            _attach_source_highlights(data, root)
+            hosts = [h["host"] for h in data.get("source_highlights") or []]
+            self.assertNotIn("search.kakaku.com", hosts)
+            self.assertIn("review.kakaku.com", hosts)  # レビュー本体は残す
+
     def test_preserves_existing(self):
         with tempfile.TemporaryDirectory() as tmp:
             data = {"product": {"asin": "B1"}, "source_highlights": [{"x": 1}]}
