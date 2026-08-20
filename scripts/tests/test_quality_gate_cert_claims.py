@@ -146,3 +146,41 @@ def test_malformed_claims_do_not_crash():
     for claims in ("not a list", [None, 42, {"claim": None}, {}], []):
         r = check_cert_claims_declared(_article(claims))
         assert r.passed
+
+
+# --- 施行日ゲート (#5490 昇格 / amazon-navi-brain#13 2-1) ---------------------
+#
+# 既存 26 件はすべて 2026-08-07 以前の slug。施行日 2026-08-20 以降の slug でだけ
+# hard にして、既存記事を触る一括修正 PR を落とさない (#4826 項目2 と同じ設計)。
+
+def test_undeclared_claim_is_hard_on_or_after_enforce_date():
+    # 施行日ゲートの入力は slug 先頭 10 文字なので slug 側を施行日以降にする
+    d = _article([_claim("STマーク取得済で安全")], date="2026-08-20T00:00:00Z")
+    d["slug"] = "2026-08-20-B0XXXXXXXX"
+    r = check_cert_claims_declared(d)
+    assert not r.passed, "施行日以降は hard"
+    assert r.score == CERT_CLAIM_UNDECLARED_SOFT_SCORE
+    assert "soft" not in r.message
+
+
+def test_undeclared_claim_stays_soft_before_enforce_date():
+    d = _article([_claim("STマーク取得済で安全")], date="2026-08-19T00:00:00Z")
+    d["slug"] = "2026-08-19-B0XXXXXXXX"
+    r = check_cert_claims_declared(d)
+    assert r.passed, "施行日前の既存記事は soft のまま"
+    assert r.score == CERT_CLAIM_UNDECLARED_SOFT_SCORE
+
+
+def test_declared_claim_is_ok_after_enforce_date():
+    d = _article([_claim("STマーク取得済で安全")], certifications=["ST"],
+                 date="2026-08-20T00:00:00Z")
+    d["slug"] = "2026-08-20-B0XXXXXXXX"
+    r = check_cert_claims_declared(d)
+    assert r.passed and r.score == 1.0
+
+
+def test_missing_slug_falls_back_to_enforcing():
+    # slug が無い/短すぎて日付を判定できない場合は安全側 (施行する) に倒す
+    d = _article([_claim("STマーク取得済で安全")], date="2026-08-14T00:00:00Z")
+    d["slug"] = ""
+    assert not check_cert_claims_declared(d).passed
