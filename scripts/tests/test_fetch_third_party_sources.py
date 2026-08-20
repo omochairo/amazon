@@ -143,5 +143,105 @@ class TavilySearchTest(unittest.TestCase):
             self.assertEqual(F.tavily_search("x", "tvly-test"), [])
 
 
+class GscDemandPoolTest(unittest.TestCase):
+    """#5490 案B / brain#13 2-3: 母集合を GSC 需要へ差し替えるレーン。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = pathlib.Path(self.tmp.name)
+        self.base = self.root / "per_asin"
+        self.hist = self.root / "gsc_by_page.jsonl"
+        self.addCleanup(self.tmp.cleanup)
+
+    def _hist(self, rows):
+        with open(self.hist, "w", encoding="utf-8") as f:
+            for r in rows:
+                print(json.dumps(r), file=f)
+
+    def _asin(self, asin, tp_hosts=0):
+        d = self.base / asin
+        d.mkdir(parents=True, exist_ok=True)
+        with open(d / "amazon.json", "w", encoding="utf-8") as f:
+            json.dump({"item": {"asin": asin, "title": f"{asin} テスト商品"}}, f)
+        if tp_hosts:
+            srcs = [{"url": f"https://h{i}.example.com/a", "host": f"h{i}.example.com"}
+                    for i in range(tp_hosts)]
+            with open(d / F.OUT_NAME, "w", encoding="utf-8") as f:
+                json.dump({"asin": asin, "sources": srcs}, f)
+
+    def test_window_anchors_on_latest_data_date_not_today(self):
+        # GSC は数日遅れて届く。今日を右端にすると窓が空になる。
+        self._hist([
+            {"date": "2026-08-16", "page": "https://navi.omcha.jp/products/b0aaaaaaa1/",
+             "impressions": 12},
+            {"date": "2026-05-01", "page": "https://navi.omcha.jp/products/b0aaaaaaa2/",
+             "impressions": 99},
+        ])
+        imps = F._gsc_page_impressions(self.hist, days=28)
+        self.assertEqual(imps, {"B0AAAAAAA1": 12})
+
+    def test_impressions_summed_per_asin_and_non_product_pages_ignored(self):
+        self._hist([
+            {"date": "2026-08-16", "page": "https://navi.omcha.jp/products/b0aaaaaaa1/",
+             "impressions": 6},
+            {"date": "2026-08-15", "page": "https://navi.omcha.jp/products/b0aaaaaaa1/",
+             "impressions": 5},
+            {"date": "2026-08-15", "page": "https://navi.omcha.jp/brands/lego/",
+             "impressions": 500},
+            {"date": "2026-08-15", "page": "https://navi.omcha.jp/", "impressions": 500},
+        ])
+        self.assertEqual(F._gsc_page_impressions(self.hist, days=28), {"B0AAAAAAA1": 11})
+
+    def test_pool_is_imp_ranked_and_threshold_applied(self):
+        self._hist([
+            {"date": "2026-08-16", "page": "https://navi.omcha.jp/products/b0aaaaaaa1/",
+             "impressions": 10},
+            {"date": "2026-08-16", "page": "https://navi.omcha.jp/products/b0aaaaaaa2/",
+             "impressions": 40},
+            {"date": "2026-08-16", "page": "https://navi.omcha.jp/products/b0aaaaaaa3/",
+             "impressions": 9},  # しきい値未満
+        ])
+        for a in ("B0AAAAAAA1", "B0AAAAAAA2", "B0AAAAAAA3"):
+            self._asin(a)
+        got = F._gsc_demand_pool(self.base, history=self.hist, days=28,
+                                 min_impressions=10)
+        self.assertEqual(got, ["B0AAAAAAA2", "B0AAAAAAA1"])
+
+    def test_already_has_third_party_sources_is_excluded(self):
+        self._hist([
+            {"date": "2026-08-16", "page": "https://navi.omcha.jp/products/b0aaaaaaa1/",
+             "impressions": 30},
+            {"date": "2026-08-16", "page": "https://navi.omcha.jp/products/b0aaaaaaa2/",
+             "impressions": 20},
+        ])
+        self._asin("B0AAAAAAA1", tp_hosts=2)  # 保有 → 対象外
+        self._asin("B0AAAAAAA2", tp_hosts=1)  # 未保有 (hosts<2) → 対象
+        got = F._gsc_demand_pool(self.base, history=self.hist, days=28,
+                                 min_impressions=10)
+        self.assertEqual(got, ["B0AAAAAAA2"])
+
+    def test_band_is_not_a_filter(self):
+        # band では絞らない (thin がコーパスの 3/4 で選別になっていない)。
+        # 素材ゼロ = zero 相当の ASIN も imp があれば入ること。
+        self._hist([
+            {"date": "2026-08-16", "page": "https://navi.omcha.jp/products/b0aaaaaaa1/",
+             "impressions": 15},
+        ])
+        self._asin("B0AAAAAAA1")
+        self.assertEqual(
+            F._gsc_demand_pool(self.base, history=self.hist, days=28, min_impressions=10),
+            ["B0AAAAAAA1"],
+        )
+
+    def test_missing_history_is_inert(self):
+        self.assertEqual(
+            F._gsc_demand_pool(self.base, history=self.root / "nope.jsonl"), [])
+
+    def test_pickable_pool_is_untouched_by_this_lane(self):
+        # 穴(a): `cand - existing` を外して母集合を融合させていないこと。
+        src = pathlib.Path(F.__file__).read_text(encoding="utf-8")
+        self.assertIn("return sorted(cand - existing)", src)
+
+
 if __name__ == "__main__":
     unittest.main()
