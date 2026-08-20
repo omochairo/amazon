@@ -185,6 +185,27 @@ def render_body(payload: dict[str, Any]) -> str:
             lines.append(f"| `{name}` | {n} | {detail} |")
         lines.append("")
 
+    cohorts = payload.get("cohorts") or {}
+    if cohorts:
+        lines.append("### 直近コホート別の減点 (施行日つき昇格の判定用)")
+        lines.append("")
+        lines.append(
+            "上の全量集計は、施行日以降の記事がコーパスの数 % しか無い段階では "
+            "**規約やプロンプト改訂の効果を原理的に表せない**。slug 順の直近 N 本で "
+            "切ったものを併記する。`95%上限` は rule of three (3/N) で、**発火 0 の "
+            "check にだけ意味がある**数値 (#4826 項目2 の昇格目安は 1.8% 以下)。"
+        )
+        lines.append("")
+        lines.append("| コホート | 範囲 | 不合格 | 発火0なら95%上限 | 減点された check |")
+        lines.append("|---|---|---:|---:|---|")
+        for key, c in cohorts.items():
+            hits = " / ".join(f"`{k}` {v}" for k, v in (c.get("by_deduction") or {}).items())
+            lines.append(
+                f"| `{key}` | {c.get('from')} 〜 {c.get('to')} | {c.get('failing')} "
+                f"| {c.get('zero_firing_95_upper', 0):.2%} | {hits or '**なし**'} |"
+            )
+        lines.append("")
+
     md_n = payload.get("md_evaluated")
     if isinstance(md_n, int):
         total = payload.get("articles", 0)

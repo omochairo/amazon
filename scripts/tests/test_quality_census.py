@@ -287,3 +287,135 @@ def test_render_body_survives_missing_diff():
     import comment_quality_census as cqc
     body = cqc.render_body(_snapshot("2026-08-10", ["a"]))
     assert "初回" in body
+
+
+# --- 直近コホート (#5083 項目3 / #4826 項目2 の昇格判定用) -----------------
+
+def _rec(slug: str, *, passed: bool = True, deducted: list[str] | None = None) -> dict:
+    return {
+        "slug": slug,
+        "total_score": 99 if passed else 93,
+        "passed": passed,
+        "md": False,
+        "failed_checks": [] if passed else [("how_to_choose", "mentions ASIN")],
+        "deducted_checks": [(n, "reason") for n in (deducted or [])],
+    }
+
+
+def test_cohort_takes_newest_n_by_slug_order():
+    # slug は YYYY-MM-DD-ASIN なので辞書順 = 生成順。末尾 2 本が最新。
+    records = [
+        _rec("2026-08-01-B0AAAAAAAA", deducted=["keywords"]),
+        _rec("2026-08-02-B0BBBBBBBB", deducted=["keywords"]),
+        _rec("2026-08-03-B0CCCCCCCC"),
+        _rec("2026-08-04-B0DDDDDDDD"),
+    ]
+    c = qc.cohort_summary(records, 2)
+    assert c["from"] == "2026-08-03-B0CCCCCCCC"
+    assert c["to"] == "2026-08-04-B0DDDDDDDD"
+    # 古い 2 本にしか無い減点はコホートに出ない = 施行後の改善が見える
+    assert c["by_deduction"] == {}
+
+
+def test_cohort_is_order_independent():
+    """records の並びに依存せず slug 順で切ること。"""
+    records = [
+        _rec("2026-08-04-B0DDDDDDDD"),
+        _rec("2026-08-01-B0AAAAAAAA", deducted=["faq"]),
+        _rec("2026-08-03-B0CCCCCCCC"),
+        _rec("2026-08-02-B0BBBBBBBB", deducted=["faq"]),
+    ]
+    c = qc.cohort_summary(records, 2)
+    assert (c["from"], c["to"]) == ("2026-08-03-B0CCCCCCCC", "2026-08-04-B0DDDDDDDD")
+    assert c["by_deduction"] == {}
+
+
+def test_cohort_none_when_corpus_smaller_than_n():
+    """母集団が n 未満ならコホートは全体と同じになるので出さない。"""
+    records = [_rec("2026-08-01-B0AAAAAAAA")]
+    assert qc.cohort_summary(records, 100) is None
+
+
+def test_cohort_rule_of_three_upper_bound():
+    """発火 0 のときの 95% 上限は 3/n。#4826 項目2 の昇格目安 1.8% は n>=163。"""
+    records = [_rec(f"2026-08-01-B0{i:08d}") for i in range(200)]
+    c = qc.cohort_summary(records, 200)
+    assert c["by_deduction"] == {}
+    assert c["zero_firing_95_upper"] == pytest.approx(0.015, abs=1e-4)
+    assert qc.cohort_summary(records, 100)["zero_firing_95_upper"] == pytest.approx(0.03, abs=1e-4)
+
+
+def test_cohort_counts_failing_separately():
+    records = [_rec(f"2026-08-01-B0{i:08d}") for i in range(9)]
+    records.append(_rec("2026-08-02-B0ZZZZZZZZ", passed=False))
+    c = qc.cohort_summary(records, 10)
+    assert c["failing"] == 1
+    assert c["failing_rate"] == pytest.approx(0.1)
+
+
+def test_summarize_includes_cohorts_for_requested_sizes():
+    records = [_rec(f"2026-08-01-B0{i:08d}", deducted=["keywords"] if i < 5 else None)
+               for i in range(20)]
+    snap = qc.summarize(records, cert_fetch=False, date="2026-08-20",
+                        cohort_sizes=(5, 10, 1000))
+    # 1000 はコーパス超過なので出ない
+    assert set(snap["cohorts"]) == {"recent_5", "recent_10"}
+    # 古い 5 本だけが減点されているので、直近コホートには出ない
+    assert snap["cohorts"]["recent_10"]["by_deduction"] == {}
+    assert snap["by_deduction"] == {"keywords": 5}
+
+
+def test_summarize_without_cohort_sizes_emits_empty_dict():
+    records = [_rec(f"2026-08-01-B0{i:08d}") for i in range(20)]
+    snap = qc.summarize(records, cert_fetch=False, date="2026-08-20", cohort_sizes=())
+    assert snap["cohorts"] == {}
+
+
+def test_history_row_carries_cohorts():
+    records = [_rec(f"2026-08-01-B0{i:08d}") for i in range(20)]
+    snap = qc.summarize(records, cert_fetch=False, date="2026-08-20", cohort_sizes=(10,))
+    row = qc.history_row(snap, {"previous_date": None, "new": [], "recovered": [],
+                                "persisting": []})
+    assert row["cohorts"]["recent_10"]["n"] == 10
+
+
+def test_history_row_tolerates_snapshot_without_cohorts():
+    """cohorts 導入前のスナップショットを渡しても列は落ちない。"""
+    snap = _snapshot("2026-08-20", [])
+    row = qc.history_row(snap, {"previous_date": None, "new": [], "recovered": [],
+                                "persisting": []})
+    assert row["cohorts"] == {}
+
+
+def test_render_body_surfaces_cohort_table():
+    from comment_quality_census import render_body
+    snap = _snapshot("2026-08-20", [])
+    snap["cohorts"] = {
+        "recent_200": {"n": 200, "from": "2026-08-01-B0AAAAAAAA",
+                       "to": "2026-08-20-B0ZZZZZZZZ", "failing": 0,
+                       "failing_rate": 0.0, "by_deduction": {"keywords": 7},
+                       "zero_firing_95_upper": 0.015},
+    }
+    body = render_body(snap)
+    assert "直近コホート" in body
+    assert "recent_200" in body
+    assert "`keywords` 7" in body
+    assert "1.50%" in body
+
+
+def test_render_body_marks_cohort_with_no_deduction():
+    """発火 0 は昇格の判断材料そのものなので、空欄ではなく明示すること。"""
+    from comment_quality_census import render_body
+    snap = _snapshot("2026-08-20", [])
+    snap["cohorts"] = {
+        "recent_300": {"n": 300, "from": "a", "to": "b", "failing": 0,
+                       "failing_rate": 0.0, "by_deduction": {},
+                       "zero_firing_95_upper": 0.01},
+    }
+    assert "**なし**" in render_body(snap)
+
+
+def test_render_body_survives_missing_cohorts():
+    """cohorts 導入前の snapshot でもレポートは壊れない。"""
+    from comment_quality_census import render_body
+    assert "直近コホート" not in render_body(_snapshot("2026-08-20", []))

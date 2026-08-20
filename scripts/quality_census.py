@@ -28,6 +28,16 @@ sidecar を書かない理由 (owner 判断・2026-08-10):
   ``<slug>.quality.json`` sidecar は廃止方針。本スクリプトは記事ディレクトリに
   派生ファイルを 1 つも作らず、集計 JSON 1 本 + history jsonl 1 行だけを出力する。
 
+直近コホート (2026-08-20 追加):
+  ``by_deduction`` は全量の集計しか出さないため、**施行日つきの soft→hard 昇格を
+  判定できない**。昇格判定は #4826 項目2 の前例に従って「施行日以降の新規記事で
+  発火 0」で行うが、施行直後は該当記事がコーパスの数 % しか無い。
+  実測 (2026-08-20): #5083 の規約適用後コホートは 2109 本中 42 本 = 2.0% で、
+  仮にコホートが全滅しても全量の発火率は 1pt しか動かず、効果と誤差が区別できない。
+
+  そこで slug 順 (= 生成順) の直近 N 本を切ったコホート集計を併せて出す。
+  詳細は ``COHORT_SIZES`` と ``cohort_summary`` を参照。
+
 出力:
   - data/analytics/quality_census.json           単一スナップショット (最新 run のみ)
   - data/analytics/history/quality_census.jsonl  1 run 1 行の時系列 (append)
@@ -149,6 +159,22 @@ def evaluate_corpus(
     return out
 
 
+# 直近コホートの既定サイズ (slug 順の末尾から N 本)。
+#
+# なぜ「施行日以降」ではなく「直近 N 本」で切るか (2026-08-20 実測):
+#   soft check を hard へ昇格する判断は #4826 項目2 の前例に従って
+#   「施行日以降の新規記事で発火 0」で行う。ところが施行当日のコホートは
+#   n=8 程度にしかならない (Jules は 1 日 16 本ペース・cron 6 時間毎) ため、
+#   発火 0 でも rule of three の 95% 上限が 37% になり、何も言えない。
+#   slug 順の直近 N 本で取れば分母が固定され、施行日を跨いだ時点から
+#   上限が単調に締まっていくので、昇格の可否をはるかに早く判定できる。
+#
+# 3 段階を同時に出す理由: 直近 100 は施行直後の変化に敏感だが上限が緩く
+# (3/100 = 3%)、直近 300 は上限が締まる (1%) が古い記事を含む。どちらか一方
+# では「効いているが n 不足」と「n は足りるが薄まっている」を区別できない。
+COHORT_SIZES = (100, 200, 300)
+
+
 # 減点理由メッセージから件数を数えるとき、埋め込まれた数値
 # ("closing 92<120" / "only 1 questions ...") で無限に分岐するのを防ぐ。
 _DIGITS = str.maketrans("0123456789", "N" * 10)
@@ -160,7 +186,40 @@ def normalize_reason(message: str) -> str:
     return head.translate(_DIGITS)
 
 
-def summarize(records: list[dict[str, Any]], *, cert_fetch: bool, date: str) -> dict[str, Any]:
+def cohort_summary(records: list[dict[str, Any]], n: int) -> dict[str, Any] | None:
+    """slug 順の直近 n 本だけで減点・不合格を数える。
+
+    slug は ``YYYY-MM-DD-ASIN`` なので辞書順 = 生成順。末尾 n 本が最新コホート。
+
+    ``zero_firing_95_upper`` は rule of three (発火 0 のとき真の発火率の 95%
+    信頼上限 = 3/n)。**発火 0 の check にしか意味が無い**数値なので、各 check の
+    件数と一緒に読むこと。#4826 項目2 の昇格判定はこの上限が 1.8% 以下
+    (= n>=163 で発火 0) を目安にしている。
+
+    コーパスが n に満たないときは None を返す (母集団が全体と同じになり、
+    コホートとして意味を成さないため)。
+    """
+    if n <= 0 or len(records) < n:
+        return None
+    cohort = sorted(records, key=lambda r: r["slug"])[-n:]
+    by_deduction: dict[str, int] = {}
+    for r in cohort:
+        for name, _msg in r.get("deducted_checks") or []:
+            by_deduction[name] = by_deduction.get(name, 0) + 1
+    failing = [r for r in cohort if not r["passed"]]
+    return {
+        "n": n,
+        "from": cohort[0]["slug"],
+        "to": cohort[-1]["slug"],
+        "failing": len(failing),
+        "failing_rate": round(len(failing) / n, 5),
+        "by_deduction": dict(sorted(by_deduction.items(), key=lambda kv: (-kv[1], kv[0]))),
+        "zero_firing_95_upper": round(3 / n, 5),
+    }
+
+
+def summarize(records: list[dict[str, Any]], *, cert_fetch: bool, date: str,
+              cohort_sizes: tuple[int, ...] = COHORT_SIZES) -> dict[str, Any]:
     """census スナップショットを組み立てる。"""
     failing = [r for r in records if not r["passed"]]
     by_check: dict[str, int] = {}
@@ -204,6 +263,15 @@ def summarize(records: list[dict[str, Any]], *, cert_fetch: bool, date: str) -> 
         # 件数を記録しないと環境差で時系列が無言でずれる (実測: MD 有ならスコア
         # 中央値 -1 点)。合否は変わらないが、記録しないと差の出所が追えない。
         "md_evaluated": sum(1 for r in records if r.get("md")),
+        # 直近コホート別の減点集計。全量の by_deduction だけでは、施行日以降の
+        # 記事が全体の数 % しか無い段階で規約やプロンプト改訂の効果が原理的に
+        # 見えない (実測 2026-08-20: #5083 の規約適用後コホートは 2109 本中
+        # 42 本 = 2.0%。コホートが全滅しても全体値は 1pt しか動かない)。
+        "cohorts": {
+            f"recent_{n}": c
+            for n in cohort_sizes
+            if (c := cohort_summary(records, n)) is not None
+        },
         "failing_slugs": sorted(
             (
                 {"slug": r["slug"], "total_score": r["total_score"],
@@ -290,6 +358,9 @@ def history_row(snapshot: dict[str, Any], diff: dict[str, Any]) -> dict[str, Any
         "score_max": snapshot["score_max"],
         "cert_fetch": snapshot["cert_fetch"],
         "md_evaluated": snapshot["md_evaluated"],
+        # by_deduction と同じくネスト dict。列集合は cohort_sizes が変わらない
+        # 限り安定する (サイズを変えるときは時系列が繋がらなくなる点に注意)。
+        "cohorts": snapshot.get("cohorts") or {},
         "new": len(diff["new"]),
         "recovered": len(diff["recovered"]),
         "persisting": len(diff["persisting"]),
@@ -310,8 +381,19 @@ def main(argv: list[str] | None = None) -> int:
                         help="証明書ページへの実 HTTP fetch を有効にする (既定 無効)")
     parser.add_argument("--force", action="store_true",
                         help="同 date の history 行が既にあっても置換する")
+    parser.add_argument("--cohorts", default=None,
+                        help="直近コホートのサイズをカンマ区切りで指定 "
+                             f"(既定 {','.join(str(x) for x in COHORT_SIZES)})。"
+                             "空文字を渡すとコホート集計を行わない")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args(argv)
+
+    if args.cohorts is None:
+        cohort_sizes = COHORT_SIZES
+    else:
+        cohort_sizes = tuple(
+            int(x) for x in (t.strip() for t in args.cohorts.split(",")) if x
+        )
 
     if not args.src.exists():
         print(f"[quality_census] src not found: {args.src}")
@@ -339,7 +421,8 @@ def main(argv: list[str] | None = None) -> int:
         print("[quality_census] no articles to check")
         return 1
 
-    snapshot = summarize(records, cert_fetch=args.cert_fetch, date=date)
+    snapshot = summarize(records, cert_fetch=args.cert_fetch, date=date,
+                         cohort_sizes=cohort_sizes)
     diff = diff_against(previous, snapshot)
     snapshot["diff"] = diff
 
@@ -356,6 +439,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"    NG {name}: {n}")
         for name, n in snapshot["by_deduction"].items():
             print(f"    減点 {name}: {n}")
+        for key, c in (snapshot.get("cohorts") or {}).items():
+            hits = ", ".join(f"{k}={v}" for k, v in c["by_deduction"].items()) or "減点なし"
+            print(f"    [{key}] {c['from']}..{c['to']} "
+                  f"発火0なら95%上限 {c['zero_firing_95_upper']:.2%} — {hits}")
         print(f"    diff vs {diff['previous_date']}: "
               f"new={len(diff['new'])} recovered={len(diff['recovered'])} "
               f"persisting={len(diff['persisting'])}")
