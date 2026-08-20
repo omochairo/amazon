@@ -196,13 +196,14 @@ def render_body(payload: dict[str, Any]) -> str:
             "check にだけ意味がある**数値 (#4826 項目2 の昇格目安は 1.8% 以下)。"
         )
         lines.append("")
-        lines.append("| コホート | 範囲 | 不合格 | 発火0なら95%上限 | 減点された check |")
-        lines.append("|---|---|---:|---:|---|")
+        lines.append("| コホート | n | 範囲 | 不合格 | 発火0なら95%上限 | 減点された check |")
+        lines.append("|---|---:|---|---:|---:|---|")
         for key, c in cohorts.items():
             hits = " / ".join(f"`{k}` {v}" for k, v in (c.get("by_deduction") or {}).items())
             lines.append(
-                f"| `{key}` | {c.get('from')} 〜 {c.get('to')} | {c.get('failing')} "
-                f"| {c.get('zero_firing_95_upper', 0):.2%} | {hits or '**なし**'} |"
+                f"| `{key}` | {c.get('n')} | {c.get('from')} 〜 {c.get('to')} "
+                f"| {c.get('failing')} | {c.get('zero_firing_95_upper', 0):.2%} "
+                f"| {hits or '**なし**'} |"
             )
         lines.append("")
 

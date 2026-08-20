@@ -218,8 +218,44 @@ def cohort_summary(records: list[dict[str, Any]], n: int) -> dict[str, Any] | No
     }
 
 
+def since_cohort_summary(records: list[dict[str, Any]], since: str) -> dict[str, Any] | None:
+    """slug 日付が ``since`` 以降の記事だけで数える (施行日コホート)。
+
+    ``cohort_summary`` の直近 N 本は分母が固定される代わりに施行日を跨ぐと
+    **効果が薄まる**。実測 (2026-08-20、#5083 のタイトル規約):
+
+        08-08〜08-17 の発火率 45.8〜75.0%  →  08-18 以降 0/50 = 0.0%
+
+    施行日でちょうど 0 に落ちているのに、直近 100 本では 29% と出た
+    (窓の半分が施行前だったため)。#4826 項目2 の昇格条件は文字どおり
+    「施行日以降の新規記事で発火 0」なので、その条件をそのまま測れる切り口を
+    別に持つ。n が小さいうちは ``zero_firing_95_upper`` が緩いままなので、
+    直近 N 本と併せて読むこと。
+    """
+    cohort = sorted((r for r in records if r["slug"][:10] >= since),
+                    key=lambda r: r["slug"])
+    if not cohort:
+        return None
+    by_deduction: dict[str, int] = {}
+    for r in cohort:
+        for name, _msg in r.get("deducted_checks") or []:
+            by_deduction[name] = by_deduction.get(name, 0) + 1
+    failing = [r for r in cohort if not r["passed"]]
+    return {
+        "n": len(cohort),
+        "since": since,
+        "from": cohort[0]["slug"],
+        "to": cohort[-1]["slug"],
+        "failing": len(failing),
+        "failing_rate": round(len(failing) / len(cohort), 5),
+        "by_deduction": dict(sorted(by_deduction.items(), key=lambda kv: (-kv[1], kv[0]))),
+        "zero_firing_95_upper": round(3 / len(cohort), 5),
+    }
+
+
 def summarize(records: list[dict[str, Any]], *, cert_fetch: bool, date: str,
-              cohort_sizes: tuple[int, ...] = COHORT_SIZES) -> dict[str, Any]:
+              cohort_sizes: tuple[int, ...] = COHORT_SIZES,
+              since: str | None = None) -> dict[str, Any]:
     """census スナップショットを組み立てる。"""
     failing = [r for r in records if not r["passed"]]
     by_check: dict[str, int] = {}
@@ -268,9 +304,16 @@ def summarize(records: list[dict[str, Any]], *, cert_fetch: bool, date: str,
         # 見えない (実測 2026-08-20: #5083 の規約適用後コホートは 2109 本中
         # 42 本 = 2.0%。コホートが全滅しても全体値は 1pt しか動かない)。
         "cohorts": {
-            f"recent_{n}": c
-            for n in cohort_sizes
-            if (c := cohort_summary(records, n)) is not None
+            **{
+                f"recent_{n}": c
+                for n in cohort_sizes
+                if (c := cohort_summary(records, n)) is not None
+            },
+            **(
+                {f"since_{since}": sc}
+                if since and (sc := since_cohort_summary(records, since)) is not None
+                else {}
+            ),
         },
         "failing_slugs": sorted(
             (
@@ -385,6 +428,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="直近コホートのサイズをカンマ区切りで指定 "
                              f"(既定 {','.join(str(x) for x in COHORT_SIZES)})。"
                              "空文字を渡すとコホート集計を行わない")
+    parser.add_argument("--since", default=None, metavar="YYYY-MM-DD",
+                        help="施行日コホート。slug 日付がこれ以降の記事だけを "
+                             "別枠で集計する (#4826 項目2 の昇格条件そのもの)")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args(argv)
 
@@ -422,7 +468,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     snapshot = summarize(records, cert_fetch=args.cert_fetch, date=date,
-                         cohort_sizes=cohort_sizes)
+                         cohort_sizes=cohort_sizes, since=args.since)
     diff = diff_against(previous, snapshot)
     snapshot["diff"] = diff
 
@@ -441,7 +487,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"    減点 {name}: {n}")
         for key, c in (snapshot.get("cohorts") or {}).items():
             hits = ", ".join(f"{k}={v}" for k, v in c["by_deduction"].items()) or "減点なし"
-            print(f"    [{key}] {c['from']}..{c['to']} "
+            print(f"    [{key}] n={c['n']} {c['from']}..{c['to']} "
                   f"発火0なら95%上限 {c['zero_firing_95_upper']:.2%} — {hits}")
         print(f"    diff vs {diff['previous_date']}: "
               f"new={len(diff['new'])} recovered={len(diff['recovered'])} "

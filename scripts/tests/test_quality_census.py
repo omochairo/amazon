@@ -419,3 +419,68 @@ def test_render_body_survives_missing_cohorts():
     """cohorts 導入前の snapshot でもレポートは壊れない。"""
     from comment_quality_census import render_body
     assert "直近コホート" not in render_body(_snapshot("2026-08-20", []))
+
+
+# --- 施行日コホート (#4826 項目2 の昇格条件そのもの) -----------------------
+
+def test_since_cohort_filters_by_slug_date():
+    records = [
+        _rec("2026-08-16-B0AAAAAAAA", deducted=["title_serp_fit"]),
+        _rec("2026-08-17-B0BBBBBBBB", deducted=["title_serp_fit"]),
+        _rec("2026-08-18-B0CCCCCCCC"),
+        _rec("2026-08-19-B0DDDDDDDD"),
+    ]
+    c = qc.since_cohort_summary(records, "2026-08-18")
+    assert c["n"] == 2
+    assert c["since"] == "2026-08-18"
+    assert c["by_deduction"] == {}
+
+
+def test_since_cohort_includes_the_boundary_date():
+    records = [_rec("2026-08-18-B0AAAAAAAA", deducted=["faq"])]
+    assert qc.since_cohort_summary(records, "2026-08-18")["by_deduction"] == {"faq": 1}
+
+
+def test_since_cohort_none_when_nothing_matches():
+    records = [_rec("2026-08-01-B0AAAAAAAA")]
+    assert qc.since_cohort_summary(records, "2026-09-01") is None
+
+
+def test_since_cohort_upper_bound_tracks_actual_n():
+    """直近 N 本と違い n が可変なので、上限は実際の件数から出すこと。"""
+    records = [_rec(f"2026-08-18-B0{i:08d}") for i in range(50)]
+    c = qc.since_cohort_summary(records, "2026-08-18")
+    assert c["n"] == 50
+    assert c["zero_firing_95_upper"] == pytest.approx(0.06, abs=1e-4)
+
+
+def test_summarize_adds_since_cohort_alongside_recent():
+    records = [_rec(f"2026-08-01-B0{i:08d}", deducted=["title_serp_fit"])
+               for i in range(20)]
+    records += [_rec(f"2026-08-18-B0{i:08d}") for i in range(10)]
+    snap = qc.summarize(records, cert_fetch=False, date="2026-08-20",
+                        cohort_sizes=(10,), since="2026-08-18")
+    assert set(snap["cohorts"]) == {"recent_10", "since_2026-08-18"}
+    assert snap["cohorts"]["since_2026-08-18"]["n"] == 10
+    assert snap["cohorts"]["since_2026-08-18"]["by_deduction"] == {}
+
+
+def test_summarize_without_since_has_no_since_cohort():
+    records = [_rec(f"2026-08-01-B0{i:08d}") for i in range(20)]
+    snap = qc.summarize(records, cert_fetch=False, date="2026-08-20",
+                        cohort_sizes=(10,))
+    assert set(snap["cohorts"]) == {"recent_10"}
+
+
+def test_render_body_shows_cohort_n():
+    """n を出さないと 95% 上限の根拠が読めない。"""
+    from comment_quality_census import render_body
+    snap = _snapshot("2026-08-20", [])
+    snap["cohorts"] = {
+        "since_2026-08-18": {"n": 50, "since": "2026-08-18", "from": "a", "to": "b",
+                             "failing": 0, "failing_rate": 0.0, "by_deduction": {},
+                             "zero_firing_95_upper": 0.06},
+    }
+    body = render_body(snap)
+    assert "| 50 |" in body
+    assert "6.00%" in body
