@@ -99,8 +99,17 @@ _PRODUCT_PAGE_RE = re.compile(r"/products/(b0[a-z0-9]{8})/?(?:[?#]|$)", re.IGNOR
 
 
 def _host(url: str) -> str:
+    """URL から host を取り出し、先頭の "www." だけを落とす。
+
+    `lstrip("www.")` は**文字集合**を削るので、"w" や "." で始まる host の
+    先頭文字まで食う (walmart.com → almart.com / watch.impress.co.jp →
+    atch.impress.co.jp)。ここで作った host は third_party_sources.json に
+    保存され、build_post の source_highlights が読者に出典として表示し、
+    _HIGHLIGHT_HOST_DENY の照合にも使われるので、削るのは接頭辞だけにする。
+    score_per_asin_info._third_party_hosts と同じ正規化。
+    """
     try:
-        return urllib.parse.urlparse(url).netloc.lower().lstrip("www.")
+        return urllib.parse.urlparse(url).netloc.lower().removeprefix("www.")
     except ValueError:
         return ""
 

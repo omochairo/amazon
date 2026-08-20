@@ -27,6 +27,19 @@ class HostFilterTest(unittest.TestCase):
         self.assertEqual(F._host("https://www.example.com/path"), "example.com")
         self.assertEqual(F._host("https://blog.example.jp/x"), "blog.example.jp")
 
+    def test_host_keeps_leading_w_of_the_domain(self):
+        # lstrip("www.") は文字集合を削るので "w"/"." 始まりの host の先頭を食う。
+        # 実データで walmart.com が almart.com として保存され、配信物の
+        # source_highlights に出典として表示されていた (2026-08-20 実測 10 ページ)。
+        self.assertEqual(F._host("https://www.walmart.com/ip/x"), "walmart.com")
+        self.assertEqual(F._host("https://walmart.com/ip/x"), "walmart.com")
+        self.assertEqual(F._host("https://watch.impress.co.jp/x"), "watch.impress.co.jp")
+        self.assertEqual(F._host("https://wish.com/x"), "wish.com")
+        self.assertEqual(F._host("https://wiki.example.com/x"), "wiki.example.com")
+
+    def test_host_strips_only_one_www_prefix(self):
+        self.assertEqual(F._host("https://www.www.example.com/x"), "www.example.com")
+
     def test_retail_excluded(self):
         for u in (
             "https://www.amazon.co.jp/dp/B0XXXX",
