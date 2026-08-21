@@ -79,7 +79,10 @@ def _query(service, site_url: str, start: str, end: str,
 
 
 def fetch(site_url: str, client_id: str, client_secret: str, refresh_token: str,
-          days: int, delay: int, end_date: str | None = None) -> dict[str, Any]:
+          days: int, delay: int, end_date: str | None = None,
+          top_query: int = TOP_QUERY_DEFAULT,
+          top_page: int = TOP_PAGE_DEFAULT,
+          top_combo: int = TOP_COMBO_DEFAULT) -> dict[str, Any]:
     service = _build_service(client_id, client_secret, refresh_token)
 
     end = date.fromisoformat(end_date) if end_date else date.today() - timedelta(days=delay)
@@ -88,13 +91,13 @@ def fetch(site_url: str, client_id: str, client_secret: str, refresh_token: str,
     logger.info("range: %s .. %s (site=%s, %d-day delay buffer)",
                 start_s, end_s, site_url, delay)
 
-    by_query = _query(service, site_url, start_s, end_s, ["query"], TOP_QUERY_DEFAULT)
+    by_query = _query(service, site_url, start_s, end_s, ["query"], top_query)
     by_query.sort(key=lambda r: r["clicks"], reverse=True)
 
-    by_page = _query(service, site_url, start_s, end_s, ["page"], TOP_PAGE_DEFAULT)
+    by_page = _query(service, site_url, start_s, end_s, ["page"], top_page)
     by_page.sort(key=lambda r: r["clicks"], reverse=True)
 
-    by_combo = _query(service, site_url, start_s, end_s, ["query", "page"], TOP_COMBO_DEFAULT)
+    by_combo = _query(service, site_url, start_s, end_s, ["query", "page"], top_combo)
     by_combo.sort(key=lambda r: r["clicks"], reverse=True)
 
     by_device = _query(service, site_url, start_s, end_s, ["device"], 10)
@@ -128,8 +131,9 @@ def fetch(site_url: str, client_id: str, client_secret: str, refresh_token: str,
     opportunity.sort(key=lambda r: r["impressions"], reverse=True)
     opportunity = opportunity[:30]
 
-    truncated_pages = len(by_page) >= TOP_PAGE_DEFAULT
-    truncated_queries = len(by_query) >= TOP_QUERY_DEFAULT
+    truncated_pages = len(by_page) >= top_page
+    truncated_queries = len(by_query) >= top_query
+    truncated_combos = len(by_combo) >= top_combo
 
     return {
         "fetched_at": datetime.now(timezone.utc).isoformat(),
@@ -138,6 +142,9 @@ def fetch(site_url: str, client_id: str, client_secret: str, refresh_token: str,
         "totals": {
             "queries": len(by_query),
             "pages": len(by_page),
+            # combos は by_combo (query×page) の行数。rowLimit に張り付いたかを
+            # truncated_combos で見る。既定 200 のままなら従来と同じ値になる。
+            "combos": len(by_combo),
             # NOTE: clicks_sum / impressions_sum は by_page (上位 TOP_PAGE_DEFAULT 件)
             # の合計であり、truncated_pages が True の場合サイト全体の値ではない。
             # 真のサイト全体値は *_sitewide を使うこと。
@@ -149,6 +156,7 @@ def fetch(site_url: str, client_id: str, client_secret: str, refresh_token: str,
             "position_sitewide": position_sitewide,
             "truncated_pages": truncated_pages,
             "truncated_queries": truncated_queries,
+            "truncated_combos": truncated_combos,
         },
         "by_query": by_query,
         "by_page": by_page,
@@ -168,6 +176,16 @@ def main() -> int:
     p.add_argument("--delay", type=int, default=DEFAULT_DELAY)
     p.add_argument("--end-date", help="range終端を(today - delay)でなく指定日 (YYYY-MM-DD) に固定 (backfill用、--delayは無視される)")
     p.add_argument("--out", default=DEFAULT_OUT)
+    # rowLimit の上書き。既定値は据え置きなので既存の呼び出し (navi 日次/週次) は不変。
+    # omcha.jp (832記事) のように母数が大きい property を週次窓で取るときに、
+    # 既定の 100/100/200 では上位しか返らず week-over-week 比較が成立しないため
+    # ([[project-omcha-ops]] の rewrite-radar)。GSC API の rowLimit 上限は 25,000。
+    p.add_argument("--top-query", type=int, default=TOP_QUERY_DEFAULT,
+                   help=f"by_query の rowLimit (default {TOP_QUERY_DEFAULT}, max 25000)")
+    p.add_argument("--top-page", type=int, default=TOP_PAGE_DEFAULT,
+                   help=f"by_page の rowLimit (default {TOP_PAGE_DEFAULT}, max 25000)")
+    p.add_argument("--top-combo", type=int, default=TOP_COMBO_DEFAULT,
+                   help=f"by_combo (query×page) の rowLimit (default {TOP_COMBO_DEFAULT}, max 25000)")
     args = p.parse_args()
 
     missing = [n for n, v in [
@@ -182,7 +200,8 @@ def main() -> int:
 
     try:
         result = fetch(args.site_url, args.client_id, args.client_secret,
-                       args.refresh_token, args.days, args.delay, args.end_date)
+                       args.refresh_token, args.days, args.delay, args.end_date,
+                       args.top_query, args.top_page, args.top_combo)
     except Exception as e:
         logger.exception("GSC fetch failed: %s", e)
         return 1
@@ -192,12 +211,13 @@ def main() -> int:
     out.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     t = result["totals"]
     logger.info(
-        "wrote %s (%d queries, %d pages, %d top-page clicks, %d opportunity; "
+        "wrote %s (%d queries, %d pages, %d combos, %d top-page clicks, %d opportunity; "
         "sitewide clicks=%s impressions=%s ctr=%s position=%s "
-        "truncated_pages=%s truncated_queries=%s)",
-        out, t["queries"], t["pages"], t["clicks_sum"], len(result["opportunity_pages"]),
+        "truncated_pages=%s truncated_queries=%s truncated_combos=%s)",
+        out, t["queries"], t["pages"], t["combos"], t["clicks_sum"],
+        len(result["opportunity_pages"]),
         t["clicks_sitewide"], t["impressions_sitewide"], t["ctr_sitewide"], t["position_sitewide"],
-        t["truncated_pages"], t["truncated_queries"],
+        t["truncated_pages"], t["truncated_queries"], t["truncated_combos"],
     )
     return 0
 
