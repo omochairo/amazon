@@ -1,7 +1,7 @@
 {
   "source_range": {
-    "start": "2026-08-06",
-    "end": "2026-08-13",
+    "start": "2026-08-13",
+    "end": "2026-08-20",
     "days": 7,
     "delay_days": 3
   },
@@ -10,54 +10,5 @@
     "min_dominant_share": 0.6,
     "max_results": 10
   },
-  "detected": [
-    {
-      "page": "https://navi.omcha.jp/english-toys/",
-      "dominant_intent": "commercial",
-      "dominant_share": 0.75,
-      "total_impressions": 52,
-      "intent_breakdown": {
-        "commercial": 39,
-        "informational": 13
-      },
-      "cta_recommendation": "購入 CTA (価格 + Amazon/楽天ボタン + 比較表) を above-the-fold で強調。買い手意図のクエリが主流なので、結論 (買うべき商品) を早く提示する。",
-      "top_queries": [
-        {
-          "query": "英語 おもちゃ ベストセラー",
-          "intent": "informational",
-          "impressions": 13,
-          "clicks": 0,
-          "position": 43.46153846153846
-        },
-        {
-          "query": "英語 おもちゃ おすすめ",
-          "intent": "commercial",
-          "impressions": 11,
-          "clicks": 0,
-          "position": 42.27272727272727
-        },
-        {
-          "query": "英語 おもちゃ 人気",
-          "intent": "commercial",
-          "impressions": 11,
-          "clicks": 0,
-          "position": 33.09090909090909
-        },
-        {
-          "query": "英語 おもちゃ ランキング",
-          "intent": "commercial",
-          "impressions": 10,
-          "clicks": 0,
-          "position": 19.7
-        },
-        {
-          "query": "知育玩具 英語 ランキング",
-          "intent": "commercial",
-          "impressions": 7,
-          "clicks": 0,
-          "position": 9.0
-        }
-      ]
-    }
-  ]
+  "detected": []
 }
