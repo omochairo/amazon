@@ -6,6 +6,7 @@
 3. max_items > 0 を明示したときはその件数でキャップされること
 4. None のフィールドが "(none)" に正規化されること
 5. --max-not-indexed-urls の既定値が無制限 (0) であること
+6. build_rich_fail_urls: PASS と (none) を除外し、課題つきで全件残すこと (#5085)
 """
 from __future__ import annotations
 
@@ -64,6 +65,44 @@ class TestBuildNotIndexedUrls(unittest.TestCase):
 
     def test_default_cap_constant_is_unlimited(self):
         self.assertEqual(0, I.DEFAULT_MAX_NOT_INDEXED_URLS)
+
+
+class BuildRichFailUrlsTest(unittest.TestCase):
+    """#5085: リッチリザルトが落ちている URL を特定できること。"""
+
+    @staticmethod
+    def _item(url, rich_verdict="FAIL", rich_types=None, rich_issues=None):
+        return {
+            "url": url,
+            "rich_verdict": rich_verdict,
+            "rich_types": rich_types if rich_types is not None else ["商品スニペット"],
+            "rich_issues": rich_issues if rich_issues is not None else ["ERROR: x"],
+        }
+
+    def test_pass_and_none_are_excluded(self):
+        inspected = [
+            self._item("https://x/1", rich_verdict="PASS"),
+            self._item("https://x/2", rich_verdict="(none)"),
+            self._item("https://x/3", rich_verdict="FAIL"),
+            self._item("https://x/4", rich_verdict="NEUTRAL"),
+        ]
+        rows = I.build_rich_fail_urls(inspected)
+        self.assertEqual(["https://x/3", "https://x/4"], [r["url"] for r in rows])
+
+    def test_missing_rich_verdict_is_treated_as_none(self):
+        rows = I.build_rich_fail_urls([{"url": "https://x/1"}])
+        self.assertEqual([], rows)
+
+    def test_issues_are_kept_so_the_url_is_actionable(self):
+        rows = I.build_rich_fail_urls([
+            self._item("https://x/1", rich_issues=["ERROR: a", "WARNING: b"]),
+        ])
+        self.assertEqual(["ERROR: a", "WARNING: b"], rows[0]["rich_issues"])
+        self.assertEqual(["商品スニペット"], rows[0]["rich_types"])
+
+    def test_not_capped(self):
+        inspected = [self._item("https://x/%d" % i) for i in range(470)]
+        self.assertEqual(470, len(I.build_rich_fail_urls(inspected)))
 
 
 if __name__ == "__main__":
