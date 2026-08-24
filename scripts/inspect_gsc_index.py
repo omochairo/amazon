@@ -362,6 +362,35 @@ def build_not_indexed_urls(
     return rows
 
 
+def build_rich_fail_urls(inspected: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """リッチリザルトが PASS でない URL を課題つきで抽出する (#5085)。
+
+    ``by_rich_verdict`` / ``rich_issues`` は件数しか残さないため、「何件が
+    落ちているか」は分かっても **どの URL か** が分からず手当てできない。
+    ここで URL 側も残す。
+
+    ``(none)`` (= リッチリザルト検出なし) は除外する。index されていない
+    URL がそのまま乗ってきて、リッチリザルトの課題と混ざるため
+    (``not_indexed_urls`` 側で既に見えている)。
+
+    上限で切らないのは ``rich_issues`` と同じ理由で、切ると「1 URL に
+    多品種」なのか「多 URL に 1 種類」なのかが消えるため。件数は
+    ``by_rich_verdict`` の PASS 以外の合計と一致する。
+    """
+    rows: list[dict[str, Any]] = []
+    for item in inspected:
+        verdict = item.get("rich_verdict") or "(none)"
+        if verdict in ("PASS", "(none)"):
+            continue
+        rows.append({
+            "url": item["url"],
+            "rich_verdict": verdict,
+            "rich_types": item.get("rich_types") or [],
+            "rich_issues": item.get("rich_issues") or [],
+        })
+    return rows
+
+
 def last_quota_reset_boundary(now: datetime, reset_hour_utc: int = DEFAULT_QUOTA_RESET_HOUR_UTC) -> datetime:
     """`now` 以前で直近のクォータリセット時刻 (UTC) を返す。"""
     boundary = now.replace(hour=reset_hour_utc, minute=0, second=0, microsecond=0)
@@ -517,6 +546,7 @@ def main() -> int:
                                   key=lambda x: (-x[1], x[0])))
 
         not_indexed_urls = build_not_indexed_urls(inspected, args.max_not_indexed_urls)
+        rich_fail_urls = build_rich_fail_urls(inspected)
 
         result = {
             "fetched_at": datetime.now(timezone.utc).isoformat(),
@@ -538,6 +568,7 @@ def main() -> int:
             "by_rich_type": by_rich_type,
             "rich_issues": rich_issues,
             "not_indexed_urls": not_indexed_urls,
+            "rich_fail_urls": rich_fail_urls,
             "errors": errors,
             "circuit_breaker": circuit_info,
         }
