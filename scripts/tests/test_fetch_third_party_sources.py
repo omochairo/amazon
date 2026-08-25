@@ -258,3 +258,112 @@ class GscDemandPoolTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MonthUsageTest(unittest.TestCase):
+    """月次バジェットの母数 = 書き出し済み fetched_at の当月ぶん。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.base = pathlib.Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _write(self, asin: str, ts):
+        d = self.base / asin
+        d.mkdir(parents=True, exist_ok=True)
+        payload = {} if ts is None else {"fetched_at": ts}
+        (d / F.OUT_NAME).write_text(json.dumps(payload), encoding="utf-8")
+
+    def test_counts_only_current_month(self):
+        now = dt.datetime(2026, 8, 25, tzinfo=dt.timezone.utc)
+        self._write("B000000001", "2026-08-01T00:00:00+00:00")
+        self._write("B000000002", "2026-08-24T23:59:59+00:00")
+        self._write("B000000003", "2026-07-31T23:59:59+00:00")   # 前月
+        self._write("B000000004", "2026-09-01T00:00:00+00:00")   # 翌月
+        self.assertEqual(F.month_usage(self.base, now=now), 2)
+
+    def test_malformed_and_missing_timestamps_are_ignored(self):
+        now = dt.datetime(2026, 8, 25, tzinfo=dt.timezone.utc)
+        self._write("B000000001", "2026-08-01T00:00:00+00:00")
+        self._write("B000000002", None)      # fetched_at 無し
+        self._write("B000000003", 12345)     # 型違い
+        self.assertEqual(F.month_usage(self.base, now=now), 1)
+
+    def test_empty_base_is_zero(self):
+        self.assertEqual(F.month_usage(self.base), 0)
+
+
+class NoticeTest(unittest.TestCase):
+    """枠の枯渇を UI に出す (#4793: 緑のまま静かに縮退させない)。"""
+
+    def test_emits_annotation_under_actions(self):
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "true"}), \
+                mock.patch("sys.stdout", buf):
+            F._notice("warning", "枠が尽きました")
+        self.assertIn("::warning::枠が尽きました", buf.getvalue())
+
+    def test_silent_on_stdout_when_not_in_actions(self):
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": ""}), \
+                mock.patch("sys.stdout", buf):
+            F._notice("warning", "枠が尽きました")
+        self.assertEqual(buf.getvalue(), "")
+
+
+class MonthlyBudgetCliTest(unittest.TestCase):
+    """レーンは 2 本あり別プロセス。budget は共有記録から数えた実消費で効く。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.base = pathlib.Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _run(self, argv, usage, fetched):
+        """_cli を走らせ、fetch_for_asin の呼び出し回数を返す。"""
+        calls = []
+
+        def _fake_fetch(asin, api_key, base, max_sources=8, dry_run=False):
+            calls.append(asin)
+            return {"asin": asin, "status": "ok", "sources": 3}
+
+        with mock.patch.dict(os.environ, {"TAVILY_API_KEY": "k", "GITHUB_ACTIONS": ""}), \
+                mock.patch.object(F, "month_usage", return_value=usage), \
+                mock.patch.object(F, "fetch_for_asin", _fake_fetch), \
+                mock.patch.object(F, "_is_fresh", return_value=False), \
+                mock.patch.object(F.time, "sleep", lambda *_: None), \
+                mock.patch.object(sys, "argv", ["prog"] + argv):
+            rc = F._cli()
+        self.assertEqual(rc, 0)
+        return calls
+
+    def test_budget_reached_fetches_nothing(self):
+        calls = self._run(
+            ["B00TARGET1", "--base", str(self.base), "--monthly-budget", "900"],
+            usage=900, fetched=0)
+        self.assertEqual(calls, [])
+
+    def test_remaining_caps_max_queries(self):
+        """残枠 < max-queries なら残枠に合わせる (超過して枠を割らない)。"""
+        with mock.patch.object(F, "_pickable_pool",
+                               return_value=["B00000000%d" % i for i in range(1, 9)]), \
+                mock.patch.object(F._sc, "score_asin", return_value={"band": "zero"}):
+            calls = self._run(
+                ["--pool", "--base", str(self.base),
+                 "--max-queries", "30", "--monthly-budget", "900"],
+                usage=897, fetched=0)
+        self.assertEqual(len(calls), 3)
+
+    def test_budget_zero_disables_the_guard(self):
+        with mock.patch.object(F, "_pickable_pool",
+                               return_value=["B00000000%d" % i for i in range(1, 6)]), \
+                mock.patch.object(F._sc, "score_asin", return_value={"band": "zero"}):
+            calls = self._run(
+                ["--pool", "--base", str(self.base),
+                 "--max-queries", "4", "--monthly-budget", "0"],
+                usage=99999, fetched=0)
+        self.assertEqual(len(calls), 4)
