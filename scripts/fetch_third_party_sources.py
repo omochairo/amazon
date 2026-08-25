@@ -57,6 +57,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from typing import Optional
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from fetch_cross_search import extract_search_keyword  # noqa: E402
@@ -220,6 +221,44 @@ def _is_fresh(path: pathlib.Path, max_age_days: int) -> bool:
     return (now - when).days < max_age_days
 
 
+def month_usage(base: pathlib.Path, now: Optional[_dt.datetime] = None) -> int:
+    """今月ぶんの取得件数を、書き出し済み `fetched_at` から数える。
+
+    Tavily 無料枠は 1,000/月。レーンが 2 本 (新規候補 / 既存記事) あり**別プロセス**で
+    走るので、プロセス内のカウンタでは合算を見張れない。両者が書き出す
+    `third_party_sources.json` の `fetched_at` が唯一の共有記録なので、そこを数える。
+
+    **これは下限の推定であって正確な API 消費ではない**:
+      - 失敗した呼び出し (429 や 0 件) はファイルを残さないが credit は消えている
+      - 同じ ASIN を同月に 2 回引くとファイルが上書きされるので 1 件にしか見えない
+        (`--max-age-days` が 30 以上なら実質起きない)
+    どちらも**過小**に出るので、budget を「これ以上は投げない」の上限として使うぶんには
+    安全側に倒れない。**枠に張り付いてからでは遅い**ので、閾値は余裕を持たせること。
+    """
+    now = now or _dt.datetime.now(_dt.timezone.utc)
+    prefix = now.strftime("%Y-%m")
+    used = 0
+    for path in base.glob("*/" + OUT_NAME):
+        data = _load(path)
+        if not isinstance(data, dict):
+            continue
+        ts = data.get("fetched_at")
+        if isinstance(ts, str) and ts.startswith(prefix):
+            used += 1
+    return used
+
+
+def _notice(level: str, message: str) -> None:
+    """Actions の run ログに annotation を出す (ローカルでは素の log のみ)。
+
+    #4793: 枠の枯渇や縮退が「緑のまま収集数だけ減る」形で進むと誰も気づかない。
+    ログ行は 1 日 40 行に埋もれるので、UI に出る annotation を併せて出す。
+    """
+    getattr(logger, "warning" if level == "warning" else "info")("%s", message)
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        print("::{}::{}".format(level, message), flush=True)
+
+
 def fetch_for_asin(
     asin: str, api_key: str, base: pathlib.Path,
     max_sources: int = 8, dry_run: bool = False,
@@ -365,6 +404,9 @@ def _cli() -> int:
     ap.add_argument("--max-sources", type=int, default=8, help="ASIN あたり保存 host 数")
     ap.add_argument("--max-age-days", type=int, default=30,
                     help="この日数以内に取得済なら skip (--force で無視)")
+    ap.add_argument("--monthly-budget", type=int, default=900,
+                    help="今月ぶんの取得上限 (Tavily 無料=1000/月。0 で無効)。"
+                         "2 本のレーンで共有し、書き出し済み fetched_at から実消費を数える")
     ap.add_argument("--force", action="store_true", help="freshness を無視して再取得")
     ap.add_argument("--dry-run", action="store_true", help="API を叩かず計画のみ表示")
     ap.add_argument("--base", default=str(PER_ASIN_DIR))
@@ -400,10 +442,36 @@ def _cli() -> int:
     else:
         ap.error("ASIN / --pool / --from-gsc のいずれかが必要です")
 
+    # 月次バジェット。レーンは別プロセスなので、共有記録 (fetched_at) から実消費を
+    # 数えて残枠を出す。ここで絞らないと 新規 30 + 既存 20 = 50/日 = 1,500/月 が
+    # 名目上の上限になり、無料枠 1,000/月 を月末前に使い切る。
+    limit = args.max_queries
+    if args.monthly_budget > 0 and not args.dry_run:
+        used = month_usage(base)
+        remaining = args.monthly_budget - used
+        pct = used / args.monthly_budget * 100
+        if remaining <= 0:
+            _notice("warning",
+                    "Tavily 月次バジェット到達: 今月 {} 件 / budget {} — 今回は 0 件で終了 "
+                    "(枠切れで無言縮退させないため、意図的に何も投げない)"
+                    .format(used, args.monthly_budget))
+            logger.info("完了: 0 件処理 (budget 到達)")
+            return 0
+        if pct >= 80:
+            _notice("warning",
+                    "Tavily 月次バジェット {:.0f}% 消費 (今月 {} 件 / budget {}, 残 {})"
+                    .format(pct, used, args.monthly_budget, remaining))
+        else:
+            logger.info("月次バジェット: 今月 %d 件 / budget %d (残 %d)",
+                        used, args.monthly_budget, remaining)
+        if remaining < limit:
+            logger.info("残枠 %d < max-queries %d — 今回は残枠に合わせる", remaining, limit)
+            limit = remaining
+
     done = 0
     for asin in targets:
-        if done >= args.max_queries:
-            logger.info("max-queries (%d) 到達 — 残りは次回", args.max_queries)
+        if done >= limit:
+            logger.info("上限 (%d) 到達 — 残りは次回", limit)
             break
         out_path = base / asin / OUT_NAME
         if not args.force and not args.dry_run and _is_fresh(out_path, args.max_age_days):
@@ -414,7 +482,12 @@ def _cli() -> int:
                                max_sources=args.max_sources, dry_run=args.dry_run)
         except urllib.error.HTTPError as e:
             if e.code in (429, 432, 433):
-                logger.warning("HTTP %s (Tavily quota/plan limit) — 中断", e.code)
+                # #4793 と同じ形: ここを log だけで抜けると、レーンは緑のまま
+                # 収集数だけ静かに減る。UI に出して気づけるようにする。
+                _notice("warning",
+                        "Tavily quota/plan limit (HTTP {}) で中断 — {} 件処理した時点。"
+                        "月次バジェットが実消費より緩い可能性があるので見直すこと"
+                        .format(e.code, done))
                 break
             logger.warning("%s: HTTP %s skip", asin, e.code)
             continue

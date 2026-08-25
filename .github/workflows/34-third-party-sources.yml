@@ -12,7 +12,14 @@ name: Pre-fetch Third-Party Sources
 # レーンは 2 本ある。母集合が違うだけで、収集・保存の処理は共通:
 #   1. 新規候補 (--pool --bands zero,thin / 30 件/日) — まだ記事になっていない ASIN
 #   2. 既存記事 (--from-gsc / 20 件/日) — GSC の直近 4 週 imp>=10 かつ第三者ソース未保有
-# 枠は共有させない。2 が 1 の枠を食い尽くすと新規候補レーンが黙って飢える。
+# 日次の枠は共有させない。2 が 1 の枠を食い尽くすと新規候補レーンが黙って飢える。
+#
+# ただし**月次の枠は共有する** (`--monthly-budget`, 既定 900)。日次上限だけだと
+# 30 + 20 = 50/日 = 1,500/月 が名目上の上限になり、無料枠 1,000/月 を月末前に
+# 使い切る。レーンは別プロセスなので、両者が書き出す third_party_sources.json の
+# `fetched_at` を共有記録として実消費を数え、残枠に合わせて日次上限を切り下げる。
+# 到達したら 0 件で正常終了し、80% 超と 429 到達は `::warning::` で run に出す
+# (#4793: 緑のまま収集数だけ静かに減る形にしない)。
 #
 # App token で PR 起票 (GITHUB_TOKEN だと anti-recursion guard で validate 不発火、
 # main 直 push は GH006 silent reject になるため PR + auto-merge 経路を採る)。
@@ -35,6 +42,10 @@ on:
         description: '既存記事レーンの imp しきい値 (直近 4 週)'
         required: false
         default: '10'
+      monthly_budget:
+        description: '今月ぶんの取得上限 (2 レーン共有, Tavily 無料=1000/月)。0 で無効'
+        required: false
+        default: '900'
   # cron re-registered 2026-07-08 after unsuspension
   schedule:
     # 毎日 21:30 UTC (06:30 JST) — 朝の記事生成スロットの前に候補を仕込む
@@ -83,7 +94,8 @@ jobs:
           python scripts/fetch_third_party_sources.py \
             --pool \
             --bands "${{ github.event.inputs.bands || 'zero,thin' }}" \
-            --max-queries "${{ github.event.inputs.max_queries || '30' }}"
+            --max-queries "${{ github.event.inputs.max_queries || '30' }}" \
+            --monthly-budget "${{ github.event.inputs.monthly_budget || '900' }}"
 
       # レーン2: 既存記事 (リライト対象)。母集合は GSC の需要で、band では絞らない。
       # レーン1 とは別プロセス・別 --max-queries で回す。枠を共有させると、母集合が
@@ -100,7 +112,8 @@ jobs:
             --from-gsc \
             --gsc-min-impressions "${{ github.event.inputs.gsc_min_impressions || '10' }}" \
             --max-age-days 90 \
-            --max-queries "${{ github.event.inputs.gsc_max_queries || '20' }}"
+            --max-queries "${{ github.event.inputs.gsc_max_queries || '20' }}" \
+            --monthly-budget "${{ github.event.inputs.monthly_budget || '900' }}"
 
       - name: Create PR + enable auto-merge
         if: ${{ always() }}
