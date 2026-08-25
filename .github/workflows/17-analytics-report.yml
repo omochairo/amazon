@@ -461,3 +461,52 @@ jobs:
         continue-on-error: true
         run: |
           python scripts/check_wp_navi_link_gate.py >> "$GITHUB_STEP_SUMMARY"
+      # #5941: 上の検出器 8 本は continue-on-error なので、落ちても run は緑になり、
+      # 下流の surfacing step も `count != ''` の条件で静かにスキップされる。つまり
+      # **「壊れた (count='')」と「検出 0 件 (count='0')」が区別できない**。
+      # 実際 opportunity / brand_suggest / cannibal / engagement_drop は 4 週連続 0 件
+      # なので、どれかが落ち始めても表示上は何も変わらない (#5941 に実測)。
+      #
+      # continue-on-error 自体は外さない。「検出器が 1 つ落ちてもレポート全体は出す」
+      # という意図は正しく、orphans が落ちたせいで GA4/GSC の週次レポートごと
+      # 出ないのは明らかに損だから。代わりに **レポート投稿の後** に outcome を
+      # 集めて run を赤にする。レポートは出たうえで失敗が run 一覧に見える。
+      #
+      # outcome を見るのは continue-on-error 適用 **前** の結果だから
+      # (conclusion のほうは success に潰れる)。#4783 の channel_results と同じ形。
+      # skipped は数えない — GSC 無しでゲートされた正常系なので失敗ではない。
+      - name: Detector health check (#5941)
+        if: ${{ !cancelled() }}
+        env:
+          OUTCOMES: >-
+            low_ctr=${{ steps.low_ctr.outcome }}
+            opportunity=${{ steps.opportunity.outcome }}
+            brand_suggest=${{ steps.brand_suggest.outcome }}
+            catalog_brand=${{ steps.catalog_brand.outcome }}
+            cannibal=${{ steps.cannibal.outcome }}
+            engagement_drop=${{ steps.engagement_drop.outcome }}
+            orphans=${{ steps.orphans.outcome }}
+            query_intent=${{ steps.query_intent.outcome }}
+        run: |
+          set -e
+          # id を書き間違えると ${{ steps.X.outcome }} は空文字になり、健全性
+          # チェックが「何も見ていない」状態で緑になる。そこだけは明示的に落とす。
+          echo "$OUTCOMES" | tr ' ' '\n' | grep -v '^$' > /tmp/detector_outcomes.txt || true
+          if [ ! -s /tmp/detector_outcomes.txt ]; then
+            echo "::error::検出器の outcome が 1 つも取れていません。step id を確認してください。"
+            exit 1
+          fi
+          {
+            echo "## Detector health (#5941)"
+            echo ""
+            echo '```'
+            cat /tmp/detector_outcomes.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/detector_outcomes.txt
+          FAILED=$(grep '=failure' /tmp/detector_outcomes.txt || true)
+          if [ -n "$FAILED" ]; then
+            echo "::error::検出器が失敗しました。週次レポートは投稿済みです: $(echo $FAILED | tr '\n' ' ')"
+            exit 1
+          fi
+          echo "all detectors ok (failure なし)"
