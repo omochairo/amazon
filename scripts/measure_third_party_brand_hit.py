@@ -12,6 +12,12 @@ measure_third_party_brand_hit.py  (#1600 Phase 2 の効果測定)
   そのため zero 帯と対象レーンを **同一の測り方で並べて出す** のがこの script の役目。
   記憶の中の数字と突き合わせるのではなく、両コホートをここで測り直して比較すること。
 
+  ただし **素の比較だけで結論を出さないこと** (2026-08-25 実測)。cohort_zero は
+  evidence 0 かつ brand_tier D で定義されており 100% tier D になるため、tier 混在の
+  レーンと素で並べるとブランド構成の差がレーンの効果に見える。実際 GSC 需要レーンは
+  素で 68.6% vs 32.8% と大差だが、同じ tier で比べると全 tier で CI が重なり差は消えた
+  (直接標準化で +6.5pt)。--by-tier がこの層別を出す。
+
 測り方 (意図的に単純):
   1. amazon.json の title からラテン系トークンを取る (先頭のものをブランド名とみなす。
      Amazon JP のタイトルはブランド始まりが大半)。汎用語・単位・型番だけの語は除く
@@ -27,6 +33,7 @@ measure_third_party_brand_hit.py  (#1600 Phase 2 の効果測定)
 Usage:
   python scripts/measure_third_party_brand_hit.py                       # 全コホート比較
   python scripts/measure_third_party_brand_hit.py --cohort gsc --list   # 明細つき
+  python scripts/measure_third_party_brand_hit.py --by-tier             # brand_tier で層別
   python scripts/measure_third_party_brand_hit.py --json                # 機械可読
 """
 
@@ -35,6 +42,7 @@ from __future__ import annotations
 import argparse
 import collections
 import json
+import math
 import pathlib
 import re
 import sys
@@ -130,6 +138,113 @@ def measure(asins: list[str], base: pathlib.Path, with_url: bool) -> dict:
     }
 
 
+def wilson_ci(k: int, n: int) -> tuple[float, float]:
+    """二項比率の 95% Wilson 信頼区間 (%) を返す。
+
+    正規近似 (p +- 1.96*sqrt(p(1-p)/n)) を使わないのは、tier 別のように
+    n が 10-20 のセルで区間が [0, 1] を飛び出すため。判定は「コホート間で
+    CI が重なるか」で行うので、小さい n で素直に効く形でないと使えない。
+    """
+    if n <= 0:
+        return (0.0, 0.0)
+    p = k / n
+    z = 1.96
+    d = 1.0 + z * z / n
+    centre = (p + z * z / (2 * n)) / d
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
+    return (100 * max(0.0, centre - half), 100 * min(1.0, centre + half))
+
+
+def _tier_of(asin: str, base: pathlib.Path, cache: dict) -> str:
+    """brand_tier を 1 回だけ引いてキャッシュする (score_asin は ASIN あたり数ファイル読む)。"""
+    if asin not in cache:
+        cache[asin] = _sc.score_asin(asin, base).get("brand_tier") or "D"
+    return cache[asin]
+
+
+def _rate_row(rows: list[dict]) -> dict:
+    k = sum(1 for r in rows if r["hit"])
+    n = len(rows)
+    lo, hi = wilson_ci(k, n)
+    return {"n": n, "hits": k, "rate": (100 * k / n) if n else 0.0,
+            "ci_low": lo, "ci_high": hi}
+
+
+def by_tier(details: list[dict], base: pathlib.Path, cache: dict) -> dict:
+    """measure() の details を brand_tier で割る。
+
+    brand_tier は brand_normalizer が amazon.json の title / seller を引くだけで、
+    third_party_sources からは一切導出されない (score_per_asin_info._brand_tier)。
+    したがって収集結果に対して pre-treatment な共変量であり、層別してよい。
+    collider ではないので、ここで割っても選択バイアスは入らない。
+    """
+    groups: dict[str, list[dict]] = collections.defaultdict(list)
+    for d in details:
+        groups[_tier_of(d["asin"], base, cache)].append(d)
+    return {t: _rate_row(rows) for t, rows in sorted(groups.items())}
+
+
+def standardize(rows: dict) -> tuple[float, int]:
+    """focus 側の tier 別ヒット率を、focus 外の tier 構成で重みづけ直す (直接標準化)。
+
+    戻り値は (標準化後のヒット率 %, 使った重みの合計 n)。
+
+    focus 側が 1 件も無い tier は重みから **外す**。0 件のセルに率は無いので
+    0% として混ぜると標準化後の値が不当に下がる。除いたぶんは分母 (重みの
+    合計) にも反映するので、「残った tier の中での標準化」であることは崩れない。
+    重みの合計を返しているのは、どれだけの母集団に対する標準化なのかを
+    出力側で明示できるようにするため。
+    """
+    weight_total = 0
+    weighted = 0.0
+    for row in rows.values():
+        w = row["outside"]["n"]
+        if w == 0 or row["inside"]["n"] == 0:
+            continue
+        weight_total += w
+        weighted += w * row["inside"]["rate"]
+    return ((weighted / weight_total) if weight_total else 0.0, weight_total)
+
+
+def tier_crosstab(base: pathlib.Path, focus: set, with_url: bool, cache: dict) -> dict:
+    """収集済み全 ASIN を brand_tier x (focus コホートに入るか) で割る。
+
+    なぜ必要か (2026-08-25 実測): cohort_zero は evidence 0 かつ brand_tier D で
+    定義されているため、基準線は 100% tier D になる。tier 混在のレーンと素で
+    並べると、ヒット率の差が「レーンの効果」ではなく「ブランド構成の差」を
+    映してしまう。実際 GSC 需要レーンは素で 68.6% vs 32.8% と大差に見えるが、
+    同じ tier の中で比べると全 tier で CI が重なり、差は消える。
+
+    direct: focus 側の tier 別ヒット率を **focus 外の tier 構成** で重みづけ
+    直した値 (直接標準化)。focus 外の粗率と直接比較してよい 1 対の数字になる。
+    """
+    collected = [d.name for d in sorted(base.iterdir())
+                 if d.is_dir() and (d / _f.OUT_NAME).exists()]
+    details = measure(collected, base, with_url)["details"]
+    inside: dict[str, list[dict]] = collections.defaultdict(list)
+    outside: dict[str, list[dict]] = collections.defaultdict(list)
+    for d in details:
+        tier = _tier_of(d["asin"], base, cache)
+        (inside if d["asin"] in focus else outside)[tier].append(d)
+
+    tiers = sorted(set(inside) | set(outside))
+    rows = {}
+    for t in tiers:
+        rows[t] = {"inside": _rate_row(inside.get(t, [])),
+                   "outside": _rate_row(outside.get(t, []))}
+
+    std_rate, weight_total = standardize(rows)
+    all_outside = [d for t in tiers for d in outside.get(t, [])]
+    return {
+        "collected": len(details),
+        "focus_size": sum(rows[t]["inside"]["n"] for t in tiers),
+        "by_tier": rows,
+        "standardized_focus_rate": std_rate,
+        "outside_crude_rate": _rate_row(all_outside)["rate"],
+        "standardization_weight_n": weight_total,
+    }
+
+
 def cohort_zero(base: pathlib.Path) -> list[str]:
     """band=zero 相当 (evidence 0 かつ brand_tier D) の ASIN。比較の基準線。
 
@@ -169,6 +284,9 @@ def _cli() -> int:
     ap.add_argument("--base", default=str(PER_ASIN_DIR))
     ap.add_argument("--gsc-min-impressions", type=int, default=10)
     ap.add_argument("--gsc-days", type=int, default=28)
+    ap.add_argument("--by-tier", action="store_true",
+                    help="brand_tier で層別する。zero 基準線は 100%% tier D なので、"
+                         "素の比較はブランド構成の差を映す (tier_crosstab の docstring 参照)")
     ap.add_argument("--list", action="store_true", help="ASIN 単位の内訳も出す")
     ap.add_argument("--json", action="store_true", help="JSON で出力")
     args = ap.parse_args()
@@ -183,30 +301,67 @@ def _cli() -> int:
     if args.cohort == "all":
         cohorts["全 per_asin"] = cohort_all(base)
 
+    tier_cache: dict[str, str] = {}
     result: dict[str, dict] = {}
     for label, asins in cohorts.items():
-        result[label] = {
+        entry = {
             "cohort_size": len(asins),
             "title_snippet": measure(asins, base, with_url=False),
             "title_snippet_url": measure(asins, base, with_url=True),
         }
+        for fld in ("title_snippet", "title_snippet_url"):
+            m = entry[fld]
+            m["ci_low"], m["ci_high"] = wilson_ci(m["hits"], m["fetched"])
+            if args.by_tier:
+                m["by_tier"] = by_tier(m["details"], base, tier_cache)
+        result[label] = entry
+
+    crosstab: dict[str, dict] = {}
+    if args.by_tier and args.cohort in ("compare", "gsc"):
+        focus = set(cohorts[f"GSC imp>={args.gsc_min_impressions}"])
+        for fld, with_url in (("title_snippet", False), ("title_snippet_url", True)):
+            crosstab[fld] = tier_crosstab(base, focus, with_url, tier_cache)
+        result["_tier_crosstab (収集済み全 ASIN)"] = crosstab
 
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
 
     for label, r in result.items():
+        if label.startswith("_"):
+            continue  # crosstab はコホートとは形が違うので下で別に出す
         print(f"\n=== {label} (コホート {r['cohort_size']} 件) ===")
         for fld in ("title_snippet", "title_snippet_url"):
             m = r[fld]
             print(f"  [{fld}] 収集済 {m['fetched']} 件 / ブランド名トークン有り "
                   f"{m['with_brand_token']} 件 / 出現 {m['hits']} 件")
-            print(f"      ヒット率: 全体分母 {m['rate_all']:.1f}% / "
+            print(f"      ヒット率: 全体分母 {m['rate_all']:.1f}% "
+                  f"CI[{m['ci_low']:.1f}, {m['ci_high']:.1f}] / "
                   f"トークン有り分母 {m['rate_with_token']:.1f}%")
+            for tier, row in (m.get("by_tier") or {}).items():
+                print(f"        tier {tier}: {row['hits']}/{row['n']} = "
+                      f"{row['rate']:.1f}% CI[{row['ci_low']:.1f}, {row['ci_high']:.1f}]")
         if args.list:
             for d in r["title_snippet"]["details"]:
                 mark = "o" if d["hit"] else "-"
                 print(f"      {mark} {d['asin']}  {d['brand_token'] or '(トークン無し)'}")
+    for fld, ct in crosstab.items():
+        print(f"\n=== brand_tier x 需要コホート [{fld}] "
+              f"(収集済み {ct['collected']} 件 / うち需要側 {ct['focus_size']} 件) ===")
+        print(f"  {'tier':<6}{'需要コホート内':<26}{'コホート外':<26}{'差':>9}")
+        for tier, row in ct["by_tier"].items():
+            i, o = row["inside"], row["outside"]
+            print(f"  {tier:<6}{i['hits']:>4}/{i['n']:<5}{i['rate']:5.1f}% "
+                  f"CI[{i['ci_low']:4.1f},{i['ci_high']:4.1f}]  "
+                  f"{o['hits']:>4}/{o['n']:<5}{o['rate']:5.1f}% "
+                  f"CI[{o['ci_low']:4.1f},{o['ci_high']:4.1f}] "
+                  f"{i['rate'] - o['rate']:+8.1f}pt")
+        print(f"  需要側をコホート外の tier 構成へ直接標準化: "
+              f"{ct['standardized_focus_rate']:.1f}%  "
+              f"(コホート外の粗率 {ct['outside_crude_rate']:.1f}%, "
+              f"重み n={ct['standardization_weight_n']})")
+        print("  注: 同じ tier の中で需要側が上回らなければ、素の差はブランド構成の差である。")
+
     print("\n注: 2 つの分母と 2 つの照合フィールドは、片方だけ見て結論を出さないために"
           "並べて出している。コホート間の比較は同じ行同士で行うこと。")
     return 0

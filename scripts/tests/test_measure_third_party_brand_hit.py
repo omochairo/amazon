@@ -97,5 +97,81 @@ class MeasureTest(unittest.TestCase):
         self.assertEqual(m["rate_with_token"], 100.0)
 
 
+class WilsonCiTest(unittest.TestCase):
+    """判定は「CI が重なるか」で行うので、小 n で壊れないことを固定する。"""
+
+    def test_zero_denominator_is_flat(self):
+        self.assertEqual((0.0, 0.0), M.wilson_ci(0, 0))
+
+    def test_bounds_stay_inside_0_100_for_extremes(self):
+        for k, n in ((0, 5), (5, 5), (1, 3), (12, 12)):
+            lo, hi = M.wilson_ci(k, n)
+            self.assertGreaterEqual(lo, 0.0, (k, n))
+            self.assertLessEqual(hi, 100.0, (k, n))
+            self.assertLessEqual(lo, hi, (k, n))
+
+    def test_known_value(self):
+        # 9/21 = 42.9% -> [24.5, 63.5] (2026-08-25 の tier D セル)
+        lo, hi = M.wilson_ci(9, 21)
+        self.assertAlmostEqual(24.5, lo, places=1)
+        self.assertAlmostEqual(63.5, hi, places=1)
+
+    def test_wider_interval_for_smaller_n_at_same_rate(self):
+        narrow = M.wilson_ci(50, 100)
+        wide = M.wilson_ci(5, 10)
+        self.assertLess(narrow[1] - narrow[0], wide[1] - wide[0])
+
+
+class ByTierTest(unittest.TestCase):
+    """brand_tier は cache 経由で引くので、cache を埋めれば FS を触らない。"""
+
+    def test_groups_by_tier_and_counts_hits(self):
+        details = [
+            {"asin": "A1", "hit": True}, {"asin": "A2", "hit": False},
+            {"asin": "D1", "hit": True},
+        ]
+        cache = {"A1": "A", "A2": "A", "D1": "D"}
+        got = M.by_tier(details, pathlib.Path("."), cache)
+        self.assertEqual({"A", "D"}, set(got))
+        self.assertEqual(2, got["A"]["n"])
+        self.assertEqual(1, got["A"]["hits"])
+        self.assertAlmostEqual(50.0, got["A"]["rate"])
+        self.assertAlmostEqual(100.0, got["D"]["rate"])
+
+    def test_tiers_are_sorted(self):
+        details = [{"asin": x, "hit": False} for x in ("d", "a", "s")]
+        cache = {"d": "D", "a": "A", "s": "S"}
+        self.assertEqual(["A", "D", "S"], list(M.by_tier(details, pathlib.Path("."), cache)))
+
+
+class StandardizeTest(unittest.TestCase):
+    """結論が乗る数字なので、重みの扱いを固定する。"""
+
+    @staticmethod
+    def _row(in_n, in_rate, out_n):
+        return {"inside": {"n": in_n, "rate": in_rate}, "outside": {"n": out_n}}
+
+    def test_weights_by_outside_composition(self):
+        # 内側は A も D も同率だが、外側の構成は D 寄り。標準化後も同率になる。
+        rows = {"A": self._row(10, 80.0, 100), "D": self._row(10, 40.0, 900)}
+        rate, w = M.standardize(rows)
+        self.assertEqual(1000, w)
+        self.assertAlmostEqual((100 * 80.0 + 900 * 40.0) / 1000, rate)
+
+    def test_tier_missing_inside_is_dropped_from_weight(self):
+        # inside が 0 件の tier を 0% として混ぜると不当に下がる。分母からも外す。
+        rows = {"A": self._row(10, 80.0, 100), "D": self._row(0, 0.0, 900)}
+        rate, w = M.standardize(rows)
+        self.assertEqual(100, w)
+        self.assertAlmostEqual(80.0, rate)
+
+    def test_tier_missing_outside_has_no_weight(self):
+        rows = {"A": self._row(10, 80.0, 0)}
+        self.assertEqual((0.0, 0), M.standardize(rows))
+
+    def test_empty(self):
+        self.assertEqual((0.0, 0), M.standardize({}))
+
+
 if __name__ == "__main__":
     unittest.main()
