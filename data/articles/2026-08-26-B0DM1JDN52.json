@@ -214,30 +214,41 @@
       "author": "メーカー公式",
       "conflict_of_interest": "none",
       "notes": "競合となるキャリアカー製品。機能や価格帯の違いを比較する上で参考となる情報。"
+    },
+    {
+      "id": "src-9",
+      "name": "タカラトミー公式 トミカ ラインナップ",
+      "url": "https://www.takaratomy.co.jp/products/tomica/lineup/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-08-14",
+      "author": "メーカー公式",
+      "conflict_of_interest": "none",
+      "notes": "一般的なミニカーのサイズ感や仕様を確認するための参考情報。"
     }
   ],
   "claims": [
     {
-      "claim": "キャビン部分にダイキャスト素材を採用し、金属特有の重厚感がある",
-      "category": "quality",
-      "confidence": "high",
-      "supporting_source_ids": [
-        "src-1",
-        "src-3"
-      ],
-      "cross_checked": false,
-      "notes": "Amazonおよび楽天の販売ページ双方の仕様説明で一致"
-    },
-    {
-      "claim": "全長約33cmで一般的なサイズのミニカーを複数積載可能である",
+      "claim": "変形ギミックを持つ他社の大型車両玩具と比較して、本品はミニカーの純粋なディスプレイや収納機能に特化している",
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
         "src-1",
-        "src-4"
+        "src-6"
       ],
-      "cross_checked": false,
-      "notes": "AmazonおよびYahoo!ショッピングの仕様説明でサイズ感が一致"
+      "cross_checked": true,
+      "notes": "Amazonの製品情報と、競合製品（タカラトミー リモコンビッグキャリアカー等）の仕様を比較して確認"
+    },
+    {
+      "claim": "一般的なサイズのミニカーを複数台積載できるスケールで設計されている",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-1",
+        "src-9"
+      ],
+      "cross_checked": true,
+      "notes": "本品のサイズ仕様（1/48スケール）と、一般的なミニカー（タカラトミー公式ラインナップ等）の標準サイズを照合"
     },
     {
       "claim": "片付けやミニカーのディスプレイとしても活用できる",
