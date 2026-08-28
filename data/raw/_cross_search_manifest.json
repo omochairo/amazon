@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-27T19:51:26.303678+00:00",
+  "generated_at": "2026-08-28T01:30:20.152927+00:00",
   "summary": {
     "rakuten": {
       "jan_400": 12,
@@ -11,19 +11,31 @@
       "unknown": 692
     },
     "yahoo": {
-      "jan": 1373,
+      "jan": 1374,
       "jan_5xx": 1,
       "jan_zero": 248,
       "no_jan": 172,
-      "unknown": 569
+      "unknown": 568
     },
     "prevent_drops": {
       "rakuten:model_mismatch": 10,
-      "yahoo:model_mismatch": 486,
-      "yahoo:used_listing": 4
+      "yahoo:model_mismatch": 479,
+      "yahoo:used_listing": 5
     }
   },
   "items": [
+    {
+      "asin": "B0GGNFZ9CW",
+      "jan_code": "4905330531148",
+      "rakuten": {
+        "method": "jan_ichiba",
+        "jan_attempt": "unknown"
+      },
+      "yahoo": {
+        "method": "jan",
+        "jan_attempt": "jan"
+      }
+    },
     {
       "asin": "B0F26B63Y8",
       "jan_code": "",
@@ -1609,18 +1621,6 @@
       }
     },
     {
-      "asin": "B0GSCRSZT9",
-      "jan_code": "4905040162748",
-      "rakuten": {
-        "method": "jan_ichiba",
-        "jan_attempt": "unknown"
-      },
-      "yahoo": {
-        "method": "jan",
-        "jan_attempt": "unknown"
-      }
-    },
-    {
       "asin": "B0GPPNQSMC",
       "jan_code": "4972825234693",
       "rakuten": {
@@ -1731,18 +1731,6 @@
     {
       "asin": "B0034G4DDW",
       "jan_code": "4904810366812",
-      "rakuten": {
-        "method": "jan_ichiba",
-        "jan_attempt": "unknown"
-      },
-      "yahoo": {
-        "method": "jan",
-        "jan_attempt": "unknown"
-      }
-    },
-    {
-      "asin": "B0GGNFZ9CW",
-      "jan_code": "4905330531148",
       "rakuten": {
         "method": "jan_ichiba",
         "jan_attempt": "unknown"
@@ -26770,6 +26758,18 @@
       "yahoo": {
         "method": "text",
         "jan_attempt": "jan_zero"
+      }
+    },
+    {
+      "asin": "B0GSCRSZT9",
+      "jan_code": "4905040162748",
+      "rakuten": {
+        "method": "jan_ichiba",
+        "jan_attempt": "unknown"
+      },
+      "yahoo": {
+        "method": "jan",
+        "jan_attempt": "unknown"
       }
     },
     {
