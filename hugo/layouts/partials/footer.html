@@ -16,6 +16,11 @@
         <a href="https://omcha.jp/contact/" target="_blank" rel="noopener">✉️ お問い合わせ</a>
     </div>
 
+    {{- /* omcha-ops#19 P3: アソシエイト・プログラム運営規約 第5条が要求する表示。
+           景表法向けの [PR] 表記 (.auto-gen-notice / pr_disclosure.html) とは
+           用途が別なので、そちらは残したまま sitewide でここに出す。 */ -}}
+    {{- partial "associate_disclosure.html" . }}
+
     {{- if not site.Params.footer.hideCopyright }}
         {{- if site.Copyright }}
         <span>{{ site.Copyright | markdownify }}</span>
