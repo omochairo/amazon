@@ -27,7 +27,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import _fetch_targets
-from internal_links import get_related_articles
+from internal_links import DEFAULT_MIN_SCORE, get_related_articles
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("fetch_omcha_related")
@@ -155,7 +155,10 @@ def main():
         help="N 日以内に query 済みの ASIN はスキップ (TTL)",
     )
     ap.add_argument("--count", type=int, default=3, help="各 ASIN の取得件数 (top N)")
-    ap.add_argument("--min-score", type=int, default=20, help="omcha 側 score の下限")
+    ap.add_argument(
+        "--min-score", type=int, default=DEFAULT_MIN_SCORE,
+        help="omcha 側 score の下限 (iro/v2 の 0..100 正規化スケール、サーバ側で足切り)",
+    )
     ap.add_argument("--sleep", type=float, default=0.3, help="API 呼び出し間 sleep (秒)")
     args = ap.parse_args()
 
