@@ -1,0 +1,51 @@
+{{- /*
+  omcha-ops#19 P0 の打ち手 (第一段)。PaperMod 既定 (themes/PaperMod/layouts/robots.txt)
+  の「User-agent: * / Disallow:」= 全許可を置き換える。
+
+  なぜ: Cloudflare のゾーン解析で、navi.omcha.jp への HTML リクエストは 24 時間で
+  6,107 件あるのに対し、GA4 が数えるページビューは同期間 3 桁前半しかない。
+  **HTML リクエストの約 98% が自動化トラフィック**で、うち MJ12bot 単独が 2,514 件
+  (全 HTML リクエストの 41%) を占める。MJ12bot は被リンク調査クローラで、
+  外部リンクを辿ること自体が目的のクローラ。商品ページ 1 枚に Amazon リンクが
+  8.6 本、一覧ページには 75〜118 本あるため、これらが `rel="sponsored nofollow"`
+  を無視して辿ると、実購入意思ゼロのアフィリエイトクリックが大量に立つ。
+
+  ここで止めるのは **検索流入に寄与しないクローラだけ**にしてある:
+    - 被リンク/SEO 調査系 (MJ12bot / SemrushBot / AhrefsBot / DotBot / BLEXBot)
+      → 読者を 1 人も連れてこない。navi にとっては純粋なコストとリスク
+  止めないもの:
+    - Googlebot / bingbot 等の検索クローラ (流入の源。触らない)
+    - AI 系 (GPTBot / ClaudeBot / PerplexityBot / Amazonbot など)
+      → AI 検索からの流入は捨てたくないので、robots.txt では止めない。
+        こちらの抑制が必要なら Cloudflare 側でレート制限する
+
+  robots.txt を守らない相手には効かないので、これは第一段でしかない。
+  本命は Cloudflare 側の遮断 (omcha-ops#19 参照)。
+*/ -}}
+User-agent: *
+{{- if hugo.IsProduction | or (eq site.Params.env "production") }}
+Disallow:
+{{- else }}
+Disallow: /
+{{- end }}
+
+{{/* 被リンク/SEO 調査クローラ — 検索流入に寄与しないので全面的に止める */}}
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
+
+User-agent: BLEXBot
+Disallow: /
+
+User-agent: DataForSeoBot
+Disallow: /
+
+Sitemap: {{ "sitemap.xml" | absURL }}
