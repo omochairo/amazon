@@ -66,7 +66,7 @@
       <a class="ranking-cta-internal" href="{{ $internal }}">💡 徹底解説レビューを見る</a>
       {{- end }}
       {{- with $external }}
-      <a class="ranking-cta-external feature-cta-external--amazon" href="{{ partial "amazon_affiliate_url.html" . }}" rel="sponsored nofollow noopener" target="_blank">🟠 Amazon で確認する</a>
+      <a data-cta-slot="list-card" class="ranking-cta-external feature-cta-external--amazon" href="{{ partial "amazon_affiliate_url.html" . }}" rel="sponsored nofollow noopener" target="_blank">🟠 Amazon で確認する</a>
       {{- end }}
     </div>
   </div>

@@ -4,6 +4,14 @@
 <script defer src="{{ $fav.RelPermalink }}" integrity="{{ $fav.Data.Integrity }}" crossorigin="anonymous"></script>
 {{- end }}
 
+{{- /* omcha-ops#19 P4: アフィリエイト CTA の明示クリック計測 — 全ページで読み込む。
+       CTA は商品ページだけでなく /deals/ /cospa/ /price/ とテーマ・年齢 hub にも
+       出るため、ページ種別で出し分けない。listener 1 個だけで DOM も触らない。 */ -}}
+{{- $affClick := resources.Get "js/affiliate_click.js" | resources.Minify | resources.Fingerprint "sha256" }}
+{{- if $affClick }}
+<script defer src="{{ $affClick.RelPermalink }}" integrity="{{ $affClick.Data.Integrity }}" crossorigin="anonymous"></script>
+{{- end }}
+
 {{- /* #1367 最近見た商品 — 全ページで読み込み (商品ページで auto-push、home + post pages で render)。 */ -}}
 {{- $recent := resources.Get "js/recently_viewed.js" | resources.Minify | resources.Fingerprint "sha256" }}
 {{- if $recent }}
