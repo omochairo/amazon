@@ -26,6 +26,7 @@ if SCRIPTS_DIR not in sys.path:
 
 import build_post  # noqa: E402
 import fetch_omcha_related  # noqa: E402
+import internal_links  # noqa: E402
 
 
 class KeywordFromTagsTest(unittest.TestCase):
@@ -151,7 +152,10 @@ class MainFlowTest(unittest.TestCase):
         with patch.object(sys, "argv", argv), \
              patch.object(fetch_omcha_related, "get_related_articles", return_value=fake_items) as mock_get:
             fetch_omcha_related.main()
-        mock_get.assert_called_once_with("木製 知育", count=3, min_score=20)
+        # min_score は iro/v2 の 0..100 スケール既定値 (Issue #6103)。
+        mock_get.assert_called_once_with(
+            "木製 知育", count=3, min_score=internal_links.DEFAULT_MIN_SCORE
+        )
         # cache 書き込み確認
         cache = self.out_dir / "per_asin" / "B000NEW001" / "omcha_related.json"
         self.assertTrue(cache.exists())

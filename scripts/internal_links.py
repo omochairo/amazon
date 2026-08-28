@@ -1,7 +1,7 @@
 """Fetch related articles from omochairo (omcha.jp) via its WP REST API.
 
-API endpoint (registered on omcha.jp by an WPCode snippet):
-    GET https://omcha.jp/wp-json/iro/v1/related?keyword=<words>&count=<N>
+API endpoint (registered on omcha.jp by a Code Snippets snippet):
+    GET https://omcha.jp/wp-json/iro/v2/related?keyword=<words>&count=<N>&min_score=<S>
 
 The response shape::
 
@@ -19,6 +19,29 @@ Used by:
   alongside each product article (``data["omcha_related"]`` -> template).
 - ``score_calculator.py`` to award ``media_exposure`` points when the top
   omcha match has a high relevance score.
+
+``iro/v2`` scoring (Issue #6103)
+--------------------------------
+v1 returned an *unbounded* sum whose scale moved with the number of query
+words (measured top scores on real tag keywords ranged 1..504). v2 returns a
+**0..100 normalised** score, so thresholds are comparable across keywords.
+The v1 client threshold of 20 maps to **12** on the v2 scale — measured on 250
+real tag keywords sampled from ``data/raw/per_asin/*/omcha_related.json``:
+
+======================  ==========  ==========
+metric                  v1 @ 20     v2 @ 12
+======================  ==========  ==========
+items kept per keyword  6.28        6.39
+keywords with >=3 cards 70%         71%
+keywords with 0 cards   12%         12%
+======================  ==========  ==========
+
+v2 also filters server-side (``min_score``), so the old ``count * 2``
+over-fetch that guarded against client-side starvation is no longer needed.
+
+Rollback: set ``OMCHA_API_BASE=https://omcha.jp/wp-json/iro/v1`` (the v1
+snippet is still active) **and** restore ``min_score=20`` at the call sites —
+the two are one unit, a v2 threshold against a v1 server is meaningless.
 """
 from __future__ import annotations
 
@@ -31,25 +54,31 @@ import requests
 
 logger = logging.getLogger("internal_links")
 
-DEFAULT_BASE = "https://omcha.jp/wp-json/iro/v1"
+DEFAULT_BASE = "https://omcha.jp/wp-json/iro/v2"
 DEFAULT_TIMEOUT = 10
+
+# 0..100 の v2 正規化スコアに対する既定の足切り。v1 の 20 と同じ通過率になる
+# 点として実測で選んだ (モジュール docstring の表)。
+DEFAULT_MIN_SCORE = 12
 
 
 def get_related_articles(
     keyword: str,
     count: int = 3,
-    min_score: int = 20,
+    min_score: int = DEFAULT_MIN_SCORE,
     base_url: str | None = None,
     timeout: int = DEFAULT_TIMEOUT,
 ) -> list[dict[str, Any]]:
     """Return up to ``count`` omcha.jp posts matching ``keyword``.
 
-    Filters out entries whose omcha-side score is below ``min_score`` so we
-    don't surface very weak matches. Returns ``[]`` on any failure so callers
-    can treat absence as "no related content" without try/except.
+    ``min_score`` is a **v2-scale (0..100)** threshold and is sent to the
+    server, which does the filtering. The client-side check below is kept as a
+    contract guarantee (it also covers a v1 base set via ``OMCHA_API_BASE``);
+    against v2 it is a no-op. Returns ``[]`` on any failure so callers can
+    treat absence as "no related content" without try/except.
 
     Honors two env vars:
-    - ``OMCHA_API_BASE`` overrides the API base URL (default omcha.jp).
+    - ``OMCHA_API_BASE`` overrides the API base URL (default omcha.jp v2).
     - ``OMCHA_API_KEY`` adds an ``api_key`` query param when the WP snippet
       has key auth enabled (empty string on the WP side = public, no key).
     """
@@ -57,8 +86,13 @@ def get_related_articles(
         return []
     base = base_url or os.environ.get("OMCHA_API_BASE", DEFAULT_BASE)
     api_key = os.environ.get("OMCHA_API_KEY", "")
-    # Ask for more than we need so min_score filtering doesn't starve us.
-    params: dict[str, Any] = {"keyword": keyword, "count": max(count * 2, 6)}
+    # v2 filters server-side, so ask for exactly what we need. (v1 needed
+    # count*2 because the threshold was applied here, after the response.)
+    params: dict[str, Any] = {
+        "keyword": keyword,
+        "count": count,
+        "min_score": min_score,
+    }
     if api_key:
         params["api_key"] = api_key
     url = f"{base.rstrip('/')}/related"

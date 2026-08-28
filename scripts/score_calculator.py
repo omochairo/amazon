@@ -293,6 +293,26 @@ def _file_state(path: pathlib.Path) -> str:
     return "empty"
 
 
+# omcha.jp 関連記事スコアの閾値 (iro/v2 の 0..100 正規化スケール、Issue #6103)。
+#
+# v1 は上限のない素の合計値で、スケールがクエリの語数に依存していた
+# (実タグキーワードでの実測レンジ 1..504)。閾値 30/15/10 はその尺度のもの
+# なので v2 にそのまま持ち込めない。実タグキーワード 250 件で v1 (client
+# min_score=20) と同じ配点分布になる点を選び直した:
+#
+#   配点   v1 (30/15/10)   v2 (18/12)
+#   4 点       68.8%          63.2%
+#   3 点       19.2%          24.8%
+#   0 点       12.0%          12.0%
+#
+# 3 段目 (v1 の `>= 10` → 2 点) は削除した。fetch 側が min_score=20 で
+# 足切りしてから書いているため、0 < om_top < 20 のキャッシュは存在せず
+# v1 でも到達不能な枝だった (実測 250 件でも該当 0 件)。v2 でも
+# min_score=12 = _OM_TOP_MATCH なので同じく到達不能になる。
+_OM_TOP_STRONG = 18
+_OM_TOP_MATCH = 12
+
+
 def _omcha_top_score(path: pathlib.Path) -> int:
     """Return the highest match score among omcha.jp related articles cached
     at ``path`` (file written by build_post._attach_omcha_related). 0 when
@@ -349,7 +369,11 @@ def _media_exposure_score(
     om_top = _omcha_top_score(omcha_path)
     yt_p = 6 if yt >= 3 else 3 if yt >= 1 else 0
     nw_p = 5 if nw >= 2 else 2 if nw >= 1 else 0
-    om_p = 4 if om_top >= 30 else 3 if om_top >= 15 else 2 if om_top >= 10 else 0
+    om_p = (
+        4 if om_top >= _OM_TOP_STRONG
+        else 3 if om_top >= _OM_TOP_MATCH
+        else 0
+    )
     raw = yt_p + nw_p + om_p
     pts = min(15, max(floor, raw))
 
@@ -359,11 +383,11 @@ def _media_exposure_score(
         primary = "YouTube に複数の紹介動画があり、実際の遊び方や子どもの反応を映像で確認できます"
     elif yt >= 1:
         primary = "YouTube に紹介動画があり、遊び方のイメージを掴みやすい商品です"
-    elif om_top >= 30:
+    elif om_top >= _OM_TOP_STRONG:
         primary = "本サイトの編集記事と商品コンセプトが強くマッチしており、関連レビューを横断して特徴を比較できます"
     elif nw >= 1:
         primary = "ニュース・記事での取り上げ事例があり、市場の評価情報を参照できます"
-    elif om_top >= 10:
+    elif om_top >= _OM_TOP_MATCH:
         primary = "本サイト内に関連レビューがあり、近いコンセプトの商品と比較しながら選べます"
 
     extras = []
@@ -371,7 +395,7 @@ def _media_exposure_score(
         extras.append("YouTube にも紹介動画あり")
     if primary and "ニュース" not in primary and (nw >= 1):
         extras.append("関連ニュースの取り上げ実績あり")
-    if primary and "本サイト" not in primary and (om_top >= 10):
+    if primary and "本サイト" not in primary and (om_top >= _OM_TOP_MATCH):
         extras.append("本サイト内の関連レビューあり")
 
     if primary:
