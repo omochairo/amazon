@@ -1135,6 +1135,36 @@ def write_github_step_summary() -> None:
                 logger.info(line)
         logger.info(f"Total Requests: {total}, Throttled: {throttled} ({throttle_rate:.2f}%), Quota Usage: {quota_usage_percent:.2f}%")
 
+# Creator API の getItems が itemIds に課している制約。実際の 400 応答から転記:
+#   Member must satisfy regular expression pattern: [0-9]{9}[0-9X]|[A-Z][A-Z0-9]{9}
+# (10 桁の ASIN、または ISBN-10。後者は末尾チェックディジットが X になりうる)
+_ASIN_INPUT_RE = re.compile(r"^(?:[0-9]{9}[0-9X]|[A-Z][A-Z0-9]{9})$")
+
+
+def _parse_asin_csv(raw: str) -> tuple[list[str], list[str]]:
+    """``--asin`` の CSV を (妥当な ASIN, 不正な入力) に分ける。
+
+    ASIN は大文字なので小文字入力は正規化して受ける (``b0abc12345`` → 大文字)。
+    workflow_dispatch の "カンマ区切りASIN" 欄に**検索キーワードを入れる**
+    取り違えが実際に起きており (run #388)、そのときは Creator API が
+    ``1 validation error detected ... at 'itemIds'`` を返して sniper が
+    ``sys.exit(1)``。ログを深く辿らないと原因が分からなかったので、
+    API に投げる前にここで弾く。
+    """
+    valid: list[str] = []
+    invalid: list[str] = []
+    for part in raw.split(","):
+        token = part.strip()
+        if not token:
+            continue
+        normalized = token.upper()
+        if _ASIN_INPUT_RE.match(normalized):
+            valid.append(normalized)
+        else:
+            invalid.append(token)
+    return valid, invalid
+
+
 def main():
     global api
     parser = argparse.ArgumentParser()
@@ -1192,6 +1222,23 @@ def main():
         args.asin = ",".join(discovered)
         logger.info(f"--all-articles: expanded to {len(discovered)} ASIN(s) from {args.articles_dir}")
 
+    # ASIN 入力は API に投げる前に検証する。--all-articles で組み立てた場合も
+    # 通すが、そちらは記事ファイル名由来なので実質常に通過する。
+    _sniper_asins: list[str] = []
+    if args.asin:
+        _sniper_asins, _invalid_asins = _parse_asin_csv(args.asin)
+        if _invalid_asins:
+            logger.error(
+                "--asin に ASIN として不正な値が %d 件あります: %s",
+                len(_invalid_asins), ", ".join(repr(a) for a in _invalid_asins),
+            )
+            logger.error(
+                "ASIN は 10 桁 (例 B0ABC12345) か ISBN-10 です。"
+                "検索キーワードを指定したい場合は --asin ではなく --keyword "
+                "(workflow の「検索キーワード」欄) を使ってください。"
+            )
+            sys.exit(1)
+
     app_id = get_secret("AMAZON_CREATORS_APPLICATION_ID")
     cid = get_secret("AMAZON_CREATORS_CREDENTIAL_ID")
     cs = get_secret("AMAZON_CREATORS_CREDENTIAL_SECRET")
@@ -1221,7 +1268,7 @@ def main():
     # supports up to 10 ASINs per call, so chunk to be safe.
     sniper_asins: list[str] = []
     if args.asin:
-        sniper_asins = [a.strip() for a in args.asin.split(",") if a.strip()]
+        sniper_asins = _sniper_asins
     if sniper_asins:
         logger.info(f"Sniper Mode: Fetching ASIN(s) {sniper_asins}")
         for chunk_start in range(0, len(sniper_asins), 10):
