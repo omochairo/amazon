@@ -210,6 +210,12 @@ pages:
     - python scripts/build_feature_lists.py --top-n 20
     - python scripts/build_category_hubs.py --top-n 24
     - cd hugo && hugo --minify --buildFuture --destination ../public && cd ..
+    # omcha-ops#19 P1 catch 層: 配信物の Amazon リンクが全て SSOT の
+    # トラッキング ID を持つことを配信前に確認する。prevent 層
+    # (build_post.py の _force_amazon_partner_tag / partials/amazon_affiliate_url.html)
+    # を通っていれば絶対に鳴らないので、鳴ったら新しい出力経路が増えている。
+    # 収益ゼロのリンクを焼くくらいなら配信を止める方が軽い。
+    - python scripts/check_affiliate_tags.py --root public
     # #2817 Phase 3: 旧 JP タグ/ブランド URL からの 301 リダイレクト。
     # public/sitemap.xml (直前の hugo build 産物) を真実源に redirect ルールを
     # 生成し、Hugo の static コピーを経由せず public/_redirects に直接書き出す

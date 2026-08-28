@@ -222,6 +222,35 @@ def load_demand_keywords(path: str, slots: int) -> list:
 def get_secret(name: str) -> str:
     return os.environ.get(name)
 
+
+def _assert_partner_tag_matches_ssot(tag: str, hugo_config: pathlib.Path) -> None:
+    """secret の AMAZON_PARTNER_TAG が commit 済み SSOT と一致することを確認する。
+
+    一致しなければ例外。「同じ値の source of truth が 2 本あって突き合わせる
+    仕組みが無い」のが omcha-ops#19 P1 の指摘で、その突き合わせがこれ。
+    """
+    import tomllib
+
+    if not hugo_config.exists():
+        raise RuntimeError(
+            f"amazonPartnerTag SSOT missing (#5087): {hugo_config} not found"
+        )
+    with hugo_config.open("rb") as f:
+        config = tomllib.load(f)
+    params = config.get("params") or {}
+    ssot = params.get("amazonPartnerTag")
+    if not ssot:
+        raise RuntimeError(
+            f"amazonPartnerTag SSOT missing (#5087): [params].amazonPartnerTag not set in {hugo_config}"
+        )
+    if tag != ssot:
+        raise RuntimeError(
+            "AMAZON_PARTNER_TAG secret does not match the committed SSOT "
+            f"[params].amazonPartnerTag in {hugo_config} (omcha-ops#19 P1). "
+            "Fix whichever is wrong before fetching; writing URLs with the "
+            "wrong tracking ID attributes navi clicks to another site."
+        )
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("fetch_amazon")
 
@@ -690,7 +719,17 @@ def _search_competitor_pool(api, target_item: dict, search_index: str, resources
     kw = build_search_keyword(target_item.get("title") or "")
     if not kw:
         return []
-    tag = get_secret("AMAZON_PARTNER_TAG") or ""
+    # omcha-ops#19 P1: タグ不在を空文字で吸収して**タグ無し URL を書き込む**
+    # フォールバックがあった。書き込み先 (data/articles の competitor url) は
+    # そのまま配信 HTML の CTA になるため、黙って収益ゼロのリンクが焼かれる。
+    # main() は tag が無ければ Amazon fetch 自体を skip する設計なので、ここに
+    # 空タグで到達するのは呼び出し経路のバグ。落として気付けるようにする。
+    tag = get_secret("AMAZON_PARTNER_TAG")
+    if not tag:
+        raise RuntimeError(
+            "AMAZON_PARTNER_TAG is not set; refusing to build tagless Amazon URLs "
+            "(omcha-ops#19 P1)"
+        )
     try:
         res = api.search_items(keywords=kw, search_index=search_index, item_count=max_n, item_page=1, resources=resources)
     except Exception as e:
@@ -707,7 +746,7 @@ def _search_competitor_pool(api, target_item: dict, search_index: str, resources
             "title": _safe_get(it, "itemInfo", "title", "displayValue"),
             "price": extract_price(it),
             "features": extract_features(it),
-            "url": f"https://www.amazon.co.jp/dp/{asin}/?tag={tag}" if tag else f"https://www.amazon.co.jp/dp/{asin}/",
+            "url": f"https://www.amazon.co.jp/dp/{asin}/?tag={tag}",
             "image": _safe_get(it, "images", "primary", "large", "url") or _safe_get(it, "images", "primary", "medium", "url"),
         })
     return pool
@@ -1202,6 +1241,8 @@ def main():
                         help="Skip refresh for ASINs checked within this many days (default 7 = weekly cycle)")
     parser.add_argument("--keyword-sample-size", type=int, default=20,
                         help="Shuffle the keyword list each run and pick this many to actually search (#795: spreads search space across runs so new-ASIN hit rate stays high even when DEFAULT_KEYWORDS saturates). Default 20 = ~8%% of the 240-entry niche list per run, hitting each keyword ~once/3 months on weekly cron. Pass 0 to disable sampling (= search every keyword in shuffled order). Ignored when --keywords is set explicitly.")
+    parser.add_argument("--hugo-config", default="hugo/config.toml",
+                        help="Committed SSOT for the Amazon partner tag (#5087). The AMAZON_PARTNER_TAG secret must match [params].amazonPartnerTag here (omcha-ops#19 P1).")
     args = parser.parse_args()
 
     # --all-articles expands sniper input to every published article ASIN.
@@ -1243,6 +1284,14 @@ def main():
     cid = get_secret("AMAZON_CREATORS_CREDENTIAL_ID")
     cs = get_secret("AMAZON_CREATORS_CREDENTIAL_SECRET")
     tag = get_secret("AMAZON_PARTNER_TAG")
+    # omcha-ops#19 P1: このスクリプトが書き込む URL 文字列は data/ 経由でそのまま
+    # 配信 HTML の CTA になる。secret と commit 済み SSOT (hugo/config.toml の
+    # [params].amazonPartnerTag, #5087) がずれていると、navi のページから出た
+    # クリックが別サイトの ID に計上される (2026-08-28 実測: 配信物に
+    # omcha.jp 側の ID が 89 本残存)。突き合わせる場所がここしか無いので、
+    # ずれていたら fetch 自体を止める。
+    if tag:
+        _assert_partner_tag_matches_ssot(tag, pathlib.Path(args.hugo_config))
 
     items = []
 

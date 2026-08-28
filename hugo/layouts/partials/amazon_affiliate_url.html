@@ -1,0 +1,34 @@
+{{- /*
+  omcha-ops#19 P1: Amazon リンクに site.Params.amazonPartnerTag を強制する。
+
+  引数: URL 文字列 (string)。戻り値: tag= を持つ URL。
+  使い方: {{ partial "amazon_affiliate_url.html" $item.amazon_url }}
+
+  なぜ必要か: /deals/ /cospa/ /price/ とテーマ・年齢 hub のカード CTA は
+  build_price_dashboard.py / build_feature_lists.py が data に書いた
+  `amazon_url` をそのまま href にしていた。その URL の出所は
+  data/articles・data/products で、タグが入っていない個体が混ざる
+  (2026-08-28 実測: 配信 HTML でタグ無し 92 本のうち一覧系が 8 本)。
+  加えて #5087 より前のデータには 別サイトのトラッキング ID が
+  混ざっている。navi のページから出たクリックが別サイトに計上されるので、
+  別 ID が入っていたら SSOT の値へ書き換える。
+  記事側は build_post.py の _force_amazon_partner_tag が同じ強制を掛ける。
+  Amazon 以外の URL は素通しする。
+*/ -}}
+{{- $u := . | default "" | string -}}
+{{- $tag := site.Params.amazonPartnerTag -}}
+{{- if or (eq $u "") (not (strings.Contains $u "amazon.co.jp")) -}}
+{{- $u -}}
+{{- else if findRE "[?&]tag=" $u -}}
+{{- replaceRE "([?&]tag=)[^&#]*" (printf "${1}%s" $tag) $u -}}
+{{- else -}}
+{{- $parts := split $u "#" -}}
+{{- $base := index $parts 0 -}}
+{{- $frag := "" -}}
+{{- if gt (len $parts) 1 -}}{{- $frag = printf "#%s" (delimit (after 1 $parts) "#") -}}{{- end -}}
+{{- $joiner := "?" -}}
+{{- if strings.Contains $base "?" -}}
+{{- $joiner = cond (or (strings.HasSuffix $base "?") (strings.HasSuffix $base "&")) "" "&" -}}
+{{- end -}}
+{{- printf "%s%stag=%s%s" $base $joiner site.Params.amazonPartnerTag $frag -}}
+{{- end -}}

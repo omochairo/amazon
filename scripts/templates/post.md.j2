@@ -14,10 +14,16 @@
   Optional seo (merged at build time):
     h2_recommendations, faq_extended, jsonld_*, breadcrumbs
 -#}
+{#- omcha-ops#19 P1: fragment を持つ URL (sources の `.../dp/ASIN/#customerReviews`)
+    に素朴に継ぐと `#customerReviews?tag=...` になり、tag が fragment の中に入って
+    Amazon に届かない (見た目は tag 付きなのに収益ゼロ)。query は必ず fragment の
+    **前**に入れる。build_post.py の _force_amazon_partner_tag が最後に全リンクを
+    同じ規則で正規化するが、素性の悪い URL を作らないのはこちらの責任。 -#}
 {%- macro affiliate_url(url) -%}
 {%- if url -%}
 {%- if 'amazon.co.jp' in url and 'tag=' not in url -%}
-{{ url }}{{ '&' if '?' in url else '?' }}tag={{ amazon_partner_tag }}
+{%- set base, sep, frag = url.partition('#') -%}
+{{ base }}{{ '' if base.endswith(('?', '&')) else ('&' if '?' in base else '?') }}tag={{ amazon_partner_tag }}{{ sep }}{{ frag }}
 {%- else -%}
 {{ url }}
 {%- endif -%}
