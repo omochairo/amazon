@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       asins:
-        description: 'カンマ区切りASIN'
+        description: 'カンマ区切りASIN (10桁。例 B0GJX8ZWCK,B0BD84ZGKV)。商品名やキーワードはここではなく下の keyword 欄へ'
         required: false
       keyword:
         description: '検索キーワード (カンマ区切りで複数可。指定分は優先で全ページ検索し、ランダム検索ワードを同数減らす)'
