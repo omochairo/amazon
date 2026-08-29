@@ -221,23 +221,29 @@ pages:
     # 生成し、Hugo の static コピーを経由せず public/_redirects に直接書き出す
     # (二度目の hugo build は不要)。
     - python scripts/generate_term_redirects.py --sitemap public/sitemap.xml --out public/_redirects
-    # #3055 E1: GitLab Pages は .gz/.br 併置で自動圧縮配信する。テキスト系を precompress
+    # #3055 E1 の事前圧縮 (.gz/.br 併置) は 2026-08-29 に撤去した。
     #
-    # **並列度を 4 → 2 に落としている (2026-08-20)**。K8 の実測 (5 秒粒度のハード
-    # ウェアログ, amazon-home-ops#65) で、pages ビルド中に CPU が最も熱くなるのは
-    # 全コアを使う hugo ではなく**この圧縮フェーズ**だと分かった:
-    #   hugo (16 スレッド / 54W)      → Tctl 87→92.5℃ を約 45 秒で通過
-    #   圧縮 (-P4 = 4 プロセス / 49W) → **Tctl 93.0℃ に張り付いたまま 1〜2 分**
-    # 少数スレッドだと Ryzen がブースト clock を上げるため、コア数が 1/4 でも
-    # パッケージ電力はほぼ同じ (54W → 49W) になり、時間が長いぶん熱くなる。
-    # そして 93℃ は EC のファンカーブの段差で、ここに張り付くとファンが
-    # **2,150 ⇄ 3,325 rpm を数十秒周期で往復**して唸る (owner が居室で聞いた音)。
-    # -P2 にすると同フェーズの電力が ~33W まで下がり段差に届かない。
-    # 代償は圧縮フェーズが約 2 倍 (実測 ~90 秒 → ~180 秒、ビルド全体 440 秒 → 約 530 秒)。
-    # **圧縮率は一切変えない** (q10 のまま。q9 は page.html -5.0% / index.json -8.1% と
-    # 有意に大きくなるため不採用、という 2026-08-05 の判断を維持する)。
-    - find public -type f -regextype posix-extended -iregex '.*\.(html|css|js|json|xml|svg|txt|webmanifest)$' -print0 | xargs -0 -r -n1 -P2 gzip -kf9
-    - find public -type f -regextype posix-extended -iregex '.*\.(html|css|js|json|xml|svg|txt|webmanifest)$' -print0 | xargs -0 -r -n1 -P2 brotli -f -q 10
+    # 理由: GitLab Pages のデプロイが「artifacts for pages are too large:
+    # 1059523450」で落ち、**本番が約 9 時間凍った**。テキストを .gz と .br の
+    # 両方に複製していたため、配信物の実サイズが上限 (約 1.0 GiB) を超えていた。
+    # 実測 (2026-08-29 の配信物 949 MB、gzip -9 = 0.214 / brotli q10 = 0.164):
+    #   gzip + brotli 1.187 GB  ← 上限超過
+    #   brotli のみ   1.016 GB  ← **これでもまだ超過**
+    #   事前圧縮なし  0.884 GB  ← クリア
+    # brotli だけに減らしても足りないので、事前圧縮そのものを外すしかない。
+    #
+    # 読者への影響が小さいと判断した根拠: navi.omcha.jp は Cloudflare の
+    # プロキシ配下 (orange cloud) で、エッジがテキストを brotli/gzip で圧縮して
+    # 返す。オリジンで圧縮済みファイルを併置する必要は無くなっている
+    # (#3055 E1 を入れた時点ではプロキシ化前だった)。
+    #
+    # 副次的な効果として、amazon-home-ops#65 で問題になった「圧縮フェーズが
+    # ビルド中で最も熱く、K8 の Tctl が 93℃ に張り付いてファンが唸る」も
+    # 一緒に消える (-P2 に落として凌いでいた ~180 秒のフェーズごと無くなる)。
+    #
+    # **これは応急処置で、余裕は 99 MB しかない。** 直近の成長ペース (10 日で
+    # 約 12%) だと 3〜4 週間でまた上限に当たる。恒久対応は配信物から
+    # noindex の tag ページ (7,316 枚 / 299 MB) を外すこと。
   artifacts:
     paths:
       - public
