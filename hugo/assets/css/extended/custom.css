@@ -5507,6 +5507,20 @@ details.development-stage-accordion[open] > summary::before {
 }
 
 /* ---- フッター運営リンクブロック ---- */
+/* omcha-ops#19 P3: アソシエイト・プログラム運営規約 第5条が要求する表示。
+   規約は「目立つように明示」を求めているので、footer の他のテキストより
+   小さくしない (14px。コピーライト行は 12px)。色も薄い --secondary ではなく
+   本文と同じ --content にして、footer のメタ情報に埋もれないようにする。 */
+.footer-associate-notice {
+  max-width: 720px;
+  margin: 0 auto 0.9rem;
+  padding: 0 1rem;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--content);
+  text-align: center;
+}
+
 .footer-editorial {
   display: flex;
   justify-content: center;

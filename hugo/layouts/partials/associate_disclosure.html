@@ -1,0 +1,23 @@
+{{- /*
+  omcha-ops#19 P3: Amazon アソシエイト・プログラム運営規約が要求する
+  「アソシエイトであることの表示」を sitewide で出す。
+
+  一次情報 (要約記事ではなく規約本文) を確認済み:
+  https://affiliate.amazon.co.jp/help/operating/agreement 第5条
+  「乙がアソシエイトであることの表示」が、
+    「Amazonのアソシエイトとして、［乙の名称を挿入］は適格販売により収入を得ています。」
+  または実質的に同じ文言を**目立つように明示**することを求めている。
+
+  これまでの状態 (2026-08-28 実測):
+    - /about/ /privacy/ には参加の記載があるが、規約の要求文言ではない
+    - 一覧系 (/deals/ /price/ /cospa/) は pr_disclosure.html を出しているが、
+      それは「Amazon アソシエイトの広告を含みます」= 景表法ステマ規制向けの表記
+    - **商品ページには何も無い**。出ているのは .auto-gen-notice
+      ([PR] おもちゃロボが市場データから自動生成しています。) で、これも
+      ステマ規制向けであって規約の要求を満たさない
+
+  用途が違うので .auto-gen-notice / pr_disclosure.html は残し、これを別に足す。
+  footer は全ページに出るので、ページ種別の出し分けはしない。
+*/ -}}
+{{- $name := site.Params.associateDisplayName | default "おもちゃいろ 比較ナビ" -}}
+<p class="footer-associate-notice">Amazonのアソシエイトとして、{{ $name }}は適格販売により収入を得ています。</p>
