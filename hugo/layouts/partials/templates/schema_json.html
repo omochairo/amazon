@@ -122,7 +122,12 @@
     {{ range $i, $e := .GetTerms "tags" }}{{ if $i }}, {{ end }}{{ $e.LinkTitle }}{{ end }}
     {{- end }}
   ],
-  "articleBody": {{ .Content | safeJS | htmlUnescape | plainify }},
+  {{/* omcha-ops#19 / amazon#6206: articleBody は出さない。記事本文をそのまま
+       JSON-LD に複製するため、商品ページ 1 枚あたり約 26 KB (ページの 14%) を
+       占めていた (2026-08-29 実測: JSON-LD 37.6 KB のうち articleBody 26.0 KB)。
+       Google の Article 構造化データは headline / image / datePublished / author
+       を要求しており articleBody は必須でも推奨でもない。本文は HTML 側に
+       そのまま存在するのでクローラは読める。PaperMod 原本にはある行。 */}}
   "wordCount" : "{{ .WordCount }}",
   "inLanguage": {{ .Language.Lang | default "en-us" }},
   {{ if .Params.cover.image -}}
