@@ -91,6 +91,12 @@
 })();
 </script>
 
+{{- /* omcha-ops#19 / amazon#6206: WebSite と Organization はホームだけに出す。
+       全ページに焼いていたため合計 4.2 KB x 7,226 枚 = 約 30 MB を占めていた
+       (2026-08-29 実測)。Google のガイドラインは Organization を「組織の公式サイトの
+       ホームページに置く。全ページではない」としており、WebSite の SearchAction も
+       ホームページ向け。サイト全体に複製しても評価は増えない。 */ -}}
+{{- if .IsHome }}
 <!-- Structured Data (JSON-LD) — WebSite (Issue #1263: URL を本番ドメインに修正) -->
 <script type="application/ld+json">
 {
@@ -169,6 +175,7 @@
 }
 </script>
 {{- end }}
+{{- end }}{{/* .IsHome (amazon#6206) */}}
 
 {{- /* #731 Part B: brand hub ItemList JSON-LD (term ページかつ narrative 対象のみ emit) */ -}}
 {{- partial "brand_hub_jsonld.html" . -}}
