@@ -106,6 +106,67 @@ def _resolve_amazon_partner_tag(hugo_config_path: pathlib.Path = _HUGO_CONFIG_DE
         return tag
     return _load_committed_amazon_partner_tag(hugo_config_path)
 
+
+# omcha-ops#19 P1: レンダリング済み Markdown の Amazon リンクに tag= を強制する。
+#
+# post.md.j2 の affiliate_url マクロは sources 一覧にしか掛かっておらず、
+# price-card (product.prices.amazon.url) / competitor カード (c.url) /
+# 販売終了時の search_url は **データに入っていた URL をそのまま出力**していた。
+# fetch_amazon.py が secret 不在時にタグ無し URL を書き込んだ分と、Jules が
+# 本文に直接書いた素の Amazon リンクが、そのまま配信に載っていた
+# (2026-08-28 実測: 配信 HTML 18,021 本中 92 本がタグ無し)。
+#
+# 加えて **navi 以外のトラッキング ID が混じっていた**。#5087 より前のデータに
+# 由来する 別サイトのトラッキング ID が 89 本残っており、navi の
+# ページから出たクリックが別サイトの ID に計上されていた。タグ無しと同じく
+# ここで SSOT の値に揃える。
+#
+# 個別の出力箇所を潰して回るのは漏れが再発するので、テンプレの外・レンダリング
+# 直後の 1 点で強制する。ここを通らない Amazon リンクは生成物に存在しない。
+_AMAZON_LINK_RE = re.compile(r'https?://(?:www\.)?amazon\.co\.jp/[^\s"\'<>)\]]*')
+_EXISTING_TAG_RE = re.compile(r"(?P<lead>[?&]tag=)(?P<tag>[^&]*)")
+# 文末・箇条書き中の URL に食い込む句読点は URL の一部ではない。剥がしてから
+# 判定する (剥がした分は置換結果の後ろに戻す)。
+_URL_TRAILING_PUNCT = ".,;:!、。）】」"
+
+
+def _force_amazon_partner_tag(text: str, tag: str) -> str:
+    """text 中の amazon.co.jp リンクすべてを ``tag=<tag>`` に揃えて返す。
+
+    - タグ無しなら付ける。別 ID が入っていれば SSOT の値へ書き換える。
+    - fragment (``#customerReviews``) は query の後ろに残す。
+    - 既存 query があれば ``&`` で継ぐ。``?`` で終わっている壊れた URL
+      (Jules が本文に書いた ``.../dp/ASIN?`` 形) はそのまま ``?tag=`` になる。
+    """
+    if not tag:
+        raise RuntimeError(
+            "amazonPartnerTag is empty; refusing to render Amazon links without a tag"
+        )
+
+    def _repl(m: "re.Match[str]") -> str:
+        url = m.group(0)
+        trailing = ""
+        while url and url[-1] in _URL_TRAILING_PUNCT:
+            trailing = url[-1] + trailing
+            url = url[:-1]
+        if not url:
+            return m.group(0)
+        base, sep, frag = url.partition("#")
+        existing = _EXISTING_TAG_RE.search(base)
+        if existing is not None:
+            if existing.group("tag") == tag:
+                return m.group(0)
+            base = _EXISTING_TAG_RE.sub(lambda t: t.group("lead") + tag, base, count=1)
+            return f"{base}{sep}{frag}{trailing}"
+        if "?" in base:
+            joiner = "" if base.endswith(("?", "&")) else "&"
+        else:
+            joiner = "?"
+        return f"{base}{joiner}tag={tag}{sep}{frag}{trailing}"
+
+    return _AMAZON_LINK_RE.sub(_repl, text)
+
+
 # #2817 Phase 2: JP タグ/ブランド名を Hugo タクソノミー URL (tags/brands) に
 # 書き込む直前で英語スラッグへ変換する。data/articles/*.json (原本) は JP のまま
 # 触らない — 変換はこの Hugo content 生成の一点だけで起きる。
@@ -3570,6 +3631,9 @@ def main() -> None:
 
             data["amazon_partner_tag"] = amazon_partner_tag
             md_body = template.render(**data)
+            # omcha-ops#19 P1: テンプレ/本文のどこを経由した Amazon リンクでも
+            # tag= を持たせる最後の一点 (_force_amazon_partner_tag の comment 参照)。
+            md_body = _force_amazon_partner_tag(md_body, amazon_partner_tag)
             # #4826 項目 4: 旧 <slug>.quality.json sidecar による draft 判定は廃止。
             # draft は --gate で**その場で評価した**スコアだけで決める (下記)。
             draft = False
