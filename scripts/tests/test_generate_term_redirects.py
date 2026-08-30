@@ -119,5 +119,57 @@ class BuildRedirectLinesTest(unittest.TestCase):
             )
 
 
+
+class BuildMapLinesTest(unittest.TestCase):
+    """nginx map 形式 (#6205: 配信を NAS の nginx へ移す)。"""
+
+    def test_emits_quoted_key_and_value_with_semicolon(self):
+        indexed = {"tags": {"lego"}, "brands": set()}
+        reverse = {"lego": "レゴ"}
+        self.assertEqual(
+            gtr.build_map_lines(indexed, reverse),
+            ['"/tags/レゴ/" "/tags/lego/";'],
+        )
+
+    def test_whitespace_term_is_kept_unlike_redirects(self):
+        # map はキーをクォートできるので、_redirects では表現できず落として
+        # いた用語 (#2817 Phase 5 の積み残し) を拾える。
+        indexed = {"tags": {"lotus-life"}, "brands": set()}
+        reverse = {"lotus-life": "LOTUS LIFE"}
+        self.assertEqual(
+            gtr.build_map_lines(indexed, reverse),
+            ['"/tags/LOTUS LIFE/" "/tags/lotus-life/";'],
+        )
+        self.assertEqual(gtr.build_redirect_lines(indexed, reverse), [])
+
+    def test_quote_and_backslash_are_escaped(self):
+        # エスケープ漏れは map ファイルを壊し、**オリジンが起動しなくなる**。
+        indexed = {"tags": {"q", "b"}, "brands": set()}
+        reverse = {"q": 'A"B', "b": 'C\\D'}
+        lines = gtr.build_map_lines(indexed, reverse)
+        self.assertIn('"/tags/C\\\\D/" "/tags/b/";', lines)
+        self.assertIn('"/tags/A\\"B/" "/tags/q/";', lines)
+
+    def test_control_characters_are_dropped(self):
+        indexed = {"tags": {"bad", "ok"}, "brands": set()}
+        reverse = {"bad": "A\nB", "ok": "レゴ"}
+        lines = gtr.build_map_lines(indexed, reverse)
+        self.assertEqual(lines, ['"/tags/レゴ/" "/tags/ok/";'])
+
+    def test_skips_when_term_equals_slug_or_missing(self):
+        indexed = {"tags": {"stem", "unknown"}, "brands": set()}
+        reverse = {"stem": "stem"}
+        self.assertEqual(gtr.build_map_lines(indexed, reverse), [])
+
+    def test_every_line_is_a_complete_map_entry(self):
+        # nginx は 1 行でも壊れていると起動しない
+        # (`[emerg] invalid number of the map parameters`)。
+        indexed = {"tags": {"a", "b"}, "brands": {"c"}}
+        reverse = {"a": "Baby curiosity", "b": "レゴ", "c": "LOTUS LIFE"}
+        for line in gtr.build_map_lines(indexed, reverse):
+            self.assertTrue(line.endswith(";"), line)
+            self.assertEqual(line.count('"'), 4, f"quote count broken: {line!r}")
+
+
 if __name__ == "__main__":
     unittest.main()
