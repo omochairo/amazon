@@ -334,5 +334,14 @@ deploy-nas:
     - test -s public/build.json
     - test -f public/redirects.map
     - export SSHOPT="ssh -p ${NAS_SSH_PORT:-2222} -i $HOME/.ssh/nas_deploy_key -o BatchMode=yes -o ConnectTimeout=15"
-    - rsync -rlptD --delete --checksum --safe-links --link-dest=/current -e "$SSHOPT" public/ "deploy@${NAS_HOST}:releases/${CI_COMMIT_SHA}/"
+    # **-t を付けない (mtime を保存しない)。** hugo は毎ビルドで全ファイルを
+    # 書き直すので mtime は必ず変わる。-t を付けると rsync は「保存する属性が
+    # 一致しない」と見なして --link-dest からハードリンクせず実体をコピーする。
+    # 2026-08-30 の実測: 内容が完全に同一の 2 世代で共有が 19,562 件中 10 件しか
+    # 効かず、1 世代あたり 693MB を毎回転送・毎回書き込んでいた。
+    # 切り分け (同一内容・mtime だけ違う 2 ファイルで再現):
+    #   -rlptD --checksum --link-dest -> links=1 (コピーされる)
+    #   -rlpD  --checksum --link-dest -> links=2 (共有される)
+    # 内容の比較は --checksum が担うので、mtime を捨てても再転送は増えない。
+    - rsync -rlpD --delete --checksum --safe-links --link-dest=/current -e "$SSHOPT" public/ "deploy@${NAS_HOST}:releases/${CI_COMMIT_SHA}/"
     - $SSHOPT "deploy@${NAS_HOST}" "switch ${CI_COMMIT_SHA}"
