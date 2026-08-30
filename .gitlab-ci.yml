@@ -319,7 +319,13 @@ deploy-nas:
   before_script:
     - apk add --no-cache rsync openssh-client
     - mkdir -p ~/.ssh && chmod 700 ~/.ssh
-    - install -m 600 "$NAS_DEPLOY_KEY" ~/.ssh/nas_deploy_key
+    # **鍵は必ず正規化してから置く。** file 型 CI 変数は登録の仕方で末尾改行が
+    # 落ちたり CRLF が混ざったりする (2026-08-30 に実際に踏んだ)。そのときの
+    # 症状は `Load key: error in libcrypto` -> `Permission denied (publickey)` で、
+    # **鍵そのものが間違っているように見える**。awk 1 が「厳密に 1 個の末尾改行」を
+    # 保証し、tr が CR を落とす。
+    - awk 1 "$NAS_DEPLOY_KEY" | tr -d '' > ~/.ssh/nas_deploy_key
+    - chmod 600 ~/.ssh/nas_deploy_key
     # host 鍵はピン留めする (StrictHostKeyChecking=no にしない)。
     - printf '%s\n' "$NAS_HOST_KEY" > ~/.ssh/known_hosts && chmod 600 ~/.ssh/known_hosts
   script:
