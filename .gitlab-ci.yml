@@ -220,7 +220,13 @@ pages:
     # public/sitemap.xml (直前の hugo build 産物) を真実源に redirect ルールを
     # 生成し、Hugo の static コピーを経由せず public/_redirects に直接書き出す
     # (二度目の hugo build は不要)。
-    - python scripts/generate_term_redirects.py --sitemap public/sitemap.xml --out public/_redirects
+    # #6205 T5: 同じルールを nginx の map 形式でも出す。map はリリースに同梱され、
+    # NAS オリジンの nginx が current/redirects.map として include する。
+    # _redirects は GitLab Pages (待機系) 用なので、両方出し続ける。
+    - python scripts/generate_term_redirects.py --sitemap public/sitemap.xml --format both --out public/_redirects --out-map public/redirects.map
+    # #6205 T9: 外形監視が「いつの・どのコミットが配信されているか」を見る的。
+    # 監視 51 は sitemap の lastmod を見ていたため 19 時間の停止を検知できなかった。
+    - printf '{"sha":"%s","built_at":"%s","ref":"%s"}' "$CI_COMMIT_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$CI_COMMIT_REF_NAME" > public/build.json
     # #3055 E1 の事前圧縮 (.gz/.br 併置) は 2026-08-29 に撤去した。
     #
     # 理由: GitLab Pages のデプロイが「artifacts for pages are too large:
@@ -282,3 +288,45 @@ cf-purge:
         -H "Authorization: Bearer ${CF_PURGE_TOKEN}" \
         -H "Content-Type: application/json" \
         --data '{"purge_everything":true}'
+
+# #6205 T6: 配信物を NAS のオリジンへ置く。
+#
+# **この時点では DNS はまだ GitLab Pages を向いている。** つまりこのジョブは
+# 「本番と同じ内容を NAS にも置く」だけで、読者には影響しない。切替 (T8) は
+# DNS 1 行の変更で行い、その時点でこのジョブが本番配信になる。
+#
+# 設計の要点 (詳細は omochairo/amazon#6205):
+# - 鍵は NAS 側で forced command (deploy-shell) に縛られており、
+#   `rsync --server …` と `switch <sha>` の 2 つしか実行できない
+# - --checksum: hugo は毎ビルドで全ファイルを書き直すので mtime は当てにならない。
+#   これが無いと差分ゼロでも毎回 600MB 超を送ることになる
+# - --link-dest=/current: 同一内容をハードリンクで共有する。**restricted root
+#   起点の絶対パスで書く**。rrsync は `..` を含む --link-dest を拒否する
+# - 切替は NAS 側の navi-switch が健全性検査 (index.html / build.json /
+#   redirects.map の存在 + 空き容量) を通してから symlink を差し替える
+# - ロールバックは `switch <古い sha>` の 1 コマンド。CI を通さない
+#
+# 変数 (すべて protected。**このリポジトリは public なので値をここに書かない**):
+#   NAS_DEPLOY_KEY (file) / NAS_HOST / NAS_SSH_PORT / NAS_HOST_KEY
+deploy-nas:
+  stage: postdeploy
+  image: alpine:3.20
+  # pages の public/ をそのまま置く (再ビルドしない = 内容が確実に一致する)。
+  dependencies:
+    - pages
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main" && $NAS_DEPLOY_KEY && $NAS_HOST'
+  before_script:
+    - apk add --no-cache rsync openssh-client
+    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    - install -m 600 "$NAS_DEPLOY_KEY" ~/.ssh/nas_deploy_key
+    # host 鍵はピン留めする (StrictHostKeyChecking=no にしない)。
+    - printf '%s\n' "$NAS_HOST_KEY" > ~/.ssh/known_hosts && chmod 600 ~/.ssh/known_hosts
+  script:
+    # navi-switch 側でも検査するが、送る前に落とせるものはここで落とす。
+    - test -s public/index.html
+    - test -s public/build.json
+    - test -f public/redirects.map
+    - export SSHOPT="ssh -p ${NAS_SSH_PORT:-2222} -i $HOME/.ssh/nas_deploy_key -o BatchMode=yes -o ConnectTimeout=15"
+    - rsync -rlptD --delete --checksum --safe-links --link-dest=/current -e "$SSHOPT" public/ "deploy@${NAS_HOST}:releases/${CI_COMMIT_SHA}/"
+    - $SSHOPT "deploy@${NAS_HOST}" "switch ${CI_COMMIT_SHA}"
