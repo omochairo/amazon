@@ -37,24 +37,33 @@ name: Delivery Freshness Monitor
 #   マーカー `<!-- delivery-freshness-monitor -->` で単一 issue を特定して body を
 #   更新し、健全に戻ったら close する。1 run あたりの書き込みは最大 1 回。
 #
+# 判定材料 (2026-08-30 差し替え・#6205 T9):
+#   **build.json の built_at と sha** を見る。以前は sitemap の lastmod を見て
+#   いたが、2026-08-28 に GitLab Pages のサイズ上限で本番が約 19 時間凍ったとき
+#   **鳴らなかった**。lastmod は「その URL を最後に動かしたコミットの時刻」で
+#   あって「配信が走った時刻」ではないので、配信が止まっても古い値を返し続ける。
+#   止まったことを検出するには、配信そのものが刻む時刻を見るしかない。
+#
+#   併せて「時計は進んでいるのに中身が古い」経路も見る (status=behind)。
+#   配信中の sha が main の HEAD でなく、かつその HEAD 自体が閾値より古いとき。
+#
 # 較正:
-#   2026-08-12 14:00 UTC 実測で sitemap の最大 lastmod は同日 13:48 UTC ——
-#   その 12 分前に main へマージされたコミットの時刻 (配信ラグは分単位) だった。
-#   記事マージは 25〜47 件/日で配信は事実上毎日走るので、閾値 36h は
-#   **入れた日に鳴らない** = 鳴ったら必ず異常。閾値は
+#   配信は main への push ごとに走り、push は 1 日 50 本前後ある。2026-08-30 の
+#   実測で build から反映までは数分。閾値 3h は **入れた日に鳴らない** =
+#   鳴ったら必ず異常。閾値は
 #   scripts/check_delivery_freshness.py の DEFAULT_MAX_AGE_HOURS 一箇所に置く。
 
 on:
   schedule:
-    # 6 時間ごと。閾値が 36h なので発火頻度を上げても誤報は増えず、
-    # 実障害の検知だけが早くなる (書き込みは異常時のみ・最大 1 回/run)。
-    - cron: '0 */6 * * *'
+    # **毎時**。閾値が 3h になったので、6 時間周期のままだと検知が最大 6 時間
+    # 遅れて閾値を短くした意味が消える (書き込みは異常時のみ・最大 1 回/run)。
+    - cron: '0 * * * *'
   workflow_dispatch:
     inputs:
       max_age_hours:
-        description: '異常とみなす経過時間 (既定 36)'
+        description: '異常とみなす経過時間 (既定 3)'
         required: false
-        default: '36'
+        default: '3'
 
 permissions:
   contents: read
@@ -89,4 +98,4 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           python scripts/check_delivery_freshness.py \
-            --max-age-hours "${{ github.event.inputs.max_age_hours || 36 }}"
+            --max-age-hours "${{ github.event.inputs.max_age_hours || 3 }}"
