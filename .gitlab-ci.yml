@@ -253,6 +253,14 @@ pages:
   artifacts:
     paths:
       - public
+    # **保管を 1 日で切る (#6205 T8)。** この artifact は 1 回 555MB あり、main への
+    # push は 1 日 50 本前後なので約 27GB/日 が GitLab に積まれ続けていた
+    # (2026-08-29 実測で job_artifacts_size = 463GB)。
+    # 用途は 2 つとも短命:
+    #   - GitLab Pages への配信 (待機系。ジョブ成功直後に取り込まれる)
+    #   - 同一パイプライン内の deploy-nas / cf-purge が受け取る
+    # 過去の artifact を後から取り出す運用は無い。
+    expire_in: 1 day
 
 # #3059 Day2: Cloudflare エッジキャッシュの purge。
 # navi.omcha.jp プロキシ化 + Cache Rule (Edge TTL 1h) 稼働後、デプロイ反映を即時化する。
@@ -278,6 +286,13 @@ cf-purge:
   # pages ジョブの public/ を受け取る (参照アセットの真実源は生成物側)。
   dependencies:
     - pages
+  # **NAS への切替が終わってから purge する (#6205 T8)。** 2026-08-30 に本番の
+  # 配信元が NAS になったので、purge の対象オリジンは deploy-nas が置いたもの。
+  # 同じ postdeploy ステージに居ると並行して走るため、明示的に順序を付ける。
+  # (before_script のアセット待ちが最後の砦だが、そこに頼らない)
+  needs:
+    - pages
+    - deploy-nas
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main" && $CF_ZONE_ID && $CF_PURGE_TOKEN'
   before_script:
