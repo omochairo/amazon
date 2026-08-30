@@ -79,18 +79,20 @@ def test_measured_reality_at_introduction_does_not_fire():
 
 
 def test_stale_when_older_than_threshold():
-    row = cdf.check(URL, NOW, _fetch(_payload("2026-08-30T04:00:00Z")))
+    # 閾値は明示的に渡す。既定値 (DEFAULT_MAX_AGE_HOURS) を変えたときに
+    # 境界のテストが道連れで壊れないようにするため。
+    row = cdf.check(URL, NOW, _fetch(_payload("2026-08-30T04:00:00Z")), max_age_hours=3)
     assert row["status"] == "stale"
     assert row["age_hours"] == 8.0
 
 
 def test_boundary_just_inside_threshold_is_ok():
-    row = cdf.check(URL, NOW, _fetch(_payload("2026-08-30T09:00:00Z")))
+    row = cdf.check(URL, NOW, _fetch(_payload("2026-08-30T09:00:00Z")), max_age_hours=3)
     assert row["status"] == "ok"
 
 
 def test_boundary_just_outside_threshold_is_stale():
-    row = cdf.check(URL, NOW, _fetch(_payload("2026-08-30T08:59:00Z")))
+    row = cdf.check(URL, NOW, _fetch(_payload("2026-08-30T08:59:00Z")), max_age_hours=3)
     assert row["status"] == "stale"
 
 
@@ -112,7 +114,7 @@ def test_nineteen_hour_outage_is_detected():
 def test_behind_when_head_is_old_and_not_deployed():
     row = cdf.check(
         URL, NOW, _fetch(_payload("2026-08-30T11:55:00Z", sha=SHA)),
-        head={"sha": OTHER_SHA, "committed_at": "2026-08-30T05:00:00Z"})
+        head={"sha": OTHER_SHA, "committed_at": "2026-08-30T01:00:00Z"})
     assert row["status"] == "behind"
     assert OTHER_SHA[:10] in row["detail"]
 
@@ -134,7 +136,8 @@ def test_not_behind_when_deployed_sha_matches_head():
 
 def test_head_unavailable_still_judges_freshness():
     # HEAD を取れなくても鮮度判定は続ける (監視を丸ごと落とさない)。
-    row = cdf.check(URL, NOW, _fetch(_payload("2026-08-30T04:00:00Z")), head=None)
+    row = cdf.check(URL, NOW, _fetch(_payload("2026-08-30T04:00:00Z")), head=None,
+                    max_age_hours=3)
     assert row["status"] == "stale"
     assert row["head_sha"] is None
 
@@ -193,3 +196,10 @@ def test_body_of_unreachable_shows_detail():
     body = cdf.render_body(row, NOW)
     assert "HTTP 503" in body
     assert "unreachable" in body
+
+
+def test_default_threshold_is_calibrated_against_measured_gaps():
+    # 2026-08-31 実測: main への commit 間隔は直近 7 日で最大 6.2h、3h 超が 4 回。
+    # 3h だと週に 4 回の誤報になるため 8h にしてある。
+    # **下げるときは間隔を測り直すこと** (平均ではなく裾を見る)。
+    assert cdf.DEFAULT_MAX_AGE_HOURS == 8
