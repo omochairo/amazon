@@ -1,18 +1,94 @@
 {
-  "generated_at": "2026-08-22T20:37:15Z",
+  "generated_at": "2026-08-30T22:44:27Z",
   "model": "gemma4:26b-a4b-it-qat",
-  "source_week": "2026-W33",
-  "baseline_ctr": 0.08099688473520249,
+  "source_week": "2026-W35",
+  "baseline_ctr": 0.09192825112107623,
   "pages": [
+    {
+      "page": "https://navi.omcha.jp/products/b0hdb8kg6g/",
+      "asin": "B0HDB8KG6G",
+      "page_coverage_avg": 0.36,
+      "queries": [
+        {
+          "query": "シャインアルカナロッド イオン",
+          "impressions": 3,
+          "position": 18.666666666666668,
+          "answered": false,
+          "coverage": 0.0,
+          "missing_aspects": [
+            "イオンでの取り扱い有無",
+            "イオンでの販売価格"
+          ],
+          "note": "検索クエリが「イオン」での購入を意図しているのに対し、記事内にはAmazonの情報しかなく、イオンに関する記述が一切ありません。",
+          "error": null
+        },
+        {
+          "query": "イオン シャインアルカナロッド",
+          "impressions": 2,
+          "position": 9.0,
+          "answered": false,
+          "coverage": 0.2,
+          "missing_aspects": [
+            "イオンでの取り扱い有無",
+            "イオンでの販売価格",
+            "イオン店舗での在庫状況"
+          ],
+          "note": "検索クエリは「イオン」での購入を意図していますが、記事内にはAmazonの価格情報しかなく、イオンに関する記述が一切ありません。",
+          "error": null
+        },
+        {
+          "query": "シャインアルカナロッド amazon",
+          "impressions": 2,
+          "position": 9.5,
+          "answered": true,
+          "coverage": 0.8,
+          "missing_aspects": [
+            "Amazonでの具体的な商品状態（新品・中古）",
+            "Amazonにおける他の販売サイトとの価格比較情報",
+            "Amazonでのユーザーレビューの詳細内容"
+          ],
+          "note": "Amazonでの現在の価格に言及しており、クエリの意図には概ね応えていますが、Amazon特有の情報（レビューや配送条件など）が不足しています。",
+          "error": null
+        },
+        {
+          "query": "\"シャインアルカナロッド\" \"予約受付中\"",
+          "impressions": 1,
+          "position": 10.0,
+          "answered": false,
+          "coverage": 0.0,
+          "missing_aspects": [
+            "予約受付中の有無",
+            "予約開始日・締切日",
+            "予約特典の有無"
+          ],
+          "note": "検索クエリが「予約受付中」という特定の状態を求めているのに対し、記事には予約に関する情報が一切含まれていません。",
+          "error": null
+        },
+        {
+          "query": "シャインアルカナロッド",
+          "impressions": 1,
+          "position": 4.0,
+          "answered": true,
+          "coverage": 0.8,
+          "missing_aspects": [
+            "商品の詳細な外観やサイズ感",
+            "具体的な遊び方（なりきり遊びの内容）の詳細",
+            "他の販売サイトとの価格比較情報"
+          ],
+          "note": "商品名での検索に対し、対象年齢、電池の有無、価格といった基本情報は網羅されていますが、商品の詳細な仕様や実際の使用感に関する記述は限定的です。",
+          "error": null
+        }
+      ]
+    },
     {
       "page": "https://navi.omcha.jp/products/b0fnm3r45c/",
       "asin": "B0FNM3R45C",
-      "page_coverage_avg": 0.5,
+      "page_coverage_avg": 0.7,
       "queries": [
         {
           "query": "ジェリーブロックス 口コミ",
-          "impressions": 15,
-          "position": 7.066666666666666,
+          "impressions": 28,
+          "position": 7.642857142857143,
           "answered": false,
           "coverage": 0.3,
           "missing_aspects": [
@@ -25,8 +101,8 @@
         },
         {
           "query": "ジェリーブロックス 安い",
-          "impressions": 3,
-          "position": 9.333333333333334,
+          "impressions": 8,
+          "position": 9.0,
           "answered": true,
           "coverage": 0.9,
           "missing_aspects": [
@@ -37,17 +113,13 @@
           "error": null
         },
         {
-          "query": "ジェリー ブロックス 口コミ",
-          "impressions": 1,
-          "position": 8.0,
-          "answered": false,
-          "coverage": 0.3,
-          "missing_aspects": [
-            "具体的なユーザーによる使用感（良い点・悪い点）",
-            "実際の購入者のレビュー内容",
-            "組み立てやすさや遊び方のバリエーションに関する意見"
-          ],
-          "note": "記事タイトルには「口コミ」とありますが、本文内には執筆者による特徴のまとめやQ&Aがあるのみで、実際の利用者の具体的な声（口コミ）が一切含まれていません。",
+          "query": "ジェリー ブロック 安い",
+          "impressions": 3,
+          "position": 10.333333333333334,
+          "answered": true,
+          "coverage": 0.9,
+          "missing_aspects": [],
+          "note": "最安値がAmazonであることや、他のサイトとの価格差について具体的に言及されており、ユーザーの「安く買いたい」という意図に十分応えています。",
           "error": null
         }
       ]
