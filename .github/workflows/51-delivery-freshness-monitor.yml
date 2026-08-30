@@ -47,23 +47,26 @@ name: Delivery Freshness Monitor
 #   併せて「時計は進んでいるのに中身が古い」経路も見る (status=behind)。
 #   配信中の sha が main の HEAD でなく、かつその HEAD 自体が閾値より古いとき。
 #
-# 較正:
-#   配信は main への push ごとに走り、push は 1 日 50 本前後ある。2026-08-30 の
-#   実測で build から反映までは数分。閾値 3h は **入れた日に鳴らない** =
-#   鳴ったら必ず異常。閾値は
+# 較正 (2026-08-31 に測り直した):
+#   最初は「push は 1 日 50 本前後あるから 3h で鳴らない」としたが、これは
+#   **平均で見て裾を見ていない**誤りだった。main への commit 間隔の実測:
+#       直近 7 日 392 commit / 連続 commit の最大間隔 6.2h
+#       3h 超が 4 回 / 2h 超が 20 回
+#   3h のままだと 1 週間に 4 回の誤報になる。既定を 8h にする (実測の最大 6.2h に
+#   対して約 3 割の余裕。検知したい 19 時間停止は 9h 以内に鳴る)。閾値は
 #   scripts/check_delivery_freshness.py の DEFAULT_MAX_AGE_HOURS 一箇所に置く。
 
 on:
   schedule:
-    # **毎時**。閾値が 3h になったので、6 時間周期のままだと検知が最大 6 時間
-    # 遅れて閾値を短くした意味が消える (書き込みは異常時のみ・最大 1 回/run)。
+    # **毎時**。閾値 (8h) より周期が粗いと検知がそのぶん遅れる。
+    # 書き込みは異常時のみ・最大 1 回/run なので頻度を上げても副作用は無い。
     - cron: '0 * * * *'
   workflow_dispatch:
     inputs:
       max_age_hours:
-        description: '異常とみなす経過時間 (既定 3)'
+        description: '異常とみなす経過時間 (既定 8)'
         required: false
-        default: '3'
+        default: '8'
 
 permissions:
   contents: read
@@ -98,4 +101,4 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           python scripts/check_delivery_freshness.py \
-            --max-age-hours "${{ github.event.inputs.max_age_hours || 3 }}"
+            --max-age-hours "${{ github.event.inputs.max_age_hours || 8 }}"

@@ -43,10 +43,19 @@
   マーカー ``<!-- delivery-freshness-monitor -->`` で単一 issue を特定して body を
   更新し、健全に戻ったら close する。1 run あたりの書き込みは最大 1 回。
 
-較正:
-  配信は main への push ごとに走り、push は 1 日 50 本前後ある。2026-08-30 の
-  実測で build から反映までは数分。既定閾値 3h は **入れた日に鳴らない** =
-  鳴ったら必ず異常。閾値は DEFAULT_MAX_AGE_HOURS 一箇所に置く。
+較正 (2026-08-31 に測り直した):
+  最初は「push は 1 日 50 本前後あるから 3h で鳴らない」としたが、これは
+  **平均で見て裾を見ていない**誤りだった。main への commit 間隔を実測すると:
+
+      直近 7 日 392 commit / 連続 commit の最大間隔 6.2h
+      3h を超えた回数 4 / 2h を超えた回数 20
+
+  3h のままだと **1 週間に 4 回の誤報**になる。夜間や Jules の停止で自然に
+  空く時間があり、そこを異常と呼んでしまう。
+
+  既定を 8h にする。実測の最大 6.2h に対して約 3 割の余裕があり、検知したい
+  故障 (2026-08-28 の 19 時間停止) は 9h 以内に鳴る。閾値は
+  DEFAULT_MAX_AGE_HOURS 一箇所に置く。
 """
 from __future__ import annotations
 
@@ -65,7 +74,7 @@ logger = logging.getLogger("check_delivery_freshness")
 MARKER = "delivery-freshness-monitor"
 LABELS = "tech-debt,todo"
 DEFAULT_BUILD_JSON = "https://navi.omcha.jp/build.json"
-DEFAULT_MAX_AGE_HOURS = 3
+DEFAULT_MAX_AGE_HOURS = 8
 DEFAULT_USER_AGENT = "navi-delivery-freshness/2.0 (+https://navi.omcha.jp)"
 DEFAULT_TIMEOUT = 30.0
 
