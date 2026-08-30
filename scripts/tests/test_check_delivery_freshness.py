@@ -1,200 +1,195 @@
-"""check_delivery_freshness.py の unit tests (#5042).
+"""check_delivery_freshness.py の単体テスト (#5042 / #6205 T9)。
 
-成り立つべき条件:
-  1. 導入時点の実測 (2026-08-12 14:00 UTC に最新 lastmod が同日 13:48 UTC) で
-     **鳴らない** = 鳴りっぱなしゲートにしない。
-  2. 止まったら必ず鳴る。GitLab 側の pages が落ちても GitHub の run は緑のままで、
-     症状は「lastmod が進まない」1 つに落ちるので、原因を問わずこの網で拾える。
-  3. 判定不能 (取得失敗 / lastmod ゼロ件) を ok に潰さない。
+判定材料は build.json (`sha` / `built_at`)。sitemap の lastmod は
+**2026-08-28 の 19 時間停止を検知できなかった**ため廃止した。理由は
+対象モジュールの docstring 参照。
+
+カバレッジ:
+1. parse_iso: Z 終端 / オフセット / tz 無し / 壊れた値
+2. check: ok / stale / 閾値の境界 / behind / unreachable / unknown
+3. behind の誤報防止: HEAD が動いた直後 (= HEAD がまだ新しい) は鳴らない
+4. title_for / render_body
 """
 from __future__ import annotations
 
 import datetime as dt
+import json
+import pathlib
+import sys
 
 import pytest
 
-from scripts.check_delivery_freshness import (
-    DEFAULT_MAX_AGE_HOURS,
-    FetchError,
-    check,
-    child_sitemaps,
-    is_sitemap_index,
-    latest_lastmod,
-    parse_lastmods,
-    render_body,
-    title_for,
-)
+THIS_DIR = pathlib.Path(__file__).resolve().parent
+SCRIPTS_DIR = THIS_DIR.parent
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
 
-T = dt.datetime.fromisoformat
+import check_delivery_freshness as cdf  # noqa: E402
+
+NOW = dt.datetime(2026, 8, 30, 12, 0, 0, tzinfo=dt.timezone.utc)
+URL = "https://navi.omcha.jp/build.json"
+SHA = "edba7e4c76dd314a295b4a1e86e3e5f205e6cfaa"
+OTHER_SHA = "c09c9bcfaeced3a3dd28e529df0bf8ac78969d67"
 
 
-def _urlset(*lastmods: str) -> str:
-    entries = "".join(
-        f"<url><loc>https://navi.omcha.jp/p/{i}/</loc><lastmod>{lm}</lastmod></url>"
-        for i, lm in enumerate(lastmods)
-    )
-    return (
-        '<?xml version="1.0" encoding="utf-8" standalone="yes"?>'
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-        f"{entries}</urlset>"
-    )
+def _payload(built_at: str, sha: str = SHA) -> str:
+    return json.dumps({"sha": sha, "built_at": built_at, "ref": "main"})
 
 
-def _index(*children: str) -> str:
-    entries = "".join(f"<sitemap><loc>{c}</loc></sitemap>" for c in children)
-    return (
-        '<?xml version="1.0" encoding="utf-8" standalone="yes"?>'
-        '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-        f"{entries}</sitemapindex>"
-    )
+def _fetch(body: str):
+    return lambda url: body
 
 
-# --- parse_lastmods ---------------------------------------------------------
+def _raises(exc: Exception):
+    def _f(url):
+        raise exc
+    return _f
 
-def test_parses_hugo_offset_format():
-    got = parse_lastmods(_urlset("2026-08-12T13:48:12+00:00"))
-    assert got == [T("2026-08-12T13:48:12+00:00")]
 
+# --- parse_iso --------------------------------------------------------------
 
 def test_parses_z_terminated_and_normalizes_to_utc():
-    # Hugo は +00:00 で出すが、Z 終端も sitemap 仕様上あり得る。
-    got = parse_lastmods(_urlset("2026-08-12T13:48:12Z"))
-    assert got == [T("2026-08-12T13:48:12+00:00")]
+    assert cdf.parse_iso("2026-08-30T11:00:00Z") == dt.datetime(
+        2026, 8, 30, 11, 0, tzinfo=dt.timezone.utc)
 
 
 def test_non_utc_offset_is_converted():
-    got = parse_lastmods(_urlset("2026-08-12T22:48:12+09:00"))
-    assert got == [T("2026-08-12T13:48:12+00:00")]
+    assert cdf.parse_iso("2026-08-30T20:00:00+09:00") == dt.datetime(
+        2026, 8, 30, 11, 0, tzinfo=dt.timezone.utc)
 
 
-def test_naive_lastmod_is_treated_as_utc():
-    # tz を落とす実装に変わっても「lastmod ゼロ件」で誤報しないこと。
-    got = parse_lastmods(_urlset("2026-08-12T13:48:12"))
-    assert got == [T("2026-08-12T13:48:12+00:00")]
+def test_naive_value_is_treated_as_utc():
+    # ここで捨てると、tz を落とす実装に変わった瞬間に誤報する。
+    assert cdf.parse_iso("2026-08-30T11:00:00") == dt.datetime(
+        2026, 8, 30, 11, 0, tzinfo=dt.timezone.utc)
 
 
-def test_unparseable_entries_are_skipped_not_fatal():
-    xml = _urlset("2026-08-12T13:48:12+00:00", "not-a-date", "")
-    assert parse_lastmods(xml) == [T("2026-08-12T13:48:12+00:00")]
+@pytest.mark.parametrize("value", ["", "   ", "not-a-date", None, 12345, {}])
+def test_unparseable_values_yield_none(value):
+    assert cdf.parse_iso(value) is None
 
 
-def test_no_lastmod_yields_empty():
-    assert parse_lastmods("<urlset><url><loc>https://x/</loc></url></urlset>") == []
-
-
-# --- sitemapindex -----------------------------------------------------------
-
-def test_detects_index_and_lists_children():
-    xml = _index("https://navi.omcha.jp/a.xml", "https://navi.omcha.jp/b.xml")
-    assert is_sitemap_index(xml)
-    assert child_sitemaps(xml) == [
-        "https://navi.omcha.jp/a.xml", "https://navi.omcha.jp/b.xml"]
-
-
-def test_urlset_is_not_index():
-    assert not is_sitemap_index(_urlset("2026-08-12T13:48:12+00:00"))
-
-
-def test_latest_across_children_of_an_index():
-    pages = {
-        "root": _index("a", "b"),
-        "a": _urlset("2026-08-10T00:00:00+00:00"),
-        "b": _urlset("2026-08-12T13:48:12+00:00"),
-    }
-    got = latest_lastmod("root", lambda u: pages[u])
-    assert got == T("2026-08-12T13:48:12+00:00")
-
-
-def test_one_broken_child_does_not_void_the_whole_index():
-    pages = {"root": _index("a", "b"), "b": _urlset("2026-08-12T13:48:12+00:00")}
-
-    def fetch(url):
-        if url not in pages:
-            raise FetchError("HTTP 500")
-        return pages[url]
-
-    assert latest_lastmod("root", fetch) == T("2026-08-12T13:48:12+00:00")
-
-
-def test_self_referencing_index_terminates():
-    # 循環しても止まること (無限再帰でジョブを固めない)。
-    got = latest_lastmod("root", lambda u: _index("root"))
-    assert got is None
-
-
-# --- check ------------------------------------------------------------------
-
-NOW = T("2026-08-12T14:00:00+00:00")
-
+# --- 鮮度 -------------------------------------------------------------------
 
 def test_measured_reality_at_introduction_does_not_fire():
-    """導入時の実測: 14:00 UTC 時点で最新 lastmod は同日 13:48 UTC (= 12 分前)。"""
-    row = check("u", NOW, lambda _: _urlset("2026-08-12T13:48:12+00:00"))
+    # 2026-08-30 実測: build から反映まで数分。導入日に鳴らないこと。
+    row = cdf.check(URL, NOW, _fetch(_payload("2026-08-30T11:55:00Z")))
     assert row["status"] == "ok"
-    assert row["age_hours"] == 0.2
+    assert row["age_hours"] == 0.1
 
 
 def test_stale_when_older_than_threshold():
-    row = check("u", NOW, lambda _: _urlset("2026-08-10T00:00:00+00:00"))
+    row = cdf.check(URL, NOW, _fetch(_payload("2026-08-30T04:00:00Z")))
     assert row["status"] == "stale"
-    assert row["age_hours"] > DEFAULT_MAX_AGE_HOURS
+    assert row["age_hours"] == 8.0
 
 
 def test_boundary_just_inside_threshold_is_ok():
-    latest = NOW - dt.timedelta(hours=DEFAULT_MAX_AGE_HOURS) + dt.timedelta(minutes=1)
-    row = check("u", NOW, lambda _: _urlset(latest.isoformat()))
+    row = cdf.check(URL, NOW, _fetch(_payload("2026-08-30T09:00:00Z")))
     assert row["status"] == "ok"
 
 
 def test_boundary_just_outside_threshold_is_stale():
-    latest = NOW - dt.timedelta(hours=DEFAULT_MAX_AGE_HOURS) - dt.timedelta(minutes=1)
-    row = check("u", NOW, lambda _: _urlset(latest.isoformat()))
+    row = cdf.check(URL, NOW, _fetch(_payload("2026-08-30T08:59:00Z")))
     assert row["status"] == "stale"
 
 
 def test_custom_threshold_is_honoured():
-    row = check("u", NOW, lambda _: _urlset("2026-08-12T00:00:00+00:00"),
-                max_age_hours=6)
+    body = _payload("2026-08-30T04:00:00Z")
+    assert cdf.check(URL, NOW, _fetch(body), max_age_hours=12)["status"] == "ok"
+    assert cdf.check(URL, NOW, _fetch(body), max_age_hours=2)["status"] == "stale"
+
+
+def test_nineteen_hour_outage_is_detected():
+    # 2026-08-28 の実障害の再現。この長さで鳴らないなら網の意味がない。
+    row = cdf.check(URL, NOW, _fetch(_payload("2026-08-29T17:00:00Z")))
+    assert row["status"] == "stale"
+    assert row["age_hours"] == 19.0
+
+
+# --- behind (時計は進んでいるのに中身が古い) --------------------------------
+
+def test_behind_when_head_is_old_and_not_deployed():
+    row = cdf.check(
+        URL, NOW, _fetch(_payload("2026-08-30T11:55:00Z", sha=SHA)),
+        head={"sha": OTHER_SHA, "committed_at": "2026-08-30T05:00:00Z"})
+    assert row["status"] == "behind"
+    assert OTHER_SHA[:10] in row["detail"]
+
+
+def test_not_behind_when_head_moved_recently():
+    # HEAD が動いた直後は sha が違って当たり前。ここで鳴らすと毎回誤報になる。
+    row = cdf.check(
+        URL, NOW, _fetch(_payload("2026-08-30T11:55:00Z", sha=SHA)),
+        head={"sha": OTHER_SHA, "committed_at": "2026-08-30T11:50:00Z"})
+    assert row["status"] == "ok"
+
+
+def test_not_behind_when_deployed_sha_matches_head():
+    row = cdf.check(
+        URL, NOW, _fetch(_payload("2026-08-30T11:55:00Z", sha=SHA)),
+        head={"sha": SHA, "committed_at": "2026-08-30T01:00:00Z"})
+    assert row["status"] == "ok"
+
+
+def test_head_unavailable_still_judges_freshness():
+    # HEAD を取れなくても鮮度判定は続ける (監視を丸ごと落とさない)。
+    row = cdf.check(URL, NOW, _fetch(_payload("2026-08-30T04:00:00Z")), head=None)
+    assert row["status"] == "stale"
+    assert row["head_sha"] is None
+
+
+def test_stale_takes_precedence_over_behind():
+    # 止まっているなら、まず止まっていることを言う。
+    row = cdf.check(
+        URL, NOW, _fetch(_payload("2026-08-29T17:00:00Z", sha=SHA)),
+        head={"sha": OTHER_SHA, "committed_at": "2026-08-30T05:00:00Z"})
     assert row["status"] == "stale"
 
 
-def test_fetch_failure_is_unreachable_not_ok():
-    def fetch(_):
-        raise FetchError("HTTP 503")
+# --- 判定不能を ok に潰さない -----------------------------------------------
 
-    row = check("u", NOW, fetch)
+def test_fetch_failure_is_unreachable_not_ok():
+    row = cdf.check(URL, NOW, _raises(cdf.FetchError("HTTP 503")))
     assert row["status"] == "unreachable"
     assert "503" in row["detail"]
 
 
-def test_readable_sitemap_without_lastmod_is_unknown_not_ok():
-    row = check("u", NOW, lambda _: "<urlset><url><loc>https://x/</loc></url></urlset>")
+def test_broken_json_is_unknown_not_ok():
+    row = cdf.check(URL, NOW, _fetch("<html>not json</html>"))
     assert row["status"] == "unknown"
 
 
-@pytest.mark.parametrize("status", ["stale", "unreachable", "unknown"])
+def test_json_array_is_unknown_not_ok():
+    row = cdf.check(URL, NOW, _fetch("[]"))
+    assert row["status"] == "unknown"
+
+
+def test_missing_built_at_is_unknown_not_ok():
+    row = cdf.check(URL, NOW, _fetch(json.dumps({"sha": SHA})))
+    assert row["status"] == "unknown"
+    assert row["sha"] == SHA
+
+
+# --- 出力 -------------------------------------------------------------------
+
+@pytest.mark.parametrize("status", ["stale", "behind", "unreachable", "unknown"])
 def test_every_abnormal_status_has_its_own_title(status):
-    assert title_for({"status": status}).startswith("[delivery]")
-    assert title_for({"status": status}) != title_for({"status": "other"})
+    title = cdf.title_for({"status": status})
+    assert title.startswith("[delivery]")
+    assert title != cdf.title_for({"status": "something-else"})
 
-
-# --- render_body ------------------------------------------------------------
 
 def test_body_carries_marker_and_numbers():
-    row = check("https://navi.omcha.jp/sitemap.xml", NOW,
-                lambda _: _urlset("2026-08-09T00:00:00+00:00"))
-    body = render_body(row, NOW)
-    assert "<!-- delivery-freshness-monitor -->" in body
-    assert "2026-08-09T00:00:00+00:00" in body
-    assert f"{DEFAULT_MAX_AGE_HOURS}h" in body
-    # 見た人が次に何を見ればいいかが本文だけで分かること。
-    assert "40-mirror-to-gitlab.yml" in body
+    row = cdf.check(URL, NOW, _fetch(_payload("2026-08-29T17:00:00Z")))
+    body = cdf.render_body(row, NOW)
+    assert cdf.MARKER in body
+    assert "19.0h" in body
+    assert SHA in body
 
 
 def test_body_of_unreachable_shows_detail():
-    def fetch(_):
-        raise FetchError("HTTP 404")
-
-    body = render_body(check("u", NOW, fetch), NOW)
+    row = cdf.check(URL, NOW, _raises(cdf.FetchError("HTTP 503")))
+    body = cdf.render_body(row, NOW)
+    assert "HTTP 503" in body
     assert "unreachable" in body
-    assert "HTTP 404" in body
