@@ -55,70 +55,14 @@
 
 {{- partial "extend_footer.html" . }}
 
-<script>
-    let menu = document.getElementById('menu');
-    if (menu) {
-        // Set the scroll position
-        const scrollPosition = localStorage.getItem("menu-scroll-position");
-        if (scrollPosition) {
-            menu.scrollLeft = parseInt(scrollPosition, 10);
-        }
-        
-        menu.onscroll = function () {
-            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
-        }
-    }
-
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-        anchor.addEventListener("click", function (e) {
-            e.preventDefault();
-            var id = this.getAttribute("href").substr(1);
-            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
-                    behavior: "smooth"
-                });
-            } else {
-                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
-            }
-            if (id === "top") {
-                history.replaceState(null, null, " ");
-            } else {
-                history.pushState(null, null, `#${id}`);
-            }
-        });
-    });
-
-</script>
-
-{{- if (not site.Params.disableScrollToTop) }}
-<script>
-    var toplink = document.getElementById("top-link");
-    window.onscroll = function () {
-        const scrollThreshold = window.innerHeight;
-        if (document.body.scrollTop > scrollThreshold || document.documentElement.scrollTop > scrollThreshold) {
-            toplink.classList.remove("hidden");
-        } else {
-            toplink.classList.add("hidden");
-        }
-    };
-
-</script>
-{{- end }}
-
-{{- if (not site.Params.disableThemeToggle) }}
-<script>
-    document.getElementById("theme-toggle").addEventListener("click", () => {
-        const html = document.querySelector("html");
-        if (html.dataset.theme === "dark") {
-            html.dataset.theme = 'light';
-            localStorage.setItem("pref-theme", 'light');
-        } else {
-            html.dataset.theme = 'dark';
-            localStorage.setItem("pref-theme", 'dark');
-        }
-    })
-
-</script>
+{{- /* #6206 chrome 削減: ここにあった 3 つのインライン <script> (menu 4.5MB /
+       top-link 1.6MB / theme-toggle 1.8MB = 全 6,369 枚に複製されて 7.9MB) を
+       assets/js/papermod_ui.js に 1 本化した。site.Params の disableScrollToTop /
+       disableThemeToggle はどちらも未設定 (= 有効) なので、条件分岐ごと畳んである。
+       再び無効化したくなったら js 側を分けるのではなくここでガードを戻すこと。 */ -}}
+{{- $pmUi := resources.Get "js/papermod_ui.js" | resources.Minify | resources.Fingerprint "sha256" }}
+{{- if $pmUi }}
+<script defer src="{{ $pmUi.RelPermalink }}" integrity="{{ $pmUi.Data.Integrity }}" crossorigin="anonymous"></script>
 {{- end }}
 
 {{- if (and (eq .Kind "page") (ne .Layout "archives") (ne .Layout "search") (.Param "ShowCodeCopyButtons")) }}

@@ -41,55 +41,13 @@
 <meta name="twitter:image:alt" content="おもちゃいろ 比較ナビ — 知育玩具スコア × 3 サイト最安値" />
 
 <!-- Product image slideshow initializer (PA-API variants gallery) -->
-<script>
-(function(){
-  function init(root){
-    var slides = root.querySelectorAll('.slide');
-    var dots = root.querySelectorAll('.slide-thumb');
-    var counter = root.querySelector('.slide-current');
-    var prev = root.querySelector('.slide-prev');
-    var next = root.querySelector('.slide-next');
-    if(!slides.length) return;
-    var idx = 0;
-    var autoplay = parseInt(root.getAttribute('data-autoplay') || '0', 10);
-    var timer = null;
-    function show(i){
-      if(i < 0) i = slides.length - 1;
-      if(i >= slides.length) i = 0;
-      slides[idx].classList.remove('active');
-      if(dots[idx]) dots[idx].classList.remove('active');
-      idx = i;
-      slides[idx].classList.add('active');
-      if(dots[idx]) dots[idx].classList.add('active');
-      if(counter) counter.textContent = idx + 1;
-    }
-    function restart(){
-      if(!autoplay) return;
-      if(timer) clearInterval(timer);
-      timer = setInterval(function(){ show(idx + 1); }, autoplay);
-    }
-    if(prev) prev.addEventListener('click', function(){ show(idx - 1); restart(); });
-    if(next) next.addEventListener('click', function(){ show(idx + 1); restart(); });
-    dots.forEach(function(d){
-      d.addEventListener('click', function(){
-        show(parseInt(d.getAttribute('data-idx'), 10));
-        restart();
-      });
-    });
-    root.addEventListener('mouseenter', function(){ if(timer) clearInterval(timer); });
-    root.addEventListener('mouseleave', restart);
-    restart();
-  }
-  function boot(){
-    document.querySelectorAll('.product-slideshow').forEach(init);
-  }
-  if(document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', boot);
-  } else {
-    boot();
-  }
-})();
-</script>
+{{- /* #6206 chrome 削減: 商品スライドショーのインライン <script> (1.1KB × 6,369 枚
+       = 6.9MB) を assets/js/slideshow.js へ。readyState 判定を内包しているので
+       defer でそのまま動く。 */ -}}
+{{- $slideshow := resources.Get "js/slideshow.js" | resources.Minify | resources.Fingerprint "sha256" }}
+{{- if $slideshow }}
+<script defer src="{{ $slideshow.RelPermalink }}" integrity="{{ $slideshow.Data.Integrity }}" crossorigin="anonymous"></script>
+{{- end }}
 
 {{- /* omcha-ops#19 / amazon#6206: WebSite と Organization はホームだけに出す。
        全ページに焼いていたため合計 4.2 KB x 7,226 枚 = 約 30 MB を占めていた
