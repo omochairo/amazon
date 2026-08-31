@@ -42,20 +42,29 @@
     });
 
 
-  /* --- scroll to top (旧 site.Params.disableScrollToTop ガード) --- */
+  /* --- scroll to top ---
+     元は {{ if not site.Params.disableScrollToTop }} で <script> ごと出し分けていた。
+     1 ファイルに束ねた以上テンプレート側では出し分けられないので、要素の有無で
+     判定する。param を true にしても #top-link が出ないだけで例外は出ない。 */
     var toplink = document.getElementById("top-link");
-    window.onscroll = function () {
-        const scrollThreshold = window.innerHeight;
-        if (document.body.scrollTop > scrollThreshold || document.documentElement.scrollTop > scrollThreshold) {
-            toplink.classList.remove("hidden");
-        } else {
-            toplink.classList.add("hidden");
-        }
-    };
+    if (toplink) {
+        window.onscroll = function () {
+            const scrollThreshold = window.innerHeight;
+            if (document.body.scrollTop > scrollThreshold || document.documentElement.scrollTop > scrollThreshold) {
+                toplink.classList.remove("hidden");
+            } else {
+                toplink.classList.add("hidden");
+            }
+        };
+    }
 
 
-  /* --- theme toggle (旧 site.Params.disableThemeToggle ガード) --- */
-    document.getElementById("theme-toggle").addEventListener("click", () => {
+  /* --- theme toggle ---
+     同上。元は {{ if not site.Params.disableThemeToggle }} で括られていた。
+     ガードが無いと param を true にした瞬間に全ページで TypeError になる
+     (しかもこのブロックは束ねた 3 つの最後なので、気づきにくい)。 */
+    var themeToggle = document.getElementById("theme-toggle");
+    if (themeToggle) themeToggle.addEventListener("click", () => {
         const html = document.querySelector("html");
         if (html.dataset.theme === "dark") {
             html.dataset.theme = 'light';

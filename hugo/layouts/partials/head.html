@@ -290,8 +290,22 @@
        (0.4KB × 6,369 枚 = 2.7MB) を assets/css/noscript.css へ。
        **extended/ ではなく css/ 直下に置いてある** — extended/*.css は上で無条件に
        連結されるので、そこに置くと JS 有効時にも適用されてしまう。
-       <link> は stylesheet.css より後にあるのでインライン時と同じく後勝ち。 */ -}}
-{{- $noscriptCss := resources.Get "css/noscript.css" | resources.Minify | resources.Fingerprint "sha256" }}
+       <link> は stylesheet.css より後にあるのでインライン時と同じく後勝ち。
+
+       2 ファイルに分けてあるのは、2 つ目 (OS 配色への追従) が元テンプレートで
+       defaultTheme = auto のときだけ出ていたため。1 ファイルに畳むとテーマを
+       light / dark に固定した瞬間に JS 無効時の配色が壊れる。
+
+       Concat の出力先を assets/css/ にしてあるのは意図的。ソースを css/ 直下に
+       置いたまま素で fingerprint すると /css/noscript.min.*.css に出て、
+       Cloudflare の「/assets/** と /js/** は指紋付きだから 1 年」ルールから外れ
+       max-age=300 になる (2026-08-31 に本番で実測)。他の指紋付きアセットと
+       同じ扱いに揃える。 */ -}}
+{{- $noscriptParts := slice (resources.Get "css/noscript-base.css") }}
+{{- if (and (ne site.Params.defaultTheme "light") (ne site.Params.defaultTheme "dark")) }}
+  {{- $noscriptParts = $noscriptParts | append (resources.Get "css/noscript-auto-dark.css") }}
+{{- end }}
+{{- $noscriptCss := $noscriptParts | resources.Concat "assets/css/noscript.css" | resources.Minify | resources.Fingerprint "sha256" }}
 <noscript>
     {{- if $noscriptCss }}
     <link rel="stylesheet" href="{{ $noscriptCss.RelPermalink }}" integrity="{{ $noscriptCss.Data.Integrity }}" crossorigin="anonymous">

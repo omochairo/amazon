@@ -1,0 +1,13 @@
+/* #6206 chrome 削減: partials/head.html の <noscript> 内にあった 1 つ目の
+   インライン <style>。実測 2.7 MB / 全 6,369 枚 (2 ファイル合計)。
+
+   **extended/ に置いてはいけない。** extended/*.css は head.html が無条件に
+   連結するので、JS 有効時にも適用されてしまう。ここは css/ 直下に置き、
+   <noscript><link rel=stylesheet> で読む (JS 無効時だけ取得される)。
+
+   読み込み位置は stylesheet.css の <link> より後なので、インラインだったときと
+   同じく後勝ちになる。 */
+#theme-toggle,
+.top-link {
+    display: none;
+}
