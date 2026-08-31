@@ -3614,14 +3614,28 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   overflow-x: auto;
   /* #3568 E3: mandatory は carousel_swipe.js の矢印 scrollBy (中途半端な位置への
      スクロール) と競合してカクつくため proximity に緩和。スワイプ操作の吸着感は
-     維持しつつ、JS 側の任意スクロールは邪魔しない。 */
-  scroll-snap-type: x proximity;
+     維持しつつ、JS 側の任意スクロールは邪魔しない。
+     #5081: ただし **読み込み中は付けない** (.snap-ready に移した)。読み込み中に
+     カルーセルの中身が入るたびスナップコンテナが再スナップし、その scroll で
+     Chrome が LCP の記録を打ち切る。結果 **商品ページは LCP 候補が 1 件も
+     記録されない** (実測 2026-08-31: trace の largestContentfulPaint::Candidate が
+     0 件・Invalidate だけ 9 件)。クラスは carousel_swipe.js が load 後に付ける。 */
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   margin: 0 -16px; /* スマホではみ出し（ピーク）を表現するためのネガティブマージン */
   padding: 4px 16px 16px;
   /* スクロールバー非表示 (Firefox / Webkit) */
   scrollbar-width: none;
+}
+
+/* #5081: スナップは load 後だけ。吸着感は保ったまま、読み込み中の再スナップで
+   LCP 計測が死ぬのを防ぐ。root のクラス 1 個で全スナップコンテナを制御する
+   (付けるのは carousel_swipe.js)。 */
+:root.snap-ready .carousel-wrapper {
+  scroll-snap-type: x proximity;
+}
+:root.snap-ready .age-timeline-track {
+  scroll-snap-type: x mandatory;
 }
 
 .carousel-wrapper::-webkit-scrollbar {
@@ -6799,7 +6813,8 @@ details.development-stage-accordion[open] > summary::before {
   gap: 14px;
   overflow-x: auto;
   padding: 6px 2px 14px;
-  scroll-snap-type: x mandatory;
+  /* #5081: scroll-snap-type は :root.snap-ready 側 (load 後) に移した。
+     .carousel-wrapper と同じ機構で LCP 計測を殺しうるため。 */
   -webkit-overflow-scrolling: touch;
 }
 .age-timeline-track::-webkit-scrollbar { height: 6px; }
