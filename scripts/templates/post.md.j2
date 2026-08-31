@@ -497,6 +497,19 @@
 <aside class="editorial-comment"><strong>おもちゃロボのひとこと</strong><br>{{ editorial_comment }}</aside>
 {% endif %}
 
+{#- omcha-ops#19 P2: らくらくベビー (ベビーレジストリ) 導線。build_post.py が
+    対象年齢を見て乳児帯の記事にだけ baby_registry を渡す。特典の内容・条件は
+    Amazon 側で変わるので、具体的な割引率や金額はここに書かない (景表法)。
+    data-cta-slot は P4 の affiliate_click.js が読む。tag= は
+    _force_amazon_partner_tag が付けるのでここでは書かない。 -#}
+{% if baby_registry %}
+<aside class="baby-registry-cta">
+<div class="baby-registry-cta__head">👶 出産準備・0〜1歳の方へ</div>
+<p class="baby-registry-cta__body">Amazon の「らくらくベビー」は、出産準備のほしい物リストを<strong>無料</strong>で作れる公式サービスです。登録した方向けの割引やお試し特典が用意されています。特典の内容と条件は変わることがあるので、最新の情報は公式ページでご確認ください。</p>
+<a class="baby-registry-cta__link" href="{{ baby_registry.url }}" target="_blank" rel="noopener nofollow sponsored" data-cta-slot="baby-registry">Amazonらくらくベビーを見る →</a>
+</aside>
+{% endif %}
+
 ---
 
 <small>※ 価格・在庫情報は当サイトが自動観測した時点のスナップショットです。ご購入の際は必ず販売ページで最新情報をご確認ください。本記事のリンクから商品をご購入いただくと、当サイトに少額の収益が入る場合があります（読者の負担はありません）。</small>

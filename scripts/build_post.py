@@ -820,6 +820,63 @@ def _get_development_stage(age_min_months: int, stages_data: dict[str, Any]) -> 
     return stages_data.get(f"{selected_key}m")
 
 
+# omcha-ops#19 P2: Amazon らくらくベビー (ベビーレジストリ) の導線。
+#
+# アソシエイトの Bounty (登録 1 件あたりの固定報酬) は、おもちゃ 1 個の
+# 商品紹介料と桁が違う。にもかかわらず navi 側には導線が 1 本も無かった
+# (2026-08-28 実測: baby-reg / registry / bounty の grep ヒットゼロ)。
+# navi の読者 (乳児向け知育玩具を探している保護者) は登録対象そのもの。
+#
+# **全記事には出さない。** 対象年齢が乳児帯の記事末だけに出す。3 歳以上の
+# 記事に出しても登録に至らないクリックが増えるだけで、P0 (クリックはあるが
+# 注文ゼロ) と同じ形の劣化を自分で作ることになる。
+_BABY_REGISTRY_URL_DEFAULT = "https://www.amazon.co.jp/baby-reg/"
+_BABY_REGISTRY_MAX_AGE_MONTHS = 18
+
+# 「0ヶ月〜」も「対象年齢の記載なし」「大人向け」も _parse_age_min_months は
+# 同じ 0 を返す。月齢の値だけでは前者 (乳児向け) と後者 (不明) を区別できない
+# ので、数値付きの年齢表記があることを別に確かめる。数値が無ければ対象外に
+# 倒す — 判定できない記事に広告を足さない側が安全。
+_AGE_HAS_NUMBER_RE = re.compile(r"\d+\s*(?:歳|才|ヶ月|ヵ月|カ月|ケ月|か月)")
+
+
+def _load_baby_registry_url(hugo_config_path: pathlib.Path = _HUGO_CONFIG_DEFAULT) -> str:
+    """[params].babyRegistryUrl を読む。未設定なら既定の公式 URL。
+
+    tag= はここでは付けない。付けるのは _force_amazon_partner_tag の 1 点だけ
+    (#19 P1 の「強制は 1 箇所」の設計をここでも崩さない)。
+    """
+    if not hugo_config_path.exists():
+        return _BABY_REGISTRY_URL_DEFAULT
+    try:
+        with hugo_config_path.open("rb") as f:
+            config = tomllib.load(f)
+    except tomllib.TOMLDecodeError:
+        return _BABY_REGISTRY_URL_DEFAULT
+    params = config.get("params")
+    url = params.get("babyRegistryUrl") if isinstance(params, dict) else None
+    if isinstance(url, str) and url.strip():
+        return url.strip()
+    return _BABY_REGISTRY_URL_DEFAULT
+
+
+def _is_baby_targeted_age(raw: Any) -> bool:
+    """対象年齢の生文字列が「乳児帯 (0〜1 歳半)」を指しているか。"""
+    if not raw:
+        return False
+    raw_str = str(raw).strip()
+    if not _AGE_HAS_NUMBER_RE.search(raw_str):
+        return False
+    return _parse_age_min_months(raw_str) <= _BABY_REGISTRY_MAX_AGE_MONTHS
+
+
+def _build_baby_registry_context(raw_age: Any, url: str) -> dict[str, Any] | None:
+    """対象年齢が乳児帯なら記事末 CTA のコンテキスト、そうでなければ None。"""
+    if not url or not _is_baby_targeted_age(raw_age):
+        return None
+    return {"url": url}
+
+
 _TRAILING_BRACKET_RE = re.compile(r"\s*[（(\[【][^）)\]】]*[）)\]】]\s*$")
 
 
@@ -3337,6 +3394,9 @@ def main() -> None:
     # data["amazon_partner_tag"] として注入する (post.md.j2 の affiliate_url
     # マクロと competitor-card の既定が参照する)。
     amazon_partner_tag = _resolve_amazon_partner_tag(pathlib.Path(args.hugo_config))
+    # omcha-ops#19 P2: らくらくベビー導線の URL。未設定なら既定の公式 URL に
+    # 落ちるだけなので、tag と違って不在で落とす必要はない。
+    baby_registry_url = _load_baby_registry_url(pathlib.Path(args.hugo_config))
 
     evaluate_article = None
     schema: dict[str, Any] = {}
@@ -3606,6 +3666,11 @@ def main() -> None:
             development_stage = _get_development_stage(age_months, stages_data)
             if development_stage:
                 data["development_stage"] = development_stage
+
+            # omcha-ops#19 P2: 乳児帯の記事だけ、記事末にらくらくベビー導線を出す。
+            data["baby_registry"] = _build_baby_registry_context(
+                target_age_raw, baby_registry_url
+            )
 
             # Issue #515: link_report_flag macro が記事 URL 構築用に slug を参照する。
             data["slug"] = slug

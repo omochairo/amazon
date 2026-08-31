@@ -41,7 +41,8 @@
     ['price-search-fallback', 'price-search-fallback'],
     ['feature-cta-external', 'list-card'],
     ['ranking-cta-external', 'ranking'],
-    ['review-cta', 'review']
+    ['review-cta', 'review'],
+    ['baby-registry-cta', 'baby-registry']
   ];
 
   function networkOf(href) {

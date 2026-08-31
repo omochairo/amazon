@@ -63,6 +63,10 @@ enableRobotsTXT = true
   # ranking.html / mobile_sticky_cta.html はここを参照する (直書き禁止)。
   # Python 側の SSOT は AMAZON_PARTNER_TAG secret (scripts/fetch_amazon.py 参照)。
   amazonPartnerTag = "chk01-22"
+  # omcha-ops#19 P2: らくらくベビー (ベビーレジストリ) 導線のリンク先。
+  # 乳児帯の記事末にだけ出す (判定は scripts/build_post.py)。tag= はここでは
+  # 付けない — 付与は _force_amazon_partner_tag / amazon_affiliate_url.html の 1 点。
+  babyRegistryUrl = "https://www.amazon.co.jp/baby-reg/"
   description = "知育玩具をスコアと価格で比較。Amazon・楽天・Yahoo!の3サイト価格を横断。元ソニーエンジニア×医療従事者のおもちゃいろのパパママが、20〜40代ファミリーの『今いちばんお得な買い方』を毎日更新します。"
   author = "おもちゃロボ 🤖"
   # Global OGP image for social previews (Issue #605)
