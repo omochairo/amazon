@@ -106,9 +106,31 @@
     });
   }
 
+  /* #5081: スクロールスナップは **最初のユーザー操作まで付けない**。
+
+     .carousel-wrapper / .age-timeline-track は overflow-x:auto のスナップ
+     コンテナで、読み込み中に中身 (画像・カード) が入るたび再スナップして
+     scrollLeft が動く。Chrome はそのスクロールで LCP 候補の記録を打ち切るため、
+     **商品ページは LCP 候補が 1 件も記録されない**状態だった (実測 2026-08-31:
+     trace の largestContentfulPaint::Candidate 0 件 / Invalidate 9 件。
+     PerformanceObserver でも LCP エントリ 0 件。scroll-snap-type を切ると同じ
+     ページで LCP が記録される)。
+
+     `load` を境にしないのは、`load` が最初の描画より前に来る条件 (画像が
+     すべてキャッシュ/失敗した場合など) が実在し、そこで付けると同じ穴に
+     戻るため。**LCP はどのみち最初の入力で確定する**ので、入力を境にすれば
+     吸着感を落とさずに計測とぶつからない。 */
+  function enableSnap() {
+    document.documentElement.classList.add('snap-ready');
+  }
+  ['pointerdown', 'touchstart', 'wheel', 'keydown'].forEach(function (type) {
+    window.addEventListener(type, enableSnap, { once: true, passive: true, capture: true });
+  });
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initCarousel);
   } else {
     initCarousel();
   }
+
 })();
