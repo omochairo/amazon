@@ -47,9 +47,18 @@ Cloudflare 自体が落ちているとき待機系に倒しても待機系も CF
 
     python scripts/failover_dns.py --to nas
 
-倒すときに直前の CNAME を issue 本文へ機械可読で埋めてある
-(`<!-- failover-prev-cname: ... -->`) ので、戻し先を人が覚えておく必要はない。
-`--target` を明示すればそちらが優先される。
+戻し先は `--target` か環境変数 `NAS_ORIGIN_CNAME` (リポジトリ変数) から取る。
+
+**トンネルのホスト名を issue にもログにも出さない。** `navi.omcha.jp` は
+proxied なので、外から DNS を引いても Cloudflare の IP しか返らず
+`<uuid>.cfargotunnel.com` は見えない。このリポジトリは public なので、
+issue 本文や Actions のログに出した時点でそれが恒久的に公開される。
+認証情報ではない (接続には credentials が要る) が、#6205 が
+「LAN の実 IP・Cloudflare のゾーン ID は public に書かない」としているのと
+同じ種類のものなので同じ扱いにする。
+
+したがって人が読む出力に載せるのは **向き先の別 (本番 / 待機系) だけ**で、
+値そのものは載せない。
 
 ## 権限
 
@@ -63,7 +72,6 @@ import datetime as dt
 import json
 import logging
 import os
-import re
 import sys
 import time
 from typing import Any, Callable, Dict, List, Optional, Sequence
@@ -72,7 +80,6 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("failover_dns")
 
 MARKER = "origin-failover"
-PREV_MARKER = "failover-prev-cname"
 LABELS = "todo"
 
 DEFAULT_ZONE_NAME = "omcha.jp"
@@ -208,6 +215,23 @@ def side_of(content: str, standby_cname: str = DEFAULT_STANDBY_CNAME) -> str:
     return "unknown"
 
 
+def describe_side(content: str, standby_cname: str = DEFAULT_STANDBY_CNAME) -> str:
+    """人が読む出力用の向き先ラベル。**値そのものは返さない。**
+
+    このリポジトリは public で、issue 本文も Actions のログも全世界に残る。
+    `<uuid>.cfargotunnel.com` は proxied な DNS からは見えないので、
+    ここに出すことがそのまま公開になる (#6205 の「Cloudflare のゾーン ID は
+    public に書かない」と同じ扱い)。運用で必要なのは「どちらを向いているか」
+    だけで、値は要らない。
+    """
+    side = side_of(content, standby_cname)
+    if side == "nas":
+        return "本番 (cloudflared tunnel)"
+    if side == "standby":
+        return "待機系 ({})".format(standby_cname)
+    return "**想定外の値**"
+
+
 def decide(probes: List[Dict[str, Any]], standby: Dict[str, Any],
            record: Optional[Dict[str, Any]], now: dt.datetime, *,
            enabled: bool,
@@ -224,7 +248,9 @@ def decide(probes: List[Dict[str, Any]], standby: Dict[str, Any],
         "action": "none", "detail": "", "now": now.isoformat(),
         "probe_verdicts": [classify_probe(p) for p in probes],
         "probes": probes,
-        "current_side": None, "current_content": None,
+        # **CNAME の値そのものは row に載せない** (public な issue / ログに
+        # 流れる)。判定に要るのは向き先の別だけ。
+        "current_side": None, "current_label": None,
         "standby": None, "target": standby_cname,
         "enabled": bool(enabled),
     }
@@ -235,8 +261,8 @@ def decide(probes: List[Dict[str, Any]], standby: Dict[str, Any],
         return row
 
     content = record.get("content") or ""
-    row["current_content"] = content
     row["current_side"] = side_of(content, standby_cname)
+    row["current_label"] = describe_side(content, standby_cname)
 
     verdicts = row["probe_verdicts"]
     if not verdicts:
@@ -268,8 +294,8 @@ def decide(probes: List[Dict[str, Any]], standby: Dict[str, Any],
     if row["current_side"] == "unknown":
         row["action"] = "blocked"
         row["detail"] = (
-            "現在の CNAME `{}` が本番でも待機系でもない。"
-            "自動で書き換えない".format(content)
+            "現在の CNAME が本番でも待機系でもない値を指している。"
+            "自動で書き換えない (値は載せない — public repo のため)"
         )
         return row
 
@@ -425,13 +451,6 @@ def get_open_issue(repo: str) -> Optional[Dict[str, Any]]:
     return {"number": items[0]["number"], "body": items[0].get("body") or ""}
 
 
-def extract_prev_cname(body: str) -> Optional[str]:
-    """倒したときに埋めた直前の CNAME を取り出す (手動の戻し先)。"""
-    m = re.search(r"<!--\s*{}:\s*([^\s>]+?)\s*-->".format(re.escape(PREV_MARKER)),
-                  body or "")
-    return m.group(1) if m else None
-
-
 def create_issue(repo: str, title: str, body: str) -> str:
     return _gh(["issue", "create", "-R", repo, "--title", title,
                 "--label", LABELS, "--body", body]).strip()
@@ -472,11 +491,6 @@ def render_body(row: Dict[str, Any]) -> str:
     parts: List[str] = [
         "<!-- {} -->".format(MARKER),
     ]
-    # 戻し先を機械可読で残す。人がトンネル UUID を覚えている必要をなくす。
-    # **`current_content` で代用しない。** 倒した後の `already` では
-    # current が待機系なので、それを埋めると戻し先が待機系自身になる。
-    if row.get("prev_content"):
-        parts.append("<!-- {}: {} -->".format(PREV_MARKER, row["prev_content"]))
     parts += [
         "",
         "**{}** ({} 時点)。".format(title_for(row).split("] ", 1)[-1], row["now"]),
@@ -484,14 +498,13 @@ def render_body(row: Dict[str, Any]) -> str:
         "| 項目 | 値 |",
         "| --- | --- |",
         "| 判定 | `{}` |".format(row["action"]),
-        "| CNAME (判定時) | `{}` ({}) |".format(
-            row.get("current_content") or "-", row.get("current_side") or "-"),
+        "| 向き先 (判定時) | {} |".format(row.get("current_label") or "-"),
         "| 自動切替 | {} |".format("武装" if row.get("enabled") else "**未武装**"),
         "| プローブ | {} |".format(" / ".join(row.get("probe_verdicts") or []) or "-"),
         "| 待機系 | {} |".format(standby.get("reason") or "未確認"),
     ]
-    if row.get("new_content"):
-        parts.append("| 書き換え後 | `{}` |".format(row["new_content"]))
+    if row.get("new_label"):
+        parts.append("| 書き換え後 | {} |".format(row["new_label"]))
     parts += [
         "| 詳細 | {} |".format(row.get("detail") or "-"),
         "",
@@ -529,8 +542,11 @@ def render_body(row: Dict[str, Any]) -> str:
         "gh workflow run 53-origin-failover.yml -R <repo> -f direction=nas",
         "```",
         "",
-        "直前の CNAME はこの issue の先頭に機械可読で埋めてあるので、"
-        "戻し先を人が控えておく必要はありません。"
+        "戻し先はリポジトリ変数 `NAS_ORIGIN_CNAME` から取ります"
+        "(未設定なら `-f target=...` を明示)。"
+        "**この issue にトンネルのホスト名は載せていません** —— "
+        "public repo なので、載せた時点で恒久的に公開されるためです。",
+        "",
         "**戻す前に NAS 側 (cloudflared / nginx / navi-switch) の復旧を確認すること。**",
         "",
         "- マーカー `<!-- {} -->` で同一 open Issue を特定し body を更新します".format(MARKER),
@@ -554,8 +570,9 @@ def run_failback(args: argparse.Namespace, token: str, now: dt.datetime) -> Dict
     row: Dict[str, Any] = {
         "action": "failback", "now": now.isoformat(), "enabled": True,
         "probes": [], "probe_verdicts": [], "standby": None,
-        "current_content": (record or {}).get("content"),
         "current_side": side_of((record or {}).get("content") or "", args.standby_cname),
+        "current_label": describe_side((record or {}).get("content") or "",
+                                       args.standby_cname),
         "detail": "",
     }
     if record is None:
@@ -563,34 +580,33 @@ def run_failback(args: argparse.Namespace, token: str, now: dt.datetime) -> Dict
         row["detail"] = "対象の CNAME レコードが見つからない"
         return row
 
-    target = args.target
-    if not target and args.repo:
-        issue = get_open_issue(args.repo)
-        if issue:
-            target = extract_prev_cname(issue["body"])
+    # 戻し先はリポジトリ変数から取る。**issue 本文には置かない** ——
+    # public repo なので、置いた時点でトンネルのホスト名が恒久的に公開される。
+    target = args.target or (os.environ.get("NAS_ORIGIN_CNAME") or "").strip()
     if not target:
         row["action"] = "blocked"
         row["detail"] = (
-            "戻し先が分からない。`--target <uuid>.cfargotunnel.com` を渡すか、"
-            "倒したときの issue (マーカー `{}`) を open のままにしておくこと".format(MARKER)
+            "戻し先が分からない。リポジトリ変数 `NAS_ORIGIN_CNAME` を設定するか、"
+            "`--target` / `-f target=...` を渡すこと。"
+            "値は private の amazon-home-ops (docker/navi) にある"
         )
         return row
     if side_of(target, args.standby_cname) != "nas":
         row["action"] = "blocked"
-        row["detail"] = "戻し先 `{}` が cfargotunnel.com ではない".format(target)
+        row["detail"] = "戻し先が cfargotunnel.com ではない (値は載せない)"
         return row
     if row["current_side"] == "nas":
         row["action"] = "none"
         row["detail"] = "すでに本番 (NAS) を向いている"
         return row
 
-    row["prev_content"] = record.get("content")
     if args.dry_run:
-        row["detail"] = "[dry-run] `{}` → `{}` に戻す".format(record.get("content"), target)
+        row["detail"] = "[dry-run] {} → 本番 (cloudflared tunnel) に戻す".format(
+            row["current_label"])
         return row
     result = patch_record(token, zone_id, record, target)
-    row["new_content"] = result.get("content", target)
-    row["detail"] = "`{}` → `{}` に戻した".format(record.get("content"), row["new_content"])
+    row["new_label"] = describe_side(result.get("content", target), args.standby_cname)
+    row["detail"] = "{} → {} に戻した".format(row["current_label"], row["new_label"])
     return row
 
 
@@ -646,18 +662,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                      standby_max_age_hours=args.standby_max_age_hours)
 
         if row["action"] == "failover" and not args.dry_run:
-            row["prev_content"] = record.get("content")
             result = patch_record(token, zone_id, record, args.standby_cname)
-            row["new_content"] = result.get("content", args.standby_cname)
-            logger.warning("CNAME を `%s` → `%s` に書き換えた",
-                           row["prev_content"], row["new_content"])
+            row["new_label"] = describe_side(
+                result.get("content", args.standby_cname), args.standby_cname)
+            logger.warning("向き先を %s → %s に書き換えた",
+                           row["current_label"], row["new_label"])
         elif row["action"] == "failover":
-            row["prev_content"] = record.get("content")
             row["detail"] += " [dry-run のため書き換えていない]"
 
-    logger.info("action=%s side=%s content=%s %s",
-                row["action"], row.get("current_side"),
-                row.get("current_content"), row.get("detail"))
+    # **CNAME の値をログに出さない。** public repo の Actions ログは
+    # 全世界に残り、proxied な DNS からは見えないホスト名がここで公開される。
+    logger.info("action=%s side=%s %s",
+                row["action"], row.get("current_side"), row.get("detail"))
 
     healthy = row["action"] in HEALTHY_ACTIONS
     body = render_body(row)
@@ -680,13 +696,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         else:
             logger.info("healthy — 何もしません")
         return 0
-
-    # 倒した直後は直前の CNAME を残したいので、既存 issue の値を引き継ぐ。
-    if existing and not row.get("prev_content"):
-        carried = extract_prev_cname(existing["body"])
-        if carried:
-            row["prev_content"] = carried
-            body = render_body(row)
 
     title = title_for(row)
     if existing:
