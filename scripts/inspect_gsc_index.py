@@ -376,7 +376,23 @@ def build_rich_fail_urls(inspected: list[dict[str, Any]]) -> list[dict[str, Any]
     上限で切らないのは ``rich_issues`` と同じ理由で、切ると「1 URL に
     多品種」なのか「多 URL に 1 種類」なのかが消えるため。件数は
     ``by_rich_verdict`` の PASS 以外の合計と一致する。
+
+    ``last_crawl_time`` を必ず載せる (2026-08-31 追加)。**この判定は
+    「いまのページ」ではなく「Google が最後にクロールした版」に対するもの**で、
+    それを区別する材料がこれしかない。落としていたために 08-30 の census で
+    実際に詰まった —— FAIL 18 件のうち 17 件は、生きているマークアップを
+    見ると `offers` も `aggregateRating` も持っており、GSC のエラー文
+    (「offers、review、または aggregateRating を指定する必要があります」) と
+    食い違う。古いクロールの残像なのか、いま本当に落ちているのかを、
+    committed な成果物だけからは判定できなかった。
+
+    ``build_not_indexed_urls`` は同じ値を最初から載せている。取得済みの
+    フィールドを集計時に捨てていただけで、API の追加呼び出しは要らない。
     """
+    def _val(item: dict[str, Any], key: str) -> Any:
+        v = item.get(key)
+        return "(none)" if v is None else v
+
     rows: list[dict[str, Any]] = []
     for item in inspected:
         verdict = item.get("rich_verdict") or "(none)"
@@ -387,6 +403,7 @@ def build_rich_fail_urls(inspected: list[dict[str, Any]]) -> list[dict[str, Any]
             "rich_verdict": verdict,
             "rich_types": item.get("rich_types") or [],
             "rich_issues": item.get("rich_issues") or [],
+            "last_crawl_time": _val(item, "last_crawl_time"),
         })
     return rows
 

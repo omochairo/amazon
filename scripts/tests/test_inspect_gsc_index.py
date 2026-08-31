@@ -7,6 +7,9 @@
 4. None のフィールドが "(none)" に正規化されること
 5. --max-not-indexed-urls の既定値が無制限 (0) であること
 6. build_rich_fail_urls: PASS と (none) を除外し、課題つきで全件残すこと (#5085)
+7. build_rich_fail_urls が last_crawl_time を落とさないこと —— 判定は「いまの
+   ページ」ではなく「最後にクロールされた版」に対するもので、古い残像と現在の
+   失敗を分ける材料がこれしかない (#5085)
 """
 from __future__ import annotations
 
@@ -77,6 +80,7 @@ class BuildRichFailUrlsTest(unittest.TestCase):
             "rich_verdict": rich_verdict,
             "rich_types": rich_types if rich_types is not None else ["商品スニペット"],
             "rich_issues": rich_issues if rich_issues is not None else ["ERROR: x"],
+            "last_crawl_time": "2026-08-24T03:11:00Z",
         }
 
     def test_pass_and_none_are_excluded(self):
@@ -103,6 +107,21 @@ class BuildRichFailUrlsTest(unittest.TestCase):
     def test_not_capped(self):
         inspected = [self._item("https://x/%d" % i) for i in range(470)]
         self.assertEqual(470, len(I.build_rich_fail_urls(inspected)))
+
+    def test_last_crawl_time_is_kept(self):
+        """判定対象は「最後にクロールされた版」。古い残像か現在の失敗かを
+        分ける材料はこれしかないので落とさない (2026-08-30 の census で実際に
+        詰まった: FAIL 18 件中 17 件が、生きているマークアップでは GSC の
+        エラー文と食い違っていた)。"""
+        rows = I.build_rich_fail_urls([self._item("https://x/1")])
+        self.assertEqual("2026-08-24T03:11:00Z", rows[0]["last_crawl_time"])
+
+    def test_missing_last_crawl_time_is_explicit_not_absent(self):
+        """キーごと消すと『取れなかった』と『集計で落とした』が区別できない。"""
+        rows = I.build_rich_fail_urls([
+            {"url": "https://x/1", "rich_verdict": "FAIL"},
+        ])
+        self.assertEqual("(none)", rows[0]["last_crawl_time"])
 
 
 if __name__ == "__main__":
