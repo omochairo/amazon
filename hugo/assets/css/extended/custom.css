@@ -4760,6 +4760,47 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 }
 [data-theme="dark"] .post-content .editorial-comment > strong { color: #93c5fd; }
 
+/* ---------- らくらくベビー導線 (baby-registry-cta) omcha-ops#19 P2 ---------- */
+.post-content .baby-registry-cta {
+  background: #fff5f7;
+  border: 1px solid #f4c2cd;
+  border-radius: var(--radius-sm);
+  padding: 16px 18px;
+  margin: 28px 0;
+  color: #1f2937;
+}
+.post-content .baby-registry-cta__head {
+  font-weight: 700;
+  font-size: 1rem;
+  margin-bottom: 8px;
+  color: #b03a5b;
+}
+.post-content .baby-registry-cta__body {
+  margin: 0 0 12px;
+  font-size: 0.92rem;
+  line-height: 1.75;
+}
+.post-content .baby-registry-cta__link {
+  display: inline-block;
+  padding: 10px 18px;
+  border-radius: 999px;
+  /* 白文字とのコントラスト比 5.49:1 (WCAG AA)。#d2496e だと 4.27:1 で足りない。 */
+  background: #b83b5e;
+  color: #fff !important;
+  font-weight: 700;
+  text-decoration: none !important;
+  box-shadow: none;
+}
+.post-content .baby-registry-cta__link:hover { background: #98304d; }
+
+[data-theme="dark"] .post-content .baby-registry-cta {
+  background: #2b1721;
+  border-color: #6b3346;
+  color: #f3dbe2;
+}
+[data-theme="dark"] .post-content .baby-registry-cta__head { color: #f7a8bf; }
+[data-theme="dark"] .post-content .baby-registry-cta__link:hover { background: #c9426a; }
+
 /* ---------- ソース一覧 (sources-list) + 信頼度バッジ ---------- */
 .post-content .sources-list {
   font-size: 0.9rem;

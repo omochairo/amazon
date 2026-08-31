@@ -125,6 +125,27 @@ test("B: data-cta-slot が無ければ class から推測する (古い HTML の
   }
 });
 
+test("B: らくらくベビー導線 (omcha-ops#19 P2) は slot=baby-registry で送る", () => {
+  // /dp/ が無い URL なので ASIN は商品ページの URL から補われる。
+  const { events } = run(makeAnchor({
+    href: "https://www.amazon.co.jp/baby-reg/?tag=chk01-22",
+    className: "baby-registry-cta__link",
+    slot: "baby-registry",
+  }));
+  assert.equal(events.length, 1);
+  assert.equal(events[0].params.network, "amazon");
+  assert.equal(events[0].params.slot, "baby-registry");
+  assert.equal(events[0].params.asin, "B0BSH34YR8");
+});
+
+test("B: らくらくベビー導線は data-cta-slot が無くても class で拾える", () => {
+  const { events } = run(makeAnchor({
+    href: "https://www.amazon.co.jp/baby-reg/?tag=chk01-22",
+    className: "baby-registry-cta__link",
+  }));
+  assert.equal(events[0].params.slot, "baby-registry");
+});
+
 test("B: 手掛かりが何も無いリンクは body として必ず送る", () => {
   const { events } = run(makeAnchor({
     href: "https://www.amazon.co.jp/dp/B0BSH34YR8/?tag=chk01-22",
