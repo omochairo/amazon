@@ -38,11 +38,24 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      # #5047 段階2: fetch-depth を既定 (=1) に戻した。
+      #
+      # この job には **local git コマンドが 1 つも無い**。commit も push も
+      # `gh api repos/.../git/{commits,refs}` 経由で main の tree を直接いじる形で、
+      # ローカルの clone を経由しない (lock ref の作成も同じ)。履歴を読む操作
+      # (git log / rev-list / merge-base / for-each-ref) も無く、呼んでいる
+      # `scripts/jules_quota_gate.py` も urllib で GitHub API を叩くだけ。
+      # checkout が要るのはそのスクリプトと jules/ プロンプトを置くためだけなので、
+      # 全履歴を引く理由が無い (2026-09-01 に全 500 行を確認)。
+      #
+      # 対照: 31 / 36 / 04 は `git diff BASE...HEAD` の三点記法で merge-base を
+      # 要求するので `fetch-depth: 0` が実際に効いている。46 は
+      # `scripts/prune_stale_branches.py` が `git for-each-ref` で全 ref の
+      # committerdate を読むので同じく必要。**これらは外さない。**
       - name: Checkout
         uses: actions/checkout@v7
         with:
           ref: main
-          fetch-depth: 0
 
       # jules/ プロンプトは private repo (amazon-navi-brain) に分離済み。実行時に overlay checkout。
       - name: Checkout prompt brain (private) into jules/
