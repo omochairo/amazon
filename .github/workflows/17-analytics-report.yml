@@ -491,9 +491,19 @@ jobs:
           set -e
           # id を書き間違えると ${{ steps.X.outcome }} は空文字になり、健全性
           # チェックが「何も見ていない」状態で緑になる。そこだけは明示的に落とす。
+          #
+          # #5941: 上の空ファイル判定は **1 度も発火しない書き方だった**。id を誤記しても
+          # 展開結果は `low_ctr=` という「空でない行」になるので `grep -v` を素通りし、
+          # ファイルは非空になる。値が空の行そのものを見る判定を下に足した
+          # (2026-08-31 に 5 ケースをローカルで流して実測)。
           echo "$OUTCOMES" | tr ' ' '\n' | grep -v '^$' > /tmp/detector_outcomes.txt || true
           if [ ! -s /tmp/detector_outcomes.txt ]; then
             echo "::error::検出器の outcome が 1 つも取れていません。step id を確認してください。"
+            exit 1
+          fi
+          MISSING=$(grep -E '=$' /tmp/detector_outcomes.txt || true)
+          if [ -n "$MISSING" ]; then
+            echo "::error::outcome を取れていない検出器があります (step id の誤記か、その step まで到達していない): $(echo $MISSING)"
             exit 1
           fi
           {
