@@ -49,6 +49,11 @@ Cloudflare 自体が落ちているとき待機系に倒しても待機系も CF
 
 戻し先は `--target` か環境変数 `NAS_ORIGIN_CNAME` (リポジトリ変数) から取る。
 
+値の在りかは **Cloudflare の `navi.omcha.jp` の CNAME レコード**(本番稼働中ならそれが現物) か、NAS の cloudflared volume の `config.yml`。
+private repo `amazon-home-ops` の `docker/navi/README.md` は手順書で、
+実値は載っていない (`<uuid>` のプレースホルダのみ)。2026-08-31 に実際に探して
+見つからず、復帰の場で迷う文言だったので直した。
+
 **トンネルのホスト名を issue にもログにも出さない。** `navi.omcha.jp` は
 proxied なので、外から DNS を引いても Cloudflare の IP しか返らず
 `<uuid>.cfargotunnel.com` は見えない。このリポジトリは public なので、
@@ -588,7 +593,8 @@ def run_failback(args: argparse.Namespace, token: str, now: dt.datetime) -> Dict
         row["detail"] = (
             "戻し先が分からない。リポジトリ変数 `NAS_ORIGIN_CNAME` を設定するか、"
             "`--target` / `-f target=...` を渡すこと。"
-            "値は private の amazon-home-ops (docker/navi) にある"
+            "値は Cloudflare の navi.omcha.jp の CNAME レコードそのもの "
+            "(本番稼働中に読める) か、NAS の cloudflared volume の config.yml にある"
         )
         return row
     if side_of(target, args.standby_cname) != "nas":
