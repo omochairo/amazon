@@ -8,7 +8,9 @@
 1. parse_iso: Z 終端 / オフセット / tz 無し / 壊れた値
 2. check: ok / stale / 閾値の境界 / behind / unreachable / unknown
 3. behind の誤報防止: HEAD が動いた直後 (= HEAD がまだ新しい) は鳴らない
-4. title_for / render_body
+4. unverified: 配信中の sha が main の履歴に無い / 優先度 / 判定不能を叫ばない
+5. get_sha_on_main: compare API の status と 404 の解釈
+6. title_for / render_body
 """
 from __future__ import annotations
 
@@ -176,7 +178,8 @@ def test_missing_built_at_is_unknown_not_ok():
 
 # --- 出力 -------------------------------------------------------------------
 
-@pytest.mark.parametrize("status", ["stale", "behind", "unreachable", "unknown"])
+@pytest.mark.parametrize(
+    "status", ["unverified", "stale", "behind", "unreachable", "unknown"])
 def test_every_abnormal_status_has_its_own_title(status):
     title = cdf.title_for({"status": status})
     assert title.startswith("[delivery]")
@@ -203,3 +206,146 @@ def test_default_threshold_is_calibrated_against_measured_gaps():
     # 3h だと週に 4 回の誤報になるため 8h にしてある。
     # **下げるときは間隔を測り直すこと** (平均ではなく裾を見る)。
     assert cdf.DEFAULT_MAX_AGE_HOURS == 8
+
+
+# --- unverified (配信中の sha が main の履歴に無い) --------------------------
+#
+# NAS 移管後、配信ツリーに書けるのは NAS_DEPLOY_KEY を持つ GitLab CI だけ。
+# その権限が奪われたときの検知はここしかない。behind は「main の HEAD 自体が
+# 閾値より古い」ときにしか立たないので、この網が無いと main が動いている限り
+# 偽リリースは ok のまま通る。
+
+def _verify(result):
+    return lambda sha: result
+
+
+def test_sha_not_on_main_is_unverified():
+    row = cdf.check(URL, NOW, _fetch(_payload("2026-08-30T11:55:00Z", sha=SHA)),
+                    verify_sha=_verify(False))
+    assert row["status"] == "unverified"
+    assert row["sha_verified"] is False
+    assert SHA[:10] in row["detail"]
+
+
+def test_sha_on_main_is_ok():
+    row = cdf.check(URL, NOW, _fetch(_payload("2026-08-30T11:55:00Z", sha=SHA)),
+                    verify_sha=_verify(True))
+    assert row["status"] == "ok"
+    assert row["sha_verified"] is True
+
+
+def test_unverifiable_sha_does_not_cry_wolf():
+    # GitHub API が落ちているだけで「改竄」を叫ばない。判定不能は None のまま残す。
+    row = cdf.check(URL, NOW, _fetch(_payload("2026-08-30T11:55:00Z", sha=SHA)),
+                    verify_sha=_verify(None))
+    assert row["status"] == "ok"
+    assert row["sha_verified"] is None
+
+
+def test_verification_is_opt_in():
+    # verify_sha を渡さなければ照合しない (既存の呼び出し元を壊さない)。
+    row = cdf.check(URL, NOW, _fetch(_payload("2026-08-30T11:55:00Z", sha=SHA)))
+    assert row["status"] == "ok"
+    assert row["sha_verified"] is None
+
+
+def test_unverified_takes_precedence_over_stale():
+    # 古いものが配られているより、main に無いものが配られているほうが重い。
+    row = cdf.check(URL, NOW, _fetch(_payload("2026-08-29T17:00:00Z", sha=SHA)),
+                    verify_sha=_verify(False))
+    assert row["status"] == "unverified"
+
+
+def test_unverified_takes_precedence_over_behind():
+    row = cdf.check(
+        URL, NOW, _fetch(_payload("2026-08-30T11:55:00Z", sha=SHA)),
+        head={"sha": OTHER_SHA, "committed_at": "2026-08-30T01:00:00Z"},
+        verify_sha=_verify(False))
+    assert row["status"] == "unverified"
+
+
+def test_mirror_lag_one_commit_behind_is_not_unverified():
+    # 配信中の sha が HEAD と違っても、main の祖先なら正常。
+    # ここを「HEAD と一致」で判定すると毎回誤報になる。
+    row = cdf.check(
+        URL, NOW, _fetch(_payload("2026-08-30T11:55:00Z", sha=SHA)),
+        head={"sha": OTHER_SHA, "committed_at": "2026-08-30T11:50:00Z"},
+        verify_sha=_verify(True))
+    assert row["status"] == "ok"
+
+
+def test_unreachable_skips_verification_entirely():
+    calls = []
+
+    def _spy(sha):
+        calls.append(sha)
+        return False
+
+    row = cdf.check(URL, NOW, _raises(cdf.FetchError("HTTP 503")), verify_sha=_spy)
+    assert row["status"] == "unreachable"
+    assert calls == []
+
+
+# --- get_sha_on_main --------------------------------------------------------
+
+@pytest.mark.parametrize("status,expected", [
+    ("identical", True),   # 配信中の sha が HEAD そのもの
+    ("behind", True),      # mirror 遅延。sha は main の祖先
+    ("ahead", False),      # main に取り込まれていないコミット
+    ("diverged", False),   # main の履歴から外れている
+    ("weird", None),       # 知らない値を True にも False にも倒さない
+])
+def test_get_sha_on_main_maps_compare_status(monkeypatch, status, expected):
+    monkeypatch.setattr(cdf, "_gh", lambda args: json.dumps({"status": status}))
+    assert cdf.get_sha_on_main("o/r", SHA) is expected
+
+
+def test_get_sha_on_main_treats_404_as_not_on_main():
+    import subprocess
+
+    def _boom(args):
+        raise subprocess.CalledProcessError(
+            1, args, output="", stderr="gh: Not Found (HTTP 404)")
+
+    cdf_gh = cdf._gh
+    try:
+        cdf._gh = _boom
+        assert cdf.get_sha_on_main("o/r", SHA) is False
+    finally:
+        cdf._gh = cdf_gh
+
+
+def test_get_sha_on_main_treats_other_failures_as_undetermined():
+    # レート制限や認証切れで「改竄」を叫ばない。
+    import subprocess
+
+    def _boom(args):
+        raise subprocess.CalledProcessError(
+            1, args, output="", stderr="gh: API rate limit exceeded (HTTP 403)")
+
+    cdf_gh = cdf._gh
+    try:
+        cdf._gh = _boom
+        assert cdf.get_sha_on_main("o/r", SHA) is None
+    finally:
+        cdf._gh = cdf_gh
+
+
+def test_get_sha_on_main_ignores_empty_sha():
+    assert cdf.get_sha_on_main("o/r", "") is None
+
+
+# --- 出力 (unverified) ------------------------------------------------------
+
+def test_body_of_unverified_names_the_suspicion():
+    row = cdf.check(URL, NOW, _fetch(_payload("2026-08-30T11:55:00Z", sha=SHA)),
+                    verify_sha=_verify(False))
+    body = cdf.render_body(row, NOW)
+    assert "unverified" in body
+    assert "**いいえ**" in body
+    assert "NAS_DEPLOY_KEY" in body
+
+
+def test_body_shows_unverified_state_as_unknown_when_not_checked():
+    row = cdf.check(URL, NOW, _fetch(_payload("2026-08-30T11:55:00Z")))
+    assert "未確認" in cdf.render_body(row, NOW)
