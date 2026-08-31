@@ -169,6 +169,62 @@ def is_generatable(asin: str) -> bool:
         return True
 
 
+PER_ASIN_ROOT = "data/raw/per_asin"
+
+
+def has_prompt_source(asin: str, per_asin_root: str = PER_ASIN_ROOT) -> bool:
+    """`build_jules_prompt.py` がこの ASIN の商品データを組めるか。
+
+    あちらは ``data/raw/amazon.json`` の該当エントリを見て、無ければ
+    ``per_asin/<ASIN>/amazon.json`` に落ちる (両方無いと SystemExit)。リライト
+    対象は前者に居ないのが常態なので、後者の有無が実質の前提になる。
+    """
+    return os.path.exists(os.path.join(per_asin_root, asin, "amazon.json"))
+
+
+def pending_rewrite_candidates(
+    articles_dir: str = "data/articles",
+    queue_dir: str = QUEUE_DIR,
+    per_asin_root: str = PER_ASIN_ROOT,
+    limit: int | None = None,
+) -> list[str]:
+    """生成に回せるリライト待ち ASIN を、依頼が古い順に返す (#5490)。
+
+    **なぜ必要か**: `eligible_rewrite_asins` は pick-asin の *除外* を外すだけで、
+    候補プールそのものは ``data/raw/amazon.json`` の ``items[]`` から作られる。
+    リライト対象は「既に記事がある古い ASIN」なので普段そこに居ない。idle-fill が
+    prepend しても **日次の 01-fetch-products が amazon.json を作り直して消す**ため、
+    候補に居られるのは数時間だけで、その窓の中でも新規 ASIN 60〜70 件と同じ確率で
+    shuffle されるだけだった。
+
+    実測 (2026-08-31): マーカー 172 件・消化 0 件、うち候補プールに居るもの 0 件。
+    直近 14 日の merged PR を全部見ても、idle-fill 自身の PR 以外で対象 ASIN に
+    触れたものは 1 件も無い。除外を外すだけでは届かない、が機構。
+
+    そこで **候補として足す**側を用意する。呼び出し側 (03-invoke-jules の
+    pick-asin / invoke_jules_repoless.pick_candidates) はこの戻り値を候補列の
+    先頭寄りに、1 run あたりの上限つきで差し込む。上限を置くのは、待ち行列が
+    新規記事のスロットを丸ごと食い潰さないため。
+
+    並びは ``requested_at`` の昇順 (FIFO)。shuffle しないのは、消化順を決定的に
+    して「毎回同じ 12 件を選び直して何も進まない」形に戻さないため。
+    """
+    ready: list[tuple[str, str]] = []
+    for asin, marker in load_markers(queue_dir).items():
+        old_slug = marker.get("old_slug", "") if isinstance(marker, dict) else ""
+        if has_newer_body(asin, old_slug, articles_dir):
+            continue  # 置き換えが着地済み = もう待っていない
+        if not has_prompt_source(asin, per_asin_root):
+            continue  # 素材が無い。生成に回しても prompt が組めない
+        if not is_generatable(asin):
+            continue  # band=zero/unfetched は生成側が defer する
+        requested_at = marker.get("requested_at", "") if isinstance(marker, dict) else ""
+        ready.append((requested_at, asin))
+    ready.sort()
+    out = [asin for _, asin in ready]
+    return out[:limit] if limit is not None and limit >= 0 else out
+
+
 def deferred_markers(queue_dir: str = QUEUE_DIR) -> list[str]:
     """マーカーはあるが生成側が defer する ASIN (= 消化されようがない) を返す。"""
     return sorted(a for a in load_markers(queue_dir) if not is_generatable(a))

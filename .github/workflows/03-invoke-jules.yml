@@ -170,13 +170,32 @@ jobs:
               ranking_set = set(ranking_pool)
               remaining_ranking = [a for a in ranking_pool if a not in existing]
               remaining_kw = [a for a in candidates if a not in existing and a not in ranking_set]
+              # #5490: リライト待ちを **候補として足す**。マーカーは除外を外すだけ
+              # だったので、amazon.json の items[] に居ない (= 日次 fetch に消された)
+              # 対象は永久に選ばれなかった。実測 2026-08-31: マーカー 172 件・
+              # 消化 0 件・候補プールに居るもの 0 件。
+              # 1 run あたりの本数を絞るのは、172 件の待ち行列が新規記事のスロットを
+              # 丸ごと食い潰さないため。並びは FIFO (requested_at 昇順) で決定的。
+              rewrite_first = []
+              try:
+                  _cap = int(os.environ.get('REWRITE_PICKS_PER_RUN', '2'))
+                  _pool = [a for a in _rq.pending_rewrite_candidates('data/articles')
+                           if a not in existing and a not in ranking_set]
+                  rewrite_first = _pool[:max(_cap, 0)]
+                  if _pool:
+                      print(f"rewrite-ready (#5490): {len(_pool)} -> picking {len(rewrite_first)} "
+                            f"{rewrite_first}")
+              except Exception as _e:
+                  print(f"::warning::rewrite candidate injection skipped: {_e}")
               # GITHUB_RUN_ID で seed してシャッフル。bash 側で 1 件ずつ lock 試行 → 取得成功した時点で確定。
               # ranking 内も shuffle: 生成に失敗し続ける ASIN が毎回 slot 1 を占有して
               # keyword pool を枯渇させる pathological loop を避ける (ranking 優先は維持)。
               rng = random.Random(os.environ.get('GITHUB_RUN_ID', ''))
               rng.shuffle(remaining_ranking)
               rng.shuffle(remaining_kw)
-              remaining = remaining_ranking + remaining_kw
+              remaining = remaining_ranking + rewrite_first + [
+                  a for a in remaining_kw if a not in rewrite_first
+              ]
               # #1600 Phase 1: 第三者情報量が「fetch 済みで真ゼロ」(band=="zero",
               # = Bajoy/Joyreal 級の D-tier 無素材品) の ASIN を pick から defer する。
               # Jules が google_search 任せで水増し記事 (#1599 sources floor 割れ) を
