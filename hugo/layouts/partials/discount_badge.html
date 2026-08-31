@@ -30,7 +30,7 @@
     {{- $items := .items | default dict -}}
     {{- with (index $items $asin) -}}
       {{- if .pct -}}
-<span class="discount-badge" title="定価から{{ .pct }}%OFF (Amazon調べ)">{{ .pct }}% OFF</span>
+<span class="discount-badge" title="Amazon の参考価格に対する値引き率 {{ .pct }}% (直近の値下がりを示すものではありません)">{{ .pct }}% OFF</span>
       {{- end -}}
     {{- end -}}
   {{- end -}}

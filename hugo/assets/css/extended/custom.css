@@ -3947,6 +3947,14 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   font-size: 1.15rem;
   letter-spacing: 0.02em;
 }
+/* #6285: OFF% の基準 (Amazon の参考価格比) をバッジ内に小さく添える。
+   数字だけを大きく出すと「直近で値下がりした」と読まれるため。 */
+.feature-discount-basis {
+  font-size: 0.68rem;
+  font-weight: 600;
+  opacity: 0.8;
+  letter-spacing: 0;
+}
 
 /* #3563 フィードバックA: OFF%・知育スコア・対象年齢の3バッジを縦積みではなく
    1行の flex 行にまとめるコンテナ。中の各バッジ自体のピル見た目 (背景・角丸・
