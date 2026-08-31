@@ -36,8 +36,13 @@
            deals/cospa それぞれ元々持っていなかった軸を nil ガード付きで追加する。 */}}
     <div class="feature-badges">
     {{- if eq $type "deals" }}
+      {{- /* #6285: この % は Amazon の参考価格に対する値引き率であって、
+             「直近で値下がりした」ではない。実測では上位 20 件のうち 12 件が
+             7 週間同一価格だった。基準を書かずに数字だけ出すと二重価格表示に
+             寄るので、バッジ自身に基準を持たせる。当サイト観測の実値下がりは
+             /price/ (build_price_dashboard.py) が担当する。 */ -}}
       {{- with $item.savings_percentage }}
-      <span class="feature-discount-badge"><span class="feature-discount-pct">{{ . }}%</span> OFF</span>
+      <span class="feature-discount-badge" title="Amazon が表示する参考価格に対する値引き率です。直近の値下がりを示すものではありません。"><span class="feature-discount-pct">{{ . }}%</span> OFF<span class="feature-discount-basis">参考価格比</span></span>
       {{- end }}
     {{- else }}
       {{- with $item.asin }}{{ partial "discount_badge.html" (upper .) }}{{ end }}
