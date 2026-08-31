@@ -129,6 +129,22 @@ jobs:
             echo "count=0" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # #5490: 待ち行列に上限を置く。生成側の消化量 (03-invoke-jules が
+          # 1 run あたり REWRITE_PICKS_PER_RUN=2 件・6h 周期 = 約 8 件/日) を
+          # 超えて積むと、消化されないマーカーが増え続け、同じ対象を選び直して
+          # 同じ PR を作り直すだけになる (実測 2026-08-31: マーカー 172 件・
+          # 消化 0 件)。積むのは「1〜2 日で消化できる量」まで。
+          BACKLOG=$(python -c "import sys; sys.path.insert(0,'scripts'); import rewrite_queue as rq; print(len(rq.eligible_rewrite_asins('data/articles')))")
+          CAP="${REWRITE_QUEUE_CAP:-12}"
+          echo "rewrite backlog=$BACKLOG cap=$CAP"
+          if [ "$BACKLOG" -ge "$CAP" ]; then
+            echo "Backlog at/over cap; not enqueueing more (cleanup already ran)."
+            echo "count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          ROOM=$((CAP - BACKLOG))
+          [ "$SLACK" -gt "$ROOM" ] && SLACK="$ROOM"
+          echo "slack after backlog cap=$SLACK"
           python scripts/select_rewrite_targets.py \
             --articles-dir data/articles \
             --exclude-file /tmp/excluded.txt \

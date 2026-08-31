@@ -260,10 +260,28 @@ def pick_candidates(gl, budget):
     remaining_ranking = [a for a in ranking_pool if a not in existing]
     remaining_kw = [a for a in candidates
                     if a not in existing and a not in ranking_set]
+    # #5490: リライト待ちを候補として **足す**。マーカーは existing から除外を
+    # 外すだけで、候補列そのものは amazon.json の items[] から作られるため、
+    # 日次 fetch に prepend を消された対象は永久に選ばれなかった
+    # (実測 2026-08-31: マーカー 172 件・消化 0 件・候補プール内 0 件)。
+    # 03-invoke-jules.yml の inline pick-asin と同じ規則。
+    rewrite_first: list[str] = []
+    try:
+        import rewrite_queue as _rq2
+        cap = int(os.environ.get("REWRITE_PICKS_PER_RUN", "2"))
+        pool = [a for a in _rq2.pending_rewrite_candidates("data/articles")
+                if a not in existing and a not in ranking_set]
+        rewrite_first = pool[:max(cap, 0)]
+        if pool:
+            print(f"rewrite-ready (#5490): {len(pool)} -> picking {len(rewrite_first)}")
+    except Exception as e:
+        print(f"warning: rewrite candidate injection skipped: {e}", file=sys.stderr)
     rng = random.Random(os.environ.get("CI_PIPELINE_ID", ""))
     rng.shuffle(remaining_ranking)
     rng.shuffle(remaining_kw)
-    remaining = remaining_ranking + remaining_kw
+    remaining = remaining_ranking + rewrite_first + [
+        a for a in remaining_kw if a not in rewrite_first
+    ]
 
     # #1600 Phase 1: band=zero (真ゼロ素材) を defer (全滅時は無効化)。
     # repoless 移行で "unfetched" (第三者収集が未実行) も defer 対象に追加:
