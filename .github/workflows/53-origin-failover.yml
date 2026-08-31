@@ -1,0 +1,109 @@
+name: Origin Failover (NAS -> GitLab Pages 待機系)
+
+# #6205 B-1: 本番オリジン (NAS + cloudflared) が落ちたとき、navi.omcha.jp の
+# CNAME を待機系 (GitLab Pages) へ自動で倒す。
+#
+# なぜ倒せるか:
+#   待機系は劣化した代替ではない。`.gitlab-ci.yml` の `pages` ジョブが push
+#   ごとに走るので本番とバイト同一・同 sha で、301 リダイレクト 512 本も 404 も
+#   同じに返る (2026-08-31 実測)。**倒すことのコストがほぼゼロ**なので自動化に
+#   見合う。逆に**戻すことは急がない**ので、戻しは手動 (workflow_dispatch) に
+#   している。非対称なのは意図的。
+#
+# なぜ 51-delivery-freshness-monitor では代替できないか:
+#   51 が見るのは「配信が更新され続けているか」で、閾値は 8h・原因非依存。
+#   オリジンが落ちた瞬間に鳴らす道具ではないし、鳴らしても直さない。
+#   こちらは「いま応答しているか」だけを見て、直せる障害のときだけ手を動かす。
+#   両方要る。
+#
+# 何を「オリジン障害」と呼ぶか (judge は scripts/failover_dns.py の docstring):
+#   `cf-ray` があって 5xx —— つまり **Cloudflare までは届いているのにオリジンが
+#   応えない** ときだけ。`cf-ray` が無い失敗 (接続不能 / DNS 不能 / runner 側の
+#   一時障害) では CNAME を触らない。**書き換えても直らない障害で DNS を殴らない。**
+#
+# 段階投入 (2026-08-31 時点):
+#   リポジトリ変数 `FAILOVER_ENABLED` が真でない間は、判定と起票だけして
+#   **DNS を書き換えない**。数日回して誤検知が無いことを確かめてから武装する。
+#
+#       gh variable set FAILOVER_ENABLED --body true -R omochairo/amazon
+#
+# 起票規律 (CLAUDE.md: GitHub API バースト禁止):
+#   マーカー `<!-- origin-failover -->` で単一 issue を特定して body を更新し、
+#   健全に戻ったら close する。1 run あたりの書き込みは最大 1 回。
+#
+# 必要な権限:
+#   `CF_DNS_TOKEN` (omcha.jp ゾーン限定 / Zone:Read + DNS:Edit)。
+#   41-pages-cert-renew.yml が使っているものと同じで追加発行は不要
+#   (2026-08-31 時点で登録済み)。
+#
+#   **未設定を `exit 0` で握り潰さない (CLAUDE.md / #4793)。** それをやると
+#   トークンが失効した日にこのレーンが黙って死に、いざ倒したいときに
+#   何も起きない。失効は緑ではなく赤で知りたい。
+
+on:
+  schedule:
+    # 10 分毎。GitHub の cron は実際には 5〜20 分遅れるので、検知までは
+    # 現実には 10〜30 分と見ておくこと。1 run のコストは正常時 1 リクエスト。
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      direction:
+        description: 'standby=判定して倒す / nas=本番へ戻す (手動復帰)'
+        required: false
+        default: 'standby'
+        type: choice
+        options: [standby, nas]
+      target:
+        description: 'nas へ戻すときの CNAME (省略時は failover issue から取得)'
+        required: false
+        default: ''
+      dry_run:
+        description: 'true なら DNS も issue も触らず判定だけ出す'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  # 倒す操作が二重に走らないようにする。cancel はしない (途中で切ると
+  # 「書き換えたが起票していない」状態が残りうる)。
+  group: origin-failover
+  cancel-in-progress: false
+
+jobs:
+  failover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      # requirements.txt 全部は要らない (この script の外部依存は requests だけ)。
+      # 監視・復旧レーンの起動を本番依存の解決に巻き込まない。
+      - name: Install requests
+        run: pip install requests
+
+      - name: Run failover judge
+        env:
+          CF_DNS_TOKEN: ${{ secrets.CF_DNS_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          FAILOVER_ENABLED: ${{ vars.FAILOVER_ENABLED }}
+        run: |
+          DIRECTION="${{ github.event.inputs.direction || 'standby' }}"
+          ARGS="--to $DIRECTION"
+          if [ -n "${{ github.event.inputs.target }}" ]; then
+            ARGS="$ARGS --target ${{ github.event.inputs.target }}"
+          fi
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          python scripts/failover_dns.py $ARGS
