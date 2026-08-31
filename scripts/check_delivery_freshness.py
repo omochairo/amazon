@@ -17,6 +17,23 @@
 2. ``behind`` —— ``built_at`` は新しいのに ``sha`` が main の HEAD でなく、
    その HEAD 自体が閾値より古い。「時計は進んでいるのに中身が追いついていない」
    経路 (mirror が壊れて GitLab 側の main が進んでいない等) を捕まえる
+3. ``unverified`` —— 配信中の ``sha`` が **main の履歴に見つからない**。
+   配信物が main 由来でないということなので、鮮度より重い異常として扱う
+
+なぜ 3 が要るか (2026-08-31 追加):
+  NAS 移管後、配信ツリーに書き込めるのは ``NAS_DEPLOY_KEY`` を持つ GitLab CI
+  だけになった。裏を返すと **GitLab 側が侵害されたときの権限は
+  「navi.omcha.jp に任意のコンテンツを公開する」**で、アフィリエイトサイトに
+  とってはリンク差し替えという最悪の被害に直結する。
+
+  それを検知するのは ``behind`` の役目に見えるが、``behind`` は
+  「main の HEAD 自体が閾値より古い」ときにしか立たない。したがって
+  **main に存在しない sha が配信されていても、main が動いている限り
+  ``ok`` のまま**だった。ここを塞ぐ。
+
+  判定は「配信中の sha が main の**祖先**か」で行う (HEAD との一致ではない)。
+  mirror 遅延で 1 つ前の main コミットが載っている状態は正常なので、
+  一致を要求すると毎回誤報になる。
 
 なぜ必要か:
   配信は GitHub と GitLab / NAS をまたいで成立している。
@@ -103,16 +120,26 @@ def parse_iso(value: Any) -> Optional[dt.datetime]:
 
 def check(url: str, now: dt.datetime, fetch: Callable[[str], str],
           max_age_hours: int = DEFAULT_MAX_AGE_HOURS,
-          head: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """配信の状態を 1 件返す。status は ok / stale / behind / unreachable / unknown。
+          head: Optional[Dict[str, Any]] = None,
+          verify_sha: Optional[Callable[[str], Optional[bool]]] = None
+          ) -> Dict[str, Any]:
+    """配信の状態を 1 件返す。
+
+    status は ok / unverified / stale / behind / unreachable / unknown。
 
     ``head`` は main の HEAD 情報 ``{"sha", "committed_at"}``。None なら
     sha の突合をしない (取得できなかった場合も鮮度判定だけは続ける)。
+
+    ``verify_sha`` は「その sha が main の祖先か」を返す関数。
+    True=祖先 / False=履歴に無い / None=判定不能。None なら鳴らさずに
+    ``sha_verified`` に None を残す (GitHub API が落ちているだけで
+    「改竄」を叫ばない)。渡さなければ検証そのものをしない。
     """
     row: Dict[str, Any] = {
         "status": "unknown", "url": url, "built_at": None, "sha": None,
         "age_hours": None, "max_age_hours": max_age_hours,
         "head_sha": (head or {}).get("sha"), "detail": "",
+        "sha_verified": None,
     }
     try:
         raw = fetch(url)
@@ -143,6 +170,19 @@ def check(url: str, now: dt.datetime, fetch: Callable[[str], str],
     age_hours = (now - built_at).total_seconds() / 3600.0
     row["age_hours"] = round(age_hours, 1)
 
+    # **鮮度より先に「これは main 由来か」を見る。**
+    # 古いものが配られているより、main に無いものが配られているほうが重い。
+    if verify_sha is not None and row["sha"]:
+        row["sha_verified"] = verify_sha(row["sha"])
+        if row["sha_verified"] is False:
+            row["status"] = "unverified"
+            row["detail"] = (
+                "配信中の sha {} が main の履歴に見つからない。"
+                "main の force-push で履歴を書き換えていないなら、"
+                "main を経由しない配信 (= 受け口の侵害) を疑う".format(row["sha"][:10])
+            )
+            return row
+
     if age_hours > max_age_hours:
         row["status"] = "stale"
         return row
@@ -168,6 +208,7 @@ def check(url: str, now: dt.datetime, fetch: Callable[[str], str],
 def render_body(row: Dict[str, Any], now: dt.datetime) -> str:
     age = "-" if row["age_hours"] is None else "{}h".format(row["age_hours"])
     headline = {
+        "unverified": "配信中のコミットが main の履歴にありません",
         "stale": "配信が止まっています",
         "behind": "配信は動いているのに中身が古いままです",
         "unreachable": "サイトに到達できません",
@@ -185,6 +226,8 @@ def render_body(row: Dict[str, Any], now: dt.datetime) -> str:
         "| built_at | {} |".format(row["built_at"] or "-"),
         "| 配信中の sha | `{}` |".format(row["sha"] or "-"),
         "| main の HEAD | `{}` |".format(row["head_sha"] or "-"),
+        "| sha は main 由来か | {} |".format(
+            {True: "はい", False: "**いいえ**"}.get(row.get("sha_verified"), "未確認")),
         "| 経過 | {} |".format(age),
         "| 上限 | {}h |".format(row["max_age_hours"]),
     ]
@@ -211,6 +254,12 @@ def render_body(row: Dict[str, Any], now: dt.datetime) -> str:
         "- `stale` — 配信が止まっている。GitLab 側のパイプライン "
         "(`pages` / `deploy-nas`) と、`40-mirror-to-gitlab.yml` の直近 run "
         "(非 fast-forward で reject されていないか) を見ること",
+        "- `unverified` — **配信中の sha が main の履歴に無い。最優先で見ること。** "
+        "配信ツリーに書けるのは `NAS_DEPLOY_KEY` を持つ GitLab CI だけなので、"
+        "main を経由しない配信は受け口の侵害を意味する。"
+        "先に潰す良性の可能性は「main を force-push で書き換えた」の 1 つだけ。"
+        "該当しなければ `NAS_DEPLOY_KEY` の失効と "
+        "`releases/<sha>` の中身の確認から入る (amazon-home-ops#70)",
         "- `behind` — 配信は走っているのに古いコミットのまま。mirror が壊れて "
         "GitLab 側の main が進んでいない可能性",
         "- `unreachable` — 取得できない。サイト自体の停止 / DNS / 証明書を疑う "
@@ -274,6 +323,45 @@ def get_head(repo: str, branch: str = "main") -> Optional[Dict[str, Any]]:
         return None
 
 
+def get_sha_on_main(repo: str, sha: str, branch: str = "main") -> Optional[bool]:
+    """``sha`` が ``branch`` の祖先か。True=祖先 / False=履歴に無い / None=判定不能。
+
+    **HEAD との一致では判定しない。** mirror 遅延で 1 つ前の main コミットが
+    載っている状態は正常なので、一致を要求すると毎回誤報になる。
+    compare API の ``status`` は head (= sha) の base (= main) に対する位置を返す:
+
+        identical / behind -> main の祖先        (正常)
+        ahead / diverged   -> main の履歴に無い  (異常)
+
+    404 は「そのコミットがリポジトリに無い」なので False。
+    それ以外の失敗 (ネットワーク / 認証 / レート制限) は None にして鳴らさない。
+    """
+    import subprocess
+    if not isinstance(sha, str) or not sha:
+        return None
+    try:
+        out = _gh(["api", "repos/{}/compare/{}...{}".format(repo, branch, sha)])
+    except subprocess.CalledProcessError as exc:
+        stderr = (exc.stderr or "")
+        if "404" in stderr or "Not Found" in stderr or "No commit found" in stderr:
+            logger.warning("sha %s は %s に存在しない (404)", sha[:10], repo)
+            return False
+        logger.warning("sha の照合に失敗した (判定不能として扱う): %s", stderr.strip()[:200])
+        return None
+    except Exception as exc:
+        logger.warning("sha の照合に失敗した (判定不能として扱う): %s", exc)
+        return None
+    try:
+        status = json.loads(out).get("status")
+    except ValueError:
+        return None
+    if status in ("identical", "behind"):
+        return True
+    if status in ("ahead", "diverged"):
+        return False
+    return None
+
+
 def get_open_issue(repo: str) -> Optional[int]:
     query = 'repo:{} is:issue is:open in:body "{}"'.format(repo, MARKER)
     out = _gh(["api", "-X", "GET", "search/issues", "-f", "q={}".format(query),
@@ -299,6 +387,7 @@ def close_issue(repo: str, number: int) -> None:
 
 def title_for(row: Dict[str, Any]) -> str:
     return {
+        "unverified": "[delivery][要確認] 配信中のコミットが main の履歴にありません",
         "stale": "[delivery] 配信が止まっています",
         "behind": "[delivery] 配信は動いているのに中身が古いままです",
         "unreachable": "[delivery] サイトに到達できません",
@@ -314,6 +403,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     p.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT)
     p.add_argument("--now", default=None,
                    help="判定基準時刻 (ISO8601, 既定: UTC 現在)。replay 検証用")
+    p.add_argument("--skip-sha-verification", action="store_true",
+                   help="配信中の sha が main の祖先かの照合を省く (offline 検証用)")
     p.add_argument("--dry-run", action="store_true",
                    help="issue を触らず判定結果と body だけ出す")
     args = p.parse_args(argv)
@@ -323,11 +414,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     head = get_head(args.repo) if args.repo else None
 
+    # --repo が無ければ照合しない (offline / dry-run のため)。
+    verify = ((lambda sha: get_sha_on_main(args.repo, sha))
+              if args.repo and not args.skip_sha_verification else None)
+
     row = check(args.build_json, now,
                 fetch=lambda u: http_fetch(u, timeout=args.timeout),
-                max_age_hours=args.max_age_hours, head=head)
-    logger.info("status=%s built_at=%s sha=%s head=%s age=%s max=%dh %s",
+                max_age_hours=args.max_age_hours, head=head, verify_sha=verify)
+    logger.info("status=%s built_at=%s sha=%s head=%s verified=%s age=%s max=%dh %s",
                 row["status"], row["built_at"], row["sha"], row["head_sha"],
+                row.get("sha_verified"),
                 "-" if row["age_hours"] is None else "{}h".format(row["age_hours"]),
                 row["max_age_hours"], row.get("detail", ""))
 
