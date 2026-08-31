@@ -104,40 +104,12 @@
     </div>
     {{- end }}
 </nav>
-<script>
-(function () {
-    var nav = document.querySelector(".cat-nav");
-    if (!nav) { return; }
-    var btns = Array.prototype.slice.call(nav.querySelectorAll(".cat-summary"));
-    function close(btn) {
-        btn.setAttribute("aria-expanded", "false");
-        var p = document.getElementById(btn.getAttribute("data-cat-target"));
-        if (p) { p.hidden = true; }
-    }
-    function closeAll(except) {
-        btns.forEach(function (b) { if (b !== except) { close(b); } });
-    }
-    btns.forEach(function (b) {
-        b.addEventListener("click", function () {
-            var open = b.getAttribute("aria-expanded") === "true";
-            closeAll(b);
-            if (open) {
-                close(b);
-            } else {
-                b.setAttribute("aria-expanded", "true");
-                var p = document.getElementById(b.getAttribute("data-cat-target"));
-                if (p) { p.hidden = false; }
-            }
-        });
-    });
-    // バー外クリック / bfcache 復元時は閉じる。
-    document.addEventListener("click", function (e) {
-        if (!nav.contains(e.target)) { closeAll(null); }
-    });
-    window.addEventListener("pageshow", function (e) {
-        if (e.persisted) { closeAll(null); }
-    });
-})();
-</script>
+{{- /* #6206 chrome 削減: カテゴリメニューの開閉スクリプト (0.7KB × 6,369 枚
+       = 4.7MB) を assets/js/cat_nav.js へ。.cat-nav を即座に querySelector するが、
+       defer は DOM 構築後に走るのでこの partial の末尾にあったときと同条件。 */ -}}
+{{- $catNav := resources.Get "js/cat_nav.js" | resources.Minify | resources.Fingerprint "sha256" }}
+{{- if $catNav }}
+<script defer src="{{ $catNav.RelPermalink }}" integrity="{{ $catNav.Data.Integrity }}" crossorigin="anonymous"></script>
+{{- end }}
 {{- end }}
 {{- end }}
