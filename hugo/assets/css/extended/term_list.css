@@ -1,0 +1,170 @@
+/* #6206 chrome 削減: _default/term.html のインライン <style> をここへ移した。
+   実測 (2026-08-31): 同一内容の <style> が term/brand 4,112 枚に焼かれ 24.5 MB を
+   占めていた。extended/ は core の後に *アルファベット順* で連結されるため、
+   このファイルは custom.css より後に来る = インラインだったときと同じ勝ち負けになる。
+   ファイル名を c より前に変えると .sort-btn 系の優先順位が反転するので注意。
+
+   なお .term-sort-controls / .sort-label / .sort-btn / .sort-btn:hover /
+   .sort-btn.active と、その dark 版 4 つ (計 9 ルール) は custom.css (L2859-2909) と
+   宣言まで同一の重複だったのでここには持ってきていない (custom.css 側を正とする)。 */
+  /* #5343 follow-up: 掲載件数を上限で切ったときの注記 */
+  .term-list-cap-note {
+    margin: 8px 0 24px;
+    font-size: 0.9em;
+    line-height: 1.7;
+    color: var(--secondary, #6b7280);
+  }
+
+  /* #731 Part D: brand hub hero */
+  .brand-hub-hero {
+    display: flex; gap: 20px; align-items: center;
+    margin: 16px 0 24px;
+    padding: 18px 20px;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(14,165,233,0.06), rgba(14,165,233,0.0));
+  }
+  .brand-hub-hero-image {
+    flex: 0 0 auto; width: 120px; height: 120px;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; border-radius: 8px;
+    background: var(--code-bg, #f3f4f6);
+  }
+  .brand-hub-hero-image img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .brand-hub-hero-image a { display: contents; }
+  .brand-hub-hero-body { flex: 1 1 auto; min-width: 0; }
+  .brand-hub-hero-meta {
+    display: flex; flex-wrap: wrap; gap: 8px 12px;
+    font-size: 0.9rem; color: var(--primary, #1f2937);
+  }
+  .brand-hub-hero-meta .brand-hub-stat {
+    display: inline-flex; align-items: center; gap: 4px;
+    white-space: nowrap;
+  }
+  .brand-hub-tier {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-weight: 700; font-size: 0.8rem;
+    background: #6b7280; color: #fff;
+  }
+  .brand-hub-tier-s { background: #f59e0b; }
+  .brand-hub-tier-a { background: #10b981; }
+  .brand-hub-tier-b { background: #0ea5e9; }
+  .brand-hub-tier-c { background: #6366f1; }
+  .brand-hub-tier-d { background: #6b7280; }
+  .brand-hub-hero-series {
+    margin-top: 10px;
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+    font-size: 0.85rem; color: var(--secondary, #6b7280);
+  }
+  .brand-hub-hero-series-label { font-weight: 600; }
+  .brand-hub-series-chip {
+    display: inline-block; padding: 3px 10px;
+    border: 1px solid var(--border, #d1d5db); border-radius: 999px;
+    background: var(--entry, #fff); color: var(--primary, #1f2937);
+  }
+  /* Mobile: stack vertically */
+  @media (max-width: 600px) {
+    .brand-hub-hero { flex-direction: column; align-items: flex-start; gap: 12px; padding: 14px; }
+    .brand-hub-hero-image { width: 96px; height: 96px; }
+  }
+  /* Dark mode */
+  [data-theme="dark"] .brand-hub-hero {
+    background: linear-gradient(135deg, rgba(14,165,233,0.10), rgba(14,165,233,0.0));
+    border-color: #374151;
+  }
+  [data-theme="dark"] .brand-hub-hero-image { background: #1f2937; }
+  [data-theme="dark"] .brand-hub-series-chip {
+    background: #1f2937; color: #e5e7eb; border-color: #374151;
+  }
+  @media (prefers-color-scheme: dark) {
+    body:not([data-theme="light"]) .brand-hub-hero {
+      background: linear-gradient(135deg, rgba(14,165,233,0.10), rgba(14,165,233,0.0));
+      border-color: #374151;
+    }
+    body:not([data-theme="light"]) .brand-hub-hero-image { background: #1f2937; }
+    body:not([data-theme="light"]) .brand-hub-series-chip {
+      background: #1f2937; color: #e5e7eb; border-color: #374151;
+    }
+  }
+
+  /* #1358 B-6: Wikidata ブランド情報パネル */
+  .brand-wikidata {
+    margin: 0 0 24px;
+    padding: 16px 20px;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 12px;
+    background: var(--entry, #fff);
+  }
+  .brand-wikidata-title {
+    margin: 0 0 12px; font-size: 1.05rem; font-weight: 700;
+    color: var(--primary, #1f2937);
+  }
+  .brand-wikidata-body { display: flex; gap: 18px; align-items: flex-start; }
+  .brand-wikidata-logo {
+    flex: 0 0 auto; width: 88px; height: 88px;
+    display: flex; align-items: center; justify-content: center;
+    padding: 8px; border-radius: 8px; background: #fff;
+    border: 1px solid var(--border, #e5e7eb);
+  }
+  .brand-wikidata-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .brand-wikidata-facts {
+    flex: 1 1 auto; min-width: 0; margin: 0;
+    display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px;
+    font-size: 0.92rem;
+  }
+  .brand-wikidata-facts dt { font-weight: 700; color: var(--secondary, #6b7280); white-space: nowrap; }
+  .brand-wikidata-facts dd { margin: 0; color: var(--primary, #1f2937); word-break: break-word; }
+  .brand-wikidata-facts dd a { color: #0ea5e9; }
+  .brand-wikidata-source {
+    margin: 12px 0 0; font-size: 0.78rem; color: var(--secondary, #9ca3af);
+  }
+  .brand-wikidata-source a { color: var(--secondary, #6b7280); text-decoration: underline; }
+  @media (max-width: 600px) {
+    .brand-wikidata-body { flex-direction: column; gap: 12px; }
+    .brand-wikidata-facts { grid-template-columns: max-content 1fr; }
+  }
+  [data-theme="dark"] .brand-wikidata { background: #1f2937; border-color: #374151; }
+  [data-theme="dark"] .brand-wikidata-logo { background: #f9fafb; border-color: #374151; }
+  @media (prefers-color-scheme: dark) {
+    body:not([data-theme="light"]) .brand-wikidata { background: #1f2937; border-color: #374151; }
+    body:not([data-theme="light"]) .brand-wikidata-logo { background: #f9fafb; border-color: #374151; }
+  }
+
+
+  /* #5330: narrative から本文に含めるのをやめた固定 CTA */
+  .brand-hub-cta {
+    margin: 0 0 24px;
+    font-size: 0.95rem;
+    line-height: 1.8;
+    color: var(--secondary, #6b7280);
+  }
+
+  /* #5330: 近いメーカー (ハブ同士の内部リンク) */
+  .brand-related { margin: 32px 0 8px; }
+  .brand-related-title {
+    margin: 0 0 12px;
+    font-size: 1.1rem;
+  }
+  .brand-related-list {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+  .brand-related-link {
+    display: flex; flex-direction: column; gap: 4px;
+    padding: 12px 14px;
+    border: 1px solid var(--border, #e5e7eb); border-radius: 10px;
+    background: var(--entry, #fff);
+    text-decoration: none;
+  }
+  .brand-related-link:hover { border-color: #0ea5e9; }
+  .brand-related-name { font-weight: 700; color: var(--primary, #1f2937); }
+  .brand-related-meta { font-size: 0.82rem; color: var(--secondary, #6b7280); }
+  .brand-related-note { margin: 12px 0 0; font-size: 0.85rem; }
+  .brand-related-note a { color: var(--secondary, #6b7280); text-decoration: underline; }
+  [data-theme="dark"] .brand-related-link { background: #1f2937; border-color: #374151; }
+  [data-theme="dark"] .brand-related-name { color: #e5e7eb; }
+  @media (prefers-color-scheme: dark) {
+    body:not([data-theme="light"]) .brand-related-link { background: #1f2937; border-color: #374151; }
+    body:not([data-theme="light"]) .brand-related-name { color: #e5e7eb; }
+  }
