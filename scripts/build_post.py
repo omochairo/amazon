@@ -35,6 +35,7 @@ import jinja2
 
 import market_prices
 import price_overlay
+import seo_title
 import stock_status
 import where_to_buy_format
 from brand_normalizer import normalize as normalize_brand
@@ -3077,6 +3078,14 @@ def _frontmatter_meta(
         "description": description,
         "keywords": data.get("keywords", []),
     }
+    # #5083 項目2: SERP に出る <title> だけを詰める。`title` は <h1> と一覧の
+    # アンカーにも使われる読者向けの文字列なので触らない。組み上がりが現行より
+    # **短くなるページにだけ** front matter を出す (根拠は scripts/seo_title.py)。
+    seo_title_value = seo_title.build_seo_title(
+        data, title, where_to_buy=bool(stock_title_override)
+    )
+    if seo_title_value:
+        meta["seo_title"] = seo_title_value
     # #1980: A-7 (GSC query intent 分類, data/analytics/query_intent.json) がこの
     # ページの主要検索意図を確定させている場合のみ CTA レイアウトを切替。未検出
     # ページ・ファイル不在時は front matter に一切書かない = 現行レイアウト不変。
