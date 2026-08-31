@@ -36,6 +36,16 @@ name: Origin Failover (NAS -> GitLab Pages 待機系)
 #   41-pages-cert-renew.yml が使っているものと同じで追加発行は不要
 #   (2026-08-31 時点で登録済み)。
 #
+#   リポジトリ変数 `NAS_ORIGIN_CNAME` = 本番の `<uuid>.cfargotunnel.com`。
+#   手動復帰 (direction=nas) の戻し先。
+#
+#   **トンネルのホスト名を issue にもログにも出さない。** navi.omcha.jp は
+#   proxied なので、外から DNS を引いても Cloudflare の IP しか返らず、この
+#   ホスト名は見えない。**このリポジトリは public** なので、issue 本文や
+#   Actions のログに出した時点で恒久的に公開される (#6205 が「LAN の実 IP・
+#   Cloudflare のゾーン ID は public に書かない」としているのと同じ扱い)。
+#   値は変数で渡し、人が読む出力には向き先の別だけを出す。
+#
 #   **未設定を `exit 0` で握り潰さない (CLAUDE.md / #4793)。** それをやると
 #   トークンが失効した日にこのレーンが黙って死に、いざ倒したいときに
 #   何も起きない。失効は緑ではなく赤で知りたい。
@@ -97,6 +107,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           FAILOVER_ENABLED: ${{ vars.FAILOVER_ENABLED }}
+          # 戻し先。**issue にもログにも出さないので変数から取る** (冒頭の注記)。
+          NAS_ORIGIN_CNAME: ${{ vars.NAS_ORIGIN_CNAME }}
         run: |
           DIRECTION="${{ github.event.inputs.direction || 'standby' }}"
           ARGS="--to $DIRECTION"

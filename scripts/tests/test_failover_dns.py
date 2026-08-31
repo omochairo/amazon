@@ -9,7 +9,7 @@
 3. 倒さない側の 5 つの防壁 (ambiguous / blocked / throttled / disabled / already)
 4. side_of: CNAME の向き先判定
 5. probe_origin: 正常時 1 回・異常時のみ追試
-6. extract_prev_cname / render_body: 戻し先が機械可読で残ること
+6. render_body / ログ: **トンネルのホスト名が public な出力に漏れないこと**
 """
 from __future__ import annotations
 
@@ -244,25 +244,39 @@ def test_probe_origin_stops_when_it_recovers_midway():
     assert len(out) == 2
 
 
-# --- 6. 戻し先の持ち回し --------------------------------------------------
+# --- 6. public な出力にトンネルのホスト名を出さない ------------------------
+#
+# このリポジトリは public で、issue 本文も Actions のログも全世界に永久に残る。
+# navi.omcha.jp は proxied なので `<uuid>.cfargotunnel.com` は外から見えず、
+# **ここに出すことがそのまま公開になる**。回帰させないための網。
 
-def test_extract_prev_cname_roundtrip():
+@pytest.mark.parametrize("rec_content", [TUNNEL, STANDBY, "example.com"])
+@pytest.mark.parametrize("enabled", [True, False])
+def test_tunnel_hostname_never_appears_in_issue_body(rec_content, enabled):
+    row = call([probe_origin_down()] * 3, rec=record(content=rec_content),
+               enabled=enabled)
+    body = fd.render_body(row)
+    assert TUNNEL not in body
+    assert "cfargotunnel.com" not in body
+
+
+def test_decide_row_does_not_carry_the_raw_cname():
+    """row 自体に値を持たせない (ログや将来の出力に漏れる経路を断つ)。"""
     row = call([probe_origin_down()] * 3)
-    row["prev_content"] = TUNNEL
-    body = fd.render_body(row)
-    assert fd.extract_prev_cname(body) == TUNNEL
+    assert "current_content" not in row
+    assert TUNNEL not in json.dumps(row, ensure_ascii=False, default=str)
 
 
-def test_prev_cname_absent_when_unknown():
-    body = fd.render_body(call([probe_origin_down()] * 3, enabled=False))
-    assert fd.extract_prev_cname(body) is None
+def test_describe_side_labels_without_the_value():
+    assert fd.describe_side(TUNNEL) == "本番 (cloudflared tunnel)"
+    assert TUNNEL not in fd.describe_side(TUNNEL)
+    assert STANDBY in fd.describe_side(STANDBY)   # 待機系は公開ホスト名なので可
+    assert fd.describe_side("example.com") == "**想定外の値**"
 
 
-def test_already_does_not_record_standby_as_failback_target():
-    """`already` の current は待機系。これを戻し先として埋めてはいけない。"""
-    row = call([probe_origin_down()] * 3, rec=record(content=STANDBY))
-    body = fd.render_body(row)
-    assert fd.extract_prev_cname(body) != STANDBY
+def test_unknown_side_detail_does_not_quote_the_value():
+    row = call([probe_origin_down()] * 3, rec=record(content="secret-host.example"))
+    assert "secret-host.example" not in row["detail"]
 
 
 def test_render_body_carries_marker_and_action():

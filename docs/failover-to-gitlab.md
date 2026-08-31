@@ -106,9 +106,18 @@ gh variable set FAILOVER_ENABLED --body true -R omochairo/amazon
 gh workflow run 53-origin-failover.yml -R omochairo/amazon -f direction=nas
 ```
 
-戻し先の CNAME は、倒したときに issue 本文へ機械可読で埋めてある
-(`<!-- failover-prev-cname: ... -->`)。トンネル UUID を人が控えておく必要はない。
-issue を閉じてしまった場合は `-f target=<uuid>.cfargotunnel.com` を明示する。
+戻し先はリポジトリ変数 `NAS_ORIGIN_CNAME` から取る（未設定なら `-f target=...` を明示）。
+
+```bash
+gh variable set NAS_ORIGIN_CNAME --body '<uuid>.cfargotunnel.com' -R omochairo/amazon
+```
+
+**トンネルのホスト名は issue にもログにも出していない。** `navi.omcha.jp` は proxied なので
+外から DNS を引いても Cloudflare の IP しか返らず、このホスト名は見えない。
+**このリポジトリは public** なので、issue 本文や Actions のログに出した時点で恒久的に公開される
+（#6205 が「LAN の実 IP・Cloudflare のゾーン ID は public に書かない」としているのと同じ扱い）。
+人が読む出力に載せるのは向き先の別（本番／待機系）だけ。値の実体は private の
+`omochairo/amazon-home-ops`（`docker/navi`）にある。
 
 ### 倒れている間に起きること
 
