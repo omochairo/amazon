@@ -152,8 +152,9 @@ jobs:
       # ここは全 PR で無条件に走る = 流量が最大なので、fetch-depth 見直しの
       # パイロットとして最も効果と安全性の比が良い。
       #
-      # 他 22 workflow の fetch-depth: 0 は据え置き。大半が commit-back して
-      # push するのでレーンごとに base の取り方が違い、一律置換は危険。
+      # 段階2 (2026-09-01) で 03-invoke-jules も既定に戻した。残り 20 workflow の
+      # fetch-depth: 0 は据え置き。大半が commit-back して push するので
+      # レーンごとに base の取り方が違い、一律置換は危険。
       # 特に 40-mirror-to-gitlab は GitLab へ HEAD:main を丸ごと転送するので
       # 全履歴が必須 (外すと非 fast-forward reject になり、フェイルオーバー
       # 痕跡の判定と区別が付かなくなる)。恒久的に対象外。
