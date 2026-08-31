@@ -151,6 +151,11 @@
        付けないこと (付けた時点で「更新されている」という主張になるため)。
        <h1> は各レイアウトの .Title をそのまま使うので月表記は入らない。 */ -}}
 {{- $pageTitle := .Title -}}
+{{- /* #5083 項目2: front matter に seo_title があればタイトルタグだけそちらを使う。
+       .Title は <h1>・一覧カード・内部リンクのアンカーが使う読者向けの文字列なので
+       触らない。seo_title は build_post.py が「現行 title より短くなるときだけ」
+       書き出すので、ここで長さの判定はしない。出すのをやめれば元に戻る。 */ -}}
+{{- with .Params.seo_title -}}{{- $pageTitle = . -}}{{- end -}}
 {{- if and (not .IsHome) (eq .Params.title_monthly true) -}}
   {{- $pageTitle = printf "%s【%s更新】" $pageTitle (now.Format "2006年1月") -}}
 {{- end -}}
