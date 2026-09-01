@@ -88,6 +88,7 @@ def detect(gsc: dict[str, Any], *,
     queries_by_page = collect_top_queries_by_page(gsc.get("by_combo", []), top_queries_per_page)
 
     detected = []
+    eligible = 0
     for row in gsc.get("by_page", []):
         page = row.get("page")
         impressions = row.get("impressions", 0)
@@ -95,6 +96,7 @@ def detect(gsc: dict[str, Any], *,
         ctr = row.get("ctr", 0.0)
         if not page or impressions < min_impressions:
             continue
+        eligible += 1
         if position <= 0 or position > max_position:
             continue
         if ctr >= threshold:
@@ -123,6 +125,7 @@ def detect(gsc: dict[str, Any], *,
             "abs_min_threshold": abs_min_threshold,
             "max_results": max_results,
         },
+        "eligible": eligible,
         "detected": detected,
     }
 
