@@ -13,8 +13,18 @@
 字数レンジはプロンプト v7.3 に合わせている (旧規定はプロンプト自身の例と
 実出力の双方が違反していたため、実測に合わせて改定された)。
 
-すべて soft (passed=True, score<1.0)。#4826 項目2 と同じく、発火率が 0 に
-近づいてから hard 昇格を検討する。
+導入時は全て soft (passed=True, score<1.0)。#4826 項目2 と同じく、発火率が 0 に
+近づいたものから施行日つきで hard へ昇格させている。
+
+昇格の状況:
+
+- `persona_fit_counts`   … 2026-08-20 施行 (#5490)
+- `review_signals`       … 2026-08-20 施行 (2026-09-01 昇格 / brain#13 2-1)
+- `verdict_headline`     … 2026-08-20 施行 (同上)
+- `claims_discipline`    … **soft 据え置き** (直近 100 本で 5% 発火・横ばい)
+
+施行日より前の slug は soft のままにする。既存記事を一括修正 PR で巻き込むと
+無関係な修正が止まるため (詳細は quality_gate._enforced_from)。
 """
 from __future__ import annotations
 
@@ -224,14 +234,79 @@ def test_persona_fit_counts_ok_after_enforce_date():
     assert r.passed and r.score == 1.0
 
 
-def test_other_three_stay_soft_after_enforce_date():
-    # review_signals / verdict_headline / claims_discipline は据え置き。
-    # 施行日以降の slug でも合否を変えないこと。
-    d = _art(review_signals={"summary_one_line": "短い"},
-             verdict={"headline": "短"},
-             claims=[])
+# --- review_signals / verdict_headline の施行日ゲート (2026-09-01 昇格) --------
+#
+# 2026-08-20 以降の slug 260 本で両方とも発火 0 (rule of three 95% 上限 1.15%)。
+# 既存 257 件 / 341 件を巻き込まないよう施行日 2026-08-20 で切る。
+# 詳細な実測は quality_gate.py の _REVIEW_SIGNALS_ENFORCE_FROM のコメント。
+
+def test_review_signals_is_hard_on_or_after_enforce_date():
+    d = _art(review_signals=_review_signals(high_points=[_entry(1)]))
     d["slug"] = "2026-08-20-B0XXXXXXXX"
-    for fn in (check_review_signals, check_verdict_headline, check_claims_discipline):
+    r = check_review_signals(d)
+    assert not r.passed, "施行日以降は hard"
+    assert r.score == V5_EXTENSION_SOFT_SCORE
+
+
+def test_review_signals_missing_is_hard_after_enforce_date():
+    # 欠落と「dict でない」は本体の件数判定より前に return するので、
+    # 施行日ゲートを素通りしていないことを別途見る。
+    missing = _art()
+    del missing["review_signals"]
+    not_a_dict = _art(review_signals=[])
+    for d in (missing, not_a_dict):
+        d["slug"] = "2026-08-20-B0XXXXXXXX"
+        r = check_review_signals(d)
+        assert not r.passed
+        assert r.score == V5_EXTENSION_SOFT_SCORE
+
+
+def test_review_signals_stays_soft_before_enforce_date():
+    d = _art(review_signals=_review_signals(high_points=[_entry(1)]))
+    d["slug"] = "2026-08-19-B0XXXXXXXX"
+    r = check_review_signals(d)
+    assert r.passed and r.score == V5_EXTENSION_SOFT_SCORE
+
+
+def test_verdict_headline_is_hard_on_or_after_enforce_date():
+    for headline in ("短", "あ" * 60):
+        d = _art(verdict={"headline": headline})
+        d["slug"] = "2026-08-20-B0XXXXXXXX"
+        r = check_verdict_headline(d)
+        assert not r.passed, headline
+        assert r.score == V5_EXTENSION_SOFT_SCORE
+
+
+def test_verdict_headline_stays_soft_before_enforce_date():
+    d = _art(verdict={"headline": "短"})
+    d["slug"] = "2026-08-19-B0XXXXXXXX"
+    r = check_verdict_headline(d)
+    assert r.passed and r.score == V5_EXTENSION_SOFT_SCORE
+
+
+def test_promoted_checks_pass_cleanly_after_enforce_date():
+    d = _art()
+    d["slug"] = "2026-08-20-B0XXXXXXXX"
+    for fn in (check_review_signals, check_verdict_headline):
         r = fn(d)
-        assert r.passed, fn.__name__
-        assert r.score == V5_EXTENSION_SOFT_SCORE, fn.__name__
+        assert r.passed and r.score == 1.0, fn.__name__
+
+
+def test_claims_discipline_stays_soft_after_enforce_date():
+    # 据え置きは claims_discipline のみ (直近 100 本で 5% 発火・横ばい)。
+    # 施行日以降の slug でも合否を変えないこと。
+    d = _art(claims=[])
+    d["slug"] = "2026-08-20-B0XXXXXXXX"
+    r = check_claims_discipline(d)
+    assert r.passed
+    assert r.score == V5_EXTENSION_SOFT_SCORE
+
+
+def test_legacy_articles_are_skipped_even_after_enforce_date():
+    # 施行日以降の slug でも date が legacy なら素通りする (既存の切りかたを壊さない)。
+    d = _art(date=LEGACY, review_signals={"summary_one_line": "短い"},
+             verdict={"headline": "短"})
+    d["slug"] = "2026-08-31-B0XXXXXXXX"
+    for fn in (check_review_signals, check_verdict_headline):
+        r = fn(d)
+        assert r.passed and r.score == 1.0, fn.__name__

@@ -866,6 +866,45 @@ _CROSS_CHECKED_MIN = 2               # §6.5.2
 # 26% / 3% / 7% 発火しており soft のまま据え置く (amazon-navi-brain#13 に測定値)。
 _PERSONA_FIT_COUNTS_ENFORCE_FROM = "2026-08-20"
 
+# §5.D の review_signals と §5.E の verdict_headline を hard にする施行日
+# (#5490 信頼レーン / amazon-navi-brain#13 2-1 の据え置き 3 本の測り直し)。
+#
+# 判断根拠 (2026-09-01 実測・data/articles 全 2,340 本):
+#
+#   全量の発火 … review_signals 257 件 (11.0%) / verdict_headline 341 件 (14.6%)
+#   **2026-08-20 以降の slug 260 本で、どちらも発火 0**
+#   (rule of three の 95% 上限 1.15%。#4826 項目2 の昇格根拠は n=163 / 1.8% だった)
+#
+# 日次で見ると断点が 1 日に立っている。08-19 まで毎日発火し、08-20 から両方 0。
+# 窓内で入った変更はプロンプト v7.3 (amazon-navi-brain#12・2026-08-19 09:42Z) だけで、
+# v7.3 は §5.D.1 を 50-100 → 35-70 字、§5.E を 50-80 → 25-50 字へ改定している。
+# **ただし因果は主張しない** (A/B を取っていない)。断点と唯一の候補が一致した、まで。
+#
+# 分布で見ると偶然ではない (07-01〜08-19 の 737 本 vs 08-20 以降の 260 本):
+#
+#   high_points  下限 3 … before 1:1 2:100 3:630 4:6  →  after 3:259 4:1  (下限割れ 0)
+#   concerns     下限 2 … before 1:40 2:693 3:4       →  after 2:257 3:3   (下限割れ 0)
+#   use_scenes   下限 3 … before 1:12 2:129 3:592 4:4 →  after 3:258 4:2   (下限割れ 0)
+#   verdict.headline 長 … before 21-78 (規定 25-50 の外へ両側にはみ出す) → after 25-46
+#   summary_one_line 長 … before 25-75 (下限 35 割れ)                     → after 35-68
+#
+# 下限割れの裾が消え、上限超過も無くなっている。件数が 1 つ足りない類の失敗が
+# 母集団から消えたということで、コホートの引き方に依存する動きではない。
+#
+# **注意: 生成側は下限ちょうどしか作っていない** (high_points は 260 本中 259 本が 3)。
+# 余裕がゼロなので、生成が 1 件でも減れば即 hard で落ちる。それは昇格の狙いどおりだが、
+# 「規定を満たしている」ではなく「規定を目標値として扱っている」状態であることは
+# 別問題として残る。件数レンジを動かすときはこの分布を先に見ること。
+#
+# 施行日を 2026-08-20 に置く理由: 最後の発火は review_signals が 2026-08-19、
+# verdict_headline が 2026-08-18 の slug。ここで切ると **既存記事を 1 本も
+# 巻き込まない** (cert_claims_declared / persona_fit_counts と同じ切りかた)。
+#
+# claims_discipline は据え置き。直近 100 本で 5%・200 本で 3%・300 本で 3% と
+# 横ばいで、2026-08-25 / 08-26 / 08-29 にも発火している (amazon-navi-brain#13)。
+_REVIEW_SIGNALS_ENFORCE_FROM = "2026-08-20"
+_VERDICT_HEADLINE_ENFORCE_FROM = "2026-08-20"
+
 
 def _v5_soft(name: str, issues: list[str], ok_message: str = "OK") -> CheckResult:
     """v5 拡張フィールドの soft 判定を組み立てる。
@@ -878,15 +917,40 @@ def _v5_soft(name: str, issues: list[str], ok_message: str = "OK") -> CheckResul
     return CheckResult(name, True, V5_EXTENSION_SOFT_SCORE, "; ".join(issues))
 
 
+def _v5_enforced(
+    name: str, issues: list[str], data: dict, enforce_from: str
+) -> CheckResult:
+    """施行日以降の slug なら hard、それより前なら soft を返す。
+
+    既存記事を巻き込まずに soft→hard を昇格させるための共通形 (#4826 項目2 の前例)。
+    hard 側も soft 側と同じ ";" 連結にしてあるので、quality_census の
+    normalize_reason から見た集計キーは昇格の前後で変わらない (時系列が切れない)。
+    """
+    if not issues:
+        return CheckResult(name, True, 1.0, "OK")
+    if _enforced_from(data, enforce_from):
+        return CheckResult(name, False, V5_EXTENSION_SOFT_SCORE, "; ".join(issues))
+    return _v5_soft(name, issues)
+
+
+def _enforce_rs(data: dict, issues: list[str]) -> CheckResult:
+    """check_review_signals の分岐が 3 箇所あるので施行日ゲートをここに寄せる。"""
+    return _v5_enforced("review_signals", issues, data, _REVIEW_SIGNALS_ENFORCE_FROM)
+
+
 def check_review_signals(data: dict) -> CheckResult:
-    """§5.D: review_signals の件数レンジ・字数・supporting_source_ids。"""
+    """§5.D: review_signals の件数レンジ・字数・supporting_source_ids。
+
+    施行日 (_REVIEW_SIGNALS_ENFORCE_FROM) 以降の slug では **hard**。
+    それより前の slug では soft のまま (既存 257 件を census から見えなくしない)。
+    """
     if _is_legacy_article(data):
         return CheckResult("review_signals", True, 1.0, "legacy article (skipped)")
     rs = data.get("review_signals")
     if rs is None:
-        return _v5_soft("review_signals", ["review_signals 欠落 (§5.D 必須)"])
+        return _enforce_rs(data, ["review_signals 欠落 (§5.D 必須)"])
     if not isinstance(rs, dict):
-        return _v5_soft("review_signals", ["review_signals が dict でない"])
+        return _enforce_rs(data, ["review_signals が dict でない"])
 
     issues: list[str] = []
     lo, hi = _SUMMARY_ONE_LINE_RANGE
@@ -905,26 +969,33 @@ def check_review_signals(data: dict) -> CheckResult:
     ]
     if missing:
         issues.append(f"supporting_source_ids が空のエントリ: {sorted(set(missing))}")
-    return _v5_soft("review_signals", issues)
+    return _enforce_rs(data, issues)
 
 
 def check_verdict_headline(data: dict) -> CheckResult:
-    """§5.E: verdict.headline は 5 秒判断用の 1 行。"""
+    """§5.E: verdict.headline は 5 秒判断用の 1 行。
+
+    施行日 (_VERDICT_HEADLINE_ENFORCE_FROM) 以降の slug では **hard**。
+    それより前の slug では soft のまま (既存 341 件を census から見えなくしない)。
+    """
     if _is_legacy_article(data):
         return CheckResult("verdict_headline", True, 1.0, "legacy article (skipped)")
     headline = (data.get("verdict") or {}).get("headline")
     lo, hi = _VERDICT_HEADLINE_RANGE
     if not isinstance(headline, str) or not headline:
-        return _v5_soft("verdict_headline", ["verdict.headline 欠落 (§5.E 必須)"])
-    n = _count_chars(headline)
-    if n < lo:
-        return _v5_soft("verdict_headline", [f"verdict.headline が短い ({lo} 字未満)"])
-    if n > hi:
-        return _v5_soft(
-            "verdict_headline",
-            [f"verdict.headline が長い ({hi} 字超) = 1 行の結論ではなく説明文になっている"],
-        )
-    return CheckResult("verdict_headline", True, 1.0, "OK")
+        issues = ["verdict.headline 欠落 (§5.E 必須)"]
+    else:
+        n = _count_chars(headline)
+        if n < lo:
+            issues = [f"verdict.headline が短い ({lo} 字未満)"]
+        elif n > hi:
+            issues = [
+                f"verdict.headline が長い ({hi} 字超) = 1 行の結論ではなく説明文になっている"
+            ]
+        else:
+            issues = []
+    return _v5_enforced(
+        "verdict_headline", issues, data, _VERDICT_HEADLINE_ENFORCE_FROM)
 
 
 def check_claims_discipline(data: dict) -> CheckResult:
@@ -963,10 +1034,8 @@ def check_persona_fit_counts(data: dict) -> CheckResult:
         issues = [f"not_recommended_for が {lo}-{hi} 件でない"]
     else:
         return CheckResult("persona_fit_counts", True, 1.0, "OK")
-    if _enforced_from(data, _PERSONA_FIT_COUNTS_ENFORCE_FROM):
-        return CheckResult(
-            "persona_fit_counts", False, V5_EXTENSION_SOFT_SCORE, "; ".join(issues))
-    return _v5_soft("persona_fit_counts", issues)
+    return _v5_enforced(
+        "persona_fit_counts", issues, data, _PERSONA_FIT_COUNTS_ENFORCE_FROM)
 
 
 def check_source_uniqueness(data: dict) -> CheckResult:
