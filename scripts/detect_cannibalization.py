@@ -37,8 +37,21 @@ logger = logging.getLogger("detect_cannibalization")
 
 DEFAULT_IN = "data/analytics/gsc_weekly.json"
 DEFAULT_OUT = "data/analytics/cannibalization.json"
-DEFAULT_MIN_PAGE_IMPRESSIONS = 10
-DEFAULT_MIN_QUERY_IMPRESSIONS = 50
+# 閾値の較正 (2026-09-01・#5941 / amazon-navi-brain#18)
+#
+# この検出器は 4 週連続で 0 件だった。**「該当が無い」のではなく「閾値に届く母数が
+# 存在しない」**状態だったことが、private 側 (brain#18) の閾値スイープで分かった。
+# サイトの実寸に対して閾値が大きすぎた (絶対値は private。数値は brain#18 を見ること)。
+#
+# 下げただけではまた同じことが起きるので、`eligible` (= 量のしきい値を通った母数) を
+# `detected` と別に出す。**eligible == 0 は「母数が無い」、eligible > 0 かつ
+# detected == 0 は「母数はあるが選別条件で落ちている」**で、同じ「0 件」でも処方が
+# 逆になる (前者は閾値、後者はサイト側)。判定は check_detector_eligibility.py。
+#
+# binding だったのは min_query_impressions のほう。min_page をどれだけ下げても
+# 旧 min_query では 0 のままだったので、両方を動かしている。
+DEFAULT_MIN_PAGE_IMPRESSIONS = 5
+DEFAULT_MIN_QUERY_IMPRESSIONS = 15
 DEFAULT_COMPETING_PAGES = 2
 DEFAULT_DOMINANCE_MAX = 0.85
 DEFAULT_MAX_RESULTS = 10
@@ -65,6 +78,7 @@ def detect(gsc: dict[str, Any], *,
         })
 
     detected = []
+    eligible = 0
     for query, pages in by_query.items():
         competing = [p for p in pages if p["impressions"] >= min_page_impressions]
         if len(competing) < competing_pages:
@@ -72,6 +86,7 @@ def detect(gsc: dict[str, Any], *,
         total_imp = sum(p["impressions"] for p in competing)
         if total_imp < min_query_impressions:
             continue
+        eligible += 1
         competing.sort(key=lambda p: p["impressions"], reverse=True)
         top_share = competing[0]["impressions"] / total_imp if total_imp else 1.0
         if top_share >= dominance_max:
@@ -99,6 +114,7 @@ def detect(gsc: dict[str, Any], *,
             "dominance_max": dominance_max,
             "max_results": max_results,
         },
+        "eligible": eligible,
         "detected": detected,
     }
 

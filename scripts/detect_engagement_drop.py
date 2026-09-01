@@ -49,6 +49,7 @@ def detect(ga4: dict[str, Any], *,
            max_duration: float = DEFAULT_MAX_DURATION,
            max_results: int = DEFAULT_MAX_RESULTS) -> dict[str, Any]:
     detected = []
+    eligible = 0
     for row in ga4.get("by_page", []):
         host = row.get("hostName", "")
         path = row.get("pagePath", "")
@@ -64,6 +65,7 @@ def detect(ga4: dict[str, Any], *,
             continue
         if pv < min_pv:
             continue
+        eligible += 1
         if eng >= max_engagement or dur >= max_duration:
             continue
         detected.append({
@@ -89,6 +91,7 @@ def detect(ga4: dict[str, Any], *,
             "max_duration": max_duration,
             "max_results": max_results,
         },
+        "eligible": eligible,
         "detected": detected,
     }
 

@@ -146,10 +146,12 @@ def suggest(gsc: dict[str, Any], taxonomy_terms: set[str], *,
     by_query = gsc.get("by_query", []) or []
     candidates: dict[str, dict[str, Any]] = {}
 
+    eligible = 0
     for row in by_query:
         impressions = row.get("impressions", 0)
         if impressions < min_impressions:
             continue
+        eligible += 1
         query = row.get("query", "")
         tokens = tokenize(query)
         seen_in_query: set[str] = set()
@@ -201,6 +203,7 @@ def suggest(gsc: dict[str, Any], taxonomy_terms: set[str], *,
             "top_n": top_n,
             "taxonomy_term_count": len(taxonomy_terms),
         },
+        "eligible": eligible,
         "candidates": sorted_candidates,
     }
 

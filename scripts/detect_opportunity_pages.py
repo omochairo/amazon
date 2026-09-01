@@ -32,7 +32,17 @@ logger = logging.getLogger("detect_opportunity_pages")
 
 DEFAULT_IN = "data/analytics/gsc_weekly.json"
 DEFAULT_OUT = "data/analytics/opportunity_pages.json"
-DEFAULT_MIN_IMPRESSIONS = 100
+# 閾値の較正 (2026-09-01・#5941 / amazon-navi-brain#18)
+#
+# この検出器は 4 週連続で 0 件だった。**「該当が無い」のではなく「閾値に届く母数が
+# 存在しない」**状態だったことが、private 側 (brain#18) の閾値スイープで分かった。
+# サイトの実寸に対して閾値が大きすぎた (絶対値は private。数値は brain#18 を見ること)。
+#
+# 下げただけではまた同じことが起きるので、`eligible` (= 量のしきい値を通った母数) を
+# `detected` と別に出す。**eligible == 0 は「母数が無い」、eligible > 0 かつ
+# detected == 0 は「母数はあるが選別条件で落ちている」**で、同じ「0 件」でも処方が
+# 逆になる (前者は閾値、後者はサイト側)。判定は check_detector_eligibility.py。
+DEFAULT_MIN_IMPRESSIONS = 20
 DEFAULT_MIN_POSITION = 11.0
 DEFAULT_MAX_POSITION = 20.0
 DEFAULT_MAX_RESULTS = 5
@@ -70,12 +80,14 @@ def detect(gsc: dict[str, Any], *,
     )
 
     detected = []
+    eligible = 0
     for row in gsc.get("by_page", []):
         page = row.get("page")
         impressions = row.get("impressions", 0)
         position = row.get("position", 0.0)
         if not page or impressions < min_impressions:
             continue
+        eligible += 1
         if position < min_position or position > max_position:
             continue
         detected.append({
@@ -98,6 +110,7 @@ def detect(gsc: dict[str, Any], *,
             "max_position": max_position,
             "max_results": max_results,
         },
+        "eligible": eligible,
         "detected": detected,
     }
 

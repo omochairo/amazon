@@ -241,6 +241,21 @@ jobs:
           echo "count=$COUNT" >> "$GITHUB_OUTPUT"
           echo "classified $COUNT pages by query intent"
 
+      # #5941 / amazon-navi-brain#18: 各検出器の **母数** を記録し、2 週続けて
+      # 0 なら鳴らす。A-2 / A-3 / A-6 は 4 週連続 0 件だったが、それは「該当が
+      # 無い」ではなく「閾値に届く母数が存在しない」状態で、**検出器は正常に走って
+      # 正しく 0 を返していた**。上の各 step が出す count だけを見ていると、この
+      # 状態は永久に緑のまま気づけない (#5941 の health check は「落ちたか」しか
+      # 見ない)。
+      #
+      # continue-on-error を **付けない**のは意図的。この step は観察レーンの
+      # 観察者で、ここが黙って落ちると #5941 と同じ穴をもう 1 つ作ることになる。
+      # 検出器の出力が無い/壊れている場合はスクリプト側が null として扱い、
+      # 例外にはしない (欠落を 0 と混ぜないため)。
+      - name: Record detector eligibility (#5941 / brain#18)
+        id: eligibility
+        run: python scripts/check_detector_eligibility.py
+
       # #1329: gsc_weekly.json は by_combo (query×page) を含む。日次 JSONL history
       # (data/analytics/history/, #1357 B-0) は by_query/by_page 分離で combo を落とす
       # ため、14-brand-narrative への GSC クエリ注入 (page_path match) には使えない。
@@ -271,6 +286,12 @@ jobs:
           if [ -f data/analytics/query_intent.json ]; then
             git add data/analytics/query_intent.json || true
           fi
+          # #5941: 母数の履歴。検出器の出力 JSON 自体は tracked ではないので、
+          # 「前回の eligible」の唯一の出どころがこの 1 本になる。ここを commit
+          # し損ねると 2 週連続判定が永久に成立しない。
+          if [ -f data/analytics/history/detector_eligibility.jsonl ]; then
+            git add data/analytics/history/detector_eligibility.jsonl || true
+          fi
           if git diff --cached --quiet; then
             echo "No snapshot changes to commit (same week already accumulated?); skipping PR."
             exit 0
@@ -289,12 +310,12 @@ jobs:
           git config user.name "omochairo-fetch-bot[bot]"
           git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
-          git commit -m "data(analytics): GSC weekly snapshot (by_combo) for #1329 + query_intent for #1980"
+          git commit -m "data(analytics): GSC weekly snapshot (by_combo) for #1329 + query_intent for #1980 + detector eligibility for #5941"
           git push -u origin "$BRANCH"
 
           PR_URL=$(gh pr create \
-            --title "data(analytics): GSC weekly snapshot (by_combo) for #1329 + query_intent for #1980" \
-            --body "Automated weekly snapshot of data/analytics/gsc_weekly.json (includes by_combo = query×page) under data/analytics/gsc_history/<YYYY-Www>.json, plus the current data/analytics/query_intent.json (A-7 classification, #1980 CTA layout switch input). The daily JSONL history (data/analytics/history/, #1357 B-0) splits by_query/by_page and drops the combo, which #1329 (GSC queries → 14-brand-narrative prompt, page_path match) needs. Refs #1329, #1980." \
+            --title "data(analytics): GSC weekly snapshot (by_combo) for #1329 + query_intent for #1980 + detector eligibility for #5941" \
+            --body "Automated weekly snapshot of data/analytics/gsc_weekly.json (includes by_combo = query×page) under data/analytics/gsc_history/<YYYY-Www>.json, plus the current data/analytics/query_intent.json (A-7 classification, #1980 CTA layout switch input). The daily JSONL history (data/analytics/history/, #1357 B-0) splits by_query/by_page and drops the combo, which #1329 (GSC queries → 14-brand-narrative prompt, page_path match) needs. Also appends one row to data/analytics/history/detector_eligibility.jsonl (per-detector eligible/detected counts, #5941) - the detector output JSONs themselves are not tracked, so this file is the only source of the previous run's eligible. Refs #1329, #1980, #5941." \
             --base main \
             --head "$BRANCH")
           echo "Created: $PR_URL"

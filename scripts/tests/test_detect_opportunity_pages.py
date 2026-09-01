@@ -38,12 +38,36 @@ def test_detect_excludes_page_3_and_beyond():
 
 
 def test_detect_excludes_low_impressions():
-    # default min=100
+    # 既定は 2026-09-01 の較正で 100 -> 20 (#5941 / amazon-navi-brain#18)。
+    # 「閾値未満は落ちる」という性質を見るテストなので、既定より下の値で確かめる。
     gsc = _make_gsc(by_page=[
-        {"page": "/a/", "clicks": 0, "impressions": 50, "ctr": 0.0, "position": 15.0},
+        {"page": "/a/", "clicks": 0, "impressions": 19, "ctr": 0.0, "position": 15.0},
     ])
     result = detect(gsc)
     assert result["detected"] == []
+    assert result["eligible"] == 0
+
+
+def test_detect_includes_at_calibrated_default():
+    # 較正前の既定 (100) では落ちていた帯が拾えること。ここが戻ると較正が消える。
+    gsc = _make_gsc(by_page=[
+        {"page": "/a/", "clicks": 0, "impressions": 20, "ctr": 0.0, "position": 15.0},
+    ])
+    result = detect(gsc)
+    assert [d["page"] for d in result["detected"]] == ["/a/"]
+
+
+def test_eligible_counts_volume_gate_not_selection():
+    # eligible は「量のしきい値を通った母数」で、位置窓の選別より前。
+    # eligible > 0 かつ detected == 0 は「母数はあるが選別で落ちた」を意味する。
+    gsc = _make_gsc(by_page=[
+        {"page": "/in/", "clicks": 0, "impressions": 30, "ctr": 0.0, "position": 15.0},
+        {"page": "/out/", "clicks": 0, "impressions": 30, "ctr": 0.0, "position": 3.0},
+        {"page": "/thin/", "clicks": 0, "impressions": 5, "ctr": 0.0, "position": 15.0},
+    ])
+    result = detect(gsc)
+    assert result["eligible"] == 2, "位置窓で落ちたページも母数には数える"
+    assert [d["page"] for d in result["detected"]] == ["/in/"]
 
 
 def test_detect_sorts_by_impressions_desc_and_caps():

@@ -52,6 +52,7 @@ def detect(ga4: dict[str, Any], *,
            min_entrance_ratio: float = DEFAULT_MIN_ENTRANCE_RATIO,
            max_results: int = DEFAULT_MAX_RESULTS) -> dict[str, Any]:
     detected = []
+    eligible = 0
     for row in ga4.get("by_page", []):
         host = row.get("hostName", "")
         path = row.get("pagePath", "")
@@ -64,6 +65,7 @@ def detect(ga4: dict[str, Any], *,
         # entrances が無い (古い artifact 等) 行は誤検出回避のため skip
         if entrances is None or pv < min_pv:
             continue
+        eligible += 1
         ratio = entrances / pv if pv else 0.0
         if ratio < min_entrance_ratio:
             continue
@@ -90,6 +92,7 @@ def detect(ga4: dict[str, Any], *,
             "min_entrance_ratio": min_entrance_ratio,
             "max_results": max_results,
         },
+        "eligible": eligible,
         "detected": detected,
     }
 
