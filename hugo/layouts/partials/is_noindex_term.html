@@ -1,0 +1,45 @@
+{{- /*
+  is_noindex_term.html (#6206 A)
+  引数: ページ (Page context)。そのページが **term 側の事情**で noindex なら "1"、
+  そうでなければ空文字を返す。
+
+  head.html の meta robots と _default/sitemap.xml がそれぞれ同じ条件を手書きして
+  いたのを 1 箇所に寄せたもの。#6206 では配信物から noindex タクソノミーを落とす
+  (7,961 ページ / 306 MB) が、**判定を 2 箇所に書いたままページを消すと、片方だけ
+  ずれた瞬間に「消したページへの内部リンク」か「残したページの noindex」が漏れる**。
+  is_noindex_brand.html / is_brand_tag.html と同型で、返り値の空・非空で判定する。
+
+  含む条件 (head.html の $isThinTerm / $isNoindexBrand / $isBrandDupTag /
+  $isHubDupTag / $isLowValueTag / $isEmptyTaxonomy と同一):
+    - 薄い term  : Kind=term かつ len(.Pages) < thinTermNoindexThreshold (default 3)
+    - noindex ブランド (epic #2126 P4)
+    - ブランド名と一致する tag (#2701 P3。正本は /brands/)
+    - category hub と同一トピックの tag (#2765。正本は hub)
+    - 低価値 tag denylist (#2719)
+    - term が 0 の taxonomy 一覧ページ (#5343 follow-up。実測では /categories/)
+
+  **含まない条件が 2 つある。呼び出し元で見ること。**
+    - paginate 2 ページ目以降 ($isPaginated): term そのものの性質ではなく、
+      判定に .Paginate を呼ぶ必要がある。Hugo のページャは 1 ページにつき 1 つで
+      最初の呼び出しで確定するため、**別ページのレンダリング中に他ページの
+      .Paginate を呼ぶとそのページのページャを壊す** (#5343 follow-up で実際に
+      term 一覧の並び順が壊れている)。リンク描画側・削除処理から呼べる述語に
+      するには、ここに入れてはいけない。
+    - .Params.robotsNoIndex: front matter の per-page 上書きで、head.html では
+      noindex,**nofollow** という別の出力になる。意味が違うので混ぜない。
+*/ -}}
+{{- $match := "" -}}
+{{- if eq .Kind "term" -}}
+  {{- $threshold := int (site.Params.thinTermNoindexThreshold | default 3) -}}
+  {{- if lt (len .Pages) $threshold -}}{{- $match = "1" -}}{{- end -}}
+  {{- if eq .Data.Plural "brands" -}}
+    {{- if partial "is_noindex_brand.html" .Title -}}{{- $match = "1" -}}{{- end -}}
+  {{- end -}}
+  {{- if eq .Data.Plural "tags" -}}
+    {{- if partial "is_brand_tag.html" .Title -}}{{- $match = "1" -}}{{- end -}}
+    {{- if partial "hub_for_tag.html" .Title -}}{{- $match = "1" -}}{{- end -}}
+    {{- if partial "is_low_value_tag.html" .Title -}}{{- $match = "1" -}}{{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- if partial "is_empty_taxonomy.html" . -}}{{- $match = "1" -}}{{- end -}}
+{{- $match -}}

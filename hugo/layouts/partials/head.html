@@ -39,17 +39,11 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-{{- /* B2 (Issue #1301): thin taxonomy term ページ (tags / brands / categories で
-       紐づく記事数が threshold 未満) を noindex,follow にする。
-       メーカー (brand) も同じゲートを通過するため、記事が増えれば自動で index,follow に戻る。
-       閾値は site.Params.thinTermNoindexThreshold で上書き可 (default 3)。 */ -}}
-{{- $isThinTerm := false -}}
-{{- if eq .Kind "term" -}}
-  {{- $threshold := int (site.Params.thinTermNoindexThreshold | default 3) -}}
-  {{- if lt (len .Pages) $threshold -}}
-    {{- $isThinTerm = true -}}
-  {{- end -}}
-{{- end -}}
+{{- /* #6206 A: term 側の事情による noindex 判定は partials/is_noindex_term.html に
+       集約した (薄い term / noindex ブランド / ブランド名と一致する tag / hub と
+       同一トピックの tag / 低価値 tag / 空 taxonomy)。_default/sitemap.xml と
+       同じ述語を見る。条件を足すときは partial 側だけを変えること。 */ -}}
+{{- $isNoindexTerm := partial "is_noindex_term.html" . -}}
 {{- /* B3 (Issue #1301): paginate 2 ページ目以降を noindex,follow に。
        /posts/page/2-65/ などのパジネーション URL は canonical が /posts/ を指す
        (PaperMod デフォルト) ため、index,follow のままだと canonical と矛盾し、
@@ -90,56 +84,24 @@
     {{- end -}}
   {{- end -}}
 {{- end -}}
-{{- /* P4 (epic #2126): brand_taxonomy.yaml で noindex: true を付けたブランドの
-       /brands/ ページを noindex,follow にする。中華系・無名級など、商品の正しい
-       帰属 (正規化) はしたいが薄いハブページを検索インデックスに出したくない
-       ブランド向け。フラグは build_brand_hub_stats.py が brand_hub.json に出力する。 */ -}}
-{{- $isNoindexBrand := false -}}
-{{- if and (eq .Kind "term") (eq .Data.Plural "brands") -}}
-  {{- if partial "is_noindex_brand.html" .Title -}}
-    {{- $isNoindexBrand = true -}}
-  {{- end -}}
-{{- end -}}
-{{- /* P3 (Issue #2701): ブランド名と一致する tag term ページは、curated な /brands/
-       ハブ (narrative/JSON-LD 付き) を正本とし、tag 側を noindex,follow + canonical
-       → /brands/<slug>/ に倒す。低価値な tag を index し高価値な brand を抑制する
-       「逆転」を是正する。tag と brand は同一スラッグなので Permalink の置換で導出。 */ -}}
-{{- $isBrandDupTag := false -}}
+{{- /* #2701 P3 / #2765: 上記のうち「正本が別 URL にある」2 ケースは canonical も
+       差し替える。noindex 自体は $isNoindexTerm が見ているので、ここで求めるのは
+       宛先 URL だけ。判定に使う partial は is_noindex_term.html と同じもの。 */ -}}
 {{- $brandDupCanonical := "" -}}
 {{- if and (eq .Kind "term") (eq .Data.Plural "tags") (partial "is_brand_tag.html" .Title) -}}
-  {{- $isBrandDupTag = true -}}
+  {{- /* tag と brand は同一スラッグなので Permalink の置換で導出できる。 */ -}}
   {{- $brandDupCanonical = replace $.Permalink "/tags/" "/brands/" -}}
 {{- end -}}
-{{- /* #2765: 情報型 category hub (#2687) と同一トピックの tag term ページは、
-       curated hub を正本とし、tag 側を noindex,follow + canonical → hub に倒す。
-       内部リンクを受ける tag と孤立 hub が同一検索意図を奪い合う cannibalization を
-       是正する。マッピングは site.Data.category_hub_tags (P3 brand-tag と同型)。 */ -}}
-{{- $isHubDupTag := false -}}
 {{- $hubDupCanonical := "" -}}
 {{- if and (eq .Kind "term") (eq .Data.Plural "tags") -}}
-  {{- $hubURL := partial "hub_for_tag.html" .Title -}}
-  {{- if $hubURL -}}
-    {{- $isHubDupTag = true -}}
-    {{- $hubDupCanonical = absURL $hubURL -}}
+  {{- with partial "hub_for_tag.html" .Title -}}
+    {{- $hubDupCanonical = absURL . -}}
   {{- end -}}
 {{- end -}}
-{{- /* #2719: ≥3 記事ありで薄タグ noindex の対象外だが、0 クリックで対応 hub も
-       無く勝ち目の薄い低価値 tag term ページを noindex,follow にする (canonical 無し)。
-       denylist は site.Data.low_value_tags (#2701 P1/P3・#2765 でカバーされない残り)。 */ -}}
-{{- $isLowValueTag := false -}}
-{{- if and (eq .Kind "term") (eq .Data.Plural "tags") (partial "is_low_value_tag.html" .Title) -}}
-  {{- $isLowValueTag = true -}}
-{{- end -}}
-{{- /* #5343 follow-up: term が 1 つも無い taxonomy 一覧ページ (実測では
-       /categories/) を noindex,follow にする。判定は sitemap.xml と共有する。 */ -}}
-{{- $isEmptyTaxonomy := false -}}
-{{- if partial "is_empty_taxonomy.html" . -}}
-  {{- $isEmptyTaxonomy = true -}}
-{{- end -}}
 {{- $isProd := or hugo.IsProduction (eq site.Params.env "production") -}}
-{{- if and $isProd (ne .Params.robotsNoIndex true) (not $isThinTerm) (not $isPaginated) (not $isNoindexBrand) (not $isBrandDupTag) (not $isHubDupTag) (not $isLowValueTag) (not $isEmptyTaxonomy) }}
+{{- if and $isProd (ne .Params.robotsNoIndex true) (not $isNoindexTerm) (not $isPaginated) }}
 <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
-{{- else if and $isProd (or $isThinTerm $isPaginated $isNoindexBrand $isBrandDupTag $isHubDupTag $isLowValueTag $isEmptyTaxonomy) (ne .Params.robotsNoIndex true) }}
+{{- else if and $isProd (or $isNoindexTerm $isPaginated) (ne .Params.robotsNoIndex true) }}
 <meta name="robots" content="noindex, follow">
 {{- else }}
 <meta name="robots" content="noindex, nofollow">

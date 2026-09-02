@@ -6,11 +6,12 @@
   に到達できない (= 9割未 index の主因)。
 
   対策: head.html の noindex 条件を mirror して sitemap から除外する。
-  対象条件 (head.html と一致):
+  対象条件:
     - .Params.robotsNoIndex == true
-    - 薄タグ: Kind=="term" かつ len(.Pages) < thinTermNoindexThreshold (default 3)
-    - noindex ブランド: Kind=="term" かつ Data.Plural=="brands" かつ brand_hub[Title].noindex
-    - 空 taxonomy: Kind=="taxonomy" かつ term ゼロ (#5343 follow-up。実測では /categories/)
+    - partials/is_noindex_term.html が真 (薄い term / noindex ブランド /
+      ブランド名と一致する tag / hub と同一トピックの tag / 低価値 tag /
+      空 taxonomy)。#6206 A でこの列挙を head.html と共有する述語に切り出した。
+      **条件をここに書き足さないこと。** mirror が 2 箇所にあると必ずずれる。
 
   加えて noindex ではないが「index されない URL」も落とす:
     - canonical を他 URL に向けたページ (.Params.canonicalURL が自分と違う)
@@ -22,36 +23,15 @@
   本文・URL 構造・既存 noindex 意図は不変 (sitemap 出力のみを絞る)。
 */ -}}
 {{- printf "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>" | safeHTML }}
-{{- $threshold := int (site.Params.thinTermNoindexThreshold | default 3) -}}
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
 {{- range .Pages -}}
   {{- $p := . -}}
   {{- $skip := false -}}
   {{- if eq $p.Params.robotsNoIndex true -}}{{- $skip = true -}}{{- end -}}
-  {{- if and (eq $p.Kind "term") (lt (len $p.Pages) $threshold) -}}{{- $skip = true -}}{{- end -}}
-  {{- if and (eq $p.Kind "term") (eq $p.Data.Plural "brands") -}}
-    {{- with site.Data.brand_hub -}}
-      {{- $entry := index .brands $p.Title -}}
-      {{- if and $entry $entry.noindex -}}{{- $skip = true -}}{{- end -}}
-    {{- end -}}
-  {{- end -}}
-  {{- /* #2701 P3: ブランド名と一致する tag は /brands/ を正本に noindex 化したため除外。 */ -}}
-  {{- if and (eq $p.Kind "term") (eq $p.Data.Plural "tags") (partial "is_brand_tag.html" $p.Title) -}}
-    {{- $skip = true -}}
-  {{- end -}}
-  {{- /* #2765: 情報型 hub と同一トピックの tag は hub を正本に noindex 化したため除外。 */ -}}
-  {{- if and (eq $p.Kind "term") (eq $p.Data.Plural "tags") (partial "hub_for_tag.html" $p.Title) -}}
-    {{- $skip = true -}}
-  {{- end -}}
-  {{- /* #2719: 低価値な tag (low_value_tags denylist) は head.html で noindex 化したため除外。 */ -}}
-  {{- if and (eq $p.Kind "term") (eq $p.Data.Plural "tags") (partial "is_low_value_tag.html" $p.Title) -}}
-    {{- $skip = true -}}
-  {{- end -}}
-  {{- /* #5343 follow-up: term が 1 つも無い taxonomy 一覧ページ (実測では /categories/)。
-         head.html と同じ判定を使う。 */ -}}
-  {{- if partial "is_empty_taxonomy.html" $p -}}
-    {{- $skip = true -}}
-  {{- end -}}
+  {{- /* #6206 A: term 側の事情による noindex (薄い term / noindex ブランド /
+         ブランド名と一致する tag / hub と同一トピックの tag / 低価値 tag /
+         空 taxonomy) は head.html と同じ述語を見る。ここに条件を書き足さないこと。 */ -}}
+  {{- if partial "is_noindex_term.html" $p -}}{{- $skip = true -}}{{- end -}}
   {{- /* #2370 A-3: canonical を他 URL に寄せたページ (build_post.py が
          data/analytics/canonical_overrides.json から .Params.canonicalURL を付ける)。
          実測 (2026-08-17): /products/b0gfvtpdbm/ が /products/b0gl815n6k/ へ統合済み
