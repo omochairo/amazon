@@ -1,0 +1,107 @@
+name: Template Tests (hugo build)
+
+# hugo のテンプレート (layouts/) を実ビルドして検証するテスト。
+# scripts/tests/test_head_robots_meta.py がこれに当たる (meta robots の内容 /
+# 「sitemap に載る URL は 1 つ残らず index,follow」の不変条件)。
+#
+# なぜ 44-unit-tests.yml に相乗りさせないか (2026-09-02 実測):
+#   1. **44-unit-tests は required status check** (2026-08-20 昇格)。落ちると
+#      bot の data PR を含む全 PR (25〜47 件/日) が止まる。そこへ重いビルドを
+#      足すのは、止まる確率と復旧の難しさを同時に上げる
+#   2. **実行時間が桁違い。** 44-unit-tests は中央値 92 秒。一方この検証には
+#      配信と同じ前処理 (build_post.py ほか 8 本) + hugo ビルドが要り、
+#      本番の GitLab `pages` ジョブは実測 **552 秒**。required レーンが 6〜7 倍になる
+#   3. **素直に足すと効果がゼロになる。** テスト側の hugo ビルドは既定 300 秒で
+#      打ち切って skip する作りなので、CI で 552 秒かかるなら**緑のまま
+#      毎回 skip される**。「入れたのに何も検証していない」状態が残る
+#
+# そこで独立させ、**required にはしない**。代わりに 2 つの経路で拾う:
+#   - pull_request の paths: テンプレートとテスト自体を触った PR
+#   - schedule: 毎日 1 回 main を通しで検証する
+#
+# paths allowlist は CLAUDE.md が「新設しない」としているもの (#4384 の
+# inverse-trap: 未登録 → required check 不発 → auto-merge 永久 pending)。
+# ここで使ってよい理由は **required ではない**から。この workflow を required に
+# 昇格させるなら paths を先に撤廃すること。allowlist の取りこぼし
+# (data 変更で述語の判定が動く等) は schedule 側が翌日に拾う。
+#
+# skip を許さないため HUGO_TEMPLATE_TESTS=required を渡す。前提 (hugo バイナリ /
+# PaperMod submodule / ビルド時間) が欠けたら skip ではなく fail させる
+# (#4793: 緑のまま黙って検証されなくなる形を作らない)。
+
+on:
+  pull_request:
+    paths:
+      - 'hugo/layouts/**'
+      - 'hugo/config.toml'
+      - 'scripts/tests/test_head_robots_meta.py'
+      - '.github/workflows/45-template-tests.yml'
+  schedule:
+    - cron: '30 18 * * *'  # 毎日 18:30 UTC = 03:30 JST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: template-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  template-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # テーマ (hugo/themes/PaperMod) は submodule。これが無いとビルドできない。
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+
+      # brand_normalizer.py (build_brand_hub_stats 経由) が yaml を import する。
+      # requirements.txt には居ないので単独 install (14-brand-narrative.yml と同じ)。
+      - name: Install pyyaml
+        run: pip install pyyaml
+
+      # hugo は .gitlab-ci.yml の HUGO_VERSION が SSOT。ここで固定値を書くと
+      # 本番とずれるので、毎回そこから読む。
+      - name: Install hugo (version from .gitlab-ci.yml)
+        run: |
+          set -euo pipefail
+          # grep -oP はロケール依存で落ちることがあるので sed で取る。
+          HUGO_VERSION=$(sed -n 's/.*HUGO_VERSION:[[:space:]]*"\([0-9.]*\)".*/\1/p' .gitlab-ci.yml | head -1)
+          if [ -z "$HUGO_VERSION" ]; then
+            echo "::error::.gitlab-ci.yml から HUGO_VERSION を読めなかった" >&2
+            exit 1
+          fi
+          echo "hugo $HUGO_VERSION を入れる"
+          curl -fsSL "https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_linux-amd64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin hugo
+          hugo version
+
+      # 配信ビルド (.gitlab-ci.yml の pages ジョブ) と同じ前処理。secrets 不要。
+      # hugo/content/products/ と hugo/data/*.json は git に居ないのでここで作る。
+      - name: Build site inputs
+        run: |
+          set -euo pipefail
+          python scripts/build_post.py
+          python scripts/build_brand_hub_stats.py
+          python scripts/build_price_dashboard.py
+          python scripts/build_price_sparks.py
+          python scripts/build_discounts.py
+          python scripts/build_age_concerns.py
+          python scripts/build_feature_lists.py --top-n 20
+          python scripts/build_category_hubs.py --top-n 24
+
+      - name: Run template tests
+        env:
+          HUGO_TEMPLATE_TESTS: required
+          HUGO_TEST_BUILD_TIMEOUT: '900'
+        run: python -m pytest scripts/tests/test_head_robots_meta.py -q
