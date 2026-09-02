@@ -173,3 +173,66 @@ class BuildMapLinesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CaseOnlyVariantTest(unittest.TestCase):
+    """大小文字だけ違う旧 URL は 301 自己ループになる (#6388)。
+
+    配信側 (`_redirects` の tj/go-redirects / nginx の map) はどちらも from 列の
+    大小文字を区別しない。`/brands/4M/ -> /brands/4m/` を出すと、宛先である
+    `/brands/4m/` 自身がルールにマッチして 301 が自分を指す。2026-09-01 の
+    site audit がこの形で 42 URL を r1_sitemap_broken として検出した。
+    """
+
+    def test_redirects_drops_case_only_variant(self):
+        indexed = {"tags": set(), "brands": {"4m"}}
+        reverse = {"4m": "4M"}
+        self.assertEqual(gtr.build_redirect_lines(indexed, reverse), [])
+
+    def test_map_drops_case_only_variant(self):
+        indexed = {"tags": set(), "brands": {"4m"}}
+        reverse = {"4m": "4M"}
+        self.assertEqual(gtr.build_map_lines(indexed, reverse), [])
+
+    def test_case_only_variant_does_not_affect_other_terms(self):
+        indexed = {"tags": {"lego"}, "brands": {"4m"}}
+        reverse = {"lego": "レゴ", "4m": "4M"}
+        self.assertEqual(
+            gtr.build_redirect_lines(indexed, reverse),
+            ["/tags/レゴ/ /tags/lego/ 301"],
+        )
+
+    def test_non_ascii_term_is_not_treated_as_case_only(self):
+        # 日本語用語は lower() しても変わらないので、通常どおり出す
+        indexed = {"tags": {"tsumiki"}, "brands": set()}
+        reverse = {"tsumiki": "つみき"}
+        self.assertEqual(
+            gtr.build_redirect_lines(indexed, reverse),
+            ["/tags/つみき/ /tags/tsumiki/ 301"],
+        )
+
+    def test_shadowed_key_space_drops_the_whole_group(self):
+        """本体が住むキー空間には、別スラッグ行も置けない。
+
+        `Connetix -> connetix` を落とすだけだと `CONNETIX -> connetix-2` が残り、
+        大小文字非区別マッチで正規 URL `/brands/connetix/` まで connetix-2 へ飛ぶ。
+        """
+        indexed = {"tags": set(), "brands": {"connetix", "connetix-2"}}
+        reverse = {"connetix": "Connetix", "connetix-2": "CONNETIX"}
+        self.assertEqual(gtr.build_redirect_lines(indexed, reverse), [])
+        self.assertEqual(gtr.build_map_lines(indexed, reverse), [])
+
+    def test_no_emitted_rule_shadows_its_own_destination(self):
+        """出力全体の不変条件: from 列 (小文字) が宛先 (小文字) と一致しない。"""
+        indexed = {
+            "tags": {"stem", "brio", "tsumiki"},
+            "brands": {"4m", "lego", "connetix", "connetix-2"},
+        }
+        reverse = {
+            "stem": "STEM", "brio": "BRIO", "tsumiki": "つみき",
+            "4m": "4M", "lego": "レゴ",
+            "connetix": "Connetix", "connetix-2": "CONNETIX",
+        }
+        for line in gtr.build_redirect_lines(indexed, reverse):
+            old, new, _code = line.split()
+            self.assertNotEqual(old.lower(), new.lower(), line)
