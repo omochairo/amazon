@@ -83,7 +83,51 @@ def _reverse_slug_map(slugs_path: pathlib.Path) -> dict:
     return {slug: term for term, slug in data.items()}
 
 
+def _is_case_only_variant(term: str, slug: str) -> bool:
+    """旧 URL が新スラッグと **ASCII 大小文字だけ**違うか。
+
+    配信側のマッチングは `_redirects` (GitLab Pages / tj/go-redirects) も
+    nginx の `map` も**キーの大小文字を区別しない**。したがって
+    `/brands/4M/ -> /brands/4m/` のようなルールは、宛先である `/brands/4m/` 自身が
+    from 列にマッチしてしまい、**301 が自分自身を指す無限ループ**になる
+    (2026-09-01 の site audit が 42 URL を r1_sitemap_broken として検出、
+    実機で `301 Location: /brands/4m/` を確認。omochairo/amazon#6388)。
+
+    大小文字だけの差なら、そもそもリダイレクトは不要 (旧 URL はホスト側の
+    大小文字非区別マッチで新 URL に素通りする)。ルールを出さないのが正しい。
+    """
+    return term != slug and term.lower() == slug.lower()
+
+
+def _case_shadowed_keys(indexed: dict, reverse: dict) -> set:
+    """大小文字だけの差の旧 URL に**覆われてしまう**キー空間を集める。
+
+    `_is_case_only_variant` の pair を単に落とすだけでは足りない。同じキー空間
+    (= 小文字化した from 列) に別の旧 URL が居ると、今度はそれが**新スラッグ本体**を
+    拾ってしまう。例: `Connetix -> connetix` と `CONNETIX -> connetix-2` が並ぶとき、
+    前者だけ落とすと `/brands/CONNETIX/ -> /brands/connetix-2/` が残り、
+    大小文字非区別マッチで正規 URL `/brands/connetix/` まで connetix-2 へ飛ぶ。
+
+    そのキー空間には**新スラッグ本体が住んでいる**ので、どのルールも置けない。
+    群ごと落として旧 URL を 404 のまま残す (= 現状維持) 方が安全。
+    """
+    shadowed = set()
+    for kind in ("tags", "brands"):
+        for slug in indexed[kind]:
+            term = reverse.get(slug)
+            if term and _is_case_only_variant(term, slug):
+                shadowed.add(f"/{kind}/{slug}/".lower())
+    return shadowed
+
+
 def build_redirect_lines(indexed: dict, reverse: dict) -> list:
+    """`_redirects` (GitLab Pages / tj/go-redirects) の行を作る。
+
+    **from 列のマッチは大小文字を区別しない。** 大小文字だけ違う旧 URL の行を出すと
+    301 が自分自身を指してループする (`_is_case_only_variant`)。同じキー空間の
+    他の行も新スラッグ本体を攫うので、群ごと落とす (`_case_shadowed_keys`)。
+    """
+    shadowed = _case_shadowed_keys(indexed, reverse)
     lines = []
     for kind in ("tags", "brands"):
         for slug in sorted(indexed[kind]):
@@ -96,6 +140,9 @@ def build_redirect_lines(indexed: dict, reverse: dict) -> list:
                 continue
             new_path = f"/{kind}/{slug}/"
             old_path = f"/{kind}/{term}/"
+            if old_path.lower() in shadowed:
+                # 新スラッグ本体が住むキー空間。ここに置いた行は本体を攫う。
+                continue
             lines.append(f"{old_path} {new_path} 301")
     return lines
 
@@ -121,7 +168,12 @@ def build_map_lines(indexed: dict, reverse: dict) -> list:
       キーが衝突し、nginx が `[emerg] conflicting parameter` で**起動しなくなる**
       (2026-08-30 に実 corpus で実測)。宛先が割れる衝突は**群ごと落とす**。
       どちらに飛ばすかを勝手に決めるより、旧 URL を 404 のまま残す方が安全。
+
+    大小文字だけの差 (`4M` -> `4m`) の扱いは `_redirects` 版と共通で、
+    `_case_shadowed_keys` が群ごと落とす。map でも `$uri` のキー照合は大小文字を
+    区別しないので、置けば同じ自己ループになる。
     """
+    shadowed = _case_shadowed_keys(indexed, reverse)
     pairs = []
     for kind in ("tags", "brands"):
         for slug in sorted(indexed[kind]):
@@ -131,7 +183,11 @@ def build_map_lines(indexed: dict, reverse: dict) -> list:
             if _CONTROL_RE.search(term):
                 # 制御文字は map ファイル自体を壊しうる。この用語だけ落とす。
                 continue
-            pairs.append((f"/{kind}/{term}/", f"/{kind}/{slug}/"))
+            old_path = f"/{kind}/{term}/"
+            if old_path.lower() in shadowed:
+                # 新スラッグ本体が住むキー空間。ここに置いた行は本体を攫う。
+                continue
+            pairs.append((old_path, f"/{kind}/{slug}/"))
 
     by_key = {}
     for old_path, new_path in pairs:
