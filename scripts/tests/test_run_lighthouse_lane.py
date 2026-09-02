@@ -1217,3 +1217,20 @@ def test_render_report_omits_run_shift_section_when_clean():
     alerts = [{"kind": "threshold", "url": "https://x/", "form_factor": "mobile",
                "metric": "tbt", "value": 900.0, "baseline": 50.0, "detail": "d"}]
     assert "run 全体が沈んでいて" not in render_report(alerts, "2026-08-15", None, None, {})
+
+
+def test_build_lighthouse_argv_marks_ua_for_both_form_factors():
+    """GA4 側でラボ計測を落とせるよう、両 form factor に UA マーカーが乗る (#6398)。
+
+    受け側は hugo/layouts/partials/extend_head.html の `ga-disable-*`。
+    ここが落ちたら GA4 がラボのヒットで汚れる。
+    """
+    for form_factor in ("mobile", "desktop"):
+        argv = build_lighthouse_argv(
+            "lighthouse", "https://navi.omcha.jp/", "out.json", form_factor
+        )
+        ua = [a for a in argv if a.startswith("--emulated-user-agent=")]
+        assert len(ua) == 1, form_factor
+        assert ua[0].endswith(" " + rll.LAB_UA_MARKER), form_factor
+        # 既定 UA の中身は保つ (端末判定を変えない)
+        assert ("Mobile Safari" in ua[0]) is (form_factor == "mobile")
