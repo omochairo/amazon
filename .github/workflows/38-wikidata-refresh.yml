@@ -46,6 +46,18 @@ jobs:
         with:
           python-version: '3.11'
 
+      # brand_normalizer.py (build_brand_hub_stats 経由) が yaml を import する。
+      # requirements.txt には居ないので単独 install (14-brand-narrative.yml と同じ)。
+      - name: Install pyyaml
+        run: pip install pyyaml
+
+      # hugo/data/brand_hub.json は /hugo gitignore で repo に居ない。
+      # fetch_wikidata_brand_meta.py はこれを対象ブランド一覧として読むので、
+      # runtime で生成する (14-brand-narrative.yml と同じ形)。この step が無い
+      # ために 2026-08-01 / 2026-09-01 の両 run が FileNotFoundError で落ちていた。
+      - name: Build brand_hub.json
+        run: python scripts/build_brand_hub_stats.py
+
       - name: Refresh brand_wikidata.json
         run: python scripts/fetch_wikidata_brand_meta.py
 
