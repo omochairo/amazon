@@ -33,6 +33,10 @@ import re
 
 MARKER_PREFIX = "analytics-expires:"
 DEFAULT_TTL_DAYS = 14
+# 週次レポート Issue は per-URL 検出より参照価値が長い (数値の突き合わせに使う)
+# ので TTL を長く取る。それでも無期限にはしない — 現況を表さなくなる点は同じで、
+# 古いレポートが積み上がると「どれが直近か」を人が判別する羽目になる。
+WEEKLY_TTL_DAYS = 28
 
 _MARKER_RE = re.compile(
     r"<!--\s*" + re.escape(MARKER_PREFIX) + r"\s*(\d{4}-\d{2}-\d{2})\s*-->"
@@ -90,3 +94,39 @@ def find_expiry(body: str | None) -> _dt.date | None:
 def is_expired(body: str | None, *, today: _dt.date) -> bool:
     d = find_expiry(body)
     return d is not None and today > d
+
+
+def _cli() -> int:
+    """workflow の shell step から marker / note を得るための薄い CLI。
+
+    週次レポート Issue (`Create weekly Issue`) は本文を shell で組み立てているので、
+    render_body を通らない。同じ期限規則を bash 側で再実装せずに済ませるための口。
+
+        python -m scripts._analytics_issue_expiry --end 2026-08-30
+        python -m scripts._analytics_issue_expiry --end 2026-08-30 --weekly
+    """
+    import argparse
+
+    p = argparse.ArgumentParser(description="期限マーカー / 説明行を stdout に出す")
+    p.add_argument("--end", required=True, help="観測期間の終端 (YYYY-MM-DD)")
+    p.add_argument("--ttl", type=int, default=DEFAULT_TTL_DAYS)
+    p.add_argument("--weekly", action="store_true",
+                   help=f"週次レポート用の TTL ({WEEKLY_TTL_DAYS} 日) を使う")
+    p.add_argument("--note", action="store_true", help="marker でなく説明行を出す")
+    a = p.parse_args()
+
+    rng = {"end": a.end}
+    ttl = WEEKLY_TTL_DAYS if a.weekly else a.ttl
+    if a.note:
+        print("\n".join(expiry_note(rng, ttl_days=ttl)))
+    else:
+        print(expiry_marker(rng, ttl_days=ttl))
+    # 期限を決められなかった場合は空行だけが出る。呼び出し側はそれを
+    # 「期限なし」として扱えばよいので、ここでは失敗にしない。
+    return 0
+
+
+if __name__ == "__main__":
+    import sys as _sys
+
+    _sys.exit(_cli())
