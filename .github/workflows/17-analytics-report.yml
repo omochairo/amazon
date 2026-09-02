@@ -468,6 +468,12 @@ jobs:
           python -m scripts.open_query_intent_issues
 
       # 週次レポート本体は PV / 表示回数 / CTR / 掲載順位の実数値そのものなので private へ。
+      #
+      # per-URL 検出と同じく、これも「その週のスナップショット」なので有効期限を
+      # 付ける (marker は close_expired_analytics_issues.py が読む)。TTL は
+      # per-URL の 14 日より長い WEEKLY_TTL_DAYS=28 — 数値の突き合わせに参照される
+      # ぶん寿命が長いため。期限を決められなかったときは marker が空になり、
+      # 従来どおり期限なしで残る。
       - name: Create weekly Issue
         env:
           GH_TOKEN: ${{ secrets.NAVI_BRAIN_PAT }}
@@ -480,6 +486,20 @@ jobs:
             TITLE="Analytics weekly report ${RANGE_START} 〜 ${RANGE_END} (GA4+GSC)"
           else
             TITLE="GA4 weekly report ${RANGE_START} 〜 ${RANGE_END}"
+          fi
+          MARKER=$(python -m scripts._analytics_issue_expiry --end "$RANGE_END" --weekly)
+          if [ -n "$MARKER" ]; then
+            { echo "$MARKER"; cat /tmp/report.md; } > /tmp/report_stamped.md
+            {
+              echo
+              echo "---"
+              echo
+              echo "この Issue は ${RANGE_START} 〜 ${RANGE_END} 週のスナップショットで、"
+              echo "上の期限を過ぎると \`close_expired_analytics_issues.py\` が自動 close する。"
+              echo "翌週の run が同じ形のレポートを立て直すので、取りこぼしにはならない。"
+              echo "恒久的に追う論点はこの Issue に足さず、期限マーカーを持たない別 Issue へ切り出すこと。"
+            } >> /tmp/report_stamped.md
+            mv /tmp/report_stamped.md /tmp/report.md
           fi
           gh issue create \
             -R "$ANALYTICS_ISSUE_REPO" \

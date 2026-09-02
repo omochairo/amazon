@@ -96,3 +96,33 @@ def test_select_expired_sorted_oldest_first():
 def test_select_expired_empty_when_nothing_due():
     items = [_item(1, f"<!-- {MARKER_PREFIX}2026-09-30 -->")]
     assert select_expired(items, today=dt.date(2026, 9, 10)) == []
+
+
+def test_weekly_ttl_is_longer_than_per_url():
+    from scripts._analytics_issue_expiry import WEEKLY_TTL_DAYS
+
+    assert WEEKLY_TTL_DAYS > DEFAULT_TTL_DAYS
+    assert expiry_date({"end": "2026-08-30"}, ttl_days=WEEKLY_TTL_DAYS) == dt.date(2026, 9, 27)
+
+
+def _run_cli(*args: str) -> str:
+    import subprocess
+    import sys
+
+    res = subprocess.run(
+        [sys.executable, "-m", "scripts._analytics_issue_expiry", *args],
+        check=True, capture_output=True, text=True, encoding="utf-8",
+    )
+    return res.stdout.strip()
+
+
+def test_cli_emits_marker_for_weekly_and_default():
+    # 週次レポート step が shell から呼ぶ経路。TTL を bash 側に再実装しないための口
+    assert _run_cli("--end", "2026-08-30", "--weekly") == f"<!-- {MARKER_PREFIX}2026-09-27 -->"
+    assert _run_cli("--end", "2026-08-30") == f"<!-- {MARKER_PREFIX}2026-09-13 -->"
+
+
+def test_cli_emits_empty_and_succeeds_when_date_unusable():
+    # workflow は空文字を「期限なし」として扱うので、ここで落ちてはいけない
+    assert _run_cli("--end", "") == ""
+    assert _run_cli("--end", "2026-13-99") == ""
