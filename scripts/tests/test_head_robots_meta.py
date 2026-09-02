@@ -10,6 +10,7 @@ max-image-preview:large / max-snippet:-1 / max-video-preview:-1 を付与する�
 """
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -25,12 +26,30 @@ ROBOTS_RE = re.compile(r'<meta name=robots content="([^"]*)">')
 LOC_RE = re.compile(r"<loc>(.*?)</loc>")
 
 
+# CI では skip を許さない (#4793 と同じ形: 前提が欠けたまま緑で通ると、レーンが
+# 黙って死ぬ)。45-template-tests.yml が HUGO_TEMPLATE_TESTS=required を渡す。
+_REQUIRED = os.environ.get("HUGO_TEMPLATE_TESTS") == "required"
+# ビルドは手元実測で 100 秒前後 (本番の GitLab `pages` ジョブは前処理込みで約 9 分)。
+# 手元は 300 秒で足りるが、CI では余裕を持たせる。
+_BUILD_TIMEOUT = int(os.environ.get("HUGO_TEST_BUILD_TIMEOUT", "300"))
+
+
+def _unavailable(reason: str):
+    """前提が無いときの扱い。手元では skip、CI (required) では fail。"""
+    if _REQUIRED:
+        pytest.fail(
+            "HUGO_TEMPLATE_TESTS=required なのにテンプレートテストを実行できない: "
+            + reason
+        )
+    pytest.skip(reason)
+
+
 @pytest.fixture(scope="module")
 def hugo_build_dir():
     if shutil.which("hugo") is None:
-        pytest.skip("hugo binary not found")
+        _unavailable("hugo binary not found")
     if not (HUGO_DIR / "themes" / "PaperMod" / "layouts").exists():
-        pytest.skip("PaperMod theme submodule not initialized")
+        _unavailable("PaperMod theme submodule not initialized")
 
     with tempfile.TemporaryDirectory(prefix="hugo_robots_test_") as tmp:
         out_dir = Path(tmp) / "public"
@@ -49,10 +68,10 @@ def hugo_build_dir():
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=300,
+                timeout=_BUILD_TIMEOUT,
             )
         except subprocess.TimeoutExpired:
-            pytest.skip("hugo build timed out (300s)")
+            _unavailable("hugo build timed out (%ds)" % _BUILD_TIMEOUT)
         if proc.returncode != 0:
             pytest.fail(f"hugo build failed:\n{proc.stdout}\n{proc.stderr}")
         yield out_dir

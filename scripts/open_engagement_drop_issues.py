@@ -22,6 +22,8 @@ import pathlib
 import subprocess
 import sys
 
+from scripts._analytics_issue_expiry import expiry_marker, expiry_note
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("open_engagement_drop_issues")
 
@@ -59,6 +61,7 @@ def render_body(d: dict, *, src_range: dict) -> str:
     rng = f"{src_range.get('start','?')} 〜 {src_range.get('end','?')}"
     parts = [
         f"<!-- {MARKER_PREFIX}{url} -->",
+        *([m] if (m := expiry_marker(src_range)) else []),
         "親 epic: #1356 (E1: GSC/GA4 駆動の自動最適化ループ) / 関連: #1301",
         "",
         "## エンゲージメント低下概要",
@@ -90,6 +93,7 @@ def render_body(d: dict, *, src_range: dict) -> str:
         "",
         f"- 重複起票防止のため本文に `<!-- {MARKER_PREFIX}{url} -->` マーカーを埋め込み済み",
         "- 同 URL が再検出されてもこの Issue が open なら新規起票なし",
+        *expiry_note(src_range),
     ]
     return "\n".join(parts)
 

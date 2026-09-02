@@ -22,6 +22,8 @@ import pathlib
 import subprocess
 import sys
 
+from scripts._analytics_issue_expiry import expiry_marker, expiry_note
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("open_opportunity_issues")
 
@@ -75,6 +77,7 @@ def render_body(detected: dict, *, src_range: dict) -> str:
 
     parts = [
         f"<!-- {MARKER_PREFIX}{page} -->",
+        *([m] if (m := expiry_marker(src_range)) else []),
         f"親 epic: #1356 (E1: GSC/GA4 駆動の自動最適化ループ) / 関連: #1301",
         "",
         "## 機会概要",
@@ -109,6 +112,7 @@ def render_body(detected: dict, *, src_range: dict) -> str:
         f"- 重複起票防止のため本文に `<!-- {MARKER_PREFIX}{page} -->` マーカーを埋め込み済み",
         "- 同 URL が再検出されてもこの Issue が open なら新規起票なし",
         "- 1 ページ目に到達 (position <= 10) して 2 週間維持されたら自動 close を将来検討",
+        *expiry_note(src_range),
     ]
     return "\n".join(parts)
 

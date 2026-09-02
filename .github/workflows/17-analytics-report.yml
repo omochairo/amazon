@@ -377,6 +377,24 @@ jobs:
             exit 1
           fi
 
+      # 期限切れの A レーン Issue を、この run の起票より **前** に閉じる (#6415 系)。
+      #
+      # A レーンの Issue は観測週のスナップショットで、恒久課題ではない。放置すると
+      # 各 opener の重複防止マーカーが効き続け、「同 URL の古い Issue が open だから
+      # 新しい週の検出は起票しない」状態になる。つまり掃除しないと最新の数値が
+      # 二度と上がってこない。先に閉じてから起票することで、まだ検出され続けている
+      # URL はこの run の中で最新の数値の Issue に置き換わる。
+      #
+      # マーカー (`<!-- analytics-expires:YYYY-MM-DD -->`) を持たない Issue には
+      # 触らない。人が立てたものを巻き込まないため。
+      - name: Close expired analytics Issues (A レーンのスナップショット掃除)
+        env:
+          GH_TOKEN: ${{ secrets.NAVI_BRAIN_PAT }}
+          REPO: ${{ env.ANALYTICS_ISSUE_REPO }}
+        run: |
+          set -e
+          python -m scripts.close_expired_analytics_issues
+
       - name: Open rewrite Issues for low-CTR pages
         if: steps.low_ctr.outputs.count != '0' && steps.low_ctr.outputs.count != ''
         env:
@@ -384,7 +402,7 @@ jobs:
           REPO: ${{ env.ANALYTICS_ISSUE_REPO }}
         run: |
           set -e
-          python scripts/open_low_ctr_issues.py
+          python -m scripts.open_low_ctr_issues
 
       - name: Open opportunity Issues
         if: steps.opportunity.outputs.count != '0' && steps.opportunity.outputs.count != ''
@@ -393,7 +411,7 @@ jobs:
           REPO: ${{ env.ANALYTICS_ISSUE_REPO }}
         run: |
           set -e
-          python scripts/open_opportunity_issues.py
+          python -m scripts.open_opportunity_issues
 
       - name: Open brand_taxonomy suggestion Issue
         if: steps.brand_suggest.outputs.count != '0' && steps.brand_suggest.outputs.count != ''
@@ -420,7 +438,7 @@ jobs:
           REPO: ${{ env.ANALYTICS_ISSUE_REPO }}
         run: |
           set -e
-          python scripts/open_cannibalization_issues.py
+          python -m scripts.open_cannibalization_issues
 
       - name: Open engagement-drop Issues (A-4)
         if: steps.engagement_drop.outputs.count != '0' && steps.engagement_drop.outputs.count != ''
@@ -429,7 +447,7 @@ jobs:
           REPO: ${{ env.ANALYTICS_ISSUE_REPO }}
         run: |
           set -e
-          python scripts/open_engagement_drop_issues.py
+          python -m scripts.open_engagement_drop_issues
 
       - name: Open orphan-page Issues (A-5)
         if: steps.orphans.outputs.count != '0' && steps.orphans.outputs.count != ''
@@ -438,7 +456,7 @@ jobs:
           REPO: ${{ env.ANALYTICS_ISSUE_REPO }}
         run: |
           set -e
-          python scripts/open_orphan_issues.py
+          python -m scripts.open_orphan_issues
 
       - name: Open query-intent Issues (A-7)
         if: steps.query_intent.outputs.count != '0' && steps.query_intent.outputs.count != ''
@@ -447,7 +465,7 @@ jobs:
           REPO: ${{ env.ANALYTICS_ISSUE_REPO }}
         run: |
           set -e
-          python scripts/open_query_intent_issues.py
+          python -m scripts.open_query_intent_issues
 
       # 週次レポート本体は PV / 表示回数 / CTR / 掲載順位の実数値そのものなので private へ。
       - name: Create weekly Issue

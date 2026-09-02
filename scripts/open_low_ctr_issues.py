@@ -25,6 +25,8 @@ import os
 import pathlib
 import subprocess
 import sys
+
+from scripts._analytics_issue_expiry import expiry_marker, expiry_note
 import time
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -107,6 +109,7 @@ def render_body(detected: dict, *, baseline: float, threshold: float,
 
     parts = [
         f"<!-- {MARKER_PREFIX}{page} -->",
+        *([m] if (m := expiry_marker(src_range)) else []),
         f"親 epic: #1356 (E1: GSC/GA4 駆動の自動最適化ループ) / 関連: #1301",
         "",
         "## 検出概要",
@@ -145,6 +148,7 @@ def render_body(detected: dict, *, baseline: float, threshold: float,
         f"- 重複起票防止のため本文に `<!-- {MARKER_PREFIX}{page} -->` マーカーを埋め込み済み",
         "- 同 URL が再検出されてもこの Issue が open なら新規起票なし",
         "- close 後に再検出 → 新規 Issue で再評価",
+        *expiry_note(src_range),
     ]
     return "\n".join(parts)
 
