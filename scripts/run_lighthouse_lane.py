@@ -131,6 +131,36 @@ LIGHTHOUSE_TIMEOUT = 300
 DEFAULT_LIGHTHOUSE_VERSION = "13.4.0"
 DEFAULT_LIGHTHOUSE_CMD = "npx --yes lighthouse@{}".format(DEFAULT_LIGHTHOUSE_VERSION)
 
+# ラボ計測を GA4 から外すための UA マーカー (#6398)。
+#
+# なぜ UA か:
+#   - `navigator.webdriver` は使えない。chrome-launcher の既定フラグに
+#     `--enable-automation` が無く、Lighthouse 実行時も false になる
+#     (2026-09-02 に `--headless=new --no-sandbox --disable-dev-shm-usage` で実測)。
+#   - URL に `?lab=1` を足す案は却下。Cloudflare のキャッシュキーが変わって毎回
+#     MISS になり、NAS オリジンに毎 run 到達する。504 が 14〜31%/日 出ている
+#     オリジンの応答を測ることになり、測定そのものが歪む。
+#   - Cookie を `--extra-headers` で送る案も却下。CDP の追加ヘッダは cookie jar に
+#     入らないので `document.cookie` からは見えない。配信は静的ホストなので
+#     サーバ側で読むこともできない。
+#
+# 文字列は Lighthouse の既定 (core/config/constants.js の MOTOG4_USERAGENT /
+# DESKTOP_USERAGENT) に `omcha-lab` を足しただけのもの。Lighthouse が既定 UA の
+# Chrome バージョンを上げると差が出るが、**配信側に UA 分岐は 1 箇所も無く**
+# (hugo/assets/js・layouts を grep して 0 件)、GA4 は本マーカーで無効化するので
+# 実害は無い。受け側は hugo/layouts/partials/extend_head.html。
+LAB_UA_MARKER = "omcha-lab"
+LAB_USER_AGENTS = {
+    "mobile": (
+        "Mozilla/5.0 (Linux; Android 11; moto g power (2022)) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36 " + LAB_UA_MARKER
+    ),
+    "desktop": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 " + LAB_UA_MARKER
+    ),
+}
+
 # Lighthouse audit id → JSONL 列名 prefix。numericValue (ms / 無次元) を採る。
 METRIC_MAP = (
     ("largest-contentful-paint", "lcp"),
@@ -275,6 +305,7 @@ def build_lighthouse_argv(
         "--quiet",
         "--chrome-flags=--headless=new --no-sandbox --disable-dev-shm-usage",
     ]
+    argv.append("--emulated-user-agent=" + LAB_USER_AGENTS[form_factor])
     if form_factor == "mobile":
         # Lighthouse の既定 (Moto G Power / 低速4G) = PSI mobile と揃う
         argv += ["--form-factor=mobile", "--screenEmulation.mobile"]

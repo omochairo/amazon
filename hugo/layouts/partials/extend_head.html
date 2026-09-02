@@ -182,6 +182,25 @@
 {{ end }}
 
 <!-- Google Analytics (G-D8ZQX1BT20) -->
+<script>
+  /* ラボ計測 (ローカル Lighthouse レーン) のヒットを GA4 に入れない。
+     lane は代表 URL 11 本を mobile/desktop で毎日叩き、run ごとにクリーン
+     プロファイルなので GA4 側では全部「新規ユーザー」になる。2026-09-02 に
+     GA4 リアルタイムの 112 ユーザーの大半がこれだったことを Cloudflare の
+     clientIP 分解で確認した (navi の JP リクエストの 97.6% が自ホスト)。
+
+     公式の `ga-disable-<ID>` フラグを使うので **gtag.js の読み込みと実行はそのまま**。
+     lane が測るページ重量・TBT は実ユーザーと同じままで、ヒットだけが出ない。
+
+     判定は UA マーカー。scripts/run_lighthouse_lane.py が --emulated-user-agent で
+     付ける。navigator.webdriver は Lighthouse (chrome-launcher の既定フラグに
+     --enable-automation が無い) では false になるので単独では効かない
+     (2026-09-02 に headless Chrome で実測)。それでも puppeteer 既定など他の
+     自動化には効くので併記する。 */
+  if (/omcha-lab/.test(navigator.userAgent) || navigator.webdriver === true) {
+    window['ga-disable-G-D8ZQX1BT20'] = true;
+  }
+</script>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-D8ZQX1BT20"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
