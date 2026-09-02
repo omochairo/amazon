@@ -16,8 +16,10 @@ name: Pre-fetch Third-Party Sources
 #
 # ただし**月次の枠は共有する** (`--monthly-budget`, 既定 900)。日次上限だけだと
 # 30 + 20 = 50/日 = 1,500/月 が名目上の上限になり、無料枠 1,000/月 を月末前に
-# 使い切る。レーンは別プロセスなので、両者が書き出す third_party_sources.json の
-# `fetched_at` を共有記録として実消費を数え、残枠に合わせて日次上限を切り下げる。
+# 使い切る。レーンは別プロセスなので、共有記録
+# `data/raw/per_asin/_tavily_usage.json` に**実 API 呼び出し回数**を刻み
+# (呼ぶ直前に 1 回ぶん)、残枠に合わせて日次上限を切り下げる。成功件数で数えると
+# API を叩いてから落ちた呼び出しが上限に載らず、credit だけ消える。
 # 到達したら 0 件で正常終了し、80% 超と 429 到達は `::warning::` で run に出す
 # (#4793: 緑のまま収集数だけ静かに減る形にしない)。
 #
@@ -103,6 +105,8 @@ jobs:
       #
       # --max-age-days を 90 にしているのは、Tavily が非販売 host を 2 件返せない ASIN が
       # 母集合に残り続けるため。既定の 30 日だと同じ空振りを毎月引き直すことになる。
+      # 90 日でも四半期ごとに全件引き直すので、script 側の --empty-max-age-days
+      # (既定 180 日 / 連続空振り回数だけ倍) で再問い合わせを後ろへ倒している。
       - name: Pre-fetch third-party sources (existing articles, GSC demand)
         if: ${{ (github.event.inputs.gsc_max_queries || '20') != '0' }}
         env:
@@ -144,7 +148,7 @@ jobs:
           git push -u origin "$BRANCH"
           PR_URL=$(gh pr create \
             --title "data: third-party source pre-fetch (#1600, run ${{ github.run_id }})" \
-            --body "Automated #1600 Phase 2 pre-fetch. data/raw/per_asin/**/third_party_sources.json only — no article changes." \
+            --body "Automated #1600 Phase 2 pre-fetch. data/raw/per_asin/**/third_party_sources.json と Tavily 消費カウンタ _tavily_usage.json のみ — no article changes." \
             --base main \
             --head "$BRANCH")
           echo "Created: $PR_URL"
