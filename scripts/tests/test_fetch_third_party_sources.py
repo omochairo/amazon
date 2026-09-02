@@ -367,3 +367,206 @@ class MonthlyBudgetCliTest(unittest.TestCase):
                  "--max-queries", "4", "--monthly-budget", "0"],
                 usage=99999, fetched=0)
         self.assertEqual(len(calls), 4)
+
+
+class RecordCallTest(unittest.TestCase):
+    """実 API 呼び出し回数の共有カウンタ (_tavily_usage.json)。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.base = pathlib.Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _read(self):
+        return json.loads((self.base / F.USAGE_NAME).read_text(encoding="utf-8"))
+
+    def test_increments_within_the_same_month(self):
+        now = dt.datetime(2026, 9, 2, tzinfo=dt.timezone.utc)
+        self.assertEqual(F.record_call(self.base, now=now), 1)
+        self.assertEqual(F.record_call(self.base, now=now), 2)
+        self.assertEqual(self._read()["month"], "2026-09")
+
+    def test_resets_on_month_rollover(self):
+        sep = dt.datetime(2026, 9, 30, tzinfo=dt.timezone.utc)
+        F.record_call(self.base, now=sep)
+        F.record_call(self.base, now=sep)
+        nxt = F.record_call(self.base, now=dt.datetime(2026, 10, 1, tzinfo=dt.timezone.utc))
+        self.assertEqual(nxt, 1)
+
+    def test_malformed_counter_restarts_at_one(self):
+        (self.base / F.USAGE_NAME).write_text("{ not json", encoding="utf-8")
+        now = dt.datetime(2026, 9, 2, tzinfo=dt.timezone.utc)
+        self.assertEqual(F.record_call(self.base, now=now), 1)
+
+    def test_counter_file_is_not_mistaken_for_an_asin_payload(self):
+        """per_asin 直下に置くので glob(*/OUT_NAME) には掛からない。"""
+        now = dt.datetime(2026, 9, 2, tzinfo=dt.timezone.utc)
+        F.record_call(self.base, now=now)
+        self.assertEqual(F._fetched_at_usage(self.base, now), 0)
+
+
+class MonthUsageCounterTest(unittest.TestCase):
+    """month_usage は「実呼び出し回数」と「成功件数」の大きい方を返す。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.base = pathlib.Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _write_success(self, asin, ts):
+        d = self.base / asin
+        d.mkdir(parents=True, exist_ok=True)
+        (d / F.OUT_NAME).write_text(json.dumps({"fetched_at": ts}), encoding="utf-8")
+
+    def _write_counter(self, month, calls):
+        (self.base / F.USAGE_NAME).write_text(
+            json.dumps({"month": month, "calls": calls}), encoding="utf-8")
+
+    def test_counter_wins_when_it_exceeds_successes(self):
+        """失敗した呼び出しの分だけ counter が多い。これが本来の消費。"""
+        now = dt.datetime(2026, 9, 20, tzinfo=dt.timezone.utc)
+        self._write_success("B000000001", "2026-09-01T00:00:00+00:00")
+        self._write_counter("2026-09", 40)
+        self.assertEqual(F.month_usage(self.base, now=now), 40)
+
+    def test_falls_back_to_successes_when_counter_is_missing(self):
+        """導入直後 / カウンタ喪失。過小な 0 で budget を判断させない。"""
+        now = dt.datetime(2026, 9, 20, tzinfo=dt.timezone.utc)
+        self._write_success("B000000001", "2026-09-01T00:00:00+00:00")
+        self._write_success("B000000002", "2026-09-02T00:00:00+00:00")
+        self.assertEqual(F.month_usage(self.base, now=now), 2)
+
+    def test_stale_counter_month_is_ignored(self):
+        now = dt.datetime(2026, 9, 20, tzinfo=dt.timezone.utc)
+        self._write_counter("2026-08", 900)
+        self._write_success("B000000001", "2026-09-01T00:00:00+00:00")
+        self.assertEqual(F.month_usage(self.base, now=now), 1)
+
+
+class EmptyNegativeCacheTest(unittest.TestCase):
+    """空振り ASIN の再問い合わせをバックオフさせる (--empty-max-age-days)。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.base = pathlib.Path(self._tmp.name)
+        self.p = self.base / F.OUT_NAME
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _write(self, days_ago, **extra):
+        ts = (dt.datetime.now(dt.timezone.utc)
+              - dt.timedelta(days=days_ago)).isoformat()
+        payload = {"fetched_at": ts}
+        payload.update(extra)
+        self.p.write_text(json.dumps(payload), encoding="utf-8")
+
+    def test_streak_defaults_to_one_for_legacy_empty_payloads(self):
+        """empty_streak を持たない既存ファイルは sources から 1 回ぶん復元する。"""
+        self.assertEqual(F._empty_streak({"sources": []}), 1)
+        self.assertEqual(F._empty_streak({"sources": [{"host": "a"}]}), 1)
+        self.assertEqual(
+            F._empty_streak({"sources": [{"host": "a"}, {"host": "b"}]}), 0)
+        self.assertEqual(F._empty_streak({"sources": [], "empty_streak": 3}), 3)
+
+    def test_empty_asin_is_skipped_past_the_normal_max_age(self):
+        self._write(100, sources=[], empty_streak=1)
+        self.assertFalse(F._is_fresh(self.p, 90))
+        self.assertTrue(F._is_fresh(self.p, 90, 180))
+
+    def test_backoff_grows_with_the_streak(self):
+        self._write(200, sources=[], empty_streak=1)
+        self.assertFalse(F._is_fresh(self.p, 90, 180))
+        self._write(200, sources=[], empty_streak=2)
+        self.assertTrue(F._is_fresh(self.p, 90, 180))
+
+    def test_backoff_is_capped(self):
+        cap = F._EMPTY_BACKOFF_CAP
+        self._write(180 * cap + 1, sources=[], empty_streak=99)
+        self.assertFalse(F._is_fresh(self.p, 90, 180))
+
+    def test_productive_asin_uses_the_normal_max_age(self):
+        self._write(100, sources=[{"host": "a"}, {"host": "b"}], empty_streak=0)
+        self.assertFalse(F._is_fresh(self.p, 90, 180))
+
+    def test_disabled_when_zero(self):
+        self._write(100, sources=[], empty_streak=3)
+        self.assertFalse(F._is_fresh(self.p, 90, 0))
+
+
+class FetchForAsinBookkeepingTest(unittest.TestCase):
+    """fetch_for_asin は「叩く前に数え」「空振りの連続回数を持ち越す」。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.base = pathlib.Path(self._tmp.name)
+        (self.base / "B00TARGET1").mkdir(parents=True)
+        (self.base / "B00TARGET1" / "amazon.json").write_text(
+            json.dumps({"item": {"title": "テスト商品"}}), encoding="utf-8")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _payload(self):
+        return json.loads(
+            (self.base / "B00TARGET1" / F.OUT_NAME).read_text(encoding="utf-8"))
+
+    def test_call_is_recorded_even_when_the_request_raises(self):
+        """credit はレスポンスを待たずに消える。成功後に数えると取りこぼす。"""
+        with mock.patch.object(F, "tavily_search", side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                F.fetch_for_asin("B00TARGET1", "k", self.base)
+        self.assertEqual(F.month_usage(self.base), 1)
+
+    def test_dry_run_records_nothing(self):
+        F.fetch_for_asin("B00TARGET1", "k", self.base, dry_run=True)
+        self.assertFalse((self.base / F.USAGE_NAME).exists())
+
+    def test_empty_streak_increments_then_resets(self):
+        with mock.patch.object(F, "tavily_search", return_value=[]):
+            F.fetch_for_asin("B00TARGET1", "k", self.base)
+        self.assertEqual(self._payload()["empty_streak"], 1)
+        with mock.patch.object(F, "tavily_search", return_value=[]):
+            F.fetch_for_asin("B00TARGET1", "k", self.base)
+        self.assertEqual(self._payload()["empty_streak"], 2)
+        hit = [{"link": "https://a.example/r", "title": "t", "snippet": "s"},
+               {"link": "https://b.example/r", "title": "t", "snippet": "s"}]
+        with mock.patch.object(F, "tavily_search", return_value=hit):
+            F.fetch_for_asin("B00TARGET1", "k", self.base)
+        self.assertEqual(self._payload()["empty_streak"], 0)
+
+
+class DailySpendCapTest(unittest.TestCase):
+    """日次上限も実呼び出し回数で切る (失敗が続いても枠を超えて投げない)。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.base = pathlib.Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_failing_calls_still_consume_the_daily_limit(self):
+        attempts = []
+
+        def _boom(asin, api_key, base, max_sources=8, dry_run=False):
+            attempts.append(asin)
+            raise RuntimeError("transport error")
+
+        pool = ["B0000000%02d" % i for i in range(1, 21)]
+        argv = ["prog", "--pool", "--base", str(self.base),
+                "--max-queries", "5", "--monthly-budget", "0"]
+        with mock.patch.dict(os.environ, {"TAVILY_API_KEY": "k", "GITHUB_ACTIONS": ""}), \
+                mock.patch.object(F, "month_usage", return_value=0), \
+                mock.patch.object(F, "_pickable_pool", return_value=pool), \
+                mock.patch.object(F._sc, "score_asin", return_value={"band": "zero"}), \
+                mock.patch.object(F, "fetch_for_asin", _boom), \
+                mock.patch.object(F, "_is_fresh", return_value=False), \
+                mock.patch.object(F.time, "sleep", lambda *_: None), \
+                mock.patch.object(sys, "argv", argv):
+            self.assertEqual(F._cli(), 0)
+        self.assertEqual(len(attempts), 5)

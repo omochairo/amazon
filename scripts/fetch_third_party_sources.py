@@ -33,6 +33,18 @@ quota: Tavily 無料枠は 1,000 query/月 (≈ 33/日)。freshness skip (既定
 定常呼び出しは thin/zero ASIN 数に収まる。--max-queries で日次上限を切る。
 secret (TAVILY_API_KEY) 未設定時は inert (no-op, exit 0)。
 
+  消費の数え方は**実 API 呼び出し回数**。`record_call` が呼び出しの直前に
+  `data/raw/per_asin/_tavily_usage.json` へ 1 回ぶんを刻み、--monthly-budget と
+  日次上限の両方がこれを見る。成功件数 (= 書き出した third_party_sources.json の
+  数) で数えていたときは、**API を叩いてから落ちた呼び出しが上限に載らず**、
+  credit だけ消えてループが余分に回っていた。
+
+  空振り (非販売 host が _THIRD_PARTY_MIN_HOSTS 未満) の ASIN は取得しても
+  --from-gsc の母集合 (third_party_hosts < 2) から出ていかないので、通常の
+  --max-age-days では同じ空振りを周期ごとに全件引き直す。--empty-max-age-days
+  (既定 180 日, 連続空振り回数だけ倍) でネガティブキャッシュし、再問い合わせを
+  後ろへ倒す。
+
 env:
   TAVILY_API_KEY  Tavily Search API キー (https://app.tavily.com — CC 不要・無料枠)
 
@@ -69,6 +81,10 @@ logger = logging.getLogger("fetch_third_party_sources")
 PER_ASIN_DIR = pathlib.Path("data/raw/per_asin")
 TAVILY_ENDPOINT = "https://api.tavily.com/search"
 OUT_NAME = "third_party_sources.json"
+# 実 API 呼び出し回数の共有記録 (レーン間・run 間)。per_asin 直下のファイルなので
+# glob("*/" + OUT_NAME) には掛からず、workflow の `git add data/raw/per_asin` で
+# main に載って次 run へ引き継がれる。
+USAGE_NAME = "_tavily_usage.json"
 GSC_BY_PAGE = pathlib.Path("data/analytics/history/gsc_by_page.jsonl")
 
 # 販売/マーケットプレイス host (= 価格・購入ページ)。第三者「出典」には使わないので除外。
@@ -206,7 +222,40 @@ def _filter_sources(raw_items: list[dict], max_sources: int) -> list[dict]:
     return out
 
 
-def _is_fresh(path: pathlib.Path, max_age_days: int) -> bool:
+# 空振り ASIN の再問い合わせを何段まで後ろへ倒すか。empty_streak 回目の再取得は
+# `--empty-max-age-days * min(streak, _EMPTY_BACKOFF_CAP)` 日後になる。
+# 頭打ちを置くのは、取れるようになった時に永久に拾い直せなくなるのを避けるため。
+_EMPTY_BACKOFF_CAP = 4
+
+
+def _empty_streak(data) -> int:
+    """保存済み payload から空振りの連続回数を読む。
+
+    `empty_streak` は後から足したフィールドなので、既存ファイルには無い。無い場合は
+    保存済みの `sources` から 1 回ぶんだけ復元する (0 に倒すと、既に何度も空振り
+    している ASIN が導入直後に全部 1 段目からやり直しになる)。
+    """
+    if not isinstance(data, dict):
+        return 0
+    raw = data.get("empty_streak")
+    if isinstance(raw, int) and raw >= 0:
+        return raw
+    sources = data.get("sources")
+    if isinstance(sources, list) and len(sources) < _sc._THIRD_PARTY_MIN_HOSTS:
+        return 1
+    return 0
+
+
+def _is_fresh(path: pathlib.Path, max_age_days: int,
+              empty_max_age_days: int = 0) -> bool:
+    """この ASIN を今回 skip してよいか (= 保存済みが十分新しいか)。
+
+    `empty_max_age_days` > 0 のとき、**空振りが続いている ASIN には長い有効期限**を
+    充てる (ネガティブキャッシュ)。--from-gsc レーンの母集合は
+    `third_party_hosts < 2` の ASIN なので、非販売 host が返ってこない ASIN は
+    取得しても母集合から出ていかない。通常の `--max-age-days` (このレーンは 90) だと
+    同じ空振りを四半期ごとに全件引き直すことになり、レーンの消費がほぼそれで埋まる。
+    """
     data = _load(path)
     if not isinstance(data, dict):
         return False
@@ -217,25 +266,55 @@ def _is_fresh(path: pathlib.Path, max_age_days: int) -> bool:
         when = _dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
     except ValueError:
         return False
+    age_limit = max_age_days
+    if empty_max_age_days > 0:
+        streak = _empty_streak(data)
+        if streak > 0:
+            age_limit = max(
+                age_limit,
+                empty_max_age_days * min(streak, _EMPTY_BACKOFF_CAP),
+            )
     now = _dt.datetime.now(_dt.timezone.utc)
-    return (now - when).days < max_age_days
+    return (now - when).days < age_limit
 
 
-def month_usage(base: pathlib.Path, now: Optional[_dt.datetime] = None) -> int:
-    """今月ぶんの取得件数を、書き出し済み `fetched_at` から数える。
+def _usage_path(base: pathlib.Path) -> pathlib.Path:
+    return base / USAGE_NAME
 
-    Tavily 無料枠は 1,000/月。レーンが 2 本 (新規候補 / 既存記事) あり**別プロセス**で
-    走るので、プロセス内のカウンタでは合算を見張れない。両者が書き出す
-    `third_party_sources.json` の `fetched_at` が唯一の共有記録なので、そこを数える。
 
-    **これは下限の推定であって正確な API 消費ではない**:
-      - 失敗した呼び出し (429 や 0 件) はファイルを残さないが credit は消えている
-      - 同じ ASIN を同月に 2 回引くとファイルが上書きされるので 1 件にしか見えない
-        (`--max-age-days` が 30 以上なら実質起きない)
-    どちらも**過小**に出るので、budget を「これ以上は投げない」の上限として使うぶんには
-    安全側に倒れない。**枠に張り付いてからでは遅い**ので、閾値は余裕を持たせること。
+def record_call(base: pathlib.Path, now: Optional[_dt.datetime] = None) -> int:
+    """API を 1 回叩くことを共有カウンタに刻み、今月の累計を返す。
+
+    **呼び出しの直前に呼ぶこと。** Tavily の credit はレスポンスが 200 で返るか
+    どうかに関係なく、リクエストを投げた時点で消えうる。成功後に数えると、
+    例外や 4xx で落ちた呼び出しがカウンタから抜け、budget が実消費より緩くなる。
+    書き込みも 1 回ごとに行う (run が途中で落ちてもそこまでの消費が残る)。
+
+    月が変わったら 0 から数え直す。
     """
     now = now or _dt.datetime.now(_dt.timezone.utc)
+    month = now.strftime("%Y-%m")
+    path = _usage_path(base)
+    data = _load(path)
+    calls = 0
+    if isinstance(data, dict) and data.get("month") == month:
+        raw = data.get("calls")
+        calls = raw if isinstance(raw, int) and raw >= 0 else 0
+    calls += 1
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"month": month, "calls": calls, "updated_at": now.isoformat()},
+                  f, ensure_ascii=False, indent=2)
+    return calls
+
+
+def _fetched_at_usage(base: pathlib.Path, now: _dt.datetime) -> int:
+    """今月ぶんの**成功**取得件数を、書き出し済み `fetched_at` から数える。
+
+    これは実 API 消費の**下限**でしかない (失敗呼び出しはファイルを残さない /
+    同月 2 回取得は上書きで 1 件に潰れる)。単独では budget の根拠にできないが、
+    `record_call` のカウンタが無い月 (導入直後・カウンタ喪失時) の底として使う。
+    """
     prefix = now.strftime("%Y-%m")
     used = 0
     for path in base.glob("*/" + OUT_NAME):
@@ -246,6 +325,30 @@ def month_usage(base: pathlib.Path, now: Optional[_dt.datetime] = None) -> int:
         if isinstance(ts, str) and ts.startswith(prefix):
             used += 1
     return used
+
+
+def month_usage(base: pathlib.Path, now: Optional[_dt.datetime] = None) -> int:
+    """今月ぶんの Tavily 消費。**実呼び出し回数**と成功件数の大きい方を返す。
+
+    Tavily 無料枠は 1,000/月。レーンが 2 本 (新規候補 / 既存記事) あり**別プロセス**で
+    走るので、プロセス内のカウンタでは合算を見張れない。共有記録は 2 つある:
+
+      1. `_tavily_usage.json` の `calls` — `record_call` が**呼び出しの直前**に刻む
+         実消費。失敗した呼び出しも入るので、これが本来の budget の根拠。
+      2. 各 `third_party_sources.json` の `fetched_at` — 成功件数。1 が無い月の底。
+
+    2 は常に 1 以下になるはずだが、カウンタのファイルが失われた月 (導入直後や
+    PR が落ちて main に載らなかったとき) には 1 だけが過小になる。**過小に出た側で
+    budget を判断すると枠を超えて投げる**ので、両者の大きい方を採る。
+    """
+    now = now or _dt.datetime.now(_dt.timezone.utc)
+    counter = 0
+    data = _load(_usage_path(base))
+    if isinstance(data, dict) and data.get("month") == now.strftime("%Y-%m"):
+        raw = data.get("calls")
+        if isinstance(raw, int) and raw >= 0:
+            counter = raw
+    return max(counter, _fetched_at_usage(base, now))
 
 
 def _notice(level: str, message: str) -> None:
@@ -270,21 +373,28 @@ def fetch_for_asin(
     query = extract_search_keyword(title)
     if dry_run:
         return {"asin": asin, "status": "dry_run", "query": query, "sources": 0}
+    out_path = base / asin / OUT_NAME
+    prev_streak = _empty_streak(_load(out_path))
+    # credit はレスポンスを待たずに消える。例外で抜ける経路も含めて必ず数える。
+    record_call(base)
     raw = tavily_search(query, api_key, num=10)
     sources = _filter_sources(raw, max_sources)
+    # 空振り (非販売 host が floor 未満) の連続回数。次回の再問い合わせを後ろへ倒す。
+    streak = prev_streak + 1 if len(sources) < _sc._THIRD_PARTY_MIN_HOSTS else 0
     payload = {
         "asin": asin,
         "fetched_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
         "query": query,
         "engine": "tavily",
         "raw_count": len(raw),
+        "empty_streak": streak,
         "sources": sources,
     }
-    out_path = base / asin / OUT_NAME
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
-    return {"asin": asin, "status": "ok", "query": query, "sources": len(sources)}
+    return {"asin": asin, "status": "ok", "query": query,
+            "sources": len(sources), "empty_streak": streak}
 
 
 def _pickable_pool() -> list[str]:
@@ -404,9 +514,13 @@ def _cli() -> int:
     ap.add_argument("--max-sources", type=int, default=8, help="ASIN あたり保存 host 数")
     ap.add_argument("--max-age-days", type=int, default=30,
                     help="この日数以内に取得済なら skip (--force で無視)")
+    ap.add_argument("--empty-max-age-days", type=int, default=180,
+                    help="空振り (非販売 host が floor 未満) が続く ASIN に充てる有効期限 "
+                         "(日, 既定 180)。連続空振り回数だけ倍に伸びる (上限 %d 段)。0 で無効"
+                         % _EMPTY_BACKOFF_CAP)
     ap.add_argument("--monthly-budget", type=int, default=900,
                     help="今月ぶんの取得上限 (Tavily 無料=1000/月。0 で無効)。"
-                         "2 本のレーンで共有し、書き出し済み fetched_at から実消費を数える")
+                         "2 本のレーンで共有し、_tavily_usage.json の実呼び出し回数で数える")
     ap.add_argument("--force", action="store_true", help="freshness を無視して再取得")
     ap.add_argument("--dry-run", action="store_true", help="API を叩かず計画のみ表示")
     ap.add_argument("--base", default=str(PER_ASIN_DIR))
@@ -442,9 +556,10 @@ def _cli() -> int:
     else:
         ap.error("ASIN / --pool / --from-gsc のいずれかが必要です")
 
-    # 月次バジェット。レーンは別プロセスなので、共有記録 (fetched_at) から実消費を
-    # 数えて残枠を出す。ここで絞らないと 新規 30 + 既存 20 = 50/日 = 1,500/月 が
-    # 名目上の上限になり、無料枠 1,000/月 を月末前に使い切る。
+    # 月次バジェット。レーンは別プロセスなので、共有記録 (_tavily_usage.json の
+    # 実呼び出し回数) から実消費を数えて残枠を出す。ここで絞らないと
+    # 新規 30 + 既存 20 = 50/日 = 1,500/月 が名目上の上限になり、
+    # 無料枠 1,000/月 を月末前に使い切る。
     limit = args.max_queries
     if args.monthly_budget > 0 and not args.dry_run:
         used = month_usage(base)
@@ -468,19 +583,33 @@ def _cli() -> int:
             logger.info("残枠 %d < max-queries %d — 今回は残枠に合わせる", remaining, limit)
             limit = remaining
 
+    # done = 書き出せた件数 / spent = 実際に API を投げた回数。両方で上限を切る。
+    # done だけで切っていたときは、**API を叩いてから落ちた呼び出し** (429 以外の
+    # HTTP エラー・タイムアウト・JSON 破損) が done に載らず、その分だけループが
+    # 余分に回っていた。credit は消えているので、日次上限も実消費で見る。
     done = 0
+    spent = 0
     for asin in targets:
         if done >= limit:
             logger.info("上限 (%d) 到達 — 残りは次回", limit)
             break
+        if spent >= limit:
+            _notice("warning",
+                    "API 呼び出しが日次上限 {} に到達 (成功 {} 件) — 失敗が多い。"
+                    "credit は消えているので残りは次回に回す".format(limit, done))
+            break
         out_path = base / asin / OUT_NAME
-        if not args.force and not args.dry_run and _is_fresh(out_path, args.max_age_days):
-            logger.info("%s: fresh (<%dd) skip", asin, args.max_age_days)
+        if not args.force and not args.dry_run and _is_fresh(
+                out_path, args.max_age_days, args.empty_max_age_days):
+            logger.info("%s: fresh skip (max-age %dd / empty-max-age %dd, streak %d)",
+                        asin, args.max_age_days, args.empty_max_age_days,
+                        _empty_streak(_load(out_path)))
             continue
         try:
             r = fetch_for_asin(asin, api_key, base,
                                max_sources=args.max_sources, dry_run=args.dry_run)
         except urllib.error.HTTPError as e:
+            spent += 1
             if e.code in (429, 432, 433):
                 # #4793 と同じ形: ここを log だけで抜けると、レーンは緑のまま
                 # 収集数だけ静かに減る。UI に出して気づけるようにする。
@@ -492,14 +621,17 @@ def _cli() -> int:
             logger.warning("%s: HTTP %s skip", asin, e.code)
             continue
         except Exception as e:  # noqa: BLE001 — 1 件失敗で全体を止めない
+            spent += 1
             logger.warning("%s: %s skip", asin, e)
             continue
         logger.info("%s", json.dumps(r, ensure_ascii=False))
+        if r.get("status") == "ok":
+            spent += 1
         if r.get("status") in ("ok", "dry_run"):
             done += 1
         if not args.dry_run:
             time.sleep(1)  # Tavily への礼儀 (秒間 1 query)
-    logger.info("完了: %d 件処理 (max %d)", done, args.max_queries)
+    logger.info("完了: %d 件処理 / API %d 回 (max %d)", done, spent, args.max_queries)
     return 0
 
 
