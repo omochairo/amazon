@@ -65,6 +65,15 @@ jobs:
       # GA4 / GSC 由来の指標を持たず、かつ「TODO は Issues に置く」で一次管理する作業項目
       # なので、private に移すと公開側の TODO 一覧から消えて追跡できなくなる。
       ANALYTICS_ISSUE_REPO: omochairo/amazon-navi-brain
+      # 掃除 step が閉じた Issue の重複防止キーを、同じ run の opener 群へ渡すファイル。
+      # GitHub の検索索引は非同期更新で、close 直後に `is:open` が旧状態を返しうる。
+      # opener はここに載ったキーを検索結果から差し引くので、索引のラグに関係なく
+      # その run で立て直せる (索引が追いついていれば差し引きは no-op)。
+      # ワークスペース外に置き、リポジトリへ紛れ込まないようにする。週次レポート本文の
+      # /tmp/report.md と同じ扱い。**`runner.temp` は使えない** — job レベルの env で
+      # 参照できる context は github / needs / strategy / matrix / vars / secrets / inputs
+      # だけで、`runner` は空文字に評価されてパスが `/analytics_closed_keys.json` になる。
+      ANALYTICS_CLOSED_KEYS: /tmp/analytics_closed_keys.json
     steps:
       # #1329: 週次 GSC スナップショット (by_combo 込み) を main に commit するため
       # App token を生成する。GITHUB_TOKEN 直 push は main 保護で GH006 silent reject
