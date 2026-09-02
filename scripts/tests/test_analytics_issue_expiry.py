@@ -79,7 +79,7 @@ def test_select_expired_skips_unmarked_and_future():
         _item(3, "人が立てた Issue (マーカー無し)"),        # 触らない
     ]
     got = select_expired(items, today=dt.date(2026, 9, 10))
-    assert [n for n, _, _ in got] == [1]
+    assert [d["number"] for d in got] == [1]
 
 
 def test_select_expired_sorted_oldest_first():
@@ -90,7 +90,7 @@ def test_select_expired_sorted_oldest_first():
     ]
     got = select_expired(items, today=dt.date(2026, 9, 10))
     # --max-close で切り捨てるとき、古いものから消化されること
-    assert [n for n, _, _ in got] == [2, 3, 1]
+    assert [d["number"] for d in got] == [2, 3, 1]
 
 
 def test_select_expired_empty_when_nothing_due():

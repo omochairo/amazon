@@ -43,6 +43,7 @@ import os
 import subprocess
 import sys
 
+from scripts._analytics_closed_keys import extract_dedup_keys, write_closed_keys
 from scripts._analytics_issue_expiry import MARKER_PREFIX, find_expiry
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -63,9 +64,13 @@ CLOSE_COMMENT = (
 def search_marked_issues(repo: str) -> list[dict]:
     """期限マーカーを持つ open Issue を集める (最大 100 件 = 1 ページ)。"""
     query = f'repo:{repo} is:issue is:open in:body "{MARKER_PREFIX}"'
+    # 1 ページ (100 件) しか見ない。マーカー付きの open が 100 を超えると溢れるが、
+    # 作成の古い順に並べているので**溢れるのは必ず新しい側** = まだ期限内のもの。
+    # 期限切れを取りこぼさない側に倒している。
     res = subprocess.run(
         ["gh", "api", "-X", "GET", "search/issues",
-         "-f", f"q={query}", "-f", "per_page=100"],
+         "-f", f"q={query}", "-f", "per_page=100",
+         "-f", "sort=created", "-f", "order=asc"],
         check=True, capture_output=True, text=True, encoding="utf-8",
     )
     return json.loads(res.stdout).get("items", [])
@@ -80,17 +85,25 @@ def close_issue(repo: str, number: int, expiry: dt.date) -> None:
     )
 
 
-def select_expired(items: list[dict], *, today: dt.date) -> list[tuple[int, dt.date, str]]:
-    """(issue番号, 期限, タイトル) を期限の古い順に返す。"""
-    out: list[tuple[int, dt.date, str]] = []
+def select_expired(items: list[dict], *, today: dt.date) -> list[dict]:
+    """期限切れの Issue を期限の古い順に返す。
+
+    `--max-close` で切り捨てるときに古いものから消化されるよう、ここで並べておく。
+    """
+    out: list[dict] = []
     for it in items:
         expiry = find_expiry(it.get("body"))
         if expiry is None:
             continue
         if today <= expiry:
             continue
-        out.append((int(it["number"]), expiry, it.get("title") or ""))
-    out.sort(key=lambda t: t[1])
+        out.append({
+            "number": int(it["number"]),
+            "expiry": expiry,
+            "title": it.get("title") or "",
+            "body": it.get("body") or "",
+        })
+    out.sort(key=lambda d: d["expiry"])
     return out
 
 
@@ -115,6 +128,10 @@ def main() -> int:
     expired = select_expired(items, today=today)
     if not expired:
         logger.info("no expired Issues as of %s", today.isoformat())
+        # 何も閉じなくても空で上書きする。runner が使い回される環境で前 run の
+        # 残骸が残ると、opener が「今 close された」と誤認して重複起票しうる。
+        if not args.dry_run:
+            write_closed_keys({})
         return 0
 
     if len(expired) > args.max_close:
@@ -126,15 +143,25 @@ def main() -> int:
         expired = expired[:args.max_close]
 
     closed = 0
-    for number, expiry, title in expired:
+    closed_keys: dict[str, list[str]] = {}
+    for item in expired:
+        number, expiry = item["number"], item["expiry"]
         if args.dry_run:
-            logger.info("would close #%d (expired %s): %s", number, expiry.isoformat(), title)
+            logger.info("would close #%d (expired %s): %s",
+                        number, expiry.isoformat(), item["title"])
             continue
         close_issue(args.repo, number, expiry)
-        logger.info("closed #%d (expired %s): %s", number, expiry.isoformat(), title)
+        logger.info("closed #%d (expired %s): %s", number, expiry.isoformat(), item["title"])
         closed += 1
+        # 閉じた Issue が押さえていた重複防止キーを opener へ渡す。search 索引が
+        # まだ open を返しても、opener がこれを差し引いて立て直せるようにするため。
+        for prefix, keys in extract_dedup_keys(item["body"]).items():
+            bucket = closed_keys.setdefault(prefix, [])
+            bucket.extend(k for k in keys if k not in bucket)
 
     logger.info("closed %d expired Issue(s)", closed)
+    if not args.dry_run:
+        write_closed_keys(closed_keys)
     return 0
 
 

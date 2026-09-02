@@ -22,6 +22,7 @@ import pathlib
 import subprocess
 import sys
 
+from scripts._analytics_closed_keys import read_closed_keys
 from scripts._analytics_issue_expiry import expiry_marker, expiry_note
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -133,6 +134,13 @@ def main() -> int:
         return 0
 
     taken = find_existing_taken(args.repo)
+    # 同じ run の掃除 step が閉じたぶんを引く。search 索引の更新は非同期で、
+    # close 直後は open のまま返りうる。索引が追いついていれば no-op。
+    just_closed = read_closed_keys(MARKER_PREFIX)
+    if just_closed & taken:
+        logger.info("ignoring %d key(s) closed earlier in this run",
+                    len(just_closed & taken))
+    taken -= just_closed
     logger.info("existing orphan-page open Issues: %d", len(taken))
 
     created = 0
