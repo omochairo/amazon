@@ -124,7 +124,7 @@ gh variable set NAS_ORIGIN_CNAME --body '<uuid>.cfargotunnel.com' -R omochairo/a
 - GitLab パイプラインの `deploy-nas` が失敗し続ける (NAS に届かない) → パイプラインは赤くなるが、
   `pages` は前のステージなので**待機系の更新は続く**
 - `cf-purge` は `needs: deploy-nas` なので走らない → エッジの HTML が最大 `edge_ttl` (4h) 古くなる
-- **GitLab Pages の 1 GiB 上限が生きた制約に戻る** (#6206)
+- **GitLab Pages の 1 GiB 上限が生きた制約に戻る** (#6415。サイズ監視は無い)
 
 ### 関連する監視との分担
 
