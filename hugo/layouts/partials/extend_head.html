@@ -200,6 +200,23 @@
   if (/omcha-lab/.test(navigator.userAgent) || navigator.webdriver === true) {
     window['ga-disable-G-D8ZQX1BT20'] = true;
   }
+
+  /* 正規ホスト以外での計測を止める。同じビルドが
+       navi-origin.omcha.jp   (トンネルの別名。canonical は navi を指す)
+       navi-92dc61.gitlab.io  (待機系 GitLab Pages の既定ドメイン)
+     でも 200 で配信されており、2026-09-02 の GA4「タグの診断」で
+     「構成用に追加のドメインが検出されました」として検出された。canonical は
+     3 ホストとも navi.omcha.jp を指しているので SEO 上の重複は緩和されているが、
+     GA4 のデータには別ホスト名として混ざる。
+
+     フェイルオーバーは CNAME の差し替えなので、待機系に倒れてもホスト名は
+     navi.omcha.jp のまま。この条件で計測が止まることはない。
+     ローカルの hugo server (localhost) も自動的に対象外になる。
+
+     ホスト名は baseURL から取る (config.toml と二重管理しない)。 */
+  if (location.hostname !== '{{ (urls.Parse site.BaseURL).Host }}') {
+    window['ga-disable-G-D8ZQX1BT20'] = true;
+  }
 </script>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-D8ZQX1BT20"></script>
 <script>
