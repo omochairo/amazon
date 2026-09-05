@@ -248,3 +248,36 @@ def test_bluesky_root_ref_falls_back_to_parent_when_top_level():
 def test_post_x_is_explicitly_unwired():
     with pytest.raises(poster.PostError, match="user-context"):
         poster.post_x({"native_id": "1"}, "本文")
+
+
+# --------------------------------------------------------------------------
+# render_sns_pending
+# --------------------------------------------------------------------------
+
+import render_sns_pending as digest  # noqa: E402
+
+
+def test_render_pending_empty_says_so():
+    assert "未対応はありません" in digest.render([])
+
+
+def test_render_pending_includes_send_command_per_draft():
+    rec = store.new_record(
+        channel="threads", kind="reply", native_id="177", text="何歳から使えますか",
+        author="someone", permalink="https://www.threads.net/p/abc",
+    )
+    rec["drafts"] = [
+        {"text": "案A", "model": "claude-sonnet-4-6"},
+        {"text": "案B", "model": "claude-sonnet-4-6"},
+    ]
+    out = digest.render([rec])
+
+    assert "何歳から使えますか" in out
+    assert "https://www.threads.net/p/abc" in out
+    assert "--id threads:177 --draft 1" in out
+    assert "--id threads:177 --draft 2" in out
+
+
+def test_render_pending_marks_undrafted():
+    rec = store.new_record(channel="bluesky", kind="mention", native_id="at://1", text="やあ")
+    assert "起草レーン待ち" in digest.render([rec])
