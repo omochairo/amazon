@@ -51,7 +51,18 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-import price_overlay
+# `python -m scripts.<mod>` (package 形式) と `python scripts/<mod>.py`
+# (scripts/ が sys.path に乗る形式) の両方で import できるようにする。
+# scripts/ に __init__.py が無く両形式が混在しているため、素の兄弟 import は
+# package 形式で ModuleNotFoundError になる。amazon-home-ops の lane は
+# `python3 -m scripts.X --help` の可否をガードにしていて、失敗すると**緑のまま
+# skip する**ので、この import 1 行で lane が無言で止まる (2026-08-12 の #5003 で
+# quality_gate に `import stock_status` が入り、24-uniqueness-audit が 08-16 から
+# 3 週間 skip し続けた)。
+try:
+    import price_overlay
+except ModuleNotFoundError:  # package 形式
+    from scripts import price_overlay  # type: ignore[no-redef]
 
 logger = logging.getLogger("stock_status")
 
