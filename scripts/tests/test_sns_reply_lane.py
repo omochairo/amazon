@@ -296,3 +296,49 @@ def test_agy_argv_attaches_prompt_to_print_flag():
     assert argv[-1] == "--print=本文プロンプト"
     assert argv.index("--model") < len(argv) - 1
     assert argv[argv.index("--model") + 1] == "claude-sonnet-4-6"
+
+
+def test_bluesky_uses_the_iropapa_persona_like_threads():
+    """@omochairo.bsky.social の displayName は「いろパパ＠おもちゃいろ」。
+
+    2026-09-05 に X (いろママ) を当ててしまい、誤った人格の案が 2 件出た。
+    アカウントの実態と一致させる。
+    """
+    assert drafter.PERSONA_FILES["bluesky"] == drafter.PERSONA_FILES["threads"]
+    assert drafter.PERSONA_FILES["x"] != drafter.PERSONA_FILES["threads"]
+
+
+def test_redraft_replaces_existing_drafts_instead_of_appending(monkeypatch, tmp_path: Path):
+    """作り直しは置き換え。没案と新案が PENDING.md に並ぶと没案を送る事故になる。"""
+    d = tmp_path / "inbox"
+    monkeypatch.setenv("SNS_INBOX_DIR", str(d))
+    rec = store.new_record(channel="threads", kind="reply", native_id="r1", text="質問です")
+    store.record_new_items([rec], d)
+    store.add_draft(rec["id"], "古い案", "old-model", d)
+
+    monkeypatch.setattr(drafter, "load_persona", lambda ch: "PERSONA")
+    monkeypatch.setattr(
+        drafter, "call_agy",
+        lambda prompt, model, timeout_s: "判定: 返信する\n理由: ok\n案1: 新案A\n案2: 新案B",
+    )
+
+    assert drafter.main(["--redraft", "--limit", "5"]) == 0
+
+    drafts = [x["text"] for x in store.load_records(d)[rec["id"]]["drafts"]]
+    assert drafts == ["新案A", "新案B"]
+    assert "古い案" not in drafts
+
+
+def test_without_redraft_already_drafted_records_are_skipped(monkeypatch, tmp_path: Path):
+    d = tmp_path / "inbox"
+    monkeypatch.setenv("SNS_INBOX_DIR", str(d))
+    rec = store.new_record(channel="threads", kind="reply", native_id="r1", text="質問です")
+    store.record_new_items([rec], d)
+    store.add_draft(rec["id"], "既存案", "old-model", d)
+
+    def _boom(*a, **k):
+        raise AssertionError("既に案があるものを呼んではいけない")
+
+    monkeypatch.setattr(drafter, "call_agy", _boom)
+    assert drafter.main(["--limit", "5"]) == 0
+    assert [x["text"] for x in store.load_records(d)[rec["id"]]["drafts"]] == ["既存案"]
