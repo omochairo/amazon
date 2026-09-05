@@ -71,6 +71,26 @@ DEFAULT_PAGE_SIZE = int(os.environ.get("JULES_API_PAGE_SIZE", "50"))
 DEFAULT_TIMEOUT = float(os.environ.get("JULES_API_TIMEOUT", "60"))
 DEFAULT_ATTEMPTS = int(os.environ.get("JULES_API_ATTEMPTS", "3"))
 DEFAULT_BACKOFF = float(os.environ.get("JULES_API_BACKOFF", "3"))
+# 上の 3 つは 1 ページあたりの粘りしか決めない。全体の上限が無いと
+# 30 ページ × 3 回 × 60s = 最悪 90 分ゲートで止まる。実際 #6501 直後の
+# 12-rewrite-idle-fill (2026-09-05 07:24 dispatch) が該当ステップで 10 分以上
+# 返らなくなった。**fallback へ倒れるまでの時間**を wall-clock で切る。
+# 180s は「retry 1〜2 回ぶんは粘るが、run を止めない」ところ。旧実装 (30s 1 発) より
+# 遅く、cron 間隔 (6h) に対しては十分短い。
+# 実測 (2026-09-05 07:24 の 12-rewrite-idle-fill): 全ページ走査に **約 14 分**
+# 掛かって成功した (fallback ではなく実値 0 が返った)。timeout=30s ではこの遅さが
+# そのまま失敗になっていた。deadline はこの実測を殺さない値に置く。早期打ち切り
+# (下記) が効けば通常はここまで掛からない。
+DEFAULT_DEADLINE = float(os.environ.get("JULES_API_DEADLINE", "900"))
+# 走査する session の総数。**pageSize を下げたぶん page 数を上げて、旧実装
+# (100 × 30 = 3,000) と同じ被覆を保つ。** ここを詰めると、API が新しい順に返して
+# いなかった場合に rolling-24h の作成数を取りこぼし、予算が過大になる
+# (= session 114 の overshoot)。並び順は未確認なので被覆は減らさない。
+DEFAULT_MAX_SESSIONS = int(os.environ.get("JULES_API_MAX_SESSIONS", "3000"))
+
+
+class DeadlineExceeded(Exception):
+    """全体の制限時間を使い切った。呼び出し側は fallback に倒す。"""
 
 
 def _fetch_page(
@@ -81,51 +101,94 @@ def _fetch_page(
     timeout: float,
     attempts: int,
     backoff: float,
+    remaining: float | None = None,
     sleep=time.sleep,
+    monotonic=time.monotonic,
 ) -> dict:
     """1 ページを取得する。一過性エラーは指数バックオフで retry し、尽きたら送出。
 
     retry を使い切ったときに partial な結果を返さないのは意図的。ページを取りこぼすと
     rolling-24h の作成数が過小になり、ゲートが予算を過大に返す = session 114 で踏んだ
     overshoot そのものを再現する。取れないときは呼び出し側で fallback に倒す。
+
+    ``remaining`` は残りの持ち時間 (秒)。socket timeout はこれを超えないよう縮め、
+    バックオフの待機も残り時間を食い潰さない範囲でしか入れない。
     """
     params = {"pageSize": str(page_size)}
     if token:
         params["pageToken"] = token
     url = f"{API_BASE}?{urllib.parse.urlencode(params)}"
     attempts = max(1, attempts)
+    started = monotonic()
+
+    def _left() -> float | None:
+        if remaining is None:
+            return None
+        return remaining - (monotonic() - started)
+
     last_exc: Exception | None = None
     for i in range(attempts):
+        left = _left()
+        if left is not None and left <= 0:
+            raise DeadlineExceeded("制限時間内に取得できなかった") from last_exc
+        eff_timeout = timeout if left is None else min(timeout, left)
         try:
             req = urllib.request.Request(url, headers={"X-Goog-Api-Key": api_key})
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with urllib.request.urlopen(req, timeout=eff_timeout) as resp:
                 return json.loads(resp.read().decode("utf-8"))
         except Exception as e:  # noqa: BLE001 — timeout / 5xx / 429 を区別せず一律 retry
             last_exc = e
-            if i + 1 < attempts:
-                wait = backoff * (2 ** i)
-                sys.stderr.write(
-                    f"jules_quota_gate: page 取得失敗 ({e}) → {wait:.0f}s 後に retry "
-                    f"({i + 2}/{attempts})\n"
-                )
-                sleep(wait)
+            if i + 1 >= attempts:
+                break
+            wait = backoff * (2 ** i)
+            left = _left()
+            if left is not None and left - wait <= 0:
+                # 待つと持ち時間が尽きる = retry しても投げるだけ。ここで打ち切る。
+                raise DeadlineExceeded("制限時間内に取得できなかった") from e
+            sys.stderr.write(
+                f"jules_quota_gate: page 取得失敗 ({e}) → {wait:.0f}s 後に retry "
+                f"({i + 2}/{attempts})\n"
+            )
+            sleep(wait)
     raise last_exc if last_exc is not None else RuntimeError("fetch failed")
 
 
 def fetch_sessions(
     api_key: str,
     *,
-    max_pages: int = 30,
+    max_pages: int | None = None,
     page_size: int = DEFAULT_PAGE_SIZE,
     timeout: float = DEFAULT_TIMEOUT,
     attempts: int = DEFAULT_ATTEMPTS,
     backoff: float = DEFAULT_BACKOFF,
+    deadline: float | None = DEFAULT_DEADLINE,
     sleep=time.sleep,
+    monotonic=time.monotonic,
 ) -> list[dict]:
-    """LIST /v1alpha/sessions を pageToken で全ページ取得 (urllib, stdlib のみ)。"""
+    """LIST /v1alpha/sessions を pageToken で全ページ取得 (urllib, stdlib のみ)。
+
+    ``deadline`` は全ページ合計の持ち時間 (秒)。超えたら ``DeadlineExceeded`` を投げ、
+    呼び出し側が fallback 予算に倒す。ページ単位の retry しか無いと
+    ページ数 × attempts × timeout ぶん待ちうるので、外側にも上限を置く。
+
+    ``max_pages`` 未指定時は ``DEFAULT_MAX_SESSIONS`` / ``page_size`` から決める
+    (pageSize を下げても走査できる session 総数を変えないため)。
+    """
+    if max_pages is None:
+        # 被覆 (page_size × max_pages) を DEFAULT_MAX_SESSIONS 以上に保つ。
+        max_pages = -(-DEFAULT_MAX_SESSIONS // max(1, page_size))
     sessions: list[dict] = []
     token = ""
+    started = monotonic()
     for _ in range(max_pages):
+        remaining = None
+        if deadline is not None:
+            remaining = deadline - (monotonic() - started)
+            if remaining <= 0:
+                raise DeadlineExceeded(
+                    f"{deadline:.0f}s 以内に全ページを取得できなかった "
+                    f"({len(sessions)} 件取得済みだが partial は使わない)"
+                )
         body = _fetch_page(
             api_key,
             token,
@@ -133,7 +196,9 @@ def fetch_sessions(
             timeout=timeout,
             attempts=attempts,
             backoff=backoff,
+            remaining=remaining,
             sleep=sleep,
+            monotonic=monotonic,
         )
         sessions.extend(body.get("sessions") or [])
         token = body.get("nextPageToken") or ""
@@ -158,6 +223,80 @@ def warn_step_summary(msg: str) -> None:
             f.write(f"\n> ⚠️ **jules_quota_gate fallback**: {msg}\n")
     except OSError:  # summary が書けないことでゲートを落とさない
         pass
+
+
+def _sorted_desc(sessions: list[dict]) -> bool:
+    """createTime が新しい順に並んでいるか (欠損は判定から外す)。"""
+    seen = [_parse_ts(s.get("createTime")) for s in sessions]
+    seen = [t for t in seen if t]
+    return all(a >= b for a, b in zip(seen, seen[1:]))
+
+
+def count_created_24h_early_stop(
+    api_key: str,
+    *,
+    page_size: int = DEFAULT_PAGE_SIZE,
+    timeout: float = DEFAULT_TIMEOUT,
+    attempts: int = DEFAULT_ATTEMPTS,
+    backoff: float = DEFAULT_BACKOFF,
+    deadline: float | None = DEFAULT_DEADLINE,
+    max_pages: int | None = None,
+    sleep=time.sleep,
+    monotonic=time.monotonic,
+) -> int:
+    """rolling-24h の作成数を、必要なページだけ読んで数える。
+
+    ## なぜ要るか
+
+    ゲートが欲しいのは「直近 24h に作成された session 数」だけなのに、旧実装は
+    **全ページを舐めてから** 24h で絞っていた。2026-09-05 の実測で全走査は約 14 分。
+    session は API に DELETE が無く増える一方なので、この時間は伸び続ける。
+
+    ## 並び順を仮定しない
+
+    「新しい順に返る」と決め打ちして打ち切ると、実際が別の順序だったときに
+    取りこぼして予算が過大になる (= session 114 の overshoot)。そこで**読んだ範囲が
+    実際に新しい順になっていることを確認できたときだけ**打ち切る:
+
+    - ここまでに読んだ session が createTime の降順になっている、かつ
+    - 直近ページの最後が 24h より古い
+
+    の両方が成り立った時点で以降のページには 24h 以内が無いと言える。並びが降順で
+    なければ確認が成立しないので、従来どおり全ページ読む (安全側)。
+    """
+    if max_pages is None:
+        max_pages = -(-DEFAULT_MAX_SESSIONS // max(1, page_size))
+    sessions: list[dict] = []
+    token = ""
+    started = monotonic()
+    for _ in range(max_pages):
+        remaining = None
+        if deadline is not None:
+            remaining = deadline - (monotonic() - started)
+            if remaining <= 0:
+                raise DeadlineExceeded(
+                    f"{deadline:.0f}s 以内に取得できなかった (partial は使わない)"
+                )
+        body = _fetch_page(
+            api_key, token,
+            page_size=page_size, timeout=timeout, attempts=attempts,
+            backoff=backoff, remaining=remaining, sleep=sleep, monotonic=monotonic,
+        )
+        page = body.get("sessions") or []
+        sessions.extend(page)
+        token = body.get("nextPageToken") or ""
+        if not token:
+            break
+        last = _parse_ts(page[-1].get("createTime")) if page else None
+        if last and _sorted_desc(sessions):
+            age = (_dt.datetime.now(_dt.timezone.utc) - last).total_seconds()
+            if age > 86400:
+                sys.stderr.write(
+                    f"jules_quota_gate: {len(sessions)} 件で 24h 境界に到達 "
+                    f"(降順を確認済み) → 以降のページは読まない\n"
+                )
+                break
+    return count_created_24h(sessions)
 
 
 def count_created_24h(sessions: list[dict]) -> int:
@@ -195,7 +334,7 @@ def main() -> int:
         print(args.fallback)
         return 0
     try:
-        sessions = fetch_sessions(api_key)
+        used = count_created_24h_early_stop(api_key)
     except Exception as e:  # noqa: BLE001 — ゲート用途。失敗時は fail-slow で継続
         sys.stderr.write(f"jules_quota_gate: API 取得失敗 ({e}) → fallback 予算を返す\n")
         warn_step_summary(
@@ -205,7 +344,6 @@ def main() -> int:
         print(args.fallback)
         return 0
 
-    used = count_created_24h(sessions)
     budget = remaining_budget(used, cap=args.cap, per_run_max=args.per_run_max)
     sys.stderr.write(
         f"jules_quota_gate: rolling-24h 作成 {used} / cap {args.cap} "

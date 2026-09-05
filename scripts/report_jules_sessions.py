@@ -82,12 +82,15 @@ DEFAULT_PAGE_SIZE = int(os.environ.get("JULES_API_PAGE_SIZE", "50"))
 DEFAULT_TIMEOUT = float(os.environ.get("JULES_API_TIMEOUT", "60"))
 DEFAULT_ATTEMPTS = int(os.environ.get("JULES_API_ATTEMPTS", "3"))
 DEFAULT_BACKOFF = float(os.environ.get("JULES_API_BACKOFF", "3"))
+# pageSize を下げたぶん page 数を上げ、走査する session 総数を旧実装 (100 × 30)
+# のまま保つ。詰めると rolling-24h の集計が取りこぼしになる。
+DEFAULT_MAX_SESSIONS = int(os.environ.get("JULES_API_MAX_SESSIONS", "3000"))
 
 
 def fetch_sessions(
     api_key: str,
     *,
-    max_pages: int = 30,
+    max_pages: int | None = None,
     page_size: int = DEFAULT_PAGE_SIZE,
     timeout: float = DEFAULT_TIMEOUT,
     attempts: int = DEFAULT_ATTEMPTS,
@@ -106,6 +109,8 @@ def fetch_sessions(
 
         sleep = _time.sleep
     attempts = max(1, attempts)
+    if max_pages is None:
+        max_pages = -(-DEFAULT_MAX_SESSIONS // max(1, page_size))
     sessions: list[dict] = []
     token: str | None = None
     for _ in range(max_pages):
