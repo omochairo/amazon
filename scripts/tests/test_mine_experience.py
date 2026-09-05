@@ -8,6 +8,7 @@ import subprocess
 import pytest
 import requests
 
+from scripts import mine_experience
 from scripts.mine_experience import (
     _USABLE_AS_MAP,
     _yahoo_rating_stats,
@@ -181,9 +182,62 @@ def test_gather_antigravity_builds_candidate_on_success(monkeypatch):
     assert result[0]["source_type"] == "antigravity"
     assert result[0]["source_url"] == ""
     assert captured["cmd"][:3] == ["dbus-run-session", "--", "agy"]
-    assert captured["cmd"][3] == "--print"
-    assert "商品名" in captured["cmd"][4]
-    assert "ブランド" in captured["cmd"][4]
+    # #6539 の罠回避形: --model が先、prompt は --print= に添付
+    assert captured["cmd"][3:5] == ["--model", mine_experience.DEFAULT_ANTIGRAVITY_MODEL]
+    assert captured["cmd"][5].startswith("--print=")
+    assert "商品名" in captured["cmd"][5]
+    assert "ブランド" in captured["cmd"][5]
+
+
+def test_build_antigravity_argv_puts_model_before_print():
+    """`agy --print <prompt> --model X` は --model 以降を prompt に食われる (#6539)。
+
+    draft_sns_reply.build_agy_argv と同じ形にそろっていることを固定する。
+    """
+    argv = mine_experience.build_antigravity_argv("要約して", "gemini-3.8-flash-medium")
+    assert argv == ["agy", "--model", "gemini-3.8-flash-medium", "--print=要約して"]
+
+
+def test_build_antigravity_argv_omits_model_when_none():
+    assert mine_experience.build_antigravity_argv("要約して", None) == ["agy", "--print=要約して"]
+    assert mine_experience.build_antigravity_argv("要約して", "") == ["agy", "--print=要約して"]
+
+
+def test_gather_antigravity_model_is_pinned_not_cli_default():
+    """--model 無し (= agy CLI の既定) に戻さない。
+
+    既定モデルは agy の更新で黙って動き、`--output-format json` の応答にモデル名が
+    入らないので本番からは何に乗っているか観測できない。実測 (bench_agy_model.py)
+    で選んだ値をピンする。
+    """
+    assert mine_experience.DEFAULT_ANTIGRAVITY_MODEL
+
+
+def test_gather_antigravity_honours_env_override(monkeypatch):
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return _FakeCompletedProcess(returncode=0, stdout="ok")
+
+    monkeypatch.setattr("scripts.mine_experience.subprocess.run", fake_run)
+    monkeypatch.setenv("ANTIGRAVITY_MODEL", "gemini-3.1-pro-high")
+    gather_antigravity("商品名", "ブランド")
+    assert "gemini-3.1-pro-high" in captured["cmd"]
+
+
+def test_gather_antigravity_explicit_model_beats_env(monkeypatch):
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return _FakeCompletedProcess(returncode=0, stdout="ok")
+
+    monkeypatch.setattr("scripts.mine_experience.subprocess.run", fake_run)
+    monkeypatch.setenv("ANTIGRAVITY_MODEL", "gemini-3.1-pro-high")
+    gather_antigravity("商品名", "ブランド", model="gemini-3.8-flash-low")
+    assert "gemini-3.8-flash-low" in captured["cmd"]
+    assert "gemini-3.1-pro-high" not in captured["cmd"]
 
 
 def test_gather_antigravity_skips_when_command_not_found(monkeypatch):
