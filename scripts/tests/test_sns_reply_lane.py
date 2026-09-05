@@ -298,14 +298,18 @@ def test_agy_argv_attaches_prompt_to_print_flag():
     assert argv[argv.index("--model") + 1] == "claude-sonnet-4-6"
 
 
-def test_bluesky_uses_the_iropapa_persona_like_threads():
-    """@omochairo.bsky.social の displayName は「いろパパ＠おもちゃいろ」。
+def test_bluesky_uses_the_same_persona_as_x():
+    """Bluesky の中身は X のミラー = いろママ。
 
-    2026-09-05 に X (いろママ) を当ててしまい、誤った人格の案が 2 件出た。
-    アカウントの実態と一致させる。
+    notify_engagement.py は channel == "x" のときだけ Bluesky にミラーし、
+    直近 100 投稿の一人称も 私 10 / 僕 0、夫 3 / 妻 0 だった。
+
+    2026-09-05 に displayName (当時「いろパパ＠おもちゃいろ」) だけを見て
+    いろパパへ倒し、誤った人格の案を出した。表示名は設定の取り違えであって
+    本文の実態ではない。人格は**何が投稿されているか**で決める。
     """
-    assert drafter.PERSONA_FILES["bluesky"] == drafter.PERSONA_FILES["threads"]
-    assert drafter.PERSONA_FILES["x"] != drafter.PERSONA_FILES["threads"]
+    assert drafter.PERSONA_FILES["bluesky"] == drafter.PERSONA_FILES["x"]
+    assert drafter.PERSONA_FILES["threads"] != drafter.PERSONA_FILES["x"]
 
 
 def test_redraft_replaces_existing_drafts_instead_of_appending(monkeypatch, tmp_path: Path):

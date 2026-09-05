@@ -12,7 +12,7 @@ fetch_sns_replies.py が貯めた inbox を読み、まだ返していないも�
   `agy --model claude-sonnet-4-6 --print=<prompt>` で 1 回 1 プロンプト。
 
 ペルソナは **private リポジトリの jules/ overlay からしか読まない**:
-  X = いろママ / Threads・Bluesky = いろパパ の人格定義は amazon-navi-brain 側の
+  X・Bluesky = いろママ / Threads = いろパパ の人格定義は amazon-navi-brain 側の
   資産で、
   public なこのリポジトリに複製しない。overlay が無い環境では起草を拒否する
   (適当なペルソナで書くくらいなら書かない方が良い。中の人が違う人格で
@@ -57,17 +57,22 @@ DEFAULT_TIMEOUT_S = 300
 
 # channel -> ペルソナ定義ファイル (private overlay)。
 #
-# bluesky は専用ペルソナが未定義なので流用する。当初 X (いろママ) を当てて
-# いたが**誤り**だった: @omochairo.bsky.social の displayName は
-# 「いろパパ＠おもちゃいろ」で、実際に運用している人格は Threads 側と同じ。
-# 2026-09-05 に getProfile で実測して修正した (初回の起草2案は、いろママの
-# 声で書かれた没案として破棄した)。
+# bluesky は専用ペルソナが未定義なので X (いろママ) を流用する。**本文の実態が
+# いろママだから**であって、表示名で決めているのではない。2026-09-05 に一度
+# いろパパへ倒して間違えたので、根拠を残す:
+#
+#   - notify_engagement.py は `channel == "x"` のときだけ Bluesky にミラーする。
+#     つまり日々の人格投稿は X の本文そのもの
+#   - 直近 100 投稿の一人称: 私 10 / 僕 0、夫 3 / 妻 0、ママ 5 / パパ 1
+#
+# @omochairo.bsky.social の displayName は当時「いろパパ＠おもちゃいろ」だったが、
+# これは設定の取り違えで、owner が いろママ へ修正すると判断済み。**表示名 1 点で
+# 人格を断定したのが誤りだった** — 実際に何が投稿されているかを先に見ること。
 #
 # ここを間違えると「中の人が急に別人格で返信する」ことになり、放置より悪い。
-# チャネルを足すときは必ずアカウントの displayName / bio を先に見ること。
 PERSONA_FILES = {
     "x": "PROMPT_ENGAGEMENT_X_IROMAMA_DAILY.md",
-    "bluesky": "PROMPT_ENGAGEMENT_THREADS_IROPAPA_DAILY.md",
+    "bluesky": "PROMPT_ENGAGEMENT_X_IROMAMA_DAILY.md",
     "threads": "PROMPT_ENGAGEMENT_THREADS_IROPAPA_DAILY.md",
 }
 
