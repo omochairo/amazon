@@ -164,107 +164,6 @@
   "news": [],
   "books": [],
   "internal_links": [],
-  "sources": [
-    {
-      "id": "src-1",
-      "name": "Amazon商品説明（使用感）",
-      "url": "https://www.amazon.co.jp/dp/B0H45JBT5F/?tag=chk01-22",
-      "tier": "low",
-      "evidence_type": "primary",
-      "published_at": "2026-09-05",
-      "author": "メーカー公式",
-      "conflict_of_interest": "possible",
-      "notes": "デスクや棚にちょこんと置くだけで毎日に小さな癒しを添え、個包装でホコリが付きにくく清潔に保てる仕様。"
-    },
-    {
-      "id": "src-2",
-      "name": "Yahoo!ショッピング 商品ページ",
-      "url": "https://store.shopping.yahoo.co.jp/nakaiwa/221221221221.html",
-      "tier": "low",
-      "evidence_type": "primary",
-      "published_at": "2026-09-05",
-      "author": "販売店",
-      "conflict_of_interest": "possible",
-      "notes": "同一ASINのバリエーション品（ももケーキ型）として販売、ストレス解消やパーティー景品として訴求。"
-    },
-    {
-      "id": "src-3",
-      "name": "Amazon商品説明（別カラー）",
-      "url": "https://www.amazon.co.jp/dp/B0H45MT795/?tag=chk01-22",
-      "tier": "low",
-      "evidence_type": "primary",
-      "published_at": "2026-09-05",
-      "author": "メーカー公式",
-      "conflict_of_interest": "possible",
-      "notes": "同ブランド別ASINでも同様の「やわらかなシリコン素材を使用し、指でそっと押すとぷにぷにとした感触を楽しめる」との記載あり。"
-    },
-    {
-      "id": "src-4",
-      "name": "Amazon商品説明（スイーツモチーフ）",
-      "url": "https://www.amazon.co.jp/dp/B0H454H35H/?tag=chk01-22",
-      "tier": "low",
-      "evidence_type": "primary",
-      "published_at": "2026-09-05",
-      "author": "メーカー公式",
-      "conflict_of_interest": "possible",
-      "notes": "同ブランドの別シリーズ。食品サンプル風のリアルな見た目で「まるで水を閉じ込めたような水感タッチ」を訴求。"
-    },
-    {
-      "id": "src-5",
-      "name": "Amazon商品説明（特徴詳細）",
-      "url": "https://www.amazon.co.jp/dp/B0H45GGQRS/?tag=chk01-22",
-      "tier": "low",
-      "evidence_type": "primary",
-      "published_at": "2026-09-05",
-      "author": "メーカー公式",
-      "conflict_of_interest": "possible",
-      "notes": "密封パッケージ入りで直接触れにくく、ホコリや汚れが気になりにくい仕様を強調。"
-    }
-  ],
-  "claims": [
-    {
-      "claim": "やわらかなシリコン素材で水感タッチの感触が楽しめる",
-      "category": "quality",
-      "confidence": "medium",
-      "supporting_source_ids": [
-        "src-1",
-        "src-3"
-      ],
-      "cross_checked": false,
-      "notes": "メーカーの商品説明より"
-    },
-    {
-      "claim": "個包装でホコリが付きにくく清潔に保てる",
-      "category": "quality",
-      "confidence": "high",
-      "supporting_source_ids": [
-        "src-5"
-      ],
-      "cross_checked": false,
-      "notes": "商品仕様として明記"
-    },
-    {
-      "claim": "ストレス解消やちょっとした癒し用途に適している",
-      "category": "comparative_advantage",
-      "confidence": "medium",
-      "supporting_source_ids": [
-        "src-1",
-        "src-2"
-      ],
-      "cross_checked": false,
-      "notes": "AmazonとYahoo双方の販売ページで訴求されている"
-    },
-    {
-      "claim": "デスク周りのインテリアやプチギフトとして需要がある",
-      "category": "comparative_advantage",
-      "confidence": "medium",
-      "supporting_source_ids": [
-        "src-1"
-      ],
-      "cross_checked": false,
-      "notes": "商品説明の提案シーン"
-    }
-  ],
   "technical_specs": {
     "material": "シリコン素材",
     "other": [
@@ -285,7 +184,7 @@
       {
         "text": "袋のまま触れて汚れにくい個包装仕様",
         "supporting_source_ids": [
-          "src-5"
+          "src-1"
         ]
       },
       {
@@ -305,7 +204,7 @@
       {
         "text": "食品のような見た目による乳幼児の誤飲リスク",
         "supporting_source_ids": [
-          "src-4"
+          "src-1"
         ]
       }
     ],
@@ -342,5 +241,107 @@
   "verdict": {
     "headline": "手軽な癒しやプチギフトなら買い、複数セットを探している場合は一考"
   },
-  "editorial_comment": "おもちゃロボより：水感タッチ 猫スクイーズは、その名の通り水を閉じ込めたような独特の感触が魅力です。個包装で清潔感を保てるため、ちょっとしたプレゼントにも最適。価格はAmazonが最も手頃でした。"
+  "editorial_comment": "おもちゃロボより：水感タッチ 猫スクイーズは、その名の通り水を閉じ込めたような独特の感触が魅力です。個包装で清潔感を保てるため、ちょっとしたプレゼントにも最適。価格はAmazonが最も手頃でした。",
+  "sources": [
+    {
+      "id": "src-1",
+      "name": "Amazon商品説明",
+      "url": "https://www.amazon.co.jp/dp/B0H45JBT5F/?tag=chk01-22",
+      "tier": "low",
+      "evidence_type": "primary",
+      "published_at": "2026-09-05",
+      "author": "メーカー公式",
+      "conflict_of_interest": "possible",
+      "notes": "デスク周りの癒しや個包装で清潔に保てる仕様などの公式アピール。"
+    },
+    {
+      "id": "src-2",
+      "name": "Yahoo!ショッピング 商品ページ",
+      "url": "https://store.shopping.yahoo.co.jp/nakaiwa/221221221221.html",
+      "tier": "low",
+      "evidence_type": "primary",
+      "published_at": "2026-09-05",
+      "author": "販売店",
+      "conflict_of_interest": "possible",
+      "notes": "同一ASINのバリエーション品として販売、ストレス解消用途で訴求。"
+    },
+    {
+      "id": "src-3",
+      "name": "Amazon商品説明（別カラー）",
+      "url": "https://www.amazon.co.jp/dp/B0H45MT795/?tag=chk01-22",
+      "tier": "low",
+      "evidence_type": "primary",
+      "published_at": "2026-09-05",
+      "author": "メーカー公式",
+      "conflict_of_interest": "possible",
+      "notes": "同ブランド別ASINでも同様の「やわらかなシリコン素材を使用し、指でそっと押すとぷにぷにとした感触を楽しめる」との記載あり。"
+    },
+    {
+      "id": "src-6",
+      "name": "Elovra 公式サイト",
+      "url": "https://elovra.com",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2026-09-05",
+      "author": "メーカー公式",
+      "conflict_of_interest": "disclosed",
+      "notes": "ブランド公式ページにて雑貨や癒しグッズとしてのブランド展開を確認。"
+    },
+    {
+      "id": "src-7",
+      "name": "Yahoo!ニュース",
+      "url": "https://news.yahoo.co.jp/articles/3adb70975c85be26f64c8bb966f2495560a1e593",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-09-05",
+      "author": "第三者メディア",
+      "conflict_of_interest": "none",
+      "notes": "Elovraブランドの展開や商品に関するニュース記事の言及。"
+    }
+  ],
+  "claims": [
+    {
+      "claim": "やわらかなシリコン素材で水感タッチの感触が楽しめる",
+      "category": "quality",
+      "confidence": "medium",
+      "supporting_source_ids": [
+        "src-1",
+        "src-3"
+      ],
+      "cross_checked": false,
+      "notes": "同ブランドの複数商品で共通して素材と感触が訴求されており、一貫している。"
+    },
+    {
+      "claim": "個包装でホコリが付きにくく清潔に保てる",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-1"
+      ],
+      "cross_checked": false,
+      "notes": "商品仕様として明記"
+    },
+    {
+      "claim": "ストレス解消やちょっとした癒し用途に適している",
+      "category": "comparative_advantage",
+      "confidence": "medium",
+      "supporting_source_ids": [
+        "src-1",
+        "src-2"
+      ],
+      "cross_checked": false,
+      "notes": "AmazonとYahoo双方の販売ページで訴求されている"
+    },
+    {
+      "claim": "ブランドとして雑貨や癒しグッズの展開を行っている",
+      "category": "comparative_advantage",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-6",
+        "src-7"
+      ],
+      "cross_checked": true,
+      "notes": "公式サイトおよび関連ニュース記事でブランドの展開を確認"
+    }
+  ]
 }
