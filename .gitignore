@@ -80,3 +80,9 @@ data/build_manifest.json
 # 7.7MB の生成物が public repo の root に 2 ヶ月半放置されていたので削除した。
 # 再コミットされないように無視する。必要なときは手元で生成して使い捨てること。
 repomix-output.xml
+
+# 2026-09-05: SNS 返信 inbox。第三者が書いた本文とハンドル名が入る。
+# このリポジトリは public なので、既定パス (SNS_INBOX_DIR 未指定時の
+# scripts/sns_inbox_store.py の fallback) を追跡対象から外しておく。
+# 本番は SNS_INBOX_DIR でランナーローカルを明示する運用。
+/tmp/sns_inbox/
