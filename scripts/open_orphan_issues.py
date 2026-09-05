@@ -24,6 +24,7 @@ import sys
 
 from scripts._analytics_closed_keys import read_closed_keys
 from scripts._analytics_issue_expiry import expiry_marker, expiry_note
+from scripts._analytics_issue_search import find_taken_keys
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("open_orphan_issues")
@@ -34,27 +35,12 @@ LABELS = "quality,todo,analytics"
 
 
 def find_existing_taken(repo: str) -> set[str]:
-    query = (
-        f"repo:{repo} is:issue is:open label:quality label:analytics "
-        f'in:body "{MARKER_PREFIX}"'
-    )
-    res = subprocess.run(
-        ["gh", "api", "-X", "GET", "search/issues",
-         "-f", f"q={query}", "-f", "per_page=100"],
-        check=True, capture_output=True, text=True,
-    )
-    items = json.loads(res.stdout).get("items", [])
-    taken: set[str] = set()
-    for it in items:
-        body = it.get("body") or ""
-        idx = body.find(MARKER_PREFIX)
-        while idx >= 0:
-            tail = body[idx + len(MARKER_PREFIX):]
-            url = tail.split("-->", 1)[0].strip()
-            if url:
-                taken.add(url)
-            idx = body.find(MARKER_PREFIX, idx + 1)
-    return taken
+    """label=quality,analytics の open Issue から重複防止キーを回収。
+
+    ページングと索引ラグ対策は `_analytics_issue_search` に集約している
+    (以前は 6 本が 1 ページ = 100 件打ち切りをそれぞれ手書きしていた)。
+    """
+    return find_taken_keys(repo, MARKER_PREFIX)
 
 
 def render_body(d: dict, *, src_range: dict) -> str:
