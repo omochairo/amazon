@@ -9,10 +9,11 @@ fetch_sns_replies.py が貯めた inbox を読み、まだ返していないも�
   K8 LLM ワーカー側で `agy` (Antigravity CLI) がファイルベース認証済みで、
   Claude 系モデルを owner の定額クォータで回せる (mine_experience.py の
   gather_antigravity と同じ経路・同じ認証)。新規 API キーを増やさない。
-  `agy --print --model claude-sonnet-4-6` で 1 回 1 プロンプト。
+  `agy --model claude-sonnet-4-6 --print=<prompt>` で 1 回 1 プロンプト。
 
 ペルソナは **private リポジトリの jules/ overlay からしか読まない**:
-  X = いろママ / Threads = いろパパ の人格定義は amazon-navi-brain 側の資産で、
+  X = いろママ / Threads・Bluesky = いろパパ の人格定義は amazon-navi-brain 側の
+  資産で、
   public なこのリポジトリに複製しない。overlay が無い環境では起草を拒否する
   (適当なペルソナで書くくらいなら書かない方が良い。中の人が違う人格で
   返信するのは、放置よりダメージが大きい)。
@@ -20,6 +21,7 @@ fetch_sns_replies.py が貯めた inbox を読み、まだ返していないも�
 使い方:
     python scripts/draft_sns_reply.py --limit 5
     python scripts/draft_sns_reply.py --limit 1 --dry-run   # プロンプトだけ出す
+    python scripts/draft_sns_reply.py --redraft             # 既存案を破棄して作り直す
 
 env:
     SNS_INBOX_DIR      inbox の置き場所
@@ -54,10 +56,18 @@ DEFAULT_MODEL = "claude-sonnet-4-6"
 DEFAULT_TIMEOUT_S = 300
 
 # channel -> ペルソナ定義ファイル (private overlay)。
-# bluesky は専用ペルソナが未定義。X と同じ「いろママ」で書く運用にしている。
+#
+# bluesky は専用ペルソナが未定義なので流用する。当初 X (いろママ) を当てて
+# いたが**誤り**だった: @omochairo.bsky.social の displayName は
+# 「いろパパ＠おもちゃいろ」で、実際に運用している人格は Threads 側と同じ。
+# 2026-09-05 に getProfile で実測して修正した (初回の起草2案は、いろママの
+# 声で書かれた没案として破棄した)。
+#
+# ここを間違えると「中の人が急に別人格で返信する」ことになり、放置より悪い。
+# チャネルを足すときは必ずアカウントの displayName / bio を先に見ること。
 PERSONA_FILES = {
     "x": "PROMPT_ENGAGEMENT_X_IROMAMA_DAILY.md",
-    "bluesky": "PROMPT_ENGAGEMENT_X_IROMAMA_DAILY.md",
+    "bluesky": "PROMPT_ENGAGEMENT_THREADS_IROPAPA_DAILY.md",
     "threads": "PROMPT_ENGAGEMENT_THREADS_IROPAPA_DAILY.md",
 }
 
@@ -231,10 +241,17 @@ def main(argv: list[str] | None = None) -> int:
         default=int(os.environ.get("AGY_TIMEOUT_S") or DEFAULT_TIMEOUT_S),
     )
     ap.add_argument("--dry-run", action="store_true", help="agy を呼ばずプロンプトを出す")
+    ap.add_argument(
+        "--redraft", action="store_true",
+        help="既に案があるものも作り直す (ペルソナ・プロンプトを直したとき用。既存案は破棄)",
+    )
     args = ap.parse_args(argv)
 
     directory = store.inbox_dir()
-    targets = [r for r in store.pending(directory) if not r.get("drafts")][: args.limit]
+    targets = [
+        r for r in store.pending(directory)
+        if args.redraft or not r.get("drafts")
+    ][: args.limit]
     if not targets:
         print("起草対象なし")
         return 0
@@ -267,6 +284,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  返信しない ({reason})")
             continue
 
+        if args.redraft and rec.get("drafts"):
+            # 作り直しは**置き換え**。古い案を残すと、人が PENDING.md で
+            # 直った案と没案を並べて見ることになり、没案を送る事故が起きる。
+            store.update_record(rec["id"], {"drafts": []}, directory)
         for d in drafts:
             store.add_draft(rec["id"], d, args.model, directory)
         drafted += 1
