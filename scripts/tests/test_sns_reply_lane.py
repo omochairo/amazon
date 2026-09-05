@@ -281,3 +281,18 @@ def test_render_pending_includes_send_command_per_draft():
 def test_render_pending_marks_undrafted():
     rec = store.new_record(channel="bluesky", kind="mention", native_id="at://1", text="やあ")
     assert "起草レーン待ち" in digest.render([rec])
+
+
+def test_agy_argv_attaches_prompt_to_print_flag():
+    """`--print` は次のトークンを食う。裸の --print の直後に別フラグを置かない。
+
+    2026-09-05 の初回 run は `agy --print --model X "本文"` と書いていたため
+    --model が prompt として解釈され、本文が無視されたまま exit 2 になった。
+    """
+    argv = drafter.build_agy_argv("本文プロンプト", "claude-sonnet-4-6")
+
+    assert argv[0] == "agy"
+    assert "--print" not in argv, "裸の --print は次のトークンを食う"
+    assert argv[-1] == "--print=本文プロンプト"
+    assert argv.index("--model") < len(argv) - 1
+    assert argv[argv.index("--model") + 1] == "claude-sonnet-4-6"
