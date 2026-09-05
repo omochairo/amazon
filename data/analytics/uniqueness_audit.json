@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-09-05T09:26:53Z",
+  "generated_at": "2026-09-05T10:58:45Z",
   "model": "cl-nagoya/ruri-v3-310m",
   "source_week": "2026-W36",
-  "corpus_size": 2359,
+  "corpus_size": 2360,
   "thresholds": {
     "mode": "percentile",
     "max_sim": 0.9757,
@@ -11,7 +11,7 @@
       "max_sim": 0.95,
       "centroid_sim": 0.9,
       "max_sim_exceeded": 852,
-      "centroid_sim_exceeded": 1950
+      "centroid_sim_exceeded": 1951
     },
     "max_sim_percentile": 95.0,
     "centroid_sim_percentile": 95.0
@@ -20,10 +20,10 @@
   "flagged_truncated": true,
   "cohort_stats": {
     "pre_v7": {
-      "count": 1453,
-      "max_sim_p25": 0.9273,
+      "count": 1451,
+      "max_sim_p25": 0.9274,
       "centroid_sim_p25": 0.9144,
-      "max_sim_p50": 0.9439,
+      "max_sim_p50": 0.9438,
       "centroid_sim_p50": 0.9238,
       "max_sim_p75": 0.9595,
       "centroid_sim_p75": 0.9315,
@@ -31,18 +31,18 @@
       "centroid_sim_p90": 0.9372
     },
     "post_v7": {
-      "count": 906,
-      "max_sim_p25": 0.9207,
+      "count": 909,
+      "max_sim_p25": 0.9205,
       "centroid_sim_p25": 0.8958,
       "max_sim_p50": 0.9376,
-      "centroid_sim_p50": 0.9092,
-      "max_sim_p75": 0.9549,
+      "centroid_sim_p50": 0.9091,
+      "max_sim_p75": 0.9548,
       "centroid_sim_p75": 0.9229,
-      "max_sim_p90": 0.9667,
+      "max_sim_p90": 0.9666,
       "centroid_sim_p90": 0.9304
     },
     "all": {
-      "count": 2359,
+      "count": 2360,
       "max_sim_p25": 0.9244,
       "centroid_sim_p25": 0.9063,
       "max_sim_p50": 0.9417,
@@ -127,7 +127,7 @@
       "max_sim": 0.9896,
       "nearest_asin": "B0FPWZ9J99",
       "mean_top5_sim": 0.9434,
-      "centroid_sim": 0.9257,
+      "centroid_sim": 0.9256,
       "reasons": [
         "max_sim>0.9757"
       ]
@@ -298,7 +298,7 @@
       "max_sim": 0.9844,
       "nearest_asin": "B08BJ9MJXG",
       "mean_top5_sim": 0.9502,
-      "centroid_sim": 0.926,
+      "centroid_sim": 0.9259,
       "reasons": [
         "max_sim>0.9757"
       ]
@@ -364,7 +364,7 @@
       "max_sim": 0.9842,
       "nearest_asin": "B011IIJS50",
       "mean_top5_sim": 0.948,
-      "centroid_sim": 0.9238,
+      "centroid_sim": 0.9237,
       "reasons": [
         "max_sim>0.9757"
       ]
@@ -403,7 +403,7 @@
       "max_sim": 0.9832,
       "nearest_asin": "B0FPWZ9J99",
       "mean_top5_sim": 0.9464,
-      "centroid_sim": 0.921,
+      "centroid_sim": 0.9209,
       "reasons": [
         "max_sim>0.9757"
       ]
