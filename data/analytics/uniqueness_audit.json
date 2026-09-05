@@ -1,451 +1,122 @@
 {
-  "generated_at": "2026-08-09T21:31:42Z",
+  "generated_at": "2026-09-05T08:39:49Z",
   "model": "cl-nagoya/ruri-v3-310m",
-  "source_week": "2026-W32",
-  "corpus_size": 1903,
+  "source_week": "2026-W36",
+  "corpus_size": 50,
   "thresholds": {
     "mode": "percentile",
-    "max_sim": 0.9761,
-    "centroid_sim": 0.9418,
+    "max_sim": 0.957,
+    "centroid_sim": 0.9441,
     "absolute_reference": {
       "max_sim": 0.95,
       "centroid_sim": 0.9,
-      "max_sim_exceeded": 728,
-      "centroid_sim_exceeded": 1680
+      "max_sim_exceeded": 6,
+      "centroid_sim_exceeded": 45
     },
     "max_sim_percentile": 95.0,
     "centroid_sim_percentile": 95.0
   },
-  "flagged_total": 182,
-  "flagged_truncated": true,
+  "flagged_total": 5,
+  "flagged_truncated": false,
   "cohort_stats": {
     "pre_v7": {
-      "count": 1494,
-      "max_sim_p25": 0.9267,
-      "centroid_sim_p25": 0.9138,
-      "max_sim_p50": 0.943,
-      "centroid_sim_p50": 0.9241,
-      "max_sim_p75": 0.9594,
-      "centroid_sim_p75": 0.9326,
-      "max_sim_p90": 0.97,
-      "centroid_sim_p90": 0.9385
+      "count": 32,
+      "max_sim_p25": 0.9003,
+      "centroid_sim_p25": 0.9217,
+      "max_sim_p50": 0.9286,
+      "centroid_sim_p50": 0.9289,
+      "max_sim_p75": 0.9471,
+      "centroid_sim_p75": 0.9346,
+      "max_sim_p90": 0.9568,
+      "centroid_sim_p90": 0.9427
     },
     "post_v7": {
-      "count": 409,
-      "max_sim_p25": 0.9271,
-      "centroid_sim_p25": 0.9026,
-      "max_sim_p50": 0.9422,
-      "centroid_sim_p50": 0.9195,
-      "max_sim_p75": 0.9584,
-      "centroid_sim_p75": 0.9288,
-      "max_sim_p90": 0.9667,
-      "centroid_sim_p90": 0.9368
+      "count": 18,
+      "max_sim_p25": 0.8871,
+      "centroid_sim_p25": 0.8994,
+      "max_sim_p50": 0.8949,
+      "centroid_sim_p50": 0.9164,
+      "max_sim_p75": 0.9191,
+      "centroid_sim_p75": 0.9243,
+      "max_sim_p90": 0.9466,
+      "centroid_sim_p90": 0.9299
     },
     "all": {
-      "count": 1903,
-      "max_sim_p25": 0.9268,
-      "centroid_sim_p25": 0.9126,
-      "max_sim_p50": 0.9429,
-      "centroid_sim_p50": 0.9229,
-      "max_sim_p75": 0.9592,
-      "centroid_sim_p75": 0.9318,
-      "max_sim_p90": 0.9693,
-      "centroid_sim_p90": 0.9382
+      "count": 50,
+      "max_sim_p25": 0.8958,
+      "centroid_sim_p25": 0.9149,
+      "max_sim_p50": 0.9148,
+      "centroid_sim_p50": 0.9244,
+      "max_sim_p75": 0.9454,
+      "centroid_sim_p75": 0.933,
+      "max_sim_p90": 0.955,
+      "centroid_sim_p90": 0.9366
     }
   },
   "flagged": [
     {
-      "asin": "B0F43QB3DT",
-      "slug_date": "2026-06-04",
+      "asin": "B0002AHQWS",
+      "slug_date": "2026-07-11",
       "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0f43qb3dt/",
-      "max_sim": 0.9909,
-      "nearest_asin": "B0F43R6BGV",
-      "mean_top5_sim": 0.9528,
-      "centroid_sim": 0.9313,
+      "page": "https://navi.omcha.jp/products/b0002ahqws/",
+      "max_sim": 0.9674,
+      "nearest_asin": "B000IXMP6Q",
+      "mean_top5_sim": 0.9351,
+      "centroid_sim": 0.9243,
       "reasons": [
-        "max_sim>0.9761"
+        "max_sim>0.957"
       ]
     },
     {
-      "asin": "B0F43R6BGV",
-      "slug_date": "2026-06-03",
+      "asin": "B000IXMP6Q",
+      "slug_date": "2026-07-13",
       "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0f43r6bgv/",
-      "max_sim": 0.9909,
-      "nearest_asin": "B0F43QB3DT",
-      "mean_top5_sim": 0.955,
-      "centroid_sim": 0.9308,
+      "page": "https://navi.omcha.jp/products/b000ixmp6q/",
+      "max_sim": 0.9674,
+      "nearest_asin": "B0002AHQWS",
+      "mean_top5_sim": 0.9339,
+      "centroid_sim": 0.9277,
       "reasons": [
-        "max_sim>0.9761"
+        "max_sim>0.957"
       ]
     },
     {
-      "asin": "B0CKYPW397",
-      "slug_date": "2026-05-29",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0ckypw397/",
-      "max_sim": 0.9901,
-      "nearest_asin": "B0CKYRJ4KY",
-      "mean_top5_sim": 0.9429,
-      "centroid_sim": 0.8871,
-      "reasons": [
-        "max_sim>0.9761"
-      ]
-    },
-    {
-      "asin": "B0CKYRJ4KY",
-      "slug_date": "2026-05-30",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0ckyrj4ky/",
-      "max_sim": 0.9901,
-      "nearest_asin": "B0CKYPW397",
-      "mean_top5_sim": 0.9446,
-      "centroid_sim": 0.8896,
-      "reasons": [
-        "max_sim>0.9761"
-      ]
-    },
-    {
-      "asin": "B0FPWZ9J99",
-      "slug_date": "2026-06-02",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0fpwz9j99/",
-      "max_sim": 0.9896,
-      "nearest_asin": "B0FPX6RPYR",
-      "mean_top5_sim": 0.9452,
-      "centroid_sim": 0.9259,
-      "reasons": [
-        "max_sim>0.9761"
-      ]
-    },
-    {
-      "asin": "B0FPX6RPYR",
-      "slug_date": "2026-06-23",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0fpx6rpyr/",
-      "max_sim": 0.9896,
-      "nearest_asin": "B0FPWZ9J99",
-      "mean_top5_sim": 0.9429,
-      "centroid_sim": 0.928,
-      "reasons": [
-        "max_sim>0.9761"
-      ]
-    },
-    {
-      "asin": "B0D5H414J7",
-      "slug_date": "2026-06-05",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0d5h414j7/",
-      "max_sim": 0.9876,
-      "nearest_asin": "B0F8T97T2N",
-      "mean_top5_sim": 0.9359,
-      "centroid_sim": 0.9387,
-      "reasons": [
-        "max_sim>0.9761"
-      ]
-    },
-    {
-      "asin": "B0F8T97T2N",
-      "slug_date": "2026-06-05",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0f8t97t2n/",
-      "max_sim": 0.9876,
-      "nearest_asin": "B0D5H414J7",
-      "mean_top5_sim": 0.9342,
-      "centroid_sim": 0.9323,
-      "reasons": [
-        "max_sim>0.9761"
-      ]
-    },
-    {
-      "asin": "B0GKX1HTTL",
-      "slug_date": "2026-08-02",
-      "cohort": "post_v7",
-      "page": "https://navi.omcha.jp/products/b0gkx1httl/",
-      "max_sim": 0.9875,
-      "nearest_asin": "B0GKXDZ9R7",
-      "mean_top5_sim": 0.9542,
-      "centroid_sim": 0.9281,
-      "reasons": [
-        "max_sim>0.9761"
-      ]
-    },
-    {
-      "asin": "B0GKXDZ9R7",
-      "slug_date": "2026-07-24",
-      "cohort": "post_v7",
-      "page": "https://navi.omcha.jp/products/b0gkxdz9r7/",
-      "max_sim": 0.9875,
-      "nearest_asin": "B0GKX1HTTL",
-      "mean_top5_sim": 0.9561,
-      "centroid_sim": 0.927,
-      "reasons": [
-        "max_sim>0.9761"
-      ]
-    },
-    {
-      "asin": "B0FVBHT5TF",
+      "asin": "B000A0VYL4",
       "slug_date": "2026-06-07",
       "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0fvbht5tf/",
-      "max_sim": 0.9865,
-      "nearest_asin": "B0GD2HFC7N",
-      "mean_top5_sim": 0.9623,
-      "centroid_sim": 0.9428,
+      "page": "https://navi.omcha.jp/products/b000a0vyl4/",
+      "max_sim": 0.955,
+      "nearest_asin": "B000HVJ9SG",
+      "mean_top5_sim": 0.9114,
+      "centroid_sim": 0.9451,
       "reasons": [
-        "max_sim>0.9761",
-        "centroid_sim>0.9418"
+        "centroid_sim>0.9441"
       ]
     },
     {
-      "asin": "B0GD2HFC7N",
-      "slug_date": "2026-06-07",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0gd2hfc7n/",
-      "max_sim": 0.9865,
-      "nearest_asin": "B0FVBHT5TF",
-      "mean_top5_sim": 0.957,
-      "centroid_sim": 0.9423,
-      "reasons": [
-        "max_sim>0.9761",
-        "centroid_sim>0.9418"
-      ]
-    },
-    {
-      "asin": "B0F43S6J12",
-      "slug_date": "2026-06-04",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0f43s6j12/",
-      "max_sim": 0.9861,
-      "nearest_asin": "B0F43R6BGV",
-      "mean_top5_sim": 0.9453,
-      "centroid_sim": 0.9176,
-      "reasons": [
-        "max_sim>0.9761"
-      ]
-    },
-    {
-      "asin": "B0D78XWQ9G",
-      "slug_date": "2026-07-26",
-      "cohort": "post_v7",
-      "page": "https://navi.omcha.jp/products/b0d78xwq9g/",
-      "max_sim": 0.986,
-      "nearest_asin": "B0DNYPL3DM",
-      "mean_top5_sim": 0.948,
-      "centroid_sim": 0.9217,
-      "reasons": [
-        "max_sim>0.9761"
-      ]
-    },
-    {
-      "asin": "B0DNYPL3DM",
-      "slug_date": "2026-06-09",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0dnypl3dm/",
-      "max_sim": 0.986,
-      "nearest_asin": "B0D78XWQ9G",
-      "mean_top5_sim": 0.9462,
-      "centroid_sim": 0.9268,
-      "reasons": [
-        "max_sim>0.9761"
-      ]
-    },
-    {
-      "asin": "B0G4NR9WNW",
-      "slug_date": "2026-06-08",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0g4nr9wnw/",
-      "max_sim": 0.9848,
-      "nearest_asin": "B0GKXDZ9R7",
-      "mean_top5_sim": 0.9559,
-      "centroid_sim": 0.937,
-      "reasons": [
-        "max_sim>0.9761"
-      ]
-    },
-    {
-      "asin": "B08BJ72Z2B",
-      "slug_date": "2026-05-30",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b08bj72z2b/",
-      "max_sim": 0.9844,
-      "nearest_asin": "B08BJ9MJXG",
-      "mean_top5_sim": 0.9502,
-      "centroid_sim": 0.9268,
-      "reasons": [
-        "max_sim>0.9761"
-      ]
-    },
-    {
-      "asin": "B08BJ9MJXG",
-      "slug_date": "2026-06-06",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b08bj9mjxg/",
-      "max_sim": 0.9844,
-      "nearest_asin": "B08BJ72Z2B",
-      "mean_top5_sim": 0.957,
-      "centroid_sim": 0.9256,
-      "reasons": [
-        "max_sim>0.9761"
-      ]
-    },
-    {
-      "asin": "B0CQY911ZP",
-      "slug_date": "2026-05-29",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0cqy911zp/",
-      "max_sim": 0.9844,
-      "nearest_asin": "B0FMJQVR5B",
-      "mean_top5_sim": 0.9497,
-      "centroid_sim": 0.9331,
-      "reasons": [
-        "max_sim>0.9761"
-      ]
-    },
-    {
-      "asin": "B0FMJQVR5B",
-      "slug_date": "2026-06-17",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0fmjqvr5b/",
-      "max_sim": 0.9844,
-      "nearest_asin": "B0CQY911ZP",
-      "mean_top5_sim": 0.9532,
-      "centroid_sim": 0.9419,
-      "reasons": [
-        "max_sim>0.9761",
-        "centroid_sim>0.9418"
-      ]
-    },
-    {
-      "asin": "B011IIJS50",
-      "slug_date": "2026-05-28",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b011iijs50/",
-      "max_sim": 0.9842,
-      "nearest_asin": "B011IIJUB2",
-      "mean_top5_sim": 0.9497,
-      "centroid_sim": 0.9295,
-      "reasons": [
-        "max_sim>0.9761"
-      ]
-    },
-    {
-      "asin": "B011IIJUB2",
-      "slug_date": "2026-07-14",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b011iijub2/",
-      "max_sim": 0.9842,
-      "nearest_asin": "B011IIJS50",
-      "mean_top5_sim": 0.948,
-      "centroid_sim": 0.9254,
-      "reasons": [
-        "max_sim>0.9761"
-      ]
-    },
-    {
-      "asin": "B07GJGQMK7",
-      "slug_date": "2026-06-03",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b07gjgqmk7/",
-      "max_sim": 0.9837,
-      "nearest_asin": "B089W6WFWZ",
-      "mean_top5_sim": 0.9587,
-      "centroid_sim": 0.9385,
-      "reasons": [
-        "max_sim>0.9761"
-      ]
-    },
-    {
-      "asin": "B089W6WFWZ",
+      "asin": "B000GG7XXK",
       "slug_date": "2026-06-01",
       "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b089w6wfwz/",
-      "max_sim": 0.9837,
-      "nearest_asin": "B07GJGQMK7",
-      "mean_top5_sim": 0.9592,
-      "centroid_sim": 0.9359,
+      "page": "https://navi.omcha.jp/products/b000gg7xxk/",
+      "max_sim": 0.9451,
+      "nearest_asin": "B0000683A4",
+      "mean_top5_sim": 0.9268,
+      "centroid_sim": 0.9463,
       "reasons": [
-        "max_sim>0.9761"
+        "centroid_sim>0.9441"
       ]
     },
     {
-      "asin": "B0FPWRGWLC",
-      "slug_date": "2026-06-23",
+      "asin": "B0007M4610",
+      "slug_date": "2026-06-14",
       "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0fpwrgwlc/",
-      "max_sim": 0.9832,
-      "nearest_asin": "B0FPWZ9J99",
-      "mean_top5_sim": 0.9442,
-      "centroid_sim": 0.9226,
+      "page": "https://navi.omcha.jp/products/b0007m4610/",
+      "max_sim": 0.928,
+      "nearest_asin": "B000FUTQN2",
+      "mean_top5_sim": 0.9199,
+      "centroid_sim": 0.945,
       "reasons": [
-        "max_sim>0.9761"
-      ]
-    },
-    {
-      "asin": "B0F197NNPV",
-      "slug_date": "2026-06-01",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0f197nnpv/",
-      "max_sim": 0.9826,
-      "nearest_asin": "B0F8JBDQMT",
-      "mean_top5_sim": 0.9586,
-      "centroid_sim": 0.9376,
-      "reasons": [
-        "max_sim>0.9761"
-      ]
-    },
-    {
-      "asin": "B0F8JBDQMT",
-      "slug_date": "2026-06-21",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0f8jbdqmt/",
-      "max_sim": 0.9826,
-      "nearest_asin": "B0F197NNPV",
-      "mean_top5_sim": 0.9616,
-      "centroid_sim": 0.9458,
-      "reasons": [
-        "max_sim>0.9761",
-        "centroid_sim>0.9418"
-      ]
-    },
-    {
-      "asin": "B009CMIFYA",
-      "slug_date": "2026-06-22",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b009cmifya/",
-      "max_sim": 0.9815,
-      "nearest_asin": "B0FNCTK56M",
-      "mean_top5_sim": 0.9492,
-      "centroid_sim": 0.9346,
-      "reasons": [
-        "max_sim>0.9761"
-      ]
-    },
-    {
-      "asin": "B0FNCTK56M",
-      "slug_date": "2026-06-12",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0fnctk56m/",
-      "max_sim": 0.9815,
-      "nearest_asin": "B009CMIFYA",
-      "mean_top5_sim": 0.9385,
-      "centroid_sim": 0.9201,
-      "reasons": [
-        "max_sim>0.9761"
-      ]
-    },
-    {
-      "asin": "B083BB66H9",
-      "slug_date": "2026-05-28",
-      "cohort": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b083bb66h9/",
-      "max_sim": 0.9814,
-      "nearest_asin": "B083BC72GR",
-      "mean_top5_sim": 0.9606,
-      "centroid_sim": 0.9224,
-      "reasons": [
-        "max_sim>0.9761"
+        "centroid_sim>0.9441"
       ]
     }
   ]
