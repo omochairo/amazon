@@ -40,6 +40,7 @@ import datetime as _dt
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -57,24 +58,106 @@ except ImportError:  # スクリプト直叩き時の path 補完
 # stdlib (urllib) のみで session を取得する (requests 非依存)。
 API_BASE = "https://jules.googleapis.com/v1alpha/sessions"
 
+# 2026-09-05: LIST /sessions が pageSize=100 / timeout=30s / retry 無しで恒常的に read
+# timeout していた。ゲートは fallback 1 を返して緑で終わるため、03-invoke-jules の生成が
+# 5 run × 6 → 5 run × 1 に落ちたまま気づかれなかった (08-24 断続 → 09-02 恒常。日次の
+# 新規記事は 22〜43 本から 7 本へ)。requests 版 (report_jules_sessions) も同じ日に同じ
+# read timeout を出しているので、HTTP クライアント差ではなく「1 ページの応答が 30s に
+# 収まらない」側の問題。打ち手は 3 つ。運用中に振り直せるよう env で上書きできる:
+#   - 1 リクエストの仕事量を減らす (pageSize 100 → 50)
+#   - timeout を伸ばす (30s は実測に対して余裕が無い)
+#   - 一過性の timeout / 5xx / 429 を指数バックオフで retry する (従来は 1 発勝負)
+DEFAULT_PAGE_SIZE = int(os.environ.get("JULES_API_PAGE_SIZE", "50"))
+DEFAULT_TIMEOUT = float(os.environ.get("JULES_API_TIMEOUT", "60"))
+DEFAULT_ATTEMPTS = int(os.environ.get("JULES_API_ATTEMPTS", "3"))
+DEFAULT_BACKOFF = float(os.environ.get("JULES_API_BACKOFF", "3"))
 
-def fetch_sessions(api_key: str, *, max_pages: int = 30) -> list[dict]:
+
+def _fetch_page(
+    api_key: str,
+    token: str,
+    *,
+    page_size: int,
+    timeout: float,
+    attempts: int,
+    backoff: float,
+    sleep=time.sleep,
+) -> dict:
+    """1 ページを取得する。一過性エラーは指数バックオフで retry し、尽きたら送出。
+
+    retry を使い切ったときに partial な結果を返さないのは意図的。ページを取りこぼすと
+    rolling-24h の作成数が過小になり、ゲートが予算を過大に返す = session 114 で踏んだ
+    overshoot そのものを再現する。取れないときは呼び出し側で fallback に倒す。
+    """
+    params = {"pageSize": str(page_size)}
+    if token:
+        params["pageToken"] = token
+    url = f"{API_BASE}?{urllib.parse.urlencode(params)}"
+    attempts = max(1, attempts)
+    last_exc: Exception | None = None
+    for i in range(attempts):
+        try:
+            req = urllib.request.Request(url, headers={"X-Goog-Api-Key": api_key})
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except Exception as e:  # noqa: BLE001 — timeout / 5xx / 429 を区別せず一律 retry
+            last_exc = e
+            if i + 1 < attempts:
+                wait = backoff * (2 ** i)
+                sys.stderr.write(
+                    f"jules_quota_gate: page 取得失敗 ({e}) → {wait:.0f}s 後に retry "
+                    f"({i + 2}/{attempts})\n"
+                )
+                sleep(wait)
+    raise last_exc if last_exc is not None else RuntimeError("fetch failed")
+
+
+def fetch_sessions(
+    api_key: str,
+    *,
+    max_pages: int = 30,
+    page_size: int = DEFAULT_PAGE_SIZE,
+    timeout: float = DEFAULT_TIMEOUT,
+    attempts: int = DEFAULT_ATTEMPTS,
+    backoff: float = DEFAULT_BACKOFF,
+    sleep=time.sleep,
+) -> list[dict]:
     """LIST /v1alpha/sessions を pageToken で全ページ取得 (urllib, stdlib のみ)。"""
     sessions: list[dict] = []
     token = ""
     for _ in range(max_pages):
-        params = {"pageSize": "100"}
-        if token:
-            params["pageToken"] = token
-        url = f"{API_BASE}?{urllib.parse.urlencode(params)}"
-        req = urllib.request.Request(url, headers={"X-Goog-Api-Key": api_key})
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
+        body = _fetch_page(
+            api_key,
+            token,
+            page_size=page_size,
+            timeout=timeout,
+            attempts=attempts,
+            backoff=backoff,
+            sleep=sleep,
+        )
         sessions.extend(body.get("sessions") or [])
         token = body.get("nextPageToken") or ""
         if not token:
             break
     return sessions
+
+
+def warn_step_summary(msg: str) -> None:
+    """fallback に倒れたことを run summary に残す。
+
+    stdout は BUDGET の値そのものとして `$(...)` に食われるので、`::warning::` の
+    workflow command は出せない (出すと予算が壊れる)。代わりに GITHUB_STEP_SUMMARY へ
+    書く。stderr だけだと job log を開くまで見えず、実際 08-24〜09-05 は誰も気づかな
+    かった。
+    """
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not path:
+        return
+    try:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(f"\n> ⚠️ **jules_quota_gate fallback**: {msg}\n")
+    except OSError:  # summary が書けないことでゲートを落とさない
+        pass
 
 
 def count_created_24h(sessions: list[dict]) -> int:
@@ -106,12 +189,19 @@ def main() -> int:
     api_key = os.environ.get("JULES_API_KEY", "").strip()
     if not api_key:
         sys.stderr.write("jules_quota_gate: JULES_API_KEY 未設定 → fallback 予算を返す\n")
+        warn_step_summary(
+            f"JULES_API_KEY 未設定 → 予算 {args.fallback} (通常 {args.per_run_max})"
+        )
         print(args.fallback)
         return 0
     try:
         sessions = fetch_sessions(api_key)
     except Exception as e:  # noqa: BLE001 — ゲート用途。失敗時は fail-slow で継続
         sys.stderr.write(f"jules_quota_gate: API 取得失敗 ({e}) → fallback 予算を返す\n")
+        warn_step_summary(
+            f"API 取得失敗 ({e}) → 予算 {args.fallback} (通常 {args.per_run_max})。"
+            "この run の生成本数はほぼ 0 に落ちる"
+        )
         print(args.fallback)
         return 0
 

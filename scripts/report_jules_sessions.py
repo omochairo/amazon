@@ -73,24 +73,69 @@ def _parse_ts(s: str | None) -> _dt.datetime | None:
         return None
 
 
-def fetch_sessions(api_key: str, *, max_pages: int = 30) -> list[dict]:
-    """LIST /v1alpha/sessions を pageToken で全ページ取得。max_pages で暴走防止。"""
+# 2026-09-05: pageSize=100 / timeout=30s / retry 無しでは LIST /sessions が恒常的に
+# read timeout し、日次レポートの「Jules sessions (live API)」が丸ごと欠測していた
+# (08-24 断続 → 09-02 恒常)。stdlib 版の jules_quota_gate と同じ症状・同じ打ち手なので
+# 既定値も揃える。ここが欠測すると quota 圧が見えなくなるだけだが、ゲート側は生成本数
+# が落ちるので、両方直さないと「落ちていることに気づく経路」が残らない。
+DEFAULT_PAGE_SIZE = int(os.environ.get("JULES_API_PAGE_SIZE", "50"))
+DEFAULT_TIMEOUT = float(os.environ.get("JULES_API_TIMEOUT", "60"))
+DEFAULT_ATTEMPTS = int(os.environ.get("JULES_API_ATTEMPTS", "3"))
+DEFAULT_BACKOFF = float(os.environ.get("JULES_API_BACKOFF", "3"))
+
+
+def fetch_sessions(
+    api_key: str,
+    *,
+    max_pages: int = 30,
+    page_size: int = DEFAULT_PAGE_SIZE,
+    timeout: float = DEFAULT_TIMEOUT,
+    attempts: int = DEFAULT_ATTEMPTS,
+    backoff: float = DEFAULT_BACKOFF,
+    sleep=None,
+) -> list[dict]:
+    """LIST /v1alpha/sessions を pageToken で全ページ取得。max_pages で暴走防止。
+
+    一過性の timeout / 5xx は指数バックオフで retry する。retry を使い切ったら partial を
+    返さず送出する (欠測を「session が少ない」と読み違えないため)。
+    """
     import requests  # 遅延 import (local lint で requests 無しでも import 可能に)
 
+    if sleep is None:
+        import time as _time
+
+        sleep = _time.sleep
+    attempts = max(1, attempts)
     sessions: list[dict] = []
     token: str | None = None
     for _ in range(max_pages):
-        params = {"pageSize": 100}
+        params: dict = {"pageSize": page_size}
         if token:
             params["pageToken"] = token
-        r = requests.get(
-            API_BASE,
-            params=params,
-            headers={"X-Goog-Api-Key": api_key},
-            timeout=30,
-        )
-        r.raise_for_status()
-        body = r.json()
+        body = None
+        last_exc: Exception | None = None
+        for i in range(attempts):
+            try:
+                r = requests.get(
+                    API_BASE,
+                    params=params,
+                    headers={"X-Goog-Api-Key": api_key},
+                    timeout=timeout,
+                )
+                r.raise_for_status()
+                body = r.json()
+                break
+            except Exception as e:  # noqa: BLE001 — timeout / 5xx / 429 を一律 retry
+                last_exc = e
+                if i + 1 < attempts:
+                    wait = backoff * (2 ** i)
+                    sys.stderr.write(
+                        f"fetch_sessions: page 取得失敗 ({e}) → {wait:.0f}s 後に retry "
+                        f"({i + 2}/{attempts})\n"
+                    )
+                    sleep(wait)
+        if body is None:
+            raise last_exc if last_exc is not None else RuntimeError("fetch failed")
         sessions.extend(body.get("sessions") or [])
         token = body.get("nextPageToken") or ""
         if not token:
