@@ -82,6 +82,11 @@ DEFAULT_EXPERIENCE_RAW_DIR = pathlib.Path.home() / ".omochairo" / "yahoo_reviews
 THREADS_ENDPOINT = "https://graph.threads.net/v1.0/keyword_search"
 
 ANTIGRAVITY_TIMEOUT_S = 120
+# agy に --model を渡さないと CLI 側の既定モデルに乗る。既定は agy のバージョン
+# 更新で黙って動く (実測: `agy --output-format json` の応答にモデル名は入らない
+# ため、production からは何に乗っているか観測できない) ので明示ピンする。
+# 値の根拠は scripts/bench_agy_model.py の実測 (docs/ANTIGRAVITY_MODEL_BENCH.md)。
+DEFAULT_ANTIGRAVITY_MODEL = "gemini-3.8-flash-low"
 
 _ASIN_RE = re.compile(r"^B0[A-Z0-9]{8}$")
 _YT_ID_RE = re.compile(r"(?:v=|youtu\.be/|/shorts/)([A-Za-z0-9_-]{11})")
@@ -234,8 +239,38 @@ def resolve_product_identity(asin: str, base: pathlib.Path = PER_ASIN_DIR) -> tu
 # ソースアダプタ
 # --------------------------------------------------------------------------
 
+def build_antigravity_prompt(product_name: str, brand: str) -> str:
+    """gather_antigravity が agy に渡すプロンプト。
+
+    bench (scripts/bench_agy_model.py) から同じ文字列を使うために切り出してある。
+    ここを変えるとモデル選定の実測前提も変わるので、変更したら bench を回し直す。
+    """
+    return (
+        f"Web検索ツールを使って『{product_name} ({brand})』という商品の購入者の"
+        "口コミ・評判・使用感を調べ、事実に基づき3〜5行の日本語箇条書きで要約して"
+        "ください。ファイル操作・コード編集は一切不要です。テキストで直接回答して"
+        "ください。"
+    )
+
+
+def build_antigravity_argv(prompt: str, model: str | None) -> list[str]:
+    """agy の argv を組む。
+
+    `agy --print <prompt> --model X` と書くと --model 以降が prompt に食われる
+    (omochairo/amazon#6539 で実測)。draft_sns_reply.build_agy_argv と同じく
+    **--model を先に置き prompt は --print= に添付する**形にそろえる。
+    model が None/空なら --model を付けない (= CLI 既定モデル)。
+    """
+    argv = ["agy"]
+    if model:
+        argv += ["--model", model]
+    argv.append(f"--print={prompt}")
+    return argv
+
+
 def gather_antigravity(
     product_name: str, brand: str, *, timeout_s: int = ANTIGRAVITY_TIMEOUT_S,
+    model: str | None = None,
 ) -> list[dict]:
     """Antigravity CLI (`agy`) をヘッドレス実行し、Web 検索に基づく口コミ要約を取得する。
 
@@ -244,15 +279,13 @@ def gather_antigravity(
     非ゼロ終了・空応答はいずれも warning ログ + 空リストで skip し、他レーンを
     止めない (gather_threads / gather_third_party と同じ graceful-skip 設計)。
     """
-    prompt = (
-        f"Web検索ツールを使って『{product_name} ({brand})』という商品の購入者の"
-        "口コミ・評判・使用感を調べ、事実に基づき3〜5行の日本語箇条書きで要約して"
-        "ください。ファイル操作・コード編集は一切不要です。テキストで直接回答して"
-        "ください。"
-    )
+    prompt = build_antigravity_prompt(product_name, brand)
+    if model is None:
+        model = os.environ.get("ANTIGRAVITY_MODEL", DEFAULT_ANTIGRAVITY_MODEL)
+    argv = build_antigravity_argv(prompt, model)
     try:
         result = subprocess.run(
-            ["dbus-run-session", "--", "agy", "--print", prompt],
+            ["dbus-run-session", "--", *argv],
             capture_output=True, text=True, timeout=timeout_s, encoding="utf-8",
         )
     except FileNotFoundError:
