@@ -37,7 +37,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import json
 import logging
 import os
 import subprocess
@@ -45,6 +44,7 @@ import sys
 
 from scripts._analytics_closed_keys import extract_dedup_keys, write_closed_keys
 from scripts._analytics_issue_expiry import MARKER_PREFIX, find_expiry
+from scripts._analytics_issue_search import search_issues
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("close_expired_analytics_issues")
@@ -62,18 +62,14 @@ CLOSE_COMMENT = (
 
 
 def search_marked_issues(repo: str) -> list[dict]:
-    """期限マーカーを持つ open Issue を集める (最大 100 件 = 1 ページ)。"""
+    """期限マーカーを持つ open Issue を全ページ集める。
+
+    並びは `created asc`。Search API の 1,000 件上限で溢れるなら、落ちるのは
+    **新しい側** = まだ期限内のもの。期限切れを取りこぼさない側に倒している
+    (opener 側は逆に `desc`。あちらは取りこぼしが重複起票になるため)。
+    """
     query = f'repo:{repo} is:issue is:open in:body "{MARKER_PREFIX}"'
-    # 1 ページ (100 件) しか見ない。マーカー付きの open が 100 を超えると溢れるが、
-    # 作成の古い順に並べているので**溢れるのは必ず新しい側** = まだ期限内のもの。
-    # 期限切れを取りこぼさない側に倒している。
-    res = subprocess.run(
-        ["gh", "api", "-X", "GET", "search/issues",
-         "-f", f"q={query}", "-f", "per_page=100",
-         "-f", "sort=created", "-f", "order=asc"],
-        check=True, capture_output=True, text=True, encoding="utf-8",
-    )
-    return json.loads(res.stdout).get("items", [])
+    return search_issues(query, order="asc")
 
 
 def close_issue(repo: str, number: int, expiry: dt.date) -> None:

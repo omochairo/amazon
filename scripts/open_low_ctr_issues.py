@@ -25,10 +25,11 @@ import os
 import pathlib
 import subprocess
 import sys
+import time
 
 from scripts._analytics_closed_keys import read_closed_keys
 from scripts._analytics_issue_expiry import expiry_marker, expiry_note
-import time
+from scripts._analytics_issue_search import find_taken_keys
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("open_low_ctr_issues")
@@ -37,53 +38,13 @@ DEFAULT_IN = "data/analytics/low_ctr_pages.json"
 MARKER_PREFIX = "a1-low-ctr:"
 LABELS = "quality,todo,analytics"
 
-_SEARCH_MAX_ATTEMPTS = 3
-_SEARCH_RETRY_SLEEP_SECONDS = 3.0
-
-
-def _search_issues(query: str, sleeper=time.sleep) -> list[dict]:
-    """`gh api search/issues` を実行し items を返す。
-
-    GitHub Search API はインデックス反映に数秒〜数十秒のラグがあり、直前の
-    書き込み (issue作成/PR作成等) 直後は既存 issue が一時的にヒットしないことが
-    ある (2026-07-14、amazon-home-ops の answerability-audit workflow 実運用で
-    観測)。total_count=0 の場合のみ短い間隔で再試行し (真に0件のケースは
-    再試行しても変わらずそのまま受け入れる)、それ以外は初回結果を返す。
-    """
-    items: list[dict] = []
-    for attempt in range(1, _SEARCH_MAX_ATTEMPTS + 1):
-        res = subprocess.run(
-            ["gh", "api", "-X", "GET", "search/issues",
-             "-f", f"q={query}", "-f", "per_page=100"],
-            check=True, capture_output=True, text=True,
-        )
-        items = json.loads(res.stdout).get("items", [])
-        if items or attempt == _SEARCH_MAX_ATTEMPTS:
-            return items
-        logger.info("search/issues returned 0 items (attempt %d/%d); retrying "
-                    "in case of search index lag", attempt, _SEARCH_MAX_ATTEMPTS)
-        sleeper(_SEARCH_RETRY_SLEEP_SECONDS)
-    return items
-
-
 def find_existing_taken_urls(repo: str, sleeper=time.sleep) -> set[str]:
-    """label=quality,analytics の open Issue で marker を含むものから URL を回収。"""
-    query = (
-        f"repo:{repo} is:issue is:open label:quality label:analytics "
-        f'in:body "{MARKER_PREFIX}"'
-    )
-    items = _search_issues(query, sleeper=sleeper)
-    taken: set[str] = set()
-    for it in items:
-        body = it.get("body") or ""
-        idx = body.find(MARKER_PREFIX)
-        while idx >= 0:
-            tail = body[idx + len(MARKER_PREFIX):]
-            url = tail.split("-->", 1)[0].strip()
-            if url:
-                taken.add(url)
-            idx = body.find(MARKER_PREFIX, idx + 1)
-    return taken
+    """label=quality,analytics の open Issue で marker を含むものから URL を回収。
+
+    ページング・索引ラグ対策は `_analytics_issue_search` に集約した。`sleeper` は
+    テストが再試行の待ちを潰すための注入口 (従来どおり)。
+    """
+    return find_taken_keys(repo, MARKER_PREFIX, sleeper=sleeper)
 
 
 def render_query_rows(top_queries: list[dict]) -> str:
