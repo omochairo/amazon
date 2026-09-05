@@ -1,0 +1,42 @@
+name: SNS Inbox Probe (read-only, manual)
+
+# 「届いた返信を読む」経路が各チャネルに実在するかを 1 回の dispatch で確定させる
+# read-only probe。設計を推測で進めないための道具であり、cron では回さない。
+#
+# 出すのは schema のフィールド名 / HTTP status / 件数だけ。本文・ユーザー名・URL は
+# 出さない (このリポジトリは public で Actions のログも public)。
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: '対象チャネル'
+        required: false
+        type: choice
+        options: [all, buffer, threads, bluesky]
+        default: all
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Probe
+        env:
+          BUFFER_ACCESS_TOKEN: ${{ secrets.BUFFER_ACCESS_TOKEN }}
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          BLUESKY_IDENTIFIER: ${{ secrets.BLUESKY_IDENTIFIER }}
+          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+        run: |
+          python scripts/probe_sns_inbox.py --channel "${{ inputs.channel || 'all' }}"
