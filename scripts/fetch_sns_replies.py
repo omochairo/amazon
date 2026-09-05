@@ -29,7 +29,7 @@
 
 env:
     SNS_INBOX_DIR          inbox の置き場所 (必須ではないが CI では明示する)
-    THREADS_ACCESS_TOKEN / THREADS_USER_ID
+    THREADS_ACCESS_TOKEN         (THREADS_USER_ID は任意 — 無ければ /me から引く)
     BLUESKY_IDENTIFIER / BLUESKY_APP_PASSWORD / BLUESKY_PDS
     X_BEARER_TOKEN / X_USER_ID   (未設定なら x は skip)
 
@@ -118,16 +118,29 @@ def _parse_iso(value: str) -> datetime | None:
 # Threads
 # --------------------------------------------------------------------------
 
-def fetch_threads(lookback_days: int) -> list[dict]:
-    token = (os.environ.get("THREADS_ACCESS_TOKEN") or "").strip()
-    user_id = (os.environ.get("THREADS_USER_ID") or "").strip()
-    if not token or not user_id:
-        raise ChannelError("THREADS_ACCESS_TOKEN / THREADS_USER_ID 未設定")
+def resolve_threads_identity(token: str) -> tuple[str, str]:
+    """(user_id, username) を返す。
 
+    THREADS_USER_ID は **必須にしない**。同じ値を配置先ごとに secret として
+    配って回ると、片方だけ欠けたときに「threads だけ黙って skip」になる
+    (実際 amazon-home-ops には ACCESS_TOKEN しか無かった)。トークンがあれば
+    /me から引けるので、env は上書き用の任意項目に降格する。
+    """
     me = _request(f"{THREADS_BASE}/me?" + urllib.parse.urlencode(
         {"fields": "id,username", "access_token": token},
     ))
-    own_username = str(me.get("username") or "")
+    user_id = (os.environ.get("THREADS_USER_ID") or "").strip() or str(me.get("id") or "")
+    if not user_id:
+        raise ChannelError("/me から user id を取得できなかった")
+    return user_id, str(me.get("username") or "")
+
+
+def fetch_threads(lookback_days: int) -> list[dict]:
+    token = (os.environ.get("THREADS_ACCESS_TOKEN") or "").strip()
+    if not token:
+        raise ChannelError("THREADS_ACCESS_TOKEN 未設定")
+
+    user_id, own_username = resolve_threads_identity(token)
 
     own = _request(f"{THREADS_BASE}/{user_id}/threads?" + urllib.parse.urlencode({
         "fields": "id,permalink,timestamp",

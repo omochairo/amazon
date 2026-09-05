@@ -75,10 +75,16 @@ def _xrpc(url: str, *, headers: dict | None = None, payload: dict | None = None)
 def post_threads(rec: dict, body: str) -> str:
     import notify_threads  # 遅延 import — bluesky だけ使う環境で巻き込まない
 
+    import fetch_sns_replies  # 同じ identity 解決を二重に書かない
+
     token = (os.environ.get("THREADS_ACCESS_TOKEN") or "").strip()
-    user_id = (os.environ.get("THREADS_USER_ID") or "").strip()
-    if not token or not user_id:
-        raise PostError("THREADS_ACCESS_TOKEN / THREADS_USER_ID 未設定")
+    if not token:
+        raise PostError("THREADS_ACCESS_TOKEN 未設定")
+    try:
+        # THREADS_USER_ID は任意 (未設定なら /me から引く)。
+        user_id, _ = fetch_sns_replies.resolve_threads_identity(token)
+    except fetch_sns_replies.ChannelError as e:
+        raise PostError(str(e)) from e
 
     container = notify_threads.create_container(
         user_id, token, body, reply_to_id=rec["native_id"],
