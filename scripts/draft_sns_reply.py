@@ -150,13 +150,28 @@ def build_prompt(rec: dict, persona: str) -> str:
 """
 
 
+def build_agy_argv(prompt: str, model: str) -> list[str]:
+    """agy の argv を組む。
+
+    `--print` は**次のトークンを prompt として食う**ので、
+    `agy --print --model X "本文"` と書くと `--model` が prompt になり、
+    本文は無視されたまま exit 2 になる (2026-09-05 の初回 run で実際に発生。
+    agy 自身が "Attach the prompt to the flag (--print='your prompt') and
+    move --model elsewhere" と言ってくる)。
+
+    そこで **--model を先に置き、prompt は --print= に添付する**。
+    この形は 2026-09-05 に agy 1.1.24 で実測して rc=0 を確認済み。
+    """
+    return ["agy", "--model", model, f"--print={prompt}"]
+
+
 def call_agy(prompt: str, model: str, timeout_s: int) -> str:
     """agy をヘッドレス実行して応答テキストを返す。
 
     mine_experience.gather_antigravity と同じ呼び方 (dbus-run-session 経由)。
     Windows には dbus-run-session が無いので、無ければ agy を直接叩く。
     """
-    base = ["agy", "--print", "--model", model, prompt]
+    base = build_agy_argv(prompt, model)
     cmds = [["dbus-run-session", "--", *base], base]
 
     last_error = ""
