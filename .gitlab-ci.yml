@@ -227,6 +227,20 @@ pages:
     # #6205 T9: 外形監視が「いつの・どのコミットが配信されているか」を見る的。
     # 監視 51 は sitemap の lastmod を見ていたため 19 時間の停止を検知できなかった。
     - printf '{"sha":"%s","built_at":"%s","ref":"%s"}' "$CI_COMMIT_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$CI_COMMIT_REF_NAME" > public/build.json
+    # #6415: 待機系 GitLab Pages の 1 GiB 上限を監視するための計測。
+    #
+    # **展開後のバイト数でなければ意味がない。** 上限は展開後に効くのに、
+    # jobs API から取れる artifacts (archive) は zip 圧縮後で、2026-09-06 実測では
+    # 展開 665MB に対し archive 220MB と 3 倍違う。Pages API の deployments は
+    # サイズを持たない。そこでここで `du -sb` して 1 行ログに出し、GitHub 側の
+    # 54-pages-size-monitor.yml (scripts/check_pages_size.py) がこの行を読む。
+    #
+    # **ここでは落とさない。** 落とすと待機系の更新が止まり、いざ NAS が倒れた
+    # ときにより古い配信物しか残らない (#6415 の設計判断)。判定と起票は GitHub 側。
+    - |
+      PAGES_ARTIFACT_BYTES=$(du -sb public | cut -f1)
+      echo "PAGES_ARTIFACT_BYTES=${PAGES_ARTIFACT_BYTES}"
+      awk -v b="$PAGES_ARTIFACT_BYTES" 'BEGIN{printf "pages artifact: %.1f MiB (%.1f%% of the 1 GiB limit)\n", b/1048576, b/1073741824*100}'
     # #3055 E1 の事前圧縮 (.gz/.br 併置) は 2026-08-29 に撤去した。
     #
     # 理由: GitLab Pages のデプロイが「artifacts for pages are too large:

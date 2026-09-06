@@ -124,14 +124,25 @@ gh variable set NAS_ORIGIN_CNAME --body '<uuid>.cfargotunnel.com' -R omochairo/a
 - GitLab パイプラインの `deploy-nas` が失敗し続ける (NAS に届かない) → パイプラインは赤くなるが、
   `pages` は前のステージなので**待機系の更新は続く**
 - `cf-purge` は `needs: deploy-nas` なので走らない → エッジの HTML が最大 `edge_ttl` (4h) 古くなる
-- **GitLab Pages の 1 GiB 上限が生きた制約に戻る** (#6415。サイズ監視は無い)
+- **GitLab Pages の 1 GiB 上限が生きた制約に戻る** (#6415)
 
 ### 関連する監視との分担
 
 - `51-delivery-freshness-monitor` — 「更新され続けているか」。閾値 8h・原因非依存。**落ちた瞬間には鳴らないし、直さない**
+- `52-asset-delivery-monitor` — 「参照アセットがオリジンから返るか」
 - `53-origin-failover` — 「いま応答しているか」。直せる障害のときだけ手を動かす
+- `54-pages-size-monitor` — 「**待機系がまだ配信できる大きさか**」。週次
 
-両方要る。
+全部要る。**51 / 52 / 53 はサイズでは鳴らない。** サイズが上限を超えても本番 (NAS) は
+無傷で、`pages` ジョブも成功する。効くのは `pages:deploy` で、**倒したあとに初めて
+「待機系が古いまま」という形で表に出る**。2026-08-28 の 19 時間停止はこの経路
+(#6204 / #6205)。`navi-switch` のサニティゲートも NAS 側の前後比較なので天井は見ていない。
+
+54 は `.gitlab-ci.yml` の `pages` ジョブが出す `PAGES_ARTIFACT_BYTES=<n>` (展開後の
+バイト数) を GitLab の job trace から読む。**展開後でなければ意味がない** — 上限は
+展開後に効くのに、jobs API の archive は zip 圧縮後で 3 倍違う (2026-09-06 実測)。
+上限の 80% で warn / 90% で alert の issue を 1 本 upsert し、**CI は落とさない**
+(落とすと待機系の更新が止まり、いざ倒したときにより古い配信物しか残らない)。
 
 ## GitHub workflow の wave 構成 (再開順序)
 
