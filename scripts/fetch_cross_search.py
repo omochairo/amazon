@@ -882,6 +882,22 @@ def _collect_targets(amazon_items: list, articles_dir: pathlib.Path, per_asin_ro
     return targets
 
 
+def _re_search_window(idx: int, offset: int, max_n: int) -> bool:
+    """低信頼候補の通し番号 `idx` が、この run の処理窓に入るかを返す (#5047 follow-up)。
+
+    `offset` 件を飛ばして `max_n` 件だけ処理する。`max_n=0` は無制限。
+
+    offset が要るのは、上限だけでは末尾に到達しないため。再検索しても
+    no-worse guard で旧エントリが保持された ASIN は次回も低信頼のままなので、
+    上限だけ付けると毎回同じ先頭 N 件を舐め続ける。
+    """
+    if idx < offset:
+        return False
+    if max_n and (idx - offset) >= max_n:
+        return False
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser(description="楽天/Yahoo を Amazon ASIN 単位で cross-search")
     parser.add_argument(
@@ -893,8 +909,32 @@ def main():
             "新結果が quality 不合格で旧結果が合格なら旧を保持。"
         ),
     )
+    # #5047 の実測で判明した運用上の問題への対処。
+    # このレーンは cron を持たない手動メンテ専用で、2026-05-30 の次が 2026-09-06
+    # だった。3 か月分の低信頼マッチが溜まった結果、1 run が 2 時間を超えても
+    # 終わらず途中で打ち切ることになった (過去 run は 15〜31 分)。
+    # 1 ASIN あたり最低 1 秒 (楽天 0.5s + Yahoo 0.5s の rate limit) かかるので、
+    # 母数が増えると線形に伸びる。刻んで回せるようにする。
+    parser.add_argument(
+        "--max-re-search", type=int, default=0, metavar="N",
+        help=(
+            "低信頼再検索の対象を N 件までに制限する (0 = 無制限、既定)。"
+            "--re-search-low-confidence 指定時のみ有効。"
+        ),
+    )
+    parser.add_argument(
+        "--re-search-offset", type=int, default=0, metavar="M",
+        help=(
+            "低信頼候補の先頭 M 件を飛ばす (既定 0)。--max-re-search と組み合わせて "
+            "0/500 → 500/500 → … と刻む。**これが無いと意味がない**: 再検索しても "
+            "no-worse guard で旧エントリが保持された ASIN は次回も低信頼のままなので、"
+            "上限だけ付けると毎回同じ先頭 N 件を舐め続けて末尾に永遠に到達しない。"
+        ),
+    )
     args = parser.parse_args()
     re_search_mode = args.re_search_low_confidence
+    max_re_search = max(0, args.max_re_search)
+    re_search_offset = max(0, args.re_search_offset)
 
     # 低信頼再検索モードでは build_post の quality gate を借用
     quality_check_fn = None
@@ -963,6 +1003,8 @@ def main():
     y_jan_hit, y_jan_miss, y_text_hit = 0, 0, 0
     # --re-search-low-confidence 専用カウンタ
     r_low_conf_targets, y_low_conf_targets = 0, 0
+    # 低信頼候補の通し番号 (offset 判定用) と、上限/offset で見送った件数。
+    low_conf_seen, low_conf_deferred = 0, 0
     r_no_better, y_no_better = 0, 0
 
     for asin, (title, force_refresh, jan_code) in targets.items():
@@ -984,16 +1026,32 @@ def main():
             r_low, r_reason = _is_low_confidence_match(
                 rakuten_index.get(asin), jan_code, amazon_price_local, quality_check_fn
             )
-            if r_low and not need_rakuten:
-                need_rakuten = True
-                r_low_conf_targets += 1
-
             y_low, y_reason = _is_low_confidence_match(
                 yahoo_index.get(asin), jan_code, amazon_price_local, quality_check_fn
             )
-            if y_low and not need_yahoo:
-                need_yahoo = True
-                y_low_conf_targets += 1
+
+            # offset / 上限は **ASIN 単位** で当てる (楽天と Yahoo で別々に数えると、
+            # 片方だけ低信頼の ASIN が枠を半分しか消費せず、刻み幅が読めなくなる)。
+            # _is_low_confidence_match 自体は API を叩かないので、ここで見送っても
+            # コストはかからない。targets は dict で挿入順が安定しているため、
+            # 同じ入力なら offset の意味も安定する。
+            in_window = True
+            if r_low or y_low:
+                idx = low_conf_seen
+                low_conf_seen += 1
+                in_window = _re_search_window(idx, re_search_offset, max_re_search)
+                if not in_window:
+                    low_conf_deferred += 1
+                    r_reason = ""
+                    y_reason = ""
+
+            if in_window:
+                if r_low and not need_rakuten:
+                    need_rakuten = True
+                    r_low_conf_targets += 1
+                if y_low and not need_yahoo:
+                    need_yahoo = True
+                    y_low_conf_targets += 1
 
         if not need_rakuten and not need_yahoo:
             r_kept += 1 if r_has else 0
@@ -1138,6 +1196,19 @@ def main():
             f"rakuten_targets={r_low_conf_targets} (no_better={r_no_better}), "
             f"yahoo_targets={y_low_conf_targets} (no_better={y_no_better})"
         )
+        # 残件を必ず出す。これが無いと「全部やった」のか「上限で切れた」のかが
+        # ログから区別できず、次の offset も決められない。
+        logger.info(
+            f"Low-confidence backlog: candidates={low_conf_seen}, "
+            f"deferred={low_conf_deferred} "
+            f"(offset={re_search_offset}, max={max_re_search or 'unlimited'})"
+        )
+        if low_conf_deferred:
+            next_offset = re_search_offset + (max_re_search or 0)
+            logger.info(
+                f"::notice::{low_conf_deferred} 件が未処理です。次は "
+                f"--re-search-offset {next_offset} で続きを処理してください。"
+            )
 
     # Issue #1087 Phase 1: JAN 成否の per-ASIN manifest を出力
     _write_cross_search_manifest(out_dir, rakuten_index, yahoo_index, targets, now_iso)

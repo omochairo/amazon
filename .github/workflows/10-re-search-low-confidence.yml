@@ -13,6 +13,17 @@ name: Re-search low confidence cross matches (manual)
 #   新フラグ。新結果が quality 不合格で旧結果が合格なら旧を保持 (no-worse guard)。
 on:
   workflow_dispatch:
+    inputs:
+      max_re_search:
+        description: '低信頼再検索を何件までに絞るか (0 = 無制限)。1 件あたり最低 1 秒かかる'
+        required: false
+        type: string
+        default: '500'
+      re_search_offset:
+        description: '低信頼候補の先頭を何件飛ばすか。0/500 → 500/500 と刻む'
+        required: false
+        type: string
+        default: '0'
 
 permissions:
   contents: write
@@ -25,6 +36,10 @@ concurrency:
 jobs:
   re-search:
     runs-on: ubuntu-latest
+    # 既定の 6 時間まで走らせない。2026-09-06 の run は 3 か月分のバックログを
+    # 舐めて 2 時間経っても終わらず手で打ち切った (過去 run は 15〜31 分)。
+    # 上の max_re_search で刻む前提なので、それを超えたら想定外として落とす。
+    timeout-minutes: 45
     steps:
       - name: Generate App token
         id: app-token
@@ -55,9 +70,25 @@ jobs:
       - name: Install Dependencies
         run: pip install -r requirements.txt
 
+      # 刻んで回す (#5047 follow-up)。上限だけだと no-worse guard で保持された
+      # ASIN が毎回同じ先頭 N 件を占め、末尾に永遠に到達しない。offset とセット。
+      # 残件は script が "Low-confidence backlog: ... deferred=N" と、次に使う
+      # --re-search-offset を ::notice:: でログに出す。
       - name: Re-search low confidence cross matches
-        run: python scripts/fetch_cross_search.py --re-search-low-confidence
+        run: |
+          # 既定値は **shell 側** で当てる。11-link-report-aggregate は
+          # `gh workflow run 10-... --ref main` と input 無しで叩くので、
+          # dispatch input の default が効かず inputs.* が空文字で来る経路がある
+          # (feedback-gha-dispatch-input-default-vs-env-fallback)。
+          # `${{ inputs.x || 500 }}` だと 0 を指定したときの扱いも曖昧になるため、
+          # ${VAR:-default} で「空なら既定、0 は 0 のまま」を保証する。
+          python scripts/fetch_cross_search.py \
+            --re-search-low-confidence \
+            --max-re-search "${MAX_RE_SEARCH:-500}" \
+            --re-search-offset "${RE_SEARCH_OFFSET:-0}"
         env:
+          MAX_RE_SEARCH: ${{ inputs.max_re_search }}
+          RE_SEARCH_OFFSET: ${{ inputs.re_search_offset }}
           RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
           RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
           RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}
