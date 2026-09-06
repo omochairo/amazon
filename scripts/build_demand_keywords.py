@@ -64,7 +64,13 @@ WP順位ガード (dropped_wp_ranked, #2686):
   WP の GSC 収集は private の omochairo/omcha-ops へ移設され、public 側のこのファイルは
   2026-08-04 で凍結している。壊れていないので正常なガードとして通り、古い順位で
   カニバリ判定を続けてしまう。assert_wp_history_fresh が最終計測日を見て
-  --wp-history-max-age-days (既定 8) を超えたら **中断する** (fail-closed)。
+  --wp-history-max-age-days を超えたら **中断する** (fail-closed)。
+
+  供給路 (omcha-ops#97 P2 / amazon-navi-brain#34): 2026-09-07 時点で public 側の
+  凍結ファイルは 34d 前で、既定のまま回すと必ず止まる = 需要レーンは 2026-08-12 から
+  動いていなかった。**直すのはガードではなく供給路**で、omcha-ops の
+  export_wp_demand.py が週次窓から派生物を作り private の amazon-navi-brain 経由で
+  渡す。既定パスは WP_QUERY_HISTORY_CANDIDATES を参照 (既定の鮮度上限も 17d に変えた)。
 
 Ubersuggest 由来の需要語の合流 (#2686 PR1・2026-08-10 実測):
   WP (omcha.jp GSC) だけでなく、競合サイトの Ubersuggest 由来語も需要側の入力に
@@ -118,7 +124,18 @@ DEFAULT_TERMS_PATH = "data/demand_topic_terms.yaml"
 DEFAULT_TOPICS_PATH = "data/analytics/demand_topics.json"
 DEFAULT_OUT = "data/demand_keywords.json"
 DEFAULT_SUPPLY_PROBE_PATH = "data/analytics/demand_supply_probe.json"
-DEFAULT_WP_QUERY_HISTORY_PATH = "data/analytics/history/gsc_wp_by_query.jsonl"
+# WP 需要の供給元 (omcha-ops#97 P2 / amazon-navi-brain#34)。
+# public 側の data/analytics/history/gsc_wp_by_query.jsonl は #4654 で収集が private へ
+# 移った時点 (2026-08-04) で凍結しており、**既定にすると必ず fail-closed で止まる**。
+# 正は private の amazon-navi-brain が中継する派生物。候補は上から順に見る:
+#   1. jules/demand/...  CI が NAVI_BRAIN_PAT で overlay checkout した先
+#   2. ../amazon-navi-brain/demand/...  手元の並びクローン (本スクリプトは CI では
+#      走らず、人 / Claude がセッションで回して出力をコミットする運用)
+# どちらも無ければ None を返し、呼び出し側の fail-open に委ねる (従来どおり)。
+WP_QUERY_HISTORY_CANDIDATES = (
+    "jules/demand/wp_demand.jsonl",
+    "../amazon-navi-brain/demand/wp_demand.jsonl",
+)
 DEFAULT_UBERSUGGEST_PROBE_PATH = "data/analytics/ubersuggest_product_probe.json"
 DEFAULT_UBERSUGGEST_LLM_JUDGE_PATH = "data/analytics/ubersuggest_llm_judge.json"
 DEFAULT_BUCKETS = ("toy",)
@@ -129,13 +146,36 @@ DEFAULT_GUARD_POS_MAX = 3.0
 DEFAULT_GUARD_MIN_CLICKS = 100
 # WP順位履歴の許容鮮度 (日)。0 で無効化。ガードは「今 WP が取れている語」を守るための
 # ものなので、古い順位で判定すると守る対象がずれる (#5107 の docstring 参照)。
-# 8d は check_history_freshness.py が退役まで gsc_wp_* に使っていた上限と同じ
-# (日次 cadence + GSC の確定遅延 3d に余裕を足した値)。
-DEFAULT_WP_HISTORY_MAX_AGE_DAYS = 8
+#
+# 8d → 17d (omcha-ops#97 P2)。供給元が **日次レーンから週次窓のブリッジに変わった**
+# ため。export_wp_demand.py が渡す `date` は 13 週窓の最終週末で、週次レーンは週 1 回
+# しか進まないので常に 7〜13 日前になる。8d のままだと**必ず** fail-closed で止まる。
+# 17d = 週次窓の最終週末 (最大 13d) + GSC の確定遅延 (3d) + 実行間隔の余裕 (1d)。
+# ガードが見たいのは「収集が生きているか」であって「窓が昨日まで伸びているか」ではない。
+DEFAULT_WP_HISTORY_MAX_AGE_DAYS = 17
 
 _SPACE_RE = re.compile(r"[\s　]+")
 # 末尾に残る助詞 1 文字 (修飾語を落とした残骸)。「…1000と1500の」→「…1000と1500」
 _TRAILING_PARTICLE_RE = re.compile(r"[のとがはをにでもへや]+$")
+
+
+def resolve_wp_history_path(explicit: str | None = None) -> pathlib.Path | None:
+    """WP 需要ブリッジの実体を探す。見つけた場所を必ず log に出す。
+
+    黙って別のファイルを読むのがいちばん危ない (凍結ファイルを掴んだまま
+    「ガードは効いている」と信じることになる) ので、採用したパスを毎回出す。
+    """
+    if explicit:
+        return pathlib.Path(explicit)
+    for cand in WP_QUERY_HISTORY_CANDIDATES:
+        p = pathlib.Path(cand)
+        if p.exists():
+            logger.info("WP需要ブリッジ: %s を使う", p)
+            return p
+    logger.warning(
+        "WP需要ブリッジが見つからない (%s)。omcha-ops の export_wp_demand.py が "
+        "amazon-navi-brain に置く想定 (omcha-ops#97 P2)", " / ".join(WP_QUERY_HISTORY_CANDIDATES))
+    return None
 
 
 def _now_iso() -> str:
@@ -671,7 +711,7 @@ def main() -> int:
                     help="供給 probe レポート。hits=0 の語 (商品名として通らない情報クエリ) を落とす")
     ap.add_argument("--no-supply-filter", action="store_true",
                     help="供給 probe によるフィルタを無効化する")
-    ap.add_argument("--wp-history", default=DEFAULT_WP_QUERY_HISTORY_PATH,
+    ap.add_argument("--wp-history", default=None,
                     help="WP (omcha.jp) の日次クエリ実績 JSONL。WP順位ガードの入力")
     ap.add_argument("--guard-pos-max", type=float, default=DEFAULT_GUARD_POS_MAX,
                     help="WP順位ガードの順位しきい値 (これ以下で保護対象、既定 3.0)")
@@ -694,7 +734,7 @@ def main() -> int:
     run(pathlib.Path(args.terms), pathlib.Path(args.topics), pathlib.Path(args.out),
         buckets, args.limit, args.dry_run,
         supply_probe_path=(None if args.no_supply_filter else pathlib.Path(args.supply_probe)),
-        wp_history_path=pathlib.Path(args.wp_history),
+        wp_history_path=resolve_wp_history_path(args.wp_history),
         guard_pos_max=args.guard_pos_max,
         guard_min_clicks=args.guard_min_clicks,
         rank_guard_enabled=not args.no_rank_guard,
