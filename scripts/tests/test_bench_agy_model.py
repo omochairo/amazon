@@ -216,3 +216,44 @@ def test_balance_is_weighted_not_only_diagnostic():
     balanced_score = bench.score_text(balanced, "ケルチェッティ", "ボーネルンド")["score"]
     assert balanced_score > praise_score
     assert balanced_score - praise_score == pytest.approx(bench.WEIGHTS["balance"], abs=1e-6)
+
+
+def _stub_calls(monkeypatch, results):
+    """call_agy_once を順番に results で置き換える。"""
+    seq = list(results)
+    monkeypatch.setattr(bench, "call_agy_once", lambda *a, **k: seq.pop(0))
+    return seq
+
+
+def test_call_agy_json_retries_only_empty_response(monkeypatch):
+    """本番 gather_antigravity と同じく、リトライするのは空応答だけ。"""
+    _stub_calls(monkeypatch, [
+        {"ok": False, "error": "status=SUCCESS", "latency_s": 3.0, "text": ""},
+        {"ok": True, "error": None, "latency_s": 2.0, "text": "本文"},
+    ])
+    res = bench.call_agy_json("p", "m", retries=2)
+    assert res["ok"] is True
+    assert res["attempts"] == 2
+    # latency はリトライぶんを積む (本番で実際にかかる時間)
+    assert res["latency_s"] == 5.0
+
+
+def test_call_agy_json_does_not_retry_timeout(monkeypatch):
+    seq = _stub_calls(monkeypatch, [
+        {"ok": False, "error": "timeout", "latency_s": 120.0, "text": ""},
+        {"ok": True, "error": None, "latency_s": 2.0, "text": "本文"},
+    ])
+    res = bench.call_agy_json("p", "m", retries=2)
+    assert res["ok"] is False
+    assert res["attempts"] == 1
+    assert len(seq) == 1  # 2 件目は消費していない
+
+
+def test_call_agy_json_gives_up_after_retries(monkeypatch):
+    _stub_calls(monkeypatch, [
+        {"ok": False, "error": "status=SUCCESS", "latency_s": 1.0, "text": ""},
+    ] * 3)
+    res = bench.call_agy_json("p", "m", retries=2)
+    assert res["ok"] is False
+    assert res["attempts"] == 3
+    assert res["attempt_errors"] == ["status=SUCCESS"] * 3
