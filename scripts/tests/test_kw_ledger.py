@@ -227,3 +227,82 @@ def test_stats_runs_on_empty_ledger(tmp_path, capsys):
 def test_unknown_site_is_rejected(tmp_path):
     with pytest.raises(SystemExit):
         _run(tmp_path, "assign", "語", "--site", "wordpress")
+
+
+def _ledger_with_csv(tmp_path, rows):
+    src = tmp_path / "ubersuggest_demand.json"
+    src.write_text(json.dumps({"generated_at": "2026-08-10T00:00:00Z",
+                               "keywords": rows}, ensure_ascii=False),
+                   encoding="utf-8")
+    _run(tmp_path, "import-navi", "--src", str(src))
+
+
+def test_refetch_queue_orders_and_excludes(tmp_path, capsys):
+    """1 日 100 レポートしか引けないので、枠の使い道が成果を決める。"""
+    _ledger_with_csv(tmp_path, [
+        {"query": "大きい語", "raw_query": "大きい語", "volume": 5000.0},
+        {"query": "小さい語", "raw_query": "小さい語", "volume": 10.0},
+        # CSV の集計崩れ。測り直す対象ではなく CSV 側が壊れている印
+        {"query": "崩れた語", "raw_query": "崩れた語", "volume": 1000000.0,
+         "suspect_volume": True},
+        # WP が上位で取っている語。navi では使えないので枠を使わない
+        {"query": "WPの語", "raw_query": "WPの語", "volume": 9000.0},
+    ])
+    wp = tmp_path / "wp_demand.jsonl"
+    with io.open(wp, "w", encoding="utf-8", newline="\n") as f:
+        f.write(json.dumps({"kind": "wp_query_window", "date": "2026-08-30"}) + "\n")
+        f.write(json.dumps({"query": "WPの語", "norm": K.normalize_key("WPの語"),
+                            "clicks": 400.0, "impressions": 5000.0,
+                            "position": 1.4}, ensure_ascii=False) + "\n")
+
+    capsys.readouterr()
+    _run(tmp_path, "refetch-queue", "--limit", "10", "--wp-demand", str(wp))
+    cap = capsys.readouterr()
+    assert cap.out.splitlines() == ["大きい語", "小さい語"], \
+        "suspect と WP 既得を外し、CSV volume の降順で出す"
+    assert "suspect=1" in cap.err and "wp既得=1" in cap.err, "除外の根拠を出す"
+
+
+def test_refetch_queue_respects_daily_limit(tmp_path, capsys):
+    _ledger_with_csv(tmp_path, [
+        {"query": "語%d" % i, "raw_query": "語%d" % i, "volume": float(100 - i)}
+        for i in range(5)])
+    capsys.readouterr()
+    _run(tmp_path, "refetch-queue", "--limit", "2", "--wp-demand", "")
+    cap = capsys.readouterr()
+    assert cap.out.splitlines() == ["語0", "語1"]
+    assert "残り 3" in cap.err
+
+
+def test_refetch_queue_skips_already_measured(tmp_path, capsys):
+    """MCP で測り直した語は二度と queue に出ない (measured_unknown が消えるため)。"""
+    _ledger_with_csv(tmp_path, [{"query": "語", "raw_query": "語", "volume": 100.0}])
+    src = _batch(tmp_path, [{"keyword": "語", "search_volume": 40,
+                             "monthly_searches": [{"period": "202608",
+                                                   "search_volume": 40}]}],
+                 fetched="2026-09-07")
+    _run(tmp_path, "merge", str(src), "--refresh")
+    capsys.readouterr()
+    _run(tmp_path, "refetch-queue", "--wp-demand", "")
+    assert capsys.readouterr().out.strip() == ""
+
+
+def test_refetch_queue_keep_list(tmp_path, capsys):
+    """枠は「navi が実際に使う語」に割り当てる (5,292語=53日 → 158語=2日)。"""
+    _ledger_with_csv(tmp_path, [
+        {"query": "使う語", "raw_query": "使う語", "volume": 100.0},
+        {"query": "使わない語", "raw_query": "使わない語", "volume": 9999.0},
+        {"query": "元クエリ側で一致", "raw_query": "元クエリ側で一致", "volume": 50.0},
+    ])
+    keep = tmp_path / "demand_keywords.json"
+    keep.write_text(json.dumps({"keywords": [
+        {"keyword": "使う語", "source_queries": []},
+        {"keyword": "別の語", "source_queries": ["元クエリ 側で一致"]},
+    ]}, ensure_ascii=False), encoding="utf-8")
+
+    capsys.readouterr()
+    _run(tmp_path, "refetch-queue", "--wp-demand", "", "--keep-list", str(keep))
+    cap = capsys.readouterr()
+    assert cap.out.splitlines() == ["使う語", "元クエリ側で一致"], \
+        "source_queries 側の表記ゆれでも norm が一致すれば残る"
+    assert "リスト外=1" in cap.err
