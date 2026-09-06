@@ -129,7 +129,9 @@ logger = logging.getLogger("ingest_ubersuggest")
 DEFAULT_CSV_DIR = "data/demand/ubersuggest"
 DEFAULT_RULES_PATH = "data/demand_query_rules.yaml"
 DEFAULT_OUT = "data/analytics/ubersuggest_demand.json"
-DEFAULT_WP_HISTORY_PATH = bdk.DEFAULT_WP_QUERY_HISTORY_PATH
+# 供給元は omcha-ops → amazon-navi-brain の派生物に変わった (omcha-ops#97 P2)。
+# 単一のパス定数ではなく bdk.resolve_wp_history_path() で候補から解決する。
+DEFAULT_WP_HISTORY_PATH = None
 DEFAULT_GUARD_POS_MAX = bdk.DEFAULT_GUARD_POS_MAX
 DEFAULT_GUARD_MIN_CLICKS = bdk.DEFAULT_GUARD_MIN_CLICKS
 
@@ -599,7 +601,7 @@ def main() -> int:
         pathlib.Path(args.csv_dir),
         pathlib.Path(args.rules),
         pathlib.Path(args.out),
-        None if args.no_wp_crossmatch else pathlib.Path(args.wp_history),
+        None if args.no_wp_crossmatch else bdk.resolve_wp_history_path(args.wp_history),
         guard_pos_max=args.guard_pos_max,
         guard_min_clicks=args.guard_min_clicks,
         dry_run=args.dry_run,
