@@ -1,56 +1,56 @@
 {
-  "generated_at": "2026-09-05T10:18:16Z",
+  "generated_at": "2026-09-06T11:22:41Z",
   "model": "cl-nagoya/ruri-v3-310m",
   "source_week": "2026-W36",
-  "corpus_size": 2359,
+  "corpus_size": 2378,
   "thresholds": {
     "mode": "percentile",
-    "max_sim": 0.9757,
-    "centroid_sim": 0.939,
+    "max_sim": 0.9759,
+    "centroid_sim": 0.9389,
     "absolute_reference": {
       "max_sim": 0.95,
       "centroid_sim": 0.9,
-      "max_sim_exceeded": 852,
-      "centroid_sim_exceeded": 1950
+      "max_sim_exceeded": 857,
+      "centroid_sim_exceeded": 1958
     },
     "max_sim_percentile": 95.0,
     "centroid_sim_percentile": 95.0
   },
-  "flagged_total": 226,
+  "flagged_total": 227,
   "flagged_truncated": true,
   "cohort_stats": {
     "pre_v7": {
-      "count": 1453,
+      "count": 1442,
       "max_sim_p25": 0.9273,
       "centroid_sim_p25": 0.9144,
-      "max_sim_p50": 0.9439,
-      "centroid_sim_p50": 0.9238,
-      "max_sim_p75": 0.9595,
-      "centroid_sim_p75": 0.9315,
-      "max_sim_p90": 0.9714,
-      "centroid_sim_p90": 0.9372
+      "max_sim_p50": 0.9437,
+      "centroid_sim_p50": 0.9237,
+      "max_sim_p75": 0.9597,
+      "centroid_sim_p75": 0.9316,
+      "max_sim_p90": 0.9715,
+      "centroid_sim_p90": 0.9371
     },
     "post_v7": {
-      "count": 906,
-      "max_sim_p25": 0.9207,
-      "centroid_sim_p25": 0.8958,
-      "max_sim_p50": 0.9376,
-      "centroid_sim_p50": 0.9092,
-      "max_sim_p75": 0.9549,
-      "centroid_sim_p75": 0.9229,
+      "count": 936,
+      "max_sim_p25": 0.9201,
+      "centroid_sim_p25": 0.8957,
+      "max_sim_p50": 0.9375,
+      "centroid_sim_p50": 0.9089,
+      "max_sim_p75": 0.9548,
+      "centroid_sim_p75": 0.9226,
       "max_sim_p90": 0.9667,
-      "centroid_sim_p90": 0.9304
+      "centroid_sim_p90": 0.9303
     },
     "all": {
-      "count": 2359,
-      "max_sim_p25": 0.9244,
-      "centroid_sim_p25": 0.9063,
-      "max_sim_p50": 0.9417,
-      "centroid_sim_p50": 0.9199,
-      "max_sim_p75": 0.9577,
-      "centroid_sim_p75": 0.929,
+      "count": 2378,
+      "max_sim_p25": 0.9242,
+      "centroid_sim_p25": 0.9061,
+      "max_sim_p50": 0.9414,
+      "centroid_sim_p50": 0.9197,
+      "max_sim_p75": 0.9578,
+      "centroid_sim_p75": 0.9289,
       "max_sim_p90": 0.9693,
-      "centroid_sim_p90": 0.9357
+      "centroid_sim_p90": 0.9356
     }
   },
   "flagged": [
@@ -64,7 +64,7 @@
       "mean_top5_sim": 0.9528,
       "centroid_sim": 0.93,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -77,7 +77,7 @@
       "mean_top5_sim": 0.955,
       "centroid_sim": 0.9293,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -88,9 +88,9 @@
       "max_sim": 0.9901,
       "nearest_asin": "B0CKYRJ4KY",
       "mean_top5_sim": 0.9435,
-      "centroid_sim": 0.8886,
+      "centroid_sim": 0.8888,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -101,9 +101,9 @@
       "max_sim": 0.9901,
       "nearest_asin": "B0CKYPW397",
       "mean_top5_sim": 0.9446,
-      "centroid_sim": 0.8907,
+      "centroid_sim": 0.8909,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -116,7 +116,7 @@
       "mean_top5_sim": 0.9469,
       "centroid_sim": 0.9241,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -127,9 +127,9 @@
       "max_sim": 0.9896,
       "nearest_asin": "B0FPWZ9J99",
       "mean_top5_sim": 0.9434,
-      "centroid_sim": 0.9257,
+      "centroid_sim": 0.9256,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -140,9 +140,9 @@
       "max_sim": 0.9876,
       "nearest_asin": "B0F8T97T2N",
       "mean_top5_sim": 0.9356,
-      "centroid_sim": 0.9388,
+      "centroid_sim": 0.9387,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -153,9 +153,9 @@
       "max_sim": 0.9876,
       "nearest_asin": "B0D5H414J7",
       "mean_top5_sim": 0.9343,
-      "centroid_sim": 0.933,
+      "centroid_sim": 0.9329,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -166,9 +166,9 @@
       "max_sim": 0.9875,
       "nearest_asin": "B0GKXDZ9R7",
       "mean_top5_sim": 0.9542,
-      "centroid_sim": 0.9278,
+      "centroid_sim": 0.9277,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -179,9 +179,9 @@
       "max_sim": 0.9875,
       "nearest_asin": "B0GKX1HTTL",
       "mean_top5_sim": 0.9561,
-      "centroid_sim": 0.9263,
+      "centroid_sim": 0.9262,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -194,8 +194,8 @@
       "mean_top5_sim": 0.9641,
       "centroid_sim": 0.9411,
       "reasons": [
-        "max_sim>0.9757",
-        "centroid_sim>0.939"
+        "max_sim>0.9759",
+        "centroid_sim>0.9389"
       ]
     },
     {
@@ -208,8 +208,8 @@
       "mean_top5_sim": 0.9583,
       "centroid_sim": 0.9401,
       "reasons": [
-        "max_sim>0.9757",
-        "centroid_sim>0.939"
+        "max_sim>0.9759",
+        "centroid_sim>0.9389"
       ]
     },
     {
@@ -222,7 +222,7 @@
       "mean_top5_sim": 0.9453,
       "centroid_sim": 0.9172,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -233,9 +233,9 @@
       "max_sim": 0.986,
       "nearest_asin": "B0DNYPL3DM",
       "mean_top5_sim": 0.948,
-      "centroid_sim": 0.9187,
+      "centroid_sim": 0.9186,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -246,9 +246,9 @@
       "max_sim": 0.986,
       "nearest_asin": "B0D78XWQ9G",
       "mean_top5_sim": 0.9462,
-      "centroid_sim": 0.924,
+      "centroid_sim": 0.9239,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -259,9 +259,9 @@
       "max_sim": 0.9853,
       "nearest_asin": "B0F324L5QW",
       "mean_top5_sim": 0.9521,
-      "centroid_sim": 0.9254,
+      "centroid_sim": 0.9253,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -272,9 +272,9 @@
       "max_sim": 0.9853,
       "nearest_asin": "B0CCCNG9CD",
       "mean_top5_sim": 0.9541,
-      "centroid_sim": 0.9281,
+      "centroid_sim": 0.928,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -285,9 +285,9 @@
       "max_sim": 0.9848,
       "nearest_asin": "B0GKXDZ9R7",
       "mean_top5_sim": 0.9559,
-      "centroid_sim": 0.9362,
+      "centroid_sim": 0.9361,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -298,9 +298,9 @@
       "max_sim": 0.9844,
       "nearest_asin": "B08BJ9MJXG",
       "mean_top5_sim": 0.9502,
-      "centroid_sim": 0.926,
+      "centroid_sim": 0.9259,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -311,9 +311,9 @@
       "max_sim": 0.9844,
       "nearest_asin": "B08BJ72Z2B",
       "mean_top5_sim": 0.957,
-      "centroid_sim": 0.9244,
+      "centroid_sim": 0.9243,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -326,7 +326,7 @@
       "mean_top5_sim": 0.9497,
       "centroid_sim": 0.9322,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -337,10 +337,10 @@
       "max_sim": 0.9844,
       "nearest_asin": "B0CQY911ZP",
       "mean_top5_sim": 0.9532,
-      "centroid_sim": 0.9401,
+      "centroid_sim": 0.94,
       "reasons": [
-        "max_sim>0.9757",
-        "centroid_sim>0.939"
+        "max_sim>0.9759",
+        "centroid_sim>0.9389"
       ]
     },
     {
@@ -350,10 +350,10 @@
       "page": "https://navi.omcha.jp/products/b011iijs50/",
       "max_sim": 0.9842,
       "nearest_asin": "B011IIJUB2",
-      "mean_top5_sim": 0.9497,
+      "mean_top5_sim": 0.9502,
       "centroid_sim": 0.9281,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -363,10 +363,10 @@
       "page": "https://navi.omcha.jp/products/b011iijub2/",
       "max_sim": 0.9842,
       "nearest_asin": "B011IIJS50",
-      "mean_top5_sim": 0.948,
-      "centroid_sim": 0.9238,
+      "mean_top5_sim": 0.9497,
+      "centroid_sim": 0.9237,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -377,9 +377,9 @@
       "max_sim": 0.9837,
       "nearest_asin": "B089W6WFWZ",
       "mean_top5_sim": 0.9587,
-      "centroid_sim": 0.9352,
+      "centroid_sim": 0.935,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -390,9 +390,9 @@
       "max_sim": 0.9837,
       "nearest_asin": "B07GJGQMK7",
       "mean_top5_sim": 0.9592,
-      "centroid_sim": 0.9337,
+      "centroid_sim": 0.9336,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -405,7 +405,7 @@
       "mean_top5_sim": 0.9464,
       "centroid_sim": 0.921,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -418,7 +418,7 @@
       "mean_top5_sim": 0.9586,
       "centroid_sim": 0.936,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     },
     {
@@ -429,10 +429,10 @@
       "max_sim": 0.9826,
       "nearest_asin": "B0F197NNPV",
       "mean_top5_sim": 0.9616,
-      "centroid_sim": 0.9436,
+      "centroid_sim": 0.9435,
       "reasons": [
-        "max_sim>0.9757",
-        "centroid_sim>0.939"
+        "max_sim>0.9759",
+        "centroid_sim>0.9389"
       ]
     },
     {
@@ -445,7 +445,7 @@
       "mean_top5_sim": 0.9262,
       "centroid_sim": 0.8782,
       "reasons": [
-        "max_sim>0.9757"
+        "max_sim>0.9759"
       ]
     }
   ]
