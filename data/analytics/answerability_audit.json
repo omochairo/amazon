@@ -1,45 +1,54 @@
 {
-  "generated_at": "2026-09-05T22:04:29Z",
+  "generated_at": "2026-09-06T22:10:33Z",
   "model": "gemma4:26b-a4b-it-qat",
-  "source_week": "2026-W35",
-  "baseline_ctr": 0.09192825112107623,
+  "source_week": "2026-W36",
+  "baseline_ctr": 0.06469500924214418,
   "pages": [
     {
       "page": "https://navi.omcha.jp/products/b0hdb8kg6g/",
       "asin": "B0HDB8KG6G",
-      "page_coverage_avg": 0.36,
+      "page_coverage_avg": 0.4,
       "queries": [
         {
-          "query": "シャインアルカナロッド イオン",
-          "impressions": 3,
-          "position": 18.666666666666668,
-          "answered": false,
-          "coverage": 0.0,
-          "missing_aspects": [
-            "イオンでの取り扱い有無",
-            "イオンでの販売価格"
-          ],
-          "note": "検索クエリが「イオン」での購入を意図しているのに対し、記事内にはAmazonの情報しかなく、イオンに関する記述が一切ありません。",
+          "query": "シャインアルカナロッド 電池",
+          "impressions": 74,
+          "position": 10.175675675675675,
+          "answered": true,
+          "coverage": 1.0,
+          "missing_aspects": [],
+          "note": "「電池が必要か」というユーザーの疑問に対し、不要であることと、その理由（音や光のギミックがないため）が明確に回答されています。",
           "error": null
         },
         {
-          "query": "イオン シャインアルカナロッド",
-          "impressions": 2,
-          "position": 9.0,
+          "query": "アルカナシャイン 使い方",
+          "impressions": 7,
+          "position": 9.428571428571429,
           "answered": false,
           "coverage": 0.2,
           "missing_aspects": [
-            "イオンでの取り扱い有無",
-            "イオンでの販売価格",
-            "イオン店舗での在庫状況"
+            "具体的な遊び方（なりきり遊びの動作など）",
+            "製品の形状やサイズ感に関する詳細"
           ],
-          "note": "検索クエリは「イオン」での購入を意図していますが、記事内にはAmazonの価格情報しかなく、イオンに関する記述が一切ありません。",
+          "note": "「電池不要」であることには触れていますが、どのように遊ぶのかという具体的な使い方の説明が不足しています。",
+          "error": null
+        },
+        {
+          "query": "シャインアルカナロッド 開かない",
+          "impressions": 4,
+          "position": 3.75,
+          "answered": false,
+          "coverage": 0.0,
+          "missing_aspects": [
+            "「開かない」という問題（蓋が開かない、またはパッケージが開かない等）に対する回答",
+            "商品の構造や開封方法に関する情報"
+          ],
+          "note": "検索クエリは商品が「開かない」というトラブルや仕様に関するものですが、記事内にはそれに関連する記述が一切ありません。",
           "error": null
         },
         {
           "query": "シャインアルカナロッド amazon",
-          "impressions": 2,
-          "position": 9.5,
+          "impressions": 1,
+          "position": 10.0,
           "answered": true,
           "coverage": 0.8,
           "missing_aspects": [
@@ -51,75 +60,213 @@
           "error": null
         },
         {
-          "query": "\"シャインアルカナロッド\" \"予約受付中\"",
+          "query": "シャインアルカナロッド joshin",
           "impressions": 1,
-          "position": 10.0,
+          "position": 30.0,
           "answered": false,
           "coverage": 0.0,
           "missing_aspects": [
-            "予約受付中の有無",
-            "予約開始日・締切日",
-            "予約特典の有無"
+            "joshin（楽天などのショップ名、あるいは特定の販売サイトに関する情報）についての記述"
           ],
-          "note": "検索クエリが「予約受付中」という特定の状態を求めているのに対し、記事には予約に関する情報が一切含まれていません。",
-          "error": null
-        },
-        {
-          "query": "シャインアルカナロッド",
-          "impressions": 1,
-          "position": 4.0,
-          "answered": true,
-          "coverage": 0.8,
-          "missing_aspects": [
-            "商品の詳細な外観やサイズ感",
-            "具体的な遊び方（なりきり遊びの内容）の詳細",
-            "他の販売サイトとの価格比較情報"
-          ],
-          "note": "商品名での検索に対し、対象年齢、電池の有無、価格といった基本情報は網羅されていますが、商品の詳細な仕様や実際の使用感に関する記述は限定的です。",
+          "note": "検索クエリに含まれる「joshin」というキーワードに対する回答が記事内に一切含まれていません。",
           "error": null
         }
       ]
     },
     {
-      "page": "https://navi.omcha.jp/products/b0fnm3r45c/",
-      "asin": "B0FNM3R45C",
-      "page_coverage_avg": 0.7,
+      "page": "https://navi.omcha.jp/products/b0hdb6x1cn/",
+      "asin": "B0HDB6X1CN",
+      "page_coverage_avg": 0.267,
       "queries": [
         {
-          "query": "ジェリーブロックス 口コミ",
-          "impressions": 28,
-          "position": 7.642857142857143,
+          "query": "アルカナシャイン 使い方",
+          "impressions": 13,
+          "position": 10.615384615384615,
           "answered": false,
           "coverage": 0.3,
           "missing_aspects": [
-            "具体的なユーザーによる使用感（良い点・悪い点）",
-            "実際の購入者のレビュー内容",
-            "サイズ感や見た目に関する感想"
+            "具体的な遊び方の手順（ボタンの押し方や回転のさせ方など）",
+            "ギミックが作動する仕組みの詳細"
           ],
-          "note": "タイトルに「口コミ」とあるものの、本文には執筆者による特徴のまとめやQ&Aが中心であり、実際に使用したユーザーの具体的な声（口コミ）が欠落しています。",
+          "note": "「お花が開く」といった特徴には触れていますが、ユーザーが求めている具体的な操作方法（使い方）についての記述が不足しています。",
           "error": null
         },
         {
-          "query": "ジェリーブロックス 安い",
-          "impressions": 8,
+          "query": "シャインアルカナロッド 開き方",
+          "impressions": 11,
+          "position": 7.545454545454546,
+          "answered": false,
+          "coverage": 0.2,
+          "missing_aspects": [
+            "ギミック（お花）の具体的な開き方・操作方法",
+            "ジュエルをどのようにセットして開くのかという手順"
+          ],
+          "note": "回転ギミックがあることには触れていますが、ユーザーが求めている「どうすれば開くのか」という具体的な操作手順についての記述がありません。",
+          "error": null
+        },
+        {
+          "query": "シャインアルカナロッド レビュー",
+          "impressions": 1,
+          "position": 18.0,
+          "answered": false,
+          "coverage": 0.3,
+          "missing_aspects": [
+            "実際に遊んだ感想（使用感）",
+            "子供の反応や満足度",
+            "メリット・デメリット",
+            "音や光などの具体的な動作に関する詳細な評価"
+          ],
+          "note": "この記事は製品の仕様や価格、対象年齢といった基本情報には答えていますが、「レビュー」を求めるユーザーが期待する実際の使用感や体験談が含まれていません。",
+          "error": null
+        }
+      ]
+    },
+    {
+      "page": "https://navi.omcha.jp/products/b0h8bpqhqn/",
+      "asin": "B0H8BPQHQN",
+      "page_coverage_avg": 0.8,
+      "queries": [
+        {
+          "query": "original tamagotchi 30th anniversary tama space",
+          "impressions": 45,
+          "position": 10.0,
+          "answered": true,
+          "coverage": 0.8,
+          "missing_aspects": [
+            "製品の外観やデザインの詳細な説明",
+            "具体的な遊び方（育成要素）の内容",
+            "「original」が指すのが復刻版か、従来モデルとの違いに関する詳細情報"
+          ],
+          "note": "対象年齢や価格、電池仕様といった実用的な疑問には的確に答えていますが、製品自体の特徴（遊び方やデザインの詳細）についての記述は限定的です。",
+          "error": null
+        },
+        {
+          "query": "tamagotchi 30th anniversary tama space",
+          "impressions": 1,
+          "position": 11.0,
+          "answered": true,
+          "coverage": 0.8,
+          "missing_aspects": [
+            "製品の具体的な機能や遊び方の詳細",
+            "外観デザインの詳細な説明（画像がないため）",
+            "購入場所ごとの価格比較の詳細データ"
+          ],
+          "note": "製品名に関する基本情報（対象年齢、電池、最安値）は網羅されていますが、製品自体の具体的な特徴や遊び方の詳細については記述が限定的です。",
+          "error": null
+        }
+      ]
+    },
+    {
+      "page": "https://navi.omcha.jp/products/b0gr4grdjc/",
+      "asin": "B0GR4GRDJC",
+      "page_coverage_avg": 0.867,
+      "queries": [
+        {
+          "query": "つぶごのみ ピープル",
+          "impressions": 12,
+          "position": 9.0,
+          "answered": true,
+          "coverage": 0.9,
+          "missing_aspects": [],
+          "note": "製品の特徴、対象年齢、価格、遊び方といったユーザーが知りたい基本情報が簡潔に網羅されています。",
+          "error": null
+        },
+        {
+          "query": "つぶごのみ",
+          "impressions": 6,
+          "position": 8.833333333333332,
+          "answered": true,
+          "coverage": 0.8,
+          "missing_aspects": [
+            "商品の詳細なレビュー（実際の使用感）",
+            "デメリットや注意点",
+            "具体的なサイズ感や素材の詳細"
+          ],
+          "note": "商品名での検索に対し、特徴、対象年齢、価格、遊び方といった基本情報は網羅されていますが、ユーザーが購入を判断するための詳細な使用レビューが不足しています。",
+          "error": null
+        },
+        {
+          "query": "つぶごのみ おもちゃ",
+          "impressions": 1,
           "position": 9.0,
           "answered": true,
           "coverage": 0.9,
           "missing_aspects": [
-            "送料の有無",
-            "セール情報やクーポン情報の有無"
+            "具体的な遊び方の詳細（どのようなパーツがあるか等）",
+            "実際の利用者の具体的な口コミ内容（メリット・デメリットの生の声）"
           ],
-          "note": "最安値がAmazonであることと、具体的な価格比較が示されており、ユーザーの「どこで買うのが安いか」という疑問に直接回答しています。",
+          "note": "製品の特徴、対象年齢、価格、遊び方といった基本情報は網羅されており、検索意図に対して十分に回答できています。",
+          "error": null
+        }
+      ]
+    },
+    {
+      "page": "https://navi.omcha.jp/products/b0fpxbtthz/",
+      "asin": "B0FPXBTTHZ",
+      "page_coverage_avg": 0.88,
+      "queries": [
+        {
+          "query": "レゴ アンゼラン",
+          "impressions": 12,
+          "position": 9.5,
+          "answered": true,
+          "coverage": 0.8,
+          "missing_aspects": [
+            "製品の具体的な外観やサイズ感",
+            "組み立て難易度に関する詳細なレビュー",
+            "セット内容（パーツ数など）の詳細"
+          ],
+          "note": "検索クエリが非常に抽象的であるため、主要な商品情報（価格・対象年齢・フィギュア構成）を網羅している点は高く評価できます。",
           "error": null
         },
         {
-          "query": "ジェリー ブロック 安い",
+          "query": "アンゼラン レゴ",
+          "impressions": 5,
+          "position": 10.0,
+          "answered": true,
+          "coverage": 0.9,
+          "missing_aspects": [],
+          "note": "製品名、対象年齢、価格比較、付属フィギュアなど、ユーザーが知りたい基本情報が網羅されています。",
+          "error": null
+        },
+        {
+          "query": "レゴ アンゼランの宇宙船",
+          "impressions": 4,
+          "position": 11.25,
+          "answered": true,
+          "coverage": 0.9,
+          "missing_aspects": [
+            "商品の詳細な外観写真やサイズ感",
+            "組み立て難易度に関する具体的な記述"
+          ],
+          "note": "製品の基本情報（対象年齢、フィギュア内容、ギミック）と価格比較が簡潔にまとめられており、購入を検討しているユーザーの疑問には十分に答えています。",
+          "error": null
+        },
+        {
+          "query": "75445",
+          "impressions": 3,
+          "position": 7.0,
+          "answered": true,
+          "coverage": 0.9,
+          "missing_aspects": [
+            "商品の詳細な外観写真やサイズ感",
+            "組み立て難易度に関する具体的な記述",
+            "実際の購入者の口コミ内容（テキスト）"
+          ],
+          "note": "型番「75445」に対する基本情報（対象年齢、価格、内容物、特徴）は網羅されており、購買検討に必要な情報は十分に提供されています。",
+          "error": null
+        },
+        {
+          "query": "レゴ 75445",
           "impressions": 3,
           "position": 10.333333333333334,
           "answered": true,
           "coverage": 0.9,
-          "missing_aspects": [],
-          "note": "最安値がAmazonであることや、他のサイトとの価格差について具体的に言及されており、ユーザーの「安く買いたい」という意図に十分応えています。",
+          "missing_aspects": [
+            "製品の具体的なサイズ（高さ・幅など）",
+            "ピース数"
+          ],
+          "note": "商品名、対象年齢、価格比較、付属フィギュアといった主要な情報が網羅されており、検索意図に十分に応えています。",
           "error": null
         }
       ]
