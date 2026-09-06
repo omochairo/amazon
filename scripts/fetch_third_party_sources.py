@@ -74,6 +74,7 @@ from typing import Optional
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from fetch_cross_search import extract_search_keyword  # noqa: E402
 import score_per_asin_info as _sc  # noqa: E402
+import self_domain as _self_domain  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("fetch_third_party_sources")
@@ -107,8 +108,10 @@ _SEARCH_ENGINE_SUBSTR = (
     "google.com/search", "google.co.jp/search", "bing.com/search",
     "search.yahoo", "duckduckgo.com",
 )
-# 自サイト (第三者ではない)。
-_OWN_SITE_SUBSTR = ("navi.omcha.jp", "omcha.jp")
+# 自サイト (第三者ではない)。判定は self_domain に共通化した (#6593)。
+# 以前は URL 全体の部分一致だったので `notomcha.jp` のような **無関係の実在
+# ドメインまで落としていた** (`"omcha.jp" in "notomcha.jp"` は真)。
+# host の suffix 一致に変えて誤除外をやめる。
 
 _ASIN_RE = re.compile(r"^B0[A-Z0-9]{8}$")
 # 商品ページ URL から ASIN を復元する (slug は小文字)。ハブ/一覧は対象外。
@@ -137,7 +140,9 @@ def _is_excluded(url: str) -> bool:
         return True
     if _sc.is_search_result_url(low):  # #5490 案B: 検索結果ページを構造で弾く
         return True
-    for grp in (_RETAIL_HOST_SUBSTR, _SEARCH_ENGINE_SUBSTR, _OWN_SITE_SUBSTR):
+    if _self_domain.is_self_domain(low):  # #6593: 自社記事を第三者ソースにしない
+        return True
+    for grp in (_RETAIL_HOST_SUBSTR, _SEARCH_ENGINE_SUBSTR):
         for sub in grp:
             if sub in low:
                 return True

@@ -65,6 +65,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import brand_normalizer  # noqa: E402
 from fetch_cross_search import extract_search_keyword  # noqa: E402
 from score_per_asin_info import is_search_result_url  # noqa: E402
+from self_domain import SELF_DOMAIN_SUFFIXES, is_self_domain  # noqa: E402,F401
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("mine_experience")
@@ -92,8 +93,7 @@ DEFAULT_ANTIGRAVITY_MODEL = "gemini-3.8-flash-low"
 # 出典 URL の収集 (#6588 の probe を受けて)。
 # 自社ドメインは **必ず除く**。probe で navi.omcha.jp の当該 ASIN 記事そのものと
 # omcha.jp が「購入者の口コミ」の出典として返ってきた。自分の書いた記事を自分の
-# 記事の根拠に取り込む循環になる。suffix 一致なので www./navi./home. も覆う。
-SELF_DOMAIN_SUFFIXES = ("omcha.jp",)
+# 記事の根拠に取り込む循環になる。判定は self_domain に共通化してある (#6593)。
 # Gemini の検索グラウンディングは実 URL でなく不透明なリダイレクト URL を返す。
 # 302 を辿らないと実 URL が分からないので、収集時に解決して保存する。
 GROUNDING_REDIRECT_HOST = "vertexaisearch.cloud.google.com"
@@ -302,20 +302,6 @@ def strip_urls(text: str) -> str:
     1 本 300 字超あり、そのまま渡すと入力の大半が URL になる。
     """
     return re.sub(r"[ 	]*(?:出典[:：]\s*)?" + _URL_RE.pattern, "", text or "")
-
-
-def is_self_domain(url: str) -> bool:
-    """自社サイトか。
-
-    probe で navi.omcha.jp の当該 ASIN 記事そのものが「購入者の口コミ」の出典
-    として返ってきた (#6588)。自分の記事を自分の記事の根拠にする循環になるので
-    必ず落とす。
-    """
-    try:
-        host = urllib.parse.urlsplit(url).netloc.lower().split(":")[0]
-    except ValueError:
-        return False
-    return any(host == d or host.endswith("." + d) for d in SELF_DOMAIN_SUFFIXES)
 
 
 def resolve_source_urls(
