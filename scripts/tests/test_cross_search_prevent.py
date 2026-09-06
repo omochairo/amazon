@@ -146,3 +146,33 @@ class ReSearchWindowTest(unittest.TestCase):
             covered += [i for i in range(n) if fcs._re_search_window(i, offset, step)]
         self.assertEqual(sorted(covered), list(range(n)))
         self.assertEqual(len(covered), len(set(covered)))
+
+
+class ConsumesReSearchSlotTest(unittest.TestCase):
+    """枠を消費するのは「実際に昇格する ASIN」だけ (#5047 follow-up)。
+
+    2026-09-06 の run 34027983203 は `r_low or y_low` で数えていたため、
+    マッチが無くてどのみち検索される ASIN にも枠を割り当てていた。
+    上限を掛けても検索が減らず、45 分の timeout で殺された。
+    """
+
+    def test_promotes_when_low_and_not_already_needed(self):
+        self.assertTrue(fcs._consumes_re_search_slot(True, False, False, False))
+        self.assertTrue(fcs._consumes_re_search_slot(False, True, False, False))
+        self.assertTrue(fcs._consumes_re_search_slot(True, True, False, False))
+
+    def test_does_not_consume_when_search_happens_anyway(self):
+        """need_* が既に True なら、枠を使っても検索は減らないので消費しない。"""
+        self.assertFalse(fcs._consumes_re_search_slot(True, False, True, False))
+        self.assertFalse(fcs._consumes_re_search_slot(False, True, False, True))
+        self.assertFalse(fcs._consumes_re_search_slot(True, True, True, True))
+
+    def test_partial_overlap_still_consumes(self):
+        """片方だけ既に検索予定でも、もう片方が昇格するなら枠は要る。"""
+        self.assertTrue(fcs._consumes_re_search_slot(True, True, True, False))
+        self.assertTrue(fcs._consumes_re_search_slot(True, True, False, True))
+
+    def test_not_low_never_consumes(self):
+        for nr in (False, True):
+            for ny in (False, True):
+                self.assertFalse(fcs._consumes_re_search_slot(False, False, nr, ny))
