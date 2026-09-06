@@ -1,0 +1,142 @@
+name: pip-compile (generate hashes)
+# Issue #5454 (#5043 項目4) — requirements.txt を `--generate-hashes` 付きで
+# 再生成し、差分があれば PR にする手動レーン。
+#
+# なぜ CI 側に置くか:
+#   ローカル (Windows) で hash を生成するには Docker で Linux Python を回す
+#   必要があり、Docker Desktop の daemon 起動というシステム状態の変更に依存する。
+#   ubuntu-latest には最初から Linux Python が揃っているので、こちらのほうが
+#   前提が少なく再現性も高い (2026-09-06 のブロック実績)。
+#
+#   Linux で生成することが要件そのものでもある。hash は wheel ファイル単位で
+#   付くため、Windows で生成すると win_amd64 wheel の hash が入り、
+#   ubuntu-latest の CI では manylinux wheel が hash 不一致で落ちる。
+#
+# なぜ auto-merge しないか:
+#   hash 付きの requirements.txt がマージされた瞬間、`pip install -r
+#   requirements.txt` を実行する 19 本のレーン全部が pip の hash-checking mode
+#   に入る (下記参照)。供給側の防波堤を張る変更であると同時に、全レーンを
+#   同時に壊しうる変更でもあるので、人のレビューを必ず挟む。
+#
+# **pip の挙動 (重要)**: requirements ファイル中の *いずれか* に hash が
+# 付いていると、pip はその install 全体を hash-checking mode に切り替える。
+# つまり `--require-hashes` を明示しなくても自動で有効になり、同じコマンドに
+# 載った hash 無しのパッケージは落ちる。
+# `45-template-tests.yml` の `pip install -r requirements.txt pytest` を
+# 事前に分割済みなのはこのため (本 PR で対応)。
+on:
+  workflow_dispatch:
+    inputs:
+      upgrade:
+        description: 'ピン留めを最新版へ更新する (--upgrade)。既定は hash の付与のみでバージョンは据え置き'
+        type: boolean
+        default: false
+
+# 書き込み (branch push / PR 作成) は App token 側で行う。GITHUB_TOKEN は
+# checkout が読むだけ (#5045 と同じ方針)。
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      # 新規ブランチを main の HEAD から切って push するだけなので履歴は要らない。
+      # fetch-depth: 0 を足さない (#5047: リポジトリは 190MB で単調増加)。
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+
+      # CI 各レーンと同じ 3.11。ここがずれると environment marker
+      # (python_version < "3.12" 等) の解決結果がずれる。
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Install pip-tools
+        run: pip install pip-tools
+
+      - name: Compile with hashes
+        run: |
+          set -euo pipefail
+          UPGRADE=""
+          if [ "${{ inputs.upgrade }}" = "true" ]; then
+            UPGRADE="--upgrade"
+          fi
+          pip-compile --generate-hashes $UPGRADE \
+            --output-file=requirements.txt requirements.in
+
+      # 生成しただけでは「その lock で本当に入るか」は分からない。壊れた lock を
+      # PR にすると 19 本のレーンが一斉に落ちるので、ここで実際に入れて確かめる。
+      # 隔離した venv で入れるのは、既に入っている pip-tools 由来の
+      # パッケージが hash 検証を素通りさせないため。
+      - name: Verify the lock actually installs under --require-hashes
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/verify-venv
+          /tmp/verify-venv/bin/pip install --upgrade pip
+          /tmp/verify-venv/bin/pip install --require-hashes -r requirements.txt
+          echo "--- installed ---"
+          /tmp/verify-venv/bin/pip list
+
+      - name: Create PR
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+
+          if git diff --quiet -- requirements.txt; then
+            echo "::notice::requirements.txt に差分なし (既に hash 付きで最新)。PR は作らない。"
+            exit 0
+          fi
+
+          echo "--- diffstat ---"
+          git diff --stat -- requirements.txt
+
+          BRANCH="pip-compile-hashes/${{ github.run_id }}"
+          git config user.name "omochairo-fetch-bot[bot]"
+          git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add requirements.txt
+          git commit -m "chore(deps): requirements.txt を --generate-hashes 付きで再生成 (#5454)"
+          git push -u origin "$BRANCH"
+
+          # PR 本文はファイルに書いてから --body-file で渡す。YAML の
+          # ブロックスカラーは共通インデント (10) を剥がして shell に渡すので、
+          # heredoc 終端の BODY は shell からは行頭に見える。
+          cat > /tmp/pr-body.md <<'BODY'
+          `54-pip-compile-hashes.yml` (run ${{ github.run_id }}) が `pip-compile --generate-hashes` で再生成した `requirements.txt`。
+
+          ## マージ前に確認すること
+
+          **この PR がマージされると、`pip install -r requirements.txt` を実行する全レーンが pip の hash-checking mode に入る。** requirements ファイル中のいずれかに hash が付いていると、pip は `--require-hashes` の明示なしにその install 全体で hash を要求するため。同じ install コマンドに hash の無いパッケージが載っているレーンは落ちる。
+
+          - [ ] `pip install -r requirements.txt <他のパッケージ>` の形になっているレーンが無いか (`grep -rn 'requirements.txt' .github/workflows/`)
+          - [ ] Unit Tests / Validate Article PR が緑か
+          - [ ] ローカル手順 (`CLAUDE.md`) の更新が要るか
+
+          ## 自動で確認済み
+
+          - 生成は ubuntu-latest / Python 3.11 (CI 各レーンと同一)。Windows で生成すると win_amd64 wheel の hash が入り Linux CI で落ちる
+          - 隔離 venv で `pip install --require-hashes -r requirements.txt` が通ることを同一 run 内で検証済み
+
+          Refs #5454, #5043
+          BODY
+
+          # ここは auto-merge しない (冒頭の設計判断参照)。
+          PR_URL=$(gh pr create \
+            --title "chore(deps): requirements.txt に hash を付ける (#5454)" \
+            --body-file /tmp/pr-body.md \
+            --base main \
+            --head "$BRANCH")
+          echo "Created: $PR_URL"
