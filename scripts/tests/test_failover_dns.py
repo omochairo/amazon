@@ -306,3 +306,102 @@ def test_title_for_covers_every_action():
 ])
 def test_parse_iso(value, ok):
     assert (fd.parse_iso(value) is not None) is ok
+
+
+# --------------------------------------------------------------------------
+# 状態 issue の特定 (#6622)
+# --------------------------------------------------------------------------
+#
+# 2026-09-06、このレーンは無関係な epic (#6602) を「自分の状態 issue」と誤認して
+# close した。原因は `in:body "origin-failover"` の本文検索で先頭 1 件を無条件に
+# 採用していたこと。GitHub 検索はトークン分割するので、**レーン名に言及した
+# だけ**の issue が全部ヒットする。
+#
+# close より怖いのは update_issue で、あれは body を丸ごと差し替えるので
+# **他人の issue が中身ごと消える**。ここは「掴まないこと」を固定する。
+
+def _install_fake_gh(monkeypatch, *, label_items=None, search_items=None, calls=None):
+    """fd._gh を差し替える。呼ばれたサブコマンドを calls に記録する。"""
+    def fake_gh(args):
+        if calls is not None:
+            calls.append(args)
+        if args[0] == "issue" and args[1] == "list":
+            return json.dumps(label_items if label_items is not None else [])
+        if args[0] == "api" and "search/issues" in args:
+            return json.dumps({"items": search_items if search_items is not None else []})
+        if args[0] == "label":
+            return ""
+        return ""
+    monkeypatch.setattr(fd, "_gh", fake_gh)
+
+
+def test_issue_merely_mentioning_the_lane_is_not_adopted(monkeypatch):
+    """#6622 の再現。本文にレーン名があるだけの issue を掴まない。"""
+    mention_only = {
+        "number": 6602,
+        "body": "寄せてはいけないもの: 51/52/53 (delivery-freshness / origin-failover)",
+    }
+    _install_fake_gh(monkeypatch, label_items=[], search_items=[mention_only])
+    assert fd.get_open_issue("omochairo/amazon") is None
+
+
+def test_issue_with_marker_comment_is_adopted(monkeypatch):
+    real = {"number": 42,
+            "body": fd.MARKER_COMMENT + "\n\n本文"}
+    _install_fake_gh(monkeypatch, label_items=[real])
+    got = fd.get_open_issue("omochairo/amazon")
+    assert got is not None and got["number"] == 42
+
+
+def test_label_lookup_is_tried_before_body_search(monkeypatch):
+    calls = []
+    real = {"number": 7, "body": fd.MARKER_COMMENT}
+    _install_fake_gh(monkeypatch, label_items=[real], calls=calls)
+    fd.get_open_issue("omochairo/amazon")
+    # ラベルで見つかったなら検索 API は叩かない
+    assert any(c[0] == "issue" and c[1] == "list" for c in calls)
+    assert not any(c[0] == "api" for c in calls)
+
+
+def test_falls_back_to_search_for_unlabelled_legacy_issue(monkeypatch):
+    """ラベルが付く前に起票された issue も拾えること (移行用)。"""
+    legacy = {"number": 99, "body": fd.MARKER_COMMENT + "\n旧 issue"}
+    _install_fake_gh(monkeypatch, label_items=[], search_items=[legacy])
+    got = fd.get_open_issue("omochairo/amazon")
+    assert got is not None and got["number"] == 99
+
+
+def test_multiple_marked_issues_refuses_instead_of_guessing(monkeypatch):
+    """複数あったら黙って先頭を取らない。片方を勝手に潰す方が高くつく。"""
+    a = {"number": 1, "body": fd.MARKER_COMMENT}
+    b = {"number": 2, "body": fd.MARKER_COMMENT}
+    _install_fake_gh(monkeypatch, label_items=[a, b])
+    with pytest.raises(fd.MultipleStateIssues):
+        fd.get_open_issue("omochairo/amazon")
+
+
+def test_search_hits_are_filtered_not_trusted(monkeypatch):
+    """検索が複数返しても、マーカーを持つ 1 件だけが採用されること。"""
+    noise1 = {"number": 100, "body": "origin-failover のレーンについて"}
+    real = {"number": 200, "body": fd.MARKER_COMMENT + "\n状態"}
+    noise2 = {"number": 300, "body": "53-origin-failover を触った"}
+    _install_fake_gh(monkeypatch, label_items=[], search_items=[noise1, real, noise2])
+    got = fd.get_open_issue("omochairo/amazon")
+    assert got is not None and got["number"] == 200
+
+
+def test_created_issue_carries_the_state_label(monkeypatch):
+    """次回からラベルで引けるように、起票時に必ず付けること。"""
+    calls = []
+    _install_fake_gh(monkeypatch, calls=calls)
+    fd.create_issue("omochairo/amazon", "t", "b")
+    create = [c for c in calls if c[0] == "issue" and c[1] == "create"][0]
+    labels = create[create.index("--label") + 1]
+    assert fd.STATE_LABEL in labels
+
+
+def test_marker_comment_is_the_full_html_comment():
+    """裸の語ではなくコメント形式で照合していること (これが #6622 の本体)。"""
+    assert fd.MARKER_COMMENT.startswith("<!--")
+    assert fd.MARKER_COMMENT.endswith("-->")
+    assert fd.MARKER in fd.MARKER_COMMENT

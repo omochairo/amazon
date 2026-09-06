@@ -65,6 +65,10 @@ import re
 import sys
 from typing import Any, Callable, Dict, List, NamedTuple, Optional, Sequence
 from urllib.parse import urljoin, urlparse
+try:  # package 実行と素実行の両対応
+    from scripts._marker_issue import verified_matches
+except ImportError:  # pragma: no cover
+    from _marker_issue import verified_matches
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("check_asset_delivery")
@@ -369,7 +373,11 @@ def get_open_issue(repo: str) -> Optional[int]:
     query = f'repo:{repo} is:issue is:open in:body "{MARKER}"'
     out = _gh(["api", "-X", "GET", "search/issues", "-f", f"q={query}", "-f", "per_page=10"])
     items = json.loads(out).get("items", [])
-    return items[0]["number"] if items else None
+    # #6622: 検索結果は候補でしかない。マーカーコメントの実体で検証して
+    # から採用する (裸のマーカー語で本文検索すると、レーン名に言及した
+    # だけの issue を掴む)。複数あるときは番号昇順で決定的に選ぶ。
+    matches = verified_matches(items, MARKER)
+    return matches[0]["number"] if matches else None
 
 
 def create_issue(repo: str, title: str, body: str) -> str:
