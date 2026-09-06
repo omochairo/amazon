@@ -71,6 +71,28 @@ def render_yaml_diff_hint(candidates: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def render_suppressed_section(suppressed: list[dict]) -> list[str]:
+    """1 クエリから新規 token が大量に出て抑制された行 (brain#18)。
+
+    候補表からは外すが、本文には残す。taxonomy 未登録の実在ブランドが 1 語
+    紛れていることがあり、黙って捨てるとレビューから永久に消えるため。
+    """
+    if not suppressed:
+        return []
+    lines = ["",
+             f"## 抑制した長いクエリ ({len(suppressed)} 件)",
+             "",
+             "1 クエリから新規 token が多数出た行 (商品タイトルの丸ごと検索とみなす)。"
+             "候補表には出していないが、ブランド名が紛れていないか目視すること。",
+             "",
+             "| クエリ | impressions | 新規 token |",
+             "|---|---:|---|"]
+    for r in suppressed:
+        toks = ", ".join(f"`{t}`" for t in r.get("tokens", []))
+        lines.append(f"| `{r.get('query','')}` | {r.get('impressions', 0)} | {toks} |")
+    return lines
+
+
 def render_body(data: dict) -> str:
     src_range = data.get("source_range") or {}
     rng = f"{src_range.get('start','?')} 〜 {src_range.get('end','?')}"
@@ -102,6 +124,7 @@ def render_body(data: dict) -> str:
         "|---|---:|---:|---|",
     ]
     parts.extend(render_candidate_rows(candidates) or ["| (none) | - | - | - |"])
+    parts.extend(render_suppressed_section(data.get("suppressed_long_queries") or []))
     parts.extend([
         "",
         "## brand_taxonomy.yaml への追加案 (素案)",

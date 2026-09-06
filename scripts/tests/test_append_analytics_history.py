@@ -49,7 +49,8 @@ def ga4_fixture():
         "by_page": [
             {"hostName": "navi.omcha.jp", "pagePath": "/products/B0X/",
              "screenPageViews": 15, "engagedSessions": 6,
-             "averageSessionDuration": 45.0, "bounceRate": 0.4},
+             "averageSessionDuration": 45.0, "bounceRate": 0.4,
+             "engagementRate": 0.62},
             {"hostName": "navi.omcha.jp", "pagePath": "/posts/foo/",
              "screenPageViews": 5, "engagedSessions": 2,
              "averageSessionDuration": 30.0, "bounceRate": 0.6},
@@ -158,6 +159,10 @@ def test_process_ga4_writes_two_files(tmp_path, ga4_fixture):
     assert len(pages) == 2
     assert pages[0]["hostName"] == "navi.omcha.jp"
     assert pages[0]["date"] == "2026-05-30"
+    assert pages[0]["engagementRate"] == 0.62
+    # 2 行目の fixture は engagementRate を持たない = 旧 artifact 相当。
+    # 0.0 に潰すと A-4 (engagementRate < 0.30) の誤検出になるので None で残す
+    assert pages[1]["engagementRate"] is None
     assert totals == [{
         "date": "2026-05-30",
         "screenPageViews_sum": 20,

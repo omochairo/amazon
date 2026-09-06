@@ -43,9 +43,10 @@
     },
     "ga4_pages.jsonl": {
       "description": "GA4 by hostName x pagePath, 1 line per (date, hostName, pagePath)",
-      "fields": ["date", "hostName", "pagePath", "screenPageViews", "engagedSessions", "averageSessionDuration", "bounceRate"],
+      "fields": ["date", "hostName", "pagePath", "screenPageViews", "engagedSessions", "averageSessionDuration", "bounceRate", "engagementRate"],
       "key": ["date", "hostName", "pagePath"],
-      "source": "scripts/fetch_ga4.py --days 1"
+      "source": "scripts/fetch_ga4.py --days 1",
+      "notes": "engagementRate is recorded from 2026-09-06 onward (#5941 / brain#18); older lines omit the key. Rows without it record null, never 0.0 — 0.0 is indistinguishable from a genuine 0% engagement rate and would fake an A-4 detection."
     },
     "ga4_totals.jsonl": {
       "description": "GA4 site totals, 1 line per date",

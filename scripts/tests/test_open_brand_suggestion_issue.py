@@ -94,3 +94,28 @@ def test_has_open_suggestion_issue_false():
                return_value=subprocess.CompletedProcess(
                    args=[], returncode=0, stdout=json.dumps({"items": []}), stderr="")):
         assert has_open_suggestion_issue("repo") is False
+
+
+def test_render_body_lists_suppressed_long_queries():
+    """brain#18: 抑制した行は候補表から外れるが本文には残す。"""
+    body = render_body({
+        "source_range": {"start": "2026-08-30", "end": "2026-09-06"},
+        "params": {"min_impressions": 10},
+        "candidates": [],
+        "suppressed_long_queries": [
+            {"query": "original brandname 30th anniversary tama space",
+             "impressions": 45,
+             "tokens": ["original", "brandname", "30th", "anniversary", "tama", "space"]},
+        ],
+    })
+    assert "抑制した長いクエリ (1 件)" in body
+    assert "`brandname`" in body
+
+
+def test_render_body_omits_suppressed_section_when_empty():
+    body = render_body({
+        "source_range": {"start": "2026-08-30", "end": "2026-09-06"},
+        "params": {"min_impressions": 10},
+        "candidates": [],
+    })
+    assert "抑制した長いクエリ" not in body

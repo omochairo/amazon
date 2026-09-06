@@ -7,6 +7,8 @@ A-6 (epic #1356): GSC weekly の by_query から brand_taxonomy.yaml に
 アルゴリズム:
 1. brand_taxonomy.yaml 全 canonical + aliases を lowercase で taxonomy set に
 2. by_query をループ。impressions >= MIN_IMPRESSIONS の行のみ評価
+   (2026-09-06 / brain#18: 20 → 10。12 週分で見て 20 では eligible が母数側で
+    枯れていた。実測値は brain#18)
 3. クエリを whitespace + 一部記号で tokenize
 4. 各 token について:
    - 長さ >= MIN_TOKEN_LEN (default 3) でない → skip
@@ -15,7 +17,11 @@ A-6 (epic #1356): GSC weekly の by_query から brand_taxonomy.yaml に
    - GENERIC_TOKENS_STOPWORDS に含まれる → skip
    - 既知 taxonomy term との substring 関係 (token in term OR term in token) で
      カバーされている → skip
-5. 残った token を集計 (impressions sum + 代表クエリ Top 3)、上位 N 件を出力
+5. 1 クエリから MAX_TOKENS_PER_QUERY 件以上の新規 token が出た行は、その行ごと
+   候補から落とす (英語の商品タイトルをそのまま検索した長いクエリで、ブランド 1 語に
+   ゴミが数語ついてくる型。1 行だけで候補表を占有する)。落とした行は
+   `suppressed_long_queries` に残すので、人間のレビューからは消えない
+6. 残った token を集計 (impressions sum + 代表クエリ Top 3)、上位 N 件を出力
 
 出力は「人間がレビューする候補リスト」であり、auto-PR は安全のため作らない。
 open_brand_suggestion_issue.py が単一の weekly Issue として提案を集約する。
@@ -40,10 +46,14 @@ logger = logging.getLogger("suggest_brand_taxonomy_additions")
 DEFAULT_GSC = "data/analytics/gsc_weekly.json"
 DEFAULT_TAXONOMY = "data/brand_taxonomy.yaml"
 DEFAULT_OUT = "data/analytics/brand_taxonomy_suggestions.json"
-DEFAULT_MIN_IMPRESSIONS = 20
+DEFAULT_MIN_IMPRESSIONS = 10
 DEFAULT_MIN_TOKEN_LEN = 3
 DEFAULT_TOP_N = 10
 DEFAULT_QUERY_EXAMPLES = 3
+# 1 クエリあたりの新規 token 数がこれ以上なら、その行はブランド発見の signal ではなく
+# 商品タイトルの丸ごと検索とみなす (brain#18)。12 週分に当てて落ちるのは上記の型の
+# 1 クエリだけで、他の週の候補は 1 件も減らない
+DEFAULT_MAX_TOKENS_PER_QUERY = 4
 
 # クエリトークン分割: whitespace と一部の括弧 / 引用符 / 区切り記号
 # (ドット / 中黒 / ハイフンはトークン内に残す。例: "デュエル・マスターズ", "Fisher-Price")
@@ -142,11 +152,13 @@ def suggest(gsc: dict[str, Any], taxonomy_terms: set[str], *,
             min_impressions: int = DEFAULT_MIN_IMPRESSIONS,
             min_token_len: int = DEFAULT_MIN_TOKEN_LEN,
             top_n: int = DEFAULT_TOP_N,
-            query_examples: int = DEFAULT_QUERY_EXAMPLES) -> dict[str, Any]:
+            query_examples: int = DEFAULT_QUERY_EXAMPLES,
+            max_tokens_per_query: int = DEFAULT_MAX_TOKENS_PER_QUERY) -> dict[str, Any]:
     by_query = gsc.get("by_query", []) or []
     candidates: dict[str, dict[str, Any]] = {}
 
     eligible = 0
+    suppressed: list[dict[str, Any]] = []
     for row in by_query:
         impressions = row.get("impressions", 0)
         if impressions < min_impressions:
@@ -155,6 +167,7 @@ def suggest(gsc: dict[str, Any], taxonomy_terms: set[str], *,
         query = row.get("query", "")
         tokens = tokenize(query)
         seen_in_query: set[str] = set()
+        new_in_query: list[str] = []
         for token in tokens:
             if not is_brand_like(token, min_token_len):
                 continue
@@ -169,6 +182,16 @@ def suggest(gsc: dict[str, Any], taxonomy_terms: set[str], *,
             if covered_by_taxonomy(token_lower, taxonomy_terms):
                 continue
             seen_in_query.add(token_lower)
+            new_in_query.append(token)
+        if len(new_in_query) >= max_tokens_per_query:
+            # ブランド 1 語 + ゴミ数語。行ごと落として suppressed に回す
+            suppressed.append({
+                "query": query,
+                "impressions": impressions,
+                "tokens": new_in_query,
+            })
+            continue
+        for token in new_in_query:
             entry = candidates.setdefault(token, {
                 "token": token,
                 "impressions_sum": 0,
@@ -201,9 +224,13 @@ def suggest(gsc: dict[str, Any], taxonomy_terms: set[str], *,
             "min_impressions": min_impressions,
             "min_token_len": min_token_len,
             "top_n": top_n,
+            "max_tokens_per_query": max_tokens_per_query,
             "taxonomy_term_count": len(taxonomy_terms),
         },
         "eligible": eligible,
+        "suppressed_long_queries": sorted(
+            suppressed, key=lambda r: r["impressions"], reverse=True,
+        ),
         "candidates": sorted_candidates,
     }
 
@@ -216,6 +243,9 @@ def main() -> int:
     p.add_argument("--min-impressions", type=int, default=DEFAULT_MIN_IMPRESSIONS)
     p.add_argument("--min-token-len", type=int, default=DEFAULT_MIN_TOKEN_LEN)
     p.add_argument("--top-n", type=int, default=DEFAULT_TOP_N)
+    p.add_argument("--max-tokens-per-query", type=int,
+                   default=DEFAULT_MAX_TOKENS_PER_QUERY,
+                   help="1 クエリからこの件数以上の新規 token が出たら行ごと抑制する")
     args = p.parse_args()
 
     gsc_path = pathlib.Path(args.gsc)
@@ -236,12 +266,15 @@ def main() -> int:
         min_impressions=args.min_impressions,
         min_token_len=args.min_token_len,
         top_n=args.top_n,
+        max_tokens_per_query=args.max_tokens_per_query,
     )
 
     out = pathlib.Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    logger.info("wrote %s (%d candidates)", out, len(result["candidates"]))
+    logger.info("wrote %s (%d candidates, eligible=%d, suppressed_long_queries=%d)",
+                out, len(result["candidates"]), result["eligible"],
+                len(result["suppressed_long_queries"]))
     return 0
 
 

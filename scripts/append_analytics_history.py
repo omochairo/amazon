@@ -15,7 +15,7 @@ analytics history を恒久蓄積する read-mostly スクリプト。
 - gsc_wp_by_query.jsonl / gsc_wp_by_page.jsonl / gsc_wp_totals.jsonl
                        上記と同スキーマの WP (omcha.jp) レーン
 - ga4_pages.jsonl      {date, hostName, pagePath, screenPageViews, engagedSessions,
-                        averageSessionDuration, bounceRate}
+                        averageSessionDuration, bounceRate, engagementRate}
 - ga4_totals.jsonl     {date, screenPageViews_sum, engagedSessions_sum, rows_by_page}
 - seen_dates.json      {gsc: {...}, gsc_wp: {...}, ga4: {...}}  (idempotency sidecar)
 
@@ -202,6 +202,12 @@ def process_ga4(ga4: dict, history_dir: pathlib.Path,
             "engagedSessions": r.get("engagedSessions", 0),
             "averageSessionDuration": r.get("averageSessionDuration", 0.0),
             "bounceRate": r.get("bounceRate", 0.0),
+            # #5941 / brain#18: fetch_ga4 は by_page で engagementRate を取っているが
+            # history に落ちておらず、A-4 (detect_engagement_drop) の閾値を過去データで
+            # 検算できなかった。欠測は 0.0 ではなく None で残す (0.0 は「エンゲージ 0%」
+            # と区別がつかず、A-4 の型の誤検出になるため。detect_engagement_drop も
+            # engagementRate が無い行は skip する側に倒してある)
+            "engagementRate": r.get("engagementRate"),
         }
         for r in ga4.get("by_page", []) or []
     ]
