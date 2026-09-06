@@ -210,12 +210,63 @@ gemini-3.8-flash-high    6/8 = 0.75
 **ただしリトライは保険であって、モデル選定の代わりにはならない。** 既定は
 リトライ後も平均 1.13 回 agy を叩いており、その差はそのまま quota に乗る。
 
+## 下流の歩留まり — gemma は母艦から叩ける（2026-09-06 訂正）
+
+**「gemma は K8 にしか無いので omochairo 機からは測れない」は誤りだった。**
+これはハード制約ではなく**経路の穴**。K8 の Ollama は WSL2 の NAT 越しで LAN
+には出ていない（`192.168.68.74:11434` は closed）が、**ssh は開いている**。
+ローカルポートフォワードを 1 本張れば母艦から `/api/generate` に届く:
+
+```bash
+ssh -N -L 21434:localhost:11434 -i ~/.ssh/id_ed25519_k8 <user>@<k8-host>
+curl -s http://localhost:21434/api/tags   # gemma4:26b-a4b-it-qat が見える
+```
+
+`mine_experience.py` は `--ollama-url`（既定 `OLLAMA_HOST`）を持つので
+**コード変更なし**で母艦から `extract_snippets` が回る。variant 別の下流歩留まり
+（agy 本文 → snippet 何本）は `scripts/bench_snippet_yield.py` で測る。本文は
+このベンチの `--out` に保存済みなので、**agy を叩き直さずに**採り直せる:
+
+```bash
+python3 -m scripts.bench_snippet_yield --bench /tmp/bench.json \
+    --ollama-url http://localhost:21434
+```
+
+疎通実測（2026-09-06、母艦 Windows → K8）: 1 candidate あたり gemma 45.6s、
+`entailed` を通って 2 snippets（`体験談` / `不満`）。
+
+### 本番の歩留まり — ピン前のベースライン（2026-09-06 取得）
+
+ピン（`ANTIGRAVITY_MODEL=gemini-3.8-flash-low`, `950d866`）は 2026-09-06 に
+入った。したがって **2026-09-01〜09-05 の 5 run は全部ピン前 = agy 既定モデル**で、
+そのまま before として使える。ピン後 5 run が溜まったら同じ集計で after を取り、
+比較すること（**この before は取り直せない**）。
+
+| | 値 |
+|---|---|
+| 対象 | 100 ASIN（20 × 5 run、2026-09-01〜09-05） |
+| `experience.json` を書けた率 | **91.0%**（0 本は 9 ASIN） |
+| 1 ASIN あたり snippet | **3.50 本**（sd 2.27 / 中央 3 / 最大 11） |
+| 本数分布 | `{0:9, 2:18, 3:41, 4:14, 5:4, 6:3, 7:1, 8:4, 9:3, 10:2, 11:1}` |
+
+注意: これは**レーン合計**（antigravity + blog + threads + youtube + yahoo）で、
+antigravity レーン単独ではない。variant 比較には使えない — それは
+`bench_snippet_yield.py` 側の仕事。
+
+**`experience.json` の件数から歩留まりは出せない。** `run_asin` は
+`if not snippets: return None` で 0 本のとき**ファイルを書かない**ので、
+リポジトリ側には分母が残らない（成功だけが残る = 生存者バイアス。
+#5941 の「失敗と検出 0 件が区別できない」と同型）。分母は workflow ログにある:
+
+```bash
+gh run view <run-id> -R omochairo/amazon-home-ops --log \
+  | grep -oE "(wrote .*/experience.json \([0-9]+ snippets\)|[A-Z0-9]{10}: 0 snippets)"
+```
+
 ## 測っていないもの
 
-- **下流の gemma judge（`extract_snippets`）の歩留まり**。gemma は K8 ワーカー
-  側にしか無く、omochairo 機からは叩けない。「agy の出力が最終的に何本の
-  snippet になったか」は**このベンチでは測れていない**。本当に効いたかは
-  本番の `data/raw/per_asin/**/experience.json` の件数で後追いすること。
+- **variant 別の下流歩留まり**。経路は通ったが、比較には variant 別の agy 本文が
+  要る（= agy を叩き直す = quota）。上のベースラインは既定モデル 1 本ぶんのみ。
 - **コスト**。agy はユーザー quota 側で、コール単価の内訳が取れない。
 - **flash 系4つの品質差**。n=30 でも 95%CI が重なっており、**差が無いことを
   示したのではなく、この標本数では差を検出できていない**。区別が要るなら
