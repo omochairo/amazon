@@ -1,0 +1,76 @@
+name: Pages Size Monitor
+
+# #6415: 待機系 GitLab Pages の約 1.0 GiB 上限を監視する。
+#
+# なぜ要るか:
+#   配信元は NAS へ移った (#6205) が、待機系として GitLab Pages を残すことが
+#   確定しているので、その上限は生きた制約であり続ける。2026-08-28 には
+#   配信物が上限を超えて `pages:deploy` が落ち、**本番が約 19 時間凍った**
+#   (#6204)。2026-08-31 時点で 644,608 KB・成長 4.1 MB/日 = 余裕 約 97 日。
+#
+#   **NAS が生きている限り本番は止まらない。効くのは NAS が倒れて待機系へ
+#   切り替わった時**で、「障害時に保険が使えない」という形でしか表に出ない。
+#   既存の監視 51 (配信鮮度) / 52 (アセット) / 53 (オリジン failover) は
+#   どれもサイズでは鳴らず、`navi-switch` のサニティゲートは NAS 側の
+#   前後比較なので GitLab の天井を見ていない。
+#
+# 測り方:
+#   展開後のバイト数でなければ意味がない (上限は展開後に効く)。GitLab の
+#   jobs API から取れる archive は zip 圧縮後で 3 倍違い、Pages API の
+#   deployments はサイズを持たない (2026-09-06 実測)。そこで .gitlab-ci.yml の
+#   `pages` ジョブが `du -sb public` を 1 行ログに出し、ここではその行を読む。
+#
+# 落とさない:
+#   閾値を超えても CI は落とさず、マーカー付き issue を 1 本 upsert するだけ。
+#   落とすと待機系の更新が止まり、いざ倒したときにより古い配信物しか残らない。
+#
+# 起票規律 (CLAUDE.md: GitHub API バースト禁止):
+#   マーカー `<!-- pages-size-monitor -->` で単一 issue を特定して body を
+#   更新し、閾値を下回れば close する。1 run あたりの書き込みは最大 1 回。
+
+on:
+  schedule:
+    # 毎週月曜 12:00 JST (= 03:00 UTC)。成長は 4.1 MB/日 = 週 29 MB で、
+    # 上限までの余裕 (導入時点で約 380 MB) に対して週次で十分間に合う。
+    # 日次で回しても同じ数字を 7 回読むだけなので、API を無駄に叩かない。
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: pages-size-monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      # GITLAB_TOKEN は 40-mirror-to-gitlab.yml が使うのと同じ PAT。
+      # 読むのは jobs API と trace だけ (read_api で足りる)。
+      #
+      # secret 未設定で無言 no-op にしない (#4789 の 1 と同じ穴)。
+      # 未設定ならジョブを落として、監視が死んでいることを表に出す。
+      - name: Check standby Pages artifact size
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          if [ -z "${GITLAB_TOKEN}" ]; then
+            echo "::error::GITLAB_TOKEN が未設定です。サイズ監視が回っていません"
+            exit 1
+          fi
+          python scripts/check_pages_size.py
