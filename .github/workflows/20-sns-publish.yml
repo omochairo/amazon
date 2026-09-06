@@ -64,12 +64,19 @@ jobs:
           client-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
+      # #5047 段階3 (Group B): fetch-depth を既定 (=1) に戻した。
+      # 下の absorb ステップが `git fetch` + `git show FETCH_HEAD:<path>` で
+      # 別ブランチの内容を読むが、読むのは tip commit の tree だけで履歴を
+      # 遡らないため、浅い clone でも成立する (2026-09-06 に実測)。
+      # ただし **ブランチ側の fetch にも --depth=1 が要る**。付けないと git は
+      # 共通祖先まで履歴を取りに行き、.git が 72MB -> 306MB に膨らむ
+      # (全履歴 429MB に対して削減が 29% しか残らない)。--depth=1 付きなら
+      # ブランチ 1 本あたり +9〜28MB で済む。
       - name: Checkout Repository
         uses: actions/checkout@v7
         with:
           token: ${{ steps.app-token.outputs.token }}
           ref: main
-          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v7
@@ -101,7 +108,9 @@ jobs:
           ARGS=""
           while read -r num branch; do
             [ -n "$num" ] || continue
-            git fetch --no-tags origin "$branch"
+            # --depth=1 必須 (#5047 段階3)。読むのは tip の tree だけ。
+            # 付けないと共通祖先まで遡って .git が 4 倍に膨らむ (実測)。
+            git fetch --no-tags --depth=1 origin "$branch"
             out="/tmp/absorb/${num}-sns_published.json"
             if git show "FETCH_HEAD:data/sns_published.json" > "$out" 2>/dev/null; then
               ARGS="$ARGS --source $out"
