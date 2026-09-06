@@ -111,6 +111,42 @@ Hugo は **Extended v0.146.0**（本番ビルドの SSOT は `.gitlab-ci.yml` �
 - `paths` allowlist を新設しない。過去に「未登録 → required check 不発 → auto-merge 永久 pending」の inverse-trap を繰り返し踏んでおり、`#4384` で撤廃した経緯がある
 - secret ガードで `::notice::skipping` して緑終了させると、secret 失効時にレーンが黙って死ぬ（Issue #4793）
 
+## 長い作業は隔離した worktree でやる
+
+**共有の作業ツリーは、他人が勝手にブランチを切り替える。** 複数人・複数エージェントが
+同じチェックアウトを触るうえ、cron が作ったブランチ（`gsc-snapshot/<run-id>` など）の
+確認もそこで行われる。
+
+2026-09-06 の実測（`git reflog` の checkout 間隔）: **7.5 時間で 13 回 = 平均 35 分**。
+
+```
+19:38  omochairo/re-search-backlog-cap -> main
+18:55  main -> omochairo/re-search-backlog-cap
+18:54  sns-publish/verify-6610 -> main
+...
+14:02  feat/k8-ollama-tunnel-snippet-yield -> gsc-snapshot/34006291263   ← 事故
+```
+
+最後の 1 行が実際の事故（#6602）。ベンチ測定中に別レーンがツリーを奪い、作業中の
+スクリプトがツリーから消えて測定が落ちた。
+
+**目安として 35 分を超える作業を共有ツリーでやらない。** 行儀の問題ではなく確率の
+問題で、長時間の作業は必ず踏む。
+
+消えるのはファイルだけではない。`data/` の中身もブランチごと入れ替わるので、
+**同じコマンドが違う入力で走る**。落ちてくれる方がまだ良く、静かに違う数字が出るのが
+最悪（上の事故では、ベンチの商品集合がバッチ間で変わりかけた）。
+
+```bash
+eval "$(scripts/agent_worktree.sh create my-task)"   # origin/main から切って cd
+# ... 作業 ...
+scripts/agent_worktree.sh remove my-task
+```
+
+`create` は必ず `origin/main` から切る（共有ツリーの HEAD は他人のブランチを指している
+ことがあり、そこから切ると無関係な変更を抱き込む）。worktree はリポジトリの外に作る
+（配下だと掃除系 workflow や `data/articles/*.json` の glob が拾う）。
+
 ## PR の作法
 
 - ブランチを切って PR を出す。`main` に直接コミットしない
