@@ -19,6 +19,7 @@ import xml.etree.ElementTree as ET
 import requests
 
 import _fetch_targets
+import self_domain as _self_domain
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("fetch_yahoo_news")
@@ -134,6 +135,13 @@ def gnews_search(query: str, max_results: int = 5) -> list:
         link_el = item.find("link")
         pub_el = item.find("pubDate")
         if title_el is None or link_el is None:
+            continue
+        # #6593: 取得元は Google News RSS の **検索**。開かれた結果空間なので、
+        # 自社記事がニュースとして返る余地がある。自分の記事を自分の記事の根拠に
+        # すると循環になるので落とす (2026-09-06 の点検では実データ 0 件だったが、
+        # 順位が上がるほど混ざりやすくなる)。
+        if _self_domain.is_self_domain(link_el.text or ""):
+            logger.info("自社ドメインのニュースを除外: %s", (link_el.text or "")[:80])
             continue
         out.append({
             "title": title_el.text or "",
