@@ -46,6 +46,7 @@ Issue: https://github.com/omochairo/amazon/issues/2995
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import math
@@ -297,6 +298,267 @@ def embed_batch_ruri(
 
 
 # --------------------------------------------------------------------------
+# 埋め込みキャッシュ (#6602 N3a)
+# --------------------------------------------------------------------------
+#
+# なぜ要るか: このレーンも audit_uniqueness も毎 run コーパス全件を embed して
+# いた。実測 (2026-09-06) では 24-uniqueness-audit が 2,359 記事で 38.5 分、
+# ジョブ 39.0 分のほぼ全部が埋め込み。一方 data/articles の変更は 7 日で 6.8%
+# (日次なら 1.7%) しかない。**93〜98% が同じテキストの再計算**だった。
+#
+# timeout の期限もある。61 記事/分・timeout 60 分なので容量は約 3,660 記事で、
+# 新規記事は 30 日で 812 本。放置すると 2 ヶ月弱で頭を打つ。このレーンは
+# 2026-07-19 に同じ理由 (全件埋め込みが時間に収まらない) で timeout し、
+# #3203 Phase 4 の観察がサイレント停止した実績がある。
+#
+# 設計:
+#   - キーは **embed に渡すテキストそのもの** の hash。記事 JSON 全体では
+#     ない。無関係な項目が変わっただけでキャッシュを捨てないため
+#   - キーには **サーバが名乗る実モデル ID** を混ぜる (resolve_embed_model)。
+#     ruri backend の `--model` はラベルでしかなく、実モデルはコンテナの
+#     EMBED_MODEL で決まる。呼び出し側のラベルを信じると、モデルを差し替えた
+#     ときに**別モデルのベクタを黙って配る**
+#   - **キャッシュは壊れても落とさない。** 読めなければ warning を出して
+#     コールドで回る。速いだけの仕組みのために本番レーンを止めない
+#   - 保存は tmp + os.replace の原子的置換。途中で殺されても壊れた JSON を
+#     残さない
+#   - 保存時に**今回参照されなかったキーを捨てる**。捨てないと削除済み記事の
+#     ベクタが永久に溜まる
+
+CACHE_FORMAT = 1
+
+
+def resolve_embed_model(
+    backend: str, *, model: str, ruri_url: str, session: requests.Session,
+) -> str:
+    """キャッシュキーに混ぜる「実際に embed するモデル」の ID を決める。
+
+    ollama backend は ``model`` がそのままリクエストに乗るので、それが実体。
+    ruri backend は ``model`` が出力ラベル用でしかないため、``/health`` が
+    名乗る ``embed_model`` を採る。取れなければ ``None`` を返す
+    (**キャッシュを使わない**。誤ったキーで別モデルのベクタを配るより、
+    遅くても正しい方を採る)。
+    """
+    if backend != "ruri":
+        return model
+    try:
+        resp = session.get(f"{ruri_url.rstrip('/')}/health", timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+        payload = resp.json()
+        name = payload.get("embed_model") if isinstance(payload, dict) else None
+        if isinstance(name, str) and name:
+            return name
+        logger.warning("ruri /health に embed_model が無い — 埋め込みキャッシュを使いません")
+    except (requests.RequestException, ValueError) as e:
+        logger.warning("ruri /health の取得に失敗 (%s) — 埋め込みキャッシュを使いません", e)
+    return ""
+
+
+def cache_key(model_id: str, text: str) -> str:
+    return hashlib.sha256(
+        "{}\x00{}".format(model_id, text).encode("utf-8")
+    ).hexdigest()
+
+
+class EmbeddingCache:
+    """テキスト hash → ベクタ の永続キャッシュ。
+
+    ファイルは 1 本の JSON。**リポジトリには置かない** (2,359 記事 × 768 次元で
+    数十 MB になり、#5047 のリポジトリ肥大を悪化させる)。K8 の named volume の
+    ようなランナーローカルの永続領域に置く。消えても遅い run が 1 回走るだけ
+    なので、可用性は要らない。
+    """
+
+    def __init__(self, path: pathlib.Path | None, model_id: str) -> None:
+        self.path = path
+        self.model_id = model_id
+        self.vectors: dict[str, list[float]] = {}
+        self.seen: set[str] = set()
+        self.hits = 0
+        self.misses = 0
+
+    @property
+    def enabled(self) -> bool:
+        return self.path is not None and bool(self.model_id)
+
+    def load(self) -> None:
+        if not self.enabled:
+            return
+        assert self.path is not None
+        if not self.path.exists():
+            logger.info("埋め込みキャッシュ %s は未作成 — コールドで開始します", self.path)
+            return
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError("cache root is not an object")
+            if data.get("format") != CACHE_FORMAT:
+                logger.warning(
+                    "埋め込みキャッシュの format が違う (%r != %r) — 捨てて作り直します",
+                    data.get("format"), CACHE_FORMAT,
+                )
+                return
+            # モデルが変わったら全部無効。混ぜて使うと似ていないもの同士の
+            # コサイン類似度を比べることになる
+            if data.get("model") != self.model_id:
+                logger.info(
+                    "埋め込みキャッシュのモデルが変わった (%r -> %r) — 捨てて作り直します",
+                    data.get("model"), self.model_id,
+                )
+                return
+            vectors = data.get("vectors")
+            if not isinstance(vectors, dict):
+                raise ValueError("cache 'vectors' is not an object")
+            self.vectors = {
+                k: v for k, v in vectors.items()
+                if isinstance(k, str) and isinstance(v, list) and v
+            }
+            logger.info("埋め込みキャッシュを読み込み: %d 件 (%s)", len(self.vectors), self.path)
+        except (OSError, ValueError) as e:
+            # 壊れたキャッシュでレーンを止めない
+            logger.warning("埋め込みキャッシュの読み込みに失敗 (%s) — コールドで続行します", e)
+            self.vectors = {}
+
+    def get(self, text: str) -> list[float] | None:
+        if not self.enabled:
+            return None
+        k = cache_key(self.model_id, text)
+        v = self.vectors.get(k)
+        if v is None:
+            self.misses += 1
+            return None
+        self.seen.add(k)
+        self.hits += 1
+        return v
+
+    def put(self, text: str, vector: list[float]) -> None:
+        if not self.enabled:
+            return
+        k = cache_key(self.model_id, text)
+        self.vectors[k] = vector
+        self.seen.add(k)
+
+    def save(self, *, prune: bool = True) -> None:
+        """原子的に書き出す。
+
+        ``prune=True`` なら今回参照されなかったキーを捨てる (削除済み記事の
+        ベクタが永久に溜まらないように)。**部分実行では必ず ``prune=False``**。
+        ``--limit 50`` のスモーク 1 回で 2,300 件の warm キャッシュが消え、
+        次の全件 run が丸ごと再計算になる — キャッシュを入れた意味が飛ぶ。
+        """
+        if not self.enabled:
+            return
+        assert self.path is not None
+        kept = ({k: v for k, v in self.vectors.items() if k in self.seen}
+                if prune else dict(self.vectors))
+        dropped = len(self.vectors) - len(kept)
+        payload = {
+            "format": CACHE_FORMAT,
+            "model": self.model_id,
+            "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "vectors": kept,
+        }
+        tmp = self.path.with_suffix(self.path.suffix + ".tmp")
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            tmp.write_text(json.dumps(payload), encoding="utf-8")
+            os.replace(tmp, self.path)
+            logger.info(
+                "埋め込みキャッシュを保存: %d 件 (未参照 %d 件を破棄) -> %s",
+                len(kept), dropped, self.path,
+            )
+        except OSError as e:
+            # 保存できなくても結果は正しい。次の run が遅くなるだけ
+            logger.warning("埋め込みキャッシュの保存に失敗 (%s) — 続行します", e)
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    def stats(self) -> dict[str, int]:
+        total = self.hits + self.misses
+        return {
+            "hits": self.hits,
+            "misses": self.misses,
+            "total": total,
+            "hit_rate_pct": round(100.0 * self.hits / total) if total else 0,
+        }
+
+
+def embed_texts(
+    texts: list[str],
+    *,
+    backend: str,
+    batch_size: int,
+    ollama_url: str,
+    model: str,
+    ruri_url: str,
+    session: requests.Session,
+    sleeper=time.sleep,
+    cache: EmbeddingCache | None = None,
+    progress_every: int | None = None,
+) -> list[list[float]]:
+    """テキスト列をベクトル化する。キャッシュがあればミス分だけ embed する。
+
+    compute_semantic_related と audit_uniqueness が同じループを別々に持って
+    いたので、ここに一本化した (キャッシュを 2 箇所に書かないため)。
+    """
+    n = len(texts)
+    out: list[list[float]] = [[] for _ in range(n)]
+    todo: list[int] = []
+    for i, t in enumerate(texts):
+        hit = cache.get(t) if cache is not None else None
+        if hit is None:
+            todo.append(i)
+        else:
+            out[i] = hit
+
+    if cache is not None and cache.enabled:
+        s = cache.stats()
+        logger.info(
+            "埋め込みキャッシュ: hit %d / %d (%d%%) — embed するのは %d 件",
+            s["hits"], s["total"], s["hit_rate_pct"], len(todo),
+        )
+
+    n_batches = (len(todo) + batch_size - 1) // batch_size
+    for bi in range(n_batches):
+        idxs = todo[bi * batch_size: (bi + 1) * batch_size]
+        batch_texts = [texts[i] for i in idxs]
+        if backend == "ruri":
+            vectors = embed_batch_ruri(batch_texts, ruri_url, session, sleeper)
+        else:
+            vectors = embed_batch(batch_texts, ollama_url, model, session, sleeper)
+        for i, vec in zip(idxs, vectors):
+            out[i] = vec
+            if cache is not None:
+                cache.put(texts[i], vec)
+        if progress_every and (bi + 1) % progress_every == 0:
+            logger.info("embedding batches progress: %d/%d", bi + 1, n_batches)
+    if n_batches and progress_every:
+        logger.info("embedding batches progress: %d/%d (done)", n_batches, n_batches)
+    return out
+
+
+def open_embedding_cache(
+    cache_path: str | os.PathLike[str] | None,
+    *,
+    backend: str,
+    model: str,
+    ruri_url: str,
+    session: requests.Session,
+) -> EmbeddingCache | None:
+    """``--embed-cache`` の値からキャッシュを用意する (未指定なら None)。"""
+    if not cache_path:
+        return None
+    model_id = resolve_embed_model(backend, model=model, ruri_url=ruri_url, session=session)
+    cache = EmbeddingCache(pathlib.Path(cache_path), model_id)
+    if not cache.enabled:
+        return None
+    cache.load()
+    return cache
+
+
+# --------------------------------------------------------------------------
 # 類似度計算 (numpy があればベクトル化、無ければ純 Python フォールバック)
 # --------------------------------------------------------------------------
 
@@ -417,6 +679,7 @@ def run(
     ruri_url: str = DEFAULT_RURI_URL,
     session: requests.Session | None = None,
     sleeper=time.sleep,
+    embed_cache: str | os.PathLike[str] | None = None,
 ) -> dict[str, Any]:
     """全体を実行し、件数サマリを dict で返す (テスト・main 双方から呼べるように分離)。
 
@@ -442,19 +705,17 @@ def run(
     texts = [t for _, t in items]
 
     session = session or requests.Session()
-    embeddings: list[list[float]] = []
-    n_batches = (len(texts) + batch_size - 1) // batch_size
-    for bi in range(n_batches):
-        batch_texts = texts[bi * batch_size: (bi + 1) * batch_size]
-        if backend == "ruri":
-            batch_embeddings = embed_batch_ruri(batch_texts, ruri_url, session, sleeper)
-        else:
-            batch_embeddings = embed_batch(batch_texts, ollama_url, model, session, sleeper)
-        embeddings.extend(batch_embeddings)
-        if (bi + 1) % _BATCH_LOG_EVERY == 0:
-            logger.info("embedding batches progress: %d/%d", bi + 1, n_batches)
-    if n_batches:
-        logger.info("embedding batches progress: %d/%d (done)", n_batches, n_batches)
+    cache = open_embedding_cache(
+        embed_cache, backend=backend, model=model, ruri_url=ruri_url, session=session,
+    )
+    embeddings = embed_texts(
+        texts, backend=backend, batch_size=batch_size, ollama_url=ollama_url,
+        model=model, ruri_url=ruri_url, session=session, sleeper=sleeper,
+        cache=cache, progress_every=_BATCH_LOG_EVERY,
+    )
+    if cache is not None:
+        # limit 付きは部分実行。prune すると warm キャッシュを削ってしまう
+        cache.save(prune=not limit)
 
     if dry_run:
         logger.info("[dry-run] computed embeddings for %d articles; not writing output", len(asins))
@@ -499,6 +760,13 @@ def main() -> None:
         default=os.environ.get("EMBED_MODEL"),
         help="embeddings に使うモデル名 (ollama: リクエストに使用 / ruri: _meta ラベルのみ、未指定ならバックエンド別既定値)",
     )
+    ap.add_argument(
+        "--embed-cache",
+        default=os.environ.get("EMBED_CACHE"),
+        help=("埋め込みキャッシュの JSON パス (未指定ならキャッシュしない)。"
+              "**リポジトリ内を指さないこと** — 数十 MB になる。ランナーローカルの"
+              "永続領域 (K8 の named volume 等) を指す"),
+    )
     args = ap.parse_args()
 
     model = args.model
@@ -518,6 +786,7 @@ def main() -> None:
             model=model,
             backend=args.backend,
             ruri_url=args.ruri_url,
+            embed_cache=args.embed_cache,
         )
     except EmbeddingBatchError as e:
         logger.error("embedding computation failed: %s; aborting without writing output", e)

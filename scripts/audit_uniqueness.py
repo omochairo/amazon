@@ -87,6 +87,8 @@ from scripts.compute_semantic_related import (
     discover_articles,
     embed_batch,
     embed_batch_ruri,
+    embed_texts,
+    open_embedding_cache,
 )
 from scripts.quality_gate import HOW_TO_CHOOSE_ENFORCE_FROM
 
@@ -483,6 +485,7 @@ def run(
     top_flagged: int = DEFAULT_TOP_FLAGGED,
     session: requests.Session | None = None,
     sleeper=time.sleep,
+    embed_cache: str | os.PathLike[str] | None = None,
 ) -> dict[str, Any]:
     """全体を実行し、件数サマリ (+ payload) を dict で返す (テスト・main 双方から呼べるように分離)。
 
@@ -506,17 +509,17 @@ def run(
     texts = [r["text"] for r in records]
 
     session = session or requests.Session()
-    embeddings: list[list[float]] = []
-    n_batches = (len(texts) + batch_size - 1) // batch_size
-    for bi in range(n_batches):
-        batch_texts = texts[bi * batch_size: (bi + 1) * batch_size]
-        if backend == "ruri":
-            batch_embeddings = embed_batch_ruri(batch_texts, ruri_url, session, sleeper)
-        else:
-            batch_embeddings = embed_batch(batch_texts, ollama_url, model, session, sleeper)
-        embeddings.extend(batch_embeddings)
-    if n_batches:
-        logger.info("embedding batches complete: %d batch(es)", n_batches)
+    cache = open_embedding_cache(
+        embed_cache, backend=backend, model=model, ruri_url=ruri_url, session=session,
+    )
+    embeddings = embed_texts(
+        texts, backend=backend, batch_size=batch_size, ollama_url=ollama_url,
+        model=model, ruri_url=ruri_url, session=session, sleeper=sleeper, cache=cache,
+    )
+    logger.info("embedding complete: %d article(s)", len(embeddings))
+    if cache is not None:
+        # limit 付きは部分実行。prune すると warm キャッシュを削ってしまう
+        cache.save(prune=not limit)
 
     similarity = compute_similarity_matrix(embeddings)
     metrics = compute_uniqueness_metrics(asins, similarity)
@@ -619,6 +622,12 @@ def main() -> int:
         default=os.environ.get("EMBED_MODEL"),
         help="embeddings に使うモデル名 (未指定ならバックエンド別既定値)",
     )
+    ap.add_argument(
+        "--embed-cache",
+        default=os.environ.get("EMBED_CACHE"),
+        help=("埋め込みキャッシュの JSON パス (未指定ならキャッシュしない)。"
+              "**リポジトリ内を指さないこと** — 数十 MB になる"),
+    )
     args = ap.parse_args()
 
     try:
@@ -629,6 +638,7 @@ def main() -> int:
             ruri_url=args.ruri_url,
             ollama_url=args.ollama_url,
             model=args.model,
+            embed_cache=args.embed_cache,
             batch_size=args.batch_size,
             limit=args.limit,
             threshold_mode=args.threshold_mode,
