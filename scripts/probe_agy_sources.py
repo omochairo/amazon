@@ -72,9 +72,19 @@ _URL_RE = re.compile(r"https?://[^\s<>\"'））\]\[|、。]+")
 # プロンプト variant
 # --------------------------------------------------------------------------
 
-def _summary_prompt(product_name: str, brand: str) -> str:
-    """現行 gather_antigravity と同一 (対照群)。"""
-    return mine_experience.build_antigravity_prompt(product_name, brand)
+def _summary_legacy_prompt(product_name: str, brand: str) -> str:
+    """#6588 以前の gather_antigravity プロンプト (対照群として凍結)。
+
+    production 側は `summary_url_balanced` に移行したので
+    `mine_experience.build_antigravity_prompt` を参照すると対照にならない。
+    **ここを production に追従させないこと** — 過去の実測値と比較できなくなる。
+    """
+    return (
+        f"Web検索ツールを使って『{product_name} ({brand})』という商品の購入者の"
+        "口コミ・評判・使用感を調べ、事実に基づき3〜5行の日本語箇条書きで要約して"
+        "ください。ファイル操作・コード編集は一切不要です。テキストで直接回答して"
+        "ください。"
+    )
 
 
 def _summary_with_url_prompt(product_name: str, brand: str) -> str:
@@ -100,27 +110,11 @@ def _excerpt_with_url_prompt(product_name: str, brand: str) -> str:
     )
 
 
-def _summary_url_balanced_prompt(product_name: str, brand: str) -> str:
-    """出典 URL を足すと注意点が押し出される (balance 0.56 -> 0.11) のを、
-
-    「良い点と注意点の両方を必ず含める」と明示して取り戻せるか。
-    体験談マイニングでは注意点こそが素材の価値なので (#3203)、ここが戻らないなら
-    出典 URL を同じコールで取るのは割に合わない。
-    """
-    return (
-        f"Web検索ツールを使って『{product_name} ({brand})』という商品の購入者の"
-        "口コミ・評判・使用感を調べ、事実に基づき3〜5行の日本語箇条書きで要約して"
-        "ください。**良い点だけでなく、不満・注意点・難点にも必ず1行以上使うこと。**"
-        "**各行の末尾に、その内容の出典URLを1つ必ず `出典: <URL>` の形で"
-        "付けてください。** 検索結果に出たURLをそのまま書き、URLを作文しないこと。"
-        "ファイル操作・コード編集は一切不要です。テキストで直接回答してください。"
-    )
-
-
 PROMPTS = {
-    "summary": _summary_prompt,                     # 現行
+    "summary_legacy": _summary_legacy_prompt,       # #6588 以前 (対照群・凍結)
     "summary_url": _summary_with_url_prompt,
-    "summary_url_balanced": _summary_url_balanced_prompt,
+    # production の現行。ここは追従させる — 本番と同じ文字列で測るため
+    "summary_url_balanced": mine_experience.build_antigravity_prompt,
     "excerpt_url": _excerpt_with_url_prompt,
 }
 

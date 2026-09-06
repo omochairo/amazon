@@ -55,6 +55,7 @@ import re
 import subprocess
 import sys
 import time
+import urllib.parse
 from datetime import datetime, timezone
 from typing import Any
 
@@ -87,6 +88,18 @@ ANTIGRAVITY_TIMEOUT_S = 120
 # ため、production からは何に乗っているか観測できない) ので明示ピンする。
 # 値の根拠は scripts/bench_agy_model.py の実測 (docs/ANTIGRAVITY_MODEL_BENCH.md)。
 DEFAULT_ANTIGRAVITY_MODEL = "gemini-3.8-flash-low"
+
+# 出典 URL の収集 (#6588 の probe を受けて)。
+# 自社ドメインは **必ず除く**。probe で navi.omcha.jp の当該 ASIN 記事そのものと
+# omcha.jp が「購入者の口コミ」の出典として返ってきた。自分の書いた記事を自分の
+# 記事の根拠に取り込む循環になる。suffix 一致なので www./navi./home. も覆う。
+SELF_DOMAIN_SUFFIXES = ("omcha.jp",)
+# Gemini の検索グラウンディングは実 URL でなく不透明なリダイレクト URL を返す。
+# 302 を辿らないと実 URL が分からないので、収集時に解決して保存する。
+GROUNDING_REDIRECT_HOST = "vertexaisearch.cloud.google.com"
+GROUNDING_REDIRECT_PATH = "/grounding-api-redirect/"
+ANTIGRAVITY_MAX_SOURCE_URLS = 6
+_URL_RE = re.compile(r"https?://[^\s<>\"'）\]\[|、。]+")
 
 _ASIN_RE = re.compile(r"^B0[A-Z0-9]{8}$")
 _YT_ID_RE = re.compile(r"(?:v=|youtu\.be/|/shorts/)([A-Za-z0-9_-]{11})")
@@ -244,13 +257,113 @@ def build_antigravity_prompt(product_name: str, brand: str) -> str:
 
     bench (scripts/bench_agy_model.py) から同じ文字列を使うために切り出してある。
     ここを変えるとモデル選定の実測前提も変わるので、変更したら bench を回し直す。
+
+    #6588 の probe で決めた形。2 つの指示がどちらも要る:
+
+    - **出典 URL**: 旧プロンプトは出典を求めておらず、このレーンだけ
+      `source_url` が空で出所を辿れなかった。
+    - **注意点を必ず 1 行**: 出典 URL だけを足すと注意点が押し出される
+      (balance 0.56 -> 0.11 と実測)。体験談マイニングは注意点こそが素材の価値
+      なので (#3203)、明示して取り戻す。両方入れると現行を上回った
+      (balance 1.00 / 注意点 0.67 -> 2.00 / score 0.824 -> 0.912)。
+
+    「原文のまま抜粋しろ」は **書かないこと**。agy が個別ページを開こうとして
+    `read_url` が headless で auto-deny され、空応答になる (#6588 実測)。
     """
     return (
         f"Web検索ツールを使って『{product_name} ({brand})』という商品の購入者の"
         "口コミ・評判・使用感を調べ、事実に基づき3〜5行の日本語箇条書きで要約して"
-        "ください。ファイル操作・コード編集は一切不要です。テキストで直接回答して"
-        "ください。"
+        "ください。**良い点だけでなく、不満・注意点・難点にも必ず1行以上使うこと。**"
+        "**各行の末尾に、その内容の出典URLを1つ必ず `出典: <URL>` の形で"
+        "付けてください。** 検索結果に出たURLをそのまま書き、URLを作文しないこと。"
+        "ファイル操作・コード編集は一切不要です。テキストで直接回答してください。"
     )
+
+
+def extract_urls(text: str) -> list[str]:
+    """本文から URL を重複なく拾う。
+
+    `agy --json-schema` は Web 検索と併用すると無視される (#6588 実測) ので、
+    構造化出力には頼れず本文パースになる。markdown リンクの閉じ括弧や日本語の
+    句読点を落とす。
+    """
+    out: list[str] = []
+    for raw in _URL_RE.findall(text or ""):
+        url = raw.rstrip(").,、。」』>")
+        if url and url not in out:
+            out.append(url)
+    return out
+
+
+def strip_urls(text: str) -> str:
+    """本文から URL を落とす。
+
+    gemma の抽出に渡すのは日本語の本文だけでよい。grounding redirect の URL は
+    1 本 300 字超あり、そのまま渡すと入力の大半が URL になる。
+    """
+    return re.sub(r"[ 	]*(?:出典[:：]\s*)?" + _URL_RE.pattern, "", text or "")
+
+
+def is_self_domain(url: str) -> bool:
+    """自社サイトか。
+
+    probe で navi.omcha.jp の当該 ASIN 記事そのものが「購入者の口コミ」の出典
+    として返ってきた (#6588)。自分の記事を自分の記事の根拠にする循環になるので
+    必ず落とす。
+    """
+    try:
+        host = urllib.parse.urlsplit(url).netloc.lower().split(":")[0]
+    except ValueError:
+        return False
+    return any(host == d or host.endswith("." + d) for d in SELF_DOMAIN_SUFFIXES)
+
+
+def resolve_source_urls(
+    text: str, *, session: requests.Session | None = None,
+    max_urls: int = ANTIGRAVITY_MAX_SOURCE_URLS,
+) -> list[str]:
+    """本文中の URL を実 URL に解決し、使えるものだけ返す。
+
+    落とすもの:
+      - 到達しない URL (200 以外)。probe では 13〜19% が **作文**だった。
+        実在しそうな形をしているので、叩いて確かめる以外に見分ける手が無い。
+      - 自社ドメイン (循環の防止)
+      - 検索結果ページ (#5490 案B と同じ理由: 体験談が載っていない)
+
+    ネットワークが死んでいても素材そのものは残したいので、例外は握って
+    「その URL を捨てる」だけにする。
+    """
+    urls = extract_urls(text)
+    if not urls:
+        return []
+    session = session or requests.Session()
+    out: list[str] = []
+    for url in urls:
+        if len(out) >= max_urls:
+            break
+        try:
+            resp = session.get(
+                url, timeout=REQUEST_TIMEOUT, allow_redirects=True,
+                headers={"User-Agent": HONEST_UA},
+            )
+        except requests.RequestException as e:
+            logger.warning("出典 URL の解決に失敗 (%s): %s — 捨てる", url[:80], e)
+            continue
+        if resp.status_code != 200:
+            logger.warning(
+                "出典 URL が %s (%s) — 作文か失効とみなして捨てる",
+                resp.status_code, resp.url[:80],
+            )
+            continue
+        final = resp.url
+        if is_self_domain(final):
+            logger.warning("出典 URL が自社ドメイン (%s) — 循環になるので捨てる", final[:80])
+            continue
+        if is_search_result_url(final):
+            continue
+        if final not in out:
+            out.append(final)
+    return out
 
 
 def build_antigravity_argv(prompt: str, model: str | None) -> list[str]:
@@ -271,6 +384,7 @@ def build_antigravity_argv(prompt: str, model: str | None) -> list[str]:
 def gather_antigravity(
     product_name: str, brand: str, *, timeout_s: int = ANTIGRAVITY_TIMEOUT_S,
     model: str | None = None, sleeper=time.sleep,
+    session: requests.Session | None = None,
 ) -> list[dict]:
     """Antigravity CLI (`agy`) をヘッドレス実行し、Web 検索に基づく口コミ要約を取得する。
 
@@ -296,16 +410,27 @@ def gather_antigravity(
         model = os.environ.get("ANTIGRAVITY_MODEL", DEFAULT_ANTIGRAVITY_MODEL)
     argv = build_antigravity_argv(prompt, model)
 
+    # 本番 (K8 の Linux ワーカー) では dbus-run-session 経由で叩く。手元検証用の
+    # Windows には dbus-run-session が無いので直接叩きにフォールバックする
+    # (draft_sns_reply.call_agy と同じ形)。
+    cmds = [["dbus-run-session", "--", *argv], argv]
+
     attempts = _MAX_EXTRA_RETRIES + 1
     for attempt in range(1, attempts + 1):
+        result = None
         try:
-            result = subprocess.run(
-                ["dbus-run-session", "--", *argv],
-                capture_output=True, text=True, timeout=timeout_s, encoding="utf-8",
-            )
-        except FileNotFoundError:
-            logger.warning("agy (Antigravity CLI) が見つかりません — antigravity skip")
-            return []
+            for cmd in cmds:
+                try:
+                    result = subprocess.run(
+                        cmd, capture_output=True, text=True,
+                        timeout=timeout_s, encoding="utf-8",
+                    )
+                    break
+                except FileNotFoundError:
+                    continue
+            if result is None:
+                logger.warning("agy (Antigravity CLI) が見つかりません — antigravity skip")
+                return []
         except subprocess.TimeoutExpired:
             logger.warning("agy 呼び出しが timeout (%ds) — antigravity skip", timeout_s)
             return []
@@ -322,10 +447,18 @@ def gather_antigravity(
         if text:
             if attempt > 1:
                 logger.info("agy が %d 回目の試行で応答 (model=%s)", attempt, model)
+            source_urls = resolve_source_urls(text, session=session)
             return [{
-                "text": text[:MAX_CANDIDATE_TEXT_LEN],
+                # gemma に渡すのは日本語の本文だけでよい。grounding redirect の
+                # URL は 1 本 300 字超あり、残すと入力の大半が URL になる。
+                "text": strip_urls(text).strip()[:MAX_CANDIDATE_TEXT_LEN],
                 "source_type": "antigravity",
+                # このレーンは複数の出典から合成した要約なので、行ごとの帰属を
+                # 名乗れない。**偽の精度を持たせない**ために source_url は空のまま
+                # にし、出典は集合として source_urls に持つ (usable_as は
+                # paraphrase なので短引用の出典表示には使われない)。
                 "source_url": "",
+                "source_urls": source_urls,
             }]
 
         if attempt < attempts:
@@ -608,6 +741,9 @@ def extract_snippets(
             "text": text_out.strip(),
             "source_type": candidate.get("source_type", ""),
             "source_url": candidate.get("source_url", ""),
+            # 集合としての出典 (antigravity レーンのみ非空)。監査と、自社記事を
+            # 引いていないかの検出に使う (#6588)
+            "source_urls": candidate.get("source_urls", []),
             "usable_as": usable_as,
             "confidence": s.get("confidence") if s.get("confidence") in ("high", "medium", "low") else "medium",
         })
@@ -635,7 +771,7 @@ def mine_asin(
         return None
 
     candidates: list[dict] = []
-    candidates += gather_antigravity(product_name, brand)
+    candidates += gather_antigravity(product_name, brand, session=session)
     candidates += gather_third_party(asin, base=base, session=session)
     candidates += gather_threads(product_name, session=session)
     candidates += gather_youtube_opportunistic(asin, base=base)

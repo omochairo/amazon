@@ -556,3 +556,189 @@ def test_run_dry_run_writes_nothing(tmp_path, monkeypatch):
     assert called == []
     assert summary["written"] == 0
     assert not base.exists() or not any(base.iterdir())
+
+
+# --------------------------------------------------------------------------
+# 出典 URL の収集 (#6588)
+# --------------------------------------------------------------------------
+
+class _UrlResp:
+    def __init__(self, status, url):
+        self.status_code = status
+        self.url = url
+
+
+class _UrlSession:
+    """URL -> (status, final_url) の対応表で GET を模す。"""
+
+    def __init__(self, table):
+        self.table = table
+        self.calls = []
+
+    def get(self, url, timeout=None, allow_redirects=None, headers=None):
+        self.calls.append(url)
+        entry = self.table[url]
+        if isinstance(entry, Exception):
+            raise entry
+        return _UrlResp(*entry)
+
+
+def test_build_antigravity_prompt_asks_for_both_caveats_and_urls():
+    """どちらが欠けても #6588 の実測前提が崩れる。
+
+    出典 URL だけ足すと注意点が押し出され (balance 0.56 -> 0.11)、
+    注意点だけ足しても出所は辿れないまま。
+    """
+    p = mine_experience.build_antigravity_prompt("ケルチェッティ", "ボーネルンド")
+    assert "注意点" in p
+    assert "出典" in p
+    assert "作文" in p
+    # 「原文のまま抜粋」は書かない。read_url が headless で auto-deny され空応答になる
+    assert "抜粋" not in p
+
+
+def test_extract_urls_strips_trailing_punctuation():
+    text = "* 好評です。出典: https://item.rakuten.co.jp/a/1/\n* [店](https://ec.example.jp/g/2/)、他。"
+    assert mine_experience.extract_urls(text) == [
+        "https://item.rakuten.co.jp/a/1/",
+        "https://ec.example.jp/g/2/",
+    ]
+
+
+def test_strip_urls_removes_url_and_its_label():
+    text = "* 連動が好評です。 出典: https://item.rakuten.co.jp/a/1/\n* 注意点もあります。"
+    assert mine_experience.strip_urls(text) == "* 連動が好評です。\n* 注意点もあります。"
+
+
+def test_is_self_domain_covers_subdomains_only():
+    assert mine_experience.is_self_domain("https://navi.omcha.jp/products/x/") is True
+    assert mine_experience.is_self_domain("https://omcha.jp/a/") is True
+    assert mine_experience.is_self_domain("https://home.omcha.jp/a/") is True
+    # suffix 一致で他人のドメインを巻き込まない
+    assert mine_experience.is_self_domain("https://notomcha.jp/a/") is False
+    assert mine_experience.is_self_domain("https://omcha.jp.evil.com/a/") is False
+
+
+def test_resolve_source_urls_drops_self_dead_and_search_pages(monkeypatch):
+    """probe (#6588) で実際に返ってきた 4 種をそのまま並べる。"""
+    table = {
+        # 生きている実ページ → 残す
+        "https://a.example.jp/1": (200, "https://a.example.jp/1"),
+        # 自社記事 → 循環になるので落とす
+        "https://navi.omcha.jp/products/b00000dmd2/": (
+            200, "https://navi.omcha.jp/products/b00000dmd2/"),
+        # 作文された URL → 404 で落とす
+        "https://item.rakuten.co.jp/babybus/5014/": (
+            404, "https://item.rakuten.co.jp/babybus/5014/"),
+        # 検索結果ページ → 体験談が載っていないので落とす (#5490 案B)
+        "https://search.rakuten.co.jp/search/mall/x/": (
+            200, "https://search.rakuten.co.jp/search/mall/x/"),
+    }
+    text = "\n".join(f"* 行 出典: {u}" for u in table)
+    got = mine_experience.resolve_source_urls(text, session=_UrlSession(table))
+    assert got == ["https://a.example.jp/1"]
+
+
+def test_resolve_source_urls_follows_grounding_redirect(monkeypatch):
+    """Gemini は実 URL でなく不透明なリダイレクト URL を返す。解決先を保存する。"""
+    src = (f"https://{mine_experience.GROUNDING_REDIRECT_HOST}"
+           f"{mine_experience.GROUNDING_REDIRECT_PATH}AUZIYQ-abc")
+    final = "https://product.rakuten.co.jp/product/-/147c/"
+    got = mine_experience.resolve_source_urls(
+        f"* 行 出典: {src}", session=_UrlSession({src: (200, final)}))
+    # 保存するのはリダイレクト URL ではなく解決先。前者は後から辿れる保証が無い
+    assert got == [final]
+
+
+def test_resolve_source_urls_survives_network_failure():
+    """ネットワークが死んでも素材そのものは残す (URL だけ捨てる)。"""
+    src = "https://a.example.jp/1"
+    got = mine_experience.resolve_source_urls(
+        f"* 行 出典: {src}", session=_UrlSession({src: requests.ConnectionError("boom")}))
+    assert got == []
+
+
+def test_resolve_source_urls_caps_and_dedupes():
+    table = {f"https://a.example.jp/{i}": (200, "https://a.example.jp/same") for i in range(9)}
+    text = "\n".join(f"* 行 出典: {u}" for u in table)
+    got = mine_experience.resolve_source_urls(text, session=_UrlSession(table), max_urls=3)
+    assert got == ["https://a.example.jp/same"]  # 解決先が同じなら 1 本に畳む
+
+
+def test_gather_antigravity_attaches_source_urls_and_strips_them_from_text(monkeypatch):
+    """本文は gemma に渡すので URL を除く。出所は source_urls に持つ。"""
+    live = "https://a.example.jp/1"
+    out = f"* 連動が好評です。 出典: {live}\n* 組み立てが難しいという指摘もあります。"
+
+    monkeypatch.setattr(
+        "scripts.mine_experience.subprocess.run",
+        lambda cmd, **kw: _FakeCompletedProcess(returncode=0, stdout=out))
+    result = gather_antigravity(
+        "商品名", "ブランド", session=_UrlSession({live: (200, live)}))
+
+    assert len(result) == 1
+    assert result[0]["source_urls"] == [live]
+    assert "http" not in result[0]["text"]
+    assert "連動が好評です。" in result[0]["text"]
+    # 合成要約なので行ごとの帰属は名乗らない (偽の精度を持たせない)
+    assert result[0]["source_url"] == ""
+
+
+def test_extract_snippets_propagates_source_urls(monkeypatch):
+    """出所は snippet まで届かないと監査に使えない。"""
+    payload = {"response": json.dumps({
+        "entailed": True,
+        "snippets": [{"aspect": "durability", "text": "丈夫だという声がある", "confidence": "high"}],
+    })}
+    session = _FakeSession([_FakeResponse(json_body=payload)])
+    candidate = {
+        "text": "丈夫だという声があります。",
+        "source_type": "antigravity",
+        "source_url": "",
+        "source_urls": ["https://a.example.jp/1", "https://b.example.jp/2"],
+    }
+    out = extract_snippets(candidate, "商品名", "ブランド", "http://x", "m", session)
+    assert len(out) == 1
+    assert out[0]["source_urls"] == ["https://a.example.jp/1", "https://b.example.jp/2"]
+    assert out[0]["usable_as"] == "paraphrase"
+
+
+def test_extract_snippets_defaults_source_urls_for_other_lanes(monkeypatch):
+    """出典 URL を返さないレーンでもキーは在る (読み手が分岐しなくて済む)。"""
+    payload = {"response": json.dumps({
+        "entailed": True,
+        "snippets": [{"aspect": "durability", "text": "丈夫", "confidence": "high"}],
+    })}
+    session = _FakeSession([_FakeResponse(json_body=payload)])
+    out = extract_snippets(
+        {"text": "丈夫です。", "source_type": "blog", "source_url": "https://blog.example.jp/1"},
+        "商品名", "ブランド", "http://x", "m", session)
+    assert out[0]["source_urls"] == []
+    assert out[0]["source_url"] == "https://blog.example.jp/1"
+
+
+def test_gather_antigravity_falls_back_when_dbus_missing(monkeypatch):
+    """手元検証用の Windows には dbus-run-session が無い。
+
+    本番 (K8 Linux) は dbus 経由が正なので、そちらを先に試す順序は崩さない。
+    """
+    tried = []
+
+    def fake_run(cmd, **kwargs):
+        tried.append(cmd[0])
+        if cmd[0] == "dbus-run-session":
+            raise FileNotFoundError("dbus-run-session")
+        return _FakeCompletedProcess(returncode=0, stdout="口コミ要約テキスト")
+
+    monkeypatch.setattr("scripts.mine_experience.subprocess.run", fake_run)
+    result = gather_antigravity("商品名", "ブランド")
+    assert len(result) == 1
+    assert tried == ["dbus-run-session", "agy"]
+
+
+def test_gather_antigravity_skips_when_neither_command_exists(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        raise FileNotFoundError(cmd[0])
+
+    monkeypatch.setattr("scripts.mine_experience.subprocess.run", fake_run)
+    assert gather_antigravity("商品名", "ブランド", sleeper=lambda _s: None) == []

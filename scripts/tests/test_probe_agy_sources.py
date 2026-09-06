@@ -90,12 +90,25 @@ def test_resolve_source_url_records_failure_instead_of_raising():
     assert rec["final_url"] == ""
 
 
-def test_prompts_cover_control_and_candidates():
-    """対照群 (現行プロンプト) を必ず含める。無いと差が測れない。"""
-    assert "summary" in probe.PROMPTS
-    control = probe.PROMPTS["summary"]("ケルチェッティ", "ボーネルンド")
-    assert control == probe.mine_experience.build_antigravity_prompt(
+def test_legacy_control_prompt_is_frozen():
+    """対照群は #6588 以前の文言のまま固定する。
+
+    production に追従させると過去の実測値と比較できなくなり、
+    「新プロンプトが対照より良い」という主張の根拠が消える。
+    """
+    legacy = probe.PROMPTS["summary_legacy"]("ケルチェッティ", "ボーネルンド")
+    assert "注意点" not in legacy
+    assert "出典" not in legacy
+    assert legacy != probe.mine_experience.build_antigravity_prompt(
         "ケルチェッティ", "ボーネルンド")
+
+
+def test_production_variant_tracks_the_real_prompt():
+    """逆に production 版は本番と同じ文字列で測る (乖離したら意味が無い)。"""
+    assert probe.PROMPTS["summary_url_balanced"] is         probe.mine_experience.build_antigravity_prompt
+
+
+def test_prompts_cover_candidates():
     for name in ("summary_url", "excerpt_url"):
         p = probe.PROMPTS[name]("ケルチェッティ", "ボーネルンド")
         assert "ケルチェッティ" in p and "URL" in p
