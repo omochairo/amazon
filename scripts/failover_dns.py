@@ -77,14 +77,30 @@ import datetime as dt
 import json
 import logging
 import os
+import pathlib
 import sys
 import time
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+try:  # package 実行 (`python -m scripts.failover_dns`) と素実行の両対応
+    from scripts._marked_issue import find_marked_issue, marker_html
+except ImportError:  # pragma: no cover
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+    from scripts._marked_issue import find_marked_issue, marker_html
 logger = logging.getLogger("failover_dns")
 
 MARKER = "origin-failover"
+# 本文の先頭に埋める実体。**検索結果はこの文字列の有無で必ず裏を取る。**
+#
+# GitHub の issue 検索は `in:body "origin-failover"` をトークン化するので、
+# 本文で「origin failover」に言及しているだけの無関係な issue が普通にヒットする。
+# 実際 2026-09-02 に #6415 (待機系 1GiB の監視) が「監視 53 (origin failover) との
+# 分担」と書いていたために自分の issue と誤認され、10 分後に自動 close された。
+# close だけでは済まない: 障害時は update_issue() が走るので、無関係な issue の
+# タイトルと本文を上書きしうる。
+MARKER_HTML = marker_html(MARKER)
 LABELS = "todo"
 
 DEFAULT_ZONE_NAME = "omcha.jp"
@@ -447,13 +463,22 @@ def _gh(args: List[str]) -> str:
 
 
 def get_open_issue(repo: str) -> Optional[Dict[str, Any]]:
+    """自動起票した open issue を 1 件返す。無ければ None。
+
+    検索は**絞り込みにしか使わない**。GitHub の全文検索はハイフンや大小文字を
+    正規化するため、本文で `origin failover` に言及しているだけの issue が
+    ヒットする。採用するのは本文に MARKER_HTML をそのまま含むものだけ。
+    """
     query = 'repo:{} is:issue is:open in:body "{}"'.format(repo, MARKER)
     out = _gh(["api", "-X", "GET", "search/issues", "-f", "q={}".format(query),
                "-f", "per_page=10"])
     items = json.loads(out).get("items", [])
-    if not items:
+    found = find_marked_issue(items, MARKER)
+    if found is None:
+        if items:
+            logger.info("検索に %d 件出たが、本文にマーカーを持つものは無い", len(items))
         return None
-    return {"number": items[0]["number"], "body": items[0].get("body") or ""}
+    return {"number": found["number"], "body": found.get("body") or ""}
 
 
 def create_issue(repo: str, title: str, body: str) -> str:

@@ -306,3 +306,42 @@ def test_title_for_covers_every_action():
 ])
 def test_parse_iso(value, ok):
     assert (fd.parse_iso(value) is not None) is ok
+
+
+# --- get_open_issue -------------------------------------------------------
+#
+# 2026-09-02 の実害: 本文に「監視 53 (origin failover) との分担」と書いてあった
+# #6415 が自分の issue と誤認され、自動 close された。検索は絞り込みでしかなく、
+# 採用の判定は本文のマーカーで行う。
+
+def _search_result(items):
+    return json.dumps({"items": items})
+
+
+def test_get_open_issue_skips_issues_without_marker(monkeypatch):
+    items = [
+        {"number": 6415, "body": "監視 51 / 53 (origin failover) との分担を書く"},
+        {"number": 999, "body": fd.MARKER_HTML + "\n本文"},
+    ]
+    monkeypatch.setattr(fd, "_gh", lambda *a, **k: _search_result(items))
+    got = fd.get_open_issue("owner/repo")
+    assert got is not None
+    assert got["number"] == 999
+
+
+def test_get_open_issue_returns_none_when_only_false_positives(monkeypatch):
+    items = [{"number": 6415, "body": "origin failover の話をしているだけ"}]
+    monkeypatch.setattr(fd, "_gh", lambda *a, **k: _search_result(items))
+    assert fd.get_open_issue("owner/repo") is None
+
+
+def test_get_open_issue_returns_none_when_no_hits(monkeypatch):
+    monkeypatch.setattr(fd, "_gh", lambda *a, **k: _search_result([]))
+    assert fd.get_open_issue("owner/repo") is None
+
+
+def test_marker_html_is_embedded_in_generated_body():
+    """起票する本文が MARKER_HTML を持たなくなったら、上の裏取りが全部空振りする。"""
+    body = fd.render_body({"action": "failover", "now": "2026-09-06T00:00:00Z",
+                           "probes": [], "probe_verdicts": []})
+    assert fd.MARKER_HTML in body

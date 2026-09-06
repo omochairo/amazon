@@ -33,6 +33,12 @@ import subprocess
 import sys
 from typing import Any, Dict, List, Optional
 
+try:  # package 実行 (`python -m scripts.x`) と素実行の両対応
+    from scripts._marked_issue import find_marked_issue
+except ImportError:  # pragma: no cover
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+    from scripts._marked_issue import find_marked_issue
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("open_stale_pr_issue")
 
@@ -140,7 +146,9 @@ def get_open_issue(repo: str) -> Optional[int]:
         check=True, capture_output=True, text=True,
     )
     items = json.loads(res.stdout).get("items", [])
-    return items[0]["number"] if items else None
+    # 検索は絞り込みでしかない。本文のマーカーで裏を取る (_marked_issue の docstring)
+    found = find_marked_issue(items, MARKER)
+    return found["number"] if found else None
 
 
 def create_issue(repo: str, title: str, body: str) -> str:
