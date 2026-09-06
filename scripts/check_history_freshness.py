@@ -91,6 +91,8 @@ LANES: Sequence[Lane] = (
          "CrUX は 28 日 rolling。月初のみ (実測 3d)"),
     Lane("quality_census.jsonl", "weekly", 12, "48-quality-census.yml",
          "毎週月曜 02:00 UTC (#4826 項目3。初回計測 2026-08-10)"),
+    Lane("detector_eligibility.jsonl", "weekly", 12, "17-analytics-report.yml",
+         "毎週日曜 00:00 UTC。detector 出力 JSON 自体は非 tracked なので前回値の唯一の出どころ (#5941)"),
 )
 
 class DirLane:
