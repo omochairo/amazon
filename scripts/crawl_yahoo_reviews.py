@@ -29,12 +29,29 @@ docs/article-quality-overhaul-design.md §5.2/§5.3)。
   - review.count == 0 の ASIN はレビューページを crawl しない (無駄リクエスト削減)。
     api_review 自体は保存する (rate/count は API の確定値・refresh-days の冪等にも使う)
 
-レビュー本文の抽出は best-effort: review.url を既存の低速クロール規律で 1 ページ
-取得し、schema.org Review/AggregateRating の JSON-LD を探す (CSS セレクタより
-markup 変更に強い)。ただし Yahoo のレビューページは JS レンダリング依存で requests
-では本文が取れない可能性がある。**取れなくてもクラッシュせず、api_review だけでも
-成果として保存する** (mine_experience 側の rating_stats は api_review 優先で集計)。
-ページネーションは review.url のページ構造が不明のため 1 ページのみ。
+レビュー本文の抽出 (2026-09-06 改訂・#6641):
+  当初は schema.org の JSON-LD だけを見ていた。「CSS セレクタより markup 変更に
+  強い」という理由だったが、**JSON-LD 自体が廃止された**。2026-07-15 〜 09-05 の
+  65 ASIN すべてで本文 0 件 (API 側は 402 件あると報告) になっていたのに、
+  レーンは success で回り続けていた。
+
+  当時の docstring に書いてあった「JS レンダリング依存で取れない可能性がある」
+  という保険が、2 ヶ月ぶん誰も確かめない理由になっていた。実際には **JS 依存では
+  なく、本文は最初のレスポンスの HTML に入っている**。
+
+  現在は JSON-LD と DOM の両方を試して取れた方を採る。DOM 側の足場は
+  `data-review-id` / `data-review-createtime` (ハッシュ化されないデータ属性) と、
+  class 名の**部分一致** — `style_ReviewDetail__reviewBody__uzkwW` の末尾ハッシュは
+  Yahoo のビルドごとに変わるので完全一致で書かない。
+
+  それでも将来また置いていかれるので、**「api_review.count > 0 なのに本文 0 件」の
+  割合**を summary に出し、EMPTY_BODY_ALERT_RATE を超えたら error を出す。
+  セレクタを直すだけでは同じことがまた起きる。
+
+  取れなくてもクラッシュせず api_review だけでも保存するのは変わらない
+  (mine_experience 側の rating_stats は api_review 優先で集計)。ただし 0 件の
+  ファイルは EMPTY_RETRY_DAYS で早めに取り直す (取得成功ではないため)。
+  ページネーションは review.url のページ構造が不明のため 1 ページのみ。
 
 出力 (ローカル raw ファイル):
   {asin, jan_code, fetched_at, api_review: {rate, count, url}, reviews: [...]}
@@ -70,6 +87,15 @@ logger = logging.getLogger("crawl_yahoo_reviews")
 PER_ASIN_DIR = pathlib.Path("data/raw/per_asin")
 DEFAULT_RAW_DIR = pathlib.Path.home() / ".omochairo" / "yahoo_reviews_raw"
 DEFAULT_MAX_REQUESTS = 60
+# レビューがあるはずの ASIN のうち、本文が 1 件も取れなかった割合がこれを
+# 超えたら「抽出器が壊れている」とみなして error を出す (#6641)。個々の ASIN で
+# 0 件になるのは普通に起こる (robots 拒否・ページ構造の例外) ので、1 件では
+# 鳴らさず割合で見る。2 ヶ月気づかなかったのは、この比較を誰もしていなかったから。
+EMPTY_BODY_ALERT_RATE = 0.8
+# 本文 0 件だったファイルを再取得するまでの日数。取得成功と同じ 30 日は待たない
+# (抽出器を直しても既存ファイルがふさがるため)。ただし毎晩叩くのは低速クロール
+# 規律に反するので間隔は空ける。
+EMPTY_RETRY_DAYS = 7
 DEFAULT_REFRESH_DAYS = 30
 REQUEST_TIMEOUT = 20
 
@@ -293,13 +319,18 @@ def _reviews_from_ldjson_node(node: Any) -> list[dict]:
         out.extend(_reviews_from_ldjson_node(review_field))
     return out
 
+def _reviews_from_ldjson(html: str) -> list[dict]:
+    """schema.org の JSON-LD から Review を拾う (当初からの経路)。
 
-def extract_reviews(html: str) -> list[dict]:
+    2026-09 時点の Yahoo レビューページには **JSON-LD が 1 ブロックも無い**
+    (#6641 で実測)。戻る可能性はあるので経路は残す。
+    """
     try:
         from bs4 import BeautifulSoup  # type: ignore
 
         soup = BeautifulSoup(html, "html.parser")
-        blocks = [s.string or s.get_text() for s in soup.find_all("script", attrs={"type": "application/ld+json"})]
+        blocks = [s.string or s.get_text()
+                  for s in soup.find_all("script", attrs={"type": "application/ld+json"})]
     except ImportError:
         blocks = re.findall(
             r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
@@ -318,6 +349,104 @@ def extract_reviews(html: str) -> list[dict]:
     return reviews
 
 
+# レビュー 1 件のカードは data 属性で括られている。**class 名を足場にしない** —
+# `style_ReviewDetail__reviewBody__uzkwW` の末尾ハッシュは Yahoo のビルドごとに
+# 変わるので、完全一致で書くと次のデプロイでまた黙って 0 件になる (#6641)。
+_REVIEW_CARD_ATTR = "data-review-id"
+_CREATETIME_ATTR = "data-review-createtime"
+# class を使うところは必ず部分一致 (CSS Modules のハッシュを避ける)
+_BODY_CLASS = "ReviewDetail__reviewBody"
+_TITLE_CLASS = "ReviewDetail__reviewTitle"
+_TIME_CLASS = "ReviewDetail__postedTime"
+# aria-label は「5点中4点の評価」の形。星 svg を数えるより読みやすく壊れにくい
+_STAR_RE = re.compile(r"(\d+(?:\.\d+)?)\s*点中\s*(\d+(?:\.\d+)?)\s*点")
+
+
+def _rating_from_aria(text: str) -> float | None:
+    m = _STAR_RE.search(text or "")
+    if not m:
+        return None
+    try:
+        return float(m.group(2))
+    except (TypeError, ValueError):
+        return None
+
+
+def _has_class(tag: Any, name: str, needle: str) -> bool:
+    return tag.name == name and needle in " ".join(tag.get("class") or [])
+
+
+def _reviews_from_dom(html: str) -> list[dict]:
+    """サーバレンダリング済み HTML の DOM から Review を拾う (#6641 で追加)。
+
+    #6641 の実測: レビュー本文は JS で後から描かれているのではなく、**最初の
+    HTTP レスポンスの HTML に入っている**。JSON-LD が廃止されただけだった。
+    元の docstring にあった「JS レンダリング依存で取れない可能性」という保険が、
+    2 ヶ月ぶん誰も確かめない理由になっていた。
+    """
+    try:
+        from bs4 import BeautifulSoup  # type: ignore
+    except ImportError:
+        logger.warning("bs4 が無いため DOM 経路をスキップします")
+        return []
+
+    soup = BeautifulSoup(html, "html.parser")
+    out: list[dict] = []
+    for card in soup.find_all(attrs={_REVIEW_CARD_ATTR: True}):
+        body_el = card.find(lambda t: _has_class(t, "p", _BODY_CLASS))
+        if body_el is None:
+            continue
+        body = body_el.get_text(" ", strip=True)
+        if not body:
+            continue
+
+        title_el = card.find(lambda t: _has_class(t, "p", _TITLE_CLASS))
+        title = title_el.get_text(" ", strip=True) if title_el else ""
+
+        # 日付は data 属性 (ISO8601) を優先。表示用の "2026/3/20" は
+        # 表記が変わりやすい
+        posted_at = card.get(_CREATETIME_ATTR) or ""
+        if not posted_at:
+            time_el = card.find(lambda t: _has_class(t, "p", _TIME_CLASS))
+            posted_at = time_el.get_text(strip=True) if time_el else ""
+
+        rating = None
+        star = card.find(attrs={"aria-label": _STAR_RE})
+        if star is not None:
+            rating = _rating_from_aria(star.get("aria-label", ""))
+
+        out.append({"rating": rating, "title": title, "body": body,
+                    "posted_at": posted_at})
+    return out
+
+
+def _dedupe_reviews(reviews: list[dict]) -> list[dict]:
+    """本文が同じものを 1 件にまとめる (ピックアップと一覧で二重に出る)。"""
+    seen: set[str] = set()
+    out: list[dict] = []
+    for r in reviews:
+        key = (r.get("body") or "").strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(r)
+    return out
+
+
+def extract_reviews(html: str) -> list[dict]:
+    """JSON-LD と DOM の両方を試し、**取れた方**を返す。
+
+    片方が Yahoo 側の変更で 0 件になっても、もう片方が生きていれば拾える。
+    どちらも取れたら件数の多い方 (#6641 の再発防止)。
+    """
+    ld = _dedupe_reviews(_reviews_from_ldjson(html))
+    dom = _dedupe_reviews(_reviews_from_dom(html))
+    if len(dom) > len(ld):
+        logger.debug("DOM 経路を採用 (dom=%d > ldjson=%d)", len(dom), len(ld))
+        return dom
+    return ld
+
+
 # --------------------------------------------------------------------------
 # 冪等・蓄積 (refresh-days)
 # --------------------------------------------------------------------------
@@ -334,7 +463,19 @@ def is_fresh(path: pathlib.Path, max_age_days: int) -> bool:
     except ValueError:
         return False
     now = datetime.now(timezone.utc)
-    return (now - when).days < max_age_days
+    age = (now - when).days
+
+    # 「レビューがあるはずなのに本文 0 件」は取得成功ではない。これを
+    # max_age_days (既定 30 日) キャッシュすると、抽出器を直しても既存ファイルが
+    # 1 ヶ月間ふさがったままになる (#6641 の 65 件がまさにこれ)。**短い間隔で
+    # 取り直す。** ページ側に本当に本文が無い場合もあるので毎晩は叩かない
+    api = data.get("api_review")
+    api_count = api.get("count") if isinstance(api, dict) else None
+    reviews = data.get("reviews")
+    if isinstance(api_count, int) and api_count > 0 and not reviews:
+        return age < EMPTY_RETRY_DAYS
+
+    return age < max_age_days
 
 
 # --------------------------------------------------------------------------
@@ -415,6 +556,8 @@ def run(
     budget = RequestBudget(max_requests)
     written = 0
     skipped = 0
+    crawled = 0   # api_review.count > 0 だった ASIN 数 (本文が取れるはずだった数)
+    empty = 0     # そのうち本文が 1 件も取れなかった数
 
     for asin in targets:
         if budget.exhausted():
@@ -437,13 +580,36 @@ def run(
         raw_dir.mkdir(parents=True, exist_ok=True)
         out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         written += 1
+        api_count = payload["api_review"]["count"]
+        n_bodies = len(payload["reviews"])
+        # 「API はあると言っているのに 1 件も取れなかった」を数える。
+        # #6641: 抽出器が Yahoo の markup 変更に置いていかれて 2 ヶ月ぶん
+        # 0 件だったのに、レーンは緑のままだった。**セレクタを直すだけでは
+        # 同じことがまた起きる**ので、比較そのものを残す
+        if api_count > 0:
+            crawled += 1
+            if n_bodies == 0:
+                empty += 1
         logger.info("%s: wrote %s (api count=%d, %d review bodies)",
-                    asin, out_path, payload["api_review"]["count"], len(payload["reviews"]))
+                    asin, out_path, api_count, n_bodies)
 
     summary = {
         "targets": len(targets), "written": written, "skipped": skipped,
         "requests_made": budget.consumed,
+        # crawled = レビューがあるはずの ASIN 数 / empty = そのうち 0 件だった数
+        "with_api_reviews": crawled, "empty_bodies": empty,
     }
+    if crawled:
+        rate = empty / crawled
+        summary["empty_body_rate"] = round(rate, 3)
+        if rate >= EMPTY_BODY_ALERT_RATE:
+            # 個々の ASIN では普通に起こりうる (robots 拒否・ページ構造の例外) ので
+            # 1 件では鳴らさない。**割合**で見る
+            logger.error(
+                "レビューがあるはずの %d ASIN のうち %d 件 (%.0f%%) で本文が 0 件でした。"
+                "抽出器が Yahoo の markup 変更に置いていかれている可能性があります (#6641)。",
+                crawled, empty, rate * 100)
+            summary["extractor_suspect"] = True
     logger.info("done: %s", json.dumps(summary, ensure_ascii=False))
     return summary
 

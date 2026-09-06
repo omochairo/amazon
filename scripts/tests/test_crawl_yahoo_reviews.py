@@ -408,3 +408,194 @@ def test_run_processes_all_targets_within_budget(tmp_path, monkeypatch):
                   max_requests=100, sleeper=lambda s: None)
     assert calls == ["B0A0000001", "B0B0000001"]
     assert summary["targets"] == 2
+
+
+# --------------------------------------------------------------------------
+# DOM 経路 (#6641)
+# --------------------------------------------------------------------------
+#
+# JSON-LD が廃止されたことに抽出器が追随できず、**2 ヶ月 65 ASIN で 0 件**の
+# まま緑で回っていた。fixture は実際のレビューページから切り出した 3 件。
+#
+# ここで守りたいのは 2 つ:
+#   1. DOM から取れること
+#   2. **class 名のハッシュを足場にしていないこと** — `__uzkwW` は Yahoo の
+#      ビルドごとに変わる。完全一致で書くと次のデプロイでまた黙って 0 になる
+
+import re as _re
+
+from scripts import crawl_yahoo_reviews as _cyr
+
+_FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "yahoo_review_page.html"
+
+
+def _fixture_html() -> str:
+    return _FIXTURE.read_text(encoding="utf-8")
+
+
+def test_dom_extraction_finds_reviews():
+    reviews = _cyr.extract_reviews(_fixture_html())
+    assert len(reviews) == 3
+    assert all(r["body"] for r in reviews)
+
+
+def test_dom_extraction_reads_rating_from_aria_label():
+    reviews = _cyr.extract_reviews(_fixture_html())
+    assert [r["rating"] for r in reviews] == [5.0, 5.0, 5.0]
+
+
+def test_dom_extraction_prefers_iso_timestamp_attribute():
+    """表示用の "2026/3/20" ではなく data 属性の ISO8601 を採ること。"""
+    reviews = _cyr.extract_reviews(_fixture_html())
+    for r in reviews:
+        assert _re.match(r"^\d{4}-\d{2}-\d{2}T", r["posted_at"]), r["posted_at"]
+
+
+def test_class_selectors_carry_no_build_hash():
+    """照合に使う class 名にビルドハッシュが入っていないこと。
+
+    `style_ReviewDetail__reviewBody__uzkwW` の `__uzkwW` を焼き込むと、Yahoo の
+    次のデプロイでまた黙って 0 件になる。#6641 の再発条件そのもの。
+    """
+    for name in (_cyr._BODY_CLASS, _cyr._TITLE_CLASS, _cyr._TIME_CLASS):
+        # `Block__element` までは持ってよいが、その先の `__hash` は持たない
+        assert name.count("__") == 1, name
+        assert not name.endswith("__"), name
+
+
+def test_extraction_survives_class_hash_change():
+    """ハッシュが変わっても取れること (部分一致で見ている証拠)。"""
+    html = _fixture_html().replace("reviewBody__uzkwW", "reviewBody__ZZZZZ")
+    assert len(_cyr.extract_reviews(html)) == 3
+
+
+def test_ldjson_path_still_works():
+    """JSON-LD が戻ってきたときのために経路を残していること。"""
+    html = """<html><body><script type="application/ld+json">
+    {"@type": "Product", "review": [
+      {"@type": "Review", "reviewBody": "とても良い", "name": "満足",
+       "datePublished": "2026-01-02", "reviewRating": {"ratingValue": 4}}]}
+    </script></body></html>"""
+    reviews = _cyr.extract_reviews(html)
+    assert len(reviews) == 1
+    assert reviews[0]["body"] == "とても良い"
+    assert reviews[0]["rating"] == 4.0
+
+
+def test_duplicate_bodies_are_collapsed():
+    """ピックアップと一覧で同じレビューが二重に出るのを 1 件にする。"""
+    one = _fixture_html()
+    doubled = one.replace("</body>", "") + one.split("<body>", 1)[1]
+    assert len(_cyr.extract_reviews(doubled)) == 3
+
+
+def test_empty_page_returns_empty_list():
+    assert _cyr.extract_reviews("<html><body>なにもない</body></html>") == []
+
+
+def test_dom_wins_when_ldjson_is_gone():
+    """実際に起きた状況: JSON-LD が 0 ブロック、DOM に本文がある。"""
+    html = _fixture_html()
+    assert _cyr._reviews_from_ldjson(html) == []
+    assert len(_cyr._reviews_from_dom(html)) == 3
+    assert len(_cyr.extract_reviews(html)) == 3
+
+
+# --------------------------------------------------------------------------
+# 「取れるはずが 0」の検知 (#6641)
+# --------------------------------------------------------------------------
+#
+# セレクタを直すだけでは同じことがまた起きる。2 ヶ月気づかなかったのは
+# 「API はあると言っているのに 0 件だった」を誰も数えていなかったから。
+
+def _payload(asin, api_count, n_bodies):
+    return {"asin": asin, "jan_code": "4901", "fetched_at": "2026-09-01T00:00:00Z",
+            "api_review": {"rate": 4.2, "count": api_count, "url": "https://x/r"},
+            "reviews": [{"rating": 5, "title": "t", "body": f"b{i}", "posted_at": ""}
+                        for i in range(n_bodies)]}
+
+
+def _run_with(monkeypatch, tmp_path, payloads):
+    import scripts.crawl_yahoo_reviews as mod
+    by_asin = {p["asin"]: p for p in payloads}
+    monkeypatch.setattr(mod, "crawl_asin", lambda asin, **kw: by_asin[asin])
+    return run(list(by_asin), raw_dir=tmp_path / "raw", client_id="cid",
+               sleeper=lambda s: None)
+
+
+def test_summary_counts_empty_bodies(tmp_path, monkeypatch):
+    summary = _run_with(monkeypatch, tmp_path, [
+        _payload("B00000000A", api_count=5, n_bodies=3),
+        _payload("B00000000B", api_count=2, n_bodies=0),
+    ])
+    assert summary["with_api_reviews"] == 2
+    assert summary["empty_bodies"] == 1
+    assert summary["empty_body_rate"] == 0.5
+
+
+def test_asin_without_api_reviews_is_not_counted(tmp_path, monkeypatch):
+    """レビューが無い商品は分母に入れない (0 件で当然なので)。"""
+    summary = _run_with(monkeypatch, tmp_path, [
+        _payload("B00000000A", api_count=0, n_bodies=0),
+        _payload("B00000000B", api_count=4, n_bodies=2),
+    ])
+    assert summary["with_api_reviews"] == 1
+    assert summary["empty_bodies"] == 0
+
+
+def test_extractor_suspect_flag_when_everything_is_empty(tmp_path, monkeypatch):
+    """#6641 の状態 (65/65 が 0 件) を再現したら旗が立つこと。"""
+    summary = _run_with(monkeypatch, tmp_path, [
+        _payload(f"B0000000{i:02d}", api_count=3, n_bodies=0) for i in range(5)
+    ])
+    assert summary["empty_body_rate"] == 1.0
+    assert summary.get("extractor_suspect") is True
+
+
+def test_single_empty_asin_does_not_raise_the_flag(tmp_path, monkeypatch):
+    """1 件の 0 件は普通に起こる。割合で見ているので鳴らない。"""
+    payloads = [_payload(f"B0000000{i:02d}", api_count=3, n_bodies=2) for i in range(4)]
+    payloads.append(_payload("B0000000ZZ", api_count=3, n_bodies=0))
+    summary = _run_with(monkeypatch, tmp_path, payloads)
+    assert summary["empty_body_rate"] == 0.2
+    assert "extractor_suspect" not in summary
+
+
+# --------------------------------------------------------------------------
+# 0 件ファイルの自己修復 (#6641)
+# --------------------------------------------------------------------------
+
+def _write_raw(tmp_path, *, days_ago, api_count, n_reviews):
+    import datetime as _dt
+    when = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=days_ago)
+    path = tmp_path / "B0000000AA.json"
+    path.write_text(json.dumps({
+        "asin": "B0000000AA", "jan_code": "4901",
+        "fetched_at": when.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "api_review": {"rate": 4.0, "count": api_count, "url": "https://x/r"},
+        "reviews": [{"body": f"b{i}"} for i in range(n_reviews)],
+    }, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+def test_successful_fetch_stays_fresh_for_the_full_window(tmp_path):
+    path = _write_raw(tmp_path, days_ago=10, api_count=5, n_reviews=3)
+    assert _cyr.is_fresh(path, 30) is True
+
+
+def test_empty_result_expires_early(tmp_path):
+    """本文 0 件は取得成功ではない。30 日ふさがない (#6641 の 65 件がこれ)。"""
+    path = _write_raw(tmp_path, days_ago=10, api_count=5, n_reviews=0)
+    assert _cyr.is_fresh(path, 30) is False
+
+
+def test_empty_result_is_not_retried_every_night(tmp_path):
+    """低速クロール規律。短くはするが毎晩は叩かない。"""
+    path = _write_raw(tmp_path, days_ago=1, api_count=5, n_reviews=0)
+    assert _cyr.is_fresh(path, 30) is True
+
+
+def test_product_with_no_reviews_at_all_is_not_retried_early(tmp_path):
+    """レビューが元から無い商品は 0 件が正しい結果。早く取り直す理由がない。"""
+    path = _write_raw(tmp_path, days_ago=10, api_count=0, n_reviews=0)
+    assert _cyr.is_fresh(path, 30) is True
