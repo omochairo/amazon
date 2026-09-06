@@ -103,3 +103,46 @@ class FilterTextCandidatesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReSearchWindowTest(unittest.TestCase):
+    """低信頼再検索の刻み (#5047 follow-up)。
+
+    このレーンは cron を持たない手動メンテ専用で、2026-05-30 の次が 2026-09-06
+    だった。3 か月分溜まって 1 run が 2 時間超になり打ち切りになったので、
+    offset + 上限で刻めるようにした。
+    """
+
+    def test_unlimited_by_default(self):
+        """max_n=0 / offset=0 は既存挙動 (全件) を変えない。"""
+        for idx in (0, 1, 500, 99999):
+            self.assertTrue(fcs._re_search_window(idx, 0, 0), idx)
+
+    def test_limit_caps_the_run(self):
+        for idx in range(500):
+            self.assertTrue(fcs._re_search_window(idx, 0, 500), idx)
+        for idx in (500, 501, 1000):
+            self.assertFalse(fcs._re_search_window(idx, 0, 500), idx)
+
+    def test_offset_skips_the_head(self):
+        """offset 未満は窓外。上限だけでは末尾に到達しない問題への対処。"""
+        for idx in (0, 499):
+            self.assertFalse(fcs._re_search_window(idx, 500, 500), idx)
+        for idx in (500, 999):
+            self.assertTrue(fcs._re_search_window(idx, 500, 500), idx)
+        for idx in (1000, 1500):
+            self.assertFalse(fcs._re_search_window(idx, 500, 500), idx)
+
+    def test_offset_without_limit_takes_the_tail(self):
+        self.assertFalse(fcs._re_search_window(499, 500, 0))
+        for idx in (500, 5000):
+            self.assertTrue(fcs._re_search_window(idx, 500, 0), idx)
+
+    def test_windows_tile_without_gap_or_overlap(self):
+        """0/500 -> 500/500 -> 1000/500 で全件をちょうど 1 回ずつ覆う。"""
+        n, step = 1300, 500
+        covered = []
+        for offset in range(0, n, step):
+            covered += [i for i in range(n) if fcs._re_search_window(i, offset, step)]
+        self.assertEqual(sorted(covered), list(range(n)))
+        self.assertEqual(len(covered), len(set(covered)))
