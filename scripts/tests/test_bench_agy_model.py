@@ -257,3 +257,26 @@ def test_call_agy_json_gives_up_after_retries(monkeypatch):
     assert res["ok"] is False
     assert res["attempts"] == 3
     assert res["attempt_errors"] == ["status=SUCCESS"] * 3
+
+
+def test_japanese_metric_ignores_url_length():
+    """grounding redirect の URL は 1 本 300 字超。比率で測ると日本語が薄まる。
+
+    測りたいのは本文の言語であって URL の長さではない (probe_agy_sources で踏んだ)。
+    """
+    url = "https://vertexaisearch.cloud.google.com/grounding-api-redirect/" + "A" * 300
+    text = (
+        f"* 歯車が連動して楽しいと好評です。 出典: {url}\n"
+        f"* 最初は組み立てが難しいという指摘もあります。 出典: {url}\n"
+        f"* デザインが鮮やかだと評価されています。 出典: {url}\n"
+    )
+    r = bench.score_text(text, "ケルチェッティ", "ボーネルンド")
+    assert r["parts"]["japanese"] == 1.0
+    # chars も URL 抜きの本文長で比べる
+    assert r["chars"] < 200
+
+
+def test_japanese_metric_still_flags_english_body():
+    url = "https://example.com/" + "a" * 300
+    text = f"* Great gears for kids. source: {url}\n* Smooth to turn. source: {url}"
+    assert bench.score_text(text, "Gears", "Bornelund")["parts"]["japanese"] == 0.0

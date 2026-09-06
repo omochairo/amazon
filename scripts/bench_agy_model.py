@@ -90,6 +90,7 @@ _REFUSAL_MARKERS = [
     "推測",
 ]
 _BULLET_RE = re.compile(r"^\s*(?:[-*・•‣]|\d+[.)]|\*\*)\s*\S")
+_URL_RE = re.compile(r"https?://\S+")
 _JA_RE = re.compile(r"[ぁ-んァ-ヴ一-龥]")
 # 商品名を語に割る。長音符はカタカナ語の一部なので明示的に含める
 # (\p{Katakana} 相当のクラスは ー を取りこぼす — feedback-regex-katakana-script-prolonged-mark)。
@@ -249,8 +250,13 @@ def score_text(text: str, product_name: str, brand: str) -> dict:
     else:
         fmt = 0.0
 
-    ja_chars = len(_JA_RE.findall(text))
-    ja = 1.0 if text and ja_chars / max(len(text), 1) >= 0.30 else 0.0
+    # URL を除いてから日本語比率を測る。grounding redirect の URL は 1 本 300 字
+    # 超あり、出典つきで返させると本文が日本語でも比率が 0.3 を割って「英語で
+    # 返ってきた」と誤判定する (probe_agy_sources で踏んだ)。
+    # 測りたいのは本文の言語であって URL の長さではない。
+    prose = _URL_RE.sub("", text)
+    ja_chars = len(_JA_RE.findall(prose))
+    ja = 1.0 if prose.strip() and ja_chars / max(len(prose), 1) >= 0.30 else 0.0
 
     toks = product_tokens(product_name, brand)
     hits = [t for t in toks if t.lower() in text.lower()]
@@ -272,7 +278,8 @@ def score_text(text: str, product_name: str, brand: str) -> dict:
         "score": round(total, 4),
         "parts": {k: round(v, 4) for k, v in parts.items()},
         "bullets": n,
-        "chars": len(text),
+        # URL を除いた本文長。出典つき variant と素の要約を同じ土俵で比べる
+        "chars": len(prose.strip()),
         "token_hits": hits[:6],
         "refusal_markers": refusals,
         "diagnostics": {
