@@ -59,8 +59,8 @@ CI (`.github/workflows/44-unit-tests.yml`) は全 PR で無条件に走る。手
 
 ```bash
 pip install -r requirements.txt && pip install pytest
-python -m pytest scripts/tests -q          # 2,354 passed / 2 skipped（約2分）
-node --test "tests/js/*.test.mjs"          # Service Worker 8 件（0.3秒）
+python -m pytest scripts/tests -q          # 3,254 passed（+ subtests 33）／約3分半
+node --test "tests/js/*.test.mjs"          # 27 件（sw 12 / affiliate_click 11 / carousel_snap 4、0.1秒）
 ```
 
 `requirements.txt` は本番実行依存だけを管理していて pytest を含まない。テスト依存は個別に入れる（本番環境に不要な依存を持ち込まないため）。
