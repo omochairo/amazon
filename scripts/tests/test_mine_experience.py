@@ -248,28 +248,62 @@ def test_gather_antigravity_skips_when_command_not_found(monkeypatch):
     assert gather_antigravity("商品名", "ブランド") == []
 
 
-def test_gather_antigravity_skips_on_timeout(monkeypatch):
+def test_gather_antigravity_skips_when_every_attempt_is_empty(monkeypatch):
+    calls = []
+
     def fake_run(cmd, **kwargs):
-        raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs.get("timeout", 120))
-
-    monkeypatch.setattr("scripts.mine_experience.subprocess.run", fake_run)
-    assert gather_antigravity("商品名", "ブランド") == []
-
-
-def test_gather_antigravity_skips_on_nonzero_returncode(monkeypatch):
-    def fake_run(cmd, **kwargs):
-        return _FakeCompletedProcess(returncode=1, stdout="", stderr="boom")
-
-    monkeypatch.setattr("scripts.mine_experience.subprocess.run", fake_run)
-    assert gather_antigravity("商品名", "ブランド") == []
-
-
-def test_gather_antigravity_skips_on_empty_response(monkeypatch):
-    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
         return _FakeCompletedProcess(returncode=0, stdout="   \n", stderr="")
 
     monkeypatch.setattr("scripts.mine_experience.subprocess.run", fake_run)
-    assert gather_antigravity("商品名", "ブランド") == []
+    assert gather_antigravity("商品名", "ブランド", sleeper=lambda _s: None) == []
+    # 初回 + _MAX_EXTRA_RETRIES 回まで粘ってから諦める
+    assert len(calls) == mine_experience._MAX_EXTRA_RETRIES + 1
+
+
+def test_gather_antigravity_retries_empty_response_then_succeeds(monkeypatch):
+    """agy は exit 0 / status SUCCESS のまま空文字を返すことがある (#6578 実測)。
+
+    ここを skip で握ると **レーンは緑のまま体験談だけが入って来ない**。
+    静かな欠落なので、空応答だけはリトライする。
+    """
+    outs = ["", "  \n", "口コミ要約テキスト\n"]
+    slept = []
+
+    def fake_run(cmd, **kwargs):
+        return _FakeCompletedProcess(returncode=0, stdout=outs.pop(0))
+
+    monkeypatch.setattr("scripts.mine_experience.subprocess.run", fake_run)
+    result = gather_antigravity("商品名", "ブランド", sleeper=slept.append)
+    assert len(result) == 1
+    assert result[0]["text"] == "口コミ要約テキスト"
+    assert slept == [mine_experience._RETRY_SLEEP_SECONDS] * 2
+
+
+def test_gather_antigravity_does_not_retry_timeout(monkeypatch):
+    """timeout のリトライは 1 回 120s を積み増すだけなので割に合わない。"""
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs.get("timeout", 120))
+
+    monkeypatch.setattr("scripts.mine_experience.subprocess.run", fake_run)
+    assert gather_antigravity("商品名", "ブランド", sleeper=lambda _s: None) == []
+    assert len(calls) == 1
+
+
+def test_gather_antigravity_does_not_retry_nonzero_exit(monkeypatch):
+    """非ゼロ終了は認証・PATH 等リトライで直らない類が主。"""
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return _FakeCompletedProcess(returncode=1, stdout="", stderr="boom")
+
+    monkeypatch.setattr("scripts.mine_experience.subprocess.run", fake_run)
+    assert gather_antigravity("商品名", "ブランド", sleeper=lambda _s: None) == []
+    assert len(calls) == 1
 
 
 # --------------------------------------------------------------------------

@@ -270,49 +270,75 @@ def build_antigravity_argv(prompt: str, model: str | None) -> list[str]:
 
 def gather_antigravity(
     product_name: str, brand: str, *, timeout_s: int = ANTIGRAVITY_TIMEOUT_S,
-    model: str | None = None,
+    model: str | None = None, sleeper=time.sleep,
 ) -> list[dict]:
     """Antigravity CLI (`agy`) をヘッドレス実行し、Web 検索に基づく口コミ要約を取得する。
 
     認証はファイルベース (K8 の WSL2 ホスト側で owner が事前に手動ブラウザ認証を
     完了済み) で完結するため api_key 引数は無い。`agy` が PATH に無い・timeout・
-    非ゼロ終了・空応答はいずれも warning ログ + 空リストで skip し、他レーンを
-    止めない (gather_threads / gather_third_party と同じ graceful-skip 設計)。
+    非ゼロ終了はいずれも warning ログ + 空リストで skip し、他レーンを止めない
+    (gather_threads / gather_third_party と同じ graceful-skip 設計)。
+
+    **空応答だけはリトライする** (#6578 の実測):
+    agy は exit 0 かつ `status: SUCCESS` のまま最終テキストを返さないことがある。
+    エージェント CLI なのでターンは「ツールを呼ばなくなったら終了」で、検索の
+    往復が伸びた回に最終メッセージを出さずに終わる経路があるらしい。実行時間は
+    その variant の成功時平均より一貫して長かった。
+    これを skip で握ると **レーンは緑のまま体験談だけが入って来ない**。失敗が
+    集中した商品では既定モデルで 8 回中 6 回この経路に落ちていた。
+
+    リトライを空応答に限るのは、それが実測した失敗モードだから。timeout は
+    1 回 120s を積み増すだけで costly、非ゼロ終了は認証・PATH 等リトライで
+    直らない類が主なので、どちらも従来どおり 1 回で諦める。
     """
     prompt = build_antigravity_prompt(product_name, brand)
     if model is None:
         model = os.environ.get("ANTIGRAVITY_MODEL", DEFAULT_ANTIGRAVITY_MODEL)
     argv = build_antigravity_argv(prompt, model)
-    try:
-        result = subprocess.run(
-            ["dbus-run-session", "--", *argv],
-            capture_output=True, text=True, timeout=timeout_s, encoding="utf-8",
-        )
-    except FileNotFoundError:
-        logger.warning("agy (Antigravity CLI) が見つかりません — antigravity skip")
-        return []
-    except subprocess.TimeoutExpired:
-        logger.warning("agy 呼び出しが timeout (%ds) — antigravity skip", timeout_s)
-        return []
 
-    if result.returncode != 0:
-        detail = (result.stderr or "")[:200]
-        logger.warning(
-            "agy 呼び出しが非ゼロ終了 (code %s): %s — antigravity skip",
-            result.returncode, detail,
-        )
-        return []
+    attempts = _MAX_EXTRA_RETRIES + 1
+    for attempt in range(1, attempts + 1):
+        try:
+            result = subprocess.run(
+                ["dbus-run-session", "--", *argv],
+                capture_output=True, text=True, timeout=timeout_s, encoding="utf-8",
+            )
+        except FileNotFoundError:
+            logger.warning("agy (Antigravity CLI) が見つかりません — antigravity skip")
+            return []
+        except subprocess.TimeoutExpired:
+            logger.warning("agy 呼び出しが timeout (%ds) — antigravity skip", timeout_s)
+            return []
 
-    text = (result.stdout or "").strip()
-    if not text:
-        logger.warning("agy から空応答 — antigravity skip")
-        return []
+        if result.returncode != 0:
+            detail = (result.stderr or "")[:200]
+            logger.warning(
+                "agy 呼び出しが非ゼロ終了 (code %s): %s — antigravity skip",
+                result.returncode, detail,
+            )
+            return []
 
-    return [{
-        "text": text[:MAX_CANDIDATE_TEXT_LEN],
-        "source_type": "antigravity",
-        "source_url": "",
-    }]
+        text = (result.stdout or "").strip()
+        if text:
+            if attempt > 1:
+                logger.info("agy が %d 回目の試行で応答 (model=%s)", attempt, model)
+            return [{
+                "text": text[:MAX_CANDIDATE_TEXT_LEN],
+                "source_type": "antigravity",
+                "source_url": "",
+            }]
+
+        if attempt < attempts:
+            logger.warning(
+                "agy から空応答 (attempt %d/%d, model=%s) — リトライ",
+                attempt, attempts, model,
+            )
+            sleeper(_RETRY_SLEEP_SECONDS)
+
+    logger.warning(
+        "agy が %d 回とも空応答 (model=%s) — antigravity skip", attempts, model,
+    )
+    return []
 
 
 def gather_third_party(

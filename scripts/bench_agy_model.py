@@ -137,7 +137,7 @@ _CAVEAT_MARKERS = [
 # 1 回分の呼び出し
 # --------------------------------------------------------------------------
 
-def call_agy_json(prompt: str, model: str, timeout_s: int = CALL_TIMEOUT_S) -> dict:
+def call_agy_once(prompt: str, model: str, timeout_s: int = CALL_TIMEOUT_S) -> dict:
     """agy を JSON 出力で 1 回叩く。
 
     本番 (gather_antigravity) は text 出力だが、bench では status と
@@ -189,6 +189,39 @@ def call_agy_json(prompt: str, model: str, timeout_s: int = CALL_TIMEOUT_S) -> d
         "output_tokens": usage.get("output_tokens"),
         "total_tokens": usage.get("total_tokens"),
     }
+
+
+def call_agy_json(
+    prompt: str, model: str, timeout_s: int = CALL_TIMEOUT_S, retries: int = 0,
+) -> dict:
+    """空応答だけリトライして叩く (本番 gather_antigravity と同じ方針)。
+
+    retries=0 なら 1 コールぶんの素の成功率が測れる。本番の挙動で順位を出したい
+    ときは retries を本番の _MAX_EXTRA_RETRIES に合わせる。**両方測ること** —
+    素の成功率だけ見ると「落ちにくいモデル」が勝ち、リトライ後だけ見ると
+    「当たれば良いモデル」が勝つので、混ぜると何を選んだのか分からなくなる。
+
+    latency はリトライぶんを積算して返す (それが本番で実際にかかる時間)。
+    """
+    attempts_used = 0
+    total_latency = 0.0
+    errors: list[str] = []
+    res: dict = {}
+    for attempt in range(retries + 1):
+        res = call_agy_once(prompt, model, timeout_s)
+        attempts_used += 1
+        total_latency += res.get("latency_s") or 0.0
+        if res["ok"]:
+            break
+        errors.append(str(res.get("error")))
+        # 本番がリトライするのは空応答だけ。ここも合わせる
+        if not str(res.get("error", "")).startswith("status="):
+            break
+    res = dict(res)
+    res["latency_s"] = total_latency
+    res["attempts"] = attempts_used
+    res["attempt_errors"] = errors
+    return res
 
 
 # --------------------------------------------------------------------------
@@ -295,6 +328,7 @@ def load_products(limit: int, asins: list[str] | None = None) -> list[dict]:
 
 def run_bench(
     variants: list[str], products: list[dict], trials: int, out_path: pathlib.Path,
+    retries: int = 0,
 ) -> list[dict]:
     records: list[dict] = []
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -311,7 +345,7 @@ def run_bench(
                     "[%d/%d] trial=%d variant=%s asin=%s",
                     i, total, trial, variant or "(default)", prod["asin"],
                 )
-                res = call_agy_json(prompt, variant)
+                res = call_agy_json(prompt, variant, retries=retries)
                 rec = {
                     "variant": variant or "(default)",
                     "model_flag": variant,
@@ -322,6 +356,8 @@ def run_bench(
                     "ok": res["ok"],
                     "error": res.get("error"),
                     "latency_s": round(res.get("latency_s") or 0.0, 2),
+                    "attempts": res.get("attempts", 1),
+                    "attempt_errors": res.get("attempt_errors", []),
                     "output_tokens": res.get("output_tokens"),
                     "text": res.get("text", ""),
                 }
@@ -393,6 +429,7 @@ def summarize(records: list[dict]) -> list[dict]:
             # 賞賛のみだった応答の割合 (体験談素材としての弱さ)
             "praise_only_rate": round(sum(
                 1 for r in oks if not r.get("diagnostics", {}).get("caveats")) / len(oks), 3) if oks else 0.0,
+            "attempts": round(statistics.fmean([r.get("attempts", 1) for r in rs]), 2),
             "errors": sorted({r["error"] for r in rs if r.get("error")}),
         })
     # 平均スコア降順、同点はレイテンシ昇順
@@ -404,7 +441,7 @@ def format_report(rows: list[dict]) -> str:
     head = (
         f"{'variant':24} {'n':>3} {'ok':>5} {'score':>7} {'sd':>6} "
         f"{'grnd':>5} {'gfull':>6} {'cavs':>5} {'praise':>7} "
-        f"{'p50s':>6} {'p95s':>6} {'chars':>6}"
+        f"{'p50s':>6} {'p95s':>6} {'chars':>6} {'att':>5}"
     )
     lines = [head, "-" * len(head)]
     for r in rows:
@@ -412,7 +449,8 @@ def format_report(rows: list[dict]) -> str:
             f"{r['variant']:24} {r['n']:>3} {r['success_rate']:>5.2f} "
             f"{r['score_mean']:>7.3f} {r['score_sd']:>6.3f} {r['grounding']:>5.2f} "
             f"{r['grounding_full']:>6.2f} {r['caveats']:>5.2f} {r['praise_only_rate']:>7.2f} "
-            f"{r['latency_p50']:>6.1f} {r['latency_p95']:>6.1f} {r['chars_mean']:>6.0f}"
+            f"{r['latency_p50']:>6.1f} {r['latency_p95']:>6.1f} {r['chars_mean']:>6.0f} "
+            f"{r['attempts']:>5.2f}"
         )
         if r["errors"]:
             lines.append(f"{'':24} errors: {', '.join(r['errors'])}")
@@ -425,6 +463,8 @@ def main(argv: list[str] | None = None) -> int:
                     help='--model に渡す値。"" は現状 (--model 無し)')
     ap.add_argument("--trials", type=int, default=3)
     ap.add_argument("--products", type=int, default=5)
+    ap.add_argument("--retries", type=int, default=0,
+                    help="空応答時の追加試行回数。本番と揃えるなら 2 (既定 0 = 素の成功率)")
     ap.add_argument("--asins", default="", help="カンマ区切りで商品を明示指定")
     ap.add_argument("--out", type=pathlib.Path, default=DEFAULT_OUT)
     ap.add_argument("--report", type=pathlib.Path, default=None,
@@ -451,9 +491,9 @@ def main(argv: list[str] | None = None) -> int:
         if not products:
             logger.error("対象商品が 0 件")
             return 1
-        logger.info("products=%s variants=%s trials=%d",
-                    [p["asin"] for p in products], args.variants, args.trials)
-        records = run_bench(args.variants, products, args.trials, args.out)
+        logger.info("products=%s variants=%s trials=%d retries=%d",
+                    [p["asin"] for p in products], args.variants, args.trials, args.retries)
+        records = run_bench(args.variants, products, args.trials, args.out, args.retries)
 
     rows = summarize(records)
     print(format_report(rows))
