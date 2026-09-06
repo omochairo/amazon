@@ -46,12 +46,18 @@ jobs:
           client-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
+      # #5047 段階3 (Group A): fetch-depth を既定 (=1) に戻した。
+      # このレーンの git 操作は commit-back だけで、HEAD より先の履歴を読まない
+      # (add / commit / checkout -b / push、`git diff --cached` = index vs HEAD、
+      # `git diff -- <path>` = worktree vs index、`git status --porcelain`)。
+      # 呼び先の scripts/*.py にも git 依存が無いことを確認済み (#46 の教訓)。
+      # 履歴を要求する 04 / 05 / 21 / 31 / 36 / 40 / 46 と、別ブランチを読む
+      # 20 / 30 は**外さない**。分類は #5047 のコメント参照。
       - name: Checkout Repository
         uses: actions/checkout@v7
         with:
           token: ${{ steps.app-token.outputs.token }}
           ref: main
-          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v7
