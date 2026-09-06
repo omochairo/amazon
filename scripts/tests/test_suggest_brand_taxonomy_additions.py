@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from scripts.suggest_brand_taxonomy_additions import (
+    DEFAULT_MAX_TOKENS_PER_QUERY,
+    DEFAULT_MIN_IMPRESSIONS,
     covered_by_taxonomy,
     is_brand_like,
     suggest,
@@ -147,3 +149,55 @@ def test_suggest_deduplicates_tokens_within_one_query():
     candidate = next(c for c in result["candidates"] if c["token"] == "ロンビー")
     assert candidate["impressions_sum"] == 80
     assert candidate["query_count"] == 1
+
+
+def test_default_min_impressions_is_ten():
+    """brain#18: 20 では eligible が母数側で枯れていたため 10 へ。"""
+    assert DEFAULT_MIN_IMPRESSIONS == 10
+
+
+def test_suggest_min_impressions_boundary_is_inclusive():
+    gsc = _make_gsc(by_query=[
+        {"query": "ロンビー", "impressions": 10, "clicks": 0, "ctr": 0.0, "position": 5.0},
+        {"query": "ピタリコ", "impressions": 9, "clicks": 0, "ctr": 0.0, "position": 5.0},
+    ])
+    result = suggest(gsc, set())
+    assert result["eligible"] == 1
+    assert [c["token"] for c in result["candidates"]] == ["ロンビー"]
+
+
+def test_suggest_suppresses_query_yielding_many_new_tokens():
+    """商品タイトル丸ごと検索は、ブランド 1 語 + ゴミ数語を一度に生む (brain#18)。"""
+    gsc = _make_gsc(by_query=[
+        {"query": "original brandname 30th anniversary tama space",
+         "impressions": 45, "clicks": 0, "ctr": 0.0, "position": 5.0},
+    ])
+    result = suggest(gsc, set())
+    assert result["candidates"] == []
+    # eligible は母数の指標なので抑制しても減らさない (#5941 の判定に効くため)
+    assert result["eligible"] == 1
+    suppressed = result["suppressed_long_queries"]
+    assert len(suppressed) == 1
+    assert suppressed[0]["impressions"] == 45
+    assert "brandname" in suppressed[0]["tokens"]
+
+
+def test_suggest_keeps_query_just_under_the_cap():
+    tokens = " ".join(f"Brand{i}" for i in range(DEFAULT_MAX_TOKENS_PER_QUERY - 1))
+    gsc = _make_gsc(by_query=[
+        {"query": tokens, "impressions": 30, "clicks": 0, "ctr": 0.0, "position": 5.0},
+    ])
+    result = suggest(gsc, set())
+    assert len(result["candidates"]) == DEFAULT_MAX_TOKENS_PER_QUERY - 1
+    assert result["suppressed_long_queries"] == []
+
+
+def test_suggest_cap_counts_only_new_tokens():
+    """既知ブランド / stopword は cap の勘定に入れない (長いだけの既知クエリを守る)。"""
+    gsc = _make_gsc(by_query=[
+        {"query": "レゴ デュプロ ランキング レビュー ピタリコ",
+         "impressions": 30, "clicks": 0, "ctr": 0.0, "position": 5.0},
+    ])
+    result = suggest(gsc, {"レゴ", "デュプロ"})
+    assert [c["token"] for c in result["candidates"]] == ["ピタリコ"]
+    assert result["suppressed_long_queries"] == []
