@@ -84,8 +84,19 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("failover_dns")
 
+class MultipleStateIssues(RuntimeError):
+    """マーカーを持つ open issue が複数ある (どれが状態 issue か決められない)。"""
+
+
 MARKER = "origin-failover"
-LABELS = "todo"
+# body に埋めるマーカーの実体。**探すときはこの完全な形で照合する。**
+# 裸の MARKER を本文検索すると、レーン名に言及しただけの無関係な issue が
+# 全部ヒットする (#6622 で実際に #6602 を close した)。
+MARKER_COMMENT = "<!-- {} -->".format(MARKER)
+# 状態 issue を一意に指すための専用ラベル。検索でなくラベルで引くのが本筋
+# (検索はトークン分割されるので「言及しただけ」と区別できない)。
+STATE_LABEL = "origin-failover-state"
+LABELS = "todo,{}".format(STATE_LABEL)
 
 DEFAULT_ZONE_NAME = "omcha.jp"
 DEFAULT_RECORD_NAME = "navi.omcha.jp"
@@ -446,17 +457,83 @@ def _gh(args: List[str]) -> str:
     return res.stdout
 
 
+def _adoptable(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """body に**マーカーコメントそのもの**がある issue だけ残す。
+
+    検索や label は候補を出すだけ。採用の判断はここでやる — 「レーン名に
+    言及しただけ」の issue を自分のものと誤認しないため。
+    """
+    return [i for i in items if MARKER_COMMENT in (i.get("body") or "")]
+
+
 def get_open_issue(repo: str) -> Optional[Dict[str, Any]]:
-    query = 'repo:{} is:issue is:open in:body "{}"'.format(repo, MARKER)
-    out = _gh(["api", "-X", "GET", "search/issues", "-f", "q={}".format(query),
-               "-f", "per_page=10"])
-    items = json.loads(out).get("items", [])
-    if not items:
+    """このレーンが upsert する状態 issue を 1 件だけ特定する。
+
+    #6622: 以前は `in:body "origin-failover"` で本文検索し、**先頭 1 件を
+    無条件に採用**していた。GitHub の検索はトークン分割するので、
+    「origin-failover というレーン名に言及しただけ」の issue が全部ヒットする。
+    実際に 2026-09-06、無関係な epic (#6602) を掴んで close した。close だけ
+    でなく update_issue が本文を丸ごと差し替えるので、**他人の issue が中身
+    ごと消える**経路でもあった。
+
+    直し方は 3 つとも入れる:
+      1. 検索ではなく専用ラベルで引く
+      2. 候補は必ず**マーカーコメントの実体**で検証してから採用する
+      3. 検証を通ったものが複数あったら**何もしない** (黙って先頭を取らない)
+
+    ラベルが付いていない旧 issue のために検索も残すが、そちらも 2 の検証を
+    通す。検証を通らなければ「無い」と同じ扱いにする。
+    """
+    candidates: List[Dict[str, Any]] = []
+    try:
+        out = _gh(["issue", "list", "-R", repo, "--state", "open",
+                   "--label", STATE_LABEL, "--limit", "50",
+                   "--json", "number,body"])
+        candidates = _adoptable(json.loads(out or "[]"))
+    except Exception as e:  # ラベル未作成など。検索フォールバックに回す
+        logger.warning("label %s での検索に失敗 (%s) — 本文検索に fallback", STATE_LABEL, e)
+
+    if not candidates:
+        # 移行用フォールバック。ラベルが付く前に起票された issue を拾う。
+        # **ここでもマーカーコメントで検証する** — 検索結果は候補でしかない
+        query = 'repo:{} is:issue is:open in:body "{}"'.format(repo, MARKER)
+        out = _gh(["api", "-X", "GET", "search/issues", "-f", "q={}".format(query),
+                   "-f", "per_page=20"])
+        items = json.loads(out).get("items", [])
+        rejected = len(items)
+        candidates = _adoptable(items)
+        if rejected and not candidates:
+            logger.info(
+                "本文検索は %d 件ヒットしたが、マーカーコメントを持つものは 0 件 "
+                "(レーン名に言及しただけの issue)。新規起票の扱いにします", rejected)
+
+    if not candidates:
         return None
-    return {"number": items[0]["number"], "body": items[0].get("body") or ""}
+    if len(candidates) > 1:
+        # どれが正か決められない。**触らない。** 片方を勝手に潰す方が高くつく
+        nums = ", ".join("#{}".format(i["number"]) for i in candidates)
+        logger.error(
+            "マーカーを持つ open issue が複数あります (%s)。"
+            "どれが状態 issue か決められないので何もしません。手で 1 件に整理してください。",
+            nums)
+        raise MultipleStateIssues(nums)
+    top = candidates[0]
+    return {"number": top["number"], "body": top.get("body") or ""}
+
+
+def ensure_state_label(repo: str) -> None:
+    """専用ラベルが無ければ作る (冪等)。起票の直前にだけ呼ぶ。"""
+    try:
+        _gh(["label", "create", STATE_LABEL, "-R", repo,
+             "--description", "origin failover レーンが upsert する状態 issue",
+             "--color", "B60205", "--force"])
+    except Exception as e:
+        # ラベルが作れなくても起票そのものは試す価値がある
+        logger.warning("ラベル %s の作成に失敗 (%s)", STATE_LABEL, e)
 
 
 def create_issue(repo: str, title: str, body: str) -> str:
+    ensure_state_label(repo)
     return _gh(["issue", "create", "-R", repo, "--title", title,
                 "--label", LABELS, "--body", body]).strip()
 
@@ -554,7 +631,8 @@ def render_body(row: Dict[str, Any]) -> str:
         "",
         "**戻す前に NAS 側 (cloudflared / nginx / navi-switch) の復旧を確認すること。**",
         "",
-        "- マーカー `<!-- {} -->` で同一 open Issue を特定し body を更新します".format(MARKER),
+        "- ラベル `{}` + マーカー `{}` で同一 open Issue を特定し body を更新します".format(
+            STATE_LABEL, MARKER_COMMENT),
         "- オリジンが応答に戻り、かつ本番を向いていれば自動 close します",
         "",
         "Refs #6205, amazon-home-ops#70",
@@ -691,7 +769,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         logger.error("--repo (または環境変数 REPO) が要ります")
         return 2
 
-    existing = get_open_issue(args.repo)
+    try:
+        existing = get_open_issue(args.repo)
+    except MultipleStateIssues as e:
+        # DNS の判定と切り替えはもう終わっている。ここで落ちても配信は守られる。
+        # issue を触らずに非 0 で終わり、人に整理させる方が安全
+        logger.error("状態 issue を特定できませんでした (%s) — issue は触りません", e)
+        return 3
     if healthy:
         if existing:
             close_issue(args.repo, existing["number"],
