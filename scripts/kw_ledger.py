@@ -42,6 +42,17 @@ Ubersuggest MCP は Claude からしか呼べず、スクリプトからも CI �
 ではなく、自分で思いつかない語が出てくるから。`keyword_metrics` の
 `search_difficulty` は月次クォータを食うので使わない。
 
+## 1 日 100 レポートしか引けない (2026-09-07 実測)
+
+`keyword_overview` も `match_keywords` も **同じ日次 100 レポート枠**を食う。
+枠が尽きると両方が `HTTP 403 daily reports limit: 100` を返す。
+
+    5,292 語 ÷ 100/日 = **53 日**
+
+したがって取り直しは「セッションで一気に」ではなく**毎日 100 語ずつの点滴**になる。
+`refetch-queue` が「今日の 100 語」を優先順に出すのはこのため。**枠の使い道を
+決めることがこの台帳の主な仕事**であって、全件を測ることではない。
+
 ## external.jsonl は append-only
 
 再取得は**上書きせず追記**する。最新は `fetched_at` が最大の行。当時の数字を消すと
@@ -313,6 +324,108 @@ def cmd_todo(args) -> int:
     return 0
 
 
+def load_wp_owned(path: pathlib.Path, pos_max: float,
+                  min_clicks: float) -> set[str]:
+    """WP が既に取っている語 (norm)。ブリッジ (wp_demand.jsonl) を読む。
+
+    omcha.jp と navi.omcha.jp は同一ホスト族なので、WP が上位で取っている語を
+    navi で狙っても露出は増えず枠を食い合う。**その語に日次 100 枠を使うのは無駄**
+    なので取り直しの対象から外す。判定は navi の rank guard と同じ AND 条件。
+    """
+    owned = set()
+    if not path or not path.exists():
+        return owned
+    for r in read_jsonl(path):
+        norm = r.get("norm") or normalize_key(r.get("query"))
+        if not norm:
+            continue
+        pos = r.get("position")
+        clicks = r.get("clicks")
+        if isinstance(pos, (int, float)) and isinstance(clicks, (int, float)):
+            if pos <= pos_max and clicks >= min_clicks:
+                owned.add(norm)
+    return owned
+
+
+def load_keep_list(path: pathlib.Path) -> set[str]:
+    """取り直しを絞り込むための語リスト (norm の集合)。
+
+    navi の `data/demand_keywords.json` (`keywords[].keyword` と `source_queries`)
+    と、1行1語のテキストの両方を受ける。
+
+    **なぜ絞るか (2026-09-07 実測):** 台帳の未判定 5,292 語を CSV volume の降順で
+    流すと 53 日かかる。一方 navi の需要パイプラインが実際に採っているのは 220 語で、
+    台帳の未判定ぶんと重なるのは **158 語** = 2 日で終わる。
+    **枠は「使う語」に割り当てる。**
+    """
+    keep = set()
+    text = io.open(path, encoding="utf-8").read()
+    if path.suffix == ".json":
+        data = json.loads(text)
+        for k in data.get("keywords", []):
+            if isinstance(k, str):
+                keep.add(normalize_key(k))
+                continue
+            keep.add(normalize_key(k.get("keyword")))
+            for q in k.get("source_queries") or []:
+                keep.add(normalize_key(q))
+    else:
+        for line in text.splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                keep.add(normalize_key(line))
+    keep.discard("")
+    return keep
+
+
+def cmd_refetch_queue(args) -> int:
+    """取り直しの「今日のぶん」を優先順に出す。
+
+    1 日 100 レポートしか引けない (docstring 参照) ので、全件を機械的に流すと
+    53 日かかる。順番そのものが成果を決めるため、根拠を stderr に必ず出す。
+
+    優先順位:
+      1. `suspect_volume` を外す — CSV の集計崩れ (実測: たまごっち 1,000,000)。
+         測り直す価値ではなく、CSV 側の値が壊れている印
+      2. WP が既に取っている語を外す — navi では使えないので枠の無駄
+      3. `--keep-list` があれば、そこに載っている語だけに絞る (load_keep_list 参照)
+      4. 残りを CSV volume の降順。**CSV の値は当てにならないから測り直すのだが、
+         順番を決める材料は他に無い。**「大きいと言われている語から確かめる」という
+         意味であって、値を信じているわけではない
+    """
+    cur = latest(read_jsonl(pathlib.Path(args.external)))
+    owned = load_wp_owned(pathlib.Path(args.wp_demand) if args.wp_demand else None,
+                          args.guard_pos_max, args.guard_min_clicks)
+    keep = load_keep_list(pathlib.Path(args.keep_list)) if args.keep_list else None
+    cand = []
+    n_suspect = n_owned = n_offlist = 0
+    for r in cur.values():
+        if not r.get("measured_unknown"):
+            continue
+        if args.source and r.get("source") != args.source:
+            continue
+        if (r.get("extra") or {}).get("suspect_volume"):
+            n_suspect += 1
+            continue
+        if r.get("norm") in owned:
+            n_owned += 1
+            continue
+        if keep is not None and r.get("norm") not in keep:
+            n_offlist += 1
+            continue
+        cand.append(r)
+    cand.sort(key=lambda r: (-(r.get("sv") or 0), r.get("norm") or ""))
+    for r in cand[:args.limit]:
+        print(r.get("keyword"))
+    print("# queue: 候補 %d / 出力 %d / 除外 suspect=%d wp既得=%d リスト外=%d (残り %d)"
+          % (len(cand), min(args.limit, len(cand)), n_suspect, n_owned, n_offlist,
+             max(0, len(cand) - args.limit)), file=sys.stderr)
+    if not owned and args.wp_demand:
+        print("# 注意: WP 既得の語が 0 件。%s を読めているか確認する"
+              % args.wp_demand, file=sys.stderr)
+    return 0
+
+
 def cmd_merge(args) -> int:
     """batch.json = {"loc_id":2392,"language":"ja","block":"...","results":[<MCPの返り値>...]}
 
@@ -509,6 +622,21 @@ def main(argv=None) -> int:
     p.add_argument("--refresh", action="store_true",
                    help="既にある語も追記する (再取得。上書きではない)")
     p.set_defaults(func=cmd_merge)
+
+    p = sub.add_parser("refetch-queue",
+                       help="取り直しの今日のぶんを優先順に出す (1日100レポート制限)")
+    p.add_argument("--limit", type=int, default=100,
+                   help="1 日の上限。既定 100 = Ubersuggest の日次レポート枠")
+    p.add_argument("--source", default="csv:competitor-export",
+                   help="対象の source。空文字で全件")
+    p.add_argument("--wp-demand", default="../amazon-navi-brain/demand/wp_demand.jsonl",
+                   help="WP 既得語の判定に使うブリッジ")
+    p.add_argument("--keep-list", default=None,
+                   help="この語リストに載っているものだけに絞る "
+                        "(navi の data/demand_keywords.json か 1行1語のテキスト)")
+    p.add_argument("--guard-pos-max", type=float, default=3.0)
+    p.add_argument("--guard-min-clicks", type=float, default=100.0)
+    p.set_defaults(func=cmd_refetch_queue)
 
     p = sub.add_parser("import-cache", help="omcha-ops の cache.jsonl を移行する")
     p.add_argument("--src", default="data/ubersuggest/cache.jsonl")
