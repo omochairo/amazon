@@ -742,3 +742,83 @@ def test_gather_antigravity_skips_when_neither_command_exists(monkeypatch):
 
     monkeypatch.setattr("scripts.mine_experience.subprocess.run", fake_run)
     assert gather_antigravity("商品名", "ブランド", sleeper=lambda _s: None) == []
+
+
+# --------------------------------------------------------------------------
+# Yahoo レビューは 1 candidate にまとめる (#6602 P1)
+# --------------------------------------------------------------------------
+#
+# 以前は 1 レビュー = 1 candidate = gemma 1 コールだった。実測で per_review は
+# 4 ASIN 中 3 ASIN で不満を 1 件も拾えず (Yahoo は 97% が 4 星以上)、
+# batched は 4 ASIN すべてで拾った。速さ (111.3s -> 29.0s/ASIN) は結果であって
+# 選定理由ではない。ここで守るのは「まとめること」と「全レビューが入ること」。
+
+def _write_reviews(tmp_path, reviews, asin="B0BATCH001"):
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir(exist_ok=True)
+    (raw_dir / f"{asin}.json").write_text(json.dumps({
+        "asin": asin, "fetched_at": "2026-09-06T00:00:00Z",
+        "api_review": {"rate": 4.6, "count": len(reviews), "url": "https://x/r"},
+        "reviews": reviews,
+    }, ensure_ascii=False), encoding="utf-8")
+    return raw_dir
+
+
+def test_yahoo_reviews_become_a_single_candidate(tmp_path):
+    """10 レビューで gemma を 10 回叩かない。"""
+    reviews = [{"rating": 5, "title": f"題{i}", "body": f"本文{i}"} for i in range(10)]
+    candidates, _ = gather_yahoo_aggregate("B0BATCH001", raw_dir=_write_reviews(tmp_path, reviews))
+    assert len(candidates) == 1
+
+
+def test_every_review_survives_into_the_candidate(tmp_path):
+    """1 件でも落ちると、落ちたのが少数派の不満だったときに効いてしまう。"""
+    reviews = [{"rating": 5, "title": "", "body": f"レビュー本文{i}"} for i in range(10)]
+    candidates, _ = gather_yahoo_aggregate("B0BATCH001", raw_dir=_write_reviews(tmp_path, reviews))
+    text = candidates[0]["text"]
+    for i in range(10):
+        assert f"レビュー本文{i}" in text
+
+
+def test_long_reviews_do_not_crowd_out_later_ones(tmp_path):
+    """長い賞賛レビューが枠を食って、後ろの不満が切り捨てられないこと。
+
+    これを落とすと「まとめた意味」が消える — 賞賛の長文だけ残る。
+    """
+    reviews = [{"rating": 5, "title": "", "body": "満足です。" * 900} for _ in range(9)]
+    reviews.append({"rating": 2, "title": "", "body": "ここが不満だった"})
+    candidates, _ = gather_yahoo_aggregate("B0BATCH001", raw_dir=_write_reviews(tmp_path, reviews))
+    assert "ここが不満だった" in candidates[0]["text"]
+
+
+def test_candidate_respects_max_candidate_text_len(tmp_path):
+    reviews = [{"rating": 5, "title": "", "body": "あ" * 2000} for _ in range(10)]
+    candidates, _ = gather_yahoo_aggregate("B0BATCH001", raw_dir=_write_reviews(tmp_path, reviews))
+    from scripts.mine_experience import MAX_CANDIDATE_TEXT_LEN
+    assert len(candidates[0]["text"]) <= MAX_CANDIDATE_TEXT_LEN
+
+
+def test_max_reviews_still_caps_the_input(tmp_path):
+    reviews = [{"rating": 5, "title": "", "body": f"本文{i}"} for i in range(30)]
+    candidates, _ = gather_yahoo_aggregate(
+        "B0BATCH001", raw_dir=_write_reviews(tmp_path, reviews), max_reviews=10)
+    text = candidates[0]["text"]
+    assert "本文9" in text
+    assert "本文10" not in text
+
+
+def test_empty_bodies_produce_no_candidate(tmp_path):
+    reviews = [{"rating": 5, "title": "", "body": "  "} for _ in range(3)]
+    candidates, stats = gather_yahoo_aggregate(
+        "B0BATCH001", raw_dir=_write_reviews(tmp_path, reviews))
+    assert candidates == []
+    # rating_stats は api_review 由来なので残る
+    assert stats["count"] == 3
+
+
+def test_candidate_keeps_aggregate_framing(tmp_path):
+    """usable_as=paraphrase の前提。行ごとの帰属を名乗らない。"""
+    reviews = [{"rating": 5, "title": "題", "body": "本文"}]
+    candidates, _ = gather_yahoo_aggregate("B0BATCH001", raw_dir=_write_reviews(tmp_path, reviews))
+    assert candidates[0]["source_type"] == "yahoo_review_aggregate"
+    assert candidates[0]["source_url"] == ""

@@ -618,6 +618,9 @@ def gather_yahoo_aggregate(
     """EXPERIENCE_RAW_DIR/<ASIN>.json (crawl_yahoo_reviews.py の出力) を読む。
     無ければ ([], 空 rating_stats) を返す。生レビュー本文は gemma への入力にのみ使う。
 
+    返す candidate は **最大 1 個** (max_reviews 件のレビューをまとめたもの)。
+    1 レビュー 1 candidate ではない — 理由は下のコメント (#6602 P1)。
+
     rating_stats は **api_review (itemSearch v3 の rate/count 確定値) 優先**。
     distribution はクロールで取れたレビュー本文がある場合のみ機械集計で補う
     (API は分布を返さない)。api_review が無い旧形式は本文集計にフォールバック。"""
@@ -640,22 +643,49 @@ def gather_yahoo_aggregate(
     else:
         rating_stats = _yahoo_rating_stats(reviews)
 
-    candidates: list[dict] = []
+    # **レビューは 1 つの candidate にまとめて gemma に渡す** (#6602 P1)。
+    #
+    # 以前は 1 レビュー = 1 candidate = gemma 1 コールだった。source_type が
+    # `yahoo_review_aggregate`、usable_as が `paraphrase` と「集合として扱う」
+    # 宣言をしているのに、実装だけ per-review だった。
+    #
+    # 2026-09-06 の実測 (4 ASIN x 10 レビュー、gemma 実機):
+    #
+    #   variant       calls  秒/ASIN  snip/ASIN  不満の割合
+    #   per_review     10.0    111.3       13.5   7% (4/54)
+    #   batched         1.0     29.0        3.8  20% (3/15)
+    #
+    # 速さだけでなく **素材の質が変わる**。Yahoo のレビューは 97% が 4 星以上
+    # (実測 141 件: 5 星 107 / 4 星 30 / 3 星 3 / 2 星 1) なので、1 件ずつ見せると
+    # 賞賛レビューからは賞賛しか出ない。per_review は 4 ASIN 中 3 ASIN で不満を
+    # 1 件も拾えなかった。まとめて見せると gemma が少数派の不満を拾える
+    # (batched は 4 ASIN すべてで拾った)。#3203 の凡庸化対策として、
+    # まとめる方が正しい向き。
+    #
+    # 副次的に 23-experience-mining の timeout も解ける (5.6 分/ASIN ->
+    # 約 1.9 分/ASIN)。ただし**速さは選定理由ではなく結果**。
+    picked: list[str] = []
     for r in reviews[:max_reviews]:
         if not isinstance(r, dict):
             continue
-        parts = [
-            str(r.get(k, "")).strip() for k in ("title", "body") if r.get(k)
-        ]
+        parts = [str(r.get(k, "")).strip() for k in ("title", "body") if r.get(k)]
         text = "\n".join(p for p in parts if p)
-        if not text:
-            continue
-        candidates.append({
-            "text": text[:MAX_CANDIDATE_TEXT_LEN],
-            "source_type": "yahoo_review_aggregate",
-            "source_url": "",
-        })
-    return candidates, rating_stats
+        if text:
+            picked.append(text)
+    if not picked:
+        return [], rating_stats
+
+    # 長いレビューが数件あるだけで後続が切り捨てられると、**まとめた意味が
+    # 消える** (賞賛の長文だけ残って少数派の不満が落ちる)。1 件あたりの枠を
+    # 決めてから連結する。
+    per_review_budget = max(200, MAX_CANDIDATE_TEXT_LEN // len(picked))
+    joined = "\n\n".join("- " + t[:per_review_budget] for t in picked)
+
+    return [{
+        "text": joined[:MAX_CANDIDATE_TEXT_LEN],
+        "source_type": "yahoo_review_aggregate",
+        "source_url": "",
+    }], rating_stats
 
 
 # --------------------------------------------------------------------------
