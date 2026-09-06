@@ -19,6 +19,7 @@ from scripts.run_lighthouse_lane import (
     build_lighthouse_argv,
     detect_regressions,
     extract_metrics,
+    filter_consecutive_regressions,
     get_targets,
     lcp_is_unmeasured,
     load_history,
@@ -1234,3 +1235,86 @@ def test_build_lighthouse_argv_marks_ua_for_both_form_factors():
         assert ua[0].endswith(" " + rll.LAB_UA_MARKER), form_factor
         # 既定 UA の中身は保つ (端末判定を変えない)
         assert ("Mobile Safari" in ua[0]) is (form_factor == "mobile")
+
+
+# ---------- #6426: 単日スパイクは連続日数で確認してから起票する ----------
+
+def _daily_rows(dates, url="https://x/", ff="mobile", **kw):
+    return [_row(url=url, ff=ff, date=d, **kw) for d in dates]
+
+
+def test_filter_consecutive_regressions_suppresses_single_day_spike():
+    """#6120 の実例: 08-27 だけ跳ねて翌日には baseline へ戻った系列は起票しない。"""
+    # MIN_BASELINE_SAMPLES=7 (#4160) を満たす安定した履歴 + 前日 (07-16) も正常値。
+    stable_dates = ["2026-07-{:02d}".format(d) for d in range(6, 17)]  # 07-06..07-16
+    history = _daily_rows(stable_dates, lcp=2000.0)
+    target_date = "2026-07-17"
+    current = [_row(date=target_date, lcp=8000.0)]  # 単日スパイク
+
+    alerts = detect_regressions(history, current)
+    assert alerts  # 単日判定そのものはこれまでどおり鳴る
+
+    confirmed = filter_consecutive_regressions(
+        history, alerts, target_date, window=10, days_required=2
+    )
+    assert confirmed == []
+
+
+def test_filter_consecutive_regressions_fires_when_regression_persists():
+    """2 日連続で悪化が続いていれば、N=2 でも起票する (取りこぼさない)。"""
+    stable_dates = ["2026-07-{:02d}".format(d) for d in range(6, 15)]  # 07-06..07-14 (9日)
+    history = _daily_rows(stable_dates, lcp=2000.0)
+    # 前日 (07-15) から既に悪化していた
+    history += [_row(date="2026-07-15", lcp=8000.0)]
+    target_date = "2026-07-16"
+    current = [_row(date=target_date, lcp=8000.0)]
+
+    alerts = detect_regressions(history, current)
+    assert alerts
+
+    confirmed = filter_consecutive_regressions(
+        history, alerts, target_date, window=10, days_required=2
+    )
+    assert len(confirmed) == len(alerts)
+    assert any(a["metric"] == "lcp" for a in confirmed)
+
+
+def test_filter_consecutive_regressions_treats_measurement_gap_as_not_confirmed():
+    """前日の計測が飛んでいる (#4785) ときは、連続性を確認できないので鳴らさない側に倒す。"""
+    stable_dates = ["2026-07-{:02d}".format(d) for d in range(6, 16)]  # 07-06..07-15
+    history = _daily_rows(stable_dates, lcp=2000.0)  # 07-16 は欠測のまま
+    target_date = "2026-07-17"
+    current = [_row(date=target_date, lcp=8000.0)]
+
+    alerts = detect_regressions(history, current)
+    assert alerts
+
+    confirmed = filter_consecutive_regressions(
+        history, alerts, target_date, window=10, days_required=2
+    )
+    assert confirmed == []
+
+
+def test_filter_consecutive_regressions_passes_through_audit_errors_unconditionally():
+    """kind="error" は計測基盤の失敗検出なので、連続日数ゲートの対象外 (無条件で鳴る)。"""
+    history = [_row(lcp=2000.0) for _ in range(3)]
+    target_date = "2026-07-17"
+    current = [_row(date=target_date, lcp=None, lcp_error="NO_LCP", lcp_error_runs=3)]
+
+    alerts = detect_regressions(history, current)
+    assert any(a["kind"] == "error" for a in alerts)
+
+    confirmed = filter_consecutive_regressions(
+        history, alerts, target_date, window=10, days_required=2
+    )
+    assert confirmed == alerts
+
+
+def test_filter_consecutive_regressions_days_required_one_is_noop():
+    history = [_row(lcp=2000.0) for _ in range(7)]
+    current = [_row(date="2026-07-17", lcp=8000.0)]
+    alerts = detect_regressions(history, current)
+    confirmed = filter_consecutive_regressions(
+        history, alerts, "2026-07-17", window=10, days_required=1
+    )
+    assert confirmed == alerts

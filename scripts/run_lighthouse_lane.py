@@ -287,6 +287,16 @@ MIN_RUN_SHIFT_SAMPLES = 4
 # 過去行も自動的に degrade 側に落ちる。
 LCP_UNMEASURED_REASONS = frozenset({"notApplicable", "no-details"})
 
+# 単日連続判定ゲート (#6426): kind="error" 以外の劣化は、直近 N 日連続で条件を
+# 満たしたときだけ報告する。#6120 の実例 (2026-08-27 の TBT 単発スパイク。翌日には
+# baseline へ戻り、その後 5 日間も戻ったまま) が示すとおり、単日の値だけで起票すると
+# ワーカー側の負荷変動を回帰として誤検出する。N=2 なら検出日だけの単発は弾け、
+# 実際に連日続く劣化は取りこぼさない。
+# kind="error" (audit error / runtime error) は計測基盤の失敗検出であり、上の
+# LCP_UNMEASURED_REASONS 付近のコメントにある設計判断 (無条件で鳴らす) と同じ理由
+# でこのゲートの対象外にする。
+REGRESSION_CONSECUTIVE_DAYS = int(os.environ.get("LH_REGRESSION_CONSECUTIVE_DAYS", "2"))
+
 
 def build_lighthouse_argv(
     cmd: str, url: str, out_path: str, form_factor: str
@@ -1071,6 +1081,68 @@ def detect_regressions(
     return alerts
 
 
+def _alert_key(alert: Dict[str, Any]) -> Tuple[Any, Any, Any, Any]:
+    return (alert.get("url"), alert.get("form_factor"), alert.get("metric"), alert.get("kind"))
+
+
+def _replay_alerts_for_date(
+    history: List[Dict[str, Any]], day: str, window: int,
+) -> List[Dict[str, Any]]:
+    """`day` 時点で detect_regressions が何を鳴らしていたかを履歴から再現する (#6426)。
+
+    baseline は `day` より前の履歴だけで作る (当時実際に走った判定と同じ土俵にする)。
+    `day` の計測行が無ければ (欠測日) 空を返す。
+    """
+    hist_before = [r for r in history if r.get("date") < day]
+    rows_on_day = [r for r in history if r.get("date") == day]
+    if not rows_on_day:
+        return []
+    shifted = run_wide_shift(hist_before, rows_on_day, window=window)
+    return detect_regressions(hist_before, rows_on_day, window=window, shifted=shifted)
+
+
+def filter_consecutive_regressions(
+    history: List[Dict[str, Any]],
+    alerts: List[Dict[str, Any]],
+    target_date: str,
+    window: int,
+    days_required: int = REGRESSION_CONSECUTIVE_DAYS,
+) -> List[Dict[str, Any]]:
+    """`days_required` 日連続で鳴っていない劣化アラートを削る (#6426)。
+
+    kind="error" は無条件で通す (REGRESSION_CONSECUTIVE_DAYS のコメント参照)。
+    それ以外 (threshold/relative/score) は、前日以前の履歴を replay して同じ
+    (url, form_factor, metric, kind) が続けて鳴っていたかを確認する。履歴が
+    無い日 (計測が飛んだ日、#4785) は「続いていない」扱いにする — 連続性を
+    確認できない以上、鳴らさない側に倒す。
+    """
+    if days_required <= 1 or not alerts:
+        return alerts
+    cache: Dict[str, List[Dict[str, Any]]] = {}
+
+    def replay(day: str) -> List[Dict[str, Any]]:
+        if day not in cache:
+            cache[day] = _replay_alerts_for_date(history, day, window)
+        return cache[day]
+
+    confirmed: List[Dict[str, Any]] = []
+    for alert in alerts:
+        if alert.get("kind") == "error":
+            confirmed.append(alert)
+            continue
+        key = _alert_key(alert)
+        day = target_date
+        ok = True
+        for _ in range(days_required - 1):
+            day = (date.fromisoformat(day) - timedelta(days=1)).isoformat()
+            if key not in {_alert_key(a) for a in replay(day)}:
+                ok = False
+                break
+        if ok:
+            confirmed.append(alert)
+    return confirmed
+
+
 def render_report(
     alerts: List[Dict[str, Any]],
     target_date: str,
@@ -1379,6 +1451,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                    help="論理日の境界を壁時計から何時間戻すか "
                         f"(既定 {DEFAULT_DAY_OFFSET_HOURS}, env LH_DAY_OFFSET_HOURS)")
     p.add_argument("--baseline-window", type=int, default=10)
+    p.add_argument("--consecutive-days", type=int, default=REGRESSION_CONSECUTIVE_DAYS,
+                   help="劣化を報告するのに何日連続で条件を満たす必要があるか "
+                        f"(既定 {REGRESSION_CONSECUTIVE_DAYS}, env "
+                        "LH_REGRESSION_CONSECUTIVE_DAYS, #6426)")
     p.add_argument("--report-out", default=None,
                    help="劣化があったとき Markdown を書き出すパス")
     p.add_argument("--dry-run", action="store_true",
@@ -1442,8 +1518,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 m, run_shift[m]["median_ratio"], run_shift[m]["over"],
                 run_shift[m]["samples"]) for m in sorted(run_shift)),
         )
-    alerts = detect_regressions(history, current, window=args.baseline_window,
-                                shifted=run_shift)
+    raw_alerts = detect_regressions(history, current, window=args.baseline_window,
+                                    shifted=run_shift)
+    alerts = filter_consecutive_regressions(
+        history, raw_alerts, target_date, args.baseline_window,
+        days_required=args.consecutive_days,
+    )
+    if len(raw_alerts) != len(alerts):
+        confirmed_keys = {_alert_key(a) for a in alerts}
+        suppressed = [a for a in raw_alerts if _alert_key(a) not in confirmed_keys]
+        logger.warning(
+            "::warning::%d alert(s) suppressed as single-day spike (need %d "
+            "consecutive days, #6426): %s",
+            len(suppressed), args.consecutive_days,
+            "; ".join(a["detail"] for a in suppressed),
+        )
     warmup = warmup_gates(history, current, window=args.baseline_window)
     if warmup:
         # 沈黙を可視化する (#5264)。Chrome major が上がるたびに必ず出るので
