@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-07-21T20:17:14Z",
-  "articles_loaded": 600,
+  "generated_at": "2026-09-06T02:47:04Z",
+  "articles_loaded": 2371,
   "cospa": {
     "bands": {
       "lt1000": 20,
@@ -8,7 +8,7 @@
       "2000-3000": 20,
       "3000-5000": 20,
       "5000-7000": 20,
-      "7000-10000": 18
+      "7000-10000": 20
     },
     "filter": {
       "min_ivs": 4.0,
@@ -52,14 +52,18 @@
     "filter": {
       "min_ivs": 4.0,
       "min_savings": 20,
-      "stale_days": 14,
+      "stale_days": 3,
+      "stale_min_cards": 8,
+      "stale_window_used": 3,
       "top_n": 20
     },
     "drops": {
-      "low_ivs": 216,
+      "low_ivs": 1020,
       "no_savings_data": 0,
-      "savings_below_threshold": 250,
-      "stale_or_unknown_fetch": 0
-    }
+      "savings_below_threshold": 910,
+      "stale_or_unknown_fetch": 8,
+      "unavailable": 1
+    },
+    "stale_window_used": 3
   }
 }
