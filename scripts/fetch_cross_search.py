@@ -882,6 +882,19 @@ def _collect_targets(amazon_items: list, articles_dir: pathlib.Path, per_asin_ro
     return targets
 
 
+def _consumes_re_search_slot(
+    r_low: bool, y_low: bool, need_rakuten: bool, need_yahoo: bool
+) -> bool:
+    """低信頼候補が処理窓の枠を消費するかを返す (#5047 follow-up)。
+
+    **既に need_* が True の ASIN には枠を使わせない。** マッチが存在しない ASIN は
+    低信頼かどうかに関係なく検索されるので、そこに枠を割り当てても検索は減らない。
+    枠を食われるぶんだけ「上限を掛けたのに縮まらない」状態になる
+    (2026-09-06 の run 34027983203 で実際にこれを踏んだ)。
+    """
+    return (r_low and not need_rakuten) or (y_low and not need_yahoo)
+
+
 def _re_search_window(idx: int, offset: int, max_n: int) -> bool:
     """低信頼候補の通し番号 `idx` が、この run の処理窓に入るかを返す (#5047 follow-up)。
 
@@ -913,8 +926,9 @@ def main():
     # このレーンは cron を持たない手動メンテ専用で、2026-05-30 の次が 2026-09-06
     # だった。3 か月分の低信頼マッチが溜まった結果、1 run が 2 時間を超えても
     # 終わらず途中で打ち切ることになった (過去 run は 15〜31 分)。
-    # 1 ASIN あたり最低 1 秒 (楽天 0.5s + Yahoo 0.5s の rate limit) かかるので、
-    # 母数が増えると線形に伸びる。刻んで回せるようにする。
+    # **実測 6.8 秒/件** (2026-09-06 の run 34027983203: 44.3 分 / 391 候補)。
+    # time.sleep の 1 秒は下限にすぎず、実際は API のレイテンシとリトライが支配的。
+    # 母数が増えると線形に伸びるので、刻んで回せるようにする。
     parser.add_argument(
         "--max-re-search", type=int, default=0, metavar="N",
         help=(
@@ -1035,23 +1049,20 @@ def main():
             # _is_low_confidence_match 自体は API を叩かないので、ここで見送っても
             # コストはかからない。targets は dict で挿入順が安定しているため、
             # 同じ入力なら offset の意味も安定する。
-            in_window = True
-            if r_low or y_low:
+            if _consumes_re_search_slot(r_low, y_low, need_rakuten, need_yahoo):
                 idx = low_conf_seen
                 low_conf_seen += 1
-                in_window = _re_search_window(idx, re_search_offset, max_re_search)
-                if not in_window:
+                if _re_search_window(idx, re_search_offset, max_re_search):
+                    if r_low and not need_rakuten:
+                        need_rakuten = True
+                        r_low_conf_targets += 1
+                    if y_low and not need_yahoo:
+                        need_yahoo = True
+                        y_low_conf_targets += 1
+                else:
                     low_conf_deferred += 1
                     r_reason = ""
                     y_reason = ""
-
-            if in_window:
-                if r_low and not need_rakuten:
-                    need_rakuten = True
-                    r_low_conf_targets += 1
-                if y_low and not need_yahoo:
-                    need_yahoo = True
-                    y_low_conf_targets += 1
 
         if not need_rakuten and not need_yahoo:
             r_kept += 1 if r_has else 0
@@ -1205,9 +1216,13 @@ def main():
         )
         if low_conf_deferred:
             next_offset = re_search_offset + (max_re_search or 0)
-            logger.info(
-                f"::notice::{low_conf_deferred} 件が未処理です。次は "
-                f"--re-search-offset {next_offset} で続きを処理してください。"
+            # logger は stderr に "2026-.. [INFO] " 接頭辞付きで書くため、
+            # ::notice:: が GitHub Actions の workflow command として解釈されない。
+            # stdout の行頭に出す必要がある (2026-09-06 に気付いた)。
+            print(
+                f"::notice::低信頼再検索: {low_conf_deferred} 件が未処理です。"
+                f"次は --re-search-offset {next_offset} で続きを処理してください。",
+                flush=True,
             )
 
     # Issue #1087 Phase 1: JAN 成否の per-ASIN manifest を出力

@@ -15,10 +15,10 @@ on:
   workflow_dispatch:
     inputs:
       max_re_search:
-        description: '低信頼再検索を何件までに絞るか (0 = 無制限)。1 件あたり最低 1 秒かかる'
+        description: '低信頼再検索を何件までに絞るか (0 = 無制限)。実測 6.8 秒/件'
         required: false
         type: string
-        default: '500'
+        default: '250'
       re_search_offset:
         description: '低信頼候補の先頭を何件飛ばすか。0/500 → 500/500 と刻む'
         required: false
@@ -36,10 +36,19 @@ concurrency:
 jobs:
   re-search:
     runs-on: ubuntu-latest
-    # 既定の 6 時間まで走らせない。2026-09-06 の run は 3 か月分のバックログを
-    # 舐めて 2 時間経っても終わらず手で打ち切った (過去 run は 15〜31 分)。
-    # 上の max_re_search で刻む前提なので、それを超えたら想定外として落とす。
-    timeout-minutes: 45
+    # 既定の 6 時間まで走らせない。2026-09-06 の run 34007621267 は 3 か月分の
+    # バックログを舐めて 2 時間経っても終わらず手で打ち切った (過去 run は 15〜31 分)。
+    #
+    # 45 分にしたら今度は timeout で殺された (run 34027983203)。**上限は総実行時間を
+    # 縛れない**のが理由: キャップの対象は「低信頼による昇格」だけで、マッチが
+    # 存在しない ASIN は上限に関係なく検索される。2026-09-06 実測でその固定費が
+    # 279 ASIN (楽天無し 245 / Yahoo 無し 106) あり、6.8 秒/件で約 32 分かかる。
+    #
+    #   固定費 ~32 分 + 上限 250 件 x 6.8 秒 ~28 分 = 約 60 分
+    #
+    # 90 分はその 1.5 倍。固定費側は「一度取れば次回から消える」性質で単調に
+    # 減るので、そちらを刻む機構は作っていない。
+    timeout-minutes: 90
     steps:
       - name: Generate App token
         id: app-token
