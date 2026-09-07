@@ -56,7 +56,8 @@ def _build_service(client_id: str, client_secret: str, refresh_token: str):
 
 
 def _query(service, site_url: str, start: str, end: str,
-           dims: list[str], row_limit: int = 1000) -> list[dict]:
+           dims: list[str], row_limit: int = 1000,
+           aggregation_type: str | None = None) -> list[dict]:
     """Search Analytics query。row を dict 列に正規化。
 
     dims が空 (dimensionless / site-wide query) の場合、"dimensions" キー自体を
@@ -80,6 +81,8 @@ def _query(service, site_url: str, start: str, end: str,
         }
         if dims:
             body["dimensions"] = dims
+        if aggregation_type:
+            body["aggregationType"] = aggregation_type
         res = service.searchanalytics().query(siteUrl=site_url, body=body).execute()
         batch = res.get("rows", [])
         for r in batch:
@@ -101,7 +104,8 @@ def fetch(site_url: str, client_id: str, client_secret: str, refresh_token: str,
           start_date: str | None = None,
           top_query: int = TOP_QUERY_DEFAULT,
           top_page: int = TOP_PAGE_DEFAULT,
-          top_combo: int = TOP_COMBO_DEFAULT) -> dict[str, Any]:
+          top_combo: int = TOP_COMBO_DEFAULT,
+          aggregation_type: str | None = None) -> dict[str, Any]:
     service = _build_service(client_id, client_secret, refresh_token)
 
     end = date.fromisoformat(end_date) if end_date else date.today() - timedelta(days=delay)
@@ -119,23 +123,23 @@ def fetch(site_url: str, client_id: str, client_secret: str, refresh_token: str,
     logger.info("range: %s .. %s (site=%s, %d-day delay buffer)",
                 start_s, end_s, site_url, delay)
 
-    by_query = _query(service, site_url, start_s, end_s, ["query"], top_query)
+    by_query = _query(service, site_url, start_s, end_s, ["query"], top_query, aggregation_type)
     by_query.sort(key=lambda r: r["clicks"], reverse=True)
 
-    by_page = _query(service, site_url, start_s, end_s, ["page"], top_page)
+    by_page = _query(service, site_url, start_s, end_s, ["page"], top_page, aggregation_type)
     by_page.sort(key=lambda r: r["clicks"], reverse=True)
 
-    by_combo = _query(service, site_url, start_s, end_s, ["query", "page"], top_combo)
+    by_combo = _query(service, site_url, start_s, end_s, ["query", "page"], top_combo, aggregation_type)
     by_combo.sort(key=lambda r: r["clicks"], reverse=True)
 
-    by_device = _query(service, site_url, start_s, end_s, ["device"], 10)
+    by_device = _query(service, site_url, start_s, end_s, ["device"], 10, aggregation_type)
 
     # site-wide totals: dimensionless query (row_limit=1) で真のサイト全体集計を取得。
     # by_page は TOP_PAGE_DEFAULT 件で打ち切られるため clicks_sum/impressions_sum は
     # 「上位ページの合計」にすぎず、position に至っては site-wide の値がどこにも
     # 存在しなかった (#3988 B-1)。ranking loss と検索需要減を切り分けるには
     # 真のサイト全体 impressions / 平均 position が必要。
-    sitewide_rows = _query(service, site_url, start_s, end_s, [], 1)
+    sitewide_rows = _query(service, site_url, start_s, end_s, [], 1, aggregation_type)
     if sitewide_rows:
         sitewide = sitewide_rows[0]
         clicks_sitewide = sitewide["clicks"]
@@ -170,6 +174,11 @@ def fetch(site_url: str, client_id: str, client_secret: str, refresh_token: str,
                   # 窓が実際に何日ぶんか。--days と違い両端を含む実日数
                   "window_days": (end - start).days + 1,
                   "delay_days": delay},
+        # **どの集計方式で取ったファイルかを残す。** byPage と既定 (byProperty)
+        # では impressions の意味が変わる (byPage はページ単位で 1 表示と数える
+        # ので 3 倍前後になる)。混ざったまま時系列にすると段差が出るが、
+        # ファイルを外から見ても区別がつかない (omochairo/omcha-ops#101)
+        "aggregation_type": aggregation_type,
         "totals": {
             "queries": len(by_query),
             "pages": len(by_page),
@@ -206,6 +215,13 @@ def main() -> int:
     p.add_argument("--days", type=int, default=DEFAULT_DAYS)
     p.add_argument("--delay", type=int, default=DEFAULT_DELAY)
     p.add_argument("--end-date", help="range終端を(today - delay)でなく指定日 (YYYY-MM-DD) に固定 (backfill用、--delayは無視される)")
+    # **1 日窓では query 次元が 5,000 行ちょうどで打ち切られる** (2026-09-07 実測。
+    # 別々の 3 日すべてで 5,000、startRow=5000 は 0 行なのでページングでも越えられない)。
+    # aggregationType=byPage を付けると外れる (同じ日で 5,751 行・端数)。
+    # 代わりに impressions が「ページ単位で 1 表示」になり 3 倍前後になる。
+    # clicks と position はほぼ変わらない (omochairo/omcha-ops#101)
+    p.add_argument("--aggregation-type", choices=["byPage", "byProperty"],
+                   help="Search Analytics の aggregationType。省略時は API 既定")
     p.add_argument("--start-date", help="range始端を明示 (YYYY-MM-DD)。--days の代わりに使う。--end-date と同じ日を渡せば 1 日窓 (両端を含むため --days 1 は 2 日窓になる)")
     p.add_argument("--out", default=DEFAULT_OUT)
     # rowLimit の上書き。既定値は据え置きなので既存の呼び出し (navi 日次/週次) は不変。
@@ -235,7 +251,8 @@ def main() -> int:
         result = fetch(args.site_url, args.client_id, args.client_secret,
                        args.refresh_token, args.days, args.delay, args.end_date,
                        args.start_date,
-                       args.top_query, args.top_page, args.top_combo)
+                       args.top_query, args.top_page, args.top_combo,
+                       args.aggregation_type)
     except Exception as e:
         logger.exception("GSC fetch failed: %s", e)
         return 1
