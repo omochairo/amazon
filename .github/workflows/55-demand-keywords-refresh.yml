@@ -1,0 +1,154 @@
+name: Demand Keywords Refresh
+
+# data/demand_keywords.json を週次で作り直す (amazon-navi-brain#34)。
+#
+# なぜ必要か (2026-09-07 実測):
+#   このファイルは tracked なスナップショットで、01-fetch-products.yml が
+#   `--demand-slots 20` で毎日 60 枠中 20 枠に使っている。ところが
+#   **build_demand_keywords.py を呼ぶ workflow は 1 本も無かった** (grep 0 件)。
+#   生成は人 / Claude が手元で回して commit する運用だったため、最終更新は
+#   2026-08-10 で止まり、需要枠は 34 日間 08-10 の語で回り続けていた。
+#   #5107 の fail-closed 鮮度ガードは build_demand_keywords.py 側にしかなく、
+#   生成そのものを止めた時点でガードごと迂回されていた (job は落ちない・
+#   需要枠が 0 になることもないので、外からは何も見えない)。
+#
+#   消費側の鮮度ガードは fetch_amazon.load_demand_keywords に入れた (catch)。
+#   ここはその根因側 (prevent) — 生成を人手から外す。
+#
+# 週次にする理由:
+#   入力の WP 需要ブリッジ (omcha-ops の 32-wp-demand-bridge.yml → brain の
+#   demand/wp_demand.jsonl) が週次窓で、日次で回しても同じ中身を作り直すだけ。
+#   cron は月曜 10:00 JST。ブリッジ (月曜 07:00 JST) の 3 時間後に置く。
+#
+# このレーンが更新するのは **WP順位ガードの結果まで** である点に注意:
+#   需要語そのものの母集団は data/analytics/demand_topics.json (classify_demand_topics.py
+#   の出力) から来ていて、その入力は public 側の凍結ファイル
+#   data/analytics/history/gsc_wp_by_query.jsonl (2026-08-04) のままである。
+#   ブリッジの派生物は 13 週窓の集計で日付別の行を持たないので、そのままでは
+#   detect_demand_gaps に渡せない。**需要コーパス自体の解凍は別件** (brain#34 の
+#   follow-up)。ここで毎週更新されるのは「いま WP が取れている語の除外」だけ。
+
+on:
+  schedule:
+    # 月曜 10:00 JST = 日曜 01:00 UTC
+    - cron: '0 1 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demand-keywords-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      # GITHUB_TOKEN の直 push は main 保護で GH006 silent reject になるので
+      # push は App token 経由 ([[feedback-omochairo-silent-push-reject]])。
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+          fetch-depth: 1
+
+      # WP 需要ブリッジ (private)。build_demand_keywords.py の
+      # WP_QUERY_HISTORY_CANDIDATES の 1 番目が jules/demand/wp_demand.jsonl。
+      - name: Checkout demand bridge (private) into jules/
+        uses: actions/checkout@v7
+        with:
+          repository: omochairo/amazon-navi-brain
+          token: ${{ secrets.NAVI_BRAIN_PAT }}
+          path: jules
+
+      # ブリッジが無いまま走らせない。build_demand_keywords.py はファイルが無いと
+      # **fail-open** (順位ガード無効) で通ってしまい、「ガード無しで作り直した出力」を
+      # main に積むことになる。生成しないほうが害が小さいので、ここで止める。
+      - name: Assert demand bridge present
+        run: |
+          f=jules/demand/wp_demand.jsonl
+          test -f "$f" || { echo "::error::$f がありません — brain checkout / PAT を確認 (brain#34)"; exit 1; }
+          head -1 "$f" | python -c "import json,sys; print('bridge meta:', json.loads(sys.stdin.read()))"
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml
+
+      # continue-on-error は付けない。鮮度ガード (fail-closed) で止まったときに
+      # 緑で返すと、#5941 / brain#34 と同じ「黙って止まる」穴をもう 1 つ作る。
+      - name: Rebuild demand keywords
+        run: python scripts/build_demand_keywords.py
+
+      - name: Summarize
+        if: ${{ always() }}
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          p = pathlib.Path("data/demand_keywords.json")
+          if not p.exists():
+              print("demand_keywords.json が生成されていません")
+              raise SystemExit(0)
+          d = json.loads(p.read_text(encoding="utf-8"))
+          s = d.get("summary", {})
+          print("## demand_keywords.json")
+          print()
+          print(f"- generated_at: `{d.get('generated_at')}`")
+          for k in ("keywords", "wp_impressions", "excluded_terms",
+                    "dropped_no_supply", "dropped_wp_ranked"):
+              if k in s:
+                  print(f"- {k}: {s[k]}")
+          PY
+
+      - name: Commit refreshed demand keywords
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+          git add data/demand_keywords.json || true
+          if git diff --cached --quiet; then
+            echo "No change in data/demand_keywords.json; skipping PR."
+            exit 0
+          fi
+
+          # 既存 open の同レーン PR は閉じる (週次で 1 本だけ残す)
+          gh pr list --base main --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("demand-keywords/")) | .number' | while read -r pr_num; do
+            if [ -n "$pr_num" ]; then
+              echo "Closing old PR #$pr_num and deleting branch..."
+              gh pr close "$pr_num" -d || true
+            fi
+          done
+
+          BRANCH="demand-keywords/${{ github.run_id }}"
+          git config user.name "omochairo-fetch-bot[bot]"
+          git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit -m "data(demand): weekly rebuild of demand_keywords.json (brain#34)"
+          git push -u origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "data(demand): weekly rebuild of demand_keywords.json (brain#34)" \
+            --body "Weekly rebuild of data/demand_keywords.json by scripts/build_demand_keywords.py, using the private WP demand bridge (amazon-navi-brain demand/wp_demand.jsonl) for the WP rank guard. Until this lane existed the file was regenerated by hand and had been frozen at 2026-08-10 while 01-fetch-products kept using it for 20 of 60 keyword slots. Refs omochairo/amazon-navi-brain#34, #2686, #5107." \
+            --base main \
+            --head "$BRANCH")
+          echo "Created: $PR_URL"
+
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge enabled on $PR_URL"
+          else
+            echo "::warning::Could not enable auto-merge on $PR_URL"
+          fi

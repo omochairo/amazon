@@ -72,6 +72,14 @@ from genre_gate import classify_genre
 #   J. 楽器系 (リトミック/木琴/etc)
 #   K. ごっこ遊び 知育
 #   L. 言語/国際
+# data/demand_keywords.json の許容鮮度 (日)。0 で無効。
+# 再生成は週次レーン (55-demand-keywords-refresh.yml) なので、17d = 週次間隔 (7d) +
+# 1 回落ちても許す猶予 (7d) + 実行時刻のずれ (3d)。build_demand_keywords.py 側の
+# WP 需要ブリッジの上限 (DEFAULT_WP_HISTORY_MAX_AGE_DAYS = 17) と同じ幅に揃えてある
+# — 入力が 17d を超えると生成側が fail-closed で止まるので、出力がそれ以上に古く
+# なったら「生成が止まっている」と読んでよい (amazon-navi-brain#34)。
+DEFAULT_DEMAND_MAX_AGE_DAYS = 17
+
 DEFAULT_KEYWORDS = [
     # A. 海外ブランド (木製/教育)
     "ボーネルンド", "Hape", "PlanToys", "BRIO", "HABA", "kiko+",
@@ -186,7 +194,23 @@ def parse_keywords(cli_value: Optional[str], shuffle: bool = False, sample_size:
         kws = kws[:sample_size]
     return kws
 
-def load_demand_keywords(path: str, slots: int) -> list:
+def _demand_keywords_age_days(data: dict, now: "datetime | None" = None) -> float | None:
+    """demand_keywords.json の generated_at から経過日数を出す。読めなければ None。"""
+    raw = data.get("generated_at")
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    try:
+        gen = datetime.fromisoformat(raw.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if gen.tzinfo is None:
+        gen = gen.replace(tzinfo=timezone.utc)
+    now = now or datetime.now(timezone.utc)
+    return (now - gen).total_seconds() / 86400.0
+
+
+def load_demand_keywords(path: str, slots: int,
+                         max_age_days: int = DEFAULT_DEMAND_MAX_AGE_DAYS) -> list:
     """需要側キーワード (#2686) を imp 上位から slots 件返す。
 
     data/demand_keywords.json は build_demand_keywords.py の出力で、omcha.jp (WP 本家)
@@ -200,6 +224,21 @@ def load_demand_keywords(path: str, slots: int) -> list:
     1 位を取っている状態。
 
     slots<=0・ファイル無し・壊れている場合は空リストを返す (従来動作のまま)。
+
+    鮮度ガード (amazon-navi-brain#34, 2026-09-07):
+      このファイルは tracked なスナップショットで、生成は build_demand_keywords.py 側
+      の手動/週次レーンに依存する。生成が止まっても**ここからは何も見えない**ため、
+      2026-08-12〜09-07 の 34 日間、08-10 のスナップショットを 20 枠に使い続けていた
+      (job は落ちず、需要枠が 0 になることもない)。#5107 の fail-closed ガードは
+      生成側にしかなく、生成を止めた時点でガードごと迂回されていた。
+
+      そこで消費側にも鮮度を見る口を置く。**古い場合は job を落とさず需要枠を 0 に
+      落として供給側へフォールバックする** (fail-closed で止めると記事供給ごと止まる。
+      需要枠が古い語で回るより、供給側 231 語で回るほうが害が小さい)。
+      generated_at が無い / 読めないファイルも同じ扱いにする — 年齢が分からないものを
+      「新しい」に倒すと、このガードは生成が壊れた瞬間に効かなくなる。
+
+      max_age_days<=0 でガード無効 (手元で古いファイルを意図的に使うとき用)。
     """
     if slots <= 0 or not path:
         return []
@@ -209,6 +248,24 @@ def load_demand_keywords(path: str, slots: int) -> list:
     except (OSError, json.JSONDecodeError) as e:
         logger.warning(f"demand keywords unreadable ({path}): {e}; falling back to supply-side only")
         return []
+    if max_age_days > 0:
+        age = _demand_keywords_age_days(data)
+        if age is None:
+            msg = (f"demand keywords {path} に generated_at が無い/読めない — "
+                   "鮮度を確認できないので需要枠を 0 にして供給側へフォールバックする "
+                   "(brain#34)")
+            logger.warning(msg)
+            print(f"::warning::{msg}")
+            return []
+        if age > max_age_days:
+            msg = (f"demand keywords {path} が {age:.1f}d 前 (上限 {max_age_days}d) — "
+                   "需要枠を 0 にして供給側へフォールバックする。"
+                   "build_demand_keywords.py の再生成レーンが止まっている "
+                   "(brain#34)")
+            logger.warning(msg)
+            print(f"::warning::{msg}")
+            return []
+        logger.info("demand keywords: %s (%.1fd 前, 上限 %dd)", path, age, max_age_days)
     out = []
     for e in (data.get("keywords") or []):
         kw = e.get("keyword") if isinstance(e, dict) else None
@@ -1225,6 +1282,10 @@ def main():
                         help="Stop searching once this many ASINs not in articles-dir are collected")
     parser.add_argument("--demand-keywords", default="data/demand_keywords.json",
                         help="需要側キーワード JSON (build_demand_keywords.py の出力, #2686)")
+    parser.add_argument("--demand-max-age-days", type=int, default=DEFAULT_DEMAND_MAX_AGE_DAYS,
+                        help="需要側キーワード JSON の許容鮮度 (日, 既定 %d)。"
+                             "超えたら需要枠を 0 にして供給側へフォールバックする。"
+                             "0 で無効 (brain#34)" % DEFAULT_DEMAND_MAX_AGE_DAYS)
     parser.add_argument("--demand-slots", type=int, default=0,
                         help="keyword サンプル枠のうち需要側に割り当てる件数 (0=無効・従来動作)")
     parser.add_argument("--search-index", default="Toys",
@@ -1413,7 +1474,8 @@ def main():
     # #2686: 需要側キーワードを優先枠で確保する。供給側のロングテール探索を止めない
     # ため全面切替はせず、sample 枠の一部だけを需要側に割り当てる。枠内に収めるので
     # SearchItems の総リクエスト数は増えない (レート的に従来と同じ)。
-    demand_kws = load_demand_keywords(args.demand_keywords, args.demand_slots)
+    demand_kws = load_demand_keywords(args.demand_keywords, args.demand_slots,
+                                      max_age_days=args.demand_max_age_days)
 
     sampling_active = not args.keywords and not os.environ.get("AMAZON_SEARCH_KEYWORDS")
     if sampling_active:
