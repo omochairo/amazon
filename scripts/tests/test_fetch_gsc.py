@@ -4,7 +4,8 @@ from __future__ import annotations
 import pytest
 
 import scripts.fetch_gsc as fetch_gsc_module
-from scripts.fetch_gsc import TOP_PAGE_DEFAULT, TOP_QUERY_DEFAULT, _query, fetch
+from scripts.fetch_gsc import (API_ROW_LIMIT_MAX, TOP_PAGE_DEFAULT,
+                              TOP_QUERY_DEFAULT, _query, fetch)
 
 
 # ---------------------------------------------------------------------------
@@ -72,6 +73,56 @@ def _patch_service(monkeypatch, responses: list[list[dict]]) -> FakeService:
     fake = FakeService(responses)
     monkeypatch.setattr(fetch_gsc_module, "_build_service", lambda *a, **kw: fake)
     return fake
+
+
+# ---------------------------------------------------------------------------
+# _query(): startRow pagination (omochairo/omcha-ops#101 1d)
+#
+# API の 1 リクエスト上限は 25,000 行。それを超える系列 (by_combo は実測で既に
+# 上限の 95%) を単発リクエストで取ると、超えたぶんが「取れない」ではなく黙って
+# 切られる。ページングしていることを、body の startRow で確かめる。
+# ---------------------------------------------------------------------------
+
+
+def test_query_pages_with_start_row_when_over_api_limit():
+    # 1 ページ目が満杯 -> 2 ページ目を取りに行く
+    first = [_query_row(f"q{i}", 1, 10) for i in range(API_ROW_LIMIT_MAX)]
+    second = [_query_row("tail", 1, 10)]
+    fake = FakeService([first, second])
+
+    rows = _query(fake, "sc-domain:example.com", "2026-07-01", "2026-07-01",
+                  ["query"], API_ROW_LIMIT_MAX + 5000)
+
+    assert len(rows) == API_ROW_LIMIT_MAX + 1
+    assert rows[-1]["query"] == "tail"
+    assert len(fake.calls) == 2
+    assert fake.calls[0]["body"]["startRow"] == 0
+    assert fake.calls[0]["body"]["rowLimit"] == API_ROW_LIMIT_MAX
+    assert fake.calls[1]["body"]["startRow"] == API_ROW_LIMIT_MAX
+    # 残り 5000 しか要求しない (row_limit を超えて取らない)
+    assert fake.calls[1]["body"]["rowLimit"] == 5000
+
+
+def test_query_stops_when_page_not_full():
+    # 返りが要求より少なければ次ページは引かない (無駄な API コールを撃たない)
+    fake = FakeService([[_query_row("only", 1, 10)]])
+
+    rows = _query(fake, "sc-domain:example.com", "2026-07-01", "2026-07-01",
+                  ["query"], API_ROW_LIMIT_MAX)
+
+    assert len(rows) == 1
+    assert len(fake.calls) == 1
+
+
+def test_query_does_not_exceed_row_limit():
+    # row_limit が API 上限以下なら 1 発で終わる (従来の挙動)
+    fake = FakeService([[_query_row(f"q{i}", 1, 10) for i in range(100)]])
+
+    rows = _query(fake, "sc-domain:example.com", "2026-07-01", "2026-07-01",
+                  ["query"], 100)
+
+    assert len(rows) == 100
+    assert len(fake.calls) == 1
 
 
 # ---------------------------------------------------------------------------

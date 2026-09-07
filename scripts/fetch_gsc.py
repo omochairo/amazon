@@ -33,6 +33,9 @@ DEFAULT_DELAY = 3  # GSC データ反映遅延 (日)
 TOP_QUERY_DEFAULT = 100
 TOP_PAGE_DEFAULT = 100
 TOP_COMBO_DEFAULT = 200
+# Search Analytics API の 1 リクエストあたり rowLimit 上限。これを超える件数は
+# startRow のページングでしか取れない (_query が面倒を見る)。
+API_ROW_LIMIT_MAX = 25000
 
 
 def _build_service(client_id: str, client_secret: str, refresh_token: str):
@@ -54,27 +57,42 @@ def _build_service(client_id: str, client_secret: str, refresh_token: str):
 
 def _query(service, site_url: str, start: str, end: str,
            dims: list[str], row_limit: int = 1000) -> list[dict]:
-    """Search Analytics query 1 発。row を dict 列に正規化。
+    """Search Analytics query。row を dict 列に正規化。
 
     dims が空 (dimensionless / site-wide query) の場合、"dimensions" キー自体を
     body から省略する。API が空リストを許容するかに依存しないための安全策。
+
+    **row_limit が API の 1 リクエスト上限 (25,000) を超える場合は startRow で
+    ページングする。** 単発リクエストのままだと 25,000 がハードキャップになり、
+    それ以上は「取れない」ではなく「黙って切られる」形で消える。実測で by_combo
+    (query x page) が 1 日 23,676 行 = 上限の 95% まで来ており、上限に張り付いた
+    日から先はまた生存者バイアスが混ざる (omochairo/omcha-ops#101)。
     """
-    body = {
-        "startDate": start,
-        "endDate": end,
-        "rowLimit": row_limit,
-    }
-    if dims:
-        body["dimensions"] = dims
-    res = service.searchanalytics().query(siteUrl=site_url, body=body).execute()
-    rows = []
-    for r in res.get("rows", []):
-        row = {dims[i]: r["keys"][i] for i in range(len(dims))}
-        row["clicks"] = int(r.get("clicks", 0))
-        row["impressions"] = int(r.get("impressions", 0))
-        row["ctr"] = float(r.get("ctr", 0.0))
-        row["position"] = float(r.get("position", 0.0))
-        rows.append(row)
+    rows: list[dict] = []
+    start_row = 0
+    while len(rows) < row_limit:
+        page_size = min(API_ROW_LIMIT_MAX, row_limit - len(rows))
+        body = {
+            "startDate": start,
+            "endDate": end,
+            "rowLimit": page_size,
+            "startRow": start_row,
+        }
+        if dims:
+            body["dimensions"] = dims
+        res = service.searchanalytics().query(siteUrl=site_url, body=body).execute()
+        batch = res.get("rows", [])
+        for r in batch:
+            row = {dims[i]: r["keys"][i] for i in range(len(dims))}
+            row["clicks"] = int(r.get("clicks", 0))
+            row["impressions"] = int(r.get("impressions", 0))
+            row["ctr"] = float(r.get("ctr", 0.0))
+            row["position"] = float(r.get("position", 0.0))
+            rows.append(row)
+        # 返りが要求より少なければそこで打ち止め (次ページは空)
+        if len(batch) < page_size:
+            break
+        start_row += len(batch)
     return rows
 
 
@@ -179,13 +197,14 @@ def main() -> int:
     # rowLimit の上書き。既定値は据え置きなので既存の呼び出し (navi 日次/週次) は不変。
     # omcha.jp (832記事) のように母数が大きい property を週次窓で取るときに、
     # 既定の 100/100/200 では上位しか返らず week-over-week 比較が成立しないため
-    # ([[project-omcha-ops]] の rewrite-radar)。GSC API の rowLimit 上限は 25,000。
+    # ([[project-omcha-ops]] の rewrite-radar)。GSC API は 1 リクエスト 25,000 行が上限で、
+    # それ以上は _query が startRow でページングして取る。
     p.add_argument("--top-query", type=int, default=TOP_QUERY_DEFAULT,
-                   help=f"by_query の rowLimit (default {TOP_QUERY_DEFAULT}, max 25000)")
+                   help=f"by_query の rowLimit (default {TOP_QUERY_DEFAULT}。25000 超は startRow でページングする)")
     p.add_argument("--top-page", type=int, default=TOP_PAGE_DEFAULT,
-                   help=f"by_page の rowLimit (default {TOP_PAGE_DEFAULT}, max 25000)")
+                   help=f"by_page の rowLimit (default {TOP_PAGE_DEFAULT}。25000 超は startRow でページングする)")
     p.add_argument("--top-combo", type=int, default=TOP_COMBO_DEFAULT,
-                   help=f"by_combo (query×page) の rowLimit (default {TOP_COMBO_DEFAULT}, max 25000)")
+                   help=f"by_combo (query×page) の rowLimit (default {TOP_COMBO_DEFAULT}。25000 超は startRow でページングする)")
     args = p.parse_args()
 
     missing = [n for n, v in [
