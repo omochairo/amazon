@@ -76,6 +76,45 @@ def _patch_service(monkeypatch, responses: list[list[dict]]) -> FakeService:
 
 
 # ---------------------------------------------------------------------------
+# aggregationType (omochairo/omcha-ops#101)
+#
+# 1 日窓では query 次元が 5,000 行ちょうどで打ち切られる。byPage を付けると
+# 外れる代わりに impressions の意味が変わるので、**どちらで取ったかをファイルに
+# 残す**。残していないと、混ざった時系列の段差を後から説明できない。
+# ---------------------------------------------------------------------------
+
+
+def test_query_omits_aggregation_type_by_default():
+    fake = FakeService([[_query_row("q", 1, 10)], []])
+    _query(fake, "sc-domain:example.com", "2026-09-04", "2026-09-04", ["query"], 100)
+    assert "aggregationType" not in fake.calls[0]["body"]
+
+
+def test_query_sends_aggregation_type_when_given():
+    fake = FakeService([[_query_row("q", 1, 10)], []])
+    _query(fake, "sc-domain:example.com", "2026-09-04", "2026-09-04", ["query"], 100,
+           "byPage")
+    assert fake.calls[0]["body"]["aggregationType"] == "byPage"
+
+
+def test_fetch_records_aggregation_type_in_payload(monkeypatch):
+    fake = _patch_service(monkeypatch, _fetch_responses([], [], [], [], []))
+    r = fetch("sc-domain:example.com", "cid", "cs", "rt", days=1, delay=3,
+              end_date="2026-09-04", start_date="2026-09-04",
+              aggregation_type="byPage")
+    assert r["aggregation_type"] == "byPage"
+    # 全ての系列に同じ集計方式を渡す (系列ごとに違うと totals が突き合わない)
+    assert all(c["body"]["aggregationType"] == "byPage" for c in fake.calls)
+
+
+def test_fetch_records_none_when_not_given(monkeypatch):
+    _patch_service(monkeypatch, _fetch_responses([], [], [], [], []))
+    r = fetch("sc-domain:example.com", "cid", "cs", "rt", days=1, delay=3,
+              end_date="2026-09-04")
+    assert r["aggregation_type"] is None
+
+
+# ---------------------------------------------------------------------------
 # fetch(): 窓の日数 (omochairo/omcha-ops#101)
 #
 # GSC の startDate/endDate は両端を含むので --days 1 は 2 日窓になる。日次
