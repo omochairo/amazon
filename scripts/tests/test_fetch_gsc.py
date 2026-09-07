@@ -76,6 +76,45 @@ def _patch_service(monkeypatch, responses: list[list[dict]]) -> FakeService:
 
 
 # ---------------------------------------------------------------------------
+# fetch(): 窓の日数 (omochairo/omcha-ops#101)
+#
+# GSC の startDate/endDate は両端を含むので --days 1 は 2 日窓になる。日次
+# アーカイブはこれを 1 日窓だと思って貯めており、隣り合うファイルが 1 日ずつ
+# 重なっていた。--start-date で始端を明示できることと、--days の意味を変えて
+# いないこと (既存レーンの窓を黙って動かさない) の両方を固定する。
+# ---------------------------------------------------------------------------
+
+
+def test_fetch_days_1_is_still_a_two_day_window(monkeypatch):
+    """--days の意味は据え置き。navi の日次/週次レーンの窓を黙って変えない。"""
+    _patch_service(monkeypatch, _fetch_responses([], [], [], [], []))
+    r = fetch("sc-domain:example.com", "cid", "cs", "rt", days=1, delay=3,
+              end_date="2026-09-04")
+    assert r["range"]["start"] == "2026-09-03"
+    assert r["range"]["end"] == "2026-09-04"
+    assert r["range"]["window_days"] == 2
+
+
+def test_fetch_start_date_gives_a_true_single_day_window(monkeypatch):
+    fake = _patch_service(monkeypatch, _fetch_responses([], [], [], [], []))
+    r = fetch("sc-domain:example.com", "cid", "cs", "rt", days=1, delay=3,
+              end_date="2026-09-04", start_date="2026-09-04")
+    assert r["range"]["start"] == "2026-09-04"
+    assert r["range"]["end"] == "2026-09-04"
+    assert r["range"]["window_days"] == 1
+    # API に渡る body も 1 日窓であること (range だけ直っていても意味がない)
+    assert fake.calls[0]["body"]["startDate"] == "2026-09-04"
+    assert fake.calls[0]["body"]["endDate"] == "2026-09-04"
+
+
+def test_fetch_rejects_start_after_end(monkeypatch):
+    _patch_service(monkeypatch, _fetch_responses([], [], [], [], []))
+    with pytest.raises(SystemExit):
+        fetch("sc-domain:example.com", "cid", "cs", "rt", days=1, delay=3,
+              end_date="2026-09-04", start_date="2026-09-05")
+
+
+# ---------------------------------------------------------------------------
 # _query(): startRow pagination (omochairo/omcha-ops#101 1d)
 #
 # API の 1 リクエスト上限は 25,000 行。それを超える系列 (by_combo は実測で既に

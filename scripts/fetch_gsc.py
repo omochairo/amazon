@@ -98,13 +98,23 @@ def _query(service, site_url: str, start: str, end: str,
 
 def fetch(site_url: str, client_id: str, client_secret: str, refresh_token: str,
           days: int, delay: int, end_date: str | None = None,
+          start_date: str | None = None,
           top_query: int = TOP_QUERY_DEFAULT,
           top_page: int = TOP_PAGE_DEFAULT,
           top_combo: int = TOP_COMBO_DEFAULT) -> dict[str, Any]:
     service = _build_service(client_id, client_secret, refresh_token)
 
     end = date.fromisoformat(end_date) if end_date else date.today() - timedelta(days=delay)
-    start = end - timedelta(days=days)
+    # **--days は「終端から何日さかのぼるか」であって窓の日数ではない。**
+    # GSC の startDate/endDate は両端を含むので、--days 1 は 2 日窓になる。
+    # 日次アーカイブはこれを 1 日窓だと思って 498 日ぶん貯めており、隣り合う
+    # ファイルが 1 日ずつ重なっていた (clicks は二重計上・position は 2 日平均)。
+    # 既存の呼び出し (navi の日次/週次) の窓を黙って変えないため --days の意味は
+    # そのままにし、**始端を明示したい呼び出しのために --start-date を足した**。
+    # start == end を渡せば正真正銘の 1 日窓になる (omochairo/omcha-ops#101)。
+    start = date.fromisoformat(start_date) if start_date else end - timedelta(days=days)
+    if start > end:
+        raise SystemExit(f"start-date ({start}) が end-date ({end}) より後です")
     start_s, end_s = start.isoformat(), end.isoformat()
     logger.info("range: %s .. %s (site=%s, %d-day delay buffer)",
                 start_s, end_s, site_url, delay)
@@ -156,7 +166,10 @@ def fetch(site_url: str, client_id: str, client_secret: str, refresh_token: str,
     return {
         "fetched_at": datetime.now(timezone.utc).isoformat(),
         "site_url": site_url,
-        "range": {"start": start_s, "end": end_s, "days": days, "delay_days": delay},
+        "range": {"start": start_s, "end": end_s, "days": days,
+                  # 窓が実際に何日ぶんか。--days と違い両端を含む実日数
+                  "window_days": (end - start).days + 1,
+                  "delay_days": delay},
         "totals": {
             "queries": len(by_query),
             "pages": len(by_page),
@@ -193,6 +206,7 @@ def main() -> int:
     p.add_argument("--days", type=int, default=DEFAULT_DAYS)
     p.add_argument("--delay", type=int, default=DEFAULT_DELAY)
     p.add_argument("--end-date", help="range終端を(today - delay)でなく指定日 (YYYY-MM-DD) に固定 (backfill用、--delayは無視される)")
+    p.add_argument("--start-date", help="range始端を明示 (YYYY-MM-DD)。--days の代わりに使う。--end-date と同じ日を渡せば 1 日窓 (両端を含むため --days 1 は 2 日窓になる)")
     p.add_argument("--out", default=DEFAULT_OUT)
     # rowLimit の上書き。既定値は据え置きなので既存の呼び出し (navi 日次/週次) は不変。
     # omcha.jp (832記事) のように母数が大きい property を週次窓で取るときに、
@@ -220,6 +234,7 @@ def main() -> int:
     try:
         result = fetch(args.site_url, args.client_id, args.client_secret,
                        args.refresh_token, args.days, args.delay, args.end_date,
+                       args.start_date,
                        args.top_query, args.top_page, args.top_combo)
     except Exception as e:
         logger.exception("GSC fetch failed: %s", e)
