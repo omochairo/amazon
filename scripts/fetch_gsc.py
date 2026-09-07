@@ -134,6 +134,20 @@ def fetch(site_url: str, client_id: str, client_secret: str, refresh_token: str,
 
     by_device = _query(service, site_url, start_s, end_s, ["device"], 10, aggregation_type)
 
+    # **country は保持 16 か月で、取っていなければ過ぎた日は二度と取れない。**
+    # 実測 (omcha.jp / 2026-09-07): 1 日 39〜90 行・raw 4〜8KB。by_query 5,751 行の
+    # 隣では無視できる。rowLimit は 25000 だが、GSC が返す国は高々 200 強なので
+    # 張り付かない (omochairo/omcha-ops#120 B-1)。
+    #
+    # **「海外を除外して position を正す」ためではない。** omcha.jp で測った
+    # 歪みは、直近でサイト全体 +0.016 位・ページ単位でも 121 本すべてが
+    # 判定しきい値 (0.3 位) 未満だった。**今は何の判定も変えない。**
+    # ただしサイトが小さかった 2025-04 は日本以外が表示の 11.4% で歪みが
+    # +0.883 位あった。**構成比が変わったときに後から確かめられるように残す。**
+    by_country = _query(service, site_url, start_s, end_s, ["country"], 500,
+                        aggregation_type)
+    by_country.sort(key=lambda r: r["impressions"], reverse=True)
+
     # site-wide totals: dimensionless query (row_limit=1) で真のサイト全体集計を取得。
     # by_page は TOP_PAGE_DEFAULT 件で打ち切られるため clicks_sum/impressions_sum は
     # 「上位ページの合計」にすぎず、position に至っては site-wide の値がどこにも
@@ -202,6 +216,7 @@ def fetch(site_url: str, client_id: str, client_secret: str, refresh_token: str,
         "by_page": by_page,
         "by_combo": by_combo,
         "by_device": by_device,
+        "by_country": by_country,
         "opportunity_pages": opportunity,
     }
 
