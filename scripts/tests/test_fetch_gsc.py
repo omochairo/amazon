@@ -241,9 +241,50 @@ def test_query_dimensionless_row_normalizes_to_empty_dim_dict():
 # fetch(): site-wide totals (1b)
 # ---------------------------------------------------------------------------
 
-def _fetch_responses(by_query_rows, by_page_rows, by_combo_rows, by_device_rows, sitewide_rows):
-    # fetch() 呼び出し順: by_query, by_page, by_combo, by_device, sitewide
-    return [by_query_rows, by_page_rows, by_combo_rows, by_device_rows, sitewide_rows]
+def _fetch_responses(by_query_rows, by_page_rows, by_combo_rows, by_device_rows,
+                     sitewide_rows, by_country_rows=None):
+    # fetch() 呼び出し順: by_query, by_page, by_combo, by_device, by_country, sitewide
+    #
+    # **順番と本数がここでずれると、後ろの呼び出しが前の応答を食う。** country を
+    # 足したとき、この helper を直し忘れて sitewide の応答が by_country に渡り、
+    # KeyError: 'keys' で 6 件落ちた (omochairo/omcha-ops#120 B-1)。
+    # 次元を足すときは必ずここも足すこと
+    return [by_query_rows, by_page_rows, by_combo_rows, by_device_rows,
+            by_country_rows or [], sitewide_rows]
+
+
+def test_fetch_returns_country_rows_sorted_by_impressions(monkeypatch):
+    """country 次元が payload に載り、表示回数の降順で並ぶこと。
+
+    GSC の保持は 16 か月で、取っていない日は二度と取れない
+    (omochairo/omcha-ops#120 B-1)。**取れていないことに気づけないと、
+    気づいたときには過ぎている**ので、載ることをテストで固定する。
+    """
+    responses = _fetch_responses(
+        by_query_rows=[],
+        by_page_rows=[],
+        by_combo_rows=[],
+        by_device_rows=[],
+        by_country_rows=[
+            {"keys": ["usa"], "clicks": 4, "impressions": 489,
+             "ctr": 0.0082, "position": 7.06},
+            {"keys": ["jpn"], "clicks": 1599, "impressions": 104882,
+             "ctr": 0.0152, "position": 6.71},
+        ],
+        sitewide_rows=[_sitewide_row(clicks=1612, impressions=105894,
+                                     ctr=0.0152, position=6.73)],
+    )
+    fake = _patch_service(monkeypatch, responses)
+
+    result = fetch("sc-domain:example.com", "cid", "secret", "refresh",
+                   days=1, delay=0, end_date="2026-07-20")
+
+    assert [r["country"] for r in result["by_country"]] == ["jpn", "usa"]
+    assert result["by_country"][0]["impressions"] == 104882
+
+    # country の呼び出しが実際に country 次元で投げられていること
+    bodies = [c["body"] for c in fake.calls]
+    assert any(b.get("dimensions") == ["country"] for b in bodies)
 
 
 def test_fetch_populates_sitewide_values_from_dimensionless_response(monkeypatch):
