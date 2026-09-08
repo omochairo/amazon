@@ -1413,3 +1413,76 @@ brands:
   # こまもの本舗=創業50年超のEC小売(プリンタスグループ)。hacomo等の正規販売代理店
   # (komamono-honpo.com/zakka/toy_hobby/ に実在商品ページ確認済)。
   - {canonical: こまもの本舗, tier: D, region: JP, noindex: true, aliases: [こまもの本舗]}
+
+  # 2026-09-08 (#2931): 供給側検出器がカタログ未登録のまま浮上した30候補のうち、
+  # オーナー承認済みの素案 (issue #2931 コメント) から登録する26件。
+  # MAG は既存の マグフォーマー/Geomag/マグビルド (磁石ブロック) とは無関係な
+  # ノア精密の時計ブランドのため、alias に寄せず独立エントリにする (issue注記どおり)。
+  # ふんわりえほん は amanoppo の商品ラインの可能性が残り実物未確認のため今回は保留 (追加しない)。
+  - canonical: e-future
+    aliases: [e-future]
+    tier: B
+    region: KR
+  - canonical: ソニーエンジェル
+    aliases: [ソニーエンジェル, Sonny Angel]
+    tier: B
+    region: JP
+  - canonical: embot
+    aliases: [embot]
+    tier: B
+    region: JP
+  - canonical: Marble Genius
+    aliases: [Marble Genius]
+    tier: B
+    region: US
+  - canonical: レーベルレーベル
+    aliases: [レーベルレーベル, Label Label]
+    tier: B
+    region: NL
+  - canonical: Alphablocks
+    aliases: [Alphablocks]
+    tier: B
+    region: GB
+  - canonical: 木製おもちゃのだいわ
+    aliases: [木製おもちゃのだいわ]
+    tier: C
+    region: JP
+  - canonical: MAG
+    aliases: [MAG, マグ]
+    tier: C
+    region: JP
+  - canonical: もりもり工房
+    aliases: [もりもり工房]
+    tier: C
+    region: JP
+  - canonical: ルーティン博士の学習塾
+    aliases: [ルーティン博士の学習塾]
+    tier: D
+    region: JP
+  - canonical: 親子Smile
+    aliases: [親子Smile]
+    tier: D
+    region: JP
+  - canonical: JPjoy
+    aliases: [JPjoy]
+    tier: D
+    region: JP
+  - canonical: amanoppo
+    aliases: [amanoppo, あまのっぽ]
+    tier: D
+    region: JP
+  # 以下は販社・ショップ名 (前例: こまもの本舗) と中華新興ブランド。
+  # 正規化はしたいが薄いハブは出さない = noindex (既存 Jasonwell/beiens 等と同方針)。
+  - {canonical: なないろ館, tier: D, region: JP, noindex: true, aliases: [なないろ館]}
+  - {canonical: おんぷカードショップ, tier: D, region: JP, noindex: true, aliases: [おんぷカードショップ]}
+  - {canonical: おもちゃ実業, tier: D, region: CN, noindex: true, aliases: [おもちゃ実業]}
+  - {canonical: HOMANY, tier: D, region: CN, noindex: true, aliases: [HOMANY]}
+  - {canonical: QYONLINE, tier: D, region: CN, noindex: true, aliases: [QYONLINE]}
+  - {canonical: GOKEI, tier: D, region: CN, noindex: true, aliases: [GOKEI]}
+  - {canonical: Across Rainbow, tier: D, region: CN, noindex: true, aliases: [Across Rainbow]}
+  - {canonical: Ornatego, tier: D, region: CN, noindex: true, aliases: [Ornatego]}
+  - {canonical: Yobuisg, tier: D, region: CN, noindex: true, aliases: [Yobuisg]}
+  - {canonical: SOLLENT, tier: D, region: CN, noindex: true, aliases: [SOLLENT]}
+  - {canonical: Vexolite, tier: D, region: CN, noindex: true, aliases: [Vexolite]}
+  - {canonical: Kitai Japan, tier: D, region: CN, noindex: true, aliases: [Kitai Japan]}
+  - {canonical: SAKURAN, tier: D, region: CN, noindex: true, aliases: [SAKURAN]}
