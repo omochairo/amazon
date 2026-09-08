@@ -14,13 +14,14 @@ name: PR Check Recovery
 # 実被害は「4 日 open のまま」なので、最悪 20〜30 分での復旧で十分。
 
 on:
-  # schedule:  # 下記の理由で一時停止中 (2026-09-08)
-    # 2026-09-08 一時停止: 初回 dry_run が `gh pr list --json ...commits` の
-    # GraphQL ノード上限超過で必ず失敗する (authors connection が 100 万ノードに展開)。
-    # 15 分毎に失敗し続けるだけなので schedule を止める。workflow_dispatch は残す。
-    # 復旧条件: 一覧クエリから commits を外し、候補に絞ってから PR 単位で
-    # head commit の push 時刻を取る形に直したら、この行を戻す。
-    # - cron: '*/15 * * * *'
+  schedule:
+    # 2026-09-08 に一度停止し、同日中に復旧させた。停止の理由は
+    # `gh pr list --json ...commits` が GraphQL のノード上限 (500,000) を
+    # 静的コスト解析で必ず超えたこと (open PR が 0 件でも失敗する)。
+    # #6810 で一覧から commits を外し、head commit の時刻は
+    # `evaluate_pr` が実際に見る条件でだけ PR 単位に取る形へ直した。
+    # 復旧前に dry_run=true (run 34230587664) が候補検出まで通ることを確認済み。
+    - cron: '*/15 * * * *'
   workflow_dispatch:
     inputs:
       dry_run:
