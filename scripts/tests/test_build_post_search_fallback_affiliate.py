@@ -105,20 +105,45 @@ class SearchFallbackAffiliateTest(unittest.TestCase):
             url = build_post._build_rakuten_search_url("テスト商品")
         self.assertTrue(url.startswith(f"{RAKUTEN_AFFILIATE_HOST}SECRET-ID/"), url)
 
-    def test_missing_ssot_fails_loudly(self):
-        """SSOT が読めないとき、素の URL へ黙って落ちずに例外で落ちること。
+    def test_missing_ssot_degrades_instead_of_raising(self):
+        """SSOT が読めないとき、例外ではなく空文字を返すこと。
 
-        ここが緩むと「リンクは出るが収益は出ない」という #6822 と同じ
-        無症状の欠陥に戻る。
+        初版は例外で落とす設計にしていたが、build_post.py は記事ごとに例外を
+        握り潰して次へ進むため、「全記事を捨てて exit 0」という挙動になった
+        (CI で 15 件 fail して発覚)。素の URL を出すこと (収益の取りこぼし) より、
+        記事が丸ごと消えてビルドが緑のままになる方が危険なので縮退させる。
         """
         missing = pathlib.Path("does-not-exist-6822.toml")
-        with self.assertRaises(RuntimeError):
-            build_post._load_committed_affiliate_param("rakutenAffiliateId", missing)
-        with self.assertRaises(RuntimeError):
-            build_post._load_committed_affiliate_param("valuecommerceSid", missing)
+        self.assertEqual(
+            build_post._load_committed_affiliate_param("rakutenAffiliateId", missing), ""
+        )
+        self.assertEqual(
+            build_post._load_committed_affiliate_param("valuecommerceSid", missing), ""
+        )
+
+    def test_render_still_produces_output_without_ids(self):
+        """ID が取れない環境でもリンク生成が例外を投げないこと。
+
+        ``_SEARCH_URL_BUILDERS`` が例外を投げると、その記事は
+        ``Error processing …`` として捨てられ、しかもビルドは exit 0 で緑になる。
+        この経路を二度と作らないための回帰テスト。
+        """
+        with unittest.mock.patch.object(build_post, "get_secret", lambda _n: ""), \
+                unittest.mock.patch.object(
+                    build_post, "_load_committed_affiliate_param", lambda *a, **k: ""):
+            rakuten = build_post._build_rakuten_search_url("テスト商品")
+            yahoo = build_post._build_yahoo_search_url("テスト商品")
+        self.assertTrue(rakuten.startswith(BARE_RAKUTEN_SEARCH), rakuten)
+        self.assertTrue(yahoo.startswith(BARE_YAHOO_SEARCH), yahoo)
 
     def test_committed_ssot_is_present_in_config(self):
-        """config.toml に 3 つの ID が実在すること (欠けたら build が落ちるため)。"""
+        """config.toml に 3 つの ID が実在すること。
+
+        実行時は ID が無くても素の URL へ縮退するだけで、警告ログは
+        1 日 57 件の PR に埋もれて誰も読まない。**設定の欠落を検出する防御は
+        実行時ではなくここ (全 PR で走る CI) に置いている。**
+        このテストが落ちたら、収益化されていないリンクが配信される。
+        """
         for param in ("rakutenAffiliateId", "valuecommerceSid", "valuecommercePid"):
             value = build_post._load_committed_affiliate_param(param)
             self.assertTrue(value, f"[params].{param} が config.toml に無い")

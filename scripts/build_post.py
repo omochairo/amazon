@@ -2605,27 +2605,30 @@ def _load_committed_affiliate_param(
 ) -> str:
     """``hugo/config.toml`` の ``[params].<param_name>`` を読む (#6822)。
 
-    ``_load_committed_amazon_partner_tag`` と同じ理由で、値が取れない場合は
-    空文字へ黙って落ちずに例外で落とす。素の URL を出し続ける経路を残すと、
-    収益化されていないことに誰も気付かないまま数か月が経つ (それが本 issue)。
+    値が取れない場合は空文字を返す。**例外で落とさない。**
+
+    初版では ``_load_committed_amazon_partner_tag`` に倣って例外を投げていたが、
+    build_post.py は記事ごとに例外を握り潰して次へ進む実装のため、
+    「``Error processing <file>`` をログに出しつつ **全記事を捨てて exit 0**」
+    という挙動になっていた (CI で 15 件 fail して発覚)。
+    素の URL を出す (= 収益の取りこぼし) よりも、記事が丸ごと消えてビルドが
+    緑のままになる方がはるかに危険なので、実行時は縮退させる。
+
+    「ID が設定されていること」は実行時ではなく **CI で保証する** —
+    ``test_build_post_search_fallback_affiliate`` の
+    ``test_committed_ssot_is_present_in_config`` が全 PR で config.toml を検査する。
+    ログの警告は 1 日 57 件の PR に埋もれて誰も読まないので、防御をそこに置かない。
     """
     if not hugo_config_path.exists():
-        raise RuntimeError(f"{param_name} SSOT missing (#6822): {hugo_config_path} not found")
+        return ""
     try:
         with hugo_config_path.open("rb") as f:
             config = tomllib.load(f)
-    except tomllib.TOMLDecodeError as e:
-        raise RuntimeError(
-            f"{param_name} SSOT unreadable (#6822): failed to parse {hugo_config_path}: {e}"
-        ) from e
+    except tomllib.TOMLDecodeError:
+        return ""
     params = config.get("params")
     value = params.get(param_name) if isinstance(params, dict) else None
-    if not value or not isinstance(value, str):
-        raise RuntimeError(
-            f"{param_name} SSOT missing (#6822): [params].{param_name} "
-            f"not set in {hugo_config_path}"
-        )
-    return value
+    return value if isinstance(value, str) and value else ""
 
 
 def _resolve_affiliate_param(secret_name: str, param_name: str) -> str:
@@ -2644,6 +2647,11 @@ def _build_rakuten_search_url(query: str) -> str:
     """
     raw = f"https://search.rakuten.co.jp/search/mall/{urllib.parse.quote(query)}/"
     affiliate_id = _resolve_affiliate_param("RAKUTEN_AFFILIATE_ID", "rakutenAffiliateId")
+    if not affiliate_id:
+        logger.warning(
+            "rakutenAffiliateId 未設定 (#6822): 検索フォールバックを素の URL で出力する"
+        )
+        return raw
     return f"{_RAKUTEN_AFFILIATE_BASE}{affiliate_id}/?pc={urllib.parse.quote(raw, safe='')}"
 
 
@@ -2657,6 +2665,11 @@ def _build_yahoo_search_url(query: str) -> str:
     raw = f"https://shopping.yahoo.co.jp/search?p={urllib.parse.quote(query)}"
     sid = _resolve_affiliate_param("VALUECOMMERCE_SID", "valuecommerceSid")
     pid = _resolve_affiliate_param("VALUECOMMERCE_PID", "valuecommercePid")
+    if not sid or not pid:
+        logger.warning(
+            "valuecommerceSid/Pid 未設定 (#6822): 検索フォールバックを素の URL で出力する"
+        )
+        return raw
     return f"{_VC_REFERRAL_BASE}?sid={sid}&pid={pid}&vc_url={urllib.parse.quote(raw, safe='')}"
 
 
