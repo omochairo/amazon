@@ -1028,6 +1028,19 @@ def extract_browse_nodes(item: dict) -> list:
     return out
 
 
+def classify_keyword_lane(kw: str, user_keywords: list, demand_kws: list) -> str:
+    """検索語 kw の出自レーンを判定する (#4964 観察項目3、ASIN 出自台帳)。
+
+    判定順序は user → demand → supply-random。user 指定語が demand 語彙と
+    重なる場合も、ユーザーが明示指定した事実の方が確度が高いので user を優先する。
+    """
+    if kw in user_keywords:
+        return "user"
+    if kw in demand_kws:
+        return "demand"
+    return "supply-random"
+
+
 def normalize_api_item(it: dict, tag: str, source: str) -> dict:
     """Creator API の item response を amazon.json / snapshot の item 形式に整形。
 
@@ -1594,6 +1607,10 @@ def main():
                     seen_parent_asins.add(parent)
                 seen_asins.add(asin)
                 normalized = normalize_api_item(it, tag, "Amazon")
+                # ASIN 出自台帳 (#4964 観察項目3) 用。この検索ループの外では
+                # kw (検索語) が失われるため、item に残せるのはここだけ。
+                normalized["source_keyword"] = kw
+                normalized["lane"] = classify_keyword_lane(kw, user_keywords, demand_kws)
                 items.append(normalized)
                 if _is_jules_eligible(normalized):
                     new_for_jules += 1
