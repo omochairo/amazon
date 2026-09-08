@@ -10,16 +10,23 @@ omcha.jp API を叩いて 24h TTL の per-ASIN キャッシュを書いていた
 
 - 描画と I/O を分離 (build_post は読むだけ)
 - 出力ファイルを tracked に統一 (untracked 汚染解消、Issue #674)
-- _fetch_targets の stale-first cycle (50/run × 7日) に統合 (PR #486 と同型)
+- _fetch_targets の stale-first cycle に統合 (PR #486 と同型)
 - score_calculator が依存する omcha_related.json の存在を保証 (race 解消)
 
-Issue: https://github.com/omochairo/amazon/issues/674
+`--max-per-run` は `auto`（既定は明示指定した数値、workflow 側は auto を指定）にすると
+対象 ASIN 数から自動算出する: ceil(対象数 / (--stale-after-days × --runs-per-day))。
+対象 ASIN は日々増えるため固定値は必ず陳腐化する (Issue #6773) — 母数から独立させて
+再発を防ぐ。例: 2026-09-08 時点で対象 2,408 件 / stale-after-days=7 / runs-per-day=2 なら
+172/run。
+
+Issue: https://github.com/omochairo/amazon/issues/674, https://github.com/omochairo/amazon/issues/6773
 """
 from __future__ import annotations
 
 import argparse
 import json
 import logging
+import math
 import pathlib
 import re
 import time
@@ -86,6 +93,48 @@ def _collect_keyword_pairs(articles_dir: pathlib.Path) -> dict[str, str]:
         if keyword:
             out[asin] = keyword
     return out
+
+
+def _max_per_run_arg(raw: str) -> str:
+    """``--max-per-run`` の argparse type。``auto`` はそのまま通し、それ以外は整数検証だけ行う。
+
+    実際の auto 解決 (母数を見る) は main() 側 (`_resolve_max_per_run`) でやる。
+    ここで int に変換してしまうと "auto" 判定ができなくなるので str のまま返す。
+    """
+    if raw == "auto":
+        return raw
+    try:
+        if int(raw) < 0:
+            raise ValueError
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"invalid --max-per-run: {raw!r} (expected non-negative int, or 'auto')"
+        )
+    return raw
+
+
+def _resolve_max_per_run(
+    raw: str, total_targets: int, stale_after_days: int, runs_per_day: int, cap: int,
+) -> int:
+    """``--max-per-run`` を実際の picked 数上限に解決する。
+
+    ``auto`` (または明示的な ``0``) のときだけ母数から算出する。それ以外の整数指定は
+    従来どおりそのまま使う (後方互換)。算出値が ``cap`` を超えたら cap で頭打ちにし、
+    TTL (``stale_after_days``) が守れなくなっている旨を WARNING で出す (無言劣化防止)。
+    """
+    if raw not in ("auto", "0"):
+        return int(raw)
+    if total_targets <= 0:
+        return 0
+    computed = math.ceil(total_targets / (stale_after_days * runs_per_day))
+    if computed > cap:
+        logger.warning(
+            f"[{SOURCE}] auto max-per-run={computed} exceeds --max-per-run-cap={cap}; "
+            f"capping to {cap} (stale-after-days={stale_after_days}d TTL will not be met "
+            f"at current target count={total_targets})"
+        )
+        computed = cap
+    return computed
 
 
 def _pick_stale_targets(
@@ -169,8 +218,19 @@ def main():
     ap.add_argument("--out", default="data/raw", help="data/raw ルート")
     ap.add_argument("--articles-dir", default="data/articles", help="記事 JSON dir")
     ap.add_argument(
-        "--max-per-run", type=int, default=50,
-        help="1 run あたりの最大 ASIN 数 (stale-first cap)",
+        "--max-per-run", type=_max_per_run_arg, default="50",
+        help="1 run あたりの最大 ASIN 数 (stale-first cap)。'auto' (または '0') を渡すと "
+             "対象 ASIN 数 / (--stale-after-days × --runs-per-day) から自動算出する "
+             "(Issue #6773)。整数を明示指定した場合はそのまま使う。",
+    )
+    ap.add_argument(
+        "--runs-per-day", type=int, default=2,
+        help="'auto' 解決に使う 1 日あたりの run 回数。既定 2 は .github/workflows/"
+             "01-fetch-products.yml の cron が 1 日 2 回 (0:00, 9:00 UTC) 実行される前提。",
+    )
+    ap.add_argument(
+        "--max-per-run-cap", type=int, default=400,
+        help="'auto' 解決値の安全上限。超えた場合はここで頭打ちにして WARNING を出す。",
     )
     ap.add_argument(
         "--asins", default=None,
@@ -215,8 +275,12 @@ def main():
             logger.warning(f"[{SOURCE}] --asins: no valid targets, nothing to fetch")
             return
     else:
+        max_per_run = _resolve_max_per_run(
+            args.max_per_run, len(keyword_pairs), args.stale_after_days,
+            args.runs_per_day, args.max_per_run_cap,
+        )
         targets = _pick_stale_targets(
-            out_dir, keyword_pairs, args.max_per_run, args.stale_after_days,
+            out_dir, keyword_pairs, max_per_run, args.stale_after_days,
         )
         if not targets:
             logger.info("No stale ASINs to refresh this run")

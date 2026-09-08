@@ -7,9 +7,11 @@
 4. main flow: stale ASIN のみ get_related_articles を呼び、結果が per_asin に書かれる
 5. build_post._attach_omcha_related が tracked キャッシュを読んで UTM 装飾するだけ
    (live HTTP しないことの回帰防止)
+6. `--max-per-run auto` の母数からの自動算出 (Issue #6773)
 """
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import pathlib
@@ -124,6 +126,95 @@ class PickStaleTargetsTest(unittest.TestCase):
             self.out_dir, keyword_pairs, max_per_run=10, stale_after_days=7, now=now,
         )
         self.assertEqual(len(picked), 10)
+
+
+class MaxPerRunArgTypeTest(unittest.TestCase):
+    """`_max_per_run_arg` (argparse type): 'auto' と非負整数のみ許容。"""
+
+    def test_accepts_auto(self):
+        self.assertEqual(fetch_omcha_related._max_per_run_arg("auto"), "auto")
+
+    def test_accepts_non_negative_int_string(self):
+        self.assertEqual(fetch_omcha_related._max_per_run_arg("50"), "50")
+        self.assertEqual(fetch_omcha_related._max_per_run_arg("0"), "0")
+
+    def test_rejects_negative(self):
+        with self.assertRaises(argparse.ArgumentTypeError):
+            fetch_omcha_related._max_per_run_arg("-1")
+
+    def test_rejects_non_numeric(self):
+        with self.assertRaises(argparse.ArgumentTypeError):
+            fetch_omcha_related._max_per_run_arg("banana")
+
+
+class ResolveMaxPerRunTest(unittest.TestCase):
+    """`_resolve_max_per_run`: 母数 / stale_after_days / runs_per_day から auto 算出 (Issue #6773)。"""
+
+    def test_auto_computes_ceil_from_total_targets(self):
+        # 2408 / (7 * 2) = 172.0 ちょうど
+        self.assertEqual(
+            fetch_omcha_related._resolve_max_per_run(
+                "auto", total_targets=2408, stale_after_days=7, runs_per_day=2, cap=400,
+            ),
+            172,
+        )
+
+    def test_auto_rounds_up_when_not_evenly_divisible(self):
+        # 2409 / 14 = 172.07... -> ceil で 173
+        self.assertEqual(
+            fetch_omcha_related._resolve_max_per_run(
+                "auto", total_targets=2409, stale_after_days=7, runs_per_day=2, cap=400,
+            ),
+            173,
+        )
+
+    def test_explicit_zero_is_treated_as_auto(self):
+        self.assertEqual(
+            fetch_omcha_related._resolve_max_per_run(
+                "0", total_targets=140, stale_after_days=7, runs_per_day=2, cap=400,
+            ),
+            10,
+        )
+
+    def test_changing_stale_after_days_changes_result(self):
+        self.assertEqual(
+            fetch_omcha_related._resolve_max_per_run(
+                "auto", total_targets=2408, stale_after_days=14, runs_per_day=2, cap=400,
+            ),
+            86,
+        )
+
+    def test_changing_runs_per_day_changes_result(self):
+        self.assertEqual(
+            fetch_omcha_related._resolve_max_per_run(
+                "auto", total_targets=2408, stale_after_days=7, runs_per_day=1, cap=400,
+            ),
+            344,
+        )
+
+    def test_auto_hits_cap_and_warns(self):
+        with self.assertLogs(fetch_omcha_related.logger, level="WARNING") as cm:
+            result = fetch_omcha_related._resolve_max_per_run(
+                "auto", total_targets=100_000, stale_after_days=7, runs_per_day=2, cap=400,
+            )
+        self.assertEqual(result, 400)
+        self.assertTrue(any("--max-per-run-cap" in msg for msg in cm.output))
+
+    def test_explicit_int_bypasses_auto_calculation(self):
+        self.assertEqual(
+            fetch_omcha_related._resolve_max_per_run(
+                "50", total_targets=2408, stale_after_days=7, runs_per_day=2, cap=400,
+            ),
+            50,
+        )
+
+    def test_auto_with_zero_targets(self):
+        self.assertEqual(
+            fetch_omcha_related._resolve_max_per_run(
+                "auto", total_targets=0, stale_after_days=7, runs_per_day=2, cap=400,
+            ),
+            0,
+        )
 
 
 class MainFlowTest(unittest.TestCase):
