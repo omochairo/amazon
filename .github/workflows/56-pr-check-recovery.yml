@@ -1,0 +1,57 @@
+name: PR Check Recovery
+
+# #6609: pull_request イベントが GitHub 側で配送されず、required check
+# (`validate` / `unit-tests`) が 1 件も付かないまま PR が永久 pending になる事故
+# (#6606 実例) への自動復旧。トリガー定義側 (paths/branches フィルタ) に原因は無く、
+# GitHub 側の配送問題 (再現条件未特定)。
+#
+# 2段構え (詳細は scripts/recover_pending_pr_checks.py の docstring):
+#   段1: workflow_dispatch で 44-unit-tests / 04-validate-article-pr を再実行
+#   段2: 段1が 1 tick (15分) 経っても効かなければ PR を close→reopen して
+#        pull_request (reopened) を再発火させる
+#
+# cron を 3〜5 分にしないこと (#6609 の母艦指示): 15 分間隔なら 1 日 96 run で足りる。
+# 実被害は「4 日 open のまま」なので、最悪 20〜30 分での復旧で十分。
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '実際には dispatch / close-reopen しない (ログのみ)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: pr-check-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Recover pending PR checks
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            python scripts/recover_pending_pr_checks.py --dry-run
+          else
+            python scripts/recover_pending_pr_checks.py
+          fi
