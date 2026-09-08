@@ -170,6 +170,113 @@ jobs:
           gh pr edit "$PR_URL" --add-label auto-merge-skipped \
             || echo "::warning::could not add 'auto-merge-skipped' label (does the label exist?)"
 
+      # 2026-09-08 (#6773 案A): 記事 merge 直後は omcha.jp 関連カードのキャッシュが無く、
+      # 次の 01-fetch-products.yml 巡回 (1日2回) まで最大 ~12h カード 0 枚のまま配信される。
+      # この PR が追加する記事の ASIN だけ fetch_omcha_related.py --asins (#6777) を実行し、
+      # 結果を「この PR に追いコミット」してから auto-merge する。別 PR を起こさないので
+      # mirror dispatch は既存どおり 1 回のままで済み、候補 B (別PR方式) が抱える二重
+      # ビルド問題 (40-mirror-to-gitlab の batching 設計と衝突) を避けられる。
+      #
+      # data/raw/per_asin/ は上の scope guard (Inspect changed files, 57行目) で既に
+      # 許可パスに入っているため、このコミットを足しても eligible=false にはならない
+      # (2026-09-08 検証済み)。**スコープガード自体は一切変更しない。**
+      - name: Determine omcha_related backfill targets (#6773)
+        id: omcha
+        if: steps.scope.outputs.eligible == 'true' || steps.repair.outputs.repaired == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          asins=""
+          added=$(git diff --name-only --diff-filter=A "$BASE_SHA"..."$HEAD_SHA" -- 'data/articles/*.json' \
+                    2>/dev/null | grep -vE '\.(enrichment|quality|seo)\.json$' || true)
+          for f in $added; do
+            asin=$(basename "$f" | grep -oE 'B0[A-Z0-9]{8}' | head -1 || true)
+            [ -z "$asin" ] && continue
+            if [ -f "data/raw/per_asin/${asin}/omcha_related.json" ]; then
+              echo "skip $asin: cache already exists"
+              continue
+            fi
+            asins="${asins:+$asins,}$asin"
+          done
+          echo "asins=$asins" >> "$GITHUB_OUTPUT"
+          echo "target ASIN(s) for omcha backfill: ${asins:-none}"
+          exit 0
+
+      # App token (01/03 と同じ機構) で push する。GITHUB_TOKEN で push すると
+      # anti-recursion guard で pull_request:synchronize が発火せず、この新しい
+      # commit に対して 04-validate-article-pr.yml の required check が二度と
+      # 付かないまま PR が永久 pending になりうる (#382 #384 #386 と同型の事故)。
+      # App token なら通常の pull_request イベントとして扱われ、04 が新 commit を
+      # 再検証する (01 の実績と同じ)。
+      #
+      # 以下の Action ベースの 3 step (App token 生成 / checkout / Python setup) は
+      # シェルコマンドではないため `||` で個別に握れない。ここだけ continue-on-error
+      # を使う (配信を止めないための唯一の手段)。失敗しても outcome には残るので
+      # ログ上は可視 (conclusion だけが success に補正される)。fetch/push 本体の
+      # シェル step では continue-on-error を使わず、各コマンドを `||` で明示的に扱う。
+      - name: Generate App token for omcha backfill (#6773)
+        id: omcha-app-token
+        if: steps.omcha.outputs.asins != ''
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout PR branch with App token (omcha backfill, #6773)
+        id: omcha-checkout
+        if: steps.omcha.outputs.asins != '' && steps.omcha-app-token.outcome == 'success'
+        continue-on-error: true
+        uses: actions/checkout@v7
+        with:
+          token: ${{ steps.omcha-app-token.outputs.token }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 1
+
+      - name: Setup Python (omcha backfill, #6773)
+        id: omcha-setup-python
+        if: steps.omcha.outputs.asins != '' && steps.omcha-checkout.outcome == 'success'
+        continue-on-error: true
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      # この step の失敗は絶対に PR を止めてはならない (配信を遅らせないことが本命案の
+      # 前提)。continue-on-error は使わない (失敗が success として記録され不可視になる
+      # ため)。代わりに各コマンドを `||` で明示的に受け、step 自体は必ず成功で抜ける。
+      - name: Fetch omcha_related and push to PR branch (#6773)
+        if: steps.omcha.outputs.asins != '' && steps.omcha-checkout.outcome == 'success' && steps.omcha-setup-python.outcome == 'success'
+        env:
+          ASINS: ${{ steps.omcha.outputs.asins }}
+          OMCHA_API_KEY: ${{ secrets.OMCHA_API_KEY }}
+        run: |
+          pip install -q -r requirements.txt \
+            || { echo "::warning::#6773 omcha backfill: pip install failed for $ASINS; merging without pre-warmed cache"; exit 0; }
+
+          python scripts/fetch_omcha_related.py --asins "$ASINS" --out data/raw/ \
+            || { echo "::warning::#6773 omcha backfill: fetch_omcha_related.py failed for $ASINS; merging without pre-warmed cache"; exit 0; }
+
+          if [ -z "$(git status --porcelain -- data/raw/per_asin/ 2>/dev/null)" ]; then
+            echo "#6773 omcha backfill: no cache changes produced for $ASINS; nothing to push"
+            exit 0
+          fi
+
+          git config user.name "omochairo-fetch-bot[bot]"
+          git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
+          git add data/raw/per_asin/ \
+            || { echo "::warning::#6773 omcha backfill: git add failed for $ASINS"; exit 0; }
+          if git diff --cached --quiet; then
+            echo "#6773 omcha backfill: nothing staged; skipping commit"
+            exit 0
+          fi
+          git commit -q -m "data: prefetch omcha_related for $ASINS (#6773)" \
+            || { echo "::warning::#6773 omcha backfill: git commit failed for $ASINS"; exit 0; }
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}" \
+            || echo "::warning::#6773 omcha backfill: git push failed for $ASINS; merging without pre-warmed cache"
+          exit 0
+
       - name: Enable native auto-merge (squash)
         if: steps.scope.outputs.eligible == 'true' || steps.repair.outputs.repaired == 'true'
         env:
