@@ -187,6 +187,22 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          # 2026-09-08 (#6788 事後): この追いコミット自体が push → synchronize を
+          # 発火させ、同じ workflow をもう一段再トリガする。その再トリガ run が
+          # HEAD 判定の時点で「自分の追いコミットが HEAD」であれば、fetch は
+          # 前段の run が既にやっているので二重に走らせる意味が無い (無駄な
+          # pip install / API 呼び出し + 再トリガの連鎖を1段で止める)。
+          # 文字列一致ではなく author/committer email で判定する
+          # (コミットメッセージは書き換えられうるが email はワークフロー内で固定)。
+          BOT_EMAIL="omochairo-fetch-bot[bot]@users.noreply.github.com"
+          head_author_email=$(git log -1 --format='%ae' "$HEAD_SHA" 2>/dev/null || true)
+          head_committer_email=$(git log -1 --format='%ce' "$HEAD_SHA" 2>/dev/null || true)
+          if [ "$head_author_email" = "$BOT_EMAIL" ] || [ "$head_committer_email" = "$BOT_EMAIL" ]; then
+            echo "HEAD ($HEAD_SHA) is our own omcha backfill commit; skipping re-fetch"
+            echo "asins=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           asins=""
           added=$(git diff --name-only --diff-filter=A "$BASE_SHA"..."$HEAD_SHA" -- 'data/articles/*.json' \
                     2>/dev/null | grep -vE '\.(enrichment|quality|seo)\.json$' || true)
@@ -278,18 +294,42 @@ jobs:
           exit 0
 
       - name: Enable native auto-merge (squash)
+        id: auto-merge
         if: steps.scope.outputs.eligible == 'true' || steps.repair.outputs.repaired == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
         run: |
           set -e
           # gh requires branch protection / rulesets with a required check to honor --auto.
           # See PR description for the one-time `gh api` setup snippet.
-          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
-            echo "Auto-merge (squash + delete-branch) enabled on $PR_URL."
+          #
+          # 2026-09-08 (#6788 事後): headSha を固定せずに --auto を有効化すると、
+          # この run が追いコミット (backfill 等) した後に別の push (Jules の
+          # 自動修復コミット等) が割り込んだ場合、native auto-merge はその新しい
+          # head に対して required check が通り次第 squash してしまう。
+          # このrunが確認した追いコミット後の内容が squash に含まれる保証が無い
+          # (#6788 で実際に omcha_related.json が squash から漏れた)。
+          # `gh pr view` で今の head を都度取り直し、--match-head-commit で
+          # 「この run が見た head」に固定する。割り込みがあれば gh pr merge 自体が
+          # 失敗し (mismatched head)、次の synchronize run が新しい head で
+          # 取り直すまでマージを保留させる。
+          head_sha=$(gh pr view "$PR_NUMBER" -R "$REPO" --json headRefOid --jq '.headRefOid' || true)
+          if [ -z "$head_sha" ]; then
+            echo "::warning::could not resolve current PR head sha for #6788 match-head-commit guard; falling back to unpinned auto-merge"
+            if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+              echo "Auto-merge (squash + delete-branch, unpinned) enabled on $PR_URL."
+            else
+              echo "::warning::Could not enable auto-merge. This usually means branch protection or repo-level 'Allow auto-merge' is not configured. PR will need manual merge until setup is complete."
+            fi
+            exit 0
+          fi
+          if gh pr merge --auto --squash --delete-branch --match-head-commit "$head_sha" "$PR_URL"; then
+            echo "Auto-merge (squash + delete-branch, pinned to $head_sha) enabled on $PR_URL."
           else
-            echo "::warning::Could not enable auto-merge. This usually means branch protection or repo-level 'Allow auto-merge' is not configured. PR will need manual merge until setup is complete."
+            echo "::warning::Could not enable auto-merge with --match-head-commit=$head_sha. This usually means branch protection / 'Allow auto-merge' is not configured, OR the PR head has already moved past $head_sha (a later synchronize run should retry with the new head). PR will need manual merge if this persists."
           fi
 
       # 2026-05-17 Step C-3: auto-merge を有効化した時点で jules-lock/<ASIN> を即時解放する。
