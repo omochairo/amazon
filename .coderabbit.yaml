@@ -1,0 +1,118 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# CodeRabbit 設定 (#6823)。
+#
+# このリポジトリは 1 日あたり 57 件以上の PR をマージしており、その大半は
+# data/ 配下の生成物だけを触る bot PR。素の既定値のままだと生成データにまで
+# レビューが付き、レビューが読まれなくなって導入自体が無意味になる。
+# そのため「人間/エージェントが書いたコードだけを見る」ように絞っている。
+#
+# 注意 (2026-09-09 実測): CodeRabbit の OSS 無料枠は star 10 個以上でないと
+# 自動レビューが動かない。本リポジトリは star 2 のため、現状 auto_review は
+# 発火せず PR コメントの「Trigger review」か `@coderabbitai review` での
+# 手動起動になる。下の auto_review 設定は star が 10 に達した時点で
+# そのまま効くように意図して残してある。
+
+language: "ja-JP"
+
+# レビュー本文・チャットの語調。日本語で簡潔に。
+tone_instructions: >-
+  日本語で簡潔にレビューしてください。指摘は「何が起きるか」を1文で述べ、
+  推測は推測と明示すること。些末な書式の指摘より、壊れる条件の指摘を優先。
+
+early_access: false
+
+reviews:
+  # quiet / chill / assertive。生成コードが多く nitpick が増えやすいので chill。
+  profile: "chill"
+
+  # 既定 false のまま。true にすると「コメントが解決済みなら自動承認」になる。
+  # bot PR の自動マージ (05-jules-auto-merge / 31-engagement-auto-merge) と
+  # 承認経路を二重化したくないので有効化しない。
+  request_changes_workflow: false
+
+  high_level_summary: true
+  review_status: true
+  collapse_walkthrough: true
+
+  # 1 日 57 件の PR に俳句が付くとノイズにしかならない。
+  poem: false
+
+  # レビュー進捗を commit status として出さない。
+  # main の required check は現状 validate / unit-tests の 2 つだけ (実測) なので
+  # 出しても即座にマージを止めることは無いが、
+  # (1) PR ごとに status が増えて見通しが悪くなる
+  # (2) 将来 required check に昇格させてしまうと全 bot PR が止まる
+  # の 2 点を避けるため明示的に無効化する。
+  commit_status: false
+
+  # レビュー対象の絞り込み。先頭 `!` が除外。
+  # 除外しているものは全て「機械生成物」か「vendored」で、人がレビューしても
+  # 得るものが無い。tracked file 76,144 件のうち data/ だけで大半を占める。
+  path_filters:
+    - "!data/**"                 # 生成物 (raw / price_history / articles / price_watch ほか)
+    - "!hugo/content/posts/**"   # build_post.py の出力
+    - "!hugo/content/tags/**"    # 生成タクソノミ (3,783 件のスタブ)
+    - "!hugo/content/brands/**"  # 同上 (321 件)
+    - "!hugo/themes/**"          # submodule (vendored)
+    # hugo/data/ は手管理の設定 (category_taxonomy.yaml / editor_picks.json 等) と
+    # スクリプト生成物が同居しているので、生成側だけを名指しで除外する。
+    - "!hugo/data/features/**"        # build_feature_lists.py の出力
+    - "!hugo/data/author_references.json"  # fetch_ndl_references.py の出力
+    - "!hugo/data/brand_wikidata.json"     # fetch_wikidata_brand_meta.py の出力
+    - "!public/**"               # ビルド成果物
+    - "!**/__pycache__/**"
+    - "!scratch/**"
+    - "!tmp/**"
+    - "!**/*.lock"
+    - "!.hugo_build.lock"
+
+  # 領域ごとに、このリポジトリ固有の見てほしい点を渡す。
+  path_instructions:
+    - path: "scripts/**/*.py"
+      instructions: >-
+        配信ビルド (.gitlab-ci.yml の pages ジョブ) には secret が渡らない。
+        os.environ / get_secret に依存する値が、レンダリング経路で未設定のまま
+        既定値へ黙って落ちていないかを見ること (#5087 / #6822 と同型の退行)。
+        失敗を握り潰して「動いているが結果が間違っている」状態を作る経路
+        (except で pass、空文字フォールバック、continue-on-error 相当) を指摘する。
+    - path: ".github/workflows/*.yml"
+      instructions: >-
+        GitHub Actions の既知の罠を優先的に見ること。
+        (1) 未定義値との比較で null == false が true になる
+        (2) continue-on-error を付けたステップの失敗が success として伝播する
+        (3) workflow_dispatch の input 既定値と env フォールバックの二重定義
+        また、bot PR の自動マージ経路を壊す変更 (required check の増減、
+        権限の変更) は影響範囲を明示して指摘する。
+    - path: "hugo/layouts/**"
+      instructions: >-
+        構造化データ (JSON-LD) の出力を変える場合、どの @type の検出件数が
+        変わるかを指摘すること。Product / Review / AggregateRating /
+        BreadcrumbList は検出実績があるため、欠落は収益・表示に直結する。
+        HTML は minify されるため、属性の引用符に依存した実装は避ける。
+    - path: "hugo/assets/js/**"
+      instructions: >-
+        localStorage / sessionStorage は Safari プライベートモード等で
+        例外を投げる。read/write が try/catch で保護され、失敗時も
+        ページが正しく描画されるかを見ること。
+
+  auto_review:
+    enabled: true
+    drafts: false
+
+    # 生成データのみを触る bot。レビューしても意味が無く、量だけが増える。
+    ignore_usernames:
+      - "omochairo-fetch-bot[bot]"
+
+    # bot PR のタイトルは全て data: / data(seo): で始まる (実測)。
+    # ignore_usernames を抜けた経路 (人間名義で流れる生成 PR) の保険。
+    ignore_title_keywords:
+      - "data:"
+      - "data(seo):"
+      - "[skip ci]"
+
+    base_branches:
+      - "main"
+
+chat:
+  auto_reply: true
