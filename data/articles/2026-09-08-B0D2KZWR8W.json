@@ -30,7 +30,7 @@
       "ちょっとしたプレゼント",
       "夏のイベント"
     ],
-    "age_range": "3歳以上",
+    "age_range": "記載なし",
     "primary_buyer": "20〜40代女性（ママ・親戚・友人）"
   },
   "narrative": {
@@ -56,7 +56,7 @@
     "safety_note": [
       "水遊びの際の安全性や扱いやすさについても確認しておきたい点です。",
       "タンクが本体とチューブで繋がっている構造のため、手元が軽く、小さなお子様でも扱いやすい設計になっています。",
-      "ただし、公式の対象年齢は明記されていないため、保護者の目の届く範囲で遊ばせるのが基本です。",
+      "公式の対象年齢は明記されていないため、保護者の目の届く範囲で遊ばせるのが基本です。",
       "操作自体は簡単であるとメーカーも謳っており、初めての水鉄砲としても選びやすいアイテムです。"
     ],
     "closing": [
@@ -150,13 +150,20 @@
           "reason": "季節モノ（夏場メイン）であるため"
         }
       ]
-    },
-    "target_age": "3歳以上"
+    }
   },
   "youtube_embeds": [],
   "news": [],
   "books": [],
   "internal_links": [],
+  "technical_specs": {
+    "material": "不明",
+    "origin": "不明"
+  },
+  "verdict": {
+    "headline": "手軽に水遊びを楽しみたいご家庭なら買い、本格派は一考"
+  },
+  "editorial_comment": "おもちゃロボより：おでかけボトルシューター ゆめかわピンクは、ペットボトルを再利用できるエコで実用的な水鉄砲です。2WAY仕様で日常使いもできるのが魅力的。最安はAmazonでした。",
   "sources": [
     {
       "id": "src-1",
@@ -190,28 +197,41 @@
       "author": "販売店",
       "conflict_of_interest": "possible",
       "notes": "おでかけ ボトルシューター ポシェットタイプ ユニコーン 水鉄砲 水ピストル ウォーターガン"
+    },
+    {
+      "id": "src-4",
+      "name": "Web Archive / おでかけボトルシューター (Amazonアーカイブ)",
+      "url": "https://web.archive.org/web/20240501/https://www.amazon%2Eco%2Ejp/dp/B0D2L1JMXG/",
+      "tier": "medium",
+      "evidence_type": "primary",
+      "published_at": "2024-05-01",
+      "author": "メーカー公式",
+      "conflict_of_interest": "possible",
+      "notes": "同シリーズの別カラー商品ページアーカイブ。ペットボトルがゴミ問題の一因になっているためSDGsな取組みとして生まれたとの記載がある。"
+    },
+    {
+      "id": "src-5",
+      "name": "Web Archive / おでかけボトルシューター (楽天アーカイブ)",
+      "url": "https://web.archive.org/web/20240501/https://item.rakuten%2Eco%2Ejp/festival-plus/gng-pis-110936-0326/",
+      "tier": "medium",
+      "evidence_type": "primary",
+      "published_at": "2024-05-01",
+      "author": "販売店",
+      "conflict_of_interest": "possible",
+      "notes": "楽天商品ページのアーカイブ。商品名と仕様について共通の記述。"
     }
   ],
   "claims": [
     {
-      "claim": "ペットボトルをタンクとして再利用でき、エコな水遊びが楽しめる仕様である。",
+      "claim": "ペットボトルをタンクとして再利用でき、使わない時はボトルカバーになる2WAY仕様である。",
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-5"
       ],
       "cross_checked": false,
-      "notes": "Amazon商品ページの記載に基づく。"
-    },
-    {
-      "claim": "使わないときはコンパクトに収納でき、お出かけ時の持ち運びに便利である。",
-      "category": "quality",
-      "confidence": "medium",
-      "supporting_source_ids": [
-        "src-1"
-      ],
-      "cross_checked": false,
-      "notes": "Amazonの商品説明に基づく。"
+      "notes": "Amazon、楽天の販売ページ（およびアーカイブ）で共通してアピールされている機能。"
     },
     {
       "claim": "操作が簡単で小さなお子様でも扱うことができる。",
@@ -224,27 +244,36 @@
       "notes": "Amazonの商品説明に基づく。"
     },
     {
-      "claim": "ボトルカバーとしても日常使いができる2WAY設計である。",
+      "claim": "使わないときはコンパクトに畳んで収納可能である。",
       "category": "quality",
       "confidence": "medium",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-4"
       ],
       "cross_checked": false,
-      "notes": "Amazonの商品説明に基づく。"
+      "notes": "Amazonの商品説明（同シリーズ）に基づく。"
+    },
+    {
+      "claim": "SDGsの観点から開発されたエコな商品である。",
+      "category": "quality",
+      "confidence": "medium",
+      "supporting_source_ids": [
+        "src-1",
+        "src-4"
+      ],
+      "cross_checked": false,
+      "notes": "Amazonの商品説明（カヨのSDGsな取組み）に基づく。"
     }
   ],
-  "technical_specs": {
-    "material": "不明",
-    "origin": "不明"
-  },
   "review_signals": {
     "summary_one_line": "エコな仕様と可愛らしいデザインから、ちょっとした外遊びやプレゼントとして注目されています。",
     "high_points": [
       {
         "text": "空のペットボトルを有効活用できるSDGsな設計で、ご家庭でのエコ教育の一環としても取り入れやすい点が好評です。",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-4"
         ]
       },
       {
@@ -284,7 +313,8 @@
       {
         "text": "海やプールなどのレジャー先へ持ち運ぶ際も、コンパクトに畳んでカバンに忍ばせておけるため邪魔になりません。",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-5"
         ]
       },
       {
@@ -299,14 +329,9 @@
         "segment_label": "エコや実用性を重視する層",
         "summary": "単なるおもちゃとしてだけでなく、日常的にボトルカバーとしても使える実用性が評価されやすい傾向にあります。",
         "supporting_source_ids": [
-          "src-1",
-          "src-2"
+          "src-1"
         ]
       }
     ]
-  },
-  "verdict": {
-    "headline": "手軽に水遊びを楽しみたいご家庭なら買い、本格派は一考"
-  },
-  "editorial_comment": "おもちゃロボより：おでかけボトルシューター ゆめかわピンクは、ペットボトルを再利用できるエコで実用的な水鉄砲です。2WAY仕様で日常使いもできるのが魅力的。最安はAmazonでした。"
+  }
 }
