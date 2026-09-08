@@ -9,12 +9,18 @@ import pytest
 from scripts.append_census_history import (
     CENSUS_HISTORY_FILE,
     CENSUS_URL_STATES_FILE,
+    CENSUS_URL_STATES_HISTORY_FILE,
     KNOWN_SLUGS,
     build_current_url_states,
     build_row,
+    build_url_state_rows,
+    classify_group,
+    compute_by_group,
     compute_cohort,
     discover_existing_asins,
     existing_dates,
+    is_first_census_of_month,
+    load_asin_origin,
     load_url_states_snapshot,
     map_coverage_states,
     run,
@@ -479,3 +485,323 @@ def test_build_row_rich_columns_default_to_zero_for_old_census():
     assert row["rich_other"] == 0
     assert row["rich_none"] == 0
     assert row["rich_issue_kinds"] == 0
+
+
+# ---------------------------------------------------------------------------
+# ASIN origin ledger / group classification (#4964)
+# ---------------------------------------------------------------------------
+
+def test_classify_group_maps_known_pools():
+    assert classify_group("demand") == "demand"
+    assert classify_group("supply-random") == "supply"
+
+
+def test_classify_group_falls_back_to_unknown():
+    assert classify_group("ranking-sniper") == "unknown"
+    assert classify_group("rewrite-queue") == "unknown"
+    assert classify_group("") == "unknown"
+    assert classify_group(None) == "unknown"
+
+
+def test_load_asin_origin_missing_file_returns_empty(tmp_path):
+    assert load_asin_origin(tmp_path / "nope.jsonl") == {}
+
+
+def test_load_asin_origin_last_row_wins_on_duplicate_asin(tmp_path):
+    path = tmp_path / "asin_origin.jsonl"
+    path.write_text(
+        '{"asin": "B0000000A1", "pool": "demand"}\n'
+        '{"asin": "B0000000A1", "pool": "supply-random"}\n',
+        encoding="utf-8",
+    )
+    assert load_asin_origin(path) == {"B0000000A1": "supply-random"}
+
+
+def test_load_asin_origin_tolerates_corrupt_line(tmp_path):
+    path = tmp_path / "asin_origin.jsonl"
+    path.write_text('not json\n{"asin": "B0000000A1", "pool": "demand"}\n', encoding="utf-8")
+    assert load_asin_origin(path) == {"B0000000A1": "demand"}
+
+
+# ---------------------------------------------------------------------------
+# by_group aggregation (#4964)
+# ---------------------------------------------------------------------------
+
+def test_compute_by_group_splits_inspected_and_indexed():
+    existing_asins = {"B0000000A1", "B0000000A2", "B0000000A3", "B0000000A4"}
+    asin_origin = {
+        "B0000000A1": "demand",
+        "B0000000A2": "demand",
+        "B0000000A3": "supply-random",
+        # B0000000A4 not in ledger -> unknown
+    }
+    not_indexed_urls = [
+        {"url": "https://navi.omcha.jp/products/b0000000a1/"},  # demand, not-indexed
+    ]
+    by_group = compute_by_group(not_indexed_urls, [], existing_asins, asin_origin)
+
+    assert by_group["demand"] == {"inspected": 2, "indexed": 1, "indexed_rate": 0.5}
+    assert by_group["supply"] == {"inspected": 1, "indexed": 1, "indexed_rate": 1.0}
+    assert by_group["unknown"] == {"inspected": 1, "indexed": 1, "indexed_rate": 1.0}
+
+
+def test_compute_by_group_subtracts_errors_too():
+    existing_asins = {"B0000000A1"}
+    asin_origin = {"B0000000A1": "demand"}
+    errors = [{"url": "https://navi.omcha.jp/products/b0000000a1/", "error": "timeout"}]
+    by_group = compute_by_group([], errors, existing_asins, asin_origin)
+    assert by_group["demand"] == {"inspected": 1, "indexed": 0, "indexed_rate": 0.0}
+
+
+def test_compute_by_group_indexed_rate_null_when_group_empty():
+    by_group = compute_by_group([], [], set(), {})
+    for group in ("demand", "supply", "unknown"):
+        assert by_group[group] == {"inspected": 0, "indexed": 0, "indexed_rate": None}
+
+
+def test_compute_by_group_none_when_articles_dir_unavailable():
+    assert compute_by_group([], [], None, {}) is None
+
+
+# ---------------------------------------------------------------------------
+# census_url_states.jsonl transition rows (#4964)
+# ---------------------------------------------------------------------------
+
+def test_build_url_state_rows_snapshot_writes_all_current(tmp_path):
+    current_states = {
+        "https://navi.omcha.jp/products/b0000000a1/": "unknown_to_google",
+        "https://navi.omcha.jp/products/b0000000a2/": "crawled_not_indexed",
+    }
+    rows = build_url_state_rows(
+        current_states, previous_snapshot=None, existing_asins=set(),
+        asin_origin={}, target_date="2026-09-06", snapshot=True,
+    )
+    assert len(rows) == 2
+    for row in rows:
+        assert row["snapshot"] is True
+        assert row["prev_state"] is None
+        assert row["date"] == "2026-09-06"
+        assert row["group"] == "unknown"
+
+
+def test_build_url_state_rows_no_previous_snapshot_records_all_as_entered():
+    current_states = {"https://navi.omcha.jp/products/b0000000a1/": "unknown_to_google"}
+    rows = build_url_state_rows(
+        current_states, previous_snapshot=None, existing_asins=set(),
+        asin_origin={}, target_date="2026-09-06", snapshot=False,
+    )
+    assert rows == [{
+        "date": "2026-09-06",
+        "url": "https://navi.omcha.jp/products/b0000000a1/",
+        "state": "unknown_to_google",
+        "prev_state": None,
+        "group": "unknown",
+    }]
+
+
+def test_build_url_state_rows_unchanged_state_produces_no_row():
+    url = "https://navi.omcha.jp/products/b0000000a1/"
+    previous_snapshot = {"date": "2026-08-30", "states": {url: "unknown_to_google"}}
+    rows = build_url_state_rows(
+        {url: "unknown_to_google"}, previous_snapshot, existing_asins=set(),
+        asin_origin={}, target_date="2026-09-06", snapshot=False,
+    )
+    assert rows == []
+
+
+def test_build_url_state_rows_changed_state_records_prev_and_new():
+    url = "https://navi.omcha.jp/products/b0000000a1/"
+    previous_snapshot = {"date": "2026-08-30", "states": {url: "unknown_to_google"}}
+    rows = build_url_state_rows(
+        {url: "discovered_not_indexed"}, previous_snapshot, existing_asins=set(),
+        asin_origin={}, target_date="2026-09-06", snapshot=False,
+    )
+    assert rows == [{
+        "date": "2026-09-06", "url": url, "state": "discovered_not_indexed",
+        "prev_state": "unknown_to_google", "group": "unknown",
+    }]
+
+
+def test_build_url_state_rows_exit_classified_indexed_when_article_exists():
+    url = "https://navi.omcha.jp/products/b0000000a1/"
+    previous_snapshot = {"date": "2026-08-30", "states": {url: "unknown_to_google"}}
+    rows = build_url_state_rows(
+        {}, previous_snapshot, existing_asins={"B0000000A1"},
+        asin_origin={}, target_date="2026-09-06", snapshot=False,
+    )
+    assert rows == [{
+        "date": "2026-09-06", "url": url, "state": "indexed",
+        "prev_state": "unknown_to_google", "group": "unknown",
+    }]
+
+
+def test_build_url_state_rows_exit_classified_dropped_when_no_article():
+    url = "https://navi.omcha.jp/products/b0000000a1/"
+    previous_snapshot = {"date": "2026-08-30", "states": {url: "unknown_to_google"}}
+    rows = build_url_state_rows(
+        {}, previous_snapshot, existing_asins=set(),
+        asin_origin={}, target_date="2026-09-06", snapshot=False,
+    )
+    assert rows == [{
+        "date": "2026-09-06", "url": url, "state": "dropped",
+        "prev_state": "unknown_to_google", "group": "unknown",
+    }]
+
+
+def test_build_url_state_rows_exit_unknown_when_articles_dir_unavailable():
+    url = "https://navi.omcha.jp/products/b0000000a1/"
+    previous_snapshot = {"date": "2026-08-30", "states": {url: "unknown_to_google"}}
+    rows = build_url_state_rows(
+        {}, previous_snapshot, existing_asins=None,
+        asin_origin={}, target_date="2026-09-06", snapshot=False,
+    )
+    assert rows[0]["state"] == "unknown"
+
+
+def test_build_url_state_rows_group_from_asin_origin():
+    url = "https://navi.omcha.jp/products/b0000000a1/"
+    rows = build_url_state_rows(
+        {url: "unknown_to_google"}, previous_snapshot=None, existing_asins=set(),
+        asin_origin={"B0000000A1": "demand"}, target_date="2026-09-06", snapshot=False,
+    )
+    assert rows[0]["group"] == "demand"
+
+
+def test_is_first_census_of_month_true_when_file_missing(tmp_path):
+    assert is_first_census_of_month(tmp_path / CENSUS_URL_STATES_HISTORY_FILE, "2026-09-06") is True
+
+
+def test_is_first_census_of_month_true_for_new_month(tmp_path):
+    path = tmp_path / CENSUS_URL_STATES_HISTORY_FILE
+    path.write_text('{"date": "2026-08-30", "url": "u1"}\n', encoding="utf-8")
+    assert is_first_census_of_month(path, "2026-09-06") is True
+
+
+def test_is_first_census_of_month_false_when_same_month_seen(tmp_path):
+    path = tmp_path / CENSUS_URL_STATES_HISTORY_FILE
+    path.write_text('{"date": "2026-09-01", "url": "u1"}\n', encoding="utf-8")
+    assert is_first_census_of_month(path, "2026-09-06") is False
+
+
+# ---------------------------------------------------------------------------
+# run() end-to-end wiring for by_group / census_url_states.jsonl (#4964)
+# ---------------------------------------------------------------------------
+
+def test_run_first_call_writes_full_snapshot_to_url_states_history(tmp_path, census_fixture):
+    articles_dir = tmp_path / "articles"
+    articles_dir.mkdir()
+    census_fixture["not_indexed_urls"] = [
+        _not_indexed("https://navi.omcha.jp/products/b0000000a1/", "URL が Google に認識されていません"),
+    ]
+    run(census_fixture, tmp_path, articles_dir, tmp_path / "asin_origin.jsonl")
+    rows = _read_jsonl(tmp_path / CENSUS_URL_STATES_HISTORY_FILE)
+    assert rows == [{
+        "date": "2026-07-19",
+        "url": "https://navi.omcha.jp/products/b0000000a1/",
+        "state": "unknown_to_google",
+        "prev_state": None,
+        "group": "unknown",
+        "snapshot": True,
+    }]
+    row = _read_jsonl(tmp_path / CENSUS_HISTORY_FILE)[0]
+    assert row["by_group"] == {
+        "demand": {"inspected": 0, "indexed": 0, "indexed_rate": None},
+        "supply": {"inspected": 0, "indexed": 0, "indexed_rate": None},
+        "unknown": {"inspected": 0, "indexed": 0, "indexed_rate": None},
+    }
+
+
+def test_run_no_change_week_appends_no_url_state_rows(tmp_path, census_fixture):
+    articles_dir = tmp_path / "articles"
+    articles_dir.mkdir()
+    asin_origin_path = tmp_path / "asin_origin.jsonl"
+
+    census1 = json.loads(json.dumps(census_fixture))
+    census1["not_indexed_urls"] = [
+        _not_indexed("https://navi.omcha.jp/products/b0000000a1/", "URL が Google に認識されていません"),
+    ]
+    run(census1, tmp_path, articles_dir, asin_origin_path)
+    rows_after_first = _read_jsonl(tmp_path / CENSUS_URL_STATES_HISTORY_FILE)
+
+    census2 = json.loads(json.dumps(census_fixture))
+    census2["fetched_at"] = "2026-07-26T22:57:54.878408+00:00"
+    census2["not_indexed_urls"] = [
+        _not_indexed("https://navi.omcha.jp/products/b0000000a1/", "URL が Google に認識されていません"),
+    ]
+    run(census2, tmp_path, articles_dir, asin_origin_path)
+    rows_after_second = _read_jsonl(tmp_path / CENSUS_URL_STATES_HISTORY_FILE)
+
+    # 2026-07-26 is still within the same month as the 2026-07-19 snapshot,
+    # and the URL's state did not change -> no new rows appended.
+    assert rows_after_second == rows_after_first
+
+
+def test_run_url_dropped_from_articles_records_dropped_state(tmp_path, census_fixture):
+    articles_dir = tmp_path / "articles"
+    articles_dir.mkdir()
+    asin_origin_path = tmp_path / "asin_origin.jsonl"
+
+    census1 = json.loads(json.dumps(census_fixture))
+    census1["not_indexed_urls"] = [
+        _not_indexed("https://navi.omcha.jp/products/b0000000a1/", "URL が Google に認識されていません"),
+    ]
+    run(census1, tmp_path, articles_dir, asin_origin_path)
+
+    census2 = json.loads(json.dumps(census_fixture))
+    census2["fetched_at"] = "2026-07-26T22:57:54.878408+00:00"
+    census2["not_indexed_urls"] = []
+    run(census2, tmp_path, articles_dir, asin_origin_path)
+
+    rows = _read_jsonl(tmp_path / CENSUS_URL_STATES_HISTORY_FILE)
+    exit_row = next(r for r in rows if r["date"] == "2026-07-26")
+    assert exit_row["state"] == "dropped"
+    assert exit_row["prev_state"] == "unknown_to_google"
+
+
+def test_run_wires_asin_origin_group_into_url_states_and_by_group(tmp_path, census_fixture):
+    articles_dir = tmp_path / "articles"
+    articles_dir.mkdir()
+    (articles_dir / "2026-07-01-B0000000A1.json").write_text("{}", encoding="utf-8")
+    asin_origin_path = tmp_path / "asin_origin.jsonl"
+    asin_origin_path.write_text(
+        '{"asin": "B0000000A1", "pool": "demand"}\n', encoding="utf-8"
+    )
+
+    census_fixture["not_indexed_urls"] = [
+        _not_indexed("https://navi.omcha.jp/products/b0000000a1/", "URL が Google に認識されていません"),
+    ]
+    run(census_fixture, tmp_path, articles_dir, asin_origin_path)
+
+    url_state_rows = _read_jsonl(tmp_path / CENSUS_URL_STATES_HISTORY_FILE)
+    assert url_state_rows[0]["group"] == "demand"
+
+    row = _read_jsonl(tmp_path / CENSUS_HISTORY_FILE)[0]
+    assert row["by_group"]["demand"] == {"inspected": 1, "indexed": 0, "indexed_rate": 0.0}
+    assert row["by_group"]["supply"] == {"inspected": 0, "indexed": 0, "indexed_rate": None}
+
+
+def test_run_month_boundary_forces_full_snapshot_even_with_prior_snapshot(tmp_path, census_fixture):
+    articles_dir = tmp_path / "articles"
+    articles_dir.mkdir()
+    asin_origin_path = tmp_path / "asin_origin.jsonl"
+
+    census1 = json.loads(json.dumps(census_fixture))
+    census1["fetched_at"] = "2026-07-26T22:57:54.878408+00:00"
+    census1["not_indexed_urls"] = [
+        _not_indexed("https://navi.omcha.jp/products/b0000000a1/", "URL が Google に認識されていません"),
+    ]
+    run(census1, tmp_path, articles_dir, asin_origin_path)
+
+    # First census of August: same URL, same state, but a new calendar month
+    # -> must still be written in full with snapshot=True (self-heal point).
+    census2 = json.loads(json.dumps(census_fixture))
+    census2["fetched_at"] = "2026-08-02T22:57:54.878408+00:00"
+    census2["not_indexed_urls"] = [
+        _not_indexed("https://navi.omcha.jp/products/b0000000a1/", "URL が Google に認識されていません"),
+    ]
+    run(census2, tmp_path, articles_dir, asin_origin_path)
+
+    rows = _read_jsonl(tmp_path / CENSUS_URL_STATES_HISTORY_FILE)
+    august_rows = [r for r in rows if r["date"] == "2026-08-02"]
+    assert len(august_rows) == 1
+    assert august_rows[0]["snapshot"] is True
