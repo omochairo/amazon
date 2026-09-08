@@ -179,8 +179,15 @@ def list_candidate_prs(repo: str) -> List[Dict[str, Any]]:
     res = subprocess.run(
         ["gh", "pr", "list", "-R", repo, "--state", "open", "--base", "main",
          "--limit", "100", "--json", PR_FIELDS],
-        check=True, capture_output=True, text=True,
+        capture_output=True, text=True,
     )
+    if res.returncode != 0:
+        # check=True のままだと CalledProcessError が stderr を飲み込み、run ログに
+        # 「exit status 1」しか残らない (2026-09-08 の初回 dry_run で実際に踏んだ)。
+        # gh 自身のメッセージを必ず表に出す。
+        logger.error("gh pr list failed (exit %s): %s", res.returncode,
+                     (res.stderr or "").strip() or "(no stderr)")
+        raise SystemExit(1)
     prs = json.loads(res.stdout or "[]")
     return filter_candidate_prs(prs)
 
