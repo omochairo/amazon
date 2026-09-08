@@ -110,6 +110,23 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      # 2026-09-08 (#6793): #6788 の catch 層。記事 PR (data/articles/*.json を
+      # 追加/変更する PR) が data/articles/ 以外を削除していないかを見る。
+      # PR の files API は同じ PR 内の追加/削除が相殺されると不可視になるため
+      # (#6788 では巻き添え削除が 1 件も見えなかった)、base..head の削除だけを
+      # 別途列挙して判定する。prevent 側は #6792 (--match-head-commit) で対応
+      # 済みなので、ここでは検出のみ。continue-on-error は付けない (失敗が
+      # success として記録され不可視になるため。05 の commit-back と同じ理由)。
+      - name: Check for deletions outside data/articles/ (#6793)
+        if: steps.list.outputs.files != '' && steps.range.outputs.mode == 'diff'
+        run: |
+          # pipefail 必須: これが無いと git diff 側が落ちたとき python は空入力を
+          # 受けて「削除なし」と判定し exit 0 で通ってしまう (失敗が無言になる)。
+          set -eo pipefail
+          git diff --name-only --diff-filter=D \
+              "${{ steps.range.outputs.base }}" "${{ steps.range.outputs.head }}" \
+            | python scripts/check_article_pr_deletions.py
+
       # jules/ プロンプトは private repo (amazon-navi-brain) に分離済み。実行時に overlay checkout。
       #
       # 2026-08-12: この step を「記事 JSON が変更された PR」限定に後ろ倒しした。
