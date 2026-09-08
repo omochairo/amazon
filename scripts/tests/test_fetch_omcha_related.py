@@ -167,6 +167,122 @@ class MainFlowTest(unittest.TestCase):
         self.assertIn("B000NEW001", state.get("omcha", {}))
 
 
+class AsinsArgTest(unittest.TestCase):
+    """--asins (Issue #6773): stale-first / --max-per-run を迂回する明示指定経路。"""
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.root = pathlib.Path(self.tmpdir.name)
+        self.out_dir = self.root / "data" / "raw"
+        self.articles = self.root / "data" / "articles"
+        self.articles.mkdir(parents=True)
+        (self.articles / "2026-05-24-B000AAAA01.json").write_text(
+            json.dumps({"tags": ["木製", "知育"]}, ensure_ascii=False), encoding="utf-8",
+        )
+        (self.articles / "2026-05-24-B000BBBB02.json").write_text(
+            json.dumps({"tags": ["ブロック"]}, ensure_ascii=False), encoding="utf-8",
+        )
+
+    def tearDown(self):
+        self.tmpdir.cleanup()
+
+    def _write_state(self, state: dict) -> None:
+        self.out_dir.mkdir(parents=True, exist_ok=True)
+        (self.out_dir / "_fetch_state.json").write_text(
+            json.dumps(state, ensure_ascii=False), encoding="utf-8",
+        )
+
+    def test_asins_bypasses_stale_first_and_max_per_run(self):
+        # B000AAAA01 はたった今 query 済み (fresh) = 通常の stale-first なら対象外だが、
+        # --asins で明示指定したら無視して処理する。--max-per-run 0 でも同様。
+        now = datetime.now(timezone.utc)
+        self._write_state({"omcha": {"B000AAAA01": now.isoformat()}})
+        argv = [
+            "fetch_omcha_related.py",
+            "--out", str(self.out_dir),
+            "--articles-dir", str(self.articles),
+            "--asins", "B000AAAA01",
+            "--max-per-run", "0",
+            "--sleep", "0",
+        ]
+        fake_items = [{"title": "t", "url": "https://omcha.jp/p", "score": 90,
+                       "thumbnail": "https://omcha.jp/t.jpg"}]
+        with patch.object(sys, "argv", argv), \
+             patch.object(fetch_omcha_related, "get_related_articles",
+                          return_value=fake_items) as mock_get:
+            fetch_omcha_related.main()
+        mock_get.assert_called_once_with(
+            "木製 知育", count=3, min_score=internal_links.DEFAULT_MIN_SCORE
+        )
+        cache = self.out_dir / "per_asin" / "B000AAAA01" / "omcha_related.json"
+        self.assertTrue(cache.exists())
+
+    def test_asins_skips_unknown_asin_and_continues(self):
+        argv = [
+            "fetch_omcha_related.py",
+            "--out", str(self.out_dir),
+            "--articles-dir", str(self.articles),
+            "--asins", "B000UNKNOWN,B000BBBB02",
+            "--sleep", "0",
+        ]
+        with patch.object(sys, "argv", argv), \
+             patch.object(fetch_omcha_related, "get_related_articles",
+                          return_value=[]) as mock_get:
+            fetch_omcha_related.main()  # raise しないこと
+        mock_get.assert_called_once_with(
+            "ブロック", count=3, min_score=internal_links.DEFAULT_MIN_SCORE
+        )
+        self.assertFalse((self.out_dir / "per_asin" / "B000UNKNOWN").exists())
+        self.assertTrue(
+            (self.out_dir / "per_asin" / "B000BBBB02" / "omcha_related.json").exists()
+        )
+
+    def test_asins_continues_after_fetch_exception(self):
+        argv = [
+            "fetch_omcha_related.py",
+            "--out", str(self.out_dir),
+            "--articles-dir", str(self.articles),
+            "--asins", "B000AAAA01,B000BBBB02",
+            "--sleep", "0",
+        ]
+
+        def raise_for_first(keyword, count, min_score):
+            if keyword == "木製 知育":
+                raise RuntimeError("boom")
+            return []
+
+        with patch.object(sys, "argv", argv), \
+             patch.object(fetch_omcha_related, "get_related_articles",
+                          side_effect=raise_for_first):
+            fetch_omcha_related.main()  # 例外を外に投げず継続すること (終了コード0)
+        cache1 = json.loads(
+            (self.out_dir / "per_asin" / "B000AAAA01" / "omcha_related.json")
+            .read_text(encoding="utf-8")
+        )
+        self.assertEqual(cache1["items"], [])
+        self.assertTrue(
+            (self.out_dir / "per_asin" / "B000BBBB02" / "omcha_related.json").exists()
+        )
+
+    def test_no_asins_flag_keeps_default_stale_first_behavior(self):
+        # --asins 未指定なら、fresh (直近 query 済み) ASIN を除外する既存挙動のまま。
+        now = datetime.now(timezone.utc)
+        self._write_state({"omcha": {"B000AAAA01": now.isoformat()}})
+        argv = [
+            "fetch_omcha_related.py",
+            "--out", str(self.out_dir),
+            "--articles-dir", str(self.articles),
+            "--sleep", "0",
+        ]
+        with patch.object(sys, "argv", argv), \
+             patch.object(fetch_omcha_related, "get_related_articles",
+                          return_value=[]) as mock_get:
+            fetch_omcha_related.main()
+        mock_get.assert_called_once_with(
+            "ブロック", count=3, min_score=internal_links.DEFAULT_MIN_SCORE
+        )
+
+
 class BuildPostAttachOmchaRelatedTest(unittest.TestCase):
     """build_post._attach_omcha_related が live HTTP しない (read-only) ことの回帰防止。"""
 
