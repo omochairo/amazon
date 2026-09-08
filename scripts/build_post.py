@@ -2583,9 +2583,86 @@ def _load_canonical_overrides(path: pathlib.Path) -> dict[str, str]:
 _matched_passes_quality = market_prices.matched_passes_quality
 
 
+# #6822: 未突合時の検索フォールバック URL もアフィリエイト経由にする。
+#
+# 突合できた商品 (2,014/2,412 = 83.5%) は fetch_rakuten.py / fetch_yahoo.py が
+# API の公式パラメータ (affiliateId / affiliate_type=vc) でアフィリエイト済み URL を
+# 受け取るため既に収益化されている。一方、突合できなかった約 398 件 (16.5%) には
+# ここで組む素の検索 URL がそのまま出ており、2026-09-09 の本番層別サンプルでは
+# 楽天側が 7/7 で 1 件もアフィリエイトを通っていなかった。
+#
+# ID の SSOT は #5087 の amazonPartnerTag と同じく **commit 済みの config.toml**。
+# build_post.py は secret の無い配信ビルド (.gitlab-ci.yml の pages ジョブ) で走るため、
+# secret を SSOT にすると本番でだけ黙って素の URL に落ちる — 今回直している欠陥と
+# 同型の退行になる。いずれの ID も公開ページの HTML に元から出ている公開
+# トラッキング ID なので秘匿する意味は無い。secret は任意のオーバーライドとして残す。
+_RAKUTEN_AFFILIATE_BASE = "https://hb.afl.rakuten.co.jp/hgc/"
+_VC_REFERRAL_BASE = "https://ck.jp.ap.valuecommerce.com/servlet/referral"
+
+
+def _load_committed_affiliate_param(
+    param_name: str, hugo_config_path: pathlib.Path = _HUGO_CONFIG_DEFAULT
+) -> str:
+    """``hugo/config.toml`` の ``[params].<param_name>`` を読む (#6822)。
+
+    ``_load_committed_amazon_partner_tag`` と同じ理由で、値が取れない場合は
+    空文字へ黙って落ちずに例外で落とす。素の URL を出し続ける経路を残すと、
+    収益化されていないことに誰も気付かないまま数か月が経つ (それが本 issue)。
+    """
+    if not hugo_config_path.exists():
+        raise RuntimeError(f"{param_name} SSOT missing (#6822): {hugo_config_path} not found")
+    try:
+        with hugo_config_path.open("rb") as f:
+            config = tomllib.load(f)
+    except tomllib.TOMLDecodeError as e:
+        raise RuntimeError(
+            f"{param_name} SSOT unreadable (#6822): failed to parse {hugo_config_path}: {e}"
+        ) from e
+    params = config.get("params")
+    value = params.get(param_name) if isinstance(params, dict) else None
+    if not value or not isinstance(value, str):
+        raise RuntimeError(
+            f"{param_name} SSOT missing (#6822): [params].{param_name} "
+            f"not set in {hugo_config_path}"
+        )
+    return value
+
+
+def _resolve_affiliate_param(secret_name: str, param_name: str) -> str:
+    value = get_secret(secret_name)
+    if value:
+        return value
+    return _load_committed_affiliate_param(param_name)
+
+
+def _build_rakuten_search_url(query: str) -> str:
+    """楽天の検索結果ページへのアフィリエイトリンクを組む (#6822)。
+
+    楽天アフィリエイトは商品ページ以外の任意の URL へのリンク作成を認めている
+    (公式ガイド「商品・ショップページ以外にもお気に入りのジャンルや企画特集
+    ページなどの様々なページ (URL) へのリンクが作成できます」)。
+    """
+    raw = f"https://search.rakuten.co.jp/search/mall/{urllib.parse.quote(query)}/"
+    affiliate_id = _resolve_affiliate_param("RAKUTEN_AFFILIATE_ID", "rakutenAffiliateId")
+    return f"{_RAKUTEN_AFFILIATE_BASE}{affiliate_id}/?pc={urllib.parse.quote(raw, safe='')}"
+
+
+def _build_yahoo_search_url(query: str) -> str:
+    """Yahoo! の検索結果ページへのバリューコマース経由リンクを組む (#6822)。
+
+    形式は ``fetch_yahoo.build_vc_affiliate_url_fallback`` と同じ MyLink 形式。
+    あちらは fetch 時に secret から組むが、こちらはレンダリング時なので
+    config.toml の SSOT を使う。
+    """
+    raw = f"https://shopping.yahoo.co.jp/search?p={urllib.parse.quote(query)}"
+    sid = _resolve_affiliate_param("VALUECOMMERCE_SID", "valuecommerceSid")
+    pid = _resolve_affiliate_param("VALUECOMMERCE_PID", "valuecommercePid")
+    return f"{_VC_REFERRAL_BASE}?sid={sid}&pid={pid}&vc_url={urllib.parse.quote(raw, safe='')}"
+
+
 _SEARCH_URL_BUILDERS = {
-    "rakuten": lambda q: f"https://search.rakuten.co.jp/search/mall/{urllib.parse.quote(q)}/",
-    "yahoo": lambda q: f"https://shopping.yahoo.co.jp/search?p={urllib.parse.quote(q)}",
+    "rakuten": _build_rakuten_search_url,
+    "yahoo": _build_yahoo_search_url,
 }
 
 

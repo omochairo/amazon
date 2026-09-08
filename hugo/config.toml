@@ -63,6 +63,16 @@ enableRobotsTXT = true
   # ranking.html / mobile_sticky_cta.html はここを参照する (直書き禁止)。
   # Python 側の SSOT は AMAZON_PARTNER_TAG secret (scripts/fetch_amazon.py 参照)。
   amazonPartnerTag = "chk01-22"
+  # #6822: 楽天 / バリューコマース のトラッキング ID の SSOT (レンダリング側)。
+  # 未突合商品の「検索フォールバック URL」をアフィリエイト経由にするために
+  # scripts/build_post.py の _resolve_affiliate_param が参照する。
+  # secret を SSOT にしない理由は amazonPartnerTag と同じ (#5087) —
+  # build_post.py は secret の無い配信ビルドで走るため、secret 依存にすると
+  # 本番でだけ黙って素の URL に落ちる。いずれも公開ページの HTML に
+  # 元から出ている公開トラッキング ID。secret 側は任意のオーバーライド。
+  rakutenAffiliateId = "g00q072h.wjrz5527.g00q072h.wjrz6f73"
+  valuecommerceSid = "3746014"
+  valuecommercePid = "891670125"
   # omcha-ops#19 P2: らくらくベビー (ベビーレジストリ) 導線のリンク先。
   # 乳児帯の記事末にだけ出す (判定は scripts/build_post.py)。tag= はここでは
   # 付けない — 付与は _force_amazon_partner_tag / amazon_affiliate_url.html の 1 点。
