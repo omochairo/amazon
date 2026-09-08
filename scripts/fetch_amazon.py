@@ -1594,6 +1594,10 @@ def main():
                     seen_parent_asins.add(parent)
                 seen_asins.add(asin)
                 normalized = normalize_api_item(it, tag, "Amazon")
+                # ASIN 出自台帳 (#4964 観察項目3) 用。この検索ループの外では
+                # kw (検索語) が失われるため、item に残せるのはここだけ。
+                normalized["source_keyword"] = kw
+                normalized["lane"] = "demand" if kw in demand_kws else "supply-random"
                 items.append(normalized)
                 if _is_jules_eligible(normalized):
                     new_for_jules += 1

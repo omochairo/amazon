@@ -119,8 +119,11 @@ jobs:
               if not _ASIN_RE.match(input_asin):
                   raise SystemExit(f"INPUT_ASIN '{input_asin}' does not match B0[A-Z0-9]{{8}}")
               print(f"Using forced ASIN from workflow_dispatch input: {input_asin}")
-              with open('/tmp/shuffled.txt', 'w') as f:
-                  f.write(input_asin + '\n')
+              # #4964: 手動指定は demand/supply-random/ranking-sniper/rewrite-queue の
+              # どれにも当たらない。pool を捏造せず空にして台帳記録をスキップさせる。
+              with open('/tmp/shuffled.jsonl', 'w') as f:
+                  f.write(json.dumps({"asin": input_asin, "pool": "", "source_keyword": None},
+                                      ensure_ascii=False) + '\n')
           else:
               with open('data/raw/amazon.json', encoding='utf-8') as f:
                   raw = json.load(f)
@@ -237,9 +240,31 @@ jobs:
               print(f"candidates={len(candidates)} ranking_pool={len(ranking_pool)} "
                     f"existing_excluded={len(existing)} ranking_first={len(remaining_ranking)} "
                     f"remaining={len(remaining)}")
-              with open('/tmp/shuffled.txt', 'w') as f:
+              # #4964 観察項目3: どのプールから来た ASIN かをここで判別して残す
+              # (この後の lock 取得ループを抜けると amazon.json の items[] には
+              # もう戻れないので、ここが最後のタイミング)。
+              rewrite_set = set(rewrite_first)
+              asin_meta = {
+                  i['asin']: i for i in items
+                  if isinstance(i, dict) and isinstance(i.get('asin'), str)
+              }
+
+              def _origin_for(a):
+                  if a in ranking_set:
+                      return {"asin": a, "pool": "ranking-sniper", "source_keyword": None}
+                  if a in rewrite_set:
+                      return {"asin": a, "pool": "rewrite-queue", "source_keyword": None}
+                  meta = asin_meta.get(a) or {}
+                  lane = meta.get('lane')
+                  if lane in ('demand', 'supply-random'):
+                      return {"asin": a, "pool": lane, "source_keyword": meta.get('source_keyword')}
+                  # 出自不明 (例: この変更より前に作られた amazon.json) は
+                  # 事実を捏造せず pool を空にして台帳記録をスキップさせる。
+                  return {"asin": a, "pool": "", "source_keyword": None}
+
+              with open('/tmp/shuffled.jsonl', 'w') as f:
                   for a in remaining:
-                      f.write(a + '\n')
+                      f.write(json.dumps(_origin_for(a), ensure_ascii=False) + '\n')
           PY
           # lock ブランチ用の empty commit を作る (committer.date を TTL 判定に利用)
           # 2026-05-17 Step C-1: MAX_LOCKS まで lock を取得し、picked.txt に列挙する。
@@ -251,10 +276,15 @@ jobs:
           MAIN_SHA=$(gh api repos/$REPO/git/refs/heads/main --jq .object.sha)
           MAIN_TREE=$(gh api repos/$REPO/git/commits/$MAIN_SHA --jq .tree.sha)
           : > /tmp/picked.txt
+          : > /tmp/picked_origin.jsonl
           ACQUIRED=0
-          while IFS= read -r asin; do
-            [ -z "$asin" ] && continue
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
             [ "$ACQUIRED" -ge "$MAX_LOCKS" ] && break
+            asin=$(jq -r '.asin' <<< "$line")
+            pool=$(jq -r '.pool // ""' <<< "$line")
+            source_keyword=$(jq -r '.source_keyword // ""' <<< "$line")
+            [ -z "$asin" ] && continue
             TS=$(date -u +%FT%TZ)
             COMMIT=$(jq -n --arg msg "jules-lock $asin" --arg tree "$MAIN_TREE" --arg parent "$MAIN_SHA" --arg ts "$TS" \
               '{message: $msg, tree: $tree, parents: [$parent], author: {name: "github-actions", email: "actions@github.com", date: $ts}, committer: {name: "github-actions", email: "actions@github.com", date: $ts}}' | \
@@ -264,11 +294,18 @@ jobs:
                 -f ref="refs/heads/jules-lock/$asin" -f sha="$COMMIT" >/dev/null 2>&1; then
               echo "Lock acquired: jules-lock/$asin"
               echo "$asin" >> /tmp/picked.txt
+              # #4964: pool が空 = 出自不明 (手動 ASIN 指定 / 旧 amazon.json)。
+              # 事実を捏造しないので台帳には書かない。
+              if [ -n "$pool" ]; then
+                jq -cn --arg asin "$asin" --arg pool "$pool" --arg kw "$source_keyword" \
+                  '{asin: $asin, pool: $pool, source_keyword: (if $kw == "" then null else $kw end)}' \
+                  >> /tmp/picked_origin.jsonl
+              fi
               ACQUIRED=$((ACQUIRED + 1))
             else
               echo "Lock contention on $asin, trying next"
             fi
-          done < /tmp/shuffled.txt
+          done < /tmp/shuffled.jsonl
           echo "Locks acquired: $ACQUIRED / target $MAX_LOCKS"
           if [ "$ACQUIRED" -eq 0 ]; then
             echo "::warning::No candidate ASINs available (all excluded/locked)"
@@ -520,3 +557,74 @@ jobs:
             fi
           done
           echo "Polling complete (best-effort; AUTO_CREATE_PR continues async)"
+
+      # #4964 観察項目3: 今回 lock を取れた ASIN の出自 (demand/supply-random/
+      # ranking-sniper/rewrite-queue) を data/analytics/asin_origin.jsonl に追記する。
+      # Jules 自体の PR ("新規ファイル1件のみ" のスコープガード対象) とは別の PR にする
+      # (Jules の PR に台帳を混ぜると 05-jules-auto-merge のスコープガードで
+      # eligible=false になる)。GITHUB_TOKEN で作った commit/PR は anti-recursion guard
+      # で pull_request イベントが発火せず required check `validate` が pending のまま
+      # 詰まる (01-fetch-products と同じ理由) ので App token を使う。
+      # ジョブの末尾に置く: root の再 checkout は actions/checkout の既定 `clean: true`
+      # (`git clean -ffdx`) で jules/ (別 checkout の nested git dir) を巻き込んで
+      # 消しうるため、jules/PROMPT_TEMPLATE.md を読み終えた後でないと安全でない。
+      - name: Check ASIN origin records
+        id: check-origin
+        if: steps.pick-asin.outputs.count != '0'
+        run: |
+          if [ -s /tmp/picked_origin.jsonl ]; then
+            echo "has_records=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No origin-known ASIN in this run (forced ASIN or unmapped pool); nothing to record."
+            echo "has_records=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate App token for origin ledger
+        id: record-origin-app-token
+        if: steps.check-origin.outputs.has_records == 'true'
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout main for origin ledger commit
+        if: steps.check-origin.outputs.has_records == 'true'
+        uses: actions/checkout@v7
+        with:
+          token: ${{ steps.record-origin-app-token.outputs.token }}
+          ref: main
+          fetch-depth: 1
+
+      - name: Commit ASIN origin ledger
+        if: steps.check-origin.outputs.has_records == 'true'
+        env:
+          GH_TOKEN: ${{ steps.record-origin-app-token.outputs.token }}
+        run: |
+          set -e
+          python scripts/record_asin_origin.py \
+            --input /tmp/picked_origin.jsonl \
+            --workflow "03-invoke-jules" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --out data/analytics/asin_origin.jsonl
+          git add data/analytics/asin_origin.jsonl
+          if git diff --cached --quiet; then
+            echo "no new origin record; nothing to commit"
+            exit 0
+          fi
+          REPO=${{ github.repository }}
+          BRANCH="data/asin-origin-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit -m "data(analytics): ASIN origin ledger (run ${GITHUB_RUN_ID})"
+          git push origin "$BRANCH"
+          PR_URL=$(gh pr create --base main --head "$BRANCH" \
+            --title "data(analytics): ASIN origin ledger (run ${GITHUB_RUN_ID})" \
+            --body "#4964 観察項目3 用の出自台帳 append。demand/supply-random/ranking-sniper/rewrite-queue のどのプールから ASIN が選ばれたかを記録するのみで、比率計算はしない。" \
+            --repo "$REPO")
+          echo "Created: $PR_URL"
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge enabled on $PR_URL"
+          else
+            echo "::warning::Could not enable auto-merge on $PR_URL"
+          fi
