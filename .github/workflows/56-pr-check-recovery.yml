@@ -27,6 +27,11 @@ permissions:
   contents: read
   pull-requests: write
   actions: write
+  # 2026-09-08: dry_run 初回実行が `gh pr list --json ...statusCheckRollup` で exit 1。
+  # permissions を明示すると列挙外は none になるため、statusCheckRollup が読む
+  # check-run / commit status に権限が無かった。
+  checks: read
+  statuses: read
 
 concurrency:
   group: pr-check-recovery
