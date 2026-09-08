@@ -12,15 +12,17 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))  # scripts/ を import path に追加
 
 from recover_pending_pr_checks import (  # noqa: E402
+    PR_FIELDS,
     STAGE2_LABEL,
     Action,
+    _parse_commit_date_result,
     evaluate_pr,
     filter_candidate_prs,
     has_any_required_check,
     has_stage2_label,
-    head_push_time,
     latest_dispatch_run,
     required_checks_satisfied,
+    resolve_push_time,
 )
 
 NOW = dt.datetime(2026, 9, 8, 12, 0, 0, tzinfo=dt.timezone.utc)
@@ -119,18 +121,78 @@ class LatestDispatchRunTests(unittest.TestCase):
         self.assertEqual(found["created_at"], newer["created_at"])
 
 
-class HeadPushTimeTests(unittest.TestCase):
+class PrFieldsRegressionTests(unittest.TestCase):
+    """#6808: `commits` を積んだ `--limit 100` は GraphQL ノード上限で必ず失敗する。
 
-    def test_uses_last_commit_committed_date(self):
-        pr = {"commits": [
-            {"committedDate": "2026-09-08T11:00:00Z"},
-            {"committedDate": "2026-09-08T11:55:00Z"},
-        ]}
-        self.assertEqual(head_push_time(pr), dt.datetime(2026, 9, 8, 11, 55, tzinfo=dt.timezone.utc))
+    open PR が 0 件でも落ちる静的コスト解析なので、二度と `commits` を
+    PR_FIELDS に足さないことを回帰ガードする。
+    """
 
-    def test_no_commits_returns_none(self):
-        self.assertIsNone(head_push_time({"commits": []}))
-        self.assertIsNone(head_push_time({}))
+    def test_commits_field_is_not_requested(self):
+        self.assertNotIn("commits", PR_FIELDS.split(","))
+
+
+class ResolvePushTimeTests(unittest.TestCase):
+    """push_time の取得 (`gh api` 呼び出し) を遅延させる条件を、fake で呼び出し回数を数えて検証する。"""
+
+    def _fake_fetch(self):
+        calls = []
+
+        def fetch(head_sha):
+            calls.append(head_sha)
+            return NOW
+
+        return fetch, calls
+
+    def _resolve(self, fetch, **kw):
+        base = dict(
+            required_satisfied=False, has_any_check=False,
+            dispatch_run=None, stage2_done=False,
+        )
+        base.update(kw)
+        return resolve_push_time({"headRefOid": "sha123"}, fetch_commit_time=fetch, **base)
+
+    def test_skips_fetch_when_required_satisfied(self):
+        fetch, calls = self._fake_fetch()
+        self._resolve(fetch, required_satisfied=True)
+        self.assertEqual(calls, [])
+
+    def test_skips_fetch_when_has_any_check(self):
+        fetch, calls = self._fake_fetch()
+        self._resolve(fetch, has_any_check=True)
+        self.assertEqual(calls, [])
+
+    def test_skips_fetch_when_dispatch_run_present(self):
+        fetch, calls = self._fake_fetch()
+        self._resolve(fetch, dispatch_run=_run(3))
+        self.assertEqual(calls, [])
+
+    def test_skips_fetch_when_stage2_done(self):
+        fetch, calls = self._fake_fetch()
+        self._resolve(fetch, stage2_done=True)
+        self.assertEqual(calls, [])
+
+    def test_fetches_exactly_once_when_all_clear(self):
+        fetch, calls = self._fake_fetch()
+        result = self._resolve(fetch)
+        self.assertEqual(calls, ["sha123"])
+        self.assertEqual(result, NOW)
+
+
+class ParseCommitDateResultTests(unittest.TestCase):
+    """commit 時刻取得が失敗 (非0 exit) しても例外を投げず None (= noop) になる。"""
+
+    def test_success(self):
+        result = _parse_commit_date_result(0, "2026-09-08T11:55:00Z\n", "", "sha123")
+        self.assertEqual(result, dt.datetime(2026, 9, 8, 11, 55, tzinfo=dt.timezone.utc))
+
+    def test_nonzero_exit_returns_none(self):
+        result = _parse_commit_date_result(1, "", "not found", "sha123")
+        self.assertIsNone(result)
+
+    def test_empty_stdout_returns_none(self):
+        result = _parse_commit_date_result(0, "", "", "sha123")
+        self.assertIsNone(result)
 
 
 class HasStage2LabelTests(unittest.TestCase):

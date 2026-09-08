@@ -36,9 +36,22 @@ check-run の**存在**ではなく**required context ごとの合否**を見る
 今回の論点そのものなので、存在チェックで代用しない。
 
 「head コミットの push 時刻」は GitHub API に直接の相当フィールドが無いため、
-head commit の `committedDate` を代理指標として使う ([推] push とほぼ同時に
+head commit の committer date を代理指標として使う ([推] push とほぼ同時に
 コミットされる自動化 PR がほとんどなので、5分閾値・15分 cron の粒度では
 十分な近似)。
+
+## #6808 事後: `commits` を PR_FIELDS から外した理由
+
+`gh pr list --json ...,commits --limit 100` は GraphQL のノード数上限
+(500,000) に静的コスト解析で毎回引っかかり exit non-zero で落ちる (open PR が
+0 件でも失敗する — 実行時のデータ量ではなく `--limit 100 × commits` の組み
+合わせ自体がコスト超過と判定される)。#6809 で schedule を止血停止した。
+
+代わりに head commit の日時は PR 単位で `gh api repos/{repo}/commits/{sha}`
+から個別に取る。この呼び出しは `evaluate_pr` が実際に `push_time` を見る
+条件 (段1候補判定: required check 未充足 かつ checks 皆無 かつ
+workflow_dispatch 未実施 かつ 段2未実施) のときだけ行う — 満たされている PR や
+既に段1/段2が動いている PR まで律儀に叩くと API 呼び出しが線形に増えるため。
 """
 from __future__ import annotations
 
@@ -66,7 +79,7 @@ DEFAULT_TICK_MINUTES = 15
 
 PR_FIELDS = (
     "number,headRefName,headRefOid,baseRefName,isDraft,isCrossRepository,"
-    "statusCheckRollup,commits,labels"
+    "statusCheckRollup,labels"
 )
 
 
@@ -110,11 +123,51 @@ def filter_candidate_prs(prs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return [pr for pr in prs if not pr.get("isDraft") and not pr.get("isCrossRepository")]
 
 
-def head_push_time(pr: Dict[str, Any]) -> Optional[dt.datetime]:
-    commits = pr.get("commits") or []
-    if not commits:
+def resolve_push_time(
+    pr: Dict[str, Any],
+    *,
+    required_satisfied: bool,
+    has_any_check: bool,
+    dispatch_run: Optional[Dict[str, Any]],
+    stage2_done: bool,
+    fetch_commit_time,
+) -> Optional[dt.datetime]:
+    """`evaluate_pr` が実際に push_time を見る条件でだけ commit 時刻を取りに行く。
+
+    その条件 (段1候補判定) は required_satisfied=False かつ has_any_check=False
+    かつ dispatch_run=None かつ stage2_done=False のときだけ (evaluate_pr の
+    分岐を参照)。それ以外は None を渡しても結果が変わらないので、余計な
+    `gh api` 呼び出しをしない。
+    """
+    if required_satisfied or has_any_check or dispatch_run is not None or stage2_done:
         return None
-    return _parse_ts(commits[-1]["committedDate"])
+    return fetch_commit_time(pr["headRefOid"])
+
+
+def _parse_commit_date_result(
+    returncode: int, stdout: str, stderr: str, head_sha: str
+) -> Optional[dt.datetime]:
+    if returncode != 0:
+        logger.warning("could not fetch commit date for %s: %s", head_sha, stderr.strip())
+        return None
+    value = stdout.strip()
+    if not value:
+        logger.warning("empty commit date for %s", head_sha)
+        return None
+    return _parse_ts(value)
+
+
+def fetch_head_commit_committed_date(repo: str, head_sha: str) -> Optional[dt.datetime]:
+    # check=True にしない: 失敗しても evaluate_pr は push_time=None を noop
+    # (安全側) として扱う設計なので、ここで例外を投げて run 全体を落とす
+    # 必要が無い。ただし失敗を無言にしない (#6808 の教訓) ため stderr は
+    # 必ず logger.warning に出す (_parse_commit_date_result 側)。
+    res = subprocess.run(
+        ["gh", "api", "-X", "GET", f"repos/{repo}/commits/{head_sha}",
+         "-q", ".commit.committer.date"],
+        capture_output=True, text=True,
+    )
+    return _parse_commit_date_result(res.returncode, res.stdout, res.stderr, head_sha)
 
 
 def has_stage2_label(pr: Dict[str, Any]) -> bool:
@@ -249,7 +302,6 @@ def main() -> int:
         satisfied = required_checks_satisfied(rollup)
         any_check = has_any_required_check(rollup)
         stage2_done = has_stage2_label(pr)
-        push_time = head_push_time(pr)
 
         dispatch_run = None
         # satisfied かつ stage2_done のときは evaluate_pr が dispatch_run を
@@ -258,6 +310,15 @@ def main() -> int:
             dispatch_run = latest_dispatch_run(
                 list_dispatch_runs(args.repo, head_sha), head_sha
             )
+
+        push_time = resolve_push_time(
+            pr,
+            required_satisfied=satisfied,
+            has_any_check=any_check,
+            dispatch_run=dispatch_run,
+            stage2_done=stage2_done,
+            fetch_commit_time=lambda sha: fetch_head_commit_committed_date(args.repo, sha),
+        )
 
         action = evaluate_pr(
             required_satisfied=satisfied,
