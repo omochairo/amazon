@@ -81,12 +81,34 @@ logger = logging.getLogger("append_census_history")
 
 DEFAULT_CENSUS = "data/analytics/gsc_index_census.json"
 DEFAULT_ARTICLES_DIR = "data/articles"
+# #4964: ASIN 出自台帳 (scripts/record_asin_origin.py が書く append-only jsonl)。
+# demand/supply-random/ranking-sniper/rewrite-queue のどのプールから ASIN が
+# 選ばれたかを記録している。ここでは群別 (demand/supply/unknown) 受理率の
+# 突き合わせキーとして読むだけで、書き込みは行わない。
+DEFAULT_ASIN_ORIGIN = "data/analytics/asin_origin.jsonl"
 
 # JSONL ファイル名 (schema.json と同期)
 CENSUS_HISTORY_FILE = "gsc_index_census.jsonl"
 # コホート追跡用の前回 not-indexed URL 状態スナップショット (#2687)。
 # history として積まず、毎 run 上書きする (常に直近 run 分のみ保持)。
 CENSUS_URL_STATES_FILE = "census_url_states.json"
+# #4964: 上の CENSUS_URL_STATES_FILE (直近1回分の上書き) だけでは時系列が
+# 追えないため、URL 単位の遷移ログを append-only で別途持つ。1 行 = 状態が
+# 変わった URL 1 件 (詳細は build_url_state_rows の docstring)。
+CENSUS_URL_STATES_HISTORY_FILE = "census_url_states.jsonl"
+
+# #4964: 群 (demand/supply-random 由来 vs それ以外) の分類。record_asin_origin.py の
+# POOLS ("demand"/"supply-random"/"ranking-sniper"/"rewrite-queue") のうち、
+# #2686 の需要駆動レーンに対応するのは demand/supply-random の2つだけなので、
+# それ以外 (ranking-sniper/rewrite-queue/台帳に無い ASIN) は demand/supply の
+# どちらかに寄せず group="unknown" に落とす。
+GROUP_DEMAND = "demand"
+GROUP_SUPPLY = "supply"
+GROUP_UNKNOWN = "unknown"
+POOL_TO_GROUP: dict[str, str] = {
+    "demand": GROUP_DEMAND,
+    "supply-random": GROUP_SUPPLY,
+}
 
 # 記事本体ファイル名は YYYY-MM-DD-{ASIN}.json。sidecar (enrichment/quality/seo) の
 # 正準3種は本体と誤認しないよう明示的に除外する。
@@ -224,6 +246,190 @@ def discover_existing_asins(articles_dir: pathlib.Path) -> set[str] | None:
 
 def _asin_from_url(url: str) -> str:
     return url.rstrip("/").split("/")[-1].upper()
+
+
+def classify_group(pool: str | None) -> str:
+    """asin_origin.jsonl の pool 文字列を群 (demand/supply/unknown) に落とす。"""
+    return POOL_TO_GROUP.get(pool or "", GROUP_UNKNOWN)
+
+
+def load_asin_origin(path: pathlib.Path | str) -> dict[str, str]:
+    """ASIN 出自台帳 (data/analytics/asin_origin.jsonl) を {asin: pool} に読む。
+
+    同一 ASIN が複数行 (別 run) に出現する場合は最後の行を採用する。ファイル
+    無し/壊れた行は無視して寛容に扱う (このレーンを fail させない、既存の
+    existing_dates と同じ方針)。
+    """
+    mapping: dict[str, str] = {}
+    p = pathlib.Path(path)
+    if not p.exists():
+        return mapping
+    try:
+        text = p.read_text(encoding="utf-8")
+    except OSError as e:
+        logger.warning("could not read %s (%s) — treating as empty asin_origin", p, e)
+        return mapping
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        asin = row.get("asin")
+        if asin:
+            mapping[asin] = row.get("pool")
+    return mapping
+
+
+def compute_by_group(
+    not_indexed_urls: list[dict[str, Any]],
+    errors: list[dict[str, Any]],
+    existing_asins: set[str] | None,
+    asin_origin: dict[str, str],
+) -> dict[str, dict[str, Any]] | None:
+    """群 (demand/supply/unknown) ごとの {inspected, indexed, indexed_rate} を作る (#4964)。
+
+    inspected の分母は「その群で現在記事が存在する ASIN の総数」であって、
+    この census が実際に検査した1800件 (inspect_gsc_index.py の --limit) との
+    厳密な積集合ではない近似値。sitemap_urls (2386) > inspected (1800) の
+    ギャップは既存の宣言的トップレベル指標 (indexed_rate = indexed/inspected)
+    と同じ制約であり、群を分けても解消はしない。群の母集団がまだ小さい
+    うちは実務上の差は無視できるが、母集団が育った際は再検討すること。
+
+    existing_asins が None (articles dir 不明) の場合は分母を作れないため
+    None を返す (exited_indexed/exited_dropped の省略と同じ方針)。
+    """
+    if existing_asins is None:
+        return None
+
+    group_of_asin = {asin: classify_group(asin_origin.get(asin)) for asin in existing_asins}
+
+    inspected = {GROUP_DEMAND: 0, GROUP_SUPPLY: 0, GROUP_UNKNOWN: 0}
+    for group in group_of_asin.values():
+        inspected[group] += 1
+
+    def _tally(items: list[dict[str, Any]]) -> dict[str, int]:
+        counts = {GROUP_DEMAND: 0, GROUP_SUPPLY: 0, GROUP_UNKNOWN: 0}
+        for item in items:
+            asin = _asin_from_url(item.get("url") or "")
+            group = group_of_asin.get(asin, GROUP_UNKNOWN)
+            counts[group] += 1
+        return counts
+
+    not_indexed_counts = _tally(not_indexed_urls or [])
+    error_counts = _tally(errors or [])
+
+    result: dict[str, dict[str, Any]] = {}
+    for group in (GROUP_DEMAND, GROUP_SUPPLY, GROUP_UNKNOWN):
+        insp = inspected[group]
+        idx = max(insp - not_indexed_counts[group] - error_counts[group], 0)
+        result[group] = {
+            "inspected": insp,
+            "indexed": idx,
+            "indexed_rate": round(idx / insp, 4) if insp else None,
+        }
+    return result
+
+
+def build_url_state_rows(
+    current_states: dict[str, str],
+    previous_snapshot: dict[str, Any] | None,
+    existing_asins: set[str] | None,
+    asin_origin: dict[str, str],
+    target_date: str,
+    snapshot: bool,
+) -> list[dict[str, Any]]:
+    """URL 単位の状態遷移ログ (census_url_states.jsonl) の行を作る (#4964)。
+
+    1 行 = {date, url, state, prev_state, group}。前回 census から state が
+    変わった URL と、今回初めて not-indexed になった URL のみを書く
+    (state は step function なので、これで任意時点の per-URL 状態を復元
+    できる)。snapshot=True のときは current_states の全件を無条件で書く
+    (月初の自己修復ポイント、行に snapshot: true を立てる)。
+
+    not-indexed から抜けた (=exit) URL は、既存のコホート判定 (#2687) と
+    同じ articles dir 存在チェックで state="indexed"/"dropped" を付ける。
+    articles dir が不明な場合は state="unknown" とし、誤って indexed と
+    確定させない。
+    """
+    def _group_for(url: str) -> str:
+        return classify_group(asin_origin.get(_asin_from_url(url)))
+
+    if snapshot:
+        return [
+            {
+                "date": target_date,
+                "url": url,
+                "state": state,
+                "prev_state": None,
+                "group": _group_for(url),
+                "snapshot": True,
+            }
+            for url, state in sorted(current_states.items())
+        ]
+
+    previous_states: dict[str, str] = (previous_snapshot or {}).get("states") or {}
+    rows: list[dict[str, Any]] = []
+
+    for url, cur_state in current_states.items():
+        prev_state = previous_states.get(url)
+        if prev_state == cur_state:
+            continue
+        rows.append({
+            "date": target_date,
+            "url": url,
+            "state": cur_state,
+            "prev_state": prev_state,
+            "group": _group_for(url),
+        })
+
+    for url, prev_state in previous_states.items():
+        if url in current_states:
+            continue
+        if existing_asins is None:
+            final_state = "unknown"
+        else:
+            final_state = "indexed" if _asin_from_url(url) in existing_asins else "dropped"
+        rows.append({
+            "date": target_date,
+            "url": url,
+            "state": final_state,
+            "prev_state": prev_state,
+            "group": _group_for(url),
+        })
+
+    rows.sort(key=lambda r: r["url"])
+    return rows
+
+
+def is_first_census_of_month(history_path: pathlib.Path, target_date: str) -> bool:
+    """target_date と同じ年月 (YYYY-MM) の行が history に無ければ True。
+
+    census_url_states.jsonl 側の月初自己修復ポイント判定に使う。ファイル
+    無し/壊れた行は「月初」扱いにして通す (壊さない側に倒す、他の関数と
+    同じ方針)。
+    """
+    ym = target_date[:7]
+    if not history_path.exists():
+        return True
+    try:
+        text = history_path.read_text(encoding="utf-8")
+    except OSError:
+        return True
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        d = row.get("date")
+        if isinstance(d, str) and d[:7] == ym:
+            return False
+    return True
 
 
 def compute_cohort(
@@ -390,6 +596,7 @@ def run(
     census: dict,
     history_dir: pathlib.Path,
     articles_dir: pathlib.Path | str = DEFAULT_ARTICLES_DIR,
+    asin_origin_path: pathlib.Path | str = DEFAULT_ASIN_ORIGIN,
 ) -> tuple[bool, str | None]:
     """1 件分の census を history へ append する。
 
@@ -399,7 +606,8 @@ def run(
     #2687: コホート遷移計算とスナップショット更新は「append を実際に行った
     場合のみ」実施する。idempotency (同一 date 既存) で append をスキップした
     場合はスナップショットも触らない (二重実行で前回状態が壊れると次回の遷移
-    計算が無意味になるため)。
+    計算が無意味になるため)。#4964 で追加した by_group / census_url_states.jsonl
+    も同じ idempotency ガードに乗る (append を行った場合のみ計算・書き込み)。
     """
     row = build_row(census)
     if row is None:
@@ -418,6 +626,12 @@ def run(
     existing_asins = discover_existing_asins(pathlib.Path(articles_dir))
     row["cohort"] = compute_cohort(current_states, previous_snapshot, existing_asins)
 
+    asin_origin = load_asin_origin(asin_origin_path)
+    row["by_group"] = compute_by_group(
+        census.get("not_indexed_urls") or [], census.get("errors") or [],
+        existing_asins, asin_origin,
+    )
+
     append_jsonl(history_path, [row])
     logger.info(
         "gsc_index_census %s: appended 1 row (inspected=%d, indexed=%d, "
@@ -425,6 +639,16 @@ def run(
         target_date, row["inspected"], row["indexed"], row["indexed_rate"],
         row["circuit_breaker_tripped"],
     )
+
+    url_states_history_path = history_dir / CENSUS_URL_STATES_HISTORY_FILE
+    force_snapshot = previous_snapshot is None or is_first_census_of_month(
+        url_states_history_path, target_date
+    )
+    url_state_rows = build_url_state_rows(
+        current_states, previous_snapshot, existing_asins, asin_origin,
+        target_date, snapshot=force_snapshot,
+    )
+    append_jsonl(url_states_history_path, url_state_rows)
 
     save_url_states_snapshot(states_path, target_date, current_states)
 
@@ -443,6 +667,8 @@ def main() -> int:
     p.add_argument("--history-dir", default=DEFAULT_HISTORY_DIR)
     p.add_argument("--articles-dir", default=DEFAULT_ARTICLES_DIR,
                    help="コホート exit 判定 (indexed/dropped) 用の記事ディレクトリ (#2687)")
+    p.add_argument("--asin-origin", default=DEFAULT_ASIN_ORIGIN,
+                   help="ASIN 出自台帳 (demand/supply 群判定用、#4964)")
     args = p.parse_args()
 
     census_path = pathlib.Path(args.census)
@@ -452,7 +678,9 @@ def main() -> int:
 
     census = json.loads(census_path.read_text(encoding="utf-8"))
     history_dir = pathlib.Path(args.history_dir)
-    appended, target_date = run(census, history_dir, pathlib.Path(args.articles_dir))
+    appended, target_date = run(
+        census, history_dir, pathlib.Path(args.articles_dir), pathlib.Path(args.asin_origin)
+    )
 
     if target_date is None:
         return 0
