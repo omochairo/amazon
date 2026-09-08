@@ -121,3 +121,22 @@ rejected:
     reason: "「Happy Flowerが運営」との定型販促文言のみで独立した企業情報・ブランドストアを確認できず"
     reviewed: 2026-07-17
     source: "#2931"
+
+  # --- 同名別業種の誤マッチ (#2931 実査・オーナー承認 2026-09-08) ---
+  - brand: スプランキー
+    category: mismatch
+    reason: ホラー音楽ゲーム Sprunki の IP 名。同じ商品群を おもちゃ実業/HOMANY (販社) も出品しており実体はブランドではない
+    reviewed: 2026-09-08
+    source: "#2931"
+  - brand: ディズニー
+    category: mismatch
+    reason: ライセンサーであり実メーカーが別 (ILY 4EVER ファッションドール / ミニーマウス デラックスキッチンセット等)。登録すると多数の実メーカー商品を吸い込む
+    reviewed: 2026-09-08
+    source: "#2931"
+
+  # --- 玩具カテゴリ外 (#2931 実査・オーナー承認 2026-09-08) ---
+  - brand: Super Simple Songs
+    category: out_of_category
+    reason: YouTube チャンネル/番組名。商品は DVD (スーパーシンプルソングス2 赤ちゃんサメ DVD) で玩具本体ではない
+    reviewed: 2026-09-08
+    source: "#2931"
