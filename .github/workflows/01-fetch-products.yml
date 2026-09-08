@@ -150,10 +150,14 @@ jobs:
       # 事前フェッチして per_asin/<ASIN>/omcha_related.json に書く。
       # 旧設計では build_post.py が描画ループで 218 ASIN 分 omcha.jp を叩いていた
       # (untracked 汚染 + 描画レイヤ I/O + score_calculator race の三重問題)。
-      # PR #486 の stale-first per-ASIN cycle (50/run × 7d) と同型で巡回する。
+      # PR #486 の stale-first per-ASIN cycle と同型で巡回する。
+      # --max-per-run auto (Issue #6773): 固定値 (旧 50/run) は対象 ASIN 増加で
+      # 7日 TTL と乖離するため、対象数 / (stale-after-days × runs-per-day) から
+      # 毎回自動算出する。この workflow の cron は 1 日 2 回 (0:00, 9:00 UTC) なので
+      # --runs-per-day は既定の 2 のままでよい。
       - name: Fetch omcha.jp Related Articles
         if: ${{ always() }}
-        run: python scripts/fetch_omcha_related.py --out data/raw/
+        run: python scripts/fetch_omcha_related.py --out data/raw/ --max-per-run auto
         env:
           OMCHA_API_KEY: ${{ secrets.OMCHA_API_KEY }}
 
