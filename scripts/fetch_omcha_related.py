@@ -35,6 +35,8 @@ logger = logging.getLogger("fetch_omcha_related")
 SOURCE = "omcha"
 _ASIN_FROM_FILENAME = re.compile(r"(B0[A-Z0-9]{8}|[0-9]{9}[0-9X])")
 _SIDECAR_SUFFIXES = (".enrichment", ".seo", ".quality")
+# fetch_amazon._parse_asin_csv と同じ ASIN 形式 (10桁の ASIN、または末尾 X もありうる ISBN-10)。
+_ASIN_INPUT_RE = re.compile(r"^(?:[0-9]{9}[0-9X]|[A-Z][A-Z0-9]{9})$")
 
 
 def _keyword_from_tags(tags: Any) -> str:
@@ -126,6 +128,26 @@ def _pick_stale_targets(
     return [(asin, keyword) for _, asin, keyword in picked]
 
 
+def _parse_asins_csv(raw: str) -> list[str]:
+    """``--asins`` の CSV をパースし、重複除去した ASIN リストを返す。
+
+    配信経路 (記事公開直後) から呼ばれる想定のため、fetch_amazon._parse_asin_csv と
+    違って不正フォーマットは warning ログを出すだけでスキップし、エラー終了しない。
+    """
+    seen: list[str] = []
+    for part in raw.split(","):
+        token = part.strip()
+        if not token:
+            continue
+        normalized = token.upper()
+        if not _ASIN_INPUT_RE.match(normalized):
+            logger.warning(f"[{SOURCE}] --asins: invalid ASIN format, skipping: {token!r}")
+            continue
+        if normalized not in seen:
+            seen.append(normalized)
+    return seen
+
+
 def _write_per_asin_cache(
     per_asin_root: pathlib.Path, asin: str, keyword: str, items: list[dict]
 ) -> None:
@@ -151,6 +173,12 @@ def main():
         help="1 run あたりの最大 ASIN 数 (stale-first cap)",
     )
     ap.add_argument(
+        "--asins", default=None,
+        help="対象 ASIN を CSV で明示指定 (例: B0XXXXXXXX,B0YYYYYYYY)。指定時は "
+             "stale-first 巡回と --max-per-run を迂回し、指定 ASIN のみ処理する "
+             "(記事公開直後にその場でキャッシュを埋める用途、Issue #6773)。",
+    )
+    ap.add_argument(
         "--stale-after-days", type=int, default=7,
         help="N 日以内に query 済みの ASIN はスキップ (TTL)",
     )
@@ -171,12 +199,28 @@ def main():
         logger.warning("No (asin, keyword) pairs found under %s; nothing to fetch", articles_dir)
         return
 
-    targets = _pick_stale_targets(
-        out_dir, keyword_pairs, args.max_per_run, args.stale_after_days,
-    )
-    if not targets:
-        logger.info("No stale ASINs to refresh this run")
-        return
+    if args.asins:
+        requested = _parse_asins_csv(args.asins)
+        targets = []
+        for asin in requested:
+            keyword = keyword_pairs.get(asin)
+            if not keyword:
+                logger.warning(
+                    f"[{SOURCE}] --asins: {asin} has no usable keyword "
+                    "(article missing or no tags), skipping"
+                )
+                continue
+            targets.append((asin, keyword))
+        if not targets:
+            logger.warning(f"[{SOURCE}] --asins: no valid targets, nothing to fetch")
+            return
+    else:
+        targets = _pick_stale_targets(
+            out_dir, keyword_pairs, args.max_per_run, args.stale_after_days,
+        )
+        if not targets:
+            logger.info("No stale ASINs to refresh this run")
+            return
 
     queried: list[str] = []
     hits = 0
