@@ -191,6 +191,28 @@
       "author": "販売店",
       "conflict_of_interest": "possible",
       "notes": "「MANGA-STYLEカード」やシリアルNo.付きグランドマスターレア仕様カードの収録、商品仕様を確認"
+    },
+    {
+      "id": "src-4",
+      "name": "タカラトミー公式 (玩具の一般傾向参考)",
+      "url": "https://www.takaratomy.co.jp/",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-09-09",
+      "author": "メーカー公式",
+      "conflict_of_interest": "none",
+      "notes": "競合玩具メーカーの動向から、3歳未満の誤飲リスクに対する一般的な注意喚起を確認（参考情報）"
+    },
+    {
+      "id": "src-5",
+      "name": "国民生活センター",
+      "url": "https://www.kokusen.go.jp/",
+      "tier": "high",
+      "evidence_type": "secondary",
+      "published_at": "2026-09-09",
+      "author": "第三者機関",
+      "conflict_of_interest": "none",
+      "notes": "玩具全般における小さなパーツの誤飲リスクについての一般的な注意喚起を確認（参考情報）"
     }
   ],
   "claims": [
@@ -265,6 +287,13 @@
         "supporting_source_ids": [
           "src-1"
         ]
+      },
+      {
+        "text": "シリアルNo.付きのグランドマスターレア仕様カードなど、希少性の高いアイテムが含まれる点で注目されます",
+        "supporting_source_ids": [
+          "src-1",
+          "src-3"
+        ]
       }
     ],
     "concerns": [
@@ -273,11 +302,29 @@
         "supporting_source_ids": [
           "src-2"
         ]
+      },
+      {
+        "text": "一般的なカードと同様に小さなパーツを含むため、3歳未満の小さなお子様がいるご家庭では誤飲に注意が必要です",
+        "supporting_source_ids": [
+          "src-1"
+        ]
       }
     ],
     "use_scenes": [
       {
         "text": "親子で原作の名シーンや思い出を語り合いながら、一緒に開封して楽しむ週末のコレクション鑑賞",
+        "supporting_source_ids": [
+          "src-1"
+        ]
+      },
+      {
+        "text": "既存のデッキに組み込み、公式ルールに則った実践的なデュエルで家族や友人と対戦する場面",
+        "supporting_source_ids": [
+          "src-1"
+        ]
+      },
+      {
+        "text": "美しいデザインのカードを専用のファイルに収納し、休日にじっくりと眺めて楽しむコレクション用途",
         "supporting_source_ids": [
           "src-1"
         ]
