@@ -63,6 +63,28 @@ enableRobotsTXT = true
   # ranking.html / mobile_sticky_cta.html はここを参照する (直書き禁止)。
   # Python 側の SSOT は AMAZON_PARTNER_TAG secret (scripts/fetch_amazon.py 参照)。
   amazonPartnerTag = "chk01-22"
+  # #6822: 楽天 / バリューコマース のトラッキング ID の SSOT (レンダリング側)。
+  # 未突合商品の「検索フォールバック URL」をアフィリエイト経由にするために
+  # scripts/build_post.py の _resolve_affiliate_param が参照する。
+  # secret を唯一の供給元にしない理由は amazonPartnerTag と同じ (#5087) —
+  # build_post.py は secret の無い配信ビルドで走るため、secret 依存にすると
+  # 本番でだけ黙って素の URL に落ちる。いずれも公開ページの HTML に
+  # 元から出ている公開トラッキング ID。
+  #
+  # 優先順は **secret が先、ここが fallback** (_resolve_affiliate_param は
+  # get_secret を先に見る)。2026-09-09 まで「secret 側は任意のオーバーライド」と
+  # 書いてあったが実装は逆で、本番に出ているのは secret 側の値。
+  #
+  # #6854: rakutenAffiliateId は 2026-09-09 まで
+  # "g00q072h.wjrz5527.g00q072h.wjrz6f73" だったが、これはアカウント ID ではなく
+  # **楽天ブックス (shop=book) 向けに楽天 API が発行した商品リンク ID** を
+  # そのままコピーしたものだった (記事データ内の該当リンク 149 本とバイト一致)。
+  # 商品リンクの `g00…` は 210 ショップに対し 211 種で、ショップと 1:1 に対応する
+  # ショップ単位の ID (実測)。アカウントを表す値ではないので、ここに置いてはいけない。
+  # ここにはアカウント ID (PC / モバイルの数値 ID ペア + ハッシュ) を置く。
+  rakutenAffiliateId = "40871861.19c94f60.40871862.8fefc5ed"
+  valuecommerceSid = "3746014"
+  valuecommercePid = "891670125"
   # omcha-ops#19 P2: らくらくベビー (ベビーレジストリ) 導線のリンク先。
   # 乳児帯の記事末にだけ出す (判定は scripts/build_post.py)。tag= はここでは
   # 付けない — 付与は _force_amazon_partner_tag / amazon_affiliate_url.html の 1 点。
@@ -120,6 +142,11 @@ enableRobotsTXT = true
   # sameAs は omcha.jp 本家 JSON-LD と統一 (ブランド整合)。
   [params.schema]
     publisherType = "Organization"
+    # Issue #6821 項目4: リッチリザルト テストの「記事」で唯一出ていた重大でない問題
+    # 「author の項目『url』がありません（任意）」を埋める。値は build_post.py の
+    # PERSON_OMOCHAIRO_BOT (@id = <base>/about/#omochairo-bot, url = <base>/about/) と
+    # 同じ宛先を指す。ここを変えるなら向こうも合わせること。
+    authorUrl = "/about/"
     sameAs = [
       "https://omcha.jp/",
       "https://home.omcha.jp",
