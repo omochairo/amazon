@@ -33,25 +33,30 @@
 Ubersuggest MCP は Claude からしか呼べず、スクリプトからも CI からも叩けない。
 したがって台帳の更新は「セッションの作業」であって cron ではない。
 
-    1. todo  <keywords.txt>    まだ取っていない語を出す
+    1. next                    今日の 100 語を出す (予約が先・台帳の裾は後)
     2. (Claude が keyword_overview を 12 語ずつ並列で叩く)
     3. merge <batch.json>      返り値を追記する
-    4. todo が 0 になるまで繰り返す
+    4. next が 0 になるまで繰り返す
+
+語リストを直に指定したいときだけ `todo <keywords.txt>` を使う。
 
 `keyword_suggestions` (面) → `keyword_overview` (点) の順は変えない。節約のため
 ではなく、自分で思いつかない語が出てくるから。`keyword_metrics` の
 `search_difficulty` は月次クォータを食うので使わない。
 
-## 1 日 100 レポートしか引けない (2026-09-07 実測)
+## 1 日 100 レポートしか引けない (2026-09-08 に境界を確定)
 
 `keyword_overview` も `match_keywords` も **同じ日次 100 レポート枠**を食う。
-枠が尽きると両方が `HTTP 403 daily reports limit: 100` を返す。
+枠が尽きると両方が `HTTP 403 daily reports limit: 100` を返す。**枠はちょうど 100 で、
+101 回目が 403。** リセットは 00:00 UTC = **09:00 JST**。**繰り越されない。**
 
-    5,292 語 ÷ 100/日 = **53 日**
+`serp_analysis` は**この枠を1件も食わない** (2026-09-08 実測。6 回叩いたあとに
+`keyword_overview` が 100 回通った)。
 
-したがって取り直しは「セッションで一気に」ではなく**毎日 100 語ずつの点滴**になる。
-`refetch-queue` が「今日の 100 語」を優先順に出すのはこのため。**枠の使い道を
-決めることがこの台帳の主な仕事**であって、全件を測ることではない。
+**枠の使い道を決めることがこの台帳の主な仕事**であって、全件を測ることではない。
+台帳の裾は 4,998 語あり、埋めても記事は 1 本も増えない。**記事を書くために要る語が
+先**なので、**毎日の入口は `next`** (予約 `queue.d/` → 台帳の裾 の順)。
+`refetch-queue` は裾しか見ないので、裾だけを掘ると分かっているときに使う。
 
 ## external.jsonl は append-only
 
@@ -88,6 +93,7 @@ normalize_key = bdk.normalize_key
 
 DEFAULT_EXTERNAL = "data/keywords/external.jsonl"
 DEFAULT_ASSIGN = "data/keywords/assign.jsonl"
+DEFAULT_QUEUE_DIR = "data/keywords/queue.d"
 DEFAULT_LOC_ID = 2392   # Japan。location_suggest で引いた実 ID 以外を入れない
 DEFAULT_LANGUAGE = "ja"
 # 採否を分けた語 (assign に載っている語) だけを再取得する間隔。全件リフレッシュは
@@ -378,11 +384,8 @@ def load_keep_list(path: pathlib.Path) -> set[str]:
     return keep
 
 
-def cmd_refetch_queue(args) -> int:
-    """取り直しの「今日のぶん」を優先順に出す。
-
-    1 日 100 レポートしか引けない (docstring 参照) ので、全件を機械的に流すと
-    53 日かかる。順番そのものが成果を決めるため、根拠を stderr に必ず出す。
+def refetch_candidates(args, cur):
+    """台帳の裾 (CSV 由来・未判定) から取り直し候補を優先順に返す。
 
     優先順位:
       1. `suspect_volume` を外す — CSV の集計崩れ (実測: たまごっち 1,000,000)。
@@ -393,7 +396,6 @@ def cmd_refetch_queue(args) -> int:
          順番を決める材料は他に無い。**「大きいと言われている語から確かめる」という
          意味であって、値を信じているわけではない
     """
-    cur = latest(read_jsonl(pathlib.Path(args.external)))
     owned = load_wp_owned(pathlib.Path(args.wp_demand) if args.wp_demand else None,
                           args.guard_pos_max, args.guard_min_clicks)
     keep = load_keep_list(pathlib.Path(args.keep_list)) if args.keep_list else None
@@ -415,12 +417,115 @@ def cmd_refetch_queue(args) -> int:
             continue
         cand.append(r)
     cand.sort(key=lambda r: (-(r.get("sv") or 0), r.get("norm") or ""))
+    return cand, {"suspect": n_suspect, "owned": n_owned, "offlist": n_offlist,
+                  "wp_demand_empty": (not owned and bool(args.wp_demand))}
+
+
+def cmd_refetch_queue(args) -> int:
+    """取り直しの「今日のぶん」を優先順に出す (台帳の裾だけを見る)。
+
+    1 日 100 レポートしか引けない (docstring 参照) ので、全件を機械的に流すと
+    50 日かかる。順番そのものが成果を決めるため、根拠を stderr に必ず出す。
+
+    **毎日の入口は `next` を使う。** こちらは裾しか見ないので、予約 (queue.d/) が
+    入っていても無視して裾を掘る。裾だけを見たいと分かっているときに使う。
+    """
+    cur = latest(read_jsonl(pathlib.Path(args.external)))
+    cand, ex = refetch_candidates(args, cur)
     for r in cand[:args.limit]:
         print(r.get("keyword"))
     print("# queue: 候補 %d / 出力 %d / 除外 suspect=%d wp既得=%d リスト外=%d (残り %d)"
-          % (len(cand), min(args.limit, len(cand)), n_suspect, n_owned, n_offlist,
-             max(0, len(cand) - args.limit)), file=sys.stderr)
-    if not owned and args.wp_demand:
+          % (len(cand), min(args.limit, len(cand)), ex["suspect"], ex["owned"],
+             ex["offlist"], max(0, len(cand) - args.limit)), file=sys.stderr)
+    if ex["wp_demand_empty"]:
+        print("# 注意: WP 既得の語が 0 件。%s を読めているか確認する"
+              % args.wp_demand, file=sys.stderr)
+    return 0
+
+
+def load_reserved(dirpath: pathlib.Path, cur, loc_id: str, language: str,
+                  stale_before):
+    """予約キュー (queue.d/) の未取得語を、優先順に返す。
+
+    **ファイル名の辞書順が優先順位。** `010-...` `020-...` のように数字を先頭に
+    置いて並べる。ファイル内では書いた順。`#` 行はブロック見出しで直後の語に付く
+    (read_keywords と同じ)。
+
+    戻り値は (keyword, block, ファイル名) のリスト。**まだ測っていない語だけを返す。**
+    台帳に行があっても `measured_unknown` (CSV 由来で測定の有無すら分からない) は
+    「未取得」として残す — 競合CSV に載っている語が trip の予約に出てくることは普通に
+    あり、そこで落とすと**予約に書いたのに永久に出てこない**ことになる。
+    """
+    out = []
+    if not dirpath or not dirpath.exists():
+        return out
+    seen = set()
+    for path in sorted(dirpath.glob("*.txt")):
+        for kw, block in read_keywords(path):
+            norm = normalize_key(kw)
+            if not norm or norm in seen:
+                continue
+            seen.add(norm)
+            row = cur.get((norm, loc_id, language))
+            if row is None or row.get("measured_unknown"):
+                out.append((kw, block, path.name))
+            elif stale_before and (row.get("fetched_at") or "") < stale_before:
+                out.append((kw, block, path.name))
+    return out
+
+
+def cmd_next(args) -> int:
+    """**今日の 100 語を出す。毎日の入口はこれ。**
+
+    枠は 1 日 100 レポートで**繰り越されない。**使わなかった日の枠は消える。
+    だから「何を測るか」より先に「**枠を何に向けるか**」が決まっていないといけない。
+
+    順番:
+      1. **予約キュー (`data/keywords/queue.d/*.txt`) を先に食う。**
+         記事を書くために要る語 — trip の新規クラスタ、新規記事の主KWと見出し語 —
+         はここに置く。**期限のある取材 (季節・休園) はここでしか表現できない。**
+      2. 予約が limit に満たなければ、残りを台帳の裾 (`refetch-queue`) で埋める
+
+    2026-09-09 に、予約の口が無かったために**枠 100 がまるごと台帳の裾に流れた**
+    (omcha-ops#155)。裾は 4,998 語あり、埋めても記事は 1 本も増えない。
+    **予約が入っている限り裾を掘らせない**のがこのコマンドの主な仕事。
+
+    `--reserved-only` は裾を混ぜない。予約を今日ぶん確実に終わらせたい日に使う。
+    """
+    cur = latest(read_jsonl(pathlib.Path(args.external)))
+    stale_before = None
+    if args.refresh_stale:
+        stale_before = (datetime.date.today()
+                        - datetime.timedelta(days=args.stale_days)).isoformat()
+    reserved = load_reserved(pathlib.Path(args.queue_dir), cur,
+                             args.loc_id, args.language, stale_before)
+    take = reserved[:args.limit]
+    for kw, _block, _src in take:
+        print(kw)
+    by_file = {}
+    for _kw, _block, src in take:
+        by_file[src] = by_file.get(src, 0) + 1
+    detail = " ".join("%s=%d" % (k, v) for k, v in sorted(by_file.items())) or "なし"
+    print("# next: 予約から %d 語 (%s) / 予約の残り %d 語"
+          % (len(take), detail, max(0, len(reserved) - len(take))), file=sys.stderr)
+
+    room = args.limit - len(take)
+    if args.reserved_only:
+        if room > 0:
+            print("# --reserved-only: 裾は混ぜない (枠が %d 語あまる)" % room,
+                  file=sys.stderr)
+        return 0
+    if room <= 0:
+        if reserved[args.limit:]:
+            print("# 台帳の裾は見ていない (予約で枠が埋まった)", file=sys.stderr)
+        return 0
+    cand, ex = refetch_candidates(args, cur)
+    for r in cand[:room]:
+        print(r.get("keyword"))
+    print("# next: 台帳の裾から %d 語 (候補 %d / 除外 suspect=%d wp既得=%d リスト外=%d)"
+          % (min(room, len(cand)), len(cand), ex["suspect"], ex["owned"],
+             ex["offlist"]), file=sys.stderr)
+    if ex["wp_demand_empty"]:
         print("# 注意: WP 既得の語が 0 件。%s を読めているか確認する"
               % args.wp_demand, file=sys.stderr)
     return 0
@@ -622,6 +727,24 @@ def main(argv=None) -> int:
     p.add_argument("--refresh", action="store_true",
                    help="既にある語も追記する (再取得。上書きではない)")
     p.set_defaults(func=cmd_merge)
+
+    p = sub.add_parser("next",
+                       help="今日の100語 (予約が先・台帳の裾は後)")
+    p.add_argument("--limit", type=int, default=100,
+                   help="1 日の枠。既定 100 (Ubersuggest tier0 の日次上限)")
+    p.add_argument("--queue-dir", default=DEFAULT_QUEUE_DIR)
+    p.add_argument("--reserved-only", action="store_true",
+                   help="予約だけを出す。台帳の裾を混ぜない")
+    p.add_argument("--loc-id", type=int, default=DEFAULT_LOC_ID)
+    p.add_argument("--language", default=DEFAULT_LANGUAGE)
+    p.add_argument("--refresh-stale", action="store_true")
+    p.add_argument("--stale-days", type=int, default=DEFAULT_STALE_DAYS)
+    p.add_argument("--source", default="csv:competitor-export")
+    p.add_argument("--wp-demand", default="../amazon-navi-brain/demand/wp_demand.jsonl")
+    p.add_argument("--keep-list", default=None)
+    p.add_argument("--guard-pos-max", type=float, default=3.0)
+    p.add_argument("--guard-min-clicks", type=float, default=100.0)
+    p.set_defaults(func=cmd_next)
 
     p = sub.add_parser("refetch-queue",
                        help="取り直しの今日のぶんを優先順に出す (1日100レポート制限)")
