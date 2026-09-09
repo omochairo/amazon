@@ -16,6 +16,13 @@ LLM 検索エンジン・モデルの引用状況 (Cited / Matched URLs / Mentio
    プロパティが完全に異なっており、別個の時系列データとして扱わなければならない。
    ホスト判定において親ドメインとサブドメインの相互マッチ（例: omcha.jp 判定時に
    navi.omcha.jp や home.omcha.jp をマッチさせること、およびその逆）は厳格に禁止する。
+   また、`omcha` の `gsc_history` 既定値 (`data/analytics/history/gsc_wp_by_query.jsonl`) は
+   2026-08-04 で凍結された過去データである (2026-08-07 のコミット 4aa0c4d884 で
+   private repo `omochairo/omcha-ops` の `data/gsc/gsc_wp_by_query.jsonl` へ移設)。
+   現行の生きた系列を処理する場合は、実行時に `--gsc-history` で private repo 側のパスを
+   明示指定する必要がある (パスの決め打ちに引きずられて古いクエリを叩き続ける事故を防ぐ)。
+   あわせて、`omcha` 系列は omcha.jp のクエリを含む出力になるため、public repo に書き出してはならない
+   (入力・出力ともに public repo の外で管理すること)。
 
 2. カレンダー窓ではなく実績日窓 (select_queries):
    GSC の履歴データ (`gsc_history`) には日付の欠損や遅延 (gap) が存在しうる。
@@ -35,6 +42,11 @@ from typing import Any, Iterable
 from urllib.parse import urlsplit
 
 # GSC プロパティごとの設定。navi と omcha は異なるプロパティであり、独立した時系列として管理する。
+# 注意: omcha の gsc_history 既定値 (data/analytics/history/gsc_wp_by_query.jsonl) は
+# 2026-08-04 で凍結された過去データである (2026-08-07 のコミット 4aa0c4d884 で
+# private repo `omochairo/omcha-ops` の `data/gsc/gsc_wp_by_query.jsonl` へ移設)。
+# 現行の生きた系列を処理する場合は実行時に `--gsc-history` で外部パスを明示指定すること。
+# また、omcha 系列は omcha.jp のクエリを含む出力になるため、public repo に書き出してはならない。
 SITES: dict[str, dict[str, str]] = {
     "navi":  {"host": "navi.omcha.jp", "gsc_history": "data/analytics/history/gsc_by_query.jsonl"},
     "omcha": {"host": "omcha.jp",      "gsc_history": "data/analytics/history/gsc_wp_by_query.jsonl"},
