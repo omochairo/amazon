@@ -80,6 +80,10 @@ jobs:
 
       - name: List changed article JSON
         id: list
+        env:
+          MODE: ${{ steps.range.outputs.mode }}
+          BASE: ${{ steps.range.outputs.base }}
+          HEAD: ${{ steps.range.outputs.head }}
         run: |
           set -e
           # sidecar (記事本体でない派生 JSON) は article.schema.json の対象外。
@@ -89,11 +93,14 @@ jobs:
           # .seo.json (#3332 N1/N3 レーンの sidecar) と .enrichment.json を取り
           # こぼし、schema 検証で 'slug' required エラーになって毎晩の data PR を
           # BLOCKED にしていた。新 sidecar 種別を足すときはこの集合も更新する。
-          if [ "${{ steps.range.outputs.mode }}" = "full" ]; then
+          if [ "$MODE" = "full" ]; then
             files=$(ls data/articles/*.json 2>/dev/null | grep -vE '\.(enrichment|quality|seo)\.json$' || true)
           else
+            # 3 点 (base...head) = merge base からの差分。2 点にすると「PR が分岐した
+            # 後に main へ入った記事」まで拾い、その記事が schema 違反だと無関係な
+            # PR が落ちる (#6793 follow-up)。
             files=$(git diff --name-only --diff-filter=AM \
-                      "${{ steps.range.outputs.base }}" "${{ steps.range.outputs.head }}" \
+                      "$BASE...$HEAD" \
                       -- 'data/articles/*.json' \
                     | grep -vE '\.(enrichment|quality|seo)\.json$' || true)
           fi
@@ -117,14 +124,34 @@ jobs:
       # 別途列挙して判定する。prevent 側は #6792 (--match-head-commit) で対応
       # 済みなので、ここでは検出のみ。continue-on-error は付けない (失敗が
       # success として記録され不可視になるため。05 の commit-back と同じ理由)。
+      #
+      # 2026-09-09 (#6793 follow-up): **範囲は 3 点 (base...head) でなければならない。**
+      # 導入時は 2 点 (base head) だった。`pull_request.base.sha` は「イベント時点の
+      # main の先端」なので、PR が分岐した後に main へ入ったファイルが 2 点差分では
+      # すべて「PR による削除」として現れる。実測 (2026-09-08 #6840):
+      # 3 点の削除 0 件に対し 2 点は 10 件以上を検出し、うち 1 件
+      # (data/raw/per_asin/B0H8BPQHQN/experience.json) は PR #6836 が main に足した
+      # ファイルだった。結果として **main が動くだけで記事 PR が落ちる**
+      # (#6840 / #6832 が BLOCKED)。3 点なら merge base からの差分なので、
+      # PR 自身が消したものだけが出る。
       - name: Check for deletions outside data/articles/ (#6793)
         if: steps.list.outputs.files != '' && steps.range.outputs.mode == 'diff'
+        env:
+          BASE: ${{ steps.range.outputs.base }}
+          HEAD: ${{ steps.range.outputs.head }}
         run: |
           # pipefail 必須: これが無いと git diff 側が落ちたとき python は空入力を
           # 受けて「削除なし」と判定し exit 0 で通ってしまう (失敗が無言になる)。
+          # --no-renames も必須。git は既定でリネーム検出を行うため、PR が
+          # **同じ内容のファイルを別の場所に足した** 場合、巻き添え削除が
+          # rename として畳まれて --diff-filter=D から消える。記事 PR は
+          # data/raw/per_asin/<ASIN>/*.json を新規追加するので、#6788 型の
+          # 巻き添え削除 (同種の JSON) はまさにこの形で隠れうる。
+          # このゲートが見たいのは「data/articles 以外から消えたか」なので、
+          # rename に畳まずパス単位で判定する。
           set -eo pipefail
-          git diff --name-only --diff-filter=D \
-              "${{ steps.range.outputs.base }}" "${{ steps.range.outputs.head }}" \
+          git diff --name-only --diff-filter=D --no-renames \
+              "$BASE...$HEAD" \
             | python scripts/check_article_pr_deletions.py
 
       # jules/ プロンプトは private repo (amazon-navi-brain) に分離済み。実行時に overlay checkout。
