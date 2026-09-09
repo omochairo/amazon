@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import logging
 import pathlib
 from unittest.mock import MagicMock, patch
 import pytest
@@ -15,6 +16,7 @@ from scripts._llm_citation import SITES
 from scripts.probe_llm_citations import (
     ENGINES,
     EngineError,
+    STALE_WARN_DAYS,
     build_agy_argv,
     build_prompt,
     engine_fixture,
@@ -22,7 +24,9 @@ from scripts.probe_llm_citations import (
     engine_agy,
     load_gsc_rows,
     main,
+    parse_gsc_history_overrides,
     seen_key,
+    stale_days,
 )
 
 
@@ -297,3 +301,164 @@ def test_main_returns_one_when_work_failed_to_write(tmp_path):
         )
         assert code == 1
         assert not citations_file.exists()
+
+
+# ==============================================================================
+# parse_gsc_history_overrides
+# ==============================================================================
+
+def test_parse_gsc_history_overrides_normal():
+    # None または空リスト
+    assert parse_gsc_history_overrides(None) == {}
+    assert parse_gsc_history_overrides([]) == {}
+
+    # 単一 site
+    res1 = parse_gsc_history_overrides(["omcha=/custom/path/gsc.jsonl"])
+    assert res1 == {"omcha": "/custom/path/gsc.jsonl"}
+
+    # 複数 site かつ前後の空白 strip
+    res2 = parse_gsc_history_overrides([
+        " omcha = C:/Users/zefir/vscode/omcha-ops/data/gsc/gsc_wp_by_query.jsonl ",
+        "navi = /data/navi.jsonl",
+    ])
+    assert res2 == {
+        "omcha": "C:/Users/zefir/vscode/omcha-ops/data/gsc/gsc_wp_by_query.jsonl",
+        "navi": "/data/navi.jsonl",
+    }
+
+
+def test_parse_gsc_history_overrides_unknown_site():
+    with pytest.raises(ValueError, match="Unknown site"):
+        parse_gsc_history_overrides(["unknown_site=/path/to/file.jsonl"])
+
+
+def test_parse_gsc_history_overrides_missing_equal():
+    with pytest.raises(ValueError, match="missing '='"):
+        parse_gsc_history_overrides(["omcha_without_equal"])
+
+
+def test_parse_gsc_history_overrides_empty_path():
+    with pytest.raises(ValueError, match="Empty path"):
+        parse_gsc_history_overrides(["omcha="])
+    with pytest.raises(ValueError, match="Empty path"):
+        parse_gsc_history_overrides(["omcha=   "])
+
+
+def test_parse_gsc_history_overrides_duplicate_last_wins():
+    res = parse_gsc_history_overrides([
+        "omcha=/first/path.jsonl",
+        "omcha=/second/path.jsonl",
+    ])
+    assert res == {"omcha": "/second/path.jsonl"}
+
+
+# ==============================================================================
+# stale_days
+# ==============================================================================
+
+def test_stale_days_normal():
+    assert stale_days("2026-08-04", "2026-09-09") == 36
+    assert stale_days("2026-08-26", "2026-09-09") == 14
+    assert stale_days("2026-08-27", "2026-09-09") == 13
+
+
+def test_stale_days_same_date():
+    assert stale_days("2026-09-09", "2026-09-09") == 0
+
+
+def test_stale_days_invalid_date():
+    assert stale_days("not-a-date", "2026-09-09") is None
+    assert stale_days("2026-08-04", "not-a-date") is None
+    assert stale_days("2026-02-30", "2026-09-09") is None
+    assert stale_days("", "2026-09-09") is None
+    assert stale_days("2026-08-04", "") is None
+
+
+def test_stale_days_none():
+    assert stale_days(None, "2026-09-09") is None
+    assert stale_days("2026-08-04", None) is None
+    assert stale_days(None, None) is None
+
+
+# ==============================================================================
+# GSC history override & stale warning tests via main()
+# ==============================================================================
+
+def test_main_e2e_gsc_history_override(tmp_path, caplog):
+    """--gsc-history で外部パスを指定したとき、指定パスのクエリが使用され、上書きログが出力される。"""
+    _setup_mock_gsc(tmp_path)
+
+    # 別ディレクトリに外部の GSC ファイルを配置
+    external_dir = tmp_path / "external_ops" / "data"
+    external_dir.mkdir(parents=True, exist_ok=True)
+    custom_omcha_file = external_dir / "external_omcha.jsonl"
+    custom_data = [
+        {"date": "2026-09-09", "query": "外部系列クエリomcha", "clicks": 50, "impressions": 500},
+    ]
+    with custom_omcha_file.open("w", encoding="utf-8") as f:
+        for r in custom_data:
+            f.write(json.dumps(r) + "\n")
+
+    history_dir = tmp_path / "data" / "analytics" / "history"
+    citations_file = history_dir / "llm_citations.jsonl"
+
+    with caplog.at_level(logging.INFO):
+        code = main(
+            [
+                "--root", str(tmp_path),
+                "--site", "omcha",
+                "--gsc-history", f"omcha={custom_omcha_file}",
+                "--date", "2026-09-09",
+                "--dry-run",
+                "--sleep", "0",
+            ],
+            sleeper=lambda *_: None,
+        )
+
+    assert code == 0
+    assert f"site omcha の供給元を {custom_omcha_file} に上書き" in caplog.text
+
+    assert citations_file.exists()
+    lines = citations_file.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 1
+    rec = json.loads(lines[0])
+    assert rec["site"] == "omcha"
+    assert rec["query"] == "外部系列クエリomcha"
+
+
+def test_main_stale_warning_logged(tmp_path, caplog):
+    """供給元の最新日付が実行対象日より STALE_WARN_DAYS 日以上古い場合に WARNING が出る。"""
+    stale_dir = tmp_path / "stale_data"
+    stale_dir.mkdir(parents=True, exist_ok=True)
+    stale_file = stale_dir / "stale_gsc.jsonl"
+    stale_data = [
+        {"date": "2026-08-04", "query": "omcha過去クエリ", "clicks": 10, "impressions": 100},
+    ]
+    with stale_file.open("w", encoding="utf-8") as f:
+        for r in stale_data:
+            f.write(json.dumps(r) + "\n")
+
+    with caplog.at_level(logging.WARNING):
+        code = main(
+            [
+                "--root", str(tmp_path),
+                "--site", "omcha",
+                "--gsc-history", f"omcha={stale_file}",
+                "--date", "2026-09-09",
+                "--dry-run",
+                "--sleep", "0",
+            ],
+            sleeper=lambda *_: None,
+        )
+
+    assert code == 0
+    assert "site omcha の GSC 供給元が 36 日古い（最終 2026-08-04）。凍結された系列を叩いていないか確認せよ" in caplog.text
+
+
+def test_main_gsc_history_override_parse_error(caplog):
+    """--gsc-history のパースエラー時にエラーログを出力して終了コード 1 を返す。"""
+    with caplog.at_level(logging.ERROR):
+        code = main(["--gsc-history", "invalid_format", "--dry-run"])
+    assert code == 1
+    assert "Failed to parse --gsc-history" in caplog.text
+

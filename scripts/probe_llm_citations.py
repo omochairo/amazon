@@ -235,6 +235,53 @@ def load_gsc_rows(path: pathlib.Path | str) -> list[dict[str, Any]]:
     return rows
 
 
+STALE_WARN_DAYS = 14
+
+
+def parse_gsc_history_overrides(values: list[str] | None) -> dict[str, str]:
+    """--gsc-history の引数リスト (site=PATH 形式) をパースして辞書に変換する。
+
+    - values が None または空の場合は空辞書を返す。
+    - 各要素は 'site=PATH' の形式である必要がある。
+    - site が SITES に登録されていない場合、'=' を含まない場合、または PATH が空の場合は ValueError を送出する。
+    - 同一 site が複数回指定された場合は後勝ち（最後に指定された値で上書き）となる。
+    """
+    if not values:
+        return {}
+
+    overrides: dict[str, str] = {}
+    for item in values:
+        if "=" not in item:
+            raise ValueError(f"Invalid --gsc-history format (missing '='): {item!r}")
+        site, _, path = item.partition("=")
+        site = site.strip()
+        path = path.strip()
+        if site not in SITES:
+            raise ValueError(f"Unknown site in --gsc-history: {site!r}. Registered sites: {list(SITES.keys())}")
+        if not path:
+            raise ValueError(f"Empty path specified in --gsc-history for site {site!r}")
+        overrides[site] = path
+
+    return overrides
+
+
+def stale_days(latest_date: str | None, target_date: str) -> int | None:
+    """最新の GSC データ日付と対象日 (target_date) の日数差を計算する。
+
+    latest_date または target_date が None、空文字、または YYYY-MM-DD 形式として
+    パースできない不正な日付文字列の場合は None を返す。
+    正常な場合は target_date - latest_date の日数差 (int) を返す。
+    """
+    if not latest_date or not target_date:
+        return None
+    try:
+        dt_latest = datetime.strptime(latest_date, "%Y-%m-%d").date()
+        dt_target = datetime.strptime(target_date, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return None
+    return (dt_target - dt_latest).days
+
+
 def seen_key(date: str, site: str, engine: str) -> str:
     """サイドカー管理用の識別キー文字列を返す。"""
     return f"{date}|{site}|{engine}"
@@ -273,12 +320,19 @@ def main(argv: list[str] | None = None, *, sleeper: Callable[[float], None] = ti
     parser.add_argument("--sleep", type=float, default=5.0, help="Sleep seconds between engine calls (default: 5.0)")
     parser.add_argument("--root", default=".", help="Repository root directory (default: '.')")
     parser.add_argument("--history-dir", default="data/analytics/history", help="History directory (default: 'data/analytics/history')")
+    parser.add_argument("--gsc-history", action="append", default=None, help="Override GSC history file path per site (format: site=PATH)")
     parser.add_argument("--dry-run", action="store_true", help="Force fixture engine and make no external calls")
     parser.add_argument("--force", action="store_true", help="Re-probe even if already recorded in seen sidecar")
     parser.add_argument("--limit", type=int, default=None, help="Cap the number of queries actually probed")
     parser.add_argument("--timeout", type=int, default=120, help="Timeout in seconds per engine call (default: 120)")
 
     args = parser.parse_args(argv)
+
+    try:
+        gsc_overrides = parse_gsc_history_overrides(args.gsc_history)
+    except ValueError as exc:
+        logger.error("Failed to parse --gsc-history: %s", exc)
+        return 1
 
     target_date = args.date if args.date else datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
@@ -317,9 +371,30 @@ def main(argv: list[str] | None = None, *, sleeper: Callable[[float], None] = ti
     is_first_call = True
 
     for site in sites:
-        gsc_rel = SITES[site]["gsc_history"]
-        gsc_path = root_path / gsc_rel
+        if site in gsc_overrides:
+            gsc_path = pathlib.Path(gsc_overrides[site])
+            logger.info("site %s の供給元を %s に上書き", site, gsc_path)
+        else:
+            gsc_rel = SITES[site]["gsc_history"]
+            gsc_path = root_path / gsc_rel
+
         rows = load_gsc_rows(gsc_path)
+
+        valid_dates = [
+            r["date"]
+            for r in rows
+            if isinstance(r, dict) and isinstance(r.get("date"), str) and r["date"].strip()
+        ]
+        latest_date = max(valid_dates) if valid_dates else None
+        stale_diff = stale_days(latest_date, target_date)
+        if stale_diff is not None and stale_diff >= STALE_WARN_DAYS:
+            logger.warning(
+                "site %s の GSC 供給元が %d 日古い（最終 %s）。凍結された系列を叩いていないか確認せよ",
+                site,
+                stale_diff,
+                latest_date,
+            )
+
         selected = select_queries(
             rows,
             days=args.days,
