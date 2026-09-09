@@ -130,6 +130,11 @@ enableRobotsTXT = true
   # sameAs は omcha.jp 本家 JSON-LD と統一 (ブランド整合)。
   [params.schema]
     publisherType = "Organization"
+    # Issue #6821 項目4: リッチリザルト テストの「記事」で唯一出ていた重大でない問題
+    # 「author の項目『url』がありません（任意）」を埋める。値は build_post.py の
+    # PERSON_OMOCHAIRO_BOT (@id = <base>/about/#omochairo-bot, url = <base>/about/) と
+    # 同じ宛先を指す。ここを変えるなら向こうも合わせること。
+    authorUrl = "/about/"
     sameAs = [
       "https://omcha.jp/",
       "https://home.omcha.jp",
