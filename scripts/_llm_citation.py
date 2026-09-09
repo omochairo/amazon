@@ -246,10 +246,19 @@ def detect_citation(
     cited = bool(matched_urls)
     mention_without_link = (not cited) and _mentions_host(answer_text, host)
 
+    # 候補 URL のホスト一覧も返す。cited=False が「そのエンジンが誰も引用しない」
+    # のか「他社を引用した」のかを区別できないと、計測系として何も学べない。
+    candidate_hosts: list[str] = []
+    for u in candidate_urls:
+        h = normalize_host(u)
+        if h and h not in candidate_hosts:
+            candidate_hosts.append(h)
+
     return {
         "cited": cited,
         "matched_urls": matched_urls,
         "mention_without_link": mention_without_link,
+        "candidate_hosts": candidate_hosts,
     }
 
 
@@ -284,6 +293,8 @@ def build_record(
         "cited": det["cited"],
         "matched_urls": det["matched_urls"],
         "mention_without_link": det["mention_without_link"],
+        "urls_found": len(det["candidate_hosts"]),
+        "other_hosts": [h for h in det["candidate_hosts"] if h != host][:20],
         "answer_chars": len(answer_text or ""),
         "citation_count": len(citation_urls or []),
         "latency_ms": latency_ms,

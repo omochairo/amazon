@@ -306,6 +306,7 @@ def test_detect_citation_citation_urls_none_and_answer_text_empty():
         "cited": False,
         "matched_urls": [],
         "mention_without_link": False,
+        "candidate_hosts": [],
     }
 
 
@@ -333,6 +334,8 @@ def test_build_record_cited_case():
         "cited": True,
         "matched_urls": ["https://navi.omcha.jp/products/b001/"],
         "mention_without_link": False,
+        "urls_found": 1,
+        "other_hosts": [],
         "answer_chars": 59,
         "citation_count": 1,
         "latency_ms": 1520,
@@ -359,6 +362,8 @@ def test_build_record_uncited_case():
         "cited": False,
         "matched_urls": [],
         "mention_without_link": True,
+        "urls_found": 0,
+        "other_hosts": [],
         "answer_chars": 34,
         "citation_count": 0,
         "latency_ms": None,
@@ -403,3 +408,34 @@ def test_mention_without_link_host_boundary(text, host, expected):
     )
     assert got["mention_without_link"] is expected
     assert got["cited"] is False
+
+
+# --- candidate_hosts / other_hosts (cited=False の解釈可能性) ---
+
+
+def test_detect_citation_reports_candidate_hosts():
+    got = detect_citation(
+        answer_text="https://example.com/a と https://navi.omcha.jp/b を参照",
+        citation_urls=["https://Example.com/a"],
+        host="navi.omcha.jp",
+    )
+    assert got["cited"] is True
+    assert got["candidate_hosts"] == ["example.com", "navi.omcha.jp"]
+
+
+def test_build_record_distinguishes_no_urls_from_other_sites():
+    silent = build_record(
+        date="2026-09-09", site="navi", engine="fixture", model="m",
+        query="q", answer_text="URL のない回答", citation_urls=None,
+    )
+    assert silent["urls_found"] == 0
+    assert silent["other_hosts"] == []
+
+    others = build_record(
+        date="2026-09-09", site="navi", engine="fixture", model="m",
+        query="q", answer_text="https://example.com/a",
+        citation_urls=["https://omcha.jp/x"],
+    )
+    assert others["cited"] is False
+    assert others["urls_found"] == 2
+    assert others["other_hosts"] == ["omcha.jp", "example.com"]
