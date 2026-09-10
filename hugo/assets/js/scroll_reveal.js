@@ -29,8 +29,15 @@
     var observer = new IntersectionObserver(function(entries, observer) {
       entries.forEach(function(entry) {
         if (entry.isIntersecting) {
-          entry.target.classList.add('is-revealed');
-          observer.unobserve(entry.target); // 一度フェードインしたら監視解除して負荷軽減
+          var target = entry.target;
+          target.classList.add('is-revealed');
+          observer.unobserve(target); // 一度フェードインしたら監視解除して負荷軽減
+          // #6977: will-change は遷移中だけレイヤーを確保するためのヒント。付けっぱなしに
+          // すると合成レイヤーが常駐し続け、内部で独立スクロールする要素(カルーセル等)と
+          // ネストしたときに描画がティアリングする一因になりうる。遷移完了で外す。
+          target.addEventListener('transitionend', function onRevealEnd() {
+            target.style.willChange = 'auto';
+          }, { once: true });
         }
       });
     }, observerOptions);

@@ -7,9 +7,11 @@
       const nextBtn = carousel.querySelector('.carousel-arrow.next');
       
       if (!wrapper || !prevBtn || !nextBtn) return;
-      
+
       let autoPlayTimer = null;
       const autoPlayInterval = 5000; // 5 seconds
+      // #6977: IntersectionObserver 非対応環境は従来通り常時オートプレイ扱いにする
+      let isInView = !('IntersectionObserver' in window);
       
       const updateButtons = () => {
         const scrollLeft = wrapper.scrollLeft;
@@ -77,27 +79,44 @@
       
       // Autoplay logic
       const startTimer = () => {
-        if (autoPlayTimer) return;
+        // #6977: 画面外(または初回入場アニメーション中)は起動しない。入場フェードイン
+        // (0.7s) の transform/opacity トランジションと、この横スクロールが同時に走ると
+        // ネストした合成レイヤーの再ラスタライズが間に合わずティアリングする一因になる。
+        if (autoPlayTimer || !isInView) return;
         autoPlayTimer = setInterval(() => {
           slide('next');
         }, autoPlayInterval);
       };
-      
+
       const stopTimer = () => {
         if (autoPlayTimer) {
           clearInterval(autoPlayTimer);
           autoPlayTimer = null;
         }
       };
-      
+
       const resetTimer = () => {
         stopTimer();
         startTimer();
       };
-      
-      // Start Autoplay
-      startTimer();
-      
+
+      // Start Autoplay (画面内に入ってから; #6977)
+      if ('IntersectionObserver' in window) {
+        const visibilityObserver = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => {
+            isInView = entry.isIntersecting;
+            if (isInView) {
+              startTimer();
+            } else {
+              stopTimer();
+            }
+          });
+        }, { threshold: 0.2 });
+        visibilityObserver.observe(carousel);
+      } else {
+        startTimer();
+      }
+
       // Pause autoplay on mouse enter / touch start
       carousel.addEventListener('mouseenter', stopTimer);
       carousel.addEventListener('mouseleave', startTimer);
