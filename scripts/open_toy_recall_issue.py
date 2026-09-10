@@ -9,6 +9,12 @@
   brand_recalls への反映は人間が検証して PR する (本 Issue がその worklist)。
 - 重複防止マーカー `<!-- toy-recall-candidates -->` で open Issue が既にあれば skip。
 - 既に検証済 (brand_recalls 登録済) の rcl は fetch 側で除外済 → 対応分は自然に消える。
+
+#4320 follow-up: `--matches` (verify_toy_recall_matches.py の出力) を渡すと、
+matched_asins が付いた候補だけを「要承認」コメントとして既存の open Issue に
+追記する (新規 Issue は作らない)。agy 判定は Flash モデルの誤りうる目安なので、
+ここでも brand_recalls への自動書き込みはしない — 人間が確認して手動 backfill
+する運用は変えない。
 """
 from __future__ import annotations
 
@@ -29,7 +35,7 @@ MARKER = "toy-recall-candidates"
 LABELS = "quality,todo"
 
 
-def has_open_issue(repo: str) -> bool:
+def find_open_issue_number(repo: str) -> int | None:
     query = (
         f"repo:{repo} is:issue is:open label:quality label:todo "
         f'in:body "{MARKER}"'
@@ -39,7 +45,12 @@ def has_open_issue(repo: str) -> bool:
          "-f", f"q={query}", "-f", "per_page=10"],
         check=True, capture_output=True, text=True,
     )
-    return len(json.loads(res.stdout).get("items", [])) > 0
+    items = json.loads(res.stdout).get("items", [])
+    return items[0]["number"] if items else None
+
+
+def has_open_issue(repo: str) -> bool:
+    return find_open_issue_number(repo) is not None
 
 
 def render_body(data: dict) -> str:
@@ -114,6 +125,46 @@ def render_body(data: dict) -> str:
     return "\n".join(parts)
 
 
+MATCH_COMMENT_MARKER = "toy-recall-asin-match"
+
+
+def render_match_comment(matches: list[dict], model: str) -> str:
+    """agyが一致ありと判定した候補だけをまとめる (#4320 follow-up)。
+
+    人間が確認するのはこのコメントだけでよいようにする — 元Issueの数十件の
+    ブランド一致一覧を全部読み直す必要が無いのが狙い。
+    """
+    parts = [
+        f"<!-- {MATCH_COMMENT_MARKER} -->",
+        f"## ⚠ ASIN一致の疑い ({len(matches)} 件、要承認)",
+        "",
+        f"`verify_toy_recall_matches.py` (agy: {model}) が、当サイト掲載商品と一致する"
+        "可能性が高いと判定した候補です。**agy の判定は参考情報であり誤検出もあり得ます。**"
+        "詳細ページで一次情報を確認したうえで、問題なければ "
+        "`hugo/data/toy_safety.json` の `brand_recalls` に `asins` 付きで追記してください。",
+        "",
+    ]
+    for c in matches:
+        title = (c.get("title") or "").replace("|", "／")
+        asin_links = ", ".join(
+            f"[{a}](https://www.amazon.co.jp/dp/{a})" for a in c.get("matched_asins") or []
+        )
+        parts.append(f"### {c.get('brand', '')} — {title}")
+        parts.append("")
+        parts.append(f"- 対象ASIN: {asin_links}")
+        parts.append(f"- agy判定理由: {c.get('match_reason') or '(理由なし)'}")
+        parts.append(f"- 公示日: {c.get('post_date', '')} / 詳細: {c.get('url', '')}")
+        parts.append("")
+    return "\n".join(parts)
+
+
+def post_issue_comment(repo: str, issue_number: int, body: str) -> None:
+    subprocess.run(
+        ["gh", "issue", "comment", str(issue_number), "-R", repo, "--body", body],
+        check=True, capture_output=True, text=True,
+    )
+
+
 def create_issue(repo: str, title: str, body: str) -> str:
     res = subprocess.run(
         ["gh", "issue", "create", "-R", repo,
@@ -123,16 +174,55 @@ def create_issue(repo: str, title: str, body: str) -> str:
     return res.stdout.strip()
 
 
+def _post_match_comment(args: argparse.Namespace) -> int:
+    matches_path = pathlib.Path(args.matches)
+    if not matches_path.exists():
+        logger.error("matches file not found: %s", matches_path)
+        return 2
+
+    data = json.loads(matches_path.read_text(encoding="utf-8"))
+    matched = [c for c in (data.get("candidates") or []) if c.get("matched_asins")]
+    if not matched:
+        logger.info("no ASIN matches — nothing to comment")
+        return 0
+
+    issue_number = find_open_issue_number(args.repo)
+    if issue_number is None:
+        logger.warning("no open toy-recall issue found — cannot post match comment")
+        return 1
+
+    body = render_match_comment(matched, args.model)
+    if args.dry_run:
+        out = pathlib.Path("_toy_recall_match_comment_preview.md")
+        out.write_text(body, encoding="utf-8")
+        logger.info("would comment on #%d (body → %s)", issue_number, out)
+        return 0
+
+    post_issue_comment(args.repo, issue_number, body)
+    logger.info("posted match comment on #%d (%d matches)", issue_number, len(matched))
+    return 0
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--input", default=DEFAULT_IN)
     p.add_argument("--repo", default=os.environ.get("REPO"))
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument(
+        "--matches", default=None,
+        help="verify_toy_recall_matches.py の出力。渡すと新規Issue作成の代わりに、"
+             "matched_asins が付いた候補だけを既存の open Issue にコメント追記する",
+    )
+    p.add_argument("--model", default="gemini-3.8-flash-high", help="--matches 使用時、コメントに記載するモデル名")
     args = p.parse_args()
 
     if not args.repo:
         logger.error("missing --repo or $REPO")
         return 2
+
+    if args.matches:
+        return _post_match_comment(args)
+
     in_path = pathlib.Path(args.input)
     if not in_path.exists():
         logger.error("input not found: %s", in_path)
