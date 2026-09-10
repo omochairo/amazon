@@ -404,6 +404,18 @@ jobs:
           set -e
           python -m scripts.close_expired_analytics_issues
 
+      # A-3 (カニバリ) を A-1 (低 CTR) より先に開く。A-1 は open な A-3 Issue の
+      # URL 集合を見て同一 URL の起票を抑制する (amazon-navi-brain#33 §5) ため、同じ run 内で今週
+      # 新規に立つ A-3 Issue も抑制対象に含められるよう、この順序にしてある。
+      - name: Open cannibalization Issues (A-3)
+        if: steps.cannibal.outputs.count != '0' && steps.cannibal.outputs.count != ''
+        env:
+          GH_TOKEN: ${{ secrets.NAVI_BRAIN_PAT }}
+          REPO: ${{ env.ANALYTICS_ISSUE_REPO }}
+        run: |
+          set -e
+          python -m scripts.open_cannibalization_issues
+
       - name: Open rewrite Issues for low-CTR pages
         if: steps.low_ctr.outputs.count != '0' && steps.low_ctr.outputs.count != ''
         env:
@@ -439,15 +451,6 @@ jobs:
         run: |
           set -e
           python scripts/open_catalog_brand_issue.py
-
-      - name: Open cannibalization Issues (A-3)
-        if: steps.cannibal.outputs.count != '0' && steps.cannibal.outputs.count != ''
-        env:
-          GH_TOKEN: ${{ secrets.NAVI_BRAIN_PAT }}
-          REPO: ${{ env.ANALYTICS_ISSUE_REPO }}
-        run: |
-          set -e
-          python -m scripts.open_cannibalization_issues
 
       - name: Open engagement-drop Issues (A-4)
         if: steps.engagement_drop.outputs.count != '0' && steps.engagement_drop.outputs.count != ''

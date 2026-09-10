@@ -10,9 +10,14 @@ from scripts.detect_low_ctr_pages import (
 )
 
 
-def _make_gsc(by_page, by_combo=None, clicks_sum=100, impressions_sum=10000):
+def _make_gsc(by_page, by_combo=None, clicks_sum=100, impressions_sum=10000,
+              clicks_sitewide=None, impressions_sitewide=None):
+    totals = {"clicks_sum": clicks_sum, "impressions_sum": impressions_sum}
+    if impressions_sitewide is not None:
+        totals["clicks_sitewide"] = clicks_sitewide
+        totals["impressions_sitewide"] = impressions_sitewide
     return {
-        "totals": {"clicks_sum": clicks_sum, "impressions_sum": impressions_sum},
+        "totals": totals,
         "by_page": by_page,
         "by_combo": by_combo or [],
         "range": {"start": "2026-05-26", "end": "2026-06-01"},
@@ -20,13 +25,26 @@ def _make_gsc(by_page, by_combo=None, clicks_sum=100, impressions_sum=10000):
 
 
 def test_baseline_zero_impressions_returns_zero():
-    assert compute_baseline_ctr({"clicks_sum": 0, "impressions_sum": 0}) == 0.0
-    assert compute_baseline_ctr({}) == 0.0
+    assert compute_baseline_ctr({"clicks_sum": 0, "impressions_sum": 0}) == (0.0, "fallback_topn")
+    assert compute_baseline_ctr({}) == (0.0, "fallback_topn")
 
 
-def test_baseline_ratio():
-    # 100 / 10000 = 0.01
-    assert compute_baseline_ctr({"clicks_sum": 100, "impressions_sum": 10000}) == 0.01
+def test_baseline_falls_back_to_topn_sum_when_sitewide_missing():
+    # amazon-navi-brain#33: *_sitewide が無い旧スナップショットのみ clicks_sum/impressions_sum を使う
+    assert compute_baseline_ctr(
+        {"clicks_sum": 100, "impressions_sum": 10000}
+    ) == (0.01, "fallback_topn")
+
+
+def test_baseline_prefers_sitewide_over_topn_sum():
+    # amazon-navi-brain#33: clicks_sum/impressions_sum は top-N ページだけの合計で上振れしうるため、
+    # *_sitewide (真の site 全体) がある場合はそちらを優先する
+    baseline, source = compute_baseline_ctr({
+        "clicks_sum": 60, "impressions_sum": 1000,  # 上振れした top-N 合計 (6.0%)
+        "clicks_sitewide": 60, "impressions_sitewide": 2400,  # 真の sitewide (2.5%)
+    })
+    assert source == "sitewide"
+    assert baseline == pytest.approx(60 / 2400)
 
 
 def test_detect_excludes_low_impressions():
@@ -61,14 +79,35 @@ def test_detect_flags_low_ctr_above_threshold():
 
 
 def test_detect_ratio_relative_to_baseline():
-    # baseline = 1000/10000 = 0.10, ratio 0.5 → threshold = 0.05
+    # baseline = 1000/10000 = 0.10, ratio 0.5 (明示指定) → threshold = 0.05
     # ctr=0.04 (< 0.05) は flag、ctr=0.06 (>= 0.05) は通常
     gsc = _make_gsc(by_page=[
         {"page": "/below/", "clicks": 10, "impressions": 250, "ctr": 0.04, "position": 3.0},
         {"page": "/above/", "clicks": 15, "impressions": 250, "ctr": 0.06, "position": 3.0},
     ], clicks_sum=1000, impressions_sum=10000)
-    result = detect(gsc)
+    result = detect(gsc, ratio=0.5)
     assert [d["page"] for d in result["detected"]] == ["/below/"]
+
+
+def test_detect_uses_sitewide_baseline_when_present():
+    # amazon-navi-brain#33: clicks_sum/impressions_sum (top-N) は上振れするので、sitewide が
+    # あるときはそちらを baseline に使う。ratio_to_baseline は sitewide 基準。
+    gsc = _make_gsc(by_page=[
+        {"page": "/p/", "clicks": 5, "impressions": 250, "ctr": 0.02, "position": 3.0},
+    ], clicks_sum=60, impressions_sum=1000,
+       clicks_sitewide=60, impressions_sitewide=2400)
+    result = detect(gsc, ratio=0.5)
+    assert result["baseline_source"] == "sitewide"
+    assert result["baseline_ctr"] == pytest.approx(60 / 2400)
+
+
+def test_default_ratio_is_recalibrated_above_one():
+    # amazon-navi-brain#33: sitewide baseline へ切り替えた際、旧 (top-N baseline, ratio=0.5) と
+    # 同等の発火頻度になるよう実データでスイープして 1.5 に再較正した。0.5 の
+    # ままだと sitewide baseline は top-N baseline よりずっと低いため、発火が
+    # 大きく減ってしまう (amazon-navi-brain#33 のレビューコメント参照)。
+    from scripts.detect_low_ctr_pages import DEFAULT_RATIO
+    assert DEFAULT_RATIO == 1.5
 
 
 def test_detect_abs_min_threshold_floor():
