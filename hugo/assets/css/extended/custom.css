@@ -3393,6 +3393,9 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
     opacity: 1 !important;
     transform: translateY(0) !important;
     transition: none !important;
+    /* transition が無いので scroll_reveal.js の transitionend ハンドラが発火しない。
+       ここで直接 will-change を切っておく (#6977)。 */
+    will-change: auto !important;
   }
 }
 /* ==========================================
@@ -3626,6 +3629,12 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   padding: 4px 16px 16px;
   /* スクロールバー非表示 (Firefox / Webkit) */
   scrollbar-width: none;
+  /* #6977: 親の .related-carousel-section は .scroll-reveal で transform/opacity
+     アニメーションする合成レイヤーになる。ここが独立スクロールの合成レイヤーと
+     ネストすると、両方が同時に動くタイミングでカード画像の再ラスタライズが
+     間に合わず、境界に前フレームが透けて見えるティアリングが起きうる。
+     contain で自分のレイアウト/描画を親から切り離して影響を受けないようにする。 */
+  contain: layout paint style;
 }
 
 /* #5081: スナップは load 後だけ。吸着感は保ったまま、読み込み中の再スナップで
