@@ -11,7 +11,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import build_demand_keywords as bdk  # noqa: E402
 import classify_demand_topics as CT  # noqa: E402
+import detect_demand_gaps as D  # noqa: E402
 
 REAL_TERMS = ROOT.parent / "data" / "demand_topic_terms.yaml"
 
@@ -166,3 +168,25 @@ def test_rows_are_impression_ordered(tmp_path):
     ]
     rep = CT.build_report(demand, terms, top_unclassified=5)
     assert [r["wp_impressions"] for r in rep["rows"]] == [99, 5]
+
+
+# --------------------------------------------------------------------------
+# WP 需要ソースの解決 (amazon-navi-brain#34 follow-up)
+# --------------------------------------------------------------------------
+
+def test_explicit_path_wins_over_bridge_and_frozen_fallback(monkeypatch, tmp_path):
+    monkeypatch.setattr(bdk, "WP_QUERY_HISTORY_CANDIDATES", ())
+    explicit = tmp_path / "explicit.jsonl"
+    assert CT.resolve_gsc_wp_query_path(str(explicit)) == explicit
+
+
+def test_bridge_candidate_is_preferred_when_present(monkeypatch, tmp_path):
+    bridge = tmp_path / "wp_demand.jsonl"
+    bridge.write_text("", encoding="utf-8")
+    monkeypatch.setattr(bdk, "WP_QUERY_HISTORY_CANDIDATES", (str(bridge),))
+    assert CT.resolve_gsc_wp_query_path() == bridge
+
+
+def test_falls_back_to_frozen_file_when_no_bridge_candidate_exists(monkeypatch, tmp_path):
+    monkeypatch.setattr(bdk, "WP_QUERY_HISTORY_CANDIDATES", (str(tmp_path / "missing.jsonl"),))
+    assert CT.resolve_gsc_wp_query_path() == pathlib.Path(D.DEFAULT_GSC_WP_QUERY_PATH)

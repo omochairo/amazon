@@ -28,6 +28,20 @@
   - どれにも当たらないものは unclassified に残し、**pass に潰さない**。
     語彙を育てる対象として impressions 降順で出力する
 
+WP 需要ソースの解決 (amazon-navi-brain#34 follow-up, 2026-09-10):
+  かつては data/analytics/history/gsc_wp_by_query.jsonl (2026-08-04 に収集が
+  private へ移設されて凍結) を直接読んでいたため、このスクリプトの出力
+  (data/analytics/demand_topics.json) はその日付のまま固定されていた。
+  build_demand_keywords.py / ingest_ubersuggest.py と同じ解決順序
+  (resolve_wp_history_path: jules/demand/wp_demand.jsonl →
+  ../amazon-navi-brain/demand/wp_demand.jsonl) に揃え、週次ブリッジが
+  あればそちらを使う。どちらも無ければ凍結ファイルへ fail-open する
+  (従来どおりの挙動、ブリッジ未配線のローカル実行を壊さないため)。
+
+  ブリッジの派生物 (13 週窓集計) はデータ行に query/impressions を持ち
+  meta 行 (query 無し) は自然にスキップされるため、
+  detect_demand_gaps.load_gsc_impressions 側の変更は不要だった。
+
 使い方:
     python scripts/classify_demand_topics.py
     python scripts/classify_demand_topics.py --min-wp-impressions 50 --top-unclassified 40
@@ -50,6 +64,7 @@ _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
+import build_demand_keywords as bdk  # noqa: E402
 import detect_demand_gaps as D  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -114,6 +129,21 @@ def classify(query: str, terms: dict[str, dict[str, Any]]) -> tuple[str, str | N
     return UNCLASSIFIED, None
 
 
+def resolve_gsc_wp_query_path(explicit: str | None = None) -> pathlib.Path:
+    """WP 需要ソースの実体を解決する (bdk.resolve_wp_history_path + 凍結ファイル fallback)。
+
+    bdk.resolve_wp_history_path はブリッジ候補 (jules/demand/wp_demand.jsonl 等)
+    しか見ず、見つからなければ None を返す。ここではさらに旧来の凍結ファイル
+    (D.DEFAULT_GSC_WP_QUERY_PATH) へ fail-open する — ブリッジ未配線のローカル
+    実行 (brain checkout していない環境) で需要コーパスが空になる方が、古い
+    凍結データで動く現状維持より悪いため。
+    """
+    bridged = bdk.resolve_wp_history_path(explicit)
+    if bridged is not None:
+        return bridged
+    return pathlib.Path(D.DEFAULT_GSC_WP_QUERY_PATH)
+
+
 def build_report(
     demand_queries: list[dict[str, Any]],
     terms: dict[str, dict[str, Any]],
@@ -158,14 +188,17 @@ def run(
     out_path: pathlib.Path,
     min_wp_impressions: int,
     top_unclassified: int,
+    gsc_wp_query_path: pathlib.Path | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
     terms = load_terms(terms_path)
+    wp_path = gsc_wp_query_path or resolve_gsc_wp_query_path()
+    logger.info("WP需要ソース: %s を使う", wp_path)
     demand = D.build_demand_queries(
         pathlib.Path(D.DEFAULT_SUGGEST_DIR),
         pathlib.Path(D.DEFAULT_GSC_QUERY_PATH),
         D.DEFAULT_MIN_IMPRESSIONS,
-        gsc_wp_query_path=pathlib.Path(D.DEFAULT_GSC_WP_QUERY_PATH),
+        gsc_wp_query_path=wp_path,
         min_wp_impressions=min_wp_impressions,
     )
     wp_demand = [q for q in demand if D.SOURCE_GSC_WP in q["sources"]]
@@ -192,10 +225,16 @@ def main() -> int:
     ap.add_argument("--min-wp-impressions", type=int, default=D.DEFAULT_MIN_WP_IMPRESSIONS)
     ap.add_argument("--top-unclassified", type=int, default=40,
                     help="レポートに残す未分類クエリの件数 (語彙を育てる対象)")
+    ap.add_argument("--gsc-wp-query", default=None,
+                    help="WP (omcha.jp) の GSC クエリ別履歴 jsonl のパス。省略時は "
+                         "bdk.resolve_wp_history_path() の候補 (週次ブリッジ) → "
+                         "凍結ファイルの順で解決する")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     run(pathlib.Path(args.terms), pathlib.Path(args.out),
-        args.min_wp_impressions, args.top_unclassified, args.dry_run)
+        args.min_wp_impressions, args.top_unclassified,
+        gsc_wp_query_path=resolve_gsc_wp_query_path(args.gsc_wp_query),
+        dry_run=args.dry_run)
     return 0
 
 
