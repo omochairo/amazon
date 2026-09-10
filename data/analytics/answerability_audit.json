@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-09-09T22:35:18Z",
+  "generated_at": "2026-09-10T22:36:49Z",
   "model": "gemma4:26b-a4b-it-qat",
   "source_week": "2026-W36",
-  "baseline_ctr": 0.06469500924214418,
+  "baseline_ctr": 0.027076282218172352,
   "pages": [
     {
       "page": "https://navi.omcha.jp/products/b0hdb8kg6g/",
@@ -157,116 +157,114 @@
       ]
     },
     {
-      "page": "https://navi.omcha.jp/products/b0gr4grdjc/",
-      "asin": "B0GR4GRDJC",
-      "page_coverage_avg": 0.867,
+      "page": "https://navi.omcha.jp/products/b0fnm3r45c/",
+      "asin": "B0FNM3R45C",
+      "page_coverage_avg": 0.775,
       "queries": [
         {
-          "query": "つぶごのみ ピープル",
-          "impressions": 12,
+          "query": "ジェリーブロックス 口コミ",
+          "impressions": 24,
+          "position": 5.916666666666667,
+          "answered": false,
+          "coverage": 0.3,
+          "missing_aspects": [
+            "具体的なユーザーによる使用感（良い点・悪い点）",
+            "実際の購入者のレビュー内容",
+            "サイズ感や見た目に関する感想"
+          ],
+          "note": "タイトルに「口コミ」とあるものの、本文には執筆者による特徴のまとめやQ&Aが中心であり、実際に使用したユーザーの具体的な声（口コミ）が欠落しています。",
+          "error": null
+        },
+        {
+          "query": "ジェリーブロックス 安い",
+          "impressions": 5,
           "position": 9.0,
+          "answered": true,
+          "coverage": 0.9,
+          "missing_aspects": [
+            "送料の有無",
+            "セール情報やクーポン情報の有無"
+          ],
+          "note": "最安値がAmazonであることと、具体的な価格比較が示されており、ユーザーの「どこで買うのが安いか」という疑問に直接回答しています。",
+          "error": null
+        },
+        {
+          "query": "ジェリー ブロック 安い",
+          "impressions": 3,
+          "position": 11.666666666666666,
           "answered": true,
           "coverage": 0.9,
           "missing_aspects": [],
-          "note": "製品の特徴、対象年齢、価格、遊び方といったユーザーが知りたい基本情報が簡潔に網羅されています。",
+          "note": "最安値がAmazonであることや、他のサイトとの価格差について具体的に言及されており、ユーザーの「安く買いたい」という意図に十分応えています。",
           "error": null
         },
         {
-          "query": "つぶごのみ",
-          "impressions": 6,
-          "position": 8.833333333333332,
-          "answered": true,
-          "coverage": 0.8,
-          "missing_aspects": [
-            "商品の詳細なレビュー（実際の使用感）",
-            "デメリットや注意点",
-            "具体的なサイズ感や素材の詳細"
-          ],
-          "note": "商品名での検索に対し、特徴、対象年齢、価格、遊び方といった基本情報は網羅されていますが、ユーザーが購入を判断するための詳細な使用レビューが不足しています。",
-          "error": null
-        },
-        {
-          "query": "つぶごのみ おもちゃ",
+          "query": "ジェリーブロックス 対象 年齢",
           "impressions": 1,
-          "position": 9.0,
+          "position": 11.0,
           "answered": true,
-          "coverage": 0.9,
-          "missing_aspects": [
-            "具体的な遊び方の詳細（どのようなパーツがあるか等）",
-            "実際の利用者の具体的な口コミ内容（メリット・デメリットの生の声）"
-          ],
-          "note": "製品の特徴、対象年齢、価格、遊び方といった基本情報は網羅されており、検索意図に対して十分に回答できています。",
+          "coverage": 1.0,
+          "missing_aspects": [],
+          "note": "対象年齢（18ヶ月以上）について、本文中およびQ&A形式で明確に回答されています。",
           "error": null
         }
       ]
     },
     {
-      "page": "https://navi.omcha.jp/products/b0fpxbtthz/",
-      "asin": "B0FPXBTTHZ",
-      "page_coverage_avg": 0.88,
+      "page": "https://navi.omcha.jp/products/b0h454qhlx/",
+      "asin": "B0H454QHLX",
+      "page_coverage_avg": 0.475,
       "queries": [
         {
-          "query": "レゴ アンゼラン",
-          "impressions": 12,
-          "position": 9.5,
+          "query": "水感スクイーズ どこで売ってる",
+          "impressions": 2,
+          "position": 12.0,
           "answered": true,
-          "coverage": 0.8,
+          "coverage": 0.6,
           "missing_aspects": [
-            "製品の具体的な外観やサイズ感",
-            "組み立て難易度に関する詳細なレビュー",
-            "セット内容（パーツ数など）の詳細"
+            "実店舗（100均、玩具店、ドン・キホーテ等）での販売状況",
+            "その他のオンラインショップの具体的な名称や比較情報"
           ],
-          "note": "検索クエリが非常に抽象的であるため、主要な商品情報（価格・対象年齢・フィギュア構成）を網羅している点は高く評価できます。",
+          "note": "Amazonでの購入については言及されていますが、「どこで売ってる」という広範な疑問に対し、実店舗での取り扱い有無などの情報が不足しています。",
           "error": null
         },
         {
-          "query": "アンゼラン レゴ",
-          "impressions": 5,
-          "position": 10.0,
+          "query": "水感スクイーズ どこに 売ってる",
+          "impressions": 2,
+          "position": 19.5,
           "answered": true,
-          "coverage": 0.9,
-          "missing_aspects": [],
-          "note": "製品名、対象年齢、価格比較、付属フィギュアなど、ユーザーが知りたい基本情報が網羅されています。",
+          "coverage": 0.7,
+          "missing_aspects": [
+            "実店舗（100均、玩具店など）での販売状況",
+            "その他のオンラインショップの有無"
+          ],
+          "note": "Amazonでの購入が可能であることには触れていますが、ユーザーが求めている「どこで買えるか」という選択肢（実店舗や他のECサイト）の情報が限定的です。",
           "error": null
         },
         {
-          "query": "レゴ アンゼランの宇宙船",
-          "impressions": 4,
-          "position": 11.25,
-          "answered": true,
-          "coverage": 0.9,
+          "query": "水感スクイーズ 売ってる場所",
+          "impressions": 1,
+          "position": 9.0,
+          "answered": false,
+          "coverage": 0.3,
           "missing_aspects": [
-            "商品の詳細な外観写真やサイズ感",
-            "組み立て難易度に関する具体的な記述"
+            "実店舗での販売状況（100均、玩具店など）",
+            "その他のオンラインショップの有無"
           ],
-          "note": "製品の基本情報（対象年齢、フィギュア内容、ギミック）と価格比較が簡潔にまとめられており、購入を検討しているユーザーの疑問には十分に答えています。",
+          "note": "Amazonでの価格には触れていますが、「どこで買えるか」という販売場所に関する情報が極めて限定的です。",
           "error": null
         },
         {
-          "query": "75445",
-          "impressions": 3,
-          "position": 7.0,
-          "answered": true,
-          "coverage": 0.9,
+          "query": "水感スクイーズ売ってる場所",
+          "impressions": 1,
+          "position": 12.0,
+          "answered": false,
+          "coverage": 0.3,
           "missing_aspects": [
-            "商品の詳細な外観写真やサイズ感",
-            "組み立て難易度に関する具体的な記述",
-            "実際の購入者の口コミ内容（テキスト）"
+            "実店舗での販売状況（100円ショップ、家電量販店、玩具店など）",
+            "その他のオンラインショップの具体的な名称や比較情報"
           ],
-          "note": "型番「75445」に対する基本情報（対象年齢、価格、内容物、特徴）は網羅されており、購買検討に必要な情報は十分に提供されています。",
-          "error": null
-        },
-        {
-          "query": "レゴ 75445",
-          "impressions": 3,
-          "position": 10.333333333333334,
-          "answered": true,
-          "coverage": 0.9,
-          "missing_aspects": [
-            "製品の具体的なサイズ（高さ・幅など）",
-            "ピース数"
-          ],
-          "note": "商品名、対象年齢、価格比較、付属フィギュアといった主要な情報が網羅されており、検索意図に十分に応えています。",
+          "note": "Amazonでの価格には触れていますが、「どこで売っているか」という場所に関する情報が極めて限定的です。",
           "error": null
         }
       ]
