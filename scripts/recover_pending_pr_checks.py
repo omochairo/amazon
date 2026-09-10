@@ -266,11 +266,31 @@ def dispatch_recovery_workflows(repo: str, ref: str) -> None:
         )
 
 
+def ensure_label_exists(repo: str, label: str) -> None:
+    """`close_reopen_pr` が付ける stage2 完了マーカーのラベルを用意する。
+
+    #6885: このラベルが repo に存在しないと直後の `--add-label` が exit 1 で
+    失敗し、close_reopen_pr が例外で中断して stage2_done が一切記録されない。
+    その結果 has_stage2_label が毎回 False のままになり、evaluate_pr は
+    「まだ段2をやっていない」と誤認して close_reopen を延々と繰り返す
+    (無限ループ禁止のはずの安全装置が効かない)。
+    `gh label create` は既存ラベルに対して非0 exit するが、それは
+    「ラベルは既にある」という望む状態そのものなので結果を見ずに無視してよい。
+    """
+    subprocess.run(
+        ["gh", "label", "create", label, "-R", repo,
+         "--color", "ededed",
+         "--description", "PR Check Recovery が close→reopen (段2) を実施済み"],
+        capture_output=True, text=True,
+    )
+
+
 def close_reopen_pr(repo: str, pr_number: int) -> None:
     subprocess.run(["gh", "pr", "close", str(pr_number), "-R", repo],
                     check=True, capture_output=True, text=True)
     subprocess.run(["gh", "pr", "reopen", str(pr_number), "-R", repo],
                     check=True, capture_output=True, text=True)
+    ensure_label_exists(repo, STAGE2_LABEL)
     subprocess.run(["gh", "pr", "edit", str(pr_number), "-R", repo,
                      "--add-label", STAGE2_LABEL],
                     check=True, capture_output=True, text=True)
