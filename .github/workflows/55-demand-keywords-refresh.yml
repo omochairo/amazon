@@ -86,7 +86,10 @@ jobs:
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          pip install pyyaml
+          # requests は classify_demand_topics.py が import する detect_demand_gaps.py の
+          # 依存 (Ruri embed 呼び出し用)。inert なパスなので実際には呼ばれないが、
+          # import 時点で解決できないと ModuleNotFoundError で落ちる。
+          pip install pyyaml requests
 
       # continue-on-error は付けない。理由は下の Rebuild demand keywords と同じ。
       - name: Rebuild demand topics
