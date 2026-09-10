@@ -3654,30 +3654,52 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 /* #3568 E3: スワイプ可能な方向を示す端フェード。carousel_swipe.js の
    updateButtons() が矢印 disabled と同時に .is-at-start / .is-at-end を
    親 (.related-carousel-section) に切り替える。JS が付かない環境
-   (same-price 等、矢印を持たないカルーセル) では常時表示のままで害はない。 */
-.carousel-wrapper::before,
-.carousel-wrapper::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 16px;
-  width: 28px;
-  pointer-events: none;
-  z-index: 3;
-  opacity: 1;
-  transition: opacity 0.2s ease;
+   (same-price 等、矢印を持たないカルーセル) では常時表示のままで害はない。
+
+   #6977: これは **オーバーレイで実装してはいけない**。
+   絶対配置の包含ブロックはスクロールコンテナの padding box なので、
+   .carousel-wrapper (overflow-x: auto) 自身に ::before/::after を置くと
+   left/right は「コンテナの端」ではなく「スクロール前の中身の端」に貼りつき、
+   中身と一緒に流れてしまう。実測 (navi.omcha.jp 商品ページ / 375px):
+
+     scrollLeft=0   → ::after の右端 x=377 (= コンテナ右端。正しい)
+     scrollLeft=200 → x=177  ← カード画像の真上
+     scrollLeft=400 → x=-23  ← 画面外へ消える
+
+   つまりオートプレイやスワイプで少し動かすたび、幅 28px の
+   var(--theme) → 透明のグラデ帯がカード画像の途中に居座る。これが
+   「画像の途中に縦の切れ目が入り、左右で別の画像・色味が混ざって見える」
+   の正体で、位置依存なので「毎回ではなく時々」に見える。
+
+   マスクなら基準はスクロールされない border box なので端に固定される。
+   同時にオーバーレイ 2 枚と z-index を消せる。透明へ抜くので
+   var(--theme) のフォールバック (#fff = ダークテーマで白帯) 依存も無くなる。
+   記事本文に HTML が焼き込み済みのカルーセル (competitor-grid /
+   same-price-grid、2,300 記事超) も CSS だけで直る。 */
+.carousel-wrapper {
+  --carousel-fade: 28px;
+  --carousel-fade-start: var(--carousel-fade);
+  --carousel-fade-end: var(--carousel-fade);
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0) 0,
+    #000 var(--carousel-fade-start),
+    #000 calc(100% - var(--carousel-fade-end)),
+    rgba(0, 0, 0, 0) 100%
+  );
+  mask-image: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0) 0,
+    #000 var(--carousel-fade-start),
+    #000 calc(100% - var(--carousel-fade-end)),
+    rgba(0, 0, 0, 0) 100%
+  );
 }
-.carousel-wrapper::before {
-  left: 0;
-  background: linear-gradient(90deg, var(--theme, #fff) 0%, rgba(0, 0, 0, 0) 100%);
+.related-carousel-section.is-at-start .carousel-wrapper {
+  --carousel-fade-start: 0px;
 }
-.carousel-wrapper::after {
-  right: 0;
-  background: linear-gradient(270deg, var(--theme, #fff) 0%, rgba(0, 0, 0, 0) 100%);
-}
-.related-carousel-section.is-at-start .carousel-wrapper::before,
-.related-carousel-section.is-at-end .carousel-wrapper::after {
-  opacity: 0;
+.related-carousel-section.is-at-end .carousel-wrapper {
+  --carousel-fade-end: 0px;
 }
 
 .carousel-track {
