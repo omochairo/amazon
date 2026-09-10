@@ -9,7 +9,12 @@ import subprocess
 from unittest.mock import patch
 
 from scripts.open_low_ctr_issues import (
+    A3_MARKER_PREFIX,
     MARKER_PREFIX,
+    SUPPRESSION_MARKER_PREFIX,
+    already_noted_suppression,
+    comment_suppression,
+    find_a3_covered_urls,
     find_existing_taken_urls,
     render_body,
     render_query_rows,
@@ -65,6 +70,113 @@ def test_render_body_handles_missing_ratio():
     }
     body = render_body(detected, baseline=0.0, threshold=0.005, src_range={})
     assert "n/a" in body
+
+
+def test_render_body_discloses_sitewide_baseline_source():
+    # amazon-navi-brain#33: baseline の出どころ (sitewide / フォールバック) を本文に明記する
+    detected = {
+        "page": "/p/", "impressions": 500, "clicks": 10, "ctr": 0.02,
+        "position": 5.0, "ratio_to_baseline": 0.74, "top_queries": [],
+    }
+    body = render_body(detected, baseline=0.027, threshold=0.0405,
+                       src_range={}, baseline_source="sitewide")
+    assert "実測値" in body
+    assert "旧スナップショット" not in body
+
+
+def test_render_body_discloses_fallback_baseline_source():
+    detected = {
+        "page": "/p/", "impressions": 500, "clicks": 10, "ctr": 0.02,
+        "position": 5.0, "ratio_to_baseline": 0.74, "top_queries": [],
+    }
+    body = render_body(detected, baseline=0.027, threshold=0.0405,
+                       src_range={}, baseline_source="fallback_topn")
+    assert "旧スナップショット" in body
+
+
+def test_render_body_does_not_claim_below_average_when_ratio_above_one():
+    # amazon-navi-brain#33: RATIO 再較正後は threshold > baseline になりうるので、検出された
+    # ページの CTR が site 全体 CTR 以上のこともある。「site 平均の X 倍」という
+    # 誤読を招く表現を使わないことを確認する。
+    detected = {
+        "page": "/p/", "impressions": 500, "clicks": 18, "ctr": 0.036,
+        "position": 5.0, "ratio_to_baseline": 1.30, "top_queries": [],
+    }
+    body = render_body(detected, baseline=0.0277, threshold=0.0415,
+                       src_range={}, baseline_source="sitewide")
+    assert "site 平均の" not in body
+    assert "判定しきい値" in body
+
+
+def test_find_a3_covered_urls_extracts_url_table_rows():
+    fake_response = {
+        "items": [
+            {
+                "number": 29,
+                "body": (
+                    f"<!-- {A3_MARKER_PREFIX}おもちゃ 使い方 -->\n"
+                    "| URL | impressions | clicks | CTR | position |\n"
+                    "|---|---:|---:|---:|---:|\n"
+                    "| `https://navi.omcha.jp/products/b0aaa/` | 100 | 2 | 2.00% | 8.0 |\n"
+                    "| `https://navi.omcha.jp/products/b0bbb/` | 80 | 1 | 1.25% | 9.0 |\n"
+                ),
+            },
+        ]
+    }
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(fake_response), stderr="")
+
+    with patch("scripts.open_low_ctr_issues.subprocess.run", side_effect=fake_run):
+        covered = find_a3_covered_urls("omochairo/amazon")
+    assert covered == {
+        "https://navi.omcha.jp/products/b0aaa/": 29,
+        "https://navi.omcha.jp/products/b0bbb/": 29,
+    }
+
+
+def test_find_a3_covered_urls_empty_when_no_open_issues():
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"items": []}), stderr="")
+
+    with patch("scripts.open_low_ctr_issues.subprocess.run", side_effect=fake_run):
+        covered = find_a3_covered_urls("repo", sleeper=lambda s: None)
+    assert covered == {}
+
+
+def test_already_noted_suppression_true_when_marker_present():
+    def fake_run(cmd, **kwargs):
+        assert cmd[:3] == ["gh", "issue", "view"]
+        marker = f"<!-- {SUPPRESSION_MARKER_PREFIX}/products/b0aaa/ -->"
+        return subprocess.CompletedProcess(cmd, 0, stdout=f"some comment\n{marker}\n", stderr="")
+
+    with patch("scripts.open_low_ctr_issues.subprocess.run", side_effect=fake_run):
+        assert already_noted_suppression("repo", 29, "/products/b0aaa/") is True
+
+
+def test_already_noted_suppression_false_when_marker_absent():
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 0, stdout="unrelated comment\n", stderr="")
+
+    with patch("scripts.open_low_ctr_issues.subprocess.run", side_effect=fake_run):
+        assert already_noted_suppression("repo", 29, "/products/b0aaa/") is False
+
+
+def test_comment_suppression_posts_marker_and_details():
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    detected = {"page": "/products/b0aaa/", "impressions": 60, "ctr": 0.02, "position": 8.5}
+    with patch("scripts.open_low_ctr_issues.subprocess.run", side_effect=fake_run):
+        comment_suppression("repo", 29, "/products/b0aaa/", detected)
+    assert calls[0][:3] == ["gh", "issue", "comment"]
+    assert calls[0][3] == "29"
+    body = calls[0][calls[0].index("--body") + 1]
+    assert f"<!-- {SUPPRESSION_MARKER_PREFIX}/products/b0aaa/ -->" in body
+    assert "/products/b0aaa/" in body
 
 
 def test_find_existing_taken_urls_extracts_marker():

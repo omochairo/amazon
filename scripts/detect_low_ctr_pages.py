@@ -8,8 +8,17 @@ GSC weekly JSON (scripts/fetch_gsc.py 出力) から CTR が site 平均を大�
 - position <= MAX_POSITION (default 10, page 1 のみ。position 11-20 は A-2 で別途扱う)
 - impressions >= MIN_IMPRESSIONS (default 50, 統計的信号確保)
 - ctr < max(baseline_ctr * RATIO, ABS_MIN_THRESHOLD)
-  - baseline_ctr = totals.clicks_sum / totals.impressions_sum
-  - RATIO default 0.5 (site 平均の半分以下)
+  - baseline_ctr = totals.clicks_sitewide / totals.impressions_sitewide
+    (真の site 全体 CTR。#3988 B-1 以前のスナップショットで *_sitewide が
+    無い場合のみ totals.clicks_sum / totals.impressions_sum にフォールバック
+    する。この2つは top-N ページだけの合計で truncated_pages=true のとき
+    サイト全体より上振れするため、フォールバック時であることを出力 JSON の
+    baseline_source で明示する)
+  - RATIO default 1.5 (amazon-navi-brain#33: sitewide baseline に切り替えた際、直近8週の実デ
+    ータで旧 baseline (top-N合計、RATIO=0.5) と同じ発火頻度になるようスイー
+    プして再較正した値。1.0 を超えるため、ratio_to_baseline が 1 を超える
+    = サイト平均以上のページも検出されうる。「検出された = サイト平均より
+    低い」ではない点に注意 (Issue 本文の文言もこれを前提に書くこと)
   - ABS_MIN_THRESHOLD default 0.005 (baseline が極端に低い時の下駄)
 
 出力 JSON: detected ページ毎に top クエリ (by_combo より) を 5 件まで付与。
@@ -36,19 +45,29 @@ DEFAULT_IN = "data/analytics/gsc_weekly.json"
 DEFAULT_OUT = "data/analytics/low_ctr_pages.json"
 DEFAULT_MIN_IMPRESSIONS = 50
 DEFAULT_MAX_POSITION = 10.0
-DEFAULT_RATIO = 0.5
+DEFAULT_RATIO = 1.5
 DEFAULT_ABS_MIN_THRESHOLD = 0.005
 DEFAULT_MAX_RESULTS = 5
 DEFAULT_TOP_QUERIES_PER_PAGE = 5
 
 
-def compute_baseline_ctr(totals: dict[str, Any]) -> float:
-    """site 全体の CTR baseline。impressions=0 なら 0 を返す。"""
+def compute_baseline_ctr(totals: dict[str, Any]) -> tuple[float, str]:
+    """site 全体の CTR baseline と、その出どころ ("sitewide" | "fallback_topn") を返す。
+
+    clicks_sitewide/impressions_sitewide (#3988 B-1) が真の site 全体集計。
+    無い場合 (2026-07-26 以前のスナップショット) のみ clicks_sum/impressions_sum
+    にフォールバックするが、これは top-N ページだけの合計で truncated_pages=true
+    のとき上振れする (amazon-navi-brain#33)。impressions=0 なら 0 を返す。
+    """
+    impressions = totals.get("impressions_sitewide")
+    clicks = totals.get("clicks_sitewide")
+    if impressions:
+        return clicks / impressions, "sitewide"
     impressions = totals.get("impressions_sum", 0) or 0
     clicks = totals.get("clicks_sum", 0) or 0
     if impressions <= 0:
-        return 0.0
-    return clicks / impressions
+        return 0.0, "fallback_topn"
+    return clicks / impressions, "fallback_topn"
 
 
 def collect_top_queries_by_page(by_combo: list[dict], n: int) -> dict[str, list[dict]]:
@@ -80,10 +99,10 @@ def detect(gsc: dict[str, Any], *,
            top_queries_per_page: int = DEFAULT_TOP_QUERIES_PER_PAGE) -> dict[str, Any]:
     """GSC weekly JSON から低 CTR ページを抽出する。"""
     totals = gsc.get("totals", {})
-    baseline = compute_baseline_ctr(totals)
+    baseline, baseline_source = compute_baseline_ctr(totals)
     threshold = max(baseline * ratio, abs_min_threshold)
-    logger.info("baseline_ctr=%.4f, threshold=%.4f (ratio=%.2f, abs_min=%.4f)",
-                baseline, threshold, ratio, abs_min_threshold)
+    logger.info("baseline_ctr=%.4f (source=%s), threshold=%.4f (ratio=%.2f, abs_min=%.4f)",
+                baseline, baseline_source, threshold, ratio, abs_min_threshold)
 
     queries_by_page = collect_top_queries_by_page(gsc.get("by_combo", []), top_queries_per_page)
 
@@ -117,6 +136,7 @@ def detect(gsc: dict[str, Any], *,
     return {
         "source_range": gsc.get("range"),
         "baseline_ctr": baseline,
+        "baseline_source": baseline_source,
         "threshold_ctr": threshold,
         "params": {
             "min_impressions": min_impressions,
