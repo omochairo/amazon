@@ -5,6 +5,7 @@ Google Search Console の URL Inspection API を使用して、
 結果を集計して JSON に書き出す read-only スクリプト。
 
 Issue: https://github.com/omochairo/amazon/issues/2701 (P4 効果測定)
+       https://github.com/omochairo/amazon/issues/7022 (watchlist 優先 + ローテーション)
 """
 from __future__ import annotations
 
@@ -31,6 +32,14 @@ DEFAULT_OUT = "data/analytics/gsc_index_census.json"
 DEFAULT_SITEMAP = "https://navi.omcha.jp/sitemap.xml"
 DEFAULT_PREFIX = "/products/"
 DEFAULT_LIMIT = 1800
+# #7022: sitemap の products 数が --limit を超えて久しく (2026-08-02 に突破、
+# 09-06 時点で 586 件・09-11 実測で 651 件が未計測)、アルファベット順の先頭
+# --limit 件を機械的に切る方式だと ASIN が後方の URL が永久に検査対象から
+# 漏れる。#3331 のような「追跡中コホート」がこの漏れで偽の回収/未回収を
+# 起こしていたため、前回 not-indexed だった URL を優先枠として必ず含め
+# (watchlist)、残り予算をアルファベット順の窓を週替わりでローテーションして
+# 埋める方式に変更した (詳細は select_target_urls)。
+DEFAULT_WATCHLIST = "data/analytics/history/census_url_states.json"
 # API 上限 600/分 = 10 QPS。安全側に 8 QPS (480/分) で抑える
 DEFAULT_QPS = 8.0
 # 1 URL あたり実測 6-7 秒かかるため、逐次だと 1500 件で 3 時間近い。
@@ -114,6 +123,76 @@ def fetch_sitemap_urls(sitemap_url: str, prefix: str) -> list[str]:
     # ソートして安定順に
     filtered_urls.sort()
     return filtered_urls
+
+
+def load_watchlist(path: pathlib.Path) -> set[str]:
+    """前回 census の not-indexed URL スナップショット (census_url_states.json)
+    を読み、優先検査すべき URL 集合を返す (#7022)。
+
+    ファイル無し/壊れている/想定外の形の場合は空集合を返す (初回実行や
+    フォーマット変更に対して壊さない側に倒す。append_census_history.py の
+    load_url_states_snapshot と同じ方針)。
+    """
+    if not path.exists():
+        return set()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        logger.warning("could not read watchlist %s (%s) — treating as empty", path, e)
+        return set()
+    states = data.get("states") if isinstance(data, dict) else None
+    if not isinstance(states, dict):
+        logger.warning("watchlist %s has unexpected shape — treating as empty", path)
+        return set()
+    return set(states.keys())
+
+
+def epoch_week_index(now: datetime) -> int:
+    """UTC 基準の「通算週番号」。ISO week (1-53) と違って年境界で折り返さない
+    単調増加値で、select_target_urls のローテーションオフセットに使う。"""
+    epoch = datetime(2020, 1, 1, tzinfo=timezone.utc)
+    return (now - epoch).days // 7
+
+
+def select_target_urls(
+    sitemap_urls: list[str], watchlist: set[str], limit: int, rotation_offset: int
+) -> list[str]:
+    """今回検査する URL を選ぶ (#7022)。
+
+    limit <= 0 または sitemap 全体が limit 以内なら全件を返す (従来どおり)。
+
+    それ以外は:
+    1. watchlist (前回 not-indexed だった URL) をアルファベット順のまま全件
+       優先枠として確保する。sitemap から既に消えた URL は自然に無視される
+       (積集合を取るため)。
+    2. 残り予算を、watchlist 以外の URL をアルファベット順の窓として
+       rotation_offset に応じて開始位置をずらしながら (循環スライス) 埋める。
+       毎週 rotation_offset が 1 ずつ進むことで、数週間かけて全 URL が
+       いずれ検査対象に入るようになる。
+
+    watchlist 自体が limit を超える異常事態 (not-indexed が limit 件超) では
+    watchlist のアルファベット順先頭 limit 件のみを返す (ローテーションの
+    対象外。この規模になったら --limit 自体の見直しが要る)。
+    """
+    if limit <= 0 or limit >= len(sitemap_urls):
+        return list(sitemap_urls)
+
+    watch_ordered = [u for u in sitemap_urls if u in watchlist]
+    if len(watch_ordered) >= limit:
+        return watch_ordered[:limit]
+
+    rest = [u for u in sitemap_urls if u not in watchlist]
+    remaining_budget = limit - len(watch_ordered)
+    if len(rest) <= remaining_budget:
+        return watch_ordered + rest
+
+    start = (rotation_offset * remaining_budget) % len(rest)
+    end = start + remaining_budget
+    if end <= len(rest):
+        rotated = rest[start:end]
+    else:
+        rotated = rest[start:] + rest[: end - len(rest)]
+    return watch_ordered + rotated
 
 
 class _RateLimiter:
@@ -464,6 +543,9 @@ def main() -> int:
     p.add_argument("--sitemap", default=DEFAULT_SITEMAP)
     p.add_argument("--prefix", default=DEFAULT_PREFIX)
     p.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
+    p.add_argument("--watchlist", default=DEFAULT_WATCHLIST,
+                   help="前回 not-indexed だった URL を優先検査するためのスナップショット "
+                        "(#7022)。空文字列で無効化 (--limit 適用時は常にアルファベット順先頭のみ)")
     p.add_argument("--qps", type=float, default=DEFAULT_QPS)
     p.add_argument("--workers", type=int, default=DEFAULT_WORKERS,
                    help="並列数。URL Inspection API は 1 URL 6-7 秒かかるため逐次では現実的でない")
@@ -507,11 +589,17 @@ def main() -> int:
         sitemap_urls = fetch_sitemap_urls(args.sitemap, args.prefix)
         sitemap_count = len(sitemap_urls)
 
-        # limit 適用
-        if args.limit > 0:
-            target_urls = sitemap_urls[:args.limit]
-        else:
-            target_urls = sitemap_urls
+        # #7022: watchlist (前回 not-indexed) を優先枠にしつつ、残り予算を
+        # 週替わりでローテーションして選ぶ。watchlist 未指定/読めない場合は
+        # 空集合になり、従来と同じ「アルファベット順先頭 limit 件」に近い
+        # 挙動になる (ローテーションのみ効く)。
+        watchlist = load_watchlist(pathlib.Path(args.watchlist)) if args.watchlist else set()
+        rotation_offset = epoch_week_index(datetime.now(timezone.utc))
+        target_urls = select_target_urls(sitemap_urls, watchlist, args.limit, rotation_offset)
+        logger.info(
+            "target selection: sitemap=%d watchlist=%d rotation_offset=%d -> inspecting %d urls",
+            sitemap_count, len(watchlist), rotation_offset, len(target_urls),
+        )
 
         creds = (args.client_id, args.client_secret, args.refresh_token)
         inspected, errors, circuit_info = inspect_urls(
@@ -584,6 +672,10 @@ def main() -> int:
             "by_rich_verdict": by_rich_verdict,
             "by_rich_type": by_rich_type,
             "rich_issues": rich_issues,
+            "target_selection": {
+                "watchlist_count": len(watchlist),
+                "rotation_offset": rotation_offset,
+            },
             "not_indexed_urls": not_indexed_urls,
             "rich_fail_urls": rich_fail_urls,
             "errors": errors,
