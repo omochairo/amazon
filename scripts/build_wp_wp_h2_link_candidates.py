@@ -30,25 +30,33 @@ markdown の候補レポートを出力するだけである。WP への書き�
      取るには WP 認証 (``context=edit`` の ``content.raw``) が要り、この K8 runner
      には資格情報が無い。タイトルのみなら index.jsonl 一発で済み、追加の WP
      負荷がゼロになる (2026-09-11 設計判断。まず動くものを作り、精度は後で見る)
-  3. 自リンク除外は **id で行う** (URL 文字列一致ではない)。下書き段階の
-     ``source_link`` は ``https://omcha.jp/?p=<id>`` 形式で、index.jsonl の
-     パーマリンクと文字列が一致しないため (issue #174 の実装ノート)
+  3. 自リンク除外は **id とタイトル完全一致の両方で行う** (URL 文字列一致では
+     ない)。下書き段階の ``source_link`` は ``https://omcha.jp/?p=<id>`` 形式で
+     index.jsonl のパーマリンクと文字列が一致しない上、``wp_draft.py copy`` の
+     リライト下書きは**元記事と別 id**になるため id 照合だけでは構造的に必ず
+     外れる (issue #174 実測: 2026-09-11 のレビューで実際に自分自身が候補に
+     混入した)。document 側がタイトルのみ埋め込みの v1 では、自分自身が常に
+     最高スコアになり得ることへの対策も兼ねる。自動判定で拾えない場合は
+     ``--exclude-id``/``--exclude-url`` で手動除外できる
   4. amazon-home-ops K8 LLM ワーカーの Ruri v3 API (``/embed``) で H2 見出しと
      document タイトルを埋め込み、コサイン類似度で照合する。reranker
      (``/rerank``) が使えれば上位候補の並べ替え精度を上げる (失敗時は cosine
      順にフォールバック)
-  5. 対象記事の本文に既に ``[blogcard url="..."]`` がある候補は、**落とさず
-     「既出」フラグを付けて出す** (消すと「なぜ出てこないのか」が分からず、
-     同じ調査を人が繰り返すため)
-  6. 類似度閾値 (``--min-score``) 未満の候補は出さない。H2 ごとに最大
-     ``--top-k`` (既定 3) 件のみ出す
+  5. 対象記事の**その H2 セクション内**に既に ``[blogcard url="..."]`` がある
+     候補、および ``--calibration-url`` で指定した既知の真陽性 URL は、
+     **閾値・top_k に関係なく落とさず、本来のスコア・順位付きで出す**
+     (消すと「なぜ出てこないのか」が分からず同じ調査を人が繰り返す上、
+     較正に使う真陽性がレポートから消えてしまう — 2026-09-11 レビュー指摘)
+  6. 通常の候補選定は 類似度閾値 (``--min-score``) 未満を除外し、H2 ごとに
+     最大 ``--top-k`` (既定 3) 件のみ出す (5. の強制表示分は別枠)
 
 ``--min-score`` の既定値 0.87 は ``build_wp_navi_link_candidates.py`` (WP→navi・
 記事単位、2026-07-18 実測較正) からの**暫定流用**。WP→WP・H2粒度は対の性質も
-粒度も違うため、そのまま当てはまる保証はない。issue #174 の較正材料
-(``omcha-ops/work/after_15750.json``) は ``.gitignore`` 対象のローカルファイルで
-この場からは参照できなかったため、較正は初回 shadow run の実データを見てから
-行う (2026-09-11 オーナー判断)。
+粒度も違うため、そのまま当てはまる保証はない。この既定値は
+``build_wp_wp_h2_link_candidates.py`` (ここ)・amazon-home-ops の
+``25-wp-wp-h2-link-lane.yml`` の workflow_dispatch input default・その env
+フォールバックの**3箇所で二重管理**になっている (27-レーンと同型の罠)。
+較正後に更新するときは3箇所とも揃えること。
 
 このスクリプトが**しないこと** (構造的にゼロ):
   - WP への書き込み・自動改稿・自動挿入 (POST/PUT/DELETE を一切呼ばない)
@@ -177,12 +185,33 @@ def load_index_jsonl(path: pathlib.Path) -> list[dict[str, Any]]:
 
 
 def build_document_candidates(
-    index_entries: list[dict[str, Any]], *, exclude_id: int | None = None,
+    index_entries: list[dict[str, Any]],
+    *,
+    exclude_id: int | None = None,
+    exclude_title: str | None = None,
+    extra_exclude_ids: frozenset[int] = frozenset(),
+    extra_exclude_urls: frozenset[str] = frozenset(),
 ) -> list[dict[str, Any]]:
-    """index エントリから document 候補を構築する (自記事は id で除外)。"""
+    """index エントリから document 候補を構築する (自記事を除外する)。
+
+    id 照合だけでは足りない (omcha-ops#174 実測: `wp_draft.py copy` のリライト
+    下書きは元記事と**別 id** になるため、下書き経由で query を読むと id 照合が
+    構造的に必ず外れる)。**タイトル完全一致でも除外する**のはその保険であり、
+    document 側がタイトルのみ埋め込みの v1 では「自分自身」が常に最高スコアに
+    なりがちなことへの対策でもある。``extra_exclude_ids``/``extra_exclude_urls``
+    は自動判定で拾えないケース (タイトルまで変えたリライト等) 用の手動指定。
+    """
+    exclude_title_norm = exclude_title.strip() if isinstance(exclude_title, str) and exclude_title.strip() else None
+    exclude_urls_norm = {normalize_url(u) for u in extra_exclude_urls}
     candidates: list[dict[str, Any]] = []
     for entry in index_entries:
         if exclude_id is not None and entry["id"] == exclude_id:
+            continue
+        if entry["id"] in extra_exclude_ids:
+            continue
+        if exclude_title_norm is not None and entry["title"].strip() == exclude_title_norm:
+            continue
+        if normalize_url(entry["url"]) in exclude_urls_norm:
             continue
         candidates.append({
             "id": entry["id"],
@@ -439,44 +468,70 @@ def select_document_candidates_for_h2(
     rerank_top_n: int = DEFAULT_RERANK_TOP_N,
     reranker: RerankerFn | None = None,
     existing_urls: frozenset[str] = frozenset(),
+    calibration_urls: frozenset[str] = frozenset(),
 ) -> list[dict[str, Any]]:
     """1 H2 分の類似度行から document 候補 top-k を選ぶ。
 
-    ``existing_urls`` に含まれる候補は除外せず ``already_linked=True`` を付けて
-    返す (本文に既にある [blogcard] を黙って落とさない — issue #174 の実装ノート)。
+    ``existing_urls`` (本文に既にある [blogcard]) と ``calibration_urls``
+    (``--calibration-url`` で指定した既知の真陽性) に含まれる候補は、
+    **閾値未満でも・top_k 圏外でも落とさず**全順位から本来のスコア・順位で
+    追加する (omcha-ops#174 実測: 較正材料の真陽性が min_score 未満で消えると
+    レポート単体で較正できない)。通常の top_k 選定 (閾値フィルタ→reranker)
+    はそれとは独立に行い、返り値は最後にスコア降順へ整列し直す (reranker で
+    選ばれる順序は cosine スコアと単調にならないことがあるため — 表示上の
+    並びはスコアと矛盾しない方が読みやすい)。
     """
+    n = len(document_candidates)
+    rank_order = sorted(range(n), key=lambda j: (-similarity_row[j], document_candidates[j]["url"]))
+    rank_by_index = {j: i + 1 for i, j in enumerate(rank_order)}
+
     eligible = [
-        (similarity_row[j], j) for j in range(len(document_candidates)) if similarity_row[j] >= min_score
+        (similarity_row[j], j) for j in range(n) if similarity_row[j] >= min_score
     ]
-    if not eligible:
-        return []
-    eligible.sort(key=lambda t: (-t[0], document_candidates[t[1]]["url"]))
+    top_indices: list[int] = []
+    if eligible:
+        eligible.sort(key=lambda t: (-t[0], document_candidates[t[1]]["url"]))
+        shortlist_size = max(rerank_top_n, top_k)
+        shortlist = eligible[:shortlist_size]
+        order = [j for _, j in shortlist]
 
-    shortlist_size = max(rerank_top_n, top_k)
-    shortlist = eligible[:shortlist_size]
-    order = [j for _, j in shortlist]
-    cosine_by_index = {j: score for score, j in eligible}
+        if reranker is not None and len(order) > 1:
+            doc_texts = [document_candidates[j]["embed_text"] for j in order]
+            rerank_result = reranker(h2_text, doc_texts)
+            if rerank_result:
+                reordered = [
+                    order[r["index"]] for r in rerank_result if 0 <= r["index"] < len(order)
+                ]
+                seen = set(reordered)
+                reordered.extend(j for j in order if j not in seen)
+                order = reordered
 
-    if reranker is not None and len(order) > 1:
-        doc_texts = [document_candidates[j]["embed_text"] for j in order]
-        rerank_result = reranker(h2_text, doc_texts)
-        if rerank_result:
-            reordered = [
-                order[r["index"]] for r in rerank_result if 0 <= r["index"] < len(order)
-            ]
-            seen = set(reordered)
-            reordered.extend(j for j in order if j not in seen)
-            order = reordered
+        top_indices = order[:top_k]
 
-    top_indices = order[:top_k]
-    return [
+    existing_norm = {normalize_url(u) for u in existing_urls}
+    calibration_norm = {normalize_url(u) for u in calibration_urls}
+    must_show_norm = existing_norm | calibration_norm
+
+    selected = list(top_indices)
+    selected_set = set(selected)
+    for j in range(n):
+        if normalize_url(document_candidates[j]["url"]) in must_show_norm and j not in selected_set:
+            selected.append(j)
+            selected_set.add(j)
+
+    out = [
         {
             **document_candidates[j],
-            "score": round(cosine_by_index[j], 3),
-            "already_linked": normalize_url(document_candidates[j]["url"]) in existing_urls,
+            "score": round(similarity_row[j], 3),
+            "rank": rank_by_index[j],
+            "already_linked": normalize_url(document_candidates[j]["url"]) in existing_norm,
+            "is_calibration": normalize_url(document_candidates[j]["url"]) in calibration_norm,
+            "below_threshold": similarity_row[j] < min_score,
         }
-        for j in top_indices
+        for j in selected
     ]
+    out.sort(key=lambda c: -c["score"])
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -517,8 +572,15 @@ def render_markdown_report(
             lines.append("")
             continue
         for i, c in enumerate(entry["candidates"], start=1):
-            flag = " **[既出]**" if c.get("already_linked") else ""
-            lines.append(f"{i}. [{c['title']}]({c['url']}) (score: {c['score']:.3f}){flag}")
+            flags = []
+            if c.get("already_linked"):
+                flags.append("既出")
+            if c.get("is_calibration"):
+                flags.append("較正対象")
+            if c.get("below_threshold"):
+                flags.append(f"閾値未満・全{doc_total}件中{c['rank']}位")
+            flag_str = f" **[{' / '.join(flags)}]**" if flags else ""
+            lines.append(f"{i}. [{c['title']}]({c['url']}) (score: {c['score']:.3f}){flag_str}")
         lines.append("")
 
     return "\n".join(lines) + "\n"
@@ -540,10 +602,18 @@ def run(
     top_k: int = DEFAULT_TOP_K,
     rerank_top_n: int = DEFAULT_RERANK_TOP_N,
     use_reranker: bool = True,
+    exclude_ids: frozenset[int] = frozenset(),
+    exclude_urls: frozenset[str] = frozenset(),
+    calibration_urls: frozenset[str] = frozenset(),
     session: requests.Session | None = None,
     sleeper=time.sleep,
 ) -> dict[str, Any]:
-    """query 記事の読み込み → document 候補構築 → 埋め込み照合 → レポート書き込みを行う。"""
+    """query 記事の読み込み → document 候補構築 → 埋め込み照合 → レポート書き込みを行う。
+
+    ``exclude_ids``/``exclude_urls`` は自動の自リンク除外 (id・タイトル完全一致)
+    で拾えない場合の手動指定。``calibration_urls`` は既知の真陽性 URL (較正用) で、
+    閾値・top_k に関係なく該当 H2 の候補一覧に本来のスコア・順位で出す。
+    """
     summary: dict[str, Any] = {
         "doc_candidates": 0, "h2_count": 0, "h2_with_candidates": 0, "aborted": False,
     }
@@ -562,7 +632,13 @@ def run(
         return summary
 
     index_entries = load_index_jsonl(index_path)
-    document_candidates = build_document_candidates(index_entries, exclude_id=query["id"])
+    document_candidates = build_document_candidates(
+        index_entries,
+        exclude_id=query["id"],
+        exclude_title=query["title"],
+        extra_exclude_ids=exclude_ids,
+        extra_exclude_urls=exclude_urls,
+    )
     summary["doc_candidates"] = len(document_candidates)
     if not document_candidates:
         logger.error("no document candidates loaded from %s; aborting", index_path)
@@ -575,8 +651,6 @@ def run(
         logger.error("no H2 headings detected in query article; aborting without writing report")
         summary["aborted"] = True
         return summary
-
-    existing_urls = frozenset(extract_blogcard_urls(query["content_html"]))
 
     h2_texts = [s["heading"][:MAX_TEXT_LEN] for s in h2_sections]
     doc_texts = [c["embed_text"] for c in document_candidates]
@@ -598,10 +672,15 @@ def run(
 
     h2_entries: list[dict[str, Any]] = []
     for i, section in enumerate(h2_sections):
+        # 既出 [blogcard] は「そのセクション内にあるか」で判定する (記事全体で
+        # 判定すると、実際には1箇所にしか貼っていなくても全 H2 に既出フラグが
+        # 付いてしまう — omcha-ops#174 レビュー指摘)。
+        section_existing_urls = frozenset(extract_blogcard_urls(section["body_html"]))
         candidates = select_document_candidates_for_h2(
             h2_texts[i], similarity[i], document_candidates,
             min_score=min_score, top_k=top_k, rerank_top_n=rerank_top_n,
-            reranker=reranker_fn, existing_urls=existing_urls,
+            reranker=reranker_fn, existing_urls=section_existing_urls,
+            calibration_urls=calibration_urls,
         )
         h2_entries.append({"heading": section["heading"], "candidates": candidates})
 
@@ -637,6 +716,18 @@ def main() -> int:
     ap.add_argument("--top-k", type=int, default=DEFAULT_TOP_K, help="H2 あたりの候補数上限")
     ap.add_argument("--rerank-top-n", type=int, default=DEFAULT_RERANK_TOP_N, help="reranker に渡す候補数の上限")
     ap.add_argument("--no-reranker", action="store_true", help="reranker (/rerank) を使わず cosine 類似度のみで選ぶ")
+    ap.add_argument(
+        "--exclude-id", type=int, action="append", default=[],
+        help="自動の自リンク除外 (id・タイトル完全一致) で拾えない場合の手動除外 id (複数指定可)",
+    )
+    ap.add_argument(
+        "--exclude-url", action="append", default=[],
+        help="自動の自リンク除外で拾えない場合の手動除外 URL (複数指定可)",
+    )
+    ap.add_argument(
+        "--calibration-url", action="append", default=[],
+        help="既知の真陽性 URL。閾値・top_k に関係なく本来のスコア・順位で候補一覧に出す (較正用・複数指定可)",
+    )
     args = ap.parse_args()
 
     summary = run(
@@ -650,6 +741,9 @@ def main() -> int:
         top_k=args.top_k,
         rerank_top_n=args.rerank_top_n,
         use_reranker=not args.no_reranker,
+        exclude_ids=frozenset(args.exclude_id),
+        exclude_urls=frozenset(args.exclude_url),
+        calibration_urls=frozenset(args.calibration_url),
     )
     return 1 if summary.get("aborted") else 0
 
