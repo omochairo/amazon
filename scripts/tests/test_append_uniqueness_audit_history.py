@@ -9,6 +9,7 @@ import pytest
 
 from scripts.append_uniqueness_audit_history import (
     KNOWN_COHORTS,
+    KNOWN_COHORTS_V2,
     PERCENTILE_FIELDS,
     UNIQUENESS_HISTORY_FILE,
     build_cohort_stats,
@@ -204,6 +205,32 @@ def test_build_row_missing_cohort_stats_key_still_has_all_known_cohorts(audit_fi
     del audit_fixture["cohort_stats"]
     row = build_row(audit_fixture)
     assert set(row["cohort_stats"].keys()) == set(KNOWN_COHORTS)
+
+
+# ---------------------------------------------------------------------------
+# cohort_stats_v2 (amazon-navi-brain#39 Step 0-a)
+# ---------------------------------------------------------------------------
+
+def test_build_row_includes_cohort_stats_v2_with_known_cohorts(audit_fixture):
+    audit_fixture["cohort_stats_v2"] = {
+        "pre_v7": {"count": 1453, "max_sim_p50": 0.944, "centroid_sim_p50": 0.924},
+        "post_v7_new": {"count": 700, "max_sim_p50": 0.93, "centroid_sim_p50": 0.90},
+        "post_v7_rewrite": {"count": 206, "max_sim_p50": 0.94, "centroid_sim_p50": 0.91},
+    }
+    row = build_row(audit_fixture)
+    assert set(row["cohort_stats_v2"].keys()) == set(KNOWN_COHORTS_V2)
+    assert row["cohort_stats_v2"]["post_v7_rewrite"]["count"] == 206
+    assert "all" not in row["cohort_stats_v2"]
+
+
+def test_build_row_missing_cohort_stats_v2_defaults_to_zero_and_null(audit_fixture):
+    """audit.json が今回導入前の形式でも (cohort_stats_v2 無し) 落ちず、
+    unknown を 0 に潰さない既存方針 (#4098) と同じ形で埋まる。"""
+    row = build_row(audit_fixture)
+    for cohort in KNOWN_COHORTS_V2:
+        assert row["cohort_stats_v2"][cohort]["count"] == 0
+        for field in PERCENTILE_FIELDS:
+            assert row["cohort_stats_v2"][cohort][field] is None
 
 
 # ---------------------------------------------------------------------------

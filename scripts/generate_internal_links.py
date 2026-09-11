@@ -110,6 +110,11 @@ DEFAULT_SEMANTIC_RELATED = "hugo/data/semantic_related.json"
 DEFAULT_CENSUS = "data/analytics/gsc_index_census.json"
 DEFAULT_HISTORY_DIR = "data/analytics/gsc_history"
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
+# amazon-navi-brain#39 Step 0-c: #4528実測 (実プロンプト最大1,098 token、既定4096に
+# 対し3.7倍の余裕) を踏まえた暫定値。ollamaは num_ctx 超過時に入力を無言で約半分に
+# 切り詰める (#4528で実測済みの罠) ため、未設定のまま記事を厚くするのが最も危険。
+# 8192 は K8 実測前の暫定値であり、決め切った値ではない。
+DEFAULT_NUM_CTX = 8192
 DEFAULT_MODEL = "gemma4:26b-a4b-it-qat"
 DEFAULT_LIMIT = 30
 DEFAULT_MIN_SCORE = 0.85
@@ -491,6 +496,7 @@ def call_gemma_internal_links(
     model: str,
     session: requests.Session,
     sleeper=time.sleep,
+    num_ctx: int = DEFAULT_NUM_CTX,
 ) -> dict[str, Any]:
     """gemma (`/api/generate`) に内部リンク提案 (逐語アンカー) を問い合わせる。
 
@@ -507,7 +513,7 @@ def call_gemma_internal_links(
         "think": False,
         "format": "json",
         "keep_alive": "30m",
-        "options": {"temperature": 0},
+        "options": {"temperature": 0, "num_ctx": num_ctx},
     }
 
     last_err: Exception | None = None
@@ -717,6 +723,7 @@ def run(
     dry_run: bool = False,
     session: requests.Session | None = None,
     sleeper=time.sleep,
+    num_ctx: int = DEFAULT_NUM_CTX,
 ) -> dict[str, Any]:
     """全記事を走査し、グローバル割当 → gemma 生成 → 検証 → 書き込みを行う。"""
     summary: dict[str, Any] = {
@@ -832,7 +839,7 @@ def run(
         sections_text = _format_sections_for_prompt(section_paragraphs)
         candidates_text = _format_candidates_for_prompt(candidates, target_summaries)
 
-        result = call_gemma_internal_links(sections_text, candidates_text, ollama_url, model, session, sleeper)
+        result = call_gemma_internal_links(sections_text, candidates_text, ollama_url, model, session, sleeper, num_ctx)
         if result.get("error"):
             summary["errors"] += 1
             logger.error("generation failed for %s: %s", article_path.stem, result["error"])
@@ -898,6 +905,9 @@ def main() -> int:
     ap.add_argument("--manifest", default=DEFAULT_MANIFEST, help="監査用 manifest JSON の出力先")
     ap.add_argument("--force", action="store_true", help="既に internal_link_suggestions がある記事も再生成する")
     ap.add_argument("--dry-run", action="store_true", help="sidecar を書かず、manifest のみ出力する")
+    ap.add_argument("--num-ctx", type=int,
+                     default=int(os.environ.get("OLLAMA_NUM_CTX", DEFAULT_NUM_CTX)),
+                     help="amazon-navi-brain#39 Step 0-c: ollama num_ctx (未設定時は超過分を無言で切り詰める罠がある)")
     args = ap.parse_args()
 
     summary = run(
@@ -915,6 +925,7 @@ def main() -> int:
         manifest_path=pathlib.Path(args.manifest),
         force=args.force,
         dry_run=args.dry_run,
+        num_ctx=args.num_ctx,
     )
     return 1 if summary.get("aborted") else 0
 

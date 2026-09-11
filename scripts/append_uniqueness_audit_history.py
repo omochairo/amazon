@@ -20,7 +20,9 @@
      max_sim_exceeded, centroid_sim_exceeded,
      threshold_mode, threshold_max_sim, threshold_centroid_sim,
      cohort_stats: {pre_v7, post_v7, all} それぞれ
-       {count, max_sim_p25/p50/p75/p90, centroid_sim_p25/p50/p75/p90}}
+       {count, max_sim_p25/p50/p75/p90, centroid_sim_p25/p50/p75/p90},
+     cohort_stats_v2 (amazon-navi-brain#39 Step 0-a): {pre_v7, post_v7_new,
+       post_v7_rewrite} 同じフィールド構成 (「all」は cohort_stats と重複するため無し)}
 
 date 列と ISO 週 (重要):
   uniqueness_audit.json は日次ではなく週次スナップショットで、日付ではなく
@@ -84,6 +86,11 @@ UNIQUENESS_HISTORY_FILE = "uniqueness_audit_history.jsonl"
 # の出力に無い cohort でも毎行必ず出現させる (census の KNOWN_SLUGS と同型)。
 KNOWN_COHORTS: tuple[str, ...] = ("pre_v7", "post_v7", "all")
 
+# amazon-navi-brain#39 Step 0-a: cohort_stats_v2 (pre_v7/post_v7 の追加分割) の
+# 既知 cohort 名。「all」は cohort_stats["all"] と重複するため含めない
+# (audit_uniqueness.compute_cohort3_stats と同じ方針)。
+KNOWN_COHORTS_V2: tuple[str, ...] = ("pre_v7", "post_v7_new", "post_v7_rewrite")
+
 # cohort_stats 内、cohort ごとの percentile 系フィールド名。
 PERCENTILE_FIELDS: tuple[str, ...] = (
     "max_sim_p25", "max_sim_p50", "max_sim_p75", "max_sim_p90",
@@ -106,17 +113,22 @@ def _as_str(value: Any) -> str | None:
     return None
 
 
-def build_cohort_stats(cohort_stats_in: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
-    """audit の cohort_stats を既知 cohort (KNOWN_COHORTS) ごとの固定フィールド集合に
+def build_cohort_stats(
+    cohort_stats_in: dict[str, Any] | None,
+    known_cohorts: tuple[str, ...] = KNOWN_COHORTS,
+) -> dict[str, dict[str, Any]]:
+    """audit の cohort_stats を既知 cohort (既定 KNOWN_COHORTS) ごとの固定フィールド集合に
     正規化する。
 
     count は cohort 自体が欠損していれば 0 (「その週たまたま該当 cohort が無い」)、
     percentile 系は欠損/型不正なら None (未計算の統計値を 0 に潰さない)。
-    列集合を時系列で安定させるため、KNOWN_COHORTS 全てを必ず key に持つ。
+    列集合を時系列で安定させるため、known_cohorts 全てを必ず key に持つ。
+    ``known_cohorts`` を差し替えれば cohort_stats_v2 (KNOWN_COHORTS_V2) にも
+    そのまま使い回せる (amazon-navi-brain#39 Step 0-a)。
     """
     cohort_stats_in = cohort_stats_in or {}
     result: dict[str, dict[str, Any]] = {}
-    for name in KNOWN_COHORTS:
+    for name in known_cohorts:
         src = cohort_stats_in.get(name)
         if not isinstance(src, dict):
             if name in cohort_stats_in:
@@ -164,6 +176,7 @@ def build_row(audit: dict) -> dict[str, Any] | None:
         "threshold_max_sim": _as_number(thresholds.get("max_sim")),
         "threshold_centroid_sim": _as_number(thresholds.get("centroid_sim")),
         "cohort_stats": build_cohort_stats(audit.get("cohort_stats")),
+        "cohort_stats_v2": build_cohort_stats(audit.get("cohort_stats_v2"), KNOWN_COHORTS_V2),
     }
     return row
 
