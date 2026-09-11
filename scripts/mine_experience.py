@@ -78,6 +78,11 @@ DEFAULT_LIMIT = 20
 OUT_NAME = "experience.json"
 
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
+# amazon-navi-brain#39 Step 0-c: #4528実測 (実プロンプト最大1,098 token、既定4096に
+# 対し3.7倍の余裕) を踏まえた暫定値。ollamaは num_ctx 超過時に入力を無言で約半分に
+# 切り詰める (#4528で実測済みの罠) ため、未設定のまま記事を厚くするのが最も危険。
+# 8192 は K8 実測前の暫定値であり、決め切った値ではない。
+DEFAULT_NUM_CTX = 8192
 DEFAULT_EXPERIENCE_MODEL = "gemma4:26b-a4b-it-qat"
 DEFAULT_EXPERIENCE_RAW_DIR = pathlib.Path.home() / ".omochairo" / "yahoo_reviews_raw"
 
@@ -696,6 +701,7 @@ def extract_snippets(
     candidate: dict, product_name: str, brand: str,
     ollama_url: str, model: str, session: requests.Session,
     sleeper=time.sleep,
+    num_ctx: int = DEFAULT_NUM_CTX,
 ) -> list[dict]:
     """1 candidate 分を gemma に投げ、entailment 通過分の snippet 群を返す。
     失敗時は空リスト (1 件の失敗で全体を止めない)。"""
@@ -711,7 +717,7 @@ def extract_snippets(
         "think": False,
         "format": "json",
         "keep_alive": "30m",
-        "options": {"temperature": 0},
+        "options": {"temperature": 0, "num_ctx": num_ctx},
     }
 
     attempts = _MAX_EXTRA_RETRIES + 1
@@ -777,6 +783,7 @@ def mine_asin(
     model: str = DEFAULT_EXPERIENCE_MODEL,
     session: requests.Session | None = None,
     sleeper=time.sleep,
+    num_ctx: int = DEFAULT_NUM_CTX,
 ) -> dict | None:
     """1 ASIN 分の候補収集 + gemma 抽出を行い、experience.json payload を返す
     (snippets 0 件なら None)。"""
@@ -796,7 +803,7 @@ def mine_asin(
 
     snippets: list[dict] = []
     for c in candidates:
-        snippets += extract_snippets(c, product_name, brand, ollama_url, model, session, sleeper)
+        snippets += extract_snippets(c, product_name, brand, ollama_url, model, session, sleeper, num_ctx)
 
     if not snippets:
         return None
@@ -823,6 +830,7 @@ def run(
     ollama_url: str = DEFAULT_OLLAMA_URL,
     model: str = DEFAULT_EXPERIENCE_MODEL,
     dry_run: bool = False,
+    num_ctx: int = DEFAULT_NUM_CTX,
 ) -> dict:
     session = requests.Session()
     written = 0
@@ -831,7 +839,7 @@ def run(
         if dry_run:
             logger.info("[dry-run] would mine %s", asin)
             continue
-        payload = mine_asin(asin, base=base, ollama_url=ollama_url, model=model, session=session)
+        payload = mine_asin(asin, base=base, ollama_url=ollama_url, model=model, session=session, num_ctx=num_ctx)
         if payload is None:
             skipped += 1
             logger.info("%s: 0 snippets — not written", asin)
@@ -852,6 +860,9 @@ def main() -> int:
     ap.add_argument("--ollama-url", default=os.environ.get("OLLAMA_HOST", DEFAULT_OLLAMA_URL))
     ap.add_argument("--model", default=os.environ.get("EXPERIENCE_MODEL", DEFAULT_EXPERIENCE_MODEL))
     ap.add_argument("--dry-run", action="store_true", help="出力せず stdout にサマリ")
+    ap.add_argument("--num-ctx", type=int,
+                     default=int(os.environ.get("OLLAMA_NUM_CTX", DEFAULT_NUM_CTX)),
+                     help="amazon-navi-brain#39 Step 0-c: ollama num_ctx (未設定時は超過分を無言で切り詰める罠がある)")
     args = ap.parse_args()
 
     asins = [a.strip() for a in args.asins.split(",") if a.strip()] or None
@@ -864,6 +875,7 @@ def main() -> int:
         ollama_url=args.ollama_url,
         model=args.model,
         dry_run=args.dry_run,
+        num_ctx=args.num_ctx,
     )
     return 0
 

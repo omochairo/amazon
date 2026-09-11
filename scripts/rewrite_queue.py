@@ -38,6 +38,12 @@ _ASIN_RE = re.compile(r"^B0[A-Z0-9]{8}$")
 _SLUG_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-(B0[A-Z0-9]{8})$")
 _SIDECAR_SUFFIXES = (".quality.json", ".enrichment.json", ".seo.json")
 
+# amazon-navi-brain#39 Step 0-a: 「そのASINが過去にリライトされたか」の来歴台帳。
+# append-only (asin_origin.jsonl と同じ思想)。読み取り側が asin ごとに
+# completed_at 最大の行を採用する。cleanup_completed が本体を消す度に1行足す他、
+# scripts/backfill_rewrite_ledger.py が git 履歴から過去分を1回だけ埋める。
+LEDGER_PATH = "data/analytics/rewrite_ledger.jsonl"
+
 
 def marker_path(asin: str, queue_dir: str = QUEUE_DIR) -> str:
     return os.path.join(queue_dir, f"{asin}.json")
@@ -73,6 +79,24 @@ def write_marker(
             indent=2,
         )
     return path
+
+
+def append_ledger(records: list[dict], path: str = LEDGER_PATH) -> int:
+    """Append rewrite-completion records to the ledger (append-only, no dedupe).
+
+    Each record: ``{asin, old_slug, new_slug, completed_at, source}``. The
+    ledger is never rewritten in place; readers take the max-``completed_at``
+    row per asin (see ``scripts.audit_uniqueness.load_rewrite_ledger``).
+    """
+    if not records:
+        return 0
+    out_dir = os.path.dirname(path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+    with open(path, "a", encoding="utf-8") as f:
+        for rec in records:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    return len(records)
 
 
 def load_markers(queue_dir: str = QUEUE_DIR) -> dict[str, dict]:
@@ -249,19 +273,29 @@ def withdraw_deferred(queue_dir: str = QUEUE_DIR) -> list[str]:
 
 
 def cleanup_completed(
-    articles_dir: str = "data/articles", queue_dir: str = QUEUE_DIR
+    articles_dir: str = "data/articles",
+    queue_dir: str = QUEUE_DIR,
+    ledger_path: str = LEDGER_PATH,
 ) -> tuple[int, int]:
     """Remove stale old body + marker for rewrites whose new body has landed.
 
     Returns ``(files_removed, markers_cleared)``. Deletion fires ONLY when a
     newer body exists, so the old body is never removed before its replacement.
+
+    amazon-navi-brain#39 Step 0-a: before removing the stale body, records
+    ``{asin, old_slug, new_slug, completed_at, source: "cleanup"}`` to the
+    rewrite ledger so ``scripts.audit_uniqueness`` can tell "this ASIN existed
+    pre-v7 and was rewritten" apart from "this ASIN is brand new" even after
+    the old slug is gone.
     """
     files_removed = 0
     markers_cleared = 0
+    ledger_records: list[dict] = []
     for asin, marker in load_markers(queue_dir).items():
         old_slug = marker.get("old_slug", "") if isinstance(marker, dict) else ""
         if not old_slug or not has_newer_body(asin, old_slug, articles_dir):
             continue
+        new_slug = newest_body_slug(asin, articles_dir)
         for suffix in (".json",) + _SIDECAR_SUFFIXES:
             stale = os.path.join(articles_dir, f"{old_slug}{suffix}")
             if os.path.exists(stale):
@@ -269,6 +303,15 @@ def cleanup_completed(
                 files_removed += 1
         os.remove(marker_path(asin, queue_dir))
         markers_cleared += 1
+        if new_slug:
+            ledger_records.append({
+                "asin": asin,
+                "old_slug": old_slug,
+                "new_slug": new_slug,
+                "completed_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "source": "cleanup",
+            })
+    append_ledger(ledger_records, ledger_path)
     return files_removed, markers_cleared
 
 
@@ -286,6 +329,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Rewrite-queue maintenance (#2711).")
     ap.add_argument("--articles-dir", default="data/articles")
     ap.add_argument("--queue-dir", default=QUEUE_DIR)
+    ap.add_argument("--ledger-path", default=LEDGER_PATH,
+                     help="rewrite ledger jsonl path (amazon-navi-brain#39 Step 0-a)")
     ap.add_argument(
         "--cleanup",
         action="store_true",
@@ -305,7 +350,7 @@ def main() -> int:
     )
     args = ap.parse_args()
     if args.cleanup:
-        files, markers = cleanup_completed(args.articles_dir, args.queue_dir)
+        files, markers = cleanup_completed(args.articles_dir, args.queue_dir, args.ledger_path)
         print(f"[rewrite_queue] cleanup removed_files={files} cleared_markers={markers}")
     if args.withdraw_deferred:
         withdrawn = withdraw_deferred(args.queue_dir)

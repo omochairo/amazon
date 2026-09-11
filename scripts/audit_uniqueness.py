@@ -91,6 +91,7 @@ from scripts.compute_semantic_related import (
     open_embedding_cache,
 )
 from scripts.quality_gate import HOW_TO_CHOOSE_ENFORCE_FROM
+from scripts.rewrite_queue import LEDGER_PATH as DEFAULT_REWRITE_LEDGER
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("audit_uniqueness")
@@ -137,6 +138,13 @@ _NARRATIVE_KEYS = (
     "lead", "why_this_product", "gift_appeal", "daily_use", "safety_note", "closing", "how_to_choose",
 )
 
+# amazon-navi-brain#39 Step 0-b: 「型 (問い→答え→根拠→締め, §5.A) が embedding
+# 類似度を直撃しているのか、それとも中身の語彙が近いだけなのか」を切り分けるための
+# text builder モード。既定 "full" は現行の週次 cron 呼び出しと完全に同じ挙動を保つ
+# (amazon-home-ops 側は変更不要)。他のモードは one-off の比較実験用の CLI フラグ。
+DEFAULT_TEXT_MODE = "full"
+TEXT_MODES = ("full", "core", "scaffold", "no_tags")
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -151,7 +159,24 @@ def _iso_week_label(dt: datetime) -> str:
 # 埋め込みテキスト組み立て (pure function)
 # --------------------------------------------------------------------------
 
-def build_uniqueness_text(article: dict[str, Any]) -> str:
+def _narrative_list_slice(items: list[str], text_mode: str) -> list[str]:
+    """text_mode に応じて δ-A 配列 (問い/答え/根拠/締め, §5.A) の一部を落とす。
+
+    - full/no_tags: 全要素そのまま
+    - core: 先頭 (問い) と末尾 (締め) を除いた中間 (答え+根拠) だけ
+    - scaffold: 先頭+末尾 (問いと締め、= 型の骨格文) だけ
+    要素が2個以下 (問い→締めしか無い) の場合、core は空になり得る (仕様通り)。
+    """
+    if text_mode == "core":
+        return items[1:-1] if len(items) > 2 else []
+    if text_mode == "scaffold":
+        if len(items) == 1:
+            return items
+        return [items[0], items[-1]]
+    return items
+
+
+def build_uniqueness_text(article: dict[str, Any], text_mode: str = DEFAULT_TEXT_MODE) -> str:
     """記事 JSON dict から凡庸度監査用の embedding テキストを組み立てる。
 
     title + narrative 全 7 セクション (string/array いずれの narrativeSection 形式
@@ -160,9 +185,17 @@ def build_uniqueness_text(article: dict[str, Any]) -> str:
     レーン、lead のみ) とは異なる text builder であり、記事の言い回し・軸そのものの
     近さを測るために narrative 全文を対象にする。どのフィールドが欠けていても
     クラッシュしない。
+
+    ``text_mode`` (amazon-navi-brain#39 Step 0-b, ``TEXT_MODES`` 参照):
+    「型 (4-step 骨格) が embedding 類似度を直撃しているのか、中身の語彙が
+    近いだけなのか」を切り分ける one-off 比較実験用。既定 "full" は元の挙動と
+    完全に同じ。文字列セクション (lead) は 4-step 配列ではないため text_mode に
+    関わらず変化しない。
     """
     if not isinstance(article, dict):
         return ""
+    if text_mode not in TEXT_MODES:
+        raise ValueError(f"unknown text_mode: {text_mode!r} (expected one of {TEXT_MODES})")
 
     parts: list[str] = []
 
@@ -177,15 +210,17 @@ def build_uniqueness_text(article: dict[str, Any]) -> str:
         if isinstance(v, str) and v.strip():
             parts.append(v.strip())
         elif isinstance(v, list):
-            joined = " ".join(str(x).strip() for x in v if isinstance(x, str) and x.strip())
+            str_items = [str(x).strip() for x in v if isinstance(x, str) and x.strip()]
+            joined = " ".join(_narrative_list_slice(str_items, text_mode))
             if joined:
                 parts.append(joined)
 
-    tags = article.get("tags")
-    if isinstance(tags, list):
-        tag_strs = [str(t).strip() for t in tags if isinstance(t, str) and t.strip()]
-        if tag_strs:
-            parts.append("タグ: " + ", ".join(tag_strs))
+    if text_mode != "no_tags":
+        tags = article.get("tags")
+        if isinstance(tags, list):
+            tag_strs = [str(t).strip() for t in tags if isinstance(t, str) and t.strip()]
+            if tag_strs:
+                parts.append("タグ: " + ", ".join(tag_strs))
 
     text = "\n\n".join(parts)
     return text[:MAX_UNIQUENESS_TEXT_LEN]
@@ -195,7 +230,9 @@ def build_uniqueness_text(article: dict[str, Any]) -> str:
 # 記事レコード読み込み (discover_articles は compute_semantic_related から再利用)
 # --------------------------------------------------------------------------
 
-def load_article_records(articles_dir: pathlib.Path, limit: int = 0) -> list[dict[str, Any]]:
+def load_article_records(
+    articles_dir: pathlib.Path, limit: int = 0, text_mode: str = DEFAULT_TEXT_MODE,
+) -> list[dict[str, Any]]:
     """discover_articles() の結果を読み込み、{asin, slug, text} のリストを返す。
 
     ASIN 昇順で安定ソートしてから --limit (0=全件) で切り詰める (compute_semantic_related
@@ -220,7 +257,7 @@ def load_article_records(articles_dir: pathlib.Path, limit: int = 0) -> list[dic
             continue
         slug = data.get("slug")
         slug = slug if isinstance(slug, str) and slug else path.stem
-        records.append({"asin": asin, "slug": slug, "text": build_uniqueness_text(data)})
+        records.append({"asin": asin, "slug": slug, "text": build_uniqueness_text(data, text_mode)})
     return records
 
 
@@ -245,6 +282,60 @@ def cohort_for_slug(slug: str) -> str:
     if not d:
         return "post_v7"
     return "post_v7" if d >= HOW_TO_CHOOSE_ENFORCE_FROM else "pre_v7"
+
+
+# amazon-navi-brain#39 Step 0-a: 「pre/post v7 の自然比較」は 12-rewrite-idle-fill が
+# 新 slug で着地し旧 body を削除するたびに目減りする (pre_v7 母集団: W31 1,497 →
+# W32 1,494 → W36 1,453 実測)。cohort_for_slug の slug 日付だけの判定はこの汚染を
+# 反映できないため、「そのASINが過去にリライトされたか」(rewrite_queue.LEDGER_PATH)
+# を突き合わせて post_v7 を further split する。既存の cohort_for_slug / pre_v7 /
+# post_v7 は history の連続性のためそのまま残す (このセットは追加のみ)。
+
+def load_rewrite_ledger(path: str | os.PathLike[str] = DEFAULT_REWRITE_LEDGER) -> dict[str, dict[str, str]]:
+    """rewrite_ledger.jsonl を読み、asin ごとに completed_at 最大の行を返す。
+
+    append-only ファイルなので同一 asin が複数行に渡って存在しうる。ファイルが
+    無い/壊れた行があっても監査全体を止めない (他の audit ファイル読み込みと同じ
+    graceful な扱い)。
+    """
+    latest: dict[str, dict[str, str]] = {}
+    p = pathlib.Path(path)
+    if not p.exists():
+        return latest
+    try:
+        text = p.read_text(encoding="utf-8")
+    except OSError as e:
+        logger.warning("could not read rewrite ledger %s (%s) — treating as empty", p, e)
+        return latest
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        asin = row.get("asin")
+        if not isinstance(asin, str) or not asin:
+            continue
+        cur = latest.get(asin)
+        if cur is None or str(row.get("completed_at", "")) > str(cur.get("completed_at", "")):
+            latest[asin] = row
+    return latest
+
+
+def cohort3_for_entry(asin: str, slug: str, ledger: dict[str, dict[str, str]]) -> str:
+    """slug 日付 + rewrite_ledger から pre_v7 / post_v7_new / post_v7_rewrite を判定する。
+
+    - slug 日付が v7 施行前 (または判定不能): pre_v7 (cohort_for_slug と同じ安全側判定)
+    - 施行後で、そのASINがかつてリライトされた記録がある (ledger に載っている):
+      post_v7_rewrite (= 元々 pre_v7 だった記事が書き直された)
+    - 施行後で、リライト記録が無い: post_v7_new (= v7 以降に初めて生成された記事)
+    """
+    d = slug_date(slug)
+    if not d or d < HOW_TO_CHOOSE_ENFORCE_FROM:
+        return "pre_v7"
+    return "post_v7_rewrite" if asin in ledger else "post_v7_new"
 
 
 # --------------------------------------------------------------------------
@@ -373,6 +464,19 @@ def compute_cohort_stats(entries: list[dict[str, Any]]) -> dict[str, dict[str, A
     return stats
 
 
+def compute_cohort3_stats(entries: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """amazon-navi-brain#39 Step 0-a: pre_v7 / post_v7_new / post_v7_rewrite の3分割集計。
+
+    ``all`` はコーパス全体で compute_cohort_stats の ``all`` と同一になるため
+    ここでは重複させない (呼び出し側が cohort_stats["all"] を見ればよい)。
+    entries の各要素は ``cohort3`` キーを持つこと (run() 側で付与)。
+    """
+    stats: dict[str, dict[str, Any]] = {}
+    for cohort in ("pre_v7", "post_v7_new", "post_v7_rewrite"):
+        stats[cohort] = _stats_for_subset([e for e in entries if e["cohort3"] == cohort])
+    return stats
+
+
 def resolve_thresholds(
     entries: list[dict[str, Any]],
     *,
@@ -486,6 +590,8 @@ def run(
     session: requests.Session | None = None,
     sleeper=time.sleep,
     embed_cache: str | os.PathLike[str] | None = None,
+    text_mode: str = DEFAULT_TEXT_MODE,
+    rewrite_ledger_path: str | os.PathLike[str] = DEFAULT_REWRITE_LEDGER,
 ) -> dict[str, Any]:
     """全体を実行し、件数サマリ (+ payload) を dict で返す (テスト・main 双方から呼べるように分離)。
 
@@ -498,7 +604,7 @@ def run(
     if not model:
         model = DEFAULT_MODEL_RURI if backend == "ruri" else DEFAULT_MODEL_OLLAMA
 
-    records = load_article_records(articles_dir, limit)
+    records = load_article_records(articles_dir, limit, text_mode)
     logger.info("articles after dedupe: %d (limit=%d)", len(records), limit)
 
     if not records:
@@ -525,6 +631,7 @@ def run(
     metrics = compute_uniqueness_metrics(asins, similarity)
     centroid_sims = compute_centroid_similarities(embeddings)
 
+    rewrite_ledger = load_rewrite_ledger(rewrite_ledger_path)
     entries: list[dict[str, Any]] = []
     for idx, r in enumerate(records):
         asin = r["asin"]
@@ -533,6 +640,7 @@ def run(
             "asin": asin,
             "slug_date": slug_date(r["slug"]),
             "cohort": cohort_for_slug(r["slug"]),
+            "cohort3": cohort3_for_entry(asin, r["slug"], rewrite_ledger),
             "page": f"https://navi.omcha.jp/products/{asin.lower()}/",
             "max_sim": m["max_sim"],
             "nearest_asin": m["nearest_asin"],
@@ -541,6 +649,7 @@ def run(
         })
 
     cohort_stats = compute_cohort_stats(entries)
+    cohort_stats_v2 = compute_cohort3_stats(entries)
     thresholds = resolve_thresholds(
         entries,
         mode=threshold_mode,
@@ -563,6 +672,11 @@ def run(
         "flagged_total": len(all_flagged),
         "flagged_truncated": len(all_flagged) > len(flagged),
         "cohort_stats": cohort_stats,
+        # amazon-navi-brain#39 Step 0-a: pre_v7/post_v7 の追加分割
+        # (post_v7_new / post_v7_rewrite)。既存 cohort_stats は不変のまま
+        # 追加するキーなので、cohort_stats のみを読む下流 (comment_uniqueness_audit
+        # 等) には影響しない。
+        "cohort_stats_v2": cohort_stats_v2,
         "flagged": flagged,
     }
 
@@ -628,6 +742,20 @@ def main() -> int:
         help=("埋め込みキャッシュの JSON パス (未指定ならキャッシュしない)。"
               "**リポジトリ内を指さないこと** — 数十 MB になる"),
     )
+    ap.add_argument(
+        "--text-mode",
+        choices=TEXT_MODES,
+        default=DEFAULT_TEXT_MODE,
+        help=("amazon-navi-brain#39 Step 0-b: embedding テキストの組み立てモード。"
+              "full (既定, 従来通り) / core (4-step の中間だけ) / "
+              "scaffold (4-step の骨格文だけ) / no_tags (tags を除く)。"
+              "one-off の比較実験用で、既定のまま呼べば週次 cron と挙動は変わらない"),
+    )
+    ap.add_argument(
+        "--rewrite-ledger",
+        default=os.environ.get("REWRITE_LEDGER", DEFAULT_REWRITE_LEDGER),
+        help="amazon-navi-brain#39 Step 0-a: rewrite_queue が積む来歴台帳の jsonl パス",
+    )
     args = ap.parse_args()
 
     try:
@@ -647,6 +775,8 @@ def main() -> int:
             max_sim_threshold=args.max_sim_threshold,
             centroid_threshold=args.centroid_threshold,
             top_flagged=args.top_flagged,
+            text_mode=args.text_mode,
+            rewrite_ledger_path=args.rewrite_ledger,
         )
     except EmbeddingBatchError as e:
         logger.error("embedding computation failed: %s; aborting without writing output", e)

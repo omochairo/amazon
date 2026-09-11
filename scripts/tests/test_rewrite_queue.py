@@ -95,12 +95,66 @@ class SuccessfulRegenInvariantTest(unittest.TestCase):
             # Already NOT eligible once the newer body exists (self-healing,
             # even before cleanup runs) -> no infinite re-pick.
             self.assertNotIn(ASIN, rq.eligible_rewrite_asins(articles, queue))
-            files, markers = rq.cleanup_completed(articles, queue)
+            ledger = os.path.join(base, "analytics", "rewrite_ledger.jsonl")
+            files, markers = rq.cleanup_completed(articles, queue, ledger)
             self.assertEqual(markers, 1)
             self.assertGreaterEqual(files, 1)
             self.assertFalse(os.path.exists(old_body))
             self.assertTrue(os.path.exists(new_body), "replacement must survive")
             self.assertFalse(os.path.exists(rq.marker_path(ASIN, queue)))
+
+
+class RewriteLedgerTest(unittest.TestCase):
+    """amazon-navi-brain#39 Step 0-a: cleanup_completed must record the
+    old_slug -> new_slug swap so audit_uniqueness can tell "rewritten" apart
+    from "brand new" even after the old slug is gone.
+    """
+
+    def test_cleanup_appends_ledger_row(self) -> None:
+        with tempfile.TemporaryDirectory() as base:
+            articles = os.path.join(base, "articles")
+            queue = os.path.join(base, "queue")
+            ledger = os.path.join(base, "analytics", "rewrite_ledger.jsonl")
+            old_slug = f"2026-05-01-{ASIN}"
+            new_slug = f"2026-05-20-{ASIN}"
+            _touch(os.path.join(articles, f"{old_slug}.json"))
+            rq.write_marker(ASIN, old_slug, queue)
+            _touch(os.path.join(articles, f"{new_slug}.json"))
+
+            rq.cleanup_completed(articles, queue, ledger)
+
+            self.assertTrue(os.path.exists(ledger))
+            with open(ledger, encoding="utf-8") as f:
+                rows = [json.loads(line) for line in f if line.strip()]
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["asin"], ASIN)
+            self.assertEqual(rows[0]["old_slug"], old_slug)
+            self.assertEqual(rows[0]["new_slug"], new_slug)
+            self.assertEqual(rows[0]["source"], "cleanup")
+
+    def test_failed_regen_does_not_write_ledger(self) -> None:
+        with tempfile.TemporaryDirectory() as base:
+            articles = os.path.join(base, "articles")
+            queue = os.path.join(base, "queue")
+            ledger = os.path.join(base, "analytics", "rewrite_ledger.jsonl")
+            old_slug = f"2026-05-01-{ASIN}"
+            _touch(os.path.join(articles, f"{old_slug}.json"))
+            rq.write_marker(ASIN, old_slug, queue)
+
+            rq.cleanup_completed(articles, queue, ledger)
+
+            self.assertFalse(os.path.exists(ledger), "no swap happened; nothing to record")
+
+    def test_append_ledger_is_append_only(self) -> None:
+        with tempfile.TemporaryDirectory() as base:
+            ledger = os.path.join(base, "rewrite_ledger.jsonl")
+            rq.append_ledger([{"asin": ASIN, "old_slug": "a", "new_slug": "b",
+                                "completed_at": "t1", "source": "cleanup"}], ledger)
+            rq.append_ledger([{"asin": ASIN, "old_slug": "b", "new_slug": "c",
+                                "completed_at": "t2", "source": "cleanup"}], ledger)
+            with open(ledger, encoding="utf-8") as f:
+                rows = [json.loads(line) for line in f if line.strip()]
+            self.assertEqual(len(rows), 2, "append_ledger must not dedupe/overwrite")
 
 
 if __name__ == "__main__":

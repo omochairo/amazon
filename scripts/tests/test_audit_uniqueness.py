@@ -12,9 +12,12 @@ import requests
 from scripts.audit_uniqueness import (
     build_uniqueness_text,
     cohort_for_slug,
+    cohort3_for_entry,
     compute_centroid_similarities,
     compute_cohort_stats,
+    compute_cohort3_stats,
     flag_entries,
+    load_rewrite_ledger,
     resolve_thresholds,
     compute_uniqueness_metrics,
     load_article_records,
@@ -84,6 +87,53 @@ class BuildUniquenessTextTest(unittest.TestCase):
         text = build_uniqueness_text(article)
         self.assertEqual(text, "")
 
+    def test_unknown_text_mode_raises(self):
+        with self.assertRaises(ValueError):
+            build_uniqueness_text({"title": "x"}, text_mode="bogus")
+
+
+class BuildUniquenessTextModeTest(unittest.TestCase):
+    """amazon-navi-brain#39 Step 0-b: text_mode で 4-step 配列のどこを残すか。"""
+
+    ARTICLE = {
+        "title": "タイトル",
+        "narrative": {
+            "lead": "リード文",
+            "how_to_choose": ["問い部分", "答え部分", "根拠部分", "締め部分"],
+        },
+        "tags": ["タグA"],
+    }
+
+    def test_full_keeps_everything(self):
+        text = build_uniqueness_text(self.ARTICLE, text_mode="full")
+        self.assertIn("問い部分 答え部分 根拠部分 締め部分", text)
+        self.assertIn("タグ: タグA", text)
+
+    def test_core_drops_first_and_last(self):
+        text = build_uniqueness_text(self.ARTICLE, text_mode="core")
+        self.assertIn("答え部分 根拠部分", text)
+        self.assertNotIn("問い部分", text)
+        self.assertNotIn("締め部分", text)
+
+    def test_scaffold_keeps_only_first_and_last(self):
+        text = build_uniqueness_text(self.ARTICLE, text_mode="scaffold")
+        self.assertIn("問い部分 締め部分", text)
+        self.assertNotIn("答え部分", text)
+        self.assertNotIn("根拠部分", text)
+
+    def test_no_tags_drops_tag_line(self):
+        text = build_uniqueness_text(self.ARTICLE, text_mode="no_tags")
+        self.assertNotIn("タグ:", text)
+
+    def test_lead_string_section_unaffected_by_text_mode(self):
+        for mode in ("full", "core", "scaffold", "no_tags"):
+            self.assertIn("リード文", build_uniqueness_text(self.ARTICLE, text_mode=mode))
+
+    def test_core_on_two_element_array_yields_nothing_for_that_section(self):
+        article = {"narrative": {"how_to_choose": ["問い", "締め"]}}
+        text = build_uniqueness_text(article, text_mode="core")
+        self.assertEqual(text, "")
+
 
 # --------------------------------------------------------------------------
 # cohort 判定
@@ -106,6 +156,53 @@ class CohortForSlugTest(unittest.TestCase):
     def test_slug_date_extracts_prefix(self):
         self.assertEqual(slug_date("2026-07-16-B0AAAAAAAA"), "2026-07-16")
         self.assertEqual(slug_date("garbage"), "")
+
+
+class Cohort3ForEntryTest(unittest.TestCase):
+    """amazon-navi-brain#39 Step 0-a: pre_v7 / post_v7_new / post_v7_rewrite."""
+
+    def test_pre_v7_slug_ignores_ledger(self):
+        ledger = {"B0AAAAAAAA": {"new_slug": "2026-07-01-B0AAAAAAAA"}}
+        self.assertEqual(
+            cohort3_for_entry("B0AAAAAAAA", "2026-07-01-B0AAAAAAAA", ledger), "pre_v7")
+
+    def test_post_v7_with_ledger_entry_is_rewrite(self):
+        ledger = {"B0AAAAAAAA": {"new_slug": "2026-08-01-B0AAAAAAAA"}}
+        self.assertEqual(
+            cohort3_for_entry("B0AAAAAAAA", "2026-08-01-B0AAAAAAAA", ledger), "post_v7_rewrite")
+
+    def test_post_v7_without_ledger_entry_is_new(self):
+        self.assertEqual(cohort3_for_entry("B0AAAAAAAA", "2026-08-01-B0AAAAAAAA", {}), "post_v7_new")
+
+    def test_unparseable_slug_defaults_to_pre_v7(self):
+        # cohort_for_slug の安全側 (post_v7) とは意図的に非対称: cohort3 は
+        # ledger と slug 日付を突き合わせる設計上、日付不明は pre_v7 側に倒す
+        # (post_v7_new/rewrite と誤分類してリライト実績を水増ししない)。
+        self.assertEqual(cohort3_for_entry("B0AAAAAAAA", "not-a-slug", {}), "pre_v7")
+
+
+class LoadRewriteLedgerTest(unittest.TestCase):
+    def test_missing_file_returns_empty(self):
+        self.assertEqual(load_rewrite_ledger("/nonexistent/path.jsonl"), {})
+
+    def test_keeps_latest_completed_at_per_asin(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = pathlib.Path(d) / "ledger.jsonl"
+            path.write_text(
+                '{"asin": "B0AAAAAAAA", "new_slug": "s1", "completed_at": "2026-06-01T00:00:00Z"}\n'
+                '{"asin": "B0AAAAAAAA", "new_slug": "s2", "completed_at": "2026-08-01T00:00:00Z"}\n',
+                encoding="utf-8",
+            )
+            ledger = load_rewrite_ledger(path)
+            self.assertEqual(ledger["B0AAAAAAAA"]["new_slug"], "s2")
+
+    def test_corrupt_lines_are_skipped(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = pathlib.Path(d) / "ledger.jsonl"
+            path.write_text("not json\n{\"asin\": \"B0AAAAAAAA\", \"completed_at\": \"t\"}\n",
+                             encoding="utf-8")
+            ledger = load_rewrite_ledger(path)
+            self.assertIn("B0AAAAAAAA", ledger)
 
 
 # --------------------------------------------------------------------------
@@ -192,6 +289,18 @@ class CohortStatsAndFlaggedTest(unittest.TestCase):
         stats = compute_cohort_stats(entries)
         self.assertEqual(stats["pre_v7"]["count"], 0)
         self.assertIsNone(stats["pre_v7"]["max_sim_p50"])
+
+    def test_cohort3_stats_splits_post_v7_into_new_and_rewrite(self):
+        entries = [
+            {"asin": "A", "cohort3": "pre_v7", "max_sim": 0.9, "centroid_sim": 0.8},
+            {"asin": "B", "cohort3": "post_v7_new", "max_sim": 0.5, "centroid_sim": 0.4},
+            {"asin": "C", "cohort3": "post_v7_rewrite", "max_sim": 0.6, "centroid_sim": 0.5},
+        ]
+        stats = compute_cohort3_stats(entries)
+        self.assertEqual(stats["pre_v7"]["count"], 1)
+        self.assertEqual(stats["post_v7_new"]["count"], 1)
+        self.assertEqual(stats["post_v7_rewrite"]["count"], 1)
+        self.assertNotIn("all", stats, "「all」は既存 cohort_stats と重複させない")
 
     def test_select_flagged_filters_by_threshold_and_sorts_desc(self):
         entries = [
@@ -373,6 +482,9 @@ class RunEndToEndTest(unittest.TestCase):
             self.articles_dir, self.out_path,
             backend="ruri", ruri_url="http://fake-ruri:8000",
             session=session, sleeper=lambda _s: None,
+            # 本物の data/analytics/rewrite_ledger.jsonl を誤って読まないよう、
+            # 常に存在しないパスを明示する (hermetic test)。
+            rewrite_ledger_path=self.root / "no_such_ledger.jsonl",
         )
         self.assertTrue(summary["written"])
         data = json.loads(self.out_path.read_text(encoding="utf-8"))
@@ -380,6 +492,10 @@ class RunEndToEndTest(unittest.TestCase):
         self.assertIn("cohort_stats", data)
         self.assertEqual(data["cohort_stats"]["pre_v7"]["count"], 1)
         self.assertEqual(data["cohort_stats"]["post_v7"]["count"], 2)
+        self.assertIn("cohort_stats_v2", data)
+        self.assertEqual(data["cohort_stats_v2"]["pre_v7"]["count"], 1)
+        self.assertEqual(data["cohort_stats_v2"]["post_v7_new"]["count"], 2)
+        self.assertEqual(data["cohort_stats_v2"]["post_v7_rewrite"]["count"], 0)
         self.assertIn("flagged", data)
         self.assertIn("generated_at", data)
         self.assertIn("source_week", data)

@@ -56,6 +56,11 @@ DEFAULT_OLLAMA_URL = "http://localhost:11434"
 DEFAULT_MODEL = "gemma4:26b-a4b-it-qat"
 DEFAULT_MAX_QUERIES_PER_PAGE = 5
 DEFAULT_LIMIT = 0
+# amazon-navi-brain#39 Step 0-c: #4528実測 (実プロンプト最大1,098 token、既定4096に
+# 対し3.7倍の余裕) を踏まえた暫定値。ollamaは num_ctx 超過時に入力を無言で約半分に
+# 切り詰める (#4528で実測済みの罠) ため、未設定のまま記事を厚くするのが最も危険。
+# 8192 は K8 実測前の暫定値であり、決め切った値ではない。
+DEFAULT_NUM_CTX = 8192
 
 REQUEST_TIMEOUT = 180
 MAX_JUDGE_TEXT_LEN = 8000
@@ -222,6 +227,7 @@ def judge_query(
     model: str,
     session: requests.Session,
     sleeper=time.sleep,
+    num_ctx: int = DEFAULT_NUM_CTX,
 ) -> dict[str, Any]:
     """1 クエリ分を gemma judge (`/api/generate`) に問い合わせる。
 
@@ -238,7 +244,7 @@ def judge_query(
         "think": False,
         "format": "json",
         "keep_alive": "30m",
-        "options": {"temperature": 0},
+        "options": {"temperature": 0, "num_ctx": num_ctx},
     }
 
     last_err: Exception | None = None
@@ -295,6 +301,7 @@ def run(
     limit: int = DEFAULT_LIMIT,
     session: requests.Session | None = None,
     sleeper=time.sleep,
+    num_ctx: int = DEFAULT_NUM_CTX,
 ) -> dict[str, Any]:
     """全体を実行し、書き込んだ payload を返す (テスト・main 双方から呼べるように分離)。"""
     src = history_file or find_latest_history_file(history_dir)
@@ -338,7 +345,7 @@ def run(
             query = q.get("query", "")
             if not query:
                 continue
-            verdict = judge_query(article_text, query, ollama_url, model, session, sleeper)
+            verdict = judge_query(article_text, query, ollama_url, model, session, sleeper, num_ctx)
             if isinstance(verdict.get("coverage"), (int, float)):
                 coverages.append(float(verdict["coverage"]))
             queries_out.append({
@@ -379,6 +386,9 @@ def main() -> int:
     ap.add_argument("--model", default=os.environ.get("JUDGE_MODEL", DEFAULT_MODEL))
     ap.add_argument("--max-queries-per-page", type=int, default=DEFAULT_MAX_QUERIES_PER_PAGE)
     ap.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="監査するページ数の上限 (0=全件、スモーク用)")
+    ap.add_argument("--num-ctx", type=int,
+                     default=int(os.environ.get("OLLAMA_NUM_CTX", DEFAULT_NUM_CTX)),
+                     help="amazon-navi-brain#39 Step 0-c: ollama num_ctx (未設定時は超過分を無言で切り詰める罠がある)")
     args = ap.parse_args()
 
     run(
@@ -390,6 +400,7 @@ def main() -> int:
         model=args.model,
         max_queries_per_page=args.max_queries_per_page,
         limit=args.limit,
+        num_ctx=args.num_ctx,
     )
     return 0
 

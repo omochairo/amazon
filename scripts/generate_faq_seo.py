@@ -68,6 +68,11 @@ DEFAULT_HISTORY_DIR = "data/analytics/gsc_history"
 DEFAULT_SUGGEST_DIR = "data/raw/suggest"
 DEFAULT_ANSWERABILITY = "data/analytics/answerability_audit.json"
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
+# amazon-navi-brain#39 Step 0-c: #4528実測 (実プロンプト最大1,098 token、既定4096に
+# 対し3.7倍の余裕) を踏まえた暫定値。ollamaは num_ctx 超過時に入力を無言で約半分に
+# 切り詰める (#4528で実測済みの罠) ため、未設定のまま記事を厚くするのが最も危険。
+# 8192 は K8 実測前の暫定値であり、決め切った値ではない。
+DEFAULT_NUM_CTX = 8192
 DEFAULT_MODEL = "gemma4:26b-a4b-it-qat"
 DEFAULT_LIMIT = 30
 
@@ -362,6 +367,7 @@ def call_gemma_faq_seo(
     model: str,
     session: requests.Session,
     sleeper=time.sleep,
+    num_ctx: int = DEFAULT_NUM_CTX,
 ) -> dict[str, Any]:
     """gemma (`/api/generate`) に FAQ 拡張 + meta_description 刷新を問い合わせる。
 
@@ -387,7 +393,7 @@ def call_gemma_faq_seo(
         "think": False,
         "format": "json",
         "keep_alive": "30m",
-        "options": {"temperature": 0},
+        "options": {"temperature": 0, "num_ctx": num_ctx},
     }
 
     last_err: Exception | None = None
@@ -437,6 +443,7 @@ def run(
     dry_run: bool = False,
     session: requests.Session | None = None,
     sleeper=time.sleep,
+    num_ctx: int = DEFAULT_NUM_CTX,
 ) -> dict[str, Any]:
     """全記事を走査し、対象を選定して sidecar を書く (テスト・main 双方から呼べるように分離)。"""
     summary: dict[str, Any] = {
@@ -487,7 +494,7 @@ def run(
         demand_queries = merge_demand_queries(suggest_queries, gsc_queries, missing_aspects)
         existing_faq = article.get("faq") if isinstance(article.get("faq"), list) else []
 
-        result = call_gemma_faq_seo(article_text, demand_queries, existing_faq, ollama_url, model, session, sleeper)
+        result = call_gemma_faq_seo(article_text, demand_queries, existing_faq, ollama_url, model, session, sleeper, num_ctx)
         summary["processed"] += 1
 
         if result.get("error"):
@@ -540,6 +547,9 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="1 回の実行で処理する記事数の上限")
     ap.add_argument("--force", action="store_true", help="既に faq_extended/meta_description_optimized がある記事も再生成する")
     ap.add_argument("--dry-run", action="store_true", help="sidecar を書かず、生成結果を stdout に出す")
+    ap.add_argument("--num-ctx", type=int,
+                     default=int(os.environ.get("OLLAMA_NUM_CTX", DEFAULT_NUM_CTX)),
+                     help="amazon-navi-brain#39 Step 0-c: ollama num_ctx (未設定時は超過分を無言で切り詰める罠がある)")
     args = ap.parse_args()
 
     run(
@@ -553,6 +563,7 @@ def main() -> int:
         limit=args.limit,
         force=args.force,
         dry_run=args.dry_run,
+        num_ctx=args.num_ctx,
     )
     return 0
 
