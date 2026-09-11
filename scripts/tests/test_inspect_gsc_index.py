@@ -10,12 +10,19 @@
 7. build_rich_fail_urls が last_crawl_time を落とさないこと —— 判定は「いまの
    ページ」ではなく「最後にクロールされた版」に対するもので、古い残像と現在の
    失敗を分ける材料がこれしかない (#5085)
+8. select_target_urls / load_watchlist: watchlist 優先 + 残りローテーションが
+   #7022 の意図どおり動くこと (watchlist は必ず含む、ローテーションが週ごとに
+   ずれる、limit 以内なら全件返す、watchlist が limit を超える異常系も壊れない)
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
+import tempfile
 import unittest
+from datetime import datetime, timezone
+from pathlib import Path
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS_DIR = os.path.dirname(THIS_DIR)
@@ -122,6 +129,102 @@ class BuildRichFailUrlsTest(unittest.TestCase):
             {"url": "https://x/1", "rich_verdict": "FAIL"},
         ])
         self.assertEqual("(none)", rows[0]["last_crawl_time"])
+
+
+class SelectTargetUrlsTest(unittest.TestCase):
+    """#7022: watchlist 優先 + 残り予算のローテーションで全 URL がいずれ検査される。"""
+
+    def test_returns_all_when_limit_covers_everything(self):
+        urls = [f"https://x/{i}" for i in range(10)]
+        got = I.select_target_urls(urls, watchlist=set(), limit=10, rotation_offset=0)
+        self.assertEqual(urls, got)
+
+    def test_returns_all_when_limit_is_zero_or_negative(self):
+        urls = [f"https://x/{i}" for i in range(10)]
+        self.assertEqual(urls, I.select_target_urls(urls, set(), limit=0, rotation_offset=3))
+        self.assertEqual(urls, I.select_target_urls(urls, set(), limit=-1, rotation_offset=3))
+
+    def test_watchlist_urls_are_always_included(self):
+        urls = [f"https://x/{i}" for i in range(20)]
+        watchlist = {"https://x/17", "https://x/3"}
+        got = I.select_target_urls(urls, watchlist, limit=5, rotation_offset=0)
+        self.assertTrue(watchlist.issubset(set(got)))
+        self.assertEqual(5, len(got))
+
+    def test_watchlist_urls_no_longer_in_sitemap_are_ignored(self):
+        urls = [f"https://x/{i}" for i in range(5)]
+        watchlist = {"https://gone/1"}
+        got = I.select_target_urls(urls, watchlist, limit=3, rotation_offset=0)
+        self.assertNotIn("https://gone/1", got)
+        self.assertEqual(3, len(got))
+
+    def test_rotation_shifts_the_window_across_offsets(self):
+        """#7022 の本題: 同じ limit でもオフセットが進むと窓がずれ、数周期で
+        watchlist 以外の全 URL がいずれ検査対象に入る。"""
+        urls = [f"https://x/{i}" for i in range(100)]
+        seen: set[str] = set()
+        for offset in range(20):
+            got = I.select_target_urls(urls, watchlist=set(), limit=10, rotation_offset=offset)
+            self.assertEqual(10, len(got))
+            seen.update(got)
+        self.assertEqual(set(urls), seen)
+
+    def test_rotation_window_wraps_around(self):
+        urls = [f"https://x/{i}" for i in range(10)]
+        got = I.select_target_urls(urls, watchlist=set(), limit=4, rotation_offset=2)
+        # offset=2, budget=4 -> start = (2*4) % 10 = 8 -> [8, 9, 0, 1]
+        self.assertEqual(["https://x/8", "https://x/9", "https://x/0", "https://x/1"], got)
+
+    def test_watchlist_larger_than_limit_falls_back_to_alphabetical_head(self):
+        urls = sorted(f"https://x/{i}" for i in range(10))
+        watchlist = set(urls[:8])
+        got = I.select_target_urls(urls, watchlist, limit=5, rotation_offset=7)
+        self.assertEqual(5, len(got))
+        self.assertTrue(set(got).issubset(watchlist))
+
+
+class LoadWatchlistTest(unittest.TestCase):
+    def test_missing_file_returns_empty_set(self):
+        got = I.load_watchlist(Path("/nonexistent/census_url_states.json"))
+        self.assertEqual(set(), got)
+
+    def test_reads_states_keys(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "census_url_states.json"
+            p.write_text(json.dumps({
+                "date": "2026-09-06",
+                "states": {"https://x/1": "not_found_404", "https://x/2": "crawled_not_indexed"},
+            }), encoding="utf-8")
+            got = I.load_watchlist(p)
+        self.assertEqual({"https://x/1", "https://x/2"}, got)
+
+    def test_malformed_file_returns_empty_set_without_raising(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "census_url_states.json"
+            p.write_text("not json", encoding="utf-8")
+            got = I.load_watchlist(p)
+        self.assertEqual(set(), got)
+
+    def test_unexpected_shape_returns_empty_set(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "census_url_states.json"
+            p.write_text(json.dumps({"date": "2026-09-06"}), encoding="utf-8")
+            got = I.load_watchlist(p)
+        self.assertEqual(set(), got)
+
+
+class EpochWeekIndexTest(unittest.TestCase):
+    def test_monotonic_across_weeks(self):
+        w1 = I.epoch_week_index(datetime(2026, 9, 6, tzinfo=timezone.utc))
+        w2 = I.epoch_week_index(datetime(2026, 9, 13, tzinfo=timezone.utc))
+        self.assertEqual(w1 + 1, w2)
+
+    def test_does_not_wrap_at_year_boundary(self):
+        """ISO week number は年境界で 52/53 -> 1 に戻るが、ローテーションの
+        オフセットとしてはそれだと窓が巻き戻ってしまうため単調増加である必要がある。"""
+        before = I.epoch_week_index(datetime(2026, 12, 28, tzinfo=timezone.utc))
+        after = I.epoch_week_index(datetime(2027, 1, 4, tzinfo=timezone.utc))
+        self.assertGreater(after, before)
 
 
 if __name__ == "__main__":

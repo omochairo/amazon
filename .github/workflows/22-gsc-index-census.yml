@@ -12,8 +12,13 @@ name: GSC Index Census (URL Inspection API)
 #
 # 設計判断:
 #   - cron: 週次 (日次だと変化が観測できずクォータを焼くだけ)
-#   - URL Inspection API のクォータは 2000/日/プロパティ。products は現状 1532 件で
-#     全数調査が 1 日枠に収まる。--limit 1800 で安全マージンを取る
+#   - URL Inspection API のクォータは 2000/日/プロパティ。--limit 1800 は当初 (products
+#     1532件) は安全マージンだったが、その後 products が増え続け 2026-08-02 に
+#     --limit を超過。以降はアルファベット順の先頭のみを検査すると後方の URL が
+#     恒久的に未計測になる問題があった (#7022)。inspect_gsc_index.py 側で
+#     「前回 not-indexed だった URL (watchlist) を優先枠として必ず含め、残り予算を
+#     週替わりでローテーション」する方式に変更済みで、このワークフロー自体の
+#     cron 頻度・quota 使用量は変えていない
 #   - 副作用ゼロの read-only fetch + commit-back のみ (fetch_gsc.py と同じ観察フェーズ)
 #   - commit-back は App token + PR + auto-merge (main protection 回避。
 #     18-analytics-daily.yml と同パターン)
@@ -131,6 +136,10 @@ jobs:
           if cb.get("tripped"):
               print(f"> ⚠️ **circuit breaker が発動し、途中で打ち切りました** (連続クォータエラー閾値={cb.get('threshold')}件)。データは部分的です (#3372)\n")
           print(f"- 対象: `{d['prefix']}` / sitemap {t['sitemap_urls']} 件中 {t['inspected']} 件を検査")
+          ts = d.get("target_selection") or {}
+          if t['sitemap_urls'] > t['inspected']:
+              print(f"  - うち watchlist 優先: {ts.get('watchlist_count', '?')} 件 / "
+                    f"ローテーション offset: {ts.get('rotation_offset', '?')} (#7022)")
           rate = (t["indexed"] / t["inspected"] * 100) if t["inspected"] else 0.0
           print(f"- **index 済み: {t['indexed']} / {t['inspected']} ({rate:.1f}%)**")
           print(f"- 未 index: {t['not_indexed']} / エラー: {t['errors']}\n")
