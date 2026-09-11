@@ -43,8 +43,43 @@ import os
 import json
 import time
 import base64
+import hashlib
+import pathlib
+import tempfile
 import requests
 from typing import Any, Optional
+
+# --- トークンのディスクキャッシュ ---------------------------------------------
+#
+# **アクセストークンは 1 時間有効なのに、プロセスが終わると捨てていた。**
+# token エンドポイントには発行数の上限があり、超えると 429 で
+#
+#   "This usually indicates a missing token cache — access tokens are valid
+#    for 1 hour and should be reused."
+#
+# が返る。2026-09-10 に実測で踏んだ (getItems / searchItems 以前に、
+# トークン取得の時点で落ちる)。**API 側の枠は資格情報ごと**なので、
+# 1 プロセス 1 トークンで済ませていても、プロセスを何度も起こす使い方
+# (CLI をキーワードごとに叩く / 1 ジョブで複数スクリプトを回す) をすると枯れる。
+#
+# ディスクに置いて使い回す。**置くのはアクセストークンだけ**で、
+# credential_secret は書かない。ファイル名にも credential_id をそのまま使わず
+# ハッシュにする (資格情報を切り替えたときに別エントリになればよい)。
+_ENV_CACHE_PATH = "CREATORS_TOKEN_CACHE"
+
+
+def _default_token_cache_path() -> pathlib.Path:
+    """既定の置き場。`CREATORS_TOKEN_CACHE` で差し替えられる。
+
+    CI の runner は 1 ジョブごとに使い捨てなので、**ジョブをまたいだ再利用は
+    しない**（トークンを actions/cache に置くと、そのリポジトリの他の
+    workflow から読めてしまう）。効くのは同じジョブ・同じ端末の中だけで、
+    それでも「キーワードごとに CLI を起こす」使い方は救われる。
+    """
+    override = os.environ.get(_ENV_CACHE_PATH)
+    if override:
+        return pathlib.Path(override)
+    return pathlib.Path.home() / ".cache" / "omochairo" / "creators_token.json"
 
 # Load .env file if available
 try:
@@ -109,10 +144,68 @@ class CreatorsAPIClient:
         self.total_requests = 0
         self.throttle_count = 0
 
+    # --- ディスクキャッシュ ---
+    #
+    # 壊れたファイル・読めないファイルで**本処理を止めない**。
+    # キャッシュはあくまで 429 を避けるための最適化で、無くても動く。
+
+    def _cache_key(self) -> str:
+        return hashlib.sha256(self.credential_id.encode()).hexdigest()[:16]
+
+    def _load_cached_token(self) -> Optional[tuple[str, float, str]]:
+        """`(token, expires_at, version)`。使えなければ None。"""
+        path = _default_token_cache_path()
+        try:
+            entry = json.loads(path.read_text(encoding="utf-8")).get(self._cache_key())
+        except (OSError, ValueError, AttributeError):
+            return None
+        if not entry or not entry.get("access_token"):
+            return None
+        # 60 秒の余裕。**期限ちょうどのトークンを配ると、使う側で 401 になる**
+        if time.time() >= float(entry.get("expires_at", 0)) - 60:
+            return None
+        return entry["access_token"], float(entry["expires_at"]), entry.get("version", "2.3")
+
+    def _store_cached_token(self, token: str, expires_at: float, version: str) -> None:
+        path = _default_token_cache_path()
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if not isinstance(data, dict):
+                    data = {}
+            except (OSError, ValueError):
+                data = {}
+            data[self._cache_key()] = {
+                "access_token": token, "expires_at": expires_at, "version": version}
+            # 同じ端末で 2 プロセスが同時に書いても壊さない (書いてから置き換える)
+            fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".creators_token.")
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                json.dump(data, fh)
+            os.replace(tmp, path)
+            os.chmod(path, 0o600)
+        except OSError:
+            pass  # 書けなくても動く。**ここで落とさない**
+
+    def _invalidate_cached_token(self) -> None:
+        """401 を食らったとき用。ディスク側も捨てないと次のプロセスが同じ死体を拾う。"""
+        path = _default_token_cache_path()
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if data.pop(self._cache_key(), None) is not None:
+                path.write_text(json.dumps(data), encoding="utf-8")
+        except (OSError, ValueError, AttributeError):
+            pass
+
     def _get_access_token(self) -> str:
         """Get OAuth 2.0 access token using client credentials flow."""
         # Return cached token if still valid (60 seconds buffer)
         if self._access_token and time.time() < self._token_expires_at - 60:
+            return self._access_token
+
+        cached = self._load_cached_token()
+        if cached:
+            self._access_token, self._token_expires_at, self.CREDENTIAL_VERSION = cached
             return self._access_token
 
         # Check if using LwA (v3.x) or legacy Cognito (v2.x)
@@ -149,6 +242,8 @@ class CreatorsAPIClient:
         self._access_token = token_data.get("access_token")
         expires_in = token_data.get("expires_in", 3600)
         self._token_expires_at = time.time() + expires_in
+        self._store_cached_token(
+            self._access_token, self._token_expires_at, self.CREDENTIAL_VERSION)
 
         return self._access_token
 
@@ -177,8 +272,11 @@ class CreatorsAPIClient:
             return True
 
         if response.status_code == 401:
-            # Token expired, refresh for next attempt
+            # Token expired, refresh for next attempt.
+            # **ディスク側も捨てる。** 残すと次のプロセスが同じ死んだトークンを拾い、
+            # 401 -> 再取得 を毎回やることになる (キャッシュを入れた意味が消える)
             self._access_token = None
+            self._invalidate_cached_token()
             headers.update(self._get_auth_headers())
             return True
 
