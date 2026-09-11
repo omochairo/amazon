@@ -12,6 +12,7 @@
 """
 from __future__ import annotations
 
+import datetime
 import io
 import json
 import pathlib
@@ -37,11 +38,17 @@ def _batch(tmp_path, results, block="b", fetched="2026-09-07"):
 def _run(tmp_path, *argv):
     ext = tmp_path / "external.jsonl"
     asg = tmp_path / "assign.jsonl"
-    return K.main(["--external", str(ext), "--assign", str(asg), *argv])
+    quota = tmp_path / "quota.jsonl"
+    return K.main(["--external", str(ext), "--assign", str(asg),
+                  "--quota", str(quota), *argv])
 
 
 def _rows(tmp_path):
     return K.read_jsonl(tmp_path / "external.jsonl")
+
+
+def _quota_rows(tmp_path):
+    return K.read_jsonl(tmp_path / "quota.jsonl")
 
 
 def test_months_normalized():
@@ -285,6 +292,75 @@ def test_refetch_queue_skips_already_measured(tmp_path, capsys):
     capsys.readouterr()
     _run(tmp_path, "refetch-queue", "--wp-demand", "")
     assert capsys.readouterr().out.strip() == ""
+
+
+def test_quota_date_uses_utc_not_jst_clock():
+    """00:00 UTC = 09:00 JST でリセットされるので、UTC暦日がそのまま境界になる。
+
+    JST 03:00 (=前日 18:00 UTC) はまだリセット前なので前日ぶんの枠として
+    扱われないといけない。UTC の暦日を使えばこれが自動的に成り立つ。
+    """
+    before_reset_utc = datetime.datetime(2026, 9, 12, 18, 0,
+                                         tzinfo=datetime.timezone.utc)
+    assert K.quota_date(before_reset_utc) == "2026-09-12"
+    after_reset_utc = datetime.datetime(2026, 9, 13, 0, 30,
+                                        tzinfo=datetime.timezone.utc)
+    assert K.quota_date(after_reset_utc) == "2026-09-13"
+
+
+def test_merge_records_actual_result_count_not_added_count(tmp_path):
+    """枠を消費したのは `results` の件数。skip された語も MCP は呼んでいる。"""
+    src = _batch(tmp_path, [
+        {"keyword": "新しい語", "search_volume": 10, "monthly_searches": []},
+        {"keyword": "新しい語", "search_volume": 10, "monthly_searches": []},
+    ])
+    _run(tmp_path, "merge", str(src), "--origin", "queue")
+    rows = _quota_rows(tmp_path)
+    assert len(rows) == 1
+    assert rows[0]["event"] == "merge"
+    assert rows[0]["origin"] == "queue"
+    assert rows[0]["count"] == 2, "2件目は台帳には足されない (skip) が枠は2件消費している"
+    assert rows[0]["date"] == K.quota_date()
+
+
+def test_merge_without_results_does_not_record_quota(tmp_path):
+    src = _batch(tmp_path, [])
+    _run(tmp_path, "merge", str(src))
+    assert _quota_rows(tmp_path) == []
+
+
+def test_quota_status_reports_remaining(tmp_path, capsys):
+    today = K.quota_date()
+    src = _batch(tmp_path, [{"keyword": "語%d" % i, "search_volume": 1,
+                             "monthly_searches": []} for i in range(30)])
+    _run(tmp_path, "merge", str(src), "--origin", "tail")
+    capsys.readouterr()
+    _run(tmp_path, "quota-status")
+    out = capsys.readouterr().out
+    assert today in out
+    assert "使用 30/100" in out
+    assert "残り 70" in out
+    assert "tail=30" in out
+    assert "枯渇: いいえ" in out
+
+
+def test_quota_exhausted_is_flagged_in_status(tmp_path, capsys):
+    _run(tmp_path, "quota-exhausted", "--date", "2026-09-09")
+    capsys.readouterr()
+    _run(tmp_path, "quota-status", "--date", "2026-09-09")
+    assert "枯渇: はい" in capsys.readouterr().out
+
+
+def test_quota_report_shows_zero_for_untouched_days(tmp_path, capsys):
+    src = _batch(tmp_path, [{"keyword": "語", "search_volume": 1,
+                             "monthly_searches": []}])
+    _run(tmp_path, "merge", str(src), "--origin", "queue")
+    capsys.readouterr()
+    _run(tmp_path, "quota-report", "--days", "3", "--end-date", K.quota_date())
+    out = capsys.readouterr().out
+    assert "used=  1/100" in out
+    assert out.count("used=  0/100") == 2, \
+        "触っていない日も「0件」として出る (未記録とは区別しつつ0扱い)"
 
 
 def test_refetch_queue_keep_list(tmp_path, capsys):
