@@ -116,6 +116,28 @@ class BuildDocumentCandidatesTest(unittest.TestCase):
         self.assertEqual(len(candidates), 1)
         self.assertEqual(candidates[0]["embed_text"], "a")
 
+    def test_excludes_by_exact_title_when_rewrite_draft_has_different_id(self):
+        # omcha-ops#174 実測: wp_draft.py copy のリライト下書きは元記事と別idに
+        # なるため、id 照合だけでは自分自身を除外できない (下書きid=99999、
+        # 公開済み元記事id=15750)。
+        entries = [
+            {"id": 15750, "url": "https://omcha.jp/anpanman-seal/", "title": "アンパンマンシール特集"},
+            {"id": 42, "url": "https://omcha.jp/other/", "title": "他の記事"},
+        ]
+        candidates = build_document_candidates(entries, exclude_id=99999, exclude_title="アンパンマンシール特集")
+        self.assertEqual([c["id"] for c in candidates], [42])
+
+    def test_extra_exclude_ids_and_urls(self):
+        entries = [
+            {"id": 1, "url": "https://omcha.jp/a/", "title": "a"},
+            {"id": 2, "url": "https://omcha.jp/b/", "title": "b"},
+            {"id": 3, "url": "https://omcha.jp/c/", "title": "c"},
+        ]
+        candidates = build_document_candidates(
+            entries, extra_exclude_ids=frozenset({1}), extra_exclude_urls=frozenset({"https://omcha.jp/b/"}),
+        )
+        self.assertEqual([c["id"] for c in candidates], [3])
+
 
 # --------------------------------------------------------------------------
 # H2 セクション分割 / 既出 blogcard 検出
@@ -329,20 +351,72 @@ class SelectDocumentCandidatesForH2Test(unittest.TestCase):
         self.assertTrue(out[0]["already_linked"])
         self.assertFalse(out[1]["already_linked"])
 
-    def test_reranker_reorders_shortlist(self):
+    def test_already_linked_below_threshold_still_shown_with_rank(self):
+        # omcha-ops#174 レビュー指摘: 既出リンクは閾値未満でも黙って落ちてはいけない。
+        candidates = _candidates(4)
+        similarity_row = [0.9, 0.85, 0.3, 0.2]  # doc2 は閾値未満だが既出
+        existing = frozenset({"https://omcha.jp/doc2/"})
+        out = select_document_candidates_for_h2(
+            "h2", similarity_row, candidates, min_score=0.5, top_k=3, existing_urls=existing,
+        )
+        urls = [c["url"] for c in out]
+        self.assertIn("https://omcha.jp/doc2/", urls)
+        doc2 = next(c for c in out if c["url"] == "https://omcha.jp/doc2/")
+        self.assertTrue(doc2["already_linked"])
+        self.assertTrue(doc2["below_threshold"])
+        self.assertEqual(doc2["score"], 0.3)
+        self.assertEqual(doc2["rank"], 3)  # 全4件中3位 (0.9, 0.85, [0.3], 0.2)
+
+    def test_calibration_url_below_threshold_still_shown_with_rank(self):
+        candidates = _candidates(3)
+        similarity_row = [0.9, 0.4, 0.1]  # doc1 は較正対象だが閾値未満
+        out = select_document_candidates_for_h2(
+            "h2", similarity_row, candidates, min_score=0.87, top_k=3,
+            calibration_urls=frozenset({"https://omcha.jp/doc1/"}),
+        )
+        doc1 = next(c for c in out if c["url"] == "https://omcha.jp/doc1/")
+        self.assertTrue(doc1["is_calibration"])
+        self.assertTrue(doc1["below_threshold"])
+        self.assertEqual(doc1["rank"], 2)
+
+    def test_no_forced_candidates_when_none_match(self):
+        candidates = _candidates(2)
+        out = select_document_candidates_for_h2(
+            "h2", [0.1, 0.2], candidates, min_score=0.5, top_k=3,
+            existing_urls=frozenset({"https://omcha.jp/not-a-candidate/"}),
+        )
+        self.assertEqual(out, [])
+
+    def test_display_order_is_always_score_descending(self):
+        candidates = _candidates(3)
+        similarity_row = [0.9, 0.2, 0.6]
+        out = select_document_candidates_for_h2(
+            "h2", similarity_row, candidates, min_score=0.5, top_k=3,
+            calibration_urls=frozenset({"https://omcha.jp/doc1/"}),  # below threshold, forced in
+        )
+        scores = [c["score"] for c in out]
+        self.assertEqual(scores, sorted(scores, reverse=True))
+
+    def test_reranker_affects_selection_but_display_is_score_sorted(self):
         candidates = _candidates(3)
         similarity_row = [0.9, 0.8, 0.7]
 
         def fake_reranker(query_text, doc_texts):
             self.assertEqual(doc_texts, ["text0", "text1", "text2"])
+            # reranker は doc2 を最上位に押し上げる (top_k=2 の選定に影響する)
             return [{"index": 2, "score": 9.0}, {"index": 0, "score": 5.0}, {"index": 1, "score": 1.0}]
 
         out = select_document_candidates_for_h2(
             "h2", similarity_row, candidates, min_score=0.5, top_k=2,
             rerank_top_n=3, reranker=fake_reranker,
         )
-        self.assertEqual([c["url"] for c in out], ["https://omcha.jp/doc2/", "https://omcha.jp/doc0/"])
-        self.assertEqual(out[0]["score"], 0.7)  # 表示スコアは常に cosine
+        # reranker が選んだのは doc2/doc0 (doc1 は落選) だが、表示順は常に
+        # cosine スコア降順に整列し直す (レビュー指摘: reranker 順のままだと
+        # レポート上でスコアが降順にならないことがあるため)。
+        self.assertEqual({c["url"] for c in out}, {"https://omcha.jp/doc2/", "https://omcha.jp/doc0/"})
+        self.assertEqual([c["url"] for c in out], ["https://omcha.jp/doc0/", "https://omcha.jp/doc2/"])
+        self.assertEqual(out[0]["score"], 0.9)
+        self.assertEqual(out[1]["score"], 0.7)
 
     def test_reranker_none_falls_back_to_cosine_order(self):
         candidates = _candidates(2)
@@ -450,6 +524,19 @@ class RenderMarkdownReportTest(unittest.TestCase):
         self.assertIn("自動挿入は一切行っていません", out)
         self.assertNotIn("投稿しました", out)
 
+    def test_below_threshold_shows_rank_and_calibration_flags(self):
+        entries = [{"heading": "H2-1", "candidates": [
+            {
+                "url": "https://omcha.jp/a/", "title": "記事A", "score": 0.61,
+                "already_linked": False, "is_calibration": True, "below_threshold": True, "rank": 234,
+            },
+        ]}]
+        out = render_markdown_report(
+            "記事", "https://omcha.jp/x/", entries, generated_at="x", min_score=0.87, doc_total=843,
+        )
+        self.assertIn("較正対象", out)
+        self.assertIn("閾値未満・全843件中234位", out)
+
 
 # --------------------------------------------------------------------------
 # run() E2E (HTTP はモック)
@@ -510,6 +597,91 @@ class RunE2ETest(unittest.TestCase):
         content = self.out_path.read_text(encoding="utf-8")
         self.assertIn("アンパンマン知育玩具ガイド", content)
         self.assertNotIn("アンパンマンシール特集(自分自身)", content)
+
+    def test_rewrite_draft_excluded_by_title_when_id_differs(self):
+        # omcha-ops#174 実測の再現: wp_draft.py copy の下書き id (99999) は
+        # 公開済み元記事の id (15750) と別物なので、id 照合だけでは自分自身が
+        # 候補に混入する。タイトル完全一致での除外がこれを補う。
+        _write_json(self.query_content_path, {
+            "source_id": 99999,
+            "source_link": "https://omcha.jp/?p=99999",
+            "title": "アンパンマンシール特集(自分自身)",  # index.jsonl の id=15750 と完全一致させる
+            "content": '<h2>シールの選び方</h2><p>本文</p>',
+        })
+
+        def embed_fn(texts):
+            return [[1.0, 0.0] for _ in texts]
+
+        session = self._session_with_embed(embed_fn)
+        summary = run(
+            index_path=self.index_path,
+            out_path=self.out_path,
+            query_content_file=self.query_content_path,
+            min_score=0.5,
+            use_reranker=False,
+            session=session,
+            sleeper=_no_sleep,
+        )
+        self.assertFalse(summary["aborted"])
+        self.assertEqual(summary["doc_candidates"], 1)  # id=15750 (タイトル一致) は除外
+        content = self.out_path.read_text(encoding="utf-8")
+        candidates_section = content.split("## シールの選び方", 1)[1]
+        self.assertNotIn("アンパンマンシール特集(自分自身)", candidates_section)
+        self.assertIn("アンパンマン知育玩具ガイド", candidates_section)
+
+    def test_calibration_url_forced_into_report_even_below_threshold(self):
+        def embed_fn(texts):
+            # H2見出しと"アンパンマン知育玩具ガイド"を直交させ、閾値未満のスコアにする
+            return [[0.0, 1.0] if "アンパンマン知育玩具ガイド" not in t else [1.0, 0.0] for t in texts]
+
+        session = self._session_with_embed(embed_fn)
+        summary = run(
+            index_path=self.index_path,
+            out_path=self.out_path,
+            query_content_file=self.query_content_path,
+            min_score=0.99,  # 通常なら直交ベクトル(score=0)は絶対に通らない
+            use_reranker=False,
+            calibration_urls=frozenset({"https://omcha.jp/anpanman-toy-guide/"}),
+            session=session,
+            sleeper=_no_sleep,
+        )
+        self.assertFalse(summary["aborted"])
+        content = self.out_path.read_text(encoding="utf-8")
+        self.assertIn("アンパンマン知育玩具ガイド", content)
+        self.assertIn("較正対象", content)
+        self.assertIn("閾値未満", content)
+
+    def test_already_linked_scoped_to_its_own_h2_section(self):
+        # H2-1 にだけ blogcard がある場合、H2-2 の候補一覧には既出フラグが
+        # 付かないこと (記事全体スコープだと誤ってどのH2にも付いてしまう)。
+        _write_json(self.query_content_path, {
+            "source_id": 15750,
+            "source_link": "https://omcha.jp/?p=15750",
+            "title": "アンパンマンシール特集",
+            "content": (
+                '<h2>シールの選び方</h2><p>本文</p>[blogcard url="https://omcha.jp/anpanman-toy-guide/"]'
+                '<h2>まとめ</h2><p>本文2</p>'
+            ),
+        })
+
+        def embed_fn(texts):
+            return [[1.0, 0.0] for _ in texts]
+
+        session = self._session_with_embed(embed_fn)
+        run(
+            index_path=self.index_path,
+            out_path=self.out_path,
+            query_content_file=self.query_content_path,
+            min_score=0.5,
+            use_reranker=False,
+            session=session,
+            sleeper=_no_sleep,
+        )
+        content = self.out_path.read_text(encoding="utf-8")
+        h2_1 = content.split("## まとめ")[0]
+        h2_2 = content.split("## まとめ")[1]
+        self.assertIn("既出", h2_1)
+        self.assertNotIn("既出", h2_2)
 
     def test_no_query_source_aborts_without_writing(self):
         with self.assertRaises(ValueError):
