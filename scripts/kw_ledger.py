@@ -58,6 +58,27 @@ Ubersuggest MCP は Claude からしか呼べず、スクリプトからも CI �
 先**なので、**毎日の入口は `next`** (予約 `queue.d/` → 台帳の裾 の順)。
 `refetch-queue` は裾しか見ないので、裾だけを掘ると分かっているときに使う。
 
+## 枠の消化を記録する (omcha-ops#179 A2)
+
+**消化率がどこにも残っていないと、枠が丸ごと裾に流れても後から気づけない**
+(2026-09-09 omcha-ops#155)。`merge` は `results` の件数 (= 実際に MCP を叩いた回数)
+を `--quota` (既定 `data/keywords/quota.jsonl`) へ自動で追記する。**候補の件数
+(`next` の出力行数) ではなく、実際に取れた結果の件数で数える。**
+
+内訳 (予約 `queue.d/` 由来 / 台帳の裾由来) を残したいときは、`next --reserved-only`
+と `refetch-queue` を分けて呼び、それぞれ `merge --origin queue` /
+`merge --origin tail` で追記する。1本の `next` (裾込み) をそのまま流したときは
+`--origin` を省略してよい (既定 `unknown`)。
+
+    python $KW quota-status              # 今日まだ枠が残っているか
+    python $KW quota-report --days 30    # 過去30日の消化率
+    python $KW quota-exhausted           # 403 に当たったら記録する (自動化しない)
+
+**日付は UTC 暦日で切る。** 枠のリセットは 00:00 UTC = 09:00 JST なので、UTC の
+暦日がそのままリセット境界と一致する。JST の `date.today()` を素朴に使うと
+0:00〜9:00 JST に使った分を「まだリセットされていない前日ぶん」なのに当日付けに
+してしまう。
+
 ## external.jsonl は append-only
 
 再取得は**上書きせず追記**する。最新は `fetched_at` が最大の行。当時の数字を消すと
@@ -94,17 +115,67 @@ normalize_key = bdk.normalize_key
 DEFAULT_EXTERNAL = "data/keywords/external.jsonl"
 DEFAULT_ASSIGN = "data/keywords/assign.jsonl"
 DEFAULT_QUEUE_DIR = "data/keywords/queue.d"
+DEFAULT_QUOTA = "data/keywords/quota.jsonl"
 DEFAULT_LOC_ID = 2392   # Japan。location_suggest で引いた実 ID 以外を入れない
 DEFAULT_LANGUAGE = "ja"
 # 採否を分けた語 (assign に載っている語) だけを再取得する間隔。全件リフレッシュは
 # 台帳を汚すだけで見返りが無い。
 DEFAULT_STALE_DAYS = 90
+# Ubersuggest tier0 の日次レポート枠。00:00 UTC = 09:00 JST でリセットされ、
+# 繰り越されない (docs/ubersuggest.md 実測)。
+DEFAULT_DAILY_LIMIT = 100
 SITES = ("omcha", "navi")
 ROLES = ("primary", "secondary", "avoid")
+QUOTA_ORIGINS = ("queue", "tail", "unknown")
 
 
 def _today() -> str:
     return datetime.date.today().isoformat()
+
+
+def quota_date(now: datetime.datetime | None = None) -> str:
+    """枠の「日」を表す文字列 (UTC 暦日)。
+
+    Ubersuggest tier0 の日次枠は 00:00 UTC にリセットされる。これは日本時間の
+    09:00 と同じ瞬間なので、UTC の暦日をそのまま鍵にすれば JST の 09:00 境界と
+    ずれない。逆に `datetime.date.today()` (ローカル/JST 時計) をそのまま使うと、
+    JST 00:00〜09:00 に使った分が「まだリセット前の前日ぶん」であるにも関わらず
+    当日付けとして記録されてしまう (omcha-ops#179 R2-1)。
+    """
+    return (now or datetime.datetime.now(datetime.timezone.utc)).date().isoformat()
+
+
+def record_quota_event(path: pathlib.Path, event: str, date: str | None = None,
+                       **fields) -> dict:
+    """枠の使われ方を1行追記する (append-only)。"""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    row = {"date": date or quota_date(now), "event": event,
+           "recorded_at": now.isoformat(timespec="seconds").replace("+00:00", "Z")}
+    row.update(fields)
+    append_jsonl(path, [row])
+    return row
+
+
+def summarize_quota(rows: list[dict], date: str) -> dict:
+    """1日ぶんの `merge`/`exhausted` イベントを集計する。
+
+    その日の行が1つも無ければ「0 件・枯渇なし」を返す。これは「未記録」では
+    なく「その日は枠を使わなかった」という積極的な 0 (受け入れ基準参照)。
+    """
+    by_origin: dict[str, int] = collections.Counter()
+    used = 0
+    exhausted = False
+    for r in rows:
+        if r.get("date") != date:
+            continue
+        if r.get("event") == "merge":
+            n = r.get("count") or 0
+            used += n
+            by_origin[r.get("origin") or "unknown"] += n
+        elif r.get("event") == "exhausted":
+            exhausted = True
+    return {"date": date, "used": used, "by_origin": dict(by_origin),
+            "exhausted": exhausted}
 
 
 def read_jsonl(path: pathlib.Path) -> list[dict]:
@@ -536,6 +607,11 @@ def cmd_merge(args) -> int:
 
     既にある語は既定で skip する (同じ日に取り直しても情報が増えない)。
     `--refresh` で追記する — **上書きではない。** 当時の数字を残す。
+
+    `results` の件数 = その日 Claude が実際に MCP へ投げた回数 (= 実際に消費した
+    日次レポート枠) として `--quota` に記録する。`merge` が `skip` した語も
+    MCP 呼び出し自体は済んでいるので枠は消費済み。**カウントは `added` ではなく
+    `results` の件数で行う。**
     """
     batch = json.loads(io.open(args.src, encoding="utf-8").read())
     ext = pathlib.Path(args.external)
@@ -546,7 +622,8 @@ def cmd_merge(args) -> int:
     fetched_at = batch.get("fetched") or _today()
     added = skipped = refreshed = 0
     new_rows = []
-    for r in batch.get("results", []):
+    results = batch.get("results", [])
+    for r in results:
         row = row_from_mcp(r, loc_id, language, block, fetched_at)
         if not row["norm"]:
             continue
@@ -563,6 +640,10 @@ def cmd_merge(args) -> int:
     append_jsonl(ext, new_rows)
     print("merge: added=%d refreshed=%d skipped=%d total=%d"
           % (added, refreshed, skipped, len(have)))
+    if results:
+        record_quota_event(pathlib.Path(args.quota), "merge", origin=args.origin,
+                           count=len(results), added=added, refreshed=refreshed,
+                           skipped=skipped)
     return 0
 
 
@@ -705,12 +786,71 @@ def cmd_report(args) -> int:
 
 
 # --------------------------------------------------------------------------
+# 枠の消化記録 (omcha-ops#179 A2)
+
+
+def cmd_quota_exhausted(args) -> int:
+    """403 (daily reports limit) に当たったことを記録する。
+
+    枠の残数を取得側 (Ubersuggest) は教えてくれない (docs/ubersuggest.md)。
+    枯渇は 403 を実見した Claude にしか分からないので、手動で記録する。
+    """
+    row = record_quota_event(pathlib.Path(args.quota), "exhausted",
+                             date=args.date, note=args.note)
+    print("quota-exhausted: %s を枯渇として記録した" % row["date"])
+    return 0
+
+
+def cmd_quota_status(args) -> int:
+    """今日 (既定) の枠の消化状況を1コマンドで出す。"""
+    date = args.date or quota_date()
+    rows = read_jsonl(pathlib.Path(args.quota))
+    s = summarize_quota(rows, date)
+    remaining = max(0, args.limit - s["used"])
+    origin_detail = (" ".join("%s=%d" % (k, v)
+                              for k, v in sorted(s["by_origin"].items()))
+                     or "なし")
+    print("%s: 使用 %d/%d (残り %d) 内訳 %s / 枯渇: %s"
+          % (date, s["used"], args.limit, remaining, origin_detail,
+             "はい" if s["exhausted"] else "いいえ"))
+    return 0
+
+
+def cmd_quota_report(args) -> int:
+    """過去 N 日ぶんの消化率を出す。行が無い日は「0件」として扱う。"""
+    end = args.end_date or quota_date()
+    end_d = datetime.date.fromisoformat(end)
+    rows = read_jsonl(pathlib.Path(args.quota))
+    total_used = 0
+    exhausted_days = 0
+    for i in range(args.days - 1, -1, -1):
+        d = (end_d - datetime.timedelta(days=i)).isoformat()
+        s = summarize_quota(rows, d)
+        total_used += s["used"]
+        if s["exhausted"]:
+            exhausted_days += 1
+        origin_detail = (" ".join("%s=%d" % (k, v)
+                                  for k, v in sorted(s["by_origin"].items()))
+                         or "-")
+        print("%s  used=%3d/%d  %-20s%s"
+              % (d, s["used"], args.limit, origin_detail,
+                 "  枯渇" if s["exhausted"] else ""))
+    capacity = args.days * args.limit
+    rate = (total_used / capacity * 100) if capacity else 0.0
+    print("---")
+    print("%d日間 消化率 %.1f%% (%d/%d) / 枯渇 %d日"
+          % (args.days, rate, total_used, capacity, exhausted_days))
+    return 0
+
+
+# --------------------------------------------------------------------------
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="キーワード台帳 (omcha-ops#97)")
     ap.add_argument("--external", default=DEFAULT_EXTERNAL)
     ap.add_argument("--assign", default=DEFAULT_ASSIGN)
+    ap.add_argument("--quota", default=DEFAULT_QUOTA)
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("todo", help="まだ取っていない語を出す")
@@ -726,6 +866,10 @@ def main(argv=None) -> int:
     p.add_argument("src", help="batch.json")
     p.add_argument("--refresh", action="store_true",
                    help="既にある語も追記する (再取得。上書きではない)")
+    p.add_argument("--origin", default="unknown", choices=QUOTA_ORIGINS,
+                   help="この batch の由来。予約 (queue.d/) だけなら queue、"
+                        "台帳の裾だけなら tail。混在バッチは unknown のまま "
+                        "(--reserved-only / refetch-queue を分けて呼べば混ざらない)")
     p.set_defaults(func=cmd_merge)
 
     p = sub.add_parser("next",
@@ -788,6 +932,25 @@ def main(argv=None) -> int:
     p.add_argument("--stale-days", type=int, default=DEFAULT_STALE_DAYS)
     p.add_argument("--limit", type=int, default=30)
     p.set_defaults(func=cmd_report)
+
+    p = sub.add_parser("quota-exhausted",
+                       help="日次レポート枠の 403 (枯渇) を記録する")
+    p.add_argument("--date", default=None,
+                   help="対象日 (UTC暦日, 既定は今日)。過去分の訂正にも使う")
+    p.add_argument("--note", default=None)
+    p.set_defaults(func=cmd_quota_exhausted)
+
+    p = sub.add_parser("quota-status",
+                       help="今日まだ枠が残っているかを1コマンドで出す")
+    p.add_argument("--date", default=None, help="既定は今日 (UTC暦日)")
+    p.add_argument("--limit", type=int, default=DEFAULT_DAILY_LIMIT)
+    p.set_defaults(func=cmd_quota_status)
+
+    p = sub.add_parser("quota-report", help="過去N日の消化率")
+    p.add_argument("--days", type=int, default=30)
+    p.add_argument("--end-date", default=None, help="既定は今日 (UTC暦日)")
+    p.add_argument("--limit", type=int, default=DEFAULT_DAILY_LIMIT)
+    p.set_defaults(func=cmd_quota_report)
 
     args = ap.parse_args(argv)
     return args.func(args)
