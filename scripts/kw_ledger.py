@@ -100,6 +100,7 @@ from __future__ import annotations
 import argparse
 import collections
 import datetime
+import hashlib
 import io
 import json
 import os
@@ -161,6 +162,13 @@ def summarize_quota(rows: list[dict], date: str) -> dict:
 
     その日の行が1つも無ければ「0 件・枯渇なし」を返す。これは「未記録」では
     なく「その日は枠を使わなかった」という積極的な 0 (受け入れ基準参照)。
+
+    **「作業したが merge を忘れた/失敗した」も同じ 0 になる** (omcha-ops#182 指摘4)。
+    `merge` 自体は自動記録 (人が別途 quota.jsonl に書く工程は無い) なので、
+    記録が落ちるとすれば merge 自体が実行されなかった場合に限られ、その時点で
+    既に `keyword_overview` の結果を `external.jsonl` にも書けていない
+    (=作業が完了していない) ため実害は小さいと判断し、記録側に「作業した
+    印」を別途持たせる複雑化はしない。
     """
     by_origin: dict[str, int] = collections.Counter()
     used = 0
@@ -641,9 +649,23 @@ def cmd_merge(args) -> int:
     print("merge: added=%d refreshed=%d skipped=%d total=%d"
           % (added, refreshed, skipped, len(have)))
     if results:
-        record_quota_event(pathlib.Path(args.quota), "merge", origin=args.origin,
-                           count=len(results), added=added, refreshed=refreshed,
-                           skipped=skipped)
+        quota_path = pathlib.Path(args.quota)
+        # **同じ batch を再実行しても枠を二重計上しない** (omcha-ops#182 指摘5)。
+        # エラー後のやり直しで同じ batch.json をもう一度 merge すると、
+        # external.jsonl 側は skip されて無害だが、quota.jsonl は無条件に
+        # 追記していたため消化が実際の2倍に見えていた。中身のハッシュで
+        # 同一 batch を検出する (ファイル名ではなく内容で判定 — コピーや
+        # リネームでもすり抜けない)
+        batch_id = hashlib.sha1(pathlib.Path(args.src).read_bytes()).hexdigest()[:12]
+        already = any(r.get("event") == "merge" and r.get("batch_id") == batch_id
+                     for r in read_jsonl(quota_path))
+        if already:
+            print("quota: 同じ batch (%s) を再実行したため枠の消化を二重計上しない"
+                  % batch_id)
+        else:
+            record_quota_event(quota_path, "merge", origin=args.origin,
+                               count=len(results), added=added, refreshed=refreshed,
+                               skipped=skipped, batch_id=batch_id)
     return 0
 
 
@@ -806,7 +828,11 @@ def cmd_quota_status(args) -> int:
     date = args.date or quota_date()
     rows = read_jsonl(pathlib.Path(args.quota))
     s = summarize_quota(rows, date)
-    remaining = max(0, args.limit - s["used"])
+    # **枯渇した日は残り 0。** 403 で失敗した呼び出しは `results` に入らないので
+    # `used` に数えられず、`limit - used` だけで出すと「残り 70」のように
+    # 実際には無い枠が残っているかのような数字になる (omcha-ops#182 指摘3)。
+    # R2-5 の役目は「今日まだ枠が残っているか」なので、ここが一番肝心な数字。
+    remaining = 0 if s["exhausted"] else max(0, args.limit - s["used"])
     origin_detail = (" ".join("%s=%d" % (k, v)
                               for k, v in sorted(s["by_origin"].items()))
                      or "なし")
