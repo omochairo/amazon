@@ -351,6 +351,42 @@ def test_quota_exhausted_is_flagged_in_status(tmp_path, capsys):
     assert "枯渇: はい" in capsys.readouterr().out
 
 
+def test_quota_status_shows_zero_remaining_when_exhausted(tmp_path, capsys):
+    """403 で失敗した呼び出しは results に入らず used に数えられない。
+
+    `limit - used` だけで残数を出すと、実際には枠が無いのに「残り 70」の
+    ように残数があるかのような数字になる (omcha-ops#182 指摘3)。
+    """
+    src = _batch(tmp_path, [{"keyword": "語%d" % i, "search_volume": 1,
+                             "monthly_searches": []} for i in range(30)])
+    _run(tmp_path, "merge", str(src), "--origin", "tail")
+    _run(tmp_path, "quota-exhausted")
+    capsys.readouterr()
+    _run(tmp_path, "quota-status")
+    out = capsys.readouterr().out
+    assert "使用 30/100" in out, "内訳の実数は残す"
+    assert "残り 0" in out
+    assert "枯渇: はい" in out
+
+
+def test_merge_does_not_double_count_when_rerun_on_same_batch(tmp_path):
+    """同じ batch.json をエラー後にやり直しても枠を二重計上しない (omcha-ops#182 指摘5)。"""
+    src = _batch(tmp_path, [{"keyword": "語%d" % i, "search_volume": 1,
+                             "monthly_searches": []} for i in range(30)])
+    _run(tmp_path, "merge", str(src), "--origin", "tail")
+    _run(tmp_path, "merge", str(src), "--origin", "tail")
+    rows = _quota_rows(tmp_path)
+    assert len(rows) == 1, "同一内容の batch を2回 merge しても quota は1行だけ"
+    assert rows[0]["count"] == 30
+
+    # 内容が違う batch (同じ語でも fetched が違う = 別の実行) は別計上でよい
+    src2 = _batch(tmp_path, [{"keyword": "語%d" % i, "search_volume": 1,
+                              "monthly_searches": []} for i in range(30)],
+                  fetched="2026-09-10")
+    _run(tmp_path, "merge", str(src2), "--origin", "tail", "--refresh")
+    assert len(_quota_rows(tmp_path)) == 2, "内容が違えば別 batch として計上する"
+
+
 def test_quota_report_shows_zero_for_untouched_days(tmp_path, capsys):
     src = _batch(tmp_path, [{"keyword": "語", "search_volume": 1,
                              "monthly_searches": []}])
