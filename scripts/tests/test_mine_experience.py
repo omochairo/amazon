@@ -931,3 +931,181 @@ def test_candidate_keeps_aggregate_framing(tmp_path):
     candidates, _ = gather_yahoo_aggregate("B0BATCH001", raw_dir=_write_reviews(tmp_path, reviews))
     assert candidates[0]["source_type"] == "yahoo_review_aggregate"
     assert candidates[0]["source_url"] == ""
+
+
+# --------------------------------------------------------------------------
+# select_mining_targets: 鮮度を見た対象選定 + K8 volume 上の ledger (#6602)
+# --------------------------------------------------------------------------
+
+from datetime import datetime, timedelta, timezone  # noqa: E402
+
+_NOW = datetime(2026, 9, 14, 0, 0, tzinfo=timezone.utc)
+
+
+def _iso(days_ago: float) -> str:
+    return (_NOW - timedelta(days=days_ago)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _pool(tmp_path, asins):
+    queue = tmp_path / "queue"
+    queue.mkdir(exist_ok=True)
+    for i, a in enumerate(asins):
+        (queue / f"{i:03d}.json").write_text(json.dumps({"asin": a}), encoding="utf-8")
+    return {"audit_path": tmp_path / "missing.json", "rewrite_queue_dir": queue}
+
+
+def _exp(base, asin, days_ago):
+    d = base / asin
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "experience.json").write_text(json.dumps({"generated_at": _iso(days_ago)}), encoding="utf-8")
+
+
+def test_mining_selection_skips_fresh_and_fills_limit_from_the_rest(tmp_path):
+    """09-07〜13 の再現: 先頭 3 件が毎日掘り直され、後ろが永遠に回ってこない。"""
+    base = tmp_path / "per_asin"
+    asins = ["B0AAAAAAA1", "B0AAAAAAA2", "B0AAAAAAA3", "B0AAAAAAA4", "B0AAAAAAA5"]
+    for a in asins[:3]:
+        _exp(base, a, days_ago=1)
+    targets, report = mine_experience.select_mining_targets(
+        limit=3, base=base, ledger={}, now=_NOW, **_pool(tmp_path, asins))
+    assert targets == ["B0AAAAAAA4", "B0AAAAAAA5"]
+    assert report["counts"] == {"fresh": 3, "never": 2}
+
+
+def test_mining_selection_priority_never_then_degraded_then_oldest(tmp_path):
+    base = tmp_path / "per_asin"
+    asins = ["B0STALENEW", "B0STALEOLD", "B0DEGRADED", "B0NEVER001", "B0NOYIELD1"]
+    stale_new, stale_old, degraded, never, noyield = asins
+    _exp(base, stale_new, days_ago=35)
+    _exp(base, stale_old, days_ago=60)
+    _exp(base, degraded, days_ago=10)
+    ledger = {
+        degraded: {"last_attempt": _iso(10), "written": True, "agy": "failed"},
+        noyield: {"last_attempt": _iso(40), "written": False, "agy": "ok"},
+    }
+    targets, report = mine_experience.select_mining_targets(
+        limit=0, base=base, ledger=ledger, now=_NOW, **_pool(tmp_path, asins))
+    assert targets == [never, degraded, noyield, stale_old, stale_new]
+    assert [s["reason"] for s in report["selected"]] == [
+        "never", "agy_degraded", "no_yield_retry", "stale", "stale"]
+
+
+def test_mining_selection_does_not_retry_recent_no_yield(tmp_path):
+    """0 件の ASIN はファイルが書かれない。ledger が無いと毎日先頭に居座る。"""
+    asin = "B0NOYIELD1"
+    ledger = {asin: {"last_attempt": _iso(3), "written": False, "agy": "ok"}}
+    targets, report = mine_experience.select_mining_targets(
+        limit=0, base=tmp_path / "per_asin", ledger=ledger, now=_NOW, **_pool(tmp_path, [asin]))
+    assert targets == []
+    assert report["counts"] == {"no_yield_recent": 1}
+
+
+def test_mining_selection_agy_degraded_waits_a_week_and_needs_matching_attempt(tmp_path):
+    base = tmp_path / "per_asin"
+    recent, old_ledger = "B0DEGRADE1", "B0DEGRADE2"
+    _exp(base, recent, days_ago=3)
+    _exp(base, old_ledger, days_ago=10)
+    ledger = {
+        recent: {"last_attempt": _iso(3), "written": True, "agy": "breaker"},
+        # ledger の最終試行が experience.json より古い = その回の記録ではない
+        old_ledger: {"last_attempt": _iso(20), "written": True, "agy": "failed"},
+    }
+    targets, report = mine_experience.select_mining_targets(
+        limit=0, base=base, ledger=ledger, now=_NOW, **_pool(tmp_path, [recent, old_ledger]))
+    assert targets == []
+    assert report["counts"] == {"fresh": 2}
+
+
+def test_mining_selection_explicit_asins_bypass_freshness_and_come_first(tmp_path):
+    base = tmp_path / "per_asin"
+    _exp(base, "B0EXPLICI1", days_ago=1)
+    targets, report = mine_experience.select_mining_targets(
+        limit=2, asins=["B0EXPLICI1"], base=base, ledger={}, now=_NOW,
+        **_pool(tmp_path, ["B0AAAAAAA1", "B0AAAAAAA2"]))
+    assert targets == ["B0EXPLICI1", "B0AAAAAAA1"]
+    assert report["selected"][0]["reason"] == "explicit"
+
+
+def test_ledger_missing_or_broken_starts_empty(tmp_path):
+    assert mine_experience.load_ledger(tmp_path / "none.json") == {}
+    broken = tmp_path / "broken.json"
+    broken.write_text("{not json", encoding="utf-8")
+    assert mine_experience.load_ledger(broken) == {}
+
+
+def test_ledger_round_trip(tmp_path):
+    path = tmp_path / "vol" / "mining_ledger.json"
+    mine_experience.save_ledger(path, {"B0AAAAAAA1": {"written": True}})
+    assert mine_experience.load_ledger(path) == {"B0AAAAAAA1": {"written": True}}
+    assert not path.with_suffix(".json.tmp").exists()
+
+
+def test_default_ledger_lives_next_to_raw_dir(monkeypatch, tmp_path):
+    monkeypatch.delenv("EXPERIENCE_LEDGER", raising=False)
+    monkeypatch.setenv("EXPERIENCE_RAW_DIR", str(tmp_path))
+    assert mine_experience.default_ledger_path() == tmp_path / "mining_ledger.json"
+
+
+def test_run_records_every_attempt_in_ledger_and_job_summary(tmp_path, monkeypatch):
+    """0 件の回も ledger に残す。Job Summary には ASIN ごとに 1 行ずつ追記する。"""
+    import scripts.mine_experience as mod
+    payload = {"asin": "x", "generated_at": "now", "model": "m", "rating_stats": {},
+               "snippets": [{"aspect": "不満", "text": "t"}]}
+
+    def fake_mine_asin(asin, **kw):
+        kw["agy_breaker"].record_ok()
+        return payload if asin == "B0WRITTEN1" else None
+
+    monkeypatch.setattr(mod, "mine_asin", fake_mine_asin)
+    summary_file = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
+    ledger_path = tmp_path / "vol" / "mining_ledger.json"
+
+    mod.run(["B0WRITTEN1", "B0NOYIELD1"], base=tmp_path / "per_asin", ledger_path=ledger_path,
+            ledger={}, reasons={"B0WRITTEN1": "never", "B0NOYIELD1": "stale"})
+
+    saved = mod.load_ledger(ledger_path)
+    assert saved["B0WRITTEN1"]["written"] is True
+    assert saved["B0WRITTEN1"]["snippets"] == 1
+    assert saved["B0WRITTEN1"]["agy"] == "ok"
+    assert saved["B0NOYIELD1"]["written"] is False
+    text = summary_file.read_text(encoding="utf-8")
+    assert "| B0WRITTEN1 | 未処理 | 書けた | 1 | ok |" in text
+    assert "| B0NOYIELD1 | 期限切れ | 0 件 | 0 | ok |" in text
+    assert "**完了**" in text
+
+
+def test_run_saves_ledger_after_each_asin(tmp_path, monkeypatch):
+    """step timeout で打ち切られても、そこまでの試行が残る。"""
+    import scripts.mine_experience as mod
+    ledger_path = tmp_path / "mining_ledger.json"
+    seen = []
+
+    def fake_mine_asin(asin, **kw):
+        seen.append(set(mod.load_ledger(ledger_path)))
+        return None
+
+    monkeypatch.setattr(mod, "mine_asin", fake_mine_asin)
+    mod.run(["B0AAAAAAA1", "B0AAAAAAA2"], base=tmp_path, ledger_path=ledger_path, ledger={})
+    assert seen == [set(), {"B0AAAAAAA1"}]
+
+
+def test_report_selection_writes_coverage_to_job_summary(tmp_path, monkeypatch):
+    summary_file = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
+    mine_experience.report_selection({
+        "candidates": 80, "ledger_entries": 5,
+        "counts": {"fresh": 19, "never": 61},
+        "selected": [{"asin": "B0AAAAAAA1", "reason": "never"}],
+    })
+    text = summary_file.read_text(encoding="utf-8")
+    assert "候補 **80** 件" in text and "**19** 件 (24%)" in text
+    assert "| 未処理 | 61 |" in text
+    assert "今回掘る: **1** 件 (未処理 1)" in text
+
+
+def test_crawl_uses_the_same_selection_as_mining():
+    """原文を取る ASIN と掘る ASIN がずれると、掘る側で Yahoo 候補が 0 件になる。"""
+    src = pathlib.Path("scripts/crawl_yahoo_reviews.py").read_text(encoding="utf-8")
+    assert "select_mining_targets(" in src
+    assert "select_targets(limit" not in src
