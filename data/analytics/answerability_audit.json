@@ -1,122 +1,78 @@
 {
-  "generated_at": "2026-09-12T22:18:11Z",
+  "generated_at": "2026-09-13T22:27:04Z",
   "model": "gemma4:26b-a4b-it-qat",
-  "source_week": "2026-W36",
-  "baseline_ctr": 0.027076282218172352,
+  "source_week": "2026-W37",
+  "baseline_ctr": 0.020238966105827847,
   "pages": [
     {
-      "page": "https://navi.omcha.jp/products/b0hdb8kg6g/",
-      "asin": "B0HDB8KG6G",
-      "page_coverage_avg": 0.4,
+      "page": "https://navi.omcha.jp/products/b010cqeucu/",
+      "asin": "B010CQEUCU",
+      "page_coverage_avg": 0.64,
       "queries": [
         {
-          "query": "シャインアルカナロッド 電池",
-          "impressions": 74,
-          "position": 10.175675675675675,
-          "answered": true,
-          "coverage": 1.0,
-          "missing_aspects": [],
-          "note": "「電池が必要か」というユーザーの疑問に対し、不要であることと、その理由（音や光のギミックがないため）が明確に回答されています。",
-          "error": null
-        },
-        {
-          "query": "アルカナシャイン 使い方",
-          "impressions": 7,
-          "position": 9.428571428571429,
-          "answered": false,
-          "coverage": 0.2,
-          "missing_aspects": [
-            "具体的な遊び方（なりきり遊びの手順など）",
-            "製品の形状やサイズ感に関する詳細"
-          ],
-          "note": "「電池不要」であることや対象年齢には触れていますが、どのように遊ぶのかという具体的な使い方の説明が不足しています。",
-          "error": null
-        },
-        {
-          "query": "シャインアルカナロッド 開かない",
-          "impressions": 4,
-          "position": 3.75,
-          "answered": false,
-          "coverage": 0.0,
-          "missing_aspects": [
-            "「開かない」という問題（蓋が開かない、電池カバーが開かない等）に対する回答",
-            "製品の構造に関する情報"
-          ],
-          "note": "検索クエリは製品が「開かない」というトラブルや仕様に関するものですが、記事にはその点に関する記述が一切ありません。",
-          "error": null
-        },
-        {
-          "query": "シャインアルカナロッド amazon",
-          "impressions": 1,
-          "position": 10.0,
+          "query": "ボーネルンド ラッパ",
+          "impressions": 49,
+          "position": 9.46938775510204,
           "answered": true,
           "coverage": 0.8,
           "missing_aspects": [
-            "Amazonでの具体的な商品状態（新品・中古）",
-            "Amazonにおける他の販売サイトとの価格比較情報",
-            "Amazonでのユーザーレビューの詳細内容"
+            "「ラッパ」という言葉で検索するユーザーが想定する他の製品（アンビトーイ以外のシリーズなど）の有無",
+            "音色や鳴らしやすさに関する具体的な使用感の詳細"
           ],
-          "note": "Amazonでの現在の価格に言及しており、クエリの意図には概ね応えていますが、Amazon特有の情報（レビューや配送条件など）が不足しています。",
+          "note": "クエリが抽象的であるため、特定の製品（アンビトーイ トランペット）に特化した内容は回答として成立していますが、ラッパ全般を求めている可能性も考慮すると網羅性は完全ではありません。",
           "error": null
         },
         {
-          "query": "シャインアルカナロッド joshin",
+          "query": "ボーネルンド トランペット",
+          "impressions": 15,
+          "position": 8.933333333333334,
+          "answered": true,
+          "coverage": 0.8,
+          "missing_aspects": [
+            "商品の詳細な外観写真やサイズ感",
+            "他の楽器（アンビトーイシリーズの他製品）との違い",
+            "実際の使用シーンをイメージできる動画や画像情報"
+          ],
+          "note": "検索クエリに対して、対象年齢、価格、特徴、お手入れ方法といった主要な疑問には的確に回答できています。",
+          "error": null
+        },
+        {
+          "query": "アンビトーイ トランペット",
+          "impressions": 14,
+          "position": 6.642857142857143,
+          "answered": true,
+          "coverage": 0.8,
+          "missing_aspects": [
+            "商品の詳細なサイズや重量",
+            "色やデザインのバリエーション",
+            "実際のユーザーによる具体的な口コミ内容（テキスト）"
+          ],
+          "note": "製品の特徴、対象年齢、価格、お手入れ方法といった主要な疑問には簡潔に回答できています。",
+          "error": null
+        },
+        {
+          "query": "ラッパ ボーネルンド",
+          "impressions": 3,
+          "position": 10.333333333333334,
+          "answered": true,
+          "coverage": 0.8,
+          "missing_aspects": [
+            "ラッパ（トランペット）のデザインや見た目の詳細",
+            "音の大きさや音色に関する具体的な口コミ"
+          ],
+          "note": "検索クエリが指す製品（ボーネルンドのラッパ）について、対象年齢、価格、特徴、お手入れ方法といった主要な情報を網羅しています。",
+          "error": null
+        },
+        {
+          "query": "caividom 口コミ",
           "impressions": 1,
-          "position": 30.0,
+          "position": 7.0,
           "answered": false,
           "coverage": 0.0,
           "missing_aspects": [
-            "joshin（楽天などのショップ名と思われる）での販売情報や価格",
-            "joshinに関連する購入方法や在庫状況"
+            "caividomに関する情報が一切含まれていない"
           ],
-          "note": "検索クエリに含まれる「joshin」に関する情報が記事内に一切含まれていません。",
-          "error": null
-        }
-      ]
-    },
-    {
-      "page": "https://navi.omcha.jp/products/b0hdb6x1cn/",
-      "asin": "B0HDB6X1CN",
-      "page_coverage_avg": 0.267,
-      "queries": [
-        {
-          "query": "アルカナシャイン 使い方",
-          "impressions": 13,
-          "position": 10.615384615384615,
-          "answered": false,
-          "coverage": 0.3,
-          "missing_aspects": [
-            "具体的な遊び方の手順（ボタンの押し方や回転のさせ方など）",
-            "ギミックが作動する仕組みの詳細"
-          ],
-          "note": "「お花が開く」といった特徴には触れていますが、ユーザーが求めている具体的な操作方法（使い方）についての記述が不足しています。",
-          "error": null
-        },
-        {
-          "query": "シャインアルカナロッド 開き方",
-          "impressions": 11,
-          "position": 7.545454545454546,
-          "answered": false,
-          "coverage": 0.2,
-          "missing_aspects": [
-            "ギミック（お花）の具体的な開き方・操作方法"
-          ],
-          "note": "「お花が開く回転ギミック」という特徴には触れていますが、どのように動かすのかという具体的な「開き方」については説明されていません。",
-          "error": null
-        },
-        {
-          "query": "シャインアルカナロッド レビュー",
-          "impressions": 1,
-          "position": 18.0,
-          "answered": false,
-          "coverage": 0.3,
-          "missing_aspects": [
-            "実際に遊んだ人の具体的な感想（良い点・悪い点）",
-            "ギミックの動作音や光り方の詳細",
-            "耐久性に関する情報",
-            "サイズ感や持ちやすさなどの使用感"
-          ],
-          "note": "この記事は製品仕様や価格、対象年齢といった基本情報の提供に留まっており、ユーザーが求めている「実際に使ってみた感想（レビュー）」が含まれていません。",
+          "note": "検索クエリは「caividom」に関する口コミを求めていますが、記事の内容は「ボーネルンド アンビトーイ トランペット」に関するものであり、全く異なる製品について書かれています。",
           "error": null
         }
       ]
@@ -128,8 +84,8 @@
       "queries": [
         {
           "query": "original tamagotchi 30th anniversary tama space",
-          "impressions": 45,
-          "position": 10.0,
+          "impressions": 37,
+          "position": 8.72972972972973,
           "answered": true,
           "coverage": 0.8,
           "missing_aspects": [
@@ -142,8 +98,8 @@
         },
         {
           "query": "tamagotchi 30th anniversary tama space",
-          "impressions": 1,
-          "position": 11.0,
+          "impressions": 3,
+          "position": 11.333333333333334,
           "answered": true,
           "coverage": 0.8,
           "missing_aspects": [
@@ -159,12 +115,12 @@
     {
       "page": "https://navi.omcha.jp/products/b0fnm3r45c/",
       "asin": "B0FNM3R45C",
-      "page_coverage_avg": 0.775,
+      "page_coverage_avg": 0.7,
       "queries": [
         {
           "query": "ジェリーブロックス 口コミ",
-          "impressions": 24,
-          "position": 5.916666666666667,
+          "impressions": 17,
+          "position": 6.0588235294117645,
           "answered": false,
           "coverage": 0.3,
           "missing_aspects": [
@@ -176,9 +132,19 @@
           "error": null
         },
         {
+          "query": "ジェリー ブロック 安い",
+          "impressions": 16,
+          "position": 10.9375,
+          "answered": true,
+          "coverage": 0.9,
+          "missing_aspects": [],
+          "note": "最安値がAmazonであることや、他のサイトとの価格差について具体的に記載されており、ユーザーの「安く買いたい」という意図に十分応えています。",
+          "error": null
+        },
+        {
           "query": "ジェリーブロックス 安い",
           "impressions": 5,
-          "position": 9.0,
+          "position": 10.0,
           "answered": true,
           "coverage": 0.9,
           "missing_aspects": [
@@ -187,84 +153,96 @@
           ],
           "note": "最安値がAmazonであることと、具体的な価格比較が示されており、ユーザーの「どこで買うのが安いか」という疑問に直接回答しています。",
           "error": null
-        },
+        }
+      ]
+    },
+    {
+      "page": "https://navi.omcha.jp/products/b01g81ip9c/",
+      "asin": "B01G81IP9C",
+      "page_coverage_avg": 0.8,
+      "queries": [
         {
-          "query": "ジェリー ブロック 安い",
-          "impressions": 3,
-          "position": 11.666666666666666,
-          "answered": true,
-          "coverage": 0.9,
-          "missing_aspects": [],
-          "note": "最安値がAmazonであることや、他のサイトとの価格差について具体的に記載されており、ユーザーの「安く買いたい」という意図に十分応えています。",
-          "error": null
-        },
-        {
-          "query": "ジェリーブロックス 対象 年齢",
+          "query": "アンパンマン よくばりキューブ",
           "impressions": 1,
-          "position": 11.0,
+          "position": 22.0,
           "answered": true,
-          "coverage": 1.0,
-          "missing_aspects": [],
-          "note": "対象年齢について、仕様欄とQ&Aの両方で明確に回答されています。",
+          "coverage": 0.8,
+          "missing_aspects": [
+            "具体的な遊び方の詳細（13種類の遊びの内容）",
+            "実際のユーザーによる具体的な口コミ内容",
+            "商品のサイズ感や重量に関する詳細情報"
+          ],
+          "note": "製品の基本スペック、価格比較、対象年齢といった主要な疑問には簡潔に回答できています。",
           "error": null
         }
       ]
     },
     {
-      "page": "https://navi.omcha.jp/products/b0h454qhlx/",
-      "asin": "B0H454QHLX",
-      "page_coverage_avg": 0.5,
+      "page": "https://navi.omcha.jp/products/b08fmq6nlh/",
+      "asin": "B08FMQ6NLH",
+      "page_coverage_avg": 0.56,
       "queries": [
         {
-          "query": "水感スクイーズ どこで売ってる",
-          "impressions": 2,
-          "position": 12.0,
-          "answered": true,
-          "coverage": 0.6,
-          "missing_aspects": [
-            "実店舗（100均、玩具店、ドン・キホーテ等）での販売状況",
-            "その他のオンラインショップの具体的な名称や価格比較"
-          ],
-          "note": "Amazonでの購入については言及されていますが、「どこで売ってる」という広範な疑問に対し、実店舗での取り扱い有無などの情報が不足しています。",
-          "error": null
-        },
-        {
-          "query": "水感スクイーズ どこに 売ってる",
-          "impressions": 2,
-          "position": 19.5,
-          "answered": true,
-          "coverage": 0.7,
-          "missing_aspects": [
-            "実店舗（100均、玩具店など）での販売状況",
-            "その他のオンラインショップの有無"
-          ],
-          "note": "Amazonでの購入価格については具体的に示されていますが、「どこに売っているか」という問いに対し、実店舗の情報が不足しています。",
-          "error": null
-        },
-        {
-          "query": "水感スクイーズ 売ってる場所",
-          "impressions": 1,
-          "position": 9.0,
+          "query": "ゆらりんタワー 遊び方",
+          "impressions": 5,
+          "position": 10.2,
           "answered": false,
           "coverage": 0.3,
           "missing_aspects": [
-            "実店舗での販売状況（100均、玩具店、ドン・キホーテなど）",
-            "Amazon以外のオンラインショップの具体的な名称や比較情報"
+            "具体的な遊び方の手順やバリエーション",
+            "成長段階ごとの遊び方の詳細（例：握る、重ねる、倒すなど）"
           ],
-          "note": "Amazonでの購入については触れられていますが、「売ってる場所」を求めるユーザーが期待する実店舗の情報が不足しています。",
+          "note": "「成長と共に重ねて遊ぶことができる」という記述はありますが、具体的な遊び方のプロセスが不足しています。",
           "error": null
         },
         {
-          "query": "水感スクイーズ売ってる場所",
-          "impressions": 1,
-          "position": 12.0,
+          "query": "ゆらりんタワーコインスロット",
+          "impressions": 5,
+          "position": 9.0,
           "answered": false,
-          "coverage": 0.4,
+          "coverage": 0.0,
           "missing_aspects": [
-            "実店舗での販売状況（100円ショップ、玩具店など）",
-            "その他のオンラインショップの具体的な名称や比較情報"
+            "コインスロット機能に関する記述",
+            "コインを使った遊び方や仕組み"
           ],
-          "note": "Amazonでの価格には触れていますが、「どこで売っているか」という場所に関する情報が限定的であり、実店舗の情報が不足しています。",
+          "note": "検索クエリは「コインスロット」という特定の機能について尋ねていますが、記事内にはその要素に関する情報が一切含まれていません。",
+          "error": null
+        },
+        {
+          "query": "ゆらり ん タワー 口コミ",
+          "impressions": 2,
+          "position": 9.5,
+          "answered": true,
+          "coverage": 0.7,
+          "missing_aspects": [
+            "具体的なユーザーの生の声（良い点・悪い点の詳細）",
+            "実際の使用感に関するエピソード"
+          ],
+          "note": "最安値や仕様などの情報は網羅されていますが、「口コミ」というクエリに対しては、購入者の具体的な感想内容が不足しています。",
+          "error": null
+        },
+        {
+          "query": "ゆらりんタワー",
+          "impressions": 1,
+          "position": 21.0,
+          "answered": true,
+          "coverage": 0.8,
+          "missing_aspects": [
+            "具体的なサイズ感（高さや直径）",
+            "実際の使用者の詳細な口コミ内容（メリット・デメリットの詳細）",
+            "メンテナンス方法（お手入れのしやすさ）"
+          ],
+          "note": "製品の基本情報、価格、対象年齢、安全性といった主要な疑問には簡潔に回答できています。",
+          "error": null
+        },
+        {
+          "query": "ゆらりんタワー いつから",
+          "impressions": 1,
+          "position": 10.0,
+          "answered": true,
+          "coverage": 1.0,
+          "missing_aspects": [],
+          "note": "Q&Aセクションで「6ヶ月から」と明確に回答されており、ユーザーの疑問に直接答えています。",
           "error": null
         }
       ]
