@@ -307,6 +307,115 @@ def test_gather_antigravity_does_not_retry_nonzero_exit(monkeypatch):
 
 
 # --------------------------------------------------------------------------
+# AgyCircuitBreaker: agy が連続で何も返さない run で時間を払い続けない (#6602)
+# --------------------------------------------------------------------------
+
+def _always_empty(calls, stderr=""):
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return _FakeCompletedProcess(returncode=0, stdout="", stderr=stderr)
+    return fake_run
+
+
+def test_breaker_trips_after_threshold_and_stops_spawning_agy(monkeypatch, capsys):
+    """2026-09-11〜13 の再現: 全商品で空応答 → 1 商品 3 回ずつ払い続けて timeout。
+
+    閾値に達したら、以降の商品では subprocess を 1 回も起こさない。
+    """
+    calls = []
+    monkeypatch.setattr("scripts.mine_experience.subprocess.run", _always_empty(calls))
+    breaker = mine_experience.AgyCircuitBreaker(threshold=3)
+    per_product = mine_experience._MAX_EXTRA_RETRIES + 1
+
+    for _ in range(3):
+        assert gather_antigravity("商品名", "ブランド", sleeper=lambda _s: None, breaker=breaker) == []
+    assert breaker.tripped
+    assert len(calls) == 3 * per_product
+
+    for _ in range(15):
+        assert gather_antigravity("商品名", "ブランド", sleeper=lambda _s: None, breaker=breaker) == []
+    assert len(calls) == 3 * per_product  # 増えていない
+    assert breaker.summary() == {"ok": 0, "failed": 3, "skipped_by_breaker": 15, "tripped": True}
+    # 黙って緑にしない: annotation は開いたときに 1 回だけ
+    assert capsys.readouterr().out.count("::warning title=agy circuit breaker::") == 1
+
+
+def test_breaker_does_not_trip_on_scattered_failures(monkeypatch):
+    """正常な日にも空応答は散発する (直近 7 run で最大 2 連続)。それで止めない。"""
+    outcomes = iter(["", "", "", "ok", "", "", "", "", "", "", "ok", "", "", ""])
+
+    def fake_run(cmd, **kwargs):
+        return _FakeCompletedProcess(returncode=0, stdout=next(outcomes))
+
+    monkeypatch.setattr("scripts.mine_experience.subprocess.run", fake_run)
+    breaker = mine_experience.AgyCircuitBreaker(threshold=3)
+    # 商品ごと: 失敗 / 成功 / 失敗 / 失敗 / 成功 / 失敗 (失敗 = 3 回とも空)
+    results = [
+        gather_antigravity("商品名", "ブランド", sleeper=lambda _s: None, breaker=breaker)
+        for _ in range(6)
+    ]
+    assert [bool(r) for r in results] == [False, True, False, False, True, False]
+    assert not breaker.tripped
+    assert breaker.summary()["ok"] == 2
+    assert breaker.summary()["failed"] == 4
+
+
+def test_breaker_counts_timeout_but_not_fast_failures(monkeypatch):
+    """timeout は時間を払うので数える。非ゼロ終了・PATH に無いは即座に返るので数えない。"""
+    breaker = mine_experience.AgyCircuitBreaker(threshold=2)
+
+    def nonzero(cmd, **kwargs):
+        return _FakeCompletedProcess(returncode=1, stderr="boom")
+
+    monkeypatch.setattr("scripts.mine_experience.subprocess.run", nonzero)
+    for _ in range(5):
+        gather_antigravity("商品名", "ブランド", sleeper=lambda _s: None, breaker=breaker)
+    assert not breaker.tripped
+    assert breaker.failed == 0
+
+    def timeout(cmd, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=cmd, timeout=120)
+
+    monkeypatch.setattr("scripts.mine_experience.subprocess.run", timeout)
+    for _ in range(2):
+        gather_antigravity("商品名", "ブランド", sleeper=lambda _s: None, breaker=breaker)
+    assert breaker.tripped
+
+
+def test_empty_response_logs_agy_stderr(monkeypatch, caplog):
+    """exit 0 の空応答でも agy は理由を stderr に書く。run ログから原因を辿れるようにする。"""
+    calls = []
+    reason = 'jetski: no output produced — a tool required the "command" permission'
+    monkeypatch.setattr("scripts.mine_experience.subprocess.run", _always_empty(calls, stderr=reason))
+    with caplog.at_level("WARNING", logger=mine_experience.logger.name):
+        gather_antigravity("商品名", "ブランド", sleeper=lambda _s: None)
+    assert any("command" in r.getMessage() and "空応答" in r.getMessage() for r in caplog.records)
+
+
+def test_gather_antigravity_without_breaker_is_unchanged(monkeypatch):
+    """bench (bench_agy_model / bench_snippet_yield) は breaker を渡さない。挙動を変えない。"""
+    calls = []
+    monkeypatch.setattr("scripts.mine_experience.subprocess.run", _always_empty(calls))
+    for _ in range(5):
+        gather_antigravity("商品名", "ブランド", sleeper=lambda _s: None)
+    assert len(calls) == 5 * (mine_experience._MAX_EXTRA_RETRIES + 1)
+
+
+def test_run_shares_one_breaker_across_asins_and_reports_it(tmp_path, monkeypatch):
+    import scripts.mine_experience as mod
+    seen = []
+
+    def fake_mine_asin(asin, **kw):
+        seen.append(kw["agy_breaker"])
+        return None
+
+    monkeypatch.setattr(mod, "mine_asin", fake_mine_asin)
+    summary = mod.run(["B0AAAAAAAA1", "B0AAAAAAAA2"], base=tmp_path / "per_asin")
+    assert seen[0] is seen[1]
+    assert summary["agy"] == {"ok": 0, "failed": 0, "skipped_by_breaker": 0, "tripped": False}
+
+
+# --------------------------------------------------------------------------
 # gather_threads
 # --------------------------------------------------------------------------
 
