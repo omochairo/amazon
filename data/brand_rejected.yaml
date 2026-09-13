@@ -140,3 +140,32 @@ rejected:
     reason: YouTube チャンネル/番組名。商品は DVD (スーパーシンプルソングス2 赤ちゃんサメ DVD) で玩具本体ではない
     reviewed: 2026-09-08
     source: "#2931"
+
+  # --- 同名別業種の誤マッチ (#7179 実査) ---
+  - brand: POMONA
+    category: mismatch
+    reason: 米Pomona Electronics (計測器/テストリード) の社名と同名。カタログの布絵本商品とは無関係
+    reviewed: 2026-09-13
+    source: "#7179"
+
+  # --- ランダム英字 OEM (実体裏取り不可・#7179 実査) ---
+  - brand: Elovra
+    category: unverifiable_oem
+    reason: 水感スクイーズの汎用出品名。公式サイト・独立ストア等の裏付けなし
+    reviewed: 2026-09-13
+    source: "#7179"
+  - brand: AAXU
+    category: unverifiable_oem
+    reason: 同名で全く無関係な商品カテゴリ (キッズ美容師ごっこ玩具 / IGTテーブル用ウォールナット天板) に使われており独自ブランド実体を確認できず
+    reviewed: 2026-09-13
+    source: "#7179"
+  - brand: Cninyck
+    category: unverifiable_oem
+    reason: 「めろジョイ」の模倣品と無関係なウサギランプ工作キットが同名義で並存しており、独自ブランド実体ではなく汎用OEM出品名
+    reviewed: 2026-09-13
+    source: "#7179"
+  - brand: paerwrs
+    category: unverifiable_oem
+    reason: 光る猫ランプお絵描きセットの汎用出品名。公式サイト・独立ストア等の裏付けなし
+    reviewed: 2026-09-13
+    source: "#7179"
