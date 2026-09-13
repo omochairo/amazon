@@ -95,6 +95,23 @@ ANTIGRAVITY_TIMEOUT_S = 120
 # 値の根拠は scripts/bench_agy_model.py の実測 (docs/ANTIGRAVITY_MODEL_BENCH.md)。
 DEFAULT_ANTIGRAVITY_MODEL = "gemini-3.8-flash-low"
 
+# run 単位のサーキットブレーカー (#6602)。
+#
+# 2026-09-11 から agy の Web 検索ツールが `no summary returned from GenerateContent`
+# で失敗し続け、モデルが代わりに RunCommand を試みて print モードで auto-deny →
+# **exit 0 の空応答**になった。モデル (flash-low / pro-low) にも agy のバージョン
+# (1.1.28 / 1.2.2) にも依らない。空応答リトライ (#6578) は 1 ASIN あたり約 61 秒を
+# 3 回とも空で使い切り、それが 18 ASIN 続いて mine ステップの 45 分 timeout に
+# 当たり、末尾の ASIN が落ちた (3 日連続)。
+#
+# 閾値 3 の根拠は直近 7 run の「全試行が空だった ASIN」の最大連続数:
+# 正常な日は 0〜2、壊れた日は 10〜18。3 で両者が分かれる。
+#
+# 開いたら **その run の間は戻さない**。half-open で様子を見ると壊れた日に
+# 1 回ずつ 61 秒払い続けるうえ、1 run の中で直るのを待つ理由がない (翌日の run が
+# 閉じた状態から始まる)。
+AGY_BREAKER_THRESHOLD = 3
+
 # 出典 URL の収集 (#6588 の probe を受けて)。
 # 自社ドメインは **必ず除く**。probe で navi.omcha.jp の当該 ASIN 記事そのものと
 # omcha.jp が「購入者の口コミ」の出典として返ってきた。自分の書いた記事を自分の
@@ -372,10 +389,58 @@ def build_antigravity_argv(prompt: str, model: str | None) -> list[str]:
     return argv
 
 
+class AgyCircuitBreaker:
+    """agy が連続して何も返さないとき、その run の残りで agy を呼ばない。
+
+    数えるのは「時間を払って何も得られなかった」結果だけ (全試行の空応答と
+    timeout)。非ゼロ終了と PATH に無いは即座に返るので、止める理由にならない。
+
+    **黙って緑にしない** (#4793): 開いたときに GitHub Actions の warning
+    annotation を 1 回出し、run の summary にも回数を残す。
+    """
+
+    def __init__(self, threshold: int = AGY_BREAKER_THRESHOLD):
+        self.threshold = threshold
+        self.consecutive_failures = 0
+        self.tripped = False
+        self.ok = 0
+        self.failed = 0
+        self.skipped = 0
+
+    def allow(self) -> bool:
+        if self.tripped:
+            self.skipped += 1
+            return False
+        return True
+
+    def record_ok(self) -> None:
+        self.ok += 1
+        self.consecutive_failures = 0
+
+    def record_failure(self, reason: str) -> None:
+        self.failed += 1
+        self.consecutive_failures += 1
+        if not self.tripped and self.consecutive_failures >= self.threshold:
+            self.tripped = True
+            msg = (
+                f"agy が {self.consecutive_failures} 商品連続で何も返さなかったため、"
+                f"この run の残りでは antigravity レーンを止めます (直近: {reason})"
+            )
+            logger.warning(msg)
+            print(f"::warning title=agy circuit breaker::{msg}", flush=True)
+
+    def summary(self) -> dict:
+        return {
+            "ok": self.ok, "failed": self.failed,
+            "skipped_by_breaker": self.skipped, "tripped": self.tripped,
+        }
+
+
 def gather_antigravity(
     product_name: str, brand: str, *, timeout_s: int = ANTIGRAVITY_TIMEOUT_S,
     model: str | None = None, sleeper=time.sleep,
     session: requests.Session | None = None,
+    breaker: AgyCircuitBreaker | None = None,
 ) -> list[dict]:
     """Antigravity CLI (`agy`) をヘッドレス実行し、Web 検索に基づく口コミ要約を取得する。
 
@@ -395,7 +460,12 @@ def gather_antigravity(
     リトライを空応答に限るのは、それが実測した失敗モードだから。timeout は
     1 回 120s を積み増すだけで costly、非ゼロ終了は認証・PATH 等リトライで
     直らない類が主なので、どちらも従来どおり 1 回で諦める。
+
+    `breaker` を渡すと、空応答と timeout を商品単位で数え、連続したら以降の
+    呼び出しを subprocess を起こさずに skip する (AgyCircuitBreaker)。
     """
+    if breaker is not None and not breaker.allow():
+        return []
     prompt = build_antigravity_prompt(product_name, brand)
     if model is None:
         model = os.environ.get("ANTIGRAVITY_MODEL", DEFAULT_ANTIGRAVITY_MODEL)
@@ -424,6 +494,8 @@ def gather_antigravity(
                 return []
         except subprocess.TimeoutExpired:
             logger.warning("agy 呼び出しが timeout (%ds) — antigravity skip", timeout_s)
+            if breaker is not None:
+                breaker.record_failure(f"timeout {timeout_s}s")
             return []
 
         if result.returncode != 0:
@@ -438,6 +510,8 @@ def gather_antigravity(
         if text:
             if attempt > 1:
                 logger.info("agy が %d 回目の試行で応答 (model=%s)", attempt, model)
+            if breaker is not None:
+                breaker.record_ok()
             source_urls = resolve_source_urls(text, session=session)
             return [{
                 # gemma に渡すのは日本語の本文だけでよい。grounding redirect の
@@ -459,9 +533,15 @@ def gather_antigravity(
             )
             sleeper(_RETRY_SLEEP_SECONDS)
 
+    # stderr を残す。exit 0 の空応答でも agy は理由を stderr に書くことがあり
+    # (「tool が auto-deny された」等)、これが無いと run ログから原因を辿れない。
+    detail = (result.stderr or "").strip()[:200] if result is not None else ""
     logger.warning(
-        "agy が %d 回とも空応答 (model=%s) — antigravity skip", attempts, model,
+        "agy が %d 回とも空応答 (model=%s) — antigravity skip%s",
+        attempts, model, f": {detail}" if detail else "",
     )
+    if breaker is not None:
+        breaker.record_failure(detail or "空応答")
     return []
 
 
@@ -784,6 +864,7 @@ def mine_asin(
     session: requests.Session | None = None,
     sleeper=time.sleep,
     num_ctx: int = DEFAULT_NUM_CTX,
+    agy_breaker: AgyCircuitBreaker | None = None,
 ) -> dict | None:
     """1 ASIN 分の候補収集 + gemma 抽出を行い、experience.json payload を返す
     (snippets 0 件なら None)。"""
@@ -794,7 +875,7 @@ def mine_asin(
         return None
 
     candidates: list[dict] = []
-    candidates += gather_antigravity(product_name, brand, session=session)
+    candidates += gather_antigravity(product_name, brand, session=session, breaker=agy_breaker)
     candidates += gather_third_party(asin, base=base, session=session)
     candidates += gather_threads(product_name, session=session)
     candidates += gather_youtube_opportunistic(asin, base=base)
@@ -833,13 +914,17 @@ def run(
     num_ctx: int = DEFAULT_NUM_CTX,
 ) -> dict:
     session = requests.Session()
+    agy_breaker = AgyCircuitBreaker()
     written = 0
     skipped = 0
     for asin in targets:
         if dry_run:
             logger.info("[dry-run] would mine %s", asin)
             continue
-        payload = mine_asin(asin, base=base, ollama_url=ollama_url, model=model, session=session, num_ctx=num_ctx)
+        payload = mine_asin(
+            asin, base=base, ollama_url=ollama_url, model=model, session=session,
+            num_ctx=num_ctx, agy_breaker=agy_breaker,
+        )
         if payload is None:
             skipped += 1
             logger.info("%s: 0 snippets — not written", asin)
@@ -847,7 +932,10 @@ def run(
         out_path = write_experience(asin, payload, base=base)
         written += 1
         logger.info("%s: wrote %s (%d snippets)", asin, out_path, len(payload["snippets"]))
-    summary = {"targets": len(targets), "written": written, "skipped": skipped}
+    summary = {
+        "targets": len(targets), "written": written, "skipped": skipped,
+        "agy": agy_breaker.summary(),
+    }
     logger.info("done: %s", json.dumps(summary, ensure_ascii=False))
     return summary
 
