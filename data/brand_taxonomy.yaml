@@ -39,7 +39,7 @@ brands:
     region: JP
     safety_default: [ST]
   - canonical: タカラトミー
-    aliases: [タカラトミー(TAKARA TOMY), TAKARA TOMY, タカラトミーアーツ, タカラトミーマーケティング, トミカ, TOMICA, プラレール, PLARAIL, リカちゃん, ベイブレード, BEYBLADE, Beyblade, ベイブレードX, "ベイブレードx", ベイブレードバースト, ゾイド, ZOIDS, デュエル・マスターズ]
+    aliases: [タカラトミー(TAKARA TOMY), TAKARA TOMY, タカラトミーアーツ, タカラトミーマーケティング, トミカ, TOMICA, プラレール, PLARAIL, リカちゃん, ベイブレード, BEYBLADE, Beyblade, ベイブレードX, "ベイブレードx", ベイブレードバースト, ゾイド, ZOIDS, デュエル・マスターズ, トランスフォーマー]
     tier: S
     region: JP
     safety_default: [ST]
@@ -1334,8 +1334,9 @@ brands:
     tier: C
     region: JP
   # 人と木=木製の雛人形・五月人形・木のおもちゃ工房 (hito-to-ki.com)。
+  # 2026-09-13 (#7179): カタログの表記ゆれ「木製節句飾り 人と木」を alias 追加。
   - canonical: 人と木
-    aliases: [人と木]
+    aliases: [人と木, 木製節句飾り 人と木]
     tier: C
     region: JP
   # ロボットプラザ=ロボット/ドローン玩具の輸入・販売 (robotplaza.jp, 公式ストア)。
@@ -1471,8 +1472,10 @@ brands:
     aliases: [JPjoy]
     tier: D
     region: JP
+  # 2026-09-13 (#7179): 「ふんわりえほん」は amanoppo の布絵本シリーズ名 (#2931 で
+  # 保留だった候補。今回カタログの商品名で amanoppo(あまのっぽ) の商品ラインと確認)。
   - canonical: amanoppo
-    aliases: [amanoppo, あまのっぽ]
+    aliases: [amanoppo, あまのっぽ, ふんわりえほん]
     tier: D
     region: JP
   # 以下は販社・ショップ名 (前例: こまもの本舗) と中華新興ブランド。
@@ -1490,3 +1493,64 @@ brands:
   - {canonical: Vexolite, tier: D, region: CN, noindex: true, aliases: [Vexolite]}
   - {canonical: Kitai Japan, tier: D, region: CN, noindex: true, aliases: [Kitai Japan]}
   - {canonical: SAKURAN, tier: D, region: CN, noindex: true, aliases: [SAKURAN]}
+
+  # 2026-09-13 (#7179): 供給側検出器がカタログ未登録のまま浮上した24候補を実データ
+  # (product.brand + 商品名) と Web 検証で判定。
+  # ZipString=光るロープトイ。ドリームブロッサム(dreamblossom.jp)が国内正規代理店、
+  # 世界50カ国展開。JELLY JELLY GAMES=ボードゲーム版元 Picart Design、公式サイト
+  # (jelly2games.com) と実店舗 (JELLY JELLY CAFE/STORE) あり。
+  - canonical: ZipString
+    aliases: [ZipString, ジップストリング]
+    tier: B
+    region: US
+  - canonical: Elenco
+    aliases: [Elenco]
+    tier: B
+    region: US
+  - canonical: JELLY JELLY GAMES
+    aliases: [JELLY JELLY GAMES, JELLYJELLYGAMES]
+    tier: B
+    region: JP
+  # キャッスルエンタープライズ=通販卸40年の会社(castle-e.net)。昔ながらの木製玩具卸。
+  - canonical: キャッスルエンタープライズ
+    aliases: [キャッスルエンタープライズ, "キャッスルエンタープライズ(Castle Enterprise)", Castle Enterprise]
+    tier: C
+    region: JP
+  # ティーズファクトリー=キャラクターグッズメーカー、公式サイト (ts-fa.jp) あり。
+  - canonical: ティーズファクトリー
+    aliases: [ティーズファクトリー]
+    tier: C
+    region: JP
+  # デビカ=文具・知育玩具メーカー、公式サイト (debika.co.jp) + Wikipedia項目あり。
+  - canonical: デビカ
+    aliases: [デビカ]
+    tier: C
+    region: JP
+  # 童友社=1951年創業のプラモデルメーカー、公式サイト (doyusha-model.com) + Wikipedia項目あり。
+  - canonical: 童友社
+    aliases: [童友社]
+    tier: B
+    region: JP
+  # めろジョイ=中華発の水感スクイーズブーム発端ブランド。@DIME/ロケットニュース24等の
+  # メディアが模倣品と区別して報じており実体が確認できる (Cninyck 名義の模倣品は却下側)。
+  - canonical: めろジョイ
+    aliases: [めろジョイ]
+    tier: D
+    region: CN
+  # 以下は実在する Amazon 出品者名だが薄いハブ不要 = noindex (既存 Jasonwell/beiens 等と同方針)。
+  # ALIVTAII/Chicer/Quikaboo/FLUFFYFUN/LAMPTOP/XIUXIUAI は各々カタログ内で商品ライン
+  # が一貫しており独立出品者と判断。キュートジャパンは同名企業が複数存在し実体を
+  # 一意に特定できないが、商品 (日本製ミニカーケース) 自体は一貫しているため商品帰属
+  # 目的で登録。XIUXIUAI の実商品はホラー音楽ゲーム「スプランキー」の非公式ブロックだが
+  # (#2931 で却下済み)、XIUXIUAI 自体は おもちゃ実業/HOMANY と同様の販売者名のため登録。
+  - {canonical: ALIVTAII, tier: D, region: CN, noindex: true, aliases: [ALIVTAII]}
+  - {canonical: Chicer, tier: D, region: CN, noindex: true, aliases: [Chicer]}
+  - {canonical: Quikaboo, tier: D, region: unknown, noindex: true, aliases: [Quikaboo]}
+  - {canonical: FLUFFYFUN, tier: D, region: unknown, noindex: true, aliases: [FLUFFYFUN]}
+  - {canonical: LAMPTOP, tier: D, region: CN, noindex: true, aliases: [LAMPTOP]}
+  - {canonical: XIUXIUAI, tier: D, region: CN, noindex: true, aliases: [XIUXIUAI]}
+  - {canonical: キュートジャパン, tier: D, region: JP, noindex: true, aliases: [キュートジャパン]}
+  - canonical: ねずみスマイル
+    aliases: [ねずみスマイル]
+    tier: D
+    region: JP
