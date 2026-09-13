@@ -381,9 +381,11 @@ jobs:
       # アーキテクチャ上で復元できる (未 dispatch でも次の cascade push で相乗り
       # mirror されるが、それだと数時間遅延する)。
       - name: Wait for merge and dispatch GitLab mirror
+        id: wait-for-merge
         if: steps.scope.outputs.eligible == 'true' || steps.repair.outputs.repaired == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
         run: |
@@ -392,7 +394,8 @@ jobs:
           MAX_ATTEMPTS=24
           attempt=0
           while [ $attempt -lt $MAX_ATTEMPTS ]; do
-            state=$(gh pr view "$PR_NUMBER" -R "$REPO" --json state --jq '.state' || echo "UNKNOWN")
+            pr_json=$(gh pr view "$PR_NUMBER" -R "$REPO" --json state,mergeStateStatus,autoMergeRequest,headRefOid || echo '{}')
+            state=$(echo "$pr_json" | jq -r '.state // "UNKNOWN"')
             echo "Attempt $((attempt+1))/$MAX_ATTEMPTS: PR #$PR_NUMBER state=$state"
             if [ "$state" = "MERGED" ]; then
               echo "PR merged. Dispatching GitLab mirror to publish."
@@ -410,6 +413,25 @@ jobs:
             if [ "$state" = "CLOSED" ]; then
               echo "PR closed without merge. Skipping mirror dispatch."
               exit 0
+            fi
+            # 2026-09-13 (#7225): 上の "Enable native auto-merge" は pull_request
+            # イベント発火直後、required checks がまだ完走していない unstable 状態で
+            # 実行されるため `gh pr merge --auto` が失敗しうる。失敗しても PR は
+            # 止めない設計 (次の synchronize run が再試行する想定) だが、その後 head
+            # に追いコミットが無ければ synchronize が二度と発火せず、auto-merge 登録が
+            # 永久に再試行されないまま滞留する (PR #7057 で発生)。
+            # ここは既存の 6 分ポーリング内なので、auto-merge が未登録
+            # (autoMergeRequest == null) かつ mergeStateStatus が CLEAN まで進んでいたら
+            # その場で再試行する。#6788 の安全策 (--match-head-commit) はそのまま維持し、
+            # head が動いていれば gh pr merge 自体が失敗して次回ポーリングに回る。
+            auto_merge_armed=$(echo "$pr_json" | jq -r 'if .autoMergeRequest == null then "false" else "true" end')
+            merge_state=$(echo "$pr_json" | jq -r '.mergeStateStatus // "UNKNOWN"')
+            if [ "$auto_merge_armed" = "false" ] && [ "$merge_state" = "CLEAN" ]; then
+              head_sha=$(echo "$pr_json" | jq -r '.headRefOid')
+              echo "auto-merge not armed and mergeStateStatus=CLEAN; retrying enable (#7225)"
+              gh pr merge --auto --squash --delete-branch --match-head-commit "$head_sha" "$PR_URL" \
+                && echo "Auto-merge (squash + delete-branch, pinned to $head_sha) enabled on retry." \
+                || echo "::warning::retry of gh pr merge --auto failed (head may have moved); will retry next poll"
             fi
             attempt=$((attempt+1))
             sleep 15
