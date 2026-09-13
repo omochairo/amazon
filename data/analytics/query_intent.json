@@ -1,8 +1,9 @@
 {
   "source_range": {
-    "start": "2026-08-27",
-    "end": "2026-09-03",
+    "start": "2026-09-03",
+    "end": "2026-09-10",
     "days": 7,
+    "window_days": 8,
     "delay_days": 3
   },
   "params": {
@@ -12,140 +13,174 @@
   },
   "detected": [
     {
-      "page": "https://navi.omcha.jp/products/b0hdb8kg6g/",
+      "page": "https://navi.omcha.jp/products/b010cqeucu/",
       "dominant_intent": "informational",
-      "dominant_share": 0.989,
-      "total_impressions": 90,
+      "dominant_share": 0.988,
+      "total_impressions": 83,
       "intent_breakdown": {
-        "informational": 89,
+        "informational": 82,
         "commercial": 1
       },
       "cta_recommendation": "冒頭で結論/答えを先出しし、比較表・関連記事で滞在を伸ばす。購入 CTA は本文中盤以降に控えめに配置 (情報目的の離脱を防ぐ)。",
       "top_queries": [
         {
-          "query": "シャインアルカナロッド 電池",
+          "query": "ボーネルンド ラッパ",
           "intent": "informational",
-          "impressions": 74,
+          "impressions": 49,
           "clicks": 0,
-          "position": 10.175675675675675
+          "position": 9.46938775510204
         },
         {
-          "query": "アルカナシャイン 使い方",
+          "query": "ボーネルンド トランペット",
           "intent": "informational",
-          "impressions": 7,
+          "impressions": 15,
           "clicks": 0,
-          "position": 9.428571428571429
+          "position": 8.933333333333334
         },
         {
-          "query": "シャインアルカナロッド 開かない",
+          "query": "アンビトーイ トランペット",
           "intent": "informational",
-          "impressions": 4,
+          "impressions": 14,
           "clicks": 0,
-          "position": 3.75
+          "position": 6.642857142857143
         },
         {
-          "query": "シャインアルカナロッド amazon",
+          "query": "ラッパ ボーネルンド",
           "intent": "informational",
-          "impressions": 1,
+          "impressions": 3,
           "clicks": 0,
-          "position": 10.0
+          "position": 10.333333333333334
         },
         {
-          "query": "シャインアルカナロッド joshin",
-          "intent": "informational",
-          "impressions": 1,
-          "clicks": 0,
-          "position": 30.0
-        },
-        {
-          "query": "シャインアルカナロッド どこで売ってる",
-          "intent": "informational",
-          "impressions": 1,
-          "clicks": 0,
-          "position": 12.0
-        },
-        {
-          "query": "ティアアルカナロッド レビュー",
+          "query": "caividom 口コミ",
           "intent": "commercial",
           "impressions": 1,
           "clicks": 0,
-          "position": 19.0
+          "position": 7.0
         },
         {
-          "query": "ミニチュアコレクション ティアアルカナロッド イオン",
+          "query": "ボーネルンド ラッパ 洗い 方",
           "intent": "informational",
           "impressions": 1,
           "clicks": 0,
-          "position": 28.0
+          "position": 11.0
         }
       ]
     },
     {
-      "page": "https://navi.omcha.jp/products/b0h7mkjq9g/",
-      "dominant_intent": "informational",
-      "dominant_share": 0.785,
-      "total_impressions": 79,
+      "page": "https://navi.omcha.jp/products/b0h4ppv8mr/",
+      "dominant_intent": "commercial",
+      "dominant_share": 0.863,
+      "total_impressions": 73,
       "intent_breakdown": {
-        "informational": 62,
-        "commercial": 17
+        "commercial": 63,
+        "informational": 10
       },
-      "cta_recommendation": "冒頭で結論/答えを先出しし、比較表・関連記事で滞在を伸ばす。購入 CTA は本文中盤以降に控えめに配置 (情報目的の離脱を防ぐ)。",
+      "cta_recommendation": "購入 CTA (価格 + Amazon/楽天ボタン + 比較表) を above-the-fold で強調。買い手意図のクエリが主流なので、結論 (買うべき商品) を早く提示する。",
       "top_queries": [
         {
-          "query": "たまごっち 何歳から",
-          "intent": "informational",
-          "impressions": 39,
-          "clicks": 0,
-          "position": 10.461538461538462
-        },
-        {
-          "query": "たまごっちパラダイス 何歳から",
-          "intent": "informational",
-          "impressions": 10,
-          "clicks": 0,
-          "position": 7.6
-        },
-        {
-          "query": "たまごっちパラダイス 最安値",
+          "query": "グローリーワルキューレ値段",
           "intent": "commercial",
-          "impressions": 7,
+          "impressions": 43,
           "clicks": 0,
-          "position": 10.0
+          "position": 12.186046511627907
         },
         {
-          "query": "たまごっち何歳から",
-          "intent": "informational",
+          "query": "グローリーワルキューレ価格",
+          "intent": "commercial",
+          "impressions": 11,
+          "clicks": 0,
+          "position": 11.090909090909092
+        },
+        {
+          "query": "グローリーワルキューレ 価格",
+          "intent": "commercial",
           "impressions": 4,
-          "clicks": 0,
-          "position": 10.5
-        },
-        {
-          "query": "たまごっちパラダイス 値段",
-          "intent": "commercial",
-          "impressions": 3,
-          "clicks": 0,
-          "position": 15.0
-        },
-        {
-          "query": "たまごっち パラダイス レビュー",
-          "intent": "commercial",
-          "impressions": 1,
-          "clicks": 1,
-          "position": 34.0
-        },
-        {
-          "query": "たまごっちパラダイス 価格",
-          "intent": "commercial",
-          "impressions": 1,
           "clicks": 0,
           "position": 11.0
         },
         {
-          "query": "たまごっち どこで 買える 在庫あり",
+          "query": "ux-20 定価",
+          "intent": "informational",
+          "impressions": 3,
+          "clicks": 0,
+          "position": 10.333333333333334
+        },
+        {
+          "query": "グローリーワルキューレ 値段",
+          "intent": "commercial",
+          "impressions": 3,
+          "clicks": 0,
+          "position": 12.0
+        },
+        {
+          "query": "b0h4ppv8mr",
+          "intent": "informational",
+          "impressions": 2,
+          "clicks": 0,
+          "position": 11.0
+        },
+        {
+          "query": "ux20",
           "intent": "informational",
           "impressions": 1,
           "clicks": 0,
-          "position": 27.0
+          "position": 10.0
+        },
+        {
+          "query": "これは？",
+          "intent": "informational",
+          "impressions": 1,
+          "clicks": 0,
+          "position": 14.0
+        }
+      ]
+    },
+    {
+      "page": "https://navi.omcha.jp/english-toys/",
+      "dominant_intent": "commercial",
+      "dominant_share": 0.84,
+      "total_impressions": 50,
+      "intent_breakdown": {
+        "commercial": 42,
+        "informational": 8
+      },
+      "cta_recommendation": "購入 CTA (価格 + Amazon/楽天ボタン + 比較表) を above-the-fold で強調。買い手意図のクエリが主流なので、結論 (買うべき商品) を早く提示する。",
+      "top_queries": [
+        {
+          "query": "英語 おもちゃ ランキング",
+          "intent": "commercial",
+          "impressions": 12,
+          "clicks": 0,
+          "position": 12.916666666666666
+        },
+        {
+          "query": "知育玩具 英語 ランキング",
+          "intent": "commercial",
+          "impressions": 11,
+          "clicks": 0,
+          "position": 9.909090909090908
+        },
+        {
+          "query": "英語 おもちゃ 人気",
+          "intent": "commercial",
+          "impressions": 11,
+          "clicks": 0,
+          "position": 31.818181818181817
+        },
+        {
+          "query": "英語 おもちゃ おすすめ",
+          "intent": "commercial",
+          "impressions": 8,
+          "clicks": 0,
+          "position": 42.875
+        },
+        {
+          "query": "英語 おもちゃ ベストセラー",
+          "intent": "informational",
+          "impressions": 8,
+          "clicks": 0,
+          "position": 32.0
         }
       ]
     }
