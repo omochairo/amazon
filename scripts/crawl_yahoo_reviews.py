@@ -10,7 +10,7 @@ docs/article-quality-overhaul-design.md §5.2/§5.3)。
   1. 未ログイン・自宅回線 (K8/NAS レーン)・夜間スケジュール
   2. 1 リクエスト 15〜30 秒間隔 + ジッター、robots.txt 尊重、正直な UA
      (連絡先 URL 入り)。bot 検知の回避策は実装しない
-  3. 対象は監査対象/生成予定 ASIN に限定 (mine_experience.select_targets を流用)、
+  3. 対象は監査対象/生成予定 ASIN に限定 (mine_experience.select_mining_targets を流用)、
      日次上限あり (--max-requests, 既定 60)
   4. 原文はランナーのローカル保管のみ。既取得 ASIN は --refresh-days (既定 30) 以内
      なら skip (冪等・蓄積型)
@@ -79,7 +79,7 @@ from typing import Any
 import requests
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from mine_experience import select_targets  # noqa: E402
+from mine_experience import default_ledger_path, load_ledger, select_mining_targets  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("crawl_yahoo_reviews")
@@ -625,7 +625,11 @@ def main() -> int:
     args = ap.parse_args()
 
     asins = [a.strip() for a in args.asins.split(",") if a.strip()] or None
-    targets = select_targets(limit=args.limit, asins=asins)
+    # mine_experience と同じ選定を使う (#6602)。原文を取る ASIN と掘る ASIN が
+    # ずれると、掘る側で Yahoo 候補が 0 件になる。ledger はここでは読むだけ
+    targets, _report = select_mining_targets(
+        limit=args.limit, asins=asins, ledger=load_ledger(default_ledger_path()),
+    )
     logger.info("対象 %d ASIN: %s", len(targets), targets)
 
     run(

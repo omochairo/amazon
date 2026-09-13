@@ -239,6 +239,150 @@ def select_targets(
     return ordered
 
 
+# 鮮度を見た対象選定 (#6602)。
+#
+# select_targets は並び順の先頭 limit 件で切るだけなので、**毎日同じ先頭を
+# 掘り直していた**。2026-09-07〜13 の 7 run で延べ 133 回マイニングして ASIN は
+# 30 種類、8 ASIN は 7 日間毎日。一方で候補 80 件のうち 61 件は一度も掘られて
+# いなかった。limit を上げ下げしても先頭を回すことは変わらない。
+#
+# 鮮度の判定は 2 つの記録を使い分ける:
+#
+# - **書けた ASIN**: リポジトリの experience.json の generated_at が正。消えない。
+# - **書けなかった ASIN / agy が死んでいた回**: K8 の named volume 上の ledger。
+#   run_asin は snippets 0 件のときファイルを書かないので、リポジトリには
+#   「試した」痕跡が残らない (本文の生存者バイアス)。
+#
+# ledger を volume に置くのは、**消えても書けなかった ASIN を 1 巡余計に試すだけ**
+# だから (N3 の埋め込みキャッシュと同じ判断)。public リポジトリに毎日の試行履歴を
+# 積む理由がない。母艦から読めない代わりに、選定の内訳を Job Summary に出す。
+MINING_REFRESH_DAYS = 30   # Yahoo 原文の --refresh-days と同じ。入力が変わらない間は掘り直さない
+NO_YIELD_RETRY_DAYS = 30   # 0 件だった ASIN も、原文が更新されるまでは再試行しても同じ
+AGY_DEGRADED_REFRESH_DAYS = 7  # agy 抜きで書いた回は、agy が戻ったら早めに取り直す
+LEDGER_NAME = "mining_ledger.json"
+
+# 優先順。未処理を最優先にし、同じ区分の中は古いものから
+REASON_ORDER = ("explicit", "never", "agy_degraded", "no_yield_retry", "stale")
+SKIP_REASONS = ("fresh", "no_yield_recent")
+
+
+def default_ledger_path() -> pathlib.Path:
+    raw_dir = os.environ.get("EXPERIENCE_RAW_DIR", str(DEFAULT_EXPERIENCE_RAW_DIR))
+    return pathlib.Path(os.environ.get("EXPERIENCE_LEDGER", str(pathlib.Path(raw_dir) / LEDGER_NAME)))
+
+
+def _parse_iso(value: Any) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def load_ledger(path: pathlib.Path) -> dict:
+    """ledger を読む。無い・壊れているときは空で始める (掘り直しが増えるだけで害は無い)。"""
+    if not path.exists():
+        logger.info("マイニング ledger %s は未作成 — 空で開始します", path)
+        return {}
+    data = _load(path)
+    if not isinstance(data, dict) or not isinstance(data.get("asins"), dict):
+        logger.warning("マイニング ledger %s が読めません — 空で開始します", path)
+        return {}
+    return data["asins"]
+
+
+def save_ledger(path: pathlib.Path, entries: dict) -> None:
+    """途中で打ち切られても壊れないよう、tmp に書いてから置き換える。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(
+        json.dumps({"version": 1, "asins": entries}, ensure_ascii=False, indent=1),
+        encoding="utf-8",
+    )
+    os.replace(tmp, path)
+
+
+def classify_target(
+    asin: str, *, base: pathlib.Path, ledger: dict, now: datetime,
+) -> tuple[str, datetime | None]:
+    """(区分, 並べ替えに使う最終日時) を返す。区分は REASON_ORDER か SKIP_REASONS。"""
+    exp = _load(base / asin / OUT_NAME)
+    generated = _parse_iso(exp.get("generated_at")) if isinstance(exp, dict) else None
+    entry = ledger.get(asin) if isinstance(ledger.get(asin), dict) else None
+    last_attempt = _parse_iso(entry.get("last_attempt")) if entry else None
+
+    if generated is not None:
+        age = (now - generated).days
+        if age >= MINING_REFRESH_DAYS:
+            return "stale", generated
+        # ledger の最終試行がこの experience.json を書いた回で、agy が効いていなかった
+        degraded = (
+            entry is not None and entry.get("written") and entry.get("agy") != "ok"
+            and last_attempt is not None and last_attempt >= generated
+        )
+        if degraded and age >= AGY_DEGRADED_REFRESH_DAYS:
+            return "agy_degraded", generated
+        return "fresh", generated
+
+    if last_attempt is None:
+        return "never", None
+    if (now - last_attempt).days < NO_YIELD_RETRY_DAYS:
+        return "no_yield_recent", last_attempt
+    return "no_yield_retry", last_attempt
+
+
+def select_mining_targets(
+    limit: int = DEFAULT_LIMIT,
+    asins: list[str] | None = None,
+    *,
+    base: pathlib.Path = PER_ASIN_DIR,
+    ledger: dict | None = None,
+    now: datetime | None = None,
+    audit_path: pathlib.Path = DEFAULT_AUDIT_PATH,
+    rewrite_queue_dir: pathlib.Path = DEFAULT_REWRITE_QUEUE_DIR,
+) -> tuple[list[str], dict]:
+    """鮮度を見て対象を選ぶ。(targets, report) を返す。
+
+    明示の --asins は鮮度に関係なく先頭に入れる (人が指定したものを黙って落とさない)。
+    crawl_yahoo_reviews も同じ関数を使い、原文を取る ASIN と掘る ASIN を揃える。
+    """
+    ledger = ledger if ledger is not None else {}
+    now = now or datetime.now(timezone.utc)
+    explicit = [a for a in (asins or []) if isinstance(a, str) and _ASIN_RE.match(a)]
+    pool = select_targets(limit=0, audit_path=audit_path, rewrite_queue_dir=rewrite_queue_dir)
+
+    classified: dict[str, tuple[str, datetime | None]] = {}
+    for a in pool:
+        if a not in explicit:
+            classified[a] = classify_target(a, base=base, ledger=ledger, now=now)
+
+    eligible = [(a, r, t) for a, (r, t) in classified.items() if r not in SKIP_REASONS]
+    # 区分の優先順 → 区分内は古い順 (never は日時なしなので元の並び順を保つ)
+    order = {a: i for i, a in enumerate(pool)}
+    eligible.sort(key=lambda x: (
+        REASON_ORDER.index(x[1]),
+        x[2] or datetime.min.replace(tzinfo=timezone.utc),
+        order[x[0]],
+    ))
+
+    chosen = [(a, "explicit") for a in dict.fromkeys(explicit)]
+    chosen += [(a, r) for a, r, _ in eligible]
+    if limit and limit > 0:
+        chosen = chosen[:limit]
+
+    counts: dict[str, int] = {}
+    for r, _ in classified.values():
+        counts[r] = counts.get(r, 0) + 1
+    report = {
+        "candidates": len(pool),
+        "counts": counts,
+        "selected": [{"asin": a, "reason": r} for a, r in chosen],
+        "ledger_entries": len(ledger),
+    }
+    return [a for a, _ in chosen], report
+
+
 # --------------------------------------------------------------------------
 # 商品名/ブランド解決
 # --------------------------------------------------------------------------
@@ -905,6 +1049,76 @@ def write_experience(asin: str, payload: dict, base: pathlib.Path = PER_ASIN_DIR
     return out_path
 
 
+REASON_LABELS = {
+    "explicit": "明示指定",
+    "never": "未処理",
+    "agy_degraded": "agy 抜きで書いた回の取り直し",
+    "no_yield_retry": "前回 0 件・期限切れで再試行",
+    "stale": "期限切れ",
+    "fresh": "新しい (skip)",
+    "no_yield_recent": "最近 0 件だった (skip)",
+}
+
+
+def _step_summary(lines: list[str]) -> None:
+    """GitHub Actions の Job Summary に追記する。
+
+    ledger は K8 の volume にあり母艦から読めないので、**状況を見る窓はここ**。
+    末尾にまとめて書くと step timeout で打ち切られた回に何も残らないため、
+    選定時・ASIN ごと・終了時に分けて追記する。
+    """
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not path:
+        return
+    try:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+    except OSError as e:
+        logger.warning("Job Summary に書けませんでした: %s", e)
+
+
+def report_selection(report: dict) -> None:
+    counts = report.get("counts", {})
+    total = report.get("candidates", 0)
+    fresh = counts.get("fresh", 0)
+    logger.info("選定: %s", json.dumps(
+        {k: v for k, v in report.items() if k != "selected"}, ensure_ascii=False))
+    lines = [
+        "## 体験談マイニング — 対象選定",
+        "",
+        f"候補 **{total}** 件のうち、新しい experience.json があるのは **{fresh}** 件"
+        f" ({fresh / total * 100:.0f}%)。ledger {report.get('ledger_entries', 0)} 件。" if total else
+        "候補 0 件。",
+        "",
+        "| 区分 | 件数 |",
+        "|---|---:|",
+    ]
+    for key in (*REASON_ORDER, *SKIP_REASONS):
+        if key in counts:
+            lines.append(f"| {REASON_LABELS[key]} | {counts[key]} |")
+    selected = report.get("selected", [])
+    by_reason: dict[str, int] = {}
+    for s in selected:
+        by_reason[s["reason"]] = by_reason.get(s["reason"], 0) + 1
+    lines += [
+        "",
+        f"今回掘る: **{len(selected)}** 件 ("
+        + ", ".join(f"{REASON_LABELS[r]} {n}" for r, n in by_reason.items()) + ")"
+        if selected else "今回掘る対象はありません (全件が新しい)。",
+        "",
+        "| ASIN | 選定理由 | 結果 | snippets | agy |",
+        "|---|---|---|---:|---|",
+    ]
+    _step_summary(lines)
+
+
+def _agy_outcome(before: dict, after: dict) -> str:
+    for key, label in (("ok", "ok"), ("failed", "failed"), ("skipped_by_breaker", "breaker")):
+        if after[key] > before[key]:
+            return label
+    return "unavailable"
+
+
 def run(
     targets: list[str], *,
     base: pathlib.Path = PER_ASIN_DIR,
@@ -912,31 +1126,61 @@ def run(
     model: str = DEFAULT_EXPERIENCE_MODEL,
     dry_run: bool = False,
     num_ctx: int = DEFAULT_NUM_CTX,
+    ledger_path: pathlib.Path | None = None,
+    ledger: dict | None = None,
+    reasons: dict[str, str] | None = None,
 ) -> dict:
     session = requests.Session()
     agy_breaker = AgyCircuitBreaker()
+    ledger = ledger if ledger is not None else {}
+    reasons = reasons or {}
     written = 0
     skipped = 0
     for asin in targets:
         if dry_run:
             logger.info("[dry-run] would mine %s", asin)
             continue
+        agy_before = agy_breaker.summary()
         payload = mine_asin(
             asin, base=base, ollama_url=ollama_url, model=model, session=session,
             num_ctx=num_ctx, agy_breaker=agy_breaker,
         )
+        agy = _agy_outcome(agy_before, agy_breaker.summary())
+        n = len(payload["snippets"]) if payload else 0
         if payload is None:
             skipped += 1
             logger.info("%s: 0 snippets — not written", asin)
-            continue
-        out_path = write_experience(asin, payload, base=base)
-        written += 1
-        logger.info("%s: wrote %s (%d snippets)", asin, out_path, len(payload["snippets"]))
+        else:
+            out_path = write_experience(asin, payload, base=base)
+            written += 1
+            logger.info("%s: wrote %s (%d snippets)", asin, out_path, n)
+
+        # 1 件ごとに保存する。step timeout で打ち切られても、そこまでの試行は残る
+        ledger[asin] = {"last_attempt": _now_iso(), "written": payload is not None,
+                        "snippets": n, "agy": agy}
+        if ledger_path is not None:
+            try:
+                save_ledger(ledger_path, ledger)
+            except OSError as e:
+                logger.warning("マイニング ledger を保存できませんでした: %s", e)
+        _step_summary([
+            f"| {asin} | {REASON_LABELS.get(reasons.get(asin, ''), '-')} "
+            f"| {'書けた' if payload else '0 件'} | {n} | {agy} |"
+        ])
+
     summary = {
         "targets": len(targets), "written": written, "skipped": skipped,
         "agy": agy_breaker.summary(),
     }
     logger.info("done: %s", json.dumps(summary, ensure_ascii=False))
+    if not dry_run:
+        agy_s = summary["agy"]
+        _step_summary([
+            "",
+            f"**完了**: {len(targets)} 件中 {written} 件書けた / {skipped} 件は 0 件。",
+            f"agy: ok {agy_s['ok']} / failed {agy_s['failed']} / breaker で skip "
+            f"{agy_s['skipped_by_breaker']}" + (" — **breaker 作動**" if agy_s["tripped"] else ""),
+        ])
     return summary
 
 
@@ -951,19 +1195,28 @@ def main() -> int:
     ap.add_argument("--num-ctx", type=int,
                      default=int(os.environ.get("OLLAMA_NUM_CTX", DEFAULT_NUM_CTX)),
                      help="amazon-navi-brain#39 Step 0-c: ollama num_ctx (未設定時は超過分を無言で切り詰める罠がある)")
+    ap.add_argument("--ledger", default=None,
+                    help=f"試行記録の置き場所 (既定 $EXPERIENCE_LEDGER か $EXPERIENCE_RAW_DIR/{LEDGER_NAME})")
     args = ap.parse_args()
 
     asins = [a.strip() for a in args.asins.split(",") if a.strip()] or None
-    targets = select_targets(limit=args.limit, asins=asins)
+    base = pathlib.Path(args.base)
+    ledger_path = pathlib.Path(args.ledger) if args.ledger else default_ledger_path()
+    ledger = load_ledger(ledger_path)
+    targets, report = select_mining_targets(limit=args.limit, asins=asins, base=base, ledger=ledger)
     logger.info("対象 %d ASIN: %s", len(targets), targets)
+    report_selection(report)
 
     run(
         targets,
-        base=pathlib.Path(args.base),
+        base=base,
         ollama_url=args.ollama_url,
         model=args.model,
         dry_run=args.dry_run,
         num_ctx=args.num_ctx,
+        ledger_path=None if args.dry_run else ledger_path,
+        ledger=ledger,
+        reasons={s["asin"]: s["reason"] for s in report["selected"]},
     )
     return 0
 
