@@ -185,6 +185,26 @@ def render_body(payload: dict[str, Any]) -> str:
             lines.append(f"| `{name}` | {n} | {detail} |")
         lines.append("")
 
+    cc = payload.get("cross_checked") or {}
+    if cc.get("articles_with_claims"):
+        lines.append("### 裏取り 0 本の記事 (第三者ソース取得率の系列)")
+        lines.append("")
+        lines.append(
+            f"`claims` に `cross_checked=true` が **1 件も無い**記事: "
+            f"**{cc['zero']} / {cc['articles_with_claims']} 件 "
+            f"({cc['zero_rate']:.2%})**"
+        )
+        lines.append("")
+        lines.append(
+            "`claims_discipline` は soft 据え置き (amazon-navi-brain#13)。"
+            "`cross_checked=false` は Jules が「販売ページ 2 本では裏取りにならない」と "
+            "**正しく自己申告した結果**で、hard 化すると false を true に書き換える圧力に "
+            "なるため。代わりに**第三者ソースの取得率**の指標として読む。発火率ではなく "
+            "二峰 (0 か 2 以上) の下側だけを追っているので、Tavily レーンの取得率が "
+            "上がればこの比率が下がるはず。下がらなければ Tavily の効き方の再評価材料。"
+        )
+        lines.append("")
+
     cohorts = payload.get("cohorts") or {}
     if cohorts:
         lines.append("### 直近コホート別の減点 (施行日つき昇格の判定用)")
@@ -196,14 +216,19 @@ def render_body(payload: dict[str, Any]) -> str:
             "check にだけ意味がある**数値 (#4826 項目2 の昇格目安は 1.8% 以下)。"
         )
         lines.append("")
-        lines.append("| コホート | n | 範囲 | 不合格 | 発火0なら95%上限 | 減点された check |")
-        lines.append("|---|---:|---|---:|---:|---|")
+        lines.append("| コホート | n | 範囲 | 不合格 | 発火0なら95%上限 | 裏取り0 | 減点された check |")
+        lines.append("|---|---:|---|---:|---:|---:|---|")
         for key, c in cohorts.items():
             hits = " / ".join(f"`{k}` {v}" for k, v in (c.get("by_deduction") or {}).items())
+            ccc = c.get("cross_checked") or {}
+            cc_cell = (
+                f"{ccc['zero']}/{ccc['articles_with_claims']}"
+                if ccc.get("articles_with_claims") else "-"
+            )
             lines.append(
                 f"| `{key}` | {c.get('n')} | {c.get('from')} 〜 {c.get('to')} "
                 f"| {c.get('failing')} | {c.get('zero_firing_95_upper', 0):.2%} "
-                f"| {hits or '**なし**'} |"
+                f"| {cc_cell} | {hits or '**なし**'} |"
             )
         lines.append("")
 

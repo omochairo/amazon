@@ -101,6 +101,49 @@ def load_matched_indexes(
     return rakuten, yahoo
 
 
+def _cross_checked_zero(jp: pathlib.Path) -> bool | None:
+    """記事の ``claims`` に ``cross_checked=true`` が 1 件も無いか。
+
+    claims が無い / 読めない記事は ``None`` (母数から外す。legacy 記事を
+    「裏取り 0」に混ぜると系列が記事形式の移行で動いてしまう)。
+
+    なぜ ``claims_discipline`` の発火率と別に数えるか
+    (amazon-navi-brain#13・2026-09-07 の据え置き条件):
+      `claims_discipline` は「claims 4 件未満 **または** cross_checked 2 件未満」の
+      OR で、発火の 85% は cross_checked 側。しかもその cross_checked の分布は
+      **0 か 2 以上の二峰** (2026-09-06 実測・直近 300 本で 1 件は 1 本だけ) で、
+      「あと 1 件足りない」記事はほぼ存在しない。
+
+      この check は soft 据え置きが決まっている。理由は記事側で直せないため:
+      `cross_checked=false` は Jules が「販売ページ 2 本では裏取りにならない」と
+      **正しく自己申告した結果**で、hard 化すると false を true に書き換える圧力に
+      なる。代わりに「第三者ソースの取得率」の指標として読むと決めたので、
+      二峰の下側 (裏取りが 1 本も無い記事の比率) だけを追う系列をここに持つ。
+      Tavily レーンの取得率が上がったときにこの比率が下がるか、が読みどころ。
+    """
+    try:
+        data = json.loads(jp.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    claims = data.get("claims") if isinstance(data, dict) else None
+    if not isinstance(claims, list) or not claims:
+        return None
+    return not any(
+        isinstance(c, dict) and c.get("cross_checked") is True for c in claims
+    )
+
+
+def cross_checked_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """``cross_checked_zero`` を {母数, 件数, 比率} に畳む (系列 1 本ぶん)。"""
+    scoped = [r for r in records if r.get("cross_checked_zero") is not None]
+    zero = sum(1 for r in scoped if r["cross_checked_zero"])
+    return {
+        "articles_with_claims": len(scoped),
+        "zero": zero,
+        "zero_rate": round(zero / len(scoped), 5) if scoped else 0.0,
+    }
+
+
 def evaluate_corpus(
     src: pathlib.Path,
     schema: dict,
@@ -134,6 +177,7 @@ def evaluate_corpus(
     out: list[dict[str, Any]] = []
     for jp in iter_article_paths(src):
         md = None
+        cc_zero = _cross_checked_zero(jp)
         if posts is not None:
             cand = posts / f"{jp.stem}.md"
             md = cand if cand.exists() else None
@@ -155,6 +199,9 @@ def evaluate_corpus(
                 {c.name: c.message for c in report.checks
                  if c.passed and c.score < 1.0}.items()
             ),
+            # claims に cross_checked=true が 1 件も無いか (claims 自体が無い記事は None)。
+            # claims_discipline の発火率とは別系列。理由は _cross_checked_zero を参照。
+            "cross_checked_zero": cc_zero,
         })
     return out
 
@@ -215,6 +262,7 @@ def cohort_summary(records: list[dict[str, Any]], n: int) -> dict[str, Any] | No
         "failing_rate": round(len(failing) / n, 5),
         "by_deduction": dict(sorted(by_deduction.items(), key=lambda kv: (-kv[1], kv[0]))),
         "zero_firing_95_upper": round(3 / n, 5),
+        "cross_checked": cross_checked_summary(cohort),
     }
 
 
@@ -250,6 +298,7 @@ def since_cohort_summary(records: list[dict[str, Any]], since: str) -> dict[str,
         "failing_rate": round(len(failing) / len(cohort), 5),
         "by_deduction": dict(sorted(by_deduction.items(), key=lambda kv: (-kv[1], kv[0]))),
         "zero_firing_95_upper": round(3 / len(cohort), 5),
+        "cross_checked": cross_checked_summary(cohort),
     }
 
 
@@ -299,6 +348,10 @@ def summarize(records: list[dict[str, Any]], *, cert_fetch: bool, date: str,
         # 件数を記録しないと環境差で時系列が無言でずれる (実測: MD 有ならスコア
         # 中央値 -1 点)。合否は変わらないが、記録しないと差の出所が追えない。
         "md_evaluated": sum(1 for r in records if r.get("md")),
+        # 裏取り (cross_checked=true) が 1 本も無い記事の比率。soft 据え置きにした
+        # claims_discipline を「第三者ソースの取得率」として読むための系列
+        # (amazon-navi-brain#13)。発火率そのものではなく二峰の下側だけを追う。
+        "cross_checked": cross_checked_summary(records),
         # 直近コホート別の減点集計。全量の by_deduction だけでは、施行日以降の
         # 記事が全体の数 % しか無い段階で規約やプロンプト改訂の効果が原理的に
         # 見えない (実測 2026-08-20: #5083 の規約適用後コホートは 2109 本中
@@ -401,6 +454,9 @@ def history_row(snapshot: dict[str, Any], diff: dict[str, Any]) -> dict[str, Any
         "score_max": snapshot["score_max"],
         "cert_fetch": snapshot["cert_fetch"],
         "md_evaluated": snapshot["md_evaluated"],
+        # 列集合を安定させるため、古い行に無くても consumer 側が欠損として
+        # 扱えるよう毎行必ず出す (append_census_history と同方針)。
+        "cross_checked": snapshot.get("cross_checked") or {},
         # by_deduction と同じくネスト dict。列集合は cohort_sizes が変わらない
         # 限り安定する (サイズを変えるときは時系列が繋がらなくなる点に注意)。
         "cohorts": snapshot.get("cohorts") or {},
@@ -485,6 +541,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"    NG {name}: {n}")
         for name, n in snapshot["by_deduction"].items():
             print(f"    減点 {name}: {n}")
+        cc = snapshot.get("cross_checked") or {}
+        if cc.get("articles_with_claims"):
+            print(f"    裏取り 0 本の記事: {cc['zero']} / "
+                  f"{cc['articles_with_claims']} ({cc['zero_rate']:.2%})")
         for key, c in (snapshot.get("cohorts") or {}).items():
             hits = ", ".join(f"{k}={v}" for k, v in c["by_deduction"].items()) or "減点なし"
             print(f"    [{key}] n={c['n']} {c['from']}..{c['to']} "
