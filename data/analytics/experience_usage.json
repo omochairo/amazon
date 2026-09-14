@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-14T00:31:24Z",
+  "generated_at": "2026-09-14T03:25:46Z",
   "embed_model": "cl-nagoya/ruri-v3-310m",
-  "elapsed_seconds": 82.3,
+  "elapsed_seconds": 120.3,
   "population": {
     "total_experience_files": 93,
     "included": 58,
@@ -210,7 +210,190 @@
         "asin": "B0HDB8KG6G",
         "reason": "article_older_than_material"
       }
-    ]
+    ],
+    "same_asin_control_total": 35,
+    "same_asin_control_asins": [
+      "B0020GD73O",
+      "B0034G4DDW",
+      "B007RE33XS",
+      "B0083AHXT0",
+      "B00OGWSUQE",
+      "B00PY3EYQO",
+      "B00V9LDHJ0",
+      "B010CQE2FK",
+      "B01G81IP9C",
+      "B01MRT5327",
+      "B01N7VQ79E",
+      "B075GQ87PV",
+      "B079BD7J5M",
+      "B07CCNZWKF",
+      "B07N329MKN",
+      "B0875FV2BQ",
+      "B0899JMQ7F",
+      "B08FMQ6NLH",
+      "B0C6HCT6K1",
+      "B0C9QNWFQH",
+      "B0CWH17Z6F",
+      "B0DQWBTFQS",
+      "B0F1TQBLLD",
+      "B0F2T9PFS9",
+      "B0F99N8CTD",
+      "B0FNM3R45C",
+      "B0FNM4Y35G",
+      "B0FPFG7B4F",
+      "B0FPXBTTHZ",
+      "B0GR4GRDJC",
+      "B0GWKWBXH3",
+      "B0H454QHLX",
+      "B0H8BPQHQN",
+      "B0HDB6X1CN",
+      "B0HDB8KG6G"
+    ],
+    "date_boundary_within_24h": {
+      "count": 28,
+      "items": [
+        {
+          "asin": "B0002U3LZO",
+          "group": "included",
+          "hours": 4.98
+        },
+        {
+          "asin": "B000GTAX48",
+          "group": "included",
+          "hours": 2.9
+        },
+        {
+          "asin": "B000PGZHPC",
+          "group": "included",
+          "hours": 2.88
+        },
+        {
+          "asin": "B005WP3JWY",
+          "group": "included",
+          "hours": 4.61
+        },
+        {
+          "asin": "B0098UYWMA",
+          "group": "included",
+          "hours": 4.67
+        },
+        {
+          "asin": "B00I7JXAYE",
+          "group": "included",
+          "hours": 4.9
+        },
+        {
+          "asin": "B00ISHL27C",
+          "group": "included",
+          "hours": 4.52
+        },
+        {
+          "asin": "B00IXF319Q",
+          "group": "included",
+          "hours": 4.76
+        },
+        {
+          "asin": "B00Q687954",
+          "group": "included",
+          "hours": 4.57
+        },
+        {
+          "asin": "B00QER4Y1E",
+          "group": "included",
+          "hours": 6.32
+        },
+        {
+          "asin": "B00SGN5LPM",
+          "group": "included",
+          "hours": 4.39
+        },
+        {
+          "asin": "B074469BPQ",
+          "group": "included",
+          "hours": 5.85
+        },
+        {
+          "asin": "B077QNBJPP",
+          "group": "included",
+          "hours": 6.59
+        },
+        {
+          "asin": "B0B5D3N9CG",
+          "group": "included",
+          "hours": 6.48
+        },
+        {
+          "asin": "B0BQJ4NPBB",
+          "group": "included",
+          "hours": 6.48
+        },
+        {
+          "asin": "B0BY2HLW37",
+          "group": "included",
+          "hours": 6.98
+        },
+        {
+          "asin": "B0C7KF6LGQ",
+          "group": "included",
+          "hours": 6.43
+        },
+        {
+          "asin": "B0C8HK543G",
+          "group": "included",
+          "hours": 6.22
+        },
+        {
+          "asin": "B0CWH2ZLVL",
+          "group": "included",
+          "hours": 6.26
+        },
+        {
+          "asin": "B0CWH43WP4",
+          "group": "included",
+          "hours": 5.78
+        },
+        {
+          "asin": "B0D2MZY2JL",
+          "group": "included",
+          "hours": 6.19
+        },
+        {
+          "asin": "B0D5Y595SV",
+          "group": "included",
+          "hours": 6.23
+        },
+        {
+          "asin": "B0DB7BYTQL",
+          "group": "included",
+          "hours": 6.28
+        },
+        {
+          "asin": "B0DF724WKX",
+          "group": "included",
+          "hours": 6.68
+        },
+        {
+          "asin": "B0FF1KW4SP",
+          "group": "included",
+          "hours": 6.35
+        },
+        {
+          "asin": "B0FHVH6JML",
+          "group": "included",
+          "hours": 5.92
+        },
+        {
+          "asin": "B0GLXBCHCL",
+          "group": "included",
+          "hours": 7.05
+        },
+        {
+          "asin": "B0CWH17Z6F",
+          "group": "same_asin_control",
+          "hours": 17.51
+        }
+      ]
+    }
   },
   "threshold": {
     "value": 0.8839,
@@ -284,6 +467,178 @@
         "total": 14,
         "used": 10,
         "rate": 0.7143
+      }
+    }
+  },
+  "same_asin_control": {
+    "total_articles": 35,
+    "asins": [
+      "B0020GD73O",
+      "B0034G4DDW",
+      "B007RE33XS",
+      "B0083AHXT0",
+      "B00OGWSUQE",
+      "B00PY3EYQO",
+      "B00V9LDHJ0",
+      "B010CQE2FK",
+      "B01G81IP9C",
+      "B01MRT5327",
+      "B01N7VQ79E",
+      "B075GQ87PV",
+      "B079BD7J5M",
+      "B07CCNZWKF",
+      "B07N329MKN",
+      "B0875FV2BQ",
+      "B0899JMQ7F",
+      "B08FMQ6NLH",
+      "B0C6HCT6K1",
+      "B0C9QNWFQH",
+      "B0CWH17Z6F",
+      "B0DQWBTFQS",
+      "B0F1TQBLLD",
+      "B0F2T9PFS9",
+      "B0F99N8CTD",
+      "B0FNM3R45C",
+      "B0FNM4Y35G",
+      "B0FPFG7B4F",
+      "B0FPXBTTHZ",
+      "B0GR4GRDJC",
+      "B0GWKWBXH3",
+      "B0H454QHLX",
+      "B0H8BPQHQN",
+      "B0HDB6X1CN",
+      "B0HDB8KG6G"
+    ],
+    "snippet_level": {
+      "overall": {
+        "total": 126,
+        "used": 53,
+        "rate": 0.4206
+      },
+      "by_aspect": {
+        "シーン": {
+          "total": 32,
+          "used": 15,
+          "rate": 0.4688
+        },
+        "不満": {
+          "total": 28,
+          "used": 0,
+          "rate": 0.0
+        },
+        "体験談": {
+          "total": 29,
+          "used": 21,
+          "rate": 0.7241
+        },
+        "安全": {
+          "total": 23,
+          "used": 10,
+          "rate": 0.4348
+        },
+        "比較": {
+          "total": 14,
+          "used": 7,
+          "rate": 0.5
+        }
+      },
+      "by_source_type": {
+        "antigravity": {
+          "total": 62,
+          "used": 28,
+          "rate": 0.4516
+        },
+        "blog": {
+          "total": 23,
+          "used": 14,
+          "rate": 0.6087
+        },
+        "yahoo_review_aggregate": {
+          "total": 41,
+          "used": 11,
+          "rate": 0.2683
+        }
+      }
+    },
+    "distribution": {
+      "count": 126,
+      "p50": 0.878,
+      "p90": 0.9193,
+      "p95": 0.9267
+    }
+  },
+  "diff": {
+    "overall": 0.3764,
+    "by_aspect": {
+      "シーン": 0.4585,
+      "不満": 0.449,
+      "体験談": 0.1939,
+      "安全": 0.4599,
+      "比較": 0.3462
+    },
+    "by_source_type": {
+      "antigravity": 0.3597,
+      "blog": 0.1413,
+      "yahoo_review_aggregate": 0.446
+    }
+  },
+  "alt_threshold_from_control": {
+    "value": 0.9267,
+    "method": "same_asin_control_p95",
+    "article_level": {
+      "total_articles": 58,
+      "articles_with_used_snippet": 38,
+      "fraction": 0.6552
+    },
+    "snippet_level": {
+      "overall": {
+        "total": 197,
+        "used": 50,
+        "rate": 0.2538
+      },
+      "by_aspect": {
+        "シーン": {
+          "total": 55,
+          "used": 11,
+          "rate": 0.2
+        },
+        "不満": {
+          "total": 49,
+          "used": 4,
+          "rate": 0.0816
+        },
+        "体験談": {
+          "total": 61,
+          "used": 27,
+          "rate": 0.4426
+        },
+        "安全": {
+          "total": 19,
+          "used": 4,
+          "rate": 0.2105
+        },
+        "比較": {
+          "total": 13,
+          "used": 4,
+          "rate": 0.3077
+        }
+      },
+      "by_source_type": {
+        "antigravity": {
+          "total": 159,
+          "used": 47,
+          "rate": 0.2956
+        },
+        "blog": {
+          "total": 24,
+          "used": 2,
+          "rate": 0.0833
+        },
+        "yahoo_review_aggregate": {
+          "total": 14,
+          "used": 1,
+          "rate": 0.0714
+        }
       }
     }
   },

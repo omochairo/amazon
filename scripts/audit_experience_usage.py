@@ -27,9 +27,18 @@ Issue #4841 T1「体験談の実使用率を測る」の計測スクリプト。
   閾値にする。正例分布との重なり (histogram overlap) も出す — 重なりが大きい
   場合、この方法では測れないというのも有効な結果として報告する。
 
+  この別ASIN負の対照は「同じ商品の話をしている」ことと「実際に使った」こと
+  を分離できない (母艦レビュー R1)。そのため `article_older_than_material`
+  で除外される記事 (素材より前に書かれていて、時系列的に使いようがない) を
+  **同一 ASIN の対照**として追加で採点し、included の閾値超過率から引いた差
+  (`diff`) を見出しの数字として使う。この差は「Jules が素材を使った効果」の
+  上限にすぎない — 対照記事 (5月生成、v7以前) と included (8〜9月生成) は
+  生成時期もプロンプトも異なるため (R3、`[推]` で扱う交絡)。
+
 出力:
   data/analytics/experience_usage.json に、母集団の内訳・閾値の根拠・分布・
-  記事単位/snippet 単位の使用率・閾値直上直下のサンプルを書き出す。
+  記事単位/snippet 単位の使用率・同一ASIN対照の分布と超過率・included との
+  差 (`diff`)・閾値直上直下のサンプルを書き出す。
 
 Issue: https://github.com/omochairo/amazon/issues/4841 (T1)
 """
@@ -237,6 +246,82 @@ def select_population(
     return included, excluded
 
 
+def select_same_asin_control(
+    experience_records: list[dict[str, Any]], articles_dir: str | os.PathLike[str],
+) -> list[dict[str, Any]]:
+    """R1: 別 ASIN の負の対照では「同じ商品の話」と「使った」を分離できない問題への対照群。
+
+    `select_population` が `article_older_than_material` で除外する記事
+    (素材の generated_at より前に書かれた記事) を対照として使う。この記事は
+    時系列的に素材を使いようがないので、この記事の段落と同じ ASIN の
+    snippet の類似度が高くても「同じ商品について書けば自然に似る」度合いの
+    目安にしかならない。included と同じ形の dict を返す
+    (`boundary_hours` は R4 の日付境界チェック用: generated_at と
+    article_date の差 (時間、正値))。
+    """
+    article_paths = discover_articles(pathlib.Path(articles_dir))
+    control: list[dict[str, Any]] = []
+    for rec in experience_records:
+        asin = rec["asin"]
+        if not rec["snippets"]:
+            continue
+        gen_dt = _parse_iso(rec["generated_at"])
+        if gen_dt is None:
+            continue
+        path = article_paths.get(asin)
+        if path is None:
+            continue
+        try:
+            article = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            logger.warning("skip %s: failed to read/parse article %s: %s", asin, path, e)
+            continue
+        if not isinstance(article, dict):
+            continue
+        article_dt = _parse_iso(article.get("date"))
+        if article_dt is None:
+            continue
+        if article_dt > gen_dt:
+            continue  # included 側 (対照ではない)
+        paragraphs = build_paragraph_map(article)
+        if not paragraphs:
+            continue
+        control.append({
+            "asin": asin,
+            "generated_at": rec["generated_at"],
+            "article_path": str(path),
+            "article_date": article.get("date"),
+            "snippets": rec["snippets"],
+            "paragraphs": paragraphs,
+            "boundary_hours": round((gen_dt - article_dt).total_seconds() / 3600.0, 2),
+        })
+    return control
+
+
+def date_boundary_within_24h(
+    included: list[dict[str, Any]], control: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """R4: 記事の `date` は生成時刻ではなく10:00 JST固定の公開日時のため、
+
+    素材の generated_at との日付境界の新旧判定が実際の生成順序と食い違い
+    うる。`article_date` と `generated_at` の差が24時間未満の件数を出す
+    (新旧の境界に近く、included/control の振り分けが逆転しうる候補)。
+    """
+    items: list[dict[str, Any]] = []
+    for item in included:
+        gen_dt = _parse_iso(item["generated_at"])
+        art_dt = _parse_iso(item["article_date"])
+        if gen_dt is None or art_dt is None:
+            continue
+        hours = abs((art_dt - gen_dt).total_seconds()) / 3600.0
+        if hours < 24:
+            items.append({"asin": item["asin"], "group": "included", "hours": round(hours, 2)})
+    for item in control:
+        if item["boundary_hours"] < 24:
+            items.append({"asin": item["asin"], "group": "same_asin_control", "hours": item["boundary_hours"]})
+    return {"count": len(items), "items": items}
+
+
 # --------------------------------------------------------------------------
 # 負の対照サンプリング (pure, 固定 seed で再現可能)
 # --------------------------------------------------------------------------
@@ -396,10 +481,21 @@ def histogram_overlap(a: list[float], b: list[float], bins: int = 20) -> float |
     return round(sum(min(x, y) for x, y in zip(ha, hb)), 4)
 
 
-def _rate_stats(items: list[dict[str, Any]]) -> dict[str, Any]:
+def _rate_stats(items: list[dict[str, Any]], key: str = "used") -> dict[str, Any]:
     total = len(items)
-    used = sum(1 for r in items if r.get("used"))
+    used = sum(1 for r in items if r.get(key))
     return {"total": total, "used": used, "rate": round(used / total, 4) if total else None}
+
+
+def _diff_rate(a: dict[str, Any] | None, b: dict[str, Any] | None) -> float | None:
+    """a (included) の rate から b (対照) の rate を引く (R1: 見出しは差で出す)。
+
+    どちらかの group が存在しない/rate が計算不能なら None
+    (母数0や、対照側に対応する aspect/source_type が無い場合)。
+    """
+    if not a or not b or a.get("rate") is None or b.get("rate") is None:
+        return None
+    return round(a["rate"] - b["rate"], 4)
 
 
 def _group_by(items: list[dict[str, Any]], key: str) -> dict[str, list[dict[str, Any]]]:
@@ -433,6 +529,10 @@ def run(
 
     experience_records = load_experience_records(experience_glob)
     included, excluded = select_population(experience_records, articles_dir)
+    # R1: article_older_than_material (素材より前に書かれた記事) を同一 ASIN
+    # の対照として使う。別 ASIN の負の対照 (下の pool/rng) では「同じ商品の
+    # 話」と「使った」を分離できないため。
+    control = select_same_asin_control(experience_records, articles_dir)
 
     population = {
         "total_experience_files": len(experience_records),
@@ -441,6 +541,11 @@ def run(
         "excluded_total": len(excluded),
         "excluded_by_reason": dict(Counter(e["reason"] for e in excluded)),
         "excluded": excluded,
+        "same_asin_control_total": len(control),
+        "same_asin_control_asins": sorted(item["asin"] for item in control),
+        # R4: date が10:00 JST固定の公開日時なので、generated_at との日付
+        # だけの比較では新旧判定を誤りうる境界ケースの件数。
+        "date_boundary_within_24h": date_boundary_within_24h(included, control),
     }
 
     if not included:
@@ -452,6 +557,9 @@ def run(
             "threshold": None,
             "article_level": None,
             "snippet_level": None,
+            "same_asin_control": None,
+            "diff": None,
+            "alt_threshold_from_control": None,
             "samples": None,
         }
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -573,6 +681,124 @@ def run(
         "overlap_coefficient": histogram_overlap(positive_sims, negative_sims),
     }
 
+    # --------------------------------------------------------------------
+    # R1: 同一 ASIN 対照 (素材より前に書かれた記事) の採点
+    # --------------------------------------------------------------------
+    control_doc_texts: list[str] = []
+    control_doc_index: list[tuple[str, str]] = []
+    for item in control:
+        for key, text in item["paragraphs"].items():
+            control_doc_texts.append(text)
+            control_doc_index.append((item["asin"], key))
+
+    control_query_texts: list[str] = []
+    control_query_meta: list[dict[str, Any]] = []
+    for item in control:
+        asin = item["asin"]
+        for idx, sn in enumerate(item["snippets"]):
+            if not isinstance(sn, dict):
+                continue
+            text = sn.get("text")
+            aspect = sn.get("aspect")
+            if not isinstance(text, str) or not text.strip() or not isinstance(aspect, str) or not aspect:
+                continue
+            text = text.strip()
+            control_query_texts.append(text)
+            control_query_meta.append({
+                "asin": asin, "snippet_index": idx, "aspect": aspect, "source_type": sn.get("source_type"),
+            })
+
+    logger.info(
+        "embedding %d control document paragraph(s), %d control query snippet(s)",
+        len(control_doc_texts), len(control_query_texts),
+    )
+    control_doc_vectors = embed_texts_ruri(
+        control_doc_texts, "document", ruri_url, session, batch_size=batch_size, sleeper=sleeper,
+    )
+    control_query_vectors = embed_texts_ruri(
+        control_query_texts, "query", ruri_url, session, batch_size=batch_size, sleeper=sleeper,
+    )
+
+    control_doc_by_asin: dict[str, dict[str, list[float]]] = {}
+    for (asin, key), vec in zip(control_doc_index, control_doc_vectors):
+        control_doc_by_asin.setdefault(asin, {})[key] = vec
+
+    control_results: list[dict[str, Any]] = []
+    for meta, qv in zip(control_query_meta, control_query_vectors):
+        paragraphs = control_doc_by_asin.get(meta["asin"], {})
+        if not paragraphs:
+            continue
+        best_key, best_sim = None, -1.0
+        for key, dv in paragraphs.items():
+            s = cosine_similarity(qv, dv)
+            if s > best_sim:
+                best_sim, best_key = s, key
+        rec = dict(meta)
+        rec["max_sim"] = round(best_sim, 4)
+        rec["matched_key"] = best_key
+        # 元の (別ASIN負の対照由来の) 閾値を超えるかどうか。この記事は素材
+        # より前に書かれているので、超えても「同じ商品の話をしている」こと
+        # の証拠にしかならない (「使った」との分離ができない部分、R1)。
+        rec["used"] = (threshold is not None) and (rec["max_sim"] > threshold)
+        control_results.append(rec)
+
+    control_sims = [r["max_sim"] for r in control_results]
+    same_asin_control_snippet_level = {
+        "overall": _rate_stats(control_results),
+        "by_aspect": {k: _rate_stats(v) for k, v in sorted(_group_by(control_results, "aspect").items())},
+        "by_source_type": {k: _rate_stats(v) for k, v in sorted(_group_by(control_results, "source_type").items())},
+    }
+    same_asin_control = {
+        "total_articles": len(control),
+        "asins": sorted(item["asin"] for item in control),
+        "snippet_level": same_asin_control_snippet_level,
+        "distribution": distribution_stats(control_sims),
+    }
+
+    # R1: 見出しの数字はこの差にする。included (元の閾値超過率) から同一ASIN
+    # 対照 (同じ閾値の超過率) を引くと、「同じ商品の話をしている」ぶんが
+    # 相殺され、素材が実際に使われた分の上限に近づく (交絡は R3 参照)。
+    diff = {
+        "overall": _diff_rate(snippet_level["overall"], same_asin_control_snippet_level["overall"]),
+        "by_aspect": {
+            k: _diff_rate(v, same_asin_control_snippet_level["by_aspect"].get(k))
+            for k, v in snippet_level["by_aspect"].items()
+        },
+        "by_source_type": {
+            k: _diff_rate(v, same_asin_control_snippet_level["by_source_type"].get(k))
+            for k, v in snippet_level["by_source_type"].items()
+        },
+    }
+
+    # R1: 対照自身の p95 を閾値にした場合、included の使用率がどう動くかも
+    # 出す (別ASIN負の対照由来の閾値より厳しい/緩いかもしれないため感度として)。
+    control_threshold = percentile(control_sims, threshold_percentile)
+    for rec in positive_results:
+        rec["used_alt"] = (control_threshold is not None) and (rec["max_sim"] > control_threshold)
+    used_by_asin_alt: dict[str, bool] = {}
+    for rec in positive_results:
+        used_by_asin_alt[rec["asin"]] = used_by_asin_alt.get(rec["asin"], False) or bool(rec["used_alt"])
+    articles_with_used_alt = sum(1 for v in used_by_asin_alt.values() if v)
+    alt_threshold_from_control = {
+        "value": control_threshold,
+        "method": f"same_asin_control_p{threshold_percentile:g}",
+        "article_level": {
+            "total_articles": len(included),
+            "articles_with_used_snippet": articles_with_used_alt,
+            "fraction": round(articles_with_used_alt / len(included), 4) if included else None,
+        },
+        "snippet_level": {
+            "overall": _rate_stats(positive_results, key="used_alt"),
+            "by_aspect": {
+                k: _rate_stats(v, key="used_alt") for k, v in sorted(_group_by(positive_results, "aspect").items())
+            },
+            "by_source_type": {
+                k: _rate_stats(v, key="used_alt")
+                for k, v in sorted(_group_by(positive_results, "source_type").items())
+            },
+        },
+    }
+
     sorted_by_sim = sorted(positive_results, key=lambda r: r["max_sim"])
     if threshold is None:
         above_samples, below_samples = [], []
@@ -597,6 +823,9 @@ def run(
         "threshold": threshold_info,
         "article_level": article_level,
         "snippet_level": snippet_level,
+        "same_asin_control": same_asin_control,
+        "diff": diff,
+        "alt_threshold_from_control": alt_threshold_from_control,
         "samples": {
             "above_threshold": [_sample_view(r) for r in above_samples],
             "below_threshold": [_sample_view(r) for r in below_samples],
@@ -606,8 +835,10 @@ def run(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     logger.info(
-        "wrote %s: included=%d threshold=%s article_fraction=%s snippet_rate=%s",
+        "wrote %s: included=%d threshold=%s article_fraction=%s snippet_rate=%s "
+        "control_rate=%s diff=%s",
         out_path, len(included), threshold, article_level["fraction"], snippet_level["overall"]["rate"],
+        same_asin_control_snippet_level["overall"]["rate"], diff["overall"],
     )
     return {"included": len(included), "written": True, "payload": payload}
 

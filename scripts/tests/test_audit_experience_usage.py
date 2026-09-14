@@ -23,6 +23,7 @@ from scripts.audit_experience_usage import (
     build_paragraph_map,
     build_snippet_pool,
     cosine_similarity,
+    date_boundary_within_24h,
     distribution_stats,
     histogram_overlap,
     load_experience_records,
@@ -30,6 +31,8 @@ from scripts.audit_experience_usage import (
     run,
     sample_negative_snippet,
     select_population,
+    select_same_asin_control,
+    _diff_rate,
     _rate_stats,
 )
 
@@ -188,6 +191,104 @@ class SelectPopulationTest(unittest.TestCase):
 
 
 # --------------------------------------------------------------------------
+# select_same_asin_control (R1) / date_boundary_within_24h (R4)
+# --------------------------------------------------------------------------
+
+class SelectSameAsinControlTest(unittest.TestCase):
+    def _articles_dir(self, tmp: pathlib.Path, files: dict) -> pathlib.Path:
+        d = tmp / "articles"
+        d.mkdir()
+        for name, data in files.items():
+            (d / name).write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        return d
+
+    def test_includes_article_older_than_material_with_boundary_hours(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = pathlib.Path(tmp)
+            articles_dir = self._articles_dir(tmp, {
+                "2026-04-01-B0000000AA.json": {
+                    "date": "2026-04-01T00:00:00Z", "narrative": {"closing": "旧記事の段落"},
+                },
+            })
+            records = [{
+                "asin": "B0000000AA", "generated_at": "2026-04-03T12:00:00Z",
+                "snippets": [{"aspect": "不満", "text": "t", "source_type": "blog"}],
+            }]
+            control = select_same_asin_control(records, articles_dir)
+            self.assertEqual(len(control), 1)
+            self.assertEqual(control[0]["asin"], "B0000000AA")
+            self.assertEqual(control[0]["paragraphs"], {"closing": "旧記事の段落"})
+            self.assertEqual(control[0]["boundary_hours"], 60.0)
+
+    def test_excludes_article_newer_than_material(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = pathlib.Path(tmp)
+            articles_dir = self._articles_dir(tmp, {
+                "2026-06-01-B0000000AA.json": {
+                    "date": "2026-06-01T00:00:00Z", "narrative": {"lead": "新しい記事"},
+                },
+            })
+            records = [{
+                "asin": "B0000000AA", "generated_at": "2026-05-01T00:00:00Z",
+                "snippets": [{"aspect": "体験談", "text": "t", "source_type": "blog"}],
+            }]
+            self.assertEqual(select_same_asin_control(records, articles_dir), [])
+
+    def test_excludes_when_no_article_or_no_snippets_or_no_paragraphs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = pathlib.Path(tmp)
+            articles_dir = self._articles_dir(tmp, {
+                "2026-04-01-B0000000BB.json": {"date": "2026-04-01T00:00:00Z"},
+            })
+            records = [
+                {"asin": "B0000000AA", "generated_at": "2026-05-01T00:00:00Z", "snippets": []},
+                {
+                    "asin": "B0000000BB", "generated_at": "2026-05-01T00:00:00Z",
+                    "snippets": [{"aspect": "安全", "text": "t", "source_type": "blog"}],
+                },
+            ]
+            # AA: 記事が無い、BB: 記事はあるが narrative が空 (no_paragraphs 相当)
+            self.assertEqual(select_same_asin_control(records, articles_dir), [])
+
+
+class DateBoundaryWithin24hTest(unittest.TestCase):
+    def test_flags_included_and_control_items_within_24h(self):
+        included = [{
+            "asin": "B0000000AA", "generated_at": "2026-05-01T00:00:00Z",
+            "article_date": "2026-05-01T10:00:00Z",  # 10時間差 → 境界
+        }]
+        control = [
+            {"asin": "B0000000BB", "boundary_hours": 12.0},  # 境界
+            {"asin": "B0000000CC", "boundary_hours": 720.0},  # 境界ではない
+        ]
+        result = date_boundary_within_24h(included, control)
+        self.assertEqual(result["count"], 2)
+        self.assertEqual(
+            {(i["asin"], i["group"]) for i in result["items"]},
+            {("B0000000AA", "included"), ("B0000000BB", "same_asin_control")},
+        )
+
+    def test_no_items_within_24h(self):
+        included = [{
+            "asin": "B0000000AA", "generated_at": "2026-05-01T00:00:00Z",
+            "article_date": "2026-06-01T00:00:00Z",
+        }]
+        control = [{"asin": "B0000000BB", "boundary_hours": 720.0}]
+        self.assertEqual(date_boundary_within_24h(included, control), {"count": 0, "items": []})
+
+
+class DiffRateTest(unittest.TestCase):
+    def test_subtracts_control_rate_from_included_rate(self):
+        self.assertEqual(_diff_rate({"rate": 0.797}, {"rate": 0.421}), round(0.797 - 0.421, 4))
+
+    def test_none_when_either_side_missing_or_unrated(self):
+        self.assertIsNone(_diff_rate(None, {"rate": 0.5}))
+        self.assertIsNone(_diff_rate({"rate": 0.5}, None))
+        self.assertIsNone(_diff_rate({"rate": None}, {"rate": 0.5}))
+        self.assertIsNone(_diff_rate({"rate": 0.5}, {"rate": None}))
+
+
+# --------------------------------------------------------------------------
 # 負の対照サンプリング
 # --------------------------------------------------------------------------
 
@@ -284,11 +385,17 @@ class _FakeSession:
     """
 
     VECTORS = {
-        "A_PARA": [1.0, 0.0, 0.0],
-        "B_PARA": [0.0, 1.0, 0.0],
-        "A_SNIPPET": [1.0, 0.0, 0.0],
-        "B_SNIPPET": [0.0, 1.0, 0.0],
-        "C_SNIPPET": [0.0, 0.0, 1.0],
+        "A_PARA": [1.0, 0.0, 0.0, 0.0],
+        "B_PARA": [0.0, 1.0, 0.0, 0.0],
+        "A_SNIPPET": [1.0, 0.0, 0.0, 0.0],
+        "B_SNIPPET": [0.0, 1.0, 0.0, 0.0],
+        "C_SNIPPET": [0.0, 0.0, 1.0, 0.0],
+        # D: article_older_than_material の同一 ASIN 対照 (R1)。D_PARA と
+        # D_SNIPPET を同じ向きにして「同じ商品の話をしている (=類似度1)」を
+        # 再現する — この記事は素材より前に書かれているので、この一致は
+        # 定義上「使った」ではありえない。
+        "D_PARA": [0.0, 0.0, 0.0, 1.0],
+        "D_SNIPPET": [0.0, 0.0, 0.0, 1.0],
     }
 
     def __init__(self):
@@ -323,11 +430,21 @@ class RunEndToEndTest(unittest.TestCase):
             "snippets": [{"aspect": "不満", "text": "C_SNIPPET", "source_type": "blog",
                           "usable_as": "paraphrase", "confidence": "high"}],
         })
+        # D: 記事が素材 (generated_at) より前に書かれている → article_older_
+        # than_material で除外され、R1 の同一 ASIN 対照になる
+        _write(tmp / "raw/B0000000DD/experience.json", {
+            "asin": "B0000000DD", "generated_at": "2026-05-01T00:00:00Z",
+            "snippets": [{"aspect": "不満", "text": "D_SNIPPET", "source_type": "blog",
+                          "usable_as": "paraphrase", "confidence": "high"}],
+        })
         _write(tmp / "articles/2026-06-01-B0000000AA.json", {
             "date": "2026-06-01T00:00:00Z", "narrative": {"closing": "A_PARA"},
         })
         _write(tmp / "articles/2026-06-01-B0000000BB.json", {
             "date": "2026-06-01T00:00:00Z", "narrative": {"closing": "B_PARA"},
+        })
+        _write(tmp / "articles/2026-04-01-B0000000DD.json", {
+            "date": "2026-04-01T00:00:00Z", "narrative": {"closing": "D_PARA"},
         })
 
     def test_full_pipeline_with_orthogonal_vectors(self):
@@ -351,7 +468,15 @@ class RunEndToEndTest(unittest.TestCase):
             pop = payload["population"]
             self.assertEqual(pop["included"], 2)
             self.assertEqual(sorted(pop["included_asins"]), ["B0000000AA", "B0000000BB"])
-            self.assertEqual(pop["excluded"], [{"asin": "B0000000CC", "reason": "no_article"}])
+            self.assertEqual(sorted(pop["excluded"], key=lambda e: e["asin"]), [
+                {"asin": "B0000000CC", "reason": "no_article"},
+                {"asin": "B0000000DD", "reason": "article_older_than_material"},
+            ])
+            # R1: article_older_than_material の DD が同一 ASIN 対照になる
+            self.assertEqual(pop["same_asin_control_total"], 1)
+            self.assertEqual(pop["same_asin_control_asins"], ["B0000000DD"])
+            # R4: DD の generated_at と article_date は約1ヶ月差なので境界には当たらない
+            self.assertEqual(pop["date_boundary_within_24h"], {"count": 0, "items": []})
 
             # 直交ベクトルなので負の対照は必ず 0、正例は自分自身の段落と一致するので 1
             self.assertEqual(payload["threshold"]["negative_distribution"]["count"], 2)
@@ -362,6 +487,24 @@ class RunEndToEndTest(unittest.TestCase):
             self.assertEqual(payload["article_level"]["fraction"], 1.0)
             self.assertEqual(payload["snippet_level"]["overall"], {"total": 2, "used": 2, "rate": 1.0})
             self.assertEqual(payload["snippet_level"]["by_aspect"]["不満"]["rate"], 1.0)
+
+            # R1: DD (同一ASIN対照) は D_PARA と D_SNIPPET を同じ向きにしてあるので
+            # 元の閾値 (0.0) を超え、「同じ商品の話」だけでも100%に見えてしまう
+            # ことを再現している。included と対照が両方100%なので、真に使った
+            # ことの証拠としての差は0になる
+            same_asin_control = payload["same_asin_control"]
+            self.assertEqual(same_asin_control["total_articles"], 1)
+            self.assertEqual(same_asin_control["asins"], ["B0000000DD"])
+            self.assertEqual(same_asin_control["snippet_level"]["overall"], {"total": 1, "used": 1, "rate": 1.0})
+            self.assertEqual(payload["diff"]["overall"], 0.0)
+            self.assertEqual(payload["diff"]["by_aspect"]["不満"], 0.0)
+
+            # R1: 対照自身の p95 (=1.0) を閾値にすると、included の一致 (max_sim=1.0)
+            # はもう閾値を超えず (>であって>=ではない)、使用率は0まで下がる
+            alt = payload["alt_threshold_from_control"]
+            self.assertEqual(alt["value"], 1.0)
+            self.assertEqual(alt["snippet_level"]["overall"], {"total": 2, "used": 0, "rate": 0.0})
+            self.assertEqual(alt["article_level"]["fraction"], 0.0)
 
             self.assertEqual(len(payload["samples"]["above_threshold"]), 2)
             self.assertEqual(payload["samples"]["below_threshold"], [])
