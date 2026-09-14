@@ -1,16 +1,19 @@
-"""scripts/audit_experience_usage.py unit tests (#4841 T1)。
+"""scripts/audit_experience_usage.py unit tests (#4841 T1 / U1)。
 
 カバレッジ:
-1. build_paragraph_map: string/array narrativeSection・editorial_comment・欠損耐性
+1. build_paragraph_map: string/array narrativeSection・editorial_comment・欠損耐性・
+   include_caveat_fields (cons[i]/verdict_headline の追加・既定オフ・欠損耐性、U1)
 2. load_experience_records: 正常系・壊れたファイルの読み飛ばし
 3. select_population: 母集団選定の全除外理由 (zero_snippets / no_article /
    invalid_generated_at / invalid_article_date / article_older_than_material /
-   no_paragraphs) と included の日付条件
+   no_paragraphs) と included の日付条件・include_caveat_fields の伝播 (U1)
 4. build_snippet_pool / sample_negative_snippet: 同一 aspect・別 ASIN の抽出、
    固定 seed での再現性、候補無しで None
 5. percentile / distribution_stats / histogram_overlap / _rate_stats: 集計の pure function
-6. run(): Ruri をモックした E2E (query/document の kind 分離、閾値、記事/snippet 単位の
-   集計、出力 JSON の形)
+6. _bucket_matched_key / matched_key_breakdown_by_aspect: cons/verdict/safety_note/その他への
+   丸め、aspect別・all/used_only の集計 (U1)
+7. run(): Ruri をモックした E2E (query/document の kind 分離、閾値、記事/snippet 単位の
+   集計、出力 JSON の形、include_caveat_fields=True での cons 段落の一致と閾値較正、U1)
 """
 from __future__ import annotations
 
@@ -27,11 +30,13 @@ from scripts.audit_experience_usage import (
     distribution_stats,
     histogram_overlap,
     load_experience_records,
+    matched_key_breakdown_by_aspect,
     percentile,
     run,
     sample_negative_snippet,
     select_population,
     select_same_asin_control,
+    _bucket_matched_key,
     _diff_rate,
     _rate_stats,
 )
@@ -70,6 +75,32 @@ class BuildParagraphMapTest(unittest.TestCase):
     def test_missing_fields_do_not_crash(self):
         self.assertEqual(build_paragraph_map({}), {})
         self.assertEqual(build_paragraph_map(None), {})  # type: ignore[arg-type]
+
+    def test_caveat_fields_excluded_by_default(self):
+        article = {
+            "narrative": {"lead": "リード文"},
+            "product": {"cons": ["坂や急カーブで脱線しやすい"]},
+            "verdict": {"headline": "省スペース重視の家庭は一考"},
+        }
+        paragraphs = build_paragraph_map(article)
+        self.assertEqual(paragraphs, {"lead": "リード文"})
+
+    def test_caveat_fields_included_when_opted_in(self):
+        article = {
+            "narrative": {"lead": "リード文"},
+            "product": {"cons": ["坂や急カーブで脱線しやすい", "収納時にかさばる"]},
+            "verdict": {"headline": "省スペース重視の家庭は一考"},
+        }
+        paragraphs = build_paragraph_map(article, include_caveat_fields=True)
+        self.assertEqual(paragraphs["cons[0]"], "坂や急カーブで脱線しやすい")
+        self.assertEqual(paragraphs["cons[1]"], "収納時にかさばる")
+        self.assertEqual(paragraphs["verdict_headline"], "省スペース重視の家庭は一考")
+
+    def test_caveat_fields_tolerate_missing_or_malformed(self):
+        article = {"narrative": {"lead": "リード文"}, "product": {"cons": "not-a-list"}, "verdict": {}}
+        paragraphs = build_paragraph_map(article, include_caveat_fields=True)
+        self.assertEqual(paragraphs, {"lead": "リード文"})
+        self.assertEqual(build_paragraph_map({}, include_caveat_fields=True), {})
 
 
 # --------------------------------------------------------------------------
@@ -175,6 +206,27 @@ class SelectPopulationTest(unittest.TestCase):
             }]
             _, excluded = select_population(records, articles_dir)
             self.assertEqual(excluded, [{"asin": "B0000000AA", "reason": "article_older_than_material"}])
+
+    def test_include_caveat_fields_propagates_to_paragraphs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = pathlib.Path(tmp)
+            articles_dir = self._articles_dir(tmp, {
+                "2026-06-01-B0000000AA.json": {
+                    "date": "2026-06-01T00:00:00Z",
+                    "narrative": {"lead": "リード"},
+                    "product": {"cons": ["脱線しやすい"]},
+                    "verdict": {"headline": "一考の余地"},
+                },
+            })
+            records = [{
+                "asin": "B0000000AA", "generated_at": "2026-05-01T00:00:00Z",
+                "snippets": [{"aspect": "不満", "text": "t", "source_type": "blog"}],
+            }]
+            included, _ = select_population(records, articles_dir, include_caveat_fields=True)
+            self.assertEqual(
+                included[0]["paragraphs"],
+                {"lead": "リード", "cons[0]": "脱線しやすい", "verdict_headline": "一考の余地"},
+            )
 
     def test_excludes_no_paragraphs(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -361,6 +413,31 @@ class AggregationTest(unittest.TestCase):
         self.assertEqual(stats, {"total": 3, "used": 2, "rate": round(2 / 3, 4)})
 
 
+class BucketMatchedKeyTest(unittest.TestCase):
+    def test_buckets_caveat_and_narrative_keys(self):
+        self.assertEqual(_bucket_matched_key("cons[0]"), "cons")
+        self.assertEqual(_bucket_matched_key("cons[3]"), "cons")
+        self.assertEqual(_bucket_matched_key("verdict_headline"), "verdict")
+        self.assertEqual(_bucket_matched_key("safety_note"), "safety_note")
+        self.assertEqual(_bucket_matched_key("closing"), "other")
+        self.assertEqual(_bucket_matched_key(None), "(none)")
+
+
+class MatchedKeyBreakdownByAspectTest(unittest.TestCase):
+    def test_splits_all_vs_used_only_per_aspect(self):
+        positive_results = [
+            {"aspect": "不満", "matched_key": "cons[0]", "used": True},
+            {"aspect": "不満", "matched_key": "closing", "used": False},
+            {"aspect": "不満", "matched_key": "verdict_headline", "used": True},
+            {"aspect": "安全", "matched_key": "safety_note", "used": True},
+        ]
+        breakdown = matched_key_breakdown_by_aspect(positive_results)
+        self.assertEqual(breakdown["不満"]["all"], {"cons": 1, "other": 1, "verdict": 1})
+        self.assertEqual(breakdown["不満"]["used_only"], {"cons": 1, "verdict": 1})
+        self.assertEqual(breakdown["安全"]["all"], {"safety_note": 1})
+        self.assertEqual(breakdown["安全"]["used_only"], {"safety_note": 1})
+
+
 # --------------------------------------------------------------------------
 # run() E2E (Ruri をモック)
 # --------------------------------------------------------------------------
@@ -509,6 +586,10 @@ class RunEndToEndTest(unittest.TestCase):
             self.assertEqual(len(payload["samples"]["above_threshold"]), 2)
             self.assertEqual(payload["samples"]["below_threshold"], [])
 
+            # 既定 (include_caveat_fields=False) では closing キーのみなので "other" 一択
+            self.assertFalse(payload["include_caveat_fields"])
+            self.assertEqual(payload["matched_key_breakdown"]["不満"]["all"], {"other": 2})
+
             # kind の使い分け (document は段落、query は snippet 側) を確認
             kinds_called = {kind for kind, _ in session.calls}
             self.assertEqual(kinds_called, {"document", "query"})
@@ -516,6 +597,63 @@ class RunEndToEndTest(unittest.TestCase):
             self.assertTrue(out_path.exists())
             written = json.loads(out_path.read_text(encoding="utf-8"))
             self.assertEqual(written["population"]["included"], 2)
+
+
+class RunWithCaveatFieldsTest(unittest.TestCase):
+    """#4841 U1: --include-caveat-fields で cons/verdict も採点対象になることの E2E 確認。"""
+
+    class _CaveatFakeSession(_FakeSession):
+        VECTORS = {
+            **_FakeSession.VECTORS,
+            # A の cons 段落は A_SNIPPET と同じ向き (=A の不満は cons に一致する想定)
+            "A_CONS": [1.0, 0.0, 0.0, 0.0],
+        }
+
+    def test_cons_paragraph_becomes_matchable_and_recalibrates_threshold(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = pathlib.Path(tmp)
+            _write(tmp / "raw/B0000000AA/experience.json", {
+                "asin": "B0000000AA", "generated_at": "2026-05-01T00:00:00Z",
+                "snippets": [{"aspect": "不満", "text": "A_SNIPPET", "source_type": "antigravity"}],
+            })
+            _write(tmp / "raw/B0000000BB/experience.json", {
+                "asin": "B0000000BB", "generated_at": "2026-05-01T00:00:00Z",
+                "snippets": [{"aspect": "不満", "text": "B_SNIPPET", "source_type": "antigravity"}],
+            })
+            # narrative には一致する段落を置かず、cons だけに一致する段落を置く
+            _write(tmp / "articles/2026-06-01-B0000000AA.json", {
+                "date": "2026-06-01T00:00:00Z",
+                "narrative": {"closing": "B_PARA"},
+                "product": {"cons": ["A_CONS"]},
+            })
+            _write(tmp / "articles/2026-06-01-B0000000BB.json", {
+                "date": "2026-06-01T00:00:00Z", "narrative": {"closing": "B_PARA"},
+            })
+
+            session = self._CaveatFakeSession()
+            out_path = tmp / "out.json"
+            result = run(
+                experience_glob=str(tmp / "raw/*/experience.json"),
+                articles_dir=str(tmp / "articles"),
+                out_path=out_path,
+                ruri_url="http://ruri:8000",
+                include_caveat_fields=True,
+                session=session,
+                sleeper=lambda s: None,
+            )
+            payload = result["payload"]
+            self.assertTrue(payload["include_caveat_fields"])
+
+            positive = {
+                (r["asin"]): r
+                for r in [
+                    r for r in (
+                        payload["samples"]["above_threshold"] + payload["samples"]["below_threshold"]
+                    )
+                ]
+            }
+            self.assertEqual(positive["B0000000AA"]["matched_key"], "cons[0]")
+            self.assertEqual(payload["matched_key_breakdown"]["不満"]["all"].get("cons"), 1)
 
     def test_writes_empty_payload_when_no_included_articles(self):
         with tempfile.TemporaryDirectory() as tmp:

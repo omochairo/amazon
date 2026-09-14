@@ -40,7 +40,17 @@ Issue #4841 T1「体験談の実使用率を測る」の計測スクリプト。
   記事単位/snippet 単位の使用率・同一ASIN対照の分布と超過率・included との
   差 (`diff`)・閾値直上直下のサンプルを書き出す。
 
-Issue: https://github.com/omochairo/amazon/issues/4841 (T1)
+U1 (#4841 「不満の使用率を、注意点の枠まで含めて測り直す」):
+  `--include-caveat-fields` を付けると、採点対象の段落に `product.cons`
+  (リストの各要素を `cons[i]` として1段落) と `verdict.headline`
+  (`verdict_headline`) を追加する。既定 (フラグ無し) は T1 と同じ挙動。
+  閾値は同じ方法 (別ASIN負の対照のp95) で採点対象範囲込みで較正し直され、
+  同一ASIN対照も同じ範囲で採点される。出力は既定と別のファイル
+  (`data/analytics/experience_usage_caveat.json`) にする。
+  `matched_key_breakdown` (aspect別・cons/verdict/safety_note/その他の内訳)
+  も出力に追加される (フラグの有無に関わらず常に出す)。
+
+Issue: https://github.com/omochairo/amazon/issues/4841 (T1 / U1)
 """
 from __future__ import annotations
 
@@ -67,6 +77,8 @@ logger = logging.getLogger("audit_experience_usage")
 DEFAULT_EXPERIENCE_GLOB = "data/raw/per_asin/*/experience.json"
 DEFAULT_ARTICLES_DIR = "data/articles"
 DEFAULT_OUT = "data/analytics/experience_usage.json"
+# #4841 U1: 既存の experience_usage.json を上書きしないための別出力先。
+DEFAULT_OUT_CAVEAT = "data/analytics/experience_usage_caveat.json"
 DEFAULT_MODEL_RURI = "cl-nagoya/ruri-v3-310m"
 DEFAULT_BATCH_SIZE = 32
 REQUEST_TIMEOUT = 120
@@ -81,6 +93,10 @@ NEGATIVE_CONTROL_SEED = 20260914
 NARRATIVE_KEYS = (
     "lead", "why_this_product", "gift_appeal", "daily_use", "safety_note", "closing", "how_to_choose",
 )
+
+# #4841 U1: 注意点の専用枠 (product.cons の各要素・verdict.headline)。
+# --include-caveat-fields でのみ採点対象に加える (既定挙動は変えない)。
+CAVEAT_VERDICT_KEY = "verdict_headline"
 
 THRESHOLD_PERCENTILE = 95.0
 DISTRIBUTION_PERCENTILES = (50, 90, 95)
@@ -114,11 +130,16 @@ def _flatten_section(value: Any) -> str:
     return ""
 
 
-def build_paragraph_map(article: dict[str, Any]) -> dict[str, str]:
+def build_paragraph_map(article: dict[str, Any], include_caveat_fields: bool = False) -> dict[str, str]:
     """記事 JSON dict から {narrative キー / editorial_comment: 段落テキスト} を作る。
 
     narrativeSection は string/array いずれの形式にも対応する
     (audit_uniqueness.build_uniqueness_text と同じ考え方)。空の段落は含めない。
+
+    include_caveat_fields=True のとき (#4841 U1)、注意点の専用枠として
+    `product.cons` (リストの各要素を `cons[i]` という 1 段落) と
+    `verdict.headline` (`verdict_headline` 段落) を追加する。既定 (False) では
+    T1 と同じ挙動 (narrative キー + editorial_comment のみ)。
     """
     if not isinstance(article, dict):
         return {}
@@ -132,6 +153,17 @@ def build_paragraph_map(article: dict[str, Any]) -> dict[str, str]:
     ec = article.get("editorial_comment")
     if isinstance(ec, str) and ec.strip():
         out["editorial_comment"] = ec.strip()
+    if include_caveat_fields:
+        product = article.get("product")
+        cons = product.get("cons") if isinstance(product, dict) else None
+        if isinstance(cons, list):
+            for i, item in enumerate(cons):
+                if isinstance(item, str) and item.strip():
+                    out[f"cons[{i}]"] = item.strip()
+        verdict = article.get("verdict")
+        headline = verdict.get("headline") if isinstance(verdict, dict) else None
+        if isinstance(headline, str) and headline.strip():
+            out[CAVEAT_VERDICT_KEY] = headline.strip()
     return out
 
 
@@ -180,7 +212,9 @@ def _parse_iso(ts: Any) -> datetime | None:
 
 
 def select_population(
-    experience_records: list[dict[str, Any]], articles_dir: str | os.PathLike[str],
+    experience_records: list[dict[str, Any]],
+    articles_dir: str | os.PathLike[str],
+    include_caveat_fields: bool = False,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """母集団 (included) と除外 (excluded, 理由付き) を作る。
 
@@ -229,7 +263,7 @@ def select_population(
             excluded.append({"asin": asin, "reason": "article_older_than_material"})
             continue
 
-        paragraphs = build_paragraph_map(article)
+        paragraphs = build_paragraph_map(article, include_caveat_fields=include_caveat_fields)
         if not paragraphs:
             excluded.append({"asin": asin, "reason": "no_paragraphs"})
             continue
@@ -247,7 +281,9 @@ def select_population(
 
 
 def select_same_asin_control(
-    experience_records: list[dict[str, Any]], articles_dir: str | os.PathLike[str],
+    experience_records: list[dict[str, Any]],
+    articles_dir: str | os.PathLike[str],
+    include_caveat_fields: bool = False,
 ) -> list[dict[str, Any]]:
     """R1: 別 ASIN の負の対照では「同じ商品の話」と「使った」を分離できない問題への対照群。
 
@@ -283,7 +319,7 @@ def select_same_asin_control(
             continue
         if article_dt > gen_dt:
             continue  # included 側 (対照ではない)
-        paragraphs = build_paragraph_map(article)
+        paragraphs = build_paragraph_map(article, include_caveat_fields=include_caveat_fields)
         if not paragraphs:
             continue
         control.append({
@@ -506,6 +542,34 @@ def _group_by(items: list[dict[str, Any]], key: str) -> dict[str, list[dict[str,
     return groups
 
 
+def _bucket_matched_key(matched_key: str | None) -> str:
+    """#4841 U1: matched_key を報告用の粗い枠 (cons/verdict/safety_note/その他) に丸める。"""
+    if not matched_key:
+        return "(none)"
+    if matched_key.startswith("cons["):
+        return "cons"
+    if matched_key == CAVEAT_VERDICT_KEY:
+        return "verdict"
+    if matched_key == "safety_note":
+        return "safety_note"
+    return "other"
+
+
+def matched_key_breakdown_by_aspect(positive_results: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """aspect別に、matched_key の粗い枠の内訳を出す (#4841 U1)。
+
+    all: 全 snippet (used に関わらず) の内訳。used_only: 閾値を超えた
+    (used=True) snippet のみの内訳。不満が cons/verdict/safety_note/その他の
+    どこに実際に着地しているかを見るための集計。
+    """
+    out: dict[str, dict[str, Any]] = {}
+    for aspect, items in sorted(_group_by(positive_results, "aspect").items()):
+        all_counts = Counter(_bucket_matched_key(r.get("matched_key")) for r in items)
+        used_counts = Counter(_bucket_matched_key(r.get("matched_key")) for r in items if r.get("used"))
+        out[aspect] = {"all": dict(all_counts), "used_only": dict(used_counts)}
+    return out
+
+
 # --------------------------------------------------------------------------
 # 実行
 # --------------------------------------------------------------------------
@@ -520,6 +584,7 @@ def run(
     batch_size: int = DEFAULT_BATCH_SIZE,
     seed: int = NEGATIVE_CONTROL_SEED,
     threshold_percentile: float = THRESHOLD_PERCENTILE,
+    include_caveat_fields: bool = False,
     session: requests.Session | None = None,
     sleeper=time.sleep,
 ) -> dict[str, Any]:
@@ -528,11 +593,11 @@ def run(
     resolved_model = resolve_embed_model("ruri", model=model, ruri_url=ruri_url, session=session) or model
 
     experience_records = load_experience_records(experience_glob)
-    included, excluded = select_population(experience_records, articles_dir)
+    included, excluded = select_population(experience_records, articles_dir, include_caveat_fields)
     # R1: article_older_than_material (素材より前に書かれた記事) を同一 ASIN
     # の対照として使う。別 ASIN の負の対照 (下の pool/rng) では「同じ商品の
     # 話」と「使った」を分離できないため。
-    control = select_same_asin_control(experience_records, articles_dir)
+    control = select_same_asin_control(experience_records, articles_dir, include_caveat_fields)
 
     population = {
         "total_experience_files": len(experience_records),
@@ -553,10 +618,12 @@ def run(
             "generated_at": _now_iso(),
             "embed_model": resolved_model,
             "elapsed_seconds": round(time.monotonic() - started, 1),
+            "include_caveat_fields": include_caveat_fields,
             "population": population,
             "threshold": None,
             "article_level": None,
             "snippet_level": None,
+            "matched_key_breakdown": None,
             "same_asin_control": None,
             "diff": None,
             "alt_threshold_from_control": None,
@@ -819,10 +886,14 @@ def run(
         "generated_at": _now_iso(),
         "embed_model": resolved_model,
         "elapsed_seconds": round(time.monotonic() - started, 1),
+        "include_caveat_fields": include_caveat_fields,
         "population": population,
         "threshold": threshold_info,
         "article_level": article_level,
         "snippet_level": snippet_level,
+        # #4841 U1: matched_key の粗い枠 (cons/verdict/safety_note/その他) の
+        # aspect別内訳。不満が実際にどの枠に着地しているかを見る。
+        "matched_key_breakdown": matched_key_breakdown_by_aspect(positive_results),
         "same_asin_control": same_asin_control,
         "diff": diff,
         "alt_threshold_from_control": alt_threshold_from_control,
@@ -849,24 +920,30 @@ def main() -> int:
     )
     ap.add_argument("--experience-glob", default=DEFAULT_EXPERIENCE_GLOB)
     ap.add_argument("--articles-dir", default=DEFAULT_ARTICLES_DIR)
-    ap.add_argument("--out", default=DEFAULT_OUT)
+    ap.add_argument("--out", default=None, help=f"default: {DEFAULT_OUT} ({DEFAULT_OUT_CAVEAT} with --include-caveat-fields)")
     ap.add_argument("--ruri-url", default=os.environ.get("RURI_URL", DEFAULT_RURI_URL))
     ap.add_argument("--model", default=os.environ.get("EMBED_MODEL", DEFAULT_MODEL_RURI))
     ap.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     ap.add_argument("--seed", type=int, default=NEGATIVE_CONTROL_SEED)
     ap.add_argument("--threshold-percentile", type=float, default=THRESHOLD_PERCENTILE)
+    ap.add_argument(
+        "--include-caveat-fields", action="store_true",
+        help="product.cons の各要素と verdict.headline も採点対象に加える (#4841 U1)。既定は narrative + editorial_comment のみ",
+    )
     args = ap.parse_args()
+    out_path = args.out or (DEFAULT_OUT_CAVEAT if args.include_caveat_fields else DEFAULT_OUT)
 
     try:
         run(
             experience_glob=args.experience_glob,
             articles_dir=args.articles_dir,
-            out_path=pathlib.Path(args.out),
+            out_path=pathlib.Path(out_path),
             ruri_url=args.ruri_url,
             model=args.model,
             batch_size=args.batch_size,
             seed=args.seed,
             threshold_percentile=args.threshold_percentile,
+            include_caveat_fields=args.include_caveat_fields,
         )
     except EmbeddingBatchError as e:
         logger.error("embedding failed: %s", e)
