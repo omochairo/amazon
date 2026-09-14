@@ -1,0 +1,802 @@
+{
+  "generated_at": "2026-09-14T10:14:32Z",
+  "embed_model": "cl-nagoya/ruri-v3-310m",
+  "elapsed_seconds": 141.0,
+  "include_caveat_fields": true,
+  "population": {
+    "total_experience_files": 93,
+    "included": 58,
+    "included_asins": [
+      "B0002U3LZO",
+      "B000GTAX48",
+      "B000N0WT4C",
+      "B000PGZHPC",
+      "B001P06GXY",
+      "B001PIJ6GU",
+      "B001PIJ6LK",
+      "B005F24TEQ",
+      "B005WP3JWY",
+      "B008AGZQW8",
+      "B0098UYWMA",
+      "B00I7JXAYE",
+      "B00ISHL27C",
+      "B00IXF319Q",
+      "B00IXF31RI",
+      "B00Q687954",
+      "B00QER4Y1E",
+      "B00SGN5LPM",
+      "B01N9DNQAU",
+      "B074469BPQ",
+      "B077MB7JKB",
+      "B077QBK4KR",
+      "B077QNBJPP",
+      "B07DLFD9JN",
+      "B07KXSR5LX",
+      "B07N3M85H2",
+      "B07SSRNT67",
+      "B0817JBFZD",
+      "B08482FZ8L",
+      "B0854VK51T",
+      "B08BPRKJ6Q",
+      "B09BNVXRCY",
+      "B09DG473KK",
+      "B09K7J5CJD",
+      "B09TZCLC2T",
+      "B0B5D3N9CG",
+      "B0BQJ4NPBB",
+      "B0BY2HLW37",
+      "B0BYDDS2BY",
+      "B0C1Y5WJYQ",
+      "B0C7KF6LGQ",
+      "B0C8HK543G",
+      "B0C8HM1F94",
+      "B0CMCW78ZG",
+      "B0CWH2ZLVL",
+      "B0CWH43WP4",
+      "B0CZQKZPR4",
+      "B0D26TNXXB",
+      "B0D2MZY2JL",
+      "B0D5Y595SV",
+      "B0D8FMDZRQ",
+      "B0DB7BYTQL",
+      "B0DC6GCTTN",
+      "B0DF724WKX",
+      "B0F324L5QW",
+      "B0FF1KW4SP",
+      "B0FHVH6JML",
+      "B0GLXBCHCL"
+    ],
+    "excluded_total": 35,
+    "excluded_by_reason": {
+      "article_older_than_material": 35
+    },
+    "excluded": [
+      {
+        "asin": "B0020GD73O",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B0034G4DDW",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B007RE33XS",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B0083AHXT0",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B00OGWSUQE",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B00PY3EYQO",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B00V9LDHJ0",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B010CQE2FK",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B01G81IP9C",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B01MRT5327",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B01N7VQ79E",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B075GQ87PV",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B079BD7J5M",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B07CCNZWKF",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B07N329MKN",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B0875FV2BQ",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B0899JMQ7F",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B08FMQ6NLH",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B0C6HCT6K1",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B0C9QNWFQH",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B0CWH17Z6F",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B0DQWBTFQS",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B0F1TQBLLD",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B0F2T9PFS9",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B0F99N8CTD",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B0FNM3R45C",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B0FNM4Y35G",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B0FPFG7B4F",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B0FPXBTTHZ",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B0GR4GRDJC",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B0GWKWBXH3",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B0H454QHLX",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B0H8BPQHQN",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B0HDB6X1CN",
+        "reason": "article_older_than_material"
+      },
+      {
+        "asin": "B0HDB8KG6G",
+        "reason": "article_older_than_material"
+      }
+    ],
+    "same_asin_control_total": 35,
+    "same_asin_control_asins": [
+      "B0020GD73O",
+      "B0034G4DDW",
+      "B007RE33XS",
+      "B0083AHXT0",
+      "B00OGWSUQE",
+      "B00PY3EYQO",
+      "B00V9LDHJ0",
+      "B010CQE2FK",
+      "B01G81IP9C",
+      "B01MRT5327",
+      "B01N7VQ79E",
+      "B075GQ87PV",
+      "B079BD7J5M",
+      "B07CCNZWKF",
+      "B07N329MKN",
+      "B0875FV2BQ",
+      "B0899JMQ7F",
+      "B08FMQ6NLH",
+      "B0C6HCT6K1",
+      "B0C9QNWFQH",
+      "B0CWH17Z6F",
+      "B0DQWBTFQS",
+      "B0F1TQBLLD",
+      "B0F2T9PFS9",
+      "B0F99N8CTD",
+      "B0FNM3R45C",
+      "B0FNM4Y35G",
+      "B0FPFG7B4F",
+      "B0FPXBTTHZ",
+      "B0GR4GRDJC",
+      "B0GWKWBXH3",
+      "B0H454QHLX",
+      "B0H8BPQHQN",
+      "B0HDB6X1CN",
+      "B0HDB8KG6G"
+    ],
+    "date_boundary_within_24h": {
+      "count": 28,
+      "items": [
+        {
+          "asin": "B0002U3LZO",
+          "group": "included",
+          "hours": 4.98
+        },
+        {
+          "asin": "B000GTAX48",
+          "group": "included",
+          "hours": 2.9
+        },
+        {
+          "asin": "B000PGZHPC",
+          "group": "included",
+          "hours": 2.88
+        },
+        {
+          "asin": "B005WP3JWY",
+          "group": "included",
+          "hours": 4.61
+        },
+        {
+          "asin": "B0098UYWMA",
+          "group": "included",
+          "hours": 4.67
+        },
+        {
+          "asin": "B00I7JXAYE",
+          "group": "included",
+          "hours": 4.9
+        },
+        {
+          "asin": "B00ISHL27C",
+          "group": "included",
+          "hours": 4.52
+        },
+        {
+          "asin": "B00IXF319Q",
+          "group": "included",
+          "hours": 4.76
+        },
+        {
+          "asin": "B00Q687954",
+          "group": "included",
+          "hours": 4.57
+        },
+        {
+          "asin": "B00QER4Y1E",
+          "group": "included",
+          "hours": 6.32
+        },
+        {
+          "asin": "B00SGN5LPM",
+          "group": "included",
+          "hours": 4.39
+        },
+        {
+          "asin": "B074469BPQ",
+          "group": "included",
+          "hours": 5.85
+        },
+        {
+          "asin": "B077QNBJPP",
+          "group": "included",
+          "hours": 6.59
+        },
+        {
+          "asin": "B0B5D3N9CG",
+          "group": "included",
+          "hours": 6.48
+        },
+        {
+          "asin": "B0BQJ4NPBB",
+          "group": "included",
+          "hours": 6.48
+        },
+        {
+          "asin": "B0BY2HLW37",
+          "group": "included",
+          "hours": 6.98
+        },
+        {
+          "asin": "B0C7KF6LGQ",
+          "group": "included",
+          "hours": 6.43
+        },
+        {
+          "asin": "B0C8HK543G",
+          "group": "included",
+          "hours": 6.22
+        },
+        {
+          "asin": "B0CWH2ZLVL",
+          "group": "included",
+          "hours": 6.26
+        },
+        {
+          "asin": "B0CWH43WP4",
+          "group": "included",
+          "hours": 5.78
+        },
+        {
+          "asin": "B0D2MZY2JL",
+          "group": "included",
+          "hours": 6.19
+        },
+        {
+          "asin": "B0D5Y595SV",
+          "group": "included",
+          "hours": 6.23
+        },
+        {
+          "asin": "B0DB7BYTQL",
+          "group": "included",
+          "hours": 6.28
+        },
+        {
+          "asin": "B0DF724WKX",
+          "group": "included",
+          "hours": 6.68
+        },
+        {
+          "asin": "B0FF1KW4SP",
+          "group": "included",
+          "hours": 6.35
+        },
+        {
+          "asin": "B0FHVH6JML",
+          "group": "included",
+          "hours": 5.92
+        },
+        {
+          "asin": "B0GLXBCHCL",
+          "group": "included",
+          "hours": 7.05
+        },
+        {
+          "asin": "B0CWH17Z6F",
+          "group": "same_asin_control",
+          "hours": 17.51
+        }
+      ]
+    }
+  },
+  "threshold": {
+    "value": 0.8839,
+    "method": "negative_control_p95",
+    "seed": 20260914,
+    "negative_skipped_no_candidate": 0,
+    "negative_distribution": {
+      "count": 197,
+      "p50": 0.8463,
+      "p90": 0.8758,
+      "p95": 0.8839
+    },
+    "positive_distribution": {
+      "count": 197,
+      "p50": 0.9123,
+      "p90": 0.9403,
+      "p95": 0.9488
+    },
+    "overlap_coefficient": 0.1777
+  },
+  "article_level": {
+    "total_articles": 58,
+    "articles_with_used_snippet": 57,
+    "fraction": 0.9828
+  },
+  "snippet_level": {
+    "overall": {
+      "total": 197,
+      "used": 173,
+      "rate": 0.8782
+    },
+    "by_aspect": {
+      "シーン": {
+        "total": 55,
+        "used": 51,
+        "rate": 0.9273
+      },
+      "不満": {
+        "total": 49,
+        "used": 38,
+        "rate": 0.7755
+      },
+      "体験談": {
+        "total": 61,
+        "used": 56,
+        "rate": 0.918
+      },
+      "安全": {
+        "total": 19,
+        "used": 17,
+        "rate": 0.8947
+      },
+      "比較": {
+        "total": 13,
+        "used": 11,
+        "rate": 0.8462
+      }
+    },
+    "by_source_type": {
+      "antigravity": {
+        "total": 159,
+        "used": 144,
+        "rate": 0.9057
+      },
+      "blog": {
+        "total": 24,
+        "used": 19,
+        "rate": 0.7917
+      },
+      "yahoo_review_aggregate": {
+        "total": 14,
+        "used": 10,
+        "rate": 0.7143
+      }
+    }
+  },
+  "matched_key_breakdown": {
+    "シーン": {
+      "all": {
+        "other": 53,
+        "safety_note": 2
+      },
+      "used_only": {
+        "other": 50,
+        "safety_note": 1
+      }
+    },
+    "不満": {
+      "all": {
+        "safety_note": 13,
+        "other": 7,
+        "cons": 24,
+        "verdict": 5
+      },
+      "used_only": {
+        "safety_note": 13,
+        "other": 4,
+        "cons": 17,
+        "verdict": 4
+      }
+    },
+    "体験談": {
+      "all": {
+        "other": 59,
+        "verdict": 1,
+        "cons": 1
+      },
+      "used_only": {
+        "other": 55,
+        "cons": 1
+      }
+    },
+    "安全": {
+      "all": {
+        "safety_note": 16,
+        "other": 2,
+        "cons": 1
+      },
+      "used_only": {
+        "safety_note": 14,
+        "other": 2,
+        "cons": 1
+      }
+    },
+    "比較": {
+      "all": {
+        "other": 11,
+        "cons": 1,
+        "verdict": 1
+      },
+      "used_only": {
+        "other": 10,
+        "cons": 1
+      }
+    }
+  },
+  "same_asin_control": {
+    "total_articles": 35,
+    "asins": [
+      "B0020GD73O",
+      "B0034G4DDW",
+      "B007RE33XS",
+      "B0083AHXT0",
+      "B00OGWSUQE",
+      "B00PY3EYQO",
+      "B00V9LDHJ0",
+      "B010CQE2FK",
+      "B01G81IP9C",
+      "B01MRT5327",
+      "B01N7VQ79E",
+      "B075GQ87PV",
+      "B079BD7J5M",
+      "B07CCNZWKF",
+      "B07N329MKN",
+      "B0875FV2BQ",
+      "B0899JMQ7F",
+      "B08FMQ6NLH",
+      "B0C6HCT6K1",
+      "B0C9QNWFQH",
+      "B0CWH17Z6F",
+      "B0DQWBTFQS",
+      "B0F1TQBLLD",
+      "B0F2T9PFS9",
+      "B0F99N8CTD",
+      "B0FNM3R45C",
+      "B0FNM4Y35G",
+      "B0FPFG7B4F",
+      "B0FPXBTTHZ",
+      "B0GR4GRDJC",
+      "B0GWKWBXH3",
+      "B0H454QHLX",
+      "B0H8BPQHQN",
+      "B0HDB6X1CN",
+      "B0HDB8KG6G"
+    ],
+    "snippet_level": {
+      "overall": {
+        "total": 126,
+        "used": 58,
+        "rate": 0.4603
+      },
+      "by_aspect": {
+        "シーン": {
+          "total": 32,
+          "used": 16,
+          "rate": 0.5
+        },
+        "不満": {
+          "total": 28,
+          "used": 3,
+          "rate": 0.1071
+        },
+        "体験談": {
+          "total": 29,
+          "used": 21,
+          "rate": 0.7241
+        },
+        "安全": {
+          "total": 23,
+          "used": 10,
+          "rate": 0.4348
+        },
+        "比較": {
+          "total": 14,
+          "used": 8,
+          "rate": 0.5714
+        }
+      },
+      "by_source_type": {
+        "antigravity": {
+          "total": 62,
+          "used": 30,
+          "rate": 0.4839
+        },
+        "blog": {
+          "total": 23,
+          "used": 16,
+          "rate": 0.6957
+        },
+        "yahoo_review_aggregate": {
+          "total": 41,
+          "used": 12,
+          "rate": 0.2927
+        }
+      }
+    },
+    "distribution": {
+      "count": 126,
+      "p50": 0.8818,
+      "p90": 0.9197,
+      "p95": 0.9282
+    }
+  },
+  "diff": {
+    "overall": 0.4179,
+    "by_aspect": {
+      "シーン": 0.4273,
+      "不満": 0.6684,
+      "体験談": 0.1939,
+      "安全": 0.4599,
+      "比較": 0.2748
+    },
+    "by_source_type": {
+      "antigravity": 0.4218,
+      "blog": 0.096,
+      "yahoo_review_aggregate": 0.4216
+    }
+  },
+  "alt_threshold_from_control": {
+    "value": 0.9282,
+    "method": "same_asin_control_p95",
+    "article_level": {
+      "total_articles": 58,
+      "articles_with_used_snippet": 38,
+      "fraction": 0.6552
+    },
+    "snippet_level": {
+      "overall": {
+        "total": 197,
+        "used": 50,
+        "rate": 0.2538
+      },
+      "by_aspect": {
+        "シーン": {
+          "total": 55,
+          "used": 11,
+          "rate": 0.2
+        },
+        "不満": {
+          "total": 49,
+          "used": 6,
+          "rate": 0.1224
+        },
+        "体験談": {
+          "total": 61,
+          "used": 25,
+          "rate": 0.4098
+        },
+        "安全": {
+          "total": 19,
+          "used": 4,
+          "rate": 0.2105
+        },
+        "比較": {
+          "total": 13,
+          "used": 4,
+          "rate": 0.3077
+        }
+      },
+      "by_source_type": {
+        "antigravity": {
+          "total": 159,
+          "used": 47,
+          "rate": 0.2956
+        },
+        "blog": {
+          "total": 24,
+          "used": 2,
+          "rate": 0.0833
+        },
+        "yahoo_review_aggregate": {
+          "total": 14,
+          "used": 1,
+          "rate": 0.0714
+        }
+      }
+    }
+  },
+  "samples": {
+    "above_threshold": [
+      {
+        "asin": "B008AGZQW8",
+        "aspect": "不満",
+        "source_type": "antigravity",
+        "snippet_text": "1000ピースなどの大型サイズでは、キャラクター部分は組みやすいものの、空や白い背景部分が多くて単調になりやすく、完成までに根気と時間がかかるという難点があります。また、完成後に飾るための専用フレームは付属しておらず別売りとなるため、別途用意が必要です。",
+        "max_sim": 0.8839,
+        "matched_key": "daily_use",
+        "matched_text": "実際の遊びで、途中で飽きてしまわないか不安に感じる方もいるはずです。 このパズルはキャラクター部分が組みやすい反面、空や白い背景部分が多いため、完成までに根気と時間が必要になる場面もあります。 購入者の声でも「空など単調になりやすい部分は根気がいる」という声が複数見られますが、それを親子で協力して乗り越えることで達成感を得られます。 少し難しい部分を家族でサポートしながら進めることで、長時間の集…"
+      },
+      {
+        "asin": "B00IXF319Q",
+        "aspect": "体験談",
+        "source_type": "blog",
+        "snippet_text": "8ヶ月の我が子はまだ上手に音を出すことはできませんが、大人が鳴らしてみると音は思っていたより大きめでした。持ち手が細く握りやすい形なので、3ヶ月の赤ちゃんでもしっかり持って遊ぶことができ、長く楽しめるおもちゃだと感じました。",
+        "max_sim": 0.8841,
+        "matched_key": "why_this_product",
+        "matched_text": "「0歳の赤ちゃんに、どんなおもちゃが適しているのか」と悩む方も多いはずです。 選ばれている理由は、赤ちゃんが「吸う」ことからおぼえる時期に合わせて作られている点にあります。 親かめブログでは「持ち手が細く握りやすい形で、3ヶ月の赤ちゃんでもしっかり持って遊べる」との声がありました。 月齢に合わせて長く楽しめる設計が、はじめての知育玩具として支持されています。"
+      },
+      {
+        "asin": "B0FF1KW4SP",
+        "aspect": "シーン",
+        "source_type": "antigravity",
+        "snippet_text": "楽天市場等のECサイトで星4.7〜4.9点前後の高評価を得ており、幼児や小学生向けの誕生日やクリスマスのプレゼントとして多く選ばれています。",
+        "max_sim": 0.8853,
+        "matched_key": "gift_appeal",
+        "matched_text": "「プレゼントとして贈った際に見栄えがするのか」と心配になる方もいるはずです。 贈り物としての強みは、160ピースという大容量によるパッケージのボリューム感と独特の世界観です。 誕生日やクリスマスのプレゼントとして幼児や小学生向けに設計されていることが公式情報でも示されています。 男女問わず親しみやすいテーマのため、プレゼントとして渡した際の特別感も十分期待できます。"
+      },
+      {
+        "asin": "B0C8HM1F94",
+        "aspect": "不満",
+        "source_type": "antigravity",
+        "snippet_text": "個体差により卵のはめ合わせが硬く、小さな子ども一人では外すのが難しい場合があります。また、簡易的な梱包状態である点についても指摘されています。",
+        "max_sim": 0.8855,
+        "matched_key": "cons[0]",
+        "matched_text": "個体差により開けにくい場合がある"
+      },
+      {
+        "asin": "B00IXF319Q",
+        "aspect": "安全",
+        "source_type": "blog",
+        "snippet_text": "丸洗いができるので、衛生的に保ちたいベビーグッズとして安心感があります。また、創業100年以上のメーカーによる、安心・安全にこだわった知育玩具シリーズの一つです。",
+        "max_sim": 0.8863,
+        "matched_key": "gift_appeal",
+        "matched_text": "「出産祝いに選んでも本当に喜ばれるか」心配な方も多いのではないでしょうか。 贈り物としての強みは『安心・安全設計と衛生面の良さ』です。出産祝いやハーフバースデーの定番ジャンルに位置付けられます。 トイローヤル公式ブログでも「丸洗いができるので、衛生的に保ちたいベビーグッズとして安心感がある」と評価されています。 相手の家庭環境を選ばず、安心しておすすめできる選択肢です。"
+      }
+    ],
+    "below_threshold": [
+      {
+        "asin": "B00IXF319Q",
+        "aspect": "安全",
+        "source_type": "yahoo_review_aggregate",
+        "snippet_text": "素材が柔らかいため、赤ちゃんが噛みついても安心です。また、投げても痛くない作りになっており、水洗いができるため衛生的にも安心して遊ばせることができます。",
+        "max_sim": 0.8823,
+        "matched_key": "safety_note",
+        "matched_text": "「口に入れるものだからこそ、安全な素材で作られているか」は最も重視したいポイントです。 STマーク取得済みで、素材はポリプロピレンとエラストマーを使用し、口に入れても問題のない規格で製造されています。 無塗装でネジ不使用のため、赤ちゃんが顔にぶつけても痛くありません。 熱湯消毒や食器洗い乾燥機の使用はできないため、その点は注意して運用してください。"
+      },
+      {
+        "asin": "B0B5D3N9CG",
+        "aspect": "不満",
+        "source_type": "antigravity",
+        "snippet_text": "マイクは口をかなり近づけないと反応しにくいという声があるほか、多機能なぶん設置にある程度のスペースが必要になるという、仕様面での注意点が挙げられています。",
+        "max_sim": 0.8808,
+        "matched_key": "cons[0]",
+        "matched_text": "設置にスペースが必要"
+      },
+      {
+        "asin": "B00I7JXAYE",
+        "aspect": "不満",
+        "source_type": "antigravity",
+        "snippet_text": "車高の高いトラックや大型の特殊車両は入らず横倒しにする必要がある点や、開封時に付属のパーキング用シールを自分で貼る手間がかかる点がデメリットとして挙げられています。",
+        "max_sim": 0.8805,
+        "matched_key": "cons[0]",
+        "matched_text": "車高の高いトミカは横倒しが必要"
+      },
+      {
+        "asin": "B0B5D3N9CG",
+        "aspect": "体験談",
+        "source_type": "blog",
+        "snippet_text": "9か月になる娘に使用させていますが、非常に満足しています。特に「つまむ」といった指先の細かい動作が身についたと感じます。ダイヤルを回す音やレシートを引いて音声が鳴るギミックなど、様々な仕掛けに興味を持って遊んでいます。立体的な形や触覚への刺激にも繋がっているようです。",
+        "max_sim": 0.8793,
+        "matched_key": "daily_use",
+        "matched_text": "自宅で遊ぶ際、子供が一人で集中して遊んでくれるかどうかが気になりませんか。 玉飛ばしや鍵開けなど、子供の興味を惹きつける仕掛けが満載で、飽きずに遊べる工夫がされています。 「ダイヤルを回す音やレシートを引いて音声が鳴るギミックなど、様々な仕掛けに興味を持って遊んでいる」という使用レポートがあります（noteレビュー）。 一部のギミックは少しコツがいるものの、親の隙間時間を作るおもちゃとして大変役…"
+      },
+      {
+        "asin": "B08BPRKJ6Q",
+        "aspect": "シーン",
+        "source_type": "antigravity",
+        "snippet_text": "説明書やパッケージに多数のレイアウト例が記載されているため、組み立てに迷うことなく遊ぶことができます。子どもの試行錯誤を促す知育玩具としての側面もあり、多様なコース作りを楽しめるため、長く遊び続けられるセットとなっています。",
+        "max_sim": 0.8779,
+        "matched_key": "daily_use",
+        "matched_text": "実際の日常的な遊びの中で、すぐに飽きてしまわないかが気になるポイントです。 基本レールと情景パーツの組み合わせにより、年齢が上がってもコースを工夫して遊び方が広がっていきます。 体験談でも多様なコース作りを楽しめるため、長く遊び続けられるとの声が複数見られます。 週末にご家族で一緒に新しいレイアウトを考えるなど、親子のコミュニケーションツールとしても活躍します。"
+      }
+    ]
+  }
+}
