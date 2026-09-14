@@ -484,3 +484,100 @@ def test_render_body_shows_cohort_n():
     body = render_body(snap)
     assert "| 50 |" in body
     assert "6.00%" in body
+
+
+# --- cross_checked=0 系列 (amazon-navi-brain#13) --------------------------
+
+
+def _article(tmp_path: pathlib.Path, slug: str, claims: list | None) -> pathlib.Path:
+    jp = tmp_path / f"{slug}.json"
+    payload: dict = {"slug": slug}
+    if claims is not None:
+        payload["claims"] = claims
+    jp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    return jp
+
+
+def test_cross_checked_zero_true_when_no_claim_is_cross_checked(tmp_path):
+    jp = _article(tmp_path, "2026-09-01-B0AAAAAAAA",
+                  [{"cross_checked": False}, {"cross_checked": False}])
+    assert qc._cross_checked_zero(jp) is True
+
+
+def test_cross_checked_zero_false_when_any_claim_is_cross_checked(tmp_path):
+    jp = _article(tmp_path, "2026-09-01-B0AAAAAAAA",
+                  [{"cross_checked": False}, {"cross_checked": True}])
+    assert qc._cross_checked_zero(jp) is False
+
+
+def test_cross_checked_zero_is_none_without_claims(tmp_path):
+    """legacy 記事を「裏取り 0」に混ぜると記事形式の移行で系列が動く。"""
+    assert qc._cross_checked_zero(_article(tmp_path, "s", None)) is None
+    assert qc._cross_checked_zero(_article(tmp_path, "s2", [])) is None
+
+
+def test_cross_checked_zero_is_none_for_unreadable_json(tmp_path):
+    jp = tmp_path / "broken.json"
+    jp.write_text("{not json", encoding="utf-8")
+    assert qc._cross_checked_zero(jp) is None
+
+
+def test_cross_checked_summary_excludes_none_from_denominator():
+    records = [
+        {"slug": "a", "cross_checked_zero": True},
+        {"slug": "b", "cross_checked_zero": False},
+        {"slug": "c", "cross_checked_zero": False},
+        {"slug": "d", "cross_checked_zero": None},
+        {"slug": "e"},
+    ]
+    s = qc.cross_checked_summary(records)
+    assert s == {"articles_with_claims": 3, "zero": 1, "zero_rate": pytest.approx(0.33333)}
+
+
+def test_cross_checked_summary_empty_corpus_does_not_divide_by_zero():
+    assert qc.cross_checked_summary([])["zero_rate"] == 0.0
+
+
+def test_summarize_carries_cross_checked_series():
+    records = [_rec(f"2026-08-01-B0{i:08d}") for i in range(20)]
+    records[0]["cross_checked_zero"] = True
+    for r in records[1:]:
+        r["cross_checked_zero"] = False
+    snap = qc.summarize(records, cert_fetch=False, date="2026-08-20",
+                        cohort_sizes=(10,))
+    assert snap["cross_checked"] == {
+        "articles_with_claims": 20, "zero": 1, "zero_rate": 0.05}
+    # コホート側にも載る (全量だけだと直近の動きが古い記事に薄められる)
+    assert snap["cohorts"]["recent_10"]["cross_checked"]["articles_with_claims"] == 10
+
+
+def test_history_row_includes_cross_checked_series():
+    """系列として毎行必ず出す (欠けると時系列が繋がらない)。"""
+    snap = _snapshot("2026-09-14", [])
+    snap["cross_checked"] = {"articles_with_claims": 2520, "zero": 106,
+                             "zero_rate": 0.04206}
+    row = qc.history_row(snap, {"new": [], "recovered": [], "persisting": [],
+                                "previous_date": None})
+    assert row["cross_checked"]["zero"] == 106
+
+
+def test_history_row_keeps_cross_checked_column_when_snapshot_lacks_it():
+    row = qc.history_row(_snapshot("2026-09-14", []),
+                         {"new": [], "recovered": [], "persisting": [],
+                          "previous_date": None})
+    assert row["cross_checked"] == {}
+
+
+def test_render_body_surfaces_cross_checked_zero_rate():
+    from comment_quality_census import render_body
+    snap = _snapshot("2026-09-14", [])
+    snap["cross_checked"] = {"articles_with_claims": 2520, "zero": 106,
+                             "zero_rate": 0.04206}
+    body = render_body(snap)
+    assert "106 / 2520 件" in body
+    assert "4.21%" in body
+
+
+def test_render_body_omits_cross_checked_section_when_absent():
+    from comment_quality_census import render_body
+    assert "裏取り 0 本の記事" not in render_body(_snapshot("2026-09-14", []))
