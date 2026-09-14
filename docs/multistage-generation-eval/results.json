@@ -1,0 +1,1189 @@
+{
+  "generated_at": "2026-09-14T09:00:14Z",
+  "run_id": "20260914T075743Z",
+  "model": "gemma4:26b-a4b-it-qat",
+  "num_ctx": 8192,
+  "seed": 20260914,
+  "asin_selection": {
+    "candidate_count": 42,
+    "categories_covered": [
+      "STEM",
+      "想像",
+      "言語",
+      "運動"
+    ],
+    "selected_asins": [
+      "B00IXF31RI",
+      "B077MB7JKB",
+      "B00ISHL27C",
+      "B0C8HK543G",
+      "B07DLFD9JN",
+      "B0DB7BYTQL",
+      "B0D2MZY2JL",
+      "B0C8HM1F94",
+      "B08482FZ8L",
+      "B0FF1KW4SP"
+    ]
+  },
+  "asin_count_attempted": 10,
+  "cutoff_reason": null,
+  "summary": {
+    "A": {
+      "n": 10,
+      "max_sim_p50": 0.8893,
+      "centroid_sim_p50": 0.9101,
+      "usage_snippet_rate_mean": 0.75,
+      "unsupported_statements_total": 12,
+      "asin_containment_violations": 0
+    },
+    "B": {
+      "n": 10,
+      "max_sim_p50": 0.8814,
+      "centroid_sim_p50": 0.9069,
+      "usage_snippet_rate_mean": 0.775,
+      "unsupported_statements_total": 13,
+      "asin_containment_violations": 0
+    },
+    "C": {
+      "n": 10,
+      "max_sim_p50": 0.8805,
+      "centroid_sim_p50": 0.9081,
+      "usage_snippet_rate_mean": 0.7833,
+      "unsupported_statements_total": 16,
+      "asin_containment_violations": 0
+    },
+    "cost": {
+      "asin_count": 10,
+      "total_gemma_calls": 90,
+      "calls_per_asin_mean": 9.0,
+      "total_gemma_seconds": 3166.2,
+      "seconds_per_asin_mean": 316.6,
+      "max_estimated_prompt_tokens": 2120
+    },
+    "verdict": "B無効 (事前登録した判定基準を満たさない)"
+  },
+  "per_asin_run_dir": "/root/multistage_runs/20260914T075743Z",
+  "per_asin_summary": [
+    {
+      "asin": "B00IXF31RI",
+      "category": "運動",
+      "elapsed_s": 342.4,
+      "flagged_count": 3,
+      "rewritten_keys": [
+        "why_this_product",
+        "gift_appeal",
+        "editorial_comment"
+      ],
+      "A": {
+        "max_sim": 0.8721,
+        "centroid_sim": 0.8908,
+        "usage_snippet_rate": 0.6667,
+        "unsupported_statements": 1,
+        "asin_containment_ok": true
+      },
+      "B": {
+        "max_sim": 0.8685,
+        "centroid_sim": 0.8905,
+        "usage_snippet_rate": 0.6667,
+        "unsupported_statements": 1,
+        "asin_containment_ok": true
+      },
+      "C": {
+        "max_sim": 0.8642,
+        "centroid_sim": 0.8853,
+        "usage_snippet_rate": 0.6667,
+        "unsupported_statements": 1,
+        "asin_containment_ok": true
+      }
+    },
+    {
+      "asin": "B077MB7JKB",
+      "category": "想像",
+      "elapsed_s": 380.6,
+      "flagged_count": 4,
+      "rewritten_keys": [
+        "gift_appeal",
+        "daily_use",
+        "safety_note",
+        "editorial_comment"
+      ],
+      "A": {
+        "max_sim": 0.8743,
+        "centroid_sim": 0.888,
+        "usage_snippet_rate": 1.0,
+        "unsupported_statements": 1,
+        "asin_containment_ok": true
+      },
+      "B": {
+        "max_sim": 0.8762,
+        "centroid_sim": 0.8994,
+        "usage_snippet_rate": 1.0,
+        "unsupported_statements": 1,
+        "asin_containment_ok": true
+      },
+      "C": {
+        "max_sim": 0.88,
+        "centroid_sim": 0.9,
+        "usage_snippet_rate": 1.0,
+        "unsupported_statements": 2,
+        "asin_containment_ok": true
+      }
+    },
+    {
+      "asin": "B00ISHL27C",
+      "category": "STEM",
+      "elapsed_s": 337.3,
+      "flagged_count": 2,
+      "rewritten_keys": [
+        "daily_use",
+        "editorial_comment"
+      ],
+      "A": {
+        "max_sim": 0.8633,
+        "centroid_sim": 0.8798,
+        "usage_snippet_rate": 1.0,
+        "unsupported_statements": 3,
+        "asin_containment_ok": true
+      },
+      "B": {
+        "max_sim": 0.859,
+        "centroid_sim": 0.8813,
+        "usage_snippet_rate": 1.0,
+        "unsupported_statements": 1,
+        "asin_containment_ok": true
+      },
+      "C": {
+        "max_sim": 0.8584,
+        "centroid_sim": 0.8807,
+        "usage_snippet_rate": 1.0,
+        "unsupported_statements": 1,
+        "asin_containment_ok": true
+      }
+    },
+    {
+      "asin": "B0C8HK543G",
+      "category": "言語",
+      "elapsed_s": 362.1,
+      "flagged_count": 3,
+      "rewritten_keys": [
+        "gift_appeal",
+        "safety_note",
+        "editorial_comment"
+      ],
+      "A": {
+        "max_sim": 0.9311,
+        "centroid_sim": 0.9257,
+        "usage_snippet_rate": 0.6667,
+        "unsupported_statements": 1,
+        "asin_containment_ok": true
+      },
+      "B": {
+        "max_sim": 0.936,
+        "centroid_sim": 0.935,
+        "usage_snippet_rate": 1.0,
+        "unsupported_statements": 2,
+        "asin_containment_ok": true
+      },
+      "C": {
+        "max_sim": 0.9346,
+        "centroid_sim": 0.9348,
+        "usage_snippet_rate": 1.0,
+        "unsupported_statements": 3,
+        "asin_containment_ok": true
+      }
+    },
+    {
+      "asin": "B07DLFD9JN",
+      "category": "運動",
+      "elapsed_s": 336.3,
+      "flagged_count": 3,
+      "rewritten_keys": [
+        "gift_appeal",
+        "safety_note",
+        "editorial_comment"
+      ],
+      "A": {
+        "max_sim": 0.8937,
+        "centroid_sim": 0.9216,
+        "usage_snippet_rate": 0.6667,
+        "unsupported_statements": 1,
+        "asin_containment_ok": true
+      },
+      "B": {
+        "max_sim": 0.8833,
+        "centroid_sim": 0.9128,
+        "usage_snippet_rate": 0.6667,
+        "unsupported_statements": 2,
+        "asin_containment_ok": true
+      },
+      "C": {
+        "max_sim": 0.8811,
+        "centroid_sim": 0.9125,
+        "usage_snippet_rate": 0.6667,
+        "unsupported_statements": 2,
+        "asin_containment_ok": true
+      }
+    },
+    {
+      "asin": "B0DB7BYTQL",
+      "category": "想像",
+      "elapsed_s": 390.6,
+      "flagged_count": 5,
+      "rewritten_keys": [
+        "why_this_product",
+        "gift_appeal",
+        "safety_note",
+        "closing",
+        "editorial_comment"
+      ],
+      "A": {
+        "max_sim": 0.8988,
+        "centroid_sim": 0.9019,
+        "usage_snippet_rate": 0.6667,
+        "unsupported_statements": 1,
+        "asin_containment_ok": true
+      },
+      "B": {
+        "max_sim": 0.898,
+        "centroid_sim": 0.9055,
+        "usage_snippet_rate": 0.6667,
+        "unsupported_statements": 1,
+        "asin_containment_ok": true
+      },
+      "C": {
+        "max_sim": 0.9001,
+        "centroid_sim": 0.9069,
+        "usage_snippet_rate": 1.0,
+        "unsupported_statements": 1,
+        "asin_containment_ok": true
+      }
+    },
+    {
+      "asin": "B0D2MZY2JL",
+      "category": "STEM",
+      "elapsed_s": 362.6,
+      "flagged_count": 3,
+      "rewritten_keys": [
+        "why_this_product",
+        "gift_appeal",
+        "safety_note"
+      ],
+      "A": {
+        "max_sim": 0.9025,
+        "centroid_sim": 0.9356,
+        "usage_snippet_rate": 0.6667,
+        "unsupported_statements": 1,
+        "asin_containment_ok": true
+      },
+      "B": {
+        "max_sim": 0.8914,
+        "centroid_sim": 0.9257,
+        "usage_snippet_rate": 0.6667,
+        "unsupported_statements": 1,
+        "asin_containment_ok": true
+      },
+      "C": {
+        "max_sim": 0.8927,
+        "centroid_sim": 0.924,
+        "usage_snippet_rate": 0.6667,
+        "unsupported_statements": 2,
+        "asin_containment_ok": true
+      }
+    },
+    {
+      "asin": "B0C8HM1F94",
+      "category": "運動",
+      "elapsed_s": 426.9,
+      "flagged_count": 3,
+      "rewritten_keys": [
+        "gift_appeal",
+        "safety_note",
+        "editorial_comment"
+      ],
+      "A": {
+        "max_sim": 0.8848,
+        "centroid_sim": 0.9183,
+        "usage_snippet_rate": 0.75,
+        "unsupported_statements": 2,
+        "asin_containment_ok": true
+      },
+      "B": {
+        "max_sim": 0.8795,
+        "centroid_sim": 0.9083,
+        "usage_snippet_rate": 0.6667,
+        "unsupported_statements": 1,
+        "asin_containment_ok": true
+      },
+      "C": {
+        "max_sim": 0.88,
+        "centroid_sim": 0.9092,
+        "usage_snippet_rate": 0.6667,
+        "unsupported_statements": 1,
+        "asin_containment_ok": true
+      }
+    },
+    {
+      "asin": "B08482FZ8L",
+      "category": "想像",
+      "elapsed_s": 443.8,
+      "flagged_count": 2,
+      "rewritten_keys": [
+        "safety_note",
+        "editorial_comment"
+      ],
+      "A": {
+        "max_sim": 0.8436,
+        "centroid_sim": 0.878,
+        "usage_snippet_rate": 0.6667,
+        "unsupported_statements": 1,
+        "asin_containment_ok": true
+      },
+      "B": {
+        "max_sim": 0.8458,
+        "centroid_sim": 0.8808,
+        "usage_snippet_rate": 0.6667,
+        "unsupported_statements": 2,
+        "asin_containment_ok": true
+      },
+      "C": {
+        "max_sim": 0.8491,
+        "centroid_sim": 0.8828,
+        "usage_snippet_rate": 0.6667,
+        "unsupported_statements": 2,
+        "asin_containment_ok": true
+      }
+    },
+    {
+      "asin": "B0FF1KW4SP",
+      "category": "STEM",
+      "elapsed_s": 368.1,
+      "flagged_count": 3,
+      "rewritten_keys": [
+        "lead",
+        "gift_appeal",
+        "closing"
+      ],
+      "A": {
+        "max_sim": 0.9077,
+        "centroid_sim": 0.9219,
+        "usage_snippet_rate": 0.75,
+        "unsupported_statements": 0,
+        "asin_containment_ok": true
+      },
+      "B": {
+        "max_sim": 0.912,
+        "centroid_sim": 0.9251,
+        "usage_snippet_rate": 0.75,
+        "unsupported_statements": 1,
+        "asin_containment_ok": true
+      },
+      "C": {
+        "max_sim": 0.9052,
+        "centroid_sim": 0.9241,
+        "usage_snippet_rate": 0.5,
+        "unsupported_statements": 1,
+        "asin_containment_ok": true
+      }
+    }
+  ],
+  "samples": [
+    {
+      "asin": "B00IXF31RI",
+      "category": "運動",
+      "title": "トイローヤル やわらかリングかみかみの口コミと素材の安全性",
+      "elapsed_s": 342.4,
+      "corpus_size": 30,
+      "angle_candidates": [
+        {
+          "angle": "【噛み心地重視】赤ちゃんの好みを探せる！6種類の感触を楽しめる「やわらかリングかみかみ」の魅力",
+          "evidence": "2種類の柔らかさと、6種類の噛み心地で赤ちゃんのお気に入りを探せます。"
+        },
+        {
+          "angle": "【安全性重視】顔に当たっても痛くない！STマーク取得＆ネジ不使用の「やわらかリングかみかみ」を徹底検証",
+          "evidence": "無塗装、ネジ不使用でやわらかい材質なので当たっても痛くなく、赤ちゃんが自分で振って顔にコツンしても大丈夫です。 / 安全基準:STマーク"
+        },
+        {
+          "angle": "【比較：音の有無で選ぶ】歯固め・ラトル選びに迷ったら？音が鳴るタイプ vs 音なし「やわらかリングかみかみ」",
+          "evidence": "商品データ（音無し）と、競合商品（ホイッスル、ラッパ、がらがら等の音が出るもの）との比較。"
+        },
+        {
+          "angle": "【お手入れガイド】水洗いOKだけど注意点も！「やわらかリングかみかみ」の正しい消毒・洗浄方法",
+          "evidence": "水、またはぬるま湯で洗い、強めの流水で汚れを落とし...熱湯消毒には堪えません。/食器洗い乾燥機のご使用はお避け下さい。"
+        },
+        {
+          "angle": "【ギフト選び】600円台から買える！出産祝いに最適な「やわらかリングかみかみ」のコスパと品質",
+          "evidence": "価格: 649円 / 出産祝いやプレゼントにもおすすめです。"
+        }
+      ],
+      "angle_selection": {
+        "selected": {
+          "angle": "【お手入れガイド】水洗いOKだけど注意点も！「やわらかリングかみかみ」の正しい消毒・洗浄方法",
+          "evidence": "水、またはぬるま湯で洗い、強めの流水で汚れを落とし...熱湯消毒には堪えません。/食器洗い乾燥機のご使用はお避け下さい。",
+          "max_sim_vs_corpus": 0.8101
+        },
+        "scored": [
+          {
+            "angle": "【お手入れガイド】水洗いOKだけど注意点も！「やわらかリングかみかみ」の正しい消毒・洗浄方法",
+            "evidence": "水、またはぬるま湯で洗い、強めの流水で汚れを落とし...熱湯消毒には堪えません。/食器洗い乾燥機のご使用はお避け下さい。",
+            "max_sim_vs_corpus": 0.8101
+          },
+          {
+            "angle": "【安全性重視】顔に当たっても痛くない！STマーク取得＆ネジ不使用の「やわらかリングかみかみ」を徹底検証",
+            "evidence": "無塗装、ネジ不使用でやわらかい材質なので当たっても痛くなく、赤ちゃんが自分で振って顔にコツンしても大丈夫です。 / 安全基準:STマーク",
+            "max_sim_vs_corpus": 0.8406
+          },
+          {
+            "angle": "【比較：音の有無で選ぶ】歯固め・ラトル選びに迷ったら？音が鳴るタイプ vs 音なし「やわらかリングかみかみ」",
+            "evidence": "商品データ（音無し）と、競合商品（ホイッスル、ラッパ、がらがら等の音が出るもの）との比較。",
+            "max_sim_vs_corpus": 0.8499
+          },
+          {
+            "angle": "【噛み心地重視】赤ちゃんの好みを探せる！6種類の感触を楽しめる「やわらかリングかみかみ」の魅力",
+            "evidence": "2種類の柔らかさと、6種類の噛み心地で赤ちゃんのお気に入りを探せます。",
+            "max_sim_vs_corpus": 0.8579
+          },
+          {
+            "angle": "【ギフト選び】600円台から買える！出産祝いに最適な「やわらかリングかみかみ」のコスパと品質",
+            "evidence": "価格: 649円 / 出産祝いやプレゼントにもおすすめです。",
+            "max_sim_vs_corpus": 0.8675
+          }
+        ]
+      },
+      "design_memo": {
+        "angle": "【お手入れガイド】水洗いOKだけど注意点も！「やわらかリングかみかみ」の正しい消毒・洗浄方法",
+        "key_snippet_map": {
+          "lead": "赤ちゃんが夢中になる「噛み心地」に特化した、トイローヤルの人気歯固め。でも、実はお手入れにはちょっとしたコツが必要であることをお伝えします。",
+          "why_this_product": "2種類の柔らかさと6種類の噛み心地があり、赤ちゃんの好みに合わせやすい点。また、ネジ不使用・無塗装の安全設計が魅力です。",
+          "gift_appeal": "STマーク取得済みで安全性も高く、出産祝いや誕生日プレゼントとして喜ばれる、手頃な価格帯（649円）のギフトに最適なアイテムです。",
+          "daily_use": "月齢の低い小さな手でも握りやすいリング形状。顔に当たっても痛くない柔らかい素材なので、日常的に安心して遊ばせられます。",
+          "safety_note": "水洗いや流水での洗浄はOKですが、熱湯消毒・電子レンジ・食洗機はNGです。使用前にはしっかり乾燥させることが重要。また、埃が付きやすい点にも注意が必要です。",
+          "closing": "正しいお手入れ方法をマスターして、清潔な状態で赤ちゃんの「お気に入り」を長く楽しませてあげましょう。",
+          "how_to_choose": "音の有無や形状（ラトルか歯固めか）で選ぶ際のポイントを解説。"
+        },
+        "how_to_choose_axis": "「音が鳴るタイプ（B00IXF319Q, B00IXF31JG, B0CGV38WV4, B0B5X37328）」か「音なしの歯固め特化型（本商品・B00VR5VLGE）」かで、赤ちゃんの興味や使用シーンに合わせて選ぶのがポイントです。"
+      },
+      "critique_flagged": [
+        {
+          "key": "why_this_product",
+          "reason": "「赤ちゃんに優しい作り」といった表現が定型句的であり、具体的な素材感や設計のメリットへの踏み込みが不足しています。"
+        },
+        {
+          "key": "gift_appeal",
+          "reason": "価格と安全性を並べるだけの記述になっており、ギフトとしての情緒的な価値や選ぶ際の決め手が具体性に欠けます。"
+        },
+        {
+          "key": "editorial_comment",
+          "reason": "お手入れに関する記述の繰り返しに留まっており、編集者独自の視点や評価が見られません。"
+        }
+      ],
+      "rewritten_keys": [
+        "why_this_product",
+        "gift_appeal",
+        "editorial_comment"
+      ],
+      "groups": {
+        "A": {
+          "narrative": {
+            "lead": "赤ちゃんが何でも口に入れてしまう時期、安心してお使いいただける歯固めを探している方は多いのではないでしょうか。今回は、ママたちの声から生まれた「トイローヤル やわらかリングかみかみ」をご紹介します。",
+            "why_this_product": "この商品の最大の魅力は、無塗装・ネジ不使用のやわらかい素材にあります。2種類の柔らかさと6種類の噛み心地が楽しめる設計になっており、赤ちゃんが自分のお気に入りの感触を見つけられるのが特徴です。小さな手でも握りやすいリング形状も、月齢の低い時期から使いやすいポイントです。",
+            "gift_appeal": "出産祝いや誕生日プレゼントとしても喜ばれるアイテムです。お世話になった方への贈り物として、実用的で安全性の高いギフトをお探しの方に最適といえるでしょう。",
+            "daily_use": "水洗いが可能ですので、毎日のお手入れもスムーズに行えます。外出時には、赤ちゃんが自分で振って顔にコツンとしても痛くない柔らかさなので、安心してお持ちいただけます。",
+            "safety_note": "熱湯消毒や食洗機、電子レンジでの消毒はできませんので、お手入れの際はご注意ください。",
+            "closing": "赤ちゃんの「噛みたい」という欲求に寄り添う、優しい使い心地の一品です。",
+            "how_to_choose": "音の有無で選ぶなら、音が鳴るタイプがおすすめです。例えば、笛のような音が楽しめる「やわらか吸っても吹いてもホイッスル」や、ラトルとして使える「やわらかふってリンリン」などがあります。一方、静かに遊ばせたい場合や、噛み心地を重視したい場合には、本商品のようになしタイプが適しています。",
+            "editorial_comment": "多様な噛み心地から、赤ちゃんの好みがきっと見つかるはずです。"
+          },
+          "entailment": {
+            "total_unsupported": 1,
+            "by_key": {
+              "lead": [],
+              "why_this_product": [],
+              "gift_appeal": [],
+              "daily_use": [],
+              "safety_note": [
+                "熱湯消毒や食洗機、電子レンジでの消毒はできませんので、お手入れの際はご注意ください。"
+              ],
+              "closing": [],
+              "how_to_choose": []
+            }
+          },
+          "asin_containment": {
+            "ok": true,
+            "disallowed_asins": [],
+            "disallowed_product_names": []
+          },
+          "usage_rate": {
+            "snippet_rate": 0.6667,
+            "article_used": true,
+            "per_snippet": [
+              {
+                "text": "月齢の低い小さな手でも細いリング部分をしっかり握りやすく、振り回して顔に当たっても痛くない柔らかい素材設計が好評です。また、突起の形や硬さが複数用意されているため噛み心地の変化を楽しめる点も高く評価されています。",
+                "max_sim": 0.9469,
+                "used": true
+              },
+              {
+                "text": "水洗いや薬液消毒には対応していますが、煮沸消毒、電子レンジ消毒、食洗機には対応していません。哺乳瓶などと一緒に一括で熱消毒を行いたい場合には、お手入れの手間に注意が必要です。",
+                "max_sim": 0.9307,
+                "used": true
+              },
+              {
+                "text": "素材の特性上、静電気などで埃やゴミが付着しやすかったり、赤ちゃんの手から滑り落ちて床を汚してしまいやすかったりする点に注意が必要です。また、熱消毒ができない点も利便性の面で難点として挙げられます。",
+                "max_sim": 0.878,
+                "used": false
+              }
+            ]
+          },
+          "uniqueness": {
+            "max_sim": 0.8721,
+            "centroid_sim": 0.8908
+          }
+        },
+        "B": {
+          "narrative": {
+            "lead": "赤ちゃんが夢中になる「噛み心地」に特化した、トイローヤルの人気歯固めをご紹介します。毎日使うものだからこそ、知っておきたいお手入れのコツについても解説いたします。",
+            "why_this_product": "2種類の柔らかさと6種類の噛み心地が用意されており、赤ちゃんの好みに合わせやすいのが魅力です。無塗装・ネジ不使用の安全設計となっており、赤ちゃんに優しい作りになっています。",
+            "gift_appeal": "STマーク取得済みの高い安全性に加え、649円という手頃な価格帯も魅力です。出産祝いや誕生日プレゼントとして、大切な方へ贈るギフトにも適しています。",
+            "daily_use": "月齢の低い小さな手でも握りやすいリング形状が特徴です。柔らかい素材なので、赤ちゃんが振り回して顔に当たっても痛くなく、日常的に安心して遊ばせられます。",
+            "safety_note": "水洗いや流水での洗浄は可能ですが、熱湯消毒や電子レンジ、食洗機の使用はできません。使用前にはしっかりと水分を拭き取り、十分に乾燥させることが大切です。",
+            "closing": "正しいお手入れ方法をマスターして、清潔な状態で赤ちゃんの「お気に入り」を長く楽しませてあげましょう。",
+            "how_to_choose": "音の有無や形状によって、用途に合わせて選ぶのがポイントです。音が鳴るタイプ（トイローヤル やわらか吸っても吹いてもホイッスル、やわらかふってリンリン、ラ♪の音のゆびあそびラッパ、ころころニャン）は、聴覚からの刺激を求める場合に適しています。一方で、本商品や「やわらか片手でなめなめ」のような音なしのタイプは、噛み心地に特化した歯固めとして活用できます。",
+            "editorial_comment": "お手入れ方法を正しく理解して、清潔に使い続けられるのが嬉しいアイテムです。"
+          },
+          "entailment": {
+            "total_unsupported": 1,
+            "by_key": {
+              "lead": [],
+              "why_this_product": [],
+              "gift_appeal": [],
+              "daily_use": [],
+              "safety_note": [
+                "水洗いや薬液消毒には対応していますが、煮沸消毒、電子レンジ消毒、食洗機には対応していません。"
+              ],
+              "closing": [],
+              "how_to_choose": []
+            }
+          },
+          "asin_containment": {
+            "ok": true,
+            "disallowed_asins": [],
+            "disallowed_product_names": []
+          },
+          "usage_rate": {
+            "snippet_rate": 0.6667,
+            "article_used": true,
+            "per_snippet": [
+              {
+                "text": "月齢の低い小さな手でも細いリング部分をしっかり握りやすく、振り回して顔に当たっても痛くない柔らかい素材設計が好評です。また、突起の形や硬さが複数用意されているため噛み心地の変化を楽しめる点も高く評価されています。",
+                "max_sim": 0.9493,
+                "used": true
+              },
+              {
+                "text": "水洗いや薬液消毒には対応していますが、煮沸消毒、電子レンジ消毒、食洗機には対応していません。哺乳瓶などと一緒に一括で熱消毒を行いたい場合には、お手入れの手間に注意が必要です。",
+                "max_sim": 0.9192,
+                "used": true
+              },
+              {
+                "text": "素材の特性上、静電気などで埃やゴミが付着しやすかったり、赤ちゃんの手から滑り落ちて床を汚してしまいやすかったりする点に注意が必要です。また、熱消毒ができない点も利便性の面で難点として挙げられます。",
+                "max_sim": 0.874,
+                "used": false
+              }
+            ]
+          },
+          "uniqueness": {
+            "max_sim": 0.8685,
+            "centroid_sim": 0.8905
+          }
+        },
+        "C": {
+          "narrative": {
+            "lead": "赤ちゃんが夢中になる「噛み心地」に特化した、トイローヤルの人気歯固めをご紹介します。毎日使うものだからこそ、知っておきたいお手入れのコツについても解説いたします。",
+            "why_this_product": "無塗装・ネジ不使用の設計により、赤ちゃんが自ら振って顔に当たっても痛くないほど柔らかな質感を実現しています。2種類の柔らかさと6種類の異なる噛み心地が備わっているため、歯ぐきのむず痒さに合わせた「お気に入り」をきっと見つけられるはずです。",
+            "gift_appeal": "STマークを取得した高い安全性はもちろん、大切な方へのちょっとした手土産や出産祝いにも選びやすい、手に取りやすい価格帯も魅力です。実用性が高く、赤ちゃんの成長に寄り添うアイテムとして喜ばれるギフトになります。",
+            "daily_use": "月齢の低い小さな手でも握りやすいリング形状が特徴です。柔らかい素材なので、赤ちゃんが振り回して顔に当たっても痛くなく、日常的に安心して遊ばせられます。",
+            "safety_note": "水洗いや流水での洗浄は可能ですが、熱湯消毒や電子レンジ、食洗機の使用はできません。使用前にはしっかりと水分を拭き取り、十分に乾燥させることが大切です。",
+            "closing": "正しいお手入れ方法をマスターして、清潔な状態で赤ちゃんの「お気に入り」を長く楽しませてあげましょう。",
+            "how_to_choose": "音の有無や形状によって、用途に合わせて選ぶのがポイントです。音が鳴るタイプ（トイローヤル やわらか吸っても吹いてもホイッスル、やわらかふってリンリン、ラ♪の音のゆびあそびラッパ、ころころニャン）は、聴覚からの刺激を求める場合に適しています。一方で、本商品や「やわらか片手でなめなめ」のような音なしのタイプは、噛み心地に特化した歯固めとして活用できます。",
+            "editorial_comment": "水洗い可能で清潔に保てる一方、煮沸や食洗機の使用はできません。お手入れの際はしっかりと水分を切って乾燥させることが、長く安全に使うためのポイントです。"
+          },
+          "entailment": {
+            "total_unsupported": 1,
+            "by_key": {
+              "lead": [],
+              "why_this_product": [],
+              "gift_appeal": [
+                "大切な方へのちょっとした手土産や出産祝いにも選びやすい、手に取りやすい価格帯も魅力です。"
+              ],
+              "daily_use": [],
+              "safety_note": [],
+              "closing": [],
+              "how_to_choose": []
+            }
+          },
+          "asin_containment": {
+            "ok": true,
+            "disallowed_asins": [],
+            "disallowed_product_names": []
+          },
+          "usage_rate": {
+            "snippet_rate": 0.6667,
+            "article_used": true,
+            "per_snippet": [
+              {
+                "text": "月齢の低い小さな手でも細いリング部分をしっかり握りやすく、振り回して顔に当たっても痛くない柔らかい素材設計が好評です。また、突起の形や硬さが複数用意されているため噛み心地の変化を楽しめる点も高く評価されています。",
+                "max_sim": 0.9493,
+                "used": true
+              },
+              {
+                "text": "水洗いや薬液消毒には対応していますが、煮沸消毒、電子レンジ消毒、食洗機には対応していません。哺乳瓶などと一緒に一括で熱消毒を行いたい場合には、お手入れの手間に注意が必要です。",
+                "max_sim": 0.9192,
+                "used": true
+              },
+              {
+                "text": "素材の特性上、静電気などで埃やゴミが付着しやすかったり、赤ちゃんの手から滑り落ちて床を汚してしまいやすかったりする点に注意が必要です。また、熱消毒ができない点も利便性の面で難点として挙げられます。",
+                "max_sim": 0.874,
+                "used": false
+              }
+            ]
+          },
+          "uniqueness": {
+            "max_sim": 0.8642,
+            "centroid_sim": 0.8853
+          }
+        }
+      },
+      "calls": [
+        {
+          "stage": "A_generate",
+          "model_id": "gemma4:26b-a4b-it-qat",
+          "prompt_eval_count": 1286,
+          "estimated_prompt_tokens": 1098,
+          "eval_count": 406,
+          "total_duration_s": 41.761,
+          "num_ctx": 8192,
+          "temperature": 0.6,
+          "seed": 20260914,
+          "prompt_sha256": "9086ab336a4873ed34a8e8fac494191b5311abe08c97a93f9a6c46c7416c923d",
+          "truncated": false,
+          "truncation_reason": null
+        },
+        {
+          "stage": "B_angle_candidates",
+          "model_id": "gemma4:26b-a4b-it-qat",
+          "prompt_eval_count": 1075,
+          "estimated_prompt_tokens": 930,
+          "eval_count": 412,
+          "total_duration_s": 41.571,
+          "num_ctx": 8192,
+          "temperature": 0.7,
+          "seed": 20260914,
+          "prompt_sha256": "6231cd9f944ef9433fdea83d3ea26054448a4d5853d55ea6fb654d730851d051",
+          "truncated": false,
+          "truncation_reason": null
+        },
+        {
+          "stage": "B_design_memo",
+          "model_id": "gemma4:26b-a4b-it-qat",
+          "prompt_eval_count": 1301,
+          "estimated_prompt_tokens": 1146,
+          "eval_count": 437,
+          "total_duration_s": 44.233,
+          "num_ctx": 8192,
+          "temperature": 0.4,
+          "seed": 20260914,
+          "prompt_sha256": "7b02960d981359b6fbdfafb5bb702003c32ec3ed3fe2046424e7cda02856b593",
+          "truncated": false,
+          "truncation_reason": null
+        },
+        {
+          "stage": "B_generate",
+          "model_id": "gemma4:26b-a4b-it-qat",
+          "prompt_eval_count": 1728,
+          "estimated_prompt_tokens": 1488,
+          "eval_count": 432,
+          "total_duration_s": 51.477,
+          "num_ctx": 8192,
+          "temperature": 0.6,
+          "seed": 20260914,
+          "prompt_sha256": "b22ab75b62f81beccafb464428a203a0e5e1ebca3855b244587edd8cc46115a8",
+          "truncated": false,
+          "truncation_reason": null
+        },
+        {
+          "stage": "C_critique",
+          "model_id": "gemma4:26b-a4b-it-qat",
+          "prompt_eval_count": 715,
+          "estimated_prompt_tokens": 665,
+          "eval_count": 125,
+          "total_duration_s": 8.535,
+          "num_ctx": 8192,
+          "temperature": 0.3,
+          "seed": 20260914,
+          "prompt_sha256": "0f9b1b48d84332f95fd3312a2a7c283db5ce3dd92ca316c9a2bc81b54a503f4a",
+          "truncated": false,
+          "truncation_reason": null
+        },
+        {
+          "stage": "C_rewrite",
+          "model_id": "gemma4:26b-a4b-it-qat",
+          "prompt_eval_count": 1428,
+          "estimated_prompt_tokens": 1260,
+          "eval_count": 186,
+          "total_duration_s": 29.582,
+          "num_ctx": 8192,
+          "temperature": 0.6,
+          "seed": 20260914,
+          "prompt_sha256": "26c3a0563b90e340383ca98ad9af1b0045b9de00974c718a0ee3afe069b6aef4",
+          "truncated": false,
+          "truncation_reason": null
+        },
+        {
+          "stage": "A_entailment",
+          "model_id": "gemma4:26b-a4b-it-qat",
+          "prompt_eval_count": 1434,
+          "estimated_prompt_tokens": 1283,
+          "eval_count": 139,
+          "total_duration_s": 24.549,
+          "num_ctx": 8192,
+          "temperature": 0.0,
+          "seed": 20260914,
+          "prompt_sha256": "81bd4854ec78ba9ac263867fb4776eda00665aa9457a4d395a3fab8d6e5dc6d6",
+          "truncated": false,
+          "truncation_reason": null
+        },
+        {
+          "stage": "B_entailment",
+          "model_id": "gemma4:26b-a4b-it-qat",
+          "prompt_eval_count": 1460,
+          "estimated_prompt_tokens": 1287,
+          "eval_count": 142,
+          "total_duration_s": 25.012,
+          "num_ctx": 8192,
+          "temperature": 0.0,
+          "seed": 20260914,
+          "prompt_sha256": "ad3534fa7b7873a72f0f982ae0490f5577c5b9064e18a8b4387f051a40611b41",
+          "truncated": false,
+          "truncation_reason": null
+        },
+        {
+          "stage": "C_entailment",
+          "model_id": "gemma4:26b-a4b-it-qat",
+          "prompt_eval_count": 1495,
+          "estimated_prompt_tokens": 1319,
+          "eval_count": 139,
+          "total_duration_s": 16.581,
+          "num_ctx": 8192,
+          "temperature": 0.0,
+          "seed": 20260914,
+          "prompt_sha256": "b20c2c47bb5fc4f4f2d6afb94f5a260e2c650819e7785203b340ae116be0de81",
+          "truncated": false,
+          "truncation_reason": null
+        }
+      ],
+      "threshold_used": 0.8839
+    },
+    {
+      "asin": "B0DB7BYTQL",
+      "category": "想像",
+      "title": "トミカ連動が魅力のプラレール レバーでアクション＆サウンド! ビッグステーション、口コミ・最安値まとめ",
+      "elapsed_s": 390.6,
+      "corpus_size": 30,
+      "angle_candidates": [
+        {
+          "angle": "「音」と「動き」で遊びが広がる！サウンド90種類以上を搭載した大型駅セットの魅力",
+          "evidence": "体験談：車両の動きに連動した90種類以上の多彩なサウンドがリアルで楽しいと好評です。関連動画タイトル：サウンド90種類以上‼"
+        },
+        {
+          "angle": "プラレールだけじゃない！トミカやごっこ遊びも楽しめる、拡張性の高い大型駅",
+          "evidence": "体験談：パーツを組み替えて大きな駅から長い駅へと変形させたり、他のレールセットと連結して拡張したりできるため... 駅前ロータリーでのトミカの発車遊びや、エレベーター・改札を用いたプラキッズによるごっこ遊びなど"
+        },
+        {
+          "angle": "鉄道体験を疑似体験！レバー操作で味わう「出発進行」のリアルなギミック",
+          "evidence": "関連ニュース見出し：2線それぞれの停発車をレバーでコントロール！...プラレールで｢顔認証改札｣｢AI音声案内｣を疑似体験"
+        },
+        {
+          "angle": "【比較】お手軽車両セット vs 大型ギミック駅、どっちがおすすめ？遊び方の幅で選ぶ",
+          "evidence": "競合商品：シンカリオン 0（3209円）、103系総武線（2081円）などの単体車両と、ビッグステーション（5027円）の価格・機能差"
+        },
+        {
+          "angle": "組み立てに時間はかかるけれど、長く遊べる！「ビッグステーション」購入前に知っておきたいこと",
+          "evidence": "体験談：製品サイズが大きくギミックも多いため、購入後の初期組み立てやシール貼り作業に少し時間がかかってしまうという声があります。"
+        }
+      ],
+      "angle_selection": {
+        "selected": {
+          "angle": "組み立てに時間はかかるけれど、長く遊べる！「ビッグステーション」購入前に知っておきたいこと",
+          "evidence": "体験談：製品サイズが大きくギミックも多いため、購入後の初期組み立てやシール貼り作業に少し時間がかかってしまうという声があります。",
+          "max_sim_vs_corpus": 0.816
+        },
+        "scored": [
+          {
+            "angle": "組み立てに時間はかかるけれど、長く遊べる！「ビッグステーション」購入前に知っておきたいこと",
+            "evidence": "体験談：製品サイズが大きくギミックも多いため、購入後の初期組み立てやシール貼り作業に少し時間がかかってしまうという声があります。",
+            "max_sim_vs_corpus": 0.816
+          },
+          {
+            "angle": "鉄道体験を疑似体験！レバー操作で味わう「出発進行」のリアルなギミック",
+            "evidence": "関連ニュース見出し：2線それぞれの停発車をレバーでコントロール！...プラレールで｢顔認証改札｣｢AI音声案内｣を疑似体験",
+            "max_sim_vs_corpus": 0.8431
+          },
+          {
+            "angle": "【比較】お手軽車両セット vs 大型ギミック駅、どっちがおすすめ？遊び方の幅で選ぶ",
+            "evidence": "競合商品：シンカリオン 0（3209円）、103系総武線（2081円）などの単体車両と、ビッグステーション（5027円）の価格・機能差",
+            "max_sim_vs_corpus": 0.8442
+          },
+          {
+            "angle": "「音」と「動き」で遊びが広がる！サウンド90種類以上を搭載した大型駅セットの魅力",
+            "evidence": "体験談：車両の動きに連動した90種類以上の多彩なサウンドがリアルで楽しいと好評です。関連動画タイトル：サウンド90種類以上‼",
+            "max_sim_vs_corpus": 0.8614
+          },
+          {
+            "angle": "プラレールだけじゃない！トミカやごっこ遊びも楽しめる、拡張性の高い大型駅",
+            "evidence": "体験談：パーツを組み替えて大きな駅から長い駅へと変形させたり、他のレールセットと連結して拡張したりできるため... 駅前ロータリーでのトミカの発車遊びや、エレベーター・改札を用いたプラキッズによるごっこ遊びなど",
+            "max_sim_vs_corpus": 0.8645
+          }
+        ]
+      },
+      "design_memo": {
+        "angle": "組み立てに時間はかかるけれど、長く遊べる！「ビッグステーション」購入前に知っておきたいこと",
+        "key_snippet_map": {
+          "lead": "プラレールの大型駅セット「ビッグステーション」を紹介。ギミック満載で非常に人気がある一方、組み立ての準備が必要な一面も持つ、遊びごたえ抜群のアイテムです。",
+          "why_this_product": "90種類以上の多彩なサウンドとレバーによるアクションが最大の特徴。パーツの組み替えや拡張性が高く、一度揃えば長く飽きずに遊べる「拡張性」こそが最大の魅力。",
+          "gift_appeal": "駅前ロータリーでのトミカ遊びや改札のごっこ遊びなど、プラレール以外の玩具とも連動できるため、プレゼントとして渡した後の遊びの幅が非常に広い。",
+          "daily_use": "車両の動きに合わせたリアルな音や、エレベーター・ホームドアなどの仕掛けにより、鉄道ごっこ遊びが日常的に楽しめる。トミカとの併用もおすすめ。",
+          "safety_note": "電池ケースには誤飲防止のための「ネジ止め式」を採用しており、小さなお子様がいる家庭でも安心して遊べる設計。",
+          "closing": "組み立てに少し時間はかかるものの、その分、圧倒的なボリュームと体験が待っています。長く愛せるプラレールデビューの決定版として。",
+          "how_to_choose": "単体の車両セット（B0DL59MW9R, B0GYCDJ46N, B0GYCBHKT7）や特定のテーマ車両（B0GWGPCHLH）と比較して、駅全体のギミックと拡張性を重視するかどうかが判断基準。"
+        },
+        "how_to_choose_axis": "「単体車両セット」か「大型ギミックセット」かの比較。B07VNRSPN1のようなコントロールセットとの違いや、特定のキャラクター・路線（B0DL59MW9R, B0GWGPCHLH, B0GYCDJ46N, B0GYCBHKT7）に特化した車両セットと比較して、遊びの「広さ」と「仕組みの複雑さ」を軸にする。"
+      },
+      "critique_flagged": [
+        {
+          "key": "why_this_product",
+          "reason": "「一度揃えば長く飽きずに遊べる」という表現は、多くの商品レビューで見られる定型句であり、具体性に欠けます。"
+        },
+        {
+          "key": "gift_appeal",
+          "reason": "「遊びの幅が非常に広いのも、嬉しいポイントです」という記述は、類似度が極めて高く、ありきたりな言い回しです。"
+        },
+        {
+          "key": "safety_note",
+          "reason": "電池ケースの仕様に関する説明は定型的な内容であり、独自の視点による解説が不足しています。"
+        },
+        {
+          "key": "closing",
+          "reason": "「圧倒的なボリュームと体験が待っています」という表現は具体性に乏しく、結びの言葉として汎用的すぎます。"
+        },
+        {
+          "key": "editorial_comment",
+          "reason": "本文の内容を繰り返しているだけであり、校閲の観点からは独自の付加価値や具体的な感想が見られません。"
+        }
+      ],
+      "rewritten_keys": [
+        "why_this_product",
+        "gift_appeal",
+        "safety_note",
+        "closing",
+        "editorial_comment"
+      ],
+      "groups": {
+        "A": {
+          "narrative": {
+            "lead": "プラレールの世界がぐんと広がる、大型の駅セットをご紹介します。レバー操作によるアクションと多彩なサウンドが楽しめる、遊びごとの楽しさが詰まったアイテムです。",
+            "why_this_product": "車両の動きに連動した90種類以上のリアルなサウンドが、お子さまの好奇心を刺激します。パーツを組み替えて大きな駅から長い駅へと変形させたり、他のレールセットと連結して拡張したりできるため、長く遊び続けられる点が魅力です。",
+            "gift_appeal": "高架駅にホームドアを備えた大型のギミックは、プレゼントとしての見栄えも抜群です。トミカを使ったロータリーでの遊びや改札ごっこなど、想像力を膨らませる要素が豊富に含まれています。",
+            "daily_use": "プラレールでの走行だけでなく、エレベーターや改札を用いた「鉄道体験」のようなごっこ遊びとしても活用できます。駅前ロータリーでトミカを発車させるなど、複数の玩具を組み合わせた幅広いシチュエーションで楽しめます。",
+            "safety_note": "誤飲防止のため、電池ケースの蓋にはネジ止め式が採用されています。",
+            "closing": "鉄道の世界をまるごと体験できる、ボリューム満点のセットです。",
+            "how_to_choose": "特定の車両に特化した「銀河鉄道999 999号」や「シンカリオン CW シンカリオン 0」、特定の路線をモチーフにした「103系総武線」「E233系横浜線」と比較すると、本商品は駅のギミックとアクションに重点を置いています。また、「E5系 はやぶさコントロールセット」のように走行体験に特化したものとは異なり、改札やロータリーなど街全体の情景を楽しめる点が特徴です。遊びの幅広さを重視するなら、このような大型のステーションタイプがおすすめです。",
+            "editorial_comment": "多彩なサウンドとアクションで、お部屋の中に小さな鉄道の世界を再現できます。"
+          },
+          "entailment": {
+            "total_unsupported": 1,
+            "by_key": {
+              "lead": [],
+              "why_this_product": [],
+              "gift_appeal": [
+                "高架駅にホームドアを備えた大型のギミックは、プレゼントとしての見栄えも抜群です。"
+              ],
+              "daily_use": [],
+              "safety_note": [],
+              "closing": [],
+              "how_to_choose": []
+            }
+          },
+          "asin_containment": {
+            "ok": true,
+            "disallowed_asins": [],
+            "disallowed_product_names": []
+          },
+          "usage_rate": {
+            "snippet_rate": 0.6667,
+            "article_used": true,
+            "per_snippet": [
+              {
+                "text": "車両の動きに連動した90種類以上の多彩なサウンドがリアルで楽しいと好評です。また、パーツを組み替えて大きな駅から長い駅へと変形させたり、他のレールセットと連結して拡張したりできるため、長く遊び続けられる点が評価されています。",
+                "max_sim": 0.9827,
+                "used": true
+              },
+              {
+                "text": "プラレールでの走行だけでなく、駅前ロータリーでのトミカの発車遊びや、エレベーター・改札を用いたプラキッズによるごっこ遊びなど、複数の玩具を組み合わせた幅広いシチュエーションで遊ぶことができます。",
+                "max_sim": 0.9653,
+                "used": true
+              },
+              {
+                "text": "製品サイズが大きくギミックも多いため、購入後の初期組み立てやシール貼り作業に少し時間がかかってしまうという声があります。",
+                "max_sim": 0.8372,
+                "used": false
+              }
+            ]
+          },
+          "uniqueness": {
+            "max_sim": 0.8988,
+            "centroid_sim": 0.9019
+          }
+        },
+        "B": {
+          "narrative": {
+            "lead": "プラレールの大型駅セット「ビッグステーション」をご紹介します。ギミックが満載で非常に人気がある一方、組み立てには準備が必要な一面も持つ、遊びごたえ抜群のアイテムです。",
+            "why_this_product": "最大の特徴は、90種類以上の多彩なサウンドとレバーによるアクションです。パーツを組み替えて大きな駅から長い駅へと変形させたり、他のレールセットと連結して拡張したりできるため、一度揃えば長く飽きずに遊べる点が最大の魅力といえます。",
+            "gift_appeal": "駅前ロータリーでのトミカ遊びや改札のごっこ遊びなど、プラレール以外の玩具とも連動して遊ぶことができます。プレゼントとして渡した後の遊びの幅が非常に広いのも、嬉しいポイントです。",
+            "daily_use": "車両の動きに合わせたリアルな音や、エレベーター・ホームドアなどの仕掛けにより、鉄道ごっこ遊びを日常的に楽しめます。トミカと併せて遊ぶスタイルもおすすめです。",
+            "safety_note": "電池ケースには、誤飲防止のための「ネジ止め式」が採用されており、小さなお子様がいる家庭でも安心して遊べる設計となっています。",
+            "closing": "組み立てに少し時間はかかるものの、その分、圧倒的なボリュームと体験が待っています。長く愛せるプラレールデビューの決定版としていかがでしょうか。",
+            "how_to_choose": "特定のキャラクターや路線を楽しむ「銀河鉄道999（B0GWGPCHLH）」、「シンカリオンCW シンカリオン 0（B0DL59MW9R）」、「103系総武線（B0GYCBHKT7）」、「E233系横浜線（B0GYCDJ46N）」といった車両セットと比較して、駅全体のギミックや拡張性を重視するかどうかが判断基準となります。また、特定の機能を体験する「E5系 はやぶさコントロールセット（B07VNRSPN1）」のようなセットとは、遊びの広さと仕組みの複雑さが異なります。",
+            "editorial_comment": "組み立ての手間を上回る、圧倒的なボリュームと楽しさを提供してくれる駅セットです。"
+          },
+          "entailment": {
+            "total_unsupported": 1,
+            "by_key": {
+              "lead": [],
+              "why_this_product": [],
+              "gift_appeal": [],
+              "daily_use": [],
+              "safety_note": [],
+              "closing": [
+                "長く愛せるプラレールデビューの決定版としていかがでしょうか。"
+              ],
+              "how_to_choose": []
+            }
+          },
+          "asin_containment": {
+            "ok": true,
+            "disallowed_asins": [],
+            "disallowed_product_names": []
+          },
+          "usage_rate": {
+            "snippet_rate": 0.6667,
+            "article_used": true,
+            "per_snippet": [
+              {
+                "text": "車両の動きに連動した90種類以上の多彩なサウンドがリアルで楽しいと好評です。また、パーツを組み替えて大きな駅から長い駅へと変形させたり、他のレールセットと連結して拡張したりできるため、長く遊び続けられる点が評価されています。",
+                "max_sim": 0.9662,
+                "used": true
+              },
+              {
+                "text": "プラレールでの走行だけでなく、駅前ロータリーでのトミカの発車遊びや、エレベーター・改札を用いたプラキッズによるごっこ遊びなど、複数の玩具を組み合わせた幅広いシチュエーションで遊ぶことができます。",
+                "max_sim": 0.9412,
+                "used": true
+              },
+              {
+                "text": "製品サイズが大きくギミックも多いため、購入後の初期組み立てやシール貼り作業に少し時間がかかってしまうという声があります。",
+                "max_sim": 0.8555,
+                "used": false
+              }
+            ]
+          },
+          "uniqueness": {
+            "max_sim": 0.898,
+            "centroid_sim": 0.9055
+          }
+        },
+        "C": {
+          "narrative": {
+            "lead": "プラレールの大型駅セット「ビッグステーション」をご紹介します。ギミックが満載で非常に人気がある一方、組み立てには準備が必要な一面も持つ、遊びごたえ抜群のアイテムです。",
+            "why_this_product": "最大の特徴は、90種類以上の多彩なサウンドとレバーによるダイナミックなアクションです。パーツの組み替えによって駅のサイズを自在に変形させたり、お手持ちのレールセットと連結して街を広げたりできるため、成長に合わせて遊び方を変化させられる点に大きな魅力があります。",
+            "gift_appeal": "プラレールでの走行はもちろん、駅前ロータリーでのトミカ遊びや、改札・エレベーターを使ったごっこ遊びなど、お手持ちの玩具と組み合わせて「自分だけの街」を作れる楽しさがあります。これ一つで鉄道の世界観がぐっと広がるため、特別な日の贈り物にも最適です。",
+            "daily_use": "車両の動きに合わせたリアルな音や、エレベーター・ホームドアなどの仕掛けにより、鉄道ごっこ遊びを日常的に楽しめます。トミカと併せて遊ぶスタイルもおすすめです。",
+            "safety_note": "電池ケースには、万が一の誤飲を防ぐための「ネジ止め式」が採用されています。小さなお子様が夢中になって遊ぶ場面でも、安全面への配慮がなされているのは嬉しいポイントですね。",
+            "closing": "組み立てやシール貼りには少し時間がかかりますが、完成した後の充実感は格別です。駅のギミックを動かすたびに新しい発見がある、プラレール遊びの楽しさを凝縮したセットといえるでしょう。",
+            "how_to_choose": "特定のキャラクターや路線を楽しむ「銀河鉄道999（B0GWGPCHLH）」、「シンカリオンCW シンカリオン 0（B0DL59MW9R）」、「103系総武線（B0GYCBHKT7）」、「E233系横浜線（B0GYCDJ46N）」といった車両セットと比較して、駅全体のギミックや拡張性を重視するかどうかが判断基準となります。また、特定の機能を体験する「E5系 はやぶさコントロールセット（B07VNRSPN1）」のようなセットとは、遊びの広さと仕組みの複雑さが異なります。",
+            "editorial_comment": "単なる駅の模型にとどまらず、音や動きを通じて鉄道の仕組みを疑似体験できる、非常に密度の濃い大型セットです。"
+          },
+          "entailment": {
+            "total_unsupported": 1,
+            "by_key": {
+              "lead": [],
+              "why_this_product": [],
+              "gift_appeal": [
+                "これ一つで鉄道の世界観がぐっと広がるため、特別な日の贈り物にも最適です。"
+              ],
+              "daily_use": [],
+              "safety_note": [],
+              "closing": [],
+              "how_to_choose": []
+            }
+          },
+          "asin_containment": {
+            "ok": true,
+            "disallowed_asins": [],
+            "disallowed_product_names": []
+          },
+          "usage_rate": {
+            "snippet_rate": 1.0,
+            "article_used": true,
+            "per_snippet": [
+              {
+                "text": "車両の動きに連動した90種類以上の多彩なサウンドがリアルで楽しいと好評です。また、パーツを組み替えて大きな駅から長い駅へと変形させたり、他のレールセットと連結して拡張したりできるため、長く遊び続けられる点が評価されています。",
+                "max_sim": 0.9624,
+                "used": true
+              },
+              {
+                "text": "プラレールでの走行だけでなく、駅前ロータリーでのトミカの発車遊びや、エレベーター・改札を用いたプラキッズによるごっこ遊びなど、複数の玩具を組み合わせた幅広いシチュエーションで遊ぶことができます。",
+                "max_sim": 0.9224,
+                "used": true
+              },
+              {
+                "text": "製品サイズが大きくギミックも多いため、購入後の初期組み立てやシール貼り作業に少し時間がかかってしまうという声があります。",
+                "max_sim": 0.8864,
+                "used": true
+              }
+            ]
+          },
+          "uniqueness": {
+            "max_sim": 0.9001,
+            "centroid_sim": 0.9069
+          }
+        }
+      },
+      "calls": [
+        {
+          "stage": "A_generate",
+          "model_id": "gemma4:26b-a4b-it-qat",
+          "prompt_eval_count": 1166,
+          "estimated_prompt_tokens": 1033,
+          "eval_count": 440,
+          "total_duration_s": 45.591,
+          "num_ctx": 8192,
+          "temperature": 0.6,
+          "seed": 20260914,
+          "prompt_sha256": "aa41e8cf7debfddad07e8b4b63700f604bf375c93308bf72b8759148dbed959e",
+          "truncated": false,
+          "truncation_reason": null
+        },
+        {
+          "stage": "B_angle_candidates",
+          "model_id": "gemma4:26b-a4b-it-qat",
+          "prompt_eval_count": 955,
+          "estimated_prompt_tokens": 865,
+          "eval_count": 432,
+          "total_duration_s": 41.42,
+          "num_ctx": 8192,
+          "temperature": 0.7,
+          "seed": 20260914,
+          "prompt_sha256": "8db2c4f13d9a6362ecf139f898fe4f0560b1fa1b9a72b05368e0e8c526fdcad4",
+          "truncated": false,
+          "truncation_reason": null
+        },
+        {
+          "stage": "B_design_memo",
+          "model_id": "gemma4:26b-a4b-it-qat",
+          "prompt_eval_count": 1155,
+          "estimated_prompt_tokens": 1082,
+          "eval_count": 486,
+          "total_duration_s": 48.959,
+          "num_ctx": 8192,
+          "temperature": 0.4,
+          "seed": 20260914,
+          "prompt_sha256": "578e705edcd0807d1d39f0211d3e046ee514d3694e65e54b1a97f3392b0a3e99",
+          "truncated": false,
+          "truncation_reason": null
+        },
+        {
+          "stage": "B_generate",
+          "model_id": "gemma4:26b-a4b-it-qat",
+          "prompt_eval_count": 1657,
+          "estimated_prompt_tokens": 1488,
+          "eval_count": 478,
+          "total_duration_s": 54.853,
+          "num_ctx": 8192,
+          "temperature": 0.6,
+          "seed": 20260914,
+          "prompt_sha256": "48dfecf7376d73a84b1a9d55dcdc8587e011b6375df0469ce42f99143a270491",
+          "truncated": false,
+          "truncation_reason": null
+        },
+        {
+          "stage": "C_critique",
+          "model_id": "gemma4:26b-a4b-it-qat",
+          "prompt_eval_count": 761,
+          "estimated_prompt_tokens": 724,
+          "eval_count": 207,
+          "total_duration_s": 23.676,
+          "num_ctx": 8192,
+          "temperature": 0.3,
+          "seed": 20260914,
+          "prompt_sha256": "cdec0a00e07c80bfeb57a64e4cb808b119702197935760e22943a913ad4efd2d",
+          "truncated": false,
+          "truncation_reason": null
+        },
+        {
+          "stage": "C_rewrite",
+          "model_id": "gemma4:26b-a4b-it-qat",
+          "prompt_eval_count": 1495,
+          "estimated_prompt_tokens": 1387,
+          "eval_count": 303,
+          "total_duration_s": 40.006,
+          "num_ctx": 8192,
+          "temperature": 0.6,
+          "seed": 20260914,
+          "prompt_sha256": "4a793a6a18850d11bc78f6670177bedfb27866a79df935bc0c8621a1a6004a4a",
+          "truncated": false,
+          "truncation_reason": null
+        },
+        {
+          "stage": "A_entailment",
+          "model_id": "gemma4:26b-a4b-it-qat",
+          "prompt_eval_count": 1351,
+          "estimated_prompt_tokens": 1246,
+          "eval_count": 139,
+          "total_duration_s": 28.441,
+          "num_ctx": 8192,
+          "temperature": 0.0,
+          "seed": 20260914,
+          "prompt_sha256": "b2292e5dea4fde046ee7697f958065a1a74585df7eec8a6304db4d54431def3f",
+          "truncated": false,
+          "truncation_reason": null
+        },
+        {
+          "stage": "B_entailment",
+          "model_id": "gemma4:26b-a4b-it-qat",
+          "prompt_eval_count": 1385,
+          "estimated_prompt_tokens": 1280,
+          "eval_count": 130,
+          "total_duration_s": 23.761,
+          "num_ctx": 8192,
+          "temperature": 0.0,
+          "seed": 20260914,
+          "prompt_sha256": "0a7e87f77b938855e868e273c80f1b1e31bcbbceb5bb323c1e41bf79e649e9c6",
+          "truncated": false,
+          "truncation_reason": null
+        },
+        {
+          "stage": "C_entailment",
+          "model_id": "gemma4:26b-a4b-it-qat",
+          "prompt_eval_count": 1445,
+          "estimated_prompt_tokens": 1325,
+          "eval_count": 136,
+          "total_duration_s": 25.158,
+          "num_ctx": 8192,
+          "temperature": 0.0,
+          "seed": 20260914,
+          "prompt_sha256": "1528ec0b5253e1cc63873840f7a68b88c05c6df009cd0c17a8c78bd7ef41e011",
+          "truncated": false,
+          "truncation_reason": null
+        }
+      ],
+      "threshold_used": 0.8839
+    }
+  ]
+}
