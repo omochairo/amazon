@@ -1,0 +1,264 @@
+{
+  "assumptions": {
+    "alpha_two_sided": 0.05,
+    "power": 0.8
+  },
+  "page_level_distribution": {
+    "weeks_available": 13,
+    "week_labels": [
+      "2026-W23",
+      "2026-W24",
+      "2026-W25",
+      "2026-W28",
+      "2026-W29",
+      "2026-W30",
+      "2026-W31",
+      "2026-W32",
+      "2026-W33",
+      "2026-W34",
+      "2026-W35",
+      "2026-W36",
+      "2026-W37"
+    ],
+    "weeks_with_page_truncation": 7,
+    "weeks_with_sitewide_totals_field": 7,
+    "sitewide_totals_trend": [
+      {
+        "week": "2026-W31",
+        "impressions_sitewide": 1332,
+        "clicks_sitewide": 59,
+        "ctr_sitewide": 0.044294294294294295
+      },
+      {
+        "week": "2026-W32",
+        "impressions_sitewide": 1659,
+        "clicks_sitewide": 77,
+        "ctr_sitewide": 0.046413502109704644
+      },
+      {
+        "week": "2026-W33",
+        "impressions_sitewide": 1965,
+        "clicks_sitewide": 52,
+        "ctr_sitewide": 0.026463104325699746
+      },
+      {
+        "week": "2026-W34",
+        "impressions_sitewide": 2183,
+        "clicks_sitewide": 63,
+        "ctr_sitewide": 0.02885936784241869
+      },
+      {
+        "week": "2026-W35",
+        "impressions_sitewide": 2732,
+        "clicks_sitewide": 82,
+        "ctr_sitewide": 0.030014641288433383
+      },
+      {
+        "week": "2026-W36",
+        "impressions_sitewide": 3841,
+        "clicks_sitewide": 104,
+        "ctr_sitewide": 0.027076282218172352
+      },
+      {
+        "week": "2026-W37",
+        "impressions_sitewide": 4101,
+        "clicks_sitewide": 83,
+        "ctr_sitewide": 0.020238966105827847
+      }
+    ],
+    "total_article_pages": 2520,
+    "distinct_article_pages_ever_with_impressions_top100": 479,
+    "lower_bound_fraction_with_impressions": 0.1901,
+    "truncation_caveat": "by_page は週あたり rowLimit=100 で打ち切られている (GSC API既定でクリック数上位から返る)。distinct_article_pages_ever_with_impressions_top100 と lower_bound_fraction_with_impressions はそのため「トップ100に入れたことがある記事」の下限値であり、真の「表示>0の記事」の割合はこれ以上 (打ち切りで見えていない低表示ページがあるため)",
+    "impressions_per_page_week_observed": {
+      "n": 958,
+      "p50": 2.0,
+      "p90": 16.0,
+      "caveat": "トップ100サンプルのみの分布 (上振れバイアスあり、母集団の中央値ではない)"
+    },
+    "avg_impressions_per_article_per_week_sitewide": 1.6274,
+    "avg_clicks_per_article_per_week_sitewide": 0.0329,
+    "note_avg_uses_sitewide_totals": "avg_*_per_article_per_week は、直近1週 (totals.impressions_sitewide 等が存在する最新週、打ち切りの影響を受けない真の合計) を記事ページ総数で割った値。sitewide_totals_trend が示す通り表示回数は7週で約3倍に増加しており急成長中のため、複数週の平均ではなく直近週を使う (平均すると過去の低い時期に引かれて過小評価する)。検出力計算のベースラインはこちらを使う (トップ100サンプルの平均は逆に上振れするため使わない)"
+  },
+  "baseline_ctr_sitewide_latest_week": 0.020238966105827847,
+  "power_table": {
+    "ctr": [
+      {
+        "N": 10,
+        "W": 4,
+        "n_impressions_per_group": 65.1,
+        "mde_relative": null
+      },
+      {
+        "N": 10,
+        "W": 8,
+        "n_impressions_per_group": 130.2,
+        "mde_relative": 4.1151
+      },
+      {
+        "N": 30,
+        "W": 4,
+        "n_impressions_per_group": 195.3,
+        "mde_relative": 3.0858
+      },
+      {
+        "N": 30,
+        "W": 8,
+        "n_impressions_per_group": 390.6,
+        "mde_relative": 1.9337
+      },
+      {
+        "N": 100,
+        "W": 4,
+        "n_impressions_per_group": 651.0,
+        "mde_relative": 1.3966
+      },
+      {
+        "N": 100,
+        "W": 8,
+        "n_impressions_per_group": 1301.9,
+        "mde_relative": 0.918
+      }
+    ],
+    "impressions": [
+      {
+        "N": 10,
+        "W": 4,
+        "n_page_weeks_per_group": 40,
+        "mde_relative": 0.4911
+      },
+      {
+        "N": 10,
+        "W": 8,
+        "n_page_weeks_per_group": 80,
+        "mde_relative": 0.3472
+      },
+      {
+        "N": 30,
+        "W": 4,
+        "n_page_weeks_per_group": 120,
+        "mde_relative": 0.2835
+      },
+      {
+        "N": 30,
+        "W": 8,
+        "n_page_weeks_per_group": 240,
+        "mde_relative": 0.2005
+      },
+      {
+        "N": 100,
+        "W": 4,
+        "n_page_weeks_per_group": 400,
+        "mde_relative": 0.1553
+      },
+      {
+        "N": 100,
+        "W": 8,
+        "n_page_weeks_per_group": 800,
+        "mde_relative": 0.1098
+      }
+    ],
+    "clicks": [
+      {
+        "N": 10,
+        "W": 4,
+        "n_page_weeks_per_group": 40,
+        "mde_relative": 3.4537
+      },
+      {
+        "N": 10,
+        "W": 8,
+        "n_page_weeks_per_group": 80,
+        "mde_relative": 2.4422
+      },
+      {
+        "N": 30,
+        "W": 4,
+        "n_page_weeks_per_group": 120,
+        "mde_relative": 1.994
+      },
+      {
+        "N": 30,
+        "W": 8,
+        "n_page_weeks_per_group": 240,
+        "mde_relative": 1.41
+      },
+      {
+        "N": 100,
+        "W": 4,
+        "n_page_weeks_per_group": 400,
+        "mde_relative": 1.0922
+      },
+      {
+        "N": 100,
+        "W": 8,
+        "n_page_weeks_per_group": 800,
+        "mde_relative": 0.7723
+      }
+    ]
+  },
+  "alternative_metric_candidates": [
+    {
+      "name": "indexされたか (URL Inspection API)",
+      "measurable": true,
+      "baseline_indexed_rate": 0.8239,
+      "totals": {
+        "sitemap_urls": 2511,
+        "inspected": 1800,
+        "errors": 0,
+        "indexed": 1483,
+        "not_indexed": 317
+      },
+      "history_rate_trend": [
+        {
+          "date": "2026-07-26",
+          "indexed_rate": 0.7114
+        },
+        {
+          "date": "2026-08-02",
+          "indexed_rate": 0.7844
+        },
+        {
+          "date": "2026-08-09",
+          "indexed_rate": 0.7894
+        },
+        {
+          "date": "2026-08-16",
+          "indexed_rate": 0.85
+        },
+        {
+          "date": "2026-08-23",
+          "indexed_rate": 0.84
+        },
+        {
+          "date": "2026-08-31",
+          "indexed_rate": 0.8594
+        },
+        {
+          "date": "2026-09-06",
+          "indexed_rate": 0.8578
+        },
+        {
+          "date": "2026-09-14",
+          "indexed_rate": 0.8239
+        }
+      ],
+      "note": "記事単位のYES/NOで、公開直後にURL Inspection APIで個別ASINを指定して取得できる(既存のcensusはwatchlistのローテーション対象のみを回しているが、実験群のN件のURLを明示指定すれば待たずに測れる)。週次のトラフィック蓄積が要らないため、他候補よりW週の制約を受けにくい"
+    },
+    {
+      "name": "表示が出始めるまでの日数",
+      "measurable": false,
+      "recent_articles_in_window": 2179,
+      "recent_articles_ever_observed_in_top100": 352,
+      "observable_hit_rate": 0.1615,
+      "reason": "観測期間中に公開された記事 2179 件のうち、by_page トップ100に一度でも載ったのは 352 件 (16.2% 相当) しかなく、残りは『表示が0だった』のか『表示はあったがトップ100に入らなかった』のか区別できない (左側打ち切り)。一般的な記事について代表性のある分布を計算できない"
+    },
+    {
+      "name": "#2995 回答性カバレッジ (gemma judge の coverage)",
+      "measurable": false,
+      "current_sample_size": 5,
+      "current_mean": 0.7,
+      "reason": "現状は detect_low_ctr_pages が検出した低CTRページ 5 件にしか計算されておらず、任意のN件の記事に汎用的に使えるわけではない。判定対象のクエリ (top_queries) はそのページに既に蓄積したGSCクリック/表示データから取るため、公開直後で表示がほぼ無い実験群の記事には適用できない (鶏と卵)。audit_query_entailment.judge_query 自体は任意の(本文,クエリ)ペアに使えるので、『クエリの代わりにkeywordsフィールドを使う』等の改修をすれば汎用化できる可能性はあるが、未実装"
+    }
+  ]
+}
