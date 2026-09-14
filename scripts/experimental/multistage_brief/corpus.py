@@ -50,6 +50,38 @@ def sample_category_articles(
     return matched[:sample_size]
 
 
+def sample_other_category_articles(
+    category: str,
+    exclude_asin: str,
+    *,
+    articles_dir: str | pathlib.Path = "data/articles",
+    sample_size: int = DEFAULT_SAMPLE_SIZE,
+    seed: int = 20260914,
+) -> list[dict[str, Any]]:
+    """``category`` 以外のカテゴリの既存記事から最大 ``sample_size`` 件をサンプリングする
+
+    (#4841 M1-b: 固有性判定の負の対照「別カテゴリの記事の文」のプール用)。
+    """
+    article_paths = discover_articles(pathlib.Path(articles_dir))
+    matched: list[dict[str, Any]] = []
+    for asin, path in article_paths.items():
+        if asin == exclude_asin:
+            continue
+        try:
+            article = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(article, dict):
+            continue
+        if article_category(article) == category:
+            continue
+        matched.append(article)
+
+    rng = random.Random(seed)
+    rng.shuffle(matched)
+    return matched[:sample_size]
+
+
 def embed_corpus_narratives(
     articles: list[dict[str, Any]], *, ruri_url: str, session: requests.Session,
 ) -> list[list[float]]:

@@ -244,3 +244,167 @@ print(d['summary']['verdict'])
 print(d['summary']['cost'])
 "
 ```
+
+---
+
+## M1: 判定に使える物差しを作る (2026-09-15)
+
+T3 の反省 2点を踏まえた設計要求:
+- 凡庸度 (埋め込み類似度) はノイズの床が不明だった → **M1-a** で床を測る
+- 根拠判定 (narrative 全体を1回で判定) は分解能が無かった → **M1-b** で文単位の
+  新指標「情報利得」(固有かつ裏付けありの文の数) を作る
+
+3つとも `scripts/experimental/multistage_brief/` に実装 (本番から import されない)。
+テスト56件追加。生の入出力は `~/multistage_runs/20260914T211052Z/` (このリポジトリ
+の外、コミット対象外)。集計は `docs/multistage-generation-eval/m1_results.json`。
+
+### 実装中に見つけたバグとその影響 (先に書く)
+
+**現行の記事スキーマは narrative の大半のキー (`why_this_product` 等) が「既に
+文単位に分割された配列」形式** (`lead` だけ地の文の文字列)。最初の実装
+(`flatten_narrative_sentences`) は文字列型しか扱っておらず、配列形式のキーを
+黙って読み飛ばしていた。これにより:
+
+- M1-c の「投入後 (new)」版 (現行スキーマ) の文がほぼ0件に潰れ (`lead` の
+  文だけ)、「投入前 (old) の方が文が多い」という**実態と逆の結果**が出ていた
+- 同じ理由でコーパスの文プール (固有性判定の比較対象) も大幅に過小になっていた
+  (本番記事の大半が配列形式のため)
+
+`scripts.audit_experience_usage.build_paragraph_map` と同じ正規化 (配列は結合
+してから句点で再分割) を経由するよう修正し、再実行して直りを確認した
+(`test_sentence_metrics.py` に回帰テストを追加)。**以下の数値はすべて修正後の
+値。** 母艦レビューでは、この正規化を経由しているか (`flatten_narrative_sentences`
+が `build_paragraph_map` を呼んでいるか) を見てほしい。
+
+### M1-a: 凡庸度のノイズの床
+
+T3 の群A (対照、1パス) と同じ10 ASIN・同じプロンプトで、seedだけ変えて3回
+(20260914/20260915/20260916) 回した。`max_sim` (`audit_uniqueness.build_uniqueness_text`
+と同じテキスト組み立て、同カテゴリコーパスとの最大コサイン類似度) の:
+
+| | 値 |
+|---|---:|
+| ASINごとの標準偏差 p50 | 0.0016 |
+| ASINごとの標準偏差 p90 | 0.0029 |
+| 同条件2回の差 (全30ペア) p50 | 0.0023 |
+| 同条件2回の差 (全30ペア) p90 (= 床) | **0.0044** |
+
+**以後「差がある」は、この床の2倍 (0.0088、0.88pt) を超えたときだけ言う。**
+
+この床を T3 の結果に当てはめ直すと: T3 の A→B の max_sim p50 低下は **0.79pt**
+だった。これは事前登録した基準 (1.0pt以上) には元々届いていなかったが、**この
+床の2倍 (0.88pt) にも届いていない** — T3「B無効」の結論は、ノイズの床を実測した
+上でも変わらないどころか、より裏付けが強まった。
+
+### M1-b: 情報利得の指標 (新規)
+
+**問い**: その商品にしか無い、素材で裏付けられた事実がいくつ narrative に
+入ったか。手順は句点分割 (LLM不使用) → 文単位のentailment判定 (gemma、ASINの
+素材から導けるか) → 裏付けありの文についてRuriで同カテゴリコーパスとの最大
+類似度を取り、別カテゴリコーパスとの類似度分布のp95未満なら「固有」。
+
+**指標: 固有かつ裏付けありの文の数 (主) / 裏付けの無い文の数 (ガードレール)**
+
+M1-aと同じ3seed×10 ASINの群Aで、この指標自体のノイズの床も測った:
+
+| | 値 |
+|---|---:|
+| ASINごとの標準偏差 p50 | 1.91 (文) |
+| 同条件2回の差 p50 / p90 (= 床) | 2.5 / **5.0** (文) |
+
+primary seed (20260914) の10 ASINの値 (`unique_and_supported_count` / 全文数):
+7/14, 9/14, 9/13, 10/15, 10/15, 10/14, 10/14, 8/12, 12/13, 11/13
+(`unresolved_count` は全ASINで0件 — index整合の失敗は実測で0)。
+
+### M1-c: 指標の検証
+
+**問い**: 素材投入前後の版が両方ある記事で、この指標は既知の差 (投入後の方が
+情報が増えているはず) を検出できるか。
+
+**ペア探索**: `experience.json` を持つ93 ASIN のうち、git履歴上で記事ファイルが
+別の日付プレフィックスで作り直されている (リライトされた) 候補は63件。うち
+「旧版のdate < experience.jsonのgenerated_at ≦ 新版のdate」を満たす有効なペアは
+**58件** (5件は日付条件を満たさず除外)。**第一候補 (git履歴上の同一ASIN前後比較)
+だけで10件を大きく上回ったため、T1のincluded/対照によるフォールバックは不要
+だった。**
+
+処理コストを抑えるため、固定seed (20260914) で **15件** をサンプリングして
+処理 (全件は`pair_search.valid_pair_count`、処理件数は`processed_pair_count`)。
+
+| | 値 |
+|---|---:|
+| 平均差 (新−旧、`unique_and_supported_count`) | **+3.47 (文)** |
+| 差が正 (改善) だったペア | 11/15 |
+| 個別に床の2倍 (10) を超えたペア | 2/15 |
+| 事前判定 (平均差 > 床の2倍) | **不採用** (3.47 < 10) |
+
+**判定: この指標では測れない (床の2倍を超えなかった)。** ただし効果の**向き**は
+一貫してプラス (11/15ペアで改善、平均+3.47文) で、T1の実測 (素材の使用率の差
++37.6pt) と同じ方向。10ペア規模・3seedだけで測った床では、この大きさの効果を
+「ノイズではない」と言い切るには荷が重い、というのが正しい読み方。
+
+**新版で `unsupported_count` (裏付けの無い文) が旧版より増えているペアが多い**
+(15件中10件)。旧版は行数自体が少なく元々「言い切り」が少ない可能性があり、
+単純な量産効果 (文が増えれば根拠の無い文も増える) を排除できていない。この
+指標は「率」ではなく「数」なので、文章量の差に影響される。
+
+### 根拠判定の精度 (20文の目視サンプル)
+
+`m1_results.json` の `entailment_spot_check_sample` に、判定済みの文から無作為
+抽出した20件を、判定結果・素材抜粋 (`material_text_excerpt`) と並べて収録。
+目視した範囲での所感:
+- 「無塗装・ネジ不使用のやわらかな素材なので〜」→ supported=True は、amazonの
+  features記載と一致しており妥当
+- 「本記事執筆時点での価格は〜」「Amazonが最安値で〜」のような**時点依存の価格
+  文言**は素材 (スナップショット) からは検証できず、一貫して unsupported 判定
+  になっていた。これは実害のある事実誤認ではなく、構造的に判定できない文言
+- 「〜も多いはずです」のような**修辞的な導入文** (問いかけの体裁で、事実主張で
+  はない) も unsupported 判定になっている。この指標は「事実主張の裏付け」を
+  測るはずが、**修辞的な言い回しを機械的に不支持扱いしている**ため、
+  unsupported_count は実際の事実誤認より高めに出ている可能性が高い
+
+### 未検証のこと
+
+- 情報利得指標の「不支持」判定が、修辞的な文と事実誤認を区別できていない
+  (上記)。実害のある誤認だけに絞った再集計は未実施
+- M1-c の15ペアは固定seedでサンプリングした一部 (有効ペア58件中)。残り43件は
+  未処理
+- 固有性判定の閾値 (別カテゴリ文の分布のp95) はカテゴリ間で1つに固定。カテゴリ
+  ごとの較正はしていない
+- 新版で不支持文が増える傾向 (未検証のこと参照) と、単純な文章量の違いの影響を
+  切り分けていない (指標が「数」であって「率」ではないため)
+- gemmaのtemperatureは0ではない生成ステージ (narrative生成 0.6) を含むため、
+  M1-aの3回の実行そのものにも生成由来のばらつきが乗っている (これがまさに
+  「床」として測ろうとしたものだが、判定系呼び出し (entailment 0.0) は別)
+
+### 検証コマンド
+
+```bash
+# 1. テスト (56件、ネットワーク不要)
+python -m pytest scripts/tests/test_sentence_metrics.py scripts/tests/test_noise_floor.py \
+  scripts/tests/test_rewrite_pairs.py scripts/tests/test_run_m1.py -v
+
+# 2. ペア探索の再現 (ネットワーク不要、git履歴を読むだけ)
+python -c "
+from scripts.experimental.multistage_brief.run_m1 import find_valid_rewrite_pairs
+r = find_valid_rewrite_pairs()
+print('valid_pair_count', r['valid_pair_count'], 'candidate', r['rewrite_candidate_count'])
+"
+# 期待: valid_pair_count=58, candidate=63
+
+# 3. 実データでの再実行 (gemma + Ruri への到達性が必要、スモークは1 ASIN・2seedで数分)
+python -m scripts.experimental.multistage_brief.run_m1 \
+  --ruri-url http://<ruri-host>:8000 --asin-limit 1 --seeds 20260914,20260915 \
+  --pair-sample-size 1 --results-out /tmp/m1_smoke.json
+# 期待: m1a_uniqueness_noise_floor / m1b_information_gain_noise_floor / m1c_validation
+#       が埋まり、m1c_validation.pair_search.valid_pair_count=58
+
+# 4. 集計結果の直接確認
+python -c "
+import json
+d = json.load(open('docs/multistage-generation-eval/m1_results.json'))
+print(d['m1a_uniqueness_noise_floor']['floor'])
+print(d['m1b_information_gain_noise_floor']['floor'])
+print(d['m1c_validation']['verdict'], d['m1c_validation']['mean_diff'])
+"
+```

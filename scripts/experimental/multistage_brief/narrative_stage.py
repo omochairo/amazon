@@ -7,6 +7,7 @@ from scripts.experimental.multistage_brief.ollama_client import (
     DEFAULT_MODEL,
     DEFAULT_NUM_CTX,
     DEFAULT_OLLAMA_URL,
+    DEFAULT_SEED,
     call_gemma,
     parse_json_response,
 )
@@ -84,15 +85,20 @@ def generate_narrative_baseline(
     ollama_url: str = DEFAULT_OLLAMA_URL,
     model: str = DEFAULT_MODEL,
     num_ctx: int = DEFAULT_NUM_CTX,
+    seed: int = DEFAULT_SEED,
     session=None,
 ) -> dict[str, Any]:
-    """群 A: 素材から narrative を 1 パスで書く (対照)。"""
+    """群 A: 素材から narrative を 1 パスで書く (対照)。
+
+    seed (#4841 M1-a): ノイズの床を測るため、同じ ASIN・同じプロンプトで
+    seed だけ変えて複数回呼べるようにする。既定は T3 と同じ DEFAULT_SEED。
+    """
     prompt = BASELINE_PROMPT_TEMPLATE.format(
         style_guide=STYLE_GUIDE, material_text=material_text, schema=NARRATIVE_OUTPUT_SCHEMA,
     )
     call = call_gemma(
-        prompt, ollama_url=ollama_url, model=model, num_ctx=num_ctx, temperature=0.6, format_json=True,
-        session=session,
+        prompt, ollama_url=ollama_url, model=model, num_ctx=num_ctx, temperature=0.6, seed=seed,
+        format_json=True, session=session,
     )
     parsed = parse_json_response(call["text"])
     narrative = _extract_narrative(parsed)
