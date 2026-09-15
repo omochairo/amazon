@@ -1,0 +1,459 @@
+{
+  "denominator": {
+    "tried_asins": 25,
+    "tried_asins_list": [
+      "B010CQEUCU",
+      "B01G81IP9C",
+      "B07FFT8P4V",
+      "B07VNMF811",
+      "B084G6PF7H",
+      "B089D94SVJ",
+      "B08BR2C3B5",
+      "B08BRDXT7V",
+      "B08FMQ6NLH",
+      "B08G4W1L42",
+      "B08R77Z7KK",
+      "B08W5FV9GN",
+      "B08XTP12C7",
+      "B08ZHRNHW9",
+      "B09NQQQL5Z",
+      "B09R7GG5BJ",
+      "B0C27TNFBG",
+      "B0C8HFPGZ9",
+      "B0CBLL5WHH",
+      "B0CFVYPKGB",
+      "B0CM8FRRK3",
+      "B0CVS7K49S",
+      "B0D5Q6FG58",
+      "B0D7Z5374Q",
+      "B0DNZTPXD1"
+    ],
+    "run_log_files": [
+      "experience-mining-run-34788591470-2026-09-13.txt",
+      "experience-mining-run-34896203769-2026-09-14.txt"
+    ],
+    "fetch_failed_urls_observed": 15,
+    "run_log_source": "omochairo/amazon-home-ops workflow \"Experience Mining (gemma / Antigravity CLI / Threads / Yahoo / K8)\" runs 34788591470 (2026-09-13T23:03Z) と 34896203769 (2026-09-14T20:59Z) の 0_mine.txt ステップログ",
+    "ledger_source": "K8 named volume docker_experience-raw 上の mining_ledger.json (docker cp 相当でコピー, 読み取りのみ, 2026-09-15 時点のスナップショット)"
+  },
+  "corpus_distribution": {
+    "total_urls": 8940,
+    "distinct_hosts": 1927,
+    "by_category": {
+      "maker": 766,
+      "ec": 3369,
+      "other": 2991,
+      "media": 324,
+      "sns": 1274,
+      "blog": 216
+    },
+    "top_other_hosts": [
+      [
+        "facebook.com",
+        56
+      ],
+      [
+        "reddit.com",
+        52
+      ],
+      [
+        "educe-web.craypas.co.jp",
+        37
+      ],
+      [
+        "play.google.com",
+        33
+      ],
+      [
+        "jp.pinterest.com",
+        28
+      ],
+      [
+        "pinterest.com",
+        24
+      ],
+      [
+        "anpanman.jp",
+        18
+      ],
+      [
+        "apps.apple.com",
+        15
+      ],
+      [
+        "detail.chiebukuro.yahoo.co.jp",
+        15
+      ],
+      [
+        "family-games.blog",
+        13
+      ],
+      [
+        "saiyasune.com",
+        13
+      ],
+      [
+        "schleichland.com",
+        12
+      ],
+      [
+        "bornelund.co.jp",
+        11
+      ],
+      [
+        "kawai.jp",
+        11
+      ],
+      [
+        "ouchi-iku.com",
+        11
+      ],
+      [
+        "people-kk.co.jp",
+        11
+      ],
+      [
+        "daivoy.com",
+        11
+      ],
+      [
+        "sun-star-st.jp",
+        11
+      ],
+      [
+        "eigoen.com",
+        10
+      ],
+      [
+        "smartschool.jp",
+        10
+      ],
+      [
+        "mama-no-wa.jp",
+        10
+      ],
+      [
+        "daiwakenso.jp",
+        10
+      ],
+      [
+        "soundhouse.co.jp",
+        10
+      ],
+      [
+        "chachacha-toy.com",
+        10
+      ],
+      [
+        "pmall.gpoint.co.jp",
+        10
+      ],
+      [
+        "babybus.co.jp",
+        10
+      ],
+      [
+        "lemon8-app.com",
+        10
+      ],
+      [
+        "econve-plus.jp",
+        9
+      ],
+      [
+        "sugorokuya.jp",
+        9
+      ],
+      [
+        "tenyo.jp",
+        9
+      ]
+    ]
+  },
+  "yield_by_host_category": {
+    "blog": {
+      "tried_urls": 3,
+      "fetch_failed": 0,
+      "urls_with_snippet": 2,
+      "snippet_count": 4,
+      "snippet_per_tried_url": 1.3333333333333333,
+      "aspect_breakdown": {
+        "体験談": 2,
+        "不満": 1,
+        "シーン": 1
+      }
+    },
+    "ec": {
+      "tried_urls": 25,
+      "fetch_failed": 13,
+      "urls_with_snippet": 2,
+      "snippet_count": 4,
+      "snippet_per_tried_url": 0.16,
+      "aspect_breakdown": {
+        "シーン": 2,
+        "比較": 1,
+        "安全": 1
+      }
+    },
+    "maker": {
+      "tried_urls": 4,
+      "fetch_failed": 1,
+      "urls_with_snippet": 0,
+      "snippet_count": 0,
+      "snippet_per_tried_url": 0.0,
+      "aspect_breakdown": {}
+    },
+    "media": {
+      "tried_urls": 2,
+      "fetch_failed": 0,
+      "urls_with_snippet": 1,
+      "snippet_count": 2,
+      "snippet_per_tried_url": 1.0,
+      "aspect_breakdown": {
+        "体験談": 1,
+        "シーン": 1
+      }
+    },
+    "other": {
+      "tried_urls": 8,
+      "fetch_failed": 1,
+      "urls_with_snippet": 3,
+      "snippet_count": 6,
+      "snippet_per_tried_url": 0.75,
+      "aspect_breakdown": {
+        "安全": 2,
+        "シーン": 3,
+        "体験談": 1
+      }
+    },
+    "sns": {
+      "tried_urls": 11,
+      "fetch_failed": 0,
+      "urls_with_snippet": 1,
+      "snippet_count": 1,
+      "snippet_per_tried_url": 0.09090909090909091,
+      "aspect_breakdown": {
+        "シーン": 1
+      }
+    }
+  },
+  "js_shell_check": {
+    "category": "blog",
+    "sample_size": 30,
+    "checked": 30,
+    "thin_body_count": 1,
+    "thin_body_rate": 0.03333333333333333,
+    "samples": [
+      {
+        "asin": "B0GXW827FQ",
+        "url": "https://note.com/no_travel_nolife/n/n040a661902f9",
+        "status": "ok",
+        "text_len": 7958,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B0C5D6KMFS",
+        "url": "https://ameblo.jp/yuruhuwapiano/entry-12874752657.html",
+        "status": "ok",
+        "text_len": 2130,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B00272MFRU",
+        "url": "https://ameblo.jp/tiyodar/entry-12858574189.html",
+        "status": "ok",
+        "text_len": 1000,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B0DY74TDZN",
+        "url": "https://ameblo.jp/gotoshiningadventure/entry-12894965329.html",
+        "status": "ok",
+        "text_len": 2080,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B0F8B6RJ8S",
+        "url": "https://note.com/bellcollar_ink/n/n3cdc06f02045",
+        "status": "ok",
+        "text_len": 4809,
+        "has_product_or_brand_keyword": false
+      },
+      {
+        "asin": "B0C7W899KP",
+        "url": "https://note.com/ysk1025/n/n5a367868a50d",
+        "status": "ok",
+        "text_len": 3611,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B000KQGNIW",
+        "url": "https://retogenofu.hateblo.jp/entry/2023/05/25/%E4%BB%8A%E3%83%93%E3%83%BC%E3%83%8A%E3%81%AEBeena_%E3%83%9D%E3%82%B1%E3%83%83%E3%83%88%E3%83%A2%E3%83%B3%E3%82%B9%E3%82%BF%E3%83%BC_%E3%83%80%E3%82%A4%E3%83%A4%E3%83%A2%E3%83%B3%E3%83%89%E3%83%BB",
+        "status": "ok",
+        "text_len": 7750,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B0GWCXK4CZ",
+        "url": "https://ameblo.jp/kanakoff/entry-12969831644.html",
+        "status": "ok",
+        "text_len": 1485,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B07MJCW4H4",
+        "url": "https://yushun.hatenablog.jp/entry/2023/09/08/102946",
+        "status": "ok",
+        "text_len": 7040,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B0B3CKT82N",
+        "url": "https://ameblo.jp/maemukimama-ksdt/entry-12836676685.html",
+        "status": "ok",
+        "text_len": 1562,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B01DIY66LQ",
+        "url": "http://blog.livedoor.jp/nobuno88/archives/1077765900.html",
+        "status": "ok",
+        "text_len": 4744,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B0BTNWTPZT",
+        "url": "https://ameblo.jp/tbmm33/entry-12912589169.html",
+        "status": "ok",
+        "text_len": 2351,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B0GSFXDVXS",
+        "url": "https://note.com/25202199/n/n974d4f4fc39f",
+        "status": "ok",
+        "text_len": 2649,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B0GYCFDY41",
+        "url": "https://ameblo.jp/gotoshiningadventure/entry-12969787702.html",
+        "status": "ok",
+        "text_len": 1940,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B0875FV2BQ",
+        "url": "https://ikujihack.hatenablog.com/entry/lon-bi-review",
+        "status": "ok",
+        "text_len": 4794,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B0002OHJWG",
+        "url": "https://ameblo.jp/chimimi-baby-diary/entry-12728627429.html",
+        "status": "ok",
+        "text_len": 2128,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B0DFT93QYM",
+        "url": "https://ameblo.jp/coolminthotyuzu/entry-12905730260.html",
+        "status": "ok",
+        "text_len": 2218,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B0H69ZK9JT",
+        "url": "https://ameblo.jp/megamegane-naamama/entry-12960793581.html",
+        "status": "ok",
+        "text_len": 2173,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B0GSFX7163",
+        "url": "https://worksight.substack.com/p/106",
+        "status": "ok",
+        "text_len": 10871,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B0DB5SM889",
+        "url": "https://ameblo.jp/kanakoff/entry-12874381245.html",
+        "status": "ok",
+        "text_len": 1090,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B0FVX972P9",
+        "url": "https://note.com/editors_note/n/nea163a3184ef",
+        "status": "ok",
+        "text_len": 3812,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B0B769Q9K4",
+        "url": "https://ameblo.jp/impactmama/entry-12845313560.html",
+        "status": "ok",
+        "text_len": 762,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B08K9G2KS9",
+        "url": "https://note.com/duppyclub/n/nf43cf077ca76",
+        "status": "ok",
+        "text_len": 2416,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B0H59YLGV7",
+        "url": "https://ameblo.jp/maripoo97/entry-12949592000.html",
+        "status": "ok",
+        "text_len": 2518,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B0CZQXTMLY",
+        "url": "https://ameblo.jp/nangoku-mama3/entry-12944253420.html",
+        "status": "ok",
+        "text_len": 2624,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B07F2QPXNC",
+        "url": "https://note.com/mamasaifu_mamoru/n/n78bba6ba212f",
+        "status": "ok",
+        "text_len": 1506,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B001PIJ6GU",
+        "url": "https://ameblo.jp/hma006/entry-12855602868.html",
+        "status": "ok",
+        "text_len": 1451,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B09R7GG5BJ",
+        "url": "https://mikine1228.hatenablog.com/entry/2023/08/24/195309",
+        "status": "ok",
+        "text_len": 4603,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B0C7Z23Z7R",
+        "url": "https://ameblo.jp/namy-mummy/entry-12819143229.html",
+        "status": "ok",
+        "text_len": 1116,
+        "has_product_or_brand_keyword": true
+      },
+      {
+        "asin": "B09V2S9K3J",
+        "url": "https://ameblo.jp/wideair/entry-12810458944.html",
+        "status": "ok",
+        "text_len": 3567,
+        "has_product_or_brand_keyword": true
+      }
+    ]
+  }
+}
