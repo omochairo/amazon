@@ -2,12 +2,14 @@
 
 #4789: 各計測レーンが**無言で止まっていないか**を検査する。
 
-対象は 2 種類:
+対象は 3 種類:
   - `LANES` … `data/analytics/history/<name>.jsonl` (1 ファイル = 1 レーン)
   - `DIR_LANES` … ディレクトリ配下にエンティティ単位で分かれる履歴。現状は価格観測の
     2 レーン (`data/price_watch/history/` / `data/price_history/`。#5015)。
     ここは `data/analytics/history/` の外にあるため走査対象から漏れており、
     **止まっても検出できない状態が続いていた**。
+  - `SINGLE_FILE_LANES` … `data/analytics/history/` の外にある単独ファイル
+    (現状は情報利得監査の1レーン。#4841 S3)。
 
 なぜ必要か:
   計測レーンは止まっても run が緑のままになる経路が 3 つある。
@@ -42,6 +44,7 @@ import json
 import logging
 import os
 import pathlib
+import re
 import sys
 from typing import Any, Dict, List, Optional, Sequence
 try:  # package 実行と素実行の両対応
@@ -139,6 +142,37 @@ DIR_LANES: Sequence[DirLane] = (
             "write_per_asin_snapshot の hook。1日2run (実測 age 0〜1)"),
 )
 
+
+class SingleFileLane:
+    """``data/analytics/history/`` の**外**にある単独の履歴 jsonl。
+
+    ``Lane`` は ``history_dir / filename`` で解決するため、その配下に無い
+    ファイルは登録できない (#4841 S3: information_gain_history.jsonl は依頼元の
+    明示指定で ``data/analytics/`` 直下に置かれる)。``path`` は repo-root からの
+    相対パス。
+    """
+
+    def __init__(self, path: str, cadence: str, max_age_days: int,
+                 lane: str, note: str = "") -> None:
+        self.path = path
+        self.filename = path  # 表示・レンダリングは Lane と同じ扱いにする
+        self.cadence = cadence
+        self.max_age_days = max_age_days
+        self.lane = lane
+        self.note = note
+
+
+# data/analytics/history/ の外にある単独ファイルレーン (#4841 S3)。
+SINGLE_FILE_LANES: Sequence[SingleFileLane] = (
+    SingleFileLane(
+        "data/analytics/information_gain_history.jsonl", "weekly", 12,
+        "amazon-home-ops/information-gain-audit.yml (#4841 S3)",
+        "凡庸度監査の uniqueness_audit_history.jsonl は date フィールドが無く "
+        "UNMONITORED 行きで、止まっても気づけない設計だった (#3300)。同じ轍を踏まないよう "
+        "date フィールドを持たせた上で最初から登録する (#4841 実装依頼 S3)",
+    ),
+)
+
 # 監視対象外。**理由つきで明示する** (未知として鳴らさないための逃げ道ではなく、
 # 「見ないと決めた」ことを記録に残すため)。
 UNMONITORED: Dict[str, str] = {
@@ -159,13 +193,40 @@ UNMONITORED: Dict[str, str] = {
 }
 
 
+_ISO_WEEK_RE = re.compile(r"^(\d{4})-W(\d{1,2})$")
+
+
+def _parse_iso_week_label(value: str) -> Optional[dt.date]:
+    """``"2026-W38"`` のような ISO 週ラベルを、その週の月曜日の date に変換する。
+
+    週次スナップショットの ``date`` 列は実日付ではなく ISO 週ラベルのことがある
+    (#4841 S3: information_gain_history.jsonl)。freshness 判定は「その週の月曜」を
+    代表日として使う。実際の生成日との誤差は最大6日だが、週次レーンの
+    max_age_days は cadence に対して既に余裕を持たせてある (floor=8) ので
+    この誤差では鳴らない。
+    """
+    m = _ISO_WEEK_RE.match(value)
+    if not m:
+        return None
+    year, week = int(m.group(1)), int(m.group(2))
+    try:
+        return dt.date.fromisocalendar(year, week, 1)
+    except ValueError:
+        return None
+
+
 def _date_of(row: Dict[str, Any]) -> Optional[dt.date]:
     # 価格レーンは日付を ``ts`` (ISO datetime) に持つ。``date`` を優先し、
-    # 無ければ ``ts`` を見る (どちらも先頭 10 文字が YYYY-MM-DD)。
+    # 無ければ ``ts`` を見る (どちらも先頭 10 文字が YYYY-MM-DD、または ISO 週ラベル)。
     value = row.get("date")
-    if not isinstance(value, str) or len(value) < 10:
+    if not isinstance(value, str) or not value:
         value = row.get("ts")
-    if not isinstance(value, str) or len(value) < 10:
+    if not isinstance(value, str) or not value:
+        return None
+    week_label = _parse_iso_week_label(value)
+    if week_label is not None:
+        return week_label
+    if len(value) < 10:
         return None
     try:
         return dt.date.fromisoformat(value[:10])
@@ -229,6 +290,31 @@ def check_dirs(repo_root: pathlib.Path, today: dt.date,
         last = last_date_in_dir(root)
         if last is None:
             # ディレクトリはあるが日付を 1 つも読めない (空 / 全部壊れている)。
+            rows.append({"filename": lane.filename, "status": "unknown",
+                         "last": None, "age_days": None, "lane": lane})
+            continue
+        age = (today - last).days
+        rows.append({"filename": lane.filename,
+                     "status": "stale" if age > lane.max_age_days else "ok",
+                     "last": last.isoformat(), "age_days": age, "lane": lane})
+    return rows
+
+
+def check_files(repo_root: pathlib.Path, today: dt.date,
+                file_lanes: Sequence[SingleFileLane] = SINGLE_FILE_LANES) -> List[Dict[str, Any]]:
+    """``data/analytics/history/`` の外にある単独ファイルレーンの状態を返す。
+
+    行の形は ``check``/``check_dirs`` と揃える (``last_date`` をそのまま流用)。
+    """
+    rows: List[Dict[str, Any]] = []
+    for lane in file_lanes:
+        path = repo_root / lane.path
+        if not path.exists():
+            rows.append({"filename": lane.filename, "status": "missing",
+                         "last": None, "age_days": None, "lane": lane})
+            continue
+        last = last_date(path)
+        if last is None:
             rows.append({"filename": lane.filename, "status": "unknown",
                          "last": None, "age_days": None, "lane": lane})
             continue
@@ -405,7 +491,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     today = (dt.date.fromisoformat(args.today) if args.today
              else dt.datetime.now(dt.timezone.utc).date())
-    rows = check(args.history_dir, today) + check_dirs(args.repo_root, today)
+    rows = (check(args.history_dir, today) + check_dirs(args.repo_root, today)
+            + check_files(args.repo_root, today))
     unregistered = unregistered_files(args.history_dir)
 
     for r in rows:
