@@ -105,6 +105,51 @@ def generate_narrative_baseline(
     return {"narrative": narrative, "call_meta": {k: v for k, v in call.items() if k != "text"}}
 
 
+FACT_CARD_PROMPT_TEMPLATE = """あなたは知育玩具比較サイト「おもちゃいろ」の書き手です。
+
+{style_guide}
+
+# 商品情報・素材
+{material_text}
+
+# 事実カード (この商品について確認済みの具体的な事実)
+{fact_cards_text}
+
+# 出力
+上記の素材だけを根拠に、以下のキーを持つ narrative を JSON で出力してください。
+他の説明文は一切含めない。
+{schema}
+"""
+
+
+def generate_narrative_with_fact_cards(
+    material_text: str,
+    fact_cards_text: str,
+    *,
+    ollama_url: str = DEFAULT_OLLAMA_URL,
+    model: str = DEFAULT_MODEL,
+    num_ctx: int = DEFAULT_NUM_CTX,
+    seed: int = DEFAULT_SEED,
+    session=None,
+) -> dict[str, Any]:
+    """群 D (#4841 M2): A と同じ素材 + 事実カードで narrative を書く。
+
+    プロンプトの差は BASELINE_PROMPT_TEMPLATE に対して「事実カードの節が
+    あるか」だけ (style_guide・素材節・出力指示・schema は一字一句同じ)。
+    """
+    prompt = FACT_CARD_PROMPT_TEMPLATE.format(
+        style_guide=STYLE_GUIDE, material_text=material_text, fact_cards_text=fact_cards_text,
+        schema=NARRATIVE_OUTPUT_SCHEMA,
+    )
+    call = call_gemma(
+        prompt, ollama_url=ollama_url, model=model, num_ctx=num_ctx, temperature=0.6, seed=seed,
+        format_json=True, session=session,
+    )
+    parsed = parse_json_response(call["text"])
+    narrative = _extract_narrative(parsed)
+    return {"narrative": narrative, "call_meta": {k: v for k, v in call.items() if k != "text"}}
+
+
 def _format_memo(memo: dict[str, Any]) -> str:
     lines = []
     key_map = memo.get("key_snippet_map")
