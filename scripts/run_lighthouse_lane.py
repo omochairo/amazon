@@ -138,8 +138,11 @@ DEFAULT_LIGHTHOUSE_CMD = "npx --yes lighthouse@{}".format(DEFAULT_LIGHTHOUSE_VER
 #     `--enable-automation` が無く、Lighthouse 実行時も false になる
 #     (2026-09-02 に `--headless=new --no-sandbox --disable-dev-shm-usage` で実測)。
 #   - URL に `?lab=1` を足す案は却下。Cloudflare のキャッシュキーが変わって毎回
-#     MISS になり、NAS オリジンに毎 run 到達する。504 が 14〜31%/日 出ている
-#     オリジンの応答を測ることになり、測定そのものが歪む。
+#     MISS になり、NAS オリジンに毎 run 到達する。実ユーザーが受け取るのは
+#     エッジのキャッシュなので、オリジン応答を測ると測定そのものが歪む。
+#     (当初「オリジンで 504 が 14〜31%/日」と書いていたが、それは Cloudflare
+#     Early Hints の内部参照の記録で、訪問者の 5xx は 0 件だった。
+#     omochairo/amazon-home-ops#87)
 #   - Cookie を `--extra-headers` で送る案も却下。CDP の追加ヘッダは cookie jar に
 #     入らないので `document.cookie` からは見えない。配信は静的ホストなので
 #     サーバ側で読むこともできない。
