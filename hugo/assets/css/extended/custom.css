@@ -7040,16 +7040,6 @@ details.development-stage-accordion[open] > summary::before {
   transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
 }
 .cat-summary-emoji { font-size: 1rem; line-height: 1; }
-.cat-summary-count {
-  font-size: 0.68rem;
-  font-weight: 700;
-  min-width: 18px;
-  text-align: center;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: rgba(255,107,53,0.14);
-  color: var(--brand-primary);
-}
 .cat-summary:hover {
   border-color: var(--brand-primary);
   background: var(--brand-gradient-subtle);
@@ -7057,10 +7047,6 @@ details.development-stage-accordion[open] > summary::before {
 .cat-summary[aria-expanded="true"] {
   background: var(--brand-primary);
   border-color: var(--brand-primary);
-  color: #fff;
-}
-.cat-summary[aria-expanded="true"] .cat-summary-count {
-  background: rgba(255,255,255,0.25);
   color: #fff;
 }
 .cat-panel {
@@ -7096,17 +7082,6 @@ details.development-stage-accordion[open] > summary::before {
 .cat-link:hover {
   border-color: var(--brand-primary);
   transform: translateY(-1px);
-}
-.cat-count {
-  flex: 0 0 auto;
-  min-width: 20px;
-  text-align: center;
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: rgba(255,107,53,0.14);
-  color: var(--brand-primary);
 }
 @media (max-width: 768px) {
   .cat-nav { padding: 0 12px; }
