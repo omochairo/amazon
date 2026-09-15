@@ -440,3 +440,191 @@ print('ratio_ci', v['ratio_diff_bootstrap_ci'])
 print('verdict', v['verdict'])
 "
 ```
+
+## M2: 素材側の多段化 (2026-09-15)
+
+**問い**: 文章 (narrative) を多段化するのではなく、素材から「その商品固有の事実カード」を
+多段で作って渡すと、M1 で採用した物差し (固有かつ裏付けありの文の数・率) は上がるか。
+
+群 A (対照、T3/M1-a と同じ10 ASIN・同じプロンプトで seed 違い3回) と、群 D
+(A と同じ素材 + 事実カード。プロンプトの差は事実カードの節の有無だけ) を、同じ
+10 ASIN で対にして比較した。実装は `scripts/experimental/multistage_brief/`
+(`fact_cards.py` / `narrative_stage.generate_narrative_with_fact_cards` /
+`unsupported_classification.py` / `run_m2.py`)。テスト91件追加。
+
+### 事前確認: youtube/news の本文カバレッジ (抽出①の前提)
+
+`count_body_content_coverage()` で `data/raw/per_asin/*/youtube.json` `news.json`
+の全アイテム (youtube 2,539件・news 1,729件) を走査した結果、**本文・字幕に相当する
+フィールド (`description`/`body`/`caption`/`transcript` 等) を持つアイテムは1件も無い
+(カバレッジ0.0%、両ソースとも)**。両ファイルは `title`/`url`/`thumbnail`/`published`/
+`_relevance_score` のみで構成されている。この実測に基づき、事実カードの抽出元は
+`amazon.json` (`item.price`・`item.features[]`) と `experience.json` (`snippets[]`) に
+限定し、youtube/news はアトミック項目の対象外にした (`build_atomic_material_items`)。
+
+### 実装中に見つけたバグとその影響
+
+本番実行 (10 ASIN) で、1件 (`B07DLFD9JN`) の事実カード抽出呼び出しが **壊れた JSON**
+(`source_index` の後にコロンが二重に入る等) を返した。`call_gemma` のリトライは
+HTTP層のみで、モデルが返した文字列自体が壊れた JSON であることはリトライしない
+ため、当初はこの1件で `run_m2.py` 全体が未捕捉例外で落ちていた。`temperature=0.2`
+固定・`seed` 固定のため **同じ入力に対して2回とも同一の壊れた出力を再現した**
+(gemma の決定性の裏返し)。`run_phase1_fact_cards` / phase2 それぞれに ASIN 単位の
+`try/except (GemmaCallError, TruncationError, ValueError)` を追加し、失敗した ASIN は
+「カード0件」として記録した上で残りの ASIN の処理を継続するよう修正した。
+この種の「モデルが返す文字列自体が壊れた JSON」はリトライされないという性質は
+M1/T3 の既存コードにも共通する (`sentence_metrics.py` 等の他の `parse_json_response`
+呼び出しも同じ経路)。今回は M2 の新規呼び出し (抽出プロンプト) でのみ実測したが、
+根治するなら `ollama_client.call_gemma` 側で JSON 妥当性チェックまで retry ループに
+含める設計変更が要る (本 PR の範囲外)。
+
+### 事実カード生成 (Phase 1、全10 ASIN)
+
+| ASIN | カテゴリ | アトミック項目 | 抽出候補 | 選定カード | 薄い(<3件) |
+|---|---|---:|---:|---:|---|
+| B00IXF31RI | 運動 | 9 | 9 | 5 | - |
+| B077MB7JKB | 想像 | 10 | 6 | 2 | ✓ |
+| B00ISHL27C | STEM | 8 | 6 | 5 | - |
+| B0C8HK543G | 言語 | 9 | 9 | 7 | - |
+| B07DLFD9JN | 運動 | 0 | 0 | 0 | ✓ (抽出失敗) |
+| B0DB7BYTQL | 想像 | 6 | 6 | 4 | - |
+| B0D2MZY2JL | STEM | 9 | 8 | 7 | - |
+| B0C8HM1F94 | 運動 | 18 | 18 | 8 | - |
+| B08482FZ8L | 想像 | 8 | 8 | 5 | - |
+| B0FF1KW4SP | STEM | 10 | 5 | 4 | - |
+
+薄い ASIN は 2/10 (打ち切り閾値 4/10 に届かず、群 A/D は10 ASIN 全件で実行した)。
+
+### 群A・群D の対比 (Phase 2、全10 ASIN)
+
+`unique_and_supported_count` (固有かつ裏付けありの文の数)・率 (÷総文数)・
+`unsupported_count` (裏付けの無い文の数) は、群Aは3 seedの平均、群Dは1回の値。
+
+| ASIN | Aの数(平均) | Dの数 | 差(数) | Aの率(平均) | Dの率 | 差(率) | 差(裏付け無し) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| B00IXF31RI | 9.33 | 10 | +0.67 | 0.646 | 0.667 | +0.021 | +1.00 |
+| B077MB7JKB | 7.67 | 7 | -0.67 | 0.535 | 0.467 | -0.068 | 0.00 |
+| B00ISHL27C | 10.00 | 9 | -1.00 | 0.729 | 0.692 | -0.037 | 0.00 |
+| B0C8HK543G | 8.00 | 7 | -1.00 | 0.581 | 0.583 | +0.002 | -2.33 |
+| B07DLFD9JN (カード0件) | 10.67 | 9 | -1.67 | 0.712 | 0.643 | -0.069 | +0.33 |
+| B0DB7BYTQL | 6.67 | 8 | +1.33 | 0.530 | 0.667 | +0.137 | -0.33 |
+| B0D2MZY2JL | 10.00 | 11 | +1.00 | 0.769 | 0.917 | +0.148 | -1.00 |
+| B0C8HM1F94 | 9.67 | 13 | +3.33 | 0.685 | 0.813 | +0.128 | +1.00 |
+| B08482FZ8L | 6.67 | 12 | +5.33 | 0.541 | 0.857 | +0.317 | -2.00 |
+| B0FF1KW4SP | 12.00 | 10 | -2.00 | 0.877 | 0.769 | -0.108 | +0.33 |
+
+10件中5件で数が改善、5件で悪化。効果の向きはばらついており一貫しない
+(改善が大きい上位2件 B08482FZ8L・B0C8HM1F94 は事実カード5件・8件、悪化した
+B0FF1KW4SP・B07DLFD9JN はカード4件・0件で、カード数と改善幅に明瞭な相関は
+見えない)。
+
+### 判定 (「M2 判定基準の差し替え」issue コメントの条件)
+
+| 指標 | 平均差 | ブートストラップ95%CI (10,000回) | 0を含むか |
+|---|---:|---|---|
+| 数 (unique_and_supported_count) | +0.53 | [-0.70, +2.00] | 含む |
+| 率 (÷総文数) | +0.047 | [-0.025, +0.127] | 含む |
+| 裏付けの無い文の数 | -0.30 | [-1.00, +0.333] | 含む (下限>0ではない) |
+
+**D無効**: 数・率いずれもブートストラップ95%信頼区間が0をまたぐ (判定基準を満たさない)。
+一方、裏付けの無い文の数のガードレール (信頼区間の下限が0を超えていない = 有意な
+増加ではない) は満たしている。**事実カードは narrative の質を明確に悪化させては
+いないが、情報利得を有意に押し上げてもいない。**
+
+### 裏付けの無い文の分類 (「M1 完了」コメントの追加要件)
+
+判定基準そのものは変えず、群A (3 seed分プール、30本のnarrative)・群D (10本) それぞれの
+`unsupported_count` に該当した文を全 ASIN ぶんプールし、gemma に一括で
+`rhetorical_or_time_dependent` (修辞的な言い回し・時点依存の言明) /
+`factual_claim` (時点に依存しない具体的な事実の主張) に分類させた
+(`unsupported_classification.classify_unsupported_sentences`)。
+
+| 群 | 修辞・時点依存 | 事実の主張 | 未解決 | 合計 |
+|---|---:|---:|---:|---:|
+| A (3 seed分) | 74 | 7 | 0 | 81 |
+| D | 21 | 3 | 0 | 24 |
+
+両群とも大半 (A: 91.4%、D: 87.5%) が「修辞・時点依存」であり、M1-c の目視で見られた
+「判定器が修辞・時点依存の文を一律 unsupported 扱いする」傾向は M2 でも同様に観察された。
+「事実の主張」(実害の可能性がある不支持) は A/D とも少数 (7件・3件) で、群間の差
+(-4件) は上のガードレール判定 (差の信頼区間が0の下限を超えない) と整合する。
+
+### コスト
+
+- 1 ASIN あたり平均 gemma 呼び出し9.8回・約323秒 (事実カード抽出+裏付け判定 + 群A
+  3seed×(生成+情報利得判定) + 群D (生成+情報利得判定))
+- 10 ASIN 全体の所要時間: 4941.2秒 (約82分)。打ち切り条件 (15分/ASIN) には
+  どの ASIN も到達しなかった (最長 B0C8HM1F94 の429.8秒)
+
+### サンプル (改善幅が大きい ASIN・小さい (悪化した) ASIN、各1件)
+
+**B08482FZ8L (差+5.33、改善幅最大)** — 使用した事実カード5件のうち1件は不満 aspect:
+
+```
+- [amazon.json:item.features[0]] 人形を最大8人乗せて遊べる、キャリア付きの車です。
+- [amazon.json:item.features[2]] 梱包サイズは17.0×30.0×15.0cmです。
+- [amazon.json:item.features[3]] 座席やバックドアを取り外してテーブルやベンチにできます。
+- [experience.json:snippets[2]] (不満) 本体カラーは、はっきりとしたピンク色です。
+```
+
+A (seed=20260914) lead: 「シルバニアファミリーから、たくさんの人形と一緒に楽しめる
+『いっぱい乗れるよ! ピクニックワゴン』をご紹介します。お出かけのごっこ遊びがもっと
+楽しくなる、魅力的なアイテムです。」
+D lead: 「(同上)…お出かけ気分を存分に味わえる、ギミック満載の乗り物セットです。」
+→ 具体的な差し替わりは限定的 (梱包サイズ等のカードは lead/why_this_product には
+反映されず、他キーで使われた可能性がある)。
+
+**B0FF1KW4SP (差-2.00、悪化)**:
+
+```
+- [amazon.json:item.features[0]] 「森の家」をテーマに、木や川、動物などのモチーフが含まれた160ピースのセットです。
+- [experience.json:snippets[0]] (シーン) 楽天市場等のECサイトで星4.7〜4.9点前後の高評価を得ています。
+- [experience.json:snippets[1]] (比較) 木や川、動物などのモチーフにより、一般的な幾何学模様とは異なる情景作りが楽しめます。
+- [experience.json:snippets[3]] (不満) 購入時にはセット内容の確認が推奨されています。
+```
+
+2件目の「星4.7〜4.9点前後」は評価スコアという時点依存の言明であり、抽出候補の
+品質にばらつきがあることの一例 (固有性・裏付け判定は「テキストとして特異かつ
+素材から導けるか」しか見ておらず、「記事に載せる価値のある事実か」は判定していない)。
+
+### 未検証のこと
+
+- 抽出候補の品質のばらつき (上記「星4.7〜4.9点」のような時点依存の値、他ASINでは
+  `(C) EPOCH` のような著作権表記がそのまま候補になったケースも1件あった) を、
+  カード化の前段でどう弾くかは未検討 (現状は固有性+裏付けの2軸のみ)
+- B07DLFD9JN の抽出失敗はプロンプト内の候補数 (9項目) が多いケースで発生した
+  ように見えるが、他の類似件数のASIN (B0C8HM1F94: 18項目) では発生しておらず、
+  再現条件は未特定
+- 1 ASIN・1回の実行のみ (群Dの生成もtemperature=0.6のため、再実行で数値は変動しうる)
+- `unsupported_classification` の分類自体の精度 (M1のentailment judgeと同様、参考値)
+  は未検証
+
+### 検証コマンド
+
+```bash
+python -m pytest scripts/tests/test_fact_cards.py scripts/tests/test_unsupported_classification.py \
+  scripts/tests/test_run_m2.py -v
+# 期待: 91 passed (fact_cards 29 / unsupported_classification 11 / run_m2 5、
+# 既存 narrative_stage 等への影響が無いことは test_multistage_brief.py 等も再実行して確認)
+
+python -c "
+from scripts.experimental.multistage_brief.fact_cards import count_body_content_coverage
+print(count_body_content_coverage())
+"
+# 期待: youtube/news とも body_coverage=0.0 (ネットワーク不要)
+
+# 実データでの再実行 (gemma + Ruri への到達性が必要、10 ASIN全件で約80分)
+OLLAMA_URL=http://<ollama-host>:11434 RURI_URL=http://<ruri-host>:8000 \
+  python -m scripts.experimental.multistage_brief.run_m2 \
+  --results-out docs/multistage-generation-eval/m2_results.json
+# 期待: asin_count_processed=10, cutoff_reason=null,
+#       verdict.d_effective=false (上記の信頼区間の通り)
+
+python -c "
+import json
+d = json.load(open('docs/multistage-generation-eval/m2_results.json'))
+print('verdict', d['verdict']['verdict'])
+print('count_ci', d['verdict']['count_diff_bootstrap_ci'])
+print('ratio_ci', d['verdict']['ratio_diff_bootstrap_ci'])
+"
+```
