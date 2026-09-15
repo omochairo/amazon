@@ -294,12 +294,18 @@ pages:
 #   /assets/** の 404 は長期キャッシュされうる (2026-08-15 実測: max-age=31536000) ため、
 #   その一瞬が読者のブラウザに焼き付く。確認できないまま時間切れになったら
 #   purge せずに落とす (古い HTML がエッジに残る方が、無スタイル表示より軽い)。
+#
+# #7386: **無条件の purge_everything をやめた。** push ごとに撃つと 1 日 15 回になり、
+#   Edge TTL が実質「次の purge まで」になっていた。deploy-nas が保存する
+#   navi-switch の差分 (navi-switch.out) を読み、配信物が変わっていなければ消去しない。
+#   判定と API 呼び出しは scripts/ci_cf_purge.sh。差分が読めないときは全消去に倒す。
 cf-purge:
   stage: postdeploy
   image: curlimages/curl:latest
-  # pages ジョブの public/ を受け取る (参照アセットの真実源は生成物側)。
+  # pages の public/ (参照アセットの真実源) と deploy-nas の navi-switch.out を受け取る。
   dependencies:
     - pages
+    - deploy-nas
   # **NAS への切替が終わってから purge する (#6205 T8)。** 2026-08-30 に本番の
   # 配信元が NAS になったので、purge の対象オリジンは deploy-nas が置いたもの。
   # 同じ postdeploy ステージに居ると並行して走るため、明示的に順序を付ける。
@@ -312,11 +318,7 @@ cf-purge:
   before_script:
     - sh scripts/ci_wait_for_assets.sh public/index.html https://navi.omcha.jp
   script:
-    - |
-      curl -fsS -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/purge_cache" \
-        -H "Authorization: Bearer ${CF_PURGE_TOKEN}" \
-        -H "Content-Type: application/json" \
-        --data '{"purge_everything":true}'
+    - sh scripts/ci_cf_purge.sh navi-switch.out
 
 # #6205 T6: 配信物を NAS のオリジンへ置く。
 #
@@ -373,4 +375,12 @@ deploy-nas:
     #   -rlpD  --checksum --link-dest -> links=2 (共有される)
     # 内容の比較は --checksum が担うので、mtime を捨てても再転送は増えない。
     - rsync -rlpD --delete --checksum --safe-links --link-dest=/current -e "$SSHOPT" public/ "deploy@${NAS_HOST}:releases/${CI_COMMIT_SHA}/"
-    - $SSHOPT "deploy@${NAS_HOST}" "switch ${CI_COMMIT_SHA}"
+    # #7386: navi-switch は切替前に前世代との差分を stdout に出す。cf-purge が
+    # 「変わったものだけ消す」判断に使うので保存する。数千行になりうるのでログには
+    # 差分行を出さない (パイプにしないのは switch の終了コードを落とさないため)。
+    - $SSHOPT "deploy@${NAS_HOST}" "switch ${CI_COMMIT_SHA}" > navi-switch.out
+    - grep -v "$(printf '^navi-diff\t')" navi-switch.out || true
+  artifacts:
+    paths:
+      - navi-switch.out
+    expire_in: 1 day
