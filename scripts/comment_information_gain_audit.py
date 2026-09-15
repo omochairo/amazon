@@ -42,16 +42,26 @@ WEEK_MARKER_PREFIX = "information-gain-audit:"
 DEFAULT_TRACKER_ISSUE = 3300
 
 
-def has_existing_week_comment(repo: str, issue_number: int, source_week: str) -> bool:
-    """指定 Issue の既存コメントに、この週用のマーカーが既にあるか。"""
+def find_week_comment_id(repo: str, issue_number: int, source_week: str) -> int | None:
+    """指定 Issue の既存コメントから、この週用のマーカーを持つコメント ID を探す。
+
+    見つかれば ``post_comment`` ではなく ``patch_comment`` (編集) の対象にする
+    (母艦レビュー要修正3: 同じ週の記録を先に走った run に占有させない。
+    limit=3 の検証 dispatch が本番 run の枠を奪わないよう、後から来た run が
+    追記ではなく上書きする)。
+    """
     marker = f"<!-- {WEEK_MARKER_PREFIX}{source_week} -->"
     res = gh_rest.run_gh(
         ["api", "-X", "GET", f"repos/{repo}/issues/{issue_number}/comments", "-f", "per_page=100"],
     )
     comments = json.loads(res.stdout)
     if not isinstance(comments, list):
-        return False
-    return any(marker in (c.get("body") or "") for c in comments)
+        return None
+    for c in comments:
+        if marker in (c.get("body") or ""):
+            cid = c.get("id")
+            return cid if isinstance(cid, int) else None
+    return None
 
 
 def _fmt_num(v: Any) -> str:
@@ -140,14 +150,18 @@ def post_comment(repo: str, issue_number: int, body: str) -> None:
     gh_rest.post_issue_comment(repo, issue_number, body)
 
 
-def main() -> int:
+def edit_comment(repo: str, comment_id: int, body: str) -> None:
+    gh_rest.patch_issue_comment(repo, comment_id, body)
+
+
+def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--input", default=DEFAULT_IN)
     p.add_argument("--repo", default=os.environ.get("REPO"))
     p.add_argument("--issue-number", type=int,
                     default=int(os.environ.get("TRACKER_ISSUE", DEFAULT_TRACKER_ISSUE)))
     p.add_argument("--dry-run", action="store_true")
-    args = p.parse_args()
+    args = p.parse_args(argv)
 
     if not args.repo:
         logger.error("missing --repo or $REPO")
@@ -164,18 +178,27 @@ def main() -> int:
         logger.error("input payload missing source_week — refusing to post ambiguous comment")
         return 2
 
-    if has_existing_week_comment(args.repo, args.issue_number, source_week):
-        logger.info("skip (already commented for week %s): issue #%d", source_week, args.issue_number)
+    if payload.get("run_ok") is False:
+        # 母艦レビュー要修正3: 失敗した run はコメントを書かない (run が赤で
+        # 知らせる。書いてしまうと、その週の枠を失敗した run に占有される)。
+        logger.info("run_ok=False for week %s — skipping tracker comment", source_week)
         return 0
 
+    comment_id = find_week_comment_id(args.repo, args.issue_number, source_week)
     body = render_comment_body(payload)
+
     if args.dry_run:
-        print(f"--- would comment on issue #{args.issue_number} (week {source_week}) ---")
+        action = "edit" if comment_id is not None else "post"
+        print(f"--- would {action} comment on issue #{args.issue_number} (week {source_week}) ---")
         print(body)
         return 0
 
-    post_comment(args.repo, args.issue_number, body)
-    logger.info("commented on issue #%d: week %s", args.issue_number, source_week)
+    if comment_id is not None:
+        edit_comment(args.repo, comment_id, body)
+        logger.info("edited comment #%d on issue #%d: week %s", comment_id, args.issue_number, source_week)
+    else:
+        post_comment(args.repo, args.issue_number, body)
+        logger.info("commented on issue #%d: week %s", args.issue_number, source_week)
     return 0
 
 

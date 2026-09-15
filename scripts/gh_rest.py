@@ -80,3 +80,22 @@ def post_issue_comment(repo: str, issue_number: int, body: str) -> str:
     except (json.JSONDecodeError, AttributeError):
         html_url = None
     return html_url or stdout
+
+
+def patch_issue_comment(repo: str, comment_id: int, body: str) -> str:
+    """既存の Issue コメントを REST 経由で編集する (#4841 S3)。
+
+    同じ週に後から来た run が、先の run のコメントに追記ではなく**上書き**する
+    ために使う (`post_issue_comment` と同じ理由で GraphQL 経路は使わず REST に統一)。
+    """
+    res = run_gh(
+        ["api", "--method", "PATCH",
+         f"repos/{repo}/issues/comments/{comment_id}", "--input", "-"],
+        input_text=json.dumps({"body": body}),
+    )
+    stdout = res.stdout.strip()
+    try:
+        html_url = json.loads(stdout).get("html_url")
+    except (json.JSONDecodeError, AttributeError):
+        html_url = None
+    return html_url or stdout

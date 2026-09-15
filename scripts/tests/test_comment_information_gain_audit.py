@@ -11,7 +11,8 @@ from unittest.mock import patch
 from scripts.comment_information_gain_audit import (
     DEFAULT_TRACKER_ISSUE,
     WEEK_MARKER_PREFIX,
-    has_existing_week_comment,
+    find_week_comment_id,
+    main,
     render_comment_body,
     render_material_row,
 )
@@ -91,32 +92,78 @@ def test_render_comment_body_omits_failed_section_when_none():
     assert "失敗した記事" not in body
 
 
-def test_has_existing_week_comment_true_when_marker_present():
-    comments = [{"body": f"unrelated\n<!-- {WEEK_MARKER_PREFIX}2026-W38 -->\nmore"}]
+def test_find_week_comment_id_returns_id_when_marker_present():
+    comments = [{"id": 555, "body": f"unrelated\n<!-- {WEEK_MARKER_PREFIX}2026-W38 -->\nmore"}]
 
     def fake_run(cmd, **kwargs):
         return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(comments), stderr="")
 
     with patch("scripts.gh_rest.subprocess.run", side_effect=fake_run):
-        assert has_existing_week_comment("repo", 3300, "2026-W38") is True
+        assert find_week_comment_id("repo", 3300, "2026-W38") == 555
 
 
-def test_has_existing_week_comment_false_for_different_week():
-    comments = [{"body": f"<!-- {WEEK_MARKER_PREFIX}2026-W37 -->"}]
+def test_find_week_comment_id_none_for_different_week():
+    comments = [{"id": 555, "body": f"<!-- {WEEK_MARKER_PREFIX}2026-W37 -->"}]
 
     def fake_run(cmd, **kwargs):
         return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(comments), stderr="")
 
     with patch("scripts.gh_rest.subprocess.run", side_effect=fake_run):
-        assert has_existing_week_comment("repo", 3300, "2026-W38") is False
+        assert find_week_comment_id("repo", 3300, "2026-W38") is None
 
 
-def test_has_existing_week_comment_ignores_uniqueness_audit_marker():
+def test_find_week_comment_id_ignores_uniqueness_audit_marker():
     """同じ issue に同居する凡庸度監査の週マーカーと混同しないこと。"""
-    comments = [{"body": "<!-- uniqueness-audit:2026-W38 -->"}]
+    comments = [{"id": 555, "body": "<!-- uniqueness-audit:2026-W38 -->"}]
 
     def fake_run(cmd, **kwargs):
         return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(comments), stderr="")
 
     with patch("scripts.gh_rest.subprocess.run", side_effect=fake_run):
-        assert has_existing_week_comment("repo", 3300, "2026-W38") is False
+        assert find_week_comment_id("repo", 3300, "2026-W38") is None
+
+
+def test_main_edits_existing_comment_instead_of_posting_new(tmp_path):
+    """母艦レビュー要修正3: 同じ週に後から来た run は追記ではなく編集する。"""
+    payload = _payload()
+    in_path = tmp_path / "audit.json"
+    in_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    comments = [{"id": 777, "body": f"<!-- {WEEK_MARKER_PREFIX}2026-W38 -->old"}]
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[:3] == ["gh", "api", "-X"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(comments), stderr="")
+        return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"html_url": "x"}), stderr="")
+
+    with patch("scripts.gh_rest.subprocess.run", side_effect=fake_run):
+        rc = main(["--input", str(in_path), "--repo", "owner/repo"])
+
+    assert rc == 0
+    patch_calls = [c for c in calls if "--method" in c and "PATCH" in c]
+    post_calls = [c for c in calls if "--method" in c and "POST" in c]
+    assert len(patch_calls) == 1
+    assert "repos/owner/repo/issues/comments/777" in patch_calls[0]
+    assert not post_calls
+
+
+def test_main_skips_when_run_ok_is_false(tmp_path):
+    """母艦レビュー要修正3: 失敗した run はコメントを書かない (run の赤で知らせる)。"""
+    payload = _payload()
+    payload["run_ok"] = False
+    in_path = tmp_path / "audit.json"
+    in_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="[]", stderr="")
+
+    with patch("scripts.gh_rest.subprocess.run", side_effect=fake_run):
+        rc = main(["--input", str(in_path), "--repo", "owner/repo"])
+
+    assert rc == 0
+    assert calls == []

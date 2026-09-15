@@ -626,7 +626,7 @@ def build_material_text(raw_material: dict[str, Any], max_len: int = MAX_MATERIA
     comp = raw_material.get("competitors")
     comp_items = comp.get("competitors") if isinstance(comp, dict) else None
     if isinstance(comp_items, list) and comp_items:
-        lines = ["## 競合商品"]
+        lines = ["## 競合商品 (比較対象として使ってよいのはこの一覧の ASIN のみ)"]
         for c in comp_items[:MAX_COMPETITORS]:
             if not isinstance(c, dict):
                 continue
@@ -681,12 +681,17 @@ def _parse_iso(ts: Any) -> datetime | None:
 
 
 def has_experience_material_at_generation(raw_material: dict[str, Any], article: dict[str, Any]) -> bool | None:
-    """experience.json が記事の生成時点で main に入っていたか (群比較の軸)。
+    """experience.json が記事の生成時点で使えたか (群比較の軸)。
 
     audit_experience_usage.select_population の population 判定 (T1) と
     同じ考え方: experience.json の generated_at が記事の date より前であれば
-    「生成時点で使えた」とみなす。experience.json が無い/日付が読めない場合は
-    None (「無かった」と「判定不能」を区別する)。
+    「生成時点で使えた」とみなす。experience.json が無ければ False (使えなかった)。
+    generated_at/date が読めない場合のみ None (「無かった」と「判定不能」を区別する)。
+
+    **近似であることに注意 `[推]`**: experience.json は体験談レーンの再掘りで
+    generated_at ごと上書きされる。この判定は「今の experience.json が記事より
+    古いか」の近似でしかなく、「記事生成時点で実在した experience.json と厳密に
+    同じものか」は分からない (T1 の population 判定と同じ近似)。
     """
     exp = raw_material.get("experience")
     if not isinstance(exp, dict):
@@ -711,8 +716,25 @@ def article_category(article: dict[str, Any]) -> str:
     return "unknown"
 
 
+def build_category_index(article_paths: dict[str, pathlib.Path]) -> dict[str, list[tuple[str, dict[str, Any]]]]:
+    """記事一覧を1回だけ読み込み、カテゴリ別にまとめる (run() の最初に1回呼ぶ)。
+
+    以前は対象記事1件ごとに、同カテゴリ用・別カテゴリ用の2回、コーパス全件を
+    毎回ディスクから読み直していた (40件の対象で約2,500件×2×40 ≈ 20万回の
+    JSON読み込み、母艦レビューで指摘)。ここで1回だけ読み込み、以後は
+    メモリ上のインデックスを引く。
+    """
+    index: dict[str, list[tuple[str, dict[str, Any]]]] = {}
+    for asin, path in article_paths.items():
+        article = _load_json(path)
+        if not isinstance(article, dict):
+            continue
+        index.setdefault(article_category(article), []).append((asin, article))
+    return index
+
+
 def _sample_articles_by_category(
-    article_paths: dict[str, pathlib.Path],
+    category_index: dict[str, list[tuple[str, dict[str, Any]]]],
     category: str,
     exclude_asin: str,
     *,
@@ -720,17 +742,14 @@ def _sample_articles_by_category(
     sample_size: int,
     seed: int,
 ) -> list[dict[str, Any]]:
-    matched: list[dict[str, Any]] = []
-    for asin, path in article_paths.items():
-        if asin == exclude_asin:
-            continue
-        article = _load_json(path)
-        if not isinstance(article, dict):
-            continue
-        is_same = article_category(article) == category
-        if is_same != same_category:
-            continue
-        matched.append(article)
+    if same_category:
+        matched = [a for asin, a in category_index.get(category, []) if asin != exclude_asin]
+    else:
+        matched = [
+            a
+            for cat, items in category_index.items() if cat != category
+            for asin, a in items if asin != exclude_asin
+        ]
 
     rng = random.Random(seed)
     rng.shuffle(matched)
@@ -738,24 +757,24 @@ def _sample_articles_by_category(
 
 
 def sample_category_articles(
-    article_paths: dict[str, pathlib.Path], category: str, exclude_asin: str,
+    category_index: dict[str, list[tuple[str, dict[str, Any]]]], category: str, exclude_asin: str,
     *, sample_size: int = DEFAULT_POOL_SAMPLE_SIZE, seed: int = DEFAULT_SEED,
 ) -> list[dict[str, Any]]:
     """同じカテゴリの既存記事から最大 ``sample_size`` 件をサンプリングする。"""
     return _sample_articles_by_category(
-        article_paths, category, exclude_asin, same_category=True, sample_size=sample_size, seed=seed,
+        category_index, category, exclude_asin, same_category=True, sample_size=sample_size, seed=seed,
     )
 
 
 def sample_other_category_articles(
-    article_paths: dict[str, pathlib.Path], category: str, exclude_asin: str,
+    category_index: dict[str, list[tuple[str, dict[str, Any]]]], category: str, exclude_asin: str,
     *, sample_size: int = DEFAULT_POOL_SAMPLE_SIZE, seed: int = DEFAULT_SEED,
 ) -> list[dict[str, Any]]:
     """``category`` 以外のカテゴリの既存記事から最大 ``sample_size`` 件をサンプリングする
     (固有性判定の負の対照「別カテゴリの文」のプール用)。
     """
     return _sample_articles_by_category(
-        article_paths, category, exclude_asin, same_category=False, sample_size=sample_size, seed=seed,
+        category_index, category, exclude_asin, same_category=False, sample_size=sample_size, seed=seed,
     )
 
 
@@ -763,13 +782,47 @@ def sample_other_category_articles(
 # 対象記事の選定 (その週に data/articles/ へコミットがあったもの、固定 seed で --limit 件)
 # --------------------------------------------------------------------------
 
+class ShallowRepositoryError(Exception):
+    """git clone が浅い (depth 制限あり) ため、週次の差分検出が信頼できない。
+
+    浅い clone では先頭コミットが「空の木との差分」として扱われるため、
+    ``git log --diff-filter=AM`` が **リポジトリ内の全ファイルを「追加」として
+    返す** (母艦レビューで実測・再現、#4841 S3)。workflow 側の fetch-depth の
+    書き方に依存させず、ここで確実に検出して止める。
+    """
+
+
+class GitLogError(Exception):
+    """git log 自体が失敗した (非0 exit)。"""
+
+
+def _is_shallow_repository(repo_dir: pathlib.Path) -> bool:
+    proc = subprocess.run(
+        ["git", "rev-parse", "--is-shallow-repository"],
+        cwd=repo_dir, capture_output=True, text=True,
+    )
+    if proc.returncode != 0:
+        # rev-parse 自体が失敗するなら後続の git log も同じ理由 (git リポジトリで
+        # ない等) で失敗するはずなので、ここでは判定を諦めて後続の GitLogError に委ねる。
+        return False
+    return proc.stdout.strip() == "true"
+
+
 def select_recent_article_paths(repo_dir: pathlib.Path, since: str, until: str) -> set[str]:
     """``data/articles/`` 配下で、``since``〜``until`` の間に追加・更新コミットがあった
-    ファイルの相対パス集合を返す (git 履歴が要る。浅い clone では検出できない)。
+    ファイルの相対パス集合を返す (git 履歴が要る)。
 
-    git 呼び出しに失敗した場合は空集合を返し、呼び出し元に委ねる (このレーンを
-    import エラー等と混同させない、freshness 監視とは別の失敗経路として扱う)。
+    浅い clone では ``ShallowRepositoryError``、git 呼び出し自体が失敗した場合は
+    ``GitLogError`` を送出する。**どちらも黙って空集合に倒さない** — 空集合は
+    「対象0件」と区別が付かなくなり、「今週は記事が無かった」という誤った
+    正常終了に化ける (母艦レビュー要修正2)。
     """
+    if _is_shallow_repository(repo_dir):
+        raise ShallowRepositoryError(
+            f"{repo_dir} is a shallow git clone — git log --diff-filter=AM would "
+            "silently return every file in the repo instead of only the ones "
+            "touched in range. Fetch with --depth 0 (or --shallow-since) instead."
+        )
     try:
         proc = subprocess.run(
             ["git", "log", f"--since={since}", f"--until={until}",
@@ -778,8 +831,7 @@ def select_recent_article_paths(repo_dir: pathlib.Path, since: str, until: str) 
             cwd=repo_dir, capture_output=True, text=True, check=True,
         )
     except (OSError, subprocess.CalledProcessError) as e:
-        logger.warning("git log failed (%s) — treating as empty selection", e)
-        return set()
+        raise GitLogError(f"git log failed for {repo_dir} ({since}..{until}): {e}") from e
 
     paths: set[str] = set()
     for line in proc.stdout.splitlines():
@@ -999,9 +1051,8 @@ def _summarize_run(
 def process_article(
     asin: str,
     article_path: pathlib.Path,
-    article_paths: dict[str, pathlib.Path],
+    category_index: dict[str, list[tuple[str, dict[str, Any]]]],
     *,
-    articles_dir: pathlib.Path,
     raw_dir: pathlib.Path,
     ollama_url: str,
     ruri_url: str,
@@ -1031,8 +1082,8 @@ def process_article(
         result["has_experience_material"] = has_material
         return result
 
-    same_pool_articles = sample_category_articles(article_paths, category, asin, seed=seed)
-    cross_pool_articles = sample_other_category_articles(article_paths, category, asin, seed=seed)
+    same_pool_articles = sample_category_articles(category_index, category, asin, seed=seed)
+    cross_pool_articles = sample_other_category_articles(category_index, category, asin, seed=seed)
     same_pool = build_sentence_pool(same_pool_articles)
     cross_pool = build_sentence_pool(cross_pool_articles)
 
@@ -1094,6 +1145,7 @@ def run(
     target_asins, article_paths = select_target_asins(
         articles_dir, repo_dir, since=since, until=until, limit=limit, seed=seed,
     )
+    category_index = build_category_index(article_paths)
 
     processed: list[dict[str, Any]] = []
     failed: list[dict[str, Any]] = []
@@ -1105,8 +1157,8 @@ def run(
             continue
         try:
             result = process_article(
-                asin, path, article_paths,
-                articles_dir=articles_dir, raw_dir=raw_dir,
+                asin, path, category_index,
+                raw_dir=raw_dir,
                 ollama_url=ollama_url, ruri_url=ruri_url, model=model, num_ctx=num_ctx, seed=seed,
                 cache=cache, session=session,
             )
@@ -1119,7 +1171,19 @@ def run(
     cache.save()
 
     summary = _summarize_run(processed, failed, len(target_asins))
-    run_ok = summary["failure_ratio"] <= MAX_FAILURE_RATIO if target_asins else True
+    if target_asins:
+        run_ok = summary["failure_ratio"] <= MAX_FAILURE_RATIO
+        summary["zero_target_articles"] = False
+    else:
+        # 母艦レビュー要修正2: 対象0件を「正常な空振り」に倒さない。7日窓の間に
+        # data/articles/ へ一切コミットが無い週は、この週次レーンにとって
+        # 通常運転ではなく異常 (2026-09時点の実測では直近7日で約200件が動く)。
+        logger.error(
+            "zero target articles selected (since=%s until=%s) — this is not a "
+            "normal week; failing the run", since, until,
+        )
+        run_ok = False
+        summary["zero_target_articles"] = True
 
     payload = {
         "generated_at": _now_iso(),
@@ -1166,26 +1230,36 @@ def main() -> int:
     ap.add_argument("--until", default=None, help="対象コミットの上限 (既定: 現在時刻)")
     args = ap.parse_args()
 
-    payload = run(
-        articles_dir=pathlib.Path(args.articles_dir),
-        raw_dir=pathlib.Path(args.raw_dir),
-        repo_dir=pathlib.Path(args.repo_dir),
-        out_path=pathlib.Path(args.out),
-        cache_path=pathlib.Path(args.cache) if args.cache else None,
-        ollama_url=args.ollama_url,
-        ruri_url=args.ruri_url,
-        model=args.model,
-        num_ctx=args.num_ctx,
-        seed=args.seed,
-        limit=args.limit,
-        since=args.since,
-        until=args.until,
-    )
-    if not payload.get("run_ok", True):
-        logger.error(
-            "failure ratio %.1f%% exceeds %.0f%% — failing the run (#4841 S3 堅牢性要件)",
-            payload["summary"]["failure_ratio"] * 100, MAX_FAILURE_RATIO * 100,
+    try:
+        payload = run(
+            articles_dir=pathlib.Path(args.articles_dir),
+            raw_dir=pathlib.Path(args.raw_dir),
+            repo_dir=pathlib.Path(args.repo_dir),
+            out_path=pathlib.Path(args.out),
+            cache_path=pathlib.Path(args.cache) if args.cache else None,
+            ollama_url=args.ollama_url,
+            ruri_url=args.ruri_url,
+            model=args.model,
+            num_ctx=args.num_ctx,
+            seed=args.seed,
+            limit=args.limit,
+            since=args.since,
+            until=args.until,
         )
+    except (ShallowRepositoryError, GitLogError) as e:
+        # 母艦レビュー要修正1/2: 週の対象選定が信頼できない状態を握りつぶさず、
+        # 明示的に run を落とす (data ファイルは書かない)。
+        logger.error("aborting without writing output: %s", e)
+        return 1
+
+    if not payload.get("run_ok", True):
+        if payload["summary"].get("zero_target_articles"):
+            logger.error("zero target articles — failing the run (#4841 S3 堅牢性要件)")
+        else:
+            logger.error(
+                "failure ratio %.1f%% exceeds %.0f%% — failing the run (#4841 S3 堅牢性要件)",
+                payload["summary"]["failure_ratio"] * 100, MAX_FAILURE_RATIO * 100,
+            )
         return 1
     return 0
 

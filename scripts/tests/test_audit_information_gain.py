@@ -17,9 +17,12 @@ from pathlib import Path
 from scripts.audit_information_gain import (
     FACTUAL_CLAIM,
     RHETORICAL_OR_TIME_DEPENDENT,
+    GitLogError,
     ResultCache,
+    ShallowRepositoryError,
     TruncationError,
     article_category,
+    build_category_index,
     build_classify_prompt,
     build_entailment_prompt,
     build_material_text,
@@ -416,11 +419,12 @@ class CategoryPoolSamplingTest(unittest.TestCase):
                 "BBBBBBBBBB": {"product": {"edu_domains": ["STEM"]}},
                 "CCCCCCCCCC": {"product": {"edu_domains": ["言語"]}},
             })
-            same = sample_category_articles(paths, "STEM", "AAAAAAAAAA", seed=1)
+            index = build_category_index(paths)
+            same = sample_category_articles(index, "STEM", "AAAAAAAAAA", seed=1)
             self.assertEqual(len(same), 1)
             self.assertEqual(same[0]["product"]["edu_domains"], ["STEM"])
 
-            cross = sample_other_category_articles(paths, "STEM", "AAAAAAAAAA", seed=1)
+            cross = sample_other_category_articles(index, "STEM", "AAAAAAAAAA", seed=1)
             self.assertEqual(len(cross), 1)
             self.assertEqual(cross[0]["product"]["edu_domains"], ["言語"])
 
@@ -429,9 +433,24 @@ class CategoryPoolSamplingTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             articles = {f"ASIN{i:06d}": {"product": {"edu_domains": ["STEM"]}} for i in range(10)}
             paths = self._paths(Path(td), articles)
-            first = [a["product"] for a in sample_category_articles(paths, "STEM", "ASIN000000", seed=42)]
-            second = [a["product"] for a in sample_category_articles(paths, "STEM", "ASIN000000", seed=42)]
+            index = build_category_index(paths)
+            first = [a["product"] for a in sample_category_articles(index, "STEM", "ASIN000000", seed=42)]
+            second = [a["product"] for a in sample_category_articles(index, "STEM", "ASIN000000", seed=42)]
             self.assertEqual(first, second)
+
+    def test_build_category_index_reads_each_article_once(self):
+        """build_category_index が run() の最初に1回だけ全記事を読む前提の入口であること
+        (母艦レビュー要修正6: 対象1件ごとにコーパス全件を毎回読み直していた反省)。
+        """
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            paths = self._paths(Path(td), {
+                "AAAAAAAAAA": {"product": {"edu_domains": ["STEM"]}},
+                "BBBBBBBBBB": {"product": {"edu_domains": ["言語"]}},
+            })
+            index = build_category_index(paths)
+            self.assertEqual({asin for asin, _ in index["STEM"]}, {"AAAAAAAAAA"})
+            self.assertEqual({asin for asin, _ in index["言語"]}, {"BBBBBBBBBB"})
 
 
 # --------------------------------------------------------------------------
@@ -456,7 +475,7 @@ class SelectRecentArticlePathsTest(unittest.TestCase):
             self._git(repo, "add", ".")
             self._git(repo, "commit", "-q", "-m", "add article")
 
-            touched = select_recent_article_paths(repo, "1970-01-01", "2099-01-01")
+            touched = select_recent_article_paths(repo, "1980-01-01", "2099-01-01")
             self.assertIn("data/articles/2026-01-01-AAAAAAAAAA.json", touched)
 
     def test_excludes_sidecar_files(self):
@@ -473,15 +492,42 @@ class SelectRecentArticlePathsTest(unittest.TestCase):
             self._git(repo, "add", ".")
             self._git(repo, "commit", "-q", "-m", "add article")
 
-            touched = select_recent_article_paths(repo, "1970-01-01", "2099-01-01")
+            touched = select_recent_article_paths(repo, "1980-01-01", "2099-01-01")
             self.assertNotIn("data/articles/2026-01-01-AAAAAAAAAA.quality.json", touched)
 
-    def test_returns_empty_set_when_git_fails(self):
+    def test_raises_git_log_error_when_git_fails(self):
+        """母艦レビュー要修正2: 握りつぶして空集合にすると「対象0件」と区別できない。"""
         import tempfile
         with tempfile.TemporaryDirectory() as td:
             # git リポジトリではないディレクトリ -> git log は失敗する
-            touched = select_recent_article_paths(Path(td), "1970-01-01", "2099-01-01")
-            self.assertEqual(touched, set())
+            with self.assertRaises(GitLogError):
+                select_recent_article_paths(Path(td), "1980-01-01", "2099-01-01")
+
+    def test_raises_shallow_repository_error_for_shallow_clone(self):
+        """母艦レビュー要修正1: 浅い clone では --diff-filter=AM が全ファイルを返す罠。
+
+        手本 (24-uniqueness-audit.yml) は fetch-depth: 1 だが、この罠のため
+        本レーンは深いfetchが要る。workflow の書き方に依存させず、ここで検出して止める。
+        """
+        import tempfile
+        with tempfile.TemporaryDirectory() as src_td, tempfile.TemporaryDirectory() as dst_td:
+            src = Path(src_td)
+            self._git(src, "init", "-q", "-b", "main")
+            self._git(src, "config", "user.email", "t@example.com")
+            self._git(src, "config", "user.name", "t")
+            (src / "a.txt").write_text("1", encoding="utf-8")
+            self._git(src, "add", ".")
+            self._git(src, "commit", "-q", "-m", "c1")
+            (src / "a.txt").write_text("2", encoding="utf-8")
+            self._git(src, "add", ".")
+            self._git(src, "commit", "-q", "-m", "c2")
+
+            dst = Path(dst_td) / "clone"
+            subprocess.run(["git", "clone", "-q", "--depth", "1", f"file://{src}", str(dst)],
+                            check=True, capture_output=True)
+
+            with self.assertRaises(ShallowRepositoryError):
+                select_recent_article_paths(dst, "1980-01-01", "2099-01-01")
 
 
 class SelectTargetAsinsTest(unittest.TestCase):
@@ -501,12 +547,22 @@ class SelectTargetAsinsTest(unittest.TestCase):
             subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
             subprocess.run(["git", "commit", "-q", "-m", "seed"], cwd=repo, check=True, capture_output=True)
 
-            first, _ = select_target_asins(articles_dir, repo, since="1970-01-01", until="2099-01-01",
+            first, _ = select_target_asins(articles_dir, repo, since="1980-01-01", until="2099-01-01",
                                             limit=3, seed=7)
-            second, _ = select_target_asins(articles_dir, repo, since="1970-01-01", until="2099-01-01",
+            second, _ = select_target_asins(articles_dir, repo, since="1980-01-01", until="2099-01-01",
                                              limit=3, seed=7)
             self.assertEqual(len(first), 3)
             self.assertEqual(first, second)
+
+    def test_propagates_git_log_error(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            repo = Path(td)
+            articles_dir = repo / "data" / "articles"
+            articles_dir.mkdir(parents=True)
+            with self.assertRaises(GitLogError):
+                select_target_asins(articles_dir, repo, since="1980-01-01", until="2099-01-01",
+                                     limit=3, seed=7)
 
 
 # --------------------------------------------------------------------------
@@ -670,7 +726,7 @@ class RunIntegrationTest(unittest.TestCase):
             payload = run(
                 articles_dir=articles_dir, raw_dir=raw_dir, repo_dir=repo,
                 out_path=repo / "out.json", cache_path=None,
-                since="1970-01-01", until="2099-01-01", limit=0, seed=1,
+                since="1980-01-01", until="2099-01-01", limit=0, seed=1,
                 session=_RunFakeSession(),
             )
             self.assertEqual(payload["summary"]["target_count"], 4)
@@ -691,7 +747,7 @@ class RunIntegrationTest(unittest.TestCase):
             payload = run(
                 articles_dir=articles_dir, raw_dir=raw_dir, repo_dir=repo,
                 out_path=repo / "out.json", cache_path=None,
-                since="1970-01-01", until="2099-01-01", limit=0, seed=1,
+                since="1980-01-01", until="2099-01-01", limit=0, seed=1,
                 session=_RunFakeSession(fail_markers=frozenset({"記事0の特徴"})),
             )
             self.assertEqual(payload["summary"]["target_count"], 3)
@@ -712,7 +768,7 @@ class RunIntegrationTest(unittest.TestCase):
             payload = run(
                 articles_dir=articles_dir, raw_dir=raw_dir, repo_dir=repo,
                 out_path=repo / "out.json", cache_path=None,
-                since="1970-01-01", until="2099-01-01", limit=0, seed=1,
+                since="1980-01-01", until="2099-01-01", limit=0, seed=1,
                 session=_RunFakeSession(fail_markers=frozenset({"記事0の特徴", "記事1の特徴"})),
             )
             self.assertEqual(payload["summary"]["failed_count"], 2)
@@ -729,7 +785,7 @@ class RunIntegrationTest(unittest.TestCase):
             common = dict(
                 articles_dir=articles_dir, raw_dir=raw_dir, repo_dir=repo,
                 out_path=repo / "out.json", cache_path=cache_path,
-                since="1970-01-01", until="2099-01-01", limit=0, seed=1,
+                since="1980-01-01", until="2099-01-01", limit=0, seed=1,
             )
             first = run(session=_RunFakeSession(), **common)
             self.assertEqual(first["cache"]["hits"], 0)
@@ -737,6 +793,41 @@ class RunIntegrationTest(unittest.TestCase):
             self.assertEqual(second["cache"]["misses"], 0)
             self.assertEqual(second["cache"]["hits"], 3)
             self.assertEqual(second["summary"]["processed_count"], 3)
+
+    def test_zero_target_articles_is_not_ok(self):
+        """母艦レビュー要修正2: 対象0件を正常終了に倒さない。"""
+        import tempfile
+        from scripts.audit_information_gain import run
+        with tempfile.TemporaryDirectory() as td:
+            repo = Path(td)
+            articles_dir, raw_dir = self._build_repo(repo, n=3)
+            payload = run(
+                articles_dir=articles_dir, raw_dir=raw_dir, repo_dir=repo,
+                out_path=repo / "out.json", cache_path=None,
+                # コミットより後の範囲を指定 -> 対象0件
+                since="2030-01-01", until="2031-01-01", limit=0, seed=1,
+                session=_RunFakeSession(),
+            )
+            self.assertEqual(payload["summary"]["target_count"], 0)
+            self.assertTrue(payload["summary"]["zero_target_articles"])
+            self.assertFalse(payload["run_ok"])
+
+    def test_git_log_failure_propagates_out_of_run(self):
+        """母艦レビュー要修正2: git の失敗を握りつぶさず呼び出し元まで伝播させる。"""
+        import tempfile
+        from scripts.audit_information_gain import GitLogError, run
+        with tempfile.TemporaryDirectory() as td:
+            repo = Path(td)
+            articles_dir = repo / "data" / "articles"
+            articles_dir.mkdir(parents=True)
+            with self.assertRaises(GitLogError):
+                run(
+                    articles_dir=articles_dir, raw_dir=repo / "data" / "raw" / "per_asin",
+                    repo_dir=repo, out_path=repo / "out.json", cache_path=None,
+                    since="1980-01-01", until="2099-01-01", limit=0, seed=1,
+                    session=_RunFakeSession(),
+                )
+            self.assertFalse((repo / "out.json").exists())
 
 
 class CliTest(unittest.TestCase):
@@ -747,6 +838,22 @@ class CliTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("usage", result.stdout.lower())
+
+    def test_main_exits_nonzero_cleanly_on_git_log_failure(self):
+        """母艦レビュー要修正1/2: 例外を裸のトレースバックで落とさず、main() が
+        ログを出して非0で終了すること (data ファイルも書かない)。
+        """
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            out_path = Path(td) / "out.json"
+            result = subprocess.run(
+                [sys.executable, "-m", "scripts.audit_information_gain",
+                 "--repo-dir", td, "--out", str(out_path), "--limit", "1"],
+                cwd=REPO_ROOT, capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("aborting", result.stderr)
+            self.assertFalse(out_path.exists())
 
 
 if __name__ == "__main__":

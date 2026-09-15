@@ -90,18 +90,51 @@ def test_run_appends_new_week(tmp_path, audit_fixture):
     assert rows[0]["date"] == "2026-W38"
 
 
-def test_run_is_idempotent_for_same_week(tmp_path, audit_fixture):
+def test_run_replaces_same_week_instead_of_duplicating(tmp_path, audit_fixture):
+    """母艦レビュー要修正3: limit=3 のスモーク run のあとに本番 limit=40 run が来ても、
+    その週の枠が最初の run に占有されず、後着の内容で置き換わること。
+    """
+    history_path = tmp_path / "information_gain_history.jsonl"
+    smoke = dict(audit_fixture)
+    smoke["limit"] = 3
+    smoke["summary"] = {**audit_fixture["summary"], "target_count": 3, "processed_count": 3}
+    written, week = run(smoke, history_path)
+    assert written is True
+    assert week == "2026-W38"
+
+    full = dict(audit_fixture)
+    full["limit"] = 40
+    written, week = run(full, history_path)
+    assert written is True
+
+    rows = [json.loads(line) for line in history_path.read_text(encoding="utf-8").splitlines()]
+    assert len(rows) == 1  # 重複しない
+    assert rows[0]["limit"] == 40  # 最初の smoke run ではなく後着の内容が残る
+    assert rows[0]["target_count"] == 40
+
+
+def test_run_skips_when_run_ok_is_false(tmp_path, audit_fixture):
+    """母艦レビュー要修正3: 失敗した run は history に書かない (run の赤で知らせる)。"""
+    audit_fixture["run_ok"] = False
+    history_path = tmp_path / "information_gain_history.jsonl"
+    written, week = run(audit_fixture, history_path)
+    assert written is False
+    assert week == "2026-W38"
+    assert not history_path.exists()
+
+
+def test_run_includes_run_ok_and_limit_fields(tmp_path, audit_fixture):
+    audit_fixture["run_ok"] = True
+    audit_fixture["limit"] = 40
     history_path = tmp_path / "information_gain_history.jsonl"
     run(audit_fixture, history_path)
-    appended, week = run(audit_fixture, history_path)
-    assert appended is False
-    assert week == "2026-W38"
-    rows = history_path.read_text(encoding="utf-8").splitlines()
-    assert len(rows) == 1
+    row = json.loads(history_path.read_text(encoding="utf-8").splitlines()[0])
+    assert row["run_ok"] is True
+    assert row["limit"] == 40
 
 
 def test_run_returns_false_when_source_week_missing(tmp_path, audit_fixture):
     del audit_fixture["source_week"]
-    appended, week = run(audit_fixture, tmp_path / "h.jsonl")
-    assert appended is False
+    written, week = run(audit_fixture, tmp_path / "h.jsonl")
+    assert written is False
     assert week is None

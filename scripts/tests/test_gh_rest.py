@@ -96,3 +96,39 @@ def test_post_issue_comment_propagates_failure_and_logs_stderr(caplog):
             with pytest.raises(subprocess.CalledProcessError):
                 gh_rest.post_issue_comment("owner/repo", 1, "body")
     assert any("boom" in record.message for record in caplog.records)
+
+
+def test_patch_issue_comment_uses_rest_patch_endpoint_and_stdin_json():
+    """#4841 S3: 同じ週に後から来た run が既存コメントを編集 (追記ではなく上書き) する経路。"""
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["input"] = kwargs.get("input")
+        return subprocess.CompletedProcess(
+            cmd, 0,
+            stdout=json.dumps({"html_url": "https://github.com/owner/repo/issues/1#issuecomment-1"}),
+            stderr="",
+        )
+
+    with patch("scripts.gh_rest.subprocess.run", side_effect=fake_run):
+        url = gh_rest.patch_issue_comment("owner/repo", 1, "更新後の本文")
+
+    cmd = captured["cmd"]
+    assert cmd[:3] == ["gh", "api", "--method"]
+    assert "PATCH" in cmd
+    assert "repos/owner/repo/issues/comments/1" in cmd
+    assert "--input" in cmd and cmd[cmd.index("--input") + 1] == "-"
+    assert json.loads(captured["input"]) == {"body": "更新後の本文"}
+    assert url == "https://github.com/owner/repo/issues/1#issuecomment-1"
+
+
+def test_patch_issue_comment_propagates_failure_and_logs_stderr(caplog):
+    def fake_run(cmd, **kwargs):
+        raise subprocess.CalledProcessError(1, cmd, output="", stderr="boom")
+
+    with patch("scripts.gh_rest.subprocess.run", side_effect=fake_run):
+        with caplog.at_level(logging.ERROR, logger="scripts.gh_rest"):
+            with pytest.raises(subprocess.CalledProcessError):
+                gh_rest.patch_issue_comment("owner/repo", 1, "body")
+    assert any("boom" in record.message for record in caplog.records)
