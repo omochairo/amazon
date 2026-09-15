@@ -298,6 +298,7 @@ pages:
 # #7386: **無条件の purge_everything をやめた。** push ごとに撃つと 1 日 15 回になり、
 #   Edge TTL が実質「次の purge まで」になっていた。deploy-nas が保存する
 #   navi-switch の差分 (navi-switch.out) を読み、配信物が変わっていなければ消去しない。
+#   変わっていれば、変わった URL だけを消去する (1,000 件超や API 失敗時は全消去)。
 #   判定と API 呼び出しは scripts/ci_cf_purge.sh。差分が読めないときは全消去に倒す。
 cf-purge:
   stage: postdeploy
