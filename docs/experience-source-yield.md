@@ -3,43 +3,71 @@
 問い: 体験談を増やすのに効くのは「検索語」か。新しい検索基盤 (SearXNG 等) を入れる
 前に、既存の検索結果 (`third_party_sources.json`, Tavily・商品名だけの検索語) で
 手持ちのデータを測る。V1 は外部への新規リクエストを最小限にした計測 (JS シェル判定の
-30 URL のみ再取得)。実施内容・判明事項・未検証のことは PR / #4841 コメントの 4 項目
-報告を参照。数字の生成物は `docs/experience-source-yield/v1_results.json`。
+30 URL のみ再取得)。数字の生成物は `docs/experience-source-yield/v1_results.json`。
 
-## V1. ホスト種別ごとの歩留まり
+**この文書は母艦レビュー (PR #7424 コメント) を受けた追補版。** 元の V1 (ledger 25
+ASIN・N 小で判定不能) から、分母を run ログ由来の 133 ASIN に広げ、取得成功 URL を
+分母にした列・ホスト別内訳・snippet 元ホスト一覧・ASIN 単位ブートストラップを追加した。
 
-### 分類表
+## 分類表
 
 `scripts/analyze_third_party_yield.py` の `HOST_CATEGORIES` (host のサフィックス
 一致)。**網羅はしていない**: third_party_sources.json は distinct host が 1,927
 あり、73% が「上位 200 ホストのみ」でカバーされる分布 (実測 2026-09-15)。上位に
-出た約 150 ホストだけを明示分類し、残りは `other` に落として上位ホストを報告する
-(下表)。
+出た約 150 ホストだけを明示分類し、残りは `other` に落として上位ホストを報告する。
+分類表自体は変更していない (母艦レビューの指示通り「後から分類を変えて条件を
+満たしにいかない」)。
 
-### 分母 (生存者バイアスを避ける)
+## 分母: ledger でなく run ログから作った (追補①) `[実]`
 
-`experience.json` は snippet が 0 件だと書かれないため、「third_party_sources.json
-に URL がある」だけでは分母にならない。分母は「体験談マイニングが実際に fetch を
-試みた ASIN」に絞った:
+元の V1 は K8 の `mining_ledger.json` を分母にしていたが、**ledger は導入
+(2026-09-14, #6602/#7272) が新しく 25 ASIN しか無い。** 母艦レビューの指摘通り、
+分母は run ログから広く取り直せる。
 
-- K8 の named volume `docker_experience-raw` 上の `mining_ledger.json` を
-  読み取り専用でコピー (`docker cp` 相当。volume には書き込んでいない)
-- home-ops workflow 「Experience Mining (gemma / Antigravity CLI / Threads /
-  Yahoo / K8)」の run 34788591470 (2026-09-13T23:03Z) と 34896203769
-  (2026-09-14T20:59Z) の `0_mine.txt` ステップログ (`third_party fetch failed for
-  <url>: ... — skip` の warning 行を fetch 失敗として拾う)
+- `omochairo/amazon-home-ops` workflow 「Experience Mining (gemma / Antigravity
+  CLI / Threads / Yahoo / K8)」の **success run 全 66 件** (third_party 経路が
+  配線された #3205 の 2026-07-15T04:40:03Z から 2026-09-15T20:20:44Z まで、
+  観測できる全期間) の `0_mine.txt` ステップログを `gh api
+  repos/omochairo/amazon-home-ops/actions/runs/<id>/logs` で 1 本ずつ逐次取得
+  (K8 volume へのアクセスがこの実行環境から無いため、ledger 自体はこの追補では
+  未使用。run ログのみで分母を作った)
+- `mine_experience.py` の `run()` が出す `<ASIN>: wrote .../experience.json
+  (N snippets)` / `<ASIN>: 0 snippets — not written` の和集合を「third_party を
+  実際に試みた ASIN」とした (`parse_mined_asins`)
+- **分母は 25 → 133 ASIN に広がった。** 母艦レビューの見積り (113 ASIN) とは
+  ずれている `[推]` — 内訳は次節
 
-`[実]` **ledger には現在 25 ASIN しか無い。** 上記 2 run の「ASIN: wrote ...
-(N snippets)」ログ行と 1:1 で一致し、ledger がこの 2 run 分の記録しか持っていない
-ことを確認した (それより古い記録は無い — 機構導入から日が浅いか、volume が最近
-作り直された可能性があるが特定はしていない `[未]`)。**V1 の歩留まり集計は
-この 25 ASIN が母数**であり、特に blog 種別の「試した URL」はわずか 3 件しかない。
-比率は出るが統計的な重みはほぼ無い。数値は下表の通り報告するが、**この N で本番判断
-はできない** (V2 が必要な理由そのもの)。
+### 母艦レビューの見積り (113 / 605 / 175) との差分について `[実]`
 
-### 結果: corpus 全体のホスト種別分布 `[実]`
+検算した結果、**`fresh (<30d) skip` と `no jan_code` の skip 行は
+`mine_experience.py` (third_party マイニング) のものではなく、同じ `0_mine.txt`
+ステップの中で先に走る `crawl_yahoo_reviews.py` (Yahoo レビュー取得レーン) の
+ログだった。** 両スクリプトは同じ `select_targets` プールを使い、同じ
+`"<ASIN>: 対象 N ASIN"` の書式でログを出すため、単純な文字列一致では混ざる
+(`"<ASIN>: wrote ..."` も両方にあるが、mine_experience.py 側は末尾が
+`(N snippets)`、crawl_yahoo_reviews.py 側は `(api count=N, M review bodies)` で
+終わり、区別できる)。
 
-2,003 ASIN・8,940 URL 全体 (分母を絞らない、V1 タスク①)。
+- `mine_experience.py` 自身の対象選定 (`select_mining_targets` の鮮度スキップ、
+  `REASON_LABELS` の `fresh` / `no_yield_recent`) は 2026-09-14 の #6602 以降にしか
+  無く、`選定: {...}` の集計行も 66 run 中 3 run にしか出ていない。つまり
+  「605 件 fresh skip / 175 件 no jan_code」は third_party レーンの分母計算には
+  使えない値 — Yahoo レビュー取得レーンの skip 理由であって、third_party
+  マイニングが対象から外した理由ではない
+- 上記を踏まえ、本追補では skip 件数の列は出していない (混ざった値を出すより、
+  「試した ASIN の和集合」だけを分母として使う方が安全)
+- 「実際に掘った ASIN」113 → **133** も、上と同じ理由 (Yahoo レーンの `wrote` 行を
+  third_party 側に誤って混ぜていた可能性) で見積りがずれたと考えられる `[推]`
+- 参考: snippet が最後まで 0 件だった ASIN (66 run のどこかで `0 snippets` に
+  なり、かつ一度も `wrote` されていない) は **14 件** (母艦レビューの見積り
+  「2 件」とは異なる `[実]`)。生存者バイアスは母艦レビューの言う通り小さいが、
+  ゼロではない
+
+## 結果: corpus 全体のホスト種別分布 `[実]` (変更なし)
+
+2,003 ASIN・8,940 URL 全体 (分母を絞らない)。third_party_sources.json 自体は
+前回計測から変わっていないため、母艦レビューの検算 (ec 3,369 / other 2,991 /
+sns 1,274 / maker 766 / media 324 / blog 216) と完全一致。
 
 | 種別 | 件数 | 割合 |
 |---|---:|---:|
@@ -50,65 +78,111 @@
 | media | 324 | 3.6% |
 | blog | 216 | 2.4% |
 
-`other` の上位ホスト (抜粋。全リストは `v1_results.json` の `top_other_hosts`):
-facebook.com (56) / reddit.com (52) / educe-web.craypas.co.jp (37) /
-play.google.com (33) / jp.pinterest.com (28) / pinterest.com (24) /
-anpanman.jp (18) / apps.apple.com (15) / detail.chiebukuro.yahoo.co.jp (15) /
-family-games.blog (13) / saiyasune.com (13)。facebook / reddit / pinterest は
-実質 SNS だが、依頼コメントの sns 定義 (youtube / instagram / x / threads /
-tiktok の 5 host) を勝手に広げず `other` のまま報告する。
+## 結果: 歩留まり (分母 = run ログの tried ASIN 133 件) `[実]`
 
-### 結果: 歩留まり (分母 = ledger の tried ASIN 25 件) `[実]` (N 小、参考値)
+| 種別 | 試した URL | 取得失敗 | 取得成功 | snippet 出た URL | snippet 数 | URL あたり (試行分母) | URL あたり (成功分母) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| blog | 9 | 0 | 9 | 6 | 12 | 1.33 | **1.33** |
+| ec | 93 | 49 | 44 | 6 | 11 | 0.12 | **0.25** |
+| maker | 22 | 3 | 19 | 2 | 3 | 0.14 | 0.16 |
+| media | 8 | 0 | 8 | 3 | 6 | 0.75 | 0.75 |
+| sns | 37 | 0 | 37 | 6 | 6 | 0.16 | 0.16 |
+| other | 40 | 6 | 34 | 9 | 20 | 0.50 | 0.59 |
 
-| 種別 | 試した URL | 取得失敗 | snippet 出た URL | snippet 数 | URL あたり snippet | 不満 |
-|---|---:|---:|---:|---:|---:|---:|
-| blog | 3 | 0 | 2 | 4 | **1.33** | 1 |
-| ec | 25 | 13 | 2 | 4 | 0.16 | 0 |
-| maker | 4 | 1 | 0 | 0 | 0.00 | 0 |
-| media | 2 | 0 | 1 | 2 | 1.00 | 0 |
-| sns | 11 | 0 | 1 | 1 | 0.09 | 0 |
-| other | 8 | 1 | 3 | 6 | 0.75 | 0 |
+blog は取得失敗が 0 件のため両分母で同じ値。**ec は取得成功分母にすると
+0.12 → 0.25 に上がる** (母艦レビュー追補②の通り、試行分母だけでは「レビューが
+無い」と「取れていない」が混ざる)。blog / ec の比は試行分母で 11.3 倍、成功分母
+でも **5.3 倍** — 分母の取り方を変えても blog 優位は変わらない。
 
 aspect 内訳は `v1_results.json` の `yield_by_host_category.<種別>.aspect_breakdown`
-に全種別ぶん出力済み (不満以外も含む)。
+に全種別ぶん出力済み。
 
-### 追加測定: blog の本文が JS シェルだけになっている割合 `[実]`
+## ec のホスト別内訳 (追補②) `[実]`
 
-blog 種別 (corpus 全体、216 URL) から固定 seed で 30 URL を再取得
-(`HONEST_UA`・1 秒 1 リクエスト・検索結果ページ除外)。判定は「本文テキストに
-商品名 (トークン単位) かブランド名が含まれるか」。
+| ホスト | 試した URL | 取得失敗 | 取得成功 | 失敗率 |
+|---|---:|---:|---:|---:|
+| yodobashi.com | 16 | 15 | 1 | 94% |
+| biccamera.com | 13 | 13 | 0 | **100%** |
+| kakaku.com | 19 | 0 | 19 | 0% |
+| other_ec (上記以外) | 46 | 21 | 25 | 46% |
+
+母艦レビューの指摘 (「ヨドバシとビックカメラは本番と同じ UA で母艦からも
+robots.txt を含めて全部タイムアウトした」) を裏付ける実測になった。**yodobashi /
+biccamera は事実上取得不能**で、この 2 ホストの「URL あたり snippet 数」が低いのは
+レビューが無いからではなく取れていないから。kakaku.com は逆に取得失敗が 0 件で、
+ec カテゴリ内で唯一 snippet が複数出ている (4 件)。「ec は歩留まりが悪い」という
+表現は host によって事情が全く違う、という点は docs に明記しておく。
+
+## snippet を出した URL のホスト一覧 (追補③) `[実]`
+
+上位 (全リストは `v1_results.json` の `snippet_source_hosts`):
+
+| ホスト | 種別 | snippet 数 | snippet が出た URL 数 |
+|---|---|---:|---:|
+| note.com | blog | 6 | 3 |
+| ameblo.jp | blog | 5 | 2 |
+| youtube.com | sns | 4 | 4 |
+| suisui-oekaki.com | **other** | 4 | 2 |
+| kakaku.com | ec | 4 | 2 |
+| niko-shufublog.com | **other** | 4 | 1 |
+| eurobus.jp | ec | 4 | 2 |
+| prtimes.jp | media | 3 | 1 |
+| lettuceclub.net | **other** | 3 | 1 |
+| oyakame.com | **other** | 3 | 1 |
+
+母艦レビューの指摘通り、独自ドメインの個人ブログ (`suisui-oekaki.com` /
+`niko-shufublog.com` / `oyakame.com` / `lettuceclub.net` 等) は `HOST_CATEGORIES`
+の `blog` (ブログサービスのドメイン限定) に入らず `other` に分類されている。
+これらを合算すると **snippet を出しているホストの実質「ブログ的」な比率は
+表の `blog` 単独 (12 件) より高い** — ただし分類表自体は変更しない (母艦レビュー
+の指示通り)。**V2 の Q2 (`include_domains` に blog 種別のドメインを渡す設計) は
+これら独自ドメインの個人ブログを取りこぼす**、という点を V2 設計時の注意点として
+ここに残す。
+
+## V2 に進む条件の判定 (追補④: サンプル下限 + ブートストラップ) `[実]`
+
+母艦レビューが固定した 4 条件 (`evaluate_v2_conditions`):
+
+1. blog の URL あたり snippet 数 (**取得成功 URL 分母**) が ec の 3 倍以上
+2. blog の URL がコーパス全体の 10% 未満
+3. blog の試した URL が 10 件以上
+4. ASIN 単位ブートストラップ (2,000 回・seed 4841 固定、種別ごとに snippet 数の
+   合計 / 取得成功 URL 数の合計を取る) で、blog/ec 比の 95% 信頼区間の下限が
+   1 を超える
+
+| 条件 | 値 | 判定 |
+|---|---|---|
+| 1. 比 ≥ 3 倍 (成功分母) | 1.33 / 0.25 = 5.3 倍 | 満たす |
+| 2. blog 比率 < 10% | 2.4% | 満たす |
+| 3. blog 試行 URL ≥ 10 | **9** | **満たさない** |
+| 4. ブートストラップ 95% CI 下限 > 1 | 下限 2.00 (2,000 回中 1,998 回が有効) | 満たす |
+
+**条件 3 (サンプル下限) を満たさない。** 133 ASIN まで分母を広げても blog の
+試行 URL は 9 件と、10 件の下限にわずかに届かない。母艦レビューが事前に固定した
+決定表の通り、この場合は:
+
+> 3 を満たさない (113 ASIN に広げても blog が 10 URL 未満) → V1 では判定不能と
+> して報告し、止まる。V2 に進むかは owner の判断に上げる
+
+**→ 結論: `v1_inconclusive`。V2 には進まない。** 1・2・4 は条件を満たしており
+(特にブートストラップの下限 2.0 は 9 件という小標本でも比較的安定して 1 を
+超えている)、方向性としては blog 優位を示す材料は揃っているが、**サンプル数の
+下限という事前約束を機械的に優先する** (数値が良く見えるからと下限を後から
+緩めない)。
+
+## 追加測定: blog の本文が JS シェルだけになっている割合 `[実]` (変更なし)
+
+blog 種別 (corpus 全体、216 URL) から固定 seed (4841) で 30 URL を再取得
+(`HONEST_UA`・1 秒 1 リクエスト・検索結果ページ除外)。third_party_sources.json
+自体が変わっていないため、結果は元の V1 と同一。
 
 - 取得成功 30/30、判定対象 30 件
-- **本文が薄い (商品名/ブランド名を含まない) 件数: 1/30 (3.3%)**
+- 本文が薄い (商品名/ブランド名を含まない) 件数: 1/30 (3.3%)
 - ameblo.jp / note.com / hatenablog.jp 系はいずれも SSR で、通常の GET で本文が
-  読めている。**JS シェル問題は blog 種別では確認されなかった** (EC 系サイトで
-  よく見る症状とは違う)
-
-この計測だけは分母を「体験談マイニングが実際に試した ASIN」(25 件、うち blog は
-3 URL) に絞らず、third_party_sources.json 全体の blog URL (216 件) から抽出した。
-歩留まり計算 (上表) は生存者バイアスを避けるため ledger に縛る設計だが、この測定は
-「blog ホストの本文品質そのもの」を見るのが目的で、母数を 3 件に絞ると測定不能に
-なるため。
-
-### V2 に進む条件の判定
-
-依頼コメントに事前固定された条件:
-
-- blog 種別の「URL あたり snippet 数」が ec 種別の 3 倍以上
-  → 実測 1.33 / 0.16 = **8.3 倍** (条件を満たす)
-- blog 種別の URL が全体の 10% 未満
-  → 実測 216 / 8,940 = **2.4%** (条件を満たす)
-
-**数値上は「V2 に進む」の条件を両方満たす。** ただし上記の通り、この判定の根拠は
-blog の「試した URL」がわずか 3 件・snippet 4 件という極小サンプルであり
-(ec は 25 件で相対的にまだ厚い)、**条件式が数値上成立していることと、結論に
-統計的な重みがあることは別**。母艦レビューで、この N でも V2 (Tavily 20 query ×
-2 群) に進める判断が妥当か確認してほしい。
-
-参考として、JS シェル判定 (N=30、corpus 全体から抽出) は blog が「取れば読める」
-ことを裏付けており、歩留まり自体(snippet 化率)が低いことの原因が「取得の失敗」
-ではなさそうだという傍証にはなる。
+  読めている。JS シェル問題は blog 種別では確認されなかった
 
 ## V2
 
-未着手。V1 の母艦レビュー通過後、着手可否を改めて判断する。
+未着手。**V1 は判定不能** (条件 3 未達) のため、V2 に進むかは owner 判断に委ねる。
+進める場合の設計メモ (Q2 の `include_domains`) は上記「snippet を出した URL の
+ホスト一覧」節を参照。

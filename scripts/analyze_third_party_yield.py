@@ -13,29 +13,41 @@ snippet (experience.json の source_url 付き) は少ない。「検索語を�
 分母の作り方が肝心: experience.json は snippet が 0 件だと書かれない (生存者
 バイアス) ので、「third_party_sources.json に URL がある」だけでは分母にならない。
 分母は「体験談マイニングが実際に fetch を試みた URL」に絞る。それは 2 つの記録の
-突き合わせで再構成する:
+突き合わせで再構成する (#4841 母艦レビューで、ledger だけでは分母が細すぎる
+[N=25] と指摘され、run ログを主たる分母源に変更した):
 
-  1. K8 の named volume `experience-raw` 上の `mining_ledger.json` (ASIN 単位で
+  1. home-ops の Experience Mining run ログ (`--run-log`, 複数可)。
+     - `mine_experience.py` の run() が出す `<ASIN>: wrote .../experience.json
+       (N snippets)` / `<ASIN>: 0 snippets — not written` の和集合が「実際に
+       third_party を試みた ASIN」(`parse_mined_asins`)。**crawl_yahoo_reviews.py
+       にも似た文言の行があるが、正規表現の末尾まで見て区別している**
+       (同じログファイルに 2 スクリプトの出力が混在するため — 母艦レビューが
+       指摘した fresh(<30d)/no jan_code の skip 行も実は crawl_yahoo_reviews.py
+       由来で mine_experience.py の選定とは無関係、という事実確認から得た教訓)。
+     - `third_party fetch failed for <url>: ... — skip` の warning 行
+       (gather_third_party が出す) が「取得失敗」。
+  2. K8 の named volume `experience-raw` 上の `mining_ledger.json` (ASIN 単位で
      last_attempt を記録)。**volume は読み取り専用**。`docker cp` 相当でコピーを
-     取ってから、このスクリプトにはローカルパスとして渡す (--ledger)。
-  2. home-ops の Experience Mining run ログの warning 行
-     (`third_party fetch failed for <url>: ... — skip`, mine_experience.py の
-     gather_third_party が出す)。ログファイルをそのままこのスクリプトに渡す
-     (--run-log, 複数可)。
+     取ってから、このスクリプトにはローカルパスとして渡す (--ledger、**任意**)。
+     ledger は導入が新しく (2026-09-14〜) 直近の run しか持たないため、run ログの
+     方が長い期間をカバーできる。指定すれば run ログとの和集合になる。
 
-ledger に載っている ASIN の third_party_sources.json 由来 URL (検索結果ページを
-除く。gather_third_party と同じフィルタ) が「試した URL」。そのうち run ログに
-fetch failed が出ているものが「失敗」。experience.json の snippet で source_url が
-一致するものが「snippet が出た」。
+分母の ASIN 集合の third_party_sources.json 由来 URL (検索結果ページを除く。
+gather_third_party と同じフィルタ) が「試した URL」。そのうち run ログに fetch
+failed が出ているものが「失敗」、それ以外が「取得成功」。experience.json の
+snippet で source_url が一致するものが「snippet が出た」。
 
 Usage:
   python scripts/analyze_third_party_yield.py \\
-      --ledger /tmp/mining_ledger.json \\
       --run-log /tmp/run1.txt --run-log /tmp/run2.txt \\
       --out docs/experience-source-yield/v1_results.json
 
+  # ledger も併用する場合 (省略可)
+  python scripts/analyze_third_party_yield.py \\
+      --ledger /tmp/mining_ledger.json --run-log ... --out ...
+
   # JS シェル判定 (blog 種別から 30 URL だけ再取得。1 秒 1 リクエスト・HONEST_UA)
-  python scripts/analyze_third_party_yield.py --ledger ... --run-log ... \\
+  python scripts/analyze_third_party_yield.py --run-log ... \\
       --js-shell-sample 30 --out ...
 """
 
@@ -46,6 +58,7 @@ import collections
 import json
 import logging
 import pathlib
+import random
 import re
 import sys
 import time
@@ -64,6 +77,16 @@ THIRD_PARTY_NAME = "third_party_sources.json"
 EXPERIENCE_NAME = "experience.json"
 
 _FETCH_FAILED_RE = re.compile(r"third_party fetch failed for (\S+):")
+
+# mine_experience.py の run() が出す行 (mine_asin が gather_third_party を実際に
+# 呼んだ ASIN だけがここに載る)。**crawl_yahoo_reviews.py にも似た文言の
+# "ASIN: wrote ... " 行があるが、そちらは "(api count=N, M review bodies)" で
+# 終わり、この正規表現には一致しない (#4841 母艦レビューで、fresh(<30d)/no jan_code
+# 系の skip 行がこのスクリプトではなく crawl_yahoo_reviews.py のものだと判明した
+# のと同じ理由 — 同じログファイルに 2 つのスクリプトの出力が混在するため、
+# 文言の末尾まで見て区別する必要がある)。
+_MINED_WRITTEN_RE = re.compile(r"([A-Z0-9]{10}): wrote \S*/experience\.json \(\d+ snippets\)")
+_MINED_ZERO_RE = re.compile(r"([A-Z0-9]{10}): 0 snippets — not written")
 
 # ホスト種別分類。判定は host の完全一致 or サフィックス一致 (サブドメイン許容)。
 # **網羅はしない。** third_party_sources.json は 1,900+ distinct host あり、うち
@@ -227,6 +250,26 @@ def load_ledger_tried_asins(path: pathlib.Path) -> set[str]:
     return {a for a in asins if isinstance(a, str)}
 
 
+def parse_mined_asins(paths: list[pathlib.Path]) -> set[str]:
+    """run ログから、mine_experience.py が実際に mine_asin (= gather_third_party) を
+    呼んだ ASIN の集合を返す (#4841 母艦レビュー 追補①)。
+
+    「wrote experience.json」または「0 snippets — not written」のどちらかが出た
+    ASIN の和集合。amazon item not found で早期 return した ASIN (gather_third_party
+    未到達) はどちらのログも出ないため、ここには含まれない。
+    """
+    asins: set[str] = set()
+    for path in paths:
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as e:
+            logger.warning("run log %s が読めません: %s", path, e)
+            continue
+        asins.update(m.group(1) for m in _MINED_WRITTEN_RE.finditer(text))
+        asins.update(m.group(1) for m in _MINED_ZERO_RE.finditer(text))
+    return asins
+
+
 def parse_fetch_failures(paths: list[pathlib.Path]) -> set[str]:
     """run ログから "third_party fetch failed for <url>: ... — skip" 行の URL を集める。
 
@@ -328,17 +371,243 @@ def compute_yield(
     for cat in categories:
         tried = tried_by_category.get(cat, 0)
         failed = failed_by_category.get(cat, 0)
+        success = tried - failed
+        snippet_count = snippet_count_by_category.get(cat, 0)
         out[cat] = {
             "tried_urls": tried,
             "fetch_failed": failed,
+            "fetch_success_urls": success,
             "urls_with_snippet": len(snippet_urls_by_category.get(cat, ())),
-            "snippet_count": snippet_count_by_category.get(cat, 0),
-            "snippet_per_tried_url": (
-                snippet_count_by_category.get(cat, 0) / tried if tried else 0.0
-            ),
+            "snippet_count": snippet_count,
+            "snippet_per_tried_url": (snippet_count / tried if tried else 0.0),
+            # 取得に成功した URL だけを分母にした歩留まり (#4841 母艦レビュー 追補②)。
+            # ec は取得失敗率が高く、snippet_per_tried_url だけだと「レビューが
+            # 無い」のか「取れていない」のか区別できない。
+            "snippet_per_success_url": (snippet_count / success if success else 0.0),
             "aspect_breakdown": dict(aspect_by_category.get(cat, {})),
         }
     return out
+
+
+def compute_yield_per_asin(
+    tried_asins: set[str],
+    sources_by_asin: dict[str, list[dict]],
+    failed_urls: set[str],
+    snippets_by_asin: dict[str, list[dict]],
+) -> dict[str, dict[str, dict[str, int]]]:
+    """ASIN 単位・種別ごとの (tried, fetch_failed, snippet_count)。
+
+    `compute_yield` の集計を ASIN 単位に分解したもの。ASIN 単位のブートストラップ
+    (`bootstrap_category_ratio`) の入力に使う。
+    """
+    out: dict[str, dict[str, dict[str, int]]] = {}
+    for asin in tried_asins:
+        per_cat: dict[str, dict[str, int]] = collections.defaultdict(
+            lambda: {"tried": 0, "fetch_failed": 0, "snippet_count": 0}
+        )
+        url_to_cat: dict[str, str] = {}
+        for r in tried_urls_for_asin(asin, sources_by_asin):
+            cat = classify_host(r["host"])
+            url_to_cat[r["url"]] = cat
+            per_cat[cat]["tried"] += 1
+            if r["url"] in failed_urls:
+                per_cat[cat]["fetch_failed"] += 1
+        for s in snippets_by_asin.get(asin, []):
+            source_url = s.get("source_url")
+            if not isinstance(source_url, str):
+                continue
+            cat = url_to_cat.get(source_url)
+            if cat is None:
+                continue
+            per_cat[cat]["snippet_count"] += 1
+        out[asin] = {cat: dict(v) for cat, v in per_cat.items()}
+    return out
+
+
+def bootstrap_category_ratio(
+    per_asin: dict[str, dict[str, dict[str, int]]],
+    cat_a: str = "blog",
+    cat_b: str = "ec",
+    *,
+    n_iter: int = 2000,
+    seed: int = 4841,
+) -> Optional[dict]:
+    """ASIN 単位のブートストラップで cat_a/cat_b の「URL あたり snippet 数」比の
+    95% 信頼区間を求める (#4841 母艦レビュー 追補④、V2 に進む条件 4)。
+
+    ASIN を重複を許して再標本し (2,000 回・seed 固定)、標本ごとに種別ごとの
+    snippet 数合計 / 取得成功 URL 数合計 の比を取る。分母 (取得成功 URL) が
+    0 になった標本は比が定義できないため捨て、実際に使えた回数を
+    `effective_iterations` に残す。
+    """
+    asins = sorted(per_asin)
+    if not asins:
+        return None
+    rng = random.Random(seed)
+    ratios: list[float] = []
+    for _ in range(n_iter):
+        sample = [asins[rng.randrange(len(asins))] for _ in range(len(asins))]
+        success_a = snippet_a = success_b = snippet_b = 0
+        for asin in sample:
+            stats = per_asin.get(asin, {})
+            a = stats.get(cat_a, {})
+            b = stats.get(cat_b, {})
+            success_a += a.get("tried", 0) - a.get("fetch_failed", 0)
+            snippet_a += a.get("snippet_count", 0)
+            success_b += b.get("tried", 0) - b.get("fetch_failed", 0)
+            snippet_b += b.get("snippet_count", 0)
+        if success_a <= 0 or success_b <= 0:
+            continue
+        rate_a = snippet_a / success_a
+        rate_b = snippet_b / success_b
+        if rate_b == 0:
+            continue
+        ratios.append(rate_a / rate_b)
+    if not ratios:
+        return {
+            "cat_a": cat_a, "cat_b": cat_b, "iterations": n_iter,
+            "effective_iterations": 0, "seed": seed,
+            "ci_low": None, "ci_high": None,
+        }
+    ratios.sort()
+    n = len(ratios)
+    lo_idx = max(0, int(0.025 * n))
+    hi_idx = min(n - 1, int(0.975 * n))
+    return {
+        "cat_a": cat_a, "cat_b": cat_b, "iterations": n_iter,
+        "effective_iterations": n, "seed": seed,
+        "ci_low": ratios[lo_idx], "ci_high": ratios[hi_idx],
+    }
+
+
+def compute_host_breakdown(
+    tried_asins: set[str],
+    sources_by_asin: dict[str, list[dict]],
+    failed_urls: set[str],
+    *,
+    category: str,
+    top_hosts: tuple[str, ...],
+    other_label: str = "other",
+) -> dict[str, dict[str, int]]:
+    """category 内をさらに host 単位に割った取得成否 (#4841 母艦レビュー 追補②)。
+
+    `top_hosts` に無い host は `other_label` にまとめる。「URL あたり snippet 数が
+    低いのはレビューが無いからか、取得に失敗しているからか」をホスト別に見るため。
+    """
+    counts: dict[str, dict[str, int]] = {
+        h: {"tried": 0, "fetch_failed": 0} for h in (*top_hosts, other_label)
+    }
+    for asin in tried_asins:
+        for r in tried_urls_for_asin(asin, sources_by_asin):
+            if classify_host(r["host"]) != category:
+                continue
+            label = r["host"] if r["host"] in top_hosts else other_label
+            counts[label]["tried"] += 1
+            if r["url"] in failed_urls:
+                counts[label]["fetch_failed"] += 1
+    for label, c in counts.items():
+        c["fetch_success"] = c["tried"] - c["fetch_failed"]
+    return {label: c for label, c in counts.items() if c["tried"] > 0}
+
+
+def list_snippet_source_hosts(
+    tried_asins: set[str],
+    sources_by_asin: dict[str, list[dict]],
+    snippets_by_asin: dict[str, list[dict]],
+) -> list[dict]:
+    """snippet を出した URL のホスト一覧 (種別つき、snippet 数の降順)。
+
+    #4841 母艦レビュー 追補③: 独自ドメインの個人ブログ (family-games.blog 等) は
+    HOST_CATEGORIES の "blog" に入らず "other" に分類される。この一覧で
+    「blog 以外に分類されているが実質ブログのホスト」を可視化する。
+    """
+    url_to_host: dict[str, str] = {}
+    for asin in tried_asins:
+        for r in tried_urls_for_asin(asin, sources_by_asin):
+            url_to_host[r["url"]] = r["host"]
+
+    counts: dict[str, int] = collections.Counter()
+    urls_by_host: dict[str, set[str]] = collections.defaultdict(set)
+    for asin in tried_asins:
+        for s in snippets_by_asin.get(asin, []):
+            source_url = s.get("source_url")
+            if not isinstance(source_url, str):
+                continue
+            host = url_to_host.get(source_url)
+            if host is None:
+                continue
+            counts[host] += 1
+            urls_by_host[host].add(source_url)
+
+    return [
+        {
+            "host": host,
+            "category": classify_host(host),
+            "snippet_count": n,
+            "urls_with_snippet": len(urls_by_host[host]),
+        }
+        for host, n in counts.most_common()
+    ]
+
+
+def evaluate_v2_conditions(
+    yield_by_category: dict,
+    corpus: dict,
+    bootstrap: Optional[dict],
+    *,
+    min_tried_urls: int = 10,
+    ratio_threshold: float = 3.0,
+    max_share: float = 0.10,
+) -> dict:
+    """V2 に進む条件の判定 (#4841 母艦レビュー、追補前に固定された 4 条件)。
+
+    1. blog の URL あたり snippet 数 (取得成功 URL 分母) が ec の 3 倍以上
+    2. blog の URL がコーパス全体の 10% 未満
+    3. blog の試した URL が 10 件以上
+    4. ASIN 単位ブートストラップの 95% 信頼区間の下限が 1 を超える
+
+    3 を満たさない場合は「V1 では判定不能」— 1・2・4 を評価しても意味がないので
+    decision を "v1_inconclusive" にして owner 判断へ上げる。
+    """
+    blog = yield_by_category.get("blog", {})
+    ec = yield_by_category.get("ec", {})
+    blog_tried = blog.get("tried_urls", 0)
+    blog_rate = blog.get("snippet_per_success_url", 0.0)
+    ec_rate = ec.get("snippet_per_success_url", 0.0)
+
+    total_urls = corpus.get("total_urls", 0)
+    blog_share = (corpus.get("by_category", {}).get("blog", 0) / total_urls) if total_urls else None
+
+    cond3_sample_floor = blog_tried >= min_tried_urls
+    # 3 (サンプル下限) が不成立でも 1・2・4 の実際の値は隠さず出す — decision の
+    # ゲートは cond3 だけにかけ、値そのものは判定不能でも透明化する
+    cond1_ratio = bool(blog_rate >= ratio_threshold * ec_rate)
+    cond2_share = bool(blog_share is not None and blog_share < max_share)
+    cond4_bootstrap = bool(
+        bootstrap is not None and bootstrap.get("ci_low") is not None
+        and bootstrap["ci_low"] > 1.0
+    )
+
+    if not cond3_sample_floor:
+        decision = "v1_inconclusive"
+    elif cond1_ratio and cond2_share and cond4_bootstrap:
+        decision = "v2_go"
+    else:
+        decision = "v2_no_go"
+
+    return {
+        "decision": decision,
+        "blog_tried_urls": blog_tried,
+        "blog_snippet_per_success_url": blog_rate,
+        "ec_snippet_per_success_url": ec_rate,
+        "blog_corpus_share": blog_share,
+        "conditions": {
+            "1_ratio_ge_3x": cond1_ratio,
+            "2_share_lt_10pct": cond2_share,
+            "3_sample_floor_ge_10": cond3_sample_floor,
+            "4_bootstrap_ci_low_gt_1": cond4_bootstrap,
+        },
+    }
 
 
 def sample_js_shell_check(
@@ -363,8 +632,6 @@ def sample_js_shell_check(
     縛られない — blog ホストの本文品質そのものを見るのが目的で、分母を tried_asins
     (実測では数件しかない) に絞ると標本が小さすぎて測れない。
     """
-    import random
-
     import requests
 
     from mine_experience import resolve_product_identity
@@ -414,30 +681,52 @@ def sample_js_shell_check(
     }
 
 
+EC_TOP_HOSTS = ("yodobashi.com", "biccamera.com", "kakaku.com")
+
+
 def build_report(
     *,
     base: pathlib.Path = PER_ASIN_DIR,
-    ledger_path: pathlib.Path,
+    ledger_path: pathlib.Path | None = None,
     run_log_paths: list[pathlib.Path],
     js_shell_sample: int = 0,
 ) -> dict:
     sources_by_asin = load_third_party_sources(base)
     snippets_by_asin = load_experience_snippets(base)
-    tried_asins = load_ledger_tried_asins(ledger_path)
+    # 分母 = ledger の ASIN (指定があれば) ∪ run ログから読み取れた「実際に
+    # third_party を試みた ASIN」の和集合 (#4841 母艦レビュー 追補①)。
+    # ledger は導入が新しく (2026-09-14〜) 直近の run しか持たないため、
+    # run ログを主たる分母源にできるよう ledger は任意にした。
+    ledger_asins = load_ledger_tried_asins(ledger_path) if ledger_path is not None else set()
+    mined_asins = parse_mined_asins(run_log_paths)
+    tried_asins = ledger_asins | mined_asins
     failed_urls = parse_fetch_failures(run_log_paths)
 
     corpus = compute_corpus_distribution(sources_by_asin)
     yield_by_category = compute_yield(tried_asins, sources_by_asin, failed_urls, snippets_by_asin)
+    per_asin_stats = compute_yield_per_asin(tried_asins, sources_by_asin, failed_urls, snippets_by_asin)
+    bootstrap = bootstrap_category_ratio(per_asin_stats, "blog", "ec")
 
     report = {
         "denominator": {
             "tried_asins": len(tried_asins),
             "tried_asins_list": sorted(tried_asins),
+            "tried_asins_from_ledger": len(ledger_asins),
+            "tried_asins_from_run_logs": len(mined_asins),
             "run_log_files": [str(p) for p in run_log_paths],
             "fetch_failed_urls_observed": len(failed_urls),
         },
         "corpus_distribution": corpus,
         "yield_by_host_category": yield_by_category,
+        "ec_host_breakdown": compute_host_breakdown(
+            tried_asins, sources_by_asin, failed_urls,
+            category="ec", top_hosts=EC_TOP_HOSTS, other_label="other_ec",
+        ),
+        "snippet_source_hosts": list_snippet_source_hosts(
+            tried_asins, sources_by_asin, snippets_by_asin,
+        ),
+        "bootstrap_blog_vs_ec": bootstrap,
+        "v2_decision": evaluate_v2_conditions(yield_by_category, corpus, bootstrap),
     }
     if js_shell_sample > 0:
         # 分母を tried_asins (実測では数件) に絞らない — corpus 全体の blog URL から
@@ -451,7 +740,9 @@ def build_report(
 def _cli() -> int:
     ap = argparse.ArgumentParser(description="第三者ソースのホスト種別ごとの歩留まり分析 (#4841 V1)")
     ap.add_argument("--base", default=str(PER_ASIN_DIR))
-    ap.add_argument("--ledger", required=True, help="mining_ledger.json のコピー (volume 外)")
+    ap.add_argument("--ledger", default=None,
+                    help="mining_ledger.json のコピー (volume 外)。省略可 — 省略時は "
+                         "--run-log から読み取れる ASIN だけを分母にする")
     ap.add_argument("--run-log", action="append", default=[], dest="run_logs",
                     help="Experience Mining run ログ (複数指定可)")
     ap.add_argument("--js-shell-sample", type=int, default=0,
@@ -461,7 +752,7 @@ def _cli() -> int:
 
     report = build_report(
         base=pathlib.Path(args.base),
-        ledger_path=pathlib.Path(args.ledger),
+        ledger_path=pathlib.Path(args.ledger) if args.ledger else None,
         run_log_paths=[pathlib.Path(p) for p in args.run_logs],
         js_shell_sample=args.js_shell_sample,
     )
