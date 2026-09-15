@@ -277,7 +277,9 @@ pages:
     expire_in: 1 day
 
 # #3059 Day2: Cloudflare エッジキャッシュの purge。
-# navi.omcha.jp プロキシ化 + Cache Rule (Edge TTL 1h) 稼働後、デプロイ反映を即時化する。
+# navi.omcha.jp プロキシ化 + Cache Rule 稼働後、デプロイ反映を即時化する。
+# (Cache Rule `navi-edge-cache` の HTML Edge TTL は 1h → 4h → 2026-09-15 に 24h。
+#  変更時はここで消去されるので、TTL を長くしても古いページは残らない前提。#7386)
 # - postdeploy ステージに置く理由: gitlab.com では pages ジョブ成功後に特殊ジョブ
 #   pages:deploy (deploy ステージ) が実際の配信反映を行う。purge を GitHub 側
 #   40-mirror-to-gitlab.yml に置くと「push 直後・ビルド完了前」に走ってしまい
