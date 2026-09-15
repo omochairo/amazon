@@ -6,8 +6,10 @@ M1-b: 同じ3回分のnarrativeについて、情報利得の指標 (固有か�
       裏付けの無い文の数) を計算する。この指標自身のノイズの床もM1-aと同じ方法
       (seedだけ変えた繰り返し) で出す。
 M1-c: 「素材投入前後の版がgit履歴に両方ある記事」のペアで、指標がその既知の差を
-      検出できるかを検証する。投入後の版の方が指標が高く、その差がノイズの床の
-      2倍を超えれば「物差しとして採用」。
+      検出できるかを検証する。対の差 (新−旧) について、数 (固有かつ裏付けあり
+      の文の数) と率 (同 ÷ 総文数) の両方でブートストラップ95%信頼区間が0を
+      含まない (正の側) ときだけ「物差しとして採用」(#4841 M1-c R1・R2、
+      母艦レビューでの判定の固定し直し)。
 
 生成物 (各段の生の入出力) はリポジトリ外 (--run-dir 既定: ~/multistage_runs) に置き、
 コミットしない。PRに含めるのは集計結果 (--results-out) だけ。
@@ -29,6 +31,7 @@ import requests
 from scripts.audit_experience_usage import load_experience_records
 from scripts.compute_semantic_related import DEFAULT_RURI_URL, discover_articles
 from scripts.experimental.multistage_brief import corpus, noise_floor, raw_material, sentence_metrics
+from scripts.experimental.multistage_brief.bootstrap import bootstrap_mean_ci, ci_excludes_zero_on_positive_side
 from scripts.experimental.multistage_brief.ollama_client import (
     DEFAULT_MODEL,
     DEFAULT_NUM_CTX,
@@ -53,6 +56,8 @@ VALIDATION_PAIR_SAMPLE_SEED = 20260914
 SPOT_CHECK_SAMPLE_SIZE = 20
 SPOT_CHECK_SEED = 20260914
 MATERIAL_EXCERPT_LEN = 1200
+BOOTSTRAP_SEED = 20260914
+BOOTSTRAP_N_RESAMPLES = 10_000
 
 
 def _now_iso() -> str:
@@ -139,9 +144,12 @@ def find_valid_rewrite_pairs(cwd: str | None = None) -> dict[str, Any]:
 def select_validation_pairs(
     valid_pairs: list[dict[str, Any]], n: int = VALIDATION_PAIR_SAMPLE_SIZE, seed: int = VALIDATION_PAIR_SAMPLE_SEED,
 ) -> list[dict[str, Any]]:
-    """処理コストを抑えるため、有効なペアから固定 seed で最大 n 件サンプリングする。"""
+    """有効なペアから固定 seed で最大 n 件サンプリングする。n <= 0 は「全件」を意味する
+
+    (#4841 M1-c R3: 15件のサンプルでは信頼区間が広すぎるため、有効な58件を全件処理する)。
+    """
     ordered = sorted(valid_pairs, key=lambda p: p["asin"])
-    if len(ordered) <= n:
+    if n <= 0 or len(ordered) <= n:
         return ordered
     rng = random.Random(seed)
     return sorted(rng.sample(ordered, n), key=lambda p: p["asin"])
@@ -171,8 +179,9 @@ def run(
     run_dir: pathlib.Path = DEFAULT_RUN_DIR,
     results_out: pathlib.Path = pathlib.Path(DEFAULT_RESULTS_OUT),
     seeds: tuple[int, ...] = noise_floor.DEFAULT_SEEDS,
-    pair_sample_size: int = VALIDATION_PAIR_SAMPLE_SIZE,
+    pair_sample_size: int = 0,
     asin_limit: int = 0,
+    reuse_group_a: bool = False,
 ) -> dict[str, Any]:
     session = requests.Session()
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -180,48 +189,70 @@ def run(
     this_run_dir.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
 
-    # --- ASIN 選定 (T3 と同じ10件) ---
+    # --- ASIN 選定 (T3 と同じ10件、群Aを再利用する場合もログ用に毎回計算する。
+    #     ネットワークを使わず安価なので再計算しても問題ない) ---
     selection = select_asins()
     selected = selection["selected"]
     if asin_limit:
         selected = selected[:asin_limit]
 
-    # --- M1-a: 群Aをseed違いで複数回 ---
-    logger.info("M1-a: running group A x %d seeds x %d ASIN(s)", len(seeds), len(selected))
-    runs = noise_floor.run_noise_floor_experiment(
-        selected, seeds=seeds, ollama_url=ollama_url, ruri_url=ruri_url, model=model, num_ctx=num_ctx,
-        session=session,
-    )
-    (this_run_dir / "group_a_runs.json").write_text(
-        json.dumps(runs, ensure_ascii=False, indent=2), encoding="utf-8",
-    )
-    uniqueness_floor = noise_floor.compute_noise_floor(runs, metric_key="max_sim")
-
-    # --- M1-b: 同じrunsに情報利得指標を追加 ---
-    logger.info("M1-b: computing information gain for %d run(s)", len(runs))
     all_sentence_records: list[dict[str, Any]] = []
-    for r in runs:
-        gain = compute_information_gain_for_asin(
-            r["asin"], r["category"], r["narrative"], r["material_text"],
-            ollama_url=ollama_url, ruri_url=ruri_url, model=model, num_ctx=num_ctx, session=session,
-        )
-        r["unique_and_supported_count"] = gain["unique_and_supported_count"]
-        r["unsupported_count"] = gain["unsupported_count"]
-        r["unresolved_count"] = gain["unresolved_count"]
-        r["sentence_count"] = gain["sentence_count"]
-        material_excerpt = r["material_text"][:MATERIAL_EXCERPT_LEN]
-        for row in gain["per_sentence"]:
-            all_sentence_records.append({
-                **row, "asin": r["asin"], "seed": r["seed"], "source": "group_a",
-                "material_text_excerpt": material_excerpt,
-            })
-    (this_run_dir / "group_a_runs_with_gain.json").write_text(
-        json.dumps(runs, ensure_ascii=False, indent=2), encoding="utf-8",
-    )
-    info_gain_floor = noise_floor.compute_noise_floor(runs, metric_key="unique_and_supported_count")
+    group_a_reused_from: str | None = None
 
-    primary_seed = seeds[0]
-    per_asin_primary = [r for r in runs if r["seed"] == primary_seed]
+    if reuse_group_a and results_out.exists():
+        # M1-a/M1-b (群Aの再生成) は #4841 M1-c R1-R3 の指摘 (判定の組み立て・
+        # 全件処理) と無関係で、数値も変わらない。生成には gemma 呼び出しが
+        # 30回要り、無駄にコストと待ち時間を積む (実測で全体の半分弱)。
+        # 既存の集計 (results_out) から再利用し、M1-c だけ処理し直す。
+        logger.info("M1-a/M1-b: reusing prior group A results from %s", results_out)
+        prior = json.loads(results_out.read_text(encoding="utf-8"))
+        uniqueness_floor = prior["m1a_uniqueness_noise_floor"]
+        info_gain_floor = prior["m1b_information_gain_noise_floor"]
+        per_asin_primary = prior["m1b_per_asin_primary_seed"]
+        group_a_reused_from = str(results_out)
+    else:
+        # --- M1-a: 群Aをseed違いで複数回 ---
+        logger.info("M1-a: running group A x %d seeds x %d ASIN(s)", len(seeds), len(selected))
+        runs = noise_floor.run_noise_floor_experiment(
+            selected, seeds=seeds, ollama_url=ollama_url, ruri_url=ruri_url, model=model, num_ctx=num_ctx,
+            session=session,
+        )
+        (this_run_dir / "group_a_runs.json").write_text(
+            json.dumps(runs, ensure_ascii=False, indent=2), encoding="utf-8",
+        )
+        uniqueness_floor = noise_floor.compute_noise_floor(runs, metric_key="max_sim")
+
+        # --- M1-b: 同じrunsに情報利得指標を追加 ---
+        logger.info("M1-b: computing information gain for %d run(s)", len(runs))
+        for r in runs:
+            gain = compute_information_gain_for_asin(
+                r["asin"], r["category"], r["narrative"], r["material_text"],
+                ollama_url=ollama_url, ruri_url=ruri_url, model=model, num_ctx=num_ctx, session=session,
+            )
+            r["unique_and_supported_count"] = gain["unique_and_supported_count"]
+            r["unsupported_count"] = gain["unsupported_count"]
+            r["unresolved_count"] = gain["unresolved_count"]
+            r["sentence_count"] = gain["sentence_count"]
+            material_excerpt = r["material_text"][:MATERIAL_EXCERPT_LEN]
+            for row in gain["per_sentence"]:
+                all_sentence_records.append({
+                    **row, "asin": r["asin"], "seed": r["seed"], "source": "group_a",
+                    "material_text_excerpt": material_excerpt,
+                })
+        (this_run_dir / "group_a_runs_with_gain.json").write_text(
+            json.dumps(runs, ensure_ascii=False, indent=2), encoding="utf-8",
+        )
+        info_gain_floor = noise_floor.compute_noise_floor(runs, metric_key="unique_and_supported_count")
+
+        primary_seed = seeds[0]
+        per_asin_primary = [
+            {
+                "asin": r["asin"], "unique_and_supported_count": r["unique_and_supported_count"],
+                "unsupported_count": r["unsupported_count"], "unresolved_count": r["unresolved_count"],
+                "sentence_count": r["sentence_count"],
+            }
+            for r in runs if r["seed"] == primary_seed
+        ]
 
     # --- M1-c: リライトペアでの指標検証 ---
     logger.info("M1-c: searching for rewrite pairs")
@@ -256,25 +287,62 @@ def run(
                 "material_text_excerpt": material_excerpt,
             })
 
+        old_count = old_gain["unique_and_supported_count"]
+        new_count = new_gain["unique_and_supported_count"]
+        old_sentences = old_gain["sentence_count"]
+        new_sentences = new_gain["sentence_count"]
+        old_ratio = round(old_count / old_sentences, 4) if old_sentences else None
+        new_ratio = round(new_count / new_sentences, 4) if new_sentences else None
+
         pair_results.append({
             "asin": asin, "category": category,
             "old_date": pair["old_date"], "new_date": pair["new_date"], "generated_at": pair["generated_at"],
-            "old_unique_and_supported_count": old_gain["unique_and_supported_count"],
-            "new_unique_and_supported_count": new_gain["unique_and_supported_count"],
-            "diff": new_gain["unique_and_supported_count"] - old_gain["unique_and_supported_count"],
+            "old_sentence_count": old_sentences,
+            "new_sentence_count": new_sentences,
+            "old_unique_and_supported_count": old_count,
+            "new_unique_and_supported_count": new_count,
+            "diff_count": new_count - old_count,
+            "old_ratio": old_ratio,
+            "new_ratio": new_ratio,
+            "diff_ratio": (
+                round(new_ratio - old_ratio, 4) if old_ratio is not None and new_ratio is not None else None
+            ),
             "old_unsupported_count": old_gain["unsupported_count"],
             "new_unsupported_count": new_gain["unsupported_count"],
+            "diff_unsupported_count": new_gain["unsupported_count"] - old_gain["unsupported_count"],
         })
     (this_run_dir / "rewrite_pair_results.json").write_text(
         json.dumps(pair_results, ensure_ascii=False, indent=2), encoding="utf-8",
     )
 
-    floor = info_gain_floor["floor"] or 0.0
-    diffs = [p["diff"] for p in pair_results]
-    improved = sum(1 for d in diffs if d > 0)
-    mean_diff = round(sum(diffs) / len(diffs), 4) if diffs else None
-    exceeds_floor = [d for d in diffs if d > 2 * floor]
-    metric_adopted = bool(diffs) and (mean_diff is not None) and (mean_diff > 2 * floor)
+    # --- 判定の固定し直し (母艦レビュー R1・R2、#4841 M1-c) ---
+    # 「平均差 > 1件あたりのノイズの床」は比べる対象を間違えていた (床は1件の
+    # ばらつき、平均差は15件超の平均のばらつき)。平均差そのものをブートストラップで
+    # 直接推定し、数・率の両方で95%信頼区間が0を含まない (正の側) ときだけ採用する。
+    # 1つだけ満たす場合は「文章量の差で説明できる」として不採用 (R2)。
+    count_diffs = [p["diff_count"] for p in pair_results]
+    ratio_diffs = [p["diff_ratio"] for p in pair_results if p["diff_ratio"] is not None]
+    unsupported_diffs = [p["diff_unsupported_count"] for p in pair_results]
+    improved = sum(1 for d in count_diffs if d > 0)
+
+    count_ci = bootstrap_mean_ci(count_diffs, seed=BOOTSTRAP_SEED, n_resamples=BOOTSTRAP_N_RESAMPLES)
+    ratio_ci = bootstrap_mean_ci(ratio_diffs, seed=BOOTSTRAP_SEED, n_resamples=BOOTSTRAP_N_RESAMPLES)
+    # 裏付けの無い文の数は同じ手法で信頼区間だけ報告する (判定には使わない。
+    # 修辞的な文を一律に不支持扱いしてしまう問題があるため、母艦レビューの指示どおり)。
+    unsupported_ci = bootstrap_mean_ci(unsupported_diffs, seed=BOOTSTRAP_SEED, n_resamples=BOOTSTRAP_N_RESAMPLES)
+
+    count_significant = ci_excludes_zero_on_positive_side(count_ci)
+    ratio_significant = ci_excludes_zero_on_positive_side(ratio_ci)
+    metric_adopted = count_significant and ratio_significant
+
+    if metric_adopted:
+        verdict = "採用: 数・率いずれもブートストラップ95%信頼区間 (10,000回) が0を含まない (正の側)"
+    elif count_significant and not ratio_significant:
+        verdict = "不採用: 数では信頼区間が0を含まないが、率では0をまたぐ (文章量の差で説明できる可能性を排除できない)"
+    elif ratio_significant and not count_significant:
+        verdict = "不採用: 率では信頼区間が0を含まないが、数では0をまたぐ"
+    else:
+        verdict = "不採用: 数・率いずれも信頼区間が0をまたぐ"
 
     validation = {
         "pair_search": {
@@ -289,15 +357,12 @@ def run(
             "processed_pair_count": len(pair_results),
         },
         "pair_results": pair_results,
-        "mean_diff": mean_diff,
         "improved_pair_count": improved,
-        "floor": floor,
-        "pairs_exceeding_2x_floor": len(exceeds_floor),
+        "count_diff_bootstrap_ci": count_ci,
+        "ratio_diff_bootstrap_ci": ratio_ci,
+        "unsupported_count_diff_bootstrap_ci": unsupported_ci,
         "metric_adopted": metric_adopted,
-        "verdict": (
-            "採用: 投入後の版で固有かつ裏付けありの文の数が増加し、床の2倍を超えた"
-            if metric_adopted else "この指標では測れない (床の2倍を超えなかった)"
-        ),
+        "verdict": verdict,
     }
 
     spot_check = entailment_spot_check_sample(all_sentence_records)
@@ -317,14 +382,8 @@ def run(
         },
         "m1a_uniqueness_noise_floor": uniqueness_floor,
         "m1b_information_gain_noise_floor": info_gain_floor,
-        "m1b_per_asin_primary_seed": [
-            {
-                "asin": r["asin"], "unique_and_supported_count": r["unique_and_supported_count"],
-                "unsupported_count": r["unsupported_count"], "unresolved_count": r["unresolved_count"],
-                "sentence_count": r["sentence_count"],
-            }
-            for r in per_asin_primary
-        ],
+        "m1b_per_asin_primary_seed": per_asin_primary,
+        "group_a_reused_from": group_a_reused_from,
         "m1c_validation": validation,
         "entailment_spot_check_sample": spot_check,
         "per_asin_run_dir": str(this_run_dir),
@@ -347,8 +406,16 @@ def main() -> int:
     ap.add_argument("--run-dir", default=str(DEFAULT_RUN_DIR))
     ap.add_argument("--results-out", default=DEFAULT_RESULTS_OUT)
     ap.add_argument("--seeds", default=",".join(str(s) for s in noise_floor.DEFAULT_SEEDS))
-    ap.add_argument("--pair-sample-size", type=int, default=VALIDATION_PAIR_SAMPLE_SIZE)
+    ap.add_argument(
+        "--pair-sample-size", type=int, default=0,
+        help="M1-c で処理するペア数の上限 (0=有効な全件。#4841 M1-c R3)",
+    )
     ap.add_argument("--asin-limit", type=int, default=0, help="ASIN 数の上限 (0=全10件、スモーク用)")
+    ap.add_argument(
+        "--reuse-group-a", action="store_true",
+        help="M1-a/M1-b (群Aの再生成) を省略し、--results-out にある既存の集計から再利用する"
+        " (#4841 M1-c R3: M1-cだけ全件処理し直すときのコスト削減用)",
+    )
     args = ap.parse_args()
 
     seeds = tuple(int(s) for s in args.seeds.split(","))
@@ -356,6 +423,7 @@ def main() -> int:
         ollama_url=args.ollama_url, ruri_url=args.ruri_url, model=args.model, num_ctx=args.num_ctx,
         run_dir=pathlib.Path(args.run_dir), results_out=pathlib.Path(args.results_out),
         seeds=seeds, pair_sample_size=args.pair_sample_size, asin_limit=args.asin_limit,
+        reuse_group_a=args.reuse_group_a,
     )
     return 0
 

@@ -31,6 +31,12 @@ class SelectValidationPairsTest(unittest.TestCase):
         b = select_validation_pairs(pairs, n=5, seed=2)
         self.assertNotEqual([p["asin"] for p in a], [p["asin"] for p in b])
 
+    def test_n_zero_or_negative_returns_all_without_sampling(self):
+        pairs = [{"asin": f"B00000000{i}"} for i in range(20)]
+        result = select_validation_pairs(pairs, n=0)
+        self.assertEqual(len(result), 20)
+        self.assertEqual([p["asin"] for p in result], sorted(p["asin"] for p in pairs))
+
 
 class EntailmentSpotCheckSampleTest(unittest.TestCase):
     def test_only_judged_records_are_eligible(self):
