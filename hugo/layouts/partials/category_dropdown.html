@@ -38,7 +38,6 @@
 {{- range .groups }}
   {{- $g := . }}
   {{- $children := slice }}
-  {{- $total := 0 }}
   {{- range $tag := .tags }}
     {{- /* 解決順: (1) title 逆引き (#2817 スラッグ移行後の主経路)
            (2) site.Taxonomies.tags の exact key (後方互換)
@@ -66,15 +65,20 @@
       {{- $hubURL := partial "hub_for_tag.html" $tag }}
       {{- if $hubURL }}{{- $url = $hubURL }}{{- end }}
       {{- $children = $children | append (dict "name" $tag "count" $count "url" $url) }}
-      {{- $total = add $total $count }}
     {{- end }}
   {{- end }}
   {{- if gt (len $children) 0 }}
     {{- /* 子タグは記事件数の降順に表示 (グループ自体の並びはキュレーション順を維持)。 */ -}}
     {{- $children = sort $children "count" "desc" }}
-    {{- $groups = $groups | append (dict "emoji" $g.emoji "name" $g.name "slug" $g.slug "total" $total "children" $children) }}
+    {{- $groups = $groups | append (dict "emoji" $g.emoji "name" $g.name "slug" $g.slug "children" $children) }}
   {{- end }}
 {{- end }}
+{{- /* #7386: **件数は表示しない。** このナビは全ページ (約 7,400 枚) に入るので、
+       件数を出すと記事が 1 本増えるだけで全ページの HTML が変わり、デプロイ後の
+       エッジキャッシュ消去が毎回全消去になっていた (2026-09-15 実測: 9 デプロイ中 5 回)。
+       件数を外すと記事追加デプロイの差分は 7,411 → 539 件。
+       件数は並び順 (降順) とグループの出し分け (0 件は描画しない) にだけ使う。
+       並び順が入れ替わったときは同じく全ページが変わるが、1 本の追加では稀。 */ -}}
 {{- if gt (len $groups) 0 }}
 <nav class="cat-nav" aria-label="おもちゃの種類から探す">
     <p class="cat-nav-title"><span aria-hidden="true">🧸</span> おもちゃの種類から探す</p>
@@ -85,7 +89,6 @@
                 aria-controls="cat-panel-{{ .slug }}" data-cat-target="cat-panel-{{ .slug }}">
                 <span class="cat-summary-emoji" aria-hidden="true">{{ .emoji }}</span>
                 <span class="cat-summary-name">{{ .name }}</span>
-                <span class="cat-summary-count">{{ .total }}</span>
             </button>
         </li>
         {{- end }}
@@ -97,7 +100,6 @@
             <li>
                 <a class="cat-link" href="{{ .url }}">
                     <span class="cat-link-name">{{ .name }}</span>
-                    <span class="cat-count" aria-label="{{ .count }}件の記事">{{ .count }}</span>
                 </a>
             </li>
             {{- end }}
