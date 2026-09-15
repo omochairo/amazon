@@ -49,17 +49,22 @@ def _module_names() -> list[str]:
 
 
 # amazon-home-ops の workflow が `python3 -m scripts.<mod>` で叩いているモジュール。
-# 取得元 (2026-09-05 時点):
-#   22-answerability-audit.yml … audit_query_entailment / comment_answerability_audit
-#   24-uniqueness-audit.yml    … audit_uniqueness / append_uniqueness_audit_history
-#   26-faq-seo-lane.yml        … generate_faq_seo / generate_internal_links
-#   27-wp-navi-link-lane.yml   … build_wp_navi_link_candidates
+# 取得元 (2026-09-15 時点):
+#   22-answerability-audit.yml     … audit_query_entailment / comment_answerability_audit
+#   24-uniqueness-audit.yml        … audit_uniqueness / append_uniqueness_audit_history
+#   26-faq-seo-lane.yml            … generate_faq_seo / generate_internal_links
+#   27-wp-navi-link-lane.yml       … build_wp_navi_link_candidates
+#   information-gain-audit.yml     … audit_information_gain / append_information_gain_history /
+#                                     comment_information_gain_audit (#4841 S3)
 GUARDED_MODULES = [
+    "append_information_gain_history",
     "append_uniqueness_audit_history",
+    "audit_information_gain",
     "audit_query_entailment",
     "audit_uniqueness",
     "build_wp_navi_link_candidates",
     "comment_answerability_audit",
+    "comment_information_gain_audit",
     "generate_faq_seo",
     "generate_internal_links",
 ]

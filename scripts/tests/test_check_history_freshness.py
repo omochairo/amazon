@@ -17,11 +17,14 @@ import pytest
 from scripts.check_history_freshness import (
     DIR_LANES,
     LANES,
+    SINGLE_FILE_LANES,
     UNMONITORED,
     DirLane,
     Lane,
+    SingleFileLane,
     check,
     check_dirs,
+    check_files,
     last_date,
     last_date_in_dir,
     problems,
@@ -173,7 +176,7 @@ def test_real_history_all_lanes_registered():
 def test_thresholds_have_headroom_over_cadence():
     """cadence より短い上限を置かない (毎回鳴るゲートを作らない)。"""
     floor = {"daily": 2, "weekly": 8, "monthly": 32}
-    for lane in (*LANES, *DIR_LANES):
+    for lane in (*LANES, *DIR_LANES, *SINGLE_FILE_LANES):
         assert lane.max_age_days >= floor[lane.cadence], lane.filename
 
 
@@ -313,3 +316,68 @@ def test_dir_lanes_do_not_fire_on_real_data_today():
         pytest.skip("価格レーンのデータが無い環境")
     rows = check_dirs(repo_root, dt.datetime.now(dt.timezone.utc).date())
     assert [r["status"] for r in rows] == ["ok", "ok"], rows
+
+
+# ---------- SINGLE_FILE_LANES: data/analytics/history/ の外の単独ファイル (#4841 S3) ----------
+
+FILE_LANE = (SingleFileLane("data/analytics/information_gain_history.jsonl", "weekly", 12, "wf.yml"),)
+
+
+def _write_dated_jsonl(path: pathlib.Path, dates) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "\n".join(json.dumps({"date": d}) for d in dates) + "\n", encoding="utf-8",
+    )
+
+
+def test_parse_iso_week_label_maps_to_monday():
+    from scripts.check_history_freshness import _parse_iso_week_label
+    assert _parse_iso_week_label("2026-W37") == D("2026-09-07")
+    assert _parse_iso_week_label("not-a-week") is None
+    assert _parse_iso_week_label("2026-08-12") is None  # 実日付はここでは扱わない
+
+
+def test_file_lane_ok_within_threshold(tmp_path):
+    # information_gain_history.jsonl の date は ISO 週ラベル (append_information_gain_history.py
+    # が書く形式)。2026-W37 の月曜 (2026-09-07) から1日後は12日しきい値の中。
+    _write_dated_jsonl(tmp_path / "data" / "analytics" / "information_gain_history.jsonl", ["2026-W37"])
+    rows = check_files(tmp_path, D("2026-09-08"), FILE_LANE)
+    assert rows[0]["status"] == "ok"
+    assert rows[0]["last"] == "2026-09-07"
+
+
+def test_file_lane_missing_when_file_absent(tmp_path):
+    rows = check_files(tmp_path, D("2026-08-12"), FILE_LANE)
+    assert rows[0]["status"] == "missing"
+
+
+def test_file_lane_unknown_when_no_readable_date(tmp_path):
+    path = tmp_path / "data" / "analytics" / "information_gain_history.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("not json\n", encoding="utf-8")
+    rows = check_files(tmp_path, D("2026-08-12"), FILE_LANE)
+    assert rows[0]["status"] == "unknown"
+
+
+def test_file_lane_stale_when_lane_stops(tmp_path):
+    # 2026-W27 の月曜 (2026-06-29) から2026-08-12までは40日超で、しきい値12日を大きく超える。
+    _write_dated_jsonl(tmp_path / "data" / "analytics" / "information_gain_history.jsonl", ["2026-W27"])
+    rows = check_files(tmp_path, D("2026-08-12"), FILE_LANE)
+    assert rows[0]["status"] == "stale"
+
+
+def test_file_lane_rows_render_like_other_lanes(tmp_path):
+    _write_dated_jsonl(tmp_path / "data" / "analytics" / "information_gain_history.jsonl", ["2026-W27"])
+    rows = check_files(tmp_path, D("2026-08-12"), FILE_LANE)
+    body = render_body(rows, [], D("2026-08-12"))
+    assert "| `data/analytics/information_gain_history.jsonl` | stale |" in body
+    assert problems(rows, []) == ["data/analytics/information_gain_history.jsonl"]
+
+
+def test_single_file_lanes_not_flagged_unregistered():
+    """SINGLE_FILE_LANES のファイルは data/analytics/history/ の外にあるため、
+    そのディレクトリを glob する unregistered_files には最初から現れない
+    (check_files 側の登録が唯一の監視経路)。"""
+    hist_dir = pathlib.Path(__file__).resolve().parent.parent.parent / "data" / "analytics" / "history"
+    names = {name for name in unregistered_files(hist_dir)} if hist_dir.is_dir() else set()
+    assert not any(pathlib.Path(l.path).name in names for l in SINGLE_FILE_LANES)
