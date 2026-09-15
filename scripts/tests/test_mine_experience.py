@@ -1109,3 +1109,105 @@ def test_crawl_uses_the_same_selection_as_mining():
     src = pathlib.Path("scripts/crawl_yahoo_reviews.py").read_text(encoding="utf-8")
     assert "select_mining_targets(" in src
     assert "select_targets(limit" not in src
+
+
+# --- run 単位の「応答しないホスト」skip (#6602) ---------------------------------
+
+def _fake_http_send(timeout_hosts: set[str], calls: list[str]):
+    def send(self, request, *args, **kwargs):
+        calls.append(request.url)
+        host = requests.utils.urlparse(request.url).hostname
+        if host in timeout_hosts:
+            raise requests.ReadTimeout("read timed out", request=request)
+        resp = requests.Response()
+        resp.status_code = 200
+        resp.url = request.url
+        resp._content = b"<html><body>ok</body></html>"
+        resp.request = request
+        return resp
+    return send
+
+
+def test_dead_host_is_skipped_for_rest_of_run_after_one_timeout(monkeypatch):
+    calls: list[str] = []
+    monkeypatch.setattr(requests.adapters.HTTPAdapter, "send",
+                        _fake_http_send({"www.biccamera.com"}, calls))
+    session, adapter = mine_experience.make_session("http://localhost:11434")
+
+    for _ in range(3):
+        with pytest.raises(requests.RequestException):
+            session.get("https://www.biccamera.com/bc/item/1/", timeout=20)
+    assert session.get("https://example.com/", timeout=20).status_code == 200
+
+    # timeout を払うのは最初の 1 回だけ。2 回目以降は送らない
+    assert calls == ["https://www.biccamera.com/bc/item/1/", "https://example.com/"]
+    assert adapter.summary() == {"hosts": ["www.biccamera.com"], "skipped_requests": 2}
+
+
+def test_dead_host_skip_is_a_request_exception_so_callers_just_drop_the_url(monkeypatch):
+    calls: list[str] = []
+    monkeypatch.setattr(requests.adapters.HTTPAdapter, "send",
+                        _fake_http_send({"www.yodobashi.com"}, calls))
+    session, _ = mine_experience.make_session()
+    text = "口コミ https://www.yodobashi.com/a https://www.yodobashi.com/b https://example.com/c"
+
+    assert mine_experience.resolve_source_urls(text, session=session) == ["https://example.com/c"]
+    assert calls == ["https://www.yodobashi.com/a", "https://example.com/c"]
+
+
+def test_ollama_host_is_never_marked_dead(monkeypatch):
+    calls: list[str] = []
+    monkeypatch.setattr(requests.adapters.HTTPAdapter, "send",
+                        _fake_http_send({"k8-ollama"}, calls))
+    session, adapter = mine_experience.make_session("http://k8-ollama:11434")
+
+    for _ in range(2):
+        with pytest.raises(requests.ReadTimeout):
+            session.post("http://k8-ollama:11434/api/generate", json={}, timeout=180)
+    # 1 回の遅い応答で gemma を止めると、その run の抽出が全部死ぬ
+    assert len(calls) == 2
+    assert adapter.summary() == {"hosts": [], "skipped_requests": 0}
+
+
+def test_non_timeout_errors_do_not_mark_host_dead(monkeypatch):
+    def send(self, request, *args, **kwargs):
+        raise requests.ConnectionError("Name or service not known", request=request)
+    monkeypatch.setattr(requests.adapters.HTTPAdapter, "send", send)
+    session, adapter = mine_experience.make_session()
+
+    for _ in range(2):
+        with pytest.raises(requests.ConnectionError):
+            session.get("https://hoobby.net/x", timeout=20)
+    assert adapter.summary() == {"hosts": [], "skipped_requests": 0}
+
+
+def test_run_reports_dead_hosts_in_summary(tmp_path, monkeypatch):
+    monkeypatch.setattr(mine_experience, "mine_asin", lambda *a, **k: None)
+    summary = run(["B000000001"], base=tmp_path)
+    assert summary["dead_hosts"] == {"hosts": [], "skipped_requests": 0}
+
+
+def test_dead_host_applies_to_redirect_target_of_grounding_url(monkeypatch):
+    """09-14 の timeout 18 件のうち 11 件は grounding redirect を辿った先だった。"""
+    calls: list[str] = []
+    inner = _fake_http_send({"www.biccamera.com"}, calls)
+
+    def send(self, request, *args, **kwargs):
+        if "vertexaisearch" in request.url:
+            calls.append(request.url)
+            resp = requests.Response()
+            resp.status_code = 302
+            resp.headers["Location"] = "https://www.biccamera.com/bc/item/9/"
+            resp.url = request.url
+            resp._content = b""
+            resp.request = request
+            return resp
+        return inner(self, request, *args, **kwargs)
+    monkeypatch.setattr(requests.adapters.HTTPAdapter, "send", send)
+    session, adapter = mine_experience.make_session()
+    g = "https://vertexaisearch.cloud.google.com/grounding-api-redirect/"
+    text = f"{g}AAA {g}BBB"
+
+    assert mine_experience.resolve_source_urls(text, session=session) == []
+    assert calls == [f"{g}AAA", "https://www.biccamera.com/bc/item/9/", f"{g}BBB"]
+    assert adapter.summary() == {"hosts": ["www.biccamera.com"], "skipped_requests": 1}

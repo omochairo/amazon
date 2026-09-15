@@ -134,6 +134,58 @@ _RETRY_SLEEP_SECONDS = 2.0
 
 HONEST_UA = "omochairo-experience-bot/1.0 (+https://navi.omcha.jp/)"
 
+
+# run 単位の「応答しないホスト」skip (#6602)。
+#
+# 2026-09-14 の定時 run で mine ステップが **44 分 09 秒** (step timeout 45 分に
+# 残り 51 秒) だった。agy が復旧して 20 件とも応答した結果、出典 URL の解決と
+# third_party 取得が増え、www.biccamera.com / www.yodobashi.com への
+# REQUEST_TIMEOUT (20s) が 18 回 = 約 6 分を空費していた。
+#
+# この 2 ホストは K8 から**一度も応答していない** (09-09 / 09-10 / 09-14 の 3 run で
+# 言及 42 件中 42 件が timeout)。ホスト名を決め打ちで塞ぐと、他のホストが同じ
+# 挙動になったときにまた踏むので、「その run で 1 回 timeout したホストは残りで
+# 叩かない」をアダプタ層に置く。アダプタで判定するのは、grounding redirect の
+# 302 を辿った先 (最初の URL からは実ホストが分からない) にも効かせるため。
+#
+# 数えるのは timeout だけ。403 / 404 / 名前解決失敗は即座に返るので時間を払わない。
+# Ollama は 1 回の遅い応答で止めると run が丸ごと死ぬので対象外にする (exempt)。
+class DeadHostSkipped(requests.ConnectionError):
+    """この run で既に timeout したホストへのリクエストを送らずに落とす。"""
+
+
+class DeadHostAdapter(requests.adapters.HTTPAdapter):
+    def __init__(self, *args, exempt_hosts: frozenset[str] = frozenset(), **kwargs):
+        super().__init__(*args, **kwargs)
+        self.exempt_hosts = exempt_hosts
+        self.dead_hosts: set[str] = set()
+        self.skipped = 0
+
+    def send(self, request, *args, **kwargs):
+        host = (urllib.parse.urlsplit(request.url).hostname or "").lower()
+        if host in self.dead_hosts:
+            self.skipped += 1
+            raise DeadHostSkipped(f"{host} はこの run で timeout 済み — 送らない", request=request)
+        try:
+            return super().send(request, *args, **kwargs)
+        except requests.Timeout:
+            if host and host not in self.exempt_hosts and host not in self.dead_hosts:
+                self.dead_hosts.add(host)
+                logger.warning("%s が timeout — この run の残りでは叩かない", host)
+            raise
+
+    def summary(self) -> dict:
+        return {"hosts": sorted(self.dead_hosts), "skipped_requests": self.skipped}
+
+
+def make_session(ollama_url: str = DEFAULT_OLLAMA_URL) -> tuple[requests.Session, DeadHostAdapter]:
+    ollama_host = (urllib.parse.urlsplit(ollama_url).hostname or "").lower()
+    adapter = DeadHostAdapter(exempt_hosts=frozenset({ollama_host}))
+    session = requests.Session()
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session, adapter
+
 # usable_as のコード側固定割当 (gemma には判定させない)
 _USABLE_AS_MAP = {
     "yahoo_review_aggregate": "paraphrase",
@@ -1130,7 +1182,7 @@ def run(
     ledger: dict | None = None,
     reasons: dict[str, str] | None = None,
 ) -> dict:
-    session = requests.Session()
+    session, dead_hosts = make_session(ollama_url)
     agy_breaker = AgyCircuitBreaker()
     ledger = ledger if ledger is not None else {}
     reasons = reasons or {}
@@ -1171,6 +1223,7 @@ def run(
     summary = {
         "targets": len(targets), "written": written, "skipped": skipped,
         "agy": agy_breaker.summary(),
+        "dead_hosts": dead_hosts.summary(),
     }
     logger.info("done: %s", json.dumps(summary, ensure_ascii=False))
     if not dry_run:
@@ -1180,6 +1233,8 @@ def run(
             f"**完了**: {len(targets)} 件中 {written} 件書けた / {skipped} 件は 0 件。",
             f"agy: ok {agy_s['ok']} / failed {agy_s['failed']} / breaker で skip "
             f"{agy_s['skipped_by_breaker']}" + (" — **breaker 作動**" if agy_s["tripped"] else ""),
+            f"timeout で止めたホスト: {', '.join(summary['dead_hosts']['hosts']) or 'なし'}"
+            f" (送らずに済んだリクエスト {summary['dead_hosts']['skipped_requests']} 件)",
         ])
     return summary
 
