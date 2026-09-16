@@ -1,0 +1,106 @@
+{
+  "generated_at": "2026-09-16T10:12:48Z",
+  "source_week": "2026-W38",
+  "model": "gemma4:26b-a4b-it-qat",
+  "num_ctx": 8192,
+  "seed": 20260914,
+  "limit": 3,
+  "since": "2026-09-09",
+  "until": "2026-09-16T10:07:19",
+  "target_asins": [
+    "B08GXGHH7G",
+    "B09HGP56C4",
+    "B0GYW6HR99"
+  ],
+  "articles": [
+    {
+      "asin": "B08GXGHH7G",
+      "category": "運動",
+      "sentence_count": 27,
+      "unique_and_supported_count": 2,
+      "unsupported_count": 25,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 18,
+        "factual_claim": 7,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 122.83
+    },
+    {
+      "asin": "B09HGP56C4",
+      "category": "運動",
+      "sentence_count": 32,
+      "unique_and_supported_count": 14,
+      "unsupported_count": 17,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 14,
+        "factual_claim": 3,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 108.336
+    },
+    {
+      "asin": "B0GYW6HR99",
+      "category": "unknown",
+      "sentence_count": 25,
+      "unique_and_supported_count": 7,
+      "unsupported_count": 18,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 13,
+        "factual_claim": 5,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 96.668
+    }
+  ],
+  "failed": [],
+  "summary": {
+    "target_count": 3,
+    "processed_count": 3,
+    "failed_count": 0,
+    "failure_ratio": 0.0,
+    "median_unique_and_supported_count": 7,
+    "median_unique_and_supported_rate": 0.28,
+    "by_experience_material": {
+      "with_material": {
+        "count": 0,
+        "median_unique_and_supported_count": null,
+        "median_unique_and_supported_rate": null
+      },
+      "without_material": {
+        "count": 3,
+        "median_unique_and_supported_count": 7,
+        "median_unique_and_supported_rate": 0.28
+      },
+      "unknown": {
+        "count": 0,
+        "median_unique_and_supported_count": null,
+        "median_unique_and_supported_rate": null
+      }
+    },
+    "unsupported_classification_totals": {
+      "rhetorical_or_time_dependent": 45,
+      "factual_claim": 15,
+      "unresolved": 0
+    },
+    "median_elapsed_seconds": 108.34,
+    "total_elapsed_seconds": 327.83,
+    "zero_target_articles": false
+  },
+  "run_ok": true,
+  "cache": {
+    "hits": 0,
+    "misses": 3,
+    "total": 3,
+    "hit_rate_pct": 0
+  }
+}
