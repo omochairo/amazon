@@ -1,0 +1,108 @@
+name: First-Party Sources Collection
+
+# omcha-ops#264「一次情報の供給経路」設計の A (収集) + D (未収載の報告)。
+#
+# omcha.jp (WP REST, read-only GET のみ) の記事本文からアフィリエイトリンクの
+# ASIN を抽出し、navi 側の商品プール / 記事 / 体験談との突き合わせを
+# data/analytics/first_party_sources.json に書き出す。role=primary かつ
+# 未記事化の ASIN は data/raw/first_party_pool.json に積み、03-invoke-jules の
+# 選定 (#7511, B) がこれを優先候補として消費する。
+#
+# B (03-invoke-jules への前置) と C (gemma による素材化) は別レーン/別 Issue。
+# このワークフローは A + D のみで、03-invoke-jules.yml には一切触れない。
+#
+# 週次: omcha.jp 全記事の modified を毎回引き直すが、本文の個別取得は前回から
+# modified が変わった記事だけ (1 秒 1 リクエスト、低レート)。
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: '記事一覧の取得件数上限 (スモーク用、0=無制限)'
+        required: false
+        default: '0'
+  schedule:
+    # 火曜 05:00 JST = 月曜 20:00 UTC。cron の曜日は UTC なので 1 (月) が正しい。
+    # 他レーンと重ならない週次枠。
+    - cron: '0 20 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: first-party-sources
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Collect first-party sources from omcha.jp
+        run: |
+          python -m scripts.collect_first_party_sources \
+            --limit "${{ github.event.inputs.limit || '0' }}"
+
+      - name: Create data PR + enable auto-merge
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+
+          git add data/analytics/first_party_sources.json data/raw/first_party_pool.json
+
+          if git diff --cached --quiet; then
+            echo "No first-party sources changes to commit; skipping PR creation."
+            exit 0
+          fi
+
+          # 既存 open の同種 PR を閉じる (重複防止)
+          gh pr list --base main --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("first-party-sources/")) | .number' \
+            | while read -r pr_num; do
+            [ -n "$pr_num" ] && gh pr close "$pr_num" -d || true
+          done
+
+          BRANCH="first-party-sources/${{ github.run_id }}"
+          git config user.name "omochairo-fetch-bot[bot]"
+          git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit -m "data: first-party sources collection (omcha-ops#264, run ${{ github.run_id }})"
+          git push -u origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "data: first-party sources collection (omcha-ops#264, run ${{ github.run_id }})" \
+            --body "Automated omcha-ops#264 weekly collection (A). \`data/analytics/first_party_sources.json\` (asin ごとの role / navi 側の状態) と \`data/raw/first_party_pool.json\` (role=primary かつ in_corpus かつ未記事化) のみ — no article changes." \
+            --base main \
+            --head "$BRANCH")
+          echo "Created: $PR_URL"
+
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge enabled on $PR_URL"
+          else
+            echo "::warning::Could not enable auto-merge on $PR_URL"
+          fi
+        # #4793: continue-on-error を付けない。落ちてよいのは auto-merge の
+        # 有効化だけ (上の if/else で握りつぶし済み)。
