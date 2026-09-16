@@ -514,6 +514,7 @@ def select_document_candidates_for_h2(
 
     selected = list(top_indices)
     selected_set = set(selected)
+    top_set = set(top_indices)
     for j in range(n):
         if normalize_url(document_candidates[j]["url"]) in must_show_norm and j not in selected_set:
             selected.append(j)
@@ -527,6 +528,11 @@ def select_document_candidates_for_h2(
             "already_linked": normalize_url(document_candidates[j]["url"]) in existing_norm,
             "is_calibration": normalize_url(document_candidates[j]["url"]) in calibration_norm,
             "below_threshold": similarity_row[j] < min_score,
+            # 通常の選定 (閾値フィルタ→reranker→top_k) では選ばれず、既出/較正
+            # 指定で強制表示している候補。閾値の当たり外れを数える側 (summary の
+            # h2_with_candidates) がこれを数えると、閾値を1件も通っていなくても
+            # 「候補あり」に見える (omcha-ops#174 レビュー指摘)。
+            "forced": j not in top_set,
         }
         for j in selected
     ]
@@ -571,6 +577,10 @@ def render_markdown_report(
             lines.append("(類似度閾値以上の候補なし)")
             lines.append("")
             continue
+        if all(c.get("forced") for c in entry["candidates"]):
+            # 閾値を通った候補が1件も無い H2。強制表示 (既出/較正指定) だけが
+            # 並んでいることを明示しないと「閾値を通った候補」と誤読される。
+            lines.append("(類似度閾値以上の候補なし — 以下は既出/較正指定の強制表示のみ)")
         for i, c in enumerate(entry["candidates"], start=1):
             flags = []
             if c.get("already_linked"):
@@ -615,7 +625,8 @@ def run(
     閾値・top_k に関係なく該当 H2 の候補一覧に本来のスコア・順位で出す。
     """
     summary: dict[str, Any] = {
-        "doc_candidates": 0, "h2_count": 0, "h2_with_candidates": 0, "aborted": False,
+        "doc_candidates": 0, "h2_count": 0, "h2_with_candidates": 0,
+        "h2_with_forced_only": 0, "aborted": False,
     }
     session = session or requests.Session()
 
@@ -684,7 +695,16 @@ def run(
         )
         h2_entries.append({"heading": section["heading"], "candidates": candidates})
 
-    summary["h2_with_candidates"] = sum(1 for e in h2_entries if e["candidates"])
+    # h2_with_candidates は「閾値を通って通常選定された候補がある H2 数」。強制表示
+    # (既出・較正指定) だけの H2 はここに数えず h2_with_forced_only に分ける
+    # (omcha-ops#174 レビュー指摘: 混ぜると閾値の当たり外れを必ず誤読する)。
+    summary["h2_with_candidates"] = sum(
+        1 for e in h2_entries if any(not c.get("forced") for c in e["candidates"])
+    )
+    summary["h2_with_forced_only"] = sum(
+        1 for e in h2_entries
+        if e["candidates"] and all(c.get("forced") for c in e["candidates"])
+    )
 
     report = render_markdown_report(
         query["title"], query["link"], h2_entries,
@@ -694,8 +714,9 @@ def run(
     out_path.write_text(report, encoding="utf-8")
 
     logger.info(
-        "done: doc_candidates=%d h2_count=%d h2_with_candidates=%d -> %s",
-        summary["doc_candidates"], summary["h2_count"], summary["h2_with_candidates"], out_path,
+        "done: doc_candidates=%d h2_count=%d h2_with_candidates=%d h2_with_forced_only=%d -> %s",
+        summary["doc_candidates"], summary["h2_count"], summary["h2_with_candidates"],
+        summary["h2_with_forced_only"], out_path,
     )
     print(json.dumps(summary, ensure_ascii=False))
     return summary

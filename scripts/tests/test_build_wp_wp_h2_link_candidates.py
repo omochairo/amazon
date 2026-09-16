@@ -387,6 +387,30 @@ class SelectDocumentCandidatesForH2Test(unittest.TestCase):
         )
         self.assertEqual(out, [])
 
+    def test_forced_flag_marks_candidates_outside_normal_selection(self):
+        # omcha-ops#174 レビュー指摘: 強制表示分と通常選定分が区別できないと、
+        # 閾値を1件も通っていない H2 が「候補あり」に見える。
+        candidates = _candidates(3)
+        similarity_row = [0.9, 0.2, 0.1]
+        out = select_document_candidates_for_h2(
+            "h2", similarity_row, candidates, min_score=0.5, top_k=3,
+            existing_urls=frozenset({"https://omcha.jp/doc1/"}),
+        )
+        by_url = {c["url"]: c for c in out}
+        self.assertFalse(by_url["https://omcha.jp/doc0/"]["forced"])  # 閾値通過・通常選定
+        self.assertTrue(by_url["https://omcha.jp/doc1/"]["forced"])   # 既出で強制表示
+
+    def test_forced_flag_false_for_threshold_passing_top_k_candidate(self):
+        # 既出かつ閾値も通って top_k 内に入っている候補は強制表示ではない。
+        candidates = _candidates(2)
+        out = select_document_candidates_for_h2(
+            "h2", [0.9, 0.8], candidates, min_score=0.5, top_k=2,
+            existing_urls=frozenset({"https://omcha.jp/doc0/"}),
+        )
+        doc0 = next(c for c in out if c["url"] == "https://omcha.jp/doc0/")
+        self.assertTrue(doc0["already_linked"])
+        self.assertFalse(doc0["forced"])
+
     def test_display_order_is_always_score_descending(self):
         candidates = _candidates(3)
         similarity_row = [0.9, 0.2, 0.6]
@@ -519,6 +543,20 @@ class RenderMarkdownReportTest(unittest.TestCase):
         )
         self.assertIn("**[既出]**", out)
 
+    def test_forced_only_h2_is_labeled_as_no_threshold_hit(self):
+        entries = [{"heading": "H2-1", "candidates": [
+            {
+                "url": "https://omcha.jp/a/", "title": "記事A", "score": 0.1,
+                "already_linked": True, "is_calibration": False, "below_threshold": True,
+                "rank": 500, "forced": True,
+            },
+        ]}]
+        out = render_markdown_report(
+            "記事", "https://omcha.jp/x/", entries, generated_at="x", min_score=0.87, doc_total=843,
+        )
+        self.assertIn("類似度閾値以上の候補なし", out)
+        self.assertIn("強制表示", out)
+
     def test_never_mentions_wp_write_actions(self):
         out = render_markdown_report("記事", "https://omcha.jp/x/", [], generated_at="x", min_score=0.87, doc_total=0)
         self.assertIn("自動挿入は一切行っていません", out)
@@ -650,6 +688,29 @@ class RunE2ETest(unittest.TestCase):
         self.assertIn("アンパンマン知育玩具ガイド", content)
         self.assertIn("較正対象", content)
         self.assertIn("閾値未満", content)
+
+    def test_summary_does_not_count_forced_only_h2_as_having_candidates(self):
+        # omcha-ops#174 レビュー指摘 (c): 強制表示だけの H2 を h2_with_candidates に
+        # 数えると、閾値を1件も通っていなくても満点に見えて必ず誤読する。
+        def embed_fn(texts):
+            return [[0.0, 1.0] if "アンパンマン知育玩具ガイド" not in t else [1.0, 0.0] for t in texts]
+
+        session = self._session_with_embed(embed_fn)
+        summary = run(
+            index_path=self.index_path,
+            out_path=self.out_path,
+            query_content_file=self.query_content_path,
+            min_score=0.99,
+            use_reranker=False,
+            calibration_urls=frozenset({"https://omcha.jp/anpanman-toy-guide/"}),
+            session=session,
+            sleeper=_no_sleep,
+        )
+        self.assertEqual(summary["h2_count"], 2)
+        self.assertEqual(summary["h2_with_candidates"], 0)
+        self.assertEqual(summary["h2_with_forced_only"], 2)
+        # 強制表示自体は消えていない
+        self.assertIn("較正対象", self.out_path.read_text(encoding="utf-8"))
 
     def test_already_linked_scoped_to_its_own_h2_section(self):
         # H2-1 にだけ blogcard がある場合、H2-2 の候補一覧には既出フラグが
