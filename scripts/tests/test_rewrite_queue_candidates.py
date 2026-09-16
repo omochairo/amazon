@@ -135,10 +135,38 @@ class WorkflowWiringTests(unittest.TestCase):
                       self._wf("03-invoke-jules.yml"), re.S).group(1))
         self.assertIn("pending_rewrite_candidates", body)
         self.assertIn("REWRITE_PICKS_PER_RUN", body)
-        # 候補列の順序: ranking -> rewrite -> keyword
+        # 候補列の順序: first-party -> ranking -> rewrite -> keyword
         order = re.search(
-            r"remaining\s*=\s*remaining_ranking\s*\+\s*rewrite_first\s*\+", body)
+            r"remaining\s*=\s*first_party_pool\s*\+\s*remaining_ranking\s*\+\s*rewrite_first\s*\+",
+            body)
         self.assertIsNotNone(order, "rewrite_first must be spliced before remaining_kw")
+
+    def test_first_party_is_exempt_from_info_zero_defer(self):
+        # omcha-ops#264: first-party を先頭に置いても、#1600 の band=zero defer が
+        # そのまま走ると落ちる (実測 2026-09-16: 手作業 8 件中 1 件が zero)。
+        # 除外と、安全弁が first-party を数えないことの両方を守る。
+        body = textwrap.dedent(
+            re.search(r"python3 - <<'PY'\n(.*?)\n\s*PY\n",
+                      self._wf("03-invoke-jules.yml"), re.S).group(1))
+        self.assertIsNotNone(
+            re.search(r"if a in first_party_set:\s*\n\s*kept\.append\(a\)\s*\n\s*continue", body),
+            "first_party_set must bypass the band=zero defer")
+        self.assertIn("kept_other", body)
+        self.assertIsNotNone(
+            re.search(r"if kept_other:\s*\n\s*remaining = kept", body),
+            "pool-starvation valve must be judged on non-first-party candidates")
+
+    def test_missing_first_party_pool_is_silent(self):
+        # A (収集レーン) が入るまで data/raw/first_party_pool.json は存在しない。
+        # ranking_pool と同じく黙って従来どおりにする (毎 run の ::warning:: を出さない)。
+        body = textwrap.dedent(
+            re.search(r"python3 - <<'PY'\n(.*?)\n\s*PY\n",
+                      self._wf("03-invoke-jules.yml"), re.S).group(1))
+        m = re.search(r"first_party_pool\.json.*?(?=^\s*first_party_set\s*=)", body, re.S | re.M)
+        self.assertIsNotNone(m, "first_party_pool block not found")
+        self.assertIsNotNone(
+            re.search(r"except FileNotFoundError:\s*\n(\s*#.*\n)*\s*pass", m.group(0)),
+            "a missing first_party_pool.json must be a silent no-op")
 
     def test_idle_fill_caps_the_backlog(self):
         src = self._wf("12-rewrite-idle-fill.yml")
