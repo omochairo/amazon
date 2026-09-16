@@ -183,6 +183,37 @@ class ExtractBlogcardUrlsTest(unittest.TestCase):
     def test_none_input(self):
         self.assertEqual(extract_blogcard_urls(None), set())
 
+    def test_finds_rendered_cocoon_blogcard_anchor(self):
+        # omcha-ops#174 follow-up: query_post_id 経路が読む content.rendered には
+        # 生ショートコードが残らず、Cocoon 描画後のアンカーだけが残る
+        # (2026-09-16 実測・公開記事 8251 の rendered より抜粋)。
+        html_content = (
+            '<a rel="noopener" href="https://omcha.jp/anpanman-toy-guide/"'
+            ' title="アンパンマンおもちゃ年齢別ガイド"'
+            ' class="blogcard-wrap internal-blogcard-wrap a-wrap cf" target="_blank">'
+            '<div class="blogcard internal-blogcard ib-left cf"></div></a>'
+        )
+        self.assertNotIn("[blogcard", html_content)
+        self.assertEqual(
+            extract_blogcard_urls(html_content), {"https://omcha.jp/anpanman-toy-guide"},
+        )
+
+    def test_plain_anchor_is_not_treated_as_blogcard(self):
+        # 本文中のふつうの内部リンクは「既出カード」ではない。
+        html_content = '<p><a href="https://omcha.jp/a/">ふつうのリンク</a></p>'
+        self.assertEqual(extract_blogcard_urls(html_content), set())
+
+    def test_shortcode_and_rendered_anchor_mix_is_deduped(self):
+        html_content = (
+            '[blogcard url="https://omcha.jp/a/"]'
+            '<a href="https://omcha.jp/a" class="blogcard-wrap"></a>'
+            '<a href="https://omcha.jp/b/" class="internal-blogcard-wrap"></a>'
+        )
+        self.assertEqual(
+            extract_blogcard_urls(html_content),
+            {"https://omcha.jp/a", "https://omcha.jp/b"},
+        )
+
 
 class NormalizeUrlTest(unittest.TestCase):
     def test_strips_trailing_slash(self):
@@ -743,6 +774,38 @@ class RunE2ETest(unittest.TestCase):
         h2_2 = content.split("## まとめ")[1]
         self.assertIn("既出", h2_1)
         self.assertNotIn("既出", h2_2)
+
+    def test_already_linked_detected_from_rendered_html_query(self):
+        # omcha-ops#174 follow-up: query_post_id 経路 (content.rendered) では
+        # ショートコードが残らないため、アンカー側を拾わないと既出フラグが0件になる。
+        _write_json(self.query_content_path, {
+            "source_id": 15750,
+            "source_link": "https://omcha.jp/?p=15750",
+            "title": "アンパンマンシール特集",
+            "content": (
+                '<h2>シールの選び方</h2><p>本文</p>'
+                '<a href="https://omcha.jp/anpanman-toy-guide/"'
+                ' class="blogcard-wrap internal-blogcard-wrap a-wrap cf"></a>'
+                '<h2>まとめ</h2><p>本文2</p>'
+            ),
+        })
+
+        def embed_fn(texts):
+            return [[1.0, 0.0] for _ in texts]
+
+        session = self._session_with_embed(embed_fn)
+        run(
+            index_path=self.index_path,
+            out_path=self.out_path,
+            query_content_file=self.query_content_path,
+            min_score=0.5,
+            use_reranker=False,
+            session=session,
+            sleeper=_no_sleep,
+        )
+        content = self.out_path.read_text(encoding="utf-8")
+        self.assertIn("既出", content.split("## まとめ")[0])
+        self.assertNotIn("既出", content.split("## まとめ")[1])
 
     def test_no_query_source_aborts_without_writing(self):
         with self.assertRaises(ValueError):
