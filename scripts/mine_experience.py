@@ -7,11 +7,14 @@ data/raw/per_asin/<ASIN>/experience.json に書き出す read-mostly スクリ�
 
 設計: docs/article-quality-overhaul-design.md §5 (Phase 2)
 
-対象 ASIN 選定 (select_targets):
-  ① data/analytics/answerability_audit.json の pages[].asin
-  ② data/rewrite_queue/*.json の asin
-  ③ (あれば) 引数 --asins 明示指定
-  上記を順に合成・重複除去し --limit (既定 20) で切る。
+対象 ASIN 選定 (select_targets, #4841: 未採掘優先):
+  ① answerability_audit.json / rewrite_queue/*.json 由来で experience.json が無い ASIN
+  ② 同じ由来で再採掘が必要な ASIN (generated_at が --remine-after-days より古い、
+     または記事が generated_at より後に更新されている)
+  ③ 記事はあるが experience.json が無い ASIN (未採掘の残り全部。ASIN 昇順)
+  ④ 上記で埋まらなければ、①②の元の並び順で再採掘 (fresh も含む)
+  --asins 明示指定は上記に関係なく常に先頭で通る。--limit (既定 20) は最後に適用。
+  select_mining_targets (#6602) はこの結果に K8 の ledger による鮮度判定を重ねる。
 
 ソースアダプタ (各アダプタは candidate テキスト群 [{text, source_type, source_url}]
 を返す。**必要な env/secret が無い・API がエラーのときは stderr warning + 空リストで
@@ -74,8 +77,16 @@ PER_ASIN_DIR = pathlib.Path("data/raw/per_asin")
 DEFAULT_AUDIT_PATH = pathlib.Path("data/analytics/answerability_audit.json")
 DEFAULT_REWRITE_QUEUE_DIR = pathlib.Path("data/rewrite_queue")
 DEFAULT_AMAZON_JSON = pathlib.Path("data/raw/amazon.json")
+DEFAULT_ARTICLES_DIR = pathlib.Path("data/articles")
 DEFAULT_LIMIT = 20
 OUT_NAME = "experience.json"
+
+# #4841: 90日 = 四半期相当。#6602 の ledger 側 MINING_REFRESH_DAYS (30日) より
+# 意図的に長い — このレーンの主目的は「一度も採掘していない ASIN」「記事が
+# リライトされて素材が古くなった ASIN」を優先することで、期限切れだけを理由に
+# 掘り直す量は絞る (未採掘の供給を圧迫しないため)。実測に基づく確定値ではなく、
+# 経験則の暫定値。
+DEFAULT_REMINE_AFTER_DAYS = 90
 
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
 # amazon-navi-brain#39 Step 0-c: #4528実測 (実プロンプト最大1,098 token、既定4096に
@@ -255,21 +266,109 @@ def _html_to_text(html: str) -> str:
 # 対象 ASIN 選定
 # --------------------------------------------------------------------------
 
+_ARTICLE_STEM_RE = re.compile(r"^\d{4}-\d{2}-\d{2}-(B0[A-Z0-9]{8})$")
+
+
+def _article_paths_by_asin(articles_dir: pathlib.Path) -> dict[str, pathlib.Path]:
+    """articles_dir 内の記事 JSON から ASIN -> ファイルパス の対応を作る。
+
+    ファイル名は `<公開日>-<ASIN>.json`。稀にリライトで同じ ASIN の新しい日付の
+    ファイルが増えたまま古い方が残ることがある (2026-09-16 実測 2 件)。
+    `sorted(glob(...))` はファイル名昇順 = 日付昇順なので、後勝ちで一番新しい
+    ファイルが残る。"""
+    out: dict[str, pathlib.Path] = {}
+    if not articles_dir.is_dir():
+        return out
+    for f in sorted(articles_dir.glob("*.json")):
+        if f.name.endswith(".seo.json"):
+            continue
+        m = _ARTICLE_STEM_RE.match(f.stem)
+        if m:
+            out[m.group(1)] = f
+    return out
+
+
+def _experience_generated_at(asin: str, base: pathlib.Path) -> datetime | None:
+    payload = _load(base / asin / OUT_NAME)
+    return _parse_iso(payload.get("generated_at")) if isinstance(payload, dict) else None
+
+
+def _has_experience(asin: str, base: pathlib.Path) -> bool:
+    return (base / asin / OUT_NAME).exists()
+
+
+def _article_last_modified(path: pathlib.Path) -> datetime | None:
+    """記事ファイルの最終更新日時。git commit 日時を優先し、取れなければ
+    ファイルの mtime にフォールバックする。
+
+    git checkout はファイルの mtime をチェックアウト時刻に均してしまう
+    (scripts/build_post.py の _load_git_history と同じ理由) ため、
+    「リライトされたか」の判定を mtime だけに頼ると新規 checkout 直後は
+    全記事が「たった今更新された」ことになり誤判定する。"""
+    try:
+        res = subprocess.run(
+            ["git", "log", "-1", "--format=%cI", "--", str(path)],
+            capture_output=True, text=True, timeout=10,
+        )
+        out = (res.stdout or "").strip()
+        if res.returncode == 0 and out:
+            return datetime.fromisoformat(out).astimezone(timezone.utc)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        pass
+    try:
+        return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+    except OSError:
+        return None
+
+
+def _needs_remine(
+    asin: str, generated: datetime, *, article_paths: dict[str, pathlib.Path],
+    remine_after_days: int, now: datetime,
+) -> bool:
+    age_days = (now - generated).total_seconds() / 86400
+    if age_days >= remine_after_days:
+        return True
+    path = article_paths.get(asin)
+    if path is None:
+        return False
+    modified = _article_last_modified(path)
+    return modified is not None and modified > generated
+
+
 def select_targets(
     limit: int = DEFAULT_LIMIT,
     asins: list[str] | None = None,
     audit_path: pathlib.Path = DEFAULT_AUDIT_PATH,
     rewrite_queue_dir: pathlib.Path = DEFAULT_REWRITE_QUEUE_DIR,
+    *,
+    base: pathlib.Path = PER_ASIN_DIR,
+    articles_dir: pathlib.Path = DEFAULT_ARTICLES_DIR,
+    remine_after_days: int = DEFAULT_REMINE_AFTER_DAYS,
+    now: datetime | None = None,
 ) -> list[str]:
-    """① answerability_audit.json ② rewrite_queue/*.json ③ 明示 --asins を合成し
-    重複除去したうえで limit (0以下なら無制限) で切る。"""
-    ordered: list[str] = []
+    """#4841: 未採掘優先で対象を選ぶ純粋関数。
+
+    候補の順序 (重複除去は従来どおり):
+      1. answerability_audit.json / rewrite_queue/*.json 由来で experience.json
+         が無い ASIN
+      2. 同じ由来で再採掘が必要な ASIN (generated_at が remine_after_days より
+         古い、または記事ファイルが generated_at より後に更新されている)
+      3. 記事はあるが experience.json が無い ASIN (未採掘の残り全部。ASIN 昇順
+         で決定的)
+      4. 上記で埋まらなければ、従来どおりの順序で再採掘 (① ②の元の並び順)
+
+    `asins` (--asins 明示指定) は上記の規則に関わらず常に先頭で通す (デバッグ用)。
+    `limit` (0以下で無制限) は最後に結果全体へ適用する。
+    """
+    now = now or datetime.now(timezone.utc)
+
+    pool: list[str] = []
     seen: set[str] = set()
 
     def _add(a: Any) -> None:
         if isinstance(a, str) and _ASIN_RE.match(a) and a not in seen:
             seen.add(a)
-            ordered.append(a)
+            pool.append(a)
 
     audit = _load(audit_path)
     if isinstance(audit, dict):
@@ -283,12 +382,40 @@ def select_targets(
             if isinstance(data, dict):
                 _add(data.get("asin"))
 
-    for a in (asins or []):
-        _add(a)
+    explicit = list(dict.fromkeys(a for a in (asins or []) if isinstance(a, str) and _ASIN_RE.match(a)))
+    explicit_set = set(explicit)
 
+    article_paths = _article_paths_by_asin(articles_dir)
+
+    never_mined: list[str] = []
+    need_remine: list[str] = []
+    for a in pool:
+        if a in explicit_set:
+            continue
+        generated = _experience_generated_at(a, base)
+        if generated is None:
+            never_mined.append(a)
+        elif _needs_remine(a, generated, article_paths=article_paths,
+                            remine_after_days=remine_after_days, now=now):
+            need_remine.append(a)
+
+    unmined_pool = sorted(
+        asin for asin in article_paths
+        if asin not in seen and asin not in explicit_set and not _has_experience(asin, base)
+    )
+
+    ordered: list[str] = []
+    ordered_seen: set[str] = set(explicit)
+    for group in (never_mined, need_remine, unmined_pool, pool):
+        for a in group:
+            if a not in ordered_seen:
+                ordered_seen.add(a)
+                ordered.append(a)
+
+    result = explicit + ordered
     if limit and limit > 0:
-        ordered = ordered[:limit]
-    return ordered
+        result = result[:limit]
+    return result
 
 
 # 鮮度を見た対象選定 (#6602)。
@@ -393,16 +520,27 @@ def select_mining_targets(
     now: datetime | None = None,
     audit_path: pathlib.Path = DEFAULT_AUDIT_PATH,
     rewrite_queue_dir: pathlib.Path = DEFAULT_REWRITE_QUEUE_DIR,
+    articles_dir: pathlib.Path = DEFAULT_ARTICLES_DIR,
+    remine_after_days: int = DEFAULT_REMINE_AFTER_DAYS,
 ) -> tuple[list[str], dict]:
     """鮮度を見て対象を選ぶ。(targets, report) を返す。
 
     明示の --asins は鮮度に関係なく先頭に入れる (人が指定したものを黙って落とさない)。
     crawl_yahoo_reviews も同じ関数を使い、原文を取る ASIN と掘る ASIN を揃える。
+
+    候補の母集団は select_targets (#4841) に委ね、audit/rewrite_queue に加えて
+    「記事はあるが experience.json が無い ASIN」も含める。ここでの鮮度判定
+    (fresh/stale/agy_degraded 等、ledger 込み) は既存の classify_target のまま
+    据え置く — select_targets 側の never_mined/need_remine 分類は候補の並び順
+    (tie-break) にのみ効く。
     """
     ledger = ledger if ledger is not None else {}
     now = now or datetime.now(timezone.utc)
     explicit = [a for a in (asins or []) if isinstance(a, str) and _ASIN_RE.match(a)]
-    pool = select_targets(limit=0, audit_path=audit_path, rewrite_queue_dir=rewrite_queue_dir)
+    pool = select_targets(
+        limit=0, audit_path=audit_path, rewrite_queue_dir=rewrite_queue_dir,
+        base=base, articles_dir=articles_dir, remine_after_days=remine_after_days, now=now,
+    )
 
     classified: dict[str, tuple[str, datetime | None]] = {}
     for a in pool:
@@ -1252,13 +1390,18 @@ def main() -> int:
                      help="amazon-navi-brain#39 Step 0-c: ollama num_ctx (未設定時は超過分を無言で切り詰める罠がある)")
     ap.add_argument("--ledger", default=None,
                     help=f"試行記録の置き場所 (既定 $EXPERIENCE_LEDGER か $EXPERIENCE_RAW_DIR/{LEDGER_NAME})")
+    ap.add_argument("--remine-after-days", type=int, default=DEFAULT_REMINE_AFTER_DAYS,
+                    help="#4841: experience.json がこの日数より古ければ再採掘の対象にする")
     args = ap.parse_args()
 
     asins = [a.strip() for a in args.asins.split(",") if a.strip()] or None
     base = pathlib.Path(args.base)
     ledger_path = pathlib.Path(args.ledger) if args.ledger else default_ledger_path()
     ledger = load_ledger(ledger_path)
-    targets, report = select_mining_targets(limit=args.limit, asins=asins, base=base, ledger=ledger)
+    targets, report = select_mining_targets(
+        limit=args.limit, asins=asins, base=base, ledger=ledger,
+        remine_after_days=args.remine_after_days,
+    )
     logger.info("対象 %d ASIN: %s", len(targets), targets)
     report_selection(report)
 
