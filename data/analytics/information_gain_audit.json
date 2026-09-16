@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-09-16T10:12:48Z",
+  "generated_at": "2026-09-16T10:14:38Z",
   "source_week": "2026-W38",
   "model": "gemma4:26b-a4b-it-qat",
   "num_ctx": 8192,
   "seed": 20260914,
   "limit": 3,
   "since": "2026-09-09",
-  "until": "2026-09-16T10:07:19",
+  "until": "2026-09-16T10:14:37",
   "target_asins": [
     "B08GXGHH7G",
     "B09HGP56C4",
@@ -25,9 +25,9 @@
         "factual_claim": 7,
         "unresolved": 0
       },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 122.83
+      "cache_hit": true,
+      "elapsed_seconds": 0.0,
+      "has_experience_material": false
     },
     {
       "asin": "B09HGP56C4",
@@ -41,9 +41,9 @@
         "factual_claim": 3,
         "unresolved": 0
       },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 108.336
+      "cache_hit": true,
+      "elapsed_seconds": 0.0,
+      "has_experience_material": false
     },
     {
       "asin": "B0GYW6HR99",
@@ -57,9 +57,9 @@
         "factual_claim": 5,
         "unresolved": 0
       },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 96.668
+      "cache_hit": true,
+      "elapsed_seconds": 0.0,
+      "has_experience_material": false
     }
   ],
   "failed": [],
@@ -92,15 +92,15 @@
       "factual_claim": 15,
       "unresolved": 0
     },
-    "median_elapsed_seconds": 108.34,
-    "total_elapsed_seconds": 327.83,
+    "median_elapsed_seconds": 0.0,
+    "total_elapsed_seconds": 0.0,
     "zero_target_articles": false
   },
   "run_ok": true,
   "cache": {
-    "hits": 0,
-    "misses": 3,
+    "hits": 3,
+    "misses": 0,
     "total": 3,
-    "hit_rate_pct": 0
+    "hit_rate_pct": 100
   }
 }
