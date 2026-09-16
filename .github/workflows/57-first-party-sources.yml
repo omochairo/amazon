@@ -65,7 +65,12 @@ jobs:
           python -m scripts.collect_first_party_sources \
             --limit "${{ github.event.inputs.limit || '0' }}"
 
+      # limit > 0 はスモーク。収集が途中までしか走らないので、その結果を
+      # コミットすると本番の posts_cache を縮めて上書きしてしまう。
+      # collect 側の切断ガード (assert_not_truncated) は --limit 時に判定を
+      # 免除するので、ここで PR 作成ごと止める。
       - name: Create data PR + enable auto-merge
+        if: ${{ (github.event.inputs.limit || '0') == '0' }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
