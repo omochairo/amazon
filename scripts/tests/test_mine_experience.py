@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import subprocess
+from datetime import datetime, timedelta, timezone
 
 import pytest
 import requests
@@ -66,6 +68,31 @@ class _FakeSession:
 # select_targets
 # --------------------------------------------------------------------------
 
+_COVERAGE_NOW = datetime(2026, 9, 16, tzinfo=timezone.utc)
+
+
+def _iso_days_ago(days: float, now: datetime = _COVERAGE_NOW) -> str:
+    return (now - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _write_experience_generated(base: pathlib.Path, asin: str, days_ago: float) -> None:
+    d = base / asin
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "experience.json").write_text(
+        json.dumps({"generated_at": _iso_days_ago(days_ago)}), encoding="utf-8",
+    )
+
+
+def _write_article(articles_dir: pathlib.Path, asin: str, *, mtime_days_ago: float | None = None,
+                    date_prefix: str = "2026-01-01") -> pathlib.Path:
+    articles_dir.mkdir(parents=True, exist_ok=True)
+    f = articles_dir / f"{date_prefix}-{asin}.json"
+    f.write_text("{}", encoding="utf-8")
+    if mtime_days_ago is not None:
+        ts = (_COVERAGE_NOW - timedelta(days=mtime_days_ago)).timestamp()
+        os.utime(f, (ts, ts))
+    return f
+
 def test_select_targets_merges_audit_and_rewrite_queue_and_dedupes(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     audit_dir = tmp_path / "data" / "analytics"
@@ -91,6 +118,7 @@ def test_select_targets_appends_explicit_asins(tmp_path):
         limit=0, asins=["B0EXPLICI1", "B0EXPLICI1"],
         audit_path=tmp_path / "missing.json",
         rewrite_queue_dir=tmp_path / "missing_dir",
+        articles_dir=tmp_path / "articles_missing",
     )
     assert targets == ["B0EXPLICI1"]
 
@@ -100,6 +128,7 @@ def test_select_targets_respects_limit(tmp_path):
         limit=2, asins=["B0AAAAAAAA", "B0BBBBBBBB", "B0CCCCCCCC"],
         audit_path=tmp_path / "missing.json",
         rewrite_queue_dir=tmp_path / "missing_dir",
+        articles_dir=tmp_path / "articles_missing",
     )
     assert targets == ["B0AAAAAAAA", "B0BBBBBBBB"]
 
@@ -114,6 +143,122 @@ def test_select_targets_ignores_malformed_asin(tmp_path, monkeypatch):
     targets = select_targets(limit=0, audit_path=audit_dir / "answerability_audit.json",
                               rewrite_queue_dir=tmp_path / "missing_dir")
     assert targets == ["B0GOODGOOD"]
+
+
+# --------------------------------------------------------------------------
+# select_targets: 未採掘優先の並び (#4841)
+# --------------------------------------------------------------------------
+
+def _setup_queue(tmp_path: pathlib.Path, asins: list[str]) -> pathlib.Path:
+    queue = tmp_path / "queue"
+    queue.mkdir(exist_ok=True)
+    for i, a in enumerate(asins):
+        (queue / f"{i:03d}.json").write_text(json.dumps({"asin": a}), encoding="utf-8")
+    return queue
+
+
+def test_select_targets_skips_fresh_asin_when_limit_is_tight(tmp_path, monkeypatch):
+    """generated_at が新しく、記事も更新されていない ASIN は limit 争いで負ける。"""
+    monkeypatch.chdir(tmp_path)
+    queue = _setup_queue(tmp_path, ["B0FRESH0AB", "B0NEVER0AB"])
+    base = tmp_path / "per_asin"
+    _write_experience_generated(base, "B0FRESH0AB", days_ago=5)
+
+    targets = select_targets(
+        limit=1, audit_path=tmp_path / "missing.json", rewrite_queue_dir=queue,
+        base=base, articles_dir=tmp_path / "articles_missing", now=_COVERAGE_NOW,
+    )
+    assert targets == ["B0NEVER0AB"]
+
+
+def test_select_targets_remines_when_article_rewritten_after_generated_at(tmp_path, monkeypatch):
+    """generated_at 自体は新しくても、記事が後から更新されていれば再採掘対象になる。"""
+    monkeypatch.chdir(tmp_path)
+    queue = _setup_queue(tmp_path, ["B0FRESH0AB", "B0REWRITE1"])
+    base = tmp_path / "per_asin"
+    _write_experience_generated(base, "B0FRESH0AB", days_ago=5)
+    _write_experience_generated(base, "B0REWRITE1", days_ago=5)
+    articles_dir = tmp_path / "articles"
+    _write_article(articles_dir, "B0FRESH0AB", mtime_days_ago=10)  # experience.json より前 = リライト無し
+    _write_article(articles_dir, "B0REWRITE1", mtime_days_ago=1)    # experience.json より後 = リライト有り
+
+    targets = select_targets(
+        limit=1, audit_path=tmp_path / "missing.json", rewrite_queue_dir=queue,
+        base=base, articles_dir=articles_dir, now=_COVERAGE_NOW,
+    )
+    assert targets == ["B0REWRITE1"]
+
+
+def test_select_targets_remines_when_older_than_remine_after_days(tmp_path, monkeypatch):
+    """記事の更新が無くても、generated_at が remine_after_days を超えていれば再採掘対象になる。"""
+    monkeypatch.chdir(tmp_path)
+    queue = _setup_queue(tmp_path, ["B0FRESH0AB", "B0STALE0AB"])
+    base = tmp_path / "per_asin"
+    _write_experience_generated(base, "B0FRESH0AB", days_ago=5)
+    _write_experience_generated(base, "B0STALE0AB", days_ago=91)
+
+    targets = select_targets(
+        limit=1, audit_path=tmp_path / "missing.json", rewrite_queue_dir=queue,
+        base=base, articles_dir=tmp_path / "articles_missing",
+        remine_after_days=90, now=_COVERAGE_NOW,
+    )
+    assert targets == ["B0STALE0AB"]
+
+
+def test_select_targets_prioritizes_unmined_pool_and_respects_limit(tmp_path, monkeypatch):
+    """記事はあるが experience.json が無い ASIN (③) が④より優先され、limit を超えない。"""
+    monkeypatch.chdir(tmp_path)
+    queue = _setup_queue(tmp_path, ["B0FRESH0AB"])
+    base = tmp_path / "per_asin"
+    _write_experience_generated(base, "B0FRESH0AB", days_ago=5)
+    articles_dir = tmp_path / "articles"
+    _write_article(articles_dir, "B0FRESH0AB", mtime_days_ago=10)
+    # 未採掘 (experience.json 無し) を3件用意。ASIN 降順で作るが結果は昇順で返るはず
+    for asin in ["B0UNMINED3", "B0UNMINED1", "B0UNMINED2"]:
+        _write_article(articles_dir, asin)
+
+    targets = select_targets(
+        limit=2, audit_path=tmp_path / "missing.json", rewrite_queue_dir=queue,
+        base=base, articles_dir=articles_dir, now=_COVERAGE_NOW,
+    )
+    assert targets == ["B0UNMINED1", "B0UNMINED2"]
+
+
+def test_select_targets_explicit_asins_bypass_freshness_rules(tmp_path, monkeypatch):
+    """--asins は fresh でも limit 争いでも常に先頭で通る。"""
+    monkeypatch.chdir(tmp_path)
+    queue = _setup_queue(tmp_path, ["B0FRESH0AB", "B0NEVER0AB"])
+    base = tmp_path / "per_asin"
+    _write_experience_generated(base, "B0FRESH0AB", days_ago=5)
+
+    targets = select_targets(
+        limit=1, asins=["B0FRESH0AB"],
+        audit_path=tmp_path / "missing.json", rewrite_queue_dir=queue,
+        base=base, articles_dir=tmp_path / "articles_missing", now=_COVERAGE_NOW,
+    )
+    assert targets == ["B0FRESH0AB"]
+
+
+def test_select_targets_is_deterministic_across_repeated_calls(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    queue = _setup_queue(tmp_path, ["B0FRESH0AB", "B0STALE0AB", "B0NEVER0AB"])
+    base = tmp_path / "per_asin"
+    _write_experience_generated(base, "B0FRESH0AB", days_ago=5)
+    _write_experience_generated(base, "B0STALE0AB", days_ago=91)
+    articles_dir = tmp_path / "articles"
+    for asin in ["B0UNMINED2", "B0UNMINED1"]:
+        _write_article(articles_dir, asin)
+
+    kwargs = dict(
+        limit=0, audit_path=tmp_path / "missing.json", rewrite_queue_dir=queue,
+        base=base, articles_dir=articles_dir, now=_COVERAGE_NOW,
+    )
+    first = select_targets(**kwargs)
+    second = select_targets(**kwargs)
+    assert first == second
+    assert first == [
+        "B0NEVER0AB", "B0STALE0AB", "B0UNMINED1", "B0UNMINED2", "B0FRESH0AB",
+    ]
 
 
 # --------------------------------------------------------------------------
@@ -951,7 +1096,12 @@ def _pool(tmp_path, asins):
     queue.mkdir(exist_ok=True)
     for i, a in enumerate(asins):
         (queue / f"{i:03d}.json").write_text(json.dumps({"asin": a}), encoding="utf-8")
-    return {"audit_path": tmp_path / "missing.json", "rewrite_queue_dir": queue}
+    # articles_dir は既定で実リポジトリの data/articles を見に行く (#4841) ので、
+    # これらのテストが実データを拾わないよう存在しないディレクトリに逸らす。
+    return {
+        "audit_path": tmp_path / "missing.json", "rewrite_queue_dir": queue,
+        "articles_dir": tmp_path / "articles_missing",
+    }
 
 
 def _exp(base, asin, days_ago):
