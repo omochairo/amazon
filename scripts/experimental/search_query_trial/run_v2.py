@@ -27,7 +27,7 @@ from typing import Any
 
 import requests
 
-from scripts.fetch_third_party_sources import month_usage
+from scripts.fetch_third_party_sources import raw_call_count
 from scripts.mine_experience import make_session, resolve_product_identity
 
 from scripts.experimental.search_query_trial import (
@@ -129,7 +129,7 @@ def run(
     per_asin_group_stats: dict[str, dict[str, dict[str, Any]]] = {}
     query_log: list[dict[str, Any]] = []
     failures: list[dict[str, Any]] = []
-    usage_before = month_usage(base)
+    usage_before = raw_call_count(base)
 
     for asin in asins:
         per_asin_group_stats[asin] = {}
@@ -181,7 +181,10 @@ def run(
     # owner 修正1: 今回の消費を報告に出す。台帳 (base/_tavily_usage.json) は
     # query_groups.tavily_search が呼び出し直前に直接更新しているので、ここでは
     # 差分を読み直して報告するだけ (owner がdata PRへ反映する際の根拠になる)。
-    usage_after = month_usage(base)
+    # month_usage ではなく raw_call_count を使う: month_usage は
+    # third_party_sources.json の fetched_at 由来の成功件数と実呼び出し回数の
+    # 大きい方を返すため、fetched_at 側が上回ると差分が 0 になってしまう。
+    usage_after = raw_call_count(base)
     report["tavily_calls_consumed"] = usage_after - usage_before
     report["tavily_usage_before"] = usage_before
     report["tavily_usage_after"] = usage_after

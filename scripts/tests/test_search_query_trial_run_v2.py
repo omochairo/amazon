@@ -4,6 +4,7 @@ Tavily/gemma への実呼び出しはせず、各ステップをモックして�
 """
 from __future__ import annotations
 
+import datetime
 import json
 import pathlib
 import tempfile
@@ -13,6 +14,10 @@ from unittest import mock
 import requests
 
 from scripts.experimental.search_query_trial import run_v2 as R
+from scripts import fetch_third_party_sources as F
+
+_NOW = datetime.datetime.now(datetime.timezone.utc)
+_MONTH = _NOW.strftime("%Y-%m")
 
 
 class _FakeDeadHosts:
@@ -89,7 +94,7 @@ class RunTest(unittest.TestCase):
         with mock.patch.object(R, "make_session", return_value=(self.__dict__.setdefault(
                 "session", type("S", (), {})()), _FakeDeadHosts())), \
              mock.patch.object(R, "run_one_group", side_effect=self._fake_run_one_group), \
-             mock.patch.object(R, "month_usage", return_value=0):
+             mock.patch.object(R, "raw_call_count", return_value=0):
             report = R.run(
                 asins, api_key="tvly-test", ollama_url="http://x", model="m",
                 num_ctx=8192, run_dir=None, sleeper=lambda s: None,
@@ -114,7 +119,7 @@ class RunTest(unittest.TestCase):
         with mock.patch.object(R, "make_session", return_value=(self.__dict__.setdefault(
                 "session", type("S", (), {})()), _FakeDeadHosts())), \
              mock.patch.object(R, "run_one_group", side_effect=flaky_run_one_group), \
-             mock.patch.object(R, "month_usage", return_value=0):
+             mock.patch.object(R, "raw_call_count", return_value=0):
             report = R.run(
                 asins, api_key="tvly-test", ollama_url="http://x", model="m",
                 num_ctx=8192, run_dir=None, sleeper=lambda s: None,
@@ -136,7 +141,7 @@ class RunTest(unittest.TestCase):
 
             with mock.patch.object(R, "make_session", return_value=(type("S", (), {})(), _FakeDeadHosts())), \
                  mock.patch.object(R, "run_one_group", side_effect=flaky_run_one_group), \
-                 mock.patch.object(R, "month_usage", return_value=0):
+                 mock.patch.object(R, "raw_call_count", return_value=0):
                 report = R.run(
                     ["B0000000AA"], api_key="tvly-test", ollama_url="http://x", model="m",
                     num_ctx=8192, run_dir=run_dir, sleeper=lambda s: None,
@@ -171,7 +176,7 @@ class RunTest(unittest.TestCase):
 
             with mock.patch.object(R, "make_session", return_value=(type("S", (), {})(), _FakeDeadHosts())), \
                  mock.patch.object(R, "run_one_group", side_effect=fake_run_one_group), \
-                 mock.patch.object(R, "month_usage", return_value=0):
+                 mock.patch.object(R, "raw_call_count", return_value=0):
                 report = R.run(
                     ["B0000000AA"], api_key="tvly-test", ollama_url="http://x", model="m",
                     num_ctx=8192, run_dir=run_dir, sleeper=lambda s: None, resume=True,
@@ -188,11 +193,47 @@ class RunTest(unittest.TestCase):
         """owner修正1: 台帳の差分 (今回の消費) を報告に出す。"""
         with mock.patch.object(R, "make_session", return_value=(type("S", (), {})(), _FakeDeadHosts())), \
              mock.patch.object(R, "run_one_group", side_effect=self._fake_run_one_group), \
-             mock.patch.object(R, "month_usage", side_effect=[374, 414]):
+             mock.patch.object(R, "raw_call_count", side_effect=[374, 414]):
             report = R.run(
                 ["B0000000AA"], api_key="tvly-test", ollama_url="http://x", model="m",
                 num_ctx=8192, run_dir=None, sleeper=lambda s: None,
             )
+        self.assertEqual(report["tavily_usage_before"], 374)
+        self.assertEqual(report["tavily_usage_after"], 414)
+        self.assertEqual(report["tavily_calls_consumed"], 40)
+
+    def test_consumed_uses_ledger_even_when_fetched_at_usage_is_larger(self):
+        """バグ回帰: month_usage は fetched_at 由来の成功件数と実呼び出し回数の
+        大きい方を返すため、成功件数側 (430) が台帳 (374→414) を上回ると
+        差分が 0 に出ていた (#4841 V2 実測で発覚)。raw_call_count を使い、
+        fetched_at 側が大きくても台帳の実差分 (40) が出ることを確認する。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            for i in range(430):
+                d = base / f"B{i:09d}"
+                d.mkdir(parents=True)
+                (d / F.OUT_NAME).write_text(
+                    json.dumps({"fetched_at": _NOW.strftime("%Y-%m-%dT%H:%M:%S+00:00")}),
+                    encoding="utf-8",
+                )
+            (base / F.USAGE_NAME).write_text(
+                json.dumps({"month": _MONTH, "calls": 374}), encoding="utf-8",
+            )
+            self.assertGreater(F.month_usage(base, now=_NOW), 374)  # fetched_at 側が上回る前提
+
+            def fake_run_one_group(group, asin, api_key, **kwargs):
+                (base / F.USAGE_NAME).write_text(
+                    json.dumps({"month": _MONTH, "calls": 414}), encoding="utf-8",
+                )
+                return self._fake_run_one_group(group, asin, api_key, **kwargs)
+
+            with mock.patch.object(R, "make_session",
+                                    return_value=(type("S", (), {})(), _FakeDeadHosts())), \
+                 mock.patch.object(R, "run_one_group", side_effect=fake_run_one_group):
+                report = R.run(
+                    ["B0000000AA"], base=base, api_key="tvly-test", ollama_url="http://x",
+                    model="m", num_ctx=8192, run_dir=None, sleeper=lambda s: None,
+                )
         self.assertEqual(report["tavily_usage_before"], 374)
         self.assertEqual(report["tavily_usage_after"], 414)
         self.assertEqual(report["tavily_calls_consumed"], 40)

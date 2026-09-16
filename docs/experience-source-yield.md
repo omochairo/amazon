@@ -463,3 +463,100 @@ python -m scripts.experimental.search_query_trial.run_v2 --dry-run
 
 **実測 (Tavily/gemma への実呼び出し) は go が出てから。** それまでこの PR は
 このまま止める。
+
+## V2 実測結果 (2026-09-16) `[実]`
+
+母艦が K8 上で実測を完走させた (`/root/v2_runs/20260916T013640Z/`、10:36〜12:43
+JST・約2時間7分)。対象 20 ASIN × Q0/Q1/Q2 = 60 組のうち、失敗は **1 組**
+(`B09R7GG5BJ` Q2、read timeout。全60組の1.7%、打ち切り基準20%未満)。
+
+### `tavily_calls_consumed` のバグ修正
+
+実行直後は `tavily_calls_consumed` が **0** と報告されていた。原因は
+`month_usage()` が「台帳の実呼び出し回数」と「`third_party_sources.json` の
+`fetched_at` 由来の成功件数」の**大きい方**を返す仕様 (V1 期からの budget
+ガード用の関数) で、今回は後者 (430) が前者を上回っていたため、実行前後とも
+430 で差分が 0 になっていた。
+
+消費量の測定には台帳の `calls` そのものを使う必要があるため、`_tavily_usage.json`
+の `calls` だけを返す `fetch_third_party_sources.raw_call_count()` を新設し、
+`run_v2.run()` の `tavily_calls_consumed` / `tavily_usage_before` /
+`tavily_usage_after` をこちらに差し替えた (`month_usage()` 自体は budget
+ガード用途のまま維持)。回帰テストとして「`fetched_at` 由来の値が台帳より
+大きい状況でも消費量が実回数の差で出る」ケースを追加した
+(`test_search_query_trial_run_v2.py::RunTest::test_consumed_uses_ledger_even_when_fetched_at_usage_is_larger`、
+`test_fetch_third_party_sources.py::RawCallCountTest`)。
+
+- **消費: 40 回** (台帳 `calls` が **374 → 414**)。owner が本番台帳
+  (`data/raw/per_asin/_tavily_usage.json`) へ反映する根拠はこの差分。
+  実行そのものは修正前のコードで走ったため `v2_results.json` の
+  `tavily_calls_consumed` はバグの影響で当初 0 だった。この文書の値と
+  `v2_results.json` の該当フィールドは、`git show
+  HEAD:data/raw/per_asin/_tavily_usage.json` (374) と実行後の worktree の
+  ファイル (414) の差分から手動で補完した (`v2_results.json` の
+  `tavily_usage_note` に補完の経緯を記録)
+- `new_query_count` (Q1/Q2 それぞれ1回 × 20 ASIN の実行試行数) は **39**。
+  差の1回は、失敗した1組 (`B09R7GG5BJ` Q2) が `record_call` (Tavily 送信
+  直前に台帳へ刻む) の後にタイムアウトしたぶん — 呼び出し自体は消費されているが
+  `query_log` には積まれていない
+
+### 群ごとの歩留まり
+
+| 群 | 試行 | 取得失敗 | empty_body | 成功 | 体験談 (snippet) | 成功URLあたり | 切り詰め | 商品名/ブランド一致率 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Q0 | 102 | 26 | 1 | 76 | 32 | 0.421 | 4 | 0.813 |
+| Q1 | 99 | 24 | 0 | 75 | 53 | 0.707 | 2 | 0.840 |
+| Q2 | 95 | 3 | 0 | 92 | 17 | 0.185 | 6 | 0.750 |
+
+extraction_failed / extraction_bad_json はいずれの群も 0 件。
+
+ホスト種別内訳 (取得成功 URL の内訳):
+
+- Q0: ec 38 / other 22 / sns 20 / maker 13 / blog 6 / media 3
+- Q1: ec 37 / other 29 / sns 15 / maker 8 / blog 7 / media 3
+- Q2: blog 92 / other 3
+
+### 統計判定 (ASIN 単位ブートストラップ、2,000回・seed 4841)
+
+| 比較 | 平均差 | 95% CI | n | 判定 |
+|---|---:|---|---:|---|
+| Q1 vs Q0 | +0.1618 | [-0.0382, +0.3751] | 20 | 0 をまたぐ → **採用しない** |
+| Q2 vs Q0 | -0.2430 | [-0.4596, -0.0404] | 19 | **有意に悪化** |
+
+全体判定 (Bonferroni 補正・97.5%信頼区間): `decision = no_go`、
+`adopted_groups = []`。
+
+### 読み方
+
+Q2 は取得成功率 97%・商品名一致率 75% で、「ブログが取れない」のではない。
+**ドメインで絞って集めたブログは体験談が薄い。** V1 の「blog は URL あたりの
+歩留まりが高い」は、商品名検索で上位に来たブログ (実質的なレビュー記事) の
+話であって、ブログ全体の性質ではなかった、と読む。Q1 (検索語だけの変更) も
+95% CI が 0 をまたぎ、既存の Q0 (third_party_sources.json 由来) に対する
+明確な改善とは言えない。**V2 は `no_go`。** 検索語・ドメイン限定のどちらの
+アプローチも、既存の third_party 経路を上回る根拠は今回の実測では得られな
+かった。
+
+### 検証コマンド
+
+```bash
+python -m pytest scripts/tests/test_search_query_trial_run_v2.py \
+  scripts/tests/test_fetch_third_party_sources.py -q
+# 期待: 64 passed (Tavily/gemmaへの実呼び出しなし)
+
+python3 -c "
+import json
+d = json.load(open('docs/experience-source-yield/v2_results.json'))
+print('decision', d['decision'], d['decision_confidence'])
+print('adopted_groups', d['adopted_groups'])
+print('tavily_calls_consumed', d['tavily_calls_consumed'],
+      d['tavily_usage_before'], '->', d['tavily_usage_after'])
+print('failures', d['failures'])
+"
+# 期待: decision no_go 0.975 / adopted_groups [] /
+# tavily_calls_consumed 40 (374 -> 414) / failures 1件 (B09R7GG5BJ Q2)
+```
+
+生の入出力 (60組の詳細JSON) は `--run-dir` (`/root/v2_runs/20260916T013640Z/`、
+worktree 外) に残っている。本 PR にコミットするのは集計結果
+(`docs/experience-source-yield/v2_results.json`) のみ。
