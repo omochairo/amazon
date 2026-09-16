@@ -183,9 +183,38 @@ jobs:
                   ]
               except FileNotFoundError:
                   pass
+              # omcha-ops#264: first_party_pool.json = おもちゃいろ (omcha.jp) の
+              # アフィリンクから実体験ありと判定された・未記事化の ASIN。
+              # ranking_pool と同じ寛容さ (無い/壊れていれば黙って従来どおり) で読み、
+              # **先頭**に置く (実体験という一次情報の希少性を優先する)。
+              # 1 run あたりの上限を置くのは、既存の ranking / keyword 枠を
+              # 締め出さないため (#5490 の rewrite_first と同じ考え方)。
+              first_party_pool = []
+              try:
+                  _fp_cap = int(os.environ.get('FIRST_PARTY_PICKS_PER_RUN', '2'))
+                  with open('data/raw/first_party_pool.json', encoding='utf-8') as f:
+                      fp = json.load(f)
+                  _fp_all = [
+                      a for a in fp.get('asins', [])
+                      if isinstance(a, str) and _ASIN_RE.match(a)
+                  ]
+                  first_party_pool = [a for a in _fp_all if a not in existing][:max(_fp_cap, 0)]
+                  if first_party_pool:
+                      print(f"first-party-ready (omcha-ops#264): {len(_fp_all)} -> "
+                            f"picking {len(first_party_pool)} {first_party_pool}")
+              except FileNotFoundError:
+                  # 収集レーン (omcha-ops#264 A) がまだ無い間はこれが常態。
+                  # ranking_pool と同じく黙って従来どおりにする。
+                  pass
+              except (json.JSONDecodeError, TypeError, ValueError) as _e:
+                  print(f"::warning::first_party_pool skipped: {_e}")
+              first_party_set = set(first_party_pool)
               ranking_set = set(ranking_pool)
-              remaining_ranking = [a for a in ranking_pool if a not in existing]
-              remaining_kw = [a for a in candidates if a not in existing and a not in ranking_set]
+              remaining_ranking = [a for a in ranking_pool if a not in existing and a not in first_party_set]
+              remaining_kw = [
+                  a for a in candidates
+                  if a not in existing and a not in ranking_set and a not in first_party_set
+              ]
               # #5490: リライト待ちを **候補として足す**。マーカーは除外を外すだけ
               # だったので、amazon.json の items[] に居ない (= 日次 fetch に消された)
               # 対象は永久に選ばれなかった。実測 2026-08-31: マーカー 172 件・
@@ -209,7 +238,7 @@ jobs:
               rng = random.Random(os.environ.get('GITHUB_RUN_ID', ''))
               rng.shuffle(remaining_ranking)
               rng.shuffle(remaining_kw)
-              remaining = remaining_ranking + rewrite_first + [
+              remaining = first_party_pool + remaining_ranking + rewrite_first + [
                   a for a in remaining_kw if a not in rewrite_first
               ]
               # #1600 Phase 1: 第三者情報量が「fetch 済みで真ゼロ」(band=="zero",
@@ -222,15 +251,27 @@ jobs:
               try:
                   import score_per_asin_info as _sc
                   kept, deferred = [], []
+                  # omcha-ops#264: first-party は defer の対象外。#1600 が切るのは
+                  # 「第三者素材がゼロなので Jules が水増しするしかない ASIN」で、
+                  # first-party は omcha.jp 側に自前の実体験がある = 書く材料が
+                  # 手元にある枠。band=zero で落とすと前置した意味が消える。
+                  # 実測 2026-09-16: 手作業の 8 件中 1 件 (B09WRH12JL) が zero。
+                  # 安全弁は first-party を数えない (下の kept_other)。first-party は
+                  # 常に kept に入るので、これを数えると「全候補 zero」を検出できない。
+                  kept_other = []
                   for a in remaining:
+                      if a in first_party_set:
+                          kept.append(a)
+                          continue
                       if _sc.score_asin(a).get('band') == 'zero':
                           deferred.append(a)
                       else:
                           kept.append(a)
+                          kept_other.append(a)
                   if deferred:
                       print(f"info-zero deferred (#1600): {len(deferred)} "
                             f"e.g. {deferred[:10]}")
-                  if kept:
+                  if kept_other:
                       remaining = kept
                   elif deferred:
                       print("::warning::all candidates band=zero; "
@@ -238,6 +279,7 @@ jobs:
               except Exception as _e:  # スコア計算失敗は pick を止めない (best-effort)
                   print(f"::warning::info scoring skipped, no defer applied: {_e}")
               print(f"candidates={len(candidates)} ranking_pool={len(ranking_pool)} "
+                    f"first_party_pool={len(first_party_pool)} "
                     f"existing_excluded={len(existing)} ranking_first={len(remaining_ranking)} "
                     f"remaining={len(remaining)}")
               # #4964 観察項目3: どのプールから来た ASIN かをここで判別して残す
@@ -250,6 +292,8 @@ jobs:
               }
 
               def _origin_for(a):
+                  if a in first_party_set:
+                      return {"asin": a, "pool": "first-party", "source_keyword": None}
                   if a in ranking_set:
                       return {"asin": a, "pool": "ranking-sniper", "source_keyword": None}
                   if a in rewrite_set:
