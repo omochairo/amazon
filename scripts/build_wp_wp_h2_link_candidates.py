@@ -106,6 +106,14 @@ _WS_RE = re.compile(r"\s+")
 _H2_RE = re.compile(r"<h2[^>]*>(.*?)</h2>", re.IGNORECASE | re.DOTALL)
 _SHORTCODE_RE = re.compile(r"\[/?[a-zA-Z0-9_-]+[^\]]*\]")
 _BLOGCARD_RE = re.compile(r"\[blogcard\b[^\]]*\burl=[\"']([^\"']+)[\"'][^\]]*\]", re.IGNORECASE)
+# 描画済み HTML (WP REST の content.rendered) では [blogcard] は Cocoon が
+# <a class="blogcard-wrap internal-blogcard-wrap ..."> に変換済みで、生ショート
+# コードは1つも残らない。query_post_id 経路 (lane の主経路) はこちらを読むため、
+# アンカー側も拾わないと「既出」フラグが常に0件になる (2026-09-16 実測: 公開記事
+# 8251 の rendered に literal "[blogcard" は 0、blogcard アンカーは 3)。
+_ANCHOR_TAG_RE = re.compile(r"<a\b[^>]*>", re.IGNORECASE)
+_ANCHOR_HREF_RE = re.compile(r"\bhref=[\"']([^\"']+)[\"']", re.IGNORECASE)
+_ANCHOR_CLASS_RE = re.compile(r"\bclass=[\"']([^\"']*)[\"']", re.IGNORECASE)
 
 
 class EmbeddingBatchError(Exception):
@@ -243,10 +251,25 @@ def extract_h2_sections(content_html: str) -> list[dict[str, Any]]:
 
 
 def extract_blogcard_urls(content_html: str) -> set[str]:
-    """本文全体から既存の ``[blogcard url="..."]`` の URL 集合を取る (正規化済み)。"""
+    """本文から既存のブログカードの URL 集合を取る (正規化済み)。
+
+    下書き JSON (``wp_draft.py pull``) は生ショートコード ``[blogcard url="..."]``、
+    公開記事の ``content.rendered`` は Cocoon が描画した
+    ``<a class="blogcard-wrap internal-blogcard-wrap ...">`` と形が違うため、
+    両方を拾う (omcha-ops#174 follow-up: アンカー側を拾わないと query_post_id
+    経路で既出フラグが必ず0件になり、既に貼ったカードを毎回また提案する)。
+    """
     if not isinstance(content_html, str) or not content_html:
         return set()
-    return {normalize_url(u) for u in _BLOGCARD_RE.findall(content_html)}
+    urls = {normalize_url(u) for u in _BLOGCARD_RE.findall(content_html)}
+    for tag in _ANCHOR_TAG_RE.findall(content_html):
+        cls = _ANCHOR_CLASS_RE.search(tag)
+        if cls is None or "blogcard" not in cls.group(1).lower():
+            continue
+        href = _ANCHOR_HREF_RE.search(tag)
+        if href is not None:
+            urls.add(normalize_url(href.group(1)))
+    return urls
 
 
 # --------------------------------------------------------------------------
