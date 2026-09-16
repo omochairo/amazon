@@ -27,6 +27,11 @@ class BuildQueryTest(unittest.TestCase):
 
 
 class TavilySearchWithDomainsTest(unittest.TestCase):
+    def setUp(self):
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.base = pathlib.Path(self._tmpdir.name)
+        self.addCleanup(self._tmpdir.cleanup)
+
     def test_include_domains_added_to_request_body(self):
         captured = {}
 
@@ -35,7 +40,7 @@ class TavilySearchWithDomainsTest(unittest.TestCase):
             return _urlopen_response({"results": []})
 
         with mock.patch.object(Q.urllib.request, "urlopen", side_effect=fake_urlopen):
-            Q.tavily_search("x", "tvly-test", include_domains=["note.com", "ameblo.jp"])
+            Q.tavily_search("x", "tvly-test", base=self.base, include_domains=["note.com", "ameblo.jp"])
         self.assertEqual(captured["body"]["include_domains"], ["note.com", "ameblo.jp"])
 
     def test_no_include_domains_key_when_not_passed(self):
@@ -46,7 +51,7 @@ class TavilySearchWithDomainsTest(unittest.TestCase):
             return _urlopen_response({"results": []})
 
         with mock.patch.object(Q.urllib.request, "urlopen", side_effect=fake_urlopen):
-            Q.tavily_search("x", "tvly-test")
+            Q.tavily_search("x", "tvly-test", base=self.base)
         self.assertNotIn("include_domains", captured["body"])
 
     def test_results_normalized_and_filterable(self):
@@ -54,9 +59,21 @@ class TavilySearchWithDomainsTest(unittest.TestCase):
             {"url": "https://note.com/1", "title": "T", "content": "C"},
         ]}
         with mock.patch.object(Q.urllib.request, "urlopen", return_value=_urlopen_response(payload)):
-            items = Q.tavily_search("x", "tvly-test")
+            items = Q.tavily_search("x", "tvly-test", base=self.base)
         out = Q._filter_sources(items, max_sources=5)
         self.assertEqual([s["host"] for s in out], ["note.com"])
+
+    def test_records_call_to_shared_ledger_before_request(self):
+        """owner修正1: Tavily を叩く直前に共有台帳へ1回ぶん刻む。"""
+        def fake_urlopen(req, timeout=None):
+            usage = json.loads((self.base / "_tavily_usage.json").read_text(encoding="utf-8"))
+            self.assertEqual(usage["calls"], 1)
+            return _urlopen_response({"results": []})
+
+        with mock.patch.object(Q.urllib.request, "urlopen", side_effect=fake_urlopen):
+            Q.tavily_search("x", "tvly-test", base=self.base)
+        usage = json.loads((self.base / "_tavily_usage.json").read_text(encoding="utf-8"))
+        self.assertEqual(usage["calls"], 1)
 
 
 class SearchForGroupTest(unittest.TestCase):
@@ -79,7 +96,7 @@ class SearchForGroupTest(unittest.TestCase):
 
         captured = {}
 
-        def fake_search(query, api_key, num=10, include_domains=None):
+        def fake_search(query, api_key, *, base, num=10, include_domains=None):
             captured["include_domains"] = include_domains
             return []
 
@@ -91,7 +108,7 @@ class SearchForGroupTest(unittest.TestCase):
     def test_q1_has_no_include_domains(self):
         captured = {}
 
-        def fake_search(query, api_key, num=10, include_domains=None):
+        def fake_search(query, api_key, *, base, num=10, include_domains=None):
             captured["include_domains"] = include_domains
             captured["query"] = query
             return []

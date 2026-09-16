@@ -360,3 +360,106 @@ TAVILY_API_KEY=... OLLAMA_URL=http://<k8-host>:11434 \
   --out docs/experience-source-yield/v2_results.json \
   --run-dir ~/v2_runs/2026-09-16
 ```
+
+## V2 修正報告 (2026-09-16, 母艦レビュー対応) — dry-run まで完了、止まって報告 `[実]`
+
+母艦レビュー (PR #7463 コメント) の要修正 1〜3・4〜7 を実施した。実測
+(Tavily/gemma への実呼び出し) はまだ行っていない — 以下は dry-run とテストの
+確認結果のみ。
+
+### 要修正 1: Tavily 消費を台帳に刻む
+
+`query_groups.tavily_search` に `base` を渡し、送信直前 (urlopen の直前) に
+本番と同じ `fetch_third_party_sources.record_call(base)` を呼ぶようにした。
+`run()` は開始時・終了時に `month_usage(base)` を読み、差分を
+`report["tavily_calls_consumed"]` / `tavily_usage_before` / `tavily_usage_after`
+として報告に出す。実測を回したら、この差分を owner が台帳の data PR に
+反映できる (`_tavily_usage.json` の `calls` を実測後の値へ)。
+
+- テスト: `test_search_query_trial_query_groups.py::TavilySearchWithDomainsTest::test_records_call_to_shared_ledger_before_request`
+- テスト: `test_search_query_trial_run_v2.py::RunTest::test_reports_tavily_calls_consumed_via_ledger_delta`
+
+### 要修正 2: ASIN×群単位で例外を捕まえて続行・`--resume`
+
+`run()` は ASIN×群ごとに例外を捕まえ、`report["failures"]` に記録して次の組へ
+進む。失敗した組も `--run-dir` に `{"status": "error", "error": ...}` を書く。
+`--resume` を付けると、`--run-dir` に既存の結果 (成功・失敗のどちらでも) が
+ある組は Tavily を叩き直さずスキップする。
+
+- テスト: `test_search_query_trial_run_v2.py::RunTest::test_exception_in_one_pair_is_recorded_and_others_continue`
+- テスト: `test_search_query_trial_run_v2.py::RunTest::test_exception_writes_error_marker_to_run_dir`
+- テスト: `test_search_query_trial_run_v2.py::RunTest::test_resume_skips_pairs_with_existing_result_and_does_not_call_run_one_group`
+- テスト: `test_search_query_trial_run_v2.py::MainCliTest::test_resume_flag_is_forwarded_to_run`
+
+### 要修正 3: 抽出の切り詰め・失敗を stats に出す
+
+`compute_group_stats` に `extraction_meta` を渡し、群ごとに `extraction_ok` /
+`extraction_truncated` / `extraction_failed` / `extraction_bad_json` の件数を
+追加。主指標 (`snippet_per_success_url`) はそのままに、切り詰め・失敗の URL を
+除いた分母の値も `snippet_per_success_url_excl_extraction_issues` として併記する。
+
+- テスト: `test_search_query_trial_evaluation.py::ComputeGroupStatsTest::test_extraction_issue_counts_and_denominator_excludes_them`
+
+### 4. `empty_body` を取得失敗と分ける
+
+`fetch_failed` (ネットワーク/HTTPエラー) と `empty_body` (取得はできたが本文が
+無かった) を分離した。分母 (`urls_fetch_success`) から落とすのは `fetch_failed`
+だけにし、`empty_body` は件数を `urls_empty_body` として別出しした。
+
+- テスト: `test_search_query_trial_evaluation.py::ComputeGroupStatsTest::test_empty_body_counted_separately_from_fetch_failed`
+
+### 5. 判定を「信頼区間が0をまたがない群だけ採用」に固定
+
+`build_report` は Q1・Q2 それぞれの信頼区間 (95%) をそのまま報告し、
+`adopted_groups` (採用する群) はその群自身の信頼区間で決める。一方
+「どちらかが有効か」という両方を見た全体判定 (`decision`) は多重比較になる
+ため、Bonferroni 補正 (各検定 97.5%、`FAMILYWISE_CONFIDENCE`) で家族的 alpha
+を約5%に抑えたうえで go/no_go を決める。
+
+- テスト: `test_search_query_trial_evaluation.py::PairedDiffsAndEvaluateTest::test_build_report_decision_reflects_either_group_valid`
+- テスト: `test_search_query_trial_evaluation.py::PairedDiffsAndEvaluateTest::test_build_report_no_go_when_neither_group_valid`
+- テスト: `test_search_query_trial_evaluation.py::PairedDiffsAndEvaluateTest::test_evaluate_group_uses_bonferroni_confidence_when_passed`
+
+### 6. 着手直前に `git fetch origin main` して台帳を読み直す
+
+`budget.refresh_ledger_from_origin_main()` が `git fetch origin main` の後に
+`git show origin/main:data/raw/per_asin/_tavily_usage.json` で最新の台帳内容
+だけを読む (ワークツリーには書かない)。取得できたらそれを
+`check_tavily_budget(usage_data=...)` に渡し、失敗時 (サンドボックスでネット
+ワーク不可等) はローカルファイルにフォールバックする。`budget_report` に
+`usage_source` / `ledger_source` を追加し、どちらを見たか報告に残る。
+
+- テスト: `test_search_query_trial_budget.py::RefreshLedgerFromOriginMainTest` (3件)
+- テスト: `test_search_query_trial_budget.py::CheckTavilyBudgetTest::test_usage_data_overrides_local_file`
+- テスト: `test_search_query_trial_run_v2.py::MainCliTest::test_passes_refreshed_ledger_data_to_budget_check`
+
+### 7. 型注釈修正
+
+`run_one_group` の戻り値注釈を `dict[str, Any]` から
+`tuple[dict[str, Any], dict[str, Any]]` に修正。
+
+### dry-run 結果 (`git fetch origin main` 後、2026-09-16T01:15:43Z 実施) `[実]`
+
+```bash
+git fetch origin main
+python -m scripts.experimental.search_query_trial.run_v2 --dry-run
+```
+
+- `usage_source: "origin_main"` / `ledger_source: "origin/main (git fetch 済み)"`
+  — ローカルの worktree ではなく origin/main から読み直した値であることを確認
+- `used_this_month: 374` (origin/main の 9/14 時点の値。9/15 以降の追加消費は
+  無かった)
+- `remaining_days_in_month: 15` / `projected_existing_lane_remainder: 405.0` /
+  `projected_total: 819.0` ≤ `monthly_budget: 900` → `feasible: true`
+- 対象 20 ASIN、カテゴリ内訳 `["STEM", "想像", "運動"]` の3種 (候補44件から選定)
+- `--resume` の動作: Tavily を叩かないテストで確認 (上記「要修正2」参照)
+
+### テスト
+
+`test_search_query_trial_*.py` 73 passed (既存57 + 今回追加16)。
+フルスイート (`.venv` 経由): 4239 passed / 3 skipped / 33 subtests、既存の
+環境起因失敗3件 (`test_validate_article_pr_range.py`、PATH に `python` が
+無いことによる既知の不具合) 以外は回帰なし。
+
+**実測 (Tavily/gemma への実呼び出し) は go が出てから。** それまでこの PR は
+このまま止める。

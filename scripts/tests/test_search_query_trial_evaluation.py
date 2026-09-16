@@ -51,6 +51,51 @@ class ComputeGroupStatsTest(unittest.TestCase):
         )
         self.assertEqual(stats["snippet_per_success_url"], 0.0)
 
+    def test_empty_body_counted_separately_from_fetch_failed(self):
+        """owner修正4: empty_bodyは取得失敗ではないので、成功URLあたりの分母から落とさない。"""
+        fetch_log = [
+            {"url": "https://a", "status": "ok"},
+            {"url": "https://b", "status": "empty_body"},
+            {"url": "https://c", "status": "fetch_failed"},
+        ]
+        stats = compute_group_stats(
+            asin="B0000000AA", group="Q1",
+            tried_urls=["https://a", "https://b", "https://c"],
+            fetch_log=fetch_log, snippets=[{"aspect": "不満", "source_url": "https://a"}],
+            product_name="BRIO", brand="BRIO", url_texts={"https://a": "BRIOの本文"},
+        )
+        self.assertEqual(stats["urls_fetch_failed"], 1)
+        self.assertEqual(stats["urls_empty_body"], 1)
+        # 分母 (成功URL) は fetch_failed の1件だけを除いた2件 (ok + empty_body)
+        self.assertEqual(stats["urls_fetch_success"], 2)
+        self.assertEqual(stats["snippet_per_success_url"], 0.5)
+
+    def test_extraction_issue_counts_and_denominator_excludes_them(self):
+        """owner修正3: 切り詰め・失敗の件数を出し、除いた分母も併記する (主指標は変えない)。"""
+        fetch_log = [
+            {"url": "https://a", "status": "ok"},
+            {"url": "https://b", "status": "ok"},
+        ]
+        extraction_meta = [
+            {"source_url": "https://a", "status": "ok"},
+            {"source_url": "https://b", "status": "truncated"},
+        ]
+        stats = compute_group_stats(
+            asin="B0000000AA", group="Q1", tried_urls=["https://a", "https://b"],
+            fetch_log=fetch_log, snippets=[{"aspect": "不満", "source_url": "https://a"}],
+            product_name="BRIO", brand="BRIO",
+            url_texts={"https://a": "BRIOの本文", "https://b": "BRIOの本文2"},
+            extraction_meta=extraction_meta,
+        )
+        self.assertEqual(stats["extraction_ok"], 1)
+        self.assertEqual(stats["extraction_truncated"], 1)
+        self.assertEqual(stats["extraction_failed"], 0)
+        self.assertEqual(stats["extraction_bad_json"], 0)
+        # 主指標 (分母2件) は変えない
+        self.assertEqual(stats["snippet_per_success_url"], 0.5)
+        # 切り詰めのURLを除いた分母 (1件) だと同じ1snippetでも率が変わる
+        self.assertEqual(stats["snippet_per_success_url_excl_extraction_issues"], 1.0)
+
     def test_host_category_breakdown_uses_v1_classification(self):
         stats = compute_group_stats(
             asin="B0000000AA", group="Q1", tried_urls=["https://note.com/1", "https://kakaku.com/2"],
@@ -110,9 +155,34 @@ class PairedDiffsAndEvaluateTest(unittest.TestCase):
             for i in range(10)
         }
         report = build_report(per_asin)
-        self.assertEqual(report["decision"], "q1_or_q2_valid")
+        self.assertEqual(report["decision"], "go")
+        self.assertEqual(report["adopted_groups"], ["Q1"])
         self.assertTrue(report["q1_vs_q0"]["valid"])
         self.assertFalse(report["q2_vs_q0"]["valid"])
+
+    def test_build_report_no_go_when_neither_group_valid(self):
+        per_asin = {
+            f"B{i:09d}": {
+                "Q0": self._stats(f"B{i:09d}", "Q0", 0.1),
+                "Q1": self._stats(f"B{i:09d}", "Q1", 0.1),
+                "Q2": self._stats(f"B{i:09d}", "Q2", 0.1),
+            }
+            for i in range(10)
+        }
+        report = build_report(per_asin)
+        self.assertEqual(report["decision"], "no_go")
+        self.assertEqual(report["adopted_groups"], [])
+
+    def test_evaluate_group_uses_bonferroni_confidence_when_passed(self):
+        per_asin = {
+            f"B{i:09d}": {
+                "Q0": self._stats(f"B{i:09d}", "Q0", 0.1),
+                "Q1": self._stats(f"B{i:09d}", "Q1", 0.6),
+            }
+            for i in range(10)
+        }
+        result = evaluate_group(per_asin, treatment="Q1", confidence=0.975)
+        self.assertEqual(result["confidence"], 0.975)
 
 
 if __name__ == "__main__":

@@ -8,8 +8,11 @@ Usage:
   # 予算・対象選定だけ確認 (API を叩かない)
   python -m scripts.experimental.search_query_trial.run_v2 --dry-run
 
-本番の data / volume には書かない。experience.json・ledger は更新しない
-(worktree 外の --run-dir にだけ生の入出力を残す)。
+本番の data / volume には書かない。experience.json は更新しない (worktree 外の
+--run-dir にだけ生の入出力を残す)。**例外は Tavily 消費台帳
+(`--base` 配下の `_tavily_usage.json`) だけ**: 本番の予算ガードの根拠を
+本レーンの消費ぶんズレさせないため、呼び出し直前に本番と同じ `record_call` で
+共有台帳へ書く (owner 修正1)。
 """
 from __future__ import annotations
 
@@ -24,6 +27,7 @@ from typing import Any
 
 import requests
 
+from scripts.fetch_third_party_sources import month_usage
 from scripts.mine_experience import make_session, resolve_product_identity
 
 from scripts.experimental.search_query_trial import (
@@ -47,12 +51,16 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _pair_result_path(run_dir: pathlib.Path, asin: str, group: str) -> pathlib.Path:
+    return run_dir / f"{asin}_{group}.json"
+
+
 def run_one_group(
     group: str, asin: str, api_key: str | None, *,
     base: pathlib.Path, session: requests.Session,
     ollama_url: str, model: str, num_ctx: int,
     run_dir: pathlib.Path | None,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], dict[str, Any]]:
     """1 ASIN・1群分を実行し、(stats, raw_record) を返す。"""
     title, product_name, brand = resolve_product_identity(asin, base)
 
@@ -86,7 +94,7 @@ def run_one_group(
     stats = evaluation.compute_group_stats(
         asin=asin, group=group, tried_urls=urls, fetch_log=fetch_log,
         snippets=snippets, product_name=product_name, brand=brand,
-        url_texts=url_texts,
+        url_texts=url_texts, extraction_meta=extraction_meta,
     )
 
     raw_record = {
@@ -96,8 +104,9 @@ def run_one_group(
     }
     if run_dir is not None:
         run_dir.mkdir(parents=True, exist_ok=True)
-        out_path = run_dir / f"{asin}_{group}.json"
-        out_path.write_text(json.dumps(raw_record, ensure_ascii=False, indent=2), encoding="utf-8")
+        out_path = _pair_result_path(run_dir, asin, group)
+        payload = {"status": "ok", "stats": stats, **raw_record}
+        out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     return stats, raw_record
 
@@ -111,18 +120,48 @@ def run(
     num_ctx: int,
     run_dir: pathlib.Path | None,
     sleeper=time.sleep,
+    resume: bool = False,
 ) -> dict[str, Any]:
+    """owner 修正2: ASIN×群の単位で例外を捕まえ、その組を失敗として記録して続行する
+    (Tavily の 429/5xx がそのまま run 全体を落とさないように)。`--run-dir` に前回の
+    結果があれば (resume=True のとき) Tavily を叩き直さない。"""
     session, dead_hosts = make_session(ollama_url)
     per_asin_group_stats: dict[str, dict[str, dict[str, Any]]] = {}
     query_log: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+    usage_before = month_usage(base)
 
     for asin in asins:
         per_asin_group_stats[asin] = {}
         for group in query_groups.GROUPS:
-            stats, raw_record = run_one_group(
-                group, asin, api_key, base=base, session=session,
-                ollama_url=ollama_url, model=model, num_ctx=num_ctx, run_dir=run_dir,
-            )
+            result_path = _pair_result_path(run_dir, asin, group) if run_dir is not None else None
+
+            if resume and result_path is not None and result_path.exists():
+                cached = json.loads(result_path.read_text(encoding="utf-8"))
+                if cached.get("status") == "error":
+                    failures.append({"asin": asin, "group": group, "error": cached.get("error")})
+                    logger.info("%s %s: resume — 前回失敗のためスキップ (%s)", asin, group, cached.get("error"))
+                    continue
+                per_asin_group_stats[asin][group] = cached["stats"]
+                query_log.append(cached.get("query", {}))
+                logger.info("%s %s: resume — 既存結果を再利用 (Tavilyは叩かない)", asin, group)
+                continue
+
+            try:
+                stats, raw_record = run_one_group(
+                    group, asin, api_key, base=base, session=session,
+                    ollama_url=ollama_url, model=model, num_ctx=num_ctx, run_dir=run_dir,
+                )
+            except Exception as e:
+                logger.error("%s %s: 失敗 — この組を諦めて続行 (%s)", asin, group, e)
+                failures.append({"asin": asin, "group": group, "error": str(e)})
+                if run_dir is not None:
+                    run_dir.mkdir(parents=True, exist_ok=True)
+                    result_path.write_text(json.dumps(
+                        {"status": "error", "error": str(e)}, ensure_ascii=False, indent=2,
+                    ), encoding="utf-8")
+                continue
+
             per_asin_group_stats[asin][group] = stats
             query_log.append(raw_record["query"])
             logger.info(
@@ -138,6 +177,14 @@ def run(
     report["dead_hosts"] = dead_hosts.summary()
     report["asins"] = asins
     report["generated_at"] = _now_iso()
+    report["failures"] = failures
+    # owner 修正1: 今回の消費を報告に出す。台帳 (base/_tavily_usage.json) は
+    # query_groups.tavily_search が呼び出し直前に直接更新しているので、ここでは
+    # 差分を読み直して報告するだけ (owner がdata PRへ反映する際の根拠になる)。
+    usage_after = month_usage(base)
+    report["tavily_calls_consumed"] = usage_after - usage_before
+    report["tavily_usage_before"] = usage_before
+    report["tavily_usage_after"] = usage_after
     return report
 
 
@@ -155,13 +202,24 @@ def main() -> int:
     ap.add_argument("--daily-pace", type=float, default=budget.DEFAULT_DAILY_PACE)
     ap.add_argument("--dry-run", action="store_true",
                      help="予算チェックと対象選定のみ表示し、API/gemma は叩かない")
+    ap.add_argument("--resume", action="store_true",
+                     help="--run-dir に前回の結果がある ASIN×群は Tavily を叩き直さない")
     args = ap.parse_args()
 
     base = pathlib.Path(args.base)
 
+    # owner 修正6: 台帳は最大1日ぶん古くなりうる (前回 main 反映以降の既存レーン消費が
+    # 乗らない)。着手直前に origin/main を fetch して読み直す。fetch できない
+    # サンドボックス環境ではローカルファイルにフォールックする。
+    usage_data = budget.refresh_ledger_from_origin_main()
+    ledger_source = "origin/main (git fetch 済み)" if usage_data is not None else \
+        "local file (git fetch 失敗 — フォールバック)"
+    logger.info("Tavily 台帳の参照元: %s", ledger_source)
+
     budget_report = budget.check_tavily_budget(
-        monthly_budget=args.monthly_budget, daily_pace=args.daily_pace,
+        monthly_budget=args.monthly_budget, daily_pace=args.daily_pace, usage_data=usage_data,
     )
+    budget_report["ledger_source"] = ledger_source
     logger.info("Tavily budget: %s", json.dumps(budget_report, ensure_ascii=False))
     if not budget_report["feasible"]:
         logger.error("Tavily 月次予算を超える見込み — 止まって報告する (前提①)")
@@ -193,7 +251,7 @@ def main() -> int:
     run_dir = pathlib.Path(args.run_dir)
     report = run(
         asins, base=base, api_key=api_key, ollama_url=args.ollama_url,
-        model=args.model, num_ctx=args.num_ctx, run_dir=run_dir,
+        model=args.model, num_ctx=args.num_ctx, run_dir=run_dir, resume=args.resume,
     )
     report["selection"] = selection
     report["budget"] = budget_report

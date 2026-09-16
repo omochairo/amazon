@@ -21,6 +21,7 @@ from scripts.fetch_third_party_sources import (
     TAVILY_ENDPOINT,
     _filter_sources,
     _product_title,
+    record_call,
 )
 
 from scripts.experimental.search_query_trial.domains import build_q2_include_domains
@@ -43,10 +44,16 @@ def build_query(group: str, keyword: str) -> str:
 
 def tavily_search(
     query: str, api_key: str, *,
+    base: pathlib.Path,
     num: int = 10, include_domains: list[str] | None = None,
 ) -> list[dict]:
     """Tavily Search API を1回呼ぶ。fetch_third_party_sources.tavily_search と同じ
-    正規化 (link/title/snippet) だが include_domains を追加で渡せる。"""
+    正規化 (link/title/snippet) だが include_domains を追加で渡せる。
+
+    owner 修正1: 本番の `fetch_for_asin` と同じ理由・同じ順序で、送信直前に
+    共有台帳 (`base/_tavily_usage.json`) へ 1 回ぶんを刻む。credit はレスポンスを
+    待たずに消えるため、例外で抜ける経路も含めて必ず数える。
+    """
     body: dict[str, Any] = {
         "query": query,
         "max_results": max(1, min(num, 20)),
@@ -65,6 +72,7 @@ def tavily_search(
             "Accept": "application/json",
         },
     )
+    record_call(base)
     with urllib.request.urlopen(req, timeout=20) as resp:
         data = json.load(resp)
     items: list[dict] = []
@@ -93,7 +101,7 @@ def search_for_group(
         return {"asin": asin, "group": group, "query": "", "sources": [], "raw_count": 0}
     query = build_query(group, keyword)
     include_domains = build_q2_include_domains() if group == "Q2" else None
-    raw = tavily_search(query, api_key, num=10, include_domains=include_domains)
+    raw = tavily_search(query, api_key, base=base, num=10, include_domains=include_domains)
     sources = _filter_sources(raw, max_sources)
     return {
         "asin": asin, "group": group, "query": query,
