@@ -447,6 +447,45 @@ class MonthUsageCounterTest(unittest.TestCase):
         self.assertEqual(F.month_usage(self.base, now=now), 1)
 
 
+class RawCallCountTest(unittest.TestCase):
+    """raw_call_count は成功件数と混ぜず、台帳の calls だけを返す
+    (#4841 V2: month_usage を消費差分に使うと fetched_at 側が上回る月に 0 と出た)。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.base = pathlib.Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _write_success(self, asin, ts):
+        d = self.base / asin
+        d.mkdir(parents=True, exist_ok=True)
+        (d / F.OUT_NAME).write_text(json.dumps({"fetched_at": ts}), encoding="utf-8")
+
+    def _write_counter(self, month, calls):
+        (self.base / F.USAGE_NAME).write_text(
+            json.dumps({"month": month, "calls": calls}), encoding="utf-8")
+
+    def test_ignores_fetched_at_success_count_even_when_larger(self):
+        now = dt.datetime(2026, 9, 20, tzinfo=dt.timezone.utc)
+        self._write_counter("2026-09", 40)
+        for i in range(430):
+            self._write_success(f"B{i:09d}", "2026-09-01T00:00:00+00:00")
+        self.assertEqual(F.month_usage(self.base, now=now), 430)  # 参考: month_usage は大きい方
+        self.assertEqual(F.raw_call_count(self.base, now=now), 40)
+
+    def test_missing_counter_is_zero_not_success_count(self):
+        now = dt.datetime(2026, 9, 20, tzinfo=dt.timezone.utc)
+        self._write_success("B000000001", "2026-09-01T00:00:00+00:00")
+        self.assertEqual(F.raw_call_count(self.base, now=now), 0)
+
+    def test_stale_counter_month_is_zero(self):
+        now = dt.datetime(2026, 9, 20, tzinfo=dt.timezone.utc)
+        self._write_counter("2026-08", 900)
+        self.assertEqual(F.raw_call_count(self.base, now=now), 0)
+
+
 class EmptyNegativeCacheTest(unittest.TestCase):
     """空振り ASIN の再問い合わせをバックオフさせる (--empty-max-age-days)。"""
 

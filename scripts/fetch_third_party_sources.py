@@ -332,6 +332,22 @@ def _fetched_at_usage(base: pathlib.Path, now: _dt.datetime) -> int:
     return used
 
 
+def raw_call_count(base: pathlib.Path, now: Optional[_dt.datetime] = None) -> int:
+    """今月ぶんの `_tavily_usage.json` の `calls` (実呼び出し回数) をそのまま返す。
+
+    `month_usage` は budget 判断用に成功件数との大きい方を返すが、**ある1回の実行が
+    実際に何回 Tavily を呼んだか** (差分で消費量を報告する用途) には、この生カウンタの
+    差を使う。成功件数と混ぜると、成功件数側がたまたま上回る月に消費が 0 と出てしまう。
+    """
+    now = now or _dt.datetime.now(_dt.timezone.utc)
+    data = _load(_usage_path(base))
+    if isinstance(data, dict) and data.get("month") == now.strftime("%Y-%m"):
+        raw = data.get("calls")
+        if isinstance(raw, int) and raw >= 0:
+            return raw
+    return 0
+
+
 def month_usage(base: pathlib.Path, now: Optional[_dt.datetime] = None) -> int:
     """今月ぶんの Tavily 消費。**実呼び出し回数**と成功件数の大きい方を返す。
 
@@ -345,15 +361,12 @@ def month_usage(base: pathlib.Path, now: Optional[_dt.datetime] = None) -> int:
     2 は常に 1 以下になるはずだが、カウンタのファイルが失われた月 (導入直後や
     PR が落ちて main に載らなかったとき) には 1 だけが過小になる。**過小に出た側で
     budget を判断すると枠を超えて投げる**ので、両者の大きい方を採る。
+
+    1 回の実行の消費量を報告する用途には、この関数ではなく `raw_call_count` を使うこと
+    (成功件数側が上回る月に消費が 0 と出てしまうため)。
     """
     now = now or _dt.datetime.now(_dt.timezone.utc)
-    counter = 0
-    data = _load(_usage_path(base))
-    if isinstance(data, dict) and data.get("month") == now.strftime("%Y-%m"):
-        raw = data.get("calls")
-        if isinstance(raw, int) and raw >= 0:
-            counter = raw
-    return max(counter, _fetched_at_usage(base, now))
+    return max(raw_call_count(base, now=now), _fetched_at_usage(base, now))
 
 
 def _notice(level: str, message: str) -> None:
