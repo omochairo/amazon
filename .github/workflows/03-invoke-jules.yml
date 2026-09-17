@@ -189,6 +189,8 @@ jobs:
               # **先頭**に置く (実体験という一次情報の希少性を優先する)。
               # 1 run あたりの上限を置くのは、既存の ranking / keyword 枠を
               # 締め出さないため (#5490 の rewrite_first と同じ考え方)。
+              # 一次フィルタは A 側 (scripts/collect_first_party_sources.py の
+              # POOL_ASIN_RE)。ここは A が壊れた場合の防御ガードで通常 no-op (#7573)。
               first_party_pool = []
               try:
                   _fp_cap = int(os.environ.get('FIRST_PARTY_PICKS_PER_RUN', '2'))
@@ -198,10 +200,11 @@ jobs:
                       a for a in fp.get('asins', [])
                       if isinstance(a, str) and _ASIN_RE.match(a)
                   ]
-                  first_party_pool = [a for a in _fp_all if a not in existing][:max(_fp_cap, 0)]
+                  _fp_remaining = [a for a in _fp_all if a not in existing]
+                  first_party_pool = _fp_remaining[:max(_fp_cap, 0)]
                   if first_party_pool:
-                      print(f"first-party-ready (omcha-ops#264): {len(_fp_all)} -> "
-                            f"picking {len(first_party_pool)} {first_party_pool}")
+                      print(f"first-party-ready (omcha-ops#264): {len(_fp_remaining)} remaining "
+                            f"(pool {len(_fp_all)}) -> picking {len(first_party_pool)} {first_party_pool}")
               except FileNotFoundError:
                   # 収集レーン (omcha-ops#264 A) がまだ無い間はこれが常態。
                   # ranking_pool と同じく黙って従来どおりにする。
