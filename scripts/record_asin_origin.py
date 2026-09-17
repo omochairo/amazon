@@ -1,7 +1,7 @@
 """ASIN 出自台帳 (data/analytics/asin_origin.jsonl) への append 専用スクリプト。
 
 #4964 観察項目3 (index 受理率の群比較) の材料として、ASIN が
-demand / supply-random / ranking-sniper / rewrite-queue のどのプールから
+demand / supply-random / ranking-sniper / rewrite-queue / first-party のどのプールから
 選ばれたかを append-only の JSONL に記録する。**受理率などの比率計算はしない
 (状態と事実だけを記録する)**。
 
@@ -10,7 +10,7 @@ demand / supply-random / ranking-sniper / rewrite-queue のどのプールから
 
 行のスキーマ (キー名固定):
   {"ts": ISO8601, "run_id": str, "workflow": str, "asin": str,
-   "pool": "demand"|"supply-random"|"ranking-sniper"|"rewrite-queue",
+   "pool": "demand"|"supply-random"|"ranking-sniper"|"rewrite-queue"|"first-party",
    "source_keyword": str|None}
 """
 from __future__ import annotations
@@ -21,7 +21,7 @@ import json
 import os
 import sys
 
-POOLS = {"demand", "supply-random", "ranking-sniper", "rewrite-queue"}
+POOLS = {"demand", "supply-random", "ranking-sniper", "rewrite-queue", "first-party"}
 
 
 def now_iso() -> str:

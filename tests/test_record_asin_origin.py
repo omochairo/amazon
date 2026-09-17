@@ -51,6 +51,19 @@ def test_all_four_pools_accepted(pool):
     assert rec["pool"] == pool
 
 
+def test_make_record_accepts_first_party_pool_with_no_source_keyword():
+    rec = R.make_record(ts="t", run_id="1", workflow="w", asin="B0X",
+                         pool="first-party", source_keyword=None)
+    assert rec == {
+        "ts": "t",
+        "run_id": "1",
+        "workflow": "w",
+        "asin": "B0X",
+        "pool": "first-party",
+        "source_keyword": None,
+    }
+
+
 def test_dedupe_new_drops_existing_run_asin_pair():
     existing = {("42", "B0AAAAAAAA")}
     records = [
