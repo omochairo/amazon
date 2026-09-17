@@ -1,0 +1,351 @@
+{
+  "schema_version": 1,
+  "labeled_by": "omochairo (母艦 / Claude Opus 5)",
+  "labeled_at": "2026-09-17",
+  "method": "post_title を伏せた本文のみの冊子 (scripts/build_first_party_eval_packet.py) を全件読んで判定",
+  "packet_seed": 7569,
+  "packet_sample_size": 40,
+  "pool_total": 159,
+  "post_title_redaction_total_occurrences": 3,
+  "label_definitions": {
+    "review": "記事本文がその商品について固有の内容 (特徴・評価・比較・体験) を述べている",
+    "mention": "商品ボックスが貼られているだけ / 文中で参照されるだけで、商品固有の内容がない",
+    "unclear": "切り出された本文範囲からは判断できない"
+  },
+  "counts": {
+    "mention": 13,
+    "review": 33,
+    "unclear": 1
+  },
+  "items": [
+    {
+      "asin": "B00HJFR9TY",
+      "label": "mention",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/daycare-age-0-regret/",
+      "prior_title_label": "title_labeled_ii"
+    },
+    {
+      "asin": "B00RZ4LM74",
+      "label": "review",
+      "source": "calibration_positive",
+      "post_url": "https://omcha.jp/aiueo-tablet-gakken-review/",
+      "prior_title_label": "calibration_positive"
+    },
+    {
+      "asin": "B01B145OAE",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/tsumiki/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B01MRR8IJC",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/lafufu-labubu-chigai-fake/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B073W9V2WB",
+      "label": "review",
+      "source": "calibration_positive",
+      "post_url": "https://omcha.jp/gestar/",
+      "prior_title_label": "calibration_positive"
+    },
+    {
+      "asin": "B075CG2WJP",
+      "label": "mention",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/remove-slime-from-clothes/",
+      "prior_title_label": "title_labeled_ii"
+    },
+    {
+      "asin": "B07B3S9G1Y",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/simasimaguruguru/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B07H7FC26W",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/ofurodeminika/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B07JGBB8GD",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/omutsugae_petseats/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B07RW6NNZV",
+      "label": "review",
+      "source": "calibration_positive",
+      "post_url": "https://omcha.jp/pitarico-toy-review/",
+      "prior_title_label": "calibration_positive"
+    },
+    {
+      "asin": "B08929TBNR",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/alobaby_kuchikomi_shampoo_bodysoap/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B08TGR9YXH",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/neomamaism-bedinbed-review/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B08YRP5R4V",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/chuggington_plarail_uttenai_omocha/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B097D4NQQ6",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/kickbike/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B09B9TBZ71",
+      "label": "mention",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/hinoeuma_meishin/",
+      "prior_title_label": "title_labeled_ii"
+    },
+    {
+      "asin": "B09FF61N5V",
+      "label": "mention",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/omotyashodoku/",
+      "prior_title_label": "title_labeled_ii"
+    },
+    {
+      "asin": "B09FPLRS66",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/dream/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B09PJJS3QV",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/smiim/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B09TVWQ2R8",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/mugitya_karada/",
+      "prior_title_label": "title_labeled_ii"
+    },
+    {
+      "asin": "B0BD3BYQKY",
+      "label": "review",
+      "source": "calibration_positive",
+      "post_url": "https://omcha.jp/logical-route-puzzle-review/",
+      "prior_title_label": "calibration_positive"
+    },
+    {
+      "asin": "B0BL5QT2D1",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/amazon_kids_tab/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B0BPB8FNV1",
+      "label": "mention",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/iq_takai_youji_tokucho_sodatekata/",
+      "prior_title_label": "title_labeled_ii"
+    },
+    {
+      "asin": "B0C3LN76K7",
+      "label": "review",
+      "source": "calibration_positive",
+      "post_url": "https://omcha.jp/kurukurusaundo/",
+      "prior_title_label": "calibration_positive"
+    },
+    {
+      "asin": "B0C42KVVG8",
+      "label": "review",
+      "source": "calibration_positive",
+      "post_url": "https://omcha.jp/dexterity-training-kumon-board/",
+      "prior_title_label": "calibration_positive"
+    },
+    {
+      "asin": "B0CCGWLFDH",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/kids_corner/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B0CJC7YC9D",
+      "label": "mention",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/1sai-noboritagaru-omocha/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B0CJT7WMC2",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/panbeana_review/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B0CMFRVGW9",
+      "label": "mention",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/nounohattatsu_synapse_dainou/",
+      "prior_title_label": "title_labeled_ii"
+    },
+    {
+      "asin": "B0CMTYGD4R",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/sunwards_blocks/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B0CTMM93J5",
+      "label": "mention",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/baby-food-2meals-outing/",
+      "prior_title_label": "title_labeled_ii"
+    },
+    {
+      "asin": "B0CY53R8QJ",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/car-rail-toy-review/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B0D419WLT4",
+      "label": "mention",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/kodomo_seikaku_nanidekimaru/",
+      "prior_title_label": "title_labeled_ii"
+    },
+    {
+      "asin": "B0D7PW3V11",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/smartkidsbelt-abunai-ihan/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B0DBTLH8ZM",
+      "label": "review",
+      "source": "calibration_positive",
+      "post_url": "https://omcha.jp/epico_kuchikomi_review_segatoys/",
+      "prior_title_label": "calibration_positive"
+    },
+    {
+      "asin": "B0DMS5ZFH3",
+      "label": "mention",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/neubora/",
+      "prior_title_label": "title_labeled_ii"
+    },
+    {
+      "asin": "B0DT9BBST1",
+      "label": "mention",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/kosodate-oya-no-tasuke-nashi-norikoeru/",
+      "prior_title_label": "title_labeled_ii"
+    },
+    {
+      "asin": "B0DW8SCQHC",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/gonggi_asobi_rule_dokodekaeru/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B0F1SLWHQG",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/utsurundesu-where-to-buy-price/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B0F54NFW3Y",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/switch2-todoitara-suru-koto/",
+      "prior_title_label": "title_labeled_ii"
+    },
+    {
+      "asin": "B0F7451FXW",
+      "label": "mention",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/hoikuen_ikitakunai/",
+      "prior_title_label": "title_labeled_ii"
+    },
+    {
+      "asin": "B0FB8LZXR2",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/tyougoukin/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B0FGX8ZYZL",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/rail-cube-3years-old-review/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B0FNL8QHJJ",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/nekashitsuke-kamitem-lullme-review/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B0FNM3BDBB",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/mama-surprise-mechanism-review/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B0FP1Z72BL",
+      "label": "review",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/diy-puffy-stickers-toy-maker/",
+      "prior_title_label": "unlabeled"
+    },
+    {
+      "asin": "B0FQMTN7CP",
+      "label": "mention",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/super-sentai-series-shuryo-shinsou/",
+      "prior_title_label": "title_labeled_ii"
+    },
+    {
+      "asin": "B0H3T1WFDV",
+      "label": "unclear",
+      "source": "pool_random_sample",
+      "post_url": "https://omcha.jp/flashcard_baby_osusume_kouka_kiken/",
+      "prior_title_label": "title_labeled_ii"
+    }
+  ]
+}
