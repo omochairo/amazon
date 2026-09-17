@@ -59,6 +59,157 @@ def test_parse_iso_rejects_garbage(value):
     assert fetch._parse_iso(value) is None
 
 
+# --------------------------------------------------------------------------
+# fetch: Threads の own-posts ページング (#7609)
+# --------------------------------------------------------------------------
+
+def test_fetch_own_posts_pages_until_cutoff(monkeypatch):
+    """25 件で頭打ちにせず、cutoff に届くまで paging.next を辿る。"""
+    responses = [
+        {
+            "data": [
+                {"id": "p1", "timestamp": "2026-09-15T00:00:00+00:00"},
+                {"id": "p2", "timestamp": "2026-09-14T00:00:00+00:00"},
+            ],
+            "paging": {"next": "page2"},
+        },
+        {
+            "data": [
+                {"id": "p3", "timestamp": "2026-09-01T00:00:00+00:00"},  # cutoff より前
+                {"id": "p4", "timestamp": "2026-08-01T00:00:00+00:00"},
+            ],
+            "paging": {"next": "page3"},
+        },
+        {"data": [{"id": "p5", "timestamp": "2026-01-01T00:00:00+00:00"}]},
+    ]
+    calls = []
+
+    def fake_request(url, **kw):
+        calls.append(url)
+        return responses[len(calls) - 1]
+
+    monkeypatch.setattr(fetch, "_request", fake_request)
+    cutoff = fetch._parse_iso("2026-09-10T00:00:00+00:00")
+
+    posts = fetch._fetch_own_posts("u1", "tok", cutoff)
+
+    assert [p["id"] for p in posts] == ["p1", "p2"]
+    assert calls == [calls[0], "page2"]  # p3 で cutoff を割った時点で page3 は取りに行かない
+    assert len(calls) == 2
+
+
+def test_fetch_own_posts_stops_at_hard_cap(monkeypatch):
+    """cutoff に届かなくても MAX_OWN_POSTS_TOTAL で必ず止まる (暴走防止)。"""
+    call_count = 0
+
+    def fake_request(url, **kw):
+        nonlocal call_count
+        call_count += 1
+        return {
+            "data": [
+                {"id": f"p{call_count}-{i}", "timestamp": "2026-09-15T00:00:00+00:00"}
+                for i in range(fetch.MAX_OWN_POSTS_PAGE)
+            ],
+            "paging": {"next": f"page{call_count + 1}"},
+        }
+
+    monkeypatch.setattr(fetch, "_request", fake_request)
+    cutoff = fetch._parse_iso("2020-01-01T00:00:00+00:00")  # 絶対に届かない
+
+    posts = fetch._fetch_own_posts("u1", "tok", cutoff)
+
+    assert len(posts) <= fetch.MAX_OWN_POSTS_TOTAL
+    assert len(posts) >= fetch.MAX_OWN_POSTS_TOTAL - fetch.MAX_OWN_POSTS_PAGE + 1
+
+
+# --------------------------------------------------------------------------
+# fetch: Threads の第三者同士の返信を除外する (#7609)
+# --------------------------------------------------------------------------
+
+def test_fetch_thread_replies_keeps_reply_addressed_to_self(monkeypatch):
+    payload = {
+        "data": [
+            {
+                "id": "r1", "text": "何歳から使えますか", "username": "someone",
+                "timestamp": "2026-09-15T00:00:00+00:00",
+                "replied_to": {"id": "media1"},
+            },
+        ],
+    }
+    monkeypatch.setattr(fetch, "_request", lambda url, **kw: payload)
+    cutoff = fetch._parse_iso("2026-01-01T00:00:00+00:00")
+
+    out = fetch._fetch_thread_replies("media1", "tok", "iromama", cutoff)
+
+    assert [r["text"] for r in out] == ["何歳から使えますか"]
+
+
+def test_fetch_thread_replies_keeps_reply_addressed_to_own_reply(monkeypatch):
+    """自分の返信 (depth 2 の根) への返信も拾う (#7589 のスコープ)。"""
+    payload = {
+        "data": [
+            {
+                "id": "own_reply", "text": "うちも同じです", "username": "iromama",
+                "timestamp": "2026-09-14T00:00:00+00:00",
+                "replied_to": {"id": "media1"},
+            },
+            {
+                "id": "r2", "text": "詳しく教えて", "username": "someone",
+                "timestamp": "2026-09-15T00:00:00+00:00",
+                "replied_to": {"id": "own_reply"},
+            },
+        ],
+    }
+    monkeypatch.setattr(fetch, "_request", lambda url, **kw: payload)
+    cutoff = fetch._parse_iso("2026-01-01T00:00:00+00:00")
+
+    out = fetch._fetch_thread_replies("media1", "tok", "iromama", cutoff)
+
+    assert [r["text"] for r in out] == ["詳しく教えて"]
+
+
+def test_fetch_thread_replies_drops_reply_between_third_parties(monkeypatch):
+    """A さんが B さんに返した発言 (自分宛でない) は拾わない (#7609)。"""
+    payload = {
+        "data": [
+            {
+                "id": "a1", "text": "私はこう思う", "username": "personA",
+                "timestamp": "2026-09-14T00:00:00+00:00",
+                "replied_to": {"id": "media1"},
+            },
+            {
+                "id": "b1", "text": "それは違うと思う", "username": "personB",
+                "timestamp": "2026-09-15T00:00:00+00:00",
+                "replied_to": {"id": "a1"},
+            },
+        ],
+    }
+    monkeypatch.setattr(fetch, "_request", lambda url, **kw: payload)
+    cutoff = fetch._parse_iso("2026-01-01T00:00:00+00:00")
+
+    out = fetch._fetch_thread_replies("media1", "tok", "iromama", cutoff)
+
+    assert [r["text"] for r in out] == ["私はこう思う"]  # b1 (A宛) は除外
+
+
+def test_fetch_thread_replies_keeps_reply_when_replied_to_field_missing(monkeypatch):
+    """`replied_to` を返さない (旧仕様/フィールド欠落) 場合はフィルタせず従来通り拾う。"""
+    payload = {
+        "data": [
+            {
+                "id": "r1", "text": "本文", "username": "someone",
+                "timestamp": "2026-09-15T00:00:00+00:00",
+            },
+        ],
+    }
+    monkeypatch.setattr(fetch, "_request", lambda url, **kw: payload)
+    cutoff = fetch._parse_iso("2026-01-01T00:00:00+00:00")
+
+    out = fetch._fetch_thread_replies("media1", "tok", "iromama", cutoff)
+
+    assert [r["text"] for r in out] == ["本文"]
+
+
 def test_bluesky_interesting_excludes_like_and_follow():
     """like / follow は返信対象ではない。混ぜると inbox がノイズで埋まる。"""
     assert set(fetch.BLUESKY_INTERESTING) == {"reply", "mention", "quote"}
