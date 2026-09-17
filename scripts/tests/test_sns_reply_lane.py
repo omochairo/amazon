@@ -210,6 +210,30 @@ def test_fetch_thread_replies_keeps_reply_when_replied_to_field_missing(monkeypa
     assert [r["text"] for r in out] == ["本文"]
 
 
+def test_fetch_thread_replies_keeps_reply_when_parent_is_off_page(monkeypatch):
+    """返信先がこのページに載っていない場合も拾う (fail-open)。
+
+    `/conversation` は MAX_REPLIES_PER_POST で切れる (ページングしていない) ので、
+    返信先が載らないことがある。「知らない = 自分宛でない」と判定すると、
+    自分の返信への返信を無言で捨てることになる。
+    """
+    payload = {
+        "data": [
+            {
+                "id": "r_new", "text": "その後どうでしたか", "username": "someone",
+                "timestamp": "2026-09-15T00:00:00+00:00",
+                "replied_to": {"id": "own_reply_not_on_this_page"},
+            },
+        ],
+    }
+    monkeypatch.setattr(fetch, "_request", lambda url, **kw: payload)
+    cutoff = fetch._parse_iso("2026-01-01T00:00:00+00:00")
+
+    out = fetch._fetch_thread_replies("media1", "tok", "iromama", cutoff)
+
+    assert [r["text"] for r in out] == ["その後どうでしたか"]
+
+
 def test_bluesky_interesting_excludes_like_and_follow():
     """like / follow は返信対象ではない。混ぜると inbox がノイズで埋まる。"""
     assert set(fetch.BLUESKY_INTERESTING) == {"reply", "mention", "quote"}

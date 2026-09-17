@@ -228,9 +228,14 @@ def _fetch_thread_replies(
             continue  # 自分の投稿は返信対象ではない
         replied_to = r.get("replied_to") if isinstance(r.get("replied_to"), dict) else {}
         replied_to_id = str(replied_to.get("id") or "")
-        if replied_to_id:
-            target_username = username_by_id.get(replied_to_id, "")
-            if own_username and target_username != own_username:
+        # 返信先がこのページに載っている場合だけ判定する。`/conversation` は
+        # MAX_REPLIES_PER_POST で切れる (ページングしていない) ので、返信先が
+        # 載らないことがある。そこで「知らない = 自分宛でない」と判定すると、
+        # **自分の返信への返信を無言で捨てる** (会話が長い投稿ほど起きる)。
+        # フィールド欠落時と同じく fail-open にする — 誤って捨てるより多少
+        # ノイズが混じる方を選ぶ。
+        if replied_to_id and replied_to_id in username_by_id:
+            if own_username and username_by_id[replied_to_id] != own_username:
                 continue  # 自分宛でない返信 (第三者同士の会話) は拾わない
         text = str(r.get("text") or "").strip()
         if not text:
