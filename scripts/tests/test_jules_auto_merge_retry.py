@@ -45,6 +45,30 @@ def _bash() -> str | None:
 BASH = _bash()
 
 
+def _has_jq() -> bool:
+    """スクリプトを走らせる bash から jq が見えるか。
+
+    wait-for-merge の run スクリプトは `gh pr view --json` の出力を jq で読む。
+    ubuntu-latest には jq が同梱されているが、ローカル (特に Windows + Git Bash)
+    には無いことがあり、その場合 `jq: command not found` (exit 127) で落ちる。
+    ロジックの不具合ではないので bash と同様にスキップする。
+
+    `shutil.which("jq")` ではなく bash 経由で探すのは、Windows の which が
+    PATHEXT に無い拡張子なしの実行ファイルを拾わず、bash から見えている jq を
+    見落としうるため (スクリプトを実際に解決するのは bash の側)。
+    """
+    if BASH is None:
+        return False
+    try:
+        return subprocess.run([BASH, "-c", "command -v jq"],
+                              capture_output=True, timeout=30).returncode == 0
+    except OSError:
+        return False
+
+
+_MISSING_TOOL = "bash" if BASH is None else (None if _has_jq() else "jq")
+
+
 def _load_step_script(step_id: str) -> str:
     doc = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     for step in doc["jobs"]["enable-auto-merge"]["steps"]:
@@ -53,7 +77,7 @@ def _load_step_script(step_id: str) -> str:
     raise AssertionError(f"id={step_id} のステップが 05-jules-auto-merge.yml に見つからない")
 
 
-@unittest.skipIf(BASH is None, "bash が無い環境ではスキップ")
+@unittest.skipIf(_MISSING_TOOL is not None, f"{_MISSING_TOOL} が無い環境ではスキップ")
 class WaitForMergeRetryTests(unittest.TestCase):
     """『Wait for merge and dispatch GitLab mirror』(id: wait-for-merge) の再試行。"""
 
