@@ -63,9 +63,14 @@ X_BASE = "https://api.x.com/2"
 TIMEOUT = 30
 
 DEFAULT_LOOKBACK_DAYS = 14
-# 1 run で見に行く自投稿の数。Threads は 1 投稿につき 1 リクエスト増えるので、
-# lookback と併せて上限を持たせる。
-MAX_OWN_POSTS = 25
+# Threads の自投稿一覧は 1 ページ最大 25 件。cutoff (lookback) に届くまで
+# paging.cursors.after (paging.next) を辿らないと、25 件で頭打ちになって
+# lookback が名目どおりに効かない (#7609: 実測ベースで 14 日 ≒ 126 件のところ
+# 25 件だと約 2.8 日分しか見えていなかった)。
+MAX_OWN_POSTS_PAGE = 25
+# ページング全体の安全弁。投稿頻度が想定より跳ねても際限なく辿らない
+# (実測 14 日 ≒ 126 件に対して余裕を持たせた値)。
+MAX_OWN_POSTS_TOTAL = 300
 MAX_REPLIES_PER_POST = 50
 MAX_BLUESKY_NOTIFICATIONS = 100
 
@@ -141,25 +146,42 @@ def fetch_threads(lookback_days: int) -> list[dict]:
         raise ChannelError("THREADS_ACCESS_TOKEN 未設定")
 
     user_id, own_username = resolve_threads_identity(token)
-
-    own = _request(f"{THREADS_BASE}/{user_id}/threads?" + urllib.parse.urlencode({
-        "fields": "id,permalink,timestamp",
-        "limit": str(MAX_OWN_POSTS),
-        "access_token": token,
-    }))
-
     cutoff = _cutoff(lookback_days)
+
     out: list[dict] = []
-    for post in own.get("data") or []:
-        if not isinstance(post, dict) or not post.get("id"):
-            continue
-        ts = _parse_iso(str(post.get("timestamp") or ""))
-        if ts and ts < cutoff:
-            continue
+    for post in _fetch_own_posts(user_id, token, cutoff):
         out.extend(
             _fetch_thread_replies(str(post["id"]), token, own_username, cutoff),
         )
     return out
+
+
+def _fetch_own_posts(user_id: str, token: str, cutoff: datetime) -> list[dict]:
+    """自投稿を新しい順に、cutoff に届くまでページングして集める。
+
+    Threads は 1 ページ最大 `MAX_OWN_POSTS_PAGE` 件で、`paging.next` に次ページの
+    URL がそのまま入っている (access_token 込み)。新しい順なので、cutoff より
+    古い投稿に当たった時点で以降は不要 (#7609)。
+    """
+    posts: list[dict] = []
+    url = f"{THREADS_BASE}/{user_id}/threads?" + urllib.parse.urlencode({
+        "fields": "id,permalink,timestamp",
+        "limit": str(MAX_OWN_POSTS_PAGE),
+        "access_token": token,
+    })
+    while url and len(posts) < MAX_OWN_POSTS_TOTAL:
+        payload = _request(url)
+        page = [p for p in (payload.get("data") or []) if isinstance(p, dict) and p.get("id")]
+        if not page:
+            break
+        for post in page:
+            ts = _parse_iso(str(post.get("timestamp") or ""))
+            if ts and ts < cutoff:
+                return posts
+            posts.append(post)
+        next_url = (payload.get("paging") or {}).get("next")
+        url = next_url if isinstance(next_url, str) and next_url else ""
+    return posts
 
 
 def _fetch_thread_replies(
@@ -176,10 +198,15 @@ def _fetch_thread_replies(
     自分の返信を起点に辿ることはできない。`GET /{user-id}/threads` は
     **自分の返信を含まない** (別エッジの /replies が要る) ので、自分の投稿を
     根として会話ごと読むこの形が唯一の経路になる。
+
+    `/conversation` は深さ関係なく flat に返す代わり、**第三者同士の返信も
+    混ざる** (A さんが自分のスレッド内で B さんに返した発言など)。
+    `replied_to` (返信先の id) を見て、返信先が自分 (根の投稿 or 自分の返信)
+    のものだけに絞る (#7609)。
     """
     try:
         payload = _request(f"{THREADS_BASE}/{media_id}/conversation?" + urllib.parse.urlencode({
-            "fields": "id,text,username,permalink,timestamp",
+            "fields": "id,text,username,permalink,timestamp,replied_to",
             "limit": str(MAX_REPLIES_PER_POST),
             "access_token": token,
         }))
@@ -188,13 +215,28 @@ def _fetch_thread_replies(
         print(f"  [threads] {media_id} の replies 取得に失敗: {e}", file=sys.stderr)
         return []
 
+    items = [r for r in (payload.get("data") or []) if isinstance(r, dict) and r.get("id")]
+    # id -> username。根の投稿 (media_id) は自分の投稿なので own_username を仕込む。
+    username_by_id = {media_id: own_username}
+    for item in items:
+        username_by_id[str(item["id"])] = str(item.get("username") or "")
+
     out: list[dict] = []
-    for r in payload.get("data") or []:
-        if not isinstance(r, dict) or not r.get("id"):
-            continue
+    for r in items:
         username = str(r.get("username") or "")
         if own_username and username == own_username:
             continue  # 自分の投稿は返信対象ではない
+        replied_to = r.get("replied_to") if isinstance(r.get("replied_to"), dict) else {}
+        replied_to_id = str(replied_to.get("id") or "")
+        # 返信先がこのページに載っている場合だけ判定する。`/conversation` は
+        # MAX_REPLIES_PER_POST で切れる (ページングしていない) ので、返信先が
+        # 載らないことがある。そこで「知らない = 自分宛でない」と判定すると、
+        # **自分の返信への返信を無言で捨てる** (会話が長い投稿ほど起きる)。
+        # フィールド欠落時と同じく fail-open にする — 誤って捨てるより多少
+        # ノイズが混じる方を選ぶ。
+        if replied_to_id and replied_to_id in username_by_id:
+            if own_username and username_by_id[replied_to_id] != own_username:
+                continue  # 自分宛でない返信 (第三者同士の会話) は拾わない
         text = str(r.get("text") or "").strip()
         if not text:
             continue
