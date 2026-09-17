@@ -28,10 +28,29 @@ owned read 扱いで **$0.001/件**。`X_BEARER_TOKEN` + `X_USER_ID` を設定�
 |---|---|---|
 | 検出 | `scripts/fetch_sns_replies.py` | GitHub hosted (`amazon-home-ops` の cron) |
 | 起草 | `scripts/draft_sns_reply.py` | **K8 LLM ワーカー** (agy の Claude を owner 定額クォータで使う) |
-| 通知 | 上記 2 段が ntfy へ push | 同上 |
+| 通知 | `scripts/sync_sns_inbox_issues.py` が `amazon-home-ops` に issue を立てる (+ ntfy) | GitHub hosted |
 | 送信 | `scripts/post_sns_reply.py` | **人手承認後に手動 dispatch のみ** |
 
 状態は `scripts/sns_inbox_store.py` の inbox (JSONL) が唯一の受け渡し面。
+
+## 通知を issue にしている理由 (#7589)
+
+ntfy push と `PENDING.md` だけだった頃、**どちらも「開かないと何も起きない」**ので
+放置された。2026-09-17 の実測で案 16 件に対し送信は 1 件。
+
+未対応 1 件につき `amazon-home-ops` に issue を 1 本立てる。送信 (`answered`) /
+見送り (`ignored`) で close されるので、**open 件数がそのまま未対応件数**になる。
+ntfy は残してあるが、気付く主経路は GitHub の issue 通知。
+
+- 起票先は private 限定。`--repo` / `SNS_ISSUE_REPO` の明示が要り、
+  `omochairo/amazon` (public) を指すと exit 2 で拒否する
+- 1 run で立てるのは既定 5 本まで。GitHub API のバースト起票は禁止されている
+  (2026-06-25 のアカウント凍結)
+- **二重起票の防波堤は 2 重**: レコードの `issue_number` と、issue 本文の
+  `<!-- sns-inbox-id: … -->` マーカー。前者は commit → push が要るので、
+  「起票は成功したが commit 前に落ちた」窓をマーカー照合で塞ぐ
+- issue を手で close しても inbox の status は動かない。返さないと決めたものは
+  inbox 側を `ignored` にする (close だけだと次の run で未対応のまま扱われる)
 
 ## なぜ自動送信しないか
 

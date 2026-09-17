@@ -27,6 +27,48 @@ except Exception:  # noqa: BLE001
 import sns_inbox_store as store  # noqa: E402
 
 
+def render_record(rec: dict, *, heading: bool = True) -> list[str]:
+    """1 レコード分の Markdown 行。
+
+    PENDING.md と、amazon-home-ops に立てる 1 件 1 本の issue (#7589) の
+    両方がこれを使う。2 箇所で別々に組み立てると、送信コマンドの書式が
+    片方だけ古くなって「issue の手順どおり叩いたら動かない」が起きる。
+    """
+    lines: list[str] = []
+    if heading:
+        title = f"## {rec['channel']} / {rec['kind']}"
+        if rec.get("author"):
+            title += f" — @{rec['author']}"
+        lines.append(title)
+        lines.append("")
+    lines.append(f"- 受信: {rec.get('created_at') or '不明'}")
+    if rec.get("permalink"):
+        lines.append(f"- 元投稿: {rec['permalink']}")
+    lines.append(f"- id: `{rec['id']}`")
+    lines.append("")
+    lines.append("**相手の本文**")
+    lines.append("")
+    lines.append("> " + str(rec.get("text") or "").replace("\n", "\n> "))
+    lines.append("")
+
+    drafts = rec.get("drafts") or []
+    if not drafts:
+        lines += ["返信案はまだありません (起草レーン待ち)。", ""]
+    for i, draft in enumerate(drafts, start=1):
+        lines.append(f"**案 {i}** ({draft.get('model') or '不明'})")
+        lines.append("")
+        lines.append("```")
+        lines.append(str(draft.get("text") or ""))
+        lines.append("```")
+        lines.append("")
+        lines.append(
+            f"送信: `--id {rec['id']} --draft {i}`  "
+            "(本文を直したいときは `--body \"...\"`)",
+        )
+        lines.append("")
+    return lines
+
+
 def render(records: list[dict]) -> str:
     lines = [
         "# 未対応の SNS 返信",
@@ -47,36 +89,7 @@ def render(records: list[dict]) -> str:
     ]
 
     for rec in records:
-        title = f"## {rec['channel']} / {rec['kind']}"
-        if rec.get("author"):
-            title += f" — @{rec['author']}"
-        lines.append(title)
-        lines.append("")
-        lines.append(f"- 受信: {rec.get('created_at') or '不明'}")
-        if rec.get("permalink"):
-            lines.append(f"- 元投稿: {rec['permalink']}")
-        lines.append(f"- id: `{rec['id']}`")
-        lines.append("")
-        lines.append("**相手の本文**")
-        lines.append("")
-        lines.append("> " + str(rec.get("text") or "").replace("\n", "\n> "))
-        lines.append("")
-
-        drafts = rec.get("drafts") or []
-        if not drafts:
-            lines += ["返信案はまだありません (起草レーン待ち)。", ""]
-        for i, draft in enumerate(drafts, start=1):
-            lines.append(f"**案 {i}** ({draft.get('model') or '不明'})")
-            lines.append("")
-            lines.append("```")
-            lines.append(str(draft.get("text") or ""))
-            lines.append("```")
-            lines.append("")
-            lines.append(
-                f"送信: `--id {rec['id']} --draft {i}`  "
-                "(本文を直したいときは `--body \"...\"`)",
-            )
-            lines.append("")
+        lines += render_record(rec)
         lines += ["---", ""]
 
     return "\n".join(lines)
