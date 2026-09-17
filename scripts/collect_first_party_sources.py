@@ -40,7 +40,7 @@ import pathlib
 import re
 import time
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Iterable
 
 import requests
 
@@ -103,6 +103,15 @@ _ASIN_LINK_PATTERNS: tuple[re.Pattern[str], ...] = (
 # 落とした分は build_pool_excluded が一覧として出力に残す。
 POOL_ASIN_RE = re.compile(r"^B0[A-Z0-9]{8}$")
 
+# omcha-ops#264 / #7569 型6: 「記事がレビューしている商品」と「引用しただけの商品」を
+# PRIMARY_SHARE_FLOOR だけでは区別できず、プールの約 1/3 が後者だった (本文ラベル実測 13/39)。
+# 商品ボックスが表示する商品名と post_title の文字 2-gram Jaccard で絞る。
+# 0.13 は負例 52 件で測ったときの最大値。本文ラベルの負例 13 件の max (0.063) ではなく
+# こちらを採るのは、小標本の端に座らないため。再現率より適合率を優先する owner 判断 (#7569)。
+# 実測 (#7611): 正例残存 11/33・負例通過 0/13。
+# (B) リンク位置 (#7592)・(C) リンク近傍のマーカー (#7584) は分離能ゼロで却下済み。
+TITLE_MATCH_FLOOR = 0.13
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -144,6 +153,30 @@ def count_own_images(content_html: str) -> int:
     if not isinstance(content_html, str):
         return 0
     return content_html.count(OWN_IMAGE_MARKER)
+
+
+def compute_title_match_by_asin(
+    content_html: str, asins: Iterable[str], post_title: str
+) -> dict[str, float | None]:
+    """asin ごとに、商品ボックスの商品名候補と post_title の bigram Jaccard 最大値を返す。
+
+    候補が一つも取れない asin は None (#7569 型6: 判定不能は「通さない」側に倒す)。
+    抽出・指標のロジックは scripts.probe_first_party_title_match のものをそのまま使う
+    (複製しない)。両モジュールが互いを import するため、循環importを避けて関数内で import する。
+    """
+    from scripts.probe_first_party_title_match import (
+        best_scores_for_asin,
+        extract_product_name_candidates,
+        match_scores,
+    )
+
+    result: dict[str, float | None] = {}
+    for asin in asins:
+        candidates = extract_product_name_candidates(content_html, asin)
+        candidate_scores = [match_scores(c, post_title) for c in candidates] if post_title else []
+        best = best_scores_for_asin(candidate_scores)
+        result[asin] = best["bigram_jaccard"] if best else None
+    return result
 
 
 def determine_roles(
@@ -359,7 +392,12 @@ def collect(
     for post in posts:
         pid = str(post["id"])
         cached = prev_cache.get(pid) if isinstance(prev_cache.get(pid), dict) else None
-        if cached is not None and cached.get("modified") == post["modified"] and isinstance(cached.get("asin_counts"), dict):
+        if (
+            cached is not None
+            and cached.get("modified") == post["modified"]
+            and isinstance(cached.get("asin_counts"), dict)
+            and isinstance(cached.get("title_match_by_asin"), dict)
+        ):
             entry = dict(cached)
         else:
             content = fetch_post_content(post["id"], wp_base_url, session, sleeper=sleeper)
@@ -368,11 +406,13 @@ def collect(
                 entry = dict(cached)
             else:
                 content = content or ""
+                asin_counts = extract_asin_mentions(content)
                 entry = {
                     "modified": post["modified"],
-                    "asin_counts": extract_asin_mentions(content),
+                    "asin_counts": asin_counts,
                     "fp_markers": count_fp_markers(content),
                     "own_images": count_own_images(content),
+                    "title_match_by_asin": compute_title_match_by_asin(content, asin_counts.keys(), post["title"]),
                 }
             if sleep_seconds > 0:
                 sleeper(sleep_seconds)
@@ -390,6 +430,9 @@ def collect(
         asin_counts = entry.get("asin_counts") or {}
         if not asin_counts:
             continue
+        title_match_by_asin = entry.get("title_match_by_asin")
+        if not isinstance(title_match_by_asin, dict):
+            title_match_by_asin = {}
         roles = determine_roles(asin_counts, entry.get("title", ""), catalog_titles)
         for asin, (role, reason) in roles.items():
             sources.append({
@@ -398,6 +441,7 @@ def collect(
                 "role_reason": reason,
                 "post_url": entry.get("link", ""),
                 "post_title": entry.get("title", ""),
+                "title_match": title_match_by_asin.get(asin),
                 "fp_markers": entry.get("fp_markers", 0),
                 "own_images": entry.get("own_images", 0),
                 "in_corpus": asin in in_corpus_set,
@@ -448,7 +492,7 @@ def build_uncatalogued(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def build_first_party_pool(sources: list[dict[str, Any]]) -> list[str]:
-    """B が消費する対象: role=primary かつ 未記事化 かつ B0 形式の ASIN。
+    """B が消費する対象: role=primary かつ 未記事化 かつ B0 形式 かつ タイトル一致の ASIN。
 
     設計 (#264) は ``in_corpus=true`` も条件に入れていたが、``in_corpus`` の出所
     ``data/raw/amazon.json`` は日次 fetch の作業セット (実測 2026-09-17 で 82 件)
@@ -461,38 +505,75 @@ def build_first_party_pool(sources: list[dict[str, Any]]) -> list[str]:
 
     ISBN 形式 (紙の書籍) は消費側が構造的に扱えないため ``POOL_ASIN_RE`` で落とす
     (#7573)。落とした分は ``build_pool_excluded`` が一覧として出力に残す。
+
+    ``title_match`` (bigram Jaccard, #7569 型6) が ``TITLE_MATCH_FLOOR`` を超えない
+    ASIN も落とす。``title_match`` が ``None`` (商品名候補が取れない = 判定不能) も
+    通さない側に倒す。落とした分は ``build_pool_excluded`` に残る。
     """
     asins = {
         r["asin"] for r in sources
-        if r["role"] == "primary" and not r["has_article"] and POOL_ASIN_RE.match(r["asin"])
+        if r["role"] == "primary"
+        and not r["has_article"]
+        and POOL_ASIN_RE.match(r["asin"])
+        and r.get("title_match") is not None
+        and r["title_match"] > TITLE_MATCH_FLOOR
     }
     return sorted(asins)
 
 
 def build_pool_excluded(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """``build_first_party_pool`` と同じ母集団のうち、B0 形式でないために落ちた ASIN の一覧。
+    """``build_first_party_pool`` の母集団 (role=primary かつ未記事化) のうち落ちた ASIN の一覧。
+
+    reason は ASIN ごとに 1 つだけ (``non_b0_asin`` の判定を先に行う。B0 形式でない
+    ASIN の ``title_match`` は判定対象外なので優先度が高い):
+      - ``non_b0_asin``: ISBN 形式など (#7573)
+      - ``no_title_match_candidate``: 全ての出現で商品名候補が取れず ``title_match=None``
+      - ``low_title_match``: 商品名候補はあるが ``TITLE_MATCH_FLOOR`` を超えない
+        (``title_match`` に複数出現中の最大値を残す)
 
     書籍ジャンルが解禁されたとき (#3311) にそのまま使えるように、捨てずに
     ``asin`` ごとに 1 件・昇順で残す (重複の畳み込みは ``build_uncatalogued`` と同じ)。
     """
-    picked: dict[str, dict[str, Any]] = {}
+    pool_asins = set(build_first_party_pool(sources))
+    grouped: dict[str, list[dict[str, Any]]] = {}
     for record in sources:
         if record["role"] != "primary" or record["has_article"]:
             continue
         asin = record["asin"]
-        if POOL_ASIN_RE.match(asin):
+        if asin in pool_asins:
             continue
-        if asin not in picked:
-            picked[asin] = record
-    return [
-        {
-            "asin": r["asin"],
-            "reason": "non_b0_asin",
-            "post_url": r["post_url"],
-            "post_title": r["post_title"],
-        }
-        for r in sorted(picked.values(), key=lambda r: r["asin"])
-    ]
+        grouped.setdefault(asin, []).append(record)
+
+    excluded: list[dict[str, Any]] = []
+    for asin in sorted(grouped):
+        records = grouped[asin]
+        first = records[0]
+        if not POOL_ASIN_RE.match(asin):
+            excluded.append({
+                "asin": asin,
+                "reason": "non_b0_asin",
+                "post_url": first["post_url"],
+                "post_title": first["post_title"],
+            })
+            continue
+        scored = [r for r in records if r.get("title_match") is not None]
+        if not scored:
+            excluded.append({
+                "asin": asin,
+                "reason": "no_title_match_candidate",
+                "post_url": first["post_url"],
+                "post_title": first["post_title"],
+            })
+            continue
+        best_record = max(scored, key=lambda r: r["title_match"])
+        excluded.append({
+            "asin": asin,
+            "reason": "low_title_match",
+            "title_match": best_record["title_match"],
+            "post_url": best_record["post_url"],
+            "post_title": best_record["post_title"],
+        })
+    return excluded
 
 
 class TruncatedCollectionError(RuntimeError):
@@ -563,10 +644,14 @@ def run(
     write_json(out_path, result)
     write_json(pool_path, {"asins": pool, "generated_at": result["generated_at"]})
 
+    excluded_reason_counts: dict[str, int] = {}
+    for row in result["pool_excluded"]:
+        excluded_reason_counts[row["reason"]] = excluded_reason_counts.get(row["reason"], 0) + 1
+
     logger.info(
-        "collected: %d posts, %d source records, %d uncatalogued, pool=%d, pool_excluded=%d",
+        "collected: %d posts, %d source records, %d uncatalogued, pool=%d, pool_excluded=%d %s",
         len(result["posts_cache"]), len(result["sources"]), len(result["uncatalogued"]),
-        len(pool), len(result["pool_excluded"]),
+        len(pool), len(result["pool_excluded"]), excluded_reason_counts,
     )
     return result
 

@@ -25,6 +25,7 @@ from unittest import mock
 import requests
 
 from scripts.collect_first_party_sources import (
+    TITLE_MATCH_FLOOR,
     TruncatedCollectionError,
     assert_not_truncated,
     build_asin_title_catalog,
@@ -32,6 +33,7 @@ from scripts.collect_first_party_sources import (
     build_pool_excluded,
     build_uncatalogued,
     collect,
+    compute_title_match_by_asin,
     count_fp_markers,
     count_own_images,
     determine_roles,
@@ -105,6 +107,22 @@ class CountOwnImagesTest(unittest.TestCase):
 
     def test_non_string(self):
         self.assertEqual(count_own_images(None), 0)
+
+
+class ComputeTitleMatchByAsinTest(unittest.TestCase):
+    def test_matching_product_box_title_scores_high(self):
+        html = '<figure class="amazon-item" title="ベビードラム"><a href="/dp/B009CMIFYA">x</a></figure>'
+        result = compute_title_match_by_asin(html, ["B009CMIFYA"], "ベビードラム 比較レビュー")
+        self.assertGreater(result["B009CMIFYA"], TITLE_MATCH_FLOOR)
+
+    def test_no_candidate_is_none(self):
+        html = '<a href="/dp/B009CMIFYA">x</a>'  # 商品ボックスに包まれていない
+        result = compute_title_match_by_asin(html, ["B009CMIFYA"], "何かのタイトル")
+        self.assertIsNone(result["B009CMIFYA"])
+
+    def test_asin_not_in_content_is_none(self):
+        result = compute_title_match_by_asin("<p>本文</p>", ["B009CMIFYA"], "タイトル")
+        self.assertIsNone(result["B009CMIFYA"])
 
 
 class DetermineRolesTest(unittest.TestCase):
@@ -325,7 +343,10 @@ class CollectTest(unittest.TestCase):
             ), mock.patch(
                 "scripts.collect_first_party_sources.fetch_post_content",
                 return_value=(
-                    '<a href="/dp/B009CMIFYA">A</a><a href="/dp/B009CMIFYA">A2</a>'
+                    '<figure class="amazon-item" title="ベビードラム">'
+                    '<a href="/dp/B009CMIFYA">A</a></figure>'
+                    '<figure class="amazon-item" title="ベビードラム">'
+                    '<a href="/dp/B009CMIFYA">A2</a></figure>'
                     '<a href="/dp/B074N9HWVW">B</a>'
                 ),
             ) as mock_content:
@@ -343,11 +364,52 @@ class CollectTest(unittest.TestCase):
             self.assertEqual(asins["B074N9HWVW"]["role"], "compared")
             self.assertTrue(asins["B009CMIFYA"]["in_corpus"])
             self.assertFalse(asins["B009CMIFYA"]["has_article"])
+            # 「ベビードラム」が商品ボックスの title 属性と post_title 両方に出現する
+            self.assertGreater(asins["B009CMIFYA"]["title_match"], TITLE_MATCH_FLOOR)
+            # <a> がむき出しで商品ボックスに包まれていないので候補が取れない
+            self.assertIsNone(asins["B074N9HWVW"]["title_match"])
 
             pool = build_first_party_pool(result["sources"])
-            self.assertEqual(pool, ["B009CMIFYA"])  # primary かつ未記事化
+            self.assertEqual(pool, ["B009CMIFYA"])  # primary かつ未記事化 かつ title_match 超え
 
     def test_unchanged_modified_skips_content_refetch(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            amazon_json, articles_dir, per_asin_dir = self._setup_corpus(root)
+            session = mock.Mock(spec=requests.Session)
+            previous = {
+                "posts_cache": {
+                    "1": {
+                        "modified": "2026-09-01T00:00:00",
+                        "asin_counts": {"B009CMIFYA": 1},
+                        "fp_markers": 0,
+                        "own_images": 0,
+                        "title_match_by_asin": {"B009CMIFYA": 0.5},
+                        "link": "https://omcha.jp/bebydrum/",
+                        "title": "旧タイトル",
+                    }
+                }
+            }
+            with mock.patch(
+                "scripts.collect_first_party_sources.fetch_post_list",
+                return_value=[{
+                    "id": 1, "link": "https://omcha.jp/bebydrum/", "title": "ベビードラム",
+                    "modified": "2026-09-01T00:00:00",
+                }],
+            ), mock.patch("scripts.collect_first_party_sources.fetch_post_content") as mock_content:
+                result = collect(
+                    "https://omcha.jp", session, previous,
+                    articles_dir=articles_dir, amazon_json_path=amazon_json, per_asin_dir=per_asin_dir,
+                    sleep_seconds=0, sleeper=_no_sleep,
+                )
+                mock_content.assert_not_called()  # modified 不変 -> 本文再取得しない
+            self.assertEqual(result["sources"][0]["asin"], "B009CMIFYA")
+            self.assertEqual(result["sources"][0]["post_title"], "ベビードラム")  # title は最新一覧の値で更新
+            self.assertEqual(result["sources"][0]["title_match"], 0.5)  # キャッシュの値を引き継ぐ
+
+    def test_missing_title_match_cache_forces_refetch(self):
+        # title_match_by_asin を持たない旧キャッシュ (本機能デプロイ前) は modified が
+        # 不変でも再取得する (一度きりのバックフィル。#7569 型6)。
         with tempfile.TemporaryDirectory() as td:
             root = pathlib.Path(td)
             amazon_json, articles_dir, per_asin_dir = self._setup_corpus(root)
@@ -370,15 +432,17 @@ class CollectTest(unittest.TestCase):
                     "id": 1, "link": "https://omcha.jp/bebydrum/", "title": "ベビードラム",
                     "modified": "2026-09-01T00:00:00",
                 }],
-            ), mock.patch("scripts.collect_first_party_sources.fetch_post_content") as mock_content:
+            ), mock.patch(
+                "scripts.collect_first_party_sources.fetch_post_content",
+                return_value='<a href="/dp/B009CMIFYA">A</a>',
+            ) as mock_content:
                 result = collect(
                     "https://omcha.jp", session, previous,
                     articles_dir=articles_dir, amazon_json_path=amazon_json, per_asin_dir=per_asin_dir,
                     sleep_seconds=0, sleeper=_no_sleep,
                 )
-                mock_content.assert_not_called()  # modified 不変 -> 本文再取得しない
-            self.assertEqual(result["sources"][0]["asin"], "B009CMIFYA")
-            self.assertEqual(result["sources"][0]["post_title"], "ベビードラム")  # title は最新一覧の値で更新
+                mock_content.assert_called_once()
+            self.assertIsNone(result["sources"][0]["title_match"])  # 候補が取れないので None
 
     def test_no_asins_in_post_produces_no_sources(self):
         with tempfile.TemporaryDirectory() as td:
@@ -445,10 +509,14 @@ class BuildUncataloguedTest(unittest.TestCase):
 class BuildFirstPartyPoolTest(unittest.TestCase):
     def test_filters_primary_without_article(self):
         sources = [
-            {"asin": "B00000000A", "role": "primary", "in_corpus": True, "has_article": False},
-            {"asin": "B00000000B", "role": "primary", "in_corpus": True, "has_article": True},
-            {"asin": "B00000000C", "role": "primary", "in_corpus": False, "has_article": False},
-            {"asin": "B00000000D", "role": "compared", "in_corpus": True, "has_article": False},
+            {"asin": "B00000000A", "role": "primary", "in_corpus": True, "has_article": False,
+             "title_match": 0.9},
+            {"asin": "B00000000B", "role": "primary", "in_corpus": True, "has_article": True,
+             "title_match": 0.9},
+            {"asin": "B00000000C", "role": "primary", "in_corpus": False, "has_article": False,
+             "title_match": 0.9},
+            {"asin": "B00000000D", "role": "compared", "in_corpus": True, "has_article": False,
+             "title_match": 0.9},
         ]
         # B00000000C は in_corpus=False でも入る (消費側 #7511 は候補列に直接前置するため)
         self.assertEqual(build_first_party_pool(sources), ["B00000000A", "B00000000C"])
@@ -457,18 +525,43 @@ class BuildFirstPartyPoolTest(unittest.TestCase):
         # ISBN 形式 (紙の書籍) は消費側 (03-invoke-jules.yml の _ASIN_RE) が構造的に
         # 消費できないのでプールに載せない (#7573)。
         sources = [
-            {"asin": "B00000000A", "role": "primary", "in_corpus": True, "has_article": False},
-            {"asin": "4023333859", "role": "primary", "in_corpus": True, "has_article": False},
-            {"asin": "000838214X", "role": "primary", "in_corpus": True, "has_article": False},
+            {"asin": "B00000000A", "role": "primary", "in_corpus": True, "has_article": False,
+             "title_match": 0.9},
+            {"asin": "4023333859", "role": "primary", "in_corpus": True, "has_article": False,
+             "title_match": 0.9},
+            {"asin": "000838214X", "role": "primary", "in_corpus": True, "has_article": False,
+             "title_match": 0.9},
         ]
         self.assertEqual(build_first_party_pool(sources), ["B00000000A"])
+
+    def test_title_match_exactly_at_floor_does_not_pass(self):
+        # `>` であって `>=` ではない (#7569 型6: しきい値ちょうどは通さない)
+        sources = [
+            {"asin": "B00000000A", "role": "primary", "has_article": False,
+             "title_match": TITLE_MATCH_FLOOR},
+        ]
+        self.assertEqual(build_first_party_pool(sources), [])
+
+    def test_title_match_above_floor_passes(self):
+        sources = [
+            {"asin": "B00000000A", "role": "primary", "has_article": False,
+             "title_match": TITLE_MATCH_FLOOR + 0.01},
+        ]
+        self.assertEqual(build_first_party_pool(sources), ["B00000000A"])
+
+    def test_title_match_none_does_not_pass(self):
+        # 商品名候補が取れない (判定不能) は適合率優先の方針で落とす側に倒す
+        sources = [
+            {"asin": "B00000000A", "role": "primary", "has_article": False, "title_match": None},
+        ]
+        self.assertEqual(build_first_party_pool(sources), [])
 
 
 class BuildPoolExcludedTest(unittest.TestCase):
     def test_returns_only_non_b0_asins_from_the_pool_population(self):
         sources = [
             {"asin": "B00000000A", "role": "primary", "has_article": False,
-             "post_url": "https://omcha.jp/a/", "post_title": "a"},
+             "post_url": "https://omcha.jp/a/", "post_title": "a", "title_match": 0.9},
             {"asin": "4023333859", "role": "primary", "has_article": False,
              "post_url": "https://omcha.jp/b/", "post_title": "b"},
         ]
@@ -502,9 +595,61 @@ class BuildPoolExcludedTest(unittest.TestCase):
     def test_b0_asins_are_not_excluded(self):
         sources = [
             {"asin": "B00000000A", "role": "primary", "has_article": False,
-             "post_url": "u", "post_title": "t"},
+             "post_url": "u", "post_title": "t", "title_match": 0.9},
         ]
         self.assertEqual(build_pool_excluded(sources), [])
+
+    def test_low_title_match_reason_carries_the_value(self):
+        sources = [
+            {"asin": "B00000000A", "role": "primary", "has_article": False,
+             "post_url": "u", "post_title": "t", "title_match": 0.05},
+        ]
+        self.assertEqual(build_pool_excluded(sources), [
+            {"asin": "B00000000A", "reason": "low_title_match", "title_match": 0.05,
+             "post_url": "u", "post_title": "t"},
+        ])
+
+    def test_title_match_exactly_at_floor_is_low_title_match(self):
+        sources = [
+            {"asin": "B00000000A", "role": "primary", "has_article": False,
+             "post_url": "u", "post_title": "t", "title_match": TITLE_MATCH_FLOOR},
+        ]
+        out = build_pool_excluded(sources)
+        self.assertEqual(out[0]["reason"], "low_title_match")
+        self.assertEqual(out[0]["title_match"], TITLE_MATCH_FLOOR)
+
+    def test_no_title_match_candidate_reason(self):
+        sources = [
+            {"asin": "B00000000A", "role": "primary", "has_article": False,
+             "post_url": "u", "post_title": "t", "title_match": None},
+        ]
+        self.assertEqual(build_pool_excluded(sources), [
+            {"asin": "B00000000A", "reason": "no_title_match_candidate",
+             "post_url": "u", "post_title": "t"},
+        ])
+
+    def test_asin_never_appears_under_two_reasons(self):
+        # 同じ asin が複数記事に出て、片方は候補なし・片方はしきい値未満でも reason は 1 つ
+        sources = [
+            {"asin": "B00000000A", "role": "primary", "has_article": False,
+             "post_url": "u1", "post_title": "t1", "title_match": None},
+            {"asin": "B00000000A", "role": "primary", "has_article": False,
+             "post_url": "u2", "post_title": "t2", "title_match": 0.05},
+        ]
+        out = build_pool_excluded(sources)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["reason"], "low_title_match")
+        self.assertEqual(out[0]["title_match"], 0.05)
+
+    def test_non_b0_reason_wins_over_title_match(self):
+        # B0 形式でない ASIN は title_match の値に関わらず non_b0_asin が優先
+        sources = [
+            {"asin": "4023333859", "role": "primary", "has_article": False,
+             "post_url": "u", "post_title": "t", "title_match": 0.9},
+        ]
+        self.assertEqual(build_pool_excluded(sources), [
+            {"asin": "4023333859", "reason": "non_b0_asin", "post_url": "u", "post_title": "t"},
+        ])
 
 
 class AssertNotTruncatedTest(unittest.TestCase):
