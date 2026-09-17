@@ -269,7 +269,8 @@ def test_answered_without_an_issue_is_not_opened_just_to_close_it(d: Path):
     store.update_record(rec["id"], {"status": store.STATUS_ANSWERED}, d)
     gh = FakeGh()
     stats = sync.sync(REPO, directory=d, gh=gh)
-    assert stats == {"created": 0, "commented": 0, "closed": 0, "adopted": 0, "deferred": 0}
+    assert stats == {"created": 0, "commented": 0, "closed": 0, "adopted": 0,
+                     "deferred": 0, "retired": 0}
 
 
 # --------------------------------------------------------------------------
@@ -355,3 +356,74 @@ def test_limit_zero_does_not_create_for_unissued_records(d: Path):
     assert stats["created"] == 0
     assert stats["deferred"] == 1
     assert gh.posts_to("/issues") == []
+
+
+# --------------------------------------------------------------------------
+# close は「返さない」の意思表示
+# --------------------------------------------------------------------------
+
+def test_human_closing_the_issue_retires_the_record(d: Path):
+    """close しただけで未対応から外れる。
+
+    ここが無いと status は drafted のまま残り、PENDING.md の「未対応 n 件」が
+    永久に減らない (人が ignored を付ける手段は他に無い)。
+    """
+    _add(d, "threads:1")
+    gh = FakeGh()
+    sync.sync(REPO, directory=d, gh=gh)
+    number = store.load_records(d)["threads:1"]["issue_number"]
+
+    closed = FakeGh([{"number": number, "state": "closed", "body": sync.marker("threads:1")}])
+    stats = sync.sync(REPO, directory=d, gh=closed)
+
+    assert stats["retired"] == 1
+    rec = store.load_records(d)["threads:1"]
+    assert rec["status"] == store.STATUS_IGNORED
+    assert rec["issue_closed"] is True
+
+
+def test_retired_record_is_not_re_issued(d: Path):
+    _add(d, "threads:1")
+    sync.sync(REPO, directory=d, gh=FakeGh())
+    listing = [{"number": 101, "state": "closed", "body": sync.marker("threads:1")}]
+    sync.sync(REPO, directory=d, gh=FakeGh(listing))
+
+    gh = FakeGh(listing)
+    stats = sync.sync(REPO, directory=d, gh=gh)
+    assert stats == {"created": 0, "commented": 0, "closed": 0, "adopted": 0,
+                     "deferred": 0, "retired": 0}
+    assert gh.posts_to("/issues") == []
+
+
+def test_retiring_does_not_re_close_the_issue(d: Path):
+    """既に閉じている issue へ close コメントを二度打たない。"""
+    _add(d, "threads:1")
+    sync.sync(REPO, directory=d, gh=FakeGh())
+    gh = FakeGh([{"number": 101, "state": "closed", "body": sync.marker("threads:1")}])
+    sync.sync(REPO, directory=d, gh=gh)
+    assert gh.posts_to("/comments") == []
+
+
+def test_open_issue_does_not_retire_the_record(d: Path):
+    _add(d, "threads:1")
+    sync.sync(REPO, directory=d, gh=FakeGh())
+    gh = FakeGh([{"number": 101, "state": "open", "body": sync.marker("threads:1")}])
+    assert sync.sync(REPO, directory=d, gh=gh)["retired"] == 0
+
+
+def test_dry_run_does_not_retire(d: Path):
+    _add(d, "threads:1")
+    sync.sync(REPO, directory=d, gh=FakeGh())
+    gh = FakeGh([{"number": 101, "state": "closed", "body": sync.marker("threads:1")}])
+    sync.sync(REPO, directory=d, gh=gh, dry_run=True)
+    assert store.load_records(d)["threads:1"]["status"] == store.STATUS_NEW
+
+
+def test_answered_record_is_not_retired_by_a_closed_issue(d: Path):
+    """送信済みを ignored に落とさない (status は後退させない)。"""
+    _add(d, "threads:1")
+    sync.sync(REPO, directory=d, gh=FakeGh())
+    store.update_record("threads:1", {"status": store.STATUS_ANSWERED}, d)
+    gh = FakeGh([{"number": 101, "state": "closed", "body": sync.marker("threads:1")}])
+    sync.sync(REPO, directory=d, gh=gh)
+    assert store.load_records(d)["threads:1"]["status"] == store.STATUS_ANSWERED

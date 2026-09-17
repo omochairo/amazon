@@ -30,6 +30,14 @@ status の一方向性 (new -> drafted -> answered/ignored) と同じ格の要�
 (_analytics_issue_search.py の注記) が、ここではそのまま二重起票になるため。
 label で絞った issue 一覧を直接読む方が件数も小さく、ラグも無い。
 
+## close は「返さない」の意思表示
+
+人が issue を close したら、次の同期で inbox 側を `ignored` にする。これが無いと
+close しても status は `drafted` のままで、PENDING.md の「未対応 n 件」に残り続ける。
+しかも **人が `ignored` を付ける手段は他に無い** (付けられるのは起草側の LLM だけ)。
+
+誤って閉じても取り返せる — store は `ignored -> answered` を許している。
+
 ## バースト上限
 
 1 run で作る issue は既定 5 本まで (draft 側の --limit と同じ)。現在の流量 (数件) では
@@ -151,8 +159,8 @@ def issue_body(rec: dict) -> str:
         "送信は自動化していない。本文を確定してから `29-sns-reply-send.yml` を",
         "1 件ずつ dispatch する (手元なら `post_sns_reply.py`)。",
         "",
-        "返さないと決めたら、この issue を close せずに inbox 側を `ignored` にする",
-        "(close だけすると次の run で未対応として扱われ続ける)。",
+        "**返さないと決めたら、この issue を close するだけでよい。** 次の同期で inbox 側が",
+        "`ignored` になり、未対応から外れる。同じ返信で立て直されることはない。",
     ]
     return "\n".join(lines)
 
@@ -215,7 +223,7 @@ def sync(
     d = directory if directory is not None else store.inbox_dir()
     records = store.load_records(d)
     marked = fetch_marked_issues(repo, label, gh=gh)
-    stats = {"created": 0, "commented": 0, "closed": 0, "adopted": 0, "deferred": 0}
+    stats = {"created": 0, "commented": 0, "closed": 0, "adopted": 0, "deferred": 0, "retired": 0}
 
     # 起票は古い順。溜まっている分を上限で切るとき、落とすのは新しい側にする
     # (古い返信ほど放置期間が長く、返す価値が先に消える)
@@ -227,6 +235,32 @@ def sync(
     for rec in pending:
         rid = rec["id"]
         number = rec.get("issue_number")
+
+        # 人が issue を close した = 「返さない」と決めた、と読む。
+        # ここが無いと、close しても inbox は drafted のままで PENDING.md の
+        # 「未対応 n 件」に残り続ける。かつ人が ignored にする手段は他に無い
+        # (ignored を付けられるのは起草側の LLM だけ)。
+        # 誤って閉じた場合は取り返せる — store は ignored -> answered を許す。
+        closed_issue = marked.get(rid)
+        if (
+            closed_issue is not None
+            and closed_issue.get("state") == "closed"
+            and rec.get("status") in (store.STATUS_NEW, store.STATUS_DRAFTED)
+        ):
+            if not dry_run:
+                store.update_record(
+                    rid,
+                    {
+                        "status": store.STATUS_IGNORED,
+                        "ignore_reason": "issue を人が close した",
+                        "issue_number": closed_issue.get("number"),
+                        "issue_closed": True,
+                    },
+                    d,
+                )
+            stats["retired"] += 1
+            continue
+
         if not isinstance(number, int):
             existing = marked.get(rid)
             if existing is not None:
@@ -338,7 +372,7 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"{prefix}起票 {stats['created']} / 追記 {stats['commented']} / "
         f"close {stats['closed']} / 既存を採用 {stats['adopted']} / "
-        f"上限で見送り {stats['deferred']}",
+        f"上限で見送り {stats['deferred']} / close 済みを ignored に {stats['retired']}",
     )
     return 0
 
