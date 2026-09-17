@@ -36,7 +36,8 @@ owned read 扱いで **$0.001/件**。`X_BEARER_TOKEN` + `X_USER_ID` を設定�
 ## 通知を issue にしている理由 (#7589)
 
 ntfy push と `PENDING.md` だけだった頃、**どちらも「開かないと何も起きない」**ので
-放置された。2026-09-17 の実測で案 16 件に対し送信は 1 件。
+放置された。2026-09-17 の実測で、未対応 4 件はいずれも案が出来ているのに、送信まで至ったのは
+通算 1 件だけだった。
 
 未対応 1 件につき `amazon-home-ops` に issue を 1 本立てる。送信 (`answered`) /
 見送り (`ignored`) で close されるので、**open 件数がそのまま未対応件数**になる。
@@ -44,7 +45,8 @@ ntfy は残してあるが、気付く主経路は GitHub の issue 通知。
 
 - 起票先は private 限定。`--repo` / `SNS_ISSUE_REPO` の明示が要り、
   `omochairo/amazon` (public) を指すと exit 2 で拒否する
-- 1 run で立てるのは既定 5 本まで。GitHub API のバースト起票は禁止されている
+- 1 run で立てるのは既定 5 本まで。現在の流量 (数件) では当たらないが、
+  取りこぼしを後から一括で流すときに効く。GitHub API のバースト起票は禁止
   (2026-06-25 のアカウント凍結)
 - **二重起票の防波堤は 2 重**: レコードの `issue_number` と、issue 本文の
   `<!-- sns-inbox-id: … -->` マーカー。前者は commit → push が要るので、
