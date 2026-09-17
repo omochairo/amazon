@@ -328,3 +328,30 @@ def test_json_round_trip_of_the_new_fields(d: Path):
     last = [json.loads(x) for x in (d / store.INBOX_FILENAME).read_text(encoding="utf-8").splitlines() if x.strip()][-1]
     assert last["issue_number"] > 0
     assert last["issue_synced_drafts"] == 0
+
+
+def test_limit_zero_closes_without_creating(d: Path):
+    """送信レーン (29-sns-reply-send.yml) は --limit 0 で呼ぶ。
+
+    送った 1 件の issue を閉じたいだけで、そこで新規起票はしない。
+    """
+    _add(d, "threads:1")
+    _add(d, "threads:2")
+    sync.sync(REPO, directory=d, gh=FakeGh())  # 両方とも起票済みにする
+    store.update_record("threads:1", {"status": store.STATUS_ANSWERED}, d)
+
+    gh = FakeGh()
+    stats = sync.sync(REPO, directory=d, gh=gh, limit=0)
+
+    assert stats["created"] == 0
+    assert stats["closed"] == 1
+    assert gh.posts_to("/issues") == []
+
+
+def test_limit_zero_does_not_create_for_unissued_records(d: Path):
+    _add(d, "threads:1")
+    gh = FakeGh()
+    stats = sync.sync(REPO, directory=d, gh=gh, limit=0)
+    assert stats["created"] == 0
+    assert stats["deferred"] == 1
+    assert gh.posts_to("/issues") == []
