@@ -14,7 +14,7 @@
              含む名前を抽出する。Buffer の GraphQL は公開ドキュメントに
              無いフィールドを持ちうるので、「docs に無い」ではなく
              「schema に無い」を根拠にするための確認。
-  threads  : GET /me/threads → 先頭 1 件の GET /{id}/replies。
+  threads  : GET /me/threads → 先頭 1 件の GET /{id}/replies と /{id}/conversation。
              現行 THREADS_ACCESS_TOKEN に threads_read_replies 相当の
              scope が付いているかを HTTP status で判定する。
   bluesky  : createSession → app.bsky.notification.listNotifications。
@@ -216,6 +216,18 @@ def probe_threads() -> dict:
 
     out["status"] = "replies-ok"
     out["reply_count_on_latest"] = len(r_payload.get("data") or [])
+
+    # 本番の fetcher が叩くのは /conversation の方 (#7589)。/replies は
+    # top-level しか返さないので、こちらが返信したあとの相手の発言 (depth 2)
+    # が見えず、会話が 1 往復で切れる。scope が別扱いでないことを確認する。
+    c_status, c_payload, c_err = _get_json(f"{THREADS_BASE}/{media_id}/conversation?{q2}")
+    out["conversation_http"] = c_status
+    if c_err or not isinstance(c_payload, dict) or c_status != 200:
+        out["conversation"] = "denied"
+        out["conversation_reason"] = c_err or _meta_error_kind(c_payload if isinstance(c_payload, dict) else {})
+        return out
+    out["conversation"] = "ok"
+    out["conversation_count_on_latest"] = len(c_payload.get("data") or [])
     return out
 
 

@@ -10,6 +10,7 @@ X / Threads / Bluesky に投稿しても、返ってきた返信に気付けず�
 | チャネル | 返信を読めるか | 根拠 |
 |---|---|---|
 | Threads | **読める** | 現行 `THREADS_ACCESS_TOKEN` のまま `GET /{media-id}/replies` が HTTP 200。再認可不要 |
+| Threads (会話の続き) | `/replies` では**読めない** | `/replies` は top-level の返信しか返さない。実際に叩くのは `/conversation` (深さに関係なく flat に全部返す) |
 | Bluesky | **読める** | `app.bsky.notification.listNotifications` が 200。reply / mention / quote を取得できる |
 | X | **Buffer からは読めない** | Buffer GraphQL の Query root は 13 個 (`account` / `channel(s)` / `post(s)` / `contentItem(s)` / `idea*` / `postTemplate*` / `aggregatedPostMetrics` / `dailyPostingLimits`) だけ。281 型を走査しても reply / comment / mention / conversation は**型ごと存在しない** |
 
@@ -51,8 +52,12 @@ ntfy は残してあるが、気付く主経路は GitHub の issue 通知。
 - **二重起票の防波堤は 2 重**: レコードの `issue_number` と、issue 本文の
   `<!-- sns-inbox-id: … -->` マーカー。前者は commit → push が要るので、
   「起票は成功したが commit 前に落ちた」窓をマーカー照合で塞ぐ
-- issue を手で close しても inbox の status は動かない。返さないと決めたものは
-  inbox 側を `ignored` にする (close だけだと次の run で未対応のまま扱われる)
+- **返さないと決めたら issue を close するだけでよい。** 次の同期で inbox 側が
+  `ignored` になり、未対応から外れる。同じ返信で立て直されることもない
+  (`issue_number` とマーカーの両方で既知として扱う)。
+  人が `ignored` を付ける手段は他に無い — 起草側の LLM が「返信しない」と
+  判断した経路しか無かったので、close をその意思表示として読む。
+  誤って閉じても取り返せる (store は `ignored -> answered` を許す)
 
 ## なぜ自動送信しないか
 
@@ -74,6 +79,20 @@ public なので、**このリポジトリにコミットしてはならない**
 - ペルソナ定義 (`jules/PROMPT_ENGAGEMENT_*`) は `amazon-navi-brain` の資産で、
   public 側に複製しない。overlay が無い環境では起草を**拒否**する
   (適当なペルソナで書くより書かない方が良い)
+
+## 会話が 1 往復で切れないようにする (#7589)
+
+Threads で「こちらが返信 → 相手がさらに返信」を拾うには `/conversation` が要る。
+
+- `GET /{media-id}/replies` は **top-level の返信しか返さない**
+  (Threads API docs: "only returns the top-level replies")。こちらの返信への
+  返信は depth 2 なので、この経路では永久に見えない
+- `GET /{user-id}/threads` は **自分の返信を含まない** (別エッジが要る)。
+  つまり「自分の返信を起点に辿る」形にも逃げられない
+- したがって自分の投稿を根として `/conversation` を読むのが唯一の経路。
+  深さに関係なく flat に全部返るので、何往復しても拾える
+
+Bluesky は `listNotifications` が深さに関係なく通知を返すので元から影響なし。
 
 ## 二重返信を防ぐ不変条件
 

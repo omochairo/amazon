@@ -6,7 +6,7 @@
 
 チャネル別の実測 (2026-09-05, run 33966085054 の probe):
   threads : 現行 THREADS_ACCESS_TOKEN のまま GET /{media-id}/replies が 200。
-            再認可不要
+            再認可不要。ただし実際に叩くのは `/conversation` (下記)
   bluesky : app.bsky.notification.listNotifications が 200。reply/mention/quote
             を拾える
   x       : **Buffer からは取れない**。Buffer GraphQL の Query root は 13 個
@@ -165,8 +165,20 @@ def fetch_threads(lookback_days: int) -> list[dict]:
 def _fetch_thread_replies(
     media_id: str, token: str, own_username: str, cutoff: datetime,
 ) -> list[dict]:
+    """1 投稿のスレッド全体から、自分以外の発言を拾う。
+
+    `/replies` ではなく `/conversation` を叩く。**`/replies` は top-level の
+    返信しか返さない** (Threads API docs: "only returns the top-level replies")。
+    こちらが返信したあとに相手が返してきた発言は depth 2 になるので、
+    `/replies` では永久に見えない = 会話が 1 往復で切れる。
+    `/conversation` は深さに関係なく flat に全部返す。
+
+    自分の返信を起点に辿ることはできない。`GET /{user-id}/threads` は
+    **自分の返信を含まない** (別エッジの /replies が要る) ので、自分の投稿を
+    根として会話ごと読むこの形が唯一の経路になる。
+    """
     try:
-        payload = _request(f"{THREADS_BASE}/{media_id}/replies?" + urllib.parse.urlencode({
+        payload = _request(f"{THREADS_BASE}/{media_id}/conversation?" + urllib.parse.urlencode({
             "fields": "id,text,username,permalink,timestamp",
             "limit": str(MAX_REPLIES_PER_POST),
             "access_token": token,
