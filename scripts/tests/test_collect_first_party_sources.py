@@ -29,6 +29,7 @@ from scripts.collect_first_party_sources import (
     assert_not_truncated,
     build_asin_title_catalog,
     build_first_party_pool,
+    build_pool_excluded,
     build_uncatalogued,
     collect,
     count_fp_markers,
@@ -444,13 +445,66 @@ class BuildUncataloguedTest(unittest.TestCase):
 class BuildFirstPartyPoolTest(unittest.TestCase):
     def test_filters_primary_without_article(self):
         sources = [
-            {"asin": "A", "role": "primary", "in_corpus": True, "has_article": False},
-            {"asin": "B", "role": "primary", "in_corpus": True, "has_article": True},
-            {"asin": "C", "role": "primary", "in_corpus": False, "has_article": False},
-            {"asin": "D", "role": "compared", "in_corpus": True, "has_article": False},
+            {"asin": "B00000000A", "role": "primary", "in_corpus": True, "has_article": False},
+            {"asin": "B00000000B", "role": "primary", "in_corpus": True, "has_article": True},
+            {"asin": "B00000000C", "role": "primary", "in_corpus": False, "has_article": False},
+            {"asin": "B00000000D", "role": "compared", "in_corpus": True, "has_article": False},
         ]
-        # C は in_corpus=False でも入る (消費側 #7511 は候補列に直接前置するため)
-        self.assertEqual(build_first_party_pool(sources), ["A", "C"])
+        # B00000000C は in_corpus=False でも入る (消費側 #7511 は候補列に直接前置するため)
+        self.assertEqual(build_first_party_pool(sources), ["B00000000A", "B00000000C"])
+
+    def test_excludes_non_b0_asins(self):
+        # ISBN 形式 (紙の書籍) は消費側 (03-invoke-jules.yml の _ASIN_RE) が構造的に
+        # 消費できないのでプールに載せない (#7573)。
+        sources = [
+            {"asin": "B00000000A", "role": "primary", "in_corpus": True, "has_article": False},
+            {"asin": "4023333859", "role": "primary", "in_corpus": True, "has_article": False},
+            {"asin": "000838214X", "role": "primary", "in_corpus": True, "has_article": False},
+        ]
+        self.assertEqual(build_first_party_pool(sources), ["B00000000A"])
+
+
+class BuildPoolExcludedTest(unittest.TestCase):
+    def test_returns_only_non_b0_asins_from_the_pool_population(self):
+        sources = [
+            {"asin": "B00000000A", "role": "primary", "has_article": False,
+             "post_url": "https://omcha.jp/a/", "post_title": "a"},
+            {"asin": "4023333859", "role": "primary", "has_article": False,
+             "post_url": "https://omcha.jp/b/", "post_title": "b"},
+        ]
+        self.assertEqual(build_pool_excluded(sources), [
+            {"asin": "4023333859", "reason": "non_b0_asin",
+             "post_url": "https://omcha.jp/b/", "post_title": "b"},
+        ])
+
+    def test_dedupes_by_asin_ascending(self):
+        sources = [
+            {"asin": "000838214X", "role": "primary", "has_article": False,
+             "post_url": "https://omcha.jp/z/", "post_title": "z"},
+            {"asin": "4023333859", "role": "primary", "has_article": False,
+             "post_url": "https://omcha.jp/y/", "post_title": "y"},
+            {"asin": "4023333859", "role": "primary", "has_article": False,
+             "post_url": "https://omcha.jp/x/", "post_title": "x"},
+        ]
+        out = build_pool_excluded(sources)
+        self.assertEqual([r["asin"] for r in out], ["000838214X", "4023333859"])
+        self.assertEqual(out[1]["post_url"], "https://omcha.jp/y/")  # 最初に見つけた 1 件を採る
+
+    def test_excludes_non_primary_and_already_articled(self):
+        sources = [
+            {"asin": "4023333859", "role": "compared", "has_article": False,
+             "post_url": "u", "post_title": "t"},
+            {"asin": "000838214X", "role": "primary", "has_article": True,
+             "post_url": "u", "post_title": "t"},
+        ]
+        self.assertEqual(build_pool_excluded(sources), [])
+
+    def test_b0_asins_are_not_excluded(self):
+        sources = [
+            {"asin": "B00000000A", "role": "primary", "has_article": False,
+             "post_url": "u", "post_title": "t"},
+        ]
+        self.assertEqual(build_pool_excluded(sources), [])
 
 
 class AssertNotTruncatedTest(unittest.TestCase):

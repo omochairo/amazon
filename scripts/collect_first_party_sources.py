@@ -23,10 +23,11 @@ omcha.jp (WP REST, read-only GET のみ) の記事本文から、アフィリエ
      状態 (in_corpus/has_article/has_experience) を書き出す。D (未収載の報告:
      primary かつ ``has_article=false`` の一覧) は同ファイル内の
      ``uncatalogued`` セクション
-  6. ``role=primary`` かつ ``has_article=false`` の
+  6. ``role=primary`` かつ ``has_article=false`` かつ B0 形式 (``POOL_ASIN_RE``) の
      ASIN を ``data/raw/first_party_pool.json`` (``{"asins": [...]}`` 形式、
      ``data/raw/ranking_pool.json`` と同形) に書き出す。03-invoke-jules 側の
-     前置 (#7511) がこれを消費する
+     前置 (#7511) がこれを消費する。B0 形式でない分 (ISBN 等) は捨てずに
+     ``first_party_sources.json`` の ``pool_excluded`` に残す (#7573)
 
 Issue: https://github.com/omochairo/omcha-ops/issues/264 (設計コメント)
 """
@@ -95,6 +96,12 @@ _ASIN_LINK_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"/gp/product/([A-Za-z0-9]{10})", re.IGNORECASE),
     re.compile(r"[?&]asin=([A-Za-z0-9]{10})", re.IGNORECASE),
 )
+
+# プールに載せてよい ASIN の形式。消費側 (03-invoke-jules.yml の _ASIN_RE) と同値。
+# 抽出時の _ASIN_LINK_PATTERNS ([A-Za-z0-9]{10}) は ISBN-10 も拾うが、
+# 紙の書籍 (先頭 4 等) は B が構造的に消費できないのでプールには載せない (#7573)。
+# 落とした分は build_pool_excluded が一覧として出力に残す。
+POOL_ASIN_RE = re.compile(r"^B0[A-Z0-9]{8}$")
 
 
 def _now_iso() -> str:
@@ -441,7 +448,7 @@ def build_uncatalogued(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def build_first_party_pool(sources: list[dict[str, Any]]) -> list[str]:
-    """B が消費する対象: role=primary かつ 未記事化。
+    """B が消費する対象: role=primary かつ 未記事化 かつ B0 形式の ASIN。
 
     設計 (#264) は ``in_corpus=true`` も条件に入れていたが、``in_corpus`` の出所
     ``data/raw/amazon.json`` は日次 fetch の作業セット (実測 2026-09-17 で 82 件)
@@ -451,9 +458,41 @@ def build_first_party_pool(sources: list[dict[str, Any]]) -> list[str]:
     消費側 (#7511) は first_party_pool を候補列に **直接前置** するので、
     amazon.json の items[] に居る必要はない (``rewrite_first`` に同じ前例がある)。
     ``in_corpus`` は情報として出力には残す。
+
+    ISBN 形式 (紙の書籍) は消費側が構造的に扱えないため ``POOL_ASIN_RE`` で落とす
+    (#7573)。落とした分は ``build_pool_excluded`` が一覧として出力に残す。
     """
-    asins = {r["asin"] for r in sources if r["role"] == "primary" and not r["has_article"]}
+    asins = {
+        r["asin"] for r in sources
+        if r["role"] == "primary" and not r["has_article"] and POOL_ASIN_RE.match(r["asin"])
+    }
     return sorted(asins)
+
+
+def build_pool_excluded(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """``build_first_party_pool`` と同じ母集団のうち、B0 形式でないために落ちた ASIN の一覧。
+
+    書籍ジャンルが解禁されたとき (#3311) にそのまま使えるように、捨てずに
+    ``asin`` ごとに 1 件・昇順で残す (重複の畳み込みは ``build_uncatalogued`` と同じ)。
+    """
+    picked: dict[str, dict[str, Any]] = {}
+    for record in sources:
+        if record["role"] != "primary" or record["has_article"]:
+            continue
+        asin = record["asin"]
+        if POOL_ASIN_RE.match(asin):
+            continue
+        if asin not in picked:
+            picked[asin] = record
+    return [
+        {
+            "asin": r["asin"],
+            "reason": "non_b0_asin",
+            "post_url": r["post_url"],
+            "post_title": r["post_title"],
+        }
+        for r in sorted(picked.values(), key=lambda r: r["asin"])
+    ]
 
 
 class TruncatedCollectionError(RuntimeError):
@@ -519,14 +558,15 @@ def run(
         sleeper=sleeper,
     )
     assert_not_truncated(previous, result, limit=limit)
-    write_json(out_path, result)
-
     pool = build_first_party_pool(result["sources"])
+    result["pool_excluded"] = build_pool_excluded(result["sources"])
+    write_json(out_path, result)
     write_json(pool_path, {"asins": pool, "generated_at": result["generated_at"]})
 
     logger.info(
-        "collected: %d posts, %d source records, %d uncatalogued, pool=%d",
-        len(result["posts_cache"]), len(result["sources"]), len(result["uncatalogued"]), len(pool),
+        "collected: %d posts, %d source records, %d uncatalogued, pool=%d, pool_excluded=%d",
+        len(result["posts_cache"]), len(result["sources"]), len(result["uncatalogued"]),
+        len(pool), len(result["pool_excluded"]),
     )
     return result
 
