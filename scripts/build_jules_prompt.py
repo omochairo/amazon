@@ -152,7 +152,8 @@ def _experience_note(asin):
         return ""
     return """【体験談素材 (experience.json) の使い方】
 - 同梱の per_asin/experience.json はシステムが Web/SNS/レビューから事前収集・検証した体験談素材です。narrative の根拠にはまずこれを使ってください (テンプレート §6.5.4)。
-- usable_as が "quote" の snippet は出典付き短引用可、"paraphrase" は集合表現への言い換えのみ可 (原文再現禁止)。"""
+- usable_as が "quote" の snippet は出典付き短引用可、"paraphrase" は集合表現への言い換えのみ可 (原文再現禁止)。
+- note が空でない snippet は、実使用対象が本記事の商品と異なるモデル・型番であることを示す注記です。本商品固有の体験として書かず、note の内容 (例: 旧モデルでの使用感) を明記するか、この snippet は使わないでください。"""
 
 
 def _amazon_item(asin):
