@@ -3,19 +3,26 @@ name: SNS Engagement Publish (X + Threads + Bluesky non-link, 8-slot)
 #   - X (Buffer) / Threads (Meta Graph) に 1 日 6 スロット non-link 投稿
 #     (記事 URL 投稿スロット 11:00 / 20:00 JST は 20-sns-publish.yml が担当、変更なし)
 #   - 各スロット時刻別に category (news / daily) を切替 (session 95 で順序変更:
-#     記事を 07:00 に前出し、news を 11:00 以降へ後ろ倒し + 21:30 予備追加。
+#     記事を 07:00 に前出し、news を 11:00 以降へ後ろ倒し。
 #     news は朝の 32→33 Jules パイプライン完了待ちなので午前遅め〜午後に寄せる):
 #       07:00 JST  [article — 20-sns-publish.yml]
 #       09:30 JST daily#1 | 11:00 JST news#1
 #       13:00 JST news#2  | 15:00 JST daily#2
-#       17:00 JST news#3  | 19:30 JST daily#3
+#                            19:30 JST daily#3
 #       20:00 JST  [article — 20-sns-publish.yml]
-#       21:30 JST news#4 (予備 — 取りこぼし救済)
-#   → 1 日 9 投稿/ch (news 4 + daily 3 + article 2)、2 ch で engagement は news4+daily3
+#   → 1 日 7 投稿/ch (news 2 + daily 3 + article 2)、2 ch で engagement は news2+daily3
 #   - news スロット: category="news" AND created_at > now-48h で latest-first pick
 #   - daily スロット: category="daily" で FIFO (古い順) pick + rotation 多様性ペナルティ
 #   - queue 候補 0 件のスロットは穴開けで skip (健全)
 #   - queue 補充は 29-jules-engagement-refill.yml (daily) + 33-jules-engagement-news.yml (news)
+#
+#   Issue #7847 (session 178): news は 17:00(news#3) / 21:30(news#4 予備) を撤去。
+#   news の実供給は 33-jules-engagement-news.yml の賛否テスト (§7-A, 論争回避
+#   最優先ルール) で構造的に 2〜3 本/日に収束しており、4 枠は供給を上回る需要
+#   だった (直近 10 run 中 3 run が news#3/#4 で skip warning)。生成本数を増やす
+#   のは安全ゲートを緩める方向になるため見送り、実測で一度も skip していない
+#   news#1/#2 のみ残す。3 本供給される日の余剰は 48h 鮮度窓の中で翌日の
+#   news#1/#2 に自然に繰り越される。
 on:
   workflow_dispatch:
     inputs:
@@ -37,11 +44,9 @@ on:
         type: boolean
         default: false
   schedule:
-    # news スロット (11/13/17/21:30 JST) — 朝の Jules news 生成完了を待てる時刻に配置
+    # news スロット (11/13 JST) — 朝の Jules news 生成完了を待てる時刻に配置
     - cron: '0 2 * * *'    # 11:00 JST (02:00 UTC)     news#1
     - cron: '0 4 * * *'    # 13:00 JST (04:00 UTC)     news#2
-    - cron: '0 8 * * *'    # 17:00 JST (08:00 UTC)     news#3
-    - cron: '30 12 * * *'  # 21:30 JST (12:30 UTC)     news#4 (予備)
     # daily スロット (09:30/15:00/19:30 JST)
     - cron: '30 0 * * *'   # 09:30 JST (00:30 UTC)     daily#1
     - cron: '0 6 * * *'    # 15:00 JST (06:00 UTC)     daily#2
@@ -123,7 +128,7 @@ jobs:
             SRC="input"
           elif [ -n "$SCHED" ]; then
             case "$SCHED" in
-              "0 2 * * *"|"0 4 * * *"|"0 8 * * *"|"30 12 * * *") CAT="news" ;;
+              "0 2 * * *"|"0 4 * * *") CAT="news" ;;
               "30 0 * * *"|"0 6 * * *"|"30 10 * * *") CAT="daily" ;;
               *)
                 echo "::warning::Unknown schedule '$SCHED', defaulting to daily"
@@ -135,7 +140,7 @@ jobs:
             # workflow_dispatch で category 未指定: JST 時刻で推定
             JST_HM=$(TZ=Asia/Tokyo date +%H%M)
             case "$JST_HM" in
-              1100|1300|1700|2130) CAT="news" ;;
+              1100|1300) CAT="news" ;;
               *) CAT="daily" ;;
             esac
             SRC="JST_HM($JST_HM)"
