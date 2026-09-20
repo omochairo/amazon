@@ -40,7 +40,18 @@ logger = logging.getLogger("detect_orphan_pages")
 DEFAULT_IN = "data/analytics/ga4_weekly.json"
 DEFAULT_OUT = "data/analytics/orphan_pages.json"
 DEFAULT_TARGET_HOST = "navi.omcha.jp"
-DEFAULT_MIN_PV = 50
+# 閾値の較正 (2026-09-20・amazon-navi-brain#56)
+#
+# #5941 導入時点 (min_pv=50) は健全だった (発火実績あり、brain#16)。その後
+# navi のトラフィックが減り続け、brain#18 で 09-06 週の eligible=0 が見つかった
+# ときに「A-4 と違って A-5 は量のしきい値と選別条件が独立なので下げる価値がある」
+# と方針は決まっていたが、実スイープは #33 に持ち越しのまま宙に浮いていた
+# (#33 は別件の A-1 baseline 修正に流れ、A-5 のスイープは行われなかった)。
+#
+# #56 でようやく実測スイープした。min_pv を下げても entrance_ratio のゲートは
+# 選別能力を保っている (下げた分がそのまま detected に化けているわけではない。
+# 実測は private 側の #56 コメントを見ること)。
+DEFAULT_MIN_PV = 5
 DEFAULT_MIN_ENTRANCE_RATIO = 0.90
 DEFAULT_MAX_RESULTS = 10
 CONTENT_PREFIXES = ("/posts/", "/products/")
