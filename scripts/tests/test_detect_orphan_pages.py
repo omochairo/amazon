@@ -1,9 +1,10 @@
 """scripts/detect_orphan_pages.py unit tests (A-5, epic #1356).
 
 この検出器は 2026-09-20 (amazon-navi-brain#56) まで unit test を持っていなかった。
-同日、navi のトラフィック縮小で min_pv=50 では母数が枯れる週が続くことが分かり
-既定値を下げたので、**較正が戻ったら気づける形**にしておく (#18 で A-3 に
-unit test を新設したのと同じ理由)。
+同日 min_pv=50→5 への引き下げを一度提案したが、レビューで「GA4/GSC の乖離が
+未確認」「min_pv=5 では entrance_ratio が二値に縮退する」「既知の真陽性を
+確認していない」と指摘され保留になった (detect_orphan_pages.py のコメント参照)。
+閾値は現行の 50 のまま、**較正が入ったら気づける形**だけ先に整備しておく。
 """
 from __future__ import annotations
 
@@ -26,14 +27,14 @@ def _ga4(rows):
 
 
 def test_detects_high_entrance_ratio_page():
-    result = detect(_ga4([_page("/products/a/", 10, 10)]))
+    result = detect(_ga4([_page("/products/a/", DEFAULT_MIN_PV, DEFAULT_MIN_PV)]))
     assert [d["page_path"] for d in result["detected"]] == ["/products/a/"]
     assert result["eligible"] == 1
 
 
 def test_low_entrance_ratio_is_not_detected_but_counts_as_eligible():
     # 内部流入があるページは孤児ではない。母数には数える。
-    result = detect(_ga4([_page("/products/a/", 10, 3)]))
+    result = detect(_ga4([_page("/products/a/", DEFAULT_MIN_PV, DEFAULT_MIN_PV // 3)]))
     assert result["detected"] == []
     assert result["eligible"] == 1
 
@@ -66,16 +67,17 @@ def test_missing_entrances_is_skipped_not_zero():
     assert result["detected"] == []
 
 
-# --- 較正が戻ったら落ちるテスト -------------------------------------------
+# --- 既定値が動いたら気づけるようにしておく (#56 のレビューで保留中) ------
 
-def test_calibrated_defaults():
-    # 較正前 (#5941 / brain#18 導入時) は min_pv=50 だった。
-    assert DEFAULT_MIN_PV == 5
+def test_default_min_pv_is_still_the_pre_56_value():
+    # #56 で 50→5 を提案したがレビューで保留 (detect_orphan_pages.py のコメント
+    # 参照)。下げるなら GA4/GSC 乖離の解消 + entrance_ratio の丸め粒度 + 既知の
+    # 真陽性確認の 3 点を先にやってからにすること。
+    assert DEFAULT_MIN_PV == 50
     assert DEFAULT_MIN_ENTRANCE_RATIO == 0.90
 
 
-def test_pv_just_at_calibrated_threshold_is_eligible():
-    # 較正後の下限ちょうど。旧値 (50) では拾えなかった帯。
+def test_pv_just_at_threshold_is_eligible():
     result = detect(_ga4([_page("/products/a/", DEFAULT_MIN_PV, DEFAULT_MIN_PV)]))
     assert result["eligible"] == 1
 

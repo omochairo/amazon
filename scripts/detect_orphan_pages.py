@@ -40,18 +40,28 @@ logger = logging.getLogger("detect_orphan_pages")
 DEFAULT_IN = "data/analytics/ga4_weekly.json"
 DEFAULT_OUT = "data/analytics/orphan_pages.json"
 DEFAULT_TARGET_HOST = "navi.omcha.jp"
-# 閾値の較正 (2026-09-20・amazon-navi-brain#56)
+# min_pv は amazon-navi-brain#56 のレビューで一旦保留 (2026-09-20)。
 #
-# #5941 導入時点 (min_pv=50) は健全だった (発火実績あり、brain#16)。その後
-# navi のトラフィックが減り続け、brain#18 で 09-06 週の eligible=0 が見つかった
-# ときに「A-4 と違って A-5 は量のしきい値と選別条件が独立なので下げる価値がある」
-# と方針は決まっていたが、実スイープは #33 に持ち越しのまま宙に浮いていた
-# (#33 は別件の A-1 baseline 修正に流れ、A-5 のスイープは行われなかった)。
+# #5941 導入時点 (min_pv=50) は健全だった (発火実績あり、brain#16)。brain#18 で
+# 09-06 週の eligible=0 が見つかったときは「A-4 と違って量のしきい値と選別条件が
+# 独立なので下げる価値がある」と方針だけ決まり (実スイープは #33 に持ち越しの
+# まま宙に浮いていた)、#56 で min_pv=50→5 を提案したが、レビューで次の 3 点を
+# 指摘されて保留になった:
 #
-# #56 でようやく実測スイープした。min_pv を下げても entrance_ratio のゲートは
-# 選別能力を保っている (下げた分がそのまま detected に化けているわけではない。
-# 実測は private 側の #56 コメントを見ること)。
-DEFAULT_MIN_PV = 5
+#   1. 前提にしている navi の GA4 PV 急落を GSC 側 (impressions は増加トレンド、
+#      position は改善) が裏付けていない。GA4 側の計測変化の可能性が先に潰れて
+#      いない (by_source / by_device はホスト別に取れないため、host 別の裏取り
+#      には使えないことも判明した)
+#   2. min_pv=5 では整数 PV の丸めで entrance_ratio>=0.90 が実質
+#      「internal_pageviews == 0 か否か」の二値に縮退する (4/5=0.80 で落ちるため)。
+#      PR で A-4 について却下した「較正ではなく退化」と同じ形
+#   3. min_pv=50 時代に発火した既知の真陽性 (brain#16) が新閾値でどう判定される
+#      かを現物で確認していない
+#
+# #18 の最終コメントが提案していたのは PV>=20 (5 より粒度が粗くならない下限)。
+# 次に見直すときは (1) の GA4/GSC 乖離の原因を先に潰し、(2) の丸め粒度が保たれる
+# 値から検証し、(3) の既知の真陽性で現物確認してから下げること。
+DEFAULT_MIN_PV = 50
 DEFAULT_MIN_ENTRANCE_RATIO = 0.90
 DEFAULT_MAX_RESULTS = 10
 CONTENT_PREFIXES = ("/posts/", "/products/")
