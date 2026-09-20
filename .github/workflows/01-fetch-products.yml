@@ -185,10 +185,31 @@ jobs:
       # 旧設計の `gh workflow run "Validate Article PR"` による workflow_dispatch kick は
       # 不要になったため削除 (workflow_dispatch run は required check に算入されない問題が
       # auto-merge stuck の根本原因だった)。
+      # 2026-09-20: push 直前で App token を**再発行**する。
+      # installation token の寿命は 60 分固定で、先頭の `Generate App token` が
+      # 発行したものは fetch 本体 (Amazon/楽天/YouTube/Yahoo/Cross-Search/Reviews)
+      # が 60 分を超えた時点で失効する。失効後に checkout が焼いた credential で
+      # push すると `fatal: could not read Username for 'https://github.com'`
+      # (exit 128) で落ち、その run のデータ更新が丸ごと捨てられる。
+      # 実測: 所要 60 分未満の run は全て success、60 分超の run は全て failure。
+      # 2026-09-15 以降は毎回 60 分を超えるようになり 12 連続失敗 = 5 日間 PR ゼロ
+      # (run 34603701097 / 34760543544 / 34979999426 … 35486652101)。
+      # fetch の探索幅 (--keyword-sample-size 60 / --pages 3) を削る対症療法だと
+      # また伸びた時に再発するので、寿命の側を作り直す。
+      - name: Regenerate App token (push 直前)
+        id: app-token-push
+        if: ${{ always() }}
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Create data update PR + enable auto-merge
         if: ${{ always() }}
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # gh / git とも**再発行したほう**を使う。steps.app-token.outputs.token は
+          # この時点で既に死んでいる。
+          GH_TOKEN: ${{ steps.app-token-push.outputs.token }}
         run: |
           set -e
           if git diff --quiet --exit-code -- data/ && [ -z "$(git status --porcelain -- data/)" ]; then
@@ -216,7 +237,15 @@ jobs:
             exit 0
           fi
           git commit -m "data: automated product data update (run ${{ github.run_id }})"
-          git push -u origin "$BRANCH"
+          # checkout が焼いた認証情報 (extraheader と includeIf 経由の
+          # credential config) は旧トークンのもので、remote 既定のまま push すると
+          # 失効したそれを掴む。新トークンを URL に埋めた push 先を明示し、
+          # extraheader は空値で一覧ごとリセットして無効化する (git の仕様)。
+          # URL userinfo が両方揃っていれば credential helper は参照されない。
+          # トークンは create-github-app-token がマスク登録するのでログに出ない。
+          git -c http."https://github.com/".extraheader= \
+            push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" \
+            "HEAD:refs/heads/$BRANCH"
           PR_URL=$(gh pr create \
             --title "data: automated fetch update (run ${{ github.run_id }})" \
             --body "Automated fetch_amazon data refresh. data/raw/ updates only — no article changes." \
