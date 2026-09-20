@@ -230,8 +230,10 @@ brands:
     name_variants: [PlanToys, プラントイジャパン]
     tier: A
     region: TH
+  # 2026-09-20 (#7809): カタログ表記ゆれ「ファットブレイン」(トイズ抜き) を alias 追加。
+  # イニービン (B07SVMZBSD) は Fat Brain Toys 公式ラインナップと一致。
   - canonical: ファットブレイントイズ
-    aliases: [ファットブレイントイズ, Fat Brain Toys]
+    aliases: [ファットブレイントイズ, Fat Brain Toys, ファットブレイン]
     tier: A
     region: US
   - canonical: Osmo
@@ -1493,6 +1495,38 @@ brands:
   - {canonical: Vexolite, tier: D, region: CN, noindex: true, aliases: [Vexolite]}
   - {canonical: Kitai Japan, tier: D, region: CN, noindex: true, aliases: [Kitai Japan]}
   - {canonical: SAKURAN, tier: D, region: CN, noindex: true, aliases: [SAKURAN]}
+
+  # 2026-09-20 (#7809): 供給側検出器がカタログ未登録のまま浮上した9候補を実データ
+  # (product.brand + 商品名) と Web 検証で判定。
+  # シヤチハタ=1925年創業のスタンプ最大手 (item.shachihata.co.jp に商品カタログ掲載、
+  # カラフルコロピカどろだんご制作キット TMN-SHCD1)。トミーテック(TOMYTEC)=タカラ
+  # トミーグループの完全子会社、TOMIX 鉄道模型・フィギュア等で独自ブランド展開
+  # (tomytec.co.jp)。友愛玩具=1963年創業・名古屋のおもちゃ企画輸入商社
+  # (you-and-i-toys.co.jp)。
+  - canonical: シヤチハタ
+    aliases: [シヤチハタ, Shachihata, シャチハタ]
+    tier: B
+    region: JP
+    safety_default: [ST]
+  - canonical: トミーテック(TOMYTEC)
+    aliases: [トミーテック(TOMYTEC), TOMYTEC, トミーテック, TOMIX]
+    tier: B
+    region: JP
+  - canonical: 友愛玩具
+    aliases: [友愛玩具]
+    tier: C
+    region: JP
+  # LINXAS=リンクサス株式会社 (横浜市、資本金900万円、社員30名)。ベビー向けシール
+  # ブック等は自社ブランド「bebicia®」名義 (linxas.co.jp)。
+  - canonical: LINXAS
+    aliases: [LINXAS, リンクサス, bebicia]
+    tier: D
+    region: JP
+  # 以下は実在するが薄いハブ不要 = noindex (既存 Jasonwell/beiens 等と同方針)。
+  # Amazonベーシック=Amazon 自社プライベートブランド。Punasi=玩具/楽器用途の汎用
+  # AC アダプターを PSE 認証付きで展開する Amazon 公式ストア出品者 (製造国不明)。
+  - {canonical: Amazonベーシック, tier: D, region: US, noindex: true, aliases: [Amazonベーシック, Amazon Basics, AmazonBasics]}
+  - {canonical: Punasi, tier: D, region: unknown, noindex: true, aliases: [Punasi, PUNASI, punasi]}
 
   # 2026-09-13 (#7179): 供給側検出器がカタログ未登録のまま浮上した24候補を実データ
   # (product.brand + 商品名) と Web 検証で判定。
