@@ -20,6 +20,8 @@ from scripts.extract_first_party_experience import (
     run,
     select_first_party_passages,
     snippet_is_grounded,
+    snippet_is_sentence_fragment,
+    strip_heading_tags,
 )
 
 
@@ -92,6 +94,65 @@ def test_snippet_is_grounded_rejects_fragments_below_the_floor():
     ok = "うちの子は毎日これで遊んでいます"
     assert len(ok) >= MIN_GROUNDED_LENGTH - 4  # 境界の目安 (この文は通る長さ)
     assert snippet_is_grounded("我が家では実際に使ってみました。うちの子は毎日これで遊んでいます", body)
+
+
+# --------------------------------------------------------------------------
+# strip_heading_tags: 見出しが本文断片として抽出される問題への手当て (#7569 型3)
+# --------------------------------------------------------------------------
+
+def test_strip_heading_tags_removes_heading_elements():
+    html = "<p>導入文です。</p><h2>実際に遊んでみたリアルな感想</h2><p>うちの子は毎日遊んでいます。</p>"
+    out = strip_heading_tags(html)
+    assert "実際に遊んでみたリアルな感想" not in out
+    assert "<h2>" not in out
+    assert "うちの子は毎日遊んでいます。" in out
+
+
+def test_strip_heading_tags_removes_multiple_and_all_levels():
+    html = "<h1>タイトル</h1><h3>もくじ1</h3><h3>もくじ2</h3><p>本文。</p>"
+    out = strip_heading_tags(html)
+    assert "タイトル" not in out
+    assert "もくじ1" not in out
+    assert "もくじ2" not in out
+    assert "本文。" in out
+
+
+def test_strip_heading_tags_keeps_nested_inline_tags_out():
+    html = '<h2><span class="rank">1</span>商品名の見出し</h2><p>本文です。</p>'
+    out = strip_heading_tags(html)
+    assert "商品名の見出し" not in out
+    assert "本文です。" in out
+
+
+def test_strip_heading_tags_empty_input():
+    assert strip_heading_tags("") == ""
+    assert strip_heading_tags(None) == ""
+
+
+# --------------------------------------------------------------------------
+# snippet_is_sentence_fragment: 文の断片チェック (#7569 型5)
+# --------------------------------------------------------------------------
+
+def test_snippet_is_sentence_fragment_true_for_dangling_comma():
+    assert snippet_is_sentence_fragment("…遊び倒した 我が家が、")
+
+
+def test_snippet_is_sentence_fragment_false_for_complete_sentence():
+    assert not snippet_is_sentence_fragment("我が家では実際に使ってみて満足しています。")
+
+
+def test_snippet_is_sentence_fragment_false_for_exclamation_and_question():
+    assert not snippet_is_sentence_fragment("うちの子が大喜びでした！")
+    assert not snippet_is_sentence_fragment("こんなに使いやすいとは思いませんでした？")
+
+
+def test_snippet_is_sentence_fragment_ignores_trailing_closing_quote():
+    assert not snippet_is_sentence_fragment("「本当に良かったです。」")
+
+
+def test_snippet_is_sentence_fragment_true_for_empty_text():
+    assert snippet_is_sentence_fragment("")
+    assert snippet_is_sentence_fragment("　")
 
 
 # --------------------------------------------------------------------------
@@ -184,7 +245,33 @@ def test_extract_first_party_snippets_success():
     session = _FakeSession([_FakeResponse({"response": inner})])
     out = extract_first_party_snippets("本文", "商品名", "ブランド", "http://ollama", "gemma4",
                                         session, sleeper=_no_sleep)
-    assert out == [{"aspect": "体験談", "text": "実際に使ってみた", "confidence": "high"}]
+    assert out == [{"aspect": "体験談", "text": "実際に使ってみた", "confidence": "high", "note": ""}]
+
+
+def test_extract_first_party_snippets_passes_through_note():
+    inner = json.dumps({
+        "entailed": True,
+        "snippets": [{"aspect": "体験談", "text": "実際に使ってみた", "confidence": "high",
+                      "note": "実使用は旧モデル"}],
+    })
+    session = _FakeSession([_FakeResponse({"response": inner})])
+    out = extract_first_party_snippets("本文", "商品名", "ブランド", "http://ollama", "gemma4",
+                                        session, sleeper=_no_sleep)
+    assert out[0]["note"] == "実使用は旧モデル"
+
+
+def test_extract_first_party_snippets_defaults_note_to_empty_when_missing_or_not_a_string():
+    inner = json.dumps({
+        "entailed": True,
+        "snippets": [
+            {"aspect": "体験談", "text": "実際に使ってみた1", "confidence": "high"},
+            {"aspect": "体験談", "text": "実際に使ってみた2", "confidence": "high", "note": 123},
+        ],
+    })
+    session = _FakeSession([_FakeResponse({"response": inner})])
+    out = extract_first_party_snippets("本文", "商品名", "ブランド", "http://ollama", "gemma4",
+                                        session, sleeper=_no_sleep)
+    assert [s["note"] for s in out] == ["", ""]
 
 
 def test_extract_first_party_snippets_not_entailed_returns_empty():
@@ -225,12 +312,12 @@ def test_extract_asin_experience_role_primary_keeps_non_comparison_aspect(tmp_pa
 
     inner = json.dumps({
         "entailed": True,
-        "snippets": [{"aspect": "体験談", "text": "うちの子は実際に使ってみて毎日のように喜んで遊んでいました", "confidence": "high"}],
+        "snippets": [{"aspect": "体験談", "text": "うちの子は実際に使ってみて毎日のように喜んで遊んでいました。", "confidence": "high"}],
     })
     session = _FakeSession([_FakeResponse({"response": inner})])
 
     def fake_fetch(post_id, wp_base_url, session_, sleeper=None):
-        return "<p>本文: うちの子は実際に使ってみて毎日のように喜んで遊んでいました、というエピソードです。</p>"
+        return "<p>本文: うちの子は実際に使ってみて毎日のように喜んで遊んでいました。というエピソードです。</p>"
 
     monkeypatch.setattr("scripts.extract_first_party_experience.fetch_post_content", fake_fetch)
 
@@ -249,7 +336,9 @@ def test_extract_asin_experience_role_primary_keeps_non_comparison_aspect(tmp_pa
     assert snippet["source_type"] == "first_party"
     assert snippet["usable_as"] == "quote"
     assert snippet["source_url"] == "https://omcha.jp/a/"
-    assert stats == {"posts": 1, "no_passage": 0, "checked": 1, "fabrication_discarded": 0, "role_filtered": 0, "kept": 1}
+    assert stats == {"posts": 1, "no_passage": 0, "checked": 1, "fabrication_discarded": 0,
+                      "fragment_discarded": 0, "role_filtered": 0, "kept": 1}
+    assert snippet["note"] == ""
 
 
 def test_extract_asin_experience_role_compared_drops_non_comparison_aspect(tmp_path, monkeypatch):
@@ -261,12 +350,12 @@ def test_extract_asin_experience_role_compared_drops_non_comparison_aspect(tmp_p
 
     inner = json.dumps({
         "entailed": True,
-        "snippets": [{"aspect": "体験談", "text": "我が家でも実際に使ってみて本当に良かったと感じています", "confidence": "high"}],
+        "snippets": [{"aspect": "体験談", "text": "我が家でも実際に使ってみて本当に良かったと感じています。", "confidence": "high"}],
     })
     session = _FakeSession([_FakeResponse({"response": inner})])
 
     def fake_fetch(post_id, wp_base_url, session_, sleeper=None):
-        return "<p>我が家でも実際に使ってみて本当に良かったと感じています、という本文です。</p>"
+        return "<p>我が家でも実際に使ってみて本当に良かったと感じています。という本文です。</p>"
 
     monkeypatch.setattr("scripts.extract_first_party_experience.fetch_post_content", fake_fetch)
 
@@ -293,7 +382,7 @@ def test_extract_asin_experience_role_compared_keeps_comparison_aspect(tmp_path,
 
     inner = json.dumps({
         "entailed": True,
-        "snippets": [{"aspect": "比較", "text": "我が家のものと比べるとこちらは明らかに軽くて扱いやすかったです", "confidence": "medium"}],
+        "snippets": [{"aspect": "比較", "text": "我が家のものと比べるとこちらは明らかに軽くて扱いやすかったです。", "confidence": "medium"}],
     })
     session = _FakeSession([_FakeResponse({"response": inner})])
 
@@ -346,6 +435,102 @@ def test_extract_asin_experience_fabrication_gate_discards_ungrounded_snippet(tm
     assert payload is None
     assert stats["fabrication_discarded"] == 1
     assert stats["kept"] == 0
+
+
+def test_extract_asin_experience_fragment_gate_discards_unfinished_sentence(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data" / "raw").mkdir(parents=True)
+    (tmp_path / "data" / "raw" / "amazon.json").write_text(json.dumps({"items": [
+        {"asin": "B0PRIMARY01", "title": "テスト商品 テストブランド"},
+    ]}), encoding="utf-8")
+
+    body_text = "我が家でもうちの子は毎日楽しそうに遊んでいて、大満足のようです。"
+    fragment_text = "我が家でもうちの子は毎日楽しそうに遊んでいて、"  # 文末が読点で切れている (実在するが断片)
+    inner = json.dumps({
+        "entailed": True,
+        "snippets": [{"aspect": "体験談", "text": fragment_text, "confidence": "high"}],
+    })
+    session = _FakeSession([_FakeResponse({"response": inner})])
+
+    def fake_fetch(post_id, wp_base_url, session_, sleeper=None):
+        return f"<p>{body_text}</p>"
+
+    monkeypatch.setattr("scripts.extract_first_party_experience.fetch_post_content", fake_fetch)
+
+    records = [{"asin": "B0PRIMARY01", "role": "primary", "post_url": "https://omcha.jp/a/"}]
+    post_id_by_url = {"https://omcha.jp/a/": 101}
+
+    payload, stats = extract_asin_experience(
+        "B0PRIMARY01", records, post_id_by_url,
+        wp_base_url="https://omcha.jp", per_asin_dir=tmp_path / "data" / "raw" / "per_asin",
+        ollama_url="http://ollama", model="gemma4", session=session, sleeper=_no_sleep,
+    )
+    assert payload is None
+    assert stats["fabrication_discarded"] == 0
+    assert stats["fragment_discarded"] == 1
+    assert stats["kept"] == 0
+
+
+def test_extract_asin_experience_keeps_note_field_in_snippet(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data" / "raw").mkdir(parents=True)
+    (tmp_path / "data" / "raw" / "amazon.json").write_text(json.dumps({"items": [
+        {"asin": "B0PRIMARY01", "title": "テスト商品 テストブランド"},
+    ]}), encoding="utf-8")
+
+    inner = json.dumps({
+        "entailed": True,
+        "snippets": [{"aspect": "体験談", "text": "うちの子は実際に旧モデルを使ってみて毎日のように遊んでいました。",
+                      "confidence": "high", "note": "実使用は旧モデル"}],
+    })
+    session = _FakeSession([_FakeResponse({"response": inner})])
+
+    def fake_fetch(post_id, wp_base_url, session_, sleeper=None):
+        return "<p>本文: うちの子は実際に旧モデルを使ってみて毎日のように遊んでいました。というエピソードです。</p>"
+
+    monkeypatch.setattr("scripts.extract_first_party_experience.fetch_post_content", fake_fetch)
+
+    records = [{"asin": "B0PRIMARY01", "role": "primary", "post_url": "https://omcha.jp/a/"}]
+    post_id_by_url = {"https://omcha.jp/a/": 101}
+
+    payload, stats = extract_asin_experience(
+        "B0PRIMARY01", records, post_id_by_url,
+        wp_base_url="https://omcha.jp", per_asin_dir=tmp_path / "data" / "raw" / "per_asin",
+        ollama_url="http://ollama", model="gemma4", session=session, sleeper=_no_sleep,
+    )
+    assert payload is not None
+    assert payload["snippets"][0]["note"] == "実使用は旧モデル"
+
+
+def test_extract_asin_experience_strips_headings_before_building_plain_text(tmp_path, monkeypatch):
+    # #7569 型3: 見出し・目次が本文として抽出されるのを防ぐため、content_cache に
+    # 乗る前の段階で見出し要素ごと落ちていることを確認する。
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data" / "raw").mkdir(parents=True)
+    (tmp_path / "data" / "raw" / "amazon.json").write_text(json.dumps({"items": [
+        {"asin": "B0PRIMARY01", "title": "テスト商品 テストブランド"},
+    ]}), encoding="utf-8")
+
+    def fake_fetch(post_id, wp_base_url, session_, sleeper=None):
+        return ("<h2>実際に遊んでみたリアルな感想 (子供の反応は？)</h2>"
+                "<p>我が家では実際に使ってみて、うちの子も毎日楽しそうに遊んでいます。</p>")
+
+    monkeypatch.setattr("scripts.extract_first_party_experience.fetch_post_content", fake_fetch)
+
+    inner = json.dumps({"entailed": False, "snippets": []})
+    session = _FakeSession([_FakeResponse({"response": inner})])
+
+    content_cache: dict[int, str] = {}
+    extract_asin_experience(
+        "B0PRIMARY01",
+        [{"asin": "B0PRIMARY01", "role": "primary", "post_url": "https://omcha.jp/a/"}],
+        {"https://omcha.jp/a/": 101},
+        wp_base_url="https://omcha.jp", per_asin_dir=tmp_path / "data" / "raw" / "per_asin",
+        ollama_url="http://ollama", model="gemma4", session=session,
+        sleeper=_no_sleep, content_cache=content_cache,
+    )
+    assert "実際に遊んでみたリアルな感想" not in content_cache[101]
+    assert "我が家では実際に使ってみて" in content_cache[101]
 
 
 def test_extract_asin_experience_missing_amazon_item_returns_none(tmp_path, monkeypatch):
@@ -441,7 +626,7 @@ def test_run_prioritises_asins_that_have_a_primary_role(tmp_path, monkeypatch):
     def fake_extract(asin, *a, **kw):
         seen.append(asin)
         return None, {"posts": 0, "no_passage": 0, "checked": 0,
-                      "fabrication_discarded": 0, "role_filtered": 0, "kept": 0}
+                      "fabrication_discarded": 0, "fragment_discarded": 0, "role_filtered": 0, "kept": 0}
 
     monkeypatch.setattr(
         "scripts.extract_first_party_experience.extract_asin_experience", fake_extract)
@@ -468,13 +653,13 @@ def test_run_persists_extraction_stats_in_the_payload(tmp_path, monkeypatch):
     )
 
     inner = json.dumps({"entailed": True, "snippets": [
-        {"aspect": "体験談", "text": "我が家でも実際に使ってみたところ想像以上に良かったです", "confidence": "high"},
-        {"aspect": "体験談", "text": "本文には存在しない作り話をそれらしく並べたものです", "confidence": "high"},
+        {"aspect": "体験談", "text": "我が家でも実際に使ってみたところ想像以上に良かったです。", "confidence": "high"},
+        {"aspect": "体験談", "text": "本文には存在しない作り話をそれらしく並べたものです。", "confidence": "high"},
     ]})
     session = _FakeSession([_FakeResponse({"response": inner})])
 
     def fake_fetch(post_id, wp_base_url, session_, sleeper=None):
-        return "<p>我が家でも実際に使ってみたところ想像以上に良かったです、という本文です。</p>"
+        return "<p>我が家でも実際に使ってみたところ想像以上に良かったです。という本文です。</p>"
 
     monkeypatch.setattr("scripts.extract_first_party_experience.fetch_post_content", fake_fetch)
 
@@ -503,12 +688,12 @@ def test_run_writes_experience_for_new_asin(tmp_path, monkeypatch):
 
     inner = json.dumps({
         "entailed": True,
-        "snippets": [{"aspect": "体験談", "text": "我が家でも実際に使ってみたところ想像以上に良かったです", "confidence": "high"}],
+        "snippets": [{"aspect": "体験談", "text": "我が家でも実際に使ってみたところ想像以上に良かったです。", "confidence": "high"}],
     })
     session = _FakeSession([_FakeResponse({"response": inner})])
 
     def fake_fetch(post_id, wp_base_url, session_, sleeper=None):
-        return "<p>我が家でも実際に使ってみたところ想像以上に良かったです、という本文です。</p>"
+        return "<p>我が家でも実際に使ってみたところ想像以上に良かったです。という本文です。</p>"
 
     monkeypatch.setattr("scripts.extract_first_party_experience.fetch_post_content", fake_fetch)
 

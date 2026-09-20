@@ -32,6 +32,18 @@ mine_experience.py の抽出プロンプトは 60〜160字の**要約**を作る
 触らないもの: ``scripts/collect_first_party_sources.py`` / ``scripts/mine_experience.py``
 / ``scripts/self_domain.py`` の挙動。
 
+#7569 (初回本実行 (#7568) のレビューで判明した、捏造ゲートを通るが素材にならない型) への
+手当て:
+  - 型1 (実使用が別SKU なのに note が無い) / 型2 (予測・仮定を実体験として抜く) —
+    ``C_EXTRACTION_PROMPT_TEMPLATE`` に禁止事項と ``note`` フィールドを追加 (プロンプト側の
+    手当てなので確率的。レビューを外す根拠にはならない)
+  - 型3 (見出し・目次が本文として抽出される) — ``strip_heading_tags`` で見出し要素を
+    strip_html の前に落とす
+  - 型5 (文の断片) — ``snippet_is_sentence_fragment`` で句点・感嘆符・疑問符で
+    閉じていない抜粋を捨てる
+  - 型4 (定型リード文) は機械判定の設計が未確定 (aspect別の採択率を見てから決める、
+    #7569 の申し送り) のため見送り
+
 Usage:
     python scripts/extract_first_party_experience.py --limit 5
     python scripts/extract_first_party_experience.py --asins B0XXXXXXXX --dry-run
@@ -85,6 +97,14 @@ _SENTENCE_SPLIT_RE = re.compile(r"(?<=[。！？])")
 # 引用として使えない長さなので、ここで弾く。
 MIN_GROUNDED_LENGTH = 20
 
+# 見出し要素をタグごと落とす (#7569 型3)。非貪欲マッチなので開閉のタグ番号が
+# 食い違っても (壊れた HTML でも) 直近の閉じタグまでで止まる。
+_HEADING_TAG_RE = re.compile(r"<h[1-6][^>]*>.*?</h[1-6]>", re.IGNORECASE | re.DOTALL)
+
+# 文として閉じているかの判定 (#7569 型5)。閉じ括弧・引用符は末尾から無視する。
+_SENTENCE_TERMINATORS = "。！？"
+_TRAILING_CLOSERS = "」』”'）) 　"
+
 C_EXTRACTION_PROMPT_TEMPLATE = """あなたは一次情報 (ブログ運営者自身の実体験) の抜き出し専門アシスタントです。
 要約・言い換え・補筆は禁止です。
 
@@ -103,12 +123,17 @@ C_EXTRACTION_PROMPT_TEMPLATE = """あなたは一次情報 (ブログ運営者�
 - ブログ運営者自身が実際に使った・買った・試したことが分かる記述であること
   (「うちの子」「我が家」「実際に使って」のような一人称の実体験。読者コメントや口コミの引用、
   一般的な商品説明・スペック紹介、他人の感想の伝聞は対象外)
+- 既に実際に体験したことだけを対象とし、「〜だろう」「〜はず」「〜かもしれない」「〜に違いない」
+  のような予測・推測・仮定の表現は対象外とすること (まだ使っていない・買っていない記述も対象外)
 - 抜き出す文字列を要約したり書き換えたりしないこと (本文の連続した一部をそのまま抜粋する)
 - aspect は 体験談・比較・安全・シーン・不満 のいずれか一つ
+- 抜き出した記述の実使用対象が商品『{product_name}』そのものではなく、別モデル・型番・旧型/新型で
+  あると分かる場合は、note にその旨を一言で書くこと (例:「実使用は旧モデル」)。該当しなければ
+  note は空文字列にすること
 
 該当する記述が無ければ snippets は空配列にしてください。
 次の JSON スキーマだけを出力してください (他の説明文は一切含めない):
-{{"entailed": true または false, "snippets": [{{"aspect": "体験談|比較|安全|シーン|不満", "text": "本文からの一字一句そのままの抜粋", "confidence": "high|medium|low"}}]}}
+{{"entailed": true または false, "snippets": [{{"aspect": "体験談|比較|安全|シーン|不満", "text": "本文からの一字一句そのままの抜粋", "confidence": "high|medium|low", "note": "実使用が別モデル等の場合のみ一言。無ければ空文字列"}}]}}
 """
 
 
@@ -142,6 +167,34 @@ def select_first_party_passages(plain_text: str, *, window: int = PASSAGE_WINDOW
     if not keep:
         return ""
     return "".join(sentences[i] for i in sorted(keep))
+
+
+def strip_heading_tags(content_html: str) -> str:
+    """``<h1>``〜``<h6>`` をタグごと除去する (#7569 型3)。
+
+    ``strip_html`` はタグを空白に置換するだけで見出しの文字列自体は残すため、
+    目次段落や見出しテキストが地の文と区別なく連結され、本文の断片として
+    抽出されていた (母艦の実測: 目次ブロックが1文になる・見出しそのものが
+    snippet になる、の2件)。strip_html に渡す前に見出し要素ごと落とすことで、
+    構造が消える前に区別を付ける。
+    """
+    if not content_html:
+        return ""
+    return _HEADING_TAG_RE.sub(" ", content_html)
+
+
+def snippet_is_sentence_fragment(text: str) -> bool:
+    """text が文として閉じていない断片か (#7569 型5)。
+
+    捏造ゲート (``snippet_is_grounded``) は本文への実在チェックしかしないため、
+    「…遊び倒した 我が家が、」のように文の途中で切れた抜粋も素通りしていた
+    (母艦の実測)。閉じ括弧・引用符を無視した末尾が句点・感嘆符・疑問符の
+    いずれでもなければ断片とみなす。
+    """
+    trimmed = (text or "").rstrip()
+    while trimmed and trimmed[-1] in _TRAILING_CLOSERS:
+        trimmed = trimmed[:-1]
+    return not trimmed or trimmed[-1] not in _SENTENCE_TERMINATORS
 
 
 def _normalize_for_match(text: str) -> str:
@@ -268,10 +321,12 @@ def extract_first_party_snippets(
         text_out = s.get("text")
         if not isinstance(aspect, str) or not isinstance(text_out, str) or not text_out.strip():
             continue
+        note = s.get("note")
         out.append({
             "aspect": aspect,
             "text": text_out.strip(),
             "confidence": s.get("confidence") if s.get("confidence") in ("high", "medium", "low") else "medium",
+            "note": note.strip() if isinstance(note, str) else "",
         })
     return out
 
@@ -290,7 +345,7 @@ def extract_asin_experience(
     title, product_name, brand = resolve_product_identity(asin, per_asin_dir)
     stats = {
         "posts": 0, "no_passage": 0, "checked": 0,
-        "fabrication_discarded": 0, "role_filtered": 0, "kept": 0,
+        "fabrication_discarded": 0, "fragment_discarded": 0, "role_filtered": 0, "kept": 0,
     }
     if not title:
         logger.warning("%s: amazon item not found — skip", asin)
@@ -311,7 +366,9 @@ def extract_asin_experience(
 
         if post_id not in content_cache:
             content_html = fetch_post_content(post_id, wp_base_url, session, sleeper=sleeper)
-            content_cache[post_id] = strip_html(content_html) if content_html else ""
+            # 見出し要素はタグごと落としてから strip_html する (#7569 型3)。
+            # strip_html だけだと見出し文字列が地の文と区別なく連結される。
+            content_cache[post_id] = strip_html(strip_heading_tags(content_html)) if content_html else ""
         plain_text = content_cache[post_id]
         if not plain_text:
             continue
@@ -334,6 +391,11 @@ def extract_asin_experience(
             if not snippet_is_grounded(s["text"], plain_text):
                 stats["fabrication_discarded"] += 1
                 continue
+            # 文の断片チェックも役割フィルタより先に通す (同じ理由: 逆順だと
+            # compared の非「比較」snippet が判定を受けないまま捨てられる)。
+            if snippet_is_sentence_fragment(s["text"]):
+                stats["fragment_discarded"] += 1
+                continue
             if role == "compared" and s["aspect"] != COMPARED_ONLY_ASPECT:
                 stats["role_filtered"] += 1
                 continue
@@ -344,6 +406,7 @@ def extract_asin_experience(
                 "source_url": post_url,
                 "usable_as": USABLE_AS,
                 "confidence": s["confidence"],
+                "note": s["note"],
             })
 
     stats["kept"] = len(snippets)
@@ -419,9 +482,10 @@ def run(
         processed.append({"asin": asin, **stats})
         logger.info(
             "%s: posts=%d no_passage=%d checked=%d fabrication_discarded=%d "
-            "role_filtered=%d kept=%d",
+            "fragment_discarded=%d role_filtered=%d kept=%d",
             asin, stats["posts"], stats["no_passage"], stats["checked"],
-            stats["fabrication_discarded"], stats["role_filtered"], stats["kept"],
+            stats["fabrication_discarded"], stats["fragment_discarded"],
+            stats["role_filtered"], stats["kept"],
         )
         if payload is None:
             continue
