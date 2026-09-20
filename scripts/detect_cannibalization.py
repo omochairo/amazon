@@ -37,21 +37,27 @@ logger = logging.getLogger("detect_cannibalization")
 
 DEFAULT_IN = "data/analytics/gsc_weekly.json"
 DEFAULT_OUT = "data/analytics/cannibalization.json"
-# 閾値の較正 (2026-09-01・#5941 / amazon-navi-brain#18)
+# 閾値の較正 (2026-09-01・#5941 / amazon-navi-brain#18 → 2026-09-20・amazon-navi-brain#56 で再較正)
 #
 # この検出器は 4 週連続で 0 件だった。**「該当が無い」のではなく「閾値に届く母数が
 # 存在しない」**状態だったことが、private 側 (brain#18) の閾値スイープで分かった。
-# サイトの実寸に対して閾値が大きすぎた (絶対値は private。数値は brain#18 を見ること)。
+# サイトの実寸に対して閾値が大きすぎた (絶対値は private。数値は brain#18 / #56 を見ること)。
 #
 # 下げただけではまた同じことが起きるので、`eligible` (= 量のしきい値を通った母数) を
 # `detected` と別に出す。**eligible == 0 は「母数が無い」、eligible > 0 かつ
 # detected == 0 は「母数はあるが選別条件で落ちている」**で、同じ「0 件」でも処方が
 # 逆になる (前者は閾値、後者はサイト側)。判定は check_detector_eligibility.py。
 #
-# binding だったのは min_query_impressions のほう。min_page をどれだけ下げても
-# 旧 min_query では 0 のままだったので、両方を動かしている。
-DEFAULT_MIN_PAGE_IMPRESSIONS = 5
-DEFAULT_MIN_QUERY_IMPRESSIONS = 15
+# 2026-09-01 (brain#18) 時点で binding だったのは min_query_impressions のほうで、
+# min_page をどれだけ下げても旧 min_query では 0 のままだった。
+#
+# 2026-09-20 (brain#56) 再較正: サイトのトラフィックがさらに減り、今度は
+# min_page_impressions のほうが binding に変わっていた (min_query だけ下げても
+# 直近週は 0 のまま)。**binding な側は固定ではなく、サイトの実寸に追随して動く**
+# ので、次に鳴ったときも「前回動かした変数をまた動かす」ではなく、都度どちらが
+# binding かを実測してから決めること。
+DEFAULT_MIN_PAGE_IMPRESSIONS = 3
+DEFAULT_MIN_QUERY_IMPRESSIONS = 10
 DEFAULT_COMPETING_PAGES = 2
 DEFAULT_DOMINANCE_MAX = 0.85
 DEFAULT_MAX_RESULTS = 10

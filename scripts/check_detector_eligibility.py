@@ -32,6 +32,36 @@ A レーン検出器 (epic #1356) の **母数** を記録し、母数が枯れ�
   「前回の eligible」を出力ファイルから読む実装は動かない (2026-09-01 に確認)。
   ここで tracked な jsonl に 1 run 1 行だけ残し、それを前回値の唯一の出どころにする。
 
+amazon-navi-brain#56 (2026-09-20) での再訪:
+  導入から 3 週たっても A-4 (engagement_drop) / A-5 (orphan_pages) / A-3
+  (cannibalization) が eligible=0 の警告を鳴らし続けていた。調べ直すと 2 つの
+  型が混ざっていた:
+
+    - A-3 (cannibalization) … サイトのトラフィックがさらに減り、閾値が再び
+      大きすぎた (#18 と同じ「閾値側」の型)。detect_cannibalization.py の
+      既定値を #56 で再較正した
+    - A-5 (orphan_pages) … 同じ型に見えたが、#56 のレビューで「前提の GA4 PV
+      急落を GSC 側が裏付けていない」「min_pv を下げると entrance_ratio が
+      二値に縮退する」と指摘され、**閾値の変更は保留**にした
+      (detect_orphan_pages.py のコメント参照)。eligible=0 の警告は当面
+      鳴り続ける想定で、鳴ってもここでは「較正すべき」の合図として扱わない
+    - A-4 … #18 で「下げてもゲートが選別しなくなる」と診断済みで、据え置く
+      と決めた検出器だった。据え置いた以上 eligible=0 は定常的に鳴り続ける
+      構造で、鳴らし続けても閾値側の合図にならない (#18 の最終コメントで
+      「eligible==0 warning の対象から外す」と決めていたが、実装が漏れていた)。
+      NO_ELIGIBILITY_WARNING で恒久的に対象から外す。
+
+  再較正した A-3 をいつ「妥当だった」と判断するか:
+    次回見直しは jsonl に **4 行 (4 週分) 溜まった時点**
+    (目安 2026-10-18 の週次 run 以降)。判断基準は「その 4 週の中で
+    eligible==0 が 2 週連続する回数」— 0 回なら妥当、1 回でも起きたら
+    「サイトの実寸がさらに縮んだ」として再スイープする。1〜2 週で判断
+    すると #18 で踏んだ「週による正常な揺れ」を較正ミスと誤読する
+    (このファイルの「なぜ2週連続」と同じ理由)。実測 (#56) では 8 週分の
+    スナップショットで 0 件週が出ない値まで下げてあるので、トラフィックが
+    さらに減らない限り 4 週内に鳴らないはずというのが検証可能な予測
+    (A-5 は保留のままなので対象外)。
+
 出力:
   - data/analytics/history/detector_eligibility.jsonl  1 run 1 行 (append)
 
@@ -63,6 +93,13 @@ DETECTORS: tuple[tuple[str, str, str], ...] = (
     ("brand_suggest", "data/analytics/brand_taxonomy_suggestions.json",
      "candidates"),                                                             # A-6
 )
+
+# A-4 は amazon-navi-brain#18 で「min_pv を下げるとゲートが選別しなくなる」と
+# 確認済みで、閾値を動かさないと決めた検出器 (detect_engagement_drop.py 参照)。
+# 動かさないと決めた以上 eligible==0 は構造的に鳴り続けるので、ここで鳴らしても
+# 「閾値側の合図」として機能しない。恒久的に警告対象から外す (amazon-navi-brain#56)。
+# collect() / history には引き続き記録する (観察はする。鳴らさないだけ)。
+NO_ELIGIBILITY_WARNING: frozenset[str] = frozenset({"engagement_drop"})
 
 
 def read_one(path: pathlib.Path, results_key: str) -> dict[str, Any] | None:
@@ -128,6 +165,8 @@ def find_starved(
         return []
     starved = []
     for name, cur in current.items():
+        if name in NO_ELIGIBILITY_WARNING:
+            continue
         prev = previous.get(name)
         if not isinstance(cur, dict) or not isinstance(prev, dict):
             continue
@@ -165,7 +204,7 @@ def main() -> int:
         # 「該当が無い」ではなく「見る対象が存在しない」ので閾値側を疑う。
         print(f"::warning::検出器 {name} は eligible=0 が 2 回続いています。"
               f"閾値に届く母数が存在しないので、0 件を「該当なし」と読まないこと "
-              f"(#5941 / amazon-navi-brain#18)")
+              f"(#5941 / amazon-navi-brain#18 / #56)")
 
     if any(row.get("date") == date for row in history) and not args.force:
         logger.info("history already has %s — skip append (--force で上書き追記)", date)

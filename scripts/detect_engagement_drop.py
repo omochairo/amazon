@@ -34,6 +34,14 @@ logger = logging.getLogger("detect_engagement_drop")
 DEFAULT_IN = "data/analytics/ga4_weekly.json"
 DEFAULT_OUT = "data/analytics/engagement_drop.json"
 DEFAULT_TARGET_HOST = "navi.omcha.jp"
+# min_pv は動かさない (amazon-navi-brain#18 / #56 で確認済み)
+#
+# #18 のスイープで min_pv を下げると eng<0.30 かつ dur<15秒 のゲートがほぼ
+# 何も落とさなくなる (該当ページの 9 割超が条件を満たす) ことが分かった。
+# #56 で最新データでも再確認済みで結論は変わらない。下げるのは較正ではなく
+# 「PV 上位 N 件を並べるだけの検出器への退化」なので、eligible == 0 が続いても
+# ここは動かさない。check_detector_eligibility.py 側もこの検出器を
+# eligible==0 warning の対象から外している (NO_ELIGIBILITY_WARNING)。
 DEFAULT_MIN_PV = 100
 DEFAULT_MAX_ENGAGEMENT = 0.30
 DEFAULT_MAX_DURATION = 15.0

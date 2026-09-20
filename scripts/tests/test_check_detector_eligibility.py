@@ -8,7 +8,12 @@ from __future__ import annotations
 
 import json
 
-from scripts.check_detector_eligibility import collect, find_starved, main
+from scripts.check_detector_eligibility import (
+    NO_ELIGIBILITY_WARNING,
+    collect,
+    find_starved,
+    main,
+)
 
 
 def _write(root, name, payload):
@@ -46,6 +51,21 @@ def test_same_date_rerun_is_not_its_own_previous():
     cur = {"opportunity": {"eligible": 0, "detected": 0}}
     hist = [_row("2026-09-01", opportunity={"eligible": 0, "detected": 0})]
     assert find_starved(cur, hist, "2026-09-01") == []
+
+
+# --- A-4 は eligible==0 が続いても恒久的に鳴らさない (amazon-navi-brain#56) ---
+
+def test_engagement_drop_is_never_starved_even_when_eligible_zero_twice():
+    # #18 で「min_pv を下げるとゲートが選別しなくなる」と確認済みで、
+    # 閾値を動かさないと決めた検出器。据え置いた以上 eligible=0 が定常的に
+    # 続くので、他の検出器と同じ基準で鳴らすと閾値側の合図として機能しない。
+    cur = {"engagement_drop": {"eligible": 0, "detected": 0}}
+    hist = [_row("2026-09-01", engagement_drop={"eligible": 0, "detected": 0})]
+    assert find_starved(cur, hist, "2026-09-08") == []
+
+
+def test_no_eligibility_warning_set_contains_only_engagement_drop():
+    assert NO_ELIGIBILITY_WARNING == frozenset({"engagement_drop"})
 
 
 # --- 母数はあるが detected == 0 は鳴らさない (A-4 の型) --------------------

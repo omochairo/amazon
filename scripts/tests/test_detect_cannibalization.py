@@ -2,8 +2,10 @@
 
 この検出器は 2026-09-01 まで unit test を持っていなかった。同日の閾値較正
 (#5941 / amazon-navi-brain#18) で既定値を動かしたので、**較正が戻ったら気づける形**
-にしておく。スイープで binding だったのは min_query_impressions のほうで、
-min_page_impressions をどれだけ下げても旧 min_query では 0 のままだった。
+にしておく。2026-09-20 (amazon-navi-brain#56) にサイトのトラフィックがさらに
+減ったため再較正し、既定値をもう一段下げた (この回は min_page_impressions の
+ほうが binding だった。#18 の回は min_query_impressions が binding で、
+binding な側は固定ではなくサイトの実寸に追随して動く)。
 """
 from __future__ import annotations
 
@@ -63,24 +65,25 @@ def test_pages_below_page_threshold_do_not_count_as_competing():
 # --- 較正が戻ったら落ちるテスト -------------------------------------------
 
 def test_calibrated_defaults():
-    # 較正前は query 50 / page 10 だった。この 2 つが戻ると下の 2 本が落ちる。
-    assert DEFAULT_MIN_QUERY_IMPRESSIONS == 15
-    assert DEFAULT_MIN_PAGE_IMPRESSIONS == 5
+    # #18 較正 (2026-09-01) は query 15 / page 5。#56 再較正 (2026-09-20) で
+    # さらに下げた。この 2 つが戻ると下の 2 本が落ちる。
+    assert DEFAULT_MIN_QUERY_IMPRESSIONS == 10
+    assert DEFAULT_MIN_PAGE_IMPRESSIONS == 3
 
 
 def test_query_volume_just_at_calibrated_threshold_is_detected():
-    # 合計 15 = 較正後の下限ちょうど。較正前 (50) では拾えなかった帯。
+    # 合計 10 = 較正後の下限ちょうど。#18 較正 (15) では拾えなかった帯。
     result = detect(_gsc([
-        _combo("q", "/a/", 8),
-        _combo("q", "/b/", 7),
+        _combo("q", "/a/", 5),
+        _combo("q", "/b/", 5),
     ]))
     assert [d["query"] for d in result["detected"]] == ["q"]
 
 
 def test_query_volume_below_threshold_is_not_eligible():
     result = detect(_gsc([
-        _combo("q", "/a/", 7),
-        _combo("q", "/b/", 7),
+        _combo("q", "/a/", 4),
+        _combo("q", "/b/", 4),
     ]))
     assert result["detected"] == []
     assert result["eligible"] == 0
