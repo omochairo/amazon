@@ -264,7 +264,7 @@ subject_exclusions:
         - takaratomymall
         - ボーネルンド
         - bornelund
-      # 実データ (data/demand/ubersuggest/) にある店舗運営語を列挙。
+      # 実データ (競合 CSV・amazon-navi-brain demand/ubersuggest/) にある店舗運営語を列挙。
       # 地名 (大阪/梅田/武蔵小杉/神戸 等) はここに含めない = brand+地名は
       # modifiers 不一致で L2 に送られる (施設クエリの可能性が高いが、
       # 「ボーネルンド 積木」のような商品語との混同を避けるため断定しない)。

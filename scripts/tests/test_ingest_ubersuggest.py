@@ -751,3 +751,25 @@ def test_real_rules_file_is_loadable_and_two_tier():
         mod_terms.update(cat.get("suffix") or [])
     assert "口コミ" in mod_terms and "口コミ" not in subj_terms
     assert "一覧" in subj_terms and "一覧" not in mod_terms
+
+
+def test_resolve_csv_dir_prefers_explicit(tmp_path):
+    assert U.resolve_csv_dir(str(tmp_path)) == tmp_path
+
+
+def test_resolve_csv_dir_finds_private_copy(tmp_path, monkeypatch):
+    """競合 CSV は public に置かない。brain の置き場を探す (omcha-ops#97 §8)。"""
+    d = tmp_path / "amazon-navi-brain" / "demand" / "ubersuggest"
+    d.mkdir(parents=True)
+    (d / "ubersuggest https_example.com.csv").write_text("Keywords,Volume\n", encoding="utf-8")
+    work = tmp_path / "amazon"
+    work.mkdir()
+    monkeypatch.chdir(work)
+    assert U.resolve_csv_dir(None) == pathlib.Path("../amazon-navi-brain/demand/ubersuggest")
+
+
+def test_resolve_csv_dir_fails_closed_when_missing(tmp_path, monkeypatch):
+    """見つからないのに空で回すと、0 語で ubersuggest_demand.json を潰す。"""
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit):
+        U.resolve_csv_dir(None)
