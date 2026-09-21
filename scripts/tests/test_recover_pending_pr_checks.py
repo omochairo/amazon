@@ -14,15 +14,20 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))  # scripts/ を import path に追加
 
 from recover_pending_pr_checks import (  # noqa: E402
+    DEFAULT_PUSH_THRESHOLD_MINUTES,
     PR_FIELDS,
     STAGE2_LABEL,
+    UNKNOWN_ESCALATE_MULTIPLIER,
     Action,
     _parse_commit_date_result,
+    deferred_unknown_escalated_message,
+    dirty_message,
     emit_warning_annotation,
     evaluate_pr,
     filter_candidate_prs,
     has_any_required_check,
     has_stage2_label,
+    recovered_none_message,
     required_checks_satisfied,
     resolve_push_time,
 )
@@ -169,6 +174,41 @@ class EmitWarningAnnotationTests(unittest.TestCase):
         )
 
 
+class RecoveredNoneMessageTests(unittest.TestCase):
+    """#7919: close→reopen 済みでも直らない PR の文言が、dirty かどうかで分かれる。"""
+
+    def test_conflicting_mentions_dirty_not_generic_needs_human(self):
+        message = recovered_none_message(123, "CONFLICTING")
+        self.assertIn("pr=123", message)
+        self.assertIn("dirty", message)
+        self.assertNotIn("needs human", message)
+
+    def test_non_conflicting_keeps_generic_needs_human(self):
+        message = recovered_none_message(123, "MERGEABLE")
+        self.assertIn("needs human", message)
+        self.assertNotIn("dirty", message)
+
+    def test_missing_mergeable_keeps_generic_needs_human(self):
+        message = recovered_none_message(123, None)
+        self.assertIn("needs human", message)
+
+
+class DirtyMessageTests(unittest.TestCase):
+
+    def test_mentions_pr_number_and_conflicting(self):
+        message = dirty_message(123)
+        self.assertIn("pr=123", message)
+        self.assertIn("CONFLICTING", message)
+
+
+class DeferredUnknownEscalatedMessageTests(unittest.TestCase):
+
+    def test_mentions_pr_number_and_unknown(self):
+        message = deferred_unknown_escalated_message(123)
+        self.assertIn("pr=123", message)
+        self.assertIn("UNKNOWN", message)
+
+
 class HasStage2LabelTests(unittest.TestCase):
 
     def test_present(self):
@@ -249,10 +289,26 @@ class EvaluatePrTests(unittest.TestCase):
         action = self._eval(mergeable="CONFLICTING")
         self.assertEqual(action, Action("dirty"))
 
-    def test_unknown_mergeable_defers_to_noop(self):
-        """#7912: mergeable=UNKNOWN は dirty と誤判定せず、次回 run に持ち越す (noop)。"""
-        action = self._eval(mergeable="UNKNOWN")
-        self.assertEqual(action, Action("noop"))
+    def test_unknown_mergeable_defers_without_escalation(self):
+        """#7912/#7919: mergeable=UNKNOWN は dirty と誤判定せず deferred_unknown に持ち越す。
+
+        経過時間が UNKNOWN_ESCALATE_MULTIPLIER 倍の閾値に達していなければ
+        escalate しない (push threshold ちょうど = 5分後、escalate 閾値は 30分後)。
+        """
+        action = self._eval(mergeable="UNKNOWN", push_time=NOW - dt.timedelta(minutes=6))
+        self.assertEqual(action, Action("deferred_unknown", escalate=False))
+
+    def test_unknown_mergeable_past_escalate_threshold_escalates(self):
+        """#7919: push から push_threshold_minutes × UNKNOWN_ESCALATE_MULTIPLIER 以上
+        経ってもなお UNKNOWN なら escalate=True にする。"""
+        minutes = DEFAULT_PUSH_THRESHOLD_MINUTES * UNKNOWN_ESCALATE_MULTIPLIER
+        action = self._eval(mergeable="UNKNOWN", push_time=NOW - dt.timedelta(minutes=minutes))
+        self.assertEqual(action, Action("deferred_unknown", escalate=True))
+
+    def test_unknown_mergeable_just_below_escalate_threshold_does_not_escalate(self):
+        minutes = DEFAULT_PUSH_THRESHOLD_MINUTES * UNKNOWN_ESCALATE_MULTIPLIER - 1
+        action = self._eval(mergeable="UNKNOWN", push_time=NOW - dt.timedelta(minutes=minutes))
+        self.assertEqual(action, Action("deferred_unknown", escalate=False))
 
     def test_mergeable_mergeable_still_closes_and_reopens(self):
         """#7912: mergeable=MERGEABLE (衝突無し) は従来通り close→reopen。"""
