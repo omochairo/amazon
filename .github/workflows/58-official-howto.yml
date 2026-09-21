@@ -1,0 +1,108 @@
+name: Official How-To URL Fetch
+
+# #7958 (#7955 設計2 改訂版 B) — 記事のある ASIN について、メーカー公式の
+# 取扱説明書・あそびかたの URL を取得し data/raw/per_asin/<ASIN>/official_howto.json
+# に書く (バンダイ=JAN / レゴ=品番 / たまごっち=系列キーワード。他社は #7956 待ち)。
+#
+# #7957 (A) はこの url の有無でタイトル・FAQ の「遊び方」約束を許すかを機械判定する。
+# #7960 (D) は AGY による書き起こしを経て steps (手順の要約) を後から足す
+# 手元専用レーン (AGY はこの PC の認証で動くため GitHub Actions からは呼べない)。
+# このワークフローは url の取得のみで steps には一切触れない
+# (scripts/fetch_official_howto.py が既存の steps/reviewed_by を必ず引き継ぐ)。
+#
+# 週次: 公式サイトへは 1 ホスト 1 秒 1 リクエスト・見つかった/見つからなかった
+# どちらも 30 日は再問い合わせしない (script 側のガード)。01 の日次には載せない
+# (#7958 本文の規律)。
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: '処理する ASIN 数の上限 (スモーク用、0=無制限)'
+        required: false
+        default: '0'
+  schedule:
+    # 水曜 06:00 JST = 火曜 21:00 UTC。22 (日曜 22:00 UTC) / 57 (月曜 20:00 UTC) と
+    # 重ならない週次枠。
+    - cron: '0 21 * * 2'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: official-howto
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch official how-to URLs (bandai / lego / tamagotchi)
+        run: |
+          python -m scripts.fetch_official_howto \
+            --limit "${{ github.event.inputs.limit || '0' }}"
+
+      - name: Create data PR + enable auto-merge
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+
+          git add data/raw/per_asin
+
+          if git diff --cached --quiet; then
+            echo "No official_howto.json changes to commit; skipping PR creation."
+            exit 0
+          fi
+
+          # 既存 open の同種 PR を閉じる (週次重複防止)
+          gh pr list --base main --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("official-howto/")) | .number' \
+            | while read -r pr_num; do
+            [ -n "$pr_num" ] && gh pr close "$pr_num" -d || true
+          done
+
+          BRANCH="official-howto/${{ github.run_id }}"
+          git config user.name "omochairo-fetch-bot[bot]"
+          git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit -m "data: official how-to URL fetch (#7958, run ${{ github.run_id }})"
+          git push -u origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "data: official how-to URL fetch (#7958, run ${{ github.run_id }})" \
+            --body "Automated #7958 weekly fetch. data/raw/per_asin/*/official_howto.json (公式の取扱説明書・あそびかたの URL、または not_found) のみ — 既存 steps/reviewed_by (#7960) は変更しない。read-only fetch のみ。Refs #7955 #7958." \
+            --base main \
+            --head "$BRANCH")
+          echo "Created: $PR_URL"
+
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge enabled on $PR_URL"
+          else
+            echo "::warning::Could not enable auto-merge on $PR_URL"
+          fi
+        # #4793: continue-on-error を付けない。落ちてよいのは auto-merge の
+        # 有効化だけ (上の if/else で握りつぶし済み)。
