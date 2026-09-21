@@ -23,6 +23,8 @@ from pathlib import Path
 
 import pytest
 
+from scripts.run_lighthouse_lane import LAB_UA_MARKER
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 HUGO_DIR = REPO_ROOT / "hugo"
 
@@ -119,8 +121,10 @@ def test_ga4_excludes_lab_and_automation_traffic(hugo_build_dir):
     html = (hugo_build_dir / "index.html").read_text(encoding="utf-8")
 
     assert "ga-disable-G-D8ZQX1BT20" in html
-    # UA マーカー (omcha-lab) と navigator.webdriver の併記ガード。
-    assert "omcha-lab" in html
+    # UA マーカーと navigator.webdriver の併記ガード。マーカーは送り側
+    # (run_lighthouse_lane.py) の定数から取る — 直書きすると値を変えても緑のまま
+    # 送り側とずれる (#7896)。
+    assert "/%s/.test(navigator.userAgent)" % LAB_UA_MARKER in html
     assert "navigator.webdriver" in html
     # 正規ホスト (config.toml の baseURL) 以外を弾くガード。
     assert "location.hostname" in html
