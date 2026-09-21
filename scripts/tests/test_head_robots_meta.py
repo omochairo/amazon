@@ -1,8 +1,12 @@
-"""hugo/layouts/partials/head.html の robots meta 出力テスト (#4964)。
+"""hugo/layouts/partials/ のテンプレート出力テスト (実 hugo build)。
 
-navi.omcha.jp は max-image-preview を全ページで未指定のため Google の
-既定値 (standard) が適用されていた。index,follow ページにのみ
-max-image-preview:large / max-snippet:-1 / max-video-preview:-1 を付与する。
+主眼は head.html の robots meta (#4964): navi.omcha.jp は max-image-preview を
+全ページで未指定のため Google の既定値 (standard) が適用されていた。
+index,follow ページにのみ max-image-preview:large / max-snippet:-1 /
+max-video-preview:-1 を付与する。
+
+extend_head.html の GA4 ラボ/自動化トラフィック除外ガード (brain#57) もここで
+一緒に押さえる — テンプレートロジックの回帰テストという性質が同じなため。
 
 テンプレートの直接ユニットテストは本リポジトリに前例が無いため、実際に
 `hugo build` した出力 HTML を検証する (テンプレートロジックそのものへの
@@ -100,6 +104,30 @@ def test_noindex_page_has_no_max_image_preview(hugo_build_dir):
     content = _robots_content(hugo_build_dir, "tags/page/2")
     assert content.startswith("noindex")
     assert "max-image-preview" not in content
+
+
+def test_ga4_excludes_lab_and_automation_traffic(hugo_build_dir):
+    """extend_head.html の GA4 ラボ/自動化除外ガードが出力に残っていること (brain#57)。
+
+    2026-09-02 に追加されたこの 2 本のガードが無いと、Lighthouse lab レーン
+    (毎日 11 URL x mobile/desktop) の自己ヒットが navi.omcha.jp の GA4 PV に
+    混入する。brain#57 の調査で、この除外が効き始めた 2026-09-04 に navi の
+    日次 PV が 60〜70% 落ちたことを確認済み (需要減ではなく計測の補正)。
+    リファクタで静かに消えると同じ規模の水増しが再発するので、ビルド出力に
+    両方のガードが残っていることを不変条件として押さえる。
+    """
+    html = (hugo_build_dir / "index.html").read_text(encoding="utf-8")
+
+    assert "ga-disable-G-D8ZQX1BT20" in html
+    # UA マーカー (omcha-lab) と navigator.webdriver の併記ガード。
+    assert "omcha-lab" in html
+    assert "navigator.webdriver" in html
+    # 正規ホスト (config.toml の baseURL) 以外を弾くガード。
+    assert "location.hostname" in html
+    assert "navi.omcha.jp" in html
+    # 2 本とも `window['ga-disable-G-D8ZQX1BT20']=true` を立てる作りなので、
+    # 出力上も ga-disable の代入が最低 2 箇所残っているはず。
+    assert html.count("ga-disable-G-D8ZQX1BT20") >= 2
 
 
 def test_sitemap_and_robots_agree(hugo_build_dir):
