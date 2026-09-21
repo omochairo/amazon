@@ -35,6 +35,7 @@ import jinja2
 
 import market_prices
 import official_howto
+import official_howto_format
 import price_overlay
 import seo_title
 import stock_status
@@ -3570,6 +3571,10 @@ def main() -> None:
     stock_index = stock_status.load_stock_index()
     stock_title_applied = 0
     howto_faq_dropped = 0
+    # #7959 (#7955 C 改訂版): official_howto_block を出したページ数と、
+    # そのうち reviewed steps 付きだった件数。
+    official_howto_block_applied = 0
+    official_howto_block_with_steps = 0
 
     rendered = 0
     skipped_legacy = 0
@@ -3803,6 +3808,19 @@ def main() -> None:
                 stock_title_override = where_to_buy_format.build_title(product_name, purchase_options)
                 stock_title_applied += 1
 
+            # #7959 (#7955 C 改訂版): 「📘 公式の取扱説明書・遊び方」ブロック。
+            # official_howto.json に url が無いページでは None のままなので、
+            # このページの出力は一切変化しない (受け入れ条件: バイト単位で同じ)。
+            # _howto_obj は上の FAQ フィルタ (#7957 A-4) で同じ slug 用に読んだもの
+            # を再利用する (page_asin は _resolve_page_asin の同一結果)。
+            data["official_howto_block"] = official_howto_format.build_official_howto_block(
+                _howto_obj
+            )
+            if data["official_howto_block"] is not None:
+                official_howto_block_applied += 1
+                if data["official_howto_block"]["has_steps"]:
+                    official_howto_block_with_steps += 1
+
             data["amazon_partner_tag"] = amazon_partner_tag
             md_body = template.render(**data)
             # omcha-ops#19 P1: テンプレ/本文のどこを経由した Amazon リンクでも
@@ -3937,6 +3955,10 @@ def main() -> None:
     )
     print(f"stock_title (#2686): {stock_title_applied} page(s) rendered with 「どこで買える」format")
     print(f"howto_faq (#7957): {howto_faq_dropped} FAQ item(s) dropped (no reviewed official steps)")
+    print(
+        f"official_howto_block (#7959): {official_howto_block_applied} page(s) "
+        f"(steps: {official_howto_block_with_steps})"
+    )
 
 
 if __name__ == "__main__":
