@@ -288,6 +288,18 @@ def _article_paths_by_asin(articles_dir: pathlib.Path) -> dict[str, pathlib.Path
     return out
 
 
+def _article_published_on(path: pathlib.Path) -> str:
+    """記事ファイル名 `<公開日>-<ASIN>.json` の公開日 (YYYY-MM-DD)。
+
+    ephemeral runner は amazon repo を `fetch-depth: 1` で clone するため、
+    git の commit 日時は全記事が同じ 1 コミットに潰れて使えない。mtime も
+    checkout 時刻に均される (_article_last_modified のコメント参照)。
+    ファイル名だけが新旧の判る情報で、かつ追加コストがゼロ。
+    """
+    m = _ARTICLE_STEM_RE.match(path.stem)
+    return path.stem[:10] if m else ""
+
+
 def _experience_generated_at(asin: str, base: pathlib.Path) -> datetime | None:
     payload = _load(base / asin / OUT_NAME)
     return _parse_iso(payload.get("generated_at")) if isinstance(payload, dict) else None
@@ -353,8 +365,8 @@ def select_targets(
          が無い ASIN
       2. 同じ由来で再採掘が必要な ASIN (generated_at が remine_after_days より
          古い、または記事ファイルが generated_at より後に更新されている)
-      3. 記事はあるが experience.json が無い ASIN (未採掘の残り全部。ASIN 昇順
-         で決定的)
+      3. 記事はあるが experience.json が無い ASIN (未採掘の残り全部。公開日の
+         新しい順 = 新着優先 (#6602)。同じ公開日の中は ASIN 昇順で決定的)
       4. 上記で埋まらなければ、従来どおりの順序で再採掘 (① ②の元の並び順)
 
     `asins` (--asins 明示指定) は上記の規則に関わらず常に先頭で通す (デバッグ用)。
@@ -399,9 +411,19 @@ def select_targets(
                             remine_after_days=remine_after_days, now=now):
             need_remine.append(a)
 
+    # #6602: 未採掘の残りは **公開日の新しい順** に掘る (新着優先)。
+    # 記事の流入 (20〜27 件/日) が mining の limit と同程度なので、ASIN 昇順の
+    # ままだと新着が 2,400 件のバックログの後ろに回り、**書かれたその日に素材が
+    # 付かない**。新着を先に消化し、バックログは残差で削る。
+    # sorted(..., reverse=True) は安定ソートなので、同じ公開日の中は ASIN 昇順
+    # (下の sorted の結果) がそのまま残り、選定は決定的なままになる。
     unmined_pool = sorted(
-        asin for asin in article_paths
-        if asin not in seen and asin not in explicit_set and not _has_experience(asin, base)
+        sorted(
+            asin for asin in article_paths
+            if asin not in seen and asin not in explicit_set and not _has_experience(asin, base)
+        ),
+        key=lambda a: _article_published_on(article_paths[a]),
+        reverse=True,
     )
 
     ordered: list[str] = []
