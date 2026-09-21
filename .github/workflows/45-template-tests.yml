@@ -35,6 +35,8 @@ on:
       - 'hugo/layouts/**'
       - 'hugo/config.toml'
       - 'scripts/tests/test_head_robots_meta.py'
+      # UA マーカーの送り側。値を変えるとビルド出力の受け側テストが落ちる (#7896)
+      - 'scripts/run_lighthouse_lane.py'
       - '.github/workflows/45-template-tests.yml'
   schedule:
     - cron: '30 18 * * *'  # 毎日 18:30 UTC = 03:30 JST

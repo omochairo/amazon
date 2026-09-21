@@ -1237,6 +1237,21 @@ def test_build_lighthouse_argv_marks_ua_for_both_form_factors():
         assert ("Mobile Safari" in ua[0]) is (form_factor == "mobile")
 
 
+def test_lab_ua_marker_matches_extend_head_guard():
+    """送り側の LAB_UA_MARKER と受け側 extend_head.html の UA 判定が同じ文字列 (#7896)。
+
+    上のテストは rll.LAB_UA_MARKER 同士を比べているだけなので、マーカーの値を
+    変えても緑のまま受け側とずれ、GA4 / CF RUM にラボのヒットが戻る
+    (brain#57 と同じ規模の水増し)。hugo ビルド無しで required レーンで拾えるよう、
+    テンプレートのソースを直接読む。ビルド出力側は test_head_robots_meta.py。
+    """
+    template = (
+        pathlib.Path(__file__).resolve().parents[2]
+        / "hugo" / "layouts" / "partials" / "extend_head.html"
+    ).read_text(encoding="utf-8")
+    assert "/%s/.test(navigator.userAgent)" % rll.LAB_UA_MARKER in template
+
+
 # ---------- #6426: 単日スパイクは連続日数で確認してから起票する ----------
 
 def _daily_rows(dates, url="https://x/", ff="mobile", **kw):
