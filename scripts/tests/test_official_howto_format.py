@@ -105,7 +105,7 @@ def test_reviewed_steps_render_ordered_list_with_sources():
         "text": "裏のリセットスイッチを押してから遊び始める",
         "section": "【1】遊ぶ前の準備",
     }
-    assert block["closing_link_text"] == "▶ 取扱説明書（PDF）の全文はバンダイ公式サイトで"
+    assert block["closing_link_text"] == "▶ 取扱説明書（PDF）の全文をバンダイの公式サイトで見る"
     assert block["date_label"] == "2026-09-21"
 
 

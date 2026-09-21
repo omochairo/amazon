@@ -151,7 +151,7 @@ class OfficialHowtoBlockRenderTest(_RenderFixtureMixin, unittest.TestCase):
         self.assertIn('<ol class="official-howto-steps">', content)
         self.assertIn("電源を入れる", content)
         self.assertIn("（【1】準備）", content)
-        self.assertIn("▶ 取扱説明書（PDF）の全文はバンダイ公式サイトで", content)
+        self.assertIn("▶ 取扱説明書（PDF）の全文をバンダイの公式サイトで見る", content)
         self.assertIn("official_howto_block (#7959): 1 page(s) (steps: 1)", stdout)
 
     def test_not_found_status_renders_nothing(self):
