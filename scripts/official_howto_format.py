@@ -29,7 +29,7 @@ import official_howto
 PUBLISHER_LABELS: dict[str, str] = {
     "bandai": "バンダイ",
     "lego": "レゴ",
-    "tamagotchi": "たまごっち公式 (BANDAI)",
+    "tamagotchi": "バンダイ",  # あそびかたは tamagotchi-official.com (バンダイ運営)
 }
 
 # kind コード -> 表示ラベル。
@@ -115,7 +115,7 @@ def build_official_howto_block(obj: dict | None) -> Optional[dict[str, Any]]:
 
     if steps:
         intro = f"{publisher}公式の{kind}から、はじめ方をまとめました。"
-        closing_link_text = f"▶ {kind}の全文は{publisher}公式サイトで"
+        closing_link_text = f"▶ {kind}の全文を{publisher}の公式サイトで見る"
         return {
             "has_steps": True,
             "intro": intro,
