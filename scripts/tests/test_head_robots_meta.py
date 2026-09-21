@@ -130,6 +130,28 @@ def test_ga4_excludes_lab_and_automation_traffic(hugo_build_dir):
     assert html.count("ga-disable-G-D8ZQX1BT20") >= 2
 
 
+def test_cf_rum_excludes_lab_and_automation_traffic(hugo_build_dir):
+    """Cloudflare Web Analytics (RUM) も GA4 と同じ条件で送信を止めること (#7895)。
+
+    CF の beacon には公式のオプトアウトが無いので、beacon.min.js の二重読み込み
+    防止 (`window.__cfBeacon.load === "single"` なら return) を流用している。
+    GA4 のガード 2 本がそれぞれこのフラグも立てるので、出力上も 2 箇所残る。
+    ガードは defer の beacon より前に実行されなければ意味が無いので順序も押さえる。
+    """
+    html = (hugo_build_dir / "index.html").read_text(encoding="utf-8")
+
+    beacon = html.find("static.cloudflareinsights.com/beacon.min.js")
+    assert beacon != -1, "CF Web Analytics の beacon が出力に無い"
+    guards = [
+        m.start()
+        for m in re.finditer(
+            r"__cfBeacon\s*=\s*\{\s*load\s*:\s*[\"']single[\"']\s*\}", html
+        )
+    ]
+    assert len(guards) >= 2
+    assert all(g < beacon for g in guards)
+
+
 def test_sitemap_and_robots_agree(hugo_build_dir):
     """sitemap に載る URL は 1 つ残らず index,follow であること (#6206 A)。
 
