@@ -13,7 +13,7 @@ Ubersuggest CSV (監視している競合おもちゃサイトの検索語エク
   WP のカニバリ対象になりにくい独立した需要源として使える。
 
 CSV の実測 (2026-08-10, 再調査不要):
-  data/demand/ubersuggest/ に投入されるファイルは 2 種類ある。
+  CSV の置き場 (CSV_DIR_CANDIDATES) に投入されるファイルは 2 種類ある。
     - キーワードレポート: 列 Keywords,Volume,Position,Est. Visits,
       Seo Difficulty,Ranking Url (Position は競合サイトの当該語での順位)
     - Top Pages レポート: 列 Title,URL,Est. Visits,Backlinks (Keywords 列が
@@ -98,7 +98,13 @@ WP (omcha.jp) とのカニバリ計測 (レポートのみ、ここでは除外�
 
 使い方:
     python scripts/ingest_ubersuggest.py
-    python scripts/ingest_ubersuggest.py --csv-dir data/demand/ubersuggest --dry-run
+    python scripts/ingest_ubersuggest.py --csv-dir ../amazon-navi-brain/demand/ubersuggest --dry-run
+
+CSV の置き場 (2026-09-21 に移した):
+  競合調査の生データなので public のこのリポジトリには置かない (omcha-ops#97 §8)。
+  private の amazon-navi-brain `demand/ubersuggest/` が正本。--csv-dir を省くと
+  CSV_DIR_CANDIDATES を順に探し、採用した場所を log に出す。見つからなければ
+  止める (0 件の結果を書き出して既存の ubersuggest_demand.json を潰さないため)。
 """
 from __future__ import annotations
 
@@ -126,7 +132,12 @@ import build_demand_keywords as bdk  # noqa: E402
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("ingest_ubersuggest")
 
-DEFAULT_CSV_DIR = "data/demand/ubersuggest"
+# 競合 CSV は private の amazon-navi-brain に置く (omcha-ops#97 §8)。
+# CI の overlay checkout (jules/) → 手元の兄弟ディレクトリ の順に探す。
+CSV_DIR_CANDIDATES = (
+    "jules/demand/ubersuggest",
+    "../amazon-navi-brain/demand/ubersuggest",
+)
 DEFAULT_RULES_PATH = "data/demand_query_rules.yaml"
 DEFAULT_OUT = "data/analytics/ubersuggest_demand.json"
 # 供給元は omcha-ops → amazon-navi-brain の派生物に変わった (omcha-ops#97 P2)。
@@ -582,10 +593,30 @@ def run(
     return result
 
 
+def resolve_csv_dir(explicit: str | None = None) -> pathlib.Path:
+    """CSV の置き場を探す。採用した場所を log に出し、無ければ止める。
+
+    黙って空のディレクトリを読むと 0 語の結果で ubersuggest_demand.json を
+    上書きしてしまうので、見つからないときは fail-closed。
+    """
+    if explicit:
+        return pathlib.Path(explicit)
+    for cand in CSV_DIR_CANDIDATES:
+        p = pathlib.Path(cand)
+        if p.is_dir() and any(p.glob("*.csv")):
+            logger.info("Ubersuggest CSV: %s を使う", p)
+            return p
+    raise SystemExit(
+        "Ubersuggest CSV が見つからない (%s)。private の amazon-navi-brain "
+        "demand/ubersuggest/ にある (omcha-ops#97 §8)。--csv-dir で指定する"
+        % " / ".join(CSV_DIR_CANDIDATES))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description="Ubersuggest CSV を需要源として取り込む (inert, #2686 PR-C)")
-    ap.add_argument("--csv-dir", default=DEFAULT_CSV_DIR)
+    ap.add_argument("--csv-dir", default=None,
+                    help="CSV の置き場。省略時は %s を順に探す" % " / ".join(CSV_DIR_CANDIDATES))
     ap.add_argument("--rules", default=DEFAULT_RULES_PATH)
     ap.add_argument("--out", default=DEFAULT_OUT)
     ap.add_argument("--wp-history", default=DEFAULT_WP_HISTORY_PATH,
@@ -598,7 +629,7 @@ def main() -> int:
     args = ap.parse_args()
 
     run(
-        pathlib.Path(args.csv_dir),
+        resolve_csv_dir(args.csv_dir),
         pathlib.Path(args.rules),
         pathlib.Path(args.out),
         None if args.no_wp_crossmatch else bdk.resolve_wp_history_path(args.wp_history),
