@@ -14,7 +14,7 @@ T3 (#7310) の群B (角度前段, angle_stage.py) は事前登録した判定基
     との最大類似度」(corpus.per_key_max_sim) を根拠情報として渡し、凡庸と判断された
     キーだけを gemma に指摘させる
   - critique_stage.rewrite_flagged: 指摘されたキーだけを書き直す (指摘が無いseedは
-    C'=A のまま、gemma を呼ばない)
+    C'=A のまま、gemma を呼ばない。C'=A のときは評価も A の結果を流用する)
 
 指標 (M1-b と同じ sentence_metrics.compute_information_gain): 固有かつ裏付けありの
 文の数 (主) / 裏付けの無い文の数 (ガードレール)。
@@ -88,11 +88,25 @@ def _mean(values: list[float]) -> float | None:
     return round(statistics.mean(values), 4) if values else None
 
 
-def _article_meta(article_path: str) -> tuple[str, list[str]]:
-    article = json.loads(pathlib.Path(article_path).read_text(encoding="utf-8"))
-    title = article.get("title", "") if isinstance(article, dict) else ""
-    tags = article.get("tags", []) if isinstance(article, dict) else []
-    return title, tags
+def summarize_gain(gain: dict[str, Any]) -> dict[str, Any]:
+    """compute_information_gain の結果から seed 1回分の集計行を作る (pure)。
+
+    unresolved_count (根拠判定が index 不整合で解決できなかった文) も残す。
+    unsupported_count だけを見ると、「裏付けの無い文」が「未判定」に移っただけで
+    減ったように見えてしまうため (run_m1.py と同じく記録する)。
+    """
+    sentence_count = gain["sentence_count"]
+    return {
+        "unique_and_supported_count": gain["unique_and_supported_count"],
+        "sentence_count": sentence_count,
+        "unsupported_count": gain["unsupported_count"],
+        "unresolved_count": gain.get("unresolved_count", 0),
+        "ratio": round(gain["unique_and_supported_count"] / sentence_count, 4) if sentence_count else None,
+    }
+
+
+def _diff(c: float | None, a: float | None) -> float | None:
+    return round(c - a, 4) if c is not None and a is not None else None
 
 
 # --------------------------------------------------------------------------
@@ -162,11 +176,17 @@ def process_asin(
             calls.append({"stage": f"C_rewrite_seed{seed}", **rewrite_out["call_meta"]})
         narrative_c = rewrite_out["narrative"]
 
-        gain_c = sentence_metrics.compute_information_gain(
-            narrative_c, material_text, same_category_pool, cross_category_pool,
-            ollama_url=ollama_url, ruri_url=ruri_url, model=model, num_ctx=num_ctx, session=session,
-        )
-        calls.append({"stage": f"C_entailment_seed{seed}", **(gain_c.get("entailment_call_meta") or {})})
+        if narrative_c == narrative_a:
+            # 指摘ゼロ、または書き直しの JSON が空で1キーも置き換わらなかった場合、
+            # C' は A と一字一句同じ。評価し直すと根拠判定の揺れだけが差として
+            # 混入するため、A の評価をそのまま使う (差は定義上 0)。
+            gain_c = gain_a
+        else:
+            gain_c = sentence_metrics.compute_information_gain(
+                narrative_c, material_text, same_category_pool, cross_category_pool,
+                ollama_url=ollama_url, ruri_url=ruri_url, model=model, num_ctx=num_ctx, session=session,
+            )
+            calls.append({"stage": f"C_entailment_seed{seed}", **(gain_c.get("entailment_call_meta") or {})})
 
         containment_a = guardrails.check_asin_containment(
             narrative_a.get("how_to_choose", ""), allowed_asins, asin, foreign_product_names=foreign_product_names,
@@ -186,33 +206,24 @@ def process_asin(
             if row["supported"] is False:
                 c_unsupported_sentences.append(row["sentence"])
 
-        a_ratio = round(gain_a["unique_and_supported_count"] / gain_a["sentence_count"], 4) if gain_a["sentence_count"] else None
-        c_ratio = round(gain_c["unique_and_supported_count"] / gain_c["sentence_count"], 4) if gain_c["sentence_count"] else None
         seed_runs.append({
             "seed": seed,
             "flagged_keys": [f["key"] for f in critique_out["flagged"]],
             "rewritten_keys": rewrite_out["rewritten_keys"],
             "narrative_key_count": len(narrative_a),
-            "a": {
-                "unique_and_supported_count": gain_a["unique_and_supported_count"],
-                "sentence_count": gain_a["sentence_count"],
-                "unsupported_count": gain_a["unsupported_count"],
-                "ratio": a_ratio,
-            },
-            "c": {
-                "unique_and_supported_count": gain_c["unique_and_supported_count"],
-                "sentence_count": gain_c["sentence_count"],
-                "unsupported_count": gain_c["unsupported_count"],
-                "ratio": c_ratio,
-            },
+            "c_identical_to_a": narrative_c == narrative_a,
+            "a": summarize_gain(gain_a),
+            "c": summarize_gain(gain_c),
         })
 
     a_count_mean = _mean([r["a"]["unique_and_supported_count"] for r in seed_runs])
     a_ratio_mean = _mean([r["a"]["ratio"] for r in seed_runs if r["a"]["ratio"] is not None])
     a_unsupported_mean = _mean([r["a"]["unsupported_count"] for r in seed_runs])
+    a_unresolved_mean = _mean([r["a"]["unresolved_count"] for r in seed_runs])
     c_count_mean = _mean([r["c"]["unique_and_supported_count"] for r in seed_runs])
     c_ratio_mean = _mean([r["c"]["ratio"] for r in seed_runs if r["c"]["ratio"] is not None])
     c_unsupported_mean = _mean([r["c"]["unsupported_count"] for r in seed_runs])
+    c_unresolved_mean = _mean([r["c"]["unresolved_count"] for r in seed_runs])
     flagged_rate = _mean([
         len(r["flagged_keys"]) / r["narrative_key_count"] for r in seed_runs if r["narrative_key_count"]
     ])
@@ -223,22 +234,22 @@ def process_asin(
         "seed_runs": seed_runs,
         "a_mean": {
             "unique_and_supported_count": a_count_mean, "ratio": a_ratio_mean, "unsupported_count": a_unsupported_mean,
+            "unresolved_count": a_unresolved_mean,
         },
         "c_mean": {
             "unique_and_supported_count": c_count_mean, "ratio": c_ratio_mean, "unsupported_count": c_unsupported_mean,
+            "unresolved_count": c_unresolved_mean,
         },
         "flagged_rate": flagged_rate,
         "containment_violations": containment_violations,
         "a_unsupported_sentences": a_unsupported_sentences,
         "c_unsupported_sentences": c_unsupported_sentences,
-        "diff_count": (c_count_mean - a_count_mean) if a_count_mean is not None and c_count_mean is not None else None,
-        "diff_ratio": (
-            round(c_ratio_mean - a_ratio_mean, 4) if c_ratio_mean is not None and a_ratio_mean is not None else None
-        ),
-        "diff_unsupported_count": (
-            round(c_unsupported_mean - a_unsupported_mean, 4)
-            if a_unsupported_mean is not None and c_unsupported_mean is not None else None
-        ),
+        "diff_count": _diff(c_count_mean, a_count_mean),
+        "diff_ratio": _diff(c_ratio_mean, a_ratio_mean),
+        "diff_unsupported_count": _diff(c_unsupported_mean, a_unsupported_mean),
+        # 判定基準には使わない (事前登録外)。unsupported の減少が未判定への
+        # 移動でないかを読むための記録。
+        "diff_unresolved_count": _diff(c_unresolved_mean, a_unresolved_mean),
         "calls": calls,
     }
 
@@ -324,8 +335,9 @@ def run(
                 asin_info, ollama_url=ollama_url, ruri_url=ruri_url, model=model, num_ctx=num_ctx,
                 session=session, run_dir=this_run_dir,
             )
-        except (GemmaCallError, TruncationError, ValueError) as e:
-            # M2 と同じ理由 (壊れた JSON はリトライされない)。この ASIN は
+        except (GemmaCallError, TruncationError, ValueError, requests.RequestException) as e:
+            # M2 と同じ理由 (壊れた JSON はリトライされない)。Ruri (埋め込み) の
+            # 接続失敗も1 ASIN の欠損として扱い、それまでの ASIN の結果を捨てない。この ASIN は
             # C'-A の対に使えないため diff_* を None にし、compute_verdict の
             # ブートストラップ入力から自然に除外する (「確認済み」と偽らない)。
             logger.error("process_asin failed asin=%s: %s", asin_info["asin"], e)
@@ -336,6 +348,7 @@ def run(
                 "containment_violations": {"a": 0, "c": 0},
                 "a_unsupported_sentences": [], "c_unsupported_sentences": [],
                 "diff_count": None, "diff_ratio": None, "diff_unsupported_count": None,
+                "diff_unresolved_count": None,
                 "calls": [], "error": str(e),
             }
         pair_results.append(r)
@@ -364,6 +377,7 @@ def run(
             "asin": p["asin"], "category": p["category"], "elapsed_s": p["elapsed_s"],
             "flagged_rate": p["flagged_rate"], "a_mean": p["a_mean"], "c_mean": p["c_mean"],
             "diff_count": p["diff_count"], "diff_ratio": p["diff_ratio"], "diff_unsupported_count": p["diff_unsupported_count"],
+            "diff_unresolved_count": p["diff_unresolved_count"],
             "containment_violations": p["containment_violations"],
         }
         for p in pair_results
