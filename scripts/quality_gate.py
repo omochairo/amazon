@@ -69,6 +69,10 @@ try:
     import stock_status
 except ModuleNotFoundError:  # package 形式
     from scripts import stock_status  # type: ignore[no-redef]
+try:
+    import official_howto
+except ModuleNotFoundError:  # package 形式
+    from scripts import official_howto  # type: ignore[no-redef]
 
 
 # 幼児口調・子ども向け演出は禁止（女性誌調をキープするため）。
@@ -185,9 +189,11 @@ TITLE_SERP_HEAD_CHARS = 30
 TITLE_SERP_MAX_NAME_CHARS = TITLE_SERP_HEAD_CHARS - len("の最安値")
 # 検索意図語。読者が商品名に添えて打つクエリ語で、#5083 の計測もこの語彙で数えた。
 # 「何歳」は「対象年齢」の口語形なので同じ意図として数える。
+# 「遊び方」は #7957 で外した。手順の約束は check_howto_title_promise が
+# 公式ソースの有無で判定するので、ここで「置けば満点」の語として勧めない。
 TITLE_SERP_INTENT_WORDS = (
     "口コミ", "最安値", "対象年齢", "何歳", "比較", "評判",
-    "レビュー", "徹底", "価格", "遊び方", "選び方", "安い",
+    "レビュー", "徹底", "価格", "選び方", "安い",
 )
 # 合否は変えず score だけ下げる (#4826 項目2 / #5088 と同じ warn-only の流儀)。
 # 施行日ゲートは置かない — census (#4828) が main 全量で発火率を出すので、
@@ -1751,6 +1757,36 @@ def check_stock_where_to_buy(
     return CheckResult("stock_where_to_buy", True, 1.0, "OK")
 
 
+# #7957 (#7955 A-1): タイトルで手順を約束してよいのは、公式の取説・あそびかたの
+# URL (official_howto.json) を持つページだけ。施行日より前の slug は soft
+# (既存 298 本のタイトルを一括で書き換えない。リライトは新 slug なので施行される)。
+HOWTO_TITLE_PROMISE_ENFORCE_FROM = "2026-09-22"
+
+
+def check_howto_title_promise(
+    data: dict, per_asin_root: pathlib.Path | str = "data/raw/per_asin",
+) -> CheckResult:
+    """title に 遊び方/使い方/説明書 等を含むのに official_howto.json の url が無ければ違反。
+
+    B0H4PQ29JS (デジヴァイス) の「タイトルで遊び方を約束して手順ゼロ」を
+    発生源で止める。答えの在処 (公式 URL) があれば約束してよい。
+    """
+    title = data.get("title", "")
+    word = official_howto.find_howto_promise(title)
+    if word is None:
+        return CheckResult("howto_title_promise", True, 1.0, "OK (no how-to promise)")
+    product = data.get("product") or {}
+    asin = product.get("asin") if isinstance(product, dict) else None
+    if official_howto.has_official_url(official_howto.load(asin, per_asin_root)):
+        return CheckResult("howto_title_promise", True, 1.0, f"OK ({word}: official_howto あり)")
+    issue = (
+        f"howto-promise-without-official-source: title が「{word}」で手順を約束しているが "
+        f"data/raw/per_asin/{asin or '?'}/official_howto.json に公式 URL が無い "
+        "(#7957: 公式の取説・あそびかたが無い商品では手順を約束しない)"
+    )
+    return _v5_enforced("howto_title_promise", [issue], data, HOWTO_TITLE_PROMISE_ENFORCE_FROM)
+
+
 def _derive_verified_status(
     data: dict,
     rakuten_idx: dict[str, Any] | None,
@@ -1838,6 +1874,7 @@ def evaluate_article(
     report.checks.append(check_heading_hierarchy(md_text))
     report.checks.append(check_body_word_count(md_text))
     report.checks.append(check_stock_where_to_buy(data, md_text, stock_index=stock_index))
+    report.checks.append(check_howto_title_promise(data))
     return report
 
 

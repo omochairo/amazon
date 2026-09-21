@@ -366,7 +366,7 @@
 {% endif %}
 
 {% if narrative.daily_use %}
-## <small>{{ product.name }}の</small>🎮 実際の使い方・遊び方
+## <small>{{ product.name }}の</small>🎮 家庭での遊ばれ方
 
 {{ narrative_section(narrative.daily_use) }}
 {% endif %}
@@ -462,7 +462,7 @@
 <aside class="expert-take"><strong>おもちゃロボの見立て</strong><br>{{ expert_take }}</aside>
 {% endif %}
 
-{% if faq %}
+{% if faq_extended or faq %}
 ## ❓ よくある質問（FAQ）
 
 {% for q in (faq_extended or faq) %}

@@ -51,6 +51,7 @@ from typing import Any
 
 import requests
 
+from scripts import official_howto
 from scripts._seo_sidecar import load_sidecar, sidecar_path, update_sidecar
 from scripts.audit_query_entailment import (
     build_judge_text,
@@ -504,6 +505,9 @@ def run(
 
         raw_faq = result.get("faq") or []
         validated_faq = validate_faq(raw_faq)
+        # #7957 (#7955 A-4): 公式の手順 (reviewed steps) が無いページでは、
+        # 遊び方・使い方を問う FAQ を作らない。build_post もビルド時に同じ条件で落とす。
+        validated_faq, _ = official_howto.filter_howto_faq(validated_faq, official_howto.load(asin))
         summary["faq_dropped"] += max(0, len(raw_faq) - len(validated_faq))
         validated_meta = validate_meta_description(result.get("meta_description"))
 
