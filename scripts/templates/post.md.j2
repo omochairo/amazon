@@ -365,6 +365,28 @@
 {% endfor %}
 {% endif %}
 
+{#- #7959 (#7955 C 改訂版): official_howto_format.build_official_howto_block()
+    が data/raw/per_asin/<ASIN>/official_howto.json から決定的に組み立てた
+    official_howto_block がある記事だけ、「🎮 家庭での遊ばれ方」の直前に出す。
+    url が無いページでは official_howto_block は None のままなので、既存記事
+    の出力は一切変化しない。リンクはアフィリエイトではないので rel は
+    noopener のみ (sponsored/nofollow を付けない)。構造化データは付けない。 -#}
+{% if official_howto_block %}
+## <small>{{ product.name }}の</small>📘 公式の取扱説明書・遊び方
+
+<section class="official-howto-block" aria-label="公式の取扱説明書・遊び方">
+<p class="official-howto-intro">{{ official_howto_block.intro }}</p>
+{% if official_howto_block.has_steps %}
+<ol class="official-howto-steps">
+{% for step in official_howto_block.steps %}<li>{{ step.text }}{% if step.section %} <small class="official-howto-step-source">（{{ step.section }}）</small>{% endif %}</li>
+{% endfor %}</ol>
+<p class="official-howto-closing"><a href="{{ official_howto_block.url }}" target="_blank" rel="noopener">{{ official_howto_block.closing_link_text }}</a>{% if official_howto_block.date_label %}（{{ official_howto_block.date_label }} 確認）{% endif %}</p>
+{% else %}
+<p class="official-howto-link"><a href="{{ official_howto_block.url }}" target="_blank" rel="noopener">{{ official_howto_block.link_text }}</a>{% if official_howto_block.date_note %}{{ official_howto_block.date_note }}{% endif %}</p>
+{% endif %}
+</section>
+{% endif %}
+
 {% if narrative.daily_use %}
 ## <small>{{ product.name }}の</small>🎮 家庭での遊ばれ方
 
