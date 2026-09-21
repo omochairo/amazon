@@ -4621,6 +4621,51 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 [data-theme="dark"] .post-content .price-history-block .price-history-table td { border-color: #334155; }
 [data-theme="dark"] .post-content .price-history-block .price-history-table th { color: #94a3b8; }
 
+/* #7959 (#7955 C 改訂版): 公式の取扱説明書・遊び方ブロック。
+   .price-history-block と同じトークン (背景/枠線/文字色) を流用し、
+   新しい配色を増やさない。 */
+.post-content .official-howto-block {
+  margin: 12px 0 18px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  color: #1f2937;
+}
+.post-content .official-howto-block .official-howto-intro {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  color: #1f2937;
+}
+.post-content .official-howto-block .official-howto-steps {
+  margin: 0 0 10px;
+  padding-left: 1.4em;
+  font-size: 0.9rem;
+  color: #1f2937;
+}
+.post-content .official-howto-block .official-howto-steps li { margin: 0 0 6px; }
+.post-content .official-howto-block .official-howto-step-source {
+  color: #6b7280;
+  font-size: 0.8rem;
+}
+.post-content .official-howto-block .official-howto-link,
+.post-content .official-howto-block .official-howto-closing {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+[data-theme="dark"] .post-content .official-howto-block {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e5e7eb;
+}
+[data-theme="dark"] .post-content .official-howto-block .official-howto-intro { color: #e5e7eb; }
+[data-theme="dark"] .post-content .official-howto-block .official-howto-steps { color: #e5e7eb; }
+[data-theme="dark"] .post-content .official-howto-block .official-howto-step-source { color: #94a3b8; }
+[data-theme="dark"] .post-content .official-howto-block .official-howto-link,
+[data-theme="dark"] .post-content .official-howto-block .official-howto-closing { color: #94a3b8; }
+
 /* ---------- 競合比較カード (#1089: grid → carousel) ----------
    .competitor-grid は .carousel-track と同じ class に乗っているため、
    layout は flex で carousel-wrapper 内を横スクロール。grid 配置は撤去。 */
