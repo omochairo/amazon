@@ -224,6 +224,38 @@ def test_select_targets_prioritizes_unmined_pool_and_respects_limit(tmp_path, mo
     assert targets == ["B0UNMINED1", "B0UNMINED2"]
 
 
+def test_select_targets_unmined_pool_is_newest_article_first(tmp_path, monkeypatch):
+    """未採掘の残り (③) は公開日の新しい順に選ばれる (#6602 新着優先)。"""
+    monkeypatch.chdir(tmp_path)
+    articles_dir = tmp_path / "articles"
+    _write_article(articles_dir, "B0OLDEST0A", date_prefix="2026-05-18")
+    _write_article(articles_dir, "B0NEWEST0A", date_prefix="2026-09-16")
+    _write_article(articles_dir, "B0MIDDLE0A", date_prefix="2026-07-01")
+
+    targets = select_targets(
+        limit=2, audit_path=tmp_path / "missing.json",
+        rewrite_queue_dir=tmp_path / "queue_missing",
+        base=tmp_path / "per_asin", articles_dir=articles_dir, now=_COVERAGE_NOW,
+    )
+    assert targets == ["B0NEWEST0A", "B0MIDDLE0A"]
+
+
+def test_select_targets_unmined_pool_same_date_falls_back_to_asin_order(tmp_path, monkeypatch):
+    """同じ公開日の中は ASIN 昇順。日ごとの流入が limit を超えても並びが揺れない。"""
+    monkeypatch.chdir(tmp_path)
+    articles_dir = tmp_path / "articles"
+    for asin in ["B0SAMEDAY3", "B0SAMEDAY1", "B0SAMEDAY2"]:
+        _write_article(articles_dir, asin, date_prefix="2026-09-16")
+    _write_article(articles_dir, "B0OLDER001", date_prefix="2026-09-15")
+
+    targets = select_targets(
+        limit=0, audit_path=tmp_path / "missing.json",
+        rewrite_queue_dir=tmp_path / "queue_missing",
+        base=tmp_path / "per_asin", articles_dir=articles_dir, now=_COVERAGE_NOW,
+    )
+    assert targets == ["B0SAMEDAY1", "B0SAMEDAY2", "B0SAMEDAY3", "B0OLDER001"]
+
+
 def test_select_targets_explicit_asins_bypass_freshness_rules(tmp_path, monkeypatch):
     """--asins は fresh でも limit 争いでも常に先頭で通る。"""
     monkeypatch.chdir(tmp_path)
