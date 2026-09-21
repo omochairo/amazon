@@ -48,6 +48,26 @@ head commit の committer date を代理指標として使う ([推] push とほ
 条件 (required check 未充足 かつ checks 皆無 かつ close→reopen 未実施)
 のときだけ行う — 満たされている PR や既に対応済みの PR まで律儀に叩くと
 API 呼び出しが線形に増えるため。
+
+## 2026-09-21: dirty PR (base が古い) を close→reopen 対象から除外する (#7912)
+
+「checks が 1 件も無い PR」には性質が違う 2 パターンがある:
+
+| 型 | 原因 | close→reopen |
+|---|---|---|
+| A: 配送不発 (#6609) | GitHub 側で `pull_request` が配送されない | **治る** (本来の対象) |
+| B: dirty (#7892) | base が古く GitHub がマージコミットを作れない | **原理的に絶対治らない** |
+
+これまでは区別せず両方に close→reopen を試みていたため、B に対しても
+1 PR につき 1 回しか無い close→reopen 枠 (`ci-recovery-reopened` ラベルで
+冪等化) を無駄に消費し、その後 `recovered_by=none` に落ちていた (#7853)。
+
+`mergeable == "CONFLICTING"` を専用の action kind (`dirty`) として扱い、
+close→reopen を消費せずに「base を取り込めば直る」という別の warning を出す。
+`mergeable` は GitHub 側で非同期に計算されるため `UNKNOWN` が返る窓がある
+(#7853 は closed 後の取得で `UNKNOWN` だった)。`UNKNOWN` を dirty 扱いすると
+誤判定になるので、`noop` にして次回 run に判定を持ち越す (close→reopen も
+まだ消費しない — この窓で誤って枠を焼くのが今回の本題)。
 """
 from __future__ import annotations
 
@@ -71,8 +91,11 @@ DEFAULT_PUSH_THRESHOLD_MINUTES = 5
 
 PR_FIELDS = (
     "number,headRefName,headRefOid,baseRefName,isDraft,isCrossRepository,"
-    "statusCheckRollup,labels"
+    "statusCheckRollup,labels,mergeable"
 )
+
+MERGEABLE_CONFLICTING = "CONFLICTING"
+MERGEABLE_UNKNOWN = "UNKNOWN"
 
 
 def emit_warning_annotation(message: str) -> None:
@@ -88,7 +111,7 @@ def emit_warning_annotation(message: str) -> None:
 
 @dataclass(frozen=True)
 class Action:
-    kind: str  # noop | close_reopen | recovered_close_reopen | recovered_none
+    kind: str  # noop | close_reopen | recovered_close_reopen | recovered_none | dirty
 
 
 def _parse_ts(value: str) -> dt.datetime:
@@ -180,6 +203,7 @@ def evaluate_pr(
     stage2_done: bool,
     push_time: Optional[dt.datetime],
     now: dt.datetime,
+    mergeable: Optional[str] = None,
     push_threshold_minutes: int = DEFAULT_PUSH_THRESHOLD_MINUTES,
 ) -> Action:
     """1 PR ぶんの状態から、次に取るアクションを決める純粋関数。"""
@@ -200,6 +224,16 @@ def evaluate_pr(
         return Action("noop")  # push 時刻が取れない = 判定不能。安全側に倒す。
     if now - push_time < dt.timedelta(minutes=push_threshold_minutes):
         return Action("noop")  # まだ実行中かもしれない。誤爆させない。
+
+    # ここから close→reopen を検討する分岐 (#7912)。
+    # base が古く GitHub がマージコミットを作れない (dirty) PR は close→reopen
+    # しても原理的に直らないので、1 回きりの枠を消費する前に弾く。
+    if mergeable == MERGEABLE_CONFLICTING:
+        return Action("dirty")
+    if mergeable == MERGEABLE_UNKNOWN:
+        # GitHub 側の非同期計算がまだ終わっていない。dirty と誤判定しないために
+        # ここでは何もせず、次回 run で判定し直す (close→reopen も消費しない)。
+        return Action("noop")
     return Action("close_reopen")
 
 
@@ -269,6 +303,7 @@ def main() -> int:
 
     close_reopened = 0
     recovered = {"close_reopen": 0, "none": 0}
+    dirty = 0
 
     for pr in prs:
         head_sha = pr["headRefOid"]
@@ -291,6 +326,7 @@ def main() -> int:
             stage2_done=stage2_done,
             push_time=push_time,
             now=now,
+            mergeable=pr.get("mergeable"),
             push_threshold_minutes=args.push_threshold_minutes,
         )
 
@@ -310,14 +346,23 @@ def main() -> int:
             logger.warning(message)
             emit_warning_annotation(message)
             recovered["none"] += 1
+        elif action.kind == "dirty":
+            message = (
+                f"pr={pr['number']} action=dirty "
+                "(base is stale, mergeable=CONFLICTING; needs rebase or re-run, "
+                "not close/reopen)"
+            )
+            logger.warning(message)
+            emit_warning_annotation(message)
+            dirty += 1
         else:
             logger.debug("pr=%s action=noop", pr["number"])
 
     logger.info(
         "summary: candidates=%d close_reopened=%d "
-        "recovered_close_reopen=%d recovered_none=%d",
+        "recovered_close_reopen=%d recovered_none=%d dirty=%d",
         len(prs), close_reopened,
-        recovered["close_reopen"], recovered["none"],
+        recovered["close_reopen"], recovered["none"], dirty,
     )
     if close_reopened == 0:
         logger.info("no recovery action needed this run")

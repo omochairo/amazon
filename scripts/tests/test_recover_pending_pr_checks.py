@@ -244,6 +244,43 @@ class EvaluatePrTests(unittest.TestCase):
         action = self._eval(required_satisfied=True)
         self.assertEqual(action, Action("noop"))
 
+    def test_conflicting_mergeable_is_dirty_not_close_reopen(self):
+        """#7912: base が古く dirty な PR は close→reopen を消費せず dirty を返す。"""
+        action = self._eval(mergeable="CONFLICTING")
+        self.assertEqual(action, Action("dirty"))
+
+    def test_unknown_mergeable_defers_to_noop(self):
+        """#7912: mergeable=UNKNOWN は dirty と誤判定せず、次回 run に持ち越す (noop)。"""
+        action = self._eval(mergeable="UNKNOWN")
+        self.assertEqual(action, Action("noop"))
+
+    def test_mergeable_mergeable_still_closes_and_reopens(self):
+        """#7912: mergeable=MERGEABLE (衝突無し) は従来通り close→reopen。"""
+        action = self._eval(mergeable="MERGEABLE")
+        self.assertEqual(action, Action("close_reopen"))
+
+    def test_mergeable_unset_still_closes_and_reopens(self):
+        """後方互換: mergeable を渡さない呼び出しは従来通り close→reopen のまま。"""
+        action = self._eval()
+        self.assertEqual(action, Action("close_reopen"))
+
+    def test_conflicting_below_push_threshold_is_still_noop(self):
+        """dirty 判定より push threshold の方が先に効く (誤爆防止が優先)。"""
+        action = self._eval(mergeable="CONFLICTING", push_time=NOW - dt.timedelta(minutes=2))
+        self.assertEqual(action, Action("noop"))
+
+    def test_conflicting_with_stage2_done_is_recovered_none(self):
+        """既に close→reopen 済み (stage2_done) なら dirty 判定より優先して従来通り。"""
+        action = self._eval(mergeable="CONFLICTING", stage2_done=True)
+        self.assertEqual(action, Action("recovered_none"))
+
+
+class PrFieldsMergeableRegressionTests(unittest.TestCase):
+    """#7912: mergeable を PR_FIELDS に積んでいないと dirty PR を判定できない。"""
+
+    def test_mergeable_field_is_requested(self):
+        self.assertIn("mergeable", PR_FIELDS.split(","))
+
 
 if __name__ == "__main__":
     unittest.main()
