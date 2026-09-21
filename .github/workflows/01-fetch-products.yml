@@ -246,8 +246,28 @@ jobs:
           # コミットを作れないため) ので required check が永久に埋まらず、
           # auto-merge が詰んだまま気づかれずデータ更新1回ぶんが丸ごと
           # 捨てられる (#7853 の実例)。push 前に最新 main を取り込む。
-          git fetch origin main
-          if ! git merge --no-edit origin/main; then
+          # fetch も push と同じ資格情報の罠を踏む: checkout が焼いた
+          # extraheader は先頭の App token のもので、この時点では既に失効
+          # している (fetch 本体だけで実測 77〜93 分 / installation token の
+          # 寿命は 60 分固定)。public repo でも無効な Basic 資格情報には匿名
+          # フォールバックせず 401 が返るため、remote 既定のまま fetch すると
+          # exit 128 → `set -e` で step ごと死に、直そうとしている「run 1回
+          # ぶんのデータ更新が捨てられる」事故を毎回起こす。下の push と同じ
+          # く新トークンを URL に埋め、extraheader は空値でリセットする。
+          # URL 直指定の fetch では refs/remotes/origin/main が更新されない
+          # ため、マージ対象は FETCH_HEAD。
+          git -c http."https://github.com/".extraheader= \
+            fetch "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" \
+            main
+          if ! git merge --no-edit FETCH_HEAD; then
+            # 競合以外の理由 (非 data/ の tracked ファイルが dirty 等) で
+            # merge が失敗した場合は MERGE_HEAD が無い。そのまま
+            # `git commit --no-edit` すると "nothing to commit" の exit 1 に
+            # なり原因が読めないので、ここで理由を名指しして落とす。
+            if [ ! -f .git/MERGE_HEAD ]; then
+              echo "::error::git merge failed without conflicts (no MERGE_HEAD); aborting"
+              exit 1
+            fi
             # data/ は生成物のスナップショットで、行単位でマージする意味が
             # 無い (JSON の途中に別 run の断片が混ざると壊れる)。競合した
             # ファイルはこの run が今取ってきたデータを丸ごと採用する
