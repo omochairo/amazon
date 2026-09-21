@@ -65,9 +65,37 @@ API 呼び出しが線形に増えるため。
 `mergeable == "CONFLICTING"` を専用の action kind (`dirty`) として扱い、
 close→reopen を消費せずに「base を取り込めば直る」という別の warning を出す。
 `mergeable` は GitHub 側で非同期に計算されるため `UNKNOWN` が返る窓がある
-(#7853 は closed 後の取得で `UNKNOWN` だった)。`UNKNOWN` を dirty 扱いすると
-誤判定になるので、`noop` にして次回 run に判定を持ち越す (close→reopen も
-まだ消費しない — この窓で誤って枠を焼くのが今回の本題)。
+(#7853 は closed 後の取得で `UNKNOWN` だった)。`UNKNOWN` は dirty と誤判定
+せず次回 run に判定を持ち越す (close→reopen もまだ消費しない — この窓で
+誤って枠を焼くのが今回の本題)。
+
+## 2026-09-21: UNKNOWN 先送りの可視化 / dirty 文言 / summary 矛盾 (#7919, #7915 レビュー残件)
+
+上の `UNKNOWN` 先送りは `noop` に落ちていたため、run ログにも summary にも
+一切痕跡が残らなかった。`deferred_unknown` という専用 kind に切り出し、
+summary 行にカウンタを足した。さらに push からの経過時間が
+`push_threshold_minutes × UNKNOWN_ESCALATE_MULTIPLIER` を超えてなお
+`UNKNOWN` のままなら (= GitHub の非同期計算が異常に長引いている)
+`Action.escalate=True` にして `::warning::` へ格上げする。
+
+close→reopen 済み (`stage2_done`) の dirty PR は `evaluate_pr` の分岐順の都合上
+(`stage2_done` チェックが `mergeable` チェックより先) 引き続き action kind は
+`recovered_none` のままだが、`recovered_none_message` で `mergeable` を見て
+「close_reopen が dirty には効かない」ことが分かる文言に寄せる。
+
+`dirty` を検出した run で `close_reopened == 0` のときに出ていた
+`"no recovery action needed this run"` は summary の `dirty=%d` と矛盾する
+(`recovered_none` も dirty も `deferred_unknown` の `escalate` も何らかの
+`::warning::` を伴う異常系なので、それらが 0 件のときだけ「何も要らなかった」
+と言うべき)。
+
+escalate の閾値は「UNKNOWN が続いた時間」ではなく「push からの経過」で測る
+(run をまたぐ状態を持たないため)。cron は `*/15` だが、実際の起動間隔は
+GitHub 側の間引きで 2〜5 時間空く (2026-09-17〜21 の run 一覧で実測)。
+したがって push から 30 分以上経った PR は、UNKNOWN を初めて観測した run で
+即 escalate しうる。main が頻繁に動くこのリポジトリでは dirty PR の
+`mergeable` が main の更新ごとに UNKNOWN に戻るので、escalate の警告文は
+「詰まっている」と断定せず、観測事実 (push から何分で UNKNOWN) だけを書く。
 """
 from __future__ import annotations
 
@@ -89,6 +117,13 @@ STAGE2_LABEL = "ci-recovery-reopened"
 
 DEFAULT_PUSH_THRESHOLD_MINUTES = 5
 
+# push_threshold_minutes の何倍、経過してなお mergeable=UNKNOWN のままなら
+# 「GitHub 側の非同期計算が異常に長引いている」とみなして ::warning:: に
+# 格上げするか (#7919)。6 倍 = デフォルト設定で 30 分。cron は `*/15` だが実際の
+# 起動間隔は 2〜5 時間空くので「2 サイクル分 UNKNOWN が続いた」の意味にはならない
+# (モジュール docstring 参照)。
+UNKNOWN_ESCALATE_MULTIPLIER = 6
+
 PR_FIELDS = (
     "number,headRefName,headRefOid,baseRefName,isDraft,isCrossRepository,"
     "statusCheckRollup,labels,mergeable"
@@ -109,9 +144,51 @@ def emit_warning_annotation(message: str) -> None:
     print(f"::warning::{message}")
 
 
+def recovered_none_message(pr_number: int, mergeable: Optional[str]) -> str:
+    """`recovered_none` (close→reopen 済みで復旧不可) の警告文を作る。
+
+    #7919: `evaluate_pr` は `stage2_done` を `mergeable` より先に見るため、
+    close→reopen 済みの dirty PR (#7853 の型) も action kind としては
+    `recovered_none` のまま区別できない。だが「close→reopen という手段が
+    dirty には原理的に効かない」ことは分かっているので、文言だけ dirty 側に
+    寄せて読み手の誤解 (再度 close→reopen すれば直るかも、という期待) を防ぐ。
+    """
+    if mergeable == MERGEABLE_CONFLICTING:
+        return (
+            f"pr={pr_number} recovered_by=none "
+            "(dirty; base is stale so close_reopen cannot fix this; needs rebase or re-run)"
+        )
+    return (
+        f"pr={pr_number} recovered_by=none "
+        "(close_reopen exhausted; needs human)"
+    )
+
+
+def dirty_message(pr_number: int) -> str:
+    return (
+        f"pr={pr_number} action=dirty "
+        "(base is stale, mergeable=CONFLICTING; needs rebase or re-run, not close/reopen)"
+    )
+
+
+def deferred_unknown_escalated_message(pr_number: int,
+                                       minutes_since_push: Optional[int] = None) -> str:
+    # 「詰まっている」と断定しない: 観測は 1 run 分だけで、main の更新直後なら
+    # dirty PR も一時的に UNKNOWN に戻る (モジュール docstring 参照)。
+    age = f"{minutes_since_push} min" if minutes_since_push is not None else "well past threshold"
+    return (
+        f"pr={pr_number} action=deferred_unknown "
+        f"(no required checks and mergeable=UNKNOWN {age} after push; "
+        "GitHub may still be computing it, will re-evaluate next run)"
+    )
+
+
 @dataclass(frozen=True)
 class Action:
-    kind: str  # noop | close_reopen | recovered_close_reopen | recovered_none | dirty
+    kind: str  # noop | close_reopen | recovered_close_reopen | recovered_none | dirty | deferred_unknown
+    # deferred_unknown 専用: push から十分経ってもなお UNKNOWN で、GitHub の
+    # 非同期計算が異常に長引いていそうなときに True (#7919)。他の kind では未使用。
+    escalate: bool = False
 
 
 def _parse_ts(value: str) -> dt.datetime:
@@ -232,8 +309,15 @@ def evaluate_pr(
         return Action("dirty")
     if mergeable == MERGEABLE_UNKNOWN:
         # GitHub 側の非同期計算がまだ終わっていない。dirty と誤判定しないために
-        # ここでは何もせず、次回 run で判定し直す (close→reopen も消費しない)。
-        return Action("noop")
+        # close→reopen は消費せず、次回 run で判定し直す (#7853)。ただし noop に
+        # 落とすと先送りが summary にもログにも一切現れず永久に気づけない
+        # (#7919) ので、専用 kind にして可視化する。push からの経過が
+        # 閾値の UNKNOWN_ESCALATE_MULTIPLIER 倍を超えているなら、GitHub 側の
+        # 計算が異常に長引いているとみなして ::warning:: に格上げする。
+        escalate = now - push_time >= dt.timedelta(
+            minutes=push_threshold_minutes * UNKNOWN_ESCALATE_MULTIPLIER
+        )
+        return Action("deferred_unknown", escalate=escalate)
     return Action("close_reopen")
 
 
@@ -304,6 +388,8 @@ def main() -> int:
     close_reopened = 0
     recovered = {"close_reopen": 0, "none": 0}
     dirty = 0
+    deferred_unknown = 0
+    deferred_unknown_escalated = 0
 
     for pr in prs:
         head_sha = pr["headRefOid"]
@@ -339,32 +425,41 @@ def main() -> int:
             logger.info("pr=%s recovered_by=close_reopen", pr["number"])
             recovered["close_reopen"] += 1
         elif action.kind == "recovered_none":
-            message = (
-                f"pr={pr['number']} recovered_by=none "
-                "(close_reopen exhausted; needs human)"
-            )
+            message = recovered_none_message(pr["number"], pr.get("mergeable"))
             logger.warning(message)
             emit_warning_annotation(message)
             recovered["none"] += 1
         elif action.kind == "dirty":
-            message = (
-                f"pr={pr['number']} action=dirty "
-                "(base is stale, mergeable=CONFLICTING; needs rebase or re-run, "
-                "not close/reopen)"
-            )
+            message = dirty_message(pr["number"])
             logger.warning(message)
             emit_warning_annotation(message)
             dirty += 1
+        elif action.kind == "deferred_unknown":
+            logger.info("pr=%s action=deferred_unknown head=%s", pr["number"], head_sha)
+            if action.escalate:
+                minutes = (int((now - push_time).total_seconds() // 60)
+                           if push_time is not None else None)
+                message = deferred_unknown_escalated_message(pr["number"], minutes)
+                logger.warning(message)
+                emit_warning_annotation(message)
+                deferred_unknown_escalated += 1
+            deferred_unknown += 1
         else:
             logger.debug("pr=%s action=noop", pr["number"])
 
     logger.info(
         "summary: candidates=%d close_reopened=%d "
-        "recovered_close_reopen=%d recovered_none=%d dirty=%d",
+        "recovered_close_reopen=%d recovered_none=%d dirty=%d deferred_unknown=%d",
         len(prs), close_reopened,
-        recovered["close_reopen"], recovered["none"], dirty,
+        recovered["close_reopen"], recovered["none"], dirty, deferred_unknown,
     )
-    if close_reopened == 0:
+    # recovered_none / dirty / deferred_unknown(escalate 済み) はどれも
+    # ::warning:: を伴う異常系なので、close_reopened と併せてこの 4 つが全て 0 の
+    # ときだけ「何もしなかった」と言ってよい (#7919: dirty>0 でもこの行が出て
+    # summary と矛盾していた。recovered_none>0 でも同じ矛盾が 2026-09-20 の
+    # run 35536800101 / 35543469464 で実際に出ていた)。
+    if (close_reopened == 0 and recovered["none"] == 0 and dirty == 0
+            and deferred_unknown_escalated == 0):
         logger.info("no recovery action needed this run")
 
     return 0
