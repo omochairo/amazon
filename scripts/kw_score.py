@@ -37,6 +37,17 @@ WP の impressions と外部の SV は**同じ検索需要を別の経路で測�
 商品ページ候補として並べても意味が無い。`--block` を渡さないと全部が対象になるので、
 ヘッダに block の内訳を必ず出して、取り違えたときに見えるようにしてある。
 
+**block は「その語のどれかの取得行」で判定する。** 取り直した語は最新行の block が
+`2026-09-20-tail` のような日次名に変わる。最新行だけで切ると、取り直しが進むほど
+`navi-competitor` の候補が減り、全部取り直した時点で 0 件になる (omcha-ops#336)。
+
+## assign で相手サイトに渡した語は出さない
+
+omcha.jp と navi.omcha.jp は同一ホスト族なので、どちらが取りにいくかは台帳の
+`assign.jsonl` で1か所で決める (#97 §1)。navi レーンは **omcha が primary / secondary
+の語と、navi 自身が avoid にした語**を落とす。rank guard は「既に取れている語」しか
+落とさないので、これから omcha で取りにいく語はここで止めないと素通りする。
+
     cd path/to/omcha-ops
     python path/to/amazon/scripts/kw_score.py navi  --block navi-competitor --limit 30
     python path/to/amazon/scripts/kw_score.py omcha --block trip --limit 30
@@ -60,6 +71,7 @@ normalize_key = L.normalize_key
 DEFAULT_EXTERNAL = "data/keywords/external.jsonl"
 DEFAULT_WP_DEMAND = "../amazon-navi-brain/demand/wp_demand.jsonl"
 DEFAULT_SUPPLY_PROBE = "../amazon/data/analytics/demand_supply_probe.json"
+DEFAULT_ASSIGN = L.DEFAULT_ASSIGN
 # navi の rank guard と同じ条件。ここだけ別の閾値にすると、片方が候補に出して
 # もう片方が落とす状態になる。
 DEFAULT_GUARD_POS_MAX = 3.0
@@ -69,16 +81,50 @@ DEFAULT_GUARD_MIN_CLICKS = 100.0
 DEFAULT_PRESENT_MIN_IMPRESSIONS = 10.0
 
 
+def _ledger_key(r: dict) -> tuple:
+    return (r.get("norm"), r.get("loc_id"), r.get("language"))
+
+
 def filter_blocks(rows: list[dict], blocks: str | None) -> list[dict]:
-    """`--block` の部分一致で絞る。カンマ区切りで複数。
+    """最新行を返す。`--block` の部分一致で絞る。カンマ区切りで複数。
+
+    `rows` は台帳の**全行** (取得履歴ごと)。一致は最新行ではなく、その語の
+    **どれかの行**で見る。取り直すと最新行の block は日次名に変わるが、
+    どの調査で集めた語か (レーンの守備範囲) は変わらないため。
 
     完全一致にしないのは、block 名に日付が入る運用 (`navi-competitor-2026-08`) で
     毎月フラグを書き換えることになるため。
     """
+    cur = L.latest(rows)
     if not blocks:
-        return rows
+        return list(cur.values())
     keys = [b.strip() for b in blocks.split(",") if b.strip()]
-    return [r for r in rows if any(k in (r.get("block") or "") for k in keys)]
+    hit = {_ledger_key(r) for r in rows
+           if any(k in (r.get("block") or "") for k in keys)}
+    return [r for k, r in cur.items() if k in hit]
+
+
+def load_assign(path: pathlib.Path) -> dict[tuple, dict]:
+    """assign.jsonl を (norm, site) -> 最新の決定 で返す。無ければ空。"""
+    if not path.exists():
+        return {}
+    return L.latest_assign(L.read_jsonl(path))
+
+
+def navi_excluded_by_assign(assign: dict[tuple, dict]) -> dict[str, str]:
+    """navi 候補から外す norm -> 理由。
+
+    omcha が primary / secondary で取りにいく語は、navi が並べても枠を食い合うだけ。
+    navi 自身が avoid と決めた語も出さない。
+    """
+    out: dict[str, str] = {}
+    for (norm, site), a in assign.items():
+        role = a.get("role")
+        if site == "omcha" and role in ("primary", "secondary"):
+            out[norm] = "assigned_omcha"
+        elif site == "navi" and role == "avoid":
+            out.setdefault(norm, "assigned_avoid")
+    return out
 
 
 def block_summary(rows: list[dict], top: int = 4) -> str:
@@ -160,7 +206,8 @@ def split_by_measurement(rows: list[dict]) -> tuple[list[dict], list[dict], list
 
 
 def score_navi(rows: list[dict], wp: dict[str, dict], supply: dict[str, int],
-               guard_pos_max: float, guard_min_clicks: float) -> tuple[list[dict], dict]:
+               guard_pos_max: float, guard_min_clicks: float,
+               excluded: dict[str, str] | None = None) -> tuple[list[dict], dict]:
     """navi の新規商品ページ候補。
 
     ゲートは2枚:
@@ -169,13 +216,19 @@ def score_navi(rows: list[dict], wp: dict[str, dict], supply: dict[str, int],
       2. 供給 — Amazon に商品が無い語は外す。probe に無い語は「まだ調べていない」
          であって「無い」ではないので、落とさず `supply=unknown` を付けて残す
 
+    `excluded` (assign で相手サイトに渡した語) はゲートより先に落とす。
+
     navi 自身の GSC はスコアに使わない (母数 652 語・アクセスの 98% がボット)。
     評価 (打った後どうなったか) にだけ使う。
     """
     out = []
     dropped = collections.Counter()
+    excluded = excluded or {}
     for r in rows:
         norm = r.get("norm")
+        if norm in excluded:
+            dropped[excluded[norm]] += 1
+            continue
         w = wp.get(norm)
         if w and (w.get("position") or 99) <= guard_pos_max \
                 and (w.get("clicks") or 0) >= guard_min_clicks:
@@ -247,14 +300,15 @@ def _fmt_season(s: dict | None) -> str:
 
 
 def cmd_navi(args) -> int:
-    rows = filter_blocks(
-        list(L.latest(L.read_jsonl(pathlib.Path(args.external))).values()),
-        args.block)
+    rows = filter_blocks(L.read_jsonl(pathlib.Path(args.external)), args.block)
     measured, unmeasured, unknown = split_by_measurement(rows)
     wp = load_wp(pathlib.Path(args.wp_demand))
     supply = load_supply(pathlib.Path(args.supply_probe))
+    assign_path = pathlib.Path(args.assign)
+    excluded = navi_excluded_by_assign(load_assign(assign_path))
     scored, dropped = score_navi(measured, wp, supply,
-                                 args.guard_pos_max, args.guard_min_clicks)
+                                 args.guard_pos_max, args.guard_min_clicks,
+                                 excluded)
 
     print("# navi 新規候補 — 台帳 %d 語 / 測れた %d 語 / 候補 %d 語"
           % (len(rows), len(measured), len(scored)))
@@ -265,6 +319,9 @@ def cmd_navi(args) -> int:
     if not wp:
         print("# 注意: WP ブリッジが空。host crowding ガードが効いていない (%s)"
               % args.wp_demand)
+    if not assign_path.exists():
+        print("# 注意: assign が無い。omcha に渡した語も候補に出ている (%s)"
+              % args.assign)
     print()
     print("%-28s %10s %-9s %8s %6s %s" %
           ("keyword", "demand", "from", "supply", "sd", "season"))
@@ -284,9 +341,7 @@ def cmd_navi(args) -> int:
 
 
 def cmd_omcha(args) -> int:
-    rows = filter_blocks(
-        list(L.latest(L.read_jsonl(pathlib.Path(args.external))).values()),
-        args.block)
+    rows = filter_blocks(L.read_jsonl(pathlib.Path(args.external)), args.block)
     measured, unmeasured, unknown = split_by_measurement(rows)
     wp = load_wp(pathlib.Path(args.wp_demand))
     scored, dropped = score_omcha(measured, wp, args.present_min_impressions)
@@ -328,6 +383,8 @@ def main(argv=None) -> int:
 
     p = sub.add_parser("navi", help="navi の新規商品ページ候補")
     p.add_argument("--supply-probe", default=DEFAULT_SUPPLY_PROBE)
+    p.add_argument("--assign", default=DEFAULT_ASSIGN,
+                   help="omcha に渡した語・navi が avoid の語を落とす")
     p.add_argument("--guard-pos-max", type=float, default=DEFAULT_GUARD_POS_MAX)
     p.add_argument("--guard-min-clicks", type=float, default=DEFAULT_GUARD_MIN_CLICKS)
     p.set_defaults(func=cmd_navi)

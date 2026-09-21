@@ -1,6 +1,6 @@
 """サイト別スコアラ (omcha-ops#97 P3) の検査。
 
-**守りたいのは5つ。**
+**守りたいのは6つ。**
 
 1. **未測定を 0 として並べない。** 「測っていない」を「需要が無い」と扱うと、
    実際には需要のある語が最下位に沈んで永久に候補に上がらない
@@ -10,6 +10,7 @@
    2026-08-21 に決めてある。ここで再実装すると黙って巻き戻す。
 4. **host crowding ガードが navi の rank guard と同じ条件で効く。**
 5. **供給 probe に無い語を「商品が無い」と読まない。** 未調査と 0 件は違う。
+6. **assign で omcha に渡した語を navi に出さない。** 取り直してもレーンから消さない (#336)。
 """
 from __future__ import annotations
 
@@ -156,9 +157,89 @@ def test_cli_reports_buckets_without_scoring_them(tmp_path, capsys):
     assert "WP ブリッジが空" in out, "ガードが効いていないことを黙らない"
 
 
+def _blk(keyword, block, fetched_at="2026-09-07", **kw):
+    return {**_row(keyword, **kw), "block": block, "fetched_at": fetched_at}
+
+
 def test_filter_blocks_is_substring_and_multi():
-    rows = [{"block": "navi-competitor-2026-08"}, {"block": "block1-日光"},
-            {"block": ""}]
+    rows = [_blk("a", "navi-competitor-2026-08"), _blk("b", "block1-日光"),
+            _blk("c", "")]
     assert len(S.filter_blocks(rows, "navi-competitor")) == 1
     assert len(S.filter_blocks(rows, "navi-competitor,block1")) == 2
     assert len(S.filter_blocks(rows, None)) == 3, "指定が無ければ全件"
+
+
+def test_filter_blocks_keeps_lane_after_refetch():
+    """取り直すと最新行の block は日次名になる。それでもレーンから消さない (#336)。
+
+    最新行だけで切ると、取り直しが進むほど navi-competitor の候補が減り、
+    全部取り直した時点で 0 件になる。
+    """
+    rows = [_blk("トミカ", "navi-competitor-2026-08", sv=None, unknown=True),
+            _blk("トミカ", "2026-09-20-tail", fetched_at="2026-09-20", sv=368000),
+            _blk("マザー牧場", "2026-09-11-trip-batch", sv=301000)]
+    got = S.filter_blocks(rows, "navi-competitor")
+    assert [r["keyword"] for r in got] == ["トミカ"]
+    assert got[0]["fetched_at"] == "2026-09-20", "返すのは最新行 (取り直した値)"
+    measured, _, unknown = S.split_by_measurement(got)
+    assert len(measured) == 1 and not unknown
+
+
+def _asg(keyword, site, role, decided_at="2026-09-20"):
+    return {"norm": L.normalize_key(keyword), "site": site, "role": role,
+            "decided_at": decided_at}
+
+
+def test_navi_drops_words_assigned_to_omcha():
+    """assign で omcha に渡した語は navi に出さない (#97 §1 / #336)。
+
+    rank guard は既に取れている語しか落とさないので、これから omcha で
+    取りにいく語はここで止めないと素通りする。
+    """
+    assign = L.latest_assign([
+        _asg("那須サファリパーク", "omcha", "primary"),
+        _asg("那須子連れ宿", "omcha", "secondary"),
+        _asg("数字おもちゃ", "omcha", "avoid"),
+        _asg("おもちゃ箱", "navi", "avoid"),
+    ])
+    excluded = S.navi_excluded_by_assign(assign)
+    rows = [_row(k, 1000) for k in
+            ("那須サファリパーク", "那須子連れ宿", "数字おもちゃ", "おもちゃ箱", "トミカ")]
+    out, dropped = S.score_navi(rows, {}, {}, 3.0, 100.0, excluded)
+    assert sorted(r["keyword"] for r in out) == ["トミカ", "数字おもちゃ"], \
+        "omcha の avoid は navi に譲る意味なので残す"
+    assert dropped == {"assigned_omcha": 2, "assigned_avoid": 1}
+
+
+def test_navi_assign_uses_latest_decision():
+    """決定は上書きされうる。古い primary で落とし続けない。"""
+    assign = L.latest_assign([
+        _asg("トミカ", "omcha", "primary", "2026-09-01"),
+        _asg("トミカ", "omcha", "avoid", "2026-09-20"),
+    ])
+    assert S.navi_excluded_by_assign(assign) == {}
+
+
+def test_cli_navi_applies_assign(tmp_path, capsys):
+    ext = tmp_path / "external.jsonl"
+    ext.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in
+                             [_row("那須サファリパーク", 5000), _row("トミカ", 3000)]),
+                   encoding="utf-8")
+    asg = tmp_path / "assign.jsonl"
+    asg.write_text(json.dumps(_asg("那須サファリパーク", "omcha", "primary"),
+                              ensure_ascii=False), encoding="utf-8")
+    S.main(["--external", str(ext), "--wp-demand", str(tmp_path / "none.jsonl"),
+            "navi", "--supply-probe", str(tmp_path / "none.json"),
+            "--assign", str(asg)])
+    out = capsys.readouterr().out
+    assert "トミカ" in out and "那須サファリパーク" not in out.split("keyword")[-1]
+    assert "assigned_omcha" in out
+
+
+def test_cli_navi_warns_without_assign(tmp_path, capsys):
+    ext = tmp_path / "external.jsonl"
+    ext.write_text(json.dumps(_row("トミカ", 3000), ensure_ascii=False), encoding="utf-8")
+    S.main(["--external", str(ext), "--wp-demand", str(tmp_path / "none.jsonl"),
+            "navi", "--supply-probe", str(tmp_path / "none.json"),
+            "--assign", str(tmp_path / "none-assign.jsonl")])
+    assert "assign が無い" in capsys.readouterr().out
