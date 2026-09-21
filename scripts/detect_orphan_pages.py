@@ -67,7 +67,7 @@ DEFAULT_TARGET_HOST = "navi.omcha.jp"
 #     増えない。eligible を非ゼロにできるのは min_pv<=10 あたりからで、そこは
 #     (2) で既に却下した二値縮退に入る領域と重なる
 #   - (3) 既知の真陽性 (brain#22, `/products/b0gc4mql8n/`, 観測週 08-23〜08-30,
-#     PV=51/entrances=51/ratio=100%) を洗い直したところ、この URL は #57 が
+#     実数値は brain#22 / #57 を見ること) を洗い直したところ、この URL は #57 が
 #     特定した Lighthouse 自己ヒット対象 11 URL の 1 つそのものだった。
 #     entrance_ratio が綺麗に 100% だったのも、内部リンク不足ではなく
 #     Lighthouse の直接ナビゲーション (=毎回が新規セッション扱いの entrance)
