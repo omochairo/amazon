@@ -569,6 +569,9 @@ def select_mining_targets(
         "counts": counts,
         "selected": [{"asin": a, "reason": r} for a, r in chosen],
         "ledger_entries": len(ledger),
+        "limit": limit,
+        # explicit は eligible の外から来るので、残数は eligible 由来の採用分だけ引く
+        "backlog_remaining": len(eligible) - sum(1 for _, r in chosen if r != "explicit"),
     }
     return [a for a, _ in chosen], report
 
@@ -1286,6 +1289,16 @@ def report_selection(report: dict) -> None:
     for key in (*REASON_ORDER, *SKIP_REASONS):
         if key in counts:
             lines.append(f"| {REASON_LABELS[key]} | {counts[key]} |")
+    backlog = report.get("backlog_remaining")
+    limit = report.get("limit")
+    if backlog is not None and limit:
+        eta_runs = -(-backlog // limit) if backlog > 0 else 0  # ceil
+        lines += [
+            "",
+            f"今回選ばれなかった未処理・再採掘対象は残り **{backlog}** 件。"
+            f" 1 run {limit} 件のペースだと最短 **{eta_runs} run** ぶん"
+            "(新着記事の増加分は含まない下限。#6602)。",
+        ]
     selected = report.get("selected", [])
     by_reason: dict[str, int] = {}
     for s in selected:
