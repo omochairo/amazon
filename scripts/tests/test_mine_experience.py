@@ -1254,6 +1254,44 @@ def test_report_selection_writes_coverage_to_job_summary(tmp_path, monkeypatch):
     assert "今回掘る: **1** 件 (未処理 1)" in text
 
 
+def test_report_selection_shows_backlog_eta_when_present(tmp_path, monkeypatch):
+    """#6602: 未処理を回り切るのに何 run かかるかを Job Summary で見えるようにする。"""
+    summary_file = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
+    mine_experience.report_selection({
+        "candidates": 2437, "ledger_entries": 125,
+        "counts": {"fresh": 11, "never": 2404, "no_yield_recent": 21, "stale": 1},
+        "selected": [{"asin": "B0AAAAAAA1", "reason": "never"}] * 20,
+        "limit": 20, "backlog_remaining": 2406,
+    })
+    text = summary_file.read_text(encoding="utf-8")
+    assert "残り **2406** 件" in text
+    assert "最短 **121 run**" in text  # ceil(2406 / 20)
+
+
+def test_report_selection_omits_eta_when_backlog_field_absent(tmp_path, monkeypatch):
+    """limit/backlog_remaining を渡さない旧呼び出しでも壊れない。"""
+    summary_file = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
+    mine_experience.report_selection({
+        "candidates": 80, "ledger_entries": 5,
+        "counts": {"fresh": 19, "never": 61},
+        "selected": [{"asin": "B0AAAAAAA1", "reason": "never"}],
+    })
+    text = summary_file.read_text(encoding="utf-8")
+    assert "最短" not in text
+
+
+def test_select_mining_targets_reports_limit_and_backlog_remaining(tmp_path):
+    base = tmp_path / "per_asin"
+    asins = [f"B0AAAAAA{i:02d}" for i in range(5)]
+    targets, report = mine_experience.select_mining_targets(
+        limit=2, base=base, ledger={}, now=_NOW, **_pool(tmp_path, asins))
+    assert len(targets) == 2
+    assert report["limit"] == 2
+    assert report["backlog_remaining"] == 3  # 5 件が未処理・うち2件だけ今回選ばれた
+
+
 def test_crawl_uses_the_same_selection_as_mining():
     """原文を取る ASIN と掘る ASIN がずれると、掘る側で Yahoo 候補が 0 件になる。"""
     src = pathlib.Path("scripts/crawl_yahoo_reviews.py").read_text(encoding="utf-8")
