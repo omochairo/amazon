@@ -576,3 +576,27 @@ def test_exit_code_nonzero_when_error_rate_exceeds_threshold():
 def test_exit_code_zero_when_nothing_attempted():
     # 全件 skip_recent/skip_no_adapter/dry_run で、判定材料が無い。
     assert fh._exit_code_for_counts({"found": 0, "not_found": 0, "error": 0}) == 0
+
+
+# --- UrllibSession (lego.com は requests を 403 で弾く。2026-09-22 実測) -------
+
+def test_urllib_session_maps_http_error_to_status(monkeypatch):
+    import urllib.error
+
+    def _raise(req, timeout):
+        raise urllib.error.HTTPError(req.full_url, 404, "Not Found", {}, None)
+
+    monkeypatch.setattr(fh.urllib.request, "urlopen", _raise)
+    resp = fh.UrllibSession("UA").get("https://www.lego.com/ja-jp/service/building-instructions/1")
+    assert resp.status_code == 404 and resp.text == ""
+
+
+def test_urllib_session_network_error_becomes_request_exception(monkeypatch):
+    import urllib.error
+
+    def _raise(req, timeout):
+        raise urllib.error.URLError("down")
+
+    monkeypatch.setattr(fh.urllib.request, "urlopen", _raise)
+    with pytest.raises(fh.requests.RequestException):
+        fh.UrllibSession("UA").get("https://www.lego.com/")

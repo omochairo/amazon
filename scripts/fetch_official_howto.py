@@ -58,6 +58,8 @@ import pathlib
 import re
 import sys
 import time
+import urllib.error
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -388,6 +390,36 @@ def extract_lego_set_numbers(name: str) -> list[str]:
     return list(reversed(candidates))
 
 
+class _UrllibResponse:
+    def __init__(self, status_code: int, text: str) -> None:
+        self.status_code = status_code
+        self.text = text
+
+
+class UrllibSession:
+    """``requests.Session`` の ``get`` と同じ形で urllib を使う最小の代替。
+
+    lego.com は Python ``requests`` からの接続を UA やヘッダに関係なく 403 で
+    弾く (2026-09-22 実測: requests は 403、同じ UA の curl / urllib は 200)。
+    TLS / 接続層の特徴で判定されているとみられ、ヘッダ調整では回避できなかった。
+    レゴのアダプタだけこれを使う (テストは従来どおり偽 session を渡せる)。
+    """
+
+    def __init__(self, user_agent: str) -> None:
+        self.user_agent = user_agent
+
+    def get(self, url: str, timeout: float = REQUEST_TIMEOUT) -> _UrllibResponse:
+        req = urllib.request.Request(url, headers={"User-Agent": self.user_agent})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                body = r.read().decode("utf-8", errors="replace")
+                return _UrllibResponse(r.status, body)
+        except urllib.error.HTTPError as e:
+            return _UrllibResponse(e.code, "")
+        except (urllib.error.URLError, OSError) as e:
+            raise requests.RequestException(str(e)) from e
+
+
 def fetch_lego_howto(
     name: str, session: requests.Session, limiter: HostRateLimiter,
 ) -> Optional[dict[str, Any]]:
@@ -602,8 +634,12 @@ def process_asin(
     recheck_days: int = RECHECK_DAYS,
     now: Optional[datetime] = None,
     dry_run: bool = False,
+    lego_session: Any = None,
 ) -> dict[str, Any]:
-    """1 ASIN 分の判定・取得・書き込みを行い、サマリ dict を返す (テスト容易化)。"""
+    """1 ASIN 分の判定・取得・書き込みを行い、サマリ dict を返す (テスト容易化)。
+
+    ``lego_session`` を渡さなければ ``session`` を使う (UrllibSession の理由は同クラス参照)。
+    """
     now = now or datetime.now(timezone.utc)
     existing = official_howto.load(asin, per_asin_root)
     if not _is_stale(existing, recheck_days, now):
@@ -620,7 +656,7 @@ def process_asin(
         if adapter == "bandai":
             found = fetch_bandai_howto(product.get("jan", ""), session, limiter)
         elif adapter == "lego":
-            found = fetch_lego_howto(product.get("name", ""), session, limiter)
+            found = fetch_lego_howto(product.get("name", ""), lego_session or session, limiter)
         elif adapter == "tamagotchi":
             found = fetch_tamagotchi_howto(product, config, session, limiter)
         else:  # pragma: no cover - route_adapter が保証する
@@ -661,6 +697,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     session = requests.Session()
     session.headers.update({"User-Agent": USER_AGENT})
+    lego_session = UrllibSession(USER_AGENT)
     limiter = HostRateLimiter()
 
     counts = {"found": 0, "not_found": 0, "skip_recent": 0, "skip_no_adapter": 0, "dry_run": 0, "error": 0}
@@ -669,6 +706,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         result = process_asin(
             asin, product, config, session, limiter, args.per_asin_root,
             recheck_days=args.recheck_days, dry_run=args.dry_run,
+            lego_session=lego_session,
         )
         counts[result["action"]] = counts.get(result["action"], 0) + 1
         suffix = f" ({result['adapter']})" if "adapter" in result else ""
