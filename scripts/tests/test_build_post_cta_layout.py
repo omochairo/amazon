@@ -48,6 +48,25 @@ class LoadQueryIntentMapTests(unittest.TestCase):
             "/ranking/": "commercial",
         })
 
+    def test_carried_forward_rows_still_apply(self):
+        """ledger の持ち越し分 (brain#47) も cta_layout に反映されること。
+
+        detect_query_intent 側で欠測を据え置くようにした意味が、
+        読み手側で carried_forward を弾いて消えないように固定する。
+        """
+        payload = {
+            "detected": [
+                {"page": "https://navi.omcha.jp/products/b010cqeucu/",
+                 "dominant_intent": "informational",
+                 "carried_forward": True, "weeks_since_confirmed": 3},
+            ]
+        }
+        with tempfile.TemporaryDirectory() as d:
+            p = pathlib.Path(d) / "query_intent.json"
+            p.write_text(json.dumps(payload), encoding="utf-8")
+            result = _load_query_intent_map(p)
+        self.assertEqual(result, {"/products/b010cqeucu/": "informational"})
+
     def test_navigational_is_dropped(self):
         # navigational has no CTA treatment in build_post; must not leak through.
         payload = {"detected": [
