@@ -3,8 +3,11 @@
 この検出器は 2026-09-20 (amazon-navi-brain#56) まで unit test を持っていなかった。
 同日 min_pv=50→5 への引き下げを一度提案したが、レビューで「GA4/GSC の乖離が
 未確認」「min_pv=5 では entrance_ratio が二値に縮退する」「既知の真陽性を
-確認していない」と指摘され保留になった (detect_orphan_pages.py のコメント参照)。
-閾値は現行の 50 のまま、**較正が入ったら気づける形**だけ先に整備しておく。
+確認していない」と指摘され保留になった。#57 でその乖離の原因 (Lighthouse
+レーンの自己ヒットによる GA4 PV 水増し) が判明した後に再検証したが、粒度を
+保てる範囲では下げても検出が増えず、唯一の既知真陽性も同じ Lighthouse 汚染の
+産物と判明して使えなくなったため、min_pv=50 据え置きが確定した (2026-09-21、
+detect_orphan_pages.py のコメント参照)。
 """
 from __future__ import annotations
 
@@ -67,12 +70,13 @@ def test_missing_entrances_is_skipped_not_zero():
     assert result["detected"] == []
 
 
-# --- 既定値が動いたら気づけるようにしておく (#56 のレビューで保留中) ------
+# --- 既定値が動いたら気づけるようにしておく (#56/#57 で 50 据え置き確定) ---
 
 def test_default_min_pv_is_still_the_pre_56_value():
-    # #56 で 50→5 を提案したがレビューで保留 (detect_orphan_pages.py のコメント
-    # 参照)。下げるなら GA4/GSC 乖離の解消 + entrance_ratio の丸め粒度 + 既知の
-    # 真陽性確認の 3 点を先にやってからにすること。
+    # #56 で 50→5 を提案したがレビューで保留、#57 の乖離解消後に再検証しても
+    # 50 据え置きが確定した (detect_orphan_pages.py のコメント参照)。次に
+    # 下げるのは navi のトラフィックが回復し、粒度が保てる PV>=20 で
+    # eligible が非ゼロの週が実際に出るようになってから。
     assert DEFAULT_MIN_PV == 50
     assert DEFAULT_MIN_ENTRANCE_RATIO == 0.90
 
