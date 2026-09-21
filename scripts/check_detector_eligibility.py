@@ -42,14 +42,40 @@ amazon-navi-brain#56 (2026-09-20) での再訪:
       既定値を #56 で再較正した
     - A-5 (orphan_pages) … 同じ型に見えたが、#56 のレビューで「前提の GA4 PV
       急落を GSC 側が裏付けていない」「min_pv を下げると entrance_ratio が
-      二値に縮退する」と指摘され、**閾値の変更は保留**にした
-      (detect_orphan_pages.py のコメント参照)。eligible=0 の警告は当面
-      鳴り続ける想定で、鳴ってもここでは「較正すべき」の合図として扱わない
+      二値に縮退する」と指摘され、閾値の変更は一旦保留にした
+      (detect_orphan_pages.py のコメント参照)
     - A-4 … #18 で「下げてもゲートが選別しなくなる」と診断済みで、据え置く
       と決めた検出器だった。据え置いた以上 eligible=0 は定常的に鳴り続ける
       構造で、鳴らし続けても閾値側の合図にならない (#18 の最終コメントで
       「eligible==0 warning の対象から外す」と決めていたが、実装が漏れていた)。
       NO_ELIGIBILITY_WARNING で恒久的に対象から外す。
+
+  amazon-navi-brain#57 (2026-09-21) での再訪:
+    #56 で保留にした A-5 の前提 (GA4 PV 急落) の原因が #57 で判明した:
+    Lighthouse レーンの代表 11 URL への自己ヒットが navi の GA4 PV を
+    60〜70% 水増ししていて、2026-09-02 の除外ガード修正が配信キャッシュの
+    入れ替わりで 09-04 から反映され、水増しが消えたのが「急落」の正体
+    だった (GSC が動じなかったのは元々クロールベースでこの水増しを
+    数えていなかったため)。
+
+    この解消を受けて #56 保留の残り 2 点 (entrance_ratio の丸め粒度 / 既知の
+    真陽性確認) を post-fix の実データ (2026-09-13 週・2026-09-20 週、
+    どちらも 09-04 以降のみで構成される完全にクリーンな週) で再検証したが、
+    **どちらも解消しなかった**:
+      - 粒度が保たれる PV>=20 (#18 提案の下限) でスイープしても、両週とも
+        eligible=0 のまま。水増し除去後の実トラフィックはさらに小さく、
+        粒度を保つ範囲では下げても検出は 1 件も増えない
+      - 唯一の既知の真陽性 (brain#22, `/products/b0gc4mql8n/`, 観測週
+        08-23〜08-30) が、まさに #57 が特定した Lighthouse 自己ヒット対象
+        11 URL の 1 つだったと判明。entrance_ratio=100% はサイト側の内部
+        リンク不足ではなく Lighthouse の直接ナビゲーションで説明がつき、
+        較正の根拠として使えなくなった
+
+    結論: min_pv は 50 のまま据え置き確定 (detect_orphan_pages.py のコメント
+    参照)。A-5 の eligible=0 は A-4 と同じ「据え置くと決めた以上、構造的に
+    鳴り続ける」型に確定したので、NO_ELIGIBILITY_WARNING に orphan_pages を
+    追加した。次に見直すのは navi のトラフィックが回復し、PV>=20 のスイープで
+    eligible が非ゼロの週が実際に出るようになってから。
 
   再較正した A-3 をいつ「妥当だった」と判断するか:
     次回見直しは jsonl に **4 行 (4 週分) 溜まった時点**
@@ -96,10 +122,14 @@ DETECTORS: tuple[tuple[str, str, str], ...] = (
 
 # A-4 は amazon-navi-brain#18 で「min_pv を下げるとゲートが選別しなくなる」と
 # 確認済みで、閾値を動かさないと決めた検出器 (detect_engagement_drop.py 参照)。
-# 動かさないと決めた以上 eligible==0 は構造的に鳴り続けるので、ここで鳴らしても
-# 「閾値側の合図」として機能しない。恒久的に警告対象から外す (amazon-navi-brain#56)。
-# collect() / history には引き続き記録する (観察はする。鳴らさないだけ)。
-NO_ELIGIBILITY_WARNING: frozenset[str] = frozenset({"engagement_drop"})
+# A-5 は #56 で保留 → #57 (GA4/GSC 乖離の原因) 解消後に再検証したが、粒度を
+# 保てる範囲では下げても検出が増えず、唯一の既知真陽性も無効化されたため
+# 50 のまま据え置き確定 (detect_orphan_pages.py 参照)。
+# どちらも動かさないと決めた以上 eligible==0 は構造的に鳴り続けるので、ここで
+# 鳴らしても「閾値側の合図」として機能しない。恒久的に警告対象から外す
+# (amazon-navi-brain#56)。collect() / history には引き続き記録する
+# (観察はする。鳴らさないだけ)。
+NO_ELIGIBILITY_WARNING: frozenset[str] = frozenset({"engagement_drop", "orphan_pages"})
 
 
 def read_one(path: pathlib.Path, results_key: str) -> dict[str, Any] | None:

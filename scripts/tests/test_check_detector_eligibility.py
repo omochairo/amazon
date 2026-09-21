@@ -53,7 +53,7 @@ def test_same_date_rerun_is_not_its_own_previous():
     assert find_starved(cur, hist, "2026-09-01") == []
 
 
-# --- A-4 は eligible==0 が続いても恒久的に鳴らさない (amazon-navi-brain#56) ---
+# --- A-4 / A-5 は eligible==0 が続いても恒久的に鳴らさない (amazon-navi-brain#56/#57) ---
 
 def test_engagement_drop_is_never_starved_even_when_eligible_zero_twice():
     # #18 で「min_pv を下げるとゲートが選別しなくなる」と確認済みで、
@@ -64,8 +64,18 @@ def test_engagement_drop_is_never_starved_even_when_eligible_zero_twice():
     assert find_starved(cur, hist, "2026-09-08") == []
 
 
-def test_no_eligibility_warning_set_contains_only_engagement_drop():
-    assert NO_ELIGIBILITY_WARNING == frozenset({"engagement_drop"})
+def test_orphan_pages_is_never_starved_even_when_eligible_zero_twice():
+    # #56 で保留 → #57 (GA4/GSC 乖離の原因) 解消後に再検証したが、粒度を
+    # 保てる PV>=20 では検出が増えず、唯一の既知真陽性も Lighthouse 自己
+    # ヒットの産物と判明して無効化されたため、min_pv=50 据え置きが確定した
+    # (detect_orphan_pages.py 参照)。据え置いた以上 A-4 と同じ構造。
+    cur = {"orphan_pages": {"eligible": 0, "detected": 0}}
+    hist = [_row("2026-09-01", orphan_pages={"eligible": 0, "detected": 0})]
+    assert find_starved(cur, hist, "2026-09-08") == []
+
+
+def test_no_eligibility_warning_set_contains_engagement_drop_and_orphan_pages():
+    assert NO_ELIGIBILITY_WARNING == frozenset({"engagement_drop", "orphan_pages"})
 
 
 # --- 母数はあるが detected == 0 は鳴らさない (A-4 の型) --------------------
