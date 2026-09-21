@@ -183,6 +183,17 @@
 
 <!-- Google Analytics (G-D8ZQX1BT20) -->
 <script>
+  /* 以下 2 本のガードは GA4 と Cloudflare Web Analytics (RUM, 末尾の beacon) の
+     両方を止める (#7895)。CF 側は当初ガードが無く、GA4 から消えたラボの自己ヒットが
+     RUM には入り続けていた。
+
+     CF は公式のオプトアウトを持たないので、beacon.min.js の二重読み込み防止を
+     流用する: `window.__cfBeacon.load === 'single'` が既に立っていると、トークンを
+     読む前に return する。GA4 と同じく **beacon の読み込みと実行はそのまま**で、
+     cdn-cgi/rum への送信だけが出ない (2026-09-21 にブラウザで実測: ガード無しは
+     XHR 1 件、ガード有りは 0 件)。ただし beacon 内部の実装に乗っているので、
+     beacon の更新で黙って効かなくなりうる。この script は defer の beacon より
+     先に実行されるので、順序はこのままにすること。 */
   /* ラボ計測 (ローカル Lighthouse レーン) のヒットを GA4 に入れない。
      lane は代表 URL 11 本を mobile/desktop で毎日叩き、run ごとにクリーン
      プロファイルなので GA4 側では全部「新規ユーザー」になる。2026-09-02 に
@@ -199,6 +210,7 @@
      自動化には効くので併記する。 */
   if (/omcha-lab/.test(navigator.userAgent) || navigator.webdriver === true) {
     window['ga-disable-G-D8ZQX1BT20'] = true;
+    window.__cfBeacon = {load: 'single'};
   }
 
   /* 正規ホスト以外での計測を止める。同じビルドが
@@ -216,6 +228,7 @@
      ホスト名は baseURL から取る (config.toml と二重管理しない)。 */
   if (location.hostname !== '{{ (urls.Parse site.BaseURL).Host }}') {
     window['ga-disable-G-D8ZQX1BT20'] = true;
+    window.__cfBeacon = {load: 'single'};
   }
 </script>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-D8ZQX1BT20"></script>
@@ -230,7 +243,9 @@
 {{- /* #3055 E4-B / #3059: Cloudflare Web Analytics (RUM)。LCP/CLS/INP の実測を無料で取得。
        config.toml の params.cloudflareWebAnalyticsToken が未設定なら何も出さない。
        JS スニペット版なのでプロキシ (orange cloud) に依存せず、GitHub Pages への
-       フェイルオーバー時も計測が継続する。 */ -}}
+       フェイルオーバー時も計測が継続する。
+       ラボ/自動化/正規ホスト以外では上の GA4 ブロックが window.__cfBeacon を
+       先に立てて送信を止めている (#7895)。 */ -}}
 {{- with site.Params.cloudflareWebAnalyticsToken }}
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "{{ . }}"}'></script>
 {{- end }}
