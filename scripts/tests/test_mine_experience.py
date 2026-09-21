@@ -1292,6 +1292,20 @@ def test_select_mining_targets_reports_limit_and_backlog_remaining(tmp_path):
     assert report["backlog_remaining"] == 3  # 5 件が未処理・うち2件だけ今回選ばれた
 
 
+def test_backlog_remaining_excludes_explicit_asins(tmp_path):
+    """--asins は eligible の外から来る。残数を負にしたり過小に出したりしない。"""
+    base = tmp_path / "per_asin"
+    asins = [f"B0AAAAAA{i:02d}" for i in range(5)]
+    pool = _pool(tmp_path, asins)
+    _, report = mine_experience.select_mining_targets(
+        limit=20, asins=["B0ZZZZZZ99"], base=base, ledger={}, now=_NOW, **pool)
+    assert report["backlog_remaining"] == 0  # 5 件すべて採用済み。-1 にしない
+
+    _, report = mine_experience.select_mining_targets(
+        limit=3, asins=["B0ZZZZZZ99"], base=base, ledger={}, now=_NOW, **pool)
+    assert report["backlog_remaining"] == 3  # 3 枠のうち 1 枠は explicit、掘れたのは 2 件
+
+
 def test_crawl_uses_the_same_selection_as_mining():
     """原文を取る ASIN と掘る ASIN がずれると、掘る側で Yahoo 候補が 0 件になる。"""
     src = pathlib.Path("scripts/crawl_yahoo_reviews.py").read_text(encoding="utf-8")

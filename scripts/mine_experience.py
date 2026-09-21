@@ -570,7 +570,8 @@ def select_mining_targets(
         "selected": [{"asin": a, "reason": r} for a, r in chosen],
         "ledger_entries": len(ledger),
         "limit": limit,
-        "backlog_remaining": len(eligible) - len(chosen),
+        # explicit は eligible の外から来るので、残数は eligible 由来の採用分だけ引く
+        "backlog_remaining": len(eligible) - sum(1 for _, r in chosen if r != "explicit"),
     }
     return [a for a, _ in chosen], report
 
