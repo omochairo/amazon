@@ -4,9 +4,11 @@ gh は呼ばない (evaluate_pr / filter_candidate_prs / required_checks_satisfi
 has_any_required_check は pure function)。
 """
 import datetime as dt
+import io
 import os
 import sys
 import unittest
+from contextlib import redirect_stdout
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))  # scripts/ を import path に追加
@@ -16,6 +18,7 @@ from recover_pending_pr_checks import (  # noqa: E402
     STAGE2_LABEL,
     Action,
     _parse_commit_date_result,
+    emit_warning_annotation,
     evaluate_pr,
     filter_candidate_prs,
     has_any_required_check,
@@ -152,6 +155,18 @@ class ParseCommitDateResultTests(unittest.TestCase):
     def test_empty_stdout_returns_none(self):
         result = _parse_commit_date_result(0, "", "", "sha123")
         self.assertIsNone(result)
+
+
+class EmitWarningAnnotationTests(unittest.TestCase):
+    """#7892: recovered_by=none を stdout の GitHub Actions annotation にも出す。"""
+
+    def test_writes_workflow_command_to_stdout(self):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            emit_warning_annotation("pr=123 recovered_by=none (close_reopen exhausted)")
+        self.assertEqual(
+            buf.getvalue(), "::warning::pr=123 recovered_by=none (close_reopen exhausted)\n"
+        )
 
 
 class HasStage2LabelTests(unittest.TestCase):

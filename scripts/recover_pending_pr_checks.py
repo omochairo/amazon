@@ -75,6 +75,17 @@ PR_FIELDS = (
 )
 
 
+def emit_warning_annotation(message: str) -> None:
+    """GitHub Actions の ANNOTATIONS 欄に出す workflow command。
+
+    #7892: logger.warning は stderr に出るだけで、run 一覧・run 詳細の
+    ANNOTATIONS 欄には出ない。「close→reopen も尽きて人手が要る」という
+    重要な状態が6時間以上どこにも表示されず見落とされた反省から、この
+    シグナルだけは stdout に `::warning::` として明示的に出す。
+    """
+    print(f"::warning::{message}")
+
+
 @dataclass(frozen=True)
 class Action:
     kind: str  # noop | close_reopen | recovered_close_reopen | recovered_none
@@ -292,9 +303,12 @@ def main() -> int:
             logger.info("pr=%s recovered_by=close_reopen", pr["number"])
             recovered["close_reopen"] += 1
         elif action.kind == "recovered_none":
-            logger.warning(
-                "pr=%s recovered_by=none (close_reopen exhausted; needs human)", pr["number"]
+            message = (
+                f"pr={pr['number']} recovered_by=none "
+                "(close_reopen exhausted; needs human)"
             )
+            logger.warning(message)
+            emit_warning_annotation(message)
             recovered["none"] += 1
         else:
             logger.debug("pr=%s action=noop", pr["number"])
