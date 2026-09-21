@@ -34,6 +34,7 @@ import frontmatter
 import jinja2
 
 import market_prices
+import official_howto
 import price_overlay
 import seo_title
 import stock_status
@@ -3568,6 +3569,7 @@ def main() -> None:
     # 設計判断: avail 文言は price_overlay の価格 index に無いので別途読む)。
     stock_index = stock_status.load_stock_index()
     stock_title_applied = 0
+    howto_faq_dropped = 0
 
     rendered = 0
     skipped_legacy = 0
@@ -3619,6 +3621,14 @@ def main() -> None:
 
             _merge(data, _load_optional_json(src_path / f"{slug}.enrichment.json"), ENRICHMENT_KEYS)
             _merge(data, _load_optional_json(src_path / f"{slug}.seo.json"), SEO_KEYS)
+            # #7957 (#7955 A-4): 公式の手順 (official_howto.json の reviewed steps) が
+            # 無いページでは「遊び方は？」「使い方は？」の FAQ を出さない。Jules の faq と
+            # FAQ サイドカーの faq_extended の両方が「遊び方」を問いに立てて手順ゼロで
+            # 答えていた (B0H4PQ29JS)。JSON-LD (FAQPage) もこの後で同じ faq から作られる。
+            _howto_obj = official_howto.load(_resolve_page_asin(data.get("product"), slug), per_asin_root)
+            for _faq_key in ("faq", "faq_extended"):
+                data[_faq_key], _dropped = official_howto.filter_howto_faq(data.get(_faq_key), _howto_obj)
+                howto_faq_dropped += _dropped
             _backfill_amazon_badges(data, raw_amazon_index, per_asin_root)
             # #4007: 凍結した Amazon 価格を日次観測で上書き (_attach_market_prices の
             # _recompute_best_price より前に置くことで最安バッジまで整合する)。
@@ -3926,6 +3936,7 @@ def main() -> None:
         f"{price_overlay_stats['unpriced_cleared']} 凍結価格を無価格化)"
     )
     print(f"stock_title (#2686): {stock_title_applied} page(s) rendered with 「どこで買える」format")
+    print(f"howto_faq (#7957): {howto_faq_dropped} FAQ item(s) dropped (no reviewed official steps)")
 
 
 if __name__ == "__main__":
