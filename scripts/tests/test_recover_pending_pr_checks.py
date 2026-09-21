@@ -208,6 +208,11 @@ class DeferredUnknownEscalatedMessageTests(unittest.TestCase):
         self.assertIn("pr=123", message)
         self.assertIn("UNKNOWN", message)
 
+    def test_reports_minutes_since_push_without_claiming_stuck(self):
+        message = deferred_unknown_escalated_message(123, 187)
+        self.assertIn("187 min", message)
+        self.assertNotIn("stuck", message)
+
 
 class HasStage2LabelTests(unittest.TestCase):
 

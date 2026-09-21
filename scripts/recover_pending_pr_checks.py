@@ -85,8 +85,17 @@ close→reopen 済み (`stage2_done`) の dirty PR は `evaluate_pr` の分岐�
 
 `dirty` を検出した run で `close_reopened == 0` のときに出ていた
 `"no recovery action needed this run"` は summary の `dirty=%d` と矛盾する
-(dirty も `deferred_unknown` の `escalate` も何らかの `::warning::` を伴う
-異常系なので、それらが 0 件のときだけ「何も要らなかった」と言うべき)。
+(`recovered_none` も dirty も `deferred_unknown` の `escalate` も何らかの
+`::warning::` を伴う異常系なので、それらが 0 件のときだけ「何も要らなかった」
+と言うべき)。
+
+escalate の閾値は「UNKNOWN が続いた時間」ではなく「push からの経過」で測る
+(run をまたぐ状態を持たないため)。cron は `*/15` だが、実際の起動間隔は
+GitHub 側の間引きで 2〜5 時間空く (2026-09-17〜21 の run 一覧で実測)。
+したがって push から 30 分以上経った PR は、UNKNOWN を初めて観測した run で
+即 escalate しうる。main が頻繁に動くこのリポジトリでは dirty PR の
+`mergeable` が main の更新ごとに UNKNOWN に戻るので、escalate の警告文は
+「詰まっている」と断定せず、観測事実 (push から何分で UNKNOWN) だけを書く。
 """
 from __future__ import annotations
 
@@ -110,7 +119,9 @@ DEFAULT_PUSH_THRESHOLD_MINUTES = 5
 
 # push_threshold_minutes の何倍、経過してなお mergeable=UNKNOWN のままなら
 # 「GitHub 側の非同期計算が異常に長引いている」とみなして ::warning:: に
-# 格上げするか (#7919)。6 倍 = デフォルト設定で 30 分 (cron `*/15` の 2 サイクル分)。
+# 格上げするか (#7919)。6 倍 = デフォルト設定で 30 分。cron は `*/15` だが実際の
+# 起動間隔は 2〜5 時間空くので「2 サイクル分 UNKNOWN が続いた」の意味にはならない
+# (モジュール docstring 参照)。
 UNKNOWN_ESCALATE_MULTIPLIER = 6
 
 PR_FIELDS = (
@@ -160,11 +171,15 @@ def dirty_message(pr_number: int) -> str:
     )
 
 
-def deferred_unknown_escalated_message(pr_number: int) -> str:
+def deferred_unknown_escalated_message(pr_number: int,
+                                       minutes_since_push: Optional[int] = None) -> str:
+    # 「詰まっている」と断定しない: 観測は 1 run 分だけで、main の更新直後なら
+    # dirty PR も一時的に UNKNOWN に戻る (モジュール docstring 参照)。
+    age = f"{minutes_since_push} min" if minutes_since_push is not None else "well past threshold"
     return (
         f"pr={pr_number} action=deferred_unknown "
-        "(mergeable has stayed UNKNOWN well past the push threshold; "
-        "GitHub may still be computing it, but this has gone on long enough to look stuck)"
+        f"(no required checks and mergeable=UNKNOWN {age} after push; "
+        "GitHub may still be computing it, will re-evaluate next run)"
     )
 
 
@@ -422,7 +437,9 @@ def main() -> int:
         elif action.kind == "deferred_unknown":
             logger.info("pr=%s action=deferred_unknown head=%s", pr["number"], head_sha)
             if action.escalate:
-                message = deferred_unknown_escalated_message(pr["number"])
+                minutes = (int((now - push_time).total_seconds() // 60)
+                           if push_time is not None else None)
+                message = deferred_unknown_escalated_message(pr["number"], minutes)
                 logger.warning(message)
                 emit_warning_annotation(message)
                 deferred_unknown_escalated += 1
@@ -436,11 +453,13 @@ def main() -> int:
         len(prs), close_reopened,
         recovered["close_reopen"], recovered["none"], dirty, deferred_unknown,
     )
-    # dirty と deferred_unknown(escalate 済み) はどちらも ::warning:: を伴う
-    # 異常系なので、close_reopened と併せてこの 3 つが全て 0 のときだけ
-    # 「何もしなかった」と言ってよい (#7919: dirty>0 でもこの行が出て summary
-    # と矛盾していた)。
-    if close_reopened == 0 and dirty == 0 and deferred_unknown_escalated == 0:
+    # recovered_none / dirty / deferred_unknown(escalate 済み) はどれも
+    # ::warning:: を伴う異常系なので、close_reopened と併せてこの 4 つが全て 0 の
+    # ときだけ「何もしなかった」と言ってよい (#7919: dirty>0 でもこの行が出て
+    # summary と矛盾していた。recovered_none>0 でも同じ矛盾が 2026-09-20 の
+    # run 35536800101 / 35543469464 で実際に出ていた)。
+    if (close_reopened == 0 and recovered["none"] == 0 and dirty == 0
+            and deferred_unknown_escalated == 0):
         logger.info("no recovery action needed this run")
 
     return 0
