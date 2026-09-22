@@ -185,6 +185,39 @@
       "author": "購入者レビュー",
       "conflict_of_interest": "none",
       "notes": "「静音性」と「コスパ」が評価されている。マンションでの利用に安心という声が多い。"
+    },
+    {
+      "id": "src-3",
+      "name": "室内トランポリンの選び方 (一般論)",
+      "url": "https://sakidori.co/article/1179402",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-09-22",
+      "author": "第三者ライター",
+      "conflict_of_interest": "none",
+      "notes": "クッション型はスプリングを使わないため静音性が高く、マンションでの使用に適している。"
+    },
+    {
+      "id": "src-4",
+      "name": "クッショントランポリンの効果 (一般論)",
+      "url": "https://www.tokyo-sports.co.jp/articles/-/266395",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-09-22",
+      "author": "第三者ライター",
+      "conflict_of_interest": "none",
+      "notes": "クッション型は出しっぱなしにでき、手軽に運動不足解消や体幹トレーニングを行えるメリットがある。"
+    },
+    {
+      "id": "src-5",
+      "name": "Homwarm Yahoo!ショッピング検索結果",
+      "url": "https://shopping.yahoo.co.jp/search?p=Homwarm+%E3%83%88%E3%83%A9%E3%83%B3%E3%83%9D%E3%83%AA%E3%83%B3",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-09-22",
+      "author": "Yahooショッピング",
+      "conflict_of_interest": "none",
+      "notes": "Homwarm製トランポリンの取り扱いが確認できる。"
     }
   ],
   "claims": [
@@ -194,10 +227,21 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-1",
-        "src-2"
+        "src-3"
       ],
       "cross_checked": true,
-      "notes": "メーカー公式仕様と購入者レビュー傾向で一致"
+      "notes": "メーカー公式仕様とクッション型トランポリン全般の静音特性から裏付けられる"
+    },
+    {
+      "claim": "クッション型であるため、使わない時もインテリアに馴染み収納の手間が省ける",
+      "category": "durability",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-1",
+        "src-4"
+      ],
+      "cross_checked": true,
+      "notes": "メーカー公式の省スペース設計と一般カテゴリ情報で一致"
     },
     {
       "claim": "耐荷重約200kgであり、大人のエクササイズにも対応する",
@@ -239,21 +283,22 @@
     "summary_one_line": "高い静音性と大人が使える反発力が、マンション住まいのご家庭を中心に高く評価されています。",
     "high_points": [
       {
-        "text": "階下への騒音を気にせず子供を遊ばせられる静音性の高さ",
+        "text": "クッション型の特性による、階下への騒音を気にせず遊べる静音性",
         "supporting_source_ids": [
-          "src-2"
+          "src-3"
         ]
       },
       {
         "text": "出しっぱなしにできるインテリアに馴染むデザイン",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-4"
         ]
       },
       {
-        "text": "家族全員でエクササイズに活用できるコスパの良さ",
+        "text": "大人でもジャンプ運動に活用できる耐荷重",
         "supporting_source_ids": [
-          "src-2"
+          "src-1"
         ]
       }
     ],
@@ -261,21 +306,21 @@
       {
         "text": "本格的なスプリング式ほどの跳ねる感覚はない",
         "supporting_source_ids": [
-          "src-2"
+          "src-3"
         ]
       },
       {
-        "text": "ジャンプ面が狭いため、子供が飛び出さないよう注意が必要",
+        "text": "ジャンプ面が限られているため、転落に注意が必要",
         "supporting_source_ids": [
-          "src-2"
+          "src-1"
         ]
       }
     ],
     "use_scenes": [
       {
-        "text": "雨の日や休日の子供のエネルギー発散",
+        "text": "雨の日や休日の手軽な室内運動",
         "supporting_source_ids": [
-          "src-2"
+          "src-4"
         ]
       },
       {
@@ -285,18 +330,18 @@
         ]
       },
       {
-        "text": "運動不足が気になる大人の手軽な室内ジャンプ",
+        "text": "運動不足が気になる大人の室内ジャンプ",
         "supporting_source_ids": [
-          "src-2"
+          "src-4"
         ]
       }
     ],
     "segment_voices": [
       {
-        "segment_label": "マンションにお住まいの子育て家庭",
-        "summary": "重低音が響かない点に感動する声が多く、騒音トラブルを避けつつ室内遊びを充実させられると好評です。",
+        "segment_label": "マンションにお住まいのご家庭",
+        "summary": "重低音が響きにくい構造により、騒音トラブルを避けつつ室内遊びを充実させられると期待されます。",
         "supporting_source_ids": [
-          "src-2"
+          "src-3"
         ]
       }
     ]
