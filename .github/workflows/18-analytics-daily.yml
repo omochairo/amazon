@@ -65,7 +65,10 @@ jobs:
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          pip install google-analytics-data google-auth google-auth-oauthlib google-api-python-client pyyaml
+          # #7954: build_post.py (article-format log step, below) needs the full
+          # production dependency set (jinja2 / python-frontmatter / etc.), which
+          # is a superset of the GA4/GSC-only list this step used to install.
+          pip install -r requirements.txt
 
       - name: Fetch GA4 (1-day window)
         id: ga4
@@ -104,7 +107,13 @@ jobs:
             echo "::error::required secret not set — GSC_OAUTH_REFRESH_TOKEN / GSC_SITE_URL"
             exit 1
           fi
-          python scripts/fetch_gsc.py --days 1
+          # #7954: 上限 100 (TOP_PAGE_DEFAULT) で日次 by_page が切れており、
+          # impression が少ないページ (新しい記事のほとんど) は「0」と「上位
+          # 100 に入らなかった」の区別がつかなかった。navi の実ページ数
+          # (商品ページ ~2,650 + noindex を除いた tag/brand hub 数百) に対して
+          # 十分な余裕を持たせる。fetch_gsc.py 自体の default (他の呼び出し元
+          # が使う) は変えず、この呼び出しだけ引き上げる。
+          python scripts/fetch_gsc.py --days 1 --top-page 5000
           rc=$?
           if [ $rc -ne 0 ]; then
             echo "::warning::GSC fetch failed (rc=$rc)"
@@ -112,6 +121,34 @@ jobs:
             exit 0
           fi
           echo "available=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build posts (article-format log, #7954)
+        id: format_log
+        run: |
+          set +e
+          # #7954: gsc_by_page.jsonl だけでは「そのページがその日どの記事型
+          # (stock/legacy) だったか」が分からない。build_post.py の本番ビルドと
+          # 同じロジック (stock_title_override / official_howto 判定) で
+          # 記事型を決めさせ、data/analytics/history/article_format.jsonl に
+          # 遷移ログとして残す。
+          #
+          # 配信ビルド (.gitlab-ci.yml の pages job) はここに commit-back の
+          # 仕組みが無い (GitLab は GitHub からの一方向ミラー先で、GitLab CI
+          # から GitHub へ push し返す経路が無い) ため、日次で commit-back
+          # 機構を既に持つこの workflow で「軽量モード」ではなく**同じ
+          # build_post.py をフル実行**して書く。フル実行を選んだ理由:
+          # stock_title_override / official_howto の判定は price_watch /
+          # stock_index / official_howto.json 読み込みを伴う一連の処理の
+          # 副産物であり、それだけを取り出す「軽量版」を別実装すると配信
+          # ビルドが実際に適用した値と食い違うリスクがある。1 日 1 回・
+          # 数分のコストで正しさを優先する。
+          mkdir -p hugo/content/posts
+          python scripts/build_post.py --format-log data/analytics/history/article_format.jsonl
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            echo "::warning::build_post (article-format log, #7954) failed (rc=$rc) — continuing without it"
+          fi
+          exit 0
 
       - name: Append to history JSONL
         if: steps.ga4.outputs.available == 'true' || steps.gsc.outputs.available == 'true'
@@ -132,7 +169,11 @@ jobs:
           python scripts/append_analytics_history.py $GA4_ARG $GSC_ARG
 
       - name: Create history update PR + auto-merge
-        if: steps.ga4.outputs.available == 'true' || steps.gsc.outputs.available == 'true'
+        # #7954: article_format.jsonl は GA4/GSC の available フラグと独立に
+        # 更新されうるため、always() にして常に評価する。中身の要否判定は
+        # 下の `git diff --cached --quiet` に任せる (変更が無ければ no-op で
+        # 抜ける、既存の分岐と同じ安全弁)。
+        if: always()
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |

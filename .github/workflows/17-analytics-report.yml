@@ -135,7 +135,16 @@ jobs:
             echo "::error::required secret not set — GSC_OAUTH_REFRESH_TOKEN / GSC_SITE_URL"
             exit 1
           fi
-          python scripts/fetch_gsc.py --days "$DAYS"
+          # #7954: by_page(100)/by_combo(200) の上限を、日次レーン
+          # (18-analytics-daily.yml) と揃えて引き上げる。この weekly レーンは
+          # data/analytics/gsc_history/<YYYY-Www>.json (commit 済み、週1ファイル)
+          # に by_combo (query×page) まで含めて丸ごと保存するため、by_page を
+          # 上げると by_combo も比例して増える想定。現状 1 週間分で by_page=100
+          # (上限に張り付き) / by_combo=171 (171<200 で非切り詰め) / 約75KB。
+          # by_page を実ページ数超の 5000 にしても、by_combo は「実際に impression
+          # のあった query×page の組」なので不当に爆発はしない (by_page 件数への
+          # 比例が今の実測比 171/100 ≈ 1.7 倍程度と見て、上限 5000 は十分な余裕)。
+          python scripts/fetch_gsc.py --days "$DAYS" --top-page 5000 --top-combo 5000
           rc=$?
           if [ $rc -ne 0 ]; then
             echo "::warning::GSC fetch failed (rc=$rc) — continuing with GA4-only report"
