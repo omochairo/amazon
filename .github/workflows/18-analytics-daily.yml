@@ -172,8 +172,9 @@ jobs:
         # #7954: article_format.jsonl は GA4/GSC の available フラグと独立に
         # 更新されうるため、always() にして常に評価する。中身の要否判定は
         # 下の `git diff --cached --quiet` に任せる (変更が無ければ no-op で
-        # 抜ける、既存の分岐と同じ安全弁)。
-        if: always()
+        # 抜ける、既存の分岐と同じ安全弁)。App token が取れていないときは
+        # 走らせない (レビュー指摘: always() 単独だと token 生成失敗でも実行される)。
+        if: always() && steps.app-token.outcome == 'success'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
