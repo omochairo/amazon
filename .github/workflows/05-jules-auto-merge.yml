@@ -41,6 +41,18 @@ jobs:
           changed=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA")
           echo "Changed files:"
           echo "$changed"
+          # 2026-09-22 (#8033): "戻す" 系の自動修復 (下記 restorable) が使う復元元。
+          # $BASE_SHA そのものではなく merge-base を使う必要がある —— $BASE_SHA は
+          # synchronize イベントごとに「その時点の main 先端」に更新される (branch
+          # 分岐点の固定値ではない)。日次 cron が同じファイルを動かし続けるため、
+          # 復元直後の次の run では $BASE_SHA がさらに main 側で進んでおり、
+          # 「その時点の $BASE_SHA」で戻すと今度はそのバージョンと新しい merge-base
+          # 診断がまた食い違い、直しても直し続ける無限ループになりうる。triple-dot
+          # 診断自体は merge-base(BASE, HEAD) を内部で使って固定される (このブランチ
+          # が分岐したコミットは動かない) ので、復元先も同じ merge-base に合わせて
+          # おけば以後の run で恒久的に一致する。
+          merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          echo "merge_base=$merge_base" >> "$GITHUB_OUTPUT"
           # Eligibility: PR must add/modify at least one of
           #   (a) data/articles/YYYY-MM-DD-B0XXXXXXXX.json (Jules article PR)
           #   (b) hugo/content/brands/*/_index.md          (brand narrative PR, e.g. PR #1355)
@@ -68,11 +80,23 @@ jobs:
             # そのたびに auto-merge が黙って止まる。スコープ外が「この PR が新規追加
             # しただけのファイル」なら、消しても失われる作業は無いので機械的に外す。
             #
+            # 2026-09-22 (#8033): スコープ外がAGENTS.md §1で明示的に読み取り専用と
+            # されている data/raw/ 配下の既存ファイルの変更・削除の場合も、機械的に
+            # base の内容へ戻して外す。PR #7950 で Jules が data/raw/rakuten_matched.json
+            # / data/raw/yahoo_matched.json (照合結果キャッシュ、フェッチャー専用領域)
+            # を丸ごと書き換えて auto-merge-skipped のまま24時間超放置される事故が
+            # 実際に発生した。この2ファイルは日次 cron が所有し、記事生成からは常に
+            # 読み取り専用のはずなので、「base の内容に戻す」のは常に安全 (base に
+            # 元々あった値へ戻すだけで、この PR 由来の変更を捨てる以外の副作用が無い)。
+            # data/raw/per_asin/ は既に許可パスなのでここには来ない。
+            #
             # 自動修復しない条件 (従来どおりラベルを付けて人間に回す):
             #   - 記事 JSON / ブランド narrative の追加が無い     … そもそも記事レーンでない
-            #   - スコープ外に既存ファイルの変更・削除が混ざる     … 消すと作業が失われる
             #   - スコープ外に .github/ 配下が含まれる            … ワークフロー自体の
             #     書き換えを機械的に扱わない (安全側に倒す)
+            #   - スコープ外に「新規追加」でも「data/raw/ 配下の既存ファイル変更」でも
+            #     ない変更が残る                                  … 消す/戻すと作業が
+            #     失われる可能性があるファイル種別 (scripts/ 等)
             added_all=$(git diff --name-only --diff-filter=A "$BASE_SHA"..."$HEAD_SHA" || true)
             printf '%s\n' "$out_of_scope" | sed '/^$/d' | sort -u > /tmp/oos.txt
             printf '%s\n' "$added_all"    | sed '/^$/d' | sort -u > /tmp/added.txt
@@ -86,11 +110,21 @@ jobs:
               repairable=false
             fi
             not_added=$(comm -23 /tmp/oos.txt /tmp/added.txt)
-            if [ -n "$not_added" ]; then
-              echo "not repairable: out-of-scope files are not all newly added:"
-              echo "$not_added"
+            printf '%s\n' "$not_added" | sed '/^$/d' > /tmp/not_added.txt
+            # not_added のうち data/raw/ 配下 (per_asin 以外。per_asin は既に許可パス
+            # なのでここに来ない) は base へ戻せば安全に外せる。それ以外が残るなら
+            # 従来どおり repairable=false。
+            restorable=$(grep -E '^data/raw/' /tmp/not_added.txt || true)
+            not_restorable=$(grep -v -E '^data/raw/' /tmp/not_added.txt || true)
+            printf '%s\n' "$restorable" | sed '/^$/d' | sort -u > /tmp/restorable.txt
+            if [ -n "$not_restorable" ]; then
+              echo "not repairable: out-of-scope changes remain that are neither newly-added nor a data/raw/ modification:"
+              echo "$not_restorable"
               repairable=false
             fi
+            echo "restore<<EOF" >> "$GITHUB_OUTPUT"
+            cat /tmp/restorable.txt >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
             echo "repairable=$repairable" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -111,18 +145,22 @@ jobs:
 
       # 2026-08-14 (#5165): スコープ外が「この PR が新規追加しただけのファイル」なら
       # 機械的に取り除いて記事 PR 単体に戻す。可否判定は scope ステップ側。
+      # 2026-09-22 (#8033): スコープ外が「data/raw/ 配下の既存ファイル変更」の場合は
+      # base の内容へ機械的に戻す (削除ではなく復元。詳細は scope ステップのコメント)。
       #
       # 修復後に auto-merge を有効化するのは同じ run の後続ステップ (下の
       # `steps.repair.outputs.repaired == 'true'` 条件)。GITHUB_TOKEN による push は
       # workflow を再トリガしないため (このファイル下部に既出の GHA cascade 制約)、
       # push 後に「もう一度 05 が走って有効化してくれる」ことを当てにできない。
-      - name: Auto-remove stray files added by the agent
+      - name: Auto-repair stray/protected-file changes made by the agent
         id: repair
         if: steps.scope.outputs.repairable == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          MERGE_BASE_SHA: ${{ steps.scope.outputs.merge_base }}
           OUT_OF_SCOPE: ${{ steps.scope.outputs.out_of_scope }}
+          RESTORE: ${{ steps.scope.outputs.restore }}
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
           set -e
@@ -135,17 +173,30 @@ jobs:
           # 結果が FETCH_HEAD にしか入らず、origin/<branch> は "unknown revision" になる。
           git fetch origin "+refs/heads/${HEAD_REF}:refs/remotes/origin/${HEAD_REF}"
           git checkout -B "$HEAD_REF" "refs/remotes/origin/${HEAD_REF}"
-          printf '%s\n' "$OUT_OF_SCOPE" | sed '/^$/d' > /tmp/strays.txt
-          echo "Removing:"
-          cat /tmp/strays.txt
-          xargs -a /tmp/strays.txt -d '\n' git rm -q --
+
+          printf '%s\n' "$RESTORE" | sed '/^$/d' > /tmp/restore.txt
+          comm -23 \
+            <(printf '%s\n' "$OUT_OF_SCOPE" | sed '/^$/d' | sort -u) \
+            <(sort -u /tmp/restore.txt) > /tmp/strays.txt
+
+          if [ -s /tmp/strays.txt ]; then
+            echo "Removing (newly added, out of scope):"
+            cat /tmp/strays.txt
+            xargs -a /tmp/strays.txt -d '\n' git rm -q --
+          fi
+          if [ -s /tmp/restore.txt ]; then
+            echo "Restoring to merge-base (protected data/raw/ files modified out of scope):"
+            cat /tmp/restore.txt
+            xargs -a /tmp/restore.txt -d '\n' git checkout "$MERGE_BASE_SHA" --
+          fi
+
           git commit -q \
-            -m "chore: エージェントが残した作業用ファイルを削除 (#5165)" \
-            -m "$(cat /tmp/strays.txt)"
+            -m "chore: エージェントのスコープ外変更を自動修復 (#5165, #8033)" \
+            -m "$(printf 'removed (stray, newly added):\n%s\n\nrestored to base (protected data/raw/):\n%s\n' "$(cat /tmp/strays.txt)" "$(cat /tmp/restore.txt)")"
           git push origin "HEAD:$HEAD_REF"
           echo "repaired=true" >> "$GITHUB_OUTPUT"
-          # 何を消したかを PR 上に残す (失敗しても auto-merge は続行させる)。
-          gh pr comment "$PR_URL" --body "$(printf 'auto-merge のスコープ外だった以下のファイルを自動で取り除きました (#5165)。いずれもこの PR が新規追加しただけのファイルなので、失われた作業はありません。\n\n```\n%s\n```\n' "$(cat /tmp/strays.txt)")" \
+          # 何をしたかを PR 上に残す (失敗しても auto-merge は続行させる)。
+          gh pr comment "$PR_URL" --body "$(printf 'auto-merge のスコープ外だった変更を自動修復しました。\n\n新規追加だったファイルを削除 (#5165):\n```\n%s\n```\n\n読み取り専用の data/raw/ 配下ファイルを base の内容へ復元 (#8033):\n```\n%s\n```\n' "$(cat /tmp/strays.txt)" "$(cat /tmp/restore.txt)")" \
             || echo "::warning::could not comment on $PR_URL"
 
       # 2026-08-04 (#4469): スコープガード自体は正しい (任意のファイルを触る PR を

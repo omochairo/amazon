@@ -56,14 +56,37 @@ class JulesAutoMergeScopeTests(unittest.TestCase):
     def setUpClass(cls):
         cls.script = _load_scope_script()
 
+    @staticmethod
+    def _parse_github_output(out_path: str) -> dict[str, str]:
+        """`$GITHUB_OUTPUT` を単純な key=value と key<<EOF ヒアドキュメントの両方に対応して読む。"""
+        outputs: dict[str, str] = {}
+        lines = open(out_path, encoding="utf-8").read().splitlines()
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            if "<<" in line:
+                key, _, delim = line.partition("<<")
+                i += 1
+                body: list[str] = []
+                while i < len(lines) and lines[i] != delim:
+                    body.append(lines[i])
+                    i += 1
+                outputs[key] = "\n".join(body)
+            elif "=" in line:
+                key, _, value = line.partition("=")
+                outputs[key] = value
+            i += 1
+        return outputs
+
     def _run(self, mutate_cmd: str) -> dict[str, str]:
         """base コミットに mutate_cmd の変更を積み、scope スクリプトの出力を返す。"""
         tmp = tempfile.mkdtemp()
         try:
             setup = (
                 "git init -q . && git config user.email t@example.com && git config user.name t "
-                "&& mkdir -p data/articles scripts .github/workflows "
+                "&& mkdir -p data/articles data/raw scripts .github/workflows "
                 "&& echo base > README.md && echo x > scripts/existing.py "
+                "&& echo '{\"items\": []}' > data/raw/rakuten_matched.json "
                 "&& git add -A && git commit -qm base"
             )
             subprocess.run([BASH, "-lc", setup], cwd=tmp, capture_output=True, text=True, check=True)
@@ -87,13 +110,7 @@ class JulesAutoMergeScopeTests(unittest.TestCase):
             self.assertEqual(proc.returncode, 0,
                              f"scope スクリプトが異常終了した\n{proc.stdout}\n{proc.stderr}")
 
-            outputs: dict[str, str] = {}
-            for line in open(out_path, encoding="utf-8"):
-                if "=" in line and "<<" not in line:
-                    key, _, value = line.strip().partition("=")
-                    if key in ("eligible", "repairable"):
-                        outputs[key] = value
-            return outputs
+            return self._parse_github_output(out_path)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
@@ -127,6 +144,31 @@ class JulesAutoMergeScopeTests(unittest.TestCase):
         """記事 JSON が無い PR は記事レーンではないので触らない。"""
         out = self._run('echo scratch > get_sources.py')
         self.assertEqual(out.get("eligible"), "false")
+        self.assertEqual(out.get("repairable"), "false")
+
+    def test_modified_data_raw_file_is_repairable_via_restore(self):
+        """#8033: Jules が読み取り専用の data/raw/ 既存ファイルを書き換えても、
+        base へ戻せば安全に外せるので repairable=true とし、restore に載せる。"""
+        out = self._run(
+            f'echo "{{}}" > {ARTICLE} && '
+            'echo \'{"items": [{"x": 1}]}\' > data/raw/rakuten_matched.json'
+        )
+        self.assertEqual(out.get("repairable"), "true")
+        self.assertEqual(out.get("restore"), "data/raw/rakuten_matched.json")
+
+    def test_deleted_data_raw_file_is_repairable_via_restore(self):
+        """data/raw/ 既存ファイルの削除も同様に base へ戻せば安全。"""
+        out = self._run(f'echo "{{}}" > {ARTICLE} && git rm -q data/raw/rakuten_matched.json')
+        self.assertEqual(out.get("repairable"), "true")
+        self.assertEqual(out.get("restore"), "data/raw/rakuten_matched.json")
+
+    def test_data_raw_change_mixed_with_non_restorable_stays_blocked(self):
+        """data/raw/ の変更と、それ以外の既存ファイル変更が混ざるなら人間に回す。"""
+        out = self._run(
+            f'echo "{{}}" > {ARTICLE} && '
+            'echo \'{"items": [{"x": 1}]}\' > data/raw/rakuten_matched.json && '
+            'echo changed >> scripts/existing.py'
+        )
         self.assertEqual(out.get("repairable"), "false")
 
 
