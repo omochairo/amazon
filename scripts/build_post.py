@@ -27,12 +27,13 @@ import pathlib
 import re
 import tomllib
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 import frontmatter
 import jinja2
 
+import article_format_log
 import market_prices
 import official_howto
 import official_howto_format
@@ -3480,6 +3481,10 @@ def main() -> None:
                         help="A-7 query intent classification (#1980); used to set cta_layout front matter")
     parser.add_argument("--canonical-overrides", default="data/analytics/canonical_overrides.json",
                         help="A-3 query cannibalization canonical consolidation (#2370); used to set canonicalURL front matter")
+    parser.add_argument("--format-log", default=None,
+                        help="#7954: path to append the per-page article-format transition log "
+                             "(e.g. data/analytics/history/article_format.jsonl). Unset by default "
+                             "so local/test builds never mutate committed history.")
     args = parser.parse_args()
 
     # #5087: 他の処理より先に解決し、失敗するなら早期に落とす。テンプレへは
@@ -3598,6 +3603,31 @@ def main() -> None:
     # score_calculator の missing/empty counter は build_post 経由の calculate_score
     # 呼出で蓄積されるため、明示的にリセットしてから loop を回す。
     reset_media_exposure_metrics()
+
+    # #7954: 記事型 (stock/legacy) + 公式手順の有無 + redated をページ単位で
+    # 記録する追記型ログ。--format-log 指定時のみ準備する (通常ビルドへの
+    # コストをゼロにするため)。
+    format_log_path: pathlib.Path | None = None
+    format_log_earliest_dates: dict[str, str] = {}
+    format_log_asin_origin_pool: dict[str, str] = {}
+    format_log_previous_states: dict[str, dict[str, Any]] = {}
+    format_log_current_states: dict[str, dict[str, Any]] = {}
+    format_log_target_date = ""
+    format_log_snapshot = False
+    if args.format_log:
+        format_log_path = pathlib.Path(args.format_log)
+        all_stems = [
+            g.stem for g in src_path.glob("*.json") if not g.stem.endswith(SUFFIX_SKIP)
+        ]
+        format_log_earliest_dates = article_format_log.earliest_dates_by_asin(all_stems)
+        format_log_asin_origin_pool = article_format_log.load_asin_origin_pool(
+            pathlib.Path("data/analytics/asin_origin.jsonl")
+        )
+        format_log_previous_states = article_format_log.load_last_states(format_log_path)
+        format_log_target_date = datetime.now(timezone.utc).date().isoformat()
+        format_log_snapshot = article_format_log.is_first_of_month(
+            format_log_path, format_log_target_date
+        )
 
     render_winners = _winning_stems(src_path)  # #2711: newest body per ASIN only
     for f in sorted(src_path.glob("*.json")):
@@ -3820,6 +3850,26 @@ def main() -> None:
                 official_howto_block_applied += 1
                 if data["official_howto_block"]["has_steps"]:
                     official_howto_block_with_steps += 1
+            # #7954: 記事型ログ用の状態を記録する (--format-log 指定時のみ)。
+            # _howto_obj は #7957 (上の FAQ フィルタ) で既にこの記事分をロード済みの
+            # ものを再利用する (official_howto.json を 2 回読まない)。
+            if format_log_path is not None and page_asin:
+                if official_howto.has_reviewed_steps(_howto_obj):
+                    _howto_state = "steps"
+                elif official_howto.has_official_url(_howto_obj):
+                    _howto_state = "link"
+                else:
+                    _howto_state = "none"
+                format_log_current_states[page_asin] = {
+                    "format": "stock" if stock_title_override else "legacy",
+                    "official_howto": _howto_state,
+                    "redated": article_format_log.compute_redated(
+                        page_asin,
+                        data.get("date"),
+                        format_log_asin_origin_pool.get(page_asin),
+                        format_log_earliest_dates.get(page_asin),
+                    ),
+                }
 
             data["amazon_partner_tag"] = amazon_partner_tag
             md_body = template.render(**data)
@@ -3861,6 +3911,19 @@ def main() -> None:
             rendered += 1
         except Exception as e:
             print(f"Error processing {f}: {e}")
+
+    # #7954: 記事型ログ (差分行 or 月初スナップショット) の書き出し。
+    format_log_rows_written = 0
+    if format_log_path is not None:
+        format_log_rows = article_format_log.build_rows(
+            format_log_current_states, format_log_previous_states,
+            format_log_target_date, format_log_snapshot,
+        )
+        format_log_rows_written = article_format_log.append_rows(format_log_path, format_log_rows)
+        print(
+            f"article_format_log (#7954): {format_log_rows_written} row(s) appended to "
+            f"{format_log_path}{' (monthly snapshot)' if format_log_snapshot else ''}"
+        )
 
     # data/build_manifest.json の出力
     manifest_dir = pathlib.Path("data")
