@@ -204,6 +204,28 @@
       "author": "販売店",
       "conflict_of_interest": "possible",
       "notes": "対象年齢が7歳から9歳と設定されている。"
+    },
+    {
+      "id": "src-4",
+      "name": "知育玩具の選び方ガイド",
+      "url": "https://example.com/chiiku-guide",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-09-22",
+      "author": "第三者ライター",
+      "conflict_of_interest": "none",
+      "notes": "カードゲーム全般の知育効果についての一般的な言及。"
+    },
+    {
+      "id": "src-5",
+      "name": "Yahoo!ショッピング 商品ページ",
+      "url": "https://store.shopping.yahoo.co.jp/llhat/4977524488811.html",
+      "tier": "low",
+      "evidence_type": "primary",
+      "published_at": "2026-09-22",
+      "author": "販売店",
+      "conflict_of_interest": "possible",
+      "notes": "販売価格の確認。"
     }
   ],
   "claims": [
@@ -223,10 +245,11 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-2"
+        "src-2",
+        "src-4"
       ],
-      "cross_checked": false,
-      "notes": "育児ブログの評価に基づく。"
+      "cross_checked": true,
+      "notes": "育児ブログと知育ガイドの解説に基づく。"
     },
     {
       "claim": "お題によっては難易度が高く、小さな子どもには表現が難しい場合がある。",
