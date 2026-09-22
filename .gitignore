@@ -86,3 +86,7 @@ repomix-output.xml
 # scripts/sns_inbox_store.py の fallback) を追跡対象から外しておく。
 # 本番は SNS_INBOX_DIR でランナーローカルを明示する運用。
 /tmp/sns_inbox/
+
+# #8002: タカラトミー取説の JAN 索引 (約 650KB)。週次 workflow が毎回作り直すので
+# コミットしない (毎週この大きさの差分を公開リポの履歴に積まない)。
+data/raw/takaratomy_manual_index.json

@@ -384,6 +384,291 @@ def test_fetch_tamagotchi_howto_not_recorded_for_accessory_even_if_url_reachable
     assert session.calls == []
 
 
+# --- 3b. タカラトミー (#8002) ------------------------------------------------
+
+def test_parse_takaratomy_category_links_from_index_page():
+    html = _read_fixture("takaratomy_manual_index.html")
+    links = fh.parse_takaratomy_category_links(html)
+    assert links == [
+        "/support/manual/tomica/",
+        "/support/manual/plarail/",
+        "/support/manual/beyblade/",
+        "/support/manual/other/",
+    ]
+
+
+def test_parse_takaratomy_category_links_excludes_breadcrumb_style_link():
+    # ナビの「/support/manual/」への単なるリンク (末尾スラッシュのみ、slug 無し) は拾わない。
+    html = _read_fixture("takaratomy_manual_index.html")
+    links = fh.parse_takaratomy_category_links(html)
+    assert "/support/manual/" not in links
+
+
+def test_parse_takaratomy_category_page_extracts_jan_and_next_page():
+    html = _read_fixture("takaratomy_category_beyblade_page1.html")
+    parsed = fh.parse_takaratomy_category_page(html)
+    jans = {e["jan"] for e in parsed["entries"]}
+    assert jans == {"4904810080640", "4904810080626", "4904810085546", "4904810080657"}
+    entry = next(e for e in parsed["entries"] if e["jan"] == "4904810085546")
+    assert entry["href"] == "/support/manual/beyblade/2026081916129.html"
+    assert entry["name"] == "ＵＸ－２１　ヘルズネザーデッキセット"
+    assert parsed["next_href"] == "/support/manual/beyblade/index_2.html"
+
+
+def test_parse_takaratomy_category_page_last_page_has_no_next_href():
+    # レビュー観点 (#8002): 「次へ」リンクが無い = ページング終端。
+    html = _read_fixture("takaratomy_category_beyblade_last_page.html")
+    parsed = fh.parse_takaratomy_category_page(html)
+    assert parsed["next_href"] is None
+    assert len(parsed["entries"]) == 3
+
+
+def test_parse_takaratomy_pdf_link_from_detail_page():
+    html = _read_fixture("takaratomy_detail_page.html")
+    href = fh.parse_takaratomy_pdf_link(html)
+    assert href is not None
+    assert href.startswith("/support/manual/items/4904810085546_")
+    assert href.endswith(".pdf")
+
+
+def test_parse_takaratomy_pdf_link_none_when_missing():
+    html = _read_fixture("takaratomy_detail_page_no_pdf.html")
+    assert fh.parse_takaratomy_pdf_link(html) is None
+
+
+class _FakeTakaratomySession:
+    """URL → _FakeResponse の固定応答。build_takaratomy_manual_index のページング巡回用。"""
+
+    def __init__(self, responses: dict[str, "_FakeResponse"]):
+        self._responses = responses
+        self.calls: list[str] = []
+
+    def get(self, url, params=None, timeout=None):
+        self.calls.append(url)
+        if url not in self._responses:
+            return _FakeResponse("", status_code=404)
+        return self._responses[url]
+
+    def head(self, url, timeout=None, allow_redirects=True):
+        self.calls.append(("HEAD", url))
+        return self._responses.get(url, _FakeResponse("", status_code=404))
+
+
+def test_build_takaratomy_manual_index_follows_pagination_and_counts_requests():
+    index_url = fh.TAKARATOMY_MANUAL_INDEX_URL
+    beyblade_p1 = "https://www.takaratomy.co.jp/support/manual/beyblade/"
+    beyblade_p2 = "https://www.takaratomy.co.jp/support/manual/beyblade/index_2.html"
+    # 索引ページには beyblade だけを含む簡略版 (テストの焦点をページングに絞る)。
+    mini_index_html = (
+        '<li class="imgOver01"><a href="/support/manual/beyblade/">'
+        '<span class="text01">ベイブレード</span></a></li>'
+    )
+    session = _FakeTakaratomySession({
+        index_url: _FakeResponse(mini_index_html),
+        beyblade_p1: _FakeResponse(_read_fixture("takaratomy_category_beyblade_page1.html")),
+        beyblade_p2: _FakeResponse(_read_fixture("takaratomy_category_beyblade_last_page.html")),
+    })
+    index, request_count = fh.build_takaratomy_manual_index(session, _NullLimiter())
+    # index page (1) + beyblade page1 (1) + beyblade page2/last (1) = 3
+    assert request_count == 3
+    assert set(index.keys()) == {
+        "4904810080640", "4904810080626", "4904810085546", "4904810080657",
+        "4904810919124", "4904810939528", "4904810956969",
+    }
+    assert index["4904810085546"][0]["category"] == "beyblade"
+    assert index["4904810085546"][0]["detail_url"] == (
+        "https://www.takaratomy.co.jp/support/manual/beyblade/2026081916129.html"
+    )
+
+
+def test_build_takaratomy_manual_index_raises_on_no_categories():
+    session = _FakeTakaratomySession({fh.TAKARATOMY_MANUAL_INDEX_URL: _FakeResponse("<html>変更後のページ</html>")})
+    with pytest.raises(fh.AdapterFetchError):
+        fh.build_takaratomy_manual_index(session, _NullLimiter())
+
+
+def test_build_takaratomy_manual_index_network_error_raises():
+    with pytest.raises(fh.AdapterFetchError):
+        fh.build_takaratomy_manual_index(_RaisingSession(), _NullLimiter())
+
+
+def _write_takaratomy_index_cache(path, entries, fetched_at="2026-09-22T00:00:00Z"):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"fetched_at": fetched_at, "entries": entries}, ensure_ascii=False), encoding="utf-8")
+
+
+def test_fetch_takaratomy_howto_records_when_exactly_one_match(tmp_path):
+    index_path = tmp_path / "takaratomy_manual_index.json"
+    detail_url = "https://www.takaratomy.co.jp/support/manual/beyblade/2026081916129.html"
+    pdf_url = "https://www.takaratomy.co.jp/support/manual/items/4904810085546_test.pdf"
+    _write_takaratomy_index_cache(index_path, {
+        "4904810085546": [{"detail_url": detail_url, "name": "ヘルズネザーデッキセット", "category": "beyblade"}],
+    })
+    detail_html = _read_fixture("takaratomy_detail_page.html")
+    session = _FakeTakaratomySession({
+        detail_url: _FakeResponse(detail_html),
+        "https://www.takaratomy.co.jp" + fh.parse_takaratomy_pdf_link(detail_html): _FakeResponse(
+            "", status_code=200,
+        ),
+    })
+    # HEAD 応答に Content-Type を持たせるため headers 属性を追加する。
+    pdf_absolute = "https://www.takaratomy.co.jp" + fh.parse_takaratomy_pdf_link(detail_html)
+    session._responses[pdf_absolute].headers = {"Content-Type": "application/pdf"}
+
+    result = fh.fetch_takaratomy_howto(
+        "4904810085546", session, _NullLimiter(), index_path=index_path,
+        now=datetime(2026, 9, 22, tzinfo=timezone.utc),
+    )
+    assert result is not None
+    assert result["publisher"] == "takaratomy"
+    assert result["kind"] == "manual_pdf"
+    assert result["url"] == pdf_absolute
+    assert result["matched_by"] == "jan"
+    assert result["matched_key"] == "4904810085546"
+    assert result["official_name"] == "ヘルズネザーデッキセット"
+
+
+def test_fetch_takaratomy_howto_zero_match_not_recorded(tmp_path):
+    index_path = tmp_path / "takaratomy_manual_index.json"
+    _write_takaratomy_index_cache(index_path, {})
+    session = _FakeTakaratomySession({})
+    assert fh.fetch_takaratomy_howto(
+        "0000000000000", session, _NullLimiter(), index_path=index_path,
+        now=datetime(2026, 9, 22, tzinfo=timezone.utc),
+    ) is None
+
+
+def test_fetch_takaratomy_howto_multi_match_not_recorded(tmp_path):
+    # 同一 JAN が (誤登録等で) 複数エントリに割れているケース。一意特定できないので記録しない。
+    index_path = tmp_path / "takaratomy_manual_index.json"
+    _write_takaratomy_index_cache(index_path, {
+        "4904810085546": [
+            {"detail_url": "https://www.takaratomy.co.jp/a.html", "name": "A", "category": "beyblade"},
+            {"detail_url": "https://www.takaratomy.co.jp/b.html", "name": "B", "category": "plarail"},
+        ],
+    })
+    session = _FakeTakaratomySession({})
+    result = fh.fetch_takaratomy_howto(
+        "4904810085546", session, _NullLimiter(), index_path=index_path,
+        now=datetime(2026, 9, 22, tzinfo=timezone.utc),
+    )
+    assert result is None
+    assert session.calls == []  # 一意特定できない時点で詳細ページすら取りに行かない
+
+
+def test_fetch_takaratomy_howto_empty_jan_returns_none_without_index_build(tmp_path, monkeypatch):
+    index_path = tmp_path / "does_not_exist.json"
+
+    def _boom(*args, **kwargs):
+        raise AssertionError("empty JAN で索引を構築してはいけない")
+
+    monkeypatch.setattr(fh, "ensure_takaratomy_index", _boom)
+    assert fh.fetch_takaratomy_howto("", _FakeTakaratomySession({}), _NullLimiter(), index_path=index_path) is None
+
+
+def test_fetch_takaratomy_howto_detail_page_network_error_raises(tmp_path):
+    index_path = tmp_path / "takaratomy_manual_index.json"
+    _write_takaratomy_index_cache(index_path, {
+        "4904810085546": [{"detail_url": "https://www.takaratomy.co.jp/x.html", "name": "X", "category": "beyblade"}],
+    })
+    with pytest.raises(fh.AdapterFetchError):
+        fh.fetch_takaratomy_howto(
+            "4904810085546", _RaisingSession(), _NullLimiter(), index_path=index_path,
+            now=datetime(2026, 9, 22, tzinfo=timezone.utc),
+        )
+
+
+def test_fetch_takaratomy_howto_missing_pdf_link_raises_adapter_fetch_error(tmp_path):
+    index_path = tmp_path / "takaratomy_manual_index.json"
+    detail_url = "https://www.takaratomy.co.jp/support/manual/other/dummy.html"
+    _write_takaratomy_index_cache(index_path, {
+        "0000000000000": [{"detail_url": detail_url, "name": "ダミー商品", "category": "other"}],
+    })
+    session = _FakeTakaratomySession({detail_url: _FakeResponse(_read_fixture("takaratomy_detail_page_no_pdf.html"))})
+    with pytest.raises(fh.AdapterFetchError):
+        fh.fetch_takaratomy_howto(
+            "0000000000000", session, _NullLimiter(), index_path=index_path,
+            now=datetime(2026, 9, 22, tzinfo=timezone.utc),
+        )
+
+
+def test_fetch_takaratomy_howto_pdf_head_wrong_content_type_raises(tmp_path):
+    index_path = tmp_path / "takaratomy_manual_index.json"
+    detail_url = "https://www.takaratomy.co.jp/support/manual/beyblade/x.html"
+    detail_html = _read_fixture("takaratomy_detail_page.html")
+    pdf_absolute = "https://www.takaratomy.co.jp" + fh.parse_takaratomy_pdf_link(detail_html)
+    _write_takaratomy_index_cache(index_path, {
+        "4904810085546": [{"detail_url": detail_url, "name": "X", "category": "beyblade"}],
+    })
+    session = _FakeTakaratomySession({
+        detail_url: _FakeResponse(detail_html),
+        pdf_absolute: _FakeResponse("", status_code=200),
+    })
+    session._responses[pdf_absolute].headers = {"Content-Type": "text/html"}
+    with pytest.raises(fh.AdapterFetchError):
+        fh.fetch_takaratomy_howto(
+            "4904810085546", session, _NullLimiter(), index_path=index_path,
+            now=datetime(2026, 9, 22, tzinfo=timezone.utc),
+        )
+
+
+def test_fetch_takaratomy_howto_uses_fresh_cache_without_rebuilding(tmp_path, monkeypatch):
+    # キャッシュが週内なら索引再構築 (build_takaratomy_manual_index) を一切呼ばない。
+    index_path = tmp_path / "takaratomy_manual_index.json"
+    detail_url = "https://www.takaratomy.co.jp/support/manual/beyblade/x.html"
+    _write_takaratomy_index_cache(
+        index_path,
+        {"4904810085546": [{"detail_url": detail_url, "name": "X", "category": "beyblade"}]},
+        fetched_at="2026-09-20T00:00:00Z",
+    )
+
+    def _boom(*args, **kwargs):
+        raise AssertionError("新しいキャッシュがあるのに再構築してはいけない")
+
+    monkeypatch.setattr(fh, "build_takaratomy_manual_index", _boom)
+    detail_html = _read_fixture("takaratomy_detail_page.html")
+    pdf_absolute = "https://www.takaratomy.co.jp" + fh.parse_takaratomy_pdf_link(detail_html)
+    session = _FakeTakaratomySession({
+        detail_url: _FakeResponse(detail_html),
+        pdf_absolute: _FakeResponse("", status_code=200),
+    })
+    session._responses[pdf_absolute].headers = {"Content-Type": "application/pdf"}
+    result = fh.fetch_takaratomy_howto(
+        "4904810085546", session, _NullLimiter(), index_path=index_path,
+        now=datetime(2026, 9, 22, tzinfo=timezone.utc),
+    )
+    assert result is not None
+
+
+def test_takaratomy_index_stale_after_max_age():
+    now = datetime(2026, 9, 22, tzinfo=timezone.utc)
+    fresh = {"fetched_at": "2026-09-20T00:00:00Z", "entries": {}}
+    stale = {"fetched_at": "2026-09-10T00:00:00Z", "entries": {}}
+    assert fh._takaratomy_index_is_stale(fresh, now) is False
+    assert fh._takaratomy_index_is_stale(stale, now) is True
+    assert fh._takaratomy_index_is_stale(None, now) is True
+
+
+# --- 3c. タカラトミー ブランド判定 (アーツ除外) --------------------------------
+
+def test_is_takaratomy_branded_matches_plain_and_suffixed_forms():
+    assert fh._is_takaratomy_branded("タカラトミー") is True
+    assert fh._is_takaratomy_branded("タカラトミー(TAKARA TOMY)") is True
+    assert fh._is_takaratomy_branded("TAKARA TOMY") is True
+
+
+def test_is_takaratomy_branded_excludes_takaratomy_arts():
+    # #7956: タカラトミーアーツは別法人・別サイト。brand の前方一致で誤合算しない。
+    assert fh._is_takaratomy_branded("タカラトミーアーツ") is False
+    assert fh._is_takaratomy_branded("タカラトミーアーツ(T-ARTS)") is False
+
+
+def test_is_takaratomy_branded_false_for_other_or_empty():
+    assert fh._is_takaratomy_branded("") is False
+    assert fh._is_takaratomy_branded("バンダイ(BANDAI)") is False
+    assert fh._is_takaratomy_branded(None) is False  # type: ignore[arg-type]
+
+
 # --- 5. route_adapter --------------------------------------------------------
 
 def test_route_prefers_tamagotchi_over_bandai_brand_tag():
@@ -408,6 +693,26 @@ def test_route_bandai_requires_jan():
 def test_route_bandai_with_jan():
     product = {"name": "[バンダイ(BANDAI)] シャインアルカナロッド", "brand": "バンダイ(BANDAI)", "jan": "4582769908774"}
     assert fh.route_adapter(product, {}) == "bandai"
+
+
+def test_route_takaratomy_requires_jan():
+    product = {"name": "タカラトミー(TAKARA TOMY) BEYBLADE X UX-21", "brand": "タカラトミー", "jan": ""}
+    assert fh.route_adapter(product, {}) is None
+
+
+def test_route_takaratomy_with_jan():
+    product = {
+        "name": "タカラトミー(TAKARA TOMY) BEYBLADE X UX-21", "brand": "タカラトミー(TAKARA TOMY)",
+        "jan": "4904810085546",
+    }
+    assert fh.route_adapter(product, {}) == "takaratomy"
+
+
+def test_route_takaratomy_arts_excluded_even_with_jan():
+    # #7956: タカラトミーアーツは別法人・別サイト。JAN があってもタカラトミー
+    # アダプタにはルーティングしない (対象外)。
+    product = {"name": "ポケモンフレンダ フレンダフォルダー2", "brand": "タカラトミーアーツ", "jan": "1234567890123"}
+    assert fh.route_adapter(product, {}) is None
 
 
 def test_route_none_for_unknown_brand():
@@ -600,3 +905,9 @@ def test_urllib_session_network_error_becomes_request_exception(monkeypatch):
     monkeypatch.setattr(fh.urllib.request, "urlopen", _raise)
     with pytest.raises(fh.requests.RequestException):
         fh.UrllibSession("UA").get("https://www.lego.com/")
+
+
+def test_takaratomy_arts_english_brand_excluded():
+    # レビュー指摘 (#8002): 英字表記のアーツも別法人として除外する
+    assert not fh._is_takaratomy_branded("TAKARA TOMY ARTS")
+    assert fh._is_takaratomy_branded("TAKARA TOMY")
