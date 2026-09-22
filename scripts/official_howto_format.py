@@ -30,6 +30,7 @@ PUBLISHER_LABELS: dict[str, str] = {
     "bandai": "バンダイ",
     "lego": "レゴ",
     "tamagotchi": "バンダイ",  # あそびかたは tamagotchi-official.com (バンダイ運営)
+    "takaratomy": "タカラトミー",  # #8002
 }
 
 # kind コード -> 表示ラベル。

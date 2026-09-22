@@ -34,6 +34,13 @@
     フィルム等) を含まない** ときだけ、対応する URL が 200 を返すことを
     確認して記録する (レビュー指摘: GOKEI 等のサードパーティ保護ケースや
     バンダイ純正キャリーケースが系列キーワードだけでは誤って一致していた)
+  - タカラトミー (#8002): カテゴリページ (``/support/manual/<category>/``、
+    要ページング) 一覧を索引化し、JAN の完全一致がちょうど 1 件のときだけ
+    詳細ページから PDF リンクを取って記録する。索引は
+    ``data/raw/takaratomy_manual_index.json`` にキャッシュし、週 1 回を
+    超えて古いときだけ再構築する (索引作りのリクエスト数はログに出す)。
+    ブランド判定は「タカラトミー」の部分一致だが、別法人・別サイトの
+    「タカラトミーアーツ」は明示的に除外する
   - 「無し」も ``{"asin", "status": "not_found", "checked_at"}`` で記録し、
     30 日は再問い合わせしない (見つかった記録も同様に 30 日は据え置く)。
     **「見つからなかった」と「取得できなかった (ネットワーク断・想定外の
@@ -59,6 +66,7 @@ import re
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
@@ -81,6 +89,7 @@ except ModuleNotFoundError:  # package 形式
 DEFAULT_ARTICLES_DIR = pathlib.Path("data/articles")
 DEFAULT_PER_ASIN_ROOT = pathlib.Path("data/raw/per_asin")
 DEFAULT_BRAND_OFFICIAL_YAML = pathlib.Path("data/brand_official.yaml")
+DEFAULT_TAKARATOMY_INDEX_PATH = pathlib.Path("data/raw/takaratomy_manual_index.json")
 
 # 記事 slug の末尾 ASIN 抽出 (data/articles/2026-05-14-B0F2T9PFS9.json -> B0F2T9PFS9)。
 # discover_articles (scripts/audit_query_entailment.py) と同じ規則だが、依存を
@@ -154,6 +163,43 @@ _LEGO_NOMATCH_MARKER = 'buildingInstructions":[]'
 
 TAMAGOTCHI_HOST = "tamagotchi-official.com"
 
+# ---------------------------------------------------------------------------
+# タカラトミー (#8002。#7956 の調査結果: サイト内検索・JAN 直接検索は機能しない。
+# カテゴリページ (/support/manual/<category>/、要ページング) の本文に JAN が
+# 平文で出る。詳細ページの /support/manual/items/<JAN>_<商品名>.pdf は署名なし
+# の恒久URL)
+# ---------------------------------------------------------------------------
+
+TAKARATOMY_HOST = "www.takaratomy.co.jp"
+TAKARATOMY_BASE_URL = "https://www.takaratomy.co.jp"
+TAKARATOMY_MANUAL_INDEX_URL = f"{TAKARATOMY_BASE_URL}/support/manual/"
+# 索引の再構築間隔 (#8002 本文: 週 1 回)。
+TAKARATOMY_INDEX_MAX_AGE_DAYS = 7
+# 1 カテゴリあたりのページング上限 (安全弁)。記事数最大 (#7956: 約 261 本) の
+# カテゴリでも実測で 4 ページ程度 (1 ページ 20 件前後) なので十分な余裕を見る。
+_TAKARATOMY_MAX_PAGES_PER_CATEGORY = 60
+
+# カテゴリ一覧 (index page) の <li class="imgOver01"><a href="/support/manual/<slug>/">。
+# 実測 (2026-09-22): この class を持つ <a> だけがカテゴリタイルで、パンくず等の
+# /support/manual/ への単なるリンク (末尾スラッシュのみ、slug 無し) とは区別できる。
+_TAKARATOMY_CATEGORY_LINK_RE = re.compile(
+    r'<li class="imgOver01">\s*<a href="(?P<href>/support/manual/[a-z0-9_-]+/)"',
+)
+# カテゴリページ 1 件分。<li><a href="...NNNN.html">商品名（JANコード：xxxx）</a></li>
+# の形。ページング (link_page/link_next/link_before) の <a> は href の後に
+# class 属性が続くため (`<a href="..." class="link_next">`)、`">` 直後で切る
+# このパターンには最初からマッチしない (エントリの <a> にはこの class が無い)。
+_TAKARATOMY_ENTRY_RE = re.compile(
+    r'<li><a href="(?P<href>/support/manual/[a-z0-9_-]+/[^"]+\.html)">(?P<text>.*?)</a></li>',
+    re.S,
+)
+# 全角/半角コロン両対応。実測は全角「JANコード：」。
+_TAKARATOMY_JAN_RE = re.compile(r"JAN\s*コード[：:]\s*(\d{8,13})")
+# 「次へ」リンク。無ければそのカテゴリは最終ページ (#8002: ページングの終端判定)。
+_TAKARATOMY_NEXT_PAGE_RE = re.compile(r'<a href="(?P<href>[^"]+)" class="link_next">')
+# 詳細ページの PDF リンク。/support/manual/items/<JAN>_<商品名(URLエンコード)>.pdf。
+_TAKARATOMY_PDF_LINK_RE = re.compile(r'<a href="(?P<href>/support/manual/items/[^"]+\.pdf)"')
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -189,6 +235,23 @@ def _is_bandai_branded(brand: str, amazon_title: str) -> bool:
     if isinstance(amazon_title, str) and amazon_title.strip().startswith("[バンダイ(BANDAI)]"):
         return True
     return False
+
+
+def _is_takaratomy_branded(brand: str) -> bool:
+    """product.brand が「タカラトミー」完全一致系かを判定する (#8002)。
+
+    「タカラトミー(TAKARA TOMY)」のような表記ゆれは正規化 (部分一致) で拾うが、
+    「タカラトミーアーツ」は別法人・別サイトなので明示的に除外する (#7956 の
+    指摘: brand の前方一致で誤って合算していた)。
+    """
+    if not isinstance(brand, str):
+        return False
+    normalized = brand.strip()
+    if not normalized:
+        return False
+    if "タカラトミーアーツ" in normalized or "TAKARA TOMY ARTS" in normalized.upper():
+        return False
+    return "タカラトミー" in normalized or "TAKARA TOMY" in normalized.upper()
 
 
 # ---------------------------------------------------------------------------
@@ -546,6 +609,229 @@ def fetch_tamagotchi_howto(
 
 
 # ---------------------------------------------------------------------------
+# タカラトミー (カテゴリページの JAN grep → 索引 → 詳細ページの PDF)
+# ---------------------------------------------------------------------------
+
+def _takaratomy_response_text(resp: Any) -> str:
+    """``resp.text`` を UTF-8 前提で読む。
+
+    実測 (2026-09-22): takaratomy.co.jp は応答の ``Content-Type`` ヘッダーに
+    charset を宣言しない (``text/html`` のみ) ため、``requests`` が
+    ISO-8859-1 と誤判定し ``resp.text`` が文字化けする (JAN・PDF リンクの
+    正規表現が一切マッチしなくなり、索引が 0 件になっていた)。``encoding``
+    属性を持つ実 ``requests.Response`` だけ明示的に上書きする
+    (テストの偽 session は ``.text`` に素の str を直接持たせているため無害)。
+    """
+    if hasattr(resp, "encoding"):
+        resp.encoding = "utf-8"
+    return resp.text
+
+
+def parse_takaratomy_category_links(html: str) -> list[str]:
+    """index page (``/support/manual/``) からカテゴリ相対 URL を全件抜く。
+
+    カテゴリを商品名から推測しない (#8002 本文)。この index page 自体が
+    正本の一覧であることを前提に、全カテゴリを舐める。
+    """
+    seen: list[str] = []
+    for m in _TAKARATOMY_CATEGORY_LINK_RE.finditer(html):
+        href = m.group("href")
+        if href not in seen:
+            seen.append(href)
+    return seen
+
+
+def parse_takaratomy_category_page(html: str) -> dict[str, Any]:
+    """カテゴリページ 1 ページ分から ``{"entries": [...], "next_href": ...}`` を作る。
+
+    entries は ``{"href":詳細ページ相対URL, "name":商品名, "jan":JAN}``。
+    JAN が平文テキストに無いエントリ (実測では無いはずだが念のため) は
+    スキップする — 推測で埋めない。
+    """
+    entries: list[dict[str, str]] = []
+    for m in _TAKARATOMY_ENTRY_RE.finditer(html):
+        text = _strip_tags(m.group("text"))
+        jan_m = _TAKARATOMY_JAN_RE.search(text)
+        if not jan_m:
+            continue
+        name = text[: jan_m.start()].rstrip("（(").strip()
+        entries.append({"href": m.group("href"), "name": name, "jan": jan_m.group(1)})
+    next_m = _TAKARATOMY_NEXT_PAGE_RE.search(html)
+    return {"entries": entries, "next_href": next_m.group("href") if next_m else None}
+
+
+def parse_takaratomy_pdf_link(html: str) -> Optional[str]:
+    m = _TAKARATOMY_PDF_LINK_RE.search(html)
+    return m.group("href") if m else None
+
+
+def build_takaratomy_manual_index(
+    session: requests.Session, limiter: HostRateLimiter,
+) -> tuple[dict[str, list[dict[str, str]]], int]:
+    """全カテゴリ (+ ページング) を巡回して JAN → [{"detail_url","name","category"}] を作る。
+
+    戻り値は ``(index, request_count)``。request_count は索引作りに使った
+    リクエスト数 (#8002 本文: ログに出す)。
+
+    ネットワーク断・想定した DOM 構造が見つからない (サイト変更の可能性) は
+    ``AdapterFetchError``。中断した索引を書き込むと、まだ舐めていないカテゴリの
+    JAN が「無し」に誤認されるため、完走しなかった索引はディスクに残さない
+    (呼び出し側 ``ensure_takaratomy_index`` が例外を捕捉せず伝播させ、
+    キャッシュファイルを更新しない)。
+    """
+    limiter.wait(TAKARATOMY_HOST)
+    request_count = 1
+    try:
+        resp = session.get(TAKARATOMY_MANUAL_INDEX_URL, timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        raise AdapterFetchError(f"takaratomy: index page request failed: {e}") from e
+
+    categories = parse_takaratomy_category_links(_takaratomy_response_text(resp))
+    if not categories:
+        raise AdapterFetchError("takaratomy: no category links found on index page (site changed?)")
+
+    index: dict[str, list[dict[str, str]]] = {}
+    for cat_href in categories:
+        category = cat_href.strip("/").rsplit("/", 1)[-1]
+        page_url: Optional[str] = urllib.parse.urljoin(TAKARATOMY_BASE_URL, cat_href)
+        pages_seen = 0
+        while page_url and pages_seen < _TAKARATOMY_MAX_PAGES_PER_CATEGORY:
+            limiter.wait(TAKARATOMY_HOST)
+            request_count += 1
+            try:
+                resp = session.get(page_url, timeout=REQUEST_TIMEOUT)
+                resp.raise_for_status()
+            except requests.RequestException as e:
+                raise AdapterFetchError(
+                    f"takaratomy: category page request failed for {page_url}: {e}"
+                ) from e
+            parsed = parse_takaratomy_category_page(_takaratomy_response_text(resp))
+            for entry in parsed["entries"]:
+                index.setdefault(entry["jan"], []).append({
+                    "detail_url": urllib.parse.urljoin(TAKARATOMY_BASE_URL, entry["href"]),
+                    "name": entry["name"],
+                    "category": category,
+                })
+            pages_seen += 1
+            next_href = parsed["next_href"]
+            page_url = urllib.parse.urljoin(page_url, next_href) if next_href else None
+
+    return index, request_count
+
+
+def load_takaratomy_index_cache(index_path: pathlib.Path) -> Optional[dict[str, Any]]:
+    try:
+        obj = json.loads(index_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(obj, dict) or "entries" not in obj or "fetched_at" not in obj:
+        return None
+    return obj
+
+
+def _takaratomy_index_is_stale(
+    cache: Optional[dict[str, Any]], now: datetime, max_age_days: int = TAKARATOMY_INDEX_MAX_AGE_DAYS,
+) -> bool:
+    if cache is None:
+        return True
+    ts = cache.get("fetched_at")
+    if not isinstance(ts, str):
+        return True
+    try:
+        fetched = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return True
+    return now - fetched >= timedelta(days=max_age_days)
+
+
+def write_takaratomy_index_cache(
+    index_path: pathlib.Path, index: dict[str, list[dict[str, str]]], now_iso: str,
+) -> None:
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"fetched_at": now_iso, "entries": index}
+    index_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def ensure_takaratomy_index(
+    session: requests.Session, limiter: HostRateLimiter, index_path: pathlib.Path,
+    now: Optional[datetime] = None,
+) -> dict[str, list[dict[str, str]]]:
+    """キャッシュが週 1 回以内に新しければそれを使い、無ければ再構築する (#8002)。
+
+    再構築に失敗した (``AdapterFetchError``) 場合は握りつぶさず伝播させる。
+    このため呼び出し元 (``fetch_takaratomy_howto``) のこの ASIN が action="error"
+    になるが、キャッシュファイルは (存在すれば) 古いまま残る。
+    """
+    now = now or datetime.now(timezone.utc)
+    cache = load_takaratomy_index_cache(index_path)
+    if not _takaratomy_index_is_stale(cache, now):
+        return cache["entries"]  # type: ignore[index]
+    index, request_count = build_takaratomy_manual_index(session, limiter)
+    print(f"takaratomy: manual index rebuilt — {len(index)} JAN(s) indexed, {request_count} request(s) used")
+    write_takaratomy_index_cache(index_path, index, now.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    return index
+
+
+def fetch_takaratomy_howto(
+    jan: str, session: requests.Session, limiter: HostRateLimiter,
+    index_path: pathlib.Path = DEFAULT_TAKARATOMY_INDEX_PATH,
+    now: Optional[datetime] = None,
+) -> Optional[dict[str, Any]]:
+    """JAN が索引にちょうど 1 件のときだけ、詳細ページから PDF を取って記録する (#8002)。
+
+    JAN が空 / 索引に 0 件 / 索引に複数件 (一意特定できない) はいずれも None
+    (呼び出し側が not_found を書く)。索引の再構築失敗・詳細ページ取得失敗・
+    PDF リンクが見つからない・PDF の実在確認 (HEAD) 失敗はいずれも
+    ``AdapterFetchError`` (「無い」の確認にならないため not_found にしない)。
+    """
+    jan = (jan or "").strip()
+    if not jan:
+        return None
+
+    index = ensure_takaratomy_index(session, limiter, index_path, now=now)
+    entries = index.get(jan) or []
+    if len(entries) != 1:
+        return None  # 0 件 or 複数件は記録しない (#8002 本文)
+    entry = entries[0]
+
+    limiter.wait(TAKARATOMY_HOST)
+    try:
+        resp = session.get(entry["detail_url"], timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        raise AdapterFetchError(f"takaratomy: detail page request failed for jan={jan}: {e}") from e
+
+    pdf_href = parse_takaratomy_pdf_link(_takaratomy_response_text(resp))
+    if not pdf_href:
+        raise AdapterFetchError(
+            f"takaratomy: no PDF link found on detail page for jan={jan} ({entry['detail_url']})"
+        )
+    pdf_url = urllib.parse.urljoin(entry["detail_url"], pdf_href)
+
+    limiter.wait(TAKARATOMY_HOST)
+    try:
+        head_resp = session.head(pdf_url, timeout=REQUEST_TIMEOUT, allow_redirects=True)
+    except requests.RequestException as e:
+        raise AdapterFetchError(f"takaratomy: PDF HEAD request failed for jan={jan}: {e}") from e
+    content_type = head_resp.headers.get("Content-Type", "") if hasattr(head_resp, "headers") else ""
+    if head_resp.status_code != 200 or "application/pdf" not in content_type:
+        raise AdapterFetchError(
+            f"takaratomy: PDF existence check failed for jan={jan}: "
+            f"status={head_resp.status_code} content_type={content_type!r}"
+        )
+
+    return {
+        "publisher": "takaratomy",
+        "kind": "manual_pdf",
+        "url": pdf_url,
+        "official_name": entry.get("name") or None,
+        "matched_by": "jan",
+        "matched_key": jan,
+    }
+
+
+# ---------------------------------------------------------------------------
 # ルーティング
 # ---------------------------------------------------------------------------
 
@@ -566,6 +852,8 @@ def route_adapter(product: dict[str, Any], config: dict[str, Any]) -> Optional[s
         return "tamagotchi"
     if "レゴ" in brand or "LEGO" in brand or "LEGO" in name_upper:
         return "lego"
+    if _is_takaratomy_branded(brand_raw) and product.get("jan"):
+        return "takaratomy"
     if ("バンダイ" in brand or "BANDAI" in brand or "バンダイ" in name or "BANDAI" in name_upper) and product.get("jan"):
         return "bandai"
     return None
@@ -635,6 +923,7 @@ def process_asin(
     now: Optional[datetime] = None,
     dry_run: bool = False,
     lego_session: Any = None,
+    takaratomy_index_path: pathlib.Path = DEFAULT_TAKARATOMY_INDEX_PATH,
 ) -> dict[str, Any]:
     """1 ASIN 分の判定・取得・書き込みを行い、サマリ dict を返す (テスト容易化)。
 
@@ -659,6 +948,10 @@ def process_asin(
             found = fetch_lego_howto(product.get("name", ""), lego_session or session, limiter)
         elif adapter == "tamagotchi":
             found = fetch_tamagotchi_howto(product, config, session, limiter)
+        elif adapter == "takaratomy":
+            found = fetch_takaratomy_howto(
+                product.get("jan", ""), session, limiter, index_path=takaratomy_index_path, now=now,
+            )
         else:  # pragma: no cover - route_adapter が保証する
             found = None
     except (AdapterFetchError, requests.RequestException) as e:
@@ -678,6 +971,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--articles-dir", type=pathlib.Path, default=DEFAULT_ARTICLES_DIR)
     ap.add_argument("--per-asin-root", type=pathlib.Path, default=DEFAULT_PER_ASIN_ROOT)
     ap.add_argument("--brand-official-yaml", type=pathlib.Path, default=DEFAULT_BRAND_OFFICIAL_YAML)
+    ap.add_argument("--takaratomy-index", type=pathlib.Path, default=DEFAULT_TAKARATOMY_INDEX_PATH)
     ap.add_argument("--limit", type=int, default=0, help="処理する ASIN 数の上限 (0=無制限)")
     ap.add_argument("--asin", default="", help="対象 ASIN をカンマ区切りで明示指定 (省略時は記事のある全 ASIN)")
     ap.add_argument("--recheck-days", type=int, default=RECHECK_DAYS)
@@ -706,7 +1000,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         result = process_asin(
             asin, product, config, session, limiter, args.per_asin_root,
             recheck_days=args.recheck_days, dry_run=args.dry_run,
-            lego_session=lego_session,
+            lego_session=lego_session, takaratomy_index_path=args.takaratomy_index,
         )
         counts[result["action"]] = counts.get(result["action"], 0) + 1
         suffix = f" ({result['adapter']})" if "adapter" in result else ""
