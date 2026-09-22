@@ -617,3 +617,148 @@ def test_row_label_for_delayed_reflects_lead_time():
 def test_row_label_for_preorder():
     rows = wtb.build_rows(_obs5483(ss.STATE_PREORDER, "この商品の発売予定日は2026年9月19日です。"), _po5483())
     assert rows[0]["state_label"] == "予約受付中"
+
+
+# ---------------------------------------------------------------------------
+# #7953: sticky (固定) — 今日 unknown でも history 由来で新型を維持する
+# ---------------------------------------------------------------------------
+
+def _write_history(root: Path, asin: str, records: list[dict]) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    (root / f"{asin.upper()}.jsonl").write_text(
+        "\n".join(json.dumps(r, ensure_ascii=False) for r in records) + "\n",
+        encoding="utf-8",
+    )
+
+
+def test_eligible_stays_true_via_history_when_today_unknown(tmp_path):
+    """今日の latest.json が unknown/missing でも、history にロールアウト日
+    以降の分類可能な観測があれば sticky で eligible のまま。"""
+    latest = _write_latest(tmp_path / "price_watch" / "latest.json", {})
+    idx = ss.load_stock_index(latest, now=NOW)
+    history = tmp_path / "price_watch" / "history"
+    _write_history(history, "B001", [
+        {"ts": "2026-08-15T00:00:00+00:00", "source": "amazon", "price": 1200,
+         "availability": "在庫あり。"},
+    ])
+    assert wtb.is_stock_format_eligible(
+        "B001", "2026-09-01T10:00:00+09:00", idx, history_root=history,
+    ) is True
+    # history_root を渡さない後方互換呼び出しは従来どおり False のまま。
+    assert wtb.is_stock_format_eligible("B001", "2026-09-01T10:00:00+09:00", idx) is False
+
+
+def test_eligible_false_via_history_when_last_known_before_rollout(tmp_path):
+    latest = _write_latest(tmp_path / "price_watch" / "latest.json", {})
+    idx = ss.load_stock_index(latest, now=NOW)
+    history = tmp_path / "price_watch" / "history"
+    _write_history(history, "B001", [
+        {"ts": "2026-08-01T00:00:00+00:00", "source": "amazon", "price": 1200,
+         "availability": "在庫あり。"},
+    ])
+    assert wtb.is_stock_format_eligible(
+        "B001", "2026-09-01T10:00:00+09:00", idx, history_root=history,
+    ) is False
+
+
+def test_resolve_effective_observation_noop_when_today_classifiable():
+    obs = _obs(ss.STATE_IN_STOCK)
+    effective, meta = wtb.resolve_effective_observation("B001", obs, now=NOW)
+    assert effective is obs
+    assert meta == {"sticky": False, "stale": False, "last_known_date": None}
+
+
+def test_resolve_effective_observation_sticky_within_window(tmp_path):
+    history = tmp_path / "history"
+    _write_history(history, "B001", [
+        {"ts": "2026-08-08T00:00:00+00:00", "source": "amazon", "price": 1500,
+         "availability": "在庫あり。"},
+    ])
+    today_unknown = _obs(ss.STATE_UNKNOWN, price=None, observed_at="2026-08-12T03:00:00+00:00")
+    effective, meta = wtb.resolve_effective_observation(
+        "B001", today_unknown, history_root=history, now=NOW,
+    )
+    assert effective.state == ss.STATE_IN_STOCK
+    assert effective.price == 1500
+    assert meta["sticky"] is True
+    assert meta["stale"] is False
+    assert meta["last_known_date"] == "2026-08-08"
+
+
+def test_resolve_effective_observation_stale_beyond_window(tmp_path):
+    history = tmp_path / "history"
+    _write_history(history, "B001", [
+        {"ts": "2026-07-20T00:00:00+00:00", "source": "amazon", "price": 1500,
+         "availability": "在庫あり。"},
+    ])
+    today_unknown = _obs(ss.STATE_UNKNOWN, price=None)
+    effective, meta = wtb.resolve_effective_observation(
+        "B001", today_unknown, history_root=history, now=NOW,
+    )
+    assert meta["sticky"] is True
+    assert meta["stale"] is True
+    assert meta["last_known_date"] == "2026-07-20"
+
+
+def test_resolve_effective_observation_not_sticky_when_no_history(tmp_path):
+    history = tmp_path / "history"
+    today_unknown = _obs(ss.STATE_UNKNOWN, price=None)
+    effective, meta = wtb.resolve_effective_observation(
+        "B001", today_unknown, history_root=history, now=NOW,
+    )
+    assert meta["sticky"] is False
+    assert meta["last_known_date"] is None
+
+
+def test_conclusion_sticky_within_window_mentions_last_known_date_and_marker():
+    obs = _obs(ss.STATE_IN_STOCK, observed_at="2026-08-08T00:00:00+00:00")
+    meta = {"sticky": True, "stale": False, "last_known_date": "2026-08-08"}
+    text = wtb.build_conclusion("テスト商品", obs, _options(), sticky_meta=meta)
+    assert "2026-08-08 時点" in text
+    assert "在庫あり" in text
+    assert wtb.STICKY_UNKNOWN_MARKER in text
+
+
+def test_conclusion_stale_drops_state_assertion_but_shows_price():
+    obs = _obs(ss.STATE_IN_STOCK, price=1500, observed_at="2026-07-01T00:00:00+00:00")
+    meta = {"sticky": True, "stale": True, "last_known_date": "2026-07-01"}
+    text = wtb.build_conclusion("テスト商品", obs, _options(amazon_price=1500), sticky_meta=meta)
+    assert "2026-07-01 時点" in text
+    assert "取扱" in text
+    assert wtb.STICKY_UNKNOWN_MARKER in text
+    # 価格にも観測日が付く (レビュー指摘: 日付の無い価格は今日の値に読める)
+    assert "￥1,500（2026-07-01 時点）" in text
+    # 現在形の在庫断定はしない (在庫あり/在庫切れの現在主張を避ける)。
+    assert "Amazon に在庫あり" not in text
+    assert "Amazon は在庫切れ" not in text
+
+
+def test_rows_stale_amazon_state_label_is_record_only():
+    obs = _obs(ss.STATE_IN_STOCK, observed_at="2026-07-01T00:00:00+00:00")
+    meta = {"sticky": True, "stale": True, "last_known_date": "2026-07-01"}
+    rows = wtb.build_rows(obs, _options(), sticky_meta=meta)
+    by_site = {r["site"]: r for r in rows}
+    assert by_site["Amazon"]["state_label"] == "2026-07-01時点の記録のみ"
+
+
+def test_title_keeps_amazon_when_out_of_stock():
+    """#7953: Amazon は在庫切れでも取扱がある限りタイトル括弧に残る。"""
+    options = {
+        "amazon": {"available": False, "listed": True, "price": None,
+                   "url": "https://www.amazon.co.jp/dp/B001/?tag=x-22", "is_search": False},
+        "rakuten": {"available": False, "price": None, "url": None, "is_search": False},
+        "yahoo": {"available": False, "price": None, "url": None, "is_search": False},
+    }
+    title = wtb.build_title("テスト商品", options)
+    assert "（Amazon）" in title
+
+
+def test_title_drops_amazon_when_not_listed():
+    """listed=False (Amazon URL 自体が無い) なら括弧から外れる。"""
+    options = {
+        "amazon": {"available": False, "listed": False, "price": None, "url": None, "is_search": False},
+        "rakuten": {"available": False, "price": None, "url": None, "is_search": False},
+        "yahoo": {"available": False, "price": None, "url": None, "is_search": False},
+    }
+    title = wtb.build_title("テスト商品", options)
+    assert "（" not in title

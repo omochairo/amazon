@@ -35,6 +35,16 @@ import stock_status
 # ための唯一のロールアウト定数 (1 箇所に集約)。
 ROLLOUT_DATE = "2026-08-13"
 
+# #7953: 最後に分類可能だった観測がこの日数を超えて古い場合は、その日の
+# 断定を諦めて価格のみの表現に落とす (「取得できていないのに在庫を主張する」
+# を避ける安全装置)。
+STALE_AFTER_DAYS = 7
+
+# #7953: sticky-unknown (今日 unknown だが history 由来の最終観測で埋めた) の
+# 本文に必ず含める目印。quality_gate.check_no_unknown_state_stock_title が
+# 「固定済みで dated な最終観測がある」ことを機械的に確認するために使う。
+STICKY_UNKNOWN_MARKER = "取得できていません"
+
 _JST = timezone(timedelta(hours=9))
 
 _SITE_ORDER = ("amazon", "rakuten", "yahoo")
@@ -82,24 +92,127 @@ def _article_date_str(date_value: Any) -> str:
     return ""
 
 
+def _merged_last_known_observation(
+    asin: str,
+    *roots: pathlib.Path | str | None,
+) -> Optional[stock_status.StockObservation]:
+    """複数レーンから「最後の分類可能な観測」を選ぶ (最も新しいもの勝ち)。
+
+    #7953 実測: ``data/price_watch/history/`` (日次) は fetch_price_watch.py の
+    収集対象に新しく入った ASIN で書き込みが数日〜1週間ほど遅れることがある
+    一方、``data/price_history/`` (週次・別ワーカー起源) には同じ観測がより
+    早く記録されていることがある。``build_price_history_note`` が既に採用
+    している「両レーンをマージして読み、片方を優先して捨てない」設計をここでも
+    踏襲する (#5011 の教訓: フォールバックは観測点を取りこぼす)。
+    """
+    best: stock_status.StockObservation | None = None
+    best_dt: datetime | None = None
+    for root in roots:
+        if root is None:
+            continue
+        obs = stock_status.find_last_known_observation(asin, root)
+        if obs is None:
+            continue
+        dt = _parse_iso(obs.observed_at)
+        if dt is None:
+            continue
+        if best_dt is None or dt > best_dt:
+            best_dt = dt
+            best = obs
+    return best
+
+
 def is_stock_format_eligible(
     asin: str,
     article_date: Any,
     index: stock_status.StockIndex,
     *,
     rollout_date: str = ROLLOUT_DATE,
+    history_root: pathlib.Path | str | None = None,
+    price_history_root: pathlib.Path | str | None = None,
 ) -> bool:
     """新型 (「どこで買える」タイトル + 在庫ブロック) を適用してよいかを判定する。
 
-    次を両方満たすときだけ True (**既存記事は絶対に変化しない**):
-      - 記事の ``date`` が ``rollout_date`` 以降
+    記事の ``date`` が ``rollout_date`` 以降であることに加え、次のいずれかを
+    満たせば True:
       - stock_status.can_use_stock_title(asin, index) が True
-        (price_watch に載っており avail が unknown でない)
+        (今日の price_watch に載っており avail が unknown/preorder でない)
+      - **#7953 sticky**: ``history_root`` (日次) / ``price_history_root``
+        (週次) のいずれかが渡されており、そのロールアウト日以降に一度でも
+        分類可能な観測があった (2 レーンをマージして最新のものを見る)。
+        今日の avail が欠測 (unknown) でも、一度新型で出せる状態になった
+        ページは固定 (sticky) で新型のまま扱う。両方とも渡さない呼び出しは
+        従来どおり今日の判定のみを行う (後方互換)。
+
+    どちらも満たさなければ False (**既存記事は絶対に変化しない**)。
     """
     d = _article_date_str(article_date)
     if not d or d < rollout_date:
         return False
-    return stock_status.can_use_stock_title(asin, index)
+    if stock_status.can_use_stock_title(asin, index):
+        return True
+    if history_root is None and price_history_root is None:
+        return False
+    last_known = _merged_last_known_observation(asin, history_root, price_history_root)
+    if last_known is None or not last_known.observed_at:
+        return False
+    known_date = last_known.observed_at[:10]
+    return len(known_date) == 10 and known_date >= rollout_date
+
+
+def resolve_effective_observation(
+    asin: str,
+    stock_obs: stock_status.StockObservation,
+    *,
+    history_root: pathlib.Path | str | None = None,
+    price_history_root: pathlib.Path | str | None = None,
+    stale_after_days: int = STALE_AFTER_DAYS,
+    now: Optional[datetime] = None,
+) -> tuple[stock_status.StockObservation, dict[str, Any]]:
+    """#7953: 今日の観測が unknown のとき、history の最後の分類可能な観測へ
+    フォールバックする (sticky ページの「今日は unknown」を埋める)。
+
+    戻り値は ``(実効 StockObservation, メタ情報)``。メタ情報:
+      - ``sticky``: 今日 unknown で history 由来の最終観測にフォールバックしたか
+      - ``stale``: 最後の分類可能観測が ``stale_after_days`` を超えて古いか
+        (sticky=True のときだけ意味を持つ)
+      - ``last_known_date``: sticky のときの観測日 (JST, ``YYYY-MM-DD``)。
+        history に分類可能な観測が無ければ None (このとき sticky=False で、
+        呼び出し側は「その日は在庫を主張しない」判断材料に使う)。
+
+    今日が unknown でなければ ``stock_obs`` をそのまま返す (no-op)。
+    ``history_root`` (日次) と ``price_history_root`` (週次) は両方渡してよく、
+    ``is_stock_format_eligible`` と同じくマージして最新の観測を採用する。
+    """
+    if stock_obs.state != stock_status.STATE_UNKNOWN:
+        return stock_obs, {"sticky": False, "stale": False, "last_known_date": None}
+
+    last_known = _merged_last_known_observation(asin, history_root, price_history_root)
+    if last_known is None:
+        # history にも分類可能な記録が無い。sticky にできる根拠が無いので、
+        # 呼び出し側 (build_post) はその日は unknown のまま扱う (安全側)。
+        return stock_obs, {"sticky": False, "stale": True, "last_known_date": None}
+
+    ref_now = now if now is not None else datetime.now(timezone.utc)
+    if ref_now.tzinfo is None:
+        ref_now = ref_now.replace(tzinfo=timezone.utc)
+    obs_dt = _parse_iso(last_known.observed_at)
+    stale = obs_dt is None or (ref_now - obs_dt) > timedelta(days=stale_after_days)
+
+    price = last_known.price if last_known.price is not None else stock_obs.price
+    effective = stock_status.StockObservation(
+        asin=last_known.asin or stock_obs.asin,
+        state=last_known.state,
+        remaining=last_known.remaining,
+        raw_avail=last_known.raw_avail,
+        price=price,
+        observed_at=last_known.observed_at,
+    )
+    return effective, {
+        "sticky": True,
+        "stale": stale,
+        "last_known_date": to_jst_date(last_known.observed_at),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -107,10 +220,25 @@ def is_stock_format_eligible(
 # ---------------------------------------------------------------------------
 
 def _available_site_labels(purchase_options: dict[str, dict]) -> list[str]:
+    """タイトル括弧に載せるサイト名。
+
+    #7953: Amazon は「取扱があるか (listed)」で決める。「今日在庫があるか
+    (available)」で決めると、在庫切れ⇔在庫ありの往復のたびに括弧が変わり
+    (実測 37日で183回・92 ASIN)、タイトルが日替わりになる。Amazon は在庫切れ
+    でも取扱自体は続いている (再入荷を待てば買える) ので、取扱がある限り
+    括弧に残す。楽天/Yahoo は今日時点でマッチした出品の有無 (=available) で
+    決める (在庫切れという状態そのものが無く、「取扱を確認できたか」だけが
+    意味を持つため #7953 の対象外)。
+    """
     labels: list[str] = []
     for site in _SITE_ORDER:
         opt = purchase_options.get(site) or {}
-        if opt.get("available"):
+        if site == "amazon":
+            listed = opt.get("listed")
+            shown = listed if listed is not None else opt.get("available")
+        else:
+            shown = opt.get("available")
+        if shown:
             labels.append(_SITE_LABELS[site])
     return labels
 
@@ -191,15 +319,61 @@ def build_conclusion(
     product_name: str,
     stock_obs: stock_status.StockObservation,
     purchase_options: dict[str, dict],
+    *,
+    sticky_meta: dict[str, Any] | None = None,
 ) -> str:
     """冒頭 2-3 文の結論ブロック。**在庫・価格は必ず取得日時とセット**で書く
     (単独の断定を避ける安全装置)。
+
+    #7953: ``sticky_meta`` (resolve_effective_observation が返すメタ情報) が
+    渡され、今日 unknown を history 由来の最終観測で埋めている場合:
+      - 最終観測が ``STALE_AFTER_DAYS`` 以内なら、通常どおりその観測の日付・
+        状態で書いた上で「以降は取得できていません」を付け足す
+        (「YYYY-MM-DD 時点では在庫あり (以降は取得できていません)」の形)。
+      - それを超えて古ければ、状態そのものは主張せず価格だけを出す
+        (取得できていない期間について嘘の在庫断定をしない)。
     """
-    date_label = to_jst_date(stock_obs.observed_at) or "確認日不明"
     amazon = purchase_options.get("amazon") or {}
     amazon_price = amazon.get("price")
     price_part = f" ￥{amazon_price:,}" if isinstance(amazon_price, int) else ""
 
+    sticky_meta = sticky_meta or {}
+    is_sticky = bool(sticky_meta.get("sticky"))
+    is_stale = is_sticky and bool(sticky_meta.get("stale"))
+
+    if is_stale:
+        date_label = sticky_meta.get("last_known_date") or to_jst_date(stock_obs.observed_at) or "確認日不明"
+        # レビュー指摘 (#7953): 価格にも観測日を付ける。日付の無い価格は、
+        # 前半で「古い」と言っていても今日の値に読めてしまう。
+        price_date = to_jst_date(stock_obs.observed_at) or date_label
+        price_sentence = (
+            f"最後に確認できた Amazon の価格は{price_part}（{price_date} 時点）です。"
+            if price_part else ""
+        )
+        head = (
+            f"{date_label} 時点の記録を最後に、Amazon の在庫状況が"
+            f"{STICKY_UNKNOWN_MARKER}。{price_sentence}"
+        )
+        other_sites = [s for s in ("rakuten", "yahoo")]
+        available_others = [
+            _SITE_LABELS[s] for s in other_sites if (purchase_options.get(s) or {}).get("available")
+        ]
+        unavailable_others = [
+            _SITE_LABELS[s] for s in other_sites if not (purchase_options.get(s) or {}).get("available")
+        ]
+        tail = ""
+        if unavailable_others and available_others:
+            tail = (
+                f"{'・'.join(available_others)}では取扱を確認できましたが、"
+                f"{'・'.join(unavailable_others)}では取扱を確認できませんでした。"
+            )
+        elif unavailable_others:
+            tail = f"{'・'.join(unavailable_others)}では取扱を確認できませんでした。"
+        elif available_others:
+            tail = f"{'・'.join(available_others)}でも取扱を確認できました。"
+        return (head + tail).strip()
+
+    date_label = to_jst_date(stock_obs.observed_at) or "確認日不明"
     state = stock_obs.state
     if state == stock_status.STATE_IN_STOCK:
         head = f"{date_label} 時点、Amazon に在庫あり{price_part}。"
@@ -224,6 +398,12 @@ def build_conclusion(
             head = f"{date_label} 時点、Amazon は予約受付中です（発売前）{price_part}。"
     else:  # unknown — 実運用ゲート経由では到達しないが、単体呼び出し用に完備しておく。
         head = f"{date_label} 時点、Amazon の在庫状況は確認できませんでした。"
+
+    if is_sticky:
+        # #7953: 今日の avail は unknown で、上の日付・状態は history 由来の
+        # 最終観測。sticky であることと、それ以降の欠測を明示する
+        # (「YYYY-MM-DD 時点では在庫あり (以降は取得できていません)」の形)。
+        head += f"以降の在庫状況は{STICKY_UNKNOWN_MARKER}。"
 
     other_sites = [s for s in ("rakuten", "yahoo")]
     available_others = [
@@ -270,13 +450,25 @@ def _other_state_label(opt: dict) -> str:
 def build_rows(
     stock_obs: stock_status.StockObservation,
     purchase_options: dict[str, dict],
+    *,
+    sticky_meta: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
+    """#7953: ``sticky_meta`` が stale (最終観測が STALE_AFTER_DAYS 超) を
+    示すとき、Amazon 行の状態は断定せず「history 記録のみ」に留める
+    (build_conclusion の stale 分岐と表現を揃える)。
+    """
+    sticky_meta = sticky_meta or {}
+    is_stale = bool(sticky_meta.get("sticky")) and bool(sticky_meta.get("stale"))
     observed_at_label = to_jst_datetime(stock_obs.observed_at) or "—"
     rows: list[dict[str, Any]] = []
     for site in _SITE_ORDER:
         opt = purchase_options.get(site) or {}
         if site == "amazon":
-            state_label = _amazon_state_label(stock_obs.state, stock_obs.raw_avail)
+            if is_stale:
+                last_date = sticky_meta.get("last_known_date") or "—"
+                state_label = f"{last_date}時点の記録のみ"
+            else:
+                state_label = _amazon_state_label(stock_obs.state, stock_obs.raw_avail)
         else:
             state_label = _other_state_label(opt)
         rows.append({
@@ -562,16 +754,20 @@ def build_stock_block(
     price_watch_root: pathlib.Path | str | None = None,
     asin: str = "",
     now: Optional[datetime] = None,
+    sticky_meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """テンプレート ``stock_where_to_buy`` コンテキストを組み立てる。
 
     ``price_watch_root`` (日次レーン) と ``price_history_root`` (週次レーン) は
     両方渡してよく、``build_price_history_note`` 側でマージされる。片方だけを
     渡す呼び出し元はそのレーンのみで動く (後方互換)。
+
+    ``sticky_meta`` は ``resolve_effective_observation`` の戻り値をそのまま
+    渡す (#7953)。省略時は従来どおり (sticky でない) 扱い。
     """
     block: dict[str, Any] = {
-        "conclusion": build_conclusion(product_name, stock_obs, purchase_options),
-        "rows": build_rows(stock_obs, purchase_options),
+        "conclusion": build_conclusion(product_name, stock_obs, purchase_options, sticky_meta=sticky_meta),
+        "rows": build_rows(stock_obs, purchase_options, sticky_meta=sticky_meta),
         "price_history_note": None,
         "low_stock_note": build_low_stock_note(stock_obs),
         "offline_note": build_offline_note(product_name, purchase_options),
