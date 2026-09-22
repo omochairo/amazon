@@ -191,6 +191,28 @@
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
       "notes": "たまごっちブランドの一般的な展開情報を確認"
+    },
+    {
+      "id": "src-4",
+      "name": "PR TIMES たまごっち関連プレスリリース",
+      "url": "https://prtimes.jp/topics/keywords/%E3%81%9F%E3%81%BE%E3%81%94%E3%81%A3%E3%81%A1",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-09-22",
+      "author": "PR TIMES",
+      "conflict_of_interest": "none",
+      "notes": "たまごっちブランドの一般的な展開状況を確認"
+    },
+    {
+      "id": "src-5",
+      "name": "たまごっち（Wikipedia）",
+      "url": "https://ja.wikipedia.org/wiki/%E3%81%9F%E3%81%BE%E3%81%94%E3%81%A3%E3%81%A1",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-09-22",
+      "author": "Wikipedia",
+      "conflict_of_interest": "none",
+      "notes": "ブランドの歴史的背景と一般的な対象年齢層を確認"
     }
   ],
   "claims": [
@@ -199,9 +221,10 @@
       "category": "safety",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-5"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "メーカー公式情報に基づき確認"
     },
     {
@@ -229,9 +252,10 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-4"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "商品名に30thの記載がある"
     }
   ],
