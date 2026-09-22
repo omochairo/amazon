@@ -114,6 +114,39 @@ def test_unknown_state_without_stock_title_passes():
 
 
 # ---------------------------------------------------------------------------
+# 4b (#7953): sticky (固定) ページの unknown は、本文に dated な最終観測の
+# 開示 (STICKY_UNKNOWN_MARKER) があれば許可する。
+# ---------------------------------------------------------------------------
+
+def test_unknown_state_with_stock_title_passes_when_body_has_sticky_marker():
+    import where_to_buy_format as wtb  # noqa: E402 (local import)
+
+    title = "テスト商品はどこで買える？在庫と価格を毎日チェック（Amazon）"
+    body = f"2026-08-08 時点では在庫あり。以降の在庫状況は{wtb.STICKY_UNKNOWN_MARKER}。"
+    violations = check_no_unknown_state_stock_title(title, ss.STATE_UNKNOWN, body)
+    assert violations == []
+
+
+def test_unknown_state_with_stock_title_fails_when_body_lacks_date():
+    import where_to_buy_format as wtb  # noqa: E402 (local import)
+
+    title = "テスト商品はどこで買える？在庫と価格を毎日チェック（Amazon）"
+    # マーカーだけあって日付スタンプが無い (機械的な dated 証拠にならない)。
+    body = f"在庫状況は{wtb.STICKY_UNKNOWN_MARKER}。"
+    violations = check_no_unknown_state_stock_title(title, ss.STATE_UNKNOWN, body)
+    assert violations
+    assert any("unknown-state" in v for v in violations)
+
+
+def test_unknown_state_with_stock_title_fails_when_body_lacks_marker():
+    title = "テスト商品はどこで買える？在庫と価格を毎日チェック（Amazon）"
+    body = "2026-08-08 時点では在庫あり。"
+    violations = check_no_unknown_state_stock_title(title, ss.STATE_UNKNOWN, body)
+    assert violations
+    assert any("unknown-state" in v for v in violations)
+
+
+# ---------------------------------------------------------------------------
 # check_stock_where_to_buy() 統合 (evaluate_article が呼ぶ経路)
 # ---------------------------------------------------------------------------
 

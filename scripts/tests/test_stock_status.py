@@ -402,3 +402,81 @@ def test_stock_title_states_exclude_preorder(tmp_path):
     assert ss.can_use_stock_title("B0OOS", idx) is True
     assert ss.can_use_stock_title("B0PRE", idx) is False
     assert ss.can_use_stock_title("B0UNK", idx) is False
+
+
+# ---------------------------------------------------------------------------
+# 10 (#7953): history からの sticky (固定) 判定
+# ---------------------------------------------------------------------------
+
+def _write_history_jsonl(root: Path, asin: str, records: list[dict]) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    (root / f"{asin.upper()}.jsonl").write_text(
+        "\n".join(json.dumps(r, ensure_ascii=False) for r in records) + "\n",
+        encoding="utf-8",
+    )
+
+
+def test_find_last_known_observation_returns_most_recent_classifiable(tmp_path):
+    root = tmp_path / "history"
+    _write_history_jsonl(root, "B001", [
+        {"ts": "2026-08-20T00:00:00+00:00", "source": "amazon", "price": 1000,
+         "availability": "在庫あり。"},
+        {"ts": "2026-08-27T00:00:00+00:00", "source": "amazon", "price": 1200,
+         "availability": "残り2点 ご注文はお早めに"},
+        # 最新行は avail 欠測 (unknown) — スキップして 08-27 を返すこと。
+        {"ts": "2026-09-03T00:00:00+00:00", "source": "amazon", "price": 1200,
+         "availability": None},
+    ])
+    obs = ss.find_last_known_observation("B001", root)
+    assert obs is not None
+    assert obs.state == ss.STATE_LOW_STOCK
+    assert obs.remaining == 2
+    assert obs.observed_at == "2026-08-27T00:00:00+00:00"
+    assert obs.price == 1200
+
+
+def test_find_last_known_observation_none_when_all_unknown(tmp_path):
+    root = tmp_path / "history"
+    _write_history_jsonl(root, "B001", [
+        {"ts": "2026-08-20T00:00:00+00:00", "source": "amazon", "price": 1000,
+         "availability": None},
+    ])
+    assert ss.find_last_known_observation("B001", root) is None
+
+
+def test_find_last_known_observation_none_when_file_missing(tmp_path):
+    root = tmp_path / "history"
+    assert ss.find_last_known_observation("B404", root) is None
+    assert ss.find_last_known_observation("B404", None) is None
+
+
+def test_find_last_known_observation_ignores_non_amazon_source(tmp_path):
+    root = tmp_path / "history"
+    _write_history_jsonl(root, "B001", [
+        {"ts": "2026-08-20T00:00:00+00:00", "source": "rakuten", "price": 1000,
+         "availability": "在庫あり。"},
+    ])
+    assert ss.find_last_known_observation("B001", root) is None
+
+
+def test_has_ever_classifiable_since_true_when_latest_after_rollout(tmp_path):
+    root = tmp_path / "history"
+    _write_history_jsonl(root, "B001", [
+        {"ts": "2026-08-15T00:00:00+00:00", "source": "amazon", "price": 1000,
+         "availability": "在庫あり。"},
+    ])
+    assert ss.has_ever_classifiable_since("B001", root, "2026-08-13") is True
+
+
+def test_has_ever_classifiable_since_false_when_latest_before_rollout(tmp_path):
+    root = tmp_path / "history"
+    _write_history_jsonl(root, "B001", [
+        {"ts": "2026-08-01T00:00:00+00:00", "source": "amazon", "price": 1000,
+         "availability": "在庫あり。"},
+    ])
+    assert ss.has_ever_classifiable_since("B001", root, "2026-08-13") is False
+
+
+def test_has_ever_classifiable_since_false_when_no_history(tmp_path):
+    root = tmp_path / "history"
+    assert ss.has_ever_classifiable_since("B404", root, "2026-08-13") is False

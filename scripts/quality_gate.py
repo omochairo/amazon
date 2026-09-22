@@ -70,6 +70,10 @@ try:
 except ModuleNotFoundError:  # package 形式
     from scripts import stock_status  # type: ignore[no-redef]
 try:
+    import where_to_buy_format
+except ModuleNotFoundError:  # package 形式
+    from scripts import where_to_buy_format  # type: ignore[no-redef]
+try:
     import official_howto
 except ModuleNotFoundError:  # package 形式
     from scripts import official_howto  # type: ignore[no-redef]
@@ -1689,15 +1693,33 @@ def check_no_physical_store_claims(body_md: str) -> list[str]:
     return violations
 
 
-def check_no_unknown_state_stock_title(title: str, state: str | None) -> list[str]:
-    """在庫状態が unknown なのに在庫系タイトルが付いていたら違反にする。"""
+def check_no_unknown_state_stock_title(
+    title: str, state: str | None, body_md: str | None = None,
+) -> list[str]:
+    """在庫状態が unknown なのに在庫系タイトルが付いていたら違反にする。
+
+    #7953: sticky (固定) ページは、その日の avail が unknown でも
+    where_to_buy_format.build_conclusion が history 由来の最終観測を
+    ``STICKY_UNKNOWN_MARKER`` (「取得できていません」) つきの dated な文で
+    書く。このマーカーと日付スタンプの両方が本文にあれば、「今日は unknown
+    だが固定済みで、最終観測を日付つきで開示している」ことの機械的な証拠に
+    なるため、unknown を理由に fail させない。
+    """
     violations: list[str] = []
-    if state == stock_status.STATE_UNKNOWN and any(
+    if state != stock_status.STATE_UNKNOWN or not any(
         k in (title or "") for k in _STOCK_TITLE_KEYWORDS
     ):
+        return violations
+
+    body = body_md or ""
+    sticky_ok = (
+        where_to_buy_format.STICKY_UNKNOWN_MARKER in body
+        and bool(_STOCK_DATE_STAMP_RE.search(body))
+    )
+    if not sticky_ok:
         violations.append(
             "unknown-state-with-stock-title: 在庫状態が unknown なのに在庫系タイトルが"
-            "付与されています"
+            "付与されています (固定済み最終観測の dated な開示も本文に見つかりません)"
         )
     return violations
 
@@ -1750,7 +1772,7 @@ def check_stock_where_to_buy(
 
     if stock_index is not None and asin:
         obs = stock_status.resolve_stock(asin, stock_index)
-        violations += check_no_unknown_state_stock_title(title, obs.state)
+        violations += check_no_unknown_state_stock_title(title, obs.state, body)
 
     if violations:
         return CheckResult("stock_where_to_buy", False, 0.0, "; ".join(violations))

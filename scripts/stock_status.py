@@ -292,6 +292,11 @@ def resolve_purchase_options(
     result: dict[str, dict] = {
         "amazon": {
             "available": stock_obs.state in _AMAZON_AVAILABLE_STATES,
+            # #7953: 「取扱があるか」。Amazon の商品ページ (URL) がある = Amazon
+            # で扱っている、という取扱の有無であって、今日の在庫状態
+            # (available) とは別軸。タイトル括弧はこちらを見る
+            # (where_to_buy_format._available_site_labels)。
+            "listed": amazon_url is not None,
             "price": stock_obs.price,
             "url": amazon_url,
             "is_search": False,
@@ -354,3 +359,107 @@ def can_use_stock_title(asin: str, index: StockIndex) -> bool:
     raw_avail = av if isinstance(av, str) and av.strip() else None
     state, _ = classify_availability(raw_avail)
     return state in _STOCK_TITLE_STATES
+
+
+# ------------------------------------------------------------------------
+# #7953: sticky (固定) 判定 — price_watch/history からの分類可能観測の解決
+# ------------------------------------------------------------------------
+#
+# 「どこで買える」型は latest.json のその日の avail だけで毎日判定していたため、
+# Creators API が avail を返さない日 (unknown) に旧型へ日替わりで戻っていた
+# (37日で147 ASIN・485回)。デプロイビルドは GitLab CI 側の別 pipeline で走り、
+# GitHub 側の main へ状態を書き戻せない (40-mirror-to-gitlab.yml: 「main の
+# 状態から丸ごと再生成する冪等ジョブ」) ため、新しい state ファイルを持たず
+# **既存の data/price_watch/history/<ASIN>.jsonl (変化点ログ) だけから毎回
+# 決定的に導出する** (=ステートレス)。この history は「ASIN がロールアウト日
+# 以降に分類可能な状態を一度でも持ったか」を再構成できる十分な記録であり、
+# 新しい committed state を追加で持ち回る必要が無い。
+
+
+def find_last_known_observation(
+    asin: str,
+    history_root: pathlib.Path | str | None,
+    *,
+    now: Optional[datetime] = None,  # noqa: ARG001 — シグネチャ互換のため保持
+) -> Optional[StockObservation]:
+    """``<history_root>/<ASIN>.jsonl`` から、直近の **分類可能** (unknown で
+    ない) 観測を 1 件返す。
+
+    ``source == "amazon"`` の行だけを見る。ファイルが無い/壊れている/
+    分類可能な行が 1 つも無ければ None を返す (呼び出し側は fail-soft で
+    「sticky にできない」扱いにする)。
+    """
+    if not history_root or not isinstance(asin, str) or not asin.strip():
+        return None
+    key = asin.strip().upper()
+    path = pathlib.Path(history_root) / f"{key}.jsonl"
+    if not path.exists():
+        return None
+
+    best_dt: datetime | None = None
+    best_obs: StockObservation | None = None
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(rec, dict) or rec.get("source") != "amazon":
+            continue
+        ts = rec.get("ts")
+        if not isinstance(ts, str) or not ts.strip():
+            continue
+        try:
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+
+        raw_avail = rec.get("availability")
+        raw_avail = raw_avail if isinstance(raw_avail, str) and raw_avail.strip() else None
+        state, remaining = classify_availability(raw_avail)
+        if state == STATE_UNKNOWN:
+            continue  # 分類できない行は「最後の分類可能な観測」にはならない
+
+        if best_dt is not None and dt <= best_dt:
+            continue
+        price_raw = rec.get("price")
+        price = (
+            price_raw if isinstance(price_raw, int) and not isinstance(price_raw, bool)
+            and price_raw > 0 else None
+        )
+        best_dt = dt
+        best_obs = StockObservation(
+            asin=key, state=state, remaining=remaining, raw_avail=raw_avail,
+            price=price, observed_at=ts,
+        )
+
+    return best_obs
+
+
+def has_ever_classifiable_since(
+    asin: str,
+    history_root: pathlib.Path | str | None,
+    since_date: str,
+) -> bool:
+    """history 上の **最新の** 分類可能観測の日付が ``since_date``
+    (``YYYY-MM-DD``) 以降かどうか。
+
+    最新の分類可能観測がロールアウト日以降なら「ロールアウト日以降に
+    分類可能な状態を一度でも持った」が成立する (それより古い観測が
+    ロールアウト日以降に無いことは、最新のものがロールアウト日より前で
+    あることと同値なので、最新の 1 件だけ見れば十分)。
+    """
+    obs = find_last_known_observation(asin, history_root)
+    if obs is None or not obs.observed_at:
+        return False
+    d = obs.observed_at[:10]
+    return len(d) == 10 and d[4] == "-" and d[7] == "-" and d >= since_date

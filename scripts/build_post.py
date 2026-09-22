@@ -3816,16 +3816,28 @@ def main() -> None:
             if query_intent_map:
                 data["cta_layout"] = query_intent_map.get(f"/products/{page_asin.lower()}/")
 
-            # #2686 / #4964: 「どこで買える/在庫」記事型。ロールアウト日以降 かつ
-            # 在庫文言が classify 可能な記事だけ新型 (決定的生成) を適用する。
-            # 既存記事は is_stock_format_eligible が False を返すため一切変化しない。
+            # #2686 / #4964 / #7953: 「どこで買える/在庫」記事型。ロールアウト日
+            # 以降 かつ (今日の在庫文言が classify 可能 または history 上で
+            # ロールアウト日以降に一度でも classify 可能だった = sticky) の
+            # 記事だけ新型 (決定的生成) を適用する。既存記事は
+            # is_stock_format_eligible が False を返すため一切変化しない。
             stock_title_override: str | None = None
             data["stock_where_to_buy"] = None
             if page_asin and where_to_buy_format.is_stock_format_eligible(
                 page_asin, data.get("date"), stock_index,
+                history_root=price_watch_history_root,
+                price_history_root=price_history_root,
             ):
-                stock_obs = stock_status.resolve_stock(
+                stock_obs_today = stock_status.resolve_stock(
                     page_asin, stock_index, per_asin_root=per_asin_root,
+                )
+                # #7953: 今日 unknown なら history (日次/週次 2 レーン) の最後の
+                # 分類可能な観測へ sticky にフォールバックする
+                # (日付つきの最終観測で埋める)。
+                stock_obs, sticky_meta = where_to_buy_format.resolve_effective_observation(
+                    page_asin, stock_obs_today,
+                    history_root=price_watch_history_root,
+                    price_history_root=price_history_root,
                 )
                 product_prices = (data.get("product") or {}).get("prices")
                 purchase_options = stock_status.resolve_purchase_options(product_prices, stock_obs)
@@ -3834,6 +3846,7 @@ def main() -> None:
                     product_name, stock_obs, purchase_options,
                     price_history_root=price_history_root,
                     price_watch_root=price_watch_history_root, asin=page_asin,
+                    sticky_meta=sticky_meta,
                 )
                 stock_title_override = where_to_buy_format.build_title(product_name, purchase_options)
                 stock_title_applied += 1
