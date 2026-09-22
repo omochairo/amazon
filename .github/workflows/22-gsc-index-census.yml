@@ -185,7 +185,7 @@ jobs:
 
           # checkout -b の前に変更有無を判定する (staged 状態で checkout -b すると
           # 一部ファイルが失われることがあるため、branch 作成前は git add しない)
-          if ! git status --porcelain -- data/analytics/gsc_index_census.json data/analytics/history/gsc_index_census.jsonl data/analytics/history/census_url_states.json | grep -q .; then
+          if ! git status --porcelain -- data/analytics/gsc_index_census.json data/analytics/history/gsc_index_census.jsonl data/analytics/history/census_url_states.json data/analytics/history/census_url_states.jsonl | grep -q .; then
             echo "No census changes to commit; skipping PR."
             exit 0
           fi
@@ -212,6 +212,12 @@ jobs:
           # これを add し忘れると新規データが自動 PR に載らず、次回 run の遷移計算が
           # 永久に初回状態のまま (previous_date=None) になってしまう
           git add data/analytics/history/census_url_states.json 2>/dev/null || true
+          # census_url_states.jsonl (#4964 / #6791): URL 単位の状態遷移 history。
+          # #6791 でこのファイルの生成コードは入ったが、ここへの git add が漏れており
+          # 毎 run 生成されては commit されず消えていた (2026-09-14/09-21 の census で
+          # 未生成のまま実測、#4964 コメント参照)。add し忘れると history が一切
+          # 積み上がらず、per-URL の状態遷移を時系列で追えない設計が機能しない
+          git add data/analytics/history/census_url_states.jsonl 2>/dev/null || true
           git commit -m "data(analytics): GSC index census (run ${{ github.run_id }})"
           git push -u origin "$BRANCH"
 
