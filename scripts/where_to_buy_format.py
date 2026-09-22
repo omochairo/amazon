@@ -343,9 +343,16 @@ def build_conclusion(
 
     if is_stale:
         date_label = sticky_meta.get("last_known_date") or to_jst_date(stock_obs.observed_at) or "確認日不明"
+        # レビュー指摘 (#7953): 価格にも観測日を付ける。日付の無い価格は、
+        # 前半で「古い」と言っていても今日の値に読めてしまう。
+        price_date = to_jst_date(stock_obs.observed_at) or date_label
+        price_sentence = (
+            f"最後に確認できた Amazon の価格は{price_part}（{price_date} 時点）です。"
+            if price_part else ""
+        )
         head = (
-            f"{date_label} 時点の記録を最後に、Amazon の取扱・在庫状況が"
-            f"{STICKY_UNKNOWN_MARKER}。価格情報のみの掲載です{price_part}。"
+            f"{date_label} 時点の記録を最後に、Amazon の在庫状況が"
+            f"{STICKY_UNKNOWN_MARKER}。{price_sentence}"
         )
         other_sites = [s for s in ("rakuten", "yahoo")]
         available_others = [

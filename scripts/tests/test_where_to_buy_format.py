@@ -726,7 +726,8 @@ def test_conclusion_stale_drops_state_assertion_but_shows_price():
     assert "2026-07-01 時点" in text
     assert "取扱" in text
     assert wtb.STICKY_UNKNOWN_MARKER in text
-    assert "￥1,500" in text
+    # 価格にも観測日が付く (レビュー指摘: 日付の無い価格は今日の値に読める)
+    assert "￥1,500（2026-07-01 時点）" in text
     # 現在形の在庫断定はしない (在庫あり/在庫切れの現在主張を避ける)。
     assert "Amazon に在庫あり" not in text
     assert "Amazon は在庫切れ" not in text
