@@ -149,14 +149,31 @@ jobs:
       # base の内容へ機械的に戻す (削除ではなく復元。詳細は scope ステップのコメント)。
       #
       # 修復後に auto-merge を有効化するのは同じ run の後続ステップ (下の
-      # `steps.repair.outputs.repaired == 'true'` 条件)。GITHUB_TOKEN による push は
-      # workflow を再トリガしないため (このファイル下部に既出の GHA cascade 制約)、
-      # push 後に「もう一度 05 が走って有効化してくれる」ことを当てにできない。
+      # `steps.repair.outputs.repaired == 'true'` 条件)。
+      #
+      # 2026-09-23 (#8092): 修復コミットは App token で push する。当初は
+      # GITHUB_TOKEN で push していたため新 head に pull_request が発火せず、
+      # required check (validate / unit-tests) が 1 件も付かないまま auto-merge が
+      # 永久 pending になった (#8061)。56 の close→reopen も GITHUB_TOKEN だったので
+      # 救済にならなかった。App token の push なら synchronize が発火し、04/44 が
+      # 新 head を検証する (下の omcha backfill #6773 と同じ理屈)。
+      # continue-on-error は付けない: token が取れないまま GITHUB_TOKEN で push
+      # すると同じ永久 pending に戻るだけなので、ここは赤く落として見えるようにする。
+      - name: Generate App token for auto-repair push (#8092)
+        id: repair-app-token
+        if: steps.scope.outputs.repairable == 'true'
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Auto-repair stray/protected-file changes made by the agent
         id: repair
         if: steps.scope.outputs.repairable == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APP_TOKEN: ${{ steps.repair-app-token.outputs.token }}
+          REPO: ${{ github.repository }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           MERGE_BASE_SHA: ${{ steps.scope.outputs.merge_base }}
           OUT_OF_SCOPE: ${{ steps.scope.outputs.out_of_scope }}
@@ -193,10 +210,21 @@ jobs:
           git commit -q \
             -m "chore: エージェントのスコープ外変更を自動修復 (#5165, #8033)" \
             -m "$(printf 'removed (stray, newly added):\n%s\n\nrestored to base (protected data/raw/):\n%s\n' "$(cat /tmp/strays.txt)" "$(cat /tmp/restore.txt)")"
-          git push origin "HEAD:$HEAD_REF"
+          # actions/checkout が仕込んだ GITHUB_TOKEN の extraheader が URL の認証情報より
+          # 優先されるので、空値で打ち消してから App token で push する (#8092)。
+          git -c "http.https://github.com/.extraheader=" \
+            push "https://x-access-token:${APP_TOKEN}@github.com/${REPO}.git" "HEAD:$HEAD_REF"
           echo "repaired=true" >> "$GITHUB_OUTPUT"
           # 何をしたかを PR 上に残す (失敗しても auto-merge は続行させる)。
-          gh pr comment "$PR_URL" --body "$(printf 'auto-merge のスコープ外だった変更を自動修復しました。\n\n新規追加だったファイルを削除 (#5165):\n```\n%s\n```\n\n読み取り専用の data/raw/ 配下ファイルを base の内容へ復元 (#8033):\n```\n%s\n```\n' "$(cat /tmp/strays.txt)" "$(cat /tmp/restore.txt)")" \
+          # 空の区分は出さない (#8092: 復元 0 件でも空のコードブロックが出ていた)。
+          body='auto-merge のスコープ外だった変更を自動修復しました。'
+          if [ -s /tmp/strays.txt ]; then
+            body="$body$(printf '\n\n新規追加だったファイルを削除 (#5165):\n```\n%s\n```' "$(cat /tmp/strays.txt)")"
+          fi
+          if [ -s /tmp/restore.txt ]; then
+            body="$body$(printf '\n\n読み取り専用の data/raw/ 配下ファイルを base の内容へ復元 (#8033):\n```\n%s\n```' "$(cat /tmp/restore.txt)")"
+          fi
+          gh pr comment "$PR_URL" --body "$body" \
             || echo "::warning::could not comment on $PR_URL"
 
       # 2026-08-04 (#4469): スコープガード自体は正しい (任意のファイルを触る PR を

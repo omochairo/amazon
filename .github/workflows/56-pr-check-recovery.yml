@@ -54,9 +54,22 @@ jobs:
         with:
           python-version: '3.11'
 
+      # 2026-09-23 (#8092): close→reopen は App token でやる。GITHUB_TOKEN による
+      # reopen は GitHub の再帰防止で pull_request を発火しないため、導入以来
+      # 回復実績が 0 件だった (#7853 / #8061)。一覧取得 (statusCheckRollup) は
+      # 権限が揃っている GITHUB_TOKEN のまま。token が取れなければ黙って効かない
+      # reopen を繰り返すより赤く落とす (continue-on-error は付けない)。
+      - name: Generate App token for close-reopen (#8092)
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Recover pending PR checks
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REOPEN_GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPO: ${{ github.repository }}
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
