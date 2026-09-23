@@ -58,8 +58,10 @@ import pathlib
 import re
 import subprocess
 import sys
+import threading
 import time
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 
@@ -204,7 +206,9 @@ def make_session(ollama_url: str = DEFAULT_OLLAMA_URL) -> tuple[requests.Session
 #
 # 1 run の所要を agy (agy CLI の subprocess 実行) / gemma (Ollama /api/generate
 # のリクエスト) / http (third_party・threads・youtube・agy 出典 URL 解決の fetch) /
-# other (残差 = ASIN ループの壁時計時間 - 上記3つ) に分ける。gemma はさらに
+# other (残差) に分ける。agy は次の ASIN を先読みして gemma と重ねて回すので、
+# 各区分は「稼働時間」で、合計は壁時計 (wall_seconds) を超える。other は壁時計から
+# メインスレッドの gemma/http と agy 待ち (agy_wait_seconds) を引いた残差。gemma はさらに
 # Ollama 応答の prompt_eval_duration (読込) / eval_duration (生成) を ns 単位で
 # 積算し、呼び出し回数・トークン数 (prompt_eval_count / eval_count) も集計する。
 # --------------------------------------------------------------------------
@@ -216,9 +220,11 @@ class TimingTracker:
         self.gemma_eval_ns = 0
         self.gemma_prompt_eval_count = 0
         self.gemma_eval_count = 0
+        self._lock = threading.Lock()
 
     def add(self, bucket: str, elapsed_s: float) -> None:
-        self.seconds[bucket] = self.seconds.get(bucket, 0.0) + elapsed_s
+        with self._lock:
+            self.seconds[bucket] = self.seconds.get(bucket, 0.0) + elapsed_s
 
     def record_gemma_response(self, payload: Any) -> None:
         """Ollama /api/generate の応答本体から読込/生成の内訳を積算する。
@@ -1311,9 +1317,12 @@ def mine_asin(
     num_ctx: int = DEFAULT_NUM_CTX,
     agy_breaker: AgyCircuitBreaker | None = None,
     timing: TimingTracker | None = None,
+    agy_candidates: list[dict] | None = None,
 ) -> dict | None:
     """1 ASIN 分の候補収集 + gemma 抽出を行い、experience.json payload を返す
-    (snippets 0 件なら None)。"""
+    (snippets 0 件なら None)。
+
+    `agy_candidates` を渡すと agy を呼ばずにそれを使う (run() が先読みした分)。"""
     session = session or requests.Session()
     title, product_name, brand = resolve_product_identity(asin, base)
     if not title:
@@ -1321,7 +1330,11 @@ def mine_asin(
         return None
 
     candidates: list[dict] = []
-    candidates += gather_antigravity(product_name, brand, session=session, breaker=agy_breaker, timing=timing)
+    if agy_candidates is None:
+        agy_candidates = gather_antigravity(
+            product_name, brand, session=session, breaker=agy_breaker, timing=timing,
+        )
+    candidates += agy_candidates
     candidates += gather_third_party(asin, base=base, session=session, timing=timing)
     candidates += gather_threads(product_name, session=session, timing=timing)
     candidates += gather_youtube_opportunistic(asin, base=base, timing=timing)
@@ -1433,6 +1446,23 @@ def _agy_outcome(before: dict, after: dict) -> str:
     return "unavailable"
 
 
+def _prefetch_agy(
+    asin: str, *, base: pathlib.Path, session: requests.Session,
+    breaker: AgyCircuitBreaker, timing: TimingTracker,
+) -> tuple[list[dict], str]:
+    """1 ASIN 分の agy を回し、(candidates, ledger 用の結果) を返す。run() の先読みスレッドで動く。
+
+    breaker を動かすのはこのスレッドだけ (1 本・投入順に実行) なので、前後の
+    summary の差がそのままこの ASIN の結果になる。"""
+    before = breaker.summary()
+    title, product_name, brand = resolve_product_identity(asin, base)
+    candidates = (
+        gather_antigravity(product_name, brand, session=session, breaker=breaker, timing=timing)
+        if title else []
+    )
+    return candidates, _agy_outcome(before, breaker.summary())
+
+
 def run(
     targets: list[str], *,
     base: pathlib.Path = PER_ASIN_DIR,
@@ -1445,64 +1475,98 @@ def run(
     reasons: dict[str, str] | None = None,
 ) -> dict:
     session, dead_hosts = make_session(ollama_url)
+    # 先読みスレッド用の session。requests.Session は thread-safe ではないので分けるが、
+    # adapter は共有して timeout したホストの記憶 (dead_hosts) を両方で効かせる。
+    agy_session = requests.Session()
+    agy_session.mount("http://", dead_hosts)
+    agy_session.mount("https://", dead_hosts)
     agy_breaker = AgyCircuitBreaker()
     ledger = ledger if ledger is not None else {}
     reasons = reasons or {}
     written = 0
     skipped = 0
     timing = TimingTracker()
+    agy_timing = TimingTracker()  # 先読みスレッドの agy / 出典 URL 解決 (http)
     loop_elapsed_s = 0.0
-    for asin in targets:
-        if dry_run:
-            logger.info("[dry-run] would mine %s", asin)
-            continue
-        agy_before = agy_breaker.summary()
-        asin_start = time.monotonic()
-        payload = mine_asin(
-            asin, base=base, ollama_url=ollama_url, model=model, session=session,
-            num_ctx=num_ctx, agy_breaker=agy_breaker, timing=timing,
-        )
-        loop_elapsed_s += time.monotonic() - asin_start
-        agy = _agy_outcome(agy_before, agy_breaker.summary())
-        n = len(payload["snippets"]) if payload else 0
-        if payload is None:
-            skipped += 1
-            logger.info("%s: 0 snippets — not written", asin)
-        else:
-            out_path = write_experience(asin, payload, base=base)
-            written += 1
-            logger.info("%s: wrote %s (%d snippets)", asin, out_path, n)
+    agy_wait_s = 0.0
 
-        # 1 件ごとに保存する。step timeout で打ち切られても、そこまでの試行は残る
-        ledger[asin] = {"last_attempt": _now_iso(), "written": payload is not None,
-                        "snippets": n, "agy": agy}
-        if ledger_path is not None:
-            try:
-                save_ledger(ledger_path, ledger)
-            except OSError as e:
-                logger.warning("マイニング ledger を保存できませんでした: %s", e)
-        _step_summary([
-            f"| {asin} | {REASON_LABELS.get(reasons.get(asin, ''), '-')} "
-            f"| {'書けた' if payload else '0 件'} | {n} | {agy} |"
-        ])
+    # #7952 / #6602: **次の ASIN の agy を、今の ASIN の gemma と重ねて回す**。
+    #
+    # 2026-09-23 の定時 run (n=30) で 1 ASIN 97.6 秒の内訳が agy 44% / gemma 46% /
+    # http 10% だった。両者は別の資源 (agy は Google 側の待ち、gemma は K8 の CPU) を
+    # 使うのに直列で待っていたので、重ねれば 1 ASIN ≈ max(agy, gemma) + http の
+    # 54.6 秒まで縮む見込み (85 分の窓で約 93 件)。推論機を 780M に替える案は
+    # 1.22 倍にとどまった (gemma の生成が重く、agy が縮まないため)。
+    #
+    # 先読みは 1 本だけ。agy の呼び出しは今までどおり 1 本ずつ・同じ回数で、
+    # 順番も targets のまま (breaker の「連続失敗」の数え方も変わらない)。
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="agy-prefetch") as pool:
+        def _submit(a: str):
+            return pool.submit(
+                _prefetch_agy, a, base=base, session=agy_session,
+                breaker=agy_breaker, timing=agy_timing,
+            )
 
-    # #6602 P2: 区分別の所要 (観測のみ・挙動は変えない)。"other" は ASIN ループの
-    # 壁時計時間から agy/gemma/http の実測を引いた残差 (yahoo ローカル読み・
-    # JSON 整形・ledger/Job Summary 書き込み等)。
-    known_s = sum(timing.seconds.get(k, 0.0) for k in ("agy", "gemma", "http"))
+        pending = _submit(targets[0]) if targets and not dry_run else None
+        for i, asin in enumerate(targets):
+            if dry_run:
+                logger.info("[dry-run] would mine %s", asin)
+                continue
+            asin_start = time.monotonic()
+            agy_candidates, agy = pending.result()
+            agy_wait_s += time.monotonic() - asin_start
+            pending = _submit(targets[i + 1]) if i + 1 < len(targets) else None
+            payload = mine_asin(
+                asin, base=base, ollama_url=ollama_url, model=model, session=session,
+                num_ctx=num_ctx, agy_breaker=agy_breaker, timing=timing,
+                agy_candidates=agy_candidates,
+            )
+            loop_elapsed_s += time.monotonic() - asin_start
+            n = len(payload["snippets"]) if payload else 0
+            if payload is None:
+                skipped += 1
+                logger.info("%s: 0 snippets — not written", asin)
+            else:
+                out_path = write_experience(asin, payload, base=base)
+                written += 1
+                logger.info("%s: wrote %s (%d snippets)", asin, out_path, n)
+
+            # 1 件ごとに保存する。step timeout で打ち切られても、そこまでの試行は残る
+            ledger[asin] = {"last_attempt": _now_iso(), "written": payload is not None,
+                            "snippets": n, "agy": agy}
+            if ledger_path is not None:
+                try:
+                    save_ledger(ledger_path, ledger)
+                except OSError as e:
+                    logger.warning("マイニング ledger を保存できませんでした: %s", e)
+            _step_summary([
+                f"| {asin} | {REASON_LABELS.get(reasons.get(asin, ''), '-')} "
+                f"| {'書けた' if payload else '0 件'} | {n} | {agy} |"
+            ])
+
+    # #6602 P2: 区分別の所要 (観測のみ)。"other" は ASIN ループの壁時計時間から、
+    # メインスレッドで測った gemma/http と「agy の先読みを待った時間」を引いた残差。
+    # agy と先読み中の http は gemma と重なって流れるので、壁時計の内訳には入れず、
+    # 稼働時間として agy/http に足す (区分の合計は壁時計を超える)。
+    known_s = timing.seconds["gemma"] + timing.seconds["http"] + agy_wait_s
     timing.seconds["other"] = round(max(0.0, loop_elapsed_s - known_s), 3)
+    timing.add("agy", agy_timing.seconds["agy"])
+    timing.add("http", agy_timing.seconds["http"])
+    timing_summary = timing.summary()
+    timing_summary["wall_seconds"] = round(loop_elapsed_s, 3)
+    timing_summary["agy_wait_seconds"] = round(agy_wait_s, 3)
     summary = {
         "targets": len(targets), "written": written, "skipped": skipped,
         "agy": agy_breaker.summary(),
         "dead_hosts": dead_hosts.summary(),
-        "timing": timing.summary(),
+        "timing": timing_summary,
     }
     logger.info("done: %s", json.dumps(summary, ensure_ascii=False))
     if not dry_run:
         agy_s = summary["agy"]
         t = summary["timing"]
         sec = t["seconds"]
-        total_s = sum(sec.values()) or 1.0
+        wall_s = t["wall_seconds"] or 1.0
         gemma_calls = t["gemma_calls"] or 1
         _step_summary([
             "",
@@ -1514,12 +1578,16 @@ def run(
             "",
             "所要時間の内訳 (観測のみ、#6602 P2):",
             "",
-            "| 区分 | 秒 | 割合 |",
+            f"壁時計 {t['wall_seconds']:.1f}s (1 件 {t['wall_seconds'] / max(1, len(targets)):.1f}s)。"
+            f"agy は次の件を gemma と並行で先読みするので、区分の合計は壁時計を超える。"
+            f"agy の先読みを待った時間 {t['agy_wait_seconds']:.1f}s。",
+            "",
+            "| 区分 | 稼働秒 | 壁時計に対する割合 |",
             "|---|---:|---:|",
-            f"| gemma | {sec['gemma']:.1f} | {sec['gemma'] / total_s * 100:.0f}% |",
-            f"| agy | {sec['agy']:.1f} | {sec['agy'] / total_s * 100:.0f}% |",
-            f"| http | {sec['http']:.1f} | {sec['http'] / total_s * 100:.0f}% |",
-            f"| other | {sec['other']:.1f} | {sec['other'] / total_s * 100:.0f}% |",
+            f"| gemma | {sec['gemma']:.1f} | {sec['gemma'] / wall_s * 100:.0f}% |",
+            f"| agy | {sec['agy']:.1f} | {sec['agy'] / wall_s * 100:.0f}% |",
+            f"| http | {sec['http']:.1f} | {sec['http'] / wall_s * 100:.0f}% |",
+            f"| other | {sec['other']:.1f} | {sec['other'] / wall_s * 100:.0f}% |",
             "",
             f"gemma 呼び出し {t['gemma_calls']} 回 (targets {len(targets)} 件中): "
             f"読込(prompt_eval) {t['gemma_prompt_eval_seconds']:.1f}s / "
