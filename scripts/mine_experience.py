@@ -50,6 +50,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import logging
 import os
@@ -196,6 +197,73 @@ def make_session(ollama_url: str = DEFAULT_OLLAMA_URL) -> tuple[requests.Session
     session.mount("http://", adapter)
     session.mount("https://", adapter)
     return session, adapter
+
+
+# --------------------------------------------------------------------------
+# 区分別計時 (#6602 P2: 観測のみ・挙動は変えない)
+#
+# 1 run の所要を agy (agy CLI の subprocess 実行) / gemma (Ollama /api/generate
+# のリクエスト) / http (third_party・threads・youtube・agy 出典 URL 解決の fetch) /
+# other (残差 = ASIN ループの壁時計時間 - 上記3つ) に分ける。gemma はさらに
+# Ollama 応答の prompt_eval_duration (読込) / eval_duration (生成) を ns 単位で
+# 積算し、呼び出し回数・トークン数 (prompt_eval_count / eval_count) も集計する。
+# --------------------------------------------------------------------------
+class TimingTracker:
+    def __init__(self) -> None:
+        self.seconds: dict[str, float] = {"agy": 0.0, "gemma": 0.0, "http": 0.0, "other": 0.0}
+        self.gemma_calls = 0
+        self.gemma_prompt_eval_ns = 0
+        self.gemma_eval_ns = 0
+        self.gemma_prompt_eval_count = 0
+        self.gemma_eval_count = 0
+
+    def add(self, bucket: str, elapsed_s: float) -> None:
+        self.seconds[bucket] = self.seconds.get(bucket, 0.0) + elapsed_s
+
+    def record_gemma_response(self, payload: Any) -> None:
+        """Ollama /api/generate の応答本体から読込/生成の内訳を積算する。
+        フィールドが無い (旧バージョン等) 場合は 0 のまま静かに無視する。"""
+        if not isinstance(payload, dict):
+            return
+        self.gemma_calls += 1
+        for key, attr in (
+            ("prompt_eval_duration", "gemma_prompt_eval_ns"),
+            ("eval_duration", "gemma_eval_ns"),
+        ):
+            v = payload.get(key)
+            if isinstance(v, (int, float)):
+                setattr(self, attr, getattr(self, attr) + v)
+        for key, attr in (
+            ("prompt_eval_count", "gemma_prompt_eval_count"),
+            ("eval_count", "gemma_eval_count"),
+        ):
+            v = payload.get(key)
+            if isinstance(v, (int, float)):
+                setattr(self, attr, getattr(self, attr) + v)
+
+    def summary(self) -> dict:
+        return {
+            "seconds": {k: round(v, 3) for k, v in self.seconds.items()},
+            "gemma_calls": self.gemma_calls,
+            "gemma_prompt_eval_seconds": round(self.gemma_prompt_eval_ns / 1e9, 3),
+            "gemma_eval_seconds": round(self.gemma_eval_ns / 1e9, 3),
+            "gemma_prompt_eval_count": self.gemma_prompt_eval_count,
+            "gemma_eval_count": self.gemma_eval_count,
+        }
+
+
+@contextlib.contextmanager
+def _timed(timing: TimingTracker | None, bucket: str):
+    """timing が None なら計測コストすら払わない (テストの大半は timing 無指定)。"""
+    if timing is None:
+        yield
+        return
+    start = time.monotonic()
+    try:
+        yield
+    finally:
+        timing.add(bucket, time.monotonic() - start)
+
 
 # usable_as のコード側固定割当 (gemma には判定させない)
 _USABLE_AS_MAP = {
@@ -688,6 +756,7 @@ def strip_urls(text: str) -> str:
 def resolve_source_urls(
     text: str, *, session: requests.Session | None = None,
     max_urls: int = ANTIGRAVITY_MAX_SOURCE_URLS,
+    timing: TimingTracker | None = None,
 ) -> list[str]:
     """本文中の URL を実 URL に解決し、使えるものだけ返す。
 
@@ -709,10 +778,11 @@ def resolve_source_urls(
         if len(out) >= max_urls:
             break
         try:
-            resp = session.get(
-                url, timeout=REQUEST_TIMEOUT, allow_redirects=True,
-                headers={"User-Agent": HONEST_UA},
-            )
+            with _timed(timing, "http"):
+                resp = session.get(
+                    url, timeout=REQUEST_TIMEOUT, allow_redirects=True,
+                    headers={"User-Agent": HONEST_UA},
+                )
         except requests.RequestException as e:
             logger.warning("出典 URL の解決に失敗 (%s): %s — 捨てる", url[:80], e)
             continue
@@ -800,6 +870,7 @@ def gather_antigravity(
     model: str | None = None, sleeper=time.sleep,
     session: requests.Session | None = None,
     breaker: AgyCircuitBreaker | None = None,
+    timing: TimingTracker | None = None,
 ) -> list[dict]:
     """Antigravity CLI (`agy`) をヘッドレス実行し、Web 検索に基づく口コミ要約を取得する。
 
@@ -839,15 +910,16 @@ def gather_antigravity(
     for attempt in range(1, attempts + 1):
         result = None
         try:
-            for cmd in cmds:
-                try:
-                    result = subprocess.run(
-                        cmd, capture_output=True, text=True,
-                        timeout=timeout_s, encoding="utf-8",
-                    )
-                    break
-                except FileNotFoundError:
-                    continue
+            with _timed(timing, "agy"):
+                for cmd in cmds:
+                    try:
+                        result = subprocess.run(
+                            cmd, capture_output=True, text=True,
+                            timeout=timeout_s, encoding="utf-8",
+                        )
+                        break
+                    except FileNotFoundError:
+                        continue
             if result is None:
                 logger.warning("agy (Antigravity CLI) が見つかりません — antigravity skip")
                 return []
@@ -871,7 +943,7 @@ def gather_antigravity(
                 logger.info("agy が %d 回目の試行で応答 (model=%s)", attempt, model)
             if breaker is not None:
                 breaker.record_ok()
-            source_urls = resolve_source_urls(text, session=session)
+            source_urls = resolve_source_urls(text, session=session, timing=timing)
             return [{
                 # gemma に渡すのは日本語の本文だけでよい。grounding redirect の
                 # URL は 1 本 300 字超あり、残すと入力の大半が URL になる。
@@ -890,7 +962,8 @@ def gather_antigravity(
                 "agy から空応答 (attempt %d/%d, model=%s) — リトライ",
                 attempt, attempts, model,
             )
-            sleeper(_RETRY_SLEEP_SECONDS)
+            with _timed(timing, "agy"):
+                sleeper(_RETRY_SLEEP_SECONDS)
 
     # stderr を残す。exit 0 の空応答でも agy は理由を stderr に書くことがあり
     # (「tool が auto-deny された」等)、これが無いと run ログから原因を辿れない。
@@ -907,6 +980,7 @@ def gather_antigravity(
 def gather_third_party(
     asin: str, *, base: pathlib.Path = PER_ASIN_DIR,
     session: requests.Session | None = None,
+    timing: TimingTracker | None = None,
 ) -> list[dict]:
     session = session or requests.Session()
     urls: list[tuple[str, str]] = []  # (url, source_type)
@@ -930,7 +1004,8 @@ def gather_third_party(
     out: list[dict] = []
     for url, source_type in urls:
         try:
-            resp = session.get(url, headers={"User-Agent": HONEST_UA}, timeout=REQUEST_TIMEOUT)
+            with _timed(timing, "http"):
+                resp = session.get(url, headers={"User-Agent": HONEST_UA}, timeout=REQUEST_TIMEOUT)
             resp.raise_for_status()
         except requests.RequestException as e:
             logger.warning("third_party fetch failed for %s: %s — skip", url, e)
@@ -949,6 +1024,7 @@ def gather_third_party(
 def gather_threads(
     product_name: str, *, token: str | None = None,
     session: requests.Session | None = None,
+    timing: TimingTracker | None = None,
 ) -> list[dict]:
     token = token if token is not None else os.environ.get("THREADS_ACCESS_TOKEN", "").strip()
     if not token:
@@ -956,16 +1032,17 @@ def gather_threads(
         return []
     session = session or requests.Session()
     try:
-        resp = session.get(
-            THREADS_ENDPOINT,
-            params={
-                "q": product_name,
-                "media_type": "TEXT",
-                "fields": "id,text,permalink,timestamp",
-                "access_token": token,
-            },
-            timeout=REQUEST_TIMEOUT,
-        )
+        with _timed(timing, "http"):
+            resp = session.get(
+                THREADS_ENDPOINT,
+                params={
+                    "q": product_name,
+                    "media_type": "TEXT",
+                    "fields": "id,text,permalink,timestamp",
+                    "access_token": token,
+                },
+                timeout=REQUEST_TIMEOUT,
+            )
         if resp.status_code in (400, 401, 403):
             # レスポンス本文 (Meta のエラー JSON は {"error": {"message": ...}} 形式で
             # token 自体は含まない) を先頭 200 字だけログに出し、権限不足の原因
@@ -1000,7 +1077,10 @@ def gather_threads(
     return out
 
 
-def gather_youtube_opportunistic(asin: str, *, base: pathlib.Path = PER_ASIN_DIR) -> list[dict]:
+def gather_youtube_opportunistic(
+    asin: str, *, base: pathlib.Path = PER_ASIN_DIR,
+    timing: TimingTracker | None = None,
+) -> list[dict]:
     yt = _load(base / asin / "youtube.json")
     items = _items(yt)
     if not items:
@@ -1023,7 +1103,8 @@ def gather_youtube_opportunistic(asin: str, *, base: pathlib.Path = PER_ASIN_DIR
             continue
         video_id = m.group(1)
         try:
-            segments = YouTubeTranscriptApi.get_transcript(video_id, languages=["ja", "en"])
+            with _timed(timing, "http"):
+                segments = YouTubeTranscriptApi.get_transcript(video_id, languages=["ja", "en"])
         except Exception as e:  # noqa: BLE001 — 字幕無し等は 1 件失敗として skip
             logger.warning("youtube transcript unavailable for %s: %s — skip", video_id, e)
             continue
@@ -1141,6 +1222,7 @@ def extract_snippets(
     ollama_url: str, model: str, session: requests.Session,
     sleeper=time.sleep,
     num_ctx: int = DEFAULT_NUM_CTX,
+    timing: TimingTracker | None = None,
 ) -> list[dict]:
     """1 candidate 分を gemma に投げ、entailment 通過分の snippet 群を返す。
     失敗時は空リスト (1 件の失敗で全体を止めない)。"""
@@ -1162,9 +1244,12 @@ def extract_snippets(
     attempts = _MAX_EXTRA_RETRIES + 1
     for attempt in range(1, attempts + 1):
         try:
-            resp = session.post(url, json=body, timeout=GEMMA_REQUEST_TIMEOUT)
-            resp.raise_for_status()
-            payload = resp.json()
+            with _timed(timing, "gemma"):
+                resp = session.post(url, json=body, timeout=GEMMA_REQUEST_TIMEOUT)
+                resp.raise_for_status()
+                payload = resp.json()
+            if timing is not None:
+                timing.record_gemma_response(payload)
             raw = payload.get("response") if isinstance(payload, dict) else None
             if not isinstance(raw, str) or not raw.strip():
                 raise ValueError("empty /api/generate response")
@@ -1175,7 +1260,8 @@ def extract_snippets(
         except (requests.RequestException, ValueError, json.JSONDecodeError) as e:
             if attempt < attempts:
                 logger.warning("extraction call failed (attempt %d/%d): %s", attempt, attempts, e)
-                sleeper(_RETRY_SLEEP_SECONDS)
+                with _timed(timing, "gemma"):
+                    sleeper(_RETRY_SLEEP_SECONDS)
             else:
                 logger.error("extraction call failed after %d attempt(s): %s", attempts, e)
                 return []
@@ -1224,6 +1310,7 @@ def mine_asin(
     sleeper=time.sleep,
     num_ctx: int = DEFAULT_NUM_CTX,
     agy_breaker: AgyCircuitBreaker | None = None,
+    timing: TimingTracker | None = None,
 ) -> dict | None:
     """1 ASIN 分の候補収集 + gemma 抽出を行い、experience.json payload を返す
     (snippets 0 件なら None)。"""
@@ -1234,16 +1321,18 @@ def mine_asin(
         return None
 
     candidates: list[dict] = []
-    candidates += gather_antigravity(product_name, brand, session=session, breaker=agy_breaker)
-    candidates += gather_third_party(asin, base=base, session=session)
-    candidates += gather_threads(product_name, session=session)
-    candidates += gather_youtube_opportunistic(asin, base=base)
+    candidates += gather_antigravity(product_name, brand, session=session, breaker=agy_breaker, timing=timing)
+    candidates += gather_third_party(asin, base=base, session=session, timing=timing)
+    candidates += gather_threads(product_name, session=session, timing=timing)
+    candidates += gather_youtube_opportunistic(asin, base=base, timing=timing)
     yahoo_candidates, rating_stats = gather_yahoo_aggregate(asin)
     candidates += yahoo_candidates
 
     snippets: list[dict] = []
     for c in candidates:
-        snippets += extract_snippets(c, product_name, brand, ollama_url, model, session, sleeper, num_ctx)
+        snippets += extract_snippets(
+            c, product_name, brand, ollama_url, model, session, sleeper, num_ctx, timing=timing,
+        )
 
     if not snippets:
         return None
@@ -1361,15 +1450,19 @@ def run(
     reasons = reasons or {}
     written = 0
     skipped = 0
+    timing = TimingTracker()
+    loop_elapsed_s = 0.0
     for asin in targets:
         if dry_run:
             logger.info("[dry-run] would mine %s", asin)
             continue
         agy_before = agy_breaker.summary()
+        asin_start = time.monotonic()
         payload = mine_asin(
             asin, base=base, ollama_url=ollama_url, model=model, session=session,
-            num_ctx=num_ctx, agy_breaker=agy_breaker,
+            num_ctx=num_ctx, agy_breaker=agy_breaker, timing=timing,
         )
+        loop_elapsed_s += time.monotonic() - asin_start
         agy = _agy_outcome(agy_before, agy_breaker.summary())
         n = len(payload["snippets"]) if payload else 0
         if payload is None:
@@ -1393,14 +1486,24 @@ def run(
             f"| {'書けた' if payload else '0 件'} | {n} | {agy} |"
         ])
 
+    # #6602 P2: 区分別の所要 (観測のみ・挙動は変えない)。"other" は ASIN ループの
+    # 壁時計時間から agy/gemma/http の実測を引いた残差 (yahoo ローカル読み・
+    # JSON 整形・ledger/Job Summary 書き込み等)。
+    known_s = sum(timing.seconds.get(k, 0.0) for k in ("agy", "gemma", "http"))
+    timing.seconds["other"] = round(max(0.0, loop_elapsed_s - known_s), 3)
     summary = {
         "targets": len(targets), "written": written, "skipped": skipped,
         "agy": agy_breaker.summary(),
         "dead_hosts": dead_hosts.summary(),
+        "timing": timing.summary(),
     }
     logger.info("done: %s", json.dumps(summary, ensure_ascii=False))
     if not dry_run:
         agy_s = summary["agy"]
+        t = summary["timing"]
+        sec = t["seconds"]
+        total_s = sum(sec.values()) or 1.0
+        gemma_calls = t["gemma_calls"] or 1
         _step_summary([
             "",
             f"**完了**: {len(targets)} 件中 {written} 件書けた / {skipped} 件は 0 件。",
@@ -1408,6 +1511,21 @@ def run(
             f"{agy_s['skipped_by_breaker']}" + (" — **breaker 作動**" if agy_s["tripped"] else ""),
             f"timeout で止めたホスト: {', '.join(summary['dead_hosts']['hosts']) or 'なし'}"
             f" (送らずに済んだリクエスト {summary['dead_hosts']['skipped_requests']} 件)",
+            "",
+            "所要時間の内訳 (観測のみ、#6602 P2):",
+            "",
+            "| 区分 | 秒 | 割合 |",
+            "|---|---:|---:|",
+            f"| gemma | {sec['gemma']:.1f} | {sec['gemma'] / total_s * 100:.0f}% |",
+            f"| agy | {sec['agy']:.1f} | {sec['agy'] / total_s * 100:.0f}% |",
+            f"| http | {sec['http']:.1f} | {sec['http'] / total_s * 100:.0f}% |",
+            f"| other | {sec['other']:.1f} | {sec['other'] / total_s * 100:.0f}% |",
+            "",
+            f"gemma 呼び出し {t['gemma_calls']} 回 (targets {len(targets)} 件中): "
+            f"読込(prompt_eval) {t['gemma_prompt_eval_seconds']:.1f}s / "
+            f"生成(eval) {t['gemma_eval_seconds']:.1f}s、"
+            f"平均プロンプト長 {t['gemma_prompt_eval_count'] / gemma_calls:.0f} tokens/call、"
+            f"平均生成長 {t['gemma_eval_count'] / gemma_calls:.0f} tokens/call。",
         ])
     return summary
 

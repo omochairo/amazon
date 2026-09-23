@@ -12,6 +12,7 @@ import requests
 
 from scripts import mine_experience
 from scripts.mine_experience import (
+    TimingTracker,
     _USABLE_AS_MAP,
     _yahoo_rating_stats,
     extract_snippets,
@@ -1445,3 +1446,129 @@ def test_dead_host_applies_to_redirect_target_of_grounding_url(monkeypatch):
     assert mine_experience.resolve_source_urls(text, session=session) == []
     assert calls == [f"{g}AAA", "https://www.biccamera.com/bc/item/9/", f"{g}BBB"]
     assert adapter.summary() == {"hosts": ["www.biccamera.com"], "skipped_requests": 1}
+
+
+# --------------------------------------------------------------------------
+# TimingTracker (#6602 P2: gemma / agy / http / other の内訳計測、観測のみ)
+# --------------------------------------------------------------------------
+
+def test_timing_tracker_summary_defaults_to_zero_without_duration_fields():
+    """response フィールドはあっても prompt_eval_duration 等が無ければ 0 のまま
+    (旧バージョン等で欠けていても壊れない)。"""
+    t = TimingTracker()
+    t.record_gemma_response({"response": "{}"})
+    s = t.summary()
+    assert s["gemma_calls"] == 1
+    assert s["gemma_prompt_eval_seconds"] == 0.0
+    assert s["gemma_eval_seconds"] == 0.0
+    assert s["gemma_prompt_eval_count"] == 0
+    assert s["gemma_eval_count"] == 0
+
+
+def test_timing_tracker_record_gemma_response_ignores_non_dict_payload():
+    t = TimingTracker()
+    t.record_gemma_response("not a dict")
+    assert t.gemma_calls == 0
+
+
+def test_timing_tracker_add_accumulates_per_bucket():
+    t = TimingTracker()
+    t.add("gemma", 1.0)
+    t.add("gemma", 0.5)
+    t.add("agy", 2.0)
+    assert t.summary()["seconds"] == {"agy": 2.0, "gemma": 1.5, "http": 0.0, "other": 0.0}
+
+
+def test_extract_snippets_records_gemma_response_stats_when_timing_given():
+    """prompt_eval_duration/eval_duration (ns) と count を timing に積算する。"""
+    inner = json.dumps({"entailed": True, "snippets": []})
+    resp_json = {
+        "response": inner,
+        "prompt_eval_duration": 1_500_000_000,
+        "eval_duration": 500_000_000,
+        "prompt_eval_count": 300,
+        "eval_count": 20,
+    }
+    session = _FakeSession([_FakeResponse(resp_json)])
+    candidate = {"text": "本文", "source_type": "blog", "source_url": ""}
+    timing = TimingTracker()
+    extract_snippets(candidate, "商品名", "ブランド", "http://ollama", "gemma4",
+                      session, sleeper=lambda s: None, timing=timing)
+    s = timing.summary()
+    assert s["gemma_calls"] == 1
+    assert s["gemma_prompt_eval_seconds"] == pytest.approx(1.5)
+    assert s["gemma_eval_seconds"] == pytest.approx(0.5)
+    assert s["gemma_prompt_eval_count"] == 300
+    assert s["gemma_eval_count"] == 20
+    assert s["seconds"]["gemma"] >= 0.0
+
+
+def test_extract_snippets_without_timing_is_unchanged():
+    """timing 未指定 (既定 None) でも従来どおり動く。"""
+    inner = json.dumps({"entailed": True, "snippets": []})
+    session = _FakeSession([_FakeResponse({"response": inner})])
+    candidate = {"text": "本文", "source_type": "blog", "source_url": ""}
+    result = extract_snippets(candidate, "商品名", "ブランド", "http://ollama", "gemma4",
+                               session, sleeper=lambda s: None)
+    assert result == []
+
+
+def test_gather_antigravity_records_agy_and_http_timing(monkeypatch):
+    """agy subprocess 実行は agy バケット、出典 URL 解決は http バケットに分かれる。"""
+    live = "https://a.example.jp/1"
+    out = f"* 連動が好評です。 出典: {live}"
+    monkeypatch.setattr(
+        "scripts.mine_experience.subprocess.run",
+        lambda cmd, **kw: _FakeCompletedProcess(returncode=0, stdout=out))
+    timing = TimingTracker()
+    result = gather_antigravity(
+        "商品名", "ブランド", session=_UrlSession({live: (200, live)}), timing=timing)
+    assert len(result) == 1
+    s = timing.summary()["seconds"]
+    assert s["agy"] >= 0.0
+    assert s["http"] >= 0.0
+    assert s["gemma"] == 0.0
+
+
+def test_run_includes_timing_breakdown_in_summary_and_job_summary(tmp_path, monkeypatch):
+    """run() は timing を集計し、summary['timing'] と Job Summary の両方に出す。"""
+    import time as time_mod
+    import scripts.mine_experience as mod
+
+    def fake_mine_asin(asin, **kw):
+        timing = kw["timing"]
+        timing.add("gemma", 0.01)
+        timing.record_gemma_response({
+            "prompt_eval_duration": 2_000_000_000,
+            "eval_duration": 1_000_000_000,
+            "prompt_eval_count": 500,
+            "eval_count": 50,
+        })
+        time_mod.sleep(0.001)  # summary['timing']['seconds']['other'] を 0 超にする
+        return None
+
+    monkeypatch.setattr(mod, "mine_asin", fake_mine_asin)
+    summary_file = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
+
+    summary = mod.run(["B0TIMING01"], base=tmp_path / "per_asin", ledger={})
+
+    t = summary["timing"]
+    assert t["gemma_calls"] == 1
+    assert t["gemma_prompt_eval_seconds"] == pytest.approx(2.0)
+    assert t["gemma_eval_seconds"] == pytest.approx(1.0)
+    assert t["gemma_prompt_eval_count"] == 500
+    assert t["gemma_eval_count"] == 50
+    assert t["seconds"]["gemma"] >= 0.01
+    assert t["seconds"]["other"] >= 0.0
+
+    text = summary_file.read_text(encoding="utf-8")
+    assert "所要時間の内訳" in text
+    assert "gemma 呼び出し 1 回" in text
+
+
+def test_run_timing_is_all_zero_in_dry_run(tmp_path, monkeypatch):
+    monkeypatch.setattr(mine_experience, "mine_asin", lambda *a, **k: None)
+    summary = run(["B0DRYRUN01"], base=tmp_path, dry_run=True)
+    assert summary["timing"]["seconds"] == {"agy": 0.0, "gemma": 0.0, "http": 0.0, "other": 0.0}
+    assert summary["timing"]["gemma_calls"] == 0
