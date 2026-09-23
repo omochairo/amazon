@@ -1235,11 +1235,14 @@ def test_run_records_every_attempt_in_ledger_and_job_summary(tmp_path, monkeypat
     payload = {"asin": "x", "generated_at": "now", "model": "m", "rating_stats": {},
                "snippets": [{"aspect": "不満", "text": "t"}]}
 
-    def fake_mine_asin(asin, **kw):
-        kw["agy_breaker"].record_ok()
-        return payload if asin == "B0WRITTEN1" else None
+    def fake_gather_antigravity(product_name, brand, **kw):
+        kw["breaker"].record_ok()
+        return []
 
-    monkeypatch.setattr(mod, "mine_asin", fake_mine_asin)
+    # agy は run() の先読みスレッドで回り、ledger の agy 欄もそちらで決まる
+    monkeypatch.setattr(mod, "resolve_product_identity", lambda asin, base=None: ("t", "p", "b"))
+    monkeypatch.setattr(mod, "gather_antigravity", fake_gather_antigravity)
+    monkeypatch.setattr(mod, "mine_asin", lambda asin, **kw: payload if asin == "B0WRITTEN1" else None)
     summary_file = tmp_path / "summary.md"
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
     ledger_path = tmp_path / "vol" / "mining_ledger.json"
@@ -1572,3 +1575,100 @@ def test_run_timing_is_all_zero_in_dry_run(tmp_path, monkeypatch):
     summary = run(["B0DRYRUN01"], base=tmp_path, dry_run=True)
     assert summary["timing"]["seconds"] == {"agy": 0.0, "gemma": 0.0, "http": 0.0, "other": 0.0}
     assert summary["timing"]["gemma_calls"] == 0
+
+
+# --------------------------------------------------------------------------
+# agy の先読み (#7952 / #6602): 次の ASIN の agy を今の ASIN の gemma と重ねる
+# --------------------------------------------------------------------------
+
+def _identity_by_asin(asin, base=None):
+    return ("title", asin, "brand")  # product_name に ASIN を入れて、agy がどの件か追えるようにする
+
+
+def test_run_prefetches_next_agy_while_current_asin_is_mined(tmp_path, monkeypatch):
+    """A1 の gemma 中に A2 の agy が走る。直列なら A2 の agy は A1 の後なので待ちが解けない。"""
+    import threading
+    import scripts.mine_experience as mod
+    a2_agy_started = threading.Event()
+    overlapped = []
+
+    def fake_gather_antigravity(product_name, brand, **kw):
+        if product_name == "B0PIPE0002":
+            a2_agy_started.set()
+        return [{"text": f"agy:{product_name}", "source_type": "antigravity", "source_url": ""}]
+
+    def fake_mine_asin(asin, **kw):
+        if asin == "B0PIPE0001":
+            overlapped.append(a2_agy_started.wait(timeout=5))
+        return None
+
+    monkeypatch.setattr(mod, "resolve_product_identity", _identity_by_asin)
+    monkeypatch.setattr(mod, "gather_antigravity", fake_gather_antigravity)
+    monkeypatch.setattr(mod, "mine_asin", fake_mine_asin)
+    mod.run(["B0PIPE0001", "B0PIPE0002"], base=tmp_path, ledger={})
+    assert overlapped == [True]
+
+
+def test_run_hands_each_asin_its_own_agy_candidates_in_order(tmp_path, monkeypatch):
+    import scripts.mine_experience as mod
+    agy_order, received = [], {}
+
+    def fake_gather_antigravity(product_name, brand, **kw):
+        agy_order.append(product_name)
+        return [{"text": f"agy:{product_name}", "source_type": "antigravity", "source_url": ""}]
+
+    def fake_mine_asin(asin, **kw):
+        received[asin] = [c["text"] for c in kw["agy_candidates"]]
+        return None
+
+    monkeypatch.setattr(mod, "resolve_product_identity", _identity_by_asin)
+    monkeypatch.setattr(mod, "gather_antigravity", fake_gather_antigravity)
+    monkeypatch.setattr(mod, "mine_asin", fake_mine_asin)
+    targets = ["B0ORDER001", "B0ORDER002", "B0ORDER003"]
+    mod.run(targets, base=tmp_path, ledger={})
+    assert agy_order == targets  # agy は 1 本ずつ・targets の順 (breaker の数え方が変わらない)
+    assert received == {a: [f"agy:{a}"] for a in targets}
+
+
+def test_run_skips_agy_for_unknown_asin_and_records_unavailable(tmp_path, monkeypatch):
+    import scripts.mine_experience as mod
+    called = []
+    monkeypatch.setattr(mod, "resolve_product_identity", lambda asin, base=None: ("", "", ""))
+    monkeypatch.setattr(mod, "gather_antigravity", lambda *a, **k: called.append(a) or [])
+    monkeypatch.setattr(mod, "mine_asin", lambda asin, **kw: None)
+    ledger = {}
+    mod.run(["B0UNKNOWN1"], base=tmp_path, ledger=ledger)
+    assert called == []
+    assert ledger["B0UNKNOWN1"]["agy"] == "unavailable"
+
+
+def test_mine_asin_uses_prefetched_agy_candidates_without_calling_agy(monkeypatch):
+    import scripts.mine_experience as mod
+    monkeypatch.setattr(mod, "resolve_product_identity", lambda asin, base=None: ("t", "p", "b"))
+    monkeypatch.setattr(mod, "gather_antigravity", lambda *a, **k: pytest.fail("agy を呼んではいけない"))
+    for name in ("gather_third_party", "gather_threads", "gather_youtube_opportunistic"):
+        monkeypatch.setattr(mod, name, lambda *a, **k: [])
+    monkeypatch.setattr(mod, "gather_yahoo_aggregate", lambda asin: ([], {}))
+    seen = []
+    monkeypatch.setattr(mod, "extract_snippets", lambda c, *a, **k: seen.append(c["text"]) or [])
+    mod.mine_asin("B0PREFETCH", agy_candidates=[{"text": "先読み済み", "source_type": "antigravity"}])
+    assert seen == ["先読み済み"]
+
+
+def test_run_timing_reports_wall_and_agy_wait_and_adds_prefetch_busy_time(tmp_path, monkeypatch):
+    import scripts.mine_experience as mod
+
+    def fake_gather_antigravity(product_name, brand, **kw):
+        kw["timing"].add("agy", 2.0)
+        kw["timing"].add("http", 0.5)
+        return []
+
+    monkeypatch.setattr(mod, "resolve_product_identity", _identity_by_asin)
+    monkeypatch.setattr(mod, "gather_antigravity", fake_gather_antigravity)
+    monkeypatch.setattr(mod, "mine_asin", lambda asin, **kw: None)
+    summary = mod.run(["B0WALL0001", "B0WALL0002"], base=tmp_path, ledger={})
+    t = summary["timing"]
+    assert t["seconds"]["agy"] == pytest.approx(4.0)   # 先読みスレッドの稼働時間を足す
+    assert t["seconds"]["http"] == pytest.approx(1.0)
+    assert t["wall_seconds"] >= t["agy_wait_seconds"] >= 0.0
+    assert t["seconds"]["other"] >= 0.0
