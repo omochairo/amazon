@@ -1549,6 +1549,55 @@ def _fallback_news_books(data: dict[str, Any], per_asin_root: pathlib.Path) -> N
             data[key] = items
 
 
+def _normalize_youtube_embeds(data: dict[str, Any]) -> int:
+    """``data["youtube_embeds"]`` の各要素を必ず dict に揃える。返り値は捨てた数。
+
+    テンプレは ``{{ vid.title }}`` / ``{{ vid.url }}`` で要素を読む。Jinja2 の
+    ``a.b`` は「まず getattr、無ければ getitem」の順で解決するため、要素が dict
+    ではなく **裸の文字列** だった場合 ``vid.title`` が ``str.title`` (束縛メソッド)
+    に解決されてしまい、生成 markdown に
+
+        - [<built-in method title of str object at 0x...>]()
+
+    がそのまま焼き込まれる (``vid.url`` は str に属性が無く getitem も
+    TypeError なので Undefined = 空文字になり ``()`` が残る)。
+    2026-07-14-B097BMF5DN で実際に1件発生した。dict 以外を素通しさせない。
+
+    裸の文字列は YouTube URL であっても救済せず落とす。関連度判定
+    (filter_raw_per_asin.filter_items, strict=2) は ``title`` を見るので、
+    title の無い要素は判定を一度も受けていない。B097BMF5DN の1件も、oEmbed で
+    タイトルを引いて判定にかけると REJECT だった。救済すると、サイトのルール
+    では載せない動画を iframe で載せることになる。
+    """
+    items = data.get("youtube_embeds")
+    if not isinstance(items, list):
+        if items:
+            data["youtube_embeds"] = []
+            return 1
+        return 0
+
+    cleaned: list[dict[str, Any]] = []
+    dropped = 0
+    for it in items:
+        if isinstance(it, dict):
+            # title/url が文字列以外 (dict / list / None) でもテンプレが壊れない
+            # よう str へ寄せる。None は空文字にする。
+            vid = dict(it)
+            for key in ("title", "url", "thumbnail", "embed_html"):
+                if key in vid:
+                    val = vid[key]
+                    vid[key] = "" if val is None else val if isinstance(val, str) else str(val)
+            if vid.get("url") or vid.get("embed_html"):
+                cleaned.append(vid)
+            else:
+                dropped += 1
+            continue
+        dropped += 1
+
+    data["youtube_embeds"] = cleaned
+    return dropped
+
+
 def _fallback_youtube_embeds(
     data: dict[str, Any],
     per_asin_root: pathlib.Path,
@@ -3648,6 +3697,12 @@ def main() -> None:
                 data.setdefault("faq", [])
                 data.setdefault("keywords", [])
                 skipped_legacy += 1
+            # Jules 由来の youtube_embeds に dict でない要素 (裸の URL 文字列等)
+            # が混ざっていると、テンプレの {{ vid.title }} が str.title の束縛
+            # メソッドに解決されて生成 markdown が壊れる。provenance を数える前
+            # に潰しておく (全要素が落ちたら「Jules 由来は無い」扱いにして
+            # per_asin フォールバックに引き継ぐ)。
+            _normalize_youtube_embeds(data)
             # フォールバック実行前の Jules 由来データの存在有無を記録
             has_jules_yt = bool(data.get("youtube_embeds"))
             has_jules_news = bool(data.get("news"))
@@ -3690,6 +3745,7 @@ def main() -> None:
             _override_competitive_analysis(data, per_asin_root)
             _fallback_news_books(data, per_asin_root)
             _fallback_youtube_embeds(data, per_asin_root)
+            _normalize_youtube_embeds(data)
             _attach_omcha_related(data, per_asin_root)
             _attach_source_highlights(data, per_asin_root)
             _attach_internal_links(data, article_index, site_base_path)
