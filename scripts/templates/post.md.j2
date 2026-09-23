@@ -352,14 +352,17 @@
 
 {{ vid.embed_html }}
 
+{% if vid.title %}
 <p class="yt-caption">{{ vid.title }}</p>
+{% endif %}
 {% elif _vid_id %}
 
 <div class="yt-embed"><iframe src="https://www.youtube-nocookie.com/embed/{{ _vid_id }}" title="{{ vid.title | e }}" loading="lazy" frameborder="0" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>
-
+{% if vid.title %}
 <p class="yt-caption">{{ vid.title }}</p>
-{% else %}
-- [{{ vid.title }}]({{ vid.url }})
+{% endif %}
+{% elif vid.title and _u %}
+- [{{ vid.title }}]({{ _u }})
 {% endif %}
 
 {% endfor %}

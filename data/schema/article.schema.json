@@ -144,8 +144,33 @@
         }
       }
     },
-    "youtube_embeds": { "type": "array" },
-    "news": { "type": "array" },
+    "youtube_embeds": {
+      "type": "array",
+      "description": "テンプレは {{ vid.title }} / {{ vid.url }} で読む。要素が裸の文字列だと Jinja2 が vid.title を str.title (束縛メソッド) に解決し、本文に '<built-in method title ...>' が焼き込まれる。url が無いと空リンクになる。",
+      "items": {
+        "type": "object",
+        "required": ["title", "url"],
+        "properties": {
+          "title": { "type": "string", "minLength": 1 },
+          "url": {
+            "type": "string",
+            "pattern": "^https://(www\\.)?(youtube\\.com/watch\\?v=[A-Za-z0-9_-]{11}|youtu\\.be/[A-Za-z0-9_-]{11})"
+          }
+        }
+      }
+    },
+    "news": {
+      "type": "array",
+      "description": "テンプレは {{ n.title }} / {{ n.url }} で読む。youtube_embeds と同じ理由で要素は object に限る。",
+      "items": {
+        "type": "object",
+        "required": ["title", "url"],
+        "properties": {
+          "title": { "type": "string", "minLength": 1 },
+          "url": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
     "books": { "type": "array" },
     "internal_links": { "type": "array" },
     "editorial_comment": { "type": "string", "minLength": 80 }
