@@ -100,6 +100,11 @@ LANES: Sequence[Lane] = (
          "毎週月曜 02:00 UTC (#4826 項目3。初回計測 2026-08-10)"),
     Lane("detector_eligibility.jsonl", "weekly", 12, "17-analytics-report.yml",
          "毎週日曜 00:00 UTC。detector 出力 JSON 自体は非 tracked なので前回値の唯一の出どころ (#5941)"),
+    # 日次ビルドで書くが、状態が変わった行しか出ない遷移ログ (#7954)。変化の無い日は
+    # 1 行も増えないので daily で監視すると誤報になる。月初の自己修復 snapshot 行が
+    # 月 1 回は必ず出ることを下限の保証として monthly で見る (#8092)。
+    Lane("article_format.jsonl", "monthly", 45, "18-analytics-daily.yml",
+         "遷移ログ + 月初 snapshot (#7954)。初回 2026-09-22"),
 )
 
 class DirLane:
