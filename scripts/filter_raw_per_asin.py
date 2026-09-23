@@ -20,6 +20,7 @@ import json
 import logging
 import pathlib
 import re
+import unicodedata
 
 import _fetch_targets
 
@@ -38,6 +39,11 @@ STRONG_TERM_MIN_LEN = 4
 # とみなし、単独では商品同定シグナルにしない (§4.7)。KNOWN_BRANDS の手動辞書では
 # 追いつかないため、ターゲット集合 (~1500 タイトル) から動的に判定する。
 SHARED_TERM_DF = 4
+
+# strict=2 の「裏付け語なし ASIN」経路で、文字種の変わり目で分けた断片の間に
+# 挟まってよい最大文字数 (2026-09-24)。「ミュウミュウおすわりぬいぐるみ」が
+# 「ミュウミュウのふわふわおすわりぬいぐるみ」に当たる幅 (5) に 1 字の余裕。
+CHUNK_PIECE_GAP = 6
 
 # コンテンツ種別ごとの top-N。youtube は本文に iframe で 1 件ずつ縦に並ぶので
 # 多すぎると記事が重くなる + 関連度の薄い候補を巻き込みやすいため少なめ。
@@ -192,6 +198,76 @@ def tokenize(text: str) -> set:
     return tokens
 
 
+def _norm(text: str) -> str:
+    """全角/半角・大小文字の揺れを吸収 (『ＮＥＷ ＯＨ！』と「NEW OH!」を同一視)。"""
+    return unicodedata.normalize("NFKC", text or "").lower()
+
+
+def _script(ch: str) -> str | None:
+    if re.match(r"[ァ-ヶー]", ch):
+        return "kata"
+    if re.match(r"[一-龯]", ch):
+        return "kanji"
+    if re.match(r"[ぁ-ん]", ch):
+        return "hira"
+    if re.match(r"[a-z0-9]", ch):
+        return "ascii"
+    return None
+
+
+def _joins_word(a: str, b: str) -> bool:
+    """a と b が隣り合うと 1 語として続いて読めるか。ひらがなは助詞
+    (の/を/で…) で区切られるのが普通なので続いているとはみなさない。"""
+    sa = _script(a)
+    return sa is not None and sa != "hira" and sa == _script(b)
+
+
+def _bounded_in(needle: str, hay: str) -> bool:
+    """needle が hay に「別の語の一部としてではなく」現れるか。
+    「はじめてのブロック」は「はじめてのブロックワゴン」の中では一致としない
+    (同ライン別商品, §4.7)。"""
+    start = hay.find(needle)
+    while start != -1:
+        end = start + len(needle)
+        # 直後の "+" は派生モデル名 (やみつきボックス+) の一部として扱う
+        if not ((start > 0 and _joins_word(hay[start - 1], needle[0]))
+                or (end < len(hay) and (hay[end] == "+"
+                                        or _joins_word(needle[-1], hay[end])))):
+            return True
+        start = hay.find(needle, start + 1)
+    return False
+
+
+def _script_runs(text: str) -> list[str]:
+    runs: list[str] = []
+    for ch in text:
+        if runs and _script(ch) == _script(runs[-1][-1]):
+            runs[-1] += ch
+        else:
+            runs.append(ch)
+    return runs
+
+
+def _chunk_in(chunk: str, hay: str) -> bool:
+    """chunk が hay に現れるか。そのままで無ければ、文字種の変わり目で分けた
+    断片 (各 2 字以上) が順番どおり CHUNK_PIECE_GAP 字以内の間隔で並ぶものも
+    一致とする (例: ミュウミュウ|おすわりぬいぐるみ)。"""
+    if _bounded_in(chunk, hay):
+        return True
+    runs = _script_runs(chunk)
+    if len(runs) < 2 or min(len(r) for r in runs) < 2:
+        return False
+    gap = ".{0,%d}?" % CHUNK_PIECE_GAP
+    pattern = re.compile(gap.join(re.escape(r) for r in runs))
+    return any(_bounded_in(m.group(0), hay) for m in pattern.finditer(hay))
+
+
+def title_chunks(title: str) -> list[str]:
+    """ターゲットタイトルを括弧除去・句読点分割した断片 (正規化済み)。"""
+    clean = re.sub(r"[【\[（\(].*?[】\]）\)]", " ", _norm(title))
+    return [c for c in _PUNCT_SPLIT.split(clean) if c.strip()]
+
+
 def score_item(item_text: str, asin_brands: set, asin_series: set,
                asin_model: str, asin_tokens: set,
                asin_product_terms: set,
@@ -245,7 +321,8 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
                  text_keys: list[str],
                  top_n: int = TOP_N_DEFAULT,
                  strict: int = 0,
-                 shared_terms: set | None = None) -> list:
+                 shared_terms: set | None = None,
+                 asin_title: str = "") -> list:
     """raw 配列をスコアリングして閾値以上を返す。
 
     strict=1 (books, 旧判定): ASIN にアンカー (model/terms/series) がある場合、
@@ -275,8 +352,27 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
         バイパス → ブランド一致 +5.0 だけで閾値超え
     誤マッチを載せるより空リストの方が良い (記事側は動画/ニュース無しで成立)
     ため、strict=2 ではアンカー無し ASIN の素通しも廃止した。
+
+    裏付け語なし ASIN (strict=2, 2026-09-24 追加): 上の条件だと、ターゲット
+    タイトルが「きらめく財宝」のように商品名 1 語だけの ASIN は unique 1 語を
+    裏付ける brand/series/shared がタイトルに存在せず、正しい動画も一律に
+    落ちていた。そこで asin_title が渡され、ASIN に brand/series/model/
+    shared (4 字以上) が一つも無く unique が 1 語以上ある場合に限り、
+    「タイトルの断片 (title_chunks) が全部、別の語の一部としてではなく
+    候補に現れる」ことを strong とする。断片を全部要求するので
+    「エヴァンゲリオンプライム2号機」に初号機の動画、「25音 カラフル鉄琴」に
+    20音の動画は通らない。語境界を見るので「はじめてのブロック」に
+    「はじめてのブロックワゴン」も通らない。
     """
     has_strong_anchor = bool(asin_model or asin_product_terms or asin_series)
+    shared_set = shared_terms or set()
+    strong_terms = {pt for pt in asin_product_terms
+                    if len(pt) >= STRONG_TERM_MIN_LEN}
+    chunks: list[str] = []
+    if (strict >= 2 and asin_title and not (asin_brands or asin_series
+                                            or asin_model)
+            and strong_terms and not (strong_terms & shared_set)):
+        chunks = title_chunks(asin_title)
     scored = []
     for item in raw_items:
         if not isinstance(item, dict):
@@ -293,6 +389,9 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
                       or (uniq == 1 and (signals.get("brand")
                                          or signals.get("series")
                                          or shared >= 1)))
+            if not strong and chunks:
+                norm_text = _norm(text)
+                strong = all(_chunk_in(c, norm_text) for c in chunks)
             if not strong:
                 continue
         elif strict and has_strong_anchor:
@@ -433,7 +532,11 @@ def main():
         yt = filter_items(yt_pool, brands, series, model, tokens,
                           product_terms, ["title"],
                           top_n=TOP_N_BY_KEY.get("youtube", TOP_N_DEFAULT),
-                          strict=2, shared_terms=shared_terms)
+                          strict=2, shared_terms=shared_terms,
+                          asin_title=title)
+        # news には裏付け語なし経路 (asin_title) を使わない。2026-09-24 の実測で
+        # 追加分 93 件中 36 件が別商品 (「ネムリラ コードレス HR」新発売のような
+        # 派生モデルの告知・同名の航空連合/釣具) だった。youtube は 282 件中 20 件。
         nw = filter_items(nw_pool, brands, series, model, tokens,
                           product_terms, ["title"], strict=2,
                           shared_terms=shared_terms)
