@@ -8,6 +8,7 @@ import io
 import os
 import sys
 import unittest
+from unittest import mock
 from contextlib import redirect_stdout
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -20,6 +21,7 @@ from recover_pending_pr_checks import (  # noqa: E402
     UNKNOWN_ESCALATE_MULTIPLIER,
     Action,
     _parse_commit_date_result,
+    close_reopen_pr,
     deferred_unknown_escalated_message,
     dirty_message,
     emit_warning_annotation,
@@ -29,6 +31,7 @@ from recover_pending_pr_checks import (  # noqa: E402
     has_stage2_label,
     recovered_none_message,
     required_checks_satisfied,
+    reopen_env,
     resolve_push_time,
 )
 
@@ -341,6 +344,32 @@ class PrFieldsMergeableRegressionTests(unittest.TestCase):
 
     def test_mergeable_field_is_requested(self):
         self.assertIn("mergeable", PR_FIELDS.split(","))
+
+
+class ReopenTokenTest(unittest.TestCase):
+    """#8092: close→reopen は App token (REOPEN_GH_TOKEN) で行う。
+
+    GITHUB_TOKEN の reopen は pull_request を発火しないため、回復実績が 0 件だった。
+    """
+
+    def test_reopen_env_swaps_gh_token(self):
+        with mock.patch.dict(os.environ, {"GH_TOKEN": "ambient", "REOPEN_GH_TOKEN": "app"}):
+            env = reopen_env()
+        self.assertEqual(env["GH_TOKEN"], "app")
+
+    def test_reopen_env_without_app_token_warns_and_keeps_ambient(self):
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"GH_TOKEN": "ambient"}, clear=True), redirect_stdout(buf):
+            env = reopen_env()
+        self.assertIsNone(env)
+        self.assertIn("REOPEN_GH_TOKEN unset", buf.getvalue())
+
+    def test_close_and_reopen_use_app_token_but_label_edit_does_not_need_it(self):
+        with mock.patch.dict(os.environ, {"GH_TOKEN": "ambient", "REOPEN_GH_TOKEN": "app"}),                 mock.patch("recover_pending_pr_checks.subprocess.run") as run:
+            close_reopen_pr("o/r", 123)
+        calls = {c.args[0][2]: c.kwargs.get("env") for c in run.call_args_list if c.args[0][1] == "pr"}
+        self.assertEqual(calls["close"]["GH_TOKEN"], "app")
+        self.assertEqual(calls["reopen"]["GH_TOKEN"], "app")
 
 
 if __name__ == "__main__":

@@ -359,11 +359,31 @@ def ensure_label_exists(repo: str, label: str) -> None:
     )
 
 
+def reopen_env() -> Optional[Dict[str, str]]:
+    """close→reopen に使う環境変数を返す (#8092)。
+
+    GITHUB_TOKEN で reopen しても GitHub の再帰防止で `pull_request` が発火せず、
+    required check は付かない (導入以来の回復実績 0 件: #7853 / #8061)。
+    ``REOPEN_GH_TOKEN`` (App token) があればそれを ``GH_TOKEN`` として渡す。
+    無いとき (手元実行など) は現在の環境のまま動かし、効かない可能性を警告に残す。
+    """
+    token = os.environ.get("REOPEN_GH_TOKEN", "")
+    if not token:
+        emit_warning_annotation(
+            "REOPEN_GH_TOKEN unset: close→reopen uses the ambient token "
+            "(GITHUB_TOKEN reopen does not trigger pull_request, #8092)")
+        return None
+    env = dict(os.environ)
+    env["GH_TOKEN"] = token
+    return env
+
+
 def close_reopen_pr(repo: str, pr_number: int) -> None:
+    env = reopen_env()
     subprocess.run(["gh", "pr", "close", str(pr_number), "-R", repo],
-                    check=True, capture_output=True, text=True)
+                    check=True, capture_output=True, text=True, env=env)
     subprocess.run(["gh", "pr", "reopen", str(pr_number), "-R", repo],
-                    check=True, capture_output=True, text=True)
+                    check=True, capture_output=True, text=True, env=env)
     ensure_label_exists(repo, STAGE2_LABEL)
     subprocess.run(["gh", "pr", "edit", str(pr_number), "-R", repo,
                      "--add-label", STAGE2_LABEL],
