@@ -96,6 +96,21 @@ class ScorePerAsinInfoTest(unittest.TestCase):
         self.assertEqual(r["band"], "ok")
         self.assertGreaterEqual(r["evidence_score"], 40)
 
+    def test_title_only_youtube_items_do_not_count(self):
+        # #8163 レビュー指摘: _match: "title_only" (#8162 案A) は enrich/defer
+        # 優先度の材料にしない。全件 title_only なら yt=0 と同じ扱い。
+        d = self._mk("B0TITLEONLY")
+        _write(d, "amazon.json", {"item": {"title": "謎ブランドのおもちゃ"}})
+        _write(d, "news.json", {"items": []})
+        _write(d, "youtube.json", {"items": [
+            {"title": "v1", "_match": "title_only"},
+            {"title": "v2", "_match": "title_only"},
+        ]})
+        _write(d, "books.json", {"items": []})
+        r = S.score_asin("B0TITLEONLY", self.base)
+        self.assertEqual(r["youtube"], 0)
+        self.assertEqual(r["band"], "zero")
+
 
 class ThirdPartySourcesBandTest(unittest.TestCase):
     """#5490 案B: third_party_sources.json を band 判定に配線した分の境界。"""

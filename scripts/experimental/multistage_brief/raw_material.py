@@ -10,6 +10,8 @@ import json
 import pathlib
 from typing import Any
 
+from scripts.filter_raw_per_asin import exclude_title_only
+
 DEFAULT_RAW_DIR = "data/raw/per_asin"
 
 # 各セクションの目安文字数。material_text 全体を MAX_MATERIAL_TEXT_LEN 以内に
@@ -39,7 +41,9 @@ def load_raw_material(asin: str, raw_dir: str | pathlib.Path = DEFAULT_RAW_DIR) 
         "amazon": _load_json(base / "amazon.json"),
         "competitors": _load_json(base / "competitors.json"),
         "experience": _load_json(base / "experience.json"),
-        "youtube": _load_json(base / "youtube.json"),
+        # _match: "title_only" (#8162 案A) は裏付け語なしで一般語/シリーズ名の
+        # ASIN に混ざりうる誤りなので、素材テキストに入れない。
+        "youtube": exclude_title_only(_load_json(base / "youtube.json")),
         "news": _load_json(base / "news.json"),
     }
 

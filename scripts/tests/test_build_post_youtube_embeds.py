@@ -228,6 +228,35 @@ class YoutubeEmbedsRenderTest(unittest.TestCase):
         self.assertIn("youtube-nocookie.com/embed/0eNXLHTnkIU", content)
         self.assertIn('<p class="yt-caption">レビュー動画</p>', content)
 
+    def test_title_only_fallback_item_is_excluded_from_embeds(self):
+        # #8162 案 A: title_only タグの付いた per_asin フォールバック項目は
+        # 公開記事に自動埋め込みしない。裏付け無しの項目と裏付けありの項目が
+        # 混ざっていても、裏付けありだけが載る。
+        content = self._render(
+            [],
+            per_asin_youtube={"items": [
+                {"title": "一般語の別商品", "url": "https://www.youtube.com/watch?v=titleonly01",
+                 "_match": "title_only"},
+                {"title": "判定済みの動画", "url": "https://www.youtube.com/watch?v=abcDEF12345"},
+            ]},
+        )
+        self._assert_no_python_repr(content)
+        self.assertIn("youtube-nocookie.com/embed/abcDEF12345", content)
+        self.assertNotIn("titleonly01", content)
+        self.assertNotIn("一般語の別商品", content)
+
+    def test_all_title_only_fallback_items_drop_the_section(self):
+        content = self._render(
+            [],
+            per_asin_youtube={"items": [
+                {"title": "一般語の別商品", "url": "https://www.youtube.com/watch?v=titleonly01",
+                 "_match": "title_only"},
+            ]},
+        )
+        self._assert_no_python_repr(content)
+        self.assertNotIn("titleonly01", content)
+        self.assertNotIn("関連動画", content)
+
 
 if __name__ == "__main__":
     unittest.main()

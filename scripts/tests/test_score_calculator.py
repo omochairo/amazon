@@ -219,5 +219,66 @@ class MediaExposureMetricsTest(unittest.TestCase):
         self.assertEqual(set(d), expected)
 
 
+class TitleOnlyYoutubeExclusionTest(unittest.TestCase):
+    """#8163 レビュー指摘: _match: "title_only" (#8162 案A) の項目は
+    メディア露出スコア・文言の根拠にしない。title_only しか無い ASIN は
+    youtube.json が空 (0件) なのと同じ扱いにする。"""
+
+    def setUp(self):
+        reset_media_exposure_metrics()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.repo_root = pathlib.Path(self.tmp.name)
+        self.asin_dir = self.repo_root / "data" / "raw" / "per_asin" / "B0TEST00001"
+        self.asin_dir.mkdir(parents=True)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+        reset_media_exposure_metrics()
+
+    def _calc(self):
+        article = {"product": {"brand": "Test", "asin": "B0TEST00001"}}
+        return calculate_score(
+            article, normalize_brand("Test"), asin="B0TEST00001",
+            repo_root=self.repo_root,
+        )
+
+    def test_title_only_only_counts_as_empty_not_present(self):
+        (self.asin_dir / "youtube.json").write_text(json.dumps({"items": [
+            {"url": "u1", "title": "一般語の別商品", "_match": "title_only"},
+            {"url": "u2", "title": "もう一件", "_match": "title_only"},
+            {"url": "u3", "title": "三件目", "_match": "title_only"},
+        ]}), encoding="utf-8")
+        self._calc()
+        m = get_media_exposure_metrics()
+        self.assertEqual(m.yt_empty, 1)
+        self.assertEqual(m.yt_missing, 0)
+
+    def test_title_only_items_do_not_add_media_exposure_points(self):
+        (self.asin_dir / "youtube.json").write_text(json.dumps({"items": [
+            {"url": "u1", "title": "一般語の別商品", "_match": "title_only"},
+            {"url": "u2", "title": "もう一件", "_match": "title_only"},
+            {"url": "u3", "title": "三件目", "_match": "title_only"},
+        ]}), encoding="utf-8")
+        res = self._calc()
+        self.assertEqual(res.breakdown["media_exposure"], 0)
+
+    def test_title_only_items_do_not_produce_youtube_reason_text(self):
+        # rationale[4] = media_exposure の reason (calculate() の並び順)
+        (self.asin_dir / "youtube.json").write_text(json.dumps({"items": [
+            {"url": "u1", "title": "一般語の別商品", "_match": "title_only"},
+        ]}), encoding="utf-8")
+        res = self._calc()
+        self.assertNotIn("YouTube", res.rationale[4])
+
+    def test_confirmed_item_alongside_title_only_still_counts(self):
+        (self.asin_dir / "youtube.json").write_text(json.dumps({"items": [
+            {"url": "u1", "title": "一般語の別商品", "_match": "title_only"},
+            {"url": "u2", "title": "確認済みの動画"},
+        ]}), encoding="utf-8")
+        res = self._calc()
+        self.assertIn("YouTube", res.rationale[4])
+        self.assertEqual(res.breakdown["media_exposure"], 3)  # yt=1 -> 3点
+
+
 if __name__ == "__main__":
     unittest.main()
