@@ -20,6 +20,7 @@ from scripts.mine_experience import (
     gather_threads,
     gather_third_party,
     gather_yahoo_aggregate,
+    gather_youtube_opportunistic,
     mine_asin,
     resolve_product_identity,
     run,
@@ -1672,3 +1673,46 @@ def test_run_timing_reports_wall_and_agy_wait_and_adds_prefetch_busy_time(tmp_pa
     assert t["seconds"]["http"] == pytest.approx(1.0)
     assert t["wall_seconds"] >= t["agy_wait_seconds"] >= 0.0
     assert t["seconds"]["other"] >= 0.0
+
+
+def test_gather_youtube_opportunistic_skips_title_only_items(tmp_path, monkeypatch):
+    # #8162 案 A: title_only タグの付いた項目は字幕取得の対象にしない
+    # (未確認の同定を体験談の引用候補にしない)。
+    asin = "B0TITLEONLY"
+    (tmp_path / asin).mkdir(parents=True)
+    (tmp_path / asin / "youtube.json").write_text(json.dumps({"items": [
+        {"title": "一般語の別商品", "url": "https://www.youtube.com/watch?v=titleonly01",
+         "_match": "title_only"},
+        {"title": "判定済みの動画", "url": "https://www.youtube.com/watch?v=confirmed01"},
+    ]}), encoding="utf-8")
+
+    fetched = []
+
+    class _FakeTranscriptApi:
+        @staticmethod
+        def get_transcript(video_id, languages=None):
+            fetched.append(video_id)
+            return [{"text": "体験談テキスト"}]
+
+    import youtube_transcript_api
+    monkeypatch.setattr(youtube_transcript_api, "YouTubeTranscriptApi", _FakeTranscriptApi)
+
+    out = gather_youtube_opportunistic(asin, base=tmp_path)
+    assert fetched == ["confirmed01"]
+    assert [c["source_url"] for c in out] == ["https://www.youtube.com/watch?v=confirmed01"]
+
+
+def test_gather_youtube_opportunistic_returns_empty_when_all_items_are_title_only(tmp_path, monkeypatch):
+    asin = "B0ALLTITLEONLY"
+    (tmp_path / asin).mkdir(parents=True)
+    (tmp_path / asin / "youtube.json").write_text(json.dumps({"items": [
+        {"title": "一般語の別商品", "url": "https://www.youtube.com/watch?v=titleonly01",
+         "_match": "title_only"},
+    ]}), encoding="utf-8")
+    # 字幕 API を一切呼ばずに空リストで返る (呼ばれたら pytest.fail)。
+    import youtube_transcript_api
+    monkeypatch.setattr(
+        youtube_transcript_api, "YouTubeTranscriptApi",
+        type("X", (), {"get_transcript": staticmethod(
+            lambda *a, **k: pytest.fail("title_only しか無いのに呼んではいけない"))}))
+    assert gather_youtube_opportunistic(asin, base=tmp_path) == []

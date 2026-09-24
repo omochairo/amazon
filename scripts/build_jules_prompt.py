@@ -45,6 +45,8 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from filter_raw_per_asin import exclude_title_only  # noqa: E402
+
 JST = timezone(timedelta(hours=9))
 
 
@@ -192,9 +194,13 @@ def build_prompt(asin, today=None):
         if base.endswith(".raw.json"):
             continue
         try:
-            per_asin[base] = _jload(p)
+            data = _jload(p)
         except Exception as e:
             print(f"warning: skip unreadable {p}: {e}", file=sys.stderr)
+            continue
+        if base == "youtube.json":
+            data = exclude_title_only(data)
+        per_asin[base] = data
 
     info_note = _info_note(asin)
     gsc_note = _gsc_note(asin)

@@ -84,6 +84,22 @@ class RawMaterialTest(unittest.TestCase):
         raw = {"competitors": {"competitors": [{"asin": "A0000000001"}, {"asin": "A0000000002"}, {}]}}
         self.assertEqual(raw_material.allowed_competitor_asins(raw), {"A0000000001", "A0000000002"})
 
+    def test_load_raw_material_excludes_title_only_youtube_items(self):
+        # #8163 レビュー指摘: _match: "title_only" (#8162 案A) は素材テキストに入れない
+        import json
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as td:
+            asin_dir = Path(td) / "B0TITLEONLY"
+            asin_dir.mkdir()
+            (asin_dir / "youtube.json").write_text(json.dumps({"items": [
+                {"title": "一般語の別商品", "url": "u1", "_match": "title_only"},
+                {"title": "確認済みの動画", "url": "u2"},
+            ]}), encoding="utf-8")
+            raw = raw_material.load_raw_material("B0TITLEONLY", raw_dir=td)
+        self.assertEqual([it["title"] for it in raw["youtube"]["items"]], ["確認済みの動画"])
+
     def test_experience_snippets_by_aspect(self):
         raw = {"experience": {"snippets": [
             {"aspect": "不満", "text": "壊れやすい"},
