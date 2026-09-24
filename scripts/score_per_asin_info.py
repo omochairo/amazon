@@ -39,9 +39,11 @@ import urllib.parse
 
 try:
     import brand_normalizer
+    from filter_raw_per_asin import exclude_title_only
 except ImportError:  # スクリプトを scripts/ 外から呼ぶ場合のフォールバック
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
     import brand_normalizer  # type: ignore
+    from filter_raw_per_asin import exclude_title_only  # type: ignore
 
 PER_ASIN_DIR = pathlib.Path("data/raw/per_asin")
 
@@ -225,7 +227,9 @@ def score_asin(asin: str, base: pathlib.Path = PER_ASIN_DIR) -> dict:
     )
 
     news_src = _news_distinct_sources(news)
-    yt = len(_items(youtube))
+    # _match: "title_only" (#8162 案A) は裏付け語なしで一般語/シリーズ名の
+    # ASIN に混ざりうる誤りなので、enrich/defer の優先度判断の材料にしない。
+    yt = len(_items(exclude_title_only(youtube)))
     bk = len(_items(books))
     comp_list = competitors.get("competitors", []) if isinstance(competitors, dict) else []
     comp = len(comp_list) if isinstance(comp_list, list) else 0

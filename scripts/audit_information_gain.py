@@ -66,6 +66,7 @@ import requests
 
 from scripts.audit_experience_usage import NARRATIVE_KEYS, build_paragraph_map, cosine_similarity, percentile
 from scripts.compute_semantic_related import DEFAULT_RURI_URL, discover_articles, embed_batch_ruri
+from scripts.filter_raw_per_asin import exclude_title_only
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("audit_information_gain")
@@ -569,7 +570,9 @@ def load_raw_material(asin: str, raw_dir: str | pathlib.Path = DEFAULT_RAW_DIR) 
         "amazon": _load_json(base / "amazon.json"),
         "competitors": _load_json(base / "competitors.json"),
         "experience": _load_json(base / "experience.json"),
-        "youtube": _load_json(base / "youtube.json"),
+        # _match: "title_only" (#8162 案A) は裏付け語なしで一般語/シリーズ名の
+        # ASIN に混ざりうる誤りなので、narrative の裏付け判定の素材にしない。
+        "youtube": exclude_title_only(_load_json(base / "youtube.json")),
         "news": _load_json(base / "news.json"),
     }
 

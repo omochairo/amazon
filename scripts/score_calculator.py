@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from brand_normalizer import NormalizedBrand
+from filter_raw_per_asin import exclude_title_only
 
 
 @dataclass
@@ -293,6 +294,25 @@ def _file_state(path: pathlib.Path) -> str:
     return "empty"
 
 
+def _youtube_state_and_count(path: pathlib.Path) -> tuple[str, int]:
+    """``_file_state`` / ``_count_items`` の youtube 専用版。``_match:
+    "title_only"`` (#8162 案A) の項目を除外してから数える。裏付け語なしで
+    一般語/シリーズ名の ASIN に混ざる誤りが、メディア露出スコアや
+    「YouTube に紹介動画があり…」の文言の根拠にならないようにする
+    (title_only しか無い ASIN は動画が無いのと同じ扱い)。"""
+    if not path.exists():
+        return "missing", 0
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return "missing", 0
+    filtered = exclude_title_only(data)
+    items = filtered.get("items") if isinstance(filtered, dict) else filtered
+    if not isinstance(items, list):
+        return "empty", 0
+    return ("present" if items else "empty"), len(items)
+
+
 # omcha.jp 関連記事スコアの閾値 (iro/v2 の 0..100 正規化スケール、Issue #6103)。
 #
 # v1 は上限のない素の合計値で、スケールがクエリの語数に依存していた
@@ -348,7 +368,7 @@ def _media_exposure_score(
     yt_path = d / "youtube.json"
     news_path = d / "news.json"
     omcha_path = d / "omcha_related.json"
-    yt_state = _file_state(yt_path)
+    yt_state, yt = _youtube_state_and_count(yt_path)
     news_state = _file_state(news_path)
     omcha_state = _file_state(omcha_path)
     _METRICS.total += 1
@@ -364,7 +384,6 @@ def _media_exposure_score(
         _METRICS.omcha_missing += 1
     elif omcha_state == "empty":
         _METRICS.omcha_empty += 1
-    yt = _count_items(yt_path)
     nw = _count_items(news_path)
     om_top = _omcha_top_score(omcha_path)
     yt_p = 6 if yt >= 3 else 3 if yt >= 1 else 0

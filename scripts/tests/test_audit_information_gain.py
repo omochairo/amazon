@@ -36,6 +36,7 @@ from scripts.audit_information_gain import (
     flatten_narrative_sentences,
     has_experience_material_at_generation,
     iso_week_label,
+    load_raw_material,
     parse_classify_response,
     parse_entailment_response,
     sample_category_articles,
@@ -357,6 +358,28 @@ class BuildMaterialTextTest(unittest.TestCase):
         text = build_material_text(raw)
         self.assertIn("商品名", text)
         self.assertIn("壊れやすい", text)
+
+
+class LoadRawMaterialTitleOnlyExclusionTest(unittest.TestCase):
+    """#8163 レビュー指摘: load_raw_material が読む youtube.json の
+    _match: "title_only" (#8162 案A) 項目は narrative の裏付け判定の素材に
+    しない (build_material_text の「関連動画タイトル」に出さない)。"""
+
+    def test_title_only_items_are_excluded_from_loaded_material(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            asin_dir = Path(td) / "B0TITLEONLY"
+            asin_dir.mkdir()
+            (asin_dir / "youtube.json").write_text(json.dumps({"items": [
+                {"title": "一般語の別商品", "url": "u1", "_match": "title_only"},
+                {"title": "確認済みの動画", "url": "u2"},
+            ]}), encoding="utf-8")
+            raw = load_raw_material("B0TITLEONLY", raw_dir=td)
+        self.assertEqual([it["title"] for it in raw["youtube"]["items"]], ["確認済みの動画"])
+        text = build_material_text(raw)
+        self.assertIn("確認済みの動画", text)
+        self.assertNotIn("一般語の別商品", text)
 
 
 class ExperienceSnippetsByAspectTest(unittest.TestCase):
