@@ -86,3 +86,41 @@ def test_target_with_corroborator_does_not_use_title_path():
     # 共有語 (GraviTrax) を持つ ASIN は従来経路のまま: 固有語 1 語だけでは足りない
     assert not _passes("GraviTrax 追加パーツ トランポリン",
                        "トランポリン 室内 子ども", {"GraviTrax", "追加パーツ"})
+
+
+def _first(target: str, video: str, shared: set | None = None,
+           with_title: bool = True) -> dict:
+    brands, series = frpa.extract_brand_series(target)
+    model = frpa.extract_model_number(target)
+    tokens = frpa.tokenize(target)
+    terms = frpa.extract_product_terms(target, brands, series)
+    result = frpa.filter_items(
+        [{"title": video, "url": "u"}], brands, series, model, tokens, terms,
+        ["title"], top_n=1, strict=2, shared_terms=shared or set(),
+        asin_title=target if with_title else "")
+    assert result, "expected a match"
+    return result[0]
+
+
+@pytest.mark.parametrize("target,video", KNOWN_POSITIVES)
+def test_title_only_path_tags_the_item(target, video):
+    # 裏付け語なし経路 (title_chunks) だけで strong になった項目は
+    # _match: "title_only" を付ける (#8162 案 A)。
+    assert _first(target, video).get("_match") == "title_only"
+
+
+def test_strong_anchor_match_is_not_tagged():
+    # brand/series/shared に裏付けられた既存 strong 経路は tag を付けない。
+    item = _first("アンパンマン ことばずかんプラス",
+                  "アンパンマンの ことばずかんプラス で遊んでみた")
+    assert "_match" not in item
+
+
+def test_exclude_title_only_drops_only_tagged_items():
+    kept = {"title": "keep", "url": "u1"}
+    dropped = {"title": "drop", "url": "u2", "_match": "title_only"}
+    assert frpa.exclude_title_only([kept, dropped]) == [kept]
+    assert frpa.exclude_title_only({"items": [kept, dropped]}) == {"items": [kept]}
+    # dict/list 以外・items の無い dict は素通し
+    assert frpa.exclude_title_only(None) is None
+    assert frpa.exclude_title_only({"foo": "bar"}) == {"foo": "bar"}

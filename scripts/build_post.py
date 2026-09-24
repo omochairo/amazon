@@ -44,6 +44,7 @@ import where_to_buy_format
 from brand_normalizer import normalize as normalize_brand
 from build_feature_lists import PRICE_BANDS
 from fetch_amazon import get_secret
+from filter_raw_per_asin import exclude_title_only
 from score_per_asin_info import is_search_result_url
 from score_calculator import (
     ScoreResult,
@@ -1617,6 +1618,7 @@ def _fallback_youtube_embeds(
     if data.get("youtube_embeds"):
         return
     items = _load_per_asin_items(per_asin_root, asin, "youtube.json", limit=limit)
+    items = exclude_title_only(items)
     if items:
         data["youtube_embeds"] = items
 

@@ -363,6 +363,14 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
     「エヴァンゲリオンプライム2号機」に初号機の動画、「25音 カラフル鉄琴」に
     20音の動画は通らない。語境界を見るので「はじめてのブロック」に
     「はじめてのブロックワゴン」も通らない。
+
+    この経路だけで strong になった項目には `_match: "title_only"` を付ける
+    (#8162 案 A)。ターゲット名そのものが一般語の ASIN (スクイッシュ/釣具 等)
+    では誤りが混ざることが実測されており (#8122 で 282 件中 20 件別商品)、
+    公開記事への自動埋め込み (build_post._fallback_youtube_embeds) と
+    体験談抽出 (mine_experience)・Jules への sources 提供 (build_jules_prompt)
+    では除外する。既存の strong 経路 (brand/series/shared に裏付けられた一致)
+    の項目には付けない。
     """
     has_strong_anchor = bool(asin_model or asin_product_terms or asin_series)
     shared_set = shared_terms or set()
@@ -381,6 +389,7 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
         s, signals = score_item(text, asin_brands, asin_series, asin_model,
                                 asin_tokens, asin_product_terms,
                                 shared_terms=shared_terms)
+        title_only = False
         if strict >= 2:
             uniq = signals.get("product_term_unique", 0)
             shared = signals.get("product_term_shared", 0)
@@ -391,7 +400,9 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
                                          or shared >= 1)))
             if not strong and chunks:
                 norm_text = _norm(text)
-                strong = all(_chunk_in(c, norm_text) for c in chunks)
+                if all(_chunk_in(c, norm_text) for c in chunks):
+                    strong = True
+                    title_only = True
             if not strong:
                 continue
         elif strict and has_strong_anchor:
@@ -402,9 +413,36 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
         if s >= SCORE_THRESHOLD:
             enriched = dict(item)
             enriched["_relevance_score"] = round(s, 2)
+            if title_only:
+                enriched["_match"] = "title_only"
             scored.append(enriched)
     scored.sort(key=lambda x: x["_relevance_score"], reverse=True)
     return scored[:top_n]
+
+
+def exclude_title_only(payload):
+    """``_match: "title_only"`` (#8162 案 A) が付いた項目を除いて返す。
+
+    filter_items の裏付け語なし経路 (タイトル断片一致のみ) で strong に
+    なった項目は、ターゲット名そのものが一般語の ASIN (スクイッシュ→釣具、
+    スカイチーム→航空連合 等) で誤りが混ざることが実測されている
+    (#8122: 282 件中 20 件が別商品)。公開記事への自動埋め込み
+    (build_post._fallback_youtube_embeds)・体験談抽出
+    (mine_experience.gather_youtube_opportunistic)・Jules への sources 提供
+    (build_jules_prompt) の 3 消費側は、この共通ヘルパーで除外してから使う。
+
+    ``{"items": [...]}`` 形と裸の list、どちらも受け付ける。"""
+    if isinstance(payload, dict):
+        items = payload.get("items")
+        if isinstance(items, list):
+            filtered = [it for it in items
+                        if not (isinstance(it, dict) and it.get("_match") == "title_only")]
+            return {**payload, "items": filtered}
+        return payload
+    if isinstance(payload, list):
+        return [it for it in payload
+                if not (isinstance(it, dict) and it.get("_match") == "title_only")]
+    return payload
 
 
 def collect_targets(amazon_items: list, articles_dir: pathlib.Path) -> dict:

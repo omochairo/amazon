@@ -70,6 +70,7 @@ import requests
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import brand_normalizer  # noqa: E402
 from fetch_cross_search import extract_search_keyword  # noqa: E402
+from filter_raw_per_asin import exclude_title_only  # noqa: E402
 from score_per_asin_info import is_search_result_url  # noqa: E402
 from self_domain import SELF_DOMAIN_SUFFIXES, is_self_domain  # noqa: E402,F401
 
@@ -1088,7 +1089,7 @@ def gather_youtube_opportunistic(
     timing: TimingTracker | None = None,
 ) -> list[dict]:
     yt = _load(base / asin / "youtube.json")
-    items = _items(yt)
+    items = exclude_title_only(_items(yt))
     if not items:
         return []
     try:

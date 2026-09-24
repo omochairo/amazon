@@ -9,7 +9,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from build_jules_prompt import _audit_note, _experience_note, main  # noqa: E402
+import build_jules_prompt  # noqa: E402
+from build_jules_prompt import _audit_note, _experience_note, build_prompt, main  # noqa: E402
 
 
 def _write_audit(tmp_path, pages):
@@ -163,3 +164,35 @@ def test_print_note_experience_empty_when_file_missing(tmp_path, monkeypatch, ca
     out = capsys.readouterr().out
     assert rc == 0
     assert out == ""
+
+
+# --------------------------------------------------------------------------
+# build_prompt: per_asin/youtube.json の title_only 除外 (#8162 案 A)
+# --------------------------------------------------------------------------
+
+def test_build_prompt_excludes_title_only_youtube_items(tmp_path, monkeypatch):
+    # jules/PROMPT_TEMPLATE.md は private repo 側にしか無いので _read だけ差し替える
+    # (AGENTS.md / jules/PROMPT_TEMPLATE.md 以外の実ファイル読み込みは素通し)。
+    real_read = build_jules_prompt._read
+    monkeypatch.setattr(
+        build_jules_prompt, "_read",
+        lambda path: "" if path in ("AGENTS.md", "jules/PROMPT_TEMPLATE.md") else real_read(path))
+    monkeypatch.chdir(tmp_path)
+    asin = "B0FNM4Y35G"
+    raw_dir = tmp_path / "data" / "raw"
+    (raw_dir).mkdir(parents=True)
+    (raw_dir / "amazon.json").write_text(
+        json.dumps({"items": [{"asin": asin, "title": "テスト商品"}]}), encoding="utf-8")
+    per_asin_dir = raw_dir / "per_asin" / asin
+    per_asin_dir.mkdir(parents=True)
+    (per_asin_dir / "youtube.json").write_text(json.dumps({"items": [
+        {"title": "一般語の別商品", "url": "https://www.youtube.com/watch?v=titleonly01",
+         "_match": "title_only"},
+        {"title": "判定済みの動画", "url": "https://www.youtube.com/watch?v=confirmed01"},
+    ]}), encoding="utf-8")
+
+    prompt = build_prompt(asin, today="2026-09-24")
+    assert "confirmed01" in prompt
+    assert "判定済みの動画" in prompt
+    assert "titleonly01" not in prompt
+    assert "一般語の別商品" not in prompt
