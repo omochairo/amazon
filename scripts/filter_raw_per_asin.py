@@ -140,7 +140,7 @@ def extract_model_number(text: str) -> str:
 
 
 _PUNCT_SPLIT = re.compile(r"[\s！。、・/／,!\?？:：「」『』\-]+")
-_JA_TERM = re.compile(r"[ぁ-んァ-ヶー一-龯]{3,12}")
+_JA_TERM = re.compile(r"[ぁ-んァ-ヶー一-龯]{3,}")
 _ASCII_TERM = re.compile(r"[A-Za-z][A-Za-z0-9]{2,}")
 _HIRAGANA_VERB = re.compile(r"^[ぁ-ん]{3,5}[うるく]$")
 _TRAIL_NOISE = re.compile(
@@ -157,7 +157,7 @@ def extract_product_terms(title: str, brands: set, series: set) -> set[str]:
         → {ことばずかん, にほんごえいご二語文} 等。
     抽出ルール:
       - 括弧内除去、ブランド/シリーズ語を除去
-      - 句読点/スラッシュで分割、長さ 3-12 の日本語語 (かな/カナ/漢字) を拾う
+      - 句読点/スラッシュで分割、長さ 3 以上の日本語語 (かな/カナ/漢字) を拾う
       - 末尾の 周年記念BOX / 限定 / 年号 等のサフィックスを剥がして core を残す
       - 末尾の 1文字助詞 (もがはにでを) を安全に strip
       - 動詞風 (5字以下のひらがな末尾 う/る/く) は除外
