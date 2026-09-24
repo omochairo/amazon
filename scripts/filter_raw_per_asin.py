@@ -45,6 +45,42 @@ SHARED_TERM_DF = 4
 # 「ミュウミュウのふわふわおすわりぬいぐるみ」に当たる幅 (5) に 1 字の余裕。
 CHUNK_PIECE_GAP = 6
 
+# #8162 案B/C (2026-09-24): 裏付け語なし経路 (title_chunks) が有効な ASIN でも、
+# ターゲット名そのものが一般語/シリーズ名だと誤りが混ざる (#8122 実測)。
+# ASIN の raw プール全体を見て、この経路を有効にするかどうかを ASIN 単位で
+# 判定するゲート (allows_title_only_path) の閾値。
+# scripts/tests/fixtures/filter_strict2_title_only_labels.jsonl (282件:
+# same_product 257 / other_product 20 / unknown 5, #8122 で目視判定) +
+# filter_strict2_title_only_pool.jsonl (raw プール) で閾値を振って決定
+# (詳細は PR 本文の表)。
+#
+# TOY_CONTEXT_MIN_RATIO=0.01 単独: same_product 残存 193/257 (75%)、
+# other_product 残存 5/20 (25%、#8122 の誤り 20 件を 75% 削減)。案B が
+# ほとんどの誤り (スクイッシュ→釣具、スカイチーム→航空連合、KIKKA→BGM 等
+# raw プールに「おもちゃの文脈」が皆無なもの) を落とす。
+#
+# 案C (SERIES_CONTINUATION_MIN_ITEMS) は「ターゲット名の直後に別の語が続く
+# 候補の件数」を見るが、ラベル付き集合では人気商品ほど紹介・感想系の
+# 動画が多く続き語も増えるため、same_product 側でも 0〜4 件普通に出る
+# (最大 4 件: アスレチックランドゲーム)。3 件以上で無効化する案は同時に
+# same_product を 193→169 に削るのに other_product は 5→5 のまま (#8122 の
+# 残り 5 件 = ナインタイル/あいうえおボード/ふんわりえほん×2ASIN は
+# いずれも続き語 0〜2 件で 3 件のラインに届かない) だったため不採用。
+# 5 件以上を要求すると、ラベル付き集合内の same_product・other_product
+# どちらにも該当が無くなる (no-op) が、より大規模なコーパスでの明確な
+# シリーズ ASIN (続き語が多数派になる) への保険として残す。
+# 「誤りを機械的にゼロにする」閾値 (ratio>1.0 等) は同時に same_product も
+# ゼロにする退化解 (案A自体を無効化するのと同じ) なので不採用。
+TOY_CONTEXT_MIN_RATIO = 0.01
+SERIES_CONTINUATION_MIN_ITEMS = 5
+
+# 案B: raw プール中の候補テキストに「おもちゃの文脈」があるとみなす汎用語。
+TOY_CONTEXT_GENERIC_WORDS = frozenset({
+    "ボードゲーム", "おもちゃ", "知育", "開封", "レビュー", "遊んでみた", "遊んで",
+    "紹介", "商品紹介", "知育玩具", "知育おもちゃ", "遊び方", "asmr", "購入品",
+    "開封動画",
+})
+
 # コンテンツ種別ごとの top-N。youtube は本文に iframe で 1 件ずつ縦に並ぶので
 # 多すぎると記事が重くなる + 関連度の薄い候補を巻き込みやすいため少なめ。
 TOP_N_DEFAULT = 5
@@ -268,6 +304,111 @@ def title_chunks(title: str) -> list[str]:
     return [c for c in _PUNCT_SPLIT.split(clean) if c.strip()]
 
 
+_TRAIL_CONT_STRIP = re.compile(
+    r"^[\s「」『』（）()\[\]【】・:：\-—_/／!！?？。、,，.]*")
+
+
+def _amazon_title_context_terms(amazon_title: str, chunks: list[str]) -> set[str]:
+    """#8162 案B: per_asin/<ASIN>/amazon.json の正式名から、ターゲット名
+    (chunks) 自体とは別の「おもちゃの文脈」語 (ブランド/シリーズ/固有語) を
+    抽出する。ターゲット名の部分文字列 (「Time to Time」の "Time" 等) は
+    除外する (それ自体は商品を裏付けない)。"""
+    if not amazon_title:
+        return set()
+    brands, series = extract_brand_series(amazon_title)
+    terms = extract_product_terms(amazon_title, brands, series) | brands | series
+    out = set()
+    for t in terms:
+        nt = _norm(t)
+        if len(nt) < 2:
+            continue
+        if any(nt in c or c in nt for c in chunks):
+            continue
+        out.add(nt)
+    return out
+
+
+def _toy_context_hit(norm_text: str, extra_context_terms: set[str]) -> bool:
+    for b in KNOWN_BRANDS:
+        if _norm(b) in norm_text:
+            return True
+    for t in extra_context_terms:
+        if t in norm_text:
+            return True
+    for w in TOY_CONTEXT_GENERIC_WORDS:
+        if _norm(w) in norm_text:
+            return True
+    return False
+
+
+# 助詞始まり (を紹介/で遊んでみた/の使い方…) は「同じ商品についての実況・
+# 感想文」の続きであってシリーズ別タイトルの証拠にならないので除外する。
+_TRAIL_PARTICLE_LEAD = re.compile(r"^[をでにとがはもへや]")
+
+
+def _trailing_continuation(chunk: str, norm_text: str) -> str | None:
+    """chunk の直後 (句読点・括弧を挟んでよい) に続く、別の商品名らしき語を返す。
+    汎用文脈語 (TOY_CONTEXT_GENERIC_WORDS) / PRODUCT_NOISE / 助詞始まりの
+    続き (「を紹介」「で遊んでみた」等、同じ商品についての実況・感想の
+    続きであってシリーズ別タイトルの証拠にならない) は None。"""
+    idx = norm_text.find(chunk)
+    if idx == -1:
+        return None
+    rest = _TRAIL_CONT_STRIP.sub("", norm_text[idx + len(chunk):])
+    m = _JA_TERM.match(rest) or re.match(r"[a-z][a-z0-9]{2,}", rest)
+    if not m:
+        return None
+    cont = m.group(0)
+    if cont in {_norm(w) for w in TOY_CONTEXT_GENERIC_WORDS} or cont in PRODUCT_NOISE:
+        return None
+    if _TRAIL_PARTICLE_LEAD.match(cont):
+        return None
+    return cont
+
+
+def _matching_pool_texts(chunks: list[str], pool_texts: list[str]) -> list[str]:
+    out = []
+    for text in pool_texts:
+        norm = _norm(text)
+        if all(_chunk_in(c, norm) for c in chunks):
+            out.append(norm)
+    return out
+
+
+def allows_title_only_path(chunks: list[str], pool_texts: list[str],
+                           amazon_title: str = "") -> bool:
+    """#8162 案B/C: 裏付け語なし経路 (title_chunks) を ASIN 単位で有効にして
+    よいかを、ASIN の raw プール全体 (pool_texts = yt_pool の title 群) で判定する。
+
+    案B (一般語判定): chunks (ターゲット名) を含む候補のうち、ブランド名 /
+    per_asin/amazon.json 正式名の語 (target 自体は除く) / 汎用文脈語
+    (「ボードゲーム」「知育」等) のいずれかを持つ割合が TOY_CONTEXT_MIN_RATIO
+    未満なら無効 (例: スクイッシュ→釣具、スカイチーム→航空連合、KIKKA→BGM は
+    候補全体がゼロ)。
+
+    案C (シリーズ名判定): chunks の直後に (汎用文脈語ではない) 別の語が続く
+    候補が SERIES_CONTINUATION_MIN_ITEMS 件以上あるなら、ターゲット名はシリーズ
+    名だけの可能性が高いとみなし無効 (例: 「ふんわりえほん こぐまくんの…」
+    「ナインタイル ポケモンドコダ」)。
+
+    閾値の根拠は TOY_CONTEXT_MIN_RATIO / SERIES_CONTINUATION_MIN_ITEMS の定義
+    コメントと PR 本文 (#8162 段階3) の表を参照。"""
+    if not chunks:
+        return False
+    matching = _matching_pool_texts(chunks, pool_texts)
+    if not matching:
+        return False
+    extra_context_terms = _amazon_title_context_terms(amazon_title, chunks)
+    hits = sum(1 for t in matching if _toy_context_hit(t, extra_context_terms))
+    if (hits / len(matching)) < TOY_CONTEXT_MIN_RATIO:
+        return False
+    continuations = sum(1 for t in matching
+                        if any(_trailing_continuation(c, t) for c in chunks))
+    if continuations >= SERIES_CONTINUATION_MIN_ITEMS:
+        return False
+    return True
+
+
 def score_item(item_text: str, asin_brands: set, asin_series: set,
                asin_model: str, asin_tokens: set,
                asin_product_terms: set,
@@ -322,7 +463,8 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
                  top_n: int = TOP_N_DEFAULT,
                  strict: int = 0,
                  shared_terms: set | None = None,
-                 asin_title: str = "") -> list:
+                 asin_title: str = "",
+                 amazon_title: str = "") -> list:
     """raw 配列をスコアリングして閾値以上を返す。
 
     strict=1 (books, 旧判定): ASIN にアンカー (model/terms/series) がある場合、
@@ -371,6 +513,11 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
     体験談抽出 (mine_experience)・Jules への sources 提供 (build_jules_prompt)
     では除外する。既存の strong 経路 (brand/series/shared に裏付けられた一致)
     の項目には付けない。
+
+    さらに ASIN 単位で allows_title_only_path() のゲートを通らないと
+    この経路自体を無効にする (#8162 案B/C, 2026-09-24)。amazon_title は
+    per_asin/<ASIN>/amazon.json の正式名 (無ければ空文字、ゲートは raw
+    プールの文脈語判定のみで行う)。
     """
     has_strong_anchor = bool(asin_model or asin_product_terms or asin_series)
     shared_set = shared_terms or set()
@@ -380,7 +527,12 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
     if (strict >= 2 and asin_title and not (asin_brands or asin_series
                                             or asin_model)
             and strong_terms and not (strong_terms & shared_set)):
-        chunks = title_chunks(asin_title)
+        candidate_chunks = title_chunks(asin_title)
+        if candidate_chunks:
+            pool_texts = [" ".join(str(it.get(k, "")) for k in text_keys)
+                         for it in raw_items if isinstance(it, dict)]
+            if allows_title_only_path(candidate_chunks, pool_texts, amazon_title):
+                chunks = candidate_chunks
     scored = []
     for item in raw_items:
         if not isinstance(item, dict):
@@ -483,6 +635,23 @@ def collect_targets(amazon_items: list, articles_dir: pathlib.Path) -> dict:
     return targets
 
 
+def load_per_asin_amazon_title(raw_dir: pathlib.Path, asin: str) -> str:
+    """data/raw/per_asin/<ASIN>/amazon.json (楽天ランキング由来の新規 ASIN 用
+    キャッシュ、build_jules_prompt._amazon_item と同じ形) から正式名を返す。
+    無ければ空文字 (#8162 案B の文脈語判定用)。"""
+    p = raw_dir / "per_asin" / asin / "amazon.json"
+    if not p.exists():
+        return ""
+    try:
+        d = json.loads(p.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return ""
+    item = d.get("item") if isinstance(d, dict) else None
+    if isinstance(item, dict):
+        return item.get("title", "") or ""
+    return ""
+
+
 def main():
     root = pathlib.Path(".")
     raw_dir = root / "data" / "raw"
@@ -571,7 +740,8 @@ def main():
                           product_terms, ["title"],
                           top_n=TOP_N_BY_KEY.get("youtube", TOP_N_DEFAULT),
                           strict=2, shared_terms=shared_terms,
-                          asin_title=title)
+                          asin_title=title,
+                          amazon_title=load_per_asin_amazon_title(raw_dir, asin))
         # news には裏付け語なし経路 (asin_title) を使わない。2026-09-24 の実測で
         # 追加分 93 件中 36 件が別商品 (「ネムリラ コードレス HR」新発売のような
         # 派生モデルの告知・同名の航空連合/釣具) だった。youtube は 282 件中 20 件。
