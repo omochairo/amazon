@@ -35,9 +35,6 @@ import _api_health  # noqa: E402
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("cross_search")
 
-# --- 楽天 API ---
-RAKUTEN_SEARCH_URL = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601"
-
 # --- Yahoo API ---
 YAHOO_SEARCH_URL = "https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch"
 VC_REFERRAL_BASE = "https://ck.jp.ap.valuecommerce.com/servlet/referral"
