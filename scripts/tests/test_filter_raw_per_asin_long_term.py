@@ -75,3 +75,82 @@ def test_shared_long_term_not_used_alone():
 def test_allow_long_term_false_disables_path():
     assert not _strong("リズムあそびいっぱいマジカルバンド",
                        "リズムあそびいっぱいマジカルバンド", allow_long_term=False)
+
+
+def test_long_term_shared_with_sibling_target_not_used_alone():
+    # 他のターゲットタイトルにも出る長い語 (df>=2) は系列名。ターゲット側に
+    # 識別語が無い基本セットでも、兄弟商品の動画を単独一致で通さない。
+    target = "LaQ ハマクロンコンストラクター"
+    sibling = "LaQ ハマクロンコンストラクター 緊急車両"
+    b, s = frpa.extract_brand_series(target)
+    terms = frpa.extract_product_terms(target, b, s)
+    df = frpa.compute_title_df([
+        (target, terms),
+        (sibling, frpa.extract_product_terms(sibling, *frpa.extract_brand_series(sibling)))])
+    video = frpa._norm("LaQハマクロンコンストラクター 緊急車両を紹介")
+    assert frpa._long_term_strong(target, terms, set(), video)
+    assert not frpa._long_term_strong(target, terms, set(), video, title_df=df)
+
+
+def test_trailing_short_marker_required():
+    # 「2」「DX」のような短い版番号は strong 語にならないが、識別語として要求する。
+    assert not _strong("トミカ ライジングポリスブレイバー 2",
+                       "ライジングポリスブレイバー 3 を開封")
+    assert _strong("トミカ ライジングポリスブレイバー 2",
+                   "ライジングポリスブレイバー 2 を開封")
+    assert not _strong("トミカ ライジングポリスブレイバー DX",
+                       "ライジングポリスブレイバー を開封")
+
+
+def test_different_model_number_rejected():
+    assert not _strong("ともだちいっぱいアドベンチャーパック 71439",
+                       "71440 ともだちいっぱいアドベンチャーパック 開封")
+    assert _strong("ともだちいっぱいアドベンチャーパック 71439",
+                   "ともだちいっぱいアドベンチャーパック 開封")
+
+
+def test_compute_title_df_counts_substring_occurrences():
+    # 語の切り方に依らず、他のタイトルに複合語の一部として出る語も数える。
+    df = frpa.compute_title_df([
+        ("すみっコぐらしパソコン", {"パソコン"}),
+        ("ドラえもんAIパソコン", {"ドラえもん", "パソコン"}),
+        ("カメラもIN!すみっコぐらしパソコンプレミアムプラス", {"パソコンプレミアムプラス"}),
+    ])
+    assert df["パソコン"] == 3
+    assert df["ドラえもん"] == 1
+
+
+def _terms(title):
+    return frpa.extract_product_terms(title, *frpa.extract_brand_series(title))
+
+
+def test_sibling_long_term_needs_distinguishing_suffix():
+    # 兄弟商品がカタログにある系列名は、後置の識別語 (版番号 6) があれば
+    # それと合わせて一致したときだけ strong。識別語にならない「ミニ」しか
+    # 無い基本版には、兄弟 (…ゲーム5) の動画を通さない (#8164 実測)。
+    six = "どこでもドラえもん日本旅行ゲーム6"
+    mini = "エポック社 どこでもドラえもん日本旅行ゲーム ミニ"
+    df = frpa.compute_title_df([(six, _terms(six)), (mini, _terms(mini))])
+    assert frpa._long_term_strong(
+        six, _terms(six), set(),
+        frpa._norm("「どこでもドラえもん日本旅行ゲーム6」が登場！"), title_df=df)
+    assert not frpa._long_term_strong(
+        mini, _terms(mini), set(),
+        frpa._norm("どこでもドラえもん日本旅行ゲーム５（ファイブ）あそび方"), title_df=df)
+
+
+def test_trailing_character_brand_required():
+    # 後ろに付くキャラクター (KNOWN_BRANDS) 違いは別商品 (#8164 実測)。
+    assert not _strong("アイアップ はじめてのマナー豆おおつぶ すみっコぐらし",
+                       "「はじめてのマナー豆おおつぶ ドラえもん」が登場！")
+    assert _strong("アイアップ はじめてのマナー豆おおつぶ すみっコぐらし",
+                   "はじめてのマナー豆おおつぶ すみっコぐらし で練習")
+
+
+def test_long_term_matches_with_inserted_spaces():
+    # 動画/ニュース側で途中に空白が入る表記 (#8164 実測)。
+    assert _strong("プラレール ありがとう!北の大地を駆け抜けた寝台特急カシオペア",
+                   "プラレール　ありがとう！北の大地を駆け抜けた　寝台特急カシオペア")
+    # 空白をまたいでも語境界は見る (後ろにカタカナが続けば別の語)。
+    assert not _strong("北の大地を駆け抜けた寝台特急カシオペア",
+                       "北の大地を駆け抜けた 寝台特急カシオペアエクスプレス")

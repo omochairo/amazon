@@ -146,6 +146,9 @@ def extract_model_number(text: str) -> str:
 
 _PUNCT_SPLIT = re.compile(r"[\s！。、・/／,!\?？:：「」『』\-]+")
 _JA_TERM = re.compile(r"[ぁ-んァ-ヶー一-龯]{3,}")
+# #8164 以前の抽出 (13 字以上を 12 字 + 残りに割る)。shared の判定を main から
+# 縮めないためだけに使う (main() の legacy_df のコメント参照)。
+_JA_TERM_LEGACY = re.compile(r"[ぁ-んァ-ヶー一-龯]{3,12}")
 _ASCII_TERM = re.compile(r"[A-Za-z][A-Za-z0-9]{2,}")
 _HIRAGANA_VERB = re.compile(r"^[ぁ-ん]{3,5}[うるく]$")
 _TRAIL_NOISE = re.compile(
@@ -155,7 +158,8 @@ _TRAIL_NOISE = re.compile(
 _PARTICLE_STRIP = re.compile(r"[もがはにでを]$")
 
 
-def extract_product_terms(title: str, brands: set, series: set) -> set[str]:
+def extract_product_terms(title: str, brands: set, series: set,
+                          ja_term: re.Pattern = _JA_TERM) -> set[str]:
     """ASIN タイトルから「商品を一意に同定する」非ブランド・非シリーズ語を抽出。
 
     例: 「アンパンマン にほんごえいご二語文も！…ことばずかん15周年記念BOX」
@@ -178,7 +182,7 @@ def extract_product_terms(title: str, brands: set, series: set) -> set[str]:
         chunk = chunk.strip()
         if not chunk:
             continue
-        for m in _JA_TERM.finditer(chunk):
+        for m in ja_term.finditer(chunk):
             t = m.group(0)
             # 末尾サフィックスを最大 2 回剥がす (例: "15周年記念BOX" → "")
             for _ in range(2):
@@ -279,6 +283,23 @@ def _bounded_in(needle: str, hay: str) -> bool:
     return False
 
 
+def _bounded_in_spaced(needle: str, hay: str) -> bool:
+    """_bounded_in と同じだが、hay 側で needle の文字の間に空白が挟まって
+    いても一致とする (「北の大地を駆け抜けた　寝台特急カシオペア」
+    「まほうのサーティワン アイスクリーム」)。長い固有語 (_long_term_strong)
+    専用: 短い語に使うと別々の語をつないで一致させてしまう。"""
+    if _bounded_in(needle, hay):
+        return True
+    pattern = re.compile(r"\s*".join(re.escape(ch) for ch in needle))
+    for m in pattern.finditer(hay):
+        start, end = m.start(), m.end()
+        if not ((start > 0 and _joins_word(hay[start - 1], needle[0]))
+                or (end < len(hay) and (hay[end] == "+"
+                                        or _joins_word(needle[-1], hay[end])))):
+            return True
+    return False
+
+
 def _script_runs(text: str) -> list[str]:
     runs: list[str] = []
     for ch in text:
@@ -309,8 +330,29 @@ def title_chunks(title: str) -> list[str]:
     return [c for c in _PUNCT_SPLIT.split(clean) if c.strip()]
 
 
+# _long_term_strong: 長い語の直後に付く短い版番号・英数字 (2 / DX / 01)。
+# 「3歳から」の 3 のように後ろに語が続くものは版番号とみなさない。
+_TRAILING_MARKER = re.compile(r"[\s・\-]*([0-9a-z]{1,3})(?=$|[\s・/／()（）【】\[\]])")
+
+
+def compute_title_df(titles_terms: list[tuple[str, set]]) -> dict[str, int]:
+    """product_term ごとに、その語を (正規化後の部分文字列として) 含む
+    ターゲットタイトルの数を返す (#8164, 2026-09-26)。_long_term_strong の
+    兄弟商品判定に使う。shared の判定には使わない (同じ商品の重複出品 =
+    長い Amazon 商品名まで数えてしまい、「ゆらりんタワー」「たんぐらむ」を
+    shared にして正しい動画を大量に落とす: youtube -90 / news -43)。"""
+    norm_titles = [_norm(title) for title, _ in titles_terms]
+    vocab: set[str] = set()
+    for _, terms in titles_terms:
+        vocab |= terms
+    return {term: sum(1 for t in norm_titles if _norm(term) in t)
+            for term in vocab}
+
+
 def _long_term_strong(asin_title: str, asin_product_terms: set,
-                      shared_terms: set, norm_text: str) -> bool:
+                      shared_terms: set, norm_text: str,
+                      title_df: dict | None = None,
+                      asin_model: str = "") -> bool:
     """#8164 (2026-09-25): LONG_TERM_MIN_LEN 字以上の固有語 (shared でない)
     が語境界を保って候補に現れれば、model 番号一致や uniq>=2 と同格の強
     シグナルとして単独で strong 扱いにしてよい。
@@ -337,25 +379,53 @@ def _long_term_strong(asin_title: str, asin_product_terms: set,
 
     語境界チェック (_bounded_in, #8122 と同じ: 前後にカタカナ/漢字/英数字が
     続いたら不一致、直後の "+" は派生モデルとして不一致) は長い語・
-    識別サフィックスの両方に適用する。"""
+    識別サフィックスの両方に適用する。長い語は、途中に空白が挟まった表記も
+    一致とする (_bounded_in_spaced)。
+
+    後置の識別語には、strong 語 (4 字以上) にならない短い版番号・英数字
+    (「…セレクション2」「… DX」「… 01」, _TRAILING_MARKER) と、後ろに付く
+    KNOWN_BRANDS/SERIES (キャラクター違い: 「はじめてのマナー豆おおつぶ
+    すみっコぐらし」に「… ドラえもん」) も含める (#8164, 2026-09-26)。
+
+    title_df (compute_title_df) で長い語が他のターゲットタイトルにも
+    現れる (カタログに兄弟商品がある) ときは、その語は商品名ではなく
+    系列名なので、後置の識別語が 1 つ以上あることを要求する。識別語の無い
+    無印・基本セット (「どこでもドラえもん日本旅行ゲーム ミニ」の「ミニ」は
+    識別語にならない) に兄弟商品 (…ゲーム5) の動画を通さない。
+
+    ASIN に型番があるときは、候補の型番が別物 (71439 に 71440) なら
+    この経路を使わない。"""
     long_terms = [pt for pt in asin_product_terms
-                 if len(pt) >= LONG_TERM_MIN_LEN and pt not in shared_terms]
+                  if len(pt) >= LONG_TERM_MIN_LEN and pt not in shared_terms]
     if not long_terms:
         return False
+    if asin_model:
+        cand_model = extract_model_number(norm_text.upper())
+        if cand_model and cand_model.upper() != asin_model.upper():
+            return False
     strong_terms = {pt for pt in asin_product_terms
-                   if len(pt) >= STRONG_TERM_MIN_LEN and pt not in shared_terms}
+                    if len(pt) >= STRONG_TERM_MIN_LEN and pt not in shared_terms}
     norm_title = _norm(asin_title)
+    title_brands, title_series = extract_brand_series(asin_title)
     for lt in long_terms:
-        if not _bounded_in(_norm(lt), norm_text):
+        nlt = _norm(lt)
+        if not _bounded_in_spaced(nlt, norm_text):
             continue
-        idx = norm_title.find(_norm(lt)) if norm_title else -1
+        idx = norm_title.find(nlt) if norm_title else -1
         if idx < 0:
-            required = strong_terms - {lt}
+            required = {_norm(t) for t in strong_terms - {lt}}
         else:
-            lt_end = idx + len(lt)
-            required = {t for t in strong_terms
-                       if t != lt and norm_title.find(_norm(t)) >= lt_end}
-        if all(_bounded_in(_norm(t), norm_text) for t in required):
+            lt_end = idx + len(nlt)
+            required = {_norm(t) for t in strong_terms
+                        if t != lt and norm_title.find(_norm(t), lt_end) >= 0}
+            required |= {_norm(w) for w in title_brands | title_series
+                         if norm_title.find(_norm(w), lt_end) >= 0}
+            marker = _TRAILING_MARKER.match(norm_title, lt_end)
+            if marker:
+                required.add(marker.group(1))
+        if title_df is not None and title_df.get(lt, 1) >= 2 and not required:
+            continue
+        if all(_bounded_in(t, norm_text) for t in required):
             return True
     return False
 
@@ -522,7 +592,8 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
                  asin_title: str = "",
                  amazon_title: str = "",
                  allow_long_term: bool = True,
-                 enable_title_chunks: bool = True) -> list:
+                 enable_title_chunks: bool = True,
+                 title_df: dict | None = None) -> list:
     """raw 配列をスコアリングして閾値以上を返す。
 
     strict=1 (books, 旧判定): ASIN にアンカー (model/terms/series) がある場合、
@@ -631,7 +702,8 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
             if not strong:
                 norm_text = _norm(text)
                 if allow_long_term and _long_term_strong(
-                        asin_title, asin_product_terms, shared_set, norm_text):
+                        asin_title, asin_product_terms, shared_set, norm_text,
+                        title_df=title_df, asin_model=asin_model):
                     strong = True
                 elif chunks and all(_chunk_in(c, norm_text) for c in chunks):
                     strong = True
@@ -784,6 +856,7 @@ def main():
     # 同定しない語) として filter_items に渡す。
     extracted: dict[str, tuple] = {}
     term_df: dict[str, int] = {}
+    legacy_df: dict[str, int] = {}
     for asin, title in targets.items():
         if not asin:
             continue
@@ -794,7 +867,18 @@ def main():
         extracted[asin] = (title, brands, series, model, tokens, product_terms)
         for t in product_terms:
             term_df[t] = term_df.get(t, 0) + 1
-    shared_terms = {t for t, n in term_df.items() if n >= SHARED_TERM_DF}
+        for t in extract_product_terms(title, brands, series, _JA_TERM_LEGACY):
+            legacy_df[t] = legacy_df.get(t, 0) + 1
+    # #8164: 12 字上限の撤廃で df の数え方が変わり、「パソコン」「トレイン」が
+    # shared から外れた (旧抽出では長い語を割った断片が偶然 df を稼いでいた)。
+    # するとブランド一致 + unique 1 語で同ブランドの別モデル (すみっコぐらし
+    # パソコン MY LIVE ← プレミアムプラス/Phone) が通る。この PR の影響を
+    # 長い固有語の経路に限るため、旧抽出の df でも閾値以上なら shared とする
+    # (shared の集合を main から縮めない)。カテゴリ語が複合語の中にあると
+    # 数えられない (トレインは 24 タイトルに出るのに df=3) こと自体は別件。
+    shared_terms = {t for t in term_df
+                    if max(term_df[t], legacy_df.get(t, 0)) >= SHARED_TERM_DF}
+    title_df = compute_title_df([(e[0], e[5]) for e in extracted.values()])
     logger.info(f"Shared terms (df>={SHARED_TERM_DF}): {len(shared_terms)}")
 
     summary = []
@@ -823,20 +907,20 @@ def main():
                           strict=2, shared_terms=shared_terms,
                           asin_title=title,
                           amazon_title=load_per_asin_amazon_title(raw_dir, asin),
-                          allow_long_term=True, enable_title_chunks=True)
+                          allow_long_term=True, enable_title_chunks=True,
+                          title_df=title_df)
         # news には裏付け語なし経路 (title_chunks, enable_title_chunks=False) を
         # 使わない。2026-09-24 の実測で追加分 93 件中 36 件が別商品
         # (「ネムリラ コードレス HR」新発売のような派生モデルの告知・
         # 同名の航空連合/釣具) だった。youtube は 282 件中 20 件。
         # 長い固有語の単独 strong 化 (allow_long_term, #8164) は asin_title が
-        # 位置判定に要るため news にも渡す。2026-09-25 の実測で news 単独では
-        # 追加 8 / 脱落 3 (無効時は追加 3 / 脱落 11) で有効化の方が正味プラス
-        # だったため有効にする。
+        # 位置判定に要るため news にも渡す。2026-09-26 の実測 (main 比) で
+        # news は追加 4 / 脱落 1 (追加は全て同一商品、脱落は別商品の除去)。
         nw = filter_items(nw_pool, brands, series, model, tokens,
                           product_terms, ["title"], strict=2,
                           shared_terms=shared_terms,
                           asin_title=title, allow_long_term=True,
-                          enable_title_chunks=False)
+                          enable_title_chunks=False, title_df=title_df)
         bk = filter_items(bk_pool, brands, series, model, tokens,
                           product_terms, ["title", "description"],
                           strict=1, shared_terms=shared_terms)
