@@ -118,12 +118,12 @@ jobs:
           # session 95: 33 (06:00 JST) が main から trend file を読むため即 merge 必須。
           # trend PR は validate paths / 31 scope に元々入っておらず --auto だと必須 check
           # 不発で永久 pending になっていた ([[engagement-queue-pr-validate-paths-trap]])。
-          # → admin merge を第一手 (bypass 即 merge)、不可なら --auto に fallback
-          #   (04-validate paths に trends 追加済なので --auto でも validate 通過後 merge)。
-          if gh pr merge --admin --squash --delete-branch "$PR_URL"; then
-            echo "Admin-merged $PR_URL"
-          elif gh pr merge --auto --squash --delete-branch "$PR_URL"; then
-            echo "::warning::admin merge 不可 — --auto に fallback (validate 通過後 merge)"
+          # → 04-validate paths に trends 追加済なので --auto で validate 通過後 merge される。
+          #   以前は admin merge を第一手にしていたが、App token は必須 check を bypass
+          #   できず毎回 "required status checks are expected" で弾かれ、--auto fallback
+          #   の warning が毎日出るだけだったため --auto に一本化 (merge は起票の数分後)。
+          if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
+            echo "Auto-merge enabled for $PR_URL"
           else
             echo "::error::trend PR を merge できず ($PR_URL)。33 が trend file 不在で失敗する恐れ"
           fi
