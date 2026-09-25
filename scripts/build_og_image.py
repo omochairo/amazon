@@ -236,7 +236,9 @@ def _build_one(asin: str, force: bool) -> int:
 
 def _build_all(force: bool) -> int:
     fail = 0
-    paths = sorted(ARTICLES_DIR.glob("*.json"))
+    # `*.seo.json` などのサイドカーを拾うと stem が "<日付>-<ASIN>.seo" になり、
+    # "B0XXXX.seo" を ASIN として _build_one に渡して記事なしで失敗する。
+    paths = sorted(p for p in ARTICLES_DIR.glob("*.json") if "." not in p.stem)
     for jp in paths:
         # ファイル名末尾の -<ASIN>.json から抜く
         stem = jp.stem

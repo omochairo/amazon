@@ -18,6 +18,7 @@ scripts/migrate_brand_dirs_to_slug.py でリネーム済みの既存 9 件のブ
 from __future__ import annotations
 
 import argparse
+import json
 import pathlib
 import sys
 
@@ -29,7 +30,9 @@ from backfill_term_slugs import _collect_brand_canonicals, _collect_tags  # noqa
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-_STUB_TEMPLATE = '---\ntitle: "{title}"\n---\n'
+# title は json.dumps で埋める。JSON 文字列は YAML の二重引用符スカラーとしても
+# 有効なので、`"` や `\` を含む用語 (tags は Jules 生成) でも front matter が壊れない。
+_STUB_TEMPLATE = '---\ntitle: {title}\n---\n'
 
 
 def _write_stub_if_missing(base_dir: pathlib.Path, slug: str, jp_title: str, dry_run: bool) -> str:
@@ -39,7 +42,7 @@ def _write_stub_if_missing(base_dir: pathlib.Path, slug: str, jp_title: str, dry
     if dry_run:
         return "would-create"
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(_STUB_TEMPLATE.format(title=jp_title), encoding="utf-8")
+    target.write_text(_STUB_TEMPLATE.format(title=json.dumps(jp_title, ensure_ascii=False)), encoding="utf-8")
     return "created"
 
 

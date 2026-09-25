@@ -298,6 +298,24 @@ def _rematch_only(out_dir: pathlib.Path) -> int:
     )
     return 0
 
+def _write_search_items(out_dir: pathlib.Path, keyword: str, items: list) -> bool:
+    """Search 結果を rakuten.json に書く。0 件なら前回分を残して False を返す。
+
+    ジャンル指定の定型キーワードで 0 件になるのは API 側の失敗しかない。空で
+    上書きすると signal_detector / resolve_ranking_asins (--search-in) の入力が
+    消えたまま run は緑で終わる (20220601 廃止時に 5 週間この状態だった)。
+    Ranking 側の rank_items ガードと同じ扱いにする。
+    """
+    if not items:
+        logger.warning(
+            "Rakuten Search returned 0 items — preserving previous rakuten.json (no overwrite)."
+        )
+        return False
+    with open(out_dir / "rakuten.json", "w", encoding="utf-8") as f:
+        json.dump({"keyword": keyword, "items": items}, f, ensure_ascii=False, indent=4)
+    return True
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
@@ -502,8 +520,7 @@ def main():
 
     # --- Write outputs --------------------------------------------------------
     os.makedirs(args.out, exist_ok=True)
-    with open(os.path.join(args.out, "rakuten.json"), "w", encoding="utf-8") as f:
-        json.dump({"keyword": args.keyword, "items": items}, f, ensure_ascii=False, indent=4)
+    _write_search_items(pathlib.Path(args.out), args.keyword, items)
 
     # signal_detector が読む既存パス。matched_asin/match_stage は追加フィールド (後方互換)
     ranking_payload = {
