@@ -2,12 +2,14 @@
 
 🚨 重要 — 使用 API: **楽天ウェブサービス v20220601 (新エンドポイント)**
   - 旧 endpoint (``app.rakuten.co.jp``) は **使えない** (session 58 で trap)。
-  - 必ず ``openapi.rakuten.co.jp`` ホスト + URL 末尾の ``/20220601`` バージョン。
+  - 必ず ``openapi.rakuten.co.jp`` ホスト + URL 末尾のバージョン (API ごとに異なる。下記)。
   - 認証は ``applicationId`` クエリパラメータ (環境変数 ``RAKUTEN_APP_ID``)。
   - PA-API 5 / Amazon Creator API とは別系統の楽天独自 API。
 
 エンドポイント:
-  - 商品検索: ``GET https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601``
+  - 商品検索: ``GET https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260701``
+      (20220601 は 2026-08-18 頃に廃止され "API Configuration not found" (HTTP 400)
+      を返すようになった。現行版は公式ドキュメント ichiba-item-search で確認する)
   - ランキング: ``GET https://openapi.rakuten.co.jp/ichibaranking/api/IchibaItem/Ranking/20220601``
   - 共通必須パラメータ:
       ``applicationId``: RAKUTEN_APP_ID (環境変数)
@@ -334,7 +336,7 @@ def main():
         return
 
     # --- Fetch Search Data (Layer 1) ---
-    url = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601"
+    url = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260701"
     headers = {
         "Referer": "https://github.com/omochairo/amazon",
         "Origin": "https://github.com/omochairo/amazon"
