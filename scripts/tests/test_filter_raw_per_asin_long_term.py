@@ -1,0 +1,77 @@
+"""filter_raw_per_asin._long_term_strong / filter_items の長い固有語 strong 化 (#8164)。
+
+12 字上限撤廃 (#8164 案D) の副作用で、13 字以上の固有語を持つ ASIN が
+uniq=1 に落ちて strict=2 の裏付け (brand/series/shared) を新たに要求され、
+同一商品の動画/ニュースが脱落していた (#8163 の計測)。その救済経路
+(`_long_term_strong`) と、それが再び持ち込む「系列名の取り違え」陰性
+(ハマクロンコンストラクター/ライジングポリスブレイバー、#8164 実測) を
+固定する。
+"""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import filter_raw_per_asin as frpa  # noqa: E402
+
+
+def _strong(target: str, video: str, allow_long_term: bool = True) -> bool:
+    brands, series = frpa.extract_brand_series(target)
+    model = frpa.extract_model_number(target)
+    tokens = frpa.tokenize(target)
+    terms = frpa.extract_product_terms(target, brands, series)
+    return bool(frpa.filter_items(
+        [{"title": video, "url": "u"}], brands, series, model, tokens, terms,
+        ["title"], top_n=1, strict=2, shared_terms=set(),
+        asin_title=target, allow_long_term=allow_long_term,
+        enable_title_chunks=False))
+
+
+def test_exact_long_term_alone_is_strong():
+    # 完全一致 (17字)。旧実装なら 12字+残りに割れて uniq=2 で通っていた。
+    assert _strong("リズムあそびいっぱいマジカルバンド",
+                   "リズムあそびいっぱいマジカルバンド")
+
+
+def test_leading_unknown_maker_name_not_required():
+    # メガハウス/アーテック等 KNOWN_BRANDS 未登録のメーカー名は、長い固有語
+    # より前に付くだけなら省略されていても strong (#8164 実測)。
+    assert _strong("メガハウス ルービックキューブジャポネスク",
+                   "ルービックキューブジャポネスク広告用30sec")
+
+
+def test_trailing_variant_suffix_required():
+    # ハマクロンコンストラクター (13字, df<4) は系列名で、後ろに続く
+    # バリエーション名 (緊急車両/はたらく車/ファイヤーステーション) を
+    # 落とすと同系列の別商品を誤って通す (#8164 実測)。
+    assert not _strong("LaQ ハマクロンコンストラクター 緊急車両",
+                       "【ラキュー公式】LaQハマクロンコンストラクター ファイヤーステーション紹介")
+    assert not _strong("LaQ ハマクロンコンストラクター はたらく車",
+                       "【ラキュー公式】LaQハマクロンコンストラクター 緊急車両紹介")
+
+
+def test_trailing_variant_suffix_present_is_strong():
+    assert _strong("LaQ ハマクロンコンストラクター 緊急車両",
+                   "【ラキュー公式】LaQハマクロンコンストラクター 緊急車両を紹介")
+
+
+def test_trailing_color_variant_required():
+    # ライジングポリスブレイバー (13字, df<4) + 色違い (白バイ/黒バイ)。
+    assert not _strong("トミカ ライジングポリスブレイバー デカライドアーマー白バイ",
+                       "【ジョブレイバー】ライジングポリスブレイバーZERO デカライドアーマー黒バイDXセット")
+
+
+def test_shared_long_term_not_used_alone():
+    # df>=4 の長い語は shared_terms に入るので、この経路の対象外
+    # (score_item 側の unique/shared 判定と一貫させる)。
+    brands, series = frpa.extract_brand_series("たいへんながいこゆうめいしょうのおもちゃ")
+    terms = frpa.extract_product_terms("たいへんながいこゆうめいしょうのおもちゃ", brands, series)
+    shared = {t for t in terms if len(t) >= frpa.LONG_TERM_MIN_LEN}
+    assert not frpa._long_term_strong(
+        "たいへんながいこゆうめいしょうのおもちゃ", terms, shared,
+        frpa._norm("たいへんながいこゆうめいしょうのおもちゃで遊んでみた"))
+
+
+def test_allow_long_term_false_disables_path():
+    assert not _strong("リズムあそびいっぱいマジカルバンド",
+                       "リズムあそびいっぱいマジカルバンド", allow_long_term=False)

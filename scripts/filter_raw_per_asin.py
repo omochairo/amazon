@@ -74,6 +74,11 @@ CHUNK_PIECE_GAP = 6
 TOY_CONTEXT_MIN_RATIO = 0.01
 SERIES_CONTINUATION_MIN_ITEMS = 5
 
+# #8164 (2026-09-25): 12 字上限撤廃で単一語になった 13 字以上の固有語は、
+# それだけで語境界を保った一致があれば strong (model 番号一致や uniq>=2 と
+# 同格の強シグナル)。定義は _bounded_in の近くの _long_term_strong 参照。
+LONG_TERM_MIN_LEN = 13
+
 # 案B: raw プール中の候補テキストに「おもちゃの文脈」があるとみなす汎用語。
 TOY_CONTEXT_GENERIC_WORDS = frozenset({
     "ボードゲーム", "おもちゃ", "知育", "開封", "レビュー", "遊んでみた", "遊んで",
@@ -304,6 +309,57 @@ def title_chunks(title: str) -> list[str]:
     return [c for c in _PUNCT_SPLIT.split(clean) if c.strip()]
 
 
+def _long_term_strong(asin_title: str, asin_product_terms: set,
+                      shared_terms: set, norm_text: str) -> bool:
+    """#8164 (2026-09-25): LONG_TERM_MIN_LEN 字以上の固有語 (shared でない)
+    が語境界を保って候補に現れれば、model 番号一致や uniq>=2 と同格の強
+    シグナルとして単独で strong 扱いにしてよい。
+
+    上限 12 字があった旧 _JA_TERM 実装では、この長さの語が機械的に
+    12字+残りの2断片に割れており、両断片が候補に現れれば「unique 2語」を
+    満たして strong になっていた（実質1語なのに2countされる偶発的な
+    迂回路）。12字上限を撤廃して正しく1語に統合すると uniq=1 になり、
+    brand/series/shared の裏付けを新たに要求されて、同一商品の動画/
+    ニュースが脱落していた (#8163 の計測: A+B+C の上に重ねると youtube
+    net -13 / news net -8)。
+
+    ただし単純に「長い語が1つでも一致すれば strong」にすると、系列名自体が
+    13字以上あるケース (ハマクロンコンストラクター, ライジングポリスブレイバー
+    等) で、同じ系列の別バリエーション (緊急車両/はたらく車/ファイヤー
+    ステーション、白バイ/黒バイ/ZERO) を取り違える (#8164 実測、SHARED_TERM_DF
+    (4) に届かない df=2〜3 の系列名は「shared でない」ため素通りしてしまう)。
+    そこで、長い語より**後ろ**にある他の strong 語 (型番・色・セット名などの
+    識別サフィックス) がタイトルにあれば、それも候補に現れることを要求する。
+    長い語より**前**にある strong 語 (メガハウス・アーテック等、KNOWN_BRANDS
+    未登録のメーカー名) は要求しない (レビュー動画では省略されがちで、
+    誤マッチの原因にもならないため)。asin_title が空 (呼び出し側が位置を
+    渡せない) ときは安全側に倒し、全ての strong 語を要求する。
+
+    語境界チェック (_bounded_in, #8122 と同じ: 前後にカタカナ/漢字/英数字が
+    続いたら不一致、直後の "+" は派生モデルとして不一致) は長い語・
+    識別サフィックスの両方に適用する。"""
+    long_terms = [pt for pt in asin_product_terms
+                 if len(pt) >= LONG_TERM_MIN_LEN and pt not in shared_terms]
+    if not long_terms:
+        return False
+    strong_terms = {pt for pt in asin_product_terms
+                   if len(pt) >= STRONG_TERM_MIN_LEN and pt not in shared_terms}
+    norm_title = _norm(asin_title)
+    for lt in long_terms:
+        if not _bounded_in(_norm(lt), norm_text):
+            continue
+        idx = norm_title.find(_norm(lt)) if norm_title else -1
+        if idx < 0:
+            required = strong_terms - {lt}
+        else:
+            lt_end = idx + len(lt)
+            required = {t for t in strong_terms
+                       if t != lt and norm_title.find(_norm(t)) >= lt_end}
+        if all(_bounded_in(_norm(t), norm_text) for t in required):
+            return True
+    return False
+
+
 _TRAIL_CONT_STRIP = re.compile(
     r"^[\s「」『』（）()\[\]【】・:：\-—_/／!！?？。、,，.]*")
 
@@ -464,7 +520,9 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
                  strict: int = 0,
                  shared_terms: set | None = None,
                  asin_title: str = "",
-                 amazon_title: str = "") -> list:
+                 amazon_title: str = "",
+                 allow_long_term: bool = True,
+                 enable_title_chunks: bool = True) -> list:
     """raw 配列をスコアリングして閾値以上を返す。
 
     strict=1 (books, 旧判定): ASIN にアンカー (model/terms/series) がある場合、
@@ -518,14 +576,34 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
     この経路自体を無効にする (#8162 案B/C, 2026-09-24)。amazon_title は
     per_asin/<ASIN>/amazon.json の正式名 (無ければ空文字、ゲートは raw
     プールの文脈語判定のみで行う)。
+
+    長い固有語の単独 strong 化 (#8164, 2026-09-25): LONG_TERM_MIN_LEN
+    (13) 字以上の unique な product_term が、語境界を保って候補に現れれば
+    strong とする (`_long_term_strong`)。title_chunks 経路と違い
+    brand/series/model の有無を問わず常に評価する (12字上限撤廃の副作用で
+    uniq=1 に落ちた既存の正しい一致を救うための経路であり、「裏付け語なし
+    ASIN」限定ではない)。長い語より後ろにある他の strong 語 (型番/色/
+    セット名) は同じ系列の別バリエーションとの取り違え防止のため追加で
+    要求する (詳細は `_long_term_strong` のコメント)。誤マッチ抑制のため
+    shared_terms には該当しないことを要求する。この経路で strong になった
+    項目には `_match: "title_only"` を付けない (title_chunks 経路と違い、
+    高い特異性を持つ語＋識別サフィックスの語境界一致そのものが十分な裏付け
+    であり、ターゲット名が一般語かどうかのゲート (allows_title_only_path)
+    の対象外)。allow_long_term=False で呼び出し側から無効化できる。
+
+    asin_title は「裏付け語なし ASIN」の title_chunks 経路 (上記) だけでなく
+    長い固有語の位置判定 (`_long_term_strong`) にも使うため、news でも渡す。
+    ただし title_chunks 経路自体は news で誤りが多いこと (#8122: 93件中36件
+    別商品) が分かっているので、enable_title_chunks=False で独立に無効化
+    できる。
     """
     has_strong_anchor = bool(asin_model or asin_product_terms or asin_series)
     shared_set = shared_terms or set()
     strong_terms = {pt for pt in asin_product_terms
                     if len(pt) >= STRONG_TERM_MIN_LEN}
     chunks: list[str] = []
-    if (strict >= 2 and asin_title and not (asin_brands or asin_series
-                                            or asin_model)
+    if (strict >= 2 and asin_title and enable_title_chunks
+            and not (asin_brands or asin_series or asin_model)
             and strong_terms and not (strong_terms & shared_set)):
         candidate_chunks = title_chunks(asin_title)
         if candidate_chunks:
@@ -550,9 +628,12 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
                       or (uniq == 1 and (signals.get("brand")
                                          or signals.get("series")
                                          or shared >= 1)))
-            if not strong and chunks:
+            if not strong:
                 norm_text = _norm(text)
-                if all(_chunk_in(c, norm_text) for c in chunks):
+                if allow_long_term and _long_term_strong(
+                        asin_title, asin_product_terms, shared_set, norm_text):
+                    strong = True
+                elif chunks and all(_chunk_in(c, norm_text) for c in chunks):
                     strong = True
                     title_only = True
             if not strong:
@@ -741,13 +822,21 @@ def main():
                           top_n=TOP_N_BY_KEY.get("youtube", TOP_N_DEFAULT),
                           strict=2, shared_terms=shared_terms,
                           asin_title=title,
-                          amazon_title=load_per_asin_amazon_title(raw_dir, asin))
-        # news には裏付け語なし経路 (asin_title) を使わない。2026-09-24 の実測で
-        # 追加分 93 件中 36 件が別商品 (「ネムリラ コードレス HR」新発売のような
-        # 派生モデルの告知・同名の航空連合/釣具) だった。youtube は 282 件中 20 件。
+                          amazon_title=load_per_asin_amazon_title(raw_dir, asin),
+                          allow_long_term=True, enable_title_chunks=True)
+        # news には裏付け語なし経路 (title_chunks, enable_title_chunks=False) を
+        # 使わない。2026-09-24 の実測で追加分 93 件中 36 件が別商品
+        # (「ネムリラ コードレス HR」新発売のような派生モデルの告知・
+        # 同名の航空連合/釣具) だった。youtube は 282 件中 20 件。
+        # 長い固有語の単独 strong 化 (allow_long_term, #8164) は asin_title が
+        # 位置判定に要るため news にも渡す。2026-09-25 の実測で news 単独では
+        # 追加 8 / 脱落 3 (無効時は追加 3 / 脱落 11) で有効化の方が正味プラス
+        # だったため有効にする。
         nw = filter_items(nw_pool, brands, series, model, tokens,
                           product_terms, ["title"], strict=2,
-                          shared_terms=shared_terms)
+                          shared_terms=shared_terms,
+                          asin_title=title, allow_long_term=True,
+                          enable_title_chunks=False)
         bk = filter_items(bk_pool, brands, series, model, tokens,
                           product_terms, ["title", "description"],
                           strict=1, shared_terms=shared_terms)
