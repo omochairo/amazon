@@ -328,9 +328,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.dry_run:
         return 0
-    # 対象があったのに 1 件も起草できなかったのは、agy かペルソナが壊れている。
-    # インジェクション混入によるスキップは意図した動作であり故障ではない。
-    return 0 if drafted or injected or not targets else 1
+    # 対象 (targets) があったのに 1 件も起草できなかったのは、agy かペルソナが
+    # 壊れている。injected は targets と無関係な集合なので判定に混ぜない
+    # (混ぜると、同じ実行にインジェクション疑いが1件でもあるだけで targets 側の
+    # 全滅が exit 0 に化けて監視をすり抜ける — #61)。
+    # targets が空 (候補がインジェクション疑いだけだった等) なら not targets で 0 になる。
+    return 0 if drafted or not targets else 1
 
 
 if __name__ == "__main__":
