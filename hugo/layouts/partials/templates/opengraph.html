@@ -14,13 +14,19 @@
     - フォールバック経路 (.Params.images 未設定ページ) は get-page-images.html 側の
       ロジックで、そもそも 1 枚しか返らない分岐なので `first 6`→`first 1` にしても
       挙動は変わらない = 0 枚化する退行は無い。
-  それ以外 (og:url / site_name / title / description / og:locale / og:type /
+  それ以外 (site_name / title / description / og:locale / og:type /
   article:* / audio / video / og:see_also / fb:app_id 等) はテーマ原本と同一。
   get-page-images の呼び出しはテーマ原本が `templates/` prefix を欠いていた
   ("_funcs/get-page-images") のを、同ディレクトリの twitter_cards.html に合わせて
   `templates/_funcs/get-page-images` に修正。
+
+  og:url は head.html の canonical link (#2370 A-3) と揃える。canonicalURL で
+  他 URL に統合済みのページが og:url だけ自己 URL のままだと、SNS クローラが
+  正規化前の URL を重複ページとして拾ってしまう。og:url は OGP 仕様上 絶対 URL が
+  必須なので absURL を通す (canonicalURL は現状すべて絶対 URL だが、相対パスが
+  入っても壊れないようにする。absURL は絶対 URL には no-op)。
 */}}
-<meta property="og:url" content="{{ .Permalink }}">
+<meta property="og:url" content="{{ with .Params.canonicalURL }}{{ trim . " " | absURL }}{{ else }}{{ .Permalink }}{{ end }}">
 
 {{- with or site.Title site.Params.title | plainify }}
   <meta property="og:site_name" content="{{ . }}">
