@@ -29,6 +29,9 @@ import urllib.parse
 import collections
 from datetime import datetime, timezone
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _api_health  # noqa: E402
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("cross_search")
 
@@ -357,6 +360,17 @@ def _filter_text_candidates(items, amazon_title, source, asin):
     return kept
 
 
+def _get(api, url, **kwargs):
+    """requests.get して HTTP ステータスを _api_health に記録する (#8272)。"""
+    try:
+        resp = requests.get(url, **kwargs)
+    except requests.exceptions.RequestException:
+        _api_health.record(api, None)
+        raise
+    _api_health.record(api, resp.status_code)
+    return resp
+
+
 def _fetch_rakuten_ichiba(keyword, app_id, access_key, aff_id, hits=15):
     """Ichiba を access_key の有無で RMS or 公開 API に振り分けて呼び出す。"""
     if access_key:
@@ -385,7 +399,7 @@ def _fetch_rakuten_ichiba(keyword, app_id, access_key, aff_id, hits=15):
         headers = {}
     if aff_id:
         params["affiliateId"] = aff_id
-    return requests.get(url, params=params, headers=headers, timeout=10)
+    return _get("rakuten_ichiba_search", url, params=params, headers=headers, timeout=10)
 
 
 def _rakuten_books_params(app_id, access_key, aff_id):
@@ -421,7 +435,7 @@ def _rakuten_books_by_isbnjan(jan_code, app_id, access_key, aff_id):
     """
     url, params, headers = _rakuten_books_params(app_id, access_key, aff_id)
     params.update({"isbnjan": jan_code, "formatVersion": 2, "hits": 5})
-    return requests.get(url, params=params, headers=headers, timeout=10)
+    return _get("rakuten_books_search", url, params=params, headers=headers, timeout=10)
 
 
 def _classify_http_status(status_code: int) -> str:
@@ -509,7 +523,8 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
     books_params.update({"keyword": keyword, "formatVersion": 2, "hits": 10})
 
     try:
-        resp = requests.get(books_url, params=books_params, headers=books_headers, timeout=10)
+        resp = _get("rakuten_books_search", books_url, params=books_params,
+                    headers=books_headers, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
             raw_items = data.get("Items", [])
@@ -623,7 +638,7 @@ def _yahoo_query(keyword, client_id, sid="", pid="", jan_code="", out_status=Non
         params["affiliate_type"] = "vc"
         params["affiliate_id"] = f"{VC_REFERRAL_BASE}?sid={sid}&pid={pid}&vc_url="
 
-    resp = requests.get(YAHOO_SEARCH_URL, params=params, timeout=10)
+    resp = _get("yahoo_shopping_search", YAHOO_SEARCH_URL, params=params, timeout=10)
     if out_status is not None:
         out_status.append(resp.status_code)
     if resp.status_code != 200:
