@@ -360,7 +360,7 @@ def _filter_text_candidates(items, amazon_title, source, asin):
 def _fetch_rakuten_ichiba(keyword, app_id, access_key, aff_id, hits=15):
     """Ichiba を access_key の有無で RMS or 公開 API に振り分けて呼び出す。"""
     if access_key:
-        url = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601"
+        url = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260701"
         params = {
             "applicationId": app_id,
             "accessKey": access_key,
