@@ -56,6 +56,12 @@ jobs:
       - name: Install Dependencies
         run: pip install -r requirements.txt
 
+      # #8272: fetch 系が外部 API の HTTP ステータスをここへ記録し、最後の
+      # "Check external API health" step が集計する (job レベルの env: では
+      # runner コンテキストが使えないので GITHUB_ENV 経由)。
+      - name: Set API health log path
+        run: echo "API_HEALTH_LOG=$RUNNER_TEMP/api_health.jsonl" >> "$GITHUB_ENV"
+
       - name: Fetch Amazon Data
         run: |
           # #810 follow-up: keyword×top100 が saturation し fresh ASIN 供給が
@@ -305,3 +311,10 @@ jobs:
         # データ更新が丸ごと消えるのに、continue-on-error のステップは REST の
         # steps[].conclusion も success を返すため run 一覧でも step 一覧でも
         # 見えない (#4793 項目2 の方針 (c))。
+      # #8272: 各 fetch step は失敗を warning に落として続行するため、外部 API が
+      # 恒常的に壊れても run は緑になる (楽天 Search 20220601 の廃止で 5 週間
+      # 気付けなかった)。データ PR の作成より後に置き、データ更新は止めずに
+      # run だけを赤にする。判定基準は scripts/check_api_health.py の docstring。
+      - name: Check external API health
+        if: ${{ always() }}
+        run: python scripts/check_api_health.py

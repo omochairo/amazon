@@ -26,6 +26,9 @@
 """
 import os, sys, json, re, time, pathlib, datetime, requests, logging
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _api_health  # noqa: E402
+
 def get_secret(name: str) -> str:
     return os.environ.get(name)
 
@@ -381,8 +384,10 @@ def main():
         try:
             resp = requests.get(url, params=params, headers=headers)
         except requests.exceptions.RequestException as e:
+            _api_health.record("rakuten_ichiba_search", None)
             logger.error(f"Rakuten RMS Search API request failed page={page}: {e}")
             break
+        _api_health.record("rakuten_ichiba_search", resp.status_code)
         if resp.status_code != 200:
             logger.error(f"Rakuten RMS Search API failed page={page} ({url}): {resp.text[:300]}")
             break
@@ -451,6 +456,8 @@ def main():
         rank_resp = _rakuten_get_with_retry(
             ranking_url, ranking_params, headers, label="Ranking"
         )
+        _api_health.record("rakuten_ranking",
+                           rank_resp.status_code if rank_resp is not None else None)
         if rank_resp is not None and rank_resp.status_code == 200:
             rank_data = rank_resp.json()
             raw_rank_items = rank_data.get("Items", [])
