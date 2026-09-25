@@ -644,3 +644,91 @@ print('count_ci', d['verdict']['count_diff_bootstrap_ci'])
 print('ratio_ci', d['verdict']['ratio_diff_bootstrap_ci'])
 "
 ```
+
+## C1: 自己批判パス (③) の単独評価 (2026-09-25)
+
+T3 群C (`critique_stage.py`) は、群B がゲートで落ちたため一度も判定されていなかった。
+群B (angle 前段) を経由せず、**群A → C' (自己批判 → 指摘キーのみ書き直し)** だけを
+評価した (`run_c1_self_critique.py`, #7961)。指標・判定は M2 と同じ
+(`sentence_metrics.compute_information_gain` + bootstrap 95% CI)。K8 で実行、
+gemma4:26b-a4b-it-qat / num_ctx 8192 / seed 3 本。
+
+### 対象 ASIN — T3/M1/M2 とは別の集合 (先に書く)
+
+`select_asins.select_asins()` を同じ seed で呼んだが、**選ばれた 10 ASIN は T3/M1/M2 と
+1 件も重ならない** `[実]`。条件を満たす候補が 42 件から 161 件に増えたため
+(`experience.json` が 09-14 時点から大きく増え、母集団が変わった)。
+
+- A と C' は同じ ASIN・同じ seed の対で比べているので、**この判定自体は有効**
+- ただし **A の絶対値を T3/M1/M2 の表と並べて比べてはいけない** (ASIN が違う)
+- カテゴリは STEM/言語/運動/想像 が各 2 件、`unknown` (`edu_domains` 無し) が 2 件
+
+### 群A・群C' の対比 (全10 ASIN、各 3 seed の平均)
+
+「指摘率」は、critique が凡庸と指摘して書き直したキーの割合。
+
+| ASIN | カテゴリ | 指摘率 | Aの数(平均) | C'の数(平均) | 差(数) | Aの率 | C'の率 | 差(率) | 差(裏付け無し) |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| B08929TBNR | unknown | 0.29 | 8.33 | 9.00 | +0.67 | 0.623 | 0.668 | +0.046 | -0.67 |
+| B0B27ZRC31 | 運動 | 0.42 | 9.67 | 8.67 | -1.00 | 0.747 | 0.667 | -0.079 | +0.00 |
+| B000KQGNIW | 言語 | 0.62 | 7.33 | 5.67 | -1.67 | 0.564 | 0.447 | -0.117 | +1.67 |
+| B001HLDVZW | 想像 | 0.42 | 11.67 | 11.33 | -0.33 | 0.899 | 0.806 | -0.093 | +0.33 |
+| B0FHVH6JML | STEM | 0.50 | 10.33 | 10.67 | +0.33 | 0.842 | 0.827 | -0.015 | +0.33 |
+| B08TGR9YXH | unknown | 0.29 | 7.67 | 9.00 | +1.33 | 0.575 | 0.676 | +0.101 | -1.33 |
+| B0FPFG7B4F | 運動 | 0.50 | 11.33 | 12.33 | +1.00 | 0.758 | 0.789 | +0.031 | -0.67 |
+| B0722JMZYD | 言語 | 0.46 | 5.33 | 6.33 | +1.00 | 0.399 | 0.474 | +0.075 | -1.67 |
+| B08DPCJ18P | 想像 | 0.38 | 8.00 | 8.00 | +0.00 | 0.584 | 0.567 | -0.018 | +1.00 |
+| B0F324L5QW | STEM | 0.46 | 6.00 | 7.33 | +1.33 | 0.414 | 0.489 | +0.075 | -1.00 |
+
+10 件中 6 件で数が増え、3 件で減った。指摘率が最も高い B000KQGNIW (0.62) が最も悪化している
+(書き直しが多いほど良くなる、という関係は見えない)。
+
+### 判定
+
+| 指標 | 平均差 | ブートストラップ95%CI (10,000回) | 0を含むか |
+|---|---:|---|---|
+| 数 (unique_and_supported_count) | +0.27 | [-0.37, +0.83] | 含む |
+| 率 (÷総文数) | +0.000 | [-0.045, +0.045] | 含む |
+| 裏付けの無い文の数 | -0.20 | [-0.80, +0.43] | 含む (下限>0ではない) |
+
+**C' 無効**: 数・率ともに信頼区間が 0 をまたぐ。ガードレール (裏付けの無い文が有意に
+増えていない) は満たす。ASIN の混入違反は A・C' とも 0 件。
+
+**読み方** `[推]`: 自己批判は「凡庸な言い回し」を書き直すが、**新しい素材を足さない**ので
+固有かつ裏付けありの文は増えない。率がほぼ 0 で動かないのは、M2 (同じ素材の再強調は効かない)・
+P1 (生成器を大きくしても率は動かない) と同じ形で、「律速は素材」の結論と一致する。
+
+### コスト
+
+- gemma 呼び出し 150 回 (1 ASIN あたり 15 回)、gemma 時間の合計 4,441.5 秒
+- 全体の所要時間 6,863.2 秒 (約 1 時間 54 分)。1 ASIN あたり 605〜756 秒で、
+  打ち切り条件 (15 分/ASIN) にはどの ASIN も到達しなかった (`cutoff_reason=null`)
+
+### 未検証のこと
+
+- 凡庸度 (max_sim) が C' で下がったかは、判定に使っていないので見ていない。
+  凡庸度は下がったが情報利得は動かない、という可能性は残る (成果指標ではないので判定は変わらない)
+- T3/M1/M2 と同じ 10 ASIN での再実行はしていない (上記の理由で、選定を固定するには
+  ASIN リストを明示的に渡す必要がある)
+
+### 検証コマンド
+
+```bash
+python -m pytest scripts/tests/test_run_c1_self_critique.py scripts/tests/test_critique_stage.py \
+  scripts/tests/test_corpus_per_key_max_sim.py -q
+
+# 実データでの再実行 (gemma + Ruri への到達性が必要、10 ASIN全件で約2時間)
+# K8 では Ruri は docker ブリッジ内部 IP (docker inspect docker-ruri-1) で WSL から叩く
+RURI_URL=http://<ruri-host>:8000 \
+  python -m scripts.experimental.multistage_brief.run_c1_self_critique --asin-limit 10 \
+  --run-dir /tmp/c1_runs
+# 期待: asin_count_processed=10, cutoff_reason=null, verdict.c_effective=false
+
+python -c "
+import json
+d = json.load(open('docs/multistage-generation-eval/c1_self_critique_results.json'))
+print('verdict', d['verdict']['verdict'])
+print('count_ci', d['verdict']['count_diff_bootstrap_ci'])
+print('ratio_ci', d['verdict']['ratio_diff_bootstrap_ci'])
+"
+```

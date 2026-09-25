@@ -1,0 +1,339 @@
+{
+  "generated_at": "2026-09-25T04:40:40Z",
+  "run_id": "20260925T024617Z",
+  "model": "gemma4:26b-a4b-it-qat",
+  "num_ctx": 8192,
+  "seeds": [
+    20260914,
+    20260915,
+    20260916
+  ],
+  "elapsed_seconds": 6863.2,
+  "asin_selection": {
+    "candidate_count": 161,
+    "categories_covered": [
+      "STEM",
+      "unknown",
+      "想像",
+      "言語",
+      "運動"
+    ],
+    "selected_asins": [
+      "B08929TBNR",
+      "B0B27ZRC31",
+      "B000KQGNIW",
+      "B001HLDVZW",
+      "B0FHVH6JML",
+      "B08TGR9YXH",
+      "B0FPFG7B4F",
+      "B0722JMZYD",
+      "B08DPCJ18P",
+      "B0F324L5QW"
+    ]
+  },
+  "cutoff_reason": null,
+  "asin_count_processed": 10,
+  "error_asins": [],
+  "per_asin_summary": [
+    {
+      "asin": "B08929TBNR",
+      "category": "unknown",
+      "elapsed_s": 669.2,
+      "flagged_rate": 0.2917,
+      "a_mean": {
+        "unique_and_supported_count": 8.3333,
+        "ratio": 0.6227,
+        "unsupported_count": 5,
+        "unresolved_count": 0
+      },
+      "c_mean": {
+        "unique_and_supported_count": 9,
+        "ratio": 0.6684,
+        "unsupported_count": 4.3333,
+        "unresolved_count": 0
+      },
+      "diff_count": 0.6667,
+      "diff_ratio": 0.0457,
+      "diff_unsupported_count": -0.6667,
+      "diff_unresolved_count": 0,
+      "containment_violations": {
+        "a": 0,
+        "c": 0
+      }
+    },
+    {
+      "asin": "B0B27ZRC31",
+      "category": "運動",
+      "elapsed_s": 718.8,
+      "flagged_rate": 0.4167,
+      "a_mean": {
+        "unique_and_supported_count": 9.6667,
+        "ratio": 0.7466,
+        "unsupported_count": 2,
+        "unresolved_count": 0
+      },
+      "c_mean": {
+        "unique_and_supported_count": 8.6667,
+        "ratio": 0.6673,
+        "unsupported_count": 2,
+        "unresolved_count": 0
+      },
+      "diff_count": -1.0,
+      "diff_ratio": -0.0793,
+      "diff_unsupported_count": 0,
+      "diff_unresolved_count": 0,
+      "containment_violations": {
+        "a": 0,
+        "c": 0
+      }
+    },
+    {
+      "asin": "B000KQGNIW",
+      "category": "言語",
+      "elapsed_s": 712.5,
+      "flagged_rate": 0.625,
+      "a_mean": {
+        "unique_and_supported_count": 7.3333,
+        "ratio": 0.5641,
+        "unsupported_count": 5,
+        "unresolved_count": 0
+      },
+      "c_mean": {
+        "unique_and_supported_count": 5.6667,
+        "ratio": 0.4466,
+        "unsupported_count": 6.6667,
+        "unresolved_count": 0
+      },
+      "diff_count": -1.6666,
+      "diff_ratio": -0.1175,
+      "diff_unsupported_count": 1.6667,
+      "diff_unresolved_count": 0,
+      "containment_violations": {
+        "a": 0,
+        "c": 0
+      }
+    },
+    {
+      "asin": "B001HLDVZW",
+      "category": "想像",
+      "elapsed_s": 755.8,
+      "flagged_rate": 0.4167,
+      "a_mean": {
+        "unique_and_supported_count": 11.6667,
+        "ratio": 0.899,
+        "unsupported_count": 1,
+        "unresolved_count": 0
+      },
+      "c_mean": {
+        "unique_and_supported_count": 11.3333,
+        "ratio": 0.8056,
+        "unsupported_count": 1.3333,
+        "unresolved_count": 0
+      },
+      "diff_count": -0.3334,
+      "diff_ratio": -0.0934,
+      "diff_unsupported_count": 0.3333,
+      "diff_unresolved_count": 0,
+      "containment_violations": {
+        "a": 0,
+        "c": 0
+      }
+    },
+    {
+      "asin": "B0FHVH6JML",
+      "category": "STEM",
+      "elapsed_s": 691.9,
+      "flagged_rate": 0.5,
+      "a_mean": {
+        "unique_and_supported_count": 10.3333,
+        "ratio": 0.8415,
+        "unsupported_count": 0.6667,
+        "unresolved_count": 0
+      },
+      "c_mean": {
+        "unique_and_supported_count": 10.6667,
+        "ratio": 0.8268,
+        "unsupported_count": 1,
+        "unresolved_count": 0
+      },
+      "diff_count": 0.3334,
+      "diff_ratio": -0.0147,
+      "diff_unsupported_count": 0.3333,
+      "diff_unresolved_count": 0,
+      "containment_violations": {
+        "a": 0,
+        "c": 0
+      }
+    },
+    {
+      "asin": "B08TGR9YXH",
+      "category": "unknown",
+      "elapsed_s": 691.5,
+      "flagged_rate": 0.2917,
+      "a_mean": {
+        "unique_and_supported_count": 7.6667,
+        "ratio": 0.5751,
+        "unsupported_count": 5.6667,
+        "unresolved_count": 0
+      },
+      "c_mean": {
+        "unique_and_supported_count": 9,
+        "ratio": 0.6758,
+        "unsupported_count": 4.3333,
+        "unresolved_count": 0
+      },
+      "diff_count": 1.3333,
+      "diff_ratio": 0.1007,
+      "diff_unsupported_count": -1.3334,
+      "diff_unresolved_count": 0,
+      "containment_violations": {
+        "a": 0,
+        "c": 0
+      }
+    },
+    {
+      "asin": "B0FPFG7B4F",
+      "category": "運動",
+      "elapsed_s": 745.5,
+      "flagged_rate": 0.5,
+      "a_mean": {
+        "unique_and_supported_count": 11.3333,
+        "ratio": 0.7584,
+        "unsupported_count": 3,
+        "unresolved_count": 0
+      },
+      "c_mean": {
+        "unique_and_supported_count": 12.3333,
+        "ratio": 0.7894,
+        "unsupported_count": 2.3333,
+        "unresolved_count": 0
+      },
+      "diff_count": 1.0,
+      "diff_ratio": 0.031,
+      "diff_unsupported_count": -0.6667,
+      "diff_unresolved_count": 0,
+      "containment_violations": {
+        "a": 0,
+        "c": 0
+      }
+    },
+    {
+      "asin": "B0722JMZYD",
+      "category": "言語",
+      "elapsed_s": 606.4,
+      "flagged_rate": 0.4583,
+      "a_mean": {
+        "unique_and_supported_count": 5.3333,
+        "ratio": 0.3993,
+        "unsupported_count": 5.6667,
+        "unresolved_count": 0
+      },
+      "c_mean": {
+        "unique_and_supported_count": 6.3333,
+        "ratio": 0.474,
+        "unsupported_count": 4,
+        "unresolved_count": 0
+      },
+      "diff_count": 1.0,
+      "diff_ratio": 0.0747,
+      "diff_unsupported_count": -1.6667,
+      "diff_unresolved_count": 0,
+      "containment_violations": {
+        "a": 0,
+        "c": 0
+      }
+    },
+    {
+      "asin": "B08DPCJ18P",
+      "category": "想像",
+      "elapsed_s": 605.0,
+      "flagged_rate": 0.375,
+      "a_mean": {
+        "unique_and_supported_count": 8,
+        "ratio": 0.5843,
+        "unsupported_count": 2.3333,
+        "unresolved_count": 0
+      },
+      "c_mean": {
+        "unique_and_supported_count": 8,
+        "ratio": 0.5667,
+        "unsupported_count": 3.3333,
+        "unresolved_count": 0
+      },
+      "diff_count": 0,
+      "diff_ratio": -0.0176,
+      "diff_unsupported_count": 1.0,
+      "diff_unresolved_count": 0,
+      "containment_violations": {
+        "a": 0,
+        "c": 0
+      }
+    },
+    {
+      "asin": "B0F324L5QW",
+      "category": "STEM",
+      "elapsed_s": 666.2,
+      "flagged_rate": 0.4583,
+      "a_mean": {
+        "unique_and_supported_count": 6,
+        "ratio": 0.4143,
+        "unsupported_count": 2.6667,
+        "unresolved_count": 0
+      },
+      "c_mean": {
+        "unique_and_supported_count": 7.3333,
+        "ratio": 0.4889,
+        "unsupported_count": 1.6667,
+        "unresolved_count": 0
+      },
+      "diff_count": 1.3333,
+      "diff_ratio": 0.0746,
+      "diff_unsupported_count": -1.0,
+      "diff_unresolved_count": 0,
+      "containment_violations": {
+        "a": 0,
+        "c": 0
+      }
+    }
+  ],
+  "verdict": {
+    "count_diff_bootstrap_ci": {
+      "mean": 0.2667,
+      "lower": -0.3666,
+      "upper": 0.8333,
+      "n": 10,
+      "n_resamples": 10000
+    },
+    "ratio_diff_bootstrap_ci": {
+      "mean": 0.0004,
+      "lower": -0.0454,
+      "upper": 0.0454,
+      "n": 10,
+      "n_resamples": 10000
+    },
+    "unsupported_count_diff_bootstrap_ci": {
+      "mean": -0.2,
+      "lower": -0.8,
+      "upper": 0.4333,
+      "n": 10,
+      "n_resamples": 10000
+    },
+    "count_significant": false,
+    "ratio_significant": false,
+    "unsupported_not_increased": true,
+    "c_effective": false,
+    "verdict": "C無効: 固有かつ裏付けありの文の数・率のいずれか (または両方) の信頼区間が0をまたぐ"
+  },
+  "containment_violations_total": {
+    "a": 0,
+    "c": 0
+  },
+  "cost": {
+    "asin_count": 10,
+    "total_gemma_calls": 150,
+    "calls_per_asin_mean": 15.0,
+    "total_gemma_seconds": 4441.5,
+    "seconds_per_asin_mean": 444.2
+  },
+  "per_asin_run_dir": "/tmp/c1_runs/20260925T024617Z"
+}
