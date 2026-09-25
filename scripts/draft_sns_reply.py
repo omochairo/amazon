@@ -289,6 +289,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     drafted = 0
+    # agy を実際に呼べて何らかの判定 (起草 or 返信しない) まで到達した件数。
+    # 「1件も起草できなかった」が agy/ペルソナの障害なのか、agy が正当に
+    # 「返信しない」と判定し続けただけなのかを区別するために drafted とは別に持つ
+    # (#8282 — handled=0 のまま drafted=0 だけで exit 1 にすると、対象全件が正当な
+    # 「返信しない」判定だった正常系まで障害扱いになっていた)。
+    handled = 0
     for rec in targets:
         print(f"\n=== {rec['id']} ({rec['channel']} / {rec['kind']}) ===")
 
@@ -315,6 +321,7 @@ def main(argv: list[str] | None = None) -> int:
                 rec["id"], {"status": store.STATUS_IGNORED, "ignore_reason": reason}, directory,
             )
             print(f"  返信しない ({reason})")
+            handled += 1
             continue
 
         if args.redraft and rec.get("drafts"):
@@ -324,16 +331,17 @@ def main(argv: list[str] | None = None) -> int:
         for d in drafts:
             store.add_draft(rec["id"], d, args.model, directory)
         drafted += 1
+        handled += 1
         print(f"  {len(drafts)} 案を起草")
 
     if args.dry_run:
         return 0
-    # 対象 (targets) があったのに 1 件も起草できなかったのは、agy かペルソナが
-    # 壊れている。injected は targets と無関係な集合なので判定に混ぜない
-    # (混ぜると、同じ実行にインジェクション疑いが1件でもあるだけで targets 側の
-    # 全滅が exit 0 に化けて監視をすり抜ける — #61)。
+    # 対象 (targets) があったのに 1 件も判定まで到達できなかったのは、agy か
+    # ペルソナが壊れている。injected は targets と無関係な集合なので判定に
+    # 混ぜない (混ぜると、同じ実行にインジェクション疑いが1件でもあるだけで
+    # targets 側の全滅が exit 0 に化けて監視をすり抜ける — #61)。
     # targets が空 (候補がインジェクション疑いだけだった等) なら not targets で 0 になる。
-    return 0 if drafted or not targets else 1
+    return 0 if handled or not targets else 1
 
 
 if __name__ == "__main__":
