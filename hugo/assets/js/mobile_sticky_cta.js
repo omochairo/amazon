@@ -252,12 +252,18 @@
     }
 
     if (bottomSentinels.length && "IntersectionObserver" in global) {
+      // entries には「今回状態が変化した要素」しか来ない (IntersectionObserver 仕様)。
+      // bottomSentinels は複数 (post-footer / recently-viewed / ranking-history) あり、
+      // どれか1つが変化しても他の要素は entries に含まれないため、entries だけで
+      // anyVisible を決めると「表示中の要素が別にある」状態を見失って sticky CTA が
+      // 誤って再表示されていた。要素ごとの最新状態を保持し、その総和で判定する。
+      var bottomState = new Map();
+      bottomSentinels.forEach(function (el) { bottomState.set(el, false); });
       var bottomObserver = new IntersectionObserver(function (entries) {
-        var anyVisible = false;
         entries.forEach(function (en) {
-          if (en.isIntersecting) anyVisible = true;
+          bottomState.set(en.target, en.isIntersecting);
         });
-        bottomVisible = anyVisible;
+        bottomVisible = Array.from(bottomState.values()).some(Boolean);
         update();
       }, { threshold: 0 });
       bottomSentinels.forEach(function (el) { bottomObserver.observe(el); });

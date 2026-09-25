@@ -33,7 +33,11 @@ document.addEventListener("DOMContentLoaded", function() {
       const data = await res.json();
       allItems = data.filter(item => {
         if (taxonomy === "brands") {
-          return item.brands && item.brands.includes(term);
+          // data-term は term ページの表示名 (.Title = ブランド正規名)。
+          // item.brands は /brands/<slug>/ タクソノミー用のローマ字スラッグ配列
+          // (build_post.py の _term_to_slug) で表示名と一致しないため、
+          // 表示名と同じ形式で入っている単数形 item.brand と比較する。
+          return item.brand === term;
         } else if (taxonomy === "tags") {
           return item.tags && item.tags.includes(term);
         }
