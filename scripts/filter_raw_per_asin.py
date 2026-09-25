@@ -335,6 +335,10 @@ def title_chunks(title: str) -> list[str]:
 _TRAILING_MARKER = re.compile(r"[\s・\-]*([0-9a-z]{1,3})(?=$|[\s・/／()（）【】\[\]])")
 
 
+# _long_term_strong: 候補側で長い語に直接続く版表記 (４×４ の 4, ゲーム５ の 5)。
+_ATTACHED_MARKER = r"([0-9a-z]+)(?![0-9a-zぁ-んァ-ヶー一-龯])"
+
+
 def compute_title_df(titles_terms: list[tuple[str, set]]) -> dict[str, int]:
     """product_term ごとに、その語を (正規化後の部分文字列として) 含む
     ターゲットタイトルの数を返す (#8164, 2026-09-26)。_long_term_strong の
@@ -393,6 +397,11 @@ def _long_term_strong(asin_title: str, asin_product_terms: set,
     無印・基本セット (「どこでもドラえもん日本旅行ゲーム ミニ」の「ミニ」は
     識別語にならない) に兄弟商品 (…ゲーム5) の動画を通さない。
 
+    候補側で長い語の直後に英数字が直接続く (「クリスタルルービックキューブ
+    ４×４」「…日本旅行ゲーム５」) のは版違いの表記なので、ターゲット側の
+    同じ位置に同じ英数字が無ければ一致としない。「やきたてパン工場35万個
+    突破」のように後ろに漢字・かなが続く数量表現は除く。
+
     ASIN に型番があるときは、候補の型番が別物 (71439 に 71440) なら
     この経路を使わない。"""
     long_terms = [pt for pt in asin_product_terms
@@ -424,6 +433,11 @@ def _long_term_strong(asin_title: str, asin_product_terms: set,
             if marker:
                 required.add(marker.group(1))
         if title_df is not None and title_df.get(lt, 1) >= 2 and not required:
+            continue
+        own = re.match(r"\s*([0-9a-z]+)", norm_title[idx + len(nlt):]) if idx >= 0 else None
+        attached = {m.group(1) for m in
+                    re.finditer(re.escape(nlt) + _ATTACHED_MARKER, norm_text)}
+        if attached - ({own.group(1)} if own else set()):
             continue
         if all(_bounded_in(t, norm_text) for t in required):
             return True
