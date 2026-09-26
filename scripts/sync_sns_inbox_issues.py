@@ -224,12 +224,28 @@ def count_synced_drafts(repo: str, number: int, body: str, gh=gh_json) -> int:
     return top
 
 
-def draft_comment(rec: dict, start_index: int) -> str:
-    """start_index (0 始まり) 以降の案だけをコメントにする。"""
-    drafts = (rec.get("drafts") or [])[start_index:]
+def draft_comment(rec: dict, synced: int) -> str:
+    """案番号が synced より大きい案 (まだ issue に出していない案) をコメントにする。
+
+    作り直しで synced 以下の案が消えていれば、それが送れないことも書く。
+    番号は作り直しても再利用しないので、issue に残る古い「案 1」を --draft 1 で
+    送ろうとしても、別の文面ではなくエラーになる (#8323)。
+    """
+    numbered = store.numbered_drafts(rec)
+    drafts = [(i, dr) for i, dr in numbered if i > synced]
     lines = [f"{DRAFT_COMMENT_LEAD}{len(drafts)} 件増えました。", ""]
-    for offset, draft in enumerate(drafts):
-        i = start_index + offset + 1
+    live = {i for i, _ in numbered}
+    gone = [i for i in range(1, synced + 1) if i not in live]
+    # issue に出した案が 1 件も残っていない = 今回のコメントが作り直しの報告。
+    # 作り直しのあとに案が足されただけなら、破棄の警告は前のコメントで済んでいる
+    if gone and not any(i <= synced for i in live):
+        span = f"案 {gone[0]}" if len(gone) == 1 else f"案 {gone[0]}〜{gone[-1]}"
+        lines += [
+            f"⚠️ 作り直したため、これより前に載っている{span}は破棄済みです"
+            "（`--draft` で指定するとエラーになります）。",
+            "",
+        ]
+    for i, draft in drafts:
         text = str(draft.get("text") or "")
         fence = renderer.code_fence(text)
         lines += [
@@ -350,7 +366,7 @@ def sync(
                     raise GhError("issue 作成の応答に number が無い")
                 store.update_record(
                     rid,
-                    {"issue_number": number, "issue_synced_drafts": len(rec.get("drafts") or [])},
+                    {"issue_number": number, "issue_synced_drafts": store.draft_seq(rec)},
                     d,
                 )
                 stats["created"] += 1
@@ -359,10 +375,11 @@ def sync(
         if not isinstance(number, int):
             continue
 
-        # 起票のあとに増えた案をコメントで追う
+        # 起票のあとに増えた案をコメントで追う。比べるのは件数ではなく案番号。
+        # 件数だと、作り直しで 2 件を 2 件に置き換えたときに何も出ない (#8323)
         synced = rec.get("issue_synced_drafts")
         synced = synced if isinstance(synced, int) else 0
-        have = len(rec.get("drafts") or [])
+        have = max((i for i, _ in store.numbered_drafts(rec)), default=0)
         if have > synced:
             if not dry_run:
                 gh(

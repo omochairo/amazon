@@ -705,3 +705,221 @@ def test_xrpc_read_timeout_is_a_post_error(monkeypatch):
     with pytest.raises(poster.PostError) as ei:
         poster._xrpc("https://example.invalid/xrpc/x", payload={"a": 1})
     assert not isinstance(ei.value, poster.PostNotSent)
+
+
+# --------------------------------------------------------------------------
+# 作り直し後の案番号と同時実行 (#8323)
+# --------------------------------------------------------------------------
+
+def _redraft(monkeypatch, d: Path, rec: dict) -> None:
+    monkeypatch.setattr(drafter, "load_persona", lambda ch: "PERSONA")
+    monkeypatch.setattr(
+        drafter, "call_agy",
+        lambda prompt, model, timeout_s: "判定: 返信する\n理由: ok\n案1: 新案A\n案2: 新案B",
+    )
+    assert drafter.main(["--redraft", "--limit", "5"]) == 0
+
+
+def test_redraft_continues_draft_numbers(monkeypatch, d: Path):
+    """作り直した案は続きの番号になる。古い「案 1」の番号を別の文面に振らない。"""
+    monkeypatch.setenv("SNS_INBOX_DIR", str(d))
+    rec = _seed(d)
+    store.add_draft(rec["id"], "古い案", "old-model", d)
+    _redraft(monkeypatch, d, rec)
+
+    after = store.load_records(d)[rec["id"]]
+    assert [(no, x["text"]) for no, x in store.numbered_drafts(after)] == [
+        (2, "新案A"), (3, "新案B"),
+    ]
+    assert after["draft_seq"] == 3
+
+
+def test_post_refuses_a_draft_number_discarded_by_redraft(monkeypatch, d: Path):
+    """issue に残る古い案の番号を打っても、作り直した別の文面は送らない。"""
+    monkeypatch.setenv("SNS_INBOX_DIR", str(d))
+    rec = _seed(d)
+    store.add_draft(rec["id"], "古い案", "old-model", d)
+    _redraft(monkeypatch, d, rec)
+    called = []
+    monkeypatch.setitem(poster.POSTERS, "threads", lambda r, b: called.append(b) or "r1")
+
+    assert poster.main(["--id", rec["id"], "--draft", "1"]) == 2
+    assert called == []
+    assert poster.main(["--id", rec["id"], "--draft", "2"]) == 0
+    assert called == ["新案A"]
+
+
+def test_resolve_body_says_discarded_for_old_numbers():
+    rec = {"draft_seq": 3, "drafts": [{"no": 3, "text": "新"}]}
+    args = type("A", (), {"body": "", "draft": 1})()
+    with pytest.raises(ValueError, match="破棄済み"):
+        poster.resolve_body(rec, args)
+
+
+def test_discard_keeps_numbers_of_legacy_drafts_without_no(d: Path):
+    """番号を持たない古い案 (並び順が番号) を捨てても、番号は戻らない。"""
+    rec = _seed(d)
+    store.update_record(rec["id"], {"drafts": [{"text": "a"}, {"text": "b"}]}, d)
+    store.discard_drafts(rec["id"], d)
+    store.add_draft(rec["id"], "c", "m", d)
+    after = store.load_records(d)[rec["id"]]
+    assert [no for no, _ in store.numbered_drafts(after)] == [3]
+
+
+def test_post_stops_while_another_run_holds_the_lock(monkeypatch, d: Path):
+    monkeypatch.setenv("SNS_INBOX_DIR", str(d))
+    rec = _seed(d)
+    called = []
+    monkeypatch.setitem(poster.POSTERS, "threads", lambda r, b: called.append(b) or "r1")
+
+    with store.record_lock(rec["id"], d):
+        assert poster.main(["--id", rec["id"], "--body", "ありがとう"]) == 2
+    assert called == []
+    assert not store.load_records(d)[rec["id"]].get("send_started_at")
+    # ロックが外れれば送れる
+    assert poster.main(["--id", rec["id"], "--body", "ありがとう"]) == 0
+    assert called == ["ありがとう"]
+
+
+def test_post_rechecks_under_the_lock(monkeypatch, d: Path):
+    """最初の読み込みのあとで別の実行が送信を始めていたら、ロックの中で止まる。"""
+    monkeypatch.setenv("SNS_INBOX_DIR", str(d))
+    rec = _seed(d)
+    called = []
+    monkeypatch.setitem(poster.POSTERS, "threads", lambda r, b: called.append(b) or "r1")
+    real_lock = store.record_lock
+
+    def racing_lock(record_id, directory=None):
+        # 先行した実行が、こちらの読み込みとロックの間に印を書いた
+        store.update_record(record_id, {"send_started_at": store.utcnow()}, d)
+        return real_lock(record_id, directory)
+
+    monkeypatch.setattr(store, "record_lock", racing_lock)
+    assert poster.main(["--id", rec["id"], "--body", "ありがとう"]) == 2
+    assert called == []
+
+
+def test_post_releases_the_lock_after_sending(monkeypatch, d: Path):
+    monkeypatch.setenv("SNS_INBOX_DIR", str(d))
+    rec = _seed(d)
+    monkeypatch.setitem(poster.POSTERS, "threads", lambda r, b: "r1")
+    assert poster.main(["--id", rec["id"], "--body", "ありがとう"]) == 0
+    assert list((d / "locks").glob("*.lock")) == []
+
+
+def test_force_does_not_override_a_run_that_started_after_reading(monkeypatch, d: Path):
+    """--force でも、読んだあとに別の実行が送信を始めていたら止まる。"""
+    monkeypatch.setenv("SNS_INBOX_DIR", str(d))
+    rec = _seed(d)
+    called = []
+    monkeypatch.setitem(poster.POSTERS, "threads", lambda r, b: called.append(b) or "r1")
+    real_lock = store.record_lock
+
+    def racing_lock(record_id, directory=None):
+        store.update_record(record_id, {"send_started_at": store.utcnow()}, d)
+        return real_lock(record_id, directory)
+
+    monkeypatch.setattr(store, "record_lock", racing_lock)
+    assert poster.main(["--id", rec["id"], "--body", "ありがとう", "--force"]) == 2
+    assert called == []
+
+
+def test_force_still_resends_after_a_confirmed_unfinished_send(monkeypatch, d: Path):
+    """前回の印が残っていても、読んだ時点から変わっていなければ --force で送れる。"""
+    monkeypatch.setenv("SNS_INBOX_DIR", str(d))
+    rec = _seed(d)
+    store.update_record(rec["id"], {"send_started_at": "2026-09-01T00:00:00Z"}, d)
+    called = []
+    monkeypatch.setitem(poster.POSTERS, "threads", lambda r, b: called.append(b) or "r1")
+    assert poster.main(["--id", rec["id"], "--body", "ありがとう", "--force"]) == 0
+    assert called == ["ありがとう"]
+
+
+def test_lock_file_is_removed_even_if_the_body_raises(d: Path):
+    with pytest.raises(RuntimeError):
+        with store.record_lock("threads:x", d):
+            raise RuntimeError("boom")
+    assert list((d / "locks").glob("*.lock")) == []
+
+
+def test_force_does_not_resend_after_another_run_finished(monkeypatch, d: Path):
+    """読んだあとに別の実行が送り終えていたら (印は消えている)、--force でも送らない。"""
+    monkeypatch.setenv("SNS_INBOX_DIR", str(d))
+    rec = _seed(d)
+    called = []
+    monkeypatch.setitem(poster.POSTERS, "threads", lambda r, b: called.append(b) or "r1")
+    real_lock = store.record_lock
+
+    def finished_lock(record_id, directory=None):
+        store.update_record(record_id, {
+            "status": store.STATUS_ANSWERED, "answered_at": store.utcnow(),
+            "send_started_at": "",
+        }, d)
+        return real_lock(record_id, directory)
+
+    monkeypatch.setattr(store, "record_lock", finished_lock)
+    assert poster.main(["--id", rec["id"], "--body", "ありがとう", "--force"]) == 2
+    assert called == []
+
+
+def test_lock_treats_permission_error_as_busy(monkeypatch, d: Path):
+    """Windows で消している途中のロックに当たると PermissionError になる。送らない側に倒す。"""
+    def denied(*a, **k):
+        raise PermissionError(13, "Access is denied")
+
+    monkeypatch.setattr(store.os, "open", denied)
+    with pytest.raises(store.LockBusy):
+        with store.record_lock("threads:x", d):
+            pass
+
+
+def test_lock_file_is_removed_if_writing_it_fails(monkeypatch, d: Path):
+    def broken(fd, data):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(store.os, "write", broken)
+    with pytest.raises(OSError):
+        with store.record_lock("threads:x", d):
+            pass
+    assert list((d / "locks").glob("*.lock")) == []
+
+
+def test_force_run_is_stopped_while_another_run_is_sending(monkeypatch, d: Path):
+    """送信中に起動した別の実行は、残った印を --force で越えられない。
+
+    ロックを印を書いた時点で外すと、あとから起動した実行が「送信開始」の印を
+    読み、--force で越えて二重に送る (実プロセス 8 本の競合で 7 回送られた)。
+    """
+    monkeypatch.setenv("SNS_INBOX_DIR", str(d))
+    rec = _seed(d)
+    called, nested = [], []
+
+    def fake(r, b):
+        called.append(b)
+        if len(called) == 1:
+            nested.append(poster.main(["--id", rec["id"], "--body", b, "--force"]))
+        return "r1"
+
+    monkeypatch.setitem(poster.POSTERS, "threads", fake)
+    assert poster.main(["--id", rec["id"], "--body", "ありがとう"]) == 0
+    assert nested == [2]
+    assert called == ["ありがとう"]
+
+
+def test_post_stops_if_drafts_were_redone_before_taking_the_lock(monkeypatch, d: Path):
+    """表示した案が、ロックを取るまでの間に作り直されていたら送らない。"""
+    monkeypatch.setenv("SNS_INBOX_DIR", str(d))
+    rec = _seed(d)
+    store.add_draft(rec["id"], "古い案", "m", d)
+    called = []
+    monkeypatch.setitem(poster.POSTERS, "threads", lambda r, b: called.append(b) or "r1")
+    real_lock = store.record_lock
+
+    def redrafting_lock(record_id, directory=None):
+        store.discard_drafts(record_id, d)
+        store.add_draft(record_id, "新案", "m", d)
+        return real_lock(record_id, directory)
+
+    monkeypatch.setattr(store, "record_lock", redrafting_lock)
+    assert poster.main(["--id", rec["id"], "--draft", "1"]) == 2
+    assert called == []

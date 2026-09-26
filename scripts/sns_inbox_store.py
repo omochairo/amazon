@@ -34,7 +34,9 @@ X / Threads / Bluesky に投稿しても、返ってきた返信に気付けず�
     created_at    相手が投稿した時刻 (ISO8601 UTC)
     detected_at   こちらが検出した時刻 (ISO8601 UTC)
     status        "new" | "drafted" | "answered" | "ignored"
-    drafts        [{"text": ..., "model": ..., "generated_at": ...}, ...]
+    drafts        [{"no": ..., "text": ..., "model": ..., "generated_at": ...}, ...]
+                  有効な案だけ。作り直し (discard_drafts) で置き換わる
+    draft_seq     これまでに振った案番号の最大値。作り直しても戻さない (#8323)
     answered_at   送信した時刻 (ISO8601 UTC / 未送信は "")
     reply_native_id  送信した自分の返信の ID (未送信は "")
 
@@ -44,8 +46,10 @@ published_at の bookkeeping が遅れて二重投稿になった #4782 と同�
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -194,6 +198,30 @@ def update_record(
     return merged
 
 
+def numbered_drafts(rec: dict) -> list[tuple[int, dict]]:
+    """(案番号, 案) の一覧。番号の無い古い案は並び順 (1 始まり) を番号とみなす。
+
+    案番号は作り直しても再利用しない (#8323)。人が issue で読んだ「案 1」と、
+    作り直したあとの別の文面が同じ番号で送られる事故を防ぐため。
+    """
+    out: list[tuple[int, dict]] = []
+    for i, dr in enumerate(rec.get("drafts") or [], start=1):
+        if not isinstance(dr, dict):
+            continue
+        no = dr.get("no")
+        out.append((no if isinstance(no, int) and no > 0 else i, dr))
+    return out
+
+
+def draft_seq(rec: dict) -> int:
+    """これまでに振った案番号の最大値 (破棄した案も含む)。"""
+    seq = rec.get("draft_seq")
+    top = seq if isinstance(seq, int) else 0
+    for no, _ in numbered_drafts(rec):
+        top = max(top, no)
+    return top
+
+
 def add_draft(
     record_id: str, text: str, model: str, directory: Path | None = None,
 ) -> dict | None:
@@ -201,11 +229,64 @@ def add_draft(
     cur = load_records(d).get(record_id)
     if cur is None:
         return None
+    no = draft_seq(cur) + 1
     drafts = list(cur.get("drafts") or [])
-    drafts.append({"text": text, "model": model, "generated_at": utcnow()})
+    drafts.append({"no": no, "text": text, "model": model, "generated_at": utcnow()})
     return update_record(
-        record_id, {"drafts": drafts, "status": STATUS_DRAFTED}, d,
+        record_id, {"drafts": drafts, "draft_seq": no, "status": STATUS_DRAFTED}, d,
     )
+
+
+def discard_drafts(record_id: str, directory: Path | None = None) -> dict | None:
+    """案を全部捨てる (作り直しの前段)。番号は draft_seq に残して再利用させない。"""
+    d = directory or inbox_dir()
+    cur = load_records(d).get(record_id)
+    if cur is None:
+        return None
+    return update_record(record_id, {"drafts": [], "draft_seq": draft_seq(cur)}, d)
+
+
+class LockBusy(RuntimeError):
+    pass
+
+
+def _lock_path(record_id: str, directory: Path) -> Path:
+    # id には ":" や "/" (Bluesky の at-uri) が入るのでファイル名にはハッシュを使う
+    digest = hashlib.sha256(record_id.encode("utf-8")).hexdigest()[:24]
+    return directory / "locks" / f"{digest}.lock"
+
+
+@contextmanager
+def record_lock(record_id: str, directory: Path | None = None):
+    """同じ id の送信を同時に 1 本に絞る排他 (O_CREAT|O_EXCL のロックファイル)。
+
+    取れなければ待たずに LockBusy を投げる。送信側は「読み直す → ガード →
+    印を書く → 送る → 記録」の間ずっと持つ。ファイルが残るのはその間に
+    プロセスが強制終了されたときで、そのときは send_started_at も残っている。
+    """
+    d = directory or inbox_dir()
+    path = _lock_path(record_id, d)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        raise LockBusy(str(path)) from None
+    except PermissionError as e:
+        # Windows では消している途中のファイルに O_EXCL を当てると PermissionError
+        # (そのとき exists() は False を返しうるので見分けられない)。本当の権限不足も
+        # 含めて「送らない」側に倒す
+        raise LockBusy(f"{path} ({e})") from None
+    try:
+        try:
+            os.write(fd, f"{os.getpid()} {utcnow()} {record_id}\n".encode("utf-8"))
+        finally:
+            os.close(fd)
+        yield path
+    finally:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def pending(directory: Path | None = None) -> list[dict]:

@@ -498,3 +498,42 @@ def test_answered_record_is_not_retired_by_a_closed_issue(d: Path):
     gh = FakeGh([{"number": 101, "state": "closed", "body": sync.marker("threads:1")}])
     sync.sync(REPO, directory=d, gh=gh)
     assert store.load_records(d)["threads:1"]["status"] == store.STATUS_ANSWERED
+
+
+def test_redraft_with_the_same_count_is_commented_as_replacement(d: Path):
+    """2 件を 2 件に作り直しても、新しい案をコメントし古い案は破棄済みと書く (#8323)。
+
+    件数で比べると何も出ず、人は issue に残る古い「案 1」を読んで送ってしまう。
+    """
+    _add(d, "threads:1", drafts=["案A", "案B"])
+    sync.sync(REPO, directory=d, gh=FakeGh())  # 案 1〜2 を載せて起票
+    store.discard_drafts("threads:1", d)
+    for t in ("新案A", "新案B"):
+        store.add_draft("threads:1", t, "claude-sonnet-4-6", d)
+
+    gh = FakeGh()
+    assert sync.sync(REPO, directory=d, gh=gh)["commented"] == 1
+    body = gh.posts_to("/comments")[0]["body"]
+    assert body.startswith(sync.DRAFT_COMMENT_LEAD)
+    assert "案 1〜2は破棄済み" in body
+    assert "--draft 3`" in body and "--draft 4`" in body
+    assert "--draft 1`" not in body
+    assert sync.count_drafts_in_body(body) == 4
+    assert store.load_records(d)["threads:1"]["issue_synced_drafts"] == 4
+    # もう一度回しても同じコメントは出さない
+    assert sync.sync(REPO, directory=d, gh=FakeGh())["commented"] == 0
+
+
+def test_drafts_added_after_a_redraft_do_not_repeat_the_discard_warning(d: Path):
+    _add(d, "threads:1", drafts=["案A"])
+    sync.sync(REPO, directory=d, gh=FakeGh())
+    store.discard_drafts("threads:1", d)
+    store.add_draft("threads:1", "新案", "claude-sonnet-4-6", d)
+    sync.sync(REPO, directory=d, gh=FakeGh())  # 作り直しの報告 (案 2)
+    store.add_draft("threads:1", "追加案", "claude-sonnet-4-6", d)
+
+    gh = FakeGh()
+    assert sync.sync(REPO, directory=d, gh=gh)["commented"] == 1
+    body = gh.posts_to("/comments")[0]["body"]
+    assert "--draft 3`" in body
+    assert "破棄済み" not in body
