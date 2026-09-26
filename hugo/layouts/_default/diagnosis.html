@@ -12,31 +12,31 @@
 <div class="diagnosis-wrapper">
   <!-- プログレスバー -->
   <div class="diagnosis-progress-container">
-    <div class="diagnosis-progress-bar" id="diagnosis-progress-bar" style="width: 0%;"></div>
+    <div class="diagnosis-progress-bar" id="diagnosis-progress-bar" role="progressbar" aria-valuenow="1" aria-valuemin="1" aria-valuemax="5" aria-valuetext="質問 1 / 5" style="width: 0%;"></div>
     <div class="diagnosis-progress-text" id="diagnosis-progress-text">質問 1 / 5</div>
   </div>
 
   <div class="diagnosis-wizard" id="diagnosis-wizard">
     <!-- Q1 -->
     <div class="diagnosis-step active" data-step="1">
-      <h2 class="diagnosis-question">Q1. お子さんの年齢は？</h2>
-      <div class="diagnosis-options">
-        <button class="diagnosis-option-btn" data-name="q1" data-value="0-1">
+      <h2 class="diagnosis-question" id="diagnosis-q1-title" tabindex="-1">Q1. お子さんの年齢は？</h2>
+      <div class="diagnosis-options" role="radiogroup" aria-labelledby="diagnosis-q1-title">
+        <button class="diagnosis-option-btn" role="radio" aria-checked="false" data-name="q1" data-value="0-1">
           <span class="emoji">👶</span>
           <span class="label">0〜1歳</span>
           <span class="sublabel">ねんね・おすわり期</span>
         </button>
-        <button class="diagnosis-option-btn" data-name="q1" data-value="1-2">
+        <button class="diagnosis-option-btn" role="radio" aria-checked="false" data-name="q1" data-value="1-2">
           <span class="emoji">🚶</span>
           <span class="label">1〜2歳</span>
           <span class="sublabel">よちよち・あんよ期</span>
         </button>
-        <button class="diagnosis-option-btn" data-name="q1" data-value="3-4">
+        <button class="diagnosis-option-btn" role="radio" aria-checked="false" data-name="q1" data-value="3-4">
           <span class="emoji">🧩</span>
           <span class="label">3〜4歳</span>
           <span class="sublabel">ごっこ遊び・社会性発達期</span>
         </button>
-        <button class="diagnosis-option-btn" data-name="q1" data-value="5-6">
+        <button class="diagnosis-option-btn" role="radio" aria-checked="false" data-name="q1" data-value="5-6">
           <span class="emoji">🎒</span>
           <span class="label">5〜6歳</span>
           <span class="sublabel">創造・就学前準備期</span>
@@ -46,24 +46,24 @@
 
     <!-- Q2 -->
     <div class="diagnosis-step" data-step="2">
-      <h2 class="diagnosis-question">Q2. 今一番伸ばしたい力は？</h2>
-      <div class="diagnosis-options">
-        <button class="diagnosis-option-btn" data-name="q2" data-value="dexterity">
+      <h2 class="diagnosis-question" id="diagnosis-q2-title" tabindex="-1">Q2. 今一番伸ばしたい力は？</h2>
+      <div class="diagnosis-options" role="radiogroup" aria-labelledby="diagnosis-q2-title">
+        <button class="diagnosis-option-btn" role="radio" aria-checked="false" data-name="q2" data-value="dexterity">
           <span class="emoji">👋</span>
           <span class="label">手先の器用さ</span>
           <span class="sublabel">指先・手の運動発達を促す</span>
         </button>
-        <button class="diagnosis-option-btn" data-name="q2" data-value="language">
+        <button class="diagnosis-option-btn" role="radio" aria-checked="false" data-name="q2" data-value="language">
           <span class="emoji">🔤</span>
           <span class="label">言語・数</span>
           <span class="sublabel">言葉の理解や論理的な思考</span>
         </button>
-        <button class="diagnosis-option-btn" data-name="q2" data-value="imagination">
+        <button class="diagnosis-option-btn" role="radio" aria-checked="false" data-name="q2" data-value="imagination">
           <span class="emoji">🎨</span>
           <span class="label">想像力</span>
           <span class="sublabel">クリエイティビティ・自由な表現</span>
         </button>
-        <button class="diagnosis-option-btn" data-name="q2" data-value="social">
+        <button class="diagnosis-option-btn" role="radio" aria-checked="false" data-name="q2" data-value="social">
           <span class="emoji">🤝</span>
           <span class="label">社会性</span>
           <span class="sublabel">役割模倣・やり取りを学ぶ</span>
@@ -73,14 +73,14 @@
 
     <!-- Q3 -->
     <div class="diagnosis-step" data-step="3">
-      <h2 class="diagnosis-question">Q3. 遊ぶ場所は？</h2>
-      <div class="diagnosis-options">
-        <button class="diagnosis-option-btn" data-name="q3" data-value="indoor">
+      <h2 class="diagnosis-question" id="diagnosis-q3-title" tabindex="-1">Q3. 遊ぶ場所は？</h2>
+      <div class="diagnosis-options" role="radiogroup" aria-labelledby="diagnosis-q3-title">
+        <button class="diagnosis-option-btn" role="radio" aria-checked="false" data-name="q3" data-value="indoor">
           <span class="emoji">🏠</span>
           <span class="label">室内メイン</span>
           <span class="sublabel">お部屋でじっくり遊ぶ</span>
         </button>
-        <button class="diagnosis-option-btn" data-name="q3" data-value="outdoor">
+        <button class="diagnosis-option-btn" role="radio" aria-checked="false" data-name="q3" data-value="outdoor">
           <span class="emoji">🌳</span>
           <span class="label">外でも使いたい</span>
           <span class="sublabel">公園やおでかけ先、持ち運び</span>
@@ -90,19 +90,19 @@
 
     <!-- Q4 -->
     <div class="diagnosis-step" data-step="4">
-      <h2 class="diagnosis-question">Q4. ご予算はどのくらい？</h2>
-      <div class="diagnosis-options">
-        <button class="diagnosis-option-btn" data-name="q4" data-value="3000">
+      <h2 class="diagnosis-question" id="diagnosis-q4-title" tabindex="-1">Q4. ご予算はどのくらい？</h2>
+      <div class="diagnosis-options" role="radiogroup" aria-labelledby="diagnosis-q4-title">
+        <button class="diagnosis-option-btn" role="radio" aria-checked="false" data-name="q4" data-value="3000">
           <span class="emoji">👛</span>
           <span class="label">〜3,000円</span>
           <span class="sublabel">手頃に買えるギフトやご褒美</span>
         </button>
-        <button class="diagnosis-option-btn" data-name="q4" data-value="8000">
+        <button class="diagnosis-option-btn" role="radio" aria-checked="false" data-name="q4" data-value="8000">
           <span class="emoji">🎁</span>
           <span class="label">〜8,000円</span>
           <span class="sublabel">誕生日などの定番プレゼント</span>
         </button>
-        <button class="diagnosis-option-btn" data-name="q4" data-value="8000+">
+        <button class="diagnosis-option-btn" role="radio" aria-checked="false" data-name="q4" data-value="8000+">
           <span class="emoji">👑</span>
           <span class="label">8,000円以上</span>
           <span class="sublabel">特別で豪華な贈り物</span>
@@ -112,24 +112,24 @@
 
     <!-- Q5 -->
     <div class="diagnosis-step" data-step="5">
-      <h2 class="diagnosis-question">Q5. 今持っているおもちゃのタイプは？</h2>
-      <div class="diagnosis-options">
-        <button class="diagnosis-option-btn" data-name="q5" data-value="block">
+      <h2 class="diagnosis-question" id="diagnosis-q5-title" tabindex="-1">Q5. 今持っているおもちゃのタイプは？</h2>
+      <div class="diagnosis-options" role="radiogroup" aria-labelledby="diagnosis-q5-title">
+        <button class="diagnosis-option-btn" role="radio" aria-checked="false" data-name="q5" data-value="block">
           <span class="emoji">🧱</span>
           <span class="label">積み木・ブロック系</span>
           <span class="sublabel">組み立てるおもちゃはすでにある</span>
         </button>
-        <button class="diagnosis-option-btn" data-name="q5" data-value="puzzle">
+        <button class="diagnosis-option-btn" role="radio" aria-checked="false" data-name="q5" data-value="puzzle">
           <span class="emoji">🧩</span>
           <span class="label">パズル・カード系</span>
           <span class="sublabel">パズルやゲームは持っている</span>
         </button>
-        <button class="diagnosis-option-btn" data-name="q5" data-value="gokko">
+        <button class="diagnosis-option-btn" role="radio" aria-checked="false" data-name="q5" data-value="gokko">
           <span class="emoji">🍳</span>
           <span class="label">ごっこ遊び・ままごと系</span>
           <span class="sublabel">ままごとやキャラクター玩具がある</span>
         </button>
-        <button class="diagnosis-option-btn" data-name="q5" data-value="few">
+        <button class="diagnosis-option-btn" role="radio" aria-checked="false" data-name="q5" data-value="few">
           <span class="emoji">🌱</span>
           <span class="label">まだ少ない / 定番から揃えたい</span>
           <span class="sublabel">おすすめの定番品を優先</span>

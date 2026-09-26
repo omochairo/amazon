@@ -5222,6 +5222,8 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 }
 .compare-floating-bar-count { flex: 1; font-size: 0.92rem; }
 .compare-floating-bar-count strong { color: #2563eb; font-size: 1.15em; margin: 0 2px; }
+.compare-floating-bar-hint { color: #6b7280; font-size: 0.82rem; }
+.compare-floating-bar-count--limit { color: #991b1b; font-weight: 700; }
 .compare-floating-bar-clear {
   background: transparent;
   border: 1px solid #d1d5db;
@@ -5246,6 +5248,15 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   background: #cbd5e1;
   pointer-events: none;
   cursor: not-allowed;
+}
+
+/* sticky CTA bar (z-index: 95) と最下部で重なるため、モバイルでは
+   sticky CTA の直上にスタックさせる (#8319 1b) */
+@media (max-width: 720px) {
+  body:has(.mobile-sticky-cta:not([hidden])) .compare-floating-bar {
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+    z-index: 96;
+  }
 }
 
 /* 比較ページ本体 */
@@ -6118,6 +6129,12 @@ details.development-stage-accordion[open] > summary::before {
 /* ---- /favorites/ ページ ---- */
 .favorites-wrapper { max-width: 980px; margin: 0 auto; padding: 0 var(--gap, 1rem); }
 
+/* 比較フローティングバー表示時、末尾カードの価格・スコアがバーの裏に
+   隠れないよう余白を確保する (agy_review_screen で実機確認して発見) */
+body:has(#compare-floating-bar) .favorites-wrapper {
+  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px) + 1rem);
+}
+
 .favorites-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -6675,6 +6692,18 @@ details.development-stage-accordion[open] > summary::before {
   }
 }
 
+/* sticky CTA bar 表示時、記事末尾のシェア・タグ・フッターがバーの裏に
+   隠れないよう本文末尾に余白を確保する (#8319 1a)。
+   :has(.mobile-sticky-cta:not([hidden])) で条件付けると、この padding が
+   IntersectionObserver の監視対象 (.post-footer 等、.post-single の子孫) の
+   可視判定に影響し、表示/非表示が交互に切り替わり続ける無限フリッカーになる
+   ため、常時確保する固定値にする。バー非表示時は単に余白が残るだけで実害はない。 */
+@media (max-width: 720px) {
+  .post-single {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px) + 1.5rem);
+  }
+}
+
 /* prefers-reduced-motion: hover scale も停止 */
 @media (prefers-reduced-motion: reduce) {
   #top-link:hover { transform: none !important; }
@@ -7078,6 +7107,7 @@ details.development-stage-accordion[open] > summary::before {
   font-size: 0.84rem;
   font-weight: 600;
   padding: 7px 13px;
+  min-height: 44px;
   border-radius: 999px;
   background: var(--entry, #fff);
   border: 1.5px solid var(--border, rgba(0,0,0,0.12));
@@ -7140,7 +7170,7 @@ details.development-stage-accordion[open] > summary::before {
     padding-bottom: 2px;
   }
   .cat-nav-list::-webkit-scrollbar { display: none; }
-  .cat-summary { font-size: 0.8rem; padding: 6px 11px; }
+  .cat-summary { font-size: 0.8rem; padding: 6px 11px; min-height: 44px; }
 }
 
 /* ===== #3332 N4-P2 follow-up: グローバルナビの見やすさ改善 (PC/スマホ) ===== */

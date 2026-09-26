@@ -95,6 +95,7 @@
       } else {
         if (!add(asin)) {
           _flashLimit(btn);
+          _flashBarLimit();
           return;
         }
       }
@@ -107,6 +108,31 @@
   function _flashLimit(btn) {
     btn.classList.add("compare-toggle--limit");
     setTimeout(function () { btn.classList.remove("compare-toggle--limit"); }, 800);
+  }
+
+  // 上限到達時、既に表示されている浮動バーのカウント文言を一時的に
+  // 「最大N件までです」に切り替えて理由を伝える。連打で退避元を
+  // 上書きしないよう、退避 HTML とタイマーはバー生成時点の値を使い回す。
+  var _limitTimer = null;
+  var _limitOriginalHtml = null;
+  function _flashBarLimit() {
+    var bar = document.getElementById("compare-floating-bar");
+    if (!bar) return;
+    var countEl = bar.querySelector(".compare-floating-bar-count");
+    if (!countEl) return;
+    if (_limitTimer) {
+      clearTimeout(_limitTimer);
+    } else {
+      _limitOriginalHtml = countEl.innerHTML;
+    }
+    countEl.textContent = "最大" + MAX + "件までです";
+    countEl.classList.add("compare-floating-bar-count--limit");
+    _limitTimer = setTimeout(function () {
+      countEl.innerHTML = _limitOriginalHtml;
+      countEl.classList.remove("compare-floating-bar-count--limit");
+      _limitTimer = null;
+      _limitOriginalHtml = null;
+    }, 1500);
   }
 
   function _syncAllToggles() {
@@ -146,6 +172,13 @@
   // ------- floating action bar -------
   function _renderBar() {
     var bar = document.getElementById("compare-floating-bar");
+    // バーの中身を作り直すたびに退避中の限度表示状態を破棄する。
+    // 残したままだと、退避元の HTML が古い (既に detach された) ものになる。
+    if (_limitTimer) {
+      clearTimeout(_limitTimer);
+      _limitTimer = null;
+      _limitOriginalHtml = null;
+    }
     var n = count();
     if (n === 0) {
       if (bar) bar.remove();
@@ -162,10 +195,11 @@
     var canCompare = n >= MIN_TO_COMPARE;
     var asins = list();
     var url = "/compare/?asins=" + encodeURIComponent(asins.join(","));
+    var hintText = !canCompare ? ' <span class="compare-floating-bar-hint">あと1件追加で比較</span>' : '';
     bar.innerHTML =
       '<div class="compare-floating-bar-inner">' +
       '  <div class="compare-floating-bar-count">' +
-      '    🆚 比較中 <strong>' + n + '</strong> / ' + MAX +
+      '    🆚 比較中 <strong>' + n + '</strong> / ' + MAX + hintText +
       '  </div>' +
       '  <button type="button" class="compare-floating-bar-clear" aria-label="比較リストをすべて解除">解除</button>' +
       '  <a class="compare-floating-bar-cta' + (canCompare ? "" : " is-disabled") + '"' +
@@ -311,6 +345,18 @@
            rows.join("") + "</tbody></table></div>";
   }
 
+  // /index.json の Promise キャッシュ (favorites.js の _fetchIndexRows と同様)。
+  // 失敗時は reject して呼び出し元の .catch (エラー表示) に処理を委譲する
+  // (キャッシュ導入前の挙動を維持。次回呼び出しで再試行できるようキャッシュも捨てる)。
+  var _indexPromise = null;
+  function _fetchIndex() {
+    if (_indexPromise) return _indexPromise;
+    _indexPromise = fetch("/index.json", { credentials: "same-origin" })
+      .then(function (r) { return r.json(); })
+      .catch(function (err) { _indexPromise = null; throw err; });
+    return _indexPromise;
+  }
+
   function hydrateComparePage() {
     var root = document.getElementById("compare-root");
     if (!root) return;
@@ -333,10 +379,8 @@
       return;
     }
     root.innerHTML = '<p class="compare-loading">読み込み中...</p>';
-    // /index.json から該当 ASIN のメタを引く
-    var idxUrl = "/index.json";
-    fetch(idxUrl, { credentials: "same-origin" })
-      .then(function (r) { return r.json(); })
+    // /index.json から該当 ASIN のメタを引く (キャッシュして削除の度の再フェッチを防ぐ)
+    _fetchIndex()
       .then(function (index) {
         var byAsin = {};
         for (var i = 0; i < index.length; i++) {
