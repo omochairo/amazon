@@ -370,7 +370,7 @@ class _FakeSession:
         self._responses = list(responses)
         self.calls = 0
 
-    def post(self, url, json=None, timeout=None):
+    def post(self, url, json=None, timeout=None, headers=None):
         self.calls += 1
         resp = self._responses.pop(0)
         if isinstance(resp, Exception):

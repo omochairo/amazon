@@ -52,7 +52,7 @@ class _FakeSession:
             raise resp
         return resp
 
-    def post(self, url, json=None, timeout=None):
+    def post(self, url, json=None, timeout=None, headers=None):
         return self._next()
 
     def get(self, url, headers=None, params=None, timeout=None):

@@ -36,7 +36,7 @@ class _FakeGemmaSession:
         self.total_duration = total_duration
         self.calls = []
 
-    def post(self, url, json=None, timeout=None):
+    def post(self, url, json=None, timeout=None, headers=None):
         self.calls.append(json)
         return _FakeResp({
             "response": self.response_text,

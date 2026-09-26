@@ -80,7 +80,7 @@ class _FakeGemmaSession:
     def __init__(self, classifications):
         self._classifications = classifications
 
-    def post(self, url, json=None, timeout=None):
+    def post(self, url, json=None, timeout=None, headers=None):
         body = {"classifications": self._classifications}
         return _FakeResp({
             "response": json_dumps(body), "model": "gemma4:26b-a4b-it-qat",

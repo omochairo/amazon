@@ -142,7 +142,7 @@ class _FakeSession:
         "CROSS_CAT_1": [0.0, 0.0, 1.0],  # どちらとも似ていない
     }
 
-    def post(self, url, json=None, timeout=None):
+    def post(self, url, json=None, timeout=None, headers=None):
         payload = json or {}
         texts = payload.get("texts", [])
         return _FakeResp({"vectors": [self.VECTORS[t] for t in texts]})
@@ -178,7 +178,7 @@ class _EntailmentFakeSession:
     def __init__(self, judgments):
         self._judgments = judgments
 
-    def post(self, url, json=None, timeout=None):
+    def post(self, url, json=None, timeout=None, headers=None):
         if url.endswith("/api/generate"):
             body = {"judgments": self._judgments}
             return _FakeResp({

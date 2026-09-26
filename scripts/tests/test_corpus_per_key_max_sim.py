@@ -29,7 +29,7 @@ class _FakeRuriSession:
         self.vectors = vectors
         self.calls = []
 
-    def post(self, url, json=None, timeout=None):
+    def post(self, url, json=None, timeout=None, headers=None):
         self.calls.append(json)
         texts = json["texts"]
         return _FakeResp({"vectors": [self.vectors[t] for t in texts]})

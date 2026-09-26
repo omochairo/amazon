@@ -42,7 +42,7 @@ class _FakeSession:
     def get(self, url, timeout=None):
         return _FakeResp({"status": "ok", "embed_model": self.embed_model})
 
-    def post(self, url, json=None, timeout=None):
+    def post(self, url, json=None, timeout=None, headers=None):
         texts = (json or {}).get("texts") or (json or {}).get("input") or []
         self.embed_calls.append(list(texts))
         return _FakeResp({"vectors": [self.vector for _ in texts],
@@ -260,7 +260,7 @@ def _write_articles(tmp_path, n=6):
 class _VaryingSession(_FakeSession):
     """テキストごとに違うベクトルを返す (全部同じだと差が出ず検出力が無い)。"""
 
-    def post(self, url, json=None, timeout=None):
+    def post(self, url, json=None, timeout=None, headers=None):
         texts = (json or {}).get("texts") or (json or {}).get("input") or []
         self.embed_calls.append(list(texts))
         vecs = [[float(len(t)), float(sum(map(ord, t)) % 97), 1.0] for t in texts]
