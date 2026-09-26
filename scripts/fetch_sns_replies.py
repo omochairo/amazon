@@ -63,6 +63,15 @@ X_BASE = "https://api.x.com/2"
 TIMEOUT = 30
 
 DEFAULT_LOOKBACK_DAYS = 14
+# X API v2 の GET /2/users/:id/mentions は start_time に過去7日を超える値を
+# 受け付けず、それより古い値を渡すと毎回 HTTP 400 になる。DEFAULT_LOOKBACK_DAYS
+# (14日、threads/bluesky 向け) をそのまま渡さず、x だけこの上限でクランプする
+# (#8286)
+X_MAX_LOOKBACK_DAYS = 7
+# ちょうど7日前を計算しても、リクエストが X のサーバーに届くまでの遅延の分だけ
+# 実際の経過時間が7日を超えうる (境界値で HTTP 400 になりうる)。数分の安全マー
+# ジンを引く
+X_LOOKBACK_SAFETY_MARGIN_MINUTES = 5
 # Threads の自投稿一覧は 1 ページ最大 25 件。cutoff (lookback) に届くまで
 # paging.cursors.after (paging.next) を辿らないと、25 件で頭打ちになって
 # lookback が名目どおりに効かない (#7609: 実測ベースで 14 日 ≒ 126 件のところ
@@ -78,7 +87,16 @@ BLUESKY_INTERESTING = {"reply": "reply", "mention": "mention", "quote": "quote"}
 
 
 class ChannelError(RuntimeError):
-    """そのチャネルが今回は取れなかった (他チャネルは続行する)。"""
+    """そのチャネルが今回は取れなかった (他チャネルは続行する)。
+
+    `status` は HTTP ステータスコード (HTTPError 由来のときだけ)。個々の投稿
+    単位の呼び出しで「404 (削除済み) だけ握りつぶし、429/500 のような全体的な
+    エラーは re-raise する」判定に使う (#8286)。
+    """
+
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
 
 
 def _request(url: str, *, headers: dict | None = None, payload: dict | None = None) -> dict:
@@ -93,7 +111,7 @@ def _request(url: str, *, headers: dict | None = None, payload: dict | None = No
             body = resp.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
         detail = (e.read().decode("utf-8", "replace") if e.fp else "")[:200]
-        raise ChannelError(f"HTTP {e.code}: {detail}") from e
+        raise ChannelError(f"HTTP {e.code}: {detail}", status=e.code) from e
     except urllib.error.URLError as e:
         raise ChannelError(f"network error: {e.reason}") from e
     try:
@@ -211,7 +229,13 @@ def _fetch_thread_replies(
             "access_token": token,
         }))
     except ChannelError as e:
-        # 1 投稿分の失敗で全体を落とさない (削除済み投稿など)。
+        # 404 (削除済み投稿) だけはこの1件だけの話なので握りつぶして続行する。
+        # 429 (レート制限) / 401 (トークン失効) は全投稿で同じ失敗を繰り返すだけ
+        # なので re-raise し、チャネル全体の失敗として上に伝える。ネットワーク
+        # エラー (status なし) も同様に系統的な障害の可能性があるため re-raise
+        # する。ここで飲み込むと「本当の障害が正常終了 (0件取得)」に化ける (#8286)
+        if e.status != 404:
+            raise
         print(f"  [threads] {media_id} の replies 取得に失敗: {e}", file=sys.stderr)
         return []
 
@@ -348,7 +372,10 @@ def fetch_x(lookback_days: int) -> list[dict]:
             "従量課金 (owned read $0.001/件) を有効化した場合のみ動く",
         )
 
-    start = _cutoff(lookback_days).strftime("%Y-%m-%dT%H:%M:%SZ")
+    start = (
+        _cutoff(min(lookback_days, X_MAX_LOOKBACK_DAYS))
+        + timedelta(minutes=X_LOOKBACK_SAFETY_MARGIN_MINUTES)
+    ).strftime("%Y-%m-%dT%H:%M:%SZ")
     payload = _request(
         f"{X_BASE}/users/{user_id}/mentions?" + urllib.parse.urlencode({
             "max_results": "50",

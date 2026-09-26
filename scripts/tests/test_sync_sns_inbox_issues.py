@@ -325,6 +325,31 @@ def test_ignored_record_closes_its_issue(d: Path):
     assert sync.sync(REPO, directory=d, gh=FakeGh())["closed"] == 1
 
 
+def test_answered_record_closes_as_completed(d: Path):
+    """送信済みは completed (#8287)。"""
+    _add(d, "threads:1")
+    sync.sync(REPO, directory=d, gh=FakeGh())
+    store.update_record(
+        "threads:1", {"status": store.STATUS_ANSWERED, "answered_at": "2026-09-10T00:00:00Z"}, d,
+    )
+    gh = FakeGh()
+    sync.sync(REPO, directory=d, gh=gh)
+    patch = [p for a, p in gh.calls if p and "PATCH" in a][0]
+    assert patch["state_reason"] == "completed"
+
+
+def test_ignored_record_closes_as_not_planned(d: Path):
+    """返さないと判断したものは not_planned。completed だと close アイコンが実態と
+    食い違う (#8287)。"""
+    _add(d, "threads:1")
+    sync.sync(REPO, directory=d, gh=FakeGh())
+    store.update_record("threads:1", {"status": store.STATUS_IGNORED}, d)
+    gh = FakeGh()
+    sync.sync(REPO, directory=d, gh=gh)
+    patch = [p for a, p in gh.calls if p and "PATCH" in a][0]
+    assert patch["state_reason"] == "not_planned"
+
+
 def test_close_happens_once(d: Path):
     _add(d, "threads:1")
     sync.sync(REPO, directory=d, gh=FakeGh())

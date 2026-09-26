@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import sys
+import urllib.parse
 from pathlib import Path
 
 import pytest
@@ -237,6 +238,60 @@ def test_fetch_thread_replies_keeps_reply_when_parent_is_off_page(monkeypatch):
 def test_bluesky_interesting_excludes_like_and_follow():
     """like / follow は返信対象ではない。混ぜると inbox がノイズで埋まる。"""
     assert set(fetch.BLUESKY_INTERESTING) == {"reply", "mention", "quote"}
+
+
+# --------------------------------------------------------------------------
+# fetch: 個別投稿の失敗と、チャネル全体の失敗を区別する (#8286)
+# --------------------------------------------------------------------------
+
+def test_fetch_thread_replies_swallows_404(monkeypatch):
+    """削除済み投稿 (404) はこの1件だけの話。握りつぶして [] を返す。"""
+    def raise_404(url, **kw):
+        raise fetch.ChannelError("HTTP 404: not found", status=404)
+
+    monkeypatch.setattr(fetch, "_request", raise_404)
+    cutoff = fetch._parse_iso("2026-01-01T00:00:00+00:00")
+
+    out = fetch._fetch_thread_replies("media1", "tok", "iromama", cutoff)
+
+    assert out == []
+
+
+@pytest.mark.parametrize("status", [429, 401, 500, None])
+def test_fetch_thread_replies_reraises_everything_but_404(monkeypatch, status):
+    """404 以外 (429/401 に加え、status の付かないネットワークエラーも含む) は
+    個別投稿の話ではない。re-raise してチャネル全体の失敗として上に伝える
+    (握りつぶすと「本当の障害が正常終了」に化ける)。"""
+    def raise_status(url, **kw):
+        raise fetch.ChannelError(f"HTTP {status}: nope", status=status)
+
+    monkeypatch.setattr(fetch, "_request", raise_status)
+    cutoff = fetch._parse_iso("2026-01-01T00:00:00+00:00")
+
+    with pytest.raises(fetch.ChannelError):
+        fetch._fetch_thread_replies("media1", "tok", "iromama", cutoff)
+
+
+def test_fetch_x_clamps_lookback_to_seven_days(monkeypatch):
+    """X API v2 の mentions は start_time に過去7日を超える値を受け付けない。
+    DEFAULT_LOOKBACK_DAYS (14) をそのまま渡すと毎回 HTTP 400 になっていた。"""
+    monkeypatch.setenv("X_BEARER_TOKEN", "tok")
+    monkeypatch.setenv("X_USER_ID", "u1")
+    captured_urls = []
+
+    def fake_request(url, **kw):
+        captured_urls.append(url)
+        return {"data": [], "includes": {}}
+
+    monkeypatch.setattr(fetch, "_request", fake_request)
+
+    fetch.fetch_x(fetch.DEFAULT_LOOKBACK_DAYS)
+
+    assert len(captured_urls) == 1
+    start = urllib.parse.parse_qs(urllib.parse.urlparse(captured_urls[0]).query)["start_time"][0]
+    start_dt = fetch._parse_iso(start.replace("Z", "+00:00"))
+    age_days = (fetch._cutoff(0) - start_dt).days
+    assert age_days <= fetch.X_MAX_LOOKBACK_DAYS
 
 
 def test_render_digest_empty():
