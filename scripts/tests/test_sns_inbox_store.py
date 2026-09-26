@@ -131,6 +131,20 @@ def test_pending_excludes_answered_and_ignored_and_sorts_by_created_at(d: Path):
     assert [r["id"] for r in store.pending(d)] == ["threads:early", "threads:late"]
 
 
+def test_pending_falls_back_to_detected_at_when_created_at_is_empty(d: Path):
+    """created_at 空文字 (取得失敗) は最小値扱いされ、常に最優先に並んで --limit
+    の枠を占有していた。detected_at にフォールバックして防ぐ (#8287)。"""
+    store.record_new_items(
+        [_rec("real_new", created_at="2026-09-05T10:00:00Z")],
+        d,
+    )
+    store.record_new_items([_rec("broken", created_at="")], d)
+    # created_at が空でも detected_at (自動付与) は real_new より新しいはず
+    store.update_record("threads:broken", {"detected_at": "2026-09-10T10:00:00Z"}, d)
+
+    assert [r["id"] for r in store.pending(d)] == ["threads:real_new", "threads:broken"]
+
+
 def test_cursor_roundtrip(d: Path):
     assert store.get_cursor("bluesky", d) == ""
     store.set_cursor("bluesky", "2026-09-05T00:00:00Z", d)

@@ -294,10 +294,11 @@ def sync(
     stats = {"created": 0, "commented": 0, "closed": 0, "adopted": 0, "deferred": 0, "retired": 0}
 
     # 起票は古い順。溜まっている分を上限で切るとき、落とすのは新しい側にする
-    # (古い返信ほど放置期間が長く、返す価値が先に消える)
+    # (古い返信ほど放置期間が長く、返す価値が先に消える)。ソート鍵は
+    # store._sort_key と揃える (#8287: created_at 空文字が最優先に化けるのを防ぐ)
     pending = sorted(
         (r for r in records.values() if r.get("status") in (store.STATUS_NEW, store.STATUS_DRAFTED)),
-        key=lambda r: (r.get("created_at") or "", r.get("id") or ""),
+        key=store._sort_key,
     )
 
     for rec in pending:
@@ -401,9 +402,13 @@ def sync(
                 [f"repos/{repo}/issues/{number}/comments", "--method", "POST"],
                 {"body": close_comment(rec)},
             )
+            # answered (送信済み) は completed、ignored (返さないと判断) は
+            # not_planned。両方 completed だと GitHub 上の close アイコンが実態と
+            # 食い違う (#8287)
+            reason = "completed" if rec.get("status") == store.STATUS_ANSWERED else "not_planned"
             gh(
                 [f"repos/{repo}/issues/{number}", "--method", "PATCH"],
-                {"state": "closed", "state_reason": "completed"},
+                {"state": "closed", "state_reason": reason},
             )
             store.update_record(rec["id"], {"issue_closed": True}, d)
         stats["closed"] += 1

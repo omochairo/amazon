@@ -289,13 +289,21 @@ def record_lock(record_id: str, directory: Path | None = None):
             pass
 
 
+def _sort_key(r: dict) -> tuple[str, str]:
+    # created_at (相手の投稿時刻) が API 仕様の穴等で空文字のことがある (#8287)。
+    # 空文字は最小値として扱われるため、常に最優先に並んで --limit の枠を占有
+    # する。detected_at (こちらの検出時刻。new_record で必ず入る) にフォール
+    # バックし、日時取得に失敗したレコードが不当に優先されないようにする
+    return (r.get("created_at") or r.get("detected_at") or "", r.get("id") or "")
+
+
 def pending(directory: Path | None = None) -> list[dict]:
     """まだ返していないもの (new / drafted) を古い順に返す。"""
     recs = [
         r for r in load_records(directory).values()
         if r.get("status") in (STATUS_NEW, STATUS_DRAFTED)
     ]
-    return sorted(recs, key=lambda r: (r.get("created_at") or "", r.get("id") or ""))
+    return sorted(recs, key=_sort_key)
 
 
 # --------------------------------------------------------------------------
