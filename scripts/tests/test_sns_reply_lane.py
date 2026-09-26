@@ -685,3 +685,23 @@ def test_without_redraft_already_drafted_records_are_skipped(monkeypatch, tmp_pa
     monkeypatch.setattr(drafter, "call_agy", _boom)
     assert drafter.main(["--limit", "5"]) == 0
     assert [x["text"] for x in store.load_records(d)[rec["id"]]["drafts"]] == ["既存案"]
+
+
+def test_post_dry_run_refuses_an_unwired_channel(monkeypatch, d: Path):
+    """dry-run が通ったのに本番で「未配線」で落ちる食い違いを無くす。"""
+    monkeypatch.setenv("SNS_INBOX_DIR", str(d))
+    rec = _seed(d, channel="x")
+    assert poster.main(["--id", rec["id"], "--body", "ありがとう", "--dry-run"]) == 2
+
+
+def test_xrpc_read_timeout_is_a_post_error(monkeypatch):
+    """応答の読み取り中のタイムアウトも PostError にする (素通りさせない)。"""
+    import socket
+
+    def slow(*a, **k):
+        raise socket.timeout("read timed out")
+
+    monkeypatch.setattr(poster.urllib.request, "urlopen", slow)
+    with pytest.raises(poster.PostError) as ei:
+        poster._xrpc("https://example.invalid/xrpc/x", payload={"a": 1})
+    assert not isinstance(ei.value, poster.PostNotSent)

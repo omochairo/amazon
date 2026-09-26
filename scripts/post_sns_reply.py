@@ -80,6 +80,9 @@ def _xrpc(url: str, *, headers: dict | None = None, payload: dict | None = None)
         raise PostError(f"HTTP {e.code}: {detail}") from e
     except urllib.error.URLError as e:
         raise PostError(f"network error: {e.reason}") from e
+    except OSError as e:
+        # 応答の読み取り中のタイムアウト・切断 (socket.timeout 等) は URLError に包まれない
+        raise PostError(f"network error: {e}") from e
     except ValueError as e:
         raise PostError("response is not JSON") from e
 
@@ -203,6 +206,8 @@ def post_x(rec: dict, body: str) -> str:
 
 
 POSTERS = {"threads": post_threads, "bluesky": post_bluesky, "x": post_x}
+# POSTERS にはあるが送れない channel。dry-run の段階で弾く
+UNWIRED_CHANNELS = {"x"}
 
 
 # --------------------------------------------------------------------------
@@ -280,7 +285,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # dry-run でも未配線 channel は弾く (dry-run が通ったのに本番で落ちる食い違いを無くす)
     poster = POSTERS.get(rec["channel"])
-    if poster is None:
+    if poster is None or rec["channel"] in UNWIRED_CHANNELS:
         print(f"未対応 channel: {rec['channel']}", file=sys.stderr)
         return 2
 
