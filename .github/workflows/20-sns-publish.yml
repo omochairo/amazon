@@ -122,10 +122,12 @@ jobs:
 
       - name: Pick target ASIN
         id: pick
+        env:
+          INPUT_ASIN: ${{ inputs.asin }}
         run: |
           set -e
-          if [ -n "${{ inputs.asin }}" ]; then
-            ASIN=$(echo "${{ inputs.asin }}" | tr '[:lower:]' '[:upper:]')
+          if [ -n "$INPUT_ASIN" ]; then
+            ASIN=$(echo "$INPUT_ASIN" | tr '[:lower:]' '[:upper:]')
             echo "Manual ASIN override: $ASIN"
           else
             ASIN=$(python scripts/pick_sns_target.py) || {
@@ -147,10 +149,11 @@ jobs:
           # #2780: shareNow 即時配信で Buffer の予約キュー (無料枠 10 件) を
           # 消費しない → LimitReachedError を構造的に回避 (root cause 側)。
           X_POST_MODE: now
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -e
           ASIN="${{ steps.pick.outputs.asin }}"
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
+          if [ "$INPUT_DRY_RUN" = "true" ]; then
             echo "DRY RUN — Buffer draft 投入のみ"
             python scripts/notify_buffer.py "$ASIN" --x-only
           else
@@ -168,10 +171,11 @@ jobs:
         env:
           THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -e
           ASIN="${{ steps.pick.outputs.asin }}"
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
+          if [ "$INPUT_DRY_RUN" = "true" ]; then
             echo "DRY RUN — Threads preview のみ"
             python scripts/notify_threads.py "$ASIN" --dry-run
           else
@@ -188,10 +192,11 @@ jobs:
         env:
           BLUESKY_IDENTIFIER: ${{ secrets.BLUESKY_IDENTIFIER }}
           BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -e
           ASIN="${{ steps.pick.outputs.asin }}"
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
+          if [ "$INPUT_DRY_RUN" = "true" ]; then
             echo "DRY RUN — Bluesky preview のみ"
             python scripts/notify_bluesky.py "$ASIN" --dry-run
           else

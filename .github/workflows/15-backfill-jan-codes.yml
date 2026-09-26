@@ -79,14 +79,16 @@ jobs:
           AMAZON_CREATORS_CREDENTIAL_ID: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_ID }}
           AMAZON_CREATORS_CREDENTIAL_SECRET: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_SECRET }}
           AMAZON_PARTNER_TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
+          INPUT_MODE: ${{ inputs.mode }}
+          INPUT_LIMIT: ${{ inputs.limit }}
         run: |
           APPLY_FLAG=""
-          if [ "${{ inputs.mode }}" = "apply" ]; then
+          if [ "$INPUT_MODE" = "apply" ]; then
             APPLY_FLAG="--apply"
           fi
           python scripts/backfill_jan_codes.py \
             --input scratch/low_confidence.json \
-            --limit ${{ inputs.limit }} \
+            --limit "$INPUT_LIMIT" \
             --report scratch/jan_backfill_report.json \
             $APPLY_FLAG
 

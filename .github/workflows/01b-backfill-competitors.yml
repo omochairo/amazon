@@ -64,22 +64,25 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Validate inputs
+        env:
+          INPUT_ALL: ${{ github.event.inputs.all }}
+          INPUT_ASINS: ${{ github.event.inputs.asins }}
         run: |
-          if [ "${{ github.event.inputs.all }}" != "true" ] && [ -z "${{ github.event.inputs.asins }}" ]; then
+          if [ "$INPUT_ALL" != "true" ] && [ -z "$INPUT_ASINS" ]; then
             echo "::error::Either 'all=true' or non-empty 'asins' must be provided."
             exit 1
           fi
 
       - name: Backfill per_asin competitors
         run: |
-          if [ "${{ github.event.inputs.all }}" = "true" ]; then
+          if [ "$INPUT_ALL" = "true" ]; then
             python scripts/fetch_amazon.py \
               --all-articles \
               --competitors-only \
               --out data/raw/
           else
             python scripts/fetch_amazon.py \
-              --asin "${{ github.event.inputs.asins }}" \
+              --asin "$INPUT_ASINS" \
               --competitors-only \
               --out data/raw/
           fi
@@ -88,6 +91,8 @@ jobs:
           AMAZON_CREATORS_CREDENTIAL_ID: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_ID }}
           AMAZON_CREATORS_CREDENTIAL_SECRET: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_SECRET }}
           AMAZON_PARTNER_TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
+          INPUT_ALL: ${{ github.event.inputs.all }}
+          INPUT_ASINS: ${{ github.event.inputs.asins }}
 
       - name: Create PR with backfilled data
         env:

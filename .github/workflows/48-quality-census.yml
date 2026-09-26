@@ -79,10 +79,12 @@ jobs:
 
       - name: Run quality census
         id: census
+        env:
+          INPUT_FORCE: ${{ github.event.inputs.force }}
         run: |
           set -e
           FORCE=""
-          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+          if [ "$INPUT_FORCE" = "true" ]; then
             FORCE="--force"
           fi
           python scripts/quality_census.py $FORCE

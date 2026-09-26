@@ -61,9 +61,11 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Fetch official how-to URLs (bandai / lego / tamagotchi)
+        env:
+          INPUT_LIMIT: ${{ github.event.inputs.limit || '0' }}
         run: |
           python -m scripts.fetch_official_howto \
-            --limit "${{ github.event.inputs.limit || '0' }}"
+            --limit "$INPUT_LIMIT"
 
       - name: Create data PR + enable auto-merge
         env:

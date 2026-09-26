@@ -79,10 +79,10 @@ jobs:
           #   --demand-slots 20 : 60 枠中 20 枠 (残り 40 枠は従来の供給側ランダム)
           # 枠内に収めるので SearchItems の総リクエスト数は増えない。
           python scripts/fetch_amazon.py \
-            --asin "${{ github.event.inputs.asins }}" \
-            --keyword "${{ github.event.inputs.keyword }}" \
+            --asin "$INPUT_ASINS" \
+            --keyword "$INPUT_KEYWORD" \
             --keyword-sample-size 60 \
-            --demand-slots "${{ github.event.inputs.demand_slots || '20' }}" \
+            --demand-slots "$INPUT_DEMAND_SLOTS" \
             --pages 3 \
             --min-new 80 \
             --out data/raw/
@@ -91,6 +91,9 @@ jobs:
           AMAZON_CREATORS_CREDENTIAL_ID: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_ID }}
           AMAZON_CREATORS_CREDENTIAL_SECRET: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_SECRET }}
           AMAZON_PARTNER_TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
+          INPUT_ASINS: ${{ github.event.inputs.asins }}
+          INPUT_KEYWORD: ${{ github.event.inputs.keyword }}
+          INPUT_DEMAND_SLOTS: ${{ github.event.inputs.demand_slots || '20' }}
 
       - name: Fetch Trends
         if: ${{ always() }}
@@ -122,17 +125,19 @@ jobs:
 
       - name: Fetch Yahoo Shopping Data
         if: ${{ always() }}
-        run: python scripts/fetch_yahoo.py "${{ github.event.inputs.keyword }}"
+        run: python scripts/fetch_yahoo.py "$INPUT_KEYWORD"
         env:
           YAHOO_CLIENT_ID: ${{ secrets.YAHOO_CLIENT_ID }}
           VALUECOMMERCE_SID: ${{ secrets.VALUECOMMERCE_SID }}
           VALUECOMMERCE_PID: ${{ secrets.VALUECOMMERCE_PID }}
+          INPUT_KEYWORD: ${{ github.event.inputs.keyword }}
 
       - name: Fetch Books Data
         if: ${{ always() }}
-        run: python scripts/fetch_books.py "${{ github.event.inputs.keyword }}"
+        run: python scripts/fetch_books.py "$INPUT_KEYWORD"
         env:
           GOOGLEBOOKS_API_KEY: ${{ secrets.GOOGLEBOOKS_API_KEY }}
+          INPUT_KEYWORD: ${{ github.event.inputs.keyword }}
 
       - name: Cross-Search (Amazon→楽天/Yahoo個別検索)
         if: ${{ always() }}
