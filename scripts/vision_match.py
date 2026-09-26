@@ -47,6 +47,11 @@ from typing import Optional, Sequence
 
 import requests
 
+try:
+    from scripts.ml_api_auth import vision_headers
+except ImportError:  # scripts/ を sys.path に足して単純 import された場合 (resolve_ranking_asins.py の直接実行)
+    from ml_api_auth import vision_headers  # type: ignore[no-redef]
+
 logger = logging.getLogger("vision_match")
 
 # 実サービス URL は未確定 (K8 デプロイはオーナー判断待ち)。空文字は「vision 無効」を
@@ -104,7 +109,10 @@ class ImageEmbeddingClient:
         for attempt in range(1, attempts + 1):
             try:
                 resp = self.session.post(
-                    url, json={"image_urls": list(image_urls)}, timeout=self.timeout
+                    url,
+                    json={"image_urls": list(image_urls)},
+                    headers=vision_headers(),
+                    timeout=self.timeout,
                 )
                 resp.raise_for_status()
                 payload = resp.json()

@@ -80,6 +80,8 @@ from typing import Any, Callable, Dict, List, Optional
 
 import requests
 
+from scripts.ml_api_auth import ruri_headers
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("build_wp_wp_h2_link_candidates")
 
@@ -366,7 +368,7 @@ def embed_batch_ruri(
     attempts = _MAX_EXTRA_RETRIES + 1
     for attempt in range(1, attempts + 1):
         try:
-            resp = session.post(url, json={"texts": texts, "kind": kind}, timeout=REQUEST_TIMEOUT)
+            resp = session.post(url, json={"texts": texts, "kind": kind}, headers=ruri_headers(), timeout=REQUEST_TIMEOUT)
             resp.raise_for_status()
             payload = resp.json()
             vectors = payload.get("vectors") if isinstance(payload, dict) else None
@@ -419,7 +421,7 @@ def rerank_candidates(
     attempts = _MAX_EXTRA_RETRIES + 1
     for attempt in range(1, attempts + 1):
         try:
-            resp = session.post(url, json=body, timeout=REQUEST_TIMEOUT)
+            resp = session.post(url, json=body, headers=ruri_headers(), timeout=REQUEST_TIMEOUT)
             resp.raise_for_status()
             payload = resp.json()
             results = payload.get("results") if isinstance(payload, dict) else None

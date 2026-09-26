@@ -635,7 +635,7 @@ class RunE2ETest(unittest.TestCase):
     def _session_with_embed(self, embed_fn):
         session = mock.Mock()
 
-        def post_side_effect(url, json=None, timeout=None):
+        def post_side_effect(url, json=None, timeout=None, headers=None):
             if url.endswith("/embed"):
                 return _post_resp({"vectors": embed_fn(json["texts"])})
             if url.endswith("/rerank"):
