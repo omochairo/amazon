@@ -107,8 +107,10 @@ jobs:
 
       - name: Resolve channels
         id: resolve
+        env:
+          INPUT_CHANNELS: ${{ inputs.channels }}
         run: |
-          CH="${{ inputs.channels }}"
+          CH="$INPUT_CHANNELS"
           if [ -z "$CH" ] || [ "$CH" = "both" ]; then CH="x,threads"; fi
           echo "channels=$CH" >> "$GITHUB_OUTPUT"
           echo "Publishing to: $CH"
@@ -204,9 +206,10 @@ jobs:
           # secret 未設定なら notify_engagement 側で inert no-op (X は止めない)。
           BLUESKY_IDENTIFIER: ${{ secrets.BLUESKY_IDENTIFIER }}
           BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -e
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
+          if [ "$INPUT_DRY_RUN" = "true" ]; then
             python scripts/notify_engagement.py \
               --channels "${{ steps.resolve.outputs.channels }}" \
               --category "${{ steps.slot.outputs.category }}" \

@@ -61,9 +61,11 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Collect first-party sources from omcha.jp
+        env:
+          INPUT_LIMIT: ${{ github.event.inputs.limit || '0' }}
         run: |
           python -m scripts.collect_first_party_sources \
-            --limit "${{ github.event.inputs.limit || '0' }}"
+            --limit "$INPUT_LIMIT"
 
       # limit > 0 はスモーク。収集が途中までしか走らないので、その結果を
       # コミットすると本番の posts_cache を縮めて上書きしてしまう。

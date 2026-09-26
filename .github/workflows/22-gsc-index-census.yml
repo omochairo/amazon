@@ -87,8 +87,10 @@ jobs:
       # google-* の pip install より前に置き、ブロック時は無駄な install も省く
       - name: Pre-flight quota window guard
         if: github.event_name == 'workflow_dispatch'
+        env:
+          INPUT_FORCE: ${{ github.event.inputs.force }}
         run: |
-          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+          if [ "$INPUT_FORCE" = "true" ]; then
             echo "::notice::force=true — skipping quota window guard (#3372)"
             exit 0
           fi
@@ -106,6 +108,7 @@ jobs:
           GSC_OAUTH_CLIENT_SECRET: ${{ secrets.GSC_OAUTH_CLIENT_SECRET }}
           GSC_OAUTH_REFRESH_TOKEN: ${{ secrets.GSC_OAUTH_REFRESH_TOKEN }}
           GSC_SITE_URL: ${{ secrets.GSC_SITE_URL }}
+          INPUT_LIMIT: ${{ github.event.inputs.limit || '1800' }}
         run: |
           set +e
           # #4793: secret 未設定は緑で skip しない。週次レーンなので、失効に
@@ -115,7 +118,7 @@ jobs:
             echo "::error::required secret not set — GSC_OAUTH_REFRESH_TOKEN / GSC_SITE_URL"
             exit 1
           fi
-          python scripts/inspect_gsc_index.py --limit "${{ github.event.inputs.limit || '1800' }}"
+          python scripts/inspect_gsc_index.py --limit "$INPUT_LIMIT"
           rc=$?
           if [ $rc -ne 0 ]; then
             echo "::warning::GSC index census failed (rc=$rc)"

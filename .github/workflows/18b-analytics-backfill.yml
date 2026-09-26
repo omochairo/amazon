@@ -81,6 +81,8 @@ jobs:
           # WP (omcha.jp) レーン。未設定ならスクリプト側で skip される
           GSC_SITE_URL_WP: ${{ secrets.GSC_SITE_URL_WP }}
           LANES: ${{ github.event.inputs.lanes }}
+          INPUT_START_DATE: ${{ github.event.inputs.start_date }}
+          INPUT_END_DATE: ${{ github.event.inputs.end_date }}
         run: |
           set -e
           # backfill_analytics_history はレーンごとに「credentials / site-url が
@@ -93,12 +95,14 @@ jobs:
             *) echo "::error::unknown lanes value: $LANES"; exit 1 ;;
           esac
           python -m scripts.backfill_analytics_history \
-            --start-date "${{ github.event.inputs.start_date }}" \
-            --end-date "${{ github.event.inputs.end_date }}"
+            --start-date "$INPUT_START_DATE" \
+            --end-date "$INPUT_END_DATE"
 
       - name: Create PR with backfilled history
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          INPUT_START_DATE: ${{ github.event.inputs.start_date }}
+          INPUT_END_DATE: ${{ github.event.inputs.end_date }}
         run: |
           set -e
           git add data/analytics/history/ || true
@@ -112,11 +116,11 @@ jobs:
           git config user.name "omochairo-fetch-bot[bot]"
           git config user.email "omochairo-fetch-bot[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
-          git commit -m "chore(analytics): backfill history ${{ github.event.inputs.start_date }}..${{ github.event.inputs.end_date }} (#2821)"
+          git commit -m "chore(analytics): backfill history ${INPUT_START_DATE}..${INPUT_END_DATE} (#2821)"
           git push -u origin "$BRANCH"
 
           PR_URL=$(gh pr create \
-            --title "chore(analytics): backfill history ${{ github.event.inputs.start_date }}..${{ github.event.inputs.end_date }}" \
+            --title "chore(analytics): backfill history ${INPUT_START_DATE}..${INPUT_END_DATE}" \
             --body "GitHub凍結期間中に18-analytics-daily.ymlが停止し欠けたGA4/GSC history JSONLを、対象範囲を1日ずつ個別fetchして埋め戻す。seen_dates.json経由でidempotent (既存日はskip)。Refs #2821." \
             --base main \
             --head "$BRANCH")

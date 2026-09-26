@@ -55,11 +55,14 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Build wiki_cache.json
+        env:
+          INPUT_TTL_DAYS: ${{ github.event.inputs.ttl_days || '30' }}
+          INPUT_LIMIT: ${{ github.event.inputs.limit }}
         run: |
           set -e
-          ARGS="--mapping hugo/data/wiki_mapping.json --out hugo/static/wiki_cache.json --ttl-days ${{ github.event.inputs.ttl_days || '30' }} --sleep 1.0"
-          if [ -n "${{ github.event.inputs.limit }}" ]; then
-            ARGS="$ARGS --limit ${{ github.event.inputs.limit }}"
+          ARGS="--mapping hugo/data/wiki_mapping.json --out hugo/static/wiki_cache.json --ttl-days ${INPUT_TTL_DAYS} --sleep 1.0"
+          if [ -n "$INPUT_LIMIT" ]; then
+            ARGS="$ARGS --limit ${INPUT_LIMIT}"
           fi
           python scripts/fetch_wiki_data.py $ARGS
 

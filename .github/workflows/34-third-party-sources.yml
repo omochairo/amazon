@@ -98,12 +98,15 @@ jobs:
       - name: Pre-fetch third-party sources (new candidates)
         env:
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          INPUT_BANDS: ${{ github.event.inputs.bands || 'zero,thin' }}
+          INPUT_MAX_QUERIES: ${{ github.event.inputs.max_queries || '30' }}
+          INPUT_MONTHLY_BUDGET: ${{ github.event.inputs.monthly_budget || '900' }}
         run: |
           python scripts/fetch_third_party_sources.py \
             --pool \
-            --bands "${{ github.event.inputs.bands || 'zero,thin' }}" \
-            --max-queries "${{ github.event.inputs.max_queries || '30' }}" \
-            --monthly-budget "${{ github.event.inputs.monthly_budget || '900' }}"
+            --bands "$INPUT_BANDS" \
+            --max-queries "$INPUT_MAX_QUERIES" \
+            --monthly-budget "$INPUT_MONTHLY_BUDGET"
 
       # レーン2: 既存記事 (リライト対象)。母集合は GSC の需要で、band では絞らない。
       # レーン1 とは別プロセス・別 --max-queries で回す。枠を共有させると、母集合が
@@ -117,13 +120,16 @@ jobs:
         if: ${{ (github.event.inputs.gsc_max_queries || '20') != '0' }}
         env:
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          INPUT_GSC_MIN_IMPRESSIONS: ${{ github.event.inputs.gsc_min_impressions || '10' }}
+          INPUT_GSC_MAX_QUERIES: ${{ github.event.inputs.gsc_max_queries || '20' }}
+          INPUT_MONTHLY_BUDGET: ${{ github.event.inputs.monthly_budget || '900' }}
         run: |
           python scripts/fetch_third_party_sources.py \
             --from-gsc \
-            --gsc-min-impressions "${{ github.event.inputs.gsc_min_impressions || '10' }}" \
+            --gsc-min-impressions "$INPUT_GSC_MIN_IMPRESSIONS" \
             --max-age-days 90 \
-            --max-queries "${{ github.event.inputs.gsc_max_queries || '20' }}" \
-            --monthly-budget "${{ github.event.inputs.monthly_budget || '900' }}"
+            --max-queries "$INPUT_GSC_MAX_QUERIES" \
+            --monthly-budget "$INPUT_MONTHLY_BUDGET"
 
       - name: Create PR + enable auto-merge
         if: ${{ always() }}

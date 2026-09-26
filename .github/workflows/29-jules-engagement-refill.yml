@@ -49,10 +49,12 @@ jobs:
     steps:
       - name: Decide channel
         id: pick
+        env:
+          INPUT_CHANNEL: ${{ inputs.channel }}
         run: |
           set -e
-          if [ -n "${{ inputs.channel }}" ]; then
-            CHANNEL="${{ inputs.channel }}"
+          if [ -n "$INPUT_CHANNEL" ]; then
+            CHANNEL="$INPUT_CHANNEL"
           else
             DOW=$(date -u +%u)  # Mon=1 Tue=2 Thu=4 Fri=5 (UTC 03:00 = JST 12:00 同日)
             case "$DOW" in

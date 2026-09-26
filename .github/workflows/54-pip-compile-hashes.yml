@@ -67,10 +67,12 @@ jobs:
         run: pip install pip-tools
 
       - name: Compile with hashes
+        env:
+          INPUT_UPGRADE: ${{ inputs.upgrade }}
         run: |
           set -euo pipefail
           UPGRADE=""
-          if [ "${{ inputs.upgrade }}" = "true" ]; then
+          if [ "$INPUT_UPGRADE" = "true" ]; then
             UPGRADE="--upgrade"
           fi
           pip-compile --generate-hashes $UPGRADE \

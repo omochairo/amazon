@@ -125,13 +125,16 @@ jobs:
           FAILOVER_ENABLED: ${{ vars.FAILOVER_ENABLED }}
           # 戻し先。**issue にもログにも出さないので変数から取る** (冒頭の注記)。
           NAS_ORIGIN_CNAME: ${{ vars.NAS_ORIGIN_CNAME }}
+          INPUT_DIRECTION: ${{ github.event.inputs.direction || 'standby' }}
+          INPUT_TARGET: ${{ github.event.inputs.target }}
+          INPUT_DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: |
-          DIRECTION="${{ github.event.inputs.direction || 'standby' }}"
+          DIRECTION="$INPUT_DIRECTION"
           ARGS="--to $DIRECTION"
-          if [ -n "${{ github.event.inputs.target }}" ]; then
-            ARGS="$ARGS --target ${{ github.event.inputs.target }}"
+          if [ -n "$INPUT_TARGET" ]; then
+            ARGS="$ARGS --target ${INPUT_TARGET}"
           fi
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+          if [ "$INPUT_DRY_RUN" = "true" ]; then
             ARGS="$ARGS --dry-run"
           fi
           python scripts/failover_dns.py $ARGS

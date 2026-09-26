@@ -54,11 +54,13 @@ jobs:
           AMAZON_CREATORS_CREDENTIAL_ID: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_ID }}
           AMAZON_CREATORS_CREDENTIAL_SECRET: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_SECRET }}
           AMAZON_PARTNER_TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
+          INPUT_LIMIT: ${{ github.event.inputs.limit }}
+          INPUT_HITS: ${{ github.event.inputs.hits }}
         run: |
           set -e
           python scripts/resolve_catalog_jan_shadow.py \
-            --limit "${{ github.event.inputs.limit }}" \
-            --hits "${{ github.event.inputs.hits }}" \
+            --limit "$INPUT_LIMIT" \
+            --hits "$INPUT_HITS" \
             --out data/raw/_catalog_jan_shadow_manifest.json
 
       - name: Upload shadow manifest artifact

@@ -101,10 +101,12 @@ jobs:
           AMAZON_CREATORS_CREDENTIAL_ID: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_ID }}
           AMAZON_CREATORS_CREDENTIAL_SECRET: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_SECRET }}
           AMAZON_PARTNER_TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
+          INPUT_LIMIT: ${{ github.event.inputs.limit || '200' }}
+          INPUT_DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: |
           set -e
-          FLAGS="--limit ${{ github.event.inputs.limit || '200' }}"
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+          FLAGS="--limit ${INPUT_LIMIT}"
+          if [ "$INPUT_DRY_RUN" = "true" ]; then
             FLAGS="$FLAGS --dry-run"
           fi
           python scripts/probe_ubersuggest_products.py $FLAGS

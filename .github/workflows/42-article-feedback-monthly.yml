@@ -75,6 +75,7 @@ jobs:
         env:
           GA4_SA_JSON: ${{ secrets.GA4_SA_JSON }}
           GA4_PROPERTY_ID: ${{ secrets.GA4_PROPERTY_ID }}
+          INPUT_MONTH: ${{ inputs.month }}
         run: |
           set +e
           # #4793: ::error:: は出していたが exit 0 だったので run は緑だった。
@@ -84,8 +85,8 @@ jobs:
             exit 1
           fi
           MONTH_ARG=""
-          if [ -n "${{ inputs.month }}" ]; then
-            MONTH_ARG="--month ${{ inputs.month }}"
+          if [ -n "$INPUT_MONTH" ]; then
+            MONTH_ARG="--month ${INPUT_MONTH}"
           fi
           python scripts/fetch_ga4_article_feedback.py $MONTH_ARG
           rc=$?
@@ -100,11 +101,14 @@ jobs:
         id: detect
         if: steps.fetch.outputs.available == 'true'
         continue-on-error: true
+        env:
+          INPUT_MIN_TOTAL: ${{ inputs.min_total }}
+          INPUT_MAX_RESULTS: ${{ inputs.max_results }}
         run: |
           set -e
           python scripts/detect_article_feedback_worst_pages.py \
-            --min-total "${{ inputs.min_total }}" \
-            --max-results "${{ inputs.max_results }}"
+            --min-total "$INPUT_MIN_TOTAL" \
+            --max-results "$INPUT_MAX_RESULTS"
           echo "--- preview (data/analytics/article_feedback_worst_pages.json) ---"
           python -c "import json; d=json.load(open('data/analytics/article_feedback_worst_pages.json',encoding='utf-8')); print(json.dumps(d, ensure_ascii=False, indent=2)[:2000])"
           echo "--- end preview ---"
@@ -125,10 +129,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -e
           DRY_ARGS=""
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
+          if [ "$INPUT_DRY_RUN" = "true" ]; then
             DRY_ARGS="--dry-run"
           fi
           # `python scripts/xxx.py` だと sys.path[0] が scripts/ になりリポジトリ

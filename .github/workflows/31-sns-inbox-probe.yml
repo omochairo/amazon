@@ -38,5 +38,6 @@ jobs:
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
           BLUESKY_IDENTIFIER: ${{ secrets.BLUESKY_IDENTIFIER }}
           BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+          INPUT_CHANNEL: ${{ inputs.channel || 'all' }}
         run: |
-          python scripts/probe_sns_inbox.py --channel "${{ inputs.channel || 'all' }}"
+          python scripts/probe_sns_inbox.py --channel "$INPUT_CHANNEL"

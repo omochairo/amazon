@@ -74,6 +74,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
+          INPUT_MAX_NEGATIVE_TTL: ${{ github.event.inputs.max_negative_ttl || 300 }}
         run: |
           python scripts/check_asset_delivery.py \
-            --max-negative-ttl "${{ github.event.inputs.max_negative_ttl || 300 }}"
+            --max-negative-ttl "$INPUT_MAX_NEGATIVE_TTL"
