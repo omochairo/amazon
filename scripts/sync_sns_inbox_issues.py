@@ -58,6 +58,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -165,13 +166,52 @@ def issue_body(rec: dict) -> str:
     return "\n".join(lines)
 
 
-def count_drafts_in_body(body: str) -> int:
-    """issue 本文に何件の案が載っているかを数える (採用時の起点決めに使う)。
+_DRAFT_HEADING = re.compile(r"^\*\*案 (\d+)\*\*")
 
-    render_record が案を `**案 N** (model)` の行で出すことに依存する。書式を
-    変えるならここも変える (テストで固定してある)。
+
+def count_drafts_in_body(body: str) -> int:
+    """本文 (issue 本文かコメント) に載っている案の最大番号を返す (採用時の起点決めに使う)。
+
+    render_record / draft_comment が案を `**案 N** (model)` の行で出すことに依存する。
+    書式を変えるならここも変える (テストで固定してある)。
+
+    行数ではなく番号の最大値を取る。案の本文は ``` の中に入るので、相手や LLM の
+    文面に同じ書式の行が混ざっても、フェンスの内側は数えない (#8287)。
     """
-    return sum(1 for line in body.splitlines() if line.startswith("**案 "))
+    top = 0
+    in_fence = False
+    for line in body.splitlines():
+        if line.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        m = _DRAFT_HEADING.match(line)
+        if m:
+            top = max(top, int(m.group(1)))
+    return top
+
+
+def count_synced_drafts(repo: str, number: int, body: str, gh=gh_json) -> int:
+    """issue に既に載っている案の番号の最大値 (本文 + 追記コメント)。
+
+    本文だけを見ると、起票後にコメントで足した案を「未同期」と読み、状態を
+    失ったあとの再同期でもう一度コメントする (#8287)。
+    """
+    top = count_drafts_in_body(body)
+    for page in range(1, MAX_PAGES + 1):
+        items = gh([
+            f"repos/{repo}/issues/{number}/comments", "--method", "GET",
+            "-f", f"per_page={PER_PAGE}", "-f", f"page={page}",
+        ])
+        if not isinstance(items, list):
+            break
+        for it in items:
+            if isinstance(it, dict):
+                top = max(top, count_drafts_in_body(it.get("body") or ""))
+        if len(items) < PER_PAGE:
+            break
+    return top
 
 
 def draft_comment(rec: dict, start_index: int) -> str:
@@ -267,14 +307,16 @@ def sync(
                 # commit されなかった前 run の起票を拾う。ここが二重起票の防波堤
                 number = existing.get("number")
                 if isinstance(number, int) and not dry_run:
-                    # 何件の案が既に body に載っているかは issue 本文から数える。
+                    # 何件の案が既に issue に載っているかは本文と追記コメントから数える。
                     # 0 に置くと下の追記で全案をもう一度コメントすることになり、
                     # 1 に置くと本当に増えた案を取りこぼす
                     store.update_record(
                         rid,
                         {
                             "issue_number": number,
-                            "issue_synced_drafts": count_drafts_in_body(existing.get("body") or ""),
+                            "issue_synced_drafts": count_synced_drafts(
+                                repo, number, existing.get("body") or "", gh=gh,
+                            ),
                         },
                         d,
                     )

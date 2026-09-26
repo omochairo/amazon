@@ -444,11 +444,131 @@ def test_post_dry_run_does_not_change_status(monkeypatch, d: Path):
 
 
 def test_post_ignored_record_can_still_be_answered_by_a_human(monkeypatch, d: Path):
-    """起草側が「返信しない」と判断しても、人の判断で送れる余地を残す。"""
+    """起草側が「返信しない」と判断しても、人の判断で送れる余地を残す (--force)。"""
     monkeypatch.setenv("SNS_INBOX_DIR", str(d))
     rec = _seed(d)
     store.update_record(rec["id"], {"status": store.STATUS_IGNORED}, d)
-    assert poster.main(["--id", rec["id"], "--body", "やっぱり返す", "--dry-run"]) == 0
+    assert poster.main(["--id", rec["id"], "--body", "やっぱり返す", "--dry-run", "--force"]) == 0
+
+
+def test_post_refuses_ignored_without_force(monkeypatch, d: Path):
+    """古い履歴から ignored の id を打ち直しただけでは送らない (#8285)。"""
+    monkeypatch.setenv("SNS_INBOX_DIR", str(d))
+    rec = _seed(d)
+    store.update_record(rec["id"], {"status": store.STATUS_IGNORED}, d)
+    called = []
+    monkeypatch.setitem(poster.POSTERS, "threads", lambda r, b: called.append(b) or "r1")
+
+    assert poster.main(["--id", rec["id"], "--body", "やっぱり返す"]) == 2
+    assert called == []
+    assert store.load_records(d)[rec["id"]]["status"] == store.STATUS_IGNORED
+
+
+def test_post_success_marks_answered_and_clears_the_send_mark(monkeypatch, d: Path):
+    monkeypatch.setenv("SNS_INBOX_DIR", str(d))
+    rec = _seed(d)
+    seen = []
+
+    def fake(r, b):
+        # 外へ出す時点では「送信開始」が永続化されている
+        seen.append(store.load_records(d)[r["id"]].get("send_started_at"))
+        return "reply-1"
+
+    monkeypatch.setitem(poster.POSTERS, "threads", fake)
+    assert poster.main(["--id", rec["id"], "--body", "ありがとう"]) == 0
+
+    after = store.load_records(d)[rec["id"]]
+    assert seen and seen[0]
+    assert after["status"] == store.STATUS_ANSWERED
+    assert after["send_started_at"] == ""
+
+
+def test_post_unfinished_send_blocks_the_next_run(monkeypatch, d: Path):
+    """送れたかどうか分からない失敗のあとは、--force なしで再送しない (#8285)。"""
+    monkeypatch.setenv("SNS_INBOX_DIR", str(d))
+    rec = _seed(d)
+
+    def unknown(r, b):
+        raise poster.PostError("HTTP 502")
+
+    monkeypatch.setitem(poster.POSTERS, "threads", unknown)
+    assert poster.main(["--id", rec["id"], "--body", "ありがとう"]) == 1
+    assert store.load_records(d)[rec["id"]]["send_started_at"]
+
+    called = []
+    monkeypatch.setitem(poster.POSTERS, "threads", lambda r, b: called.append(b) or "r1")
+    assert poster.main(["--id", rec["id"], "--body", "ありがとう"]) == 2
+    assert called == []
+    assert poster.main(["--id", rec["id"], "--body", "ありがとう", "--force"]) == 0
+    assert called == ["ありがとう"]
+
+
+def test_post_crash_after_sending_blocks_the_next_run(monkeypatch, d: Path):
+    """送信後・記録前にプロセスが落ちたのと同じ状態 (想定外の例外) でも止まる。"""
+    monkeypatch.setenv("SNS_INBOX_DIR", str(d))
+    rec = _seed(d)
+
+    def boom(r, b):
+        raise KeyError("記録前に落ちた")
+
+    monkeypatch.setitem(poster.POSTERS, "threads", boom)
+    with pytest.raises(KeyError):
+        poster.main(["--id", rec["id"], "--body", "ありがとう"])
+    assert poster.main(["--id", rec["id"], "--body", "ありがとう", "--dry-run"]) == 2
+
+
+def test_post_not_sent_failure_allows_a_retry(monkeypatch, d: Path):
+    """相手側に何も出ていない失敗なら印を外し、そのまま再実行できる。"""
+    monkeypatch.setenv("SNS_INBOX_DIR", str(d))
+    rec = _seed(d)
+
+    def not_sent(r, b):
+        raise poster.PostNotSent("THREADS_ACCESS_TOKEN 未設定")
+
+    monkeypatch.setitem(poster.POSTERS, "threads", not_sent)
+    assert poster.main(["--id", rec["id"], "--body", "ありがとう"]) == 1
+    after = store.load_records(d)[rec["id"]]
+    assert after["send_started_at"] == ""
+    assert after["status"] == store.STATUS_NEW
+    assert poster.main(["--id", rec["id"], "--body", "ありがとう", "--dry-run"]) == 0
+
+
+def test_threads_network_error_before_publish_is_not_sent(monkeypatch):
+    """container 作成でのネットワーク例外は PostNotSent に包む (素通りさせない)。"""
+    import urllib.error
+
+    import fetch_sns_replies
+    import notify_threads
+
+    monkeypatch.setenv("THREADS_ACCESS_TOKEN", "t")
+    monkeypatch.setattr(fetch_sns_replies, "resolve_threads_identity", lambda tok: ("u", "me"))
+
+    def down(*a, **k):
+        raise urllib.error.URLError("dns")
+
+    monkeypatch.setattr(notify_threads, "create_container", down)
+    with pytest.raises(poster.PostNotSent):
+        poster.post_threads({"native_id": "n1"}, "本文")
+
+
+def test_threads_network_error_at_publish_is_unknown(monkeypatch):
+    """publish でのネットワーク例外は「届いたか不明」(PostNotSent ではない)。"""
+    import urllib.error
+
+    import fetch_sns_replies
+    import notify_threads
+
+    monkeypatch.setenv("THREADS_ACCESS_TOKEN", "t")
+    monkeypatch.setattr(fetch_sns_replies, "resolve_threads_identity", lambda tok: ("u", "me"))
+    monkeypatch.setattr(notify_threads, "create_container", lambda *a, **k: {"id": "c1"})
+
+    def timeout(*a, **k):
+        raise urllib.error.URLError("timed out")
+
+    monkeypatch.setattr(notify_threads, "publish_container", timeout)
+    with pytest.raises(poster.PostError) as ei:
+        poster.post_threads({"native_id": "n1"}, "本文")
+    assert not isinstance(ei.value, poster.PostNotSent)
 
 
 def test_bluesky_root_ref_uses_thread_root():
