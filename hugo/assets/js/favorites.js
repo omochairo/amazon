@@ -227,6 +227,7 @@
     if (!container) return;
     var data = _read();
     _wireShareButton();
+    _wireClearButton();
     _renderShareBar(data.asins.length);
     if (data.asins.length === 0) {
       container.style.display = "none";
@@ -257,10 +258,18 @@
       card.querySelector(".favorites-card-remove").addEventListener("click", function (e) {
         e.preventDefault();
         e.stopPropagation();
+        var removedMeta = snap;
         remove(asin);
         card.remove();
         _syncAllToggles();
         _renderHeaderBadge();
+        _showToast("お気に入りから削除しました", "元に戻す", function () {
+          add(asin, removedMeta);
+          _syncAllToggles();
+          _renderHeaderBadge();
+          hydrateFavoritesPage();
+          _decorateFavoritesDrops();
+        });
         if (count() === 0) hydrateFavoritesPage();
       });
       container.appendChild(card);
@@ -274,17 +283,35 @@
   var SHARE_ASIN_RE = /^[a-z0-9]{8,14}$/;
   var _toastTimer = null;
 
-  function _showToast(msg) {
+  function _showToast(msg, actionLabel, actionFn) {
     var el = document.getElementById("favorites-toast");
     if (!el) return;
-    el.textContent = msg;
+    el.innerHTML = "";
+    if (actionLabel && actionFn) {
+      var msgSpan = document.createElement("span");
+      msgSpan.textContent = msg;
+      var undoBtn = document.createElement("button");
+      undoBtn.type = "button";
+      undoBtn.className = "favorites-toast-undo";
+      undoBtn.textContent = actionLabel;
+      undoBtn.addEventListener("click", function () {
+        if (_toastTimer) clearTimeout(_toastTimer);
+        el.classList.remove("is-visible");
+        el.hidden = true;
+        actionFn();
+      });
+      el.appendChild(msgSpan);
+      el.appendChild(undoBtn);
+    } else {
+      el.textContent = msg;
+    }
     el.hidden = false;
     el.classList.add("is-visible");
     if (_toastTimer) clearTimeout(_toastTimer);
     _toastTimer = setTimeout(function () {
       el.classList.remove("is-visible");
       el.hidden = true;
-    }, 2000);
+    }, actionLabel ? 5000 : 2000);
   }
 
   function _fallbackPrompt(url) {
@@ -295,6 +322,22 @@
     var bar = document.getElementById("favorites-share-bar");
     if (!bar) return;
     bar.style.display = n > 0 ? "" : "none";
+  }
+
+  var _clearBtnWired = false;
+  function _wireClearButton() {
+    if (_clearBtnWired) return;
+    var btn = document.getElementById("favorites-clear-btn");
+    if (!btn) return;
+    _clearBtnWired = true;
+    btn.addEventListener("click", function () {
+      if (count() === 0) return;
+      if (!global.confirm("お気に入りをすべて削除してもよろしいですか？")) return;
+      clear();
+      _syncAllToggles();
+      _renderHeaderBadge();
+      hydrateFavoritesPage();
+    });
   }
 
   var _shareBtnWired = false;

@@ -105,8 +105,12 @@
     color: var(--primary);
     position: relative;
     overflow: hidden;
-    outline: none;
     width: 100%;
+}
+
+.diagnosis-option-btn:focus-visible {
+    outline: 3px solid #4f46e5;
+    outline-offset: 2px;
 }
 
 [data-theme="dark"] .diagnosis-option-btn {

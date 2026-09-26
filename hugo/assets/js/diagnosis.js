@@ -254,9 +254,12 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        // プログレスバーの更新
+        // プログレスバーの更新 (currentStep は完了時に 6 になるため aria-valuemax=5 に収める)
         const progressPercent = ((currentStep - 1) / 5) * 100;
+        const ariaStep = Math.min(currentStep, 5);
         progressBar.style.width = `${progressPercent}%`;
+        progressBar.setAttribute("aria-valuenow", ariaStep);
+        progressBar.setAttribute("aria-valuetext", currentStep > 5 ? "集計中" : `質問 ${currentStep} / 5`);
         progressText.textContent = `質問 ${currentStep} / 5`;
 
         // 戻るボタンの表示制御
@@ -264,6 +267,13 @@ document.addEventListener("DOMContentLoaded", () => {
             prevBtn.style.display = "inline-block";
         } else {
             prevBtn.style.display = "none";
+        }
+
+        // 設問切り替え時、見出しにフォーカスを移してスクリーンリーダーに読み上げさせる
+        const activeStep = document.querySelector(`.diagnosis-step[data-step="${currentStep}"]`);
+        if (activeStep) {
+            const question = activeStep.querySelector(".diagnosis-question");
+            if (question) question.focus();
         }
     }
 
@@ -274,6 +284,13 @@ document.addEventListener("DOMContentLoaded", () => {
             const name = btn.getAttribute("data-name");
             const val = btn.getAttribute("data-value");
             answers[name] = val;
+
+            // 同じ設問 (data-name が同じ) の選択肢だけ aria-checked を張り替える。
+            // .closest() は最小限の DOM しか持たないテストのモックに無いため使わない。
+            optionBtns.forEach(b => {
+                if (b.getAttribute("data-name") === name) b.setAttribute("aria-checked", "false");
+            });
+            btn.setAttribute("aria-checked", "true");
 
             if (currentStep < 5) {
                 currentStep++;
@@ -302,6 +319,7 @@ document.addEventListener("DOMContentLoaded", () => {
         currentStep = 1;
         // 回答をクリア
         for (let key in answers) answers[key] = null;
+        optionBtns.forEach(b => b.setAttribute("aria-checked", "false"));
 
         // 初回の /search.json 取得が失敗したまま (itemsLoadFailed) だと、
         // 「もう一度診断する」で最初からやり直しても再取得を試みず、5問目で

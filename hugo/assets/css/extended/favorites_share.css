@@ -9,7 +9,30 @@
 .favorites-share-bar {
   display: flex;
   justify-content: flex-end;
+  gap: 0.6rem;
   margin: 0 0 1rem;
+}
+
+/* ---- すべて削除ボタン (#8319 4b) ---- */
+.favorites-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 44px;
+  padding: 0.55rem 1.1rem;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--secondary, #6b7280);
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+.favorites-clear-btn:hover {
+  background: rgba(231, 76, 60, 0.08);
+  color: #e74c3c;
+  border-color: #e74c3c;
 }
 
 .favorites-share-btn {
@@ -34,10 +57,12 @@
 .favorites-share-btn:active { transform: translateY(0) scale(0.97); }
 
 /* ---- トースト通知 (コピー完了など) ---- */
+/* sticky CTA bar (最大 56px + safe-area) と重なって読みにくくならないよう
+   バーの上に浮かせる (#8319 1c) */
 .favorites-toast {
   position: fixed;
   left: 50%;
-  bottom: 1.6rem;
+  bottom: calc(56px + env(safe-area-inset-bottom, 0px) + 1.2rem);
   z-index: 4000;
   transform: translate(-50%, 12px);
   padding: 0.7rem 1.3rem;
@@ -57,9 +82,29 @@
 .favorites-toast.is-visible {
   opacity: 1;
   transform: translate(-50%, 0);
+  pointer-events: auto;
 }
 @media (prefers-reduced-motion: reduce) {
   .favorites-toast { transition: none; }
+}
+
+/* ---- トースト内の Undo ボタン (#8319 4b) ---- */
+.favorites-toast-undo {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.7rem;
+  padding: 0.2rem 0.6rem;
+  min-height: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.favorites-toast-undo:hover {
+  background: rgba(255, 255, 255, 0.15);
 }
 
 /* ---- 受信側: 共有ビュー ---- */
@@ -161,6 +206,13 @@
 [data-theme="dark"] .favorites-toast {
   background: rgba(240, 240, 245, 0.94);
   color: #1a1a1a;
+}
+[data-theme="dark"] .favorites-toast-undo {
+  color: #1a1a1a;
+  border-color: rgba(0, 0, 0, 0.35);
+}
+[data-theme="dark"] .favorites-toast-undo:hover {
+  background: rgba(0, 0, 0, 0.08);
 }
 [data-theme="dark"] .favorites-shared-header {
   background: linear-gradient(135deg, rgba(255,107,53,0.12) 0%, rgba(247,201,72,0.10) 50%, rgba(46,196,182,0.12) 100%);

@@ -168,16 +168,19 @@ document.addEventListener("DOMContentLoaded", function() {
   
   function updateToggleUI() {
     if (!toggleMatch || !toggleAll) return;
+    const descEl = document.getElementById("age-filter-toggle-desc");
     if (ageFilterMode === "match") {
       toggleMatch.classList.add("active");
       toggleMatch.setAttribute("aria-checked", "true");
       toggleAll.classList.remove("active");
       toggleAll.setAttribute("aria-checked", "false");
+      if (descEl) descEl.textContent = "対象年齢がぴったりなおすすめ商品に絞り込みます";
     } else {
       toggleAll.classList.add("active");
       toggleAll.setAttribute("aria-checked", "true");
       toggleMatch.classList.remove("active");
       toggleMatch.setAttribute("aria-checked", "false");
+      if (descEl) descEl.textContent = "対象年齢以下で、今すぐ遊べるおもちゃをすべて表示します";
     }
   }
 

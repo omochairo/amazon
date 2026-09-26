@@ -36,7 +36,14 @@
     cjk.sort(function (a, b) { return b.length - a.length; });
     var patterns = [];
     if (ascii.length) {
-      patterns.push(new RegExp('(?:^|(?<=[^A-Za-z0-9]))(' + ascii.map(escapeRe).join('|') + ')(?=$|[^A-Za-z0-9])', 'g'));
+      // lookbehind (?<=...) は iOS Safari 16.4 未満で SyntaxError になるため、
+      // 先頭側は「文字列先頭 または 英数字以外の1文字」を消費するグループに置き換える
+      // (\b だと Toys"R"Us のように非英数字で始まる/終わる用語がマッチしなくなるため
+      // 用語自体の文字種には依存しない元の lookbehind と同じ判定にする)。
+      // 末尾側は元々 lookahead (幅ゼロ) なのでそのまま使える。
+      // m[0] は消費した1文字を含みうるため、呼び出し側は m[0].indexOf(term) で
+      // 実際の用語位置を再計算する (#8319 5c)。
+      patterns.push(new RegExp('(?:^|[^A-Za-z0-9])(' + ascii.map(escapeRe).join('|') + ')(?=$|[^A-Za-z0-9])', 'g'));
     }
     if (cjk.length) {
       patterns.push(new RegExp('(' + cjk.map(escapeRe).join('|') + ')', 'g'));

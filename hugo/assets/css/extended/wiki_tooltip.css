@@ -21,7 +21,12 @@
 .wiki-term:focus-visible {
   color: #4f46e5;
   border-bottom-color: #4f46e5;
-  outline: none;
+}
+
+.wiki-term:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 .wiki-term__icon {
@@ -152,8 +157,8 @@ body.wiki-scroll-lock {
 
 .wiki-sheet__close {
   flex: 0 0 auto;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border: 0;
   border-radius: 50%;
   background: transparent;
@@ -167,7 +172,11 @@ body.wiki-scroll-lock {
 .wiki-sheet__close:hover,
 .wiki-sheet__close:focus-visible {
   background: rgba(0, 0, 0, 0.06);
-  outline: none;
+}
+
+.wiki-sheet__close:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
 }
 
 [data-theme="dark"] .wiki-sheet__close:hover,
