@@ -137,6 +137,13 @@ def test_sibling_long_term_needs_distinguishing_suffix():
     assert not frpa._long_term_strong(
         mini, _terms(mini), set(),
         frpa._norm("どこでもドラえもん日本旅行ゲーム５（ファイブ）あそび方"), title_df=df)
+    # 基本版の直後の語 (ミニ) が候補にあれば、兄弟 (…ゲーム６) と並記された
+    # 動画でも基本版の動画として残す (版表記はどれか 1 回の出現が満たせばよい)。
+    assert frpa._long_term_strong(
+        mini, _terms(mini), set(),
+        frpa._norm("【ドラえもん】どこでもドラえもん日本旅行ゲーム６＋"
+                   "どこでもドラえもん日本旅行ゲーム ミニ〈エポック社公式〉"),
+        title_df=df)
 
 
 def test_trailing_character_brand_required():

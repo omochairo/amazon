@@ -395,11 +395,14 @@ def _long_term_strong(asin_title: str, asin_product_terms: set,
     現れる (カタログに兄弟商品がある) ときは、その語は商品名ではなく
     系列名なので、後置の識別語が 1 つ以上あることを要求する。識別語の無い
     無印・基本セット (「どこでもドラえもん日本旅行ゲーム ミニ」の「ミニ」は
-    識別語にならない) に兄弟商品 (…ゲーム5) の動画を通さない。
+    識別語にならない) に兄弟商品 (…ゲーム5) の動画を通さない。ただし
+    ターゲット側で長い語の直後に語 (「ミニ」) があれば、それを必須語として
+    扱う (「…ゲーム６＋…ゲーム ミニ」はミニの動画として残す、2026-09-26)。
 
     候補側で長い語の直後に英数字が直接続く (「クリスタルルービックキューブ
     ４×４」「…日本旅行ゲーム５」) のは版違いの表記なので、ターゲット側の
-    同じ位置に同じ英数字が無ければ一致としない。「やきたてパン工場35万個
+    同じ位置に同じ英数字が無ければ一致としない。候補に長い語が複数回
+    現れるときは、どれか 1 つがこの条件を満たせばよい。「やきたてパン工場35万個
     突破」のように後ろに漢字・かなが続く数量表現は除く。
 
     ASIN に型番があるときは、候補の型番が別物 (71439 に 71440) なら
@@ -433,11 +436,17 @@ def _long_term_strong(asin_title: str, asin_product_terms: set,
             if marker:
                 required.add(marker.group(1))
         if title_df is not None and title_df.get(lt, 1) >= 2 and not required:
-            continue
+            nxt = re.match(r"\s*(\S{2,})", norm_title[lt_end:]) if idx >= 0 else None
+            if not nxt:
+                continue
+            required = {nxt.group(1)}
         own = re.match(r"\s*([0-9a-z]+)", norm_title[idx + len(nlt):]) if idx >= 0 else None
-        attached = {m.group(1) for m in
-                    re.finditer(re.escape(nlt) + _ATTACHED_MARKER, norm_text)}
-        if attached - ({own.group(1)} if own else set()):
+        own_marker = own.group(1) if own else None
+        occurrences = [m.end() for m in re.finditer(re.escape(nlt), norm_text)]
+        if occurrences and not any(
+                (a := re.match(_ATTACHED_MARKER, norm_text[end:])) is None
+                or a.group(1) == own_marker
+                for end in occurrences):
             continue
         if all(_bounded_in(t, norm_text) for t in required):
             return True
