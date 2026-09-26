@@ -80,7 +80,10 @@ from typing import Any, Callable, Dict, List, Optional
 
 import requests
 
-from scripts.ml_api_auth import ruri_headers
+try:
+    from scripts.ml_api_auth import ruri_headers
+except ImportError:  # python scripts/build_wp_wp_h2_link_candidates.py の直接実行
+    from ml_api_auth import ruri_headers  # type: ignore[no-redef]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("build_wp_wp_h2_link_candidates")
