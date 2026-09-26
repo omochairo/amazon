@@ -166,7 +166,10 @@ def issue_body(rec: dict) -> str:
     return "\n".join(lines)
 
 
-_DRAFT_HEADING = re.compile(r"^\*\*案 (\d+)\*\*")
+# 見出しは `**案 N** (model)` まで照合する。人のコメント「**案 2** が良さそう」を数えない
+_DRAFT_HEADING = re.compile(r"^\*\*案 (\d+)\*\* \([^)]*\)\s*$")
+_FENCE = re.compile(r"^(`{3,})")
+DRAFT_COMMENT_LEAD = "返信案が "
 
 
 def count_drafts_in_body(body: str) -> int:
@@ -175,16 +178,21 @@ def count_drafts_in_body(body: str) -> int:
     render_record / draft_comment が案を `**案 N** (model)` の行で出すことに依存する。
     書式を変えるならここも変える (テストで固定してある)。
 
-    行数ではなく番号の最大値を取る。案の本文は ``` の中に入るので、相手や LLM の
-    文面に同じ書式の行が混ざっても、フェンスの内側は数えない (#8287)。
+    行数ではなく番号の最大値を取る。案の本文はフェンスの中に入るので、相手や LLM の
+    文面に同じ書式の行が混ざっても、フェンスの内側は数えない (#8287)。フェンスは
+    開いたときと同じ長さ以上のバッククォートでしか閉じない (renderer.code_fence が
+    本文より長いフェンスを使う)。
     """
     top = 0
-    in_fence = False
+    fence = ""
     for line in body.splitlines():
-        if line.startswith("```"):
-            in_fence = not in_fence
+        fm = _FENCE.match(line)
+        if fence:
+            if fm and len(fm.group(1)) >= len(fence) and not line[len(fm.group(1)):].strip():
+                fence = ""
             continue
-        if in_fence:
+        if fm:
+            fence = fm.group(1)
             continue
         m = _DRAFT_HEADING.match(line)
         if m:
@@ -207,8 +215,10 @@ def count_synced_drafts(repo: str, number: int, body: str, gh=gh_json) -> int:
         if not isinstance(items, list):
             break
         for it in items:
-            if isinstance(it, dict):
-                top = max(top, count_drafts_in_body(it.get("body") or ""))
+            # 数えるのは draft_comment が書いたコメントだけ (人の書き込みは見ない)
+            body_ = (it.get("body") or "") if isinstance(it, dict) else ""
+            if body_.startswith(DRAFT_COMMENT_LEAD):
+                top = max(top, count_drafts_in_body(body_))
         if len(items) < PER_PAGE:
             break
     return top
@@ -217,15 +227,17 @@ def count_synced_drafts(repo: str, number: int, body: str, gh=gh_json) -> int:
 def draft_comment(rec: dict, start_index: int) -> str:
     """start_index (0 始まり) 以降の案だけをコメントにする。"""
     drafts = (rec.get("drafts") or [])[start_index:]
-    lines = [f"返信案が {len(drafts)} 件増えました。", ""]
+    lines = [f"{DRAFT_COMMENT_LEAD}{len(drafts)} 件増えました。", ""]
     for offset, draft in enumerate(drafts):
         i = start_index + offset + 1
+        text = str(draft.get("text") or "")
+        fence = renderer.code_fence(text)
         lines += [
             f"**案 {i}** ({draft.get('model') or '不明'})",
             "",
-            "```",
-            str(draft.get("text") or ""),
-            "```",
+            fence,
+            text,
+            fence,
             "",
             f"送信: `--id {rec['id']} --draft {i}`",
             "",

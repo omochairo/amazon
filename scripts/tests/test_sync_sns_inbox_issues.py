@@ -262,6 +262,34 @@ def test_count_drafts_ignores_lookalike_lines_inside_a_draft():
     assert sync.count_drafts_in_body(sync.issue_body(rec)) == 1
 
 
+def test_count_drafts_survives_a_code_fence_inside_a_draft():
+    """案の本文に ``` があっても枠が閉じず、後ろの案も数える。"""
+    rec = {
+        "id": "threads:1", "channel": "threads", "kind": "reply", "author": "a",
+        "text": "本文", "created_at": "2026-09-01T00:00:00Z", "permalink": "",
+        "drafts": [
+            {"text": "例です\n```\n**案 8** (m)\n", "model": "m"},
+            {"text": "二つ目", "model": "m"},
+        ],
+    }
+    assert sync.count_drafts_in_body(sync.issue_body(rec)) == 2
+    assert sync.count_drafts_in_body(sync.draft_comment(rec, 0)) == 2
+
+
+def test_human_comments_mentioning_a_draft_are_not_counted(d: Path):
+    """人のコメント「**案 3** がよさそう」で同期済み件数を引き上げない。"""
+    _add(d, "threads:1", drafts=["案A", "案B"])
+    rec = store.load_records(d)["threads:1"]
+    body = sync.issue_body({**rec, "drafts": rec["drafts"][:1]})
+    human = {"body": "**案 3** (たぶん) がよさそう\n**案 2**"}
+    gh = FakeGh([{"number": 42, "body": body}], comments={42: [human]})
+
+    stats = sync.sync(REPO, directory=d, gh=gh)
+
+    assert stats["commented"] == 1
+    assert "**案 2**" in gh.posts_to("/comments")[0]["body"]
+
+
 def test_count_drafts_in_body_matches_render_record():
     rec = {
         "id": "threads:1", "channel": "threads", "kind": "reply", "author": "a",
