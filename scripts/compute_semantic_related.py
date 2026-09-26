@@ -59,6 +59,11 @@ from typing import Any
 
 import requests
 
+try:
+    from scripts.ml_api_auth import ruri_headers
+except ImportError:  # scripts/ を sys.path に足して単純 import された場合 (detect_demand_gaps.py 経由など)
+    from ml_api_auth import ruri_headers  # type: ignore[no-redef]
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("compute_semantic_related")
 
@@ -275,7 +280,10 @@ def embed_batch_ruri(
     for attempt in range(1, attempts + 1):
         try:
             resp = session.post(
-                url, json={"texts": texts, "kind": "document"}, timeout=REQUEST_TIMEOUT
+                url,
+                json={"texts": texts, "kind": "document"},
+                headers=ruri_headers(),
+                timeout=REQUEST_TIMEOUT,
             )
             resp.raise_for_status()
             payload = resp.json()

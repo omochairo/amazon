@@ -100,6 +100,7 @@ if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
 import compute_semantic_related as C  # noqa: E402
+from ml_api_auth import ruri_headers  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("detect_demand_gaps")
@@ -320,7 +321,10 @@ def embed_batch_ruri_query(
     for attempt in range(1, attempts + 1):
         try:
             resp = session.post(
-                url, json={"texts": texts, "kind": "query"}, timeout=C.REQUEST_TIMEOUT
+                url,
+                json={"texts": texts, "kind": "query"},
+                headers=ruri_headers(),
+                timeout=C.REQUEST_TIMEOUT,
             )
             resp.raise_for_status()
             payload = resp.json()

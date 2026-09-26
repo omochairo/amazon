@@ -70,6 +70,7 @@ from typing import Any
 import requests
 
 from scripts.compute_semantic_related import DEFAULT_RURI_URL, discover_articles, resolve_embed_model
+from scripts.ml_api_auth import ruri_headers
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("audit_experience_usage")
@@ -416,7 +417,7 @@ def embed_batch_ruri(
     attempts = _MAX_EXTRA_RETRIES + 1
     for attempt in range(1, attempts + 1):
         try:
-            resp = session.post(url, json={"texts": texts, "kind": kind}, timeout=REQUEST_TIMEOUT)
+            resp = session.post(url, json={"texts": texts, "kind": kind}, headers=ruri_headers(), timeout=REQUEST_TIMEOUT)
             resp.raise_for_status()
             payload = resp.json()
             vectors = payload.get("vectors") if isinstance(payload, dict) else None

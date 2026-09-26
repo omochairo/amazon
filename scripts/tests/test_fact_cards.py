@@ -40,7 +40,7 @@ class _FakeSession:
         self._vector_map = vector_map or {}
         self.generate_calls: list[dict] = []
 
-    def post(self, url, json=None, timeout=None):
+    def post(self, url, json=None, timeout=None, headers=None):
         payload = json or {}
         if url.endswith("/api/generate"):
             self.generate_calls.append(payload)

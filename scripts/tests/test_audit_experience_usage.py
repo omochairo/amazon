@@ -481,7 +481,7 @@ class _FakeSession:
     def get(self, url, timeout=None):
         return _FakeResp({"status": "ok", "embed_model": "cl-nagoya/ruri-v3-310m"})
 
-    def post(self, url, json=None, timeout=None):
+    def post(self, url, json=None, timeout=None, headers=None):
         payload = json or {}
         texts = payload.get("texts", [])
         kind = payload.get("kind")

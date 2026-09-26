@@ -547,7 +547,7 @@ class RunE2ETest(unittest.TestCase):
             data = wp_pages[page - 1] if page - 1 < len(wp_pages) else []
             return _resp(200, data)
 
-        def post_side_effect(url, json=None, timeout=None):
+        def post_side_effect(url, json=None, timeout=None, headers=None):
             if url.endswith("/embed"):
                 kind = json["kind"]
                 return _post_resp({"vectors": embed_vectors_by_kind[kind](json["texts"])})
@@ -603,7 +603,7 @@ class RunE2ETest(unittest.TestCase):
         wp_pages = [[_wp_raw(1)]]
         session = self._session_for(wp_pages, {"query": lambda t: (_ for _ in ()).throw(requests.ConnectionError("x"))})
 
-        def post_side_effect(url, json=None, timeout=None):
+        def post_side_effect(url, json=None, timeout=None, headers=None):
             raise requests.ConnectionError("boom")
 
         session.post.side_effect = post_side_effect

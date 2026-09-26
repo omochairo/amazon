@@ -134,7 +134,7 @@ class ImageEmbeddingClientTest(unittest.TestCase):
             def __init__(self):
                 self.posted_urls = []
 
-            def post(self, url, json=None, timeout=None):
+            def post(self, url, json=None, timeout=None, headers=None):
                 self.posted_urls.append(url)
                 return FakeResponse()
 

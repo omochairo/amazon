@@ -41,7 +41,7 @@ class _FakeGemmaSession:
         self.total_duration = total_duration
         self.calls = []
 
-    def post(self, url, json=None, timeout=None):
+    def post(self, url, json=None, timeout=None, headers=None):
         self.calls.append(json)
         return _FakeResp({
             "response": self.response_text,
@@ -168,7 +168,7 @@ class AngleStageTest(unittest.TestCase):
         candidates = [{"angle": "A_TEXT", "evidence": "e1"}, {"angle": "B_TEXT", "evidence": "e2"}]
 
         class _EmbedSession:
-            def post(self, url, json=None, timeout=None):
+            def post(self, url, json=None, timeout=None, headers=None):
                 vecs = {"A_TEXT": [1.0, 0.0], "B_TEXT": [0.0, 1.0]}
                 return _FakeResp({"vectors": [vecs[t] for t in json["texts"]]})
 
