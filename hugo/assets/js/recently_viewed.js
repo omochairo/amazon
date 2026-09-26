@@ -18,7 +18,15 @@
 
   function _read() {
     try {
-      var raw = (localStorage || sessionStorage).getItem(KEY);
+      // (localStorage || sessionStorage) は localStorage オブジェクト自体への
+      // アクセスが例外を投げない限り常に localStorage 側になる (setItem が失敗する
+      // 環境でも参照自体は成功することが多い)。そのため _write() が sessionStorage
+      // に書いた内容がここで一切読めていなかった。両方を明示的に試す。
+      var raw = null;
+      try { raw = localStorage.getItem(KEY); } catch (e) { raw = null; }
+      if (raw == null) {
+        try { raw = sessionStorage.getItem(KEY); } catch (e) { /* ignore */ }
+      }
       if (raw == null && memStore != null) return memStore.slice();
       return raw ? JSON.parse(raw) : [];
     } catch (e) {
@@ -89,6 +97,15 @@
     if (scoreEl) {
       var s = parseInt(scoreEl.getAttribute("data-ivs100"), 10);
       if (s > 0) meta.score = s;
+    }
+    // min_price は元々ハードコードで null のままだったため、記事ページ経由で
+    // 記録された「最近見た商品」には最安値ラベルが一切出なかった。
+    // #mobile-sticky-cta (mobile_sticky_cta.html) が data-min-price に商品ページ
+    // 共通の最安値を既に埋めているので、それを流用する (新規スクレイピング不要)。
+    var stickyBar = document.getElementById("mobile-sticky-cta");
+    if (stickyBar) {
+      var mp = parseInt(stickyBar.getAttribute("data-min-price") || "0", 10);
+      if (mp > 0) meta.min_price = mp;
     }
     push(meta);
   }

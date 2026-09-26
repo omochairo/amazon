@@ -19,7 +19,15 @@
   var memStore = null;
   function _read() {
     try {
-      var raw = (localStorage || sessionStorage).getItem(KEY);
+      // (localStorage || sessionStorage) は localStorage オブジェクト自体への
+      // アクセスが例外を投げない限り常に localStorage 側になる (setItem が失敗する
+      // 環境でも参照自体は成功することが多い)。そのため _write() が sessionStorage
+      // に書いた内容がここで一切読めていなかった。両方を明示的に試す。
+      var raw = null;
+      try { raw = localStorage.getItem(KEY); } catch (e) { raw = null; }
+      if (raw == null) {
+        try { raw = sessionStorage.getItem(KEY); } catch (e) { /* ignore */ }
+      }
       if (raw == null && memStore != null) return memStore.slice();
       return raw ? JSON.parse(raw) : [];
     } catch (e) {
@@ -306,9 +314,14 @@
   function hydrateComparePage() {
     var root = document.getElementById("compare-root");
     if (!root) return;
+    // #588 follow-up: 共有 URL の全件削除後は ?asins= を空のまま残す (下の
+    // 削除ハンドラ参照)。ここで「asins パラメータ自体が無い (素の /compare/
+    // 直接アクセス)」と「?asins= はあるが 0 件 (全部削除済み)」を区別しないと、
+    // 後者をリロードしたときに localStorage の無関係なリストが復元されてしまう。
+    var hasAsinsParam = new URLSearchParams(global.location.search || "").has("asins");
     var asins = _readUrlAsins();
-    if (!asins.length) {
-      // URL に何もない → localStorage から復元
+    if (!asins.length && !hasAsinsParam) {
+      // URL に asins パラメータ自体が無い → localStorage から復元
       asins = _read();
       if (asins.length && global.history && global.history.replaceState) {
         var u = global.location.pathname + "?asins=" + encodeURIComponent(asins.join(","));
@@ -346,15 +359,31 @@
           rms[k].addEventListener("click", function (e) {
             var a = e.currentTarget.getAttribute("data-asin");
             if (!a) return;
-            remove(a);
-            // URL も更新
-            var rest = list();
-            var u = global.location.pathname +
-                    (rest.length ? "?asins=" + encodeURIComponent(rest.join(",")) : "");
+            // #588 follow-up: 共有 URL (?asins=A,B) で開いたページは localStorage の
+            // 保存済みリストと無関係な ASIN 集合を表示していることがある。ここで
+            // list()/remove() (= localStorage 側) から rest を作ると、閲覧者自身の
+            // 保存済みリスト (無関係、または空) で URL の残り ASIN が丸ごと上書き
+            // されてしまっていた。今表示中の asins から直接減らす。
+            // 保存済みリストにも入っている ASIN なら、そちらも合わせて外して整合させる。
+            if (has(a)) remove(a);
+            asins = asins.filter(function (x) { return x !== a; });
+            // 0件になっても "?asins=" 自体は残す (空値でも key は残す)。
+            // 消して pathname 単体に戻すと、この後リロードされたときに
+            // hydrateComparePage() が「パラメータ自体が無い」と区別できず、
+            // 閲覧者自身の (無関係な) 保存済みリストが復元されてしまう。
+            var u = global.location.pathname + "?asins=" + encodeURIComponent(asins.join(","));
             if (global.history && global.history.replaceState) {
               global.history.replaceState(null, "", u);
             }
-            hydrateComparePage();
+            if (asins.length === 0) {
+              // #588 follow-up: hydrateComparePage() をそのまま呼び直すと
+              // _readUrlAsins() が空配列を返し「復元」分岐と誤認しかねないため、
+              // ここは呼ばず直接空表示にする (URL 自体は上で ?asins= のまま残す)。
+              root.innerHTML = _renderCompareTable([]);
+            } else {
+              hydrateComparePage();
+            }
+            _syncAllToggles();
             _renderBar();
           });
         }

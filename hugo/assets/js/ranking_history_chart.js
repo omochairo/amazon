@@ -68,12 +68,20 @@
     });
   }
 
-  function init() {
+  var MAX_INIT_RETRIES = 50; // 100ms x 50 = 5秒。CDN 障害時に無限ポーリングしない上限。
+
+  function init(retries) {
+    // addEventListener("DOMContentLoaded", init) 経由だと retries に Event が渡る
+    // ("retries || 0" では Event が truthy なので NaN 汚染して上限が効かなくなる)。
+    retries = typeof retries === "number" ? retries : 0;
     var nodes = document.querySelectorAll(".ranking-history-canvas[data-ranking-history]");
     if (!nodes.length) return;
     if (typeof window.Chart !== "function") {
       // Chart.js がまだ読まれていない場合 (defer の race) は遅延リトライ。
-      window.setTimeout(init, 100);
+      // CDN 障害・ブロック時にリトライ上限が無く、100ms ごとに無限に
+      // setTimeout し続けて CPU/バッテリーを消費し続けていた。
+      if (retries >= MAX_INIT_RETRIES) return;
+      window.setTimeout(function () { init(retries + 1); }, 100);
       return;
     }
     nodes.forEach(render);

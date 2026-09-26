@@ -122,6 +122,18 @@ document.addEventListener("DOMContentLoaded", function() {
       grid.appendChild(renderProductCard(item));
     });
 
+    // renderProductCard は素の product-card しか作らない。♡ / 🆚 トグルは
+    // compare.js / favorites.js が DOMContentLoaded 時に静的DOMへ1回だけ inject
+    // しており、ここで再呼び出ししないと並び替え・絞り込みのたびにカードから
+    // 比較・お気に入りボタンが消えていた (両関数とも injected 済みか data-asin
+    // 単位で判定するため、同じ grid に何度呼んでも安全)。
+    if (window.OmochaCompare && window.OmochaCompare.mountToggles) {
+      window.OmochaCompare.mountToggles(grid);
+    }
+    if (window.OmochaFavorites && window.OmochaFavorites.mountToggles) {
+      window.OmochaFavorites.mountToggles(grid);
+    }
+
     if (items.length > end) {
       paginationContainer.innerHTML = `<div style="text-align:center; margin-top: 20px;">
         <button id="load-more-btn" class="sort-btn" style="padding: 10px 24px;">さらに読み込む</button>
@@ -226,9 +238,23 @@ document.addEventListener("DOMContentLoaded", function() {
         stage.classList.remove("stage-active");
         trigger.setAttribute("aria-expanded", "false");
         
-        // 閉じられたステージが現在選択されていたら、フィルター解除
-        if (activeAgeFilter && activeAgeFilter.type === "stage" && activeAgeFilter.min === parseInt(stage.getAttribute("data-min"), 10)) {
+        // 閉じられたステージが現在選択されていたら、フィルター解除。
+        // activeAgeFilter はステージ全体選択時は {type:"stage",...} だが、
+        // ステージを開いたまま中の個別年齢ボタンを押すと数値になる。数値の
+        // 場合は type==="stage" に一致せず解除されず、見た目は閉じているのに
+        // 絞り込みだけ残る不一致になっていた。このステージ配下の個別年齢ボタン
+        // の値かどうかもあわせて見る。
+        const stageMin = parseInt(stage.getAttribute("data-min"), 10);
+        const stageAgeValues = Array.prototype.map.call(
+          stage.querySelectorAll(".age-btn"),
+          b => parseInt(b.getAttribute("data-age"), 10)
+        );
+        const activeMatchesThisStage =
+          (activeAgeFilter && typeof activeAgeFilter === "object" && activeAgeFilter.type === "stage" && activeAgeFilter.min === stageMin) ||
+          (typeof activeAgeFilter === "number" && stageAgeValues.indexOf(activeAgeFilter) !== -1);
+        if (activeMatchesThisStage) {
           activeAgeFilter = null;
+          ageBtns.forEach(b => b.classList.remove("active"));
         }
       }
 
