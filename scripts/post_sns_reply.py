@@ -29,6 +29,8 @@ exit code:
 二重送信の防止 (#8285):
     送信の直前に send_started_at を書き、記録まで済んだら消す。印が残って
     いる = 前回が途中で終わった (送れたかは分からない) ので、次の実行は止まる。
+    読み直し → ガード → 印を書く → 送る → 記録、は id ごとのロックファイルの中で
+    やるので、同じ id を同時に 2 本走らせても (--force 付きでも) 片方は止まる (#8323)。
 """
 from __future__ import annotations
 
@@ -215,84 +217,95 @@ UNWIRED_CHANNELS = {"x"}
 def resolve_body(rec: dict, args: argparse.Namespace) -> str:
     if args.body:
         return args.body.strip()
-    drafts = rec.get("drafts") or []
     if args.draft is None:
         raise ValueError("--body か --draft のどちらかを指定する")
-    idx = args.draft - 1
-    if idx < 0 or idx >= len(drafts):
-        raise ValueError(f"--draft {args.draft} は範囲外 (案は {len(drafts)} 件)")
-    return str(drafts[idx].get("text") or "").strip()
-
-
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--id", required=True, help="inbox id (例 threads:178...)")
-    ap.add_argument("--body", default="", help="送信する本文 (最優先)")
-    ap.add_argument("--draft", type=int, default=None, help="保存済み案の番号 (1 始まり)")
-    ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument(
-        "--force", action="store_true",
-        help="既に answered のものにも送る (通常は使わない)",
-    )
-    args = ap.parse_args(argv)
-
-    directory = store.inbox_dir()
-    rec = store.load_records(directory).get(args.id)
-    if rec is None:
-        print(f"inbox に {args.id} が無い", file=sys.stderr)
-        return 2
-
-    if rec.get("status") == store.STATUS_ANSWERED and not args.force:
-        print(
-            f"{args.id} は既に返信済み ({rec.get('answered_at')})。二度目を送らない。"
-            "本当に送るなら --force",
-            file=sys.stderr,
+    # 案番号で引く (並び順ではない)。作り直しで消えた番号は別の案に振り直さ
+    # れないので、issue に残る古い案の番号を打つとここで止まる (#8323)
+    numbered = store.numbered_drafts(rec)
+    for no, draft in numbered:
+        if no == args.draft:
+            return str(draft.get("text") or "").strip()
+    if 0 < args.draft <= store.draft_seq(rec):
+        live = ", ".join(str(no) for no, _ in numbered) or "なし"
+        raise ValueError(
+            f"案 {args.draft} は作り直しで破棄済み (今ある案: {live})。"
+            "issue の最新のコメントを見て番号を選び直す",
         )
-        return 2
+    raise ValueError(f"--draft {args.draft} は範囲外 (案は {len(numbered)} 件)")
+
+
+def refuse_reason(rec: dict, force: bool) -> str:
+    """送ってはいけない状態なら理由を返す (送ってよければ "")。"""
+    if force:
+        return ""
+    rid = rec.get("id")
+    if rec.get("status") == store.STATUS_ANSWERED:
+        return (
+            f"{rid} は既に返信済み ({rec.get('answered_at')})。二度目を送らない。"
+            "本当に送るなら --force"
+        )
     # ignored は「返さない」と決めたもの (起草側の判断か、人が issue を close した)。
     # 古いコマンド履歴から id を打ち直しただけで送れてしまわないよう、answered と
     # 同じく --force を要求する。人が考え直して送る余地は --force で残す (#8285)
-    if rec.get("status") == store.STATUS_IGNORED and not args.force:
-        print(
-            f"{args.id} は返信しないと判断済み ({rec.get('ignore_reason') or '理由不明'})。"
-            "考え直して送るなら --force",
-            file=sys.stderr,
+    if rec.get("status") == store.STATUS_IGNORED:
+        return (
+            f"{rid} は返信しないと判断済み ({rec.get('ignore_reason') or '理由不明'})。"
+            "考え直して送るなら --force"
         )
-        return 2
     # 前回の送信が「送信開始」を書いたまま終わっていない。送れたのに記録する前に
     # 落ちたのか、送る前に落ちたのかは inbox からは区別できないので、相手側を
     # 目で確かめてから --force で送る (#8285)
-    if rec.get("send_started_at") and not args.force:
-        print(
-            f"{args.id} は前回の送信が完了していない ({rec['send_started_at']} 開始)。"
-            "相手の投稿に返信が付いていないことを確かめてから --force",
-            file=sys.stderr,
+    if rec.get("send_started_at"):
+        return (
+            f"{rid} は前回の送信が完了していない ({rec['send_started_at']} 開始)。"
+            "相手の投稿に返信が付いていないことを確かめてから --force"
         )
-        return 2
+    return ""
 
+
+def _send_state(rec: dict) -> tuple:
+    return (
+        rec.get("status"), rec.get("send_started_at") or "", rec.get("answered_at") or "",
+    )
+
+
+def recheck_under_lock(
+    args: argparse.Namespace, body: str, directory, seen: dict,
+) -> str:
+    """ロックを取ったあとに読み直し、送ってよいかをもう一度確かめる。
+
+    最初の読み込みからロックを取るまでの間に、同じ id の別の実行が送り終えて
+    いたり (同時実行。#8323)、案が作り直されていたりしたら止める。止めるときは
+    理由を返す (送ってよければ "")。
+
+    seen は最初に読んだときのレコード。--force はガードを越えるが、読んだあとに
+    送信の状態が変わっていたら (= 別の実行が送信を始めた・終えた) --force でも
+    止める。--force は「前回の結果を人が確かめた」という意味で、いま走っている
+    別の実行まで越える意味ではない。
+    """
+    rec = store.load_records(directory).get(args.id)
+    if rec is None:
+        return f"inbox に {args.id} が無い"
+    if _send_state(rec) != _send_state(seen):
+        return (
+            f"{args.id} は読んだあとに別の実行が送信を始めたか終えた "
+            f"(status={rec.get('status')} "
+            f"send_started_at={rec.get('send_started_at') or '-'})。"
+            "二重送信を避けて止めた"
+        )
+    reason = refuse_reason(rec, args.force)
+    if reason:
+        return reason
     try:
-        body = resolve_body(rec, args)
+        again = resolve_body(rec, args)
     except ValueError as e:
-        print(str(e), file=sys.stderr)
-        return 2
-    if not body:
-        print("本文が空", file=sys.stderr)
-        return 2
+        return str(e)
+    if again != body:
+        return f"{args.id} の案が表示のあとに変わった。もう一度実行して本文を確かめる"
+    return ""
 
-    print(f"channel : {rec['channel']}")
-    print(f"相手    : @{rec.get('author') or '不明'}")
-    print(f"本文    : {body}")
 
-    # dry-run でも未配線 channel は弾く (dry-run が通ったのに本番で落ちる食い違いを無くす)
-    poster = POSTERS.get(rec["channel"])
-    if poster is None or rec["channel"] in UNWIRED_CHANNELS:
-        print(f"未対応 channel: {rec['channel']}", file=sys.stderr)
-        return 2
-
-    if args.dry_run:
-        print("(dry-run: 送信していない)")
-        return 0
-
+def send_and_record(args, rec: dict, body: str, poster, directory) -> int:
     # 外へ出す前に「送信開始」を残す。送信後・記録前に落ちても、次の実行は
     # 上のガードで止まる (drafted のままだと黙ってもう一度送る)
     if store.update_record(args.id, {"send_started_at": store.utcnow()}, directory) is None:
@@ -332,5 +345,70 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--id", required=True, help="inbox id (例 threads:178...)")
+    ap.add_argument("--body", default="", help="送信する本文 (最優先)")
+    ap.add_argument(
+        "--draft", type=int, default=None,
+        help="保存済み案の番号 (issue / PENDING.md に出ている「案 N」。作り直しても再利用しない)",
+    )
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument(
+        "--force", action="store_true",
+        help="既に answered のものにも送る (通常は使わない)",
+    )
+    args = ap.parse_args(argv)
+
+    directory = store.inbox_dir()
+    rec = store.load_records(directory).get(args.id)
+    if rec is None:
+        print(f"inbox に {args.id} が無い", file=sys.stderr)
+        return 2
+
+    reason = refuse_reason(rec, args.force)
+    if reason:
+        print(reason, file=sys.stderr)
+        return 2
+
+    try:
+        body = resolve_body(rec, args)
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        return 2
+    if not body:
+        print("本文が空", file=sys.stderr)
+        return 2
+
+    print(f"channel : {rec['channel']}")
+    print(f"相手    : @{rec.get('author') or '不明'}")
+    print(f"本文    : {body}")
+
+    # dry-run でも未配線 channel は弾く (dry-run が通ったのに本番で落ちる食い違いを無くす)
+    poster = POSTERS.get(rec["channel"])
+    if poster is None or rec["channel"] in UNWIRED_CHANNELS:
+        print(f"未対応 channel: {rec['channel']}", file=sys.stderr)
+        return 2
+
+    if args.dry_run:
+        print("(dry-run: 送信していない)")
+        return 0
+
+    # ロックは送信と記録が終わるまで持つ。印を書いた時点で外すと、そのあとに
+    # 起動した別の実行が「残った印」を読み、--force でそれを越えて送ってしまう
+    # (印が生きた送信中のものか、落ちた実行の残りかを区別できない。#8323)
+    try:
+        with store.record_lock(args.id, directory):
+            reason = recheck_under_lock(args, body, directory, rec)
+            if reason:
+                print(reason, file=sys.stderr)
+                return 2
+            return send_and_record(args, rec, body, poster, directory)
+    except store.LockBusy as e:
+        print(
+            f"{args.id} は別の実行が送信中 (ロック {e})。二重送信を避けて止めた。"
+            "その実行が落ちてロックだけが残っているなら、相手の投稿に返信が付いて"
+            "いないことを確かめてからロックファイルを消し、--force で送る",
+            file=sys.stderr,
+        )
+        return 2

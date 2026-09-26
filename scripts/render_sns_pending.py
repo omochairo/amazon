@@ -59,10 +59,10 @@ def render_record(rec: dict, *, heading: bool = True) -> list[str]:
     lines.append("> " + str(rec.get("text") or "").replace("\n", "\n> "))
     lines.append("")
 
-    drafts = rec.get("drafts") or []
+    drafts = store.numbered_drafts(rec)
     if not drafts:
         lines += ["返信案はまだありません (起草レーン待ち)。", ""]
-    for i, draft in enumerate(drafts, start=1):
+    for i, draft in drafts:
         lines.append(f"**案 {i}** ({draft.get('model') or '不明'})")
         lines.append("")
         text = str(draft.get("text") or "")
