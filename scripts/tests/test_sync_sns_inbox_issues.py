@@ -22,8 +22,9 @@ REPO = "omochairo/amazon-home-ops"
 class FakeGh:
     """gh api の代役。issues 一覧は listing で与え、書き込みは calls に貯める。"""
 
-    def __init__(self, listing: list[dict] | None = None):
+    def __init__(self, listing: list[dict] | None = None, comments: dict[int, list[dict]] | None = None):
         self.listing = listing or []
+        self.comments = comments or {}
         self.calls: list[tuple[list[str], dict | None]] = []
         self._next_number = 100
 
@@ -33,6 +34,9 @@ class FakeGh:
             page = next(
                 (a.split("=", 1)[1] for a in args if a.startswith("page=")), "1",
             )
+            if args[0].endswith("/comments"):
+                number = int(args[0].split("/")[-2])
+                return self.comments.get(number, []) if page == "1" else []
             return self.listing if page == "1" else []
         if args[0].endswith("/issues") and "POST" in args:
             self._next_number += 1
@@ -217,6 +221,73 @@ def test_adopted_issue_counts_drafts_from_its_body(d: Path):
     assert stats["adopted"] == 1
     assert stats["commented"] == 0
     assert store.load_records(d)["threads:1"]["issue_synced_drafts"] == 1
+
+
+def test_adopted_issue_counts_drafts_already_added_as_comments(d: Path):
+    """起票後にコメントで足した案も数える。本文だけ見ると状態を失ったあとの
+    再同期で案 2 をもう一度コメントする (#8287)。"""
+    _add(d, "threads:1", drafts=["案A"])
+    body = sync.issue_body(store.load_records(d)["threads:1"])
+    store.add_draft("threads:1", "案B", "claude-sonnet-4-6", d)
+    comment = sync.draft_comment(store.load_records(d)["threads:1"], 1)
+    gh = FakeGh([{"number": 42, "body": body}], comments={42: [{"body": comment}]})
+
+    stats = sync.sync(REPO, directory=d, gh=gh)
+
+    assert stats["adopted"] == 1
+    assert stats["commented"] == 0
+    assert gh.posts_to("/comments") == []
+    assert store.load_records(d)["threads:1"]["issue_synced_drafts"] == 2
+
+
+def test_adopted_issue_still_comments_really_new_drafts(d: Path):
+    _add(d, "threads:1", drafts=["案A", "案B"])
+    rec = store.load_records(d)["threads:1"]
+    body = sync.issue_body({**rec, "drafts": rec["drafts"][:1]})
+    gh = FakeGh([{"number": 42, "body": body}])
+
+    stats = sync.sync(REPO, directory=d, gh=gh)
+
+    assert stats["commented"] == 1
+    assert "**案 2**" in gh.posts_to("/comments")[0]["body"]
+
+
+def test_count_drafts_ignores_lookalike_lines_inside_a_draft():
+    """案の本文 (``` の中) に同じ書式の行があっても数えない (#8287)。"""
+    rec = {
+        "id": "threads:1", "channel": "threads", "kind": "reply", "author": "a",
+        "text": "**案 9** (x)", "created_at": "2026-09-01T00:00:00Z", "permalink": "",
+        "drafts": [{"text": "前置き\n**案 7** (m)\n後ろ", "model": "m"}],
+    }
+    assert sync.count_drafts_in_body(sync.issue_body(rec)) == 1
+
+
+def test_count_drafts_survives_a_code_fence_inside_a_draft():
+    """案の本文に ``` があっても枠が閉じず、後ろの案も数える。"""
+    rec = {
+        "id": "threads:1", "channel": "threads", "kind": "reply", "author": "a",
+        "text": "本文", "created_at": "2026-09-01T00:00:00Z", "permalink": "",
+        "drafts": [
+            {"text": "例です\n```\n**案 8** (m)\n", "model": "m"},
+            {"text": "二つ目", "model": "m"},
+        ],
+    }
+    assert sync.count_drafts_in_body(sync.issue_body(rec)) == 2
+    assert sync.count_drafts_in_body(sync.draft_comment(rec, 0)) == 2
+
+
+def test_human_comments_mentioning_a_draft_are_not_counted(d: Path):
+    """人のコメント「**案 3** がよさそう」で同期済み件数を引き上げない。"""
+    _add(d, "threads:1", drafts=["案A", "案B"])
+    rec = store.load_records(d)["threads:1"]
+    body = sync.issue_body({**rec, "drafts": rec["drafts"][:1]})
+    human = {"body": "**案 3** (たぶん) がよさそう\n**案 2**"}
+    gh = FakeGh([{"number": 42, "body": body}], comments={42: [human]})
+
+    stats = sync.sync(REPO, directory=d, gh=gh)
+
+    assert stats["commented"] == 1
+    assert "**案 2**" in gh.posts_to("/comments")[0]["body"]
 
 
 def test_count_drafts_in_body_matches_render_record():

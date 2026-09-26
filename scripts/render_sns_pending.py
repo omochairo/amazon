@@ -16,6 +16,7 @@ exit code:
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -25,6 +26,13 @@ except Exception:  # noqa: BLE001
     pass
 
 import sns_inbox_store as store  # noqa: E402
+
+
+def code_fence(text: str) -> str:
+    """text を囲むフェンス。本文中の最長のバッククォート連より 1 本長くする
+    (CommonMark の規則)。LLM の案に ``` が入っていても枠が途中で閉じない。"""
+    longest = max((len(m) for m in re.findall(r"`+", text)), default=0)
+    return "`" * max(3, longest + 1)
 
 
 def render_record(rec: dict, *, heading: bool = True) -> list[str]:
@@ -57,9 +65,11 @@ def render_record(rec: dict, *, heading: bool = True) -> list[str]:
     for i, draft in enumerate(drafts, start=1):
         lines.append(f"**案 {i}** ({draft.get('model') or '不明'})")
         lines.append("")
-        lines.append("```")
-        lines.append(str(draft.get("text") or ""))
-        lines.append("```")
+        text = str(draft.get("text") or "")
+        fence = code_fence(text)
+        lines.append(fence)
+        lines.append(text)
+        lines.append(fence)
         lines.append("")
         lines.append(
             f"送信: `--id {rec['id']} --draft {i}`  "
