@@ -327,7 +327,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.redraft and rec.get("drafts"):
             # 作り直しは**置き換え**。古い案を残すと、人が PENDING.md で
             # 直った案と没案を並べて見ることになり、没案を送る事故が起きる。
-            store.update_record(rec["id"], {"drafts": []}, directory)
+            # 案番号は再利用しない (新しい案は続きの番号になる)。issue で読んだ
+            # 古い「案 1」を --draft 1 で送ると、別の文面が出ていくため (#8323)
+            store.discard_drafts(rec["id"], directory)
         for d in drafts:
             store.add_draft(rec["id"], d, args.model, directory)
         drafted += 1
