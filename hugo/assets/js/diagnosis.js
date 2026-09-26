@@ -2,6 +2,12 @@ document.addEventListener("DOMContentLoaded", () => {
     let currentStep = 1;
     const answers = { q1: null, q2: null, q3: null, q4: null, q5: null };
     let itemsCache = null;
+    let itemsLoadFailed = false;
+    let itemsPollAttempts = 0;
+    const MAX_POLL_ATTEMPTS = 100; // 100ms x 100 = 10秒。fetch が resolve も reject もせず
+                                    // ハングした場合に無限ポーリングしない上限。
+    const DEFAULT_RESULT_TITLE = "✨ あなたにおすすめのおもちゃ処方箋 ✨";
+    const DEFAULT_RESULT_LEAD = "ご回答いただいた内容をもとに、最適なおもちゃを選定しました。";
 
     // DOM Elements
     const steps = document.querySelectorAll(".diagnosis-step");
@@ -16,14 +22,60 @@ document.addEventListener("DOMContentLoaded", () => {
     const fallbackBadge = document.getElementById("diagnosis-fallback-badge");
 
     // search.json の非同期フェッチ (#3055 E1: content を使うため index.json から分離した search.json 側)
-    fetch("/search.json")
-        .then(res => res.json())
-        .then(data => {
-            itemsCache = data;
-        })
-        .catch(err => {
-            console.error("Failed to load search.json", err);
+    function loadItems() {
+        itemsLoadFailed = false;
+        itemsPollAttempts = 0;
+        fetch("/search.json")
+            .then(res => res.json())
+            .then(data => {
+                itemsCache = data;
+            })
+            .catch(err => {
+                console.error("Failed to load search.json", err);
+                // オフライン・通信断・404 等で取得に失敗すると itemsCache が
+                // 永遠に null のままになり、showResults/showAgeBest の
+                // setTimeout リトライが無限ループして「集計中...」のまま固まって
+                // いた。失敗をフラグで検知できるようにし、呼び出し側で
+                // エラー表示 + 手動リトライに切り替える。
+                itemsLoadFailed = true;
+            });
+    }
+    loadItems();
+
+    // 通信失敗でリトライを諦めたときに結果エリアへ出すエラー表示。
+    // retryFn は再取得後にもう一度呼び出す表示関数 (showResults / showAgeBest)。
+    function showLoadError(retryFn) {
+        wizardContainer.style.display = "none";
+        progressBar.parentElement.style.display = "none";
+        prevBtn.style.display = "none";
+        resultContainer.style.display = "block";
+        fallbackBadge.style.display = "none";
+        if (wrapper) wrapper.classList.add("diagnosis-wrapper--results");
+
+        const header = resultContainer.querySelector(".diagnosis-result-header");
+        if (header) {
+            const h = header.querySelector("h2");
+            const p = header.querySelector("p");
+            if (h) h.textContent = "😥 おもちゃ情報の読み込みに失敗しました";
+            if (p) p.textContent = "通信状況をご確認のうえ、もう一度お試しください。";
+        }
+
+        resultGrid.innerHTML = "";
+        const retryButton = document.createElement("button");
+        retryButton.type = "button";
+        retryButton.className = "diagnosis-nav-btn";
+        retryButton.textContent = "🔄 もう一度読み込む";
+        retryButton.addEventListener("click", () => {
+            // 低速回線で反応が無いように見えて連打されると、その都度
+            // /search.json への再フェッチと setTimeout ポーリングが多重に
+            // 走ってしまうため、結果が出るまで連打できないようにする。
+            retryButton.disabled = true;
+            retryButton.textContent = "読み込み中...";
+            loadItems();
+            retryFn();
         });
+        resultGrid.appendChild(retryButton);
+    }
 
     // カード描画は window.OmochaUtils.renderProductCard に集約済 (Issue #745 Phase 2)。
     // hugo/assets/js/utils/product-card.js を参照。
@@ -250,7 +302,25 @@ document.addEventListener("DOMContentLoaded", () => {
         currentStep = 1;
         // 回答をクリア
         for (let key in answers) answers[key] = null;
-        
+
+        // 初回の /search.json 取得が失敗したまま (itemsLoadFailed) だと、
+        // 「もう一度診断する」で最初からやり直しても再取得を試みず、5問目で
+        // 即座にまたエラー表示に戻ってしまっていた。やり直し開始時にも
+        // 再取得のチャンスを与える。
+        if (!itemsCache && itemsLoadFailed) loadItems();
+
+        // ?age=<band> / ?restore=1 を残したままやり直し中にリロードすると、
+        // restoreFromAge / restoreFromSaved が再発火して回答が全部破棄され
+        // 前回の結果に巻き戻ってしまうため、やり直し開始時に消しておく。
+        if (window.history && window.history.replaceState) {
+            const url = new URL(window.location.href);
+            if (url.searchParams.has("age") || url.searchParams.has("restore")) {
+                url.searchParams.delete("age");
+                url.searchParams.delete("restore");
+                window.history.replaceState(null, "", url.pathname + url.search);
+            }
+        }
+
         resultContainer.style.display = "none";
         wizardContainer.style.display = "block";
         prevBtn.style.display = "none";
@@ -261,8 +331,21 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     function showResults() {
+        // 通信が遅い間に「もう一度診断する」でウィザードへ戻られると、この
+        // showResults 呼び出しはもう古い (前回の完了時点のもの)。currentStep
+        // が 6 (結果画面) でなければ、後から itemsCache が届いても無回答のまま
+        // 結果へ強制遷移しない (agy レビュー指摘)。
+        if (currentStep !== 6) return;
         if (!itemsCache) {
+            if (itemsLoadFailed) { showLoadError(showResults); return; }
+            if (itemsPollAttempts >= MAX_POLL_ATTEMPTS) {
+                // fetch が resolve も reject もせずハングしたケース。
+                itemsLoadFailed = true;
+                showLoadError(showResults);
+                return;
+            }
             // ロードがまだ終わっていない場合はリトライ
+            itemsPollAttempts++;
             setTimeout(showResults, 100);
             return;
         }
@@ -282,6 +365,17 @@ document.addEventListener("DOMContentLoaded", () => {
         prevBtn.style.display = "none";
         resultContainer.style.display = "block";
         if (wrapper) wrapper.classList.add("diagnosis-wrapper--results"); // 結果は main 幅いっぱいに
+
+        // showAgeBest / showLoadError が見出しを書き換えている場合があるので戻す
+        // (例: 年齢ベスト10 から「もう一度診断する」で5問診断を完了した場合、
+        // 見出しが「0〜1歳のベスト10」のまま残って推薦内容と矛盾していた)。
+        const resetHeader = resultContainer.querySelector(".diagnosis-result-header");
+        if (resetHeader) {
+            const rh = resetHeader.querySelector("h2");
+            const rp = resetHeader.querySelector("p");
+            if (rh) rh.textContent = DEFAULT_RESULT_TITLE;
+            if (rp) rp.textContent = DEFAULT_RESULT_LEAD;
+        }
 
         // フォールバックバッジの表示
         if (fallbackType) {
@@ -305,6 +399,16 @@ document.addEventListener("DOMContentLoaded", () => {
             recommendations.forEach(item => {
                 resultGrid.appendChild(renderProductCard(item));
             });
+        }
+        // renderProductCard は素のカードしか作らない。term_list.js と同じ理由
+        // (compare.js/favorites.js は DOMContentLoaded 時に静的DOMへ1回だけ
+        // トグルを inject する) で、診断結果カードには ♡/🆚 が一切付いて
+        // いなかった (agy レビュー指摘)。
+        if (window.OmochaCompare && window.OmochaCompare.mountToggles) {
+            window.OmochaCompare.mountToggles(resultGrid);
+        }
+        if (window.OmochaFavorites && window.OmochaFavorites.mountToggles) {
+            window.OmochaFavorites.mountToggles(resultGrid);
         }
 
         // #1365 Layer 1-③ 診断結果の永続化。次回訪問時にホーム上部の
@@ -383,7 +487,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function showAgeBest(q1) {
+        // showResults と同じ理由: 通信待ちの間に「もう一度診断する」で
+        // ウィザードへ戻られたら、古い呼び出しは結果へ強制遷移しない。
+        if (currentStep !== 6) return;
         if (!itemsCache) {
+            if (itemsLoadFailed) { showLoadError(() => showAgeBest(q1)); return; }
+            if (itemsPollAttempts >= MAX_POLL_ATTEMPTS) {
+                itemsLoadFailed = true;
+                showLoadError(() => showAgeBest(q1));
+                return;
+            }
+            itemsPollAttempts++;
             setTimeout(() => showAgeBest(q1), 100);
             return;
         }
@@ -409,6 +523,12 @@ document.addEventListener("DOMContentLoaded", () => {
         resultGrid.innerHTML = "";
         if (renderProductCard) {
             items.forEach(item => resultGrid.appendChild(renderProductCard(item)));
+        }
+        if (window.OmochaCompare && window.OmochaCompare.mountToggles) {
+            window.OmochaCompare.mountToggles(resultGrid);
+        }
+        if (window.OmochaFavorites && window.OmochaFavorites.mountToggles) {
+            window.OmochaFavorites.mountToggles(resultGrid);
         }
     }
 

@@ -10,7 +10,7 @@
   var CONTENT_SEL = '.post-content';
   var SKIP_TAGS = { A: 1, CODE: 1, PRE: 1, SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, BUTTON: 1, TEXTAREA: 1, INPUT: 1 };
   var SKIP_ATTR = 'data-wiki-skip';
-  var STATE = { cache: null, opened: false, lastFocus: null, sheet: null, overlay: null, popHandler: null };
+  var STATE = { cache: null, opened: false, lastFocus: null, sheet: null, overlay: null, popHandler: null, detachSwipe: null };
   var REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function idle(fn) {
@@ -191,6 +191,14 @@
     handle.addEventListener('mousedown', onStart);
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onEnd);
+    // closeSheet 側で外せるよう、document に付けたリスナーの解除関数を返す。
+    // 元々ここが無く、用語ツールチップを開閉するたびに mousemove/mouseup が
+    // document に増え続け、閉じた (DOM からは外れた) sheet を参照するクロージャが
+    // 溜まり続けるメモリリークになっていた。
+    return function detachSwipe() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onEnd);
+    };
   }
 
   function openSheet(term, trigger) {
@@ -212,7 +220,7 @@
       sheet.classList.add('is-open');
     });
     STATE.sheet = sheet; STATE.overlay = overlay; STATE.opened = true;
-    attachSwipe(sheet);
+    STATE.detachSwipe = attachSwipe(sheet);
     document.addEventListener('keydown', trapFocus);
     setTimeout(function () { sheet.querySelector('.wiki-sheet__close').focus(); }, 50);
     try {
@@ -228,6 +236,7 @@
     sheet.classList.remove('is-open');
     overlay.classList.remove('is-open');
     document.removeEventListener('keydown', trapFocus);
+    if (STATE.detachSwipe) { STATE.detachSwipe(); STATE.detachSwipe = null; }
     if (STATE.popHandler) {
       window.removeEventListener('popstate', STATE.popHandler);
       STATE.popHandler = null;

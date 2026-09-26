@@ -20,7 +20,15 @@
   // ------- storage (graceful fallback) -------
   function _read() {
     try {
-      var raw = (localStorage || sessionStorage).getItem(KEY);
+      // (localStorage || sessionStorage) は localStorage オブジェクト自体への
+      // アクセスが例外を投げない限り常に localStorage 側になる (setItem が失敗する
+      // 環境でも参照自体は成功することが多い)。そのため _write() が sessionStorage
+      // に書いた内容がここで一切読めていなかった。両方を明示的に試す。
+      var raw = null;
+      try { raw = localStorage.getItem(KEY); } catch (e) { raw = null; }
+      if (raw == null) {
+        try { raw = sessionStorage.getItem(KEY); } catch (e) { /* ignore */ }
+      }
       if (raw == null && memStore != null) return _clone(memStore);
       return raw ? JSON.parse(raw) : { asins: [], snapshots: {} };
     } catch (e) {
@@ -607,6 +615,7 @@
 
   global.OmochaFavorites = {
     add: add, remove: remove, toggle: toggle, has: has,
-    list: list, count: count, clear: clear, snapshot: snapshot
+    list: list, count: count, clear: clear, snapshot: snapshot,
+    mountToggles: mountToggles
   };
 })(typeof window !== "undefined" ? window : this);
