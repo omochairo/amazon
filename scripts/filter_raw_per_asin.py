@@ -16,6 +16,8 @@ Jules はこの per_asin/<ASIN>/ のみを参照することで、
 スコア閾値 SCORE_THRESHOLD 以上のもののみ保存。
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import pathlib
