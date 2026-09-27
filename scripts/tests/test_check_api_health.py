@@ -107,6 +107,37 @@ class TestCrossSearchGetRecords(unittest.TestCase):
                     fetch_cross_search._get("api", "http://x")
             self.assertEqual(check_api_health.load(log), {"api": [400, None]})
 
+    def test_retries_once_on_429(self):
+        ok = mock.Mock(status_code=200)
+        limited = mock.Mock(status_code=429)
+        with mock.patch.object(fetch_cross_search.time, "sleep") as sleep, \
+                mock.patch.object(fetch_cross_search.requests, "get",
+                                  side_effect=[limited, ok]) as get:
+            self.assertIs(fetch_cross_search._get("api", "http://x"), ok)
+        self.assertEqual(get.call_count, 2)
+        sleep.assert_called_once_with(fetch_cross_search.RATE_LIMIT_RETRY_WAIT)
+
+    def test_gives_up_after_second_429(self):
+        with tempfile.TemporaryDirectory() as d:
+            log = os.path.join(d, "h.jsonl")
+            limited = mock.Mock(status_code=429)
+            with mock.patch.dict(os.environ, {_api_health.ENV_VAR: log}), \
+                    mock.patch.object(fetch_cross_search.time, "sleep"), \
+                    mock.patch.object(fetch_cross_search.requests, "get",
+                                      side_effect=[limited, limited]) as get:
+                self.assertIs(fetch_cross_search._get("api", "http://x"), limited)
+            self.assertEqual(get.call_count, 2)
+            self.assertEqual(check_api_health.load(log), {"api": [429, 429]})
+
+    def test_no_retry_on_400(self):
+        resp = mock.Mock(status_code=400)
+        with mock.patch.object(fetch_cross_search.time, "sleep") as sleep, \
+                mock.patch.object(fetch_cross_search.requests, "get",
+                                  return_value=resp) as get:
+            self.assertIs(fetch_cross_search._get("api", "http://x"), resp)
+        self.assertEqual(get.call_count, 1)
+        sleep.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

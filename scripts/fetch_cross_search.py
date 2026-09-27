@@ -373,14 +373,28 @@ def _filter_text_candidates(items, amazon_title, source, asin):
     return kept
 
 
+# 429 (レート制限) のときに待つ秒数。楽天の 429 本文は "Try again in 1 seconds."
+# なので 1 秒に余裕を足す (navi-brain#76)。
+RATE_LIMIT_RETRY_WAIT = 1.5
+
+
 def _get(api, url, **kwargs):
-    """requests.get して HTTP ステータスを _api_health に記録する (#8272)。"""
-    try:
-        resp = requests.get(url, **kwargs)
-    except requests.exceptions.RequestException:
-        _api_health.record(api, None)
-        raise
-    _api_health.record(api, resp.status_code)
+    """requests.get して HTTP ステータスを _api_health に記録する (#8272)。
+
+    429 のときだけ ``RATE_LIMIT_RETRY_WAIT`` 秒待って 1 回再試行する
+    (navi-brain#76)。429 も記録するので、check_api_health の集計には残る。
+    """
+    for attempt in range(2):
+        try:
+            resp = requests.get(url, **kwargs)
+        except requests.exceptions.RequestException:
+            _api_health.record(api, None)
+            raise
+        _api_health.record(api, resp.status_code)
+        if resp.status_code != 429 or attempt:
+            return resp
+        logger.info(f"  {api}: 429, retry in {RATE_LIMIT_RETRY_WAIT}s")
+        time.sleep(RATE_LIMIT_RETRY_WAIT)
     return resp
 
 
