@@ -1506,8 +1506,9 @@ brands:
     region: JP
   # 壽屋=コトブキヤ (kotobukiya.co.jp)。プラモデル・フィギュアの国内メーカー。#8411 の
   # 起票後にカタログで 2 商品 (B0HCT3B45V / B0D9XHB9FM) になり検出器に浮上した。
+  # slug は括弧併記の ASCII alias からしか取られない (term_slug.py) ため「壽屋(KOTOBUKIYA)」を置く。
   - canonical: 壽屋
-    aliases: [壽屋, コトブキヤ, KOTOBUKIYA]
+    aliases: [壽屋, 壽屋(KOTOBUKIYA), コトブキヤ, KOTOBUKIYA]
     tier: B
     region: JP
   # 以下は実在するが薄いハブ不要 = noindex。
