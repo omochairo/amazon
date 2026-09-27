@@ -234,8 +234,10 @@ jobs:
       - name: Import K8 modules on Python 3.8
         run: python scripts/check_k8_py38_imports.py --closure-out /tmp/k8_closure.txt
       # import で分かるのはモジュール読込時の問題だけ。関数内で実行時に初めて
-      # 落ちる 3.9+ 機能 (str.removeprefix / dict の | / zip(strict=) 等) は
-      # vermin で静的に見る。注釈は __future__ annotations 済みなら無害なので
-      # --eval-annotations は付けない (付けると誤検知で埋まる)。
+      # 落ちる 3.9+ 機能 (math.lcm / zip(strict=) 等) は vermin で静的に見る。
+      # 注釈は __future__ annotations 済みなら無害なので --eval-annotations は
+      # 付けない (付けると誤検知で埋まる)。
+      # 限界: 型の分からない変数のメソッド (s.removeprefix / 変数同士の dict |)
+      # は vermin も拾えない (2026-09-27 実測)。
       - name: Check runtime features with vermin (target 3.8)
         run: vermin --no-tips -t=3.8- --violations --no-parse-comments $(cat /tmp/k8_closure.txt)
