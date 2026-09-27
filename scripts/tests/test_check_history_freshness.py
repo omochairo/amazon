@@ -16,15 +16,18 @@ import pytest
 
 from scripts.check_history_freshness import (
     DIR_LANES,
+    GLOB_LANES,
     LANES,
     SINGLE_FILE_LANES,
     UNMONITORED,
     DirLane,
+    GlobLane,
     Lane,
     SingleFileLane,
     check,
     check_dirs,
     check_files,
+    check_globs,
     last_date,
     last_date_in_dir,
     problems,
@@ -176,7 +179,7 @@ def test_real_history_all_lanes_registered():
 def test_thresholds_have_headroom_over_cadence():
     """cadence より短い上限を置かない (毎回鳴るゲートを作らない)。"""
     floor = {"daily": 2, "weekly": 8, "monthly": 32}
-    for lane in (*LANES, *DIR_LANES, *SINGLE_FILE_LANES):
+    for lane in (*LANES, *DIR_LANES, *SINGLE_FILE_LANES, *GLOB_LANES):
         assert lane.max_age_days >= floor[lane.cadence], lane.filename
 
 
@@ -372,6 +375,51 @@ def test_file_lane_rows_render_like_other_lanes(tmp_path):
     body = render_body(rows, [], D("2026-08-12"))
     assert "| `data/analytics/information_gain_history.jsonl` | stale |" in body
     assert problems(rows, []) == ["data/analytics/information_gain_history.jsonl"]
+
+
+# ---------- GLOB_LANES: 追記ログの無いエンティティ単位 JSON (#8425) ----------
+
+GLOB_LANE = (GlobLane("data/raw/per_asin/*/experience.json", "generated_at", "daily", 3, "wf.yml"),)
+
+
+def _write_experience(root: pathlib.Path, asin: str, generated_at) -> None:
+    path = root / "data" / "raw" / "per_asin" / asin / "experience.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"asin": asin, "snippets": []}
+    if generated_at is not None:
+        payload["generated_at"] = generated_at
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def test_glob_lane_takes_newest_generated_at(tmp_path):
+    _write_experience(tmp_path, "A1", "2026-09-20T20:42:10Z")
+    _write_experience(tmp_path, "A2", "2026-09-23T20:42:10Z")
+    _write_experience(tmp_path, "A3", None)  # 日付の無いファイルは飛ばす
+    rows = check_globs(tmp_path, D("2026-09-24"), GLOB_LANE)
+    assert rows[0]["status"] == "ok"
+    assert rows[0]["last"] == "2026-09-23"
+
+
+def test_glob_lane_stale_when_mining_stops(tmp_path):
+    # 2026-09-24〜26 の実事故: 最後の採掘 09-23 のまま 09-27 を迎えると 4 日 > 3 日。
+    _write_experience(tmp_path, "A1", "2026-09-23T20:42:10Z")
+    rows = check_globs(tmp_path, D("2026-09-27"), GLOB_LANE)
+    assert rows[0]["status"] == "stale"
+    assert problems(rows, []) == ["data/raw/per_asin/*/experience.json"]
+
+
+def test_glob_lane_missing_when_nothing_matches(tmp_path):
+    rows = check_globs(tmp_path, D("2026-09-24"), GLOB_LANE)
+    assert rows[0]["status"] == "missing"
+
+
+def test_glob_lane_unknown_when_no_readable_date(tmp_path):
+    _write_experience(tmp_path, "A1", None)
+    broken = tmp_path / "data" / "raw" / "per_asin" / "A2" / "experience.json"
+    broken.parent.mkdir(parents=True)
+    broken.write_text("{not json", encoding="utf-8")
+    rows = check_globs(tmp_path, D("2026-09-24"), GLOB_LANE)
+    assert rows[0]["status"] == "unknown"
 
 
 def test_single_file_lanes_not_flagged_unregistered():

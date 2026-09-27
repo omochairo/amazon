@@ -2,7 +2,7 @@
 
 #4789: 各計測レーンが**無言で止まっていないか**を検査する。
 
-対象は 3 種類:
+対象は 4 種類:
   - `LANES` … `data/analytics/history/<name>.jsonl` (1 ファイル = 1 レーン)
   - `DIR_LANES` … ディレクトリ配下にエンティティ単位で分かれる履歴。現状は価格観測の
     2 レーン (`data/price_watch/history/` / `data/price_history/`。#5015)。
@@ -10,6 +10,8 @@
     **止まっても検出できない状態が続いていた**。
   - `SINGLE_FILE_LANES` … `data/analytics/history/` の外にある単独ファイル
     (現状は情報利得監査の1レーン。#4841 S3)。
+  - `GLOB_LANES` … 追記ログを持たず、エンティティ単位の JSON の生成時刻だけが進む
+    レーン (現状は体験談採掘の1レーン。#8425)。
 
 なぜ必要か:
   計測レーンは止まっても run が緑のままになる経路が 3 つある。
@@ -171,11 +173,46 @@ class SingleFileLane:
 SINGLE_FILE_LANES: Sequence[SingleFileLane] = (
     SingleFileLane(
         "data/analytics/information_gain_history.jsonl", "weekly", 12,
-        "amazon-home-ops/information-gain-audit.yml (#4841 S3)",
+        "amazon-home-ops/46-information-gain-audit.yml (#4841 S3)",
         "凡庸度監査の uniqueness_audit_history.jsonl は date フィールドが無く "
         "UNMONITORED 行きで、止まっても気づけない設計だった (#3300)。同じ轍を踏まないよう "
         "date フィールドを持たせた上で最初から登録する (#4841 実装依頼 S3)",
     ),
+)
+
+
+class GlobLane:
+    """履歴 jsonl を持たず、**エンティティ単位の JSON の生成時刻** だけが進むレーン。
+
+    ``pattern`` (repo-root からの glob) に当たる JSON の ``field`` (ISO datetime) の
+    最大値をレーンの代表値にする。体験談採掘は ASIN ごとに
+    ``data/raw/per_asin/<ASIN>/experience.json`` を上書きするだけで追記ログを残さない
+    ので、``DirLane`` (``*.jsonl`` 前提) では拾えない。
+    """
+
+    def __init__(self, pattern: str, field: str, cadence: str, max_age_days: int,
+                 lane: str, note: str = "") -> None:
+        self.pattern = pattern
+        self.field = field
+        self.filename = pattern  # 表示・レンダリングは Lane と同じ扱いにする
+        self.cadence = cadence
+        self.max_age_days = max_age_days
+        self.lane = lane
+        self.note = note
+
+
+# 2026-09-24〜26 に 23-experience-mining が Python 3.8 の import エラーで 3 run
+# 連続停止し、どの網にも掛からなかった (#8425 の調査で発覚)。
+#
+# しきい値: 採掘 PR のコミット日 (2026-08-01〜09-23) の最大間隔は 2 日。cron は
+# 17:30 UTC、監視は 02:00 UTC なので通常 age 1。max_age=3 で 1 run の取りこぼしは
+# 吸収し、2 run 連続で止まれば鳴る。
+# 既知の穴: 手動の再採掘 (#8248 等) も同じファイルに generated_at を書くので、
+# その日付ぶん検知が遅れる。手動実行はまれで遅れは数日なので区別しない。
+GLOB_LANES: Sequence[GlobLane] = (
+    GlobLane("data/raw/per_asin/*/experience.json", "generated_at", "daily", 3,
+             "amazon-home-ops/23-experience-mining.yml",
+             "K8 LLM runner・17:30 UTC 日次。追記ログが無く generated_at の最大値で見る"),
 )
 
 # 監視対象外。**理由つきで明示する** (未知として鳴らさないための逃げ道ではなく、
@@ -319,6 +356,55 @@ def check_files(repo_root: pathlib.Path, today: dt.date,
                          "last": None, "age_days": None, "lane": lane})
             continue
         last = last_date(path)
+        if last is None:
+            rows.append({"filename": lane.filename, "status": "unknown",
+                         "last": None, "age_days": None, "lane": lane})
+            continue
+        age = (today - last).days
+        rows.append({"filename": lane.filename,
+                     "status": "stale" if age > lane.max_age_days else "ok",
+                     "last": last.isoformat(), "age_days": age, "lane": lane})
+    return rows
+
+
+def last_date_in_glob(repo_root: pathlib.Path, pattern: str,
+                      field: str) -> Optional[dt.date]:
+    """``pattern`` に当たる JSON の ``field`` の最大日付を返す (読めなければ None)。
+
+    壊れたファイル・日付の無いファイルは飛ばす (freshness の網であってスキーマ検証
+    ではない)。
+    """
+    found: Optional[dt.date] = None
+    for path in repo_root.glob(pattern):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        value = data.get(field) if isinstance(data, dict) else None
+        if not isinstance(value, str) or len(value) < 10:
+            continue
+        try:
+            d = dt.date.fromisoformat(value[:10])
+        except ValueError:
+            continue
+        if found is None or d > found:
+            found = d
+    return found
+
+
+def check_globs(repo_root: pathlib.Path, today: dt.date,
+                glob_lanes: Sequence[GlobLane] = GLOB_LANES) -> List[Dict[str, Any]]:
+    """``GlobLane`` の状態を返す。行の形は ``check`` と揃える。
+
+    1 本も当たらなければ ``missing``、当たるが日付を読めなければ ``unknown``。
+    """
+    rows: List[Dict[str, Any]] = []
+    for lane in glob_lanes:
+        if next(iter(repo_root.glob(lane.pattern)), None) is None:
+            rows.append({"filename": lane.filename, "status": "missing",
+                         "last": None, "age_days": None, "lane": lane})
+            continue
+        last = last_date_in_glob(repo_root, lane.pattern, lane.field)
         if last is None:
             rows.append({"filename": lane.filename, "status": "unknown",
                          "last": None, "age_days": None, "lane": lane})
@@ -497,7 +583,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     today = (dt.date.fromisoformat(args.today) if args.today
              else dt.datetime.now(dt.timezone.utc).date())
     rows = (check(args.history_dir, today) + check_dirs(args.repo_root, today)
-            + check_files(args.repo_root, today))
+            + check_files(args.repo_root, today) + check_globs(args.repo_root, today))
     unregistered = unregistered_files(args.history_dir)
 
     for r in rows:
