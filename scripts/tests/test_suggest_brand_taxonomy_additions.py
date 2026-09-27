@@ -87,6 +87,16 @@ def test_suggest_skips_stopword_tokens():
     assert result["candidates"] == []
 
 
+def test_suggest_skips_stopword_with_digit_suffix():
+    # #8410: "youtube10425" は stopword "youtube" + 数字。ブランドではない
+    gsc = _make_gsc(by_query=[
+        {"query": "youtube10425", "impressions": 64, "clicks": 0, "ctr": 0.0, "position": 5.0},
+        {"query": "Kiko10 おもちゃ", "impressions": 50, "clicks": 0, "ctr": 0.0, "position": 5.0},
+    ])
+    result = suggest(gsc, {"レゴ"})
+    assert [c["token"] for c in result["candidates"]] == ["Kiko10"]
+
+
 def test_suggest_skips_beyblade_random_booster_vol_token():
     # #2644: "ランダムブースターvol" はベイブレードX の商品シリーズ名でブランドではない。
     # tokenizer は "." で分割するため "bx-50 ランダムブースターvol.11" は

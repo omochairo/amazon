@@ -85,6 +85,9 @@ GENERIC_TOKENS_STOPWORDS: set[str] = {
     # 2026-07-11 (#2644): ベイブレードX の商品シリーズ名 (例: "BX-50 ランダムブースターVol.11")。
     # ブランドではないため reject。tokenizer は "." で分割するので "vol" は小文字で登録する。
     "ランダムブースターvol", "ランダムブースター",
+    # 2026-09-27 (#8410): キャラクター IP。実メーカーが別 (ピタッとボードはアガツマ製)
+    # で、ポケモン/ディズニー (brand_rejected.yaml) と同じ理由で登録しない。
+    "アンパンマン",
     # イベント / シーズン
     "ハーフ", "バースデー", "クリスマス", "ハロウィン", "プレゼント",
     "イベント", "セール", "キャンペーン",
@@ -178,6 +181,9 @@ def suggest(gsc: dict[str, Any], taxonomy_terms: set[str], *,
                 continue
             if token_lower in (s.lower() for s in GENERIC_TOKENS_STOPWORDS):
                 # already covered above; kept for safety re uppercase
+                continue
+            # stopword + 数字 (例: "youtube10425", #8410) も同じ generic 語として落とす
+            if token_lower.rstrip("0123456789") in GENERIC_TOKENS_STOPWORDS:
                 continue
             if covered_by_taxonomy(token_lower, taxonomy_terms):
                 continue

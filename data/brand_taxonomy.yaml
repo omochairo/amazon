@@ -1496,6 +1496,28 @@ brands:
   - {canonical: Kitai Japan, tier: D, region: CN, noindex: true, aliases: [Kitai Japan]}
   - {canonical: SAKURAN, tier: D, region: CN, noindex: true, aliases: [SAKURAN]}
 
+  # 2026-09-27 (#8411 / #8410): 供給側検出器 (#8411) と A-6 (#8410) の候補を実データ
+  # (product.brand + 商品名) と Web 検証で判定。
+  # EdisonBrain=「ひらがな麻雀 ひらがじゃん」の国内ブランド (hiragajong.com、量販店にも
+  # 流通)。商品名で検索されるため「ひらがじゃん」も alias に入れる。
+  - canonical: EdisonBrain
+    aliases: [EdisonBrain, ひらがじゃん]
+    tier: D
+    region: JP
+  # 壽屋=コトブキヤ (kotobukiya.co.jp)。プラモデル・フィギュアの国内メーカー。#8411 の
+  # 起票後にカタログで 2 商品 (B0HCT3B45V / B0D9XHB9FM) になり検出器に浮上した。
+  - canonical: 壽屋
+    aliases: [壽屋, コトブキヤ, KOTOBUKIYA]
+    tier: B
+    region: JP
+  # 以下は実在するが薄いハブ不要 = noindex。
+  # FlyCreat=深圳の越境 EC 向け知育玩具ブランド (flycreat.com、US 商標登録あり)。
+  # TOKAIZ=国内の日用品・家電 PB ブランド (tokaiz.jp)。「マセポケ」は同社の暗算ドリル
+  # 機 (B0DTTQ8WFS) の商品名で、A-6 (#8410) が検索クエリから拾った。alias に入れて
+  # クエリを TOKAIZ に寄せ、再提案を止める。
+  - {canonical: FlyCreat, tier: D, region: CN, noindex: true, aliases: [FlyCreat]}
+  - {canonical: TOKAIZ, tier: D, region: JP, noindex: true, aliases: [TOKAIZ, マセポケ]}
+
   # 2026-09-20 (#7809): 供給側検出器がカタログ未登録のまま浮上した9候補を実データ
   # (product.brand + 商品名) と Web 検証で判定。
   # シヤチハタ=1925年創業のスタンプ最大手 (item.shachihata.co.jp に商品カタログ掲載、
