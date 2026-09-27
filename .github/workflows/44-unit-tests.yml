@@ -216,3 +216,26 @@ jobs:
       # ことになるため。
       - name: Run service worker tests
         run: node --test "tests/js/*.test.mjs"
+
+  # K8 の self-hosted runner (amazon-home-ops) は Python 3.8 で本リポジトリの
+  # scripts を実行する。上の unit-tests は 3.11 なので 3.9+ の注釈を入れても緑の
+  # まま K8 のレーンだけが落ちる (#8425: filter_raw_per_asin の set[str] で
+  # 23-experience-mining / 46-information-gain-audit が 09-18〜09-26 に停止)。
+  # required check には入れていない (job 名が unit-tests と別)。
+  k8-py38-imports:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container: python:3.8-slim
+    steps:
+      - uses: actions/checkout@v7
+      # K8 のレーンが入れている依存と揃える (23/46 の Ensure python3 ステップ)。
+      - name: Install K8 lane dependencies
+        run: pip install -q requests pyyaml beautifulsoup4 jsonschema vermin
+      - name: Import K8 modules on Python 3.8
+        run: python scripts/check_k8_py38_imports.py --closure-out /tmp/k8_closure.txt
+      # import で分かるのはモジュール読込時の問題だけ。関数内で実行時に初めて
+      # 落ちる 3.9+ 機能 (str.removeprefix / dict の | / zip(strict=) 等) は
+      # vermin で静的に見る。注釈は __future__ annotations 済みなら無害なので
+      # --eval-annotations は付けない (付けると誤検知で埋まる)。
+      - name: Check runtime features with vermin (target 3.8)
+        run: vermin --no-tips -t=3.8- --violations --no-parse-comments $(cat /tmp/k8_closure.txt)
