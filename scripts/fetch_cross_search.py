@@ -22,6 +22,7 @@ import json
 import re
 import time
 import logging
+import unicodedata
 import pathlib
 import argparse
 import requests
@@ -85,6 +86,21 @@ def _strip_trailing_digits(keyword):
     while toks and _is_age_token(toks[-1]):
         toks.pop()
     return " ".join(toks)
+
+
+def _is_invalid_rakuten_token(t):
+    """楽天が 400 'keyword is not valid' を返す語か (半角 1 文字 / 記号だけの語)。
+
+    実測で弾かれた語: 'X' 'a' '-' '&' '|' '、' '［' '］'。
+    """
+    if len(t) == 1 and t.isascii():
+        return True
+    return all(unicodedata.category(c)[0] in "PS" for c in t)
+
+
+def _sanitize_rakuten_keyword(keyword):
+    """楽天のテキスト検索に渡す前に、API が受け付けない語を除く。"""
+    return " ".join(t for t in keyword.split() if not _is_invalid_rakuten_token(t))
 
 
 def _dedupe_tokens(tokens):
@@ -514,6 +530,12 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
         except Exception as e:
             jan_attempt = "jan_error"
             logger.error(f"Rakuten Stage0b error: {e}")
+
+    # テキスト検索 (Stage 1〜3) は同じ keyword を使う。'Playmobil X F-150' の 'X' のような
+    # 語が 1 つでも混ざると 400 になり、その商品は楽天価格が取れない
+    keyword = _sanitize_rakuten_keyword(keyword)
+    if not keyword:
+        return None
 
     # Stage 1: Rakuten Books (access_key の有無で RMS or 公開 API に振り分け)
     books_url, books_params, books_headers = _rakuten_books_params(app_id, access_key, aff_id)
