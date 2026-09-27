@@ -36,8 +36,6 @@ if skip_unless "fetch_amazon" AMAZON_CREATORS_APPLICATION_ID; then
     --keyword-sample-size 60 --pages 3 --min-new 80 --out data/raw/
 fi
 
-step "fetch_trends" python scripts/fetch_trends.py --out data/raw/
-
 if skip_unless "fetch_rakuten" RAKUTEN_APP_ID; then
   step "fetch_rakuten" python scripts/fetch_rakuten.py --out data/raw/
 fi
