@@ -80,6 +80,20 @@ class MatchesTest(unittest.TestCase):
         # shape は min_ivs override を持たない (供給潤沢で既定 3.8 で足りる)。
         self.assertNotIn("min_ivs", bch.THEMES["shape"])
 
+    def test_music_include_and_deny(self):
+        # brain#67: 楽器・リズム hub。キャラ楽器はこの棚の需要の中心なので残す。
+        theme = bch.THEMES["music"]
+        self.assertTrue(bch._matches("アンパンマン うちの子天才 シロホン 楽器", theme))
+        self.assertTrue(bch._matches("ハペ ベビードラム", theme))
+        self.assertTrue(bch._matches("リズム遊び マラカス", theme))
+        # 「ドラム」がナーフのドラムマガジンに、「ピアノ」が大人向けレゴに当たる。
+        self.assertFalse(bch._matches("ナーフ エリート ドラムマガジン", theme))
+        self.assertFalse(bch._matches("レゴ アイデア グランドピアノ", theme))
+        # 英語うたマイク等は英語 hub の担当。
+        self.assertFalse(bch._matches("くもんの英語うたマイク リズム", theme))
+        # 「音楽が鳴る」は電子玩具の説明文に広く出るため include に入れない。
+        self.assertFalse(bch._matches("音楽が鳴る 車のおもちゃ", theme))
+
 
 class ThemeMinIvsOverrideTest(unittest.TestCase):
     def test_montessori_override_present(self):
