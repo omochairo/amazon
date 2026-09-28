@@ -113,7 +113,10 @@ jobs:
             echo "::error::GA4_SA_JSON or GA4_PROPERTY_ID secret is not set"
             exit 1
           fi
-          python scripts/fetch_ga4.py --days "$DAYS"
+          # 当日・前日は流入元の処理が終わっておらず、sessionSourceMedium が
+          # `(data not available)` に寄る。2 日前までの処理済みの日だけで、
+          # ちょうど DAYS 日間を取る (既定の --days だけだと DAYS+1 日間になる)。
+          python scripts/fetch_ga4.py --days "$DAYS" --lag-days 2 --inclusive-days
 
       - name: Fetch GSC data (optional)
         id: gsc

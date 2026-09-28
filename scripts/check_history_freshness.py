@@ -107,6 +107,10 @@ LANES: Sequence[Lane] = (
     # 月 1 回は必ず出ることを下限の保証として monthly で見る (#8092)。
     Lane("article_format.jsonl", "monthly", 45, "18-analytics-daily.yml",
          "遷移ログ + 月初 snapshot (#7954)。初回 2026-09-22"),
+    # 週次 census で書くが、article_format.jsonl と同じく状態が変わった URL しか
+    # 出ない遷移ログ (#4964)。月初の census が必ず全件 snapshot を書くので monthly で見る。
+    Lane("census_url_states.jsonl", "monthly", 45, "22-gsc-index-census.yml",
+         "遷移ログ + 月初 snapshot (#6791)。commit 漏れを #8047 で修正、初回 2026-09-28"),
 )
 
 class DirLane:
