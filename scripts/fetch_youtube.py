@@ -55,7 +55,7 @@ def _load_prior_items(youtube_json_path: pathlib.Path) -> list | None:
 # 各 key は別 Google Cloud project の YOUTUBE Data API key を想定 (project ごとに
 # daily quota 10,000 units を持つ)。secret 名は YOUTUBE_API_KEY,
 # YOUTUBE_API_KEY2 〜 YOUTUBE_API_KEY5。未登録 (空文字) の slot は
-# load 時に除外する。403 + body に "quota" or "exceeded" を含むレスポンスを
+# load 時に除外する。quota 枯渇のレスポンス (_is_quota_error) を
 # 受け取ったら、その key を exhausted として捨てて次の key に切替える。全 key
 # 枯渇した時点で youtube_search は [] を返し、以降のクエリも空で抜ける。
 _API_KEYS: list[str] = []
@@ -76,10 +76,15 @@ def load_api_keys() -> list[str]:
 
 
 def _is_quota_error(status: int, body: str) -> bool:
-    if status != 403:
-        return False
     low = (body or "").lower()
-    return "quota" in low or "exceeded" in low
+    if status == 403:
+        return "quota" in low or "exceeded" in low
+    # 日次の "Search Queries per day" 超過は 429 で返る (01-fetch-products の
+    # 実行ログで確認, navi-brain#76)。429 は一時的なレート超過でも返りうるので、
+    # その key を捨てるのは本文に "quota" があるときだけにする。
+    if status == 429:
+        return "quota" in low
+    return False
 
 
 def _current_key() -> str | None:
