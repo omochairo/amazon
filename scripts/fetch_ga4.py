@@ -143,14 +143,35 @@ def _build_entrances_by_key(rows: list[dict],
     return out
 
 
+def compute_range(days: int, end_date: str | None = None, lag_days: int = 0,
+                  inclusive_days: bool = False,
+                  today: date | None = None) -> tuple[date, date]:
+    """取得範囲 (start, end) を返す。両端とも GA4 の DateRange で含まれる。
+
+    既定 (lag_days=0, inclusive_days=False) は従来どおり「今日まで・days+1 日間」。
+    日次レーン (18) は range.end を履歴のキーにしているので、既定は変えない。
+
+    週次レーン (17) は lag_days=2 / inclusive_days=True で「処理済みの日まで・
+    ちょうど days 日間」にする。当日・前日は流入元の処理が終わっておらず、
+    sessionSourceMedium が `(data not available)` になる
+    (https://support.google.com/analytics/answer/15509398)。
+    """
+    if end_date:
+        end = date.fromisoformat(end_date)
+    else:
+        end = (today or date.today()) - timedelta(days=lag_days)
+    span = days - 1 if inclusive_days else days
+    return end - timedelta(days=span), end
+
+
 def fetch(property_id: str, sa_json: str, days: int, top_n: int,
-          end_date: str | None = None) -> dict[str, Any]:
+          end_date: str | None = None, lag_days: int = 0,
+          inclusive_days: bool = False) -> dict[str, Any]:
     from google.analytics.data_v1beta import BetaAnalyticsDataClient
     creds = _load_credentials(sa_json)
     client = BetaAnalyticsDataClient(credentials=creds)
 
-    end = date.fromisoformat(end_date) if end_date else date.today()
-    start = end - timedelta(days=days)
+    start, end = compute_range(days, end_date, lag_days, inclusive_days)
     start_s, end_s = start.isoformat(), end.isoformat()
     logger.info("range: %s .. %s (property=%s)", start_s, end_s, property_id)
 
@@ -258,6 +279,10 @@ def main() -> int:
     p.add_argument("--days", type=int, default=DEFAULT_DAYS)
     p.add_argument("--top-n", type=int, default=TOP_N_DEFAULT)
     p.add_argument("--end-date", help="range終端をtodayでなく指定日 (YYYY-MM-DD) に固定 (backfill用)")
+    p.add_argument("--lag-days", type=int, default=0,
+                   help="range終端を today - N 日にする (処理中の直近日を外す。--end-date 指定時は無視)")
+    p.add_argument("--inclusive-days", action="store_true",
+                   help="--days を両端込みの日数として扱う (未指定だと days+1 日間になる)")
     p.add_argument("--out", default=DEFAULT_OUT)
     args = p.parse_args()
 
@@ -272,7 +297,8 @@ def main() -> int:
         return 2
 
     try:
-        result = fetch(args.property_id, sa_json, args.days, args.top_n, args.end_date)
+        result = fetch(args.property_id, sa_json, args.days, args.top_n, args.end_date,
+                       args.lag_days, args.inclusive_days)
     except Exception as e:
         logger.exception("GA4 fetch failed: %s", e)
         return 1
