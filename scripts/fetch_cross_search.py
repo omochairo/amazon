@@ -377,6 +377,10 @@ def _filter_text_candidates(items, amazon_title, source, asin):
 # なので 1 秒に余裕を足す (navi-brain#76)。
 RATE_LIMIT_RETRY_WAIT = 1.5
 
+# 楽天の呼び出し同士の間に入れる待ち。上限は 1 秒に 1 回で、0.5 秒だと応答 0.4 秒前後と
+# 合わせて約 0.9 秒間隔になり、応答が速い日ほど 429 が出ていた (navi-brain#76)。
+RAKUTEN_REQUEST_INTERVAL = 1.0
+
 
 def _get(api, url, **kwargs):
     """requests.get して HTTP ステータスを _api_health に記録する (#8272)。
@@ -513,7 +517,7 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
                     f"Rakuten Stage0a failed (Books isbnjan={jan_code}): "
                     f"HTTP {resp.status_code} {resp.text[:200]}"
                 )
-            time.sleep(0.5)
+            time.sleep(RAKUTEN_REQUEST_INTERVAL)
         except Exception as e:
             jan_attempt = "jan_error"
             logger.error(f"Rakuten Stage0a error: {e}")
@@ -540,7 +544,7 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
             else:
                 jan_attempt = _classify_http_status(resp.status_code)
                 logger.warning(f"Rakuten Stage0b failed (keyword=JAN:{jan_code}): HTTP {resp.status_code} {resp.text[:200]}")
-            time.sleep(0.5)
+            time.sleep(RAKUTEN_REQUEST_INTERVAL)
         except Exception as e:
             jan_attempt = "jan_error"
             logger.error(f"Rakuten Stage0b error: {e}")
@@ -571,7 +575,7 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
                     best["_match_method"] = "text"
                     best["_jan_attempt"] = jan_attempt
                     return best
-        time.sleep(0.5)
+        time.sleep(RAKUTEN_REQUEST_INTERVAL)
     except Exception as e:
         logger.error(f"Rakuten Stage1 error: {e}")
 
@@ -585,6 +589,7 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
             if trimmed and trimmed != stage2_keyword:
                 logger.info(f"Rakuten Stage2 retry with trimmed keyword: '{stage2_keyword}' → '{trimmed}'")
                 stage2_keyword = trimmed
+                time.sleep(RAKUTEN_REQUEST_INTERVAL)
                 resp = _fetch_rakuten_ichiba(stage2_keyword, app_id, access_key, aff_id, hits=15)
         if resp.status_code == 200:
             data = resp.json()
@@ -602,7 +607,7 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
                     return best
         else:
             logger.warning(f"Rakuten Stage2 failed for '{stage2_keyword}': HTTP {resp.status_code} - {resp.text[:200]}")
-        time.sleep(0.5)
+        time.sleep(RAKUTEN_REQUEST_INTERVAL)
     except Exception as e:
         logger.error(f"Rakuten Stage2 error: {e}")
 
@@ -1173,7 +1178,7 @@ def main():
                 else:
                     r_skipped += 1
                     logger.info(f"  → Rakuten: not found")
-            time.sleep(0.5)  # Rate limit
+            time.sleep(RAKUTEN_REQUEST_INTERVAL)  # Rate limit
         elif r_has:
             r_kept += 1
 
