@@ -95,10 +95,6 @@ jobs:
           INPUT_KEYWORD: ${{ github.event.inputs.keyword }}
           INPUT_DEMAND_SLOTS: ${{ github.event.inputs.demand_slots || '20' }}
 
-      - name: Fetch Trends
-        if: ${{ always() }}
-        run: python scripts/fetch_trends.py --out data/raw/
-
       - name: Fetch Rakuten Data
         if: ${{ always() }}
         run: python scripts/fetch_rakuten.py --out data/raw/
