@@ -5,7 +5,9 @@ _merge_unique_rows / _build_entrances_by_key は pure function (GA4 API 呼び�
 """
 from __future__ import annotations
 
-from scripts.fetch_ga4 import _build_entrances_by_key, _merge_unique_rows
+from datetime import date
+
+from scripts.fetch_ga4 import _build_entrances_by_key, _merge_unique_rows, compute_range
 
 
 def test_merge_unique_rows_appends_new_keys_only():
@@ -69,3 +71,21 @@ def test_build_entrances_by_key_merges_navi_rows_without_double_count():
 def test_build_entrances_by_key_none_navi_rows():
     rows = [{"hostName": "omcha.jp", "landingPagePlusQueryString": "/a/", "sessions": 1}]
     assert _build_entrances_by_key(rows, None) == {("omcha.jp", "/a/"): 1}
+
+
+def test_compute_range_default_keeps_legacy_window():
+    # 日次レーン (18) は --days 1 で range.end=今日 を履歴キーにしている。既定は変えない
+    assert compute_range(1, today=date(2026, 9, 27)) == (date(2026, 9, 26), date(2026, 9, 27))
+    assert compute_range(7, today=date(2026, 9, 27)) == (date(2026, 9, 20), date(2026, 9, 27))
+
+
+def test_compute_range_weekly_processed_exact_seven_days():
+    # 週次レーン (17): 当日・前日を外し、両端込みでちょうど 7 日
+    start, end = compute_range(7, lag_days=2, inclusive_days=True, today=date(2026, 9, 27))
+    assert (start, end) == (date(2026, 9, 19), date(2026, 9, 25))
+    assert (end - start).days + 1 == 7
+
+
+def test_compute_range_end_date_wins_over_lag():
+    assert compute_range(7, end_date="2026-09-10", lag_days=2, inclusive_days=True,
+                         today=date(2026, 9, 27)) == (date(2026, 9, 4), date(2026, 9, 10))
