@@ -228,6 +228,17 @@ class UpcToEan13Test(unittest.TestCase):
             fetch_cross_search.search_rakuten_tiered("輸入品", app_id="dummy", jan_code="885354616349")
         self.assertEqual(mock_get.call_args.kwargs["params"].get("isbnjan"), "0885354616349")
 
+    def test_rakuten_ichiba_keyword_keeps_original_upc12(self):
+        """Ichiba の keyword は自由文検索なので、店舗ページに書かれた 12 桁のまま投げる。"""
+        empty = MagicMock(status_code=200, text="")
+        empty.json.return_value = {"Items": []}
+        with patch.object(fetch_cross_search.requests, "get", return_value=empty) as mock_get, \
+             patch.object(fetch_cross_search.time, "sleep"):
+            fetch_cross_search.search_rakuten_tiered("輸入品", app_id="dummy", jan_code="885354616349")
+        calls = [c.kwargs["params"] for c in mock_get.call_args_list]
+        self.assertEqual(calls[0].get("isbnjan"), "0885354616349")
+        self.assertEqual(calls[1].get("keyword"), "885354616349")
+
     def test_yahoo_receives_ean13(self):
         resp = MagicMock(status_code=200)
         resp.json.return_value = {"hits": [

@@ -112,6 +112,20 @@ def test_lookup_yahoo_review_sleeps_for_api_politeness():
     assert sleeps == [1.0]
 
 
+def test_lookup_yahoo_review_sends_upc12_as_ean13():
+    """12 桁 UPC-A は Yahoo が 400 を返すので EAN-13 に直して投げる (#8547)。"""
+    sent = []
+
+    class _Recorder(_FakeSession):
+        def get(self, url, headers=None, params=None, timeout=None):
+            sent.append(params)
+            return super().get(url, headers=headers, params=params, timeout=timeout)
+
+    session = _Recorder([_FakeResponse({"hits": []})])
+    lookup_yahoo_review("885354616349", "cid", session, sleeper=lambda s: None)
+    assert sent[0]["jan_code"] == "0885354616349"
+
+
 def test_lookup_yahoo_review_coerces_malformed_rate_count():
     body = {"hits": [{"review": {"rate": "not a number", "count": None, "url": "https://x/r"}}]}
     session = _FakeSession([_FakeResponse(body)])

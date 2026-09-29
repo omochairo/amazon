@@ -32,6 +32,7 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _api_health  # noqa: E402
+import jan_utils  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("cross_search")
@@ -478,18 +479,7 @@ def _classify_http_status(status_code: int) -> str:
     return f"jan_http_{status_code}"
 
 
-def _to_ean13(jan_code):
-    """12 桁数字の UPC-A を先頭 0 付きの EAN-13 にする。それ以外はそのまま返す。
-
-    `fetch_amazon.extract_jan` は eans が無いと upcs を拾うので (#2747)、輸入品では
-    12 桁の UPC が `jan_code` に入る。楽天 Books `isbnjan` は 13 桁以外を 400 で弾き、
-    Yahoo の `jan_code` 検索も 400 を返す (#8547)。UPC-A → EAN-13 は先頭に 0 を
-    足すだけでチェックディジットも変わらない。保存データ側は触らず、API に渡す
-    直前でだけ変換する。
-    """
-    if isinstance(jan_code, str) and len(jan_code) == 12 and jan_code.isascii() and jan_code.isdigit():
-        return "0" + jan_code
-    return jan_code
+_to_ean13 = jan_utils.to_ean13
 
 
 def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code="", amazon_title="", asin=""):
@@ -501,8 +491,11 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
     返り値 dict には診断用に `_match_method` と `_jan_attempt` を埋め込む。
     `_jan_attempt` の値: jan_books / jan_ichiba (hit) / jan_zero / jan_400 / jan_5xx /
     jan_http_<code> / jan_error / no_jan (Issue #1087 Phase 1 observability)。
-    12 桁の UPC-A は EAN-13 に直してから投げる (#8547)。
+    12 桁の UPC-A は Books には EAN-13 に直して投げる (#8547)。Ichiba の keyword は
+    自由文検索なので、店舗が商品ページに書いている元の 12 桁のまま投げる
+    (run 36457975650 では 12 桁で 2 hit していた)。
     """
+    ichiba_jan = jan_code
     jan_code = _to_ean13(jan_code)
 
     # JAN フェーズの最終 outcome を tracking (manifest/log 用)
@@ -540,7 +533,7 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
 
         # Stage 0b: JAN を Ichiba の keyword に投入
         try:
-            resp = _fetch_rakuten_ichiba(jan_code, app_id, access_key, aff_id, hits=10)
+            resp = _fetch_rakuten_ichiba(ichiba_jan, app_id, access_key, aff_id, hits=10)
             if resp.status_code == 200:
                 data = resp.json()
                 raw_items = data.get("Items", [])
@@ -548,7 +541,7 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
                 parsed_items = _filter_text_candidates(parsed_items, "", "rakuten", asin)
                 if parsed_items:
                     api_label = "Ichiba RMS" if access_key else "Ichiba"
-                    logger.info(f"Rakuten Stage0b ({api_label} keyword=JAN:{jan_code}): {len(parsed_items)} hit(s)")
+                    logger.info(f"Rakuten Stage0b ({api_label} keyword=JAN:{ichiba_jan}): {len(parsed_items)} hit(s)")
                     best = parsed_items[0]
                     best["source"] = "Rakuten"
                     best["_match_method"] = "jan_ichiba"
@@ -556,10 +549,10 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
                     return best
                 else:
                     jan_attempt = "jan_zero"
-                    logger.info(f"Rakuten Stage0b (keyword=JAN:{jan_code}): 0 hits")
+                    logger.info(f"Rakuten Stage0b (keyword=JAN:{ichiba_jan}): 0 hits")
             else:
                 jan_attempt = _classify_http_status(resp.status_code)
-                logger.warning(f"Rakuten Stage0b failed (keyword=JAN:{jan_code}): HTTP {resp.status_code} {resp.text[:200]}")
+                logger.warning(f"Rakuten Stage0b failed (keyword=JAN:{ichiba_jan}): HTTP {resp.status_code} {resp.text[:200]}")
             time.sleep(RAKUTEN_REQUEST_INTERVAL)
         except Exception as e:
             jan_attempt = "jan_error"
