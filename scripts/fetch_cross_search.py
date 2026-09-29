@@ -478,6 +478,20 @@ def _classify_http_status(status_code: int) -> str:
     return f"jan_http_{status_code}"
 
 
+def _to_ean13(jan_code):
+    """12 桁数字の UPC-A を先頭 0 付きの EAN-13 にする。それ以外はそのまま返す。
+
+    `fetch_amazon.extract_jan` は eans が無いと upcs を拾うので (#2747)、輸入品では
+    12 桁の UPC が `jan_code` に入る。楽天 Books `isbnjan` は 13 桁以外を 400 で弾き、
+    Yahoo の `jan_code` 検索も 400 を返す (#8547)。UPC-A → EAN-13 は先頭に 0 を
+    足すだけでチェックディジットも変わらない。保存データ側は触らず、API に渡す
+    直前でだけ変換する。
+    """
+    if isinstance(jan_code, str) and len(jan_code) == 12 and jan_code.isascii() and jan_code.isdigit():
+        return "0" + jan_code
+    return jan_code
+
+
 def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code="", amazon_title="", asin=""):
     """楽天で階層的検索を行う (JAN優先 → Books → Ichiba → Shortened Ichiba)
 
@@ -487,7 +501,9 @@ def search_rakuten_tiered(keyword, app_id, access_key="", aff_id="", jan_code=""
     返り値 dict には診断用に `_match_method` と `_jan_attempt` を埋め込む。
     `_jan_attempt` の値: jan_books / jan_ichiba (hit) / jan_zero / jan_400 / jan_5xx /
     jan_http_<code> / jan_error / no_jan (Issue #1087 Phase 1 observability)。
+    12 桁の UPC-A は EAN-13 に直してから投げる (#8547)。
     """
+    jan_code = _to_ean13(jan_code)
 
     # JAN フェーズの最終 outcome を tracking (manifest/log 用)
     jan_attempt = "no_jan" if not jan_code else "jan_skipped"
@@ -737,7 +753,9 @@ def search_yahoo(keyword, client_id, sid="", pid="", jan_code="", amazon_title="
     最優先で試す。ヒットすればテキスト検索はスキップ (中央値選択もバイパスして即返却)。
     短縮候補が `_GENERIC_BRAND_TOKENS` のみで構成される場合 (例: 'タカラトミー トミカ',
     'タカラトミー' 単独) は無関係な人気商品にマッチするのでスキップする。
+    12 桁の UPC-A は EAN-13 に直してから投げる (#8547)。
     """
+    jan_code = _to_ean13(jan_code)
     jan_attempt = "no_jan" if not jan_code else "jan_skipped"
     if jan_code:
         status_out: list[int] = []

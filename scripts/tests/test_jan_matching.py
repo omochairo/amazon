@@ -202,6 +202,45 @@ class YahooJanFlowTest(unittest.TestCase):
         self.assertEqual(mock_get.call_args_list[1].kwargs["params"].get("query"), "ブランド ワード")
 
 
+class UpcToEan13Test(unittest.TestCase):
+    """12 桁 UPC-A を EAN-13 に直してから楽天 / Yahoo に渡す (#8547)。"""
+
+    def test_to_ean13(self):
+        f = fetch_cross_search._to_ean13
+        self.assertEqual(f("885354616349"), "0885354616349")
+        # 13 桁・空・数字以外・その他の桁数はそのまま
+        self.assertEqual(f("4900000000001"), "4900000000001")
+        self.assertEqual(f(""), "")
+        self.assertEqual(f("88535461634X"), "88535461634X")
+        self.assertEqual(f("１２３４５６７８９０１２"), "１２３４５６７８９０１２")
+        self.assertEqual(f("12345678"), "12345678")
+
+    def test_rakuten_books_receives_ean13(self):
+        books_payload = {
+            "Items": [
+                {"itemName": "輸入品", "itemPrice": 3000, "itemUrl": "http://example.com/u",
+                 "mediumImageUrls": ["http://img/u.jpg"], "availability": 1},
+            ]
+        }
+        resp = MagicMock(status_code=200, text="")
+        resp.json.return_value = books_payload
+        with patch.object(fetch_cross_search.requests, "get", return_value=resp) as mock_get:
+            fetch_cross_search.search_rakuten_tiered("輸入品", app_id="dummy", jan_code="885354616349")
+        self.assertEqual(mock_get.call_args.kwargs["params"].get("isbnjan"), "0885354616349")
+
+    def test_yahoo_receives_ean13(self):
+        resp = MagicMock(status_code=200)
+        resp.json.return_value = {"hits": [
+            {"name": "輸入品", "price": 3000, "url": "http://y.example/u",
+             "image": {"medium": "http://img/yu.jpg"}, "inStock": True,
+             "shipping": {"code": 2}},
+        ]}
+        with patch.object(fetch_cross_search.requests, "get", return_value=resp) as mock_get, \
+             patch.object(fetch_cross_search.time, "sleep"):
+            fetch_cross_search.search_yahoo("輸入品", "dummy_appid", jan_code="885354616349")
+        self.assertEqual(mock_get.call_args_list[0].kwargs["params"].get("jan_code"), "0885354616349")
+
+
 class JanAttemptObservabilityTest(unittest.TestCase):
     """Issue #1087 Phase 1: `_jan_attempt` field が JAN フェーズ outcome を
     正しく記録することを確認する。"""
