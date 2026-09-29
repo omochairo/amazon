@@ -80,6 +80,7 @@ import requests
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from mine_experience import default_ledger_path, load_ledger, select_mining_targets  # noqa: E402
+from jan_utils import to_ean13  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("crawl_yahoo_reviews")
@@ -175,7 +176,9 @@ def lookup_yahoo_review(
 ) -> dict | None:
     """itemSearch v3 を jan_code で叩き、最初の hit の review
     {rate (平均), count (件数), url (レビューページURL)} を返す。
-    エラー/hit なし/review なしは None (warning + skip、lane を止めない)。"""
+    エラー/hit なし/review なしは None (warning + skip、lane を止めない)。
+    12 桁の UPC-A は 400 になるので EAN-13 に直して投げる (#8547)。"""
+    jan_code = to_ean13(jan_code)
     sleeper(API_SLEEP_SECONDS)  # 公式 API への節度 (1 query/sec)
     try:
         resp = session.get(

@@ -28,6 +28,7 @@ import os, sys, json, re, time, pathlib, datetime, requests, logging
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _api_health  # noqa: E402
+from jan_utils import to_ean13  # noqa: E402
 
 def get_secret(name: str) -> str:
     return os.environ.get(name)
@@ -115,7 +116,9 @@ def _build_jan_to_asin(per_asin_root: pathlib.Path) -> dict:
             continue
         jan = (item.get("jan_code") or "").strip()
         if jan:
-            index.setdefault(jan, asin)
+            # 12 桁 UPC-A と先頭 0 付き EAN-13 を同じキーにする (#8547)。
+            # 照合側 (_match_ranking_item) も同じ正規化をかける。
+            index.setdefault(to_ean13(jan), asin)
     return index
 
 
@@ -205,7 +208,7 @@ def _match_ranking_item(
             return asin, "stage1", _has_article(asin)
     jan = _extract_jan_from_item(item)
     if jan:
-        asin = jan_idx.get(jan)
+        asin = jan_idx.get(to_ean13(jan))
         if asin:
             return asin, "stage2_jan", _has_article(asin)
     return "", "", False

@@ -223,6 +223,29 @@ class MatchRankingItemTest(unittest.TestCase):
         self.assertEqual(result, ("B0001", "stage1", True))
 
 
+class UpcEan13MatchTest(unittest.TestCase):
+    """Amazon 側の 12 桁 UPC-A と楽天側の先頭 0 付き EAN-13 (またはその逆) を
+    同じ商品として照合する (#8547)。"""
+
+    def _index(self, jan):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            d = root / "B0UPC00001"
+            d.mkdir()
+            (d / "amazon.json").write_text(json.dumps({"item": {"jan_code": jan}}), encoding="utf-8")
+            return fetch_rakuten._build_jan_to_asin(root)
+
+    def test_amazon_upc12_matches_rakuten_ean13(self):
+        idx = self._index("012345678905")
+        item = {"itemCode": "x:1", "title": "輸入品", "itemCaption": "JAN 0012345678905"}
+        self.assertEqual(fetch_rakuten._match_ranking_item(item, {}, idx)[:2], ("B0UPC00001", "stage2_jan"))
+
+    def test_amazon_ean13_matches_rakuten_upc12(self):
+        idx = self._index("0012345678905")
+        item = {"itemCode": "x:1", "title": "輸入品", "itemCaption": "UPC 012345678905"}
+        self.assertEqual(fetch_rakuten._match_ranking_item(item, {}, idx)[:2], ("B0UPC00001", "stage2_jan"))
+
+
 class ArticleAsinIndexTest(unittest.TestCase):
     """Issue #1149: _build_article_asins / 記事ありき gate のテスト。"""
 
