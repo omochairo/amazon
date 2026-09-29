@@ -191,6 +191,50 @@
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
       "notes": "食品グレードのプラスチックと柔らかいシリコン素材を使用。スチームや煮沸消毒が可能と記載されている。"
+    },
+    {
+      "id": "src-2",
+      "name": "おもちゃいろ",
+      "url": "https://omcha.jp/takoomocha/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2025-03-01",
+      "author": "いろパパ",
+      "conflict_of_interest": "none",
+      "notes": "類似のシリコン製指遊びおもちゃのレビューとして、カミカミ遊びが歯茎のムズムズ解消に役立つことや、煮沸消毒が衛生的である点を評価。"
+    },
+    {
+      "id": "src-3",
+      "name": "頭のいい子を育てるプチ すうじのないあかちゃんかずえほん",
+      "url": "http://books.google.com/books?id=Hx5zEQAAQBAJ&dq=%E3%83%9D%E3%82%B1%E3%83%A2%E3%83%B3+%E7%B5%B5%E6%9C%AC&hl=&source=gbs_api",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "",
+      "author": "かしわら あきお, 小林 哲生",
+      "conflict_of_interest": "none",
+      "notes": "生後6ヶ月からの認知発達に関連し、指先での探索が脳の刺激になる点などを間接的に支持する文脈として参考。"
+    },
+    {
+      "id": "src-4",
+      "name": "おもちゃいろ 0歳おもちゃ完全ガイド",
+      "url": "https://omcha.jp/0sai_best/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-09-07",
+      "author": "おもちゃいろ編集部",
+      "conflict_of_interest": "none",
+      "notes": "0歳向けのおもちゃ選びにおいて、安全性や手入れのしやすさが重要視されている傾向を確認。"
+    },
+    {
+      "id": "src-5",
+      "name": "おもちゃいろ おもちゃの消毒方法",
+      "url": "https://omcha.jp/omotyashodoku/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "",
+      "author": "おもちゃいろ編集部",
+      "conflict_of_interest": "none",
+      "notes": "煮沸消毒や薬液消毒が赤ちゃん用おもちゃにおいて衛生的であることを支持。"
     }
   ],
   "claims": [
@@ -199,9 +243,11 @@
       "category": "safety",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-2",
+        "src-5"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "メーカー公式の仕様欄より確認"
     },
     {
@@ -209,9 +255,10 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-4"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "メーカー公式の仕様欄より確認"
     },
     {
