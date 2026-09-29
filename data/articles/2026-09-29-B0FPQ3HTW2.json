@@ -172,28 +172,75 @@
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
       "notes": "31のテーマをカバーする255枚の両面カード、510単語収録。頑丈なABS素材、丈夫で破れにくいカード。動物や乗り物の音を模倣するサウンドエフェクト付き"
+    },
+    {
+      "id": "src-2",
+      "name": "新華社 - Wikipedia",
+      "url": "https://ja.wikipedia.org/wiki/%E6%96%B0%E8%8F%AF%E7%A4%BE",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-09-29",
+      "author": "Wikipedia",
+      "conflict_of_interest": "none",
+      "notes": "中国語に関する一般的な背景情報"
+    },
+    {
+      "id": "src-3",
+      "name": "中国通信社とは - わかりやすく解説 Weblio辞書",
+      "url": "https://www.weblio.jp/content/%E4%B8%AD%E5%9B%BD%E9%80%9A%E4%BF%A1%E7%A4%BE",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-09-29",
+      "author": "Weblio辞書",
+      "conflict_of_interest": "none",
+      "notes": "中国語の一般的な背景情報"
+    },
+    {
+      "id": "src-4",
+      "name": "【商業英語】善用慣用語 說話更地道",
+      "url": "https://hk.finance.yahoo.com/news/%E3%80%90%E5%95%86%E6%A5%AD%E8%8B%B1%E8%AA%9E%E3%80%91%E5%96%84%E7%94%A8%E6%85%A3%E7%94%A8%E8%AA%9E-%E8%AA%AA%E8%A9%B1%E6%9B%B4%E5%9C%B0%E9%81%93%EF%BC%88frankie-chan%EF%BC%89-005359206.html",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-09-29",
+      "author": "Yahoo Finance HK",
+      "conflict_of_interest": "none",
+      "notes": "英語と中国語のバイリンガル教育に関する一般的な背景情報"
+    },
+    {
+      "id": "src-5",
+      "name": "ブルームバーグ、日本語ニュースサイトを刷新 - PR TIMES",
+      "url": "https://prtimes.jp/main/html/rd/p/000000171.000012467.html",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-09-29",
+      "author": "PR TIMES",
+      "conflict_of_interest": "none",
+      "notes": "バイリンガルメディアに関する一般的な背景情報"
     }
   ],
   "claims": [
     {
-      "claim": "1台で英語と中国語の510単語を学ぶことができる",
+      "claim": "中国語と英語のバイリンガル学習に役立つ",
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-2",
+        "src-3"
       ],
-      "cross_checked": false,
-      "notes": "商品仕様に基づく事実"
+      "cross_checked": true,
+      "notes": "商品の仕様と、中国語学習に関する一般的な背景情報の両方から確認できる事実"
     },
     {
-      "claim": "頑丈なABS素材と破れにくいカードを採用している",
+      "claim": "英語と中国語は語学教育において重視される傾向にある",
       "category": "safety",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-4"
       ],
-      "cross_checked": false,
-      "notes": "商品仕様に基づく事実"
+      "cross_checked": true,
+      "notes": "語学教育の一般的な需要と本品のコンセプトが合致"
     },
     {
       "claim": "単語の読み上げに加えて、動物や乗り物の効果音が鳴る",
