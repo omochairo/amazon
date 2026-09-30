@@ -1,0 +1,1547 @@
+{
+  "_doc": "filter_raw_per_asin の title_only 経路 (ターゲット名の断片だけで一致) で採用された youtube 候補のうち、人が見て同じ商品と確認した ASIN x URL。ここにある組は _match を title_only_verified にし、公開経路 (exclude_title_only) で除外しない。載っていない組は従来どおり除外する。別商品・判定不能は載せない (#8320)。初期値は scripts/tests/fixtures/filter_strict2_title_only_labels.jsonl の same_product (#8122 の目視判定)。推定ラベル (_8320.jsonl) は含めない。",
+  "verified": [
+    {
+      "asin": "B00006408Q",
+      "url": "https://www.youtube.com/watch?v=2n--4eOfSBE",
+      "target_title": "ThinkFun ジンゴ",
+      "video_title": "Zingo! ジンゴ！ - ThinkFun シンクファン"
+    },
+    {
+      "asin": "B000EVMHIS",
+      "url": "https://www.youtube.com/watch?v=2oqq5BVin7s",
+      "target_title": "ミニルーピングセット",
+      "video_title": "初孫ちゃん（生後９ヶ月）ミニルーピングセット／エドインター"
+    },
+    {
+      "asin": "B001P06GXY",
+      "url": "https://www.youtube.com/watch?v=alZnN2OvoYc",
+      "target_title": "ブロックストライゴン",
+      "video_title": "絶対に仲が悪くなる陣取りゲーム『ブロックストライゴン』で遊んだら地獄空間になったｗｗｗ【アナログゲーム】"
+    },
+    {
+      "asin": "B002IGTP00",
+      "url": "https://www.youtube.com/watch?v=rOmIw8ntavg",
+      "target_title": "オタマトーン",
+      "video_title": "オタマトーン4種類を比較！ #オタマトーン #otamatone"
+    },
+    {
+      "asin": "B00370BTAA",
+      "url": "https://www.youtube.com/watch?v=0_6t67_yGNk",
+      "target_title": "ポカポンゲーム",
+      "video_title": "ポカポンゲーム③ #ボードゲーム #ミニオンズ"
+    },
+    {
+      "asin": "B00370BTAA",
+      "url": "https://www.youtube.com/watch?v=vLS6isooPbs",
+      "target_title": "ポカポンゲーム",
+      "video_title": "ポカポンゲームで暴露とモノマネしたら笑いすぎたwww"
+    },
+    {
+      "asin": "B003AVMUU4",
+      "url": "https://www.youtube.com/watch?v=8GWKvXQoe78",
+      "target_title": "トラベルレールセット",
+      "video_title": "BRIO トラベルレールセット 33512"
+    },
+    {
+      "asin": "B003AVMUU4",
+      "url": "https://www.youtube.com/watch?v=EWt0aZUQ1lo",
+      "target_title": "トラベルレールセット",
+      "video_title": "【BRIO】ブリオ　トラベルレールセット　訂正版"
+    },
+    {
+      "asin": "B003AVMUU4",
+      "url": "https://www.youtube.com/watch?v=x3rjFugZ-oQ",
+      "target_title": "トラベルレールセット",
+      "video_title": "【BRIO】ブリオ トラベルレールセット Travel Switching Set"
+    },
+    {
+      "asin": "B003I4DTM6",
+      "url": "https://www.youtube.com/watch?v=yLfkzOzuJuM",
+      "target_title": "リズムあそびいっぱいマジカルバンド",
+      "video_title": "ディズニーキャラクター「リズムあそびいっぱい　マジカルバンド」　6つの楽器で遊べる知育トイ♪"
+    },
+    {
+      "asin": "B004KUEHFU",
+      "url": "https://www.youtube.com/watch?v=GRgH7QgjdNE",
+      "target_title": "はじめてのブロックバケツL",
+      "video_title": "ブロックラボ アンパンマン はじめてのブロックバケツL"
+    },
+    {
+      "asin": "B004KUEHFU",
+      "url": "https://www.youtube.com/watch?v=HfAQHGJZsYY",
+      "target_title": "はじめてのブロックバケツL",
+      "video_title": "アンパンマンのおもちゃアニメ☆バイキンマンとはじめてのブロックバケツLで遊ぶ！！アンパンマンブロック"
+    },
+    {
+      "asin": "B004RK7F2U",
+      "url": "https://www.youtube.com/watch?v=rJ8kAS0IKGo",
+      "target_title": "カーゴレールデラックスセット",
+      "video_title": "BRIO WORLD カーゴレールデラックスセット！遊んでみた！"
+    },
+    {
+      "asin": "B00D8T2VFM",
+      "url": "https://www.youtube.com/watch?v=ZtAJhMyWl8M",
+      "target_title": "ピエロのびっくりはかり",
+      "video_title": "♯19 ピエロのびっくりはかり"
+    },
+    {
+      "asin": "B00D8T2VFM",
+      "url": "https://www.youtube.com/watch?v=qlSNM-5tKYU",
+      "target_title": "ピエロのびっくりはかり",
+      "video_title": "【uni z】ピエロのびっくりはかり"
+    },
+    {
+      "asin": "B00DTM2DGK",
+      "url": "https://www.youtube.com/watch?v=6phsfxvWoAo",
+      "target_title": "森のあそび箱",
+      "video_title": "エドインター ジェニ GENI 森のあそび箱"
+    },
+    {
+      "asin": "B00DTM2DGK",
+      "url": "https://www.youtube.com/watch?v=k_447aWHDwE",
+      "target_title": "森のあそび箱",
+      "video_title": "森のあそび箱に夢中のベビ太郎 2024/04/08 生後321日目 #赤ちゃん #成長記録 #生後10ヶ月"
+    },
+    {
+      "asin": "B00G46M45I",
+      "url": "https://www.youtube.com/watch?v=9gugeAfFbzg",
+      "target_title": "キャプテン・リノ",
+      "video_title": "BE:FIRST / 巨大ボードゲーム「キャプテン・リノ」をプレイ！[You&#39;re My &quot;BESTY&quot; #55]"
+    },
+    {
+      "asin": "B00G46M45I",
+      "url": "https://www.youtube.com/watch?v=LbsIr5f72fo",
+      "target_title": "キャプテン・リノ",
+      "video_title": "６分超簡単説明！「キャプテン・リノ  」ボードゲーム"
+    },
+    {
+      "asin": "B00VR5VLGE",
+      "url": "https://www.youtube.com/watch?v=OQUd7SUT6zI",
+      "target_title": "やわらか片手でなめなめ",
+      "video_title": "3195 やわらか片手でなめなめ"
+    },
+    {
+      "asin": "B00ZQFPQLW",
+      "url": "https://www.youtube.com/watch?v=iQcpBL-fiL8",
+      "target_title": "幼児教育の経済学",
+      "video_title": "【本の要約】幼児教育の経済学"
+    },
+    {
+      "asin": "B010CQDG02",
+      "url": "https://www.youtube.com/watch?v=Cf1_f5Yvup4",
+      "target_title": "ビルディング・カップ",
+      "video_title": "【東京おもちゃ美術館】出す・入れる・積み上げる！遊び方自在な「ビルディング・カップ」岡田哲也のおもちゃの時間Vol.13"
+    },
+    {
+      "asin": "B01628ZNZA",
+      "url": "https://www.youtube.com/watch?v=QGJgZVmDwyI",
+      "target_title": "パカパカお馬",
+      "video_title": "おうちでボードゲーム#6『パカパカお馬』"
+    },
+    {
+      "asin": "B016FYD722",
+      "url": "https://www.youtube.com/watch?v=2yeq7pFwXOE",
+      "target_title": "育脳タワー",
+      "video_title": "育脳タワーの紹介"
+    },
+    {
+      "asin": "B016FYD722",
+      "url": "https://www.youtube.com/watch?v=Dd4UWjJu4Bc",
+      "target_title": "育脳タワー",
+      "video_title": "立体パズル！育脳タワーで遊んでみた！"
+    },
+    {
+      "asin": "B016FYD722",
+      "url": "https://www.youtube.com/watch?v=wj6KYD2Qdt4",
+      "target_title": "育脳タワー",
+      "video_title": "育脳タワー.mp4"
+    },
+    {
+      "asin": "B01778NPQI",
+      "url": "https://www.youtube.com/watch?v=Rk59WbOjd50",
+      "target_title": "コロロンパーク NEWベーシックセット",
+      "video_title": "【アンパンマン コロロンパーク】NEWベーシックセットで遊んでみた！初めてにおすすめの基本セットレビュー"
+    },
+    {
+      "asin": "B01778NPQI",
+      "url": "https://www.youtube.com/watch?v=Wz_1GFdp1rs",
+      "target_title": "コロロンパーク NEWベーシックセット",
+      "video_title": "アンパンマン それいけ! コロロンパーク NEWベーシックセット"
+    },
+    {
+      "asin": "B01B7QHIGO",
+      "url": "https://www.youtube.com/watch?v=SQHa0dhXuSI",
+      "target_title": "ナンジャモンジャ・シロ",
+      "video_title": "【発想】名前を付けて早く呼ぶカードゲーム〜ナンジャモンジャ シロ〜 #ナンジャモンジャ  #shorts"
+    },
+    {
+      "asin": "B01B7QHIGO",
+      "url": "https://www.youtube.com/watch?v=y9GWFVKJOwc",
+      "target_title": "ナンジャモンジャ・シロ",
+      "video_title": "【ナンジャモンジャ シロ】「あ、お客様そちらのサングラスお似合いですね」「せやろ？」"
+    },
+    {
+      "asin": "B01CVCGDN2",
+      "url": "https://www.youtube.com/watch?v=Yuq13eBrf60",
+      "target_title": "マルカ カラフルドミノ 50P",
+      "video_title": "マルカ カラフルドミノ 50P を買ってきました^ ^"
+    },
+    {
+      "asin": "B01GJ8WTKA",
+      "url": "https://www.youtube.com/watch?v=ZnFkPQI2Iu8",
+      "target_title": "ぐらぐらゲーム",
+      "video_title": "【元祖ぐらぐらゲーム】彼の初手が凄すぎる.... #shorts"
+    },
+    {
+      "asin": "B01GJ8WTKA",
+      "url": "https://www.youtube.com/watch?v=sZyeESYowCA",
+      "target_title": "ぐらぐらゲーム",
+      "video_title": "【ゲーム】元祖ぐらぐらゲーム"
+    },
+    {
+      "asin": "B01GJ8WTKA",
+      "url": "https://www.youtube.com/watch?v=zKf07S17M7Y",
+      "target_title": "ぐらぐらゲーム",
+      "video_title": "予想外すぎｗｗｗぐらぐらゲーム（難易度★★） #たろけろ #おもちゃ #ゲーム"
+    },
+    {
+      "asin": "B01IRRTS14",
+      "url": "https://www.youtube.com/watch?v=K6CsXrhRO0A",
+      "target_title": "ねことねずみの大レース",
+      "video_title": "おうちでボードゲーム#7『ねことねずみの大レース』"
+    },
+    {
+      "asin": "B01IRRTS14",
+      "url": "https://www.youtube.com/watch?v=MJZ09to8cYQ",
+      "target_title": "ねことねずみの大レース",
+      "video_title": "ボードゲーム　ねことねずみの大レース 遊び方・ルールの説明"
+    },
+    {
+      "asin": "B01JA7Z9E0",
+      "url": "https://www.youtube.com/watch?v=-pSrO7hNkA0",
+      "target_title": "クラッシュアイスゲーム",
+      "video_title": "EIKOがクラッシュアイスゲームでバカ騒ぎ！！"
+    },
+    {
+      "asin": "B01JA7Z9E0",
+      "url": "https://www.youtube.com/watch?v=PfGUaDSDvSw",
+      "target_title": "クラッシュアイスゲーム",
+      "video_title": "ペンギンを落とすな！！#クラッシュアイスゲーム#ボードゲーム#レイクレ"
+    },
+    {
+      "asin": "B01JA7Z9E0",
+      "url": "https://www.youtube.com/watch?v=vO7MoT10x8w",
+      "target_title": "クラッシュアイスゲーム",
+      "video_title": "皆知ってる『クラッシュアイスゲーム』今更やっても面白い説"
+    },
+    {
+      "asin": "B01M0EGPTV",
+      "url": "https://www.youtube.com/watch?v=UgSaoLNzoy8",
+      "target_title": "特選焼肉パズル-ウシ-",
+      "video_title": "今年は丑年!! 焼肉食べたい!!  一頭買い!!特選焼肉パズル -ウシ-"
+    },
+    {
+      "asin": "B01M0EGPTV",
+      "url": "https://www.youtube.com/watch?v=q9kylzC6ElQ",
+      "target_title": "特選焼肉パズル-ウシ-",
+      "video_title": "【やばい】一頭買い!! 特選焼肉パズル-ウシ-がスグレモノすぎてやばい"
+    },
+    {
+      "asin": "B072B6QVVW",
+      "url": "https://www.youtube.com/watch?v=B4vuxQzOv1w",
+      "target_title": "Sphero Mini",
+      "video_title": "【ドクターそうのこどもプログラミング】#1：迷子の子イヌを助けよう！【Sphero mini】【こどものミライ】"
+    },
+    {
+      "asin": "B073CM2RVL",
+      "url": "https://www.youtube.com/watch?v=17_aBV1MLCc",
+      "target_title": "ナインタイル",
+      "video_title": "３分でわかる！ボードゲーム ルール説明「ナインタイル」(No.22)"
+    },
+    {
+      "asin": "B073CM2RVL",
+      "url": "https://www.youtube.com/watch?v=fAVS8FubvUs",
+      "target_title": "ナインタイル",
+      "video_title": "ふと、無性に遊びたくなるパズルゲーム！#ナインタイル #ボードゲーム #shorts"
+    },
+    {
+      "asin": "B076Q8THPF",
+      "url": "https://www.youtube.com/watch?v=OpHlw8szA9I",
+      "target_title": "一本買い! 本マグロ解体パズル",
+      "video_title": "一本買い！本マグロ解体パズル"
+    },
+    {
+      "asin": "B079J5CS3W",
+      "url": "https://www.youtube.com/watch?v=WYWHzKtYvbs",
+      "target_title": "リップスティックジェッツ",
+      "video_title": "リップスティックジェッツの滑り方とコツ【RIPSTIKJETTS】"
+    },
+    {
+      "asin": "B079J5CS3W",
+      "url": "https://www.youtube.com/watch?v=sw5txxSQYMY",
+      "target_title": "リップスティックジェッツ",
+      "video_title": "できると超楽しい！身に着けるローラー【リップスティックジェッツ】で遊びました！"
+    },
+    {
+      "asin": "B07BF4TBQB",
+      "url": "https://www.youtube.com/watch?v=JTWzbc_hXeo",
+      "target_title": "エレキット フォロ",
+      "video_title": "【エレキット】フォロ作ってみた！"
+    },
+    {
+      "asin": "B07CHF23S2",
+      "url": "https://www.youtube.com/watch?v=GdLCMJs0yOo",
+      "target_title": "公園ロケット",
+      "video_title": "【ラングスジャパン】公園ロケット"
+    },
+    {
+      "asin": "B07CHF23S2",
+      "url": "https://www.youtube.com/watch?v=SjFQTcDTntk",
+      "target_title": "公園ロケット",
+      "video_title": "【公園ロケット】公園遊びにピッタリなロケットおもちゃを紹介します😄🚀"
+    },
+    {
+      "asin": "B07CHF23S2",
+      "url": "https://www.youtube.com/watch?v=tt6ltgqFW-U",
+      "target_title": "公園ロケット",
+      "video_title": "公園ロケット‼️めちゃくちゃ飛ぶよ‼️"
+    },
+    {
+      "asin": "B07DJ9VXXY",
+      "url": "https://www.youtube.com/watch?v=_1OZizeuLDw",
+      "target_title": "パックンフラワーゲーム",
+      "video_title": "【かみつき注意！パックンフラワーゲーム】というドキドキゲーム　#アナログゲーム #スーパーマリオ"
+    },
+    {
+      "asin": "B07DJ9VXXY",
+      "url": "https://www.youtube.com/watch?v=bmExse6kRNY",
+      "target_title": "パックンフラワーゲーム",
+      "video_title": "フラワーが襲ってくる!!! スーパーマリオ かみつき注意! パックンフラワーゲーム | まえちゃんねる"
+    },
+    {
+      "asin": "B07DJ9VXXY",
+      "url": "https://www.youtube.com/watch?v=gIRXfVUieKo",
+      "target_title": "パックンフラワーゲーム",
+      "video_title": "フラワーが襲ってくる!!! スーパーマリオ かみつき注意! パックンフラワーゲーム | まえちゃんねる [倍速]"
+    },
+    {
+      "asin": "B07SJFNNT2",
+      "url": "https://www.youtube.com/watch?v=RKOZRIfqM3Q",
+      "target_title": "ドキンちゃんのおしゃれなおみせブロックバケツ",
+      "video_title": "レオくんがブロックラボ ドキンちゃんのおしゃれなおみせ ブロックバケツを組み立てて遊ぶよ！ レオスマイル"
+    },
+    {
+      "asin": "B07YFRZTQW",
+      "url": "https://www.youtube.com/watch?v=4VNfIZ4_IWo",
+      "target_title": "ミニピアノP-25",
+      "video_title": "楽器店スタッフが弾く！ミニピアノ第三弾！KAWAIミニピアノP-25シリーズ"
+    },
+    {
+      "asin": "B07YFRZTQW",
+      "url": "https://www.youtube.com/watch?v=4nwq8gyfQIM",
+      "target_title": "ミニピアノP-25",
+      "video_title": "【KAWAI official】 ミニピアノP-25演奏デモ「狼なんかこわくない」（フル）"
+    },
+    {
+      "asin": "B07YFRZTQW",
+      "url": "https://www.youtube.com/watch?v=7JEP7H9X70M",
+      "target_title": "ミニピアノP-25",
+      "video_title": "カワイ　ミニピアノP-25　演奏デモ"
+    },
+    {
+      "asin": "B085S43G86",
+      "url": "https://www.youtube.com/watch?v=A1AE2g_DC1E",
+      "target_title": "ルービックキューブ UD",
+      "video_title": "ルービックキューブUD 点字"
+    },
+    {
+      "asin": "B085ZM5ZMV",
+      "url": "https://www.youtube.com/watch?v=BNN8h3zJXlg",
+      "target_title": "オンダ 輪ゴムショットGX",
+      "video_title": "輪ゴムショットGX　株式会社オンダ　　#おもちゃ #子ども"
+    },
+    {
+      "asin": "B0875FV2BQ",
+      "url": "https://www.youtube.com/watch?v=Ihcd4XD-2jw",
+      "target_title": "ロンビー",
+      "video_title": "【Lon-Bi】ロンビーでおうち遊び！Minecraftハウス！？小さい子も作れるよ。ボール入れや輪投げで楽しく遊ぼう！"
+    },
+    {
+      "asin": "B0875FV2BQ",
+      "url": "https://www.youtube.com/watch?v=RMptWcgluVU",
+      "target_title": "ロンビー",
+      "video_title": "雨の日や長期休暇のおうち時間に最高のおもちゃ「ロンビー」"
+    },
+    {
+      "asin": "B0894MVK59",
+      "url": "https://www.youtube.com/watch?v=1B1gIkBRmcY",
+      "target_title": "きらめく財宝",
+      "video_title": "最近ハマってる☺️きらめく財宝  #shorts"
+    },
+    {
+      "asin": "B0894MVK59",
+      "url": "https://www.youtube.com/watch?v=K9r2OKpXheE",
+      "target_title": "きらめく財宝",
+      "video_title": "＃4【きらめく財宝】きらめく財宝の遊び方"
+    },
+    {
+      "asin": "B0894MVK59",
+      "url": "https://www.youtube.com/watch?v=vNQ2CDQ02QY",
+      "target_title": "きらめく財宝",
+      "video_title": "落ちるヤツを見極めるボドゲ『きらめく財宝』がギャンブル初等教育にピッタリ！！"
+    },
+    {
+      "asin": "B089D94SVJ",
+      "url": "https://www.youtube.com/watch?v=7YZXhhovYE0",
+      "target_title": "金庫破りのジギ",
+      "video_title": "ボードゲーム 『金庫破りのジギ』35秒動画"
+    },
+    {
+      "asin": "B089D94SVJ",
+      "url": "https://www.youtube.com/watch?v=GnrI9dCm90M",
+      "target_title": "金庫破りのジギ",
+      "video_title": "動画で紹介『金庫破りのジギ』金庫破り×安全判断のボードゲーム【お宝の大小を当てろ! /チキンレースな宝集め】"
+    },
+    {
+      "asin": "B089D94SVJ",
+      "url": "https://www.youtube.com/watch?v=o4GG3C6ZZOU",
+      "target_title": "金庫破りのジギ",
+      "video_title": "フクハナのボードゲーム紹介 No.123：金庫破りのジギ"
+    },
+    {
+      "asin": "B089P77XGH",
+      "url": "https://www.youtube.com/watch?v=7vZWNLSe0BI",
+      "target_title": "天才脳らくがき教室",
+      "video_title": "アンパンマンが上手に描けちゃう！天才脳らくがき教室 PV"
+    },
+    {
+      "asin": "B089P77XGH",
+      "url": "https://www.youtube.com/watch?v=cPm0mWCuqTs",
+      "target_title": "天才脳らくがき教室",
+      "video_title": "アンパンマンおもちゃ　アンパンマンが上手に描けちゃう！天才脳らくがき教室"
+    },
+    {
+      "asin": "B089P77XGH",
+      "url": "https://www.youtube.com/watch?v=geABowPq2dg",
+      "target_title": "天才脳らくがき教室",
+      "video_title": "アンパンマンが上手に描けちゃう！天才脳らくがき教室 Draw Anpanman Well! Genius Brain Doodle Class Play Set ASMR | Review Toys"
+    },
+    {
+      "asin": "B08J2GC4NH",
+      "url": "https://www.youtube.com/watch?v=eimgxzPmIVQ",
+      "target_title": "手づくり泡ボムキット",
+      "video_title": "【販売店様】手づくり泡ボムキット【ご掲載用】－Artec－"
+    },
+    {
+      "asin": "B08KXP79ML",
+      "url": "https://www.youtube.com/watch?v=WMaW_4YFntc",
+      "target_title": "LaQ ブルーインパルス",
+      "video_title": "【ラキュー公式】2020年10月新商品「LaQブルーインパルス」【知育玩具ブロック LaQ】"
+    },
+    {
+      "asin": "B08MZHMY4S",
+      "url": "https://www.youtube.com/watch?v=809EmVOKevw",
+      "target_title": "フォボスのほしめぐり",
+      "video_title": "【お坊さんのボードゲーム三昧】お子さん:幼児さんと楽しむゲーム絵本3冊【ドラゴンをさがしに、フォボスのほしめぐり、アトランディスのはっけん】"
+    },
+    {
+      "asin": "B08MZHMY4S",
+      "url": "https://www.youtube.com/watch?v=MhBPoH_muH8",
+      "target_title": "フォボスのほしめぐり",
+      "video_title": "新作ボードゲーム紹介：ゲーム絵本 第2弾『フォボスのほしめぐり』、第3弾『アトランティスのはっけん』"
+    },
+    {
+      "asin": "B08W5FV9GN",
+      "url": "https://www.youtube.com/watch?v=2v3LgcvvUw0",
+      "target_title": "かずあそびトレイン",
+      "video_title": "レゴ LEGO デュプロ はじめてのデュプロ かずあそびトレイン 10954｜トイザらス"
+    },
+    {
+      "asin": "B08YN8TV82",
+      "url": "https://www.youtube.com/watch?v=3KE6RyvkpTU",
+      "target_title": "かみつきドラゴン",
+      "video_title": "かみつきドラゴンを作ったらギャルみたいに可愛くなった💫"
+    },
+    {
+      "asin": "B08YN8TV82",
+      "url": "https://www.youtube.com/watch?v=TY3Hu-wVQ_M",
+      "target_title": "かみつきドラゴン",
+      "video_title": "【夏休み工作】ガブッとつかめ！かみつきドラゴン【つくってみた編】－Artec－"
+    },
+    {
+      "asin": "B08YN8TV82",
+      "url": "https://www.youtube.com/watch?v=_gCOioWS8LI",
+      "target_title": "かみつきドラゴン",
+      "video_title": "【販売店様】マジックハンド工作　かみつきドラゴン【ご掲載用】－Artec－"
+    },
+    {
+      "asin": "B097BMF5DN",
+      "url": "https://www.youtube.com/watch?v=SwvhWLfpLZs",
+      "target_title": "ミュウミュウおすわりぬいぐるみ",
+      "video_title": "BabyBusミュウミュウのふわふわおすわりぬいぐるみ"
+    },
+    {
+      "asin": "B097D4NQQ6",
+      "url": "https://www.youtube.com/watch?v=3mI48XY8SBc",
+      "target_title": "ストライダー 14x",
+      "video_title": "【ストライダー14X】息子3歳4ヵ月 ペダル付きに挑戦"
+    },
+    {
+      "asin": "B097T46X3P",
+      "url": "https://www.youtube.com/watch?v=BBmlicRcNOE",
+      "target_title": "LaQ マスター 青龍",
+      "video_title": "【ラキュー公式】2021年6月新商品「LaQマスター青龍」【知育玩具ブロックLaQ 新商品】"
+    },
+    {
+      "asin": "B09CPNKDJJ",
+      "url": "https://www.youtube.com/watch?v=ocIbfnxNKR4",
+      "target_title": "ねんDo! ねんどにゅるにゅる めんたろうセット",
+      "video_title": "ねんDo！ねんどにゅるにゅる めんたろうセット　PV"
+    },
+    {
+      "asin": "B09CPNKDJJ",
+      "url": "https://www.youtube.com/watch?v=wd25MOW6VSU",
+      "target_title": "ねんDo! ねんどにゅるにゅる めんたろうセット",
+      "video_title": "【粘土】ねんDo！ねんどにゅるにゅる めんたろうセット｜トイザらス"
+    },
+    {
+      "asin": "B09D7KKZQ9",
+      "url": "https://www.youtube.com/watch?v=H1sgPILlmM4",
+      "target_title": "宝石がいっぱい",
+      "video_title": "【宝石がいっぱい】「ボードゲーム紹介６５」カードをめくるだけ！１００％運なので子どもと一緒に遊ぼう！"
+    },
+    {
+      "asin": "B09D7KKZQ9",
+      "url": "https://www.youtube.com/watch?v=TN5d7Zdgu5c",
+      "target_title": "宝石がいっぱい",
+      "video_title": "【宝石がいっぱい！】ハイテンポ宝石発掘ゲーム！(土多め)【ボードゲーム】"
+    },
+    {
+      "asin": "B09D7KKZQ9",
+      "url": "https://www.youtube.com/watch?v=tqr8IS7lqbI",
+      "target_title": "宝石がいっぱい",
+      "video_title": "【商品紹介】『宝石がいっぱい！』"
+    },
+    {
+      "asin": "B09FGKJ2K3",
+      "url": "https://www.youtube.com/watch?v=SHt42RoIY2U",
+      "target_title": "へんがおならべ",
+      "video_title": "【家族や友だちと爆笑しよう🤣アナログゲームのへんがおならべ】　　#おうち遊び #おうち時間 #室内遊び #アナログゲーム　#ボードゲーム  #カードゲーム"
+    },
+    {
+      "asin": "B09FGKJ2K3",
+      "url": "https://www.youtube.com/watch?v=_3knfCzSNkc",
+      "target_title": "へんがおならべ",
+      "video_title": "009548へんがおならべ"
+    },
+    {
+      "asin": "B09FGKJ2K3",
+      "url": "https://www.youtube.com/watch?v=uYrn8PwP3f4",
+      "target_title": "へんがおならべ",
+      "video_title": "【対決】カードゲームで変顔になっちゃった！？笑ってはいけない！へんがおならべ・子供向け知育教育★サンサンキッズTV★"
+    },
+    {
+      "asin": "B09LXN76D9",
+      "url": "https://www.youtube.com/watch?v=-W1noIxKazw",
+      "target_title": "3Dロジカルルートパズル",
+      "video_title": "3Dロジカルルートパズル"
+    },
+    {
+      "asin": "B09NQQQL5Z",
+      "url": "https://www.youtube.com/watch?v=hTcBAaLg980",
+      "target_title": "リラックス感情ボトル",
+      "video_title": "感情に“色”があるって知ってた？🫶✨「リラックス感情ボトル」🌈 #知育玩具 #おもちゃ #ショート #shorts"
+    },
+    {
+      "asin": "B09PDBYSLH",
+      "url": "https://www.youtube.com/watch?v=8wGuKRehWDc",
+      "target_title": "リップスティックライトショー",
+      "video_title": "【ラングスジャパン】リップスティックライトショー"
+    },
+    {
+      "asin": "B09R754Y38",
+      "url": "https://www.youtube.com/watch?v=HsBUh5-YbRc",
+      "target_title": "アスレチックランドゲーム",
+      "video_title": "【アスレチックランドゲーム】　昭和に大ヒットしたエキサイティングアクションゲームが令和に復活！"
+    },
+    {
+      "asin": "B09R754Y38",
+      "url": "https://www.youtube.com/watch?v=kgUaXwXNOns",
+      "target_title": "アスレチックランドゲーム",
+      "video_title": "3種のアスレチックランドゲーム連結させたら激ムズどころじゃないwwwwww"
+    },
+    {
+      "asin": "B09R754Y38",
+      "url": "https://www.youtube.com/watch?v=qpFjdRC1V-0",
+      "target_title": "アスレチックランドゲーム",
+      "video_title": "【アスレチックランドゲーム】ドキドキ止まらん☆こりゃタマらん！テーマソング全部歌えるかな？"
+    },
+    {
+      "asin": "B09TZCLC2T",
+      "url": "https://www.youtube.com/watch?v=gcbityfx_dE",
+      "target_title": "ゆめいろ赤ちゃんプリンセスセット",
+      "video_title": "【シルバニア】🎀ゆめいろ赤ちゃんプリンセスセット👑〈公式〉#shorts #シルバニアファミリー #miniature"
+    },
+    {
+      "asin": "B09TZCLC2T",
+      "url": "https://www.youtube.com/watch?v=wk-x2zfNc38",
+      "target_title": "ゆめいろ赤ちゃんプリンセスセット",
+      "video_title": "【 開封 】6月11日発売　ゆめいろ赤ちゃんプリンセスセット　シルバニアファミリー【SylvanianFamilies】【CalicoCritters】 【森林家族】Unboxing"
+    },
+    {
+      "asin": "B09VC18NB6",
+      "url": "https://www.youtube.com/watch?v=dMCdO294ydE",
+      "target_title": "シャイニングセイバークラフトキット",
+      "video_title": "シャイニングセイバークラフトキットで光の剣を作ろう！【Create a sword of light with the Shining Saber Craft Kit!】#shorts"
+    },
+    {
+      "asin": "B09XWDBXF6",
+      "url": "https://www.youtube.com/watch?v=5HYanh1Kflk",
+      "target_title": "ルービックキューブ ver.3.0",
+      "video_title": "最新の公式キューブ！ルービックキューブver.3.0（ver.2.1やスピードキューブエントリーとの比較など）【キューブレビュー】"
+    },
+    {
+      "asin": "B09XWDBXF6",
+      "url": "https://www.youtube.com/watch?v=ufmfDUOec0s",
+      "target_title": "ルービックキューブ ver.3.0",
+      "video_title": "最新ルービックキューブver.3.0をver.2.1と比較！どこが変わったのか？"
+    },
+    {
+      "asin": "B0B1P9MRQS",
+      "url": "https://www.youtube.com/watch?v=LPrMDBEFjNQ",
+      "target_title": "ショコラウサギファミリー",
+      "video_title": "【シルバニア】〈期間限定〉3話イッキ見！ショコラウサギファミリーのおはなしまとめ🎶〈公式〉"
+    },
+    {
+      "asin": "B0B1P9MRQS",
+      "url": "https://www.youtube.com/watch?v=nmm2FPrQrvU",
+      "target_title": "ショコラウサギファミリー",
+      "video_title": "【シルバニア】第1話　おはよう！ショコラウサギファミリー！｜シルバニアファミリー ミニストーリー シーズン2〈公式〉"
+    },
+    {
+      "asin": "B0B2J2K5PZ",
+      "url": "https://www.youtube.com/watch?v=_ecI92quJXE",
+      "target_title": "光るくるコロタワー",
+      "video_title": "「NEW！にぎって！おとして！光るくるコロタワー」で遊んでみよう！"
+    },
+    {
+      "asin": "B0B48LZRK3",
+      "url": "https://www.youtube.com/watch?v=6d3ZqVqjYzI",
+      "target_title": "LaQ モササウルス",
+      "video_title": "【LaQ】大迫力！モササウルスを作ります　ラキュー LaQ 恐竜"
+    },
+    {
+      "asin": "B0B48LZRK3",
+      "url": "https://www.youtube.com/watch?v=ewg49kcEtts",
+      "target_title": "LaQ モササウルス",
+      "video_title": "【ラキュー公式】6月新商品『LaQ ダイナソーワールド モササウルス』を紹介！【知育玩具ブロック LaQ】"
+    },
+    {
+      "asin": "B0B48LZRK3",
+      "url": "https://www.youtube.com/watch?v=s5detkAqbHE",
+      "target_title": "LaQ モササウルス",
+      "video_title": "【ラキュー公式】新商品✨モササウルス・カルノタウルスのミニキットが仲間入り！2月下旬発売！小さな恐竜をうみだそう！【知育玩具ブロック LaQ 新商品 恐竜】"
+    },
+    {
+      "asin": "B0B5D3N9CG",
+      "url": "https://www.youtube.com/watch?v=qOnQGxs9Fmk",
+      "target_title": "やみつきボックス+",
+      "video_title": "生後9ヶ月がやみつきボックス＋に夢中！✨知育玩具レビュー【Toyroyal】"
+    },
+    {
+      "asin": "B0B5X7MTXD",
+      "url": "https://www.youtube.com/watch?v=1SXMbyyACdw",
+      "target_title": "コロリンチャイム",
+      "video_title": "10月27日　生後43日　コロリンチャイムを不思議そうに見つめます🔊🎼🎶"
+    },
+    {
+      "asin": "B0B7J1939Y",
+      "url": "https://www.youtube.com/watch?v=EVNow244yuU",
+      "target_title": "かつのう ラッキーパズル",
+      "video_title": "かつのう ラッキーパズル スタンダード"
+    },
+    {
+      "asin": "B0B7J1939Y",
+      "url": "https://www.youtube.com/watch?v=m6nVWZc7q7Q",
+      "target_title": "かつのう ラッキーパズル",
+      "video_title": "かつのう　ラッキーパズル"
+    },
+    {
+      "asin": "B0BD3BYQKY",
+      "url": "https://www.youtube.com/watch?v=5GdIjJzlbho",
+      "target_title": "ロジカルルートパズル",
+      "video_title": "ロジカルルートパズル　問題やってみた"
+    },
+    {
+      "asin": "B0BD3BYQKY",
+      "url": "https://www.youtube.com/watch?v=Md08JH-YW0Q",
+      "target_title": "ロジカルルートパズル",
+      "video_title": "【おもちゃ王国】おもちゃ博士が聞いてみた！#1「くもん出版 3Dロジカルルートパズル」"
+    },
+    {
+      "asin": "B0BD3BYQKY",
+      "url": "https://www.youtube.com/watch?v=SUtw8ENAXHM",
+      "target_title": "ロジカルルートパズル",
+      "video_title": "ロジカルルートパズル【公文の知育玩具】"
+    },
+    {
+      "asin": "B0BGKNK1Z4",
+      "url": "https://www.youtube.com/watch?v=Ibb4gI-cPGk",
+      "target_title": "おしゃべりパウフェクトずかん",
+      "video_title": "パウ・パトロールとことばを学ぼう！ にほんご・えいご・クイズも！おしゃべりパウフェクトずかん"
+    },
+    {
+      "asin": "B0BGKNK1Z4",
+      "url": "https://www.youtube.com/watch?v=q5UPidme318",
+      "target_title": "おしゃべりパウフェクトずかん",
+      "video_title": "パウ・パトロール『パウっと解決！パウフェクトクイズ！』【タカラトミーキッズ】PAW Patrol | えいご | おもちゃ | ファミリー | おしゃべりパウフェクトずかん | タカラトミー公式"
+    },
+    {
+      "asin": "B0BGKNK1Z4",
+      "url": "https://www.youtube.com/watch?v=xCgHZqGLTwc",
+      "target_title": "おしゃべりパウフェクトずかん",
+      "video_title": "【パウっと紹介！パウフェクトTV】パウ・パトロールとことばを学ぼう！にほんご・えいご・クイズも！おしゃべりパウフェクトずかんを紹介！"
+    },
+    {
+      "asin": "B0BJK8DGPG",
+      "url": "https://www.youtube.com/watch?v=O2QZelZcTzA",
+      "target_title": "FUN FUN JUMPER",
+      "video_title": "【ファンジャンパー】2歳児が10回連続ジャンプミッションを即クリア！？　/FUN JUMPER"
+    },
+    {
+      "asin": "B0BQB2MB97",
+      "url": "https://www.youtube.com/watch?v=lAZBgZ-5CxU",
+      "target_title": "コロコロできるおおきなブロック",
+      "video_title": "ローヤル コロコロできるおおきなブロック JiPANGにて。"
+    },
+    {
+      "asin": "B0BTSXNBFH",
+      "url": "https://www.youtube.com/watch?v=ObVE4Gy7Uhc",
+      "target_title": "クリスタルルービックキューブ",
+      "video_title": "#466:クリスタルルービックキューブ４×４"
+    },
+    {
+      "asin": "B0BTSXNBFH",
+      "url": "https://www.youtube.com/watch?v=WXpvWBs8ol0",
+      "target_title": "クリスタルルービックキューブ",
+      "video_title": "2023年12月24日 メガハウスのクリスタルルービックキューブ開封の儀 クリスマスイブに自分で買ったプレゼント🎁"
+    },
+    {
+      "asin": "B0BTSXNBFH",
+      "url": "https://www.youtube.com/watch?v=naXelcuSbJQ",
+      "target_title": "クリスタルルービックキューブ",
+      "video_title": "【ルービックキューブ】メガハウス(MegaHouse)クリスタルルービックキューブ購入レビュー♪ #ルービックキューブ #rubikscube #レビュー"
+    },
+    {
+      "asin": "B0BVXTB9GJ",
+      "url": "https://www.youtube.com/watch?v=Ne8__O9WrAo",
+      "target_title": "図形キューブつみき",
+      "video_title": "KUMON図形キューブつみきを遊んだ4歳男の子★"
+    },
+    {
+      "asin": "B0BVXTB9GJ",
+      "url": "https://www.youtube.com/watch?v=zjcV_T91m_o",
+      "target_title": "図形キューブつみき",
+      "video_title": "育脳 知育玩具 図形キューブつみき 図形 キューブ 積み木 つみき 積木 くもん 公文 KUMON くもん出版 KUMON 遊具・のりもの おもちゃ ＃６８うーまく～　たー君"
+    },
+    {
+      "asin": "B0BWCTPLYL",
+      "url": "https://www.youtube.com/watch?v=FkNlybzy5nw",
+      "target_title": "なかよし赤ちゃんセット -雨ふり-",
+      "video_title": "【4月8日・29日新発売】なかよし赤ちゃんセット 水あそび・雨ふり・おとまり・通園 4種類開封【シルバニアファミリー】"
+    },
+    {
+      "asin": "B0BWCTPLYL",
+      "url": "https://www.youtube.com/watch?v=ZBkHXozBKEk",
+      "target_title": "なかよし赤ちゃんセット -雨ふり-",
+      "video_title": "シルバニアファミリー新商品レビューvol7.なかよし赤ちゃんセット-雨ふり-傘、長靴、雨ガッパがかわいい💕#PR#シルバニアファミリー#SylvanianFamilies#シルバニア公式アンバサダー"
+    },
+    {
+      "asin": "B0BWCTPLYL",
+      "url": "https://www.youtube.com/watch?v=ctYclpYf4v0",
+      "target_title": "なかよし赤ちゃんセット -雨ふり-",
+      "video_title": "なかよし赤ちゃんセット　ー雨ふりー　シルバニアファミリー　Sylvanian Families(Calico Critters)"
+    },
+    {
+      "asin": "B0BWY4M6GT",
+      "url": "https://www.youtube.com/watch?v=MHiWE-y9BFg",
+      "target_title": "だんご屋のひまつぶし",
+      "video_title": "【公式】だんご屋のひまつぶし　紹介動画"
+    },
+    {
+      "asin": "B0BWY4M6GT",
+      "url": "https://www.youtube.com/watch?v=R5lX871hlkA",
+      "target_title": "だんご屋のひまつぶし",
+      "video_title": "【だんご屋のひまつぶし】だんごと真剣に向き合うひととき初級編【むぎ山くん】"
+    },
+    {
+      "asin": "B0BWY4M6GT",
+      "url": "https://www.youtube.com/watch?v=WHS5dxv0wEw",
+      "target_title": "だんご屋のひまつぶし",
+      "video_title": "🍡パズルだよ🍡  #だんご屋のひまつぶし #パズル #買ってよかった"
+    },
+    {
+      "asin": "B0BY1VPLWX",
+      "url": "https://www.youtube.com/watch?v=SLtAdWb5nu0",
+      "target_title": "育脳まるまるパズル",
+      "video_title": "アンパンマンの育脳まるまるパズルで遊んでみるよ！ おもちゃ アニメ 知育　幼児　あんぱんきっずアニメ"
+    },
+    {
+      "asin": "B0BYMRCQ96",
+      "url": "https://www.youtube.com/watch?v=fE87Y-RGccY",
+      "target_title": "ナナトリドリ",
+      "video_title": "煽り合いで喧嘩勃発！！7種類の鳥カードで遊ぶ新時代の大富豪『ナナトリドリ』が面白すぎる件wwww【アナログゲーム】"
+    },
+    {
+      "asin": "B0BYMRCQ96",
+      "url": "https://www.youtube.com/watch?v=moqDPzy8fSs",
+      "target_title": "ナナトリドリ",
+      "video_title": "☆ナナトリドリ☆【ボードゲーム紹介&amp;ルール説明】【083】"
+    },
+    {
+      "asin": "B0BYMRCQ96",
+      "url": "https://www.youtube.com/watch?v=t75wGJw3Hg4",
+      "target_title": "ナナトリドリ",
+      "video_title": "【商品紹介】『ナナトリドリ』"
+    },
+    {
+      "asin": "B0BZTW5KTL",
+      "url": "https://www.youtube.com/watch?v=5ncMQeeYg1k",
+      "target_title": "NEWくみくみスロープ",
+      "video_title": "ＮＥＷくみくみスロープたっぷり100の紹介"
+    },
+    {
+      "asin": "B0C3C5KXM6",
+      "url": "https://www.youtube.com/watch?v=-IztxSWoo1s",
+      "target_title": "NEW さんかくたんぐらむ",
+      "video_title": "ＮＥＷさんかくたんぐらむ　セット内容編"
+    },
+    {
+      "asin": "B0C3LN76K7",
+      "url": "https://www.youtube.com/watch?v=qpqfPYZeBVA",
+      "target_title": "まわしてクルクルサウンド",
+      "video_title": "8171まわしてクルクルサウンド"
+    },
+    {
+      "asin": "B0C42KVVG8",
+      "url": "https://www.youtube.com/watch?v=GQQrlLtVwXM",
+      "target_title": "わごむパターンボード",
+      "video_title": "わごむパターンボード　セット内容編"
+    },
+    {
+      "asin": "B0C42KVVG8",
+      "url": "https://www.youtube.com/watch?v=__EPCAO4OFI",
+      "target_title": "わごむパターンボード",
+      "video_title": "わごむパターンボード「日本おもちゃ大賞2013」大賞受賞！"
+    },
+    {
+      "asin": "B0C65HPRVP",
+      "url": "https://www.youtube.com/watch?v=3_HNbMWAqtc",
+      "target_title": "たまつむバランス(リニューアル)",
+      "video_title": "【たまつむバランス】そ～っと積まないと崩れちゃう！ルールはカンタン！ハラハラドキドキのバランスゲーム！！"
+    },
+    {
+      "asin": "B0C65HPRVP",
+      "url": "https://www.youtube.com/watch?v=OwDhU90TJnw",
+      "target_title": "たまつむバランス(リニューアル)",
+      "video_title": "スティックと玉。至高のバランス系ボドゲ『たまつむバランス』"
+    },
+    {
+      "asin": "B0C65HPRVP",
+      "url": "https://www.youtube.com/watch?v=yQh_hA1aCRE",
+      "target_title": "たまつむバランス(リニューアル)",
+      "video_title": "【たまつむバランス】ハラハラ！！ドキドキ！！超～人気アクションゲームがリニューアルされて新発売！！ #shorts"
+    },
+    {
+      "asin": "B0C7CNDDBL",
+      "url": "https://www.youtube.com/watch?v=aP3YABs8_SI",
+      "target_title": "リトミックスカーフ",
+      "video_title": "シフォン布で遊ぼう！わらべうたで楽しむリトミックスカーフ"
+    },
+    {
+      "asin": "B0C7CNDDBL",
+      "url": "https://www.youtube.com/watch?v=mR0CuZFqGA8",
+      "target_title": "リトミックスカーフ",
+      "video_title": "長く遊べるリトミックスカーフ"
+    },
+    {
+      "asin": "B0C7Z23Z7R",
+      "url": "https://www.youtube.com/watch?v=TjCubQHro1s",
+      "target_title": "展開図パズル",
+      "video_title": "展開図パズル"
+    },
+    {
+      "asin": "B0C8HM1F94",
+      "url": "https://www.youtube.com/watch?v=7fTgbF73_OU",
+      "target_title": "マッチングエッグ",
+      "video_title": "【マッチングエッグ買った】 #asmrvideo #ママの日常 #購入品紹介 #ベビーおもちゃ"
+    },
+    {
+      "asin": "B0C8HM1F94",
+      "url": "https://www.youtube.com/watch?v=i7Ysr0NAfTo",
+      "target_title": "マッチングエッグ",
+      "video_title": "モンテの教材にもなってる“マッチングエッグ”🥚いろんな遊び方が出来てたのしい👍🏻楽天ルーム見てね🤎#モンテッソーリ#おうちモンテ#マッチングエッグ#知育玩具"
+    },
+    {
+      "asin": "B0C8HM1F94",
+      "url": "https://www.youtube.com/watch?v=zf0_f9oy0Is",
+      "target_title": "マッチングエッグ",
+      "video_title": "知育玩具「マッチングエッグ」買ってみたら…遊び方が違った！？"
+    },
+    {
+      "asin": "B0CF97KXJ3",
+      "url": "https://www.youtube.com/watch?v=aCe421haNtQ",
+      "target_title": "クリックソー",
+      "video_title": "クリックソー"
+    },
+    {
+      "asin": "B0CF97KXJ3",
+      "url": "https://www.youtube.com/watch?v=bDfwN268VbA",
+      "target_title": "クリックソー",
+      "video_title": "【ラングスジャパン】クリックソー"
+    },
+    {
+      "asin": "B0CF97KXJ3",
+      "url": "https://www.youtube.com/watch?v=eVlTB11dMMg",
+      "target_title": "クリックソー",
+      "video_title": "【ラングスジャパン】クリックソー"
+    },
+    {
+      "asin": "B0CFXJX5FT",
+      "url": "https://www.youtube.com/watch?v=aG7zo1epzxQ",
+      "target_title": "カラフルころころ迷路ブロック",
+      "video_title": "保育園で、貰ってきたカラフルころころ迷路ブロック遊んでみた🌈#カラフルころころ迷路ブロック#5歳女の子 #IWonder#遊んでみた"
+    },
+    {
+      "asin": "B0CKBCDMX8",
+      "url": "https://www.youtube.com/watch?v=FLh3osafA8k",
+      "target_title": "スウィートメロディーメーカー",
+      "video_title": "ミルキートイ MilkyToy スウィートメロディーメーカー Sweet Melody Maker ベビーギフト ご出産祝い お誕生日 エドインター"
+    },
+    {
+      "asin": "B0CKVGHC9K",
+      "url": "https://www.youtube.com/watch?v=pTqC6xQ41sg",
+      "target_title": "はらはらブロック",
+      "video_title": "はらはらブロックであそんだー"
+    },
+    {
+      "asin": "B0CL4WXQZ6",
+      "url": "https://www.youtube.com/watch?v=AucgHVBWv_A",
+      "target_title": "くるくるチャイム",
+      "video_title": "くるくるチャイム"
+    },
+    {
+      "asin": "B0CL4WXQZ6",
+      "url": "https://www.youtube.com/watch?v=NFIQwBACyUg",
+      "target_title": "くるくるチャイム",
+      "video_title": "くるくるチャイム　使い方編"
+    },
+    {
+      "asin": "B0CL4WXQZ6",
+      "url": "https://www.youtube.com/watch?v=_R_CU6w5Xn0",
+      "target_title": "くるくるチャイム",
+      "video_title": "くるくるチャイム開封"
+    },
+    {
+      "asin": "B0CL6SV924",
+      "url": "https://www.youtube.com/watch?v=IYT8ivIMKk4",
+      "target_title": "NEW OH!寿司ゲーム",
+      "video_title": "お寿司を積んで、はらはらドキドキバランスゲーム！「NEW OH！寿司ゲーム」"
+    },
+    {
+      "asin": "B0CLTPGK2Y",
+      "url": "https://www.youtube.com/watch?v=uX3gIDN-ERE",
+      "target_title": "ポケット人生ゲーム",
+      "video_title": "【あんこと遊ぶ】第1弾！「ポケット人生ゲーム(準備)」編"
+    },
+    {
+      "asin": "B0CMCW78ZG",
+      "url": "https://www.youtube.com/watch?v=WxmqDVuJZbs",
+      "target_title": "明治ミルクチョコレートパズル",
+      "video_title": "衝撃！　明治ミルクチョコレートパズル　簡単！！"
+    },
+    {
+      "asin": "B0CMCW78ZG",
+      "url": "https://www.youtube.com/watch?v=n2RilYJ2P1g",
+      "target_title": "明治ミルクチョコレートパズル",
+      "video_title": "明治ミルクチョコレートパズル 謎解き"
+    },
+    {
+      "asin": "B0CMZSRJ3Q",
+      "url": "https://www.youtube.com/watch?v=4jFH89mmHCg",
+      "target_title": "フェニックスウイング",
+      "video_title": "BX-23 フェニックスウイング9-60GF ベイブレードエックス PHOENIXWING 9-60GF  BEYBLADE X"
+    },
+    {
+      "asin": "B0CNJQKM85",
+      "url": "https://www.youtube.com/watch?v=8jzXimueAR4",
+      "target_title": "はじめてのひらがなボード",
+      "video_title": "はじめてのひらがなボード"
+    },
+    {
+      "asin": "B0CNJQKM85",
+      "url": "https://www.youtube.com/watch?v=t3ZMZ4cJuRE",
+      "target_title": "はじめてのひらがなボード",
+      "video_title": "はじめてのひらがなボード　セット内容編"
+    },
+    {
+      "asin": "B0CNWT9H56",
+      "url": "https://www.youtube.com/watch?v=5jgu-YfbEaY",
+      "target_title": "ナチュラルカフェキッチン",
+      "video_title": "木製おもちゃのだいわ　リバーシブルであそべる！ナチュラルカフェキッチン"
+    },
+    {
+      "asin": "B0CNWT9H56",
+      "url": "https://www.youtube.com/watch?v=EwWbARl_jSc",
+      "target_title": "ナチュラルカフェキッチン",
+      "video_title": "ナチュラルカフェキッチンつまみのカチカチ音"
+    },
+    {
+      "asin": "B0CRQWD881",
+      "url": "https://www.youtube.com/watch?v=wuz2vEm98aU",
+      "target_title": "ころころくみかえスライダー きほんセット",
+      "video_title": "ビー玉転がし#5 E8862 Hape（ハペ） ころころくみかえスライダー きほんセット"
+    },
+    {
+      "asin": "B0CT9YMVF5",
+      "url": "https://www.youtube.com/watch?v=LV09CjxtYEA",
+      "target_title": "アスレチックランドゲーム レベルアップ",
+      "video_title": "また帰ってきたアナログゲーム『アスレチックランドゲーム レベルアップ』がレベル上げし過ぎな件。"
+    },
+    {
+      "asin": "B0CV7D5B6K",
+      "url": "https://www.youtube.com/watch?v=_-7fAn2-0tI",
+      "target_title": "ウィザードロッド 5-70DB",
+      "video_title": "【最強of最強】🪄UX-03 ウィザードロッド5-70DBは案の定環境ティア１ベイ【ベイブレードX】"
+    },
+    {
+      "asin": "B0CV7D5B6K",
+      "url": "https://www.youtube.com/watch?v=lLpP9O-W4dc",
+      "target_title": "ウィザードロッド 5-70DB",
+      "video_title": "UX-03 ウィザードロッド5-70DB ベイブレードエックス  WIZARDROD5-70DB  BEYBLADE X"
+    },
+    {
+      "asin": "B0CVQ5DDGC",
+      "url": "https://www.youtube.com/watch?v=4ZBfCO_Pihc",
+      "target_title": "embot+ （エムボットプラス）",
+      "video_title": "embot+(エムボットプラス)とデジタルセンサーのプログラミング例"
+    },
+    {
+      "asin": "B0CVQ5DDGC",
+      "url": "https://www.youtube.com/watch?v=ID9FGlKqoOI",
+      "target_title": "embot+ （エムボットプラス）",
+      "video_title": "embot+(エムボットプラス)と超音波センサーのプログラミング例"
+    },
+    {
+      "asin": "B0CVQ5DDGC",
+      "url": "https://www.youtube.com/watch?v=kM-fnswZk5I",
+      "target_title": "embot+ （エムボットプラス）",
+      "video_title": "embot+(エムボットプラス)とジョイスティックのプログラミング例"
+    },
+    {
+      "asin": "B0CX8B22CQ",
+      "url": "https://www.youtube.com/watch?v=ohZuqEHjThg",
+      "target_title": "エレキット フォロ",
+      "video_title": "【エレキット】フォロ"
+    },
+    {
+      "asin": "B0CY4H1TJD",
+      "url": "https://www.youtube.com/watch?v=6TqnFZspEUI",
+      "target_title": "ドライガースラッシュ 4-80P",
+      "video_title": "【変幻自在】復刻の「ドライガースラッシュ4-80P」がバランスタイプの完成系すぎた！最強格も沈めてしまう強さwww【大人向け解説】【ベイブレードX】"
+    },
+    {
+      "asin": "B0CY4H1TJD",
+      "url": "https://www.youtube.com/watch?v=SPbbtYc_--U",
+      "target_title": "ドライガースラッシュ 4-80P",
+      "video_title": "BX-00 ドライガースラッシュ4-80P ベイブレードエックス DRIGERSLASH4-80P  BEYBLADE X"
+    },
+    {
+      "asin": "B0CY4H1TJD",
+      "url": "https://www.youtube.com/watch?v=ko--Stv3vBk",
+      "target_title": "ドライガースラッシュ 4-80P",
+      "video_title": "【ベイブレード開発者レビュー】ドライガースラッシュ4-80P"
+    },
+    {
+      "asin": "B0D7PC5KFS",
+      "url": "https://www.youtube.com/watch?v=HmTeuVRzbRc",
+      "target_title": "ナーフ Nシリーズ ピンポイント",
+      "video_title": "ナーフ Nシリーズ ピンポイント NERF Nseries pinpoint"
+    },
+    {
+      "asin": "B0D7PC5KFS",
+      "url": "https://www.youtube.com/watch?v=R2LKTasnVqI",
+      "target_title": "ナーフ Nシリーズ ピンポイント",
+      "video_title": "「Nerf N-Series Pinpoint」（ナーフ Nシリーズ ピンポイント）　レビュー：神ナフチャンネル　Vol.46"
+    },
+    {
+      "asin": "B0D7PC5KFS",
+      "url": "https://www.youtube.com/watch?v=WL-Bq7NK7Qo",
+      "target_title": "ナーフ Nシリーズ ピンポイント",
+      "video_title": "ナーフ Nシリーズ ピンポイント  エリート2 0 イーグルポイント RD 8で遊んでみた｜Joshin 試用レポート"
+    },
+    {
+      "asin": "B0D7PCCHDH",
+      "url": "https://www.youtube.com/watch?v=XOoEZgC8HlY",
+      "target_title": "ナーフ Nシリーズ スプリンター",
+      "video_title": "ナーフ Nシリーズ スプリンター Nerf N-Series Sprinter"
+    },
+    {
+      "asin": "B0DFW7ZLPL",
+      "url": "https://www.youtube.com/watch?v=7COmMeI7xXw",
+      "target_title": "ナンスピ",
+      "video_title": "【ナンスピ/NUMBER SPEED」ポチっと脳トレ！老若男女が遊び感覚で脳を鍛えられる脳トレトイ！　日本おもちゃ大賞2024 ゲーム＆パズル部門】優秀賞受賞！！　#shorts"
+    },
+    {
+      "asin": "B0DFW7ZLPL",
+      "url": "https://www.youtube.com/watch?v=SahyNjwcdmk",
+      "target_title": "ナンスピ",
+      "video_title": "親子でナンスピ対決したら面白すぎたww #Shorts #ナンスピ #親子 #こっちゃん"
+    },
+    {
+      "asin": "B0DFW7ZLPL",
+      "url": "https://www.youtube.com/watch?v=pzwLZ_9Vn1U",
+      "target_title": "ナンスピ",
+      "video_title": "【ナンスピ/NUMBER SPEED】ポチっと脳トレ！老若男女が遊び感覚で脳を鍛えられる脳トレトイ！ 【日本おもちゃ大賞2024 ゲーム&amp;パズル部門 優秀賞受賞】"
+    },
+    {
+      "asin": "B0DG5D5QCR",
+      "url": "https://www.youtube.com/watch?v=1FX5_zLM_HI",
+      "target_title": "ルービックキューブファントム",
+      "video_title": "温度で色が変わる！？　ルービックキューブファントム"
+    },
+    {
+      "asin": "B0DP1YN9FP",
+      "url": "https://www.youtube.com/watch?v=-I7Zc6lJy_4",
+      "target_title": "サメサメパックン",
+      "video_title": "アニアから本格アクションゲームが登場！「サメサメパックン」をレビュー！ドキドキの作動ポイントとアニア収納の裏技を公開"
+    },
+    {
+      "asin": "B0DQHP6Z45",
+      "url": "https://www.youtube.com/watch?v=R2LKTasnVqI",
+      "target_title": "ナーフ Nシリーズ ピンポイント",
+      "video_title": "「Nerf N-Series Pinpoint」（ナーフ Nシリーズ ピンポイント）　レビュー：神ナフチャンネル　Vol.46"
+    },
+    {
+      "asin": "B0DSKCP1TY",
+      "url": "https://www.youtube.com/watch?v=3WwoO6oQDsU",
+      "target_title": "つみつみスロープ",
+      "video_title": "つみつみスロープ"
+    },
+    {
+      "asin": "B0DXDVDS5R",
+      "url": "https://www.youtube.com/watch?v=GU0BJ4QMayU",
+      "target_title": "ルービックキューブピクセル",
+      "video_title": "ルービックキューブピクセル／ルービックキューブタイム"
+    },
+    {
+      "asin": "B0DXDVDS5R",
+      "url": "https://www.youtube.com/watch?v=JjPEcAoBz70",
+      "target_title": "ルービックキューブピクセル",
+      "video_title": "【広告用】ルービックキューブピクセル　カット版"
+    },
+    {
+      "asin": "B0DXDVDS5R",
+      "url": "https://www.youtube.com/watch?v=S_4e3B3JzY0",
+      "target_title": "ルービックキューブピクセル",
+      "video_title": "ルービックキューブピクセル／ルービックキューブタイム／ルービックキューブフラッシュ"
+    },
+    {
+      "asin": "B0DY75DS1S",
+      "url": "https://www.youtube.com/watch?v=AbiCwlzIe1A",
+      "target_title": "いろがわりオーブンレンジDX",
+      "video_title": "こんがり焼けたよ❕いろがわりオーブンレンジDX🎶【アンパンマン・おもちゃあそび】"
+    },
+    {
+      "asin": "B0DY75DS1S",
+      "url": "https://www.youtube.com/watch?v=csWdWcguXFI",
+      "target_title": "いろがわりオーブンレンジDX",
+      "video_title": "「こんがり焼けたよ！いろがわりオーブンレンジDX」PV"
+    },
+    {
+      "asin": "B0DYJ9NS7B",
+      "url": "https://www.youtube.com/watch?v=_byvaBSe5jo",
+      "target_title": "ばいきんまんブロックバケツ",
+      "video_title": "だだんだん！もぐりん！バイキンじょうが作れる！ ばいきんまんブロックバケツ"
+    },
+    {
+      "asin": "B0DZ6FM12N",
+      "url": "https://www.youtube.com/watch?v=FmE6ni-imtY",
+      "target_title": "スピンアニメーカー",
+      "video_title": "スピンアニメーカー　①  注意事項と使い方"
+    },
+    {
+      "asin": "B0DZ6FM12N",
+      "url": "https://www.youtube.com/watch?v=FqsGa-dcAKc",
+      "target_title": "スピンアニメーカー",
+      "video_title": "自分でアニメが作れちゃうメイキングトイ『スピンアニメーカー』"
+    },
+    {
+      "asin": "B0DZ6FM12N",
+      "url": "https://www.youtube.com/watch?v=cCxeYwCyivQ",
+      "target_title": "スピンアニメーカー",
+      "video_title": "メイキングトイ スピンアニメーカー　PV"
+    },
+    {
+      "asin": "B0F1MKNTDN",
+      "url": "https://www.youtube.com/watch?v=ghOGOS03v3A",
+      "target_title": "はじめてのおしゃべりバス",
+      "video_title": "エルにベビーバスはじめてのおしゃべりバスを渡してみた#ベビーバス #babybus"
+    },
+    {
+      "asin": "B0F1MKNTDN",
+      "url": "https://www.youtube.com/watch?v=tuLZsh7iVVY",
+      "target_title": "はじめてのおしゃべりバス",
+      "video_title": "BabyBusはじめてのおしゃべりバス　遊びながら学ぼう！"
+    },
+    {
+      "asin": "B0F4WRGPFD",
+      "url": "https://www.youtube.com/watch?v=V4mHlBbaF4Q",
+      "target_title": "ナーフ Nシリーズ ダブルインパクト",
+      "video_title": "ナーフ Nシリーズ ダブルインパクト ブラスター Nerf N Series Double Impact Blaster"
+    },
+    {
+      "asin": "B0F89Y6XQ1",
+      "url": "https://www.youtube.com/watch?v=IFoViyNtBwA",
+      "target_title": "トリケラプレスM-85BS",
+      "video_title": "【驚愕】異質な存在…！新ベイの「トリケラプレスM-85BS」がラチェットにメタルパーツ付きってマジ！？【大人向け解説】【ベイブレードX】"
+    },
+    {
+      "asin": "B0F89Y6XQ1",
+      "url": "https://www.youtube.com/watch?v=uFr15sCqc5Q",
+      "target_title": "トリケラプレスM-85BS",
+      "video_title": "【脅威の耐久力】メタル搭載ラチェット！新ベイの「トリケラプレスM-85BS」が予想外のカウンター型だった件www【大人向け解説】【ベイブレードX】"
+    },
+    {
+      "asin": "B0F89Y6XQ1",
+      "url": "https://www.youtube.com/watch?v=z-lNP8LqJU4",
+      "target_title": "トリケラプレスM-85BS",
+      "video_title": "BX-44 トリケラプレスM-85BS ベイブレードエックス TRICERAPRESSM-85BS  BEYBLADE X"
+    },
+    {
+      "asin": "B0F997N43C",
+      "url": "https://www.youtube.com/watch?v=DhkSvEsNUyI",
+      "target_title": "シトラスバードファミリー",
+      "video_title": "【7月12日新発売】シトラスバードファミリー開封【シルバニアファミリー】"
+    },
+    {
+      "asin": "B0F997N43C",
+      "url": "https://www.youtube.com/watch?v=fczeORF8RXM",
+      "target_title": "シトラスバードファミリー",
+      "video_title": "【 開封 】シトラスバードファミリー シルバニアファミリー【SylvanianFamilies】【CalicoCritters】Unboxing"
+    },
+    {
+      "asin": "B0FCLJ67NK",
+      "url": "https://www.youtube.com/watch?v=-wMaVHLRofA",
+      "target_title": "ペガサスブラストATr",
+      "video_title": "【変形】再加速で突然のリーサル！ペガサスブラストATrの打撃力が想像以上だった件…【大人向け解説】【ベイブレードX】＋政治・経済ニュース"
+    },
+    {
+      "asin": "B0FCLJ67NK",
+      "url": "https://www.youtube.com/watch?v=aq16KpjgCwc",
+      "target_title": "ペガサスブラストATr",
+      "video_title": "CX-07 ペガサスブラストATr ベイブレードエックス PEGASUSBLAST ATr  BEYBLADE X"
+    },
+    {
+      "asin": "B0FCLJ67NK",
+      "url": "https://www.youtube.com/watch?v=mzL1qbrlq7c",
+      "target_title": "ペガサスブラストATr",
+      "video_title": "CX-00 ペガサスブラストATr メタルコート：レッド ベイブレードエックス PEGASUSBLAST ATr  BEYBLADE X"
+    },
+    {
+      "asin": "B0FJ7ZN6JY",
+      "url": "https://www.youtube.com/watch?v=1_QSrhut6aY",
+      "target_title": "パネルでちいくキューブ",
+      "video_title": "【公式】しまじろう パネルでちいくキューブ15秒 CM"
+    },
+    {
+      "asin": "B0FJ7ZN6JY",
+      "url": "https://www.youtube.com/watch?v=k1D-FM7EUdQ",
+      "target_title": "パネルでちいくキューブ",
+      "video_title": "【公式】しまじろう パネルでちいくキューブ"
+    },
+    {
+      "asin": "B0FJW7GQ8X",
+      "url": "https://www.youtube.com/watch?v=di_pKPreFA8",
+      "target_title": "立体ドット絵メーカー",
+      "video_title": "【祝！2025おもちゃ大賞エデュケーショナル部門優秀賞受賞】立体ドット絵メーカー"
+    },
+    {
+      "asin": "B0FL79TDTY",
+      "url": "https://www.youtube.com/watch?v=0YTbb95H5Bk",
+      "target_title": "ドリームスイッチ ベーシックセット",
+      "video_title": "「早く終わらせたい」から「もっと続いてほしい」へ、寝る前の親子の時間が変わる！【ドリームスイッチ　ベーシックセット】｜セガ フェイブ"
+    },
+    {
+      "asin": "B0FLX6ZXMC",
+      "url": "https://www.youtube.com/watch?v=7z4CGFFY_hU",
+      "target_title": "ユナイトポリスブレイバーZERO",
+      "video_title": "【ジョブレイバー】ＴＪＢＤＸ ユナイトポリスブレイバーＺＥＲＯ 覆面パトロールカー＆黒バイ 合体セット 組み立て説明動画"
+    },
+    {
+      "asin": "B0FNM31F4G",
+      "url": "https://www.youtube.com/watch?v=sgkBcVp7hmg",
+      "target_title": "のりものブロックタウンボックス",
+      "video_title": "【トミカ・プラレールブロック】　のりものブロックタウンボックス　商品紹介PV"
+    },
+    {
+      "asin": "B0FPC3B85M",
+      "url": "https://www.youtube.com/watch?v=WGrk1NpZOzw",
+      "target_title": "LaQ ボーナスセット2025",
+      "video_title": "【ラキュー公式】超オトク！本屋さんだけ！『LaQ ボーナスセット 2025 書店限定版』限定ジュエルパーツや蓄光パーツなど大満足のセット！11月発売！【知育玩具ブロック LaQ】"
+    },
+    {
+      "asin": "B0FPDZ5GCR",
+      "url": "https://www.youtube.com/watch?v=-vKdlEjQ6Mw",
+      "target_title": "やみつきボックス",
+      "video_title": "7760たのしく知育！やみつきボックス"
+    },
+    {
+      "asin": "B0FPQHG3V1",
+      "url": "https://www.youtube.com/watch?v=mKxYAb3OsFE",
+      "target_title": "まわすのだいすき！",
+      "video_title": "まわすのだいすき！"
+    },
+    {
+      "asin": "B0FT3W4KKH",
+      "url": "https://www.youtube.com/watch?v=lijJ0t1hPXc",
+      "target_title": "LaQ プリンセスジュエリー",
+      "video_title": "【ラキュー公式】まるでプリンセス👸きらめくアクセサリーをつくろう！『プリンセスジュエリー』で作れるモデルをくるくる紹介✨💎【知育玩具ブロック LaQ】"
+    },
+    {
+      "asin": "B0FT3W4KKH",
+      "url": "https://www.youtube.com/watch?v=qpu9vv5iAlM",
+      "target_title": "LaQ プリンセスジュエリー",
+      "video_title": "【ラキュー公式】新商品『LaQ SCプリンセスジュエリー』CM　ジュエルでキラキラ✨輝くアイテムがつくれちゃう！2025年10月発売！【知育玩具ブロック LaQ おひめさま プリンセス かわいい】"
+    },
+    {
+      "asin": "B0FV74J4H5",
+      "url": "https://www.youtube.com/watch?v=yltZ6pR2c4M",
+      "target_title": "ウルフハントF0-60DB",
+      "video_title": "【受け流し⇄打撃】※俺では制御不能「ウルフハントF0-60DB」の真価を引き出すのが難しすぎた件【大人向け解説】【ベイブレードX】"
+    },
+    {
+      "asin": "B0G23TSNMF",
+      "url": "https://www.youtube.com/watch?v=WMSoMWgd8Ng",
+      "target_title": "りったいすごろく まほうのくに",
+      "video_title": "りったいすごろく【にんじゃ】【じゃんぐるたんけん】【まほうのくに】"
+    },
+    {
+      "asin": "B0GC2GR7D4",
+      "url": "https://www.youtube.com/watch?v=aPxsnJ5FYSs",
+      "target_title": "道路保安用品運搬トラック",
+      "video_title": "【トミカ】いすゞエルフに改造！2026年2月発売の道路保安用品運搬トラックをカスタム！平ボデーは嬉しいです！架空車 トミカカスタム いじる ミニカー改造 トラック はたらくくるま 標識車 道路パトカー"
+    },
+    {
+      "asin": "B0GC2GR7D4",
+      "url": "https://www.youtube.com/watch?v=fu3e9Cuy_Y0",
+      "target_title": "道路保安用品運搬トラック",
+      "video_title": "はたらく車『トラック』【トミカ 新製品 開封】トミカ「No.82 道路保安用品運搬トラック」【シール&amp;バリケード付き】箱から出せば『工事現場ごっこ』ができるっ！【トミカの日  2026/2/21〜】"
+    },
+    {
+      "asin": "B0GC2GR7D4",
+      "url": "https://www.youtube.com/watch?v=tf4RBZf-cro",
+      "target_title": "道路保安用品運搬トラック",
+      "video_title": "トミカ No.82 道路保安用品運搬トラック"
+    },
+    {
+      "asin": "B0GG8V3N79",
+      "url": "https://www.youtube.com/watch?v=L9Til18FNjY",
+      "target_title": "フェニックスフレアZ9-80WW",
+      "video_title": "CX-12 フェニックスフレア Z9-80WW ベイブレードエックス PHOENIXFLARE9-80WW  BEYBLADE X"
+    },
+    {
+      "asin": "B0GG8V3N79",
+      "url": "https://www.youtube.com/watch?v=N0KC9jDtxhk",
+      "target_title": "フェニックスフレアZ9-80WW",
+      "video_title": "【重厚】絶対に倒れない「フェニックスフレアZ9-80WW」の姿勢保持性能が素晴らしい！が…難易度がS-Tierな件【ベイブレードX】【大人向け解説】"
+    },
+    {
+      "asin": "B0GMDXM7LN",
+      "url": "https://www.youtube.com/watch?v=B1pZVYBeUhk",
+      "target_title": "エヴァンゲリオンプライム初号機",
+      "video_title": "「シナジネクス エヴァンゲリオンプライム初号機」のトランスフォームを一足先にチェック！【トランスフォーマー×エヴァンゲリオン】"
+    },
+    {
+      "asin": "B0GMDXM7LN",
+      "url": "https://www.youtube.com/watch?v=bcBI04lqXPc",
+      "target_title": "エヴァンゲリオンプライム初号機",
+      "video_title": "【シナジネクス】トランスフォーマー×エヴァンゲリオンコラボ　エヴァンゲリオンプライム初号機 商品紹介PV　SYNERGENEX EVANGELION PRIME 01 PV"
+    },
+    {
+      "asin": "B0GMDXM7LN",
+      "url": "https://www.youtube.com/watch?v=rOCy5c13gm4",
+      "target_title": "エヴァンゲリオンプライム初号機",
+      "video_title": "スパークのルフラン！エヴァンゲリオンとトランスフォーマーがコラボした【エヴァンゲリオンプライム初号機】をレビュー！"
+    },
+    {
+      "asin": "B0GMF1DTFB",
+      "url": "https://www.youtube.com/watch?v=9lqPf__Jlgs",
+      "target_title": "バハムートブリッツBK1-50I",
+      "video_title": "【ベイブレード開発者レビュー】CXエクスパンドブレード登場！バハムートブリッツBK1-50I"
+    },
+    {
+      "asin": "B0GMF1DTFB",
+      "url": "https://www.youtube.com/watch?v=JWhgJTyP1pg",
+      "target_title": "バハムートブリッツBK1-50I",
+      "video_title": "【エクスパンド】CX史上最高火力「バハムートブリッツBK1-50I」の性能が攻撃特化型すぎて20秒しか回らない件www【ベイブレードX】【大人向け解説】"
+    },
+    {
+      "asin": "B0GMF1DTFB",
+      "url": "https://www.youtube.com/watch?v=i8_7Z-5cJo4",
+      "target_title": "バハムートブリッツBK1-50I",
+      "video_title": "CX-13 バハムートブリッツBK1-50I ベイブレードエックス　BAHMUTBLITZ BK1-50I  BEYBLADE X"
+    },
+    {
+      "asin": "B0GS4F6977",
+      "url": "https://www.youtube.com/watch?v=MVnpdGNfneY",
+      "target_title": "バレットグリフォンH",
+      "video_title": "【BEYBLADE X】20秒でわかる！バレットグリフォンH！"
+    },
+    {
+      "asin": "B0GS4F6977",
+      "url": "https://www.youtube.com/watch?v=MZTLMCQHLU8",
+      "target_title": "バレットグリフォンH",
+      "video_title": "【BEYBLADE X】20秒でわかる！バレットグリフォンH！"
+    },
+    {
+      "asin": "B0GS4F6977",
+      "url": "https://www.youtube.com/watch?v=rLi0Jp16smQ",
+      "target_title": "バレットグリフォンH",
+      "video_title": "【強すぎ…】分身ギミック史上最高傑作「バレットグリフォンH」の２機で戦うスタイルが楽しすぎる件www【大人向け解説】【ベイブレードX】"
+    },
+    {
+      "asin": "B0GS4M7T5B",
+      "url": "https://www.youtube.com/watch?v=GudIf4FfNTg",
+      "target_title": "ドランストライク4-50FF",
+      "video_title": "【新型】中央までメタル！剛性を高めた「ドランストライク4-50FF」の攻撃音が恐ろしすぎたwww【大人向け解説】【ベイブレードX】"
+    },
+    {
+      "asin": "B0GS4M7T5B",
+      "url": "https://www.youtube.com/watch?v=Ryy_iNBAQaI",
+      "target_title": "ドランストライク4-50FF",
+      "video_title": "BX-49 ドランストライク4-50FF ベイブレードエックス　DRANSTRIKE4-50FF  BEYBLADE X"
+    },
+    {
+      "asin": "B0GS4M7T5B",
+      "url": "https://www.youtube.com/watch?v=Uwf6oHeuGUE",
+      "target_title": "ドランストライク4-50FF",
+      "video_title": "【一撃崩壊】連続重攻撃が可能な新ベイ『ドランストライク4-50FF』がぶっ壊れ火力で全員消し飛ぶww【ベイブレードX】【性能&amp;パーツ徹底解説】"
+    },
+    {
+      "asin": "B0GS8PVZ2F",
+      "url": "https://www.youtube.com/watch?v=FCpl-IjfF9s",
+      "target_title": "ストームスプリガン2-70M",
+      "video_title": "【バースト】不遇な復刻「ストームスプリガン2-70M」が弱すぎるので改造で化けさせましたwww【ベイブレードX】【大人向け解説】"
+    },
+    {
+      "asin": "B0GS8PVZ2F",
+      "url": "https://www.youtube.com/watch?v=MkVxOppYLiA",
+      "target_title": "ストームスプリガン2-70M",
+      "video_title": "BX-00 ストームスプリガン2-70M ベイブレードエックス　STORMSPRIGGAN2-70M  BEYBLADE X"
+    },
+    {
+      "asin": "B0GSCZQV8G",
+      "url": "https://www.youtube.com/watch?v=UEQNRxszvEs",
+      "target_title": "フクロウのふしぎな野菜畑",
+      "video_title": "フクロウのふしぎな野菜畑🍄"
+    },
+    {
+      "asin": "B0GVC7P9JH",
+      "url": "https://www.youtube.com/watch?v=krpG6c6zpzE",
+      "target_title": "にじ色ランタン工作",
+      "video_title": "「にじ色ランタン工作」　 60秒動画"
+    },
+    {
+      "asin": "B0GVC7P9JH",
+      "url": "https://www.youtube.com/watch?v=vvZtAwOIPpA",
+      "target_title": "にじ色ランタン工作",
+      "video_title": "「にじ色ランタン工作」　 90秒動画"
+    },
+    {
+      "asin": "B0GWSB32V2",
+      "url": "https://www.youtube.com/watch?v=LiOxyUBtmlA",
+      "target_title": "子どもたちの100の言葉",
+      "video_title": "【おすすめの一冊】子どもたちの100の言葉 　レッジョ・チルドレン (著)"
+    },
+    {
+      "asin": "B0H1B5QDJK",
+      "url": "https://www.youtube.com/watch?v=ujjohFcEPjI",
+      "target_title": "ブラキオウィップセレクト",
+      "video_title": "『CX-18 ランダムブースター ブラキオウィップセレクト』を10箱開ける!!　ベイブレードエックス"
+    },
+    {
+      "asin": "B0H4PK66SN",
+      "url": "https://www.youtube.com/watch?v=8eiLzogodYY",
+      "target_title": "ストームペガシス 3-70RA",
+      "video_title": "BX-00 BX-00ストームペガシス3-70RA ベイブレードエックス STORMPEGASIS3-70RA  BEYBLADE X"
+    },
+    {
+      "asin": "B0H4PK66SN",
+      "url": "https://www.youtube.com/watch?v=9EN4-CFmgUY",
+      "target_title": "ストームペガシス 3-70RA",
+      "video_title": "BX-00 ストームペガシス3-70RA 【ベイブレード エックス】"
+    },
+    {
+      "asin": "B0H4PK66SN",
+      "url": "https://www.youtube.com/watch?v=c9WwkNpeTNA",
+      "target_title": "ストームペガシス 3-70RA",
+      "video_title": "【ベイブレード開発者レビュー】 ストームペガシス3-70RA"
+    },
+    {
+      "asin": "B0H4PQBWB6",
+      "url": "https://www.youtube.com/watch?v=RAGnYR3aYqw",
+      "target_title": "テラスタルオーブEX",
+      "video_title": "【何かがおかしい】5代目！？ポケモン テラスタルオーブEX、初代から全部比べたら…"
+    },
+    {
+      "asin": "B0H6LVQ285",
+      "url": "https://www.youtube.com/watch?v=D0voDK1raaE",
+      "target_title": "ライジングポリスブレイバーZERO",
+      "video_title": "【特装合体ロボ ジョブレイバー 逆襲のジョーカー！第7話】 ＴＪＢＤＸ ライジングポリスブレイバーＺＥＲＯ デカライドアーマー黒バイＤＸセット 【トミカ】"
+    },
+    {
+      "asin": "B0H6LVQ285",
+      "url": "https://www.youtube.com/watch?v=h-kL0wEIIcQ",
+      "target_title": "ライジングポリスブレイバーZERO",
+      "video_title": "【ジョブレイバー】ＴＪＢＤＸ ライジングポリスブレイバーＺＥＲＯ デカライドアーマー黒バイＤＸセット 組み立て説明動画"
+    },
+    {
+      "asin": "B0HDB55QMY",
+      "url": "https://www.youtube.com/watch?v=Z4YXyijYGtw",
+      "target_title": "スターキラリングブローチ",
+      "video_title": "8/29にシャインアルカナロッドと同時発売されるスターキラリングブローチ！劇場版に登場するフューチャーフォームとスターキラリングフォームにパワーアップ変身！#プリキュア #名探偵プリキュア #おもちゃ"
+    },
+    {
+      "asin": "B0HDB55QMY",
+      "url": "https://www.youtube.com/watch?v=oMHalyw-l3U",
+      "target_title": "スターキラリングブローチ",
+      "video_title": "Star Detective Precure EP 29 - The Star Kiraring Brooch! | 名探偵プリキュア！第29話：スターキラリングブローチの試練！"
+    },
+    {
+      "asin": "B0HDB6X1CN",
+      "url": "https://www.youtube.com/watch?v=PnNmvHw-_r0",
+      "target_title": "シャインアルカナロッド",
+      "video_title": "【名探偵プリキュア】シャインアルカナロッドがヤバい！白アルカナ専用かと思ったらまさかの全員武器！？【たんプリ】"
+    },
+    {
+      "asin": "B0HDB6X1CN",
+      "url": "https://www.youtube.com/watch?v=Z4YXyijYGtw",
+      "target_title": "シャインアルカナロッド",
+      "video_title": "8/29にシャインアルカナロッドと同時発売されるスターキラリングブローチ！劇場版に登場するフューチャーフォームとスターキラリングフォームにパワーアップ変身！#プリキュア #名探偵プリキュア #おもちゃ"
+    },
+    {
+      "asin": "B0HDB8KG6G",
+      "url": "https://www.youtube.com/watch?v=PnNmvHw-_r0",
+      "target_title": "シャインアルカナロッド",
+      "video_title": "【名探偵プリキュア】シャインアルカナロッドがヤバい！白アルカナ専用かと思ったらまさかの全員武器！？【たんプリ】"
+    },
+    {
+      "asin": "B0HDB8KG6G",
+      "url": "https://www.youtube.com/watch?v=Z4YXyijYGtw",
+      "target_title": "シャインアルカナロッド",
+      "video_title": "8/29にシャインアルカナロッドと同時発売されるスターキラリングブローチ！劇場版に登場するフューチャーフォームとスターキラリングフォームにパワーアップ変身！#プリキュア #名探偵プリキュア #おもちゃ"
+    }
+  ]
+}
