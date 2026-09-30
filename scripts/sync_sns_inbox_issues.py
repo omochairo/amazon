@@ -37,6 +37,10 @@ close しても status は `drafted` のままで、PENDING.md の「未対応 n
 しかも **人が `ignored` を付ける手段は他に無い** (付けられるのは起草側の LLM だけ)。
 
 誤って閉じても取り返せる — store は `ignored -> answered` を許している。
+ただし **Issue を開き直しても inbox は `ignored` のまま戻らない** (store は状態を後ろに
+戻さない)。開き直した Issue は同期から外れ、閉じ直しも案の追記もされない (`issue_closed`
+が立っているため)。返すと決め直したら手元の `post_sns_reply.py --force` で送り
+(`29-sns-reply-send.yml` には force の入力が無い)、Issue は人が閉じる (#8287 項目6)。
 
 ## バースト上限
 
@@ -162,6 +166,8 @@ def issue_body(rec: dict) -> str:
         "",
         "**返さないと決めたら、この issue を close するだけでよい。** 次の同期で inbox 側が",
         "`ignored` になり、未対応から外れる。同じ返信で立て直されることはない。",
+        "閉じたあとで返すことにしたら、開き直しても inbox は戻らない。手元の",
+        "`post_sns_reply.py --force` で送り (workflow には force が無い)、この issue は手で閉じる。",
     ]
     return "\n".join(lines)
 
@@ -310,6 +316,7 @@ def sync(
         # 「未対応 n 件」に残り続ける。かつ人が ignored にする手段は他に無い
         # (ignored を付けられるのは起草側の LLM だけ)。
         # 誤って閉じた場合は取り返せる — store は ignored -> answered を許す。
+        # 開き直しでは戻らない (モジュール docstring の「close は…」参照)。
         closed_issue = marked.get(rid)
         if (
             closed_issue is not None
