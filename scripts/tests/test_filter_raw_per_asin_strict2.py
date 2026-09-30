@@ -231,3 +231,29 @@ def test_gate_disables_general_word_targets(asin):
 ])
 def test_gate_keeps_known_positive_targets(asin):
     assert _gate_enabled(asin)
+
+
+# --------------------------------------------------------------------------
+# #8320: KNOWN_BRANDS 内の表記ゆれ (レゴ⇔LEGO 等) を同じブランドとして照合する
+# --------------------------------------------------------------------------
+
+def test_brand_keys_merges_aliases_and_ignores_ascii_case():
+    assert frpa.brand_keys("Opening a Lego Duplo 10465") == {"レゴ"}
+    assert frpa.brand_keys("レゴ デュプロ") == {"レゴ"}
+    assert frpa.brand_keys("公文 くるくるチャイム") == {"くもん"}
+    assert frpa.brand_keys("JOYREAL Busy Board") == {"ジョイレア"}
+
+
+@pytest.mark.parametrize("target,video", [
+    # 本番の per_asin raw から: 型番 + (表記の違う) ブランドで一致する
+    ("レゴ デュプロ ミッキーマウス クラブハウス 10465", "Opening a Lego Duplo 10465 😭"),
+    ("レゴ シティ ライド ポリストラック 60481", "LEGO CITY Rides Police Truck LEGO SET 60481"),
+    ("くもん くるくるチャイム", "公文　くるくるチャイムで遊んでみた　#PR_affiliate"),
+])
+def test_brand_alias_passes_same_product(target, video):
+    assert _passes(target, video)
+
+
+def test_brand_alias_still_rejects_other_model():
+    assert not _passes("レゴ デュプロ ミッキーマウス クラブハウス 10465",
+                       "LEGO DUPLO - Wild Animal Families 10446 #lego #duplo")

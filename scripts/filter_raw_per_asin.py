@@ -222,6 +222,28 @@ def extract_brand_series(text: str) -> tuple[set, set]:
     return brands, series
 
 
+# KNOWN_BRANDS 内の表記ゆれ (カタカナ/英字、漢字/かな) を同じブランドとして
+# 突き合わせる (#8320)。これが無いと「レゴ デュプロ … 10465」に
+# 「LEGO DUPLO … 10465」が型番一致でも brand 不一致で通らなかった。
+_BRAND_ALIASES = {"LEGO": "レゴ", "BorneLund": "ボーネルンド", "公文": "くもん",
+                  "Joyreal": "ジョイレア"}
+
+
+def _canonical_brands(brands: set) -> set:
+    return {_BRAND_ALIASES.get(b, b) for b in brands}
+
+
+def brand_keys(text: str) -> set:
+    """score_item の brand 照合用。英字ブランドは大文字小文字を区別しない
+    (「Lego Duplo」)。extract_brand_series は product_term の除去にも使うので
+    そちらの返り値 (元の表記) は変えない。"""
+    if not text:
+        return set()
+    lower = text.lower()
+    return _canonical_brands({b for b in KNOWN_BRANDS
+                              if (b.lower() in lower if b.isascii() else b in text)})
+
+
 def tokenize(text: str) -> set:
     """日本語テキストを bigram + ASCII 単語に分解。簡易版。"""
     if not text:
@@ -578,8 +600,8 @@ def score_item(item_text: str, asin_brands: set, asin_series: set,
     signals: dict = {"brand": False, "series": False, "model": False,
                      "product_term": 0, "product_term_unique": 0,
                      "product_term_shared": 0, "token_overlap": 0}
-    item_brands, item_series = extract_brand_series(item_text)
-    if asin_brands & item_brands:
+    _, item_series = extract_brand_series(item_text)
+    if _canonical_brands(asin_brands) & brand_keys(item_text):
         score += 5.0
         signals["brand"] = True
     if asin_model and asin_model in item_text:
