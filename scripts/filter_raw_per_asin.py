@@ -629,6 +629,47 @@ def score_item(item_text: str, asin_brands: set, asin_series: set,
     return score, signals
 
 
+# 型番単独の strong 化 (#8320): KNOWN_BRANDS に無いブランド (BRIO / Hape /
+# ナーフ / ベイブレード 等) の商品は「model かつ brand」を満たせず、型番まで
+# 一致する正しい動画が落ちていた (2026-09-30 の実測で未採用 65 件、うち
+# 別商品 3 件)。次を全部満たすときだけ brand 無しで strong とする:
+#   - その ASIN 専用の取得結果 (per_asin/<ASIN>/<source>.raw.json) に出ている。
+#     ブランド未検出の ASIN はタイトル先頭 30 字で検索しているので、
+#     商品名で狙った結果という裏付けになる (全体プール由来は偶然の一致:
+#     「LaQ ボーナスセット 2025」にマインクラフト 2025 年新製品の動画)
+#   - 型番が語境界で一致する (30181 が 301812 の一部として当たるのは除く)
+#   - 型番が固有 (5 桁以上 / 英字+ハイフン+数字 / 英数字混在 4 字以上)、
+#     またはタイトル先頭の語 (多くはブランド名) も候補に出ている。4 桁の
+#     数字は年 (2023/2025) と、2〜3 字 (S2/T1/D3) は一般語と衝突する
+#     (「ランドローバー S2」に実車の動画)
+# youtube だけに使う (main() が own_urls を渡すのは youtube のみ)。news は
+# 商品名で検索しても実物の話題が混ざる (プレイモービル F-150 に実車の記事)。
+_SPECIFIC_MODEL = re.compile(
+    r"\d{5,}|[A-Za-z]{1,3}-\d{1,4}[A-Za-z]?|(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9]{4,}")
+
+
+def _urls(items: list) -> set:
+    return {it.get("url") or it.get("link") for it in items
+            if isinstance(it, dict) and (it.get("url") or it.get("link"))}
+
+
+def _lead_term(title: str) -> str:
+    parts = re.sub(r"[（(【\[].*?[)）】\]]", " ", title or "").split()
+    return parts[0] if parts else ""
+
+
+def _model_alone_strong(asin_title: str, asin_model: str, text: str,
+                        from_own_fetch: bool) -> bool:
+    if not (asin_model and from_own_fetch):
+        return False
+    if not re.search(r"(?<![0-9A-Za-z])" + re.escape(asin_model) + r"(?![0-9A-Za-z])", text):
+        return False
+    if _SPECIFIC_MODEL.fullmatch(asin_model):
+        return True
+    lead = _lead_term(asin_title).lower()
+    return len(lead) >= 2 and lead != asin_model.lower() and lead in text.lower()
+
+
 def filter_items(raw_items: list, asin_brands: set, asin_series: set,
                  asin_model: str, asin_tokens: set,
                  asin_product_terms: set,
@@ -640,7 +681,8 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
                  amazon_title: str = "",
                  allow_long_term: bool = True,
                  enable_title_chunks: bool = True,
-                 title_df: dict | None = None) -> list:
+                 title_df: dict | None = None,
+                 own_urls: set | None = None) -> list:
     """raw 配列をスコアリングして閾値以上を返す。
 
     strict=1 (books, 旧判定): ASIN にアンカー (model/terms/series) がある場合、
@@ -755,6 +797,10 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
                 elif chunks and all(_chunk_in(c, norm_text) for c in chunks):
                     strong = True
                     title_only = True
+                elif own_urls and _model_alone_strong(
+                        asin_title, asin_model, text,
+                        (item.get("url") or item.get("link")) in own_urls):
+                    strong = True
             if not strong:
                 continue
         elif strict and has_strong_anchor:
@@ -939,8 +985,8 @@ def main():
         # per-ASIN raw は当該 ASIN だけを狙った fetch 結果なので関連度が高い。
         # global pool は genre 全般なのでブランド被りで偶然 hit するケース用。
         # 両方を union-dedup してから strict filter に渡す。
-        yt_pool = _dedupe_by_url(youtube_items +
-                                 _fetch_targets.load_per_asin_raw_items(raw_dir, "youtube", asin))
+        yt_own = _fetch_targets.load_per_asin_raw_items(raw_dir, "youtube", asin)
+        yt_pool = _dedupe_by_url(youtube_items + yt_own)
         nw_pool = _dedupe_by_url(news_items +
                                  _fetch_targets.load_per_asin_raw_items(raw_dir, "news", asin))
         bk_pool = _dedupe_by_url(books_items +
@@ -955,7 +1001,7 @@ def main():
                           asin_title=title,
                           amazon_title=load_per_asin_amazon_title(raw_dir, asin),
                           allow_long_term=True, enable_title_chunks=True,
-                          title_df=title_df)
+                          title_df=title_df, own_urls=_urls(yt_own))
         # news には裏付け語なし経路 (title_chunks, enable_title_chunks=False) を
         # 使わない。2026-09-24 の実測で追加分 93 件中 36 件が別商品
         # (「ネムリラ コードレス HR」新発売のような派生モデルの告知・

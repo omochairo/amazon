@@ -257,3 +257,47 @@ def test_brand_alias_passes_same_product(target, video):
 def test_brand_alias_still_rejects_other_model():
     assert not _passes("レゴ デュプロ ミッキーマウス クラブハウス 10465",
                        "LEGO DUPLO - Wild Animal Families 10446 #lego #duplo")
+
+
+# --------------------------------------------------------------------------
+# #8320: KNOWN_BRANDS に無いブランドの型番単独 strong 化 (youtube の自分向け取得分)
+# --------------------------------------------------------------------------
+
+def _model(target: str) -> str:
+    return frpa.extract_model_number(target)
+
+
+@pytest.mark.parametrize("target,video", [
+    # 本番の per_asin raw から: 固有の型番 (5 桁 / 英字-数字 / 英数字 4 字以上)
+    ("BRIO ドラム 30181", "BRIO - 30181 Musical Drum"),
+    ("ナーフ エリート2.0 コマンダー RD-6", "NERF Elite 2.0 Commander RD-6 Blaster Unboxing"),
+    ("Hape はじめてのカラフルドミノ E1042", "E1042 DYNAMO DOMINOES"),
+    # 弱い型番 (4 桁 / 2 字) はタイトル先頭の語も出ていれば通す
+    ("PLANTOYS 6404 ソリッドドラム", "6404 PLANTOYS  SOLID DRUM"),
+    ("Dreamegg D3 Pro", "Dreamegg D3 Pro White Noise Machine Review &amp; Demo"),
+])
+def test_model_alone_strong_accepts_own_fetch(target, video):
+    assert frpa._model_alone_strong(target, _model(target), video, True)
+    assert not frpa._model_alone_strong(target, _model(target), video, False)
+
+
+@pytest.mark.parametrize("target,video", [
+    ("ランドローバー S2", "1970 Land Rover S2.wmv"),
+    ("LaQ ボーナスセット 2025",
+     "【組み立て&amp;AIレビュー？】ミニフィグ4体の神セット 2025年1月のマインクラフト新製品 21266"),
+    ("BRIO ドラム 30181", "BRIO 301812 Wooden Railway"),
+])
+def test_model_alone_strong_rejects_weak_or_partial(target, video):
+    assert not frpa._model_alone_strong(target, _model(target), video, True)
+
+
+def test_filter_items_model_alone_requires_own_urls():
+    target, video = "BRIO ドラム 30181", "BRIO - 30181 Musical Drum"
+    brands, series = frpa.extract_brand_series(target)
+    args = ([{"title": video, "url": "u1"}], brands, series, _model(target),
+            frpa.tokenize(target), frpa.extract_product_terms(target, brands, series),
+            ["title"])
+    kw = dict(top_n=3, strict=2, asin_title=target)
+    assert frpa.filter_items(*args, **kw, own_urls={"u1"})
+    assert not frpa.filter_items(*args, **kw, own_urls={"other"})
+    assert not frpa.filter_items(*args, **kw)
