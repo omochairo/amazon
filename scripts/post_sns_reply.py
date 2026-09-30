@@ -160,7 +160,15 @@ def post_bluesky(rec: dict, body: str) -> str:
     except PostError as e:
         raise PostNotSent(str(e)) from e
     found = (posts.get("posts") or [])
-    if not found or not isinstance(found[0], dict) or not found[0].get("cid"):
+    if not found:
+        # getPosts は消えた・見えない投稿を黙って結果から落とす。status は drafted の
+        # ままなので再実行しても同じ所で落ち続ける。送らないなら Issue を閉じれば
+        # 次の同期で ignored になり pending から外れる (#8285 項目4)
+        raise PostNotSent(
+            f"返信先の投稿を取得できなかった (削除・非公開の可能性): {target_uri}。"
+            " 送らないなら inbox の Issue を閉じる (次の同期で ignored になる)"
+        )
+    if not isinstance(found[0], dict) or not found[0].get("cid"):
         raise PostNotSent(f"返信先の cid を引けなかった: {target_uri}")
 
     parent_ref = {"uri": target_uri, "cid": found[0]["cid"]}
