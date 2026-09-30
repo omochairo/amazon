@@ -648,6 +648,25 @@ _SPECIFIC_MODEL = re.compile(
     r"\d{5,}|[A-Za-z]{1,3}-\d{1,4}[A-Za-z]?|(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9]{4,}")
 
 
+# 番号付きシリーズ表記 (#8320): ターゲット名に「シリーズ29」「Vol.11」
+# 「第3弾」「Part 2」のような番号があるなら、候補にも同じ番号を要求する
+# (型番が一致する候補は除く)。無いと「レゴ ミニフィギュア シリーズ29」に
+# ミニフィギュアのカプセルマシン (21358) や「マーベル・スタジオ ミニフィギュア
+# シリーズ (71031)」が、「ミニフィギュア」(unique) + ブランドで通っていた
+# (2026-09-30 の実測: 番号付きターゲット 4 件の採用済み候補 8 件のうち、
+# 番号の無い 6 件が全部別商品、同じ番号の 2 件は正解)。同じ番号でも別商品は
+# ありうる (Tamagotchi Pop! Vol.2 と Collectibles Vol.2) ので、これは拒否
+# 条件としてだけ使う。
+_SERIES_NO = re.compile(
+    r"(シリーズ|series|vol\.?|part|パート|season|シーズン|第)\s*(\d{1,3})\s*(弾)?", re.I)
+
+
+def _series_numbers(text: str) -> set:
+    t = unicodedata.normalize("NFKC", text or "")
+    return {int(m.group(2)) for m in _SERIES_NO.finditer(t)
+            if not (m.group(1) == "第" and not m.group(3))}
+
+
 def _urls(items: list) -> set:
     return {it.get("url") or it.get("link") for it in items
             if isinstance(it, dict) and (it.get("url") or it.get("link"))}
@@ -658,11 +677,17 @@ def _lead_term(title: str) -> str:
     return parts[0] if parts else ""
 
 
+def _model_in(asin_model: str, text: str) -> bool:
+    """型番が語境界で現れるか (30181 が 301812 の一部として当たるのは除く)。"""
+    return bool(asin_model) and bool(re.search(
+        r"(?<![0-9A-Za-z])" + re.escape(asin_model) + r"(?![0-9A-Za-z])", text))
+
+
 def _model_alone_strong(asin_title: str, asin_model: str, text: str,
                         from_own_fetch: bool) -> bool:
     if not (asin_model and from_own_fetch):
         return False
-    if not re.search(r"(?<![0-9A-Za-z])" + re.escape(asin_model) + r"(?![0-9A-Za-z])", text):
+    if not _model_in(asin_model, text):
         return False
     if _SPECIFIC_MODEL.fullmatch(asin_model):
         return True
@@ -771,6 +796,7 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
                          for it in raw_items if isinstance(it, dict)]
             if allows_title_only_path(candidate_chunks, pool_texts, amazon_title):
                 chunks = candidate_chunks
+    target_series_nos = _series_numbers(asin_title) if strict >= 2 else set()
     scored = []
     for item in raw_items:
         if not isinstance(item, dict):
@@ -802,6 +828,9 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
                         (item.get("url") or item.get("link")) in own_urls):
                     strong = True
             if not strong:
+                continue
+            if (target_series_nos and not (_series_numbers(text) & target_series_nos)
+                    and not _model_in(asin_model, text)):
                 continue
         elif strict and has_strong_anchor:
             strong = (signals.get("series") or signals.get("product_term")
