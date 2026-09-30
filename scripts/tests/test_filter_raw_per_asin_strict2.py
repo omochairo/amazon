@@ -177,6 +177,22 @@ def test_gate_labels_fixture_matches_committed_additions_exactly():
     assert labels == {"same_product", "other_product", "unknown"}
 
 
+# #8320 残件1: title_only 解禁の受け入れ条件 (公開済み × youtube_embeds 空) の
+# 対象のうち、上の 282 件に無かった 20 件 (main f3723b763d 時点)。動画タイトル
+# だけで判定した推定ラベルで、人の目視ではない。閾値校正 (上の 282 件) には
+# 混ぜない。
+_LABELS_8320 = _load_jsonl(FIXTURES / "filter_strict2_title_only_labels_8320.jsonl")
+
+
+def test_labels_8320_fixture_is_disjoint_from_calibration_set():
+    assert len(_LABELS_8320) == 20
+    assert {l["label"] for l in _LABELS_8320} <= {"same_product", "other_product", "unknown"}
+    assert {l["kind"] for l in _LABELS_8320} == {"youtube"}
+    keys = [(l["asin"], l["url"]) for l in _LABELS_8320]
+    assert len(set(keys)) == len(keys)
+    assert not set(keys) & {(l["asin"], l["url"]) for l in _LABELS}
+
+
 def test_gate_reduces_other_product_errors_by_three_quarters():
     # 現在の閾値 (TOY_CONTEXT_MIN_RATIO=0.01, SERIES_CONTINUATION_MIN_ITEMS=5) の
     # 回帰テスト。閾値やヒューリスティックを変えて誤りが増えたらここで落ちる。
