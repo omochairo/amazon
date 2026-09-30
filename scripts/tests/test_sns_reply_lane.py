@@ -639,6 +639,28 @@ def test_bluesky_root_ref_falls_back_to_parent_when_top_level():
     assert poster._bluesky_root_ref({"record": {}}, parent) == parent
 
 
+def test_bluesky_deleted_parent_is_not_sent_and_says_how_to_give_up(monkeypatch):
+    """返信先が消えていると getPosts は空を返す。送らずに止め、Issue を閉じる道を示す (#8285 項目4)。"""
+    monkeypatch.setenv("BLUESKY_IDENTIFIER", "me.bsky.social")
+    monkeypatch.setenv("BLUESKY_APP_PASSWORD", "pw")
+    calls = []
+
+    def fake_xrpc(url, *, headers=None, payload=None):
+        calls.append(url)
+        if "createSession" in url:
+            return {"accessJwt": "jwt", "did": "did:plc:me"}
+        if "getPosts" in url:
+            return {"posts": []}
+        raise AssertionError(f"呼ばれてはいけない: {url}")
+
+    monkeypatch.setattr(poster, "_xrpc", fake_xrpc)
+    with pytest.raises(poster.PostNotSent) as ei:
+        poster.post_bluesky({"native_id": "at://did/app.bsky.feed.post/gone"}, "本文")
+    assert "削除・非公開" in str(ei.value)
+    assert "Issue を閉じる" in str(ei.value)
+    assert not any("createRecord" in u for u in calls)
+
+
 def test_post_x_is_explicitly_unwired():
     with pytest.raises(poster.PostError, match="user-context"):
         poster.post_x({"native_id": "1"}, "本文")
