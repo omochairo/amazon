@@ -707,7 +707,8 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
                  allow_long_term: bool = True,
                  enable_title_chunks: bool = True,
                  title_df: dict | None = None,
-                 own_urls: set | None = None) -> list:
+                 own_urls: set | None = None,
+                 verified_urls: set | None = None) -> list:
     """raw 配列をスコアリングして閾値以上を返す。
 
     strict=1 (books, 旧判定): ASIN にアンカー (model/terms/series) がある場合、
@@ -755,7 +756,9 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
     公開記事への自動埋め込み (build_post._fallback_youtube_embeds) と
     体験談抽出 (mine_experience)・Jules への sources 提供 (build_jules_prompt)
     では除外する。既存の strong 経路 (brand/series/shared に裏付けられた一致)
-    の項目には付けない。
+    の項目には付けない。verified_urls (この ASIN について人が同一商品と
+    確認した URL、data/title_only_verified.json) に入っている項目は
+    `_match: "title_only_verified"` にして、除外の対象から外す (#8320)。
 
     さらに ASIN 単位で allows_title_only_path() のゲートを通らないと
     この経路自体を無効にする (#8162 案B/C, 2026-09-24)。amazon_title は
@@ -841,7 +844,10 @@ def filter_items(raw_items: list, asin_brands: set, asin_series: set,
             enriched = dict(item)
             enriched["_relevance_score"] = round(s, 2)
             if title_only:
-                enriched["_match"] = "title_only"
+                url = item.get("url") or item.get("link")
+                enriched["_match"] = ("title_only_verified"
+                                      if verified_urls and url in verified_urls
+                                      else "title_only")
             scored.append(enriched)
     scored.sort(key=lambda x: x["_relevance_score"], reverse=True)
     return scored[:top_n]
@@ -857,6 +863,8 @@ def exclude_title_only(payload):
     (build_post._fallback_youtube_embeds)・体験談抽出
     (mine_experience.gather_youtube_opportunistic)・Jules への sources 提供
     (build_jules_prompt) の 3 消費側は、この共通ヘルパーで除外してから使う。
+    人が同一商品と確認した項目 (``_match: "title_only_verified"``, #8320) は
+    除外しない。
 
     ``{"items": [...]}`` 形と裸の list、どちらも受け付ける。"""
     if isinstance(payload, dict):
@@ -927,6 +935,21 @@ def load_per_asin_amazon_title(raw_dir: pathlib.Path, asin: str) -> str:
     return ""
 
 
+def load_title_only_verified(path: pathlib.Path) -> dict[str, set]:
+    """data/title_only_verified.json を ASIN → 確認済み URL の集合にする。
+
+    ファイルが無い・壊れているときは空 (従来どおり title_only を全部除外)。"""
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    out: dict[str, set] = {}
+    for row in doc.get("verified", []) if isinstance(doc, dict) else []:
+        if isinstance(row, dict) and row.get("asin") and row.get("url"):
+            out.setdefault(row["asin"], set()).add(row["url"])
+    return out
+
+
 def main():
     root = pathlib.Path(".")
     raw_dir = root / "data" / "raw"
@@ -955,6 +978,7 @@ def main():
         if (raw_dir / "books_result.json").exists() else []
 
     logger.info(f"Source pools: youtube={len(youtube_items)} news={len(news_items)} books={len(books_items)}")
+    verified = load_title_only_verified(root / "data" / "title_only_verified.json")
 
     out_root = raw_dir / "per_asin"
     out_root.mkdir(parents=True, exist_ok=True)
@@ -1030,7 +1054,8 @@ def main():
                           asin_title=title,
                           amazon_title=load_per_asin_amazon_title(raw_dir, asin),
                           allow_long_term=True, enable_title_chunks=True,
-                          title_df=title_df, own_urls=_urls(yt_own))
+                          title_df=title_df, own_urls=_urls(yt_own),
+                          verified_urls=verified.get(asin))
         # news には裏付け語なし経路 (title_chunks, enable_title_chunks=False) を
         # 使わない。2026-09-24 の実測で追加分 93 件中 36 件が別商品
         # (「ネムリラ コードレス HR」新発売のような派生モデルの告知・

@@ -98,7 +98,7 @@ def test_target_with_corroborator_does_not_use_title_path():
 
 
 def _first(target: str, video: str, shared: set | None = None,
-           with_title: bool = True) -> dict:
+           with_title: bool = True, verified_urls: set | None = None) -> dict:
     brands, series = frpa.extract_brand_series(target)
     model = frpa.extract_model_number(target)
     tokens = frpa.tokenize(target)
@@ -107,7 +107,7 @@ def _first(target: str, video: str, shared: set | None = None,
         result = frpa.filter_items(
             [{"title": video, "url": "u"}], brands, series, model, tokens, terms,
             ["title"], top_n=1, strict=2, shared_terms=shared or set(),
-            asin_title=target if with_title else "")
+            asin_title=target if with_title else "", verified_urls=verified_urls)
     assert result, "expected a match"
     return result[0]
 
@@ -134,6 +134,57 @@ def test_exclude_title_only_drops_only_tagged_items():
     # dict/list 以外・items の無い dict は素通し
     assert frpa.exclude_title_only(None) is None
     assert frpa.exclude_title_only({"foo": "bar"}) == {"foo": "bar"}
+
+
+# --------------------------------------------------------------------------
+# 人が確認した title_only の解禁 (#8320): data/title_only_verified.json に
+# ある ASIN x URL だけ title_only_verified にして、公開経路で除外しない。
+# --------------------------------------------------------------------------
+
+def test_verified_title_only_item_is_kept_for_publishing():
+    target, video = KNOWN_POSITIVES[0]
+    item = _first(target, video, verified_urls={"u"})
+    assert item["_match"] == "title_only_verified"
+    assert frpa.exclude_title_only([item]) == [item]
+    # 別の URL が確認済みでも、この項目は従来どおり除外される
+    other = _first(target, video, verified_urls={"u-other"})
+    assert other["_match"] == "title_only"
+    assert frpa.exclude_title_only([other]) == []
+
+
+def test_verified_urls_do_not_create_matches():
+    # 確認済みリストは title_only の昇格だけに使い、strong の根拠にはしない
+    brands, series = frpa.extract_brand_series("GraviTrax 追加パーツ トランポリン")
+    assert not frpa.filter_items(
+        [{"title": "トランポリン 室内 子ども", "url": "u"}], brands, series, "",
+        set(), {"トランポリン"}, ["title"], strict=2,
+        shared_terms={"GraviTrax", "追加パーツ"},
+        asin_title="GraviTrax 追加パーツ トランポリン", verified_urls={"u"})
+
+
+def test_load_title_only_verified(tmp_path):
+    assert frpa.load_title_only_verified(tmp_path / "missing.json") == {}
+    (tmp_path / "broken.json").write_text("{", encoding="utf-8")
+    assert frpa.load_title_only_verified(tmp_path / "broken.json") == {}
+    p = tmp_path / "v.json"
+    p.write_text(json.dumps({"verified": [
+        {"asin": "A1", "url": "u1"}, {"asin": "A1", "url": "u2"},
+        {"asin": "A2", "url": "u3"}, {"asin": "", "url": "u4"}, "junk"]}),
+        encoding="utf-8")
+    assert frpa.load_title_only_verified(p) == {"A1": {"u1", "u2"}, "A2": {"u3"}}
+
+
+def test_verified_list_has_no_rejected_labels():
+    # 確認済みリストに、目視・推定のどちらかで別商品/判定不能とした組を入れない
+    path = Path(__file__).resolve().parents[2] / "data" / "title_only_verified.json"
+    verified = {(r["asin"], r["url"])
+                for r in json.loads(path.read_text(encoding="utf-8"))["verified"]}
+    assert verified
+    rejected = {(r["asin"], r["url"])
+                for f in ("filter_strict2_title_only_labels.jsonl",
+                          "filter_strict2_title_only_labels_8320.jsonl")
+                for r in _load_jsonl(FIXTURES / f) if r["label"] != "same_product"}
+    assert not verified & rejected
 
 
 # --------------------------------------------------------------------------
