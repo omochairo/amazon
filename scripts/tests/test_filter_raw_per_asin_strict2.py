@@ -301,3 +301,46 @@ def test_filter_items_model_alone_requires_own_urls():
     assert frpa.filter_items(*args, **kw, own_urls={"u1"})
     assert not frpa.filter_items(*args, **kw, own_urls={"other"})
     assert not frpa.filter_items(*args, **kw)
+
+
+# --------------------------------------------------------------------------
+# #8320: 番号付きシリーズ表記 (シリーズ29 / Vol.11 / 第3弾) は候補にも同じ番号を要求する
+# --------------------------------------------------------------------------
+
+def test_series_numbers_extraction():
+    assert frpa._series_numbers("レゴ ミニフィギュア シリーズ29") == {29}
+    assert frpa._series_numbers("BX-50 ランダムブースターVol.11") == {11}
+    assert frpa._series_numbers("ＣＸ－０５ ランダムブースターＶｏｌ．６") == {6}
+    assert frpa._series_numbers("ポケモンカード 第3弾") == {3}
+    assert frpa._series_numbers("第3回 大会") == set()
+    assert frpa._series_numbers("LEGO Minifigures Series 29 unboxing") == {29}
+    assert frpa._series_numbers("レゴ ミニフィギュア") == set()
+
+
+@pytest.mark.parametrize("video", [
+    # 本番の per_asin で採用されていた別商品 (番号が無い)
+    "【レゴのガチャガチャ！】LEGO Ideas LEGO Minifigure Capsule Machine 21358 レゴアイデア レゴミニフィギュア",
+    "『LEGO 71031 マーベル・スタジオ ミニフィギュアシリーズ』超人気ドラマのキャラクターが勢揃い！",
+    # 番号違い
+    "LEGO Minifigures Series 27 unboxing レゴ ミニフィギュア",
+])
+def test_series_number_rejects_other_series(video):
+    assert not _passes("レゴ ミニフィギュア シリーズ29", video)
+
+
+def test_series_number_keeps_same_series():
+    assert _passes("レゴ ミニフィギュア シリーズ29", "レゴ ミニフィギュア シリーズ29 全種開封")
+    # 本番で採用されている正解 (自分向け取得の型番一致経路で strong)
+    target = "BX-50 ランダムブースターVol.11"
+    brands, series = frpa.extract_brand_series(target)
+    assert frpa.filter_items(
+        [{"title": "【開封】入手すらレア過ぎる「BX-50 ランダムブースターVol.11」ベイブレードエックス",
+          "url": "u"}],
+        brands, series, _model(target), frpa.tokenize(target),
+        frpa.extract_product_terms(target, brands, series), ["title"],
+        top_n=3, strict=2, asin_title=target, own_urls={"u"})
+
+
+def test_series_number_model_match_is_exempt():
+    # 型番まで一致する候補は番号表記が無くても通す
+    assert _passes("レゴ ミニフィギュア シリーズ29 71048", "LEGO 71048 レゴ ミニフィギュア 開封")
