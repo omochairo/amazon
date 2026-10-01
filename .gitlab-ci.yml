@@ -161,7 +161,12 @@ third-party-sources:
       --body "Automated #1600 Phase 2 pre-fetch (旧 34-third-party-sources.yml の GitLab 移植). data/raw/per_asin/**/third_party_sources.json のみの更新。"
       --paths data/raw/per_asin
 
-pages:
+# #6415 の 2: サイトのビルドは build-site、待機系 GitLab Pages への配信は pages
+# (後ろに定義) に分けている。build-site の public/ は全量で、本番 (NAS) へは
+# deploy-nas がこれをそのまま置く。pages はそこから noindex の term を落として
+# GitLab Pages に渡す。GitLab Pages の 1 GiB 上限は待機系だけの制約なので、
+# 本番の URL は 1 本も減らさずに上限への余裕だけを作る。
+build-site:
   stage: deploy
   image: python:3.11-bookworm
   # 新しいコミットが来たら、走行中/待機中の古い pages ビルドは捨ててよい
@@ -227,20 +232,9 @@ pages:
     # #6205 T9: 外形監視が「いつの・どのコミットが配信されているか」を見る的。
     # 監視 51 は sitemap の lastmod を見ていたため 19 時間の停止を検知できなかった。
     - printf '{"sha":"%s","built_at":"%s","ref":"%s"}' "$CI_COMMIT_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$CI_COMMIT_REF_NAME" > public/build.json
-    # #6415: 待機系 GitLab Pages の 1 GiB 上限を監視するための計測。
-    #
-    # **展開後のバイト数でなければ意味がない。** 上限は展開後に効くのに、
-    # jobs API から取れる artifacts (archive) は zip 圧縮後で、2026-09-06 実測では
-    # 展開 665MB に対し archive 220MB と 3 倍違う。Pages API の deployments は
-    # サイズを持たない。そこでここで `du -sb` して 1 行ログに出し、GitHub 側の
-    # 54-pages-size-monitor.yml (scripts/check_pages_size.py) がこの行を読む。
-    #
-    # **ここでは落とさない。** 落とすと待機系の更新が止まり、いざ NAS が倒れた
-    # ときにより古い配信物しか残らない (#6415 の設計判断)。判定と起票は GitHub 側。
-    - |
-      PAGES_ARTIFACT_BYTES=$(du -sb public | cut -f1)
-      echo "PAGES_ARTIFACT_BYTES=${PAGES_ARTIFACT_BYTES}"
-      awk -v b="$PAGES_ARTIFACT_BYTES" 'BEGIN{printf "pages artifact: %.1f MiB (%.1f%% of the 1 GiB limit)\n", b/1048576, b/1073741824*100}'
+    # 本番 (NAS) に置く全量のサイズ。監視 54 が読むのは pages ジョブの
+    # PAGES_ARTIFACT_BYTES (間引いた後) の方で、こちらは比較用に残すだけ。
+    - echo "SITE_FULL_BYTES=$(du -sb public | cut -f1)"
     # #3055 E1 の事前圧縮 (.gz/.br 併置) は 2026-08-29 に撤去した。
     #
     # 理由: GitLab Pages のデプロイが「artifacts for pages are too large:
@@ -264,16 +258,58 @@ pages:
     # **これは応急処置で、余裕は 99 MB しかない。** 直近の成長ペース (10 日で
     # 約 12%) だと 3〜4 週間でまた上限に当たる。恒久対応は配信物から
     # noindex の tag ページ (7,316 枚 / 299 MB) を外すこと。
+    # → #6415 の 2 で、待機系 (下の pages ジョブ) からだけ外す形にした。
   artifacts:
     paths:
       - public
     # **保管を 1 日で切る (#6205 T8)。** この artifact は 1 回 555MB あり、main への
     # push は 1 日 50 本前後なので約 27GB/日 が GitLab に積まれ続けていた
     # (2026-08-29 実測で job_artifacts_size = 463GB)。
-    # 用途は 2 つとも短命:
-    #   - GitLab Pages への配信 (待機系。ジョブ成功直後に取り込まれる)
-    #   - 同一パイプライン内の deploy-nas / cf-purge が受け取る
+    # 用途はどれも同一パイプライン内で短命 (pages / deploy-nas / cf-purge が受け取る)。
     # 過去の artifact を後から取り出す運用は無い。
+    expire_in: 1 day
+
+# 待機系 GitLab Pages への配信 (#6415 の 2)。ジョブ名 `pages` が GitLab Pages の
+# 取り込み対象 (pages:deploy) になるので、名前を変えないこと。
+#
+# build-site の全量 public/ から noindex の term (sitemap にも導線にも無いページ) を
+# 落として渡す。待機系に切り替わっている間だけ、それらの URL は 404 になる。
+# 判定は scripts/prune_standby_noindex.py (レンダリング結果の meta robots を見る)。
+pages:
+  stage: deploy
+  image: python:3.11-bookworm
+  # **interruptible にしない。** build-site が終わった後に新しいコミットが来ると、
+  # 並行する deploy-nas (非 interruptible) は完走して本番を更新するのに、こちらだけ
+  # 捨てられる。次のパイプラインが build-site で落ちれば、待機系だけ古いまま残る。
+  # 間引いて渡すだけの短いジョブなので、完走させる方が安い。
+  needs:
+    - build-site
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
+  variables:
+    # scripts/ だけ使う。テーマ submodule と履歴は要らない
+    GIT_SUBMODULE_STRATEGY: none
+    GIT_DEPTH: "1"
+  script:
+    - python scripts/prune_standby_noindex.py --root public
+    # #6415: 待機系 GitLab Pages の 1 GiB 上限を監視するための計測。
+    #
+    # **展開後のバイト数でなければ意味がない。** 上限は展開後に効くのに、
+    # jobs API から取れる artifacts (archive) は zip 圧縮後で、2026-09-06 実測では
+    # 展開 665MB に対し archive 220MB と 3 倍違う。Pages API の deployments は
+    # サイズを持たない。そこでここで `du -sb` して 1 行ログに出し、GitHub 側の
+    # 54-pages-size-monitor.yml (scripts/check_pages_size.py) がこの行を読む。
+    # 測るのは間引いた後、つまり GitLab が上限判定に使うのと同じもの。
+    #
+    # **ここでは落とさない。** 落とすと待機系の更新が止まり、いざ NAS が倒れた
+    # ときにより古い配信物しか残らない (#6415 の設計判断)。判定と起票は GitHub 側。
+    - |
+      PAGES_ARTIFACT_BYTES=$(du -sb public | cut -f1)
+      echo "PAGES_ARTIFACT_BYTES=${PAGES_ARTIFACT_BYTES}"
+      awk -v b="$PAGES_ARTIFACT_BYTES" 'BEGIN{printf "pages artifact: %.1f MiB (%.1f%% of the 1 GiB limit)\n", b/1048576, b/1073741824*100}'
+  artifacts:
+    paths:
+      - public
     expire_in: 1 day
 
 # #3059 Day2: Cloudflare エッジキャッシュの purge。
@@ -305,16 +341,17 @@ pages:
 cf-purge:
   stage: postdeploy
   image: curlimages/curl:latest
-  # pages の public/ (参照アセットの真実源) と deploy-nas の navi-switch.out を受け取る。
+  # build-site の public/ (参照アセットの真実源) と deploy-nas の navi-switch.out を受け取る。
+  # pages (待機系) の public/ は間引き済みなので使わない (#6415 の 2)。
   dependencies:
-    - pages
+    - build-site
     - deploy-nas
   # **NAS への切替が終わってから purge する (#6205 T8)。** 2026-08-30 に本番の
   # 配信元が NAS になったので、purge の対象オリジンは deploy-nas が置いたもの。
   # 同じ postdeploy ステージに居ると並行して走るため、明示的に順序を付ける。
   # (before_script のアセット待ちが最後の砦だが、そこに頼らない)
   needs:
-    - pages
+    - build-site
     - deploy-nas
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main" && $CF_ZONE_ID && $CF_PURGE_TOKEN'
@@ -345,9 +382,12 @@ cf-purge:
 deploy-nas:
   stage: postdeploy
   image: alpine:3.20
-  # pages の public/ をそのまま置く (再ビルドしない = 内容が確実に一致する)。
+  # build-site の public/ (全量) をそのまま置く (再ビルドしない = 内容が確実に一致する)。
+  # needs で pages (待機系) の完了を待たない。待機系の失敗で本番の更新を止めないため。
   dependencies:
-    - pages
+    - build-site
+  needs:
+    - build-site
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main" && $NAS_DEPLOY_KEY && $NAS_HOST'
   before_script:

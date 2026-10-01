@@ -53,7 +53,8 @@ DEFAULT_TIMEOUT = 30.0
 
 # 配信に効くジョブだけを先頭に並べる。データ収集系 (fetch-data 等) が同じ ref で
 # 走っていても配信の可否とは関係が無いため、見る順で優先度を表現する。
-DELIVERY_JOBS = ["pages", "pages:deploy", "cf-purge"]
+# build-site / deploy-nas が本番 (NAS)、pages / pages:deploy が待機系 GitLab Pages (#6415 の 2)。
+DELIVERY_JOBS = ["build-site", "deploy-nas", "pages", "pages:deploy", "cf-purge"]
 
 
 class ApiError(Exception):
