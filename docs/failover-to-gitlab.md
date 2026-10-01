@@ -122,9 +122,21 @@ gh variable set NAS_ORIGIN_CNAME --body '<uuid>.cfargotunnel.com' -R omochairo/a
 ### 倒れている間に起きること
 
 - GitLab パイプラインの `deploy-nas` が失敗し続ける (NAS に届かない) → パイプラインは赤くなるが、
-  `pages` は前のステージなので**待機系の更新は続く**
+  `pages` は `deploy-nas` に依存しないので**待機系の更新は続く**
 - `cf-purge` は `needs: deploy-nas` なので走らない → エッジの HTML が最大 `edge_ttl` (4h) 古くなる
 - **GitLab Pages の 1 GiB 上限が生きた制約に戻る** (#6415)
+- **noindex の term ページ (薄い tag・noindex ブランド等) が 404 になる** (#6415 の 2)。
+  待機系の配信物からだけ落としているため。sitemap にも導線にも載っていないページで、
+  本番 (NAS) には全量がある
+
+### ビルドと配信先の対応 (#6415 の 2)
+
+| ジョブ | 配信物 | 行き先 |
+|---|---|---|
+| `build-site` | 全量 | `deploy-nas` → 本番 (NAS) / `cf-purge` の参照 |
+| `pages` | `build-site` から noindex の term を落としたもの (`scripts/prune_standby_noindex.py`) | `pages:deploy` → 待機系 GitLab Pages |
+
+ジョブ名 `pages` が GitLab Pages の取り込み対象なので変えないこと。
 
 ### 関連する監視との分担
 
@@ -139,7 +151,8 @@ gh variable set NAS_ORIGIN_CNAME --body '<uuid>.cfargotunnel.com' -R omochairo/a
 (#6204 / #6205)。`navi-switch` のサニティゲートも NAS 側の前後比較なので天井は見ていない。
 
 54 は `.gitlab-ci.yml` の `pages` ジョブが出す `PAGES_ARTIFACT_BYTES=<n>` (展開後の
-バイト数) を GitLab の job trace から読む。**展開後でなければ意味がない** — 上限は
+バイト数・間引いた後) を GitLab の job trace から読む。本番の全量は `build-site` の
+`SITE_FULL_BYTES=<n>` に出ている。**展開後でなければ意味がない** — 上限は
 展開後に効くのに、jobs API の archive は zip 圧縮後で 3 倍違う (2026-09-06 実測)。
 上限の 80% で warn / 90% で alert の issue を 1 本 upsert し、**CI は落とさない**
 (落とすと待機系の更新が止まり、いざ倒したときにより古い配信物しか残らない)。
