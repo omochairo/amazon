@@ -69,10 +69,10 @@
       "次の移動や旅行の前に、ぜひ準備しておきたいアイテムです。"
     ],
     "how_to_choose": [
-      "シールブック選びで迷うのは『同じリーバンシリーズの他のテーマと何が違うか』ではないでしょうか。",
+      "「他の類似テーマのシールブックとどう違うか」と迷う方も多いのではないでしょうか。",
       "本品は新幹線に特化しており、日本全国のマップを使ったごっこ遊びができるのが特徴です。",
-      "一方、同ブランドの『どうぶつ』や『はたらくくるま』は、それぞれ異なる興味に合わせたテーマ展開をしています。",
-      "乗り物全般への興味なら『のりものランド』、新幹線という明確な「推し」があるご家庭には本品が向いています。"
+      "同ブランドの別テーマ品は動物や働く車など、興味に合わせた展開をしています。",
+      "色々な乗り物が好きな場合は総合的な乗り物テーマを、新幹線という明確な「推し」があるご家庭には本品が向いています。"
     ]
   },
   "faq": [
@@ -220,20 +220,53 @@
       "published_at": "2026-10-02",
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
-      "notes": "旅行や帰省のお供、おみやげとしての用途を推奨"
+      "notes": "夏休みの旅行や帰省のお供、おみやげとしての用途を推奨"
+    },
+    {
+      "id": "src-4",
+      "name": "シールブックのリーバン 公式Instagram",
+      "url": "https://www.instagram.com/liebam_official",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2026-10-02",
+      "author": "メーカー公式",
+      "conflict_of_interest": "possible",
+      "notes": "新幹線キオスクなどでの販売情報と旅行のお供推奨"
+    },
+    {
+      "id": "src-5",
+      "name": "Google Books はってはがせるシールブック",
+      "url": "http://books.google.com/books?id=J2aKzgEACAAJ&dq=%E3%83%AA%E3%83%BC%E3%83%90%E3%83%B3+%E3%82%B7%E3%83%BC%E3%83%AB%E3%83%96%E3%83%83%E3%82%AF+%E7%B5%B5%E6%9C%AC&hl=&source=gbs_api",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-10-02",
+      "author": "第三者メディア",
+      "conflict_of_interest": "none",
+      "notes": "シール遊びが子供向けの人気の遊びであることを確認"
     }
   ],
   "claims": [
     {
-      "claim": "シールブックの遊びとして、ぬりえやマップでのごっこ遊びが可能",
+      "claim": "シールを貼る・剥がす動作が子供に人気で長く遊べる",
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
         "src-1",
-        "src-2"
+        "src-5"
+      ],
+      "cross_checked": true,
+      "notes": "公式説明のロングセラー実績と一般書籍でのシール遊びの人気が一致"
+    },
+    {
+      "claim": "旅行や帰省など、外出時の時間潰しやお供に最適である",
+      "category": "comparative_advantage",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-3",
+        "src-4"
       ],
       "cross_checked": false,
-      "notes": "公式商品ページとニュースの両方で多様な遊び方を言及"
+      "notes": "公式SNSの推奨用途"
     },
     {
       "claim": "1500万部を超えるロングセラーである",
@@ -246,25 +279,25 @@
       "notes": "メーカー公式の説明に基づく"
     },
     {
-      "claim": "旅行や帰省など、外出時の時間潰しやお供に適している",
-      "category": "comparative_advantage",
-      "confidence": "high",
-      "supporting_source_ids": [
-        "src-3"
-      ],
-      "cross_checked": false,
-      "notes": "公式Facebookの推奨用途に基づく"
-    },
-    {
-      "claim": "全16ページ構成であり、持ち運びに適したサイズ感",
+      "claim": "全16ページ構成であり、シールが90枚以上付属する",
       "category": "durability",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1",
-        "src-3"
+        "src-1"
       ],
       "cross_checked": false,
-      "notes": "商品ページの仕様とFacebookの旅行推奨から一致"
+      "notes": "商品ページの仕様"
+    },
+    {
+      "claim": "シールブックにはカラー台紙があり、オリジナルの世界を作って遊べる",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-1",
+        "src-5"
+      ],
+      "cross_checked": true,
+      "notes": "Amazon商品ページと一般シールブックの共通仕様として一致"
     }
   ],
   "technical_specs": {
@@ -282,7 +315,7 @@
     ]
   },
   "review_signals": {
-    "summary_one_line": "第三者の口コミは確認できませんが、公式説明からは移動時のお供としての実用性が読み取れます。",
+    "summary_one_line": "第三者の口コミは確認できませんが、公式情報から移動時のお供としての実用性が読み取れます。",
     "high_points": [
       {
         "text": "公式説明では「楽しみながら知恵をのばし、推理力をつける」とされています",
@@ -291,9 +324,10 @@
         ]
       },
       {
-        "text": "公式Facebookでは「旅行や帰省のお供、おみやげに」と推奨されています",
+        "text": "公式SNSでは旅行や帰省のお供、おみやげとしての利用が推奨されています",
         "supporting_source_ids": [
-          "src-3"
+          "src-3",
+          "src-4"
         ]
       },
       {
@@ -319,15 +353,15 @@
     ],
     "use_scenes": [
       {
-        "text": "旅行や帰省時の新幹線や車内での時間潰し",
+        "text": "帰省時の新幹線や車内での時間潰し",
         "supporting_source_ids": [
           "src-3"
         ]
       },
       {
-        "text": "お出かけ先へのちょっとしたおみやげ",
+        "text": "旅行先へのちょっとしたおみやげ",
         "supporting_source_ids": [
-          "src-3"
+          "src-4"
         ]
       },
       {
