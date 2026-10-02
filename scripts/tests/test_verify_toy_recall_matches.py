@@ -262,4 +262,27 @@ def test_verify_candidates_skips_agy_call_when_brand_has_no_articles():
         [{"brand": "無名ブランド", "title": "t"}], {}, caller=fake_caller,
     )
     assert out[0]["matched_asins"] == []
+    assert out[0]["verify_status"] == vtrm.STATUS_NO_ARTICLES
     assert calls == []
+
+
+def test_verify_candidates_records_whether_agy_actually_answered():
+    """一致なしと agy の故障は matched_asins では区別できない (#8721) — verify_status に残す。"""
+    index = {"b": [{"asin": "B0BD3GW7S8", "name": "くるくるチャイム", "name_full": ""}]}
+    responses = {
+        "answered-none": "一致: なし\n理由: 別商品",
+        "answered-match": "一致: あり\nASIN: B0BD3GW7S8\n理由: 同一",
+        "failed": "",
+        "unparsed": "よく分かりません",
+    }
+    candidates = [{"brand": "b", "title": key} for key in responses]
+
+    def fake_caller(prompt, *, model, timeout_s):
+        return next(v for k, v in responses.items() if k in prompt)
+
+    out = {c["title"]: c for c in vtrm.verify_candidates(candidates, index, caller=fake_caller)}
+    assert out["answered-none"]["verify_status"] == vtrm.STATUS_ANSWERED
+    assert out["answered-match"]["verify_status"] == vtrm.STATUS_ANSWERED
+    assert out["failed"]["verify_status"] == vtrm.STATUS_AGY_FAILED
+    assert out["unparsed"]["verify_status"] == vtrm.STATUS_UNPARSED
+    assert all(out[k]["matched_asins"] == [] for k in ("answered-none", "failed", "unparsed"))
