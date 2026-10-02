@@ -166,25 +166,47 @@
     },
     {
       "id": "src-2",
+      "name": "HOPPL（ホップル） 公式サイト",
+      "url": "http://www.hoppl.jp/",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2026-10-01",
+      "author": "メーカー公式",
+      "conflict_of_interest": "disclosed",
+      "notes": "ホップルは日本でデザイン考案されたベビー用品ブランド。子供の成長に合わせて使える商品を展開。"
+    },
+    {
+      "id": "src-3",
       "name": "Amazon / HOPPL 木製ベビージム",
       "url": "https://www.amazon.co.jp/dp/B0FB389MTG/",
       "tier": "medium",
       "evidence_type": "primary",
       "published_at": "2026-10-01",
-      "author": "メーカー公式",
+      "author": "販売サイト",
       "conflict_of_interest": "disclosed",
       "notes": "新生児から使用できる天然木製のベビージム。みる、さわる、きくなどの感覚を自然と身に付けられる。"
     },
     {
-      "id": "src-3",
+      "id": "src-4",
       "name": "Amazon / トイローヤル モンポケ 7ステップ メリージム",
       "url": "https://www.amazon.co.jp/dp/B0CJHXT334/",
       "tier": "medium",
       "evidence_type": "primary",
       "published_at": "2026-10-01",
-      "author": "メーカー公式",
+      "author": "販売サイト",
       "conflict_of_interest": "disclosed",
       "notes": "競合のプラスチック製ジム。メロディや自然音などが鳴る多機能タイプとして比較対象。"
+    },
+    {
+      "id": "src-5",
+      "name": "Amazon / HOPPL ベビージム BTL-BGS-GY",
+      "url": "https://www.amazon.co.jp/dp/B0FBLWNTW9/",
+      "tier": "medium",
+      "evidence_type": "primary",
+      "published_at": "2026-10-01",
+      "author": "販売サイト",
+      "conflict_of_interest": "disclosed",
+      "notes": "カラーバリエーションのグレー/ピンク版。赤ちゃんのはじめての遊び場に最適と記載。"
     }
   ],
   "claims": [
@@ -196,7 +218,7 @@
         "src-1",
         "src-2"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "複数の販売ページで天然木の使用とデザイン性が強調されている"
     },
     {
@@ -206,7 +228,7 @@
       "supporting_source_ids": [
         "src-1"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "商品詳細ページにて折りたたみ可能と記載"
     },
     {
