@@ -205,6 +205,17 @@
       "author": "第三者専門家",
       "conflict_of_interest": "none",
       "notes": "型はめパズルは「はめるという意図した運動（微細運動）」や「視覚による形の認識」を育むと解説されている（本商品自体への言及ではなくジャンル一般の知育効果）。"
+    },
+    {
+      "id": "src-5",
+      "name": "Wikipedia: モンテッソーリ教育",
+      "url": "https://ja.wikipedia.org/wiki/%E3%83%A2%E3%83%B3%E3%83%86%E3%83%83%E3%82%BD%E3%83%BC%E3%83%AA%E6%95%99%E8%82%B2",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-10-01",
+      "author": "Wikipedia",
+      "conflict_of_interest": "none",
+      "notes": "モンテッソーリ教育における教具（木製知育玩具など）の重要性についての一般的背景。"
     }
   ],
   "claims": [
@@ -236,9 +247,10 @@
       "confidence": "medium",
       "supporting_source_ids": [
         "src-4",
-        "src-1"
+        "src-1",
+        "src-5"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "専門家の解説と製品の知育アピールが一致"
     },
     {
@@ -251,6 +263,17 @@
       ],
       "cross_checked": false,
       "notes": "メーカー公式と販売店双方でギフト適性が訴求されている"
+    },
+    {
+      "claim": "モンテッソーリ教育において、木製教具を通じた感覚的体験は重要とされている",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-4",
+        "src-5"
+      ],
+      "cross_checked": true,
+      "notes": "モンテッソーリ教育の一般論"
     }
   ],
   "technical_specs": {
