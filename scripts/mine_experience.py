@@ -127,6 +127,12 @@ DEFAULT_ANTIGRAVITY_MODEL = "gemini-3.8-flash-low"
 # 閉じた状態から始まる)。
 AGY_BREAKER_THRESHOLD = 3
 
+# agy の個人 quota 切れ。2026-09-29 の定時 run で全商品が exit 3 + この文言で
+# 落ちた (「Resets in 11h…」)。run の間に戻らないので 1 回で breaker を開く。
+# 非ゼロ終了は breaker の連続失敗に数えない設計なので、これが無いと summary は
+# `failed 1` のまま warning も出ず、書けた件数だけが 25 → 14 に落ちて緑で終わっていた。
+_AGY_QUOTA_RE = re.compile(r"RESOURCE_EXHAUSTED|quota reached", re.IGNORECASE)
+
 # 出典 URL の収集 (#6588 の probe を受けて)。
 # 自社ドメインは **必ず除く**。probe で navi.omcha.jp の当該 ASIN 記事そのものと
 # omcha.jp が「購入者の口コミ」の出典として返ってきた。自分の書いた記事を自分の
@@ -830,6 +836,9 @@ class AgyCircuitBreaker:
 
     数えるのは「時間を払って何も得られなかった」結果だけ (全試行の空応答と
     timeout)。非ゼロ終了と PATH に無いは即座に返るので、止める理由にならない。
+    ただし非ゼロ終了も `errored` として summary には残す (数えないと、全滅した日も
+    `failed` が 0 のまま見える)。quota 切れの非ゼロ終了だけは run の間に戻らない
+    ので、1 回で開く。
 
     **黙って緑にしない** (#4793): 開いたときに GitHub Actions の warning
     annotation を 1 回出し、run の summary にも回数を残す。
@@ -841,6 +850,7 @@ class AgyCircuitBreaker:
         self.tripped = False
         self.ok = 0
         self.failed = 0
+        self.errored = 0
         self.skipped = 0
 
     def allow(self) -> bool:
@@ -857,17 +867,28 @@ class AgyCircuitBreaker:
         self.failed += 1
         self.consecutive_failures += 1
         if not self.tripped and self.consecutive_failures >= self.threshold:
-            self.tripped = True
-            msg = (
+            self._trip(
                 f"agy が {self.consecutive_failures} 商品連続で何も返さなかったため、"
                 f"この run の残りでは antigravity レーンを止めます (直近: {reason})"
             )
-            logger.warning(msg)
-            print(f"::warning title=agy circuit breaker::{msg}", flush=True)
+
+    def record_error(self, detail: str) -> None:
+        """非ゼロ終了。連続失敗には数えないが、quota 切れなら即座に開く。"""
+        self.errored += 1
+        if not self.tripped and _AGY_QUOTA_RE.search(detail or ""):
+            self._trip(
+                "agy の quota が切れているため、この run の残りでは antigravity "
+                f"レーンを止めます (直近: {(detail or '').strip()[:120]})"
+            )
+
+    def _trip(self, msg: str) -> None:
+        self.tripped = True
+        logger.warning(msg)
+        print(f"::warning title=agy circuit breaker::{msg}", flush=True)
 
     def summary(self) -> dict:
         return {
-            "ok": self.ok, "failed": self.failed,
+            "ok": self.ok, "failed": self.failed, "errored": self.errored,
             "skipped_by_breaker": self.skipped, "tripped": self.tripped,
         }
 
@@ -899,7 +920,8 @@ def gather_antigravity(
     直らない類が主なので、どちらも従来どおり 1 回で諦める。
 
     `breaker` を渡すと、空応答と timeout を商品単位で数え、連続したら以降の
-    呼び出しを subprocess を起こさずに skip する (AgyCircuitBreaker)。
+    呼び出しを subprocess を起こさずに skip する (AgyCircuitBreaker)。quota 切れの
+    非ゼロ終了は 1 回で同じく止める。
     """
     if breaker is not None and not breaker.allow():
         return []
@@ -942,6 +964,8 @@ def gather_antigravity(
                 "agy 呼び出しが非ゼロ終了 (code %s): %s — antigravity skip",
                 result.returncode, detail,
             )
+            if breaker is not None:
+                breaker.record_error(result.stderr or "")
             return []
 
         text = (result.stdout or "").strip()
@@ -1441,7 +1465,10 @@ def report_selection(report: dict) -> None:
 
 
 def _agy_outcome(before: dict, after: dict) -> str:
-    for key, label in (("ok", "ok"), ("failed", "failed"), ("skipped_by_breaker", "breaker")):
+    for key, label in (
+        ("ok", "ok"), ("failed", "failed"), ("errored", "errored"),
+        ("skipped_by_breaker", "breaker"),
+    ):
         if after[key] > before[key]:
             return label
     return "unavailable"
@@ -1572,7 +1599,8 @@ def run(
         _step_summary([
             "",
             f"**完了**: {len(targets)} 件中 {written} 件書けた / {skipped} 件は 0 件。",
-            f"agy: ok {agy_s['ok']} / failed {agy_s['failed']} / breaker で skip "
+            f"agy: ok {agy_s['ok']} / failed {agy_s['failed']} / 非ゼロ終了 {agy_s['errored']}"
+            f" / breaker で skip "
             f"{agy_s['skipped_by_breaker']}" + (" — **breaker 作動**" if agy_s["tripped"] else ""),
             f"timeout で止めたホスト: {', '.join(summary['dead_hosts']['hosts']) or 'なし'}"
             f" (送らずに済んだリクエスト {summary['dead_hosts']['skipped_requests']} 件)",
