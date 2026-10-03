@@ -87,79 +87,15 @@ def test_post_match_comment_dry_run_writes_preview_and_skips_gh(tmp_path, monkey
     assert "t" in preview.read_text(encoding="utf-8")
 
 
-def _no_match_setup(tmp_path, monkeypatch, candidates, *, has_match_comment=False, issue=8721):
-    """一致 0 件の経路 (#8721) を gh 無しで動かし、close / comment の呼び出しを記録する。"""
+def test_post_match_comment_returns_zero_when_no_matches(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     matches_file = tmp_path / "matches.json"
-    matches_file.write_text(json.dumps({"candidates": candidates}), encoding="utf-8")
-    calls = {"close": [], "comment": []}
-    monkeypatch.setattr(otri, "find_open_issue_number", lambda repo: issue)
-    monkeypatch.setattr(otri, "issue_has_match_comment", lambda repo, n: has_match_comment)
-    monkeypatch.setattr(otri, "close_issue", lambda repo, n, body: calls["close"].append((n, body)))
-    monkeypatch.setattr(otri, "post_issue_comment", lambda repo, n, body: calls["comment"].append((n, body)))
+    matches_file.write_text(json.dumps({"candidates": [{"brand": "b", "matched_asins": []}]}), encoding="utf-8")
+
+    monkeypatch.setattr(otri, "find_open_issue_number", lambda repo: (_ for _ in ()).throw(AssertionError("should not be called")))
+
     args = otri.argparse.Namespace(matches=str(matches_file), repo="owner/repo", dry_run=False, model="m")
-    return args, calls
-
-
-def test_no_match_closes_issue_when_every_candidate_was_answered(tmp_path, monkeypatch):
-    args, calls = _no_match_setup(tmp_path, monkeypatch, [
-        {"brand": "b", "title": "t1", "matched_asins": [], "verify_status": "answered"},
-        {"brand": "c", "title": "t2", "matched_asins": [], "verify_status": "no_articles"},
-    ])
     assert otri._post_match_comment(args) == 0
-    assert calls["comment"] == []
-    [(n, body)] = calls["close"]
-    assert n == 8721
-    assert "一致 0 件 (2 件中)" in body
-    assert "toy-recall-no-match" in body
-
-
-def test_no_match_keeps_issue_open_when_agy_did_not_answer(tmp_path, monkeypatch):
-    args, calls = _no_match_setup(tmp_path, monkeypatch, [
-        {"brand": "b", "title": "t1", "matched_asins": [], "verify_status": "answered"},
-        {"brand": "c", "title": "t2", "matched_asins": [], "verify_status": "agy_failed"},
-        {"brand": "d", "title": "t3", "matched_asins": [], "verify_status": "unparsed"},
-    ])
-    assert otri._post_match_comment(args) == 0
-    assert calls["close"] == []
-    [(_, body)] = calls["comment"]
-    assert "agy が答えなかった候補 2 件 (3 件中)" in body
-    assert "t2" in body and "t3" in body and "t1" not in body
-
-
-def test_no_match_treats_legacy_output_without_status_as_unsettled(tmp_path, monkeypatch):
-    args, calls = _no_match_setup(tmp_path, monkeypatch, [{"brand": "b", "title": "t", "matched_asins": []}])
-    assert otri._post_match_comment(args) == 0
-    assert calls["close"] == []
-    assert len(calls["comment"]) == 1
-
-
-def test_no_match_does_not_close_when_earlier_match_comment_awaits_approval(tmp_path, monkeypatch):
-    args, calls = _no_match_setup(tmp_path, monkeypatch, [
-        {"brand": "b", "title": "t", "matched_asins": [], "verify_status": "answered"},
-    ], has_match_comment=True)
-    assert otri._post_match_comment(args) == 0
-    assert calls["close"] == []
-    [(_, body)] = calls["comment"]
-    assert "承認待ち" in body
-
-
-def test_no_match_without_open_issue_does_nothing(tmp_path, monkeypatch):
-    args, calls = _no_match_setup(tmp_path, monkeypatch, [
-        {"brand": "b", "title": "t", "matched_asins": [], "verify_status": "answered"},
-    ], issue=None)
-    assert otri._post_match_comment(args) == 0
-    assert calls == {"close": [], "comment": []}
-
-
-def test_no_match_dry_run_writes_preview_and_skips_gh(tmp_path, monkeypatch):
-    args, calls = _no_match_setup(tmp_path, monkeypatch, [
-        {"brand": "b", "title": "t", "matched_asins": [], "verify_status": "answered"},
-    ])
-    args.dry_run = True
-    assert otri._post_match_comment(args) == 0
-    assert calls == {"close": [], "comment": []}
-    assert (tmp_path / "_toy_recall_no_match_preview.md").exists()
 
 
 def test_post_match_comment_warns_and_returns_nonzero_when_no_open_issue(tmp_path, monkeypatch):

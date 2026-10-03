@@ -283,24 +283,12 @@ def call_agy(
     return ""
 
 
-# 候補ごとの照合状態 (verify_status)。matched_asins が空になる経路は
-# 「照合して一致なし」と「agy が答えなかった」の両方なので、後者を区別して残す。
-# open_toy_recall_issue.py は一致 0 件の issue を自動 close するが、それは
-# 全件が ANSWERED / NO_ARTICLES のときだけ — agy の故障を「一致なし」として
-# 黙って閉じないため。
-STATUS_NO_ARTICLES = "no_articles"  # 当サイトにそのブランドの記事が無い (照合不要)
-STATUS_ANSWERED = "answered"        # agy が 一致: あり/なし の形式で答えた
-STATUS_AGY_FAILED = "agy_failed"    # 空応答・timeout・非ゼロ終了
-STATUS_UNPARSED = "unparsed"        # 応答はあったが 一致: 欄が無い
-SETTLED_STATUSES = frozenset({STATUS_NO_ARTICLES, STATUS_ANSWERED})
-
-
 def verify_candidates(
     candidates: list[dict], article_index: dict[str, list[dict]], *,
     model: str = DEFAULT_MODEL, timeout_s: int = ANTIGRAVITY_TIMEOUT_S,
     caller=call_agy,
 ) -> list[dict]:
-    """candidates を破壊せず、matched_asins/match_reason/verify_status を足したコピーを返す。"""
+    """candidates を破壊せず、matched_asins/match_reason を足したコピーを返す。"""
     out = []
     for c in candidates:
         c = dict(c)
@@ -308,7 +296,6 @@ def verify_candidates(
         if not articles:
             c["matched_asins"] = []
             c["match_reason"] = ""
-            c["verify_status"] = STATUS_NO_ARTICLES
             out.append(c)
             continue
         articles = select_relevant_articles(c, articles)
@@ -318,12 +305,6 @@ def verify_candidates(
         asins, reason = parse_verify_response(text, valid_asins)
         c["matched_asins"] = asins
         c["match_reason"] = reason
-        if not (text or "").strip():
-            c["verify_status"] = STATUS_AGY_FAILED
-        elif not MATCH_RE.search(text):
-            c["verify_status"] = STATUS_UNPARSED
-        else:
-            c["verify_status"] = STATUS_ANSWERED
         if asins:
             logger.info("MATCH: %s (%s) -> %s", c.get("title", ""), c.get("brand", ""), asins)
         out.append(c)
@@ -360,9 +341,7 @@ def main() -> int:
 
     verified = verify_candidates(candidates, article_index, model=args.model, timeout_s=args.timeout)
     matched = [c for c in verified if c.get("matched_asins")]
-    unsettled = [c for c in verified if c.get("verify_status") not in SETTLED_STATUSES]
-    logger.info("%d/%d candidates matched an ASIN (%d unsettled: agy failed / unparsed)",
-                len(matched), len(verified), len(unsettled))
+    logger.info("%d/%d candidates matched an ASIN", len(matched), len(verified))
 
     data["candidates"] = verified
     out_path = pathlib.Path(args.out) if args.out else in_path

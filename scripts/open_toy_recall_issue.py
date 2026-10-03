@@ -15,14 +15,6 @@ matched_asins が付いた候補だけを「要承認」コメントとして既
 追記する (新規 Issue は作らない)。agy 判定は Flash モデルの誤りうる目安なので、
 ここでも brand_recalls への自動書き込みはしない — 人間が確認して手動 backfill
 する運用は変えない。
-
-一致 0 件のときは、照合結果を open Issue に残して close する (#8721)。#4320 で
-「brand_recalls には掲載 ASIN まで特定できたものだけを登録する」と決めたので、
-一致 0 件の Issue に人手の作業は残らない。何も書かずにいると、照合済みなのに
-未処理に見える Issue が開いたまま残る。ただし次のときは close しない:
-- agy が答えなかった候補がある (verify_status が answered / no_articles 以外、
-  または verify_status の無い古い出力)。agy の故障を「一致なし」として閉じない
-- Issue に以前の一致コメントがある (人間の承認待ちを消さない)
 """
 from __future__ import annotations
 
@@ -129,14 +121,11 @@ def render_body(data: dict) -> str:
         f"- マーカー `<!-- {MARKER} -->` で重複起票防止 (open が 1 件あれば新規起票なし)。",
         "- backfill 済 (brand_recalls に url 登録済) の事例は次回 fetch で自動除外される。",
         "- この Issue を close すると、次回 cron で残り候補を含む新 Issue が起票される。",
-        "- K8 の `toy-recall-verify.timer` が候補を agy で掲載 ASIN と照合する。一致があれば"
-        "「要承認」コメントを追記し、一致 0 件ならその旨をコメントしてこの Issue を close する。",
     ])
     return "\n".join(parts)
 
 
 MATCH_COMMENT_MARKER = "toy-recall-asin-match"
-NO_MATCH_COMMENT_MARKER = "toy-recall-no-match"
 
 
 def render_match_comment(matches: list[dict], model: str) -> str:
@@ -169,74 +158,9 @@ def render_match_comment(matches: list[dict], model: str) -> str:
     return "\n".join(parts)
 
 
-# verify_toy_recall_matches.py の SETTLED_STATUSES と同じ値 (照合が終わったとみなせる状態)。
-SETTLED_STATUSES = frozenset({"no_articles", "answered"})
-
-
-def unsettled_candidates(candidates: list[dict]) -> list[dict]:
-    """agy が答えなかった候補。verify_status の無い古い出力も未確定に数える。"""
-    return [c for c in candidates if c.get("verify_status") not in SETTLED_STATUSES]
-
-
-def render_no_match_comment(total: int, model: str, *, closing: bool) -> str:
-    parts = [
-        f"<!-- {NO_MATCH_COMMENT_MARKER} -->",
-        f"## 照合済み: ASIN 一致 0 件 ({total} 件中)",
-        "",
-        f"`verify_toy_recall_matches.py` (agy: {model}) が、候補 {total} 件すべてを当サイト掲載 ASIN と"
-        "照合し、一致は 0 件だった。",
-        "",
-        "#4320 の方針 (`brand_recalls` には掲載 ASIN まで特定できたものだけを登録し、ブランド一致"
-        "だけの候補は登録しない) により、人手で行う作業は無い。",
-    ]
-    if closing:
-        parts += ["", "このため自動で close する。未解決の候補は残り続け、次回 cron の Issue で再び照合される。"]
-    else:
-        parts += ["", "ただし以前の「ASIN一致の疑い」コメントが承認待ちのため、この Issue は open のまま残す。"]
-    return "\n".join(parts)
-
-
-def render_unsettled_comment(total: int, unsettled: list[dict], model: str) -> str:
-    parts = [
-        f"<!-- {NO_MATCH_COMMENT_MARKER} -->",
-        f"## 照合未完了: agy が答えなかった候補 {len(unsettled)} 件 ({total} 件中)",
-        "",
-        f"`verify_toy_recall_matches.py` (agy: {model}) の照合で、一致は 0 件だったが、"
-        f"{len(unsettled)} 件は agy が答えなかった (空応答・timeout・形式不正)。"
-        "**一致なしと確定できないので、この Issue は open のまま残す。**",
-        "",
-        "agy の状態を確認し、必要なら K8 で `scripts/toy_recall_verify_cycle.sh` を再実行する "
-        "(state file を消すと同じ run を再照合する)。",
-        "",
-    ]
-    for c in unsettled[:20]:
-        title = (c.get("title") or "").replace("|", "／")
-        parts.append(f"- {c.get('brand', '')} — {title} ({c.get('verify_status', 'status なし')})")
-    if len(unsettled) > 20:
-        parts.append(f"- … ほか {len(unsettled) - 20} 件")
-    return "\n".join(parts)
-
-
-def issue_has_match_comment(repo: str, issue_number: int) -> bool:
-    res = subprocess.run(
-        ["gh", "issue", "view", str(issue_number), "-R", repo, "--json", "comments"],
-        check=True, capture_output=True, text=True,
-    )
-    comments = json.loads(res.stdout).get("comments") or []
-    return any(MATCH_COMMENT_MARKER in (c.get("body") or "") for c in comments)
-
-
 def post_issue_comment(repo: str, issue_number: int, body: str) -> None:
     subprocess.run(
         ["gh", "issue", "comment", str(issue_number), "-R", repo, "--body", body],
-        check=True, capture_output=True, text=True,
-    )
-
-
-def close_issue(repo: str, issue_number: int, body: str) -> None:
-    subprocess.run(
-        ["gh", "issue", "close", str(issue_number), "-R", repo,
-         "--reason", "completed", "--comment", body],
         check=True, capture_output=True, text=True,
     )
 
@@ -257,10 +181,10 @@ def _post_match_comment(args: argparse.Namespace) -> int:
         return 2
 
     data = json.loads(matches_path.read_text(encoding="utf-8"))
-    candidates = data.get("candidates") or []
-    matched = [c for c in candidates if c.get("matched_asins")]
+    matched = [c for c in (data.get("candidates") or []) if c.get("matched_asins")]
     if not matched:
-        return _report_no_match(args, candidates)
+        logger.info("no ASIN matches — nothing to comment")
+        return 0
 
     issue_number = find_open_issue_number(args.repo)
     if issue_number is None:
@@ -276,43 +200,6 @@ def _post_match_comment(args: argparse.Namespace) -> int:
 
     post_issue_comment(args.repo, issue_number, body)
     logger.info("posted match comment on #%d (%d matches)", issue_number, len(matched))
-    return 0
-
-
-def _report_no_match(args: argparse.Namespace, candidates: list[dict]) -> int:
-    """一致 0 件の照合結果を open Issue に残し、確定していれば close する (#8721)。"""
-    if not candidates:
-        logger.info("no candidates in matches file — nothing to report")
-        return 0
-    issue_number = find_open_issue_number(args.repo)
-    if issue_number is None:
-        logger.info("no ASIN matches and no open toy-recall issue — nothing to report")
-        return 0
-
-    unsettled = unsettled_candidates(candidates)
-    if unsettled:
-        action = "comment"
-        body = render_unsettled_comment(len(candidates), unsettled, args.model)
-    elif issue_has_match_comment(args.repo, issue_number):
-        action = "comment"
-        body = render_no_match_comment(len(candidates), args.model, closing=False)
-    else:
-        action = "close"
-        body = render_no_match_comment(len(candidates), args.model, closing=True)
-
-    if args.dry_run:
-        out = pathlib.Path("_toy_recall_no_match_preview.md")
-        out.write_text(body, encoding="utf-8")
-        logger.info("would %s #%d (body → %s)", action, issue_number, out)
-        return 0
-
-    if action == "close":
-        close_issue(args.repo, issue_number, body)
-        logger.info("no ASIN matches (%d candidates) — closed #%d", len(candidates), issue_number)
-    else:
-        post_issue_comment(args.repo, issue_number, body)
-        logger.info("no ASIN matches — commented on #%d without closing (%d unsettled)",
-                    issue_number, len(unsettled))
     return 0
 
 
