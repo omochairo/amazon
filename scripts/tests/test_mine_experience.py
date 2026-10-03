@@ -514,7 +514,9 @@ def test_breaker_trips_after_threshold_and_stops_spawning_agy(monkeypatch, capsy
     for _ in range(15):
         assert gather_antigravity("商品名", "ブランド", sleeper=lambda _s: None, breaker=breaker) == []
     assert len(calls) == 3 * per_product  # 増えていない
-    assert breaker.summary() == {"ok": 0, "failed": 3, "skipped_by_breaker": 15, "tripped": True}
+    assert breaker.summary() == {
+        "ok": 0, "failed": 3, "errored": 0, "skipped_by_breaker": 15, "tripped": True,
+    }
     # 黙って緑にしない: annotation は開いたときに 1 回だけ
     assert capsys.readouterr().out.count("::warning title=agy circuit breaker::") == 1
 
@@ -551,6 +553,7 @@ def test_breaker_counts_timeout_but_not_fast_failures(monkeypatch):
         gather_antigravity("商品名", "ブランド", sleeper=lambda _s: None, breaker=breaker)
     assert not breaker.tripped
     assert breaker.failed == 0
+    assert breaker.errored == 5  # 止めないが、summary には残す
 
     def timeout(cmd, **kwargs):
         raise subprocess.TimeoutExpired(cmd=cmd, timeout=120)
@@ -559,6 +562,43 @@ def test_breaker_counts_timeout_but_not_fast_failures(monkeypatch):
     for _ in range(2):
         gather_antigravity("商品名", "ブランド", sleeper=lambda _s: None, breaker=breaker)
     assert breaker.tripped
+
+
+def test_breaker_trips_immediately_on_quota_exhaustion(monkeypatch, capsys):
+    """2026-09-29 の再現: quota 切れで全商品が exit 3。
+
+    非ゼロ終了は連続失敗に数えないので、以前は breaker が開かず summary も
+    `failed 0` のまま緑で終わった。quota 切れは run の間に戻らないので 1 回で開く。
+    """
+    calls = []
+    stderr = (
+        "error: Individual quota reached. Please upgrade your subscription to "
+        'increase your limits. Resets in 11h18m3s.\nAGY_ERROR: {"short_error":'
+        '"RESOURCE_EXHAUSTED (code 429): Individual quota reached."}'
+    )
+
+    def quota(cmd, **kwargs):
+        calls.append(cmd)
+        return _FakeCompletedProcess(returncode=3, stderr=stderr)
+
+    monkeypatch.setattr("scripts.mine_experience.subprocess.run", quota)
+    breaker = mine_experience.AgyCircuitBreaker(threshold=3)
+    for _ in range(10):
+        assert gather_antigravity("商品名", "ブランド", sleeper=lambda _s: None, breaker=breaker) == []
+    assert len(calls) == 1
+    assert breaker.summary() == {
+        "ok": 0, "failed": 0, "errored": 1, "skipped_by_breaker": 9, "tripped": True,
+    }
+    out = capsys.readouterr().out
+    assert out.count("::warning title=agy circuit breaker::") == 1
+    assert "quota" in out
+
+
+def test_agy_outcome_labels_nonzero_exit_as_errored():
+    before = {"ok": 0, "failed": 0, "errored": 0, "skipped_by_breaker": 0}
+    after = dict(before, errored=1)
+    assert mine_experience._agy_outcome(before, after) == "errored"
+    assert mine_experience._agy_outcome(before, dict(before)) == "unavailable"
 
 
 def test_empty_response_logs_agy_stderr(monkeypatch, caplog):
@@ -591,7 +631,9 @@ def test_run_shares_one_breaker_across_asins_and_reports_it(tmp_path, monkeypatc
     monkeypatch.setattr(mod, "mine_asin", fake_mine_asin)
     summary = mod.run(["B0AAAAAAAA1", "B0AAAAAAAA2"], base=tmp_path / "per_asin")
     assert seen[0] is seen[1]
-    assert summary["agy"] == {"ok": 0, "failed": 0, "skipped_by_breaker": 0, "tripped": False}
+    assert summary["agy"] == {
+        "ok": 0, "failed": 0, "errored": 0, "skipped_by_breaker": 0, "tripped": False,
+    }
 
 
 # --------------------------------------------------------------------------
