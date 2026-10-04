@@ -186,29 +186,50 @@
       "author": "販売店",
       "conflict_of_interest": "possible",
       "notes": "親子で楽しむ知育玩具として推奨。対象年齢は6歳以上。"
+    },
+    {
+      "id": "src-4",
+      "name": "note / 私が子供用顕微鏡をネットで買って後悔した日",
+      "url": "https://note.com/kaimononavi/n/n2aa99ce734ef",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "author": "第三者",
+      "conflict_of_interest": "none",
+      "notes": "子供用顕微鏡の選び方として、大人の考える性能よりも子どもが一人で使えそうか、ピント合わせがしやすいかが重要であると言及。また、最近の顕微鏡はスマホで見られる機能がワクワクを長続きさせると評価されている。"
+    },
+    {
+      "id": "src-5",
+      "name": "関連書籍 / 英語に強い子の育て方",
+      "url": "http://books.google.com/books?id=Wn9GEAAAQBAJ&dq=%E3%82%B9%E3%83%94%E3%83%BC%E3%83%89+%E3%83%95%E3%82%A9%E3%83%8B%E3%83%83%E3%82%AF%E3%82%B9+%E7%B5%B5%E6%9C%AC&hl=&source=gbs_api",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "author": "第三者",
+      "conflict_of_interest": "none",
+      "notes": "教育において、子どもが学習を継続できる環境作りと探究心の育成が重要であるという一般的な教育的観点を確認。"
     }
   ],
   "claims": [
     {
-      "claim": "スマホアダプターを使用して観察結果を写真撮影できる",
+      "claim": "スマホを使用することで観察への興味が長続きしやすい",
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-4"
       ],
-      "cross_checked": false,
-      "notes": "商品ページでスマホ撮影機能が確認できる"
+      "cross_checked": true,
+      "notes": "メーカーの商品説明と、第三者による顕微鏡選びの体験談（note）の双方で、スマホ連動機能が子どものワクワクを長続きさせる要素として評価されている"
     },
     {
-      "claim": "届いてすぐ使える豊富な付属品がセットになっている",
+      "claim": "学習を継続するには届いてすぐ使える環境づくりが重要である",
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
         "src-1",
-        "src-2"
+        "src-5"
       ],
-      "cross_checked": false,
-      "notes": "複数サイトの商品説明で付属品の充実度がアピールされている"
+      "cross_checked": true,
+      "notes": "本品の充実した付属品（商品説明）が、教育書で言及される「子どもを飽きさせない環境作り」に合致している"
     },
     {
       "claim": "軽量・コンパクトで持ち運びに便利",
@@ -219,7 +240,7 @@
         "src-2"
       ],
       "cross_checked": false,
-      "notes": "商品説明で軽量性が明記されている"
+      "notes": "Amazonおよび楽天の商品説明で軽量性が明記されている"
     },
     {
       "claim": "親子で一緒に自然の世界を探索するのに適している",
@@ -300,7 +321,7 @@
       {
         "text": "スマホで撮影した画像を家族で共有",
         "supporting_source_ids": [
-          "src-1"
+          "src-4"
         ]
       }
     ],
@@ -309,7 +330,7 @@
         "segment_label": "自由研究用に検討する保護者層",
         "summary": "手軽にスマホで撮影でき、記録を残しやすい入門機として適していると説明されています。",
         "supporting_source_ids": [
-          "src-1"
+          "src-4"
         ]
       }
     ]
