@@ -1113,13 +1113,23 @@ def check_sources_v5(data: dict) -> CheckResult:
     は sources=3)。プロンプトには明記されているが gate 未強制だったため追加。
 
     判定:
-    - sources field 無し → skip (legacy article)
+    - legacy article → skip
+    - sources field 無し → fail (#8934)
     - sources が list でない → fail
     - len(sources) < 5 → fail
     - 非販売 (= _is_sales_source False) が 2 件未満 → fail
+
+    #8934: 以前は field 無しも skip していたため、sources が 5 件に届かない記事で
+    Jules の CI 自動修正が `sources` / `claims` を丸ごと消して通していた
+    (#8344 B0FWK6FFN7、#6788 B0DPHB7DMT)。根拠を消すほど合格しやすい穴なので塞ぐ。
     """
-    if "sources" not in data or _is_legacy_article(data):
-        return CheckResult("sources_v5", True, 1.0, "field absent or legacy article (skipped)")
+    if _is_legacy_article(data):
+        return CheckResult("sources_v5", True, 1.0, "legacy article (skipped)")
+    if "sources" not in data:
+        return CheckResult(
+            "sources_v5", False, 0.0,
+            "sources field 無し (v5 §6.5.1 最低 5 件必須。消して通さない)",
+        )
     srcs = data.get("sources") or []
     if not isinstance(srcs, list):
         return CheckResult("sources_v5", False, 0.0, "sources must be a list")
