@@ -241,6 +241,22 @@ def test_last_date_reads_ts_field(tmp_path):
     assert last_date(p) == D("2026-08-05")
 
 
+def test_last_date_reads_generated_at_field(tmp_path):
+    """定型句監査 (#8922) の行は ``generated_at`` しか持たない。"""
+    p = tmp_path / "template_phrase_audit.jsonl"
+    p.write_text(json.dumps({"generated_at": "2026-10-04T00:33:16Z", "corpus_size": 1}) + "\n",
+                 encoding="utf-8")
+    assert last_date(p) == D("2026-10-04")
+
+
+def test_last_date_prefers_ts_over_generated_at(tmp_path):
+    p = tmp_path / "a.jsonl"
+    p.write_text(json.dumps({"ts": "2026-08-05T00:00:00+00:00",
+                             "generated_at": "2026-01-01T00:00:00Z"}) + "\n",
+                 encoding="utf-8")
+    assert last_date(p) == D("2026-08-05")
+
+
 def test_last_date_prefers_date_over_ts(tmp_path):
     """両方あるレコードでは既存の ``date`` を優先する (既存レーンの挙動を変えない)。"""
     p = tmp_path / "a.jsonl"
