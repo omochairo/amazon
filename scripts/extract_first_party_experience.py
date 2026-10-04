@@ -37,8 +37,9 @@ mine_experience.py の抽出プロンプトは 60〜160字の**要約**を作る
   - 型1 (実使用が別SKU なのに note が無い) / 型2 (予測・仮定を実体験として抜く) —
     ``C_EXTRACTION_PROMPT_TEMPLATE`` に禁止事項と ``note`` フィールドを追加 (プロンプト側の
     手当てなので確率的。レビューを外す根拠にはならない)
-  - 型3 (見出し・目次が本文として抽出される) — ``strip_heading_tags`` で見出し要素を
-    strip_html の前に落とす
+  - 型3 (見出し・目次が本文として抽出される) — ``prose_text`` で本文を地の文のブロック
+    (段落・吹き出し等) に分け、見出し・箇条書き・表は落とす。snippet は 1 ブロックの
+    中に収まっていることも要求する (``block_span_discarded``)
   - 型5 (文の断片) — ``snippet_is_sentence_fragment`` で句点・感嘆符・疑問符で
     閉じていない抜粋を捨てる
   - 型4 (定型リード文) は機械判定の設計が未確定 (aspect別の採択率を見てから決める、
@@ -51,6 +52,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import html.parser
 import json
 import logging
 import os
@@ -62,7 +64,7 @@ from typing import Any
 
 import requests
 
-from scripts.build_wp_navi_link_candidates import DEFAULT_WP_BASE_URL, strip_html
+from scripts.build_wp_navi_link_candidates import DEFAULT_WP_BASE_URL
 from scripts.collect_first_party_sources import FP_MARKERS, fetch_post_content
 from scripts.mine_experience import (
     DEFAULT_EXPERIENCE_MODEL,
@@ -90,16 +92,32 @@ COMPARED_ONLY_ASPECT = "比較"
 
 # 一人称マーカーを含む文の前後何文まで一緒に残すか (select_first_party_passages)。
 PASSAGE_WINDOW = 1
-_SENTENCE_SPLIT_RE = re.compile(r"(?<=[。！？])")
+# ブロックの境目 (改行) も文の境目にする。区切り文字は前の文の末尾に残るので、
+# "".join で元の本文に戻る。句点の直後が改行なら句点では割らない (割ると "\n" だけの
+# 空の文ができ、select_first_party_passages の前後 window を食う)。
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=\n)|(?<=[。！？])(?!\n)")
 
 # 捏造ゲートを通すのに必要な、正規化後の最短長。
 # 部分一致だけだと「子」「。」のような 1 文字の断片が素通りする (母艦で実証)。
 # 引用として使えない長さなので、ここで弾く。
 MIN_GROUNDED_LENGTH = 20
 
-# 見出し要素をタグごと落とす (#7569 型3)。非貪欲マッチなので開閉のタグ番号が
-# 食い違っても (壊れた HTML でも) 直近の閉じタグまでで止まる。
-_HEADING_TAG_RE = re.compile(r"<h[1-6][^>]*>.*?</h[1-6]>", re.IGNORECASE | re.DOTALL)
+# prose_text (#7569 型3): 中身ごと落とす要素と、ブロックの境目になる要素。
+# 箇条書き・表を落とすのは、引用 (usable_as=quote) として使える文がそこに無いため。
+# omcha.jp の実測 (2026-10-04) では、冒頭の「この記事では、」に続く目次代わりの <ul>、
+# 価格比較の <table>、入れ子の <ul> (メリット/デメリット) が句点まで 1 文に連結され、
+# 最長 705 字の「文」になっていた。目次の 1 項目は「…感想 (子供の反応は？)」のように
+# 疑問符で終わるので、型5 の断片判定もすり抜ける。
+_PROSE_SKIP_TAGS = frozenset({
+    "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "table",
+    "script", "style", "noscript", "nav",
+})
+_PROSE_BLOCK_TAGS = frozenset({
+    "p", "div", "blockquote", "section", "article", "aside", "figure", "figcaption",
+    "dl", "dt", "dd", "pre", "header", "footer",
+})
+_HEADING_TAGS = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
+_WS_RUN_RE = re.compile(r"\s+")
 
 # 文として閉じているかの判定 (#7569 型5)。閉じ括弧・引用符は末尾から無視する。
 _SENTENCE_TERMINATORS = "。！？"
@@ -169,18 +187,83 @@ def select_first_party_passages(plain_text: str, *, window: int = PASSAGE_WINDOW
     return "".join(sentences[i] for i in sorted(keep))
 
 
-def strip_heading_tags(content_html: str) -> str:
-    """``<h1>``〜``<h6>`` をタグごと除去する (#7569 型3)。
+class _ProseExtractor(html.parser.HTMLParser):
+    """HTMLParser は閉じタグを補わないので、落とす要素は開いている順にスタックで持つ。
 
-    ``strip_html`` はタグを空白に置換するだけで見出しの文字列自体は残すため、
-    目次段落や見出しテキストが地の文と区別なく連結され、本文の断片として
-    抽出されていた (母艦の実測: 目次ブロックが1文になる・見出しそのものが
-    snippet になる、の2件)。strip_html に渡す前に見出し要素ごと落とすことで、
-    構造が消える前に区別を付ける。
+    閉じ忘れへの安全弁: 見出しはブロック要素を含めないので、見出しの中でブロック
+    要素か別の見出しが始まったら、見出しは閉じたものとみなす (``</h2>`` が無い
+    だけで以降の本文が全部消えるのを防ぐ。旧実装の非貪欲な正規表現も直近の閉じタグで
+    回復していた)。閉じタグは対応する開きタグまで遡って閉じ、対応が無ければ無視する。
+    ``<ul>`` / ``<table>`` の閉じ忘れは、中に段落を含めるので見分けられず回復しない。
+    """
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.blocks: list[str] = []
+        self._buf: list[str] = []
+        self._skipping: list[str] = []
+
+    def _flush(self) -> None:
+        text = _WS_RUN_RE.sub(" ", "".join(self._buf)).strip()
+        if text:
+            self.blocks.append(text)
+        self._buf = []
+
+    def _close_dangling_headings(self) -> None:
+        while self._skipping and self._skipping[-1] in _HEADING_TAGS:
+            self._skipping.pop()
+
+    def handle_starttag(self, tag, attrs):
+        if tag in _HEADING_TAGS or tag in _PROSE_BLOCK_TAGS:
+            self._close_dangling_headings()
+        if tag in _PROSE_SKIP_TAGS:
+            if not self._skipping:
+                self._flush()
+            self._skipping.append(tag)
+        elif tag in _PROSE_BLOCK_TAGS and not self._skipping:
+            self._flush()
+
+    def handle_endtag(self, tag):
+        if tag in _PROSE_SKIP_TAGS:
+            if tag in self._skipping:
+                while self._skipping.pop() != tag:
+                    pass
+        elif tag in _PROSE_BLOCK_TAGS and not self._skipping:
+            self._flush()
+
+    def handle_data(self, data):
+        if not self._skipping:
+            self._buf.append(data)
+
+    def close(self) -> None:
+        super().close()
+        self._flush()
+
+
+def prose_text(content_html: str | None) -> str:
+    """WP の本文 HTML を、地の文のブロックを 1 行ずつ並べたテキストにする (#7569 型3)。
+
+    見出し・箇条書き・表は中身ごと落とす。段落・吹き出し (div) などのブロックの
+    境目は改行にする。``strip_html`` はタグを空白 1 個に潰すので、ブロックをまたいで
+    句点まで 1 文に連結され、gemma が目次や表を本文の一節として抜き出していた。
+    インライン要素 (strong / a / span / br 等) は境目にしない (文の途中に入るため)。
     """
     if not content_html:
         return ""
-    return _HEADING_TAG_RE.sub(" ", content_html)
+    parser = _ProseExtractor()
+    parser.feed(content_html)
+    parser.close()
+    return "\n".join(parser.blocks)
+
+
+def snippet_is_within_one_block(snippet_text: str, prose: str) -> bool:
+    """snippet が ``prose_text`` の 1 ブロック (1 行) の中に収まっているか (#7569 型3)。
+
+    本文全体への接地 (``snippet_is_grounded``) は空白を無視して照合するので、
+    段落・吹き出しの境目をまたいだ抜粋も通ってしまう。境目をまたぐのは
+    話者名や別の段落を巻き込んだ抜粋なので、引用としては使えない。
+    """
+    return any(snippet_is_grounded(snippet_text, block) for block in prose.split("\n"))
 
 
 def snippet_is_sentence_fragment(text: str) -> bool:
@@ -202,11 +285,11 @@ def _normalize_for_match(text: str) -> str:
 
     - Unicode NFKC 正規化で全角/半角・互換文字を統一する (gemma が全角スペースや
       互換englishを混ぜて出力することがある)
-    - 空白・改行を全て除去する (strip_html は連続空白を1個に畳むだけなので、
-      本文側の改行の入り方と gemma 出力の空白の入り方が食い違いうる)
+    - 空白・改行を全て除去する (本文側の改行の入り方と gemma 出力の空白の
+      入り方が食い違いうる)
     - casefold で英数字の大小文字差を吸収する (日本語には影響しない)
 
-    HTML タグの除去はここでは行わない。呼び出し側は既に strip_html 済みの
+    HTML タグの除去はここでは行わない。呼び出し側は既に prose_text 済みの
     本文を渡す前提。
     """
     normalized = unicodedata.normalize("NFKC", text or "")
@@ -345,7 +428,8 @@ def extract_asin_experience(
     title, product_name, brand = resolve_product_identity(asin, per_asin_dir)
     stats = {
         "posts": 0, "no_passage": 0, "checked": 0,
-        "fabrication_discarded": 0, "fragment_discarded": 0, "role_filtered": 0, "kept": 0,
+        "fabrication_discarded": 0, "block_span_discarded": 0, "fragment_discarded": 0,
+        "role_filtered": 0, "kept": 0,
     }
     if not title:
         logger.warning("%s: amazon item not found — skip", asin)
@@ -366,9 +450,8 @@ def extract_asin_experience(
 
         if post_id not in content_cache:
             content_html = fetch_post_content(post_id, wp_base_url, session, sleeper=sleeper)
-            # 見出し要素はタグごと落としてから strip_html する (#7569 型3)。
-            # strip_html だけだと見出し文字列が地の文と区別なく連結される。
-            content_cache[post_id] = strip_html(strip_heading_tags(content_html)) if content_html else ""
+            # 地の文のブロックだけを 1 行ずつ残す (#7569 型3)。見出し・箇条書き・表は落ちる。
+            content_cache[post_id] = prose_text(content_html)
         plain_text = content_cache[post_id]
         if not plain_text:
             continue
@@ -390,6 +473,9 @@ def extract_asin_experience(
             # fabrication_discarded が実態より小さく出る。
             if not snippet_is_grounded(s["text"], plain_text):
                 stats["fabrication_discarded"] += 1
+                continue
+            if not snippet_is_within_one_block(s["text"], plain_text):
+                stats["block_span_discarded"] += 1
                 continue
             # 文の断片チェックも役割フィルタより先に通す (同じ理由: 逆順だと
             # compared の非「比較」snippet が判定を受けないまま捨てられる)。
@@ -482,9 +568,10 @@ def run(
         processed.append({"asin": asin, **stats})
         logger.info(
             "%s: posts=%d no_passage=%d checked=%d fabrication_discarded=%d "
-            "fragment_discarded=%d role_filtered=%d kept=%d",
+            "block_span_discarded=%d fragment_discarded=%d role_filtered=%d kept=%d",
             asin, stats["posts"], stats["no_passage"], stats["checked"],
-            stats["fabrication_discarded"], stats["fragment_discarded"],
+            stats["fabrication_discarded"], stats["block_span_discarded"],
+            stats["fragment_discarded"],
             stats["role_filtered"], stats["kept"],
         )
         if payload is None:

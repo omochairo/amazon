@@ -111,6 +111,10 @@ LANES: Sequence[Lane] = (
     # 出ない遷移ログ (#4964)。月初の census が必ず全件 snapshot を書くので monthly で見る。
     Lane("census_url_states.jsonl", "monthly", 45, "22-gsc-index-census.yml",
          "遷移ログ + 月初 snapshot (#6791)。commit 漏れを #8047 で修正、初回 2026-09-28"),
+    # #8922 で週次 census に同梱した定型句監査。行は date を持たず generated_at
+    # (ISO datetime) だけなので、_date_of が generated_at も見る。
+    Lane("template_phrase_audit.jsonl", "weekly", 12, "48-quality-census.yml",
+         "quality_census と同じ run (#8922)。初回 2026-10-04"),
 )
 
 class DirLane:
@@ -264,9 +268,12 @@ def _parse_iso_week_label(value: str) -> Optional[dt.date]:
 def _date_of(row: Dict[str, Any]) -> Optional[dt.date]:
     # 価格レーンは日付を ``ts`` (ISO datetime) に持つ。``date`` を優先し、
     # 無ければ ``ts`` を見る (どちらも先頭 10 文字が YYYY-MM-DD、または ISO 週ラベル)。
-    value = row.get("date")
-    if not isinstance(value, str) or not value:
-        value = row.get("ts")
+    # 定型句監査 (#8922) は ``generated_at`` しか持たないので最後にそれを見る。
+    value = None
+    for key in ("date", "ts", "generated_at"):
+        value = row.get(key)
+        if isinstance(value, str) and value:
+            break
     if not isinstance(value, str) or not value:
         return None
     week_label = _parse_iso_week_label(value)
