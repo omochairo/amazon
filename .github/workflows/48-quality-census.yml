@@ -124,19 +124,45 @@ jobs:
         run: |
           python -m scripts.comment_quality_census
 
+      # 定型句 (PROMPT_TEMPLATE 例文の逐語コピー) の週次観測 (amazon-navi-brain#39)。
+      # 専用レーンや tracker issue を新設せず、この census の PR に同梱する。
+      # 外部 API ゼロ・部分文字列一致のみで数秒。census と独立に成否を見るため
+      # always() で走らせ、落ちたら run は赤のままにする。census のサマリ・コメントより
+      # 後ろに置くのは、if の無いステップが暗黙の success() で巻き添えに飛ばないため。
+      - name: Run template phrase audit
+        id: template
+        if: always()
+        run: python -m scripts.audit_template_phrases
+
+      - name: Summarize template phrase audit
+        if: always() && steps.template.outcome == 'success'
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          d = json.loads(pathlib.Path("data/analytics/template_phrase_audit.json").read_text(encoding="utf-8"))
+          cohorts = ("pre_v7", "post_v7_new", "post_v7_rewrite")
+          fmt = lambda r: "-" if r is None else f"{r*100:.1f}%"
+          print("## 定型句の出現率 (amazon-navi-brain#39)\n")
+          print(f"- {d['source_week']} / 記事 {d['corpus_size']} 件 / cohort {d['cohort_sizes']}\n")
+          print("| 句 | " + " | ".join(cohorts) + " |\n|---|" + "---:|" * len(cohorts))
+          for p in d["phrases"]:
+              print(f"| {p['text']} | " + " | ".join(fmt(p['rate'][c]) for c in cohorts) + " |")
+          PY
+
       # コメント投稿が落ちても census データの commit-back までは行う。
       # 逆に、コメント失敗そのものは run を落として可視化したままにする
       # (continue-on-error を付けると REST の steps[].conclusion が success を
       # 返し、失敗が run 一覧からも step 一覧からも見えなくなる)。
-      # census 自体が失敗しているときは commit するものが無いので走らせない。
+      # census と定型句監査の両方が失敗しているときは commit するものが無いので走らせない。
       - name: Create census PR + auto-merge
         id: pr
-        if: always() && steps.census.outcome == 'success'
+        if: always() && (steps.census.outcome == 'success' || steps.template.outcome == 'success')
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -e
           TARGETS="data/analytics/quality_census.json data/analytics/history/quality_census.jsonl"
+          TARGETS="$TARGETS data/analytics/template_phrase_audit.json data/analytics/history/template_phrase_audit.jsonl"
 
           # checkout -b の前に変更有無を判定する (staged 状態で checkout -b すると
           # 一部ファイルが失われることがあるため、branch 作成前は git add しない)
@@ -164,7 +190,7 @@ jobs:
 
           PR_URL=$(gh pr create \
             --title "data(analytics): quality gate census (run ${{ github.run_id }})" \
-            --body "main 全量に quality_gate を当てた週次 census。観察のみで記事・CI には影響しない。Refs #4826." \
+            --body "main 全量に quality_gate を当てた週次 census と、定型句の出現率の週次観測。観察のみで記事・CI には影響しない。Refs #4826." \
             --base main \
             --head "$BRANCH")
           echo "Created: $PR_URL"
