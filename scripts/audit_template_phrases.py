@@ -29,6 +29,12 @@ K8/embedding 不要 (単純な部分文字列一致) — GitHub Actions (ubuntu-
 出力: data/analytics/template_phrase_audit.json に
   {generated_at, source_week, corpus_size, cohort_sizes, phrases: [{id, text,
    origin, hits: {cohort: count}, rate: {cohort: 0-1 float}}]}
+
+週次 history: data/analytics/history/template_phrase_audit.jsonl に 1 週 1 行
+  {source_week, generated_at, corpus_size, cohort_sizes, rate: {id: {cohort: rate}}}
+  を追記する。同じ source_week の行は置換する (workflow_dispatch の再実行で
+  行が増えない)。snapshot は毎週上書きされるので、v7.4 で禁止句を入れたときの
+  before/after はこの history で見る。48-quality-census.yml から週次で呼ぶ。
 """
 from __future__ import annotations
 
@@ -51,6 +57,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("audit_template_phrases")
 
 DEFAULT_OUT = "data/analytics/template_phrase_audit.json"
+DEFAULT_HISTORY = "data/analytics/history/template_phrase_audit.jsonl"
 
 COHORTS: tuple[str, ...] = ("pre_v7", "post_v7_new", "post_v7_rewrite")
 
@@ -163,20 +170,52 @@ def run(
     return payload
 
 
+def history_row(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "source_week": payload["source_week"],
+        "generated_at": payload["generated_at"],
+        "corpus_size": payload["corpus_size"],
+        "cohort_sizes": payload["cohort_sizes"],
+        "rate": {p["id"]: p["rate"] for p in payload["phrases"]},
+    }
+
+
+def append_history(history_path: pathlib.Path, row: dict[str, Any]) -> None:
+    """1 週 1 行。同じ source_week の行は置換する。壊れた行はそのまま残す。"""
+    kept: list[str] = []
+    if history_path.exists():
+        for ln in history_path.read_text(encoding="utf-8").splitlines():
+            if not ln.strip():
+                continue
+            try:
+                if json.loads(ln).get("source_week") == row["source_week"]:
+                    continue
+            except (json.JSONDecodeError, AttributeError):
+                pass
+            kept.append(ln)
+    kept.append(json.dumps(row, ensure_ascii=False, sort_keys=True))
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    history_path.write_text("\n".join(kept) + "\n", encoding="utf-8")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--articles-dir", default=DEFAULT_ARTICLES_DIR)
     ap.add_argument("--out", default=DEFAULT_OUT)
     ap.add_argument("--rewrite-ledger", default=DEFAULT_REWRITE_LEDGER)
     ap.add_argument("--limit", type=int, default=0, help="処理する記事数の上限 (0=全件、スモークテスト用)")
+    ap.add_argument("--history", default=DEFAULT_HISTORY, help="週次 history jsonl ('' で書かない)")
     args = ap.parse_args()
 
-    run(
+    payload = run(
         pathlib.Path(args.articles_dir),
         pathlib.Path(args.out),
         rewrite_ledger_path=args.rewrite_ledger,
         limit=args.limit,
     )
+    # --limit はスモークテスト用なので、部分集計を history に混ぜない
+    if args.history and not args.limit:
+        append_history(pathlib.Path(args.history), history_row(payload))
     return 0
 
 
