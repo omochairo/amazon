@@ -20,8 +20,9 @@ from scripts.extract_first_party_experience import (
     run,
     select_first_party_passages,
     snippet_is_grounded,
+    prose_text,
     snippet_is_sentence_fragment,
-    strip_heading_tags,
+    snippet_is_within_one_block,
 )
 
 
@@ -97,36 +98,95 @@ def test_snippet_is_grounded_rejects_fragments_below_the_floor():
 
 
 # --------------------------------------------------------------------------
-# strip_heading_tags: 見出しが本文断片として抽出される問題への手当て (#7569 型3)
+# prose_text: 見出し・目次・表が本文断片として抽出される問題への手当て (#7569 型3)
 # --------------------------------------------------------------------------
 
-def test_strip_heading_tags_removes_heading_elements():
+def test_prose_text_removes_heading_elements():
     html = "<p>導入文です。</p><h2>実際に遊んでみたリアルな感想</h2><p>うちの子は毎日遊んでいます。</p>"
-    out = strip_heading_tags(html)
+    out = prose_text(html)
     assert "実際に遊んでみたリアルな感想" not in out
     assert "<h2>" not in out
-    assert "うちの子は毎日遊んでいます。" in out
+    assert out.split("\n") == ["導入文です。", "うちの子は毎日遊んでいます。"]
 
 
-def test_strip_heading_tags_removes_multiple_and_all_levels():
-    html = "<h1>タイトル</h1><h3>もくじ1</h3><h3>もくじ2</h3><p>本文。</p>"
-    out = strip_heading_tags(html)
-    assert "タイトル" not in out
-    assert "もくじ1" not in out
-    assert "もくじ2" not in out
-    assert "本文。" in out
+def test_prose_text_removes_multiple_and_all_levels():
+    html = '<h1>タイトル</h1><h3>もくじ1</h3><h2><span class="rank">1</span>商品名の見出し</h2><p>本文。</p>'
+    assert prose_text(html) == "本文。"
 
 
-def test_strip_heading_tags_keeps_nested_inline_tags_out():
-    html = '<h2><span class="rank">1</span>商品名の見出し</h2><p>本文です。</p>'
-    out = strip_heading_tags(html)
-    assert "商品名の見出し" not in out
-    assert "本文です。" in out
+def test_prose_text_drops_toc_list_after_lead():
+    # omcha.jp の実例 (2026-10-04): 「この記事では、」に続く目次代わりの <ul>。
+    # 項目は「…(子供の反応は？)」で終わるので、型5 の断片判定ではすり抜ける。
+    html = (
+        '<p class="wp-block-paragraph">この記事では、</p>'
+        '<ul class="wp-block-list"><li><strong>Sunwardsってどこのメーカー？</strong></li>'
+        '<li><strong>実際に「ブロックコースター」で遊んでみたリアルな感想</strong> (子供の反応は？)</li></ul>'
+        "<p>我が家では実際に使ってみて、うちの子も毎日楽しそうに遊んでいます。</p>"
+    )
+    out = prose_text(html)
+    assert "リアルな感想" not in out
+    assert out.split("\n") == ["この記事では、", "我が家では実際に使ってみて、うちの子も毎日楽しそうに遊んでいます。"]
 
 
-def test_strip_heading_tags_empty_input():
-    assert strip_heading_tags("") == ""
-    assert strip_heading_tags(None) == ""
+def test_prose_text_drops_nested_lists_and_tables():
+    html = (
+        "<ul><li>メリット:<ul><li>長く遊べる</li></ul></li>"
+        "<li>セット選びの後悔:<ul><li>我が家は通常版を買ったが後悔…</li></ul></li></ul>"
+        "<table><tr><td>実売価格</td><td>2,973円</td></tr><tr><td>実際に値段を見てみる</td></tr></table>"
+        "<p>うちの子のお気に入りです。</p>"
+    )
+    assert prose_text(html) == "うちの子のお気に入りです。"
+
+
+def test_prose_text_splits_blocks_but_not_inline_elements():
+    # 吹き出しの話者名 (div) は別ブロック。strong / a / br は文の途中に入るので境目にしない。
+    html = (
+        '<div class="speech-wrap"><div class="speech-name">いろパパ</div>'
+        '<div class="speech-balloon"><p>正直、<strong>セット選び</strong>には<br>ちょっと後悔もあるよ。</p></div></div>'
+        "<p>A &amp; B を<a href='#'>比べた</a>結果です。</p>"
+    )
+    assert prose_text(html).split("\n") == [
+        "いろパパ", "正直、セット選びにはちょっと後悔もあるよ。", "A & B を比べた結果です。",
+    ]
+
+
+def test_prose_text_recovers_from_unclosed_heading():
+    # </h2> が無いだけで以降の本文が全部消えないこと (旧実装の正規表現も回復していた)
+    html = "<h2>見出し<p>うちの子は毎日遊んでいます。</p><h3>次の見出し</h3><p>我が家の感想です。</p>"
+    assert prose_text(html).split("\n") == ["うちの子は毎日遊んでいます。", "我が家の感想です。"]
+
+
+def test_prose_text_ignores_stray_closing_tags():
+    html = "<p>前の段落です。</p></ul></h2><p>うちの子は毎日遊んでいます。</p>"
+    assert prose_text(html).split("\n") == ["前の段落です。", "うちの子は毎日遊んでいます。"]
+
+
+def test_prose_text_empty_input():
+    assert prose_text("") == ""
+    assert prose_text(None) == ""
+
+
+def test_snippet_is_within_one_block():
+    prose = "いろパパ\n正直、セット選びにはちょっと後悔もあるけど本当に素晴らしいおもちゃだよ。"
+    assert snippet_is_within_one_block("正直、セット選びにはちょっと後悔もあるけど本当に素晴らしいおもちゃだよ。", prose)
+    # 話者名を巻き込んだ抜粋は、空白を無視すれば本文全体には実在するが 1 ブロックには収まらない
+    spanning = "いろパパ 正直、セット選びにはちょっと後悔もあるけど本当に素晴らしいおもちゃだよ。"
+    assert snippet_is_grounded(spanning, prose)
+    assert not snippet_is_within_one_block(spanning, prose)
+
+
+def test_select_first_party_passages_treats_block_boundary_as_sentence_boundary():
+    # 句点の無いブロック (話者名・ボタン文言) が次の文に連結されない
+    text = "実際に値段を見てみる\nスペックの説明です。\n価格は変動します。\nうちの子は喜んでいます。"
+    out = select_first_party_passages(text, window=0)
+    assert out == "実際に値段を見てみる\nうちの子は喜んでいます。"
+
+
+def test_select_first_party_passages_window_is_not_eaten_by_block_breaks():
+    # 「。\n」で "\n" だけの空の文ができると、既定の window=1 が前後の文に届かない
+    text = "無関係の文です。\n導入です。\nうちの子は喜んでいます。\n後書きです。\n無関係です。"
+    out = select_first_party_passages(text)
+    assert out == "導入です。\nうちの子は喜んでいます。\n後書きです。\n"
 
 
 # --------------------------------------------------------------------------
@@ -337,7 +397,8 @@ def test_extract_asin_experience_role_primary_keeps_non_comparison_aspect(tmp_pa
     assert snippet["usable_as"] == "quote"
     assert snippet["source_url"] == "https://omcha.jp/a/"
     assert stats == {"posts": 1, "no_passage": 0, "checked": 1, "fabrication_discarded": 0,
-                      "fragment_discarded": 0, "role_filtered": 0, "kept": 1}
+                      "block_span_discarded": 0, "fragment_discarded": 0, "role_filtered": 0,
+                      "kept": 1}
     assert snippet["note"] == ""
 
 
@@ -533,6 +594,37 @@ def test_extract_asin_experience_strips_headings_before_building_plain_text(tmp_
     assert "我が家では実際に使ってみて" in content_cache[101]
 
 
+def test_extract_asin_experience_discards_snippet_spanning_blocks(tmp_path, monkeypatch):
+    # #7569 型3: 吹き出しの話者名と本文をまたいだ抜粋は、本文全体には実在しても捨てる
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data" / "raw").mkdir(parents=True)
+    (tmp_path / "data" / "raw" / "amazon.json").write_text(json.dumps({"items": [
+        {"asin": "B0PRIMARY01", "title": "テスト商品 テストブランド"},
+    ]}), encoding="utf-8")
+
+    def fake_fetch(post_id, wp_base_url, session_, sleeper=None):
+        return ('<div class="speech-name">いろパパ</div>'
+                "<div><p>我が家では実際に使ってみて、うちの子も毎日楽しそうに遊んでいます。</p></div>")
+
+    monkeypatch.setattr("scripts.extract_first_party_experience.fetch_post_content", fake_fetch)
+    inner = json.dumps({"entailed": True, "snippets": [{
+        "aspect": "体験談", "confidence": "high",
+        "text": "いろパパ 我が家では実際に使ってみて、うちの子も毎日楽しそうに遊んでいます。",
+    }]})
+    session = _FakeSession([_FakeResponse({"response": inner})])
+
+    payload, stats = extract_asin_experience(
+        "B0PRIMARY01",
+        [{"asin": "B0PRIMARY01", "role": "primary", "post_url": "https://omcha.jp/a/"}],
+        {"https://omcha.jp/a/": 101},
+        wp_base_url="https://omcha.jp", per_asin_dir=tmp_path / "data" / "raw" / "per_asin",
+        ollama_url="http://ollama", model="gemma4", session=session, sleeper=_no_sleep,
+    )
+    assert payload is None
+    assert stats["fabrication_discarded"] == 0
+    assert stats["block_span_discarded"] == 1
+
+
 def test_extract_asin_experience_missing_amazon_item_returns_none(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "data" / "raw").mkdir(parents=True)
@@ -626,7 +718,7 @@ def test_run_prioritises_asins_that_have_a_primary_role(tmp_path, monkeypatch):
     def fake_extract(asin, *a, **kw):
         seen.append(asin)
         return None, {"posts": 0, "no_passage": 0, "checked": 0,
-                      "fabrication_discarded": 0, "fragment_discarded": 0, "role_filtered": 0, "kept": 0}
+                      "fabrication_discarded": 0, "block_span_discarded": 0, "fragment_discarded": 0, "role_filtered": 0, "kept": 0}
 
     monkeypatch.setattr(
         "scripts.extract_first_party_experience.extract_asin_experience", fake_extract)
