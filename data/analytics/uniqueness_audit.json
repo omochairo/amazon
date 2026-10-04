@@ -1,91 +1,91 @@
 {
-  "generated_at": "2026-09-27T23:15:19Z",
+  "generated_at": "2026-10-04T23:24:41Z",
   "model": "cl-nagoya/ruri-v3-310m",
-  "source_week": "2026-W39",
-  "corpus_size": 2747,
+  "source_week": "2026-W40",
+  "corpus_size": 2844,
   "thresholds": {
     "mode": "percentile",
-    "max_sim": 0.9752,
-    "centroid_sim": 0.9369,
+    "max_sim": 0.9749,
+    "centroid_sim": 0.936,
     "absolute_reference": {
       "max_sim": 0.95,
       "centroid_sim": 0.9,
-      "max_sim_exceeded": 923,
-      "centroid_sim_exceeded": 2132
+      "max_sim_exceeded": 942,
+      "centroid_sim_exceeded": 2185
     },
     "max_sim_percentile": 95.0,
     "centroid_sim_percentile": 95.0
   },
-  "flagged_total": 259,
+  "flagged_total": 264,
   "flagged_truncated": true,
   "cohort_stats": {
     "pre_v7": {
-      "count": 1241,
-      "max_sim_p25": 0.9276,
-      "centroid_sim_p25": 0.9144,
-      "max_sim_p50": 0.9449,
-      "centroid_sim_p50": 0.9231,
-      "max_sim_p75": 0.9607,
-      "centroid_sim_p75": 0.9311,
-      "max_sim_p90": 0.9716,
-      "centroid_sim_p90": 0.936
+      "count": 1185,
+      "max_sim_p25": 0.9271,
+      "centroid_sim_p25": 0.9143,
+      "max_sim_p50": 0.9445,
+      "centroid_sim_p50": 0.9228,
+      "max_sim_p75": 0.9603,
+      "centroid_sim_p75": 0.9307,
+      "max_sim_p90": 0.9703,
+      "centroid_sim_p90": 0.9355
     },
     "post_v7": {
-      "count": 1506,
-      "max_sim_p25": 0.9177,
-      "centroid_sim_p25": 0.8953,
-      "max_sim_p50": 0.9343,
-      "centroid_sim_p50": 0.9074,
-      "max_sim_p75": 0.9514,
-      "centroid_sim_p75": 0.9201,
-      "max_sim_p90": 0.9648,
-      "centroid_sim_p90": 0.9281
+      "count": 1659,
+      "max_sim_p25": 0.9179,
+      "centroid_sim_p25": 0.8955,
+      "max_sim_p50": 0.9348,
+      "centroid_sim_p50": 0.9075,
+      "max_sim_p75": 0.9516,
+      "centroid_sim_p75": 0.9197,
+      "max_sim_p90": 0.9652,
+      "centroid_sim_p90": 0.9272
     },
     "all": {
-      "count": 2747,
-      "max_sim_p25": 0.9214,
-      "centroid_sim_p25": 0.9021,
-      "max_sim_p50": 0.9388,
-      "centroid_sim_p50": 0.9161,
-      "max_sim_p75": 0.9566,
-      "centroid_sim_p75": 0.9263,
-      "max_sim_p90": 0.9689,
-      "centroid_sim_p90": 0.9337
+      "count": 2844,
+      "max_sim_p25": 0.9211,
+      "centroid_sim_p25": 0.9014,
+      "max_sim_p50": 0.9386,
+      "centroid_sim_p50": 0.915,
+      "max_sim_p75": 0.9564,
+      "centroid_sim_p75": 0.9254,
+      "max_sim_p90": 0.9683,
+      "centroid_sim_p90": 0.9328
     }
   },
   "cohort_stats_v2": {
     "pre_v7": {
-      "count": 1241,
-      "max_sim_p25": 0.9276,
-      "centroid_sim_p25": 0.9144,
-      "max_sim_p50": 0.9449,
-      "centroid_sim_p50": 0.9231,
-      "max_sim_p75": 0.9607,
-      "centroid_sim_p75": 0.9311,
-      "max_sim_p90": 0.9716,
-      "centroid_sim_p90": 0.936
+      "count": 1185,
+      "max_sim_p25": 0.9271,
+      "centroid_sim_p25": 0.9143,
+      "max_sim_p50": 0.9445,
+      "centroid_sim_p50": 0.9228,
+      "max_sim_p75": 0.9603,
+      "centroid_sim_p75": 0.9307,
+      "max_sim_p90": 0.9703,
+      "centroid_sim_p90": 0.9355
     },
     "post_v7_new": {
-      "count": 1397,
-      "max_sim_p25": 0.9177,
-      "centroid_sim_p25": 0.895,
-      "max_sim_p50": 0.9348,
-      "centroid_sim_p50": 0.9071,
-      "max_sim_p75": 0.9517,
-      "centroid_sim_p75": 0.92,
-      "max_sim_p90": 0.9652,
-      "centroid_sim_p90": 0.9273
+      "count": 1549,
+      "max_sim_p25": 0.9179,
+      "centroid_sim_p25": 0.8951,
+      "max_sim_p50": 0.9351,
+      "centroid_sim_p50": 0.907,
+      "max_sim_p75": 0.9521,
+      "centroid_sim_p75": 0.9195,
+      "max_sim_p90": 0.9657,
+      "centroid_sim_p90": 0.9266
     },
     "post_v7_rewrite": {
-      "count": 109,
-      "max_sim_p25": 0.9172,
-      "centroid_sim_p25": 0.9036,
-      "max_sim_p50": 0.93,
-      "centroid_sim_p50": 0.9106,
-      "max_sim_p75": 0.9443,
-      "centroid_sim_p75": 0.9233,
-      "max_sim_p90": 0.9532,
-      "centroid_sim_p90": 0.9303
+      "count": 110,
+      "max_sim_p25": 0.9175,
+      "centroid_sim_p25": 0.9039,
+      "max_sim_p50": 0.9302,
+      "centroid_sim_p50": 0.9107,
+      "max_sim_p75": 0.9449,
+      "centroid_sim_p75": 0.9238,
+      "max_sim_p90": 0.9546,
+      "centroid_sim_p90": 0.9304
     }
   },
   "flagged": [
@@ -97,10 +97,10 @@
       "page": "https://navi.omcha.jp/products/b0f43qb3dt/",
       "max_sim": 0.9909,
       "nearest_asin": "B0F43R6BGV",
-      "mean_top5_sim": 0.9528,
-      "centroid_sim": 0.9288,
+      "mean_top5_sim": 0.9526,
+      "centroid_sim": 0.9284,
       "reasons": [
-        "max_sim>0.9752"
+        "max_sim>0.9749"
       ]
     },
     {
@@ -112,37 +112,9 @@
       "max_sim": 0.9909,
       "nearest_asin": "B0F43QB3DT",
       "mean_top5_sim": 0.955,
-      "centroid_sim": 0.9276,
+      "centroid_sim": 0.9271,
       "reasons": [
-        "max_sim>0.9752"
-      ]
-    },
-    {
-      "asin": "B0CKYPW397",
-      "slug_date": "2026-05-29",
-      "cohort": "pre_v7",
-      "cohort3": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0ckypw397/",
-      "max_sim": 0.9901,
-      "nearest_asin": "B0CKYRJ4KY",
-      "mean_top5_sim": 0.9421,
-      "centroid_sim": 0.8916,
-      "reasons": [
-        "max_sim>0.9752"
-      ]
-    },
-    {
-      "asin": "B0CKYRJ4KY",
-      "slug_date": "2026-05-30",
-      "cohort": "pre_v7",
-      "cohort3": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0ckyrj4ky/",
-      "max_sim": 0.9901,
-      "nearest_asin": "B0CKYPW397",
-      "mean_top5_sim": 0.9416,
-      "centroid_sim": 0.8932,
-      "reasons": [
-        "max_sim>0.9752"
+        "max_sim>0.9749"
       ]
     },
     {
@@ -153,10 +125,10 @@
       "page": "https://navi.omcha.jp/products/b0fpwz9j99/",
       "max_sim": 0.9896,
       "nearest_asin": "B0FPX6RPYR",
-      "mean_top5_sim": 0.9469,
-      "centroid_sim": 0.9231,
+      "mean_top5_sim": 0.947,
+      "centroid_sim": 0.9229,
       "reasons": [
-        "max_sim>0.9752"
+        "max_sim>0.9749"
       ]
     },
     {
@@ -168,9 +140,9 @@
       "max_sim": 0.9896,
       "nearest_asin": "B0FPWZ9J99",
       "mean_top5_sim": 0.9434,
-      "centroid_sim": 0.9243,
+      "centroid_sim": 0.924,
       "reasons": [
-        "max_sim>0.9752"
+        "max_sim>0.9749"
       ]
     },
     {
@@ -182,10 +154,10 @@
       "max_sim": 0.9876,
       "nearest_asin": "B0F8T97T2N",
       "mean_top5_sim": 0.9356,
-      "centroid_sim": 0.9374,
+      "centroid_sim": 0.937,
       "reasons": [
-        "max_sim>0.9752",
-        "centroid_sim>0.9369"
+        "max_sim>0.9749",
+        "centroid_sim>0.936"
       ]
     },
     {
@@ -197,9 +169,9 @@
       "max_sim": 0.9876,
       "nearest_asin": "B0D5H414J7",
       "mean_top5_sim": 0.9343,
-      "centroid_sim": 0.9322,
+      "centroid_sim": 0.9319,
       "reasons": [
-        "max_sim>0.9752"
+        "max_sim>0.9749"
       ]
     },
     {
@@ -211,9 +183,9 @@
       "max_sim": 0.9875,
       "nearest_asin": "B0GKXDZ9R7",
       "mean_top5_sim": 0.9542,
-      "centroid_sim": 0.9267,
+      "centroid_sim": 0.9263,
       "reasons": [
-        "max_sim>0.9752"
+        "max_sim>0.9749"
       ]
     },
     {
@@ -225,9 +197,9 @@
       "max_sim": 0.9875,
       "nearest_asin": "B0GKX1HTTL",
       "mean_top5_sim": 0.9561,
-      "centroid_sim": 0.9247,
+      "centroid_sim": 0.9242,
       "reasons": [
-        "max_sim>0.9752"
+        "max_sim>0.9749"
       ]
     },
     {
@@ -239,10 +211,10 @@
       "max_sim": 0.9865,
       "nearest_asin": "B0GD2HFC7N",
       "mean_top5_sim": 0.9641,
-      "centroid_sim": 0.9402,
+      "centroid_sim": 0.9401,
       "reasons": [
-        "max_sim>0.9752",
-        "centroid_sim>0.9369"
+        "max_sim>0.9749",
+        "centroid_sim>0.936"
       ]
     },
     {
@@ -254,10 +226,10 @@
       "max_sim": 0.9865,
       "nearest_asin": "B0FVBHT5TF",
       "mean_top5_sim": 0.9583,
-      "centroid_sim": 0.9389,
+      "centroid_sim": 0.9387,
       "reasons": [
-        "max_sim>0.9752",
-        "centroid_sim>0.9369"
+        "max_sim>0.9749",
+        "centroid_sim>0.936"
       ]
     },
     {
@@ -269,9 +241,9 @@
       "max_sim": 0.9861,
       "nearest_asin": "B0F43R6BGV",
       "mean_top5_sim": 0.9453,
-      "centroid_sim": 0.9166,
+      "centroid_sim": 0.9163,
       "reasons": [
-        "max_sim>0.9752"
+        "max_sim>0.9749"
       ]
     },
     {
@@ -283,9 +255,9 @@
       "max_sim": 0.986,
       "nearest_asin": "B0DNYPL3DM",
       "mean_top5_sim": 0.948,
-      "centroid_sim": 0.9163,
+      "centroid_sim": 0.9157,
       "reasons": [
-        "max_sim>0.9752"
+        "max_sim>0.9749"
       ]
     },
     {
@@ -297,9 +269,9 @@
       "max_sim": 0.986,
       "nearest_asin": "B0D78XWQ9G",
       "mean_top5_sim": 0.9462,
-      "centroid_sim": 0.9216,
+      "centroid_sim": 0.9209,
       "reasons": [
-        "max_sim>0.9752"
+        "max_sim>0.9749"
       ]
     },
     {
@@ -311,9 +283,9 @@
       "max_sim": 0.9853,
       "nearest_asin": "B0F324L5QW",
       "mean_top5_sim": 0.9625,
-      "centroid_sim": 0.9237,
+      "centroid_sim": 0.9232,
       "reasons": [
-        "max_sim>0.9752"
+        "max_sim>0.9749"
       ]
     },
     {
@@ -325,9 +297,9 @@
       "max_sim": 0.9853,
       "nearest_asin": "B0CCCNG9CD",
       "mean_top5_sim": 0.964,
-      "centroid_sim": 0.9255,
+      "centroid_sim": 0.9247,
       "reasons": [
-        "max_sim>0.9752"
+        "max_sim>0.9749"
       ]
     },
     {
@@ -339,9 +311,9 @@
       "max_sim": 0.9848,
       "nearest_asin": "B0GKXDZ9R7",
       "mean_top5_sim": 0.9559,
-      "centroid_sim": 0.9345,
+      "centroid_sim": 0.934,
       "reasons": [
-        "max_sim>0.9752"
+        "max_sim>0.9749"
       ]
     },
     {
@@ -353,66 +325,9 @@
       "max_sim": 0.9847,
       "nearest_asin": "B0F324L5QW",
       "mean_top5_sim": 0.9628,
-      "centroid_sim": 0.923,
+      "centroid_sim": 0.9225,
       "reasons": [
-        "max_sim>0.9752"
-      ]
-    },
-    {
-      "asin": "B08BJ72Z2B",
-      "slug_date": "2026-05-30",
-      "cohort": "pre_v7",
-      "cohort3": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b08bj72z2b/",
-      "max_sim": 0.9844,
-      "nearest_asin": "B08BJ9MJXG",
-      "mean_top5_sim": 0.9502,
-      "centroid_sim": 0.9241,
-      "reasons": [
-        "max_sim>0.9752"
-      ]
-    },
-    {
-      "asin": "B08BJ9MJXG",
-      "slug_date": "2026-06-06",
-      "cohort": "pre_v7",
-      "cohort3": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b08bj9mjxg/",
-      "max_sim": 0.9844,
-      "nearest_asin": "B08BJ72Z2B",
-      "mean_top5_sim": 0.957,
-      "centroid_sim": 0.923,
-      "reasons": [
-        "max_sim>0.9752"
-      ]
-    },
-    {
-      "asin": "B0CQY911ZP",
-      "slug_date": "2026-05-29",
-      "cohort": "pre_v7",
-      "cohort3": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0cqy911zp/",
-      "max_sim": 0.9844,
-      "nearest_asin": "B0FMJQVR5B",
-      "mean_top5_sim": 0.9497,
-      "centroid_sim": 0.9318,
-      "reasons": [
-        "max_sim>0.9752"
-      ]
-    },
-    {
-      "asin": "B0FMJQVR5B",
-      "slug_date": "2026-06-17",
-      "cohort": "pre_v7",
-      "cohort3": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0fmjqvr5b/",
-      "max_sim": 0.9844,
-      "nearest_asin": "B0CQY911ZP",
-      "mean_top5_sim": 0.9532,
-      "centroid_sim": 0.9388,
-      "reasons": [
-        "max_sim>0.9752",
-        "centroid_sim>0.9369"
+        "max_sim>0.9749"
       ]
     },
     {
@@ -424,9 +339,9 @@
       "max_sim": 0.9837,
       "nearest_asin": "B089W6WFWZ",
       "mean_top5_sim": 0.9587,
-      "centroid_sim": 0.9324,
+      "centroid_sim": 0.9318,
       "reasons": [
-        "max_sim>0.9752"
+        "max_sim>0.9749"
       ]
     },
     {
@@ -438,37 +353,9 @@
       "max_sim": 0.9837,
       "nearest_asin": "B07GJGQMK7",
       "mean_top5_sim": 0.9592,
-      "centroid_sim": 0.9317,
+      "centroid_sim": 0.9314,
       "reasons": [
-        "max_sim>0.9752"
-      ]
-    },
-    {
-      "asin": "B0GSVQTP4W",
-      "slug_date": "2026-09-09",
-      "cohort": "post_v7",
-      "cohort3": "post_v7_new",
-      "page": "https://navi.omcha.jp/products/b0gsvqtp4w/",
-      "max_sim": 0.9835,
-      "nearest_asin": "B0GVXZRSFV",
-      "mean_top5_sim": 0.9728,
-      "centroid_sim": 0.921,
-      "reasons": [
-        "max_sim>0.9752"
-      ]
-    },
-    {
-      "asin": "B0GVXZRSFV",
-      "slug_date": "2026-05-29",
-      "cohort": "pre_v7",
-      "cohort3": "pre_v7",
-      "page": "https://navi.omcha.jp/products/b0gvxzrsfv/",
-      "max_sim": 0.9835,
-      "nearest_asin": "B0GSVQTP4W",
-      "mean_top5_sim": 0.9728,
-      "centroid_sim": 0.9218,
-      "reasons": [
-        "max_sim>0.9752"
+        "max_sim>0.9749"
       ]
     },
     {
@@ -480,9 +367,9 @@
       "max_sim": 0.9832,
       "nearest_asin": "B0FPWZ9J99",
       "mean_top5_sim": 0.9464,
-      "centroid_sim": 0.9202,
+      "centroid_sim": 0.9201,
       "reasons": [
-        "max_sim>0.9752"
+        "max_sim>0.9749"
       ]
     },
     {
@@ -494,9 +381,9 @@
       "max_sim": 0.983,
       "nearest_asin": "B07ND16L8C",
       "mean_top5_sim": 0.9405,
-      "centroid_sim": 0.9356,
+      "centroid_sim": 0.9355,
       "reasons": [
-        "max_sim>0.9752"
+        "max_sim>0.9749"
       ]
     },
     {
@@ -508,9 +395,122 @@
       "max_sim": 0.983,
       "nearest_asin": "B006IOCMGM",
       "mean_top5_sim": 0.9372,
-      "centroid_sim": 0.9299,
+      "centroid_sim": 0.93,
       "reasons": [
-        "max_sim>0.9752"
+        "max_sim>0.9749"
+      ]
+    },
+    {
+      "asin": "B00I7JXAYE",
+      "slug_date": "2026-09-05",
+      "cohort": "post_v7",
+      "cohort3": "post_v7_rewrite",
+      "page": "https://navi.omcha.jp/products/b00i7jxaye/",
+      "max_sim": 0.9826,
+      "nearest_asin": "B0G5DHX1T3",
+      "mean_top5_sim": 0.9408,
+      "centroid_sim": 0.9099,
+      "reasons": [
+        "max_sim>0.9749"
+      ]
+    },
+    {
+      "asin": "B0F197NNPV",
+      "slug_date": "2026-06-01",
+      "cohort": "pre_v7",
+      "cohort3": "pre_v7",
+      "page": "https://navi.omcha.jp/products/b0f197nnpv/",
+      "max_sim": 0.9826,
+      "nearest_asin": "B0F8JBDQMT",
+      "mean_top5_sim": 0.956,
+      "centroid_sim": 0.9348,
+      "reasons": [
+        "max_sim>0.9749"
+      ]
+    },
+    {
+      "asin": "B0F8JBDQMT",
+      "slug_date": "2026-06-21",
+      "cohort": "pre_v7",
+      "cohort3": "pre_v7",
+      "page": "https://navi.omcha.jp/products/b0f8jbdqmt/",
+      "max_sim": 0.9826,
+      "nearest_asin": "B0F197NNPV",
+      "mean_top5_sim": 0.9608,
+      "centroid_sim": 0.9412,
+      "reasons": [
+        "max_sim>0.9749",
+        "centroid_sim>0.936"
+      ]
+    },
+    {
+      "asin": "B0G5DHX1T3",
+      "slug_date": "2026-09-28",
+      "cohort": "post_v7",
+      "cohort3": "post_v7_new",
+      "page": "https://navi.omcha.jp/products/b0g5dhx1t3/",
+      "max_sim": 0.9826,
+      "nearest_asin": "B00I7JXAYE",
+      "mean_top5_sim": 0.9404,
+      "centroid_sim": 0.8992,
+      "reasons": [
+        "max_sim>0.9749"
+      ]
+    },
+    {
+      "asin": "B0G1TYVLKY",
+      "slug_date": "2026-08-29",
+      "cohort": "post_v7",
+      "cohort3": "post_v7_new",
+      "page": "https://navi.omcha.jp/products/b0g1tyvlky/",
+      "max_sim": 0.9822,
+      "nearest_asin": "B0HDBCMPFD",
+      "mean_top5_sim": 0.9355,
+      "centroid_sim": 0.8806,
+      "reasons": [
+        "max_sim>0.9749"
+      ]
+    },
+    {
+      "asin": "B0HDBCMPFD",
+      "slug_date": "2026-08-23",
+      "cohort": "post_v7",
+      "cohort3": "post_v7_new",
+      "page": "https://navi.omcha.jp/products/b0hdbcmpfd/",
+      "max_sim": 0.9822,
+      "nearest_asin": "B0G1TYVLKY",
+      "mean_top5_sim": 0.9305,
+      "centroid_sim": 0.8889,
+      "reasons": [
+        "max_sim>0.9749"
+      ]
+    },
+    {
+      "asin": "B009CMIFYA",
+      "slug_date": "2026-06-22",
+      "cohort": "pre_v7",
+      "cohort3": "pre_v7",
+      "page": "https://navi.omcha.jp/products/b009cmifya/",
+      "max_sim": 0.9815,
+      "nearest_asin": "B0FNCTK56M",
+      "mean_top5_sim": 0.9435,
+      "centroid_sim": 0.9306,
+      "reasons": [
+        "max_sim>0.9749"
+      ]
+    },
+    {
+      "asin": "B0FNCTK56M",
+      "slug_date": "2026-06-12",
+      "cohort": "pre_v7",
+      "cohort3": "pre_v7",
+      "page": "https://navi.omcha.jp/products/b0fnctk56m/",
+      "max_sim": 0.9815,
+      "nearest_asin": "B009CMIFYA",
+      "mean_top5_sim": 0.9366,
+      "centroid_sim": 0.9189,
+      "reasons": [
+        "max_sim>0.9749"
       ]
     }
   ]
