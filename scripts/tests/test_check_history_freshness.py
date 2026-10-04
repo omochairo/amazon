@@ -11,6 +11,8 @@ from __future__ import annotations
 import datetime as dt
 import json
 import pathlib
+import re
+from typing import Dict, List
 
 import pytest
 
@@ -164,7 +166,12 @@ def test_real_history_is_quiet_on_introduction_date():
     if not hist.is_dir():  # pragma: no cover - チェックアウト構成が違うときは skip
         pytest.skip("history dir not present")
     rows = check(hist, D("2026-08-09"))
-    bad = [r for r in rows if r["status"] != "ok"]
+    # missing は許す: 書き手を足す PR では履歴ファイルがまだ無い (初回 cron で生まれる)。
+    # ここで missing を落とすと「登録すると missing で落ち、登録しないと初回 cron の
+    # PR が未登録で落ちる」のどちらかになり、#8924 で auto-merge が詰まった
+    # (#8929 は初回行を手で同梱して回避した)。
+    # 登録名が書き手と食い違っていないかは test_registered_lanes_have_file_or_writer が見る。
+    bad = [r for r in rows if r["status"] not in ("ok", "missing")]
     assert bad == [], [(r["filename"], r["status"], r["last"]) for r in bad]
 
 
@@ -174,6 +181,53 @@ def test_real_history_all_lanes_registered():
     if not hist.is_dir():  # pragma: no cover
         pytest.skip("history dir not present")
     assert unregistered_files(hist) == []
+
+
+# ---------- 書き手を足した PR の時点で登録漏れを落とす (#8924) ----------
+
+_HISTORY_PATH_RE = re.compile(r"data/analytics/history/([A-Za-z0-9_]+\.jsonl)\b")
+
+
+def _history_writer_refs(repo_root: pathlib.Path) -> Dict[str, List[str]]:
+    """scripts/ と workflows に**文字列で**現れる history jsonl 名 → 出現ファイル。
+
+    test_real_history_all_lanes_registered は実ファイルを見るので、書き手を足した
+    PR では素通りし、初回 cron が作る bot PR で初めて落ちる (#8922 → #8924)。
+    bot PR は auto-merge 待ちのまま誰にも気づかれず止まるので、コード側を静的に
+    走査して書き手の PR で落とす。f-string で組み立てるパスは拾えないが、その場合は
+    従来どおり実ファイル側のテストが最後の網になる。
+    """
+    refs: Dict[str, List[str]] = {}
+    sources = [p for p in (repo_root / "scripts").rglob("*.py")
+               if "tests" not in p.relative_to(repo_root / "scripts").parts]
+    sources += sorted((repo_root / ".github" / "workflows").glob("*.yml"))
+    for path in sources:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for name in _HISTORY_PATH_RE.findall(text):
+            refs.setdefault(name, []).append(path.relative_to(repo_root).as_posix())
+    return refs
+
+
+def test_history_writers_are_registered():
+    repo_root = pathlib.Path(__file__).resolve().parent.parent.parent
+    refs = _history_writer_refs(repo_root)
+    known = {l.filename for l in LANES} | set(UNMONITORED)
+    missing = {name: files for name, files in refs.items() if name not in known}
+    assert missing == {}, (
+        "data/analytics/history/ に書くコードがあるのに LANES にも UNMONITORED にも無い。"
+        "check_history_freshness.py に登録すること: " + repr(missing))
+
+
+def test_registered_lanes_have_file_or_writer():
+    """登録名の typo 検出。較正テストが missing を許すので、その代わりに見る。"""
+    repo_root = pathlib.Path(__file__).resolve().parent.parent.parent
+    hist = repo_root / "data" / "analytics" / "history"
+    refs = _history_writer_refs(repo_root)
+    # lighthouse は amazon-home-ops 側が書くのでこのリポジトリに書き手が無い。
+    # ga4_* などパスを組み立てる書き手もあるので、実ファイルがあれば良しとする。
+    orphan = [l.filename for l in LANES
+              if not (hist / l.filename).exists() and l.filename not in refs]
+    assert orphan == []
 
 
 def test_thresholds_have_headroom_over_cadence():
