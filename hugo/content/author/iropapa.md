@@ -37,6 +37,7 @@ searchHidden: false
 ## SNS / 関連リンク
 
 - [omcha.jp の運営者プロフィール](https://omcha.jp/about/)
+- [開発したツール・ゲーム一覧 (omochairo.github.io)](https://omochairo.github.io/)
 - [X (Twitter) — @omochairo](https://x.com/omochairo)
 - [Instagram — @omochairo](https://www.instagram.com/omochairo)
 - [Bluesky — omochairo.bsky.social](https://bsky.app/profile/omochairo.bsky.social)
@@ -70,6 +71,8 @@ searchHidden: false
   "knowsAbout": ["知育玩具", "STEM 教育", "コスパ分析", "市場データ分析", "ソフトウェアエンジニアリング"],
   "sameAs": [
     "https://omcha.jp/about/",
+    "https://omochairo.github.io/",
+    "https://github.com/omochairo",
     "https://x.com/omochairo",
     "https://www.instagram.com/omochairo",
     "https://bsky.app/profile/omochairo.bsky.social",
