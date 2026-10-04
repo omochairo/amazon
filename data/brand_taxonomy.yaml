@@ -1496,6 +1496,29 @@ brands:
   - {canonical: Kitai Japan, tier: D, region: CN, noindex: true, aliases: [Kitai Japan]}
   - {canonical: SAKURAN, tier: D, region: CN, noindex: true, aliases: [SAKURAN]}
 
+  # 2026-10-04 (#8931): 供給側検出器の候補を実データ (product.brand + 商品名) と
+  # Web 検証で判定。
+  # HOPPL=株式会社Noz (兵庫県宝塚市) の木製ベビー・キッズ家具/玩具ブランド (hoppl.jp)。
+  # ベビージム「Move」は同ブランドの製品。カタログでは raw がカナ (ホップル) と
+  # 英字 (商品名 HOPPL) で混在するため両方を alias に入れる。
+  - canonical: HOPPL
+    aliases: [HOPPL, ホップル]
+    tier: B
+    region: JP
+  # コクヨ=文具の国内大手 (kokuyo.co.jp)。知育ブロック「ワミー」・透明クレヨンを展開。
+  # #8931 の起票後にカタログで 2 商品 (B003Q3JPS6 / B072KD7SDT) になり検出器に浮上した。
+  - canonical: コクヨ
+    aliases: [コクヨ, KOKUYO, "コクヨ(KOKUYO)", ワミー]
+    tier: B
+    region: JP
+  # 以下は実在するが薄いハブ不要 = noindex。
+  # ガリバー=株式会社ガリバー (横浜、DM・印刷業) の「ガリバー勝手にボドゲ事業部」
+  # (gulliver-games.com)。オリジナルのカードゲームを販売。中古車のガリバーとは別会社。
+  # OSJ=オリエンタル・スタンダード・ジャパン (現ギガクラウド・テクノロジー・ジャパン、
+  # 東京都八王子市) の家具・インテリア EC ブランド。おままごとキッチンは家具の派生品。
+  - {canonical: ガリバー, tier: D, region: JP, noindex: true, aliases: [ガリバー]}
+  - {canonical: OSJ, tier: D, region: JP, noindex: true, aliases: [OSJ]}
+
   # 2026-09-27 (#8411 / #8410): 供給側検出器 (#8411) と A-6 (#8410) の候補を実データ
   # (product.brand + 商品名) と Web 検証で判定。
   # EdisonBrain=「ひらがな麻雀 ひらがじゃん」の国内ブランド (hiragajong.com、量販店にも
