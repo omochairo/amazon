@@ -1,23 +1,23 @@
 {
-  "date": "2026-09-28",
-  "articles": 2754,
-  "failing": 31,
-  "failing_rate": 0.01126,
+  "date": "2026-10-04",
+  "articles": 2830,
+  "failing": 33,
+  "failing_rate": 0.01166,
   "by_check": {
-    "how_to_choose": 31
+    "how_to_choose": 33
   },
   "by_deduction": {
-    "title_serp_fit": 869,
-    "prices_verified": 769,
-    "faq": 495,
-    "keywords": 405,
-    "howto_title_promise": 341,
-    "narrative": 322,
-    "verdict_headline": 273,
+    "title_serp_fit": 853,
+    "prices_verified": 790,
+    "faq": 479,
+    "keywords": 388,
+    "howto_title_promise": 337,
+    "narrative": 311,
+    "verdict_headline": 261,
     "review_signals": 246,
-    "tag_granularity": 226,
-    "claims_discipline": 175,
-    "how_to_choose": 76,
+    "tag_granularity": 221,
+    "claims_discipline": 176,
+    "how_to_choose": 74,
     "cert_claims_declared": 22,
     "persona_fit_counts": 2
   },
@@ -30,18 +30,18 @@
       "claim が ['ASTM'] を主張しているが product.certifications 未申告 → 裏取りが走らない": 1
     },
     "claims_discipline": {
-      "cross_checked=true が N 件未満": 149,
+      "cross_checked=true が N 件未満": 150,
       "claims が N 件未満": 26
     },
     "faq": {
-      "only N questions contain product name (recommend >=N)": 495
+      "only N questions contain product name (recommend >=N)": 479
     },
     "how_to_choose": {
       "how_to_choose に生の ASIN コード: ['BNCNHNLNNW', 'BNCVKMNNNZ'] (soft: 表記規律。読者に意味がないので生成側で書かないこと)": 2,
       "how_to_choose に生の ASIN コード: ['BNBLPNMCQL'] (soft: 表記規律。読者に意味がないので生成側で書かないこと)": 1,
       "how_to_choose に生の ASIN コード: ['BNBNCDNGSB'] (soft: 表記規律。読者に意味がないので生成側で書かないこと)": 1,
-      "how_to_choose に生の ASIN コード: ['BNBNNRVNNF', 'BNFPQQXXNV'] (soft: 表記規律。読者に意味がないので生成側で書かないこと)": 1,
-      "how_to_choose に生の ASIN コード: ['BNBQYKNVVV'] (soft: 表記規律。読者に意味がないので生成側で書かないこと)": 1
+      "how_to_choose に生の ASIN コード: ['BNBQYKNVVV'] (soft: 表記規律。読者に意味がないので生成側で書かないこと)": 1,
+      "how_to_choose に生の ASIN コード: ['BNBSNNRNFN'] (soft: 表記規律。読者に意味がないので生成側で書かないこと)": 1
     },
     "howto_title_promise": {
       "howto-promise-without-official-source: title が「ルール」で手順を約束しているが data/raw/per_asin/BNDWDSMBYH/official_howto.json に公式 URL が無い (#NNNN: 公式の取説・あそびかたが無い商品では手順を約束しない)": 1,
@@ -51,15 +51,15 @@
       "howto-promise-without-official-source: title が「作り方」で手順を約束しているが data/raw/per_asin/BNCNNMZNNN/official_howto.json に公式 URL が無い (#NNNN: 公式の取説・あそびかたが無い商品では手順を約束しない)": 1
     },
     "keywords": {
-      "product name not in any keyword": 221,
-      "brand 'レゴ(LEGO)' not in any keyword": 14,
-      "brand 'アガツマ(AGATSUMA)' not in any keyword": 9,
+      "product name not in any keyword": 212,
+      "brand 'レゴ(LEGO)' not in any keyword": 13,
       "brand 'バンダイ(BANDAI)' not in any keyword": 9,
+      "brand 'アガツマ(AGATSUMA)' not in any keyword": 8,
       "brand 'アガツマ' not in any keyword": 5
     },
     "narrative": {
-      "closing NN<NNN": 123,
-      "closing NNN<NNN": 113,
+      "closing NN<NNN": 113,
+      "closing NNN<NNN": 112,
       "daily_use NNN<NNN": 40,
       "why_this_product NNN<NNN": 40,
       "gift_appeal NNN<NNN": 3
@@ -68,11 +68,11 @@
       "not_recommended_for が N-N 件でない": 2
     },
     "prices_verified": {
-      "unverified=rakuten,yahoo verified=none (warn-only": 268,
-      "unverified=yahoo verified=rakuten (warn-only": 239,
-      "unverified=rakuten verified=yahoo (warn-only": 156,
+      "unverified=rakuten,yahoo verified=none (warn-only": 273,
+      "unverified=yahoo verified=rakuten (warn-only": 250,
+      "unverified=rakuten verified=yahoo (warn-only": 163,
       "unverified=yahoo verified=none (warn-only": 91,
-      "unverified=rakuten verified=none (warn-only": 15
+      "unverified=rakuten verified=none (warn-only": 13
     },
     "review_signals": {
       "high_points が N-N 件でない": 105,
@@ -88,102 +88,89 @@
       "product-name tags=['一頭買い!! 黒豚パズル'] (warn-only, #NNNN)": 2
     },
     "title_serp_fit": {
-      "検索意図語が先頭 NN 字に無い (NN 字目): 商品名の直後に N つ置く (warn-only, #NNNN 項目N)": 597,
+      "検索意図語が先頭 NN 字に無い (NN 字目): 商品名の直後に N つ置く (warn-only, #NNNN 項目N)": 583,
       "product.name が NN 字 (先頭 NN 字に意図語を置くには NN 字以下): §N の「短い通称」に寄せる": 165,
       "先頭 NN 字に product.name が無い (name=NN 字): title で型番・シリーズ・ブランドの英字併記などを足し直さない": 100,
-      "検索意図語が先頭 NN 字に無い (タイトル全体に無し): 商品名の直後に N つ置く (warn-only, #NNNN 項目N)": 6,
-      "先頭 NN 字に product.name が無い (name=N 字): title で型番・シリーズ・ブランドの英字併記などを足し直さない": 1
+      "検索意図語が先頭 NN 字に無い (タイトル全体に無し): 商品名の直後に N つ置く (warn-only, #NNNN 項目N)": 5
     },
     "verdict_headline": {
-      "verdict.headline が長い (NN 字超) = N 行の結論ではなく説明文になっている": 264,
+      "verdict.headline が長い (NN 字超) = N 行の結論ではなく説明文になっている": 252,
       "verdict.headline が短い (NN 字未満)": 9
     }
   },
-  "score_min": 94,
+  "score_min": 95,
   "score_median": 99,
   "score_max": 100,
   "cert_fetch": false,
   "md_evaluated": 0,
   "cross_checked": {
-    "articles_with_claims": 2751,
-    "zero": 110,
-    "zero_rate": 0.03999
+    "articles_with_claims": 2827,
+    "zero": 111,
+    "zero_rate": 0.03926
   },
   "cohorts": {
     "recent_100": {
       "n": 100,
-      "from": "2026-09-24-B0FFRZSY2S",
-      "to": "2026-09-28-B0H6LLD9FY",
+      "from": "2026-09-29-B0GR4K3JH7",
+      "to": "2026-10-04-B0FH6NZ19H",
       "failing": 0,
       "failing_rate": 0.0,
       "by_deduction": {
-        "prices_verified": 26,
-        "claims_discipline": 8,
-        "narrative": 1,
-        "tag_granularity": 1,
+        "prices_verified": 32,
+        "narrative": 2,
+        "claims_discipline": 1,
         "title_serp_fit": 1
       },
       "zero_firing_95_upper": 0.03,
       "cross_checked": {
-        "articles_with_claims": 98,
-        "zero": 7,
-        "zero_rate": 0.07143
+        "articles_with_claims": 100,
+        "zero": 1,
+        "zero_rate": 0.01
       }
     },
     "recent_200": {
       "n": 200,
-      "from": "2026-09-20-B0DXF2XYQC",
-      "to": "2026-09-28-B0H6LLD9FY",
+      "from": "2026-09-25-B0DV93D348",
+      "to": "2026-10-04-B0FH6NZ19H",
       "failing": 0,
       "failing_rate": 0.0,
       "by_deduction": {
-        "prices_verified": 47,
-        "claims_discipline": 11,
-        "howto_title_promise": 3,
-        "title_serp_fit": 3,
-        "narrative": 1,
-        "tag_granularity": 1
+        "prices_verified": 60,
+        "claims_discipline": 7,
+        "narrative": 2,
+        "tag_granularity": 1,
+        "title_serp_fit": 1
       },
       "zero_firing_95_upper": 0.015,
       "cross_checked": {
-        "articles_with_claims": 198,
-        "zero": 10,
-        "zero_rate": 0.05051
+        "articles_with_claims": 199,
+        "zero": 6,
+        "zero_rate": 0.03015
       }
     },
     "recent_300": {
       "n": 300,
-      "from": "2026-09-16-B0GYC7W8BV",
-      "to": "2026-09-28-B0H6LLD9FY",
+      "from": "2026-09-21-B089Y3VR2Q",
+      "to": "2026-10-04-B0FH6NZ19H",
       "failing": 0,
       "failing_rate": 0.0,
       "by_deduction": {
-        "prices_verified": 62,
-        "howto_title_promise": 13,
-        "claims_discipline": 11,
-        "title_serp_fit": 5,
-        "narrative": 1,
+        "prices_verified": 81,
+        "claims_discipline": 14,
+        "title_serp_fit": 4,
+        "narrative": 3,
+        "howto_title_promise": 1,
         "tag_granularity": 1
       },
       "zero_firing_95_upper": 0.01,
       "cross_checked": {
         "articles_with_claims": 298,
-        "zero": 10,
-        "zero_rate": 0.03356
+        "zero": 13,
+        "zero_rate": 0.04362
       }
     }
   },
   "failing_slugs": [
-    {
-      "slug": "2026-07-16-B07B7FDZT6",
-      "total_score": 96,
-      "failed_checks": [
-        {
-          "name": "how_to_choose",
-          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0BSXDRT7R']"
-        }
-      ]
-    },
     {
       "slug": "2026-07-16-B08WRPSMMR",
       "total_score": 95,
@@ -191,6 +178,16 @@
         {
           "name": "how_to_choose",
           "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0CHZ37H8V']"
+        }
+      ]
+    },
+    {
+      "slug": "2026-07-18-B0D6BPHLX6",
+      "total_score": 95,
+      "failed_checks": [
+        {
+          "name": "how_to_choose",
+          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0FV85QSMX']"
         }
       ]
     },
@@ -265,16 +262,6 @@
       ]
     },
     {
-      "slug": "2026-07-27-B00RZ4LM74",
-      "total_score": 94,
-      "failed_checks": [
-        {
-          "name": "how_to_choose",
-          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B00RZ4LL3Y']"
-        }
-      ]
-    },
-    {
       "slug": "2026-07-27-B0DT9CMSDR",
       "total_score": 96,
       "failed_checks": [
@@ -330,7 +317,7 @@
       "failed_checks": [
         {
           "name": "how_to_choose",
-          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B07LB5M238', 'B08W4M8TFM']"
+          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B07LB5M238']"
         }
       ]
     },
@@ -371,6 +358,16 @@
         {
           "name": "how_to_choose",
           "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B01FTGHZNO']"
+        }
+      ]
+    },
+    {
+      "slug": "2026-07-31-B0G2TN2NC6",
+      "total_score": 95,
+      "failed_checks": [
+        {
+          "name": "how_to_choose",
+          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0FTJQH2JJ']"
         }
       ]
     },
@@ -425,6 +422,16 @@
       ]
     },
     {
+      "slug": "2026-08-03-B089JYCQKC",
+      "total_score": 97,
+      "failed_checks": [
+        {
+          "name": "how_to_choose",
+          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0FDJQH3WW']"
+        }
+      ]
+    },
+    {
       "slug": "2026-08-05-B0837KSKK9",
       "total_score": 95,
       "failed_checks": [
@@ -435,22 +442,22 @@
       ]
     },
     {
+      "slug": "2026-08-05-B0FPQQXX7V",
+      "total_score": 96,
+      "failed_checks": [
+        {
+          "name": "how_to_choose",
+          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0B27RV45F']"
+        }
+      ]
+    },
+    {
       "slug": "2026-08-06-B0BWQWSBH6",
       "total_score": 97,
       "failed_checks": [
         {
           "name": "how_to_choose",
           "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0BYRJVZR7', 'B0BYRLTDVC']"
-        }
-      ]
-    },
-    {
-      "slug": "2026-08-06-B0FB2DXDF3",
-      "total_score": 95,
-      "failed_checks": [
-        {
-          "name": "how_to_choose",
-          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0D5CFLFV3']"
         }
       ]
     },
@@ -475,41 +482,49 @@
       ]
     },
     {
+      "slug": "2026-08-09-B0C9THFSQ4",
+      "total_score": 95,
+      "failed_checks": [
+        {
+          "name": "how_to_choose",
+          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B074469BPQ']"
+        }
+      ]
+    },
+    {
       "slug": "2026-08-09-B0D8HSKBBR",
       "total_score": 96,
       "failed_checks": [
         {
           "name": "how_to_choose",
-          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0D86Z54FR']"
+          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0D8HSBN68']"
         }
       ]
     }
   ],
   "diff": {
-    "previous_date": "2026-09-21",
+    "previous_date": "2026-09-28",
     "new": [
-      "2026-07-19-B093XQCJ87",
-      "2026-07-26-B085TTFQTH",
-      "2026-07-31-B00YX78I4G",
-      "2026-08-01-B0DM9YCV8T",
-      "2026-08-02-B0BPSRT9SK",
-      "2026-08-05-B0837KSKK9",
-      "2026-08-06-B0BWQWSBH6",
-      "2026-08-06-B0FB2DXDF3"
-    ],
-    "recovered": [
+      "2026-07-18-B0D6BPHLX6",
+      "2026-07-31-B0G2TN2NC6",
+      "2026-08-03-B089JYCQKC",
       "2026-08-05-B0FPQQXX7V",
       "2026-08-09-B0C9THFSQ4"
     ],
-    "persisting": [
+    "recovered": [
       "2026-07-16-B07B7FDZT6",
+      "2026-07-27-B00RZ4LM74",
+      "2026-08-06-B0FB2DXDF3"
+    ],
+    "persisting": [
       "2026-07-16-B08WRPSMMR",
+      "2026-07-19-B093XQCJ87",
       "2026-07-19-B0GD64HNCS",
       "2026-07-21-B01C9AP64I",
       "2026-07-23-B0CWH2ZLVL",
       "2026-07-24-B00005BHOG",
+      "2026-07-26-B085TTFQTH",
       "2026-07-27-B0053VTGQK",
-      "2026-07-27-B00RZ4LM74",
       "2026-07-27-B0DT9CMSDR",
       "2026-07-28-B0CQTNNNBY",
       "2026-07-28-B0CS9NM5YP",
@@ -517,11 +532,16 @@
       "2026-07-29-B0CGLNPRHF",
       "2026-07-30-B079NWGD9Z",
       "2026-07-30-B07TSMF1BF",
+      "2026-07-31-B00YX78I4G",
       "2026-07-31-B074L8RV1F",
       "2026-07-31-B08152B7W1",
       "2026-08-01-B07JG53FL4",
       "2026-08-01-B0BW2L5WVC",
+      "2026-08-01-B0DM9YCV8T",
       "2026-08-02-B0041X6SEO",
+      "2026-08-02-B0BPSRT9SK",
+      "2026-08-05-B0837KSKK9",
+      "2026-08-06-B0BWQWSBH6",
       "2026-08-06-B0FRD8Q1P5",
       "2026-08-09-B09BNTW4NN",
       "2026-08-09-B0D8HSKBBR"
