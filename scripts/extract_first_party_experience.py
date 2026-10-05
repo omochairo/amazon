@@ -42,8 +42,10 @@ mine_experience.py の抽出プロンプトは 60〜160字の**要約**を作る
     中に収まっていることも要求する (``block_span_discarded``)
   - 型5 (文の断片) — ``snippet_is_sentence_fragment`` で句点・感嘆符・疑問符で
     閉じていない抜粋を捨てる
-  - 型4 (定型リード文) は機械判定の設計が未確定 (aspect別の採択率を見てから決める、
-    #7569 の申し送り) のため見送り
+  - 型4 (定型リード文) — ``snippet_is_lead_boilerplate`` で、文末が記事の予告・案内
+    (「〜をお届けします！」「〜をまとめました」「〜の実機レビューです」) になっている
+    抜粋を捨てる (``lead_boilerplate_discarded``)。aspect 別の採択率で決める案は、
+    09-25 の再検証で通過 11 件中 7 件が型4 で、どれも文末の形で見分けられたため取らない
 
 Usage:
     python scripts/extract_first_party_experience.py --limit 5
@@ -122,6 +124,30 @@ _WS_RUN_RE = re.compile(r"\s+")
 # 文として閉じているかの判定 (#7569 型5)。閉じ括弧・引用符は末尾から無視する。
 _SENTENCE_TERMINATORS = "。！？"
 _TRAILING_CLOSERS = "」』”'）) 　"
+
+# 定型リード文の判定 (#7569 型4)。記事の予告・案内で終わる文の文末。
+# 体験の文を巻き込まないよう、文末に限ったうえで:
+#   - 「友人にも紹介します」(人に勧めた体験) は「に」「にも」の直後なので除く
+#   - 「まとめる」は「おもちゃをケースにまとめました」(片付けの体験) と区別するため、
+#     目的語が記事の中身 (感想・メリット等) のときだけ拾う
+#   - 過去形は「まとめました」「解説しました」だけ (「紹介しました」は体験でありうる)
+_LEAD_POLITE_ENDINGS = (
+    r"(?:ます|ますね|ましょう|ていきます|ていきますね|ていきたいと思います|たいと思います)"
+)
+_LEAD_BOILERPLATE_END_RE = re.compile(
+    r"(?:"
+    r"(?<!に)(?<!にも)(?:お伝え|ご紹介|紹介|ご説明|解説|お届け|ご案内|レビュー)(?:し|いたし)"
+    + _LEAD_POLITE_ENDINGS +
+    r"|解説しました"
+    r"|(?:感想|ポイント|メリット|デメリット|特徴|理由|口コミ|評判|情報|違い|選び方|内容|結果)"
+    r"をまとめ(?:" + _LEAD_POLITE_ENDINGS[3:-1] + r"|ました)"
+    r"|(?:レビュー|記事|体験談|口コミ|レポート)(?:です|になります)"
+    r")$"
+)
+_LEAD_TRAILING_CHARS = _SENTENCE_TERMINATORS + _TRAILING_CLOSERS + "!?♪〜~…\""
+_SNIPPET_SENTENCE_RE = re.compile(r"[^。！？!?]+[。！？!?]*")
+# 鉤括弧内のセリフ (「ブログで紹介します！」) は地の文の文末ではないので、判定前に中身を消す。
+_QUOTED_SPEECH_RE = re.compile(r"「[^「」]*」|『[^『』]*』")
 
 C_EXTRACTION_PROMPT_TEMPLATE = """あなたは一次情報 (ブログ運営者自身の実体験) の抜き出し専門アシスタントです。
 要約・言い換え・補筆は禁止です。
@@ -280,6 +306,22 @@ def snippet_is_sentence_fragment(text: str) -> bool:
     return not trimmed or trimmed[-1] not in _SENTENCE_TERMINATORS
 
 
+def snippet_is_lead_boilerplate(text: str) -> bool:
+    """text に、記事の予告・案内で終わる文 (定型リード文) が含まれるか (#7569 型4)。
+
+    「〜の実機レビューです」「〜お伝えします！」「〜をまとめました」のような記事冒頭の
+    案内文は、本文に実在し一人称も含むので捏造ゲートと断片判定を通るが、体験の
+    記述ではないので引用素材にならない (#8248 / 10-04 の再検証で落選理由の主因)。
+    抜粋の中に 1 文でもあれば、抜粋ごと引用には使えないので捨てる。
+    """
+    normalized = _QUOTED_SPEECH_RE.sub("「」", unicodedata.normalize("NFKC", text or ""))
+    for sentence in _SNIPPET_SENTENCE_RE.findall(normalized):
+        trimmed = sentence.strip().rstrip(_LEAD_TRAILING_CHARS)
+        if _LEAD_BOILERPLATE_END_RE.search(trimmed):
+            return True
+    return False
+
+
 def _normalize_for_match(text: str) -> str:
     """捏造ゲートの正規化。
 
@@ -429,7 +471,7 @@ def extract_asin_experience(
     stats = {
         "posts": 0, "no_passage": 0, "checked": 0,
         "fabrication_discarded": 0, "block_span_discarded": 0, "fragment_discarded": 0,
-        "role_filtered": 0, "kept": 0,
+        "lead_boilerplate_discarded": 0, "role_filtered": 0, "kept": 0,
     }
     if not title:
         logger.warning("%s: amazon item not found — skip", asin)
@@ -481,6 +523,9 @@ def extract_asin_experience(
             # compared の非「比較」snippet が判定を受けないまま捨てられる)。
             if snippet_is_sentence_fragment(s["text"]):
                 stats["fragment_discarded"] += 1
+                continue
+            if snippet_is_lead_boilerplate(s["text"]):
+                stats["lead_boilerplate_discarded"] += 1
                 continue
             if role == "compared" and s["aspect"] != COMPARED_ONLY_ASPECT:
                 stats["role_filtered"] += 1
@@ -568,10 +613,11 @@ def run(
         processed.append({"asin": asin, **stats})
         logger.info(
             "%s: posts=%d no_passage=%d checked=%d fabrication_discarded=%d "
-            "block_span_discarded=%d fragment_discarded=%d role_filtered=%d kept=%d",
+            "block_span_discarded=%d fragment_discarded=%d lead_boilerplate_discarded=%d "
+            "role_filtered=%d kept=%d",
             asin, stats["posts"], stats["no_passage"], stats["checked"],
             stats["fabrication_discarded"], stats["block_span_discarded"],
-            stats["fragment_discarded"],
+            stats["fragment_discarded"], stats["lead_boilerplate_discarded"],
             stats["role_filtered"], stats["kept"],
         )
         if payload is None:

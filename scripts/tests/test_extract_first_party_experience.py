@@ -21,6 +21,7 @@ from scripts.extract_first_party_experience import (
     select_first_party_passages,
     snippet_is_grounded,
     prose_text,
+    snippet_is_lead_boilerplate,
     snippet_is_sentence_fragment,
     snippet_is_within_one_block,
 )
@@ -216,6 +217,44 @@ def test_snippet_is_sentence_fragment_true_for_empty_text():
 
 
 # --------------------------------------------------------------------------
+# snippet_is_lead_boilerplate: 定型リード文 (#7569 型4)
+# --------------------------------------------------------------------------
+
+def test_snippet_is_lead_boilerplate_true_for_announcement_endings():
+    # #7569 本文と 10-04 の再検証で挙がった型
+    assert snippet_is_lead_boilerplate("我が家で半年使ったアンパンマンブロックの実機レビューです。")
+    assert snippet_is_lead_boilerplate("2歳の息子と遊んでみた感想をお伝えします！")
+    assert snippet_is_lead_boilerplate("実際に使ってみて感じたメリット・デメリットをまとめました。")
+    assert snippet_is_lead_boilerplate("うちの子のリアルな反応をお届けします！")
+    assert snippet_is_lead_boilerplate("今回は我が家の体験をもとに詳しく解説していきますね♪")
+
+
+def test_snippet_is_lead_boilerplate_true_when_any_sentence_is_a_lead():
+    assert snippet_is_lead_boilerplate("うちの子は毎日遊んでいます。その様子をご紹介します。")
+
+
+def test_snippet_is_lead_boilerplate_false_for_experience_sentences():
+    assert not snippet_is_lead_boilerplate("我が家では実際に使ってみて満足しています。")
+    # 「まとめ」「紹介」が文中・体験の文末にあるだけなら落とさない
+    assert not snippet_is_lead_boilerplate("専用のバケツにまとめて片付けられるので、息子も自分で片付けます。")
+    assert not snippet_is_lead_boilerplate("あまりに気に入ったので、ママ友にも紹介しました。")
+    assert not snippet_is_lead_boilerplate("")
+
+
+def test_snippet_is_lead_boilerplate_covers_conjugations():
+    assert snippet_is_lead_boilerplate("我が家の体験をもとに、選び方のポイントをまとめていきます。")
+    assert snippet_is_lead_boilerplate("息子と遊んだ感想をまとめます！")
+    assert snippet_is_lead_boilerplate("実際に使ってわかったことをお伝えいたします。")
+
+
+def test_snippet_is_lead_boilerplate_false_for_recommending_or_tidying_experiences():
+    # agy レビューで挙がった偽陽性の型: 人に勧めた体験・片付けの体験・セリフ内の「紹介します」
+    assert not snippet_is_lead_boilerplate("とても使いやすかったので、今度実家の両親にも紹介します！")
+    assert not snippet_is_lead_boilerplate("散らかりがちだったおもちゃを専用ケースにすっきりまとめました。")
+    assert not snippet_is_lead_boilerplate("「ブログで紹介します！」と店員さんに伝えたら、おまけをつけてくれました。")
+
+
+# --------------------------------------------------------------------------
 # select_first_party_passages: gemma に渡す前の絞り込み
 # --------------------------------------------------------------------------
 
@@ -397,7 +436,7 @@ def test_extract_asin_experience_role_primary_keeps_non_comparison_aspect(tmp_pa
     assert snippet["usable_as"] == "quote"
     assert snippet["source_url"] == "https://omcha.jp/a/"
     assert stats == {"posts": 1, "no_passage": 0, "checked": 1, "fabrication_discarded": 0,
-                      "block_span_discarded": 0, "fragment_discarded": 0, "role_filtered": 0,
+                      "block_span_discarded": 0, "fragment_discarded": 0, "lead_boilerplate_discarded": 0, "role_filtered": 0,
                       "kept": 1}
     assert snippet["note"] == ""
 
@@ -529,6 +568,39 @@ def test_extract_asin_experience_fragment_gate_discards_unfinished_sentence(tmp_
     assert payload is None
     assert stats["fabrication_discarded"] == 0
     assert stats["fragment_discarded"] == 1
+    assert stats["kept"] == 0
+
+
+def test_extract_asin_experience_lead_boilerplate_gate_discards_announcement(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data" / "raw").mkdir(parents=True)
+    (tmp_path / "data" / "raw" / "amazon.json").write_text(json.dumps({"items": [
+        {"asin": "B0PRIMARY01", "title": "テスト商品 テストブランド"},
+    ]}), encoding="utf-8")
+
+    lead_text = "我が家で実際に使ってみて感じたメリットとデメリットをまとめました。"  # 実在・一人称だが案内文
+    inner = json.dumps({
+        "entailed": True,
+        "snippets": [{"aspect": "体験談", "text": lead_text, "confidence": "high"}],
+    })
+    session = _FakeSession([_FakeResponse({"response": inner})])
+
+    def fake_fetch(post_id, wp_base_url, session_, sleeper=None):
+        return f"<p>{lead_text}</p>"
+
+    monkeypatch.setattr("scripts.extract_first_party_experience.fetch_post_content", fake_fetch)
+
+    records = [{"asin": "B0PRIMARY01", "role": "primary", "post_url": "https://omcha.jp/a/"}]
+    post_id_by_url = {"https://omcha.jp/a/": 101}
+
+    payload, stats = extract_asin_experience(
+        "B0PRIMARY01", records, post_id_by_url,
+        wp_base_url="https://omcha.jp", per_asin_dir=tmp_path / "data" / "raw" / "per_asin",
+        ollama_url="http://ollama", model="gemma4", session=session, sleeper=_no_sleep,
+    )
+    assert payload is None
+    assert stats["fragment_discarded"] == 0
+    assert stats["lead_boilerplate_discarded"] == 1
     assert stats["kept"] == 0
 
 
@@ -718,7 +790,7 @@ def test_run_prioritises_asins_that_have_a_primary_role(tmp_path, monkeypatch):
     def fake_extract(asin, *a, **kw):
         seen.append(asin)
         return None, {"posts": 0, "no_passage": 0, "checked": 0,
-                      "fabrication_discarded": 0, "block_span_discarded": 0, "fragment_discarded": 0, "role_filtered": 0, "kept": 0}
+                      "fabrication_discarded": 0, "block_span_discarded": 0, "fragment_discarded": 0, "lead_boilerplate_discarded": 0, "role_filtered": 0, "kept": 0}
 
     monkeypatch.setattr(
         "scripts.extract_first_party_experience.extract_asin_experience", fake_extract)
