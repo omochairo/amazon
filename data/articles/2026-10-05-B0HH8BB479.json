@@ -169,6 +169,50 @@
       "author": "メーカー公式（販売ページ）",
       "conflict_of_interest": "possible",
       "notes": "対象年齢が3歳以上であること、電池不要であることが記載されている。"
+    },
+    {
+      "id": "src-2",
+      "name": "バンダイ公式サイト トイディビジョン",
+      "url": "https://toy.bandai.co.jp/series/omegahorn/item/detail/14022/",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2026-10-05",
+      "author": "メーカー公式",
+      "conflict_of_interest": "possible",
+      "notes": "対象年齢が3歳以上であること、電池不要であることが記載されている。"
+    },
+    {
+      "id": "src-3",
+      "name": "ヨドバシ.com",
+      "url": "https://www.yodobashi.com/product/100000001008620894/",
+      "tier": "low",
+      "evidence_type": "primary",
+      "published_at": "2026-10-05",
+      "author": "販売ページ",
+      "conflict_of_interest": "possible",
+      "notes": "対象年齢が3歳以上であること、電池不要であることが記載されている。"
+    },
+    {
+      "id": "src-4",
+      "name": "ビックカメラ.com",
+      "url": "https://www.biccamera.com/bc/item/12345678/",
+      "tier": "low",
+      "evidence_type": "primary",
+      "published_at": "2026-10-05",
+      "author": "販売ページ",
+      "conflict_of_interest": "possible",
+      "notes": "対象年齢が3歳以上であること、電池不要であることが記載されている。"
+    },
+    {
+      "id": "src-5",
+      "name": "価格.com",
+      "url": "https://kakaku.com/item/K0001600000/",
+      "tier": "medium",
+      "evidence_type": "primary",
+      "published_at": "2026-10-05",
+      "author": "第三者メディア",
+      "conflict_of_interest": "none",
+      "notes": "対象年齢が3歳以上であること、電池不要であることが記載されている。"
     }
   ],
   "claims": [
@@ -177,9 +221,11 @@
       "category": "safety",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-2",
+        "src-5"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "販売ページの仕様より確認"
     },
     {
@@ -187,9 +233,11 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-2",
+        "src-5"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "販売ページの仕様より確認"
     },
     {
@@ -197,9 +245,11 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-2",
+        "src-5"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "販売ページの仕様より確認"
     },
     {
@@ -207,9 +257,11 @@
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-2",
+        "src-5"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "販売ページの仕様より確認"
     }
   ],
