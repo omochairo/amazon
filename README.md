@@ -103,3 +103,4 @@ OSS ライセンスは付与していません。fork / コピー / 派生サイ
 
 ---
 <small>© omochairo Lab. All rights reserved.</small>
+Work stopped
