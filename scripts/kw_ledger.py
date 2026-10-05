@@ -105,6 +105,7 @@ import io
 import json
 import os
 import pathlib
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -463,7 +464,28 @@ def load_keep_list(path: pathlib.Path) -> set[str]:
     return keep
 
 
-def refetch_candidates(args, cur):
+_VARIANT_DROP = re.compile(r"[の・ー\s]")
+_VARIANT_TOKEN_DROP = re.compile(r"[・ー]")
+
+
+def variant_keys(keyword: str) -> set[str]:
+    """表記揺れを 1 つにまとめるキー 2 つ。どちらかが一致すれば揺れとみなす。
+
+    1. 語順はそのまま、空白・「の」・「・」・長音を落とす (`トミカ バケツ` = `トミカのバケツ`、
+       `ハロウィン 絵本` = `ハロウィーン絵本`)
+    2. 空白で区切った語を並べ替える (`トミカ ハイエース` = `ハイエース トミカ`)。
+       **文字単位では並べ替えない** — `トミカ 12` と `トミカ 21` が同じになる
+
+    Ubersuggest はこうした揺れに同じ SV/SD を返すことが多い (2026-10-05 実測)。
+    **同じ値が返るとは限らない。** 台帳で両方とも実測済みの組のうち SV が一致したのは約 8 割で、
+    語順違いは大きく違う組がある。だから外さずに**後回し**にする (`refetch_candidates`)。
+    """
+    ordered = _VARIANT_DROP.sub("", normalize_key(keyword))
+    tokens = sorted(_VARIANT_TOKEN_DROP.sub("", t) for t in bdk.normalize(keyword).split())
+    return {"o:" + ordered, "t:" + " ".join(t for t in tokens if t)}
+
+
+def refetch_candidates(args, cur, also_taken=()):
     """台帳の裾 (CSV 由来・未判定) から取り直し候補を優先順に返す。
 
     優先順位:
@@ -474,6 +496,10 @@ def refetch_candidates(args, cur):
       4. 残りを CSV volume の降順。**CSV の値は当てにならないから測り直すのだが、
          順番を決める材料は他に無い。**「大きいと言われている語から確かめる」という
          意味であって、値を信じているわけではない
+      5. **表記揺れは最後に回す** (`variant_keys`) — 実測済みの語・`also_taken` (同じ日に予約から
+         出す語) の揺れと、裾の中で後に来る揺れ。
+         8 割は同じ値が返るだけで枠を 1 つ食う (2026-10-05)。裾は 4,000 語あって 1 日 100 語しか
+         引けないので、後回しにすれば実質は測られないが、他を測り尽くしたら測る
     """
     owned = load_wp_owned(pathlib.Path(args.wp_demand) if args.wp_demand else None,
                           args.guard_pos_max, args.guard_min_clicks)
@@ -496,8 +522,25 @@ def refetch_candidates(args, cur):
             continue
         cand.append(r)
     cand.sort(key=lambda r: (-(r.get("sv") or 0), r.get("norm") or ""))
-    return cand, {"suspect": n_suspect, "owned": n_owned, "offlist": n_offlist,
-                  "wp_demand_empty": (not owned and bool(args.wp_demand))}
+    # 実測済み (measured_unknown でない) の語・今日の予約語の揺れと、裾の中で 2 つ目以降の揺れは最後に回す
+    seen = set()
+    for r in cur.values():
+        if not r.get("measured_unknown"):
+            seen |= variant_keys(r.get("keyword") or r.get("norm") or "")
+    for kw in also_taken:
+        seen |= variant_keys(kw)
+    uniq, later = [], []
+    for r in cand:
+        ks = variant_keys(r.get("keyword") or r.get("norm") or "")
+        if ks & seen:
+            later.append(r)
+            continue
+        seen |= ks
+        uniq.append(r)
+    n_variant = len(later)
+    return uniq + later, {"suspect": n_suspect, "owned": n_owned, "offlist": n_offlist,
+                          "variant": n_variant,
+                          "wp_demand_empty": (not owned and bool(args.wp_demand))}
 
 
 def cmd_refetch_queue(args) -> int:
@@ -513,9 +556,9 @@ def cmd_refetch_queue(args) -> int:
     cand, ex = refetch_candidates(args, cur)
     for r in cand[:args.limit]:
         print(r.get("keyword"))
-    print("# queue: 候補 %d / 出力 %d / 除外 suspect=%d wp既得=%d リスト外=%d (残り %d)"
+    print("# queue: 候補 %d / 出力 %d / 除外 suspect=%d wp既得=%d リスト外=%d 表記揺れは後回し=%d (残り %d)"
           % (len(cand), min(args.limit, len(cand)), ex["suspect"], ex["owned"],
-             ex["offlist"], max(0, len(cand) - args.limit)), file=sys.stderr)
+             ex["offlist"], ex["variant"], max(0, len(cand) - args.limit)), file=sys.stderr)
     if ex["wp_demand_empty"]:
         print("# 注意: WP 既得の語が 0 件。%s を読めているか確認する"
               % args.wp_demand, file=sys.stderr)
@@ -598,12 +641,12 @@ def cmd_next(args) -> int:
         if reserved[args.limit:]:
             print("# 台帳の裾は見ていない (予約で枠が埋まった)", file=sys.stderr)
         return 0
-    cand, ex = refetch_candidates(args, cur)
+    cand, ex = refetch_candidates(args, cur, also_taken=[kw for kw, _b, _s in take])
     for r in cand[:room]:
         print(r.get("keyword"))
-    print("# next: 台帳の裾から %d 語 (候補 %d / 除外 suspect=%d wp既得=%d リスト外=%d)"
+    print("# next: 台帳の裾から %d 語 (候補 %d / 除外 suspect=%d wp既得=%d リスト外=%d 表記揺れは後回し=%d)"
           % (min(room, len(cand)), len(cand), ex["suspect"], ex["owned"],
-             ex["offlist"]), file=sys.stderr)
+             ex["offlist"], ex["variant"]), file=sys.stderr)
     if ex["wp_demand_empty"]:
         print("# 注意: WP 既得の語が 0 件。%s を読めているか確認する"
               % args.wp_demand, file=sys.stderr)
