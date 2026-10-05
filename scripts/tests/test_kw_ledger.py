@@ -294,6 +294,54 @@ def test_refetch_queue_skips_already_measured(tmp_path, capsys):
     assert capsys.readouterr().out.strip() == ""
 
 
+def test_refetch_queue_puts_spelling_variants_last(tmp_path, capsys):
+    """表記揺れ (の・空白・長音・語順) は 8 割が同じ値を返すだけなので、裾の最後に回す。"""
+    _ledger_with_csv(tmp_path, [
+        {"query": "トミカ バケツ", "raw_query": "トミカ バケツ", "volume": 2400.0},
+        {"query": "トミカのバケツ", "raw_query": "トミカのバケツ", "volume": 1900.0},
+        {"query": "ハイエース トミカ", "raw_query": "ハイエース トミカ", "volume": 1900.0},
+        {"query": "ハロウィーン絵本", "raw_query": "ハロウィーン絵本", "volume": 1600.0},
+        {"query": "別の語", "raw_query": "別の語", "volume": 100.0},
+    ])
+    # 実測済みの語の揺れも後回し
+    src = _batch(tmp_path, [
+        {"keyword": "トミカ ハイエース", "search_volume": 1900,
+         "monthly_searches": [{"period": "202609", "search_volume": 1900}]},
+        {"keyword": "ハロウィン 絵本", "search_volume": 1900,
+         "monthly_searches": [{"period": "202609", "search_volume": 1900}]},
+    ], fetched="2026-10-05")
+    _run(tmp_path, "merge", str(src))
+    capsys.readouterr()
+    _run(tmp_path, "refetch-queue", "--wp-demand", "")
+    cap = capsys.readouterr()
+    assert cap.out.splitlines() == [
+        "トミカ バケツ", "別の語", "トミカのバケツ", "ハイエース トミカ", "ハロウィーン絵本"]
+    assert "表記揺れは後回し=3" in cap.err
+
+
+def test_variant_keys_keep_distinct_words_apart():
+    same = lambda a, b: bool(K.variant_keys(a) & K.variant_keys(b))  # noqa: E731
+    assert not same("トミカ 消防署", "トミカ 飛行機")
+    assert not same("トミカ 12", "トミカ 21"), "文字単位では並べ替えない"
+    assert same("トミカ 12", "12 トミカ")
+    assert same("トミカのバケツ", "トミカ バケツ")
+    assert same("ハロウィン 絵本", "ハロウィーン絵本")
+
+
+def test_next_puts_variants_of_reserved_words_last(tmp_path, capsys):
+    """同じ日に予約から出す語の揺れを、裾が残り枠で出さない。"""
+    _ledger_with_csv(tmp_path, [
+        {"query": "ハイエース トミカ", "raw_query": "ハイエース トミカ", "volume": 1900.0},
+        {"query": "別の語", "raw_query": "別の語", "volume": 100.0},
+    ])
+    q = tmp_path / "queue.d"
+    q.mkdir()
+    (q / "010-x.txt").write_text("# 予約\nトミカ ハイエース\n", encoding="utf-8")
+    capsys.readouterr()
+    _run(tmp_path, "next", "--limit", "2", "--queue-dir", str(q), "--wp-demand", "")
+    assert capsys.readouterr().out.splitlines() == ["トミカ ハイエース", "別の語"]
+
+
 def test_quota_date_uses_utc_not_jst_clock():
     """00:00 UTC = 09:00 JST でリセットされるので、UTC暦日がそのまま境界になる。
 
