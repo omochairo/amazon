@@ -280,6 +280,28 @@ def score_asin(asin: str, base: pathlib.Path = PER_ASIN_DIR) -> dict:
     }
 
 
+def should_defer(result: dict) -> bool:
+    """03-invoke-jules の pick から外すか (score_asin の戻り値で判定)。
+
+    zero は従来どおり外す (#1600)。unfetched は「本流の収集待ち」で defer 対象では
+    なかったが、ranking_pool (楽天ランキング由来) の ASIN は amazon.json の items[] に
+    居ないので news/youtube/books が永久に集まらず、ずっと unfetched のまま pick される。
+    素材が amazon.json と competitors だけでは sources 5 件 (v5 §6.5.1) に届かず、
+    navi-brain#89 以降の Jules は削らずに validate 赤のまま終えるので PR が滞留する
+    (実測 2026-10-05: ranking-sniper の 4 件が全部 unfetched で初回 validate 落ち、
+    3 件が赤のまま放置)。
+
+    unfetched でも事前収集 (fetch_third_party_sources) の非販売 host が
+    _THIRD_PARTY_MIN_HOSTS 以上あれば、zero を外す条件と同じく書く材料ありとみなす。
+    """
+    band = result.get("band")
+    if band == "zero":
+        return True
+    if band == "unfetched":
+        return result.get("third_party_hosts", 0) < _THIRD_PARTY_MIN_HOSTS
+    return False
+
+
 def _cli() -> int:
     ap = argparse.ArgumentParser(description="per_asin 第三者情報量スコア (#1600 Phase 1)")
     ap.add_argument("asin", nargs="?", help="単一 ASIN")
