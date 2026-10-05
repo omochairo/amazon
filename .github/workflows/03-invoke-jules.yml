@@ -266,18 +266,22 @@ jobs:
                       if a in first_party_set:
                           kept.append(a)
                           continue
-                      if _sc.score_asin(a).get('band') == 'zero':
+                      # zero に加え、第三者 host が 2 未満の unfetched も外す。
+                      # ranking_pool 品は news/youtube/books が集まらず常に unfetched で、
+                      # 素材ゼロのまま pick → sources 5 件に届かず validate 赤で滞留していた
+                      # (2026-10-05)。判定の SSOT は score_per_asin_info.should_defer
+                      if _sc.should_defer(_sc.score_asin(a)):
                           deferred.append(a)
                       else:
                           kept.append(a)
                           kept_other.append(a)
                   if deferred:
-                      print(f"info-zero deferred (#1600): {len(deferred)} "
+                      print(f"info-zero/unfetched deferred (#1600): {len(deferred)} "
                             f"e.g. {deferred[:10]}")
                   if kept_other:
                       remaining = kept
                   elif deferred:
-                      print("::warning::all candidates band=zero; "
+                      print("::warning::all candidates deferred (zero/unfetched); "
                             "proceeding without defer to avoid pool starvation")
               except Exception as _e:  # スコア計算失敗は pick を止めない (best-effort)
                   print(f"::warning::info scoring skipped, no defer applied: {_e}")

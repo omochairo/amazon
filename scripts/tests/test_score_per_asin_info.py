@@ -221,6 +221,50 @@ class ThirdPartySourcesBandTest(unittest.TestCase):
         self.assertEqual(r["band"], "zero")
 
 
+class ShouldDeferTest(unittest.TestCase):
+    """03-invoke-jules の入口除外。ranking_pool の unfetched 品が素材ゼロで pick される穴。"""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.base = pathlib.Path(self._tmp.name)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _mk_unfetched(self, asin: str, sources: list | None = None) -> None:
+        # ranking_pool 品の実態: amazon.json と competitors.json だけ (S tier でも同じ)
+        d = self.base / asin
+        d.mkdir(parents=True)
+        _write(d, "amazon.json", {"item": {"title": "バンダイ ロボットおもちゃ"}})
+        _write(d, "competitors.json", {"competitors": [{"asin": f"B0CP00000{i}"} for i in range(5)]})
+        if sources is not None:
+            _write(d, "third_party_sources.json", {"sources": sources})
+
+    def test_unfetched_without_third_party_is_deferred(self):
+        self._mk_unfetched("B0SD000001")
+        r = S.score_asin("B0SD000001", self.base)
+        self.assertEqual(r["band"], "unfetched")
+        self.assertTrue(S.should_defer(r))
+
+    def test_unfetched_with_one_host_is_deferred(self):
+        self._mk_unfetched("B0SD000002", [{"url": "https://note.com/a/n/1", "host": "note.com"}])
+        self.assertTrue(S.should_defer(S.score_asin("B0SD000002", self.base)))
+
+    def test_unfetched_with_two_hosts_is_picked(self):
+        self._mk_unfetched("B0SD000003", [
+            {"url": "https://note.com/a/n/1", "host": "note.com"},
+            {"url": "https://mokutopia.com/products/x", "host": "mokutopia.com"},
+        ])
+        r = S.score_asin("B0SD000003", self.base)
+        self.assertEqual(r["band"], "unfetched")
+        self.assertFalse(S.should_defer(r))
+
+    def test_zero_is_deferred_and_thin_ok_are_not(self):
+        self.assertTrue(S.should_defer({"band": "zero", "third_party_hosts": 0}))
+        self.assertFalse(S.should_defer({"band": "thin", "third_party_hosts": 0}))
+        self.assertFalse(S.should_defer({"band": "ok", "third_party_hosts": 0}))
+
+
 class IsSearchResultUrlTest(unittest.TestCase):
     def test_search_pages(self):
         for u in (

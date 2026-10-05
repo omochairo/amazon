@@ -568,8 +568,14 @@ def _cli() -> int:
         )
     elif args.pool:
         want = {b.strip() for b in args.bands.split(",") if b.strip()}
-        targets = [a for a in _pickable_pool()
-                   if _sc.score_asin(a, base).get("band") in want]
+        bands = {a: _sc.score_asin(a, base).get("band") for a in _pickable_pool()}
+        targets = [a for a, b in bands.items() if b in want]
+        # unfetched (= ranking_pool 品) を先頭に回す。03-invoke-jules はこれらを
+        # 第三者 host が 2 件集まるまで pick しない (should_defer) ので、ここで後回しに
+        # されると永久に記事にならない。ASIN の辞書順だと新しい B0H... は日次上限の外に
+        # 落ちる (実測 2026-10-05: ranking 7 件中 6 件が 30 件枠の外)。安定ソートなので
+        # 各グループ内の順序は従来どおり。
+        targets.sort(key=lambda a: bands[a] != "unfetched")
         logger.info("pool 対象 (band in %s): %d 件", sorted(want), len(targets))
     else:
         ap.error("ASIN / --pool / --from-gsc のいずれかが必要です")
