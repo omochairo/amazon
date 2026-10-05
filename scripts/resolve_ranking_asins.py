@@ -519,6 +519,15 @@ def _collect_unmatched_jans(ranking_items: list) -> list:
 # と同一規約 (B0... / ISBN-10 数字 ASIN 両対応、.enrichment/.seo/.quality は除外)。
 _ASIN_SUFFIX_RE = re.compile(r"-([A-Z0-9]{10})$")
 
+# ranking_pool に入れてよい ASIN。03-invoke-jules の候補 regex (_ASIN_RE) と同じ。
+# 書籍の ISBN-10 ASIN (例 9813379227) は JAN から正しく解決されても 03 が pick
+# しないので記事にならず、記事化で prune される経路も無いため pool に永久に残る
+# (実測 2026-10-05: 9/19 から 3 件が居座り)。per_asin の backfill も無駄打ちになる。
+_POOL_ASIN_RE = re.compile(r"^B0[A-Z0-9]{8}$")
+# 解決時点で弾く書籍 ASIN (ISBN-10)。pool 側は上の regex で全部落ちるが、ここで止めれば
+# per_asin の backfill (Amazon API) も打たずに済む。
+_ISBN10_RE = re.compile(r"^\d{9}[\dX]$")
+
 
 def _load_article_asins(articles_dir: str) -> set:
     """``data/articles`` のスラッグ末尾 ASIN 集合 (= **記事化済**)。
@@ -569,7 +578,9 @@ def update_ranking_pool(existing_asins, new_asins, article_covered) -> list:
     for a in list(existing_asins) + list(new_asins):
         if not isinstance(a, str) or not a.strip():
             continue
-        au = a.upper()
+        au = a.strip().upper()
+        if not _POOL_ASIN_RE.match(au):
+            continue  # 既に居座っている ISBN 等もここで落ちる
         if au in covered_u or au in seen:
             continue
         seen.add(au)
@@ -608,7 +619,7 @@ def resolve_ranking_asins(
     jan_candidates_before_limit = len(jans)
     if limit and limit > 0:
         jans = jans[:limit]
-    resolved, unresolved, skipped = [], [], []
+    resolved, unresolved, skipped, non_b0 = [], [], [], []
     seen_asins = set()
     for i, (jan, rank, title) in enumerate(jans):
         matched = resolve_jan_to_item(api, jan, search_index=search_index)
@@ -627,6 +638,8 @@ def resolve_ranking_asins(
             genre_dropped.append(entry)
         elif asin.upper() in covered:
             skipped.append({"jan": jan, "asin": asin, "rank": rank})
+        elif _ISBN10_RE.match(asin.upper()):
+            non_b0.append({"jan": jan, "asin": asin, "rank": rank, "title": title})
         elif asin in seen_asins:
             pass  # 別 JAN が同 ASIN に解決 — 重複は無視
         else:
@@ -641,6 +654,7 @@ def resolve_ranking_asins(
         "resolved": resolved,
         "unresolved": unresolved,
         "skipped_already_covered": skipped,
+        "skipped_non_b0": non_b0,
         "new_asins": [r["asin"] for r in resolved],
     }
 
@@ -656,7 +670,8 @@ def resolve_ranking_asins(
             enable_genre_gate=enable_genre_gate, genre_dropped=genre_dropped,
         )
         manifest["title_fuzzy"] = fuzzy_result
-        fuzzy_new_asins = [e["asin"] for e in fuzzy_result["title_fuzzy_resolved"]]
+        fuzzy_new_asins = [e["asin"] for e in fuzzy_result["title_fuzzy_resolved"]
+                           if not _ISBN10_RE.match((e.get("asin") or "").upper())]
         manifest["new_asins"] = manifest["new_asins"] + fuzzy_new_asins
 
     # #2823: 両経路のゲート除外をまとめて記録する (fuzzy 実行後に確定するのでここ)。

@@ -250,25 +250,41 @@ class SearchPoolMiningTest(unittest.TestCase):
         self.assertEqual(m["input_unmatched_jans"], 1)
         self.assertEqual(api.calls, ["4904810000020"])  # 1 回だけ
 
+    def test_isbn_asin_is_not_resolved(self):
+        # 書籍は JAN 一致でも ISBN-10 ASIN に解決される。03 が pick しないので
+        # new_asins (= CSV backfill / pool) に載せず、manifest の skipped_non_b0 に残す。
+        ranking = [{"rank": 3, "matched_asin": None, "title": "英語絵本 4904810000037"}]
+        api = FakeAPI({"4904810000037": "9813379227"})
+        m = rr.resolve_ranking_asins(ranking, api, set(), sleep=0)
+        self.assertEqual(m["new_asins"], [])
+        self.assertEqual([e["asin"] for e in m["skipped_non_b0"]], ["9813379227"])
+
 
 class UpdateRankingPoolTest(unittest.TestCase):
+    # ASIN は 03-invoke-jules の候補 regex (B0 + 8 桁) に合わせて 10 文字にする
     def test_appends_new_and_dedups_preserving_order(self):
-        pool = rr.update_ranking_pool(["B0OLD001", "B0OLD002"], ["B0NEW003", "B0OLD001"], set())
-        # B0OLD001 は既存なので重複追加されない、順序は既存→新規
-        self.assertEqual(pool, ["B0OLD001", "B0OLD002", "B0NEW003"])
+        pool = rr.update_ranking_pool(["B0OLD00001", "B0OLD00002"], ["B0NEW00003", "B0OLD00001"], set())
+        # B0OLD00001 は既存なので重複追加されない、順序は既存→新規
+        self.assertEqual(pool, ["B0OLD00001", "B0OLD00002", "B0NEW00003"])
 
     def test_prunes_article_covered_only(self):
-        # B0OLD001 が記事化された → pool から除く。per_asin 済でも article でなければ残す。
-        pool = rr.update_ranking_pool(["B0OLD001", "B0OLD002"], [], {"B0OLD001"})
-        self.assertEqual(pool, ["B0OLD002"])
+        # B0OLD00001 が記事化された → pool から除く。per_asin 済でも article でなければ残す。
+        pool = rr.update_ranking_pool(["B0OLD00001", "B0OLD00002"], [], {"B0OLD00001"})
+        self.assertEqual(pool, ["B0OLD00002"])
 
     def test_prune_is_case_insensitive(self):
-        pool = rr.update_ranking_pool(["b0old001"], [], {"B0OLD001"})
+        pool = rr.update_ranking_pool(["b0old00001"], [], {"B0OLD00001"})
         self.assertEqual(pool, [])
 
     def test_skips_blank_and_non_str(self):
-        pool = rr.update_ranking_pool(["B0OK00001", "", None, "  "], [123, "B0OK00002"], set())
-        self.assertEqual(pool, ["B0OK00001", "B0OK00002"])
+        pool = rr.update_ranking_pool(["B0OK000001", "", None, "  "], [123, "B0OK000002"], set())
+        self.assertEqual(pool, ["B0OK000001", "B0OK000002"])
+
+    def test_drops_isbn_already_in_pool(self):
+        # 9/19 から居座っていた ISBN-10 は記事化 prune の経路が無いので、ここで落とす
+        pool = rr.update_ranking_pool(
+            ["9813379227", "133864498X", "B0HC1GGTZC"], ["4865391266", "B0HH8BB479"], set())
+        self.assertEqual(pool, ["B0HC1GGTZC", "B0HH8BB479"])
 
     def test_resolved_then_covered_lifecycle(self):
         # Run 1: resolve B0X → pool=[B0X]。Run 2: B0X 記事化 → pool=[]。

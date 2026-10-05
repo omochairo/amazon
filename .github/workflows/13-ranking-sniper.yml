@@ -185,11 +185,25 @@ jobs:
           git commit -m "data: ranking-sniper per_asin backfill (run ${{ github.run_id }})"
           git push -u origin "$BRANCH"
 
-          PR_URL=$(gh pr create \
-            --title "data: ranking-sniper per_asin backfill (run ${{ github.run_id }})" \
-            --body "Issue #810 Phase 1+1.5: resolved unmatched Rakuten-ranking JANs to new Amazon ASINs (Option A), backfilled data/raw/per_asin via fetch_amazon --competitors-only, and updated data/raw/ranking_pool.json (Phase 1.5 — 03-invoke-jules pick-asin unions this pool so ranking ASINs become articles). See _ranking_resolved_manifest.json for the resolved/unresolved breakdown." \
-            --base main \
-            --head "$BRANCH")
+          # GitHub API の一時的な 5xx で PR 作成だけ落ち、push 済みブランチが孤立して
+          # その日の backfill が丸ごと消えた (2026-10-03, HTTP 503)。3 回まで再試行し、
+          # 前の試行で PR が実はできていた場合はそれを拾う。3 回とも駄目なら従来どおり赤。
+          PR_URL=""
+          for attempt in 1 2 3; do
+            PR_URL=$(gh pr create \
+              --title "data: ranking-sniper per_asin backfill (run ${{ github.run_id }})" \
+              --body "Issue #810 Phase 1+1.5: resolved unmatched Rakuten-ranking JANs to new Amazon ASINs (Option A), backfilled data/raw/per_asin via fetch_amazon --competitors-only, and updated data/raw/ranking_pool.json (Phase 1.5 — 03-invoke-jules pick-asin unions this pool so ranking ASINs become articles). See _ranking_resolved_manifest.json for the resolved/unresolved breakdown." \
+              --base main \
+              --head "$BRANCH") && break
+            PR_URL=$(gh pr list --head "$BRANCH" --state open --json url --jq '.[0].url // empty' || true)
+            [ -n "$PR_URL" ] && break
+            echo "::warning::gh pr create failed (attempt $attempt/3); retrying in 30s"
+            sleep 30
+          done
+          if [ -z "$PR_URL" ]; then
+            echo "::error::gh pr create failed 3 times; branch $BRANCH is pushed but has no PR"
+            exit 1
+          fi
           echo "Created: $PR_URL"
 
           if gh pr merge --auto --squash --delete-branch "$PR_URL"; then
