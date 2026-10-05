@@ -501,6 +501,88 @@ def resolve_title_fuzzy(
     }
 
 
+def resolve_yahoo_jan(
+    items: list,
+    api,
+    covered: set,
+    seen_asins: set,
+    search_hits,
+    search_index: str = "All",
+    limit: int = 30,
+    sleep: float = 2.1,
+    enable_genre_gate: bool = True,
+    genre_dropped: list = None,
+) -> dict:
+    """JAN を抽出できないランキング item の JAN を Yahoo!ショッピングで推定し、Amazon の
+    JAN 完全一致 (resolve_jan_to_item) に通す。
+
+    ``search_hits(query) -> list`` は Yahoo itemSearch の hits を返す callable
+    (テストで差し替えるため注入する)。採否は ``entries[].adopted`` に残し、
+    shadow / enforce の切り替えは呼び出し側 (main) が行う。
+    """
+    import yahoo_jan_bridge as yjb
+
+    if genre_dropped is None:
+        genre_dropped = []
+    # rank を持つ = ランキング本体。Search プール (rank なし・150 件規模) は Yahoo の
+    # 1 分 30 回制限に収まらないので対象外。
+    targets = [it for it in _collect_unmatched_no_jan(items) if it.get("rank") is not None]
+    before_limit = len(targets)
+    if limit and limit > 0:
+        targets = targets[:limit]
+    seen_asins = set(seen_asins)
+    entries = []
+    for i, item in enumerate(targets):
+        title = item.get("title") or ""
+        query = yjb.build_query(title)
+        entry = {"rank": item.get("rank"), "title": title, "query": query,
+                 "jan": "", "votes": {}, "asin": "", "adopted": False, "reason": ""}
+        entries.append(entry)
+        if sleep and i > 0:
+            time.sleep(sleep)
+        if not query:
+            entry["reason"] = "empty_query"
+            continue
+        try:
+            hits = search_hits(query)
+        except Exception as e:  # noqa: BLE001 — 1 件の失敗で他の item を止めない
+            entry["reason"] = f"yahoo_error: {type(e).__name__}"
+            continue
+        consensus = yjb.pick_consensus_jan(hits)
+        entry["votes"] = consensus["votes"]
+        if not consensus["jan"]:
+            entry["reason"] = consensus["reason"]
+            continue
+        jan = consensus["jan"]
+        entry["jan"] = jan
+        matched = resolve_jan_to_item(api, jan, search_index=search_index)
+        asin = (matched.get("asin") or "").strip()
+        entry["asin"] = asin
+        if not asin:
+            entry["reason"] = "amazon_no_jan_match"
+        elif _ISBN10_RE.match(asin.upper()):
+            entry["reason"] = "isbn"
+        elif enable_genre_gate and _is_genre_rejected(
+                (verdict_roots := _genre_verdict_for_item(matched))[0]):
+            drop = _genre_drop_entry(matched, item.get("rank"), title, verdict_roots[1], "yahoo_jan")
+            drop["jan"] = jan
+            genre_dropped.append(drop)
+            entry["reason"] = "genre_gate"
+        elif asin.upper() in covered:
+            entry["reason"] = "already_covered"
+        elif asin in seen_asins:
+            entry["reason"] = "duplicate"
+        else:
+            seen_asins.add(asin)
+            entry["adopted"] = True
+    return {
+        "yahoo_jan_candidates_before_limit": before_limit,
+        "yahoo_jan_input": len(targets),
+        "yahoo_jan_adopted": sum(1 for e in entries if e["adopted"]),
+        "yahoo_jan_entries": entries,
+    }
+
+
 def _collect_unmatched_jans(ranking_items: list) -> list:
     """未マッチ ranking item から (jan, rank, title) を rank 順・JAN 重複排除で抽出。"""
     seen = set()
@@ -727,6 +809,14 @@ def main():
     parser.add_argument("--vision-min-score", type=float, default=None,
                         help=f"vision gate の採用閾値 (enforce モード時のみ有効)。既定 "
                              f"{VISION_DEFAULT_MIN_SCORE} (較正前の保守的な値。shadow 実測で見直すこと)。")
+    parser.add_argument("--yahoo-jan-mode", choices=("off", "shadow", "enforce"), default="off",
+                        help="JAN を抽出できないランキング item の JAN を Yahoo!ショッピングで推定し "
+                             "Amazon の JAN 完全一致に通す。shadow: manifest の yahoo_jan に記録するだけ "
+                             "(採否を変えない)。enforce: 採用分を new_asins に足す。")
+    parser.add_argument("--yahoo-jan-limit", type=int, default=30,
+                        help="Yahoo JAN 仲介で試す item 数の上限 (ランキング本体のみ。0 = 全件)。")
+    parser.add_argument("--yahoo-client-id", default=os.environ.get("YAHOO_CLIENT_ID", ""),
+                        help="Yahoo!ショッピング API のアプリ ID (既定は env YAHOO_CLIENT_ID)。")
     parser.add_argument("--manifest-out", default="",
                         help="manifest JSON をこのパスにも書き出す (--dry-run 中でも有効)。"
                              "#3332 N5 shadow workflow が採否を変えずに較正データを回収するために使う。"
@@ -795,6 +885,42 @@ def main():
         vision_min_score=args.vision_min_score,
         enable_genre_gate=args.genre_gate,
     )
+
+    # Yahoo JAN 仲介。shadow は manifest に記録するだけで new_asins (= pool / backfill) を
+    # 変えない。enforce で採用分を new_asins に足す。client id が無ければ記録して何もしない。
+    if args.yahoo_jan_mode != "off":
+        if not args.yahoo_client_id:
+            manifest["yahoo_jan"] = {"mode": args.yahoo_jan_mode, "skipped": "no YAHOO_CLIENT_ID"}
+            logger.warning("Yahoo JAN bridge: YAHOO_CLIENT_ID 未設定のため skip")
+        else:
+            import yahoo_jan_bridge as yjb
+            yahoo_genre_dropped = []
+            yres = resolve_yahoo_jan(
+                mine_items, api, covered, set(manifest["new_asins"]),
+                search_hits=lambda q: yjb.yahoo_search_hits(q, args.yahoo_client_id),
+                search_index=args.search_index, limit=args.yahoo_jan_limit,
+                sleep=yjb.YAHOO_DEFAULT_SLEEP, enable_genre_gate=args.genre_gate,
+                genre_dropped=yahoo_genre_dropped,
+            )
+            yres["mode"] = args.yahoo_jan_mode
+            yres["genre_gate_dropped_items"] = yahoo_genre_dropped
+            manifest["yahoo_jan"] = yres
+            adopted = [e["asin"] for e in yres["yahoo_jan_entries"] if e["adopted"]]
+            if args.yahoo_jan_mode == "enforce":
+                # 既存の集計 (new_asins / genre_gate_*) に反映するのは enforce のときだけ
+                manifest["new_asins"] = manifest["new_asins"] + adopted
+                manifest["genre_gate_dropped_items"].extend(yahoo_genre_dropped)
+                manifest["genre_gate_dropped"] = len(manifest["genre_gate_dropped_items"])
+            logger.info(
+                f"Yahoo JAN bridge ({args.yahoo_jan_mode}): input={yres['yahoo_jan_input']} "
+                f"adopted={len(adopted)}"
+            )
+            for e in yres["yahoo_jan_entries"]:
+                logger.info(
+                    f"  yahoo rank={e['rank']} q={e['query']!r} jan={e['jan'] or '-'} "
+                    f"asin={e['asin'] or '-'} adopted={e['adopted']} reason={e['reason'] or '-'}"
+                )
+
     manifest["generated_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     logger.info(
         f"Resolve: unmatched_jans={manifest['input_unmatched_jans']} "
