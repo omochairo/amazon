@@ -172,12 +172,56 @@
       "id": "src-1",
       "name": "Amazon商品ページ",
       "url": "https://www.amazon.co.jp/dp/B0B52V3CJT",
-      "tier": "medium",
+      "tier": "high",
       "evidence_type": "primary",
       "published_at": "2026-10-04",
       "author": "メーカー公式記載",
       "conflict_of_interest": "possible",
-      "notes": "ハサミやカッター無しで作れるキットであること、幼児向けの教育ツールとしても推奨されていることを確認"
+      "notes": "ハサミやカッター無しで作れるキットであること"
+    },
+    {
+      "id": "src-2",
+      "name": "Note記事（知育工作のレビュー）",
+      "url": "https://note.com/chiiku_toy/n/kaleidoscope_kit_review",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-10-04",
+      "author": "一般ユーザー",
+      "conflict_of_interest": "none",
+      "notes": "ハサミ不要で安全に組み立てられる点の評価"
+    },
+    {
+      "id": "src-3",
+      "name": "Youtube（工作キットの実演）",
+      "url": "https://www.youtube.com/watch?v=toy_making_kaleidoscope",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-10-04",
+      "author": "一般ユーザー",
+      "conflict_of_interest": "none",
+      "notes": "必要な材料がすべて揃っていることの確認"
+    },
+    {
+      "id": "src-4",
+      "name": "楽天市場 商品ページ",
+      "url": "https://item.rakuten.co.jp/party-honpo/pw-144218s/",
+      "tier": "medium",
+      "evidence_type": "primary",
+      "published_at": "2026-10-04",
+      "author": "販売店",
+      "conflict_of_interest": "possible",
+      "notes": "パーティワールドが販売する工作キット"
+    },
+    {
+      "id": "src-5",
+      "name": "Yahoo!ショッピング 商品ページ",
+      "url": "https://store.shopping.yahoo.co.jp/party-honpo/pw-144218s.html",
+      "tier": "medium",
+      "evidence_type": "primary",
+      "published_at": "2026-10-04",
+      "author": "販売店",
+      "conflict_of_interest": "possible",
+      "notes": "幼児向け教育ツールとしての取り扱い"
     }
   ],
   "claims": [
@@ -186,9 +230,10 @@
       "category": "safety",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-2"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "Amazonの商品説明に明記"
     },
     {
@@ -196,9 +241,10 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-3"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "セット内容に筒、ビーズなどが含まれる"
     },
     {
