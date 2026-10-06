@@ -390,5 +390,67 @@ class RematchOnlyTest(unittest.TestCase):
             self.assertEqual(rc, 2)
 
 
+class YahooJanStage3Test(unittest.TestCase):
+    """Yahoo JAN 仲介キャッシュ (resolve_ranking_asins が書く) による stage3_yahoo_jan。"""
+
+    def _write_cache(self, td, items):
+        p = pathlib.Path(td) / "_ranking_yahoo_jan.json"
+        p.write_text(json.dumps({"items": items}), encoding="utf-8")
+        return p
+
+    def test_index_reads_cache_and_skips_broken_rows(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = self._write_cache(td, {
+                "shop:1": {"asin": "B0YAHOO001", "jan": "4904810000037"},
+                "shop:2": {"asin": ""},
+                "shop:3": "garbage",
+            })
+            self.assertEqual(fetch_rakuten._build_yahoo_jan_idx(p), {"shop:1": "B0YAHOO001"})
+            self.assertEqual(fetch_rakuten._build_yahoo_jan_idx(pathlib.Path(td) / "none.json"), {})
+
+    def test_stage3_only_after_stage1_and_stage2(self):
+        item = {"itemCode": "shop:1", "title": "JAN の無い商品"}
+        yahoo = {"shop:1": "B0YAHOO001"}
+        self.assertEqual(
+            fetch_rakuten._match_ranking_item(item, {}, {}, None, yahoo)[:2],
+            ("B0YAHOO001", "stage3_yahoo_jan"))
+        # itemCode 直引きが当たるなら stage1 を優先する
+        self.assertEqual(
+            fetch_rakuten._match_ranking_item(item, {"shop:1": "B0STAGE101"}, {}, None, yahoo)[:2],
+            ("B0STAGE101", "stage1"))
+        # キャッシュ無し (既定) は従来どおり未マッチ
+        self.assertEqual(fetch_rakuten._match_ranking_item(item, {}, {})[:2], ("", ""))
+
+    def test_match_all_does_not_count_stage3_as_unmatched(self):
+        items = [{"rank": 1, "itemCode": "shop:1", "title": "A"},
+                 {"rank": 2, "itemCode": "shop:2", "title": "B"}]
+        s1, s2, unmatched = fetch_rakuten._match_all(items, {}, {}, set(), {"shop:1": "B0YAHOO001"})
+        self.assertEqual((s1, s2), (0, 0))
+        self.assertEqual([u["rank"] for u in unmatched], [2])
+        self.assertEqual(items[0]["match_stage"], "stage3_yahoo_jan")
+        self.assertFalse(items[0]["has_article"])
+
+    def test_rematch_uses_cache(self):
+        with tempfile.TemporaryDirectory() as td:
+            cwd = os.getcwd()
+            try:
+                os.chdir(td)
+                weekly = pathlib.Path("hugo/data/ranking/weekly.json")
+                weekly.parent.mkdir(parents=True)
+                weekly.write_text(json.dumps({"items": [
+                    {"rank": 1, "itemCode": "shop:1", "title": "A"}]}), encoding="utf-8")
+                raw = pathlib.Path("data/raw")
+                raw.mkdir(parents=True)
+                self._write_cache(raw, {"shop:1": {"asin": "B0YAHOO001"}})
+                self.assertEqual(fetch_rakuten._rematch_only(raw), 0)
+                after = json.loads(weekly.read_text(encoding="utf-8"))
+                manifest = json.loads((raw / "_rakuten_ranking_manifest.json").read_text(encoding="utf-8"))
+            finally:
+                os.chdir(cwd)
+            self.assertEqual(after["items"][0]["matched_asin"], "B0YAHOO001")
+            self.assertEqual(manifest["stage3_yahoo_jan_matches"], 1)
+            self.assertEqual(manifest["unmatched"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -122,6 +122,26 @@ def _build_jan_to_asin(per_asin_root: pathlib.Path) -> dict:
     return index
 
 
+def _build_yahoo_jan_idx(cache_path: pathlib.Path) -> dict:
+    """resolve_ranking_asins が書く Yahoo JAN 仲介キャッシュ (itemCode → ASIN)。
+
+    楽天ランキング API は JAN を返さないので、itemCode も JAN も既知の index に無い
+    item は stage1/2 で紐づかない。13-ranking-sniper が Yahoo!ショッピングの janCode
+    → Amazon JAN 完全一致 → 同一性ガードを通した結果をここに残す。無ければ空。
+    """
+    try:
+        data = json.loads(cache_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    items = data.get("items") if isinstance(data, dict) else None
+    if not isinstance(items, dict):
+        return {}
+    return {
+        code: v["asin"].strip() for code, v in items.items()
+        if isinstance(v, dict) and isinstance(v.get("asin"), str) and v["asin"].strip()
+    }
+
+
 # 記事スラッグ末尾 10 文字 ASIN (B0... / ISBN-10 数字 ASIN 両対応)。
 _ARTICLE_ASIN_RE = re.compile(r"-([A-Z0-9]{10})$", re.IGNORECASE)
 # サイドカー JSON (.enrichment/.seo/.quality) は記事本体ではないので除外する
@@ -186,10 +206,12 @@ def _match_ranking_item(
     itemcode_idx: dict,
     jan_idx: dict,
     article_asins: set | None = None,
+    yahoo_idx: dict | None = None,
 ) -> tuple:
     """ranking item を ASIN にマッチング。返り値: (matched_asin, match_stage, has_article)。
 
-    match_stage は 'stage1' (itemCode 直接), 'stage2_jan' (JAN 抽出), '' (未マッチ)。
+    match_stage は 'stage1' (itemCode 直接), 'stage2_jan' (JAN 抽出),
+    'stage3_yahoo_jan' (Yahoo JAN 仲介キャッシュ, _build_yahoo_jan_idx), '' (未マッチ)。
 
     Issue #600 follow-up: itemCode/JAN が解決できれば **記事が無くても** matched_asin を
     返す。Amazon 外部 CTA (amazon.co.jp/dp/<asin>) は記事を必要としないため、記事化前でも
@@ -211,16 +233,23 @@ def _match_ranking_item(
         asin = jan_idx.get(to_ean13(jan))
         if asin:
             return asin, "stage2_jan", _has_article(asin)
+    if code and yahoo_idx:
+        asin = yahoo_idx.get(code)
+        if asin:
+            return asin, "stage3_yahoo_jan", _has_article(asin)
     return "", "", False
 
 
-def _match_all(rank_items: list, itemcode_idx: dict, jan_idx: dict, article_asins: set | None) -> tuple:
+def _match_all(rank_items: list, itemcode_idx: dict, jan_idx: dict, article_asins: set | None,
+               yahoo_idx: dict | None = None) -> tuple:
     """rank_items を一括マッチングし、(stage1_n, stage2_n, unmatched_list) を返す。
     rank_items の各 dict に matched_asin / match_stage を破壊的に書き込む。
+    stage3_yahoo_jan の件数は items の match_stage から数える (_count_stage)。
     """
     stage1_n, stage2_n, unmatched = 0, 0, []
     for it in rank_items:
-        asin, stage, has_article = _match_ranking_item(it, itemcode_idx, jan_idx, article_asins)
+        asin, stage, has_article = _match_ranking_item(
+            it, itemcode_idx, jan_idx, article_asins, yahoo_idx)
         it["matched_asin"] = asin or None
         it["match_stage"] = stage or None
         # Issue #600 follow-up: 記事の有無を別フィールドで保持。テンプレは matched_asin で
@@ -230,6 +259,8 @@ def _match_all(rank_items: list, itemcode_idx: dict, jan_idx: dict, article_asin
             stage1_n += 1
         elif stage == "stage2_jan":
             stage2_n += 1
+        elif stage == "stage3_yahoo_jan":
+            pass  # 件数は呼び出し側が items から数える (戻り値の形を変えないため)
         else:
             unmatched.append({
                 "rank": it.get("rank"),
@@ -268,7 +299,10 @@ def _rematch_only(out_dir: pathlib.Path) -> int:
         f"articles={len(article_asins)}"
     )
 
-    stage1_n, stage2_n, unmatched = _match_all(rank_items, itemcode_idx, jan_idx, article_asins)
+    yahoo_idx = _build_yahoo_jan_idx(raw_root / "_ranking_yahoo_jan.json")
+    stage1_n, stage2_n, unmatched = _match_all(
+        rank_items, itemcode_idx, jan_idx, article_asins, yahoo_idx)
+    stage3_n = sum(1 for it in rank_items if it.get("match_stage") == "stage3_yahoo_jan")
 
     generated_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
     payload["items"] = rank_items
@@ -279,6 +313,7 @@ def _rematch_only(out_dir: pathlib.Path) -> int:
         "input_total": len(rank_items),
         "stage1_matches": stage1_n,
         "stage2_matches": stage2_n,
+        "stage3_yahoo_jan_matches": stage3_n,
         "matched_with_article": sum(1 for it in rank_items if it.get("has_article")),
         "unmatched": len(unmatched),
         "unmatched_items": unmatched,
@@ -510,7 +545,10 @@ def main():
         f"articles={len(article_asins)}"
     )
 
-    stage1_n, stage2_n, unmatched = _match_all(rank_items, itemcode_idx, jan_idx, article_asins)
+    yahoo_idx = _build_yahoo_jan_idx(raw_root / "_ranking_yahoo_jan.json")
+    stage1_n, stage2_n, unmatched = _match_all(
+        rank_items, itemcode_idx, jan_idx, article_asins, yahoo_idx)
+    stage3_n = sum(1 for it in rank_items if it.get("match_stage") == "stage3_yahoo_jan")
 
     generated_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
     manifest = {
@@ -519,6 +557,7 @@ def main():
         "input_total": len(rank_items),
         "stage1_matches": stage1_n,
         "stage2_matches": stage2_n,
+        "stage3_yahoo_jan_matches": stage3_n,
         "matched_with_article": sum(1 for it in rank_items if it.get("has_article")),
         "unmatched": len(unmatched),
         "unmatched_items": unmatched,

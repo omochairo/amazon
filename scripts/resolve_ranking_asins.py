@@ -501,6 +501,68 @@ def resolve_title_fuzzy(
     }
 
 
+def _yahoo_identity_guard(rakuten_title: str, amazon_item: dict, yjb) -> dict:
+    """Yahoo 多数決の JAN が楽天の商品と同一かを、Amazon 側の題名と突き合わせて確かめる。
+
+    Yahoo の上位が揃っていても、ノーブランドの汎用品 (飛び石・平均台等) は似た商品を
+    複数メーカーが出していて、別メーカーの JAN を拾いうる (2026-10-05 dry-run の
+    バランスストーン)。オーナー判断 (2026-10-06): ノーブランド品はブランドか型番が
+    一致しない限り採らない。
+      - 双方のブランドが分かり、食い違う → 不採用
+      - 双方のブランドが分かり、一致する → 採用
+      - それ以外 (どちらかがノーブランド) → 型番が共通する場合だけ採用
+    Amazon 側だけブランドが分かる場合も型番を求める。楽天のノーブランド汎用品の
+    JAN が多数決で有名メーカー品に当たっても、それは楽天の商品と同一とは言えない。
+    楽天の題名にブランド名が無い正規品 (仮面ライダーの変身ベルト等) は取りこぼすが、
+    誤ったリンクより取りこぼしを選ぶ (precision 優先は #2818 と同じ方針)。
+    """
+    amazon_title = _safe_get(amazon_item, "itemInfo", "title", "displayValue", default="") or ""
+    r_brand, a_brand = _brand_of(rakuten_title), _brand_of(amazon_title)
+    common = sorted(yjb.model_codes(rakuten_title) & yjb.model_codes(amazon_title))
+    if r_brand and a_brand and r_brand != a_brand:
+        ok, reason = False, "brand_mismatch"
+    elif (r_brand and r_brand == a_brand) or common:
+        ok, reason = True, ""
+    else:
+        ok, reason = False, "no_brand_or_model_match"
+    return {"amazon_title": amazon_title, "rakuten_brand": r_brand, "amazon_brand": a_brand,
+            "common_codes": common, "identity_ok": ok, "identity_reason": reason}
+
+
+def ranking_page_matches(yahoo_result: dict, checked_at: str) -> dict:
+    """/ranking/ の照合 (fetch_rakuten の stage3_yahoo_jan) に使う itemCode → ASIN。
+
+    記事化の採否 (covered / duplicate) とは無関係に、Amazon の JAN 完全一致と同一性
+    ガードとジャンルゲートを通ったものを全部載せる。既に記事や商品データがある ASIN
+    ほど /ranking/ のリンクとして価値がある。
+    """
+    out = {}
+    for e in (yahoo_result or {}).get("yahoo_jan_entries", []):
+        code = e.get("item_code")
+        if (code and e.get("asin") and e.get("identity_ok")
+                and e.get("reason") not in ("isbn", "genre_gate")):
+            out[code] = {"asin": e["asin"], "jan": e["jan"], "checked_at": checked_at}
+    return out
+
+
+def merge_ranking_page_cache(existing: dict, new: dict, now: datetime.datetime,
+                             max_age_days: int = 30) -> dict:
+    """既存キャッシュに今回分を上書きマージし、max_age_days より古い itemCode を落とす。"""
+    merged = {}
+    for code, v in list((existing or {}).items()) + list((new or {}).items()):
+        if not isinstance(v, dict):
+            continue
+        try:
+            when = datetime.datetime.fromisoformat(v.get("checked_at", ""))
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=datetime.timezone.utc)
+        if (now - when).days < max_age_days and v.get("asin"):
+            merged[code] = v
+    return merged
+
+
 def resolve_yahoo_jan(
     items: list,
     api,
@@ -558,6 +620,9 @@ def resolve_yahoo_jan(
         matched = resolve_jan_to_item(api, jan, search_index=search_index)
         asin = (matched.get("asin") or "").strip()
         entry["asin"] = asin
+        entry["item_code"] = item.get("itemCode") or ""
+        if asin:
+            entry.update(_yahoo_identity_guard(title, matched, yjb))
         if not asin:
             entry["reason"] = "amazon_no_jan_match"
         elif _ISBN10_RE.match(asin.upper()):
@@ -568,6 +633,8 @@ def resolve_yahoo_jan(
             drop["jan"] = jan
             genre_dropped.append(drop)
             entry["reason"] = "genre_gate"
+        elif not entry["identity_ok"]:
+            entry["reason"] = entry["identity_reason"]
         elif asin.upper() in covered:
             entry["reason"] = "already_covered"
         elif asin in seen_asins:
@@ -815,6 +882,8 @@ def main():
                              "(採否を変えない)。enforce: 採用分を new_asins に足す。")
     parser.add_argument("--yahoo-jan-limit", type=int, default=30,
                         help="Yahoo JAN 仲介で試す item 数の上限 (ランキング本体のみ。0 = 全件)。")
+    parser.add_argument("--yahoo-cache", default="data/raw/_ranking_yahoo_jan.json",
+                        help="/ranking/ 照合用に Yahoo JAN 仲介の結果 (itemCode → ASIN) を書くパス。")
     parser.add_argument("--yahoo-client-id", default=os.environ.get("YAHOO_CLIENT_ID", ""),
                         help="Yahoo!ショッピング API のアプリ ID (既定は env YAHOO_CLIENT_ID)。")
     parser.add_argument("--manifest-out", default="",
@@ -998,6 +1067,25 @@ def main():
                    ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    # /ranking/ 照合用の Yahoo JAN キャッシュ (fetch_rakuten の stage3_yahoo_jan が読む)。
+    # 記事化の採否とは独立なので shadow でも書く。
+    if isinstance(manifest.get("yahoo_jan"), dict) and "yahoo_jan_entries" in manifest["yahoo_jan"]:
+        cache_path = pathlib.Path(args.yahoo_cache)
+        try:
+            existing = json.loads(cache_path.read_text(encoding="utf-8")).get("items", {})
+        except (OSError, json.JSONDecodeError, AttributeError):
+            existing = {}
+        if not isinstance(existing, dict):
+            existing = {}
+        now = datetime.datetime.now(datetime.timezone.utc)
+        merged = merge_ranking_page_cache(
+            existing, ranking_page_matches(manifest["yahoo_jan"], now.isoformat()), now)
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(
+            json.dumps({"items": merged}, ensure_ascii=False, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        logger.info(f"Yahoo JAN cache for /ranking/: {len(existing)} → {len(merged)} itemCodes")
     print(",".join(manifest["new_asins"]))
 
 
