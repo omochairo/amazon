@@ -228,6 +228,33 @@ class IdentityGuardTest(unittest.TestCase):
         e = self._run("タカラトミー トミカ No.1 日産 GT-R", "バンダイ ミニカー GT-R")
         self.assertEqual(e["reason"], "brand_mismatch")
 
+    # #9071: 2026-10-06 enforce dry-run で no_brand_or_model_match に落ちた正しい組
+    def test_franchise_name_on_both_sides_is_adopted(self):
+        e = self._run("遊戯王 ORIGINAL ARTWORK COLLECTION",
+                      "遊戯王 ORIGINAL ARTWORK COLLECTION BOX")
+        self.assertTrue(e["adopted"])
+        self.assertEqual(e["rakuten_brand"], "コナミデジタルエンタテインメント")
+
+    def test_franchise_name_matches_amazon_maker(self):
+        e = self._run("変身ベルト DXマイスドライバー スペシャルなりきりセット 仮面ライダーマイス",
+                      "[BANDAI] 変身ベルト DXマイスドライバー スペシャルなりきりセット")
+        self.assertTrue(e["adopted"])
+        self.assertEqual((e["rakuten_brand"], e["amazon_brand"]), ("バンダイ", "バンダイ"))
+
+    def test_multi_maker_character_is_not_used(self):
+        # プーさんは複数メーカーが出している → ブランド一致の根拠にしない
+        e = self._run("えらべる回転 6WAYジムにへんしんメリー プラス くまのプーさん",
+                      "タカラトミー(TAKARA TOMY) えらべる回転 6WAYジムにへんしんメリー プラス")
+        self.assertFalse(e["adopted"])
+        self.assertEqual(e["reason"], "no_brand_or_model_match")
+
+    def test_franchise_name_conflicting_with_known_maker_is_rejected(self):
+        e = self._run("遊☆戯☆王 ラッシュデュエル スターターデッキ", "バンダイ カードゲーム スターターデッキ")
+        self.assertEqual(e["reason"], "brand_mismatch")
+
+    def test_taxonomy_brand_wins_over_franchise_name(self):
+        self.assertEqual(rr._guard_brand_of("タカラトミー 仮面ライダー ミニカー"), "タカラトミー")
+
 
 class ModelCodesTest(unittest.TestCase):
     def test_codes(self):

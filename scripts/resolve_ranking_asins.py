@@ -67,6 +67,7 @@ if THIS_DIR not in sys.path:
     sys.path.insert(0, THIS_DIR)
 
 from fetch_rakuten import _extract_jan_from_item  # noqa: E402
+from brand_normalizer import _fold as _fold_brand_text  # noqa: E402
 from brand_normalizer import normalize as _normalize_brand  # noqa: E402
 from genre_gate import classify_genre  # noqa: E402
 # browse_nodes の抽出ロジックは fetch_amazon 側の実装を再利用する (同等ロジックを
@@ -501,6 +502,33 @@ def resolve_title_fuzzy(
     }
 
 
+# 同一性ガード専用: メーカーが一意に決まるキャラクター・シリーズ名 → brand_taxonomy の canonical (#9071)。
+# 楽天の題名はメーカー名を書かずにキャラクター名だけのことが多いので、ブランドが判定できない
+# ときの補助に使う。brand_taxonomy.yaml の aliases には足さない — aliases は /brands/ ハブの
+# 「人気シリーズ」や記事生成にも効くうえ、3 文字の "遊戯王" は fuzzy 一致 (4 文字以上) に乗らない。
+# 複数のメーカーが出しているキャラクター (ディズニー・サンリオ・ポケモン等) は足さないこと。
+# ブランド一致の根拠にならず、誤った紐づけの穴になる。
+_FRANCHISE_BRANDS = (
+    ("遊戯王", "コナミデジタルエンタテインメント"),
+    ("YUGIOH", "コナミデジタルエンタテインメント"),
+    ("仮面ライダー", "バンダイ"),
+    ("スーパー戦隊", "バンダイ"),
+    ("プリキュア", "バンダイ"),
+)
+
+
+def _guard_brand_of(text: str) -> str:
+    """同一性ガード用のブランド判定。taxonomy で分からなければキャラクター名から補う。"""
+    b = _brand_of(text)
+    if b or not text:
+        return b
+    folded = _fold_brand_text(text).replace("☆", "")
+    for key, canonical in _FRANCHISE_BRANDS:
+        if key in folded:
+            return canonical
+    return ""
+
+
 def _yahoo_identity_guard(rakuten_title: str, amazon_item: dict, yjb) -> dict:
     """Yahoo 多数決の JAN が楽天の商品と同一かを、Amazon 側の題名と突き合わせて確かめる。
 
@@ -513,11 +541,13 @@ def _yahoo_identity_guard(rakuten_title: str, amazon_item: dict, yjb) -> dict:
       - それ以外 (どちらかがノーブランド) → 型番が共通する場合だけ採用
     Amazon 側だけブランドが分かる場合も型番を求める。楽天のノーブランド汎用品の
     JAN が多数決で有名メーカー品に当たっても、それは楽天の商品と同一とは言えない。
-    楽天の題名にブランド名が無い正規品 (仮面ライダーの変身ベルト等) は取りこぼすが、
-    誤ったリンクより取りこぼしを選ぶ (precision 優先は #2818 と同じ方針)。
+    楽天の題名にブランド名が無い正規品は、メーカーが一意に決まるキャラクター名
+    (仮面ライダー・遊戯王等) に限り ``_FRANCHISE_BRANDS`` で補う (#9071)。それ以外
+    (プーさん等の複数メーカーのキャラクター) は取りこぼすが、誤ったリンクより
+    取りこぼしを選ぶ (precision 優先は #2818 と同じ方針)。
     """
     amazon_title = _safe_get(amazon_item, "itemInfo", "title", "displayValue", default="") or ""
-    r_brand, a_brand = _brand_of(rakuten_title), _brand_of(amazon_title)
+    r_brand, a_brand = _guard_brand_of(rakuten_title), _guard_brand_of(amazon_title)
     common = sorted(yjb.model_codes(rakuten_title) & yjb.model_codes(amazon_title))
     if r_brand and a_brand and r_brand != a_brand:
         ok, reason = False, "brand_mismatch"
