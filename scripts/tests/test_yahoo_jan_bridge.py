@@ -14,16 +14,21 @@ import yahoo_jan_bridge as yjb  # noqa: E402
 class FakeAPI:
     """Creator API searchItems(keywords=JAN) の偽物。JAN→ASIN マップにあれば eans 一致 item を返す。"""
 
-    def __init__(self, jan_to_asin: dict):
+    # 既定の Amazon 題名はブランド (レゴ) が判定できるもの = 同一性ガードを通る
+    def __init__(self, jan_to_asin: dict, titles: dict | None = None,
+                 default_title: str = "レゴ(LEGO) アイデア 21371"):
         self.jan_to_asin = jan_to_asin
+        self.titles = titles or {}
+        self.default_title = default_title
 
     def search_items(self, keywords=None, **_kw):
         asin = self.jan_to_asin.get(keywords)
         items = [{"asin": "BNOISE0001",
                   "itemInfo": {"externalIds": {"eans": {"displayValues": ["4900000000000"]}}}}]
         if asin:
-            items.append({"asin": asin,
-                          "itemInfo": {"externalIds": {"eans": {"displayValues": [keywords]}}}})
+            items.append({"asin": asin, "itemInfo": {
+                "title": {"displayValue": self.titles.get(asin, self.default_title)},
+                "externalIds": {"eans": {"displayValues": [keywords]}}}})
         return {"searchResult": {"items": items}}
 
 # チェックディジットの正しい JAN
@@ -140,7 +145,7 @@ class ResolveYahooJanTest(unittest.TestCase):
         self.assertEqual(r["yahoo_jan_entries"][0]["reason"], "isbn")
 
     def test_yahoo_error_is_recorded_and_does_not_stop(self):
-        items = self._items() + [{"rank": 8, "matched_asin": None, "title": "BTM 三輪車 5in1"}]
+        items = self._items() + [{"rank": 8, "matched_asin": None, "title": "レゴ アイデア 21371 別ショップ"}]
         state = {"n": 0}
 
         def hits(q):
@@ -172,6 +177,84 @@ class ResolveYahooJanTest(unittest.TestCase):
         r = rr.resolve_yahoo_jan(items, FakeAPI({}), set(), set(), lambda q: [], limit=2, sleep=0)
         self.assertEqual(r["yahoo_jan_candidates_before_limit"], 5)
         self.assertEqual(r["yahoo_jan_input"], 2)
+
+
+class IdentityGuardTest(unittest.TestCase):
+    """オーナー判断 (2026-10-06): ノーブランド品はブランドか型番が一致しない限り採らない。"""
+
+    def _run(self, rakuten_title, amazon_title):
+        items = [{"rank": 1, "itemCode": "shop:1", "matched_asin": None, "title": rakuten_title}]
+        api = FakeAPI({JAN_A: "B0TEST0001"}, default_title=amazon_title)
+        r = rr.resolve_yahoo_jan(items, api, set(), set(), lambda q: [{"janCode": JAN_A}] * 2, sleep=0)
+        return r["yahoo_jan_entries"][0]
+
+    def test_nobrand_without_model_is_rejected(self):
+        # 2026-10-05 dry-run のバランスストーン: 似た商品を複数メーカーが出している
+        e = self._run("バランスストーン 平均台 飛び石 セット 子供", "KIDS バランスストーン 6個セット")
+        self.assertFalse(e["adopted"])
+        self.assertEqual(e["reason"], "no_brand_or_model_match")
+        self.assertFalse(e["identity_ok"])
+
+    def test_nobrand_with_common_model_code_is_adopted(self):
+        e = self._run("ワンピース カードゲーム 世界最強の戦士 BOX OP-17", "ワンピース カードゲーム OP-17 BOX")
+        self.assertTrue(e["adopted"])
+        self.assertEqual(e["common_codes"], ["OP-17"])
+
+    def test_same_brand_is_adopted_without_model(self):
+        e = self._run("変身ベルト DXマイスドライバー 仮面ライダーマイス＆リドセット バンダイ",
+                      "[BANDAI] 変身ベルト DXマイスドライバー 仮面ライダーマイス＆リドセット")
+        self.assertTrue(e["adopted"])
+        self.assertEqual((e["rakuten_brand"], e["amazon_brand"]), ("バンダイ", "バンダイ"))
+
+    def test_amazon_only_brand_needs_model(self):
+        # 楽天のノーブランド汎用品の JAN が多数決で有名メーカー品に当たったケース
+        e = self._run("バランスストーン 平均台 飛び石 セット 子供", "バンダイ ストーンバランス")
+        self.assertFalse(e["adopted"])
+        self.assertEqual(e["reason"], "no_brand_or_model_match")
+
+    def test_conflicting_brands_are_rejected(self):
+        e = self._run("タカラトミー トミカ No.1 日産 GT-R", "バンダイ ミニカー GT-R")
+        self.assertEqual(e["reason"], "brand_mismatch")
+
+
+class ModelCodesTest(unittest.TestCase):
+    def test_codes(self):
+        self.assertEqual(yjb.model_codes("LEGO 21371 / OP-17 / DM26-EX4 2026年"),
+                         {"21371", "OP-17", "DM26-EX4"})
+
+    def test_prices_and_capacities_are_not_codes(self):
+        self.assertEqual(yjb.model_codes("10000円 10000mAh 12,800 100000 ピース"), set())
+
+
+class RankingPageCacheTest(unittest.TestCase):
+    def test_matches_include_covered_but_not_unsafe(self):
+        res = {"yahoo_jan_entries": [
+            {"item_code": "a:1", "asin": "B0COVERED1", "jan": JAN_A, "identity_ok": True,
+             "reason": "already_covered"},
+            {"item_code": "a:2", "asin": "B0NEW00001", "jan": JAN_B, "identity_ok": True, "reason": ""},
+            {"item_code": "a:3", "asin": "B0NOBRAND1", "jan": JAN_A, "identity_ok": False,
+             "reason": "nobrand_without_model_match"},
+            {"item_code": "a:4", "asin": "B0NOTTOY01", "jan": JAN_A, "identity_ok": True,
+             "reason": "genre_gate"},
+            {"item_code": "", "asin": "B0NOCODE01", "jan": JAN_A, "identity_ok": True, "reason": ""},
+        ]}
+        m = rr.ranking_page_matches(res, "2026-10-06T00:00:00+00:00")
+        self.assertEqual(sorted(m), ["a:1", "a:2"])
+        self.assertEqual(m["a:1"]["asin"], "B0COVERED1")
+
+    def test_merge_overwrites_and_prunes_old(self):
+        import datetime as dt
+        now = dt.datetime(2026, 10, 6, tzinfo=dt.timezone.utc)
+        existing = {
+            "old:1": {"asin": "B0OLD00001", "checked_at": "2026-08-01T00:00:00+00:00"},
+            "keep:1": {"asin": "B0KEEP0001", "checked_at": "2026-10-01T00:00:00+00:00"},
+            "upd:1": {"asin": "B0BEFORE01", "checked_at": "2026-10-01T00:00:00+00:00"},
+            "bad:1": {"asin": "B0BAD00001", "checked_at": "not-a-date"},
+        }
+        new = {"upd:1": {"asin": "B0AFTER001", "checked_at": now.isoformat()}}
+        merged = rr.merge_ranking_page_cache(existing, new, now)
+        self.assertEqual(sorted(merged), ["keep:1", "upd:1"])
+        self.assertEqual(merged["upd:1"]["asin"], "B0AFTER001")
 
 
 if __name__ == "__main__":

@@ -40,8 +40,12 @@ _PROMO_PHRASE_RE = re.compile(
     r"|クーポン[^\s]*|楽天[^\s]*\d+位|全品[^\s]*|予約(?:販売|商品)?|新品未開封|シュリンク付き"
     r"|正規品|即納|代引決済不可|初回生産限定|マラソン[^\s]*|あす楽",
 )
-# 型番らしいトークン (OP-17 / DM26-EX4 / 21371)。年 (2026) は除く。
-_CODE_RE = re.compile(r"(?<![A-Za-z0-9])(?:[A-Za-z]{1,4}\d{1,4}-[A-Za-z0-9]{1,6}|[A-Za-z]{2,4}-\d{1,4}|\d{5,6})(?![A-Za-z0-9])")
+# 型番らしいトークン (OP-17 / DM26-EX4 / 21371)。年 (2026) は除く。5〜6 桁の数字は
+# 金額・容量 (10000円 / 10000mAh / 12,800) を型番と取り違えないよう前後を見る。
+_CODE_RE = re.compile(
+    r"(?<![A-Za-z0-9,])(?:[A-Za-z]{1,4}\d{1,4}-[A-Za-z0-9]{1,6}|[A-Za-z]{2,4}-\d{1,4}"
+    r"|\d{5,6}(?![,.]?\d)(?!\s*(?:円|mAh|ml|mm|cm|g|名|件|個|台|ピース)))(?![A-Za-z0-9])"
+)
 
 
 def build_query(title: str) -> str:
@@ -58,6 +62,14 @@ def build_query(title: str) -> str:
             query = f"{query} {code}"
             break
     return query.strip()
+
+
+def model_codes(text: str) -> set:
+    """型番トークン (OP-17 / DM26-EX4 / 21371) の集合 (大文字)。ブランドの無い商品の照合に使う。"""
+    if not text:
+        return set()
+    clean = _PROMO_PHRASE_RE.sub(" ", _PROMO_BLOCK_RE.sub(" ", text))
+    return {c.upper() for c in _CODE_RE.findall(clean)}
 
 
 def _valid_jan(code) -> str:
