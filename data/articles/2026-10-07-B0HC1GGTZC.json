@@ -165,10 +165,21 @@
       "published_at": "2026-08-20",
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
-      "notes": "別売りの「変身ベルト DXマイスドライバー」にセットすることで手で開いた時と絵柄が変化し、各ライダーオリジナルの音声・発光遊びが楽しめる。対象年齢3才以上、電池不要。"
+      "notes": "別売りの「変身ベルト DXマイスドライバー」にセットすることで手で開いた時と絵柄が変化し、音声・発光遊びが楽しめる。対象年齢3才以上、電池不要。"
     },
     {
       "id": "src-2",
+      "name": "バンダイおもちゃカタログ",
+      "url": "https://www.bandai.co.jp/catalog/item.php?jan_cd=4582770021639000",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2026-08-20",
+      "author": "メーカー公式",
+      "conflict_of_interest": "possible",
+      "notes": "『仮面ライダーマイス』より、ライダーエグズがセットで登場。マイスドライバー連動について記載。"
+    },
+    {
+      "id": "src-3",
       "name": "特撮情報局LadyEve",
       "url": "https://www.ladyeve.net/archives/099981",
       "tier": "medium",
@@ -176,7 +187,29 @@
       "published_at": "2026-08-28",
       "author": "第三者ライター",
       "conflict_of_interest": "none",
-      "notes": "セット02には「リバイスライドエグズ」と「ガッチャードライドエグズ」がラインナップされるという情報や、発売日情報。"
+      "notes": "セット02には「リバイスライドエグズ」と「ガッチャードライドエグズ」がラインナップされるという情報。"
+    },
+    {
+      "id": "src-4",
+      "name": "YouTube / バンダイ公式チャンネル",
+      "url": "https://www.youtube.com/watch?v=jKKPh8JYz4A",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2026-08-20",
+      "author": "メーカー公式",
+      "conflict_of_interest": "possible",
+      "notes": "DXライダーエグズセット02の詳細を紹介している動画。"
+    },
+    {
+      "id": "src-5",
+      "name": "Amazon 商品ページ",
+      "url": "https://www.amazon.co.jp/dp/B0HC1GGTZC",
+      "tier": "low",
+      "evidence_type": "primary",
+      "published_at": "2026-08-20",
+      "author": "メーカー公式",
+      "conflict_of_interest": "possible",
+      "notes": "Amazonの商品ページ。対象年齢や電池不要であることが確認できる。"
     }
   ],
   "claims": [
@@ -185,10 +218,22 @@
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-2"
       ],
-      "cross_checked": false,
-      "notes": "メーカー公式ページで連動遊びの仕様が確認できる"
+      "cross_checked": true,
+      "notes": "メーカー公式の2つのページで連動遊びの仕様が確認できる"
+    },
+    {
+      "claim": "リバイスとガッチャードのレジェンドライダーがモチーフ",
+      "category": "comparative_advantage",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-1",
+        "src-3"
+      ],
+      "cross_checked": true,
+      "notes": "公式サイトおよび第三者ブログでモチーフのライダーについて一致"
     },
     {
       "claim": "本商品は電池不要で遊べる仕様",
@@ -199,6 +244,17 @@
       ],
       "cross_checked": false,
       "notes": "公式サイトの仕様欄で電池不要と明記されている"
+    },
+    {
+      "claim": "対象年齢は3才以上に設定されている",
+      "category": "safety",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-1",
+        "src-5"
+      ],
+      "cross_checked": true,
+      "notes": "公式サイトおよび販売ページで対象年齢が一致している"
     }
   ],
   "technical_specs": {
