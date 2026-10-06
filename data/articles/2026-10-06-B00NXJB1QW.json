@@ -183,6 +183,39 @@
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
       "notes": "プラレールディズニーリゾートライン プレイセットの商品仕様を確認。"
+    },
+    {
+      "id": "src-3",
+      "name": "おもちゃいろ プラレール完全ガイド",
+      "url": "https://omcha.jp/plarail-complete-guide/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-10-06",
+      "author": "いろパパ（元ソニーエンジニア）",
+      "conflict_of_interest": "none",
+      "notes": "プラレール全般の遊び方と対象年齢の目安。本製品への応用として、立体交差を楽しむための基礎知識として参照。"
+    },
+    {
+      "id": "src-4",
+      "name": "おもちゃいろ レール種類一覧",
+      "url": "https://omcha.jp/plarail-rail-shurui-ichiran/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-10-06",
+      "author": "いろパパ（元ソニーエンジニア）",
+      "conflict_of_interest": "none",
+      "notes": "プラレールのレール規格の解説。本製品が通常の青いレールとは互換性がなく、専用レールを必要とする点の補強材料。"
+    },
+    {
+      "id": "src-5",
+      "name": "おもちゃいろ ブリオ連結解説",
+      "url": "https://omcha.jp/plarail-brio-renketsu-tsunagarail/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-10-06",
+      "author": "いろパパ（元ソニーエンジニア）",
+      "conflict_of_interest": "none",
+      "notes": "他のおもちゃとの接続性についての解説。モノレールと他のレールセットを組み合わせる場合の拡張性の参考に。"
     }
   ],
   "claims": [
@@ -201,9 +234,10 @@
       "category": "durability",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-3"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "レビューサイトの実体験により確認"
     },
     {
@@ -211,9 +245,10 @@
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-3"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "解説箇所で年齢的なハードルが言及されている"
     },
     {
@@ -221,9 +256,10 @@
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-4"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "互換性と遊び方の仕様解説にて確認"
     }
   ],
