@@ -1,7 +1,7 @@
 {
   "_meta": {
     "crux_last_fetch_utc": "2026-08-06T11:33:30.712298+00:00",
-    "lighthouse_last_run_utc": "2026-10-05T00:22:21.765885+00:00",
+    "lighthouse_last_run_utc": "2026-10-06T02:14:18.806313+00:00",
     "lighthouse_missing_dates": [
       "2026-09-06",
       "2026-09-07",
@@ -25,6 +25,14 @@
         "tbt": {
           "fraction": 0.833,
           "median_ratio": 1.644,
+          "over": 5,
+          "samples": 6
+        }
+      },
+      "2026-10-05": {
+        "tbt": {
+          "fraction": 0.833,
+          "median_ratio": 1.611,
           "over": 5,
           "samples": 6
         }
@@ -466,6 +474,7 @@
     "2026-10-01": true,
     "2026-10-02": true,
     "2026-10-03": true,
-    "2026-10-04": true
+    "2026-10-04": true,
+    "2026-10-05": true
   }
 }
