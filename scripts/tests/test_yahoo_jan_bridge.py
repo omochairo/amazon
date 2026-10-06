@@ -72,10 +72,23 @@ class BuildQueryTest(unittest.TestCase):
 
 
 class PickConsensusJanTest(unittest.TestCase):
+    @staticmethod
+    def _hits(a, b=0):
+        return [{"janCode": JAN_A}] * a + [{"janCode": JAN_B}] * b + [{"janCode": ""}]
+
     def test_majority_wins(self):
-        hits = [{"janCode": JAN_A}, {"janCode": JAN_A}, {"janCode": JAN_B}, {"janCode": ""}]
-        r = yjb.pick_consensus_jan(hits)
-        self.assertEqual(r["jan"], JAN_A)
+        self.assertEqual(yjb.pick_consensus_jan(self._hits(4, 1))["jan"], JAN_A)
+
+    def test_two_votes_are_too_few(self):
+        # 2026-10-06 run のノーブランド飛び石は 2 対 1
+        self.assertEqual(yjb.pick_consensus_jan(self._hits(2, 1))["reason"], "too_few_votes")
+
+    def test_close_second_is_rejected(self):
+        # 同 run の実測: 年式違い 10 対 9・単品とセット 10 対 6 は落とし、13 対 6 は採る
+        self.assertEqual(yjb.pick_consensus_jan(self._hits(10, 9))["reason"], "close_second")
+        self.assertEqual(yjb.pick_consensus_jan(self._hits(10, 6))["reason"], "close_second")
+        self.assertEqual(yjb.pick_consensus_jan(self._hits(13, 6))["jan"], JAN_A)
+        self.assertEqual(yjb.pick_consensus_jan(self._hits(5, 1))["jan"], JAN_A)
 
     def test_single_vote_is_rejected(self):
         r = yjb.pick_consensus_jan([{"janCode": JAN_A}, {"janCode": ""}])
@@ -84,8 +97,7 @@ class PickConsensusJanTest(unittest.TestCase):
 
     def test_tie_is_rejected(self):
         # 色違い・セット違いが同数並ぶ = どれが楽天の商品か決められない
-        hits = [{"janCode": JAN_A}, {"janCode": JAN_B}, {"janCode": JAN_A}, {"janCode": JAN_B}]
-        self.assertEqual(yjb.pick_consensus_jan(hits)["reason"], "tied")
+        self.assertEqual(yjb.pick_consensus_jan(self._hits(4, 4))["reason"], "tied")
 
     def test_bad_checksum_is_ignored(self):
         hits = [{"janCode": "4904810000038"}, {"janCode": "4904810000038"}]
@@ -93,8 +105,8 @@ class PickConsensusJanTest(unittest.TestCase):
 
     def test_jan8_requires_checksum(self):
         good, bad = "49123456", "49123457"  # 4912345 のチェックディジットは 6
-        self.assertEqual(yjb.pick_consensus_jan([{"janCode": good}] * 2)["jan"], good)
-        self.assertEqual(yjb.pick_consensus_jan([{"janCode": bad}] * 2)["reason"], "no_jan_in_hits")
+        self.assertEqual(yjb.pick_consensus_jan([{"janCode": good}] * 3)["jan"], good)
+        self.assertEqual(yjb.pick_consensus_jan([{"janCode": bad}] * 3)["reason"], "no_jan_in_hits")
 
     def test_no_hits(self):
         self.assertEqual(yjb.pick_consensus_jan([])["reason"], "no_jan_in_hits")
@@ -115,7 +127,7 @@ class ResolveYahooJanTest(unittest.TestCase):
 
         def hits(q):
             calls.append(q)
-            return [{"janCode": JAN_A}, {"janCode": JAN_A}]
+            return [{"janCode": JAN_A}] * 3
 
         r = rr.resolve_yahoo_jan(self._items(), api, set(), set(), hits, sleep=0)
         self.assertEqual(len(calls), 1)  # matched 済みと Search プールは問い合わせない
@@ -127,13 +139,13 @@ class ResolveYahooJanTest(unittest.TestCase):
     def test_amazon_without_exact_jan_is_not_adopted(self):
         api = FakeAPI({})  # Amazon 側に JAN 一致なし
         r = rr.resolve_yahoo_jan(self._items(), api, set(), set(),
-                                 lambda q: [{"janCode": JAN_A}] * 2, sleep=0)
+                                 lambda q: [{"janCode": JAN_A}] * 3, sleep=0)
         e = r["yahoo_jan_entries"][0]
         self.assertFalse(e["adopted"])
         self.assertEqual(e["reason"], "amazon_no_jan_match")
 
     def test_covered_seen_and_isbn_are_not_adopted(self):
-        hits = lambda q: [{"janCode": JAN_A}] * 2  # noqa: E731
+        hits = lambda q: [{"janCode": JAN_A}] * 3  # noqa: E731
         r = rr.resolve_yahoo_jan(self._items(), FakeAPI({JAN_A: "B0LEGO2137"}),
                                  {"B0LEGO2137"}, set(), hits, sleep=0)
         self.assertEqual(r["yahoo_jan_entries"][0]["reason"], "already_covered")
@@ -165,7 +177,7 @@ class ResolveYahooJanTest(unittest.TestCase):
         rr._genre_verdict_for_item = lambda item: ("flag", ["家電"])
         try:
             r = rr.resolve_yahoo_jan(self._items(), api, set(), set(),
-                                     lambda q: [{"janCode": JAN_A}] * 2, sleep=0,
+                                     lambda q: [{"janCode": JAN_A}] * 3, sleep=0,
                                      genre_dropped=dropped)
         finally:
             rr._genre_verdict_for_item = orig
@@ -185,7 +197,7 @@ class IdentityGuardTest(unittest.TestCase):
     def _run(self, rakuten_title, amazon_title):
         items = [{"rank": 1, "itemCode": "shop:1", "matched_asin": None, "title": rakuten_title}]
         api = FakeAPI({JAN_A: "B0TEST0001"}, default_title=amazon_title)
-        r = rr.resolve_yahoo_jan(items, api, set(), set(), lambda q: [{"janCode": JAN_A}] * 2, sleep=0)
+        r = rr.resolve_yahoo_jan(items, api, set(), set(), lambda q: [{"janCode": JAN_A}] * 3, sleep=0)
         return r["yahoo_jan_entries"][0]
 
     def test_nobrand_without_model_is_rejected(self):

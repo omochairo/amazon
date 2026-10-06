@@ -82,11 +82,15 @@ def _valid_jan(code) -> str:
     return ""
 
 
-def pick_consensus_jan(hits: list, min_votes: int = 2) -> dict:
-    """上位ヒットの janCode を数え、単独首位かつ min_votes 票以上の JAN だけを返す。
+def pick_consensus_jan(hits: list, min_votes: int = 3, min_margin: float = 2.0) -> dict:
+    """上位ヒットの janCode を数え、min_votes 票以上かつ 2 位の min_margin 倍以上の
+    首位 JAN だけを返す。
 
     Yahoo のヒットは出品者ごとに並ぶので、同じ商品なら同じ JAN が複数並ぶ。
-    1 票しかない JAN や同票首位は「別商品が混ざっている」とみなして採らない。
+    票が少ない・2 位と拮抗している JAN は「別商品が混ざっている」とみなして採らない。
+    閾値は 2026-10-06 の定時 run (37394536765) の得票で決めた: 正しい商品は 5〜20 票で
+    2 位に大差を付ける一方、年式違い (10 対 9) ・単品とセット (10 対 6) ・ノーブランドの
+    飛び石 (2 対 1) は拮抗または少数だった。
     """
     votes = collections.Counter()
     for h in hits or []:
@@ -101,6 +105,8 @@ def pick_consensus_jan(hits: list, min_votes: int = 2) -> dict:
         result["reason"] = "too_few_votes"
     elif len(ranked) > 1 and ranked[1][1] == ranked[0][1]:
         result["reason"] = "tied"
+    elif len(ranked) > 1 and ranked[0][1] < ranked[1][1] * min_margin:
+        result["reason"] = "close_second"
     else:
         result["jan"] = ranked[0][0]
     return result

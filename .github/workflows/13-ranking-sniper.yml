@@ -84,16 +84,16 @@ jobs:
           AMAZON_CREATORS_CREDENTIAL_SECRET: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_SECRET }}
           AMAZON_PARTNER_TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
           JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
-          # Yahoo JAN 仲介 (shadow): JAN の無いランキング item を Yahoo!ショッピングの janCode
-          # 経由で Amazon の JAN 完全一致に通し、結果を manifest の yahoo_jan に記録する。
-          # 採否 (pool / backfill) はまだ変えない。1 回目の結果を見て enforce に切り替える。
+          # Yahoo JAN 仲介 (enforce): JAN の無いランキング item を Yahoo!ショッピングの janCode
+          # 経由で Amazon の JAN 完全一致に通し、同一性ガードを通った新規 ASIN を ranking_pool に足す。
+          # shadow (#9043) の定時 run 37394536765 の得票を見て enforce に切り替えた。
           YAHOO_CLIENT_ID: ${{ secrets.YAHOO_CLIENT_ID }}
         run: |
           set -e
           # #810 Phase 2: --search-in で楽天 Search プール (rakuten.json) の JAN も mine する。
           if [ "$DRY_RUN" = "true" ]; then
             echo "DRY RUN: resolving up to $LIMIT JAN(s), no files written."
-            python scripts/resolve_ranking_asins.py --limit "$LIMIT" --search-in data/raw/rakuten.json --yahoo-jan-mode shadow --dry-run
+            python scripts/resolve_ranking_asins.py --limit "$LIMIT" --search-in data/raw/rakuten.json --yahoo-jan-mode enforce --dry-run
           else
             # 2026-06-08 (session 117 / #2008): Jules daily quota 共有ゲート。
             # 解決した新規 ASIN は per_asin に backfill され 03-invoke-jules (6h cron) が
@@ -108,7 +108,7 @@ jobs:
               : > data/raw/ranking_sniper_asins.csv
               exit 0
             fi
-            python scripts/resolve_ranking_asins.py --limit "$LIMIT" --search-in data/raw/rakuten.json --yahoo-jan-mode shadow
+            python scripts/resolve_ranking_asins.py --limit "$LIMIT" --search-in data/raw/rakuten.json --yahoo-jan-mode enforce
           fi
 
       - name: Sniper backfill resolved ASINs into per_asin
