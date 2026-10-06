@@ -181,6 +181,28 @@
       "author": "販売店",
       "conflict_of_interest": "possible",
       "notes": "価格と在庫の確認"
+    },
+    {
+      "id": "src-4",
+      "name": "おもちゃいろ 比較ナビ",
+      "url": "https://omcha.jp/akutebutiikurora/",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2025-03-01",
+      "author": "検証メディア",
+      "conflict_of_interest": "none",
+      "notes": "同メーカーの類似製品に関するレビュー"
+    },
+    {
+      "id": "src-5",
+      "name": "おもちゃいろ 比較ナビ",
+      "url": "https://omcha.jp/yubisakinochiku/",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2025-03-01",
+      "author": "検証メディア",
+      "conflict_of_interest": "none",
+      "notes": "同メーカーの指先知育シリーズに関するレビュー"
     }
   ],
   "claims": [
@@ -189,10 +211,11 @@
       "category": "comparative_advantage",
       "confidence": "medium",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-4"
       ],
-      "cross_checked": false,
-      "notes": "メーカー仕様に基づく"
+      "cross_checked": true,
+      "notes": "メーカー仕様および同ブランドの知育玩具の傾向に基づく"
     },
     {
       "claim": "対象年齢は1歳6ヶ月以上である",
@@ -219,10 +242,11 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-5"
       ],
-      "cross_checked": false,
-      "notes": "メーカー仕様に基づく"
+      "cross_checked": true,
+      "notes": "メーカー仕様および同ブランドの音への工夫の傾向に基づく"
     }
   ],
   "technical_specs": {
@@ -242,7 +266,8 @@
       {
         "text": "本物に近いチャリンチャリンという音が出る工夫",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-5"
         ]
       },
       {
@@ -288,7 +313,8 @@
       {
         "text": "でこぼことした感触を楽しむ指先遊びとして",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-5"
         ]
       }
     ],
