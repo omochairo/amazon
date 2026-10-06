@@ -21,7 +21,6 @@ env:
 import glob
 import json
 import os
-import random
 import re
 import subprocess
 import sys
@@ -33,6 +32,7 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import article_pick  # noqa: E402
 from build_jules_prompt import build_prompt  # noqa: E402
 
 JST = timezone(timedelta(hours=9))
@@ -222,12 +222,7 @@ def existing_article_asins():
 
 
 def pick_candidates(gl, budget):
-    """旧 03 pick-asin の移植: ranking_pool 優先 + keyword pool、既存/オープンMR/lock/info-zero を除外。"""
-    raw = json.load(open("data/raw/amazon.json", encoding="utf-8"))
-    candidates = [i["asin"] for i in raw.get("items", [])
-                  if isinstance(i, dict) and isinstance(i.get("asin"), str)
-                  and ASIN_RE.match(i["asin"])]
-
+    """旧 03 pick-asin の移植: 既存記事/オープンMR/lock を除外し、article_pick で並べる。"""
     existing = existing_article_asins()
 
     # #2711: rewrite_queue マーカーのある ASIN は再生成対象として復帰
@@ -248,64 +243,11 @@ def pick_candidates(gl, budget):
         if ASIN_RE.match(asin):
             existing.add(asin)
 
-    # #810 Phase 1.5: ranking_pool を先頭に (shuffle は pool 内でのみ)
-    ranking_pool = []
-    try:
-        rp = json.load(open("data/raw/ranking_pool.json", encoding="utf-8"))
-        ranking_pool = [a for a in rp.get("asins", [])
-                        if isinstance(a, str) and ASIN_RE.match(a)]
-    except FileNotFoundError:
-        pass
-    ranking_set = set(ranking_pool)
-    remaining_ranking = [a for a in ranking_pool if a not in existing]
-    remaining_kw = [a for a in candidates
-                    if a not in existing and a not in ranking_set]
-    # #5490: リライト待ちを候補として **足す**。マーカーは existing から除外を
-    # 外すだけで、候補列そのものは amazon.json の items[] から作られるため、
-    # 日次 fetch に prepend を消された対象は永久に選ばれなかった
-    # (実測 2026-08-31: マーカー 172 件・消化 0 件・候補プール内 0 件)。
-    # 03-invoke-jules.yml の inline pick-asin と同じ規則。
-    rewrite_first: list[str] = []
-    try:
-        import rewrite_queue as _rq2
-        cap = int(os.environ.get("REWRITE_PICKS_PER_RUN", "2"))
-        pool = [a for a in _rq2.pending_rewrite_candidates("data/articles")
-                if a not in existing and a not in ranking_set]
-        rewrite_first = pool[:max(cap, 0)]
-        if pool:
-            print(f"rewrite-ready (#5490): {len(pool)} -> picking {len(rewrite_first)}")
-    except Exception as e:
-        print(f"warning: rewrite candidate injection skipped: {e}", file=sys.stderr)
-    rng = random.Random(os.environ.get("CI_PIPELINE_ID", ""))
-    rng.shuffle(remaining_ranking)
-    rng.shuffle(remaining_kw)
-    remaining = remaining_ranking + rewrite_first + [
-        a for a in remaining_kw if a not in rewrite_first
-    ]
-
-    # #1600 Phase 1: band=zero (真ゼロ素材) を defer (全滅時は無効化)。
-    # repoless 移行で "unfetched" (第三者収集が未実行) も defer 対象に追加:
-    # 非販売ソース 2 件必須 (v5 §6.5.1) を満たす素材が存在せず、生成しても
-    # 品質ゲートに構造的不合格 (実測: B0GYCJC6DC が 5 session 空費)。
-    # フェーズ4 でデータ収集系が復旧しフェッチされれば自然に候補へ戻る。
-    try:
-        import score_per_asin_info as sc
-        deferred_bands = ("zero", "unfetched")
-        kept = [a for a in remaining
-                if sc.score_asin(a).get("band") not in deferred_bands]
-        if kept:
-            if len(kept) < len(remaining):
-                print(f"info-zero/unfetched deferred (#1600): {len(remaining) - len(kept)}")
-            remaining = kept
-        elif remaining:
-            print("warning: all candidates deferred band; proceeding without defer",
-                  file=sys.stderr)
-    except Exception as e:
-        print(f"warning: info scoring skipped, no defer applied: {e}", file=sys.stderr)
-
-    print(f"candidates={len(candidates)} ranking_first={len(remaining_ranking)} "
-          f"excluded={len(existing)} remaining={len(remaining)} budget={budget}")
-    return remaining
+    # 並び (first-party → ranking → rewrite → keyword)・defer・出自の判定は
+    # 03-invoke-jules.yml の pick-asin と共通の規則 (#9073)。
+    # 戻り値は {"asin", "pool", "source_keyword"} のリスト (pool は #4964 の出自台帳用)。
+    print(f"budget={budget}")
+    return article_pick.pick_from_repo(existing, os.environ.get("CI_PIPELINE_ID", ""))
 
 
 def validate_article(asin, today, content):
@@ -370,7 +312,9 @@ def main():
     if input_asin:
         if not ASIN_RE.match(input_asin):
             raise SystemExit(f"INPUT_ASIN '{input_asin}' does not match B0[A-Z0-9]{{8}}")
-        targets, budget = [input_asin], 1  # 手動 override は gate バイパス (旧 03 同様)
+        # 手動 override は gate バイパス (旧 03 同様)。出自は捏造せず空 (台帳に書かない)
+        targets = [{"asin": input_asin, "pool": "", "source_keyword": None}]
+        budget = 1
     else:
         budget = quota_budget(max_per_run)
         if budget <= 0:
@@ -383,18 +327,60 @@ def main():
 
     # lock 取得 (budget 件まで)
     picked = []
-    for asin in targets:
+    origins = []  # #4964: lock を取れた ASIN のうち出自が分かるもの
+    for t in targets:
+        asin = t["asin"]
         if len(picked) >= budget:
             break
         if gl.try_lock(asin):
             print(f"lock acquired: jules-lock/{asin}")
             picked.append(asin)
+            if t.get("pool"):
+                origins.append(t)
         else:
             print(f"lock contention on {asin}, trying next")
     if not picked:
         print("warning: no locks acquired")
         return 0
 
+    # 03 と同じく、セッションの成否に関わらず lock を取れた時点の出自を残す
+    try:
+        return _run_sessions(gl, jules, today, picked)
+    finally:
+        record_origin_ledger(origins)
+
+
+def record_origin_ledger(origins, path="data/analytics/asin_origin.jsonl"):
+    """#4964: 出自台帳に追記し、記事とは別の MR にする (03 の Commit ASIN origin ledger 相当)。
+
+    記事 MR に混ぜないのは 03 と同じ理由 (記事 1 ファイルのみのスコープガード)。
+    台帳は観察用なので、失敗しても記事生成の結果 (exit code) は変えない。
+    """
+    if not origins:
+        print("No origin-known ASIN in this run (forced ASIN or unmapped pool); nothing to record.")
+        return
+    try:
+        import record_asin_origin as rao
+        run_id = os.environ.get("CI_PIPELINE_ID") or "local"
+        ts = rao.now_iso()
+        records = [rao.make_record(ts=ts, run_id=run_id, workflow="invoke-jules-repoless",
+                                   asin=o["asin"], pool=o["pool"],
+                                   source_keyword=o.get("source_keyword"))
+                   for o in origins]
+        if rao.append_records(path, records) == 0:
+            print("no new origin record; nothing to commit")
+            return
+        subprocess.run(
+            [sys.executable, "scripts/create_data_mr.py", "--prefix", "asin-origin",
+             "--title", "data(analytics): ASIN origin ledger",
+             "--body", "#4964 観察項目3 用の出自台帳 append (invoke_jules_repoless.py)。",
+             "--paths", path],
+            check=True, timeout=600)
+    except Exception as e:
+        print(f"warning: origin ledger not recorded: {e}", file=sys.stderr)
+
+
+def _run_sessions(gl, jules, today, picked):
     # セッション作成
     sessions = {}  # asin -> session id
     for asin in picked:

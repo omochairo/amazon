@@ -174,7 +174,10 @@ class WorkflowWiringTests(unittest.TestCase):
         self.assertIn("REWRITE_QUEUE_CAP", src)
 
     def test_repoless_lane_uses_the_same_helper(self):
+        # repoless は候補選定を article_pick に委ねる (#9073)
         src = (REPO_ROOT / "scripts" / "invoke_jules_repoless.py").read_text(encoding="utf-8")
+        self.assertIn("article_pick.pick_from_repo", src)
+        src = (REPO_ROOT / "scripts" / "article_pick.py").read_text(encoding="utf-8")
         self.assertIn("pending_rewrite_candidates", src)
         self.assertIn("REWRITE_PICKS_PER_RUN", src)
 

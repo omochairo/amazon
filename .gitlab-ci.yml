@@ -75,6 +75,9 @@ invoke-jules:
     - if: '$CI_PIPELINE_SOURCE == "schedule" && $CI_PIPELINE_SCHEDULE_DESCRIPTION =~ /^invoke-jules/'
     - if: '$SCHEDULE_JOB == "invoke-jules"'
   timeout: 75 minutes
+  variables:
+    # 出自台帳 (#4964) を create_data_mr.py で push するため、他のデータ MR ジョブと揃える
+    GIT_DEPTH: "0"
   before_script:
     - pip install -r requirements.txt
     # hugo/ は gitignore 配下で checkout に posts が無い。quality_gate の --posts 用に空で用意
