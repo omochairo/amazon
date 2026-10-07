@@ -1,326 +1,467 @@
-/* diagnosis.css */
+/* diagnosis.css — おもちゃ診断 (/diagnosis/)。クラス接頭辞は dx-。
+   色はテーマ変数 (--primary / --secondary / --entry / --border / --theme) と
+   custom.css のブランド色を使い、ライト/ダークの両方で読めるようにする。 */
 
-.diagnosis-wrapper {
-    max-width: 700px;
-    margin: 2rem auto;
-    padding: 2rem;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    transition: all 0.3s ease;
+.dx {
+    --dx-accent: var(--brand-primary, #FF6B35);
+    --dx-accent-2: var(--brand-accent, #2EC4B6);
+    --dx-soft: rgba(255, 107, 53, 0.08);
+    --dx-ring: rgba(255, 107, 53, 0.45);
+    max-width: 760px;
+    margin: 0 auto 2rem;
+}
+[data-theme="dark"] .dx {
+    --dx-soft: rgba(255, 107, 53, 0.14);
 }
 
-[data-theme="dark"] .diagnosis-wrapper {
-    background: rgba(0, 0, 0, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+.dx [hidden] { display: none !important; }
+
+.dx-card {
+    background: var(--entry);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg, 16px);
+    box-shadow: var(--card-shadow, 0 4px 20px rgba(0, 0, 0, 0.08));
+    padding: 1.75rem 1.75rem 1.5rem;
 }
 
-/* プログレスバー */
-.diagnosis-progress-container {
-    margin-bottom: 2.5rem;
-    background: rgba(0, 0, 0, 0.05);
-    border-radius: 8px;
-    height: 8px;
-    position: relative;
-    overflow: hidden;
+/* ---------- 3 つの約束 ---------- */
+.dx-promises {
+    list-style: none;
+    margin: 0 0 1rem;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
 }
-
-[data-theme="dark"] .diagnosis-progress-container {
-    background: rgba(255, 255, 255, 0.08);
-}
-
-.diagnosis-progress-bar {
-    height: 100%;
-    background: linear-gradient(90deg, #4f46e5 0%, #7c3aed 100%);
-    border-radius: 8px;
-    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.diagnosis-progress-text {
-    font-size: 0.85rem;
+.dx-promises li {
+    margin: 0;
+    font-size: 0.82rem;
     font-weight: 600;
     color: var(--secondary);
-    text-align: right;
-    margin-top: 0.5rem;
+    background: var(--dx-soft);
+    border-radius: 999px;
+    padding: 0.3rem 0.8rem;
 }
 
-/* ウィザードステップ */
-.diagnosis-step {
-    display: none;
-    opacity: 0;
-    transform: translateY(10px);
+/* ---------- 設問 ---------- */
+.dx-quiz-head {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 44px;
+    margin-bottom: 0.5rem;
 }
-
-.diagnosis-step.active {
-    display: block;
-    animation: diagnosisFadeInUp 0.4s forwards cubic-bezier(0.4, 0, 0.2, 1);
+.dx-back {
+    background: none;
+    border: none;
+    color: var(--secondary);
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.92rem;
+    padding: 0.5rem 0.5rem 0.5rem 0;
+    min-height: 44px;
+    cursor: pointer;
 }
-
-@keyframes diagnosisFadeInUp {
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.diagnosis-question {
-    font-size: 1.5rem;
+.dx-back:hover { color: var(--primary); }
+.dx-back:focus-visible { outline: 3px solid var(--dx-ring); outline-offset: 2px; }
+.dx-progress-text {
+    margin-left: auto;
+    font-size: 0.85rem;
     font-weight: 700;
-    margin-bottom: 2rem;
+    color: var(--secondary);
+    font-variant-numeric: tabular-nums;
+}
+.dx-remain {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--dx-accent);
+    background: var(--dx-soft);
+    border-radius: 999px;
+    padding: 0.15rem 0.6rem;
+}
+.dx-progress {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--border);
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+}
+.dx-progress-bar {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--dx-accent) 0%, var(--brand-secondary, #F7C948) 60%, var(--dx-accent-2) 100%);
+    transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dx-q-title {
+    font-size: 1.45rem;
+    font-weight: 800;
     text-align: center;
     color: var(--primary);
-    border: none;
-    padding: 0;
+    margin: 0 0 0.35rem;
+    line-height: 1.4;
+    outline: none;
+}
+.dx-q-hint {
+    text-align: center;
+    color: var(--secondary);
+    font-size: 0.88rem;
+    margin: 0 0 1.25rem;
+    min-height: 1.3em;
 }
 
-/* 選択肢オプション */
-.diagnosis-options {
+.dx-options {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: 1.25rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+    animation: dxIn 0.3s ease both;
+}
+@media (min-width: 600px) {
+    .dx-options--many { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+/* 2 列で選択肢が奇数個のとき、最後の 1 つ (出産祝い・バランスよく等) を横いっぱいにして
+   片側だけ空く見た目を避ける */
+@media (max-width: 599px) {
+    .dx-option:last-child:nth-child(odd) { grid-column: 1 / -1; min-height: 72px; }
+}
+@media (min-width: 600px) {
+    .dx-options:not(.dx-options--many) .dx-option:last-child:nth-child(odd) { grid-column: 1 / -1; min-height: 72px; }
 }
 
-@media (min-width: 550px) {
-    .diagnosis-options {
-        grid-template-columns: 1fr 1fr;
-    }
-}
-
-.diagnosis-option-btn {
+.dx-option {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 0.2rem;
+    min-height: 92px;
+    padding: 0.9rem 0.6rem;
     text-align: center;
-    padding: 1.5rem 1rem;
-    background: rgba(0, 0, 0, 0.02);
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 12px;
-    cursor: pointer;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    background: var(--theme);
     color: var(--primary);
-    position: relative;
-    overflow: hidden;
-    width: 100%;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-md, 12px);
+    cursor: pointer;
+    font: inherit;
+    transition: transform 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
 }
-
-.diagnosis-option-btn:focus-visible {
-    outline: 3px solid #4f46e5;
+@media (hover: hover) {
+    .dx-option:hover {
+        border-color: var(--dx-ring);
+        box-shadow: 0 6px 18px rgba(255, 107, 53, 0.12);
+        transform: translateY(-2px);
+    }
+}
+.dx-option:active { transform: scale(0.98); }
+.dx-option:focus-visible {
+    outline: 3px solid var(--dx-ring);
     outline-offset: 2px;
 }
-
-[data-theme="dark"] .diagnosis-option-btn {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+.dx-option[aria-checked="true"] {
+    border-color: var(--dx-accent);
+    background: var(--dx-soft);
 }
-
-.diagnosis-option-btn:hover {
-    transform: translateY(-3px);
-    background: rgba(79, 70, 229, 0.05);
-    border-color: rgba(79, 70, 229, 0.4);
-    box-shadow: 0 8px 20px rgba(79, 70, 229, 0.1);
-}
-
-[data-theme="dark"] .diagnosis-option-btn:hover {
-    background: rgba(124, 58, 237, 0.08);
-    border-color: rgba(124, 58, 237, 0.4);
-    box-shadow: 0 8px 20px rgba(124, 58, 237, 0.2);
-}
-
-.diagnosis-option-btn .emoji {
-    font-size: 2.25rem;
-    margin-bottom: 0.75rem;
-    transition: transform 0.3s ease;
-}
-
-.diagnosis-option-btn:hover .emoji {
-    transform: scale(1.15) rotate(5deg);
-}
-
-.diagnosis-option-btn .label {
-    font-size: 1.1rem;
-    font-weight: 700;
-    margin-bottom: 0.25rem;
-}
-
-.diagnosis-option-btn .sublabel {
+.dx-option[role="checkbox"][aria-checked="true"]::after {
+    content: "✓";
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    width: 22px;
+    height: 22px;
+    line-height: 22px;
+    border-radius: 50%;
+    background: var(--dx-accent);
+    color: #fff;
     font-size: 0.8rem;
-    color: var(--secondary);
-    line-height: 1.3;
-}
-
-/* ナビゲーション */
-.diagnosis-navigation {
-    margin-top: 2rem;
-    display: flex;
-    justify-content: flex-start;
-}
-
-.diagnosis-nav-btn {
-    padding: 0.5rem 1.25rem;
-    font-size: 0.9rem;
-    font-weight: 600;
-    background: transparent;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    cursor: pointer;
-    color: var(--secondary);
-    transition: all 0.2s ease;
-}
-
-.diagnosis-nav-btn:hover {
-    background: rgba(0, 0, 0, 0.05);
-    color: var(--primary);
-    border-color: var(--secondary);
-}
-
-[data-theme="dark"] .diagnosis-nav-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
-}
-
-/* 結果表示 */
-.diagnosis-result-container {
-    animation: diagnosisFadeIn 0.6s forwards ease;
-}
-
-@keyframes diagnosisFadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-.diagnosis-result-header {
-    text-align: center;
-    margin-bottom: 2.5rem;
-}
-
-.diagnosis-result-header h2 {
-    font-size: 1.8rem;
     font-weight: 800;
-    margin-bottom: 0.5rem;
-    color: var(--primary);
-    border: none;
-    padding: 0;
+}
+.dx-option.is-picked { animation: dxPop 0.18s ease; }
+.dx-option-emoji { font-size: 1.9rem; line-height: 1.1; }
+.dx-option-label { font-weight: 700; font-size: 0.98rem; line-height: 1.35; }
+.dx-option-sub { font-size: 0.76rem; color: var(--secondary); line-height: 1.35; }
+
+/* PC では選択肢の左上に数字キーのヒントを出す */
+@media (hover: hover) and (pointer: fine) {
+    .dx-option[data-key]::before {
+        content: attr(data-key);
+        position: absolute;
+        top: 6px;
+        left: 8px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: var(--secondary);
+        opacity: 0.7;
+    }
 }
 
-.diagnosis-result-header p {
+.dx-multi-actions { text-align: center; margin-top: 1.25rem; }
+
+.dx-keyhint {
+    margin: 1rem 0 0;
+    text-align: center;
+    font-size: 0.75rem;
     color: var(--secondary);
+}
+@media (hover: none), (pointer: coarse) {
+    .dx-keyhint { display: none; }
+}
+
+/* ---------- ボタン ---------- */
+.dx-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 48px;
+    padding: 0.7rem 1.4rem;
+    border-radius: 999px;
+    border: 2px solid var(--border);
+    background: var(--theme);
+    color: var(--primary);
+    font: inherit;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.dx-btn:hover { transform: translateY(-1px); border-color: var(--dx-ring); }
+.dx-btn:focus-visible { outline: 3px solid var(--dx-ring); outline-offset: 2px; }
+.dx-btn:disabled { opacity: 0.6; cursor: progress; transform: none; }
+.dx-btn--primary {
+    background: var(--dx-accent);
+    border-color: var(--dx-accent);
+    color: #fff;
+    box-shadow: 0 6px 16px rgba(255, 107, 53, 0.28);
+}
+.dx-btn--primary:hover { border-color: var(--dx-accent); box-shadow: 0 8px 20px rgba(255, 107, 53, 0.36); }
+
+/* ---------- 診断中 ---------- */
+.dx-loading { text-align: center; padding: 2.5rem 1rem; }
+.dx-loading p { margin: 1rem 0 0; color: var(--secondary); font-weight: 600; }
+.dx-loading-emoji { display: flex; justify-content: center; gap: 0.6rem; font-size: 2.2rem; }
+.dx-loading-emoji span { display: inline-block; animation: dxBounce 0.9s ease-in-out infinite; }
+.dx-loading-emoji span:nth-child(2) { animation-delay: 0.12s; }
+.dx-loading-emoji span:nth-child(3) { animation-delay: 0.24s; }
+.dx-loading-emoji span:nth-child(4) { animation-delay: 0.36s; }
+
+/* ---------- 結果 ---------- */
+.dx-result { animation: dxIn 0.35s ease both; }
+.dx-persona {
+    text-align: center;
+    background: var(--brand-gradient-subtle), var(--entry);
+}
+.dx-eyebrow {
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: var(--dx-accent);
+}
+.dx-eyebrow:empty { display: none; }
+.dx-persona-emoji {
+    font-size: 3.2rem;
+    line-height: 1.2;
+    margin: 0.3rem 0 0.1rem;
+    animation: dxPop 0.5s ease both;
+}
+.dx-persona-title {
+    margin: 0 0 0.5rem;
+    font-size: 1.55rem;
+    font-weight: 900;
+    color: var(--primary);
+    line-height: 1.35;
+    outline: none;
+}
+.dx-persona-text {
+    margin: 0 auto;
+    max-width: 36em;
+    color: var(--primary);
+    line-height: 1.75;
     font-size: 0.95rem;
 }
+.dx-age-tip {
+    margin: 0.85rem auto 0;
+    max-width: 36em;
+    font-size: 0.86rem;
+    line-height: 1.7;
+    color: var(--secondary);
+    background: var(--theme);
+    border-radius: var(--radius-sm, 8px);
+    padding: 0.6rem 0.85rem;
+    text-align: left;
+}
+.dx-age-tip:empty { display: none; }
 
-.diagnosis-fallback-badge {
-    display: inline-block;
+.dx-chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.45rem;
     margin-top: 1rem;
-    padding: 0.5rem 1rem;
-    background: rgba(245, 158, 11, 0.08);
-    border: 1px solid rgba(245, 158, 11, 0.3);
-    border-radius: 20px;
-    font-size: 0.85rem;
+}
+.dx-chips:empty { display: none; }
+.dx-chips-label {
+    margin: 1rem 0 0;
+    font-size: 0.75rem;
+    color: var(--secondary);
+}
+.dx-chips-label + .dx-chips { margin-top: 0.4rem; }
+.dx.dx--wide .dx-promises { display: none; }
+.dx-chip {
+    font: inherit;
+    font-size: 0.8rem;
     font-weight: 600;
-    color: #d97706;
-}
-
-[data-theme="dark"] .diagnosis-fallback-badge {
-    background: rgba(245, 158, 11, 0.15);
-    color: #fbbf24;
-    border-color: rgba(245, 158, 11, 0.4);
-}
-
-.diagnosis-result-footer {
-    margin-top: 3rem;
-    text-align: center;
-}
-
-.diagnosis-retry-btn {
-    padding: 0.75rem 2rem;
-    font-size: 1rem;
-    font-weight: 700;
-    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-    border: none;
-    border-radius: 30px;
-    color: #ffffff !important;
+    color: var(--primary);
+    background: var(--theme);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.35rem 0.75rem;
+    min-height: 36px;
     cursor: pointer;
-    box-shadow: 0 4px 15px rgba(79, 70, 229, 0.2);
-    transition: all 0.25s ease;
 }
+.dx-chip::after { content: " ✎"; color: var(--secondary); }
+.dx-chip:hover { border-color: var(--dx-ring); }
+.dx-chip:focus-visible { outline: 3px solid var(--dx-ring); outline-offset: 2px; }
 
-.diagnosis-retry-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(79, 70, 229, 0.35);
+.dx-note {
+    margin: 1rem 0 0;
+    padding: 0.7rem 0.95rem;
+    font-size: 0.86rem;
+    line-height: 1.6;
+    color: var(--primary);
+    background: rgba(247, 201, 72, 0.16);
+    border: 1px solid rgba(247, 201, 72, 0.5);
+    border-radius: var(--radius-sm, 8px);
 }
+.dx-error { text-align: center; margin: 1.25rem 0; }
 
-/* 診断結果ビューは wizard の狭い 700px 枠を外して main 幅いっぱいに広げる。
-   #3055 follow-up: 結果カードが 700px - padding の中で 3 列に詰め込まれ
-   1 枚 ≈196px まで細り、最安値バッジ (左下) と年齢バッジ (右下) が重なって
-   価格が隠れていた。JS が結果表示時にこのクラスを付与する。
-   card-grid の列数はベース .card-grid (custom.css: 3→2→1 のレスポンシブ) に
-   委ね、診断側では上書きしない (ホームと同じ折返し挙動に統一)。 */
-.diagnosis-wrapper.diagnosis-wrapper--results {
-    max-width: none;
+/* 1 位はカード + 理由を横並びで大きく */
+.dx-top { margin-top: 1.5rem; }
+.dx-top:empty { display: none; }
+.dx-pick { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
+.dx-pick--top {
+    display: grid;
+    grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
+    grid-template-areas: "rank rank" "card reasons";
+    gap: 0.75rem 1.25rem;
+    align-items: start;
+    padding: 1.1rem;
+    border: 2px solid var(--dx-accent);
+    border-radius: var(--radius-lg, 16px);
+    background: var(--entry);
+}
+.dx-pick--top .dx-rank { grid-area: rank; font-size: 1rem; }
+.dx-pick--top .product-card { grid-area: card; }
+.dx-pick--top .dx-reasons { grid-area: reasons; align-self: center; }
+.dx-pick--top .dx-reason { font-size: 0.95rem; padding: 0.55rem 0.75rem; }
+
+.dx-rank {
+    align-self: flex-start;
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: var(--dx-accent);
+}
+.dx-reasons {
+    list-style: none;
+    margin: 0;
     padding: 0;
-    background: none;
-    border: none;
-    box-shadow: none;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
 }
-.diagnosis-result-container .card-grid {
-    margin-top: 0.5rem;
+.dx-reason {
+    margin: 0;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: var(--primary);
+    background: rgba(46, 196, 182, 0.1);
+    border-radius: var(--radius-sm, 8px);
+    padding: 0.35rem 0.6rem;
+}
+[data-theme="dark"] .dx-reason { background: rgba(46, 196, 182, 0.16); }
+.dx-reason::before { content: "✓ "; color: var(--dx-accent-2); font-weight: 800; }
+
+.dx-grid-title {
+    margin: 1.75rem 0 0.75rem;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--primary);
+}
+.dx-more-wrap { text-align: center; margin-top: 1rem; }
+.dx-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-top: 2rem;
+}
+.dx-share-msg {
+    text-align: center;
+    margin: 0.75rem 0 0;
+    font-size: 0.85rem;
+    color: var(--secondary);
+    word-break: break-all;
+}
+.dx-share-msg:empty { display: none; }
+.dx-disclaimer {
+    margin: 1.5rem 0 0;
+    font-size: 0.75rem;
+    line-height: 1.6;
+    color: var(--secondary);
 }
 
-/* #1418 P2: 診断ページのモバイル最適化
-   iPhone 実機で wrapper の padding 2rem が過剰、絵文字・ボタンが大きすぎ
-   操作性を損ねていたため、余白とフォントを縮小する。 */
+/* 結果は main 幅いっぱいに広げる (#3055 follow-up: 狭い枠に 3 列を詰めると
+   カードが細り、最安値バッジと年齢バッジが重なって価格が隠れていた)。 */
+.dx.dx--wide { max-width: none; }
+.dx.dx--wide .dx-persona,
+.dx.dx--wide .dx-top,
+.dx.dx--wide .dx-note,
+.dx.dx--wide .dx-error { max-width: 760px; margin-left: auto; margin-right: auto; }
+.dx.dx--wide .dx-note { margin-top: 1rem; }
+
+/* ---------- スマホ ---------- */
 @media (max-width: 720px) {
-    .diagnosis-wrapper {
-        padding: 1.25rem 1rem;
-        margin: 1rem auto;
-        border-radius: 12px;
+    .dx-card { padding: 1.1rem 0.9rem 1rem; border-radius: 14px; }
+    .dx-promises { gap: 0.35rem; margin-bottom: 0.75rem; }
+    .dx-promises li { font-size: 0.74rem; padding: 0.25rem 0.6rem; }
+    .dx-q-title { font-size: 1.2rem; }
+    .dx-q-hint { font-size: 0.8rem; margin-bottom: 1rem; }
+    .dx-options { gap: 0.55rem; }
+    .dx-option { min-height: 84px; padding: 0.7rem 0.4rem; }
+    .dx-option-emoji { font-size: 1.6rem; }
+    .dx-option-label { font-size: 0.9rem; }
+    .dx-option-sub { font-size: 0.7rem; }
+    .dx-persona-emoji { font-size: 2.6rem; }
+    .dx-persona-title { font-size: 1.3rem; }
+    .dx-persona-text { font-size: 0.9rem; text-align: left; }
+    .dx-pick--top {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: "rank" "card" "reasons";
+        padding: 0.8rem;
     }
-    .diagnosis-progress-container {
-        margin-bottom: 1.5rem;
-    }
-    .diagnosis-question {
-        font-size: 1.15rem;
-        margin-bottom: 1.25rem;
-        line-height: 1.45;
-    }
-    .diagnosis-options {
-        gap: 0.75rem;
-    }
-    .diagnosis-option-btn {
-        padding: 1rem 0.75rem;
-        min-height: 44px; /* Apple HIG */
-        border-radius: 10px;
-    }
-    .diagnosis-option-btn .emoji {
-        font-size: 1.75rem;
-        margin-bottom: 0.5rem;
-    }
-    .diagnosis-option-btn .label {
-        font-size: 0.98rem;
-    }
-    .diagnosis-option-btn .sublabel {
-        font-size: 0.74rem;
-    }
-    .diagnosis-navigation {
-        margin-top: 1.25rem;
-    }
-    .diagnosis-nav-btn {
-        min-height: 44px;
-        padding: 0.6rem 1rem;
-    }
-    .diagnosis-result-header h2 {
-        font-size: 1.4rem;
-    }
-    .diagnosis-result-header p {
-        font-size: 0.88rem;
-    }
-    .diagnosis-retry-btn {
-        min-height: 44px;
-        padding: 0.75rem 1.5rem;
+    .dx-actions .dx-btn { flex: 1 1 100%; }
+}
+
+/* ---------- アニメーション ---------- */
+@keyframes dxIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+}
+@keyframes dxPop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.06); }
+    100% { transform: scale(1); }
+}
+@keyframes dxBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-12px); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .dx *, .dx *::before, .dx *::after {
+        animation: none !important;
+        transition: none !important;
     }
 }

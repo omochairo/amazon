@@ -1,7 +1,8 @@
 // hugo/assets/js/last_diagnosis.js
 // #1365 Layer 1-③ 診断結果の永続化 — ホーム上部「前回の診断」バナー。
 // diagnosis.js が localStorage("omcha_last_diagnosis") に保存した回答を読み、
-// 人が読める要約 (年齢・伸ばしたい力・場所・予算) を組み立てて再表示する。
+// 人が読める要約 (だれに・年齢・好きな遊び・予算) を組み立てて再表示する。
+// 旧 5 問 (v なし: q1..q5) の保存も読める。
 // mount (`[data-last-diagnosis]`) はホームにのみ出力されるため、他ページでは no-op。
 // 保存が無ければ hidden のまま (空状態は何も出さない)。サーバ不要・全 localStorage。
 (function () {
@@ -9,7 +10,7 @@
 
   var KEY = "omcha_last_diagnosis";
 
-  // diagnosis.html の各 data-value → バナー用の短い日本語ラベル。
+  // 旧 5 問 (v1) の data-value → バナー用の短い日本語ラベル。
   var LABELS = {
     q1: { "0-1": "0〜1歳", "1-2": "1〜2歳", "3-4": "3〜4歳", "5-6": "5〜6歳" },
     q2: {
@@ -24,9 +25,45 @@
     }
   };
 
+  // v2 (2026-10 の作り直し以降) の保存形式。値は diagnosis_core.js の各選択肢と一致させる。
+  // ホームでは diagnosis_core.js を読み込まない (重いので) ため、要約に要る分だけ持つ。
+  var LABELS_V2 = {
+    who: { child: "わが子に", gift: "プレゼント", birth: "出産祝い" },
+    age: {
+      "0-5m": "0〜5か月", "6-11m": "6〜11か月", "1y": "1歳", "2y": "2歳", "3y": "3歳",
+      "4y": "4歳", "5y": "5歳", "6-7y": "6〜7歳", "8y": "8歳以上"
+    },
+    interest: {
+      sense: "さわる・にぎる", build: "つくる・組み立てる", pretend: "ごっこ遊び",
+      vehicle: "のりもの", think: "考える・ゲーム", art: "描く・工作",
+      words: "ことば・数・英語", music: "音・リズム", science: "しくみ・科学",
+      active: "体を動かす", any: "おまかせ"
+    },
+    budget: { "3000": "〜3,000円", "5000": "〜5,000円", "10000": "〜10,000円", any: "予算こだわらない" }
+  };
+
   function label(q, val) {
     var map = LABELS[q] || {};
     return map[val] || "";
+  }
+
+  function labelV2(q, val) {
+    var map = LABELS_V2[q] || {};
+    return map[val] || "";
+  }
+
+  function summaryParts(saved) {
+    var a = saved.answers;
+    if (saved.v === 2) {
+      return [
+        labelV2("who", a.who), a.who === "birth" ? "" : labelV2("age", a.age),
+        labelV2("interest", a.interest), labelV2("budget", a.budget)
+      ].filter(Boolean);
+    }
+    return [
+      label("q1", a.q1), label("q2", a.q2),
+      label("q3", a.q3), label("q4", a.q4)
+    ].filter(Boolean);
   }
 
   // ts (ISO8601) → 「3日前 / きのう / きょう」程度のゆるい相対表記。
@@ -56,13 +93,10 @@
     if (!mount) return; // ホーム以外では mount 自体が無い
 
     var saved = readSaved();
-    if (!saved || !saved.answers || !saved.answers.q1) return; // 空状態
+    if (!saved || !saved.answers) return; // 空状態
+    if (saved.v === 2 ? !saved.answers.who : !saved.answers.q1) return;
 
-    var a = saved.answers;
-    var parts = [
-      label("q1", a.q1), label("q2", a.q2),
-      label("q3", a.q3), label("q4", a.q4)
-    ].filter(Boolean);
+    var parts = summaryParts(saved);
     if (!parts.length) return;
 
     var summaryEl = mount.querySelector(".last-diagnosis-summary");
