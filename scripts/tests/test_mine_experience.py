@@ -1757,8 +1757,12 @@ def test_gather_youtube_opportunistic_skips_title_only_items(tmp_path, monkeypat
     class _FakeTranscriptApi:
         def fetch(self, video_id, languages=("en",)):
             fetched.append(video_id)
-            return [youtube_transcript_api.FetchedTranscriptSnippet(
-                text="体験談テキスト", start=0.0, duration=1.0)]
+            # 実物の fetch() と同じく list ではなく FetchedTranscript を返す
+            return youtube_transcript_api.FetchedTranscript(
+                snippets=[youtube_transcript_api.FetchedTranscriptSnippet(
+                    text="体験談テキスト", start=0.0, duration=1.0)],
+                video_id=video_id, language="Japanese", language_code="ja",
+                is_generated=False)
 
     monkeypatch.setattr(youtube_transcript_api, "YouTubeTranscriptApi", _FakeTranscriptApi)
 
