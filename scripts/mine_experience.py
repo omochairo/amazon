@@ -1121,6 +1121,14 @@ def gather_youtube_opportunistic(
     except ImportError:
         logger.warning("youtube-transcript-api 未インストール — youtube skip")
         return []
+    # 1.x はインスタンスの fetch() (旧 staticmethod の get_transcript は 1.2.0 で
+    # 削除)。API が合わないときは下の except に全動画が「字幕無し」として
+    # 吸われて黙って 0 件になるので、ここで 1 回だけ明示して抜ける (amazon-home-ops#190)。
+    try:
+        fetch = YouTubeTranscriptApi().fetch
+    except Exception as e:  # noqa: BLE001
+        logger.warning("youtube-transcript-api の API が想定と違う (%s) — youtube skip", e)
+        return []
 
     out: list[dict] = []
     for it in items:
@@ -1135,11 +1143,13 @@ def gather_youtube_opportunistic(
         video_id = m.group(1)
         try:
             with _timed(timing, "http"):
-                segments = YouTubeTranscriptApi.get_transcript(video_id, languages=["ja", "en"])
+                segments = fetch(video_id, languages=["ja", "en"])
         except Exception as e:  # noqa: BLE001 — 字幕無し等は 1 件失敗として skip
             logger.warning("youtube transcript unavailable for %s: %s — skip", video_id, e)
             continue
-        text = " ".join(seg.get("text", "") for seg in segments if isinstance(seg, dict))
+        text = " ".join(
+            t for t in (getattr(seg, "text", None) for seg in segments) if isinstance(t, str)
+        )
         if not text.strip():
             continue
         out.append({
