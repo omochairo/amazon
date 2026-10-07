@@ -1730,18 +1730,83 @@ def test_gather_youtube_opportunistic_skips_title_only_items(tmp_path, monkeypat
 
     fetched = []
 
-    class _FakeTranscriptApi:
-        @staticmethod
-        def get_transcript(video_id, languages=None):
-            fetched.append(video_id)
-            return [{"text": "体験談テキスト"}]
-
     import youtube_transcript_api
+
+    class _FakeTranscriptApi:
+        def fetch(self, video_id, languages=("en",)):
+            fetched.append(video_id)
+            return [youtube_transcript_api.FetchedTranscriptSnippet(
+                text="体験談テキスト", start=0.0, duration=1.0)]
+
     monkeypatch.setattr(youtube_transcript_api, "YouTubeTranscriptApi", _FakeTranscriptApi)
 
     out = gather_youtube_opportunistic(asin, base=tmp_path)
     assert fetched == ["confirmed01"]
     assert [c["source_url"] for c in out] == ["https://www.youtube.com/watch?v=confirmed01"]
+
+
+def _write_youtube_json(tmp_path, asin, video_ids):
+    (tmp_path / asin).mkdir(parents=True)
+    (tmp_path / asin / "youtube.json").write_text(json.dumps({"items": [
+        {"title": f"動画{v}", "url": f"https://www.youtube.com/watch?v={v}"} for v in video_ids
+    ]}), encoding="utf-8")
+
+
+def test_youtube_transcript_api_installed_version_has_instance_fetch():
+    # amazon-home-ops#190: 旧コードは staticmethod の get_transcript を呼んでいたが、
+    # 1.2.0 で削除済み。偽物で差し替えるテストだけだと実ライブラリとの食い違いを
+    # 拾えないので、requirements.txt で入る実物の形をここで固定する (通信はしない)。
+    import inspect
+
+    from youtube_transcript_api import YouTubeTranscriptApi
+
+    fetch = YouTubeTranscriptApi().fetch
+    assert "languages" in inspect.signature(fetch).parameters
+
+
+def test_gather_youtube_opportunistic_joins_real_fetched_transcript(tmp_path, monkeypatch):
+    # fetch() が返す実物の FetchedTranscript (dict ではなく .text 属性の snippet 列) から
+    # 本文を組み立てられること。旧コードは seg.get("text") で dict を前提にしていた。
+    import youtube_transcript_api as yta
+
+    asin = "B0REALFETCH"
+    _write_youtube_json(tmp_path, asin, ["realfetch01"])
+    calls = []
+
+    def _fake_fetch(self, video_id, languages=("en",)):
+        calls.append((video_id, list(languages)))
+        return yta.FetchedTranscript(
+            snippets=[yta.FetchedTranscriptSnippet(text=t, start=0.0, duration=1.0)
+                      for t in ("組み立てが", "簡単でした")],
+            video_id=video_id, language="Japanese", language_code="ja", is_generated=False)
+
+    monkeypatch.setattr(yta.YouTubeTranscriptApi, "fetch", _fake_fetch)
+
+    out = gather_youtube_opportunistic(asin, base=tmp_path)
+    assert calls == [("realfetch01", ["ja", "en"])]
+    assert [c["text"] for c in out] == ["組み立てが 簡単でした"]
+    assert out[0]["source_type"] == "youtube"
+
+
+def test_gather_youtube_opportunistic_skips_once_when_api_shape_mismatches(tmp_path, monkeypatch, caplog):
+    # fetch を持たない (旧 0.x 形の) API なら、動画ごとに「字幕無し」へ吸わせず
+    # 1 回の警告で抜ける。
+    import youtube_transcript_api
+
+    asin = "B0OLDAPI"
+    _write_youtube_json(tmp_path, asin, ["oldapi01", "oldapi02"])
+
+    class _OldApi:
+        @staticmethod
+        def get_transcript(video_id, languages=None):
+            pytest.fail("旧 API を呼んではいけない")
+
+    monkeypatch.setattr(youtube_transcript_api, "YouTubeTranscriptApi", _OldApi)
+    with caplog.at_level("WARNING"):
+        assert gather_youtube_opportunistic(asin, base=tmp_path) == []
+    msgs = [r.getMessage() for r in caplog.records]
+    assert sum("API が想定と違う" in m for m in msgs) == 1
+    assert not any("transcript unavailable" in m for m in msgs)
 
 
 def test_gather_youtube_opportunistic_returns_empty_when_all_items_are_title_only(tmp_path, monkeypatch):
@@ -1755,6 +1820,6 @@ def test_gather_youtube_opportunistic_returns_empty_when_all_items_are_title_onl
     import youtube_transcript_api
     monkeypatch.setattr(
         youtube_transcript_api, "YouTubeTranscriptApi",
-        type("X", (), {"get_transcript": staticmethod(
+        type("X", (), {"fetch": (
             lambda *a, **k: pytest.fail("title_only しか無いのに呼んではいけない"))}))
     assert gather_youtube_opportunistic(asin, base=tmp_path) == []
