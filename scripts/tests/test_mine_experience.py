@@ -1805,9 +1805,30 @@ def test_gather_youtube_opportunistic_joins_real_fetched_transcript(tmp_path, mo
     monkeypatch.setattr(yta.YouTubeTranscriptApi, "fetch", _fake_fetch)
 
     out = gather_youtube_opportunistic(asin, base=tmp_path)
-    assert calls == [("realfetch01", ["ja", "en"])]
+    assert calls == [("realfetch01", ["ja"])]  # 英語字幕は候補にしない
     assert [c["text"] for c in out] == ["組み立てが 簡単でした"]
     assert out[0]["source_type"] == "youtube"
+
+
+def test_gather_youtube_opportunistic_logs_only_error_type_when_no_ja(tmp_path, monkeypatch, caplog):
+    # 日本語字幕が無い動画は skip。例外本文 (言語一覧で数十行) はログに出さず種類名だけ。
+    import youtube_transcript_api as yta
+
+    asin = "B0NOJA0001"
+    _write_youtube_json(tmp_path, asin, ["noja0000001"])
+
+    class NoTranscriptFound(Exception):
+        pass
+
+    def _fake_fetch(self, video_id, languages=("en",)):
+        raise NoTranscriptFound("長い本文\n - en (\"English\")\n - ko (\"Korean\")")
+
+    monkeypatch.setattr(yta.YouTubeTranscriptApi, "fetch", _fake_fetch)
+    with caplog.at_level("WARNING"):
+        assert gather_youtube_opportunistic(asin, base=tmp_path) == []
+    msgs = [r.getMessage() for r in caplog.records if "noja0000001" in r.getMessage()]
+    assert len(msgs) == 1
+    assert "NoTranscriptFound" in msgs[0] and "\n" not in msgs[0]
 
 
 def test_gather_youtube_opportunistic_skips_once_when_api_shape_mismatches(tmp_path, monkeypatch, caplog):

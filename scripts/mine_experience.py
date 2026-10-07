@@ -1149,9 +1149,15 @@ def gather_youtube_opportunistic(
         video_id = m.group(1)
         try:
             with _timed(timing, "http"):
-                segments = fetch(video_id, languages=["ja", "en"])
+                # 日本語字幕だけ (手動 → 自動生成の順に ja を探す)。en を許すと
+                # "[Music] enjoy ..." のような中身の薄い英語の自動字幕が体験談の
+                # 候補に混ざっていた (amazon-home-ops#190 の検証 run)。
+                segments = fetch(video_id, languages=["ja"])
         except Exception as e:  # noqa: BLE001 — 字幕無し等は 1 件失敗として skip
-            logger.warning("youtube transcript unavailable for %s: %s — skip", video_id, e)
+            # 例外の本文は字幕言語の一覧まで含めて 1 件で数十行になるので、
+            # 種類名 (NoTranscriptFound / TranscriptsDisabled / RequestBlocked 等) だけ出す。
+            logger.warning("youtube transcript unavailable for %s: %s — skip",
+                           video_id, type(e).__name__)
             continue
         text = " ".join(
             t for t in (getattr(seg, "text", None) for seg in segments) if isinstance(t, str)
