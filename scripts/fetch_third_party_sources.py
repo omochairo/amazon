@@ -416,7 +416,15 @@ def fetch_for_asin(
 
 
 def _pickable_pool() -> list[str]:
-    """03-invoke-jules と同じ候補母集合 (amazon.json items + ranking_pool − 既存記事)。"""
+    """03-invoke-jules と同じ候補母集合
+    (amazon.json items + ranking_pool + first_party_pool − 既存記事)。
+
+    first_party_pool (omcha-ops#264) は 03-invoke-jules の先頭に前置され、
+    should_defer の対象外で必ず pick される。ranking_pool と同じく amazon.json の
+    items[] に居ないので news/youtube/books が集まらず常に unfetched になる。
+    ここで拾わないと第三者候補も永久に 0 件のまま Jules に渡り、sources 5 件
+    (v5 §6.5.1) に届かず validate 赤で滞留する (実測 2026-10-06: B0FYCTJF5Z)。
+    """
     cand: set[str] = set()
     raw = _load(pathlib.Path("data/raw/amazon.json"))
     if isinstance(raw, dict):
@@ -424,11 +432,12 @@ def _pickable_pool() -> list[str]:
             a = i.get("asin") if isinstance(i, dict) else None
             if isinstance(a, str) and _ASIN_RE.match(a):
                 cand.add(a)
-    rp = _load(pathlib.Path("data/raw/ranking_pool.json"))
-    if isinstance(rp, dict):
-        for a in rp.get("asins", []):
-            if isinstance(a, str) and _ASIN_RE.match(a):
-                cand.add(a)
+    for pool_file in ("data/raw/ranking_pool.json", "data/raw/first_party_pool.json"):
+        rp = _load(pathlib.Path(pool_file))
+        if isinstance(rp, dict):
+            for a in rp.get("asins", []):
+                if isinstance(a, str) and _ASIN_RE.match(a):
+                    cand.add(a)
     existing: set[str] = set()
     for p in pathlib.Path("data/articles").glob("*.json"):
         m = re.search(r"(B0[A-Z0-9]{8})", p.name)

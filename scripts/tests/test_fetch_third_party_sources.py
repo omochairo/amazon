@@ -609,3 +609,35 @@ class DailySpendCapTest(unittest.TestCase):
                 mock.patch.object(sys, "argv", argv):
             self.assertEqual(F._cli(), 0)
         self.assertEqual(len(attempts), 5)
+
+
+class PickablePoolTest(unittest.TestCase):
+    """_pickable_pool は 03-invoke-jules と同じ母集合 (first_party_pool を含む)。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self._cwd = os.getcwd()
+        root = pathlib.Path(self._tmp.name)
+        (root / "data" / "raw").mkdir(parents=True)
+        (root / "data" / "articles").mkdir(parents=True)
+        os.chdir(root)
+
+    def tearDown(self):
+        os.chdir(self._cwd)
+        self._tmp.cleanup()
+
+    def _write(self, rel: str, obj):
+        pathlib.Path(rel).write_text(json.dumps(obj), encoding="utf-8")
+
+    def test_includes_first_party_pool(self):
+        self._write("data/raw/amazon.json", {"items": [{"asin": "B0AAAAAAA1"}]})
+        self._write("data/raw/ranking_pool.json", {"asins": ["B0BBBBBBB2"]})
+        self._write("data/raw/first_party_pool.json",
+                    {"asins": ["B0CCCCCCC3", "not-an-asin"]})
+        self.assertEqual(F._pickable_pool(),
+                         ["B0AAAAAAA1", "B0BBBBBBB2", "B0CCCCCCC3"])
+
+    def test_existing_article_excluded_and_missing_pools_inert(self):
+        self._write("data/raw/first_party_pool.json", {"asins": ["B0CCCCCCC3"]})
+        pathlib.Path("data/articles/2026-10-06-B0CCCCCCC3.json").write_text("{}")
+        self.assertEqual(F._pickable_pool(), [])
