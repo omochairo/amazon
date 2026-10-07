@@ -25,9 +25,9 @@ YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 # 既知ブランド (filter_raw_per_asin.py と一致させること)
 KNOWN_BRANDS = [
     "レゴ", "LEGO", "プラレール", "トミカ", "アンパンマン", "ディズニー", "サンリオ",
-    "ポケモン", "すみっコぐらし", "リカちゃん", "シルバニアファミリー", "ボーネルンド",
-    "くもん", "公文", "学研", "ピープル", "バンダイ", "タカラトミー", "セガトイズ",
-    "エポック", "アガツマ", "ジョイレア",
+    "ポケモン", "すみっコぐらし", "リカちゃん", "シルバニアファミリー", "BorneLund",
+    "ボーネルンド", "くもん", "公文", "学研", "ピープル", "バンダイ", "タカラトミー",
+    "セガトイズ", "セガフェイブ", "エポック", "アガツマ", "ジョイレア", "Joyreal",
 ]
 
 
@@ -57,7 +57,7 @@ def _load_prior_items(youtube_json_path: pathlib.Path) -> list | None:
 # YOUTUBE_API_KEY2 〜 YOUTUBE_API_KEY5。未登録 (空文字) の slot は
 # load 時に除外する。quota 枯渇のレスポンス (_is_quota_error) を
 # 受け取ったら、その key を exhausted として捨てて次の key に切替える。全 key
-# 枯渇した時点で youtube_search は [] を返し、以降のクエリも空で抜ける。
+# 枯渇した時点で youtube_search は None (取得失敗) を返し、以降のクエリも即 None。
 _API_KEYS: list[str] = []
 _KEY_INDEX: int = 0
 _EXHAUSTED_LOGGED: set[int] = set()
@@ -243,14 +243,18 @@ def _do_search_once(api_key: str, query: str, max_results: int) -> tuple[int, st
         return 0, f"{type(e).__name__}: {e}", []
 
 
-def youtube_search(query: str, max_results: int = 5) -> list:
+def youtube_search(query: str, max_results: int = 5) -> list | None:
     """quota 枯渇時は次の API key にローテートして同じ query を 1 回ずつ再試行する。
-    全 key 枯渇後の query は即 [] を返す。
+
+    戻り値は「0 件」([]) と「取得失敗」(None) を区別する。失敗を [] で返すと、
+    呼び出し側が per-ASIN raw を空で上書きして 7 日間 queried 扱いにし、過去に
+    取れていたその ASIN の動画が filter 経由で youtube.json から消えていた。
+    全 key 枯渇後の query は即 None。
     quota 以外の 4xx/5xx はその query 限りの失敗 (key はローテートしない)。"""
     while True:
         key = _current_key()
         if key is None:
-            return []
+            return None
         status, body, items = _do_search_once(key, query, max_results)
         if status == 200:
             return items
@@ -259,12 +263,12 @@ def youtube_search(query: str, max_results: int = 5) -> list:
                 # 新しい key で同じ query をもう一度
                 continue
             # 全 key 枯渇
-            return []
+            return None
         # quota 以外のエラー (keyInvalid / 5xx / network) はこの query だけ諦める
         logger.warning(
             f"YouTube search failed for '{query}': HTTP {status} body={body[:300]}"
         )
-        return []
+        return None
 
 
 def main():
@@ -307,7 +311,7 @@ def main():
     # 1. ジャンル全体検索 (global pool — 全 ASIN の filter で共通使用)
     genre_kw = args.keyword if args.keyword else "知育玩具"
     logger.info(f"Genre search: {genre_kw}")
-    for v in youtube_search(f"{genre_kw} おもちゃ レビュー", max_results=5):
+    for v in youtube_search(f"{genre_kw} おもちゃ レビュー", max_results=5) or []:
         if v["url"] not in seen_urls:
             items.append(v)
             seen_urls.add(v["url"])
@@ -315,7 +319,8 @@ def main():
     # 2. ASIN 別検索 (stale-first 巡回、quota 制御)
     #    target = union(amazon.json, data/articles/*.json) を _fetch_targets で
     #    staleness 順に並べて先頭 max_per_run のみ query。Quota が枯渇したら
-    #    youtube_search が [] を返すので残りは自動的に no-op。
+    #    youtube_search が None を返すので、残りは raw も state も触らずに抜ける
+    #    (= 前回の raw を温存し、次 run で再 query される)。
     amazon_items = []
     amazon_path = out_dir / "amazon.json"
     if amazon_path.exists():
@@ -334,6 +339,7 @@ def main():
     )
 
     queried_asins: list[str] = []
+    failed_asins: list[str] = []
     for asin, title in targets:
         if not title:
             continue
@@ -341,15 +347,28 @@ def main():
         if not query:
             continue
         logger.info(f"  [{asin}] query='{query}'")
+        result = youtube_search(query, max_results=3)
+        if result is None:
+            # 取得失敗 (quota 枯渇 / HTTP エラー / network) は 0 件と区別する。
+            # raw を空で上書きすると、前回取れていた動画が filter 経由で
+            # per_asin/<ASIN>/youtube.json から消える。state も更新しない。
+            failed_asins.append(asin)
+            continue
         per_asin_items: list = []
-        for v in youtube_search(query, max_results=3):
+        for v in result:
             per_asin_items.append(v)
             if v["url"] not in seen_urls:
                 items.append(v)
                 seen_urls.add(v["url"])
-        # Empty result も含めて raw を書く (= 次 run までスキップ対象になる)
+        # 0 件 (検索は成功) も raw を書く (= 次 run までスキップ対象になる)
         _fetch_targets.write_per_asin_raw(out_dir, "youtube", asin, query, per_asin_items)
         queried_asins.append(asin)
+
+    if failed_asins:
+        logger.warning(
+            "YouTube search failed for %d ASIN(s); kept their previous raw and "
+            "left them stale for the next run.", len(failed_asins),
+        )
 
     # state を一括更新 (空 result でも mark することで retry loop 防止)
     if queried_asins:
