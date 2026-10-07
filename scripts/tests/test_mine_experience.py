@@ -1252,6 +1252,28 @@ def test_mining_selection_explicit_asins_bypass_freshness_and_come_first(tmp_pat
     assert report["selected"][0]["reason"] == "explicit"
 
 
+def test_mining_selection_warns_on_explicit_asins_it_drops(tmp_path, caplog):
+    # B0 形式でない明示指定 (書籍の ISBN 型 ASIN 等) は対象外だが、黙って落とさず
+    # 警告に出す。落とした枠は従来どおり自動選定で埋まる。
+    base = tmp_path / "per_asin"
+    with caplog.at_level("WARNING"):
+        targets, _ = mine_experience.select_mining_targets(
+            limit=2, asins=["4861487315", "B0EXPLICI1"], base=base, ledger={}, now=_NOW,
+            **_pool(tmp_path, ["B0AAAAAAA1"]))
+    assert targets == ["B0EXPLICI1", "B0AAAAAAA1"]
+    warned = [r.getMessage() for r in caplog.records if "4861487315" in r.getMessage()]
+    assert len(warned) == 1 and "B0EXPLICI1" not in warned[0]
+
+
+def test_mining_selection_does_not_warn_when_all_explicit_asins_are_valid(tmp_path, caplog):
+    base = tmp_path / "per_asin"
+    with caplog.at_level("WARNING"):
+        mine_experience.select_mining_targets(
+            limit=1, asins=["B0EXPLICI1"], base=base, ledger={}, now=_NOW,
+            **_pool(tmp_path, []))
+    assert not any("--asins" in r.getMessage() for r in caplog.records)
+
+
 def test_ledger_missing_or_broken_starts_empty(tmp_path):
     assert mine_experience.load_ledger(tmp_path / "none.json") == {}
     broken = tmp_path / "broken.json"
