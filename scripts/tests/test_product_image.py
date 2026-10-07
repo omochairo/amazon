@@ -17,6 +17,8 @@ import build_feature_lists  # noqa: E402
 import build_post  # noqa: E402
 import build_price_dashboard  # noqa: E402
 import product_image  # noqa: E402
+import quality_census  # noqa: E402
+import quality_gate  # noqa: E402
 
 ASIN = "B0DF72LSP7"
 FAKE = "https://m.media-amazon.com/images/I/71xyz123abc._AC_SX679_.jpg"
@@ -117,3 +119,35 @@ def test_build_post_article_index_uses_amazon_image(tmp_path):
     _write_article(articles, ASIN, FAKE)
     index = build_post._build_article_index(articles, root)
     assert index[ASIN]["image"] == REAL
+
+
+# --- #9155 B 案: 品質ゲートは落とさず減点だけする -------------------------
+
+def _article(image):
+    return {"slug": f"2026-10-08-{ASIN}", "product": {"asin": ASIN, "image": image}}
+
+
+def test_gate_ok_when_same_image_id_even_if_size_differs(tmp_path):
+    root = _write_amazon(tmp_path, ASIN, {"image": REAL})
+    r = quality_gate.check_product_image_matches_amazon(
+        _article("https://m.media-amazon.com/images/I/41PF9dk71TL._AC_SX679_.jpg"), root)
+    assert r.passed and r.score == 1.0
+
+
+def test_gate_warns_on_fabricated_image_without_failing(tmp_path):
+    root = _write_amazon(tmp_path, ASIN, {"image": REAL, "images": [REAL]})
+    r = quality_gate.check_product_image_matches_amazon(_article(FAKE), root)
+    assert r.passed and r.score < 1.0
+    # census の集計キー (最初の ";" より前) に URL を含めない
+    assert FAKE not in quality_census.normalize_reason(r.message)
+    other = quality_gate.check_product_image_matches_amazon(
+        _article("https://m.media-amazon.com/images/I/dummy.jpg"), root)
+    assert quality_census.normalize_reason(other.message) == quality_census.normalize_reason(r.message)
+
+
+def test_gate_warns_on_empty_and_skips_without_amazon_image(tmp_path):
+    root = _write_amazon(tmp_path, ASIN, {"image": REAL})
+    r = quality_gate.check_product_image_matches_amazon(_article(""), root)
+    assert r.passed and r.score < 1.0
+    no_img = quality_gate.check_product_image_matches_amazon(_article(FAKE), tmp_path / "none")
+    assert no_img.passed and no_img.score == 1.0

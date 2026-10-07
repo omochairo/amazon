@@ -37,24 +37,28 @@ def amazon_image(item: Any) -> str:
     return ""
 
 
-def load_amazon_image(per_asin_root: Path | str | None, asin: str | None) -> str:
-    """``<per_asin_root>/<ASIN>/amazon.json`` の画像 URL を返す (無い・壊れていれば "")。
+def load_amazon_item(per_asin_root: Path | str | None, asin: Any) -> dict | None:
+    """``<per_asin_root>/<ASIN>/amazon.json`` の item dict を返す (無い・壊れていれば None)。
 
     ``{asin, fetched_at, item}`` 形と、item を root に置いた旧形の両方を受ける。
     """
     key = asin.strip().upper() if isinstance(asin, str) else ""
     if not key:
-        return ""
+        return None
     root = DEFAULT_PER_ASIN_ROOT if per_asin_root is None else Path(per_asin_root)
-    path = root / key / "amazon.json"
     try:
-        snap = json.loads(path.read_text(encoding="utf-8"))
+        snap = json.loads((root / key / "amazon.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return ""
+        return None
     if not isinstance(snap, dict):
-        return ""
+        return None
     item = snap.get("item") if isinstance(snap.get("item"), dict) else snap
-    return amazon_image(item)
+    return item if isinstance(item, dict) else None
+
+
+def load_amazon_image(per_asin_root: Path | str | None, asin: Any) -> str:
+    """``<per_asin_root>/<ASIN>/amazon.json`` の画像 URL を返す (無い・壊れていれば "")。"""
+    return amazon_image(load_amazon_item(per_asin_root, asin))
 
 
 def resolve_product_image(

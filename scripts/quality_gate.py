@@ -77,6 +77,10 @@ try:
     import official_howto
 except ModuleNotFoundError:  # package 形式
     from scripts import official_howto  # type: ignore[no-redef]
+try:
+    import product_image
+except ModuleNotFoundError:  # package 形式
+    from scripts import product_image  # type: ignore[no-redef]
 
 
 # 幼児口調・子ども向け演出は禁止（女性誌調をキープするため）。
@@ -1819,6 +1823,57 @@ def check_howto_title_promise(
     return _v5_enforced("howto_title_promise", [issue], data, HOWTO_TITLE_PROMISE_ENFORCE_FROM)
 
 
+_AMAZON_IMAGE_ID = re.compile(r"/images/I/([^./]+)\.")
+PRODUCT_IMAGE_MISMATCH_SCORE = 0.9
+
+
+def _amazon_image_ids(item: Any) -> set[str]:
+    if not isinstance(item, dict):
+        return set()
+    urls = [item.get("image")]
+    images = item.get("images")
+    if isinstance(images, list):
+        urls += images
+    return {
+        m.group(1) for u in urls
+        if isinstance(u, str) and (m := _AMAZON_IMAGE_ID.search(u))
+    }
+
+
+def check_product_image_matches_amazon(
+    data: dict, per_asin_root: pathlib.Path | str | None = None,
+) -> CheckResult:
+    """Warn-only (#9155 B 案): ``product.image`` が amazon.json の画像と一致するか。
+
+    Jules は画像 URL を「高解像度版」に組み立て直したり捏造したりする
+    (B0DF72LSP7 の ``71xyz123abc``、B0BT4NSYBX の ``dummy.jpg``)。表示は
+    #2812 / #9154 で全経路 amazon.json の画像に上書き済みなので、ここでは
+    落とさず減点だけして quality_census の「減点のみ」で捏造率を追う。
+    比較は画像 ID 単位 (``_SL500_`` ↔ ``_AC_SX679_`` のサイズ違いは同一扱い)。
+    amazon.json に画像が無い ASIN は判定できないので満点。
+    """
+    product = data.get("product") or {}
+    if not isinstance(product, dict):
+        return CheckResult("product_image", True, 1.0, "OK (no product)")
+    ids = _amazon_image_ids(product_image.load_amazon_item(per_asin_root, product.get("asin")))
+    if not ids:
+        return CheckResult("product_image", True, 1.0, "OK (amazon.json に画像なし: 判定不能)")
+    image = product.get("image")
+    if not isinstance(image, str) or not image:
+        return CheckResult(
+            "product_image", True, PRODUCT_IMAGE_MISMATCH_SCORE,
+            "product-image-missing: product.image が空 (表示は amazon.json の画像で補う)",
+        )
+    m = _AMAZON_IMAGE_ID.search(image)
+    if m and m.group(1) in ids:
+        return CheckResult("product_image", True, 1.0, "OK")
+    return CheckResult(
+        "product_image", True, PRODUCT_IMAGE_MISMATCH_SCORE,
+        "product-image-not-in-amazon-json (warn-only; 表示は amazon.json の画像で"
+        f"上書きされる。#9155); {image}",
+    )
+
+
 def _derive_verified_status(
     data: dict,
     rakuten_idx: dict[str, Any] | None,
@@ -1907,6 +1962,7 @@ def evaluate_article(
     report.checks.append(check_body_word_count(md_text))
     report.checks.append(check_stock_where_to_buy(data, md_text, stock_index=stock_index))
     report.checks.append(check_howto_title_promise(data))
+    report.checks.append(check_product_image_matches_amazon(data))
     return report
 
 
