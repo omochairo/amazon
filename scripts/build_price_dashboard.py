@@ -127,7 +127,7 @@ def load_article_meta(
         meta[asin] = {
             "name": product.get("name"),
             "brand": product.get("brand"),
-            "image": resolve_product_image(asin, product.get("image"), per_asin_root) or None,
+            "image": resolve_product_image(asin, product.get("image"), per_asin_root),
             "url": f"/products/{asin.lower()}/",
             "path": f,
         }

@@ -71,6 +71,22 @@ def test_load_tolerates_broken_json(tmp_path):
     assert product_image.load_amazon_image(tmp_path, ASIN) == ""
 
 
+def test_non_list_images_and_blank_asin_are_tolerated(tmp_path):
+    root = _write_amazon(tmp_path, ASIN, {"images": 3})
+    assert product_image.load_amazon_image(root, ASIN) == ""
+    # 空白だけの ASIN で per_asin 直下の amazon.json を読みに行かない
+    (tmp_path / "amazon.json").write_text(json.dumps({"item": {"image": REAL}}), encoding="utf-8")
+    assert product_image.load_amazon_image(tmp_path, "  ") == ""
+    assert product_image.load_amazon_image(tmp_path, 123) == ""
+
+
+def test_missing_image_is_empty_string_everywhere(tmp_path):
+    articles = tmp_path / "articles"
+    _write_article(articles, ASIN, None)
+    meta = build_price_dashboard.load_article_meta(articles, tmp_path / "per_asin")
+    assert meta[ASIN]["image"] == ""
+
+
 def test_feature_lists_overlay_replaces_fabricated_image(tmp_path):
     root = _write_amazon(tmp_path / "per_asin", ASIN, {"image": REAL})
     articles = tmp_path / "articles"

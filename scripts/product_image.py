@@ -29,9 +29,11 @@ def amazon_image(item: Any) -> str:
     img = item.get("image")
     if isinstance(img, str) and img:
         return img
-    for u in item.get("images") or []:
-        if isinstance(u, str) and u:
-            return u
+    images = item.get("images")
+    if isinstance(images, list):
+        for u in images:
+            if isinstance(u, str) and u:
+                return u
     return ""
 
 
@@ -40,10 +42,11 @@ def load_amazon_image(per_asin_root: Path | str | None, asin: str | None) -> str
 
     ``{asin, fetched_at, item}`` 形と、item を root に置いた旧形の両方を受ける。
     """
-    if not asin:
+    key = asin.strip().upper() if isinstance(asin, str) else ""
+    if not key:
         return ""
     root = DEFAULT_PER_ASIN_ROOT if per_asin_root is None else Path(per_asin_root)
-    path = root / str(asin).strip().upper() / "amazon.json"
+    path = root / key / "amazon.json"
     try:
         snap = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
