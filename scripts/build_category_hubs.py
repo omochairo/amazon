@@ -31,6 +31,7 @@ from build_feature_lists import (  # noqa: E402
     _now_iso,
     _record_to_payload_common,
     load_articles,
+    overlay_amazon_images,
     overlay_current_prices,
     parse_min_months,
 )
@@ -339,6 +340,9 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
         per_asin_dir: Path | None = None,
         raw_root: Path | None = None) -> dict[str, int]:
     records = _dedupe_by_asin(load_articles(articles_dir))
+    # #2812: カード画像も記事ページと同じ amazon.json の検証済み画像に揃える。
+    logger.info("amazon image overlay: %d replaced",
+                overlay_amazon_images(records, per_asin_dir))
     # #4007: hub カードも記事ページ・/deals/ /cospa/ と同じ日次観測の価格を出す。
     # per_asin_dir=None のときは price_overlay の既定 (data/raw/per_asin) を使う。
     # raw_root を渡すと楽天/Yahoo も matched JSON で更新する (follow-up 1)。

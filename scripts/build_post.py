@@ -38,6 +38,7 @@ import market_prices
 import official_howto
 import official_howto_format
 import price_overlay
+from product_image import resolve_product_image
 import seo_title
 import stock_status
 import where_to_buy_format
@@ -913,7 +914,10 @@ def _shrink_competitor_feature(text: str) -> str:
     return s[: _COMPETITOR_FEATURE_MAX - 1].rstrip("、。・,. ") + "…"
 
 
-def _build_article_index(src_path: pathlib.Path) -> dict[str, dict[str, Any]]:
+def _build_article_index(
+    src_path: pathlib.Path,
+    per_asin_root: pathlib.Path | None = None,
+) -> dict[str, dict[str, Any]]:
     """Return {asin: {slug, ivs_score_100, ivs_score, name, image, amazon_price}}.
 
     Used so competitor cards can deep-link to an existing internal article
@@ -983,7 +987,9 @@ def _build_article_index(src_path: pathlib.Path) -> dict[str, dict[str, Any]]:
             "ivs_score_100": ivs_score_100,
             "ivs_score": ivs_score,
             "name": product.get("name") or "",
-            "image": product.get("image") or "",
+            # #2812: 関連商品・比較カードも記事ページと同じ amazon.json の画像に揃える
+            # (記事ページ自身は _enforce_amazon_image で上書き済みだが、この索引は生 JSON)。
+            "image": resolve_product_image(asin, product.get("image"), per_asin_root),
             "amazon_price": amazon_price,
         }
     return index
@@ -3581,7 +3587,7 @@ def main() -> None:
     price_watch_latest_path = price_watch_history_root.parent / "latest.json"
     rakuten_matched_index = _load_matched_index(raw_root / "rakuten_matched.json")
     yahoo_matched_index = _load_matched_index(raw_root / "yahoo_matched.json")
-    article_index = _build_article_index(src_path)
+    article_index = _build_article_index(src_path, per_asin_root)
     site_base_path = _site_base_path(pathlib.Path(args.hugo_config))
     git_history = _load_git_history(src_path)
     query_intent_map = _load_query_intent_map(pathlib.Path(args.query_intent))

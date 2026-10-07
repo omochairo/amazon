@@ -44,6 +44,7 @@ from typing import Any, Iterable
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import market_prices  # noqa: E402
 import price_overlay  # noqa: E402
+import product_image  # noqa: E402
 from brand_normalizer import normalize as normalize_brand  # noqa: E402
 from score_calculator import calculate as calculate_score, compute_ivs_axes  # noqa: E402
 
@@ -369,6 +370,24 @@ def overlay_current_prices(
             _recompute_best_price(rec)
 
     return stats
+
+
+def overlay_amazon_images(records: list[ArticleRecord], per_asin_dir: Path | None) -> int:
+    """#2812 と同じく ``rec.image`` を検証済み amazon.json の画像で上書きする。
+
+    記事 JSON の ``product.image`` は Jules の生値で、捏造 URL (404) が混ざる
+    (B0DF72LSP7 の ``71xyz123abc`` で /deals/ の画像が壊れた)。記事ページは
+    build_post の ``_enforce_amazon_image`` で既に上書きしているので、カードも
+    同じ画像に揃える。amazon.json に画像が無い ASIN は記事 JSON の値のまま。
+    ``per_asin_dir=None`` は既定の data/raw/per_asin。戻り値は差し替えた件数。
+    """
+    replaced = 0
+    for rec in records:
+        img = product_image.load_amazon_image(per_asin_dir, rec.asin)
+        if img and img != rec.image:
+            rec.image = img
+            replaced += 1
+    return replaced
 
 
 def attach_amazon_meta(
@@ -846,6 +865,7 @@ def run(
     """Run the full pipeline. Returns the manifest dict for testability."""
     records = load_articles(articles_dir)
     attach_amazon_meta(records, per_asin_dir, raw_root=raw_root)
+    logger.info("amazon image overlay: %d replaced", overlay_amazon_images(records, per_asin_dir))
 
     cospa_bands = build_cospa_bands(
         records,

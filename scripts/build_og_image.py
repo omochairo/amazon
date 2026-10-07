@@ -36,6 +36,9 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from product_image import resolve_product_image  # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ARTICLES_DIR = REPO_ROOT / "data" / "articles"
 DEFAULT_OUT_DIR = REPO_ROOT / "hugo" / "static" / "og"
@@ -221,7 +224,8 @@ def _build_one(asin: str, force: bool) -> int:
         print(f"no article JSON for ASIN={asin}", file=sys.stderr)
         return 1
     product = article.get("product") or {}
-    image_url = product.get("image") or ""
+    # #2812: 記事ページと同じく amazon.json の検証済み画像を優先 (Jules 生値は捏造 URL が混ざる)
+    image_url = resolve_product_image(asin, product.get("image"))
     title = article.get("title") or ""
     if not image_url:
         print(f"no product.image for ASIN={asin}", file=sys.stderr)

@@ -50,6 +50,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from brand_normalizer import normalize as normalize_brand  # noqa: E402
 from build_feature_lists import age_min_months_from_article  # noqa: E402
 import price_overlay  # noqa: E402
+from product_image import resolve_product_image  # noqa: E402
 from score_calculator import calculate as calculate_score, compute_ivs_axes  # noqa: E402
 
 logger = logging.getLogger("build_price_dashboard")
@@ -87,8 +88,14 @@ def _is_primary_article(path: str) -> bool:
     return not stem.endswith(SIDECAR_SUFFIXES)
 
 
-def load_article_meta(articles_dir: pathlib.Path | str) -> dict[str, dict[str, Any]]:
+def load_article_meta(
+    articles_dir: pathlib.Path | str,
+    per_asin_root: pathlib.Path | str | None = None,
+) -> dict[str, dict[str, Any]]:
     """``data/articles/*.json`` (サイドカー除く) から ASIN(大文字) -> meta を返す。
+
+    ``image`` は記事ページと同じく amazon.json の検証済み画像を優先する
+    (#2812。Jules の生値は捏造 URL が混ざる。``per_asin_root=None`` は既定)。
 
     meta = {"name", "brand", "image", "url", "path"}。``path`` は #3563 の
     enrich_items が採択後の最大 _TOP_N_CAP 件だけ記事 json を再読込して
@@ -120,7 +127,7 @@ def load_article_meta(articles_dir: pathlib.Path | str) -> dict[str, dict[str, A
         meta[asin] = {
             "name": product.get("name"),
             "brand": product.get("brand"),
-            "image": product.get("image"),
+            "image": resolve_product_image(asin, product.get("image"), per_asin_root) or None,
             "url": f"/products/{asin.lower()}/",
             "path": f,
         }

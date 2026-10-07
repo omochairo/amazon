@@ -41,6 +41,7 @@ from brand_normalizer import (
     name_variants as brand_name_variants,
     normalize as normalize_brand,
 )
+from product_image import resolve_product_image
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 _DEFAULT_ARTICLES = _REPO_ROOT / "data" / "articles"
@@ -314,8 +315,15 @@ def _is_primary_article(path: str) -> bool:
     )
 
 
-def aggregate(articles_dir: pathlib.Path | str) -> dict:
-    """記事ディレクトリを走査し、ブランド別集計 dict を返す。"""
+def aggregate(
+    articles_dir: pathlib.Path | str,
+    per_asin_root: pathlib.Path | str | None = None,
+) -> dict:
+    """記事ディレクトリを走査し、ブランド別集計 dict を返す。
+
+    代表画像は記事ページと同じく amazon.json の検証済み画像を優先する
+    (#2812。``per_asin_root=None`` は既定の data/raw/per_asin)。
+    """
     files = sorted(
         f for f in glob.glob(str(pathlib.Path(articles_dir) / "*.json"))
         if _is_primary_article(f)
@@ -338,7 +346,9 @@ def aggregate(articles_dir: pathlib.Path | str) -> dict:
         by_brand[norm.canonical].append(
             {
                 "asin": product.get("asin"),
-                "image": product.get("image"),
+                "image": resolve_product_image(
+                    product.get("asin"), product.get("image"), per_asin_root
+                ) or None,
                 "ivs_100": ivs,
                 "best_price": product.get("best_price"),
                 "tier": norm.tier,
