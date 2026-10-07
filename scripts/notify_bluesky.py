@@ -54,6 +54,7 @@ except Exception:
     pass
 
 import sns_copy_store  # noqa: E402  (stdout reconfigure を先に済ませる)
+from product_image import resolve_product_image  # noqa: E402
 
 DEFAULT_PDS = "https://bsky.social"
 DEFAULT_BASE_URL = "https://navi.omcha.jp"
@@ -107,7 +108,8 @@ def build_payload(article: dict, base_url: str) -> dict:
     store_hook = sns_copy_store.get_hook(asin, "threads")
     hook = store_hook or (desc if desc else title)
     product = article.get("product") or {}
-    fallback_image = product.get("image") or ""
+    # #2812: 記事ページと同じく amazon.json の検証済み画像を優先 (Jules 生値は捏造 URL が混ざる)
+    fallback_image = resolve_product_image(product.get("asin"), product.get("image"))
     return {
         "text": _truncate(hook, BLUESKY_TEXT_LIMIT),
         "url": url,
