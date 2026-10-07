@@ -640,6 +640,12 @@ def select_mining_targets(
     ledger = ledger if ledger is not None else {}
     now = now or datetime.now(timezone.utc)
     explicit = [a for a in (asins or []) if isinstance(a, str) and _ASIN_RE.match(a)]
+    # 採掘対象は B0 形式だけ (書籍の ISBN 型 ASIN 等は対象外)。人が明示したものが
+    # 落ちたことは黙らずに出す — limit の枠が自動選定で埋まり、指定が無視されたと
+    # 気づけなかった (amazon-home-ops#190 の検証 run で踏んだ)。
+    rejected = [a for a in (asins or []) if a not in explicit]
+    if rejected:
+        logger.warning("--asins のうち B0 形式でないものは採掘対象外のため除外: %s", rejected)
     pool = select_targets(
         limit=0, audit_path=audit_path, rewrite_queue_dir=rewrite_queue_dir,
         base=base, articles_dir=articles_dir, remine_after_days=remine_after_days, now=now,
