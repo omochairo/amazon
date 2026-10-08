@@ -74,6 +74,10 @@ try:
 except ModuleNotFoundError:  # package 形式
     from scripts import where_to_buy_format  # type: ignore[no-redef]
 try:
+    import self_domain
+except ModuleNotFoundError:  # package 形式
+    from scripts import self_domain  # type: ignore[no-redef]
+try:
     import official_howto
 except ModuleNotFoundError:  # package 形式
     from scripts import official_howto  # type: ignore[no-redef]
@@ -1122,6 +1126,8 @@ def check_sources_v5(data: dict) -> CheckResult:
     - sources が list でない → fail
     - len(sources) < 5 → fail
     - 非販売 (= _is_sales_source False) が 2 件未満 → fail
+    - navi.omcha.jp (この比較サイト自身) を出典にしている → fail (#9199)
+    - 本家 omcha.jp の記事は非販売に 1 件までしか数えない (#9199 案b)
 
     #8934: 以前は field 無しも skip していたため、sources が 5 件に届かない記事で
     Jules の CI 自動修正が `sources` / `claims` を丸ごと消して通していた
@@ -1139,6 +1145,15 @@ def check_sources_v5(data: dict) -> CheckResult:
         return CheckResult("sources_v5", False, 0.0, "sources must be a list")
 
     valid = [s for s in srcs if isinstance(s, dict) and s.get("url")]
+    # #9199: 自分の生成記事を自分の根拠にする循環。件数を満たしていても通さない
+    # (以前は非販売ソースとして数えていた)。本家 omcha.jp の実使用記事は別扱いで可。
+    navi = [s["url"] for s in valid if self_domain.is_navi_self(str(s["url"]))]
+    if navi:
+        return CheckResult(
+            "sources_v5", False, 0.0,
+            f"navi.omcha.jp (このサイト自身) を出典にしている: {navi[0][:100]} "
+            f"(自己引用は不可。外して別の出典で 5 件を満たす)",
+        )
     total = len(valid)
     if total < 5:
         return CheckResult(
@@ -1147,6 +1162,11 @@ def check_sources_v5(data: dict) -> CheckResult:
         )
 
     non_sales = [s for s in valid if not _is_sales_source(s)]
+    # #9199 案b: 本家 omcha.jp の実使用記事は運営者自身の一次情報で、第三者ではない。
+    # 非販売に数えるのは 1 件まで (2 件目は外部の第三者で満たす。テンプレート §6.5.1)。
+    own = [s for s in non_sales if self_domain.is_self_domain(str(s["url"]))]
+    if len(own) > 1:
+        non_sales = [s for s in non_sales if s not in own[1:]]
     if len(non_sales) < 2:
         sales_count = total - len(non_sales)
         return CheckResult(

@@ -166,3 +166,12 @@ def test_audit_skips_intended_first_party_snippets(tmp_path):
     hits = audit.audit(tmp_path)["per_file"]["experience.json"]["hits"]
     assert [h["url"] for h in hits] == ["https://navi.omcha.jp/products/x/",
                                         "https://omcha.jp/other/"]
+
+
+def test_is_navi_self_only_matches_the_comparison_site():
+    """#9199: 出典に使えないのは navi.omcha.jp だけ。本家 omcha.jp は一次情報として可。"""
+    assert self_domain.is_navi_self("https://navi.omcha.jp/products/b0aaaaaaaa/")
+    assert self_domain.is_navi_self("https://www.navi.omcha.jp/x")
+    assert not self_domain.is_navi_self("https://omcha.jp/review/")
+    assert not self_domain.is_navi_self("https://notnavi.omcha.jp.example.com/")
+    assert not self_domain.is_navi_self("")
