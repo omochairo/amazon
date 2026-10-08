@@ -199,6 +199,24 @@ test("アコーディオンを閉じると、中の個別年齢ボタンで選�
   assert.equal(appended.length, 2, "閉じたら絞り込みが解除されて2件とも表示される (回帰防止)");
 });
 
+test("年齢で絞ると、対象年齢が不明 (null) な物は 0 か月扱いにせず外す (#9186)", async () => {
+  const { appended, stages } = run({
+    taxonomy: "tags",
+    term: "知育玩具",
+    indexData: [
+      { tags: ["知育玩具"], age_min_months: 0, ivs_score_100: 80 },     // 0〜3か月に一致
+      { tags: ["知育玩具"], age_min_months: null, ivs_score_100: 90 },  // 不明: 出さない
+      { tags: ["知育玩具"], ivs_score_100: 70 },                        // 欠落も不明扱い
+    ],
+    stages: [{ min: 0, max: 3, ageValues: [3] }],
+  });
+  const { trigger, ageBtnEls } = stages[0];
+  await trigger._listeners.click.call(trigger);
+  appended.length = 0;
+  await ageBtnEls[0]._listeners.click.call(ageBtnEls[0], { stopPropagation() {} });
+  assert.equal(appended.length, 1, "0 か月の 1 件だけ (不明の 2 件は出ない)");
+});
+
 test("OmochaCompare / OmochaFavorites が無い (未ロード) ページでも並び替えは落ちない", async () => {
   const { sortBtn, appended } = run({
     taxonomy: "tags",

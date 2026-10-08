@@ -253,8 +253,10 @@
   function _formatAge(item) {
     var range = (item.age_range || "").trim();
     if (range) return range;
-    var m = Number(item.age_min_months || 0);
-    if (!m && m !== 0) return "—";
+    // 不明は null で来る (#9186)。Number(null) は 0 になるので先に弾く
+    if (item.age_min_months === null || item.age_min_months === undefined || item.age_min_months === "") return "—";
+    var m = Number(item.age_min_months);
+    if (isNaN(m)) return "—";
     if (m <= 0) return "0歳〜";
     if (m < 12) return m + "ヶ月〜";
     var years = Math.floor(m / 12);

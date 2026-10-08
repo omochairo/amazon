@@ -23,7 +23,7 @@
     { value: "birth", emoji: "👶", label: "出産祝いに", sub: "生まれたばかりの赤ちゃんへ" }
   ];
 
-  // lo / hi は月齢。対象年齢 (age_min_months) が hi を超える商品は出さない。
+  // lo / hi は月齢。対象年齢 (age_min_months) が hi を超える商品と、対象年齢が不明な商品は出さない。
   var AGES = [
     { value: "0-5m", emoji: "🍼", label: "0〜5か月", sub: "ねんね期", lo: 0, hi: 5 },
     { value: "6-11m", emoji: "🧸", label: "6〜11か月", sub: "おすわり・はいはい", lo: 6, hi: 11 },
@@ -168,9 +168,10 @@
     return null;
   }
 
+  // 対象年齢の下限 (月齢)。不明なら null。search.json は不明を null で出す (0 は「0か月〜」だけ。#9186)。
   function ageMinOf(item) {
     var v = parseInt(item.age_min_months, 10);
-    return isNaN(v) ? 0 : v;
+    return isNaN(v) ? null : v;
   }
 
   // 月齢の幅に対して、どこまで下の対象年齢を許すか (それより幼い物は物足りない)。
@@ -201,6 +202,7 @@
     var reasons = [];
     var score = 0;
 
+    if (ageMin === null) return null; // 安全側: 対象年齢が不明で、お子さんの年齢に合うか確かめられない
     if (ageMin > age.hi) return null; // 安全側: 対象年齢がお子さんの年齢を超える
     var win = lowerWindow(age.lo) + (relax.age ? 24 : 0);
     if (ageMin < age.lo - win) return null; // 幼すぎて物足りない
@@ -386,20 +388,6 @@
     return "";
   }
 
-  // 対象年齢 0 か月は「未設定」の意味で入っていることが多い (実データで 178 件、タグが「小学生」の
-  // 工作キットやフィギュアも 0)。年齢別ベスト10 では、赤ちゃん向けと読み取れる物だけを 0 か月として扱う。
-  // 「モンテッソーリ」「型はめ」のように幼児向けにも使う語では判定しない。
-  var BABY_WORDS = ["ベビー", "赤ちゃん", "0歳", "新生児", "出産祝い", "ねんね", "ファーストトイ", "ラトル", "歯固め",
-                    "メリー", "にぎにぎ", "ガラガラ", "布絵本", "プレイジム"];
-  function looksBaby(item) {
-    var hs = haystack(item);
-    if (hs.tags.some(function (t) { return t.indexOf("小学生") !== -1; })) return false;
-    for (var i = 0; i < BABY_WORDS.length; i++) {
-      var w = BABY_WORDS[i];
-      if (hs.name.indexOf(w) !== -1 || hs.tags.some(function (t) { return t.indexOf(w) !== -1; })) return true;
-    }
-    return false;
-  }
 
   var AGE_BEST_PER_GENRE = 8;  // 候補にする件数 (ジャンルごとの上位)。人気ジャンルだけで候補が埋まるのを防ぐ
   var AGE_BEST_FLOOR = 20;     // 候補にする点の下限 (帯の最高点からの差)。散らすために質を落としすぎない
@@ -456,7 +444,7 @@
     var near = b.lo - (b.lo < 24 ? 6 : 12);
     var all = items.filter(function (it) {
       var m = ageMinOf(it);
-      if (m === 0 && !looksBaby(it)) return false;
+      if (m === null) return false; // 対象年齢が不明な物は、どの帯にも入れない
       return m <= b.max && m >= b.min;
     }).map(function (it) {
       var fit = (Number(it.ivs_score_100) || 0) - Math.max(0, near - ageMinOf(it)) / 12 * 5;

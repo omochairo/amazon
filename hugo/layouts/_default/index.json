@@ -1,6 +1,7 @@
 {{- /* #3055 E1: 全文 content/summary は /search.json (index.searchindex.json) に分離。
        ここは compare/favorites/posts一覧/term が使う軽量カタログ */ -}}
 {{- /* Scratch は home の複数 output format 間で共有されキー衝突するため、ローカル変数で蓄積する */ -}}
+{{- /* #9186 age_min_months は対象年齢が不明なら null (0 は「0ヶ月〜」の意味だけに使う)。default 0 にしない */ -}}
 {{- $idx := slice -}}
 {{- range where site.RegularPages "Section" "posts" -}}
     {{- if and (not .Params.searchhidden) (not .Params.searchHidden) (ne .File.BaseFileName "privacy") (ne .Layout `archives`) (ne .Layout `search`) }}
@@ -27,7 +28,7 @@
         "date"         (.Date.Format "2006-01-02")
         "unix_time"    .Date.Unix
         "age_range"    (.Params.age_range | default "")
-        "age_min_months" (.Params.age_min_months | default 0)
+        "age_min_months" .Params.age_min_months
         "tags"         $tagNames
     ) -}}
     {{- end }}

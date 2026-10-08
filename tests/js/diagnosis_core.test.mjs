@@ -22,7 +22,7 @@ const D = load();
 function item(o) {
   return {
     title: o.name, product_name: o.name, permalink: "/products/" + o.name + "/",
-    brand: o.brand || o.name, tags: o.tags || [], age_min_months: o.age ?? 36,
+    brand: o.brand || o.name, tags: o.tags || [], age_min_months: "age" in o ? o.age : 36,
     price_amazon: o.price ?? 2000, price_rakuten: 0, price_yahoo: 0,
     ivs_score_100: o.score ?? 70, ivs_axes: o.axes || {},
   };
@@ -226,14 +226,31 @@ test("年齢別ベスト10: 1 組 10 件の中で同じジャンルは 2 件ま�
   assert.equal(new Set(all.map((p) => p.item.product_name)).size, 14, "同じ商品は 2 度出さない");
 });
 
-test("年齢別ベスト10: 対象年齢 0 か月 (未設定のことが多い) は赤ちゃん向けと読める物だけ出す", () => {
+test("年齢別ベスト10: 対象年齢が不明 (null) な物はどの帯にも出さず、0 か月はそのまま 0 か月として出す (#9186)", () => {
   const items = [
     item({ name: "rattle", tags: ["ラトル"], age: 0, score: 80 }),
-    item({ name: "figure", tags: ["フィギュア"], age: 0, score: 95 }),
-    item({ name: "craft", tags: ["工作キット", "ベビー", "小学生"], age: 0, score: 95 }),
+    item({ name: "figure", tags: ["フィギュア"], age: null, score: 95 }),
+    item({ name: "craft", tags: ["工作キット", "小学生"], score: 95, age: undefined }),
   ];
-  const names = plain(D.ageBest(items, "0-5m", 10, () => 0.5).map((p) => p.item.product_name));
-  assert.deepEqual(names, ["rattle"]);
+  for (const band of ["0-5m", "3y", "8y"]) {
+    const names = plain(D.ageBest(items, band, 10, () => 0.5).map((p) => p.item.product_name));
+    assert.ok(!names.includes("figure") && !names.includes("craft"), band + " に不明な物が出ない");
+  }
+  assert.deepEqual(plain(D.ageBest(items, "0-5m", 10, () => 0.5).map((p) => p.item.product_name)), ["rattle"]);
+});
+
+test("診断: 対象年齢が不明 (null) な物は、条件を緩めても推薦に出さない (#9186)", () => {
+  const items = [
+    item({ name: "rattle", tags: ["ラトル", "出産祝い"], age: 0, score: 60 }),
+    item({ name: "unknown", tags: ["出産祝い"], age: null, score: 99 }),
+  ];
+  const a = { ...D.emptyAnswers(), who: "birth", interest: "any", budget: "any", priority: "balance" };
+  const names = D.recommend(items, a).picks.map((p) => p.item.product_name);
+  assert.ok(names.includes("rattle"));
+  assert.ok(!names.includes("unknown"));
+  for (const relax of [{}, { interest: true, price: true, age: true }]) {
+    assert.equal(D.scoreItem(items[1], a, relax), null);
+  }
 });
 
 test("年齢別ベスト10: 人気ジャンルが上位を占めていても、候補はジャンルごとに取る", () => {
