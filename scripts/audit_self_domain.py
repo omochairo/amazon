@@ -18,6 +18,8 @@ URL が何件あるかを出す。**0 件であることが正常。**
 
 意図的な自己参照は対象外にしてある:
   - omcha_related.json … 内部リンク用。設計どおり自社 URL しか入らない
+  - experience.json の source_type="first_party" で omcha.jp 本家の snippet …
+    運営者自身の実使用記事から抜いた一次情報 (omcha-ops#264 / #9199)
   - data/analytics/**  … GSC/GA4/Lighthouse 等、自社サイトの計測データ
 
 使い方:
@@ -71,6 +73,27 @@ def iter_urls(node) -> list[str]:
     return out
 
 
+# omcha-ops#264 / #9199: 本家 omcha.jp の実使用記事から運営者自身が抜き出した体験談
+# (extract_first_party_experience, source_type="first_party") は意図的な自己参照。
+# 「外部から集めたつもりが自社だった」汚染ではないので数えない。
+# navi.omcha.jp (この比較サイト自身) は first_party でも数える (生成記事の循環)。
+_FIRST_PARTY_HOSTS = ("omcha.jp", "www.omcha.jp")
+
+
+def _is_intended_first_party(snippet) -> bool:
+    if not isinstance(snippet, dict) or snippet.get("source_type") != "first_party":
+        return False
+    urls = iter_urls(snippet)
+    return bool(urls) and all(self_domain.self_host(u) in _FIRST_PARTY_HOSTS for u in urls)
+
+
+def _drop_intended_first_party(data):
+    if isinstance(data, dict) and isinstance(data.get("snippets"), list):
+        data = dict(data)
+        data["snippets"] = [s for s in data["snippets"] if not _is_intended_first_party(s)]
+    return data
+
+
 def audit(base: pathlib.Path = PER_ASIN_DIR, targets: tuple[str, ...] = TARGET_FILES) -> dict:
     per_file: dict[str, dict] = {name: {"scanned": 0, "urls": 0, "hits": []} for name in targets}
     if not base.exists():
@@ -89,6 +112,8 @@ def audit(base: pathlib.Path = PER_ASIN_DIR, targets: tuple[str, ...] = TARGET_F
                 data = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 continue
+            if name == "experience.json":
+                data = _drop_intended_first_party(data)
             for url in iter_urls(data):
                 stat["urls"] += 1
                 if self_domain.is_self_domain(url):

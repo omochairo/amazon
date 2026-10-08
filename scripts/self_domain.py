@@ -54,6 +54,8 @@ def is_self_domain(url: str, suffixes: tuple[str, ...] = SELF_DOMAIN_SUFFIXES) -
     外部から集めた素材・出典・引用元がこれに該当したら **必ず落とすこと**。
     「参考リンク」として意図的に自社を混ぜる用途 (内部リンクの
     `omcha_related.json` など) には使わない — あれは設計どおりの自己参照。
+    本家 omcha.jp の実使用記事を「運営者の一次情報」として使う経路 (first-party,
+    omcha-ops#264 / #9199) も同じく意図的な自己参照で、第三者扱いはしない。
     """
     host = self_host(url)
     if not host:

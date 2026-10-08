@@ -158,6 +158,30 @@ def _experience_note(asin):
 - note が空でない snippet は、実使用対象が本記事の商品と異なるモデル・型番であることを示す注記です。本商品固有の体験として書かず、note の内容 (例: 旧モデルでの使用感) を明記するか、この snippet は使わないでください。"""
 
 
+def _first_party_note(asin):
+    """#9199 案(b): omcha.jp の実使用記事を出典に使ってよいことの注記。
+
+    この ASIN を主役にした omcha.jp の記事 (first_party_sources.json の role=primary) が
+    あるときだけ返す。待ちの判定 (score_per_asin_info.non_sales_material) はこれを
+    非販売ソース 1 件として数えているので、ここで渡さないと待ちが解けても sources_v5 で落ちる。
+    03-invoke-jules.yml は --print-note first_party で同じ文面を受け取る。
+    """
+    try:
+        import score_per_asin_info as sc
+        posts = sc.first_party_posts(asin)
+    except Exception as e:
+        print(f"warning: first-party posts read failed, skipping note: {e}", file=sys.stderr)
+        return ""
+    if not posts:
+        return ""
+    urls = "\n".join(f"- {u}" for u in posts[:3])
+    return f"""【おもちゃいろ (omcha.jp) の実使用記事 (出典に使ってよい)】
+{urls}
+- サイト運営者がこの商品を実際に使って書いた omcha.jp (おもちゃいろ本家) の記事です。販売ページではない一次情報なので、内容を閲覧ツールで確認したうえで **sources に 1 件まで採用してよい** (title / notes は記事の中身から書く)。
+- これは第三者ソースではありません。sources の非販売ソースのうち**少なくとも 1 件は外部のサイト**から確保してください (同梱 third_party_sources.json / news.json 等)。
+- navi.omcha.jp (この比較サイト自身) の URL は出典にしないでください。自分の記事を自分の根拠にする循環になります。"""
+
+
 def _amazon_item(asin):
     raw = _jload("data/raw/amazon.json")
     for item in raw.get("items", []):
@@ -206,6 +230,7 @@ def build_prompt(asin, today=None):
     gsc_note = _gsc_note(asin)
     audit_note = _audit_note(asin)
     experience_note = _experience_note(asin)
+    first_party_note = _first_party_note(asin)
 
     prompt = f"""あなたは知育玩具メディア「おもちゃいろ」の記事生成エージェントです。
 このセッションはリポジトリ非接続 (repoless) です。必要な入力データは本プロンプト末尾に全て同梱しています。
@@ -228,6 +253,8 @@ def build_prompt(asin, today=None):
 
 {experience_note}
 
+{first_party_note}
+
 【本日の日付 (必ず使用)】: {today}
 - 出力ファイル名: data/articles/{today}-{asin}.json
 - slug フィールド: "{today}-{asin}"
@@ -245,6 +272,7 @@ def build_prompt(asin, today=None):
 - あなたの環境には google_search と view_text_website ツールがあります。まず対象商品について**必ず検索・URL閲覧で裏取りを試みてください**。
 - ただしこの環境では両ツールが失敗することがあります (検索結果なし・サイト取得失敗)。**失敗しても諦めて販売ページで埋めないでください。**
 - ツールで裏取りできなかった場合のフォールバック: 同梱の per_asin データ (news.json / books.json / youtube.json / competitors.json) に含まれる URL は、システム側が実在する API (ニュース検索・Google Books・YouTube Data API) から事前収集した検証済み URL です。**これらを sources に採用して構いません** (タイトル・出典名も同梱データのものを使う)。
+- 同梱の per_asin/third_party_sources.json は、システムが事前収集した非販売の第三者候補 URL (レビュー・解説・メディア) です。**sources 候補として優先的に内容を確認し**、裏取りに使えた URL を採用してください。候補に過ぎないので、内容を読めなかった・商品が違う URL は採用しない (#9199。03-invoke-jules と同じ規則)。
 - Amazon の販売ページ URL は sources に 1 件だけ含めてよい (慣例)。楽天・Yahoo の販売ページは sources に入れない。
 - **sources は最低 5 件必須** (品質ゲートで機械検査されます)。
 
@@ -282,9 +310,9 @@ def main():
     ap.add_argument("--out", help="出力先ファイル (省略時 stdout)")
     ap.add_argument(
         "--print-note",
-        choices=["audit", "experience"],
+        choices=["audit", "experience", "first_party"],
         help=(
-            "指定時は _audit_note/_experience_note の戻り値のみを stdout に出力して終了する"
+            "指定時は _audit_note/_experience_note/_first_party_note の戻り値のみを stdout に出力して終了する"
             " (03-invoke-jules.yml から高頻度に呼ばれる軽量モード。--out は無視される)。"
         ),
     )
@@ -295,6 +323,8 @@ def main():
         try:
             if args.print_note == "audit":
                 note = _audit_note(args.asin)
+            elif args.print_note == "first_party":
+                note = _first_party_note(args.asin)
             else:
                 note = _experience_note(args.asin)
         except Exception as e:

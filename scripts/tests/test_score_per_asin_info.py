@@ -289,6 +289,42 @@ class ShouldDeferTest(unittest.TestCase):
         self.assertFalse(S.score_asin("B0SD000099", self.base)["third_party_fetched"])
 
 
+class FirstPartyPostTest(unittest.TestCase):
+    """#9199 案(b): omcha.jp の実使用記事を非販売ソース 1 件として数える。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.fps = pathlib.Path(self._tmp.name) / "first_party_sources.json"
+        _write(self.fps.parent, self.fps.name, {"sources": [
+            {"asin": "B0FP000001", "role": "primary", "post_url": "https://omcha.jp/a/"},
+            {"asin": "B0FP000001", "role": "primary", "post_url": "https://omcha.jp/b/"},
+            {"asin": "B0FP000002", "role": "compared", "post_url": "https://omcha.jp/c/"},
+            {"asin": "B0FP000003", "role": "primary",
+             "post_url": "https://navi.omcha.jp/products/b0fp000003/"},
+        ]})
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_only_primary_posts_on_omcha_jp(self):
+        self.assertEqual(S.first_party_posts("B0FP000001", self.fps),
+                         ("https://omcha.jp/a/", "https://omcha.jp/b/"))
+        self.assertEqual(S.first_party_posts("B0FP000002", self.fps), ())  # compared
+        self.assertEqual(S.first_party_posts("B0FP000003", self.fps), ())  # navi 自身
+        self.assertEqual(S.first_party_posts("B0FP000009", self.fps), ())
+
+    def test_missing_file_is_empty(self):
+        self.assertEqual(S.first_party_posts("B0FP000001", self.fps.parent / "nope.json"), ())
+
+    def test_counts_as_one_non_sales_source_at_most(self):
+        r = {"band": "thin", "third_party_hosts": 1, "first_party_posts": 2}
+        self.assertEqual(S.non_sales_material(r), 2)
+        self.assertFalse(S.should_defer(r))
+        # 第三者 0 件なら omcha.jp だけでは揃わない (2 件目は外部から要る)
+        self.assertTrue(S.should_defer({"band": "thin", "third_party_hosts": 0,
+                                        "first_party_posts": 2}))
+
+
 class IsSearchResultUrlTest(unittest.TestCase):
     def test_search_pages(self):
         for u in (
