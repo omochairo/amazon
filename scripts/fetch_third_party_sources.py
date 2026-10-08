@@ -417,7 +417,8 @@ def fetch_for_asin(
 
 def _pickable_pool() -> list[str]:
     """03-invoke-jules と同じ候補母集合
-    (amazon.json items + ranking_pool + first_party_pool − 既存記事)。
+    (amazon.json items + ranking_pool + first_party_pool + rewrite_queue 待ち
+    − 既存記事 (rewrite_queue 待ちを除く))。
 
     first_party_pool (omcha-ops#264) は 03-invoke-jules の先頭に前置され、
     should_defer の対象外で必ず pick される。ranking_pool と同じく amazon.json の
@@ -443,6 +444,22 @@ def _pickable_pool() -> list[str]:
         m = re.search(r"(B0[A-Z0-9]{8})", p.name)
         if m:
             existing.add(m.group(1))
+    # rewrite_queue 待ち (#2711 / #5490) は 03-invoke-jules が既存記事でも pick する
+    # (existing から外し、候補列にも足す)。こちらで既存記事として外すと第三者候補が
+    # 永久に 0 件のまま書き直しが生成され、sources 5 件 (v5 §6.5.1) に届かず
+    # validate 赤で滞留する (実測 2026-10-07: B0C6THPT89 / B0CKYRJ4KY)。
+    # 対象は amazon.json に居ないのが常態なので、除外を外すだけでなく候補に足す。
+    # pending_rewrite_candidates は band=unfetched を外すため使わない (ここが
+    # unfetched を埋める側なので、それを外すと永久に集まらない)。
+    try:
+        import rewrite_queue as _rq
+        pending = {a for a in _rq.eligible_rewrite_asins("data/articles")
+                   if isinstance(a, str) and _ASIN_RE.match(a)}
+    except Exception as e:  # noqa: BLE001 — 待ち行列が読めなくても本流は止めない
+        logger.warning("rewrite_queue を読めない — 書き直し待ちは対象外: %s", e)
+        pending = set()
+    cand |= pending
+    existing -= pending
     return sorted(cand - existing)
 
 
