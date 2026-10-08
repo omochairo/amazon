@@ -641,3 +641,20 @@ class PickablePoolTest(unittest.TestCase):
         self._write("data/raw/first_party_pool.json", {"asins": ["B0CCCCCCC3"]})
         pathlib.Path("data/articles/2026-10-06-B0CCCCCCC3.json").write_text("{}")
         self.assertEqual(F._pickable_pool(), [])
+
+    def test_pending_rewrite_included_even_outside_amazon_json(self):
+        # 書き直し待ちは既存記事があり amazon.json にも居ないが、03 は pick する
+        pathlib.Path("data/rewrite_queue").mkdir(parents=True)
+        self._write("data/rewrite_queue/B0DDDDDDD4.json",
+                    {"asin": "B0DDDDDDD4", "old_slug": "2026-05-30-B0DDDDDDD4"})
+        pathlib.Path("data/articles/2026-05-30-B0DDDDDDD4.json").write_text("{}")
+        self.assertEqual(F._pickable_pool(), ["B0DDDDDDD4"])
+
+    def test_landed_rewrite_excluded(self):
+        # 置き換えが着地済み (より新しい本文がある) なら待ちではない
+        pathlib.Path("data/rewrite_queue").mkdir(parents=True)
+        self._write("data/rewrite_queue/B0DDDDDDD4.json",
+                    {"asin": "B0DDDDDDD4", "old_slug": "2026-05-30-B0DDDDDDD4"})
+        pathlib.Path("data/articles/2026-05-30-B0DDDDDDD4.json").write_text("{}")
+        pathlib.Path("data/articles/2026-10-08-B0DDDDDDD4.json").write_text("{}")
+        self.assertEqual(F._pickable_pool(), [])
