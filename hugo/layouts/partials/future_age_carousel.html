@@ -14,7 +14,8 @@
 {{- $selfAge := int (.Params.age_min_months | default 0) -}}
 {{- /* #9186 対象年齢が不明な記事は age_min_months を持たない。0 か月の記事にも出すため isset で見る
        (候補側の不明は 0 に落ちるが、gt $ca $selfAge で必ず外れる) */ -}}
-{{- if isset .Params "age_min_months" -}}
+{{- /* 大人向け (216 = 18歳以上) の記事・候補は「成長の次のステップ」にしない */ -}}
+{{- if and (isset .Params "age_min_months") (lt $selfAge 216) -}}
 {{- $pages := where site.RegularPages "Section" "posts" -}}
 {{- $pages = where $pages "Permalink" "!=" .Permalink -}}
 
@@ -22,7 +23,7 @@
 {{- $scored := slice -}}
 {{- range $pages -}}
   {{- $ca := int (.Params.age_min_months | default 0) -}}
-  {{- if gt $ca $selfAge -}}
+  {{- if and (gt $ca $selfAge) (lt $ca 216) -}}
     {{- $gap := sub $ca $selfAge -}}
     {{- /* band: 半年〜1年上 (+4..+14ヶ月) を最優先、次いで +14..+24、僅差上、遠方 */ -}}
     {{- $band := 1 -}}

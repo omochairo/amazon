@@ -9,6 +9,7 @@
     var m = parseInt(months, 10);
     if (isNaN(m)) return "";
     if (m === 0) return "0歳〜";
+    if (m >= 216) return "大人向け"; // 18 歳以上 (#9186)
     if (m < 12) return m + "ヶ月〜";
     var years = Math.floor(m / 12);
     var rem = m % 12;

@@ -229,7 +229,8 @@
 
 {{- /* --- 年齢を起点にしたレコメンドであることを明示するリード文 (エンゲージメント改善) --- */ -}}
 {{- $ageText := "" -}}
-{{- if $selfKnown -}}
+{{- /* 大人向け (216 = 18歳以上) は「同じ 18歳〜向けのおもちゃ」と書かない (#9186) */ -}}
+{{- if and $selfKnown (lt $selfAge 216) -}}
   {{- if ge $selfAge 12 -}}{{- $ageText = printf "%d歳" (int (div $selfAge 12)) -}}
   {{- else -}}{{- $ageText = printf "%dヶ月" $selfAge -}}{{- end -}}
 {{- end -}}
@@ -289,7 +290,9 @@
                 <span class="carousel-card-badge cc-badge-price">💰 {{ $label }}</span>
               {{- end -}}
               {{- /* age badge */ -}}
-              {{- if gt .candAge 0 -}}
+              {{- if ge .candAge 216 -}}
+                <span class="carousel-card-badge cc-badge-age">👶 大人向け</span>
+              {{- else if gt .candAge 0 -}}
                 {{- $years := int (div .candAge 12) -}}
                 {{- $ageLabel := printf "%d歳〜" $years -}}
                 {{- if $selfKnown -}}

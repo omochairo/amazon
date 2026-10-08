@@ -43,6 +43,12 @@ import seo_title
 import stock_status
 import where_to_buy_format
 from brand_normalizer import normalize as normalize_brand
+from age_semantics import (
+    ADULT_AGE_MONTHS,
+    is_seasonal_decoration,
+    min_months_from_words,
+    seasonal_names,
+)
 from build_feature_lists import PRICE_BANDS
 from fetch_amazon import get_secret
 from filter_raw_per_asin import exclude_title_only
@@ -396,10 +402,11 @@ def _parse_age_min_months(raw: Any) -> int:
 
 
 def _parse_age_min_months_or_none(raw: Any) -> int | None:
-    """年齢文字列から最小月齢（months）をパースする。数字が無ければ None (不明)。
+    """年齢文字列から最小月齢（months）をパースする。読めなければ None (不明)。
 
-    「対象年齢の記載なし」「全年齢」「大人向け」などは不明として None を返し、
+    「対象年齢の記載なし」「全年齢」などは不明として None を返し、
     「0ヶ月〜」「0歳〜」のように 0 と書かれたものだけを 0 にする (#9186)。
+    数字が無くても「小学生以上」「大人向け」は age_semantics の規則で読む。
     """
     if not raw:
         return None
@@ -434,7 +441,7 @@ def _parse_age_min_months_or_none(raw: Any) -> int | None:
     if m_num:
         return int(m_num.group(1)) * 12
 
-    return None
+    return min_months_from_words(raw_str)
 
 
 # Issue #1301 B4 Stage 2: Article 単位 JSON-LD の reviewedBy / creator 用定数。
@@ -821,8 +828,9 @@ def _get_development_stage(age_min_months: int | None, stages_data: dict[str, An
 
     対象年齢が不明 (None) なら出さない。0 に落とすと「このおもちゃの対象年齢
     (0〜2ヶ月) における発達の目安」と、事実と違う年齢を記事に書いてしまう (#9186)。
+    大人向け (18 歳以上) も子どもの発達段階に当てはまらないので出さない。
     """
-    if not stages_data or age_min_months is None:
+    if not stages_data or age_min_months is None or age_min_months >= ADULT_AGE_MONTHS:
         return None
     stage_keys = []
     for k in stages_data.keys():
@@ -3426,7 +3434,10 @@ def _frontmatter_meta(
                 
     # 不明なら age_min_months を書かない。0 を書くと「0ヶ月から遊べる」と
     # 区別できず、年齢で絞る機能 (診断・年齢フィルタ) に乳児向けとして混ざる (#9186)。
+    # 節句・正月の飾り物も書かない。「0歳〜」は初節句の赤ちゃんを指し、遊ぶ年齢ではない。
     age_min_months = _parse_age_min_months_or_none(raw_age)
+    if is_seasonal_decoration(*seasonal_names(data)):
+        age_min_months = None
     if age_min_months is not None:
         meta["age_min_months"] = age_min_months
 
@@ -3884,6 +3895,8 @@ def main() -> None:
                 target_age_raw = data["persona_fit"].get("age_range")
 
             age_months = _parse_age_min_months_or_none(target_age_raw)
+            if is_seasonal_decoration(*seasonal_names(data)):
+                age_months = None  # 節句・正月の飾り物に発達の目安は出さない (#9186)
             development_stage = _get_development_stage(age_months, stages_data)
             if development_stage:
                 data["development_stage"] = development_stage
