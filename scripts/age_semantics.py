@@ -7,11 +7,18 @@ build_post.py (front matter の age_min_months) と build_feature_lists.py
 - min_months_from_words: 数字の無い年齢表記 (「小学生以上」「大人向け」) を月齢にする
 - is_seasonal_decoration: 節句・正月の飾り物か。「0歳〜」は遊ぶ年齢ではなく初節句を
   迎える赤ちゃんを指すので、対象年齢を持たない (年齢で絞る機能に出さない) 扱いにする
+- override_age_months: data/age_overrides.json に人が確かめて書いた対象年齢。
+  記事 json の年齢表記より優先する
 """
 from __future__ import annotations
 
+import json
 import re
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
+
+AGE_OVERRIDES_PATH = Path(__file__).resolve().parent.parent / "data" / "age_overrides.json"
 
 # 18 歳。これ以上は大人向け (年齢別 hub・診断の対象外)。
 ADULT_AGE_MONTHS = 216
@@ -48,6 +55,30 @@ def min_months_from_words(text: Any) -> int | None:
 def is_seasonal_decoration(*names: Any) -> bool:
     """商品名 (name / name_full 等) のどれかが節句・正月の飾り物を指しているか。"""
     return any(n and _SEASONAL_DECORATION_RE.search(str(n)) for n in names)
+
+
+@lru_cache(maxsize=None)
+def _load_overrides(path: str) -> dict[str, int]:
+    p = Path(path)
+    if not p.exists():
+        return {}
+    data = json.loads(p.read_text(encoding="utf-8"))
+    out: dict[str, int] = {}
+    for asin, entry in (data.get("overrides") or {}).items():
+        months = entry.get("age_min_months") if isinstance(entry, dict) else None
+        # 出典の無い値は使わない (推測で埋めないための約束。#9186)
+        if isinstance(months, int) and months >= 0 and entry.get("source"):
+            out[str(asin).upper()] = months
+    return out
+
+
+def override_age_months(raw: dict[str, Any], path: Path | None = None) -> int | None:
+    """記事 json の ASIN に、data/age_overrides.json の確認済み年齢があれば返す。"""
+    product = raw.get("product") or {}
+    asin = product.get("asin") if isinstance(product, dict) else None
+    if not asin:
+        return None
+    return _load_overrides(str(path or AGE_OVERRIDES_PATH)).get(str(asin).upper())
 
 
 def seasonal_names(raw: dict[str, Any]) -> tuple[Any, ...]:
