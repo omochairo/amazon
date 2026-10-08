@@ -42,10 +42,10 @@ from typing import Iterable
 # v7 施行日は quality_gate を単一情報源とする (audit_uniqueness.cohort_for_slug と
 # 同じ定数を見ることで pre/post v7 の線引きが 2 箇所でずれないようにする)。
 from quality_gate import HOW_TO_CHOOSE_ENFORCE_FROM
-# #5490: 生成側 (03-invoke-jules) が defer する ASIN を選ばないための適格性判定。
-# 判定は rewrite_queue が SSOT (詳細は rewrite_queue.is_generatable の docstring)。
+# #5490: 生成されようがない ASIN を選ばないための適格性判定。
+# 判定は rewrite_queue が SSOT (詳細は rewrite_queue.sources_exhausted の docstring)。
 import rewrite_queue
-from rewrite_queue import is_generatable, load_markers
+from rewrite_queue import load_markers, sources_exhausted
 
 _ASIN_RE = re.compile(r"(B0[A-Z0-9]{8})")
 _SLUG_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-(B0[A-Z0-9]{8})$")
@@ -110,10 +110,13 @@ def select(
     ``total_score`` は順序付けに使わない (理由はモジュール docstring)。日付が読めない
     候補は安全側で post-v7 扱いにする (quality_gate._how_to_choose_enforced と同じ方針)。
 
-    #5490: **生成側が defer する ASIN は選ばない。** `03-invoke-jules` は
-    band=zero / unfetched を生成対象から外すので、それを選ぶとマーカーだけが
+    #5490: **生成されようがない ASIN は選ばない。** それを選ぶとマーカーだけが
     永久に残り、次の選定でも同じ ASIN が先頭に来る (実測で最古 56 日・中央値
-    30 日の滞留)。判定は rewrite_queue.is_generatable が SSOT。
+    30 日の滞留)。判定は rewrite_queue.sources_exhausted が SSOT。
+
+    #9199: 非販売ソースの収集前で「待てば揃う」ASIN は選ぶ。選ばれると
+    34-third-party-sources が書き直し待ちとして先頭で集め、揃ってから生成される。
+    以前は生成側が今 defer するものを全部外していたため、収集の対象にも入らなかった。
 
     除外した ASIN は捨てずに第 2 戻り値で返す。**黙って落とすと「選ばれないから
     気付かない」状態になる**ので、呼び出し側がログに出せるようにしておく
@@ -127,10 +130,10 @@ def select(
     available = [c for c in candidates if c["asin"] not in excluded]
     available.sort(key=key)
 
-    # 既定は実データの band 判定。テストは per_asin ディレクトリを作らずに
-    # 順序だけを確かめたいので差し替えられるようにしておく (per_asin が無い ASIN は
-    # band=unfetched = defer 対象になり、順序のテストが書けなくなるため)。
-    check = generatable if generatable is not None else is_generatable
+    # 既定は実データの判定。テストは per_asin ディレクトリを作らずに
+    # 順序だけを確かめたいので差し替えられるようにしておく。
+    check = generatable if generatable is not None else (
+        lambda a: not sources_exhausted(a))
 
     picked: list[dict] = []
     deferred: list[str] = []
@@ -205,7 +208,7 @@ def main() -> int:
         # できない記事」であり、放置すると古いまま配信され続ける (対処は #5490 案B の
         # 収集レーン)。件数が増え続けるなら、それ自体が別の問題の信号になる。
         print(
-            f"  deferred (band=zero/unfetched, 生成側が見送るので選ばない): "
+            f"  deferred (第三者ソースを収集しても非販売 2 件に届かないので選ばない): "
             f"{', '.join(deferred)}",
             file=sys.stderr,
         )

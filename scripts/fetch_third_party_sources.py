@@ -463,6 +463,31 @@ def _pickable_pool() -> list[str]:
     return sorted(cand - existing)
 
 
+def _waiting_priority() -> dict[str, int]:
+    """生成が第三者ソース待ちで止まっている ASIN の収集優先度 (小さいほど先, #9199)。
+
+    0: first-party (omcha-ops#264)。本当に有用なおもちゃなので必ず記事にする。
+       03-invoke-jules は非販売ソースが 2 件揃うまで待たせるので、ここで後回しに
+       されると待ったまま記事にならない。
+    1: 書き直し待ち (rewrite_queue)。first-party と同じく揃うまで待たせている。
+    どちらも ``_pickable_pool`` と同じファイルから読む。読めなければ空 (本流は止めない)。
+    """
+    prio: dict[str, int] = {}
+    try:
+        import rewrite_queue as _rq
+        for a in _rq.eligible_rewrite_asins("data/articles"):
+            if isinstance(a, str) and _ASIN_RE.match(a):
+                prio[a] = 1
+    except Exception as e:  # noqa: BLE001
+        logger.warning("rewrite_queue を読めない — 書き直し待ちを優先できない: %s", e)
+    fp = _load(pathlib.Path("data/raw/first_party_pool.json"))
+    if isinstance(fp, dict):
+        for a in fp.get("asins", []):
+            if isinstance(a, str) and _ASIN_RE.match(a):
+                prio[a] = 0
+    return prio
+
+
 def _gsc_page_impressions(
     history: pathlib.Path, days: int, anchor: str | None = None,
 ) -> dict[str, int]:
@@ -601,7 +626,12 @@ def _cli() -> int:
         # されると永久に記事にならない。ASIN の辞書順だと新しい B0H... は日次上限の外に
         # 落ちる (実測 2026-10-05: ranking 7 件中 6 件が 30 件枠の外)。安定ソートなので
         # 各グループ内の順序は従来どおり。
-        targets.sort(key=lambda a: bands[a] != "unfetched")
+        #
+        # #9199: さらに前に、生成が第三者ソース待ちで止まっている first-party と
+        # 書き直し待ちを置く。03-invoke-jules はこれらを落とさず待たせているので、
+        # 集めるのが遅れるほど記事にならない期間が延びる。
+        prio = _waiting_priority()
+        targets.sort(key=lambda a: (prio.get(a, 2), bands[a] != "unfetched"))
         logger.info("pool 対象 (band in %s): %d 件", sorted(want), len(targets))
     else:
         ap.error("ASIN / --pool / --from-gsc のいずれかが必要です")

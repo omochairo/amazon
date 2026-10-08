@@ -611,6 +611,34 @@ class DailySpendCapTest(unittest.TestCase):
         self.assertEqual(len(attempts), 5)
 
 
+    def test_waiting_first_party_and_rewrite_are_collected_first(self):
+        # #9199: 生成が第三者ソース待ちで止まっている first-party → 書き直し待ち →
+        # unfetched → その他 の順。日次上限の外に落ちると待ったまま記事にならない。
+        order = []
+
+        def _ok(asin, api_key, base, max_sources=8, dry_run=False):
+            order.append(asin)
+            return {"asin": asin, "status": "ok", "sources": 2}
+
+        pool = ["B0A0000001", "B0A0000002", "B0A0000003", "B0A0000004", "B0A0000005"]
+        bands = {"B0A0000001": "thin", "B0A0000002": "unfetched", "B0A0000003": "thin",
+                 "B0A0000004": "zero", "B0A0000005": "thin"}
+        prio = {"B0A0000005": 0, "B0A0000004": 1}
+        argv = ["prog", "--pool", "--bands", "zero,thin,unfetched", "--base", str(self.base),
+                "--max-queries", "10", "--monthly-budget", "0"]
+        with mock.patch.dict(os.environ, {"TAVILY_API_KEY": "k", "GITHUB_ACTIONS": ""}), \
+                mock.patch.object(F, "_pickable_pool", return_value=pool), \
+                mock.patch.object(F, "_waiting_priority", return_value=prio), \
+                mock.patch.object(F._sc, "score_asin", lambda a, base: {"band": bands[a]}), \
+                mock.patch.object(F, "fetch_for_asin", _ok), \
+                mock.patch.object(F, "_is_fresh", return_value=False), \
+                mock.patch.object(F.time, "sleep", lambda *_: None), \
+                mock.patch.object(sys, "argv", argv):
+            self.assertEqual(F._cli(), 0)
+        self.assertEqual(order, ["B0A0000005", "B0A0000004", "B0A0000002",
+                                 "B0A0000001", "B0A0000003"])
+
+
 class PickablePoolTest(unittest.TestCase):
     """_pickable_pool は 03-invoke-jules と同じ母集合 (first_party_pool を含む)。"""
 
@@ -649,6 +677,16 @@ class PickablePoolTest(unittest.TestCase):
                     {"asin": "B0DDDDDDD4", "old_slug": "2026-05-30-B0DDDDDDD4"})
         pathlib.Path("data/articles/2026-05-30-B0DDDDDDD4.json").write_text("{}")
         self.assertEqual(F._pickable_pool(), ["B0DDDDDDD4"])
+
+    def test_waiting_priority_puts_first_party_before_rewrite(self):
+        pathlib.Path("data/rewrite_queue").mkdir(parents=True)
+        for a in ("B0DDDDDDD4", "B0CCCCCCC3"):
+            self._write(f"data/rewrite_queue/{a}.json",
+                        {"asin": a, "old_slug": f"2026-05-30-{a}"})
+            pathlib.Path(f"data/articles/2026-05-30-{a}.json").write_text("{}")
+        self._write("data/raw/first_party_pool.json", {"asins": ["B0CCCCCCC3", "B0EEEEEEE5"]})
+        self.assertEqual(F._waiting_priority(),
+                         {"B0DDDDDDD4": 1, "B0CCCCCCC3": 0, "B0EEEEEEE5": 0})
 
     def test_landed_rewrite_excluded(self):
         # 置き換えが着地済み (より新しい本文がある) なら待ちではない

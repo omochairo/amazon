@@ -259,10 +259,34 @@ class ShouldDeferTest(unittest.TestCase):
         self.assertEqual(r["band"], "unfetched")
         self.assertFalse(S.should_defer(r))
 
-    def test_zero_is_deferred_and_thin_ok_are_not(self):
+    def test_zero_is_deferred_and_ok_is_not(self):
         self.assertTrue(S.should_defer({"band": "zero", "third_party_hosts": 0}))
-        self.assertFalse(S.should_defer({"band": "thin", "third_party_hosts": 0}))
         self.assertFalse(S.should_defer({"band": "ok", "third_party_hosts": 0}))
+
+    def test_thin_waits_until_two_non_sales_sources(self):
+        # #9199: thin でも非販売の材料 (第三者 host + news の媒体) が 2 件未満なら待たせる
+        self.assertTrue(S.should_defer({"band": "thin", "third_party_hosts": 0}))
+        self.assertTrue(S.should_defer({"band": "thin", "third_party_hosts": 1}))
+        self.assertFalse(S.should_defer({"band": "thin", "third_party_hosts": 2}))
+        self.assertFalse(S.should_defer(
+            {"band": "thin", "third_party_hosts": 1, "news_sources": 1}))
+        self.assertFalse(S.should_defer(
+            {"band": "thin", "third_party_hosts": 0, "news_sources": 2}))
+
+    def test_sources_exhausted_only_after_collection(self):
+        # 収集前の待ちは「待てば揃う」。収集後も足りないものだけ打ち切り扱い
+        waiting = {"band": "thin", "third_party_hosts": 0, "third_party_fetched": False}
+        self.assertFalse(S.sources_exhausted(waiting))
+        self.assertTrue(S.sources_exhausted(dict(waiting, third_party_fetched=True)))
+        self.assertTrue(S.sources_exhausted(
+            {"band": "zero", "third_party_hosts": 1, "third_party_fetched": True}))
+        self.assertFalse(S.sources_exhausted(
+            {"band": "thin", "third_party_hosts": 2, "third_party_fetched": True}))
+
+    def test_score_reports_whether_collection_ran(self):
+        self._mk_unfetched("B0SD000004", [])
+        self.assertTrue(S.score_asin("B0SD000004", self.base)["third_party_fetched"])
+        self.assertFalse(S.score_asin("B0SD000099", self.base)["third_party_fetched"])
 
 
 class IsSearchResultUrlTest(unittest.TestCase):

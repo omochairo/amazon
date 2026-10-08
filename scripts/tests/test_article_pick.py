@@ -170,9 +170,30 @@ class ParityTest(unittest.TestCase):
         self.assertTrue({"first-party", "ranking-sniper", "rewrite-queue",
                          "demand", "supply-random"} <= pools)
         picked = [o["asin"] for o in ours]
-        self.assertEqual(picked[:2], [_asin(60), _asin(61)])  # first-party は zero でも残る
+        # #9199: first-party も素材ゼロなら待たせ、上限 2 件の枠は次の ASIN に回す
+        self.assertEqual(picked[:2], [_asin(61), _asin(62)])
+        self.assertNotIn(_asin(60), picked)
         self.assertNotIn(_asin(31), picked)  # unfetched + host 不足は defer
         self.assertIn(_asin(33), picked)  # unfetched でも host 2 件あれば残る
+
+    def test_first_party_waits_for_third_party_sources(self):
+        # #9199: thin / unfetched の first-party は非販売ソースが 2 件揃うまで待たせる。
+        # 安全弁 (全候補 defer) が働いても first-party の待ちは解除しない。
+        fp = [_asin(60), _asin(61), _asin(62), _asin(63)]
+        bands = {_asin(60): "thin", _asin(61): "unfetched", _asin(62): "thin"}
+        for seed in ("1", "12345"):
+            with self.subTest(seed=seed):
+                wf03, ours = self._both(seed, first_party=fp, bands=bands,
+                                        hosts={_asin(62): 2})
+                self.assertEqual(ours, wf03)
+                fp_picked = [o["asin"] for o in ours if o["pool"] == "first-party"]
+                self.assertEqual(fp_picked, [_asin(62), _asin(63)])
+        valve = {_asin(n): "zero" for n in range(1, 60)}
+        valve[_asin(60)] = "thin"
+        wf03, ours = self._both(first_party=[_asin(60)], bands=valve)
+        self.assertEqual(ours, wf03)
+        self.assertGreater(len(ours), 1)  # 安全弁は働く
+        self.assertNotIn(_asin(60), [o["asin"] for o in ours])
 
     def test_all_deferred_valve_ignores_first_party(self):
         bands = {_asin(n): "zero" for n in range(1, 60)}
