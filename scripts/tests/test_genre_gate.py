@@ -9,8 +9,10 @@
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
+import tempfile
 import unittest
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -18,7 +20,7 @@ SCRIPTS_DIR = os.path.dirname(THIS_DIR)
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
-from genre_gate import classify_genre  # noqa: E402
+from genre_gate import classify_genre, is_flagged_snapshot  # noqa: E402
 
 TOY_STORE = {"id": "8184989051", "name": "おもちゃ ストア", "root": "おもちゃ"}
 TOY_GLOBAL = {"id": "5830559051", "name": "Toys - AmazonGlobal free shipping", "root": "おもちゃ"}
@@ -115,6 +117,45 @@ class TestAllowedAsins(unittest.TestCase):
 
     def test_asin_none_does_not_crash(self):
         self.assertEqual(classify_genre([BLOCKS], None)[0], "pass")
+
+
+class IsFlaggedSnapshotTest(unittest.TestCase):
+    """#9155: first-party の pick 時に per_asin の snapshot で判定する。"""
+
+    BLEACH = {"id": "170563011", "name": "漂白剤", "root": "ドラッグストア"}
+
+    def _snap(self, root, asin, body):
+        d = os.path.join(root, asin)
+        os.makedirs(d)
+        with open(os.path.join(d, "amazon.json"), "w", encoding="utf-8") as f:
+            json.dump(body, f, ensure_ascii=False)
+
+    def test_snapshot_verdicts(self):
+        with tempfile.TemporaryDirectory() as root:
+            self._snap(root, "B000FQMTIU", {"asin": "B000FQMTIU",
+                                            "item": {"title": "キッチンハイター", "browse_nodes": [self.BLEACH]}})
+            self._snap(root, "B0TOY00001", {"asin": "B0TOY00001",
+                                            "item": {"title": "ブロック", "browse_nodes": [BLOCKS]}})
+            self._snap(root, "B0MISS0001", {"asin": "B0MISS0001", "status": "gone", "miss_count": 3})
+            self._snap(root, "B0OLD00001", {"asin": "B0OLD00001",
+                                            "item": {"title": "旧 snapshot", "browse_nodes": [UNROOTED]}})
+            self.assertTrue(is_flagged_snapshot(root, "B000FQMTIU"))
+            self.assertFalse(is_flagged_snapshot(root, "B0TOY00001"))
+            # データ無し・root 未取得・ファイル無しは fail-open で False
+            self.assertFalse(is_flagged_snapshot(root, "B0MISS0001"))
+            self.assertFalse(is_flagged_snapshot(root, "B0OLD00001"))
+            self.assertFalse(is_flagged_snapshot(root, "B0NOFILE01"))
+            # browse_nodes の形が壊れていても例外にせず False (pick を止めない)
+            self._snap(root, "B0BROKEN01", {"asin": "B0BROKEN01",
+                                            "item": {"title": "壊れ", "browse_nodes": 5}})
+            self.assertFalse(is_flagged_snapshot(root, "B0BROKEN01"))
+
+    def test_rescued_kids_items_from_2026_10_08_audit(self):
+        home = {"id": "3839151", "name": "ホームストア", "root": "ホーム＆キッチン"}
+        for asin in ("B0FTFDRP62", "B089Y3VR2Q", "B0BJK8DGPG", "B082HX5B97"):
+            with self.subTest(asin=asin):
+                self.assertEqual(classify_genre([home], asin)[0], "pass")
+        self.assertEqual(classify_genre([home], "B00ZF3P72S")[0], "flag")  # IKEA 収納家具は削除側
 
 
 if __name__ == "__main__":

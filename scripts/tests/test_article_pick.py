@@ -51,7 +51,8 @@ class FakeGitLab:
 
 
 class ParityTest(unittest.TestCase):
-    def _fixture(self, tmp, *, first_party=None, bands=None, hosts=None, no_amazon=()):
+    def _fixture(self, tmp, *, first_party=None, bands=None, hosts=None, no_amazon=(),
+                 off_genre=()):
         root = pathlib.Path(tmp)
         (root / "data" / "raw").mkdir(parents=True)
         (root / "data" / "articles").mkdir(parents=True)
@@ -79,9 +80,11 @@ class ParityTest(unittest.TestCase):
                     continue
                 d = root / "data" / "raw" / "per_asin" / a
                 d.mkdir(parents=True, exist_ok=True)
+                item = {"asin": a, "title": f"商品 {a}"}
+                if a in off_genre:  # #9155: 取得時ゲートを通らない first-party のジャンル不一致
+                    item["browse_nodes"] = [{"id": "1", "name": "漂白剤", "root": "ドラッグストア"}]
                 (d / "amazon.json").write_text(
-                    json.dumps({"asin": a, "item": {"asin": a, "title": f"商品 {a}"}}),
-                    encoding="utf-8")
+                    json.dumps({"asin": a, "item": item}), encoding="utf-8")
         for n in (1, 4, 50):  # 既存記事 (50 はリライト待ち)
             (root / "data" / "articles" / f"2026-01-01-{_asin(n)}.json").write_text("{}")
         (root / "data" / "articles" / f"2026-01-01-{_asin(7)}.quality.json").write_text("{}")
@@ -171,6 +174,18 @@ class ParityTest(unittest.TestCase):
         for seed in ("1", "12345"):
             with self.subTest(seed=seed):
                 wf03, ours = self._both(seed, first_party=fp, no_amazon={_asin(60), _asin(62)})
+                self.assertEqual(ours, wf03)
+                fp_picked = [o["asin"] for o in ours if o["pool"] == "first-party"]
+                self.assertEqual(fp_picked, [_asin(61), _asin(63)])
+                self.assertNotIn(_asin(60), [o["asin"] for o in ours])
+
+    def test_first_party_skips_genre_mismatch(self):
+        # #9155: ジャンル不一致の first-party は外し、上限 2 件の枠は次の ASIN に回す。
+        fp = [_asin(60), _asin(61), _asin(62), _asin(63)]
+        for seed in ("1", "12345"):
+            with self.subTest(seed=seed):
+                wf03, ours = self._both(seed, first_party=fp, off_genre={_asin(60)},
+                                        no_amazon={_asin(62)})
                 self.assertEqual(ours, wf03)
                 fp_picked = [o["asin"] for o in ours if o["pool"] == "first-party"]
                 self.assertEqual(fp_picked, [_asin(61), _asin(63)])
