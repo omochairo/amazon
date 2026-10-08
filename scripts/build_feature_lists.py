@@ -45,6 +45,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import market_prices  # noqa: E402
 import price_overlay  # noqa: E402
 import product_image  # noqa: E402
+from age_semantics import is_seasonal_decoration, min_months_from_words, seasonal_names  # noqa: E402
 from brand_normalizer import normalize as normalize_brand  # noqa: E402
 from score_calculator import calculate as calculate_score, compute_ivs_axes  # noqa: E402
 
@@ -94,12 +95,14 @@ def parse_min_months(age_range: str | None) -> int | None:
 
     例: "3歳以上"/"3歳〜"/"3歳" → 36, "1歳6ヶ月〜"/"1.5歳"/"1歳半" → 18,
     "6ヶ月〜" → 6, "対象年齢の記載なし" → None。複数表記 (歳半=.5歳=6ヶ月) を吸収。
+    数字の無い "小学生以上" → 72 / "大人向け" → 216 は age_semantics の規則で読む (#9186)。
     """
     if not age_range:
         return None
     s = age_range.strip()
     if "記載" in s or "なし" in s:
-        return None
+        # 「対象年齢の記載なし（小学生以上推奨）」のように、言葉で補っている物だけ読む
+        return min_months_from_words(s)
     s = s.replace("歳半", ".5歳").replace("才", "歳")
     # 「N歳Mヶ月」形式
     m = re.search(r"(\d+)\s*歳\s*(\d+)\s*[ヶか]?月", s)
@@ -113,7 +116,7 @@ def parse_min_months(age_range: str | None) -> int | None:
     m = re.search(r"(\d+)\s*[ヶか]?月", s)
     if m:
         return int(m.group(1))
-    return None
+    return min_months_from_words(s)
 
 
 def age_min_months_from_article(raw: dict[str, Any]) -> int | None:
@@ -122,7 +125,10 @@ def age_min_months_from_article(raw: dict[str, Any]) -> int | None:
     フィールド優先順は build_post.py L2668-2699 (raw_age 抽出部) と同じ:
     product.target_age or product.age_range -> persona_fit.age_range ->
     technical_specs.age_range。build_post.py 自体は変更しない (仕様固定)。
+    節句・正月の飾り物は対象年齢を持たない扱い (None) にする (#9186、build_post と同じ)。
     """
+    if is_seasonal_decoration(*seasonal_names(raw)):
+        return None
     product = raw.get("product") or {}
     age_range = (
         product.get("target_age")

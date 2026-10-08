@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from age_semantics import is_seasonal_decoration, seasonal_names  # noqa: E402
 from build_feature_lists import (  # noqa: E402
     _dedupe_by_asin,
     _is_article_json,
@@ -177,6 +178,9 @@ def build_min_months_index(articles_dir: Path) -> dict[str, int]:
             continue
         asin = (raw.get("product") or {}).get("asin")
         if not asin:
+            continue
+        # 節句・正月の飾り物は年齢別 hub に入れない。「0歳〜」は初節句の赤ちゃんの意味 (#9186)
+        if is_seasonal_decoration(*seasonal_names(raw)):
             continue
         mm = parse_min_months((raw.get("persona_fit") or {}).get("age_range"))
         if mm is None:
