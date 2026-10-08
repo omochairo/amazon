@@ -59,7 +59,7 @@ const IDS = [...LAYOUT.matchAll(/id="(dx-[a-z0-9-]+)"/g)].map((m) => m[1]);
 
 const tick = (ms = 5) => new Promise((r) => setTimeout(r, ms));
 
-function boot({ fetchImpl, search = "", saved = null, compare, favorites } = {}) {
+function boot({ fetchImpl, search = "", saved = null, compare, favorites, gtag } = {}) {
   const byId = {};
   for (const id of IDS) byId[id] = new El("div", id);
   // テンプレートの初期状態で hidden のもの
@@ -85,6 +85,7 @@ function boot({ fetchImpl, search = "", saved = null, compare, favorites } = {})
     navigator: {},
     OmochaCompare: compare,
     OmochaFavorites: favorites,
+    gtag,
     OmochaUtils: { renderProductCard: (item) => { const e = new El("a"); e.className = "product-card"; e.textContent = item.product_name || item.title || ""; e.item = item; return e; } },
   };
   const sandbox = {
@@ -372,4 +373,47 @@ test("「もっと見る」は描画済みのカードを作り直さずに足�
   assert.equal(ui.$("dx-grid").children[0], firstCard, "既存のカードは同じ要素のまま");
   assert.equal(ui.$("dx-grid").children.length, 11);
   assert.equal(ui.$("dx-more").hidden, true);
+});
+
+test("GA4: 開始・完了 (回答の選択肢と経路)・順位つきクリック・答え直しを送る", async () => {
+  const events = [];
+  const ui = boot({ gtag: (type, name, params) => events.push({ type, name, params }) });
+  await answerChild3y(ui);
+  ui.$("dx-multi-next").click();
+  await tick(20);
+  assert.deepEqual(events.map((e) => e.name), ["diagnosis_start", "diagnosis_complete"]);
+  assert.ok(events.every((e) => e.type === "event"));
+  const done = events[1].params;
+  assert.equal(done.entry, "quiz");
+  assert.equal(done.who, "child");
+  assert.equal(done.age, "3y");
+  assert.equal(done.interest, "build");
+  assert.equal(done.relaxed, "age", "テスト用の 6 商品では条件緩和が年齢段階まで進む");
+  assert.equal(done.owned_count, 0);
+
+  ui.$("dx-top").children[0].children[1].click();
+  assert.deepEqual(JSON.parse(JSON.stringify(events.at(-1))), { type: "event", name: "diagnosis_pick_click", params: { rank: 1, view: "diagnosis" } });
+
+  ui.$("dx-chips").children.find((c) => c.textContent.includes("3,000円")).click();
+  await ui.pick("〜10,000円");
+  await tick(20);
+  const names = events.map((e) => e.name);
+  assert.deepEqual(names.slice(-2), ["diagnosis_edit", "diagnosis_complete"]);
+  assert.equal(events.at(-1).params.entry, "edit");
+  assert.equal(names.filter((n) => n === "diagnosis_start").length, 1, "開始は 1 回だけ");
+});
+
+test("GA4: 共有リンクと年齢別ベスト10 は経路を区別して送る", async () => {
+  const events = [];
+  const shared = boot({ search: "?w=gift&a=3y&i=pretend&b=5000&p=safety", gtag: (t, n, p) => events.push({ n, p }) });
+  await tick(20);
+  assert.equal(events.at(-1).n, "diagnosis_complete");
+  assert.equal(events.at(-1).p.entry, "shared");
+
+  const ev2 = [];
+  const age = boot({ search: "?age=0-1", gtag: (t, n, p) => ev2.push({ n, p }) });
+  await tick(20);
+  assert.deepEqual(JSON.parse(JSON.stringify(ev2)), [{ n: "diagnosis_age_best", p: { band: "0-1" } }]);
+  age.$("dx-top").children[0].children[1].click();
+  assert.equal(ev2.at(-1).p.view, "age_best");
 });
