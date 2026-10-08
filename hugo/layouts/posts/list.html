@@ -118,8 +118,9 @@ document.addEventListener("DOMContentLoaded", function() {
     // 1. 年齢フィルター適用
     if (activeAgeFilter !== null) {
       items = items.filter(function(item) {
-        var minMonths = parseInt(item.age_min_months || 0, 10);
-        
+        var minMonths = parseInt(item.age_min_months, 10);
+        if (isNaN(minMonths)) return false; // 対象年齢が不明 (null) な物は、年齢で絞ったときは出さない (#9186)
+
         if (typeof activeAgeFilter === "number") {
           // 個別年齢ボタン選択時
           var targetAge = activeAgeFilter;

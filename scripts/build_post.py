@@ -386,13 +386,27 @@ _COMPETITOR_TOP_N = 3
 
 
 def _parse_age_min_months(raw: Any) -> int:
-    """年齢文字列から最小月齢（months）を数値でパースする。"""
+    """年齢文字列から最小月齢（months）を数値でパースする。読めなければ 0。
+
+    0 は「0ヶ月〜」と「不明」の両方を指す。区別が要るところ (front matter の
+    age_min_months) は _parse_age_min_months_or_none を使う (#9186)。
+    """
+    months = _parse_age_min_months_or_none(raw)
+    return 0 if months is None else months
+
+
+def _parse_age_min_months_or_none(raw: Any) -> int | None:
+    """年齢文字列から最小月齢（months）をパースする。数字が無ければ None (不明)。
+
+    「対象年齢の記載なし」「全年齢」「大人向け」などは不明として None を返し、
+    「0ヶ月〜」「0歳〜」のように 0 と書かれたものだけを 0 にする (#9186)。
+    """
     if not raw:
-        return 0
+        return None
     raw_str = str(raw).strip()
     if not raw_str:
-        return 0
-    
+        return None
+
     # 1.5歳半、18ヶ月などの特異パターンを優先判定
     if re.search(r"1\.5|1歳半|1歳6ヶ月|18ヶ月", raw_str):
         return 18
@@ -419,8 +433,8 @@ def _parse_age_min_months(raw: Any) -> int:
     m_num = re.search(r"(\d+)", raw_str)
     if m_num:
         return int(m_num.group(1)) * 12
-        
-    return 0
+
+    return None
 
 
 # Issue #1301 B4 Stage 2: Article 単位 JSON-LD の reviewedBy / creator 用定数。
@@ -3406,7 +3420,11 @@ def _frontmatter_meta(
             if match:
                 raw_age = match.group(0)
                 
-    meta["age_min_months"] = _parse_age_min_months(raw_age)
+    # 不明なら age_min_months を書かない。0 を書くと「0ヶ月から遊べる」と
+    # 区別できず、年齢で絞る機能 (診断・年齢フィルタ) に乳児向けとして混ざる (#9186)。
+    age_min_months = _parse_age_min_months_or_none(raw_age)
+    if age_min_months is not None:
+        meta["age_min_months"] = age_min_months
 
     # #1124: Jules 側の ivs_score / ivs_detail 生成は廃止。スコアは
     # brand_tier(25) + safety(10) + age(10) + edu(15) + media(15) + market(10) + price(15)

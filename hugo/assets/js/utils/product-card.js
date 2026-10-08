@@ -108,7 +108,8 @@
     a.setAttribute("aria-label", displayName + " の比較レビューを読む");
     a.setAttribute("data-ivs", score5 || 0);
     a.setAttribute("data-ivs100", score100 || 0);
-    a.setAttribute("data-age-min", item.age_min_months || 0);
+    // 不明 (null) は空にする。0 は「0か月〜」の意味だけに使う (#9186)
+    a.setAttribute("data-age-min", item.age_min_months == null ? "" : item.age_min_months);
     a.innerHTML =
       '<div class="product-card-image">' +
         imgHtml + scoreHtml + ageHtml +
