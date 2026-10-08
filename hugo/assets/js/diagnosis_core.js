@@ -358,7 +358,8 @@
     return { picks: picked, relaxed: relaxed };
   }
 
-  // 年齢タイムライン (?age=0-1 など、ホームの age_timeline.html) 用の旧バンド。
+  // 年齢別ベスト10 (?age=、ホームの age_timeline.html) は AGES の 9 段階をそのまま使う。
+  // 2026-10 以前のタイムラインの旧 4 区分は、外部リンクやブックマーク用に残す。
   var LEGACY_AGE_BANDS = {
     "0-1": { label: "0〜1歳", emoji: "👶", lo: 0, hi: 23, age: "6-11m" },
     "1-2": { label: "1〜2歳", emoji: "🚶", lo: 12, hi: 35, age: "1y" },
@@ -366,13 +367,23 @@
     "5-6": { label: "5〜6歳", emoji: "🎒", lo: 60, hi: 83, age: "5y" }
   };
 
+  // ?age= の値 → 表示名と、出してよい対象年齢 (月齢) の範囲。知らない値は null。
+  // min は診断と同じく「幼すぎて物足りない」物を除く下限、max は帯の上限。
+  function ageBand(band) {
+    var a = find(AGES, band);
+    if (a) return { label: a.label, emoji: a.emoji, min: a.lo - lowerWindow(a.lo), max: a.hi, age: a.value };
+    if (!Object.prototype.hasOwnProperty.call(LEGACY_AGE_BANDS, band)) return null;
+    var b = LEGACY_AGE_BANDS[band];
+    return { label: b.label, emoji: b.emoji, min: b.lo - 12, max: b.hi, age: b.age };
+  }
+
   // 年齢帯の知育スコア上位。対象年齢が帯の上限を超えるものは出さない。
   function ageBest(items, band, limit) {
-    var b = LEGACY_AGE_BANDS[band];
+    var b = ageBand(band);
     if (!b) return [];
     var list = items.filter(function (it) {
       var m = ageMinOf(it);
-      return m <= b.hi && m >= b.lo - 12;
+      return m <= b.max && m >= b.min;
     }).map(function (it) { return { item: it, score: Number(it.ivs_score_100) || 0, reasons: [] }; });
     list.sort(function (x, y) { return y.score - x.score; });
     return diversify(list, limit || 10, []);
@@ -529,7 +540,7 @@
     WHO: WHO, AGES: AGES, INTERESTS: INTERESTS, BUDGETS: BUDGETS, PRIORITIES: PRIORITIES,
     LEGACY_AGE_BANDS: LEGACY_AGE_BANDS, RELAX_NOTES: RELAX_NOTES,
     find: find, stepsFor: stepsFor, question: question, emptyAnswers: emptyAnswers, isComplete: isComplete,
-    scoreItem: scoreItem, recommend: recommend, ageBest: ageBest, minPrice: minPrice, formatMonths: formatMonths,
+    scoreItem: scoreItem, recommend: recommend, ageBand: ageBand, ageBest: ageBest, minPrice: minPrice, formatMonths: formatMonths,
     persona: persona, ageTip: ageTip, summaryChips: summaryChips,
     toQuery: toQuery, fromParams: fromParams, fromSaved: fromSaved, toSaved: toSaved
   };
