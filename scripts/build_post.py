@@ -47,6 +47,7 @@ from age_semantics import (
     ADULT_AGE_MONTHS,
     is_seasonal_decoration,
     min_months_from_words,
+    override_age_months,
     seasonal_names,
 )
 from build_feature_lists import PRICE_BANDS
@@ -3438,6 +3439,10 @@ def _frontmatter_meta(
     age_min_months = _parse_age_min_months_or_none(raw_age)
     if is_seasonal_decoration(*seasonal_names(data)):
         age_min_months = None
+    # data/age_overrides.json の確認済みの年齢 (出典付き) は、記事の表記より優先する
+    override = override_age_months(data)
+    if override is not None:
+        age_min_months = override
     if age_min_months is not None:
         meta["age_min_months"] = age_min_months
 
@@ -3897,6 +3902,9 @@ def main() -> None:
             age_months = _parse_age_min_months_or_none(target_age_raw)
             if is_seasonal_decoration(*seasonal_names(data)):
                 age_months = None  # 節句・正月の飾り物に発達の目安は出さない (#9186)
+            override = override_age_months(data)
+            if override is not None:
+                age_months = override
             development_stage = _get_development_stage(age_months, stages_data)
             if development_stage:
                 data["development_stage"] = development_stage

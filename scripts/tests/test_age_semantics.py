@@ -10,11 +10,13 @@ import pathlib
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 THIS_DIR = pathlib.Path(__file__).resolve().parent
 REPO_ROOT = THIS_DIR.parent.parent  # amazon-clone/
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+import age_semantics  # type: ignore[import-not-found]  # noqa: E402
 from age_semantics import (  # type: ignore[import-not-found]  # noqa: E402
     ADULT_AGE_MONTHS,
     is_seasonal_decoration,
@@ -111,6 +113,53 @@ class CategoryHubAgeIndexTests(unittest.TestCase):
                 }, ensure_ascii=False), encoding="utf-8")
             index = build_min_months_index(d)
         self.assertEqual(index, {"B000000002": 0})
+
+
+class AgeOverridesTests(unittest.TestCase):
+    """data/age_overrides.json: 出典付きで確かめた年齢だけを、記事の表記より優先する。"""
+
+    def _write(self, d: pathlib.Path) -> pathlib.Path:
+        p = d / "age_overrides.json"
+        p.write_text(json.dumps({"overrides": {
+            "B0000000AA": {"age_min_months": 72, "source": "https://example.com/aa", "quote": "対象年齢 6歳以上"},
+            "B0000000BB": {"age_min_months": 36},  # 出典なし: 使わない
+            "b0000000cc": {"age_min_months": 0, "source": "https://example.com/cc"},
+        }}, ensure_ascii=False), encoding="utf-8")
+        return p
+
+    def test_only_sourced_entries_are_used(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self._write(pathlib.Path(tmp))
+            self.assertEqual(age_semantics.override_age_months({"product": {"asin": "B0000000AA"}}, p), 72)
+            self.assertIsNone(age_semantics.override_age_months({"product": {"asin": "B0000000BB"}}, p))
+            self.assertEqual(age_semantics.override_age_months({"product": {"asin": "B0000000CC"}}, p), 0)
+            self.assertIsNone(age_semantics.override_age_months({"product": {}}, p))
+
+    def test_override_wins_in_feature_lists_and_hubs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = pathlib.Path(tmp)
+            p = self._write(d)
+            arts = d / "articles"
+            arts.mkdir()
+            raw = {"product": {"asin": "B0000000AA", "name": "工作キット"},
+                   "persona_fit": {"age_range": "対象年齢の記載なし"}}
+            (arts / "B0000000AA.json").write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
+            with mock.patch.object(age_semantics, "AGE_OVERRIDES_PATH", p):
+                self.assertEqual(age_min_months_from_article(raw), 72)
+                self.assertEqual(build_min_months_index(arts), {"B0000000AA": 72})
+
+    def test_repo_overrides_file_is_valid(self):
+        # 実ファイル: 全エントリに出典 URL と原文の引用がある
+        path = age_semantics.AGE_OVERRIDES_PATH
+        if not path.exists():
+            self.skipTest("data/age_overrides.json が無い")
+        data = json.loads(path.read_text(encoding="utf-8"))
+        for asin, e in data["overrides"].items():
+            with self.subTest(asin=asin):
+                self.assertRegex(asin, r"^[A-Z0-9]{10}$")
+                self.assertIsInstance(e["age_min_months"], int)
+                self.assertTrue(e["source"].startswith("http"))
+                self.assertTrue(e.get("quote"))
 
 
 if __name__ == "__main__":

@@ -45,7 +45,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import market_prices  # noqa: E402
 import price_overlay  # noqa: E402
 import product_image  # noqa: E402
-from age_semantics import is_seasonal_decoration, min_months_from_words, seasonal_names  # noqa: E402
+from age_semantics import (  # noqa: E402
+    is_seasonal_decoration,
+    min_months_from_words,
+    override_age_months,
+    seasonal_names,
+)
 from brand_normalizer import normalize as normalize_brand  # noqa: E402
 from score_calculator import calculate as calculate_score, compute_ivs_axes  # noqa: E402
 
@@ -126,7 +131,11 @@ def age_min_months_from_article(raw: dict[str, Any]) -> int | None:
     product.target_age or product.age_range -> persona_fit.age_range ->
     technical_specs.age_range。build_post.py 自体は変更しない (仕様固定)。
     節句・正月の飾り物は対象年齢を持たない扱い (None) にする (#9186、build_post と同じ)。
+    data/age_overrides.json の確認済みの年齢があれば、それを最優先する。
     """
+    override = override_age_months(raw)
+    if override is not None:
+        return override
     if is_seasonal_decoration(*seasonal_names(raw)):
         return None
     product = raw.get("product") or {}

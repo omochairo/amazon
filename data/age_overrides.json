@@ -1,0 +1,54 @@
+{
+  "_doc": "記事 json に対象年齢が無い (または誤っている) 商品の、メーカー公表の対象年齢 (#9186)。scripts/age_semantics.py が読み、記事の年齢表記より優先する。source (メーカー公式の商品ページ等) と quote (そのページの文言) が無い値は使われない。推測で埋めない — 対象年齢を低く見積もると誤飲の危険がある物を乳幼児向けに出してしまう。",
+  "overrides": {
+    "B071YP7PC7": {
+      "age_min_months": 72,
+      "product_name": "アーテック ペットボトルエコライト 097512",
+      "source": "https://www.artec-kk.co.jp/goods/workshop/product/097512",
+      "quote": "対象年齢 6歳以上",
+      "checked_at": "2026-10-08"
+    },
+    "B09VBZTHCM": {
+      "age_min_months": 72,
+      "product_name": "アーテック 紙せっけんてづくりキット 055532",
+      "source": "https://www.artec-kk.co.jp/goods/workshop/product/055532",
+      "quote": "対象年齢 6歳以上",
+      "checked_at": "2026-10-08"
+    },
+    "B08YN8TV82": {
+      "age_min_months": 72,
+      "product_name": "アーテック マジックハンド工作かみつきドラゴン 055903",
+      "source": "https://www.artec-kk.co.jp/goods/workshop/product/055903",
+      "quote": "対象年齢 6歳以上",
+      "checked_at": "2026-10-08"
+    },
+    "B09VBZWNW7": {
+      "age_min_months": 72,
+      "product_name": "アーテック BIGロケットパンチ工作キット 055974",
+      "source": "https://www.artec-kk.co.jp/goods/workshop/product/055974",
+      "quote": "対象年齢 6歳以上",
+      "checked_at": "2026-10-08"
+    },
+    "B08YYBHV58": {
+      "age_min_months": 36,
+      "product_name": "アーテック ミニ万華鏡をつくろう 055942",
+      "source": "https://www.artec-kk.co.jp/goods/workshop/product/055942",
+      "quote": "対象年齢 3歳以上",
+      "checked_at": "2026-10-08"
+    },
+    "B09VBZFMCC": {
+      "age_min_months": 72,
+      "product_name": "アーテック ソーラーミニカー組立キット 055983",
+      "source": "https://www.artec-kk.co.jp/goods/workshop/product/055983",
+      "quote": "対象年齢 6歳以上",
+      "checked_at": "2026-10-08"
+    },
+    "B088CC8FYH": {
+      "age_min_months": 48,
+      "product_name": "幻冬舎 モンテッソーリ式 さいしょのずけいパズル",
+      "source": "https://www.gentosha-edu.co.jp/book/b512328.html",
+      "quote": "【対象年齢】 4歳以上",
+      "checked_at": "2026-10-08"
+    }
+  }
+}
