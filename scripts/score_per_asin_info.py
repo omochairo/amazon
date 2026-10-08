@@ -31,6 +31,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import pathlib
 import re
@@ -46,6 +47,13 @@ except ImportError:  # スクリプトを scripts/ 外から呼ぶ場合のフ�
     from filter_raw_per_asin import exclude_title_only  # type: ignore
 
 PER_ASIN_DIR = pathlib.Path("data/raw/per_asin")
+FIRST_PARTY_SOURCES = pathlib.Path("data/analytics/first_party_sources.json")
+
+# #9199 案(b): omcha.jp (おもちゃいろ本家) の実使用記事は「運営者の一次情報」として
+# 非販売ソースに 1 件まで数える。第三者ではないので 2 件目は外部から要る。
+# navi.omcha.jp (このサイト自身) は数えない: 自分の生成記事を根拠にする循環 (#6593)。
+_FIRST_PARTY_HOSTS = ("omcha.jp", "www.omcha.jp")
+_FIRST_PARTY_MAX_COUNTED = 1
 
 # ニュース見出しの末尾 " - 媒体名" を媒体として distinct 集計する。
 # Google News RSS は url が news.google.com 固定リダイレクトのため host では
@@ -183,6 +191,34 @@ def _third_party_hosts(asin: str, base: pathlib.Path) -> int:
     return len(hosts)
 
 
+@functools.lru_cache(maxsize=4)
+def _first_party_index(path: str) -> dict:
+    """first_party_sources.json を ASIN -> 実使用記事 URL のタプルに引き直す (1 プロセス 1 回)。
+
+    role=primary (その記事の主役の商品) だけ。compared は比較で名前が出るだけで、
+    その商品の一次情報とは言えない。無い/壊れていれば空 (pick を止めない)。
+    """
+    data = _load(pathlib.Path(path))
+    rows = data.get("sources") if isinstance(data, dict) else None
+    out: dict[str, list[str]] = {}
+    for r in rows if isinstance(rows, list) else []:
+        if not isinstance(r, dict) or r.get("role") != "primary":
+            continue
+        url = r.get("post_url") or ""
+        if urllib.parse.urlparse(url).netloc.lower() not in _FIRST_PARTY_HOSTS:
+            continue
+        lst = out.setdefault(r.get("asin") or "", [])
+        if url not in lst:
+            lst.append(url)
+    return {a: tuple(v) for a, v in out.items()}
+
+
+def first_party_posts(asin: str, path: pathlib.Path = FIRST_PARTY_SOURCES) -> tuple:
+    """この ASIN を主役にした omcha.jp の実使用記事 URL (#9199 案b)。"""
+    # cwd 相対のまま cache のキーにすると、cwd を変えたときに別の索引を返す
+    return _first_party_index(str(pathlib.Path(path).resolve())).get(asin, ())
+
+
 def _brand_tier(amazon) -> str:
     """raw amazon.json item から brand tier を推定する。
 
@@ -277,6 +313,7 @@ def score_asin(asin: str, base: pathlib.Path = PER_ASIN_DIR) -> dict:
         "competitors": comp,
         "third_party_hosts": tp_hosts,
         "third_party_fetched": (d / "third_party_sources.json").exists(),
+        "first_party_posts": len(first_party_posts(asin)),
         "exists": d.is_dir(),
     }
 
@@ -287,8 +324,12 @@ def non_sales_material(result: dict) -> int:
     事前収集 (fetch_third_party_sources) の非販売 host と、news の distinct 媒体を
     足す。youtube / books は数えない: youtube は何本あっても 1 host で、books は
     販売サイト由来が多く、どちらも「第三者の非販売サイト」の裏付けとしては弱い。
+
+    #9199 案(b): omcha.jp の実使用記事 (first_party_posts) を 1 件まで足す。
+    プロンプトにも sources に 1 件まで採用してよいと渡している (build_jules_prompt)。
     """
-    return result.get("third_party_hosts", 0) + result.get("news_sources", 0)
+    fp = min(result.get("first_party_posts", 0), _FIRST_PARTY_MAX_COUNTED)
+    return result.get("third_party_hosts", 0) + result.get("news_sources", 0) + fp
 
 
 def awaiting_sources(result: dict) -> bool:

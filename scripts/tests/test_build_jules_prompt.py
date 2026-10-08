@@ -196,3 +196,53 @@ def test_build_prompt_excludes_title_only_youtube_items(tmp_path, monkeypatch):
     assert "判定済みの動画" in prompt
     assert "titleonly01" not in prompt
     assert "一般語の別商品" not in prompt
+
+
+# --------------------------------------------------------------------------
+# _first_party_note: omcha.jp の実使用記事を出典に使ってよい注記 (#9199 案 b)
+# --------------------------------------------------------------------------
+
+def _write_first_party(tmp_path, rows):
+    d = tmp_path / "data" / "analytics"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "first_party_sources.json").write_text(json.dumps({"sources": rows}), encoding="utf-8")
+
+
+def test_first_party_note_lists_primary_omcha_posts(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _write_first_party(tmp_path, [
+        {"asin": "B0FNM4Y35G", "role": "primary", "post_url": "https://omcha.jp/review-a/"},
+        {"asin": "B0FNM4Y35G", "role": "compared", "post_url": "https://omcha.jp/hikaku-b/"},
+    ])
+    rc = _run_main(monkeypatch, ["--asin", "B0FNM4Y35G", "--print-note", "first_party"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "https://omcha.jp/review-a/" in out
+    assert "hikaku-b" not in out  # 比較で名前が出るだけの記事は渡さない
+    assert "1 件まで" in out and "外部のサイト" in out and "navi.omcha.jp" in out
+
+
+def test_first_party_note_empty_without_post(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _write_first_party(tmp_path, [
+        {"asin": "B0OTHER001", "role": "primary", "post_url": "https://omcha.jp/x/"}])
+    assert build_jules_prompt._first_party_note("B0FNM4Y35G") == ""
+
+
+def test_build_prompt_includes_first_party_note_and_third_party_rule(tmp_path, monkeypatch):
+    # 03 (--print-note first_party) と repoless (build_prompt) で同じ文面を渡す
+    real_read = build_jules_prompt._read
+    monkeypatch.setattr(
+        build_jules_prompt, "_read",
+        lambda path: "" if path in ("AGENTS.md", "jules/PROMPT_TEMPLATE.md") else real_read(path))
+    monkeypatch.chdir(tmp_path)
+    asin = "B0FNM4Y35G"
+    raw_dir = tmp_path / "data" / "raw"
+    raw_dir.mkdir(parents=True)
+    (raw_dir / "amazon.json").write_text(
+        json.dumps({"items": [{"asin": asin, "title": "テスト商品"}]}), encoding="utf-8")
+    _write_first_party(tmp_path, [
+        {"asin": asin, "role": "primary", "post_url": "https://omcha.jp/review-a/"}])
+    prompt = build_prompt(asin, today="2026-10-08")
+    assert build_jules_prompt._first_party_note(asin) in prompt
+    assert "third_party_sources.json は、システムが事前収集した非販売の第三者候補" in prompt

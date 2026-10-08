@@ -149,3 +149,20 @@ def test_audit_does_not_scan_intentional_self_reference():
     from scripts import audit_self_domain as audit
 
     assert "omcha_related.json" not in audit.TARGET_FILES
+
+
+def test_audit_skips_intended_first_party_snippets(tmp_path):
+    """#9199: 本家 omcha.jp の実使用記事から抜いた体験談は意図的な自己参照。
+
+    ただし navi.omcha.jp (この比較サイト自身) は first_party でも数える。
+    """
+    from scripts import audit_self_domain as audit
+
+    _write(tmp_path / "B0AAAAAAAA" / "experience.json", {"snippets": [
+        {"source_type": "first_party", "source_url": "https://omcha.jp/review/"},
+        {"source_type": "first_party", "source_url": "https://navi.omcha.jp/products/x/"},
+        {"source_type": "blog", "source_url": "https://omcha.jp/other/"},
+    ]})
+    hits = audit.audit(tmp_path)["per_file"]["experience.json"]["hits"]
+    assert [h["url"] for h in hits] == ["https://navi.omcha.jp/products/x/",
+                                        "https://omcha.jp/other/"]
