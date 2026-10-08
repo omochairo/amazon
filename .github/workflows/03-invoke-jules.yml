@@ -201,6 +201,23 @@ jobs:
                       if isinstance(a, str) and _ASIN_RE.match(a)
                   ]
                   _fp_remaining = [a for a in _fp_all if a not in existing]
+                  # #9155: per_asin に商品データ (amazon.json の item) が無い ASIN は
+                  # 取得されるまで待たせる。first-party は navi の検索プール外から来る
+                  # ので、従来は記事化されるまで amazon.json が作られず、Jules は商品
+                  # データ無しで起動されて画像 URL 等を自作していた (83 本中 73 本)。
+                  # データは fetch_amazon の巡回が先に取る (1 日 2 run)。上限で切る
+                  # **前に**外す: 後で外すとデータの無い ASIN が枠を占有し続ける。
+                  try:
+                      import product_image as _pi
+                      _fp_waiting = [a for a in _fp_remaining
+                                     if not _pi.has_amazon_item('data/raw/per_asin', a)]
+                  except Exception as _e:  # 判定できなければ従来どおり (pick を止めない)
+                      print(f"::warning::first-party amazon data check skipped: {_e}")
+                      _fp_waiting = []
+                  if _fp_waiting:
+                      print(f"first-party waiting for amazon data (#9155): {len(_fp_waiting)} "
+                            f"{_fp_waiting[:10]}")
+                  _fp_remaining = [a for a in _fp_remaining if a not in set(_fp_waiting)]
                   first_party_pool = _fp_remaining[:max(_fp_cap, 0)]
                   if first_party_pool:
                       print(f"first-party-ready (omcha-ops#264): {len(_fp_remaining)} remaining "

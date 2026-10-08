@@ -151,3 +151,31 @@ def test_gate_warns_on_empty_and_skips_without_amazon_image(tmp_path):
     assert r.passed and r.score < 1.0
     no_img = quality_gate.check_product_image_matches_amazon(_article(FAKE), tmp_path / "none")
     assert no_img.passed and no_img.score == 1.0
+
+
+# --- #9155: first-party の ASIN を商品データ取得前に Jules へ渡さない --------
+
+def test_has_amazon_item_requires_title(tmp_path):
+    _write_amazon(tmp_path, ASIN, {"title": "すみっコスマホワイド", "image": REAL})
+    assert product_image.has_amazon_item(tmp_path, ASIN)
+    # GetItems で取れず miss だけ記録された snapshot (item 無し)
+    miss = tmp_path / "B0MISSONLY"
+    miss.mkdir()
+    (miss / "amazon.json").write_text(
+        json.dumps({"asin": "B0MISSONLY", "miss_count": 1}), encoding="utf-8")
+    assert not product_image.has_amazon_item(tmp_path, "B0MISSONLY")
+    assert not product_image.has_amazon_item(tmp_path, "B0NOTEXIST")
+
+
+def test_fetch_amazon_targets_first_party_without_item(tmp_path):
+    import fetch_amazon
+
+    raw = tmp_path / "raw"
+    _write_amazon(raw / "per_asin", ASIN, {"title": "取得済み", "image": REAL})
+    (raw / "first_party_pool.json").write_text(
+        json.dumps({"asins": [ASIN, "B0NEWFIRST", "4910762175"]}), encoding="utf-8")
+    targets = fetch_amazon._first_party_targets_without_item(str(raw))
+    assert [t["asin"] for t in targets] == ["B0NEWFIRST"]
+    assert all(t["title"] for t in targets)  # pick_target_asins は title 必須
+    # プールが無ければ何もしない
+    assert fetch_amazon._first_party_targets_without_item(str(tmp_path / "none")) == []

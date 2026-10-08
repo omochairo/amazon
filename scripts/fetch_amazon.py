@@ -45,6 +45,7 @@ from typing import Any, Optional
 
 import _fetch_targets
 import price_history
+import product_image
 import image_dimensions
 from genre_gate import classify_genre
 
@@ -1106,6 +1107,33 @@ def _record_snapshot_miss(out_root: str, asin: str) -> int:
     return miss
 
 
+def _first_party_targets_without_item(out_root: str) -> list:
+    """first_party_pool.json の ASIN のうち、per_asin に商品データが無いもの。
+
+    #9155: first-party 枠 (omcha-ops#264) の ASIN は navi の検索プール外から
+    来るため、記事化されるまで per_asin/<ASIN>/amazon.json が作られず、Jules は
+    商品データ無しで起動されていた (実測: 83 本中 73 本。画像 URL を自作し
+    10 本が 404/400)。記事 ASIN と同じ巡回に混ぜて先に取得しておく。state に
+    未登録の ASIN は pick_target_asins で最優先になる。
+    title は pick_target_asins の必須項目を満たすための仮値 (GetItems は使わない)。
+    """
+    path = os.path.join(out_root, "first_party_pool.json")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            pool = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return []
+    asins = pool.get("asins") if isinstance(pool, dict) else None
+    if not isinstance(asins, list):
+        return []
+    per_asin_root = os.path.join(out_root, "per_asin")
+    return [
+        {"asin": a, "title": a} for a in asins
+        if isinstance(a, str) and re.fullmatch(r"B0[A-Z0-9]{8}", a)
+        and not product_image.has_amazon_item(per_asin_root, a)
+    ]
+
+
 def refresh_article_snapshots(api, out_root: str, articles_dir: str, tag: str,
                               max_per_run: int, stale_days: int) -> None:
     """既掲載記事 ASIN の Amazon データを stale-first で巡回更新する (2026-07-07)。
@@ -1128,7 +1156,7 @@ def refresh_article_snapshots(api, out_root: str, articles_dir: str, tag: str,
     call/run (~12秒) で、全記事 ~1420 ASIN を 7 日で一巡する。
     """
     picked = _fetch_targets.pick_target_asins(
-        pathlib.Path(out_root), "amazon_refresh", [],
+        pathlib.Path(out_root), "amazon_refresh", _first_party_targets_without_item(out_root),
         pathlib.Path(articles_dir),
         max_per_run=max_per_run, stale_after_days=stale_days)
     if not picked:

@@ -60,12 +60,14 @@ def load_first_party_pool(path: str = "data/raw/first_party_pool.json") -> list:
 
 def select_candidates(items, existing, ranking_pool, first_party_all,
                       rewrite_candidates, seed, scorer=None,
-                      first_party_cap: int = 2, rewrite_cap: int = 2) -> list:
+                      first_party_cap: int = 2, rewrite_cap: int = 2,
+                      has_amazon_item=None) -> list:
     """候補を優先順に並べ、``{"asin", "pool", "source_keyword"}`` のリストで返す。
 
     items: amazon.json の items[]。existing: 除外する ASIN (既存記事・open PR/MR・lock)。
     rewrite_candidates: ``rewrite_queue.pending_rewrite_candidates`` の戻り値
     (取得に失敗したら None)。scorer: ``score_per_asin_info`` (None なら defer しない)。
+    has_amazon_item: ASIN -> per_asin に商品データがあるか (None なら判定しない)。
     pool が空文字の行は出自不明 (台帳に書かない)。
     """
     candidates = [i["asin"] for i in items
@@ -73,6 +75,14 @@ def select_candidates(items, existing, ranking_pool, first_party_all,
                   and ASIN_RE.match(i["asin"])]
 
     fp_remaining = [a for a in first_party_all if a not in existing]
+    # #9155: 商品データの無い first-party は取得されるまで待たせる (03 と同じ)。
+    # 上限で切る前に外す: 後で外すとデータの無い ASIN が枠を占有し続ける。
+    if has_amazon_item is not None:
+        fp_waiting = [a for a in fp_remaining if not has_amazon_item(a)]
+        if fp_waiting:
+            print(f"first-party waiting for amazon data (#9155): {len(fp_waiting)} "
+                  f"{fp_waiting[:10]}")
+        fp_remaining = [a for a in fp_remaining if a not in set(fp_waiting)]
     first_party_pool = fp_remaining[:max(first_party_cap, 0)]
     if first_party_pool:
         print(f"first-party-ready (omcha-ops#264): {len(fp_remaining)} remaining "
@@ -162,9 +172,18 @@ def pick_from_repo(existing, seed) -> list:
     except Exception as e:
         _warn(f"info scoring skipped, no defer applied: {e}")
         scorer = None
+    try:
+        import product_image
+
+        def has_amazon_item(a):
+            return product_image.has_amazon_item("data/raw/per_asin", a)
+    except Exception as e:  # 判定できなければ従来どおり (pick を止めない)
+        _warn(f"first-party amazon data check skipped: {e}")
+        has_amazon_item = None
     return select_candidates(
         items, existing, load_ranking_pool(), load_first_party_pool(),
         rewrite_candidates, seed, scorer,
         first_party_cap=int(os.environ.get("FIRST_PARTY_PICKS_PER_RUN", "2")),
         rewrite_cap=int(os.environ.get("REWRITE_PICKS_PER_RUN", "2")),
+        has_amazon_item=has_amazon_item,
     )
