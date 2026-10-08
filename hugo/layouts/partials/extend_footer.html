@@ -4,6 +4,13 @@
 <script defer src="{{ $fav.RelPermalink }}" integrity="{{ $fav.Data.Integrity }}" crossorigin="anonymous"></script>
 {{- end }}
 
+{{- /* #9155: 読み込めなかった画像を「画像なし」に差し替える — 全ページ (一覧・ハブ・
+       お気に入り・閲覧履歴など、商品画像はどのページにも出るため)。 */ -}}
+{{- $imgFallback := resources.Get "js/img_fallback.js" | resources.Minify | resources.Fingerprint "sha256" }}
+{{- if $imgFallback }}
+<script defer src="{{ $imgFallback.RelPermalink }}" integrity="{{ $imgFallback.Data.Integrity }}" crossorigin="anonymous"></script>
+{{- end }}
+
 {{- /* omcha-ops#19 P4: アフィリエイト CTA の明示クリック計測 — 全ページで読み込む。
        CTA は商品ページだけでなく /deals/ /cospa/ /price/ とテーマ・年齢 hub にも
        出るため、ページ種別で出し分けない。listener 1 個だけで DOM も触らない。 */ -}}

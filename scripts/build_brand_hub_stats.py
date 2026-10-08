@@ -348,7 +348,7 @@ def aggregate(
                 "asin": product.get("asin"),
                 "image": resolve_product_image(
                     product.get("asin"), product.get("image"), per_asin_root
-                ) or None,
+                ),
                 "ivs_100": ivs,
                 "best_price": product.get("best_price"),
                 "tier": norm.tier,

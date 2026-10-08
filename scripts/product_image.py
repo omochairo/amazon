@@ -29,29 +29,36 @@ def amazon_image(item: Any) -> str:
     img = item.get("image")
     if isinstance(img, str) and img:
         return img
-    for u in item.get("images") or []:
-        if isinstance(u, str) and u:
-            return u
+    images = item.get("images")
+    if isinstance(images, list):
+        for u in images:
+            if isinstance(u, str) and u:
+                return u
     return ""
 
 
-def load_amazon_image(per_asin_root: Path | str | None, asin: str | None) -> str:
-    """``<per_asin_root>/<ASIN>/amazon.json`` の画像 URL を返す (無い・壊れていれば "")。
+def load_amazon_item(per_asin_root: Path | str | None, asin: Any) -> dict | None:
+    """``<per_asin_root>/<ASIN>/amazon.json`` の item dict を返す (無い・壊れていれば None)。
 
     ``{asin, fetched_at, item}`` 形と、item を root に置いた旧形の両方を受ける。
     """
-    if not asin:
-        return ""
+    key = asin.strip().upper() if isinstance(asin, str) else ""
+    if not key:
+        return None
     root = DEFAULT_PER_ASIN_ROOT if per_asin_root is None else Path(per_asin_root)
-    path = root / str(asin).strip().upper() / "amazon.json"
     try:
-        snap = json.loads(path.read_text(encoding="utf-8"))
+        snap = json.loads((root / key / "amazon.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return ""
+        return None
     if not isinstance(snap, dict):
-        return ""
+        return None
     item = snap.get("item") if isinstance(snap.get("item"), dict) else snap
-    return amazon_image(item)
+    return item if isinstance(item, dict) else None
+
+
+def load_amazon_image(per_asin_root: Path | str | None, asin: Any) -> str:
+    """``<per_asin_root>/<ASIN>/amazon.json`` の画像 URL を返す (無い・壊れていれば "")。"""
+    return amazon_image(load_amazon_item(per_asin_root, asin))
 
 
 def resolve_product_image(
