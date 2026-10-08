@@ -218,6 +218,20 @@ jobs:
                       print(f"first-party waiting for amazon data (#9155): {len(_fp_waiting)} "
                             f"{_fp_waiting[:10]}")
                   _fp_remaining = [a for a in _fp_remaining if a not in set(_fp_waiting)]
+                  # #9155: first-party は検索を通らないので取得時のジャンルゲート (#2823)
+                  # が効かず、漂白剤・ペットシーツ等が記事化されていた。商品データが
+                  # 揃った時点で同じ判定をかけて外す (これも上限で切る前)。
+                  try:
+                      import genre_gate as _gg
+                      _fp_offgenre = [a for a in _fp_remaining
+                                      if _gg.is_flagged_snapshot('data/raw/per_asin', a)]
+                  except Exception as _e:  # 判定できなければ従来どおり (pick を止めない)
+                      print(f"::warning::first-party genre check skipped: {_e}")
+                      _fp_offgenre = []
+                  if _fp_offgenre:
+                      print(f"first-party skipped, genre mismatch (#9155): {len(_fp_offgenre)} "
+                            f"{_fp_offgenre[:10]}")
+                  _fp_remaining = [a for a in _fp_remaining if a not in set(_fp_offgenre)]
                   first_party_pool = _fp_remaining[:max(_fp_cap, 0)]
                   if first_party_pool:
                       print(f"first-party-ready (omcha-ops#264): {len(_fp_remaining)} remaining "

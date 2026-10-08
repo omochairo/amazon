@@ -40,6 +40,13 @@ ALLOWED_ASINS = {
     # blocklist 済みの B07TL3JZGH (清原 ループ返し) があり、ノード許可すると
     # 2026-07-12 の手芸用品 cleanup を無効化してしまう。
     "B096TWPGWV": "サンフェルト 子ども手芸キット ゆめいろマスコット",
+    # 2026-10-08 の棚卸し (#9155) で子ども向けの遊び道具と確認したもの。
+    # ノード (カードメーキングキット / ホームストア / 室内用トランポリン / クレヨン)
+    # は大人向け商品と共有しているのでノード許可にはしない。
+    "B0FTFDRP62": "ギンポー pocoPOKKE はじめてのダンボール工作キット",
+    "B089Y3VR2Q": "ホームテイスト 積み木クッション BLOCCHI",
+    "B0BJK8DGPG": "ケラッタ トランポリン クッション FUN FUN JUMPER (こども用)",
+    "B082HX5B97": "Shuttle Art クレヨン 32色 水で落とせる",
 }
 
 
@@ -70,3 +77,24 @@ def classify_genre(browse_nodes, asin=None):
     if {nd.get("id") for nd in cat} & set(ALLOWED_NODE_IDS):
         return "pass", cat
     return "flag", cat
+
+
+def is_flagged_snapshot(per_asin_root, asin) -> bool:
+    """``<per_asin_root>/<ASIN>/amazon.json`` の browse_nodes がジャンル不一致 ("flag") か。
+
+    first-party (omcha-ops#264) は検索を通らないので取得時ゲートが効かない。
+    pick 時にこれで外す (#9155)。snapshot が無い・壊れている・判定不能なら False
+    (fail-open: 判定の失敗で pick を止めない)。
+    """
+    try:
+        try:
+            import product_image
+        except ImportError:  # pragma: no cover - repo root から import された場合
+            from scripts import product_image  # type: ignore[no-redef]
+        item = product_image.load_amazon_item(per_asin_root, asin)
+        if not item:
+            return False
+        verdict, _ = classify_genre(item.get("browse_nodes"), asin=asin)
+    except Exception:
+        return False
+    return verdict == "flag"

@@ -61,13 +61,14 @@ def load_first_party_pool(path: str = "data/raw/first_party_pool.json") -> list:
 def select_candidates(items, existing, ranking_pool, first_party_all,
                       rewrite_candidates, seed, scorer=None,
                       first_party_cap: int = 2, rewrite_cap: int = 2,
-                      has_amazon_item=None) -> list:
+                      has_amazon_item=None, genre_flagged=None) -> list:
     """候補を優先順に並べ、``{"asin", "pool", "source_keyword"}`` のリストで返す。
 
     items: amazon.json の items[]。existing: 除外する ASIN (既存記事・open PR/MR・lock)。
     rewrite_candidates: ``rewrite_queue.pending_rewrite_candidates`` の戻り値
     (取得に失敗したら None)。scorer: ``score_per_asin_info`` (None なら defer しない)。
     has_amazon_item: ASIN -> per_asin に商品データがあるか (None なら判定しない)。
+    genre_flagged: ASIN -> ジャンル不一致か (None なら判定しない)。first-party にだけ使う。
     pool が空文字の行は出自不明 (台帳に書かない)。
     """
     candidates = [i["asin"] for i in items
@@ -83,6 +84,13 @@ def select_candidates(items, existing, ranking_pool, first_party_all,
             print(f"first-party waiting for amazon data (#9155): {len(fp_waiting)} "
                   f"{fp_waiting[:10]}")
         fp_remaining = [a for a in fp_remaining if a not in set(fp_waiting)]
+    # #9155: first-party は取得時のジャンルゲート (#2823) を通らないので、ここで外す (03 と同じ)。
+    if genre_flagged is not None:
+        fp_offgenre = [a for a in fp_remaining if genre_flagged(a)]
+        if fp_offgenre:
+            print(f"first-party skipped, genre mismatch (#9155): {len(fp_offgenre)} "
+                  f"{fp_offgenre[:10]}")
+        fp_remaining = [a for a in fp_remaining if a not in set(fp_offgenre)]
     first_party_pool = fp_remaining[:max(first_party_cap, 0)]
     if first_party_pool:
         print(f"first-party-ready (omcha-ops#264): {len(fp_remaining)} remaining "
@@ -180,10 +188,19 @@ def pick_from_repo(existing, seed) -> list:
     except Exception as e:  # 判定できなければ従来どおり (pick を止めない)
         _warn(f"first-party amazon data check skipped: {e}")
         has_amazon_item = None
+    try:
+        import genre_gate
+
+        def genre_flagged(a):
+            return genre_gate.is_flagged_snapshot("data/raw/per_asin", a)
+    except Exception as e:  # 判定できなければ従来どおり (pick を止めない)
+        _warn(f"first-party genre check skipped: {e}")
+        genre_flagged = None
     return select_candidates(
         items, existing, load_ranking_pool(), load_first_party_pool(),
         rewrite_candidates, seed, scorer,
         first_party_cap=int(os.environ.get("FIRST_PARTY_PICKS_PER_RUN", "2")),
         rewrite_cap=int(os.environ.get("REWRITE_PICKS_PER_RUN", "2")),
         has_amazon_item=has_amazon_item,
+        genre_flagged=genre_flagged,
     )
