@@ -371,22 +371,114 @@
   // min は診断と同じく「幼すぎて物足りない」物を除く下限、max は帯の上限。
   function ageBand(band) {
     var a = find(AGES, band);
-    if (a) return { label: a.label, emoji: a.emoji, min: a.lo - lowerWindow(a.lo), max: a.hi, age: a.value };
+    if (a) return { label: a.label, emoji: a.emoji, lo: a.lo, min: a.lo - lowerWindow(a.lo), max: a.hi, age: a.value };
     if (!Object.prototype.hasOwnProperty.call(LEGACY_AGE_BANDS, band)) return null;
     var b = LEGACY_AGE_BANDS[band];
-    return { label: b.label, emoji: b.emoji, min: b.lo - 12, max: b.hi, age: b.age };
+    return { label: b.label, emoji: b.emoji, lo: b.lo, min: b.lo - 12, max: b.hi, age: b.age };
   }
 
-  // 年齢帯の知育スコア上位。対象年齢が帯の上限を超えるものは出さない。
-  function ageBest(items, band, limit) {
+  // 商品のジャンル (INTERESTS のどれに当たるか)。年齢別ベスト10 で同じジャンルが並ぶのを防ぐ。
+  function genreOf(item) {
+    var hs = haystack(item);
+    for (var i = 0; i < INTERESTS.length; i++) {
+      if (INTERESTS[i].kw.length && matchInterest(hs, INTERESTS[i].value)) return INTERESTS[i].value;
+    }
+    return "";
+  }
+
+  // 対象年齢 0 か月は「未設定」の意味で入っていることが多い (実データで 178 件、タグが「小学生」の
+  // 工作キットやフィギュアも 0)。年齢別ベスト10 では、赤ちゃん向けと読み取れる物だけを 0 か月として扱う。
+  // 「モンテッソーリ」「型はめ」のように幼児向けにも使う語では判定しない。
+  var BABY_WORDS = ["ベビー", "赤ちゃん", "0歳", "新生児", "出産祝い", "ねんね", "ファーストトイ", "ラトル", "歯固め",
+                    "メリー", "にぎにぎ", "ガラガラ", "布絵本", "プレイジム"];
+  function looksBaby(item) {
+    var hs = haystack(item);
+    if (hs.tags.some(function (t) { return t.indexOf("小学生") !== -1; })) return false;
+    for (var i = 0; i < BABY_WORDS.length; i++) {
+      var w = BABY_WORDS[i];
+      if (hs.name.indexOf(w) !== -1 || hs.tags.some(function (t) { return t.indexOf(w) !== -1; })) return true;
+    }
+    return false;
+  }
+
+  var AGE_BEST_PER_GENRE = 8;  // 候補にする件数 (ジャンルごとの上位)。人気ジャンルだけで候補が埋まるのを防ぐ
+  var AGE_BEST_FLOOR = 20;     // 候補にする点の下限 (帯の最高点からの差)。散らすために質を落としすぎない
+  var AGE_BEST_JITTER = 12;    // 開くたびの入れ替えの幅 (点)。点差がこれより小さい商品どうしだけが入れ替わる
+  var AGE_BEST_BATCH = 10;   // 1 回に見せる件数。この組ごとにブランド・ジャンルを散らす
+  var AGE_BEST_CAP = 2;      // 1 組の中で同じブランド・同じジャンルを何件まで出すか
+
+  // 並び順を保ったまま 10 件ずつの組に分け、組ごとに同じブランド・同じジャンルを 2 件までにする。
+  // 制限で組が埋まらなければ残りの上位で埋める (件数は減らさない)。
+  function spreadBatches(list, limit) {
+    var rest = [];
+    var seenKeys = [];
+    for (var i = 0; i < list.length; i++) {
+      var nk = nameKey(list[i].item);
+      if (sameProduct(nk, seenKeys)) continue;  // 色違い・型番違いの同一商品
+      seenKeys.push(nk);
+      rest.push(list[i]);
+    }
+    var out = [];
+    while (out.length < limit && rest.length) {
+      var batch = [];
+      var left = [];
+      var perBrand = {};
+      var perGenre = {};
+      for (var j = 0; j < rest.length; j++) {
+        var p = rest[j];
+        var br = brandKey(p.item);
+        var g = p.genre || "other";
+        if (batch.length >= AGE_BEST_BATCH || (br && (perBrand[br] || 0) >= AGE_BEST_CAP) || (perGenre[g] || 0) >= AGE_BEST_CAP) {
+          left.push(p);
+          continue;
+        }
+        if (br) perBrand[br] = (perBrand[br] || 0) + 1;
+        perGenre[g] = (perGenre[g] || 0) + 1;
+        batch.push(p);
+      }
+      while (batch.length < AGE_BEST_BATCH && left.length) batch.push(left.shift());
+      out = out.concat(batch);
+      rest = left;
+    }
+    return out.slice(0, limit);
+  }
+
+  // 年齢帯のおすすめ。対象年齢が帯の上限を超えるものは出さない。
+  // 知育スコアの上位から、開くたびに少しずつ違う組み合わせを、ジャンルを散らして返す。
+  // limit を 10 より大きくすると、11 件目以降も 10 件ずつ同じ散らし方で並ぶ (「ほかも見る」用)。
+  // random はテスト用 (既定 Math.random)。
+  function ageBest(items, band, limit, random) {
     var b = ageBand(band);
     if (!b) return [];
-    var list = items.filter(function (it) {
+    random = random || Math.random;
+    // 帯より幼い向けは 1 年ごとに 5 点下げる (2 歳未満の帯は半年幼いところから、それ以外は 1 年幼いところから)。
+    // 上の帯に幼児向けの定番が居座るのを防ぐ。
+    var near = b.lo - (b.lo < 24 ? 6 : 12);
+    var all = items.filter(function (it) {
       var m = ageMinOf(it);
+      if (m === 0 && !looksBaby(it)) return false;
       return m <= b.max && m >= b.min;
-    }).map(function (it) { return { item: it, score: Number(it.ivs_score_100) || 0, reasons: [] }; });
-    list.sort(function (x, y) { return y.score - x.score; });
-    return diversify(list, limit || 10, []);
+    }).map(function (it) {
+      var fit = (Number(it.ivs_score_100) || 0) - Math.max(0, near - ageMinOf(it)) / 12 * 5;
+      return { item: it, score: fit, reasons: [], genre: genreOf(it) };
+    });
+    all.sort(function (x, y) { return y.score - x.score; });
+    if (!all.length) return [];
+    var floor = all[0].score - AGE_BEST_FLOOR;
+    var perGenre = {};
+    var list = all.filter(function (p) {
+      if (p.score < floor) return false;
+      perGenre[p.genre] = (perGenre[p.genre] || 0) + 1;
+      return perGenre[p.genre] <= AGE_BEST_PER_GENRE;
+    });
+    for (var i = 0; i < list.length; i++) list[i].key = list[i].score + random() * AGE_BEST_JITTER;
+    list.sort(function (x, y) { return y.key - x.key; });
+    // ジャンルの少ない帯で件数が足りなければ、候補から外した分を点の高い順に足す
+    limit = limit || AGE_BEST_BATCH;
+    for (var k = 0; k < all.length && list.length < limit; k++) {
+      if (list.indexOf(all[k]) === -1) list.push(all[k]);
+    }
+    return spreadBatches(list, limit);
   }
 
   // ---------------------------------------------------------------- 結果の言語化

@@ -284,6 +284,34 @@ test("年齢タイムラインの 9 段階 (?age=6-7y) でも年齢別ベスト1
   assert.match(ui.$("dx-age-tip").textContent, /^この時期のポイント: /);
 });
 
+test("年齢別ベスト10: 10 件ずつ「ほかのおもちゃも見る」で足し、順位は付けず、診断に戻ると元の表示に戻る", async () => {
+  const genres = ["ブロック", "ままごと", "パズル", "お絵かき", "ひらがな", "木琴", "ボール", "プラレール", "トミカ", "ミニカー", "電車", "新幹線"];
+  const many = genres.map((t, i) => ({
+    title: "T" + i, product_name: t + "Toy" + String.fromCharCode(65 + i) + "xyz", brand: "B" + i,
+    permalink: "/products/b00000000" + i + "/", tags: [t], age_min_months: 36, price_amazon: 2000, ivs_score_100: 90 - i,
+  }));
+  const events = [];
+  const ui = boot({ search: "?age=3y", fetchImpl: async () => ({ ok: true, json: async () => many }), gtag: (t, n, p) => events.push({ n, p }) });
+  await tick(20);
+  const ranks = () => ui.$("dx-top").children.concat(ui.$("dx-grid").children).map((p) => p.children[0]);
+  assert.equal(ranks().length, 10);
+  assert.equal(ranks()[0].textContent, "✨ ピックアップ");
+  assert.ok(ranks().slice(1).every((r) => r.hidden), "2 件目以降に順位の札を出さない");
+  assert.equal(ui.$("dx-more").textContent, "🔀 ほかのおもちゃも見る");
+  assert.equal(ui.$("dx-more").hidden, false);
+  ui.$("dx-more").click();
+  assert.equal(ranks().length, 12);
+  assert.equal(ui.$("dx-more").hidden, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(events.at(-1))), { n: "diagnosis_more", p: { view: "age_best", shown: 12 } });
+
+  ui.$("dx-retry").click();
+  await answerChild3y(ui);
+  ui.$("dx-multi-next").click();
+  await tick(20);
+  assert.equal(ui.$("dx-more").textContent, "もっと見る");
+  assert.equal(ui.$("dx-top").children[0].children[0].textContent, "🥇 いちばんのおすすめ");
+});
+
 test("D: エラー表示中に最初からやり直しても再取得を試みる", async () => {
   let attempt = 0;
   const ui = boot({ fetchImpl: async () => { attempt++; if (attempt <= 2) throw new Error("network"); return { json: async () => ITEMS }; } });
