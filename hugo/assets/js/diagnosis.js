@@ -47,6 +47,16 @@
     var token = 0;         // 古い非同期処理 (通信待ち・演出待ち) が後から画面を書き換えないための世代番号
     var picks = [];
     var shown = FIRST_SHOWN;
+    var lastView = "diagnosis"; // diagnosis | age_best
+    var entry = "quiz";    // 計測用: 結果に来た経路 (quiz | shared | restore | edit)
+    var started = false;
+
+    // GA4 計測。回答の選択肢 (年齢帯・予算帯など) だけを送り、個人を特定する値は送らない。
+    // 計測の失敗で操作を妨げない。
+    function track(name, params) {
+      if (typeof window.gtag !== "function") return;
+      try { window.gtag("event", name, params || {}); } catch (e) { /* 無視 */ }
+    }
 
     // ------------------------------------------------------------ データ取得
     var items = null;
@@ -199,6 +209,7 @@
       // 「だれに」を変えると聞くべき設問そのものが変わる (プレゼント → わが子なら
       // 「持っているもの」が増える) ので、結果へ直行せず残りを順に聞く
       if (id === "who" && answers.who !== value) editing = false;
+      if (!started && id === "who") { started = true; track("diagnosis_start", { who: value }); }
       answers[id] = value;
       dropInvalidAnswers();
       var siblings = els.options.children || [];
@@ -264,6 +275,8 @@
     function editStep(stepId) {
       token++;
       editing = true;
+      entry = "edit";
+      track("diagnosis_edit", { step: stepId });
       stepIndex = Math.max(0, currentSteps().indexOf(stepId));
       show("quiz");
       renderStep();
@@ -333,7 +346,16 @@
       var wrap = make("div", "dx-pick" + (rank === 1 ? " dx-pick--top" : ""));
       wrap.appendChild(make("span", "dx-rank", rankLabel(rank)));
       var render = window.OmochaUtils && window.OmochaUtils.renderProductCard;
-      if (render) wrap.appendChild(render(pick.item));
+      if (render) {
+        var card = render(pick.item);
+        // どの順位のおすすめが開かれているか (理由つき 1 位が効いているか) を見る
+        if (card && card.addEventListener) {
+          card.addEventListener("click", function () {
+            track("diagnosis_pick_click", { rank: rank, view: lastView });
+          });
+        }
+        wrap.appendChild(card);
+      }
       if (pick.reasons && pick.reasons.length) {
         var ul = make("ul", "dx-reasons");
         ul.setAttribute("aria-label", "おすすめの理由");
@@ -412,9 +434,22 @@
         els.note.textContent = "💡 " + D.RELAX_NOTES[r.relaxed];
         els.note.hidden = false;
       }
+      lastView = "diagnosis";
       renderPicks();
       writeUrl(D.toQuery(answers));
       save();
+      track("diagnosis_complete", {
+        entry: entry,
+        who: answers.who,
+        age: answers.age || "",
+        interest: answers.interest,
+        budget: answers.budget,
+        priority: answers.priority,
+        owned_count: (answers.owned || []).length,
+        relaxed: r.relaxed || "none",
+        result_count: picks.length
+      });
+      entry = "quiz";
       if (els.pTitle.focus) els.pTitle.focus();
       scrollToTop(els.result);
     }
@@ -449,10 +484,12 @@
       var text = "おもちゃ診断の結果は「" + p.title + "」でした！";
       var nav = window.navigator || {};
       if (nav.share) {
+        track("diagnosis_share", { method: "web_share" });
         nav.share({ title: document.title, text: text, url: url }).catch(function () {});
         return;
       }
       if (nav.clipboard && nav.clipboard.writeText) {
+        track("diagnosis_share", { method: "clipboard" });
         nav.clipboard.writeText(url).then(function () {
           els.shareMsg.textContent = "✅ 結果のリンクをコピーしました。家族やパートナーに送ってみてください。";
         }, function () {
@@ -488,7 +525,9 @@
         els.ageTip.textContent = tip ? "この時期のポイント: " + tip : "";
         els.share.hidden = true;
         els.retry.textContent = "🧸 好きな遊び・予算で絞り込む";
+        lastView = "age_best";
         renderPicks();
+        track("diagnosis_age_best", { band: band });
       }, function () {
         if (myToken !== token) return;
         showError(function () { showAgeBest(band); });
@@ -502,13 +541,13 @@
       if (band && D.LEGACY_AGE_BANDS[band]) { showAgeBest(band); return; }
 
       var shared = D.fromParams(params);
-      if (shared) { answers = shared; finish(); return; }
+      if (shared) { answers = shared; entry = "shared"; finish(); return; }
 
       if (params.get("restore") === "1") {
         var saved = null;
         try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); } catch (e) { saved = null; }
         var restored = D.fromSaved(saved);
-        if (restored) { answers = restored; finish(); return; }
+        if (restored) { answers = restored; entry = "restore"; finish(); return; }
       }
       startQuiz(false);
     }
