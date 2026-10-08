@@ -61,3 +61,15 @@ def is_self_domain(url: str, suffixes: tuple[str, ...] = SELF_DOMAIN_SUFFIXES) -
     if not host:
         return False
     return any(host == d or host.endswith("." + d) for d in suffixes)
+
+
+# この比較サイト自身。本家 omcha.jp の実使用記事 (first-party 一次情報) は出典に
+# 1 件まで使ってよいが (#9199 案b)、navi.omcha.jp は Jules が書いた記事そのもので、
+# 出典にすると自分の生成物を自分の根拠にする循環になる。quality_gate が弾く。
+NAVI_HOST = "navi.omcha.jp"
+
+
+def is_navi_self(url: str) -> bool:
+    """この比較サイト (navi.omcha.jp) 自身の URL か。"""
+    host = self_host(url)
+    return host == NAVI_HOST or host.endswith("." + NAVI_HOST)

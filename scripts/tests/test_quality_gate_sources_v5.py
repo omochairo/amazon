@@ -34,3 +34,28 @@ def test_five_sources_with_third_party_passes():
     srcs = [_src(i) for i in range(5)]
     r = check_sources_v5({"date": "2026-09-26", "sources": srcs})
     assert r.passed is True
+
+
+def test_navi_self_citation_fails_even_with_enough_sources():
+    # #9199: navi.omcha.jp はこのサイト自身。件数・非販売を満たしても通さない
+    srcs = [_src(i) for i in range(5)] + [_src(9, "navi.omcha.jp")]
+    r = check_sources_v5({"date": "2026-09-26", "sources": srcs})
+    assert r.passed is False
+    assert "navi.omcha.jp" in r.message
+
+
+def test_omcha_first_party_post_is_allowed():
+    # 本家 omcha.jp の実使用記事は一次情報として使ってよい (#9199 案b)
+    srcs = [_src(i) for i in range(4)] + [_src(9, "omcha.jp")]
+    r = check_sources_v5({"date": "2026-09-26", "sources": srcs})
+    assert r.passed is True
+
+
+def test_omcha_posts_count_as_one_non_sales_at_most():
+    # 本家の記事 2 件 + 販売 3 件 → 非販売は 1 件扱い (2 件目は外部の第三者が要る)
+    srcs = ([_src(i, "www.amazon.co.jp") for i in range(3)]
+            + [_src(7, "omcha.jp"), _src(8, "omcha.jp")])
+    r = check_sources_v5({"date": "2026-09-26", "sources": srcs})
+    assert r.passed is False
+    srcs[-1] = _src(8, "example.org")
+    assert check_sources_v5({"date": "2026-09-26", "sources": srcs}).passed is True
