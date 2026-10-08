@@ -52,7 +52,7 @@ class FakeGitLab:
 
 class ParityTest(unittest.TestCase):
     def _fixture(self, tmp, *, first_party=None, bands=None, hosts=None, no_amazon=(),
-                 off_genre=()):
+                 off_genre=(), blocked=()):
         root = pathlib.Path(tmp)
         (root / "data" / "raw").mkdir(parents=True)
         (root / "data" / "articles").mkdir(parents=True)
@@ -85,6 +85,19 @@ class ParityTest(unittest.TestCase):
                     item["browse_nodes"] = [{"id": "1", "name": "漂白剤", "root": "ドラッグストア"}]
                 (d / "amazon.json").write_text(
                     json.dumps({"asin": a, "item": item}), encoding="utf-8")
+        # #9155: first-party 以外のプールにも、取得時ゲートを素通りしたジャンル不一致が居うる
+        for a in off_genre:
+            if first_party and a in first_party:
+                continue
+            d = root / "data" / "raw" / "per_asin" / a
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "amazon.json").write_text(json.dumps({"asin": a, "item": {
+                "asin": a, "title": f"工作材料 {a}",
+                "browse_nodes": [{"id": "2033480051", "name": "木材", "root": "DIY・工具・ガーデン"}],
+            }}), encoding="utf-8")
+        if blocked:
+            (root / "data" / "asin_blocklist.json").write_text(json.dumps(
+                {"blocked": [{"asin": a, "reason": "test"} for a in blocked]}), encoding="utf-8")
         for n in (1, 4, 50):  # 既存記事 (50 はリライト待ち)
             (root / "data" / "articles" / f"2026-01-01-{_asin(n)}.json").write_text("{}")
         (root / "data" / "articles" / f"2026-01-01-{_asin(7)}.quality.json").write_text("{}")
@@ -191,6 +204,27 @@ class ParityTest(unittest.TestCase):
                 self.assertEqual(fp_picked, [_asin(61), _asin(63)])
                 self.assertNotIn(_asin(60), [o["asin"] for o in ours])
 
+    def test_every_pool_excludes_genre_mismatch_and_blocklist(self):
+        # #9155: ranking-sniper 経由 (2026-07-16〜19) のように入口のゲートを素通りしても、
+        # pick で全プールから外す。rewrite は上限 2 件で切る前に外す (枠を占有させない)。
+        off_genre = {_asin(2), _asin(51), _asin(10)}  # ranking / rewrite / keyword
+        blocked = {_asin(31), _asin(52), _asin(11), _asin(60)}  # ranking / rewrite / keyword / first-party
+        fp = [_asin(60), _asin(61)]
+        for seed in ("1", "12345"):
+            with self.subTest(seed=seed):
+                wf03, ours = self._both(seed, first_party=fp, off_genre=off_genre,
+                                        blocked=blocked)
+                self.assertEqual(ours, wf03)
+                picked = [o["asin"] for o in ours]
+                for a in off_genre | blocked:
+                    self.assertNotIn(a, picked)
+                self.assertEqual([o["asin"] for o in ours if o["pool"] == "first-party"],
+                                 [_asin(61)])
+                self.assertIn(_asin(5), [o["asin"] for o in ours if o["pool"] == "ranking-sniper"])
+                # rewrite 候補 50/51/52/5 のうち 51/52 は除外、5 は ranking 側 → 50 だけ
+                self.assertEqual([o["asin"] for o in ours if o["pool"] == "rewrite-queue"],
+                                 [_asin(50)])
+
     def test_without_first_party_pool_file(self):
         wf03, ours = self._both(first_party=None)
         self.assertEqual(ours, wf03)
@@ -204,6 +238,29 @@ class SelectCandidatesTest(unittest.TestCase):
             out = article_pick.select_candidates(
                 [{"asin": _asin(1)}], set(), [], [], None, "s", broken)
         self.assertEqual(out, [{"asin": _asin(1), "pool": "", "source_keyword": None}])
+
+    def test_genre_check_failure_does_not_stop_pick(self):
+        # 判定不能・判定の例外は通す (fail-open)。pick を止めない。
+        def boom(a):
+            raise RuntimeError("broken snapshot")
+        with contextlib.redirect_stdout(open(os.devnull, "w", encoding="utf-8")):
+            out = article_pick.select_candidates(
+                [{"asin": _asin(1)}, {"asin": _asin(2)}], set(), [], [], None, "s",
+                genre_flagged=boom, blocked={_asin(2)})
+        self.assertEqual([o["asin"] for o in out], [_asin(1)])
+
+    def test_load_blocklist(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = os.path.join(tmp, "b.json")
+            self.assertEqual(article_pick.load_blocklist(p), set())  # 無ければ空
+            with open(p, "w", encoding="utf-8") as f:
+                f.write("{broken")
+            with open(os.devnull, "w", encoding="utf-8") as null, \
+                    contextlib.redirect_stdout(null), contextlib.redirect_stderr(null):
+                self.assertEqual(article_pick.load_blocklist(p), set())  # 壊れていれば空
+            with open(p, "w", encoding="utf-8") as f:
+                json.dump({"blocked": [{"asin": _asin(1)}, {"reason": "no asin"}, "x"]}, f)
+            self.assertEqual(article_pick.load_blocklist(p), {_asin(1)})
 
 
 class OriginLedgerTest(unittest.TestCase):

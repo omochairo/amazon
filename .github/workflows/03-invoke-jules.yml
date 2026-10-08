@@ -108,7 +108,7 @@ jobs:
           gh api "repos/$REPO/git/matching-refs/heads/jules-lock/" \
             --jq '.[] | .ref | sub("refs/heads/jules-lock/"; "")' > /tmp/locked.txt 2>/dev/null || echo "" > /tmp/locked.txt
           python3 - <<'PY'
-          import json, re, glob, os, random
+          import json, re, glob, os
           input_asin = os.environ.get('INPUT_ASIN', '').strip()
           _ASIN_RE = re.compile(r'^B0[A-Z0-9]{8}$')
           if input_asin:
@@ -125,18 +125,8 @@ jobs:
                   f.write(json.dumps({"asin": input_asin, "pool": "", "source_keyword": None},
                                       ensure_ascii=False) + '\n')
           else:
-              with open('data/raw/amazon.json', encoding='utf-8') as f:
-                  raw = json.load(f)
-              items = raw.get('items', [])
-              # 2026-05-17: candidates は B0[A-Z0-9]{8} 形式 (Amazon 標準 ASIN) のみに絞る。
-              # PR #279 で書籍/JAN 形式 ASIN (例 4910762175) が pick されてしまい、
-              # 06-jules-lock-cleanup.yml の release-on-merge regex (B0...) にも一致せず
-              # lock が schedule TTL まで残る事故が発生した。
-              candidates = [
-                  i['asin'] for i in items
-                  if isinstance(i, dict) and isinstance(i.get('asin'), str)
-                  and _ASIN_RE.match(i['asin'])
-              ]
+              # B0 形式 (Amazon 標準 ASIN) だけを候補にする規則 (PR #279 の lock 残り事故) は
+              # article_pick.ASIN_RE にある。
               existing = set()
               for path in glob.glob('data/articles/*.json'):
                   base = os.path.basename(path)
@@ -168,185 +158,16 @@ jobs:
                                   existing.add(m.group(1))
                   except FileNotFoundError:
                       pass
-              # #810 Phase 1.5: ranking_pool.json = 楽天ランキング由来・未記事化 ASIN の
-              # 永続プール (13-ranking-sniper が main にコミット)。keyword × top100 の
-              # 構造的上限の外にある売れ筋を記事化するため、keyword 候補に union する。
-              # 件数が少なく高価値なので **先頭** に置き (shuffle せず)、毎日数枠ある
-              # Jules pick で確実に消化されるようにする。記事化されると existing 除外で消える。
-              ranking_pool = []
-              try:
-                  with open('data/raw/ranking_pool.json', encoding='utf-8') as f:
-                      rp = json.load(f)
-                  ranking_pool = [
-                      a for a in rp.get('asins', [])
-                      if isinstance(a, str) and _ASIN_RE.match(a)
-                  ]
-              except FileNotFoundError:
-                  pass
-              # omcha-ops#264: first_party_pool.json = おもちゃいろ (omcha.jp) の
-              # アフィリンクから実体験ありと判定された・未記事化の ASIN。
-              # ranking_pool と同じ寛容さ (無い/壊れていれば黙って従来どおり) で読み、
-              # **先頭**に置く (実体験という一次情報の希少性を優先する)。
-              # 1 run あたりの上限を置くのは、既存の ranking / keyword 枠を
-              # 締め出さないため (#5490 の rewrite_first と同じ考え方)。
-              # 一次フィルタは A 側 (scripts/collect_first_party_sources.py の
-              # POOL_ASIN_RE)。ここは A が壊れた場合の防御ガードで通常 no-op (#7573)。
-              first_party_pool = []
-              try:
-                  _fp_cap = int(os.environ.get('FIRST_PARTY_PICKS_PER_RUN', '2'))
-                  with open('data/raw/first_party_pool.json', encoding='utf-8') as f:
-                      fp = json.load(f)
-                  _fp_all = [
-                      a for a in fp.get('asins', [])
-                      if isinstance(a, str) and _ASIN_RE.match(a)
-                  ]
-                  _fp_remaining = [a for a in _fp_all if a not in existing]
-                  # #9155: per_asin に商品データ (amazon.json の item) が無い ASIN は
-                  # 取得されるまで待たせる。first-party は navi の検索プール外から来る
-                  # ので、従来は記事化されるまで amazon.json が作られず、Jules は商品
-                  # データ無しで起動されて画像 URL 等を自作していた (83 本中 73 本)。
-                  # データは fetch_amazon の巡回が先に取る (1 日 2 run)。上限で切る
-                  # **前に**外す: 後で外すとデータの無い ASIN が枠を占有し続ける。
-                  try:
-                      import product_image as _pi
-                      _fp_waiting = [a for a in _fp_remaining
-                                     if not _pi.has_amazon_item('data/raw/per_asin', a)]
-                  except Exception as _e:  # 判定できなければ従来どおり (pick を止めない)
-                      print(f"::warning::first-party amazon data check skipped: {_e}")
-                      _fp_waiting = []
-                  if _fp_waiting:
-                      print(f"first-party waiting for amazon data (#9155): {len(_fp_waiting)} "
-                            f"{_fp_waiting[:10]}")
-                  _fp_remaining = [a for a in _fp_remaining if a not in set(_fp_waiting)]
-                  # #9155: first-party は検索を通らないので取得時のジャンルゲート (#2823)
-                  # が効かず、漂白剤・ペットシーツ等が記事化されていた。商品データが
-                  # 揃った時点で同じ判定をかけて外す (これも上限で切る前)。
-                  try:
-                      import genre_gate as _gg
-                      _fp_offgenre = [a for a in _fp_remaining
-                                      if _gg.is_flagged_snapshot('data/raw/per_asin', a)]
-                  except Exception as _e:  # 判定できなければ従来どおり (pick を止めない)
-                      print(f"::warning::first-party genre check skipped: {_e}")
-                      _fp_offgenre = []
-                  if _fp_offgenre:
-                      print(f"first-party skipped, genre mismatch (#9155): {len(_fp_offgenre)} "
-                            f"{_fp_offgenre[:10]}")
-                  _fp_remaining = [a for a in _fp_remaining if a not in set(_fp_offgenre)]
-                  first_party_pool = _fp_remaining[:max(_fp_cap, 0)]
-                  if first_party_pool:
-                      print(f"first-party-ready (omcha-ops#264): {len(_fp_remaining)} remaining "
-                            f"(pool {len(_fp_all)}) -> picking {len(first_party_pool)} {first_party_pool}")
-              except FileNotFoundError:
-                  # 収集レーン (omcha-ops#264 A) がまだ無い間はこれが常態。
-                  # ranking_pool と同じく黙って従来どおりにする。
-                  pass
-              except (json.JSONDecodeError, TypeError, ValueError) as _e:
-                  print(f"::warning::first_party_pool skipped: {_e}")
-              first_party_set = set(first_party_pool)
-              ranking_set = set(ranking_pool)
-              remaining_ranking = [a for a in ranking_pool if a not in existing and a not in first_party_set]
-              remaining_kw = [
-                  a for a in candidates
-                  if a not in existing and a not in ranking_set and a not in first_party_set
-              ]
-              # #5490: リライト待ちを **候補として足す**。マーカーは除外を外すだけ
-              # だったので、amazon.json の items[] に居ない (= 日次 fetch に消された)
-              # 対象は永久に選ばれなかった。実測 2026-08-31: マーカー 172 件・
-              # 消化 0 件・候補プールに居るもの 0 件。
-              # 1 run あたりの本数を絞るのは、172 件の待ち行列が新規記事のスロットを
-              # 丸ごと食い潰さないため。並びは FIFO (requested_at 昇順) で決定的。
-              rewrite_first = []
-              try:
-                  _cap = int(os.environ.get('REWRITE_PICKS_PER_RUN', '2'))
-                  _pool = [a for a in _rq.pending_rewrite_candidates('data/articles')
-                           if a not in existing and a not in ranking_set]
-                  rewrite_first = _pool[:max(_cap, 0)]
-                  if _pool:
-                      print(f"rewrite-ready (#5490): {len(_pool)} -> picking {len(rewrite_first)} "
-                            f"{rewrite_first}")
-              except Exception as _e:
-                  print(f"::warning::rewrite candidate injection skipped: {_e}")
-              # GITHUB_RUN_ID で seed してシャッフル。bash 側で 1 件ずつ lock 試行 → 取得成功した時点で確定。
-              # ranking 内も shuffle: 生成に失敗し続ける ASIN が毎回 slot 1 を占有して
-              # keyword pool を枯渇させる pathological loop を避ける (ranking 優先は維持)。
-              rng = random.Random(os.environ.get('GITHUB_RUN_ID', ''))
-              rng.shuffle(remaining_ranking)
-              rng.shuffle(remaining_kw)
-              remaining = first_party_pool + remaining_ranking + rewrite_first + [
-                  a for a in remaining_kw if a not in rewrite_first
-              ]
-              # #1600 Phase 1: 第三者情報量が「fetch 済みで真ゼロ」(band=="zero",
-              # = Bajoy/Joyreal 級の D-tier 無素材品) の ASIN を pick から defer する。
-              # Jules が google_search 任せで水増し記事 (#1599 sources floor 割れ) を
-              # 生成し AWAITING_USER_FEEDBACK で concurrent 枠を占有する (#1353) のを入口で断つ。
-              # 安全弁: 全候補が zero でも枯渇させない (kept 空なら defer 無効化)。
-              import sys as _sys
-              _sys.path.insert(0, 'scripts')
-              try:
-                  import score_per_asin_info as _sc
-                  kept, deferred = [], []
-                  # omcha-ops#264: first-party は defer の対象外。#1600 が切るのは
-                  # 「第三者素材がゼロなので Jules が水増しするしかない ASIN」で、
-                  # first-party は omcha.jp 側に自前の実体験がある = 書く材料が
-                  # 手元にある枠。band=zero で落とすと前置した意味が消える。
-                  # 実測 2026-09-16: 手作業の 8 件中 1 件 (B09WRH12JL) が zero。
-                  # 安全弁は first-party を数えない (下の kept_other)。first-party は
-                  # 常に kept に入るので、これを数えると「全候補 zero」を検出できない。
-                  kept_other = []
-                  for a in remaining:
-                      if a in first_party_set:
-                          kept.append(a)
-                          continue
-                      # zero に加え、第三者 host が 2 未満の unfetched も外す。
-                      # ranking_pool 品は news/youtube/books が集まらず常に unfetched で、
-                      # 素材ゼロのまま pick → sources 5 件に届かず validate 赤で滞留していた
-                      # (2026-10-05)。判定の SSOT は score_per_asin_info.should_defer
-                      if _sc.should_defer(_sc.score_asin(a)):
-                          deferred.append(a)
-                      else:
-                          kept.append(a)
-                          kept_other.append(a)
-                  if deferred:
-                      print(f"info-zero/unfetched deferred (#1600): {len(deferred)} "
-                            f"e.g. {deferred[:10]}")
-                  if kept_other:
-                      remaining = kept
-                  elif deferred:
-                      print("::warning::all candidates deferred (zero/unfetched); "
-                            "proceeding without defer to avoid pool starvation")
-              except Exception as _e:  # スコア計算失敗は pick を止めない (best-effort)
-                  print(f"::warning::info scoring skipped, no defer applied: {_e}")
-              print(f"candidates={len(candidates)} ranking_pool={len(ranking_pool)} "
-                    f"first_party_pool={len(first_party_pool)} "
-                    f"existing_excluded={len(existing)} ranking_first={len(remaining_ranking)} "
-                    f"remaining={len(remaining)}")
-              # #4964 観察項目3: どのプールから来た ASIN かをここで判別して残す
-              # (この後の lock 取得ループを抜けると amazon.json の items[] には
-              # もう戻れないので、ここが最後のタイミング)。
-              rewrite_set = set(rewrite_first)
-              asin_meta = {
-                  i['asin']: i for i in items
-                  if isinstance(i, dict) and isinstance(i.get('asin'), str)
-              }
-
-              def _origin_for(a):
-                  if a in first_party_set:
-                      return {"asin": a, "pool": "first-party", "source_keyword": None}
-                  if a in ranking_set:
-                      return {"asin": a, "pool": "ranking-sniper", "source_keyword": None}
-                  if a in rewrite_set:
-                      return {"asin": a, "pool": "rewrite-queue", "source_keyword": None}
-                  meta = asin_meta.get(a) or {}
-                  lane = meta.get('lane')
-                  if lane in ('demand', 'supply-random'):
-                      return {"asin": a, "pool": lane, "source_keyword": meta.get('source_keyword')}
-                  # 出自不明 (例: この変更より前に作られた amazon.json) は
-                  # 事実を捏造せず pool を空にして台帳記録をスキップさせる。
-                  return {"asin": a, "pool": "", "source_keyword": None}
-
+              # 並び (first-party → ranking → rewrite → keyword)・全プール共通の除外
+              # (ジャンル不一致 #2823 / blocklist)・素材ゼロの defer (#1600)・出自 (#4964) は
+              # scripts/article_pick.py が SSOT (#9155)。GitLab 側 (invoke_jules_repoless) も同じ
+              # 関数を呼ぶ。ここに規則を書き足さないこと: 入口ごとにゲートを付けて付け忘れた
+              # のが #9155 (2026-07-16〜19 の ranking-sniper 経由で工作材料が記事化された)。
+              import article_pick
+              origins = article_pick.pick_from_repo(existing, os.environ.get('GITHUB_RUN_ID', ''))
               with open('/tmp/shuffled.jsonl', 'w') as f:
-                  for a in remaining:
-                      f.write(json.dumps(_origin_for(a), ensure_ascii=False) + '\n')
+                  for o in origins:
+                      f.write(json.dumps(o, ensure_ascii=False) + '\n')
           PY
           # lock ブランチ用の empty commit を作る (committer.date を TTL 判定に利用)
           # 2026-05-17 Step C-1: MAX_LOCKS まで lock を取得し、picked.txt に列挙する。
