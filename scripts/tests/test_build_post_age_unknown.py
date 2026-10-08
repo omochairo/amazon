@@ -17,6 +17,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from build_post import (  # type: ignore[import-not-found]
     _frontmatter_meta,
+    _get_development_stage,
     _parse_age_min_months,
     _parse_age_min_months_or_none,
 )
@@ -68,6 +69,27 @@ class FrontmatterAgeMinMonthsTests(unittest.TestCase):
 
     def test_known_age_is_written(self):
         self.assertEqual(self._meta("3歳以上")["age_min_months"], 36)
+
+
+class DevelopmentStageTests(unittest.TestCase):
+    """対象年齢が不明な記事に「0〜2ヶ月の発達の目安」を出さない。"""
+
+    STAGES = {"0m": {"age_label": "0〜2ヶ月"}, "3m": {"age_label": "3〜5ヶ月"}, "36m": {"age_label": "3歳"}}
+
+    def test_unknown_age_has_no_stage(self):
+        for raw in UNKNOWN:
+            with self.subTest(raw=raw):
+                self.assertIsNone(
+                    _get_development_stage(_parse_age_min_months_or_none(raw), self.STAGES)
+                )
+
+    def test_zero_months_gets_newborn_stage(self):
+        stage = _get_development_stage(_parse_age_min_months_or_none("0ヶ月〜"), self.STAGES)
+        self.assertEqual(stage["age_label"], "0〜2ヶ月")
+
+    def test_known_age_gets_its_stage(self):
+        stage = _get_development_stage(_parse_age_min_months_or_none("3歳以上"), self.STAGES)
+        self.assertEqual(stage["age_label"], "3歳")
 
 
 if __name__ == "__main__":

@@ -816,9 +816,13 @@ def _extract_review_body(data: dict[str, Any]) -> str:
     return ""
 
 
-def _get_development_stage(age_min_months: int, stages_data: dict[str, Any]) -> dict[str, Any] | None:
-    """最小月齢から、合致する最適な発達段階のデータを取り出す。"""
-    if not stages_data:
+def _get_development_stage(age_min_months: int | None, stages_data: dict[str, Any]) -> dict[str, Any] | None:
+    """最小月齢から、合致する最適な発達段階のデータを取り出す。
+
+    対象年齢が不明 (None) なら出さない。0 に落とすと「このおもちゃの対象年齢
+    (0〜2ヶ月) における発達の目安」と、事実と違う年齢を記事に書いてしまう (#9186)。
+    """
+    if not stages_data or age_min_months is None:
         return None
     stage_keys = []
     for k in stages_data.keys():
@@ -3879,7 +3883,7 @@ def main() -> None:
             if not target_age_raw and isinstance(data.get("persona_fit"), dict):
                 target_age_raw = data["persona_fit"].get("age_range")
 
-            age_months = _parse_age_min_months(target_age_raw)
+            age_months = _parse_age_min_months_or_none(target_age_raw)
             development_stage = _get_development_stage(age_months, stages_data)
             if development_stage:
                 data["development_stage"] = development_stage

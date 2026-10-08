@@ -12,7 +12,9 @@
   carousel_swipe.js が .related-carousel-section に束ねるため同クラスで再利用する。
 */ -}}
 {{- $selfAge := int (.Params.age_min_months | default 0) -}}
-{{- if gt $selfAge 0 -}}
+{{- /* #9186 対象年齢が不明な記事は age_min_months を持たない。0 か月の記事にも出すため isset で見る
+       (候補側の不明は 0 に落ちるが、gt $ca $selfAge で必ず外れる) */ -}}
+{{- if isset .Params "age_min_months" -}}
 {{- $pages := where site.RegularPages "Section" "posts" -}}
 {{- $pages = where $pages "Permalink" "!=" .Permalink -}}
 
