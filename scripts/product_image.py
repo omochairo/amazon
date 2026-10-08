@@ -56,6 +56,16 @@ def load_amazon_item(per_asin_root: Path | str | None, asin: Any) -> dict | None
     return item if isinstance(item, dict) else None
 
 
+def has_amazon_item(per_asin_root: Path | str | None, asin: Any) -> bool:
+    """amazon.json に商品データ (``item.title``) があるか。
+
+    GetItems で一度も取れていない ASIN は、miss だけを記録した
+    ``{asin, miss_count, ...}`` (item 無し) になるので False。
+    """
+    item = load_amazon_item(per_asin_root, asin)
+    return bool(item and isinstance(item.get("title"), str) and item["title"].strip())
+
+
 def load_amazon_image(per_asin_root: Path | str | None, asin: Any) -> str:
     """``<per_asin_root>/<ASIN>/amazon.json`` の画像 URL を返す (無い・壊れていれば "")。"""
     return amazon_image(load_amazon_item(per_asin_root, asin))

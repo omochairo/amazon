@@ -51,7 +51,7 @@ class FakeGitLab:
 
 
 class ParityTest(unittest.TestCase):
-    def _fixture(self, tmp, *, first_party=None, bands=None, hosts=None):
+    def _fixture(self, tmp, *, first_party=None, bands=None, hosts=None, no_amazon=()):
         root = pathlib.Path(tmp)
         (root / "data" / "raw").mkdir(parents=True)
         (root / "data" / "articles").mkdir(parents=True)
@@ -73,6 +73,15 @@ class ParityTest(unittest.TestCase):
         if first_party is not None:
             (root / "data" / "raw" / "first_party_pool.json").write_text(
                 json.dumps({"asins": first_party}), encoding="utf-8")
+            # #9155: 商品データ (per_asin amazon.json の item) がある ASIN だけ pick される
+            for a in first_party:
+                if a in no_amazon:
+                    continue
+                d = root / "data" / "raw" / "per_asin" / a
+                d.mkdir(parents=True, exist_ok=True)
+                (d / "amazon.json").write_text(
+                    json.dumps({"asin": a, "item": {"asin": a, "title": f"商品 {a}"}}),
+                    encoding="utf-8")
         for n in (1, 4, 50):  # 既存記事 (50 はリライト待ち)
             (root / "data" / "articles" / f"2026-01-01-{_asin(n)}.json").write_text("{}")
         (root / "data" / "articles" / f"2026-01-01-{_asin(7)}.quality.json").write_text("{}")
@@ -154,6 +163,18 @@ class ParityTest(unittest.TestCase):
         wf03, ours = self._both(first_party=[_asin(60)], bands=bands)
         self.assertEqual(ours, wf03)
         self.assertGreater(len(ours), 1)  # 安全弁で defer が無効化される
+
+    def test_first_party_waits_for_amazon_data(self):
+        # #9155: 商品データの無い first-party は待たせ、上限 2 件の枠は次の ASIN に回す。
+        # miss だけ記録された snapshot (item 無し) もデータ無し扱い。
+        fp = [_asin(60), _asin(61), _asin(62), _asin(63)]
+        for seed in ("1", "12345"):
+            with self.subTest(seed=seed):
+                wf03, ours = self._both(seed, first_party=fp, no_amazon={_asin(60), _asin(62)})
+                self.assertEqual(ours, wf03)
+                fp_picked = [o["asin"] for o in ours if o["pool"] == "first-party"]
+                self.assertEqual(fp_picked, [_asin(61), _asin(63)])
+                self.assertNotIn(_asin(60), [o["asin"] for o in ours])
 
     def test_without_first_party_pool_file(self):
         wf03, ours = self._both(first_party=None)
