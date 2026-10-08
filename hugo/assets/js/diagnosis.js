@@ -19,6 +19,8 @@
   var FIRST_SHOWN = 6;
   var MORE_STEP = 6;
   var MAX_PICKS = 12;
+  var AGE_BEST_STEP = 10;  // 年齢別ベスト10: 最初の件数と「ほかのおもちゃも見る」1 回で足す件数
+  var AGE_BEST_MAX = 60;
 
   function init() {
     var D = window.OmochaDiagnosis;
@@ -48,6 +50,7 @@
     var token = 0;         // 古い非同期処理 (通信待ち・演出待ち) が後から画面を書き換えないための世代番号
     var picks = [];
     var shown = FIRST_SHOWN;
+    var moreStep = MORE_STEP;
     var lastView = "diagnosis"; // diagnosis | age_best
     var entry = "quiz";    // 計測用: 結果に来た経路 (quiz | shared | restore | edit)
     var started = false;
@@ -337,6 +340,8 @@
     });
 
     function rankLabel(rank) {
+      // 年齢別ベスト10 は開くたびに並びが変わるので、順位ではなく先頭だけ目印を付ける
+      if (lastView === "age_best") return rank === 1 ? "✨ ピックアップ" : "";
       if (rank === 1) return "🥇 いちばんのおすすめ";
       if (rank === 2) return "🥈 2位";
       if (rank === 3) return "🥉 3位";
@@ -345,7 +350,9 @@
 
     function buildPick(pick, rank) {
       var wrap = make("div", "dx-pick" + (rank === 1 ? " dx-pick--top" : ""));
-      wrap.appendChild(make("span", "dx-rank", rankLabel(rank)));
+      var label = make("span", "dx-rank", rankLabel(rank));
+      label.hidden = !label.textContent;
+      wrap.appendChild(label);
       var render = window.OmochaUtils && window.OmochaUtils.renderProductCard;
       if (render) {
         var card = render(pick.item);
@@ -391,7 +398,8 @@
     // 「もっと見る」は描画済みのカードを作り直さずに末尾へ足す (フォーカスとスクロール位置を保つ)
     els.more.addEventListener("click", function () {
       var from = Math.min(shown, picks.length);
-      shown += MORE_STEP;
+      shown += moreStep;
+      track("diagnosis_more", { view: lastView, shown: Math.min(shown, picks.length) });
       var end = Math.min(shown, picks.length);
       var first = null;
       for (var i = from; i < end; i++) {
@@ -409,6 +417,8 @@
       var r = D.recommend(data, answers, MAX_PICKS);
       picks = r.picks;
       shown = FIRST_SHOWN;
+      moreStep = MORE_STEP;
+      els.more.textContent = "もっと見る";
       show("result");
       resetResultArea();
 
@@ -514,14 +524,16 @@
       show("loading");
       loadItems().then(function (data) {
         if (myToken !== token) return;
-        picks = D.ageBest(data, band, 10);
-        shown = 10;
+        picks = D.ageBest(data, band, AGE_BEST_MAX);
+        shown = AGE_BEST_STEP;
+        moreStep = AGE_BEST_STEP;
+        els.more.textContent = "🔀 ほかのおもちゃも見る";
         show("result");
         resetResultArea();
         els.eyebrow.textContent = "年齢別ベスト10";
         els.pEmoji.textContent = b.emoji;
         els.pTitle.textContent = b.label + "のベスト10";
-        els.pText.textContent = b.label + "のお子さんに、知育スコアの高い定番おもちゃを集めました。好きな遊びや予算で絞り込むなら、下のボタンから診断をどうぞ。";
+        els.pText.textContent = b.label + "のお子さんに、知育スコアの高いおもちゃをジャンルが偏らないように選びました。開くたびに顔ぶれが変わります。好きな遊びや予算で絞り込むなら、下のボタンから診断をどうぞ。";
         var tip = D.ageTip({ age: b.age });
         els.ageTip.textContent = tip ? "この時期のポイント: " + tip : "";
         els.share.hidden = true;

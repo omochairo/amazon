@@ -190,12 +190,12 @@ test("年齢別ベスト10 (?age=): 帯の上限を超える対象年齢は出�
 
 test("年齢別ベスト10 (?age=): 診断の 9 段階で引け、小学生の帯もある", () => {
   const items = [
-    item({ name: "baby", age: 0, score: 60 }),
+    item({ name: "baby", tags: ["ベビー"], age: 0, score: 60 }),
     item({ name: "three", age: 36, score: 80 }),
     item({ name: "six", age: 72, score: 90 }),
     item({ name: "ten", age: 120, score: 99 }),
   ];
-  const names = (band) => plain(D.ageBest(items, band, 10).map((p) => p.item.product_name));
+  const names = (band) => plain(D.ageBest(items, band, 10, () => 0.5).map((p) => p.item.product_name));
   assert.deepEqual(names("0-5m"), ["baby"]);
   assert.deepEqual(names("3y"), ["three"], "1 歳未満向けは 3 歳には幼すぎる");
   assert.deepEqual(names("6-7y"), ["six", "three"], "下限は診断と同じ lowerWindow (72-36=36 か月) まで");
@@ -203,6 +203,76 @@ test("年齢別ベスト10 (?age=): 診断の 9 段階で引け、小学生の�
   for (const a of D.AGES) assert.ok(D.ageBand(a.value), a.value + " が引ける");
   assert.equal(D.ageBand("6-7y").label, "6〜7歳");
   assert.equal(D.ageBand("1-2").label, "1〜2歳", "旧 4 区分のリンクも生きている");
+});
+
+// 年齢別ベスト10 の偏り対策用: のりもの 6 件 (高得点) と、他ジャンル 1 件ずつ
+function varietyItems() {
+  const v = ["プラレール", "トミカ", "新幹線", "ミニカー", "電車", "はたらくくるま"].map((n, i) =>
+    item({ name: n + "セット", brand: "乗り物" + i, tags: [n], age: 36, score: 99 - i }));
+  const others = [["ブロック", "build"], ["ままごと", "pretend"], ["パズル", "think"], ["お絵かき", "art"],
+                  ["ひらがな", "words"], ["木琴", "music"], ["ボール", "active"], ["ラトル", "sense"]]
+    .map(([t], i) => item({ name: t + "のおもちゃ", brand: "他" + i, tags: [t], age: 36, score: 90 - i }));
+  return v.concat(others);
+}
+
+test("年齢別ベスト10: 1 組 10 件の中で同じジャンルは 2 件まで (のりものばかりにならない)", () => {
+  const picks = D.ageBest(varietyItems(), "3y", 10, () => 0.5);
+  assert.equal(picks.length, 10);
+  const vehicles = picks.filter((p) => /セット$/.test(p.item.product_name)).length;
+  assert.equal(vehicles, 2, "のりもの 6 件のうち 2 件だけ");
+  // 「ほかも見る」で後ろに続く分には、残りののりものも出てくる (件数は減らさない)
+  const all = D.ageBest(varietyItems(), "3y", 60, () => 0.5);
+  assert.equal(all.length, 14);
+  assert.equal(new Set(all.map((p) => p.item.product_name)).size, 14, "同じ商品は 2 度出さない");
+});
+
+test("年齢別ベスト10: 対象年齢 0 か月 (未設定のことが多い) は赤ちゃん向けと読める物だけ出す", () => {
+  const items = [
+    item({ name: "rattle", tags: ["ラトル"], age: 0, score: 80 }),
+    item({ name: "figure", tags: ["フィギュア"], age: 0, score: 95 }),
+    item({ name: "craft", tags: ["工作キット", "ベビー", "小学生"], age: 0, score: 95 }),
+  ];
+  const names = plain(D.ageBest(items, "0-5m", 10, () => 0.5).map((p) => p.item.product_name));
+  assert.deepEqual(names, ["rattle"]);
+});
+
+test("年齢別ベスト10: 人気ジャンルが上位を占めていても、候補はジャンルごとに取る", () => {
+  // ブロック (レゴ以外のブランドも) が 30 件で上位を独占、ゲームとごっこは少し低い
+  const items = [];
+  for (let i = 0; i < 30; i++) items.push(item({ name: "ブロック" + i + "号セット", brand: "B" + i, tags: ["ブロック"], age: 72, score: 99 - i * 0.1 }));
+  items.push(item({ name: "すごろく盤", brand: "G", tags: ["すごろく"], age: 72, score: 88 }));
+  items.push(item({ name: "おままごとセット", brand: "P", tags: ["ままごと"], age: 72, score: 86 }));
+  const picks = plain(D.ageBest(items, "6-7y", 10, () => 0.5).map((p) => p.item.product_name));
+  assert.ok(picks.includes("すごろく盤") && picks.includes("おままごとセット"));
+  assert.equal(picks.length, 10, "足りない分はブロックで埋める");
+});
+
+test("年齢別ベスト10: ジャンルが 1 つしか無い帯でも 10 件出す (ジャンルごとの候補数で削りすぎない)", () => {
+  const items = [];
+  for (let i = 0; i < 12; i++) items.push(item({ name: "ブロック" + String.fromCharCode(65 + i) + "セット", brand: "B" + i, tags: ["ブロック"], age: 48, score: 95 - i }));
+  assert.equal(D.ageBest(items, "4y", 10, () => 0.5).length, 10);
+  assert.equal(D.ageBest(items, "4y", 60, () => 0.5).length, 12);
+});
+
+test("年齢別ベスト10: 帯より 1 年以上幼い向けは下がり、その年齢向けが上に来る", () => {
+  const items = [
+    item({ name: "toddler-classic", tags: ["プラレール"], age: 36, score: 99 }),  // 6〜7 歳から見て 2 年幼い → -10
+    item({ name: "school-kit", tags: ["プログラミング"], age: 72, score: 92 }),
+  ];
+  const names = plain(D.ageBest(items, "6-7y", 10, () => 0.5).map((p) => p.item.product_name));
+  assert.deepEqual(names, ["school-kit", "toddler-classic"]);
+});
+
+test("年齢別ベスト10: 開くたびに顔ぶれが変わるが、帯の上限を超える対象年齢は決して出さない", () => {
+  const items = [];
+  for (let i = 0; i < 40; i++) items.push(item({ name: "toy" + i, brand: "b" + i, tags: ["タグ" + i], age: 48, score: 90 - (i % 5) }));
+  items.push(item({ name: "too-old", brand: "x", age: 72, score: 100 }));
+  let seed = 1;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const a = plain(D.ageBest(items, "4y", 10, rnd).map((p) => p.item.product_name));
+  const b = plain(D.ageBest(items, "4y", 10, rnd).map((p) => p.item.product_name));
+  assert.notDeepEqual(a, b);
+  assert.ok(!a.includes("too-old") && !b.includes("too-old"));
 });
 
 test("ホームの年齢タイムラインは診断の AGES と同じ帯・表記で並ぶ", () => {
