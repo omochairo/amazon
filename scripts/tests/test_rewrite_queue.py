@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import pathlib
 import sys
 import tempfile
 import unittest
@@ -180,7 +181,7 @@ class WithdrawDeferredTest(unittest.TestCase):
     def test_withdraws_only_deferred_markers(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             qdir = self._queue(tmp, "B0AAAAAAAA", "B0BBBBBBBB")
-            with mock.patch.object(rq, "is_generatable", lambda a: a != "B0AAAAAAAA"):
+            with mock.patch.object(rq, "sources_exhausted", lambda a: a == "B0AAAAAAAA"):
                 withdrawn = rq.withdraw_deferred(qdir)
             self.assertEqual(withdrawn, ["B0AAAAAAAA"])
             self.assertFalse(os.path.exists(rq.marker_path("B0AAAAAAAA", qdir)))
@@ -199,16 +200,47 @@ class WithdrawDeferredTest(unittest.TestCase):
             body = os.path.join(adir, "2026-05-01-B0AAAAAAAA.json")
             with open(body, "w", encoding="utf-8") as f:
                 f.write("{}")
-            with mock.patch.object(rq, "is_generatable", lambda a: False):
+            with mock.patch.object(rq, "sources_exhausted", lambda a: True):
                 rq.withdraw_deferred(qdir)
             self.assertTrue(os.path.exists(body), "本体が消えてはいけない")
 
     def test_nothing_to_withdraw_is_a_noop(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             qdir = self._queue(tmp, "B0AAAAAAAA")
-            with mock.patch.object(rq, "is_generatable", lambda a: True):
+            with mock.patch.object(rq, "sources_exhausted", lambda a: False):
                 self.assertEqual(rq.withdraw_deferred(qdir), [])
             self.assertTrue(os.path.exists(rq.marker_path("B0AAAAAAAA", qdir)))
+
+    def test_waiting_for_sources_is_not_withdrawn(self) -> None:
+        """#9199: 収集前で非販売ソースを待っているマーカーは取り下げない。
+
+        取り下げると 34-third-party-sources の収集対象からも外れ、永久に揃わない。
+        収集を試しても揃わなかったものだけ取り下げる。
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            base = os.path.join(tmp, "per_asin")
+            for a, hosts in (("B0AAAAAAAA", None), ("B0BBBBBBBB", 1), ("B0CCCCCCCC", 3)):
+                d = os.path.join(base, a)
+                os.makedirs(d)
+                with open(os.path.join(d, "news.json"), "w", encoding="utf-8") as f:
+                    f.write("[]")
+                with open(os.path.join(d, "youtube.json"), "w", encoding="utf-8") as f:
+                    json.dump([{"title": "t", "url": "https://youtube.com/watch?v=1"}], f)
+                if hosts is not None:
+                    with open(os.path.join(d, "third_party_sources.json"), "w",
+                              encoding="utf-8") as f:
+                        json.dump({"sources": [{"url": f"https://h{i}.example/x"}
+                                               for i in range(hosts)]}, f)
+            qdir = self._queue(tmp, "B0AAAAAAAA", "B0BBBBBBBB", "B0CCCCCCCC")
+            import score_per_asin_info as sc
+            real_score = sc.score_asin
+            with mock.patch.object(sc, "score_asin",
+                                   lambda a: real_score(a, pathlib.Path(base))):
+                self.assertFalse(rq.is_generatable("B0AAAAAAAA"))  # 待ち (未収集)
+                self.assertFalse(rq.is_generatable("B0BBBBBBBB"))  # 収集済みでも 1 host
+                self.assertTrue(rq.is_generatable("B0CCCCCCCC"))
+                withdrawn = rq.withdraw_deferred(qdir)
+            self.assertEqual(withdrawn, ["B0BBBBBBBB"])
 
     def test_is_generatable_is_permissive_when_scoring_fails(self) -> None:
         """判定できないことを理由に候補を減らさない (生成側の defer が独立に効く)。"""

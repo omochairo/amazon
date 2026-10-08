@@ -159,17 +159,8 @@ def eligible_rewrite_asins(
     return out
 
 
-# #5490: 03-invoke-jules が生成を見送る band。invoke_jules_repoless.pick_candidates の
-# `deferred_bands` と同じ値で、こちらが SSOT。
-#
-# band=="zero" は「非販売ソース 2 件必須 (v5 §6.5.1) を満たす素材が fetch 済みで
-# 真にゼロ」= 生成しても品質ゲートに構造的不合格、という信号 (#1600 Phase 1)。
-# "unfetched" は第三者収集そのものが未実行。どちらも生成側が defer する。
-DEFERRED_BANDS = ("zero", "unfetched")
-
-
 def is_generatable(asin: str) -> bool:
-    """`03-invoke-jules` がこの ASIN の生成に進むか (#5490)。
+    """`03-invoke-jules` がこの ASIN の生成に**今**進むか (#5490 / #9199)。
 
     リライトの選定 (select_rewrite_targets) と生成の選定
     (invoke_jules_repoless.pick_candidates) が別々の適格性ルールを持っていたため、
@@ -181,16 +172,38 @@ def is_generatable(asin: str) -> bool:
       4. マーカーが消えない → 1 に戻る (同じ 12 件)
 
     実測 (2026-08-18): キュー先頭の 12 件は band=zero が 11 件で、最古のマーカーは
-    56 日・中央値 30 日ぶん滞留していた。判定をここに集約して両側から呼ぶ。
+    56 日・中央値 30 日ぶん滞留していた。
+
+    #9199: 判定は生成側と同じ ``score_per_asin_info.should_defer`` にする。以前は
+    band (zero/unfetched) だけを見ていて、生成側とずれていた (unfetched でも
+    第三者 host が 2 件あれば生成側は通す / thin は第三者 0 件でも通していた)。
+    ここで False でも「待ち」であって諦めではない。取り下げは
+    ``sources_exhausted`` (収集しても揃わない) だけ。
 
     スコアリングが失敗したら **True を返す** (判定できないことを理由に候補を
     減らさない)。生成側の defer は独立に効くので、取りこぼしても二重に落ちるだけ。
     """
     try:
         import score_per_asin_info as sc
-        return sc.score_asin(asin).get("band") not in DEFERRED_BANDS
+        return not sc.should_defer(sc.score_asin(asin))
     except Exception:
         return True
+
+
+def sources_exhausted(asin: str) -> bool:
+    """非販売ソースを収集しても揃わず、待っても生成されない ASIN か (#9199)。
+
+    書き直し待ちは first-party と同じく「ソースが揃うまで待たせる」。待っている間は
+    34-third-party-sources が先頭で集める。ここが True になるのは収集を試した後も
+    足りないときだけで、そのマーカーは取り下げる (残すと #5490 のループに戻る)。
+
+    スコアリングが失敗したら False (判定できないことを理由に取り下げない)。
+    """
+    try:
+        import score_per_asin_info as sc
+        return sc.sources_exhausted(sc.score_asin(asin))
+    except Exception:
+        return False
 
 
 PER_ASIN_ROOT = "data/raw/per_asin"
@@ -241,7 +254,7 @@ def pending_rewrite_candidates(
         if not has_prompt_source(asin, per_asin_root):
             continue  # 素材が無い。生成に回しても prompt が組めない
         if not is_generatable(asin):
-            continue  # band=zero/unfetched は生成側が defer する
+            continue  # 生成側が defer する (素材ゼロ・非販売ソース待ち)。待ちは 34 が集める
         requested_at = marker.get("requested_at", "") if isinstance(marker, dict) else ""
         ready.append((requested_at, asin))
     ready.sort()
@@ -250,19 +263,27 @@ def pending_rewrite_candidates(
 
 
 def deferred_markers(queue_dir: str = QUEUE_DIR) -> list[str]:
-    """マーカーはあるが生成側が defer する ASIN (= 消化されようがない) を返す。"""
-    return sorted(a for a in load_markers(queue_dir) if not is_generatable(a))
+    """マーカーはあるが消化されようがない ASIN (収集しても非販売ソースが揃わない) を返す。
+
+    #9199: 以前は生成側が defer する ASIN を全部返していたが、それだと収集前の
+    「待てば揃う」マーカーまで取り下げていた (取り下げると 34 の収集対象からも外れ、
+    永久に揃わない)。
+    """
+    return sorted(a for a in load_markers(queue_dir) if sources_exhausted(a))
 
 
 def withdraw_deferred(queue_dir: str = QUEUE_DIR) -> list[str]:
-    """defer 対象のマーカーを取り下げる (#5490 対処C)。
+    """消化されようがないマーカーを取り下げる (#5490 対処C / #9199)。
+
+    対象は ``sources_exhausted`` (収集しても非販売ソースが揃わない) だけ。
+    収集前で待っているマーカーは残す (34-third-party-sources が集める)。
 
     `cleanup_completed` は「新しい本体が着地したとき」だけ消すので、生成されない
     ASIN のマーカーは永久に残る。取り下げても**本体は消さない** — リライトを
     諦めるだけで、記事は今のまま配信され続ける (`cleanup_completed` が旧本体を
     消すのは置き換えが着地した後だけ、という #2711 の不変条件は保つ)。
 
-    素材が埋まって band が上がれば、次の選定で普通に選ばれ直す。
+    素材が埋まって非販売ソースが揃えば、次の選定で普通に選ばれ直す。
     """
     withdrawn = deferred_markers(queue_dir)
     for asin in withdrawn:
@@ -340,7 +361,7 @@ def main() -> int:
     ap.add_argument(
         "--withdraw-deferred",
         action="store_true",
-        help="#5490: 生成側が defer する band (zero/unfetched) のマーカーを取り下げる。"
+        help="#5490 / #9199: 第三者ソースを収集しても非販売 2 件に届かないマーカーを取り下げる。"
         "本体は消さない (リライトを諦めるだけで記事は今のまま配信される)。",
     )
     ap.add_argument(

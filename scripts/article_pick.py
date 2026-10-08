@@ -18,9 +18,11 @@ GitLab 側の ``invoke_jules_repoless.py`` が使う。03 の inline Python
 判定不能 (snapshot 無し・root 無し) は従来どおり通す (fail-open)。
 手動指定 (03 の workflow_dispatch asin) はここを通らない。
 
-その後 ``score_per_asin_info.should_defer`` で素材ゼロ品を外す (#1600 / #9025)。
-first-party は defer しない。安全弁 (全候補 defer なら defer を無効化) は
-first-party を数えずに判定する。
+その後 ``score_per_asin_info.should_defer`` で素材ゼロ品と、非販売ソースが 2 件
+揃っていない品を外す (#1600 / #9025 / #9199)。first-party も同じ基準で待たせるが、
+上限で切る**前に**外す (待っている ASIN に枠を占有させない)。first-party は落とさず
+待たせるだけで、34-third-party-sources が優先して集める。安全弁 (全候補 defer なら
+defer を無効化) は first-party を数えずに判定し、first-party の待ちは解除しない。
 
 03 の pick-asin はこのモジュールを呼ぶだけにした (#9155)。03 と GitLab 側で
 規則が 2 重に書かれていた頃の名残で、``scripts/tests/test_article_pick.py`` は
@@ -141,6 +143,25 @@ def select_candidates(items, existing, ranking_pool, first_party_all,
         fp_remaining = [a for a in fp_remaining if a not in set(fp_waiting)]
     # #9155: ジャンル不一致・blocklist 済みは上限で切る**前に**外す (枠を占有させない)。
     fp_remaining = [a for a in fp_remaining if excluded_reason(a) is None]
+    # #9199: 非販売ソースが 2 件揃うまで待たせる (sources_v5 で確実に落ちるため)。
+    # 落とさない: 34-third-party-sources が first-party を先頭で集める。
+    if scorer is not None:
+        try:
+            fp_scores = {a: scorer.score_asin(a) for a in fp_remaining}
+            fp_src_waiting = [a for a in fp_remaining if scorer.should_defer(fp_scores[a])]
+            if fp_src_waiting:
+                print(f"first-party waiting for third-party sources (#9199): "
+                      f"{len(fp_src_waiting)} {fp_src_waiting[:10]}")
+                exhausted = getattr(scorer, "sources_exhausted", None)
+                stuck = [a for a in fp_src_waiting
+                         if exhausted is not None and exhausted(fp_scores[a])]
+                if stuck:
+                    # 収集を試しても揃わなかった。待ち続けて記事にならないので人が見る。
+                    _warn(f"first-party sources exhausted (#9199): {len(stuck)} "
+                          f"{stuck[:10]} — 収集済みでも非販売ソース 2 件に届かない")
+                fp_remaining = [a for a in fp_remaining if a not in set(fp_src_waiting)]
+        except Exception as e:  # スコア計算失敗は pick を止めない (従来どおり通す)
+            _warn(f"first-party source check skipped: {e}")
     first_party_pool = fp_remaining[:max(first_party_cap, 0)]
     if first_party_pool:
         print(f"first-party-ready (omcha-ops#264): {len(fp_remaining)} remaining "
@@ -188,7 +209,7 @@ def select_candidates(items, existing, ranking_pool, first_party_all,
                     kept.append(a)
                     kept_other.append(a)
             if deferred:
-                print(f"info-zero/unfetched deferred (#1600): {len(deferred)} "
+                print(f"info-zero/awaiting-sources deferred (#1600/#9199): {len(deferred)} "
                       f"e.g. {deferred[:10]}")
             if kept_other:
                 remaining = kept

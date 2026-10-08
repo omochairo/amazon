@@ -13,6 +13,7 @@ name: Pre-fetch Third-Party Sources
 #   1. 新規候補 (--pool --bands zero,thin,unfetched / 30 件/日) — まだ記事になっていない ASIN
 #      unfetched は ranking_pool 品 (news/youtube/books が集まらない)。ここで host が
 #      2 件集まるまで 03-invoke-jules は pick しない (score_per_asin_info.should_defer)
+#      first-party と書き直し待ちも thin なら同じく待たされるので、さらに先頭で集める (#9199)
 #   2. 既存記事 (--from-gsc / 20 件/日) — GSC の直近 4 週 imp>=10 かつ第三者ソース未保有
 # 日次の枠は共有させない。2 が 1 の枠を食い尽くすと新規候補レーンが黙って飢える。
 #

@@ -276,8 +276,34 @@ def score_asin(asin: str, base: pathlib.Path = PER_ASIN_DIR) -> dict:
         "books": bk,
         "competitors": comp,
         "third_party_hosts": tp_hosts,
+        "third_party_fetched": (d / "third_party_sources.json").exists(),
         "exists": d.is_dir(),
     }
+
+
+def non_sales_material(result: dict) -> int:
+    """v5 §6.5.1 の「非販売ソース」に使える材料の数 (score_asin の戻り値から)。
+
+    事前収集 (fetch_third_party_sources) の非販売 host と、news の distinct 媒体を
+    足す。youtube / books は数えない: youtube は何本あっても 1 host で、books は
+    販売サイト由来が多く、どちらも「第三者の非販売サイト」の裏付けとしては弱い。
+    """
+    return result.get("third_party_hosts", 0) + result.get("news_sources", 0)
+
+
+def awaiting_sources(result: dict) -> bool:
+    """非販売ソースが 2 件揃うまで生成を待たせる状態か (#9199)。
+
+    thin / unfetched は「材料は乏しいが書ける」扱いで生成に回していたが、
+    非販売の材料が 2 件に届かないまま生成すると sources_v5 で確実に落ちる
+    (実測: 書き直し待ち 12 件中 8 件が第三者ソース 0 件・defer されず)。
+    落とすのではなく、34-third-party-sources が集めるまで待たせる。
+    ok は evidence (news/youtube/books) が十分あるので待たせない。
+    """
+    band = result.get("band")
+    if band not in ("thin", "unfetched"):
+        return False
+    return non_sales_material(result) < _THIRD_PARTY_MIN_HOSTS
 
 
 def should_defer(result: dict) -> bool:
@@ -291,15 +317,22 @@ def should_defer(result: dict) -> bool:
     (実測 2026-10-05: ranking-sniper の 4 件が全部 unfetched で初回 validate 落ち、
     3 件が赤のまま放置)。
 
-    unfetched でも事前収集 (fetch_third_party_sources) の非販売 host が
-    _THIRD_PARTY_MIN_HOSTS 以上あれば、zero を外す条件と同じく書く材料ありとみなす。
+    #9199: thin も同じ。非販売の材料が 2 件に届くまで待たせる (awaiting_sources)。
     """
-    band = result.get("band")
-    if band == "zero":
+    if result.get("band") == "zero":
         return True
-    if band == "unfetched":
-        return result.get("third_party_hosts", 0) < _THIRD_PARTY_MIN_HOSTS
-    return False
+    return awaiting_sources(result)
+
+
+def sources_exhausted(result: dict) -> bool:
+    """待っても非販売ソースが揃う見込みが無いか (#9199)。
+
+    defer 対象で、かつ事前収集を一度は試した (third_party_sources.json がある)。
+    収集前の defer は「待てば揃うかもしれない」ので待たせる。収集後もまだ足りないなら、
+    fetch_third_party_sources は空振りを長期間 (既定 180 日〜) 引き直さないので、
+    実質これ以上は増えない。
+    """
+    return should_defer(result) and bool(result.get("third_party_fetched"))
 
 
 def _cli() -> int:
