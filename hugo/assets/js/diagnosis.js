@@ -9,7 +9,8 @@
 //   /diagnosis/                 … 1 問目から
 //   /diagnosis/?w=..&a=..       … 共有リンク。回答を復元して結果を出す
 //   /diagnosis/?restore=1       … ホームの「前回の診断」バナーから。保存済みの回答で再計算
-//   /diagnosis/?age=0-1 等      … ホームの年齢タイムライン (age_timeline.html) から。年齢別ベスト10
+//   /diagnosis/?age=3y 等       … ホームの年齢タイムライン (age_timeline.html) から。年齢別ベスト10
+//                                 (旧 4 区分の ?age=0-1 等も受け付ける)
 (function () {
   "use strict";
 
@@ -508,7 +509,7 @@
 
     // ------------------------------------------------------------ 年齢別ベスト10
     function showAgeBest(band) {
-      var b = D.LEGACY_AGE_BANDS[band];
+      var b = D.ageBand(band);
       var myToken = ++token;
       show("loading");
       loadItems().then(function (data) {
@@ -538,7 +539,7 @@
     function route() {
       var params = new URLSearchParams(window.location.search);
       var band = params.get("age");
-      if (band && D.LEGACY_AGE_BANDS[band]) { showAgeBest(band); return; }
+      if (band && D.ageBand(band)) { showAgeBest(band); return; }
 
       var shared = D.fromParams(params);
       if (shared) { answers = shared; entry = "shared"; finish(); return; }

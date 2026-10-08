@@ -185,6 +185,33 @@ test("年齢別ベスト10 (?age=): 帯の上限を超える対象年齢は出�
   const names = D.ageBest(items, "0-1", 10).map((p) => p.item.product_name);
   assert.deepEqual(plain(names), ["baby"]);
   assert.deepEqual(plain(D.ageBest(items, "nope", 10)), []);
+  assert.deepEqual(plain(D.ageBest(items, "constructor", 10)), [], "Object の組み込み名を帯と取り違えない");
+});
+
+test("年齢別ベスト10 (?age=): 診断の 9 段階で引け、小学生の帯もある", () => {
+  const items = [
+    item({ name: "baby", age: 0, score: 60 }),
+    item({ name: "three", age: 36, score: 80 }),
+    item({ name: "six", age: 72, score: 90 }),
+    item({ name: "ten", age: 120, score: 99 }),
+  ];
+  const names = (band) => plain(D.ageBest(items, band, 10).map((p) => p.item.product_name));
+  assert.deepEqual(names("0-5m"), ["baby"]);
+  assert.deepEqual(names("3y"), ["three"], "1 歳未満向けは 3 歳には幼すぎる");
+  assert.deepEqual(names("6-7y"), ["six", "three"], "下限は診断と同じ lowerWindow (72-36=36 か月) まで");
+  assert.deepEqual(names("8y"), ["ten", "six"]);
+  for (const a of D.AGES) assert.ok(D.ageBand(a.value), a.value + " が引ける");
+  assert.equal(D.ageBand("6-7y").label, "6〜7歳");
+  assert.equal(D.ageBand("1-2").label, "1〜2歳", "旧 4 区分のリンクも生きている");
+});
+
+test("ホームの年齢タイムラインは診断の AGES と同じ帯・表記で並ぶ", () => {
+  const tpl = readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)),
+                 "../../hugo/layouts/partials/age_timeline.html"), "utf8");
+  const bands = [...tpl.matchAll(/\(dict "v" "([^"]+)" "emoji" "([^"]+)" "label" "([^"]+)" "sub" "([^"]+)"\)/g)]
+    .map((m) => ({ value: m[1], emoji: m[2], label: m[3], sub: m[4] }));
+  assert.deepEqual(bands, plain(D.AGES.map((a) => ({ value: a.value, emoji: a.emoji, label: a.label, sub: a.sub }))));
 });
 
 test("結果のチップは回答した設問ぶん出て、出産祝いでは年齢チップを出さない", () => {

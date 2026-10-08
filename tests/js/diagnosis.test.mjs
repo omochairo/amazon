@@ -276,6 +276,14 @@ test("C: 年齢ベスト10 (?age=0-1) から診断をやり直すと、見出し
   assert.equal(ui.$("dx-result-eyebrow").textContent, "診断結果");
 });
 
+test("年齢タイムラインの 9 段階 (?age=6-7y) でも年齢別ベスト10 を出す", async () => {
+  const ui = boot({ search: "?age=6-7y" });
+  await tick(20);
+  assert.equal(ui.$("dx-result-eyebrow").textContent, "年齢別ベスト10");
+  assert.equal(ui.$("dx-persona-title").textContent, "6〜7歳のベスト10");
+  assert.match(ui.$("dx-age-tip").textContent, /^この時期のポイント: /);
+});
+
 test("D: エラー表示中に最初からやり直しても再取得を試みる", async () => {
   let attempt = 0;
   const ui = boot({ fetchImpl: async () => { attempt++; if (attempt <= 2) throw new Error("network"); return { json: async () => ITEMS }; } });
