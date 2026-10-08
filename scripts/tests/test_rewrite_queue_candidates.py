@@ -15,6 +15,8 @@
 from __future__ import annotations
 
 import ast
+import contextlib
+import io
 import json
 import os
 import pathlib
@@ -129,10 +131,21 @@ class WorkflowWiringTests(unittest.TestCase):
         self.assertIsNotNone(m, "inline pick-asin block not found")
         ast.parse(textwrap.dedent(m.group(1)))
 
-    def test_pick_asin_adds_rewrite_candidates_before_keyword_pool(self):
+    def _pick_src(self) -> str:
+        # 規則の SSOT は article_pick.py (#9155)。03 はそれを呼ぶだけ。
+        return (REPO_ROOT / "scripts" / "article_pick.py").read_text(encoding="utf-8")
+
+    def test_pick_asin_delegates_to_article_pick(self):
         body = textwrap.dedent(
             re.search(r"python3 - <<'PY'\n(.*?)\n\s*PY\n",
                       self._wf("03-invoke-jules.yml"), re.S).group(1))
+        self.assertIn("article_pick.pick_from_repo", body)
+        # 規則を 03 側に書き戻すと 2 重管理に戻る (#9073 / #9155)
+        self.assertNotIn("first_party_pool.json", body)
+        self.assertNotIn("should_defer", body)
+
+    def test_pick_asin_adds_rewrite_candidates_before_keyword_pool(self):
+        body = self._pick_src()
         self.assertIn("pending_rewrite_candidates", body)
         self.assertIn("REWRITE_PICKS_PER_RUN", body)
         # 候補列の順序: first-party -> ranking -> rewrite -> keyword
@@ -145,9 +158,7 @@ class WorkflowWiringTests(unittest.TestCase):
         # omcha-ops#264: first-party を先頭に置いても、#1600 の band=zero defer が
         # そのまま走ると落ちる (実測 2026-09-16: 手作業 8 件中 1 件が zero)。
         # 除外と、安全弁が first-party を数えないことの両方を守る。
-        body = textwrap.dedent(
-            re.search(r"python3 - <<'PY'\n(.*?)\n\s*PY\n",
-                      self._wf("03-invoke-jules.yml"), re.S).group(1))
+        body = self._pick_src()
         self.assertIsNotNone(
             re.search(r"if a in first_party_set:\s*\n\s*kept\.append\(a\)\s*\n\s*continue", body),
             "first_party_set must bypass the band=zero defer")
@@ -159,14 +170,13 @@ class WorkflowWiringTests(unittest.TestCase):
     def test_missing_first_party_pool_is_silent(self):
         # A (収集レーン) が入るまで data/raw/first_party_pool.json は存在しない。
         # ranking_pool と同じく黙って従来どおりにする (毎 run の ::warning:: を出さない)。
-        body = textwrap.dedent(
-            re.search(r"python3 - <<'PY'\n(.*?)\n\s*PY\n",
-                      self._wf("03-invoke-jules.yml"), re.S).group(1))
-        m = re.search(r"first_party_pool\.json.*?(?=^\s*first_party_set\s*=)", body, re.S | re.M)
-        self.assertIsNotNone(m, "first_party_pool block not found")
-        self.assertIsNotNone(
-            re.search(r"except FileNotFoundError:\s*\n(\s*#.*\n)*\s*pass", m.group(0)),
-            "a missing first_party_pool.json must be a silent no-op")
+        import article_pick
+        with tempfile.TemporaryDirectory() as tmp:
+            with contextlib.redirect_stdout(io.StringIO()) as out, \
+                    contextlib.redirect_stderr(io.StringIO()) as err:
+                got = article_pick.load_first_party_pool(os.path.join(tmp, "missing.json"))
+        self.assertEqual(got, [])
+        self.assertEqual(out.getvalue() + err.getvalue(), "")
 
     def test_idle_fill_caps_the_backlog(self):
         src = self._wf("12-rewrite-idle-fill.yml")
