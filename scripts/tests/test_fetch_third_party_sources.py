@@ -144,8 +144,9 @@ class FilterSourcesTest(unittest.TestCase):
 
     def test_fetch_for_asin_writes_dropped(self):
         raw = [
-            {"link": "https://a.example.com/1", "title": "A"},
+            {"link": "https://a.example.com/1", "title": "積み木で遊んだ感想"},
             {"link": "https://item.rakuten.co.jp/shop/abc/", "title": "R"},
+            {"link": "https://b.example.com/x", "title": "水資源の現況"},
         ]
         with tempfile.TemporaryDirectory() as td:
             base = pathlib.Path(td)
@@ -155,9 +156,68 @@ class FilterSourcesTest(unittest.TestCase):
             with mock.patch.object(F, "tavily_search", return_value=raw):
                 F.fetch_for_asin("B0TEST0001", "tvly-test", base)
             saved = json.loads((base / "B0TEST0001" / F.OUT_NAME).read_text(encoding="utf-8"))
-        self.assertEqual(saved["raw_count"], 2)
-        self.assertEqual(len(saved["sources"]), 1)
-        self.assertEqual(saved["dropped"], [{"host": "item.rakuten.co.jp", "reason": "retail"}])
+        self.assertEqual(saved["raw_count"], 3)
+        self.assertEqual([x["host"] for x in saved["sources"]], ["a.example.com"])
+        self.assertEqual(saved["dropped"], [
+            {"host": "item.rakuten.co.jp", "reason": "retail"},
+            {"host": "b.example.com", "reason": "off_topic"},
+        ])
+
+    def test_contact_pages_are_unrelated(self):
+        # #9199: 商品名の検索で拾う無関係サイトの問い合わせ窓口
+        self.assertEqual(F._exclude_reason("https://www.sophia.ac.jp/jpn/contact"), "unrelated")
+        self.assertEqual(F._exclude_reason("https://example.jp/wp/contact-us/"), "unrelated")
+        self.assertEqual(F._exclude_reason("https://example.jp/otoiawase.html"), "unrelated")
+        # 語の一部に contact を含むだけのものは外さない
+        self.assertIsNone(F._exclude_reason("https://example.jp/contacts-lens-review"))
+        self.assertIsNone(F._exclude_reason("https://example.jp/blog/?p=contact"))
+        self.assertIsNone(F._exclude_reason("https://example.com/inquiry-based-learning-toys"))
+
+
+class RelevanceTest(unittest.TestCase):
+    """#9199: クエリの語がタイトルにも本文にも出てこない結果は外す。"""
+
+    def test_unrelated_page_is_off_topic(self):
+        q = "サンリオ ぬいぐるみおせわセット シナモロール 199249"
+        self.assertFalse(F._is_relevant(q, "お問い合わせ｜上智大学", "受付時間 9:00-17:00"))
+        self.assertTrue(F._is_relevant(q, "シナモロールのおせわセットを買ってみた", ""))
+
+    def test_matches_in_snippet(self):
+        self.assertTrue(F._is_relevant("LAMPTOP 収納ボックス", "ブログ", "lamptop の箱を使ってみた"))
+
+    def test_kana_and_spacing_are_folded(self):
+        self.assertTrue(F._is_relevant("Original Tamagotchi 初代 すけるとん",
+                                       "たまごっち スケルトンのレビュー", ""))
+        self.assertTrue(F._is_relevant(
+            "池田工業社 わくわくミッション宇宙探査セット［ スペースシャトル",
+            "池田工業社 わくわくミッション 宇宙探査セット", ""))
+
+    def test_long_token_partial_match(self):
+        q = "ボーネルンドオリジナル ファーストピックアップパズル HY7"
+        self.assertTrue(F._is_relevant(q, "1歳向けパズル ボーネルンド「ピックアップパズル」", ""))
+
+    def test_token_length_is_measured_before_folding(self):
+        # 「ゲーム」は長音を畳むと 2 文字になるが、照合には使う
+        self.assertTrue(F._is_relevant("ゲーム", "人気のゲームを紹介", ""))
+
+    def test_nakaguro_splits_tokens(self):
+        q = "マイファースト・テディーメモリー"
+        self.assertTrue(F._is_relevant(q, "テディーメモリーで遊んだ", ""))
+
+    def test_short_tokens_are_not_used(self):
+        # 2 文字以下の語 (「水」「木製」) では関連とみなさない
+        self.assertFalse(F._is_relevant("木製 水 3D魔法ペイント", "水資源の現況 木製の橋", ""))
+
+    def test_query_without_usable_tokens_keeps_everything(self):
+        self.assertTrue(F._is_relevant("水 木", "何でも", ""))
+        self.assertTrue(F._is_relevant("", "何でも", ""))
+
+    def test_filter_without_query_skips_relevance(self):
+        raw = [{"link": "https://a.example.com/1", "title": "無関係"}]
+        self.assertEqual(len(F._filter_sources(raw, max_sources=5)), 1)
+        out, dropped = F._filter_sources_with_drops(raw, 5, query="シナモロール")
+        self.assertEqual(out, [])
+        self.assertEqual(dropped, [{"host": "a.example.com", "reason": "off_topic"}])
 
 
 class FreshnessTest(unittest.TestCase):
@@ -197,8 +257,12 @@ class TavilySearchTest(unittest.TestCase):
         resp = io.BytesIO(json.dumps(payload).encode("utf-8"))
         resp.__enter__ = lambda *a: resp  # type: ignore[attr-defined]
         resp.__exit__ = lambda *a: False  # type: ignore[attr-defined]
-        with mock.patch.object(F.urllib.request, "urlopen", return_value=resp):
+        with mock.patch.object(F.urllib.request, "urlopen", return_value=resp) as urlopen:
             items = F.tavily_search("レゴ クラシック", "tvly-test", num=10)
+        body = json.loads(urlopen.call_args.args[0].data)
+        # #9199: exclude_domains を渡すと raw が 0 件近くまで減る (実測) ので渡さない
+        self.assertNotIn("exclude_domains", body)
+        self.assertEqual(body["max_results"], 10)
         self.assertEqual(len(items), 2)
         self.assertEqual(items[0], {
             "link": "https://a.example.com/1", "title": "A", "snippet": "snip a",
@@ -631,8 +695,8 @@ class FetchForAsinBookkeepingTest(unittest.TestCase):
         with mock.patch.object(F, "tavily_search", return_value=[]):
             F.fetch_for_asin("B00TARGET1", "k", self.base)
         self.assertEqual(self._payload()["empty_streak"], 2)
-        hit = [{"link": "https://a.example/r", "title": "t", "snippet": "s"},
-               {"link": "https://b.example/r", "title": "t", "snippet": "s"}]
+        hit = [{"link": "https://a.example/r", "title": "テスト商品の感想", "snippet": "s"},
+               {"link": "https://b.example/r", "title": "t", "snippet": "テスト商品を使った"}]
         with mock.patch.object(F, "tavily_search", return_value=hit):
             F.fetch_for_asin("B00TARGET1", "k", self.base)
         self.assertEqual(self._payload()["empty_streak"], 0)
