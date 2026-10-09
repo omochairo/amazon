@@ -7,7 +7,12 @@
 {{- $rank := int ($item.rank | default 0) }}
 {{- $internal := $item.url_internal }}
 {{- $external := $item.amazon_url }}
-<li class="ranking-item feature-item feature-item--{{ $type }} ranking-item--rank-{{ $rank }}" data-rank="{{ $rank }}" data-asin="{{ $item.asin }}">
+{{- /* data-price / data-age は /deals/ の絞り込み (list_filter.js) が読む。
+       age_min_months は 0 (0歳〜) と未設定 (nil) を区別するため with を使わない。 */ -}}
+{{- $ageAttr := "" -}}
+{{- $ageRaw := index $item "age_min_months" -}}
+{{- if ne (printf "%v" $ageRaw) "<nil>" }}{{ $ageAttr = printf "%d" (int $ageRaw) }}{{ end -}}
+<li class="ranking-item feature-item feature-item--{{ $type }} ranking-item--rank-{{ $rank }}" data-rank="{{ $rank }}" data-asin="{{ $item.asin }}"{{ with $item.best_price }} data-price="{{ int . }}"{{ end }}{{ with $ageAttr }} data-age="{{ . }}"{{ end }}>
   <div class="ranking-badge ranking-badge--rank-{{ $rank }}" aria-label="第 {{ $rank }} 位">
     {{- if eq $rank 1 }}<span class="ranking-medal">🥇</span>
     {{- else if eq $rank 2 }}<span class="ranking-medal">🥈</span>

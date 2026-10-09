@@ -117,11 +117,20 @@
     {{- if not $items }}
     <p class="ranking-empty">現在データを集計中です。次回の自動更新までしばらくお待ちください。</p>
     {{- else }}
-    <ol class="ranking-list feature-list feature-list--{{ $type }}">
+    {{- if eq $type "deals" }}
+    {{- partial "list_filter.html" (dict "list" "deals-list" "mode" "deals" "pageSize" 0) }}
+    {{- end }}
+    <ol class="ranking-list feature-list feature-list--{{ $type }}"{{ if eq $type "deals" }} id="deals-list"{{ end }}>
       {{- range $items }}
       {{- partial "feature-item.html" (dict "item" . "type" $type) }}
       {{- end }}
     </ol>
+    {{- if eq $type "deals" }}
+    <div class="list-filter-empty" data-lf-empty data-list="deals-list" hidden>
+      <p>この条件に合う商品は、いまはありません。<a href="/price/">値下がり中のおもちゃ一覧</a>や<a href="/cospa/">価格帯別のコスパランキング</a>もご覧ください。</p>
+      <button type="button" class="list-filter-reset" data-lf-reset>条件をクリア</button>
+    </div>
+    {{- end }}
 
     {{- if hasPrefix $type "age-" }}
     {{- partial "age_concerns.html" (dict "type" $type) }}

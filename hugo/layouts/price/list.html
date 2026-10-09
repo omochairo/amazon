@@ -34,11 +34,17 @@
   {{- if not $items }}
   <p class="ranking-empty">現在値下げ情報はありません。次回の自動更新までしばらくお待ちください。</p>
   {{- else }}
-  <ol class="ranking-list feature-list feature-list--price">
+  {{- partial "list_filter.html" (dict "list" "price-list" "mode" "price" "pageSize" 30) }}
+  <ol class="ranking-list feature-list feature-list--price" id="price-list">
     {{- range $items }}
     {{- partial "price_dashboard_item.html" . }}
     {{- end }}
   </ol>
+  <div class="list-filter-empty" data-lf-empty data-list="price-list" hidden>
+    <p>この条件に合う値下がり商品は、いまはありません。</p>
+    <button type="button" class="list-filter-reset" data-lf-reset>条件をクリア</button>
+  </div>
+  <button type="button" class="list-filter-more" data-lf-more data-list="price-list" hidden>さらに表示</button>
 
   <p class="ranking-disclaimer">
     ※ 価格・在庫は Amazon から自動観測した時点のスナップショットです。「以前の価格」は直近90日の観測範囲での最高値です。リンク先で最新の価格・在庫を必ずご確認ください。
