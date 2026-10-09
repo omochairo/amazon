@@ -41,11 +41,13 @@ import urllib.parse
 try:
     import brand_normalizer
     import market_prices
+    import source_sites
     from filter_raw_per_asin import exclude_title_only
 except ImportError:  # スクリプトを scripts/ 外から呼ぶ場合のフォールバック
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
     import brand_normalizer  # type: ignore
     import market_prices  # type: ignore
+    import source_sites  # type: ignore
     from filter_raw_per_asin import exclude_title_only  # type: ignore
 
 RAW_DIR = pathlib.Path("data/raw")
@@ -99,34 +101,15 @@ _THIRD_PARTY_MIN_HOSTS = 2
 # 「材料が潤沢 (ok)」の主張はさせない。
 _THIN_EVIDENCE_CEILING = 16  # evidence がこの値以下なら "薄い" とみなす
 
-# #9239: sources_v5 は「合計 5 件以上、かつ非販売 2 件以上」。非販売 2 件だけを
-# 待っても、合計 5 件に届く材料が無ければ Jules は 3 件で止まり、PR は確実に落ちる
-# (実測 2026-10-07〜09: close 8 本の失敗は全件「合計 5 件未満」)。
-_SOURCES_MIN_TOTAL = 5
-
 # #9239: 事前収集 (Tavily) の候補 host のうち、非販売の第三者ソースに数えないもの。
 # host の完全一致か、その subdomain に当てる (部分一致にすると無関係の実在
 # ドメインまで落とす。#6593 の notomcha.jp と同じ罠)。
 #
-# 通販サイト (モール以外): 商品ページは「その店が売っている」記載で、第三者の評価では
-# ない。quality_gate._SALES_PAGE_HOSTS はモール 3 つしか持たないので gate は
-# 非販売として通すが、ここで非販売に数えると「非販売 2 件揃った」と誤判定して
-# 生成に回る (#9193 B0CGLGLJRM: 候補 7 host が全部通販)。合計 5 件の足しには数える。
-_RETAIL_SITE_HOSTS = frozenset({
-    # モール (quality_gate._SALES_PAGE_HOSTS)。fetch は取らないが、古い JSON や手で
-    # 足された行に残っていても第三者には数えない
-    "amazon.co.jp", "amazon.com", "rakuten.co.jp", "shopping.yahoo.co.jp",
-    "mercari.com", "qoo10.jp", "wowma.jp",
-    "yodobashi.com", "biccamera.com", "yamada-denkiweb.com", "askul.co.jp",
-    "lohaco.yahoo.co.jp", "monotaro.com", "kaunet.com", "dcm-ekurashi.com",
-    "joshinweb.jp", "edion.com", "kojima.net", "nojima.co.jp", "ksdenki.com",
-    "sofmap.com", "toysrus.co.jp", "aeonretail.com", "irisplaza.co.jp",
-    "cainz.com", "hands.net", "amiami.jp", "happinetonline.com", "giftmall.co.jp",
-    "superdelivery.com", "as-1.co.jp", "furusato-tax.jp", "pmall.gpoint.co.jp",
-    "paypayfleamarket.yahoo.co.jp", "auctions.yahoo.co.jp", "creema.jp", "minne.com",
-    "ebay.com", "walmart.com", "target.com", "etsy.com", "aliexpress.com",
-    "temu.com", "shein.com",
-})
+# 通販サイト: 商品ページは「その店が売っている」記載で、第三者の評価ではない。
+# 非販売に数えると「非販売 2 件揃った」と誤判定して生成に回る (#9193 B0CGLGLJRM:
+# 候補 7 host が全部通販)。gate (quality_gate.check_sources_v5) も同じ集合で
+# 非販売から外すので、SSOT は source_sites に置く (navi-brain#92)。
+_RETAIL_SITE_HOSTS = source_sites.RETAIL_SITE_HOSTS
 # 商品と無関係: メーカー名やブランド名で検索したときに拾う会社情報・求人・金融・
 # 地図・アプリストア等。商品について何も書いていないので Jules は採用しない
 # (#9211 B0DKFDMJZS: 英国法人登記と rocketreach)。合計にも数えない。
@@ -208,9 +191,7 @@ def is_search_result_url(url: str) -> bool:
     return bool(_SEARCH_QUERY_PARAMS & set(params))
 
 
-def _host_in(host: str, hosts: frozenset) -> bool:
-    """host が集合のいずれかと一致するか、その subdomain か。"""
-    return any(host == h or host.endswith("." + h) for h in hosts)
+_host_in = source_sites.host_in
 
 
 def host_kind(host: str) -> str:
@@ -376,6 +357,8 @@ def score_asin(asin: str, base: pathlib.Path = PER_ASIN_DIR) -> dict:
     pt_tier = _TIER_FALLBACK.get(tier, 4)
     cand = _candidate_hosts(asin, base)
     tp_hosts = len(cand["third_party"])
+    # navi-brain#92: gate と同じ「サイト」単位 (登録ドメイン・SNS はまとめて 1)
+    tp_sites = len({source_sites.site_key(h) for h in cand["third_party"]})
     pt_third = min(tp_hosts, _THIRD_PARTY_CAP) * _THIRD_PARTY_POINT
 
     evidence = pt_news + pt_yt + pt_bk
@@ -392,7 +375,7 @@ def score_asin(asin: str, base: pathlib.Path = PER_ASIN_DIR) -> dict:
     # あっても先に本流の収集を回すべきで、defer 対象ではない (enrich 待ち) のは同じ。
     if not evidence_fetched and evidence == 0:
         band = "unfetched"  # fetch 未実行 → enrich すべき。defer 対象ではない
-    elif evidence == 0 and tier == "D" and tp_hosts < _THIRD_PARTY_MIN_HOSTS:
+    elif evidence == 0 and tier == "D" and tp_sites < _THIRD_PARTY_MIN_HOSTS:
         band = "zero"  # fetch 済みで真ゼロ かつ フォールバックも事前収集も弱い → defer
     elif evidence <= _THIN_EVIDENCE_CEILING:
         band = "thin"
@@ -411,6 +394,7 @@ def score_asin(asin: str, base: pathlib.Path = PER_ASIN_DIR) -> dict:
         "books": bk,
         "competitors": comp,
         "third_party_hosts": tp_hosts,
+        "third_party_sites": tp_sites,
         "retail_hosts": len(cand["retail"]),
         "unrelated_hosts": len(cand["unrelated"]),
         "mall_pages": mall_pages(asin, base.parent),
@@ -421,21 +405,33 @@ def score_asin(asin: str, base: pathlib.Path = PER_ASIN_DIR) -> dict:
 
 
 def non_sales_material(result: dict) -> int:
-    """v5 §6.5.1 の「非販売ソース」に使える材料の数 (score_asin の戻り値から)。
+    """v5 §6.5.1 の「非販売の出典」に使える材料のサイト数 (score_asin の戻り値から)。
 
-    事前収集 (fetch_third_party_sources) の非販売 host と、news の distinct 媒体を
-    足す。youtube / books は数えない: youtube は何本あっても 1 host で、books は
-    販売サイト由来が多く、どちらも「第三者の非販売サイト」の裏付けとしては弱い。
+    事前収集 (fetch_third_party_sources) の非販売サイトと、news の distinct 媒体を
+    足す。youtube / books は数えない: youtube は何本あっても SNS で 1 サイトにしか
+    ならず、books は販売サイト由来が多く、どちらも「第三者の非販売サイト」の
+    裏付けとしては弱い。
+
+    navi-brain#92: 事前収集は host ではなくサイト (登録ドメイン・SNS はまとめて 1) で
+    数える。gate がサイトで数えるので、host で数えると ja/en の wikipedia で「2 件
+    揃った」と判定して生成に回り、gate で落ちる。third_party_sites の無い古い結果は
+    host 数で代用する。
+
+    news は媒体がいくつあっても 1 サイトまで。news.json の url は Google ニュースの
+    転送 URL (news.google.com) で、Jules はそれをそのまま出典に入れる (2026-10 の記事で
+    実測)。gate では google.com の 1 サイトにしかならない。
 
     #9199 案(b): omcha.jp の実使用記事 (first_party_posts) を 1 件まで足す。
     プロンプトにも sources に 1 件まで採用してよいと渡している (build_jules_prompt)。
     """
     fp = min(result.get("first_party_posts", 0), _FIRST_PARTY_MAX_COUNTED)
-    return result.get("third_party_hosts", 0) + result.get("news_sources", 0) + fp
+    sites = result.get("third_party_sites", result.get("third_party_hosts", 0))
+    news = min(result.get("news_sources", 0), 1)
+    return sites + news + fp
 
 
 def awaiting_sources(result: dict) -> bool:
-    """非販売ソースが 2 件揃うまで生成を待たせる状態か (#9199)。
+    """非販売の出典が 2 サイト揃うまで生成を待たせる状態か (#9199)。
 
     thin / unfetched は「材料は乏しいが書ける」扱いで生成に回していたが、
     非販売の材料が 2 件に届かないまま生成すると sources_v5 で確実に落ちる
@@ -443,27 +439,12 @@ def awaiting_sources(result: dict) -> bool:
     落とすのではなく、34-third-party-sources が集めるまで待たせる。
     ok は evidence (news/youtube/books) が十分あるので待たせない。
 
-    #9239: 非販売 2 件に加えて、合計 5 件に届く材料があるかも見る。
+    navi-brain#92: gate から合計 5 件の条件が外れたので、合計 5 件に届く材料が
+    あるか (#9239) は見ない。
     """
-    band = result.get("band")
-    if band not in ("thin", "unfetched"):
+    if result.get("band") not in ("thin", "unfetched"):
         return False
-    if non_sales_material(result) < _THIRD_PARTY_MIN_HOSTS:
-        return True
-    reachable = reachable_sources(result)
-    return reachable is not None and reachable < _SOURCES_MIN_TOTAL
-
-
-def reachable_sources(result: dict) -> int | None:
-    """sources に入れられる材料の合計 (#9239)。測れていない結果 (mall_pages 無し) は None。
-
-    非販売の材料 + 通販サイトの候補 + モールの商品ページ (Amazon + 照合済みの楽天・Yahoo)。
-    #9165 / #9211 / #9225 は非販売 2〜3 件の材料で生成に回り、合計 2〜3 件で落ちた。
-    """
-    if "mall_pages" not in result:
-        return None
-    return (non_sales_material(result) + result.get("retail_hosts", 0)
-            + result.get("mall_pages", 0))
+    return non_sales_material(result) < _THIRD_PARTY_MIN_HOSTS
 
 
 def should_defer(result: dict) -> bool:

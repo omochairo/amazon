@@ -53,9 +53,21 @@ class HostFilterTest(unittest.TestCase):
         self.assertTrue(F._is_excluded("https://www.google.com/search?q=x"))
         self.assertTrue(F._is_excluded("https://navi.omcha.jp/posts/foo/"))
 
-    def test_unrelated_hosts_excluded_but_retail_sites_kept(self):
-        # #9239: 会社情報・求人・金融は商品と無関係なので取らない。通販サイトは
-        # sources の合計 5 件の足しになるので残す (非販売に数えないのは採点側)。
+    def test_site_count_merges_same_site_and_sns(self):
+        # navi-brain#92: 空振りの判定もサイトで数える (ja/en の wikipedia・SNS 同士は 1)
+        self.assertEqual(F._site_count([
+            {"url": "https://ja.wikipedia.org/wiki/x", "host": "ja.wikipedia.org"},
+            {"url": "https://en.wikipedia.org/wiki/x", "host": "en.wikipedia.org"},
+            {"url": "https://www.youtube.com/watch?v=1"},
+            {"url": "https://x.com/a/status/1", "host": "x.com"},
+        ]), 2)
+        self.assertEqual(F._empty_streak({"sources": [
+            {"url": "https://toy.bandai.co.jp/a"}, {"url": "https://www.bandai.co.jp/b"},
+        ]}), 1)
+
+    def test_unrelated_hosts_and_retail_sites_excluded(self):
+        # #9239: 会社情報・求人・金融は商品と無関係なので取らない。
+        # navi-brain#92: 通販サイトも取らない (合計 5 件の条件が無くなり、非販売にも数えない)
         for u in (
             "https://rocketreach.co/acme-profile",
             "https://find-and-update.company-information.service.gov.uk/company/1",
@@ -67,7 +79,7 @@ class HostFilterTest(unittest.TestCase):
             "https://www.yodobashi.com/product/100000001001234567/",
             "https://www.monotaro.com/p/1234/",
         ):
-            self.assertFalse(F._is_excluded(u), u)
+            self.assertEqual(F._exclude_reason(u), "retail", u)
 
     def test_editorial_kept(self):
         for u in (
@@ -300,7 +312,8 @@ class GscDemandPoolTest(unittest.TestCase):
         with open(d / "amazon.json", "w", encoding="utf-8") as f:
             json.dump({"item": {"asin": asin, "title": f"{asin} テスト商品"}}, f)
         if tp_hosts:
-            srcs = [{"url": f"https://h{i}.example.com/a", "host": f"h{i}.example.com"}
+            # 別々のサイト (navi-brain#92: 同じ登録ドメインの host は 1 サイトに数える)
+            srcs = [{"url": f"https://h{i}.example/a", "host": f"h{i}.example"}
                     for i in range(tp_hosts)]
             with open(d / F.OUT_NAME, "w", encoding="utf-8") as f:
                 json.dump({"asin": asin, "sources": srcs}, f)

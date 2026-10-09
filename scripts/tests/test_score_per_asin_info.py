@@ -250,30 +250,38 @@ class ShouldDeferTest(unittest.TestCase):
         self._mk_unfetched("B0SD000002", [{"url": "https://note.com/a/n/1", "host": "note.com"}])
         self.assertTrue(S.should_defer(S.score_asin("B0SD000002", self.base)))
 
-    def test_unfetched_with_two_hosts_and_enough_total_is_picked(self):
-        # 非販売 2 + 通販 2 + Amazon 1 = 合計 5 件に届く
+    def test_unfetched_with_two_sites_is_picked(self):
+        # navi-brain#92: 合計 5 件の見込みは見ない。非販売 2 サイトで生成に回す
         self._mk_unfetched("B0SD000003", [
             {"url": "https://note.com/a/n/1", "host": "note.com"},
             {"url": "https://mokutopia.com/products/x", "host": "mokutopia.com"},
-            {"url": "https://www.yodobashi.com/product/1/", "host": "yodobashi.com"},
-            {"url": "https://www.biccamera.com/bc/item/1/", "host": "biccamera.com"},
         ])
         r = S.score_asin("B0SD000003", self.base)
         self.assertEqual(r["band"], "unfetched")
-        self.assertEqual(r["third_party_hosts"], 2)
-        self.assertEqual(r["retail_hosts"], 2)
-        self.assertEqual(S.reachable_sources(r), 5)
+        self.assertEqual(r["third_party_sites"], 2)
+        self.assertEqual(S.non_sales_material(r), 2)
         self.assertFalse(S.should_defer(r))
 
-    def test_two_non_sales_but_total_short_waits(self):
-        # #9239: 非販売 2 件だけでは合計 3 件 (+Amazon) で sources_v5 に落ちる (#9211)
+    def test_same_site_hosts_count_once(self):
+        # navi-brain#92: gate と同じくサイトで数える (ja/en の wikipedia、SNS 同士は 1)
         self._mk_unfetched("B0SD000006", [
-            {"url": "https://note.com/a/n/1", "host": "note.com"},
-            {"url": "https://mokutopia.com/products/x", "host": "mokutopia.com"},
+            {"url": "https://ja.wikipedia.org/wiki/x", "host": "ja.wikipedia.org"},
+            {"url": "https://en.wikipedia.org/wiki/x", "host": "en.wikipedia.org"},
+            {"url": "https://www.youtube.com/watch?v=1", "host": "youtube.com"},
+            {"url": "https://www.instagram.com/p/1/", "host": "instagram.com"},
         ])
         r = S.score_asin("B0SD000006", self.base)
+        self.assertEqual(r["third_party_hosts"], 4)
+        self.assertEqual(r["third_party_sites"], 2)
         self.assertEqual(S.non_sales_material(r), 2)
-        self.assertEqual(S.reachable_sources(r), 3)
+
+    def test_one_site_with_two_hosts_waits(self):
+        self._mk_unfetched("B0SD000010", [
+            {"url": "https://toy.bandai.co.jp/x", "host": "toy.bandai.co.jp"},
+            {"url": "https://www.bandai.co.jp/y", "host": "bandai.co.jp"},
+        ])
+        r = S.score_asin("B0SD000010", self.base)
+        self.assertEqual(r["third_party_sites"], 1)
         self.assertTrue(S.should_defer(r))
 
     def test_retail_and_unrelated_hosts_are_not_non_sales(self):
@@ -321,10 +329,10 @@ class ShouldDeferTest(unittest.TestCase):
         self.assertEqual(S.host_kind("store.shopping.yahoo.co.jp"), "retail")
         self.assertEqual(S.host_kind("item.rakuten.co.jp"), "retail")
 
-    def test_reachable_unknown_without_mall_pages(self):
-        # 手で組んだ結果 (mall_pages 無し) は合計を判定しない (従来どおり非販売だけ)
+    def test_hand_built_result_without_sites_uses_hosts(self):
+        # 手で組んだ結果 (third_party_sites 無し) は host 数で代用する
         r = {"band": "thin", "third_party_hosts": 2}
-        self.assertIsNone(S.reachable_sources(r))
+        self.assertEqual(S.non_sales_material(r), 2)
         self.assertFalse(S.should_defer(r))
 
     def test_host_kind_matches_subdomains_not_substrings(self):
@@ -344,7 +352,9 @@ class ShouldDeferTest(unittest.TestCase):
         self.assertFalse(S.should_defer({"band": "thin", "third_party_hosts": 2}))
         self.assertFalse(S.should_defer(
             {"band": "thin", "third_party_hosts": 1, "news_sources": 1}))
-        self.assertFalse(S.should_defer(
+        # navi-brain#92: news は Google ニュースの転送 URL (news.google.com) で出典に入り、
+        # gate では媒体が違っても google.com の 1 サイトになる。news だけでは揃わない
+        self.assertTrue(S.should_defer(
             {"band": "thin", "third_party_hosts": 0, "news_sources": 2}))
 
     def test_sources_exhausted_only_after_collection(self):

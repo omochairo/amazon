@@ -219,7 +219,7 @@ class WithdrawDeferredTest(unittest.TestCase):
         """
         with tempfile.TemporaryDirectory() as tmp:
             base = os.path.join(tmp, "per_asin")
-            # #9239: 生成に回るには非販売 2 件に加えて合計 5 件 (host 4 + Amazon 1) が要る
+            # 生成に回るには非販売 2 サイトが要る (navi-brain#92。B0BBBBBBBB は 1 サイトで待ち)
             for a, hosts in (("B0AAAAAAAA", None), ("B0BBBBBBBB", 1), ("B0CCCCCCCC", 4)):
                 d = os.path.join(base, a)
                 os.makedirs(d)

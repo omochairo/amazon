@@ -196,11 +196,11 @@ def _unwrap_affiliate(url):
 
 
 def _sources_note(asin):
-    """#9239: sources_v5 (合計 5 件以上・うち非販売 2 件以上) を満たす組み立て方の注記。
+    """sources_v5 を満たす組み立て方の注記 (#9239 → navi-brain#92 案 C)。
 
-    Jules は「水増し禁止」と「販売ページは出典に含めない」(03 の旧文面) /「楽天・Yahoo は
-    入れない」(repoless の旧文面) を受けて、非販売 2〜3 件だけで止まり sources_v5 で落ちて
-    いた (#9165 / #9211 / #9225)。使ってよい URL を具体的に並べ、件数の数え方を渡す。
+    gate の条件は「本文 (claims / review_signals) の supporting_source_ids から参照された
+    非販売の出典が、別々のサイトで 2 件以上」。合計件数の条件は無い。使ってよい URL を
+    具体的に並べ、数え方 (サイト単位・SNS は 1・通販は数えない) を渡す。
     03-invoke-jules.yml は --print-note sources で同じ文面を受け取る。
     """
     import score_per_asin_info as sc
@@ -215,7 +215,7 @@ def _sources_note(asin):
                 continue
             if url:
                 mall.append(f"- {label} 商品ページ (照合済み): {url}")
-    third, retail = [], []
+    third = []
     try:
         data = _jload(f"data/raw/per_asin/{asin}/third_party_sources.json")
     except (FileNotFoundError, ValueError):
@@ -224,32 +224,36 @@ def _sources_note(asin):
         url = src.get("url") if isinstance(src, dict) else None
         if not url or sc.is_search_result_url(url):
             continue
-        kind = sc.host_kind(src.get("host") or urlparse(url).netloc)
+        # 通販サイトは非販売に数えないので候補に出さない (古い JSON に残っている分)
+        if sc.host_kind(src.get("host") or urlparse(url).netloc) != "third_party":
+            continue
         title = (src.get("title") or "").strip()
-        line = f"- {url}" + (f" ({title[:60]})" if title else "")
-        if kind == "third_party":
-            third.append(line)
-        elif kind == "retail":
-            retail.append(line)
+        third.append(f"- {url}" + (f" ({title[:60]})" if title else ""))
     blocks = [
-        "【sources の組み立て (品質ゲート sources_v5: 合計 5 件以上・うち非販売 2 件以上)】",
-        "1. 非販売 (第三者) を 2 件以上確保する。まず下の候補を閲覧ツールで開き、"
-        "対象商品について書かれているものを採用する。足りなければ検索で探す。",
+        "【sources の組み立て (品質ゲート sources_v5: 本文から参照された非販売の出典が、"
+        "別々のサイトで 2 件以上)】",
+        "1. 非販売 (第三者) の出典を、別々のサイトから 2 件以上確保する。まず下の候補を"
+        "閲覧ツールで開き、対象商品について書かれているものを採用する。足りなければ検索で探す。",
     ]
     if third:
         blocks.append("   第三者の候補 (システムが事前収集。商品が違う・読めないものは採用しない):")
         blocks.extend("   " + t for t in third[:8])
-    blocks.append(
-        "2. 合計 5 件に届かない分は、販売ページで埋める。**対象商品そのものの販売ページを"
-        "出典に入れるのは水増しではない** (価格・仕様の出典として正当。テンプレート §6.5.1 の"
-        "表の「販売」)。使ってよい販売ページ:")
+    blocks.extend([
+        "2. 採用した出典は、それが裏付けた claims / review_signals の supporting_source_ids に"
+        "必ず id を書く。**どこからも参照されない出典は数えられない**ので、参照しない出典は載せない。",
+        "3. 数え方: サイトはドメイン単位 (ja.wikipedia.org と en.wikipedia.org、"
+        "toy.example.co.jp と example.co.jp は 1 サイト)。SNS (YouTube・X・Instagram・TikTok 等) は"
+        "合わせて 1 サイトまで。販売ページ・通販サイト (ヨドバシ・ビックカメラ等) は非販売に数えない。"
+        "omcha.jp の記事は 1 サイトなので、もう 1 サイトは外部が要る。"
+        "news.json の Google ニュースの URL (news.google.com) と Google Books は、媒体が違っても"
+        "google.com の 1 サイトになる。ニュースを 2 件目に数えたいときは、記事を開いて配信元の URL を載せる。",
+        "4. 価格・仕様の主張には販売ページを出典にしてよい (非販売の 2 サイトの代わりにはならない)。"
+        "使ってよい販売ページ:",
+    ])
     blocks.extend("   " + m for m in mall)
-    if retail:
-        blocks.append("   通販サイトの商品ページ (仕様・価格の確認用。件数に入れてよい):")
-        blocks.extend("   " + r for r in retail[:5])
     blocks.append(
-        "3. 保存する前に sources の件数を数える。合計 5 件未満・非販売 2 件未満なら 1・2 に"
-        "戻って足す。架空の URL・別の商品のページで埋めることは引き続き禁止。")
+        "5. 保存する前に、参照された非販売の出典のサイト数を数える。2 未満なら 1 に戻って足す。"
+        "件数を埋めるための出典・架空の URL・別の商品のページは引き続き禁止。")
     return "\n".join(blocks)
 
 
@@ -348,11 +352,11 @@ def build_prompt(asin, today=None):
 
 【sources のルール (リポジトリ非接続環境向けの明確化・必読)】
 - あなたの環境には google_search と view_text_website ツールがあります。まず対象商品について**必ず検索・URL閲覧で裏取りを試みてください**。
-- ただしこの環境では両ツールが失敗することがあります (検索結果なし・サイト取得失敗)。**失敗しても、非販売 2 件を販売ページで代用しないでください** (販売ページは合計 5 件の残りを埋めるためのもの)。
+- ただしこの環境では両ツールが失敗することがあります (検索結果なし・サイト取得失敗)。**失敗しても、非販売の 2 サイトを販売ページで代用しないでください** (販売ページは価格・仕様の主張の根拠)。
 - ツールで裏取りできなかった場合のフォールバック: 同梱の per_asin データ (news.json / books.json / youtube.json / competitors.json) に含まれる URL は、システム側が実在する API (ニュース検索・Google Books・YouTube Data API) から事前収集した検証済み URL です。**これらを sources に採用して構いません** (タイトル・出典名も同梱データのものを使う)。
 - 同梱の per_asin/third_party_sources.json は、システムが事前収集した非販売の第三者候補 URL (レビュー・解説・メディア) です。**sources 候補として優先的に内容を確認し**、裏取りに使えた URL を採用してください。候補に過ぎないので、内容を読めなかった・商品が違う URL は採用しない (#9199。03-invoke-jules と同じ規則)。
-- 販売ページ (Amazon / 楽天 / Yahoo の対象商品ページ) は sources の合計 5 件に数えてよい。ただし非販売 2 件の代わりにはならない (上の【sources の組み立て】。#9239)。
-- **sources は最低 5 件必須** (品質ゲートで機械検査されます)。
+- 販売ページ (Amazon / 楽天 / Yahoo の対象商品ページ) は価格・仕様の出典にしてよい。ただし非販売の 2 サイトの代わりにはならない (上の【sources の組み立て】)。
+- **claims / review_signals の supporting_source_ids から参照された非販売の出典が、別々のサイトで 2 件以上必須** (品質ゲートで機械検査されます。合計件数の下限は無いので、参照しない出典で件数を埋めない)。
 
 【品質ゲートで機械検査される項目】
 product.name の通称ルール (最大 40 字) と機械検査 11 項目は、下記テンプレート §4 / §4.5 に明文化されています (不合格になると公開されません・全項目厳守)。

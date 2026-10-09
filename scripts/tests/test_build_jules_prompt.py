@@ -252,7 +252,7 @@ def test_build_prompt_includes_first_party_note_and_third_party_rule(tmp_path, m
 
 
 # --------------------------------------------------------------------------
-# _sources_note: sources_v5 (合計 5 件・非販売 2 件) の組み立て方 (#9239)
+# _sources_note: sources_v5 (参照された非販売の出典が別々のサイトで 2 件以上) の組み立て方 (#9239 → navi-brain#92)
 # --------------------------------------------------------------------------
 
 def test_sources_note_lists_mall_pages_and_sorts_candidates(tmp_path, monkeypatch, capsys):
@@ -277,10 +277,12 @@ def test_sources_note_lists_mall_pages_and_sorts_candidates(tmp_path, monkeypatc
     assert "https://item.rakuten.co.jp/shop/123/" in out  # アフィリエイトを剥がした商品ページ
     assert "Yahoo!ショッピング 商品ページ" not in out  # 照合が無いモールは出さない
     third = out.split("第三者の候補")[1].split("2.")[0]
-    assert "ameblo.jp" in third and "yodobashi" not in third
-    assert "yodobashi.com" in out.split("通販サイト")[1]
+    assert "ameblo.jp" in third
+    # navi-brain#92: 通販サイトは非販売に数えないので、古い JSON に残っていても出さない
+    assert "yodobashi" not in out
     assert "rocketreach" not in out and "search.kakaku" not in out
-    assert "水増しではない" in out and "合計 5 件" in out
+    assert "別々のサイトで 2 件以上" in out and "supporting_source_ids" in out
+    assert "合計 5 件" not in out
 
 
 def test_sources_note_without_candidates_still_gives_amazon(tmp_path, monkeypatch):
