@@ -86,6 +86,22 @@ class FilterTextCandidatesTest(unittest.TestCase):
         self.assertEqual(fcs._DROP_STATS["yahoo:used_listing"], 1)
         self.assertEqual(fcs._DROP_STATS["yahoo:model_mismatch"], 1)
 
+    def test_drops_piece_count_mismatch(self):
+        # #9244: ピース数違いの別セットは中央値選択の前に外す
+        # (`108pcs` は既存の型番フィルタが型番として扱うので「ピース」表記で見る)
+        items = self._items(
+            "マグネットブロック 108ピース 磁石",  # keep
+            "マグネットブロック 60ピース 磁石",   # drop: pieces
+            "マグネットブロック 磁石",            # keep: 記載なし
+        )
+        kept = fcs._filter_text_candidates(
+            items, "マグネットブロック 108 ピース", "rakuten", "B0X")
+        self.assertEqual([i["title"] for i in kept],
+                         ["マグネットブロック 108ピース 磁石", "マグネットブロック 磁石"])
+        self.assertEqual(fcs._DROP_STATS["rakuten:piece_mismatch"], 1)
+        # JAN 段 (amazon_title="") では判定しない
+        self.assertEqual(len(fcs._filter_text_candidates(items, "", "rakuten", "B0X")), 3)
+
     def test_empty_title_skips_model_filter(self):
         # JAN 段は amazon_title="" で呼ぶ → used のみ落とし、型番判定はしない
         items = self._items("Hape E3209", "【中古】Hape E3209")

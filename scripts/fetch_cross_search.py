@@ -378,6 +378,12 @@ def _filter_text_candidates(items, amazon_title, source, asin):
             _DROP_STATS[f"{source}:model_mismatch"] += 1
             logger.info(f"  ✕ drop [model] {source} {asin}: {ctitle[:50]}")
             continue
+        if market_prices.pieces_conflict(amazon_title, ctitle):
+            # ピース数違いの別セット (108pcs vs 60pcs)。quality gate でも外れるので、
+            # 中央値選択の前に除いて同じ出品を拾い直さないようにする (#9244)
+            _DROP_STATS[f"{source}:piece_mismatch"] += 1
+            logger.info(f"  ✕ drop [pieces] {source} {asin}: {ctitle[:50]}")
+            continue
         kept.append(it)
     return kept
 
@@ -1017,14 +1023,24 @@ def main():
             "上限だけ付けると毎回同じ先頭 N 件を舐め続けて末尾に永遠に到達しない。"
         ),
     )
+    # #9244: 照合を直した後、JAN の無い ASIN は低信頼再検索の対象にならないため、
+    # 個別に指定して取り直す経路。指定した ASIN だけを JAN の有無に関係なく再検索する
+    parser.add_argument(
+        "--asins", default="", metavar="ASIN[,ASIN...]",
+        help=(
+            "指定した ASIN だけを再検索する (カンマ/空白区切り)。他の ASIN は検索しない。"
+            "新結果が quality 不合格で旧結果が合格なら旧を保持する。"
+        ),
+    )
     args = parser.parse_args()
     re_search_mode = args.re_search_low_confidence
+    only_asins = [a for a in re.split(r"[\s,]+", args.asins.strip()) if a]
     max_re_search = max(0, args.max_re_search)
     re_search_offset = max(0, args.re_search_offset)
 
     # 低信頼再検索モードでは build_post の quality gate を借用
     quality_check_fn = None
-    if re_search_mode:
+    if re_search_mode or only_asins:
         try:
             from build_post import _matched_passes_quality as quality_check_fn  # noqa: F401
             logger.info("Mode: --re-search-low-confidence (using build_post._matched_passes_quality)")
@@ -1052,6 +1068,14 @@ def main():
     articles_dir = pathlib.Path("data/articles")
     per_asin_root = out_dir / "per_asin"
     targets = _collect_targets(amazon_items, articles_dir, per_asin_root)
+    if only_asins:
+        missing = [a for a in only_asins if a not in targets]
+        if missing:
+            logger.warning(f"--asins: not in amazon.json / data/articles, skipped: {missing}")
+        targets = {
+            a: (targets[a][0], True, targets[a][2]) for a in only_asins if a in targets
+        }
+        logger.info(f"Mode: --asins ({len(targets)} ASINs, force re-search)")
     jan_available = sum(1 for (_t, _f, jan) in targets.values() if jan)
     logger.info(
         f"Cross-search targets: amazon.json={len(amazon_items)}, "
@@ -1169,7 +1193,7 @@ def main():
                 # --re-search-low-confidence: no-worse-than-old guard
                 # 旧エントリが quality pass で新結果が fail なら旧を保持
                 replace = True
-                if re_search_mode and r_has:
+                if check_fn and r_has:
                     amazon_price_local = amazon_price_by_asin.get(asin, 0) or \
                         _load_amazon_price_from_per_asin(per_asin_root, asin)
                     new_passed = check_fn(r_result, amazon_price_local)
@@ -1218,7 +1242,7 @@ def main():
                 method = y_result.get("_match_method", "text")
 
                 replace = True
-                if re_search_mode and y_has:
+                if check_fn and y_has:
                     amazon_price_local = amazon_price_by_asin.get(asin, 0) or \
                         _load_amazon_price_from_per_asin(per_asin_root, asin)
                     new_passed = check_fn(y_result, amazon_price_local)
@@ -1303,8 +1327,10 @@ def main():
                 flush=True,
             )
 
-    # Issue #1087 Phase 1: JAN 成否の per-ASIN manifest を出力
-    _write_cross_search_manifest(out_dir, rakuten_index, yahoo_index, targets, now_iso)
+    # Issue #1087 Phase 1: JAN 成否の per-ASIN manifest を出力。
+    # --asins は targets を絞っているので、書くと manifest が指定分だけに縮む
+    if not only_asins:
+        _write_cross_search_manifest(out_dir, rakuten_index, yahoo_index, targets, now_iso)
 
 
 def _write_cross_search_manifest(out_dir, rakuten_index, yahoo_index, targets, generated_at):

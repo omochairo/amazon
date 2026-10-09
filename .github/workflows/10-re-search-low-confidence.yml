@@ -24,6 +24,11 @@ on:
         required: false
         type: string
         default: '0'
+      asins:
+        description: '指定した ASIN だけを再検索する (カンマ区切り。JAN の有無を問わない)。空なら通常の低信頼再検索'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: write
@@ -94,10 +99,13 @@ jobs:
           python scripts/fetch_cross_search.py \
             --re-search-low-confidence \
             --max-re-search "${MAX_RE_SEARCH:-500}" \
-            --re-search-offset "${RE_SEARCH_OFFSET:-0}"
+            --re-search-offset "${RE_SEARCH_OFFSET:-0}" \
+            --asins "${ASINS:-}"
         env:
           MAX_RE_SEARCH: ${{ inputs.max_re_search }}
           RE_SEARCH_OFFSET: ${{ inputs.re_search_offset }}
+          # #9244: 照合を直した後に、JAN の無い ASIN を個別に取り直す
+          ASINS: ${{ inputs.asins }}
           RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
           RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
           RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}
