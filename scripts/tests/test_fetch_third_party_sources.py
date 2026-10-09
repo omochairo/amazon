@@ -171,6 +171,7 @@ class FilterSourcesTest(unittest.TestCase):
         # 語の一部に contact を含むだけのものは外さない
         self.assertIsNone(F._exclude_reason("https://example.jp/contacts-lens-review"))
         self.assertIsNone(F._exclude_reason("https://example.jp/blog/?p=contact"))
+        self.assertIsNone(F._exclude_reason("https://example.com/inquiry-based-learning-toys"))
 
 
 class RelevanceTest(unittest.TestCase):
@@ -194,6 +195,14 @@ class RelevanceTest(unittest.TestCase):
     def test_long_token_partial_match(self):
         q = "ボーネルンドオリジナル ファーストピックアップパズル HY7"
         self.assertTrue(F._is_relevant(q, "1歳向けパズル ボーネルンド「ピックアップパズル」", ""))
+
+    def test_token_length_is_measured_before_folding(self):
+        # 「ゲーム」は長音を畳むと 2 文字になるが、照合には使う
+        self.assertTrue(F._is_relevant("ゲーム", "人気のゲームを紹介", ""))
+
+    def test_nakaguro_splits_tokens(self):
+        q = "マイファースト・テディーメモリー"
+        self.assertTrue(F._is_relevant(q, "テディーメモリーで遊んだ", ""))
 
     def test_short_tokens_are_not_used(self):
         # 2 文字以下の語 (「水」「木製」) では関連とみなさない

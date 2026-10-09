@@ -113,7 +113,7 @@ _SEARCH_ENGINE_SUBSTR = (
 # (#9199 実測: シナモロールのクエリで大学と防災 NPO の問い合わせページ)、
 # 商品について何も書いていない。
 _CONTACT_PATH_RE = re.compile(
-    r"/(?:contact|contact-?us|inquiry|inquiries|toiawase|otoiawase)(?:[/.?#_-]|$)")
+    r"/(?:contact(?:[-_]?(?:us|form))?|inquiry|inquiries|toiawase|otoiawase)(?:[/.?#]|$)")
 
 # Tavily の exclude_domains / country は使わない (#9199 実測 2026-10-09)。通販と
 # 無関係 host 33 件を exclude_domains に渡すと、同じクエリで raw が 20 件 → 0〜9 件に
@@ -176,7 +176,7 @@ def _exclude_reason(url: str) -> Optional[str]:
 # 結果を埋める (自治体の「水」のページ、別商品の通販ミラー等)。sources_v5 は非販売なら
 # 中身を問わず数えるので、残すとゲートは通っても出典の質が落ち、defer 判定も
 # 「材料あり」と誤る。タイトルか本文にクエリの語が 1 つも出てこない結果は外す。
-_QUERY_SPLIT = re.compile(r"[\s　\[\]【】（）()『』「」［］〔〕、,/|]+")
+_QUERY_SPLIT = re.compile(r"[\s　\[\]【】（）()『』「」［］〔〕、,/|・]+")
 _FOLD_RE = re.compile(r"[\s　・\-‐ー―〜~]+")
 # 2 文字以下の語は一般語に当たりやすい (「木製」「水」等) ので照合に使わない。
 _MIN_QUERY_TOKEN_LEN = 3
@@ -197,8 +197,11 @@ def _fold(text: str) -> str:
 def _query_tokens(query: str) -> list[str]:
     out = []
     for raw in _QUERY_SPLIT.split(unicodedata.normalize("NFKC", query or "")):
+        # 長さは畳む前で測る (畳むと「ゲーム」が「ゲム」の 2 文字になって使われない)
+        if len(raw.strip()) < _MIN_QUERY_TOKEN_LEN:
+            continue
         tok = _fold(raw)
-        if len(tok) >= _MIN_QUERY_TOKEN_LEN:
+        if tok:
             out.append(tok)
     return out
 
