@@ -56,7 +56,29 @@ class CollectCandidatesTest(unittest.TestCase):
 
             # #4826 項目4: 候補レコードに score / passed は載らなくなった。
             by_asin = {c["asin"]: c for c in got}
-            self.assertEqual(sorted(by_asin["B00I7JXEEA"]), ["asin", "date", "slug"])
+            self.assertEqual(sorted(by_asin["B00I7JXEEA"]), ["asin", "date", "ref_sites", "slug"])
+            # date の無い最小の JSON は legacy 扱い = sources_v5 の対象外
+            self.assertIsNone(by_asin["B00I7JXEEA"]["ref_sites"])
+
+    def test_ref_sites_counts_referenced_non_sales_sites(self) -> None:
+        """navi-brain#92: 本文から参照された非販売の出典をサイトで数える。"""
+        with tempfile.TemporaryDirectory() as d:
+            def write(slug, data):
+                with open(os.path.join(d, f"{slug}.json"), "w", encoding="utf-8") as f:
+                    json.dump({"slug": slug, "date": slug[:10], **data}, f)
+            write("2026-09-01-B0AAAAAAAA", {
+                "sources": [{"id": "s1", "url": "https://www.amazon.co.jp/dp/B0AAAAAAAA/"},
+                            {"id": "s2", "url": "https://example.org/a"}],
+                "claims": [{"text": "x", "supporting_source_ids": ["s1"]}],
+            })  # 参照は販売ページだけ → 0
+            write("2026-09-01-B0BBBBBBBB", {
+                "sources": [{"id": "s1", "url": "https://example.org/a"},
+                            {"id": "s2", "url": "https://example.net/b"}],
+                "claims": [{"text": "x", "supporting_source_ids": ["s1", "s2"]}],
+            })  # 2
+            write("2026-09-01-B0CCCCCCCC", {"title": "sources 欄なし"})
+            got = {c["asin"]: c["ref_sites"] for c in srt.collect_candidates(d)}
+            self.assertEqual(got, {"B0AAAAAAAA": 0, "B0BBBBBBBB": 2, "B0CCCCCCCC": None})
 
     def test_duplicate_asin_kept_once(self) -> None:
         """Two article files referencing the same ASIN: only the earlier one is kept."""
@@ -95,6 +117,22 @@ class SelectTest(unittest.TestCase):
         picked, _ = srt.select(candidates, excluded=set(), limit=10, generatable=lambda a: True)
         # 2026-07-16 は施行日ちょうど = post_v7 (quality_gate._how_to_choose_enforced と同じ境界)
         self.assertEqual([c["asin"] for c in picked], ["B0CCCCCCCC", "B0BBBBBBBB", "B0AAAAAAAA"])
+
+    def test_unsupported_articles_outrank_pre_v7(self) -> None:
+        """navi-brain#92 手順 5: 参照された非販売が 0 サイトの記事が最優先 (post-v7 でも)。
+
+        1 サイト・判定対象外 (None) は従来の順序のまま。
+        """
+        candidates = [
+            {"slug": "2026-05-14-B0AAAAAAAA", "asin": "B0AAAAAAAA", "date": "2026-05-14", "ref_sites": 1},
+            {"slug": "2026-09-01-B0BBBBBBBB", "asin": "B0BBBBBBBB", "date": "2026-09-01", "ref_sites": 0},
+            {"slug": "2026-05-12-B0CCCCCCCC", "asin": "B0CCCCCCCC", "date": "2026-05-12", "ref_sites": None},
+            {"slug": "2026-08-01-B0DDDDDDDD", "asin": "B0DDDDDDDD", "date": "2026-08-01", "ref_sites": 0},
+            {"slug": "2026-06-01-B0EEEEEEEE", "asin": "B0EEEEEEEE", "date": "2026-06-01", "ref_sites": 0},
+        ]
+        picked, _ = srt.select(candidates, excluded=set(), limit=10, generatable=lambda a: True)
+        self.assertEqual([c["asin"] for c in picked],
+                         ["B0EEEEEEEE", "B0DDDDDDDD", "B0BBBBBBBB", "B0CCCCCCCC", "B0AAAAAAAA"])
 
     def test_same_generation_tie_broken_by_date(self) -> None:
         candidates = [

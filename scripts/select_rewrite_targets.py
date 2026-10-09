@@ -6,6 +6,10 @@ with rewrites of low-quality / old-prompt articles when new-ASIN fetch supply
 is low (Issue #812).
 
 Priority key (lower = higher priority):
+0. 本文から参照された非販売の出典が 0 サイトの記事 (navi-brain#92 手順 5) を最優先。
+   sources_v5 を「参照された非販売の出典が別々のサイトで 2 件以上」に変えたとき、
+   既存記事は施行日前の救済で落とさなかった。そのうち裏付けが全く無い記事から
+   少しずつ書き直す (積む量は 12-rewrite-idle-fill の待ち行列の上限で絞られる)。
 1. pre-v7 (slug date < ``quality_gate.HOW_TO_CHOOSE_ENFORCE_FROM``) before post-v7.
    「古いプロンプトで書かれた記事ほどリライトの価値が高い」という #812 の意図を、
    実在するシグナル (施行日) で表す。
@@ -34,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import json
 import os
 import re
 import sys
@@ -41,7 +46,11 @@ from typing import Iterable
 
 # v7 施行日は quality_gate を単一情報源とする (audit_uniqueness.cohort_for_slug と
 # 同じ定数を見ることで pre/post v7 の線引きが 2 箇所でずれないようにする)。
-from quality_gate import HOW_TO_CHOOSE_ENFORCE_FROM
+from quality_gate import (
+    HOW_TO_CHOOSE_ENFORCE_FROM,
+    _is_legacy_article,
+    _referenced_non_sales_sites,
+)
 # #5490: 生成されようがない ASIN を選ばないための適格性判定。
 # 判定は rewrite_queue が SSOT (詳細は rewrite_queue.sources_exhausted の docstring)。
 import rewrite_queue
@@ -52,8 +61,27 @@ _SLUG_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-(B0[A-Z0-9]{8})$")
 _SIDECAR_SUFFIXES = (".quality.json", ".enrichment.json", ".seo.json")
 
 
+def _ref_sites(path: str):
+    """本文から参照された非販売の出典のサイト数 (navi-brain#92)。判定しない記事は None。
+
+    v5 より前の記事 (legacy) と sources 欄の無い記事は sources_v5 の対象外なので None。
+    """
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict) or _is_legacy_article(data):
+        return None
+    srcs = data.get("sources")
+    if not isinstance(srcs, list):
+        return None
+    valid = [s for s in srcs if isinstance(s, dict) and s.get("url")]
+    return len(_referenced_non_sales_sites(valid, data))
+
+
 def collect_candidates(articles_dir: str) -> list[dict]:
-    """Return primary article records as {slug, asin, date, score, passed}.
+    """Return primary article records as {slug, asin, date, ref_sites}.
 
     Skips sidecar JSONs and any file whose slug doesn't match YYYY-MM-DD-ASIN.
     """
@@ -84,6 +112,7 @@ def collect_candidates(articles_dir: str) -> list[dict]:
             "slug": slug,
             "asin": asin,
             "date": date,
+            "ref_sites": _ref_sites(path),
         })
     return out
 
@@ -105,7 +134,7 @@ def select(
     limit: int,
     generatable=None,
 ) -> tuple[list[dict], list[str]]:
-    """Sort by (pre-v7 first, date asc) and return ``(picked, deferred)``.
+    """Sort by (参照された非販売 0 サイト first, pre-v7 first, date asc) and return ``(picked, deferred)``.
 
     ``total_score`` は順序付けに使わない (理由はモジュール docstring)。日付が読めない
     候補は安全側で post-v7 扱いにする (quality_gate._how_to_choose_enforced と同じ方針)。
@@ -122,10 +151,11 @@ def select(
     気付かない」状態になる**ので、呼び出し側がログに出せるようにしておく
     (#4789 の「鳴っていない = 健全とは読めない」と同じ)。
     """
-    def key(c: dict) -> tuple[int, str]:
+    def key(c: dict) -> tuple[int, int, str]:
         date = c.get("date") or ""
+        unsupported = 0 if c.get("ref_sites") == 0 else 1
         generation = 0 if date and date < HOW_TO_CHOOSE_ENFORCE_FROM else 1
-        return (generation, date)
+        return (unsupported, generation, date)
 
     available = [c for c in candidates if c["asin"] not in excluded]
     available.sort(key=key)
@@ -201,14 +231,18 @@ def main() -> int:
         f"picked={len(picked)} limit={args.limit}",
         file=sys.stderr,
     )
+    unsupported = sum(1 for c in candidates if c.get("ref_sites") == 0)
+    print(f"  参照された非販売が 0 サイトの記事 (navi-brain#92、最優先): {unsupported}",
+          file=sys.stderr)
     for c in picked:
-        print(f"  -> {c['asin']} slug={c['slug']}", file=sys.stderr)
+        print(f"  -> {c['asin']} slug={c['slug']} ref_sites={c.get('ref_sites')}",
+              file=sys.stderr)
     if deferred:
         # #5490: 黙って落とさない。ここに出続ける ASIN は「素材が無くてリライト
         # できない記事」であり、放置すると古いまま配信され続ける (対処は #5490 案B の
         # 収集レーン)。件数が増え続けるなら、それ自体が別の問題の信号になる。
         print(
-            f"  deferred (第三者ソースを収集しても非販売 2 件に届かないので選ばない): "
+            f"  deferred (第三者ソースを収集しても非販売 2 サイトに届かないので選ばない): "
             f"{', '.join(deferred)}",
             file=sys.stderr,
         )
