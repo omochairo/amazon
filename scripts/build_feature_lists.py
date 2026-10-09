@@ -211,24 +211,38 @@ def load_articles(articles_dir: Path) -> list[ArticleRecord]:
             logger.debug("skip article: calculate_score raised for %s: %s", path.name, exc)
             continue
 
-        records.append(
-            ArticleRecord(
-                asin=str(asin),
-                slug=str(raw.get("slug") or path.stem),
-                name=prod.get("name"),
-                image=prod.get("image"),
-                ivs_score=sr.ivs_score,
-                ivs_100=sr.total_100,
-                best_price=_safe_int(best_price),
-                best_platform=prod.get("best_platform"),
-                amazon_url=amazon_block.get("url"),
-                ivs_axes=compute_ivs_axes(sr.breakdown),
-                age_min_months=age_min_months_from_article(raw),
-                price_amazon=_safe_int(amazon_block.get("price")),
-                price_rakuten=_safe_int((prices.get("rakuten") or {}).get("price")),
-                price_yahoo=_safe_int((prices.get("yahoo") or {}).get("price")),
-            )
+        rec = ArticleRecord(
+            asin=str(asin),
+            slug=str(raw.get("slug") or path.stem),
+            name=prod.get("name"),
+            image=prod.get("image"),
+            ivs_score=sr.ivs_score,
+            ivs_100=sr.total_100,
+            best_price=_safe_int(best_price),
+            best_platform=prod.get("best_platform"),
+            amazon_url=amazon_block.get("url"),
+            ivs_axes=compute_ivs_axes(sr.breakdown),
+            age_min_months=age_min_months_from_article(raw),
+            price_amazon=_safe_int(amazon_block.get("price")),
+            price_rakuten=_safe_int((prices.get("rakuten") or {}).get("price")),
+            price_yahoo=_safe_int((prices.get("yahoo") or {}).get("price")),
         )
+        # 記事側の楽天/Yahoo リンクが別の ASIN の出品ページなら、その価格は別商品のもの。
+        # build_post._attach_market_prices が記事ページで捨てるのと揃える (#9244)
+        dropped = False
+        for platform in ("rakuten", "yahoo"):
+            block = prices.get(platform)
+            if isinstance(block, dict) and market_prices.other_asin_in_url(
+                    block.get("url") or "", str(asin)):
+                setattr(rec, f"price_{platform}", None)
+                dropped = True
+        if dropped:
+            if rec.best_platform in ("楽天市場", "Yahoo!ショッピング"):
+                rec.best_price, rec.best_platform = None, None
+            _recompute_best_price(rec)
+            if rec.best_price is None:
+                continue  # 他に価格が無ければ、best_price 欠落の記事と同じく外す
+        records.append(rec)
 
     return records
 
