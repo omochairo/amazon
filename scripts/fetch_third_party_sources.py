@@ -134,23 +134,32 @@ def _host(url: str) -> str:
         return ""
 
 
-def _is_excluded(url: str) -> bool:
+def _exclude_reason(url: str) -> Optional[str]:
+    """URL を候補から外す理由を返す。外さないなら None。
+
+    理由は third_party_sources.json の ``dropped`` に件数で残す (#9199: raw 10 件が
+    候補 3〜4 件に減る段の内訳を、後から確かめられるようにする)。
+    """
     low = (url or "").lower()
     if not low.startswith("http"):
-        return True
+        return "not_http"
     if _sc.is_search_result_url(low):  # #5490 案B: 検索結果ページを構造で弾く
-        return True
+        return "search_result"
     if _self_domain.is_self_domain(low):  # #6593: 自社記事を第三者ソースにしない
-        return True
+        return "self_domain"
     # #9239: 会社情報・求人・金融など商品と無関係な host は候補枠を食うだけなので取らない。
     # 通販サイトは残す (sources の合計 5 件の足しになる)。判定の SSOT は採点側。
     if _sc.host_kind(_host(low)) == "unrelated":
-        return True
-    for grp in (_RETAIL_HOST_SUBSTR, _SEARCH_ENGINE_SUBSTR):
-        for sub in grp:
-            if sub in low:
-                return True
-    return False
+        return "unrelated"
+    if any(sub in low for sub in _RETAIL_HOST_SUBSTR):
+        return "retail"
+    if any(sub in low for sub in _SEARCH_ENGINE_SUBSTR):
+        return "search_result"
+    return None
+
+
+def _is_excluded(url: str) -> bool:
+    return _exclude_reason(url) is not None
 
 
 def _load(path: pathlib.Path):
@@ -208,16 +217,30 @@ def tavily_search(query: str, api_key: str, num: int = 10) -> list[dict]:
 
 def _filter_sources(raw_items: list[dict], max_sources: int) -> list[dict]:
     """検索 raw items から非販売 distinct host を抽出 (host あたり 1 件、上位 max_sources)。"""
+    return _filter_sources_with_drops(raw_items, max_sources)[0]
+
+
+def _filter_sources_with_drops(
+    raw_items: list[dict], max_sources: int,
+) -> tuple[list[dict], list[dict]]:
+    """_filter_sources と同じ絞り込みをして、外した候補 ({host, reason}) も返す。
+
+    reason は _exclude_reason の値か、"duplicate_host" (同じ host の 2 件目以降)。
+    """
     seen_hosts: set[str] = set()
     out: list[dict] = []
+    dropped: list[dict] = []
     for it in raw_items:
         if not isinstance(it, dict):
             continue
         link = it.get("link", "")
-        if _is_excluded(link):
+        reason = _exclude_reason(link)
+        if reason:
+            dropped.append({"host": _host(link), "reason": reason})
             continue
         h = _host(link)
         if not h or h in seen_hosts:
+            dropped.append({"host": h, "reason": "duplicate_host"})
             continue
         seen_hosts.add(h)
         out.append({
@@ -228,7 +251,7 @@ def _filter_sources(raw_items: list[dict], max_sources: int) -> list[dict]:
         })
         if len(out) >= max_sources:
             break
-    return out
+    return out, dropped
 
 
 # 空振り ASIN の再問い合わせを何段まで後ろへ倒すか。empty_streak 回目の再取得は
@@ -400,7 +423,7 @@ def fetch_for_asin(
     # credit はレスポンスを待たずに消える。例外で抜ける経路も含めて必ず数える。
     record_call(base)
     raw = tavily_search(query, api_key, num=10)
-    sources = _filter_sources(raw, max_sources)
+    sources, dropped = _filter_sources_with_drops(raw, max_sources)
     # 空振り (非販売 host が floor 未満) の連続回数。次回の再問い合わせを後ろへ倒す。
     streak = prev_streak + 1 if len(sources) < _sc._THIRD_PARTY_MIN_HOSTS else 0
     payload = {
@@ -411,6 +434,8 @@ def fetch_for_asin(
         "raw_count": len(raw),
         "empty_streak": streak,
         "sources": sources,
+        # raw から候補に残らなかった分の host と理由 (#9199)
+        "dropped": dropped,
     }
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:

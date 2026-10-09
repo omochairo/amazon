@@ -116,6 +116,49 @@ class FilterSourcesTest(unittest.TestCase):
         self.assertEqual([s["host"] for s in out], ["a.example.com", "b.example.com"])
         self.assertEqual(out[0]["title"], "A1")
 
+    def test_drop_reasons_recorded(self):
+        # #9199: raw から候補に残らなかった分の理由を残す
+        raw = [
+            {"link": "https://a.example.com/1"},
+            {"link": "https://a.example.com/2"},
+            {"link": "https://www.amazon.co.jp/dp/X"},
+            {"link": "https://www.google.com/search?q=x"},
+            {"link": "https://navi.omcha.jp/posts/foo/"},
+            {"link": "https://rocketreach.co/acme-profile"},
+            {"link": "ftp://example.com/x"},
+        ]
+        out, dropped = F._filter_sources_with_drops(raw, max_sources=8)
+        self.assertEqual([s["host"] for s in out], ["a.example.com"])
+        self.assertEqual(
+            [(d["host"], d["reason"]) for d in dropped],
+            [
+                ("a.example.com", "duplicate_host"),
+                ("amazon.co.jp", "retail"),
+                ("google.com", "search_result"),
+                ("navi.omcha.jp", "self_domain"),
+                ("rocketreach.co", "unrelated"),
+                ("example.com", "not_http"),
+            ],
+        )
+        self.assertEqual(len(out) + len(dropped), len(raw))
+
+    def test_fetch_for_asin_writes_dropped(self):
+        raw = [
+            {"link": "https://a.example.com/1", "title": "A"},
+            {"link": "https://item.rakuten.co.jp/shop/abc/", "title": "R"},
+        ]
+        with tempfile.TemporaryDirectory() as td:
+            base = pathlib.Path(td)
+            (base / "B0TEST0001").mkdir()
+            (base / "B0TEST0001" / "amazon.json").write_text(
+                json.dumps({"title": "テスト 積み木"}, ensure_ascii=False), encoding="utf-8")
+            with mock.patch.object(F, "tavily_search", return_value=raw):
+                F.fetch_for_asin("B0TEST0001", "tvly-test", base)
+            saved = json.loads((base / "B0TEST0001" / F.OUT_NAME).read_text(encoding="utf-8"))
+        self.assertEqual(saved["raw_count"], 2)
+        self.assertEqual(len(saved["sources"]), 1)
+        self.assertEqual(saved["dropped"], [{"host": "item.rakuten.co.jp", "reason": "retail"}])
+
 
 class FreshnessTest(unittest.TestCase):
     def setUp(self):
