@@ -125,6 +125,71 @@ class OtherAsinMatchTest(unittest.TestCase):
             self.assertTrue(market_prices.matched_passes_quality(self._matched(url), 2000), url)
 
 
+class PieceCountGuardTest(unittest.TestCase):
+    """Amazon 題名と照合先題名でピース数が食い違えば別セット (#9244)。"""
+
+    AMAZON = "Jasonwell 108pcs マグネットブロック 磁気おもちゃ 知育玩具"
+
+    def _matched(self, title, kw="Jasonwell マグネットブロック"):
+        return {"matched_asin": "B07GJGQMK7", "title": title, "price": 4700,
+                "search_keyword": kw,
+                "url": "https://item.rakuten.co.jp/shop/123/"}
+
+    def test_piece_counts(self):
+        cases = {
+            "Jasonwell 108pcs マグネット": {108},
+            "160 PCS マグネットブロック": {160},
+            "にじのキューブ 小 36p【GM43110】": {36},
+            "パズル ３００ピース": {300},  # 全角数字
+            "マグネットブロック 102~960pcs 収納ボックス付き": set(),  # 範囲 = バリエーション選択
+            "木製 積み木 3歳": set(),
+            "最大P16%還元 積み木": set(),
+            "ステップパノラマパズル 8/12/16ピース 24-200": {8, 12, 16},  # 3 枚組
+            "エレメント積み木 小 23P〜ドイツ": {23},
+            "積み木 500P進呈 3Pセット 10P%": set(),  # ポイント・入り数
+            "すみっコぐらし 世界の国旗 25-284 75ピース": {75},  # 品番を範囲と誤認しない
+        }
+        for title, want in cases.items():
+            self.assertEqual(market_prices.piece_counts(title), want, title)
+
+    def test_different_piece_count_fails(self):
+        m = self._matched("Jasonwell 60pcs マグネットブロック 磁気おもちゃ")
+        self.assertTrue(market_prices.matched_passes_quality(m, 3599))
+        self.assertFalse(market_prices.matched_passes_quality(m, 3599, amazon_title=self.AMAZON))
+        self.assertEqual(market_prices.resolve_price(0, m, 3599, self.AMAZON), 0)
+
+    def test_unrelated_tokens_are_not_shared_codes(self):
+        cases = [
+            ("クムクムパズル KM-55", "クムクムパズル KM-550"),  # 別の型番
+            ("キッズカメラ 32GB 20-30cm 108pcs", "キッズカメラ 32GB 20-30cm 60pcs"),  # 単位付きの数
+            ("ブロック 1000ピース 2026", "ブロック 400ピース 2026"),  # 4 桁の数字
+        ]
+        for amazon, matched in cases:
+            self.assertFalse(market_prices._shares_product_code(amazon, matched), matched)
+
+    def test_same_or_unknown_piece_count_passes(self):
+        for title in ("Jasonwell 108PCS マグネットブロック",
+                      "Jasonwell マグネットブロック 磁気おもちゃ",  # 照合先に記載なし
+                      "Jasonwell マグネットブロック 60~108pcs"):  # 範囲
+            m = self._matched(title)
+            self.assertTrue(
+                market_prices.matched_passes_quality(m, 3599, amazon_title=self.AMAZON), title)
+        # 品番が一致すればピース数の書き方の揺れより品番を信じる
+        m = self._matched("ビルダースターターセット 工具付き48ピース 34586 BRIO", "BRIO ビルダースターターセット")
+        self.assertTrue(market_prices.matched_passes_quality(
+            m, 3599, amazon_title="BRIO ビルダースターターセット 「全49ピース」 34586"))
+        m = self._matched("クムクムパズル 37ピース コマさん KM-55", "クムクムパズル コマさん")
+        self.assertTrue(market_prices.matched_passes_quality(
+            m, 3599, amazon_title="エンスカイ 32ピース クムクムパズル コマさん KM-55"))
+        # 品番が一致すれば (英字の接頭辞は許す) ピース数の書き方の揺れより品番を信じる
+        self.assertTrue(market_prices._shares_product_code(
+            "パノラマパズル 24-200", "ジグソーパズル 8ピース APO-24-200"))
+        # Amazon 側に記載が無ければ判定しない
+        m = self._matched("Jasonwell 60pcs マグネットブロック")
+        self.assertTrue(market_prices.matched_passes_quality(
+            m, 3599, amazon_title="Jasonwell マグネットブロック"))
+
+
 # ---------------------------------------------------------------------------
 # load_matched_index
 # ---------------------------------------------------------------------------

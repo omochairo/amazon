@@ -2009,7 +2009,10 @@ def _derive_verified_status(
         if not isinstance(entry, dict):
             continue
         matched = (idx or {}).get(asin)
-        matched_ok = bool(matched) and _bp_matched_passes_quality(matched, amazon_price)
+        matched_ok = bool(matched) and _bp_matched_passes_quality(
+            matched, amazon_price,
+            amazon_title=product.get("name_full") or product.get("name") or "",
+        )
         if matched_ok:
             entry["verified"] = True
             continue
