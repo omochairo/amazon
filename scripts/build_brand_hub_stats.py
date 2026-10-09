@@ -41,6 +41,8 @@ from brand_normalizer import (
     name_variants as brand_name_variants,
     normalize as normalize_brand,
 )
+from age_semantics import ADULT_AGE_MONTHS
+from build_feature_lists import age_min_months_from_article, parse_min_months
 from product_image import resolve_product_image
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -84,27 +86,14 @@ GENERIC_TAG_STOPWORDS = {
 # 「0歳」「1歳半」「6ヶ月」等は商品シリーズではないので top_3_series から除外する。
 _AGE_TAG_STOPWORD_RE = re.compile(r"^\d+\s*(?:歳(?:半)?|ヶ月|か月|カ月|ヵ月)$")
 
-_AGE_RE_NEN = re.compile(r"(\d+)\s*歳(半)?")
-_AGE_RE_MONTH = re.compile(r"(\d+)\s*(?:ヶ月|か月|カ月|ヵ月)")
-
-
 def parse_age_min_months(age_range: str | None) -> int | None:
     """persona_fit.age_range から下限月齢 (整数) を返す。
 
-    対応パターン: "3歳以上" / "5歳〜" / "1歳半〜" / "10ヶ月〜" / "0歳〜".
+    読み取りは特集リスト・年齢別 hub と同じ build_feature_lists.parse_min_months
+    に任せる (#9217。「小学生以上」「大人向け」も age_semantics の規則で読む)。
     解釈不能なら ``None``.
     """
-    if not age_range:
-        return None
-    m = _AGE_RE_MONTH.search(age_range)
-    if m:
-        return int(m.group(1))
-    m = _AGE_RE_NEN.search(age_range)
-    if m:
-        years = int(m.group(1))
-        half = 6 if m.group(2) else 0
-        return years * 12 + half
-    return None
+    return parse_min_months(age_range)
 
 
 def _series_candidates(tags: Iterable[str] | None,
@@ -340,9 +329,9 @@ def aggregate(
             # ノーブランド系はハブを作らない
             continue
         ivs = (product.get("ivs_detail") or {}).get("total_100")
-        age = parse_age_min_months(
-            (d.get("persona_fit") or {}).get("age_range")
-        )
+        # age_overrides.json の確認済み年齢を優先し、節句・正月の飾り物は年齢を
+        # 持たない扱い (None) にする。特集リスト・年齢別 hub と同じ規則 (#9217)
+        age = age_min_months_from_article(d)
         by_brand[norm.canonical].append(
             {
                 "asin": product.get("asin"),
@@ -375,7 +364,12 @@ def aggregate(
             continue
 
         ivs_vals = [i["ivs_100"] for i in items if isinstance(i["ivs_100"], (int, float))]
-        age_vals = [i["age_min_months"] for i in items if isinstance(i["age_min_months"], int)]
+        # 大人向けは平均に入れない。子ども向けと混ざると「10歳から」のような
+        # どの商品にも当たらない年齢帯が title に出るため (#9217)
+        age_vals = [
+            i["age_min_months"] for i in items
+            if isinstance(i["age_min_months"], int) and i["age_min_months"] < ADULT_AGE_MONTHS
+        ]
         price_vals = [i["best_price"] for i in items if isinstance(i["best_price"], int) and i["best_price"] > 0]
 
         # representative = 最高 IVS、同点は best_price 安い方

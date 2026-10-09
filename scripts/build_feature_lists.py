@@ -110,15 +110,15 @@ def parse_min_months(age_range: str | None) -> int | None:
         return min_months_from_words(s)
     s = s.replace("歳半", ".5歳").replace("才", "歳")
     # 「N歳Mヶ月」形式
-    m = re.search(r"(\d+)\s*歳\s*(\d+)\s*[ヶか]?月", s)
+    m = re.search(r"(\d+)\s*歳\s*(\d+)\s*[ヶケかカヵ]?月", s)
     if m:
         return int(m.group(1)) * 12 + int(m.group(2))
     # 「N歳」「N.5歳」形式
     m = re.search(r"(\d+(?:\.\d+)?)\s*歳", s)
     if m:
         return int(round(float(m.group(1)) * 12))
-    # 「Nヶ月」形式
-    m = re.search(r"(\d+)\s*[ヶか]?月", s)
+    # 「Nヶ月」形式 (「カ月」「ヵ月」「ケ月」の表記揺れも読む。#9217)
+    m = re.search(r"(\d+)\s*[ヶケかカヵ]?月", s)
     if m:
         return int(m.group(1))
     return min_months_from_words(s)
