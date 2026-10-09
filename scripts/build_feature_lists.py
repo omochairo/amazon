@@ -74,6 +74,8 @@ class ArticleRecord:
     amazon_url: str | None
     savings_percentage: int | None = None
     fetched_at: str | None = None
+    # #9244: 楽天/Yahoo 照合のピース数ガード用 (name は切り詰めた表示名)
+    name_full: str | None = None
     # #4007: プラットフォーム別価格。best_price を Amazon の最新観測で再計算する
     # ために保持する (記事 JSON の best_price は記事生成時のまま凍結している)。
     price_amazon: int | None = None
@@ -215,6 +217,7 @@ def load_articles(articles_dir: Path) -> list[ArticleRecord]:
             asin=str(asin),
             slug=str(raw.get("slug") or path.stem),
             name=prod.get("name"),
+            name_full=prod.get("name_full"),
             image=prod.get("image"),
             ivs_score=sr.ivs_score,
             ivs_100=sr.total_100,
@@ -304,9 +307,12 @@ def _apply_market_price(
     field = f"price_{platform}"
     existing_price = getattr(rec, field) or 0
     matched = index.get(rec.asin)
-    new_price = market_prices.resolve_price(existing_price, matched, amazon_price)
+    amazon_title = rec.name_full or rec.name or ""
+    new_price = market_prices.resolve_price(existing_price, matched, amazon_price, amazon_title)
 
-    if matched and market_prices.matched_passes_quality(matched, amazon_price):
+    if matched and market_prices.matched_passes_quality(
+        matched, amazon_price, amazon_title=amazon_title
+    ):
         stats[f"market_{platform}"] += 1
     elif existing_price > 0 and new_price == 0:
         # matched が無い/gate 落ちで、かつ既存値が Amazon 価格の 3.0x 超 / 1/3 未満の

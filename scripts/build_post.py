@@ -2802,11 +2802,15 @@ def _attach_market_prices(
             amazon_price = 0
 
     product_name = product.get("name") or ""
+    # ピース数ガード (#9244) は切り詰めた name ではなく Amazon の題名全体で見る
+    amazon_title = product.get("name_full") or product_name
 
     for key, index in (("rakuten", rakuten_index), ("yahoo", yahoo_index)):
         existing = prices.get(key) if isinstance(prices.get(key), dict) else None
         matched = index.get(asin)
-        matched_ok = bool(matched) and _matched_passes_quality(matched, amazon_price)
+        matched_ok = bool(matched) and _matched_passes_quality(
+            matched, amazon_price, amazon_title=amazon_title
+        )
 
         if matched_ok:
             try:

@@ -26,6 +26,7 @@ import html
 import json
 import pathlib
 import re
+import unicodedata
 import urllib.parse
 from typing import Any
 
@@ -112,6 +113,78 @@ def _compact_for_model_match(s: str) -> str:
     return re.sub(r"[-\s]", "", _normalize_for_match(s or "")).upper()
 
 
+# ピース数の表記 (`108pcs` / `160 PCS` / `36ピース` / `23P`)。#9244 で、題名の
+# 他の部分がほぼ同じでピース数だけ違う別セット (Jasonwell 108pcs vs 60pcs 等) が
+# search_keyword (先頭を切り詰めたもの) だけでは見分けられず gate を通っていた。
+# `8/12/16ピース` (段階パズルの 3 枚組) は全部の数を拾う。単独の `P` は区切り
+# (空白・括弧・〜・終端) が続くときだけ数える。`500P進呈` (ポイント)・`3Pセット`
+# (入り数)・`P16%` を拾わないため
+_PIECE_UNIT = r"(?:ピース|pcs|pieces|p(?=$|[\s【】()\[\]〜~/,、]))"
+_PIECE_COUNT_RE = re.compile(
+    r"(\d{1,4}(?:\s*/\s*\d{1,4})*)\s*" + _PIECE_UNIT, re.IGNORECASE
+)
+# `102~960pcs` のような範囲表記は、バリエーションを選ぶ出品ページなので判定しない。
+# 区切りに `-` を含めない (`25-284 ピース` のような品番 + ピース数を範囲と誤認する)
+_PIECE_RANGE_RE = re.compile(
+    r"\d{1,4}\s*(?:ピース|pcs|pieces|p)?\s*[~〜]\s*\d{1,4}\s*" + _PIECE_UNIT,
+    re.IGNORECASE,
+)
+
+
+def piece_counts(title: str) -> set[int]:
+    """題名に書かれたピース数の集合。範囲表記を含む題名・記載なしは空集合。"""
+    # _normalize_for_match は長音「ー」をハイフンに畳むので (ピース → ピ-ス) 使わない
+    s = unicodedata.normalize("NFKC", html.unescape(title or ""))
+    if _PIECE_RANGE_RE.search(s):
+        return set()
+    return {int(n) for group in _PIECE_COUNT_RE.findall(s) for n in re.findall(r"\d+", group)}
+
+
+# 品番らしい ASCII トークン (`34586` / `KM-55` / `25-284` / `GM43110`)
+_CODE_TOKEN_RE = re.compile(r"[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+|[A-Za-z0-9]+")
+# 単位付きの数 (`30cm` / `32GB` / `20-30cm` / `12-18m`) は品番ではない
+_UNIT_TOKEN_RE = re.compile(
+    r"\d+(?:[-.]\d+)*(?:pcs|pieces|p|cm|mm|m|kg|g|ml|l|gb|mb|mah|w|v|hz)", re.IGNORECASE
+)
+
+
+def _code_tokens(title: str) -> list[str]:
+    """題名から品番らしいトークンを、型番比較用に正規化して返す。
+
+    数字だけのトークンは 5 桁以上 (4 桁は 1000 ピースや年と区別できない)。
+    """
+    s = _normalize_for_match(unicodedata.normalize("NFKC", html.unescape(title or "")))
+    out = []
+    for tok in _CODE_TOKEN_RE.findall(s):
+        if _UNIT_TOKEN_RE.fullmatch(tok):
+            continue
+        digits = sum(c.isdigit() for c in tok)
+        has_alpha = any(c.isalpha() for c in tok)
+        if ("-" in tok and digits >= 3) or (has_alpha and digits >= 2) or digits >= 5:
+            out.append(_compact_for_model_match(tok))
+    return out
+
+
+def _shares_product_code(amazon_title: str, matched_title: str) -> bool:
+    """両方の題名に同じ品番が載っているか (ピース数ガードの例外)。
+
+    同じ品番でもピース数の書き方が出品者で揺れる (BRIO 34586 が 49 / 48 ピース、
+    エポック社 25-284 が 75 / 63 ピース)。品番が一致するならピース数より品番を信じる。
+    比較はトークン単位で、前後に英字の接頭辞・接尾辞が付くのだけ許す
+    (`24-200` と `APO-24-200` は同じ、`KM-55` と `KM-550` は別)。
+    """
+    matched_codes = _code_tokens(matched_title)
+    for a in _code_tokens(amazon_title):
+        for m in matched_codes:
+            if m == a:
+                return True
+            if m.endswith(a) and not m[-len(a) - 1].isdigit() and not a[0].isalpha():
+                return True
+            if m.startswith(a) and not m[len(a)].isdigit():
+                return True
+    return False
+
+
 def _descriptor_hits_title(descriptor: str, title_norm: str, title_tokens_norm: list) -> bool:
     """Issue #1140: descriptor token が title に「実質的に」出現するか。
 
@@ -158,12 +231,15 @@ def matched_passes_quality(
     price_high: float = PRICE_BAND_HIGH,
     coverage_ratio: float = COVERAGE_RATIO,
     hits_threshold_multi: int = 2,
+    amazon_title: str = "",
 ) -> bool:
     """Phase 2 quality gate: 価格帯と検索語タイトル overlap で誤マッチを弾く。
 
     - Amazon 価格 (>0) を anchor に [price_low, price_high] 帯外を除外 (ふるさと納税対策)。
     - search_keyword のうち汎用語を除いた meaningful token が、matched title に
       閾値以上一致しているかを確認 (median band 選出後の無関係 hit 除外)。
+    - ``amazon_title`` (Amazon 側の商品名) を渡すと、両方の題名にピース数があって
+      1 つも一致しないものを別セットとして弾く (#9244)。空なら判定しない。
 
     閾値は keyword-only 引数で上書き可能 (デフォルト = 本番 `PRICE_BAND_*` 定数)。
     analyze_threshold_relaxation の dry-run がこの 1 関数を直接呼ぶことで、
@@ -187,6 +263,15 @@ def matched_passes_quality(
         if price < amazon_price * price_low:
             return False
         if price > amazon_price * price_high:
+            return False
+
+    # ピース数ガード (#9244): 型番・色も試したが、型番は出品者の管理コード、色は
+    # 「赤ちゃん」の「赤」や「黒 / ブラック」の表記揺れで誤検出の方が多かったので入れない
+    if amazon_title:
+        amazon_pieces = piece_counts(amazon_title)
+        matched_pieces = piece_counts(title)
+        if (amazon_pieces and matched_pieces and not (amazon_pieces & matched_pieces)
+                and not _shares_product_code(amazon_title, title)):
             return False
 
     kw = matched.get("search_keyword") or ""
@@ -259,7 +344,12 @@ def matched_passes_quality(
     return True
 
 
-def resolve_price(existing_price: int, matched: dict[str, Any] | None, amazon_price: int) -> int:
+def resolve_price(
+    existing_price: int,
+    matched: dict[str, Any] | None,
+    amazon_price: int,
+    amazon_title: str = "",
+) -> int:
     """楽天/Yahoo の「価格数値」を優先順位に沿って 1 つ解決する (#4007 follow-up 1)。
 
     ``build_post._attach_market_prices`` の価格解決優先順位のうち、価格の
@@ -275,7 +365,7 @@ def resolve_price(existing_price: int, matched: dict[str, Any] | None, amazon_pr
       3. それ以外 (matched が gate 落ち かつ existing が extreme、または
          existing が無い) → 0 (= 最安候補から外れる)。
     """
-    if matched and matched_passes_quality(matched, amazon_price):
+    if matched and matched_passes_quality(matched, amazon_price, amazon_title=amazon_title):
         try:
             return int(matched.get("price") or 0)
         except (TypeError, ValueError):
