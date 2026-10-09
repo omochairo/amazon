@@ -14,6 +14,7 @@ import pathlib
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS_DIR = os.path.dirname(THIS_DIR)
@@ -71,6 +72,56 @@ class TestAgeParser(unittest.TestCase):
         self.assertIsNone(bhs.parse_age_min_months("all ages"))
         self.assertIsNone(bhs.parse_age_min_months(""))
         self.assertIsNone(bhs.parse_age_min_months(None))
+
+    def test_words_without_digits(self):
+        # 数字の無い表記も特集リストと同じ規則で読む (#9217)
+        self.assertEqual(bhs.parse_age_min_months("小学生以上"), 72)
+        self.assertEqual(bhs.parse_age_min_months("大人向け"), 216)
+        self.assertEqual(bhs.parse_age_min_months("1歳6ヶ月〜"), 18)
+
+
+class TestAggregateAgeRules(unittest.TestCase):
+    """平均年齢に age_semantics の規則が効くこと (#9217)。"""
+
+    def _avg(self, items: list[dict]) -> float | None:
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td) / "articles"
+            _write_articles(root, items)
+            payload = bhs.aggregate(root)
+        return payload["brands"]["レゴ"]["avg_age_min_months"]
+
+    def test_words_counted_and_adult_excluded(self):
+        avg = self._avg([
+            _article("A1", "レゴ(LEGO)", 80, 1000, "3歳以上", ["レゴ"]),
+            _article("A2", "レゴ(LEGO)", 80, 1000, "小学生以上", ["レゴ"]),
+            _article("A3", "レゴ(LEGO)", 80, 1000, "大人向け", ["レゴ"]),
+        ])
+        # 36 と 72 の平均。大人向け (216) は入れない
+        self.assertEqual(avg, 54.0)
+
+    def test_seasonal_decoration_has_no_age(self):
+        deco = _article("A3", "レゴ(LEGO)", 80, 1000, "0歳〜", ["レゴ"])
+        deco["product"]["name"] = "五月人形 兜飾り コンパクト"
+        avg = self._avg([
+            _article("A1", "レゴ(LEGO)", 80, 1000, "3歳以上", ["レゴ"]),
+            _article("A2", "レゴ(LEGO)", 80, 1000, "5歳〜", ["レゴ"]),
+            deco,
+        ])
+        self.assertEqual(avg, 48.0)
+
+    def test_override_wins(self):
+        items = [
+            _article("A1", "レゴ(LEGO)", 80, 1000, "3歳以上", ["レゴ"]),
+            _article("A2", "レゴ(LEGO)", 80, 1000, "5歳〜", ["レゴ"]),
+            _article("A3", "レゴ(LEGO)", 80, 1000, "対象年齢の記載なし", ["レゴ"]),
+        ]
+        overrides = {"A3": 24}
+        with mock.patch(
+            "build_feature_lists.override_age_months",
+            side_effect=lambda raw: overrides.get((raw.get("product") or {}).get("asin")),
+        ):
+            avg = self._avg(items)
+        self.assertEqual(avg, 40.0)
 
 
 class TestBrandNameVariants(unittest.TestCase):
