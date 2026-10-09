@@ -321,5 +321,60 @@ class OriginLedgerTest(unittest.TestCase):
             repoless.subprocess.run = orig_run
 
 
+class RecentlyFailedTest(unittest.TestCase):
+    """#9239: マージされずに close された記事 PR の ASIN を、しばらく pick に戻さない。"""
+
+    def setUp(self):
+        import datetime as dt
+        self.dt = dt
+        self.now = dt.datetime(2026, 10, 9, 12, 0, tzinfo=dt.timezone.utc)
+
+    def _ago(self, days):
+        return (self.now - self.dt.timedelta(days=days)).isoformat().replace("+00:00", "Z")
+
+    def test_single_close_cools_down_then_returns(self):
+        rows = [{"title": "feat(article): add article JSON for B0FYCTJF5Z", "closedAt": self._ago(1)},
+                {"title": "Add article JSON for B0OLDCLOSE", "closedAt": self._ago(20)}]
+        cooling, stuck = article_pick.recently_failed(rows, self.now)
+        self.assertEqual(cooling, {"B0FYCTJF5Z"})  # 14 日を過ぎた B0OLDCLOSE は戻す
+        self.assertEqual(stuck, set())
+
+    def test_lowercase_title_and_material_refresh(self):
+        rows = [{"title": "Add article JSON for b0h11r2ft2 (3D魔法ペイント)", "closedAt": self._ago(2)}]
+        cooling, _ = article_pick.recently_failed(rows, self.now)
+        self.assertEqual(cooling, {"B0H11R2FT2"})
+        # close の後に事前収集を取り直していれば、素材が変わったので待たせない
+        fresh = lambda a: self.now - self.dt.timedelta(days=1)  # noqa: E731
+        cooling, _ = article_pick.recently_failed(rows, self.now, fresh)
+        self.assertEqual(cooling, set())
+
+    def test_repeated_closes_are_stuck_until_material_changes(self):
+        rows = [{"title": "Add article JSON for B0FYCTJF5Z", "closedAt": self._ago(d)}
+                for d in (0, 1, 25)]
+        before = lambda a: self.now - self.dt.timedelta(days=3)  # noqa: E731
+        cooling, stuck = article_pick.recently_failed(rows, self.now, before)
+        self.assertEqual(stuck, {"B0FYCTJF5Z"})
+        self.assertEqual(cooling, set())
+        # 最後の close の後に取り直していれば戻す (B0C6THPT89 の実例)
+        after = lambda a: self.now + self.dt.timedelta(minutes=1)  # noqa: E731
+        self.assertEqual(article_pick.recently_failed(rows, self.now, after), (set(), set()))
+        # 窓 (30 日) の外の close は数えない
+        old = [{"title": "Add article JSON for B0AAAAAAAA", "closedAt": self._ago(d)}
+               for d in (31, 40)]
+        self.assertEqual(article_pick.recently_failed(old, self.now), (set(), set()))
+
+    def test_exclude_reads_file_and_is_fail_open(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "closed.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump([{"title": "Add article JSON for B0FYCTJF5Z", "closedAt": self._ago(1)}], f)
+            out = article_pick.exclude_recently_failed({"B0EXISTING"}, path=path, now=self.now)
+            self.assertEqual(out, {"B0EXISTING", "B0FYCTJF5Z"})
+            # 指定無し・読めないファイルは除外しない
+            self.assertEqual(article_pick.exclude_recently_failed({"B0X"}, path=""), {"B0X"})
+            self.assertEqual(article_pick.exclude_recently_failed(
+                {"B0X"}, path=os.path.join(tmp, "missing.json")), {"B0X"})
+
+
 if __name__ == "__main__":
     unittest.main()

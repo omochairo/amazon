@@ -42,6 +42,7 @@ import json
 import os
 import sys
 from datetime import datetime, timedelta, timezone
+from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -182,6 +183,76 @@ def _first_party_note(asin):
 - navi.omcha.jp (この比較サイト自身) の URL は出典にしないでください。自分の記事を自分の根拠にする循環になります。"""
 
 
+def _unwrap_affiliate(url):
+    """楽天 (hb.afl ?pc=) / Yahoo (valuecommerce ?vc_url=) のアフィリエイト URL から商品ページを取り出す。"""
+    try:
+        q = parse_qs(urlparse(url or "").query)
+    except ValueError:
+        return ""
+    for key in ("pc", "vc_url"):
+        if q.get(key):
+            return q[key][0]
+    return url or ""
+
+
+def _sources_note(asin):
+    """#9239: sources_v5 (合計 5 件以上・うち非販売 2 件以上) を満たす組み立て方の注記。
+
+    Jules は「水増し禁止」と「販売ページは出典に含めない」(03 の旧文面) /「楽天・Yahoo は
+    入れない」(repoless の旧文面) を受けて、非販売 2〜3 件だけで止まり sources_v5 で落ちて
+    いた (#9165 / #9211 / #9225)。使ってよい URL を具体的に並べ、件数の数え方を渡す。
+    03-invoke-jules.yml は --print-note sources で同じ文面を受け取る。
+    """
+    import score_per_asin_info as sc
+    mall = [f"- Amazon 商品ページ: https://www.amazon.co.jp/dp/{asin}/"]
+    for label, path in (("楽天", "data/raw/rakuten_matched.json"),
+                        ("Yahoo!ショッピング", "data/raw/yahoo_matched.json")):
+        for row in _matched(path, asin)[:1]:
+            url = _unwrap_affiliate(row.get("url"))
+            # 照合の誤り: 出品ページの URL に別の ASIN が埋まっている (s-b0xxxxxxxx-...)。
+            # 別商品のページを「対象商品の販売ページ」として渡さない
+            if url and sc.other_asin_in_url(url, asin):
+                continue
+            if url:
+                mall.append(f"- {label} 商品ページ (照合済み): {url}")
+    third, retail = [], []
+    try:
+        data = _jload(f"data/raw/per_asin/{asin}/third_party_sources.json")
+    except (FileNotFoundError, ValueError):
+        data = {}
+    for src in (data.get("sources") or []) if isinstance(data, dict) else []:
+        url = src.get("url") if isinstance(src, dict) else None
+        if not url or sc.is_search_result_url(url):
+            continue
+        kind = sc.host_kind(src.get("host") or urlparse(url).netloc)
+        title = (src.get("title") or "").strip()
+        line = f"- {url}" + (f" ({title[:60]})" if title else "")
+        if kind == "third_party":
+            third.append(line)
+        elif kind == "retail":
+            retail.append(line)
+    blocks = [
+        "【sources の組み立て (品質ゲート sources_v5: 合計 5 件以上・うち非販売 2 件以上)】",
+        "1. 非販売 (第三者) を 2 件以上確保する。まず下の候補を閲覧ツールで開き、"
+        "対象商品について書かれているものを採用する。足りなければ検索で探す。",
+    ]
+    if third:
+        blocks.append("   第三者の候補 (システムが事前収集。商品が違う・読めないものは採用しない):")
+        blocks.extend("   " + t for t in third[:8])
+    blocks.append(
+        "2. 合計 5 件に届かない分は、販売ページで埋める。**対象商品そのものの販売ページを"
+        "出典に入れるのは水増しではない** (価格・仕様の出典として正当。テンプレート §6.5.1 の"
+        "表の「販売」)。使ってよい販売ページ:")
+    blocks.extend("   " + m for m in mall)
+    if retail:
+        blocks.append("   通販サイトの商品ページ (仕様・価格の確認用。件数に入れてよい):")
+        blocks.extend("   " + r for r in retail[:5])
+    blocks.append(
+        "3. 保存する前に sources の件数を数える。合計 5 件未満・非販売 2 件未満なら 1・2 に"
+        "戻って足す。架空の URL・別の商品のページで埋めることは引き続き禁止。")
+    return "\n".join(blocks)
+
+
 def _amazon_item(asin):
     raw = _jload("data/raw/amazon.json")
     for item in raw.get("items", []):
@@ -231,6 +302,11 @@ def build_prompt(asin, today=None):
     audit_note = _audit_note(asin)
     experience_note = _experience_note(asin)
     first_party_note = _first_party_note(asin)
+    try:
+        sources_note = _sources_note(asin)
+    except Exception as e:  # best-effort: 注記が作れなくてもプロンプトは出す
+        print(f"warning: sources note failed: {e}", file=sys.stderr)
+        sources_note = ""
 
     prompt = f"""あなたは知育玩具メディア「おもちゃいろ」の記事生成エージェントです。
 このセッションはリポジトリ非接続 (repoless) です。必要な入力データは本プロンプト末尾に全て同梱しています。
@@ -255,6 +331,8 @@ def build_prompt(asin, today=None):
 
 {first_party_note}
 
+{sources_note}
+
 【本日の日付 (必ず使用)】: {today}
 - 出力ファイル名: data/articles/{today}-{asin}.json
 - slug フィールド: "{today}-{asin}"
@@ -270,10 +348,10 @@ def build_prompt(asin, today=None):
 
 【sources のルール (リポジトリ非接続環境向けの明確化・必読)】
 - あなたの環境には google_search と view_text_website ツールがあります。まず対象商品について**必ず検索・URL閲覧で裏取りを試みてください**。
-- ただしこの環境では両ツールが失敗することがあります (検索結果なし・サイト取得失敗)。**失敗しても諦めて販売ページで埋めないでください。**
+- ただしこの環境では両ツールが失敗することがあります (検索結果なし・サイト取得失敗)。**失敗しても、非販売 2 件を販売ページで代用しないでください** (販売ページは合計 5 件の残りを埋めるためのもの)。
 - ツールで裏取りできなかった場合のフォールバック: 同梱の per_asin データ (news.json / books.json / youtube.json / competitors.json) に含まれる URL は、システム側が実在する API (ニュース検索・Google Books・YouTube Data API) から事前収集した検証済み URL です。**これらを sources に採用して構いません** (タイトル・出典名も同梱データのものを使う)。
 - 同梱の per_asin/third_party_sources.json は、システムが事前収集した非販売の第三者候補 URL (レビュー・解説・メディア) です。**sources 候補として優先的に内容を確認し**、裏取りに使えた URL を採用してください。候補に過ぎないので、内容を読めなかった・商品が違う URL は採用しない (#9199。03-invoke-jules と同じ規則)。
-- Amazon の販売ページ URL は sources に 1 件だけ含めてよい (慣例)。楽天・Yahoo の販売ページは sources に入れない。
+- 販売ページ (Amazon / 楽天 / Yahoo の対象商品ページ) は sources の合計 5 件に数えてよい。ただし非販売 2 件の代わりにはならない (上の【sources の組み立て】。#9239)。
 - **sources は最低 5 件必須** (品質ゲートで機械検査されます)。
 
 【品質ゲートで機械検査される項目】
@@ -310,9 +388,9 @@ def main():
     ap.add_argument("--out", help="出力先ファイル (省略時 stdout)")
     ap.add_argument(
         "--print-note",
-        choices=["audit", "experience", "first_party"],
+        choices=["audit", "experience", "first_party", "sources"],
         help=(
-            "指定時は _audit_note/_experience_note/_first_party_note の戻り値のみを stdout に出力して終了する"
+            "指定時は _audit_note/_experience_note/_first_party_note/_sources_note の戻り値のみを stdout に出力して終了する"
             " (03-invoke-jules.yml から高頻度に呼ばれる軽量モード。--out は無視される)。"
         ),
     )
@@ -325,6 +403,8 @@ def main():
                 note = _audit_note(args.asin)
             elif args.print_note == "first_party":
                 note = _first_party_note(args.asin)
+            elif args.print_note == "sources":
+                note = _sources_note(args.asin)
             else:
                 note = _experience_note(args.asin)
         except Exception as e:

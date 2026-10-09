@@ -107,6 +107,16 @@ jobs:
           # 次 run が同 ASIN を picking) を防ぐ。lock ブランチは ref 作成が atomic (422 on conflict)。
           gh api "repos/$REPO/git/matching-refs/heads/jules-lock/" \
             --jq '.[] | .ref | sub("refs/heads/jules-lock/"; "")' > /tmp/locked.txt 2>/dev/null || echo "" > /tmp/locked.txt
+          # #9239: マージされずに close された PR の ASIN をしばらく pick に戻さない
+          # (判定は article_pick.exclude_recently_failed)。取れなければ除外しないだけ。
+          # 期間 (30 日) は Python 側で切る。検索に closed:>=日付 を足すと取りこぼす
+          # (実測 2026-10-09: 21 件中 5 件しか返らなかった)。close 順に並べて先頭を取る。
+          if gh pr list --repo $REPO --state closed --search "is:unmerged sort:updated-desc" \
+               --limit 300 --json title,closedAt > /tmp/closed_article_prs.json; then
+            export CLOSED_ARTICLE_PRS=/tmp/closed_article_prs.json
+          else
+            echo "::warning::closed PR list failed; cooldown after unmerged close (#9239) skipped"
+          fi
           python3 - <<'PY'
           import json, re, glob, os
           input_asin = os.environ.get('INPUT_ASIN', '').strip()
@@ -285,7 +295,8 @@ jobs:
               INFO_NOTE="【事前収集ソースの量】: 乏しい (媒体${INFO_NEWS} / 動画${INFO_YT} / 書籍${INFO_BK})。この商品は第三者情報が少ない品です。
             - 確認できない仕様・効果・受賞歴・口コミを創作して字数を埋めること (水増し) を**禁止**します。検索で裏取りできない記述は書かないでください。
             - 出典の弱い一般論で分量を稼ぐより、確認できた事実だけで簡潔にまとめる方を優先してください (本文 minLength は安全網であって目標値ではありません)。
-            - sources には実在し検証可能な URL のみ記載。検索エンジンの結果ページ URL は出典にしないでください。"
+            - sources には実在し検証可能な URL のみ記載。検索エンジンの結果ページ URL は出典にしないでください。
+            - 対象商品そのものの販売ページ (Amazon / 楽天 / Yahoo) を sources に入れるのは水増しではありません。合計 5 件の残りはこれで埋めてください (下の【sources の組み立て】)。"
             fi
             # #2953 B案 (#1329 記事版): GSC 実流入クエリを prompt に注入 (読者が実際に
             # 検索した語を title/meta_description/faq の意図選定シグナルとして使わせる)。
@@ -311,6 +322,9 @@ jobs:
 
             # #9199 案(b): omcha.jp の実使用記事を出典に 1 件まで使ってよい注記 (first-party のみ)
             FIRST_PARTY_NOTE=$(python3 scripts/build_jules_prompt.py --asin "$TARGET_ASIN" --print-note first_party 2>/dev/null || echo "")
+
+            # #9239: sources_v5 (合計 5 件・非販売 2 件) の組み立て方と、使ってよい URL の一覧
+            SOURCES_NOTE=$(python3 scripts/build_jules_prompt.py --asin "$TARGET_ASIN" --print-note sources 2>/dev/null || echo "")
             # 2026-05-13: 12行のハードコードプロンプトを廃止し、jules/PROMPT_TEMPLATE.md
             # を読み込む形に変更（記事品質向上のため出典・競合比較・cross-check ルールを
             # フルプロンプトとして渡す）。
@@ -333,6 +347,8 @@ jobs:
             ${EXPERIENCE_NOTE}
 
             ${FIRST_PARTY_NOTE}
+
+            ${SOURCES_NOTE}
 
             【本日の日付 (必ず使用)】: ${TODAY}
             - 出力ファイル名: data/articles/${TODAY}-${TARGET_ASIN}.json
@@ -362,7 +378,9 @@ jobs:
             - data/raw/per_asin/${TARGET_ASIN}/third_party_sources.json が存在する場合 (#1600 Phase 2 で
               事前収集した非販売の第三者候補 URL = レビュー/解説/メディア) は、sources 候補として優先的に
               内容を確認すること。ただし候補に過ぎないので、実際に内容を読んで記述の裏取りに使えた URL のみを
-              article の sources に採用する (販売ページ・検索結果ページは出典に含めない)
+              article の sources に採用する (検索結果ページは出典に含めない)。
+              対象商品の販売ページ (Amazon / 楽天 / Yahoo) は非販売 2 件の代わりにはならないが、
+              合計 5 件には数えてよい (上の【sources の組み立て】。#9239)
 
             === 以下、jules/PROMPT_TEMPLATE.md の内容 ==="
             PROMPT="$INTRO
