@@ -185,6 +185,22 @@ def _shares_product_code(amazon_title: str, matched_title: str) -> bool:
     return False
 
 
+def pieces_conflict(amazon_title: str, matched_title: str) -> bool:
+    """両方の題名にピース数があって 1 つも一致しない (= 別セット) か (#9244)。
+
+    品番が一致するならピース数の書き方の揺れとみなして False。照合の quality gate と
+    fetch_cross_search の候補選び (中央値選択の前) の両方で使う。
+    """
+    if not amazon_title or not matched_title:
+        return False
+    amazon_pieces = piece_counts(amazon_title)
+    matched_pieces = piece_counts(matched_title)
+    return bool(
+        amazon_pieces and matched_pieces and not (amazon_pieces & matched_pieces)
+        and not _shares_product_code(amazon_title, matched_title)
+    )
+
+
 def _descriptor_hits_title(descriptor: str, title_norm: str, title_tokens_norm: list) -> bool:
     """Issue #1140: descriptor token が title に「実質的に」出現するか。
 
@@ -267,12 +283,8 @@ def matched_passes_quality(
 
     # ピース数ガード (#9244): 型番・色も試したが、型番は出品者の管理コード、色は
     # 「赤ちゃん」の「赤」や「黒 / ブラック」の表記揺れで誤検出の方が多かったので入れない
-    if amazon_title:
-        amazon_pieces = piece_counts(amazon_title)
-        matched_pieces = piece_counts(title)
-        if (amazon_pieces and matched_pieces and not (amazon_pieces & matched_pieces)
-                and not _shares_product_code(amazon_title, title)):
-            return False
+    if pieces_conflict(amazon_title, title):
+        return False
 
     kw = matched.get("search_keyword") or ""
     kw_tokens = [t for t in re.split(r"\s+", kw) if len(t) >= 2]
