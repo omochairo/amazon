@@ -221,6 +221,40 @@ class LoadArticlesTest(unittest.TestCase):
 
             self.assertEqual([r.asin for r in records], ["B00000008"])
 
+    def test_market_link_with_other_asin_is_dropped(self):
+        """#9244: 記事側の楽天/Yahoo リンクが別の ASIN の出品なら、その価格を捨てて最安を引き直す。"""
+        asin = "B0HCTDR9ZN"
+        with tempfile.TemporaryDirectory() as td:
+            d = pathlib.Path(td)
+            art = _make_article(asin, best_price=1500, best_platform="Yahoo!ショッピング")
+            art["product"]["prices"]["amazon"]["price"] = 2000
+            art["product"]["prices"]["yahoo"] = {
+                "price": 1500,
+                "url": "https://store.shopping.yahoo.co.jp/shop/s-b0bxslrtpj-1.html",
+            }
+            art["product"]["prices"]["rakuten"] = {
+                "price": 1800, "url": "https://item.rakuten.co.jp/shop/123/",
+            }
+            _write_article(d, art)
+            [rec] = bfl.load_articles(d)
+            self.assertIsNone(rec.price_yahoo)
+            self.assertEqual(rec.price_rakuten, 1800)
+            self.assertEqual((rec.best_price, rec.best_platform), (1800, "楽天市場"))
+
+    def test_same_asin_market_link_is_kept(self):
+        asin = "B0HCTDR9ZN"
+        with tempfile.TemporaryDirectory() as td:
+            d = pathlib.Path(td)
+            art = _make_article(asin, best_price=1500, best_platform="Yahoo!ショッピング")
+            art["product"]["prices"]["yahoo"] = {
+                "price": 1500,
+                "url": "https://store.shopping.yahoo.co.jp/shop/s-b0hctdr9zn-1.html",
+            }
+            _write_article(d, art)
+            [rec] = bfl.load_articles(d)
+            self.assertEqual(rec.price_yahoo, 1500)
+            self.assertEqual((rec.best_price, rec.best_platform), (1500, "Yahoo!ショッピング"))
+
 
 # ---------------------------------------------------------------------------
 # attach_amazon_meta
