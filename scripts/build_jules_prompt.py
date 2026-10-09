@@ -238,6 +238,13 @@ def _sources_note(asin):
     if third:
         blocks.append("   第三者の候補 (システムが事前収集。商品が違う・読めないものは採用しない):")
         blocks.extend("   " + t for t in third[:8])
+    # navi-brain#92: 書き直しでは、前の記事が見つけた非販売の出典も材料になる。
+    # 前の記事は「本文から参照していない」だけで非販売を 2 サイト以上持っていることが多い
+    listed = {t.split(" ", 2)[1] for t in third}
+    prior = [u for u in sc.prior_article_urls(asin) if u not in listed]
+    if prior:
+        blocks.append("   前の記事が出典にしていた非販売のページ (同じく開いて確認してから採用する):")
+        blocks.extend(f"   - {u}" for u in prior[:8])
     blocks.extend([
         "2. 採用した出典は、それが裏付けた claims / review_signals の supporting_source_ids に"
         "必ず id を書く。**どこからも参照されない出典は数えられない**ので、参照しない出典は載せない。",

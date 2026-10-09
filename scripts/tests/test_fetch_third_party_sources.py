@@ -832,3 +832,33 @@ class PickablePoolTest(unittest.TestCase):
         pathlib.Path("data/articles/2026-05-30-B0DDDDDDD4.json").write_text("{}")
         pathlib.Path("data/articles/2026-10-08-B0DDDDDDD4.json").write_text("{}")
         self.assertEqual(F._pickable_pool(), [])
+
+
+class SufficientIsFreshTest(unittest.TestCase):
+    """navi-brain#92: 既に非販売 2 サイトある ASIN は取り直さない。"""
+
+    def _write(self, d, fetched_at, hosts):
+        p = pathlib.Path(d) / "third_party_sources.json"
+        p.write_text(json.dumps({"fetched_at": fetched_at, "sources": [
+            {"url": f"https://{h}/x", "host": h} for h in hosts]}), encoding="utf-8")
+        return p
+
+    def test_sufficient_after_relevance_filter_waits_a_year(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = self._write(d, "2026-10-09T07:00:00+00:00", ["a.example", "b.example"])
+            self.assertTrue(F._is_fresh(p, max_age_days=0))
+            later = dt.datetime(2027, 10, 10, tzinfo=dt.timezone.utc)
+            with mock.patch.object(F._dt, "datetime", wraps=dt.datetime) as m:
+                m.now.return_value = later
+                self.assertFalse(F._is_fresh(p, max_age_days=0))
+
+    def test_sufficient_before_relevance_filter_uses_normal_age(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = self._write(d, "2026-06-01T00:00:00+00:00", ["a.example", "b.example"])
+            self.assertFalse(F._is_fresh(p, max_age_days=90))
+
+    def test_one_site_or_retail_only_is_not_sufficient(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = self._write(d, "2026-10-09T07:00:00+00:00",
+                            ["ja.wikipedia.org", "en.wikipedia.org", "yodobashi.com"])
+            self.assertFalse(F._is_fresh(p, max_age_days=0))

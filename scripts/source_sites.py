@@ -44,6 +44,8 @@ RETAIL_SITE_HOSTS = frozenset({
     "paypayfleamarket.yahoo.co.jp", "auctions.yahoo.co.jp", "creema.jp", "minne.com",
     "ebay.com", "walmart.com", "target.com", "etsy.com", "aliexpress.com",
     "temu.com", "shein.com",
+    # アフィリエイトの転送 (Yahoo!ショッピング等の商品ページへ飛ぶ)。記事の sources に残っている
+    "valuecommerce.com",
 })
 
 # SNS / 動画共有。合わせて 1 サイトまでしか数えない。

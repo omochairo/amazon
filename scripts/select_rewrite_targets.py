@@ -6,10 +6,20 @@ with rewrites of low-quality / old-prompt articles when new-ASIN fetch supply
 is low (Issue #812).
 
 Priority key (lower = higher priority):
-0. 本文から参照された非販売の出典が 0 サイトの記事 (navi-brain#92 手順 5) を最優先。
-   sources_v5 を「参照された非販売の出典が別々のサイトで 2 件以上」に変えたとき、
-   既存記事は施行日前の救済で落とさなかった。そのうち裏付けが全く無い記事から
-   少しずつ書き直す (積む量は 12-rewrite-idle-fill の待ち行列の上限で絞られる)。
+0. 出典の裏付けが足りず、**書き直せば足りる見込みがある**記事 (navi-brain#92 手順 5)。
+   sources_v5 を「本文から参照された非販売の出典が別々のサイトで 2 件以上」に変えたとき、
+   既存記事は施行日前の救済で落とさなかった。そのうち次の順で書き直す
+   (積む量は 12-rewrite-idle-fill の待ち行列の上限で絞られる):
+
+   - tier 0: 参照された非販売が 0 サイトで、書き直しの材料がある
+   - tier 1: 参照された非販売が 1 サイトで、書き直しの材料がある
+   - tier 2: 参照された非販売が 0 サイトで、第三者の候補をまだ一度も集めていない
+     (選ばれると 34-third-party-sources が先頭で集める。1 回の検索で済む)
+
+   「材料がある」= 前の記事が非販売を 2 サイト以上持っている (参照を付けていなかった
+   だけ。build_jules_prompt が候補として渡す)、または記事を書いた後に集めた第三者の
+   候補で非販売 2 サイトに届く。**どちらでもない記事は優先しない**: 前回と同じ材料で
+   書き直しても同じ結果になり、Jules の枠を使って gate で落ちるだけになる。
 1. pre-v7 (slug date < ``quality_gate.HOW_TO_CHOOSE_ENFORCE_FROM``) before post-v7.
    「古いプロンプトで書かれた記事ほどリライトの価値が高い」という #812 の意図を、
    実在するシグナル (施行日) で表す。
@@ -37,9 +47,11 @@ passed in here as a flat text file.
 from __future__ import annotations
 
 import argparse
+import collections
 import glob
 import json
 import os
+import pathlib
 import re
 import sys
 from typing import Iterable
@@ -49,8 +61,10 @@ from typing import Iterable
 from quality_gate import (
     HOW_TO_CHOOSE_ENFORCE_FROM,
     _is_legacy_article,
+    _non_sales_sites,
     _referenced_non_sales_sites,
 )
+import score_per_asin_info as sc
 # #5490: 生成されようがない ASIN を選ばないための適格性判定。
 # 判定は rewrite_queue が SSOT (詳細は rewrite_queue.sources_exhausted の docstring)。
 import rewrite_queue
@@ -61,27 +75,52 @@ _SLUG_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-(B0[A-Z0-9]{8})$")
 _SIDECAR_SUFFIXES = (".quality.json", ".enrichment.json", ".seo.json")
 
 
-def _ref_sites(path: str):
-    """本文から参照された非販売の出典のサイト数 (navi-brain#92)。判定しない記事は None。
+# 書き直しの優先度 (navi-brain#92)。数字が小さいほど先。出典で優先しない記事は _TIER_REST
+_TIER_REST = 3
+
+
+def _source_outlook(path: str, asin: str, date: str,
+                    per_asin: pathlib.Path = sc.PER_ASIN_DIR) -> tuple:
+    """(本文から参照された非販売のサイト数, 書き直しの優先 tier)。判定しない記事は (None, _TIER_REST)。
 
     v5 より前の記事 (legacy) と sources 欄の無い記事は sources_v5 の対象外なので None。
+    tier の決め方はモジュール docstring の Priority key 0。
     """
     try:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, ValueError):
-        return None
+        return None, _TIER_REST
     if not isinstance(data, dict) or _is_legacy_article(data):
-        return None
+        return None, _TIER_REST
     srcs = data.get("sources")
     if not isinstance(srcs, list):
-        return None
+        return None, _TIER_REST
     valid = [s for s in srcs if isinstance(s, dict) and s.get("url")]
-    return len(_referenced_non_sales_sites(valid, data))
+    ref = len(_referenced_non_sales_sites(valid, data))
+    if ref >= 2:
+        return ref, _TIER_REST
+    # 前の記事が非販売を 2 サイト以上持っている = 参照を付ければ足りる
+    in_hand = len(_non_sales_sites(valid)) >= 2
+    tp = sc._load(pathlib.Path(per_asin) / asin / "third_party_sources.json")
+    fetched = str(tp.get("fetched_at") or "")[:10] if isinstance(tp, dict) else ""
+    # 記事を書いた後に集めた候補で 2 サイトに届く = 前回の生成には無かった材料。
+    # 前の記事の出典 (prior_article_sites) は前回もあった材料なので数えない。候補が
+    # 空振りなら、news・omcha.jp だけで 2 に届いても「増えた」とは言えない
+    new_material = False
+    if fetched and fetched > date:
+        r = sc.score_asin(asin, pathlib.Path(per_asin))
+        new_material = (r.get("third_party_sites", 0) >= 1
+                        and sc.non_sales_material({**r, "prior_article_sites": 0}) >= 2)
+    if in_hand or new_material:
+        return ref, ref  # 0 サイト → tier 0 / 1 サイト → tier 1
+    if ref == 0 and tp is None:
+        return ref, 2
+    return ref, _TIER_REST
 
 
 def collect_candidates(articles_dir: str) -> list[dict]:
-    """Return primary article records as {slug, asin, date, ref_sites}.
+    """Return primary article records as {slug, asin, date, ref_sites, tier}.
 
     Skips sidecar JSONs and any file whose slug doesn't match YYYY-MM-DD-ASIN.
     """
@@ -102,6 +141,7 @@ def collect_candidates(articles_dir: str) -> list[dict]:
         if asin in seen_asin:
             continue
         seen_asin.add(asin)
+        ref_sites, tier = _source_outlook(path, asin, date)
         # #4826 項目4: 旧 <slug>.quality.json sidecar の読み取りを外した。
         # sidecar の生成は quality_gate 側で廃止済み (main 全量の品質は
         # 48-quality-census.yml が集計 JSON 1 本で観測する) で、リポジトリに
@@ -112,7 +152,8 @@ def collect_candidates(articles_dir: str) -> list[dict]:
             "slug": slug,
             "asin": asin,
             "date": date,
-            "ref_sites": _ref_sites(path),
+            "ref_sites": ref_sites,
+            "tier": tier,
         })
     return out
 
@@ -134,7 +175,7 @@ def select(
     limit: int,
     generatable=None,
 ) -> tuple[list[dict], list[str]]:
-    """Sort by (参照された非販売 0 サイト first, pre-v7 first, date asc) and return ``(picked, deferred)``.
+    """Sort by (出典の tier, pre-v7 first, date asc) and return ``(picked, deferred)``.
 
     ``total_score`` は順序付けに使わない (理由はモジュール docstring)。日付が読めない
     候補は安全側で post-v7 扱いにする (quality_gate._how_to_choose_enforced と同じ方針)。
@@ -153,9 +194,9 @@ def select(
     """
     def key(c: dict) -> tuple[int, int, str]:
         date = c.get("date") or ""
-        unsupported = 0 if c.get("ref_sites") == 0 else 1
+        tier = c.get("tier", _TIER_REST)
         generation = 0 if date and date < HOW_TO_CHOOSE_ENFORCE_FROM else 1
-        return (unsupported, generation, date)
+        return (tier, generation, date)
 
     available = [c for c in candidates if c["asin"] not in excluded]
     available.sort(key=key)
@@ -202,6 +243,8 @@ def main() -> int:
     )
     args = ap.parse_args()
 
+    # 生成前の判定 (score_asin) が前の記事を読むときも同じディレクトリを見る
+    sc.ARTICLES_DIR = pathlib.Path(args.articles_dir)
     candidates = collect_candidates(args.articles_dir)
     excluded = _read_exclude(args.exclude_file)
     # #5490 対処D: 既にマーカーがある ASIN は「依頼済みで生成待ち」なので選び直さない。
@@ -231,12 +274,12 @@ def main() -> int:
         f"picked={len(picked)} limit={args.limit}",
         file=sys.stderr,
     )
-    unsupported = sum(1 for c in candidates if c.get("ref_sites") == 0)
-    print(f"  参照された非販売が 0 サイトの記事 (navi-brain#92、最優先): {unsupported}",
-          file=sys.stderr)
+    tiers = collections.Counter(c.get("tier", _TIER_REST) for c in candidates)
+    print(f"  出典で優先する記事 (navi-brain#92): tier0={tiers[0]} tier1={tiers[1]} "
+          f"tier2={tiers[2]}", file=sys.stderr)
     for c in picked:
-        print(f"  -> {c['asin']} slug={c['slug']} ref_sites={c.get('ref_sites')}",
-              file=sys.stderr)
+        print(f"  -> {c['asin']} slug={c['slug']} ref_sites={c.get('ref_sites')} "
+              f"tier={c.get('tier')}", file=sys.stderr)
     if deferred:
         # #5490: 黙って落とさない。ここに出続ける ASIN は「素材が無くてリライト
         # できない記事」であり、放置すると古いまま配信され続ける (対処は #5490 案B の

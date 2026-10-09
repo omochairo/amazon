@@ -290,3 +290,29 @@ def test_sources_note_without_candidates_still_gives_amazon(tmp_path, monkeypatc
     note = build_jules_prompt._sources_note("B0FNM4Y35G")
     assert "https://www.amazon.co.jp/dp/B0FNM4Y35G/" in note
     assert "第三者の候補" not in note
+
+
+def test_sources_note_lists_prior_article_sources(tmp_path, monkeypatch):
+    # navi-brain#92: 書き直しでは前の記事の非販売の出典も候補として渡す (候補と重複は出さない)
+    monkeypatch.chdir(tmp_path)
+    asin = "B0FNM4Y35G"
+    (tmp_path / "data" / "raw" / "per_asin" / asin).mkdir(parents=True)
+    (tmp_path / "data" / "raw" / "per_asin" / asin / "third_party_sources.json").write_text(
+        json.dumps({"sources": [{"url": "https://ameblo.jp/a/entry-1.html", "host": "ameblo.jp"}]}),
+        encoding="utf-8")
+    arts = tmp_path / "data" / "articles"
+    arts.mkdir(parents=True)
+    (arts / f"2026-08-01-{asin}.json").write_text(json.dumps({"sources": [
+        {"id": "s1", "url": "https://www.amazon.co.jp/dp/B0FNM4Y35G/"},
+        {"id": "s2", "url": "https://ameblo.jp/a/entry-1.html"},
+        {"id": "s3", "url": "https://example.org/review"},
+    ]}), encoding="utf-8")
+    note = build_jules_prompt._sources_note(asin)
+    prior = note.split("前の記事が出典にしていた")[1].split("2.")[0]
+    assert "https://example.org/review" in prior
+    assert "ameblo" not in prior and "amazon.co.jp" not in prior
+
+
+def test_sources_note_without_prior_article_has_no_prior_block(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert "前の記事が出典にしていた" not in build_jules_prompt._sources_note("B0FNM4Y35G")
