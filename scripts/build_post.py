@@ -2837,6 +2837,10 @@ def _attach_market_prices(
                 or existing_price < amazon_price / _MARKET_PRICE_BAND_EXTREME
             )
         )
+        # 記事側に焼き込まれたリンクが別の ASIN の出品ページなら、外れ値と同じく捨てる
+        # (誤照合の URL を Jules が写したもの。#9244)
+        if existing and market_prices.other_asin_in_url(existing.get("url") or "", asin):
+            existing_extreme = True
 
         if existing and not existing_extreme and (existing.get("price") or existing.get("url")):
             # Jules-supplied data with no deterministic cross-check. Keep it

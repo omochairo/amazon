@@ -26,7 +26,22 @@ import html
 import json
 import pathlib
 import re
+import urllib.parse
 from typing import Any
+
+# 前後が英数字でない 10 桁だけ (アフィリエイトのハッシュ等の途中に当てない)
+_ASIN_IN_URL = re.compile(r"(?<![a-z0-9])b0[a-z0-9]{8}(?![a-z0-9])")
+
+
+def other_asin_in_url(url: str, asin: str) -> bool:
+    """照合済みとされた販売ページの URL に、別の ASIN が埋まっているか (#9239 / #9244)。
+
+    楽天・Yahoo の出品 URL には Amazon の ASIN を埋めたもの (s-b0xxxxxxxx-...) があり、
+    それが対象と違えば照合の誤り (実測: B0HCTDR9ZN の Yahoo 照合先が s-b0bxslrtpj)。
+    アフィリエイト URL は中の商品 URL が % エンコードされているので戻してから見る。
+    """
+    low = urllib.parse.unquote(url or "").lower()
+    return any(a != asin.lower() for a in _ASIN_IN_URL.findall(low))
 
 # 楽天/Yahoo cross-search 結果を本文の価格グリッドに流し込むときに、
 # 検索ヒットしただけで実商品とかけ離れた item (ふるさと納税の高額品など) を
@@ -160,6 +175,12 @@ def matched_passes_quality(
     except (TypeError, ValueError):
         price = 0
     if not title or price <= 0:
+        return False
+
+    # 照合先 URL に別の ASIN が埋まっていれば別商品の出品 (#9244)。価格帯や題名が
+    # 近くても通さない (同シリーズの別 SKU が題名 overlap で通ってしまうため)
+    matched_asin = matched.get("matched_asin") or ""
+    if matched_asin and other_asin_in_url(matched.get("url") or "", matched_asin):
         return False
 
     if amazon_price > 0:

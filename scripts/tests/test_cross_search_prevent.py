@@ -100,6 +100,20 @@ class FilterTextCandidatesTest(unittest.TestCase):
         kept = fcs._filter_text_candidates(items, "メロディーゴーラウンド", "yahoo", "B0X")
         self.assertEqual(len(kept), 2)
 
+    def test_drops_listing_url_with_other_asin(self):
+        # 出品 URL に別の ASIN が埋まっていれば JAN 段 (title="") でも落とす (#9244)
+        items = [
+            {"title": "積み木", "price": 1000,
+             "url": "https://store.shopping.yahoo.co.jp/shop/s-b0bxslrtpj-20260804.html"},
+            {"title": "積み木", "price": 1000,
+             "url": "https://store.shopping.yahoo.co.jp/shop/s-b0hctdr9zn-20260804.html"},
+            {"title": "積み木", "price": 1000, "url": "https://item.rakuten.co.jp/shop/123/"},
+        ]
+        kept = fcs._filter_text_candidates(items, "", "yahoo", "B0HCTDR9ZN")
+        self.assertEqual(len(kept), 2)
+        self.assertNotIn("b0bxslrtpj", " ".join(i["url"] for i in kept))
+        self.assertEqual(fcs._DROP_STATS["yahoo:other_asin_url"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
