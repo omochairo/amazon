@@ -8,6 +8,10 @@
 {{- $d := site.Data.toy_safety -}}
 {{- if $d -}}
 {{- $brand := .Params.brand | default "" -}}
+{{- /* #9217: 年齢不明の商品 (front matter に age_min_months が無い) を 0 歳扱いに
+       すると、3 歳未満向けの統計が「この商品は 0 歳向け」と読めるので、年齢別の
+       注意は年齢が分かる商品にだけ出す。一般の小さな部品の注意は全商品に出す。 */ -}}
+{{- $ageKnown := isset .Params "age_min_months" -}}
 {{- $ageMonths := int (.Params.age_min_months | default 0) -}}
 {{- $srcs := $d.sources -}}
 {{- /* session 145: パネルは必須ではないので <details> アコーディオンで既定 closed。
@@ -37,7 +41,7 @@
     <p>{{ .small_parts_rule.body }}{{- with index $srcs .small_parts_rule.source }} <a class="toy-safety__src" href="{{ .url }}" target="_blank" rel="noopener nofollow">（出典: {{ .name }}）</a>{{- end }}</p>
     {{- $stat := "" }}{{ $statSrc := "" -}}
     {{- range .by_age -}}
-      {{- if and (eq $stat "") (le $ageMonths (int .max_months)) -}}
+      {{- if and $ageKnown (eq $stat "") (le $ageMonths (int .max_months)) -}}
         {{- $stat = .stat }}{{ $statSrc = .source -}}
       {{- end -}}
     {{- end -}}
