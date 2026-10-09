@@ -1,0 +1,193 @@
+{{- /*
+  /deals/ と /price/ の一覧の上に置く絞り込みバー (予算・お子さまの年齢・並び順)。
+  動作は assets/js/list_filter.js。一覧の <li> に data-price / data-age (/price/ は
+  data-drop-yen / data-lowest も) を持たせておくこと。
+
+  JS が動くまでは hidden のまま (JS 無効なら全件がそのまま見える)。
+
+  Expects context = dict
+    list     … 対象の <ol> の id
+    mode     … "deals" | "price" (並び替えの選択肢と「過去最安値のみ」の有無)
+    pageSize … 0 なら全件表示。>0 なら N 件ずつ「さらに表示」
+*/ -}}
+{{- $mode := .mode -}}
+<div class="list-filter" data-list-filter data-list="{{ .list }}" data-page-size="{{ .pageSize | default 0 }}" hidden>
+  <div class="list-filter-row">
+    <span class="list-filter-label" id="{{ .list }}-lf-budget">ご予算</span>
+    <div class="list-filter-chips" role="group" aria-labelledby="{{ .list }}-lf-budget">
+      <button type="button" class="list-filter-chip" data-lf="budget" data-v="">すべて</button>
+      <button type="button" class="list-filter-chip" data-lf="budget" data-v="u2000">〜2,000円</button>
+      <button type="button" class="list-filter-chip" data-lf="budget" data-v="2000-3000">2,000〜3,000円</button>
+      <button type="button" class="list-filter-chip" data-lf="budget" data-v="3000-5000">3,000〜5,000円</button>
+      <button type="button" class="list-filter-chip" data-lf="budget" data-v="5000-10000">5,000〜10,000円</button>
+      <button type="button" class="list-filter-chip" data-lf="budget" data-v="o10000">10,000円〜</button>
+    </div>
+  </div>
+  <div class="list-filter-row">
+    <span class="list-filter-label" id="{{ .list }}-lf-age">お子さまの年齢</span>
+    <div class="list-filter-chips" role="group" aria-labelledby="{{ .list }}-lf-age">
+      <button type="button" class="list-filter-chip" data-lf="age" data-v="">すべて</button>
+      <button type="button" class="list-filter-chip" data-lf="age" data-v="0y">0歳</button>
+      <button type="button" class="list-filter-chip" data-lf="age" data-v="1y">1歳</button>
+      <button type="button" class="list-filter-chip" data-lf="age" data-v="2y">2歳</button>
+      <button type="button" class="list-filter-chip" data-lf="age" data-v="3y">3歳</button>
+      <button type="button" class="list-filter-chip" data-lf="age" data-v="4y">4歳</button>
+      <button type="button" class="list-filter-chip" data-lf="age" data-v="5y">5歳</button>
+      <button type="button" class="list-filter-chip" data-lf="age" data-v="6-7y">6〜7歳</button>
+      <button type="button" class="list-filter-chip" data-lf="age" data-v="8y">8歳〜</button>
+    </div>
+  </div>
+  <div class="list-filter-row list-filter-row--foot">
+    <label class="list-filter-sort">並び替え
+      <select data-lf="sort">
+        {{- if eq $mode "price" }}
+        <option value="default">値下げ率が大きい順</option>
+        <option value="drop-yen">値下げ額が大きい順</option>
+        {{- else }}
+        <option value="default">割引率が高い順</option>
+        {{- end }}
+        <option value="price-asc">価格が安い順</option>
+        <option value="price-desc">価格が高い順</option>
+      </select>
+    </label>
+    {{- if eq $mode "price" }}
+    <label class="list-filter-check"><input type="checkbox" data-lf="lowest"> 過去最安値のみ</label>
+    {{- end }}
+    <span class="list-filter-count" data-lf-count aria-live="polite"></span>
+    <button type="button" class="list-filter-reset" data-lf-reset hidden>条件をクリア</button>
+  </div>
+  <p class="list-filter-note">年齢は、対象年齢がお子さまの年齢以下で、幼すぎないものを表示します。</p>
+</div>
+{{- $js := resources.Get "js/list_filter.js" | resources.Minify | resources.Fingerprint "sha256" }}
+{{- if $js }}
+<script defer src="{{ $js.RelPermalink }}" integrity="{{ $js.Data.Integrity }}" crossorigin="anonymous"></script>
+{{- end }}
+<style>
+  /* .ranking-item は display:grid を持つので、hidden 属性だけでは消えない。 */
+  .list-filter[hidden], .feature-list > li[hidden], .list-filter-empty[hidden], .list-filter-more[hidden], .list-filter-reset[hidden] { display: none !important; }
+  .list-filter {
+    margin: 1.25rem 0 0.5rem;
+    padding: 0.85rem 1rem;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    display: grid;
+    /* 列を中身の幅に広げない (横スクロールのチップ列がページ幅を押し広げるため) */
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.6rem;
+  }
+  .list-filter-row { display: flex; align-items: center; gap: 0.6rem; }
+  .list-filter-label { flex: 0 0 7.5em; font-size: 0.82rem; font-weight: 700; }
+  .list-filter-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; min-width: 0; }
+  .list-filter-chip {
+    border: 1px solid rgba(148, 163, 184, 0.6);
+    background: transparent;
+    color: inherit;
+    border-radius: 999px;
+    padding: 0.3rem 0.75rem;
+    min-height: 36px;
+    font-size: 0.82rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .list-filter-chip.is-on { background: var(--brand-primary, #f97316); border-color: transparent; color: #fff; font-weight: 700; }
+  .list-filter-row--foot { flex-wrap: wrap; font-size: 0.85rem; }
+  .list-filter-sort select { margin-left: 0.3rem; padding: 0.3rem 0.4rem; min-height: 36px; border-radius: 8px; font-size: 0.85rem; color: inherit; background: transparent; border: 1px solid rgba(148, 163, 184, 0.6); }
+  .list-filter-sort select option { color: #0f172a; }
+  .list-filter-check { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 36px; cursor: pointer; }
+  .list-filter-count { margin-left: auto; font-weight: 700; }
+  .list-filter-reset, .list-filter-more {
+    border: 1px solid rgba(148, 163, 184, 0.6);
+    background: transparent;
+    color: inherit;
+    border-radius: 999px;
+    padding: 0.3rem 0.8rem;
+    min-height: 36px;
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+  .list-filter-note { margin: 0; font-size: 0.75rem; opacity: 0.75; }
+  .list-filter-empty { margin: 1rem 0; padding: 1rem; text-align: center; border-radius: 12px; border: 1px dashed rgba(148, 163, 184, 0.7); }
+  .list-filter-empty p { margin: 0 0 0.6rem; }
+  .list-filter-more { display: block; width: 100%; max-width: 420px; margin: 1rem auto; min-height: 44px; font-size: 0.95rem; font-weight: 700; }
+  /* 並び替え後は割引率の順位バッジが並びと合わないので隠す */
+  .feature-list.is-resorted .ranking-badge { visibility: hidden; }
+  [data-theme="dark"] .list-filter { background: rgba(30, 41, 59, 0.6); border-color: rgba(71, 85, 105, 0.55); }
+  [data-theme="dark"] .list-filter-sort select option { color: #e2e8f0; background: #1e293b; }
+
+  @media (max-width: 720px) {
+    .list-filter { padding: 0.7rem 0.75rem; }
+    .list-filter-row { flex-direction: column; align-items: stretch; gap: 0.35rem; }
+    .list-filter-row--foot { flex-direction: row; align-items: center; }
+    .list-filter-label { flex: none; }
+    /* チップは 1 行の横スクロールにして、絞り込みバーで画面を埋めない */
+    .list-filter-chips { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; margin: 0 -0.75rem; padding: 0 0.75rem 2px; }
+    .list-filter-chips::-webkit-scrollbar { display: none; }
+
+    /* スマホのカードを「画像左・本文右」に詰める。縦積みだと 1 枚 約 790px あり、
+       /price/ の 150 件で 12 万 px のスクロールになっていた。 */
+    .feature-list--price .ranking-item,
+    .feature-list--deals .ranking-item {
+      grid-template-columns: 96px minmax(0, 1fr);
+      grid-template-areas: none;
+      align-items: start;
+      gap: 0.3rem 0.7rem;
+      padding: 0.7rem;
+    }
+    .feature-list--price .ranking-thumb,
+    .feature-list--deals .ranking-thumb {
+      /* 本文の見出し側 (最大 5 行: 最安値バッジ・タイトル・ブランド・バッジ・価格) の左に置く */
+      grid-area: auto;
+      grid-column: 1;
+      grid-row: 1 / span 5;
+      width: 96px;
+      max-height: 96px;
+      aspect-ratio: 1 / 1;
+    }
+    .feature-list--price .ranking-thumb img,
+    .feature-list--deals .ranking-thumb img { max-height: 96px; object-fit: contain; }
+    /* 順位バッジは画像の左下に重ねる (左上は比較トグル、右上は ♡ が使っている) */
+    .feature-list--deals .ranking-badge {
+      /* grid-area が残っていると、絶対配置の基準がカードではなくそのグリッド領域になる */
+      grid-area: auto;
+      position: absolute;
+      top: calc(0.7rem + 96px - 26px);
+      left: 0.3rem;
+      width: 30px;
+      height: 30px;
+      font-size: 0.8rem;
+      z-index: 1;
+    }
+    /* タイトルを右上の ♡ と重ねない */
+    .feature-list--price .ranking-title,
+    .feature-list--deals .ranking-title { padding-right: 30px !important; }
+    .feature-list--deals .ranking-medal { font-size: 1.05rem; }
+    /* 本文の子要素を直接カードのグリッドに並べる。見出し側は右列、指標と CTA は
+       サムネの行より下に全幅で置かれるので、タイトルが短くても画像と重ならない。 */
+    .feature-list--price .ranking-body,
+    .feature-list--deals .ranking-body { display: contents; }
+    .feature-list--price .ranking-body > *,
+    .feature-list--deals .ranking-body > * { grid-column: 2; min-width: 0; }
+    .feature-list--price .price-item-lowest-badge { font-size: 0.72rem; padding: 0.1rem 0.5rem; }
+    .feature-list--price .feature-badges,
+    .feature-list--deals .feature-badges { gap: 0.25rem; margin: 0.25rem 0; line-height: 1.35; }
+    .feature-list--price .feature-badges > *,
+    .feature-list--deals .feature-badges > * { font-size: 0.72rem; padding: 0.12rem 0.5rem; margin: 0; }
+    .feature-list--price .feature-badges strong,
+    .feature-list--deals .feature-badges strong,
+    .feature-list--price .feature-discount-pct,
+    .feature-list--deals .feature-discount-pct { font-size: 0.85rem; }
+    .feature-list--price .ranking-shop { margin: 0; }
+    .feature-list--price .ranking-price,
+    .feature-list--deals .ranking-price { margin: 0.2rem 0; }
+    /* 指標 (スコア 4 軸と価格推移) と CTA は、本文の下にカード幅いっぱいで置く */
+    .feature-list--price .ranking-body > .card-metrics,
+    .feature-list--deals .ranking-body > .card-metrics,
+    .feature-list--price .ranking-body > .ranking-cta,
+    .feature-list--deals .ranking-body > .ranking-cta { grid-column: 1 / -1; }
+    .feature-list--price .ranking-cta,
+    .feature-list--deals .ranking-cta { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-top: 0.5rem; }
+    .feature-list--price .ranking-cta a,
+    .feature-list--deals .ranking-cta a { font-size: 0.78rem; line-height: 1.3; padding: 0.45rem 0.3rem; text-align: center; justify-content: center; }
+  }
+</style>

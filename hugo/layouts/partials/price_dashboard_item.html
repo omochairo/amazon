@@ -11,7 +11,12 @@
 {{- $url := $item.url -}}
 {{- $pct := 0 -}}
 {{- with $item.drop_pct }}{{ $pct = . }}{{ end -}}
-<li class="ranking-item feature-item feature-item--price price-item" data-asin="{{ $item.asin }}">
+{{- /* data-* は /price/ の絞り込み (list_filter.js) が読む。age_min_months は
+       0 (0歳〜) と未設定 (nil) を区別するため with を使わない。 */ -}}
+{{- $ageAttr := "" -}}
+{{- $ageRaw := index $item "age_min_months" -}}
+{{- if ne (printf "%v" $ageRaw) "<nil>" }}{{ $ageAttr = printf "%d" (int $ageRaw) }}{{ end -}}
+<li class="ranking-item feature-item feature-item--price price-item" data-asin="{{ $item.asin }}" data-price="{{ int $item.current }}"{{ with $item.drop_yen }} data-drop-yen="{{ int . }}"{{ end }}{{ if $item.all_time_low }} data-lowest="1"{{ end }}{{ with $ageAttr }} data-age="{{ . }}"{{ end }}>
   {{- with $item.image }}
   <a class="ranking-thumb" href="{{ $url }}" aria-hidden="true" tabindex="-1">
     <img src="{{ . }}" alt="" loading="lazy" decoding="async" width="200" height="200">
