@@ -56,9 +56,11 @@ class CollectCandidatesTest(unittest.TestCase):
 
             # #4826 項目4: 候補レコードに score / passed は載らなくなった。
             by_asin = {c["asin"]: c for c in got}
-            self.assertEqual(sorted(by_asin["B00I7JXEEA"]), ["asin", "date", "ref_sites", "slug"])
+            self.assertEqual(sorted(by_asin["B00I7JXEEA"]),
+                             ["asin", "date", "ref_sites", "slug", "tier"])
             # date の無い最小の JSON は legacy 扱い = sources_v5 の対象外
             self.assertIsNone(by_asin["B00I7JXEEA"]["ref_sites"])
+            self.assertEqual(by_asin["B00I7JXEEA"]["tier"], srt._TIER_REST)
 
     def test_ref_sites_counts_referenced_non_sales_sites(self) -> None:
         """navi-brain#92: 本文から参照された非販売の出典をサイトで数える。"""
@@ -118,21 +120,91 @@ class SelectTest(unittest.TestCase):
         # 2026-07-16 は施行日ちょうど = post_v7 (quality_gate._how_to_choose_enforced と同じ境界)
         self.assertEqual([c["asin"] for c in picked], ["B0CCCCCCCC", "B0BBBBBBBB", "B0AAAAAAAA"])
 
-    def test_unsupported_articles_outrank_pre_v7(self) -> None:
-        """navi-brain#92 手順 5: 参照された非販売が 0 サイトの記事が最優先 (post-v7 でも)。
-
-        1 サイト・判定対象外 (None) は従来の順序のまま。
-        """
+    def test_source_tiers_outrank_pre_v7(self) -> None:
+        """navi-brain#92 手順 5: 出典の tier (0 → 1 → 2) が pre-v7 より先。tier 3 は従来の順序。"""
         candidates = [
-            {"slug": "2026-05-14-B0AAAAAAAA", "asin": "B0AAAAAAAA", "date": "2026-05-14", "ref_sites": 1},
-            {"slug": "2026-09-01-B0BBBBBBBB", "asin": "B0BBBBBBBB", "date": "2026-09-01", "ref_sites": 0},
-            {"slug": "2026-05-12-B0CCCCCCCC", "asin": "B0CCCCCCCC", "date": "2026-05-12", "ref_sites": None},
-            {"slug": "2026-08-01-B0DDDDDDDD", "asin": "B0DDDDDDDD", "date": "2026-08-01", "ref_sites": 0},
-            {"slug": "2026-06-01-B0EEEEEEEE", "asin": "B0EEEEEEEE", "date": "2026-06-01", "ref_sites": 0},
+            {"slug": "2026-05-14-B0AAAAAAAA", "asin": "B0AAAAAAAA", "date": "2026-05-14", "tier": 3},
+            {"slug": "2026-09-01-B0BBBBBBBB", "asin": "B0BBBBBBBB", "date": "2026-09-01", "tier": 2},
+            {"slug": "2026-05-12-B0CCCCCCCC", "asin": "B0CCCCCCCC", "date": "2026-05-12"},
+            {"slug": "2026-08-01-B0DDDDDDDD", "asin": "B0DDDDDDDD", "date": "2026-08-01", "tier": 1},
+            {"slug": "2026-09-01-B0EEEEEEEE", "asin": "B0EEEEEEEE", "date": "2026-09-01", "tier": 0},
         ]
         picked, _ = srt.select(candidates, excluded=set(), limit=10, generatable=lambda a: True)
         self.assertEqual([c["asin"] for c in picked],
                          ["B0EEEEEEEE", "B0DDDDDDDD", "B0BBBBBBBB", "B0CCCCCCCC", "B0AAAAAAAA"])
+
+
+class SourceOutlookTest(unittest.TestCase):
+    """navi-brain#92: 書き直せば出典が足りる見込みがある記事だけを優先する。"""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.d = self._tmp.name
+        self.per_asin = os.path.join(self.d, "per_asin")
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _article(self, asin, sources, refs, date="2026-09-01"):
+        path = os.path.join(self.d, f"{date}-{asin}.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"slug": f"{date}-{asin}", "date": date, "sources": sources,
+                       "claims": [{"text": "x", "supporting_source_ids": refs}]}, f)
+        return path
+
+    def _third_party(self, asin, hosts, fetched_at):
+        d = os.path.join(self.per_asin, asin)
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "third_party_sources.json"), "w", encoding="utf-8") as f:
+            json.dump({"fetched_at": fetched_at,
+                       "sources": [{"url": f"https://{h}/x", "host": h} for h in hosts]}, f)
+
+    def _outlook(self, path, asin, date="2026-09-01"):
+        return srt._source_outlook(path, asin, date, per_asin=self.per_asin)
+
+    def test_unreferenced_sources_in_hand_is_tier_by_ref(self) -> None:
+        # 前の記事が非販売を 2 サイト持っている (参照は 1 つだけ) → 参照を付ければ足りる
+        path = self._article("B0AAAAAAAA", [
+            {"id": "s1", "url": "https://example.org/a"},
+            {"id": "s2", "url": "https://example.net/b"}], ["s1"])
+        self.assertEqual(self._outlook(path, "B0AAAAAAAA"), (1, 1))
+
+    def test_material_collected_after_article_is_gain(self) -> None:
+        path = self._article("B0BBBBBBBB", [
+            {"id": "s1", "url": "https://www.amazon.co.jp/dp/B0BBBBBBBB/"}], ["s1"])
+        self._third_party("B0BBBBBBBB", ["a.example", "b.example"], "2026-09-15T00:00:00+00:00")
+        self.assertEqual(self._outlook(path, "B0BBBBBBBB"), (0, 0))
+
+    def test_empty_collection_after_article_is_not_new_material(self) -> None:
+        # 書いた後に取り直したが候補は空振り。news 等で 2 に届いても「増えた」ではない
+        path = self._article("B0GGGGGGGG", [
+            {"id": "s1", "url": "https://www.amazon.co.jp/dp/B0GGGGGGGG/"}], ["s1"])
+        self._third_party("B0GGGGGGGG", [], "2026-09-15T00:00:00+00:00")
+        news = os.path.join(self.per_asin, "B0GGGGGGGG", "news.json")
+        with open(news, "w", encoding="utf-8") as f:
+            json.dump([{"title": "記事 - 媒体A"}, {"title": "記事 - 媒体B"}], f)
+        self.assertEqual(self._outlook(path, "B0GGGGGGGG"), (0, srt._TIER_REST))
+
+    def test_material_already_there_at_write_time_is_not_prioritised(self) -> None:
+        # 前回の生成にも同じ材料があった → 書き直しても同じ結果。優先しない
+        path = self._article("B0CCCCCCCC", [
+            {"id": "s1", "url": "https://www.amazon.co.jp/dp/B0CCCCCCCC/"}], ["s1"])
+        self._third_party("B0CCCCCCCC", ["a.example", "b.example"], "2026-08-01T00:00:00+00:00")
+        self.assertEqual(self._outlook(path, "B0CCCCCCCC"), (0, srt._TIER_REST))
+
+    def test_never_collected_zero_site_is_tier2_but_one_site_is_not(self) -> None:
+        path = self._article("B0DDDDDDDD", [
+            {"id": "s1", "url": "https://www.amazon.co.jp/dp/B0DDDDDDDD/"}], ["s1"])
+        self.assertEqual(self._outlook(path, "B0DDDDDDDD"), (0, 2))
+        path = self._article("B0EEEEEEEE", [
+            {"id": "s1", "url": "https://example.org/a"}], ["s1"])
+        self.assertEqual(self._outlook(path, "B0EEEEEEEE"), (1, srt._TIER_REST))
+
+    def test_supported_article_is_rest(self) -> None:
+        path = self._article("B0FFFFFFFF", [
+            {"id": "s1", "url": "https://example.org/a"},
+            {"id": "s2", "url": "https://example.net/b"}], ["s1", "s2"])
+        self.assertEqual(self._outlook(path, "B0FFFFFFFF"), (2, srt._TIER_REST))
 
     def test_same_generation_tie_broken_by_date(self) -> None:
         candidates = [

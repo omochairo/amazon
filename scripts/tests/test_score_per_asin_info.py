@@ -437,3 +437,72 @@ class IsSearchResultUrlTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PriorArticleSitesTest(unittest.TestCase):
+    """navi-brain#92: 書き直しでは、前の記事の非販売の出典も材料に数える。"""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        root = pathlib.Path(self._tmp.name)
+        self.base = root / "per_asin"
+        self.arts = root / "articles"
+        self.arts.mkdir()
+        self._orig = S.ARTICLES_DIR
+        S.ARTICLES_DIR = self.arts
+        S._article_index.cache_clear()
+
+    def tearDown(self) -> None:
+        S.ARTICLES_DIR = self._orig
+        S._article_index.cache_clear()
+        self._tmp.cleanup()
+
+    def _article(self, slug, urls):
+        _write(self.arts, f"{slug}.json", {"slug": slug, "sources": [
+            {"id": f"s{i}", "url": u} for i, u in enumerate(urls)]})
+
+    def test_prior_urls_skip_sales_retail_self_and_take_latest(self):
+        self._article("2026-06-01-B0PA000001", ["https://old.example/a"])
+        self._article("2026-08-01-B0PA000001", [
+            "https://www.amazon.co.jp/dp/B0PA000001/",
+            "https://ck.jp.ap.valuecommerce.com/servlet/referral?x=1",
+            "https://www.yodobashi.com/product/1/",
+            "https://omcha.jp/post/1/",
+            "https://www.google.com/search?q=x",
+            "https://example.org/review",
+            "https://blog.example.net/b",
+        ])
+        self.assertEqual(S.prior_article_urls("B0PA000001"),
+                         ("https://example.org/review", "https://blog.example.net/b"))
+        self.assertEqual(S.prior_article_urls("B0PA000009"), ())
+
+    def test_prior_sites_add_only_sites_not_in_candidates(self):
+        d = self.base / "B0PA000002"
+        d.mkdir(parents=True)
+        _write(d, "amazon.json", {"item": {"title": "テスト"}})
+        _write(d, "third_party_sources.json", {"sources": [
+            {"url": "https://example.org/x", "host": "example.org"}]})
+        self._article("2026-08-01-B0PA000002", [
+            "https://ja.example.org/y",            # 候補と同じサイト → 足さない
+            "https://news.google.com/rss/articles/z",  # news として別に数える
+            "https://example.net/b",
+        ])
+        r = S.score_asin("B0PA000002", self.base)
+        self.assertEqual(r["third_party_sites"], 1)
+        self.assertEqual(r["prior_article_sites"], 1)
+        self.assertEqual(S.non_sales_material(r), 2)
+
+    def test_prior_sites_lift_zero_band(self):
+        # 素材ゼロ (zero) の判定も前の記事の出典を見る。見ないと書き直しが永久に待つ
+        d = self.base / "B0PA000003"
+        d.mkdir(parents=True)
+        _write(d, "amazon.json", {"item": {"title": "無名 テスト"}})
+        _write(d, "news.json", [])
+        _write(d, "youtube.json", [])
+        _write(d, "books.json", [])
+        self.assertEqual(S.score_asin("B0PA000003", self.base)["band"], "zero")
+        self._article("2026-08-01-B0PA000003", ["https://a.example/x", "https://b.example/y"])
+        S._article_index.cache_clear()
+        r = S.score_asin("B0PA000003", self.base)
+        self.assertNotEqual(r["band"], "zero")
+        self.assertFalse(S.should_defer(r))

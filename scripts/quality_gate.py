@@ -1166,11 +1166,20 @@ def _referenced_non_sales_sites(valid: list[dict], data: dict) -> list[str]:
     登録ドメインで 1 サイトになるので、自然に 1 件まで (2 件目は外部が要る)。
     """
     ref_ids = _referenced_source_ids(data)
+    return _non_sales_sites([
+        s for s in valid
+        if isinstance(s.get("id"), str) and s["id"].strip() in ref_ids
+    ])
+
+
+def _non_sales_sites(valid: list[dict]) -> list[str]:
+    """出典のうち非販売のもののサイト (参照の有無は見ない)。
+
+    書き直しの選定 (select_rewrite_targets) が「前の記事が非販売を何サイト持って
+    いたか」を見るのにも使う (navi-brain#92)。
+    """
     sites: list[str] = []
     for s in valid:
-        sid = s.get("id")
-        if not isinstance(sid, str) or sid.strip() not in ref_ids:
-            continue
         url = str(s["url"])
         host = source_sites.host_of(url)
         if (not host or _is_sales_source(s) or source_sites.is_retail(host)

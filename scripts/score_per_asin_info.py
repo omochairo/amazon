@@ -53,6 +53,7 @@ except ImportError:  # スクリプトを scripts/ 外から呼ぶ場合のフ�
 RAW_DIR = pathlib.Path("data/raw")
 PER_ASIN_DIR = RAW_DIR / "per_asin"
 FIRST_PARTY_SOURCES = pathlib.Path("data/analytics/first_party_sources.json")
+ARTICLES_DIR = pathlib.Path("data/articles")
 
 # #9199 案(b): omcha.jp (おもちゃいろ本家) の実使用記事は「運営者の一次情報」として
 # 非販売ソースに 1 件まで数える。第三者ではないので 2 件目は外部から要る。
@@ -292,6 +293,48 @@ def _first_party_index(path: str) -> dict:
     return {a: tuple(v) for a, v in out.items()}
 
 
+@functools.lru_cache(maxsize=4)
+def _article_index(articles_dir: str) -> dict:
+    """ASIN -> その ASIN の最新の記事 JSON のパス (slug 日付が最大のもの)。"""
+    out: dict[str, pathlib.Path] = {}
+    d = pathlib.Path(articles_dir)
+    if not d.is_dir():
+        return out
+    for p in sorted(d.glob("*.json")):  # slug は日付始まりなので昇順 = 古い順
+        m = re.match(r"^\d{4}-\d{2}-\d{2}-(B0[A-Z0-9]{8})\.json$", p.name)
+        if m:
+            out[m.group(1)] = p
+    return out
+
+
+def prior_article_urls(asin: str, articles_dir: pathlib.Path | None = None) -> tuple:
+    """この ASIN の既存記事が sources に載せている非販売の URL (navi-brain#92)。
+
+    書き直しのとき、前の記事が見つけた非販売の出典は Jules にとって材料になる
+    (build_jules_prompt が候補として渡す)。前の記事は「本文から参照していない」だけで
+    非販売を 2 サイト以上持っていることが多く、それなら書き直しで参照を付ければ足りる。
+    販売ページ・通販サイト・検索結果・自社サイト (omcha.jp は first_party_posts で
+    別に数える) は除く。記事の無い ASIN は空。
+    """
+    # 既定は呼び出し時に読む (テストが ARTICLES_DIR を差し替えられるように)
+    d = ARTICLES_DIR if articles_dir is None else articles_dir
+    path = _article_index(str(pathlib.Path(d).resolve())).get(asin)
+    data = _load(path) if path else None
+    srcs = data.get("sources") if isinstance(data, dict) else None
+    out = []
+    for src in srcs if isinstance(srcs, list) else []:
+        url = src.get("url") if isinstance(src, dict) else None
+        if not isinstance(url, str) or not url or is_search_result_url(url):
+            continue
+        host = source_sites.host_of(url)
+        if (not host or host_kind(host) != "third_party"
+                or source_sites.registered_domain(host) == "omcha.jp"):
+            continue
+        if url not in out:
+            out.append(url)
+    return tuple(out)
+
+
 def first_party_posts(asin: str, path: pathlib.Path = FIRST_PARTY_SOURCES) -> tuple:
     """この ASIN を主役にした omcha.jp の実使用記事 URL (#9199 案b)。"""
     # cwd 相対のまま cache のキーにすると、cwd を変えたときに別の索引を返す
@@ -358,7 +401,12 @@ def score_asin(asin: str, base: pathlib.Path = PER_ASIN_DIR) -> dict:
     cand = _candidate_hosts(asin, base)
     tp_hosts = len(cand["third_party"])
     # navi-brain#92: gate と同じ「サイト」単位 (登録ドメイン・SNS はまとめて 1)
-    tp_sites = len({source_sites.site_key(h) for h in cand["third_party"]})
+    tp_site_keys = {source_sites.site_key(h) for h in cand["third_party"]}
+    tp_sites = len(tp_site_keys)
+    # 既存記事の非販売の出典のうち、事前収集の候補に無いサイト (書き直しの材料)。
+    # google.com (Google ニュース・Books の転送 URL) は news の材料として別に数える
+    prior_keys = {source_sites.site_key(source_sites.host_of(u)) for u in prior_article_urls(asin)}
+    prior_extra = len(prior_keys - tp_site_keys - {"google.com"})
     pt_third = min(tp_hosts, _THIRD_PARTY_CAP) * _THIRD_PARTY_POINT
 
     evidence = pt_news + pt_yt + pt_bk
@@ -375,7 +423,7 @@ def score_asin(asin: str, base: pathlib.Path = PER_ASIN_DIR) -> dict:
     # あっても先に本流の収集を回すべきで、defer 対象ではない (enrich 待ち) のは同じ。
     if not evidence_fetched and evidence == 0:
         band = "unfetched"  # fetch 未実行 → enrich すべき。defer 対象ではない
-    elif evidence == 0 and tier == "D" and tp_sites < _THIRD_PARTY_MIN_HOSTS:
+    elif evidence == 0 and tier == "D" and tp_sites + prior_extra < _THIRD_PARTY_MIN_HOSTS:
         band = "zero"  # fetch 済みで真ゼロ かつ フォールバックも事前収集も弱い → defer
     elif evidence <= _THIN_EVIDENCE_CEILING:
         band = "thin"
@@ -395,6 +443,7 @@ def score_asin(asin: str, base: pathlib.Path = PER_ASIN_DIR) -> dict:
         "competitors": comp,
         "third_party_hosts": tp_hosts,
         "third_party_sites": tp_sites,
+        "prior_article_sites": prior_extra,
         "retail_hosts": len(cand["retail"]),
         "unrelated_hosts": len(cand["unrelated"]),
         "mall_pages": mall_pages(asin, base.parent),
@@ -423,11 +472,14 @@ def non_sales_material(result: dict) -> int:
 
     #9199 案(b): omcha.jp の実使用記事 (first_party_posts) を 1 件まで足す。
     プロンプトにも sources に 1 件まで採用してよいと渡している (build_jules_prompt)。
+
+    既存記事がある ASIN (書き直し) は、前の記事の非販売の出典のうち事前収集の候補に
+    無いサイト (prior_article_sites) も足す。build_jules_prompt が候補として渡す。
     """
     fp = min(result.get("first_party_posts", 0), _FIRST_PARTY_MAX_COUNTED)
     sites = result.get("third_party_sites", result.get("third_party_hosts", 0))
     news = min(result.get("news_sources", 0), 1)
-    return sites + news + fp
+    return sites + result.get("prior_article_sites", 0) + news + fp
 
 
 def awaiting_sources(result: dict) -> bool:

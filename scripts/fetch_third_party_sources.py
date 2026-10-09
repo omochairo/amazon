@@ -346,6 +346,12 @@ def _filter_sources_with_drops(
 # 頭打ちを置くのは、取れるようになった時に永久に拾い直せなくなるのを避けるため。
 _EMPTY_BACKOFF_CAP = 4
 
+# 商品名と無関係な検索結果を候補から外す判定 (#9254) が入った時刻 (UTC)。これより前に
+# 取った候補は無関係なページを含みうるので、2 サイトあっても 1 度は取り直す。
+_RELEVANCE_FILTER_FROM = "2026-10-09T06:46"
+# 非販売 2 サイトある候補の有効期限 (日)。通常の --max-age-days (90) の代わり
+_SUFFICIENT_MAX_AGE_DAYS = 365
+
 
 def _empty_streak(data) -> int:
     """保存済み payload から空振りの連続回数を読む。
@@ -366,13 +372,19 @@ def _empty_streak(data) -> int:
 
 
 def _site_count(sources: list) -> int:
-    """候補のサイト数 (navi-brain#92: 採点・gate と同じく登録ドメイン・SNS はまとめて 1)。"""
+    """非販売の第三者候補のサイト数 (navi-brain#92: 採点・gate と同じく登録ドメイン・SNS はまとめて 1)。
+
+    古い JSON に残っている通販サイト・検索結果ページは数えない (採点側と同じ)。
+    """
     sites = set()
     for src in sources:
         if not isinstance(src, dict):
             continue
-        host = src.get("host") or _sc.source_sites.host_of(src.get("url") or "")
-        if host:
+        url = src.get("url") or ""
+        if url and _sc.is_search_result_url(url):
+            continue
+        host = src.get("host") or _sc.source_sites.host_of(url)
+        if host and _sc.host_kind(host) == "third_party":
             sites.add(_sc.source_sites.site_key(host))
     return len(sites)
 
@@ -405,6 +417,15 @@ def _is_fresh(path: pathlib.Path, max_age_days: int,
                 age_limit,
                 empty_max_age_days * min(streak, _EMPTY_BACKOFF_CAP),
             )
+    # navi-brain#92: 既に非販売 2 サイトある ASIN は、ほぼ取り直さない (有効期限を
+    # _SUFFICIENT_MAX_AGE_DAYS に延ばす)。gate も生成前の判定も 2 サイトあれば足りるので、
+    # 取り直しても増える分は使われない。git 履歴で取り直しを見ると、2 サイト以上あった
+    # ものが増えた例は無く、減った例 (無関係なページを外す判定が後から入ったため) は
+    # あった。その判定 (#9254) より前に取ったものは、通常の有効期限で 1 度取り直す。
+    # 永久にしないのは、候補が実は使えず生成が落ち続ける ASIN に取り直しの機会を残すため。
+    sites = _site_count(data.get("sources") or [])
+    if ts >= _RELEVANCE_FILTER_FROM and sites >= _sc._THIRD_PARTY_MIN_HOSTS:
+        age_limit = max(age_limit, _SUFFICIENT_MAX_AGE_DAYS)
     now = _dt.datetime.now(_dt.timezone.utc)
     return (now - when).days < age_limit
 
