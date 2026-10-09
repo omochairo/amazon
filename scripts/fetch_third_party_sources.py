@@ -66,6 +66,7 @@ import pathlib
 import re
 import sys
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -108,6 +109,17 @@ _SEARCH_ENGINE_SUBSTR = (
     "google.com/search", "google.co.jp/search", "bing.com/search",
     "search.yahoo", "duckduckgo.com",
 )
+# 「お問い合わせ」ページ。商品名で検索して拾うのは無関係なサイトの問い合わせ窓口で
+# (#9199 実測: シナモロールのクエリで大学と防災 NPO の問い合わせページ)、
+# 商品について何も書いていない。
+_CONTACT_PATH_RE = re.compile(
+    r"/(?:contact|contact-?us|inquiry|inquiries|toiawase|otoiawase)(?:[/.?#_-]|$)")
+
+# Tavily の exclude_domains / country は使わない (#9199 実測 2026-10-09)。通販と
+# 無関係 host 33 件を exclude_domains に渡すと、同じクエリで raw が 20 件 → 0〜9 件に
+# 減った (3 ASIN 中 2 件が 0 件)。country=japan は 3 ASIN で候補 +1 / ±0 / -2 と
+# 改善しなかった。代わりに raw を 20 件取り、_is_relevant で絞る。
+
 # 自サイト (第三者ではない)。判定は self_domain に共通化した (#6593)。
 # 以前は URL 全体の部分一致だったので `notomcha.jp` のような **無関係の実在
 # ドメインまで落としていた** (`"omcha.jp" in "notomcha.jp"` は真)。
@@ -155,7 +167,64 @@ def _exclude_reason(url: str) -> Optional[str]:
         return "retail"
     if any(sub in low for sub in _SEARCH_ENGINE_SUBSTR):
         return "search_result"
+    if _CONTACT_PATH_RE.search(urllib.parse.urlparse(low).path):
+        return "unrelated"
     return None
+
+
+# 関連度の判定 (#9199)。ニッチな商品では Tavily が商品名と関係の無いページで
+# 結果を埋める (自治体の「水」のページ、別商品の通販ミラー等)。sources_v5 は非販売なら
+# 中身を問わず数えるので、残すとゲートは通っても出典の質が落ち、defer 判定も
+# 「材料あり」と誤る。タイトルか本文にクエリの語が 1 つも出てこない結果は外す。
+_QUERY_SPLIT = re.compile(r"[\s　\[\]【】（）()『』「」［］〔〕、,/|]+")
+_FOLD_RE = re.compile(r"[\s　・\-‐ー―〜~]+")
+# 2 文字以下の語は一般語に当たりやすい (「木製」「水」等) ので照合に使わない。
+_MIN_QUERY_TOKEN_LEN = 3
+_PARTIAL_MATCH_LEN = 6
+
+
+def _fold(text: str) -> str:
+    """照合用に正規化する: NFKC・小文字・ひらがな→カタカナ・空白/長音/中黒を除く。
+
+    表記揺れ (「すけるとん」と「スケルトン」、「わくわくミッション 宇宙探査セット」
+    と「わくわくミッション宇宙探査セット」) を同じ文字列にするため。
+    """
+    t = unicodedata.normalize("NFKC", text or "").lower()
+    t = "".join(chr(ord(c) + 0x60) if "ぁ" <= c <= "ゖ" else c for c in t)
+    return _FOLD_RE.sub("", t)
+
+
+def _query_tokens(query: str) -> list[str]:
+    out = []
+    for raw in _QUERY_SPLIT.split(unicodedata.normalize("NFKC", query or "")):
+        tok = _fold(raw)
+        if len(tok) >= _MIN_QUERY_TOKEN_LEN:
+            out.append(tok)
+    return out
+
+
+def _is_relevant(query: str, title: str, snippet: str) -> bool:
+    """タイトルか本文にクエリの語 (3 文字以上) が 1 つでも入っていれば True。
+
+    長い語は 6 文字の部分一致でもよい。英語表記とカタカナ表記の違い
+    (「Transformers」と「トランスフォーマー」) は拾えない。
+
+    照合できる語が無いクエリでは判定しない (True)。
+    """
+    tokens = _query_tokens(query)
+    if not tokens:
+        return True
+    hay = _fold(title) + "\n" + _fold(snippet)
+    for tok in tokens:
+        if tok in hay:
+            return True
+        # Amazon タイトルは語がつながって長い (「ファーストピックアップパズル」に対して
+        # 記事側は「ピックアップパズル」)。長い語は 6 文字の部分一致でも拾う。
+        # 収集済み 1 万件で、6 文字で救える分は 4 分の 3 が商品に関係するページだった。
+        n = _PARTIAL_MATCH_LEN
+        if len(tok) > n and any(tok[i:i + n] in hay for i in range(len(tok) - n + 1)):
+            return True
+    return False
 
 
 def _is_excluded(url: str) -> bool:
@@ -215,17 +284,23 @@ def tavily_search(query: str, api_key: str, num: int = 10) -> list[dict]:
     return items
 
 
-def _filter_sources(raw_items: list[dict], max_sources: int) -> list[dict]:
-    """検索 raw items から非販売 distinct host を抽出 (host あたり 1 件、上位 max_sources)。"""
-    return _filter_sources_with_drops(raw_items, max_sources)[0]
+def _filter_sources(
+    raw_items: list[dict], max_sources: int, query: Optional[str] = None,
+) -> list[dict]:
+    """検索 raw items から非販売 distinct host を抽出 (host あたり 1 件、上位 max_sources)。
+
+    query を渡すと、その語がタイトルにも本文にも出てこない結果を外す (#9199)。
+    """
+    return _filter_sources_with_drops(raw_items, max_sources, query)[0]
 
 
 def _filter_sources_with_drops(
-    raw_items: list[dict], max_sources: int,
+    raw_items: list[dict], max_sources: int, query: Optional[str] = None,
 ) -> tuple[list[dict], list[dict]]:
     """_filter_sources と同じ絞り込みをして、外した候補 ({host, reason}) も返す。
 
-    reason は _exclude_reason の値か、"duplicate_host" (同じ host の 2 件目以降)。
+    reason は _exclude_reason の値か、"off_topic" (クエリの語が出てこない)、
+    "duplicate_host" (同じ host の 2 件目以降)。
     """
     seen_hosts: set[str] = set()
     out: list[dict] = []
@@ -237,6 +312,10 @@ def _filter_sources_with_drops(
         reason = _exclude_reason(link)
         if reason:
             dropped.append({"host": _host(link), "reason": reason})
+            continue
+        if query is not None and not _is_relevant(
+                query, it.get("title") or "", it.get("snippet") or ""):
+            dropped.append({"host": _host(link), "reason": "off_topic"})
             continue
         h = _host(link)
         if not h or h in seen_hosts:
@@ -422,8 +501,9 @@ def fetch_for_asin(
     prev_streak = _empty_streak(_load(out_path))
     # credit はレスポンスを待たずに消える。例外で抜ける経路も含めて必ず数える。
     record_call(base)
-    raw = tavily_search(query, api_key, num=10)
-    sources, dropped = _filter_sources_with_drops(raw, max_sources)
+    # #9199: 関連度で外す分があるので raw を多めに取る (basic は件数によらず 1 credit)
+    raw = tavily_search(query, api_key, num=20)
+    sources, dropped = _filter_sources_with_drops(raw, max_sources, query)
     # 空振り (非販売 host が floor 未満) の連続回数。次回の再問い合わせを後ろへ倒す。
     streak = prev_streak + 1 if len(sources) < _sc._THIRD_PARTY_MIN_HOSTS else 0
     payload = {
