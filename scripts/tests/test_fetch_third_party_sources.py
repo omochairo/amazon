@@ -53,6 +53,22 @@ class HostFilterTest(unittest.TestCase):
         self.assertTrue(F._is_excluded("https://www.google.com/search?q=x"))
         self.assertTrue(F._is_excluded("https://navi.omcha.jp/posts/foo/"))
 
+    def test_unrelated_hosts_excluded_but_retail_sites_kept(self):
+        # #9239: 会社情報・求人・金融は商品と無関係なので取らない。通販サイトは
+        # sources の合計 5 件の足しになるので残す (非販売に数えないのは採点側)。
+        for u in (
+            "https://rocketreach.co/acme-profile",
+            "https://find-and-update.company-information.service.gov.uk/company/1",
+            "https://www.indeed.com/cmp/acme",
+            "https://hk.finance.yahoo.com/quote/1234.T",
+        ):
+            self.assertTrue(F._is_excluded(u), u)
+        for u in (
+            "https://www.yodobashi.com/product/100000001001234567/",
+            "https://www.monotaro.com/p/1234/",
+        ):
+            self.assertFalse(F._is_excluded(u), u)
+
     def test_editorial_kept(self):
         for u in (
             "https://review.kakaku.com/review/K0001/",

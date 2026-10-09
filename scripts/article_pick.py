@@ -30,6 +30,7 @@ defer を無効化) は first-party を数えずに判定し、first-party の�
 """
 from __future__ import annotations
 
+import datetime as _dt
 import json
 import os
 import random
@@ -244,8 +245,99 @@ def select_candidates(items, existing, ranking_pool, first_party_all,
     return [origin_for(a) for a in remaining]
 
 
+# #9239: マージされずに close された記事 PR の ASIN を、しばらく pick に戻さない。
+# close すると ASIN は候補に戻り、同じ素材のまま次の pick で再生成されていた
+# (B0FYCTJF5Z は #9098 → #9165 → #9225 と 3 日で 3 回、同じ sources_v5 で close)。
+# close 理由は問わない: マージされなかった PR を同じ入力で作り直しても同じ結果になる。
+FAILED_PR_COOLDOWN_DAYS = 14
+# 窓の中でこの回数以上 close された ASIN は、素材を取り直すまで戻さず人に回す。
+FAILED_PR_REPEAT_WINDOW_DAYS = 30
+FAILED_PR_REPEAT_LIMIT = 2
+
+
+def _parse_ts(value):
+    try:
+        ts = _dt.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return ts if ts.tzinfo else ts.replace(tzinfo=_dt.timezone.utc)
+
+
+def recently_failed(closed_prs, now, material_updated=None):
+    """マージされずに close された記事 PR から、pick に戻さない ASIN を返す (#9239)。
+
+    closed_prs: ``gh pr list --state closed --search is:unmerged --json title,closedAt``
+    の行。ASIN はタイトルから拾う (03 が open PR を除外するのと同じ)。
+    material_updated: ASIN -> 事前収集を最後に取り直した時刻 (無ければ None)。
+    最後の close より後に取り直していれば、入力が変わったので回数に関わらず戻す
+    (B0C6THPT89 は 2 回とも素材の収集前に close され、その後の収集で揃った)。
+
+    戻り値: (cooling, stuck)。cooling は最後の close から FAILED_PR_COOLDOWN_DAYS 日
+    待たせる ASIN、stuck は窓の中で FAILED_PR_REPEAT_LIMIT 回以上 close され、その後も
+    素材が変わっていない ASIN (待っても同じ結果になる見込みが高いので、人が判断する)。
+    """
+    window = now - _dt.timedelta(days=FAILED_PR_REPEAT_WINDOW_DAYS)
+    closes: dict = {}
+    for pr in closed_prs or []:
+        if not isinstance(pr, dict):
+            continue
+        ts = _parse_ts(pr.get("closedAt"))
+        if ts is None or ts < window:
+            continue
+        for a in set(re.findall(r"B0[A-Z0-9]{8}", str(pr.get("title") or "").upper())):
+            closes.setdefault(a, []).append(ts)
+    cooling, stuck = set(), set()
+    for a, times in closes.items():
+        last = max(times)
+        updated = material_updated(a) if material_updated else None
+        if updated is not None and updated > last:
+            continue  # close の後に素材を取り直した: 入力が変わったので試し直す
+        if len(times) >= FAILED_PR_REPEAT_LIMIT:
+            stuck.add(a)
+        elif now - last < _dt.timedelta(days=FAILED_PR_COOLDOWN_DAYS):
+            cooling.add(a)
+    return cooling, stuck
+
+
+def _third_party_fetched_at(asin):
+    try:
+        with open(f"data/raw/per_asin/{asin}/third_party_sources.json", encoding="utf-8") as f:
+            return _parse_ts(json.load(f).get("fetched_at"))
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def exclude_recently_failed(existing, path=None, now=None) -> set:
+    """close 直後の ASIN を除外に足した集合を返す (#9239)。
+
+    path は 03 が ``gh pr list`` で書く JSON (既定は環境変数 CLOSED_ARTICLE_PRS)。
+    指定が無い・読めない入口 (GitLab 側など) は従来どおり除外しない (fail-open)。
+    """
+    path = path if path is not None else os.environ.get("CLOSED_ARTICLE_PRS", "")
+    if not path:
+        return set(existing)
+    try:
+        with open(path, encoding="utf-8") as f:
+            rows = json.load(f)
+    except (OSError, ValueError) as e:
+        _warn(f"closed article PR cooldown skipped (#9239): {e}")
+        return set(existing)
+    cooling, stuck = recently_failed(rows, now or _dt.datetime.now(_dt.timezone.utc),
+                                     _third_party_fetched_at)
+    cooling -= set(existing)
+    stuck -= set(existing)
+    if cooling:
+        print(f"cooldown after unmerged close (#9239): {len(cooling)} {sorted(cooling)[:10]}")
+    if stuck:
+        _warn(f"repeatedly closed without merge (#9239): {len(stuck)} {sorted(stuck)[:10]} "
+              f"— {FAILED_PR_REPEAT_WINDOW_DAYS} 日で {FAILED_PR_REPEAT_LIMIT} 回以上 close。"
+              f"pick から外している。素材を足すか blocklist に入れるかは人が判断する")
+    return set(existing) | cooling | stuck
+
+
 def pick_from_repo(existing, seed) -> list:
     """作業ツリーのデータ (cwd = リポジトリ直下) を読んで ``select_candidates`` を呼ぶ。"""
+    existing = exclude_recently_failed(existing)
     with open("data/raw/amazon.json", encoding="utf-8") as f:
         items = json.load(f).get("items", [])
     try:

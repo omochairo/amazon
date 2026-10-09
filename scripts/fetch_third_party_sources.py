@@ -142,6 +142,10 @@ def _is_excluded(url: str) -> bool:
         return True
     if _self_domain.is_self_domain(low):  # #6593: 自社記事を第三者ソースにしない
         return True
+    # #9239: 会社情報・求人・金融など商品と無関係な host は候補枠を食うだけなので取らない。
+    # 通販サイトは残す (sources の合計 5 件の足しになる)。判定の SSOT は採点側。
+    if _sc.host_kind(_host(low)) == "unrelated":
+        return True
     for grp in (_RETAIL_HOST_SUBSTR, _SEARCH_ENGINE_SUBSTR):
         for sub in grp:
             if sub in low:

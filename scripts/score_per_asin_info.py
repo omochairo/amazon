@@ -46,7 +46,8 @@ except ImportError:  # スクリプトを scripts/ 外から呼ぶ場合のフ�
     import brand_normalizer  # type: ignore
     from filter_raw_per_asin import exclude_title_only  # type: ignore
 
-PER_ASIN_DIR = pathlib.Path("data/raw/per_asin")
+RAW_DIR = pathlib.Path("data/raw")
+PER_ASIN_DIR = RAW_DIR / "per_asin"
 FIRST_PARTY_SOURCES = pathlib.Path("data/analytics/first_party_sources.json")
 
 # #9199 案(b): omcha.jp (おもちゃいろ本家) の実使用記事は「運営者の一次情報」として
@@ -95,6 +96,47 @@ _THIRD_PARTY_MIN_HOSTS = 2
 # しまう。third_party に許すのは「zero (= 材料皆無) の否定」までとし、
 # 「材料が潤沢 (ok)」の主張はさせない。
 _THIN_EVIDENCE_CEILING = 16  # evidence がこの値以下なら "薄い" とみなす
+
+# #9239: sources_v5 は「合計 5 件以上、かつ非販売 2 件以上」。非販売 2 件だけを
+# 待っても、合計 5 件に届く材料が無ければ Jules は 3 件で止まり、PR は確実に落ちる
+# (実測 2026-10-07〜09: close 8 本の失敗は全件「合計 5 件未満」)。
+_SOURCES_MIN_TOTAL = 5
+
+# #9239: 事前収集 (Tavily) の候補 host のうち、非販売の第三者ソースに数えないもの。
+# host の完全一致か、その subdomain に当てる (部分一致にすると無関係の実在
+# ドメインまで落とす。#6593 の notomcha.jp と同じ罠)。
+#
+# 通販サイト (モール以外): 商品ページは「その店が売っている」記載で、第三者の評価では
+# ない。quality_gate._SALES_PAGE_HOSTS はモール 3 つしか持たないので gate は
+# 非販売として通すが、ここで非販売に数えると「非販売 2 件揃った」と誤判定して
+# 生成に回る (#9193 B0CGLGLJRM: 候補 7 host が全部通販)。合計 5 件の足しには数える。
+_RETAIL_SITE_HOSTS = frozenset({
+    # モール (quality_gate._SALES_PAGE_HOSTS)。fetch は取らないが、古い JSON や手で
+    # 足された行に残っていても第三者には数えない
+    "amazon.co.jp", "amazon.com", "rakuten.co.jp", "shopping.yahoo.co.jp",
+    "mercari.com", "qoo10.jp", "wowma.jp",
+    "yodobashi.com", "biccamera.com", "yamada-denkiweb.com", "askul.co.jp",
+    "lohaco.yahoo.co.jp", "monotaro.com", "kaunet.com", "dcm-ekurashi.com",
+    "joshinweb.jp", "edion.com", "kojima.net", "nojima.co.jp", "ksdenki.com",
+    "sofmap.com", "toysrus.co.jp", "aeonretail.com", "irisplaza.co.jp",
+    "cainz.com", "hands.net", "amiami.jp", "happinetonline.com", "giftmall.co.jp",
+    "superdelivery.com", "as-1.co.jp", "furusato-tax.jp", "pmall.gpoint.co.jp",
+    "paypayfleamarket.yahoo.co.jp", "auctions.yahoo.co.jp", "creema.jp", "minne.com",
+    "ebay.com", "walmart.com", "target.com", "etsy.com", "aliexpress.com",
+    "temu.com", "shein.com",
+})
+# 商品と無関係: メーカー名やブランド名で検索したときに拾う会社情報・求人・金融・
+# 地図・アプリストア等。商品について何も書いていないので Jules は採用しない
+# (#9211 B0DKFDMJZS: 英国法人登記と rocketreach)。合計にも数えない。
+_UNRELATED_HOSTS = frozenset({
+    "company-information.service.gov.uk", "find-and-update.company-information.service.gov.uk",
+    "rocketreach.co", "cbinsights.com", "tracxn.com", "crunchbase.com",
+    "zoominfo.com", "dnb.com", "opencorporates.com", "bizdb.co.uk",
+    "indeed.com", "linkedin.com", "glassdoor.com", "talent-book.jp",
+    "yelp.com", "mapquest.com", "jalan.net", "tabelog.com",
+    "tradingkey.com", "finance.yahoo.com", "coingecko.com", "coinmarketcap.com",
+    "weblio.jp", "play.google.com", "apps.apple.com",
+})
 
 
 def _load(path: pathlib.Path) -> dict | list | None:
@@ -164,17 +206,37 @@ def is_search_result_url(url: str) -> bool:
     return bool(_SEARCH_QUERY_PARAMS & set(params))
 
 
-def _third_party_hosts(asin: str, base: pathlib.Path) -> int:
-    """third_party_sources.json の「検索結果ページでない」distinct host 数を返す。
+def _host_in(host: str, hosts: frozenset) -> bool:
+    """host が集合のいずれかと一致するか、その subdomain か。"""
+    return any(host == h or host.endswith("." + h) for h in hosts)
+
+
+def host_kind(host: str) -> str:
+    """事前収集の候補 host の種別 (#9239): "third_party" / "retail" / "unrelated"。
+
+    fetch_third_party_sources も同じ判定を使う (SSOT はこちら)。
+    """
+    host = (host or "").strip().lower()
+    if host.startswith("www."):
+        host = host[4:]
+    if _host_in(host, _UNRELATED_HOSTS):
+        return "unrelated"
+    if _host_in(host, _RETAIL_SITE_HOSTS):
+        return "retail"
+    return "third_party"
+
+
+def _candidate_hosts(asin: str, base: pathlib.Path) -> dict[str, set[str]]:
+    """third_party_sources.json の「検索結果ページでない」distinct host を種別ごとに返す。
 
     fetch 側も host 単位で dedupe しているが、採点側でも数え直す (古い JSON や
     手で足された行を信用しない)。host フィールドが無ければ URL から補う。
     """
+    out: dict[str, set[str]] = {"third_party": set(), "retail": set(), "unrelated": set()}
     data = _load(base / asin / "third_party_sources.json")
     srcs = data.get("sources") if isinstance(data, dict) else None
     if not isinstance(srcs, list):
-        return 0
-    hosts: set[str] = set()
+        return out
     for src in srcs:
         if not isinstance(src, dict):
             continue
@@ -187,8 +249,53 @@ def _third_party_hosts(asin: str, base: pathlib.Path) -> int:
         if host.startswith("www."):
             host = host[4:]
         if host:
-            hosts.add(host)
-    return len(hosts)
+            out[host_kind(host)].add(host)
+    return out
+
+
+def _third_party_hosts(asin: str, base: pathlib.Path) -> int:
+    """非販売の第三者として数えられる distinct host 数 (通販・無関係を除く。#9239)。"""
+    return len(_candidate_hosts(asin, base)["third_party"])
+
+
+# 前後が英数字でない 10 桁だけ (アフィリエイトのハッシュ等の途中に当てない)
+_ASIN_IN_URL = re.compile(r"(?<![a-z0-9])b0[a-z0-9]{8}(?![a-z0-9])")
+
+
+def other_asin_in_url(url: str, asin: str) -> bool:
+    """照合済みとされた販売ページの URL に、別の ASIN が埋まっているか (#9239)。
+
+    楽天・Yahoo の出品 URL には Amazon の ASIN を埋めたもの (s-b0xxxxxxxx-...) があり、
+    それが対象と違えば照合の誤り (実測: B0HCTDR9ZN の Yahoo 照合先が s-b0bxslrtpj)。
+    アフィリエイト URL は中の商品 URL が % エンコードされているので戻してから見る。
+    """
+    low = urllib.parse.unquote(url or "").lower()
+    return any(a != asin.lower() for a in _ASIN_IN_URL.findall(low))
+
+
+@functools.lru_cache(maxsize=4)
+def _matched_asins(path: str) -> frozenset:
+    """rakuten_matched / yahoo_matched で商品ページが特定できている ASIN (1 プロセス 1 回)。"""
+    data = _load(pathlib.Path(path))
+    rows = data.get("items") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        return frozenset()
+    return frozenset(r["matched_asin"] for r in rows
+                     if isinstance(r, dict) and r.get("matched_asin") and r.get("url")
+                     and not other_asin_in_url(r["url"], r["matched_asin"]))
+
+
+def mall_pages(asin: str, raw_dir: pathlib.Path = RAW_DIR) -> int:
+    """sources に入れられるモールの商品ページ数 (#9239): Amazon 1 + 楽天・Yahoo の照合済み。
+
+    Amazon の商品ページ (dp) は ASIN から必ず作れる。楽天・Yahoo は照合済みの
+    ときだけ。レビューページは数えない (中身を Jules が読むかは分からない)。
+    """
+    n = 1
+    for name in ("rakuten_matched.json", "yahoo_matched.json"):
+        if asin in _matched_asins(str((pathlib.Path(raw_dir) / name).resolve())):
+            n += 1
+    return n
 
 
 @functools.lru_cache(maxsize=4)
@@ -276,7 +383,8 @@ def score_asin(asin: str, base: pathlib.Path = PER_ASIN_DIR) -> dict:
     pt_bk = min(bk, 2) * 5
     pt_comp = min(comp, 5) * 2
     pt_tier = _TIER_FALLBACK.get(tier, 4)
-    tp_hosts = _third_party_hosts(asin, base)
+    cand = _candidate_hosts(asin, base)
+    tp_hosts = len(cand["third_party"])
     pt_third = min(tp_hosts, _THIRD_PARTY_CAP) * _THIRD_PARTY_POINT
 
     evidence = pt_news + pt_yt + pt_bk
@@ -312,6 +420,9 @@ def score_asin(asin: str, base: pathlib.Path = PER_ASIN_DIR) -> dict:
         "books": bk,
         "competitors": comp,
         "third_party_hosts": tp_hosts,
+        "retail_hosts": len(cand["retail"]),
+        "unrelated_hosts": len(cand["unrelated"]),
+        "mall_pages": mall_pages(asin, base.parent),
         "third_party_fetched": (d / "third_party_sources.json").exists(),
         "first_party_posts": len(first_party_posts(asin)),
         "exists": d.is_dir(),
@@ -340,11 +451,28 @@ def awaiting_sources(result: dict) -> bool:
     (実測: 書き直し待ち 12 件中 8 件が第三者ソース 0 件・defer されず)。
     落とすのではなく、34-third-party-sources が集めるまで待たせる。
     ok は evidence (news/youtube/books) が十分あるので待たせない。
+
+    #9239: 非販売 2 件に加えて、合計 5 件に届く材料があるかも見る。
     """
     band = result.get("band")
     if band not in ("thin", "unfetched"):
         return False
-    return non_sales_material(result) < _THIRD_PARTY_MIN_HOSTS
+    if non_sales_material(result) < _THIRD_PARTY_MIN_HOSTS:
+        return True
+    reachable = reachable_sources(result)
+    return reachable is not None and reachable < _SOURCES_MIN_TOTAL
+
+
+def reachable_sources(result: dict) -> int | None:
+    """sources に入れられる材料の合計 (#9239)。測れていない結果 (mall_pages 無し) は None。
+
+    非販売の材料 + 通販サイトの候補 + モールの商品ページ (Amazon + 照合済みの楽天・Yahoo)。
+    #9165 / #9211 / #9225 は非販売 2〜3 件の材料で生成に回り、合計 2〜3 件で落ちた。
+    """
+    if "mall_pages" not in result:
+        return None
+    return (non_sales_material(result) + result.get("retail_hosts", 0)
+            + result.get("mall_pages", 0))
 
 
 def should_defer(result: dict) -> bool:
