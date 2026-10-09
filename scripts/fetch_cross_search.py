@@ -33,6 +33,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _api_health  # noqa: E402
 import jan_utils  # noqa: E402
+import market_prices  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("cross_search")
@@ -362,6 +363,12 @@ def _filter_text_candidates(items, amazon_title, source, asin):
     kept = []
     for it in items or []:
         ctitle = it.get("title", "") or ""
+        if asin and market_prices.other_asin_in_url(it.get("url", "") or "", asin):
+            # 出品 URL に別の ASIN が埋まっている = 別商品の出品 (#9244)。JAN 直引きでも
+            # 店舗が JAN を流用していることがあるので、全段で外す
+            _DROP_STATS[f"{source}:other_asin_url"] += 1
+            logger.info(f"  ✕ drop [other_asin] {source} {asin}: {ctitle[:50]}")
+            continue
         if _is_used_listing(ctitle):
             _DROP_STATS[f"{source}:used_listing"] += 1
             logger.info(f"  ✕ drop [used] {source} {asin}: {ctitle[:50]}")

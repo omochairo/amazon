@@ -40,10 +40,12 @@ import urllib.parse
 
 try:
     import brand_normalizer
+    import market_prices
     from filter_raw_per_asin import exclude_title_only
 except ImportError:  # スクリプトを scripts/ 外から呼ぶ場合のフォールバック
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
     import brand_normalizer  # type: ignore
+    import market_prices  # type: ignore
     from filter_raw_per_asin import exclude_title_only  # type: ignore
 
 RAW_DIR = pathlib.Path("data/raw")
@@ -258,19 +260,8 @@ def _third_party_hosts(asin: str, base: pathlib.Path) -> int:
     return len(_candidate_hosts(asin, base)["third_party"])
 
 
-# 前後が英数字でない 10 桁だけ (アフィリエイトのハッシュ等の途中に当てない)
-_ASIN_IN_URL = re.compile(r"(?<![a-z0-9])b0[a-z0-9]{8}(?![a-z0-9])")
-
-
-def other_asin_in_url(url: str, asin: str) -> bool:
-    """照合済みとされた販売ページの URL に、別の ASIN が埋まっているか (#9239)。
-
-    楽天・Yahoo の出品 URL には Amazon の ASIN を埋めたもの (s-b0xxxxxxxx-...) があり、
-    それが対象と違えば照合の誤り (実測: B0HCTDR9ZN の Yahoo 照合先が s-b0bxslrtpj)。
-    アフィリエイト URL は中の商品 URL が % エンコードされているので戻してから見る。
-    """
-    low = urllib.parse.unquote(url or "").lower()
-    return any(a != asin.lower() for a in _ASIN_IN_URL.findall(low))
+# 判定は照合 (fetch_cross_search) と価格表示 (build_post) でも使うので market_prices に置く (#9244)
+other_asin_in_url = market_prices.other_asin_in_url
 
 
 @functools.lru_cache(maxsize=4)

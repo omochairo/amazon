@@ -300,5 +300,44 @@ class ModelNumberSeparatorTest(unittest.TestCase):
             market_prices._compact_for_model_match("CN6381254A"),
         )
 
+
+class OtherAsinPriceLinkTest(unittest.TestCase):
+    """別の ASIN の出品ページへの価格リンクは表示しない (#9244)。"""
+
+    ASIN = "B0HCTDR9ZN"
+    BAD = "https://store.shopping.yahoo.co.jp/shop/s-b0bxslrtpj-20260804.html"
+
+    def _data(self, yahoo):
+        return {"product": {"asin": self.ASIN, "name": "木製 積み木", "prices": {
+            "amazon": {"price": 2000, "url": "https://www.amazon.co.jp/dp/B0HCTDR9ZN/"},
+            "yahoo": yahoo,
+        }}}
+
+    def test_matched_other_asin_falls_back_to_search(self):
+        data = self._data({})
+        matched = {"matched_asin": self.ASIN, "title": "木製 積み木", "price": 2000,
+                   "search_keyword": "木製 積み木", "url": self.BAD}
+        build_post._attach_market_prices(data, {}, {self.ASIN: matched})
+        y = data["product"]["prices"]["yahoo"]
+        self.assertTrue(y["is_search"])
+        self.assertNotIn("b0bxslrtpj", y["url"])
+
+    def test_article_link_with_other_asin_is_dropped(self):
+        # Jules が誤照合の URL を記事に写していた場合も、未検証として残さない
+        data = self._data({"price": 2000, "url": self.BAD})
+        build_post._attach_market_prices(data, {}, {})
+        y = data["product"]["prices"]["yahoo"]
+        self.assertTrue(y["is_search"])
+        self.assertNotIn("b0bxslrtpj", y["url"])
+
+    def test_article_link_same_asin_kept_unverified(self):
+        url = "https://store.shopping.yahoo.co.jp/shop/s-b0hctdr9zn-1.html"
+        data = self._data({"price": 2000, "url": url})
+        build_post._attach_market_prices(data, {}, {})
+        y = data["product"]["prices"]["yahoo"]
+        self.assertEqual(y["url"], url)
+        self.assertFalse(y["verified"])
+
+
 if __name__ == "__main__":
     unittest.main()

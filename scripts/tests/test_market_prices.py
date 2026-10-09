@@ -100,6 +100,31 @@ class ResolvePriceTest(unittest.TestCase):
         self.assertEqual(price, 1800)
 
 
+class OtherAsinMatchTest(unittest.TestCase):
+    """照合先 URL に別の ASIN が埋まった行は quality gate を通さない (#9244)。"""
+
+    def _matched(self, url):
+        return {"matched_asin": "B0HCTDR9ZN", "title": "木製 積み木", "price": 2000,
+                "search_keyword": "木製 積み木", "url": url}
+
+    def test_other_asin_url_fails_gate(self):
+        m = self._matched("https://store.shopping.yahoo.co.jp/shop/s-b0bxslrtpj-20260804.html")
+        self.assertFalse(market_prices.matched_passes_quality(m, 2000))
+        # 記事側の値が無ければ最安候補からも外れる
+        self.assertEqual(market_prices.resolve_price(0, m, 2000), 0)
+
+    def test_affiliate_encoded_other_asin_fails_gate(self):
+        inner = "https://store.shopping.yahoo.co.jp/shop/s-b0bxslrtpj-1.html"
+        url = "https://ck.jp.ap.valuecommerce.com/servlet/referral?vc_url=" + \
+            inner.replace(":", "%3A").replace("/", "%2F")
+        self.assertFalse(market_prices.matched_passes_quality(self._matched(url), 2000))
+
+    def test_same_asin_or_no_asin_url_passes(self):
+        for url in ("https://store.shopping.yahoo.co.jp/shop/s-b0hctdr9zn-1.html",
+                    "https://item.rakuten.co.jp/shop/123/"):
+            self.assertTrue(market_prices.matched_passes_quality(self._matched(url), 2000), url)
+
+
 # ---------------------------------------------------------------------------
 # load_matched_index
 # ---------------------------------------------------------------------------
