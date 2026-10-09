@@ -620,6 +620,12 @@ def _parse_iso8601(value: str | None) -> datetime | None:
     return dt
 
 
+# /deals/ の掲載数 (amazon-navi-brain#94)。20 件だと予算・年齢の絞り込みを 2 つ重ねた
+# ときに 1〜5 件まで減っていた。2026-10-10 の実測で候補 (割引率 20% 以上) は 498 件あり、
+# 60 件目でも割引率 42%。ページは 20 件ずつ「さらに表示」で出す。
+DEALS_TOP_N = 60
+
+
 def build_deals(
     records: Iterable[ArticleRecord],
     *,
@@ -888,6 +894,7 @@ def run(
     out_hugo: Path,
     out_manifest: Path,
     top_n: int = 20,
+    deals_top_n: int | None = None,
     min_ivs: float = 4.0,
     price_min: int = 500,
     price_max: int = 5000,
@@ -897,7 +904,14 @@ def run(
     now: datetime | None = None,
     raw_root: Path | None = None,
 ) -> dict[str, Any]:
-    """Run the full pipeline. Returns the manifest dict for testability."""
+    """Run the full pipeline. Returns the manifest dict for testability.
+
+    ``deals_top_n`` は /deals/ の掲載数。None なら ``top_n`` と同じ (従来の挙動)。
+    /deals/ は予算・年齢の絞り込みを持つので、/cospa/ の価格帯ごとの件数
+    (``top_n``) より多く載せる (amazon-navi-brain#94)。
+    """
+    if deals_top_n is None:
+        deals_top_n = top_n
     records = load_articles(articles_dir)
     attach_amazon_meta(records, per_asin_dir, raw_root=raw_root)
     logger.info("amazon image overlay: %d replaced", overlay_amazon_images(records, per_asin_dir))
@@ -913,7 +927,7 @@ def run(
         min_savings=min_savings,
         stale_days=stale_days,
         stale_min_cards=stale_min_cards,
-        top_n=top_n,
+        top_n=deals_top_n,
         now=now,
     )
     if deals_stale_window != stale_days:
@@ -939,7 +953,7 @@ def run(
         "stale_days": stale_days,
         "stale_min_cards": stale_min_cards,
         "stale_window_used": deals_stale_window,
-        "top_n": top_n,
+        "top_n": deals_top_n,
     }
 
     cospa_payload = serialize_cospa_bands(
@@ -988,6 +1002,13 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
     )
     parser.add_argument("--top-n", type=int, default=20)
+    parser.add_argument(
+        "--deals-top-n",
+        type=int,
+        default=DEALS_TOP_N,
+        help="/deals/ の掲載数。/deals/ は予算・年齢で絞り込めるので --top-n "
+             "(/cospa/ の価格帯ごとの件数) より多く載せる (amazon-navi-brain#94)。",
+    )
     parser.add_argument("--min-ivs", type=float, default=4.0)
     parser.add_argument("--price-min", type=int, default=500)
     parser.add_argument("--price-max", type=int, default=5000)
@@ -1030,6 +1051,7 @@ def main(argv: list[str] | None = None) -> int:
         out_hugo=args.out_hugo,
         out_manifest=args.out_manifest,
         top_n=args.top_n,
+        deals_top_n=args.deals_top_n,
         min_ivs=args.min_ivs,
         price_min=args.price_min,
         price_max=args.price_max,

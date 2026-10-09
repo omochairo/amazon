@@ -22,6 +22,7 @@ import pathlib
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from datetime import datetime, timedelta, timezone
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -902,6 +903,53 @@ class RunEndToEndTest(unittest.TestCase):
             self.assertEqual(manifest["cospa"]["bands"]["1000-2000"], 1)
             self.assertEqual(manifest["cospa"]["bands"]["2000-3000"], 1)
             self.assertEqual(manifest["cospa"]["bands"]["3000-5000"], 1)
+
+    def test_deals_top_n_is_separate_from_cospa_top_n(self):
+        """amazon-navi-brain#94: /deals/ の掲載数は /cospa/ の価格帯ごとの件数 (--top-n)
+        と別に決める。--top-n 20 のまま /deals/ だけ増やせることを固定する。"""
+        with tempfile.TemporaryDirectory() as td:
+            d = pathlib.Path(td)
+            arts = d / "articles"
+            arts.mkdir()
+            per = d / "per_asin"
+            now = datetime(2026, 5, 25, tzinfo=timezone.utc)
+            # 同じ価格帯 (1000-2000) に割引のある 4 件
+            for i in range(4):
+                asin = f"B0DDD{i}"
+                _write_article(arts, _make_article(
+                    asin, ivs_score=4.5, ivs_100=90, best_price=1500,
+                ))
+                _write_per_asin(
+                    per, asin,
+                    savings=30 + i, fetched_at=(now - timedelta(days=1)).isoformat(),
+                )
+
+            manifest = bfl.run(
+                articles_dir=arts, per_asin_dir=per,
+                out_hugo=d / "out", out_manifest=d / "m.json",
+                now=now, stale_min_cards=1, top_n=2, deals_top_n=3,
+            )
+            self.assertEqual(manifest["cospa"]["bands"]["1000-2000"], 2)
+            self.assertEqual(manifest["deals"]["count"], 3)
+            self.assertEqual(manifest["deals"]["filter"]["top_n"], 3)
+
+            # 省略時は従来どおり top_n と同じ
+            manifest = bfl.run(
+                articles_dir=arts, per_asin_dir=per,
+                out_hugo=d / "out", out_manifest=d / "m.json",
+                now=now, stale_min_cards=1, top_n=2,
+            )
+            self.assertEqual(manifest["deals"]["count"], 2)
+
+    def test_cli_default_deals_top_n(self):
+        """CLI (配信ビルドは --top-n 20 だけ渡す) では /deals/ が DEALS_TOP_N 件になる。"""
+        with mock.patch.object(bfl, "run", return_value={
+            "deals": {"count": 0, "stale_window_used": 3}, "cospa": {"bands": {}}, "articles_loaded": 0,
+        }) as run:
+            bfl.main(["--top-n", "20"])
+        self.assertEqual(run.call_args.kwargs["top_n"], 20)
+        self.assertEqual(run.call_args.kwargs["deals_top_n"], bfl.DEALS_TOP_N)
+        self.assertEqual(bfl.DEALS_TOP_N, 60)
 
 
 class IvsAxesPropagationTest(unittest.TestCase):
