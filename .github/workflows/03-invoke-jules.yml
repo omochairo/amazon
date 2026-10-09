@@ -296,7 +296,7 @@ jobs:
             - 確認できない仕様・効果・受賞歴・口コミを創作して字数を埋めること (水増し) を**禁止**します。検索で裏取りできない記述は書かないでください。
             - 出典の弱い一般論で分量を稼ぐより、確認できた事実だけで簡潔にまとめる方を優先してください (本文 minLength は安全網であって目標値ではありません)。
             - sources には実在し検証可能な URL のみ記載。検索エンジンの結果ページ URL は出典にしないでください。
-            - 対象商品そのものの販売ページ (Amazon / 楽天 / Yahoo) を sources に入れるのは水増しではありません。合計 5 件の残りはこれで埋めてください (下の【sources の組み立て】)。"
+            - sources は件数を埋めるものではありません。本文の claims / review_signals から参照した出典だけを載せ、非販売の出典を別々のサイトで 2 件以上確保してください (下の【sources の組み立て】)。価格・仕様の主張には対象商品の販売ページ (Amazon / 楽天 / Yahoo) を出典にしてよい。"
             fi
             # #2953 B案 (#1329 記事版): GSC 実流入クエリを prompt に注入 (読者が実際に
             # 検索した語を title/meta_description/faq の意図選定シグナルとして使わせる)。
@@ -323,7 +323,7 @@ jobs:
             # #9199 案(b): omcha.jp の実使用記事を出典に 1 件まで使ってよい注記 (first-party のみ)
             FIRST_PARTY_NOTE=$(python3 scripts/build_jules_prompt.py --asin "$TARGET_ASIN" --print-note first_party 2>/dev/null || echo "")
 
-            # #9239: sources_v5 (合計 5 件・非販売 2 件) の組み立て方と、使ってよい URL の一覧
+            # #9239 / navi-brain#92: sources_v5 (参照された非販売の出典が別々のサイトで 2 件以上) の組み立て方と、使ってよい URL の一覧
             SOURCES_NOTE=$(python3 scripts/build_jules_prompt.py --asin "$TARGET_ASIN" --print-note sources 2>/dev/null || echo "")
             # 2026-05-13: 12行のハードコードプロンプトを廃止し、jules/PROMPT_TEMPLATE.md
             # を読み込む形に変更（記事品質向上のため出典・競合比較・cross-check ルールを
@@ -379,8 +379,8 @@ jobs:
               事前収集した非販売の第三者候補 URL = レビュー/解説/メディア) は、sources 候補として優先的に
               内容を確認すること。ただし候補に過ぎないので、実際に内容を読んで記述の裏取りに使えた URL のみを
               article の sources に採用する (検索結果ページは出典に含めない)。
-              対象商品の販売ページ (Amazon / 楽天 / Yahoo) は非販売 2 件の代わりにはならないが、
-              合計 5 件には数えてよい (上の【sources の組み立て】。#9239)
+              対象商品の販売ページ (Amazon / 楽天 / Yahoo) は価格・仕様の出典にしてよいが、
+              非販売の 2 サイトの代わりにはならない (上の【sources の組み立て】。navi-brain#92)
 
             === 以下、jules/PROMPT_TEMPLATE.md の内容 ==="
             PROMPT="$INTRO

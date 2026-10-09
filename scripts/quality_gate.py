@@ -85,6 +85,10 @@ try:
     import product_image
 except ModuleNotFoundError:  # package 形式
     from scripts import product_image  # type: ignore[no-redef]
+try:
+    import source_sites
+except ModuleNotFoundError:  # package 形式
+    from scripts import source_sites  # type: ignore[no-redef]
 
 
 # 幼児口調・子ども向け演出は禁止（女性誌調をキープするため）。
@@ -1113,68 +1117,143 @@ def check_source_uniqueness(data: dict) -> CheckResult:
     return CheckResult("source_uniqueness", True, 1.0, "OK")
 
 
-def check_sources_v5(data: dict) -> CheckResult:
-    """v5 §6.5.1 件数規律: sources は最低 5 件、うち非販売 (第三者) が 2 件以上。
+# navi-brain#92 案 C: sources_v5 を「件数」から「本文で参照された裏付け」に切り替える施行日。
+#
+# 旧条件 (合計 5 件以上・非販売 2 件以上) は大半の記事がちょうど 5 件で、件数合わせに
+# 足した出典 (本文のどこからも参照されない・SNS・通販サイト・同じ運営者の別 host) で
+# 埋まっていた。新条件では、本文から参照された非販売の出典を「サイト」で数える。
+#
+# 施行日より前の slug は **旧条件と新条件のどちらかを満たせば合格** にする。
+# - 既存記事を落とさない: 新条件では少なくない本数が落ちる。ゲートは PR の変更ファイルにしか
+#   当たらないが、一括修正 PR で既存記事に触れたときに無関係な修正が止まる
+#   (_enforced_from と同じ理由)。落ちる記事は書き直しキュー側で少しずつ回す
+# - 新テンプレートで書いた記事を落とさない: テンプレートは「最低 5 件」をやめるので、
+#   施行日前の slug でも 5 件未満で出てくる。旧条件だけで見ると落ちる
+SOURCES_REF_ENFORCE_FROM = "2026-10-12"
 
-    セッション 19 で「certs=[] にすれば cert 系 check が全 skip → sources を
-    緩めても通過する」盲点が判明 (例: B0GFVV4YG9 は販売 5 件のみ / B0C8HM1F94
-    は sources=3)。プロンプトには明記されているが gate 未強制だったため追加。
+# 本文で出典を参照する欄 (supporting_source_ids を持つもの)。id の文字列検索は
+# 誤検出があるので、参照の欄を決めて厳密に見る。
+_SOURCE_REF_REVIEW_KEYS = ("high_points", "use_scenes", "concerns", "segment_voices")
+
+# 非販売の出典に要るサイト数。
+_SOURCES_MIN_NON_SALES_SITES = 2
+
+
+def _referenced_source_ids(data: dict) -> set[str]:
+    """claims[] と review_signals.{high_points,use_scenes,concerns,segment_voices}[] の参照 id。"""
+    entries: list = []
+    claims = data.get("claims")
+    if isinstance(claims, list):
+        entries.extend(claims)
+    rs = data.get("review_signals")
+    if isinstance(rs, dict):
+        for key in _SOURCE_REF_REVIEW_KEYS:
+            v = rs.get(key)
+            if isinstance(v, list):
+                entries.extend(v)
+    ids: set[str] = set()
+    for e in entries:
+        refs = e.get("supporting_source_ids") if isinstance(e, dict) else None
+        if isinstance(refs, list):
+            ids.update(r.strip() for r in refs if isinstance(r, str) and r.strip())
+    return ids
+
+
+def _referenced_non_sales_sites(valid: list[dict], data: dict) -> list[str]:
+    """本文から参照された非販売の出典のサイト (登録ドメイン。SNS はまとめて 1)。
+
+    販売ページ (モール)・通販サイト・検索結果ページは数えない。本家 omcha.jp は
+    登録ドメインで 1 サイトになるので、自然に 1 件まで (2 件目は外部が要る)。
+    """
+    ref_ids = _referenced_source_ids(data)
+    sites: list[str] = []
+    for s in valid:
+        sid = s.get("id")
+        if not isinstance(sid, str) or sid.strip() not in ref_ids:
+            continue
+        url = str(s["url"])
+        host = source_sites.host_of(url)
+        if (not host or _is_sales_source(s) or source_sites.is_retail(host)
+                or _is_search_engine_url(url)):
+            continue
+        key = source_sites.site_key(host)
+        if key not in sites:
+            sites.append(key)
+    return sites
+
+
+def check_sources_v5(data: dict) -> CheckResult:
+    """v5 §6.5.1: 本文から参照された非販売の出典が、別々のサイトで 2 件以上 (navi-brain#92 案 C)。
 
     判定:
     - legacy article → skip
     - sources field 無し → fail (#8934)
     - sources が list でない → fail
-    - len(sources) < 5 → fail
-    - 非販売 (= _is_sales_source False) が 2 件未満 → fail
     - navi.omcha.jp (この比較サイト自身) を出典にしている → fail (#9199)
-    - 本家 omcha.jp の記事は非販売に 1 件までしか数えない (#9199 案b)
+    - claims / review_signals の supporting_source_ids から参照された非販売の出典が
+      2 サイト未満 → fail。サイトは登録ドメインで数え (ja/en の wikipedia は 1 サイト)、
+      SNS は合わせて 1、販売ページ・通販サイトは数えない。合計件数の条件は無い
+    - 施行日 (SOURCES_REF_ENFORCE_FROM) より前の slug は、旧条件 (合計 5 件以上・
+      非販売 2 件以上・omcha.jp は 1 件まで) を満たしていても合格
+
+    セッション 19 で「certs=[] にすれば cert 系 check が全 skip → sources を
+    緩めても通過する」盲点が判明して入った check (旧条件)。
 
     #8934: 以前は field 無しも skip していたため、sources が 5 件に届かない記事で
     Jules の CI 自動修正が `sources` / `claims` を丸ごと消して通していた
     (#8344 B0FWK6FFN7、#6788 B0DPHB7DMT)。根拠を消すほど合格しやすい穴なので塞ぐ。
+    新条件では claims を消すと参照も消えるので、消しても通らない。
     """
     if _is_legacy_article(data):
         return CheckResult("sources_v5", True, 1.0, "legacy article (skipped)")
     if "sources" not in data:
         return CheckResult(
             "sources_v5", False, 0.0,
-            "sources field 無し (v5 §6.5.1 最低 5 件必須。消して通さない)",
+            "sources field 無し (v5 §6.5.1 必須。消して通さない)",
         )
     srcs = data.get("sources") or []
     if not isinstance(srcs, list):
         return CheckResult("sources_v5", False, 0.0, "sources must be a list")
 
     valid = [s for s in srcs if isinstance(s, dict) and s.get("url")]
-    # #9199: 自分の生成記事を自分の根拠にする循環。件数を満たしていても通さない
+    # #9199: 自分の生成記事を自分の根拠にする循環。条件を満たしていても通さない
     # (以前は非販売ソースとして数えていた)。本家 omcha.jp の実使用記事は別扱いで可。
     navi = [s["url"] for s in valid if self_domain.is_navi_self(str(s["url"]))]
     if navi:
         return CheckResult(
             "sources_v5", False, 0.0,
             f"navi.omcha.jp (このサイト自身) を出典にしている: {navi[0][:100]} "
-            f"(自己引用は不可。外して別の出典で 5 件を満たす)",
-        )
-    total = len(valid)
-    if total < 5:
-        return CheckResult(
-            "sources_v5", False, 0.0,
-            f"sources={total} 件 (v5 §6.5.1 最低 5 件必須)",
+            f"(自己引用は不可。外して別のサイトの出典で裏付ける)",
         )
 
-    non_sales = [s for s in valid if not _is_sales_source(s)]
-    # #9199 案b: 本家 omcha.jp の実使用記事は運営者自身の一次情報で、第三者ではない。
-    # 非販売に数えるのは 1 件まで (2 件目は外部の第三者で満たす。テンプレート §6.5.1)。
-    own = [s for s in non_sales if self_domain.is_self_domain(str(s["url"]))]
-    if len(own) > 1:
-        non_sales = [s for s in non_sales if s not in own[1:]]
-    if len(non_sales) < 2:
-        sales_count = total - len(non_sales)
+    sites = _referenced_non_sales_sites(valid, data)
+    if len(sites) >= _SOURCES_MIN_NON_SALES_SITES:
         return CheckResult(
-            "sources_v5", False, 0.0,
-            f"非販売 source={len(non_sales)} 件 / 販売={sales_count} 件 "
-            f"(v5 §6.5.1 第三者 2 件以上必須)",
+            "sources_v5", True, 1.0,
+            f"OK (参照された非販売 {len(sites)} サイト: {', '.join(sites[:5])})",
         )
-    return CheckResult("sources_v5", True, 1.0, f"OK (total={total}, non_sales={len(non_sales)})")
+    if not _enforced_from(data, SOURCES_REF_ENFORCE_FROM) and _legacy_count_ok(valid):
+        return CheckResult(
+            "sources_v5", True, 1.0,
+            f"OK (施行日 {SOURCES_REF_ENFORCE_FROM} 前の記事: 旧条件 合計 5 件・非販売 2 件で合格。"
+            f"参照された非販売は {len(sites)} サイト)",
+        )
+    shown = ", ".join(sites) if sites else "なし"
+    return CheckResult(
+        "sources_v5", False, 0.0,
+        f"本文 (claims / review_signals の supporting_source_ids) から参照された非販売の出典が "
+        f"{len(sites)} サイト ({shown})。別々のサイトで {_SOURCES_MIN_NON_SALES_SITES} 件以上必須 "
+        f"(v5 §6.5.1。サイトはドメイン単位・SNS は合わせて 1・販売ページと通販サイトは数えない)",
+    )
+
+
+def _legacy_count_ok(valid: list[dict]) -> bool:
+    """旧条件 (amazon#341〜): 合計 5 件以上、非販売 2 件以上 (omcha.jp は 1 件まで。#9199 案b)。"""
+    if len(valid) < 5:
+        return False
+    non_sales = [s for s in valid if not _is_sales_source(s)]
+    own = [s for s in non_sales if self_domain.is_self_domain(str(s["url"]))]
+    return len(non_sales) - max(len(own) - 1, 0) >= 2
 
 
 # #5490 信頼レーン: claims で認証を主張しながら product.certifications に載せない

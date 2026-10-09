@@ -160,9 +160,14 @@ def _exclude_reason(url: str) -> Optional[str]:
     if _self_domain.is_self_domain(low):  # #6593: 自社記事を第三者ソースにしない
         return "self_domain"
     # #9239: 会社情報・求人・金融など商品と無関係な host は候補枠を食うだけなので取らない。
-    # 通販サイトは残す (sources の合計 5 件の足しになる)。判定の SSOT は採点側。
-    if _sc.host_kind(_host(low)) == "unrelated":
+    # navi-brain#92: 通販サイトも取らない。以前は sources の合計 5 件の足しに残していたが、
+    # gate から合計件数の条件が外れ、通販は非販売にも数えない。候補枠を第三者に空ける
+    # (残すと通販だけの ASIN が空振りに数えられず、再検索が後ろへ倒れない)。
+    kind = _sc.host_kind(_host(low))
+    if kind == "unrelated":
         return "unrelated"
+    if kind == "retail":
+        return "retail"
     if any(sub in low for sub in _RETAIL_HOST_SUBSTR):
         return "retail"
     if any(sub in low for sub in _SEARCH_ENGINE_SUBSTR):
@@ -355,9 +360,21 @@ def _empty_streak(data) -> int:
     if isinstance(raw, int) and raw >= 0:
         return raw
     sources = data.get("sources")
-    if isinstance(sources, list) and len(sources) < _sc._THIRD_PARTY_MIN_HOSTS:
+    if isinstance(sources, list) and _site_count(sources) < _sc._THIRD_PARTY_MIN_HOSTS:
         return 1
     return 0
+
+
+def _site_count(sources: list) -> int:
+    """候補のサイト数 (navi-brain#92: 採点・gate と同じく登録ドメイン・SNS はまとめて 1)。"""
+    sites = set()
+    for src in sources:
+        if not isinstance(src, dict):
+            continue
+        host = src.get("host") or _sc.source_sites.host_of(src.get("url") or "")
+        if host:
+            sites.add(_sc.source_sites.site_key(host))
+    return len(sites)
 
 
 def _is_fresh(path: pathlib.Path, max_age_days: int,
@@ -507,8 +524,8 @@ def fetch_for_asin(
     # #9199: 関連度で外す分があるので raw を多めに取る (basic は件数によらず 1 credit)
     raw = tavily_search(query, api_key, num=20)
     sources, dropped = _filter_sources_with_drops(raw, max_sources, query)
-    # 空振り (非販売 host が floor 未満) の連続回数。次回の再問い合わせを後ろへ倒す。
-    streak = prev_streak + 1 if len(sources) < _sc._THIRD_PARTY_MIN_HOSTS else 0
+    # 空振り (非販売サイトが floor 未満) の連続回数。次回の再問い合わせを後ろへ倒す。
+    streak = prev_streak + 1 if _site_count(sources) < _sc._THIRD_PARTY_MIN_HOSTS else 0
     payload = {
         "asin": asin,
         "fetched_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
@@ -667,7 +684,7 @@ def _gsc_demand_pool(
         key=lambda kv: (-kv[1], kv[0]),
     )
     out = [a for a, _ in ranked
-           if _sc.score_asin(a, base).get("third_party_hosts", 0) < _sc._THIRD_PARTY_MIN_HOSTS]
+           if _sc.score_asin(a, base).get("third_party_sites", 0) < _sc._THIRD_PARTY_MIN_HOSTS]
     logger.info("GSC 需要 (imp>=%d, 直近 %d 日): %d 件 / うち第三者ソース未保有 %d 件",
                 min_impressions, days, len(ranked), len(out))
     return out
