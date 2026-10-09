@@ -246,3 +246,45 @@ def test_build_prompt_includes_first_party_note_and_third_party_rule(tmp_path, m
     prompt = build_prompt(asin, today="2026-10-08")
     assert build_jules_prompt._first_party_note(asin) in prompt
     assert "third_party_sources.json は、システムが事前収集した非販売の第三者候補" in prompt
+    # #9239: 03 (--print-note sources) と同じ組み立て注記を渡し、販売ページを締め出さない
+    assert build_jules_prompt._sources_note(asin) in prompt
+    assert "楽天・Yahoo の販売ページは sources に入れない" not in prompt
+
+
+# --------------------------------------------------------------------------
+# _sources_note: sources_v5 (合計 5 件・非販売 2 件) の組み立て方 (#9239)
+# --------------------------------------------------------------------------
+
+def test_sources_note_lists_mall_pages_and_sorts_candidates(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    asin = "B0FNM4Y35G"
+    raw = tmp_path / "data" / "raw"
+    (raw / "per_asin" / asin).mkdir(parents=True)
+    (raw / "rakuten_matched.json").write_text(json.dumps({"items": [
+        {"matched_asin": asin, "url": "https://hb.afl.rakuten.co.jp/hgc/x/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Fshop%2F123%2F&m=y"},
+    ]}), encoding="utf-8")
+    (raw / "yahoo_matched.json").write_text(json.dumps({"items": []}), encoding="utf-8")
+    (raw / "per_asin" / asin / "third_party_sources.json").write_text(json.dumps({"sources": [
+        {"url": "https://ameblo.jp/a/entry-1.html", "host": "ameblo.jp", "title": "使ってみた"},
+        {"url": "https://www.yodobashi.com/product/1/", "host": "yodobashi.com"},
+        {"url": "https://rocketreach.co/acme", "host": "rocketreach.co"},
+        {"url": "https://search.kakaku.com/x", "host": "search.kakaku.com"},
+    ]}), encoding="utf-8")
+    rc = _run_main(monkeypatch, ["--asin", asin, "--print-note", "sources"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert f"https://www.amazon.co.jp/dp/{asin}/" in out
+    assert "https://item.rakuten.co.jp/shop/123/" in out  # アフィリエイトを剥がした商品ページ
+    assert "Yahoo!ショッピング 商品ページ" not in out  # 照合が無いモールは出さない
+    third = out.split("第三者の候補")[1].split("2.")[0]
+    assert "ameblo.jp" in third and "yodobashi" not in third
+    assert "yodobashi.com" in out.split("通販サイト")[1]
+    assert "rocketreach" not in out and "search.kakaku" not in out
+    assert "水増しではない" in out and "合計 5 件" in out
+
+
+def test_sources_note_without_candidates_still_gives_amazon(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    note = build_jules_prompt._sources_note("B0FNM4Y35G")
+    assert "https://www.amazon.co.jp/dp/B0FNM4Y35G/" in note
+    assert "第三者の候補" not in note

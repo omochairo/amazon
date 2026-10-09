@@ -250,14 +250,88 @@ class ShouldDeferTest(unittest.TestCase):
         self._mk_unfetched("B0SD000002", [{"url": "https://note.com/a/n/1", "host": "note.com"}])
         self.assertTrue(S.should_defer(S.score_asin("B0SD000002", self.base)))
 
-    def test_unfetched_with_two_hosts_is_picked(self):
+    def test_unfetched_with_two_hosts_and_enough_total_is_picked(self):
+        # 非販売 2 + 通販 2 + Amazon 1 = 合計 5 件に届く
         self._mk_unfetched("B0SD000003", [
             {"url": "https://note.com/a/n/1", "host": "note.com"},
             {"url": "https://mokutopia.com/products/x", "host": "mokutopia.com"},
+            {"url": "https://www.yodobashi.com/product/1/", "host": "yodobashi.com"},
+            {"url": "https://www.biccamera.com/bc/item/1/", "host": "biccamera.com"},
         ])
         r = S.score_asin("B0SD000003", self.base)
         self.assertEqual(r["band"], "unfetched")
+        self.assertEqual(r["third_party_hosts"], 2)
+        self.assertEqual(r["retail_hosts"], 2)
+        self.assertEqual(S.reachable_sources(r), 5)
         self.assertFalse(S.should_defer(r))
+
+    def test_two_non_sales_but_total_short_waits(self):
+        # #9239: 非販売 2 件だけでは合計 3 件 (+Amazon) で sources_v5 に落ちる (#9211)
+        self._mk_unfetched("B0SD000006", [
+            {"url": "https://note.com/a/n/1", "host": "note.com"},
+            {"url": "https://mokutopia.com/products/x", "host": "mokutopia.com"},
+        ])
+        r = S.score_asin("B0SD000006", self.base)
+        self.assertEqual(S.non_sales_material(r), 2)
+        self.assertEqual(S.reachable_sources(r), 3)
+        self.assertTrue(S.should_defer(r))
+
+    def test_retail_and_unrelated_hosts_are_not_non_sales(self):
+        # #9239 (#9193 / #9211): 通販サイトと会社情報は「非販売 2 件」に数えない
+        self._mk_unfetched("B0SD000007", [
+            {"url": "https://www.monotaro.com/p/1/", "host": "monotaro.com"},
+            {"url": "https://www.askul.co.jp/p/1/", "host": "askul.co.jp"},
+            {"url": "https://rocketreach.co/x", "host": "rocketreach.co"},
+            {"url": "https://find-and-update.company-information.service.gov.uk/company/1"},
+            {"url": "https://hk.finance.yahoo.com/quote/x", "host": "hk.finance.yahoo.com"},
+        ])
+        r = S.score_asin("B0SD000007", self.base)
+        self.assertEqual(r["third_party_hosts"], 0)
+        self.assertEqual(r["retail_hosts"], 2)
+        self.assertEqual(r["unrelated_hosts"], 3)
+        self.assertTrue(S.should_defer(r))
+
+    def test_mall_pages_counts_matched_rakuten_and_yahoo(self):
+        root = self.base / "raw"
+        base = root / "per_asin"
+        base.mkdir(parents=True)
+        _write(root, "rakuten_matched.json", {"items": [
+            {"matched_asin": "B0SD000008", "url": "https://hb.afl.rakuten.co.jp/x"},
+            {"matched_asin": "B0SD000009", "url": ""},  # URL の無い行は数えない
+        ]})
+        _write(root, "yahoo_matched.json", {"items": [
+            {"matched_asin": "B0SD000008", "url": "https://ck.jp.ap.valuecommerce.com/x"},
+            # 照合の誤り: 出品 URL に別の ASIN が埋まっている (B0HCTDR9ZN の実例)
+            {"matched_asin": "B0SD000009", "url": "https://ck.jp.ap.valuecommerce.com/servlet/"
+             "referral?vc_url=https%3A%2F%2Fstore.shopping.yahoo.co.jp%2Fx%2Fs-b0bxslrtpj-1.html"},
+        ]})
+        self.assertEqual(S.mall_pages("B0SD000008", root), 3)
+        self.assertEqual(S.mall_pages("B0SD000009", root), 1)
+
+    def test_other_asin_in_url(self):
+        self.assertTrue(S.other_asin_in_url(
+            "https://x/?vc_url=https%3A%2F%2Fs.jp%2Fs-b0bxslrtpj-1.html", "B0HCTDR9ZN"))
+        self.assertFalse(S.other_asin_in_url("https://s.jp/s-b0hctdr9zn-1.html", "B0HCTDR9ZN"))
+        self.assertFalse(S.other_asin_in_url("https://item.rakuten.co.jp/shop/123/", "B0HCTDR9ZN"))
+        # ハッシュ等の途中にある b0 から始まる文字列は ASIN とみなさない
+        self.assertFalse(S.other_asin_in_url("https://hb.afl/hgc/xb0abcdefgh1/", "B0HCTDR9ZN"))
+
+    def test_mall_urls_left_in_old_json_are_not_third_party(self):
+        self.assertEqual(S.host_kind("www.amazon.co.jp"), "retail")
+        self.assertEqual(S.host_kind("store.shopping.yahoo.co.jp"), "retail")
+        self.assertEqual(S.host_kind("item.rakuten.co.jp"), "retail")
+
+    def test_reachable_unknown_without_mall_pages(self):
+        # 手で組んだ結果 (mall_pages 無し) は合計を判定しない (従来どおり非販売だけ)
+        r = {"band": "thin", "third_party_hosts": 2}
+        self.assertIsNone(S.reachable_sources(r))
+        self.assertFalse(S.should_defer(r))
+
+    def test_host_kind_matches_subdomains_not_substrings(self):
+        self.assertEqual(S.host_kind("www.yodobashi.com"), "retail")
+        self.assertEqual(S.host_kind("hk.finance.yahoo.com"), "unrelated")
+        self.assertEqual(S.host_kind("notyodobashi.com"), "third_party")
+        self.assertEqual(S.host_kind("note.com"), "third_party")
 
     def test_zero_is_deferred_and_ok_is_not(self):
         self.assertTrue(S.should_defer({"band": "zero", "third_party_hosts": 0}))
