@@ -28,6 +28,7 @@ import argparse
 import requests
 import urllib.parse
 import collections
+import functools
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -1093,6 +1094,12 @@ def main():
     r_no_better, y_no_better = 0, 0
 
     for asin, (title, force_refresh, jan_code) in targets.items():
+        # ピース数ガード (#9244) にも Amazon の題名を渡す。build_post / quality_gate と
+        # 同じ判定にしないと、表示で外れた行を「低信頼ではない」と見て再検索しない
+        check_fn = (
+            functools.partial(quality_check_fn, amazon_title=title)
+            if quality_check_fn else None
+        )
         # 既に matched があり、かつ amazon.json 由来でない (force_refresh=False) ASIN
         # → 既存エントリ保持で API コール節約
         r_has = asin in rakuten_index
@@ -1109,10 +1116,10 @@ def main():
                 amazon_price_local = _load_amazon_price_from_per_asin(per_asin_root, asin)
 
             r_low, r_reason = _is_low_confidence_match(
-                rakuten_index.get(asin), jan_code, amazon_price_local, quality_check_fn
+                rakuten_index.get(asin), jan_code, amazon_price_local, check_fn
             )
             y_low, y_reason = _is_low_confidence_match(
-                yahoo_index.get(asin), jan_code, amazon_price_local, quality_check_fn
+                yahoo_index.get(asin), jan_code, amazon_price_local, check_fn
             )
 
             # offset / 上限は **ASIN 単位** で当てる (楽天と Yahoo で別々に数えると、
@@ -1165,8 +1172,8 @@ def main():
                 if re_search_mode and r_has:
                     amazon_price_local = amazon_price_by_asin.get(asin, 0) or \
                         _load_amazon_price_from_per_asin(per_asin_root, asin)
-                    new_passed = quality_check_fn(r_result, amazon_price_local)
-                    old_passed = quality_check_fn(rakuten_index[asin], amazon_price_local)
+                    new_passed = check_fn(r_result, amazon_price_local)
+                    old_passed = check_fn(rakuten_index[asin], amazon_price_local)
                     if old_passed and not new_passed:
                         replace = False
                         r_no_better += 1
@@ -1214,8 +1221,8 @@ def main():
                 if re_search_mode and y_has:
                     amazon_price_local = amazon_price_by_asin.get(asin, 0) or \
                         _load_amazon_price_from_per_asin(per_asin_root, asin)
-                    new_passed = quality_check_fn(y_result, amazon_price_local)
-                    old_passed = quality_check_fn(yahoo_index[asin], amazon_price_local)
+                    new_passed = check_fn(y_result, amazon_price_local)
+                    old_passed = check_fn(yahoo_index[asin], amazon_price_local)
                     if old_passed and not new_passed:
                         replace = False
                         y_no_better += 1
