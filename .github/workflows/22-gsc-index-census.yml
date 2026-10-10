@@ -170,6 +170,17 @@ jobs:
                       print(f"| {k} | {v} |")
               else:
                   print("- 課題: なし")
+          # 核ページ (ホーム・一覧・hub)。products の集計とは別枠で全件出す。
+          core = d.get("core_pages") or []
+          if core:
+              print("")
+              print("### 核ページ")
+              print("")
+              print("| URL | coverageState | 最終クロール |")
+              print("|---|---|---|")
+              for r in core:
+                  state = r.get("coverage_state") or f"(error) {r.get('error', '')}"
+                  print(f"| {r['url']} | {state} | {r.get('last_crawl_time', '')} |")
           PY
 
       # B-3 (#3988): census は毎週上書きされる単一スナップショットのため、
