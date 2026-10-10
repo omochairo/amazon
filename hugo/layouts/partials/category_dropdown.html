@@ -70,6 +70,19 @@
   {{- if gt (len $children) 0 }}
     {{- /* 子タグは記事件数の降順に表示 (グループ自体の並びはキュレーション順を維持)。 */ -}}
     {{- $children = sort $children "count" "desc" }}
+    {{- /* hub に寄せた結果、同じ行き先のリンクが並ぶことがある (例: 楽器 / 楽器おもちゃ
+           → どちらも /music-toys/)。行き先ごとに件数の多い 1 個だけ残す。 */ -}}
+    {{- $seen := dict }}
+    {{- $uniq := slice }}
+    {{- range $children }}
+      {{- /* hub_for_tag.html の返り値は template.HTML なので、map のキーにする前に string 化する。 */ -}}
+      {{- $key := string .url }}
+      {{- if not (index $seen $key) }}
+        {{- $uniq = $uniq | append . }}
+        {{- $seen = merge $seen (dict $key true) }}
+      {{- end }}
+    {{- end }}
+    {{- $children = $uniq }}
     {{- $groups = $groups | append (dict "emoji" $g.emoji "name" $g.name "slug" $g.slug "children" $children) }}
   {{- end }}
 {{- end }}
@@ -85,15 +98,25 @@
     <ul class="cat-nav-list">
         {{- range $groups }}
         <li class="cat-group">
+            {{- /* 子が 1 個だけのグループ (例: 木のおもちゃ) は、開いても同じ行き先の
+                   リンクが 1 個出るだけなので、パネルを作らず直接リンクにする。 */ -}}
+            {{- if eq (len .children) 1 }}
+            <a class="cat-summary" href="{{ (index .children 0).url }}">
+                <span class="cat-summary-emoji" aria-hidden="true">{{ .emoji }}</span>
+                <span class="cat-summary-name">{{ .name }}</span>
+            </a>
+            {{- else }}
             <button type="button" class="cat-summary" aria-expanded="false"
                 aria-controls="cat-panel-{{ .slug }}" data-cat-target="cat-panel-{{ .slug }}">
                 <span class="cat-summary-emoji" aria-hidden="true">{{ .emoji }}</span>
                 <span class="cat-summary-name">{{ .name }}</span>
             </button>
+            {{- end }}
         </li>
         {{- end }}
     </ul>
     {{- range $groups }}
+    {{- if gt (len .children) 1 }}
     <div class="cat-panel" id="cat-panel-{{ .slug }}" role="region" aria-label="{{ .name }}のタグ一覧" hidden>
         <ul class="cat-sublist">
             {{- range .children }}
@@ -105,6 +128,7 @@
             {{- end }}
         </ul>
     </div>
+    {{- end }}
     {{- end }}
 </nav>
 {{- /* #6206 chrome 削減: カテゴリメニューの開閉スクリプト (0.7KB × 6,369 枚
