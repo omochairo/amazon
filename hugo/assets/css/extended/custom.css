@@ -7165,6 +7165,24 @@ body:has(#compare-floating-bar) .favorites-wrapper {
   border-color: var(--brand-primary);
   color: #fff;
 }
+/* 開閉する chip (button) にだけ山形の印を付ける。子が 1 個のグループは <a> で
+   押すとそのまま移動するので、見た目で区別できるようにする (HTML は増やさない)。 */
+.cat-summary[aria-expanded]::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin: -3px 1px 0 0;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  opacity: 0.6;
+  transition: transform 0.18s ease;
+}
+.cat-summary[aria-expanded="true"]::after {
+  margin-top: 3px;
+  transform: rotate(-135deg);
+  opacity: 1;
+}
 .cat-panel {
   margin: 10px 0 0;
   padding: 14px;
