@@ -1,6 +1,6 @@
 ---
-title: "算数 おもちゃ ランキング｜知育スコアで選ぶ数・計算トイ ベスト17"
-description: "3〜8歳の数の概念・計算力を育てるおもちゃを、独自の 知育スコア（教育効果・安全性・長く遊べる・コスパの 4 軸）で評価してランキング。そろばん・九九・たし算ひき算・数量感覚の玩具を Amazon・楽天の最安値とあわせて徹底比較。遊びながら「数が好きになる」一台が見つかります。"
+title: "算数・計算の知育玩具ランキング｜かず・たし算を遊びで学ぶ"
+description: "3〜8歳の数の概念・計算力を育てるおもちゃランキング。そろばん・九九・たし算ひき算・数量感覚の玩具を Amazon・楽天の最安値とあわせて徹底比較。遊びながら「数が好きになる」一台が見つかります。独自の知育スコア（教育効果・安全性・長く遊べる・コスパの 4 軸）が高い順に掲載しています。"
 layout: "feature"
 url: /math-toys/
 draft: false
@@ -9,6 +9,7 @@ ShowBreadCrumbs: true
 hidemeta: false
 disableShare: true
 params:
+  title_suffix_short: true
   feature_type: math
 ---
 

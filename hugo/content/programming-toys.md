@@ -1,6 +1,6 @@
 ---
-title: "プログラミング おもちゃ ランキング｜知育スコアで選ぶ思考力トイ ベスト17"
-description: "3〜8歳のプログラミング的思考を育てるおもちゃを、独自の 知育スコア（教育効果・安全性・長く遊べる・コスパの 4 軸）で評価してランキング。ロボット・コーディングカー・論理ゲームを Amazon・楽天の最安値とあわせて徹底比較。パソコン不要で「順序立てて考える力」が遊びながら身につく一台が見つかります。"
+title: "プログラミングおもちゃランキング｜パソコン不要で3歳から"
+description: "3〜8歳のプログラミング的思考を育てるおもちゃランキング。ロボット・コーディングカー・論理ゲームを Amazon・楽天の最安値とあわせて徹底比較。パソコン不要で「順序立てて考える力」が遊びながら身につく一台が見つかります。独自の知育スコア（教育効果・安全性・長く遊べる・コスパの 4 軸）が高い順に掲載しています。"
 layout: "feature"
 url: /programming-toys/
 draft: false
@@ -9,6 +9,7 @@ ShowBreadCrumbs: true
 hidemeta: false
 disableShare: true
 params:
+  title_suffix_short: true
   feature_type: programming
 ---
 

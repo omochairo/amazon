@@ -1,6 +1,6 @@
 ---
-title: "英語 おもちゃ ランキング｜知育スコアで選ぶ英語学習トイ ベスト24"
-description: "0〜6歳の英語学習におすすめのおもちゃを、独自の 知育スコア（教育効果・安全性・長く遊べる・コスパの 4 軸）で評価してランキング。アルファベット・フォニックス・バイリンガル玩具を Amazon・楽天の最安値とあわせて徹底比較。はじめての英語耳づくりに本当に役立つ一台が見つかります。"
+title: "英語の知育玩具・おもちゃランキング｜0〜6歳のおうち英語に"
+description: "0〜6歳の英語学習におすすめのおもちゃランキング。アルファベット・フォニックス・バイリンガル玩具を Amazon・楽天の最安値とあわせて徹底比較。はじめての英語耳づくりに本当に役立つ一台が見つかります。独自の知育スコア（教育効果・安全性・長く遊べる・コスパの 4 軸）が高い順に掲載しています。"
 layout: "feature"
 url: /english-toys/
 draft: false
@@ -9,6 +9,7 @@ ShowBreadCrumbs: true
 hidemeta: false
 disableShare: true
 params:
+  title_suffix_short: true
   feature_type: english
 ---
 
