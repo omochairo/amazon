@@ -173,12 +173,12 @@ def build_seo_title(brand: str, entry: dict) -> str:
     age = age_band_label(entry.get("avg_age_min_months"))
 
     if n >= TITLE_COUNT_MIN:
-        return f"{brand}の知育玩具{n}選｜スコアと価格で比較"
+        return f"{brand}の知育玩具{n}選｜口コミと価格で比較"
     if age:
-        return f"{brand}の知育玩具レビュー｜{age}から選ぶ比較ガイド"
+        return f"{brand}の知育玩具の口コミ｜{age}から選ぶ比較ガイド"
     if series:
-        return f"{brand}の知育玩具レビュー｜{series[0]}をスコアで比較"
-    return f"{brand}の知育玩具レビュー｜スコアと価格で比較"
+        return f"{brand}の知育玩具の口コミ｜{series[0]}をスコアで比較"
+    return f"{brand}の知育玩具の口コミ｜スコアと価格で比較"
 
 
 def build_seo_description(brand: str, entry: dict) -> str:
@@ -205,15 +205,15 @@ def build_seo_description(brand: str, entry: dict) -> str:
         detail = ""
 
     if n >= TITLE_COUNT_MIN:
-        head = f"{brand}の知育玩具{n}件を横断比較。"
+        head = f"{brand}の知育玩具{n}件を口コミ・価格つきで横断比較。"
         tail = "教育性・安全性・コスパの知育スコアで並べ替えて選べます。"
         body = f"{detail}の商品を掲載しています。" if detail else ""
     elif n >= 10:
-        head = f"{brand}の知育玩具{n}件をレビュー。"
+        head = f"{brand}の知育玩具{n}件を口コミつきでレビュー。"
         tail = "知育スコアと価格で並べ替えて比較できます。"
         body = f"{detail}の商品が中心です。" if detail else ""
     else:
-        head = f"{brand}の知育玩具{n}件を1点ずつレビュー。"
+        head = f"{brand}の知育玩具{n}件を1点ずつ、口コミつきでレビュー。"
         tail = "教育性・安全性・コスパを独自スコアで採点しています。"
         body = f"{detail}の商品を掲載。" if detail else ""
 

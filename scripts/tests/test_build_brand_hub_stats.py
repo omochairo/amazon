@@ -259,7 +259,7 @@ class TestSeoTitle(unittest.TestCase):
         t = bhs.build_seo_title("タカラトミー", {
             "count": 61, "top_3_series": ["ミニカー"], "avg_age_min_months": 36.0,
         })
-        self.assertEqual(t, "タカラトミーの知育玩具61選｜スコアと価格で比較")
+        self.assertEqual(t, "タカラトミーの知育玩具61選｜口コミと価格で比較")
 
     def test_small_brand_hides_count(self):
         # #5322: 少ない件数を title に出すと「3 件しかない」の自己申告になる
@@ -267,7 +267,7 @@ class TestSeoTitle(unittest.TestCase):
             "count": 3, "top_3_series": ["実験キット"], "avg_age_min_months": 80.0,
         })
         self.assertNotIn("3", t)
-        self.assertEqual(t, "4Mの知育玩具レビュー｜6歳から選ぶ比較ガイド")
+        self.assertEqual(t, "4Mの知育玩具の口コミ｜6歳から選ぶ比較ガイド")
 
     def test_threshold_boundary(self):
         entry = {"count": bhs.TITLE_COUNT_MIN, "top_3_series": [],
@@ -279,11 +279,11 @@ class TestSeoTitle(unittest.TestCase):
     def test_falls_back_to_series_then_generic(self):
         self.assertEqual(
             bhs.build_seo_title("B", {"count": 3, "top_3_series": ["S1"]}),
-            "Bの知育玩具レビュー｜S1をスコアで比較",
+            "Bの知育玩具の口コミ｜S1をスコアで比較",
         )
         self.assertEqual(
             bhs.build_seo_title("B", {"count": 3, "top_3_series": []}),
-            "Bの知育玩具レビュー｜スコアと価格で比較",
+            "Bの知育玩具の口コミ｜スコアと価格で比較",
         )
 
 
