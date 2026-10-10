@@ -1,0 +1,59 @@
+{{- /*
+  explore_links.html
+  検索窓や一覧の外から、年齢別・テーマ別 hub と予算・価格系の一覧へ進むための
+  静的リンク。/search/ は検索窓だけ、/posts/ は新着順のカードだけで、どちらも
+  hub への入口が無かった。JS を待たずに描画されるのでクローラも辿れる。
+
+  hub の一覧は hub_siblings.html と同じ hugo/data/features/hub_index.json
+  (build_category_hubs.py 生成) を読む。key が "age-" で始まるものを年齢別、
+  それ以外をテーマ別として分ける。未生成/空ならその段は出さない。
+*/ -}}
+{{- $hubs := site.Data.features.hub_index -}}
+{{- $ages := slice -}}
+{{- $themes := slice -}}
+{{- range $hubs -}}
+  {{- if hasPrefix .key "age-" -}}
+    {{- $ages = $ages | append . -}}
+  {{- else -}}
+    {{- $themes = $themes | append . -}}
+  {{- end -}}
+{{- end -}}
+<nav class="explore-links" aria-label="条件から探す">
+  <h2 class="explore-links-title">条件から探す</h2>
+  {{- with $ages }}
+  <div class="explore-links-group">
+    <h3 class="explore-links-label">年齢から</h3>
+    <div class="tag-chips">
+      {{- range . }}
+      <a class="tag-chip" href="{{ .url | relURL }}">{{ .label }}の知育玩具</a>
+      {{- end }}
+    </div>
+  </div>
+  {{- end }}
+  {{- with $themes }}
+  <div class="explore-links-group">
+    <h3 class="explore-links-label">テーマから</h3>
+    <div class="tag-chips">
+      {{- range . }}
+      <a class="tag-chip" href="{{ .url | relURL }}">{{ .label }}のおもちゃ</a>
+      {{- end }}
+    </div>
+  </div>
+  {{- end }}
+  <div class="explore-links-group">
+    <h3 class="explore-links-label">予算・価格から</h3>
+    <div class="tag-chips">
+      <a class="tag-chip" href="{{ "cospa/" | relURL }}">予算別ランキング</a>
+      <a class="tag-chip" href="{{ "deals/" | relURL }}">割引率が高い知育玩具</a>
+      <a class="tag-chip" href="{{ "price/" | relURL }}">値下がり中のおもちゃ</a>
+    </div>
+  </div>
+  <div class="explore-links-group">
+    <h3 class="explore-links-label">ほかの探し方</h3>
+    <div class="tag-chips">
+      <a class="tag-chip" href="{{ "brands/" | relURL }}">メーカーから探す</a>
+      <a class="tag-chip" href="{{ "diagnosis/" | relURL }}">おもちゃ診断（約1分）</a>
+      <a class="tag-chip" href="{{ "ranking/" | relURL }}">楽天おもちゃランキング</a>
+    </div>
+  </div>
+</nav>
