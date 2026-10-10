@@ -7160,10 +7160,11 @@ body:has(#compare-floating-bar) .favorites-wrapper {
   border-color: var(--brand-primary);
   background: var(--brand-gradient-subtle);
 }
+/* 文字は白ではなく濃色。白 × #FF6B35 は約 2.8:1 で読みにくく、#1e1e1e なら約 5.9:1。 */
 .cat-summary[aria-expanded="true"] {
   background: var(--brand-primary);
   border-color: var(--brand-primary);
-  color: #fff;
+  color: #1e1e1e;
 }
 /* 開閉する chip (button) にだけ山形の印を付ける。子が 1 個のグループは <a> で
    押すとそのまま移動するので、見た目で区別できるようにする (HTML は増やさない)。 */
@@ -7190,6 +7191,11 @@ body:has(#compare-floating-bar) .favorites-wrapper {
   border: 1px solid var(--border, rgba(0,0,0,0.08));
   border-radius: var(--radius-md, 12px);
 }
+/* JS が無効・読み込み失敗のとき: chip (#cat-panel-... へのリンク) を押すと
+   :target でパネルが開く。JS が動いたら cat_nav.js が is-js を付けて止める。
+   飛んだ先で chip の列が画面の外へ出ないよう、上に余白を取って止める。 */
+.cat-panel { scroll-margin-top: 140px; }
+.cat-nav:not(.is-js) .cat-panel:target { display: block; }
 .cat-sublist {
   list-style: none;
   display: flex;
