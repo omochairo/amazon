@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-09T00:23:05Z",
+  "generated_at": "2026-10-10T00:01:15Z",
   "model": "gemma4:26b-a4b-it-qat",
   "source_week": "2026-W40",
   "baseline_ctr": 0.03198090692124105,
@@ -64,19 +64,17 @@
     {
       "page": "https://navi.omcha.jp/products/b07bt3wm3h/",
       "asin": "B07BT3WM3H",
-      "page_coverage_avg": 0.0,
+      "page_coverage_avg": null,
       "queries": [
         {
           "query": "youtube10425",
           "impressions": 87,
           "position": 8.988505747126437,
-          "answered": false,
-          "coverage": 0.0,
-          "missing_aspects": [
-            "YouTubeでの動画コンテンツ（遊び方やレビュー動画など）の情報"
-          ],
-          "note": "検索クエリが特定の製品番号（10425）に関連するYouTube動画を意図しているのに対し、記事は製品の比較情報のみであり、動画に関する回答が一切含まれていません。",
-          "error": null
+          "answered": null,
+          "coverage": null,
+          "missing_aspects": [],
+          "note": "",
+          "error": "empty /api/generate response"
         }
       ]
     }
