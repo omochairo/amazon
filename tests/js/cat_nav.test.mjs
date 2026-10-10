@@ -6,6 +6,9 @@
 //     直接リンクで出るので、開閉の対象にしない (aria-expanded を付けない)
 //   - Esc で閉じ、フォーカスがナビの中にあったときだけ開いていたボタンへ戻す
 //   - キーボードで開いたときだけ、パネルの先頭リンクへフォーカスを移す
+//   - 開いている間の Tab は「開いたボタン → パネルのリンク → 次の chip」の順に進む
+//   - bfcache から戻ったときは閉じた状態にする
+//   - 現在地の chip が横スクロールの外にあるときは、見える位置までスクロールする
 //   - 現在地 (URL が一致するリンクと、その親ボタン) に印を付ける
 //   - 横スクロールの続きがある側にだけ has-more-left / has-more-right を付ける
 import { test } from "node:test";
@@ -41,7 +44,8 @@ function makeEl(doc, attrs = {}, extra = {}) {
 }
 
 // groups: [{ id, links: [pathname, ...] }]。links が 1 個のグループは直接リンク。
-function setup({ pathname = "/", groups, scrollWidth = 300, clientWidth = 300 }) {
+function setup({ pathname = "/", groups, scrollWidth = 300, clientWidth = 300,
+                 chipRect = { left: 0, right: 10 } }) {
   const docListeners = {};
   const winListeners = {};
   const doc = {
@@ -66,6 +70,7 @@ function setup({ pathname = "/", groups, scrollWidth = 300, clientWidth = 300 })
       links.push(a);
     }
     panel.querySelector = () => panel.links[0] || null;
+    panel.querySelectorAll = () => panel.links;
     panels[panel.id] = panel;
     btns.push(makeEl(doc, { "aria-expanded": "false", "data-cat-target": panel.id }, { panel }));
   }
@@ -74,7 +79,7 @@ function setup({ pathname = "/", groups, scrollWidth = 300, clientWidth = 300 })
     getBoundingClientRect: () => ({ left: 0, right: clientWidth }),
   });
   for (const el of [...btns, ...direct]) {
-    el.getBoundingClientRect = () => ({ left: 0, right: 10 });
+    el.getBoundingClientRect = () => chipRect;
   }
   const nav = {
     querySelector(sel) {
@@ -185,4 +190,82 @@ test("折り返し表示 (PC) では印を付けない", () => {
   const { list } = setup({ groups: GROUPS });
   assert.equal(list.classList.contains("has-more-right"), false);
   assert.equal(list.classList.contains("has-more-left"), false);
+});
+
+function tab(docListeners, shiftKey = false) {
+  let prevented = false;
+  docListeners.keydown({ key: "Tab", shiftKey, preventDefault() { prevented = true; } });
+  return prevented;
+}
+
+test("Tab: 開いたボタン → パネルのリンク → 次の chip の順に進む", () => {
+  const { doc, btns, docListeners } = setup({ groups: GROUPS });
+  btns[0].fire("click", { detail: 1 });
+  const [first, last] = btns[0].panel.links;
+  doc.activeElement = btns[0];
+  assert.equal(tab(docListeners), true);
+  assert.equal(doc.activeElement, first);
+  // パネルの中のリンク同士は DOM 順のままなので、既定の動作に任せる。
+  assert.equal(tab(docListeners), false);
+  doc.activeElement = last;
+  assert.equal(tab(docListeners), true);
+  assert.equal(doc.activeElement, btns[1]);
+});
+
+test("Shift+Tab: 次の chip → パネルの末尾 / 先頭リンク → 開いたボタン", () => {
+  const { doc, btns, docListeners } = setup({ groups: GROUPS });
+  btns[0].fire("click", { detail: 1 });
+  const [first, last] = btns[0].panel.links;
+  doc.activeElement = btns[1];
+  assert.equal(tab(docListeners, true), true);
+  assert.equal(doc.activeElement, last);
+  doc.activeElement = first;
+  assert.equal(tab(docListeners, true), true);
+  assert.equal(doc.activeElement, btns[0]);
+});
+
+test("Tab: 閉じているとき・末尾の chip を開いたときは既定の動作に任せる", () => {
+  const { doc, btns, docListeners } = setup({
+    groups: [GROUPS[2], GROUPS[0]],
+  });
+  doc.activeElement = btns[0];
+  assert.equal(tab(docListeners), false);
+  // querySelectorAll(".cat-summary") の並びは [...btns, ...direct] なので、
+  // この組では btns[0] が末尾の 1 つ手前、direct[0] が末尾になる。
+  btns[0].fire("click", { detail: 1 });
+  doc.activeElement = btns[0].panel.links[1];
+  assert.equal(tab(docListeners), true);
+  const only = setup({ groups: [GROUPS[0]] });
+  only.btns[0].fire("click", { detail: 1 });
+  only.doc.activeElement = only.btns[0].panel.links[1];
+  assert.equal(tab(only.docListeners), false);
+  assert.equal(only.doc.activeElement, only.btns[0].panel.links[1]);
+});
+
+test("bfcache から戻ったときは閉じる (通常の表示では閉じない)", () => {
+  const { btns, winListeners } = setup({ groups: GROUPS });
+  btns[0].fire("click", { detail: 1 });
+  winListeners.pageshow({ persisted: false });
+  assert.equal(btns[0].panel.hidden, false);
+  winListeners.pageshow({ persisted: true });
+  assert.equal(btns[0].panel.hidden, true);
+  assert.equal(btns[0].getAttribute("aria-expanded"), "false");
+});
+
+test("現在地の chip が横スクロールの外にあれば見える位置まで送る", () => {
+  const { list } = setup({
+    groups: GROUPS, pathname: "/tags/jigusoo/",
+    scrollWidth: 1600, clientWidth: 350, chipRect: { left: 900, right: 1050 },
+  });
+  // 左端のぼかし (36px) に掛からないよう 40px 手前で止める。
+  assert.equal(list.scrollLeft, 860);
+  assert.equal(list.classList.contains("has-more-left"), true);
+});
+
+test("現在地の chip が見えていればスクロールしない", () => {
+  const { list } = setup({
+    groups: GROUPS, pathname: "/tags/jigusoo/",
+    scrollWidth: 1600, clientWidth: 350, chipRect: { left: 100, right: 250 },
+  });
+  assert.equal(list.scrollLeft, 0);
 });

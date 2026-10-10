@@ -55,8 +55,38 @@
     window.addEventListener("pageshow", function (e) {
         if (e.persisted) { closeAll(null); }
     });
+    // Tab の順路。パネルは DOM 上すべての chip の「後ろ」にあるので、そのままだと
+    // 開いたボタンから Tab で残りの chip を全部通らないと中のリンクに届かず、
+    // 先頭リンクから Shift+Tab で戻ると末尾の chip へ飛ぶ。開いている間だけ
+    // 「開いたボタン → パネルのリンク → 次の chip」の順に繋ぎ替える。
+    var chips = Array.prototype.slice.call(nav.querySelectorAll(".cat-summary"));
+    function tabThroughPanel(e) {
+        var b = openBtn();
+        var p = b && panelOf(b);
+        var links = p ? p.querySelectorAll("a") : [];
+        if (!links.length) { return; }
+        var first = links[0];
+        var last = links[links.length - 1];
+        // 開いたボタンが末尾の chip のときは next が無い。パネルが DOM の最後なので
+        // 既定の Tab でそのままナビの外へ抜ける。
+        var next = chips[chips.indexOf(b) + 1] || null;
+        var at = document.activeElement;
+        var to = null;
+        if (e.shiftKey) {
+            if (at === first) { to = b; } else if (next && at === next) { to = last; }
+        } else if (at === b) {
+            to = first;
+        } else if (at === last) {
+            to = next;
+        }
+        if (to) {
+            e.preventDefault();
+            to.focus();
+        }
+    }
     // Esc で閉じる。フォーカスがナビの中にあるときは、開いていたボタンへ戻す。
     document.addEventListener("keydown", function (e) {
+        if (e.key === "Tab") { tabThroughPanel(e); return; }
         if (e.key !== "Escape") { return; }
         var b = openBtn();
         if (!b) { return; }
