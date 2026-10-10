@@ -7136,6 +7136,24 @@ body:has(#compare-floating-bar) .favorites-wrapper {
   border: 1.5px solid var(--border, rgba(0,0,0,0.12));
   color: var(--primary, #2e2e33);
   transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+  /* 子が 1 個のグループは <a> で出る。button と同じ見た目・同じ高さに揃える。 */
+  box-sizing: border-box;
+  font-family: inherit;
+  line-height: 1.2;
+  text-decoration: none;
+}
+.cat-summary:focus-visible,
+.cat-link:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+/* 現在地 (cat_nav.js が URL を照合して付ける)。開いている状態 (塗りつぶし) と
+   区別するため、枠線と淡い背景だけで示す。 */
+.cat-summary.is-current,
+.cat-summary[aria-current] {
+  border-color: var(--brand-primary);
+  background: var(--brand-gradient-subtle);
+  font-weight: 700;
 }
 .cat-summary-emoji { font-size: 1rem; line-height: 1; }
 .cat-summary:hover {
@@ -7176,10 +7194,18 @@ body:has(#compare-floating-bar) .favorites-wrapper {
   border: 1px solid var(--border, rgba(0,0,0,0.1));
   color: var(--primary, #2e2e33);
   transition: border-color 0.15s ease, transform 0.15s ease;
+  /* タップ領域 44px (親 chip と同じ)。 */
+  box-sizing: border-box;
+  min-height: 44px;
 }
 .cat-link:hover {
   border-color: var(--brand-primary);
   transform: translateY(-1px);
+}
+.cat-link[aria-current] {
+  border-color: var(--brand-primary);
+  border-width: 1.5px;
+  font-weight: 700;
 }
 @media (max-width: 768px) {
   .cat-nav { padding: 0 12px; }
@@ -7193,6 +7219,20 @@ body:has(#compare-floating-bar) .favorites-wrapper {
     padding-bottom: 2px;
   }
   .cat-nav-list::-webkit-scrollbar { display: none; }
+  /* スクロールバーを隠しているので、続きがある側の端をぼかして知らせる
+     (cat_nav.js がスクロール位置に応じて class を付け外しする)。 */
+  .cat-nav-list.has-more-right {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+  }
+  .cat-nav-list.has-more-left {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 36px);
+    mask-image: linear-gradient(to right, transparent, #000 36px);
+  }
+  .cat-nav-list.has-more-left.has-more-right {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+  }
   .cat-summary { font-size: 0.8rem; padding: 6px 11px; min-height: 44px; }
 }
 

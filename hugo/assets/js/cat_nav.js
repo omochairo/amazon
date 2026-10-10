@@ -5,25 +5,46 @@
 (function () {
     var nav = document.querySelector(".cat-nav");
     if (!nav) { return; }
-    var btns = Array.prototype.slice.call(nav.querySelectorAll(".cat-summary"));
+    var list = nav.querySelector(".cat-nav-list");
+    // 子が 1 個のグループは <a class="cat-summary"> (直接リンク) で出るので、
+    // 開閉の対象はパネルを持つ button だけに絞る。
+    var btns = Array.prototype.slice.call(nav.querySelectorAll(".cat-summary[data-cat-target]"));
+    function panelOf(btn) {
+        return document.getElementById(btn.getAttribute("data-cat-target"));
+    }
     function close(btn) {
         btn.setAttribute("aria-expanded", "false");
-        var p = document.getElementById(btn.getAttribute("data-cat-target"));
+        var p = panelOf(btn);
         if (p) { p.hidden = true; }
     }
     function closeAll(except) {
         btns.forEach(function (b) { if (b !== except) { close(b); } });
     }
+    function openBtn() {
+        for (var i = 0; i < btns.length; i++) {
+            if (btns[i].getAttribute("aria-expanded") === "true") { return btns[i]; }
+        }
+        return null;
+    }
     btns.forEach(function (b) {
-        b.addEventListener("click", function () {
+        b.addEventListener("click", function (e) {
             var open = b.getAttribute("aria-expanded") === "true";
             closeAll(b);
             if (open) {
                 close(b);
             } else {
                 b.setAttribute("aria-expanded", "true");
-                var p = document.getElementById(b.getAttribute("data-cat-target"));
-                if (p) { p.hidden = false; }
+                var p = panelOf(b);
+                if (p) {
+                    p.hidden = false;
+                    // パネルは DOM 上すべての親ボタンの「後ろ」にあるので、Tab だと残りの
+                    // ボタンを全部通らないと中のリンクに届かない。キーボードで開いたとき
+                    // (Enter / Space 由来の click は detail が 0) は先頭のリンクへ移す。
+                    if (e && e.detail === 0) {
+                        var first = p.querySelector("a");
+                        if (first) { first.focus(); }
+                    }
+                }
             }
         });
     });
@@ -34,4 +55,50 @@
     window.addEventListener("pageshow", function (e) {
         if (e.persisted) { closeAll(null); }
     });
+    // Esc で閉じる。フォーカスがナビの中にあるときは、開いていたボタンへ戻す。
+    document.addEventListener("keydown", function (e) {
+        if (e.key !== "Escape") { return; }
+        var b = openBtn();
+        if (!b) { return; }
+        var inside = nav.contains(document.activeElement);
+        closeAll(null);
+        if (inside) { b.focus(); }
+    });
+
+    // 現在地の表示。このナビは partialCached で全ページ共通の HTML なので、
+    // テンプレートではなくここで URL を照合して付ける。
+    function norm(path) { return path.replace(/\/?$/, "/"); }
+    var here = norm(location.pathname);
+    var currentChip = null;
+    Array.prototype.forEach.call(nav.querySelectorAll("a[href]"), function (a) {
+        if (norm(a.pathname) !== here) { return; }
+        a.setAttribute("aria-current", "page");
+        var chip = a;
+        var panel = a.closest(".cat-panel");
+        if (panel) {
+            chip = nav.querySelector('.cat-summary[data-cat-target="' + panel.id + '"]');
+            if (chip) { chip.classList.add("is-current"); }
+        }
+        currentChip = currentChip || chip;
+    });
+
+    // スマホの横スクロール。スクロールバーを隠しているので、続きがある側の端を
+    // ぼかして知らせる (PC は折り返し表示で scrollWidth == clientWidth になり付かない)。
+    if (!list) { return; }
+    function updateHint() {
+        var max = list.scrollWidth - list.clientWidth;
+        list.classList.toggle("has-more-left", list.scrollLeft > 4);
+        list.classList.toggle("has-more-right", list.scrollLeft < max - 4);
+    }
+    if (currentChip && list.scrollWidth > list.clientWidth) {
+        var lr = list.getBoundingClientRect();
+        var cr = currentChip.getBoundingClientRect();
+        if (cr.right > lr.right || cr.left < lr.left) {
+            // 左端のぼかし (36px) に現在地の chip が掛からない位置で止める。
+            list.scrollLeft += cr.left - lr.left - 40;
+        }
+    }
+    list.addEventListener("scroll", updateHint, { passive: true });
+    window.addEventListener("resize", updateHint);
+    updateHint();
 })();
