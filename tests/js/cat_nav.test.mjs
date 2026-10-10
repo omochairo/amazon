@@ -8,6 +8,8 @@
 //   - キーボードで開いたときだけ、パネルの先頭リンクへフォーカスを移す
 //   - 開いている間の Tab は「開いたボタン → パネルのリンク → 次の chip」の順に進む
 //   - bfcache から戻ったときは閉じた状態にする
+//   - 開閉 chip は <a href="#cat-panel-..." role="button">。JS が動いたら is-js を付けて
+//     CSS の :target (JS 無しの経路) を止め、遷移を止めてその場で開閉する
 //   - 現在地の chip が横スクロールの外にあるときは、見える位置までスクロールする
 //   - 現在地 (URL が一致するリンクと、その親ボタン) に印を付ける
 //   - 横スクロールの続きがある側にだけ has-more-left / has-more-right を付ける
@@ -44,7 +46,7 @@ function makeEl(doc, attrs = {}, extra = {}) {
 }
 
 // groups: [{ id, links: [pathname, ...] }]。links が 1 個のグループは直接リンク。
-function setup({ pathname = "/", groups, scrollWidth = 300, clientWidth = 300,
+function setup({ pathname = "/", hash = "", groups, scrollWidth = 300, clientWidth = 300,
                  chipRect = { left: 0, right: 10 } }) {
   const docListeners = {};
   const winListeners = {};
@@ -72,7 +74,11 @@ function setup({ pathname = "/", groups, scrollWidth = 300, clientWidth = 300,
     panel.querySelector = () => panel.links[0] || null;
     panel.querySelectorAll = () => panel.links;
     panels[panel.id] = panel;
-    btns.push(makeEl(doc, { "aria-expanded": "false", "data-cat-target": panel.id }, { panel }));
+    // 開閉 chip は <a href="#cat-panel-..."> なので、pathname は今のページと同じになる。
+    btns.push(makeEl(doc,
+      { "aria-expanded": "false", "aria-controls": panel.id, href: "#" + panel.id },
+      { panel, pathname, closest: () => null,
+        click() { this.fire("click", { detail: 0 }); } }));
   }
   const list = makeEl(doc, {}, {
     scrollWidth, clientWidth, scrollLeft: 0,
@@ -84,22 +90,26 @@ function setup({ pathname = "/", groups, scrollWidth = 300, clientWidth = 300,
   const nav = {
     querySelector(sel) {
       if (sel === ".cat-nav-list") { return list; }
-      const m = /data-cat-target="([^"]+)"/.exec(sel);
-      return m ? btns.find((b) => b.getAttribute("data-cat-target") === m[1]) || null : null;
+      const m = /aria-controls="([^"]+)"/.exec(sel);
+      return m ? btns.find((b) => b.getAttribute("aria-controls") === m[1]) || null : null;
     },
     querySelectorAll(sel) {
-      if (sel === ".cat-summary[data-cat-target]") { return btns; }
+      if (sel === ".cat-summary[aria-controls]") { return btns; }
       if (sel === ".cat-summary") { return [...btns, ...direct]; }
-      if (sel === "a[href]") { return links; }
+      if (sel === "a[href]") { return [...btns, ...links]; }
       return [];
     },
     contains: (el) => !!(el && el.inNav),
+    classList: makeEl(doc).classList,
   };
   doc.querySelector = (sel) => (sel === ".cat-nav" ? nav : null);
   doc.getElementById = (id) => panels[id] || null;
-  const win = { addEventListener(type, fn) { winListeners[type] = fn; } };
-  vm.runInNewContext(SRC, { document: doc, window: win, location: { pathname } });
-  return { doc, btns, direct, links, list, panels, docListeners, winListeners };
+  const replaced = [];
+  const history = { replaceState: (state, title, url) => { replaced.push(url); } };
+  const win = { history, addEventListener(type, fn) { winListeners[type] = fn; } };
+  vm.runInNewContext(SRC, { document: doc, window: win, history,
+                            location: { pathname, hash, search: "" } });
+  return { doc, nav, replaced, btns, direct, links, list, panels, docListeners, winListeners };
 }
 
 const GROUPS = [
@@ -260,6 +270,47 @@ test("現在地の chip が横スクロールの外にあれば見える位置�
   // 左端のぼかし (36px) に掛からないよう 40px 手前で止める。
   assert.equal(list.scrollLeft, 860);
   assert.equal(list.classList.contains("has-more-left"), true);
+});
+
+test("開閉 chip: ページ内リンクの遷移を止め、is-js を付けて :target の規則を止める", () => {
+  const { nav, btns } = setup({ groups: GROUPS });
+  assert.equal(nav.classList.contains("is-js"), true);
+  let prevented = false;
+  btns[0].fire("click", { detail: 1, preventDefault() { prevented = true; } });
+  assert.equal(prevented, true);
+  assert.equal(btns[0].panel.hidden, false);
+});
+
+test("開閉 chip: Space で開き、先頭リンクへフォーカスを移す", () => {
+  const { doc, btns } = setup({ groups: GROUPS });
+  let prevented = false;
+  btns[0].fire("keydown", { key: "Enter", preventDefault() { prevented = true; } });
+  assert.equal(prevented, false);
+  assert.equal(btns[0].panel.hidden, true);
+  btns[0].fire("keydown", { key: " ", preventDefault() { prevented = true; } });
+  assert.equal(prevented, true);
+  assert.equal(btns[0].panel.hidden, false);
+  assert.equal(doc.activeElement, btns[0].panel.links[0]);
+});
+
+test("開閉 chip: #cat-panel-... 付きで開いたら、そのパネルを開いた状態で引き継ぐ", () => {
+  const { btns, replaced } = setup({ groups: GROUPS, pathname: "/tags/pazuru/",
+                                     hash: "#cat-panel-puzzle" });
+  // # は消す (閉じたあとの再読み込みでまた開かないように)。
+  assert.deepEqual(replaced, ["/tags/pazuru/"]);
+  assert.equal(setup({ groups: GROUPS }).replaced.length, 0);
+  assert.equal(btns[1].getAttribute("aria-expanded"), "true");
+  assert.equal(btns[1].panel.hidden, false);
+  assert.equal(btns[0].panel.hidden, true);
+  // 引き継いだあとは普通に閉じられる。
+  btns[1].fire("click", { detail: 1 });
+  assert.equal(btns[1].panel.hidden, true);
+});
+
+test("現在地: 開閉 chip 自身 (href が # だけ) には aria-current を付けない", () => {
+  const { btns } = setup({ groups: GROUPS, pathname: "/tags/jigusoo/" });
+  assert.equal(btns.some((b) => b.getAttribute("aria-current") !== null), false);
+  assert.equal(btns[0].classList.contains("is-current"), false);
 });
 
 test("現在地の chip が見えていればスクロールしない", () => {
