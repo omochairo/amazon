@@ -1,6 +1,6 @@
 ---
-title: "楽天 知育玩具ランキング TOP30｜独自の知育スコア解説＆最安値比較リンク付き"
-description: "楽天市場「おもちゃジャンル」の売れ筋日次ランキング TOP30 を毎日 04:00 JST に自動更新。気になる商品は、おもちゃいろ独自の知育スコア（教育効果・安全性・長く遊べる・コスパの 4 軸）で評価した徹底解説レビューや、Amazon 価格との比較リンクからチェックできます。"
+title: "楽天おもちゃランキングTOP30【毎日更新】｜知育スコア・Amazon価格つき"
+description: "楽天市場「おもちゃジャンル」の売れ筋ランキング TOP30 を毎日 04:00 JST に自動更新。気になる商品は、おもちゃいろ独自の知育スコア（教育効果・安全性・長く遊べる・コスパの 4 軸）で評価した解説レビューや、Amazon 価格との比較リンクから確認できます。"
 layout: "ranking"
 url: /ranking/
 draft: false
@@ -8,6 +8,8 @@ ShowToc: false
 ShowBreadCrumbs: true
 hidemeta: false
 disableShare: true
+params:
+  title_suffix_short: true
 ---
 
 楽天市場「おもちゃジャンル」の **日次ランキング TOP30** を毎日 04:00 JST に自動更新しています。お子さまや甥姪へのプレゼント選びの参考にどうぞ。
