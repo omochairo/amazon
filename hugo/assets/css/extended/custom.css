@@ -1737,6 +1737,29 @@ main.main:has(.card-grid) {
 }
 [data-theme="dark"] .search-summary { color: #c8c8d0; }
 
+/* ---------- 条件から探す (explore_links.html: /search/ /posts/) ---------- */
+.explore-links {
+  margin: 2rem 0 1.5rem;
+  padding: 1.2rem 1.4rem 1.4rem;
+  border-radius: var(--radius-md);
+  background: var(--brand-gradient-subtle);
+}
+.explore-links-title {
+  margin: 0 0 0.9rem;
+  font-size: 1.1rem;
+}
+.explore-links-group + .explore-links-group { margin-top: 0.9rem; }
+.explore-links-label {
+  margin: 0 0 0.45rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--secondary, #666);
+}
+[data-theme="dark"] .explore-links {
+  background: linear-gradient(135deg, rgba(255,107,53,0.12) 0%, rgba(247,201,72,0.10) 50%, rgba(46,196,182,0.12) 100%);
+}
+[data-theme="dark"] .explore-links-label { color: #c8c8d0; }
+
 /* ---------- omcha 関連記事 (ブログカード) ---------- */
 /* おもちゃいろ (omcha.jp) の関連記事を画像付きカードで表示。YouTube セクションの直上 */
 .post-content .omcha-card-grid {
