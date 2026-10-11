@@ -107,9 +107,11 @@ header .logo a {
   transition: all 0.2s ease;
 }
 
+/* 文字は白ではなく濃色。白 × #FF6B35 は約 2.8:1 で読みにくく、#1e1e1e なら約 5.9:1。
+   塗りが --brand-primary の部品はこの色に揃える (.cat-summary[aria-expanded="true"] と同じ)。 */
 .post-tags a:hover {
   background: var(--brand-primary) !important;
-  color: white !important;
+  color: #1e1e1e !important;
   border-color: var(--brand-primary) !important;
   transform: scale(1.05);
 }
@@ -1072,10 +1074,10 @@ main.main:has(.card-grid) {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .home-hero-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.14); }
-.home-hero-btn.primary { background: var(--brand-primary); color: #fff; }
+.home-hero-btn.primary { background: var(--brand-primary); color: #1e1e1e; }
 .home-hero-btn.outline { background: transparent; border: 1.5px solid var(--brand-primary); color: var(--brand-primary); }
 [data-theme="dark"] .home-hero-btn { background: #2a2a3a; color: #eee; }
-[data-theme="dark"] .home-hero-btn.primary { background: var(--brand-primary); color: #fff; }
+[data-theme="dark"] .home-hero-btn.primary { background: var(--brand-primary); color: #1e1e1e; }
 
 /* --- Section header --- */
 .home-section { margin: 2.2rem 0 0; }
@@ -1365,7 +1367,7 @@ main.main:has(.card-grid) {
 }
 [data-theme="dark"] .home-hero-btn.primary {
   background: var(--brand-primary);
-  color: #fff;
+  color: #1e1e1e;
 }
 [data-theme="dark"] .home-hero-btn.outline {
   background: transparent;
@@ -1438,7 +1440,7 @@ main.main:has(.card-grid) {
 .posts-toolbar-link:hover { transform: translateY(-1px); box-shadow: var(--card-shadow); }
 .posts-toolbar-link.is-active {
   background: var(--brand-primary);
-  color: #fff !important;
+  color: #1e1e1e !important;
   box-shadow: 0 3px 10px rgba(255,107,53,0.35);
 }
 
@@ -1485,7 +1487,7 @@ main.main:has(.card-grid) {
 }
 [data-theme="dark"] .posts-toolbar-link.is-active {
   background: var(--brand-primary);
-  color: #fff !important;
+  color: #1e1e1e !important;
 }
 [data-theme="dark"] .posts-pagination .pagination a {
   background: #232334;
@@ -1536,7 +1538,7 @@ main.main:has(.card-grid) {
   padding: 0.25rem 0.75rem;
   border-radius: 999px;
   background: var(--brand-primary);
-  color: #fff;
+  color: #1e1e1e;
   font-weight: 700;
 }
 .term-header-link {
@@ -6894,7 +6896,7 @@ body:has(#compare-floating-bar) .favorites-wrapper {
 }
 .last-diagnosis-btn.primary {
   background: var(--brand-primary, #e8743b);
-  color: #fff;
+  color: #1e1e1e;
 }
 .last-diagnosis-btn:hover {
   transform: translateY(-1px);
@@ -6910,6 +6912,7 @@ body:has(#compare-floating-bar) .favorites-wrapper {
   background: linear-gradient(135deg, #2a2422, #241f1d);
 }
 [data-theme="dark"] .last-diagnosis-btn { background: #2a2a3a; }
+/* ダークでは上の行 (詳細度が高い) が勝ち、primary も塗りが #2a2a3a になる。オレンジではないので白のまま。 */
 [data-theme="dark"] .last-diagnosis-btn.primary { color: #fff; }
 
 /* ============================================================
