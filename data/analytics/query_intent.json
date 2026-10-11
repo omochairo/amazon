@@ -1,7 +1,7 @@
 {
   "source_range": {
-    "start": "2026-09-24",
-    "end": "2026-10-01",
+    "start": "2026-10-01",
+    "end": "2026-10-08",
     "days": 7,
     "window_days": 8,
     "delay_days": 3
@@ -14,25 +14,75 @@
   },
   "detected": [
     {
-      "page": "https://navi.omcha.jp/products/b07bt3wm3h/",
+      "page": "https://navi.omcha.jp/products/b0h86rpr71/",
       "dominant_intent": "informational",
-      "dominant_share": 1.0,
-      "total_impressions": 87,
+      "dominant_share": 0.946,
+      "total_impressions": 56,
       "intent_breakdown": {
-        "informational": 87
+        "informational": 53,
+        "commercial": 3
       },
       "cta_recommendation": "冒頭で結論/答えを先出しし、比較表・関連記事で滞在を伸ばす。購入 CTA は本文中盤以降に控えめに配置 (情報目的の離脱を防ぐ)。",
       "top_queries": [
         {
-          "query": "youtube10425",
+          "query": "バター スクイーズ どこに 売ってる",
           "intent": "informational",
-          "impressions": 87,
+          "impressions": 19,
           "clicks": 0,
-          "position": 8.988505747126437
+          "position": 12.473684210526315
+        },
+        {
+          "query": "バター スクイーズ 本物 どこで 売っ てる",
+          "intent": "informational",
+          "impressions": 12,
+          "clicks": 0,
+          "position": 9.416666666666666
+        },
+        {
+          "query": "バタースクイーズ",
+          "intent": "informational",
+          "impressions": 7,
+          "clicks": 0,
+          "position": 4.428571428571429
+        },
+        {
+          "query": "バタースクイーズ どこで売ってる",
+          "intent": "informational",
+          "impressions": 3,
+          "clicks": 0,
+          "position": 10.333333333333334
+        },
+        {
+          "query": "バタースクイーズ 何円",
+          "intent": "informational",
+          "impressions": 2,
+          "clicks": 0,
+          "position": 11.0
+        },
+        {
+          "query": "バタースクイーズどこに売ってる",
+          "intent": "informational",
+          "impressions": 2,
+          "clicks": 0,
+          "position": 14.5
+        },
+        {
+          "query": "バタースクイーズはどこに売ってる",
+          "intent": "informational",
+          "impressions": 2,
+          "clicks": 0,
+          "position": 14.0
+        },
+        {
+          "query": "バタースクイーズ安い",
+          "intent": "commercial",
+          "impressions": 2,
+          "clicks": 0,
+          "position": 12.0
         }
       ],
-      "first_detected": "2026-09-24",
-      "last_confirmed": "2026-10-01",
+      "first_detected": "2026-10-08",
+      "last_confirmed": "2026-10-08",
       "weeks_since_confirmed": 0,
       "carried_forward": false
     },
@@ -40,43 +90,36 @@
       "page": "https://navi.omcha.jp/products/b0875fv2bq/",
       "dominant_intent": "informational",
       "dominant_share": 1.0,
-      "total_impressions": 67,
+      "total_impressions": 54,
       "intent_breakdown": {
-        "informational": 67
+        "informational": 54
       },
       "cta_recommendation": "冒頭で結論/答えを先出しし、比較表・関連記事で滞在を伸ばす。購入 CTA は本文中盤以降に控えめに配置 (情報目的の離脱を防ぐ)。",
       "top_queries": [
         {
           "query": "ロンビー おもちゃ",
           "intent": "informational",
-          "impressions": 38,
+          "impressions": 28,
           "clicks": 0,
-          "position": 10.473684210526315
+          "position": 10.214285714285714
         },
         {
           "query": "ロンビー",
           "intent": "informational",
-          "impressions": 23,
+          "impressions": 22,
           "clicks": 0,
-          "position": 10.73913043478261
+          "position": 11.363636363636363
         },
         {
           "query": "ロンビー トイザらス",
           "intent": "informational",
           "impressions": 4,
           "clicks": 0,
-          "position": 7.5
-        },
-        {
-          "query": "ろんびー",
-          "intent": "informational",
-          "impressions": 2,
-          "clicks": 0,
-          "position": 10.5
+          "position": 10.25
         }
       ],
       "first_detected": "2026-07-09",
-      "last_confirmed": "2026-10-01",
+      "last_confirmed": "2026-10-08",
       "weeks_since_confirmed": 0,
       "carried_forward": false
     },
@@ -150,7 +193,30 @@
       ],
       "first_detected": "2026-09-03",
       "last_confirmed": "2026-09-03",
-      "weeks_since_confirmed": 4,
+      "weeks_since_confirmed": 5,
+      "carried_forward": true
+    },
+    {
+      "page": "https://navi.omcha.jp/products/b07bt3wm3h/",
+      "dominant_intent": "informational",
+      "dominant_share": 1.0,
+      "total_impressions": 87,
+      "intent_breakdown": {
+        "informational": 87
+      },
+      "cta_recommendation": "冒頭で結論/答えを先出しし、比較表・関連記事で滞在を伸ばす。購入 CTA は本文中盤以降に控えめに配置 (情報目的の離脱を防ぐ)。",
+      "top_queries": [
+        {
+          "query": "youtube10425",
+          "intent": "informational",
+          "impressions": 87,
+          "clicks": 0,
+          "position": 8.988505747126437
+        }
+      ],
+      "first_detected": "2026-09-24",
+      "last_confirmed": "2026-10-01",
+      "weeks_since_confirmed": 1,
       "carried_forward": true
     },
     {
@@ -209,7 +275,7 @@
       ],
       "first_detected": "2026-09-10",
       "last_confirmed": "2026-09-10",
-      "weeks_since_confirmed": 3,
+      "weeks_since_confirmed": 4,
       "carried_forward": true
     },
     {
@@ -282,7 +348,7 @@
       ],
       "first_detected": "2026-09-03",
       "last_confirmed": "2026-09-03",
-      "weeks_since_confirmed": 4,
+      "weeks_since_confirmed": 5,
       "carried_forward": true
     },
     {
@@ -355,7 +421,7 @@
       ],
       "first_detected": "2026-09-10",
       "last_confirmed": "2026-09-10",
-      "weeks_since_confirmed": 3,
+      "weeks_since_confirmed": 4,
       "carried_forward": true
     },
     {
@@ -407,7 +473,7 @@
       ],
       "first_detected": "2026-08-13",
       "last_confirmed": "2026-09-10",
-      "weeks_since_confirmed": 3,
+      "weeks_since_confirmed": 4,
       "carried_forward": true
     }
   ]
