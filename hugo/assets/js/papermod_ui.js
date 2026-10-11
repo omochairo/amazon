@@ -26,14 +26,24 @@
     // 開閉するので、ここでスクロールして # を履歴に積むと、開くたびに画面が動く。
     document.querySelectorAll('a[href^="#"]:not([role="button"])').forEach(anchor => {
         anchor.addEventListener("click", function (e) {
-            e.preventDefault();
             var id = this.getAttribute("href").substr(1);
+            // 行き先が無いリンク (href="#"、id の無い見出し、壊れた % 表記) は既定の動作に
+            // 任せる。以前は null.scrollIntoView() で例外になり、押しても何も起きなかった。
+            // getElementById にしたので、id に ' が入っていてもセレクタの構文エラーにならない。
+            var target = null;
+            try {
+                target = id ? document.getElementById(decodeURIComponent(id)) : null;
+            } catch (err) {
+                target = null;
+            }
+            if (!target) { return; }
+            e.preventDefault();
             if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                target.scrollIntoView({
                     behavior: "smooth"
                 });
             } else {
-                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+                target.scrollIntoView();
             }
             if (id === "top") {
                 history.replaceState(null, null, " ");
