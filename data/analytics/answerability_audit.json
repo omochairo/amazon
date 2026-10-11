@@ -1,18 +1,89 @@
 {
-  "generated_at": "2026-10-10T23:31:32Z",
+  "generated_at": "2026-10-11T23:39:08Z",
   "model": "gemma4:26b-a4b-it-qat",
-  "source_week": "2026-W40",
-  "baseline_ctr": 0.03198090692124105,
+  "source_week": "2026-W41",
+  "baseline_ctr": 0.0344418052256532,
   "pages": [
+    {
+      "page": "https://navi.omcha.jp/products/b0h86rpr71/",
+      "asin": "B0H86RPR71",
+      "page_coverage_avg": 0.44,
+      "queries": [
+        {
+          "query": "バター スクイーズ どこに 売ってる",
+          "impressions": 19,
+          "position": 12.473684210526315,
+          "answered": false,
+          "coverage": 0.3,
+          "missing_aspects": [
+            "実店舗での販売状況（100均、雑貨店、玩具店など）",
+            "その他のオンラインショップ（楽天、Yahoo!ショッピングなど）の具体的な販売情報"
+          ],
+          "note": "Amazonでの価格には触れていますが、「どこに売っているか」という問いに対し、実店舗の有無や他の販売チャネルに関する情報が不足しています。",
+          "error": null
+        },
+        {
+          "query": "バター スクイーズ 本物 どこで 売っ てる",
+          "impressions": 12,
+          "position": 9.416666666666666,
+          "answered": false,
+          "coverage": 0.3,
+          "missing_aspects": [
+            "「本物のような」という質感に関する具体的な詳細（見た目や触感のより深い説明）",
+            "「どこで売っているか」に対する、Amazon以外の販売店（実店舗など）の情報"
+          ],
+          "note": "最安値としてAmazonの情報はありますが、ユーザーが求めている「本物のようなもの」の具体的な特徴や、Amazon以外の購入場所についての記述が不足しています。",
+          "error": null
+        },
+        {
+          "query": "バタースクイーズ",
+          "impressions": 7,
+          "position": 4.428571428571429,
+          "answered": false,
+          "coverage": 0.3,
+          "missing_aspects": [
+            "バタースクイーズ全般の定義や特徴",
+            "バタースクイーズの種類（形状やサイズなど）",
+            "具体的な遊び方や活用シーン",
+            "購入時の注意点やメンテナンス方法"
+          ],
+          "note": "検索クエリが「バタースクイーズ」という広範な単語であるのに対し、記事の内容が「2本セット」という特定の製品に特化しすぎているため、一般的な情報を求めるユーザーの疑問には十分に応えられていません。",
+          "error": null
+        },
+        {
+          "query": "バタースクイーズ どこで売ってる",
+          "impressions": 3,
+          "position": 10.333333333333334,
+          "answered": false,
+          "coverage": 0.3,
+          "missing_aspects": [
+            "実店舗での販売状況（100均、雑貨店、玩具店など）",
+            "その他のオンラインショップ（楽天、Yahoo!ショッピングなど）の具体的な情報"
+          ],
+          "note": "Amazonでの価格には触れていますが、「どこで売っているか」という問いに対し、実店舗の有無や他の販売チャネルに関する情報が不足しています。",
+          "error": null
+        },
+        {
+          "query": "バタースクイーズ 何円",
+          "impressions": 2,
+          "position": 11.0,
+          "answered": true,
+          "coverage": 1.0,
+          "missing_aspects": [],
+          "note": "「バタースクイーズ 2本セット」の価格が具体的に明記されており、ユーザーの疑問に直接回答しています。",
+          "error": null
+        }
+      ]
+    },
     {
       "page": "https://navi.omcha.jp/products/b0875fv2bq/",
       "asin": "B0875FV2BQ",
-      "page_coverage_avg": 0.7,
+      "page_coverage_avg": 0.633,
       "queries": [
         {
           "query": "ロンビー おもちゃ",
-          "impressions": 38,
-          "position": 10.473684210526315,
+          "impressions": 28,
+          "position": 10.214285714285714,
           "answered": true,
           "coverage": 0.9,
           "missing_aspects": [
@@ -24,8 +95,8 @@
         },
         {
           "query": "ロンビー",
-          "impressions": 23,
-          "position": 10.73913043478261,
+          "impressions": 22,
+          "position": 11.363636363636363,
           "answered": true,
           "coverage": 0.9,
           "missing_aspects": [
@@ -38,7 +109,7 @@
         {
           "query": "ロンビー トイザらス",
           "impressions": 4,
-          "position": 7.5,
+          "position": 10.25,
           "answered": false,
           "coverage": 0.1,
           "missing_aspects": [
@@ -48,34 +119,45 @@
           ],
           "note": "検索クエリは「トイザらス」での販売に関する情報を求めていますが、記事内にはAmazonと楽天の価格情報しかなく、トイザらスに関する記述が一切ありません。",
           "error": null
-        },
-        {
-          "query": "ろんびー",
-          "impressions": 2,
-          "position": 10.5,
-          "answered": true,
-          "coverage": 0.9,
-          "missing_aspects": [],
-          "note": "「ろんびー」という製品名での検索に対し、特徴、価格、対象年齢、安全性といった主要な情報を網羅しており、ユーザーの疑問に十分応えられています。",
-          "error": null
         }
       ]
     },
     {
-      "page": "https://navi.omcha.jp/products/b07bt3wm3h/",
-      "asin": "B07BT3WM3H",
-      "page_coverage_avg": 0.0,
+      "page": "https://navi.omcha.jp/products/b0gc4mql8n/",
+      "asin": "B0GC4MQL8N",
+      "page_coverage_avg": 0.9,
       "queries": [
         {
-          "query": "youtube10425",
-          "impressions": 87,
-          "position": 8.988505747126437,
-          "answered": false,
-          "coverage": 0.0,
+          "query": "はむにぎり 口コミ",
+          "impressions": 6,
+          "position": 10.333333333333334,
+          "answered": true,
+          "coverage": 0.8,
           "missing_aspects": [
-            "YouTubeでの動画コンテンツ（遊び方やレビュー動画など）の情報"
+            "具体的なユーザーの体験談（良い点・悪い点の詳細）",
+            "購入者の具体的な評価（星の数やレビュー内容の引用）"
           ],
-          "note": "検索クエリが特定の製品番号（10425）に関連するYouTube動画を意図しているのに対し、記事は製品の比較情報のみであり、動画に関する回答が一切含まれていません。",
+          "note": "商品の特徴や仕様、価格に関する情報は網羅されていますが、実際の利用者の具体的な声（レビュー内容）が不足しています。",
+          "error": null
+        },
+        {
+          "query": "はむにぎり 洗い方",
+          "impressions": 4,
+          "position": 10.75,
+          "answered": true,
+          "coverage": 1.0,
+          "missing_aspects": [],
+          "note": "「お洗濯不可」であることと、汚れた際の具体的な拭き取り方法が明記されており、ユーザーの疑問に的確に回答しています。",
+          "error": null
+        },
+        {
+          "query": "これ何？",
+          "impressions": 1,
+          "position": 30.0,
+          "answered": true,
+          "coverage": 0.9,
+          "missing_aspects": [],
+          "note": "製品名、形状、質感、サイズ、用途などが具体的に記載されており、「これ何？」という問いに対して十分に回答できています。",
           "error": null
         }
       ]
