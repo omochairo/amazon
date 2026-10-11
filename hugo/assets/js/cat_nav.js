@@ -6,11 +6,15 @@
     var nav = document.querySelector(".cat-nav");
     if (!nav) { return; }
     var list = nav.querySelector(".cat-nav-list");
-    // 子が 1 個のグループは <a class="cat-summary"> (直接リンク) で出るので、
-    // 開閉の対象はパネルを持つ button だけに絞る。
-    var btns = Array.prototype.slice.call(nav.querySelectorAll(".cat-summary[data-cat-target]"));
+    // 子が 1 個のグループは直接リンクで出るので、開閉の対象はパネルを持つ chip
+    // (aria-controls 付き) だけに絞る。chip は <a href="#cat-panel-..." role="button">
+    // で、JS が無いときは CSS の :target でパネルが開く。ここから先は JS が開閉を
+    // 受け持つので、is-js を付けて :target の規則を止める (履歴を書き換えても
+    // :target は外れず、閉じられなくなるため)。
+    var btns = Array.prototype.slice.call(nav.querySelectorAll(".cat-summary[aria-controls]"));
+    nav.classList.add("is-js");
     function panelOf(btn) {
-        return document.getElementById(btn.getAttribute("data-cat-target"));
+        return document.getElementById(btn.getAttribute("aria-controls"));
     }
     function close(btn) {
         btn.setAttribute("aria-expanded", "false");
@@ -28,6 +32,8 @@
     }
     btns.forEach(function (b) {
         b.addEventListener("click", function (e) {
+            // ページ内リンクとしての遷移 (#cat-panel-... へのスクロール) は止める。
+            if (e && e.preventDefault) { e.preventDefault(); }
             var open = b.getAttribute("aria-expanded") === "true";
             closeAll(b);
             if (open) {
@@ -47,6 +53,25 @@
                 }
             }
         });
+    });
+    btns.forEach(function (b) {
+        // role="button" の <a> は Space では押せないので補う (Enter は既定で click になる)。
+        b.addEventListener("keydown", function (e) {
+            if (e.key !== " " && e.key !== "Spacebar") { return; }
+            e.preventDefault();
+            b.click();
+        });
+        // スクリプトが動く前に chip を押した / #cat-panel-... 付きの URL で開いたときは、
+        // :target で見えていたパネルを、開いた状態としてそのまま引き継ぐ。
+        if (location.hash === "#" + b.getAttribute("aria-controls")) {
+            b.setAttribute("aria-expanded", "true");
+            var p = panelOf(b);
+            if (p) { p.hidden = false; }
+            // # を残すと、閉じたあとの再読み込みでまた開く。
+            if (window.history && history.replaceState) {
+                history.replaceState(null, "", location.pathname + (location.search || ""));
+            }
+        }
     });
     // バー外クリック / bfcache 復元時は閉じる。
     document.addEventListener("click", function (e) {
@@ -101,12 +126,14 @@
     var here = norm(location.pathname);
     var currentChip = null;
     Array.prototype.forEach.call(nav.querySelectorAll("a[href]"), function (a) {
+        // 開閉 chip の href は "#cat-panel-..." で、pathname が今のページと一致する。
+        if (a.hasAttribute("aria-controls")) { return; }
         if (norm(a.pathname) !== here) { return; }
         a.setAttribute("aria-current", "page");
         var chip = a;
         var panel = a.closest(".cat-panel");
         if (panel) {
-            chip = nav.querySelector('.cat-summary[data-cat-target="' + panel.id + '"]');
+            chip = nav.querySelector('.cat-summary[aria-controls="' + panel.id + '"]');
             if (chip) { chip.classList.add("is-current"); }
         }
         currentChip = currentChip || chip;

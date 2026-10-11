@@ -106,11 +106,14 @@
                 <span class="cat-summary-name">{{ .name }}</span>
             </a>
             {{- else }}
-            <button type="button" class="cat-summary" aria-expanded="false"
-                aria-controls="cat-panel-{{ .slug }}" data-cat-target="cat-panel-{{ .slug }}">
+            {{- /* JS が無効・読み込み失敗でも子リンクへ届くよう、button ではなくパネルへの
+                   ページ内リンクにする (CSS の :target でパネルが開く)。JS が動けば
+                   cat_nav.js が遷移を止めて、これまで通りその場で開閉する。 */}}
+            <a class="cat-summary" href="#cat-panel-{{ .slug }}" role="button" aria-expanded="false"
+                aria-controls="cat-panel-{{ .slug }}">
                 <span class="cat-summary-emoji" aria-hidden="true">{{ .emoji }}</span>
                 <span class="cat-summary-name">{{ .name }}</span>
-            </button>
+            </a>
             {{- end }}
         </li>
         {{- end }}
