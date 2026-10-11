@@ -296,3 +296,48 @@ class SummarizeRichResultsTest(unittest.TestCase):
         })
         self.assertEqual(got["verdict"], "FAIL")
         self.assertEqual(got["types"], ["(unnamed)", "T"])
+
+
+class CorePagesTest(unittest.TestCase):
+    """核ページは products の集計と別枠で、index 済みも含めて全件残す。"""
+
+    def test_urls_use_the_sitemap_origin(self):
+        got = I.core_page_urls("https://example.test/sitemap.xml", ("/", "/toys-age-1/"))
+        self.assertEqual(got, ["https://example.test/", "https://example.test/toys-age-1/"])
+
+    def test_default_paths_are_not_product_pages(self):
+        # products は --prefix 側で数える。ここに混ざると二重に検査される。
+        self.assertTrue(I.CORE_PAGE_PATHS)
+        for p in I.CORE_PAGE_PATHS:
+            self.assertTrue(p.startswith("/") and p.endswith("/"), p)
+            self.assertFalse(p.startswith("/products/"), p)
+        self.assertEqual(len(set(I.CORE_PAGE_PATHS)), len(I.CORE_PAGE_PATHS))
+
+    def test_indexed_pages_are_kept(self):
+        urls = ["https://example.test/a/", "https://example.test/b/"]
+        rows = I.build_core_pages(urls, [
+            _item(urls[0], verdict="PASS", coverage_state="送信して登録されました"),
+            _item(urls[1], verdict="NEUTRAL", coverage_state="クロール済み - インデックス未登録"),
+        ], [])
+        self.assertEqual([r["url"] for r in rows], urls)
+        self.assertEqual(rows[0]["verdict"], "PASS")
+        self.assertEqual(rows[1]["coverage_state"], "クロール済み - インデックス未登録")
+
+    def test_rows_follow_the_requested_order(self):
+        urls = ["https://example.test/b/", "https://example.test/a/"]
+        rows = I.build_core_pages(urls, [_item(urls[1]), _item(urls[0])], [])
+        self.assertEqual([r["url"] for r in rows], urls)
+
+    def test_failed_url_is_an_error_row_not_dropped(self):
+        urls = ["https://example.test/a/", "https://example.test/b/", "https://example.test/c/"]
+        rows = I.build_core_pages(
+            urls, [_item(urls[0])], [{"url": urls[1], "error": "HttpError 429"}])
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[1], {"url": urls[1], "error": "HttpError 429"})
+        self.assertEqual(rows[2], {"url": urls[2], "error": "not inspected"})
+
+    def test_none_fields_are_normalized(self):
+        url = "https://example.test/a/"
+        rows = I.build_core_pages([url], [{"url": url, "verdict": None}], [])
+        self.assertEqual(rows[0]["verdict"], "(none)")
+        self.assertEqual(rows[0]["last_crawl_time"], "(none)")

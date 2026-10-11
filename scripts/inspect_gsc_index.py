@@ -56,6 +56,35 @@ DEFAULT_CIRCUIT_BREAKER_THRESHOLD = 8
 # Google URL Inspection API のクォータリセットは Pacific 深夜。夏時間 (PDT, UTC-7) では UTC 07:00。
 # 冬時間 (PST, UTC-8) との誤差は安全側 (早め=まだリセットされていない扱い) に倒す
 DEFAULT_QUOTA_RESET_HOUR_UTC = 7
+# 核ページ (ホーム・一覧・年齢別/テーマ別 hub)。census の集計対象は --prefix
+# (/products/) だけなので、ここに挙げたページは一度も検査されず、「検索に出て
+# こないのは順位が低いからか、index されていないからか」を committed な成果物
+# から判定できなかった。products の集計 (totals / by_* / watchlist) には混ぜず、
+# 別枠 ``core_pages`` に 1 URL 1 行で全件 (index 済みも含めて) 残す。
+# クォータは 2000/日で、--limit 1800 に対してここは 20 件強なので収まる。
+CORE_PAGE_PATHS: tuple[str, ...] = (
+    "/",
+    "/posts/",
+    "/brands/",
+    "/search/",
+    "/diagnosis/",
+    "/cospa/",
+    "/deals/",
+    "/price/",
+    "/ranking/",
+    "/toys-age-0/",
+    "/toys-age-1/",
+    "/toys-age-2/",
+    "/toys-age-3/",
+    "/toys-age-4/",
+    "/toys-age-6/",
+    "/english-toys/",
+    "/math-toys/",
+    "/montessori-toys/",
+    "/music-toys/",
+    "/programming-toys/",
+    "/shape-toys/",
+)
 
 
 def _build_service(client_id: str, client_secret: str, refresh_token: str):
@@ -487,6 +516,47 @@ def build_rich_fail_urls(inspected: list[dict[str, Any]]) -> list[dict[str, Any]
     return rows
 
 
+def core_page_urls(sitemap_url: str, paths: tuple[str, ...] = CORE_PAGE_PATHS) -> list[str]:
+    """核ページの絶対 URL を、sitemap と同じ origin で組み立てる。"""
+    parsed = urllib.parse.urlparse(sitemap_url)
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    return [origin + p for p in paths]
+
+
+def build_core_pages(
+    urls: list[str],
+    inspected: list[dict[str, Any]],
+    errors: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """核ページの検査結果を、``urls`` の順に 1 URL 1 行で返す。
+
+    ``not_indexed_urls`` と違い **index 済みの URL も残す**。件数が少なく、
+    見たいのは「どれが落ちているか」ではなく「各ページがいまどの状態か」のため。
+    API エラーで結果が無い URL は ``error`` を持つ行にする (行ごと落とすと
+    「検査していない」と「検査して問題なし」が区別できなくなる)。
+    """
+    def _val(item: dict[str, Any], key: str) -> Any:
+        v = item.get(key)
+        return "(none)" if v is None else v
+
+    by_url = {item["url"]: item for item in inspected}
+    err_by_url = {e["url"]: e.get("error") for e in errors}
+    rows: list[dict[str, Any]] = []
+    for url in urls:
+        item = by_url.get(url)
+        if item is None:
+            rows.append({"url": url, "error": err_by_url.get(url) or "not inspected"})
+            continue
+        rows.append({
+            "url": url,
+            "coverage_state": _val(item, "coverage_state"),
+            "verdict": _val(item, "verdict"),
+            "last_crawl_time": _val(item, "last_crawl_time"),
+            "google_canonical": _val(item, "google_canonical"),
+        })
+    return rows
+
+
 def last_quota_reset_boundary(now: datetime, reset_hour_utc: int = DEFAULT_QUOTA_RESET_HOUR_UTC) -> datetime:
     """`now` 以前で直近のクォータリセット時刻 (UTC) を返す。"""
     boundary = now.replace(hour=reset_hour_utc, minute=0, second=0, microsecond=0)
@@ -554,6 +624,8 @@ def main() -> int:
     p.add_argument("--circuit-breaker-threshold", type=int, default=DEFAULT_CIRCUIT_BREAKER_THRESHOLD,
                    help="連続クォータエラー N 件で残り URL のリトライを打ち切る (#3372)。0 で無効化")
     p.add_argument("--out", default=DEFAULT_OUT)
+    p.add_argument("--no-core-pages", action="store_true",
+                   help="核ページ (CORE_PAGE_PATHS) の検査を省く")
     p.add_argument("--preflight-check", action="store_true",
                    help="#3372: API を叩かず、前回成功 run からクォータリセットウィンドウを"
                         "跨いだかだけを判定して終了する (0=OK / 1=ブロック)")
@@ -606,6 +678,21 @@ def main() -> int:
             creds, args.site_url, target_urls, args.qps, args.workers,
             args.circuit_breaker_threshold,
         )
+
+        # 核ページは products の集計が済んでから別枠で検査する。クォータが
+        # 尽きている (circuit breaker 発動) ときは叩いても全件エラーになるだけ
+        # なので省く。ここが失敗しても products 側の census は書き出す。
+        core_pages: list[dict[str, Any]] = []
+        if not args.no_core_pages and not circuit_info["tripped"]:
+            core_urls = core_page_urls(args.sitemap)
+            try:
+                core_inspected, core_errors, _ = inspect_urls(
+                    creds, args.site_url, core_urls, args.qps, args.workers,
+                    args.circuit_breaker_threshold,
+                )
+                core_pages = build_core_pages(core_urls, core_inspected, core_errors)
+            except Exception as e:
+                logger.warning("core page inspection failed (%s) — census is written without it", e)
 
         # 集計処理
         total_sitemap_urls = sitemap_count
@@ -678,6 +765,7 @@ def main() -> int:
             },
             "not_indexed_urls": not_indexed_urls,
             "rich_fail_urls": rich_fail_urls,
+            "core_pages": core_pages,
             "errors": errors,
             "circuit_breaker": circuit_info,
         }
