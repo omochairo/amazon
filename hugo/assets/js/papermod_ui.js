@@ -22,7 +22,9 @@
         }
     }
 
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    // role="button" の <a> (カテゴリナビの開閉 chip) は除く。cat_nav.js がその場で
+    // 開閉するので、ここでスクロールして # を履歴に積むと、開くたびに画面が動く。
+    document.querySelectorAll('a[href^="#"]:not([role="button"])').forEach(anchor => {
         anchor.addEventListener("click", function (e) {
             e.preventDefault();
             var id = this.getAttribute("href").substr(1);
