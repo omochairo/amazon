@@ -246,6 +246,96 @@ class BuildAgeHubTest(unittest.TestCase):
         self.assertEqual([r.asin for r in out], ["D", "B", "A"])
 
 
+class AgeHubBrandCapTest(unittest.TestCase):
+    """年齢 hub の同一メーカー上限 (navi-brain#95)。"""
+
+    def setUp(self):
+        self.hub = bch.AGE_HUBS["age-1"]
+        # スコア順: X1 X2 X3 (メーカー X) > Y1 > Z1 > N1 (brand 不明)
+        self.records = [
+            _rec("X1", 4.9, 99, 1000),
+            _rec("X2", 4.9, 98, 1000),
+            _rec("X3", 4.9, 97, 1000),
+            _rec("Y1", 4.5, 90, 1000),
+            _rec("Z1", 4.4, 88, 1000),
+            _rec("N1", 4.3, 86, 1000),
+        ]
+        self.mm = {r.asin: 12 for r in self.records}
+        self.brands = {"X1": "X", "X2": "X", "X3": "X", "Y1": "Y", "Z1": "Z"}
+
+    def _asins(self, **kw):
+        return [r.asin for r in bch.build_age_hub(
+            self.records, self.mm, self.hub, min_ivs=3.8, **kw)]
+
+    def test_no_cap_by_default(self):
+        self.assertEqual(self._asins(top_n=3), ["X1", "X2", "X3"])
+
+    def test_cap_spreads_brands_in_score_order(self):
+        out = self._asins(top_n=3, brand_index=self.brands, max_per_brand=1)
+        self.assertEqual(out, ["X1", "Y1", "Z1"])
+
+    def test_unknown_brand_is_never_capped(self):
+        out = self._asins(top_n=4, brand_index=self.brands, max_per_brand=1)
+        self.assertEqual(out, ["X1", "Y1", "Z1", "N1"])
+
+    def test_backfills_when_brands_run_out(self):
+        # 上限で外した X2 を戻して top_n を満たし、並びはスコア順に戻す
+        out = self._asins(top_n=5, brand_index=self.brands, max_per_brand=1)
+        self.assertEqual(out, ["X1", "X2", "Y1", "Z1", "N1"])
+
+    def test_zero_disables_cap(self):
+        out = self._asins(top_n=3, brand_index=self.brands, max_per_brand=0)
+        self.assertEqual(out, ["X1", "X2", "X3"])
+
+
+class BuildBrandIndexTest(unittest.TestCase):
+    def _write(self, adir, asin, brand):
+        doc = {"slug": asin, "product": {"asin": asin, "brand": brand}}
+        (adir / f"2026-06-01-{asin}.json").write_text(
+            json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+
+    def test_variants_share_a_key_and_unknowns_stay_apart(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            adir = pathlib.Path(tmp)
+            self._write(adir, "B0LEGO0001", "レゴ(LEGO)")
+            self._write(adir, "B0LEGO0002", "LEGO")
+            self._write(adir, "B0UNKN0001", "Zzqx Toys")
+            self._write(adir, "B0UNKN0002", "Qqwv Works")
+            self._write(adir, "B0EMPTY001", "")
+            idx = bch.build_brand_index(adir)
+        self.assertEqual(idx["B0LEGO0001"], idx["B0LEGO0002"])
+        # taxonomy に無いメーカー同士を「ノーブランド」1 枠にまとめない
+        self.assertNotEqual(idx["B0UNKN0001"], idx["B0UNKN0002"])
+        self.assertNotIn("B0EMPTY001", idx)
+
+
+class RunAgeHubBrandCapTest(unittest.TestCase):
+    def test_capped_items_move_to_lineup(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            adir = pathlib.Path(tmp) / "articles"
+            adir.mkdir()
+            for i, score in enumerate([4.9, 4.8, 4.7]):
+                asin = f"B0LEGOCAP{i}"
+                doc = {
+                    "slug": asin, "title": "t",
+                    "persona_fit": {"age_range": "1歳〜"},
+                    "product": {"asin": asin, "name": asin, "brand": "レゴ",
+                                "ivs_score": score, "best_price": 1000,
+                                "best_platform": "amazon",
+                                "prices": {"amazon": {"url": "https://amazon/x"}}},
+                }
+                (adir / f"2026-06-01-{asin}.json").write_text(
+                    json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+            out = pathlib.Path(tmp) / "features"
+            bch.run(adir, out, top_n=2, min_ivs=0.0, themes=[],
+                    age_hubs=["age-1"], age_max_per_brand=1)
+            data = json.loads((out / "age-1.json").read_text(encoding="utf-8"))
+        # メーカーが 1 社しか無い bucket は、件数を減らさず埋め戻す
+        self.assertEqual([i["asin"] for i in data["items"]],
+                         ["B0LEGOCAP0", "B0LEGOCAP1"])
+        self.assertEqual([i["asin"] for i in data["lineup"]], ["B0LEGOCAP2"])
+
+
 class RunAgeHubTest(unittest.TestCase):
     def test_end_to_end_writes_age_file(self):
         with tempfile.TemporaryDirectory() as tmp:
