@@ -101,6 +101,11 @@ jobs:
             echo "Jules quota gate budget: $BUDGET (rolling-24h 作成数ベース)"
             if [ -s /tmp/jules_recent_sessions.json ]; then
               export JULES_RECENT_SESSIONS=/tmp/jules_recent_sessions.json
+              # 渡せたことをログに残す。除外が効かなかった run を、警告が無いことだけでは
+              # 「渡せて該当なし」と「渡せていない」に分けられない。
+              echo "Recent Jules sessions passed to pick: $(jq 'length' /tmp/jules_recent_sessions.json 2>/dev/null || echo '?') (#9410)"
+            else
+              echo "Recent Jules sessions not available; failing-session exclusion is off for this run (#9410)"
             fi
             if [ "${BUDGET:-0}" -le 0 ]; then
               echo "Jules daily quota gate: budget 0; skipping pick + downstream."
