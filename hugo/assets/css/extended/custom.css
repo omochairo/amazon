@@ -1179,7 +1179,7 @@ main.main:has(.card-grid) {
   padding: 0.3rem 0.6rem;
   border-radius: 6px;
   background: #cd7f32;  /* default: bronze */
-  color: #fff;
+  color: #1e1e1e;  /* 白は 3.1。#1e1e1e なら 5.3 */
   font-size: 0.82rem;
   font-weight: 700;
   line-height: 1;
@@ -1189,7 +1189,7 @@ main.main:has(.card-grid) {
 /* Score color tiers */
 .product-card-score.score-gold   { background: #ffd700; color: #5c4000; }
 .product-card-score.score-silver { background: #c0c0c0; color: #1f2937; }
-.product-card-score.score-bronze { background: #cd7f32; color: #fff; }
+.product-card-score.score-bronze { background: #cd7f32; color: #1e1e1e; }
 .product-card-score strong { font-size: 1.05rem; font-weight: 900; }
 .product-card-score-suffix { font-size: 0.7rem; font-weight: 700; }
 .product-card-score-price,
@@ -1425,26 +1425,6 @@ main.main:has(.card-grid) {
   color: var(--secondary, #555);
   margin-right: 0.3rem;
 }
-.posts-toolbar-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.35rem 0.85rem;
-  border-radius: 999px;
-  background: #fff;
-  color: var(--primary, #333) !important;
-  font-size: 0.88rem;
-  font-weight: 700;
-  text-decoration: none !important;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
-}
-.posts-toolbar-link:hover { transform: translateY(-1px); box-shadow: var(--card-shadow); }
-.posts-toolbar-link.is-active {
-  background: var(--brand-primary);
-  color: #1e1e1e !important;
-  box-shadow: 0 3px 10px rgba(255,107,53,0.35);
-}
 
 /* --- グリッド & ページネーション --- */
 .posts-card-grid { margin-bottom: 2rem; }
@@ -1482,15 +1462,6 @@ main.main:has(.card-grid) {
   background: rgba(255,255,255,0.04);
 }
 [data-theme="dark"] .posts-toolbar-label { color: #c0c0c8; }
-[data-theme="dark"] .posts-toolbar-link {
-  background: #232334;
-  color: #f0f0f0 !important;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
-}
-[data-theme="dark"] .posts-toolbar-link.is-active {
-  background: var(--brand-primary);
-  color: #1e1e1e !important;
-}
 [data-theme="dark"] .posts-pagination .pagination a {
   background: #232334;
   color: #f0f0f0 !important;
@@ -2435,7 +2406,7 @@ html[data-theme="dark"] .post-content .price-cta-grid .price-search-fallback a:h
 .post-content .review-cta a {
   display: inline-block;
   background: #ff9900;
-  color: #fff;
+  color: #1e1e1e;  /* 白は 2.1。#1e1e1e なら 7.8 (hover の #f97316 でも 5.9) */
   font-weight: 700;
   padding: 8px 22px;
   border-radius: 6px;
@@ -3809,7 +3780,7 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   top: 10px;
   right: 10px;
   background: linear-gradient(135deg, #f59e0b, #d97706) !important; /* プレミアムなゴールドグラデーション */
-  color: #ffffff !important;
+  color: #1e1e1e !important; /* 白は 2.2〜3.2。#1e1e1e なら 5.2 以上 */
   font-size: 0.72rem;
   font-weight: 800;
   padding: 4px 10px !important;
@@ -4740,7 +4711,7 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   padding: 0.25rem 0.55rem;
   border-radius: 6px;
   background: #cd7f32;
-  color: #fff;
+  color: #1e1e1e;
   font-size: 0.78rem;
   font-weight: 700;
   line-height: 1;
@@ -4748,7 +4719,7 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 }
 .post-content .competitor-card-score.score-gold   { background: #ffd700; color: #5c4000; }
 .post-content .competitor-card-score.score-silver { background: #c0c0c0; color: #1f2937; }
-.post-content .competitor-card-score.score-bronze { background: #cd7f32; color: #fff; }
+.post-content .competitor-card-score.score-bronze { background: #cd7f32; color: #1e1e1e; }
 .post-content .competitor-card-score strong { font-size: 1rem; font-weight: 900; }
 .post-content .competitor-card-score-suffix { font-size: 0.68rem; font-weight: 700; }
 
@@ -6605,20 +6576,16 @@ body:has(#compare-floating-bar) .favorites-wrapper {
 [data-theme="dark"] .m-sticky-share.is-flash .m-sticky-label { color: #5eead4; }
 
 .m-sticky-buy {
-  /* brand-gradient は中央が黄色 (#F7C948) なので、白文字 contrast 1.66 で
-     ライト/ダークどちらでも読みにくい。テキスト全体に黒シャドウを敷いて
-     白文字を浮かせる + 全体を少し暗めにする overlay でラベルの可読性を確保。 */
-  background:
-    linear-gradient(180deg, rgba(0,0,0,0.0) 0%, rgba(0,0,0,0.22) 100%),
-    var(--brand-gradient);
-  color: #fff !important;
+  /* 文字は白ではなく濃色。--brand-gradient の上の白は 2.8 (橙) / 1.6 (黄) / 2.2 (青緑) で、
+     以前は暗い overlay と文字の影で補っていた。#1e1e1e なら 5.9 / 10.6 / 7.7 なので、
+     overlay と影は外して他のグラデーション部品 (Amazon ボタン等) と揃える。 */
+  background: var(--brand-gradient);
+  color: #1e1e1e !important;
   font-weight: 700;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55), 0 0 1px rgba(0, 0, 0, 0.45);
 }
 .m-sticky-buy .m-sticky-icon {
-  color: #fff;
+  color: #1e1e1e;
   font-size: 22px;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
 }
 .m-sticky-buy .m-sticky-label {
   display: flex;
@@ -6986,7 +6953,7 @@ body:has(#compare-floating-bar) .favorites-wrapper {
   justify-content: center;
   font-size: 0.72rem;
   font-weight: 800;
-  color: #fff;
+  color: #1e1e1e;  /* 白は 2.4。#1e1e1e なら 6.8 */
   background: #e8923c;
 }
 .age-timeline-emoji {
@@ -7299,12 +7266,15 @@ body:has(#compare-floating-bar) .favorites-wrapper {
   background: var(--brand-gradient-subtle);
   color: var(--brand-primary);
 }
+/* 現在地のラベルは親の文字色を継ぐ。--brand-primary の文字は淡い背景の上で 2.8 しか
+   出ないので、色ではなく太字と枠線で現在地を示す。 */
 .header-nav #menu li a span.active {
-  color: var(--brand-primary);
+  color: inherit;
   font-weight: 700;
 }
 .header-nav #menu li a:has(span.active) {
   background: var(--brand-gradient-subtle);
+  border-color: var(--brand-primary);
 }
 @media (max-width: 768px) {
   .header-nav #menu { gap: 5px 6px; }
