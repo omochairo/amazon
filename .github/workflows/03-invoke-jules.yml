@@ -390,6 +390,7 @@ jobs:
             REQUEST_BODY=$(jq -n \
               --arg prompt "$PROMPT" \
               --arg source "$SOURCE_NAME" \
+              --arg title "[wf03] 記事生成: $TARGET_ASIN" \
               '{
                 prompt: $prompt,
                 sourceContext: {
@@ -399,7 +400,7 @@ jobs:
                   }
                 },
                 automationMode: "AUTO_CREATE_PR",
-                title: "[wf03] 記事生成: 商品深掘りガイド"
+                title: $title
               }')
 
             RESPONSE=$(curl -s -w "\n%{http_code}" \
@@ -431,7 +432,7 @@ jobs:
               fi
               continue
             fi
-            echo "$BODY" | jq -c '{name, id, status}' 2>/dev/null || echo "$BODY" | head -c 500
+            echo "$BODY" | jq -c '{name, id, state}' 2>/dev/null || echo "$BODY" | head -c 500
             SESSION_ID=$(echo "$BODY" | jq -r '.id // empty')
             if [ -z "$SESSION_ID" ]; then
               echo "::warning::No session id returned for $TARGET_ASIN"
@@ -471,7 +472,10 @@ jobs:
               RESPONSE=$(curl -s \
                 "https://jules.googleapis.com/v1alpha/sessions/$SESSION_ID" \
                 -H "X-Goog-Api-Key: ${{ secrets.JULES_API_KEY }}")
-              STATUS=$(echo "$RESPONSE" | jq -r '.status // "unknown"')
+              # #9410: Session の状態は `state` に入る (`status` は存在しない)。`.status` を
+              # 読んでいた間は 10 回とも unknown になり、PR が出ないセッションが失敗なのか
+              # 人間待ちなのかをログから区別できなかった。
+              STATUS=$(echo "$RESPONSE" | jq -r '.state // .status // "unknown"')
               echo "[$i/10] $ASIN ($SESSION_ID): $STATUS"
               if [ "$STATUS" = "COMPLETED" ] || [ "$STATUS" = "FAILED" ]; then
                 DONE=$((DONE + 1))

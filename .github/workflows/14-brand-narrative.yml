@@ -323,7 +323,7 @@ jobs:
             echo "::error::Failed to create Jules session (HTTP $HTTP_CODE)"
             exit 1
           fi
-          echo "$BODY" | jq -c '{name, id, status}' 2>/dev/null || echo "$BODY" | head -c 500
+          echo "$BODY" | jq -c '{name, id, state}' 2>/dev/null || echo "$BODY" | head -c 500
           SESSION_ID=$(echo "$BODY" | jq -r '.id // empty')
           if [ -z "$SESSION_ID" ]; then
             echo "::error::No session id returned"
@@ -342,7 +342,7 @@ jobs:
             RESPONSE=$(curl -s \
               "https://jules.googleapis.com/v1alpha/sessions/$SESSION_ID" \
               -H "X-Goog-Api-Key: ${{ secrets.JULES_API_KEY }}")
-            STATUS=$(echo "$RESPONSE" | jq -r '.status // "unknown"')
+            STATUS=$(echo "$RESPONSE" | jq -r '.state // .status // "unknown"')
             echo "[$i/10] status: $STATUS"
             if [ "$STATUS" = "COMPLETED" ] || [ "$STATUS" = "FAILED" ]; then
               exit 0

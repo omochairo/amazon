@@ -193,7 +193,7 @@ jobs:
           HTTP_CODE=$(echo "$RESPONSE" | tail -1)
           BODY=$(echo "$RESPONSE" | sed '$d')
           echo "HTTP: $HTTP_CODE"
-          echo "$BODY" | jq -c '{name, id, status}' 2>/dev/null || echo "$BODY" | head -c 500
+          echo "$BODY" | jq -c '{name, id, state}' 2>/dev/null || echo "$BODY" | head -c 500
           if [ "$HTTP_CODE" != "200" ]; then
             # FAILED_PRECONDITION → memory: feedback_jules_api_failed_precondition.md
             echo "::error::Create session HTTP $HTTP_CODE"
