@@ -6916,6 +6916,8 @@ body:has(#compare-floating-bar) .favorites-wrapper {
      .carousel-wrapper と同じ機構で LCP 計測を殺しうるため。 */
   -webkit-overflow-scrolling: touch;
 }
+/* タイムライン下の年齢別ランキング hub へのリンク (age_timeline.html) */
+.age-timeline-hubs { margin-top: 0.9rem; }
 .age-timeline-track::-webkit-scrollbar { height: 6px; }
 .age-timeline-track::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.18);
