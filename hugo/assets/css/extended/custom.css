@@ -7418,3 +7418,24 @@ body:has(#compare-floating-bar) .favorites-wrapper {
 .sale-notice-notes {
   font-size: 0.75rem;
 }
+
+/* #9449 第 2 段: 商品ページの価格カード下の 1 行 (shortcodes/sale_notice_inline.html) */
+.sale-notice-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin: 0.75rem 0;
+  padding: 0.55rem 0.85rem;
+  border-left: 4px solid #dc2626;
+  border-radius: var(--radius-sm);
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.sale-notice-inline[hidden] {
+  display: none;
+}
+.sale-notice-inline small {
+  font-size: 0.75rem;
+}

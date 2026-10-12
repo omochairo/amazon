@@ -8,15 +8,10 @@
        - ビルド時点で終了済みのイベントは出力しない (JS も読み込まない)
        - JS が動かなければ hidden のまま = 何も出ない側に倒れる
        - JS は defer ではなく要素の直後にインラインで置く。defer だと描画後に帯が
-         開いてページ全体が下にずれる (CLS) */ -}}
-{{- $now := now -}}
-{{- $live := slice -}}
-{{- range (site.Data.sale_events | default slice) -}}
-  {{- $lastPhase := index (last 1 .phases) 0 -}}
-  {{- if (time.AsTime $lastPhase.end).After $now -}}
-    {{- $live = $live | append (slice .) -}}
-  {{- end -}}
-{{- end -}}
+         開いてページ全体が下にずれる (CLS)
+       - 商品ページの価格カード下の 1 行 (shortcodes/sale_notice_inline.html) も
+         ここで読み込んだ JS が DOMContentLoaded で拾う */ -}}
+{{- $live := partialCached "sale_events_live.html" . -}}
 {{- if $live }}
 {{- range $live }}
 <div class="sale-notice" role="note" data-sale-notice data-phases="{{ .phases | jsonify }}" hidden>

@@ -1,0 +1,12 @@
+{{- /* #9449: hugo/data/sale_events.yaml のうち、ビルド時点でまだ終わっていないイベントを返す。
+       「いま開催中か」はここでは決めない (閲覧時に sale_notice.js が判定する)。
+       終了済みを落とすのは、出力と JS の読み込みを省くためだけ。 */ -}}
+{{- $now := now -}}
+{{- $live := slice -}}
+{{- range (site.Data.sale_events | default slice) -}}
+  {{- $lastPhase := index (last 1 .phases) 0 -}}
+  {{- if (time.AsTime $lastPhase.end).After $now -}}
+    {{- $live = $live | append (slice .) -}}
+  {{- end -}}
+{{- end -}}
+{{- return $live -}}

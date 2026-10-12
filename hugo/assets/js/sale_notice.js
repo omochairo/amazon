@@ -51,8 +51,8 @@
     return out;
   }
 
-  // 期間外は空文字 (= 出さない)
-  function message(phases, nowMs) {
+  // 期間外は空文字 (= 出さない)。short は次の区分の予告を省く (商品ページの 1 行用)
+  function message(phases, nowMs, short) {
     var list = parse(phases);
     if (!list.length) return '';
     if (nowMs < list[0].start || nowMs > list[list.length - 1].end) return '';
@@ -69,7 +69,7 @@
         var text = p.headline + ' 開催中（' +
           (sameDay(now, end) ? '本日' : md(end)) + ' ' + hm(end) + ' まで）';
         var next = list[i + 1];
-        if (next) {
+        if (next && !short) {
           var s = jst(next.start);
           text += '／' + next.label + 'は ' + md(s) + ' ' + hm(s) + ' から';
         }
@@ -85,7 +85,8 @@
       var node = nodes[i];
       var text = '';
       try {
-        text = message(JSON.parse(node.getAttribute('data-phases')), nowMs);
+        text = message(JSON.parse(node.getAttribute('data-phases')), nowMs,
+          node.getAttribute('data-sale-notice-short') !== null);
       } catch (e) {
         text = '';
       }
@@ -95,6 +96,10 @@
         continue;
       }
       main.textContent = text;
+      // 補足は本文 (.Plain) に混ざらないよう data 属性で受け取り、表示するときだけ入れる
+      var sub = node.getAttribute('data-sale-notice-sub');
+      var subTarget = node.querySelector('[data-sale-notice-sub-target]');
+      if (sub && subTarget) subTarget.textContent = sub;
       node.hidden = false;
     }
   }
@@ -102,6 +107,11 @@
   window.OmochaSaleNotice = { message: message, apply: apply };
 
   apply(document, Date.now());
+  // このスクリプトはヘッダー直下にインラインで置かれるので、それより後ろにある要素
+  // (商品ページの価格カード下の 1 行) は、この時点ではまだ DOM に無い
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { apply(document, Date.now()); });
+  }
   // bfcache から戻ったときは再実行されないので、期間をまたいだ表示が残らないよう判定し直す
   window.addEventListener('pageshow', function () { apply(document, Date.now()); });
 })();
