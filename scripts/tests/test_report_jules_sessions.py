@@ -130,3 +130,76 @@ def test_default_page_fits_timeout_with_margin() -> None:
 
     for mod in (gate, rep):
         assert mod.DEFAULT_TIMEOUT >= 2 * 57
+
+
+# --- PR が出なかった記事生成セッション (#9410) -------------------------------------
+
+
+def _sess(sid: str, state: str, *, title: str = "[wf03] 記事生成: B0TEST0001",
+          hours_ago: float = 5, outputs=None) -> dict:
+    s = {"id": sid, "state": state, "title": title, "createTime": _iso(hours_ago)}
+    if outputs is not None:
+        s["outputs"] = outputs
+    return s
+
+
+def test_no_pr_sessions_splits_by_outcome() -> None:
+    from report_jules_sessions import no_pr_sessions
+
+    pr = [{"pullRequest": {"url": "https://example.invalid/pr/1"}}]
+    info = no_pr_sessions([
+        _sess("1", "COMPLETED", outputs=pr),
+        _sess("2", "COMPLETED"),                                    # 空振り
+        _sess("3", "COMPLETED", outputs=[{"changeSet": {}}]),       # 変更はあるが PR 無し
+        _sess("4", "FAILED", hours_ago=1),
+        _sess("5", "AWAITING_USER_FEEDBACK"),
+        _sess("6", "IN_PROGRESS"),                                  # 実行中は数えない
+        _sess("7", "FAILED", title="[wf33] news"),                  # 03 以外は対象外
+    ])
+    assert info["with_pr"] == 1 and info["running"] == 1 and info["outputs_seen"]
+    assert [r["id"] for r in info["rows"]] == ["4", "2", "3", "5"]
+    assert {r["id"]: r["outputs"] for r in info["rows"]}["3"] == ["changeSet"]
+
+
+def test_render_no_pr_refuses_to_judge_without_outputs() -> None:
+    """LIST が outputs を返さないとき、全部を PR 無しと書かない。"""
+    from report_jules_sessions import no_pr_sessions, render_no_pr
+
+    info = no_pr_sessions([_sess("1", "COMPLETED"), _sess("2", "COMPLETED")])
+    assert not info["outputs_seen"]
+    assert "判定できない" in render_no_pr(info)
+    assert "| `1` |" not in render_no_pr(info)
+
+
+def test_activity_digest_exposes_only_kinds_and_failure_reason() -> None:
+    from report_jules_sessions import activity_digest
+
+    d = activity_digest([
+        {"createTime": "2026-10-12T10:31:00Z", "sessionFailed": {"reason": "boom | x\ny"}},
+        {"createTime": "2026-10-12T10:27:00Z", "planGenerated": {"plan": {"steps": ["SECRET"]}}},
+        {"createTime": "2026-10-12T10:28:00Z", "description": "d",
+         "agentMessaged": {"agentMessage": "PRIVATE PROMPT TEXT"}},
+    ])
+    assert d == {"n": 3, "kinds": ["planGenerated", "agentMessaged", "sessionFailed"],
+                 "reason": "boom / x y"}
+    assert "PRIVATE" not in str(d) and "SECRET" not in str(d)
+
+
+def test_add_activity_digests_is_best_effort_and_limited() -> None:
+    from report_jules_sessions import add_activity_digests, render_no_pr
+
+    rows = [{"id": str(i), "title": "t", "state": "FAILED", "age_h": i, "reason": ""} for i in range(4)]
+    seen: list[str] = []
+
+    def _fetch(_key, sid):
+        seen.append(sid)
+        if sid == "1":
+            raise RuntimeError("timeout")
+        return [{"createTime": "2026-10-12T10:31:00Z", "sessionFailed": {"reason": "r"}}]
+
+    add_activity_digests("k", rows, limit=3, fetch=_fetch)
+    assert seen == ["0", "1", "2"]
+    assert "digest" in rows[0] and "digest" not in rows[1] and "digest" not in rows[3]
+    out = render_no_pr({"rows": rows, "with_pr": 2, "running": 0, "outputs_seen": True})
+    assert "PR あり: 2 / 実行中: 0 / PR 無しで終了: 4 (FAILED 4)" in out
+    assert "| sessionFailed | r |" in out
