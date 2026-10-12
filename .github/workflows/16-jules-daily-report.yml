@@ -4,9 +4,12 @@ name: Jules Daily Usage Report
 # に append する。run 数 / PR 数 / cap 状況を可視化。
 #
 # 設計判断:
-#   - target date は「実行日の UTC 前日」(深夜 cron 23:00 UTC は実行日付の
-#     朝 JST だが、データ集計対象は前日 UTC 0:00-23:59)。
-#   - workflow_dispatch では --date 指定可能 (任意日のバックフィル / 当日確認)。
+#   - target date は「cron が予定された UTC 日」(23:00 UTC の枠が属する日)。
+#     定時 run は数時間遅れて翌 UTC 日に始まるので、開始時刻の日付をそのまま使うと
+#     始まったばかりの日を集計して全項目 0 になる (#9410)。開始時刻から 23 時間
+#     引いた日付を使えば、定刻でも 23 時間未満の遅れでも同じ日になる。
+#   - workflow_dispatch では --date 指定可能 (任意日のバックフィル)。未指定なら
+#     当日 UTC (当日確認用)。
 #   - GITHUB_TOKEN で issue write 可能 (permissions: issues: write)。
 
 on:
@@ -47,10 +50,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
           INPUT_DATE: ${{ github.event.inputs.date }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -e
           if [ -n "$INPUT_DATE" ]; then
             DATE="$INPUT_DATE"
+          elif [ "$EVENT_NAME" = "schedule" ]; then
+            DATE=$(date -u -d '23 hours ago' +%Y-%m-%d)
           else
             DATE=$(date -u +%Y-%m-%d)
           fi
