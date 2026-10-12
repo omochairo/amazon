@@ -67,8 +67,13 @@ API_BASE = "https://jules.googleapis.com/v1alpha/sessions"
 #   - 1 リクエストの仕事量を減らす (pageSize 100 → 50)
 #   - timeout を伸ばす (30s は実測に対して余裕が無い)
 #   - 一過性の timeout / 5xx / 429 を指数バックオフで retry する (従来は 1 発勝負)
-DEFAULT_PAGE_SIZE = int(os.environ.get("JULES_API_PAGE_SIZE", "50"))
-DEFAULT_TIMEOUT = float(os.environ.get("JULES_API_TIMEOUT", "60"))
+# 2026-10-12 (#9410 の調査で判明): pageSize=50 / timeout=60s でも 1 ページ目が収まらなく
+# なっていた。成功した run でも 1 ページ (50 件) に約 57 秒掛かっており、60s の境目で
+# 落ちるか通るかが決まっていた (10-03〜10-12 の 03 を 14 run 抜き取って 8 run が fallback 1)。
+# 09-05 と同じ「緑のまま生成が 6 → 1 に落ちる」状態。1 ページを小さくし (50 → 20)、
+# timeout に余裕を持たせる (60s → 120s)。全体の上限は DEFAULT_DEADLINE のまま。
+DEFAULT_PAGE_SIZE = int(os.environ.get("JULES_API_PAGE_SIZE", "20"))
+DEFAULT_TIMEOUT = float(os.environ.get("JULES_API_TIMEOUT", "120"))
 DEFAULT_ATTEMPTS = int(os.environ.get("JULES_API_ATTEMPTS", "3"))
 DEFAULT_BACKOFF = float(os.environ.get("JULES_API_BACKOFF", "3"))
 # 上の 3 つは 1 ページあたりの粘りしか決めない。全体の上限が無いと
