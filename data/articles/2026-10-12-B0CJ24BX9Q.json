@@ -178,6 +178,17 @@
       "author": "個人ブログのレビュー",
       "conflict_of_interest": "none",
       "notes": "傘や鞄に付けたりできる目印チャームで名前欄つき。リングがシリコンとなっているので、傘の手元に直接取り付けられるとの記載。"
+    },
+    {
+      "id": "src-lawson",
+      "name": "ローソン研究所 / エンタメ",
+      "url": "https://www.lawson.co.jp/lab/entertainment/art/20230927_bookpokemon.html",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2023-09-27",
+      "author": "ローソン",
+      "conflict_of_interest": "none",
+      "notes": "傘につけられるアンブレラチャームがローソンの一部店舗にて発売されたとの記載があり、モンスターボールのチャームには名前を記入できるスペースがあることが確認できる。全8種類のラインナップ。"
     }
   ],
   "claims": [
@@ -186,9 +197,10 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-ameba"
+        "src-ameba",
+        "src-lawson"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "個人ブログにて、リングがシリコンとなっているので、傘の手元に直接取り付けられるとの記載を確認"
     },
     {
@@ -220,6 +232,27 @@
       ],
       "cross_checked": false,
       "notes": "ブログに全10種類のラインナップの記載あり"
+    },
+    {
+      "claim": "全8種類のラインナップで展開されている",
+      "category": "comparative_advantage",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-lawson"
+      ],
+      "cross_checked": false,
+      "notes": "ローソン研究所の記事にて全8種類との記載"
+    },
+    {
+      "claim": "モンスターボールのチャームには名前を記入できるスペースがある",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-ameba",
+        "src-lawson"
+      ],
+      "cross_checked": true,
+      "notes": "ブログとローソン研究所の記事にて名前欄があることを確認"
     }
   ],
   "technical_specs": {
