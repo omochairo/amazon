@@ -43,7 +43,7 @@
   border: none;
   border-radius: 999px;
   background: var(--brand-gradient);
-  color: #fff;
+  color: #1e1e1e;
   font-weight: 700;
   font-size: 0.88rem;
   cursor: pointer;
@@ -144,7 +144,7 @@
   border: none;
   border-radius: 999px;
   background: var(--brand-gradient);
-  color: #fff !important;
+  color: #1e1e1e !important;
   font-weight: 700;
   font-size: 0.9rem;
   cursor: pointer;
@@ -193,7 +193,7 @@
 }
 .favorites-card-add:hover {
   background: var(--brand-gradient);
-  color: #fff;
+  color: #1e1e1e;
 }
 .favorites-card-add:disabled {
   cursor: default;
@@ -235,7 +235,7 @@
 }
 [data-theme="dark"] .favorites-card-add:hover {
   background: var(--brand-gradient);
-  color: #fff;
+  color: #1e1e1e;
 }
 [data-theme="dark"] .favorites-card-add:disabled {
   color: #999;
