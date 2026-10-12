@@ -70,9 +70,12 @@ API_BASE = "https://jules.googleapis.com/v1alpha/sessions"
 # 2026-10-12 (#9410 の調査で判明): pageSize=50 / timeout=60s でも 1 ページ目が収まらなく
 # なっていた。成功した run でも 1 ページ (50 件) に約 57 秒掛かっており、60s の境目で
 # 落ちるか通るかが決まっていた (10-03〜10-12 の 03 を 14 run 抜き取って 8 run が fallback 1)。
-# 09-05 と同じ「緑のまま生成が 6 → 1 に落ちる」状態。1 ページを小さくし (50 → 20)、
-# timeout に余裕を持たせる (60s → 120s)。全体の上限は DEFAULT_DEADLINE のまま。
-DEFAULT_PAGE_SIZE = int(os.environ.get("JULES_API_PAGE_SIZE", "20"))
+# 09-05 と同じ「緑のまま生成が 6 → 1 に落ちる」状態。timeout に余裕を持たせる
+# (60s → 120s)。全体の上限は DEFAULT_DEADLINE のまま。
+# pageSize は 50 のまま。一度 20 に下げたが、実測 (10-12 の日次レポート: 20 件 × 3 ページで
+# 約 200 秒) では 1 ページの応答時間が件数に比例せず、1 リクエストあたり約 1 分だった。
+# 小さくするとリクエスト数が増えるぶん遅くなるだけなので戻した。
+DEFAULT_PAGE_SIZE = int(os.environ.get("JULES_API_PAGE_SIZE", "50"))
 DEFAULT_TIMEOUT = float(os.environ.get("JULES_API_TIMEOUT", "120"))
 DEFAULT_ATTEMPTS = int(os.environ.get("JULES_API_ATTEMPTS", "3"))
 DEFAULT_BACKOFF = float(os.environ.get("JULES_API_BACKOFF", "3"))

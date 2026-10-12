@@ -79,10 +79,11 @@ def _parse_ts(s: str | None) -> _dt.datetime | None:
 # 既定値も揃える。ここが欠測すると quota 圧が見えなくなるだけだが、ゲート側は生成本数
 # が落ちるので、両方直さないと「落ちていることに気づく経路」が残らない。
 # 2026-10-12 (#9410): 09-29 から再び毎日 read timeout で欠測していた。1 ページ (50 件) に
-# 約 1 分掛かるようになり、60s に収まらない。ゲート側と同じ値に揃える (20 件 / 120s)。
-DEFAULT_PAGE_SIZE = int(os.environ.get("JULES_API_PAGE_SIZE", "20"))
+# 約 1 分掛かるようになり、60s に収まらない。ゲート側と同じ値に揃える (50 件 / 120s)。
+# 応答時間は件数に比例しない (1 リクエスト約 1 分) ので、pageSize は下げない。
+DEFAULT_PAGE_SIZE = int(os.environ.get("JULES_API_PAGE_SIZE", "50"))
 DEFAULT_TIMEOUT = float(os.environ.get("JULES_API_TIMEOUT", "120"))
-# 1 件あたり約 1 秒掛かる現状では、全 session の走査 (最大 3,000 件) は終わらない。
+# 1 リクエスト約 1 分掛かる現状では、全 session の走査 (最大 60 ページ) は終わらない。
 # レポートが見たいのは直近の圧と失敗・放置なので、作成から WINDOW 時間より古い session は
 # 読まない。打ち切るのは、読んだ範囲が createTime の降順だと確認できたときだけ
 # (jules_quota_gate.count_created_24h_early_stop と同じ考え方)。

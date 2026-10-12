@@ -124,9 +124,9 @@ def test_fetch_raises_when_deadline_exceeded(monkeypatch) -> None:
 
 
 def test_default_page_fits_timeout_with_margin() -> None:
-    """1 件あたり約 1 秒 (2026-10 実測) でも 1 ページが timeout に収まる既定値にしておく。"""
+    """1 リクエスト約 1 分 (2026-10 実測) の倍は待つ既定値にしておく。"""
     import jules_quota_gate as gate
     import report_jules_sessions as rep
 
     for mod in (gate, rep):
-        assert mod.DEFAULT_TIMEOUT >= 2 * mod.DEFAULT_PAGE_SIZE * 1.2
+        assert mod.DEFAULT_TIMEOUT >= 2 * 57
