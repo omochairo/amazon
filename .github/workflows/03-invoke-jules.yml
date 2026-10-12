@@ -486,12 +486,14 @@ jobs:
               # 人間待ちなのかをログから区別できなかった。
               STATUS=$(echo "$RESPONSE" | jq -r '.state // .status // "unknown"')
               echo "[$i/10] $ASIN ($SESSION_ID): $STATUS"
-              if [ "$STATUS" = "COMPLETED" ] || [ "$STATUS" = "FAILED" ]; then
-                DONE=$((DONE + 1))
-              fi
+              # #9410: AWAITING_* / PAUSED は人間が操作するまで動かないので、待っても変わらない。
+              # 終端に数えないと、1 本でも止まった時点で残りの回数を待ち切る。
+              case "$STATUS" in
+                COMPLETED|FAILED|AWAITING_*|PAUSED) DONE=$((DONE + 1)) ;;
+              esac
             done
             if [ "$DONE" -eq "$TOTAL" ]; then
-              echo "All $TOTAL sessions reached terminal state"
+              echo "All $TOTAL sessions stopped (terminal or waiting for a human)"
               break
             fi
           done

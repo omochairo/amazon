@@ -344,8 +344,9 @@ jobs:
               -H "X-Goog-Api-Key: ${{ secrets.JULES_API_KEY }}")
             STATUS=$(echo "$RESPONSE" | jq -r '.state // .status // "unknown"')
             echo "[$i/10] status: $STATUS"
-            if [ "$STATUS" = "COMPLETED" ] || [ "$STATUS" = "FAILED" ]; then
-              exit 0
-            fi
+            # #9410: AWAITING_* / PAUSED は人間が操作するまで動かないので、待たずに終える。
+            case "$STATUS" in
+              COMPLETED|FAILED|AWAITING_*|PAUSED) exit 0 ;;
+            esac
           done
           echo "Polling complete; Jules continues async."
