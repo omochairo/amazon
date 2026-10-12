@@ -288,6 +288,130 @@ def summarize(sessions: list[dict], *, stuck_hours: float) -> dict:
     }
 
 
+# --- PR が出なかった記事生成セッション (#9410) ------------------------------------
+#
+# 03 が作ったセッションのうち、終わったのに PR が無いものを一覧にする。PR が出ない
+# セッションは close された PR の一覧に現れず、同じ ASIN が選ばれ直すので、理由を
+# 毎日見える所に出す。型は 3 つ:
+#   - FAILED: 実行中に落ちた。理由は activities の sessionFailed に入る
+#   - AWAITING_* / PAUSED: 人間待ちで止まった
+#   - COMPLETED だが outputs に PR が無い: 成果物ゼロで終わる「空振り」
+#     (invoke_jules_repoless.py が 2026-07-07 に実測したのと同じ型)
+NO_PR_WF = "wf03"
+NO_PR_MAX_DETAIL = int(os.environ.get("JULES_REPORT_NO_PR_DETAIL", "12"))
+_ACTIVITY_BASE_KEYS = {"name", "id", "description", "createTime", "originator", "artifacts"}
+
+
+def _has_pr(s: dict) -> bool:
+    return any(isinstance(o, dict) and o.get("pullRequest") for o in (s.get("outputs") or []))
+
+
+def no_pr_sessions(sessions: list[dict], *, now: _dt.datetime | None = None) -> dict:
+    """wf03 のセッションを「PR あり / 実行中 / PR 無しで終了」に分ける。
+
+    ``outputs_seen`` は読んだ範囲に outputs を持つセッションが 1 つでもあったか。
+    LIST の応答が outputs を返さない場合に「全部 PR 無し」と誤って出さないための印。
+    """
+    ref = now or _now()
+    rows: list[dict] = []
+    with_pr = running = 0
+    outputs_seen = any(s.get("outputs") for s in sessions)
+    for s in sessions:
+        if _wf_key(s) != NO_PR_WF:
+            continue
+        st = _state_of(s)
+        if _has_pr(s):
+            with_pr += 1
+            continue
+        if st in CONCURRENT_STATES:
+            running += 1
+            continue
+        created = _parse_ts(s.get("createTime"))
+        rows.append({
+            "id": s.get("id") or (s.get("name") or "").split("/")[-1],
+            "title": (s.get("title") or "")[:50],
+            "state": st,
+            "age_h": (ref - created).total_seconds() / 3600 if created else 0.0,
+            "reason": _failure_reason(s),
+            # outputs の中身の種類 (changeSet だけで PR が無い、などを見分ける)
+            "outputs": sorted({k for o in (s.get("outputs") or []) if isinstance(o, dict) for k in o}),
+        })
+    rows.sort(key=lambda x: x["age_h"])
+    return {"rows": rows, "with_pr": with_pr, "running": running, "outputs_seen": outputs_seen}
+
+
+def _activity_kind(a: dict) -> str:
+    """activity の種類 (oneof のキー名)。基本フィールド以外で最初に見つかったキー。"""
+    for k in a:
+        if k not in _ACTIVITY_BASE_KEYS:
+            return k
+    return "?"
+
+
+def activity_digest(activities: list[dict]) -> dict:
+    """activities から、公開してよい最小限だけを取り出す。
+
+    本文 (agent のメッセージ・plan) は出さない。プロンプトは private repo のもので、
+    agent の文章にはその引用が混じりうる。出すのは件数・種類の並び・失敗理由だけ。
+    """
+    acts = sorted(activities, key=lambda a: a.get("createTime") or "")
+    reason = ""
+    for a in acts:
+        failed = a.get("sessionFailed")
+        if isinstance(failed, dict) and failed.get("reason"):
+            reason = str(failed["reason"]).replace("\n", " ").replace("|", "/")[:160]
+    return {"n": len(acts), "kinds": [_activity_kind(a) for a in acts[-3:]], "reason": reason}
+
+
+def fetch_activities(api_key: str, session_id: str, *, timeout: float = 60.0) -> list[dict]:
+    import requests
+
+    r = requests.get(
+        f"{API_BASE}/{session_id}/activities",
+        params={"pageSize": 100},
+        headers={"X-Goog-Api-Key": api_key},
+        timeout=timeout,
+    )
+    r.raise_for_status()
+    return r.json().get("activities") or []
+
+
+def add_activity_digests(api_key: str, rows: list[dict], *, limit: int = NO_PR_MAX_DETAIL,
+                         fetch=fetch_activities) -> None:
+    """新しい順に ``limit`` 件まで activities を引いて rows に足す (best-effort)。"""
+    for row in rows[:max(0, limit)]:
+        try:
+            row["digest"] = activity_digest(fetch(api_key, row["id"]))
+        except Exception as e:  # noqa: BLE001 — 1 件取れなくてもレポートは出す
+            sys.stderr.write(f"activities 取得失敗 ({row['id']}): {e}\n")
+
+
+def render_no_pr(info: dict) -> str:
+    L: list[str] = ["", f"### PR が出なかった記事生成セッション (#9410, 約 {DEFAULT_WINDOW_HOURS:g}h)", ""]
+    rows = info["rows"]
+    if not info["outputs_seen"]:
+        L.append("_LIST の応答に outputs を持つ session が無く、PR の有無を判定できない_")
+        return "\n".join(L)
+    by_state: dict[str, int] = {}
+    for x in rows:
+        by_state[x["state"]] = by_state.get(x["state"], 0) + 1
+    L.append(f"- PR あり: {info['with_pr']} / 実行中: {info['running']} / PR 無しで終了: {len(rows)}"
+             + (f" ({', '.join(f'{k} {v}' for k, v in sorted(by_state.items()))})" if rows else ""))
+    if not rows:
+        return "\n".join(L)
+    L.append("")
+    L.append("| id | title | state | age(h) | outputs | activities | 直近の種類 | 失敗理由 |")
+    L.append("|---|---|---|---:|---|---:|---|---|")
+    for x in rows[:30]:
+        d = x.get("digest") or {}
+        reason = d.get("reason") or x.get("reason") or ""
+        n = d.get("n", "")
+        kinds = " → ".join(d.get("kinds") or [])
+        L.append(f"| `{x['id']}` | {x['title']} | {x['state']} | {x['age_h']:.1f} | "
+                 f"{', '.join(x.get('outputs') or []) or '無し'} | {n} | {kinds} | {reason} |")
+    return "\n".join(L)
+
+
 def _pct_emoji(used: int, cap: int) -> str:
     if cap <= 0:
         return ""
@@ -389,6 +513,10 @@ def main() -> int:
         print(f"## Jules sessions (live API)\n\n_API 取得失敗: {e}_")
         return 0
     print(render(summarize(sessions, stuck_hours=args.stuck_hours), stuck_hours=args.stuck_hours))
+    info = no_pr_sessions(sessions)
+    if info["outputs_seen"]:
+        add_activity_digests(api_key, info["rows"])
+    print(render_no_pr(info))
     return 0
 
 
