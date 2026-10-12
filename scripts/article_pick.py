@@ -335,9 +335,89 @@ def exclude_recently_failed(existing, path=None, now=None) -> set:
     return set(existing) | cooling | stuck
 
 
+# #9410: Jules のセッションが FAILED で終わると PR が出ず、lock は 1 時間で外れるので、
+# 同じ ASIN が次の run でまた選ばれる。FAILED は ASIN に固有で (B00JP15EE2 は 3 回作って
+# 3 回とも、作成から数分で FAILED)、失敗理由は API からは分からない。
+# 数えるのは FAILED だけ。COMPLETED で PR が出ない空振りは時間帯に固有で、作り直せば
+# 通る (空振りした 5 ASIN は全部、後の run で記事になった) ので対象にしない。
+# 記録は持たず、quota gate が読んだ session 一覧だけで判定する。ゲートは 24h の境界を
+# 含むページまでしか読まないので、見えるのは「24h 以上・1 ページ (50 件) ぶん」
+# (2026-10-12 の実測で 50 件 = 約 72h)。作成数が増えて見える範囲が縮めば、そのぶん
+# 外れにくくなるだけ (LIST は 1 リクエスト約 1 分掛かるので、このために読み足さない)。
+# 除外している間は session が作られないので、古い FAILED が窓から出るたびに 1 回ずつ
+# 試し直しになる (3 回 / 窓)。止め切らないのは意図的: B00IUD8SFI は FAILED 4 回のあと
+# 5 回目で PR が出た。
+FAILED_SESSION_WINDOW_HOURS = 72
+FAILED_SESSION_STREAK_LIMIT = 3
+# 記事生成 (03 / invoke_jules_repoless) の session だけを見る。題名の ASIN は #9419 以降。
+_ARTICLE_SESSION_PREFIX = "[wf03]"
+
+
+def failing_sessions(sessions, now) -> set:
+    """直近の session が FAILED_SESSION_STREAK_LIMIT 回続けて FAILED の ASIN を返す (#9410)。
+
+    sessions: jules_quota_gate.py --sessions-out の行 (title / state / createTime)。
+    ASIN ごとに新しい順へ並べ、先頭から FAILED が続く数を数える。FAILED 以外
+    (空振りの COMPLETED・実行中・人間待ち) が挟まればそこで止める。
+    """
+    window = now - _dt.timedelta(hours=FAILED_SESSION_WINDOW_HOURS)
+    by_asin: dict = {}
+    for s in sessions or []:
+        if not isinstance(s, dict):
+            continue
+        title = str(s.get("title") or "")
+        if not title.startswith(_ARTICLE_SESSION_PREFIX):
+            continue
+        ts = _parse_ts(s.get("createTime"))
+        if ts is None or ts < window:
+            continue
+        failed = str(s.get("state") or "").upper() == "FAILED"
+        for a in set(re.findall(r"B0[A-Z0-9]{8}", title.upper())):
+            by_asin.setdefault(a, []).append((ts, failed))
+    out = set()
+    for a, rows in by_asin.items():
+        streak = 0
+        for _, failed in sorted(rows, key=lambda r: r[0], reverse=True):
+            if not failed:
+                break
+            streak += 1
+        if streak >= FAILED_SESSION_STREAK_LIMIT:
+            out.add(a)
+    return out
+
+
+def exclude_failing_sessions(existing, path=None, now=None) -> set:
+    """FAILED が続いている ASIN を除外に足した集合を返す (#9410)。
+
+    path は jules_quota_gate.py が書く JSON (既定は環境変数 JULES_RECENT_SESSIONS)。
+    指定が無い・読めない (ゲートが fallback に倒れた・手動起動でゲートを通らない) ときは
+    除外しない (fail-open)。
+    """
+    path = path if path is not None else os.environ.get("JULES_RECENT_SESSIONS", "")
+    if not path:
+        return set(existing)
+    try:
+        with open(path, encoding="utf-8") as f:
+            rows = json.load(f)
+        if not isinstance(rows, list):
+            raise ValueError("session list is not a JSON array")
+    except (OSError, ValueError) as e:
+        _warn(f"failing session exclusion skipped (#9410): {e}")
+        return set(existing)
+    failing = failing_sessions(rows, now or _dt.datetime.now(_dt.timezone.utc))
+    failing -= set(existing)
+    if failing:
+        _warn(f"sessions keep failing (#9410): {len(failing)} {sorted(failing)[:10]} "
+              f"— 直近 {FAILED_SESSION_WINDOW_HOURS} 時間で {FAILED_SESSION_STREAK_LIMIT} 回"
+              f"続けて FAILED。pick から外している。理由は Jules の dashboard で確かめ、"
+              f"直せなければ blocklist に入れる")
+    return set(existing) | failing
+
+
 def pick_from_repo(existing, seed) -> list:
     """作業ツリーのデータ (cwd = リポジトリ直下) を読んで ``select_candidates`` を呼ぶ。"""
     existing = exclude_recently_failed(existing)
+    existing = exclude_failing_sessions(existing)
     with open("data/raw/amazon.json", encoding="utf-8") as f:
         items = json.load(f).get("items", [])
     try:
