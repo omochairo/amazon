@@ -26,6 +26,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from age_semantics import is_seasonal_decoration, override_age_months, seasonal_names  # noqa: E402
+from brand_normalizer import normalize as normalize_brand  # noqa: E402
 from build_feature_lists import (  # noqa: E402
     _dedupe_by_asin,
     _is_article_json,
@@ -161,6 +162,9 @@ AGE_HUBS: dict[str, dict[str, Any]] = {
     "age-6": {"label": "6歳以上", "min_months": 72, "max_months": 216},
 }
 
+# 年齢 hub の上位 (top-n) に載せる同一メーカーの上限。24 件なら 6 メーカー以上が並ぶ。
+AGE_MAX_PER_BRAND = 4
+
 
 def build_min_months_index(articles_dir: Path) -> dict[str, int]:
     """{asin: 最小推奨年齢(月)} を返す。同一 ASIN 複数ファイルは最小値を採用。"""
@@ -189,6 +193,37 @@ def build_min_months_index(articles_dir: Path) -> dict[str, int]:
             continue
         prev = index.get(str(asin))
         index[str(asin)] = mm if prev is None else min(prev, mm)
+    return index
+
+
+def build_brand_index(articles_dir: Path) -> dict[str, str]:
+    """{asin: メーカーのキー} を返す。年齢 hub の同一メーカー上限に使う。
+
+    表記ゆれ ("レゴ" / "レゴ(LEGO)" / "LEGO") は data/brand_taxonomy.yaml の
+    canonical に寄せる。taxonomy に無いメーカーは canonical が全部「ノーブランド」
+    になるので、そのまま使うと無関係なメーカー同士が 1 つの枠を食い合う。
+    その場合は元の表記をキーにする。brand が空の商品は index に入れない
+    (= 上限の対象外)。
+    """
+    index: dict[str, str] = {}
+    if not articles_dir.exists():
+        return index
+    for path in sorted(articles_dir.glob("*.json")):
+        if not _is_article_json(path):
+            continue
+        try:
+            with path.open(encoding="utf-8") as f:
+                raw = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            continue
+        product = raw.get("product") or {}
+        asin = product.get("asin")
+        brand = product.get("brand")
+        if not asin or not isinstance(brand, str) or not brand.strip():
+            continue
+        nb = normalize_brand(brand)
+        key = brand.strip().casefold() if nb.match_type == "unknown" else nb.canonical
+        index.setdefault(str(asin), key)
     return index
 
 
@@ -251,8 +286,13 @@ def build_hub(records, text_index, theme, *, top_n, min_ivs):
     return pool[:top_n]
 
 
-def build_age_hub(records, min_months_index, hub, *, top_n, min_ivs):
-    """最小推奨年齢が [min_months, max_months) に入る record を ivs_100 降順で束ねる。"""
+def build_age_hub(records, min_months_index, hub, *, top_n, min_ivs,
+                  brand_index=None, max_per_brand=None):
+    """最小推奨年齢が [min_months, max_months) に入る record を ivs_100 降順で束ねる。
+
+    brand_index と max_per_brand (>0) を渡すと、同一メーカーの件数に上限をかける
+    (_cap_per_brand)。省略時は上限なし。
+    """
     lo, hi = hub["min_months"], hub["max_months"]
     pool = []
     for rec in records:
@@ -262,8 +302,43 @@ def build_age_hub(records, min_months_index, hub, *, top_n, min_ivs):
         if mm is None or not (lo <= mm < hi):
             continue
         pool.append(rec)
-    pool.sort(key=lambda r: (-(r.ivs_100 or 0), r.best_price or 10**9))
+    pool.sort(key=_rank_key)
+    if brand_index and max_per_brand and max_per_brand > 0:
+        return _cap_per_brand(pool, brand_index, top_n, max_per_brand)
     return pool[:top_n]
+
+
+def _rank_key(rec):
+    return (-(rec.ivs_100 or 0), rec.best_price or 10**9)
+
+
+def _cap_per_brand(pool, brand_index, top_n, max_per_brand):
+    """スコア順の pool から、同一メーカー max_per_brand 件までで top_n 件選ぶ。
+
+    上限を入れる前は、スコアが僅差で並ぶ 1 メーカーが上位を埋めていた
+    (2026-10-12 実測: 3歳 hub の 24 件中 23 件がタカラトミー、2歳は 17 件がレゴ)。
+    年齢 hub は「その年齢で何を選ぶか」を見比べる入口なので、メーカーを散らす。
+
+    上限で外した商品だけでは top_n に届かないとき (メーカー数が少ない bucket) は、
+    外した商品をスコア順に戻して埋める。件数を減らすより偏りを残す方を選ぶ。
+    外れた商品は全ラインナップ節 (build_age_lineup) に回るのでリンクは失われない。
+    """
+    picked, held = [], []
+    used: dict[str, int] = {}
+    for rec in pool:
+        if len(picked) >= top_n:
+            break
+        brand = brand_index.get(rec.asin)
+        if brand is not None and used.get(brand, 0) >= max_per_brand:
+            held.append(rec)
+            continue
+        if brand is not None:
+            used[brand] = used.get(brand, 0) + 1
+        picked.append(rec)
+    if len(picked) < top_n:
+        picked.extend(held[:top_n - len(picked)])
+        picked.sort(key=_rank_key)
+    return picked
 
 
 def build_age_lineup(records, min_months_index, hub, exclude_asins):
@@ -344,7 +419,8 @@ def _write_hub_index(out_hugo: Path, entries: list[dict[str, str]]) -> None:
 def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
         themes: list[str], age_hubs: list[str] | None = None,
         per_asin_dir: Path | None = None,
-        raw_root: Path | None = None) -> dict[str, int]:
+        raw_root: Path | None = None,
+        age_max_per_brand: int = 0) -> dict[str, int]:
     records = _dedupe_by_asin(load_articles(articles_dir))
     # #2812: カード画像も記事ページと同じ amazon.json の検証済み画像に揃える。
     logger.info("amazon image overlay: %d replaced",
@@ -377,10 +453,13 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
                               "url": f"/{key}-toys/"})
     if age_hubs:
         mm_index = build_min_months_index(articles_dir)
+        brand_index = build_brand_index(articles_dir) if age_max_per_brand > 0 else None
         for key in age_hubs:
             hub = AGE_HUBS[key]
             items = build_age_hub(records, mm_index, hub,
-                                  top_n=top_n, min_ivs=min_ivs)
+                                  top_n=top_n, min_ivs=min_ivs,
+                                  brand_index=brand_index,
+                                  max_per_brand=age_max_per_brand)
             lineup_recs = build_age_lineup(
                 records, mm_index, hub, exclude_asins={r.asin for r in items})
             lineup = [_lineup_entry(r, mm_index.get(r.asin)) for r in lineup_recs]
@@ -404,6 +483,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--age-hubs", nargs="*", default=list(AGE_HUBS.keys()),
                         choices=list(AGE_HUBS.keys()),
                         help="生成する年齢 hub キー (既定=全件)。")
+    parser.add_argument("--age-max-per-brand", type=int, default=AGE_MAX_PER_BRAND,
+                        help="年齢 hub の上位に載せる同一メーカーの上限件数 (0 で上限なし)。")
     # #4007: 価格を日次観測で上書きするための per_asin スナップショット置き場。
     parser.add_argument("--per-asin-dir", default=Path("data/raw/per_asin"), type=Path)
     # #4007 follow-up 1: data/raw/{rakuten,yahoo}_matched.json の親ディレクトリ。
@@ -417,7 +498,8 @@ def main(argv: list[str] | None = None) -> int:
                  top_n=args.top_n, min_ivs=args.min_ivs,
                  themes=args.themes, age_hubs=args.age_hubs,
                  per_asin_dir=args.per_asin_dir,
-                 raw_root=args.raw_root)
+                 raw_root=args.raw_root,
+                 age_max_per_brand=args.age_max_per_brand)
     print(json.dumps(counts, ensure_ascii=False))
     return 0
 
