@@ -30,4 +30,22 @@
     </a>
     {{- end }}
   </div>
+  {{- /* 年齢別ランキング hub (/toys-age-N/) への静的リンク。上のカードは診断
+         (/diagnosis/?age=) に飛ぶので、ホームから年齢別 hub への入口が無かった。
+         hub の一覧は explore_links.html と同じ hub_index.json (build_category_hubs.py
+         生成) を読む。未生成/空なら何も出さない。 */ -}}
+  {{- $ageHubs := slice -}}
+  {{- range site.Data.features.hub_index -}}
+    {{- if hasPrefix .key "age-" -}}{{- $ageHubs = $ageHubs | append . -}}{{- end -}}
+  {{- end -}}
+  {{- with $ageHubs }}
+  <div class="explore-links-group age-timeline-hubs">
+    <h3 class="explore-links-label">年齢別のランキングを一覧で見る</h3>
+    <div class="tag-chips">
+      {{- range . }}
+      <a class="tag-chip" href="{{ .url | relURL }}">{{ .label }}の知育玩具</a>
+      {{- end }}
+    </div>
+  </div>
+  {{- end }}
 </section>
