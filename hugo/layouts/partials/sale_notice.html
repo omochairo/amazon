@@ -1,0 +1,31 @@
+{{- /* #9449 セール期間の告知帯。
+
+       hugo/data/sale_events.yaml のイベントを hidden で出力し、sale_notice.js が
+       閲覧時刻で「いま開催中の区分」だけを表示する。ビルド時刻で出し分けないのは、
+       サイトが main への push でしか再ビルドされず、終了後も次の push まで
+       「開催中」が残るため。
+
+       - ビルド時点で終了済みのイベントは出力しない (JS も読み込まない)
+       - JS が動かなければ hidden のまま = 何も出ない側に倒れる
+       - JS は defer ではなく要素の直後にインラインで置く。defer だと描画後に帯が
+         開いてページ全体が下にずれる (CLS) */ -}}
+{{- $now := now -}}
+{{- $live := slice -}}
+{{- range (site.Data.sale_events | default slice) -}}
+  {{- $lastPhase := index (last 1 .phases) 0 -}}
+  {{- if (time.AsTime $lastPhase.end).After $now -}}
+    {{- $live = $live | append (slice .) -}}
+  {{- end -}}
+{{- end -}}
+{{- if $live }}
+{{- range $live }}
+<div class="sale-notice" role="note" data-sale-notice data-phases="{{ .phases | jsonify }}" hidden>
+  <span class="sale-notice-main" data-sale-notice-main></span>
+  {{- with .notes }}
+  <span class="sale-notice-notes">{{ delimit . "・" }}</span>
+  {{- end }}
+</div>
+{{- end }}
+{{- $saleNotice := resources.Get "js/sale_notice.js" | resources.Minify }}
+<script>{{ $saleNotice.Content | safeJS }}</script>
+{{- end }}
