@@ -225,8 +225,10 @@ header .logo a {
   background: var(--brand-gradient) !important;
 }
 
+/* 文字は白ではなく濃色。--brand-gradient の上の白は 2.8 (橙) / 1.6 (黄) / 2.2 (青緑) で読みにくく、
+   #1e1e1e なら 5.9 / 10.6 / 7.7。塗りは変えない。 */
 .post-content table thead th {
-  color: white !important;
+  color: #1e1e1e !important;
   font-weight: 700;
   padding: 12px 16px;
   border: none !important;
@@ -352,7 +354,7 @@ header .logo a {
 .post-content p a[href*="amazon.co.jp"] {
   display: inline-block;
   background: var(--brand-gradient);
-  color: white !important;
+  color: #1e1e1e !important;
   padding: 10px 24px;
   border-radius: 30px;
   font-weight: 700;
@@ -1607,12 +1609,11 @@ main.main:has(.card-grid) {
   z-index: 3;
 }
 .brand-card-hover-text {
-  color: #fff;
+  color: #1e1e1e;
   font-size: 0.92rem;
   font-weight: 800;
   text-align: center;
   line-height: 1.4;
-  text-shadow: 0 2px 6px rgba(0,0,0,0.15);
 }
 
 .brand-card:hover .brand-card-hover-overlay {
@@ -5638,7 +5639,7 @@ details.development-stage-accordion[open] > summary::before {
 
 #menu li a:has(.active) {
   background: var(--brand-gradient);
-  color: #fff;
+  color: #1e1e1e;
   border-color: transparent;
   box-shadow: 0 4px 14px rgba(255, 107, 53, 0.32);
 }
@@ -6348,7 +6349,7 @@ body:has(#compare-floating-bar) .favorites-wrapper {
 }
 .favorites-empty-btn.primary {
   background: var(--brand-gradient);
-  color: #fff !important;
+  color: #1e1e1e !important;
   border-color: transparent;
 }
 .favorites-empty-btn.primary:hover {
