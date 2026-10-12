@@ -115,7 +115,7 @@ def test_fetch_sessions_paginates(monkeypatch) -> None:
 def test_fetch_sessions_sends_default_page_size(monkeypatch) -> None:
     fake = _patch_urlopen(monkeypatch, [{'sessions': []}])
     _gate.fetch_sessions('k', sleep=lambda _s: None)
-    assert 'pageSize=50' in fake.urls[0]
+    assert f'pageSize={_gate.DEFAULT_PAGE_SIZE}' in fake.urls[0]
 
 
 def test_fetch_sessions_retries_transient_error(monkeypatch) -> None:

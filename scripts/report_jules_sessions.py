@@ -78,8 +78,17 @@ def _parse_ts(s: str | None) -> _dt.datetime | None:
 # (08-24 断続 → 09-02 恒常)。stdlib 版の jules_quota_gate と同じ症状・同じ打ち手なので
 # 既定値も揃える。ここが欠測すると quota 圧が見えなくなるだけだが、ゲート側は生成本数
 # が落ちるので、両方直さないと「落ちていることに気づく経路」が残らない。
-DEFAULT_PAGE_SIZE = int(os.environ.get("JULES_API_PAGE_SIZE", "50"))
-DEFAULT_TIMEOUT = float(os.environ.get("JULES_API_TIMEOUT", "60"))
+# 2026-10-12 (#9410): 09-29 から再び毎日 read timeout で欠測していた。1 ページ (50 件) に
+# 約 1 分掛かるようになり、60s に収まらない。ゲート側と同じ値に揃える (20 件 / 120s)。
+DEFAULT_PAGE_SIZE = int(os.environ.get("JULES_API_PAGE_SIZE", "20"))
+DEFAULT_TIMEOUT = float(os.environ.get("JULES_API_TIMEOUT", "120"))
+# 1 件あたり約 1 秒掛かる現状では、全 session の走査 (最大 3,000 件) は終わらない。
+# レポートが見たいのは直近の圧と失敗・放置なので、作成から WINDOW 時間より古い session は
+# 読まない。打ち切るのは、読んだ範囲が createTime の降順だと確認できたときだけ
+# (jules_quota_gate.count_created_24h_early_stop と同じ考え方)。
+DEFAULT_WINDOW_HOURS = float(os.environ.get("JULES_REPORT_WINDOW_HOURS", "72"))
+# 全体の持ち時間。超えたら partial を使わず送出する (呼び出し側が「取得失敗」と書く)。
+DEFAULT_DEADLINE = float(os.environ.get("JULES_API_DEADLINE", "900"))
 DEFAULT_ATTEMPTS = int(os.environ.get("JULES_API_ATTEMPTS", "3"))
 DEFAULT_BACKOFF = float(os.environ.get("JULES_API_BACKOFF", "3"))
 # pageSize を下げたぶん page 数を上げ、走査する session 総数を旧実装 (100 × 30)
@@ -96,24 +105,37 @@ def fetch_sessions(
     attempts: int = DEFAULT_ATTEMPTS,
     backoff: float = DEFAULT_BACKOFF,
     sleep=None,
+    window_hours: float | None = None,
+    deadline: float | None = None,
+    monotonic=None,
 ) -> list[dict]:
     """LIST /v1alpha/sessions を pageToken で全ページ取得。max_pages で暴走防止。
 
     一過性の timeout / 5xx は指数バックオフで retry する。retry を使い切ったら partial を
     返さず送出する (欠測を「session が少ない」と読み違えないため)。
+
+    ``window_hours`` を渡すと、読んだ範囲が createTime の降順で、直近ページの最後が
+    それより古くなった時点で以降のページを読まない。降順を確認できなければ全ページ読む。
+    ``deadline`` は全ページ合計の持ち時間 (秒)。超えたら partial を返さず送出する。
     """
     import requests  # 遅延 import (local lint で requests 無しでも import 可能に)
+    import time as _time
 
     if sleep is None:
-        import time as _time
-
         sleep = _time.sleep
+    if monotonic is None:
+        monotonic = _time.monotonic
+    started = monotonic()
     attempts = max(1, attempts)
     if max_pages is None:
         max_pages = -(-DEFAULT_MAX_SESSIONS // max(1, page_size))
     sessions: list[dict] = []
     token: str | None = None
     for _ in range(max_pages):
+        if deadline is not None and monotonic() - started >= deadline:
+            raise TimeoutError(
+                f"{deadline:.0f}s 以内に取得できなかった ({len(sessions)} 件取得済みだが partial は使わない)"
+            )
         params: dict = {"pageSize": page_size}
         if token:
             params["pageToken"] = token
@@ -141,10 +163,17 @@ def fetch_sessions(
                     sleep(wait)
         if body is None:
             raise last_exc if last_exc is not None else RuntimeError("fetch failed")
-        sessions.extend(body.get("sessions") or [])
+        page = body.get("sessions") or []
+        sessions.extend(page)
         token = body.get("nextPageToken") or ""
         if not token:
             break
+        if window_hours is not None and page:
+            last = _parse_ts(page[-1].get("createTime"))
+            seen = [t for t in (_parse_ts(s.get("createTime")) for s in sessions) if t]
+            if (last and all(a >= b for a, b in zip(seen, seen[1:]))
+                    and (_now() - last).total_seconds() > window_hours * 3600):
+                break
     return sessions
 
 
@@ -278,7 +307,8 @@ def render(summary: dict, *, stuck_hours: float) -> str:
     L.append(f"- **daily 圧 (rolling 24h 作成): {d} / {DAILY_CAP}** {_pct_emoji(d, DAILY_CAP)}")
     L.append(f"- **concurrent 圧 (実working 枠占有: QUEUED/PLANNING/IN_PROGRESS): {a} / {CONCURRENT_CAP}** {_pct_emoji(a, CONCURRENT_CAP)}")
     L.append(f"- 人間待ち放置 (AWAITING_*/PAUSED): {w} _(quota 非占有・記事未生成)_")
-    L.append(f"- total visible sessions: {summary['total']}")
+    L.append(f"- 読んだ session: {summary['total']} _(作成から約 {DEFAULT_WINDOW_HOURS:g}h 以内。"
+             f"それより古いものは state 分布・放置の一覧に入らない)_")
     L.append("")
     L.append("### state 分布")
     L.append("")
@@ -351,7 +381,8 @@ def main() -> int:
         print("## Jules sessions (live API)\n\n_JULES_API_KEY 未設定のためスキップ_")
         return 0
     try:
-        sessions = fetch_sessions(api_key)
+        sessions = fetch_sessions(api_key, window_hours=DEFAULT_WINDOW_HOURS,
+                                  deadline=DEFAULT_DEADLINE)
     except Exception as e:  # noqa: BLE001 — レポート用途なので握り潰して継続
         sys.stderr.write(f"fetch failed: {e}\n")
         print(f"## Jules sessions (live API)\n\n_API 取得失敗: {e}_")
