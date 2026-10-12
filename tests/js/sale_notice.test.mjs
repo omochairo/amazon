@@ -24,18 +24,26 @@ const PHASES = [
     start: "2026-10-16T00:00:00+09:00", end: "2026-10-19T23:59:59+09:00" },
 ];
 
-function makeNode(phasesAttr, { withMain = true } = {}) {
+// attrs: data-phases 以外の属性 (data-sale-notice-short など)
+function makeNode(phasesAttr, { withMain = true, attrs = {} } = {}) {
   const main = { textContent: "" };
+  const sub = { textContent: "" };
+  const all = { "data-phases": phasesAttr, ...attrs };
   return {
     hidden: true,
     main,
-    getAttribute: (name) => (name === "data-phases" ? phasesAttr : null),
-    querySelector: () => (withMain ? main : null),
+    sub,
+    getAttribute: (name) => (name in all ? all[name] : null),
+    querySelector: (sel) => {
+      if (sel === "[data-sale-notice-main]") return withMain ? main : null;
+      if (sel === "[data-sale-notice-sub-target]") return sub;
+      return null;
+    },
   };
 }
 
 // nodes を持つ document で読み込む。読み込み時の apply は now で判定される。
-function load(nodes = [], now = "2026-10-01T00:00:00+09:00") {
+function load(nodes = [], now = "2026-10-01T00:00:00+09:00", readyState = "complete") {
   const listeners = [];
   const RealDate = Date;
   class FakeDate extends RealDate {
@@ -45,7 +53,11 @@ function load(nodes = [], now = "2026-10-01T00:00:00+09:00") {
     Date: FakeDate,
     JSON,
     isNaN,
-    document: { querySelectorAll: () => nodes },
+    document: {
+      readyState,
+      querySelectorAll: () => nodes,
+      addEventListener: (type, fn) => listeners.push({ type, fn }),
+    },
     window: { addEventListener: (type, fn) => listeners.push({ type, fn }) },
   };
   sandbox.globalThis = sandbox;
@@ -140,4 +152,45 @@ test("apply: 表示中に期間が終わったら pageshow で消える", () => 
   assert.ok(listeners.some((l) => l.type === "pageshow"));
   loaded.apply({ querySelectorAll: () => [node] }, at("2026-10-20T00:00:00+09:00"));
   assert.equal(node.hidden, true);
+});
+
+// ---- 第 2 段: 商品ページの価格カード下の 1 行 ----
+
+test("short: 次の区分の予告を省く", () => {
+  assert.equal(
+    api.message(PHASES, at("2026-10-14T09:00:00+09:00"), true),
+    "Amazon プライム感謝祭 先行セール 開催中（10/15 23:59 まで）");
+  assert.equal(api.message(PHASES, at("2026-10-20T00:00:00+09:00"), true), "");
+});
+
+test("apply: data-sale-notice-short の要素には短い文言と補足を入れる", () => {
+  const node = makeNode(JSON.stringify(PHASES), {
+    attrs: { "data-sale-notice-short": "", "data-sale-notice-sub": "販売ページでご確認ください" },
+  });
+  load([node], "2026-10-14T09:00:00+09:00");
+  assert.equal(node.hidden, false);
+  assert.equal(node.main.textContent, "Amazon プライム感謝祭 先行セール 開催中（10/15 23:59 まで）");
+  assert.equal(node.sub.textContent, "販売ページでご確認ください");
+});
+
+test("apply: 期間外は補足も入れない", () => {
+  const node = makeNode(JSON.stringify(PHASES), {
+    attrs: { "data-sale-notice-short": "", "data-sale-notice-sub": "販売ページでご確認ください" },
+  });
+  load([node], "2026-10-20T00:00:00+09:00");
+  assert.equal(node.hidden, true);
+  assert.equal(node.sub.textContent, "");
+});
+
+test("apply: 読み込み中に実行されたら、後から現れる要素を DOMContentLoaded で拾う", () => {
+  // スクリプトはヘッダー直下にインラインで置かれ、価格カード下の 1 行はその後ろにある
+  const nodes = [];
+  const { listeners } = load(nodes, "2026-10-14T09:00:00+09:00", "loading");
+  const late = makeNode(JSON.stringify(PHASES));
+  nodes.push(late);
+  assert.equal(late.hidden, true);
+  const ready = listeners.find((l) => l.type === "DOMContentLoaded");
+  assert.ok(ready);
+  ready.fn();
+  assert.equal(late.hidden, false);
 });

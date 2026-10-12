@@ -1,0 +1,13 @@
+{{- /* #9449 第 2 段: 商品ページの価格カード直下に出す、セール期間の 1 行。
+       post.md.j2 の価格比較ブロックから呼ぶ。Usage: {{< sale_notice_inline >}}
+
+       - 文言は要素の中に書かず data 属性に置き、sale_notice.js (ヘッダーの告知帯と
+         同じもの) が期間中だけ入れる。本文に直接書くと、期間外でも検索インデックスや
+         要約 (.Plain) に混ざる
+       - Amazon で買えない商品 (価格なし・在庫切れ・取り扱い終了) に出さない判定は、
+         商品データを持っている post.md.j2 側でやる
+       - 言ってよいのは「セール期間中である」ことまで。この商品が値引きされているとは
+         書かない (#6285) */ -}}
+{{- range (partialCached "sale_events_live.html" .Page) }}
+<p class="sale-notice-inline" role="note" data-sale-notice data-sale-notice-short data-phases="{{ .phases | jsonify }}" data-sale-notice-sub="この商品が対象かどうか・実際の価格は Amazon の販売ページでご確認ください" hidden><strong data-sale-notice-main></strong><small data-sale-notice-sub-target></small></p>
+{{- end -}}
