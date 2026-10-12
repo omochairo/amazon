@@ -91,8 +91,17 @@ jobs:
           # workflow_dispatch (手動 override) は従来どおり bypass (BUDGET 未設定 → MAX_LOCKS=6)。
           # schedule (自動 6h 毎) は gate を通し rolling-24h 残予算で絞る。
           if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
-            BUDGET=$(python scripts/jules_quota_gate.py --cap 80 --max 6 || echo 0)
+            # #9410: ゲートが読んだ session 一覧を pick に渡す (FAILED が続く ASIN を外す。
+            # 判定は article_pick.exclude_failing_sessions)。LIST は 1 リクエスト約 1 分
+            # 掛かるので読み直さない。ゲートが fallback に倒れたときはファイルが出来ず、
+            # 除外しないだけ。
+            rm -f /tmp/jules_recent_sessions.json
+            BUDGET=$(python scripts/jules_quota_gate.py --cap 80 --max 6 \
+              --sessions-out /tmp/jules_recent_sessions.json || echo 0)
             echo "Jules quota gate budget: $BUDGET (rolling-24h 作成数ベース)"
+            if [ -s /tmp/jules_recent_sessions.json ]; then
+              export JULES_RECENT_SESSIONS=/tmp/jules_recent_sessions.json
+            fi
             if [ "${BUDGET:-0}" -le 0 ]; then
               echo "Jules daily quota gate: budget 0; skipping pick + downstream."
               echo "count=0" >> "$GITHUB_OUTPUT"

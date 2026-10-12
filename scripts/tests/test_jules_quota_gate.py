@@ -281,6 +281,32 @@ def _page(hours, token=None):
     return body
 
 
+def test_main_writes_sessions_only_on_success(monkeypatch, tmp_path, capsys) -> None:
+    """#9410: --sessions-out は読めたときだけ書く。stdout は予算の 1 行のまま。"""
+    out = tmp_path / 'sessions.json'
+    monkeypatch.setenv('JULES_API_KEY', 'k')
+    monkeypatch.setattr(sys, 'argv', ['gate', '--max', '6', '--sessions-out', str(out)])
+    _patch_urlopen(monkeypatch, [{'sessions': [
+        {'id': '1', 'title': '[wf03] 記事生成: B00JP15EE2', 'state': 'FAILED',
+         'createTime': _iso(1), 'prompt': 'long'}]}])
+    assert _gate.main() == 0
+    assert capsys.readouterr().out.strip() == '6'
+    rows = json.loads(out.read_text(encoding='utf-8'))
+    assert [(r['id'], r['title'], r['state']) for r in rows] == [
+        ('1', '[wf03] 記事生成: B00JP15EE2', 'FAILED')]
+    assert 'prompt' not in rows[0]
+
+    out.unlink()
+    monkeypatch.setattr(_gate, 'read_recent_sessions',
+                        lambda *_a, **_k: (_ for _ in ()).throw(TimeoutError('read timed out')))
+    assert _gate.main() == 0
+    assert capsys.readouterr().out.strip() == '1'   # fallback
+    assert not out.exists()
+
+    # 書き出し先が無くてもゲートは落とさない
+    _gate.write_sessions(str(tmp_path / 'no-such-dir' / 's.json'), [{'id': '1'}])
+
+
 def test_early_stop_when_desc_and_past_24h(monkeypatch) -> None:
     """降順が確認でき、ページ末尾が 24h より古ければ次のページを読まない。"""
     fake = _patch_urlopen(monkeypatch, [

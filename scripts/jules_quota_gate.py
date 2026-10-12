@@ -240,7 +240,7 @@ def _sorted_desc(sessions: list[dict]) -> bool:
     return all(a >= b for a, b in zip(seen, seen[1:]))
 
 
-def count_created_24h_early_stop(
+def read_recent_sessions(
     api_key: str,
     *,
     page_size: int = DEFAULT_PAGE_SIZE,
@@ -251,8 +251,8 @@ def count_created_24h_early_stop(
     max_pages: int | None = None,
     sleep=time.sleep,
     monotonic=time.monotonic,
-) -> int:
-    """rolling-24h の作成数を、必要なページだけ読んで数える。
+) -> list[dict]:
+    """rolling-24h の作成数を数えるのに必要なページだけ読み、読んだ session を返す。
 
     ## なぜ要るか
 
@@ -304,7 +304,36 @@ def count_created_24h_early_stop(
                     f"(降順を確認済み) → 以降のページは読まない\n"
                 )
                 break
-    return count_created_24h(sessions)
+    return sessions
+
+
+def count_created_24h_early_stop(api_key: str, **kwargs) -> int:
+    """rolling-24h の作成数を、必要なページだけ読んで数える (``read_recent_sessions``)。"""
+    return count_created_24h(read_recent_sessions(api_key, **kwargs))
+
+
+def write_sessions(path: str, sessions: list[dict]) -> None:
+    """読んだ session の要点 (id / title / state / createTime) を JSON で書き出す (#9410)。
+
+    03 の pick が「同じ ASIN で FAILED が続いている」判定に使う
+    (article_pick.exclude_failing_sessions)。LIST は 1 リクエスト約 1 分掛かるので、
+    pick の側で読み直さず、ゲートが読んだものをそのまま渡す。書けなくてもゲートは
+    落とさない (pick 側はファイルが無ければ除外しないだけ)。
+    """
+    rows = []
+    for s in sessions:
+        created = _parse_ts(s.get("createTime"))
+        rows.append({
+            "id": s.get("id"),
+            "title": s.get("title"),
+            "state": s.get("state") or s.get("status"),
+            "createTime": created.isoformat() if created else None,
+        })
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(rows, f, ensure_ascii=False)
+    except OSError as e:
+        sys.stderr.write(f"jules_quota_gate: session 一覧を書けなかった ({e})\n")
 
 
 def count_created_24h(sessions: list[dict]) -> int:
@@ -331,6 +360,8 @@ def main() -> int:
                    help="1 run あたりの作成上限 (既定 12 = 旧 MAX_LOCKS)")
     p.add_argument("--fallback", type=int, default=1,
                    help="API 取得失敗 / キー未設定時に返す保守的予算 (既定 1)")
+    p.add_argument("--sessions-out", default="",
+                   help="読んだ session の要点を書き出す JSON のパス (#9410。取得失敗時は書かない)")
     args = p.parse_args()
 
     api_key = os.environ.get("JULES_API_KEY", "").strip()
@@ -342,7 +373,8 @@ def main() -> int:
         print(args.fallback)
         return 0
     try:
-        used = count_created_24h_early_stop(api_key)
+        sessions = read_recent_sessions(api_key)
+        used = count_created_24h(sessions)
     except Exception as e:  # noqa: BLE001 — ゲート用途。失敗時は fail-slow で継続
         sys.stderr.write(f"jules_quota_gate: API 取得失敗 ({e}) → fallback 予算を返す\n")
         warn_step_summary(
@@ -352,6 +384,8 @@ def main() -> int:
         print(args.fallback)
         return 0
 
+    if args.sessions_out:
+        write_sessions(args.sessions_out, sessions)
     budget = remaining_budget(used, cap=args.cap, per_run_max=args.per_run_max)
     sys.stderr.write(
         f"jules_quota_gate: rolling-24h 作成 {used} / cap {args.cap} "

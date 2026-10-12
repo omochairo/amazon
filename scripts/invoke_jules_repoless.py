@@ -196,13 +196,20 @@ class Jules:
 
 def quota_budget(max_per_run):
     """jules_quota_gate.py (H11: GitHub 非依存) で rolling-24h 残予算を取得。"""
+    # #9410: ゲートが読んだ session 一覧を pick に渡す (article_pick.exclude_failing_sessions)。
+    sessions_out = os.path.join(tempfile.gettempdir(), "jules_recent_sessions.json")
+    os.environ.pop("JULES_RECENT_SESSIONS", None)
     try:
+        if os.path.exists(sessions_out):
+            os.remove(sessions_out)
         # Jules の sessions 一覧 API は履歴が増えると遅い (実測 4 分超) ため長めに取る
         out = subprocess.run(
             [sys.executable, "scripts/jules_quota_gate.py", "--cap", "80",
-             "--max", str(max_per_run)],
+             "--max", str(max_per_run), "--sessions-out", sessions_out],
             capture_output=True, text=True, timeout=600, check=True,
             env=os.environ.copy())
+        if os.path.exists(sessions_out):
+            os.environ["JULES_RECENT_SESSIONS"] = sessions_out
         return int(out.stdout.strip().splitlines()[-1])
     except Exception as e:
         print(f"warning: quota gate failed ({e}); fail-closed budget=0", file=sys.stderr)

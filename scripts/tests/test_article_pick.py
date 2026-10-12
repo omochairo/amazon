@@ -376,5 +376,77 @@ class RecentlyFailedTest(unittest.TestCase):
                 {"B0X"}, path=os.path.join(tmp, "missing.json")), {"B0X"})
 
 
+class FailingSessionsTest(unittest.TestCase):
+    """#9410: 同じ ASIN の session が続けて FAILED なら pick から外す。"""
+
+    def setUp(self):
+        import datetime as dt
+        self.dt = dt
+        self.now = dt.datetime(2026, 10, 12, 12, 0, tzinfo=dt.timezone.utc)
+
+    def _s(self, asin, state, hours_ago, title=None):
+        created = self.now - self.dt.timedelta(hours=hours_ago)
+        return {"id": "1", "title": title or f"[wf03] 記事生成: {asin}",
+                "state": state, "createTime": created.isoformat()}
+
+    def test_three_failed_in_a_row_is_excluded(self):
+        rows = [self._s("B00JP15EE2", "FAILED", h) for h in (1, 26, 50)]
+        rows += [self._s("B00IUD8SFI", "FAILED", h) for h in (14, 26)]  # 2 回はまだ外さない
+        self.assertEqual(article_pick.failing_sessions(rows, self.now), {"B00JP15EE2"})
+
+    def test_empty_completed_is_not_counted(self):
+        # 空振り (COMPLETED で PR 無し) は数えない。FAILED の間に挟まれば連続も切れる
+        rows = [self._s("B0DJNNHSCB", "COMPLETED", h) for h in (1, 10, 20)]
+        rows += [self._s("B0AAAAAAAA", s, h) for s, h in
+                 (("FAILED", 1), ("FAILED", 5), ("COMPLETED", 9), ("FAILED", 13))]
+        self.assertEqual(article_pick.failing_sessions(rows, self.now), set())
+
+    def test_newest_session_decides(self):
+        # 3 回 FAILED のあとに作り直した session が走っている・終わったなら外さない
+        failed = [self._s("B0AAAAAAAA", "FAILED", h) for h in (5, 10, 15)]
+        for state in ("IN_PROGRESS", "COMPLETED", None):
+            rows = failed + [self._s("B0AAAAAAAA", state, 1)]
+            self.assertEqual(article_pick.failing_sessions(rows, self.now), set())
+
+    def test_window_and_other_sessions_are_ignored(self):
+        # 窓 (72h) の外の FAILED は数えない = 古い FAILED が出れば試し直しになる
+        rows = [self._s("B0AAAAAAAA", "FAILED", h) for h in (1, 30, 73)]
+        # 題名に ASIN が無い旧 session・記事生成以外の session・壊れた行
+        rows += [self._s("", "FAILED", h, title="[wf03] 記事生成: 商品深掘りガイド") for h in (1, 2, 3)]
+        rows += [self._s("", "FAILED", h, title="[wf14] narrative: B0BBBBBBBB") for h in (1, 2, 3)]
+        rows += [None, {"title": "[wf03] 記事生成: B0CCCCCCCC", "state": "FAILED"}]
+        self.assertEqual(article_pick.failing_sessions(rows, self.now), set())
+
+    def test_exclude_reads_file_and_is_fail_open(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "sessions.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump([self._s("B00JP15EE2", "FAILED", h) for h in (1, 2, 3)], f)
+            out = article_pick.exclude_failing_sessions({"B0EXISTING"}, path=path, now=self.now)
+            self.assertEqual(out, {"B0EXISTING", "B00JP15EE2"})
+            # 指定無し・読めないファイル (ゲートの fallback・手動起動) は除外しない
+            self.assertEqual(article_pick.exclude_failing_sessions({"B0X"}, path=""), {"B0X"})
+            self.assertEqual(article_pick.exclude_failing_sessions(
+                {"B0X"}, path=os.path.join(tmp, "missing.json")), {"B0X"})
+            for broken in ("3", "{not json"):
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(broken)
+                self.assertEqual(article_pick.exclude_failing_sessions({"B0X"}, path=path), {"B0X"})
+
+    def test_gate_output_feeds_the_pick(self):
+        # jules_quota_gate.write_sessions の出力をそのまま読める (API の createTime は Z 付き・ナノ秒)
+        import jules_quota_gate
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "sessions.json")
+            jules_quota_gate.write_sessions(path, [
+                {"id": str(i), "title": "[wf03] 記事生成: B00JP15EE2", "state": "FAILED",
+                 "createTime": f"2026-10-12T0{i}:00:00.123456789Z", "prompt": "x" * 100}
+                for i in range(3)])
+            with open(path, encoding="utf-8") as f:
+                self.assertNotIn("prompt", f.read())
+            out = article_pick.exclude_failing_sessions(set(), path=path, now=self.now)
+            self.assertEqual(out, {"B00JP15EE2"})
+
+
 if __name__ == "__main__":
     unittest.main()
