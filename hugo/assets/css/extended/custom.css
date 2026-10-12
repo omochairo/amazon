@@ -7393,3 +7393,28 @@ body:has(#compare-floating-bar) .favorites-wrapper {
   background: rgba(30, 41, 59, 0.6);
   border-color: rgba(71, 85, 105, 0.55);
 }
+
+/* ---------- #9449 セール期間の告知帯 (partials/sale_notice.html) ---------- */
+.sale-notice {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: 0.15rem 0.75rem;
+  padding: 0.45rem 1rem;
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  color: #991b1b;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  text-align: center;
+}
+/* display: flex が hidden 属性を上書きするので明示する (期間外は出さない) */
+.sale-notice[hidden] {
+  display: none;
+}
+.sale-notice-main {
+  font-weight: 700;
+}
+.sale-notice-notes {
+  font-size: 0.75rem;
+}

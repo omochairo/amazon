@@ -1,0 +1,29 @@
+# セール期間の告知 (#9449)。ここに 1 件書くと、期間中だけ全ページのヘッダー下に
+# 告知帯が出て、終わると再ビルド無しで消える (partials/sale_notice.html +
+# assets/js/sale_notice.js が閲覧時刻で判定する)。
+#
+# 書き方:
+#   - start / end は必ずクォートし、+09:00 を付ける (JST)。end は「23:59 まで」なら 23:59:59
+#   - phases は時系列順。重ねない
+#   - headline は「開催中」の前に出る名前。label は前の区分から「◯◯は M/D H:MM から」と
+#     予告するときの呼び名
+#   - source / verified_on は確認元と確認日。公式の告知を見てから書く
+#   - notes は期間を通して出す補足。個別の商品が値引きされているとは書かない (#6285)
+#
+# 検証: scripts/tests/test_sale_events.py
+- id: prime-kanshasai-2026
+  name: Amazon プライム感謝祭
+  source: Amazon.co.jp のプライム感謝祭 告知ページ
+  verified_on: 2026-10-13
+  notes:
+    - プライム会員限定
+    - ポイントアップは要エントリー（期間中に合計1万円以上の買い物が対象）
+  phases:
+    - label: 先行セール
+      headline: Amazon プライム感謝祭 先行セール
+      start: "2026-10-13T00:00:00+09:00"
+      end: "2026-10-15T23:59:59+09:00"
+    - label: 本番
+      headline: Amazon プライム感謝祭
+      start: "2026-10-16T00:00:00+09:00"
+      end: "2026-10-19T23:59:59+09:00"

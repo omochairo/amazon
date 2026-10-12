@@ -99,6 +99,14 @@ cd hugo && hugo server -D
 
 Hugo は **Extended v0.146.0**（本番ビルドの SSOT は `.gitlab-ci.yml` の `HUGO_VERSION`。上げるときはそちらに合わせる）。`http://localhost:1313/`。
 
+## セール期間の告知を出す
+
+Amazon の大型セールなどの期間は `hugo/data/sale_events.yaml` に 1 件書く（#9449）。期間中だけ全ページのヘッダー下に告知帯が出て、終わると再ビルド無しで消える（判定は閲覧時に `hugo/assets/js/sale_notice.js` が行う）。テンプレートは触らない。
+
+- 公式の告知で日程を確認してから書く（`source` / `verified_on` が必須）
+- 書いてよいのは「セール期間中である」ことまで。個別の商品が値引きされているとは書かない（#6285）
+- 検証は `python -m pytest scripts/tests/test_sale_events.py`
+
 ## 触ってよい / いけない
 
 `AGENTS.md` の「リポジトリ保護ルール」は Jules 向けの制約だが、そこに挙がっている `hugo/config.toml` / `hugo/themes/` / `data/schema/` / `data/raw/` は自動化パイプラインの前提になっているので、人間が変更する場合も影響範囲を確認してから触ること。

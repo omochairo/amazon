@@ -115,3 +115,5 @@
     {{- /* category_dropdown.html の出力は site.* のみ依存でページ非依存のため全ページ共通キャッシュが安全。 */}}
     {{- partialCached "category_dropdown.html" . }}
 </header>
+{{- /* #9449 セール期間の告知帯。出力は site.Data のみ依存でページ非依存。 */}}
+{{- partialCached "sale_notice.html" . }}
