@@ -198,6 +198,17 @@
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
       "notes": "電池不要、対象年齢3歳以上の記載"
+    },
+    {
+      "id": "src-blog",
+      "name": "個人ブログ（トミカ103ca）",
+      "url": "https://ameblo.jp/hma006/entry-12972199045.html",
+      "tier": "medium",
+      "evidence_type": "primary",
+      "published_at": "2026-10-12",
+      "author": "個人ブロガー",
+      "conflict_of_interest": "none",
+      "notes": "「大きなショベルカーが開くと採石場になります！」など変形ギミックが写真付きで紹介されている"
     }
   ],
   "claims": [
@@ -207,7 +218,7 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-youtube",
-        "src-amazon"
+        "src-blog"
       ],
       "cross_checked": true,
       "notes": "YouTubeのレビュー動画でギミックが紹介されている"
@@ -228,7 +239,7 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-youtube",
-        "src-amazon"
+        "src-blog"
       ],
       "cross_checked": true,
       "notes": "YouTube動画内で他車両と組み合わせる様子が確認できる"
@@ -304,6 +315,12 @@
         "text": "休日の朝に自分だけの採石場を作って集中する時間",
         "supporting_source_ids": [
           "src-youtube"
+        ]
+      },
+      {
+        "text": "休日の朝に自分だけの採石場を作って集中する時間",
+        "supporting_source_ids": [
+          "src-blog"
         ]
       }
     ],
