@@ -185,7 +185,7 @@ jobs:
             echo "::error::Create session HTTP $HTTP_CODE"
             exit 1
           fi
-          echo "$BODY" | jq -c '{name, id, status}' 2>/dev/null || echo "$BODY" | head -c 500
+          echo "$BODY" | jq -c '{name, id, state}' 2>/dev/null || echo "$BODY" | head -c 500
           echo "::notice::Jules SNS copy session dispatched. AUTO_CREATE_PR → 36-sns-copy-auto-merge.yml が処理。"
 
       - name: No targets
