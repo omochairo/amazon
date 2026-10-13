@@ -107,6 +107,8 @@ Amazon の大型セールなどの期間は `hugo/data/sale_events.yaml` に 1 �
 - 書いてよいのは「セール期間中である」ことまで。個別の商品が値引きされているとは書かない（#6285）
 - 検証は `python -m pytest scripts/tests/test_sale_events.py`
 
+毎年来るセール（初売り・プライムデー・ブラックフライデーなど）は、例年の目安の時期を `data/sale_calendar.yaml` に持っている。週次の `59-sale-calendar-reminder.yml` が、時期が近いのに未登録のセールについて「日程を確認して登録する」issue を 1 件立てる（同じセールでは 1 回だけ。外部サイトは取りに行かない）。登録済みかどうかはイベントの `id` で見るので、**`sale_events.yaml` の `id` は `<sale_calendar.yaml の id>-<開始年>`**（例: `prime-kanshasai-2026`）にする。
+
 ## 触ってよい / いけない
 
 `AGENTS.md` の「リポジトリ保護ルール」は Jules 向けの制約だが、そこに挙がっている `hugo/config.toml` / `hugo/themes/` / `data/schema/` / `data/raw/` は自動化パイプラインの前提になっているので、人間が変更する場合も影響範囲を確認してから触ること。
