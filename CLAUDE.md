@@ -107,7 +107,7 @@ Amazon の大型セールなどの期間は `hugo/data/sale_events.yaml` に 1 �
 - 書いてよいのは「セール期間中である」ことまで。個別の商品が値引きされているとは書かない（#6285）
 - 検証は `python -m pytest scripts/tests/test_sale_events.py`
 
-毎年来るセール（初売り・プライムデー・ブラックフライデーなど）は、例年の目安の時期を `data/sale_calendar.yaml` に持っている。週次の `59-sale-calendar-reminder.yml` が、時期が近いのに未登録のセールについて「日程を確認して登録する」issue を 1 件立てる（同じセールでは 1 回だけ。外部サイトは取りに行かない）。登録済みかどうかはイベントの `id` で見るので、**`sale_events.yaml` の `id` は `<sale_calendar.yaml の id>-<開始年>`**（例: `prime-kanshasai-2026`）にする。
+毎年来るセール（初売り・プライムデー・ブラックフライデーなど）は、例年の目安の時期を `data/sale_calendar.yaml` に持っている。毎日の `59-sale-calendar-reminder.yml` が、未登録のセールについて「日程を確認して登録する」issue を 1 件立てる（同じセールでは 1 回だけ）。立つのは、公式のフィード（About Amazon Japan / PR TIMES）に開催の発表が出たときと、発表を拾えないまま目安の時期が近づいたとき。前者には題名から読んだ日程の候補が付くが、**候補は未確認で、自動では登録されない**。出典を開いて確かめてから書く（先行セールの期間は題名に出ないので候補に入らない）。登録済みかどうかはイベントの `id` で見るので、**`sale_events.yaml` の `id` は `<sale_calendar.yaml の id>-<開始年>`**（例: `prime-kanshasai-2026`）にする。
 
 ## 触ってよい / いけない
 

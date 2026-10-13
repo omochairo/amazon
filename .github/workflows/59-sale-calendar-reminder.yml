@@ -6,16 +6,23 @@ name: Sale Calendar Reminder
 # 自動で出て自動で消える。足りなかったのは「追記を思い出す手段」で、忘れると
 # そのセールは告知されないまま過ぎる。
 #
-# - 目安の時期は data/sale_calendar.yaml。判定は scripts/sale_calendar_reminder.py
-# - 外部サイトは取りに行かない。日程の確認と登録は人がやる
+# - 公式のフィード 2 本 (About Amazon Japan / PR TIMES のアマゾンジャパン) を
+#   1 回ずつ読み、開催の発表が出ていたら、題名から読んだ日程を「候補」として
+#   issue に載せる (scripts/sale_announcements.py)。Amazon.co.jp 本体は読まない
+# - 日程は自動では登録しない。出典での確認と sale_events.yaml への登録は人がやる
+# - 発表を拾えなかったときの保険に、目安の時期 (data/sale_calendar.yaml) でも立てる。
+#   判定は scripts/sale_calendar_reminder.py
 # - 同じセールでは 1 回しか立てない (本文のマーカーで open / closed とも探す)。
-#   1 回の run で立てるのは 1 件まで
+#   目安で立てた issue が開いていれば、発表の候補はそこへ 1 回だけコメントする。
+#   1 回の run で書くのは 1 件まで
 # - 既存 issue の検索に失敗したら、立てずに赤で終わる (重複起票と無言の停止を避ける)
+# - フィードを読めなかったら赤で終わる (検知が止まったまま緑にしない)
 
 on:
   schedule:
-    # 毎週月曜 09:23 JST。告知が出るのは開催の 2〜3 週間前なので週次で足りる
-    - cron: '23 0 * * 1'
+    # 毎日 15:23 JST。初売りは発表 (12/27 ごろ) から開始まで 7 日しか無く、
+    # 週次では間に合わない。発表は 10〜14 時台に出るので、その日のうちに拾う
+    - cron: '23 6 * * *'
   workflow_dispatch:
     inputs:
       today:

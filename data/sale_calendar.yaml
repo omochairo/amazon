@@ -1,8 +1,10 @@
 # 毎年ほぼ同じ時期に来るセールの「目安の時期」(#9449)。
 #
-# これは告知には使わない。使い道は 1 つだけで、時期が近づいたら
-# scripts/sale_calendar_reminder.py (週次の 59-sale-calendar-reminder.yml) が
-# 「日程を公式で確認して hugo/data/sale_events.yaml に登録する」issue を 1 件立てる。
+# これは告知には使わない。使い道は scripts/sale_calendar_reminder.py
+# (毎日の 59-sale-calendar-reminder.yml) が立てる「日程を公式で確認して
+# hugo/data/sale_events.yaml に登録する」issue だけ。issue が立つのは 2 通り:
+#   - 公式のフィードに開催の発表が出たとき (題名から読んだ日程の候補つき)
+#   - 発表を拾えないまま、ここに書いた目安の時期が近づいたとき (保険)
 # サイトに出る日程の SSOT は hugo/data/sale_events.yaml のまま。
 #
 # 書き方:
@@ -12,7 +14,13 @@
 #   - typical_start は例年の開始日の目安 ("MM-DD"。必ずクォートする)。
 #     年によって 2 週間ほど前後するので、例年のうち早い方に寄せて書く
 #   - remind_days_before は typical_start の何日前から issue を立てるか。
-#     公式の告知が出るのは開催の 2〜3 週間前なので、早くしすぎても確認できない
+#     公式の発表より前に立てても確認できないので、発表の時期に合わせる
+#     (プライムデー・プライム感謝祭は開催の 3〜4 週間前、初売りと
+#     ブラックフライデーは 1〜2 週間前に発表される)
+#   - 発表の題名では、セール名を「」の中身の完全一致で探す (先頭の "Amazon" と
+#     空白は無視)。name と違う名前で発表された年があれば announce_names に足す。
+#     部分一致にしないのは、「Amazon プライムデー フェス」のような日付の違う
+#     関連の発表を取り違えないため
 #   - ここに書く時期は過去の開催時期からの目安で、公式に確認した日程ではない。
 #     実際の日程は毎回、公式の告知で確認する
 #
@@ -20,10 +28,12 @@
 - id: hatsuuri
   name: Amazon 初売り
   typical_start: "01-03"
-  remind_days_before: 21
-  note: 例年 1 月上旬
+  remind_days_before: 7
+  note: 例年 1 月上旬。発表は 12 月 27 日ごろ
 - id: shinseikatsu
   name: Amazon 新生活セール
+  announce_names:
+    - Amazon スマイルSALE 新生活
   typical_start: "02-28"
   remind_days_before: 21
   note: 例年 2 月末〜3 月上旬
@@ -40,5 +50,5 @@
 - id: black-friday
   name: Amazon ブラックフライデー
   typical_start: "11-21"
-  remind_days_before: 21
-  note: 例年 11 月下旬〜12 月上旬。先行セールが数日前から始まる
+  remind_days_before: 7
+  note: 例年 11 月下旬〜12 月上旬。先行セールが数日前から始まる。発表は 11 月中旬
