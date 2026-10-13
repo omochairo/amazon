@@ -157,57 +157,70 @@
   "internal_links": [],
   "sources": [
     {
-      "id": "src-amazon",
-      "name": "Amazon 商品ページ",
-      "url": "https://www.amazon.co.jp/dp/B0HG8XQN58/?tag=chk01-22",
-      "tier": "low",
+      "id": "src-official",
+      "name": "タカラトミー公式ページ",
+      "url": "https://www.takaratomy.co.jp/products/tomica/new/2610.htm",
+      "tier": "high",
       "evidence_type": "primary",
       "published_at": "unknown",
       "author": "メーカー公式",
-      "conflict_of_interest": "possible",
-      "notes": "商品の特徴としてサスペンション機能を記載。また発売日が2026年11月28日であることを明記。"
+      "conflict_of_interest": "none",
+      "notes": "No.30 三菱 デリカミニの公式情報。サスペンション機能の記載あり。"
+    },
+    {
+      "id": "src-kakaku",
+      "name": "価格.com",
+      "url": "https://kakaku.com/item/S0001047912/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "unknown",
+      "author": "第三者メディア",
+      "conflict_of_interest": "none",
+      "notes": "トミカ No.30 三菱 デリカミニの商品ページ。参考最安価格などの情報が記載されている。"
     }
   ],
   "claims": [
     {
-      "claim": "ダイキャスト製で手頃な価格のためコレクションに最適である",
+      "claim": "メーカー公式としてサスペンション機能が搭載されていることが公表されている",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-official"
+      ],
+      "cross_checked": false,
+      "notes": "公式ページにサスペンションの記載あり"
+    },
+    {
+      "claim": "発売前から複数のショップで取り扱われ、価格比較の対象となっている",
+      "category": "comparative_advantage",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-kakaku"
+      ],
+      "cross_checked": false,
+      "notes": "価格.comに商品ページが存在し、複数の販売店がリストされている"
+    },
+    {
+      "claim": "実車のデザインを手のひらサイズに落とし込んだ公式モデルである",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-official",
+        "src-kakaku"
+      ],
+      "cross_checked": true,
+      "notes": "公式サイトおよび価格.comの両方で、商品名やデザインが確認できる"
+    },
+    {
+      "claim": "手頃な価格帯であり、ミニカーの定番として安心して購入できる",
       "category": "quality",
       "confidence": "medium",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-official",
+        "src-kakaku"
       ],
-      "cross_checked": false,
-      "notes": "手頃な価格帯が魅力として挙げられる"
-    },
-    {
-      "claim": "サスペンション機能が搭載されており、手で押したときの感触が楽しめる",
-      "category": "quality",
-      "confidence": "high",
-      "supporting_source_ids": [
-        "src-amazon"
-      ],
-      "cross_checked": false,
-      "notes": "Amazon商品ページにサスペンションの記載あり"
-    },
-    {
-      "claim": "対象年齢は3歳以上と設定されており、小さな部品があるため注意が必要",
-      "category": "safety",
-      "confidence": "high",
-      "supporting_source_ids": [
-        "src-amazon"
-      ],
-      "cross_checked": false,
-      "notes": "メーカー公式の対象年齢を記載"
-    },
-    {
-      "claim": "実車のデザインを1/57スケールで再現している",
-      "category": "quality",
-      "confidence": "high",
-      "supporting_source_ids": [
-        "src-amazon"
-      ],
-      "cross_checked": false,
-      "notes": "スケール比の記載"
+      "cross_checked": true,
+      "notes": "両サイトに価格情報が掲載されており、定番のトミカシリーズであることが確認できる"
     }
   ],
   "technical_specs": {
@@ -230,19 +243,20 @@
       {
         "text": "実車の愛らしいフロントデザインを手のひらサイズで忠実に再現している",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-official",
+          "src-kakaku"
         ]
       },
       {
         "text": "サスペンション機能が搭載されており、手転がしでの走りがスムーズ",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-official"
         ]
       },
       {
-        "text": "完成度が高くコレクションとしての満足度も十分にある",
+        "text": "価格比較サイトでも複数の販売店が取り扱っており手に入りやすい",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-kakaku"
         ]
       }
     ],
@@ -250,13 +264,13 @@
       {
         "text": "ドアの開閉などの追加ギミックがない点は少し物足りない可能性がある",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-official"
         ]
       },
       {
-        "text": "細部まで作り込まれている反面、乱暴な扱いには向かない可能性がある",
+        "text": "小さな部品があるため3歳未満のお子さまには注意が必要",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-official"
         ]
       }
     ],
@@ -264,19 +278,20 @@
       {
         "text": "車好きなお子さまへのちょっとしたご褒美や誕生日プレゼント",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-kakaku"
         ]
       },
       {
         "text": "他のトミカシリーズやトミカタウンと組み合わせての室内遊び",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-official"
         ]
       },
       {
         "text": "実車のデリカミニが好きな大人のコレクション用途",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-official",
+          "src-kakaku"
         ]
       }
     ],
@@ -285,7 +300,8 @@
         "segment_label": "大人のミニカーコレクター層",
         "summary": "実車の特徴を捉えた完成度の高い造形が評価され、カラーバリエーションも含めて複数集めたいと期待されています。",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-official",
+          "src-kakaku"
         ]
       }
     ]
