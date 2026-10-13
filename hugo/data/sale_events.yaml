@@ -3,6 +3,9 @@
 # assets/js/sale_notice.js が閲覧時刻で判定する)。
 #
 # 書き方:
+#   - id は「<data/sale_calendar.yaml の id>-<開始年>」(例: prime-kanshasai-2026)。
+#     毎年来るセールの登録忘れを知らせる scripts/sale_calendar_reminder.py が、
+#     この id で登録済みかを判定する。カレンダーに無い単発のセールは自由に付けてよい
 #   - start / end は必ずクォートし、+09:00 を付ける (JST)。end は「23:59 まで」なら 23:59:59
 #   - phases は時系列順。重ねない
 #   - headline は「開催中」の前に出る名前。label は前の区分から「◯◯は M/D H:MM から」と

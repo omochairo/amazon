@@ -1,0 +1,44 @@
+# 毎年ほぼ同じ時期に来るセールの「目安の時期」(#9449)。
+#
+# これは告知には使わない。使い道は 1 つだけで、時期が近づいたら
+# scripts/sale_calendar_reminder.py (週次の 59-sale-calendar-reminder.yml) が
+# 「日程を公式で確認して hugo/data/sale_events.yaml に登録する」issue を 1 件立てる。
+# サイトに出る日程の SSOT は hugo/data/sale_events.yaml のまま。
+#
+# 書き方:
+#   - id は英小文字・数字・ハイフン。hugo/data/sale_events.yaml に登録するときの
+#     イベント id は「<この id>-<開始年>」にする (例: prime-kanshasai-2026)。
+#     リマインドはこの id の有無で「登録済みか」を判定する
+#   - typical_start は例年の開始日の目安 ("MM-DD"。必ずクォートする)。
+#     年によって 2 週間ほど前後するので、例年のうち早い方に寄せて書く
+#   - remind_days_before は typical_start の何日前から issue を立てるか。
+#     公式の告知が出るのは開催の 2〜3 週間前なので、早くしすぎても確認できない
+#   - ここに書く時期は過去の開催時期からの目安で、公式に確認した日程ではない。
+#     実際の日程は毎回、公式の告知で確認する
+#
+# 検証: scripts/tests/test_sale_calendar_reminder.py
+- id: hatsuuri
+  name: Amazon 初売り
+  typical_start: "01-03"
+  remind_days_before: 21
+  note: 例年 1 月上旬
+- id: shinseikatsu
+  name: Amazon 新生活セール
+  typical_start: "02-28"
+  remind_days_before: 21
+  note: 例年 2 月末〜3 月上旬
+- id: prime-day
+  name: Amazon プライムデー
+  typical_start: "07-08"
+  remind_days_before: 21
+  note: 例年 7 月中旬。先行セールが数日前から始まる
+- id: prime-kanshasai
+  name: Amazon プライム感謝祭
+  typical_start: "10-04"
+  remind_days_before: 21
+  note: 例年 10 月上旬〜中旬。先行セールが数日前から始まる
+- id: black-friday
+  name: Amazon ブラックフライデー
+  typical_start: "11-21"
+  remind_days_before: 21
+  note: 例年 11 月下旬〜12 月上旬。先行セールが数日前から始まる

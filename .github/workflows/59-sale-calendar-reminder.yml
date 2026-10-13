@@ -1,0 +1,65 @@
+name: Sale Calendar Reminder
+# #9449: 毎年来るセール (プライムデー・ブラックフライデー等) の時期が近づいたら、
+# 「日程を公式で確認して hugo/data/sale_events.yaml に登録する」issue を 1 件立てる。
+#
+# セール期間の告知は、人が日程を確認して sale_events.yaml に 1 件追記すれば
+# 自動で出て自動で消える。足りなかったのは「追記を思い出す手段」で、忘れると
+# そのセールは告知されないまま過ぎる。
+#
+# - 目安の時期は data/sale_calendar.yaml。判定は scripts/sale_calendar_reminder.py
+# - 外部サイトは取りに行かない。日程の確認と登録は人がやる
+# - 同じセールでは 1 回しか立てない (本文のマーカーで open / closed とも探す)。
+#   1 回の run で立てるのは 1 件まで
+# - 既存 issue の検索に失敗したら、立てずに赤で終わる (重複起票と無言の停止を避ける)
+
+on:
+  schedule:
+    # 毎週月曜 09:23 JST。告知が出るのは開催の 2〜3 週間前なので週次で足りる
+    - cron: '23 0 * * 1'
+  workflow_dispatch:
+    inputs:
+      today:
+        description: '判定基準日 (YYYY-MM-DD)。空なら JST の今日。検証用'
+        required: false
+        default: ''
+      dry_run:
+        description: 'issue を立てず、判定結果と本文だけログに出す'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: sale-calendar-reminder
+  cancel-in-progress: false
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Remind upcoming sales
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          INPUT_TODAY: ${{ github.event.inputs.today }}
+          # 定時実行 (inputs 無し) は本番動作。手動実行の既定は dry-run
+          INPUT_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
+        run: |
+          args=()
+          if [ -n "$INPUT_TODAY" ]; then args+=(--today "$INPUT_TODAY"); fi
+          if [ "$INPUT_DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          python scripts/sale_calendar_reminder.py "${args[@]}"
