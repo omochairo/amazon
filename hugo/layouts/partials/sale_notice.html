@@ -10,14 +10,23 @@
        - JS は defer ではなく要素の直後にインラインで置く。defer だと描画後に帯が
          開いてページ全体が下にずれる (CLS)
        - 商品ページの価格カード下の 1 行 (shortcodes/sale_notice_inline.html) も
-         ここで読み込んだ JS が DOMContentLoaded で拾う */ -}}
+         ここで読み込んだ JS が DOMContentLoaded で拾う
+       - リンク先は自サイトの /price/ (価格観測で値下がりした商品の一覧) だけ。
+         Amazon へのリンクは付けない。リンクの文言は /price/ の中身 (値下がり) を
+         指すもので、「セール対象の商品」とは書かない (#6285)
+       - /price/ が空 (price_dashboard に 1 件も無い) のビルドではリンクを出さない
+       - クリックは sale_notice.js が sale_notice_click として GA4 に送る */ -}}
 {{- $live := partialCached "sale_events_live.html" . -}}
 {{- if $live }}
+{{- $hasPriceItems := and site.Data.price_dashboard site.Data.price_dashboard.items }}
 {{- range $live }}
-<div class="sale-notice" role="note" data-sale-notice data-phases="{{ .phases | jsonify }}" hidden>
+<div class="sale-notice" role="note" data-sale-notice data-sale-slot="header-band" data-sale-id="{{ .id }}" data-phases="{{ .phases | jsonify }}" hidden>
   <span class="sale-notice-main" data-sale-notice-main></span>
   {{- with .notes }}
   <span class="sale-notice-notes">{{ delimit . "・" }}</span>
+  {{- end }}
+  {{- if $hasPriceItems }}
+  <a class="sale-notice-link" href="{{ "price/" | relURL }}">値下がり中のおもちゃを見る</a>
   {{- end }}
 </div>
 {{- end }}

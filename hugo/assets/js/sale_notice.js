@@ -104,7 +104,34 @@
     }
   }
 
-  window.OmochaSaleNotice = { message: message, apply: apply };
+  /* 告知が押されたことを GA4 へ送る (affiliate_click.js と同じ流儀)。
+   *   - リスナーは document に 1 個だけ (capture)。告知の置き場所が増えても配線は不要
+   *   - リンクの無い告知 (商品ページの 1 行) も送る。link が空のクリックは
+   *     「押せると思って押された」回数で、リンクを付けるかどうかの判断材料になる
+   *   - gtag が無い (広告ブロッカー等) 場合は黙って何もしない。リンクは素の <a>
+   *     なので、計測が死んでも遷移は必ず起きる
+   */
+  function track(ev) {
+    if (typeof window.gtag !== 'function') return;
+    var target = ev && ev.target;
+    var node = target && target.closest ? target.closest('[data-sale-notice]') : null;
+    if (!node || node.hidden) return;
+    var a = target.closest('a[href]');
+    try {
+      window.gtag('event', 'sale_notice_click', {
+        slot: node.getAttribute('data-sale-slot') || 'unknown',
+        sale_id: node.getAttribute('data-sale-id') || '',
+        link: a ? (a.getAttribute('href') || '') : '',
+        page_path: window.location.pathname
+      });
+    } catch (e) {
+      /* 計測の失敗で遷移を妨げない */
+    }
+  }
+
+  window.OmochaSaleNotice = { message: message, apply: apply, track: track };
+
+  document.addEventListener('click', track, true);
 
   apply(document, Date.now());
   // このスクリプトはヘッダー直下にインラインで置かれるので、それより後ろにある要素

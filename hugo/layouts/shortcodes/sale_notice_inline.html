@@ -7,7 +7,9 @@
        - Amazon で買えない商品 (価格なし・在庫切れ・取り扱い終了) に出さない判定は、
          商品データを持っている post.md.j2 側でやる
        - 言ってよいのは「セール期間中である」ことまで。この商品が値引きされているとは
-         書かない (#6285) */ -}}
+         書かない (#6285)
+       - リンクは付けない (購入ボタンの直下で、他のページへ逃がさない)。押された回数
+         だけ sale_notice.js が sale_notice_click として GA4 に送る */ -}}
 {{- range (partialCached "sale_events_live.html" .Page) }}
-<p class="sale-notice-inline" role="note" data-sale-notice data-sale-notice-short data-phases="{{ .phases | jsonify }}" data-sale-notice-sub="この商品が対象かどうか・実際の価格は Amazon の販売ページでご確認ください" hidden><strong data-sale-notice-main></strong><small data-sale-notice-sub-target></small></p>
+<p class="sale-notice-inline" role="note" data-sale-notice data-sale-notice-short data-sale-slot="price-card" data-sale-id="{{ .id }}" data-phases="{{ .phases | jsonify }}" data-sale-notice-sub="この商品が対象かどうか・実際の価格は Amazon の販売ページでご確認ください" hidden><strong data-sale-notice-main></strong><small data-sale-notice-sub-target></small></p>
 {{- end -}}

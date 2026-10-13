@@ -7418,6 +7418,20 @@ body:has(#compare-floating-bar) .favorites-wrapper {
 .sale-notice-notes {
   font-size: 0.75rem;
 }
+/* /price/ への内部リンク。帯の文字色に合わせ、下線で押せることを示す */
+.sale-notice-link {
+  /* 指で押せる高さを確保する (文字の高さだけだと 20px しかない) */
+  display: inline-block;
+  padding: 0.3rem 0.25rem;
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  white-space: nowrap;
+}
+.sale-notice-link::after {
+  content: " ›";
+}
 
 /* #9449 第 2 段: 商品ページの価格カード下の 1 行 (shortcodes/sale_notice_inline.html) */
 .sale-notice-inline {
