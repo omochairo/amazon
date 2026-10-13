@@ -1496,6 +1496,29 @@ brands:
   - {canonical: Kitai Japan, tier: D, region: CN, noindex: true, aliases: [Kitai Japan]}
   - {canonical: SAKURAN, tier: D, region: CN, noindex: true, aliases: [SAKURAN]}
 
+  # 2026-10-13 (#9363 / #9362): 供給側検出器 (#9363) と A-6 (#9362) の候補を実データ
+  # (product.brand + 商品名) と Web 検証で判定。
+  # レイス=株式会社レイス (RACE Co.,ltd.、東京都港区、race-corp.jp) のキッズコスメ
+  # ブランド。「スモールレディ」やサンリオ等のライセンスコスメを製造販売。カタログの raw は
+  # "レイス" と括弧形 "レイス(Race)" が混在する。英字単独の Race は一般語なので入れない。
+  - canonical: レイス
+    aliases: [レイス, "レイス(Race)"]
+    tier: B
+    region: JP
+  # SILKYROOM=三山商事有限会社 (大阪府柏原市、sunsun-corp.com) の自社ブランド。
+  # 音の出る絵本 (オールエデュケーション サウンドブック) とフォニックス教材を展開。
+  # 公式表記は大文字 (SILKYROOM) だが、term_slugs.yaml に小文字の silkyroom が登録済みで、
+  # 大文字を canonical にすると slug が silkyroom-2 になる。既存 slug に合わせて小文字にする。
+  - canonical: silkyroom
+    aliases: [silkyroom, SILKYROOM, シルキールーム]
+    tier: B
+    region: JP
+  # 以下は実在するが薄いハブ不要 = noindex。
+  # アクロース=楽天・Yahoo 等に出店する日用品 EC ショップ「Across【アクロース】」の屋号。
+  # 玩具メーカーではないが、リトミックスカーフ・お手玉を自社名義で出品している。
+  # 知育玩具の Across Rainbow (別会社・登録済み) とは無関係。
+  - {canonical: アクロース, tier: D, region: JP, noindex: true, aliases: [アクロース, Across]}
+
   # 2026-10-04 (#8931): 供給側検出器の候補を実データ (product.brand + 商品名) と
   # Web 検証で判定。
   # HOPPL=株式会社Noz (兵庫県宝塚市) の木製ベビー・キッズ家具/玩具ブランド (hoppl.jp)。
