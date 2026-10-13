@@ -6,6 +6,7 @@ from scripts.suggest_brand_taxonomy_additions import (
     DEFAULT_MIN_IMPRESSIONS,
     covered_by_taxonomy,
     is_brand_like,
+    load_rejected_terms,
     suggest,
     tokenize,
 )
@@ -211,3 +212,34 @@ def test_suggest_cap_counts_only_new_tokens():
     result = suggest(gsc, {"レゴ", "デュプロ"})
     assert [c["token"] for c in result["candidates"]] == ["ピタリコ"]
     assert result["suppressed_long_queries"] == []
+
+
+def test_suggest_skips_butter_squeeze_category_tokens():
+    # #9362: 「バター スクイーズ」は商品カテゴリ名でブランドではない
+    gsc = _make_gsc(by_query=[
+        {"query": "バター スクイーズ どこに 売ってる", "impressions": 19, "clicks": 0, "ctr": 0.0, "position": 5.0},
+    ])
+    result = suggest(gsc, set())
+    assert result["candidates"] == []
+
+
+def test_suggest_skips_rejected_brand_exact_match_only():
+    # #9362: 供給側で却下済みの brand (Ghbunuz) は大小無視の完全一致で落とす。
+    # 部分一致では落とさない (短い却下名が別ブランドを巻き込まないように)
+    gsc = _make_gsc(by_query=[
+        {"query": "ghbunuz", "impressions": 10, "clicks": 0, "ctr": 0.0, "position": 5.0},
+        {"query": "ghbunuzmax", "impressions": 10, "clicks": 0, "ctr": 0.0, "position": 5.0},
+    ])
+    result = suggest(gsc, set(), rejected_terms={"ghbunuz"})
+    assert [c["token"] for c in result["candidates"]] == ["ghbunuzmax"]
+    assert result["params"]["rejected_term_count"] == 1
+
+
+def test_load_rejected_terms_lowercases_and_tolerates_missing(tmp_path):
+    path = tmp_path / "brand_rejected.yaml"
+    path.write_text(
+        "rejected:\n  - brand: Ghbunuz\n    category: unverifiable_oem\n  - category: mismatch\n",
+        encoding="utf-8",
+    )
+    assert load_rejected_terms(path) == {"ghbunuz"}
+    assert load_rejected_terms(tmp_path / "missing.yaml") == set()

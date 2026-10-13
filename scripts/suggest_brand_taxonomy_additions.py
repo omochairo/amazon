@@ -15,6 +15,7 @@ A-6 (epic #1356): GSC weekly の by_query から brand_taxonomy.yaml に
    - brand-like pattern (katakana / 半角ｶﾅ / alphabet / 数字 / ・ . - _ 以外を含まない、
      かつ最低 1 文字は katakana / alphabet) に合わない → skip
    - GENERIC_TOKENS_STOPWORDS に含まれる → skip
+   - brand_rejected.yaml (供給側検出器の reviewed-rejected denylist) に完全一致 → skip
    - 既知 taxonomy term との substring 関係 (token in term OR term in token) で
      カバーされている → skip
 5. 1 クエリから MAX_TOKENS_PER_QUERY 件以上の新規 token が出た行は、その行ごと
@@ -45,6 +46,7 @@ logger = logging.getLogger("suggest_brand_taxonomy_additions")
 
 DEFAULT_GSC = "data/analytics/gsc_weekly.json"
 DEFAULT_TAXONOMY = "data/brand_taxonomy.yaml"
+DEFAULT_REJECTED = "data/brand_rejected.yaml"
 DEFAULT_OUT = "data/analytics/brand_taxonomy_suggestions.json"
 DEFAULT_MIN_IMPRESSIONS = 10
 DEFAULT_MIN_TOKEN_LEN = 3
@@ -88,6 +90,9 @@ GENERIC_TOKENS_STOPWORDS: set[str] = {
     # 2026-09-27 (#8410): キャラクター IP。実メーカーが別 (ピタッとボードはアガツマ製)
     # で、ポケモン/ディズニー (brand_rejected.yaml) と同じ理由で登録しない。
     "アンパンマン",
+    # 2026-10-13 (#9362): 「バター スクイーズ」は商品カテゴリ名 (バター形のスクイーズ玩具)。
+    # 検索されている「本物」は めろジョイ (taxonomy 登録済み) で、語そのものはブランドではない。
+    "バター", "スクイーズ",
     # イベント / シーズン
     "ハーフ", "バースデー", "クリスマス", "ハロウィン", "プレゼント",
     "イベント", "セール", "キャンペーン",
@@ -125,6 +130,25 @@ def load_taxonomy_terms(path: pathlib.Path) -> set[str]:
     return terms
 
 
+def load_rejected_terms(path: pathlib.Path) -> set[str]:
+    """brand_rejected.yaml の brand を lowercase set で返す (無ければ空)。
+
+    供給側検出器 (suggest_brand_taxonomy_from_catalog.py) が人手レビューで却下した
+    ブランドは、指名検索があると本検出器に同じ名前で浮上する (#9362 の ghbunuz)。
+    却下の記憶を 1 ファイルに保つため、stopword へ二重登録せずここを読む。
+    """
+    if not path.exists():
+        logger.info("rejected denylist not found (%s) — none excluded", path)
+        return set()
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    terms: set[str] = set()
+    for entry in data.get("rejected", []) or []:
+        brand = str((entry or {}).get("brand") or "").strip()
+        if brand:
+            terms.add(brand.lower())
+    return terms
+
+
 def is_brand_like(token: str, min_len: int) -> bool:
     if len(token) < min_len:
         return False
@@ -156,7 +180,9 @@ def suggest(gsc: dict[str, Any], taxonomy_terms: set[str], *,
             min_token_len: int = DEFAULT_MIN_TOKEN_LEN,
             top_n: int = DEFAULT_TOP_N,
             query_examples: int = DEFAULT_QUERY_EXAMPLES,
-            max_tokens_per_query: int = DEFAULT_MAX_TOKENS_PER_QUERY) -> dict[str, Any]:
+            max_tokens_per_query: int = DEFAULT_MAX_TOKENS_PER_QUERY,
+            rejected_terms: set[str] | None = None) -> dict[str, Any]:
+    rejected_terms = rejected_terms or set()
     by_query = gsc.get("by_query", []) or []
     candidates: dict[str, dict[str, Any]] = {}
 
@@ -184,6 +210,8 @@ def suggest(gsc: dict[str, Any], taxonomy_terms: set[str], *,
                 continue
             # stopword + 数字 (例: "youtube10425", #8410) も同じ generic 語として落とす
             if token_lower.rstrip("0123456789") in GENERIC_TOKENS_STOPWORDS:
+                continue
+            if token_lower in rejected_terms:
                 continue
             if covered_by_taxonomy(token_lower, taxonomy_terms):
                 continue
@@ -232,6 +260,7 @@ def suggest(gsc: dict[str, Any], taxonomy_terms: set[str], *,
             "top_n": top_n,
             "max_tokens_per_query": max_tokens_per_query,
             "taxonomy_term_count": len(taxonomy_terms),
+            "rejected_term_count": len(rejected_terms),
         },
         "eligible": eligible,
         "suppressed_long_queries": sorted(
@@ -245,6 +274,8 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--gsc", default=DEFAULT_GSC)
     p.add_argument("--taxonomy", default=DEFAULT_TAXONOMY)
+    p.add_argument("--rejected", default=DEFAULT_REJECTED,
+                   help="reviewed-rejected denylist YAML (#2196)。完全一致の token を除外する")
     p.add_argument("--out", default=DEFAULT_OUT)
     p.add_argument("--min-impressions", type=int, default=DEFAULT_MIN_IMPRESSIONS)
     p.add_argument("--min-token-len", type=int, default=DEFAULT_MIN_TOKEN_LEN)
@@ -266,6 +297,8 @@ def main() -> int:
     gsc = json.loads(gsc_path.read_text(encoding="utf-8"))
     taxonomy_terms = load_taxonomy_terms(tax_path)
     logger.info("loaded taxonomy: %d terms", len(taxonomy_terms))
+    rejected_terms = load_rejected_terms(pathlib.Path(args.rejected))
+    logger.info("loaded rejected denylist: %d brands", len(rejected_terms))
 
     result = suggest(
         gsc, taxonomy_terms,
@@ -273,6 +306,7 @@ def main() -> int:
         min_token_len=args.min_token_len,
         top_n=args.top_n,
         max_tokens_per_query=args.max_tokens_per_query,
+        rejected_terms=rejected_terms,
     )
 
     out = pathlib.Path(args.out)
