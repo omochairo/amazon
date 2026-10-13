@@ -6,6 +6,7 @@
 //   B. 区分の境目で文言が切り替わる (先行 → 本番)
 //   C. 日時は閲覧者のタイムゾーンではなく JST で出る
 //   D. データが壊れているときは出さない側に倒れる
+//   E. 告知のクリックを GA4 に送る (リンクの有無と置き場所を区別する)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -43,7 +44,9 @@ function makeNode(phasesAttr, { withMain = true, attrs = {} } = {}) {
 }
 
 // nodes を持つ document で読み込む。読み込み時の apply は now で判定される。
-function load(nodes = [], now = "2026-10-01T00:00:00+09:00", readyState = "complete") {
+// gtag: sale_notice_click の送り先 (省略時は未定義 = 広告ブロッカー等で GA が無い状態)
+function load(nodes = [], now = "2026-10-01T00:00:00+09:00", readyState = "complete",
+              { gtag, pathname = "/" } = {}) {
   const listeners = [];
   const RealDate = Date;
   class FakeDate extends RealDate {
@@ -58,7 +61,11 @@ function load(nodes = [], now = "2026-10-01T00:00:00+09:00", readyState = "compl
       querySelectorAll: () => nodes,
       addEventListener: (type, fn) => listeners.push({ type, fn }),
     },
-    window: { addEventListener: (type, fn) => listeners.push({ type, fn }) },
+    window: {
+      addEventListener: (type, fn) => listeners.push({ type, fn }),
+      location: { pathname },
+      ...(gtag ? { gtag } : {}),
+    },
   };
   sandbox.globalThis = sandbox;
   vm.runInNewContext(SRC, sandbox);
@@ -193,4 +200,78 @@ test("apply: 読み込み中に実行されたら、後から現れる要素を 
   assert.ok(ready);
   ready.fn();
   assert.equal(late.hidden, false);
+});
+
+// ---- E: クリック計測 (sale_notice_click) ----
+
+// 告知の要素と、その中のクリックされた要素を作る。link: 告知内の <a> の href (無ければ null)
+function makeClick({ slot = "header-band", saleId = "prime-kanshasai-2026", link = null,
+                     hidden = false, inside = true } = {}) {
+  const attrs = { "data-sale-slot": slot, "data-sale-id": saleId };
+  const node = { hidden, getAttribute: (name) => (name in attrs ? attrs[name] : null) };
+  const anchor = link === null ? null : { getAttribute: (name) => (name === "href" ? link : null) };
+  const target = {
+    closest: (sel) => {
+      if (sel === "[data-sale-notice]") return inside ? node : null;
+      if (sel === "a[href]") return anchor;
+      return null;
+    },
+  };
+  return { target };
+}
+
+function loadWithGtag(pathname = "/") {
+  const sent = [];
+  const { listeners } = load([], "2026-10-14T09:00:00+09:00", "complete",
+    { gtag: (...args) => sent.push(args), pathname });
+  const click = listeners.find((l) => l.type === "click");
+  assert.ok(click, "document に click リスナーを 1 個登録する");
+  return { sent, click: click.fn };
+}
+
+test("E: 告知帯のリンクを押すと slot・セール ID・リンク先・ページを送る", () => {
+  const { sent, click } = loadWithGtag("/deals/");
+  click(makeClick({ link: "/price/" }));
+  // params は vm の別 realm で作られるので、プロトタイプ差を避けて写してから比べる
+  assert.equal(sent.length, 1);
+  assert.deepEqual([sent[0][0], sent[0][1], { ...sent[0][2] }], ["event", "sale_notice_click", {
+    slot: "header-band", sale_id: "prime-kanshasai-2026", link: "/price/", page_path: "/deals/",
+  }]);
+});
+
+test("E: リンクの無い告知 (商品ページの 1 行) は link を空で送る", () => {
+  const { sent, click } = loadWithGtag("/products/b0abcdefgh/");
+  click(makeClick({ slot: "price-card" }));
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0][2].slot, "price-card");
+  assert.equal(sent[0][2].link, "");
+  assert.equal(sent[0][2].page_path, "/products/b0abcdefgh/");
+});
+
+test("E: 告知の外・非表示の告知のクリックは送らない", () => {
+  const { sent, click } = loadWithGtag();
+  click(makeClick({ inside: false, link: "/price/" }));
+  click(makeClick({ hidden: true, link: "/price/" }));
+  click({ target: null });
+  click({ target: {} });
+  assert.deepEqual(sent, []);
+});
+
+test("E: gtag が無くても・gtag が投げても例外を外に出さない (遷移を妨げない)", () => {
+  const { listeners } = load([], "2026-10-14T09:00:00+09:00");
+  listeners.find((l) => l.type === "click").fn(makeClick({ link: "/price/" }));
+
+  const { listeners: throwing } = load([], "2026-10-14T09:00:00+09:00", "complete",
+    { gtag: () => { throw new Error("blocked"); } });
+  throwing.find((l) => l.type === "click").fn(makeClick({ link: "/price/" }));
+});
+
+test("E: slot の属性が無い古い HTML でも unknown として送る", () => {
+  const { sent, click } = loadWithGtag();
+  const ev = makeClick({ link: "/price/" });
+  const node = ev.target.closest("[data-sale-notice]");
+  node.getAttribute = () => null;
+  click(ev);
+  assert.equal(sent[0][2].slot, "unknown");
+  assert.equal(sent[0][2].sale_id, "");
 });
