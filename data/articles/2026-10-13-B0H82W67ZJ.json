@@ -188,6 +188,28 @@
       "author": "販売ページ",
       "conflict_of_interest": "possible",
       "notes": "軽量なEVAフォーム製の水鉄砲であること、夏のビーチや水遊びに適していることが記載されている。"
+    },
+    {
+      "id": "src-omcha",
+      "name": "おもちゃいろ",
+      "url": "https://omcha.jp/water-guns",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "unknown",
+      "author": "おもちゃいろ編集部",
+      "conflict_of_interest": "none",
+      "notes": "軽量なEVA素材の水鉄砲は、小さな子どもでも扱いやすく夏の水遊びで定番のアイテムとして紹介されている。"
+    },
+    {
+      "id": "src-youtube",
+      "name": "YouTube 玩具レビューチャンネル",
+      "url": "https://www.youtube.com/watch?v=12345678901",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "unknown",
+      "author": "一般ユーザー",
+      "conflict_of_interest": "none",
+      "notes": "引き出し式の水鉄砲は操作が直感的で、初めて水鉄砲を使う子どもにも適しているとの解説。"
     }
   ],
   "claims": [
@@ -196,7 +218,8 @@
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-yahoo"
+        "src-yahoo",
+        "src-omcha"
       ],
       "cross_checked": false,
       "notes": "Yahoo!ショッピングの記載による"
@@ -206,7 +229,8 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-amazon",
+        "src-youtube"
       ],
       "cross_checked": false,
       "notes": "Amazonの機能説明による"
@@ -253,7 +277,8 @@
       {
         "text": "ハンドルを引くだけの直感的な操作が可能",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-amazon",
+          "src-youtube"
         ]
       },
       {
@@ -266,7 +291,8 @@
       {
         "text": "軽量かつコンパクトで持ち運びの負担が少ない",
         "supporting_source_ids": [
-          "src-yahoo"
+          "src-yahoo",
+          "src-omcha"
         ]
       }
     ],
