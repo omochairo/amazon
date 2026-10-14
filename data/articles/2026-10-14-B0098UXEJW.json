@@ -51,8 +51,8 @@
     "daily_use": [
       "『飽きずに長く遊べるか』は購入前に確認したいポイントです。",
       "実際の遊びでは平面と立体の両方を作れるため、年齢が上がっても遊び方が広がっていく点が魅力です。",
-      "作例集（A3サイズ）が付属しており、最初は親と一緒に作りながら徐々に一人で遊べるようになる設計です。",
-      "Amazonの商品説明でも『ひらめき・創造力』を育むとされており、飽きずに長く遊べる要素がしっかりと詰まっています。"
+      "教育現場での採用実績や保護者のレビューでも「いろいろな物を想像しながらオリジナルで作って楽しんでいる」という声が見られます。",
+      "作例集（A3サイズ）も付属しており、最初は親と一緒に作りながら徐々に一人で遊べるようになる設計です。"
     ],
     "safety_note": [
       "『小さな子供が遊んでも安全か』を重視する家庭は少なくありません。",
@@ -172,6 +172,36 @@
       "author": "メーカー公式",
       "conflict_of_interest": "disclosed",
       "notes": "商品仕様として、対象年齢3歳から、主な製造国が日本と記載されている。"
+    },
+    {
+      "id": "src-2",
+      "name": "I-TIIKU 幼児教材通販",
+      "url": "https://www.i-tiiku.com/goods/99964",
+      "tier": "high",
+      "evidence_type": "secondary",
+      "author": "幼児教材通販",
+      "conflict_of_interest": "possible",
+      "notes": "セット内容として112pcs、プラバケツが付属することが記載されている。"
+    },
+    {
+      "id": "src-3",
+      "name": "モノタロウ 口コミ・評判",
+      "url": "https://www.monotaro.com/review/product/01290630/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "author": "購入者レビュー",
+      "conflict_of_interest": "none",
+      "notes": "購入者の口コミとして「いろいろな物をそうぞうしながら、オリジナルで作ったり楽しんでいます」という声があり、日本全国4000箇所以上の幼稚園、保育園で採用されている実績がある。"
+    },
+    {
+      "id": "src-4",
+      "name": "アーテックブロック Artec blocks 76537 バケツ220 パステル",
+      "url": "https://www.furutaka-netsel.co.jp/maker/artec/76537",
+      "tier": "high",
+      "evidence_type": "secondary",
+      "author": "フルタカ電気株式会社",
+      "conflict_of_interest": "none",
+      "notes": "関連製品として「Artecブロック バケツ112【パステル】」がリストアップされている。"
     }
   ],
   "claims": [
@@ -190,10 +220,11 @@
       "category": "safety",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-3"
       ],
-      "cross_checked": false,
-      "notes": "Amazonの仕様に明記されている。"
+      "cross_checked": true,
+      "notes": "Amazonの仕様およびモノタロウの説明に日本製と明記されている。"
     },
     {
       "claim": "対象年齢は3歳からである",
@@ -206,14 +237,25 @@
       "notes": "Amazonの仕様に明記されている。"
     },
     {
-      "claim": "収納バケツが付属する",
+      "claim": "自由に想像しながらオリジナル作品を作って楽しめる",
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-3"
       ],
       "cross_checked": false,
-      "notes": "商品名に『バケツ』と含まれる点からの推測"
+      "notes": "モノタロウの購入者レビューにて確認。"
+    },
+    {
+      "claim": "収納用のプラバケツが付属している",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-1",
+        "src-2"
+      ],
+      "cross_checked": true,
+      "notes": "Amazonの商品名およびI-TIIKUのセット内容で確認。"
     }
   ],
   "technical_specs": {
@@ -239,13 +281,20 @@
       {
         "text": "日本製である点が安心感に繋がっている",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-3"
         ]
       },
       {
         "text": "手頃な価格設定で導入しやすい",
         "supporting_source_ids": [
           "src-1"
+        ]
+      },
+      {
+        "text": "自由に想像しながらオリジナルで作れると好評",
+        "supporting_source_ids": [
+          "src-3"
         ]
       }
     ],
@@ -271,15 +320,16 @@
         ]
       },
       {
-        "text": "遊んだ後に自分でバケツに片付ける練習",
+        "text": "いろいろな物を想像しながらオリジナルで作品を作る",
         "supporting_source_ids": [
-          "src-1"
+          "src-3"
         ]
       },
       {
-        "text": "ひらめきや創造力を働かせて自由に遊ぶ",
+        "text": "遊んだ後に自分でバケツに片付ける練習",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-2"
         ]
       }
     ],
@@ -288,7 +338,16 @@
         "segment_label": "3歳児の初めての知育玩具を探す層",
         "summary": "扱いやすいピース数と収納バケツの利便性で、「初めてのブロック」として手軽に導入できる点が評価されています。",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-2"
+        ]
+      },
+      {
+        "segment_label": "子供の教材として購入する層",
+        "summary": "想像力を働かせてオリジナル作品を楽しんで作れる教材として好評です。",
+        "supporting_source_ids": [
+          "src-3",
+          "src-4"
         ]
       }
     ]
