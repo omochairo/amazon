@@ -176,6 +176,17 @@
       "author": "木のおもちゃ専門店ユーロバス",
       "conflict_of_interest": "possible",
       "notes": "ゴムで1本につながったブロックを動かして遊ぶ、図形あそびの例題付属、材質は木製"
+    },
+    {
+      "id": "src-wiki",
+      "name": "Wikipedia - 平和工業",
+      "url": "https://ja.wikipedia.org/wiki/%E5%B9%B3%E5%92%8C%E5%B7%A5%E6%A5%AD",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "unknown",
+      "author": "Wikipedia contributors",
+      "conflict_of_interest": "none",
+      "notes": "日本の木製玩具メーカーとしての一般的な記載"
     }
   ],
   "claims": [
@@ -205,9 +216,10 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-amazon",
-        "src-eurobus"
+        "src-eurobus",
+        "src-wiki"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "Amazonとユーロバスの両方で記載を確認"
     },
     {
@@ -218,7 +230,7 @@
         "src-amazon",
         "src-eurobus"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "Amazonとユーロバスの仕様で確認"
     }
   ],
