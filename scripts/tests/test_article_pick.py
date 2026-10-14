@@ -270,6 +270,20 @@ class SelectCandidatesTest(unittest.TestCase):
                 genre_flagged=boom, blocked={_asin(2)})
         self.assertEqual([o["asin"] for o in out], [_asin(1)])
 
+    def test_blocklisted_first_party_is_not_reported_as_waiting(self):
+        # blocklist 済みは商品データも消してあるので、「データ待ち」には数えない
+        # (待っても取得されない。除外の行に出す)。
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            out = article_pick.select_candidates(
+                [], set(), [], [_asin(60), _asin(61), _asin(62)], None, "s",
+                has_amazon_item=lambda a: a == _asin(62), blocked={_asin(60)})
+        self.assertEqual([o["asin"] for o in out], [_asin(62)])
+        log = buf.getvalue()
+        self.assertIn(f"first-party waiting for amazon data (#9155): 1 ['{_asin(61)}']", log)
+        self.assertIn(f"excluded at pick, blocklist (#9155): 1 ['{_asin(60)}']", log)
+
     def test_load_blocklist(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = os.path.join(tmp, "b.json")

@@ -134,6 +134,10 @@ def select_candidates(items, existing, ranking_pool, first_party_all,
                   and ASIN_RE.match(i["asin"])]
 
     fp_remaining = [a for a in first_party_all if a not in existing]
+    # #9155: ジャンル不一致・blocklist 済みは上限で切る**前に**外す (枠を占有させない)。
+    # 「データ待ち」より先に外す: blocklist 済みは商品データも消してあるので、後で
+    # 外すと取得されることのない ASIN が「待ち」として毎回ログに出続ける。
+    fp_remaining = [a for a in fp_remaining if excluded_reason(a) is None]
     # #9155: 商品データの無い first-party は取得されるまで待たせる (03 と同じ)。
     # 上限で切る前に外す: 後で外すとデータの無い ASIN が枠を占有し続ける。
     if has_amazon_item is not None:
@@ -142,8 +146,6 @@ def select_candidates(items, existing, ranking_pool, first_party_all,
             print(f"first-party waiting for amazon data (#9155): {len(fp_waiting)} "
                   f"{fp_waiting[:10]}")
         fp_remaining = [a for a in fp_remaining if a not in set(fp_waiting)]
-    # #9155: ジャンル不一致・blocklist 済みは上限で切る**前に**外す (枠を占有させない)。
-    fp_remaining = [a for a in fp_remaining if excluded_reason(a) is None]
     # #9199: 非販売ソースが 2 件揃うまで待たせる (sources_v5 で確実に落ちるため)。
     # 落とさない: 34-third-party-sources が first-party を先頭で集める。
     if scorer is not None:
