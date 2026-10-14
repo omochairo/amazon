@@ -61,6 +61,7 @@ logger = logging.getLogger("collect_first_party_sources")
 
 DEFAULT_OUT = "data/analytics/first_party_sources.json"
 DEFAULT_POOL_OUT = "data/raw/first_party_pool.json"
+DEFAULT_BLOCKLIST = "data/asin_blocklist.json"
 DEFAULT_ARTICLES_DIR = "data/articles"
 DEFAULT_AMAZON_JSON = "data/raw/amazon.json"
 DEFAULT_PER_ASIN_DIR = "data/raw/per_asin"
@@ -124,6 +125,17 @@ def _load_json(path: pathlib.Path) -> Any:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
+
+
+def load_blocklist(path: pathlib.Path) -> set[str]:
+    """``data/asin_blocklist.json`` (``{"blocked": [{"asin": ...}]}``) の ASIN 集合。
+
+    無い/壊れていれば空 (収集を止めない。pick 側 ``article_pick`` でも外れる)。
+    """
+    data = _load_json(path)
+    blocked = data.get("blocked", []) if isinstance(data, dict) else []
+    return {e["asin"] for e in blocked
+            if isinstance(e, dict) and isinstance(e.get("asin"), str)}
 
 
 # --------------------------------------------------------------------------
@@ -491,7 +503,9 @@ def build_uncatalogued(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
-def build_first_party_pool(sources: list[dict[str, Any]]) -> list[str]:
+def build_first_party_pool(
+    sources: list[dict[str, Any]], blocked: Iterable[str] = (),
+) -> list[str]:
     """B が消費する対象: role=primary かつ 未記事化 かつ B0 形式 かつ タイトル一致の ASIN。
 
     設計 (#264) は ``in_corpus=true`` も条件に入れていたが、``in_corpus`` の出所
@@ -509,24 +523,34 @@ def build_first_party_pool(sources: list[dict[str, Any]]) -> list[str]:
     ``title_match`` (bigram Jaccard, #7569 型6) が ``TITLE_MATCH_FLOOR`` を超えない
     ASIN も落とす。``title_match`` が ``None`` (商品名候補が取れない = 判定不能) も
     通さない側に倒す。落とした分は ``build_pool_excluded`` に残る。
+
+    ``blocked`` (``data/asin_blocklist.json``) の ASIN も落とす。記事を消して
+    blocklist に入れた ASIN は ``has_article=false`` に戻るので、ここで外さないと
+    次の収集でプールに戻り、pick 側で外れるだけの ASIN がプールに居座る
+    (実測 2026-10-13: 5 件中 3 件)。
     """
+    blocked = set(blocked)
     asins = {
         r["asin"] for r in sources
         if r["role"] == "primary"
         and not r["has_article"]
         and POOL_ASIN_RE.match(r["asin"])
+        and r["asin"] not in blocked
         and r.get("title_match") is not None
         and r["title_match"] > TITLE_MATCH_FLOOR
     }
     return sorted(asins)
 
 
-def build_pool_excluded(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def build_pool_excluded(
+    sources: list[dict[str, Any]], blocked: Iterable[str] = (),
+) -> list[dict[str, Any]]:
     """``build_first_party_pool`` の母集団 (role=primary かつ未記事化) のうち落ちた ASIN の一覧。
 
     reason は ASIN ごとに 1 つだけ (``non_b0_asin`` の判定を先に行う。B0 形式でない
     ASIN の ``title_match`` は判定対象外なので優先度が高い):
       - ``non_b0_asin``: ISBN 形式など (#7573)
+      - ``blocklist``: ``data/asin_blocklist.json`` に載っている
       - ``no_title_match_candidate``: 全ての出現で商品名候補が取れず ``title_match=None``
       - ``low_title_match``: 商品名候補はあるが ``TITLE_MATCH_FLOOR`` を超えない
         (``title_match`` に複数出現中の最大値を残す)
@@ -534,7 +558,8 @@ def build_pool_excluded(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
     書籍ジャンルが解禁されたとき (#3311) にそのまま使えるように、捨てずに
     ``asin`` ごとに 1 件・昇順で残す (重複の畳み込みは ``build_uncatalogued`` と同じ)。
     """
-    pool_asins = set(build_first_party_pool(sources))
+    blocked = set(blocked)
+    pool_asins = set(build_first_party_pool(sources, blocked))
     grouped: dict[str, list[dict[str, Any]]] = {}
     for record in sources:
         if record["role"] != "primary" or record["has_article"]:
@@ -552,6 +577,14 @@ def build_pool_excluded(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
             excluded.append({
                 "asin": asin,
                 "reason": "non_b0_asin",
+                "post_url": first["post_url"],
+                "post_title": first["post_title"],
+            })
+            continue
+        if asin in blocked:
+            excluded.append({
+                "asin": asin,
+                "reason": "blocklist",
                 "post_url": first["post_url"],
                 "post_title": first["post_title"],
             })
@@ -620,6 +653,7 @@ def run(
     articles_dir: pathlib.Path,
     amazon_json_path: pathlib.Path,
     per_asin_dir: pathlib.Path,
+    blocklist_path: pathlib.Path = pathlib.Path(DEFAULT_BLOCKLIST),
     sleep_seconds: float = DEFAULT_SLEEP_SECONDS,
     limit: int = 0,
     session: requests.Session | None = None,
@@ -639,8 +673,9 @@ def run(
         sleeper=sleeper,
     )
     assert_not_truncated(previous, result, limit=limit)
-    pool = build_first_party_pool(result["sources"])
-    result["pool_excluded"] = build_pool_excluded(result["sources"])
+    blocked = load_blocklist(blocklist_path)
+    pool = build_first_party_pool(result["sources"], blocked)
+    result["pool_excluded"] = build_pool_excluded(result["sources"], blocked)
     write_json(out_path, result)
     write_json(pool_path, {"asins": pool, "generated_at": result["generated_at"]})
 
@@ -664,6 +699,7 @@ def main() -> None:
     parser.add_argument("--articles-dir", default=DEFAULT_ARTICLES_DIR)
     parser.add_argument("--amazon-json", default=DEFAULT_AMAZON_JSON)
     parser.add_argument("--per-asin-dir", default=DEFAULT_PER_ASIN_DIR)
+    parser.add_argument("--blocklist", default=DEFAULT_BLOCKLIST)
     parser.add_argument("--sleep-seconds", type=float, default=DEFAULT_SLEEP_SECONDS)
     parser.add_argument("--limit", type=int, default=0, help="記事一覧の取得件数上限 (スモーク用, 0=無制限)")
     args = parser.parse_args()
@@ -675,6 +711,7 @@ def main() -> None:
         articles_dir=pathlib.Path(args.articles_dir),
         amazon_json_path=pathlib.Path(args.amazon_json),
         per_asin_dir=pathlib.Path(args.per_asin_dir),
+        blocklist_path=pathlib.Path(args.blocklist),
         sleep_seconds=args.sleep_seconds,
         limit=args.limit,
     )

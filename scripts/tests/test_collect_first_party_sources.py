@@ -556,8 +556,33 @@ class BuildFirstPartyPoolTest(unittest.TestCase):
         ]
         self.assertEqual(build_first_party_pool(sources), [])
 
+    def test_excludes_blocklisted_asins(self):
+        # 記事を消して blocklist に入れた ASIN は has_article=false に戻る。
+        # ここで外さないと、次の収集でプールに戻る。
+        sources = [
+            {"asin": "B00000000A", "role": "primary", "has_article": False, "title_match": 0.9},
+            {"asin": "B00000000B", "role": "primary", "has_article": False, "title_match": 0.9},
+        ]
+        self.assertEqual(build_first_party_pool(sources, {"B00000000B"}), ["B00000000A"])
+        self.assertEqual(build_first_party_pool(sources), ["B00000000A", "B00000000B"])
+
 
 class BuildPoolExcludedTest(unittest.TestCase):
+    def test_blocklisted_asin_is_listed_with_reason(self):
+        # title_match が通っていても blocklist を理由に残す (non_b0_asin の次に判定)。
+        sources = [
+            {"asin": "B00000000A", "role": "primary", "has_article": False, "title_match": 0.9,
+             "post_url": "u-a", "post_title": "t-a"},
+            {"asin": "B00000000B", "role": "primary", "has_article": False, "title_match": 0.9,
+             "post_url": "u-b", "post_title": "t-b"},
+            {"asin": "4023333859", "role": "primary", "has_article": False, "title_match": 0.9,
+             "post_url": "u-c", "post_title": "t-c"},
+        ]
+        self.assertEqual(build_pool_excluded(sources, {"B00000000B", "4023333859"}), [
+            {"asin": "4023333859", "reason": "non_b0_asin", "post_url": "u-c", "post_title": "t-c"},
+            {"asin": "B00000000B", "reason": "blocklist", "post_url": "u-b", "post_title": "t-b"},
+        ])
+
     def test_returns_only_non_b0_asins_from_the_pool_population(self):
         sources = [
             {"asin": "B00000000A", "role": "primary", "has_article": False,
