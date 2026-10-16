@@ -9,6 +9,17 @@ A-7 (epic #1356): scripts/detect_query_intent.py の出力
 
 build_post の実変更は含まない (epic 完了基準=副作用ゼロ)。本 Issue は per-page の
 意図と推奨 CTA を提示し、build_post / テンプレ側での CTA レイアウト調整を促す。
+
+## 商品ページは初検出の週だけ起票する (brain#111)
+
+商品ページ (`/products/<asin>/`) は #1980 以降、build_post が query_intent.json を
+読んで `cta_layout` を自動で当てる。人が直す余地が無いのに、ledger の持ち越し
+(sticky_weeks) と Issue の有効期限 (14 日) の組み合わせで同じページが 2 週ごとに
+起票され直し、brain#75 / #88 / #111 の 3 週続けて全件「作業なし」で閉じていた。
+
+そこで商品ページは `first_detected` が今週 (= 初めて検出された週) のときだけ起票
+する。お知らせとしての 1 回は残し、それ以降は黙る。自動適用の外にあるページ
+(hub の /english-toys/ など) と navigational は従来どおり毎回起票する。
 """
 from __future__ import annotations
 
@@ -19,6 +30,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import urllib.parse
 
 from scripts._analytics_closed_keys import read_closed_keys
 from scripts._analytics_issue_expiry import expiry_marker, expiry_note
@@ -35,6 +47,32 @@ INTENT_JA = {
     "informational": "情報収集",
     "navigational": "指名 (ナビゲーショナル)",
 }
+
+
+AUTO_APPLIED_INTENTS = ("commercial", "informational")
+
+
+def is_auto_applied(d: dict) -> bool:
+    """build_post が `cta_layout` を自動で当てるページか。
+
+    build_post._load_query_intent_map と同じ条件 (意図が commercial /
+    informational) に、実際に照合される `/products/` 配下であることを足す。
+    """
+    path = urllib.parse.urlparse(d.get("page") or "").path.lower()
+    return (path.startswith("/products/")
+            and d.get("dominant_intent") in AUTO_APPLIED_INTENTS)
+
+
+def should_file(d: dict, *, src_range: dict) -> bool:
+    """起票するか。自動適用のページは初検出の週だけ (モジュール docstring 参照)。
+
+    first_detected が無い・今週の終端日が分からないときは「初検出ではない」と
+    読む (黙る側に倒す)。自動適用自体は Issue の有無に関係なく当たっている。
+    """
+    if not is_auto_applied(d):
+        return True
+    range_end = src_range.get("end")
+    return bool(range_end) and d.get("first_detected") == range_end
 
 
 def find_existing_taken(repo: str) -> set[str]:
@@ -102,12 +140,22 @@ def render_body(d: dict, *, src_range: dict) -> str:
         f"このページの検索流入は **{INTENT_JA.get(intent, intent)}** が "
         f"{d['dominant_share']*100:.1f}% を占める。現状の CTA レイアウトがこの意図に"
         "合っているか確認し、ズレていれば上記推奨に寄せる (build_post / テンプレ調整は別 PR)。",
+        *([
+            "",
+            "商品ページなので、上記推奨は次の build_post で `cta_layout` として自動で当たる。"
+            "この Issue は初検出のお知らせで、同じページは以後起票しない。"
+            "見るのは主要クエリの語が title にあるかくらいでよい。",
+        ] if is_auto_applied(d) else []),
         "",
         "## 自動運用",
         "",
         f"- 重複起票防止のため本文に `<!-- {MARKER_PREFIX}{page} -->` マーカーを埋め込み済み",
         "- 同 URL が再検出されてもこの Issue が open なら新規起票なし",
-        *expiry_note(src_range),
+        # 共通の expiry_note は 2 行目で「次週の run が立て直す」と書くが、
+        # 自動適用の商品ページは初検出の週しか起票しないので 1 行目だけ使う。
+        *(expiry[:1] + [
+            "- 期限で自動 close されても立て直さない (cta_layout は Issue と関係なく当たり続ける)",
+        ] if (expiry := expiry_note(src_range)) and is_auto_applied(d) else expiry),
     ]
     return "\n".join(parts)
 
@@ -160,6 +208,10 @@ def main() -> int:
         page = d["page"]
         if page in taken:
             logger.info("skip (already open): %s", page)
+            continue
+        if not should_file(d, src_range=src_range):
+            logger.info("skip (cta_layout auto-applied since %s): %s",
+                        d.get("first_detected"), page)
             continue
         title = (f"[A-7] Query intent = {d['dominant_intent']} "
                  f"({d['dominant_share']*100:.0f}%): {page}")
