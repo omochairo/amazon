@@ -341,6 +341,41 @@ class ShouldDeferTest(unittest.TestCase):
         self.assertEqual(S.host_kind("notyodobashi.com"), "third_party")
         self.assertEqual(S.host_kind("note.com"), "third_party")
 
+    def test_small_online_shops_are_retail_but_makers_are_not(self):
+        # 10-12 以降に sources_v5 で落ちた記事の候補に多かった小さなネットショップ
+        self.assertEqual(S.host_kind("goodsmiley.base.ec"), "retail")
+        self.assertEqual(S.host_kind("www.costco.co.jp"), "retail")
+        self.assertEqual(S.host_kind("edute.jp"), "retail")
+        # メーカー公式の商品ページ・価格比較は Jules が実際に出典へ使うので通販にしない
+        self.assertEqual(S.host_kind("toy.bandai.co.jp"), "third_party")
+        self.assertEqual(S.host_kind("takaratomy.co.jp"), "third_party")
+        self.assertEqual(S.host_kind("kakaku.com"), "third_party")
+        # 部分一致ではない
+        self.assertEqual(S.host_kind("notbase.ec.example.com"), "third_party")
+
+    def test_color_me_shop_template_path_is_retail(self):
+        url = "https://shop.example.jp/view/item/000000019009"
+        self.assertEqual(S.host_kind("shop.example.jp"), "third_party")
+        self.assertEqual(S.host_kind("shop.example.jp", url), "retail")
+        self.assertEqual(
+            S.host_kind("shop.example.jp", "https://shop.example.jp/view/category/ct120"), "retail")
+        self.assertEqual(
+            S.host_kind("shop.example.jp", "https://shop.example.jp/news/view/item/1"),
+            "third_party")
+
+    def test_shop_only_candidates_do_not_count_as_material(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = pathlib.Path(td)
+            (base / "B0AAAAAAAA").mkdir()
+            _write(base / "B0AAAAAAAA", "third_party_sources.json", {"sources": [
+                {"url": "https://x.base.ec/items/1", "host": "x.base.ec"},
+                {"url": "https://www.costco.co.jp/p/1", "host": "www.costco.co.jp"},
+                {"url": "https://note.com/a/n/1", "host": "note.com"},
+            ]})
+            r = S.score_asin("B0AAAAAAAA", base)
+            self.assertEqual(r["third_party_hosts"], 1)
+            self.assertEqual(r["retail_hosts"], 2)
+
     def test_zero_is_deferred_and_ok_is_not(self):
         self.assertTrue(S.should_defer({"band": "zero", "third_party_hosts": 0}))
         self.assertFalse(S.should_defer({"band": "ok", "third_party_hosts": 0}))

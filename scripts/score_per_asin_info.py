@@ -195,17 +195,48 @@ def is_search_result_url(url: str) -> bool:
 _host_in = source_sites.host_in
 
 
-def host_kind(host: str) -> str:
+# 生成前の判定 (と候補の絞り込み) だけで通販として扱う店。source_sites.RETAIL_SITE_HOSTS
+# (gate も参照する) には入れない: gate に入れると、Jules が既に出典へ入れた記事の合否が
+# 変わる。ここは「この候補は書く材料にならない」を先に見積もるための集合。
+#
+# 根拠 (2026-10-16): 10-12 以降の記事で sources_v5 に落ちた記事の候補は、小さなネット
+# ショップ (base.ec・costco・dreamblossom・知育玩具.jp・エデュテ等) の商品ページが多く、
+# 「非販売 2 サイト揃った」と判定して生成に回っていた。収集済み 2,670 ASIN の候補から、
+# 商品ページ型の URL + 通販らしいタイトルが繰り返し出る店を拾った。
+# メーカー公式の商品ページ (bandai・takaratomy 等) は Jules が実際に出典へ使うので入れない。
+_CANDIDATE_SHOP_HOSTS = frozenset({
+    # ネットショップの作成サービス (サブドメインごとに別の店)
+    "base.ec", "thebase.in", "stores.jp", "theshop.jp", "shop-pro.jp", "makeshop.jp",
+    "ocnk.net", "cart.ne.jp",
+    # 玩具・知育・文具の通販
+    "costco.co.jp", "dreamblossom.jp", "chiikugangu.jp", "edute.jp", "econve-plus.jp",
+    "torano-te.jp", "marutsu.co.jp", "airis1.co.jp", "bildy.jp", "creatoys.jp",
+    "something4u.jp", "krtek.ne.jp", "saywoodwork.com", "woodymonkey.com",
+    "daiwakenso.jp", "soundhouse.co.jp", "nafco-online.com", "omni7.jp",
+    "kagu-wakuwaku.com", "amanoppo.com", "payid.jp", "hauhau.net", "ec-design.co.jp",
+    "nicoly.net", "orange-baby.com", "basicandaccent-online.com", "goods-station.jp",
+    "mrmax.jp", "inokuchi.net", "expjapon.jp", "ganguoroshi.jp", "hlj.co.jp",
+    "1999.co.jp", "hoobby.net", "doorzo.com", "buyee.jp", "ed-inter.co.jp",
+})
+# カラーミーショップのテンプレート (/view/item/<番号>・/view/category/<番号>)。店ごとに
+# ホスト名が違うので path で拾う。メーカー公式の商品ページはこの形をとらない。
+_SHOP_TEMPLATE_PATH_RE = re.compile(r"^/view/(?:item|category)/\w+")
+
+
+def host_kind(host: str, url: str = "") -> str:
     """事前収集の候補 host の種別 (#9239): "third_party" / "retail" / "unrelated"。
 
-    fetch_third_party_sources も同じ判定を使う (SSOT はこちら)。
+    fetch_third_party_sources も同じ判定を使う (SSOT はこちら)。url を渡すと、
+    ショップのテンプレート path でも通販と判定する。
     """
     host = (host or "").strip().lower()
     if host.startswith("www."):
         host = host[4:]
     if _host_in(host, _UNRELATED_HOSTS):
         return "unrelated"
-    if _host_in(host, _RETAIL_SITE_HOSTS):
+    if _host_in(host, _RETAIL_SITE_HOSTS) or _host_in(host, _CANDIDATE_SHOP_HOSTS):
+        return "retail"
+    if url and _SHOP_TEMPLATE_PATH_RE.match(urllib.parse.urlparse(url).path):
         return "retail"
     return "third_party"
 
@@ -233,7 +264,7 @@ def _candidate_hosts(asin: str, base: pathlib.Path) -> dict[str, set[str]]:
         if host.startswith("www."):
             host = host[4:]
         if host:
-            out[host_kind(host)].add(host)
+            out[host_kind(host, url)].add(host)
     return out
 
 
@@ -327,7 +358,7 @@ def prior_article_urls(asin: str, articles_dir: pathlib.Path | None = None) -> t
         if not isinstance(url, str) or not url or is_search_result_url(url):
             continue
         host = source_sites.host_of(url)
-        if (not host or host_kind(host) != "third_party"
+        if (not host or host_kind(host, url) != "third_party"
                 or source_sites.registered_domain(host) == "omcha.jp"):
             continue
         if url not in out:
