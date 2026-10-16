@@ -72,6 +72,11 @@ except ImportError:
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("probe_llm_citations")
 
+# agy の既定モデル（--model なし）は更新で黙って動き、枠の小さい重いモデルに
+# 替わることもある（2026-10-16 に Gemini 4 Argon へ）ので明示ピンする。
+# mine_experience.DEFAULT_ANTIGRAVITY_MODEL と同じ値。ANTIGRAVITY_MODEL で上書き可。
+DEFAULT_ANTIGRAVITY_MODEL = "gemini-3.8-flash-low"
+
 
 class EngineError(RuntimeError):
     """LLM エンジンの呼び出しまたは応答解析失敗を表す例外。"""
@@ -101,10 +106,9 @@ def build_agy_argv(prompt: str, model: str | None) -> list[str]:
 
 def engine_agy(query: str, *, timeout: int) -> dict[str, Any]:
     """ローカルの Antigravity CLI (agy) をサブプロセスとして実行する。"""
-    env_model = os.environ.get("ANTIGRAVITY_MODEL") or None
+    resolved_model = os.environ.get("ANTIGRAVITY_MODEL") or DEFAULT_ANTIGRAVITY_MODEL
     prompt = build_prompt(query)
-    argv = build_agy_argv(prompt, env_model)
-    resolved_model = env_model if env_model else "agy-default"
+    argv = build_agy_argv(prompt, resolved_model)
 
     try:
         res = subprocess.run(

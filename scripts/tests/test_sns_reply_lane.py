@@ -683,8 +683,8 @@ def test_render_pending_includes_send_command_per_draft():
         author="someone", permalink="https://www.threads.net/p/abc",
     )
     rec["drafts"] = [
-        {"text": "案A", "model": "claude-sonnet-4-6"},
-        {"text": "案B", "model": "claude-sonnet-4-6"},
+        {"text": "案A", "model": "claude-sonnet-5-5-medium"},
+        {"text": "案B", "model": "claude-sonnet-5-5-medium"},
     ]
     out = digest.render([rec])
 
@@ -705,13 +705,13 @@ def test_agy_argv_attaches_prompt_to_print_flag():
     2026-09-05 の初回 run は `agy --print --model X "本文"` と書いていたため
     --model が prompt として解釈され、本文が無視されたまま exit 2 になった。
     """
-    argv = drafter.build_agy_argv("本文プロンプト", "claude-sonnet-4-6")
+    argv = drafter.build_agy_argv("本文プロンプト", "claude-sonnet-5-5-medium")
 
     assert argv[0] == "agy"
     assert "--print" not in argv, "裸の --print は次のトークンを食う"
     assert argv[-1] == "--print=本文プロンプト"
     assert argv.index("--model") < len(argv) - 1
-    assert argv[argv.index("--model") + 1] == "claude-sonnet-4-6"
+    assert argv[argv.index("--model") + 1] == "claude-sonnet-5-5-medium"
 
 
 def test_bluesky_uses_the_same_persona_as_x():
