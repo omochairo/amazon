@@ -9,7 +9,7 @@ fetch_sns_replies.py が貯めた inbox を読み、まだ返していないも�
   K8 LLM ワーカー側で `agy` (Antigravity CLI) がファイルベース認証済みで、
   Claude 系モデルを owner の定額クォータで回せる (mine_experience.py の
   gather_antigravity と同じ経路・同じ認証)。新規 API キーを増やさない。
-  `agy --model claude-sonnet-4-6 --print=<prompt>` で 1 回 1 プロンプト。
+  `agy --model claude-sonnet-5-5-medium --print=<prompt>` で 1 回 1 プロンプト。
 
 ペルソナは **private リポジトリの jules/ overlay からしか読まない**:
   X・Bluesky = いろママ / Threads = いろパパ の人格定義は amazon-navi-brain 側の
@@ -25,7 +25,7 @@ fetch_sns_replies.py が貯めた inbox を読み、まだ返していないも�
 
 env:
     SNS_INBOX_DIR      inbox の置き場所
-    AGY_MODEL          既定 claude-sonnet-4-6
+    AGY_MODEL          既定 claude-sonnet-5-5-medium
     AGY_TIMEOUT_S      既定 300
 
 exit code:
@@ -52,7 +52,7 @@ import sns_inbox_store as store  # noqa: E402
 REPO_ROOT = Path(__file__).resolve().parent.parent
 JULES_DIR = REPO_ROOT / "jules"
 
-DEFAULT_MODEL = "claude-sonnet-4-6"
+DEFAULT_MODEL = "claude-sonnet-5-5-medium"
 DEFAULT_TIMEOUT_S = 300
 
 # channel -> ペルソナ定義ファイル (private overlay)。

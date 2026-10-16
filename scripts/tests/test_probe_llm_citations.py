@@ -273,6 +273,30 @@ def test_engine_agy_empty_stdout():
             engine_agy("test query", timeout=10)
 
 
+@pytest.mark.parametrize("env_value, expected", [
+    (None, "gemini-3.8-flash-low"),  # 未設定 → 既定に明示ピン（agy 既定の Argon に乗らない）
+    ("", "gemini-3.8-flash-low"),
+    ("gemini-3.8-flash-high", "gemini-3.8-flash-high"),
+])
+def test_engine_agy_pins_model(monkeypatch, env_value, expected):
+    if env_value is None:
+        monkeypatch.delenv("ANTIGRAVITY_MODEL", raising=False)
+    else:
+        monkeypatch.setenv("ANTIGRAVITY_MODEL", env_value)
+    with patch("subprocess.run") as mock_run:
+        mock_res = MagicMock()
+        mock_res.returncode = 0
+        mock_res.stdout = "回答"
+        mock_res.stderr = ""
+        mock_run.return_value = mock_res
+
+        res = engine_agy("test query", timeout=10)
+
+    argv = mock_run.call_args.args[0]
+    assert argv[argv.index("--model") + 1] == expected
+    assert res["model"] == expected
+
+
 def test_engine_perplexity_odd_shape(monkeypatch):
     monkeypatch.setenv("PERPLEXITY_API_KEY", "dummy_key")
 

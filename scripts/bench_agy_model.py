@@ -5,7 +5,7 @@
 Gemini に乗っている唯一のレーン。
 
   - 23-experience-mining.yml  gather_antigravity  -> agy 既定モデル (= Gemini)  ← ここ
-  - 29-sns-reply-inbox.yml    draft_sns_reply     -> AGY_MODEL=claude-sonnet-4-6 (Claude なので対象外)
+  - 29-sns-reply-inbox.yml    draft_sns_reply     -> AGY_MODEL=claude-sonnet-5-5-medium (Claude なので対象外)
   - generate_faq_seo.py       agy は「使わない」と owner 確定済み (対象外)
 
 なぜ要るか:
@@ -32,7 +32,7 @@ Gemini に乗っている唯一のレーン。
 
 使い方:
   python3 -m scripts.bench_agy_model --trials 3 --products 5 \
-      --variants "" gemini-3.8-flash-medium gemini-3.8-flash-high gemini-3.1-pro-high \
+      --variants "" gemini-3.8-flash-medium gemini-3.8-flash-high gemini-4-argon-medium \
       --out data/analytics/agy_model_bench.json
 
   # 途中結果は --out に逐次書くので、中断しても再開せずそのまま集計できる。
@@ -66,8 +66,9 @@ DEFAULT_VARIANTS = [
     "gemini-3.8-flash-low",
     "gemini-3.8-flash-medium",
     "gemini-3.8-flash-high",
-    "gemini-3.1-pro-low",
-    "gemini-3.1-pro-high",
+    "gemini-4-argon-low",
+    "gemini-4-argon-medium",
+    "gemini-4-argon-high",
 ]
 DEFAULT_OUT = pathlib.Path("data/analytics/agy_model_bench.json")
 CALL_TIMEOUT_S = mine_experience.ANTIGRAVITY_TIMEOUT_S
