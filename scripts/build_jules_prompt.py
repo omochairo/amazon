@@ -225,7 +225,7 @@ def _sources_note(asin):
         if not url or sc.is_search_result_url(url):
             continue
         # 通販サイトは非販売に数えないので候補に出さない (古い JSON に残っている分)
-        if sc.host_kind(src.get("host") or urlparse(url).netloc) != "third_party":
+        if sc.host_kind(src.get("host") or urlparse(url).netloc, url) != "third_party":
             continue
         title = (src.get("title") or "").strip()
         third.append(f"- {url}" + (f" ({title[:60]})" if title else ""))

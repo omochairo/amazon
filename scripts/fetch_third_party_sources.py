@@ -163,7 +163,7 @@ def _exclude_reason(url: str) -> Optional[str]:
     # navi-brain#92: 通販サイトも取らない。以前は sources の合計 5 件の足しに残していたが、
     # gate から合計件数の条件が外れ、通販は非販売にも数えない。候補枠を第三者に空ける
     # (残すと通販だけの ASIN が空振りに数えられず、再検索が後ろへ倒れない)。
-    kind = _sc.host_kind(_host(low))
+    kind = _sc.host_kind(_host(low), low)
     if kind == "unrelated":
         return "unrelated"
     if kind == "retail":
@@ -384,7 +384,7 @@ def _site_count(sources: list) -> int:
         if url and _sc.is_search_result_url(url):
             continue
         host = src.get("host") or _sc.source_sites.host_of(url)
-        if host and _sc.host_kind(host) == "third_party":
+        if host and _sc.host_kind(host, url) == "third_party":
             sites.add(_sc.source_sites.site_key(host))
     return len(sites)
 
