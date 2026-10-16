@@ -1,0 +1,45 @@
+name: Close Failed Article PRs
+# 品質ゲート (validate) で落ちたまま止まっている Jules の記事 PR を close する。
+#
+# 経緯 (2026-10-16): navi-brain#89 以降の Jules はゲートで落ちても validate 赤のまま
+# セッションを終え、赤い記事 PR を閉じる経路が無かったので 4 日で 18 本が積み上がった。
+# 03-invoke-jules の pick (article_pick.exclude_recently_failed, #9239) は「close された
+# 記事 PR」で待ち (14 日) と打ち切り (30 日で 2 回) を決めるので、close してそこに乗せる。
+# 対象の条件と理由は scripts/close_failed_article_prs.py の docstring。
+on:
+  schedule:
+    # 3 時間ごと。close は validate の完了から 6h 経ったものだけ (Jules / 05 の
+    # 自動修復が後から push し直す猶予)。
+    - cron: '35 */3 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'close せずに対象を表示するだけ'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write        # --delete-branch
+  pull-requests: write
+
+concurrency:
+  group: close-failed-article-prs
+  cancel-in-progress: false
+
+jobs:
+  close:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 1
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Close article PRs left failing validate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: python scripts/close_failed_article_prs.py
