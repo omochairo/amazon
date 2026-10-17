@@ -375,10 +375,12 @@ def _site_count(sources: list) -> int:
     """非販売の第三者候補のサイト数 (navi-brain#92: 採点・gate と同じく登録ドメイン・SNS はまとめて 1)。
 
     古い JSON に残っている通販サイト・検索結果ページは数えない (採点側と同じ)。
+    リンク切れと記録された候補も数えない (navi-brain#117)。2 サイトを割ったら通常の
+    有効期限で取り直しに回る。
     """
     sites = set()
     for src in sources:
-        if not isinstance(src, dict):
+        if not isinstance(src, dict) or _sc.link_dead(src):
             continue
         url = src.get("url") or ""
         if url and _sc.is_search_result_url(url):
@@ -527,6 +529,18 @@ def _notice(level: str, message: str) -> None:
         print("::{}::{}".format(level, message), flush=True)
 
 
+def carry_link(sources: list, prev) -> None:
+    """前回の third_party_sources.json の ``link`` を、URL が同じ新しい行へ写す。"""
+    old = {}
+    if isinstance(prev, dict):
+        for s in prev.get("sources") or []:
+            if isinstance(s, dict) and s.get("url") and isinstance(s.get("link"), dict):
+                old[s["url"]] = s["link"]
+    for s in sources:
+        if isinstance(s, dict) and s.get("url") in old and "link" not in s:
+            s["link"] = old[s["url"]]
+
+
 def fetch_for_asin(
     asin: str, api_key: str, base: pathlib.Path,
     max_sources: int = 8, dry_run: bool = False,
@@ -539,12 +553,16 @@ def fetch_for_asin(
     if dry_run:
         return {"asin": asin, "status": "dry_run", "query": query, "sources": 0}
     out_path = base / asin / OUT_NAME
-    prev_streak = _empty_streak(_load(out_path))
+    prev = _load(out_path)
+    prev_streak = _empty_streak(prev)
     # credit はレスポンスを待たずに消える。例外で抜ける経路も含めて必ず数える。
     record_call(base)
     # #9199: 関連度で外す分があるので raw を多めに取る (basic は件数によらず 1 credit)
     raw = tavily_search(query, api_key, num=20)
     sources, dropped = _filter_sources_with_drops(raw, max_sources, query)
+    # navi-brain#117: 取り直しで同じ URL が返ってきたら、リンクの確認結果を引き継ぐ。
+    # 消すとリンク切れの候補が次の確認まで数え直される
+    carry_link(sources, prev)
     # 空振り (非販売サイトが floor 未満) の連続回数。次回の再問い合わせを後ろへ倒す。
     streak = prev_streak + 1 if _site_count(sources) < _sc._THIRD_PARTY_MIN_HOSTS else 0
     payload = {
