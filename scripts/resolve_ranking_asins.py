@@ -316,6 +316,23 @@ def _spec_match(rakuten_title: str, candidate_title: str, brand: str) -> bool:
             and r["models"] == c["models"] and r["variants"] == c["variants"])
 
 
+def _spec_query(title: str) -> str:
+    """ブランドと仕様トークンだけの短い検索語 (``ストライダー 14X 14インチ``)。
+
+    ブランドが分からない、または仕様トークンが 1 つも無い題名は空文字 (再検索しない)。
+    派生名 (ロッキングストライダー) があればブランド名の代わりに使う。
+    """
+    brand = _brand_of(title)
+    if not brand:
+        return ""
+    t = _spec_tokens(title, brand)
+    if not (t["sizes"] or t["codes"] or t["models"] or t["variants"]):
+        return ""
+    words = sorted(t["variants"]) or [brand]
+    words += sorted(t["models"]) + sorted(t["codes"]) + [f"{s}インチ" for s in sorted(t["sizes"])]
+    return " ".join(words)
+
+
 def _brand_of(text: str) -> str:
     """brand_taxonomy 経由でテキストからブランド canonical 名を抽出する (#2818 対策4c ガードレール: brand一致)。
 
@@ -489,36 +506,47 @@ def resolve_title_fuzzy(
             rakuten_price = 0
         rakuten_image = item.get("image") or ""
 
-        raw_candidates = search_title_fuzzy_candidates(
-            api, title, search_index=search_index, item_count=item_count
-        )
-        best = None
-        best_raw = None
         checked = []  # 人が spot check するための上位候補の判定 (manifest に残す)
-        for cand in raw_candidates:
-            evald = evaluate_title_fuzzy_candidate(
-                title, rakuten_price, cand, price_tolerance=price_tolerance
-            )
-            if len(checked) < 3:
-                checked.append({k: evald[k] for k in (
-                    "asin", "candidate_title", "candidate_price", "brand_match",
-                    "model_token_match", "spec_match", "price_ok")})
-            if not evald["passed_guardrails"] or not evald["asin"]:
-                continue
-            # #2823: ガードレール通過後・採用確定前にジャンルゲート。"flag" は
-            # 不採用にして次候補へ進む。"indeterminate" は fail-open で通す。
-            if enable_genre_gate:
-                verdict, roots = _genre_verdict_for_item(cand)
-                if _is_genre_rejected(verdict):
-                    genre_dropped.append(
-                        _genre_drop_entry(cand, rank, title, roots, "title_fuzzy")
-                    )
+
+        def _pick(raw_candidates):
+            for cand in raw_candidates:
+                evald = evaluate_title_fuzzy_candidate(
+                    title, rakuten_price, cand, price_tolerance=price_tolerance
+                )
+                if len(checked) < 3:
+                    checked.append({k: evald[k] for k in (
+                        "asin", "candidate_title", "candidate_price", "brand_match",
+                        "model_token_match", "spec_match", "price_ok")})
+                if not evald["passed_guardrails"] or not evald["asin"]:
                     continue
-            # Creator API の関連度順を信頼し、最初にガードレール通過した候補で止める。
-            # 既に記事・商品データがある ASIN でも次の候補へは進まない (#9819): 同じ
-            # 商品が既知なら、それより下位の候補 (色違い・別商品) を採るのは誤り。
-            best, best_raw = evald, cand
-            break
+                # #2823: ガードレール通過後・採用確定前にジャンルゲート。"flag" は
+                # 不採用にして次候補へ進む。"indeterminate" は fail-open で通す。
+                if enable_genre_gate:
+                    verdict, roots = _genre_verdict_for_item(cand)
+                    if _is_genre_rejected(verdict):
+                        genre_dropped.append(
+                            _genre_drop_entry(cand, rank, title, roots, "title_fuzzy")
+                        )
+                        continue
+                # Creator API の関連度順を信頼し、最初にガードレール通過した候補で止める。
+                # 既に記事・商品データがある ASIN でも次の候補へは進まない (#9819): 同じ
+                # 商品が既知なら、それより下位の候補 (色違い・別商品) を採るのは誤り。
+                return evald, cand
+            return None, None
+
+        best, best_raw = _pick(search_title_fuzzy_candidates(
+            api, title, search_index=search_index, item_count=item_count
+        ))
+        # #9819: 楽天の長い題名 (販促語・年齢・用途の羅列) で検索すると、Amazon が別メーカーの
+        # 汎用品ばかり返すことがある (2026-10-17 dry-run の ストライダー14x)。ブランドと
+        # 仕様トークンだけの短い検索語でもう 1 回引く。判定のガードレールは同じ。
+        short_query = _spec_query(title)
+        if best is None and short_query:
+            if sleep:
+                time.sleep(sleep)
+            best, best_raw = _pick(search_title_fuzzy_candidates(
+                api, short_query, search_index=search_index, item_count=item_count
+            ))
 
         if best is None:
             rejected.append({"rank": rank, "title": title, "reason": "no_guardrail_pass",

@@ -527,6 +527,23 @@ class ResolveTitleFuzzyTest(unittest.TestCase):
         self.assertEqual(cache["shop:10913"]["asin"], "B0LEGO0001")
         self.assertEqual(cache["shop:10913"]["via"], "title_fuzzy")
 
+    def test_short_spec_query_is_tried_when_long_title_finds_nothing(self):
+        title = "【楽天1位連続受賞】 ストライダー14x 14インチ 安心2年保証 キックバイク キッズバイク 3歳"
+        self.assertEqual(rr._spec_query(title), "ストライダー 14X 14インチ")
+        items = [{"rank": 18, "matched_asin": None, "itemCode": "shop:14x", "title": title, "price": "29700"}]
+        api = FakeFuzzyAPI({
+            "ストライダー 14X 14インチ": [_fuzzy_candidate(
+                "B014X00001", "ストライダー 14x (STRIDER 14x) 14インチ 車体 オレンジ 日本正規品", 29700)],
+            "安心2年保証": [_fuzzy_candidate("B0GENERIC1", "LittleSo キックバイク 12インチ", 3638)],
+        })
+        m = rr.resolve_title_fuzzy(items, api, covered=set(), seen_asins=set(), sleep=0)
+        self.assertEqual([e["asin"] for e in m["title_fuzzy_resolved"]], ["B014X00001"])
+        self.assertEqual(len(api.calls), 2)
+
+    def test_no_short_query_without_brand_or_spec(self):
+        self.assertEqual(rr._spec_query("かみかみチキン 歯固め シリコン"), "")
+        self.assertEqual(rr._spec_query("ストライダー キックバイク"), "")
+
     def test_string_price_from_ranking_api(self):
         # 楽天ランキング API の price は文字列。数値に直して価格ガードに使う
         items = [dict(self.items[0], price="3200")]
