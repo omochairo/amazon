@@ -88,12 +88,14 @@ jobs:
           # 経由で Amazon の JAN 完全一致に通し、同一性ガードを通った新規 ASIN を ranking_pool に足す。
           # shadow (#9043) の定時 run 37394536765 の得票を見て enforce に切り替えた。
           YAHOO_CLIENT_ID: ${{ secrets.YAHOO_CLIENT_ID }}
+          # 題名照合 (#2818 対策4c) はランキング本体だけに掛ける (#9819)。JAN を載せない店舗の
+          # 正規品 (ストライダー等) を、ブランド・型番 or 仕様トークン・価格の一致で紐づける。
         run: |
           set -e
           # #810 Phase 2: --search-in で楽天 Search プール (rakuten.json) の JAN も mine する。
           if [ "$DRY_RUN" = "true" ]; then
             echo "DRY RUN: resolving up to $LIMIT JAN(s), no files written."
-            python scripts/resolve_ranking_asins.py --limit "$LIMIT" --search-in data/raw/rakuten.json --yahoo-jan-mode enforce --dry-run
+            python scripts/resolve_ranking_asins.py --limit "$LIMIT" --search-in data/raw/rakuten.json --yahoo-jan-mode enforce --enable-title-fuzzy --title-fuzzy-ranking-only --dry-run
           else
             # 2026-06-08 (session 117 / #2008): Jules daily quota 共有ゲート。
             # 解決した新規 ASIN は per_asin に backfill され 03-invoke-jules (6h cron) が
@@ -108,7 +110,7 @@ jobs:
               : > data/raw/ranking_sniper_asins.csv
               exit 0
             fi
-            python scripts/resolve_ranking_asins.py --limit "$LIMIT" --search-in data/raw/rakuten.json --yahoo-jan-mode enforce
+            python scripts/resolve_ranking_asins.py --limit "$LIMIT" --search-in data/raw/rakuten.json --yahoo-jan-mode enforce --enable-title-fuzzy --title-fuzzy-ranking-only
           fi
 
       - name: Sniper backfill resolved ASINs into per_asin
@@ -169,6 +171,8 @@ jobs:
           git add data/raw/rakuten_ranking.json data/raw/_rakuten_ranking_manifest.json || true
           # Yahoo JAN 仲介の /ranking/ 照合キャッシュ (fetch_rakuten の stage3_yahoo_jan が読む)
           git add data/raw/_ranking_yahoo_jan.json || true
+          # 題名照合 (title fuzzy) の /ranking/ 照合キャッシュ (fetch_rakuten の stage4_title_fuzzy が読む, #9819)
+          git add data/raw/_ranking_title_fuzzy.json || true
 
           if git diff --cached --quiet; then
             echo "No backfill changes to commit; skipping PR creation."
