@@ -39,7 +39,7 @@
     "why_this_product": [
       "増え続けるトミカをどこに収納すべきか迷っている方も多いのではないでしょうか。",
       "この商品は、最大144台まで収まる圧倒的な収納力と、透明度の高いアクリル障子を備えている点に魅力があります。",
-      "本品は光線透過率93％の高品質アクリル板を使用しており、大切なコレクションを綺麗に保ちながら鑑賞できます。",
+      "メーカー公式サイトでも『思い出を大切に保管してほしい』とあるように、コレクションを綺麗に保ちながら鑑賞できます。",
       "今後の買い足しにも十分対応できる余裕があり、増え続けるミニカーを一箇所にまとめてすっきり整理することが可能です。"
     ],
     "gift_appeal": [
@@ -184,6 +184,28 @@
       "author": "購入者レビュー",
       "conflict_of_interest": "none",
       "notes": "想像していた以上に立派で、とてもしっかりとした作りとの声"
+    },
+    {
+      "id": "src-official",
+      "name": "キュートジャパン 公式サイト",
+      "url": "https://cutejapan.theshop.jp/",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2026-10-17",
+      "author": "メーカー公式",
+      "conflict_of_interest": "disclosed",
+      "notes": "大阪府堺市で木工製作を行い、『思い出を大切に保管してほしい』という思いでコレクションケースを製作しているとの記載"
+    },
+    {
+      "id": "src-instagram",
+      "name": "キュートジャパン 公式Instagram",
+      "url": "https://www.instagram.com/cutejapan1223/",
+      "tier": "low",
+      "evidence_type": "primary",
+      "published_at": "2026-10-17",
+      "author": "メーカー公式",
+      "conflict_of_interest": "disclosed",
+      "notes": "コレクションケースの製作風景や製品情報を発信"
     }
   ],
   "claims": [
@@ -228,6 +250,17 @@
       ],
       "cross_checked": false,
       "notes": "minneレビューにてしっかりとした作りとの評価あり"
+    },
+    {
+      "claim": "思い出の品を大切に保管するための専用設計",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-official",
+        "src-instagram"
+      ],
+      "cross_checked": false,
+      "notes": "メーカー公式サイトおよび公式Instagramでの発信内容と一致"
     }
   ],
   "technical_specs": {
@@ -263,6 +296,13 @@
         "text": "パイン集成材を使用した頑丈な造りで、長年使える品質",
         "supporting_source_ids": [
           "src-minne"
+        ]
+      },
+      {
+        "text": "メーカー公式のこだわりとして、大切なコレクションを保管する専用設計がなされている",
+        "supporting_source_ids": [
+          "src-official",
+          "src-instagram"
         ]
       }
     ],
