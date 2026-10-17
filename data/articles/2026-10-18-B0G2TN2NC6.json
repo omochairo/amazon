@@ -72,8 +72,8 @@
     "how_to_choose": [
       "打楽器セット選びで迷うのは、内容の豊富さと扱いやすさのバランスではないでしょうか。",
       "本品はハンドベルとカスタネットに特化しており、シンプルな操作で音が鳴るのが特徴です。",
-      "一方、同ブランドの「SALUDABLE 打楽器 7点セット」は、トライアングルやタンバリンなどより多様な楽器を試したい方に向いています。",
-      "シンプルにリズム感を楽しみたい場合は本品、幅広い音色を体験したい場合は7点セットを選ぶと良いでしょう。"
+      "一方、より多くの種類の打楽器が含まれるセットは、多彩な音色を楽しめる反面、扱いが複雑になる場合があります。",
+      "シンプルにリズム感を楽しみたい場合は本品のような特化型を、幅広い音色を体験したい場合は多種セットを選ぶと良いでしょう。"
     ]
   },
   "faq": [
@@ -192,6 +192,17 @@
       "author": "第三者",
       "conflict_of_interest": "none",
       "notes": "SALUDABLE ハンドベル カスタネットの紹介記事として掲載あり"
+    },
+    {
+      "id": "src-2",
+      "name": "Wikipedia (カスタネット)",
+      "url": "https://ja.wikipedia.org/wiki/%E3%82%AB%E3%82%B9%E3%82%BF%E3%83%8D%E3%83%83%E3%83%88",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2024-10-23",
+      "author": "第三者",
+      "conflict_of_interest": "none",
+      "notes": "教育用楽器として、また幼児のおもちゃとしてよく見られるものは教育用カスタネットと呼ばれるとの記載"
     }
   ],
   "claims": [
@@ -236,6 +247,16 @@
       ],
       "cross_checked": true,
       "notes": "Amazon商品説明およびブログで紹介あり"
+    },
+    {
+      "claim": "カスタネットは幼児のおもちゃや教育用楽器として定番である",
+      "category": "comparative_advantage",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-2"
+      ],
+      "cross_checked": false,
+      "notes": "Wikipediaに教育用楽器やおもちゃとしてよく見られるとの記載あり"
     }
   ],
   "technical_specs": {
@@ -271,6 +292,12 @@
         "text": "カラフルな色使いが視覚的な楽しさを提供",
         "supporting_source_ids": [
           "src-1"
+        ]
+      },
+      {
+        "text": "教育用楽器やおもちゃとしての定番であるカスタネットを採用している",
+        "supporting_source_ids": [
+          "src-2"
         ]
       }
     ],
