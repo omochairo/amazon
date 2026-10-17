@@ -1657,3 +1657,10 @@ brands:
     aliases: [ねずみスマイル]
     tier: D
     region: JP
+  # #9819: 楽天ランキング常連のキックバイク。題名照合 (resolve_ranking_asins) のブランド判定に要る。
+  # 「ゴーストライダー」にも部分一致するので、ほかのブランドに負けるよう末尾に置く
+  # (brand_normalizer の fuzzy 一致は taxonomy の並び順で最初に当たったものを採る)。
+  - canonical: ストライダー
+    aliases: [ストライダー(STRIDER), STRIDER]
+    tier: A
+    region: US

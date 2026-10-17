@@ -296,5 +296,79 @@ class RankingPageCacheTest(unittest.TestCase):
         self.assertEqual(merged["upd:1"]["asin"], "B0AFTER001")
 
 
+JAN_C = "4904810000044"
+
+
+class TiebreakTest(unittest.TestCase):
+    """#9819: 得票が拮抗したとき、単品とセットのような版違いを Amazon の題名で絞り込む。"""
+
+    TITLE = "変身ベルト DXマイスドライバー(1セット)【バンダイ(仮面ライダー)】"
+
+    def _items(self, title=None):
+        return [{"rank": 7, "matched_asin": None, "itemCode": "shop:1", "title": title or self.TITLE}]
+
+    def _api(self, single="変身ベルト DXマイスドライバー"):
+        return FakeAPI(
+            {JAN_A: "B0SINGLE01", JAN_B: "B0SPECIAL1", JAN_C: "B0OTHER001"},
+            titles={
+                "B0SINGLE01": f"バンダイ 仮面ライダー {single}",
+                "B0SPECIAL1": "バンダイ 仮面ライダー 変身ベルト DXマイスドライバー スペシャルなりきりセット",
+                "B0OTHER001": "バンダイ 仮面ライダー DXフルボトル",
+            })
+
+    def _hits(self, votes):
+        return lambda q: [h for jan, n in votes.items() for h in [{"janCode": jan}] * n]
+
+    def test_tied_votes_resolve_to_the_only_matching_edition(self):
+        r = rr.resolve_yahoo_jan(self._items(), self._api(), set(), set(),
+                                 self._hits({JAN_A: 6, JAN_B: 6, JAN_C: 5}), sleep=0)
+        e = r["yahoo_jan_entries"][0]
+        self.assertTrue(e["adopted"])
+        self.assertEqual((e["jan"], e["asin"], e["tiebreak_from"]), (JAN_A, "B0SINGLE01", "tied"))
+        by_jan = {c["jan"]: c for c in e["tiebreak"]}
+        self.assertTrue(by_jan[JAN_B]["amazon_set"])  # セット版は版違いで落ちる
+        self.assertTrue(by_jan[JAN_C]["core_missing"])  # 別商品は商品名が無くて落ちる
+        self.assertIn("shop:1", rr.ranking_page_matches(r, "2026-10-17T00:00:00+00:00"))
+
+    def test_two_passing_editions_are_not_adopted(self):
+        api = FakeAPI({JAN_A: "B0SINGLE01", JAN_B: "B0SINGLE02"},
+                      default_title="バンダイ 仮面ライダー 変身ベルト DXマイスドライバー")
+        r = rr.resolve_yahoo_jan(self._items(), api, set(), set(),
+                                 self._hits({JAN_A: 6, JAN_B: 6}), sleep=0)
+        e = r["yahoo_jan_entries"][0]
+        self.assertFalse(e["adopted"])
+        self.assertEqual(e["reason"], "tied")
+        self.assertEqual(len(e["tiebreak"]), 2)
+
+    def test_set_listing_picks_the_set_edition(self):
+        title = "初回生産 変身ベルト DXマイスドライバー スペシャルなりきりセット(1セット)【バンダイ(仮面ライダー)】"
+        r = rr.resolve_yahoo_jan(self._items(title), self._api(), set(), set(),
+                                 self._hits({JAN_A: 6, JAN_B: 6}), sleep=0)
+        self.assertEqual(r["yahoo_jan_entries"][0]["asin"], "B0SPECIAL1")
+
+    def test_jan_missing_on_amazon_blocks_adoption(self):
+        # 拮抗相手が Amazon に無い (JAN_C 未登録) と、残った 1 件が正しい版とは言えない
+        api = FakeAPI({JAN_A: "B0SINGLE01"},
+                      default_title="バンダイ 仮面ライダー 変身ベルト DXマイスドライバー")
+        r = rr.resolve_yahoo_jan(self._items(), api, set(), set(),
+                                 self._hits({JAN_A: 6, JAN_C: 6}), sleep=0)
+        e = r["yahoo_jan_entries"][0]
+        self.assertFalse(e["adopted"])
+        self.assertEqual(e["reason"], "tied")
+
+    def test_low_votes_do_not_trigger_tiebreak(self):
+        # 首位が min_votes 未満 (too_few_votes) は従来どおり絞り込みもしない
+        r = rr.resolve_yahoo_jan(self._items(), self._api(), set(), set(),
+                                 self._hits({JAN_A: 2, JAN_B: 2}), sleep=0)
+        e = r["yahoo_jan_entries"][0]
+        self.assertEqual(e["reason"], "too_few_votes")
+        self.assertNotIn("tiebreak", e)
+
+    def test_quantity_one_set_is_not_a_set_word(self):
+        self.assertFalse(rr._has_set_word("DXマイスドライバー(1セット)"))
+        self.assertFalse(rr._has_set_word("まとめ買いでお得 DXマイスドライバー"))
+        self.assertTrue(rr._has_set_word("DXマイスドライバー スペシャルなりきりセット"))
+
+
 if __name__ == "__main__":
     unittest.main()

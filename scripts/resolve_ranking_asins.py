@@ -61,6 +61,7 @@ import pathlib
 import logging
 import argparse
 import datetime
+import unicodedata
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 if THIS_DIR not in sys.path:
@@ -121,6 +122,14 @@ _HAS_DIGIT_RE = re.compile(r"\d")
 
 # 楽天タイトルの装飾的な角括弧・記号 (【送料無料】【あす楽】等) を検索キーワードから除く。
 _TITLE_DECORATION_RE = re.compile(r"[【】\[\]()（）]")
+
+# #9819: 型番の無い商品 (ストライダー等) 用の「仕様トークン」。型番ガードの代わりに使う。
+# 年 (2026 年限定カラー) は型番ではないので、型番が年しか無い題名も仕様トークンで見る。
+_YEAR_TOKEN_RE = re.compile(r"^20\d{2}$")
+_PROMO_BRACKET_RE = re.compile(r"【[^】]*】")  # 【楽天1位】【P5倍】等。中の英数を拾わない
+_SIZE_TOKEN_RE = re.compile(r"(\d{1,2}(?:\.\d)?)\s*(?:インチ|INCH)")
+_SHORT_CODE_RE = re.compile(r"(?<![A-Z0-9])[A-Z0-9]{2,3}(?![A-Z0-9])")  # 14X 等
+_MODEL_WORD_RE = re.compile(r"[ァ-ヴー]{2,}モデル")  # スポーツモデル / クラシックモデル
 
 
 def _safe_get(obj, *attrs, default=None):
@@ -262,6 +271,97 @@ def _extract_model_tokens(text: str) -> set:
     }
 
 
+def _spec_tokens(text: str, brand: str) -> dict:
+    """#9819: 型番の無い題名から、同じブランドの別商品と見分ける手がかりを抜き出す。
+
+    - sizes: ``12インチ`` / ``14inch`` → ``{"12"}``
+    - codes: 英字と数字が混ざる 2〜3 文字 (``ストライダー14x`` の ``14X``)
+    - models: ``スポーツモデル`` のような「〜モデル」
+    - variants: ブランド名の前に語が付いたカタカナ語 (``ロッキングストライダー``)。
+      同じブランドの派生商品名なので、こちらは双方で一致を求める。後ろに付く語
+      (``ストライダージャパン`` = 代理店名) は商品の区別にならないので拾わない
+    """
+    t = unicodedata.normalize("NFKC", _PROMO_BRACKET_RE.sub(" ", text or "")).upper()
+    codes = {
+        c for c in _SHORT_CODE_RE.findall(t)
+        if re.search(r"\d", c) and re.search(r"[A-Z]", c)
+    }
+    variants = set()
+    b = unicodedata.normalize("NFKC", brand or "").upper()
+    if b and re.fullmatch(r"[ァ-ヴー]+", b):
+        variants = set(re.findall(rf"[ァ-ヴー]+{re.escape(b)}", t))
+    return {
+        "sizes": set(_SIZE_TOKEN_RE.findall(t)),
+        "codes": codes,
+        "models": set(_MODEL_WORD_RE.findall(t)),
+        "variants": variants,
+    }
+
+
+def _spec_match(rakuten_title: str, candidate_title: str, brand: str) -> bool:
+    """楽天側の仕様トークンが全部候補にあり、「〜モデル」と派生商品名が双方で一致するか。
+
+    「〜モデル」は一致を求める: 楽天が「ストライダー 12インチ」とだけ書いた出品に、
+    候補の「スポーツモデル」を当てると、クラシックとスポーツ (価格帯が重なる) を
+    取り違えうる。
+
+    楽天側に手がかりが 1 つも無ければ成立させない (ブランドと価格だけでは同じ
+    ブランドの別商品を拾う)。
+    """
+    r = _spec_tokens(rakuten_title, brand)
+    c = _spec_tokens(candidate_title, brand)
+    if not (r["sizes"] or r["codes"] or r["models"] or r["variants"]):
+        return False
+    return (r["sizes"] <= c["sizes"] and r["codes"] <= c["codes"]
+            and r["models"] == c["models"] and r["variants"] == c["variants"])
+
+
+def _brand_named(text: str, brand: str) -> bool:
+    """ブランド名が単独の語、または英字の別名 (STRIDER) として題名に出ているか。
+
+    ``_brand_of`` は部分一致なので、「マグネットキューブ」から一般名詞のまま
+    メーカーの「キューブ」を拾う (2026-10-17 dry-run)。型番の無い題名を仕様トークンで
+    照合するときは、ブランドが語として書かれていることを別に確かめる。
+    """
+    t = unicodedata.normalize("NFKC", text or "").upper()
+    b = unicodedata.normalize("NFKC", brand or "").upper()
+    if not b:
+        return False
+    if re.search(rf"(?<![ァ-ヴー]){re.escape(b)}(?![ァ-ヴー])", t):
+        return True
+    for entry in _brand_taxonomy_entries():
+        if entry.get("canonical") != brand:
+            continue
+        for alias in entry.get("aliases") or []:
+            a = unicodedata.normalize("NFKC", str(alias)).upper()
+            if re.fullmatch(r"[A-Z][A-Z0-9 .&'-]{2,}", a) and re.search(
+                    rf"(?<![A-Z0-9]){re.escape(a)}(?![A-Z0-9])", t):
+                return True
+    return False
+
+
+def _brand_taxonomy_entries() -> list:
+    from brand_normalizer import get_taxonomy
+    return getattr(get_taxonomy(), "_brands", []) or []
+
+
+def _spec_query(title: str) -> str:
+    """ブランドと仕様トークンだけの短い検索語 (``ストライダー 14X 14インチ``)。
+
+    ブランドが分からない、または仕様トークンが 1 つも無い題名は空文字 (再検索しない)。
+    派生名 (ロッキングストライダー) があればブランド名の代わりに使う。
+    """
+    brand = _brand_of(title)
+    if not brand:
+        return ""
+    t = _spec_tokens(title, brand)
+    if not (t["sizes"] or t["codes"] or t["models"] or t["variants"]):
+        return ""
+    words = sorted(t["variants"]) or [brand]
+    words += sorted(t["models"]) + sorted(t["codes"]) + [f"{s}インチ" for s in sorted(t["sizes"])]
+    return " ".join(words)
+
+
 def _brand_of(text: str) -> str:
     """brand_taxonomy 経由でテキストからブランド canonical 名を抽出する (#2818 対策4c ガードレール: brand一致)。
 
@@ -341,6 +441,13 @@ def evaluate_title_fuzzy_candidate(
     candidate_tokens = _extract_model_tokens(cand_title)
     common_tokens = rakuten_tokens & candidate_tokens
     model_token_match = bool(common_tokens)
+    # #9819: 楽天の題名に型番が無い (年だけを含む) ときに限り、仕様トークンの一致を
+    # 型番一致の代わりにする。型番がある題名は従来どおり型番一致を求める。
+    spec_match = False
+    if (brand_match and not {t for t in rakuten_tokens if not _YEAR_TOKEN_RE.match(t)}
+            and (_brand_named(rakuten_title, rakuten_brand)
+                 or _brand_named(cand_title, rakuten_brand))):
+        spec_match = _spec_match(rakuten_title, cand_title, rakuten_brand)
 
     cand_price = _candidate_price(candidate)
     price_ok = False
@@ -357,10 +464,11 @@ def evaluate_title_fuzzy_candidate(
         "candidate_brand": candidate_brand,
         "model_token_match": model_token_match,
         "common_tokens": sorted(common_tokens),
+        "spec_match": spec_match,
         "price_ok": price_ok,
         "rakuten_price": rakuten_price,
         "candidate_price": cand_price,
-        "passed_guardrails": brand_match and model_token_match and price_ok,
+        "passed_guardrails": brand_match and (model_token_match or spec_match) and price_ok,
     }
 
 
@@ -416,44 +524,64 @@ def resolve_title_fuzzy(
     candidates_before_limit = len(items)
     if limit and limit > 0:
         items = items[:limit]
-    resolved, rejected = [], []
+    resolved, rejected, page_matches = [], [], []
     seen_asins = set(seen_asins)
 
     for i, item in enumerate(items):
         title = item.get("title") or ""
         rank = item.get("rank")
-        rakuten_price = item.get("price") or 0
+        # ランキング API の price は文字列 ("29700")。Search の items は int (#9819)
+        try:
+            rakuten_price = float(item.get("price") or 0)
+        except (TypeError, ValueError):
+            rakuten_price = 0
         rakuten_image = item.get("image") or ""
 
-        raw_candidates = search_title_fuzzy_candidates(
-            api, title, search_index=search_index, item_count=item_count
-        )
-        best = None
-        best_raw = None
-        for cand in raw_candidates:
-            evald = evaluate_title_fuzzy_candidate(
-                title, rakuten_price, cand, price_tolerance=price_tolerance
-            )
-            if not evald["passed_guardrails"]:
-                continue
-            asin = evald["asin"]
-            if not asin or asin.upper() in covered or asin in seen_asins:
-                continue
-            # #2823: ガードレール通過後・採用確定前にジャンルゲート。"flag" は
-            # 不採用にして次候補へ進む (covered/seen と同じ扱い)。"indeterminate"
-            # は fail-open で通す。
-            if enable_genre_gate:
-                verdict, roots = _genre_verdict_for_item(cand)
-                if _is_genre_rejected(verdict):
-                    genre_dropped.append(
-                        _genre_drop_entry(cand, rank, title, roots, "title_fuzzy")
-                    )
+        checked = []  # 人が spot check するための上位候補の判定 (manifest に残す)
+
+        def _pick(raw_candidates):
+            for cand in raw_candidates:
+                evald = evaluate_title_fuzzy_candidate(
+                    title, rakuten_price, cand, price_tolerance=price_tolerance
+                )
+                if len(checked) < 3:
+                    checked.append({k: evald[k] for k in (
+                        "asin", "candidate_title", "candidate_price", "brand_match",
+                        "model_token_match", "spec_match", "price_ok")})
+                if not evald["passed_guardrails"] or not evald["asin"]:
                     continue
-            best, best_raw = evald, cand
-            break  # Creator API の関連度順を信頼し、最初にガードレール通過した候補を採用
+                # #2823: ガードレール通過後・採用確定前にジャンルゲート。"flag" は
+                # 不採用にして次候補へ進む。"indeterminate" は fail-open で通す。
+                if enable_genre_gate:
+                    verdict, roots = _genre_verdict_for_item(cand)
+                    if _is_genre_rejected(verdict):
+                        genre_dropped.append(
+                            _genre_drop_entry(cand, rank, title, roots, "title_fuzzy")
+                        )
+                        continue
+                # Creator API の関連度順を信頼し、最初にガードレール通過した候補で止める。
+                # 既に記事・商品データがある ASIN でも次の候補へは進まない (#9819): 同じ
+                # 商品が既知なら、それより下位の候補 (色違い・別商品) を採るのは誤り。
+                return evald, cand
+            return None, None
+
+        best, best_raw = _pick(search_title_fuzzy_candidates(
+            api, title, search_index=search_index, item_count=item_count
+        ))
+        # #9819: 楽天の長い題名 (販促語・年齢・用途の羅列) で検索すると、Amazon が別メーカーの
+        # 汎用品ばかり返すことがある (2026-10-17 dry-run の ストライダー14x)。ブランドと
+        # 仕様トークンだけの短い検索語でもう 1 回引く。判定のガードレールは同じ。
+        short_query = _spec_query(title)
+        if best is None and short_query:
+            if sleep:
+                time.sleep(sleep)
+            best, best_raw = _pick(search_title_fuzzy_candidates(
+                api, short_query, search_index=search_index, item_count=item_count
+            ))
 
         if best is None:
-            rejected.append({"rank": rank, "title": title, "reason": "no_guardrail_pass"})
+            rejected.append({"rank": rank, "title": title, "reason": "no_guardrail_pass",
+                             "candidates": checked})
             if sleep and i < len(items) - 1:
                 time.sleep(sleep)
             continue
@@ -467,16 +595,20 @@ def resolve_title_fuzzy(
         if vision_gate_mode == "enforce":
             vision_gate_passed = passes_vision_gate(image_sim, vision_min_score)
 
+        asin = best["asin"]
         entry = {
             "rank": rank,
             "title": title,
-            "asin": best["asin"],
+            "item_code": item.get("itemCode") or "",
+            "asin": asin,
             "match_method": "title_fuzzy",
+            "candidate_title": best["candidate_title"],
             "brand_match": best["brand_match"],
             "rakuten_brand": best["rakuten_brand"],
             "candidate_brand": best["candidate_brand"],
             "model_token_match": best["model_token_match"],
             "common_tokens": best["common_tokens"],
+            "spec_match": best["spec_match"],
             "price_ok": best["price_ok"],
             "rakuten_price": best["rakuten_price"],
             "candidate_price": best["candidate_price"],
@@ -484,12 +616,19 @@ def resolve_title_fuzzy(
             "vision_gate_mode": vision_gate_mode,
             "vision_gate_passed": vision_gate_passed,
         }
-        if vision_gate_passed:
-            resolved.append(entry)
-            seen_asins.add(best["asin"])
-        else:
+        if not vision_gate_passed:
             entry["reason"] = "vision_gate_rejected"
             rejected.append(entry)
+        else:
+            # /ranking/ のリンクは記事・商品データの有無と無関係に使う (#9819)。
+            page_matches.append(entry)
+            if asin.upper() in covered:
+                entry["reason"] = "already_covered"
+            elif asin in seen_asins:
+                entry["reason"] = "duplicate"
+            else:
+                resolved.append(entry)
+                seen_asins.add(asin)
 
         if sleep and i < len(items) - 1:
             time.sleep(sleep)
@@ -499,6 +638,7 @@ def resolve_title_fuzzy(
         "title_fuzzy_input": len(items),
         "title_fuzzy_resolved": resolved,
         "title_fuzzy_rejected": rejected,
+        "title_fuzzy_page_matches": page_matches,
     }
 
 
@@ -575,6 +715,20 @@ def ranking_page_matches(yahoo_result: dict, checked_at: str) -> dict:
     return out
 
 
+def title_fuzzy_page_matches(fuzzy_result: dict, checked_at: str) -> dict:
+    """/ranking/ の照合 (fetch_rakuten の stage4_title_fuzzy) に使う itemCode → ASIN (#9819)。
+
+    ガードレール・ジャンルゲート・画像ゲートを通ったものを、記事化の採否 (covered /
+    duplicate) と無関係に全部載せる (``ranking_page_matches`` と同じ考え方)。
+    """
+    out = {}
+    for e in (fuzzy_result or {}).get("title_fuzzy_page_matches", []):
+        code = e.get("item_code")
+        if code and e.get("asin"):
+            out[code] = {"asin": e["asin"], "via": "title_fuzzy", "checked_at": checked_at}
+    return out
+
+
 def merge_ranking_page_cache(existing: dict, new: dict, now: datetime.datetime,
                              max_age_days: int = 30) -> dict:
     """既存キャッシュに今回分を上書きマージし、max_age_days より古い itemCode を落とす。"""
@@ -591,6 +745,72 @@ def merge_ranking_page_cache(existing: dict, new: dict, now: datetime.datetime,
         if (now - when).days < max_age_days and v.get("asin"):
             merged[code] = v
     return merged
+
+
+# #9819: Yahoo の得票が拮抗したときの絞り込み。単品とセット (DXマイスドライバー と
+# スペシャルなりきりセット) のように、同じ商品名の版違いで票が割れる。
+_TIEBREAK_REASONS = ("tied", "close_second")
+_TIEBREAK_MAX_JANS = 3
+_TIEBREAK_MIN_VOTES = 3  # yahoo_jan_bridge.pick_consensus_jan の min_votes と同じ
+# 「(1セット)」「1個」は数量表記でセット商品ではない
+_QTY_ONE_RE = re.compile(r"[(（]?\s*1\s*(?:セット|個|点|台)\s*[)）]?")
+_SET_WORDS = ("セット", "スペシャル", "なりきり", "同梱")  # 「まとめ買い」は販促語なので入れない
+
+
+def _fold_title(text: str) -> str:
+    return unicodedata.normalize("NFKC", text or "").upper()
+
+
+def _has_set_word(title: str) -> bool:
+    t = _QTY_ONE_RE.sub(" ", _fold_title(_PROMO_BRACKET_RE.sub(" ", title)))
+    return any(w in t for w in _SET_WORDS)
+
+
+def _tiebreak_check(rakuten_title: str, amazon_title: str, query: str) -> dict:
+    """拮抗した JAN の Amazon 商品が楽天の商品と同じ版かを見る。
+
+    - 検索語の主要語 (4 文字以上) のうち最長の語 (たいてい商品名) が Amazon の題名にあり、
+      主要語の半分以上がある。全部は求めない: 検索語に「初回生産」等の販促語が残る
+    - セット系の語の有無が楽天と Amazon で一致する
+    """
+    core = [w for w in _fold_title(query).split() if len(w) >= 4]
+    a = re.sub(r"\s+", "", _fold_title(amazon_title))
+    missing = [w for w in core if w not in a]
+    name_ok = bool(core) and max(core, key=len) in a and len(missing) * 2 <= len(core)
+    r_set, a_set = _has_set_word(rakuten_title), _has_set_word(amazon_title)
+    return {"core_missing": missing, "rakuten_set": r_set, "amazon_set": a_set,
+            "tiebreak_ok": name_ok and r_set == a_set}
+
+
+def _tiebreak_jan(title: str, query: str, votes: dict, api, yjb,
+                  search_index: str = "All", sleep: float = 1.1) -> dict:
+    """得票上位の JAN を Amazon で引き、同一性ガードと版の一致を両方通るものが
+    ちょうど 1 つのときだけ、その JAN を返す。2 つ以上・0 なら採らない。
+
+    上位の JAN が 1 つでも Amazon で引けなければ採らない: 楽天の出品が Amazon に
+    無い版で、引けた別の版だけが残って「唯一の通過者」になるのを防ぐ。
+    """
+    top = [j for j, v in sorted(votes.items(), key=lambda kv: -kv[1])
+           if v >= _TIEBREAK_MIN_VOTES][:_TIEBREAK_MAX_JANS]
+    checks, passed = [], []
+    if len(top) < 2:
+        return {"jan": "", "item": {}, "checks": checks}
+    for i, jan in enumerate(top):
+        if sleep and i > 0:
+            time.sleep(sleep)
+        matched = resolve_jan_to_item(api, jan, search_index=search_index)
+        asin = (matched.get("asin") or "").strip()
+        check = {"jan": jan, "votes": votes.get(jan), "asin": asin}
+        if asin:
+            guard = _yahoo_identity_guard(title, matched, yjb)
+            check.update(amazon_title=guard["amazon_title"], identity_ok=guard["identity_ok"])
+            check.update(_tiebreak_check(title, guard["amazon_title"], query))
+            if guard["identity_ok"] and check["tiebreak_ok"]:
+                passed.append((jan, matched))
+        checks.append(check)
+    if len(passed) == 1 and all(c["asin"] for c in checks):
+        return {"jan": passed[0][0], "item": passed[0][1], "checks": checks}
+    return {"jan": "", "item": {}, "checks": checks}
 
 
 def resolve_yahoo_jan(
@@ -642,12 +862,20 @@ def resolve_yahoo_jan(
             continue
         consensus = yjb.pick_consensus_jan(hits)
         entry["votes"] = consensus["votes"]
-        if not consensus["jan"]:
+        jan, matched = consensus["jan"], None
+        if not jan and consensus["reason"] in _TIEBREAK_REASONS:
+            tb = _tiebreak_jan(title, query, consensus["votes"], api, yjb,
+                               search_index=search_index, sleep=1.1 if sleep else 0)
+            entry["tiebreak"] = tb["checks"]
+            if tb["jan"]:
+                jan, matched = tb["jan"], tb["item"]
+                entry["tiebreak_from"] = consensus["reason"]
+        if not jan:
             entry["reason"] = consensus["reason"]
             continue
-        jan = consensus["jan"]
         entry["jan"] = jan
-        matched = resolve_jan_to_item(api, jan, search_index=search_index)
+        if matched is None:
+            matched = resolve_jan_to_item(api, jan, search_index=search_index)
         asin = (matched.get("asin") or "").strip()
         entry["asin"] = asin
         entry["item_code"] = item.get("itemCode") or ""
@@ -777,6 +1005,7 @@ def resolve_ranking_asins(
     vision_gate_mode="shadow",
     vision_min_score=None,
     enable_genre_gate=True,
+    title_fuzzy_ranking_only=False,
 ):
     """純粋ロジック: 未マッチ JAN を解決し manifest dict を返す (テスト driver)。
 
@@ -840,6 +1069,9 @@ def resolve_ranking_asins(
     if enable_title_fuzzy:
         vmin = vision_min_score if vision_min_score is not None else VISION_DEFAULT_MIN_SCORE
         no_jan_items = _collect_unmatched_no_jan(ranking_items)
+        if title_fuzzy_ranking_only:
+            # #9819: rank を持つ = ランキング本体だけ。Search プール (150 件規模) は対象外
+            no_jan_items = [it for it in no_jan_items if it.get("rank") is not None]
         fuzzy_result = resolve_title_fuzzy(
             no_jan_items, api, covered=covered, seen_asins=seen_asins,
             search_index=search_index, price_tolerance=title_fuzzy_price_tolerance,
@@ -890,6 +1122,11 @@ def main():
     parser.add_argument("--enable-title-fuzzy", action="store_true",
                         help="#2818 対策4c: JAN 抽出不可能な item に title fuzzy 解決を有効化する "
                              "(既定 off。既存の JAN 解決挙動は変えないオプトイン)。")
+    parser.add_argument("--title-fuzzy-ranking-only", action="store_true",
+                        help="#9819: title fuzzy をランキング本体 (rank を持つ item) だけに掛ける。"
+                             "--search-in の Search プールは JAN 経路だけで扱う。")
+    parser.add_argument("--title-fuzzy-cache", default="data/raw/_ranking_title_fuzzy.json",
+                        help="#9819: /ranking/ 照合用に title fuzzy の結果 (itemCode → ASIN) を書くパス。")
     parser.add_argument("--title-fuzzy-limit", type=int, default=0,
                         help="title fuzzy で解決を試みる item 数の上限 (0 = 全件)。")
     parser.add_argument("--title-fuzzy-item-count", type=int, default=10,
@@ -983,6 +1220,7 @@ def main():
         vision_gate_mode=args.vision_gate_mode,
         vision_min_score=args.vision_min_score,
         enable_genre_gate=args.genre_gate,
+        title_fuzzy_ranking_only=args.title_fuzzy_ranking_only,
     )
 
     # Yahoo JAN 仲介。shadow は manifest に記録するだけで new_asins (= pool / backfill) を
@@ -1018,7 +1256,15 @@ def main():
                 logger.info(
                     f"  yahoo rank={e['rank']} q={e['query']!r} jan={e['jan'] or '-'} "
                     f"asin={e['asin'] or '-'} adopted={e['adopted']} reason={e['reason'] or '-'}"
+                    + (f" tiebreak_from={e['tiebreak_from']}" if e.get("tiebreak_from") else "")
                 )
+                for c in e.get("tiebreak", []):
+                    logger.info(
+                        f"    tiebreak jan={c['jan']} votes={c['votes']} asin={c['asin'] or '-'} "
+                        f"identity_ok={c.get('identity_ok')} tiebreak_ok={c.get('tiebreak_ok')} "
+                        f"set={c.get('rakuten_set')}/{c.get('amazon_set')} "
+                        f"missing={c.get('core_missing')} title={c.get('amazon_title', '')[:60]!r}"
+                    )
 
     manifest["generated_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     logger.info(
@@ -1047,11 +1293,20 @@ def main():
             f"rejected={len(tf['title_fuzzy_rejected'])} "
             f"gate_mode={args.vision_gate_mode}"
         )
-        for e in tf["title_fuzzy_resolved"]:
+        for e in tf["title_fuzzy_page_matches"]:
             logger.info(
                 f"  fuzzy {e['asin']} (rank={e['rank']}) brand={e['rakuten_brand']!r} "
-                f"tokens={e['common_tokens']} image_sim={e['image_sim']}"
+                f"tokens={e['common_tokens']} spec={e['spec_match']} image_sim={e['image_sim']} "
+                f"reason={e.get('reason') or 'new'} cand={e['candidate_title'][:60]!r}"
             )
+        for e in tf["title_fuzzy_rejected"]:
+            logger.info(f"  fuzzy-reject rank={e['rank']} reason={e['reason']} title={e['title'][:40]!r}")
+            for c in e.get("candidates", []):
+                logger.info(
+                    f"    cand {c['asin']} brand={c['brand_match']} model={c['model_token_match']} "
+                    f"spec={c['spec_match']} price={c['price_ok']}({c['candidate_price']}) "
+                    f"title={c['candidate_title'][:60]!r}"
+                )
 
     # ranking_pool: ランキング由来・未記事化 ASIN の永続候補リスト (#810 Phase 1.5)。
     # 既存 pool を読み、記事化済を prune して今回 resolved を足し、Jules pick-asin に渡す。
@@ -1116,6 +1371,24 @@ def main():
             encoding="utf-8",
         )
         logger.info(f"Yahoo JAN cache for /ranking/: {len(existing)} → {len(merged)} itemCodes")
+    # #9819: title fuzzy の /ranking/ 照合キャッシュ (fetch_rakuten の stage4_title_fuzzy が読む)。
+    if isinstance(manifest.get("title_fuzzy"), dict):
+        fz_path = pathlib.Path(args.title_fuzzy_cache)
+        try:
+            existing = json.loads(fz_path.read_text(encoding="utf-8")).get("items", {})
+        except (OSError, json.JSONDecodeError, AttributeError):
+            existing = {}
+        if not isinstance(existing, dict):
+            existing = {}
+        now = datetime.datetime.now(datetime.timezone.utc)
+        merged = merge_ranking_page_cache(
+            existing, title_fuzzy_page_matches(manifest["title_fuzzy"], now.isoformat()), now)
+        fz_path.parent.mkdir(parents=True, exist_ok=True)
+        fz_path.write_text(
+            json.dumps({"items": merged}, ensure_ascii=False, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        logger.info(f"Title fuzzy cache for /ranking/: {len(existing)} → {len(merged)} itemCodes")
     print(",".join(manifest["new_asins"]))
 
 
