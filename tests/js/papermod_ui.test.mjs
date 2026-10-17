@@ -17,7 +17,7 @@ const SRC = readFileSync(
                "../../hugo/assets/js/papermod_ui.js"), "utf8");
 
 // hrefs: ページ内リンクの href。ids: ページに存在する id。
-function setup({ hrefs, ids, reducedMotion = false }) {
+function setup({ hrefs, ids, reducedMotion = false, menu = null, storage = {} }) {
   const scrolled = [];
   const pushed = [];
   const replaced = [];
@@ -35,7 +35,7 @@ function setup({ hrefs, ids, reducedMotion = false }) {
     };
   });
   const doc = {
-    getElementById: (id) => (ids.includes(id)
+    getElementById: (id) => (id === "menu" ? menu : ids.includes(id)
       ? { scrollIntoView: (opt) => scrolled.push([id, opt]) } : null),
     querySelectorAll(sel) { selector = sel; return anchors; },
     querySelector: () => null,
@@ -45,7 +45,7 @@ function setup({ hrefs, ids, reducedMotion = false }) {
     pushState: (s, t, url) => pushed.push(url),
     replaceState: (s, t, url) => replaced.push(url),
   };
-  vm.runInNewContext(SRC, { document: doc, window: win, history, localStorage: {} });
+  vm.runInNewContext(SRC, { document: doc, window: win, history, localStorage: storage });
   return { anchors, scrolled, pushed, replaced, selector: () => selector };
 }
 
@@ -87,4 +87,20 @@ test("行き先の無いリンクでは例外を出さず、既定の動作に�
 test("role=\"button\" の <a> は対象から外す", () => {
   const { selector } = setup({ hrefs: [], ids: [] });
   assert.equal(selector(), 'a[href^="#"]:not([role="button"])');
+});
+
+test("localStorage に触れると例外になる環境でも、ページ内リンクは動く", () => {
+  // Safari の「すべての Cookie をブロック」等では getItem/setItem が SecurityError を投げる。
+  // 以前はメニューのスクロール位置の復元で IIFE ごと止まり、目次リンク等が効かなかった。
+  const denied = {
+    getItem() { throw new Error("SecurityError"); },
+    setItem() { throw new Error("SecurityError"); },
+  };
+  const menu = { scrollLeft: 0, onscroll: null };
+  const { anchors, scrolled } = setup({
+    hrefs: ["#spec"], ids: ["spec"], menu, storage: denied,
+  });
+  assert.equal(anchors[0].click(), true);
+  assert.equal(scrolled[0][0], "spec");
+  assert.doesNotThrow(() => menu.onscroll());
 });

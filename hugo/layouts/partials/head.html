@@ -284,7 +284,9 @@
 {{- /* theme is light */}}
 {{- if (eq site.Params.defaultTheme "light") }}
 <script>
-    if (localStorage.getItem("pref-theme") === "dark") {
+    var prefTheme = null;
+    try { prefTheme = localStorage.getItem("pref-theme"); } catch (e) { /* ストレージ不可 (Safari の Cookie 全ブロック等) */ }
+    if (prefTheme === "dark") {
         document.querySelector("html").dataset.theme = 'dark';
     }
 
@@ -292,7 +294,9 @@
 {{- /* theme is dark */}}
 {{- else if (eq site.Params.defaultTheme "dark") }}
 <script>
-    if (localStorage.getItem("pref-theme") === "light") {
+    var prefTheme = null;
+    try { prefTheme = localStorage.getItem("pref-theme"); } catch (e) { /* ストレージ不可 */ }
+    if (prefTheme === "light") {
         document.querySelector("html").dataset.theme = 'light';
     }
 
@@ -300,9 +304,11 @@
 {{- else }}
 {{- /* theme is auto */}}
 <script>
-    if (localStorage.getItem("pref-theme") === "dark") {
+    var prefTheme = null;
+    try { prefTheme = localStorage.getItem("pref-theme"); } catch (e) { /* ストレージ不可。OS の設定に従う */ }
+    if (prefTheme === "dark") {
         document.querySelector("html").dataset.theme = 'dark';
-    } else if (localStorage.getItem("pref-theme") === "light") {
+    } else if (prefTheme === "light") {
        document.querySelector("html").dataset.theme = 'light';
     } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
         document.querySelector("html").dataset.theme = 'dark';

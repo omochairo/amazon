@@ -116,6 +116,9 @@ function loadSW({ network }) {
     async assetStore() {
       return caches.open(ASSET_CACHE);
     },
+    async cacheStore(name) {
+      return caches.open(name);
+    },
     /** 指紋付きアセット (destination: style/script) を 1 本流す。 */
     async asset(pathname, destination = "style") {
       const req = {
@@ -325,4 +328,41 @@ test("PAGE_CACHE に保存される応答には保存時刻が打たれる", asy
   const at = Number(hit.headers.get("x-omcha-cached-at"));
   assert.ok(at >= before && at <= Date.now(), "保存時刻ヘッダが無い/不正: " + at);
   assert.equal(await hit.text(), "FRESH", "body が壊れている");
+});
+
+// ---- オフライン時のシェル ----------------------------------------------------
+// install で SHELL_CACHE に precache した "/" や "/favorites/" を、PAGE_CACHE しか
+// 見ていなかったためオフラインで開くと /offline/ に落ちていた。
+
+const SHELL_CACHE = "omcha-shell-" + CACHE_VERSION;
+const offlineNet = async () => {
+  throw new TypeError("offline");
+};
+
+async function seedShell(sw, pathname, body) {
+  const cache = await sw.cacheStore(SHELL_CACHE);
+  await cache.put(pathname, new Response(body, { status: 200 }));
+}
+
+test("オフライン: 未訪問の SWR ページは precache 済みのシェルを返す", async () => {
+  const sw = loadSW({ network: offlineNet });
+  await seedShell(sw, "/favorites/", "SHELL_FAVORITES");
+  await seedShell(sw, "/offline/", "OFFLINE");
+  const res = await sw.navigate("/favorites/");
+  assert.equal(await res.text(), "SHELL_FAVORITES", "precache したシェルを使わず /offline/ に落ちている");
+});
+
+test("オフライン: 鮮度必須のトップも precache 済みのシェルを返す", async () => {
+  const sw = loadSW({ network: offlineNet });
+  await seedShell(sw, "/", "SHELL_TOP");
+  await seedShell(sw, "/offline/", "OFFLINE");
+  const res = await sw.navigate("/");
+  assert.equal(await res.text(), "SHELL_TOP");
+});
+
+test("オフライン: どの cache にも無いページは /offline/ を返す", async () => {
+  const sw = loadSW({ network: offlineNet });
+  await seedShell(sw, "/offline/", "OFFLINE");
+  const res = await sw.navigate("/products/b0zzz/");
+  assert.equal(await res.text(), "OFFLINE");
 });
