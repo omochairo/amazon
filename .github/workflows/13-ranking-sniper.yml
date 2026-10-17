@@ -57,7 +57,9 @@ jobs:
         uses: actions/checkout@v7
         with:
           token: ${{ steps.app-token.outputs.token }}
-          ref: main
+          # dry_run はファイルも PR も作らないので、dispatch したブランチのコードで回す
+          # (PR 前に実 API で確かめるため。#9819)。定時 run と本番 dispatch は main のまま
+          ref: ${{ github.event.inputs.dry_run == 'true' && github.ref_name || 'main' }}
 
       - name: Setup Python
         uses: actions/setup-python@v7
