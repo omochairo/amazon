@@ -71,6 +71,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Fetch Rakuten Ranking + Search + Match to ASIN
+        if: ${{ env.DRY_RUN != 'true' }}  # TEMP #9819: 検証用。PR 前に戻す
         # #810 Phase 2: --search-pages 5 で Search プール (= ~150 件) を取得し、
         # ランキング 30 件の外の売れ筋 JAN も resolve の対象に供給する。
         run: python scripts/fetch_rakuten.py --out data/raw/ --search-pages 5
