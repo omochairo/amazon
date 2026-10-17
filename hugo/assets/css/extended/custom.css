@@ -3622,8 +3622,11 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
      0 件・Invalidate だけ 9 件)。クラスは carousel_swipe.js が load 後に付ける。 */
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
-  margin: 0 -16px; /* スマホではみ出し（ピーク）を表現するためのネガティブマージン */
-  padding: 4px 16px 16px;
+  /* スマホではみ出し（ピーク）を表現するためのネガティブマージン。本文の左右余白
+     (PaperMod の --gap。スマホは 14px) と同じだけ広げる。16px 固定だと両側 2px ずつ
+     画面からはみ出し、ページ全体が横にスクロールしていた。 */
+  margin: 0 calc(-1 * var(--gap, 16px));
+  padding: 4px var(--gap, 16px) 16px;
   /* スクロールバー非表示 (Firefox / Webkit) */
   scrollbar-width: none;
   /* #6977: 親の .related-carousel-section は .scroll-reveal で transform/opacity
@@ -7041,7 +7044,8 @@ body:has(#compare-floating-bar) .favorites-wrapper {
 .toy-safety__src {
   font-size: 0.82rem;
   color: var(--secondary, #6b7280);
-  white-space: nowrap;
+  /* nowrap にしない: 出典名が長いとスマホで右端が切れて読めなくなる */
+  overflow-wrap: anywhere;
 }
 .toy-safety__alert {
   margin-top: 8px;

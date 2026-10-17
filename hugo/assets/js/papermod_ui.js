@@ -9,16 +9,26 @@
    スクリプトのままにする (paint 前に走らないとテーマがちらつく)。ここにあるのは
    クリックハンドラだけ。 */
 (function () {
+    // Safari の「すべての Cookie をブロック」等では localStorage に触れただけで
+    // SecurityError になる。素で呼ぶとこの IIFE ごと止まり、ページ内リンク・
+    // トップへ戻る・テーマ切替がまとめて効かなくなるので、必ずこれを通す。
+    function lsGet(k) {
+        try { return localStorage.getItem(k); } catch (e) { return null; }
+    }
+    function lsSet(k, v) {
+        try { localStorage.setItem(k, v); } catch (e) { /* 保存できないだけ */ }
+    }
+
     let menu = document.getElementById('menu');
     if (menu) {
         // Set the scroll position
-        const scrollPosition = localStorage.getItem("menu-scroll-position");
+        const scrollPosition = lsGet("menu-scroll-position");
         if (scrollPosition) {
             menu.scrollLeft = parseInt(scrollPosition, 10);
         }
         
         menu.onscroll = function () {
-            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+            lsSet("menu-scroll-position", menu.scrollLeft);
         }
     }
 
@@ -80,10 +90,10 @@
         const html = document.querySelector("html");
         if (html.dataset.theme === "dark") {
             html.dataset.theme = 'light';
-            localStorage.setItem("pref-theme", 'light');
+            lsSet("pref-theme", 'light');
         } else {
             html.dataset.theme = 'dark';
-            localStorage.setItem("pref-theme", 'dark');
+            lsSet("pref-theme", 'dark');
         }
     })
 

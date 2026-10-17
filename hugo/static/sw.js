@@ -201,11 +201,20 @@ function staleWhileRevalidate(req, cacheName) {
   });
 }
 
+// cache にも無いときの最後の受け皿。install で SHELL_CACHE に precache した
+// "/" や "/favorites/" は PAGE_CACHE に無い (未訪問) ことがあるので、全 cache を
+// 見てから /offline/ に落とす。
+function offlineFallback(req) {
+  return caches.match(req).then(function (hit) {
+    return hit || caches.match("/offline/");
+  });
+}
+
 function networkFirst(req, cacheName) {
   return caches.open(cacheName).then(function (cache) {
     return revalidate(cache, req).catch(function () {
       return cache.match(req).then(function (hit) {
-        return hit || caches.match("/offline/");
+        return hit || offlineFallback(req);
       });
     });
   });
@@ -277,7 +286,7 @@ self.addEventListener("fetch", function (event) {
       // 静的 page / 商品ページとも SWR (即返し + 裏更新)。失敗時 offline へ。
       event.respondWith(
         staleWhileRevalidate(req, PAGE_CACHE).then(function (res) {
-          return res || caches.match("/offline/");
+          return res || offlineFallback(req);
         })
       );
     }
