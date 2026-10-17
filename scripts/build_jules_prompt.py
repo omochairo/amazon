@@ -195,13 +195,73 @@ def _unwrap_affiliate(url):
     return url or ""
 
 
-def _sources_note(asin):
+_EXCERPT_MAX_URLS = 12
+_EXCERPT_TIMEOUT = 6.0
+_EXCERPT_WORKERS = 6
+
+
+def _fetch_excerpts(asin, urls, fetch=None):
+    """候補ページを開いて {url: (状態, 抜粋, 本文に出た語, HTTP)} を返す (navi-brain#117 段階 3)。
+
+    Jules は閲覧ツールで本文を確かめられない候補を捨てる (不合格の型 B: 良い候補が
+    あるのに非販売 0 サイトで出す)。システム側で開けたページは、商品名・型番の周りを
+    短く切り出して渡す。抜粋はプロンプトにだけ入れ、repo には残さない。
+    """
+    import concurrent.futures as cf
+    import source_pages
+    fetch = fetch or source_pages.fetch_page
+    try:
+        item = _amazon_item(asin)
+    except SystemExit:
+        item = {}
+    tokens = source_pages.identity_tokens(item.get("title") or "", (item.get("jan_code") or "",))
+    out = {}
+
+    def one(u):
+        page = fetch(u, timeout=_EXCERPT_TIMEOUT)
+        snip, hits = source_pages.excerpt(page.text, tokens) if page.status == "ok" else ("", [])
+        return u, (page.status, snip, hits, page.http)
+
+    with cf.ThreadPoolExecutor(max_workers=_EXCERPT_WORKERS) as ex:
+        for u, res in ex.map(one, list(dict.fromkeys(urls))[:_EXCERPT_MAX_URLS]):
+            out[u] = res
+    return out
+
+
+def _excerpt_line(res):
+    """候補 1 件の下に付ける 1 行。開けなかった・語が無いときもそう書く (黙って外さない)。"""
+    if res is None:
+        return None
+    status, snip, hits, http = res
+    if status == "dead":
+        return "     → リンク切れ (システムが確認)。採用しない"
+    if status != "ok":
+        return (f"     → システムからは開けなかった ({'HTTP ' + str(http) if http else '接続できず'})。"
+                "閲覧ツールで開けて対象商品の話なら採用してよい")
+    if not snip:
+        return ("     → システムが取得した本文に商品名・型番の語が見つからなかった"
+                " (通称で書かれていることもあるので、開いて確かめる)")
+    import source_pages
+    # 見せる語は強い順 (型番・JAN → 長い語)。「出版」のような短い語が先に並ぶと根拠が弱く見える
+    shown = "」「".join(sorted(hits, key=lambda h: (not any(c.isdigit() for c in h), -len(h)))[:3])
+    if not source_pages.strong_match(hits):
+        # 分類語や語 1 つだけの一致は、別の商品のページでも起きる。採用の根拠にさせない
+        return (f"     参考 (本文に出たのは「{shown}」だけ。別の商品の可能性があるので、"
+                f"開いて確かめてから採用する): {snip}")
+    return f"     抜粋 (システムが取得。本文に商品名の語「{shown}」あり): {snip}"
+
+
+def _sources_note(asin, fetch_excerpts=False, fetch=None):
     """sources_v5 を満たす組み立て方の注記 (#9239 → navi-brain#92 案 C)。
 
     gate の条件は「本文 (claims / review_signals) の supporting_source_ids から参照された
     非販売の出典が、別々のサイトで 2 件以上」。合計件数の条件は無い。使ってよい URL を
     具体的に並べ、数え方 (サイト単位・SNS は 1・通販は数えない) を渡す。
-    03-invoke-jules.yml は --print-note sources で同じ文面を受け取る。
+    03-invoke-jules.yml は --print-note sources --fetch-excerpts で同じ文面を受け取る。
+
+    fetch_excerpts=True のとき (navi-brain#117 段階 3) は候補と前の記事の出典を開き、
+    抜粋を付ける。抜粋のある候補は、Jules が閲覧で開けなくても採用してよいと伝える。
+    リンク切れと記録された候補 (score_per_asin_info.link_dead) は並べない。
     """
     import score_per_asin_info as sc
     mall = [f"- Amazon 商品ページ: https://www.amazon.co.jp/dp/{asin}/"]
@@ -215,36 +275,68 @@ def _sources_note(asin):
                 continue
             if url:
                 mall.append(f"- {label} 商品ページ (照合済み): {url}")
-    third = []
+    third = []  # [(url, title)]
+    dead = set()
     try:
         data = _jload(f"data/raw/per_asin/{asin}/third_party_sources.json")
     except (FileNotFoundError, ValueError):
         data = {}
     for src in (data.get("sources") or []) if isinstance(data, dict) else []:
         url = src.get("url") if isinstance(src, dict) else None
+        if url and sc.link_dead(src):
+            dead.add(url)
+            continue
         if not url or sc.is_search_result_url(url):
             continue
         # 通販サイトは非販売に数えないので候補に出さない (古い JSON に残っている分)
         if sc.host_kind(src.get("host") or urlparse(url).netloc, url) != "third_party":
             continue
-        title = (src.get("title") or "").strip()
-        third.append(f"- {url}" + (f" ({title[:60]})" if title else ""))
+        third.append((url, (src.get("title") or "").strip()))
+    third = third[:8]
+    # navi-brain#92: 書き直しでは、前の記事が見つけた非販売の出典も材料になる。
+    # 前の記事は「本文から参照していない」だけで非販売を 2 サイト以上持っていることが多い
+    listed = {u for u, _ in third} | dead  # リンク切れは前の記事の出典としても出さない
+    prior = [u for u in sc.prior_article_urls(asin) if u not in listed][:8]
+    excerpts = {}
+    if fetch_excerpts and (third or prior):
+        try:
+            excerpts = _fetch_excerpts(asin, [u for u, _ in third] + prior, fetch=fetch)
+        except Exception as e:  # noqa: BLE001 — 抜粋は補助。取れなくても注記は出す
+            print(f"warning: excerpt fetch failed, listing URLs only: {e}", file=sys.stderr)
+
+    def lines(url, title=""):
+        out = [f"   - {url}" + (f" ({title[:60]})" if title else "")]
+        extra = _excerpt_line(excerpts.get(url)) if excerpts else None
+        if extra:
+            out.append(extra)
+        return out
+
+    first = ("1. 非販売 (第三者) の出典を、別々のサイトから 2 件以上確保する。まず下の候補を"
+             "閲覧ツールで開き、対象商品について書かれているものを採用する。足りなければ検索で探す。")
     blocks = [
         "【sources の組み立て (品質ゲート sources_v5: 本文から参照された非販売の出典が、"
         "別々のサイトで 2 件以上)】",
-        "1. 非販売 (第三者) の出典を、別々のサイトから 2 件以上確保する。まず下の候補を"
-        "閲覧ツールで開き、対象商品について書かれているものを採用する。足りなければ検索で探す。",
+        first,
     ]
+    if excerpts:
+        blocks.append(
+            "   **「抜粋」が付いた候補は、システムが本文を取得して商品名・型番の語を確かめたもの。**"
+            "閲覧ツールで開けない・本文が読めないときも、抜粋を読んで対象商品についての記述だと"
+            "判断できれば採用してよい (「確認できなかった」として捨てない)。その場合 notes と本文は"
+            "抜粋に書かれている範囲で書き、抜粋に無いことは書かない。同じブランドの別の商品の"
+            "話なら採用しない。「参考」の候補は一致が弱いので、開いて確かめられたときだけ採用する。")
     if third:
         blocks.append("   第三者の候補 (システムが事前収集。商品が違う・読めないものは採用しない):")
-        blocks.extend("   " + t for t in third[:8])
-    # navi-brain#92: 書き直しでは、前の記事が見つけた非販売の出典も材料になる。
-    # 前の記事は「本文から参照していない」だけで非販売を 2 サイト以上持っていることが多い
-    listed = {t.split(" ", 2)[1] for t in third}
-    prior = [u for u in sc.prior_article_urls(asin) if u not in listed]
+        for u, t in third:
+            blocks.extend(lines(u, t))
     if prior:
-        blocks.append("   前の記事が出典にしていた非販売のページ (同じく開いて確認してから採用する):")
-        blocks.extend(f"   - {u}" for u in prior[:8])
+        if excerpts:
+            blocks.append("   前の記事が出典にしていた非販売のページ (書き直しでは、抜粋で対象商品と"
+                          "確かめられたものは原則として残し、claims / review_signals から参照する):")
+        else:
+            blocks.append("   前の記事が出典にしていた非販売のページ (同じく開いて確認してから採用する):")
+        for u in prior:
+            blocks.extend(lines(u))
     blocks.extend([
         "2. 採用した出典は、それが裏付けた claims / review_signals の supporting_source_ids に"
         "必ず id を書く。**どこからも参照されない出典は数えられない**ので、参照しない出典は載せない。",
@@ -405,6 +497,10 @@ def main():
             " (03-invoke-jules.yml から高頻度に呼ばれる軽量モード。--out は無視される)。"
         ),
     )
+    ap.add_argument(
+        "--fetch-excerpts", action="store_true",
+        help="--print-note sources で、候補ページを開いて抜粋を付ける (navi-brain#117。外部へ HTTP する)",
+    )
     args = ap.parse_args()
 
     if args.print_note:
@@ -415,7 +511,7 @@ def main():
             elif args.print_note == "first_party":
                 note = _first_party_note(args.asin)
             elif args.print_note == "sources":
-                note = _sources_note(args.asin)
+                note = _sources_note(args.asin, fetch_excerpts=args.fetch_excerpts)
             else:
                 note = _experience_note(args.asin)
         except Exception as e:

@@ -134,6 +134,14 @@ jobs:
             --max-queries "$INPUT_GSC_MAX_QUERIES" \
             --monthly-budget "$INPUT_MONTHLY_BUDGET"
 
+      # navi-brain#117 段階 1: 候補 URL を 1 回ずつ開き、リンク切れ (404 / 410 / DNS) を
+      # third_party_sources.json の各行の `link` に記録する。生成前の判定はリンク切れの
+      # 候補を数えない (score_per_asin_info.link_dead)。本文・抜粋は commit しない。
+      # API キー不要。上の取得が落ちても、既存の候補の確認は進める。
+      - name: Check third-party links
+        if: ${{ always() }}
+        run: python scripts/check_third_party_links.py --max-urls 400
+
       - name: Create PR + enable auto-merge
         if: ${{ always() }}
         env:
@@ -163,7 +171,7 @@ jobs:
           git push -u origin "$BRANCH"
           PR_URL=$(gh pr create \
             --title "data: third-party source pre-fetch (#1600, run ${{ github.run_id }})" \
-            --body "Automated #1600 Phase 2 pre-fetch. data/raw/per_asin/**/third_party_sources.json と Tavily 消費カウンタ _tavily_usage.json のみ — no article changes." \
+            --body "Automated #1600 Phase 2 pre-fetch. data/raw/per_asin/**/third_party_sources.json (候補とリンク切れの記録) と Tavily 消費カウンタ _tavily_usage.json のみ — no article changes." \
             --base main \
             --head "$BRANCH")
           echo "Created: $PR_URL"

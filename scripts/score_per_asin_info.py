@@ -241,11 +241,21 @@ def host_kind(host: str, url: str = "") -> str:
     return "third_party"
 
 
+def link_dead(src: dict) -> bool:
+    """check_third_party_links がリンク切れ (404 / 410 / DNS) と記録した候補か (navi-brain#117)。
+
+    403・タイムアウトなどの unknown と、未確認の行は数え続ける。
+    """
+    link = src.get("link") if isinstance(src, dict) else None
+    return isinstance(link, dict) and link.get("status") == "dead"
+
+
 def _candidate_hosts(asin: str, base: pathlib.Path) -> dict[str, set[str]]:
     """third_party_sources.json の「検索結果ページでない」distinct host を種別ごとに返す。
 
     fetch 側も host 単位で dedupe しているが、採点側でも数え直す (古い JSON や
     手で足された行を信用しない)。host フィールドが無ければ URL から補う。
+    リンク切れと記録された候補 (link_dead) は数えない (navi-brain#117 段階 2)。
     """
     out: dict[str, set[str]] = {"third_party": set(), "retail": set(), "unrelated": set()}
     data = _load(base / asin / "third_party_sources.json")
@@ -253,7 +263,7 @@ def _candidate_hosts(asin: str, base: pathlib.Path) -> dict[str, set[str]]:
     if not isinstance(srcs, list):
         return out
     for src in srcs:
-        if not isinstance(src, dict):
+        if not isinstance(src, dict) or link_dead(src):
             continue
         url = src.get("url") or ""
         if not url or is_search_result_url(url):

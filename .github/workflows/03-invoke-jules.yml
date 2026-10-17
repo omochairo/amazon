@@ -338,7 +338,9 @@ jobs:
             FIRST_PARTY_NOTE=$(python3 scripts/build_jules_prompt.py --asin "$TARGET_ASIN" --print-note first_party 2>/dev/null || echo "")
 
             # #9239 / navi-brain#92: sources_v5 (参照された非販売の出典が別々のサイトで 2 件以上) の組み立て方と、使ってよい URL の一覧
-            SOURCES_NOTE=$(python3 scripts/build_jules_prompt.py --asin "$TARGET_ASIN" --print-note sources 2>/dev/null || echo "")
+            # navi-brain#117 段階 3: --fetch-excerpts で候補ページを開き、商品名・型番の周りの抜粋を付ける
+            # (Jules が閲覧で確かめられずに良い候補を捨てるのを防ぐ)。抜粋はプロンプトにだけ入り、ログには出さない
+            SOURCES_NOTE=$(python3 scripts/build_jules_prompt.py --asin "$TARGET_ASIN" --print-note sources --fetch-excerpts 2>/dev/null || echo "")
             # 2026-05-13: 12行のハードコードプロンプトを廃止し、jules/PROMPT_TEMPLATE.md
             # を読み込む形に変更（記事品質向上のため出典・競合比較・cross-check ルールを
             # フルプロンプトとして渡す）。
