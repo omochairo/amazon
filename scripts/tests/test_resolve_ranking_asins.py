@@ -411,6 +411,80 @@ class EvaluateTitleFuzzyCandidateTest(unittest.TestCase):
         self.assertFalse(evald["passed_guardrails"])
 
 
+class SpecMatchTest(unittest.TestCase):
+    """#9819: 型番の無い正規品 (ストライダー) を仕様トークンで見分ける。"""
+
+    R14X = "【楽天1位連続受賞】 ストライダー14x 14インチ 安心2年保証 キックバイク 3歳 4歳"
+    RSPORT = "【楽天1位連続受賞】 【2026年限定カラー】 ストライダー スポーツモデル 12インチ MOSS モス 2年保証"
+    RROCK = "【楽天1位連続受賞】 ロッキングストライダー スポーツモデル 12インチ キックバイク 0歳 1歳"
+    CANDS = {
+        "14x": _fuzzy_candidate("B014X00001", "ストライダー 14x (STRIDER 14x) 14インチ 車体 オレンジ 日本正規品", 29700),
+        "sport": _fuzzy_candidate("B0SPORT001", "ストライダー スポーツモデル 12インチ ブルー 日本正規品", 16500),
+        "rock": _fuzzy_candidate("B0ROCK0001", "ロッキングストライダー スポーツモデル (STRIDER Rocking) 12インチ レッド", 26400),
+        "classic": _fuzzy_candidate("B0CLASSIC1", "ストライダー クラシックモデル 12インチ", 15000),
+    }
+
+    def _passed(self, title, price):
+        return {k for k, c in self.CANDS.items()
+                if rr.evaluate_title_fuzzy_candidate(title, price, c)["passed_guardrails"]}
+
+    def test_each_listing_matches_only_its_own_model(self):
+        self.assertEqual(self._passed(self.R14X, 29700), {"14x"})
+        self.assertEqual(self._passed(self.RSPORT, 16940), {"sport"})
+        # ロッキングとスポーツモデルは価格帯が重なる。派生名 (ロッキング〜) で分ける
+        self.assertEqual(self._passed(self.RROCK, 26840), {"rock"})
+
+    def test_year_only_token_falls_back_to_spec(self):
+        evald = rr.evaluate_title_fuzzy_candidate(self.RSPORT, 16940, self.CANDS["sport"])
+        self.assertFalse(evald["model_token_match"])  # 2026 は候補に無い
+        self.assertTrue(evald["spec_match"])
+
+    def test_real_model_token_is_still_required(self):
+        # 型番 (10913) がある題名は、仕様トークンが揃っても型番一致を求める
+        cand = _fuzzy_candidate("B0LEGO0009", "レゴ LEGO デュプロ 10920 12インチ", 3000)
+        evald = rr.evaluate_title_fuzzy_candidate("レゴ LEGO デュプロ 10913 12インチ", 3000, cand)
+        self.assertFalse(evald["spec_match"])
+        self.assertFalse(evald["passed_guardrails"])
+
+    def test_brand_and_price_alone_do_not_pass(self):
+        # 楽天側に手がかり (サイズ・型番・〜モデル・派生名) が無ければ成立させない
+        cand = _fuzzy_candidate("B0STRIDER1", "ストライダー キックバイク", 16000)
+        evald = rr.evaluate_title_fuzzy_candidate("ストライダー キックバイク 子供用", 16000, cand)
+        self.assertTrue(evald["brand_match"])
+        self.assertFalse(evald["passed_guardrails"])
+
+    def test_model_word_must_match_both_ways(self):
+        # 楽天がモデル名を書いていなければ、候補の「スポーツモデル」は当てない
+        cand = self.CANDS["sport"]
+        evald = rr.evaluate_title_fuzzy_candidate("ストライダー 12インチ キックバイク", 16000, cand)
+        self.assertFalse(evald["spec_match"])
+
+    def test_agent_name_after_brand_is_not_a_variant(self):
+        t = rr._spec_tokens("ストライダージャパン 公式 ストライダー14x", "ストライダー")
+        self.assertEqual(t["variants"], set())
+        self.assertEqual(rr._spec_tokens("ロッキングストライダー", "ストライダー")["variants"],
+                         {"ロッキングストライダー"})
+
+    def test_generic_word_containing_brand_is_not_enough(self):
+        # 「マグネットキューブ」は一般名詞。メーカーの「キューブ」が語として出ていない
+        # 題名どうしは、仕様トークンで照合しない (2026-10-17 dry-run で別商品に当たった)
+        cand = _fuzzy_candidate("B0FMKB9FBB", "磁石ブロック 150個セット 0.8インチ マグネットキューブ 3歳以上", 3000)
+        evald = rr.evaluate_title_fuzzy_candidate(
+            "磁石ブロック マインクラフト風 レゴ互換 マグネットキューブ 知育玩具", 3250, cand)
+        self.assertTrue(evald["brand_match"])
+        self.assertFalse(evald["spec_match"])
+        self.assertFalse(evald["passed_guardrails"])
+
+    def test_brand_named_by_word_or_ascii_alias(self):
+        self.assertTrue(rr._brand_named("ストライダー スポーツモデル", "ストライダー"))
+        self.assertTrue(rr._brand_named("ロッキングストライダー (STRIDER) 12インチ", "ストライダー"))
+        self.assertFalse(rr._brand_named("ロッキングストライダー 12インチ", "ストライダー"))
+        self.assertFalse(rr._brand_named("マグネットキューブ", "キューブ"))
+
+    def test_promo_brackets_do_not_become_codes(self):
+        self.assertEqual(rr._spec_tokens("【P5倍】 ストライダー14x", "ストライダー")["codes"], {"14X"})
+
+
 class CollectUnmatchedNoJanTest(unittest.TestCase):
     def test_selects_only_unmatched_without_jan(self):
         items = [
@@ -452,6 +526,53 @@ class ResolveTitleFuzzyTest(unittest.TestCase):
         api = FakeFuzzyAPI({"10913": [_fuzzy_candidate("B0LEGO0001", "レゴ LEGO デュプロ 10913", 3000)]})
         m = rr.resolve_title_fuzzy(self.items, api, covered={"B0LEGO0001"}, seen_asins=set(), sleep=0)
         self.assertEqual(m["title_fuzzy_resolved"], [])
+
+    def test_covered_asin_stops_search_and_is_kept_for_ranking_page(self):
+        # #9819: 既知の ASIN が首位なら、下位の候補 (色違い等) へ進まずに止まる。
+        # /ranking/ のリンクには使う (page_matches)
+        items = [dict(self.items[0], itemCode="shop:10913")]
+        api = FakeFuzzyAPI({"10913": [
+            _fuzzy_candidate("B0LEGO0001", "レゴ LEGO デュプロ 10913", 3000),
+            _fuzzy_candidate("B0LEGO0002", "レゴ LEGO デュプロ 10913 別色", 3000),
+        ]})
+        m = rr.resolve_title_fuzzy(items, api, covered={"B0LEGO0001"}, seen_asins=set(), sleep=0)
+        self.assertEqual(m["title_fuzzy_resolved"], [])
+        page = m["title_fuzzy_page_matches"]
+        self.assertEqual([(e["asin"], e["reason"]) for e in page], [("B0LEGO0001", "already_covered")])
+        cache = rr.title_fuzzy_page_matches(m, "2026-10-17T00:00:00+00:00")
+        self.assertEqual(cache["shop:10913"]["asin"], "B0LEGO0001")
+        self.assertEqual(cache["shop:10913"]["via"], "title_fuzzy")
+
+    def test_short_spec_query_is_tried_when_long_title_finds_nothing(self):
+        title = "【楽天1位連続受賞】 ストライダー14x 14インチ 安心2年保証 キックバイク キッズバイク 3歳"
+        self.assertEqual(rr._spec_query(title), "ストライダー 14X 14インチ")
+        items = [{"rank": 18, "matched_asin": None, "itemCode": "shop:14x", "title": title, "price": "29700"}]
+        api = FakeFuzzyAPI({
+            "ストライダー 14X 14インチ": [_fuzzy_candidate(
+                "B014X00001", "ストライダー 14x (STRIDER 14x) 14インチ 車体 オレンジ 日本正規品", 29700)],
+            "安心2年保証": [_fuzzy_candidate("B0GENERIC1", "LittleSo キックバイク 12インチ", 3638)],
+        })
+        m = rr.resolve_title_fuzzy(items, api, covered=set(), seen_asins=set(), sleep=0)
+        self.assertEqual([e["asin"] for e in m["title_fuzzy_resolved"]], ["B014X00001"])
+        self.assertEqual(len(api.calls), 2)
+
+    def test_no_short_query_without_brand_or_spec(self):
+        self.assertEqual(rr._spec_query("かみかみチキン 歯固め シリコン"), "")
+        self.assertEqual(rr._spec_query("ストライダー キックバイク"), "")
+
+    def test_string_price_from_ranking_api(self):
+        # 楽天ランキング API の price は文字列。数値に直して価格ガードに使う
+        items = [dict(self.items[0], price="3200")]
+        api = FakeFuzzyAPI({"10913": [_fuzzy_candidate("B0LEGO0001", "レゴ LEGO デュプロ 10913", 3000)]})
+        m = rr.resolve_title_fuzzy(items, api, covered=set(), seen_asins=set(), sleep=0)
+        self.assertEqual([e["asin"] for e in m["title_fuzzy_resolved"]], ["B0LEGO0001"])
+
+    def test_rejected_entry_keeps_candidate_checks(self):
+        api = FakeFuzzyAPI({"10913": [_fuzzy_candidate("B0OTHER001", "タカラトミー プラレール 10913", 3000)]})
+        m = rr.resolve_title_fuzzy(self.items, api, covered=set(), seen_asins=set(), sleep=0)
+        cands = m["title_fuzzy_rejected"][0]["candidates"]
+        self.assertEqual(cands[0]["asin"], "B0OTHER001")
+        self.assertFalse(cands[0]["brand_match"])
 
     def test_vision_enforce_rejects_low_similarity(self):
         api = FakeFuzzyAPI({"10913": [
@@ -550,6 +671,21 @@ class ResolveRankingAsinsTitleFuzzyIntegrationTest(unittest.TestCase):
         self.assertIn("title_fuzzy", m)
         self.assertIn("B0JAN00010", m["new_asins"])
         self.assertIn("B0LEGO0001", m["new_asins"])
+
+    def test_ranking_only_skips_search_pool_items(self):
+        items = [
+            {"rank": 1, "matched_asin": None, "title": "レゴ LEGO デュプロ 10913", "price": 3000},
+            {"matched_asin": None, "title": "レゴ LEGO クラシック 11717", "price": 4000},  # Search プール
+        ]
+        api = FakeFuzzyAPI({
+            "10913": [_fuzzy_candidate("B0LEGO0001", "レゴ LEGO デュプロ 10913", 3000)],
+            "11717": [_fuzzy_candidate("B0LEGO0002", "レゴ LEGO クラシック 11717", 4000)],
+        })
+        m = rr.resolve_ranking_asins(items, api, set(), sleep=0, enable_title_fuzzy=True,
+                                     title_fuzzy_ranking_only=True)
+        self.assertEqual(m["title_fuzzy"]["title_fuzzy_input"], 1)
+        self.assertEqual(m["new_asins"], ["B0LEGO0001"])
+        self.assertFalse(any("11717" in (k or "") for k in api.calls))
 
 
 # --------------------------------------------------------------------------

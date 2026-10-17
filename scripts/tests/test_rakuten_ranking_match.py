@@ -452,5 +452,42 @@ class YahooJanStage3Test(unittest.TestCase):
             self.assertEqual(manifest["unmatched"], 0)
 
 
+class TitleFuzzyStage4Test(unittest.TestCase):
+    """#9819: 題名照合キャッシュ (_ranking_title_fuzzy.json) による stage4_title_fuzzy。"""
+
+    def test_stage4_only_after_yahoo_cache(self):
+        item = {"itemCode": "shop:1", "title": "JAN の無い商品"}
+        fuzzy = {"shop:1": "B0FUZZY001"}
+        self.assertEqual(
+            fetch_rakuten._match_ranking_item(item, {}, {}, None, {}, fuzzy)[:2],
+            ("B0FUZZY001", "stage4_title_fuzzy"))
+        # JAN 経由 (Yahoo) が当たるならそちらを優先する
+        self.assertEqual(
+            fetch_rakuten._match_ranking_item(item, {}, {}, None, {"shop:1": "B0YAHOO001"}, fuzzy)[:2],
+            ("B0YAHOO001", "stage3_yahoo_jan"))
+
+    def test_rematch_reads_fuzzy_cache(self):
+        with tempfile.TemporaryDirectory() as td:
+            cwd = os.getcwd()
+            try:
+                os.chdir(td)
+                weekly = pathlib.Path("hugo/data/ranking/weekly.json")
+                weekly.parent.mkdir(parents=True)
+                weekly.write_text(json.dumps({"items": [
+                    {"rank": 1, "itemCode": "shop:1", "title": "A"}]}), encoding="utf-8")
+                raw = pathlib.Path("data/raw")
+                raw.mkdir(parents=True)
+                (raw / "_ranking_title_fuzzy.json").write_text(json.dumps({"items": {
+                    "shop:1": {"asin": "B0FUZZY001", "via": "title_fuzzy"}}}), encoding="utf-8")
+                self.assertEqual(fetch_rakuten._rematch_only(raw), 0)
+                after = json.loads(weekly.read_text(encoding="utf-8"))
+                manifest = json.loads((raw / "_rakuten_ranking_manifest.json").read_text(encoding="utf-8"))
+            finally:
+                os.chdir(cwd)
+            self.assertEqual(after["items"][0]["match_stage"], "stage4_title_fuzzy")
+            self.assertEqual(manifest["stage4_title_fuzzy_matches"], 1)
+            self.assertEqual(manifest["unmatched"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
