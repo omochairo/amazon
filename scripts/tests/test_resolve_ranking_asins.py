@@ -420,7 +420,7 @@ class SpecMatchTest(unittest.TestCase):
     CANDS = {
         "14x": _fuzzy_candidate("B014X00001", "ストライダー 14x (STRIDER 14x) 14インチ 車体 オレンジ 日本正規品", 29700),
         "sport": _fuzzy_candidate("B0SPORT001", "ストライダー スポーツモデル 12インチ ブルー 日本正規品", 16500),
-        "rock": _fuzzy_candidate("B0ROCK0001", "ロッキングストライダー スポーツモデル 12インチ レッド", 26400),
+        "rock": _fuzzy_candidate("B0ROCK0001", "ロッキングストライダー スポーツモデル (STRIDER Rocking) 12インチ レッド", 26400),
         "classic": _fuzzy_candidate("B0CLASSIC1", "ストライダー クラシックモデル 12インチ", 15000),
     }
 
@@ -464,6 +464,22 @@ class SpecMatchTest(unittest.TestCase):
         self.assertEqual(t["variants"], set())
         self.assertEqual(rr._spec_tokens("ロッキングストライダー", "ストライダー")["variants"],
                          {"ロッキングストライダー"})
+
+    def test_generic_word_containing_brand_is_not_enough(self):
+        # 「マグネットキューブ」は一般名詞。メーカーの「キューブ」が語として出ていない
+        # 題名どうしは、仕様トークンで照合しない (2026-10-17 dry-run で別商品に当たった)
+        cand = _fuzzy_candidate("B0FMKB9FBB", "磁石ブロック 150個セット 0.8インチ マグネットキューブ 3歳以上", 3000)
+        evald = rr.evaluate_title_fuzzy_candidate(
+            "磁石ブロック マインクラフト風 レゴ互換 マグネットキューブ 知育玩具", 3250, cand)
+        self.assertTrue(evald["brand_match"])
+        self.assertFalse(evald["spec_match"])
+        self.assertFalse(evald["passed_guardrails"])
+
+    def test_brand_named_by_word_or_ascii_alias(self):
+        self.assertTrue(rr._brand_named("ストライダー スポーツモデル", "ストライダー"))
+        self.assertTrue(rr._brand_named("ロッキングストライダー (STRIDER) 12インチ", "ストライダー"))
+        self.assertFalse(rr._brand_named("ロッキングストライダー 12インチ", "ストライダー"))
+        self.assertFalse(rr._brand_named("マグネットキューブ", "キューブ"))
 
     def test_promo_brackets_do_not_become_codes(self):
         self.assertEqual(rr._spec_tokens("【P5倍】 ストライダー14x", "ストライダー")["codes"], {"14X"})

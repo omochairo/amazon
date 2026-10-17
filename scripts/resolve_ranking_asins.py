@@ -316,6 +316,35 @@ def _spec_match(rakuten_title: str, candidate_title: str, brand: str) -> bool:
             and r["models"] == c["models"] and r["variants"] == c["variants"])
 
 
+def _brand_named(text: str, brand: str) -> bool:
+    """ブランド名が単独の語、または英字の別名 (STRIDER) として題名に出ているか。
+
+    ``_brand_of`` は部分一致なので、「マグネットキューブ」から一般名詞のまま
+    メーカーの「キューブ」を拾う (2026-10-17 dry-run)。型番の無い題名を仕様トークンで
+    照合するときは、ブランドが語として書かれていることを別に確かめる。
+    """
+    t = unicodedata.normalize("NFKC", text or "").upper()
+    b = unicodedata.normalize("NFKC", brand or "").upper()
+    if not b:
+        return False
+    if re.search(rf"(?<![ァ-ヴー]){re.escape(b)}(?![ァ-ヴー])", t):
+        return True
+    for entry in _brand_taxonomy_entries():
+        if entry.get("canonical") != brand:
+            continue
+        for alias in entry.get("aliases") or []:
+            a = unicodedata.normalize("NFKC", str(alias)).upper()
+            if re.fullmatch(r"[A-Z][A-Z0-9 .&'-]{2,}", a) and re.search(
+                    rf"(?<![A-Z0-9]){re.escape(a)}(?![A-Z0-9])", t):
+                return True
+    return False
+
+
+def _brand_taxonomy_entries() -> list:
+    from brand_normalizer import get_taxonomy
+    return getattr(get_taxonomy(), "_brands", []) or []
+
+
 def _spec_query(title: str) -> str:
     """ブランドと仕様トークンだけの短い検索語 (``ストライダー 14X 14インチ``)。
 
@@ -415,7 +444,9 @@ def evaluate_title_fuzzy_candidate(
     # #9819: 楽天の題名に型番が無い (年だけを含む) ときに限り、仕様トークンの一致を
     # 型番一致の代わりにする。型番がある題名は従来どおり型番一致を求める。
     spec_match = False
-    if brand_match and not {t for t in rakuten_tokens if not _YEAR_TOKEN_RE.match(t)}:
+    if (brand_match and not {t for t in rakuten_tokens if not _YEAR_TOKEN_RE.match(t)}
+            and (_brand_named(rakuten_title, rakuten_brand)
+                 or _brand_named(cand_title, rakuten_brand))):
         spec_match = _spec_match(rakuten_title, cand_title, rakuten_brand)
 
     cand_price = _candidate_price(candidate)
