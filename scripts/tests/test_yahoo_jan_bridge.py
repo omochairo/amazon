@@ -346,6 +346,16 @@ class TiebreakTest(unittest.TestCase):
                                  self._hits({JAN_A: 6, JAN_B: 6}), sleep=0)
         self.assertEqual(r["yahoo_jan_entries"][0]["asin"], "B0SPECIAL1")
 
+    def test_jan_missing_on_amazon_blocks_adoption(self):
+        # 拮抗相手が Amazon に無い (JAN_C 未登録) と、残った 1 件が正しい版とは言えない
+        api = FakeAPI({JAN_A: "B0SINGLE01"},
+                      default_title="バンダイ 仮面ライダー 変身ベルト DXマイスドライバー")
+        r = rr.resolve_yahoo_jan(self._items(), api, set(), set(),
+                                 self._hits({JAN_A: 6, JAN_C: 6}), sleep=0)
+        e = r["yahoo_jan_entries"][0]
+        self.assertFalse(e["adopted"])
+        self.assertEqual(e["reason"], "tied")
+
     def test_low_votes_do_not_trigger_tiebreak(self):
         # 首位が min_votes 未満 (too_few_votes) は従来どおり絞り込みもしない
         r = rr.resolve_yahoo_jan(self._items(), self._api(), set(), set(),
@@ -356,7 +366,7 @@ class TiebreakTest(unittest.TestCase):
 
     def test_quantity_one_set_is_not_a_set_word(self):
         self.assertFalse(rr._has_set_word("DXマイスドライバー(1セット)"))
-        self.assertFalse(rr._has_set_word("【まとめ買いクーポン】 DXマイスドライバー"))
+        self.assertFalse(rr._has_set_word("まとめ買いでお得 DXマイスドライバー"))
         self.assertTrue(rr._has_set_word("DXマイスドライバー スペシャルなりきりセット"))
 
 

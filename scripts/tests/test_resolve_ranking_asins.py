@@ -453,6 +453,18 @@ class SpecMatchTest(unittest.TestCase):
         self.assertTrue(evald["brand_match"])
         self.assertFalse(evald["passed_guardrails"])
 
+    def test_model_word_must_match_both_ways(self):
+        # 楽天がモデル名を書いていなければ、候補の「スポーツモデル」は当てない
+        cand = self.CANDS["sport"]
+        evald = rr.evaluate_title_fuzzy_candidate("ストライダー 12インチ キックバイク", 16000, cand)
+        self.assertFalse(evald["spec_match"])
+
+    def test_agent_name_after_brand_is_not_a_variant(self):
+        t = rr._spec_tokens("ストライダージャパン 公式 ストライダー14x", "ストライダー")
+        self.assertEqual(t["variants"], set())
+        self.assertEqual(rr._spec_tokens("ロッキングストライダー", "ストライダー")["variants"],
+                         {"ロッキングストライダー"})
+
     def test_promo_brackets_do_not_become_codes(self):
         self.assertEqual(rr._spec_tokens("【P5倍】 ストライダー14x", "ストライダー")["codes"], {"14X"})
 

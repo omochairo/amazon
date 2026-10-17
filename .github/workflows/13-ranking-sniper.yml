@@ -95,7 +95,7 @@ jobs:
           # #810 Phase 2: --search-in で楽天 Search プール (rakuten.json) の JAN も mine する。
           if [ "$DRY_RUN" = "true" ]; then
             echo "DRY RUN: resolving up to $LIMIT JAN(s), no files written."
-            python scripts/resolve_ranking_asins.py --limit "$LIMIT" --search-in data/raw/rakuten.json --yahoo-jan-mode enforce --enable-title-fuzzy --title-fuzzy-ranking-only --dry-run
+            python scripts/resolve_ranking_asins.py --limit "$LIMIT" --search-in data/raw/rakuten.json --yahoo-jan-mode enforce --enable-title-fuzzy --title-fuzzy-ranking-only --title-fuzzy-limit 30 --dry-run
           else
             # 2026-06-08 (session 117 / #2008): Jules daily quota 共有ゲート。
             # 解決した新規 ASIN は per_asin に backfill され 03-invoke-jules (6h cron) が
@@ -110,7 +110,7 @@ jobs:
               : > data/raw/ranking_sniper_asins.csv
               exit 0
             fi
-            python scripts/resolve_ranking_asins.py --limit "$LIMIT" --search-in data/raw/rakuten.json --yahoo-jan-mode enforce --enable-title-fuzzy --title-fuzzy-ranking-only
+            python scripts/resolve_ranking_asins.py --limit "$LIMIT" --search-in data/raw/rakuten.json --yahoo-jan-mode enforce --enable-title-fuzzy --title-fuzzy-ranking-only --title-fuzzy-limit 30
           fi
 
       - name: Sniper backfill resolved ASINs into per_asin

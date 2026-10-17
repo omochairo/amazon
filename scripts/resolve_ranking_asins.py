@@ -277,8 +277,9 @@ def _spec_tokens(text: str, brand: str) -> dict:
     - sizes: ``12インチ`` / ``14inch`` → ``{"12"}``
     - codes: 英字と数字が混ざる 2〜3 文字 (``ストライダー14x`` の ``14X``)
     - models: ``スポーツモデル`` のような「〜モデル」
-    - variants: ブランド名を含む長いカタカナ語 (``ロッキングストライダー``)。
-      同じブランドの派生商品名なので、こちらは双方で一致を求める
+    - variants: ブランド名の前に語が付いたカタカナ語 (``ロッキングストライダー``)。
+      同じブランドの派生商品名なので、こちらは双方で一致を求める。後ろに付く語
+      (``ストライダージャパン`` = 代理店名) は商品の区別にならないので拾わない
     """
     t = unicodedata.normalize("NFKC", _PROMO_BRACKET_RE.sub(" ", text or "")).upper()
     codes = {
@@ -288,9 +289,7 @@ def _spec_tokens(text: str, brand: str) -> dict:
     variants = set()
     b = unicodedata.normalize("NFKC", brand or "").upper()
     if b and re.fullmatch(r"[ァ-ヴー]+", b):
-        for w in re.findall(rf"[ァ-ヴー]*{re.escape(b)}[ァ-ヴー]*", t):
-            if w != b:
-                variants.add(w)
+        variants = set(re.findall(rf"[ァ-ヴー]+{re.escape(b)}", t))
     return {
         "sizes": set(_SIZE_TOKEN_RE.findall(t)),
         "codes": codes,
@@ -300,7 +299,11 @@ def _spec_tokens(text: str, brand: str) -> dict:
 
 
 def _spec_match(rakuten_title: str, candidate_title: str, brand: str) -> bool:
-    """楽天側の仕様トークンが全部候補にあり、派生商品名が双方で一致するか。
+    """楽天側の仕様トークンが全部候補にあり、「〜モデル」と派生商品名が双方で一致するか。
+
+    「〜モデル」は一致を求める: 楽天が「ストライダー 12インチ」とだけ書いた出品に、
+    候補の「スポーツモデル」を当てると、クラシックとスポーツ (価格帯が重なる) を
+    取り違えうる。
 
     楽天側に手がかりが 1 つも無ければ成立させない (ブランドと価格だけでは同じ
     ブランドの別商品を拾う)。
@@ -310,7 +313,7 @@ def _spec_match(rakuten_title: str, candidate_title: str, brand: str) -> bool:
     if not (r["sizes"] or r["codes"] or r["models"] or r["variants"]):
         return False
     return (r["sizes"] <= c["sizes"] and r["codes"] <= c["codes"]
-            and r["models"] <= c["models"] and r["variants"] == c["variants"])
+            and r["models"] == c["models"] and r["variants"] == c["variants"])
 
 
 def _brand_of(text: str) -> str:
@@ -692,7 +695,7 @@ _TIEBREAK_MAX_JANS = 3
 _TIEBREAK_MIN_VOTES = 3  # yahoo_jan_bridge.pick_consensus_jan の min_votes と同じ
 # 「(1セット)」「1個」は数量表記でセット商品ではない
 _QTY_ONE_RE = re.compile(r"[(（]?\s*1\s*(?:セット|個|点|台)\s*[)）]?")
-_SET_WORDS = ("セット", "スペシャル", "なりきり", "同梱", "まとめ")
+_SET_WORDS = ("セット", "スペシャル", "なりきり", "同梱")  # 「まとめ買い」は販促語なので入れない
 
 
 def _fold_title(text: str) -> str:
@@ -723,7 +726,11 @@ def _tiebreak_check(rakuten_title: str, amazon_title: str, query: str) -> dict:
 def _tiebreak_jan(title: str, query: str, votes: dict, api, yjb,
                   search_index: str = "All", sleep: float = 1.1) -> dict:
     """得票上位の JAN を Amazon で引き、同一性ガードと版の一致を両方通るものが
-    ちょうど 1 つのときだけ、その JAN を返す。2 つ以上・0 なら採らない。"""
+    ちょうど 1 つのときだけ、その JAN を返す。2 つ以上・0 なら採らない。
+
+    上位の JAN が 1 つでも Amazon で引けなければ採らない: 楽天の出品が Amazon に
+    無い版で、引けた別の版だけが残って「唯一の通過者」になるのを防ぐ。
+    """
     top = [j for j, v in sorted(votes.items(), key=lambda kv: -kv[1])
            if v >= _TIEBREAK_MIN_VOTES][:_TIEBREAK_MAX_JANS]
     checks, passed = [], []
@@ -742,7 +749,7 @@ def _tiebreak_jan(title: str, query: str, votes: dict, api, yjb,
             if guard["identity_ok"] and check["tiebreak_ok"]:
                 passed.append((jan, matched))
         checks.append(check)
-    if len(passed) == 1:
+    if len(passed) == 1 and all(c["asin"] for c in checks):
         return {"jan": passed[0][0], "item": passed[0][1], "checks": checks}
     return {"jan": "", "item": {}, "checks": checks}
 
