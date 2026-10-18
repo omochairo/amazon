@@ -218,3 +218,38 @@ test("B-2: 全件削除後にページを再読み込みしても、無関係な
   await new Promise((r) => setTimeout(r, 0));
   assert.equal(buttons2().length, 0, "再読み込みしても C が復元されず空のまま (回帰防止)");
 });
+
+test("C: 商品名・ブランドに < や \" を含んでも、比較表の HTML にそのまま入らない (#9781)", async () => {
+  const { root } = boot({
+    initialSearch: "?asins=B0AAAAAAAA",
+    storage: { local: memStorage(), session: memStorage() },
+    index: [{
+      permalink: "https://example.com/products/b0aaaaaaaa/",
+      image: "https://example.com/a.jpg",
+      product_name: 'くみたて "DX" <セット>',
+      brand: "A&B <toys>",
+    }],
+  });
+  await new Promise((r) => setTimeout(r, 0));
+  await new Promise((r) => setTimeout(r, 0));
+
+  const html = root.innerHTML;
+  assert.ok(!html.includes("<セット>"), "商品名の < > はエスケープされる");
+  assert.ok(!html.includes("<toys>"), "ブランドの < > はエスケープされる");
+  assert.ok(html.includes('alt="くみたて &quot;DX&quot; &lt;セット&gt;"'), "alt 属性の \" は &quot; になる");
+  assert.ok(html.includes("A&amp;B &lt;toys&gt;"), "ブランドは本文としてエスケープされる");
+});
+
+test("D: 書籍の ASIN (ISBN-10 由来の数字 10 桁) も ?asins= から読める (#9781)", async () => {
+  const { buttons } = boot({
+    initialSearch: "?asins=479731234X,B0AAAAAAAA,bad",
+    storage: { local: memStorage(), session: memStorage() },
+    index: [
+      { permalink: "https://example.com/products/479731234x/", product_name: "本" },
+      { permalink: "https://example.com/products/b0aaaaaaaa/", product_name: "A" },
+    ],
+  });
+  await new Promise((r) => setTimeout(r, 0));
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(buttons().map((b) => b.getAttribute()), ["479731234X", "B0AAAAAAAA"]);
+});

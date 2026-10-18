@@ -28,9 +28,20 @@
   var memStore = null;
 
   // ------- storage (graceful fallback) -------
+  // (localStorage || sessionStorage) は localStorage 参照が例外を投げない限り常に
+  // localStorage 側になり、setItem 失敗で sessionStorage に逃がした分をページ遷移後に
+  // 読めない (#9781)。recently_viewed.js / compare.js と同じく両方を明示的に試す。
+  function _getRaw(key) {
+    var raw = null;
+    try { raw = localStorage.getItem(key); } catch (e) { raw = null; }
+    if (raw == null) {
+      try { raw = sessionStorage.getItem(key); } catch (e) { /* ignore */ }
+    }
+    return raw;
+  }
   function _read() {
     try {
-      var raw = (localStorage || sessionStorage).getItem(KEY);
+      var raw = _getRaw(KEY);
       if (raw == null && memStore != null) return _clone(memStore);
       return raw ? JSON.parse(raw) : { sources: {} };
     } catch (e) {
@@ -56,7 +67,7 @@
 
   function _readRecent() {
     try {
-      var raw = (localStorage || sessionStorage).getItem(RECENT_KEY);
+      var raw = _getRaw(RECENT_KEY);
       return raw ? JSON.parse(raw) : [];
     } catch (e) {
       return [];

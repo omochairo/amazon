@@ -7457,3 +7457,9 @@ body:has(#compare-floating-bar) .favorites-wrapper {
 .sale-notice-inline small {
   font-size: 0.75rem;
 }
+
+/* #9781: 前後記事ナビでリンクが片方だけのとき (先頭/末尾の記事)、PaperMod の
+   .paginav a { width: 50% } のままだと題名が縦長に折り返す。単独なら全幅にする */
+.paginav a:only-child {
+  width: 100%;
+}
