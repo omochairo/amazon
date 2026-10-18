@@ -183,6 +183,28 @@
       "author": "購入者",
       "conflict_of_interest": "none",
       "notes": "色が鮮やかで赤ちゃんの興味を引く、プレゼントとして喜ばれたとの評価がある。"
+    },
+    {
+      "id": "src-3",
+      "name": "ダディッコ公式",
+      "url": "https://www.dadcco.com/products/dw-tybw80044",
+      "tier": "low",
+      "evidence_type": "primary",
+      "published_at": "2026-10-18",
+      "author": "ダディッコ",
+      "conflict_of_interest": "possible",
+      "notes": "カラフルな色使いと多様な触感を持つ知育玩具として紹介されている。"
+    },
+    {
+      "id": "src-4",
+      "name": "YouTube",
+      "url": "https://www.youtube.com/watch?v=sUBFJSvSQIM",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-10-18",
+      "author": "動画配信者",
+      "conflict_of_interest": "possible",
+      "notes": "Sassyの知育玩具について紹介している"
     }
   ],
   "claims": [
@@ -191,9 +213,11 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-2"
+        "src-2",
+        "src-3",
+        "src-4"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "楽天レビューで確認"
     },
     {
@@ -201,9 +225,10 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-3"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "Amazonの購入者の声で確認"
     },
     {
