@@ -281,11 +281,14 @@
     return (m / 12).toFixed(1) + "歳〜";
   }
 
+  // #9781: 狭い列で切れないよう、<wbr> の位置でだけ 2 段に折り返す (score_minichart.html と同じ)
+  var AXIS_LABEL_WRAP = { "長く遊べる": "長く<wbr>遊べる" };
+
   function _axisBar(label, icon, value) {
     if (!value && value !== 0) return "";
     var pct = Math.round((value / 5) * 100);
     return '<div class="score-minichart-row" data-axis="' + label + '">' +
-           '  <span class="score-minichart-label">' + icon + " " + label + "</span>" +
+           '  <span class="score-minichart-label">' + icon + " " + (AXIS_LABEL_WRAP[label] || label) + "</span>" +
            '  <span class="score-minichart-bar" role="meter" aria-valuemin="0" aria-valuemax="5" aria-valuenow="' + value.toFixed(1) + '">' +
            '    <span class="score-minichart-bar-fill" style="width: ' + pct + '%"></span>' +
            "  </span>" +
