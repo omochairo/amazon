@@ -179,6 +179,16 @@
       "author": "メーカー公式",
       "conflict_of_interest": "disclosed",
       "notes": "メーカーによる商品仕様の説明。ナイトライト、伝言板など幅広い用途で使えることが記載されている。"
+    },
+    {
+      "id": "src-fallook",
+      "name": "Fallook",
+      "url": "https://fallook.com/products/led%E3%83%A1%E3%83%83%E3%82%BB%E3%83%BC%E3%82%B8%E3%83%9C%E3%83%BC%E3%83%89",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "author": "第三者メディア",
+      "conflict_of_interest": "none",
+      "notes": "LEDメッセージボードは光るアクリル製クリアボードで、マーカーで書いたり消したりでき、食事プランや買い物リストなどに活躍する。"
     }
   ],
   "claims": [
@@ -187,9 +197,10 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-amazon",
+        "src-fallook"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "紙やインクを出さず汚れないメリットが言及されている。"
     },
     {
@@ -197,9 +208,10 @@
       "category": "durability",
       "confidence": "medium",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-amazon",
+        "src-fallook"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "単なるおもちゃにとどまらない汎用性が評価されている。"
     },
     {
@@ -217,9 +229,10 @@
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-amazon",
+        "src-fallook"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "光るLED機能は差別化要素として際立っている。"
     }
   ],
@@ -247,13 +260,15 @@
       {
         "text": "紙のゴミを出さず、繰り返し使える",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-amazon",
+          "src-fallook"
         ]
       },
       {
         "text": "伝言板やナイトライトとしても使える実用性の高さ",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-amazon",
+          "src-fallook"
         ]
       }
     ],
@@ -281,7 +296,8 @@
       {
         "text": "家族間の伝言板やスケジュールを書き込むリビングでの利用",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-amazon",
+          "src-fallook"
         ]
       },
       {
