@@ -172,6 +172,113 @@ class JulesAutoMergeScopeTests(unittest.TestCase):
         self.assertEqual(out.get("repairable"), "false")
 
 
+@unittest.skipIf(BASH is None, "bash が無い環境ではスキップ")
+class MainCopiesTests(unittest.TestCase):
+    """#9638: PR ブランチが main の新しい内容を普通のコミットとして取り込んだ場合。
+
+    PR #9685 では、分岐後に main へ入った他レーンの記事・experience.json・
+    asin_origin.jsonl などがそのまま Jules のコミットに入り、triple-dot で
+    「この PR の変更」に見えてスコープ外 → auto-merge-skipped で滞留した。
+    """
+
+    OTHER_ARTICLE = "data/articles/2026-08-14-B0AAAAAAAA.json"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.script = _load_scope_script()
+
+    def _run(self, main_cmds: list[str], branch_cmd: str) -> dict[str, str]:
+        """base から PR ブランチを切り、main 側に main_cmds を 1 コミットずつ積んだうえで
+        PR ブランチに branch_cmd を積む (branch_cmd からは `main` / `main~N` を参照できる)。"""
+        tmp = tempfile.mkdtemp()
+
+        def sh(cmd: str) -> str:
+            return subprocess.run([BASH, "-lc", cmd], cwd=tmp, capture_output=True,
+                                  text=True, check=True).stdout.strip()
+
+        try:
+            sh("git init -q -b main . && git config user.email t@example.com && git config user.name t "
+               "&& mkdir -p data/articles data/raw data/analytics scripts "
+               "&& echo base > README.md && echo a > data/analytics/asin_origin.jsonl "
+               "&& echo 'k: v' > data/term_slugs.yaml "
+               "&& git add -A && git commit -qm base && git branch pr")
+            for i, cmd in enumerate(main_cmds):
+                sh(f"{cmd} && git add -A && git commit -qm main{i}")
+            base = sh("git rev-parse main")
+            # pr へ切り替えると main 側で増えた記事ごと data/articles/ が消えることがある
+            sh(f"git checkout -q pr && mkdir -p data/articles && {branch_cmd} "
+               "&& git add -A && git commit -qm change")
+            head = sh("git rev-parse HEAD")
+
+            out_path = os.path.join(tmp, "gh_output")
+            open(out_path, "w", encoding="utf-8").close()
+            script_path = os.path.join(tmp, "scope.sh")
+            with open(script_path, "w", encoding="utf-8", newline="\n") as f:
+                f.write(self.script)
+            env = dict(os.environ, BASE_SHA=base, HEAD_SHA=head,
+                       GITHUB_OUTPUT=out_path.replace("\\", "/"))
+            proc = subprocess.run([BASH, script_path], cwd=tmp, capture_output=True,
+                                  text=True, env=env)
+            self.assertEqual(proc.returncode, 0,
+                             f"scope スクリプトが異常終了した\n{proc.stdout}\n{proc.stderr}")
+            return JulesAutoMergeScopeTests._parse_github_output(out_path)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    MAIN_LANES = [
+        f'echo "{{}}" > {OTHER_ARTICLE}',
+        "echo b >> data/analytics/asin_origin.jsonl && echo 'k2: v2' >> data/term_slugs.yaml",
+    ]
+
+    def test_copies_of_latest_main_are_not_this_prs_changes(self):
+        """main の最新をそのまま写したファイルは除外され、記事 PR として扱われる。"""
+        out = self._run(
+            self.MAIN_LANES,
+            f'echo "{{}}" > {ARTICLE} && git checkout main -- {self.OTHER_ARTICLE} '
+            'data/analytics/asin_origin.jsonl data/term_slugs.yaml',
+        )
+        self.assertEqual(out.get("eligible"), "true")
+        self.assertEqual(out.get("repairable"), "true")  # 写しを戻すための修復
+        self.assertEqual(out.get("out_of_scope", ""), "")
+        self.assertEqual(
+            out.get("main_copies", "").splitlines(),
+            sorted(["data/analytics/asin_origin.jsonl", "data/term_slugs.yaml", self.OTHER_ARTICLE]),
+        )
+
+    def test_copy_of_intermediate_main_version_is_also_detected(self):
+        """main の途中の版 (取り込んだ後に main がさらに進んだ) も写しとして扱う。"""
+        out = self._run(
+            self.MAIN_LANES + ["echo 'k3: v3' >> data/term_slugs.yaml"],
+            f'echo "{{}}" > {ARTICLE} && git show main~1:data/term_slugs.yaml > data/term_slugs.yaml',
+        )
+        self.assertEqual(out.get("eligible"), "true")
+        self.assertEqual(out.get("main_copies"), "data/term_slugs.yaml")
+
+    def test_own_edit_of_main_file_stays_out_of_scope(self):
+        """main のどの版とも一致しない変更はこの PR の作業なので、従来どおり人間に回す。"""
+        out = self._run(
+            self.MAIN_LANES,
+            f'echo "{{}}" > {ARTICLE} && echo mine >> data/term_slugs.yaml',
+        )
+        self.assertEqual(out.get("eligible"), "false")
+        self.assertEqual(out.get("repairable"), "false")
+        self.assertEqual(out.get("out_of_scope"), "data/term_slugs.yaml")
+        self.assertEqual(out.get("main_copies", ""), "")
+
+    def test_copied_article_is_not_counted_as_this_prs_article(self):
+        """他レーンの記事の写ししか無い PR は記事 PR ではない。"""
+        out = self._run(self.MAIN_LANES, f"git checkout main -- {self.OTHER_ARTICLE}")
+        self.assertEqual(out.get("eligible"), "false")
+        self.assertNotEqual(out.get("repairable"), "true")
+
+    def test_plain_article_pr_has_no_main_copies(self):
+        """main が進んでいても、写しの無い通常の記事 PR は従来どおり。"""
+        out = self._run(self.MAIN_LANES, f'echo "{{}}" > {ARTICLE}')
+        self.assertEqual(out.get("eligible"), "true")
+        self.assertEqual(out.get("main_copies", ""), "")
+        self.assertNotIn("repairable", out)
+
+
 class GitignoreBlocksRootScriptsTests(unittest.TestCase):
     """#5165: ルート直下の *.py が .gitignore で塞がれていること。
 

@@ -53,6 +53,46 @@ jobs:
           # おけば以後の run で恒久的に一致する。
           merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
           echo "merge_base=$merge_base" >> "$GITHUB_OUTPUT"
+          # 2026-10-18 (#9638): エージェントが main の新しい内容を、マージコミットでは
+          # なく普通のコミットとして取り込むことがある。PR #9685 では、下の omcha 追い
+          # コミット (#6773) が Jules のブランチに積まれた後に Jules が追加で push し、
+          # その commit に「分岐後に main へ入った他レーンの記事 2 本・experience.json
+          # 30 本・asin_origin.jsonl・タグ stub」がそのまま入っていた。triple-dot は
+          # これを「この PR の変更」として出すので、スコープ外で auto-merge-skipped に
+          # なり、60-close-failed-article-prs の対象 (スコープ内のファイルだけの PR) から
+          # も外れて、誰も触らないまま滞留した。
+          # 中身が main のどこかの時点と完全に同じファイルは、この PR の作業ではない。
+          # 判定: HEAD での状態 (blob、または不在) が merge-base..BASE の main の
+          # いずれかのコミット直後の状態と一致するもの (main の最新でなく途中の版を
+          # 取り込んだ場合も拾う)。これを merge-base の状態へ戻しても失われる作業は
+          # 無い (3-way merge で「PR 側は無変更」になり、main の最新が残る)。
+          # .github/ は機械的に扱わない方針 (下の repairable と同じ) なので対象外。
+          main_copies=""
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in .github/*) continue ;; esac
+            head_obj=$(git rev-parse -q --verify "$HEAD_SHA:$f" 2>/dev/null || echo absent)
+            for c in $(git rev-list "$merge_base..$BASE_SHA" -- "$f"); do
+              main_obj=$(git rev-parse -q --verify "$c:$f" 2>/dev/null || echo absent)
+              if [ "$head_obj" = "$main_obj" ]; then
+                main_copies="${main_copies}${f}"$'\n'
+                break
+              fi
+            done
+          done <<< "$changed"
+          printf '%s' "$main_copies" | sed '/^$/d' | sort -u > /tmp/main_copies.txt
+          if [ -s /tmp/main_copies.txt ]; then
+            echo "Identical to a main version (synced from main, not this PR's work; #9638):"
+            cat /tmp/main_copies.txt
+            changed=$(printf '%s\n' "$changed" | grep -vxF -f /tmp/main_copies.txt || true)
+          fi
+          echo "main_copies<<EOF" >> "$GITHUB_OUTPUT"
+          cat /tmp/main_copies.txt >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          # main の写しを除いた変更一覧を返す (以後の判定はすべてこれを使う)。
+          not_main_copy() {
+            if [ -s /tmp/main_copies.txt ]; then grep -vxF -f /tmp/main_copies.txt || true; else cat; fi
+          }
           # Eligibility: PR must add/modify at least one of
           #   (a) data/articles/YYYY-MM-DD-B0XXXXXXXX.json (Jules article PR)
           #   (b) hugo/content/brands/*/_index.md          (brand narrative PR, e.g. PR #1355)
@@ -60,10 +100,11 @@ jobs:
           # 判定が「そもそも記事 PR なのか」を知る必要があるため。
           added_article=$(git diff --name-only --diff-filter=AM "$BASE_SHA"..."$HEAD_SHA" \
                     -- 'data/articles/*.json' \
+                  | not_main_copy \
                   | grep -v '\.quality\.json$' \
                   | grep -E 'data/articles/[0-9]{4}-[0-9]{2}-[0-9]{2}-B0[A-Z0-9]{8}\.json$' || true)
           added_brand=$(git diff --name-only --diff-filter=AM "$BASE_SHA"..."$HEAD_SHA" \
-                    -- 'hugo/content/brands/*/_index.md' || true)
+                    -- 'hugo/content/brands/*/_index.md' | not_main_copy || true)
           # Safety: every changed file must be under data/articles/, data/raw/per_asin/,
           # or hugo/content/brands/*/_index.md (brand narrative Markdown).
           out_of_scope=$(echo "$changed" | grep -v -E '^(data/articles/|data/raw/per_asin/|hugo/content/brands/[^/]+/_index\.md$)' || true)
@@ -97,7 +138,7 @@ jobs:
             #   - スコープ外に「新規追加」でも「data/raw/ 配下の既存ファイル変更」でも
             #     ない変更が残る                                  … 消す/戻すと作業が
             #     失われる可能性があるファイル種別 (scripts/ 等)
-            added_all=$(git diff --name-only --diff-filter=A "$BASE_SHA"..."$HEAD_SHA" || true)
+            added_all=$(git diff --name-only --diff-filter=A "$BASE_SHA"..."$HEAD_SHA" | not_main_copy || true)
             printf '%s\n' "$out_of_scope" | sed '/^$/d' | sort -u > /tmp/oos.txt
             printf '%s\n' "$added_all"    | sed '/^$/d' | sort -u > /tmp/added.txt
             repairable=true
@@ -142,6 +183,12 @@ jobs:
             echo "$added_brand"
           fi
           echo "eligible=true" >> "$GITHUB_OUTPUT"
+          # #9638: スコープ内でも main の写し (他レーンの記事など) が残っていれば戻す。
+          # 残すと 04 の validate がこの PR の記事でない記事まで検査して落ちうるうえ、
+          # PR の変更一覧 (60 / 45 が見る) も汚れたままになる。
+          if [ -s /tmp/main_copies.txt ]; then
+            echo "repairable=true" >> "$GITHUB_OUTPUT"
+          fi
 
       # 2026-08-14 (#5165): スコープ外が「この PR が新規追加しただけのファイル」なら
       # 機械的に取り除いて記事 PR 単体に戻す。可否判定は scope ステップ側。
@@ -178,6 +225,7 @@ jobs:
           MERGE_BASE_SHA: ${{ steps.scope.outputs.merge_base }}
           OUT_OF_SCOPE: ${{ steps.scope.outputs.out_of_scope }}
           RESTORE: ${{ steps.scope.outputs.restore }}
+          MAIN_COPIES: ${{ steps.scope.outputs.main_copies }}
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
           set -e
@@ -206,10 +254,23 @@ jobs:
             cat /tmp/restore.txt
             xargs -a /tmp/restore.txt -d '\n' git checkout "$MERGE_BASE_SHA" --
           fi
+          # #9638: main の写しは merge-base の状態 (無ければ不在) に戻す。
+          printf '%s\n' "$MAIN_COPIES" | sed '/^$/d' > /tmp/main_copies.txt
+          if [ -s /tmp/main_copies.txt ]; then
+            echo "Reverting to merge-base (identical to a main version, synced from main):"
+            cat /tmp/main_copies.txt
+            while IFS= read -r f; do
+              if git cat-file -e "$MERGE_BASE_SHA:$f" 2>/dev/null; then
+                git checkout "$MERGE_BASE_SHA" -- "$f"
+              else
+                git rm -q -- "$f"
+              fi
+            done < /tmp/main_copies.txt
+          fi
 
           git commit -q \
-            -m "chore: エージェントのスコープ外変更を自動修復 (#5165, #8033)" \
-            -m "$(printf 'removed (stray, newly added):\n%s\n\nrestored to base (protected data/raw/):\n%s\n' "$(cat /tmp/strays.txt)" "$(cat /tmp/restore.txt)")"
+            -m "chore: エージェントのスコープ外変更を自動修復 (#5165, #8033, #9638)" \
+            -m "$(printf 'removed (stray, newly added):\n%s\n\nrestored to base (protected data/raw/):\n%s\n\nreverted to base (copied from main, #9638):\n%s\n' "$(cat /tmp/strays.txt)" "$(cat /tmp/restore.txt)" "$(cat /tmp/main_copies.txt)")"
           # actions/checkout が仕込んだ GITHUB_TOKEN の extraheader が URL の認証情報より
           # 優先されるので、空値で打ち消してから App token で push する (#8092)。
           git -c "http.https://github.com/.extraheader=" \
@@ -223,6 +284,9 @@ jobs:
           fi
           if [ -s /tmp/restore.txt ]; then
             body="$body$(printf '\n\n読み取り専用の data/raw/ 配下ファイルを base の内容へ復元 (#8033):\n```\n%s\n```' "$(cat /tmp/restore.txt)")"
+          fi
+          if [ -s /tmp/main_copies.txt ]; then
+            body="$body$(printf '\n\nmain の内容をそのまま取り込んでいたファイルを分岐点の状態へ戻す (マージ後は main の最新が残る、#9638):\n```\n%s\n```' "$(cat /tmp/main_copies.txt)")"
           fi
           gh pr comment "$PR_URL" --body "$body" \
             || echo "::warning::could not comment on $PR_URL"
@@ -265,6 +329,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MAIN_COPIES: ${{ steps.scope.outputs.main_copies }}
         run: |
           # 2026-09-08 (#6788 事後): この追いコミット自体が push → synchronize を
           # 発火させ、同じ workflow をもう一段再トリガする。その再トリガ run が
@@ -285,6 +350,10 @@ jobs:
           asins=""
           added=$(git diff --name-only --diff-filter=A "$BASE_SHA"..."$HEAD_SHA" -- 'data/articles/*.json' \
                     2>/dev/null | grep -vE '\.(enrichment|quality|seo)\.json$' || true)
+          # #9638: main から写しただけの他レーンの記事は、この PR の記事ではない。
+          if [ -n "$MAIN_COPIES" ]; then
+            added=$(printf '%s\n' "$added" | grep -vxF -f <(printf '%s\n' "$MAIN_COPIES" | sed '/^$/d') || true)
+          fi
           for f in $added; do
             asin=$(basename "$f" | grep -oE 'B0[A-Z0-9]{8}' | head -1 || true)
             [ -z "$asin" ] && continue
