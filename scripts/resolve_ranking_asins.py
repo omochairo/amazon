@@ -669,7 +669,22 @@ def _guard_brand_of(text: str) -> str:
     return ""
 
 
-def _yahoo_identity_guard(rakuten_title: str, amazon_item: dict, yjb) -> dict:
+# 版違い (#9872): 片側の題名にだけあれば別商品とみなす語。ブランドが一致していても
+# 「カードセット」と「拡張パック BOX」、「ロッド」と「ミニチュアコレクション ロッド」は別物。
+# BOX は「COLLECTION」の有無と違い Amazon 側だけが付けることが多いので入れない。
+_EDITION_WORDS = ("拡張パック", "ブースターパック", "カードセット", "ミニチュア", "コレクション")
+# 楽天価格に対する Amazon 価格の許容比 (#9872)。title fuzzy の ±40% より緩い:
+# 楽天が高い側に振れる (予約・転売) ぶん下側を広く取る。
+_YAHOO_PRICE_RATIO = (1 / 3, 2.5)
+
+
+def _edition_words(title: str) -> set:
+    t = _fold_title(_PROMO_BRACKET_RE.sub(" ", title or ""))
+    return {w for w in _EDITION_WORDS if w in t}
+
+
+def _yahoo_identity_guard(rakuten_title: str, amazon_item: dict, yjb,
+                          rakuten_price: float = 0) -> dict:
     """Yahoo 多数決の JAN が楽天の商品と同一かを、Amazon 側の題名と突き合わせて確かめる。
 
     Yahoo の上位が揃っていても、ノーブランドの汎用品 (飛び石・平均台等) は似た商品を
@@ -689,8 +704,16 @@ def _yahoo_identity_guard(rakuten_title: str, amazon_item: dict, yjb) -> dict:
     amazon_title = _safe_get(amazon_item, "itemInfo", "title", "displayValue", default="") or ""
     r_brand, a_brand = _guard_brand_of(rakuten_title), _guard_brand_of(amazon_title)
     common = sorted(yjb.model_codes(rakuten_title) & yjb.model_codes(amazon_title))
+    amazon_price = _candidate_price(amazon_item)
+    edition_diff = sorted(_edition_words(rakuten_title) ^ _edition_words(amazon_title))
+    ratio_lo, ratio_hi = _YAHOO_PRICE_RATIO
     if r_brand and a_brand and r_brand != a_brand:
         ok, reason = False, "brand_mismatch"
+    elif edition_diff:
+        ok, reason = False, "edition_mismatch"
+    elif (rakuten_price and amazon_price
+          and not ratio_lo <= amazon_price / rakuten_price <= ratio_hi):
+        ok, reason = False, "price_mismatch"
     elif (r_brand and r_brand == a_brand) or common:
         ok, reason = True, ""
     else:
@@ -783,7 +806,8 @@ def _tiebreak_check(rakuten_title: str, amazon_title: str, query: str) -> dict:
 
 
 def _tiebreak_jan(title: str, query: str, votes: dict, api, yjb,
-                  search_index: str = "All", sleep: float = 1.1) -> dict:
+                  search_index: str = "All", sleep: float = 1.1,
+                  rakuten_price: float = 0) -> dict:
     """得票上位の JAN を Amazon で引き、同一性ガードと版の一致を両方通るものが
     ちょうど 1 つのときだけ、その JAN を返す。2 つ以上・0 なら採らない。
 
@@ -802,7 +826,7 @@ def _tiebreak_jan(title: str, query: str, votes: dict, api, yjb,
         asin = (matched.get("asin") or "").strip()
         check = {"jan": jan, "votes": votes.get(jan), "asin": asin}
         if asin:
-            guard = _yahoo_identity_guard(title, matched, yjb)
+            guard = _yahoo_identity_guard(title, matched, yjb, rakuten_price)
             check.update(amazon_title=guard["amazon_title"], identity_ok=guard["identity_ok"])
             check.update(_tiebreak_check(title, guard["amazon_title"], query))
             if guard["identity_ok"] and check["tiebreak_ok"]:
@@ -846,6 +870,10 @@ def resolve_yahoo_jan(
     entries = []
     for i, item in enumerate(targets):
         title = item.get("title") or ""
+        try:
+            rakuten_price = float(item.get("price") or 0)
+        except (TypeError, ValueError):
+            rakuten_price = 0
         query = yjb.build_query(title)
         entry = {"rank": item.get("rank"), "title": title, "query": query,
                  "jan": "", "votes": {}, "asin": "", "adopted": False, "reason": ""}
@@ -865,7 +893,8 @@ def resolve_yahoo_jan(
         jan, matched = consensus["jan"], None
         if not jan and consensus["reason"] in _TIEBREAK_REASONS:
             tb = _tiebreak_jan(title, query, consensus["votes"], api, yjb,
-                               search_index=search_index, sleep=1.1 if sleep else 0)
+                               search_index=search_index, sleep=1.1 if sleep else 0,
+                               rakuten_price=rakuten_price)
             entry["tiebreak"] = tb["checks"]
             if tb["jan"]:
                 jan, matched = tb["jan"], tb["item"]
@@ -880,7 +909,7 @@ def resolve_yahoo_jan(
         entry["asin"] = asin
         entry["item_code"] = item.get("itemCode") or ""
         if asin:
-            entry.update(_yahoo_identity_guard(title, matched, yjb))
+            entry.update(_yahoo_identity_guard(title, matched, yjb, rakuten_price))
         if not asin:
             entry["reason"] = "amazon_no_jan_match"
         elif _ISBN10_RE.match(asin.upper()):

@@ -16,7 +16,8 @@ class FakeAPI:
 
     # 既定の Amazon 題名はブランド (レゴ) が判定できるもの = 同一性ガードを通る
     def __init__(self, jan_to_asin: dict, titles: dict | None = None,
-                 default_title: str = "レゴ(LEGO) アイデア 21371"):
+                 default_title: str = "レゴ(LEGO) アイデア 21371", prices: dict | None = None):
+        self.prices = prices or {}
         self.jan_to_asin = jan_to_asin
         self.titles = titles or {}
         self.default_title = default_title
@@ -26,9 +27,12 @@ class FakeAPI:
         items = [{"asin": "BNOISE0001",
                   "itemInfo": {"externalIds": {"eans": {"displayValues": ["4900000000000"]}}}}]
         if asin:
-            items.append({"asin": asin, "itemInfo": {
+            item = {"asin": asin, "itemInfo": {
                 "title": {"displayValue": self.titles.get(asin, self.default_title)},
-                "externalIds": {"eans": {"displayValues": [keywords]}}}})
+                "externalIds": {"eans": {"displayValues": [keywords]}}}}
+            if asin in self.prices:
+                item["offersV2"] = {"listings": [{"price": {"money": {"amount": self.prices[asin]}}}]}
+            items.append(item)
         return {"searchResult": {"items": items}}
 
 # チェックディジットの正しい JAN
@@ -254,6 +258,55 @@ class IdentityGuardTest(unittest.TestCase):
 
     def test_taxonomy_brand_wins_over_franchise_name(self):
         self.assertEqual(rr._guard_brand_of("タカラトミー 仮面ライダー ミニカー"), "タカラトミー")
+
+
+class Issue9872Test(unittest.TestCase):
+    """#9872: MEGA をマテルと誤判定したカードセット ↔ 拡張パック BOX、ミニチュア版の取り違え。"""
+
+    def _run(self, rakuten_title, amazon_title, rakuten_price=None, amazon_price=None):
+        item = {"rank": 1, "itemCode": "shop:1", "matched_asin": None, "title": rakuten_title}
+        if rakuten_price:
+            item["price"] = rakuten_price
+        prices = {"B0TEST0001": amazon_price} if amazon_price else None
+        api = FakeAPI({JAN_A: "B0TEST0001"}, default_title=amazon_title, prices=prices)
+        r = rr.resolve_yahoo_jan([item], api, set(), set(),
+                                 lambda q: [{"janCode": JAN_A}] * 3, sleep=0)
+        return r["yahoo_jan_entries"][0]
+
+    PIKA_AMAZON = "ポケモンカードゲーム MEGA 拡張パック 30th CELEBRATION BOX(20パック入り)"
+
+    def test_mega_alone_is_not_mattel(self):
+        self.assertEqual(rr._guard_brand_of("ポケモンカードゲーム MEGA 30th CELEBRATION"), "")
+        self.assertEqual(rr._guard_brand_of("メガブロック トーマス"), "マテル")
+        self.assertEqual(rr._guard_brand_of("MEGA BLOKS ピクサー"), "マテル")
+
+    def test_card_set_vs_booster_box_is_rejected_by_brand(self):
+        e = self._run("ポケモンカードゲーム MEGA 30th CELEBRATION カードセット 選べる",
+                      self.PIKA_AMAZON)
+        self.assertFalse(e["adopted"])
+        self.assertEqual(e["rakuten_brand"], "")
+
+    def test_edition_word_on_one_side_is_rejected_even_with_same_brand(self):
+        e = self._run("バンダイ プリキュア シャインアルカナロッド",
+                      "バンダイ プリキュア ミニチュアコレクション シャインアルカナロッド")
+        self.assertFalse(e["adopted"])
+        self.assertEqual(e["reason"], "edition_mismatch")
+
+    def test_edition_word_on_both_sides_is_ok(self):
+        e = self._run("バンダイ プリキュア ミニチュアコレクション シャインアルカナロッド",
+                      "バンダイ プリキュア ミニチュアコレクション シャインアルカナロッド")
+        self.assertTrue(e["adopted"])
+
+    def test_price_ratio_guard(self):
+        t = "バンダイ 変身ベルト DXマイスドライバー"
+        e = self._run(t, t, rakuten_price=2160, amazon_price=7216)
+        self.assertEqual(e["reason"], "price_mismatch")
+        e = self._run(t, t, rakuten_price=9000, amazon_price=2000)  # 楽天が 4.5 倍
+        self.assertEqual(e["reason"], "price_mismatch")
+        e = self._run(t, t, rakuten_price=3000, amazon_price=2000)  # 楽天が 1.5 倍までは許容
+        self.assertTrue(e["adopted"])
+        e = self._run(t, t, rakuten_price=3000)  # Amazon 価格不明は価格で落とさない
+        self.assertTrue(e["adopted"])
 
 
 class ModelCodesTest(unittest.TestCase):
