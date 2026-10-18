@@ -223,6 +223,16 @@ def test_suggest_skips_butter_squeeze_category_tokens():
     assert result["candidates"] == []
 
 
+def test_suggest_skips_all_in_one_set_product_name_token():
+    # #9860: 「BX-53 オールインワンセット」はベイブレードX の商品名でブランドではない
+    gsc = _make_gsc(by_query=[
+        {"query": "bx-53 オールインワンセット", "impressions": 19, "clicks": 0, "ctr": 0.0, "position": 5.0},
+    ])
+    result = suggest(gsc, set())
+    # 型番 bx-53 は本番では taxonomy の部分一致で消える。ここでは語の除外だけを見る
+    assert "オールインワンセット" not in [c["token"] for c in result["candidates"]]
+
+
 def test_suggest_skips_rejected_brand_exact_match_only():
     # #9362: 供給側で却下済みの brand (Ghbunuz) は大小無視の完全一致で落とす。
     # 部分一致では落とさない (短い却下名が別ブランドを巻き込まないように)

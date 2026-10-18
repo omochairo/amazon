@@ -1496,6 +1496,16 @@ brands:
   - {canonical: Kitai Japan, tier: D, region: CN, noindex: true, aliases: [Kitai Japan]}
   - {canonical: SAKURAN, tier: D, region: CN, noindex: true, aliases: [SAKURAN]}
 
+  # 2026-10-18 (#9861): 供給側検出器の候補を実データ (product.brand + 商品名) と
+  # Web 検証で判定。
+  # iDventure=iDventure GmbH (ドイツ・メーアブッシュ、idventure.de)。木製の脱出パズル
+  # 「Cluebox」と謎解きジグソー「CluePuzzle」を自社で企画・製造する。カタログの raw は
+  # 英字の "iDventure" のみ。カタカナ表記は定まっていないので入れない。
+  - canonical: iDventure
+    aliases: [iDventure, IDVENTURE]
+    tier: B
+    region: DE
+
   # 2026-10-13 (#9363 / #9362): 供給側検出器 (#9363) と A-6 (#9362) の候補を実データ
   # (product.brand + 商品名) と Web 検証で判定。
   # レイス=株式会社レイス (RACE Co.,ltd.、東京都港区、race-corp.jp) のキッズコスメ
