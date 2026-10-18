@@ -223,8 +223,22 @@
     return raw
       .split(",")
       .map(function (s) { return s.trim().toUpperCase(); })
-      .filter(function (s) { return /^B0[A-Z0-9]{8}$/.test(s); })
+      // 書籍の ASIN は ISBN-10 由来 (数字 9 桁 + 数字/X) で B0 始まりではない (#9781)。
+      // カード側 (/products/<asin>/ からの抽出) と同じく英数字 10 桁なら通す。
+      .filter(function (s) { return /^[A-Z0-9]{10}$/.test(s); })
       .slice(0, MAX);
+  }
+
+  // index.json 由来の文字列を innerHTML に入れる前に通す (#9781)。
+  // utils/product-card.js の escapeAttr / escapeText と同じ規則。
+  function _escapeAttr(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function _escapeText(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
   function _scoreTierClass(s) {
@@ -286,18 +300,18 @@
     var rows = [];
     rows.push('<tr class="compare-row compare-row--image"><th scope="row">画像</th>');
     items.forEach(function (it) {
-      rows.push('<td><a href="' + it.permalink + '">' +
-                (it.image ? '<img src="' + it.image + '" alt="' + (it.product_name || it.title || "") + '" loading="lazy">' : "🧸") +
+      rows.push('<td><a href="' + _escapeAttr(it.permalink) + '">' +
+                (it.image ? '<img src="' + _escapeAttr(it.image) + '" alt="' + _escapeAttr(it.product_name || it.title || "") + '" loading="lazy">' : "🧸") +
                 "</a></td>");
     });
     rows.push("</tr>");
 
     rows.push('<tr class="compare-row compare-row--name"><th scope="row">商品名</th>');
     items.forEach(function (it) {
-      rows.push('<td><a class="compare-name-link" href="' + it.permalink + '">' +
-                (it.brand ? '<span class="compare-brand">' + it.brand + "</span>" : "") +
-                (it.product_name || it.title || "") + "</a>" +
-                '<button type="button" class="compare-remove" data-asin="' + (it.asin || "") + '" aria-label="この商品を比較から外す">×</button></td>');
+      rows.push('<td><a class="compare-name-link" href="' + _escapeAttr(it.permalink) + '">' +
+                (it.brand ? '<span class="compare-brand">' + _escapeText(it.brand) + "</span>" : "") +
+                _escapeText(it.product_name || it.title || "") + "</a>" +
+                '<button type="button" class="compare-remove" data-asin="' + _escapeAttr(it.asin || "") + '" aria-label="この商品を比較から外す">×</button></td>');
     });
     rows.push("</tr>");
 
@@ -333,13 +347,13 @@
 
     rows.push('<tr class="compare-row compare-row--age"><th scope="row">対象年齢</th>');
     items.forEach(function (it) {
-      rows.push("<td>" + _formatAge(it) + "</td>");
+      rows.push("<td>" + _escapeText(_formatAge(it)) + "</td>");
     });
     rows.push("</tr>");
 
     rows.push('<tr class="compare-row compare-row--cta"><th scope="row">詳細</th>');
     items.forEach(function (it) {
-      rows.push('<td><a class="compare-cta" href="' + it.permalink + '">📝 詳しく読む →</a></td>');
+      rows.push('<td><a class="compare-cta" href="' + _escapeAttr(it.permalink) + '">📝 詳しく読む →</a></td>');
     });
     rows.push("</tr>");
 
