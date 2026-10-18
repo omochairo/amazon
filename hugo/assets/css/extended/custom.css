@@ -5009,7 +5009,8 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   align-items: center;
   gap: 4px;
 }
-.score-minichart-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* #9781: 省略 (…) せず、<wbr> の位置でだけ 2 段に折り返す (keep-all で他の位置では切らない)。 */
+.score-minichart-label { word-break: keep-all; overflow-wrap: normal; }
 .score-minichart-bar {
   display: block;
   height: 5px;
@@ -7000,25 +7001,29 @@ body:has(#compare-floating-bar) .favorites-wrapper {
   border-radius: 12px;
   background: var(--entry, #fff);
 }
-/* session 145: <details> アコーディオン化。summary を見出し帯として使い、
-   既定 closed。検証済リコールヒット時のみ partial 側で open 属性が付く。 */
+/* session 145: <details> アコーディオン化。既定 closed。検証済リコールヒット時のみ
+   partial 側で open 属性が付く。
+   #9781: 見出し (h2) は summary の外に出した。summary は見出しの下の開閉行。 */
+.toy-safety__title {
+  margin: 0 0 6px;
+  font-size: 1.2rem;
+  color: var(--primary, #222);
+}
 .toy-safety__summary {
+  display: block;
+  width: auto; /* 左右の負のマージンで枠いっぱいに広げる (幅指定が残ると右端が届かない) */
   cursor: pointer;
   list-style: none;
-  margin: -20px -22px 0;
-  padding: 16px 22px;
+  margin: 0 -22px -20px;
+  padding: 8px 22px 16px;
+  font-size: 0.92rem;
+  color: var(--secondary, #4b5563);
 }
-.toy-safety[open] > .toy-safety__summary {
+.toy-safety__details[open] > .toy-safety__summary {
   margin-bottom: 14px;
   border-bottom: 1px solid var(--border, #e5e7eb);
 }
 .toy-safety__summary::-webkit-details-marker { display: none; }
-.toy-safety__summary > h2 {
-  display: inline;
-  margin: 0;
-  font-size: 1.2rem;
-  color: var(--primary, #222);
-}
 .toy-safety__summary::before {
   content: "▶";
   display: inline-block;
@@ -7027,7 +7032,7 @@ body:has(#compare-floating-bar) .favorites-wrapper {
   color: var(--secondary, #9ca3af);
   transition: transform 0.2s ease;
 }
-.toy-safety[open] > .toy-safety__summary::before { transform: rotate(90deg); }
+.toy-safety__details[open] > .toy-safety__summary::before { transform: rotate(90deg); }
 .toy-safety__block { margin: 0 0 16px; }
 .toy-safety__block:last-of-type { margin-bottom: 8px; }
 .toy-safety__h3 {

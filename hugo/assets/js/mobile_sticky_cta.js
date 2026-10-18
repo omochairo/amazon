@@ -217,7 +217,18 @@
         var labelEl = anchor.querySelector(".m-sticky-buy-label");
         if (labelEl) labelEl.textContent = info.label + " 最安";
       }
+      // #9781: 固定の aria-label が見えている店名・価格を読み上げから隠していた。
+      // リンク先が決まったここで、店名と価格を含めて付け直す。
+      anchor.setAttribute("aria-label", _buyAriaLabel(
+        (info.label || "").trim(),
+        parseInt(bar.getAttribute("data-min-price") || "0", 10)));
     }
+  }
+
+  function _buyAriaLabel(store, price) {
+    var head = store ? store + "で購入する" : "最安値の店で購入する";
+    if (!(price > 0)) return head;
+    return head + "（最安 " + price.toLocaleString("ja-JP") + "円）";
   }
 
   function _setupVisibility(bar) {

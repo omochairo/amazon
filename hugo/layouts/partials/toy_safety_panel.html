@@ -32,8 +32,12 @@
     {{- $applicable = $applicable | append . -}}
   {{- end -}}
 {{- end -}}
-<details class="toy-safety" aria-labelledby="toy-safety-h"{{ if gt (len $applicable) 0 }} open{{ end }}>
-  <summary class="toy-safety__summary"><h2 id="toy-safety-h">🛡 安全性とリコールの確認</h2></summary>
+{{- /* #9781: 見出しは <summary> の外に置く。<summary> はボタンとして読み上げられ、
+       中の <h2> は見出しの一覧に出ない (スクリーンリーダーで見出しジャンプできない)。 */ -}}
+<section class="toy-safety" aria-labelledby="toy-safety-h">
+<h2 id="toy-safety-h" class="toy-safety__title">🛡 安全性とリコールの確認</h2>
+<details class="toy-safety__details"{{ if gt (len $applicable) 0 }} open{{ end }}>
+  <summary class="toy-safety__summary">誤飲の注意・安全基準・リコールの確認先を見る</summary>
 
   {{- with $d.choking }}
   <div class="toy-safety__block">
@@ -82,4 +86,5 @@
 
   <p class="toy-safety__note">公的機関の一次情報をもとに編集部が整理しています（{{ $d.updated }} 時点）。</p>
 </details>
+</section>
 {{- end -}}
