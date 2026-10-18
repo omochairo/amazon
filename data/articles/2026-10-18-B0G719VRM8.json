@@ -181,7 +181,48 @@
       "notes": "メーカーによる商品仕様の説明。ナイトライト、伝言板など幅広い用途で使えることが記載されている。"
     }
   ],
-  "claims": [],
+  "claims": [
+    {
+      "claim": "お絵かきボードは汚れを気にせず繰り返し遊べるエコな仕様である",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-amazon"
+      ],
+      "cross_checked": false,
+      "notes": "紙やインクを出さず汚れないメリットが言及されている。"
+    },
+    {
+      "claim": "成長後は伝言板など別の用途で活用できる余地がある",
+      "category": "durability",
+      "confidence": "medium",
+      "supporting_source_ids": [
+        "src-amazon"
+      ],
+      "cross_checked": false,
+      "notes": "単なるおもちゃにとどまらない汎用性が評価されている。"
+    },
+    {
+      "claim": "描いて消すという動作が子どもの興味を引き出す",
+      "category": "quality",
+      "confidence": "medium",
+      "supporting_source_ids": [
+        "src-amazon"
+      ],
+      "cross_checked": false,
+      "notes": "繰り返し遊ぶ動作が支持される。"
+    },
+    {
+      "claim": "他のお絵描きボードと比べ、光るギミックが目新しさを持つ",
+      "category": "comparative_advantage",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-amazon"
+      ],
+      "cross_checked": false,
+      "notes": "光るLED機能は差別化要素として際立っている。"
+    }
+  ],
   "technical_specs": {
     "dimensions": {
       "height": "150mm",
