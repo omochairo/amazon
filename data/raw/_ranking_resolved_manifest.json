@@ -1,83 +1,93 @@
 {
-  "jan_candidates_before_limit": 1,
-  "input_unmatched_jans": 1,
-  "resolved": [],
+  "jan_candidates_before_limit": 4,
+  "input_unmatched_jans": 4,
+  "resolved": [
+    {
+      "jan": "4523251108944",
+      "asin": "B0HGQVPSFG",
+      "rank": 29,
+      "title": "【予約】【11月発売予定】はむにぎり ジャンガリアンハムスター（くろまめ／おこめ／こむぎ／おそば）マスコット ハムスター りぶはあと ハムにぎり ぬいぐるみ 癒し ふわふわ かわいい 持ち運び グッズ【メール便送料無料】"
+    },
+    {
+      "jan": "0074451114869",
+      "asin": "B0772WYFPP",
+      "rank": null,
+      "title": "ブライトスターツ Bright Starts Oball オーボールラトル【0ヶ月~】 ベビーカー用おもちゃ 歯固め ガラガラ ソフトボール 出産祝い ライトブルー 11486"
+    }
+  ],
   "unresolved": [
     {
       "jan": "4513179113946",
-      "rank": 15,
+      "rank": 13,
       "title": "のりかえ三輪車 押し棒付き ヤトミ 股ベルト付き 背もたれ付き 4WAY バランスバイク キッズバイク 変身 三輪車 子供 手押し棒付き 3歳 【ラッピング不可】【KS5】"
     }
   ],
-  "skipped_already_covered": [],
+  "skipped_already_covered": [
+    {
+      "jan": "4971404318021",
+      "asin": "B08WX1ZFKR",
+      "rank": null
+    }
+  ],
   "skipped_non_b0": [],
-  "new_asins": [],
+  "new_asins": [
+    "B0HGQVPSFG",
+    "B0772WYFPP",
+    "B0GNZD4NST"
+  ],
   "title_fuzzy": {
-    "title_fuzzy_candidates_before_limit": 13,
-    "title_fuzzy_input": 13,
-    "title_fuzzy_resolved": [],
+    "title_fuzzy_candidates_before_limit": 14,
+    "title_fuzzy_input": 14,
+    "title_fuzzy_resolved": [
+      {
+        "rank": 5,
+        "title": "【楽天1位連続受賞】 【2026年限定カラー】 ストライダー スポーツモデル 12インチ MOSS モス 2年保証 キックバイク キッズバイク 子供用 ペダルなし 自転車 誕生日 クリスマス プレゼント ギフト 男の子 女の子 こども 1歳 2歳 3歳 バランスバイク",
+        "item_code": "mamegyorai:10047560",
+        "asin": "B0GNZD4NST",
+        "match_method": "title_fuzzy",
+        "candidate_title": "ストライダー スポーツモデル (STRIDER Sport) 12インチ 車体 モス 日本正規品",
+        "brand_match": true,
+        "rakuten_brand": "ストライダー",
+        "candidate_brand": "ストライダー",
+        "model_token_match": false,
+        "common_tokens": [],
+        "spec_match": true,
+        "price_ok": true,
+        "rakuten_price": 16940.0,
+        "candidate_price": 16940.0,
+        "image_sim": null,
+        "vision_gate_mode": "shadow",
+        "vision_gate_passed": true
+      }
+    ],
     "title_fuzzy_rejected": [
       {
-        "rank": 29,
-        "title": "9月26日発売 ばら売り 5パック/10パック レビュー特典付き 遊戯王 ORIGINAL ARTWORK COLLECTION ボックス BOX オリジナル アートワーク コレクション",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0HL9BZVYG",
-            "candidate_title": "オリジナルアートワークコレクション 遊 戯 王 ORIGINA ARTWORK COLLECTION（未開封シュリンク付きBOX）2026年9月26日(土)発売",
-            "candidate_price": 11980.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0HHRF1NYC",
-            "candidate_title": "【シュリンク付き未開封BOX】遊 戯 王 ORIGINAL ARTWORK COLLECTION オリジナル アートワーク コレクション BOX※24BOXご購入で未開封カートンにて発送",
-            "candidate_price": 12990.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0HMKDL54S",
-            "candidate_title": "オリジナルアートワークコレクション 遊 戯 王 ORIGINA ARTWORK COLLECTION パック 2026年9月26日(土)発売 オリジナルフィルム付き",
-            "candidate_price": 6800.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          }
-        ]
-      },
-      {
         "rank": 28,
-        "title": "【クーポン利用で1個17%、2個22%OFF】磁石ブロック マインクラフト風 レゴ互換 マイクラ風 マグネットキューブ マイクラ風 知育玩具 誕生日プレゼント クリスマス 入園ギフト 卒業プレゼント マグネット 磁石 ブロック おもちゃ クリスマスプレゼント",
+        "title": "メロジョイ Mellojoy ミニランド ミニ ブラインドボックス スクイーズ おもちゃ プレゼント ギフト 人気 ストレス発散 即納 正規品 公式 902121",
         "reason": "no_guardrail_pass",
         "candidates": [
           {
-            "asin": "B0DMNXMQTB",
-            "candidate_title": "Vexolite マグネットブロック マイクラ風 磁石ブロック 積み木 マグネット 立体パズル 知育玩具 マグネットパズル 小学生 おもちゃ 誕生日 入園 卒園 ギフト クリスマスプレゼント 212PCS 農場",
-            "candidate_price": 5999.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0FPVYSJ55",
-            "candidate_title": "マグネットブロッククリスマステーマ マイクラ風 磁石ブロックセット 2cm 知育玩具 小学生 おもちゃ 誕生日 入園 卒園 ギフト クリスマスプレゼント (150PCS)",
-            "candidate_price": 4319.0,
+            "asin": "B0HG48G9TR",
+            "candidate_title": "メロジョイ　ミニランド　肉球 [並行輸入品]",
+            "candidate_price": 6498.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
             "price_ok": true
           },
           {
-            "asin": "B0DMNWZ413",
-            "candidate_title": "Vexolite マグネットブロック マイクラ風 磁石ブロック 積み木 立体パズル 知育玩具 マグネットパズル 小学生 おもちゃ 誕生日 入園 卒園 ギフト クリスマスプレゼント 80PCS (木の家)",
-            "candidate_price": 3099.0,
+            "asin": "B0H4GB68YH",
+            "candidate_title": "【1ピース】めろジョイ ミニランド ブラインドボックス ミニチュア かわいい おもちゃ コレクション",
+            "candidate_price": 7980.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0HLXBWDZD",
+            "candidate_title": "メロジョイ スクイーズ ミニランド ブラインドボックス [並行輸入品]",
+            "candidate_price": 7980.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
@@ -87,31 +97,31 @@
       },
       {
         "rank": 27,
-        "title": "【おもちゃ2点で10%オフクーポン配布中！】【2026年10月31日発売 予約商品】ちいかわフォンすまーと",
+        "title": "積み木 音が鳴る 音いっぱいつみき ボリュームセット 名入れ無料 25ピース すべて音入り 木箱付き 1歳 誕生日プレゼント 木のおもちゃ 出産祝い エドインター GENI 木製 知育玩具 赤ちゃん 男の子 女の子 孫 クリスマス",
         "reason": "no_guardrail_pass",
         "candidates": [
           {
-            "asin": "B0HGKP7LWL",
-            "candidate_title": "[バンダイ(BANDAI)] ちいかわフォンすまーと スペシャルセット（特典：『きらりんドロップステッカー』付き） 対象年齢 6 才以上",
-            "candidate_price": 17000.0,
+            "asin": "B07X83J3T5",
+            "candidate_title": "ピープル 純国産 お米のどうぶつつみき いろどり KM-029",
+            "candidate_price": 5891.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
-            "price_ok": true
+            "price_ok": false
           },
           {
-            "asin": "B0FNM5155P",
-            "candidate_title": "[バンダイ(BANDAI)] ちいかわフォン ポシェット付きDXセット 対象年齢 6 才以上",
-            "candidate_price": 12300.0,
+            "asin": "B00AYPDB2K",
+            "candidate_title": "BRIO 木製レール 知育玩具 カラーつみき２５ピース 対象年齢1歳~ 30114 誕生日 クリスマス プレゼント 室内遊び 男の子 女の子 脳トレ",
+            "candidate_price": 1936.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
-            "price_ok": true
+            "price_ok": false
           },
           {
-            "asin": "B0D59WRLY6",
-            "candidate_title": "[バンダイ(BANDAI)] ちいかわフォン 【日本おもちゃ大賞2024デジタル部門大賞】 対象年齢 6才以上",
-            "candidate_price": 10800.0,
+            "asin": "B087PGZT5V",
+            "candidate_title": "Edutē エデュテ baby&kids ベビーアンドキッズ SOUNDブロックスLarge 1歳からの誕生日プレゼントに!音が鳴る木製つみき | 積み木 1歳 2歳 1歳半 一歳 誕生日プレゼント 積木 おもちゃ 赤ちゃん 男の子 女の子 木製玩具 木のおもちゃ 木の玩具 知育玩具 音の鳴る積み木 振って楽しむ 早期教育 視覚と聴覚の連動 安心安全 スタンダード",
+            "candidate_price": 11000.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
@@ -120,32 +130,66 @@
         ]
       },
       {
-        "rank": 25,
-        "title": "ポケモンカードゲーム メガブレイブ メガシンフォニア BOX MEGA 拡張パック 新品未開封 シュリンク付き",
+        "rank": 26,
+        "title": "【タイムセール 全品25%,2点30%OFF】マグネット ブロック マインクラフト 磁石 100-1000pcsセット ランダム発送 2cmサイズ 通常版/強力版/超強力の3種類から選べる マイクラ風ミニフィグ8-107体付 プレゼント袋付 収納ボックス付 光るブロック付 キューブ おもちゃ",
         "reason": "no_guardrail_pass",
         "candidates": [
           {
-            "asin": "B0F18J2CJF",
-            "candidate_title": "ポケモンカードゲーム MEGA 拡張パック メガブレイブ BOX",
-            "candidate_price": 5412.0,
+            "asin": "B0G5K9LBHT",
+            "candidate_title": "Vexolite 180PCS マグネットブロック マイクラ風 3.0アップグレード強力マグネット 光るブロック 専用収納ケース付き デラックスセット 磁石ブロック 知育玩具 積み木 立体パズル 小学生 おもちゃ 男の子 女の子 誕生日 クリスマスプレゼント",
+            "candidate_price": 5599.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0DMNXMQTB",
+            "candidate_title": "Vexolite マグネットブロック マイクラ風 磁石ブロック 積み木 マグネット 立体パズル 知育玩具 マグネットパズル 小学生 おもちゃ 誕生日 入園 卒園 ギフト クリスマスプレゼント 212PCS 農場",
+            "candidate_price": 7299.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0G5K95R2F",
+            "candidate_title": "Vexolite 280PCS マグネットブロック マイクラ風 3.0アップグレード強力マグネット 光るブロック 専用収納ケース付き デラックスセット 磁石ブロック 知育玩具 積み木 立体パズル 小学生 おもちゃ 男の子 女の子 誕生日 クリスマスプレゼント",
+            "candidate_price": 8599.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
             "price_ok": false
-          },
+          }
+        ]
+      },
+      {
+        "rank": 23,
+        "title": "【正規品＼楽天1位／】 かみかみチキン 歯固め 手にはめる歯がため シリコン 食品グレード おもちゃ 歯がため 安心素材 はがため 赤ちゃん 新生児 ベビー BPAフリー 3ヶ月 0歳 1歳 おしゃぶり ファーストトイ かわいい マッサージ プレゼント 出産祝い",
+        "reason": "no_guardrail_pass",
+        "candidates": [
           {
-            "asin": "B0F189YH8W",
-            "candidate_title": "ポケモンカードゲーム MEGA 拡張パック メガシンフォニア BOX",
-            "candidate_price": 5412.0,
+            "asin": "B0BFDVQBXD",
+            "candidate_title": "【正規品】 かみかみチキン 歯固め シリコン おしゃぶり 歯がため バーピー 食品グレード おもちゃ 歯固め 安心素材 はがため 赤ちゃん 新生児 ベビー BPAフリー 0歳 3ヵ月 1歳 (ベージュ)",
+            "candidate_price": 1300.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
-            "price_ok": false
+            "price_ok": true
           },
           {
-            "asin": "B0GP928YDZ",
-            "candidate_title": "ポケモンカードゲーム MEGA 拡張パック ストームエメラルダ BOX",
-            "candidate_price": 7800.0,
+            "asin": "B0BFDTNGZY",
+            "candidate_title": "【正規品】 かみかみチキン 歯固め シリコン おしゃぶり 歯がため バーピー 食品グレード おもちゃ 歯固め 安心素材 はがため 赤ちゃん 新生児 ベビー BPAフリー 0歳 3ヵ月 1歳 (ブルー)",
+            "candidate_price": 1300.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0D9T689B2",
+            "candidate_title": "【保育士が監修】 歯固め 赤ちゃん 歯がため 新生児 はがため おもちゃ おしゃぶり 指しゃぶり シリコン 洗える ベビー 可愛い (ベージュ) | 歯がため 歯固め かみかみ はがため 歯かため はかため 赤ちゃん 新生児 チキン ベビー 安心素材 カミカミ シリコン BPAフリー 0歳 1歳 チキン おしゃぶり 落とさない かわいい 乳幼児 ベビー 指しゃぶり",
+            "candidate_price": 980.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
@@ -155,65 +199,99 @@
       },
       {
         "rank": 21,
-        "title": "9月16日発売 予約 ばら売り 5パック/10パック/15パック レビュー特典付き ポケモンカードゲーム MEGA 拡張パック 30th CELEBRATION BOX 30周年 セレブレーション BOX ボックス",
+        "title": "高評価★4.7【累計48万台突破】光るホイール MOVEGU_公式 キックスクーター 【4段階高さ調整】 キックボード 子供用 三輪車 軽量 頑丈 方向変換 安定 折りたたみ 持ち運び便利 後輪ブレーキ 誕生日 【お試し返品可能】",
         "reason": "no_guardrail_pass",
         "candidates": [
           {
-            "asin": "B0GXCRBL5J",
-            "candidate_title": "ポケモンカードゲーム MEGA 拡張パック 30th CELEBRATION BOX",
-            "candidate_price": 7216.0,
+            "asin": "B0CCYMV1T1",
+            "candidate_title": "Gotrax 3輪 キックボード 子供 軽量かつ頑丈 光るLEDタイヤ 3段階高さ調整 3歳以上 静音 後輪ブレーキ 滑り止めデッキ ギフトに最適 | 持ち運び便利 方向転換 耐荷重50kg 安定 コンパクト おもちゃ 誕生日/クリスマス/入学/新年プレゼント",
+            "candidate_price": 4980.0,
             "brand_match": false,
-            "model_token_match": true,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0GX9FJ4G5",
+            "candidate_title": "*安心の日本企業*SFUN キックスクーター 子供用 キックボード LED 光るホイール 3階段調節可能 組み立てが簡単 足踏み式 耐荷重80kg 誕生日プレゼント (ブラック)",
+            "candidate_price": 4580.0,
+            "brand_match": false,
+            "model_token_match": false,
             "spec_match": false,
             "price_ok": false
           },
           {
-            "asin": "B0H5QVJMP6",
-            "candidate_title": "【バラパック】MEGA 拡張パック 30th CELEBRATION 【ばら売り】 (10パックセット)",
-            "candidate_price": 9780.0,
+            "asin": "B0DNLGTY5R",
+            "candidate_title": "Fkstyle【20cmビッグホイールで安定走行！】キックボード キックスクーター 折りたたみ式 高さ3段階調節 スタンド付き ブレーキ搭載 衝撃吸収サスペンション [並行輸入品]",
+            "candidate_price": 6480.0,
             "brand_match": false,
-            "model_token_match": true,
+            "model_token_match": false,
             "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0H89JMTZ2",
-            "candidate_title": "【シュリンク付き未開封BOX】MEGA 拡張パック 30th CELEBRATION BOX",
-            "candidate_price": 31780.0,
-            "brand_match": false,
-            "model_token_match": true,
-            "spec_match": false,
-            "price_ok": false
+            "price_ok": true
           }
         ]
       },
       {
         "rank": 20,
-        "title": "【正規品＼楽天1位／】 かみかみチキン 歯固め 手にはめる歯がため シリコン 食品グレード おもちゃ 歯がため 安心素材 はがため 赤ちゃん 新生児 ベビー BPAフリー 3ヶ月 0歳 1歳 おしゃぶり ファーストトイ かわいい マッサージ プレゼント 出産祝い",
+        "title": "再入荷完了＼楽天週間1位／【SNSで話題！！驚きの安定感】CANPA 鉄棒 子供用 ぶら下がり鉄棒 折りたたみ 自立式 室内 子供 コンパクト 家庭用 耐荷重約100kg 高さ調節 てつぼう さか上がり キッズ ぶらさがり 屋外 ブランコ 体操 運動 小学生 誕生日 ギフト クリスマス",
         "reason": "no_guardrail_pass",
         "candidates": [
           {
-            "asin": "B0BFDVQBXD",
-            "candidate_title": "【正規品】 かみかみチキン 歯固め シリコン おしゃぶり 歯がため バーピー 食品グレード おもちゃ 歯固め 安心素材 はがため 赤ちゃん 新生児 ベビー BPAフリー 0歳 3ヵ月 1歳 (ベージュ)",
-            "candidate_price": 1000.0,
+            "asin": "B0DF4RN28C",
+            "candidate_title": "【累計販売30000台】 鉄棒 室内 子供 屋外 家庭用 大人 高さ12段階 折りたたみ 耐荷重(約)100kg 錆びない コンパクト収納 折り畳み | 体操 てつぼう 逆上がり テツボウ ぶら下がり 日本語説明書付き 全10カラー seathestars (ベージュ)",
+            "candidate_price": 6480.0,
+            "brand_match": false,
+            "model_token_match": true,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0F59FP69B",
+            "candidate_title": "【アワード受賞・人気ブランド】 YouTen(ユーテン) さか上がり 鉄棒 調整 子供用 てつぼう 高さ可能 折り畳み キッズ 室内 (キッズ 鉄棒ベージュ)",
+            "candidate_price": 6980.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
             "price_ok": true
           },
           {
-            "asin": "B0BFDTNGZY",
-            "candidate_title": "【正規品】 かみかみチキン 歯固め シリコン おしゃぶり 歯がため バーピー 食品グレード おもちゃ 歯固め 安心素材 はがため 赤ちゃん 新生児 ベビー BPAフリー 0歳 3ヵ月 1歳 (ブルー)",
-            "candidate_price": 1000.0,
+            "asin": "B09ZNQCY53",
+            "candidate_title": "【累計販売30000台】 鉄棒 室内 子供 屋外 家庭用 大人 高さ12段階 折りたたみ 耐荷重(約)100kg 錆びない コンパクト収納 折り畳み | 体操 てつぼう 逆上がり テツボウ ぶら下がり 日本語説明書付き 全10カラー seathestars (グレー)",
+            "candidate_price": 6480.0,
+            "brand_match": false,
+            "model_token_match": true,
+            "spec_match": false,
+            "price_ok": true
+          }
+        ]
+      },
+      {
+        "rank": 12,
+        "title": "【全品P5倍!21時から3時間限定】三輪車 5in1 BTM 子供用三輪車 三輪車のりもの セーフティーガードなし/付き 2タイプ 押し棒付き 安全バー付き おもちゃ 乗用玩具 幼児用 キッズバイク 誕生日ギフト 贈り物 プレゼント",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B0D17LZLXW",
+            "candidate_title": "PYKES PEAK(パイクスピーク) 三輪車 子供用 キッズ 1歳半から3歳まで 誕生日プレゼント コンパクト 超軽量 ベビーカー バランス 乗り物 おもちゃ ハンドル プレゼント スカイブルー",
+            "candidate_price": 5980.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
             "price_ok": true
           },
           {
-            "asin": "B0BFDSKRNW",
-            "candidate_title": "【正規品】 かみかみチキン 歯固め シリコン おしゃぶり 歯がため バーピー 食品グレード おもちゃ 歯固め 安心素材 はがため 赤ちゃん 新生児 ベビー BPAフリー 0歳 3ヵ月 1歳 (ピンク)",
-            "candidate_price": 1000.0,
+            "asin": "B09LQXYDYY",
+            "candidate_title": "ズーブリー 三輪車 2-6歳子供用 5in1キッズバイク 折りたたみ ハンドル・シート高さ調整可能 へんしんバイク 子供自転車 ベビーバイク 持ち運び便利",
+            "candidate_price": 6499.0,
+            "brand_match": false,
+            "model_token_match": true,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0D5CF88LJ",
+            "candidate_title": "BTM 子供用三輪車 5n1新色 三輪車のりもの 押し棒付き ランニング 三輪車 自転車 おもちゃ 乗用玩具 おしゃれ 1歳-5歳 幼児用 プレゼント お祝い ギフト(ベージュカメオ)",
+            "candidate_price": 8450.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
@@ -222,19 +300,78 @@
         ]
       },
       {
-        "rank": 16,
-        "title": "【累計66,340台突破！】三輪車 ロック付き 折りたたみ BTM 手押し棒付き 安全ストッパー かじとり サンシェード 三輪車カバー 軽量 おしゃれ 自転車 バランスバイク キックバイク 9in1 赤ちゃん プレゼント 誕生日 ギフト箱入り 6ヶ月~6歳まで【2年保証】",
+        "rank": 9,
+        "title": "【辻ちゃんネル紹介記念★2,000円クーポン】 モルビー 三輪車 手押し棒付き 折りたたみ 三輪車 1歳 2歳 3歳 赤ちゃん 手押し かじとり キックバイク 10段階変形 10in1 5点式ハーネス UVカット サンシェード 軽量 おしゃれ 室内OK 子供 0歳～6歳まで MORBY",
         "reason": "no_guardrail_pass",
         "candidates": [
           {
-            "asin": "B0G525N7LB",
-            "candidate_title": "【colulu】 モルビー 三輪車 手押し棒付き 折りたたみ キックバイク 1歳 2歳 3歳 10in1 子供 室内 MORBY (ベージュ)",
-            "candidate_price": 14980.0,
+            "asin": "B0G52587KC",
+            "candidate_title": "【colulu】 モルビー 三輪車 手押し棒付き 折りたたみ キックバイク 1歳 2歳 3歳 10in1 子供 室内 MORBY (ブラック)",
+            "candidate_price": 17980.0,
+            "brand_match": false,
+            "model_token_match": true,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0G525622N",
+            "candidate_title": "【colulu】 モルビー 三輪車 手押し棒付き 折りたたみ キックバイク 1歳 2歳 3歳 10in1 子供 室内 MORBY (グレー) | 10通りに変身,工具不要,おしゃれ,静音タイヤ,軽量,サンシェード付,手押し,男の子,女の子,0歳〜6歳,ベビー,誕生日,プレゼント,クリスマス,出産祝い,おもちゃ",
+            "candidate_price": 17980.0,
+            "brand_match": false,
+            "model_token_match": true,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0D17LZLXW",
+            "candidate_title": "PYKES PEAK(パイクスピーク) 三輪車 子供用 キッズ 1歳半から3歳まで 誕生日プレゼント コンパクト 超軽量 ベビーカー バランス 乗り物 おもちゃ ハンドル プレゼント スカイブルー",
+            "candidate_price": 5980.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          }
+        ]
+      },
+      {
+        "rank": 8,
+        "title": "【POP MART 公式ストア】THE MONSTERS CAT MODE ON シリーズ ぬいぐるみキーホルダー　 labubu ラブブ らぶぶ人形 ブラインドボックス フィギュア おもちゃ ガチャガチャ プラモデル ギフト 推し活 ポップマート",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B0HK426YFR",
+            "candidate_title": "【POP MART 公式ストア】THE MONSTERS CAT MODE ON シリーズ ぬいぐるみキーホルダー 【1ピース】 | らぶぶ　ラブブ　labubu ポップマート ガチャガチャ ブラインド ボックス フィギュア プラモデル プレミアム おもちゃ PVC ソフビ オリジナル キャラクター 誕生日 プレゼント",
+            "candidate_price": 3520.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
             "price_ok": false
           },
+          {
+            "asin": "B0DZ6QLR7S",
+            "candidate_title": "【POP MART 公式ストア】THE MONSTERS Big into Energy シリーズ ぬいぐるみペンダント 【1ピース】 エナジーラブブ labubu ラブブ らぶぶ ポップマート ブラインドボックス フィギュア おもちゃ ガチャガチャ プラモデル ギフト 推し活 ポプマ 正規品",
+            "candidate_price": 2750.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          },
+          {
+            "asin": "B0HK3Z7X3K",
+            "candidate_title": "【POP MART 公式ストア】THE MONSTERS CAT MODE ON シリーズ ぬいぐるみキーホルダー【3ピース】 | らぶぶ　ラブブ　labubu ポップマート ガチャガチャ ブラインド ボックス フィギュア プラモデル プレミアム おもちゃ PVC ソフビ オリジナル キャラクター 誕生日 プレゼント",
+            "candidate_price": 10560.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          }
+        ]
+      },
+      {
+        "rank": 7,
+        "title": "【P5倍！累計66,340台突破！】三輪車 ロック付き 折りたたみ BTM 手押し棒付き 安全ストッパー かじとり サンシェード 三輪車カバー 軽量 おしゃれ 自転車 バランスバイク キックバイク 9in1 赤ちゃん プレゼント 誕生日 ギフト箱入り 6ヶ月~6歳まで【2年保証】",
+        "reason": "no_guardrail_pass",
+        "candidates": [
           {
             "asin": "B0F938SBQ9",
             "candidate_title": "BTM 子供用三輪車 折りたたみカバー 手押し棒付き 7in1 バイク 安全ベルト 三輪車のりもの 超軽量 座面回転 ハンドル調整可能 自転車 おもちゃ 乗用玩具 幼児用 赤ちゃん 組み立て簡単 誕生日プレゼント",
@@ -245,9 +382,18 @@
             "price_ok": false
           },
           {
-            "asin": "B0D4M5KWTF",
-            "candidate_title": "Bacany 子供用三輪車 7in1 三輪車 ステップ付き 折りたたみ 手押し棒 おしゃれ 1歳-6歳 コンパクト 自転車 おもちゃ 乗用玩具 幼児用 キッズバイク プレゼント おもちゃ 調整可能 お祝い ギフト シートベルト付き (グレー)",
-            "candidate_price": 10380.0,
+            "asin": "B0CK7Z7LCN",
+            "candidate_title": "BTM 子供用三輪車 折りたたみカバー 手押し棒付き 7in1 バイク 安全ベルト 三輪車のりもの 超軽量 座面回転 ハンドル調整可能 自転車 おもちゃ 乗用玩具 幼児用 赤ちゃん 組み立て簡単 誕生日プレゼント",
+            "candidate_price": 12980.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          },
+          {
+            "asin": "B0F9W4GTMP",
+            "candidate_title": "BTM 子供用三輪車 4in1 自転車 オリジナル 押し棒付き 安全バー付き キックボード おもちゃ 乗用玩具 幼児用 軽量 キッズバイク",
+            "candidate_price": 9380.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
@@ -256,57 +402,23 @@
         ]
       },
       {
-        "rank": 13,
-        "title": "再入荷完了＼楽天週間1位／【SNSで話題！！驚きの安定感】CANPA 鉄棒 子供用 ぶら下がり鉄棒 折りたたみ 自立式 室内 子供 コンパクト 家庭用 耐荷重約100kg 高さ調節 てつぼう さか上がり キッズ ぶらさがり 屋外 ブランコ 体操 運動 小学生 誕生日 ギフト クリスマス",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0F59FP69B",
-            "candidate_title": "【アワード受賞・人気ブランド】 YouTen(ユーテン) さか上がり 鉄棒 調整 子供用 てつぼう 高さ可能 折り畳み キッズ 室内 (キッズ 鉄棒ベージュ)",
-            "candidate_price": 5980.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0DF4RN28C",
-            "candidate_title": "【累計販売30000台】 鉄棒 室内 子供 屋外 家庭用 大人 高さ12段階 折りたたみ 耐荷重(約)100kg 錆びない コンパクト収納 折り畳み | 体操 てつぼう 逆上がり テツボウ ぶら下がり 日本語説明書付き 全10カラー seathestars (ベージュ)",
-            "candidate_price": 6010.0,
-            "brand_match": false,
-            "model_token_match": true,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0DB1CLYQS",
-            "candidate_title": "DABADA（ダバダ） 折りたたみ 鉄棒 耐荷重(約)100kg 5段階調節可 室内使用可 子供用 (鉄棒単体, ベージュ)",
-            "candidate_price": 6850.0,
-            "brand_match": false,
-            "model_token_match": true,
-            "spec_match": false,
-            "price_ok": true
-          }
-        ]
-      },
-      {
-        "rank": 9,
+        "rank": 6,
         "title": "【在庫あり！】はむにぎり マスコット ハムスター ねずみ ぬいぐるみ マスコット もちもち ふわふわ ぬいどり ぬい活 手のりサイズ 動物 アニマル 癒し かわいい",
         "reason": "no_guardrail_pass",
         "candidates": [
           {
-            "asin": "B0GC4MQL8N",
-            "candidate_title": "りぶはあと マスコット はむにぎり おもち (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-11",
-            "candidate_price": 2108.0,
+            "asin": "B0GC3H61ZX",
+            "candidate_title": "りぶはあと マスコット はむにぎり みたらし (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-43",
+            "candidate_price": 1998.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
             "price_ok": true
           },
           {
-            "asin": "B0GC4J1BR4",
-            "candidate_title": "りぶはあと マスコット はむにぎり ごまきち (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-72",
-            "candidate_price": 1762.0,
+            "asin": "B0GC4MQL8N",
+            "candidate_title": "りぶはあと マスコット はむにぎり おもち (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-11",
+            "candidate_price": 2108.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
@@ -324,135 +436,33 @@
         ]
       },
       {
-        "rank": 8,
-        "title": "【辻ちゃんネル紹介記念★2,000円クーポン】 モルビー 三輪車 手押し棒付き 折りたたみ 三輪車 1歳 2歳 3歳 赤ちゃん 手押し かじとり キックバイク 10段階変形 10in1 5点式ハーネス UVカット サンシェード 軽量 おしゃれ 室内OK 子供 0歳～6歳まで MORBY",
+        "rank": 3,
+        "title": "予約 2026年11月【正規品】ボンボンドロップシール ちいかわ こびとづかん mofusand mini サンリオ ハローキティ マイメロ クロミ キキララ ウサハナ 90s タイルシール ヒョウ ヒョウ(ピンク) ハイビスカス シール帳",
         "reason": "no_guardrail_pass",
         "candidates": [
           {
-            "asin": "B0G52587KC",
-            "candidate_title": "【colulu】 モルビー 三輪車 手押し棒付き 折りたたみ キックバイク 1歳 2歳 3歳 10in1 子供 室内 MORBY (ブラック)",
-            "candidate_price": 14980.0,
-            "brand_match": false,
-            "model_token_match": true,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0G525622N",
-            "candidate_title": "【colulu】 モルビー 三輪車 手押し棒付き 折りたたみ キックバイク 1歳 2歳 3歳 10in1 子供 室内 MORBY (グレー)",
-            "candidate_price": 14980.0,
-            "brand_match": false,
-            "model_token_match": true,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B09LQXYDYY",
-            "candidate_title": "ズーブリー 三輪車 2-6歳子供用 5in1キッズバイク 折りたたみ ハンドル・シート高さ調整可能 へんしんバイク 子供自転車 ベビーバイク 持ち運び便利",
-            "candidate_price": 5489.0,
+            "asin": "B0H74PNRSR",
+            "candidate_title": "クーリア シール パキパキタイルシール こびとづかん 集合 14009",
+            "candidate_price": 660.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
             "price_ok": false
-          }
-        ]
-      },
-      {
-        "rank": 7,
-        "title": "【先着77名様9%OFFクーポン】三輪車 5in1 BTM 子供用三輪車 三輪車のりもの セーフティーガードなし/付き 2タイプ 押し棒付き 安全バー付き おもちゃ 乗用玩具 幼児用 キッズバイク 誕生日ギフト 贈り物 プレゼント",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B09LQXYDYY",
-            "candidate_title": "ズーブリー 三輪車 2-6歳子供用 5in1キッズバイク 折りたたみ ハンドル・シート高さ調整可能 へんしんバイク 子供自転車 ベビーバイク 持ち運び便利",
-            "candidate_price": 5489.0,
-            "brand_match": false,
-            "model_token_match": true,
-            "spec_match": false,
-            "price_ok": true
           },
           {
-            "asin": "B0C3HBNQCZ",
-            "candidate_title": "BTM子供用三輪車 5in1 三輪車 押し棒付き ランニング バイク 自転車 おもちゃ 乗用玩具 組み立て おしゃれ 1歳-5歳 幼児用 プレゼント お祝い ギフト(ミント×ブラウン)",
-            "candidate_price": 7182.0,
-            "brand_match": false,
-            "model_token_match": true,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0H4LDB74T",
-            "candidate_title": "Nijakise 子供用 三輪車 5in1三輪車 ベビーカー 手押し棒付き 手押し棒調整可能 サンシェード付き 組み立て式 6ヶ月～6歳 おもちゃ プレゼント",
-            "candidate_price": 8480.0,
-            "brand_match": false,
-            "model_token_match": true,
-            "spec_match": false,
-            "price_ok": true
-          }
-        ]
-      },
-      {
-        "rank": 5,
-        "title": "ポケモンカードゲーム MEGA 30th CELEBRATION カードセット 選べる",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0GXCTRZ8L",
-            "candidate_title": "ポケモンカードゲーム MEGA 30th CELEBRATION カードセット サルノリ・ヒバニー・メッソン",
-            "candidate_price": 1200.0,
-            "brand_match": false,
-            "model_token_match": true,
-            "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0GXCPF84C",
-            "candidate_title": "ポケモンカードゲーム MEGA 30th CELEBRATION カードセット モクロー・ニャビー・アシマリ",
-            "candidate_price": 1200.0,
-            "brand_match": false,
-            "model_token_match": true,
-            "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0GXCX36HP",
-            "candidate_title": "ポケモンカードゲーム MEGA 30th CELEBRATION カードセット キモリ・アチャモ・ミズゴロウ",
-            "candidate_price": 1200.0,
-            "brand_match": false,
-            "model_token_match": true,
-            "spec_match": false,
-            "price_ok": false
-          }
-        ]
-      },
-      {
-        "rank": 4,
-        "title": "【POP MART 公式ストア】THE MONSTERS CAT MODE ON シリーズ ぬいぐるみキーホルダー　 labubu ラブブ らぶぶ人形 ブラインドボックス フィギュア おもちゃ ガチャガチャ プラモデル ギフト 推し活 ポップマート",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0HK426YFR",
-            "candidate_title": "【POP MART 公式ストア】THE MONSTERS CAT MODE ON シリーズ ぬいぐるみキーホルダー 【1ピース】 | らぶぶ　ラブブ　labubu ポップマート ガチャガチャ ブラインド ボックス フィギュア プラモデル プレミアム おもちゃ PVC ソフビ オリジナル キャラクター 誕生日 プレゼント",
-            "candidate_price": 3520.0,
-            "brand_match": false,
+            "asin": "B0HCXW4PQT",
+            "candidate_title": "オーロラぷくっとシール サンリオキャラクターズ【星座】ぷっくり 立体シール 001836-54",
+            "candidate_price": 544.0,
+            "brand_match": true,
             "model_token_match": false,
             "spec_match": false,
-            "price_ok": true
+            "price_ok": false
           },
           {
-            "asin": "B0DZ6QLR7S",
-            "candidate_title": "【POP MART 公式ストア】THE MONSTERS Big into Energy シリーズ ぬいぐるみペンダント 【1ピース】 エナジーラブブ labubu ラブブ らぶぶ ポップマート ブラインドボックス フィギュア おもちゃ ガチャガチャ プラモデル ギフト 推し活 ポプマ 正規品",
-            "candidate_price": 2750.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0HK3YNPXZ",
-            "candidate_title": "【POP MART 公式ストア】THE MONSTERS CAT MODE ON シリーズ ぬいぐるみキーホルダー 【アソートボックス 9ピース】 | らぶぶ　ラブブ　labubu ポップマート ガチャガチャ ブラインド ボックス フィギュア プラモデル プレミアム おもちゃ PVC ソフビ オリジナル キャラクター 誕生日 プレゼント",
-            "candidate_price": 31680.0,
-            "brand_match": false,
+            "asin": "B0HCY2FCSK",
+            "candidate_title": "オーロラぷくっとシール サンリオキャラクターズ【ねこみみメイドカフェ】ぷっくり 立体シール 0018",
+            "candidate_price": 505.0,
+            "brand_match": true,
             "model_token_match": false,
             "spec_match": false,
             "price_ok": false
@@ -460,30 +470,64 @@
         ]
       }
     ],
-    "title_fuzzy_page_matches": []
+    "title_fuzzy_page_matches": [
+      {
+        "rank": 14,
+        "title": "レゴ クラシック 黄色のアイデアボックス スペシャル 10698(1セット)【レゴ(LEGO)】[おもちゃ 玩具 プレゼント 4歳 5歳 6歳]",
+        "item_code": "netbaby:10015402",
+        "asin": "B00PY3EYQO",
+        "match_method": "title_fuzzy",
+        "candidate_title": "レゴ(LEGO) クラシック 黄色のアイデアボックス ＜スペシャル＞ 10698 おもちゃ 男の子 女の子 | 玩具 誕生日 プレゼント ブロック 知育 4歳 5歳 6歳 7歳 ごっこ遊び おままごと 子供 790ピース",
+        "brand_match": true,
+        "rakuten_brand": "レゴ",
+        "candidate_brand": "レゴ",
+        "model_token_match": true,
+        "common_tokens": [
+          "10698"
+        ],
+        "spec_match": false,
+        "price_ok": true,
+        "rakuten_price": 6120.0,
+        "candidate_price": 5264.0,
+        "image_sim": null,
+        "vision_gate_mode": "shadow",
+        "vision_gate_passed": true,
+        "reason": "already_covered"
+      },
+      {
+        "rank": 5,
+        "title": "【楽天1位連続受賞】 【2026年限定カラー】 ストライダー スポーツモデル 12インチ MOSS モス 2年保証 キックバイク キッズバイク 子供用 ペダルなし 自転車 誕生日 クリスマス プレゼント ギフト 男の子 女の子 こども 1歳 2歳 3歳 バランスバイク",
+        "item_code": "mamegyorai:10047560",
+        "asin": "B0GNZD4NST",
+        "match_method": "title_fuzzy",
+        "candidate_title": "ストライダー スポーツモデル (STRIDER Sport) 12インチ 車体 モス 日本正規品",
+        "brand_match": true,
+        "rakuten_brand": "ストライダー",
+        "candidate_brand": "ストライダー",
+        "model_token_match": false,
+        "common_tokens": [],
+        "spec_match": true,
+        "price_ok": true,
+        "rakuten_price": 16940.0,
+        "candidate_price": 16940.0,
+        "image_sim": null,
+        "vision_gate_mode": "shadow",
+        "vision_gate_passed": true
+      }
+    ]
   },
   "genre_gate_enabled": true,
   "genre_gate_dropped": 0,
   "genre_gate_dropped_items": [],
   "yahoo_jan": {
-    "yahoo_jan_candidates_before_limit": 13,
-    "yahoo_jan_input": 13,
+    "yahoo_jan_candidates_before_limit": 14,
+    "yahoo_jan_input": 14,
     "yahoo_jan_adopted": 0,
     "yahoo_jan_entries": [
       {
-        "rank": 29,
-        "title": "9月26日発売 ばら売り 5パック/10パック レビュー特典付き 遊戯王 ORIGINAL ARTWORK COLLECTION ボックス BOX オリジナル アートワーク コレクション",
-        "query": "ばら売り 5パック/10パック 遊戯王 ORIGINAL",
-        "jan": "",
-        "votes": {},
-        "asin": "",
-        "adopted": false,
-        "reason": "no_jan_in_hits"
-      },
-      {
         "rank": 28,
-        "title": "【クーポン利用で1個17%、2個22%OFF】磁石ブロック マインクラフト風 レゴ互換 マイクラ風 マグネットキューブ マイクラ風 知育玩具 誕生日プレゼント クリスマス 入園ギフト 卒業プレゼント マグネット 磁石 ブロック おもちゃ クリスマスプレゼント",
-        "query": "磁石ブロック マインクラフト風 マグネットキューブ",
+        "title": "メロジョイ Mellojoy ミニランド ミニ ブラインドボックス スクイーズ おもちゃ プレゼント ギフト 人気 ストレス発散 即納 正規品 公式 902121",
+        "query": "メロジョイ Mellojoy ブラインドボックス 902121",
         "jan": "",
         "votes": {},
         "asin": "",
@@ -492,79 +536,31 @@
       },
       {
         "rank": 27,
-        "title": "【おもちゃ2点で10%オフクーポン配布中！】【2026年10月31日発売 予約商品】ちいかわフォンすまーと",
-        "query": "ちいかわフォンすまーと",
-        "jan": "",
+        "title": "積み木 音が鳴る 音いっぱいつみき ボリュームセット 名入れ無料 25ピース すべて音入り 木箱付き 1歳 誕生日プレゼント 木のおもちゃ 出産祝い エドインター GENI 木製 知育玩具 赤ちゃん 男の子 女の子 孫 クリスマス",
+        "query": "積み木 音が鳴る ボリュームセット",
+        "jan": "4941746825051",
         "votes": {
-          "4580872232540": 2,
-          "4580872232564": 2,
-          "4580872232502": 2,
-          "4580872232489": 2,
-          "4580872232533": 2
+          "4941746825051": 14,
+          "4941746806371": 1,
+          "4941746822746": 1
         },
         "asin": "",
         "adopted": false,
-        "reason": "too_few_votes"
+        "reason": "amazon_no_jan_match",
+        "item_code": "gajumarunoki:10001116"
       },
       {
-        "rank": 25,
-        "title": "ポケモンカードゲーム メガブレイブ メガシンフォニア BOX MEGA 拡張パック 新品未開封 シュリンク付き",
-        "query": "ポケモンカードゲーム メガブレイブ メガシンフォニア",
+        "rank": 26,
+        "title": "【タイムセール 全品25%,2点30%OFF】マグネット ブロック マインクラフト 磁石 100-1000pcsセット ランダム発送 2cmサイズ 通常版/強力版/超強力の3種類から選べる マイクラ風ミニフィグ8-107体付 プレゼント袋付 収納ボックス付 光るブロック付 キューブ おもちゃ",
+        "query": "マグネット ブロック マインクラフト 磁石",
         "jan": "",
-        "votes": {
-          "4521329431185": 7,
-          "4521329431161": 6,
-          "4521329374635": 1,
-          "4521329362342": 1
-        },
+        "votes": {},
         "asin": "",
         "adopted": false,
-        "reason": "close_second",
-        "tiebreak": [
-          {
-            "jan": "4521329431185",
-            "votes": 7,
-            "asin": "B0F189YH8W",
-            "amazon_title": "ポケモンカードゲーム MEGA 拡張パック メガシンフォニア BOX",
-            "identity_ok": false,
-            "core_missing": [
-              "メガブレイブ"
-            ],
-            "rakuten_set": false,
-            "amazon_set": false,
-            "tiebreak_ok": true
-          },
-          {
-            "jan": "4521329431161",
-            "votes": 6,
-            "asin": "B0F18J2CJF",
-            "amazon_title": "ポケモンカードゲーム MEGA 拡張パック メガブレイブ BOX",
-            "identity_ok": false,
-            "core_missing": [
-              "メガシンフォニア"
-            ],
-            "rakuten_set": false,
-            "amazon_set": false,
-            "tiebreak_ok": true
-          }
-        ]
+        "reason": "no_jan_in_hits"
       },
       {
-        "rank": 21,
-        "title": "9月16日発売 予約 ばら売り 5パック/10パック/15パック レビュー特典付き ポケモンカードゲーム MEGA 拡張パック 30th CELEBRATION BOX 30周年 セレブレーション BOX ボックス",
-        "query": "ばら売り 5パック/10パック/15パック ポケモンカードゲーム",
-        "jan": "",
-        "votes": {
-          "4521329346199": 1,
-          "4521329374642": 1,
-          "4521329378749": 1
-        },
-        "asin": "",
-        "adopted": false,
-        "reason": "too_few_votes"
-      },
-      {
-        "rank": 20,
+        "rank": 23,
         "title": "【正規品＼楽天1位／】 かみかみチキン 歯固め 手にはめる歯がため シリコン 食品グレード おもちゃ 歯がため 安心素材 はがため 赤ちゃん 新生児 ベビー BPAフリー 3ヶ月 0歳 1歳 おしゃぶり ファーストトイ かわいい マッサージ プレゼント 出産祝い",
         "query": "かみかみチキン 歯固め 手にはめる歯がため シリコン",
         "jan": "",
@@ -576,9 +572,9 @@
         "reason": "too_few_votes"
       },
       {
-        "rank": 16,
-        "title": "【累計66,340台突破！】三輪車 ロック付き 折りたたみ BTM 手押し棒付き 安全ストッパー かじとり サンシェード 三輪車カバー 軽量 おしゃれ 自転車 バランスバイク キックバイク 9in1 赤ちゃん プレゼント 誕生日 ギフト箱入り 6ヶ月~6歳まで【2年保証】",
-        "query": "三輪車 ロック付き 折りたたみ BTM",
+        "rank": 21,
+        "title": "高評価★4.7【累計48万台突破】光るホイール MOVEGU_公式 キックスクーター 【4段階高さ調整】 キックボード 子供用 三輪車 軽量 頑丈 方向変換 安定 折りたたみ 持ち運び便利 後輪ブレーキ 誕生日 【お試し返品可能】",
+        "query": "高評価★4.7 光るホイール キックスクーター",
         "jan": "",
         "votes": {},
         "asin": "",
@@ -586,7 +582,7 @@
         "reason": "no_jan_in_hits"
       },
       {
-        "rank": 13,
+        "rank": 20,
         "title": "再入荷完了＼楽天週間1位／【SNSで話題！！驚きの安定感】CANPA 鉄棒 子供用 ぶら下がり鉄棒 折りたたみ 自立式 室内 子供 コンパクト 家庭用 耐荷重約100kg 高さ調節 てつぼう さか上がり キッズ ぶらさがり 屋外 ブランコ 体操 運動 小学生 誕生日 ギフト クリスマス",
         "query": "再入荷完了 CANPA 鉄棒 子供用",
         "jan": "",
@@ -596,30 +592,46 @@
         "reason": "no_jan_in_hits"
       },
       {
-        "rank": 9,
-        "title": "【在庫あり！】はむにぎり マスコット ハムスター ねずみ ぬいぐるみ マスコット もちもち ふわふわ ぬいどり ぬい活 手のりサイズ 動物 アニマル 癒し かわいい",
-        "query": "はむにぎり マスコット ハムスター ねずみ",
-        "jan": "",
-        "votes": {},
-        "asin": "",
-        "adopted": false,
-        "reason": "no_jan_in_hits"
-      },
-      {
-        "rank": 8,
-        "title": "【辻ちゃんネル紹介記念★2,000円クーポン】 モルビー 三輪車 手押し棒付き 折りたたみ 三輪車 1歳 2歳 3歳 赤ちゃん 手押し かじとり キックバイク 10段階変形 10in1 5点式ハーネス UVカット サンシェード 軽量 おしゃれ 室内OK 子供 0歳～6歳まで MORBY",
-        "query": "モルビー 三輪車 手押し棒付き 折りたたみ",
+        "rank": 14,
+        "title": "レゴ クラシック 黄色のアイデアボックス スペシャル 10698(1セット)【レゴ(LEGO)】[おもちゃ 玩具 プレゼント 4歳 5歳 6歳]",
+        "query": "レゴ クラシック 黄色のアイデアボックス スペシャル 10698",
         "jan": "",
         "votes": {
-          "4580786193456": 1
+          "5702015357197": 9,
+          "0726312399907": 5,
+          "5054814619373": 2
         },
         "asin": "",
         "adopted": false,
-        "reason": "too_few_votes"
+        "reason": "close_second",
+        "tiebreak": [
+          {
+            "jan": "5702015357197",
+            "votes": 9,
+            "asin": "B00PY3EYQO",
+            "amazon_title": "レゴ(LEGO) クラシック 黄色のアイデアボックス ＜スペシャル＞ 10698 おもちゃ 男の子 女の子 | 玩具 誕生日 プレゼント ブロック 知育 4歳 5歳 6歳 7歳 ごっこ遊び おままごと 子供 790ピース",
+            "identity_ok": true,
+            "core_missing": [],
+            "rakuten_set": true,
+            "amazon_set": true,
+            "tiebreak_ok": true
+          },
+          {
+            "jan": "0726312399907",
+            "votes": 5,
+            "asin": "B00PY3EYQO",
+            "amazon_title": "レゴ(LEGO) クラシック 黄色のアイデアボックス ＜スペシャル＞ 10698 おもちゃ 男の子 女の子 | 玩具 誕生日 プレゼント ブロック 知育 4歳 5歳 6歳 7歳 ごっこ遊び おままごと 子供 790ピース",
+            "identity_ok": true,
+            "core_missing": [],
+            "rakuten_set": true,
+            "amazon_set": true,
+            "tiebreak_ok": true
+          }
+        ]
       },
       {
-        "rank": 7,
-        "title": "【先着77名様9%OFFクーポン】三輪車 5in1 BTM 子供用三輪車 三輪車のりもの セーフティーガードなし/付き 2タイプ 押し棒付き 安全バー付き おもちゃ 乗用玩具 幼児用 キッズバイク 誕生日ギフト 贈り物 プレゼント",
+        "rank": 12,
+        "title": "【全品P5倍!21時から3時間限定】三輪車 5in1 BTM 子供用三輪車 三輪車のりもの セーフティーガードなし/付き 2タイプ 押し棒付き 安全バー付き おもちゃ 乗用玩具 幼児用 キッズバイク 誕生日ギフト 贈り物 プレゼント",
         "query": "三輪車 5in1 BTM 子供用三輪車",
         "jan": "",
         "votes": {
@@ -634,48 +646,77 @@
         "reason": "too_few_votes"
       },
       {
-        "rank": 5,
-        "title": "ポケモンカードゲーム MEGA 30th CELEBRATION カードセット 選べる",
-        "query": "ポケモンカードゲーム MEGA 30th CELEBRATION",
-        "jan": "4521329462424",
+        "rank": 9,
+        "title": "【辻ちゃんネル紹介記念★2,000円クーポン】 モルビー 三輪車 手押し棒付き 折りたたみ 三輪車 1歳 2歳 3歳 赤ちゃん 手押し かじとり キックバイク 10段階変形 10in1 5点式ハーネス UVカット サンシェード 軽量 おしゃれ 室内OK 子供 0歳～6歳まで MORBY",
+        "query": "モルビー 三輪車 手押し棒付き 折りたたみ",
+        "jan": "",
         "votes": {
-          "4521329462424": 8,
-          "4521329462295": 3,
-          "4521329462189": 2,
-          "4521329462363": 1,
-          "4904790111259": 1
+          "4580786193456": 1
         },
-        "asin": "B0GXCRBL5J",
+        "asin": "",
         "adopted": false,
-        "reason": "edition_mismatch",
-        "item_code": "yum-yum:10002175",
-        "amazon_title": "ポケモンカードゲーム MEGA 拡張パック 30th CELEBRATION BOX",
-        "rakuten_brand": "",
-        "amazon_brand": "",
-        "common_codes": [],
-        "identity_ok": false,
-        "identity_reason": "edition_mismatch"
+        "reason": "too_few_votes"
       },
       {
-        "rank": 4,
+        "rank": 8,
         "title": "【POP MART 公式ストア】THE MONSTERS CAT MODE ON シリーズ ぬいぐるみキーホルダー　 labubu ラブブ らぶぶ人形 ブラインドボックス フィギュア おもちゃ ガチャガチャ プラモデル ギフト 推し活 ポップマート",
         "query": "THE MONSTERS ブラインドボックス",
         "jan": "",
         "votes": {
           "6931571071929": 2,
-          "6941848255204": 2,
           "6941848244741": 2,
+          "6941848255204": 2,
           "6931571026301": 2,
           "6941848244727": 1
         },
         "asin": "",
         "adopted": false,
         "reason": "too_few_votes"
+      },
+      {
+        "rank": 7,
+        "title": "【P5倍！累計66,340台突破！】三輪車 ロック付き 折りたたみ BTM 手押し棒付き 安全ストッパー かじとり サンシェード 三輪車カバー 軽量 おしゃれ 自転車 バランスバイク キックバイク 9in1 赤ちゃん プレゼント 誕生日 ギフト箱入り 6ヶ月~6歳まで【2年保証】",
+        "query": "三輪車 ロック付き 折りたたみ BTM",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
+      },
+      {
+        "rank": 6,
+        "title": "【在庫あり！】はむにぎり マスコット ハムスター ねずみ ぬいぐるみ マスコット もちもち ふわふわ ぬいどり ぬい活 手のりサイズ 動物 アニマル 癒し かわいい",
+        "query": "はむにぎり マスコット ハムスター ねずみ",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
+      },
+      {
+        "rank": 5,
+        "title": "【楽天1位連続受賞】 【2026年限定カラー】 ストライダー スポーツモデル 12インチ MOSS モス 2年保証 キックバイク キッズバイク 子供用 ペダルなし 自転車 誕生日 クリスマス プレゼント ギフト 男の子 女の子 こども 1歳 2歳 3歳 バランスバイク",
+        "query": "ストライダー スポーツモデル 12インチ MOSS",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
+      },
+      {
+        "rank": 3,
+        "title": "予約 2026年11月【正規品】ボンボンドロップシール ちいかわ こびとづかん mofusand mini サンリオ ハローキティ マイメロ クロミ キキララ ウサハナ 90s タイルシール ヒョウ ヒョウ(ピンク) ハイビスカス シール帳",
+        "query": "ボンボンドロップシール ちいかわ こびとづかん mofusand",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
       }
     ],
     "mode": "enforce",
     "genre_gate_dropped_items": []
   },
-  "generated_at": "2026-10-18T21:16:35.225325+00:00",
-  "ranking_pool_size": 23
+  "generated_at": "2026-10-19T22:50:30.577012+00:00",
+  "ranking_pool_size": 17
 }
