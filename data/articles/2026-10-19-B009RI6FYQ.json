@@ -190,6 +190,17 @@
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
       "notes": "材質はABS。サイズはW20×H20×D10mm。"
+    },
+    {
+      "id": "src-artec",
+      "name": "アーテックブロック公式 / ブロックのヒミツ",
+      "url": "https://www.artec-kk.co.jp/blocks/himitsu",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2026-10-19",
+      "author": "メーカー公式",
+      "conflict_of_interest": "possible",
+      "notes": "すべての面に複数の穴があいているので、あらゆる方向にブロックをさしこむことができ、平面から立体へあらゆる形が組み立てられる。"
     }
   ],
   "claims": [
@@ -198,10 +209,22 @@
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-sccip"
+        "src-sccip",
+        "src-artec"
       ],
-      "cross_checked": false,
-      "notes": "SCCIPでシリーズの共通仕様として言及されている。"
+      "cross_checked": true,
+      "notes": "SCCIPとメーカー公式の2サイトでシリーズ共通の独自構造について一致して説明されている。"
+    },
+    {
+      "claim": "平面的な作品から立体的な造形まで、子どもの成長に合わせて幅広い遊び方が可能",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-sccip",
+        "src-artec"
+      ],
+      "cross_checked": true,
+      "notes": "平面から立体へとステップアップできる点が公式とSCCIPの両方で強調されている。"
     },
     {
       "claim": "W20×H20×D10mmのハーフサイズパーツで、細かな造形に適している",
@@ -254,7 +277,8 @@
       {
         "text": "縦・横・斜めのあらゆる方向へ接続できるシリーズ共通の独自構造による自由な表現力",
         "supporting_source_ids": [
-          "src-sccip"
+          "src-sccip",
+          "src-artec"
         ]
       },
       {
@@ -266,7 +290,8 @@
       {
         "text": "平面的な表現から複雑で立体的な造形まで、お子さまの成長に応じた多様な遊び方ができるシリーズの魅力",
         "supporting_source_ids": [
-          "src-sccip"
+          "src-sccip",
+          "src-artec"
         ]
       }
     ],
@@ -289,7 +314,8 @@
         "text": "お手持ちのアーテックブロック基本セットに本品を加えて、より細かで複雑な造形作品作りに没頭する時間",
         "supporting_source_ids": [
           "src-sccip",
-          "src-amazon"
+          "src-amazon",
+          "src-artec"
         ]
       },
       {
@@ -301,7 +327,8 @@
       {
         "text": "雨の日の室内遊びで、他のシリーズとつなぎ合わせ、大きな作品作りのアクセントとして利用する家族の時間",
         "supporting_source_ids": [
-          "src-sccip"
+          "src-sccip",
+          "src-artec"
         ]
       }
     ],
@@ -311,7 +338,8 @@
         "summary": "シリーズ共通の縦・横・斜めの多方向接続を活かし、ハーフサイズならではの細かな表現力を足したい場合に選ばれています。",
         "supporting_source_ids": [
           "src-sccip",
-          "src-amazon"
+          "src-amazon",
+          "src-artec"
         ]
       }
     ]
