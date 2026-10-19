@@ -178,6 +178,28 @@
       "author": "メーカー公式",
       "conflict_of_interest": "disclosed",
       "notes": "素材がEVAと紙であること、重量約100gであること、イベントや景品におすすめであることが記載されている。"
+    },
+    {
+      "id": "src-artec",
+      "name": "アーテック公式サイト",
+      "url": "https://www.artec-kk.co.jp/",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2026-10-19",
+      "author": "メーカー公式",
+      "conflict_of_interest": "disclosed",
+      "notes": "1960年創業の老舗学校教材メーカーであることが確認できる。"
+    },
+    {
+      "id": "src-youtube",
+      "name": "保育士のバランスゲーム実践動画",
+      "url": "https://www.youtube.com/watch?v=CWhQMOs0I3Q",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-10-18",
+      "author": "第三者ライター",
+      "conflict_of_interest": "none",
+      "notes": "3歳児向けのバランス能力や手指訓練としての室内遊びの実践例。"
     }
   ],
   "claims": [
@@ -216,10 +238,22 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-amazon",
+        "src-artec"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "Amazon商品説明にメーカー情報として記載"
+    },
+    {
+      "claim": "室内遊びとして手先の器用さやバランス感覚を養うことができる",
+      "category": "comparative_advantage",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-amazon",
+        "src-youtube"
+      ],
+      "cross_checked": true,
+      "notes": "Amazonの商品説明とYouTubeの保育実践例で一致"
     }
   ],
   "technical_specs": {
@@ -288,6 +322,12 @@
         "text": "お正月の親戚が集まる場での盛り上げ役",
         "supporting_source_ids": [
           "src-amazon"
+        ]
+      },
+      {
+        "text": "3歳児の室内遊びやバランス感覚・手指の訓練用途",
+        "supporting_source_ids": [
+          "src-youtube"
         ]
       }
     ],
