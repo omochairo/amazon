@@ -15,6 +15,8 @@ GSC weekly JSON の query×page (`by_combo`) から「クエリ・カニバリ�
 - クエリ全体の impressions 合計 >= MIN_QUERY_IMPRESSIONS
 - 上位 1 位 URL の impressions シェアが DOMINANCE_MAX 未満
   (1 ページが圧倒的なら実質カニバってない → 除外)
+- competing ページのどれかの順位が NAVIGATIONAL_MAX_POSITION を超える
+  (全ページが 1 位 = サイト名の指名検索でサイトリンクが並んでいるだけ → 除外)
 
 ランキング: competing ページ群の impressions 合計の降順、top N。
 
@@ -61,6 +63,11 @@ DEFAULT_MIN_QUERY_IMPRESSIONS = 10
 DEFAULT_COMPETING_PAGES = 2
 DEFAULT_DOMINANCE_MAX = 0.85
 DEFAULT_MAX_RESULTS = 10
+# 全 competing ページがこの順位以内なら指名検索 (サイトリンク) とみなして数えない。
+# 上げる順位が無いので直す対象にならず、毎週「作業なし」で閉じていた
+# (amazon-navi-brain#128。過去 13 週でこの条件に当たったのはサイト名の
+# 指名検索だけ)。ブランド語の一覧を持たずに済む。
+DEFAULT_NAVIGATIONAL_MAX_POSITION = 1.5
 
 
 def detect(gsc: dict[str, Any], *,
@@ -68,7 +75,9 @@ def detect(gsc: dict[str, Any], *,
            min_query_impressions: int = DEFAULT_MIN_QUERY_IMPRESSIONS,
            competing_pages: int = DEFAULT_COMPETING_PAGES,
            dominance_max: float = DEFAULT_DOMINANCE_MAX,
-           max_results: int = DEFAULT_MAX_RESULTS) -> dict[str, Any]:
+           max_results: int = DEFAULT_MAX_RESULTS,
+           navigational_max_position: float = DEFAULT_NAVIGATIONAL_MAX_POSITION,
+           ) -> dict[str, Any]:
     by_query: dict[str, list[dict]] = defaultdict(list)
     for row in gsc.get("by_combo", []):
         query = row.get("query")
@@ -85,6 +94,7 @@ def detect(gsc: dict[str, Any], *,
 
     detected = []
     eligible = 0
+    skipped_navigational = 0
     for query, pages in by_query.items():
         competing = [p for p in pages if p["impressions"] >= min_page_impressions]
         if len(competing) < competing_pages:
@@ -97,6 +107,9 @@ def detect(gsc: dict[str, Any], *,
         top_share = competing[0]["impressions"] / total_imp if total_imp else 1.0
         if top_share >= dominance_max:
             # 1 ページが圧倒的 — 実質カニバっていない
+            continue
+        if all(p["position"] <= navigational_max_position for p in competing):
+            skipped_navigational += 1
             continue
         detected.append({
             "query": query,
@@ -119,8 +132,10 @@ def detect(gsc: dict[str, Any], *,
             "competing_pages": competing_pages,
             "dominance_max": dominance_max,
             "max_results": max_results,
+            "navigational_max_position": navigational_max_position,
         },
         "eligible": eligible,
+        "skipped_navigational": skipped_navigational,
         "detected": detected,
     }
 
@@ -134,6 +149,8 @@ def main() -> int:
     p.add_argument("--competing-pages", type=int, default=DEFAULT_COMPETING_PAGES)
     p.add_argument("--dominance-max", type=float, default=DEFAULT_DOMINANCE_MAX)
     p.add_argument("--max-results", type=int, default=DEFAULT_MAX_RESULTS)
+    p.add_argument("--navigational-max-position", type=float,
+                   default=DEFAULT_NAVIGATIONAL_MAX_POSITION)
     args = p.parse_args()
 
     in_path = pathlib.Path(args.input)
@@ -149,11 +166,15 @@ def main() -> int:
         competing_pages=args.competing_pages,
         dominance_max=args.dominance_max,
         max_results=args.max_results,
+        navigational_max_position=args.navigational_max_position,
     )
 
     out = pathlib.Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    logger.info("eligible=%d, skipped_navigational=%d (max_position=%.1f)",
+                result["eligible"], result["skipped_navigational"],
+                args.navigational_max_position)
     logger.info("wrote %s (%d cannibalization candidates)", out, len(result["detected"]))
     return 0
 
