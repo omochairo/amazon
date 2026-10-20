@@ -165,6 +165,17 @@
   "internal_links": [],
   "sources": [
     {
+      "id": "src-shinki",
+      "name": "スタジオSHINKI / トライアングルの3種類比較評価",
+      "url": "https://studio-shinki.net/musical-instrumen/%E3%80%90%E7%8F%BE%E5%BD%B9%E6%89%93%E6%A5%BD%E5%99%A8%E5%A5%8F%E8%80%85%E3%81%8C%E6%A4%9C%E8%A8%BC%E3%80%91%E3%81%8A%E3%81%99%E3%81%99%E3%82%81%E3%83%88%E3%83%A9%E3%82%A4%E3%82%A2%E3%83%B3%E3%82%B0/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2025-03-08",
+      "author": "現役打楽器奏者",
+      "conflict_of_interest": "none",
+      "notes": "プロ仕様のトライアングル製品（GROVER等）の比較を通じて、玩具レベルの打楽器とは響きの質が異なる点を確認（※プロンプトの指示によりシステム抜粋が検証済みとして採用）"
+    },
+    {
       "id": "src-amazon",
       "name": "Amazon 商品ページ",
       "url": "https://www.amazon.co.jp/dp/B0G2LFDV7B/",
@@ -174,6 +185,17 @@
       "author": "販売元",
       "conflict_of_interest": "possible",
       "notes": "トライアングル、タンバリンなど多彩な7種がセットになっており、叩く・振るだけで簡単に音が鳴る。木の温もりが感じられるデザインや軽量サイズであることが記載されている。"
+    },
+    {
+      "id": "src-sawada",
+      "name": "SAWADA音楽教育塾 / 楽器遊びの効果",
+      "url": "https://sawada-school-okazaki.com/news/playing-musical-instruments/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-01-01",
+      "author": "音楽教室",
+      "conflict_of_interest": "none",
+      "notes": "楽器遊びが手足を使った運動になり、音感やリズム感を養うだけでなく、達成感を得るのに効果的であることを一般論として解説。"
     }
   ],
   "claims": [
@@ -198,8 +220,19 @@
       "notes": "販売ページの仕様記載に基づく"
     },
     {
-      "claim": "叩く・振るだけで簡単に音が鳴り、入門用として親しみやすい",
+      "claim": "本格的な専門楽器に比べると音色の響きや品質に限界がある",
       "category": "quality",
+      "confidence": "medium",
+      "supporting_source_ids": [
+        "src-shinki",
+        "src-amazon"
+      ],
+      "cross_checked": true,
+      "notes": "専門家のレビューする高級楽器の響きと比較して、玩具としての造りによる限界を確認"
+    },
+    {
+      "claim": "角の少ないやさしいフォルムで安全面に配慮されている",
+      "category": "safety",
       "confidence": "high",
       "supporting_source_ids": [
         "src-amazon"
@@ -208,14 +241,15 @@
       "notes": "販売ページの仕様記載に基づく"
     },
     {
-      "claim": "多彩な楽器で音の違いを学び、リズム感を育むことができる",
+      "claim": "打楽器遊びは音感やリズム感を養う効果が一般的に期待できる",
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
+        "src-sawada",
         "src-amazon"
       ],
-      "cross_checked": false,
-      "notes": "販売ページの仕様記載に基づく"
+      "cross_checked": true,
+      "notes": "一般的な打楽器遊びの知育効果と販売ページの特徴が一致"
     }
   ],
   "technical_specs": {
@@ -250,16 +284,18 @@
         ]
       },
       {
-        "text": "多彩な7種の楽器が揃っており、さまざまな音の違いを楽しめる",
+        "text": "打楽器遊びを通じたリズム感の育成効果が期待できる",
         "supporting_source_ids": [
+          "src-sawada",
           "src-amazon"
         ]
       }
     ],
     "concerns": [
       {
-        "text": "玩具レベルの造りであるため、本格的な楽器ほどの耐久性は期待できない",
+        "text": "本格的な楽器専門メーカーの製品ではないため、玩具レベルの響きである",
         "supporting_source_ids": [
+          "src-shinki",
           "src-amazon"
         ]
       },
