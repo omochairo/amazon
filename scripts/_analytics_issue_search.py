@@ -78,12 +78,17 @@ def _run_search(query: str, page: int, order: str) -> list[dict]:
     return json.loads(res.stdout).get("items", [])
 
 
-def search_issues(query: str, *, order: str = "desc", sleeper=time.sleep) -> list[dict]:
-    """検索結果を全ページ集める (Search API の上限 1,000 件まで)。"""
+def search_issues(query: str, *, order: str = "desc", sleeper=time.sleep,
+                  retry_empty: bool = True) -> list[dict]:
+    """検索結果を全ページ集める (Search API の上限 1,000 件まで)。
+
+    `retry_empty=False` は 0 件が普通の検索用 (`find_dismissed_keys`)。毎回
+    索引ラグの再試行で待つと、opener 6 本で 1 run あたり数十秒を空費する。
+    """
     items: list[dict] = []
     for page in range(1, MAX_PAGES + 1):
         got = _run_search(query, page, order)
-        if page == 1 and not got:
+        if page == 1 and not got and retry_empty:
             # 索引ラグ対策。1 ページ目が 0 件のときだけ短く粘る
             for attempt in range(2, SEARCH_MAX_ATTEMPTS + 1):
                 logger.info("search/issues returned 0 items (attempt %d/%d); retrying "
@@ -136,7 +141,10 @@ def find_dismissed_keys(repo: str, marker_prefix: str, *, today: _dt.date | None
         f"label:{DISMISS_LABEL} closed:>={since.isoformat()} "
         f'in:body "{marker_prefix}"'
     )
-    keys = extract_marked_keys(search_issues(query, sleeper=sleeper), marker_prefix)
+    # 0 件が普通なので索引ラグの再試行はしない。閉じた直後の数秒を取りこぼしても
+    # 週次 run の間隔では問題にならない
+    items = search_issues(query, sleeper=sleeper, retry_empty=False)
+    keys = extract_marked_keys(items, marker_prefix)
     if keys:
         logger.info("%d key(s) closed as %s within %d days — not refiling",
                     len(keys), DISMISS_LABEL, DISMISS_DAYS)

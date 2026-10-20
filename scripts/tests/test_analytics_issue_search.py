@@ -123,3 +123,12 @@ def test_dismissed_keys_query_only_recent_wontfix_closures():
     q = seen[0]
     assert "is:closed" in q and f"label:{s.DISMISS_LABEL}" in q
     assert "closed:>=2026-09-22" in q  # 28 日前から
+
+
+def test_dismissed_keys_do_not_wait_on_empty_results():
+    # 0 件が普通の検索なので、索引ラグの再試行で毎 run 待たない
+    run, calls = _fake([[]])
+    slept: list[float] = []
+    with patch.object(s, "_run_search", run):
+        assert s.find_dismissed_keys("o/r", "a5-orphan:", sleeper=slept.append) == set()
+    assert len(calls) == 1 and slept == []
