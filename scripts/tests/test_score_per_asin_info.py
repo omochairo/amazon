@@ -540,4 +540,34 @@ class PriorArticleSitesTest(unittest.TestCase):
         S._article_index.cache_clear()
         r = S.score_asin("B0PA000003", self.base)
         self.assertNotEqual(r["band"], "zero")
-        self.assertFalse(S.should_defer(r))
+        # navi-brain#117: ただし前の記事の出典だけでは待ちは解かない (thin のまま待つ)
+        self.assertEqual(r["band"], "thin")
+        self.assertTrue(S.should_defer(r))
+
+    def test_prior_sites_do_not_lift_awaiting(self):
+        # navi-brain#117: 事前収集の候補が無く、前の記事の出典だけで 2 サイトに届く
+        # 書き直しは待たせる。材料の数 (注記に渡す分) には従来どおり足す
+        d = self.base / "B0PA000004"
+        d.mkdir(parents=True)
+        _write(d, "amazon.json", {"item": {"title": "テスト"}})
+        _write(d, "youtube.json", [{"title": "テスト 動画", "url": "https://www.youtube.com/watch?v=x"}])
+        _write(d, "third_party_sources.json", {"sources": []})
+        self._article("2026-08-01-B0PA000004", ["https://a.example/x", "https://b.example/y"])
+        r = S.score_asin("B0PA000004", self.base)
+        self.assertEqual(r["band"], "thin")
+        self.assertEqual(r["prior_article_sites"], 2)
+        self.assertEqual(S.non_sales_material(r), 2)
+        self.assertTrue(S.awaiting_sources(r))
+
+    def test_candidate_sites_still_lift_awaiting_for_rewrite(self):
+        d = self.base / "B0PA000005"
+        d.mkdir(parents=True)
+        _write(d, "amazon.json", {"item": {"title": "テスト"}})
+        _write(d, "youtube.json", [{"title": "テスト 動画", "url": "https://www.youtube.com/watch?v=x"}])
+        _write(d, "third_party_sources.json", {"sources": [
+            {"url": "https://c.example/x", "host": "c.example"},
+            {"url": "https://d.example/y", "host": "d.example"}]})
+        self._article("2026-08-01-B0PA000005", ["https://a.example/x"])
+        r = S.score_asin("B0PA000005", self.base)
+        self.assertEqual(r["third_party_sites"], 2)
+        self.assertFalse(S.awaiting_sources(r))

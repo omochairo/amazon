@@ -182,6 +182,17 @@ def select_candidates(items, existing, ranking_pool, first_party_all,
     if rewrite_candidates is not None:
         pool = [a for a in rewrite_candidates if a not in existing and a not in ranking_set
                 and excluded_reason(a) is None]
+        # navi-brain#117: 待ちの書き直しは上限で切る**前に**外す (first-party と同じ)。
+        # 後で外すと、先頭の待ちの ASIN が枠を占有して書き直しが回らなくなる
+        if scorer is not None:
+            try:
+                waiting = [a for a in pool if scorer.should_defer(scorer.score_asin(a))]
+                if waiting:
+                    print(f"rewrite waiting for sources (navi-brain#117): {len(waiting)} "
+                          f"{waiting[:10]}")
+                pool = [a for a in pool if a not in set(waiting)]
+            except Exception as e:  # スコア計算失敗は pick を止めない (従来どおり通す)
+                _warn(f"rewrite source check skipped: {e}")
         rewrite_first = pool[:max(rewrite_cap, 0)]
         if pool:
             print(f"rewrite-ready (#5490): {len(pool)} -> picking {len(rewrite_first)} "
