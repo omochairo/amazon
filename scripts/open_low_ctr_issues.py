@@ -132,6 +132,39 @@ def render_body(detected: dict, *, baseline: float, threshold: float,
     rng = f"{src_range.get('start','?')} 〜 {src_range.get('end','?')}"
     source_note = ("実測値" if baseline_source == "sitewide"
                     else "旧スナップショットのため top-N ページ合計で代用 (amazon-navi-brain#33)")
+    # 順位帯の期待 CTR + ポアソン検定で検出したもの (detect_low_ctr_pages の docstring)
+    expected = detected.get("expected_ctr")
+    p_value = detected.get("p_value")
+    tested = detected.get("rule") == "position_poisson" and expected is not None \
+        and p_value is not None
+    if tested:
+        judge_rows = [
+            f"| 順位帯 {detected.get('position_band')} 位のサイト実績 CTR (期待値) | "
+            f"{expected*100:.2f}%（過去の週の実測。この週は含めない） |",
+            f"| 期待クリック数 | {imp * expected:.1f} |",
+            f"| このクリック数以下になる確率 (ポアソン) | {p_value:.3f} |",
+            f"| site 全体 CTR (参考) | {baseline*100:.2f}%（{source_note}） |",
+        ]
+        judge_text = (
+            f"このページは page 1 (position {pos:.1f}) に出ているが、同じ順位帯のサイト実績 "
+            f"CTR {expected*100:.2f}% なら {imp * expected:.1f} クリック期待できるところ、"
+            f"{clicks} クリックだった。偶然でこれ以下になる確率は {p_value:.3f} で、"
+            "スニペット / タイトル / description が機会損失を起こしている可能性がある。"
+        )
+    else:
+        judge_rows = [
+            f"| site 全体 CTR (baseline) | {baseline*100:.2f}%（{source_note}） |",
+            f"| このページの CTR ÷ site 全体 CTR | {ratio_s} |",
+            f"| 判定しきい値 (threshold) | {threshold*100:.2f}% |",
+        ]
+        judge_text = (
+            f"このページは page 1 (position {pos:.1f}) に出ているが、CTR {ctr*100:.2f}% は"
+            f"判定しきい値 {threshold*100:.2f}% を下回っている"
+            f"（site 全体 CTR は {baseline*100:.2f}%。しきい値は再検出頻度を保つため "
+            "baseline よりゆるく取ってあるため、このページの CTR が site 全体 CTR 以上でも"
+            "検出されることがある）。スニペット / タイトル / description が機会損失を"
+            "起こしている可能性がある。"
+        )
 
     parts = [
         f"<!-- {MARKER_PREFIX}{page} -->",
@@ -148,9 +181,7 @@ def render_body(detected: dict, *, baseline: float, threshold: float,
         f"| clicks | {clicks} |",
         f"| CTR | {ctr*100:.2f}% |",
         f"| avg position | {pos:.1f} |",
-        f"| site 全体 CTR (baseline) | {baseline*100:.2f}%（{source_note}） |",
-        f"| このページの CTR ÷ site 全体 CTR | {ratio_s} |",
-        f"| 判定しきい値 (threshold) | {threshold*100:.2f}% |",
+        *judge_rows,
         "",
         f"## 検索流入クエリ Top {len(top_q)}",
         "",
@@ -160,12 +191,7 @@ def render_body(detected: dict, *, baseline: float, threshold: float,
         "",
         "## アクション提案",
         "",
-        f"このページは page 1 (position {pos:.1f}) に出ているが、CTR {ctr*100:.2f}% は"
-        f"判定しきい値 {threshold*100:.2f}% を下回っている"
-        f"（site 全体 CTR は {baseline*100:.2f}%。しきい値は再検出頻度を保つため "
-        "baseline よりゆるく取ってあるため、このページの CTR が site 全体 CTR 以上でも"
-        "検出されることがある）。スニペット / タイトル / description が機会損失を"
-        "起こしている可能性がある。",
+        judge_text,
         "",
         "1. ページの `<title>` / `<meta name=description>` を上記検索クエリ語に寄せて書き直す",
         "2. 数字 / 年号 / 「2026」「最新」「徹底比較」等のクリック誘因を入れる",

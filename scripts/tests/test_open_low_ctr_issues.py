@@ -264,3 +264,29 @@ def test_find_existing_taken_urls_true_zero_does_not_retry_forever():
         urls = find_existing_taken_urls("repo", sleeper=lambda s: None)
     assert urls == set()
     assert len(calls) == 3  # _SEARCH_MAX_ATTEMPTS
+
+
+def test_render_body_explains_position_band_test():
+    detected = {
+        "page": "/products/B0XXX/", "impressions": 200, "clicks": 1, "ctr": 0.005,
+        "position": 2.0, "ratio_to_baseline": 0.2, "top_queries": [],
+        "rule": "position_poisson", "position_band": "1-3",
+        "expected_ctr": 0.12, "p_value": 0.0001,
+    }
+    body = render_body(detected, baseline=0.03, threshold=0.045,
+                       src_range={"start": "2026-10-08", "end": "2026-10-15"})
+    assert "順位帯 1-3 位" in body
+    assert "12.00%" in body and "24.0" in body  # 期待値と期待クリック数
+    assert "0.000" in body
+    # 旧判定の「しきい値は baseline よりゆるく」の説明は出さない
+    assert "判定しきい値" not in body
+
+
+def test_render_body_keeps_legacy_text_for_sitewide_rule():
+    detected = {
+        "page": "/p/", "impressions": 60, "clicks": 0, "ctr": 0.0, "position": 9.0,
+        "ratio_to_baseline": 0.0, "top_queries": [], "rule": "sitewide_ratio",
+        "expected_ctr": None, "p_value": None,
+    }
+    body = render_body(detected, baseline=0.03, threshold=0.045, src_range={})
+    assert "判定しきい値" in body

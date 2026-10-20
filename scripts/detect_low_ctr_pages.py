@@ -21,6 +21,23 @@ GSC weekly JSON (scripts/fetch_gsc.py 出力) から CTR が site 平均を大�
     低い」ではない点に注意 (Issue 本文の文言もこれを前提に書くこと)
   - ABS_MIN_THRESHOLD default 0.005 (baseline が極端に低い時の下駄)
 
+## 順位帯の期待 CTR とポアソン検定 (amazon-navi-brain#128 の続き)
+
+上の「site 全体 CTR × RATIO」は順位を見ない。サイト自身の実績では CTR は順位で
+大きく違い (1〜3 位と 7〜10 位で 2.5 倍前後)、一本の線だと上位のページに甘く、
+9 位前後のページに厳しい。しかも imp 50 では期待クリックが 2 前後しかなく、
+0 クリックは偶然でも普通に起きる。
+
+そこで `main()` は `data/analytics/gsc_history/` の過去の週から順位帯ごとの CTR を
+集め (判定する週そのものは除く)、このページの順位帯の CTR を期待値として
+「この imp でこのクリック数以下になる確率」(ポアソン分布の下側確率) が ALPHA
+未満のときだけ検出する。履歴の週をスイープすると、起票は約 3 分の 1 になり、
+実際に title を直した既知の例 (brain#41) は残る (実数は brain#128)。
+
+`detect()` に `band_ctr` を渡さないとき、または順位帯の imp が MIN_BAND_IMPRESSIONS
+に満たないときは従来の site 全体 × RATIO に戻る。ライブラリとして `detect()` を
+使う側 (audit_query_entailment など) の挙動は変えていない。
+
 出力 JSON: detected ページ毎に top クエリ (by_combo より) を 5 件まで付与。
 workflow 側で重複 Issue 起票防止のためのマーカー `<!-- a1-low-ctr:URL -->` を
 本文に埋め込む運用。
@@ -34,6 +51,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import pathlib
 import sys
 from typing import Any
@@ -64,6 +82,13 @@ DEFAULT_MAX_RESULTS = 5
 # 下限値でしかないので、この条件を当てない (落とす根拠にならない)。
 DEFAULT_MIN_KNOWN_QUERY_IMP = 5
 DEFAULT_TOP_QUERIES_PER_PAGE = 5
+DEFAULT_HISTORY_DIR = "data/analytics/gsc_history"
+# 順位帯 (上限, ラベル)。上限は「以下」。max_position (10) を超える帯は持たない
+POSITION_BANDS = ((3.0, "1-3"), (5.0, "3-5"), (7.0, "5-7"), (10.0, "7-10"))
+# 下側確率がこれ未満なら「偶然では説明しにくいほどクリックが少ない」
+DEFAULT_ALPHA = 0.05
+# 帯の期待 CTR を信じるのに要る履歴の imp。満たない帯は従来の判定に戻る
+MIN_BAND_IMPRESSIONS = 300
 
 
 def compute_baseline_ctr(totals: dict[str, Any]) -> tuple[float, str]:
@@ -83,6 +108,61 @@ def compute_baseline_ctr(totals: dict[str, Any]) -> tuple[float, str]:
     if impressions <= 0:
         return 0.0, "fallback_topn"
     return clicks / impressions, "fallback_topn"
+
+
+def position_band(position: float) -> str | None:
+    """順位帯のラベル。0 以下・最後の帯の上限超えは None。"""
+    if position <= 0:
+        return None
+    for upper, label in POSITION_BANDS:
+        if position <= upper:
+            return label
+    return None
+
+
+def _same_range(a: dict | None, b: dict | None) -> bool:
+    return bool(a and b) and a.get("start") == b.get("start") and a.get("end") == b.get("end")
+
+
+def load_band_ctr(history_dir: str | pathlib.Path, *,
+                  exclude_range: dict | None = None) -> dict[str, dict[str, Any]]:
+    """過去の週次スナップショットから順位帯ごとの clicks / impressions / ctr を集める。
+
+    `exclude_range` と同じ range の週は数えない (判定する週を自分の期待値に混ぜない)。
+    読めないファイルは飛ばす。どの帯にも行が無ければ空の dict。
+    """
+    sums: dict[str, list[int]] = {}
+    for f in sorted(pathlib.Path(history_dir).glob("*.json")):
+        try:
+            snap = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            logger.warning("skip unreadable history file: %s", f)
+            continue
+        if _same_range(snap.get("range"), exclude_range):
+            continue
+        for row in snap.get("by_page", []):
+            band = position_band(row.get("position", 0.0) or 0.0)
+            if band is None:
+                continue
+            acc = sums.setdefault(band, [0, 0])
+            acc[0] += row.get("clicks", 0) or 0
+            acc[1] += row.get("impressions", 0) or 0
+    return {
+        band: {"clicks": c, "impressions": i, "ctr": c / i}
+        for band, (c, i) in sums.items() if i > 0
+    }
+
+
+def poisson_lower_tail(k: int, lam: float) -> float:
+    """P(X <= k), X ~ Poisson(lam)。k はクリック数なので小さい前提で素直に足す。"""
+    if lam <= 0:
+        return 1.0
+    term = math.exp(-lam)
+    total = term
+    for i in range(1, int(k) + 1):
+        term *= lam / i
+        total += term
+    return min(total, 1.0)
 
 
 def collect_top_queries_by_page(by_combo: list[dict], n: int) -> dict[str, list[dict]]:
@@ -127,13 +207,27 @@ def detect(gsc: dict[str, Any], *,
            abs_min_threshold: float = DEFAULT_ABS_MIN_THRESHOLD,
            max_results: int = DEFAULT_MAX_RESULTS,
            top_queries_per_page: int = DEFAULT_TOP_QUERIES_PER_PAGE,
-           min_known_query_imp: int = DEFAULT_MIN_KNOWN_QUERY_IMP) -> dict[str, Any]:
-    """GSC weekly JSON から低 CTR ページを抽出する。"""
+           min_known_query_imp: int = DEFAULT_MIN_KNOWN_QUERY_IMP,
+           band_ctr: dict[str, dict[str, Any]] | None = None,
+           alpha: float = DEFAULT_ALPHA) -> dict[str, Any]:
+    """GSC weekly JSON から低 CTR ページを抽出する。
+
+    `band_ctr` (load_band_ctr の戻り値) を渡すと、履歴が足りる順位帯では
+    順位帯の期待 CTR + ポアソン検定で判定する。渡さなければ従来どおり。
+    """
     totals = gsc.get("totals", {})
     baseline, baseline_source = compute_baseline_ctr(totals)
     threshold = max(baseline * ratio, abs_min_threshold)
     logger.info("baseline_ctr=%.4f (source=%s), threshold=%.4f (ratio=%.2f, abs_min=%.4f)",
                 baseline, baseline_source, threshold, ratio, abs_min_threshold)
+    usable_bands = {
+        band: v for band, v in (band_ctr or {}).items()
+        if v.get("impressions", 0) >= MIN_BAND_IMPRESSIONS
+    }
+    if band_ctr is not None:
+        logger.info("position-band expected CTR: %s (alpha=%.3f, min_band_imp=%d)",
+                    {b: round(v["ctr"], 4) for b, v in usable_bands.items()},
+                    alpha, MIN_BAND_IMPRESSIONS)
 
     queries_by_page = collect_top_queries_by_page(gsc.get("by_combo", []), top_queries_per_page)
     known_by_page = sum_known_query_impressions(gsc.get("by_combo", []))
@@ -156,7 +250,15 @@ def detect(gsc: dict[str, Any], *,
         eligible += 1
         if position <= 0 or position > max_position:
             continue
-        if ctr >= threshold:
+        band = position_band(position)
+        expected = usable_bands.get(band) if band else None
+        p_value = None
+        if expected is not None:
+            p_value = poisson_lower_tail(row.get("clicks", 0) or 0,
+                                         impressions * expected["ctr"])
+            if p_value >= alpha:
+                continue
+        elif ctr >= threshold:
             continue
         known = known_by_page.get(page, 0)
         if known_gate_applied and known < min_known_query_imp:
@@ -169,12 +271,18 @@ def detect(gsc: dict[str, Any], *,
             "ctr": ctr,
             "position": position,
             "ratio_to_baseline": (ctr / baseline) if baseline > 0 else None,
+            "rule": "position_poisson" if expected is not None else "sitewide_ratio",
+            "position_band": band,
+            "expected_ctr": expected["ctr"] if expected is not None else None,
+            "p_value": p_value,
             "known_query_impressions": known,
             "top_queries": queries_by_page.get(page, []),
         })
 
     # 上限で切る前に落とす。落としたページの枠を、材料のあるページが使えるようにする。
-    detected.sort(key=lambda r: r["impressions"], reverse=True)
+    # 検定したものは確率の小さい (偶然で説明しにくい) 順、従来判定のものはその後ろに imp 順。
+    detected.sort(key=lambda r: (r["p_value"] is None, r["p_value"] or 0.0,
+                                 -r["impressions"]))
     logger.info("eligible=%d, matched=%d, dropped_low_known_query_imp=%d (min=%d, applied=%s)",
                 eligible, len(detected) + len(dropped_low_known), len(dropped_low_known),
                 min_known_query_imp, known_gate_applied)
@@ -192,7 +300,10 @@ def detect(gsc: dict[str, Any], *,
             "abs_min_threshold": abs_min_threshold,
             "max_results": max_results,
             "min_known_query_imp": min_known_query_imp,
+            "alpha": alpha,
+            "min_band_impressions": MIN_BAND_IMPRESSIONS,
         },
+        "band_ctr": usable_bands,
         "eligible": eligible,
         "known_query_gate_applied": known_gate_applied,
         "dropped_low_known_query_imp": len(dropped_low_known),
@@ -211,6 +322,10 @@ def main() -> int:
     p.add_argument("--max-results", type=int, default=DEFAULT_MAX_RESULTS)
     p.add_argument("--min-known-query-imp", type=int, default=DEFAULT_MIN_KNOWN_QUERY_IMP,
                    help="by_combo に出るクエリの imp 合計がこれ未満のページは出さない (0 で無効)")
+    p.add_argument("--history-dir", default=DEFAULT_HISTORY_DIR,
+                   help="順位帯の期待 CTR を集める週次スナップショットの置き場。"
+                        "空文字で従来の site 全体 × ratio 判定に戻す")
+    p.add_argument("--alpha", type=float, default=DEFAULT_ALPHA)
     args = p.parse_args()
 
     in_path = pathlib.Path(args.input)
@@ -218,6 +333,12 @@ def main() -> int:
         logger.error("input not found: %s", in_path)
         return 2
     gsc = json.loads(in_path.read_text(encoding="utf-8"))
+    band_ctr = None
+    if args.history_dir and pathlib.Path(args.history_dir).is_dir():
+        band_ctr = load_band_ctr(args.history_dir, exclude_range=gsc.get("range"))
+    elif args.history_dir:
+        logger.warning("history dir not found: %s — falling back to sitewide ratio",
+                       args.history_dir)
 
     result = detect(
         gsc,
@@ -227,6 +348,8 @@ def main() -> int:
         abs_min_threshold=args.abs_min_threshold,
         max_results=args.max_results,
         min_known_query_imp=args.min_known_query_imp,
+        band_ctr=band_ctr,
+        alpha=args.alpha,
     )
 
     out = pathlib.Path(args.out)
