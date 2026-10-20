@@ -253,6 +253,19 @@ class ParityTest(unittest.TestCase):
 
 
 class SelectCandidatesTest(unittest.TestCase):
+    def test_waiting_rewrite_does_not_take_rewrite_slot(self):
+        # navi-brain#117: 待ちの書き直しは上限 (rewrite_cap) で切る前に外す。
+        # 後で外すと先頭の待ちが枠を占有し、書き直しが回らない
+        waiting = {_asin(50)}
+        scorer = types.SimpleNamespace(score_asin=lambda a: a,
+                                       should_defer=lambda r: r in waiting)
+        with contextlib.redirect_stdout(open(os.devnull, "w", encoding="utf-8")):
+            out = article_pick.select_candidates(
+                [], set(), [], [], [_asin(50), _asin(51), _asin(52)], "s", scorer,
+                rewrite_cap=2)
+        self.assertEqual([o["asin"] for o in out if o["pool"] == "rewrite-queue"],
+                         [_asin(51), _asin(52)])
+
     def test_scorer_failure_does_not_stop_pick(self):
         broken = types.SimpleNamespace(score_asin=lambda a: 1 / 0, should_defer=lambda r: True)
         with contextlib.redirect_stdout(open(os.devnull, "w", encoding="utf-8")):
