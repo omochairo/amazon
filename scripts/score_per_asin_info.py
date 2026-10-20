@@ -516,6 +516,7 @@ def non_sales_material(result: dict) -> int:
 
     既存記事がある ASIN (書き直し) は、前の記事の非販売の出典のうち事前収集の候補に
     無いサイト (prior_article_sites) も足す。build_jules_prompt が候補として渡す。
+    待たせるかの判定 (awaiting_sources) はこれを数えない (navi-brain#117)。
     """
     fp = min(result.get("first_party_posts", 0), _FIRST_PARTY_MAX_COUNTED)
     sites = result.get("third_party_sites", result.get("third_party_hosts", 0))
@@ -534,10 +535,15 @@ def awaiting_sources(result: dict) -> bool:
 
     navi-brain#92: gate から合計 5 件の条件が外れたので、合計 5 件に届く材料が
     あるか (#9239) は見ない。
+
+    navi-brain#117: 前の記事の出典 (prior_article_sites) はここでは数えない。注記には
+    従来どおり候補として渡す (build_jules_prompt) が、質の保証が無い (通販サイトや
+    動画サイトのトップページが混ざる)。事前収集の候補が無く前の記事の出典だけで 2 に
+    届いた書き直しは、sources_v5 で落ちる割合が高かった。待たせても前の記事は残る。
     """
     if result.get("band") not in ("thin", "unfetched"):
         return False
-    return non_sales_material(result) < _THIRD_PARTY_MIN_HOSTS
+    return non_sales_material({**result, "prior_article_sites": 0}) < _THIRD_PARTY_MIN_HOSTS
 
 
 def should_defer(result: dict) -> bool:
@@ -565,6 +571,11 @@ def sources_exhausted(result: dict) -> bool:
     収集前の defer は「待てば揃うかもしれない」ので待たせる。収集後もまだ足りないなら、
     fetch_third_party_sources は空振りを長期間 (既定 180 日〜) 引き直さないので、
     実質これ以上は増えない。
+
+    navi-brain#117 以降、前の記事の出典だけで 2 サイトに届いていた書き直しもここで
+    True になる (awaiting_sources が前の記事の出典を数えないため)。書き直しの印は
+    取り下げられるが記事本体は残る。印を残すと、生成されないまま書き直しの列を
+    埋め続ける。
     """
     return should_defer(result) and bool(result.get("third_party_fetched"))
 
