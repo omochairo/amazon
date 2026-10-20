@@ -4,10 +4,20 @@ from __future__ import annotations
 from scripts.detect_opportunity_pages import detect
 
 
+def _fully_known_combo(by_page):
+    """各ページの imp を 1 クエリで全部説明する by_combo。
+
+    既知クエリ imp の下限 (brain#128) と無関係なテストが、その条件で落ちないようにする。
+    """
+    return [{"page": r["page"], "query": "q", "clicks": r.get("clicks", 0),
+             "impressions": r["impressions"], "ctr": r.get("ctr", 0.0),
+             "position": r.get("position", 0.0)} for r in by_page]
+
+
 def _make_gsc(by_page, by_combo=None):
     return {
         "by_page": by_page,
-        "by_combo": by_combo or [],
+        "by_combo": _fully_known_combo(by_page) if by_combo is None else by_combo,
         "range": {"start": "2026-05-26", "end": "2026-06-01"},
     }
 
@@ -102,3 +112,68 @@ def test_detect_boundary_position_11_and_20_inclusive():
     result = detect(gsc)
     pages = sorted(d["page"] for d in result["detected"])
     assert pages == ["/hi/", "/lo/"]
+
+
+# --- 既知クエリ imp の下限 (amazon-navi-brain#128) ---------------------------
+
+def _combo(page, impressions, query="q"):
+    return {"page": page, "query": query, "clicks": 0, "impressions": impressions,
+            "ctr": 0.0, "position": 15.0}
+
+
+def test_known_query_gate_drops_page_with_too_few_known_impressions():
+    gsc = _make_gsc(
+        by_page=[
+            {"page": "/thin/", "clicks": 0, "impressions": 60, "ctr": 0.0, "position": 15.0},
+            {"page": "/ok/", "clicks": 0, "impressions": 30, "ctr": 0.0, "position": 15.0},
+        ],
+        by_combo=[_combo("/thin/", 2), _combo("/thin/", 2, query="q2"), _combo("/ok/", 5)],
+    )
+    result = detect(gsc)
+    assert [d["page"] for d in result["detected"]] == ["/ok/"], "下限ちょうどは残す"
+    assert result["detected"][0]["known_query_impressions"] == 5
+    assert result["dropped_low_known_query_imp"] == 1
+    assert result["eligible"] == 2
+
+
+def test_known_query_gate_does_not_count_position_window_misses():
+    # 位置窓で落ちたページは「既知 imp で落とした」に数えない。
+    gsc = _make_gsc(
+        by_page=[{"page": "/p1/", "clicks": 0, "impressions": 60, "ctr": 0.0, "position": 3.0}],
+        by_combo=[],
+    )
+    result = detect(gsc)
+    assert result["detected"] == []
+    assert result["dropped_low_known_query_imp"] == 0
+
+
+def test_known_query_gate_applies_before_max_results_cap():
+    gsc = _make_gsc(
+        by_page=[
+            {"page": "/big-thin/", "clicks": 0, "impressions": 90, "ctr": 0.0, "position": 15.0},
+            {"page": "/small-ok/", "clicks": 0, "impressions": 25, "ctr": 0.0, "position": 15.0},
+        ],
+        by_combo=[_combo("/small-ok/", 10)],
+    )
+    result = detect(gsc, max_results=1)
+    assert [d["page"] for d in result["detected"]] == ["/small-ok/"]
+
+
+def test_known_query_gate_skipped_when_combo_rows_truncated():
+    gsc = _make_gsc(
+        by_page=[{"page": "/p/", "clicks": 0, "impressions": 60, "ctr": 0.0, "position": 15.0}],
+        by_combo=[],
+    )
+    gsc["totals"] = {"truncated_combos": True}
+    result = detect(gsc)
+    assert [d["page"] for d in result["detected"]] == ["/p/"]
+    assert result["known_query_gate_applied"] is False
+
+
+def test_known_query_gate_disabled_with_zero():
+    gsc = _make_gsc(
+        by_page=[{"page": "/p/", "clicks": 0, "impressions": 60, "ctr": 0.0, "position": 15.0}],
+        by_combo=[],
+    )
+    result = detect(gsc, min_known_query_imp=0)
+    assert [d["page"] for d in result["detected"]] == ["/p/"]

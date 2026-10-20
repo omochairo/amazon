@@ -46,6 +46,12 @@ DEFAULT_MIN_IMPRESSIONS = 20
 DEFAULT_MIN_POSITION = 11.0
 DEFAULT_MAX_POSITION = 20.0
 DEFAULT_MAX_RESULTS = 5
+# 既知クエリ imp の下限 (amazon-navi-brain#128)
+#
+# by_combo に出るクエリの imp 合計がこれ未満のページは起票しない。理由と
+# truncated_combos の週に当てない理由は detect_low_ctr_pages.py の同名定数を見ること
+# (A-1 と A-2 で同じ値を使う。スイープは両方まとめて brain#128)。
+DEFAULT_MIN_KNOWN_QUERY_IMP = 5
 DEFAULT_TOP_QUERIES_PER_PAGE = 5
 
 
@@ -69,18 +75,41 @@ def collect_top_queries_by_page(by_combo: list[dict], n: int) -> dict[str, list[
     return grouped
 
 
+def sum_known_query_impressions(by_combo: list[dict]) -> dict[str, int]:
+    """page URL -> by_combo に出ているクエリの impressions 合計。
+
+    top_queries (上位 N 件) ではなく全行で数える。GSC が匿名化したクエリの分は
+    by_page の impressions には入るがここには入らない。
+    """
+    known: dict[str, int] = {}
+    for row in by_combo:
+        page = row.get("page")
+        if not page:
+            continue
+        known[page] = known.get(page, 0) + (row.get("impressions", 0) or 0)
+    return known
+
+
 def detect(gsc: dict[str, Any], *,
            min_impressions: int = DEFAULT_MIN_IMPRESSIONS,
            min_position: float = DEFAULT_MIN_POSITION,
            max_position: float = DEFAULT_MAX_POSITION,
            max_results: int = DEFAULT_MAX_RESULTS,
-           top_queries_per_page: int = DEFAULT_TOP_QUERIES_PER_PAGE) -> dict[str, Any]:
+           top_queries_per_page: int = DEFAULT_TOP_QUERIES_PER_PAGE,
+           min_known_query_imp: int = DEFAULT_MIN_KNOWN_QUERY_IMP) -> dict[str, Any]:
     queries_by_page = collect_top_queries_by_page(
         gsc.get("by_combo", []), top_queries_per_page,
     )
+    known_by_page = sum_known_query_impressions(gsc.get("by_combo", []))
+    # rowLimit に張り付いた週は行の合計が下限値でしかないので、既知 imp で落とさない。
+    known_gate_applied = not gsc.get("totals", {}).get("truncated_combos", False)
+    if not known_gate_applied:
+        logger.warning("by_combo is truncated (truncated_combos=true); "
+                       "min_known_query_imp gate skipped this run")
 
     detected = []
     eligible = 0
+    dropped_low_known = []
     for row in gsc.get("by_page", []):
         page = row.get("page")
         impressions = row.get("impressions", 0)
@@ -90,16 +119,25 @@ def detect(gsc: dict[str, Any], *,
         eligible += 1
         if position < min_position or position > max_position:
             continue
+        known = known_by_page.get(page, 0)
+        if known_gate_applied and known < min_known_query_imp:
+            dropped_low_known.append(page)
+            continue
         detected.append({
             "page": page,
             "clicks": row.get("clicks", 0),
             "impressions": impressions,
             "ctr": row.get("ctr", 0.0),
             "position": position,
+            "known_query_impressions": known,
             "top_queries": queries_by_page.get(page, []),
         })
 
+    # 上限で切る前に落とす。落としたページの枠を、材料のあるページが使えるようにする。
     detected.sort(key=lambda r: r["impressions"], reverse=True)
+    logger.info("eligible=%d, matched=%d, dropped_low_known_query_imp=%d (min=%d, applied=%s)",
+                eligible, len(detected) + len(dropped_low_known), len(dropped_low_known),
+                min_known_query_imp, known_gate_applied)
     detected = detected[:max_results]
 
     return {
@@ -109,8 +147,11 @@ def detect(gsc: dict[str, Any], *,
             "min_position": min_position,
             "max_position": max_position,
             "max_results": max_results,
+            "min_known_query_imp": min_known_query_imp,
         },
         "eligible": eligible,
+        "known_query_gate_applied": known_gate_applied,
+        "dropped_low_known_query_imp": len(dropped_low_known),
         "detected": detected,
     }
 
@@ -123,6 +164,8 @@ def main() -> int:
     p.add_argument("--min-position", type=float, default=DEFAULT_MIN_POSITION)
     p.add_argument("--max-position", type=float, default=DEFAULT_MAX_POSITION)
     p.add_argument("--max-results", type=int, default=DEFAULT_MAX_RESULTS)
+    p.add_argument("--min-known-query-imp", type=int, default=DEFAULT_MIN_KNOWN_QUERY_IMP,
+                   help="by_combo に出るクエリの imp 合計がこれ未満のページは出さない (0 で無効)")
     args = p.parse_args()
 
     in_path = pathlib.Path(args.input)
@@ -137,6 +180,7 @@ def main() -> int:
         min_position=args.min_position,
         max_position=args.max_position,
         max_results=args.max_results,
+        min_known_query_imp=args.min_known_query_imp,
     )
 
     out = pathlib.Path(args.out)
