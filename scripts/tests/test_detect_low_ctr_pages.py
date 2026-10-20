@@ -283,6 +283,12 @@ def test_poisson_lower_tail_matches_closed_form():
     assert poisson_lower_tail(3, 0.0) == 1.0
 
 
+def test_poisson_lower_tail_does_not_underflow_on_large_expectations():
+    # exp(-1000) は 0.0。掛け上げ式だとクリックが期待どおりでも確率 0 になる
+    assert poisson_lower_tail(1000, 1000.0) == pytest.approx(0.508, abs=0.01)
+    assert poisson_lower_tail(900, 1000.0) < 0.01
+
+
 def test_band_rule_does_not_flag_zero_clicks_explained_by_chance():
     # 9 位・imp 50・0 クリック: 期待 2.25 クリックで 0 は 1 割ほど起きる。旧判定なら鳴る
     page = {"page": "/p/a", "impressions": 50, "clicks": 0, "ctr": 0.0, "position": 9.0}
@@ -336,3 +342,15 @@ def test_load_band_ctr_excludes_the_judged_week(tmp_path):
     got = load_band_ctr(tmp_path, exclude_range={"start": "2026-10-01", "end": "2026-10-08"})
     assert got == {"1-3": {"clicks": 10, "impressions": 100, "ctr": 0.1}}  # 15 位は帯の外
     assert load_band_ctr(tmp_path)["1-3"]["clicks"] == 40
+
+
+def test_tested_pages_come_before_legacy_ones():
+    thin = {k: v for k, v in BANDS.items() if k != "7-10"}  # 7-10 位は従来判定に戻る
+    pages = [
+        {"page": "/p/legacy", "impressions": 900, "clicks": 0, "ctr": 0.0, "position": 9.0},
+        {"page": "/p/tested", "impressions": 100, "clicks": 0, "ctr": 0.0, "position": 2.0},
+    ]
+    gsc = _make_gsc(pages, clicks_sitewide=300, impressions_sitewide=10000)
+    got = detect(gsc, band_ctr=thin)["detected"]
+    assert [(r["page"], r["rule"]) for r in got] == [
+        ("/p/tested", "position_poisson"), ("/p/legacy", "sitewide_ratio")]

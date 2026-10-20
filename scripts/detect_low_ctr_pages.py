@@ -154,14 +154,15 @@ def load_band_ctr(history_dir: str | pathlib.Path, *,
 
 
 def poisson_lower_tail(k: int, lam: float) -> float:
-    """P(X <= k), X ~ Poisson(lam)。k はクリック数なので小さい前提で素直に足す。"""
+    """P(X <= k), X ~ Poisson(lam)。
+
+    各項は対数で作る。`exp(-lam)` から掛け上げると lam が 745 前後を超えた所で
+    0 にアンダーフローし、クリック数が期待どおりでも確率 0 = 検出になってしまう。
+    """
     if lam <= 0:
         return 1.0
-    term = math.exp(-lam)
-    total = term
-    for i in range(1, int(k) + 1):
-        term *= lam / i
-        total += term
+    log_lam = math.log(lam)
+    total = sum(math.exp(i * log_lam - lam - math.lgamma(i + 1)) for i in range(int(k) + 1))
     return min(total, 1.0)
 
 
