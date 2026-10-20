@@ -34,7 +34,7 @@ import urllib.parse
 
 from scripts._analytics_closed_keys import read_closed_keys
 from scripts._analytics_issue_expiry import expiry_marker, expiry_note
-from scripts._analytics_issue_search import find_taken_keys
+from scripts._analytics_issue_search import find_dismissed_keys, find_taken_keys
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("open_query_intent_issues")
@@ -68,7 +68,14 @@ def should_file(d: dict, *, src_range: dict) -> bool:
 
     first_detected が無い・今週の終端日が分からないときは「初検出ではない」と
     読む (黙る側に倒す)。自動適用自体は Issue の有無に関係なく当たっている。
+
+    持ち越し (`carried_forward`) の行は、どのページでも起票しない (brain#127)。
+    sticky_weeks は cta_layout を当て続けるための持ち越しで、数字は
+    last_confirmed の週のまま。これを今週の観察期間として起票すると古い数字を
+    今週のものと読ませる (/english-toys/ が 09-10 の数字で 5 週立ち続けた)。
     """
+    if d.get("carried_forward"):
+        return False
     if not is_auto_applied(d):
         return True
     range_end = src_range.get("end")
@@ -201,6 +208,8 @@ def main() -> int:
         logger.info("ignoring %d key(s) closed earlier in this run",
                     len(just_closed & taken))
     taken -= just_closed
+    # 人が「作業なし」(wontfix) で閉じたキーは、しばらく立て直さない
+    taken |= find_dismissed_keys(args.repo, MARKER_PREFIX)
     logger.info("existing query-intent open Issues: %d", len(taken))
 
     created = 0
@@ -210,8 +219,12 @@ def main() -> int:
             logger.info("skip (already open): %s", page)
             continue
         if not should_file(d, src_range=src_range):
-            logger.info("skip (cta_layout auto-applied since %s): %s",
-                        d.get("first_detected"), page)
+            if d.get("carried_forward"):
+                logger.info("skip (carried forward, last confirmed %s): %s",
+                            d.get("last_confirmed"), page)
+            else:
+                logger.info("skip (cta_layout auto-applied since %s): %s",
+                            d.get("first_detected"), page)
             continue
         title = (f"[A-7] Query intent = {d['dominant_intent']} "
                  f"({d['dominant_share']*100:.0f}%): {page}")

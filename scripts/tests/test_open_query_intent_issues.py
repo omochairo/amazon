@@ -52,6 +52,16 @@ def test_pages_outside_auto_apply_are_filed_every_week():
                        src_range=RANGE)
 
 
+def test_carried_forward_rows_are_never_filed():
+    # brain#127: 持ち越しの数字は last_confirmed の週のもの。今週の観察期間として
+    # 起票すると古い数字を今週の実測と読ませる。hub でも初検出の週でも黙る
+    hub = {**_row(HUB, "commercial", first_detected="2026-08-13"), "carried_forward": True}
+    assert not should_file(hub, src_range=RANGE)
+    product = {**_row(PRODUCT), "carried_forward": True}
+    assert not should_file(product, src_range=RANGE)
+    assert should_file({**hub, "carried_forward": False}, src_range=RANGE)
+
+
 def test_body_says_auto_applied_only_for_product_pages():
     note = "自動で当たる"
     assert note in render_body(_row(PRODUCT), src_range=RANGE)

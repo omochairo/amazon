@@ -106,3 +106,29 @@ def test_find_taken_keys_scopes_the_query_to_open_labelled_issues():
     assert "is:open" in seen[0]
     assert "label:quality label:analytics" in seen[0]
     assert 'in:body "a5-orphan:"' in seen[0]
+
+
+def test_dismissed_keys_query_only_recent_wontfix_closures():
+    # brain#128: 仕分けで閉じたキーが翌週そのまま立て直されないように
+    import datetime as dt
+    seen: list[str] = []
+
+    def run(query, page, order):
+        seen.append(query)
+        return [{"body": "<!-- a3-cannibal:おもちゃいろ -->"}]
+
+    with patch.object(s, "_run_search", run):
+        got = s.find_dismissed_keys("o/r", "a3-cannibal:", today=dt.date(2026, 10, 20))
+    assert got == {"おもちゃいろ"}
+    q = seen[0]
+    assert "is:closed" in q and f"label:{s.DISMISS_LABEL}" in q
+    assert "closed:>=2026-09-22" in q  # 28 日前から
+
+
+def test_dismissed_keys_do_not_wait_on_empty_results():
+    # 0 件が普通の検索なので、索引ラグの再試行で毎 run 待たない
+    run, calls = _fake([[]])
+    slept: list[float] = []
+    with patch.object(s, "_run_search", run):
+        assert s.find_dismissed_keys("o/r", "a5-orphan:", sleeper=slept.append) == set()
+    assert len(calls) == 1 and slept == []
