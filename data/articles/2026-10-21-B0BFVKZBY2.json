@@ -196,6 +196,17 @@
       "author": "Amazon",
       "conflict_of_interest": "possible",
       "notes": "価格2737円。対象年齢3歳以上。3歳未満への使用警告記載"
+    },
+    {
+      "id": "src-2",
+      "name": "PR TIMES (学研ホールディングス プレスリリース)",
+      "url": "https://prtimes.jp/main/html/rd/p/000004409.000002535.html",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2022-09-22",
+      "author": "株式会社学研ステイフル",
+      "conflict_of_interest": "possible",
+      "notes": "3歳の子どもでも理解できる簡単なルール。未就学の子どもがルールを守って遊ぶ社会性を学び、「数の数え方」と「色の認知スキル」が身につく。"
     }
   ],
   "claims": [
@@ -205,10 +216,11 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-1",
-        "src-amz"
+        "src-amz",
+        "src-2"
       ],
-      "cross_checked": false,
-      "notes": "販売・公式ページ記載のみ"
+      "cross_checked": true,
+      "notes": "公式とPR TIMESで一致確認"
     },
     {
       "claim": "未就学児でも理解しやすい簡単なルールである",
@@ -216,10 +228,11 @@
       "confidence": "medium",
       "supporting_source_ids": [
         "src-1",
-        "src-amz"
+        "src-amz",
+        "src-2"
       ],
-      "cross_checked": false,
-      "notes": "販売・公式ページ記載のみ"
+      "cross_checked": true,
+      "notes": "公式とPR TIMESで一致確認"
     },
     {
       "claim": "家族みんなで複数人(2〜4人)で遊べる",
@@ -227,10 +240,11 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-1",
-        "src-amz"
+        "src-amz",
+        "src-2"
       ],
-      "cross_checked": false,
-      "notes": "販売・公式ページ記載のみ"
+      "cross_checked": true,
+      "notes": "公式とPR TIMESで一致確認"
     },
     {
       "claim": "3歳未満の小部品の誤飲リスクに注意が必要",
@@ -259,7 +273,8 @@
         "text": "色と数を同時に学べる直感的なルールで未就学児でも遊びやすい設計",
         "supporting_source_ids": [
           "src-1",
-          "src-amz"
+          "src-amz",
+          "src-2"
         ]
       },
       {
@@ -300,7 +315,8 @@
       {
         "text": "兄弟や友達とのルールの概念を学ぶ遊び",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-2"
         ]
       },
       {
@@ -317,7 +333,8 @@
         "summary": "複雑なルールが不要で、色と数のマッチングという直感的な遊びやすさが支持されています。家族全員で楽しめる点が大きな魅力です。",
         "supporting_source_ids": [
           "src-1",
-          "src-amz"
+          "src-amz",
+          "src-2"
         ]
       }
     ]
