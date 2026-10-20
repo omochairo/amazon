@@ -24,7 +24,7 @@ import sys
 
 from scripts._analytics_closed_keys import read_closed_keys
 from scripts._analytics_issue_expiry import expiry_marker, expiry_note
-from scripts._analytics_issue_search import find_taken_keys
+from scripts._analytics_issue_search import find_dismissed_keys, find_taken_keys
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("open_engagement_drop_issues")
@@ -126,6 +126,8 @@ def main() -> int:
         logger.info("ignoring %d key(s) closed earlier in this run",
                     len(just_closed & taken))
     taken -= just_closed
+    # 人が「作業なし」(wontfix) で閉じたキーは、しばらく立て直さない
+    taken |= find_dismissed_keys(args.repo, MARKER_PREFIX)
     logger.info("existing engagement-drop open Issues: %d", len(taken))
 
     created = 0

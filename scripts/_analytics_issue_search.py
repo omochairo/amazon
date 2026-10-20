@@ -34,9 +34,23 @@ amazon-home-ops の answerability-audit workflow 実運用で観測)。1 ペー�
 なお同一 run 内で closer が閉じたぶんの取り扱いは別経路 (`_analytics_closed_keys`)。
 あちらは「閉じたのに open と返る」ラグ、こちらは「在るのに 0 件と返る」ラグで、
 必要な補正が逆向きなので分けてある。
+
+## 「作業なし」で閉じたキーはしばらく起票しない (brain#128)
+
+重複判定は open の Issue しか見ないので、人が仕分けて期限より前に閉じると、
+翌週の run が同じキーをそのまま立て直す。brain#96〜#98 を「作業なし」で閉じた
+翌週に #119〜#121 として同じクエリが戻ってきた。仕分けるほど戻ってくる。
+
+そこで `wontfix` を付けて閉じた Issue のキーは、閉じてから `DISMISS_DAYS` 日は
+起票しない (`find_dismissed_keys`)。期限切れで closer が閉じたものは `wontfix` が
+付かないので従来どおり立て直される。`wontfix` を付けるのは人の判断だけ。
+
+opener は `taken -= just_closed` の**後**に足すこと。先に足すと、同じキーの別の
+Issue が同じ run で期限切れになったときに差し引きで抑止まで消える。
 """
 from __future__ import annotations
 
+import datetime as _dt
 import json
 import logging
 import subprocess
@@ -49,6 +63,9 @@ PER_PAGE = 100
 MAX_PAGES = 10
 SEARCH_MAX_ATTEMPTS = 3
 SEARCH_RETRY_SLEEP_SECONDS = 3.0
+# 「作業なし」で閉じたキーを起票しない日数。週次 run 4 回ぶん
+DISMISS_LABEL = "wontfix"
+DISMISS_DAYS = 28
 
 
 def _run_search(query: str, page: int, order: str) -> list[dict]:
@@ -108,3 +125,19 @@ def find_taken_keys(repo: str, marker_prefix: str, *, sleeper=time.sleep) -> set
         f'in:body "{marker_prefix}"'
     )
     return extract_marked_keys(search_issues(query, sleeper=sleeper), marker_prefix)
+
+
+def find_dismissed_keys(repo: str, marker_prefix: str, *, today: _dt.date | None = None,
+                        sleeper=time.sleep) -> set[str]:
+    """`wontfix` で閉じてから DISMISS_DAYS 日以内の Issue の重複防止キー。"""
+    since = (today or _dt.date.today()) - _dt.timedelta(days=DISMISS_DAYS)
+    query = (
+        f"repo:{repo} is:issue is:closed label:quality label:analytics "
+        f"label:{DISMISS_LABEL} closed:>={since.isoformat()} "
+        f'in:body "{marker_prefix}"'
+    )
+    keys = extract_marked_keys(search_issues(query, sleeper=sleeper), marker_prefix)
+    if keys:
+        logger.info("%d key(s) closed as %s within %d days — not refiling",
+                    len(keys), DISMISS_LABEL, DISMISS_DAYS)
+    return keys
