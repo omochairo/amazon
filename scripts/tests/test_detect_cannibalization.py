@@ -12,6 +12,7 @@ from __future__ import annotations
 from scripts.detect_cannibalization import (
     DEFAULT_MIN_PAGE_IMPRESSIONS,
     DEFAULT_MIN_QUERY_IMPRESSIONS,
+    DEFAULT_NAVIGATIONAL_MAX_POSITION,
     detect,
 )
 
@@ -93,3 +94,35 @@ def test_params_are_reported():
     result = detect(_gsc([]))
     assert result["params"]["min_query_impressions"] == DEFAULT_MIN_QUERY_IMPRESSIONS
     assert result["params"]["min_page_impressions"] == DEFAULT_MIN_PAGE_IMPRESSIONS
+
+
+def test_navigational_query_with_all_pages_at_top_is_skipped():
+    # サイト名の指名検索: サイトリンクで全ページが 1 位に並ぶ。上げる順位が無い
+    result = detect(_gsc([
+        _combo("サイト名", "/", 10, position=1.0),
+        _combo("サイト名", "/search/", 8, position=1.0),
+        _combo("サイト名", "/compare/", 6, position=1.0),
+    ]))
+    assert result["detected"] == []
+    assert result["skipped_navigational"] == 1
+    # 量のしきい値は通っているので eligible には数える (母数ゼロと区別する)
+    assert result["eligible"] == 1
+
+
+def test_one_page_below_top_keeps_query_detected():
+    result = detect(_gsc([
+        _combo("ロンビー", "/a/", 10, position=1.0),
+        _combo("ロンビー", "/b/", 8, position=2.8),
+    ]))
+    assert [d["query"] for d in result["detected"]] == ["ロンビー"]
+    assert result["skipped_navigational"] == 0
+
+
+def test_navigational_boundary_is_inclusive():
+    assert DEFAULT_NAVIGATIONAL_MAX_POSITION == 1.5
+    result = detect(_gsc([
+        _combo("サイト名", "/", 10, position=1.5),
+        _combo("サイト名", "/b/", 8, position=1.2),
+    ]))
+    assert result["detected"] == []
+    assert result["params"]["navigational_max_position"] == 1.5
