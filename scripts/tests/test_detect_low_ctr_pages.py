@@ -3,10 +3,16 @@ from __future__ import annotations
 
 import pytest
 
+import json
+
 from scripts.detect_low_ctr_pages import (
+    MIN_BAND_IMPRESSIONS,
     collect_top_queries_by_page,
     compute_baseline_ctr,
     detect,
+    load_band_ctr,
+    poisson_lower_tail,
+    position_band,
 )
 
 
@@ -249,3 +255,102 @@ def test_known_query_gate_disabled_with_zero():
     )
     result = detect(gsc, min_known_query_imp=0)
     assert [d["page"] for d in result["detected"]] == ["/p/"]
+
+
+# --- 順位帯の期待 CTR + ポアソン検定 (brain#128 の続き) ---
+
+BANDS = {
+    "1-3": {"clicks": 120, "impressions": 1000, "ctr": 0.12},
+    "3-5": {"clicks": 110, "impressions": 1000, "ctr": 0.11},
+    "5-7": {"clicks": 80, "impressions": 1000, "ctr": 0.08},
+    "7-10": {"clicks": 45, "impressions": 1000, "ctr": 0.045},
+}
+
+
+def test_position_band_edges():
+    assert position_band(1.0) == "1-3"
+    assert position_band(3.0) == "1-3"
+    assert position_band(3.01) == "3-5"
+    assert position_band(10.0) == "7-10"
+    assert position_band(10.5) is None
+    assert position_band(0.0) is None
+
+
+def test_poisson_lower_tail_matches_closed_form():
+    import math
+    assert poisson_lower_tail(0, 2.0) == pytest.approx(math.exp(-2.0))
+    assert poisson_lower_tail(1, 2.0) == pytest.approx(3 * math.exp(-2.0))
+    assert poisson_lower_tail(3, 0.0) == 1.0
+
+
+def test_poisson_lower_tail_does_not_underflow_on_large_expectations():
+    # exp(-1000) は 0.0。掛け上げ式だとクリックが期待どおりでも確率 0 になる
+    assert poisson_lower_tail(1000, 1000.0) == pytest.approx(0.508, abs=0.01)
+    assert poisson_lower_tail(900, 1000.0) < 0.01
+
+
+def test_band_rule_does_not_flag_zero_clicks_explained_by_chance():
+    # 9 位・imp 50・0 クリック: 期待 2.25 クリックで 0 は 1 割ほど起きる。旧判定なら鳴る
+    page = {"page": "/p/a", "impressions": 50, "clicks": 0, "ctr": 0.0, "position": 9.0}
+    gsc = _make_gsc([page], clicks_sitewide=300, impressions_sitewide=10000)
+    assert len(detect(gsc)["detected"]) == 1
+    assert detect(gsc, band_ctr=BANDS)["detected"] == []
+
+
+def test_band_rule_flags_top_position_page_the_old_line_missed():
+    # 2 位・CTR 4% は site 全体 3% × 1.5 = 4.5% の線なら鳴るが、上位で 12% 期待なら強く低い
+    page = {"page": "/p/b", "impressions": 200, "clicks": 9, "ctr": 0.045, "position": 2.0}
+    gsc = _make_gsc([page], clicks_sitewide=300, impressions_sitewide=10000)
+    assert detect(gsc)["detected"] == []  # 4.5% は線ちょうどで鳴らない
+    got = detect(gsc, band_ctr=BANDS)["detected"]
+    assert [r["page"] for r in got] == ["/p/b"]
+    assert got[0]["rule"] == "position_poisson"
+    assert got[0]["position_band"] == "1-3"
+    assert got[0]["expected_ctr"] == 0.12
+    assert got[0]["p_value"] < 0.05
+
+
+def test_thin_band_falls_back_to_sitewide_ratio():
+    thin = {**BANDS, "7-10": {"clicks": 1, "impressions": MIN_BAND_IMPRESSIONS - 1, "ctr": 0.01}}
+    page = {"page": "/p/a", "impressions": 50, "clicks": 0, "ctr": 0.0, "position": 9.0}
+    gsc = _make_gsc([page], clicks_sitewide=300, impressions_sitewide=10000)
+    got = detect(gsc, band_ctr=thin)
+    assert [r["rule"] for r in got["detected"]] == ["sitewide_ratio"]
+    assert "7-10" not in got["band_ctr"]
+
+
+def test_tested_pages_sort_by_p_value_first():
+    pages = [
+        {"page": "/p/weak", "impressions": 400, "clicks": 10, "ctr": 0.025, "position": 8.0},
+        {"page": "/p/strong", "impressions": 100, "clicks": 0, "ctr": 0.0, "position": 2.0},
+    ]
+    gsc = _make_gsc(pages, clicks_sitewide=300, impressions_sitewide=10000)
+    got = detect(gsc, band_ctr=BANDS)["detected"]
+    assert [r["page"] for r in got] == ["/p/strong", "/p/weak"]
+
+
+def test_load_band_ctr_excludes_the_judged_week(tmp_path):
+    def snap(name, start, end, clicks):
+        (tmp_path / name).write_text(json.dumps({
+            "range": {"start": start, "end": end},
+            "by_page": [{"page": "/p", "clicks": clicks, "impressions": 100, "position": 2.0},
+                        {"page": "/q", "clicks": 1, "impressions": 100, "position": 15.0}],
+        }), encoding="utf-8")
+    snap("2026-W40.json", "2026-09-24", "2026-10-01", 10)
+    snap("2026-W41.json", "2026-10-01", "2026-10-08", 30)
+    (tmp_path / "broken.json").write_text("{", encoding="utf-8")
+    got = load_band_ctr(tmp_path, exclude_range={"start": "2026-10-01", "end": "2026-10-08"})
+    assert got == {"1-3": {"clicks": 10, "impressions": 100, "ctr": 0.1}}  # 15 位は帯の外
+    assert load_band_ctr(tmp_path)["1-3"]["clicks"] == 40
+
+
+def test_tested_pages_come_before_legacy_ones():
+    thin = {k: v for k, v in BANDS.items() if k != "7-10"}  # 7-10 位は従来判定に戻る
+    pages = [
+        {"page": "/p/legacy", "impressions": 900, "clicks": 0, "ctr": 0.0, "position": 9.0},
+        {"page": "/p/tested", "impressions": 100, "clicks": 0, "ctr": 0.0, "position": 2.0},
+    ]
+    gsc = _make_gsc(pages, clicks_sitewide=300, impressions_sitewide=10000)
+    got = detect(gsc, band_ctr=thin)["detected"]
+    assert [(r["page"], r["rule"]) for r in got] == [
+        ("/p/tested", "position_poisson"), ("/p/legacy", "sitewide_ratio")]
