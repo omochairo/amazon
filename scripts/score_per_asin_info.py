@@ -571,6 +571,11 @@ def sources_exhausted(result: dict) -> bool:
     収集前の defer は「待てば揃うかもしれない」ので待たせる。収集後もまだ足りないなら、
     fetch_third_party_sources は空振りを長期間 (既定 180 日〜) 引き直さないので、
     実質これ以上は増えない。
+
+    navi-brain#117 以降、前の記事の出典だけで 2 サイトに届いていた書き直しもここで
+    True になる (awaiting_sources が前の記事の出典を数えないため)。書き直しの印は
+    取り下げられるが記事本体は残る。印を残すと、生成されないまま書き直しの列を
+    埋め続ける。
     """
     return should_defer(result) and bool(result.get("third_party_fetched"))
 

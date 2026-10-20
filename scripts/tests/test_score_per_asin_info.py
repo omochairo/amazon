@@ -558,6 +558,8 @@ class PriorArticleSitesTest(unittest.TestCase):
         self.assertEqual(r["prior_article_sites"], 2)
         self.assertEqual(S.non_sales_material(r), 2)
         self.assertTrue(S.awaiting_sources(r))
+        # 収集を試した後なので「揃う見込みなし」。書き直しの印は取り下げる (記事は残る)
+        self.assertTrue(S.sources_exhausted(r))
 
     def test_candidate_sites_still_lift_awaiting_for_rewrite(self):
         d = self.base / "B0PA000005"
