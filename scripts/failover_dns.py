@@ -288,6 +288,19 @@ def decide(probes: List[Dict[str, Any]], standby: Dict[str, Any],
 
     # **1 回でも健全なら健全。** 連続失敗を要求するのと同じことを裏から言っている。
     if "healthy" in verdicts:
+        if row["current_side"] == "standby":
+            # 倒したあとは、プローブ先の navi.omcha.jp が**待機系から** 200 を返す。
+            # これを「オリジンが戻った」と読んで none にすると、状態 issue が閉じて
+            # 待機系を向いたままだと誰も気づかない (戻しは手動なので戻らない)。
+            # 待機系で配信している間は noindex の term ページが 404 になる (#6415 の 2)
+            # ので、放置はクロールの 404 を自分で作ることになる。NAS が直ったか
+            # どうかはここからは見えないので、戻すまで already で開いたままにする。
+            row["action"] = "already"
+            row["detail"] = (
+                "待機系から応答している (NAS が直ったかはここからは見えない)。"
+                "戻すのは手動: --to nas"
+            )
+            return row
         row["action"] = "none"
         row["detail"] = "オリジンは応答している"
         return row
@@ -568,6 +581,11 @@ def title_for(row: Dict[str, Any]) -> str:
     return TITLES.get(row["action"], "[delivery][failover] 配信に異常があります")
 
 
+def _action_line(action: str) -> str:
+    """本文の「判定」行。前回の判定を本文から読み戻すときも同じ形で照合する。"""
+    return "| 判定 | `{}` |".format(action)
+
+
 def render_body(row: Dict[str, Any]) -> str:
     standby = row.get("standby") or {}
     parts: List[str] = [
@@ -579,7 +597,7 @@ def render_body(row: Dict[str, Any]) -> str:
         "",
         "| 項目 | 値 |",
         "| --- | --- |",
-        "| 判定 | `{}` |".format(row["action"]),
+        _action_line(row["action"]),
         "| 向き先 (判定時) | {} |".format(row.get("current_label") or "-"),
         "| 自動切替 | {} |".format("武装" if row.get("enabled") else "**未武装**"),
         "| プローブ | {} |".format(" / ".join(row.get("probe_verdicts") or []) or "-"),
@@ -616,7 +634,8 @@ def render_body(row: Dict[str, Any]) -> str:
         "- `ambiguous` — `cf-ray` が無い失敗が混ざっています。"
         "CF 自体か手元の回線の問題である可能性を否定できないため、"
         "**CNAME は触りません**。GitHub Actions runner 側の一時障害でも出ます",
-        "- `already` — すでに待機系で配信中です",
+        "- `already` — すでに待機系で配信中です。**本番に戻すまでこの issue は開いたままです**"
+        "(待機系では noindex のタグ・ブランドが 404 になるので、長く放置しないこと)",
         "",
         "## 戻しかた",
         "",
@@ -788,6 +807,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     title = title_for(row)
+    if existing and row["action"] == "already" and _action_line("already") in existing["body"]:
+        # 待機系での配信は戻すまで続くので、30 分毎に同じ内容で body を書き換えない
+        # (GitHub API を無駄に叩かない。CLAUDE.md のバースト規律)。
+        logger.info("#%d はすでに already — 書き換えません", existing["number"])
+        return 0
     if existing:
         logger.info("updated %s", update_issue(args.repo, existing["number"], title, body))
     else:
