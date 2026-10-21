@@ -176,6 +176,23 @@ def test_already_on_standby_is_not_flipped_again():
     assert row["action"] == "already"
 
 
+def test_healthy_while_on_standby_stays_already():
+    """倒したあとの次の run。navi.omcha.jp は**待機系から** 200 を返す。
+
+    これを none (= 健全) にすると状態 issue が閉じ、待機系を向いたままだと
+    誰も気づかない。戻すまで already で開いたままにする。
+    """
+    row = call([probe_ok()], rec=record(content=STANDBY))
+    assert row["action"] == "already"
+    assert row["action"] not in fd.HEALTHY_ACTIONS
+    assert "--to nas" in row["detail"]
+
+
+def test_healthy_on_nas_is_still_none():
+    row = call([probe_ok()], rec=record(content=TUNNEL))
+    assert row["action"] == "none"
+
+
 def test_unknown_cname_is_never_touched():
     """向き先が想定外なら自動で書き換えない (人が何かしている最中かもしれない)。"""
     row = call([probe_origin_down()] * 3, rec=record(content="example.com"))
@@ -398,6 +415,67 @@ def test_created_issue_carries_the_state_label(monkeypatch):
     create = [c for c in calls if c[0] == "issue" and c[1] == "create"][0]
     labels = create[create.index("--label") + 1]
     assert fd.STATE_LABEL in labels
+
+
+# --------------------------------------------------------------------------
+# main: 待機系を向いている間の状態 issue
+# --------------------------------------------------------------------------
+
+def _run_main(monkeypatch, *, rec_content, existing_body=None):
+    """main を DNS・HTTP・gh を差し替えて 1 回走らせ、gh の呼び出しを返す。"""
+    calls = []
+    label_items = ([{"number": 9704, "body": existing_body}]
+                   if existing_body is not None else [])
+    _install_fake_gh(monkeypatch, label_items=label_items, calls=calls)
+    monkeypatch.setattr(fd, "probe_origin", lambda *a, **k: [probe_ok()])
+    monkeypatch.setattr(fd, "get_zone_id", lambda *a, **k: "zone")
+    monkeypatch.setattr(fd, "get_record", lambda *a, **k: record(content=rec_content))
+
+    def no_patch(*a, **k):
+        raise AssertionError("健全な応答で DNS を書き換えてはいけない")
+    monkeypatch.setattr(fd, "patch_record", no_patch)
+    monkeypatch.setenv("CF_DNS_TOKEN", "t")
+    monkeypatch.setenv("FAILOVER_ENABLED", "true")
+    assert fd.main(["--repo", "omochairo/amazon"]) == 0
+    return calls
+
+
+def _issue_ops(calls):
+    return [c[1] for c in calls if c[0] == "issue" and c[1] != "list"]
+
+
+def test_main_keeps_issue_open_after_failover(monkeypatch):
+    """倒した直後 (本文は failover) の次の run で、close せず already に更新する。"""
+    body = fd.MARKER_COMMENT + "\n" + fd._action_line("failover")
+    calls = _run_main(monkeypatch, rec_content=STANDBY, existing_body=body)
+    assert _issue_ops(calls) == ["edit"]
+    edit = [c for c in calls if c[:2] == ["issue", "edit"]][0]
+    assert edit[edit.index("--title") + 1] == fd.title_for({"action": "already"})
+
+
+def test_main_does_not_rewrite_issue_that_is_already_already(monkeypatch):
+    """待機系での配信中は 30 分毎に同じ内容で書き換えない (API を叩かない)。"""
+    body = fd.MARKER_COMMENT + "\n" + fd._action_line("already")
+    calls = _run_main(monkeypatch, rec_content=STANDBY, existing_body=body)
+    assert _issue_ops(calls) == []
+
+
+def test_main_opens_issue_when_on_standby_without_one(monkeypatch):
+    """手で倒した等で issue が無くても、待機系を向いていれば起票する。"""
+    calls = _run_main(monkeypatch, rec_content=STANDBY)
+    assert _issue_ops(calls) == ["create"]
+
+
+def test_main_closes_issue_once_back_on_nas(monkeypatch):
+    body = fd.MARKER_COMMENT + "\n" + fd._action_line("already")
+    calls = _run_main(monkeypatch, rec_content=TUNNEL, existing_body=body)
+    assert _issue_ops(calls) == ["close"]
+
+
+def test_main_issue_body_never_carries_the_tunnel_hostname(monkeypatch):
+    calls = _run_main(monkeypatch, rec_content=STANDBY)
+    for c in calls:
+        assert TUNNEL not in " ".join(c)
 
 
 def test_marker_comment_is_the_full_html_comment():
