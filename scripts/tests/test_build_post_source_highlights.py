@@ -22,6 +22,7 @@ from build_post import (  # type: ignore[import-not-found]
     _attach_source_highlights,
     _highlight_score,
     _highlight_snippet_ok,
+    _snippet_plain_text,
 )
 
 
@@ -161,6 +162,37 @@ class AttachTests(unittest.TestCase):
             hosts = [h["host"] for h in data.get("source_highlights") or []]
             self.assertNotIn("search.kakaku.com", hosts)
             self.assertIn("review.kakaku.com", hosts)  # レビュー本体は残す
+
+    def test_markdown_snippet_is_flattened(self):
+        # #10091: 空行入りの Markdown スニペットが <details> の HTML ブロックを
+        # 途中で終わらせ、外部サイトの相対リンク (/news/products_info/hoph.html)
+        # が navi.omcha.jp 上のリンクとして描画されて 404 になっていた。
+        snippet = (
+            "### 最新の記事\n\n 2025.03.10 充放電装置を追加！\n"
+            " [2024.11.25 新しいアンプを発売しました。[HOPHシリーズ]](/news/products_info/hoph.html)\n\n"
+            "  + 新製品情報\n\n ![img](//img.example.com/a.jpg) 最高クラスのパワーを実現した電源モジュール登場"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            self._write(root, "B4", [
+                {"title": "新製品情報", "url": "https://www.matsusada.co.jp/news/products_info",
+                 "snippet": snippet, "host": "matsusada.co.jp"},
+            ])
+            data = {"product": {"asin": "B4"}}
+            _attach_source_highlights(data, root)
+            out = data["source_highlights"][0]["snippet"]
+        self.assertNotIn("\n", out)
+        self.assertNotIn("/news/products_info", out)
+        self.assertNotIn("img.example.com", out)
+        for ch in "#[]()":
+            self.assertNotIn(ch, out)
+        self.assertNotIn("+ 新製品情報", out)
+        self.assertIn("最新の記事 2025.03.10 充放電装置を追加！", out)
+        self.assertIn("HOPHシリーズ", out)
+
+    def test_plain_text_keeps_prose(self):
+        s = "子どもが夢中で遊んでいます。対象年齢は3-5歳で、全長30cmほどです。"
+        self.assertEqual(_snippet_plain_text(s), s)
 
     def test_preserves_existing(self):
         with tempfile.TemporaryDirectory() as tmp:
