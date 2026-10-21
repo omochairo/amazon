@@ -1777,6 +1777,30 @@ def _highlight_has_contact_info(text: str) -> bool:
     return bool(_EMAIL_RE.search(s) or _PHONE_RE.search(s))
 
 
+# #10091: Tavily snippets are Markdown extracts of the source page (headings,
+# list bullets, `[text](/relative/path)` links). The template HTML-escapes the
+# snippet inside a raw `<details>` block, but Goldmark ends an HTML block at the
+# first blank line and parses the rest as Markdown — so a snippet with "\n\n"
+# leaked the third party's headings into our TOC and turned its *relative*
+# links into links on navi.omcha.jp (404: /news/products_info/hoph.html).
+# 2026-10-21: 154 rendered articles carried a blank-line snippet. Flatten to a
+# single line of plain text so nothing in the quote is ever parsed as Markdown.
+_MD_IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
+_MD_LINK_DEST_RE = re.compile(r"\]\([^)\s]*\)")
+_MD_LINE_MARKER_RE = re.compile(r"^[ \t]*(?:#{1,6}|[-+*]|>)[ \t]+", re.MULTILINE)
+
+
+def _snippet_plain_text(snippet: str) -> str:
+    """Flatten a Markdown snippet into one line of plain text: images and link
+    destinations dropped, bracket markup removed, heading / list / quote
+    markers stripped, whitespace (incl. blank lines) collapsed."""
+    s = _MD_IMAGE_RE.sub(" ", snippet or "")
+    s = _MD_LINK_DEST_RE.sub("]", s)
+    s = s.replace("[", "").replace("]", "")
+    s = _MD_LINE_MARKER_RE.sub("", s)
+    return " ".join(s.split())
+
+
 def _highlight_snippet_ok(snippet: str) -> bool:
     """True when the snippet reads like prose a reader benefits from, not a
     digit-dense parts list, a contact block, or a stub. Used to keep the
@@ -1841,8 +1865,13 @@ def _attach_source_highlights(
     if not isinstance(sources, list):
         return
     candidates = [
-        s for s in sources
-        if isinstance(s, dict) and s.get("url") and s.get("title")
+        {**s, "snippet": _snippet_plain_text(s.get("snippet") or "")}
+        for s in sources
+        if isinstance(s, dict)
+    ]
+    candidates = [
+        s for s in candidates
+        if s.get("url") and s.get("title")
         # #5490 案B: 検索語を URL に埋めただけのページは出典ではない。収集側
         # (fetch_third_party_sources._is_excluded) は塞いだが、**それ以前に集めた
         # 行が store に残っており、ここには防波堤が無かった** (2026-08-20 実測:
@@ -1863,7 +1892,7 @@ def _attach_source_highlights(
         picked.append({
             "title": s.get("title"),
             "url": s.get("url"),
-            "snippet": (s.get("snippet") or "").strip(),
+            "snippet": s["snippet"],
             "host": s.get("host") or "",
         })
         if len(picked) >= limit:
