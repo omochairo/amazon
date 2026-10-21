@@ -100,6 +100,10 @@ gh variable set FAILOVER_ENABLED --body true -R omochairo/amazon
 
 ### 戻しかた (手動)
 
+倒したあとは、状態 issue（ラベル `origin-failover-state`）が `already`（待機系で配信中）のまま**開き続ける**。
+`navi.omcha.jp` は待機系から 200 を返すので、53 からは NAS が直ったかどうかは見えない。
+戻して本番を向いた時点で閉じる。
+
 **先に NAS 側 (cloudflared / nginx / navi-switch) の復旧を確認すること。**
 
 ```bash

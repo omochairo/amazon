@@ -157,8 +157,17 @@ def _nginx_quote(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def build_map_lines(indexed: dict, reverse: dict) -> list:
+def build_map_lines(indexed: dict, reverse: dict, include_feeds: bool = False) -> list:
     """nginx の `map` に include できる行を作る。
+
+    `include_feeds=True` のときは、残った各ルールについて RSS (`index.xml`) の
+    行も足す。Hugo はタグ・ブランドのページごとに `<term>/index.xml` を出すので、
+    旧 JP の RSS URL も同じ用語の新スラッグの RSS に飛ばせる。navi.conf の map は
+    `$uri` の完全一致なので、本体の行だけでは RSS に効かない。GSC のクロールの
+    統計情報 (2026-10-21 取得) では、転送表にある用語の旧 RSS が 404 を返していた。
+    RSS 行は本体の行から機械的に作るので、キー衝突・自己ループの判定は本体と同じ
+    結果になる。`_redirects` (待機系) には足さない: GitLab Pages はルール数に
+    上限があり (既定 1,000)、待機系で RSS まで転送する理由は薄い。
 
     `_redirects` 版 (build_redirect_lines) との差は 3 点:
     - キーをクォートするので、生の空白を含む用語もスキップせずに拾える
@@ -207,6 +216,8 @@ def build_map_lines(indexed: dict, reverse: dict) -> list:
             continue
         old_path, new_path = group[0]
         lines.append(f'"{_nginx_quote(old_path)}" "{new_path}";')
+        if include_feeds:
+            lines.append(f'"{_nginx_quote(old_path)}index.xml" "{new_path}index.xml";')
     if dropped:
         print(f"dropped {dropped} map rules due to case-insensitive key conflicts", file=sys.stderr)
     return sorted(lines)
@@ -239,7 +250,7 @@ def main() -> int:
     want_nginx = args.format in ("nginx", "both")
 
     lines = build_redirect_lines(indexed, reverse) if want_netlify else []
-    map_lines = build_map_lines(indexed, reverse) if want_nginx else []
+    map_lines = build_map_lines(indexed, reverse, include_feeds=True) if want_nginx else []
 
     print(
         f"indexed tags={len(indexed['tags'])} brands={len(indexed['brands'])} "
