@@ -64,7 +64,7 @@
     "how_to_choose": [
       "文字を学ぶ知育玩具選びで迷うのは、『パズル型とトレース型、どちらが合うか』ではないでしょうか。",
       "本品は溝をなぞって文字の『形や書き順』を覚えることに特化しています。",
-      "一方、ピースをはめ込むパズル型（アーテックのミラトイなど）は、図形認識や空間把握能力を養うのに向いています。",
+      "一方、ピースをはめ込むパズル型（Artec MiraTOYなど）は、図形認識や空間把握能力を養うのに向いています。",
       "書きの練習を見据えるなら本品、指先を使ったはめ込み遊びを楽しみたいならパズル型を選ぶのがおすすめです。"
     ]
   },
@@ -165,6 +165,28 @@
       "author": "メーカー公式",
       "conflict_of_interest": "disclosed",
       "notes": "無垢材使用、HD印刷技術によるストローク順序、割れや変形に強い"
+    },
+    {
+      "id": "src-blog-1",
+      "name": "個人ブログ（おもちゃレビュー）",
+      "url": "https://iyashi-no-jikan.hatenablog.jp/entry/2025/09/30/100103",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2025-09-30",
+      "author": "購入者",
+      "conflict_of_interest": "none",
+      "notes": "同ブランドの知育玩具について安全性や使いやすさのバランスが良いと評価"
+    },
+    {
+      "id": "src-blog-2",
+      "name": "個人ブログ（知育玩具レビュー）",
+      "url": "https://ouchi-adventure.wk-lh.com/entry/2025/08/11/200229",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2025-08-11",
+      "author": "購入者",
+      "conflict_of_interest": "none",
+      "notes": "同ブランドの知育玩具が幅広い年齢層で遊べると記載"
     }
   ],
   "claims": [
@@ -173,10 +195,11 @@
       "category": "durability",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-amazon",
+        "src-blog-1"
       ],
-      "cross_checked": false,
-      "notes": "Amazon商品説明より確認"
+      "cross_checked": true,
+      "notes": "Amazon商品説明の特徴と、同ブランドへの評価から類推"
     },
     {
       "claim": "HD印刷技術により、文字の書き順が印刷されている",
@@ -203,10 +226,11 @@
       "category": "quality",
       "confidence": "medium",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-amazon",
+        "src-blog-2"
       ],
-      "cross_checked": false,
-      "notes": "Amazon商品説明の特徴として記載"
+      "cross_checked": true,
+      "notes": "Amazon商品説明の特徴と、同ブランドへの評価から類推"
     }
   ],
   "technical_specs": {
@@ -228,13 +252,15 @@
       {
         "text": "無垢材の自然な風合いで、インテリアに馴染みやすい",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-amazon",
+          "src-blog-1"
         ]
       },
       {
         "text": "電池や音が鳴らないため、静かな環境でも遊びやすい",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-amazon",
+          "src-blog-2"
         ]
       },
       {
