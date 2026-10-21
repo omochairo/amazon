@@ -170,6 +170,34 @@ class BuildMapLinesTest(unittest.TestCase):
             self.assertTrue(line.endswith(";"), line)
             self.assertEqual(line.count('"'), 4, f"quote count broken: {line!r}")
 
+    def test_include_feeds_adds_rss_line_per_rule(self):
+        # map は $uri の完全一致なので、本体の行だけでは旧 RSS に効かない。
+        indexed = {"tags": {"lego"}, "brands": {"lotus-life"}}
+        reverse = {"lego": "レゴ", "lotus-life": "LOTUS LIFE"}
+        self.assertEqual(
+            gtr.build_map_lines(indexed, reverse, include_feeds=True),
+            sorted([
+                '"/tags/レゴ/" "/tags/lego/";',
+                '"/tags/レゴ/index.xml" "/tags/lego/index.xml";',
+                '"/brands/LOTUS LIFE/" "/brands/lotus-life/";',
+                '"/brands/LOTUS LIFE/index.xml" "/brands/lotus-life/index.xml";',
+            ]),
+        )
+
+    def test_include_feeds_follows_the_same_drops(self):
+        # 本体で落とした用語 (自己ループ・キー衝突・制御文字) は RSS も出さない。
+        indexed = {"tags": {"bad"}, "brands": {"4m", "connetix", "connetix-2"}}
+        reverse = {"bad": "A\nB", "4m": "4M", "connetix": "Connetix", "connetix-2": "CONNETIX"}
+        self.assertEqual(gtr.build_map_lines(indexed, reverse, include_feeds=True), [])
+
+    def test_include_feeds_keys_are_escaped(self):
+        indexed = {"tags": {"q"}, "brands": set()}
+        reverse = {"q": 'A"B'}
+        lines = gtr.build_map_lines(indexed, reverse, include_feeds=True)
+        self.assertIn('"/tags/A\\"B/index.xml" "/tags/q/index.xml";', lines)
+        for line in lines:
+            self.assertTrue(line.endswith(";"), line)
+
 
 if __name__ == "__main__":
     unittest.main()
