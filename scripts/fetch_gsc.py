@@ -36,6 +36,11 @@ TOP_COMBO_DEFAULT = 200
 # Search Analytics API の 1 リクエストあたり rowLimit 上限。これを超える件数は
 # startRow のページングでしか取れない (_query が面倒を見る)。
 API_ROW_LIMIT_MAX = 25000
+# Search Analytics の検索種別 (body の "type")。省略時は API 既定の web。
+SEARCH_TYPES = ("web", "image", "video", "news", "discover", "googleNews")
+# **query 次元を受け付けない種別。** Discover と Google ニュースは検索語を経由しない
+# 面なので、by_query / by_combo は投げずに空で返す (投げると API がエラーを返す)。
+QUERYLESS_SEARCH_TYPES = frozenset({"discover", "googleNews"})
 
 
 def _build_service(client_id: str, client_secret: str, refresh_token: str):
@@ -57,7 +62,8 @@ def _build_service(client_id: str, client_secret: str, refresh_token: str):
 
 def _query(service, site_url: str, start: str, end: str,
            dims: list[str], row_limit: int = 1000,
-           aggregation_type: str | None = None) -> list[dict]:
+           aggregation_type: str | None = None,
+           search_type: str | None = None) -> list[dict]:
     """Search Analytics query。row を dict 列に正規化。
 
     dims が空 (dimensionless / site-wide query) の場合、"dimensions" キー自体を
@@ -83,6 +89,8 @@ def _query(service, site_url: str, start: str, end: str,
             body["dimensions"] = dims
         if aggregation_type:
             body["aggregationType"] = aggregation_type
+        if search_type:
+            body["type"] = search_type
         res = service.searchanalytics().query(siteUrl=site_url, body=body).execute()
         batch = res.get("rows", [])
         for r in batch:
@@ -90,7 +98,9 @@ def _query(service, site_url: str, start: str, end: str,
             row["clicks"] = int(r.get("clicks", 0))
             row["impressions"] = int(r.get("impressions", 0))
             row["ctr"] = float(r.get("ctr", 0.0))
-            row["position"] = float(r.get("position", 0.0))
+            # 順位の無い面 (Discover など) では position が返らない。0.0 で埋めると
+            # 「1 位より上」に見えるので None のまま残す
+            row["position"] = float(r["position"]) if "position" in r else None
             rows.append(row)
         # 返りが要求より少なければそこで打ち止め (次ページは空)
         if len(batch) < page_size:
@@ -105,7 +115,8 @@ def fetch(site_url: str, client_id: str, client_secret: str, refresh_token: str,
           top_query: int = TOP_QUERY_DEFAULT,
           top_page: int = TOP_PAGE_DEFAULT,
           top_combo: int = TOP_COMBO_DEFAULT,
-          aggregation_type: str | None = None) -> dict[str, Any]:
+          aggregation_type: str | None = None,
+          search_type: str | None = None) -> dict[str, Any]:
     service = _build_service(client_id, client_secret, refresh_token)
 
     end = date.fromisoformat(end_date) if end_date else date.today() - timedelta(days=delay)
@@ -123,16 +134,23 @@ def fetch(site_url: str, client_id: str, client_secret: str, refresh_token: str,
     logger.info("range: %s .. %s (site=%s, %d-day delay buffer)",
                 start_s, end_s, site_url, delay)
 
-    by_query = _query(service, site_url, start_s, end_s, ["query"], top_query, aggregation_type)
+    queryless = search_type in QUERYLESS_SEARCH_TYPES
+
+    def q(dims: list[str], row_limit: int) -> list[dict]:
+        # 全ての系列に同じ集計方式・検索種別を渡す (系列ごとに違うと totals が突き合わない)
+        return _query(service, site_url, start_s, end_s, dims, row_limit,
+                      aggregation_type, search_type)
+
+    by_query = [] if queryless else q(["query"], top_query)
     by_query.sort(key=lambda r: r["clicks"], reverse=True)
 
-    by_page = _query(service, site_url, start_s, end_s, ["page"], top_page, aggregation_type)
+    by_page = q(["page"], top_page)
     by_page.sort(key=lambda r: r["clicks"], reverse=True)
 
-    by_combo = _query(service, site_url, start_s, end_s, ["query", "page"], top_combo, aggregation_type)
+    by_combo = [] if queryless else q(["query", "page"], top_combo)
     by_combo.sort(key=lambda r: r["clicks"], reverse=True)
 
-    by_device = _query(service, site_url, start_s, end_s, ["device"], 10, aggregation_type)
+    by_device = q(["device"], 10)
 
     # **country は保持 16 か月で、取っていなければ過ぎた日は二度と取れない。**
     # 実測 (omcha.jp / 2026-09-07): 1 日 39〜90 行・raw 4〜8KB。by_query 5,751 行の
@@ -144,8 +162,7 @@ def fetch(site_url: str, client_id: str, client_secret: str, refresh_token: str,
     # 判定しきい値 (0.3 位) 未満だった。**今は何の判定も変えない。**
     # ただしサイトが小さかった 2025-04 は日本以外が表示の 11.4% で歪みが
     # +0.883 位あった。**構成比が変わったときに後から確かめられるように残す。**
-    by_country = _query(service, site_url, start_s, end_s, ["country"], 500,
-                        aggregation_type)
+    by_country = q(["country"], 500)
     by_country.sort(key=lambda r: r["impressions"], reverse=True)
 
     # site-wide totals: dimensionless query (row_limit=1) で真のサイト全体集計を取得。
@@ -153,7 +170,7 @@ def fetch(site_url: str, client_id: str, client_secret: str, refresh_token: str,
     # 「上位ページの合計」にすぎず、position に至っては site-wide の値がどこにも
     # 存在しなかった (#3988 B-1)。ranking loss と検索需要減を切り分けるには
     # 真のサイト全体 impressions / 平均 position が必要。
-    sitewide_rows = _query(service, site_url, start_s, end_s, [], 1, aggregation_type)
+    sitewide_rows = q([], 1)
     if sitewide_rows:
         sitewide = sitewide_rows[0]
         clicks_sitewide = sitewide["clicks"]
@@ -172,7 +189,7 @@ def fetch(site_url: str, client_id: str, client_secret: str, refresh_token: str,
     # → tiny tuning で 1 ページ目に押し上げ可能な候補
     opportunity = [
         r for r in by_page
-        if 11.0 <= r.get("position", 0.0) <= 20.0 and r.get("impressions", 0) >= 50
+        if 11.0 <= (r.get("position") or 0.0) <= 20.0 and r.get("impressions", 0) >= 50
     ]
     opportunity.sort(key=lambda r: r["impressions"], reverse=True)
     opportunity = opportunity[:30]
@@ -193,6 +210,9 @@ def fetch(site_url: str, client_id: str, client_secret: str, refresh_token: str,
         # ので 3 倍前後になる)。混ざったまま時系列にすると段差が出るが、
         # ファイルを外から見ても区別がつかない (omochairo/omcha-ops#101)
         "aggregation_type": aggregation_type,
+        # どの面のデータかを残す。None は API 既定 (web)。Discover のファイルを
+        # web の時系列に混ぜると clicks が二重に数えられる
+        "search_type": search_type,
         "totals": {
             "queries": len(by_query),
             "pages": len(by_page),
@@ -237,6 +257,9 @@ def main() -> int:
     # clicks と position はほぼ変わらない (omochairo/omcha-ops#101)
     p.add_argument("--aggregation-type", choices=["byPage", "byProperty"],
                    help="Search Analytics の aggregationType。省略時は API 既定")
+    p.add_argument("--search-type", choices=SEARCH_TYPES,
+                   help="検索種別 (body の type)。省略時は API 既定の web。"
+                        "discover / googleNews では query 次元が使えないので by_query / by_combo は空になる")
     p.add_argument("--start-date", help="range始端を明示 (YYYY-MM-DD)。--days の代わりに使う。--end-date と同じ日を渡せば 1 日窓 (両端を含むため --days 1 は 2 日窓になる)")
     p.add_argument("--out", default=DEFAULT_OUT)
     # rowLimit の上書き。既定値は据え置きなので既存の呼び出し (navi 日次/週次) は不変。
@@ -267,7 +290,7 @@ def main() -> int:
                        args.refresh_token, args.days, args.delay, args.end_date,
                        args.start_date,
                        args.top_query, args.top_page, args.top_combo,
-                       args.aggregation_type)
+                       args.aggregation_type, args.search_type)
     except Exception as e:
         logger.exception("GSC fetch failed: %s", e)
         return 1
