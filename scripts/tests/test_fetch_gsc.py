@@ -424,3 +424,82 @@ def test_fetch_clicks_and_impressions_sum_are_top_n_page_sums(monkeypatch):
     # sitewide values are independent and NOT equal to the page sums here
     assert t["clicks_sitewide"] == 999
     assert t["impressions_sitewide"] == 9999
+
+
+# ---------------------------------------------------------------------------
+# 検索種別 (--search-type)
+#
+# 既定は API 既定の web のまま (既存の日次/週次レーンの中身を黙って変えない)。
+# Discover は検索語を経由しない面なので query 次元が使えず、順位も返らない。
+# **どの面のファイルかを残す** — web の時系列に Discover を混ぜると clicks が
+# 二重に数えられる。
+# ---------------------------------------------------------------------------
+
+
+def test_query_omits_type_by_default():
+    fake = FakeService([[_query_row("q", 1, 10)], []])
+    _query(fake, "sc-domain:example.com", "2026-09-04", "2026-09-04", ["query"], 100)
+    assert "type" not in fake.calls[0]["body"]
+
+
+def test_query_sends_type_when_given():
+    fake = FakeService([[_page_row("/a/", 1, 10)], []])
+    _query(fake, "sc-domain:example.com", "2026-09-04", "2026-09-04", ["page"], 100,
+           None, "discover")
+    assert fake.calls[0]["body"]["type"] == "discover"
+
+
+def test_query_keeps_missing_position_as_none():
+    """順位の無い面で 0.0 を入れると「1 位より上」に見える。"""
+    row = {"keys": ["/a/"], "clicks": 3, "impressions": 40, "ctr": 0.075}
+    fake = FakeService([[row]])
+    rows = _query(fake, "sc-domain:example.com", "2026-09-04", "2026-09-04", ["page"], 100,
+                  None, "discover")
+    assert rows[0]["position"] is None
+
+
+def test_fetch_default_records_no_search_type(monkeypatch):
+    fake = _patch_service(monkeypatch, _fetch_responses([], [], [], [], []))
+    r = fetch("sc-domain:example.com", "cid", "cs", "rt", days=1, delay=3,
+              end_date="2026-09-04")
+    assert r["search_type"] is None
+    assert all("type" not in c["body"] for c in fake.calls)
+
+
+def test_fetch_discover_skips_query_dimensions(monkeypatch):
+    # discover の呼び出し順: by_page, by_device, by_country, sitewide (query 系は投げない)
+    page = {"keys": ["https://example.com/a/"], "clicks": 12, "impressions": 900, "ctr": 0.0133}
+    fake = _patch_service(monkeypatch, [
+        [page],
+        [],
+        [],
+        [{"clicks": 12, "impressions": 900, "ctr": 0.0133}],
+    ])
+    r = fetch("sc-domain:example.com", "cid", "cs", "rt", days=1, delay=3,
+              end_date="2026-09-04", start_date="2026-09-04", search_type="discover")
+
+    bodies = [c["body"] for c in fake.calls]
+    assert len(bodies) == 4
+    assert not any("query" in (b.get("dimensions") or []) for b in bodies)
+    # 全ての系列に同じ検索種別を渡す
+    assert all(b["type"] == "discover" for b in bodies)
+
+    assert r["search_type"] == "discover"
+    assert r["by_query"] == [] and r["by_combo"] == []
+    assert r["by_page"][0]["clicks"] == 12
+    assert r["by_page"][0]["position"] is None
+    t = r["totals"]
+    assert t["clicks_sitewide"] == 12
+    assert t["position_sitewide"] is None
+    assert t["truncated_queries"] is False and t["truncated_combos"] is False
+    # 順位が無くても機会記事の抽出で落ちない
+    assert r["opportunity_pages"] == []
+
+
+def test_fetch_image_still_queries_by_query(monkeypatch):
+    """画像検索は検索語があるので query 系も取る。"""
+    fake = _patch_service(monkeypatch, _fetch_responses([], [], [], [], []))
+    fetch("sc-domain:example.com", "cid", "cs", "rt", days=1, delay=3,
+          end_date="2026-09-04", search_type="image")
+    dims = [c["body"].get("dimensions") for c in fake.calls]
+    assert ["query"] in dims and ["query", "page"] in dims
