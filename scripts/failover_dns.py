@@ -47,7 +47,7 @@ Cloudflare 自体が落ちているとき待機系に倒しても待機系も CF
 
     python scripts/failover_dns.py --to nas
 
-戻し先は `--target` か環境変数 `NAS_ORIGIN_CNAME` (リポジトリ変数) から取る。
+戻し先は `--target` か環境変数 `NAS_ORIGIN_CNAME` (Actions では secret) から取る。
 
 値の在りかは **Cloudflare の `navi.omcha.jp` の CNAME レコード**(本番稼働中ならそれが現物) か、NAS の cloudflared volume の `config.yml`。
 private repo `amazon-home-ops` の `docker/navi/README.md` は手順書で、
@@ -643,8 +643,8 @@ def render_body(row: Dict[str, Any]) -> str:
         "gh workflow run 53-origin-failover.yml -R <repo> -f direction=nas",
         "```",
         "",
-        "戻し先はリポジトリ変数 `NAS_ORIGIN_CNAME` から取ります"
-        "(未設定なら `-f target=...` を明示)。"
+        "戻し先は secret `NAS_ORIGIN_CNAME` から取ります"
+        "(未設定なら先に `gh secret set NAS_ORIGIN_CNAME` で登録する)。"
         "**この issue にトンネルのホスト名は載せていません** —— "
         "public repo なので、載せた時点で恒久的に公開されるためです。",
         "",
@@ -682,14 +682,14 @@ def run_failback(args: argparse.Namespace, token: str, now: dt.datetime) -> Dict
         row["detail"] = "対象の CNAME レコードが見つからない"
         return row
 
-    # 戻し先はリポジトリ変数から取る。**issue 本文には置かない** ——
+    # 戻し先は secret から取る。**issue 本文には置かない** ——
     # public repo なので、置いた時点でトンネルのホスト名が恒久的に公開される。
     target = args.target or (os.environ.get("NAS_ORIGIN_CNAME") or "").strip()
     if not target:
         row["action"] = "blocked"
         row["detail"] = (
-            "戻し先が分からない。リポジトリ変数 `NAS_ORIGIN_CNAME` を設定するか、"
-            "`--target` / `-f target=...` を渡すこと。"
+            "戻し先が分からない。secret `NAS_ORIGIN_CNAME` を設定すること"
+            "(手元からは `--target`。`-f target=...` はログに出るので使わない)。"
             "値は Cloudflare の navi.omcha.jp の CNAME レコードそのもの "
             "(本番稼働中に読める) か、NAS の cloudflared volume の config.yml にある"
         )

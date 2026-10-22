@@ -110,11 +110,15 @@ gh variable set FAILOVER_ENABLED --body true -R omochairo/amazon
 gh workflow run 53-origin-failover.yml -R omochairo/amazon -f direction=nas
 ```
 
-戻し先はリポジトリ変数 `NAS_ORIGIN_CNAME` から取る（未設定なら `-f target=...` を明示）。
+戻し先は secret `NAS_ORIGIN_CNAME` から取る。
 
 ```bash
-gh variable set NAS_ORIGIN_CNAME --body '<uuid>.cfargotunnel.com' -R omochairo/amazon
+gh secret set NAS_ORIGIN_CNAME -R omochairo/amazon   # 値は対話で入力する
 ```
+
+**リポジトリ変数（`gh variable set`）にはしない。** GitHub は変数の値をログで伏せ字にしないので、
+workflow の env 一覧にホスト名がそのまま出る（2026-10-22 まで実際に出ていた）。
+同じ理由で `-f target=...` も使わない（dispatch の入力はログに出る）。secret が未設定なら、先に登録してから戻す。
 
 **トンネルのホスト名は issue にもログにも出していない。** `navi.omcha.jp` は proxied なので
 外から DNS を引いても Cloudflare の IP しか返らず、このホスト名は見えない。
