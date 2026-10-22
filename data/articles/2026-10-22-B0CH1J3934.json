@@ -185,6 +185,17 @@
       "author": "専門店",
       "conflict_of_interest": "none",
       "notes": "大海原にひそむ魅力的な動物として紹介。イルカやクジラだけでなく、多様な海の動物をリアルに再現していると評価。"
+    },
+    {
+      "id": "src-3",
+      "name": "schleich 公式オンラインショップ",
+      "url": "https://us.schleich-s.com",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "",
+      "author": "メーカー公式",
+      "conflict_of_interest": "possible",
+      "notes": "公式サイトにて、WILD LIFEシリーズのおもちゃが「inspire big adventures and endless imagination（大きな冒険と無限の想像力を刺激する）」と紹介されています。"
     }
   ],
   "claims": [
@@ -193,9 +204,10 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-3"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "公式の理念や海外公式サイトで想像力を刺激する遊びとして言及。"
     },
     {
@@ -206,7 +218,7 @@
         "src-2"
       ],
       "cross_checked": false,
-      "notes": "第三者メディアや専門店において、品質と耐久性が高く評価されている。"
+      "notes": "専門店等において、品質と耐久性が高く評価されている。"
     },
     {
       "claim": "対象年齢3歳以上",
@@ -224,7 +236,8 @@
       "confidence": "medium",
       "supporting_source_ids": [
         "src-1",
-        "src-2"
+        "src-2",
+        "src-3"
       ],
       "cross_checked": true,
       "notes": "野生動物フィギュアとしての位置付けが各所で一致。"
@@ -251,9 +264,9 @@
         ]
       },
       {
-        "text": "子どもたちの想像力を刺激する遊びとして適している",
+        "text": "WILD LIFEシリーズのおもちゃとして無限の想像力を刺激する",
         "supporting_source_ids": [
-          "src-1"
+          "src-3"
         ]
       }
     ],
