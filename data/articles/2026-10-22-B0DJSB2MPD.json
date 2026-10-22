@@ -46,20 +46,20 @@
     ],
     "gift_appeal": [
       "出産祝いや1歳の誕生日に贈って喜ばれるか、気になりますよね。",
-      "実用性と知育要素を兼ね備えているため、親御さんからの評価が高いジャンルです。",
+      "実用性と知育要素を兼ね備えているため、出産祝いやハーフバースデーの贈り物として適したジャンルです。",
       "よだれで汚れても丸洗いできる点は、贈り物としての安心感につながります。",
       "価格帯も手頃で、他のプレゼントに添えるプラスアルファの贈り物としても優秀です。"
     ],
     "daily_use": [
       "実際の遊びではどのように活躍するのでしょうか。",
-      "「赤ちゃんの『本物のティッシュを引き抜きたい欲求』を満たす便利なおもちゃ」という声が複数見られます。",
+      "メーカーによれば、赤ちゃんの「本物のティッシュを引き抜きたい欲求」を満たす便利なおもちゃとして設計されています。",
       "また、軽くてコンパクトなため、外出先でぐずったときの気を引くアイテムとしても重宝します。",
       "ただし、引き出された大量の布を親が毎回詰め直す手間がかかる点は、あらかじめ理解しておくと良いでしょう。"
     ],
     "safety_note": [
       "赤ちゃんが毎日触れるものだからこそ、安全性は最も重要です。",
       "本品は全体が柔らかい布製のため、ぶつけて怪我をする心配がなく、赤ちゃんにも安心して使えます。",
-      "「よだれで汚れても洗濯して清潔に保てる点が好評」との声もあり、衛生面でも安心です。",
+      "水洗い可能な高品質綿素材を使用しているため、衛生面でも安心です。",
       "口に入れやすい時期のお子さまに与える上で、衛生面での安心感は心強いポイントです。"
     ],
     "closing": [
@@ -175,17 +175,6 @@
       "author": "Mamimami Home",
       "conflict_of_interest": "possible",
       "notes": "商品の仕様、素材（水洗い可能な綿素材）、仕掛け（ミラー、笛など）の記載"
-    },
-    {
-      "id": "src-yahoo-flea",
-      "name": "Yahoo!フリマ 購入者の声",
-      "url": "https://paypayfleamarket.yahoo.co.jp/item/z704691054",
-      "tier": "medium",
-      "evidence_type": "secondary",
-      "published_at": "2026-10-22",
-      "author": "購入者",
-      "conflict_of_interest": "none",
-      "notes": "赤ちゃんのティッシュを引き抜きたい欲求を満たす点、柔らかく安全である点、洗濯して清潔に保てる点、親が布を詰め直す手間についての言及"
     }
   ],
   "claims": [
@@ -194,10 +183,9 @@
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon",
-        "src-yahoo-flea"
+        "src-amazon"
       ],
-      "cross_checked": true,
+      "cross_checked": false,
       "notes": "メーカーの説明と実際の使用者の声で一致"
     },
     {
@@ -205,10 +193,9 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon",
-        "src-yahoo-flea"
+        "src-amazon"
       ],
-      "cross_checked": true,
+      "cross_checked": false,
       "notes": "素材の仕様と使用者の手入れに関する声で一致"
     },
     {
@@ -216,10 +203,9 @@
       "category": "safety",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon",
-        "src-yahoo-flea"
+        "src-amazon"
       ],
-      "cross_checked": true,
+      "cross_checked": false,
       "notes": "設計の意図と使用者の実感で一致"
     },
     {
@@ -227,7 +213,7 @@
       "category": "comparative_advantage",
       "confidence": "medium",
       "supporting_source_ids": [
-        "src-yahoo-flea"
+        "src-amazon"
       ],
       "cross_checked": false,
       "notes": "実際の使用者の声として確認"
@@ -244,35 +230,35 @@
     "summary_one_line": "本物のティッシュを引き抜きたい欲求を満たしつつ、清潔に保てる点で評価されています。",
     "high_points": [
       {
-        "text": "よだれで汚れても洗濯して清潔に保てる点が好評",
+        "text": "よだれで汚れても水洗い可能で衛生的に使える仕様",
         "supporting_source_ids": [
-          "src-yahoo-flea"
+          "src-amazon"
         ]
       },
       {
-        "text": "全体が柔らかい布製のため、ぶつけて怪我をする心配がない",
+        "text": "全体が柔らかい布製のため、ぶつけて怪我をする心配が少ない",
         "supporting_source_ids": [
-          "src-yahoo-flea"
+          "src-amazon"
         ]
       },
       {
-        "text": "五感を刺激する仕掛けが遊びのシーンで役立つ",
+        "text": "ミラーやカサカサ音など五感を刺激する仕掛けが豊富",
         "supporting_source_ids": [
-          "src-yahoo-flea"
+          "src-amazon"
         ]
       }
     ],
     "concerns": [
       {
-        "text": "引き出された大量の布を親が毎回詰め直す手間がかかる",
+        "text": "引き出された布を毎回箱に詰め直す手間がかかる構造",
         "supporting_source_ids": [
-          "src-yahoo-flea"
+          "src-amazon"
         ]
       },
       {
-        "text": "スカーフが面ファスナー等に引っかかって糸くずが出やすい",
+        "text": "よだれで汚れやすいため、こまめな洗濯が必要になる",
         "supporting_source_ids": [
-          "src-yahoo-flea"
+          "src-amazon"
         ]
       }
     ],
@@ -280,7 +266,7 @@
       {
         "text": "ティッシュへのいたずらを防止したい日常の遊び",
         "supporting_source_ids": [
-          "src-yahoo-flea"
+          "src-amazon"
         ]
       },
       {
@@ -290,18 +276,18 @@
         ]
       },
       {
-        "text": "よだれで汚れた後の定期的な丸洗いとお手入れ",
+        "text": "指先の運動や五感を刺激する知育の時間",
         "supporting_source_ids": [
-          "src-yahoo-flea"
+          "src-amazon"
         ]
       }
     ],
     "segment_voices": [
       {
-        "segment_label": "0〜1歳児の自宅遊び用に購入した層",
-        "summary": "赤ちゃんの好奇心を満たしつつ、いたずら防止になる実用的なアイテムとして支持されています。洗濯可能で衛生的な点も高く評価されています。",
+        "segment_label": "ティッシュのいたずらに悩む0〜1歳児のご家庭",
+        "summary": "赤ちゃんの好奇心を満たしつつ、本物のティッシュの無駄遣いを防げる実用的なアイテムとして期待できます。",
         "supporting_source_ids": [
-          "src-yahoo-flea"
+          "src-amazon"
         ]
       }
     ]
