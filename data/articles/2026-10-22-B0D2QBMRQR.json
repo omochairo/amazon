@@ -194,6 +194,28 @@
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
       "notes": "様々な形状のラトルが含まれており、出産祝いやハーフバースデーの小物としての用途が示されている"
+    },
+    {
+      "id": "src-3",
+      "name": "木のおもちゃのお店りぷか",
+      "url": "https://ripka2007.com?mode=cate&cbid=2438897&csid=1&sort=n",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-10-22",
+      "author": "第三者",
+      "conflict_of_interest": "none",
+      "notes": "木製のラトルは音と色の移り変わりを楽しめ、赤ちゃんの感覚を刺激する知育効果があるとされている"
+    },
+    {
+      "id": "src-4",
+      "name": "IKONIH OSAKA",
+      "url": "https://www.ikonih-osaka.com/items/6315084",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-10-22",
+      "author": "第三者",
+      "conflict_of_interest": "none",
+      "notes": "ラトルは世界中で親しまれており、赤ちゃんの感覚（触覚・視覚・聴覚）を伸ばすことができる"
     }
   ],
   "claims": [
@@ -238,6 +260,17 @@
       ],
       "cross_checked": false,
       "notes": "体験談からの指摘"
+    },
+    {
+      "claim": "木製のラトルは赤ちゃんの感覚（触覚・視覚・聴覚）を伸ばす知育効果がある",
+      "category": "quality",
+      "confidence": "medium",
+      "supporting_source_ids": [
+        "src-3",
+        "src-4"
+      ],
+      "cross_checked": true,
+      "notes": "一般的な木製ラトルの知育効果として複数サイトで言及されている"
     }
   ],
   "technical_specs": {
@@ -265,6 +298,13 @@
         "text": "撮影小物としても活躍する見栄え",
         "supporting_source_ids": [
           "src-2"
+        ]
+      },
+      {
+        "text": "木製ラトルの知育効果に対する期待",
+        "supporting_source_ids": [
+          "src-3",
+          "src-4"
         ]
       }
     ],
