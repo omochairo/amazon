@@ -1,76 +1,572 @@
 {
-  "generated_at": "2026-10-16T00:43:49Z",
-  "source_week": "2026-W42",
+  "generated_at": "2026-10-23T01:04:54Z",
+  "source_week": "2026-W43",
   "model": "gemma4:26b-a4b-it-qat",
   "num_ctx": 8192,
   "seed": 20260914,
   "limit": 40,
-  "since": "2026-10-09",
-  "until": "2026-10-16T00:04:27",
+  "since": "2026-10-16",
+  "until": "2026-10-23T00:23:50",
   "target_asins": [
-    "B0DQ1BLZLK",
-    "B0DQCLDQN1",
-    "B0H5VPT5SS",
-    "B0CHZ37H8V",
-    "B0GYCJ8JKC",
-    "B07QM4563V",
-    "B00JP15F2I",
-    "B0G51HPK25",
-    "B0DSKDC9RN",
-    "B0F9W6LJ1F",
-    "B076PBVFKN",
-    "B0HFLGD4VM",
-    "B0C6THPT89",
-    "B00IUD8SFI",
-    "B00IJC7VLC",
-    "B0D17942ZJ",
-    "B0BQG4JD18",
-    "B0D86P3LC2",
-    "B0FKMVCQ7C",
-    "B0HLYP7TYL",
-    "B00KMOOF3W",
-    "B00KMOOLHC",
-    "B0C6DMN3NL",
-    "B005WP1PNY",
-    "B0DHRS1GCX",
-    "B0HJ4F3Z4V",
-    "B000B75PV6",
-    "B0CGR3B9GW",
-    "B0CYSLHP85",
-    "B07NZ5B13Q",
-    "B0DHRQ4B31",
-    "B0CWH3BRYZ",
-    "B00JP15I2U",
-    "B0H82W67ZJ",
-    "B01MQYIFMZ",
-    "B0CYSQBRXL",
-    "B0GFM8PKTN",
-    "B01H1MMHSC",
-    "B0B5MG33PL",
-    "B0CF4C397D"
+    "B0C533Q31X",
+    "B00JZKYHOQ",
+    "B08YFF63XN",
+    "B0G2LFDV7B",
+    "B01G1P7KO6",
+    "B0FRK4LX8X",
+    "B018LJHZYU",
+    "B0H4JJ1NGX",
+    "B07T92DWR3",
+    "B0HHHSNHHV",
+    "B009620BJI",
+    "B0GR3L6Q4N",
+    "B0DHG8R2BS",
+    "B0HMGKVCGT",
+    "B0DV8XCNN9",
+    "B0HFM4S7BY",
+    "B0FD97Q14H",
+    "B0FCXPPD1H",
+    "B0HJ7CPXJ6",
+    "B009RI5VHS",
+    "B0DN1FF368",
+    "B07YFQHKLD",
+    "B0FX4BW1H5",
+    "B0D1Y1LS74",
+    "B00SFI8KE2",
+    "B005WP2HLI",
+    "B0FNM2WDRM",
+    "B0842GQRTD",
+    "B0C1Z88PRL",
+    "B0GW536YTH",
+    "B071VLP536",
+    "B0H2XKZWRQ",
+    "B08V7S74B7",
+    "B0DJP9XF6J",
+    "B07FTPX71F",
+    "B095R8VPBB",
+    "B0FNVHX9VG",
+    "B0FNM39FZV",
+    "B0H2T9W4NQ",
+    "B0DSKBG6VF"
   ],
   "articles": [
     {
-      "asin": "B0DQ1BLZLK",
-      "category": "言語",
-      "sentence_count": 26,
-      "unique_and_supported_count": 10,
-      "unsupported_count": 14,
+      "asin": "B0C533Q31X",
+      "category": "運動",
+      "sentence_count": 27,
+      "unique_and_supported_count": 18,
+      "unsupported_count": 9,
       "unresolved_count": 0,
       "unsupported_classification": {
-        "rhetorical_or_time_dependent": 11,
+        "rhetorical_or_time_dependent": 6,
         "factual_claim": 3,
         "unresolved": 0
       },
       "cache_hit": false,
       "has_experience_material": false,
-      "elapsed_seconds": 66.5
+      "elapsed_seconds": 75.818
     },
     {
-      "asin": "B0DQCLDQN1",
+      "asin": "B00JZKYHOQ",
+      "category": "運動",
+      "sentence_count": 27,
+      "unique_and_supported_count": 16,
+      "unsupported_count": 11,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 9,
+        "factual_claim": 2,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": true,
+      "elapsed_seconds": 57.139
+    },
+    {
+      "asin": "B08YFF63XN",
       "category": "運動",
       "sentence_count": 28,
-      "unique_and_supported_count": 20,
+      "unique_and_supported_count": 10,
+      "unsupported_count": 18,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 16,
+        "factual_claim": 2,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 65.978
+    },
+    {
+      "asin": "B0G2LFDV7B",
+      "category": "運動",
+      "sentence_count": 27,
+      "unique_and_supported_count": 15,
+      "unsupported_count": 12,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 10,
+        "factual_claim": 2,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": true,
+      "elapsed_seconds": 58.585
+    },
+    {
+      "asin": "B01G1P7KO6",
+      "category": "STEM",
+      "sentence_count": 28,
+      "unique_and_supported_count": 11,
+      "unsupported_count": 17,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 14,
+        "factual_claim": 3,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 63.492
+    },
+    {
+      "asin": "B0FRK4LX8X",
+      "category": "言語",
+      "sentence_count": 25,
+      "unique_and_supported_count": 10,
+      "unsupported_count": 14,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 12,
+        "factual_claim": 2,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 59.95
+    },
+    {
+      "asin": "B018LJHZYU",
+      "category": "言語",
+      "sentence_count": 27,
+      "unique_and_supported_count": 19,
+      "unsupported_count": 7,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 5,
+        "factual_claim": 2,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": true,
+      "elapsed_seconds": 53.701
+    },
+    {
+      "asin": "B0H4JJ1NGX",
+      "category": "運動",
+      "sentence_count": 21,
+      "unique_and_supported_count": 15,
+      "unsupported_count": 6,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 5,
+        "factual_claim": 1,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 50.562
+    },
+    {
+      "asin": "B07T92DWR3",
+      "category": "unknown",
+      "sentence_count": 27,
+      "unique_and_supported_count": 16,
+      "unsupported_count": 9,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 5,
+        "factual_claim": 4,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 54.603
+    },
+    {
+      "asin": "B0HHHSNHHV",
+      "category": "運動",
+      "sentence_count": 27,
+      "unique_and_supported_count": 12,
+      "unsupported_count": 14,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 12,
+        "factual_claim": 2,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 62.129
+    },
+    {
+      "asin": "B009620BJI",
+      "category": "想像",
+      "sentence_count": 22,
+      "unique_and_supported_count": 9,
+      "unsupported_count": 10,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 6,
+        "factual_claim": 4,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 52.839
+    },
+    {
+      "asin": "B0GR3L6Q4N",
+      "category": "想像",
+      "sentence_count": 24,
+      "unique_and_supported_count": 11,
+      "unsupported_count": 13,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 11,
+        "factual_claim": 2,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 56.605
+    },
+    {
+      "asin": "B0DHG8R2BS",
+      "category": "unknown",
+      "sentence_count": 28,
+      "unique_and_supported_count": 13,
+      "unsupported_count": 13,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 10,
+        "factual_claim": 3,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 61.142
+    },
+    {
+      "asin": "B0HMGKVCGT",
+      "category": "unknown",
+      "sentence_count": 27,
+      "unique_and_supported_count": 6,
+      "unsupported_count": 21,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 17,
+        "factual_claim": 4,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 72.632
+    },
+    {
+      "asin": "B0DV8XCNN9",
+      "category": "想像",
+      "sentence_count": 34,
+      "unique_and_supported_count": 12,
+      "unsupported_count": 14,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 10,
+        "factual_claim": 4,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 66.163
+    },
+    {
+      "asin": "B0HFM4S7BY",
+      "category": "想像",
+      "sentence_count": 26,
+      "unique_and_supported_count": 1,
+      "unsupported_count": 25,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 16,
+        "factual_claim": 9,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 70.769
+    },
+    {
+      "asin": "B0FD97Q14H",
+      "category": "想像",
+      "sentence_count": 26,
+      "unique_and_supported_count": 11,
+      "unsupported_count": 15,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 13,
+        "factual_claim": 2,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 64.279
+    },
+    {
+      "asin": "B0FCXPPD1H",
+      "category": "想像",
+      "sentence_count": 18,
+      "unique_and_supported_count": 11,
+      "unsupported_count": 7,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 4,
+        "factual_claim": 3,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 50.624
+    },
+    {
+      "asin": "B0HJ7CPXJ6",
+      "category": "運動",
+      "sentence_count": 26,
+      "unique_and_supported_count": 4,
+      "unsupported_count": 22,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 18,
+        "factual_claim": 4,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 69.849
+    },
+    {
+      "asin": "B009RI5VHS",
+      "category": "STEM",
+      "sentence_count": 27,
+      "unique_and_supported_count": 15,
+      "unsupported_count": 12,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 9,
+        "factual_claim": 3,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 57.677
+    },
+    {
+      "asin": "B0DN1FF368",
+      "category": "想像",
+      "sentence_count": 26,
+      "unique_and_supported_count": 9,
+      "unsupported_count": 17,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 13,
+        "factual_claim": 4,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 65.53
+    },
+    {
+      "asin": "B07YFQHKLD",
+      "category": "運動",
+      "sentence_count": 27,
+      "unique_and_supported_count": 10,
+      "unsupported_count": 17,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 15,
+        "factual_claim": 2,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": true,
+      "elapsed_seconds": 69.253
+    },
+    {
+      "asin": "B0FX4BW1H5",
+      "category": "想像",
+      "sentence_count": 27,
+      "unique_and_supported_count": 18,
+      "unsupported_count": 8,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 4,
+        "factual_claim": 4,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 56.13
+    },
+    {
+      "asin": "B0D1Y1LS74",
+      "category": "想像",
+      "sentence_count": 26,
+      "unique_and_supported_count": 4,
+      "unsupported_count": 22,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 16,
+        "factual_claim": 6,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 70.608
+    },
+    {
+      "asin": "B00SFI8KE2",
+      "category": "運動",
+      "sentence_count": 26,
+      "unique_and_supported_count": 5,
+      "unsupported_count": 20,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 15,
+        "factual_claim": 5,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": true,
+      "elapsed_seconds": 69.821
+    },
+    {
+      "asin": "B005WP2HLI",
+      "category": "運動",
+      "sentence_count": 23,
+      "unique_and_supported_count": 8,
+      "unsupported_count": 14,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 13,
+        "factual_claim": 1,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 58.542
+    },
+    {
+      "asin": "B0FNM2WDRM",
+      "category": "運動",
+      "sentence_count": 26,
+      "unique_and_supported_count": 12,
+      "unsupported_count": 14,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 12,
+        "factual_claim": 2,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 64.077
+    },
+    {
+      "asin": "B0842GQRTD",
+      "category": "運動",
+      "sentence_count": 26,
+      "unique_and_supported_count": 15,
+      "unsupported_count": 10,
+      "unresolved_count": 1,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 9,
+        "factual_claim": 1,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": true,
+      "elapsed_seconds": 58.454
+    },
+    {
+      "asin": "B0C1Z88PRL",
+      "category": "STEM",
+      "sentence_count": 25,
+      "unique_and_supported_count": 3,
+      "unsupported_count": 22,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 17,
+        "factual_claim": 5,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 68.544
+    },
+    {
+      "asin": "B0GW536YTH",
+      "category": "STEM",
+      "sentence_count": 21,
+      "unique_and_supported_count": 14,
+      "unsupported_count": 5,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 4,
+        "factual_claim": 1,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": true,
+      "elapsed_seconds": 48.819
+    },
+    {
+      "asin": "B071VLP536",
+      "category": "運動",
+      "sentence_count": 27,
+      "unique_and_supported_count": 22,
+      "unsupported_count": 4,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 4,
+        "factual_claim": 0,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": true,
+      "elapsed_seconds": 52.478
+    },
+    {
+      "asin": "B0H2XKZWRQ",
+      "category": "STEM",
+      "sentence_count": 26,
+      "unique_and_supported_count": 0,
+      "unsupported_count": 26,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 21,
+        "factual_claim": 5,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 72.497
+    },
+    {
+      "asin": "B08V7S74B7",
+      "category": "STEM",
+      "sentence_count": 22,
+      "unique_and_supported_count": 13,
       "unsupported_count": 8,
       "unresolved_count": 0,
       "unsupported_classification": {
@@ -79,46 +575,14 @@
         "unresolved": 0
       },
       "cache_hit": false,
-      "has_experience_material": true,
-      "elapsed_seconds": 51.933
+      "has_experience_material": false,
+      "elapsed_seconds": 51.741
     },
     {
-      "asin": "B0H5VPT5SS",
+      "asin": "B0DJP9XF6J",
       "category": "運動",
-      "sentence_count": 18,
-      "unique_and_supported_count": 9,
-      "unsupported_count": 9,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 4,
-        "factual_claim": 5,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": true,
-      "elapsed_seconds": 44.543
-    },
-    {
-      "asin": "B0CHZ37H8V",
-      "category": "STEM",
-      "sentence_count": 26,
-      "unique_and_supported_count": 16,
-      "unsupported_count": 10,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 8,
-        "factual_claim": 2,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": true,
-      "elapsed_seconds": 53.094
-    },
-    {
-      "asin": "B0GYCJ8JKC",
-      "category": "想像",
-      "sentence_count": 20,
-      "unique_and_supported_count": 7,
+      "sentence_count": 28,
+      "unique_and_supported_count": 14,
       "unsupported_count": 13,
       "unresolved_count": 0,
       "unsupported_classification": {
@@ -128,45 +592,13 @@
       },
       "cache_hit": false,
       "has_experience_material": false,
-      "elapsed_seconds": 51.452
+      "elapsed_seconds": 62.048
     },
     {
-      "asin": "B07QM4563V",
-      "category": "運動",
-      "sentence_count": 27,
-      "unique_and_supported_count": 21,
-      "unsupported_count": 6,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 4,
-        "factual_claim": 2,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 50.907
-    },
-    {
-      "asin": "B00JP15F2I",
-      "category": "STEM",
-      "sentence_count": 27,
-      "unique_and_supported_count": 5,
-      "unsupported_count": 21,
-      "unresolved_count": 1,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 14,
-        "factual_claim": 7,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 63.391
-    },
-    {
-      "asin": "B0G51HPK25",
-      "category": "運動",
-      "sentence_count": 26,
-      "unique_and_supported_count": 15,
+      "asin": "B07FTPX71F",
+      "category": "unknown",
+      "sentence_count": 28,
+      "unique_and_supported_count": 16,
       "unsupported_count": 11,
       "unresolved_count": 0,
       "unsupported_classification": {
@@ -175,520 +607,88 @@
         "unresolved": 0
       },
       "cache_hit": false,
-      "has_experience_material": true,
-      "elapsed_seconds": 56.491
-    },
-    {
-      "asin": "B0DSKDC9RN",
-      "category": "想像",
-      "sentence_count": 28,
-      "unique_and_supported_count": 10,
-      "unsupported_count": 17,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 16,
-        "factual_claim": 1,
-        "unresolved": 0
-      },
-      "cache_hit": false,
       "has_experience_material": false,
-      "elapsed_seconds": 60.77
+      "elapsed_seconds": 59.477
     },
     {
-      "asin": "B0F9W6LJ1F",
-      "category": "運動",
+      "asin": "B095R8VPBB",
+      "category": "想像",
       "sentence_count": 27,
       "unique_and_supported_count": 1,
       "unsupported_count": 26,
       "unresolved_count": 0,
       "unsupported_classification": {
-        "rhetorical_or_time_dependent": 17,
-        "factual_claim": 9,
+        "rhetorical_or_time_dependent": 21,
+        "factual_claim": 5,
         "unresolved": 0
       },
       "cache_hit": false,
       "has_experience_material": false,
-      "elapsed_seconds": 66.608
+      "elapsed_seconds": 72.81
     },
     {
-      "asin": "B076PBVFKN",
-      "category": "想像",
+      "asin": "B0FNVHX9VG",
+      "category": "運動",
+      "sentence_count": 27,
+      "unique_and_supported_count": 13,
+      "unsupported_count": 12,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 10,
+        "factual_claim": 2,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 56.99
+    },
+    {
+      "asin": "B0FNM39FZV",
+      "category": "STEM",
       "sentence_count": 26,
-      "unique_and_supported_count": 8,
-      "unsupported_count": 18,
+      "unique_and_supported_count": 14,
+      "unsupported_count": 11,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 6,
+        "factual_claim": 5,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": false,
+      "elapsed_seconds": 53.652
+    },
+    {
+      "asin": "B0H2T9W4NQ",
+      "category": "運動",
+      "sentence_count": 26,
+      "unique_and_supported_count": 12,
+      "unsupported_count": 14,
+      "unresolved_count": 0,
+      "unsupported_classification": {
+        "rhetorical_or_time_dependent": 11,
+        "factual_claim": 3,
+        "unresolved": 0
+      },
+      "cache_hit": false,
+      "has_experience_material": true,
+      "elapsed_seconds": 61.561
+    },
+    {
+      "asin": "B0DSKBG6VF",
+      "category": "STEM",
+      "sentence_count": 25,
+      "unique_and_supported_count": 3,
+      "unsupported_count": 22,
       "unresolved_count": 0,
       "unsupported_classification": {
         "rhetorical_or_time_dependent": 14,
-        "factual_claim": 4,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 60.777
-    },
-    {
-      "asin": "B0HFLGD4VM",
-      "category": "unknown",
-      "sentence_count": 25,
-      "unique_and_supported_count": 8,
-      "unsupported_count": 17,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 9,
         "factual_claim": 8,
         "unresolved": 0
       },
       "cache_hit": false,
       "has_experience_material": false,
-      "elapsed_seconds": 56.878
-    },
-    {
-      "asin": "B0C6THPT89",
-      "category": "想像",
-      "sentence_count": 27,
-      "unique_and_supported_count": 17,
-      "unsupported_count": 10,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 9,
-        "factual_claim": 1,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": true,
-      "elapsed_seconds": 55.202
-    },
-    {
-      "asin": "B00IUD8SFI",
-      "category": "STEM",
-      "sentence_count": 28,
-      "unique_and_supported_count": 4,
-      "unsupported_count": 24,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 17,
-        "factual_claim": 7,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 66.977
-    },
-    {
-      "asin": "B00IJC7VLC",
-      "category": "STEM",
-      "sentence_count": 27,
-      "unique_and_supported_count": 12,
-      "unsupported_count": 15,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 12,
-        "factual_claim": 3,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": true,
-      "elapsed_seconds": 60.174
-    },
-    {
-      "asin": "B0D17942ZJ",
-      "category": "STEM",
-      "sentence_count": 27,
-      "unique_and_supported_count": 3,
-      "unsupported_count": 24,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 17,
-        "factual_claim": 7,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 66.702
-    },
-    {
-      "asin": "B0BQG4JD18",
-      "category": "想像",
-      "sentence_count": 25,
-      "unique_and_supported_count": 5,
-      "unsupported_count": 19,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 15,
-        "factual_claim": 4,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 60.726
-    },
-    {
-      "asin": "B0D86P3LC2",
-      "category": "想像",
-      "sentence_count": 27,
-      "unique_and_supported_count": 8,
-      "unsupported_count": 19,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 15,
-        "factual_claim": 4,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": true,
-      "elapsed_seconds": 62.656
-    },
-    {
-      "asin": "B0FKMVCQ7C",
-      "category": "運動",
-      "sentence_count": 26,
-      "unique_and_supported_count": 16,
-      "unsupported_count": 10,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 7,
-        "factual_claim": 3,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 52.353
-    },
-    {
-      "asin": "B0HLYP7TYL",
-      "category": "unknown",
-      "sentence_count": 26,
-      "unique_and_supported_count": 9,
-      "unsupported_count": 14,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 12,
-        "factual_claim": 2,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 56.554
-    },
-    {
-      "asin": "B00KMOOF3W",
-      "category": "STEM",
-      "sentence_count": 27,
-      "unique_and_supported_count": 4,
-      "unsupported_count": 22,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 17,
-        "factual_claim": 5,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": true,
-      "elapsed_seconds": 63.823
-    },
-    {
-      "asin": "B00KMOOLHC",
-      "category": "STEM",
-      "sentence_count": 30,
-      "unique_and_supported_count": 3,
-      "unsupported_count": 27,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 20,
-        "factual_claim": 7,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 70.97
-    },
-    {
-      "asin": "B0C6DMN3NL",
-      "category": "想像",
-      "sentence_count": 27,
-      "unique_and_supported_count": 12,
-      "unsupported_count": 15,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 14,
-        "factual_claim": 1,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 59.477
-    },
-    {
-      "asin": "B005WP1PNY",
-      "category": "運動",
-      "sentence_count": 34,
-      "unique_and_supported_count": 8,
-      "unsupported_count": 25,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 22,
-        "factual_claim": 3,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 72.638
-    },
-    {
-      "asin": "B0DHRS1GCX",
-      "category": "想像",
-      "sentence_count": 27,
-      "unique_and_supported_count": 11,
-      "unsupported_count": 15,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 11,
-        "factual_claim": 4,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 57.512
-    },
-    {
-      "asin": "B0HJ4F3Z4V",
-      "category": "想像",
-      "sentence_count": 25,
-      "unique_and_supported_count": 8,
-      "unsupported_count": 17,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 12,
-        "factual_claim": 5,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 60.415
-    },
-    {
-      "asin": "B000B75PV6",
-      "category": "運動",
-      "sentence_count": 31,
-      "unique_and_supported_count": 27,
-      "unsupported_count": 4,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 3,
-        "factual_claim": 1,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 52.147
-    },
-    {
-      "asin": "B0CGR3B9GW",
-      "category": "運動",
-      "sentence_count": 27,
-      "unique_and_supported_count": 16,
-      "unsupported_count": 11,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 9,
-        "factual_claim": 2,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 56.713
-    },
-    {
-      "asin": "B0CYSLHP85",
-      "category": "STEM",
-      "sentence_count": 28,
-      "unique_and_supported_count": 17,
-      "unsupported_count": 10,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 9,
-        "factual_claim": 1,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": true,
-      "elapsed_seconds": 54.338
-    },
-    {
-      "asin": "B07NZ5B13Q",
-      "category": "運動",
-      "sentence_count": 28,
-      "unique_and_supported_count": 8,
-      "unsupported_count": 20,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 16,
-        "factual_claim": 4,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 63.384
-    },
-    {
-      "asin": "B0DHRQ4B31",
-      "category": "unknown",
-      "sentence_count": 21,
-      "unique_and_supported_count": 7,
-      "unsupported_count": 14,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 12,
-        "factual_claim": 2,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 52.651
-    },
-    {
-      "asin": "B0CWH3BRYZ",
-      "category": "STEM",
-      "sentence_count": 28,
-      "unique_and_supported_count": 10,
-      "unsupported_count": 18,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 15,
-        "factual_claim": 3,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": true,
-      "elapsed_seconds": 61.067
-    },
-    {
-      "asin": "B00JP15I2U",
-      "category": "STEM",
-      "sentence_count": 26,
-      "unique_and_supported_count": 4,
-      "unsupported_count": 22,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 15,
-        "factual_claim": 7,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 63.005
-    },
-    {
-      "asin": "B0H82W67ZJ",
-      "category": "運動",
-      "sentence_count": 26,
-      "unique_and_supported_count": 21,
-      "unsupported_count": 3,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 2,
-        "factual_claim": 1,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 47.074
-    },
-    {
-      "asin": "B01MQYIFMZ",
-      "category": "運動",
-      "sentence_count": 28,
-      "unique_and_supported_count": 1,
-      "unsupported_count": 27,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 18,
-        "factual_claim": 9,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 65.631
-    },
-    {
-      "asin": "B0CYSQBRXL",
-      "category": "想像",
-      "sentence_count": 26,
-      "unique_and_supported_count": 20,
-      "unsupported_count": 6,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 6,
-        "factual_claim": 0,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": true,
-      "elapsed_seconds": 53.7
-    },
-    {
-      "asin": "B0GFM8PKTN",
-      "category": "STEM",
-      "sentence_count": 25,
-      "unique_and_supported_count": 17,
-      "unsupported_count": 8,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 7,
-        "factual_claim": 1,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": true,
-      "elapsed_seconds": 55.726
-    },
-    {
-      "asin": "B01H1MMHSC",
-      "category": "運動",
-      "sentence_count": 28,
-      "unique_and_supported_count": 11,
-      "unsupported_count": 17,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 14,
-        "factual_claim": 3,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 64.738
-    },
-    {
-      "asin": "B0B5MG33PL",
-      "category": "運動",
-      "sentence_count": 25,
-      "unique_and_supported_count": 12,
-      "unsupported_count": 13,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 9,
-        "factual_claim": 4,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": true,
-      "elapsed_seconds": 56.649
-    },
-    {
-      "asin": "B0CF4C397D",
-      "category": "運動",
-      "sentence_count": 27,
-      "unique_and_supported_count": 5,
-      "unsupported_count": 22,
-      "unresolved_count": 0,
-      "unsupported_classification": {
-        "rhetorical_or_time_dependent": 18,
-        "factual_claim": 4,
-        "unresolved": 0
-      },
-      "cache_hit": false,
-      "has_experience_material": false,
-      "elapsed_seconds": 65.031
+      "elapsed_seconds": 65.855
     }
   ],
   "failed": [],
@@ -697,18 +697,18 @@
     "processed_count": 40,
     "failed_count": 0,
     "failure_ratio": 0.0,
-    "median_unique_and_supported_count": 9.5,
-    "median_unique_and_supported_rate": 0.3571,
+    "median_unique_and_supported_count": 12.0,
+    "median_unique_and_supported_rate": 0.4599,
     "by_experience_material": {
       "with_material": {
-        "count": 13,
+        "count": 9,
         "median_unique_and_supported_count": 15,
         "median_unique_and_supported_rate": 0.5769
       },
       "without_material": {
-        "count": 27,
-        "median_unique_and_supported_count": 8,
-        "median_unique_and_supported_rate": 0.32
+        "count": 31,
+        "median_unique_and_supported_count": 11,
+        "median_unique_and_supported_rate": 0.4231
       },
       "unknown": {
         "count": 0,
@@ -717,12 +717,12 @@
       }
     },
     "unsupported_classification_totals": {
-      "rhetorical_or_time_dependent": 476,
-      "factual_claim": 145,
+      "rhetorical_or_time_dependent": 439,
+      "factual_claim": 126,
       "unresolved": 0
     },
-    "median_elapsed_seconds": 59.83,
-    "total_elapsed_seconds": 2361.38,
+    "median_elapsed_seconds": 61.35,
+    "total_elapsed_seconds": 2463.42,
     "zero_target_articles": false
   },
   "run_ok": true,
