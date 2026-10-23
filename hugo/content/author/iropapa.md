@@ -1,5 +1,5 @@
 ---
-title: "いろパパ — 元ソニー IT エンジニア / 知育玩具の分析担当"
+title: "いろパパ — 元ソニーエンジニア / 知育玩具の分析担当"
 date: 2026-06-01
 layout: "single"
 url: /author/iropapa/
@@ -8,7 +8,7 @@ ShowToc: false
 ShowBreadCrumbs: true
 ShowShareButtons: false
 ShowReadingTime: false
-description: "おもちゃいろ 比較ナビの共同運営者、いろパパのプロフィール。元ソニー株式会社の IT エンジニアとしての分析力を活かし、知育玩具のスコアロジック設計とコスパ評価を担当。"
+description: "おもちゃいろ 比較ナビの共同運営者、いろパパのプロフィール。元ソニーのエンジニアとしての分析力を活かし、知育玩具のスコアロジック設計とコスパ評価を担当。"
 searchHidden: false
 ---
 
@@ -18,8 +18,8 @@ searchHidden: false
 
 ## 経歴・専門分野
 
-- **元ソニー株式会社の IT エンジニア**
-- **おもちゃ研究家**
+- **元ソニーエンジニア**
+- おもちゃの専門家ではなく、3 歳の息子の親として実際に買って試す立場で書いています
 - 本サイトでは「**分析・ロジック・コスパ担当**」として、市場データの収集設計とスコアアルゴリズムの実装を担っています
 
 ## 編集部での担当
@@ -32,11 +32,11 @@ searchHidden: false
 
 ## 子育て経験
 
-3 歳の息子と日々おもちゃで遊びながら、机上のスペックでは見えない「実際の食いつき」「飽きるまでの期間」「壊れやすい部位」をフィールドノートとして蓄積しています (年間 300 個以上)。
+3 歳の息子と日々おもちゃで遊びながら、机上のスペックでは見えない「実際の食いつき」「飽きるまでの期間」「壊れやすい部位」をフィールドノートとして蓄積しています。
 
 ## SNS / 関連リンク
 
-- [omcha.jp の運営者プロフィール](https://omcha.jp/about/)
+- [omcha.jp のプロフィール](https://omcha.jp/profile/iropapa/)
 - [開発したツール・ゲーム一覧 (omochairo.github.io)](https://omochairo.github.io/)
 - [X (Twitter) — @omochairo](https://x.com/omochairo)
 - [Instagram — @omochairo](https://www.instagram.com/omochairo)
@@ -54,8 +54,8 @@ searchHidden: false
   "@id": "https://navi.omcha.jp/author/iropapa/#person",
   "name": "いろパパ",
   "alternateName": "IroPapa",
-  "jobTitle": "IT エンジニア / おもちゃ研究家",
-  "description": "元ソニー株式会社の IT エンジニア。おもちゃいろ 比較ナビの共同運営者として、知育玩具のスコア設計とコスパ分析を担当。",
+  "jobTitle": "元ソニーエンジニア",
+  "description": "元ソニーエンジニア。おもちゃいろ 比較ナビの共同運営者として、知育玩具のスコア設計とコスパ分析を担当。",
   "url": "https://navi.omcha.jp/author/iropapa/",
   "image": "https://omcha.jp/wp-content/uploads/2025/04/c22cd52e63323cfe98c0cb54c211d308.jpg",
   "alumniOf": {
@@ -65,12 +65,12 @@ searchHidden: false
   },
   "worksFor": {
     "@type": "Organization",
-    "name": "おもちゃいろ運営局",
+    "name": "おもちゃいろ",
     "url": "https://omcha.jp/"
   },
   "knowsAbout": ["知育玩具", "STEM 教育", "コスパ分析", "市場データ分析", "ソフトウェアエンジニアリング"],
   "sameAs": [
-    "https://omcha.jp/about/",
+    "https://omcha.jp/profile/iropapa/",
     "https://omochairo.github.io/",
     "https://github.com/omochairo",
     "https://x.com/omochairo",
