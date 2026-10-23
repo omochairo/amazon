@@ -6,6 +6,7 @@ against a temp articles_dir to control which ASINs currently have a live body.
 """
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
@@ -88,6 +89,32 @@ class BuildLedgerRecordsTest(unittest.TestCase):
                           "commit_date": "2026-07-01T00:00:00+00:00"}]
             records = brl.build_ledger_records(deletions, articles_dir)
             self.assertEqual(records, [])
+
+
+class DropExistingTest(unittest.TestCase):
+    """Re-running the backfill must only append rows the ledger is missing."""
+
+    def test_skips_rows_already_in_ledger(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            ledger = os.path.join(d, "rewrite_ledger.jsonl")
+            with open(ledger, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"asin": ASIN, "old_slug": f"2026-05-01-{ASIN}",
+                                    "new_slug": f"2026-08-01-{ASIN}", "source": "backfill"}) + "\n")
+                f.write("not json\n\n")
+            records = [
+                {"asin": ASIN, "old_slug": f"2026-05-01-{ASIN}"},
+                # 同じ ASIN でも旧 slug が違えば 2 回目のリライトなので足す
+                {"asin": ASIN, "old_slug": f"2026-08-01-{ASIN}"},
+                {"asin": ASIN2, "old_slug": f"2026-05-01-{ASIN2}"},
+            ]
+            out = brl.drop_existing(records, brl.existing_keys(ledger))
+            self.assertEqual([r["old_slug"] for r in out],
+                             [f"2026-08-01-{ASIN}", f"2026-05-01-{ASIN2}"])
+
+    def test_missing_ledger_keeps_everything(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            keys = brl.existing_keys(os.path.join(d, "absent.jsonl"))
+            self.assertEqual(keys, set())
 
 
 if __name__ == "__main__":
