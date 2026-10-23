@@ -28,11 +28,11 @@ searchHidden: false
 | --- | --- |
 | 安全性審査 | 対象年齢の妥当性 (誤飲リスク、強磁石・小部品の有無)、安全認証 (ST マーク / CE / EN71) の確認 |
 | 食育・健康観点 | 食をテーマにしたおもちゃ・ままごと・栄養知育系製品のレビュー精査 |
-| 子供目線 | 3 歳児との実体験に基づく「掴みやすさ」「飽きにくさ」「親の目が離れても安心か」の判断 |
+| 子供目線 | 2022 年生まれの息子との実体験に基づく「掴みやすさ」「飽きにくさ」「親の目が離れても安心か」の判断 |
 
 ## 子育て経験
 
-3 歳の息子の母として、日々のおもちゃ遊びの中で「子どもが本当に夢中になる瞬間」を観察し、編集判断に反映しています。年間 300 個を超えるおもちゃを夫婦で実際に試しています。
+2022 年生まれの息子の母として、日々のおもちゃ遊びの中で「子どもが本当に夢中になる瞬間」を観察し、編集判断に反映しています。夫婦で実際に買って試しています。
 
 ## 国家資格
 
@@ -41,7 +41,8 @@ searchHidden: false
 
 ## SNS / 関連リンク
 
-- [omcha.jp の運営者プロフィール](https://omcha.jp/about/)
+- [omcha.jp のプロフィール](https://omcha.jp/profile/iromama/)
+- [note — おもちゃいろ](https://note.com/omchairo)
 - [X (Twitter) — @omochairo](https://x.com/omochairo)
 - [Instagram — @omochairo](https://www.instagram.com/omochairo)
 - [Bluesky — omochairo.bsky.social](https://bsky.app/profile/omochairo.bsky.social)
@@ -64,7 +65,7 @@ searchHidden: false
   "image": "https://omcha.jp/wp-content/uploads/2025/04/a5b0c622e23a862ce050186e940695a1.jpg",
   "worksFor": {
     "@type": "Organization",
-    "name": "おもちゃいろ運営局",
+    "name": "おもちゃいろ",
     "url": "https://omcha.jp/"
   },
   "hasCredential": [
@@ -81,7 +82,8 @@ searchHidden: false
   ],
   "knowsAbout": ["知育玩具の安全性", "玩具安全認証 (ST/CE/EN71)", "子どもの食と栄養", "対象年齢適合判定"],
   "sameAs": [
-    "https://omcha.jp/about/",
+    "https://omcha.jp/profile/iromama/",
+    "https://note.com/omchairo",
     "https://x.com/omochairo",
     "https://www.instagram.com/omochairo",
     "https://bsky.app/profile/omochairo.bsky.social",
