@@ -21,14 +21,20 @@ Approach:
      ASINs with no surviving body (quarantined, blocklisted, etc.) are skipped:
      there is no current article to assign a cohort to.
 
-Safe to re-run: ``append_ledger`` only appends, and readers
+Safe to re-run: rows whose ``(asin, old_slug)`` is already in the ledger are
+skipped (``drop_existing``), so a re-run only appends what is missing. Readers
 (``scripts.audit_uniqueness.load_rewrite_ledger``) take the max-``completed_at``
-row per asin, so re-running after new deletions land just adds more rows
-without corrupting the "latest wins" read.
+row per asin either way.
+
+Re-run on 2026-10-23: 12-rewrite-idle-fill never staged the ledger, so every
+row ``cleanup_completed`` appended from 2026-09-11 on was discarded. Running
+this again fills that gap from git history.
 """
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import re
 import subprocess
 import sys
@@ -102,6 +108,30 @@ def build_ledger_records(deletions: list[dict], articles_dir: str = "data/articl
     return records
 
 
+def existing_keys(path: str) -> set[tuple[str, str]]:
+    """Return ``{(asin, old_slug)}`` already recorded in the ledger at ``path``."""
+    keys: set[tuple[str, str]] = set()
+    if not os.path.exists(path):
+        return keys
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(row, dict) and row.get("asin") and row.get("old_slug"):
+                keys.add((row["asin"], row["old_slug"]))
+    return keys
+
+
+def drop_existing(records: list[dict], keys: set[tuple[str, str]]) -> list[dict]:
+    """Drop records whose ``(asin, old_slug)`` is already in the ledger."""
+    return [r for r in records if (r["asin"], r["old_slug"]) not in keys]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--articles-dir", default="data/articles")
@@ -111,7 +141,7 @@ def main() -> int:
 
     git_log_output = run_git_log(f"{args.articles_dir}/*.json")
     deletions = parse_deletions(git_log_output)
-    records = build_ledger_records(deletions, args.articles_dir)
+    records = drop_existing(build_ledger_records(deletions, args.articles_dir), existing_keys(args.out))
 
     if args.dry_run:
         print(f"[backfill_rewrite_ledger] deletions_seen={len(deletions)} "

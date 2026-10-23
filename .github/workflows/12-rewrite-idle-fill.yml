@@ -208,7 +208,10 @@ jobs:
           # -A so step-0 cleanup deletions (old bodies + markers) are staged too.
           # price_history: #2953 C案。--competitors-only 経由の write_per_asin_snapshot が
           # 同時に data/price_history/<ASIN>.jsonl へ追記する。
-          git add -A data/raw/amazon.json data/raw/per_asin/ data/articles/ data/rewrite_queue/ data/price_history/
+          # rewrite_ledger.jsonl: step 0 の --cleanup が旧本体を消すときに完了行を追記する
+          # (navi-brain#39 Step 0-a)。ここに無かったため 2026-09-11 以降の追記が毎回捨てられ、
+          # audit_uniqueness がリライト済みの記事を新規として数えていた。
+          git add -A data/raw/amazon.json data/raw/per_asin/ data/articles/ data/rewrite_queue/ data/price_history/ data/analytics/rewrite_ledger.jsonl
           if git diff --cached --quiet; then
             echo "Nothing staged after git add; skipping."
             exit 0
