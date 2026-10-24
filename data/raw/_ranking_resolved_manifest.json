@@ -1,449 +1,35 @@
 {
-  "jan_candidates_before_limit": 2,
-  "input_unmatched_jans": 2,
+  "jan_candidates_before_limit": 6,
+  "input_unmatched_jans": 6,
   "resolved": [],
-  "unresolved": [],
-  "skipped_already_covered": [
+  "unresolved": [
     {
-      "jan": "9784865391268",
-      "asin": "4865391266",
-      "rank": null
+      "jan": "4974475965736",
+      "rank": 12,
+      "title": "バムとケロ ぬいぐるみ バムS リュック付き　【宅配便（追跡あり）送料無料】"
     },
     {
-      "jan": "4535304730996",
-      "asin": "B0D6QN4YXV",
+      "jan": "4974475965835",
+      "rank": 2,
+      "title": "バムとケロ ぬいぐるみ ケロS リュック付き　【宅配便（追跡あり）】"
+    }
+  ],
+  "skipped_already_covered": [
+    {
+      "jan": "4521718553511",
+      "asin": "B0CGLGLJRM",
       "rank": null
     }
   ],
   "skipped_non_b0": [],
   "new_asins": [],
   "title_fuzzy": {
-    "title_fuzzy_candidates_before_limit": 19,
-    "title_fuzzy_input": 19,
+    "title_fuzzy_candidates_before_limit": 22,
+    "title_fuzzy_input": 22,
     "title_fuzzy_resolved": [],
     "title_fuzzy_rejected": [
       {
-        "rank": 30,
-        "title": "【2026年10月31日発売 予約商品】ちいかわフォンすまーと スペシャルセット",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0HGKP7LWL",
-            "candidate_title": "[バンダイ(BANDAI)] ちいかわフォンすまーと スペシャルセット（特典：『きらりんドロップステッカー』付き） 対象年齢 6 才以上 | 日本おもちゃ大賞2026デジタル部門大賞",
-            "candidate_price": 18700.0,
-            "brand_match": false,
-            "model_token_match": true,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0HGL6BX31",
-            "candidate_title": "[バンダイ(BANDAI)] ちいかわフォンすまーと（特典：『きらりんドロップステッカー』付き） 対象年齢 6 才以上 | 日本おもちゃ大賞2026デジタル部門大賞",
-            "candidate_price": 15950.0,
-            "brand_match": false,
-            "model_token_match": true,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0FNM5155P",
-            "candidate_title": "[バンダイ(BANDAI)] ちいかわフォン ポシェット付きDXセット 対象年齢 6 才以上",
-            "candidate_price": 12200.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          }
-        ]
-      },
-      {
-        "rank": 25,
-        "title": "予約販売10月30発売 【正規品・mofusandモフサンド 】mofusand モフサンド ボンボンドロップシール たまごっち ディズニー ぷっくりシール BONBON DROP 韓国雑貨 デコシール キラキラ シール ステッカー グッズ かわいい シール交換 小学生 プレゼント 手帳デコ",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0C4Y7D95P",
-            "candidate_title": "mofusand クリアシール(5)",
-            "candidate_price": 390.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0DPSN855W",
-            "candidate_title": "【2袋セット】 ごほうびシール mofusand/モフサンド 64枚入 SL-258 まとめ買い 台紙付き",
-            "candidate_price": 698.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0HFHJLKQ1",
-            "candidate_title": "グルマンディーズ mofusand mochipop にゃんぱんつ！ MOFU-117B | グルマンディーズ mofusand モフサンド シール ステッカー ぷっくり 立体 もちもち mochipop",
-            "candidate_price": 858.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          }
-        ]
-      },
-      {
-        "rank": 24,
-        "title": "＼CICINELL【正規品】／ バランスボード 木製 子供 大人 体幹 トレーニング アスレチック 軽量 大人 室内遊び おすすめ こども バランス ボード 小学生 遊具 フィットネス ヨガ ボード子供用　バランス フィットヨガボード おもちゃ 木育 プレゼント",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0BH4TC54Q",
-            "candidate_title": "CICINELL バランスボード 木製 子供 大人 体幹 トレーニング アスレチック 軽量 室内遊び 小学生 遊具 フィットネス 子供用 フィットヨガボード おもちゃ 木育 プレゼント (グレー)",
-            "candidate_price": 3980.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0BH4VRD93",
-            "candidate_title": "CICINELL バランスボード 木製 子供 大人 体幹 トレーニング アスレチック 軽量 大人 室内遊び こども バランス ボード 小学生 遊具 フィットネス ヨガ ボード子供用 バランス フィットヨガボード おもちゃ 木育 プレゼント (ブルー)",
-            "candidate_price": 3980.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0BH4RWQ5W",
-            "candidate_title": "CICINELL バランスボード 木製 子供 大人 体幹 トレーニング アスレチック 軽量 大人 室内遊び こども バランス ボード 小学生 遊具 フィットネス ヨガ ボード子供用 バランス フィットヨガボード おもちゃ 木育 プレゼント (ライラックアッシュ)",
-            "candidate_price": 3980.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          }
-        ]
-      },
-      {
-        "rank": 22,
-        "title": "【先着77名様8%OFFクーポン】三輪車 5in1 BTM 子供用三輪車 三輪車のりもの セーフティーガードなし/付き 2タイプ 押し棒付き 安全バー付き おもちゃ 乗用玩具 幼児用 キッズバイク 誕生日ギフト 贈り物 プレゼント",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0HJQ8XJSB",
-            "candidate_title": "YASUICHI 三輪車 子供用 1歳から6歳 さんりん自転車 安定設計 手押し棒付き 高さ調節 安全ベルト ロックブレーキ ノーパンクタイヤ | 成長に寄り添う多機能キッズバイク ワイドシート 前後バスケット付き 公園・散歩に 一部組立式 後輪幅約51cm 誕生日プレゼント",
-            "candidate_price": 7980.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0H4LDB74T",
-            "candidate_title": "Nijakise 子供用 三輪車 5in1三輪車 ベビーカー 手押し棒付き 手押し棒調整可能 サンシェード付き 組み立て式 6ヶ月～6歳 おもちゃ プレゼント",
-            "candidate_price": 10580.0,
-            "brand_match": false,
-            "model_token_match": true,
-            "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0F9W4GTMP",
-            "candidate_title": "BTM 子供用三輪車 4in1 自転車 オリジナル 押し棒付き 安全バー付き キックボード おもちゃ 乗用玩具 幼児用 軽量 キッズバイク",
-            "candidate_price": 9380.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          }
-        ]
-      },
-      {
-        "rank": 21,
-        "title": "予約 ポケモンカード くじ シュリンク付 ポケモン 第38弾 ポケモンカード BOXくじ 未開封シュリンク BOX 全500口 バトルパートナーズ アビスアイ ストームエメラルダ PSA",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0GP928YDZ",
-            "candidate_title": "ポケモンカードゲーム MEGA 拡張パック ストームエメラルダ BOX",
-            "candidate_price": 6006.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0H62NZ5CG",
-            "candidate_title": "【完全未開封 BOX】拡張パック ストームエメラルダBOX 【国内正規品 シュリンク付き】",
-            "candidate_price": 16600.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0HC7LL223",
-            "candidate_title": "【正規品ｼｭﾘﾝｸ付きbox 】ストーム エメラルダ box",
-            "candidate_price": 14890.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          }
-        ]
-      },
-      {
-        "rank": 20,
-        "title": "【定形外送料無料】はむにぎり マスコット きなこ りぶはあと 47903-13 ベージュ マスコット ハムスター ふわふわ かわいい 癒し リラックス 握る 安心感 虚無 もっちり はむすたー 新作 ギフト インテリア お土産 正規品 ぬい撮り",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0GC3H61ZX",
-            "candidate_title": "りぶはあと マスコット はむにぎり みたらし (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-43",
-            "candidate_price": 2530.0,
-            "brand_match": false,
-            "model_token_match": true,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0GC1W2143",
-            "candidate_title": "りぶはあと マスコット はむにぎり きなこ (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-13",
-            "candidate_price": 2109.0,
-            "brand_match": false,
-            "model_token_match": true,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0GC4MQL8N",
-            "candidate_title": "りぶはあと マスコット はむにぎり おもち (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-11",
-            "candidate_price": 2108.0,
-            "brand_match": false,
-            "model_token_match": true,
-            "spec_match": false,
-            "price_ok": true
-          }
-        ]
-      },
-      {
-        "rank": 19,
-        "title": "【公式】＜送料無料＞ちょこぷに ぬいぐるみ ユズ/モモイ/ミドリ/アリス グッドスマイルカンパニー",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0GWHY3CQQ",
-            "candidate_title": "グッドスマイルカンパニー ブルーアーカイブ -Blue Archive- ちょこぷに ぬいぐるみ モモイ 素材 綿 ポリエステル サイズ 全高約170mm",
-            "candidate_price": 4950.0,
-            "brand_match": true,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0GWHX3939",
-            "candidate_title": "グッドスマイルカンパニー ブルーアーカイブ -Blue Archive- ちょこぷに ぬいぐるみ アリス 素材 綿 ポリエステル サイズ 全高約170mm",
-            "candidate_price": 4950.0,
-            "brand_match": true,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0GWJ49X6G",
-            "candidate_title": "グッドスマイルカンパニー ブルーアーカイブ -Blue Archive- ちょこぷに ぬいぐるみ ミドリ 素材 綿 ポリエステル サイズ 全高約170mm",
-            "candidate_price": 4950.0,
-            "brand_match": true,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          }
-        ]
-      },
-      {
-        "rank": 18,
-        "title": "高評価★4.7【累計48万台突破】光るホイール MOVEGU_公式 キックスクーター 【4段階高さ調整】 キックボード 子供用 三輪車 軽量 頑丈 方向変換 安定 折りたたみ 持ち運び便利 後輪ブレーキ 誕生日 【お試し返品可能】",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0H9RKXN9B",
-            "candidate_title": "「KAYUSO」キックスクーター 子供用 キックボード アウトドアに適用 おもちゃ ギフト 誕生日 (ブルー) | 4段階高さ調整 | 光るLEDタイヤ | 折り畳み式 | 方向変換 | 耐荷重75kg",
-            "candidate_price": 4980.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0CJXXS8J7",
-            "candidate_title": "【S.Darwin】子供～大人 キックボード 大人用 ディスクブレーキ Wサスペンション 折りたたみ キックスクーター | LEDタイヤ 光る 子供・小学生から大人まで, 国内ブランド, 1年保 証・PL保険加入, 収納バッグ付き,誕生日プレゼント",
-            "candidate_price": 14980.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0DNLGTY5R",
-            "candidate_title": "Fkstyle【20cmビッグホイールで安定走行！】キックボード キックスクーター 折りたたみ式 高さ3段階調節 スタンド付き ブレーキ搭載 衝撃吸収サスペンション [並行輸入品]",
-            "candidate_price": 6480.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          }
-        ]
-      },
-      {
-        "rank": 17,
-        "title": "【公式】＜送料無料＞ぬいぐるみ 遠野ハンナ/蓮見レイア グッドスマイルカンパニー",
-        "reason": "no_guardrail_pass",
-        "candidates": []
-      },
-      {
-        "rank": 16,
-        "title": "積み木 音が鳴る 音いっぱいつみき ボリュームセット 25ピース すべて音入り 木箱付き 1歳 誕生日プレゼント 木のおもちゃ 出産祝い エドインター GENI 木製 知育玩具 赤ちゃん 男の子 女の子 孫 クリスマス",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B00AYPDB2K",
-            "candidate_title": "BRIO 木製レール 知育玩具 カラーつみき２５ピース 対象年齢1歳~ 30114 誕生日 クリスマス プレゼント 室内遊び 男の子 女の子 脳トレ",
-            "candidate_price": 1936.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0C8YJ7RY4",
-            "candidate_title": "アガツマ(AGATSUMA) アンパンマン 自然の恵 お米からうまれたつみきDX （対象年齢:0ヶ月以上）",
-            "candidate_price": 6453.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B07X83J3T5",
-            "candidate_title": "ピープル 純国産 お米のどうぶつつみき いろどり KM-029",
-            "candidate_price": 5891.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          }
-        ]
-      },
-      {
-        "rank": 15,
-        "title": "【P5倍！22:00から！累計販売66,340台突破！】三輪車 ロック付き 折りたたみ BTM 手押し棒付き 安全ストッパー かじとり サンシェード 三輪車カバー 軽量 おしゃれ 自転車 バランスバイク キックバイク 9in1 赤ちゃん プレゼント 誕生日 ギフト箱入り 6ヶ月~6歳【2年保証】",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0HJQ8XJSB",
-            "candidate_title": "YASUICHI 三輪車 子供用 1歳から6歳 さんりん自転車 安定設計 手押し棒付き 高さ調節 安全ベルト ロックブレーキ ノーパンクタイヤ | 成長に寄り添う多機能キッズバイク ワイドシート 前後バスケット付き 公園・散歩に 一部組立式 後輪幅約51cm 誕生日プレゼント",
-            "candidate_price": 7980.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0DB4WQ3FF",
-            "candidate_title": "Bacany 子供用三輪車 7in1 三輪車 ステップ付き 折りたたみ 手押し棒 おしゃれ 1歳-6歳 子供バイク コンパクト 自転車 おもちゃ 乗用玩具 幼児用 キッズバイク プレゼント おもちゃ 調整可能 お祝い ギフト シートベルト付き (ホワイト)",
-            "candidate_price": 10380.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0F9W4GTMP",
-            "candidate_title": "BTM 子供用三輪車 4in1 自転車 オリジナル 押し棒付き 安全バー付き キックボード おもちゃ 乗用玩具 幼児用 軽量 キッズバイク",
-            "candidate_price": 9380.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          }
-        ]
-      },
-      {
-        "rank": 14,
-        "title": "【辻ちゃんネル紹介記念★P5倍】 モルビー 三輪車 手押し棒付き 折りたたみ 三輪車 1歳 2歳 3歳 赤ちゃん 手押し かじとり キックバイク 10段階変形 10in1 5点式ハーネス UVカット サンシェード 軽量 おしゃれ 室内OK 子供 0歳～6歳まで MORBY",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0G52587KC",
-            "candidate_title": "【colulu】 モルビー 三輪車 手押し棒付き 折りたたみ キックバイク 1歳 2歳 3歳 10in1 子供 室内 MORBY (ブラック)",
-            "candidate_price": 17980.0,
-            "brand_match": false,
-            "model_token_match": true,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0G525622N",
-            "candidate_title": "【colulu】 モルビー 三輪車 手押し棒付き 折りたたみ キックバイク 1歳 2歳 3歳 10in1 子供 室内 MORBY (グレー) | 10通りに変身,工具不要,おしゃれ,静音タイヤ,軽量,サンシェード付,手押し,男の子,女の子,0歳〜6歳,ベビー,誕生日,プレゼント,クリスマス,出産祝い,おもちゃ",
-            "candidate_price": 17980.0,
-            "brand_match": false,
-            "model_token_match": true,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0H4LDB74T",
-            "candidate_title": "Nijakise 子供用 三輪車 5in1三輪車 ベビーカー 手押し棒付き 手押し棒調整可能 サンシェード付き 組み立て式 6ヶ月～6歳 おもちゃ プレゼント",
-            "candidate_price": 10580.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          }
-        ]
-      },
-      {
-        "rank": 11,
-        "title": "バンダイ おでかけしよ♪お世話して、かわいがって?おしゃべりポチタン オシヤベリポチタン [オシヤベリポチタン]",
-        "reason": "no_guardrail_pass",
-        "candidates": []
-      },
-      {
-        "rank": 10,
-        "title": "【在庫あり！】はむにぎり マスコット ハムスター ねずみ ぬいぐるみ マスコット もちもち ふわふわ ぬいどり ぬい活 手のりサイズ 動物 アニマル 癒し かわいい",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0HGQYPZS7",
-            "candidate_title": "りぶはあと マスコット はむにぎり おそば (全長約10cm) ハムスター ぬいどり ふわふわ もちもち 47904-74",
-            "candidate_price": 2510.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0HGRGW5BC",
-            "candidate_title": "りぶはあと マスコット はむにぎり こむぎ (全長約10cm) ハムスター ぬいどり ふわふわ もちもち 47904-30",
-            "candidate_price": 2510.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0GC1W2143",
-            "candidate_title": "りぶはあと マスコット はむにぎり きなこ (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-13",
-            "candidate_price": 2109.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          }
-        ]
-      },
-      {
-        "rank": 8,
+        "rank": 28,
         "title": "【正規品＼楽天1位／】 かみかみチキン 歯固め 手にはめる歯がため シリコン 食品グレード おもちゃ 歯がため 安心素材 はがため 赤ちゃん 新生児 ベビー BPAフリー 3ヶ月 0歳 1歳 おしゃぶり ファーストトイ かわいい マッサージ プレゼント 出産祝い",
         "reason": "no_guardrail_pass",
         "candidates": [
@@ -477,66 +63,32 @@
         ]
       },
       {
-        "rank": 5,
-        "title": "【楽天1位連続受賞】 ロッキングストライダー スポーツモデル 12インチ キックバイク キッズバイク 0歳 1歳 1歳半 2歳 誕生日 プレゼント クリスマス 男の子 女の子 赤ちゃん こども 子供用 自転車 三輪車 バランス おもちゃ",
+        "rank": 26,
+        "title": "【在庫あり！】はむにぎり マスコット ハムスター ねずみ ぬいぐるみ マスコット もちもち ふわふわ ぬいどり ぬい活 手のりサイズ 動物 アニマル 癒し かわいい",
         "reason": "no_guardrail_pass",
         "candidates": [
           {
-            "asin": "B0DMNLCQVN",
-            "candidate_title": "【米国グッドデザイン賞受賞】PYKES PEAK(パイクスピーク) ちびっこライダー 子供用 四輪車 キッズ 1歳以上 誕生日プレゼント コンパクト 超軽量 ベビーカー バランス 乗り物 おもちゃ ハンドル プレゼント ライオン",
-            "candidate_price": 5980.0,
+            "asin": "B0HGQYPZS7",
+            "candidate_title": "りぶはあと マスコット はむにぎり おそば (全長約10cm) ハムスター ぬいどり ふわふわ もちもち 47904-74",
+            "candidate_price": 2510.0,
             "brand_match": false,
             "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0DMNK2FZL",
-            "candidate_title": "【米国グッドデザイン賞受賞】PYKES PEAK(パイクスピーク) ちびっこライダー 子供用 四輪車 キッズ 1歳以上 誕生日プレゼント コンパクト 超軽量 ベビーカー バランス 乗り物 おもちゃ ハンドル プレゼント ウシ",
-            "candidate_price": 5980.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0HJ1TSGPB",
-            "candidate_title": "BARWING バーウィング キッズバイク 3Way 子供用自転車 バイク キック 2歳 3歳 4歳 5歳 ランバイク 男の子 女の子 ブレーキ付き ペダル 補助輪 おしゃれ 補助輪付き ランニングバイク 子ども用 ペダルなし自転車 バランス バイク 誕生日",
-            "candidate_price": 12800.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          }
-        ]
-      },
-      {
-        "rank": 4,
-        "title": "VG-DZ-TBP02 カードファイト!! ヴァンガード タイトルブースター プレミアム ペルソナ 30th Anniversary BOX 10パック入り VG ブシロード",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0DNB2WSPN",
-            "candidate_title": "カードファイト!! ヴァンガード タイトルブースター プレミアム Persona 30th Anniversary VG-DZ-TBP02 BOX",
-            "candidate_price": 5600.0,
-            "brand_match": false,
-            "model_token_match": true,
             "spec_match": false,
             "price_ok": true
           },
           {
-            "asin": "B0H6DXCN7K",
-            "candidate_title": "ヴァンガード タイトルブースター プレミアム ペルソナ 30th Anniversary BOX",
-            "candidate_price": 6980.0,
+            "asin": "B0HGRGW5BC",
+            "candidate_title": "りぶはあと マスコット はむにぎり こむぎ (全長約10cm) ハムスター ぬいどり ふわふわ もちもち 47904-30",
+            "candidate_price": 2510.0,
             "brand_match": false,
-            "model_token_match": true,
+            "model_token_match": false,
             "spec_match": false,
             "price_ok": true
           },
           {
-            "asin": "B0DT6TJLMZ",
-            "candidate_title": "カードファイト!! ヴァンガード ブースターパック 零騎転生 VG-DZ-BT08 BOX",
-            "candidate_price": 4640.0,
+            "asin": "B0GC1W2143",
+            "candidate_title": "りぶはあと マスコット はむにぎり きなこ (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-13",
+            "candidate_price": 2109.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
@@ -545,8 +97,191 @@
         ]
       },
       {
-        "rank": 2,
-        "title": "はむにぎり　マスコットチャーム　はむにぎり　おもち　きなこ　みたらし　ごまきち　チャーム",
+        "rank": 24,
+        "title": "予約 2026年11月【正規品】ボンボンドロップシール ちいかわ こびとづかん mofusand mini サンリオ ハローキティ マイメロ クロミ キキララ ウサハナ 90s タイルシール ヒョウ ヒョウ(ピンク) ハイビスカス シール帳",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B0H74PNRSR",
+            "candidate_title": "クーリア シール パキパキタイルシール こびとづかん 集合 14009",
+            "candidate_price": 670.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          },
+          {
+            "asin": "B0HCY2FCSK",
+            "candidate_title": "オーロラぷくっとシール サンリオキャラクターズ【ねこみみメイドカフェ】ぷっくり 立体シール 0018",
+            "candidate_price": 498.0,
+            "brand_match": true,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          },
+          {
+            "asin": "B0HCXW4PQT",
+            "candidate_title": "オーロラぷくっとシール サンリオキャラクターズ【星座】ぷっくり 立体シール 001836-54",
+            "candidate_price": 544.0,
+            "brand_match": true,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          }
+        ]
+      },
+      {
+        "rank": 22,
+        "title": "【はむにぎり】ポージングはむにぎり　おそば",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B0HGQYPZS7",
+            "candidate_title": "りぶはあと マスコット はむにぎり おそば (全長約10cm) ハムスター ぬいどり ふわふわ もちもち 47904-74",
+            "candidate_price": 2510.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          }
+        ]
+      },
+      {
+        "rank": 21,
+        "title": "【はむにぎり】ポージングはむにぎり　くろまめ",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B0HGQVPSFG",
+            "candidate_title": "りぶはあと マスコット はむにぎり くろまめ (全長約10cm) ハムスター ぬいどり ふわふわ もちもち 47903-75",
+            "candidate_price": 2510.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0H6CFSCBN",
+            "candidate_title": "はむにぎり 豆巾着 おもち",
+            "candidate_price": 748.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          },
+          {
+            "asin": "B0H6CS7W8Y",
+            "candidate_title": "はむにぎり 豆巾着 きなこ",
+            "candidate_price": 748.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          }
+        ]
+      },
+      {
+        "rank": 20,
+        "title": "【はむにぎり】ポージングはむにぎり　ごまきち",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B0GC4J1BR4",
+            "candidate_title": "りぶはあと マスコット はむにぎり ごまきち (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-72",
+            "candidate_price": 2510.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0HCW49VM9",
+            "candidate_title": "はむにぎり ごまきち 虚無顔ハムスター",
+            "candidate_price": 8980.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          }
+        ]
+      },
+      {
+        "rank": 19,
+        "title": "【はむにぎり】ポージングはむにぎり　おこめ",
+        "reason": "no_guardrail_pass",
+        "candidates": []
+      },
+      {
+        "rank": 18,
+        "title": "【はむにぎり】ポージングはむにぎり　みたらし",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B0GC3H61ZX",
+            "candidate_title": "りぶはあと マスコット はむにぎり みたらし (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-43",
+            "candidate_price": 2109.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0GC4MQL8N",
+            "candidate_title": "りぶはあと マスコット はむにぎり おもち (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-11",
+            "candidate_price": 2108.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0HLBMKSRJ",
+            "candidate_title": "もっちり はむにぎり みたらし C",
+            "candidate_price": 5100.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          }
+        ]
+      },
+      {
+        "rank": 17,
+        "title": "【はむにぎり】ポージングはむにぎり　こむぎ",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B0HGRGW5BC",
+            "candidate_title": "りぶはあと マスコット はむにぎり こむぎ (全長約10cm) ハムスター ぬいどり ふわふわ もちもち 47904-30",
+            "candidate_price": 2510.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0HGR6RV1S",
+            "candidate_title": "りぶはあと マスコット はむにぎり おこめ (全長約10cm) ハムスター ぬいどり ふわふわ もちもち 47904-10",
+            "candidate_price": 2510.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0GC4MQL8N",
+            "candidate_title": "りぶはあと マスコット はむにぎり おもち (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-11",
+            "candidate_price": 2108.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          }
+        ]
+      },
+      {
+        "rank": 16,
+        "title": "【はむにぎり】ポージングはむにぎり　おもち",
         "reason": "no_guardrail_pass",
         "candidates": [
           {
@@ -556,16 +291,7 @@
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0GC4J1BR4",
-            "candidate_title": "りぶはあと マスコット はむにぎり ごまきち (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-72",
-            "candidate_price": 2480.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
+            "price_ok": true
           },
           {
             "asin": "B0GC1W2143",
@@ -574,250 +300,361 @@
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
-            "price_ok": false
+            "price_ok": true
           }
         ]
       },
       {
-        "rank": 1,
-        "title": "バンダイ Tamagotchi(たまごっち) Paradise - My Lab Tamagotchi 《2026年11月7日発売予定》",
+        "rank": 15,
+        "title": "【はむにぎり】ポージングはむにぎり　きなこ",
         "reason": "no_guardrail_pass",
         "candidates": [
           {
-            "asin": "B0F8H35HG3",
-            "candidate_title": "[バンダイ(BANDAI)] Tamagotchi Paradise - Pink Land 対象年齢 6才以上 たまごっちパラダイス | 日本おもちゃ大賞2026ヒット・セールス賞",
-            "candidate_price": 5109.0,
-            "brand_match": true,
-            "model_token_match": true,
-            "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0H1KQ5CMD",
-            "candidate_title": "[バンダイ(BANDAI)] Tamagotchi Paradise - White Glacier 対象年齢 6 才以上 たまごっちパラダイス",
-            "candidate_price": 6380.0,
-            "brand_match": true,
+            "asin": "B0GC1W2143",
+            "candidate_title": "りぶはあと マスコット はむにぎり きなこ (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-13",
+            "candidate_price": 2109.0,
+            "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
             "price_ok": true
           },
           {
-            "asin": "B0F8HCR6H4",
-            "candidate_title": "[バンダイ(BANDAI)] Tamagotchi Paradise - Blue Water 対象年齢 6才以上 たまごっちパラダイス | 日本おもちゃ大賞2026ヒット・セールス賞",
-            "candidate_price": 5782.0,
-            "brand_match": true,
-            "model_token_match": true,
+            "asin": "B0H6CS7W8Y",
+            "candidate_title": "はむにぎり 豆巾着 きなこ",
+            "candidate_price": 748.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          }
+        ]
+      },
+      {
+        "rank": 13,
+        "title": "【10/23 大集合！新作登場限定販売】ぷにっこ スイーツシリーズ ふわふわスフレ ジュエルキャンディコレクション もちもち大福 スイスロール＆バター アイスクリーム カップケーキ 夢色ふわもこケーキ スクイーズ Punikko ブラインド スライム おもちゃ TOKOTOYZ",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B0HLJLKK6Y",
+            "candidate_title": "スクイーズ ドーナツ もちもち ぷにぷに ふわふわ シリコン お菓子 食べ物 スイーツ おもちゃ 玩具 かわいい [ エール ぷにゅる ドーナツシリコンパック ](ストロベリードーナツ)",
+            "candidate_price": 1045.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          },
+          {
+            "asin": "B0H8CWSHYN",
+            "candidate_title": "スクイーズ (SNSで話題 もちもち ぷにぷに おもちゃ ストレス解消) (スフレアイス抹茶)",
+            "candidate_price": 990.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          },
+          {
+            "asin": "B0HLJ7QG78",
+            "candidate_title": "スクイーズ ドーナツ もちもち ぷにぷに ふわふわ シリコン お菓子 食べ物 スイーツ おもちゃ 玩具 かわいい [ エール ぷにゅる ドーナツシリコンパック ](チョコドーナツ)",
+            "candidate_price": 1045.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          }
+        ]
+      },
+      {
+        "rank": 11,
+        "title": "【はむにぎりフレンズ】マスコット　ブンチョウのアールグレー",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B00VWRY5R4",
+            "candidate_title": "三英貿易(Sanei Boeki) オリジナル ぬいぐるみ とりだんご サクラブンチョウ W9×D8×H7cm アニマル",
+            "candidate_price": 891.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          },
+          {
+            "asin": "B0F4X5QHRL",
+            "candidate_title": "【1.ダチョウ ベイビー】てのりベイビーフレンズ",
+            "candidate_price": 1698.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          }
+        ]
+      },
+      {
+        "rank": 10,
+        "title": "【はむにぎりフレンズ】マスコット　インコのソーダ",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B0GC4MQL8N",
+            "candidate_title": "りぶはあと マスコット はむにぎり おもち (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-11",
+            "candidate_price": 2108.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0HFW9NC6W",
+            "candidate_title": "てのりフレンズ13 12個 BOX 食玩",
+            "candidate_price": 3980.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          },
+          {
+            "asin": "B08F736RYB",
+            "candidate_title": "りぶはあと リラクシングアイテム てのひらモッチまにあっく トリまにあ セキセイインコ (全長約5cm) かわいい ストレス解消 74101-04",
+            "candidate_price": 1280.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          }
+        ]
+      },
+      {
+        "rank": 9,
+        "title": "【はむにぎりフレンズ】マスコット　インコのメロン",
+        "reason": "no_guardrail_pass",
+        "candidates": []
+      },
+      {
+        "rank": 8,
+        "title": "【はむにぎりフレンズ】マスコット　オカメインコのアラモード",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B0DJFGJWX2",
+            "candidate_title": "【BESTEVER】バウンディーズ Boundies スクイーズ マスコット オカメインコ Cockatiel 46188",
+            "candidate_price": 1595.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B07XTGB6G7",
+            "candidate_title": "B2181104 アニマルフレンズ チャーム オカメインコ",
+            "candidate_price": 706.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          },
+          {
+            "asin": "B099WY3C1K",
+            "candidate_title": "吉徳ことりのね オカメインコ 180092",
+            "candidate_price": 1783.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          }
+        ]
+      },
+      {
+        "rank": 7,
+        "title": "【はむにぎりフレンズ】マスコット　ブンチョウのチャイ",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B0F4X5QHRL",
+            "candidate_title": "【1.ダチョウ ベイビー】てのりベイビーフレンズ",
+            "candidate_price": 1698.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          }
+        ]
+      },
+      {
+        "rank": 6,
+        "title": "【はむにぎりフレンズ】マスコット　シマエナガのマシュマロ",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B0GC3H61ZX",
+            "candidate_title": "りぶはあと マスコット はむにぎり みたらし (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-43",
+            "candidate_price": 2109.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0HGRGW5BC",
+            "candidate_title": "りぶはあと マスコット はむにぎり こむぎ (全長約10cm) ハムスター ぬいどり ふわふわ もちもち 47904-30",
+            "candidate_price": 2510.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0GC4MQL8N",
+            "candidate_title": "りぶはあと マスコット はむにぎり おもち (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-11",
+            "candidate_price": 2108.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          }
+        ]
+      },
+      {
+        "rank": 5,
+        "title": "【はむにぎりフレンズ】マスコット　ブンチョウのココナッツ",
+        "reason": "no_guardrail_pass",
+        "candidates": []
+      },
+      {
+        "rank": 4,
+        "title": "【はむにぎりフレンズ】マスコット　ひよこのカスタード",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B0GC1W2143",
+            "candidate_title": "りぶはあと マスコット はむにぎり きなこ (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-13",
+            "candidate_price": 2109.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0GC3H61ZX",
+            "candidate_title": "りぶはあと マスコット はむにぎり みたらし (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-43",
+            "candidate_price": 2109.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0GC4MQL8N",
+            "candidate_title": "りぶはあと マスコット はむにぎり おもち (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-11",
+            "candidate_price": 2108.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          }
+        ]
+      },
+      {
+        "rank": 3,
+        "title": "【はむにぎりフレンズ】マスコット　アヒルのバニラ",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B0HGR6RV1S",
+            "candidate_title": "りぶはあと マスコット はむにぎり おこめ (全長約10cm) ハムスター ぬいどり ふわふわ もちもち 47904-10",
+            "candidate_price": 2510.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0GC1W2143",
+            "candidate_title": "りぶはあと マスコット はむにぎり きなこ (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-13",
+            "candidate_price": 2109.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0HFHVYMMQ",
+            "candidate_title": "ネイチャーテクニカラー MONO アヒルとマガモのぬいぐるみ 全5種 [フルコンプ] カプ*セルトイ",
+            "candidate_price": 4580.0,
+            "brand_match": false,
+            "model_token_match": false,
             "spec_match": false,
             "price_ok": false
           }
         ]
       }
     ],
-    "title_fuzzy_page_matches": []
+    "title_fuzzy_page_matches": [
+      {
+        "rank": 14,
+        "title": "バンダイ Tamagotchi(たまごっち) Paradise - My Lab Tamagotchi 《2026年11月7日発売予定》",
+        "item_code": "emedama:11345860",
+        "asin": "B0F8GS281Q",
+        "match_method": "title_fuzzy",
+        "candidate_title": "[バンダイ(BANDAI)] Tamagotchi Paradise - Purple Sky 対象年齢 6才以上 たまごっちパラダイス | 日本おもちゃ大賞2026ヒット・セールス賞",
+        "brand_match": true,
+        "rakuten_brand": "バンダイ",
+        "candidate_brand": "バンダイ",
+        "model_token_match": true,
+        "common_tokens": [
+          "2026"
+        ],
+        "spec_match": false,
+        "price_ok": true,
+        "rakuten_price": 9900.0,
+        "candidate_price": 6283.0,
+        "image_sim": null,
+        "vision_gate_mode": "shadow",
+        "vision_gate_passed": true,
+        "reason": "already_covered"
+      }
+    ]
   },
   "genre_gate_enabled": true,
-  "genre_gate_dropped": 1,
+  "genre_gate_dropped": 3,
   "genre_gate_dropped_items": [
     {
-      "asin": "B0GC1W2143",
-      "rank": 20,
-      "title": "【定形外送料無料】はむにぎり マスコット きなこ りぶはあと 47903-13 ",
+      "asin": "B0HLKTBTCF",
+      "rank": 30,
+      "title": "【11/6までに出荷可能分☆】[メール便OK]【新品】ポケモンG プチドロップス",
       "roots": [
-        "ホーム＆キッチン"
+        "文房具・オフィス用品"
       ],
-      "match_method": "yahoo_jan",
-      "jan": "4523251046215"
+      "match_method": "jan",
+      "jan": "4550433079952"
+    },
+    {
+      "asin": "B0HLKS5LXM",
+      "rank": 29,
+      "title": "【11/6までに出荷可能分☆】[メール便OK]【新品】ポケモンG プチドロップス",
+      "roots": [
+        "文房具・オフィス用品"
+      ],
+      "match_method": "jan",
+      "jan": "4550433079945"
+    },
+    {
+      "asin": "B0FPPYXTRC",
+      "rank": null,
+      "title": "【ギフト 特典あり】クリスマス おうた えほん ぴかぴかひかる 絵本 音の出る絵",
+      "roots": [
+        "本",
+        "産業・研究開発用品"
+      ],
+      "match_method": "jan",
+      "jan": "4959321010419"
     }
   ],
   "yahoo_jan": {
-    "yahoo_jan_candidates_before_limit": 19,
-    "yahoo_jan_input": 19,
+    "yahoo_jan_candidates_before_limit": 22,
+    "yahoo_jan_input": 22,
     "yahoo_jan_adopted": 0,
     "yahoo_jan_entries": [
       {
-        "rank": 30,
-        "title": "【2026年10月31日発売 予約商品】ちいかわフォンすまーと スペシャルセット",
-        "query": "ちいかわフォンすまーと スペシャルセット",
-        "jan": "",
-        "votes": {
-          "4582770018509": 2,
-          "4580872232489": 2,
-          "4580872232564": 2,
-          "4580872232533": 2,
-          "4580872232557": 2
-        },
-        "asin": "",
-        "adopted": false,
-        "reason": "too_few_votes"
-      },
-      {
-        "rank": 25,
-        "title": "予約販売10月30発売 【正規品・mofusandモフサンド 】mofusand モフサンド ボンボンドロップシール たまごっち ディズニー ぷっくりシール BONBON DROP 韓国雑貨 デコシール キラキラ シール ステッカー グッズ かわいい シール交換 小学生 プレゼント 手帳デコ",
-        "query": "10月30発売 mofusand ボンボンドロップシール",
-        "jan": "",
-        "votes": {},
-        "asin": "",
-        "adopted": false,
-        "reason": "no_jan_in_hits"
-      },
-      {
-        "rank": 24,
-        "title": "＼CICINELL【正規品】／ バランスボード 木製 子供 大人 体幹 トレーニング アスレチック 軽量 大人 室内遊び おすすめ こども バランス ボード 小学生 遊具 フィットネス ヨガ ボード子供用　バランス フィットヨガボード おもちゃ 木育 プレゼント",
-        "query": "バランスボード 木製 フィットヨガボード",
-        "jan": "",
-        "votes": {},
-        "asin": "",
-        "adopted": false,
-        "reason": "no_jan_in_hits"
-      },
-      {
-        "rank": 22,
-        "title": "【先着77名様8%OFFクーポン】三輪車 5in1 BTM 子供用三輪車 三輪車のりもの セーフティーガードなし/付き 2タイプ 押し棒付き 安全バー付き おもちゃ 乗用玩具 幼児用 キッズバイク 誕生日ギフト 贈り物 プレゼント",
-        "query": "三輪車 5in1 BTM 子供用三輪車",
-        "jan": "",
-        "votes": {
-          "4580502081555": 2,
-          "4580502090625": 1,
-          "4580502266419": 1,
-          "4580502088189": 1,
-          "4580502097082": 1
-        },
-        "asin": "",
-        "adopted": false,
-        "reason": "too_few_votes"
-      },
-      {
-        "rank": 21,
-        "title": "予約 ポケモンカード くじ シュリンク付 ポケモン 第38弾 ポケモンカード BOXくじ 未開封シュリンク BOX 全500口 バトルパートナーズ アビスアイ ストームエメラルダ PSA",
-        "query": "ポケモンカード くじ バトルパートナーズ",
-        "jan": "",
-        "votes": {},
-        "asin": "",
-        "adopted": false,
-        "reason": "no_jan_in_hits"
-      },
-      {
-        "rank": 20,
-        "title": "【定形外送料無料】はむにぎり マスコット きなこ りぶはあと 47903-13 ベージュ マスコット ハムスター ふわふわ かわいい 癒し リラックス 握る 安心感 虚無 もっちり はむすたー 新作 ギフト インテリア お土産 正規品 ぬい撮り",
-        "query": "はむにぎり マスコット きなこ りぶはあと 47903",
-        "jan": "4523251046215",
-        "votes": {
-          "4523251046215": 5
-        },
-        "asin": "B0GC1W2143",
-        "adopted": false,
-        "reason": "genre_gate",
-        "item_code": "king-bear777:10010314",
-        "amazon_title": "りぶはあと マスコット はむにぎり きなこ (全長約10cm) ハムスター かわいい ぬいどり モチモチ 47903-13",
-        "rakuten_brand": "",
-        "amazon_brand": "",
-        "common_codes": [
-          "47903"
-        ],
-        "identity_ok": true,
-        "identity_reason": ""
-      },
-      {
-        "rank": 19,
-        "title": "【公式】＜送料無料＞ちょこぷに ぬいぐるみ ユズ/モモイ/ミドリ/アリス グッドスマイルカンパニー",
-        "query": "＜ ＞ちょこぷに グッドスマイルカンパニー",
-        "jan": "",
-        "votes": {
-          "4570232589179": 2,
-          "4580828671539": 1,
-          "4570232588936": 1,
-          "4580828671577": 1,
-          "4580828678064": 1
-        },
-        "asin": "",
-        "adopted": false,
-        "reason": "too_few_votes"
-      },
-      {
-        "rank": 18,
-        "title": "高評価★4.7【累計48万台突破】光るホイール MOVEGU_公式 キックスクーター 【4段階高さ調整】 キックボード 子供用 三輪車 軽量 頑丈 方向変換 安定 折りたたみ 持ち運び便利 後輪ブレーキ 誕生日 【お試し返品可能】",
-        "query": "高評価★4.7 光るホイール キックスクーター",
-        "jan": "",
-        "votes": {},
-        "asin": "",
-        "adopted": false,
-        "reason": "no_jan_in_hits"
-      },
-      {
-        "rank": 17,
-        "title": "【公式】＜送料無料＞ぬいぐるみ 遠野ハンナ/蓮見レイア グッドスマイルカンパニー",
-        "query": "＜ ＞ぬいぐるみ グッドスマイルカンパニー",
-        "jan": "",
-        "votes": {
-          "4570232589179": 2,
-          "4570232580206": 1,
-          "4580828671539": 1,
-          "4570232592032": 1,
-          "4570232580190": 1
-        },
-        "asin": "",
-        "adopted": false,
-        "reason": "too_few_votes"
-      },
-      {
-        "rank": 16,
-        "title": "積み木 音が鳴る 音いっぱいつみき ボリュームセット 25ピース すべて音入り 木箱付き 1歳 誕生日プレゼント 木のおもちゃ 出産祝い エドインター GENI 木製 知育玩具 赤ちゃん 男の子 女の子 孫 クリスマス",
-        "query": "積み木 音が鳴る ボリュームセット",
-        "jan": "4941746825051",
-        "votes": {
-          "4941746825051": 14,
-          "4941746806371": 1,
-          "4941746822746": 1
-        },
-        "asin": "",
-        "adopted": false,
-        "reason": "amazon_no_jan_match",
-        "item_code": "gajumarunoki:10001116"
-      },
-      {
-        "rank": 15,
-        "title": "【P5倍！22:00から！累計販売66,340台突破！】三輪車 ロック付き 折りたたみ BTM 手押し棒付き 安全ストッパー かじとり サンシェード 三輪車カバー 軽量 おしゃれ 自転車 バランスバイク キックバイク 9in1 赤ちゃん プレゼント 誕生日 ギフト箱入り 6ヶ月~6歳【2年保証】",
-        "query": "三輪車 ロック付き 折りたたみ BTM",
-        "jan": "",
-        "votes": {},
-        "asin": "",
-        "adopted": false,
-        "reason": "no_jan_in_hits"
-      },
-      {
-        "rank": 14,
-        "title": "【辻ちゃんネル紹介記念★P5倍】 モルビー 三輪車 手押し棒付き 折りたたみ 三輪車 1歳 2歳 3歳 赤ちゃん 手押し かじとり キックバイク 10段階変形 10in1 5点式ハーネス UVカット サンシェード 軽量 おしゃれ 室内OK 子供 0歳～6歳まで MORBY",
-        "query": "モルビー 三輪車 手押し棒付き 折りたたみ",
-        "jan": "",
-        "votes": {
-          "4580786193456": 1
-        },
-        "asin": "",
-        "adopted": false,
-        "reason": "too_few_votes"
-      },
-      {
-        "rank": 11,
-        "title": "バンダイ おでかけしよ♪お世話して、かわいがって?おしゃべりポチタン オシヤベリポチタン [オシヤベリポチタン]",
-        "query": "バンダイ おでかけしよ オシヤベリポチタン",
-        "jan": "",
-        "votes": {},
-        "asin": "",
-        "adopted": false,
-        "reason": "no_jan_in_hits"
-      },
-      {
-        "rank": 10,
-        "title": "【在庫あり！】はむにぎり マスコット ハムスター ねずみ ぬいぐるみ マスコット もちもち ふわふわ ぬいどり ぬい活 手のりサイズ 動物 アニマル 癒し かわいい",
-        "query": "はむにぎり マスコット ハムスター ねずみ",
-        "jan": "",
-        "votes": {},
-        "asin": "",
-        "adopted": false,
-        "reason": "no_jan_in_hits"
-      },
-      {
-        "rank": 8,
+        "rank": 28,
         "title": "【正規品＼楽天1位／】 かみかみチキン 歯固め 手にはめる歯がため シリコン 食品グレード おもちゃ 歯がため 安心素材 はがため 赤ちゃん 新生児 ベビー BPAフリー 3ヶ月 0歳 1歳 おしゃぶり ファーストトイ かわいい マッサージ プレゼント 出産祝い",
         "query": "かみかみチキン 歯固め 手にはめる歯がため シリコン",
         "jan": "",
@@ -829,9 +666,9 @@
         "reason": "too_few_votes"
       },
       {
-        "rank": 5,
-        "title": "【楽天1位連続受賞】 ロッキングストライダー スポーツモデル 12インチ キックバイク キッズバイク 0歳 1歳 1歳半 2歳 誕生日 プレゼント クリスマス 男の子 女の子 赤ちゃん こども 子供用 自転車 三輪車 バランス おもちゃ",
-        "query": "ロッキングストライダー スポーツモデル 12インチ キックバイク",
+        "rank": 26,
+        "title": "【在庫あり！】はむにぎり マスコット ハムスター ねずみ ぬいぐるみ マスコット もちもち ふわふわ ぬいどり ぬい活 手のりサイズ 動物 アニマル 癒し かわいい",
+        "query": "はむにぎり マスコット ハムスター ねずみ",
         "jan": "",
         "votes": {},
         "asin": "",
@@ -839,21 +676,9 @@
         "reason": "no_jan_in_hits"
       },
       {
-        "rank": 4,
-        "title": "VG-DZ-TBP02 カードファイト!! ヴァンガード タイトルブースター プレミアム ペルソナ 30th Anniversary BOX 10パック入り VG ブシロード",
-        "query": "VG-DZ-TBP02 カードファイト",
-        "jan": "",
-        "votes": {
-          "4573616015684": 1
-        },
-        "asin": "",
-        "adopted": false,
-        "reason": "too_few_votes"
-      },
-      {
-        "rank": 2,
-        "title": "はむにぎり　マスコットチャーム　はむにぎり　おもち　きなこ　みたらし　ごまきち　チャーム",
-        "query": "はむにぎり マスコットチャーム おもち",
+        "rank": 24,
+        "title": "予約 2026年11月【正規品】ボンボンドロップシール ちいかわ こびとづかん mofusand mini サンリオ ハローキティ マイメロ クロミ キキララ ウサハナ 90s タイルシール ヒョウ ヒョウ(ピンク) ハイビスカス シール帳",
+        "query": "ボンボンドロップシール ちいかわ こびとづかん mofusand",
         "jan": "",
         "votes": {},
         "asin": "",
@@ -861,16 +686,96 @@
         "reason": "no_jan_in_hits"
       },
       {
-        "rank": 1,
+        "rank": 22,
+        "title": "【はむにぎり】ポージングはむにぎり　おそば",
+        "query": "ポージングはむにぎり おそば",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
+      },
+      {
+        "rank": 21,
+        "title": "【はむにぎり】ポージングはむにぎり　くろまめ",
+        "query": "ポージングはむにぎり くろまめ",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
+      },
+      {
+        "rank": 20,
+        "title": "【はむにぎり】ポージングはむにぎり　ごまきち",
+        "query": "ポージングはむにぎり ごまきち",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
+      },
+      {
+        "rank": 19,
+        "title": "【はむにぎり】ポージングはむにぎり　おこめ",
+        "query": "ポージングはむにぎり おこめ",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
+      },
+      {
+        "rank": 18,
+        "title": "【はむにぎり】ポージングはむにぎり　みたらし",
+        "query": "ポージングはむにぎり みたらし",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
+      },
+      {
+        "rank": 17,
+        "title": "【はむにぎり】ポージングはむにぎり　こむぎ",
+        "query": "ポージングはむにぎり こむぎ",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
+      },
+      {
+        "rank": 16,
+        "title": "【はむにぎり】ポージングはむにぎり　おもち",
+        "query": "ポージングはむにぎり おもち",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
+      },
+      {
+        "rank": 15,
+        "title": "【はむにぎり】ポージングはむにぎり　きなこ",
+        "query": "ポージングはむにぎり きなこ",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
+      },
+      {
+        "rank": 14,
         "title": "バンダイ Tamagotchi(たまごっち) Paradise - My Lab Tamagotchi 《2026年11月7日発売予定》",
         "query": "バンダイ Tamagotchi Paradise -",
         "jan": "",
         "votes": {
           "4582769733369": 3,
           "4582770018790": 3,
-          "4582769733345": 2,
-          "4582770015768": 2,
-          "4582769733352": 2
+          "4582770015775": 3,
+          "4582769733352": 3,
+          "4582769733345": 2
         },
         "asin": "",
         "adopted": false,
@@ -897,24 +802,131 @@
             "rakuten_set": false,
             "amazon_set": false,
             "tiebreak_ok": true
+          },
+          {
+            "jan": "4582770015775",
+            "votes": 3,
+            "asin": "B0H1KQ5CMD",
+            "amazon_title": "[バンダイ(BANDAI)] Tamagotchi Paradise - White Glacier 対象年齢 6 才以上 たまごっちパラダイス",
+            "identity_ok": true,
+            "core_missing": [],
+            "rakuten_set": false,
+            "amazon_set": false,
+            "tiebreak_ok": true
           }
         ]
+      },
+      {
+        "rank": 13,
+        "title": "【10/23 大集合！新作登場限定販売】ぷにっこ スイーツシリーズ ふわふわスフレ ジュエルキャンディコレクション もちもち大福 スイスロール＆バター アイスクリーム カップケーキ 夢色ふわもこケーキ スクイーズ Punikko ブラインド スライム おもちゃ TOKOTOYZ",
+        "query": "ぷにっこ スイーツシリーズ ジュエルキャンディコレクション",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
+      },
+      {
+        "rank": 11,
+        "title": "【はむにぎりフレンズ】マスコット　ブンチョウのアールグレー",
+        "query": "マスコット ブンチョウのアールグレー",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
+      },
+      {
+        "rank": 10,
+        "title": "【はむにぎりフレンズ】マスコット　インコのソーダ",
+        "query": "マスコット インコのソーダ",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
+      },
+      {
+        "rank": 9,
+        "title": "【はむにぎりフレンズ】マスコット　インコのメロン",
+        "query": "マスコット インコのメロン",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
+      },
+      {
+        "rank": 8,
+        "title": "【はむにぎりフレンズ】マスコット　オカメインコのアラモード",
+        "query": "マスコット オカメインコのアラモード",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
+      },
+      {
+        "rank": 7,
+        "title": "【はむにぎりフレンズ】マスコット　ブンチョウのチャイ",
+        "query": "マスコット ブンチョウのチャイ",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
+      },
+      {
+        "rank": 6,
+        "title": "【はむにぎりフレンズ】マスコット　シマエナガのマシュマロ",
+        "query": "マスコット シマエナガのマシュマロ",
+        "jan": "4548598396984",
+        "votes": {
+          "4548598396984": 4,
+          "4534253276869": 2,
+          "4534253276852": 1,
+          "4534253277415": 1,
+          "4534253277408": 1
+        },
+        "asin": "",
+        "adopted": false,
+        "reason": "amazon_no_jan_match",
+        "item_code": "vvstore:10012404"
+      },
+      {
+        "rank": 5,
+        "title": "【はむにぎりフレンズ】マスコット　ブンチョウのココナッツ",
+        "query": "マスコット ブンチョウのココナッツ",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
+      },
+      {
+        "rank": 4,
+        "title": "【はむにぎりフレンズ】マスコット　ひよこのカスタード",
+        "query": "マスコット ひよこのカスタード",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
+      },
+      {
+        "rank": 3,
+        "title": "【はむにぎりフレンズ】マスコット　アヒルのバニラ",
+        "query": "マスコット アヒルのバニラ",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
       }
     ],
     "mode": "enforce",
-    "genre_gate_dropped_items": [
-      {
-        "asin": "B0GC1W2143",
-        "rank": 20,
-        "title": "【定形外送料無料】はむにぎり マスコット きなこ りぶはあと 47903-13 ",
-        "roots": [
-          "ホーム＆キッチン"
-        ],
-        "match_method": "yahoo_jan",
-        "jan": "4523251046215"
-      }
-    ]
+    "genre_gate_dropped_items": []
   },
-  "generated_at": "2026-10-23T21:51:12.391018+00:00",
-  "ranking_pool_size": 19
+  "generated_at": "2026-10-24T21:26:17.339532+00:00",
+  "ranking_pool_size": 18
 }
