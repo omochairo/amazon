@@ -172,6 +172,28 @@
       "author": "販売ページ",
       "conflict_of_interest": "possible",
       "notes": "価格、仕様、セット内容についての情報"
+    },
+    {
+      "id": "src-2",
+      "name": "ムラウチドットコム",
+      "url": "https://murauchi.com/offers/0000026082658",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-10-17",
+      "author": "通販サイト",
+      "conflict_of_interest": "unknown",
+      "notes": "ARTEC わくわくミニクレーンゲーム ATC21396 という商品名での取り扱い"
+    },
+    {
+      "id": "src-3",
+      "name": "トラノテ",
+      "url": "https://www.torano-te.jp/v/g07239235",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-10-17",
+      "author": "通販サイト",
+      "conflict_of_interest": "unknown",
+      "notes": "アーテック わくわくミニクレーンケﾞームの通販ページ"
     }
   ],
   "claims": [
@@ -180,20 +202,22 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-3"
       ],
-      "cross_checked": false,
-      "notes": "Amazonの販売ページでW70×D81×H100mmとの記載あり"
+      "cross_checked": true,
+      "notes": "Amazonとトラノテで商品情報の取り扱いが一致"
     },
     {
       "claim": "1000円以下の手頃な価格",
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-2"
       ],
-      "cross_checked": false,
-      "notes": "Amazonの販売ページで確認"
+      "cross_checked": true,
+      "notes": "Amazonとムラウチドットコムで価格帯の傾向が一致"
     },
     {
       "claim": "PP素材を使用した作り",
@@ -230,13 +254,15 @@
       {
         "text": "置き場所を選ばない手のひらサイズのコンパクトさ",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-3"
         ]
       },
       {
         "text": "買ってすぐに遊べるボール6個付属のセット内容",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-2"
         ]
       },
       {
