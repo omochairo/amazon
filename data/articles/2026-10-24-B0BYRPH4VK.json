@@ -179,6 +179,28 @@
       "author": "購入者レビュー",
       "conflict_of_interest": "none",
       "notes": "2歳の子が飽きずに遊んでいる、百均より質が良い、作りがしっかりして安心といった評価。"
+    },
+    {
+      "id": "src-2",
+      "name": "Green Beans",
+      "url": "https://greenbeans.com/products/14905096252131/details",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-10-24",
+      "author": "通販サイト",
+      "conflict_of_interest": "possible",
+      "notes": "エポック社 ピクチュアパズル ミッフィー どうぶつランド。対象年齢1.5才以上の記載あり。"
+    },
+    {
+      "id": "src-4",
+      "name": "YouTube: Miffy Puzzle ミッフィー パズル",
+      "url": "https://www.youtube.com/playlist?list=PLe_4YOnmL6y5ikZiPTxiT1YlRQNhFzc0p",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-10-24",
+      "author": "動画配信者",
+      "conflict_of_interest": "unknown",
+      "notes": "ミッフィーのパズル「どうぶつランド」の遊び方を紹介する動画が含まれている。"
     }
   ],
   "claims": [
@@ -209,7 +231,8 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-1",
-        "src-3"
+        "src-3",
+        "src-2"
       ],
       "cross_checked": true,
       "notes": "メーカー公式の9ピース・1.5才以上の記載と、レビューでの1-2歳児の遊びの様子から確認。"
@@ -224,6 +247,16 @@
       ],
       "cross_checked": true,
       "notes": "公式の製品特徴およびレビューでの好意的な評価から確認。"
+    },
+    {
+      "claim": "実際の遊びの様子は動画などでも共有されている。",
+      "category": "quality",
+      "confidence": "low",
+      "supporting_source_ids": [
+        "src-4"
+      ],
+      "cross_checked": false,
+      "notes": "YouTubeのプレイリストに商品の動画が含まれていることを確認。"
     }
   ],
   "technical_specs": {
