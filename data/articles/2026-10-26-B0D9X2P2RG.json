@@ -136,10 +136,7 @@
       }
     },
     "best_platform": "Amazon",
-    "best_price": 545,
-    "other": [
-      "対象年齢3歳以上"
-    ]
+    "best_price": 545
   },
   "ivs_detail": {
     "education": 3.5,
@@ -180,7 +177,7 @@
       "published_at": "2026-10-26",
       "author": "メーカー公式記載",
       "conflict_of_interest": "possible",
-      "notes": "STマーク表示商品であること、対象年齢3歳以上、フルーツ4種（イチゴ・ブドウ・バナナ・みかん）とまな板・包丁のセット内容が記載。"
+      "notes": "対象年齢3歳以上、フルーツ4種（イチゴ・ブドウ・バナナ・みかん）とまな板・包丁のセット内容が記載。"
     },
     {
       "id": "src-2",
@@ -192,6 +189,17 @@
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
       "notes": "「さくっとフルーツ」の商品名およびパッケージサイズ（160×230×45）が掲載されている。"
+    },
+    {
+      "id": "src-3",
+      "name": "株式会社オンダ 公式Instagram",
+      "url": "https://www.instagram.com/reel/CfsyTxZjsX7",
+      "tier": "low",
+      "evidence_type": "primary",
+      "published_at": "2026-10-26",
+      "author": "メーカー公式",
+      "conflict_of_interest": "possible",
+      "notes": "同社がフルーツ系のおままごと玩具を展開していることがわかる。"
     }
   ],
   "claims": [
@@ -207,6 +215,16 @@
       "notes": "Amazonの販売価格と公式のパッケージ情報から確認"
     },
     {
+      "claim": "対象年齢は3歳以上であり、3歳未満の誤飲には配慮が必要",
+      "category": "safety",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-1"
+      ],
+      "cross_checked": false,
+      "notes": "メーカーの対象年齢指定に基づく"
+    },
+    {
       "claim": "マジックテープ式で簡単に切れるため、初めての包丁遊びに適している",
       "category": "quality",
       "confidence": "medium",
@@ -217,14 +235,14 @@
       "notes": "商品特徴の「さくっと切れちゃう」に基づく"
     },
     {
-      "claim": "対象年齢は3歳以上であり、3歳未満の誤飲には配慮が必要",
-      "category": "safety",
+      "claim": "ABS樹脂などの素材が使われており、手入れがしやすい",
+      "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
         "src-1"
       ],
       "cross_checked": false,
-      "notes": "メーカーの対象年齢指定に基づく"
+      "notes": "商品ページの素材表記に基づく"
     }
   ],
   "technical_specs": {
@@ -237,8 +255,7 @@
     "material": "フルーツ：ABS・ナイロン、まな板・包丁：PP",
     "origin": "不明",
     "other": [
-      "対象年齢3歳以上",
-      "STマーク"
+      "対象年齢3歳以上"
     ]
   },
   "review_signals": {
@@ -303,7 +320,7 @@
         "summary": "ワンコイン強の価格で必要な道具が揃うため、おままごとデビューに最適との見方が大勢を占めています。",
         "supporting_source_ids": [
           "src-1",
-          "src-2"
+          "src-3"
         ]
       }
     ]
