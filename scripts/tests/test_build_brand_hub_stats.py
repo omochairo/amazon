@@ -150,6 +150,24 @@ class TestBrandNameVariants(unittest.TestCase):
         self.assertEqual(name_variants(None), frozenset())
 
 
+class TestBrandReading(unittest.TestCase):
+    """brand_normalizer.reading (brain#137)。書いたブランドだけが読みを持つ。"""
+
+    def test_declared_reading(self):
+        from brand_normalizer import reading
+        self.assertEqual(reading("amanoppo"), "あまのっぽ")
+
+    def test_not_taken_from_aliases(self):
+        from brand_normalizer import reading
+        # Pinkfong の aliases にはシリーズ名が混ざる。reading 未指定なら空のまま
+        self.assertEqual(reading("Pinkfong"), "")
+
+    def test_unknown_brand_is_empty(self):
+        from brand_normalizer import reading
+        self.assertEqual(reading("存在しないブランド名XYZ"), "")
+        self.assertEqual(reading(None), "")
+
+
 class TestSeriesCandidates(unittest.TestCase):
     def test_skips_first_tag_as_brand(self):
         out = bhs._series_candidates(["レゴ", "デュプロ", "クラシック"])
@@ -286,8 +304,27 @@ class TestSeoTitle(unittest.TestCase):
             "Bの知育玩具の口コミ｜スコアと価格で比較",
         )
 
+    def test_reading_is_added_to_brand(self):
+        # brain#137: かなで探す読者の語を title に入れる
+        t = bhs.build_seo_title("amanoppo", {
+            "count": 3, "top_3_series": [], "avg_age_min_months": 0.0,
+            "reading": "あまのっぽ",
+        })
+        self.assertEqual(t, "amanoppo（あまのっぽ）の知育玩具の口コミ｜0歳から選ぶ比較ガイド")
+
+    def test_reading_same_as_brand_is_not_repeated(self):
+        t = bhs.build_seo_title("B", {"count": 3, "top_3_series": [], "reading": "B"})
+        self.assertNotIn("（", t)
+
 
 class TestSeoDescription(unittest.TestCase):
+    def test_reading_is_added_to_brand(self):
+        d = bhs.build_seo_description("amanoppo", {
+            "count": 3, "top_3_series": [], "avg_age_min_months": None,
+            "reading": "あまのっぽ",
+        })
+        self.assertTrue(d.startswith("amanoppo（あまのっぽ）の知育玩具"))
+
     def _d(self, count, series, age=36.0):
         return bhs.build_seo_description("B", {
             "count": count, "top_3_series": series, "avg_age_min_months": age,
@@ -429,6 +466,24 @@ class TestAggregate(unittest.TestCase):
         self.assertEqual(payload["brand_count_narrative"], 0)
         rec = payload["brands"]["レゴ"]
         self.assertEqual(rec, {"count": 2})
+
+    def test_reading_reaches_small_and_narrative_entries(self):
+        # brain#137: 記事数 3 未満でも reading は出す (h1 と head.html の title が使う)
+        def run(n):
+            with tempfile.TemporaryDirectory() as td:
+                root = pathlib.Path(td) / "articles"
+                _write_articles(root, [
+                    _article(f"N{i}", "amanoppo", 80, 1000, "0歳〜",
+                             ["amanoppo", "あまのっぽ", "布絵本"])
+                    for i in range(n)
+                ])
+                return bhs.aggregate(root)["brands"]["amanoppo"]
+        small, big = run(2), run(3)
+        self.assertEqual(small, {"count": 2, "reading": "あまのっぽ"})
+        self.assertEqual(big["reading"], "あまのっぽ")
+        self.assertTrue(big["seo_title"].startswith("amanoppo（あまのっぽ）の"))
+        # 読みのタグはシリーズ欄に出ない
+        self.assertNotIn("あまのっぽ", big["top_3_series"])
 
     def test_full_aggregate_three_articles(self):
         with tempfile.TemporaryDirectory() as td:

@@ -40,6 +40,7 @@ from brand_normalizer import (
     _fold,
     name_variants as brand_name_variants,
     normalize as normalize_brand,
+    reading as brand_reading,
 )
 from age_semantics import ADULT_AGE_MONTHS
 from build_feature_lists import age_min_months_from_article, parse_min_months
@@ -162,12 +163,21 @@ def age_band_label(avg_age_min_months: float | int | None) -> str | None:
 TITLE_COUNT_MIN = 20
 
 
+def _brand_label(brand: str, entry: dict) -> str:
+    """title / description に出すブランド名。読みがあれば全角括弧で添える。"""
+    reading = entry.get("reading")
+    return f"{brand}（{reading}）" if reading and reading != brand else brand
+
+
 def build_seo_title(brand: str, entry: dict) -> str:
     """/brands/<brand>/ の <title> 本体 (サイト名サフィックスは template 側)。
 
     日本語 SERP の title 表示は全角 30〜35 文字程度で切れるので、サフィックス
     込みで収まる長さに抑える。件数は TITLE_COUNT_MIN 以上のときだけ出す。
+    ``entry["reading"]`` があれば「amanoppo（あまのっぽ）」のようにブランド名に
+    添える (brain#137: ローマ字名のブランドをかなで探す読者の語が title に無かった)。
     """
+    brand = _brand_label(brand, entry)
     n = int(entry.get("count") or 0)
     series = list(entry.get("top_3_series") or [])
     age = age_band_label(entry.get("avg_age_min_months"))
@@ -188,6 +198,7 @@ def build_seo_description(brand: str, entry: dict) -> str:
     ブランドごとに固有で、"ブランド名 シリーズ名" の検索意図に直接当たるため
     最優先で入れる。価格は入れない (module docstring 参照)。
     """
+    brand = _brand_label(brand, entry)
     n = int(entry.get("count") or 0)
     series = [s for s in (entry.get("top_3_series") or []) if s]
     age = age_band_label(entry.get("avg_age_min_months"))
@@ -356,8 +367,11 @@ def aggregate(
         # site.Data.brand_hub.brands[<brand>].noindex を見て /brands/ ページを
         # noindex 化する (epic #2126 P4)。True のときだけ出力して JSON を軽く保つ。
         brand_noindex = bool(items[0].get("noindex"))
+        reading = brand_reading(brand)
         if n < NARRATIVE_MIN_COUNT:
             entry = {"count": n}
+            if reading:
+                entry["reading"] = reading
             if brand_noindex:
                 entry["noindex"] = True
             brands_out[brand] = entry
@@ -406,6 +420,9 @@ def aggregate(
             "lowest_price": min(price_vals) if price_vals else None,
         }
         # seo_* は上の集計結果から導出するので entry を組んだ後に足す。
+        # reading は h1 (term.html) と seo_* の両方が使うので先に入れる。
+        if reading:
+            entry["reading"] = reading
         entry["seo_title"] = build_seo_title(brand, entry)
         entry["seo_description"] = build_seo_description(brand, entry)
         brands_out[brand] = entry

@@ -63,6 +63,8 @@ class Taxonomy:
         self._fuzzy_keys: list[tuple[str, dict]] = []
         # folded(canonical) -> そのブランド名の別表記 (folded) 集合。canonical 自身を含む。
         self._name_variants: dict[str, frozenset[str]] = {}
+        # folded(canonical) -> かな読み。`reading` を書いたブランドだけ (brain#137)。
+        self._readings: dict[str, str] = {}
         for entry in self._brands:
             canon = entry["canonical"]
             variants = {_fold(canon)}
@@ -70,6 +72,11 @@ class Taxonomy:
                 folded_v = _fold(str(v))
                 if folded_v:
                     variants.add(folded_v)
+            reading = str(entry.get("reading") or "").strip()
+            if reading:
+                self._readings[_fold(canon)] = reading
+                # 読みは同じ名前の別表記なので、シリーズ欄からも落とす
+                variants.add(_fold(reading))
             self._name_variants[_fold(canon)] = frozenset(variants)
             keys = [canon] + list(entry.get("aliases") or [])
             for k in keys:
@@ -126,6 +133,17 @@ class Taxonomy:
         """
         return self._name_variants.get(_fold(canonical or ""), frozenset())
 
+    def reading(self, canonical: str | None) -> str:
+        """`canonical` のかな読み。未指定なら空文字 (brain#137)。
+
+        正式名がローマ字のブランドは /brands/ の title と h1 がローマ字だけになり、
+        かなで検索する読者の語がページのどこにも無い。aliases から自動で拾わない
+        のは、先頭の alias が読みとは限らないため (Pinkfong の先頭はシリーズ名の
+        ピンキッツ、TOKAIZ はマセポケ)。読みは brand_taxonomy.yaml の任意キー
+        `reading` に人が書いたものだけを使う。
+        """
+        return self._readings.get(_fold(canonical or ""), "")
+
     def _unknown(self, raw: str) -> NormalizedBrand:
         return NormalizedBrand(
             canonical="ノーブランド",
@@ -153,6 +171,10 @@ def normalize(raw: str | None) -> NormalizedBrand:
 
 def name_variants(canonical: str | None) -> frozenset[str]:
     return get_taxonomy().name_variants(canonical)
+
+
+def reading(canonical: str | None) -> str:
+    return get_taxonomy().reading(canonical)
 
 
 def _cli() -> None:
