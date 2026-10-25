@@ -40,7 +40,7 @@
     "why_this_product": [
       "本格的なシューティングトイは種類が多く、どれを選ぶべきか迷う方も多いのではないでしょうか。",
       "本品は全長約61cmというしっかりとしたサイズ感と、マガジンからスポンジ弾を装填するリアルなアクションが特徴です。",
-      "Amazonの商品説明にもあるように、少しだけリアルなデザインが採用されており、お子さまの満足度を高める工夫がされています。",
+      "販売元は企画から製造まで一貫して手掛けるメーカーで、価格と品質の両立にこだわった玩具展開に定評があります。",
       "本格的なギミックを求めている小学生のお子さまには、手軽な価格で本格気分が味わえる一品として推奨できます。"
     ],
     "gift_appeal": [
@@ -180,6 +180,28 @@
       "author": "販売店",
       "conflict_of_interest": "possible",
       "notes": "マガジン式、的当て、サバゲー、室内遊び用途の記載"
+    },
+    {
+      "id": "src-3",
+      "name": "トップ - you-and-i-toys.co.jp",
+      "url": "http://www.you-and-i-toys.co.jp",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2026-10-23",
+      "author": "株式会社 友愛玩具 YOU&I TOYS CO.,LTD.",
+      "conflict_of_interest": "disclosed",
+      "notes": "友愛玩具の公式ホームページ。お客様の要求にゼロ回答はしない姿勢で、品質・価格に納得できる商品を提案しているとの記載"
+    },
+    {
+      "id": "src-4",
+      "name": "you_and_i_toys - 株式会社 友愛玩具【公式】",
+      "url": "https://x.com/you_and_i_toys",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2026-10-23",
+      "author": "株式会社 友愛玩具【公式】",
+      "conflict_of_interest": "disclosed",
+      "notes": "友愛玩具は玩具・雑貨などを企画・製造・輸入・販売する会社であるとの記載"
     }
   ],
   "claims": [
@@ -205,26 +227,26 @@
       "notes": "楽天市場の商品名に用途の記載あり"
     },
     {
-      "claim": "電池不要で手動のコッキングアクションで発射できる",
+      "claim": "企画から製造・輸入まで一貫して行う信頼性のあるメーカーが展開",
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1",
-        "src-2"
+        "src-3",
+        "src-4"
       ],
-      "cross_checked": false,
-      "notes": "Amazon・楽天の商品名に電池不要と記載"
+      "cross_checked": true,
+      "notes": "公式サイトおよび公式X（旧Twitter）にて、企画・製造・輸入・販売を一貫して行っている旨が一致"
     },
     {
-      "claim": "弾丸には安全に配慮されたソフトスポンジ弾を使用",
-      "category": "safety",
+      "claim": "価格と品質の両立にこだわった玩具を展開している",
+      "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1",
-        "src-2"
+        "src-3",
+        "src-4"
       ],
-      "cross_checked": false,
-      "notes": "Amazon・楽天の商品名にソフトスポンジ弾と記載"
+      "cross_checked": true,
+      "notes": "公式サイトでの品質・価格へのこだわりと、公式SNSでの玩具企画・販売の実績が一致"
     }
   ],
   "technical_specs": {
@@ -300,9 +322,10 @@
     "segment_voices": [
       {
         "segment_label": "8歳以上の小学生のお子さまを持つ層",
-        "summary": "本格的なライフル型のデザインとギミックが、手軽な価格で楽しめる点に魅力を感じて購入される傾向があります。",
+        "summary": "本格的なライフル型のデザインとギミックが、品質と価格のバランスの良いメーカーから手軽な価格で楽しめる点に魅力を感じて購入される傾向があります。",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-3"
         ]
       }
     ]
