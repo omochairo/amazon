@@ -15,7 +15,14 @@
 <header class="page-header term-header">
   {{- partial "breadcrumbs.html" . }}
   <div class="term-header-eyebrow">{{ $icon }} {{ $kindLabel }}</div>
-  <h1 class="term-header-title">{{ .Title }}</h1>
+  {{- /* navi-brain#137: taxonomy に reading があるブランドは読みを添える */ -}}
+  {{- $reading := "" -}}
+  {{- if eq $kind "brands" -}}
+    {{- with site.Data.brand_hub -}}
+      {{- with index .brands $.Title -}}{{- $reading = index . "reading" | default "" -}}{{- end -}}
+    {{- end -}}
+  {{- end }}
+  <h1 class="term-header-title">{{ .Title }}{{ with $reading }}（{{ . }}）{{ end }}</h1>
   {{- with .Description }}<p class="term-header-description">{{ . | markdownify }}</p>{{ end }}
   <div class="term-header-meta">
     <span class="term-header-count">{{ len .Pages }} 件の記事</span>

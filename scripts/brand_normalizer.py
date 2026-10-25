@@ -63,6 +63,8 @@ class Taxonomy:
         self._fuzzy_keys: list[tuple[str, dict]] = []
         # folded(canonical) -> そのブランド名の別表記 (folded) 集合。canonical 自身を含む。
         self._name_variants: dict[str, frozenset[str]] = {}
+        # folded(canonical) -> 読み (任意キー `reading`)。
+        self._reading: dict[str, str] = {}
         for entry in self._brands:
             canon = entry["canonical"]
             variants = {_fold(canon)}
@@ -71,6 +73,8 @@ class Taxonomy:
                 if folded_v:
                     variants.add(folded_v)
             self._name_variants[_fold(canon)] = frozenset(variants)
+            if entry.get("reading"):
+                self._reading[_fold(canon)] = str(entry["reading"]).strip()
             keys = [canon] + list(entry.get("aliases") or [])
             for k in keys:
                 folded = _fold(k)
@@ -126,6 +130,15 @@ class Taxonomy:
         """
         return self._name_variants.get(_fold(canonical or ""), frozenset())
 
+    def reading(self, canonical: str | None) -> str | None:
+        """brand_taxonomy.yaml の任意キー `reading` (無ければ None)。
+
+        aliases や name_variants から推さないのは、正式名がローマ字のブランドの
+        日本語 alias がシリーズ名・商品名のことがあるため (Pinkfong→ピンキッツ、
+        TOKAIZ→マセポケ。navi-brain#137)。読みは人が明示したものだけを使う。
+        """
+        return self._reading.get(_fold(canonical or ""))
+
     def _unknown(self, raw: str) -> NormalizedBrand:
         return NormalizedBrand(
             canonical="ノーブランド",
@@ -153,6 +166,10 @@ def normalize(raw: str | None) -> NormalizedBrand:
 
 def name_variants(canonical: str | None) -> frozenset[str]:
     return get_taxonomy().name_variants(canonical)
+
+
+def reading(canonical: str | None) -> str | None:
+    return get_taxonomy().reading(canonical)
 
 
 def _cli() -> None:
