@@ -72,9 +72,12 @@ class Taxonomy:
                 folded_v = _fold(str(v))
                 if folded_v:
                     variants.add(folded_v)
-            self._name_variants[_fold(canon)] = frozenset(variants)
             if entry.get("reading"):
                 self._reading[_fold(canon)] = str(entry["reading"]).strip()
+                # 読みは同じ名前の別表記なので、人気シリーズ欄からも落とす
+                # (amanoppo の記事は「あまのっぽ」をタグに持つ)
+                variants.add(_fold(self._reading[_fold(canon)]))
+            self._name_variants[_fold(canon)] = frozenset(variants)
             keys = [canon] + list(entry.get("aliases") or [])
             for k in keys:
                 folded = _fold(k)

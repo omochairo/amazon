@@ -308,8 +308,24 @@ class TestBrandReading(unittest.TestCase):
         self.assertIsNone(reading("存在しないブランド名XYZ"))
         self.assertIsNone(reading(None))
 
+    def test_reading_is_a_name_variant(self):
+        # 読みのタグ (あまのっぽ) は人気シリーズ欄に出さない
+        from brand_normalizer import _fold, name_variants
+        self.assertIn(_fold("あまのっぽ"), name_variants("amanoppo"))
+        self.assertEqual(
+            bhs._series_candidates(["amanoppo", "あまのっぽ", "布絵本"], "amanoppo"),
+            ["布絵本"],
+        )
+
 
 class TestSeoDescription(unittest.TestCase):
+    def test_adds_reading_after_brand(self):
+        d = bhs.build_seo_description("amanoppo", {
+            "count": 3, "top_3_series": [], "avg_age_min_months": None,
+            "reading": "あまのっぽ",
+        })
+        self.assertTrue(d.startswith("amanoppo（あまのっぽ）の知育玩具"))
+
     def _d(self, count, series, age=36.0):
         return bhs.build_seo_description("B", {
             "count": count, "top_3_series": series, "avg_age_min_months": age,
