@@ -194,7 +194,10 @@ def build_seo_description(brand: str, entry: dict) -> str:
     top_3_series / avg_age_min_months / count の有無で文型を選ぶ。シリーズ名は
     ブランドごとに固有で、"ブランド名 シリーズ名" の検索意図に直接当たるため
     最優先で入れる。価格は入れない (module docstring 参照)。
+    読みは title と同じく添える (navi-brain#137: スニペットでも検索語が太字になる)。
     """
+    if entry.get("reading"):
+        brand = f"{brand}（{entry['reading']}）"
     n = int(entry.get("count") or 0)
     series = [s for s in (entry.get("top_3_series") or []) if s]
     age = age_band_label(entry.get("avg_age_min_months"))
