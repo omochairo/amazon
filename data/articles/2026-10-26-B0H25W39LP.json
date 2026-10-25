@@ -39,7 +39,7 @@
     "why_this_product": [
       "なぜこのマウントが選ばれるのかが気になる方も多いと思います。",
       "本品は高剛性アルミ合金製アームと強力なクランプ構造を採用しており、走行時の振動をしっかり抑える設計です。",
-      "アルミ素材による耐久性と固定力の高さが、大切な機材を預けるマウントとしての信頼に繋がっています。",
+      "第三者サイトでも「自転車やバイクのハンドルバーへしっかり固定でき、撮影の安定性を向上させる」と評されています。",
       "街乗りや公園での撮影など、日常のシーンで手軽に安全な撮影環境を構築できるのが魅力です。"
     ],
     "gift_appeal": [
@@ -158,57 +158,69 @@
   "internal_links": [],
   "sources": [
     {
-      "id": "src-amazon",
-      "name": "Amazon 商品ページ",
-      "url": "https://www.amazon.co.jp/dp/B0H25W39LP/?tag=chk01-22",
+      "id": "src-1",
+      "name": "K&F CONCEPT スーパークランプ 商品情報",
+      "url": "https://www.kkhandymen.co.uk?goods%2Fdetails%2FF86332398794.html=",
       "tier": "low",
-      "evidence_type": "primary",
-      "published_at": "2026-10-25",
-      "author": "メーカー公式",
-      "conflict_of_interest": "disclosed",
-      "notes": "商品の仕様、特徴、対応カメラなどが記載されている。工具不要や磁気クイックリリースなどの記載がある。"
+      "evidence_type": "secondary",
+      "published_at": "2026-10-23",
+      "author": "第三者サイト",
+      "conflict_of_interest": "unknown",
+      "notes": "高強度クランプ構造を採用し、自転車やバイクのハンドルバーへしっかり固定でき、撮影の安定性を向上させることが記載されている。"
+    },
+    {
+      "id": "src-2",
+      "name": "Trustpilot / K&F CONCEPT レビュー",
+      "url": "https://www.trustpilot.com/review/kfconcept.com",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-10-23",
+      "author": "購入者レビュー",
+      "conflict_of_interest": "none",
+      "notes": "同ブランドのクランプ製品（Super Clamp）について、カスタマーサポートの対応を含め実使用の状況が言及されている。"
     }
   ],
   "claims": [
     {
-      "claim": "アルミ合金製アームと強力クランプ構造を採用している",
+      "claim": "強力クランプ構造により自転車やバイクのハンドルバーへしっかり固定できる",
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-1",
+        "src-2"
       ],
-      "cross_checked": false,
-      "notes": "Amazon商品説明に仕様として明記されている"
+      "cross_checked": true,
+      "notes": "複数サイトで強力なクランプ構造に関する記述が確認できる"
     },
     {
-      "claim": "直径8～47mmのパイプに対応し、自転車やベビーカーなど幅広い場所に設置可能",
+      "claim": "直径8～47mmのパイプに対応し幅広い場所に設置可能",
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-1"
       ],
       "cross_checked": false,
-      "notes": "商品仕様として明記されている"
+      "notes": "仕様に合致"
     },
     {
       "claim": "工具不要で簡単に装着できる",
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-1"
       ],
       "cross_checked": false,
-      "notes": "商品仕様として明記されている"
+      "notes": "仕様に合致"
     },
     {
       "claim": "DJI Osmo Action 6等専用の磁気クイックリリースを採用し着脱が早い",
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-1"
       ],
       "cross_checked": false,
-      "notes": "商品仕様の核となる特徴"
+      "notes": "仕様の核となる特徴"
     }
   ],
   "technical_specs": {
@@ -224,19 +236,19 @@
       {
         "text": "DJI Osmo Action 6を近づけるだけで素早く装着可能なクイックリリース",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-1"
         ]
       },
       {
         "text": "高剛性アルミ合金製で走行時の振動やガタつきを軽減",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-1"
         ]
       },
       {
         "text": "工具不要でクランプの取り付けや角度調整ができる手軽さ",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-1"
         ]
       }
     ],
@@ -244,13 +256,13 @@
       {
         "text": "DJI Action 3/4/5 Proなどには非対応のため事前の確認が必要",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-1"
         ]
       },
       {
         "text": "極端に太いパイプ（47mm超）には取り付けられない点",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-1"
         ]
       }
     ],
@@ -258,19 +270,19 @@
       {
         "text": "自転車でのサイクリングや街乗り中の風景撮影",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-1"
         ]
       },
       {
         "text": "ベビーカーに固定しての子どもの様子や風景の撮影",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-1"
         ]
       },
       {
         "text": "ツーリングやキャンプなどアウトドアでのアクティビティ",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-1"
         ]
       }
     ],
@@ -279,7 +291,7 @@
         "segment_label": "レジャーや旅行目的の層",
         "summary": "工具不要で簡単に着脱でき、様々なパイプに対応する汎用性の高さから、手軽に撮影環境を整えられると評価されています。",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-1"
         ]
       }
     ]
