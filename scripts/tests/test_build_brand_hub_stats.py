@@ -286,6 +286,28 @@ class TestSeoTitle(unittest.TestCase):
             "Bの知育玩具の口コミ｜スコアと価格で比較",
         )
 
+    def test_adds_reading_after_brand(self):
+        # navi-brain#137: 検索されるかな表記を title に入れる
+        self.assertEqual(
+            bhs.build_seo_title("amanoppo", {"count": 3, "reading": "あまのっぽ"}),
+            "amanoppo（あまのっぽ）の知育玩具の口コミ｜スコアと価格で比較",
+        )
+
+
+class TestBrandReading(unittest.TestCase):
+    """brand_normalizer.reading (navi-brain#137)。明示したものだけを返す。"""
+
+    def test_declared_reading(self):
+        from brand_normalizer import reading
+        self.assertEqual(reading("amanoppo"), "あまのっぽ")
+
+    def test_not_inferred_from_aliases(self):
+        from brand_normalizer import reading
+        # 日本語 alias (ピンキッツ) はシリーズ名で読みではない
+        self.assertIsNone(reading("Pinkfong"))
+        self.assertIsNone(reading("存在しないブランド名XYZ"))
+        self.assertIsNone(reading(None))
+
 
 class TestSeoDescription(unittest.TestCase):
     def _d(self, count, series, age=36.0):

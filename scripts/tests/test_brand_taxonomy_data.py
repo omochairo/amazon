@@ -28,6 +28,13 @@ def test_no_duplicate_canonical():
     assert not dups, f"duplicate canonical entries: {dups}"
 
 
+def test_reading_is_non_empty_string():
+    # navi-brain#137: title / h1 にそのまま出るので空文字や数値を許さない
+    for b in _brands():
+        if "reading" in b:
+            assert isinstance(b["reading"], str) and b["reading"].strip(), b
+
+
 def test_noindex_entries_satisfy_schema():
     for b in _brands():
         if not b.get("noindex"):

@@ -40,6 +40,7 @@ from brand_normalizer import (
     _fold,
     name_variants as brand_name_variants,
     normalize as normalize_brand,
+    reading as brand_reading,
 )
 from age_semantics import ADULT_AGE_MONTHS
 from build_feature_lists import age_min_months_from_article, parse_min_months
@@ -167,10 +168,16 @@ def build_seo_title(brand: str, entry: dict) -> str:
 
     日本語 SERP の title 表示は全角 30〜35 文字程度で切れるので、サフィックス
     込みで収まる長さに抑える。件数は TITLE_COUNT_MIN 以上のときだけ出す。
+
+    entry に ``reading`` があれば「amanoppo（あまのっぽ）」のように読みを添える
+    (navi-brain#137)。正式名がローマ字だけのブランドは、検索者が打つかな表記が
+    title に無かった。
     """
     n = int(entry.get("count") or 0)
     series = list(entry.get("top_3_series") or [])
     age = age_band_label(entry.get("avg_age_min_months"))
+    if entry.get("reading"):
+        brand = f"{brand}（{entry['reading']}）"
 
     if n >= TITLE_COUNT_MIN:
         return f"{brand}の知育玩具{n}選｜口コミと価格で比較"
@@ -356,8 +363,12 @@ def aggregate(
         # site.Data.brand_hub.brands[<brand>].noindex を見て /brands/ ページを
         # noindex 化する (epic #2126 P4)。True のときだけ出力して JSON を軽く保つ。
         brand_noindex = bool(items[0].get("noindex"))
+        # 読みは term.html の h1 でも使うので、記事数に関係なく出す (navi-brain#137)
+        reading = brand_reading(brand)
         if n < NARRATIVE_MIN_COUNT:
             entry = {"count": n}
+            if reading:
+                entry["reading"] = reading
             if brand_noindex:
                 entry["noindex"] = True
             brands_out[brand] = entry
@@ -405,6 +416,8 @@ def aggregate(
             "representative_image": rep["image"],
             "lowest_price": min(price_vals) if price_vals else None,
         }
+        if reading:
+            entry["reading"] = reading
         # seo_* は上の集計結果から導出するので entry を組んだ後に足す。
         entry["seo_title"] = build_seo_title(brand, entry)
         entry["seo_description"] = build_seo_description(brand, entry)
