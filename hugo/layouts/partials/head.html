@@ -118,6 +118,13 @@
        触らない。seo_title は build_post.py が「現行 title より短くなるときだけ」
        書き出すので、ここで長さの判定はしない。出すのをやめれば元に戻る。 */ -}}
 {{- with .Params.seo_title -}}{{- $pageTitle = . -}}{{- end -}}
+{{- /* BRAND-HUB SEO (navi-brain#137): 記事数が少なく $brandTitle の無いブランドでも、
+       reading があれば title に添える (h1 は term.html が同じ値で添える)。 */ -}}
+{{- if and (eq .Kind "term") (eq .Data.Plural "brands") (not $brandTitle) -}}
+  {{- with site.Data.brand_hub -}}{{- with index .brands $.Title -}}{{- with index . "reading" -}}
+    {{- $pageTitle = printf "%s（%s）" $pageTitle . -}}
+  {{- end -}}{{- end -}}{{- end -}}
+{{- end -}}
 {{- if and (not .IsHome) (eq .Params.title_monthly true) -}}
   {{- $pageTitle = printf "%s【%s更新】" $pageTitle (now.Format "2006年1月") -}}
 {{- end -}}
