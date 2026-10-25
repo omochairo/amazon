@@ -177,6 +177,28 @@
       "author": "メーカー公式/販売ページ",
       "conflict_of_interest": "possible",
       "notes": "対象年齢3歳以上。大正15年創業のMOCCOブランド。手のひらサイズのお手軽木製玩具。"
+    },
+    {
+      "id": "src-brand-mocco",
+      "name": "平和工業（MOCCO）公式",
+      "url": "https://www.mocco.jp/news/view/252",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2026-10-23",
+      "author": "メーカー公式",
+      "conflict_of_interest": "disclosed",
+      "notes": "愛知県名古屋市の平和工業（MOCCO）。同ブランドの木製スロープトイ等が紹介されている。"
+    },
+    {
+      "id": "src-brand-eurobus",
+      "name": "木のおもちゃ専門店 eurobus",
+      "url": "https://www.eurobus.jp?pid=157144522",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-10-23",
+      "author": "おもちゃコンサルタント",
+      "conflict_of_interest": "possible",
+      "notes": "日本の工房で作られた平和工業の日本製木のおもちゃMocco（モッコ）シリーズについての言及。"
     }
   ],
   "claims": [
@@ -185,10 +207,22 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-amazon",
+        "src-brand-mocco"
       ],
-      "cross_checked": false,
-      "notes": "Amazon商品説明より確認"
+      "cross_checked": true,
+      "notes": "Amazon商品説明およびメーカー公式ページよりブランド情報を確認"
+    },
+    {
+      "claim": "MOCCOシリーズは日本の工房で製造されている",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-amazon",
+        "src-brand-eurobus"
+      ],
+      "cross_checked": true,
+      "notes": "ブランドの製造体制について複数ソースで確認"
     },
     {
       "claim": "手のひらサイズのお手軽木製玩具である",
@@ -203,16 +237,6 @@
     {
       "claim": "対象年齢は3歳以上である",
       "category": "safety",
-      "confidence": "high",
-      "supporting_source_ids": [
-        "src-amazon"
-      ],
-      "cross_checked": false,
-      "notes": "Amazon商品説明より確認"
-    },
-    {
-      "claim": "シンプルで子どもから大人まで一緒に楽しめるおもちゃである",
-      "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
         "src-amazon"
@@ -242,7 +266,8 @@
       {
         "text": "大正15年創業の老舗ブランドが作る木製玩具という長年の実績が、初めてのプレゼント選びでの安心感に繋がっています。",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-amazon",
+          "src-brand-mocco"
         ]
       },
       {
@@ -291,7 +316,8 @@
         "segment_label": "3歳前後のお祝いにギフトを探す層",
         "summary": "価格の手頃さと老舗ブランドの安心感から、ちょっとしたプレゼントとして選ばれやすい傾向にあります。",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-amazon",
+          "src-brand-eurobus"
         ]
       }
     ]
