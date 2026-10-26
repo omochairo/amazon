@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-25T22:33:33Z",
+  "generated_at": "2026-10-26T23:50:59Z",
   "model": "gemma4:26b-a4b-it-qat",
   "source_week": "2026-W43",
   "baseline_ctr": 0.03337585034013606,
@@ -79,7 +79,7 @@
     {
       "page": "https://navi.omcha.jp/products/b0h86rpr71/",
       "asin": "B0H86RPR71",
-      "page_coverage_avg": 0.55,
+      "page_coverage_avg": 0.44,
       "queries": [
         {
           "query": "バター スクイーズ 本物 どこで 売っ てる",
@@ -112,31 +112,40 @@
           "query": "シーン バター スクイーズ 値段",
           "impressions": 3,
           "position": 8.333333333333332,
-          "answered": null,
-          "coverage": null,
-          "missing_aspects": [],
-          "note": "",
-          "error": "500 Server Error: Internal Server Error for url: http://host.docker.internal:11434/api/generate"
+          "answered": true,
+          "coverage": 0.5,
+          "missing_aspects": [
+            "「シーン」に関する具体的な利用場面の記述（いつ、どこで使うか）"
+          ],
+          "note": "値段については明確に回答されていますが、検索クエリに含まれる「シーン」に対する具体的な活用場面の記述が不足しています。",
+          "error": null
         },
         {
           "query": "バター スクイーズ 本物 どこに 売っ てる",
           "impressions": 3,
           "position": 12.666666666666666,
-          "answered": null,
-          "coverage": null,
-          "missing_aspects": [],
-          "note": "",
-          "error": "500 Server Error: Internal Server Error for url: http://host.docker.internal:11434/api/generate"
+          "answered": false,
+          "coverage": 0.3,
+          "missing_aspects": [
+            "「本物のような」という質感に関する具体的な詳細（見た目や触感のより深い説明）",
+            "Amazon以外の販売店（実店舗や他のECサイト）の情報",
+            "「どこに売っているか」に対する、オンライン以外の購入場所の提示"
+          ],
+          "note": "Amazonでの販売価格には触れていますが、ユーザーが求めている「どこで買えるか（販売チャネルの網羅性）」や「本物らしさの根拠」への回答が不十分です。",
+          "error": null
         },
         {
           "query": "バタースクイーズどこで売ってる",
           "impressions": 3,
           "position": 11.333333333333334,
-          "answered": null,
-          "coverage": null,
-          "missing_aspects": [],
-          "note": "",
-          "error": "500 Server Error: Internal Server Error for url: http://host.docker.internal:11434/api/generate"
+          "answered": false,
+          "coverage": 0.3,
+          "missing_aspects": [
+            "実店舗での販売状況（100均、雑貨店、玩具店など）",
+            "その他のオンラインショップ（楽天、Yahoo!ショッピングなど）の具体的な情報"
+          ],
+          "note": "Amazonでの価格情報には触れていますが、「どこで売っているか」という販売チャネル全般（実店舗の有無など）への回答が不足しています。",
+          "error": null
         }
       ]
     }
