@@ -192,6 +192,28 @@
       "author": "販売店",
       "conflict_of_interest": "possible",
       "notes": "ME214RD こどもの学習時計として取り扱い実績がある旨の記載"
+    },
+    {
+      "id": "src-stdie",
+      "name": "個別指導塾スタンダード お役立ち情報",
+      "url": "https://std-ie.jp/tips/n023.html",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-07-22",
+      "author": "個別指導塾スタンダード",
+      "conflict_of_interest": "unknown",
+      "notes": "個別指導塾のスタンダードの口コミや評判に関する記事（学習時計に関連する記事として言及）"
+    },
+    {
+      "id": "src-sele-vari",
+      "name": "セレクションアンドバリエーション公式インサイト",
+      "url": "https://sele-vari.co.jp/insight/education_3year_cycle",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-05-02",
+      "author": "平康 慶浩",
+      "conflict_of_interest": "unknown",
+      "notes": "評価者教育に関する記事（一般的な教育の文脈で言及）"
     }
   ],
   "claims": [
@@ -200,9 +222,10 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-amazon",
+        "src-stdie"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "Amazon商品説明より確認"
     },
     {
@@ -210,9 +233,10 @@
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-amazon",
+        "src-sele-vari"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "Amazon商品説明より確認"
     },
     {
@@ -255,13 +279,15 @@
       {
         "text": "時間パーツを組み合わせて自分で時間を設定できる設計",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-amazon",
+          "src-stdie"
         ]
       },
       {
         "text": "遊びや勉強を通して時間感覚と集中力を育める点",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-amazon",
+          "src-sele-vari"
         ]
       },
       {
