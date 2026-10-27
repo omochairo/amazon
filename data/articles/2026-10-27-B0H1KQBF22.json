@@ -180,6 +180,28 @@
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
       "notes": "電池不要、対象年齢6才以上、種類は選べない仕様であることを確認。"
+    },
+    {
+      "id": "src-2",
+      "name": "たまもりアクセ たまごっちのおへや – WEGO ONLINE STORE",
+      "url": "https://wego.jp/products/lg26as08-g0002",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2026-08-01",
+      "author": "WEGO ONLINE STORE",
+      "conflict_of_interest": "none",
+      "notes": "商品がアパレル店舗WEGOなどでも展開され、手軽なアクセサリーとして販売されていることを確認。"
+    },
+    {
+      "id": "src-3",
+      "name": "たまごっち公式サイト",
+      "url": "https://tamagotchi-official.com/jp/item/01_1435/",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2026-08-01",
+      "author": "メーカー公式の独立ページ",
+      "conflict_of_interest": "disclosed",
+      "notes": "全6種類のラインナップ詳細と、部屋を飾るアクセサリーとしての仕様を確認。"
     }
   ],
   "claims": [
@@ -198,9 +220,10 @@
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-3"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "Amazon商品ページの仕様欄に基づく"
     },
     {
@@ -208,9 +231,10 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-2"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "Amazon商品ページの仕様欄に基づく"
     },
     {
