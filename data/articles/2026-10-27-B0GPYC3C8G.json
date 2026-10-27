@@ -171,6 +171,39 @@
       "author": "メーカー公式",
       "conflict_of_interest": "disclosed",
       "notes": "手動式（電池不要）、対象年齢8歳以上、アタッチメントによるモード切り替えについて記載あり。"
+    },
+    {
+      "id": "src-target",
+      "name": "Target (Nerf Rebel Ops Ammohawk)",
+      "url": "https://www.target.com/p/nerf-rebel-ops-ammohawk-toy-blaster/-/A-95005789",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-10-25",
+      "author": "販売店",
+      "conflict_of_interest": "possible",
+      "notes": "Nerf Rebel Ops Ammohawk (アーマーホーク)の販売ページ。商品仕様の裏付けに使用。"
+    },
+    {
+      "id": "src-nerffandom",
+      "name": "Nerf Wiki Fandom (Rebel Ops)",
+      "url": "https://nerf.fandom.com/wiki/Rebel_Ops",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-10-25",
+      "author": "コミュニティ",
+      "conflict_of_interest": "none",
+      "notes": "Nerf Rebel Opsシリーズのファンwiki。"
+    },
+    {
+      "id": "src-blasterhub",
+      "name": "Blaster Hub (Nerf Rebel Ops Ammohawk Review)",
+      "url": "https://blasterhub.com/2026/06/nerf-rebel-ops-ammohawk-review/",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-06-01",
+      "author": "第三者レビュワー",
+      "conflict_of_interest": "none",
+      "notes": "Nerf Rebel Ops Ammohawk (アーマーホーク)のレビュー記事。"
     }
   ],
   "claims": [
@@ -179,10 +212,11 @@
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-amazon",
+        "src-blasterhub"
       ],
-      "cross_checked": false,
-      "notes": "メーカー公式の仕様説明より"
+      "cross_checked": true,
+      "notes": "メーカー公式の仕様説明および第三者レビューより"
     },
     {
       "claim": "ダーツを15本収納できるアタッチメントが付属し、戦略的なリロードが可能である。",
@@ -199,20 +233,22 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-amazon",
+        "src-blasterhub"
       ],
-      "cross_checked": false,
-      "notes": "Amazon商品ページの機能説明より"
+      "cross_checked": true,
+      "notes": "Amazon商品ページの機能説明および第三者レビューより"
     },
     {
       "claim": "対象年齢は8歳以上と設定されている。",
       "category": "safety",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-amazon",
+        "src-nerffandom"
       ],
-      "cross_checked": false,
-      "notes": "商品名の対象年齢表記より"
+      "cross_checked": true,
+      "notes": "商品名の対象年齢表記およびコミュニティwikiより"
     }
   ],
   "technical_specs": {
@@ -234,7 +270,7 @@
       {
         "text": "アタッチメントの切り替えによる戦略的な遊び方が支持されている",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-blasterhub"
         ]
       },
       {
@@ -254,7 +290,7 @@
       {
         "text": "室内遊びの場合は、柔らかい的を用意するなどの工夫が必要",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-blasterhub"
         ]
       }
     ],
@@ -262,7 +298,7 @@
       {
         "text": "休日の外遊びでのシューティングバトル",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-blasterhub"
         ]
       },
       {
@@ -283,7 +319,7 @@
         "segment_label": "8歳以上の男の子をもつ保護者層",
         "summary": "価格の手頃さとギミックの豊富さから、遊び道具として満足度が高い傾向にあります。",
         "supporting_source_ids": [
-          "src-amazon"
+          "src-blasterhub"
         ]
       }
     ]
