@@ -188,6 +188,16 @@
       "author": "レビュアー",
       "conflict_of_interest": "none",
       "notes": "ミニサイズのジャスミンとラプンツェルの組み立てと、それぞれのアクセサリー（ランプとフライパン）についての紹介。"
+    },
+    {
+      "id": "src-3",
+      "name": "Brickset",
+      "url": "https://brickset.com/sets/43303-1",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "author": "外部データベースサイト",
+      "conflict_of_interest": "none",
+      "notes": "レゴ公式データべースサイト。ピース数が59、サイズが5 x 4 x 3 cm、対象年齢5+と記載されている。テーマはDisney Princess。"
     }
   ],
   "claims": [
@@ -197,10 +207,11 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-1",
-        "src-2"
+        "src-2",
+        "src-3"
       ],
       "cross_checked": true,
-      "notes": "公式の仕様記載と動画レビューから、コンパクトなディスプレイ性が一致。"
+      "notes": "公式の仕様記載と動画レビューから、コンパクトなディスプレイ性が一致。 Bricksetの仕様(5x4x3cm)とも一致。"
     },
     {
       "claim": "ミニフィギュアは腕が動き、付属のアクセサリーを持たせてごっこ遊びが可能",
@@ -218,10 +229,11 @@
       "category": "comparative_advantage",
       "confidence": "medium",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-3"
       ],
-      "cross_checked": false,
-      "notes": "手軽なボリューム感について。"
+      "cross_checked": true,
+      "notes": "手軽なボリューム感について。 Bricksetのデータとも一致。"
     },
     {
       "claim": "小さなアクセサリーパーツが含まれるため、誤飲には配慮が必要",
@@ -252,7 +264,8 @@
         "text": "高さ約5cmというコンパクトさで、場所を取らずにディスプレイできる設計",
         "supporting_source_ids": [
           "src-1",
-          "src-2"
+          "src-2",
+          "src-3"
         ]
       },
       {
