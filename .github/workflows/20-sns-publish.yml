@@ -153,11 +153,14 @@ jobs:
         run: |
           set -e
           ASIN="${{ steps.pick.outputs.asin }}"
+          # X が失敗した回に前回の記録を mark が拾わないよう、先に消す (runner を使い回す場合の保険)。
+          rm -f /tmp/x_post.json
           if [ "$INPUT_DRY_RUN" = "true" ]; then
             echo "DRY RUN — Buffer draft 投入のみ"
             python scripts/notify_buffer.py "$ASIN" --x-only
           else
-            python scripts/notify_buffer.py "$ASIN" --x-only --live
+            # navi-brain#139: 反応を測るために X の投稿 ID を書き出し、mark で記録する。
+            python scripts/notify_buffer.py "$ASIN" --x-only --live --record-x-post /tmp/x_post.json
           fi
         # #2780: 万一 Buffer が失敗 (LimitReached 等) しても Threads/Bluesky の
         # 配信と published 履歴の commit を止めない (catch 側の防御)。
@@ -227,7 +230,8 @@ jobs:
           python scripts/pick_sns_target.py --mark "$ASIN" \
             --channel "x=${{ steps.post-x.outcome }}" \
             --channel "threads=${{ steps.post-threads.outcome }}" \
-            --channel "bluesky=${{ steps.post-bluesky.outcome }}" || MARK_RC=$?
+            --channel "bluesky=${{ steps.post-bluesky.outcome }}" \
+            --x-post-file /tmp/x_post.json || MARK_RC=$?
           if [ "$MARK_RC" -ne 0 ] && [ "$MARK_RC" -ne 2 ]; then
             exit "$MARK_RC"
           fi

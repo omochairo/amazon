@@ -25,6 +25,8 @@ data/articles/ の未投稿 ASIN を「知育 × 価格」加重スコアでラ�
 state file:  data/sns_published.json
     {"published": ["B0DBTLH8ZM", "B0XXXXXXXX", ...],
      "channel_results": {"B0DBTLH8ZM": {"x": "success", "threads": "failure"}},
+     "x_posts": {"B0DBTLH8ZM": {"post_id": "<Buffer の投稿 ID>",
+                                "published_at": "2026-10-28T...", "text": "..."}},
      "updated": "2026-06-03T..."}
 
 呼び出し例:
@@ -165,6 +167,41 @@ def record_channel_results(state: dict, asin: str, channels: dict[str, str]) -> 
     state["channel_results"] = {k: v for k, v in results.items() if k in alive}
 
 
+def load_x_post_file(path: Path | None) -> dict | None:
+    """notify_buffer.py --record-x-post の書き出しを読む。無い・壊れているなら None。
+
+    X が失敗した回はファイル自体が作られないので、無いのは正常。
+    """
+    if path is None or not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        print(f"::warning::{path.name} unreadable, X post not recorded: {e}")
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("post_id"), str) or not data["post_id"]:
+        print(f"::warning::{path.name} has no post_id, X post not recorded")
+        return None
+    return {k: data.get(k) for k in ("post_id", "published_at", "text")}
+
+
+def record_x_post(state: dict, asin: str, rec: dict | None) -> None:
+    """x_posts に記事投稿の Buffer 投稿 ID を書く (navi-brain#139)。
+
+    fetch_engagement_metrics.py が反応を測るのに使う。channel_results と同じく
+    published に残っていない ASIN は掃除する。
+    """
+    posts = state.get("x_posts")
+    if not isinstance(posts, dict):
+        if rec is None:
+            return
+        posts = {}
+    if rec is not None:
+        posts[asin] = rec
+    alive = set(state.get("published") or [])
+    state["x_posts"] = {k: v for k, v in posts.items() if k in alive}
+
+
 def list_articles_desc() -> list[tuple[str, str]]:
     """(asin, filename) を新しい順で返す。同一 ASIN の duplicate は最新側を残す。"""
     seen: dict[str, str] = {}
@@ -283,6 +320,9 @@ def main() -> int:
     parser.add_argument("--channel", action="append", default=[], metavar="NAME=OUTCOME",
                         help="--mark と併用。投稿ステップの outcome (success/failure/skipped)。"
                              "1 つも success が無ければ mark せず exit 2 (#4783)")
+    parser.add_argument("--x-post-file", type=Path, metavar="PATH",
+                        help="--mark と併用。notify_buffer.py --record-x-post の書き出しを "
+                             "x_posts に記録する (navi-brain#139)")
     args = parser.parse_args()
 
     state = load_state()
@@ -313,6 +353,7 @@ def main() -> int:
         if len(state["published"]) > args.limit:
             state["published"] = state["published"][-args.limit:]
         record_channel_results(state, asin, channels)
+        record_x_post(state, asin, load_x_post_file(args.x_post_file))
         save_state(state)
         print(f"[mark] {asin} added (total={len(state['published'])})", file=sys.stderr)
         failed = sorted(k for k, v in channels.items() if v != DELIVERED_OUTCOME)

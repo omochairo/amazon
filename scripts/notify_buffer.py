@@ -29,6 +29,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 import sns_copy_store
@@ -163,6 +164,30 @@ def create_post(token: str, channel_id: str, service: str, text: str, live: bool
     return graphql_request(token, CREATE_POST_MUTATION, variables)
 
 
+def posted_id(result: dict) -> str | None:
+    """createPost が成功していれば Buffer の投稿 ID を返す。"""
+    if "errors" in result:
+        return None
+    data = (result.get("data") or {}).get("createPost") or {}
+    if data.get("__typename") != "PostActionSuccess":
+        return None
+    pid = (data.get("post") or {}).get("id")
+    return pid if isinstance(pid, str) and pid else None
+
+
+def write_x_post_record(path: Path, post_id: str, text: str, now: datetime | None = None) -> None:
+    """X に出した記事投稿を記録用に書き出す (navi-brain#139)。
+
+    pick_sns_target.py --x-post-file が sns_published.json の x_posts に取り込み、
+    fetch_engagement_metrics.py が反応を測る。shareNow なので書き出した時刻を配信時刻とする。
+    """
+    at = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+    path.write_text(
+        json.dumps({"post_id": post_id, "published_at": at, "text": text}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
 def report(result: dict, label: str) -> bool:
     if "errors" in result:
         print(f"[{label}] FAIL: {result['errors']}", file=sys.stderr)
@@ -182,6 +207,8 @@ def main() -> int:
     parser.add_argument("--live", action="store_true", help="addToQueue 投入 (default: draft)")
     parser.add_argument("--x-only", action="store_true")
     parser.add_argument("--threads-only", action="store_true")
+    parser.add_argument("--record-x-post", type=Path, metavar="PATH",
+                        help="--live で X に出せたら投稿 ID・配信時刻・本文を JSON で書き出す")
     args = parser.parse_args()
 
     token = os.environ.get("BUFFER_ACCESS_TOKEN")
@@ -212,7 +239,16 @@ def main() -> int:
 
     ok = True
     if not args.threads_only:
-        ok &= report(create_post(token, x_id, "twitter", text, args.live, buffer_mode), "X")
+        x_result = create_post(token, x_id, "twitter", text, args.live, buffer_mode)
+        ok &= report(x_result, "X")
+        x_post_id = posted_id(x_result)
+        if args.record_x_post and args.live and x_post_id:
+            # 書き出しの失敗で exit を非ゼロにすると、投稿済みの X が outcome=failure と
+            # 記録されてしまう。計測用の記録なので警告に留める。
+            try:
+                write_x_post_record(args.record_x_post, x_post_id, text)
+            except OSError as e:
+                print(f"::warning::could not write X post record: {e}", file=sys.stderr)
     if not args.x_only:
         ok &= report(create_post(token, threads_id, "threads", text, args.live, buffer_mode), "Threads")
     return 0 if ok else 1

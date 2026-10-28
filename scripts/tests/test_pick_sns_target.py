@@ -208,6 +208,49 @@ class MarkCliTest(unittest.TestCase):
         self.assertIn("B0NEW00002", state["published"])
         self.assertNotIn("channel_results", state)
 
+    def _x_post_file(self, payload):
+        path = pathlib.Path(self._tmp.name) / "x_post.json"
+        path.write_text(payload if isinstance(payload, str) else json.dumps(payload), encoding="utf-8")
+        return str(path)
+
+    def test_x_post_file_is_recorded(self):
+        # navi-brain#139: 記事投稿の X の投稿 ID を残し、反応を測れるようにする。
+        rec = {"post_id": "abc", "published_at": "2026-10-27T16:14:04+00:00", "text": "本文"}
+        rc = self._run("--mark", "B0NEW00001", "--channel", "x=success",
+                       "--x-post-file", self._x_post_file(rec))
+        self.assertEqual(rc, 0)
+        self.assertEqual(self._state()["x_posts"], {"B0NEW00001": rec})
+
+    def test_missing_x_post_file_marks_without_x_posts(self):
+        # X が失敗した回はファイルが作られない。mark は従来どおり進む。
+        rc = self._run("--mark", "B0NEW00001", "--channel", "x=failure",
+                       "--channel", "threads=success",
+                       "--x-post-file", str(pathlib.Path(self._tmp.name) / "none.json"))
+        self.assertEqual(rc, 0)
+        state = self._state()
+        self.assertIn("B0NEW00001", state["published"])
+        self.assertNotIn("x_posts", state)
+
+    def test_broken_x_post_file_does_not_block_mark(self):
+        for payload in ("{not json", {"post_id": ""}):
+            with self.subTest(payload=payload):
+                rc = self._run("--mark", "B0NEW00003", "--channel", "x=success",
+                               "--x-post-file", self._x_post_file(payload))
+                self.assertEqual(rc, 0)
+                self.assertNotIn("x_posts", self._state())
+                self.state_file.write_text(
+                    json.dumps({"published": ["B0OLD00001"], "updated": None}), encoding="utf-8")
+
+    def test_limit_trim_also_trims_x_posts(self):
+        self.state_file.write_text(json.dumps({
+            "published": ["A1", "A2"],
+            "x_posts": {"A1": {"post_id": "p1"}, "A2": {"post_id": "p2"}},
+        }), encoding="utf-8")
+        rc = self._run("--mark", "A3", "--limit", "2", "--channel", "x=success",
+                       "--x-post-file", self._x_post_file({"post_id": "p3"}))
+        self.assertEqual(rc, 0)
+        self.assertEqual(set(self._state()["x_posts"]), {"A2", "A3"})
+
     def test_already_published_is_still_a_no_op(self):
         rc = self._run("--mark", "B0OLD00001", "--channel", "x=success")
         self.assertEqual(rc, 0)
