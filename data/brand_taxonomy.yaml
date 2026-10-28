@@ -1501,6 +1501,27 @@ brands:
   - {canonical: Kitai Japan, tier: D, region: CN, noindex: true, aliases: [Kitai Japan]}
   - {canonical: SAKURAN, tier: D, region: CN, noindex: true, aliases: [SAKURAN]}
 
+  # 2026-10-28 (#10393): 供給側検出器の候補を実データ (product.brand + 商品名) と
+  # Web 検証で判定。Aeeom は実体を裏取りできず brand_rejected.yaml へ。
+  # Puzzle Potato=Wisteria GmbH (ドイツ・イニング、puzzlepotato.com)。「哲学者の石」
+  # 「Tesla Box」などの木製パズルボックスを自社で企画する。iDventure と同じ扱い。
+  - canonical: Puzzle Potato
+    aliases: [Puzzle Potato, PuzzlePotato]
+    tier: B
+    region: DE
+  # りぶはあと=株式会社りぶはあと (東京都中央区、livheart.jp)。ぬいぐるみ・抱きまくらの
+  # 雑貨メーカーで「はむにぎり」「ねむねむアニマルズ」は自社シリーズ。
+  - canonical: りぶはあと
+    aliases: [りぶはあと]
+    tier: B
+    region: JP
+  # tanoshimu=株式会社慶之商事 (神奈川県相模原市) の EC 販売名。木製のビー玉転がし・
+  # 積み木を楽天・Amazon で売る小規模事業者で、自社サイトは無い。
+  - canonical: tanoshimu
+    aliases: [tanoshimu]
+    tier: D
+    region: JP
+
   # 2026-10-18 (#9861): 供給側検出器の候補を実データ (product.brand + 商品名) と
   # Web 検証で判定。
   # iDventure=iDventure GmbH (ドイツ・メーアブッシュ、idventure.de)。木製の脱出パズル
