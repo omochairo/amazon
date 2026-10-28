@@ -372,8 +372,11 @@ cf-purge:
 # 設計の要点 (詳細は omochairo/amazon#6205):
 # - 鍵は NAS 側で forced command (deploy-shell) に縛られており、
 #   `rsync --server …` と `switch <sha>` の 2 つしか実行できない
-# - --checksum: hugo は毎ビルドで全ファイルを書き直すので mtime は当てにならない。
-#   これが無いと差分ゼロでも毎回 600MB 超を送ることになる
+# - 差分の判定: hugo は毎ビルドで全ファイルを書き直すので mtime は当てにならない。
+#   送る前に scripts/ci_stable_mtimes.py が mtime を中身のハッシュから決まる値に
+#   そろえ、rsync -t の既定の比較 (大きさ + mtime) で判定する
+#   (以前の --checksum は受け側でも全ファイルを読むため、NAS の HDD を詰まらせていた。
+#   amazon-home-ops#251)
 # - --link-dest=/current: 同一内容をハードリンクで共有する。**restricted root
 #   起点の絶対パスで書く**。rrsync は `..` を含む --link-dest を拒否する
 # - 切替は NAS 側の navi-switch が健全性検査 (index.html / build.json /
@@ -394,7 +397,7 @@ deploy-nas:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main" && $NAS_DEPLOY_KEY && $NAS_HOST'
   before_script:
-    - apk add --no-cache rsync openssh-client
+    - apk add --no-cache rsync openssh-client python3
     - mkdir -p ~/.ssh && chmod 700 ~/.ssh
     # **鍵は必ず正規化してから置く。** file 型 CI 変数は登録の仕方で末尾改行が
     # 落ちたり CRLF が混ざったりする (2026-08-30 に実際に踏んだ)。そのときの
@@ -411,16 +414,21 @@ deploy-nas:
     - test -s public/build.json
     - test -f public/redirects.map
     - export SSHOPT="ssh -p ${NAS_SSH_PORT:-2222} -i $HOME/.ssh/nas_deploy_key -o BatchMode=yes -o ConnectTimeout=15"
-    # **-t を付けない (mtime を保存しない)。** hugo は毎ビルドで全ファイルを
-    # 書き直すので mtime は必ず変わる。-t を付けると rsync は「保存する属性が
-    # 一致しない」と見なして --link-dest からハードリンクせず実体をコピーする。
-    # 2026-08-30 の実測: 内容が完全に同一の 2 世代で共有が 19,562 件中 10 件しか
-    # 効かず、1 世代あたり 693MB を毎回転送・毎回書き込んでいた。
-    # 切り分け (同一内容・mtime だけ違う 2 ファイルで再現):
-    #   -rlptD --checksum --link-dest -> links=1 (コピーされる)
-    #   -rlpD  --checksum --link-dest -> links=2 (共有される)
-    # 内容の比較は --checksum が担うので、mtime を捨てても再転送は増えない。
-    - rsync -rlpD --delete --checksum --safe-links --link-dest=/current -e "$SSHOPT" public/ "deploy@${NAS_HOST}:releases/${CI_COMMIT_SHA}/"
+    # **mtime を中身から決めてから -t で送る (amazon-home-ops#251)。**
+    # 以前は -t を付けずに --checksum で比べていた。hugo は毎ビルドで mtime を変えるので、
+    # -t を付けると rsync は「保存する属性が一致しない」と見なして --link-dest から
+    # ハードリンクせず実体をコピーする (2026-08-30 の実測: 同一内容の 2 世代で共有が
+    # 19,562 件中 10 件、1 世代 693MB を毎回書き込み)。ところが --checksum は
+    # **受け側でも --link-dest の全ファイルを読んでハッシュを取る**ので、NAS は毎デプロイ
+    # 配信物の全量を HDD から読み直し、I/O を詰まらせていた。
+    # mtime を中身の sha256 から決まる値にそろえれば、同一内容は同じ大きさ・同じ mtime に
+    # なるので、既定の比較 (大きさ + mtime) で変わったファイルだけ送られ、残りは
+    # ハードリンクで共有される。受け側は stat するだけで中身を読まない。
+    # navi-switch の差分 (inode 比較) もそのまま正しい。
+    # 導入直後の 1 回だけは current の mtime がそろっていないので全量を送る (purge も全消去)。
+    # -O: ディレクトリの時刻は送らない (リリースのディレクトリは毎回新しく作られる)。
+    - python3 scripts/ci_stable_mtimes.py public
+    - rsync -rlptDO --delete --safe-links --link-dest=/current -e "$SSHOPT" public/ "deploy@${NAS_HOST}:releases/${CI_COMMIT_SHA}/"
     # #7386: navi-switch は切替前に前世代との差分を stdout に出す。cf-purge が
     # 「変わったものだけ消す」判断に使うので保存する。数千行になりうるのでログには
     # 差分行を出さない (パイプにしないのは switch の終了コードを落とさないため)。
