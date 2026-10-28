@@ -37,8 +37,9 @@ brands:
   # ==========================================
   # Tier S: 国内最大手 + 国際トップ
   # ==========================================
+  # ベビラボ (べビラボ) はバンダイの乳幼児向けシリーズ。記事の brand に単独で入る (2026-10-28)
   - canonical: バンダイ
-    aliases: [バンダイ(BANDAI), BANDAI, BANDAI SPIRITS, バンダイナムコ, バンダイナムコクラフト, バンダイナムコヌイ, たまごっち, Tamagotchi, TAMAGOTCHI, タマゴッチ]
+    aliases: [バンダイ(BANDAI), BANDAI, BANDAI SPIRITS, バンダイナムコ, バンダイナムコクラフト, バンダイナムコヌイ, たまごっち, Tamagotchi, TAMAGOTCHI, タマゴッチ, ベビラボ, べビラボ]
     tier: S
     region: JP
     safety_default: [ST]
@@ -1316,8 +1317,9 @@ brands:
   # ==========================================
   # 既存記事のみで使用 (toy.md 未掲載 / 暫定)
   # ==========================================
+  # 素の "GP" はカタン・絶壁スライダー (gp-inc.jp) の記事の brand。2 文字なので完全一致だけで効く (2026-10-28)
   - canonical: ジーピー
-    aliases: [ジーピー(GP), GP Games, GPゲームズ]
+    aliases: [ジーピー(GP), GP, GP Games, GPゲームズ]
     tier: B
     region: JP
   - canonical: トイローヤル
@@ -1500,6 +1502,16 @@ brands:
   - {canonical: Vexolite, tier: D, region: CN, noindex: true, aliases: [Vexolite]}
   - {canonical: Kitai Japan, tier: D, region: CN, noindex: true, aliases: [Kitai Japan]}
   - {canonical: SAKURAN, tier: D, region: CN, noindex: true, aliases: [SAKURAN]}
+
+  # 2026-10-28: #10393 の後に供給側検出器に出た 6 件を同じ手順で判定。
+  # ベビラボ→バンダイ・GP→ジーピーの alias に、Brfveob / SI-ZEN / クニニック株式会社は
+  # brand_rejected.yaml へ。
+  # クツワ=クツワ株式会社 (大阪府東大阪市、kutsuwa.co.jp)。文具メーカーで「こどもの
+  # 学習時計」は未就学向けシリーズ metete の商品。
+  - canonical: クツワ
+    aliases: [クツワ, KUTSUWA]
+    tier: B
+    region: JP
 
   # 2026-10-28 (#10393): 供給側検出器の候補を実データ (product.brand + 商品名) と
   # Web 検証で判定。Aeeom は実体を裏取りできず brand_rejected.yaml へ。
