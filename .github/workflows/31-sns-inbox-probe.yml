@@ -5,6 +5,9 @@ name: SNS Inbox Probe (read-only, manual)
 #
 # 出すのは schema のフィールド名 / HTTP status / 件数だけ。本文・ユーザー名・URL は
 # 出さない (このリポジトリは public で Actions のログも public)。
+#
+# buffer_metrics / threads_insights (#10628) は「投稿ごとの反応を読めるか」の確認。
+# 出すのは metric の種類名と HTTP status だけで、値は出さない。
 
 on:
   workflow_dispatch:
@@ -13,7 +16,7 @@ on:
         description: '対象チャネル'
         required: false
         type: choice
-        options: [all, buffer, threads, bluesky]
+        options: [all, buffer, threads, bluesky, buffer_metrics, threads_insights]
         default: all
 
 permissions:

@@ -19,6 +19,12 @@
              scope が付いているかを HTTP status で判定する。
   bluesky  : createSession → app.bsky.notification.listNotifications。
              reason (reply / mention / quote / like / follow) の**件数**のみ数える。
+  buffer_metrics   : (#10628) 配信済み X engagement の Buffer post id を数件取り、
+             post(input:{id}).metrics に**どの metric type が入るか**を見る
+             (X で impressions が取れるか)。値は出さない。
+  threads_insights : (#10628) 配信済み Threads engagement の media id で
+             GET /{id}/insights を叩き、threads_manage_insights 相当の scope が
+             付いているかを HTTP status と返ってきた metric 名で判定する。値は出さない。
 
 🚨 出力の秘匿性 — このリポジトリは public で、Actions のログも public。
    本文・ユーザー名・URL・トークンは **一切出さない**。出すのは
@@ -48,6 +54,8 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -308,7 +316,141 @@ def probe_bluesky() -> dict:
     }
 
 
-PROBES = {"buffer": probe_buffer, "threads": probe_threads, "bluesky": probe_bluesky}
+# --------------------------------------------------------------------------
+# 反応の計測 (#10628)
+# --------------------------------------------------------------------------
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+QUEUE_X = REPO_ROOT / "data" / "engagement_queue_x.jsonl"
+QUEUE_THREADS = REPO_ROOT / "data" / "engagement_queue_threads.jsonl"
+# Buffer の metrics は 1 日 1 回の取り込みなので、配信直後の post は空で当然。
+# 48h 以上経ったものを見ないと「取れない」と誤判定する。
+METRICS_MIN_AGE = timedelta(hours=48)
+METRICS_MAX_AGE = timedelta(days=10)
+METRICS_SAMPLE = 3
+
+
+def pick_published_post_ids(path: Path, now: datetime, n: int = METRICS_SAMPLE) -> list[str]:
+    """配信から 48h〜10 日経った row の post_id を新しい順に n 件返す。"""
+    if not path.exists():
+        return []
+    picked: list[tuple[datetime, str]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        pid, ts = row.get("post_id"), row.get("published_at")
+        if not isinstance(pid, str) or not pid or not isinstance(ts, str):
+            continue
+        try:
+            at = datetime.fromisoformat(ts)
+        except ValueError:
+            continue
+        if at.tzinfo is None:
+            at = at.replace(tzinfo=timezone.utc)
+        if METRICS_MIN_AGE <= now - at <= METRICS_MAX_AGE:
+            picked.append((at, pid))
+    picked.sort(reverse=True)
+    return [pid for _, pid in picked[:n]]
+
+
+def probe_buffer_metrics() -> dict:
+    token = (os.environ.get("BUFFER_ACCESS_TOKEN") or "").strip()
+    if not token:
+        return {"channel": "buffer_metrics", "status": "skip", "reason": "BUFFER_ACCESS_TOKEN 未設定"}
+    ids = pick_published_post_ids(QUEUE_X, datetime.now(timezone.utc))
+    if not ids:
+        return {"channel": "buffer_metrics", "status": "skip", "reason": "48h〜10 日前に配信した X の row が無い"}
+
+    posts: list[dict] = []
+    for pid in ids:
+        query = (
+            "query { post(input: { id: %s }) { id metrics { type unit } metricsUpdatedAt } }"
+            % json.dumps(pid)
+        )
+        status, payload, err = _post_json(
+            BUFFER_GRAPHQL_URL,
+            {"query": query},
+            {"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        )
+        entry: dict = {"http": status}
+        if err or not isinstance(payload, dict):
+            entry["error"] = err or "payload not dict"
+        elif payload.get("errors"):
+            # message は出さない。code だけに丸める (権限不足なら FORBIDDEN 系が来るはず)。
+            entry["error_codes"] = sorted({
+                str(((e or {}).get("extensions") or {}).get("code"))
+                for e in payload["errors"] if isinstance(e, dict)
+            })
+        else:
+            post = ((payload.get("data") or {}).get("post") or {})
+            metrics = post.get("metrics")
+            entry["metrics_field"] = "null" if metrics is None else "list"
+            entry["metric_types"] = sorted({
+                str(m.get("type")) for m in (metrics or []) if isinstance(m, dict)
+            })
+            entry["has_metrics_updated_at"] = bool(post.get("metricsUpdatedAt"))
+        posts.append(entry)
+
+    types = sorted({t for p in posts for t in p.get("metric_types", [])})
+    if any("error" in p or "error_codes" in p for p in posts) and not types:
+        status = "metrics-denied"
+    elif "impressions" in types:
+        status = "impressions-ok"
+    elif types:
+        status = "metrics-ok-no-impressions"
+    else:
+        status = "metrics-empty"
+    return {
+        "channel": "buffer_metrics",
+        "status": status,
+        "sampled": len(posts),
+        "metric_types_seen": types,
+        "posts": posts,
+    }
+
+
+THREADS_INSIGHT_METRICS = "views,likes,replies,reposts,quotes,shares"
+
+
+def probe_threads_insights() -> dict:
+    token = (os.environ.get("THREADS_ACCESS_TOKEN") or "").strip()
+    if not token:
+        return {"channel": "threads_insights", "status": "skip", "reason": "THREADS_ACCESS_TOKEN 未設定"}
+    ids = pick_published_post_ids(QUEUE_THREADS, datetime.now(timezone.utc), n=1)
+    if not ids:
+        return {"channel": "threads_insights", "status": "skip", "reason": "48h〜10 日前に配信した Threads の row が無い"}
+
+    q = urllib.parse.urlencode({"metric": THREADS_INSIGHT_METRICS, "access_token": token})
+    status, payload, err = _get_json(f"{THREADS_BASE}/{ids[0]}/insights?{q}")
+    out: dict = {"channel": "threads_insights", "http": status}
+    if err or not isinstance(payload, dict):
+        out["status"] = "error"
+        out["reason"] = err or "payload not dict"
+        return out
+    if status != 200:
+        # scope 不足ならここに落ちる。再認可が要るかの判定点。
+        out["status"] = "insights-denied"
+        out["reason"] = _meta_error_kind(payload)
+        return out
+    out["status"] = "insights-ok"
+    out["metric_names"] = sorted({
+        str(m.get("name")) for m in (payload.get("data") or []) if isinstance(m, dict)
+    })
+    return out
+
+
+PROBES = {
+    "buffer": probe_buffer,
+    "threads": probe_threads,
+    "bluesky": probe_bluesky,
+    "buffer_metrics": probe_buffer_metrics,
+    "threads_insights": probe_threads_insights,
+}
 
 
 def main(argv: list[str] | None = None) -> int:
