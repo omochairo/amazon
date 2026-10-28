@@ -152,6 +152,32 @@ class ChannelResultsAbsorbTests(unittest.TestCase):
             self.assertEqual(state["channel_results"],
                              {"A2": {"x": "success", "threads": "failure"}})
 
+    def test_cli_absorbs_x_posts(self):
+        # navi-brain#139: 滞留 PR の記事投稿の X 投稿 ID も落とさない。
+        with tempfile.TemporaryDirectory() as d:
+            d = pathlib.Path(d)
+            target, source = d / "state.json", d / "src.json"
+            target.write_text(json.dumps({
+                "published": ["A1"], "x_posts": {"A1": {"post_id": "p1"}},
+            }), encoding="utf-8")
+            source.write_text(json.dumps({
+                "published": ["A2"], "x_posts": {"A2": {"post_id": "p2"}},
+            }), encoding="utf-8")
+            sys.argv = ["absorb", "--target", str(target), "--source", str(source)]
+            self.assertEqual(main(), 0)
+            state = json.loads(target.read_text(encoding="utf-8"))
+            self.assertEqual(state["x_posts"], {"A1": {"post_id": "p1"}, "A2": {"post_id": "p2"}})
+
+    def test_cli_without_x_posts_adds_no_key(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = pathlib.Path(d)
+            target, source = d / "state.json", d / "src.json"
+            target.write_text(json.dumps({"published": ["A1"]}), encoding="utf-8")
+            source.write_text(json.dumps({"published": ["A2"]}), encoding="utf-8")
+            sys.argv = ["absorb", "--target", str(target), "--source", str(source)]
+            self.assertEqual(main(), 0)
+            self.assertNotIn("x_posts", json.loads(target.read_text(encoding="utf-8")))
+
 
 if __name__ == "__main__":
     unittest.main()

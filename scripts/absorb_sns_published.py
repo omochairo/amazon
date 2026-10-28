@@ -112,6 +112,7 @@ def main() -> int:
     published = state["published"]
     all_added: list[str] = []
     src_channels: list[dict] = []
+    src_x_posts: list[dict] = []
     for src_path in args.source:
         if not src_path.exists():
             print(f"::warning::source not found, skipping: {src_path}")
@@ -119,6 +120,7 @@ def main() -> int:
         src_state = _load_state(src_path)
         published, added = absorb(published, src_state["published"], args.limit)
         src_channels.append(src_state.get("channel_results") or {})
+        src_x_posts.append(src_state.get("x_posts") or {})
         if added:
             print(f"{src_path}: absorbed {len(added)}: {', '.join(added)}")
         all_added.extend(added)
@@ -137,6 +139,13 @@ def main() -> int:
         merged = absorb_channel_results(merged, sc, alive)
     if merged:
         state["channel_results"] = merged
+    # 記事投稿の X の投稿 ID (navi-brain#139) も channel_results と同じ規則で union する。
+    # 落とすとその回の反応が測れなくなる。
+    merged_x = state.get("x_posts") or {}
+    for sx in src_x_posts:
+        merged_x = absorb_channel_results(merged_x, sx, alive)
+    if merged_x:
+        state["x_posts"] = merged_x
     _save_state(args.target, state)
     # cp932 な Windows ローカルでも落ちないよう、標準出力は ASCII に留める。
     print(f"::notice::{args.target.name}: absorbed {len(all_added)} published ASIN(s) "

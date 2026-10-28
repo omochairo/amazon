@@ -21,6 +21,10 @@ amazon-navi-brain#139 の案 0'。X と Threads のどちらで何が効いて�
 使い方:
     python scripts/fetch_engagement_metrics.py --out /tmp/metrics.md
     python scripts/fetch_engagement_metrics.py --days-ago 3 --out /tmp/metrics.md
+    python scripts/fetch_engagement_metrics.py --days-ago 10 --source article --out /tmp/metrics.md
+
+記事投稿 (20-sns-publish.yml のリンク付き X 投稿) は data/sns_published.json の x_posts
+から測る (navi-brain#139)。種別は article/<ASIN>。Threads の記事投稿は測らない。
 
 env:
     BUFFER_ACCESS_TOKEN                    X の取得に必要
@@ -52,6 +56,7 @@ except Exception:  # noqa: BLE001
 REPO_ROOT = Path(__file__).resolve().parent.parent
 QUEUE_X = REPO_ROOT / "data" / "engagement_queue_x.jsonl"
 QUEUE_THREADS = REPO_ROOT / "data" / "engagement_queue_threads.jsonl"
+SNS_PUBLISHED = REPO_ROOT / "data" / "sns_published.json"
 
 BUFFER_GRAPHQL_URL = "https://api.buffer.com/"
 THREADS_BASE = "https://graph.threads.net/v1.0"
@@ -195,9 +200,10 @@ def _head(text: str) -> str:
     return s if len(s) <= TEXT_HEAD else s[: TEXT_HEAD - 1] + "…"
 
 
-def build_markdown(target: date, records: list[dict], fetched_at: datetime) -> str:
+def build_markdown(target: date, records: list[dict], fetched_at: datetime, source: str = "all") -> str:
+    scope = {"article": "（記事投稿のみ）", "engagement": "（記事投稿を除く）"}.get(source, "")
     lines = [
-        f"## {target.isoformat()}（JST）に配信した分",
+        f"## {target.isoformat()}（JST）に配信した分{scope}",
         "",
         f"取得: {fetched_at.astimezone(JST).strftime('%Y-%m-%d %H:%M')} JST",
         "",
@@ -228,13 +234,55 @@ def build_markdown(target: date, records: list[dict], fetched_at: datetime) -> s
     return "\n".join(lines)
 
 
-def collect(target: date, x_token: str, threads_token: str) -> list[dict]:
+def load_article_rows(path: Path) -> list[dict]:
+    """sns_published.json の x_posts を engagement の row と同じ形にして返す (navi-brain#139)。
+
+    記事投稿 (20-sns-publish.yml) は engagement のキューに載らないので、
+    pick_sns_target.py --x-post-file が記録した Buffer の投稿 ID から測る。
+    """
+    try:
+        state = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    posts = state.get("x_posts") if isinstance(state, dict) else None
+    if not isinstance(posts, dict):
+        return []
+    rows = []
+    for asin, rec in posts.items():
+        if not isinstance(rec, dict):
+            continue
+        rows.append({
+            "id": f"article-x-{asin}",
+            "post_id": rec.get("post_id"),
+            "published_at": rec.get("published_at"),
+            "category": "article",
+            "subcategory": asin,
+            "text": rec.get("text") or "",
+        })
+    return rows
+
+
+SOURCES = ("all", "engagement", "article")
+
+
+def collect(target: date, x_token: str, threads_token: str, source: str = "all") -> list[dict]:
+    """source="article" は記事投稿だけ、"engagement" は従来の engagement 投稿だけを測る。
+
+    過去の日付を記事投稿だけ取り直すときに、engagement の行を #140 に二重に載せないため。
+    """
+    x_rows: list[dict] = []
+    threads_rows: list[dict] = []
+    if source in ("all", "engagement"):
+        x_rows += load_rows(QUEUE_X)
+        threads_rows += load_rows(QUEUE_THREADS)
+    if source in ("all", "article"):
+        x_rows += load_article_rows(SNS_PUBLISHED)
     records = []
-    for channel, path, token, fetch in (
-        ("X", QUEUE_X, x_token, fetch_buffer_metrics),
-        ("Threads", QUEUE_THREADS, threads_token, fetch_threads_insights),
+    for channel, rows, token, fetch in (
+        ("X", x_rows, x_token, fetch_buffer_metrics),
+        ("Threads", threads_rows, threads_token, fetch_threads_insights),
     ):
-        for row in select_rows(load_rows(path), target):
+        for row in select_rows(rows, target):
             metrics, note = fetch(row["post_id"], token)
             at = _parse_ts(row["published_at"])
             records.append({
@@ -255,19 +303,25 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", required=True, type=Path, help="記録用 Markdown の書き出し先 (値はここにだけ書く)")
     ap.add_argument("--days-ago", type=int, default=3, help="JST で何日前に配信した分を測るか (既定 3)")
+    ap.add_argument("--source", choices=SOURCES, default="all",
+                    help="測る投稿: all (既定) / engagement / article (記事投稿の X だけ)")
     args = ap.parse_args(argv)
 
     x_token = (os.environ.get("BUFFER_ACCESS_TOKEN") or "").strip()
     threads_token = (os.environ.get("THREADS_ACCESS_TOKEN") or "").strip()
-    missing = [n for n, v in (("BUFFER_ACCESS_TOKEN", x_token), ("THREADS_ACCESS_TOKEN", threads_token)) if not v]
+    # 記事投稿は X だけなので、--source article のときは Threads の token を要求しない。
+    needed = [("BUFFER_ACCESS_TOKEN", x_token)]
+    if args.source != "article":
+        needed.append(("THREADS_ACCESS_TOKEN", threads_token))
+    missing = [n for n, v in needed if not v]
     if missing:
         print(f"::error::{', '.join(missing)} が未設定 — 反応を取得できない")
         return 2
 
     now = datetime.now(timezone.utc)
     target = now.astimezone(JST).date() - timedelta(days=args.days_ago)
-    records = collect(target, x_token, threads_token)
-    args.out.write_text(build_markdown(target, records, now), encoding="utf-8")
+    records = collect(target, x_token, threads_token, args.source)
+    args.out.write_text(build_markdown(target, records, now, args.source), encoding="utf-8")
 
     failed = [r for r in records if r["metrics"] is None]
     by_channel = {}

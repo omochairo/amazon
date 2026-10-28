@@ -5,6 +5,7 @@ name: SNS Engagement Metrics (X + Threads → private log)
 #
 #   - 対象: JST で 3 日前に配信した row (scripts/fetch_engagement_metrics.py の docstring 参照)。
 #     schedule が数時間遅れても日付で区切るので取りこぼし・二重計測しない
+#   - 記事投稿 (20-sns-publish の X) も data/sns_published.json の x_posts から測る (navi-brain#139)
 #   - X: Buffer GraphQL post.metrics (BUFFER_ACCESS_TOKEN は insightsRead 付きの個人用キー。
 #     2026-10-28 に作り直し済み) / Threads: /{media-id}/insights
 #
@@ -21,6 +22,12 @@ on:
         required: false
         type: number
         default: 3
+      source:
+        description: '測る投稿（all / engagement / article = 記事投稿の X だけ。過去分の取り直し用）'
+        required: false
+        type: choice
+        options: [all, engagement, article]
+        default: all
   schedule:
     - cron: '0 3 * * *'   # 12:00 JST
 
@@ -68,9 +75,10 @@ jobs:
           BUFFER_ACCESS_TOKEN: ${{ secrets.BUFFER_ACCESS_TOKEN }}
           THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
           DAYS_AGO: ${{ inputs.days_ago || 3 }}
+          SOURCE: ${{ inputs.source || 'all' }}
         run: |
           set +e
-          python scripts/fetch_engagement_metrics.py --days-ago "$DAYS_AGO" --out /tmp/engagement_metrics.md
+          python scripts/fetch_engagement_metrics.py --days-ago "$DAYS_AGO" --source "$SOURCE" --out /tmp/engagement_metrics.md
           code=$?
           echo "code=$code" >> "$GITHUB_OUTPUT"
           # 2 = token 未設定。何も取れていないので記録もせずここで赤にする。

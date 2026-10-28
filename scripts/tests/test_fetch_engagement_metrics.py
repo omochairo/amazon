@@ -133,5 +133,71 @@ class MainTest(unittest.TestCase):
         self.assertIn("::warning::[Threads] 取得失敗 (http=400)", stdout)
 
 
+class ArticleSourceTest(unittest.TestCase):
+    """navi-brain#139 — 記事投稿 (sns_published.json の x_posts) も X として測る。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        d = pathlib.Path(self._tmp.name)
+        self.qx, self.qth, self.sp = d / "qx.jsonl", d / "qth.jsonl", d / "sp.json"
+        self.qx.write_text(json.dumps(_row("eng", "2026-10-25T14:00:00", post_id="e1")) + "\n",
+                           encoding="utf-8")
+        self.qth.write_text(json.dumps(_row("th", "2026-10-25T14:00:00", post_id="t1")) + "\n",
+                            encoding="utf-8")
+        at = datetime(2026, 10, 25, 23, 30, tzinfo=JST).astimezone(timezone.utc).isoformat()
+        self.sp.write_text(json.dumps({"published": ["B0ART00001"], "x_posts": {
+            "B0ART00001": {"post_id": "a1", "published_at": at, "text": "記事\n\n→ https://x"},
+        }}), encoding="utf-8")
+        self._patches = [mock.patch.object(fem, "QUEUE_X", self.qx),
+                         mock.patch.object(fem, "QUEUE_THREADS", self.qth),
+                         mock.patch.object(fem, "SNS_PUBLISHED", self.sp),
+                         mock.patch.object(fem, "fetch_buffer_metrics", return_value=({"表示": 1}, "")),
+                         mock.patch.object(fem, "fetch_threads_insights", return_value=({"表示": 2}, ""))]
+        for p in self._patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self._patches:
+            p.stop()
+        self._tmp.cleanup()
+
+    def _ids(self, source):
+        return [(r["channel"], r["id"]) for r in fem.collect(date(2026, 10, 25), "x", "t", source)]
+
+    def test_all_includes_article_in_time_order(self):
+        self.assertEqual(self._ids("all"),
+                         [("X", "eng"), ("X", "article-x-B0ART00001"), ("Threads", "th")])
+
+    def test_article_only_skips_engagement_rows(self):
+        self.assertEqual(self._ids("article"), [("X", "article-x-B0ART00001")])
+
+    def test_engagement_only_matches_old_behaviour(self):
+        self.assertEqual(self._ids("engagement"), [("X", "eng"), ("Threads", "th")])
+
+    def test_article_row_shape(self):
+        rec = [r for r in fem.collect(date(2026, 10, 25), "x", "t", "article")][0]
+        self.assertEqual((rec["category"], rec["subcategory"], rec["post_id"], rec["published_jst"]),
+                         ("article", "B0ART00001", "a1", "23:30"))
+
+    def test_missing_or_broken_state_is_empty(self):
+        self.sp.write_text("{broken", encoding="utf-8")
+        self.assertEqual(self._ids("article"), [])
+        self.sp.unlink()
+        self.assertEqual(self._ids("article"), [])
+
+    def test_article_only_does_not_need_threads_token(self):
+        out = pathlib.Path(self._tmp.name) / "out.md"
+        with mock.patch.dict("os.environ", {"BUFFER_ACCESS_TOKEN": "x", "THREADS_ACCESS_TOKEN": ""}), \
+                redirect_stdout(io.StringIO()):
+            self.assertEqual(fem.main(["--out", str(out), "--source", "article"]), 0)
+            self.assertEqual(fem.main(["--out", str(out), "--source", "all"]), 2)
+
+    def test_heading_marks_article_only_runs(self):
+        md = fem.build_markdown(date(2026, 10, 25), [], datetime(2026, 10, 28, tzinfo=timezone.utc), "article")
+        self.assertTrue(md.startswith("## 2026-10-25（JST）に配信した分（記事投稿のみ）"))
+        md = fem.build_markdown(date(2026, 10, 25), [], datetime(2026, 10, 28, tzinfo=timezone.utc))
+        self.assertTrue(md.startswith("## 2026-10-25（JST）に配信した分\n"))
+
+
 if __name__ == "__main__":
     unittest.main()
