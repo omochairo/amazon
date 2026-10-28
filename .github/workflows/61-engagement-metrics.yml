@@ -1,0 +1,92 @@
+name: SNS Engagement Metrics (X + Threads → private log)
+
+# #10628 / amazon-navi-brain#139 案 0': 配信済み engagement 投稿の反応を毎日 1 回取得して、
+# private の amazon-navi-brain#140 にコメントで追記する。
+#
+#   - 対象: JST で 3 日前に配信した row (scripts/fetch_engagement_metrics.py の docstring 参照)。
+#     schedule が数時間遅れても日付で区切るので取りこぼし・二重計測しない
+#   - X: Buffer GraphQL post.metrics (BUFFER_ACCESS_TOKEN は insightsRead 付きの個人用キー。
+#     2026-10-28 に作り直し済み) / Threads: /{media-id}/insights
+#
+# 値を public に出さない: このリポジトリの Actions ログは public。値は /tmp の Markdown に
+# だけ書き、NAVI_BRAIN_PAT で private 側にコメントする。17-analytics-report.yml と同じ形。
+#
+# 取りこぼした日は workflow_dispatch の days_ago で後から取り直せる。
+
+on:
+  workflow_dispatch:
+    inputs:
+      days_ago:
+        description: 'JST で何日前に配信した分を測るか'
+        required: false
+        type: number
+        default: 3
+  schedule:
+    - cron: '0 3 * * *'   # 12:00 JST
+
+permissions:
+  contents: read
+
+concurrency:
+  group: engagement-metrics
+  cancel-in-progress: false
+
+env:
+  METRICS_ISSUE_REPO: omochairo/amazon-navi-brain
+  METRICS_ISSUE_NUMBER: '140'
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      # 書き込み先に届かないなら、取得する前に赤で止める (17-analytics-report.yml と同じ)。
+      - name: Preflight — private Issue 先への書き込み資格を確認
+        env:
+          GH_TOKEN: ${{ secrets.NAVI_BRAIN_PAT }}
+        run: |
+          set -e
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::NAVI_BRAIN_PAT が未設定です。反応の値は public には書けないため停止します。"
+            exit 1
+          fi
+          if ! gh api "repos/${METRICS_ISSUE_REPO}/issues/${METRICS_ISSUE_NUMBER}" --jq .number >/dev/null; then
+            echo "::error::NAVI_BRAIN_PAT で ${METRICS_ISSUE_REPO}#${METRICS_ISSUE_NUMBER} にアクセスできません。"
+            exit 1
+          fi
+
+      - name: Fetch metrics
+        id: fetch
+        env:
+          BUFFER_ACCESS_TOKEN: ${{ secrets.BUFFER_ACCESS_TOKEN }}
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          DAYS_AGO: ${{ inputs.days_ago || 3 }}
+        run: |
+          set +e
+          python scripts/fetch_engagement_metrics.py --days-ago "$DAYS_AGO" --out /tmp/engagement_metrics.md
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # 2 = token 未設定。何も取れていないので記録もせずここで赤にする。
+          if [ "$code" = "2" ]; then exit 1; fi
+          exit 0
+
+      # 取得失敗 (code=1) の行も「取得失敗」として記録してから、最後に赤にする。
+      - name: Append to private log
+        env:
+          GH_TOKEN: ${{ secrets.NAVI_BRAIN_PAT }}
+        run: |
+          set -e
+          gh issue comment "$METRICS_ISSUE_NUMBER" -R "$METRICS_ISSUE_REPO" --body-file /tmp/engagement_metrics.md
+
+      - name: Surface fetch failure
+        if: steps.fetch.outputs.code == '1'
+        run: |
+          echo "::error::一部の投稿の反応を取得できませんでした (詳細は上の warning)。記録には「取得失敗」として残っています。"
+          exit 1
