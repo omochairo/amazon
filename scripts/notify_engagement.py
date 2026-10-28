@@ -269,6 +269,11 @@ def post_x_via_buffer(text: str, live: bool,
     return False, None
 
 
+def _bluesky_creds_present() -> bool:
+    ident = os.environ.get("BLUESKY_IDENTIFIER") or os.environ.get("BLUESKY_HANDLE")
+    return bool(ident and os.environ.get("BLUESKY_APP_PASSWORD"))
+
+
 def post_bluesky_text(text: str) -> tuple[bool, str | None]:
     """engagement テキストを Bluesky に plain text (embed なし) で投稿。成功で (True, uri)。
 
@@ -281,7 +286,7 @@ def post_bluesky_text(text: str) -> tuple[bool, str | None]:
     ident = os.environ.get("BLUESKY_IDENTIFIER") or os.environ.get("BLUESKY_HANDLE")
     pw = os.environ.get("BLUESKY_APP_PASSWORD")
     pds = os.environ.get("BLUESKY_PDS", BLUESKY_DEFAULT_PDS).rstrip("/")
-    if not ident or not pw:
+    if not _bluesky_creds_present():
         print("::notice::[bluesky] creds 未設定 — mirror skip (inert)")
         return False, None
 
@@ -392,6 +397,27 @@ def consume_one(queue_path: Path, channel: str, dry_run: bool, live: bool,
     print(f"--- [{channel}] picked id={row['id']} category={row.get('category')} subcategory={row.get('subcategory')} ---")
     print(text)
 
+    if channel == "bluesky":
+        # #10628: X を休むスロットでも X の queue は Bluesky で消費する
+        # (X だけ減らすと補充との差で在庫が溜まり、FIFO で古い本文が出るため)。
+        # creds 未設定なら何もしない (row は pending のまま。従来の mirror と同じ inert)。
+        if not _bluesky_creds_present():
+            print("::notice::[bluesky] creds 未設定 — bluesky-only skip (inert)")
+            return True
+        if dry_run:
+            print("[bluesky] DRY RUN — would post to Bluesky only (X skipped), not mutating queue")
+            return True
+        b_ok, b_uri = post_bluesky_text(text)
+        if not b_ok:
+            return False
+        row["published_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        row["post_id"] = None
+        row["bluesky_post_id"] = b_uri
+        rows[idx] = row
+        _write_jsonl(queue_path, rows)
+        print(f"[bluesky] queue updated (X skipped): {row['id']} -> published_at={row['published_at']}")
+        return True
+
     if channel == "x":
         # X は weighted char (CJK=2) で 280 評価。超過分は配信前に切る
         # ([[feedback-omochairo-x-cjk-weight]])。shareNow は即時配信で後修正不能なので必須。
@@ -440,7 +466,8 @@ def consume_one(queue_path: Path, channel: str, dry_run: bool, live: bool,
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--channels", default="x,threads",
-                        help="comma-separated channels: x / threads (default both)")
+                        help="comma-separated channels: x / threads / bluesky (default x,threads)。"
+                             "bluesky は X の queue から 1 件取り Bluesky だけに流す (X は投稿しない)")
     parser.add_argument("--category", default=None, choices=[None, "news", "daily", ""],
                         help="restrict pick to this category. '' or omitted = no restriction (legacy).")
     parser.add_argument("--dry-run", action="store_true",
@@ -471,6 +498,8 @@ def main() -> int:
         ok &= consume_one(QUEUE_X, "x", args.dry_run, args.live,
                           category=category, x_post_mode=x_post_mode,
                           bluesky_mirror=args.bluesky_mirror)
+    elif "bluesky" in channels:
+        ok &= consume_one(QUEUE_X, "bluesky", args.dry_run, args.live, category=category)
     if "threads" in channels:
         ok &= consume_one(QUEUE_THREADS, "threads", args.dry_run, args.live, category=category)
     return 0 if ok else 1

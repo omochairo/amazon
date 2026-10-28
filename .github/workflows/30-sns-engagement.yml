@@ -11,7 +11,8 @@ name: SNS Engagement Publish (X + Threads + Bluesky non-link, 8-slot)
 #                            19:30 JST daily#3
 #       20:00 JST  [article — 20-sns-publish.yml]
 #   → 1 日 7 投稿/ch (news 2 + daily 3 + article 2)、2 ch で engagement は news2+daily3
-#   ※ #10628 で X は 11:00 news#1 / 19:30 daily#3 の 2 枠だけに削減 (Threads は 5 枠のまま)
+#   ※ #10628 で X は 11:00 news#1 / 19:30 daily#3 の 2 枠だけに削減。他の 3 枠は X の
+#     queue を Bluesky だけに流す (Threads / Bluesky は 5 枠のまま)
 #   - news スロット: category="news" AND created_at > now-48h で latest-first pick
 #   - daily スロット: category="daily" で FIFO (古い順) pick + rotation 多様性ペナルティ
 #   - queue 候補 0 件のスロットは穴開けで skip (健全)
@@ -107,8 +108,9 @@ jobs:
           python-version: '3.11'
 
       # #10628: X は反応が伸びないので、定時実行では X を 11:00 (news#1) と
-      # 19:30 (daily#3) の 2 枠だけに絞る。残りの 3 枠は Threads のみ。
-      # Bluesky は X の mirror なので同じく 2 枠になる。
+      # 19:30 (daily#3) の 2 枠だけに絞る。残りの 3 枠は Threads と、X の queue を
+      # Bluesky だけに流す bluesky channel。Bluesky は従来どおり 5 枠で、X の queue の
+      # 消費ペースも変わらない (X だけ減らすと補充との差で在庫が溜まる)。
       # 手動 dispatch は channels の指定どおりに流す (従来と同じ)。
       - name: Resolve channels
         id: resolve
@@ -119,7 +121,7 @@ jobs:
           CH="$INPUT_CHANNELS"
           if [ -z "$CH" ] || [ "$CH" = "both" ]; then CH="x,threads"; fi
           case "$SCHED" in
-            "0 4 * * *"|"30 0 * * *"|"0 6 * * *") CH="threads" ;;
+            "0 4 * * *"|"30 0 * * *"|"0 6 * * *") CH="bluesky,threads" ;;
           esac
           echo "channels=$CH" >> "$GITHUB_OUTPUT"
           echo "Publishing to: $CH"
