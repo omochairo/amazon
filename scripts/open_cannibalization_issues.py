@@ -141,14 +141,17 @@ def main() -> int:
                     len(just_closed & taken))
     taken -= just_closed
     # 人が「作業なし」(wontfix) で閉じたキーは、しばらく立て直さない
-    taken |= find_dismissed_keys(args.repo, MARKER_PREFIX)
-    logger.info("existing cannibalization open Issues: %d", len(taken))
+    dismissed = find_dismissed_keys(args.repo, MARKER_PREFIX) - taken
+    logger.info("existing cannibalization open Issues: %d (+%d dismissed as wontfix)",
+                len(taken), len(dismissed))
+    taken |= dismissed
 
     created = 0
     for d in detected:
         query = d["query"]
         if query in taken:
-            logger.info("skip (already open): %s", query)
+            reason = "dismissed as wontfix" if query in dismissed else "already open"
+            logger.info("skip (%s): %s", reason, query)
             continue
         title = (f"[A-3] Query cannibalization: \"{query}\" "
                  f"({d['competing_page_count']} URLs, imp={d['total_impressions']})")

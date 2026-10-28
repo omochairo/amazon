@@ -209,14 +209,17 @@ def main() -> int:
                     len(just_closed & taken))
     taken -= just_closed
     # 人が「作業なし」(wontfix) で閉じたキーは、しばらく立て直さない
-    taken |= find_dismissed_keys(args.repo, MARKER_PREFIX)
-    logger.info("existing query-intent open Issues: %d", len(taken))
+    dismissed = find_dismissed_keys(args.repo, MARKER_PREFIX) - taken
+    logger.info("existing query-intent open Issues: %d (+%d dismissed as wontfix)",
+                len(taken), len(dismissed))
+    taken |= dismissed
 
     created = 0
     for d in detected:
         page = d["page"]
         if page in taken:
-            logger.info("skip (already open): %s", page)
+            reason = "dismissed as wontfix" if page in dismissed else "already open"
+            logger.info("skip (%s): %s", reason, page)
             continue
         if not should_file(d, src_range=src_range):
             if d.get("carried_forward"):
