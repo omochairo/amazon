@@ -76,6 +76,8 @@ _ALLOWED_RE = re.compile(
 _HAS_BRAND_CHAR_RE = re.compile(
     r"[ァ-ヶｦ-ﾝa-zA-Z]"
 )
+# ASIN の丸ごと検索 (例: "b0hj75x3pn", #10392)。B0 + 英数 8 文字はブランド名にならない
+_ASIN_RE = re.compile(r"^[bB]0[0-9a-zA-Z]{8}$")
 
 # 非ブランドのカタカナ / 英字 generic 語 (反復で育てる前提の初期セット)
 GENERIC_TOKENS_STOPWORDS: set[str] = {
@@ -158,6 +160,8 @@ def is_brand_like(token: str, min_len: int) -> bool:
     if not _ALLOWED_RE.match(token):
         return False
     if not _HAS_BRAND_CHAR_RE.search(token):
+        return False
+    if _ASIN_RE.match(token):
         return False
     return True
 

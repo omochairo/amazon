@@ -98,6 +98,17 @@ def test_suggest_skips_stopword_with_digit_suffix():
     assert [c["token"] for c in result["candidates"]] == ["Kiko10"]
 
 
+def test_suggest_skips_asin_query():
+    # #10392: ASIN の丸ごと検索はブランドではない。B0 で始まる 10 文字以外は残す
+    gsc = _make_gsc(by_query=[
+        {"query": "b0hj75x3pn", "impressions": 23, "clicks": 0, "ctr": 0.0, "position": 5.0},
+        {"query": "B0DFWQ6N2K 口コミ", "impressions": 12, "clicks": 0, "ctr": 0.0, "position": 5.0},
+        {"query": "Kiko10 おもちゃ", "impressions": 50, "clicks": 0, "ctr": 0.0, "position": 5.0},
+    ])
+    result = suggest(gsc, {"レゴ"})
+    assert [c["token"] for c in result["candidates"]] == ["Kiko10"]
+
+
 def test_suggest_skips_beyblade_random_booster_vol_token():
     # #2644: "ランダムブースターvol" はベイブレードX の商品シリーズ名でブランドではない。
     # tokenizer は "." で分割するため "bx-50 ランダムブースターvol.11" は
