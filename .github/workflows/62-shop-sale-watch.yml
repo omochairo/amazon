@@ -14,7 +14,7 @@ name: Shop Sale Watch
 on:
   schedule:
     - cron: '17 21 * * *'  # 06:17 JST
-    - cron: '17 3 * * *'   # 12:17 JST
+    - cron: '17 4 * * *'   # 13:17 JST (超PayPay祭のリリースは開催当日の正午ごろに出る)
   workflow_dispatch:
     inputs:
       dry_run:

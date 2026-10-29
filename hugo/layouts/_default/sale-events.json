@@ -1,0 +1,16 @@
+{{- /* #9449: セール日程の正本 (hugo/data/sale_events.yaml) のうち、ビルド時点でまだ
+       終わっていないイベントを /sale-events/index.json に出す。
+
+       読むのは omcha.jp・home.omcha.jp のセールモード v2 (omochairo/omcha-ops の
+       docs/snippets/sale-mode-v2.php)。WordPress 側が 1 時間ごとに取りに来て、
+       楽天・Yahoo・Amazon のショップボタンの文言に使う。navi の告知帯と同じ日程が
+       両方のサイトに出るのはこの出口があるから。
+
+       - 中身は sale_events_live.html と同じもの (閲覧時の判定は読む側がする)
+       - 項目を消す・名前を変えるときは omcha-ops 側の読み取りも直す
+       - HTML のページは作らない (content/sale-events.md の outputs が json だけ) */ -}}
+{{- $events := slice -}}
+{{- range partialCached "sale_events_live.html" . -}}
+  {{- $events = $events | append (dict "id" .id "shop" .shop "name" .name "notes" (.notes | default slice) "phases" .phases) -}}
+{{- end -}}
+{{- dict "version" 1 "events" $events | jsonify -}}
