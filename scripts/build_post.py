@@ -180,6 +180,44 @@ def _force_amazon_partner_tag(text: str, tag: str) -> str:
     return _AMAZON_LINK_RE.sub(_repl, text)
 
 
+# 2026-10-29: navi.omcha.jp がバリューコマースの登録サイトとして承認された。
+# それまで navi の Yahoo! リンクはおもちゃいろ (omcha.jp) のサイト ID を借りていて、
+# 記事データ (data/articles/*.json の prices.yahoo.url など) と data/raw に
+# 旧 ID が約 7,600 本焼き込まれている。データを一括で書き換えると走行中の
+# add-article-* PR と衝突するので、_force_amazon_partner_tag と同じく
+# レンダリング直後の 1 点で SSOT (config.toml) の値に揃える。
+#
+# pid はプログラムごとの ID なので、sid/pid を無条件に上書きすると Yahoo 以外の
+# プログラムのリンクが壊れる。置き換えるのは旧 Yahoo の組と一致するものだけ。
+_VC_LEGACY_YAHOO_IDS = frozenset({("3746014", "891670125")})
+_VC_LINK_RE = re.compile(
+    r'https?://ck\.jp\.ap\.valuecommerce\.com/servlet/referral\?[^\s"\'<>)\]]*'
+)
+_VC_PARAM_RE = re.compile(r"(?P<lead>(?:\?|&|&amp;))(?P<key>sid|pid)=(?P<val>\d+)")
+
+
+def _force_vc_site_ids(text: str, sid: str, pid: str) -> str:
+    """text 中の旧 ID の VC リンクを ``sid=<sid>&pid=<pid>`` に揃えて返す。
+
+    sid/pid が空 (config.toml が読めない) なら何もしない。リンクを消すより
+    旧 ID のまま出す方がよい (_load_committed_affiliate_param と同じ縮退)。
+    """
+    if not sid or not pid:
+        return text
+
+    def _repl(m: "re.Match[str]") -> str:
+        url = m.group(0)
+        found = {p.group("key"): p.group("val") for p in _VC_PARAM_RE.finditer(url)}
+        if (found.get("sid"), found.get("pid")) not in _VC_LEGACY_YAHOO_IDS:
+            return url
+        new = {"sid": sid, "pid": pid}
+        return _VC_PARAM_RE.sub(
+            lambda p: f"{p.group('lead')}{p.group('key')}={new[p.group('key')]}", url
+        )
+
+    return _VC_LINK_RE.sub(_repl, text)
+
+
 # #2817 Phase 2: JP タグ/ブランド名を Hugo タクソノミー URL (tags/brands) に
 # 書き込む直前で英語スラッグへ変換する。data/articles/*.json (原本) は JP のまま
 # 触らない — 変換はこの Hugo content 生成の一点だけで起きる。
@@ -3623,6 +3661,9 @@ def main() -> None:
     # data["amazon_partner_tag"] として注入する (post.md.j2 の affiliate_url
     # マクロと competitor-card の既定が参照する)。
     amazon_partner_tag = _resolve_amazon_partner_tag(pathlib.Path(args.hugo_config))
+    # secret は旧 ID のまま残りうるので見ない。置き換え先は commit 済みの SSOT だけ。
+    vc_sid = _load_committed_affiliate_param("valuecommerceSid", pathlib.Path(args.hugo_config))
+    vc_pid = _load_committed_affiliate_param("valuecommercePid", pathlib.Path(args.hugo_config))
     # omcha-ops#19 P2: らくらくベビー導線の URL。未設定なら既定の公式 URL に
     # 落ちるだけなので、tag と違って不在で落とす必要はない。
     baby_registry_url = _load_baby_registry_url(pathlib.Path(args.hugo_config))
@@ -4033,6 +4074,7 @@ def main() -> None:
             # omcha-ops#19 P1: テンプレ/本文のどこを経由した Amazon リンクでも
             # tag= を持たせる最後の一点 (_force_amazon_partner_tag の comment 参照)。
             md_body = _force_amazon_partner_tag(md_body, amazon_partner_tag)
+            md_body = _force_vc_site_ids(md_body, vc_sid, vc_pid)
             # #4826 項目 4: 旧 <slug>.quality.json sidecar による draft 判定は廃止。
             # draft は --gate で**その場で評価した**スコアだけで決める (下記)。
             draft = False

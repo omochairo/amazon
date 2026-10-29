@@ -83,8 +83,11 @@ enableRobotsTXT = true
   # ショップ単位の ID (実測)。アカウントを表す値ではないので、ここに置いてはいけない。
   # ここにはアカウント ID (PC / モバイルの数値 ID ペア + ハッシュ) を置く。
   rakutenAffiliateId = "40871861.19c94f60.40871862.8fefc5ed"
-  valuecommerceSid = "3746014"
-  valuecommercePid = "891670125"
+  # バリューコマースの ID は navi.omcha.jp 用 (サイト 3785826 × Yahoo!ショッピング 2025875)。
+  # 2026-10-29 まではおもちゃいろ (omcha.jp) の 3746014 / 891670125 を借りていた。
+  # 記事データに残る旧 ID は build_post.py の _force_vc_site_ids が出力時に置き換える。
+  valuecommerceSid = "3785826"
+  valuecommercePid = "892735851"
   # omcha-ops#19 P2: らくらくベビー (ベビーレジストリ) 導線のリンク先。
   # 乳児帯の記事末にだけ出す (判定は scripts/build_post.py)。tag= はここでは
   # 付けない — 付与は _force_amazon_partner_tag / amazon_affiliate_url.html の 1 点。
