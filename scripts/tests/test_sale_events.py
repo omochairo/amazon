@@ -14,6 +14,7 @@ import yaml
 
 SALE_EVENTS = Path(__file__).resolve().parents[2] / "hugo" / "data" / "sale_events.yaml"
 JST = timedelta(hours=9)
+SHOPS = ("amazon", "rakuten", "yahoo")
 
 
 def _events():
@@ -43,6 +44,12 @@ def test_ids_are_unique():
     ids = [event.get("id") for event in _events()]
     assert all(ids), "id の無いイベントがある"
     assert len(ids) == len(set(ids))
+
+
+@pytest.mark.parametrize("event", _events(), ids=lambda e: e.get("id"))
+def test_event_names_its_shop(event):
+    # navi の帯のリンク・商品ページの 1 行と、omcha-ops が送る段階の出し分けに使う
+    assert event.get("shop") in SHOPS, "shop は amazon / rakuten / yahoo のどれか"
 
 
 @pytest.mark.parametrize("event", _events(), ids=lambda e: e.get("id"))

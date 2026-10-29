@@ -340,7 +340,26 @@ def test_registered_monthly_sale_is_not_a_candidate():
     assert _news(D(2026, 10, 29), PHILEWEB_SMILE, registered={"smile-sale-2026-11"}) == {}
     # id が違っても、登録済みの期間に開始日が入っていれば登録済み
     assert _news(D(2026, 10, 29), PHILEWEB_SMILE,
-                 spans=[(D(2026, 11, 4), D(2026, 11, 12))]) == {}
+                 spans=[(D(2026, 11, 4), D(2026, 11, 12), "amazon")]) == {}
+
+
+def test_span_of_another_shop_does_not_hide_candidate():
+    # 楽天のセールが同じ時期に登録済みでも、Amazon の発表は候補に残す
+    found = _news(D(2026, 10, 29), PHILEWEB_SMILE,
+                  spans=[(D(2026, 11, 4), D(2026, 11, 12), "rakuten")])
+    assert list(found) == ["smile-sale-2026-11"]
+    assert found["smile-sale-2026-11"]["shop"] == "amazon"
+    assert "  shop: amazon" in sa.render_yaml(found["smile-sale-2026-11"],
+                                              found["smile-sale-2026-11"]["periods"][0])
+
+
+def test_feed_only_matches_calendar_of_its_shop():
+    # 楽天のカレンダーにある名前でも、Amazon のフィードの題名とは突き合わせない
+    calendar = [{"id": "rakuten-x", "name": "スマイルSALE", "shop": "rakuten", "cycle": "monthly"}]
+    item = {"title": PHILEWEB_SMILE, "link": "http://www.phileweb.com/news/1.html",
+            "published": D(2026, 10, 29)}
+    found = sa.detect([(PHILEWEB, [item])], calendar, set(), D(2026, 10, 29))
+    assert all(c["calendar_id"] != "rakuten-x" for c in found.values())
 
 
 @pytest.mark.parametrize("title", [

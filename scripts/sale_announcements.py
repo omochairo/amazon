@@ -46,17 +46,19 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 logger = logging.getLogger("sale_announcements")
 
 JST = dt.timezone(dt.timedelta(hours=9))
+# どのモールのセールか。hugo/data/sale_events.yaml と data/sale_calendar.yaml の shop
+SHOPS = ("amazon", "rakuten", "yahoo")
 FEEDS: Tuple[Dict[str, Any], ...] = (
     {"name": "About Amazon Japan",
      "url": "https://www.aboutamazon.jp/rss/feed.rss",
-     "hosts": ("www.aboutamazon.jp",)},
+     "shop": "amazon", "hosts": ("www.aboutamazon.jp",)},
     {"name": "PR TIMES（アマゾンジャパン）",
      "url": "https://prtimes.jp/companyrdf.php?company_id=4612",
-     "hosts": ("prtimes.jp",)},
+     "shop": "amazon", "hosts": ("prtimes.jp",)},
     # 報道。Amazon 以外の記事も混ざり、題名の書き方もそろっていない
     {"name": "PHILE WEB", "news": True, "upgrade_http": True,
      "url": "https://www.phileweb.com/rss.php",
-     "hosts": ("www.phileweb.com",)},
+     "shop": "amazon", "hosts": ("www.phileweb.com",)},
 )
 USER_AGENT = "navi-omcha-sale-calendar/1.0 (+https://navi.omcha.jp/)"
 TIMEOUT_S = 20
@@ -379,8 +381,15 @@ def event_key(entry: Optional[Dict[str, Any]], name: str,
     return "{}-{}".format(entry["id"], start.year), start.year
 
 
-def _covered(start: dt.date, spans: Sequence[Tuple[dt.date, dt.date]]) -> bool:
-    return any(lo <= start <= hi for lo, hi in spans)
+def shop_of(entry: Dict[str, Any]) -> str:
+    """カレンダー・フィードの shop (書いていなければ amazon)。"""
+    return entry.get("shop") or "amazon"
+
+
+def _covered(start: dt.date, shop: str,
+             spans: Sequence[Tuple[dt.date, dt.date, str]]) -> bool:
+    # 別のモールのセールと期間が重なるのは普通 (楽天のマラソンとスマイルSALE など)
+    return any(lo <= start <= hi and s == shop for lo, hi, s in spans)
 
 
 def detect(
@@ -388,24 +397,27 @@ def detect(
     calendar: Sequence[Dict[str, Any]],
     registered: set,
     today: dt.date,
-    registered_spans: Sequence[Tuple[dt.date, dt.date]] = (),
+    registered_spans: Sequence[Tuple[dt.date, dt.date, str]] = (),
 ) -> Dict[str, Dict[str, Any]]:
     """未登録・これから始まるセールの候補を、イベント id ごとにまとめて返す。
 
-    registered_spans は登録済みのイベントの期間 (JST の日付)。開始日がそこに入る
-    候補は、id が違っても登録済みとみなす (カレンダーに無いセールは id で突き合わせ
-    られないため)。
+    registered_spans は登録済みのイベントの期間 (JST の日付) とモール。開始日が同じ
+    モールの期間に入る候補は、id が違っても登録済みとみなす (カレンダーに無いセールは
+    id で突き合わせられないため)。
     """
     found = {}  # type: Dict[str, Dict[str, Any]]
     for feed, items in feed_items:
         news = bool(feed.get("news"))
+        shop = shop_of(feed)
+        # フィードはモールごと。別のモールのセール名と取り違えない
+        shop_calendar = [e for e in calendar if shop_of(e) == shop]
         for item in items:
             age = (today - item["published"]).days
             if not -1 <= age <= MAX_AGE_DAYS:
                 continue
-            entry = match_sale(item["title"], calendar, news)
+            entry = match_sale(item["title"], shop_calendar, news)
             name = entry["name"] if entry else match_unknown_sale(
-                item["title"], calendar, news)
+                item["title"], shop_calendar, news)
             if name is None:
                 continue
             period = parse_period(item["title"], item["published"])
@@ -417,10 +429,11 @@ def detect(
             if last_day < today:
                 continue
             event_id, label = event_key(entry, name, period["start"])
-            if event_id in registered or _covered(period["start"], registered_spans):
+            if event_id in registered or _covered(period["start"], shop, registered_spans):
                 continue
             cand = found.setdefault(event_id, {
                 "event_id": event_id, "calendar_id": entry["id"] if entry else None,
+                "shop": shop,
                 "name": name, "year": label,
                 "periods": [], "sources": [],
             })
@@ -444,16 +457,18 @@ def detect(
         cand["periods"].sort(key=lambda p: (p["start"], p["end"] or dt.date.max))
     # 同じ開始日にカレンダーのセールの候補があれば、名前の違う adhoc はその別名とみなす
     # (「スマイルセール」と「スマイルSALE」で 2 本立てない)
-    known_starts = {p["start"] for c in found.values() if c["calendar_id"] for p in c["periods"]}
+    known_starts = {(c["shop"], p["start"])
+                    for c in found.values() if c["calendar_id"] for p in c["periods"]}
     for event_id in [k for k, c in found.items() if c["calendar_id"] is None]:
-        if any(p["start"] in known_starts for p in found[event_id]["periods"]):
+        cand = found[event_id]
+        if any((cand["shop"], p["start"]) in known_starts for p in cand["periods"]):
             del found[event_id]
     return found
 
 
 def collect(
     calendar: Sequence[Dict[str, Any]], registered: set, today: dt.date,
-    registered_spans: Sequence[Tuple[dt.date, dt.date]] = (),
+    registered_spans: Sequence[Tuple[dt.date, dt.date, str]] = (),
 ) -> Tuple[Dict[str, Dict[str, Any]], List[str]]:
     """フィードを読んで候補を返す。読めなかったフィードは 2 つ目の戻り値に積む。"""
     feed_items, errors = [], []
@@ -495,6 +510,7 @@ def render_yaml(cand: Dict[str, Any], period: Dict[str, Any]) -> str:
     source = cand["sources"][0]
     return "\n".join([
         "- id: {}".format(cand["event_id"]),
+        "  shop: {}".format(cand.get("shop", "amazon")),
         "  name: {}".format(cand["name"]),
         # 報道は出典にしない (Amazon.co.jp の告知で確かめて書き直してもらう)
         "  source: {}".format("{} の記事 → Amazon.co.jp の告知で確認".format(source["feed"])

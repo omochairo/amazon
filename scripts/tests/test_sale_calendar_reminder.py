@@ -400,7 +400,7 @@ def test_main_passes_registered_ids_to_detection(files, monkeypatch):
     monkeypatch.setattr(sa, "collect", collect)
     assert _run(monkeypatch, FakeGhWithComments()) == 0
     assert seen == {"registered": {"a-2027"}, "today": dt.date(2027, 7, 1), "ids": ["a", "b"],
-                    "spans": [(dt.date(2027, 7, 1), dt.date(2027, 7, 8))]}
+                    "spans": [(dt.date(2027, 7, 1), dt.date(2027, 7, 8), "amazon")]}
 
 
 # ---- 毎月のセール (cycle: monthly) ----
@@ -427,4 +427,18 @@ def test_registered_spans_skip_unreadable_phases():
         {"id": "b", "phases": [{"start": "not a date"}]},
         "junk",
     ]
-    assert scr.registered_spans(events) == [(dt.date(2026, 11, 4), dt.date(2026, 11, 12))]
+    assert scr.registered_spans(events) == [
+        (dt.date(2026, 11, 4), dt.date(2026, 11, 12), "amazon")]
+
+
+def test_registered_spans_carry_shop():
+    events = [{"id": "m", "shop": "rakuten",
+               "phases": [{"start": "2026-11-04T20:00:00+09:00",
+                           "end": "2026-11-11T01:59:59+09:00"}]}]
+    assert scr.registered_spans(events) == [
+        (dt.date(2026, 11, 4), dt.date(2026, 11, 11), "rakuten")]
+
+
+def test_calendar_rejects_unknown_shop():
+    with pytest.raises(scr.CalendarError, match="shop"):
+        scr.validate_calendar([{"id": "x", "name": "x", "shop": "amzn", "cycle": "monthly"}])

@@ -103,6 +103,7 @@ Hugo は **Extended v0.146.0**（本番ビルドの SSOT は `.gitlab-ci.yml` �
 
 Amazon の大型セールなどの期間は `hugo/data/sale_events.yaml` に 1 件書く（#9449）。期間中だけ全ページのヘッダー下に告知帯が出て、終わると再ビルド無しで消える（判定は閲覧時に `hugo/assets/js/sale_notice.js` が行う）。テンプレートは触らない。
 
+- `shop`（`amazon` / `rakuten` / `yahoo`）が必須。このファイルは navi と omcha.jp・home.omcha.jp のセール日程の正本で、omcha-ops は public の main を読む。`/price/` へのリンクと商品ページの 1 行は Amazon のセールにだけ出る
 - 公式の告知で日程を確認してから書く（`source` / `verified_on` が必須）
 - 書いてよいのは「セール期間中である」ことまで。個別の商品が値引きされているとは書かない（#6285）
 - 検証は `python -m pytest scripts/tests/test_sale_events.py`
