@@ -159,6 +159,19 @@ def test_before_enforce_date_old_rule_omcha_counts_once():
     assert check_sources_v5(_article(srcs, slug=OLD_SLUG)).passed is True
 
 
+def test_spam_shaped_url_does_not_count():
+    # navi-brain#117 (C): スパム形の URL を 2 サイトの片方にした合格を止める
+    srcs = [_src(1, "example.org"),
+            {"id": "s2", "name": "spam",
+             "url": "https://www.kkhandymen.co.uk?goods%2Fdetails%2FF86332398794.html="}]
+    r = check_sources_v5(_article(srcs, claim_ids=["s1", "s2"]))
+    assert r.passed is False
+    srcs[1]["url"] = "https://cnbd.rmutt.ac.th?n=ab12cd34ef56gh"
+    assert check_sources_v5(_article(srcs, claim_ids=["s1", "s2"])).passed is False
+    srcs[1]["url"] = "https://example.net/?p=4904"
+    assert check_sources_v5(_article(srcs, claim_ids=["s1", "s2"])).passed is True
+
+
 def test_registered_domain():
     rd = source_sites.registered_domain
     assert rd("toy.bandai.co.jp") == "bandai.co.jp"
