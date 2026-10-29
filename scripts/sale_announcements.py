@@ -5,18 +5,26 @@ scripts/sale_calendar_reminder.py が呼ぶ。ここがやるのは候補を作�
 **サイトに出る日程 (hugo/data/sale_events.yaml) には一切書かない。** 候補は issue に
 載り、人が出典を開いて確かめてから登録する。
 
-読むのは公開のフィード 2 本だけ (1 run で各 1 回):
+読むのは公開のフィード 3 本だけ (1 run で各 1 回):
   - About Amazon Japan (公式ニュースルーム) の RSS
   - PR TIMES のアマゾンジャパンの企業別 RSS
+  - PHILE WEB の RSS (報道。公式の 2 本は大型セールしか発表しないので、月例の
+    スマイルSALE などはここで拾う。2026-11 のスマイルSALE を取り逃した反省)
 Amazon.co.jp 本体は読まない (利用規約がロボットでの収集を認めていない)。
 
 決めごと:
   - **拾うのは題名だけ。** 本文は読まない。先行セールの日程は本文にしか無いので、
     候補には入らない (人が出典で確かめる)
-  - **セール名は「」の中身の完全一致で見る。** 同じフィードに、日付の違う関連の
-    発表が毎回混ざる (「Amazon プライムデー フェス」を 6/27 から、「プライムデー
-    特選セール」を…)。部分一致で拾うと取り違える。名前が変わった年は拾えないが、
-    その場合は例年の目安によるリマインドが残る (黙る方向に倒す)
+  - **カレンダーのセール名は「」の中身の完全一致で見る。** 同じフィードに、日付の
+    違う関連の発表が毎回混ざる (「Amazon プライムデー フェス」を 6/27 から、
+    「プライムデー特選セール」を…)。部分一致で拾うと取り違える
+  - **カレンダーに無いセールも拾う。** 「」の中身がセールの名前らしく (セール /
+    SALE / 祭 などを含む)、既知のセール名を含まないもの。既知の名前を含むものは
+    上の関連の発表なので捨てる。報道のフィードでは、Amazon のセールだと題名で
+    言い切っているもの (「Amazon「…」」/「「Amazon …」」) だけにする
+  - **報道の題名は書き方がそろっていない。** 「11/4 9時スタート」のように終了日の
+    無いものや、「11/4(水)〜11/12(木)」の形も読む。終了日が無ければ YAML の終了は
+    「??」のままにする (曜日が書いてあれば暦と突き合わせるのは同じ)
   - **曜日が合わない日付は捨てる。** 題名の「7月10日（金）」の曜日を実際の暦と
     突き合わせる。年の推定や読み取りを誤ったときに、ここで落ちる
   - **題名に無い時刻は埋めない。** 貼り付け用の YAML には「??」を入れ、そのまま
@@ -45,6 +53,10 @@ FEEDS: Tuple[Dict[str, Any], ...] = (
     {"name": "PR TIMES（アマゾンジャパン）",
      "url": "https://prtimes.jp/companyrdf.php?company_id=4612",
      "hosts": ("prtimes.jp",)},
+    # 報道。Amazon 以外の記事も混ざり、題名の書き方もそろっていない
+    {"name": "PHILE WEB", "news": True, "upgrade_http": True,
+     "url": "https://www.phileweb.com/rss.php",
+     "hosts": ("www.phileweb.com",)},
 )
 USER_AGENT = "navi-omcha-sale-calendar/1.0 (+https://navi.omcha.jp/)"
 TIMEOUT_S = 20
@@ -58,6 +70,10 @@ MAX_TITLE_LEN = 200
 WEEKDAYS = "月火水木金土日"
 
 QUOTED_RE = re.compile("「([^」]{1,40})」")
+# 「Amazon「スマイルSALE」」の形 (報道で Amazon のセールだと言い切っている題名)
+AMAZON_QUOTED_RE = re.compile(r"amazon[\s、,:]*「([^」]{1,40})」", re.IGNORECASE)
+# カレンダーに無いセールを拾うときの、セールの名前らしさ (NFKC・小文字にしてから見る)
+SALE_WORDS = ("セール", "sale", "祭", "初売り", "フライデー", "サイバーマンデー")
 
 
 def _date_pattern(prefix: str, month_required: bool) -> str:
@@ -75,6 +91,23 @@ def _date_pattern(prefix: str, month_required: bool) -> str:
 PERIOD_RE = re.compile(
     _date_pattern("s", True) + r"\s*から\s*(?:" + _date_pattern("e", False) +
     r"|(?P<n>\d{1,2})\s*日間)")
+
+
+def _loose_date(prefix: str, month_required: bool) -> str:
+    """報道の題名の日付。「11/4」「11月4日」の両方と、曜日・時刻の省略を許す。"""
+    month = r"(?P<{p}m>\d{{1,2}})\s*(?:月|/)\s*"
+    if not month_required:
+        month = "(?:" + month + ")?"
+    return (
+        r"(?<!\d)(?:(?P<{p}y>\d{{4}})\s*(?:年|/)\s*)?" + month +
+        r"(?P<{p}d>\d{{1,2}})(?!\d)\s*日?\s*(?:\((?P<{p}w>[月火水木金土日])(?:・[祝休])?\))?\s*"
+        r"(?:(?P<{p}H>\d{{1,2}})\s*(?:時\s*(?:(?P<{p}M>\d{{1,2}})\s*分)?|:(?P<{p}C>\d{{2}})))?"
+    ).format(p=prefix)
+
+
+LOOSE_RANGE_RE = re.compile(
+    _loose_date("s", True) + r"\s*(?:から|[〜~ー-])\s*" + _loose_date("e", False))
+LOOSE_START_RE = re.compile(_loose_date("s", True) + r"\s*(?:スタート|開始|から|より)")
 
 
 class FeedError(RuntimeError):
@@ -148,8 +181,11 @@ def safe_link(link: str, feed: Dict[str, Any]) -> str:
         parts = urllib.parse.urlsplit(link.strip())
     except ValueError:
         return feed["url"]
-    if parts.scheme != "https" or parts.hostname not in feed["hosts"]:
+    # PHILE WEB は http のリンクを配る。同じホストは https でも開けるので上げる
+    schemes = ("https", "http") if feed.get("upgrade_http") else ("https",)
+    if parts.hostname not in feed["hosts"] or parts.scheme not in schemes:
         return feed["url"]
+    parts = parts._replace(scheme="https")
     # 計測用のクエリ (?utm_source=rss) は落とす
     return urllib.parse.urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
 
@@ -167,11 +203,55 @@ def announce_names(entry: Dict[str, Any]) -> List[str]:
     return [normalize_name(n) for n in names]
 
 
-def match_sale(title: str, calendar: Sequence[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    """題名の「」の中身がカレンダーのセール名と完全一致する 1 件を返す。"""
-    quoted = {normalize_name(q) for q in QUOTED_RE.findall(title)}
+def _quoted(title: str, news: bool) -> List[str]:
+    """題名の「」の中身。報道では Amazon のものと言い切っている形だけ返す
+    (他社の「ブラックフライデー」を Amazon のものと取り違えないため)。"""
+    if not news:
+        return QUOTED_RE.findall(title)
+    text = unicodedata.normalize("NFKC", title)
+    # 「Amazon ブラックフライデー」の形。「Amazon対抗セール」(他社) は空白が無いので外れる
+    return AMAZON_QUOTED_RE.findall(text) + [
+        q for q in QUOTED_RE.findall(text) if re.match(r"\s*amazon\s", q, re.IGNORECASE)]
+
+
+def match_sale(title: str, calendar: Sequence[Dict[str, Any]],
+               news: bool = False) -> Optional[Dict[str, Any]]:
+    """題名の「」の中身がカレンダーのセール名と完全一致する 1 件を返す。
+
+    毎月のセール (cycle: monthly) だけは前方一致も見る。スマイルSALE は
+    「スマイルSALE ゴールデンウィーク」のような回ごとの呼び名で出ることがあり、
+    完全一致だと取り逃す (完全一致の別のセール、例えば新生活が先に当たる)。
+    """
+    quoted = {normalize_name(q) for q in _quoted(title, news)}
     hits = [e for e in calendar if quoted.intersection(announce_names(e))]
+    if not hits:
+        hits = [e for e in calendar if e.get("cycle") == "monthly"
+                and any(q.startswith(n) for q in quoted for n in announce_names(e))]
     return hits[0] if len(hits) == 1 else None
+
+
+def match_unknown_sale(title: str, calendar: Sequence[Dict[str, Any]],
+                       news: bool = False) -> Optional[str]:
+    """カレンダーに無いセールの名前を返す。無ければ None。
+
+    既知のセール名を含む名前 (「プライムデー特選セール」など) は、そのセールの関連の
+    発表なので返さない。
+    """
+    quoted = _quoted(title, news)
+    known = [n for e in calendar for n in announce_names(e)]
+    names = []
+    for raw in quoted:
+        name = normalize_name(raw)
+        if not name or not any(w in name for w in SALE_WORDS):
+            continue
+        if any(k in name for k in known):
+            continue
+        label = re.sub(r"\s+", " ", raw).strip()
+        if not re.match(r"amazon", label, re.IGNORECASE):
+            label = "Amazon " + label
+        if label not in names:
+            names.append(label)
+    return names[0] if len(names) == 1 else None
 
 
 def _checked_date(year: int, month: int, day: int, weekday: str) -> Optional[dt.date]:
@@ -230,53 +310,150 @@ def parse_period(title: str, published: dt.date) -> Optional[Dict[str, Any]]:
             "start_time": _clock(m.group("sH"), m.group("sM")), "end_time": end_time}
 
 
+def _loose_resolve(m: "re.Match", p: str, base: dt.date, month: Optional[int],
+                   lo: int, hi: int) -> Optional[dt.date]:
+    """_loose_date の一致を日付にする。曜日があれば暦と突き合わせる。"""
+    month = int(m.group(p + "m")) if m.group(p + "m") else month
+    if month is None:
+        return None
+    day = int(m.group(p + "d"))
+    years = [int(m.group(p + "y"))] if m.group(p + "y") else [base.year, base.year + 1]
+    for year in years:
+        try:
+            date = dt.date(year, month, day)
+        except ValueError:
+            continue
+        if m.group(p + "w") and WEEKDAYS[date.weekday()] != m.group(p + "w"):
+            continue
+        if lo <= (date - base).days <= hi:
+            return date
+    return None
+
+
+def _loose_clock(m: "re.Match", p: str) -> Optional[Tuple[int, int]]:
+    return _clock(m.group(p + "H"), m.group(p + "M") or m.group(p + "C"))
+
+
+def parse_loose_period(title: str, published: dt.date) -> Optional[Dict[str, Any]]:
+    """報道の題名から開催期間を読む。終了日が無ければ end は None。
+
+    「11/4〜12(木)」のような終了の月が無い形は、終了に曜日か月が書いてあるときだけ
+    範囲として読む (「11/4〜12」の 12 が日付か個数か題名だけでは決められない)。
+    """
+    text = unicodedata.normalize("NFKC", title)
+    m = LOOSE_RANGE_RE.search(text)
+    if m and not (m.group("em") or m.group("ew")):
+        m = None
+    if m:
+        start = _loose_resolve(m, "s", published, None, 0, MAX_LEAD_DAYS)
+        end = start and _loose_resolve(m, "e", start, start.month, 0, MAX_SPAN_DAYS)
+        if start and end:
+            return {"start": start, "end": end,
+                    "start_time": _loose_clock(m, "s"), "end_time": _loose_clock(m, "e")}
+        # 範囲として書いてあるのに暦と合わない題名は、開始だけ拾い直さずに捨てる
+        return None
+    m = LOOSE_START_RE.search(text)
+    if not m:
+        return None
+    start = _loose_resolve(m, "s", published, None, 0, MAX_LEAD_DAYS)
+    if start is None:
+        return None
+    return {"start": start, "end": None,
+            "start_time": _loose_clock(m, "s"), "end_time": None}
+
+
 # --- 候補 -------------------------------------------------------------------
+
+def event_key(entry: Optional[Dict[str, Any]], name: str,
+              start: dt.date) -> Tuple[str, Any]:
+    """候補のイベント id と、issue の題名に出す回の呼び名。
+
+    毎年のセールは「<id>-<年>」、毎月のセール (cycle: monthly) は「<id>-<年>-<月>」。
+    カレンダーに無いセールは名前から id を作れないので、開始日で「adhoc-<開始日>」。
+    """
+    if entry is None:
+        return "adhoc-{}".format(start.isoformat()), start.isoformat()
+    if entry.get("cycle") == "monthly":
+        return ("{}-{}-{:02d}".format(entry["id"], start.year, start.month),
+                "{}年{}月".format(start.year, start.month))
+    return "{}-{}".format(entry["id"], start.year), start.year
+
+
+def _covered(start: dt.date, spans: Sequence[Tuple[dt.date, dt.date]]) -> bool:
+    return any(lo <= start <= hi for lo, hi in spans)
+
 
 def detect(
     feed_items: Sequence[Tuple[Dict[str, Any], Sequence[Dict[str, Any]]]],
     calendar: Sequence[Dict[str, Any]],
     registered: set,
     today: dt.date,
+    registered_spans: Sequence[Tuple[dt.date, dt.date]] = (),
 ) -> Dict[str, Dict[str, Any]]:
-    """未登録・これから始まるセールの候補を、イベント id ごとにまとめて返す。"""
+    """未登録・これから始まるセールの候補を、イベント id ごとにまとめて返す。
+
+    registered_spans は登録済みのイベントの期間 (JST の日付)。開始日がそこに入る
+    候補は、id が違っても登録済みとみなす (カレンダーに無いセールは id で突き合わせ
+    られないため)。
+    """
     found = {}  # type: Dict[str, Dict[str, Any]]
     for feed, items in feed_items:
+        news = bool(feed.get("news"))
         for item in items:
             age = (today - item["published"]).days
             if not -1 <= age <= MAX_AGE_DAYS:
                 continue
-            entry = match_sale(item["title"], calendar)
-            period = parse_period(item["title"], item["published"]) if entry else None
-            if not period or period["end"] < today:
+            entry = match_sale(item["title"], calendar, news)
+            name = entry["name"] if entry else match_unknown_sale(
+                item["title"], calendar, news)
+            if name is None:
                 continue
-            event_id = "{}-{}".format(entry["id"], period["start"].year)
-            if event_id in registered:
+            period = parse_period(item["title"], item["published"])
+            if period is None and news:
+                period = parse_loose_period(item["title"], item["published"])
+            if period is None:
+                continue
+            last_day = period["end"] or period["start"] + dt.timedelta(days=MAX_SPAN_DAYS)
+            if last_day < today:
+                continue
+            event_id, label = event_key(entry, name, period["start"])
+            if event_id in registered or _covered(period["start"], registered_spans):
                 continue
             cand = found.setdefault(event_id, {
-                "event_id": event_id, "calendar_id": entry["id"],
-                "name": entry["name"], "year": period["start"].year,
+                "event_id": event_id, "calendar_id": entry["id"] if entry else None,
+                "name": name, "year": label,
                 "periods": [], "sources": [],
             })
             cand["sources"].append({
-                "feed": feed["name"], "title": item["title"],
+                "feed": feed["name"], "news": news, "title": item["title"],
                 "link": safe_link(item["link"], feed), "published": item["published"],
             })
+            # 開始日が同じで、終了日が同じか片方に無いものは同じ日程とみなす
             same = next((p for p in cand["periods"]
-                         if (p["start"], p["end"]) == (period["start"], period["end"])), None)
+                         if p["start"] == period["start"]
+                         and (p["end"] == period["end"] or None in (p["end"], period["end"]))),
+                        None)
             if same is None:
                 cand["periods"].append(period)
             else:
-                # 同じ日付なら、時刻は書いてある方を採る
-                for key in ("start_time", "end_time"):
+                # 書いてある方を採る (終了日・時刻)
+                for key in ("end", "start_time", "end_time"):
                     same[key] = same[key] or period[key]
     for cand in found.values():
         cand["sources"].sort(key=lambda s: (s["published"], s["link"]))
-        cand["periods"].sort(key=lambda p: (p["start"], p["end"]))
+        cand["periods"].sort(key=lambda p: (p["start"], p["end"] or dt.date.max))
+    # 同じ開始日にカレンダーのセールの候補があれば、名前の違う adhoc はその別名とみなす
+    # (「スマイルセール」と「スマイルSALE」で 2 本立てない)
+    known_starts = {p["start"] for c in found.values() if c["calendar_id"] for p in c["periods"]}
+    for event_id in [k for k, c in found.items() if c["calendar_id"] is None]:
+        if any(p["start"] in known_starts for p in found[event_id]["periods"]):
+            del found[event_id]
     return found
 
 
 def collect(
     calendar: Sequence[Dict[str, Any]], registered: set, today: dt.date,
+    registered_spans: Sequence[Tuple[dt.date, dt.date]] = (),
 ) -> Tuple[Dict[str, Dict[str, Any]], List[str]]:
     """フィードを読んで候補を返す。読めなかったフィードは 2 つ目の戻り値に積む。"""
     feed_items, errors = [], []
@@ -288,12 +465,15 @@ def collect(
             continue
         logger.info("feed %s: %d items", feed["name"], len(items))
         feed_items.append((feed, items))
-    return detect(feed_items, calendar, registered, today), errors
+    return detect(feed_items, calendar, registered, today, registered_spans), errors
 
 
 # --- issue に載せる文面 -----------------------------------------------------
 
-def _stamp(date: dt.date, clock: Optional[Tuple[int, int]], is_end: bool) -> str:
+def _stamp(date: Optional[dt.date], clock: Optional[Tuple[int, int]], is_end: bool) -> str:
+    if date is None:
+        # 終了日が題名に無かった (報道の「11/4 9時スタート」など)
+        return "????-??-??T??:??:??+09:00"
     if clock is None:
         hhmmss = "??:??:??"
     elif is_end and clock == (23, 59):
@@ -316,7 +496,9 @@ def render_yaml(cand: Dict[str, Any], period: Dict[str, Any]) -> str:
     return "\n".join([
         "- id: {}".format(cand["event_id"]),
         "  name: {}".format(cand["name"]),
-        "  source: {} の発表".format(source["feed"]),
+        # 報道は出典にしない (Amazon.co.jp の告知で確かめて書き直してもらう)
+        "  source: {}".format("{} の記事 → Amazon.co.jp の告知で確認".format(source["feed"])
+                               if source.get("news") else "{} の発表".format(source["feed"])),
         "  verified_on: ????-??-??",
         "  phases:",
         "    - label: 本番",
