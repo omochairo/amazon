@@ -9,7 +9,8 @@ name: Sale Calendar Reminder
 # - 公式のフィード 2 本 (About Amazon Japan / PR TIMES のアマゾンジャパン) を
 #   1 回ずつ読み、開催の発表が出ていたら、題名から読んだ日程を「候補」として
 #   issue に載せる (scripts/sale_announcements.py)。Amazon.co.jp 本体は読まない
-# - 日程は自動では登録しない。出典での確認と sale_events.yaml への登録は人がやる
+# - ここでは日程を登録しない。関門を通った発表は 62-shop-sale-watch.yml が自動で登録し、
+#   通らなかったもの (時刻が題名に無い・報道だけ等) をここで issue にして人が登録する
 # - 発表を拾えなかったときの保険に、目安の時期 (data/sale_calendar.yaml) でも立てる。
 #   判定は scripts/sale_calendar_reminder.py
 # - 同じセールでは 1 回しか立てない (本文のマーカーで open / closed とも探す)。

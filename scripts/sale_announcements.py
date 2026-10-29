@@ -2,7 +2,8 @@
 """公式のフィードから、セール開催の発表を見つけて日程の「候補」を作る (#9449)。
 
 scripts/sale_calendar_reminder.py が呼ぶ。ここがやるのは候補を作るところまでで、
-**サイトに出る日程 (hugo/data/sale_events.yaml) には一切書かない。** 候補は issue に
+**サイトに出る日程 (hugo/data/sale_events.yaml) には書かない。** 関門を通った候補だけ
+scripts/shop_sale_watch.py が登録し、残りの候補は issue に
 載り、人が出典を開いて確かめてから登録する。
 
 読むのは公開のフィード 3 本だけ (1 run で各 1 回):

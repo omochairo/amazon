@@ -1,0 +1,100 @@
+# 楽天・Yahoo のセール日程を公式告知から読み、hugo/data/sale_events.yaml に足す (#9449)。
+#
+# scripts/shop_sale_watch.py が関門 (公式の決まった場所から読めた・日時が全部ある・
+# 曜日と長さが合う) を通ったものだけ足し、ここで PR にして自動マージする。
+# マージの関門は必須チェック (44-unit-tests の test_sale_events.py ほか)。
+# sale_events.yaml は navi と omcha.jp・home.omcha.jp の正本なので、マージされた
+# 日程は navi の告知帯と、omcha-ops が送る段階の両方に出る。
+#
+# 楽天のマラソンは開始の 2 日ほど前にページに期間が出るので、毎日 2 回見る。
+# ページが読めない・既にある自動のイベントと期間が食い違うときは赤で終わる
+# (足せたものの PR は出してから赤にする)。
+name: Shop Sale Watch
+
+on:
+  schedule:
+    - cron: '17 21 * * *'  # 06:17 JST
+    - cron: '17 3 * * *'   # 12:17 JST
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '書き込み・PR をせず、読んだ結果だけログに出す'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shop-sale-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 1
+          token: ${{ steps.app-token.outputs.token }}
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install pyyaml pytest
+
+      - name: Read official pages
+        id: watch
+        env:
+          INPUT_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
+        run: |
+          args=()
+          if [ "$INPUT_DRY_RUN" != "true" ]; then args+=(--write); fi
+          status=0
+          python scripts/shop_sale_watch.py "${args[@]}" || status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      - name: Open PR with auto-merge
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+          if git diff --quiet -- hugo/data/sale_events.yaml; then
+            echo "足すものは無い"
+            exit 0
+          fi
+          # 足した YAML がサイトの決まりを満たすことを、PR を出す前にも確かめる
+          python -m pytest scripts/tests/test_sale_events.py -q
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          BRANCH="auto/shop-sale-events"
+          git checkout -B "$BRANCH"
+          git add hugo/data/sale_events.yaml
+          git commit -m "data(sale): 楽天・Yahoo のセール日程を公式告知から登録 (run ${{ github.run_id }})"
+          # 前の PR がまだ開いていれば、main から作り直したもので置き換える (PR を二重に出さない)
+          git push --force origin "$BRANCH"
+          if [ "$(gh pr list --head "$BRANCH" --state open --json number --jq length)" = "0" ]; then
+            gh pr create --base main --head "$BRANCH" \
+              --title "data(sale): 楽天・Yahoo のセール日程を公式告知から登録" \
+              --body "[62-shop-sale-watch.yml](.github/workflows/62-shop-sale-watch.yml) run ${{ github.run_id }} が公式のキャンペーンページ・リリースから読んだ日程です。関門 (決まった場所から読めた・日時が全部ある・曜日と長さが合う・test_sale_events.py) を通ったので自動でマージします。Refs #9449" \
+              --label todo
+          fi
+          gh pr merge "$BRANCH" --auto --squash
+
+      - name: Fail if a source could not be read
+        if: steps.watch.outputs.status != '0'
+        run: |
+          echo "::error::公式ページが読めない、または登録済みの期間と食い違う。ログを見る"
+          exit 1
