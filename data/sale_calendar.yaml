@@ -3,14 +3,19 @@
 # これは告知には使わない。使い道は scripts/sale_calendar_reminder.py
 # (毎日の 59-sale-calendar-reminder.yml) が立てる「日程を公式で確認して
 # hugo/data/sale_events.yaml に登録する」issue だけ。issue が立つのは 2 通り:
-#   - 公式のフィードに開催の発表が出たとき (題名から読んだ日程の候補つき)
-#   - 発表を拾えないまま、ここに書いた目安の時期が近づいたとき (保険)
+#   - 公式・報道のフィードに開催の発表が出たとき (題名から読んだ日程の候補つき)
+#   - 発表を拾えないまま、ここに書いた目安の時期が近づいたとき (保険。毎年のセールだけ)
+# ここに無いセールも、題名がセールの発表らしければ「adhoc-<開始日>」として拾う。
+# 繰り返し来るものはここに足すと、issue の題名と id がそのセールの名前になる。
 # サイトに出る日程の SSOT は hugo/data/sale_events.yaml のまま。
 #
 # 書き方:
 #   - id は英小文字・数字・ハイフン。hugo/data/sale_events.yaml に登録するときの
 #     イベント id は「<この id>-<開始年>」にする (例: prime-kanshasai-2026)。
 #     リマインドはこの id の有無で「登録済みか」を判定する
+#   - cycle: monthly は毎月のように来るセール (スマイルSALE)。目安の日が決まらない
+#     ので typical_start / remind_days_before は書かず、発表を拾ったときだけ知らせる。
+#     イベント id は「<この id>-<開始年>-<開始月 2 桁>」(例: smile-sale-2026-11)
 #   - typical_start は例年の開始日の目安 ("MM-DD"。必ずクォートする)。
 #     年によって 2 週間ほど前後するので、例年のうち早い方に寄せて書く
 #   - remind_days_before は typical_start の何日前から issue を立てるか。
@@ -52,3 +57,7 @@
   typical_start: "11-21"
   remind_days_before: 7
   note: 例年 11 月下旬〜12 月上旬。先行セールが数日前から始まる。発表は 11 月中旬
+- id: smile-sale
+  name: Amazon スマイルSALE
+  cycle: monthly
+  note: ほぼ毎月 1 週間ほど。公式のフィードには発表が出ず、報道 (PHILE WEB) とサイト上の告知だけ

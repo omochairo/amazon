@@ -35,7 +35,7 @@ def no_network(monkeypatch):
     def refuse(url):
         raise AssertionError("テストから外部へ取りに行こうとした: {}".format(url))
     monkeypatch.setattr(sa, "fetch", refuse)
-    monkeypatch.setattr(sa, "collect", lambda calendar, registered, today: ({}, []))
+    monkeypatch.setattr(sa, "collect", lambda calendar, registered, today, spans=(): ({}, []))
 
 CAL = [
     {"id": "prime-day", "name": "Amazon プライムデー", "typical_start": "07-08",
@@ -295,7 +295,7 @@ def _detected(event_id="a-2027", feed_errors=()):
                      "link": "https://prtimes.jp/main/html/rd/p/1.html",
                      "published": dt.date(2027, 6, 15)}],
     }
-    return lambda calendar, registered, today: ({event_id: cand}, list(feed_errors))
+    return lambda calendar, registered, today, spans=(): ({event_id: cand}, list(feed_errors))
 
 
 def test_detected_announcement_creates_issue_with_candidate(files, monkeypatch):
@@ -378,19 +378,53 @@ def test_dry_run_with_announcement_writes_nothing(files, monkeypatch):
 def test_feed_failure_still_reminds_then_exits_nonzero(files, monkeypatch):
     # 検知が止まっても目安のリマインドは出す。ただし緑では終わらない
     monkeypatch.setattr(
-        sa, "collect", lambda calendar, registered, today: ({}, ["About Amazon Japan: 403"]))
+        sa, "collect", lambda calendar, registered, today, spans=(): ({}, ["About Amazon Japan: 403"]))
     gh = FakeGhWithComments()
     assert _run(monkeypatch, gh) == 1
     assert len(gh.created) == 1
 
 
 def test_main_passes_registered_ids_to_detection(files, monkeypatch):
-    files.write_text("- id: a-2027\n", encoding="utf-8")
+    files.write_text(
+        "- id: a-2027\n"
+        "  phases:\n"
+        '    - {start: "2027-07-01T09:00:00+09:00", end: "2027-07-03T23:59:59+09:00"}\n'
+        '    - {start: "2027-07-04T00:00:00+09:00", end: "2027-07-08T23:59:59+09:00"}\n',
+        encoding="utf-8")
     seen = {}
 
-    def collect(calendar, registered, today):
-        seen.update(registered=registered, today=today, ids=[e["id"] for e in calendar])
+    def collect(calendar, registered, today, spans=()):
+        seen.update(registered=registered, today=today, ids=[e["id"] for e in calendar],
+                    spans=spans)
         return {}, []
     monkeypatch.setattr(sa, "collect", collect)
     assert _run(monkeypatch, FakeGhWithComments()) == 0
-    assert seen == {"registered": {"a-2027"}, "today": dt.date(2027, 7, 1), "ids": ["a", "b"]}
+    assert seen == {"registered": {"a-2027"}, "today": dt.date(2027, 7, 1), "ids": ["a", "b"],
+                    "spans": [(dt.date(2027, 7, 1), dt.date(2027, 7, 8))]}
+
+
+# ---- 毎月のセール (cycle: monthly) ----
+
+def test_monthly_sale_has_no_typical_reminder():
+    cal = [{"id": "smile-sale", "name": "Amazon スマイルSALE", "cycle": "monthly"}]
+    assert scr.due_reminders(cal, [], dt.date(2026, 11, 1)) == []
+
+
+@pytest.mark.parametrize("entry", [
+    {"id": "x", "name": "X", "cycle": "weekly"},
+    {"id": "x", "name": "X", "cycle": "monthly", "typical_start": "11-04"},
+    {"id": "x", "name": "X", "cycle": "monthly", "remind_days_before": 7},
+])
+def test_invalid_cycle_entries_are_rejected(entry):
+    with pytest.raises(scr.CalendarError):
+        scr.validate_calendar([entry])
+
+
+def test_registered_spans_skip_unreadable_phases():
+    events = [
+        {"id": "a", "phases": [{"start": "2026-11-04T09:00:00+09:00",
+                                "end": "2026-11-12T23:59:59+09:00"}]},
+        {"id": "b", "phases": [{"start": "not a date"}]},
+        "junk",
+    ]
+    assert scr.registered_spans(events) == [(dt.date(2026, 11, 4), dt.date(2026, 11, 12))]

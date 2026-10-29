@@ -27,7 +27,7 @@ from scripts import sale_calendar_reminder as scr  # noqa: E402
 
 D = dt.date
 REAL_CALENDAR = scr.load_yaml(scr.CALENDAR)
-ABOUT, PRTIMES = sa.FEEDS
+ABOUT, PRTIMES, PHILEWEB = sa.FEEDS
 
 # (発表日, 題名, セールの id, 開始, 終了, 開始時刻, 終了時刻)。題名は実際に出たもの
 REAL_ANNOUNCEMENTS = [
@@ -299,7 +299,8 @@ def test_same_announcement_in_both_feeds_is_one_candidate(monkeypatch):
     found, errors = sa.collect(REAL_CALENDAR, set(), D(2026, 6, 16))
     assert errors == []
     cand = found["prime-day-2026"]
-    assert len(cand["periods"]) == 1 and len(cand["sources"]) == 2
+    # 報道のフィードにも同じ題名を返している (「Amazon、「プライムデー」」は報道でも拾う)
+    assert len(cand["periods"]) == 1 and len(cand["sources"]) == len(sa.FEEDS)
     assert cand["sources"][0]["link"] == "https://prtimes.jp/main/html/rd/p/000002145.000004612.html"
 
 
@@ -308,3 +309,135 @@ def test_same_announcement_in_both_feeds_is_one_candidate(monkeypatch):
 def test_real_calendar_names_are_distinct_after_normalization():
     names = [n for e in REAL_CALENDAR for n in sa.announce_names(e)]
     assert len(names) == len(set(names))
+
+
+# ---- 8. カレンダーに無いセール・報道のフィード (2026-11 のスマイルSALE の取り逃し) ----
+
+# PHILE WEB に実際に出た題名 (2026-10-29)
+PHILEWEB_SMILE = "Amazon「スマイルSALE」11/4 9時スタート。セール品情報など事前公開中"
+
+
+def _news(published, title, registered=(), spans=()):
+    item = {"title": title, "link": "http://www.phileweb.com/news/d-av/202610/29/1.html",
+            "published": published}
+    return sa.detect([(PHILEWEB, [item])], REAL_CALENDAR, set(registered), published, spans)
+
+
+def test_monthly_smile_sale_is_found_in_news_without_end_date():
+    found = _news(D(2026, 10, 29), PHILEWEB_SMILE)
+    assert list(found) == ["smile-sale-2026-11"]
+    cand = found["smile-sale-2026-11"]
+    assert cand["year"] == "2026年11月"
+    assert cand["periods"] == [
+        {"start": D(2026, 11, 4), "end": None, "start_time": (9, 0), "end_time": None}]
+    assert cand["sources"][0]["link"] == "https://www.phileweb.com/news/d-av/202610/29/1.html"
+    yaml_text = sa.render_yaml(cand, cand["periods"][0])
+    assert 'start: "2026-11-04T09:00:00+09:00"' in yaml_text
+    assert 'end: "????-??-??T??:??:??+09:00"' in yaml_text
+
+
+def test_registered_monthly_sale_is_not_a_candidate():
+    assert _news(D(2026, 10, 29), PHILEWEB_SMILE, registered={"smile-sale-2026-11"}) == {}
+    # id が違っても、登録済みの期間に開始日が入っていれば登録済み
+    assert _news(D(2026, 10, 29), PHILEWEB_SMILE,
+                 spans=[(D(2026, 11, 4), D(2026, 11, 12))]) == {}
+
+
+@pytest.mark.parametrize("title", [
+    # Amazon と言い切っていない (他社のセール)
+    "楽天「ブラックフライデー」11/21 20時スタート",
+    "ヨドバシ「スマイルSALE」11/4 9時スタート",
+    # Amazon の記事だが、セールの発表ではない
+    "【本日限定】レグザ85V型4K液晶テレビが20万円以下！Amazonタイムセールで30％オフ",
+    "【限定数残り半分以下】AnkerのUSB充電器＆USBケーブルセットがAmazonでセール中",
+    # 日付が無い
+    "Amazon「スマイルSALE」で狙い目の4Kテレビ",
+])
+def test_news_noise_is_not_a_candidate(title):
+    assert _news(D(2026, 10, 29), title) == {}
+
+
+@pytest.mark.parametrize("published, title", REAL_NOISE)
+def test_official_noise_is_not_a_candidate_from_news_either(published, title):
+    assert _news(published, title) == {}
+
+
+def test_unknown_sale_in_official_feed_becomes_adhoc():
+    title = "Amazon、「Amazon タイムセール祭り」を12月5日（土）9時から12月8日（火）23時59分まで開催"
+    found = _candidate(D(2026, 11, 27), title)
+    assert list(found) == ["adhoc-2026-12-05"]
+    cand = found["adhoc-2026-12-05"]
+    assert cand["name"] == "Amazon タイムセール祭り"
+    assert cand["calendar_id"] is None
+    assert cand["periods"] == [
+        {"start": D(2026, 12, 5), "end": D(2026, 12, 8), "start_time": (9, 0), "end_time": (23, 59)}]
+
+
+def test_unknown_sale_in_news_with_slash_range():
+    title = "Amazon「ビッグセール」11/20(金)〜11/23(月)開催"
+    cand = _news(D(2026, 11, 10), title)["adhoc-2026-11-20"]
+    assert cand["name"] == "Amazon ビッグセール"
+    assert cand["periods"][0]["end"] == D(2026, 11, 23)
+
+
+def test_known_sale_in_news_uses_calendar_id():
+    title = "Amazon「ブラックフライデー」11/24(火)スタート"
+    assert list(_news(D(2026, 11, 13), title)) == ["black-friday-2026"]
+
+
+@pytest.mark.parametrize("title", [
+    "Amazon「スマイルSALE」11/5(水)9時スタート",   # 曜日が暦と合わない (11/5 は木)
+    "Amazon「スマイルSALE」9/4 9時スタート",        # 発表より前
+])
+def test_news_dates_are_still_checked(title):
+    assert _news(D(2026, 10, 29), title) == {}
+
+
+def test_start_only_and_full_period_are_merged():
+    a = {"title": PHILEWEB_SMILE, "link": "", "published": D(2026, 10, 29)}
+    b = {"title": "Amazon「スマイルSALE」11/4(水)9時〜11/12(木)23時59分",
+         "link": "", "published": D(2026, 10, 30)}
+    cand = sa.detect([(PHILEWEB, [a, b])], REAL_CALENDAR, set(),
+                     D(2026, 10, 30))["smile-sale-2026-11"]
+    assert cand["periods"] == [
+        {"start": D(2026, 11, 4), "end": D(2026, 11, 12), "start_time": (9, 0),
+         "end_time": (23, 59)}]
+    assert "食い違って" not in "\n".join(sa.render_candidate(cand))
+
+
+def test_start_only_candidate_expires_after_max_span():
+    assert list(_news(D(2026, 10, 29), PHILEWEB_SMILE)) == ["smile-sale-2026-11"]
+    item = {"title": PHILEWEB_SMILE, "link": "", "published": D(2026, 10, 29)}
+    late = D(2026, 11, 4) + dt.timedelta(days=sa.MAX_SPAN_DAYS + 1)
+    assert sa.detect([(PHILEWEB, [item])], REAL_CALENDAR, set(), late) == {}
+
+
+# ---- 9. レビューで見つかった取り違え・取り逃し ----
+
+@pytest.mark.parametrize("title", [
+    "楽天「Amazon対抗セール」11/4 9時スタート",                 # 他社の売り文句
+    "Amazon「スマイルSALE」11/4(水)〜11/12(水)開催",           # 終了の曜日が違う → 開始だけ拾わない
+])
+def test_misleading_news_titles_are_rejected(title):
+    assert _news(D(2026, 10, 29), title) == {}
+
+
+def test_comma_between_amazon_and_name_is_accepted():
+    assert list(_news(D(2026, 10, 29), "Amazon、「スマイルSALE」11/4 9時スタート")) == [
+        "smile-sale-2026-11"]
+
+
+def test_monthly_sale_with_a_seasonal_suffix_is_the_monthly_sale():
+    found = _news(D(2027, 4, 10), "Amazon「スマイルSALE ゴールデンウィーク」4/18 9時スタート")
+    assert list(found) == ["smile-sale-2027-04"]
+    # 完全一致の別のセール (新生活) はそちらが勝つ
+    found = _news(D(2027, 2, 20), "Amazon「スマイルSALE 新生活」2/27 9時スタート")
+    assert list(found) == ["shinseikatsu-2027"]
+
+
+def test_adhoc_alias_of_a_calendar_sale_on_the_same_day_is_dropped():
+    a = {"title": PHILEWEB_SMILE, "link": "", "published": D(2026, 10, 29)}
+    b = {"title": "Amazon「スマイルセール」11/4 9時スタート", "link": "",
+         "published": D(2026, 10, 29)}
+    found = sa.detect([(PHILEWEB, [a, b])], REAL_CALENDAR, set(), D(2026, 10, 29))
+    assert list(found) == ["smile-sale-2026-11"]

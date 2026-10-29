@@ -8,8 +8,9 @@
 このスクリプトは data/sale_calendar.yaml (例年の目安の時期) を読み、開始の目安が
 近いのに sale_events.yaml に未登録のセールがあれば、登録を促す issue を立てる。
 
-あわせて公式のフィード 2 本を読み、開催の発表が出ていたら、題名から読んだ日程を
-「候補」として issue に載せる (scripts/sale_announcements.py)。
+あわせて公式のフィード 2 本と報道のフィード 1 本を読み、開催の発表が出ていたら、
+題名から読んだ日程を「候補」として issue に載せる (scripts/sale_announcements.py)。
+カレンダーに無いセール (月例のスマイルSALE の別名・単発のセールなど) の発表も拾う。
 
 決めごと:
   - **日程は自動では登録しない。** 題名の読み違いや、日付の違う関連の発表との
@@ -63,6 +64,7 @@ DEFAULT_REMIND_DAYS = 21
 GRACE_DAYS = 28
 ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 MMDD_RE = re.compile(r"^(\d{2})-(\d{2})$")
+CYCLES = ("yearly", "monthly")
 
 
 class CalendarError(ValueError):
@@ -94,6 +96,17 @@ def validate_calendar(entries: Sequence[Dict[str, Any]]) -> None:
                 isinstance(n, str) and n.strip() for n in names):
             raise CalendarError(
                 "{}: announce_names は空でない文字列のリスト: {!r}".format(cal_id, names))
+        cycle = entry.get("cycle", "yearly")
+        if cycle not in CYCLES:
+            raise CalendarError("{}: cycle は {} のどれか: {!r}".format(
+                cal_id, " / ".join(CYCLES), cycle))
+        if cycle == "monthly":
+            # 毎月のセールは目安の日が決まらないので、発表を拾ったときだけ知らせる
+            if "typical_start" in entry or "remind_days_before" in entry:
+                raise CalendarError(
+                    "{}: cycle: monthly には typical_start / remind_days_before を書かない".format(
+                        cal_id))
+            continue
         typical_date(entry, 2024)  # うるう年で形だけ確かめる
         days = entry.get("remind_days_before", DEFAULT_REMIND_DAYS)
         # bool は int の部分型なので先に弾く。上限は、前年の同じセールの時期まで
@@ -123,6 +136,27 @@ def registered_ids(events: Sequence[Dict[str, Any]]) -> set:
     return {e.get("id") for e in events if isinstance(e, dict) and isinstance(e.get("id"), str)}
 
 
+def registered_spans(events: Sequence[Dict[str, Any]]) -> List[tuple]:
+    """登録済みのイベントの期間 (最初の区分の開始日〜最後の区分の終了日, JST)。
+
+    読めない区分は飛ばす (書き方の誤りは test_sale_events.py が落とす)。
+    """
+    spans = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        days = []
+        for phase in event.get("phases") or []:
+            for key in ("start", "end"):
+                try:
+                    days.append(dt.datetime.fromisoformat(str(phase[key])).astimezone(JST).date())
+                except (KeyError, TypeError, ValueError):
+                    pass
+        if days:
+            spans.append((min(days), max(days)))
+    return spans
+
+
 def due_reminders(
     calendar: Sequence[Dict[str, Any]],
     events: Sequence[Dict[str, Any]],
@@ -133,6 +167,8 @@ def due_reminders(
     registered = registered_ids(events)
     due = []
     for entry in calendar:
+        if entry.get("cycle") == "monthly":
+            continue
         lead = entry.get("remind_days_before", DEFAULT_REMIND_DAYS)
         # 年またぎ (1 月のセールを 12 月に知らせる) があるので、今年と来年の両方を見る
         for year in (today.year, today.year + 1):
@@ -208,7 +244,7 @@ def render_body(row: Dict[str, Any], today: dt.date) -> str:
         "4. マージしたらこの issue を閉じる",
         "",
         "まだ告知が出ていなければ、出るまで開けたままにしてください。"
-        "今年は登録しないと決めたら、そのまま閉じてください（閉じた issue は立て直しません）。",
+        "今回は登録しないと決めたら、そのまま閉じてください（閉じた issue は立て直しません）。",
         "",
         "## 注意",
         "",
@@ -301,7 +337,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     calendar, events = load_yaml(CALENDAR), load_yaml(SALE_EVENTS)
     due = due_reminders(calendar, events, today)
     detected, feed_errors = sale_announcements.collect(
-        calendar, registered_ids(events), today)
+        calendar, registered_ids(events), today, registered_spans(events))
     # 発表が出ているセールを先に。目安だけのセールはその後
     rows = [{"event_id": c["event_id"], "calendar_id": c["calendar_id"],
              "name": c["name"], "year": c["year"], "candidate": c}
