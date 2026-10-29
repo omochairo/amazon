@@ -24,6 +24,7 @@ from scripts.mine_experience import (
     mine_asin,
     resolve_product_identity,
     run,
+    load_product_impressions,
     select_targets,
     write_experience,
 )
@@ -256,6 +257,56 @@ def test_select_targets_unmined_pool_same_date_falls_back_to_asin_order(tmp_path
         base=tmp_path / "per_asin", articles_dir=articles_dir, now=_COVERAGE_NOW,
     )
     assert targets == ["B0SAMEDAY1", "B0SAMEDAY2", "B0SAMEDAY3", "B0OLDER001"]
+
+
+def _write_gsc_by_page(path: pathlib.Path, rows: list[tuple[str, str, int]]) -> pathlib.Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(
+        json.dumps({"date": d, "page": f"https://navi.omcha.jp/products/{a.lower()}/",
+                    "impressions": imp, "clicks": 0}) + "\n"
+        for d, a, imp in rows
+    ), encoding="utf-8")
+    return path
+
+
+def test_load_product_impressions_sums_window_ending_at_latest_date(tmp_path):
+    """窓の終端はファイル中の最新日。窓より古い日・商品ページ以外・壊れた行は数えない。"""
+    path = _write_gsc_by_page(tmp_path / "gsc.jsonl", [
+        ("2026-10-25", "B0AAAAAAAA", 5),
+        ("2026-09-28", "B0AAAAAAAA", 3),   # 28 日窓の初日 (10-25 から 27 日前)
+        ("2026-09-27", "B0AAAAAAAA", 100), # 窓の外
+        ("2026-10-20", "B0BBBBBBBB", 0),
+    ])
+    with path.open("a", encoding="utf-8") as f:
+        f.write("not json\n")
+        f.write(json.dumps({"date": "2026-10-25", "page": "https://navi.omcha.jp/toys-age-6/",
+                            "impressions": 9}) + "\n")
+    assert load_product_impressions(path) == {"B0AAAAAAAA": 8}
+    assert load_product_impressions(tmp_path / "missing.jsonl") == {}
+
+
+def test_select_targets_unmined_pool_new_then_impressions_then_rest(tmp_path, monkeypatch):
+    """未採掘は 新着 (公開 7 日以内) → 検索表示の多い順 → 残り (公開日順)。"""
+    monkeypatch.chdir(tmp_path)
+    articles_dir = tmp_path / "articles"
+    new_day = (_COVERAGE_NOW - timedelta(days=2)).date().isoformat()
+    _write_article(articles_dir, "B0NEWART0A", date_prefix=new_day)
+    _write_article(articles_dir, "B0LOWIMP0A", date_prefix="2026-05-01")
+    _write_article(articles_dir, "B0HIGHIMPA", date_prefix="2026-04-01")
+    _write_article(articles_dir, "B0NOIMP00A", date_prefix="2026-09-01")
+    gsc = _write_gsc_by_page(tmp_path / "gsc.jsonl", [
+        ("2026-10-25", "B0LOWIMP0A", 2),
+        ("2026-10-25", "B0HIGHIMPA", 40),
+        ("2026-10-25", "B0NEWART0A", 1),
+    ])
+
+    targets = select_targets(
+        limit=0, audit_path=tmp_path / "missing.json",
+        rewrite_queue_dir=tmp_path / "queue_missing",
+        base=tmp_path / "per_asin", articles_dir=articles_dir, now=_COVERAGE_NOW,
+        gsc_by_page_path=gsc,
+    )
+    assert targets == ["B0NEWART0A", "B0HIGHIMPA", "B0LOWIMP0A", "B0NOIMP00A"]
 
 
 def test_select_targets_explicit_asins_bypass_freshness_rules(tmp_path, monkeypatch):

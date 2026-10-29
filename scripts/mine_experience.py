@@ -62,7 +62,7 @@ import threading
 import time
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import requests
@@ -91,6 +91,16 @@ OUT_NAME = "experience.json"
 # 掘り直す量は絞る (未採掘の供給を圧迫しないため)。実測に基づく確定値ではなく、
 # 経験則の暫定値。
 DEFAULT_REMINE_AFTER_DAYS = 90
+
+# 未採掘プールの並び (#7952 の後続)。未採掘のバックログは新着の流入と同じ枠を
+# 取り合っていて、1 日あたり約 10 件しか減らない (2026-10-21→28 の実測)。全件を
+# 掘り終えるのは繁忙期 (12 月) の後になるので、検索で既に表示されている記事から
+# 先に素材を付ける。公開直後の記事は表示がまだ付かないので、新着優先 (#6602) は
+# NEW_ARTICLE_DAYS 以内に限って先頭に残す。
+DEFAULT_GSC_BY_PAGE = pathlib.Path("data/analytics/history/gsc_by_page.jsonl")
+DEMAND_WINDOW_DAYS = 28
+NEW_ARTICLE_DAYS = 7
+_PRODUCT_PAGE_RE = re.compile(r"/products/(b0[a-z0-9]{8})/", re.IGNORECASE)
 
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
 # amazon-navi-brain#39 Step 0-c: #4528実測 (実プロンプト最大1,098 token、既定4096に
@@ -381,6 +391,38 @@ def _article_published_on(path: pathlib.Path) -> str:
     return path.stem[:10] if m else ""
 
 
+def load_product_impressions(
+    path: pathlib.Path, window_days: int = DEMAND_WINDOW_DAYS,
+) -> dict[str, int]:
+    """gsc_by_page.jsonl から、商品ページ (/products/<asin>/) の直近 window_days 日の
+    表示回数を ASIN ごとに合計する。窓の終端はファイル中の最新日 (GSC は数日遅れで
+    着くので、実行日を基準にすると窓が欠ける)。無い・壊れているときは空 = 公開日順のまま。"""
+    rows: list[tuple[str, str, int]] = []
+    try:
+        with path.open(encoding="utf-8") as f:
+            for line in f:
+                try:
+                    r = json.loads(line)
+                    m = _PRODUCT_PAGE_RE.search(r["page"])
+                    if m:
+                        rows.append((r["date"], m.group(1).upper(), int(r.get("impressions") or 0)))
+                except (ValueError, KeyError, TypeError):
+                    continue
+    except OSError:
+        return {}
+    if not rows:
+        return {}
+    try:
+        start = (date.fromisoformat(max(d for d, _, _ in rows)) - timedelta(days=window_days - 1)).isoformat()
+    except ValueError:
+        return {}
+    out: dict[str, int] = {}
+    for d, asin, imp in rows:
+        if d >= start and imp > 0:
+            out[asin] = out.get(asin, 0) + imp
+    return out
+
+
 def _experience_generated_at(asin: str, base: pathlib.Path) -> datetime | None:
     payload = _load(base / asin / OUT_NAME)
     return _parse_iso(payload.get("generated_at")) if isinstance(payload, dict) else None
@@ -438,6 +480,7 @@ def select_targets(
     articles_dir: pathlib.Path = DEFAULT_ARTICLES_DIR,
     remine_after_days: int = DEFAULT_REMINE_AFTER_DAYS,
     now: datetime | None = None,
+    gsc_by_page_path: pathlib.Path = DEFAULT_GSC_BY_PAGE,
 ) -> list[str]:
     """#4841: 未採掘優先で対象を選ぶ純粋関数。
 
@@ -446,8 +489,11 @@ def select_targets(
          が無い ASIN
       2. 同じ由来で再採掘が必要な ASIN (generated_at が remine_after_days より
          古い、または記事ファイルが generated_at より後に更新されている)
-      3. 記事はあるが experience.json が無い ASIN (未採掘の残り全部。公開日の
-         新しい順 = 新着優先 (#6602)。同じ公開日の中は ASIN 昇順で決定的)
+      3. 記事はあるが experience.json が無い ASIN (未採掘の残り全部)。
+         a. 公開から NEW_ARTICLE_DAYS 以内の記事 (新着優先 #6602、公開日の新しい順)
+         b. 検索で表示されている記事 (直近 DEMAND_WINDOW_DAYS 日の表示回数の多い順)
+         c. 残り (公開日の新しい順)
+         同順位の中は ASIN 昇順で決定的。GSC のファイルが無ければ全体が公開日順
       4. 上記で埋まらなければ、従来どおりの順序で再採掘 (① ②の元の並び順)
 
     `asins` (--asins 明示指定) は上記の規則に関わらず常に先頭で通す (デバッグ用)。
@@ -506,6 +552,19 @@ def select_targets(
         key=lambda a: _article_published_on(article_paths[a]),
         reverse=True,
     )
+    # 繁忙期前にバックログを全部は掘り切れないので、新着の次は検索で表示されている
+    # 記事を表示回数の多い順に掘る (定数のコメント参照)。sorted は安定なので、
+    # 同じ区分・同じ表示回数の中は上の公開日順がそのまま残る。
+    impressions = load_product_impressions(gsc_by_page_path)
+    new_since = (now - timedelta(days=NEW_ARTICLE_DAYS)).date().isoformat()
+
+    def _unmined_rank(asin: str) -> tuple[int, int]:
+        if _article_published_on(article_paths[asin]) >= new_since:
+            return (0, 0)
+        imp = impressions.get(asin, 0)
+        return (1, -imp) if imp > 0 else (2, 0)
+
+    unmined_pool.sort(key=_unmined_rank)
 
     ordered: list[str] = []
     ordered_seen: set[str] = set(explicit)
@@ -625,6 +684,7 @@ def select_mining_targets(
     rewrite_queue_dir: pathlib.Path = DEFAULT_REWRITE_QUEUE_DIR,
     articles_dir: pathlib.Path = DEFAULT_ARTICLES_DIR,
     remine_after_days: int = DEFAULT_REMINE_AFTER_DAYS,
+    gsc_by_page_path: pathlib.Path = DEFAULT_GSC_BY_PAGE,
 ) -> tuple[list[str], dict]:
     """鮮度を見て対象を選ぶ。(targets, report) を返す。
 
@@ -649,6 +709,7 @@ def select_mining_targets(
     pool = select_targets(
         limit=0, audit_path=audit_path, rewrite_queue_dir=rewrite_queue_dir,
         base=base, articles_dir=articles_dir, remine_after_days=remine_after_days, now=now,
+        gsc_by_page_path=gsc_by_page_path,
     )
 
     classified: dict[str, tuple[str, datetime | None]] = {}
