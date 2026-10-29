@@ -22,6 +22,7 @@ URL 重複判定のために ``tag=`` を意図的に剥がしており、剥が
 from __future__ import annotations
 
 import argparse
+import html
 import pathlib
 import re
 import sys
@@ -63,7 +64,10 @@ def scan(root: pathlib.Path, expected: str) -> tuple[int, list[tuple[str, str, s
     for path in sorted(root.rglob("*.html")):
         text = path.read_text(encoding="utf-8", errors="ignore")
         for m in _HREF_AMAZON_RE.finditer(text):
-            url = m.group("url")
+            # 属性値の & は HTML では &amp; と書く (正しい書き方)。ブラウザが送る URL と
+            # 同じものを見るため、戻してから判定する。戻さないと `?rh=…&amp;tag=` を
+            # 「tag= が無い」と誤判定し、配信ビルドが止まる (2026-10-29 #9449 の帯で発生)
+            url = html.unescape(m.group("url"))
             total += 1
             tag_m = _TAG_RE.search(url.partition("#")[0])
             rel = str(path.relative_to(root))
