@@ -214,6 +214,27 @@ def test_amazon_news_only_goes_to_issue():
                    "Amazon「スマイルSALE」11/4 9時スタート。セール品情報など事前公開中") == []
 
 
+def test_amazon_news_times_do_not_fill_official_announcement():
+    # 公式の題名に時刻が無く、報道の題名で時刻が補われても、自動では足さない (agy 指摘)
+    official = {"title": "Amazon、「プライムデー」を7月10日（金）から13日（月）まで4日間開催",
+                "link": "https://prtimes.jp/main/html/rd/p/000001.html",
+                "published": dt.date(2026, 6, 16)}
+    news = {"title": "Amazon「プライムデー」7/10 0時〜7/13(月) 23:59",
+            "link": "http://www.phileweb.com/news/1.html", "published": dt.date(2026, 6, 16)}
+    cands = sa.detect([(sa.FEEDS[1], [official]), (sa.FEEDS[2], [news])],
+                      CALENDAR, set(), dt.date(2026, 6, 16))
+    assert "prime-day-2026" in cands
+    assert not sa.auto_eligible(cands["prime-day-2026"])
+    assert w.amazon_events(cands) == []
+
+
+def test_amazon_adhoc_sale_is_not_registered():
+    # カレンダーに無い単発のセールは、日時が揃っていても人が決める
+    ev = _amazon(1, dt.date(2026, 9, 1),
+                 "Amazon、「Amazon おもちゃ祭」を9月10日（木）0時から9月13日（日）23時59分まで開催")
+    assert ev == []
+
+
 # --- 正本に足す ---------------------------------------------------------------
 
 def _found():
@@ -246,6 +267,18 @@ def test_plan_does_not_rewrite_and_reports_changed_period():
     add, conflicts = w.plan(_found(), events)
     assert "rakuten-marathon-2026-10-24" not in [f["id"] for f in add]
     assert len(conflicts) == 1 and "rakuten-marathon-2026-10-24" in conflicts[0]
+
+
+def test_plan_adds_same_id_once():
+    # 同じ回のリリースが 2 本あると同じ id を 2 回読む (agy 指摘)
+    found = _found()
+    twice = found + [dict(found[-1])]
+    add, conflicts = w.plan(twice, [])
+    assert [f["id"] for f in add].count("yahoo-paypay-final-2026-11-13") == 1
+    assert conflicts == []
+    other = dict(found[-1], end=found[-1]["end"] + dt.timedelta(hours=1))
+    _, conflicts = w.plan(found + [other], [])
+    assert len(conflicts) == 1
 
 
 def test_plan_same_period_is_quiet():

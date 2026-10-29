@@ -263,19 +263,17 @@ def collect(now: dt.datetime, get: Callable[[str], str] = fetch
 def amazon_events(candidates: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
     """sale_announcements.py の Amazon の候補のうち、関門を通ったものをイベントにする。
 
-    通すのは: 公式のフィード (報道ではない) の発表があり、日程が 1 つに定まり、
-    開始と終了の日付・時刻が題名に全部書いてあるものだけ。それ以外は今までどおり
+    通すのは sale_announcements.auto_eligible の候補だけ (公式の発表だけで日程が 1 つに
+    定まり、日時が題名に全部あり、カレンダーにあるセール)。それ以外は今までどおり
     sale_calendar_reminder.py が issue にして人が確かめる。
     先行セールは題名に出ないので、足すのは本番の期間だけ (先行セールの間は帯が出ない側に倒れる)。
     """
     out = []
     for cand in candidates.values():
+        if not sale_announcements.auto_eligible(cand):
+            continue
         official = [s for s in cand["sources"] if not s.get("news")]
-        if not official or len(cand["periods"]) != 1:
-            continue
-        period = cand["periods"][0]
-        if None in (period["end"], period["start_time"], period["end_time"]):
-            continue
+        period = cand["official_periods"][0]
         start = dt.datetime.combine(period["start"], dt.time(*period["start_time"]), JST)
         end = dt.datetime.combine(period["end"], dt.time(*period["end_time"]), JST)
         if not start < end:
@@ -293,6 +291,10 @@ def plan(found: Sequence[Dict[str, Any]], events: Sequence[Dict[str, Any]]
     add, conflicts = [], []
     for f in found:
         have = by_id.get(f["id"])
+        if have is None:
+            # 同じ回のリリースが 2 本あると同じ id を 2 回読む。2 本目は 1 本目と突き合わせる
+            have = next(({"phases": [{"start": _stamp(a["start"]), "end": _stamp(a["end"])}]}
+                         for a in add if a["id"] == f["id"]), None)
         if have is not None:
             phases = have.get("phases") or [{}]
             if (str(phases[0].get("start")), str(phases[-1].get("end"))) != (

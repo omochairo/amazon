@@ -298,6 +298,26 @@ def _detected(event_id="a-2027", feed_errors=()):
     return lambda calendar, registered, today, spans=(): ({event_id: cand}, list(feed_errors))
 
 
+def test_auto_eligible_announcement_is_left_to_shop_sale_watch(files, monkeypatch):
+    # 公式の発表だけで日時が揃った候補は 62-shop-sale-watch.yml が登録するので issue にしない
+    detected = _detected()
+    cands, errors = detected(None, None, None)
+    cand = cands["a-2027"]
+    cand["official_periods"] = [dict(cand["periods"][0])]
+    assert sa.auto_eligible(cand)
+    monkeypatch.setattr(sa, "collect", lambda calendar, registered, today, spans=(): (cands, errors))
+    gh = FakeGhWithComments()
+    monkeypatch.setattr(scr, "_gh", gh)
+    assert scr.main(["--repo", "o/r", "--today", "2027-06-15"]) == 0
+    assert gh.created == [] and gh.commented == []
+
+
+def test_calendar_only_issue_does_not_mention_gate():
+    row = {"event_id": "a-2027", "calendar_id": "a", "name": "A", "year": 2027,
+           "typical_start": dt.date(2027, 7, 8), "note": ""}
+    assert "関門" not in scr.render_body(row, dt.date(2027, 6, 20))
+
+
 def test_detected_announcement_creates_issue_with_candidate(files, monkeypatch):
     # 目安の窓 (7/8 の 21 日前 = 6/17) より前でも、発表が出ていれば立てる
     monkeypatch.setattr(sa, "collect", _detected())

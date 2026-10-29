@@ -393,6 +393,35 @@ def _covered(start: dt.date, shop: str,
     return any(lo <= start <= hi and s == shop for lo, hi, s in spans)
 
 
+def _merge_period(periods: List[Dict[str, Any]], period: Dict[str, Any]) -> None:
+    # 開始日が同じで、終了日が同じか片方に無いものは同じ日程とみなす
+    same = next((p for p in periods
+                 if p["start"] == period["start"]
+                 and (p["end"] == period["end"] or None in (p["end"], period["end"]))),
+                None)
+    if same is None:
+        periods.append(period)
+    else:
+        # 書いてある方を採る (終了日・時刻)
+        for key in ("end", "start_time", "end_time"):
+            same[key] = same[key] or period[key]
+
+
+def auto_eligible(cand: Dict[str, Any]) -> bool:
+    """人の確認なしで sale_events.yaml に登録してよい候補か (2026-10-29 K 決定)。
+
+    公式のフィードの発表だけで日程が 1 つに定まり、開始と終了の日付・時刻が全部
+    題名に書いてある、カレンダーにあるセールだけ。カレンダーに無いセール (adhoc) は
+    部門別・単発のことがあり、全ページに出してよいかを人が決めるので通さない。
+    登録は scripts/shop_sale_watch.py、通らなかったものの issue は
+    scripts/sale_calendar_reminder.py。
+    """
+    if not cand.get("calendar_id") or len(cand.get("official_periods") or []) != 1:
+        return False
+    period = cand["official_periods"][0]
+    return None not in (period["end"], period["start_time"], period["end_time"])
+
+
 def detect(
     feed_items: Sequence[Tuple[Dict[str, Any], Sequence[Dict[str, Any]]]],
     calendar: Sequence[Dict[str, Any]],
@@ -436,26 +465,20 @@ def detect(
                 "event_id": event_id, "calendar_id": entry["id"] if entry else None,
                 "shop": shop,
                 "name": name, "year": label,
-                "periods": [], "sources": [],
+                "periods": [], "official_periods": [], "sources": [],
             })
             cand["sources"].append({
                 "feed": feed["name"], "news": news, "title": item["title"],
                 "link": safe_link(item["link"], feed), "published": item["published"],
             })
-            # 開始日が同じで、終了日が同じか片方に無いものは同じ日程とみなす
-            same = next((p for p in cand["periods"]
-                         if p["start"] == period["start"]
-                         and (p["end"] == period["end"] or None in (p["end"], period["end"]))),
-                        None)
-            if same is None:
-                cand["periods"].append(period)
-            else:
-                # 書いてある方を採る (終了日・時刻)
-                for key in ("end", "start_time", "end_time"):
-                    same[key] = same[key] or period[key]
+            _merge_period(cand["periods"], period)
+            if not news:
+                # 自動登録の判定 (auto_eligible) は公式の発表だけで見る。報道の時刻で補わない
+                _merge_period(cand["official_periods"], dict(period))
     for cand in found.values():
         cand["sources"].sort(key=lambda s: (s["published"], s["link"]))
-        cand["periods"].sort(key=lambda p: (p["start"], p["end"] or dt.date.max))
+        for key in ("periods", "official_periods"):
+            cand[key].sort(key=lambda p: (p["start"], p["end"] or dt.date.max))
     # 同じ開始日にカレンダーのセールの候補があれば、名前の違う adhoc はその別名とみなす
     # (「スマイルセール」と「スマイルSALE」で 2 本立てない)
     known_starts = {(c["shop"], p["start"])

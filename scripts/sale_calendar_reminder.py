@@ -258,8 +258,9 @@ def render_body(row: Dict[str, Any], today: dt.date) -> str:
         "",
         "- 告知に書いてよいのは「セール期間中である」ことまで。"
         "個別の商品が値引きされているとは書かない (#6285)",
-        "- この候補は自動登録の関門（公式のフィード・日時が全部題名にある）を通らなかったので、"
-        "自動では登録されません。出典で確かめていない日程を登録しないこと",
+        "- 日程は出典で確かめてから登録すること"
+        + ("（この候補は自動登録の関門〈公式のフィード・日時が全部題名にある〉を"
+           "通らなかったので、自動では登録されません）" if candidate else ""),
     ]
     if row.get("note"):
         lines += ["", "メモ: {}".format(row["note"])]
@@ -348,6 +349,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     detected, feed_errors = sale_announcements.collect(
         calendar, registered_ids(events), today, registered_spans(events))
     # 発表が出ているセールを先に。目安だけのセールはその後
+    # 関門を通る候補は 62-shop-sale-watch.yml が登録するので、issue にしない
+    detected = {k: c for k, c in detected.items() if not sale_announcements.auto_eligible(c)}
     rows = [{"event_id": c["event_id"], "calendar_id": c["calendar_id"],
              "shop": c.get("shop", "amazon"), "name": c["name"], "year": c["year"], "candidate": c}
             for _, c in sorted(detected.items())]

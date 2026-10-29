@@ -69,6 +69,7 @@ jobs:
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          WATCH_STATUS: ${{ steps.watch.outputs.status }}
         run: |
           set -e
           if git diff --quiet -- hugo/data/sale_events.yaml; then
@@ -80,12 +81,18 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           BRANCH="auto/shop-sale-events"
+          OPEN="$(gh pr list --head "$BRANCH" --state open --json number --jq length)"
+          # 一部の出典が読めなかった run で、前の run が足した分を開いている PR から消さない
+          if [ "$WATCH_STATUS" != "0" ] && [ "$OPEN" != "0" ]; then
+            echo "出典の一部が読めなかったので、開いている PR は置き換えない"
+            exit 0
+          fi
           git checkout -B "$BRANCH"
           git add hugo/data/sale_events.yaml
           git commit -m "data(sale): 楽天・Yahoo のセール日程を公式告知から登録 (run ${{ github.run_id }})"
           # 前の PR がまだ開いていれば、main から作り直したもので置き換える (PR を二重に出さない)
           git push --force origin "$BRANCH"
-          if [ "$(gh pr list --head "$BRANCH" --state open --json number --jq length)" = "0" ]; then
+          if [ "$OPEN" = "0" ]; then
             gh pr create --base main --head "$BRANCH" \
               --title "data(sale): 楽天・Yahoo のセール日程を公式告知から登録" \
               --body "[62-shop-sale-watch.yml](.github/workflows/62-shop-sale-watch.yml) run ${{ github.run_id }} が公式のキャンペーンページ・リリースから読んだ日程です。関門 (決まった場所から読めた・日時が全部ある・曜日と長さが合う・test_sale_events.py) を通ったので自動でマージします。Refs #9449" \
