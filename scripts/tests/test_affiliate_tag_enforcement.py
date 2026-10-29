@@ -154,6 +154,25 @@ class CheckAffiliateTagsTest(unittest.TestCase):
             self.assertEqual(len(violations), 1)
             self.assertIn("no tag=", violations[0][2])
 
+    def test_query_url_with_escaped_ampersand_is_ok(self):
+        # 属性値の & は &amp; と書くのが正しい HTML。`?rh=…&amp;tag=` を
+        # 「tag= が無い」と誤判定して配信ビルドを止めていた (#9449 の告知帯)。
+        # 一方で &amp; を戻した後もタグが無い・別 ID なら今までどおり違反
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            self._write(
+                root,
+                "index.html",
+                f'<a href="https://www.amazon.co.jp/s?rh=n%3A1&amp;tag={TAG}">ok</a>'
+                '<a href="https://www.amazon.co.jp/s?rh=n%3A1&amp;k=x">missing</a>'
+                '<a href="https://www.amazon.co.jp/s?rh=n%3A1&amp;tag=other-site-22">foreign</a>',
+            )
+            total, violations = check_affiliate_tags.scan(root, TAG)
+            self.assertEqual(total, 3)
+            self.assertEqual(sorted(v[2][:7] for v in violations), ["no tag=", "tag='ot"])
+
     def test_clean_tree_has_no_violations(self):
         import tempfile
 
