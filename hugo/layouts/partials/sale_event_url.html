@@ -1,0 +1,27 @@
+{{- /* #9449: セールのイベント (hugo/data/sale_events.yaml の 1 件) の url を、そのモールの
+       アフィリエイトを通した URL にして返す。url が無ければ空文字。
+
+       - Amazon: tag= の付与は amazon_affiliate_url.html の 1 点に任せる
+       - 楽天: 楽天アフィリエイトの任意 URL リンク (hb.afl.rakuten.co.jp/hgc/<ID>/?pc=)。
+         キャンペーンページへのリンクも公式に認められている (build_post.py の
+         _build_rakuten_search_url と同じ形)
+       - Yahoo: バリューコマースの MyLink (referral?sid=&pid=&vc_url=)。_build_yahoo_search_url と同じ形
+       - ID は config.toml の [params] (公開ページに元から出ているトラッキング ID)。
+         無ければ素の URL を返す (リンクが消えるよりはよい)
+       - url のホストがモールと合っているかは test_sale_events.py が見る */ -}}
+{{- $u := .url | default "" -}}
+{{- $out := "" -}}
+{{- if $u -}}
+  {{- if eq .shop "amazon" -}}
+    {{- /* amazon_affiliate_url.html は出力する部品で、& がエスケープ済みで返る。
+           ここは戻り値として href に入れるので、一度戻しておかないと &amp;amp; になる */ -}}
+    {{- $out = partial "amazon_affiliate_url.html" $u | htmlUnescape -}}
+  {{- else if and (eq .shop "rakuten") site.Params.rakutenAffiliateId -}}
+    {{- $out = printf "https://hb.afl.rakuten.co.jp/hgc/%s/?pc=%s" site.Params.rakutenAffiliateId (urlquery $u) -}}
+  {{- else if and (eq .shop "yahoo") site.Params.valuecommerceSid site.Params.valuecommercePid -}}
+    {{- $out = printf "https://ck.jp.ap.valuecommerce.com/servlet/referral?sid=%s&pid=%s&vc_url=%s" site.Params.valuecommerceSid site.Params.valuecommercePid (urlquery $u) -}}
+  {{- else -}}
+    {{- $out = $u -}}
+  {{- end -}}
+{{- end -}}
+{{- return $out -}}

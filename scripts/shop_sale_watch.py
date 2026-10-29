@@ -134,9 +134,9 @@ def _sane(start: dt.datetime, end: dt.datetime, now: dt.datetime) -> bool:
 
 
 def _event(event_id: str, shop: str, name: str, start: dt.datetime, end: dt.datetime,
-           source: str) -> Dict[str, Any]:
-    # end は公式の「09:59 まで」= その分の終わりまで
-    return {"id": event_id, "shop": shop, "name": name, "source": source,
+           source: str, url: str) -> Dict[str, Any]:
+    # end は公式の「09:59 まで」= その分の終わりまで。url は帯の文言の行き先
+    return {"id": event_id, "shop": shop, "name": name, "source": source, "url": url,
             "start": start, "end": end + dt.timedelta(seconds=59)}
 
 
@@ -167,7 +167,7 @@ def parse_rakuten(raw: str, page: Dict[str, str], now: dt.datetime) -> List[Dict
         logger.warning("期間が不自然なので捨てた: %s", m.group(0))
         return []
     return [_event("rakuten-{}-{}".format(page["kind"], sd.isoformat()), "rakuten",
-                   page["name"], start, end, page["url"])]
+                   page["name"], start, end, page["url"], page["url"])]
 
 
 # --- Yahoo (LINEヤフーのプレスリリース) ---------------------------------------
@@ -236,7 +236,8 @@ def parse_paypay_release(raw: str, url: str, now: dt.datetime) -> List[Dict[str,
         logger.warning("期間が不自然なので捨てた: %s", m.group(0))
         return []
     return [_event("yahoo-paypay-final-{}".format(sd.isoformat()), "yahoo",
-                   "Yahoo!ショッピング {} 最終3日間".format(PAYPAY_NAME), start, end, url)]
+                   "Yahoo!ショッピング {} 最終3日間".format(PAYPAY_NAME), start, end, url,
+                   sale_announcements.SALE_URLS["yahoo"])]
 
 
 # --- まとめ -------------------------------------------------------------------
@@ -279,7 +280,8 @@ def amazon_events(candidates: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]
         if not start < end:
             continue
         out.append(_event(cand["event_id"], cand.get("shop", "amazon"), cand["name"],
-                          start, end, official[0]["link"]))
+                          start, end, official[0]["link"],
+                          sale_announcements.SALE_URLS[cand.get("shop", "amazon")]))
     return out
 
 
@@ -321,6 +323,7 @@ def render(f: Dict[str, Any], today: dt.date) -> str:
     return "\n".join([
         "- id: {}".format(f["id"]),
         "  shop: {}".format(f["shop"]),
+        "  url: {}".format(q(f["url"])),
         "  name: {}".format(q(f["name"])),
         "  source: {}".format(q(f["source"])),
         "  verified_on: {}".format(today.isoformat()),

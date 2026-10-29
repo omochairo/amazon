@@ -200,6 +200,7 @@ def test_amazon_official_with_full_times_is_registered():
     assert [e["id"] for e in ev] == ["prime-kanshasai-2026"]
     assert span(ev) == [("2026-10-16 00:00:00", "2026-10-19 23:59:59")]
     assert ev[0]["shop"] == "amazon" and ev[0]["source"].startswith("https://prtimes.jp/")
+    assert ev[0]["url"] == sa.SALE_URLS["amazon"]
 
 
 def test_amazon_without_times_goes_to_issue():
@@ -298,6 +299,8 @@ def test_appended_yaml_passes_sale_events_rules(tmp_path):
     events = yaml.safe_load(text)
     added = events[1:]
     assert [e["id"] for e in added] == ["rakuten-marathon-2026-10-24", "yahoo-paypay-final-2026-11-13"]
+    # 帯の文言の行き先: 楽天は読んだキャンペーンページ、Yahoo は Yahoo!ショッピングのセールページ
+    assert [e["url"] for e in added] == [MARATHON["url"], sa.SALE_URLS["yahoo"]]
     for e in added:
         assert e["shop"] in ("rakuten", "yahoo") and e["source"].startswith("https://")
         assert e["verified_on"] == dt.date(2026, 10, 22)

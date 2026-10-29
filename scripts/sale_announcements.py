@@ -49,6 +49,14 @@ logger = logging.getLogger("sale_announcements")
 JST = dt.timezone(dt.timedelta(hours=9))
 # どのモールのセールか。hugo/data/sale_events.yaml と data/sale_calendar.yaml の shop
 SHOPS = ("amazon", "rakuten", "yahoo")
+# 帯の文言を押したときの既定の行き先 (sale_events.yaml の url)。アフィリエイトは付けない
+# (hugo/layouts/partials/sale_event_url.html が付ける)。Amazon はおもちゃのセール品の絞り込みで、
+# 平常時は「本日のタイムセール」、大型セールの間はそのセールの絞り込みになる
+# (omcha-ops で 2026-10-22 に実物を確認)。Amazon.co.jp 本体は読まないので、ここは人が確かめた値
+SALE_URLS = {
+    "amazon": "https://www.amazon.co.jp/s?rh=n%3A13299531%2Cp_n_deal_type%3A10343614051",
+    "yahoo": "https://shopping.yahoo.co.jp/promotion/sale/ppf/",
+}
 FEEDS: Tuple[Dict[str, Any], ...] = (
     {"name": "About Amazon Japan",
      "url": "https://www.aboutamazon.jp/rss/feed.rss",
@@ -535,6 +543,7 @@ def render_yaml(cand: Dict[str, Any], period: Dict[str, Any]) -> str:
     return "\n".join([
         "- id: {}".format(cand["event_id"]),
         "  shop: {}".format(cand.get("shop", "amazon")),
+        '  url: "{}"'.format(SALE_URLS.get(cand.get("shop", "amazon"), "")),
         "  name: {}".format(cand["name"]),
         # 報道は出典にしない (Amazon.co.jp の告知で確かめて書き直してもらう)
         "  source: {}".format("{} の記事 → Amazon.co.jp の告知で確認".format(source["feed"])

@@ -6,6 +6,10 @@
 #   - shop はどのモールのセールか (amazon / rakuten / yahoo)。navi の告知帯と、
 #     omcha-ops が omcha.jp・home.omcha.jp に送る段階の両方がこれで出し分ける。
 #     このファイルは両サイトのセール日程の正本 (omcha-ops は public の main を読む)
+#   - url は帯の文言を押したときの行き先 (そのモールのセールページ。アフィリエイトの
+#     パラメータは付けない。partials/sale_event_url.html がモールごとに付ける)。
+#     Amazon はおもちゃのセール品の絞り込み (omcha-ops で 2026-10-22 に実物を確認した形)、
+#     楽天・Yahoo は公式のセールページ。ホストはモールに合わせる (test_sale_events.py)
 #   - id は「<data/sale_calendar.yaml の id>-<開始年>」(例: prime-kanshasai-2026)。
 #     毎年来るセールの登録忘れを知らせる scripts/sale_calendar_reminder.py が、
 #     この id で登録済みかを判定する。カレンダーに無い単発のセールは自由に付けてよい
@@ -19,6 +23,7 @@
 # 検証: scripts/tests/test_sale_events.py
 - id: prime-kanshasai-2026
   shop: amazon
+  url: "https://www.amazon.co.jp/s?rh=n%3A13299531%2Cp_n_deal_type%3A10343614051"
   name: Amazon プライム感謝祭
   source: Amazon.co.jp のプライム感謝祭 告知ページ
   verified_on: 2026-10-13
@@ -36,6 +41,7 @@
       end: "2026-10-19T23:59:59+09:00"
 - id: smile-sale-2026-11
   shop: amazon
+  url: "https://www.amazon.co.jp/s?rh=n%3A13299531%2Cp_n_deal_type%3A10343614051"
   name: Amazon スマイルSale
   source: Amazon.co.jp トップページの告知と スマイルSale ページ (/events/monthlydealevent/)
   verified_on: 2026-10-29

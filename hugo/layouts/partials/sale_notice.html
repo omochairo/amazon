@@ -11,9 +11,12 @@
          開いてページ全体が下にずれる (CLS)
        - 商品ページの価格カード下の 1 行 (shortcodes/sale_notice_inline.html) も
          ここで読み込んだ JS が DOMContentLoaded で拾う
-       - リンク先は自サイトの /price/ (価格観測で値下がりした商品の一覧) だけ。
-         Amazon へのリンクは付けない。リンクの文言は /price/ の中身 (値下がり) を
-         指すもので、「セール対象の商品」とは書かない (#6285)
+       - 「◯◯ 開催中（…まで）」の文言そのものを、そのモールのセールページ (イベントの url) への
+         アフィリエイトリンクにする (2026-10-29 K 依頼: 文言が一番目立つのに押せないと意味が薄い)。
+         組み立ては partials/sale_event_url.html。文言は開催中という事実だけで、
+         個別の商品が値引きされているとは書かない (#6285)
+       - もう 1 つのリンクは自サイトの /price/ (価格観測で値下がりした商品の一覧)。
+         リンクの文言は /price/ の中身 (値下がり) を指すもので、「セール対象の商品」とは書かない
        - /price/ が空 (price_dashboard に 1 件も無い) のビルドではリンクを出さない
        - /price/ は Amazon の価格観測なので、リンクは Amazon のセール (shop: amazon) の
          帯にだけ付ける。楽天・Yahoo のセールは帯の文言だけ
@@ -23,7 +26,11 @@
 {{- $hasPriceItems := and site.Data.price_dashboard site.Data.price_dashboard.items }}
 {{- range $live }}
 <div class="sale-notice sale-notice--{{ .shop }}" role="note" data-sale-notice data-sale-slot="header-band" data-sale-id="{{ .id }}" data-sale-shop="{{ .shop }}" data-phases="{{ .phases | jsonify }}" hidden>
+  {{- with partial "sale_event_url.html" . }}
+  <a class="sale-notice-main" data-sale-notice-main href="{{ . }}" rel="sponsored nofollow noopener" target="_blank"></a>
+  {{- else }}
   <span class="sale-notice-main" data-sale-notice-main></span>
+  {{- end }}
   {{- with .notes }}
   <span class="sale-notice-notes">{{ delimit . "・" }}</span>
   {{- end }}

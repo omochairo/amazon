@@ -11,6 +11,6 @@
        - HTML のページは作らない (content/sale-events.md の outputs が json だけ) */ -}}
 {{- $events := slice -}}
 {{- range partialCached "sale_events_live.html" . -}}
-  {{- $events = $events | append (dict "id" .id "shop" .shop "name" .name "notes" (.notes | default slice) "phases" .phases) -}}
+  {{- $events = $events | append (dict "id" .id "shop" .shop "name" .name "url" (.url | default "") "notes" (.notes | default slice) "phases" .phases) -}}
 {{- end -}}
 {{- dict "version" 1 "events" $events | jsonify -}}

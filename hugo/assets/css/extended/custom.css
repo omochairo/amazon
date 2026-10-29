@@ -7424,6 +7424,23 @@ body:has(#compare-floating-bar) .favorites-wrapper {
 .sale-notice-main {
   font-weight: 700;
 }
+/* セールページへのリンクにした文言。/price/ のリンクと同じく下線と › で押せることを示す */
+a.sale-notice-main {
+  display: inline-block;
+  padding: 0.3rem 0.25rem;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  /* スマホ幅で 2 行になるとき、文節の切れ目で折り、行の長さをそろえる
+     (「開／催中」のような語の途中や、末尾の数文字だけが次の行に落ちるのを避ける。
+     auto-phrase に未対応のブラウザは今までどおりの折り返し) */
+  word-break: auto-phrase;
+  text-wrap: balance;
+}
+/* 改行しない空白でつなぐ (スマホ幅で › だけが次の行に落ちないように) */
+a.sale-notice-main::after {
+  content: "\00a0›";
+}
 .sale-notice-notes {
   font-size: 0.75rem;
 }
