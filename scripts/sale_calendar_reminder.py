@@ -13,9 +13,11 @@
 カレンダーに無いセール (月例のスマイルSALE の別名・単発のセールなど) の発表も拾う。
 
 決めごと:
-  - **日程は自動では登録しない。** 題名の読み違いや、日付の違う関連の発表との
+  - **このスクリプトは日程を登録しない。** 題名の読み違いや、日付の違う関連の発表との
     取り違えがあると、やっていないセールを「開催中」と出すことになる (#6285 と
-    同じ形)。候補は issue に載せるだけで、出典での確認と登録は人がやる
+    同じ形)。自動で登録するのは scripts/shop_sale_watch.py で、関門 (公式のフィード・
+    日程が 1 つに定まる・開始と終了の日時が題名に全部ある) を通った候補だけ
+    (2026-10-29 K 決定)。通らなかった候補はここで issue に載せ、人が確かめて登録する
   - **発表を見つけたら、目安の時期を待たずに知らせる。** 既に目安で立てた issue が
     開いていれば、そこへ 1 回だけコメントする。閉じた issue には何もしない
   - **フィードを読めなかったら、できる仕事 (目安によるリマインド) を済ませてから
@@ -65,6 +67,7 @@ GRACE_DAYS = 28
 ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 MMDD_RE = re.compile(r"^(\d{2})-(\d{2})$")
 CYCLES = ("yearly", "monthly")
+SHOP_SITES = {"amazon": "Amazon.co.jp", "rakuten": "楽天市場", "yahoo": "Yahoo!ショッピング"}
 
 
 class CalendarError(ValueError):
@@ -96,6 +99,9 @@ def validate_calendar(entries: Sequence[Dict[str, Any]]) -> None:
                 isinstance(n, str) and n.strip() for n in names):
             raise CalendarError(
                 "{}: announce_names は空でない文字列のリスト: {!r}".format(cal_id, names))
+        if entry.get("shop", "amazon") not in sale_announcements.SHOPS:
+            raise CalendarError("{}: shop は {} のどれか: {!r}".format(
+                cal_id, " / ".join(sale_announcements.SHOPS), entry.get("shop")))
         cycle = entry.get("cycle", "yearly")
         if cycle not in CYCLES:
             raise CalendarError("{}: cycle は {} のどれか: {!r}".format(
@@ -137,7 +143,7 @@ def registered_ids(events: Sequence[Dict[str, Any]]) -> set:
 
 
 def registered_spans(events: Sequence[Dict[str, Any]]) -> List[tuple]:
-    """登録済みのイベントの期間 (最初の区分の開始日〜最後の区分の終了日, JST)。
+    """登録済みのイベントの期間 (最初の区分の開始日〜最後の区分の終了日, JST) とモール。
 
     読めない区分は飛ばす (書き方の誤りは test_sale_events.py が落とす)。
     """
@@ -153,7 +159,7 @@ def registered_spans(events: Sequence[Dict[str, Any]]) -> List[tuple]:
                 except (KeyError, TypeError, ValueError):
                     pass
         if days:
-            spans.append((min(days), max(days)))
+            spans.append((min(days), max(days), event.get("shop") or "amazon"))
     return spans
 
 
@@ -181,6 +187,7 @@ def due_reminders(
             due.append({
                 "event_id": event_id,
                 "calendar_id": entry["id"],
+                "shop": sale_announcements.shop_of(entry),
                 "name": entry["name"],
                 "year": year,
                 "typical_start": start,
@@ -232,7 +239,8 @@ def render_body(row: Dict[str, Any], today: dt.date) -> str:
             "",
             "## やること",
             "",
-            "1. Amazon.co.jp の公式の告知で、開催期間（先行セールがあればその期間も）を確認する",
+            "1. {} の公式の告知で、開催期間（先行セールがあればその期間も）を確認する".format(
+                SHOP_SITES[row.get("shop", "amazon")]),
         ]
     lines += [
         "2. `hugo/data/sale_events.yaml` に 1 件追記する PR を出す",
@@ -250,7 +258,9 @@ def render_body(row: Dict[str, Any], today: dt.date) -> str:
         "",
         "- 告知に書いてよいのは「セール期間中である」ことまで。"
         "個別の商品が値引きされているとは書かない (#6285)",
-        "- 日程は自動では登録しません。出典で確かめていない日程を登録しないこと",
+        "- 日程は出典で確かめてから登録すること"
+        + ("（この候補は自動登録の関門〈公式のフィード・日時が全部題名にある〉を"
+           "通らなかったので、自動では登録されません）" if candidate else ""),
     ]
     if row.get("note"):
         lines += ["", "メモ: {}".format(row["note"])]
@@ -339,8 +349,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     detected, feed_errors = sale_announcements.collect(
         calendar, registered_ids(events), today, registered_spans(events))
     # 発表が出ているセールを先に。目安だけのセールはその後
+    # 関門を通る候補は 62-shop-sale-watch.yml が登録するので、issue にしない
+    detected = {k: c for k, c in detected.items() if not sale_announcements.auto_eligible(c)}
     rows = [{"event_id": c["event_id"], "calendar_id": c["calendar_id"],
-             "name": c["name"], "year": c["year"], "candidate": c}
+             "shop": c.get("shop", "amazon"), "name": c["name"], "year": c["year"], "candidate": c}
             for _, c in sorted(detected.items())]
     rows += [r for r in due if r["event_id"] not in detected]
     logger.info("today=%s detected=%s due=%s", today.isoformat(),

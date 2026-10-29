@@ -103,11 +103,12 @@ Hugo は **Extended v0.146.0**（本番ビルドの SSOT は `.gitlab-ci.yml` �
 
 Amazon の大型セールなどの期間は `hugo/data/sale_events.yaml` に 1 件書く（#9449）。期間中だけ全ページのヘッダー下に告知帯が出て、終わると再ビルド無しで消える（判定は閲覧時に `hugo/assets/js/sale_notice.js` が行う）。テンプレートは触らない。
 
+- `shop`（`amazon` / `rakuten` / `yahoo`）が必須。このファイルは navi と omcha.jp・home.omcha.jp のセール日程の正本で、omcha-ops は public の main を読む。`/price/` へのリンクと商品ページの 1 行は Amazon のセールにだけ出る
 - 公式の告知で日程を確認してから書く（`source` / `verified_on` が必須）
 - 書いてよいのは「セール期間中である」ことまで。個別の商品が値引きされているとは書かない（#6285）
 - 検証は `python -m pytest scripts/tests/test_sale_events.py`
 
-毎年来るセール（初売り・プライムデー・ブラックフライデーなど）は、例年の目安の時期を `data/sale_calendar.yaml` に持っている。毎日の `59-sale-calendar-reminder.yml` が、未登録のセールについて「日程を確認して登録する」issue を 1 件立てる（同じセールでは 1 回だけ）。立つのは、公式のフィード（About Amazon Japan / PR TIMES）か報道のフィード（PHILE WEB）に開催の発表が出たときと、発表を拾えないまま目安の時期が近づいたとき。前者には題名から読んだ日程の候補が付くが、**候補は未確認で、自動では登録されない**。出典を開いて確かめてから書く（先行セールの期間は題名に出ないので候補に入らない。報道の記事は終了日が無いことが多いので、Amazon.co.jp の告知で確かめる）。登録済みかどうかはイベントの `id` で見るので、**`sale_events.yaml` の `id` は `<sale_calendar.yaml の id>-<開始年>`**（例: `prime-kanshasai-2026`）にする。毎月来るスマイルSALE（`cycle: monthly`）は `<id>-<開始年>-<開始月 2 桁>`（例: `smile-sale-2026-11`）。カレンダーに無いセールも、題名がセールの発表らしければ `adhoc-<開始日>` として issue が立つ（こちらは登録済みの期間に開始日が入るかで判定するので、`id` は自由でよい）。
+毎年来るセール（初売り・プライムデー・ブラックフライデーなど）は、例年の目安の時期を `data/sale_calendar.yaml` に持っている。毎日の `59-sale-calendar-reminder.yml` が、未登録のセールについて「日程を確認して登録する」issue を 1 件立てる（同じセールでは 1 回だけ）。立つのは、公式のフィード（About Amazon Japan / PR TIMES）か報道のフィード（PHILE WEB）に開催の発表が出たときと、発表を拾えないまま目安の時期が近づいたとき。前者には題名から読んだ日程の候補が付く。**自動で登録されるのは、公式のフィードの発表で開始と終了の日時が題名に全部あるものだけ**（`62-shop-sale-watch.yml`。楽天・Yahoo の公式キャンペーンページから読んだ日程もここで登録される）。それ以外の候補は未確認なので、出典を開いて確かめてから書く（先行セールの期間は題名に出ないので候補に入らない。報道の記事は終了日が無いことが多いので、Amazon.co.jp の告知で確かめる）。登録済みかどうかはイベントの `id` で見るので、**`sale_events.yaml` の `id` は `<sale_calendar.yaml の id>-<開始年>`**（例: `prime-kanshasai-2026`）にする。毎月来るスマイルSALE（`cycle: monthly`）は `<id>-<開始年>-<開始月 2 桁>`（例: `smile-sale-2026-11`）。カレンダーに無いセールも、題名がセールの発表らしければ `adhoc-<開始日>` として issue が立つ（こちらは登録済みの期間に開始日が入るかで判定するので、`id` は自由でよい）。
 
 ## 触ってよい / いけない
 

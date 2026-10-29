@@ -6,14 +6,17 @@
 日時の形と順序、確認元の記載を固定する。
 """
 
+import re
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 import yaml
 
 SALE_EVENTS = Path(__file__).resolve().parents[2] / "hugo" / "data" / "sale_events.yaml"
 JST = timedelta(hours=9)
+SHOPS = ("amazon", "rakuten", "yahoo")
 
 
 def _events():
@@ -43,6 +46,29 @@ def test_ids_are_unique():
     ids = [event.get("id") for event in _events()]
     assert all(ids), "id の無いイベントがある"
     assert len(ids) == len(set(ids))
+
+
+@pytest.mark.parametrize("event", _events(), ids=lambda e: e.get("id"))
+def test_event_names_its_shop(event):
+    # navi の帯のリンク・商品ページの 1 行と、omcha-ops が送る段階の出し分けに使う
+    assert event.get("shop") in SHOPS, "shop は amazon / rakuten / yahoo のどれか"
+
+
+SHOP_HOSTS = {
+    "amazon": ("www.amazon.co.jp",),
+    "rakuten": ("event.rakuten.co.jp", "www.rakuten.co.jp"),
+    "yahoo": ("shopping.yahoo.co.jp",),
+}
+
+
+@pytest.mark.parametrize("event", _events(), ids=lambda e: e.get("id"))
+def test_event_url_is_the_shops_own_page(event):
+    # 帯の文言の行き先。アフィリエイトは partials/sale_event_url.html が付けるので、
+    # ここに付いていると二重になるか、別のアカウントに計上される
+    url = urlsplit(event.get("url") or "")
+    assert url.scheme == "https", "url は https のそのモールのセールページ"
+    assert url.hostname in SHOP_HOSTS[event["shop"]], "url のホストが shop と合わない"
+    assert not re.search(r"(^|&)(tag|scid|vc_url)=", url.query), "url にアフィリエイトを付けない"
 
 
 @pytest.mark.parametrize("event", _events(), ids=lambda e: e.get("id"))
