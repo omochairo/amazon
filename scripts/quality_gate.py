@@ -1176,14 +1176,15 @@ def _non_sales_sites(valid: list[dict]) -> list[str]:
     """出典のうち非販売のもののサイト (参照の有無は見ない)。
 
     書き直しの選定 (select_rewrite_targets) が「前の記事が非販売を何サイト持って
-    いたか」を見るのにも使う (navi-brain#92)。
+    いたか」を見るのにも使う (navi-brain#92)。スパム形の URL は数えない
+    (navi-brain#117 (C)。生成前の候補からも同じ判定で外している)。
     """
     sites: list[str] = []
     for s in valid:
         url = str(s["url"])
         host = source_sites.host_of(url)
         if (not host or _is_sales_source(s) or source_sites.is_retail(host)
-                or _is_search_engine_url(url)):
+                or _is_search_engine_url(url) or source_sites.is_spam_shaped_url(url)):
             continue
         key = source_sites.site_key(host)
         if key not in sites:

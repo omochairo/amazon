@@ -24,6 +24,7 @@ SNS 同士 (YouTube 2 本、YouTube + X) は合わせて 1 サイトに数える
 
 from __future__ import annotations
 
+import re
 import urllib.parse
 
 # 通販サイト (モール含む)。商品ページは「その店が売っている」記載で、第三者の評価では
@@ -102,6 +103,38 @@ def is_retail(host: str) -> bool:
 
 def is_sns(host: str) -> bool:
     return host_in(host, SNS_HOSTS)
+
+
+# スパム形の URL のクエリ値 (1 文字のキーに付く乱数)。
+_SPAM_QUERY_VALUE_RE = re.compile(r"^[a-z0-9_\-]{10,}$")
+
+
+def is_spam_shaped_url(url: str) -> bool:
+    """おもちゃと無関係なドメインが通販の商品名をタイトルにした偽ページの URL か (navi-brain#117 (C))。
+
+    path が空か "/" で、クエリが 1 組だけの次のどれか:
+    - 1 文字のキーに 10 字以上の乱数 (``?z=f21jy2pbe8tf4ra_gkind14524026``)
+    - 1 文字のキーで値が空 (``?n=``)
+    - キーに %2F を含む (``?goods%2Fdetail%2FU31512769022=``)
+
+    タイトルとドメインの関係は見ない (メーカー公式の商品ページを大量に巻き込む)。
+    カラーミーの ``?pid=``・WordPress の ``?p=4904`` は当たらない。
+    """
+    try:
+        parts = urllib.parse.urlsplit((url or "").strip())
+    except ValueError:
+        return False
+    if parts.path not in ("", "/") or not parts.query:
+        return False
+    pairs = parts.query.lower().split("&")
+    if len(pairs) != 1:
+        return False
+    key, _, value = pairs[0].partition("=")
+    if "%2f" in key:
+        return True
+    if len(key) != 1:
+        return False
+    return not value or bool(_SPAM_QUERY_VALUE_RE.match(value))
 
 
 def site_key(host: str) -> str:

@@ -227,12 +227,15 @@ def host_kind(host: str, url: str = "") -> str:
     """事前収集の候補 host の種別 (#9239): "third_party" / "retail" / "unrelated"。
 
     fetch_third_party_sources も同じ判定を使う (SSOT はこちら)。url を渡すと、
-    ショップのテンプレート path でも通販と判定する。
+    ショップのテンプレート path でも通販と判定し、スパム形の URL
+    (source_sites.is_spam_shaped_url) は無関係と判定する。
     """
     host = (host or "").strip().lower()
     if host.startswith("www."):
         host = host[4:]
     if _host_in(host, _UNRELATED_HOSTS):
+        return "unrelated"
+    if url and source_sites.is_spam_shaped_url(url):
         return "unrelated"
     if _host_in(host, _RETAIL_SITE_HOSTS) or _host_in(host, _CANDIDATE_SHOP_HOSTS):
         return "retail"

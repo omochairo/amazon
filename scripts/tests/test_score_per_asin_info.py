@@ -363,6 +363,27 @@ class ShouldDeferTest(unittest.TestCase):
             S.host_kind("shop.example.jp", "https://shop.example.jp/news/view/item/1"),
             "third_party")
 
+    def test_spam_shaped_url_is_unrelated(self):
+        # navi-brain#117 (C): 無関係なドメインが通販の商品名をタイトルにした偽ページ
+        for url in ("https://www.packedgeco.com?n=fclr6y9bmdpzdz6_gkind14524026",
+                    "https://www.musicalchild.com.au?u=08919101451603",
+                    "https://www.agrovesti.net?n=",
+                    "https://www.kkhandymen.co.uk?goods%2Fdetails%2FF86332398794.html="):
+            host = url.split("//")[1].split("?")[0]
+            self.assertEqual(S.host_kind(host, url), "unrelated", url)
+            self.assertEqual(S.host_kind(host), "third_party", url)
+        # fetch 側は小文字にした URL を渡す
+        self.assertEqual(
+            S.host_kind("hover.at", "https://hover.at?goods%2fdetail%2fu31512769022="), "unrelated")
+        # カラーミー・WordPress・普通の記事は当たらない
+        for url in ("https://shop.example.jp/?pid=31464144",
+                    "https://tosigohaha.com?p=4904",
+                    "https://shop.example.jp/?mode=grp&gid=586731",
+                    "https://note.com/foo/n/n0123456789ab",
+                    "https://example.jp/?z=c2928662"):
+            host = url.split("//")[1].split("/")[0].split("?")[0]
+            self.assertEqual(S.host_kind(host, url), "third_party", url)
+
     def test_shop_only_candidates_do_not_count_as_material(self):
         with tempfile.TemporaryDirectory() as td:
             base = pathlib.Path(td)
