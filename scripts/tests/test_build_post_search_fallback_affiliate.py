@@ -149,5 +149,35 @@ class SearchFallbackAffiliateTest(unittest.TestCase):
             self.assertTrue(value, f"[params].{param} が config.toml に無い")
 
 
+class ForceVcSiteIdsTest(unittest.TestCase):
+    """記事データに残る旧 ID (おもちゃいろのサイト) の VC リンクを navi の ID に揃えること。"""
+
+    OLD = f"{VC_REFERRAL_HOST}?sid=3746014&pid=891670125&vc_url=https%3A%2F%2Fstore.shopping.yahoo.co.jp%2Fx%2Fy.html"
+
+    def test_legacy_link_is_rewritten(self):
+        out = build_post._force_vc_site_ids(f"[Yahoo]({self.OLD})", "3785826", "892735851")
+        self.assertIn("sid=3785826&pid=892735851&vc_url=https%3A%2F%2Fstore", out)
+        self.assertNotIn("3746014", out)
+
+    def test_html_escaped_ampersand_is_handled(self):
+        old = self.OLD.replace("&", "&amp;")
+        out = build_post._force_vc_site_ids(f'<a href="{old}">', "3785826", "892735851")
+        self.assertIn("sid=3785826&amp;pid=892735851&amp;vc_url=", out)
+
+    def test_other_program_link_is_untouched(self):
+        """pid はプログラムごとの ID。Yahoo 以外のプログラムのリンクを壊さない。"""
+        other = f"{VC_REFERRAL_HOST}?sid=3746014&pid=999999999&vc_url=x"
+        self.assertEqual(build_post._force_vc_site_ids(other, "3785826", "892735851"), other)
+
+    def test_empty_ssot_leaves_text_as_is(self):
+        self.assertEqual(build_post._force_vc_site_ids(self.OLD, "", ""), self.OLD)
+
+    def test_committed_ssot_is_not_a_legacy_id(self):
+        """config.toml を旧 ID に戻す回帰を検出する。"""
+        sid = build_post._load_committed_affiliate_param("valuecommerceSid")
+        pid = build_post._load_committed_affiliate_param("valuecommercePid")
+        self.assertNotIn((sid, pid), build_post._VC_LEGACY_YAHOO_IDS)
+
+
 if __name__ == "__main__":
     unittest.main()
