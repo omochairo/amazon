@@ -54,9 +54,10 @@ Ubersuggest MCP は Claude からしか呼べず、スクリプトからも CI �
 `keyword_overview` が 100 回通った)。
 
 **枠の使い道を決めることがこの台帳の主な仕事**であって、全件を測ることではない。
-台帳の裾は 4,998 語あり、埋めても記事は 1 本も増えない。**記事を書くために要る語が
-先**なので、**毎日の入口は `next`** (予約 `queue.d/` → 台帳の裾 の順)。
-`refetch-queue` は裾しか見ないので、裾だけを掘ると分かっているときに使う。
+台帳の裾 (競合CSV由来の未判定語) は測っても CSV とほぼ同じ値が返るだけで、記事は
+1 本も増えない。**記事を書くために要る語が先**なので、**毎日の入口は `next`** で、
+出すのは予約 `queue.d/` の語だけ (余った枠は使わずに残す)。裾を掘ると人が決めた日だけ
+`next --include-tail` か `refetch-queue` を使う。
 
 ## 枠の消化を記録する (omcha-ops#179 A2)
 
@@ -606,13 +607,16 @@ def cmd_next(args) -> int:
       1. **予約キュー (`data/keywords/queue.d/*.txt`) を先に食う。**
          記事を書くために要る語 — trip の新規クラスタ、新規記事の主KWと見出し語 —
          はここに置く。**期限のある取材 (季節・休園) はここでしか表現できない。**
-      2. 予約が limit に満たなければ、残りを台帳の裾 (`refetch-queue`) で埋める
+      2. **台帳の裾は既定で出さない。** 予約が limit に満たなければ枠は余る。
+         裾 (競合CSV由来の未判定語) を測っても、CSV の値とほぼ同じ値が返るだけで
+         新しい情報が増えない。人が裾を掘ると決めたときだけ `--include-tail`
+         (または `refetch-queue`) で出す
 
     2026-09-09 に、予約の口が無かったために**枠 100 がまるごと台帳の裾に流れた**
     (omcha-ops#155)。裾は 4,998 語あり、埋めても記事は 1 本も増えない。
     **予約が入っている限り裾を掘らせない**のがこのコマンドの主な仕事。
 
-    `--reserved-only` は裾を混ぜない。予約を今日ぶん確実に終わらせたい日に使う。
+    `--reserved-only` は既定と同じ (裾を混ぜない)。呼び出し側が意図を明示するために残してある。
     """
     cur = latest(read_jsonl(pathlib.Path(args.external)))
     stale_before = None
@@ -632,9 +636,9 @@ def cmd_next(args) -> int:
           % (len(take), detail, max(0, len(reserved) - len(take))), file=sys.stderr)
 
     room = args.limit - len(take)
-    if args.reserved_only:
+    if args.reserved_only or not args.include_tail:
         if room > 0:
-            print("# --reserved-only: 裾は混ぜない (枠が %d 語あまる)" % room,
+            print("# 裾は混ぜない (枠が %d 語あまる)。裾を掘るなら --include-tail か refetch-queue" % room,
                   file=sys.stderr)
         return 0
     if room <= 0:
@@ -947,7 +951,9 @@ def main(argv=None) -> int:
                    help="1 日の枠。既定 100 (Ubersuggest tier0 の日次上限)")
     p.add_argument("--queue-dir", default=DEFAULT_QUEUE_DIR)
     p.add_argument("--reserved-only", action="store_true",
-                   help="予約だけを出す。台帳の裾を混ぜない")
+                   help="予約だけを出す (既定と同じ。意図の明示用)")
+    p.add_argument("--include-tail", action="store_true",
+                   help="予約で枠が余ったとき台帳の裾で埋める (既定は埋めない)")
     p.add_argument("--loc-id", type=int, default=DEFAULT_LOC_ID)
     p.add_argument("--language", default=DEFAULT_LANGUAGE)
     p.add_argument("--refresh-stale", action="store_true")
