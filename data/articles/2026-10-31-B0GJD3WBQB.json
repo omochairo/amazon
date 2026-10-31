@@ -174,28 +174,6 @@
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
       "notes": "電池不要で指先訓練になる設計、高品質ABS素材の使用"
-    },
-    {
-      "id": "src-2",
-      "name": "楽天検索結果",
-      "url": "https://search.rakuten.co.jp/search/mall/B0GJD3WBQB/",
-      "tier": "low",
-      "evidence_type": "primary",
-      "published_at": "2026-10-31",
-      "author": "販売店",
-      "conflict_of_interest": "possible",
-      "notes": "取り扱い状況の確認"
-    },
-    {
-      "id": "src-3",
-      "name": "Yahoo検索結果",
-      "url": "https://shopping.yahoo.co.jp/search?p=B0GJD3WBQB",
-      "tier": "low",
-      "evidence_type": "primary",
-      "published_at": "2026-10-31",
-      "author": "販売店",
-      "conflict_of_interest": "possible",
-      "notes": "取り扱い状況の確認"
     }
   ],
   "claims": [
@@ -224,10 +202,9 @@
       "category": "safety",
       "confidence": "medium",
       "supporting_source_ids": [
-        "src-1",
-        "src-3"
+        "src-1"
       ],
-      "cross_checked": true,
+      "cross_checked": false,
       "notes": "メーカーの商品ページに記載"
     },
     {
@@ -235,10 +212,9 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1",
-        "src-2"
+        "src-1"
       ],
-      "cross_checked": true,
+      "cross_checked": false,
       "notes": "メーカーの商品ページに記載"
     }
   ],
