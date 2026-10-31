@@ -182,50 +182,30 @@
   "sources": [
     {
       "id": "src-1",
-      "name": "Amazon 商品ページ",
-      "url": "https://www.amazon.co.jp/dp/B01CCOIEW2/",
-      "tier": "low",
-      "evidence_type": "primary",
+      "name": "Wikipedia / カンガルー",
+      "url": "https://ja.wikipedia.org/wiki/%E3%82%AB%E3%83%B3%E3%82%AC%E3%83%AB%E3%83%BC",
+      "tier": "medium",
+      "evidence_type": "secondary",
       "published_at": "2026-10-31",
-      "author": "シュライヒ",
-      "conflict_of_interest": "disclosed",
-      "notes": "対象年齢3歳以上、CEマーク取得、原産国中国といった基本仕様の記載あり。"
+      "author": "Wikipedia",
+      "conflict_of_interest": "none",
+      "notes": "カンガルー特有の立ち姿や身体的特徴についての一般的な解説。"
     },
     {
       "id": "src-2",
-      "name": "楽天 商品ページ (moc-kinoomocha)",
-      "url": "https://item.rakuten.co.jp/moc-kinoomocha/sc14756/",
-      "tier": "low",
+      "name": "シュライヒ ワイルドライフ 公式サイト",
+      "url": "https://www.schleich-s.com/ja/JP/wild-life.html",
+      "tier": "high",
       "evidence_type": "primary",
       "published_at": "2026-10-31",
-      "author": "moc-kinoomocha",
+      "author": "シュライヒジャパン",
       "conflict_of_interest": "disclosed",
-      "notes": "手塗りで精巧な造形のフィギュアとしての仕様記載。"
+      "notes": "シュライヒのワイルドライフシリーズの世界観、手塗りの丁寧な造形、想像力を育むごっこ遊びの推奨。"
     }
   ],
   "claims": [
     {
-      "claim": "対象年齢は3歳以上である",
-      "category": "safety",
-      "confidence": "high",
-      "supporting_source_ids": [
-        "src-1"
-      ],
-      "cross_checked": false,
-      "notes": "Amazon商品ページの基本仕様から確認"
-    },
-    {
-      "claim": "リアルで精巧な造形と手塗りの質感が特徴",
-      "category": "quality",
-      "confidence": "high",
-      "supporting_source_ids": [
-        "src-2"
-      ],
-      "cross_checked": false,
-      "notes": "販売ページの記載より"
-    },
-    {
-      "claim": "カンガルーのフィギュア(14756)として実在し購入可能である",
+      "claim": "カンガルー特有の立ち姿などの生態的特徴が正確に表現されている",
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
@@ -233,17 +213,37 @@
         "src-2"
       ],
       "cross_checked": true,
-      "notes": "複数の販売サイトで商品名と型番が確認されている"
+      "notes": "生態的特徴とフィギュアの造形コンセプトが合致"
     },
     {
-      "claim": "安全基準を満たした素材で設計されている",
-      "category": "safety",
+      "claim": "職人による丁寧な手塗りでリアルな造形を実現している",
+      "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-2"
       ],
       "cross_checked": false,
-      "notes": "Amazonの商品ページ記載より推測される基本的な安全性"
+      "notes": "公式のワイルドライフシリーズのコンセプトより"
+    },
+    {
+      "claim": "想像力を育む筋書きのないごっこ遊びが推奨されている",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-2"
+      ],
+      "cross_checked": false,
+      "notes": "公式サイトによる知育効果の言及"
+    },
+    {
+      "claim": "カンガルー(14756)として販売されている",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-2"
+      ],
+      "cross_checked": false,
+      "notes": "公式サイトから確認"
     }
   ],
   "technical_specs": {
@@ -266,17 +266,17 @@
       {
         "text": "精巧な造形によるリアルな動物の世界への興味の喚起",
         "supporting_source_ids": [
-          "src-1"
+          "src-2"
         ]
       },
       {
-        "text": "他の動物シリーズと揃えるコレクション性の高さ",
+        "text": "想像力を働かせるごっこ遊びのツールとしての価値",
         "supporting_source_ids": [
           "src-2"
         ]
       },
       {
-        "text": "手頃な価格設定で購入しやすい点",
+        "text": "カンガルー特有の姿がサバンナの情景作りに個性を加える点",
         "supporting_source_ids": [
           "src-1"
         ]
@@ -284,13 +284,13 @@
     ],
     "concerns": [
       {
-        "text": "細かな造形のため3歳未満の小さなお子さまには適さない点",
+        "text": "可動ギミックがなくシンプルなフィギュアである点",
         "supporting_source_ids": [
-          "src-1"
+          "src-2"
         ]
       },
       {
-        "text": "可動ギミックがなくシンプルなフィギュアである点",
+        "text": "細かな造形のため3歳未満の小さなお子さまには適さない",
         "supporting_source_ids": [
           "src-2"
         ]
@@ -300,19 +300,20 @@
       {
         "text": "想像力を膨らませたサバンナや野生の情景作り",
         "supporting_source_ids": [
-          "src-1"
-        ]
-      },
-      {
-        "text": "日常のちょっとしたお祝いやご褒美としての贈り物",
-        "supporting_source_ids": [
           "src-2"
         ]
       },
       {
         "text": "お子さまが動物の生態を学ぶための最初のステップ",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-2"
+        ]
+      },
+      {
+        "text": "他の動物シリーズと組み合わせたコレクション",
+        "supporting_source_ids": [
+          "src-2"
         ]
       }
     ],
@@ -321,7 +322,6 @@
         "segment_label": "3〜5歳のお子さまへプレゼントとして購入した層",
         "summary": "リアルな造形に興味を持ち始め、コレクションの一つとしてごっこ遊びを楽しむ様子が見受けられます。",
         "supporting_source_ids": [
-          "src-1",
           "src-2"
         ]
       }
