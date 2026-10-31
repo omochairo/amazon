@@ -338,7 +338,8 @@ def test_next_puts_variants_of_reserved_words_last(tmp_path, capsys):
     q.mkdir()
     (q / "010-x.txt").write_text("# 予約\nトミカ ハイエース\n", encoding="utf-8")
     capsys.readouterr()
-    _run(tmp_path, "next", "--limit", "2", "--queue-dir", str(q), "--wp-demand", "")
+    _run(tmp_path, "next", "--limit", "2", "--queue-dir", str(q), "--wp-demand", "",
+         "--include-tail")
     assert capsys.readouterr().out.splitlines() == ["トミカ ハイエース", "別の語"]
 
 
@@ -466,3 +467,34 @@ def test_refetch_queue_keep_list(tmp_path, capsys):
     assert cap.out.splitlines() == ["使う語", "元クエリ側で一致"], \
         "source_queries 側の表記ゆれでも norm が一致すれば残る"
     assert "リスト外=1" in cap.err
+
+
+def test_next_does_not_fill_with_tail_by_default(tmp_path, capsys):
+    """裾は既定で出さない。予約が少ない日は枠が余る。"""
+    _ledger_with_csv(tmp_path, [{"query": "裾の語", "raw_query": "裾の語", "volume": 100.0}])
+    q = tmp_path / "queue.d"
+    q.mkdir()
+    (q / "010-x.txt").write_text("# 予約\n新しい語\n", encoding="utf-8")
+    capsys.readouterr()
+    _run(tmp_path, "next", "--limit", "5", "--queue-dir", str(q), "--wp-demand", "")
+    cap = capsys.readouterr()
+    assert cap.out.splitlines() == ["新しい語"]
+    assert "枠が 4 語あまる" in cap.err
+
+
+def test_next_include_tail_fills_the_rest(tmp_path, capsys):
+    _ledger_with_csv(tmp_path, [{"query": "裾の語", "raw_query": "裾の語", "volume": 100.0}])
+    q = tmp_path / "queue.d"
+    q.mkdir()
+    (q / "010-x.txt").write_text("# 予約\n新しい語\n", encoding="utf-8")
+    capsys.readouterr()
+    _run(tmp_path, "next", "--limit", "5", "--queue-dir", str(q), "--wp-demand", "",
+         "--include-tail")
+    assert capsys.readouterr().out.splitlines() == ["新しい語", "裾の語"]
+
+
+def test_refetch_queue_still_available_explicitly(tmp_path, capsys):
+    _ledger_with_csv(tmp_path, [{"query": "裾の語", "raw_query": "裾の語", "volume": 100.0}])
+    capsys.readouterr()
+    _run(tmp_path, "refetch-queue", "--limit", "5", "--wp-demand", "")
+    assert capsys.readouterr().out.splitlines() == ["裾の語"]
