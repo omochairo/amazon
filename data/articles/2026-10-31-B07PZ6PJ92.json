@@ -185,6 +185,28 @@
       "author": "販売元",
       "conflict_of_interest": "possible",
       "notes": "日本語の説明カード付き。現在、過去、未来を表すフレーズを覚えよう。対象年齢10歳以上。"
+    },
+    {
+      "id": "src-rakuten",
+      "name": "楽天市場商品ページ",
+      "url": "https://item.rakuten.co.jp/mannishboy/20032031177/",
+      "tier": "low",
+      "evidence_type": "primary",
+      "published_at": "2026-10-31",
+      "author": "販売元",
+      "conflict_of_interest": "possible",
+      "notes": "Time to Time カードゲーム取り扱い。価格や在庫情報を確認可能。"
+    },
+    {
+      "id": "src-alc",
+      "name": "アルク Kiddy CAT 英語教室",
+      "url": "https://kc.alc.co.jp/teacher/ganda",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-10-17",
+      "author": "第三者",
+      "conflict_of_interest": "none",
+      "notes": "英語教室のレッスンやイベントで、カードゲームなどのアクティビティを取り入れることが推奨・紹介されている。"
     }
   ],
   "claims": [
@@ -229,6 +251,16 @@
       ],
       "cross_checked": false,
       "notes": "公式と販売ページ"
+    },
+    {
+      "claim": "英語教室や家庭学習において、ゲーム形式のアクティビティを取り入れることは学習に有効とされている",
+      "category": "comparative_advantage",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-alc"
+      ],
+      "cross_checked": false,
+      "notes": "一般的な英語学習のコンテキスト"
     }
   ],
   "technical_specs": {
@@ -264,6 +296,12 @@
         "text": "フレーズとアイコンが時制ごとに色分けされている親切な設計",
         "supporting_source_ids": [
           "src-kavs"
+        ]
+      },
+      {
+        "text": "英語教室のレッスン等でも推奨されるゲーム形式の学習が可能",
+        "supporting_source_ids": [
+          "src-alc"
         ]
       }
     ],
