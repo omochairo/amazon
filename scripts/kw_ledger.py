@@ -123,6 +123,9 @@ DEFAULT_LANGUAGE = "ja"
 # 採否を分けた語 (assign に載っている語) だけを再取得する間隔。全件リフレッシュは
 # 台帳を汚すだけで見返りが無い。
 DEFAULT_STALE_DAYS = 90
+# 台帳の裾 (競合CSV由来の未判定) を取り直す前に置く最低日数。CSV の取り込みから
+# この日数たつまでは裾を出さず、空いた枠を予約 (新しい語) に回す。0 で無効
+DEFAULT_TAIL_MIN_AGE_DAYS = 90
 # Ubersuggest tier0 の日次レポート枠。00:00 UTC = 09:00 JST でリセットされ、
 # 繰り越されない (docs/ubersuggest.md 実測)。
 DEFAULT_DAILY_LIMIT = 100
@@ -496,7 +499,10 @@ def refetch_candidates(args, cur, also_taken=()):
       4. 残りを CSV volume の降順。**CSV の値は当てにならないから測り直すのだが、
          順番を決める材料は他に無い。**「大きいと言われている語から確かめる」という
          意味であって、値を信じているわけではない
-      5. **表記揺れは最後に回す** (`variant_keys`) — 実測済みの語・`also_taken` (同じ日に予約から
+      5. **前回の測定から `--tail-min-age-days` (既定 90) 日たっていない語は出さない。**
+         裾の 1 語は新しい語の 1 語と同じ枠を食うが、記事に近づくのは新しい語のほう。
+         期間内は枠が予約 (新しい語) に回り、足りなければ余るだけ
+      6. **表記揺れは最後に回す** (`variant_keys`) — 実測済みの語・`also_taken` (同じ日に予約から
          出す語) の揺れと、裾の中で後に来る揺れ。
          8 割は同じ値が返るだけで枠を 1 つ食う (2026-10-05)。裾は 4,000 語あって 1 日 100 語しか
          引けないので、後回しにすれば実質は測られないが、他を測り尽くしたら測る
@@ -504,10 +510,17 @@ def refetch_candidates(args, cur, also_taken=()):
     owned = load_wp_owned(pathlib.Path(args.wp_demand) if args.wp_demand else None,
                           args.guard_pos_max, args.guard_min_clicks)
     keep = load_keep_list(pathlib.Path(args.keep_list)) if args.keep_list else None
+    min_age = int(getattr(args, "tail_min_age_days", DEFAULT_TAIL_MIN_AGE_DAYS) or 0)
+    young_after = ((datetime.date.today() - datetime.timedelta(days=min_age)).isoformat()
+                   if min_age > 0 else None)
     cand = []
-    n_suspect = n_owned = n_offlist = 0
+    n_suspect = n_owned = n_offlist = n_young = 0
     for r in cur.values():
         if not r.get("measured_unknown"):
+            continue
+        # 前回の測定 (CSV の取り込み) から日が浅い語は出さない。日付の無い行は古いとみなす
+        if young_after and (r.get("fetched_at") or "") > young_after:
+            n_young += 1
             continue
         if args.source and r.get("source") != args.source:
             continue
@@ -539,7 +552,7 @@ def refetch_candidates(args, cur, also_taken=()):
         uniq.append(r)
     n_variant = len(later)
     return uniq + later, {"suspect": n_suspect, "owned": n_owned, "offlist": n_offlist,
-                          "variant": n_variant,
+                          "variant": n_variant, "young": n_young,
                           "wp_demand_empty": (not owned and bool(args.wp_demand))}
 
 
@@ -556,9 +569,9 @@ def cmd_refetch_queue(args) -> int:
     cand, ex = refetch_candidates(args, cur)
     for r in cand[:args.limit]:
         print(r.get("keyword"))
-    print("# queue: 候補 %d / 出力 %d / 除外 suspect=%d wp既得=%d リスト外=%d 表記揺れは後回し=%d (残り %d)"
+    print("# queue: 候補 %d / 出力 %d / 除外 suspect=%d wp既得=%d リスト外=%d 表記揺れは後回し=%d 測定から日が浅い=%d (残り %d)"
           % (len(cand), min(args.limit, len(cand)), ex["suspect"], ex["owned"],
-             ex["offlist"], ex["variant"], max(0, len(cand) - args.limit)), file=sys.stderr)
+             ex["offlist"], ex["variant"], ex["young"], max(0, len(cand) - args.limit)), file=sys.stderr)
     if ex["wp_demand_empty"]:
         print("# 注意: WP 既得の語が 0 件。%s を読めているか確認する"
               % args.wp_demand, file=sys.stderr)
@@ -644,9 +657,9 @@ def cmd_next(args) -> int:
     cand, ex = refetch_candidates(args, cur, also_taken=[kw for kw, _b, _s in take])
     for r in cand[:room]:
         print(r.get("keyword"))
-    print("# next: 台帳の裾から %d 語 (候補 %d / 除外 suspect=%d wp既得=%d リスト外=%d 表記揺れは後回し=%d)"
+    print("# next: 台帳の裾から %d 語 (候補 %d / 除外 suspect=%d wp既得=%d リスト外=%d 表記揺れは後回し=%d 測定から日が浅い=%d)"
           % (min(room, len(cand)), len(cand), ex["suspect"], ex["owned"],
-             ex["offlist"], ex["variant"]), file=sys.stderr)
+             ex["offlist"], ex["variant"], ex["young"]), file=sys.stderr)
     if ex["wp_demand_empty"]:
         print("# 注意: WP 既得の語が 0 件。%s を読めているか確認する"
               % args.wp_demand, file=sys.stderr)
@@ -957,6 +970,9 @@ def main(argv=None) -> int:
     p.add_argument("--keep-list", default=None)
     p.add_argument("--guard-pos-max", type=float, default=3.0)
     p.add_argument("--guard-min-clicks", type=float, default=100.0)
+    p.add_argument("--tail-min-age-days", type=int, default=DEFAULT_TAIL_MIN_AGE_DAYS,
+                   help="裾は前回の測定からこの日数たった語だけ (既定 90・0 で無効)。"
+                        "空いた枠は予約 (新しい語) に回す")
     p.set_defaults(func=cmd_next)
 
     p = sub.add_parser("refetch-queue",
@@ -972,6 +988,9 @@ def main(argv=None) -> int:
                         "(navi の data/demand_keywords.json か 1行1語のテキスト)")
     p.add_argument("--guard-pos-max", type=float, default=3.0)
     p.add_argument("--guard-min-clicks", type=float, default=100.0)
+    p.add_argument("--tail-min-age-days", type=int, default=DEFAULT_TAIL_MIN_AGE_DAYS,
+                   help="裾は前回の測定からこの日数たった語だけ (既定 90・0 で無効)。"
+                        "空いた枠は予約 (新しい語) に回す")
     p.set_defaults(func=cmd_refetch_queue)
 
     p = sub.add_parser("import-cache", help="omcha-ops の cache.jsonl を移行する")

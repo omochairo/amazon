@@ -238,7 +238,7 @@ def test_unknown_site_is_rejected(tmp_path):
 
 def _ledger_with_csv(tmp_path, rows):
     src = tmp_path / "ubersuggest_demand.json"
-    src.write_text(json.dumps({"generated_at": "2026-08-10T00:00:00Z",
+    src.write_text(json.dumps({"generated_at": "2026-01-10T00:00:00Z",
                                "keywords": rows}, ensure_ascii=False),
                    encoding="utf-8")
     _run(tmp_path, "import-navi", "--src", str(src))
@@ -466,3 +466,48 @@ def test_refetch_queue_keep_list(tmp_path, capsys):
     assert cap.out.splitlines() == ["使う語", "元クエリ側で一致"], \
         "source_queries 側の表記ゆれでも norm が一致すれば残る"
     assert "リスト外=1" in cap.err
+
+
+def _csv_ledger_at(tmp_path, fetched_at, words):
+    src = tmp_path / "ubersuggest_demand.json"
+    src.write_text(json.dumps({"generated_at": fetched_at + "T00:00:00Z",
+                               "keywords": [{"query": w, "raw_query": w, "volume": v}
+                                            for w, v in words]},
+                              ensure_ascii=False), encoding="utf-8")
+    _run(tmp_path, "import-navi", "--src", str(src))
+
+
+def test_tail_skips_words_measured_within_min_age(tmp_path, capsys):
+    """前回の測定から日が浅い語は裾に出さない。空いた枠は予約 (新しい語) に回る。"""
+    today = datetime.date.today()
+    old = (today - datetime.timedelta(days=120)).isoformat()
+    young = (today - datetime.timedelta(days=10)).isoformat()
+    _csv_ledger_at(tmp_path, old, [("古い語", 100.0)])
+    # 同じ台帳に日の浅い行を足す (別ファイルでの取り込み)
+    _csv_ledger_at(tmp_path, young, [("浅い語", 900.0)])
+    capsys.readouterr()
+    _run(tmp_path, "refetch-queue", "--limit", "10", "--wp-demand", "")
+    cap = capsys.readouterr()
+    assert cap.out.splitlines() == ["古い語"], "90 日たっていない語は出ない"
+    assert "測定から日が浅い=1" in cap.err
+
+
+def test_tail_min_age_zero_disables_filter(tmp_path, capsys):
+    young = (datetime.date.today() - datetime.timedelta(days=3)).isoformat()
+    _csv_ledger_at(tmp_path, young, [("浅い語", 900.0)])
+    capsys.readouterr()
+    _run(tmp_path, "refetch-queue", "--limit", "10", "--wp-demand", "",
+         "--tail-min-age-days", "0")
+    assert capsys.readouterr().out.splitlines() == ["浅い語"]
+
+
+def test_next_leaves_room_when_only_young_tail_remains(tmp_path, capsys):
+    """予約が少なく裾が全部日の浅い日は、裾で埋めずに枠を余らせる。"""
+    young = (datetime.date.today() - datetime.timedelta(days=3)).isoformat()
+    _csv_ledger_at(tmp_path, young, [("浅い語", 900.0)])
+    q = tmp_path / "queue.d"
+    q.mkdir()
+    (q / "010-x.txt").write_text("# 予約\n新しい語\n", encoding="utf-8")
+    capsys.readouterr()
+    _run(tmp_path, "next", "--limit", "5", "--queue-dir", str(q), "--wp-demand", "")
+    assert capsys.readouterr().out.splitlines() == ["新しい語"]
