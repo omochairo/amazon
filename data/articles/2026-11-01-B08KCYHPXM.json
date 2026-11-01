@@ -198,6 +198,17 @@
       "author": "メーカー公式",
       "conflict_of_interest": "disclosed",
       "notes": "やわらかい素材で赤ちゃんのはじめてのおもちゃにぴったりであり、それぞれ音の仕掛けがあること。"
+    },
+    {
+      "id": "src-3",
+      "name": "PR TIMES プレスリリース",
+      "url": "https://prtimes.jp/main/html/rd/p/000000414.000001909.html",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2026-10-28",
+      "author": "メーカー公式",
+      "conflict_of_interest": "disclosed",
+      "notes": "モンポケ はじめてのギフトセットの発売情報や特徴に関する公式プレスリリース。"
     }
   ],
   "claims": [
@@ -238,10 +249,22 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
+        "src-1",
+        "src-3"
+      ],
+      "cross_checked": true,
+      "notes": "公式サイトの記載から確認"
+    },
+    {
+      "claim": "ポケモンのベビー向けブランドとしてギフト用に展開",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-3",
         "src-1"
       ],
-      "cross_checked": false,
-      "notes": "公式サイトの記載から確認"
+      "cross_checked": true,
+      "notes": "PR TIMESの公式発表からの確認"
     }
   ],
   "technical_specs": {
@@ -313,7 +336,8 @@
         "summary": "安全な素材と可愛らしいデザインが、赤ちゃんへの贈り物として適していると支持されています。",
         "supporting_source_ids": [
           "src-1",
-          "src-2"
+          "src-2",
+          "src-3"
         ]
       }
     ]
