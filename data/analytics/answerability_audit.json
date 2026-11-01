@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-10-31T23:21:07Z",
+  "generated_at": "2026-11-01T23:34:17Z",
   "model": "gemma4:26b-a4b-it-qat",
-  "source_week": "2026-W43",
-  "baseline_ctr": 0.03337585034013606,
+  "source_week": "2026-W44",
+  "baseline_ctr": 0.026847757422615286,
   "pages": [
     {
       "page": "https://navi.omcha.jp/products/b0h691176h/",
@@ -11,8 +11,8 @@
       "queries": [
         {
           "query": "むぎゅぽこアンパンマン",
-          "impressions": 109,
-          "position": 9.541284403669724,
+          "impressions": 228,
+          "position": 10.092105263157896,
           "answered": true,
           "coverage": 0.8,
           "missing_aspects": [
@@ -25,8 +25,8 @@
         },
         {
           "query": "アンパンマン むぎゅぽこ",
-          "impressions": 37,
-          "position": 9.405405405405405,
+          "impressions": 80,
+          "position": 9.8625,
           "answered": true,
           "coverage": 0.9,
           "missing_aspects": [
@@ -37,114 +37,185 @@
           "error": null
         },
         {
+          "query": "むぎゅぽこアンパンマン販売店",
+          "impressions": 75,
+          "position": 7.613333333333333,
+          "answered": true,
+          "coverage": 0.8,
+          "missing_aspects": [
+            "実店舗での取り扱い有無",
+            "その他のオンラインショップ（公式サイトなど）の有無"
+          ],
+          "note": "主要なオンライン販売サイト（Amazon, 楽天, Yahoo）の価格比較が含まれており、購入場所を知りたいユーザーの意図には概ね応えられています。",
+          "error": null
+        },
+        {
           "query": "むぎゅぽこ アンパンマン",
-          "impressions": 17,
-          "position": 10.0,
+          "impressions": 38,
+          "position": 9.789473684210526,
           "answered": true,
           "coverage": 0.8,
           "missing_aspects": [
             "商品の具体的なサイズや重量",
             "具体的な遊び方のバリエーション",
-            "購入者の具体的な口コミ内容（テキスト）"
+            "購入者の具体的な口コミ内容（テキスト）」"
           ],
           "note": "商品名での検索に対し、対象年齢、価格、特徴、安全性といった主要な情報を網羅しており、購買検討に必要な基本情報は十分に提供されています。",
           "error": null
         },
         {
           "query": "アンパンマンむぎゅぽこ",
-          "impressions": 9,
-          "position": 9.666666666666666,
+          "impressions": 28,
+          "position": 10.107142857142858,
           "answered": true,
           "coverage": 0.9,
           "missing_aspects": [],
-          "note": "商品名に関する主要な情報（対象年齢、価格、特徴、安全性）が簡潔にまとめられており、ユーザーの疑問に十分応えています。",
-          "error": null
-        },
-        {
-          "query": "むぎゅぽこ",
-          "impressions": 1,
-          "position": 14.0,
-          "answered": true,
-          "coverage": 0.8,
-          "missing_aspects": [
-            "製品の具体的なサイズや重量",
-            "具体的な遊び方のバリエーション",
-            "購入者の具体的な口コミ内容（テキスト）」"
-          ],
-          "note": "製品の基本情報（対象年齢、価格、安全性、特徴）を網羅しており、製品名のみの広範なクエリに対して十分な回答となっています。",
+          "note": "商品名に関する主要な情報（対象年齢、価格、特徴、安全性）が簡潔にまとめられており、ユーザーの疑問に応える内容となっています。",
           "error": null
         }
       ]
     },
     {
-      "page": "https://navi.omcha.jp/products/b0h86rpr71/",
-      "asin": "B0H86RPR71",
-      "page_coverage_avg": 0.44,
+      "page": "https://navi.omcha.jp/products/b0hdb8kg6g/",
+      "asin": "B0HDB8KG6G",
+      "page_coverage_avg": 0.28,
       "queries": [
         {
-          "query": "バター スクイーズ 本物 どこで 売っ てる",
-          "impressions": 10,
-          "position": 11.0,
-          "answered": false,
-          "coverage": 0.3,
-          "missing_aspects": [
-            "「本物のような」という質感に関する具体的な詳細（見た目や触感のより詳しい説明）",
-            "「どこで売ってるか」に対する、Amazon以外の販売店（実店舗など）の情報"
-          ],
-          "note": "最安値としてAmazonの情報はありますが、ユーザーが求めている「本物のようなもの」の具体的な特徴や、Amazon以外の購入場所についての回答が不足しています。",
-          "error": null
-        },
-        {
-          "query": "バタースクイーズ 安全",
-          "impressions": 6,
-          "position": 10.5,
+          "query": "シャイン アルカナ ロッド 最 安値",
+          "impressions": 11,
+          "position": 9.636363636363637,
           "answered": true,
           "coverage": 0.8,
           "missing_aspects": [
-            "具体的な有害物質の有無（BPAフリーなど）",
-            "誤飲に関する具体的なリスクや注意点",
-            "お手入れ方法（汚れがついた際の安全性への影響）"
+            "他のECサイト（楽天、Yahoo!ショッピング等）との価格比較",
+            "送料の有無"
           ],
-          "note": "素材（EVA）や無毒・無臭である点に触れており、安全性に関する基本的な疑問には答えています。",
+          "note": "Amazonの価格を提示しており、最安値を知りたいという意図には応えていますが、比較対象がAmazonのみであるため網羅性は限定的です。",
           "error": null
         },
         {
-          "query": "シーン バター スクイーズ 値段",
-          "impressions": 3,
-          "position": 8.333333333333332,
+          "query": "シャインアルカナロッド 予約 イオン",
+          "impressions": 8,
+          "position": 10.25,
+          "answered": false,
+          "coverage": 0.0,
+          "missing_aspects": [
+            "イオンでの予約方法",
+            "イオンでの販売状況",
+            "イオンでの取り扱い有無"
+          ],
+          "note": "検索クエリが「イオンでの予約」について尋ねているのに対し、記事内にはイオンに関する情報が一切含まれていません。",
+          "error": null
+        },
+        {
+          "query": "シャインアルカナロッド どこで売ってる",
+          "impressions": 4,
+          "position": 15.25,
+          "answered": false,
+          "coverage": 0.3,
+          "missing_aspects": [
+            "実店舗での販売状況（トイザらス、家電量販店など）",
+            "その他のオンラインショップ（楽天、Yahoo!ショッピングなど）の有無"
+          ],
+          "note": "Amazonでの価格には触れていますが、具体的な販売店（どこで売っているか）の選択肢が不足しています。",
+          "error": null
+        },
+        {
+          "query": "シャインアルカナロッド どこに売ってる",
+          "impressions": 2,
+          "position": 13.0,
+          "answered": false,
+          "coverage": 0.3,
+          "missing_aspects": [
+            "実店舗（玩具店、家電量販店、100円ショップ等）での販売状況",
+            "その他のオンラインショップ（楽天、Yahoo!ショッピング等）の有無"
+          ],
+          "note": "Amazonでの価格には触れていますが、「どこに売っているか」という販売チャネル（店舗・サイトの種類）に関する情報が不足しています。",
+          "error": null
+        },
+        {
+          "query": "シャインアルカナロッド 在庫",
+          "impressions": 2,
+          "position": 13.0,
+          "answered": false,
+          "coverage": 0.0,
+          "missing_aspects": [
+            "現在の在庫状況",
+            "在庫がある販売サイトの情報"
+          ],
+          "note": "記事には価格や対象年齢の情報はありますが、ユーザーが求めている「在庫の有無」に関する情報は一切含まれていません。",
+          "error": null
+        }
+      ]
+    },
+    {
+      "page": "https://navi.omcha.jp/products/b0h1kq5cmd/",
+      "asin": "B0H1KQ5CMD",
+      "page_coverage_avg": 0.7,
+      "queries": [
+        {
+          "query": "たまごっちパラダイス 最安値",
+          "impressions": 24,
+          "position": 9.75,
           "answered": true,
-          "coverage": 0.5,
+          "coverage": 0.8,
           "missing_aspects": [
-            "「シーン」に関する具体的な利用場面の記述（いつ、どこで使うか）"
+            "他のECサイト（楽天、Yahoo!ショッピング等）の具体的な価格比較情報"
           ],
-          "note": "値段については明確に回答されていますが、検索クエリに含まれる「シーン」に対する具体的な活用場面の記述が不足しています。",
+          "note": "Amazonの価格を提示し、最安値圏であることには触れていますが、比較対象となる他のサイトの価格が明記されていないため、完全な「比較」としては不十分です。",
           "error": null
         },
         {
-          "query": "バター スクイーズ 本物 どこに 売っ てる",
-          "impressions": 3,
-          "position": 12.666666666666666,
+          "query": "たまごっちパラダイス 価格ドットコム",
+          "impressions": 11,
+          "position": 8.272727272727273,
           "answered": false,
-          "coverage": 0.3,
+          "coverage": 0.2,
           "missing_aspects": [
-            "「本物のような」という質感に関する具体的な詳細（見た目や触感のより深い説明）",
-            "Amazon以外の販売店（実店舗や他のECサイト）の情報",
-            "「どこに売っているか」に対する、オンライン以外の購入場所の提示"
+            "価格.comにおける現在の最安値情報",
+            "価格.comでのユーザーレビューや評価",
+            "価格.comでの価格推移グラフ",
+            "価格.comにおけるショップごとの価格比較"
           ],
-          "note": "Amazonでの販売価格には触れていますが、ユーザーが求めている「どこで買えるか（販売チャネルの網羅性）」や「本物らしさの根拠」への回答が不十分です。",
+          "note": "ユーザーは価格.comでの価格比較や評価を求めていますが、記事はAmazonの価格情報に限定されており、価格.comに関する情報が一切含まれていません。",
           "error": null
         },
         {
-          "query": "バタースクイーズどこで売ってる",
-          "impressions": 3,
-          "position": 11.333333333333334,
-          "answered": false,
-          "coverage": 0.3,
+          "query": "たまごっちパラダイス 値段",
+          "impressions": 7,
+          "position": 11.857142857142858,
+          "answered": true,
+          "coverage": 1.0,
+          "missing_aspects": [],
+          "note": "Amazonでの販売価格が明記されており、ユーザーが知りたい値段に関する情報に直接回答しています。",
+          "error": null
+        },
+        {
+          "query": "たまごっちパラダイス最安値",
+          "impressions": 2,
+          "position": 5.0,
+          "answered": true,
+          "coverage": 0.8,
           "missing_aspects": [
-            "実店舗での販売状況（100均、雑貨店、玩具店など）",
-            "その他のオンラインショップ（楽天、Yahoo!ショッピングなど）の具体的な情報"
+            "他のECサイト（楽天、Yahoo!ショッピング等）の具体的な価格比較",
+            "送料の有無",
+            "中古市場の価格情報"
           ],
-          "note": "Amazonでの価格情報には触れていますが、「どこで売っているか」という販売チャネル全般（実店舗の有無など）への回答が不足しています。",
+          "note": "Amazonの価格を提示し、最安値圏であることには触れていますが、比較対象となる他のサイトの具体的な価格が示されていないため、完全な「徹底比較」には至っていません。",
+          "error": null
+        },
+        {
+          "query": "たまごっちパラダイス レビュー",
+          "impressions": 1,
+          "position": 24.0,
+          "answered": true,
+          "coverage": 0.7,
+          "missing_aspects": [
+            "実際の使用感（メリット・デメリット）",
+            "具体的な遊び方の詳細（ズームダイヤルの操作感など）",
+            "購入者の具体的な口コミ内容"
+          ],
+          "note": "製品の基本スペックや価格、対象年齢については網羅されていますが、「レビュー」を求めるユーザーが期待する具体的な使用感や体験談が不足しています。",
           "error": null
         }
       ]
