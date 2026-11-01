@@ -184,14 +184,25 @@
     },
     {
       "id": "src-2",
-      "name": "Fallook / LEDメッセージボード",
-      "url": "https://fallook.com/products/led%E3%83%A1%E3%83%83%E3%82%BB%E3%83%BC%E3%82%B8%E3%83%9C%E3%83%BC%E3%83%89",
-      "tier": "medium",
-      "evidence_type": "secondary",
-      "published_at": "2026-10-17",
-      "author": "Fallook",
-      "conflict_of_interest": "none",
-      "notes": "光るアクリル製クリアボード。マーカーで書いたり消したりでき、同棲生活の献立、買い物リスト、子供のお絵かきなどに使える。"
+      "name": "楽天商品ページ",
+      "url": "https://item.rakuten.co.jp/colorsstore/58081495620/",
+      "tier": "low",
+      "evidence_type": "primary",
+      "published_at": "2026-11-01",
+      "author": "販売店",
+      "conflict_of_interest": "disclosed",
+      "notes": "LEDアクリルメッセージボード。USB給電で発光する仕様について。"
+    },
+    {
+      "id": "src-3",
+      "name": "Yahoo!ショッピング商品ページ",
+      "url": "https://store.shopping.yahoo.co.jp/chansuaa/49081253999.html",
+      "tier": "low",
+      "evidence_type": "primary",
+      "published_at": "2026-11-01",
+      "author": "販売店",
+      "conflict_of_interest": "disclosed",
+      "notes": "LEDアクリルメッセージボード。USB給電や7色ペンについて。"
     }
   ],
   "claims": [
@@ -200,9 +211,10 @@
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-2"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "メーカー公式の商品仕様記載より"
     },
     {
@@ -210,9 +222,10 @@
       "category": "durability",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-3"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "商品の幅広い活用シーンについて"
     },
     {
