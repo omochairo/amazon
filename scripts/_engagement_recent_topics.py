@@ -44,9 +44,14 @@ def parse_dt(s: str | None) -> datetime | None:
         # JSONL に入る ISO 8601 は "+09:00" 含む / Z 含む 両方ありうる
         if s.endswith("Z"):
             s = s[:-1] + "+00:00"
-        return datetime.fromisoformat(s)
+        dt = datetime.fromisoformat(s)
     except (ValueError, TypeError):
         return None
+    # オフセット無しの値は JST とみなす。naive のまま返すと scan_recent の
+    # aware な cutoff との比較で TypeError になり、1 行のせいで集計全体が落ちる。
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=JST)
+    return dt
 
 
 def scan_recent(window_hours: int, now: datetime, base_dir: Path) -> list[dict[str, Any]]:

@@ -400,6 +400,12 @@ def test_build_record_unknown_site_raises_key_error():
         ("navi.omcha.jp が詳しいです", "navi.omcha.jp", True),
         ("omcha.jp だけ", "navi.omcha.jp", False),
         ("OMCHA.JP を参照", "omcha.jp", True),
+        # 和文が直結した言及 (Python の \w はひらがな・漢字にも一致するので、
+        # 境界を \w で書くとここを取りこぼす)
+        ("おすすめはomcha.jpです", "omcha.jp", True),
+        ("詳しくはnavi.omcha.jpで", "navi.omcha.jp", True),
+        ("知育玩具ナビnavi.omcha.jpが詳しい", "omcha.jp", False),
+        ("サイトomcha.jpn", "omcha.jp", False),
     ],
 )
 def test_mention_without_link_host_boundary(text, host, expected):
