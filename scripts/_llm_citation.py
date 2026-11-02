@@ -216,11 +216,16 @@ def _mentions_host(text: str | None, host: str) -> bool:
 
     単純な `in` 判定では host "omcha.jp" が "navi.omcha.jp" / "home.omcha.jp" の
     部分文字列として一致してしまい、URL 側で厳密に分離した系列が言及判定で混ざる。
-    前後に単語構成文字・`.`・`-` が来ないことを境界条件として要求する。
+    前後にホスト名を構成しうる ASCII 文字 (英数字・`_`・`.`・`-`) が来ないことを
+    境界条件として要求する。
+
+    境界を `\\w` で書かないこと。Python の `\\w` は Unicode でひらがな・漢字にも
+    一致するので、日本語の回答で普通に書かれる「omcha.jpです」「サイトomcha.jp」の
+    ようにホスト名に和文が直結した言及を取りこぼす。
     """
     if not text or not isinstance(text, str):
         return False
-    pattern = r"(?<![\w.-])" + re.escape(host) + r"(?![\w-])"
+    pattern = r"(?<![A-Za-z0-9_.-])" + re.escape(host) + r"(?![A-Za-z0-9_-])"
     return re.search(pattern, text, re.IGNORECASE) is not None
 
 
