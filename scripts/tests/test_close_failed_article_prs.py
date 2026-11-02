@@ -41,6 +41,15 @@ def test_latest_validate_run_wins():
     assert _numbers([pr]) == []
 
 
+def test_in_progress_revalidation_is_kept():
+    # 前回の run は FAILURE だが、修正 push 後の再検証が走っている → close しない。
+    # 未完了の run は completedAt を持たない (gh は 0001-01-01 を返す)
+    for completed in (None, "0001-01-01T00:00:00Z"):
+        pr = _pr(extra_checks=[{"name": "validate", "status": "IN_PROGRESS",
+                                "conclusion": "", "completedAt": completed}])
+        assert _numbers([pr]) == []
+
+
 def test_other_failing_check_is_ignored():
     pr = _pr(conclusion="SUCCESS", extra_checks=[
         {"name": "unit-tests", "status": "COMPLETED", "conclusion": "FAILURE",

@@ -82,11 +82,20 @@ def is_article_pr(pr: Dict[str, Any]) -> bool:
 
 
 def latest_check(pr: Dict[str, Any], name: str = CHECK_NAME) -> Optional[Dict[str, Any]]:
-    """statusCheckRollup から name の最新 (完了時刻が一番新しい) チェックを返す。"""
+    """statusCheckRollup から name の最新 (完了時刻が一番新しい) チェックを返す。
+
+    未完了 (QUEUED / IN_PROGRESS) の run があればそれを最新とみなす。未完了の
+    run は completedAt を持たない (gh は 0001-01-01 を返す) ので、完了時刻だけで
+    比べると一番古い扱いになり、修正 push 後の再検証中でも前回の FAILURE が
+    「最新」に選ばれて close されてしまう。
+    """
     runs = [c for c in (pr.get("statusCheckRollup") or [])
             if isinstance(c, dict) and c.get("name") == name]
     if not runs:
         return None
+    pending = [c for c in runs if c.get("status") not in (None, "COMPLETED")]
+    if pending:
+        return pending[0]
     epoch = dt.datetime.min.replace(tzinfo=dt.timezone.utc)
     return max(runs, key=lambda c: _parse_ts(c.get("completedAt")) or epoch)
 

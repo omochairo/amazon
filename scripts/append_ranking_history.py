@@ -50,11 +50,18 @@ def _load_history(history_path: pathlib.Path) -> dict:
 
 
 def _upsert_today(entries: list[dict], today_mm_dd: str, rank: int) -> None:
-    """Update today's rank if present, else append. Rotate to MAX_HISTORY."""
-    for e in entries:
-        if e.get("d") == today_mm_dd:
-            e["r"] = rank
-            return
+    """Update today's rank if present, else append. Rotate to MAX_HISTORY.
+
+    同日 re-run かどうかは **末尾の 1 件だけ** で判定する。entries は挿入順
+    (= chronological) で、今日の entry があるなら必ず末尾にあるため。
+    全件を MM-DD で探すと、ランキングから外れて戻ってきた ASIN の
+    「1 年前の同じ MM-DD」の entry を今日の値で上書きしてしまい、
+    今日の点が配列の途中に入って時系列が壊れる (rotation は append 時にしか
+    走らないので、外れていた ASIN の古い entry は残り続ける)。
+    """
+    if entries and entries[-1].get("d") == today_mm_dd:
+        entries[-1]["r"] = rank
+        return
     entries.append({"d": today_mm_dd, "r": rank})
     while len(entries) > MAX_HISTORY:
         entries.pop(0)

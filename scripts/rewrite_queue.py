@@ -314,7 +314,15 @@ def cleanup_completed(
     ledger_records: list[dict] = []
     for asin, marker in load_markers(queue_dir).items():
         old_slug = marker.get("old_slug", "") if isinstance(marker, dict) else ""
-        if not old_slug or not has_newer_body(asin, old_slug, articles_dir):
+        if not has_newer_body(asin, old_slug, articles_dir):
+            continue
+        if not old_slug:
+            # 本体が無い時点で書かれたマーカー (apply_rewrite_targets.write_markers の
+            # old_slug=None)。本体が着地したらマーカーだけ消す。消す旧本体は無く、
+            # リライトでもないので ledger にも書かない。以前はここで continue して
+            # いたため、このマーカーは永久に残っていた。
+            os.remove(marker_path(asin, queue_dir))
+            markers_cleared += 1
             continue
         new_slug = newest_body_slug(asin, articles_dir)
         for suffix in (".json",) + _SIDECAR_SUFFIXES:

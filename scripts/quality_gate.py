@@ -45,7 +45,6 @@ try:
 except ImportError:  # pragma: no cover - best-effort fallback
     _bp_load_matched_index = None
     _bp_matched_passes_quality = None
-from typing import Any, Optional
 
 try:
     from jsonschema import Draft7Validator
@@ -2157,6 +2156,11 @@ def main() -> int:
             jp, schema, md_candidate if md_candidate.exists() else None,
             rakuten_idx=rakuten_idx, yahoo_idx=yahoo_idx,
             cert_fetch=not args.no_cert_fetch,
+            # 以前は stock_index を読むだけで渡しておらず、unknown-state の検査
+            # (check_stock_where_to_buy の 3) が CLI からは一度も走っていなかった。
+            # latest.json が無い/壊れているときの空 index は渡さない (全 ASIN が
+            # unknown 扱いになり、fail-soft のはずが在庫系タイトルを一斉に落とすため)。
+            stock_index=stock_index if stock_index.items else None,
             tag_corpus=tag_corpus,
         )
         all_reports.append(report)

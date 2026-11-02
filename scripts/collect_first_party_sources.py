@@ -354,7 +354,6 @@ def fetch_post_content(
     headers = {"User-Agent": WP_USER_AGENT}
     params = {"_fields": "id,content"}
     attempts = _CONTENT_MAX_EXTRA_RETRIES + 1
-    last_err: Exception | None = None
     for attempt in range(1, attempts + 1):
         try:
             resp = session.get(url, params=params, headers=headers, timeout=REQUEST_TIMEOUT)
@@ -364,7 +363,6 @@ def fetch_post_content(
             rendered = content_field.get("rendered") if isinstance(content_field, dict) else None
             return rendered if isinstance(rendered, str) else ""
         except (requests.RequestException, ValueError) as e:
-            last_err = e
             if attempt < attempts:
                 logger.warning(
                     "WP post %s content fetch failed (attempt %d/%d): %s; retrying",
