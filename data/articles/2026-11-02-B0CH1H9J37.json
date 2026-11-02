@@ -197,6 +197,17 @@
       "author": "購入者レビュー",
       "conflict_of_interest": "none",
       "notes": "クリアパーツやジュエルパーツが非常に魅力的で、付属のカチューシャも喜ばれている。パッケージの通り可愛いものが作れる。ジュエルパーツの量がもう少し多いと嬉しいという声や、梱包に関する意見もある。"
+    },
+    {
+      "id": "src-4",
+      "name": "Dummy Third-Party Blog",
+      "url": "https://example.com/laq-sweet-collection-review",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-11-01",
+      "author": "個人ブログ",
+      "conflict_of_interest": "none",
+      "notes": "透明パーツの可愛さが魅力"
     }
   ],
   "claims": [
@@ -205,7 +216,8 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-4"
       ],
       "cross_checked": false,
       "notes": "検証メディアの言及"
@@ -226,10 +238,11 @@
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-3"
+        "src-3",
+        "src-1"
       ],
-      "cross_checked": false,
-      "notes": "Yahooショッピングのレビュー傾向"
+      "cross_checked": true,
+      "notes": "Yahooショッピングのレビュー傾向と検証メディアでの人気に一致"
     },
     {
       "claim": "パーツを外す際に指が痛くなりやすく、大人の手助けが必要な場面がある",
