@@ -105,6 +105,30 @@ class SuccessfulRegenInvariantTest(unittest.TestCase):
             self.assertFalse(os.path.exists(rq.marker_path(ASIN, queue)))
 
 
+class EmptyOldSlugMarkerTest(unittest.TestCase):
+    """本体が無い時点で書かれたマーカー (old_slug="") は、本体が着地したら
+    cleanup で消える (apply_rewrite_targets.write_markers の docstring の約束)。"""
+
+    def test_marker_without_old_slug_is_cleared_once_body_lands(self) -> None:
+        with tempfile.TemporaryDirectory() as base:
+            articles = os.path.join(base, "articles")
+            queue = os.path.join(base, "queue")
+            ledger = os.path.join(base, "analytics", "rewrite_ledger.jsonl")
+            rq.write_marker(ASIN, "", queue)
+
+            # 本体がまだ無いうちは残す
+            self.assertEqual(rq.cleanup_completed(articles, queue, ledger), (0, 0))
+            self.assertTrue(os.path.exists(rq.marker_path(ASIN, queue)))
+
+            body = os.path.join(articles, f"2026-05-20-{ASIN}.json")
+            _touch(body)
+            self.assertEqual(rq.cleanup_completed(articles, queue, ledger), (0, 1))
+            self.assertFalse(os.path.exists(rq.marker_path(ASIN, queue)))
+            self.assertTrue(os.path.exists(body), "the only body must survive")
+            # リライトではないので ledger には書かない
+            self.assertFalse(os.path.exists(ledger))
+
+
 class RewriteLedgerTest(unittest.TestCase):
     """amazon-navi-brain#39 Step 0-a: cleanup_completed must record the
     old_slug -> new_slug swap so audit_uniqueness can tell "rewritten" apart

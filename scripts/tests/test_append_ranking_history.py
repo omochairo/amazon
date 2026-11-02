@@ -120,3 +120,27 @@ def test_missing_weekly_raises(tmp_path: pathlib.Path) -> None:
     history = tmp_path / "history.json"
     with pytest.raises(FileNotFoundError):
         append_history(tmp_path / "missing.json", history)
+
+
+def test_returning_asin_does_not_overwrite_last_years_same_day(tmp_path: pathlib.Path) -> None:
+    """ランキングから外れて 1 年後の同じ MM-DD に戻ってきた ASIN は、古い entry を
+    上書きせず末尾に追記する (時系列を壊さない)。"""
+    weekly = tmp_path / "weekly.json"
+    history = tmp_path / "history.json"
+    history.write_text(json.dumps({
+        "updated_at": "2025-11-03T00:00:00+09:00",
+        "history": {"B0AAA": {"name": "A", "history": [
+            {"d": "11-02", "r": 7},
+            {"d": "11-03", "r": 9},
+        ]}},
+    }), encoding="utf-8")
+    _write_weekly(weekly, [{"rank": 4, "matched_asin": "B0AAA", "title": "A"}])
+
+    append_history(weekly, history, today_mm_dd="11-02", now_iso="2026-11-02T00:00:00+09:00")
+
+    state = json.loads(history.read_text(encoding="utf-8"))
+    assert state["history"]["B0AAA"]["history"] == [
+        {"d": "11-02", "r": 7},
+        {"d": "11-03", "r": 9},
+        {"d": "11-02", "r": 4},
+    ]

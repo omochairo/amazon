@@ -199,3 +199,52 @@ def test_check_falls_back_to_json_title_when_md_missing():
     result = check_stock_where_to_buy(data, None, stock_index=None)
     assert not result.passed
     assert "dated-conclusion" in result.message
+
+
+# ---------------------------------------------------------------------------
+# main() が stock_index を evaluate_article に渡すこと (以前は読むだけで渡して
+# おらず、unknown-state の検査が CLI からは走っていなかった)
+# ---------------------------------------------------------------------------
+
+def _run_main_capturing_stock_index(tmp_path, monkeypatch, latest_payload):
+    import json as _json
+
+    import quality_gate as qg
+
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "2026-08-13-B0TESTASIN.json").write_text("{}", encoding="utf-8")
+    schema = tmp_path / "schema.json"
+    schema.write_text("{}", encoding="utf-8")
+    latest = tmp_path / "latest.json"
+    latest.write_text(_json.dumps(latest_payload), encoding="utf-8")
+
+    seen = []
+
+    def fake_evaluate(json_path, schema, md_path, **kwargs):
+        seen.append(kwargs.get("stock_index"))
+        return qg.ArticleReport(slug="x", path=str(json_path))
+
+    monkeypatch.setattr(qg, "evaluate_article", fake_evaluate)
+    monkeypatch.setattr(sys, "argv", [
+        "quality_gate.py", "--src", str(src), "--posts", str(tmp_path / "posts"),
+        "--schema", str(schema), "--no-cert-fetch", "--quiet", "--tag-corpus", "",
+        "--price-watch", str(latest),
+    ])
+    qg.main()
+    assert len(seen) == 1
+    return seen[0]
+
+
+def test_main_passes_stock_index_to_evaluate_article(tmp_path, monkeypatch):
+    idx = _run_main_capturing_stock_index(tmp_path, monkeypatch, {
+        "generated_at": "2026-08-12T00:00:00+00:00",
+        "items": {"B0OTHERASN": {"avail": "在庫あり。"}},
+    })
+    assert idx is not None
+    assert "B0OTHERASN" in idx.items
+
+
+def test_main_does_not_pass_empty_stock_index(tmp_path, monkeypatch):
+    # latest.json が空 = 全 ASIN が unknown になるので、検査自体を skip させる
+    assert _run_main_capturing_stock_index(tmp_path, monkeypatch, {"items": {}}) is None
