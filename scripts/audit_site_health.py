@@ -568,7 +568,12 @@ def run(
     noindex_inlinked_count = len(noindex_inlinked_details)
     noindex_inlinked_patterns = _pattern_counts([d["pattern"] for d in noindex_inlinked_details])
 
-    has_regressions = (
+    # sitemap が取れない/0 件だと R1/R2/R5 の走査が空振りして「問題 0 件」で緑になる。
+    # 監査そのものが成立していないので回帰として扱う (#11004)
+    sitemap_empty = len(sitemap_urls) == 0
+    if sitemap_empty:
+        logger.error("sitemap から URL を 1 件も取れなかった。監査は成立していない")
+    has_regressions = sitemap_empty or (
         len(r1_sitemap_broken) + len(r2_sitemap_noindex) + len(r3_broken_internal) + len(r4_server_errors)
     ) > 0
 
@@ -578,6 +583,7 @@ def run(
         "pages_crawled": len(records),
         "sitemap_urls": len(sitemap_urls),
         "has_regressions": has_regressions,
+        "sitemap_empty": sitemap_empty,
         "summary": {
             "r1_sitemap_broken": len(r1_sitemap_broken),
             "r2_sitemap_noindex": len(r2_sitemap_noindex),

@@ -593,6 +593,18 @@ def test_fresh_wp_history_passes_and_returns_last_date(tmp_path):
         history, 8, today=B.date.fromisoformat("2026-08-15")) == "2026-08-10"
 
 
+def test_unparsable_date_rows_are_skipped_not_fatal(tmp_path):
+    # YYYY-MM-DD でない日付 (スラッシュ区切り等) で date.fromisoformat が落ちていた (#11004)
+    history = _wp_history_file(tmp_path, [
+        {"query": "テスト語", "date": "2026/08/10 00:00:00", "impressions": 1, "clicks": 0,
+         "position": 1.1},
+        {"query": "テスト語", "date": "2026-08-09", "impressions": 1, "clicks": 0,
+         "position": 1.1},
+    ])
+    assert B.assert_wp_history_fresh(
+        history, 8, today=B.date.fromisoformat("2026-08-15")) == "2026-08-09"
+
+
 def test_max_age_zero_disables_the_freshness_check(tmp_path):
     history = _wp_history_file(tmp_path, [
         {"query": "テスト語", "date": "2020-01-01", "impressions": 5, "clicks": 1,

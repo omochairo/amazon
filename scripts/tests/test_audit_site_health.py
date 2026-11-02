@@ -388,6 +388,17 @@ class RunRegressionsTest(unittest.TestCase):
         self.assertEqual(result["summary"]["canonical_mismatch_count"], 1)
         self.assertEqual(result["summary"]["noindex_inlinked_count"], 2)
 
+    def test_empty_sitemap_is_a_regression(self):
+        # sitemap が取れないと R1/R2/R5 が空振りして「問題 0 件」で緑になっていた (#11004)
+        pages = {HOME: {"text": ""}, "https://test.example/sitemap.xml": {"status": 404}}
+        result = A.run(
+            base_url=BASE_URL, max_pages=100, delay=0, timeout=15,
+            out_dir=self.out_dir, user_agent="ua", limit=0,
+            session=mock.Mock(), fetch_fn=make_pages_fetcher(pages), sleeper=_noop_sleeper,
+        )
+        self.assertTrue(result["sitemap_empty"])
+        self.assertTrue(result["has_regressions"])
+
     def test_clean_site_has_no_regressions(self):
         good = "https://test.example/good/"
         sitemap_xml = f"""<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

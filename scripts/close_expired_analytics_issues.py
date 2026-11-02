@@ -140,24 +140,27 @@ def main() -> int:
 
     closed = 0
     closed_keys: dict[str, list[str]] = {}
-    for item in expired:
-        number, expiry = item["number"], item["expiry"]
-        if args.dry_run:
-            logger.info("would close #%d (expired %s): %s",
-                        number, expiry.isoformat(), item["title"])
-            continue
-        close_issue(args.repo, number, expiry)
-        logger.info("closed #%d (expired %s): %s", number, expiry.isoformat(), item["title"])
-        closed += 1
-        # 閉じた Issue が押さえていた重複防止キーを opener へ渡す。search 索引が
-        # まだ open を返しても、opener がこれを差し引いて立て直せるようにするため。
-        for prefix, keys in extract_dedup_keys(item["body"]).items():
-            bucket = closed_keys.setdefault(prefix, [])
-            bucket.extend(k for k in keys if k not in bucket)
-
-    logger.info("closed %d expired Issue(s)", closed)
-    if not args.dry_run:
-        write_closed_keys(closed_keys)
+    try:
+        for item in expired:
+            number, expiry = item["number"], item["expiry"]
+            if args.dry_run:
+                logger.info("would close #%d (expired %s): %s",
+                            number, expiry.isoformat(), item["title"])
+                continue
+            close_issue(args.repo, number, expiry)
+            logger.info("closed #%d (expired %s): %s", number, expiry.isoformat(), item["title"])
+            closed += 1
+            # 閉じた Issue が押さえていた重複防止キーを opener へ渡す。search 索引が
+            # まだ open を返しても、opener がこれを差し引いて立て直せるようにするため。
+            for prefix, keys in extract_dedup_keys(item["body"]).items():
+                bucket = closed_keys.setdefault(prefix, [])
+                bucket.extend(k for k in keys if k not in bucket)
+    finally:
+        # 途中の close が例外で落ちても、それまでに閉じた分のキーは保存する (#11004)。
+        # 保存しないと後続の起票が、すでに閉じた Issue のキーでブロックされ続ける
+        logger.info("closed %d expired Issue(s)", closed)
+        if not args.dry_run:
+            write_closed_keys(closed_keys)
     return 0
 
 
