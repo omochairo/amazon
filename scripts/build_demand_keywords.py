@@ -343,6 +343,12 @@ def wp_history_last_date(history_path: pathlib.Path | None) -> str | None:
                 value = json.loads(line).get("date")
                 if isinstance(value, str) and len(value) >= 10:
                     day = value[:10]
+                    try:
+                        date.fromisoformat(day)
+                    except ValueError:
+                        # 後段の date.fromisoformat(last) で止まらないよう、読めない日付は除く (#11004)
+                        logger.warning("WP順位履歴の日付が YYYY-MM-DD でない行を読み飛ばす: %r", value)
+                        continue
                     if last is None or day > last:
                         last = day
     except (OSError, json.JSONDecodeError) as e:
