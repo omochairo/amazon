@@ -46,11 +46,10 @@ from brand_normalizer import normalize as normalize_brand
 from age_semantics import (
     ADULT_AGE_MONTHS,
     is_seasonal_decoration,
-    min_months_from_words,
     override_age_months,
     seasonal_names,
 )
-from build_feature_lists import PRICE_BANDS
+from build_feature_lists import PRICE_BANDS, parse_min_months
 from fetch_amazon import get_secret
 from filter_raw_per_asin import exclude_title_only
 from score_per_asin_info import is_search_result_url
@@ -453,34 +452,19 @@ def _parse_age_min_months_or_none(raw: Any) -> int | None:
     if not raw_str:
         return None
 
-    # 1.5歳半、18ヶ月などの特異パターンを優先判定
-    if re.search(r"1\.5|1歳半|1歳6ヶ月|18ヶ月", raw_str):
-        return 18
-    
-    # 範囲パターン: e.g. "6ヶ月〜2歳", "3歳〜7歳"
-    m_range = re.search(r"(\d+)\s*(歳|才|ヶ月)\s*[〜~\-]", raw_str)
-    if m_range:
-        n, u = int(m_range.group(1)), m_range.group(2)
-        return n if u == "ヶ月" else n * 12
-        
-    # 下限のみ: e.g. "6歳以上", "3歳〜", "12ヶ月から"
-    m_min = re.search(r"(\d+)\s*(歳|才|ヶ月)\s*(?:〜|~|から|以上|\+)", raw_str)
-    if m_min:
-        n, u = int(m_min.group(1)), m_min.group(2)
-        return n if u == "ヶ月" else n * 12
+    # 特集リスト・年齢別 hub と同じ読み方にする (build_feature_lists.parse_min_months。記事ページだけ
+    # 別の正規表現で読んでいたため、「7ヵ月〜」が 7 歳、「0.5歳〜」が 5 歳、
+    # 「1歳7ヶ月〜」が 7ヶ月、「6ヶ月〜1歳半」が 18ヶ月 と読まれていた)。
+    months = parse_min_months(raw_str)
+    if months is not None:
+        return months
 
-    # 単一: e.g. "3歳"
-    m_single = re.search(r"(\d+)\s*(歳|才|ヶ月)", raw_str)
-    if m_single:
-        n, u = int(m_single.group(1)), m_single.group(2)
-        return n if u == "ヶ月" else n * 12
-
-    # 単なる数値
+    # 単位の無い数値 (例: "3+")。特集リスト側には無い、記事ページだけの従来の読み方
     m_num = re.search(r"(\d+)", raw_str)
     if m_num:
         return int(m_num.group(1)) * 12
 
-    return min_months_from_words(raw_str)
+    return None
 
 
 # Issue #1301 B4 Stage 2: Article 単位 JSON-LD の reviewedBy / creator 用定数。

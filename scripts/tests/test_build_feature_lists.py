@@ -1096,6 +1096,39 @@ class ParseMinMonthsTest(unittest.TestCase):
         self.assertIsNone(bfl.parse_min_months(""))
         self.assertIsNone(bfl.parse_min_months("対象年齢の記載なし"))
 
+    def test_range_takes_lower_bound_across_units(self):
+        """範囲の下限を読む。表記の種類ごとに優先順を付けて探していたため、
+        「6ヶ月〜3歳」が「N歳」形式に先に当たって上限の 36 になっていた。"""
+        cases = {
+            "6ヶ月〜3歳": 6,
+            "0ヶ月〜2歳": 0,
+            "10ヶ月〜3歳頃": 10,
+            "6ヶ月〜1歳半": 6,
+            "対象年齢：6ヶ月～3才": 6,
+            "8ヶ月頃〜3歳頃": 8,
+        }
+        for raw, want in cases.items():
+            with self.subTest(raw=raw):
+                self.assertEqual(bfl.parse_min_months(raw), want)
+
+    def test_range_with_shared_unit(self):
+        """「6〜12歳」「6〜36カ月」は単位が上限にしか付かない。下限を同じ単位で読む。"""
+        cases = {
+            "6〜12歳": 72,
+            "対象年齢 3-5歳": 36,
+            "対象年齢:1.5〜5才": 18,
+            "対象年齢: 6〜36カ月": 6,
+            "対象年齢: 6－36カ月": 6,
+            "対象年齢0〜12ヶ月": 0,
+        }
+        for raw, want in cases.items():
+            with self.subTest(raw=raw):
+                self.assertEqual(bfl.parse_min_months(raw), want)
+
+    def test_years_and_months_still_win_at_same_position(self):
+        self.assertEqual(bfl.parse_min_months("1歳6ヵ月から"), 18)
+        self.assertEqual(bfl.parse_min_months("3歳〜6歳"), 36)
+
 
 class AgeMinMonthsFromArticleTest(unittest.TestCase):
     """#3563: 優先順 product.target_age or product.age_range ->
