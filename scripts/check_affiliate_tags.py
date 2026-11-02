@@ -30,9 +30,18 @@ import tomllib
 
 # href/src 属性値の中の amazon.co.jp リンクだけを見る。本文にテキストとして
 # 現れた URL はクリックされないので対象外 (誤検出を増やすだけ)。
+#
+# 配信ビルドは `hugo --minify`。minify は引用符の要らない属性値から引用符を外す
+# (実測: `href="https://www.amazon.co.jp/dp/B0ABC/"` → `href=https://www.amazon.co.jp/dp/B0ABC/`)。
+# `=` を含む URL (`?tag=` 付き) は引用符が残るので、タグ無しの違反リンクほど
+# 引用符なしで出てくる。引用符なし形式も見ないと、違反だけがすり抜ける (#11004)。
 _HREF_AMAZON_RE = re.compile(
-    r"""href=["'](?P<url>https?://(?:www\.)?amazon\.co\.jp/[^"']*)["']""",
-    re.IGNORECASE,
+    r"""href=(?:
+        "(?P<dq>https?://(?:www\.)?amazon\.co\.jp/[^"]*)"
+      | '(?P<sq>https?://(?:www\.)?amazon\.co\.jp/[^']*)'
+      | (?P<uq>https?://(?:www\.)?amazon\.co\.jp/[^\s"'<>`]*)
+    )""",
+    re.IGNORECASE | re.VERBOSE,
 )
 _TAG_RE = re.compile(r"[?&]tag=(?P<tag>[^&#\"']*)")
 
@@ -67,7 +76,7 @@ def scan(root: pathlib.Path, expected: str) -> tuple[int, list[tuple[str, str, s
             # 属性値の & は HTML では &amp; と書く (正しい書き方)。ブラウザが送る URL と
             # 同じものを見るため、戻してから判定する。戻さないと `?rh=…&amp;tag=` を
             # 「tag= が無い」と誤判定し、配信ビルドが止まる (2026-10-29 #9449 の帯で発生)
-            url = html.unescape(m.group("url"))
+            url = html.unescape(m.group("dq") or m.group("sq") or m.group("uq"))
             total += 1
             tag_m = _TAG_RE.search(url.partition("#")[0])
             rel = str(path.relative_to(root))
@@ -93,6 +102,16 @@ def main() -> int:
 
     expected = load_expected_tag(pathlib.Path(args.hugo_config))
     total, violations = scan(root, expected)
+
+    if total == 0:
+        # 0 本で OK にすると、href の書式が変わって regex が全件外したときも緑で通る。
+        # サイトには必ず Amazon リンクがあるので、0 本は検査が空振りした合図 (#11004)
+        print(
+            f"[check_affiliate_tags] FAIL: no Amazon links found under {root} "
+            "(the check scanned nothing)",
+            file=sys.stderr,
+        )
+        return 1
 
     if not violations:
         print(f"[check_affiliate_tags] OK: {total} Amazon links, all tag={expected}")

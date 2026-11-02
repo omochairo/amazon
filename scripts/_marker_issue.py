@@ -65,7 +65,7 @@ def verified_matches(
         if isinstance(i, dict) and isinstance(i.get("body"), str) and needle in i["body"]
     ]
     # 番号昇順。同じ入力なら毎回同じものを選ぶ (検索の並び順に依存しない)
-    return sorted(out, key=lambda i: i.get("number", 0))
+    return sorted(out, key=lambda i: i.get("number") or 0)
 
 
 def sole_match(

@@ -141,8 +141,8 @@ def build_context(snapshots: list[tuple[str, dict[str, Any]]], canonical: str,
         # 1. brand-name substring match (by_query は当該クエリの全ページ合算 = 権威値)
         for q, row in by_query_map.items():
             if _query_matches_brand(normalize(q), terms):
-                week_q[q] = {"imp": row.get("impressions", 0),
-                             "clk": row.get("clicks", 0), "src": {"brand_name"}}
+                week_q[q] = {"imp": row.get("impressions") or 0,
+                             "clk": row.get("clicks") or 0, "src": {"brand_name"}}
 
         # 2. page_path match via by_combo (/brands/<brand>/...)
         for row in gsc.get("by_combo") or []:
@@ -159,8 +159,8 @@ def build_context(snapshots: list[tuple[str, dict[str, Any]]], canonical: str,
                 # by_query 権威値があれば優先、無ければ combo 値 (二重計上回避)
                 base = by_query_map.get(q)
                 week_q[q] = {
-                    "imp": (base or row).get("impressions", 0),
-                    "clk": (base or row).get("clicks", 0),
+                    "imp": (base or row).get("impressions") or 0,
+                    "clk": (base or row).get("clicks") or 0,
                     "src": {"page_path"},
                 }
 

@@ -173,6 +173,38 @@ class CheckAffiliateTagsTest(unittest.TestCase):
             self.assertEqual(total, 3)
             self.assertEqual(sorted(v[2][:7] for v in violations), ["no tag=", "tag='ot"])
 
+    def test_minified_unquoted_href_is_checked(self):
+        # hugo --minify は引用符の要らない href から引用符を外す (#11004)。
+        # タグ無しの違反リンクほど引用符なしで出るので、見逃すと違反だけ通る
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            self._write(
+                root,
+                "index.html",
+                '<a href=https://www.amazon.co.jp/dp/B0ABC/>missing</a>'
+                f'<a class=c href="https://www.amazon.co.jp/dp/B0ABC/?tag={TAG}" rel=noopener>ok</a>'
+                '<a href=https://www.amazon.co.jp/dp/B0DEF/#r?tag=x>frag</a>'
+                '<a href=https://www.rakuten.co.jp/x/>other ec</a>',
+            )
+            total, violations = check_affiliate_tags.scan(root, TAG)
+            self.assertEqual(total, 3)
+            self.assertEqual(len(violations), 2)
+            self.assertEqual(violations[0][1], "https://www.amazon.co.jp/dp/B0ABC/")
+
+    def test_main_fails_when_no_amazon_links(self):
+        import tempfile
+        from unittest import mock
+
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            self._write(root, "index.html", "<p>no links</p>")
+            with mock.patch.object(
+                sys, "argv", ["x", "--root", td, "--hugo-config", str(SCRIPTS_DIR.parent / "hugo" / "config.toml")]
+            ):
+                self.assertEqual(check_affiliate_tags.main(), 1)
+
     def test_clean_tree_has_no_violations(self):
         import tempfile
 
