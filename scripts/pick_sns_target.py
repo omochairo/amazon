@@ -312,8 +312,11 @@ def pick_next(published: set[str]) -> str | None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mark", metavar="ASIN", help="この ASIN を published に追記して終了")
-    parser.add_argument("--limit", type=int, default=int(os.environ.get("SNS_HISTORY_LIMIT", "500")),
-                        help="published 履歴の保持上限 (default 500)")
+    # rank_candidates は「未配信の中から固定スコア順」に選ぶので、上限を超えて古い側を
+    # 切ると、押し出された最高スコアの記事が即座に再選定される (#11004)。記事総数
+    # (約 4,000 件) より十分大きくして、実質「切らない」にしておく
+    parser.add_argument("--limit", type=int, default=int(os.environ.get("SNS_HISTORY_LIMIT", "100000")),
+                        help="published 履歴の保持上限 (default 100000)")
     parser.add_argument("--debug", action="store_true",
                         help="上位ランキングを stderr に表示 (選定 ASIN は通常通り stdout)")
     parser.add_argument("--top", type=int, default=15, help="--debug 表示件数 (default 15)")

@@ -38,6 +38,12 @@ def test_top_n_keywords_are_taken_in_file_order(tmp_path):
     assert F.load_demand_keywords(p, 2) == ["トミカ収納", "スクイーズ"]
 
 
+def test_same_word_with_and_without_space_takes_one_slot(tmp_path):
+    """WP 由来 (空白除去) と Ubersuggest 由来 (元表記) の同じ語で枠を 2 つ使わない (#11004)。"""
+    p = _kw_file(tmp_path, ["トミカ収納", "トミカ 収納", "スクイーズ"])
+    assert F.load_demand_keywords(p, 3) == ["トミカ収納", "スクイーズ"]
+
+
 def test_slots_larger_than_file_returns_all(tmp_path):
     p = _kw_file(tmp_path, ["トミカ収納"])
     assert F.load_demand_keywords(p, 99) == ["トミカ収納"]
