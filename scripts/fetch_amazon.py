@@ -268,9 +268,16 @@ def load_demand_keywords(path: str, slots: int,
             return []
         logger.info("demand keywords: %s (%.1fd 前, 上限 %dd)", path, age, max_age_days)
     out = []
+    seen = set()
     for e in (data.get("keywords") or []):
         kw = e.get("keyword") if isinstance(e, dict) else None
         if isinstance(kw, str) and kw.strip():
+            # WP 由来 (空白除去形) と Ubersuggest 由来 (元の表記) が同じ語を空白の
+            # 有無だけで別々に持つので、API 枠を 2 つ使わないよう畳む (#11004)
+            key = "".join(kw.split())
+            if key in seen:
+                continue
+            seen.add(key)
             out.append(kw.strip())
         if len(out) >= slots:
             break

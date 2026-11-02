@@ -131,7 +131,7 @@ def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--date", default=None, help="YYYY-MM-DD (UTC). Default: today.")
     args = p.parse_args()
-    date = args.date or _dt.datetime.utcnow().strftime("%Y-%m-%d")
+    date = args.date or _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%d")
     print(render(date))
     return 0
 

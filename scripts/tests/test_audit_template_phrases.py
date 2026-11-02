@@ -154,12 +154,29 @@ class TestHistory(unittest.TestCase):
         articles.mkdir()
         base = ["prog", "--articles-dir", str(articles), "--out", str(self.root / "out.json"),
                 "--history", str(self.history), "--rewrite-ledger", str(self.root / "none.jsonl")]
-        with mock.patch("sys.argv", base + ["--limit", "1"]):
-            mod.main()
-        self.assertFalse(self.history.exists(), "--limit の部分集計は history に混ぜない")
-        with mock.patch("sys.argv", base):
-            mod.main()
+        payload = self._payload("2026-W41", 3)
+        with mock.patch.object(mod, "run", return_value=payload):
+            with mock.patch("sys.argv", base + ["--limit", "1"]):
+                mod.main()
+            self.assertFalse(self.history.exists(), "--limit の部分集計は history に混ぜない")
+            with mock.patch("sys.argv", base):
+                mod.main()
         self.assertEqual(len(self._rows()), 1)
+
+    def test_main_does_not_append_history_for_zero_articles(self):
+        # 記事 0 件 (引数パス誤り・checkout 異常) の空集計を足すと freshness 検査から
+        # 正常更新に見える (#11004)
+        from unittest import mock
+
+        from scripts import audit_template_phrases as mod
+
+        articles = self.root / "articles"
+        articles.mkdir()
+        argv = ["prog", "--articles-dir", str(articles), "--out", str(self.root / "out.json"),
+                "--history", str(self.history), "--rewrite-ledger", str(self.root / "none.jsonl")]
+        with mock.patch("sys.argv", argv):
+            self.assertEqual(mod.main(), 1)
+        self.assertFalse(self.history.exists())
 
     def test_broken_line_is_kept(self):
         self.history.parent.mkdir(parents=True)

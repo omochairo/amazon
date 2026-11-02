@@ -236,6 +236,37 @@ def test_run_end_to_end_writes_expected_payload(tmp_path: pathlib.Path):
     assert page["queries"][0]["answered"] is True
 
 
+def test_run_all_judge_calls_failed_keeps_previous_output(tmp_path: pathlib.Path):
+    # Ollama 停止等で全クエリが失敗したとき、前回の有効な結果を全件 null で上書きしない (#11004)
+    history_dir = tmp_path / "gsc_history"
+    articles_dir = tmp_path / "articles"
+    history_dir.mkdir()
+    articles_dir.mkdir()
+    gsc = {
+        "totals": {"clicks_sum": 600, "impressions_sum": 10000},
+        "by_page": [{"page": "https://navi.omcha.jp/products/b0fnm4y35g/", "clicks": 3,
+                     "impressions": 106, "ctr": 0.0283, "position": 8.5}],
+        "by_combo": [{"page": "https://navi.omcha.jp/products/b0fnm4y35g/", "query": "何歳から",
+                      "clicks": 2, "impressions": 26, "ctr": 0.0769, "position": 6.7}],
+        "range": {"start": "2026-07-02", "end": "2026-07-09"},
+    }
+    (history_dir / "2026-W28.json").write_text(json.dumps(gsc), encoding="utf-8")
+    (articles_dir / "2026-05-11-B0FNM4Y35G.json").write_text(
+        json.dumps({"title": "テスト商品", "narrative": {"lead": "リード"}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    out_path = tmp_path / "out.json"
+    out_path.write_text('{"previous": true}', encoding="utf-8")
+
+    bad = _FakeResponse({"response": "not json"})
+    result = run(
+        history_dir=history_dir, articles_dir=articles_dir, out_path=out_path,
+        session=_FakeSession([bad, bad, bad, bad, bad, bad]), sleeper=lambda s: None,
+    )
+    assert result["written"] is False
+    assert out_path.read_text(encoding="utf-8") == '{"previous": true}'
+
+
 def test_run_no_detected_pages_does_not_write(tmp_path: pathlib.Path):
     history_dir = tmp_path / "gsc_history"
     articles_dir = tmp_path / "articles"

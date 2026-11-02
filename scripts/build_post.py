@@ -63,7 +63,6 @@ from score_calculator import (
 from term_slug import TermSlugMap
 
 import sys
-import pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from price_spark import (build_spark, empty_spark, parse_ts, ARTICLE_GEOM,
                          load_out_of_stock_points as _load_out_of_stock_points,

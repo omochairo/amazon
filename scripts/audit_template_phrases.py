@@ -214,6 +214,11 @@ def main() -> int:
         limit=args.limit,
     )
     # --limit はスモークテスト用なので、部分集計を history に混ぜない
+    # 記事 0 件 (引数パス誤り・checkout 異常) の空の集計を history に足すと、
+    # check_history_freshness からは正常更新に見えてしまう (#11004)
+    if not payload.get("corpus_size"):
+        logger.error("corpus_size=0: 記事を 1 件も読めなかったので history に追記しない")
+        return 1
     if args.history and not args.limit:
         append_history(pathlib.Path(args.history), history_row(payload))
     return 0
