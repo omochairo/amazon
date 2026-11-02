@@ -327,7 +327,9 @@ def load_rewrite_ledger(path: str | os.PathLike[str] = DEFAULT_REWRITE_LEDGER) -
 def cohort3_for_entry(asin: str, slug: str, ledger: dict[str, dict[str, str]]) -> str:
     """slug 日付 + rewrite_ledger から pre_v7 / post_v7_new / post_v7_rewrite を判定する。
 
-    - slug 日付が v7 施行前 (または判定不能): pre_v7 (cohort_for_slug と同じ安全側判定)
+    - slug 日付が v7 施行前 (または判定不能): pre_v7
+      (判定不能の扱いは cohort_for_slug と逆: あちらは post_v7 に倒れる。
+      実 slug は全件日付付きなので差は出ない #11004)
     - 施行後で、そのASINがかつてリライトされた記録がある (ledger に載っている):
       post_v7_rewrite (= 元々 pre_v7 だった記事が書き直された)
     - 施行後で、リライト記録が無い: post_v7_new (= v7 以降に初めて生成された記事)

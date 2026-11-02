@@ -362,6 +362,14 @@ def run(
             "queries": queries_out,
         })
 
+    attempted = sum(len(p["queries"]) for p in pages_out)
+    succeeded = sum(1 for p in pages_out for q in p["queries"] if not q.get("error"))
+    if attempted and not succeeded:
+        # Ollama 停止・モデル未ロード等で全クエリが失敗したとき、前回の有効な結果を
+        # 全件 null で上書きしてしまう (#11004)。書かずに失敗として返す
+        logger.error("judge が全 %d クエリで失敗: %s は更新しない", attempted, out_path)
+        return {"written": False, "pages": len(pages_out), "failed": attempted}
+
     payload = {
         "generated_at": _now_iso(),
         "model": model,
@@ -391,7 +399,7 @@ def main() -> int:
                      help="amazon-navi-brain#39 Step 0-c: ollama num_ctx (未設定時は超過分を無言で切り詰める罠がある)")
     args = ap.parse_args()
 
-    run(
+    result = run(
         history_dir=pathlib.Path(args.history_dir),
         articles_dir=pathlib.Path(args.articles_dir),
         out_path=pathlib.Path(args.out),
@@ -402,7 +410,8 @@ def main() -> int:
         limit=args.limit,
         num_ctx=args.num_ctx,
     )
-    return 0
+    # 入力が無い・全クエリ失敗のときは 0 で終わらせない (#11004)
+    return 0 if result.get("written") else 1
 
 
 if __name__ == "__main__":
