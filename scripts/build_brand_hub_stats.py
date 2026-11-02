@@ -30,7 +30,6 @@ import argparse
 import datetime as _dt
 import glob
 import json
-import os
 import pathlib
 import re
 from collections import Counter, defaultdict

@@ -23,6 +23,7 @@ from build_post import (  # type: ignore[import-not-found]
     _parse_age_min_months,
     _parse_age_min_months_or_none,
 )
+from build_feature_lists import parse_min_months  # type: ignore[import-not-found]
 
 UNKNOWN = (None, "", "  ", "対象年齢の記載なし", "記載なし", "全年齢", "指定なし", "子供から大人まで",
            "小学生未満")
@@ -33,6 +34,31 @@ class ParseAgeMinMonthsOrNoneTests(unittest.TestCase):
         for raw in UNKNOWN:
             with self.subTest(raw=raw):
                 self.assertIsNone(_parse_age_min_months_or_none(raw))
+
+    def test_reads_same_as_feature_lists(self):
+        """記事ページの年齢は特集リスト・年齢別 hub と同じ読み方にする。
+        記事ページだけ別の正規表現で読んでいたため、単位の表記揺れ・小数・
+        「N歳Mヶ月」・範囲を取り違えていた。"""
+        cases = {
+            "7ヵ月〜": 7,            # 旧: 84 (7 歳)
+            "対象年齢 6カ月～": 6,   # 旧: 72
+            "18か月から": 18,        # 旧: 216
+            "0.5歳〜": 6,            # 旧: 60
+            "2.5歳以上": 30,         # 旧: 60
+            "1歳7ヶ月〜": 19,        # 旧: 7
+            "0ヶ月〜1歳半": 0,       # 旧: 18
+            "6ヶ月〜18ヶ月": 6,      # 旧: 18
+            "6〜12歳": 72,           # 旧: 144
+            "3歳半〜7歳": 42,        # 旧: 36
+        }
+        for raw, want in cases.items():
+            with self.subTest(raw=raw):
+                self.assertEqual(_parse_age_min_months_or_none(raw), want)
+                self.assertEqual(_parse_age_min_months_or_none(raw), parse_min_months(raw))
+
+    def test_bare_number_keeps_article_page_reading(self):
+        # 単位の無い数値は記事ページだけの従来の読み方 (歳) を残す
+        self.assertEqual(_parse_age_min_months_or_none("3+"), 36)
 
     def test_zero_months_is_zero(self):
         for raw in ("0ヶ月〜", "0歳〜", "0歳〜3歳", "0ヶ月〜12ヶ月"):

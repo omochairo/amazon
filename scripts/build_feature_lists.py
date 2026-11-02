@@ -28,7 +28,6 @@ import argparse
 import json
 import logging
 import math
-import os
 import re
 import sys
 from dataclasses import dataclass, field
@@ -111,19 +110,28 @@ def parse_min_months(age_range: str | None) -> int | None:
         # 「対象年齢の記載なし（小学生以上推奨）」のように、言葉で補っている物だけ読む
         return min_months_from_words(s)
     s = s.replace("歳半", ".5歳").replace("才", "歳")
-    # 「N歳Mヶ月」形式
-    m = re.search(r"(\d+)\s*歳\s*(\d+)\s*[ヶケかカヵ]?月", s)
+    # 文字列の先頭に近い年齢表記を採る。範囲 (「6ヶ月〜3歳」「6〜12歳」) は下限が
+    # 先に書かれるので、表記の種類ごとに優先順を付けて探すと上限を拾ってしまう
+    # (「6ヶ月〜3歳」が「N歳」形式に先に当たって 36 になっていた)。
+    m = _AGE_EXPR_RE.search(s)
     if m:
-        return int(m.group(1)) * 12 + int(m.group(2))
-    # 「N歳」「N.5歳」形式
-    m = re.search(r"(\d+(?:\.\d+)?)\s*歳", s)
-    if m:
-        return int(round(float(m.group(1)) * 12))
-    # 「Nヶ月」形式 (「カ月」「ヵ月」「ケ月」の表記揺れも読む。#9217)
-    m = re.search(r"(\d+)\s*[ヶケかカヵ]?月", s)
-    if m:
-        return int(m.group(1))
+        if m.group("ym_y") is not None:  # 「N歳Mヶ月」
+            return int(m.group("ym_y")) * 12 + int(m.group("ym_m"))
+        if m.group("y") is not None:  # 「N歳」「N.5歳」「N〜M歳」
+            return int(round(float(m.group("y")) * 12))
+        return int(m.group("m"))  # 「Nヶ月」(「カ月」「ヵ月」「ケ月」の表記揺れも読む。#9217)
     return min_months_from_words(s)
+
+
+# parse_min_months 用。同じ位置で複数の形に当たるときは左の選択肢が勝つ
+# (「1歳6ヶ月」を「1歳」と読まないよう「N歳Mヶ月」を先に置く)。
+# 「N〜M歳」「N〜Mヶ月」は単位が後ろの数字にしか付かないので、下限 N を同じ単位で読む。
+_AGE_RANGE_TAIL = r"(?:[〜~～\-－]\s*\d+(?:\.\d+)?\s*)?"
+_AGE_EXPR_RE = re.compile(
+    r"(?P<ym_y>\d+)\s*歳\s*(?P<ym_m>\d+)\s*[ヶケかカヵ]?月"
+    r"|(?P<y>\d+(?:\.\d+)?)\s*" + _AGE_RANGE_TAIL + r"歳"
+    r"|(?P<m>\d+)\s*" + _AGE_RANGE_TAIL + r"[ヶケかカヵ]?月"
+)
 
 
 def age_min_months_from_article(raw: dict[str, Any]) -> int | None:
