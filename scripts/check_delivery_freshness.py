@@ -417,8 +417,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                    help="issue を触らず判定結果と body だけ出す")
     args = p.parse_args(argv)
 
-    now = (dt.datetime.fromisoformat(args.now).astimezone(dt.timezone.utc)
-           if args.now else dt.datetime.now(dt.timezone.utc))
+    # tz 無しの --now は build.json の built_at と同じく UTC とみなす (parse_iso)。
+    # 素の fromisoformat().astimezone() は tz 無しを**実行環境のローカル時刻**と読むので、
+    # JST の手元で replay すると基準時刻が 9 時間ずれ、stale を ok と判定していた。
+    if args.now:
+        now = parse_iso(args.now)
+        if now is None:
+            p.error("--now を ISO8601 として読めない: {!r}".format(args.now))
+    else:
+        now = dt.datetime.now(dt.timezone.utc)
 
     head = get_head(args.repo) if args.repo else None
 

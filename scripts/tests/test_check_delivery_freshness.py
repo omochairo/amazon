@@ -349,3 +349,39 @@ def test_body_of_unverified_names_the_suspicion():
 def test_body_shows_unverified_state_as_unknown_when_not_checked():
     row = cdf.check(URL, NOW, _fetch(_payload("2026-08-30T11:55:00Z")))
     assert "未確認" in cdf.render_body(row, NOW)
+
+
+# --- CLI の --now ------------------------------------------------------------
+
+def _run_main_dry(monkeypatch, capsys, now_arg, built_at):
+    monkeypatch.delenv("REPO", raising=False)
+    monkeypatch.setattr(cdf, "http_fetch",
+                        lambda url, timeout=None: json.dumps({"built_at": built_at}))
+    rc = cdf.main(["--build-json", URL, "--now", now_arg, "--max-age-hours", "8",
+                   "--dry-run"])
+    return rc, capsys.readouterr().out
+
+
+@pytest.mark.skipif(not hasattr(__import__("time"), "tzset"), reason="tzset が無い (Windows)")
+def test_cli_naive_now_is_utc_regardless_of_local_timezone(monkeypatch, capsys):
+    """tz 無しの --now を実行環境のローカル時刻と読まない (parse_iso と同じく UTC)。
+
+    JST で 12:00 を「03:00 UTC」と読むと、8.5h 前の built_at が 0.5h 前に見えて ok になる。
+    """
+    import time as _time
+    monkeypatch.setenv("TZ", "Asia/Tokyo")
+    _time.tzset()
+    try:
+        rc, out = _run_main_dry(monkeypatch, capsys,
+                                "2026-08-31T12:00:00", "2026-08-31T03:30:00Z")
+    finally:
+        monkeypatch.undo()
+        _time.tzset()
+    assert rc == 0
+    assert "配信が止まっています" in out
+
+
+def test_cli_rejects_unparseable_now(monkeypatch, capsys):
+    with pytest.raises(SystemExit) as exc:
+        _run_main_dry(monkeypatch, capsys, "not-a-date", "2026-08-31T03:30:00Z")
+    assert exc.value.code == 2

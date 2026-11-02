@@ -25,7 +25,7 @@ URL が何件あるかを出す。**0 件であることが正常。**
 使い方:
   python3 -m scripts.audit_self_domain
   python3 -m scripts.audit_self_domain --json      # CI から読む用
-  python3 -m scripts.audit_self_domain --strict    # 1 件でもあれば非ゼロ終了
+  python3 -m scripts.audit_self_domain --strict    # 1 件でもあれば非ゼロ終了 (何も走査できなくても非ゼロ)
 """
 
 from __future__ import annotations
@@ -95,7 +95,8 @@ def _drop_intended_first_party(data):
 
 
 def audit(base: pathlib.Path = PER_ASIN_DIR, targets: tuple[str, ...] = TARGET_FILES) -> dict:
-    per_file: dict[str, dict] = {name: {"scanned": 0, "urls": 0, "hits": []} for name in targets}
+    per_file: dict[str, dict] = {
+        name: {"scanned": 0, "unreadable": 0, "urls": 0, "hits": []} for name in targets}
     if not base.exists():
         return {"per_file": per_file, "total_hits": 0, "base_missing": True}
 
@@ -110,7 +111,9 @@ def audit(base: pathlib.Path = PER_ASIN_DIR, targets: tuple[str, ...] = TARGET_F
             stat["scanned"] += 1
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                # 読めないファイルは中身を見ていない。「走査して 0 件」と混ぜない
+                stat["unreadable"] += 1
                 continue
             if name == "experience.json":
                 data = _drop_intended_first_party(data)
@@ -136,11 +139,31 @@ def format_report(result: dict) -> str:
             for hit in stat["hits"][:20]:
                 lines.append(f"  {name} {hit['asin']} {hit['url']}")
     # 走査 0 件は「きれい」ではなく「測れていない」。区別できないと嘘をつく
+    if result.get("base_missing"):
+        lines.append("")
+        lines.append("注意: per_asin ディレクトリが無い (何も測れていない)")
     empty = [n for n, s in result["per_file"].items() if s["scanned"] == 0]
     if empty:
         lines.append("")
         lines.append(f"注意: 走査対象が 0 件だったファイル: {', '.join(empty)}")
+    unreadable = [f"{n} ({s['unreadable']})" for n, s in result["per_file"].items()
+                  if s.get("unreadable")]
+    if unreadable:
+        lines.append("")
+        lines.append(f"注意: JSON として読めず中身を見ていないファイル: {', '.join(unreadable)}")
     return "\n".join(lines)
+
+
+def unmeasured(result: dict) -> bool:
+    """1 ファイルも中身を見られなかったか (base が無い / 全部読めない / 0 件)。
+
+    この状態の total_hits=0 は「きれい」ではなく「測れていない」。--strict で
+    合格扱いにすると、パスの取り違えやチェックアウト漏れが緑で通る。
+    """
+    if result.get("base_missing"):
+        return True
+    return not any(s["scanned"] - s.get("unreadable", 0) > 0
+                   for s in result["per_file"].values())
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -148,7 +171,8 @@ def main(argv: list[str] | None = None) -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--base", type=pathlib.Path, default=PER_ASIN_DIR)
     ap.add_argument("--json", action="store_true", help="JSON で出す")
-    ap.add_argument("--strict", action="store_true", help="1 件でもあれば非ゼロ終了")
+    ap.add_argument("--strict", action="store_true",
+                    help="1 件でもあれば非ゼロ終了。1 ファイルも中身を見られなかったときも非ゼロ")
     args = ap.parse_args(argv)
 
     for stream in (sys.stdout, sys.stderr):
@@ -162,7 +186,12 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, ensure_ascii=False, indent=1))
     else:
         print(format_report(result))
-    return 1 if (args.strict and result["total_hits"]) else 0
+    if not args.strict:
+        return 0
+    if unmeasured(result):
+        print("[audit_self_domain] 走査できたファイルが 0 件 (--strict では不合格)", file=sys.stderr)
+        return 1
+    return 1 if result["total_hits"] else 0
 
 
 if __name__ == "__main__":

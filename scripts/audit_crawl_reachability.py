@@ -214,8 +214,12 @@ def crawl(
         for link in page.outlinks:
             if link not in pages:
                 queue.append(link)
-    if queue:
-        logger.warning("hit --max-pages=%d, %d URL(s) left unvisited", max_pages, len(queue))
+    # queue には訪問済み URL の重複も積まれている (積む時点では未訪問でも、同じ URL が
+    # 複数ページからリンクされると何度も入る)。len(queue) をそのまま出すと未訪問数を
+    # 過大に数え、上限ちょうどで全部辿り終えた run でも「取りこぼした」と警告する。
+    unvisited = {u for u in queue if u not in pages}
+    if unvisited:
+        logger.warning("hit --max-pages=%d, %d URL(s) left unvisited", max_pages, len(unvisited))
     return pages
 
 
