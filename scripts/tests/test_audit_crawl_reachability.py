@@ -212,6 +212,28 @@ class TestCrawl(unittest.TestCase):
             pages = A.crawl(root, BASE_URL, {BASE_URL + "/"}, 2)
             self.assertEqual(len(pages), 2)
 
+    def test_max_pages_warning_counts_only_unvisited(self):
+        """上限ちょうどで全部辿り終えたら警告しない。重複・訪問済みを未訪問に数えない。"""
+        with tempfile.TemporaryDirectory() as d:
+            root = pathlib.Path(d)
+            # / と /a/ が互いにリンクし、/a/ は 2 回リンクされる。到達集合は 2 枚だけ。
+            write(root, "index.html", PAGE.format(
+                head="", body='<a href="/a/">a</a><a href="/a/">a2</a>'))
+            write(root, "a/index.html", PAGE.format(head="", body='<a href="/">top</a>'))
+            with self.assertNoLogs("audit_crawl_reachability", level="WARNING"):
+                pages = A.crawl(root, BASE_URL, {BASE_URL + "/", BASE_URL + "/a/"}, 2)
+            self.assertEqual(len(pages), 2)
+
+    def test_max_pages_warning_reports_unique_unvisited(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = pathlib.Path(d)
+            build_site(root)
+            with self.assertLogs("audit_crawl_reachability", level="WARNING") as cm:
+                pages = A.crawl(root, BASE_URL, {BASE_URL + "/"}, 1)
+            self.assertEqual(len(pages), 1)
+            expected = len(pages[BASE_URL + "/"].outlinks)
+            self.assertIn("{} URL(s) left unvisited".format(expected), cm.output[0])
+
 
 class TestRender(unittest.TestCase):
     def test_render_with_baseline_shows_delta(self):

@@ -175,3 +175,40 @@ def test_is_navi_self_only_matches_the_comparison_site():
     assert not self_domain.is_navi_self("https://omcha.jp/review/")
     assert not self_domain.is_navi_self("https://notnavi.omcha.jp.example.com/")
     assert not self_domain.is_navi_self("")
+
+
+def test_audit_strict_fails_when_nothing_was_measured(tmp_path, capsys):
+    """--strict で「何も走査できなかった」を合格にしない (パスの取り違えが緑で通る)。"""
+    from scripts import audit_self_domain as audit
+
+    assert audit.main(["--base", str(tmp_path / "no_such_dir"), "--strict"]) == 1
+    assert audit.main(["--base", str(tmp_path), "--strict"]) == 1  # 空ディレクトリ
+    # --strict でなければ従来どおり 0 (観察用の実行は落とさない)
+    assert audit.main(["--base", str(tmp_path / "no_such_dir")]) == 0
+    assert "per_asin ディレクトリが無い" in capsys.readouterr().out
+
+
+def test_audit_strict_does_not_treat_unreadable_files_as_scanned(tmp_path, capsys):
+    """壊れた JSON しか無いときは「走査して 0 件」ではなく「測れていない」。"""
+    from scripts import audit_self_domain as audit
+
+    path = tmp_path / "B0AAAAAAAA" / "news.json"
+    path.parent.mkdir(parents=True)
+    path.write_text("{broken", encoding="utf-8")
+
+    result = audit.audit(tmp_path)
+    assert result["per_file"]["news.json"]["unreadable"] == 1
+    assert audit.unmeasured(result)
+    assert "読めず中身を見ていない" in audit.format_report(result)
+    assert audit.main(["--base", str(tmp_path), "--strict"]) == 1
+
+
+def test_audit_strict_passes_clean_measured_data(tmp_path):
+    from scripts import audit_self_domain as audit
+
+    _write(tmp_path / "B0AAAAAAAA" / "news.json",
+           {"items": [{"url": "https://news.example.jp/1"}]})
+    assert audit.main(["--base", str(tmp_path), "--strict"]) == 0
+    _write(tmp_path / "B0BBBBBBBB" / "news.json",
+           {"items": [{"url": "https://navi.omcha.jp/products/b0bbbbbbbb/"}]})
+    assert audit.main(["--base", str(tmp_path), "--strict"]) == 1
