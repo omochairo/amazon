@@ -1503,6 +1503,28 @@ brands:
   - {canonical: Kitai Japan, tier: D, region: CN, noindex: true, aliases: [Kitai Japan]}
   - {canonical: SAKURAN, tier: D, region: CN, noindex: true, aliases: [SAKURAN]}
 
+  # 2026-11-03 (#10908 / #10907): 供給側検出器 (#10908) と A-6 (#10907) の候補を実データ
+  # (product.brand + 商品名) と Web 検証で判定。Newsones は実体を裏取りできず
+  # brand_rejected.yaml へ、デジヴァイス / リバイバルは A-6 の stopword へ。
+  # カミオジャパン=株式会社カミオジャパン (大阪市中央区、kamiojapan.jp)。キャラクター文具・
+  # 雑貨のメーカーで、たまごっちのステッカー・マスコットはライセンス商品。たまごっちは
+  # バンダイの alias だが、記事の brand は "カミオジャパン" 単独なのでバンダイには寄らない。
+  - canonical: カミオジャパン
+    aliases: [カミオジャパン, KAMIO JAPAN]
+    tier: B
+    region: JP
+  # RiZKiZ=株式会社クローバー (東京都新宿区、rizkiz.jp) の自社ブランド。マグネットブロック・
+  # ままごとキッチン・室内遊具を企画し EC で販売する。A-6 では "rizkiz どこ の 会社" で検索されている。
+  - canonical: RiZKiZ
+    aliases: [RiZKiZ, リズキズ]
+    tier: B
+    region: JP
+  # 以下は実在するが薄いハブ不要 = noindex。
+  # ONEBEST1+=Amazon の総合 EC セラー「ONEBEST1」の出品名。食品・日用品・スマホ周辺機器が
+  # 主で玩具メーカーではないが、リトミックスカーフ・シフォンスカーフを自社名義で出品している
+  # (アクロース (#9363) と同じ扱い)。
+  - {canonical: ONEBEST1+, tier: D, region: JP, noindex: true, aliases: [ONEBEST1+, ONEBEST1]}
+
   # 2026-10-28: #10393 の後に供給側検出器に出た 6 件を同じ手順で判定。
   # ベビラボ→バンダイ・GP→ジーピーの alias に、Brfveob / SI-ZEN / クニニック株式会社は
   # brand_rejected.yaml へ。
