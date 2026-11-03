@@ -244,6 +244,15 @@ def test_suggest_skips_all_in_one_set_product_name_token():
     assert "オールインワンセット" not in [c["token"] for c in result["candidates"]]
 
 
+def test_suggest_skips_digivice_revival_product_name_tokens():
+    # #10907: 「デジヴァイス Ver.REVIVAL」はバンダイの商品名でブランドではない
+    gsc = _make_gsc(by_query=[
+        {"query": "デジヴァイス リバイバル 遊び方", "impressions": 11, "clicks": 0, "ctr": 0.0, "position": 5.0},
+    ])
+    result = suggest(gsc, set())
+    assert result["candidates"] == []
+
+
 def test_suggest_skips_rejected_brand_exact_match_only():
     # #9362: 供給側で却下済みの brand (Ghbunuz) は大小無視の完全一致で落とす。
     # 部分一致では落とさない (短い却下名が別ブランドを巻き込まないように)
