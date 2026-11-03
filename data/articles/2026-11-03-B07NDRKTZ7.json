@@ -197,6 +197,17 @@
       "author": "価格.com",
       "conflict_of_interest": "none",
       "notes": "ABCブロックスは30ピースそれぞれにアルファベットがプリントされていることが確認できる。"
+    },
+    {
+      "id": "src-3",
+      "name": "Amazon商品ページ",
+      "url": "https://www.amazon.co.jp/dp/B07NDRKTZ7/?tag=chk01-22",
+      "tier": "low",
+      "evidence_type": "primary",
+      "published_at": "2026-11-03",
+      "author": "メーカー公式",
+      "conflict_of_interest": "disclosed",
+      "notes": "食品衛生法に合格したなめても大丈夫な塗料を使用している旨の記載がある"
     }
   ],
   "claims": [
@@ -240,6 +251,17 @@
       ],
       "cross_checked": false,
       "notes": "レビューにてギフト用途での高評価を確認"
+    },
+    {
+      "claim": "なめても安心な安全な塗料が使用されている",
+      "category": "safety",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-1",
+        "src-3"
+      ],
+      "cross_checked": true,
+      "notes": "メーカー公称と実際のレビューで舐めても安心な点が一致している"
     }
   ],
   "review_signals": {
