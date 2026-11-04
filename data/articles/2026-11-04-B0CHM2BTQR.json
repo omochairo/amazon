@@ -181,39 +181,39 @@
     },
     {
       "id": "src-2",
-      "name": "Amazonレビュー",
-      "url": "https://www.amazon.co.jp/dp/B0CHM2BTQR/",
+      "name": "Green Beans",
+      "url": "https://greenbeans.com/products/14944121548344/details",
       "tier": "medium",
       "evidence_type": "secondary",
       "published_at": "2026-11-04",
-      "author": "購入者レビュー",
-      "conflict_of_interest": "possible",
-      "notes": "体験談スニペット（厚手で頑丈、ピース裏面に数字が印字されている点、難易度が高く親のサポートが必要になる点や、枠がなく手が当たると崩れやすいという使用レポート）の出典元として統合。"
+      "author": "第三者サイト",
+      "conflict_of_interest": "none",
+      "notes": "140ピースの車パズルが含まれているという事実の裏付け。"
     }
   ],
   "claims": [
     {
-      "claim": "厚手で頑丈なため、折れにくく長く遊ぶことができる。",
-      "category": "durability",
+      "claim": "1ピースから234ピースまで22段階のラインアップがある。",
+      "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-2"
+        "src-1"
       ],
       "cross_checked": false,
-      "notes": "体験談スニペットより抽出。耐久性の高さ。"
+      "notes": "メーカー公式のシリーズ全体説明。"
     },
     {
-      "claim": "ピース裏面に数字が印字されており、絵柄だけでなく並び順のヒントになる。",
+      "claim": "幼児でも今の発達に合ったパズルで遊ぶことができる。",
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-2"
+        "src-1"
       ],
       "cross_checked": false,
-      "notes": "体験談スニペットより抽出。遊びやすさをサポートする機能。"
+      "notes": "メーカー公式の機能説明。"
     },
     {
-      "claim": "96・117・140ピースの3段階構成で、段階を踏んで難易度を上げられる。",
+      "claim": "最大140ピースの車パズルが含まれている。",
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
@@ -221,27 +221,16 @@
         "src-2"
       ],
       "cross_checked": true,
-      "notes": "体験談および商品仕様。スモールステップによる達成感の醸成。"
-    },
-    {
-      "claim": "枠がない仕様のため、手が当たると崩れやすい。",
-      "category": "safety",
-      "confidence": "high",
-      "supporting_source_ids": [
-        "src-2"
-      ],
-      "cross_checked": false,
-      "notes": "体験談における不満点から抽出。遊び環境への留意点。"
+      "notes": "商品仕様に基づく事実の裏付け。"
     },
     {
       "claim": "集中力と作業力を伸ばすスモールステップ方式を採用している。",
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1",
-        "src-2"
+        "src-1"
       ],
-      "cross_checked": true,
+      "cross_checked": false,
       "notes": "集中力と作業力を高める教育的効果。"
     }
   ],
@@ -252,39 +241,39 @@
     ]
   },
   "review_signals": {
-    "summary_one_line": "高い難易度とピース裏の数字によるサポートが、達成感を求める層を中心に支持されています。",
+    "summary_one_line": "スモールステップ方式により、達成感を味わいながら集中力を高められる点が商品の魅力とされています。",
     "high_points": [
       {
-        "text": "厚手で頑丈な作りで、折れにくく耐久性が高いとの声",
+        "text": "22段階の細かいステップで、子供の発達に合わせやすい仕様",
         "supporting_source_ids": [
-          "src-2"
+          "src-1"
         ]
       },
       {
-        "text": "ピース裏面の数字が、絵柄以外のヒントとして役立つと好評",
+        "text": "3段階のパズルで、少しずつピース数を増やしていける仕様",
         "supporting_source_ids": [
-          "src-2"
+          "src-1"
         ]
       },
       {
-        "text": "3段階のステップアップが、子供の達成感を育むと評価",
+        "text": "最大140ピースのパズルも含まれており、やりごたえがある点",
         "supporting_source_ids": [
-          "src-1",
           "src-2"
         ]
       }
     ],
     "concerns": [
       {
-        "text": "枠（ガイドフレーム）がなく、手が当たると崩れやすい点",
+        "text": "最大140ピースと難易度が高く、年齢によっては難しい場合がある点",
         "supporting_source_ids": [
+          "src-1",
           "src-2"
         ]
       },
       {
-        "text": "最大140ピースと難易度が高く、一人では完成しにくい点",
+        "text": "細かいピースを紛失しないよう注意が必要な点",
         "supporting_source_ids": [
-          "src-2"
+          "src-1"
         ]
       }
     ],
@@ -292,17 +281,17 @@
       {
         "text": "親子で協力して難しいパズルに取り組む集中遊び",
         "supporting_source_ids": [
-          "src-2"
+          "src-1"
         ]
       },
       {
-        "text": "ピース裏の数字をヒントに一人で挑戦する場面",
+        "text": "少しずつピース数を増やして達成感を感じる場面",
         "supporting_source_ids": [
-          "src-2"
+          "src-1"
         ]
       },
       {
-        "text": "少しずつピース数を増やして達成感を感じる週末の遊び",
+        "text": "集中力と作業力を育む毎日の知育時間",
         "supporting_source_ids": [
           "src-1",
           "src-2"
@@ -312,8 +301,9 @@
     "segment_voices": [
       {
         "segment_label": "知育目的でパズルに挑戦させる層",
-        "summary": "難易度の高さと、ピース裏の数字といった補助機能が両立しており、親子で取り組む知育玩具として評価されています。",
+        "summary": "細かいステップで難易度を上げられるため、子供の達成感と集中力を育む知育玩具として注目されています。",
         "supporting_source_ids": [
+          "src-1",
           "src-2"
         ]
       }
