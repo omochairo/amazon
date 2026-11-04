@@ -262,7 +262,7 @@ jobs:
           すべて守ってください。
 
           【今回生成する brand】: ${BRAND}
-          【出力ファイル (新規作成のみ)】: hugo/content/brands/${BRAND_SLUG}/_index.md
+          【出力ファイル (新規なら作成・再生成なら置き換え)】: hugo/content/brands/${BRAND_SLUG}/_index.md
           【本日の日付 (frontmatter last_generated_at に使用)】: ${TODAY_ISO}
           【データ (これ以外の事実は書かない)】:
             - count = ${COUNT}

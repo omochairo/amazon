@@ -147,7 +147,7 @@ jobs:
         run: |
           set -e
           TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
-          INTRO="AGENTS.md を最初に必ず読み、その指示に厳密に従ってください。
+          INTRO="AGENTS.md は §1 リポジトリ保護ルールと §4 禁止事項 (捏造・API キー探索・fetch_*.py の実行など) を守ってください。§0 の文体・記事スキーマ・提出フローは記事生成用なので、このタスクでは下記プロンプトの指定に従います (amazon-navi-brain#154 項目 6)。
 
           【今回のタスク】: SNS engagement 投稿 draft を 7〜10 本生成し、
           ${QUEUE_FILE} に append-only で追加する。
@@ -156,7 +156,7 @@ jobs:
 
           【本日 (Asia/Tokyo)】: ${TODAY}
           - 各 draft の created_at は本日の現在時刻 (+09:00)
-          - id 連番は本日付 + 001 から 010
+          - id 連番は本日付 + 001 から。queue に本日付の id が既にあれば (同日 2 回目以降)、その最大番号の次から続ける
 
           【絶対守るリポジトリ保護ルール】:
           - 最終 PR 差分は ${QUEUE_FILE} の追記 1 ファイルのみ
