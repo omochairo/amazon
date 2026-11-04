@@ -133,7 +133,7 @@ jobs:
           TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
           TARGETS_JSON=$(cat /tmp/sns-copy/targets.json)
 
-          INTRO="AGENTS.md を最初に必ず読み、その指示に厳密に従ってください。
+          INTRO="AGENTS.md は §1 リポジトリ保護ルールと §4 禁止事項 (捏造・API キー探索・fetch_*.py の実行など) を守ってください。§0 の文体・記事スキーマ・提出フローは記事生成用なので、このタスクでは下記プロンプトの指定に従います (amazon-navi-brain#154 項目 6)。
 
           【今回のタスク】: 商品投稿コピー生成。下記 targets の各 ASIN について
           data/articles/<filename> を読み、data/sns_copy/<ASIN>.json に X/Threads の
