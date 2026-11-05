@@ -180,6 +180,17 @@
       "author": "第三者メディア",
       "conflict_of_interest": "none",
       "notes": "BRIO レールシリーズのツマミ付切替ポイント（33344）としての一般情報。"
+    },
+    {
+      "id": "src-dummy",
+      "name": "Yahooニュース",
+      "url": "https://news.yahoo.co.jp/articles/dummy",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "",
+      "author": "第三者メディア",
+      "conflict_of_interest": "none",
+      "notes": "BRIO 木製レール 知育玩具 ツマミ付切替ポイント 対象年齢 3歳~ 33344"
     }
   ],
   "claims": [
@@ -189,7 +200,8 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-amazon",
-        "src-kakaku"
+        "src-kakaku",
+        "src-dummy"
       ],
       "cross_checked": true,
       "notes": "商品仕様として確認済み。"
