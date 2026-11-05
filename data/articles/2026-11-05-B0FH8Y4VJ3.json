@@ -163,17 +163,6 @@
   "internal_links": [],
   "sources": [
     {
-      "id": "src-wiki",
-      "name": "Wikipedia / スリンキー",
-      "url": "https://ja.wikipedia.org/wiki/%E3%82%B9%E3%83%AA%E3%83%B3%E3%82%AD%E3%83%BC",
-      "tier": "medium",
-      "evidence_type": "secondary",
-      "published_at": "2026-10-28",
-      "author": "Wikipediaコミュニティ",
-      "conflict_of_interest": "none",
-      "notes": "スリンキーはばね状の玩具。プラスチック製の虹色のものはレインボースプリングとも呼ばれる。両手で端を交互に操ったり、階段から落としたりして遊ぶことができる。"
-    },
-    {
       "id": "src-amazon",
       "name": "Amazon / アーテック(Artec) おもちゃ スリンキー",
       "url": "https://www.amazon.co.jp/dp/B0FH8Y4VJ3/?tag=chk01-22",
@@ -182,51 +171,49 @@
       "published_at": "2026-11-05",
       "author": "メーカー公式・販売元",
       "conflict_of_interest": "disclosed",
-      "notes": "イベント景品やプチギフトに最適。光るタイプのスプリングでボタン電池内蔵。ワンコインの価格帯。"
+      "notes": "【ピカピカ光る！遊んで楽しいスプリングトイ！】LEDが内蔵された、光るタイプのス"
     }
   ],
   "claims": [
     {
-      "claim": "階段から落とすなど、独特の動きが楽しめる",
+      "claim": "LED内蔵で光るタイプのスプリングトイである",
       "category": "quality",
-      "confidence": "high",
-      "supporting_source_ids": [
-        "src-wiki",
-        "src-amazon"
-      ],
-      "cross_checked": true,
-      "notes": "WikipediaとAmazonの公式説明で一致"
-    },
-    {
-      "claim": "虹色（レインボー）のカラーリングが特徴的",
-      "category": "quality",
-      "confidence": "high",
-      "supporting_source_ids": [
-        "src-wiki",
-        "src-amazon"
-      ],
-      "cross_checked": true,
-      "notes": "WikipediaとAmazon公式説明で一致"
-    },
-    {
-      "claim": "両手で操るジャグリングのような遊び方も可能",
-      "category": "quality",
-      "confidence": "high",
-      "supporting_source_ids": [
-        "src-wiki"
-      ],
-      "cross_checked": false,
-      "notes": "Wikipediaに記載あり"
-    },
-    {
-      "claim": "プチギフトやイベント景品として手頃な価格帯",
-      "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
         "src-amazon"
       ],
       "cross_checked": false,
-      "notes": "Amazon商品ページより"
+      "notes": "メーカー公式説明より"
+    },
+    {
+      "claim": "ボタン電池（LR41）が内蔵されている",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-amazon"
+      ],
+      "cross_checked": false,
+      "notes": "メーカー公式説明より"
+    },
+    {
+      "claim": "イベント景品やプチギフトとしての用途が推奨されている",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-amazon"
+      ],
+      "cross_checked": false,
+      "notes": "メーカー公式説明より"
+    },
+    {
+      "claim": "手のひらに収まるサイズ感である",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-amazon"
+      ],
+      "cross_checked": false,
+      "notes": "メーカー公式説明より"
     }
   ],
   "technical_specs": {
@@ -243,24 +230,24 @@
     ]
   },
   "review_signals": {
-    "summary_one_line": "安価で楽しいプチギフトとして、イベント景品用途を中心に評価されています。",
+    "summary_one_line": "メーカーの公式情報では、手頃な価格帯と光るギミックを活かしたプチギフトとしての用途が提案されています。",
     "high_points": [
       {
-        "text": "ワンコインの手頃な価格でまとめ買いしやすい",
+        "text": "ワンコインの手頃な価格でまとめ買いしやすい設計",
         "supporting_source_ids": [
           "src-amazon"
         ]
       },
       {
-        "text": "光るギミックが子どもの興味を惹きつける",
+        "text": "光るギミックが子どもの興味を惹きつける仕様",
         "supporting_source_ids": [
           "src-amazon"
         ]
       },
       {
-        "text": "階段から落とすなど独特の動きが楽しい",
+        "text": "手軽に楽しめる知育おもちゃとしての用途",
         "supporting_source_ids": [
-          "src-wiki"
+          "src-amazon"
         ]
       }
     ],
@@ -272,7 +259,7 @@
         ]
       },
       {
-        "text": "色の指定ができず、ランダムな色となる点",
+        "text": "色の指定ができず、ランダムな色となる仕様",
         "supporting_source_ids": [
           "src-amazon"
         ]
@@ -280,28 +267,28 @@
     ],
     "use_scenes": [
       {
-        "text": "子ども会のイベントやパーティーの景品として",
+        "text": "子ども会のイベントやパーティーの景品として推奨",
         "supporting_source_ids": [
           "src-amazon"
         ]
       },
       {
-        "text": "ちょっとしたご褒美やプチギフトとして",
+        "text": "ちょっとしたご褒美やプチギフトとしての提案",
         "supporting_source_ids": [
           "src-amazon"
         ]
       },
       {
-        "text": "自宅の階段を使った遊びで",
+        "text": "ご家庭での気軽な遊びやおもちゃとして",
         "supporting_source_ids": [
-          "src-wiki"
+          "src-amazon"
         ]
       }
     ],
     "segment_voices": [
       {
-        "segment_label": "イベント景品として購入した層",
-        "summary": "価格の安さと光る楽しさから、子どもが喜ぶ景品として重宝されています。",
+        "segment_label": "公式情報における用途提案",
+        "summary": "価格の安さと光る楽しさから、子どもが喜ぶイベント景品としての活用が推奨されています。",
         "supporting_source_ids": [
           "src-amazon"
         ]
