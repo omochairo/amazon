@@ -194,6 +194,46 @@
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
       "notes": "セット内容やサイズ、材質（人体に害のない塗料）、対象年齢（3歳〜）などの仕様記載"
+    },
+    {
+      "id": "src-rakuten",
+      "name": "楽天市場 商品ページ",
+      "url": "https://item.rakuten.co.jp/toy-daiwa/48046/",
+      "tier": "low",
+      "evidence_type": "primary",
+      "author": "販売ページ",
+      "conflict_of_interest": "possible",
+      "notes": "スイーツセットの商品詳細"
+    },
+    {
+      "id": "src-yahoo",
+      "name": "Yahoo!ショッピング 商品ページ",
+      "url": "https://store.shopping.yahoo.co.jp/y-furusato/1694522.html",
+      "tier": "low",
+      "evidence_type": "primary",
+      "author": "販売ページ",
+      "conflict_of_interest": "possible",
+      "notes": "ふるさと納税の商品詳細"
+    },
+    {
+      "id": "src-instagram",
+      "name": "木製おもちゃのだいわ 公式Instagram",
+      "url": "https://www.instagram.com/woodentoy_daiwa/",
+      "tier": "medium",
+      "evidence_type": "primary",
+      "author": "メーカー公式",
+      "conflict_of_interest": "possible",
+      "notes": "スイーツセットの商品紹介"
+    },
+    {
+      "id": "src-blog",
+      "name": "木製おもちゃのだいわ 公式ブログ",
+      "url": "https://ameblo.jp/daiwa-toy/",
+      "tier": "medium",
+      "evidence_type": "primary",
+      "author": "メーカー公式",
+      "conflict_of_interest": "possible",
+      "notes": "商品の詳細や遊び方について"
     }
   ],
   "claims": [
@@ -202,9 +242,11 @@
       "category": "safety",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-rakuten",
+        "src-instagram"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "メーカー公式の注意書き等から確認"
     },
     {
@@ -212,9 +254,11 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-yahoo",
+        "src-blog"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "メーカー公式の仕様欄より"
     },
     {
