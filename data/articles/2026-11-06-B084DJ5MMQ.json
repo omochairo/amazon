@@ -186,7 +186,29 @@
       "published_at": "2026-11-06",
       "author": "販売ページ",
       "conflict_of_interest": "possible",
-      "notes": "手・指を動かして頭のリフレッシュができ、おままごとにも使える"
+      "notes": "手・指を動かして頭のリフレッシュができ、おままごとにも使える。商品サイズはお手玉：全長7cm、素材はポリエステル。"
+    },
+    {
+      "id": "src-3",
+      "name": "Yahoo Shopping Review",
+      "url": "https://ck.jp.ap.valuecommerce.com/servlet/referral?sid=3785826&pid=892735851&vc_url=https%3A%2F%2Fstore.shopping.yahoo.co.jp%2Fmaxzen%2F4989409089150.html",
+      "tier": "medium",
+      "evidence_type": "primary",
+      "published_at": "2026-11-06",
+      "author": "販売ページ",
+      "conflict_of_interest": "possible",
+      "notes": "頭のリフレッシュができる商品であることの言及"
+    },
+    {
+      "id": "src-4",
+      "name": "tavily (アイメディア株式会社)",
+      "url": "https://tavily.com/knowledge/company/Ri5AfEY71ZrO",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2026-11-06",
+      "author": "企業情報",
+      "conflict_of_interest": "none",
+      "notes": "アイメディア株式会社 is a company that develops unique and innovative products for home goods."
     }
   ],
   "claims": [
@@ -196,7 +218,8 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-1",
-        "src-2"
+        "src-2",
+        "src-3"
       ],
       "cross_checked": true,
       "notes": "商品の特徴として複数のサイトで紹介されている"
@@ -206,10 +229,11 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-2"
       ],
-      "cross_checked": false,
-      "notes": "デザインとかわいらしさについての評価"
+      "cross_checked": true,
+      "notes": "デザインとかわいらしさについての評価と公式画像の裏付け"
     },
     {
       "claim": "お手玉以外におままごとにも使える",
@@ -230,6 +254,16 @@
       ],
       "cross_checked": false,
       "notes": "知育要素に関する記載"
+    },
+    {
+      "claim": "アイメディア株式会社は家庭用品等のユニークで革新的な製品を開発する企業",
+      "category": "quality",
+      "confidence": "high",
+      "supporting_source_ids": [
+        "src-4"
+      ],
+      "cross_checked": false,
+      "notes": "企業情報"
     }
   ],
   "technical_specs": {
@@ -251,14 +285,16 @@
       {
         "text": "やわらかくて、コロンと可愛い十二支のキャラクター達",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-2"
         ]
       },
       {
         "text": "手・指を動かして頭のリフレッシュができ、干支の勉強にもなる",
         "supporting_source_ids": [
           "src-1",
-          "src-2"
+          "src-2",
+          "src-3"
         ]
       },
       {
@@ -293,7 +329,8 @@
         "text": "手・指を動かして頭のリフレッシュ",
         "supporting_source_ids": [
           "src-1",
-          "src-2"
+          "src-2",
+          "src-3"
         ]
       },
       {
