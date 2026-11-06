@@ -180,6 +180,28 @@
       "author": "購入者",
       "conflict_of_interest": "none",
       "notes": "手鏡などが付いており、指先の運動や五感を刺激する知育玩具として役立つ。よだれで汚れても洗濯して清潔に保てる点が好評。引き出された大量の布を親が毎回詰め直す手間がかかる"
+    },
+    {
+      "id": "src-moomin",
+      "name": "ムーミン公式サイト",
+      "url": "https://www.moomin.co.jp/news/others/108038",
+      "tier": "high",
+      "evidence_type": "secondary",
+      "published_at": "2022-03-28",
+      "author": "公式メディア",
+      "conflict_of_interest": "none",
+      "notes": "布製ティッシュケースは水回りでも活躍すると紹介されている"
+    },
+    {
+      "id": "src-tiscase",
+      "name": "ティッシュケース専門通販サイトTiscase",
+      "url": "https://www.tiscase.jp/category/1",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-10-22",
+      "author": "第三者メディア",
+      "conflict_of_interest": "none",
+      "notes": "布製の赤ちゃん向けティッシュケースポーチが市場で販売されている"
     }
   ],
   "claims": [
@@ -222,6 +244,17 @@
       ],
       "cross_checked": false,
       "notes": "親にとっての手間となる声"
+    },
+    {
+      "claim": "布製のティッシュケース型商品は水回りや赤ちゃん向けとして広く認知されている",
+      "category": "comparative_advantage",
+      "confidence": "low",
+      "supporting_source_ids": [
+        "src-moomin",
+        "src-tiscase"
+      ],
+      "cross_checked": true,
+      "notes": "他製品の例で市場でも認知されている"
     }
   ],
   "technical_specs": {
