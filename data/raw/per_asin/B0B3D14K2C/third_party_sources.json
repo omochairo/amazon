@@ -1,9 +1,9 @@
 {
   "asin": "B0B3D14K2C",
-  "fetched_at": "2026-10-06T01:50:55.432698+00:00",
+  "fetched_at": "2026-11-06T01:42:57.992345+00:00",
   "query": "ギンポー お米のねんど A-RD4ZR",
   "engine": "tavily",
-  "raw_count": 10,
+  "raw_count": 20,
   "empty_streak": 0,
   "sources": [
     {
@@ -20,23 +20,86 @@
     {
       "title": "よくある質問 - 【公式】銀鳥産業株式会社(ギンポー)",
       "url": "https://gincho.co.jp/guardians_post",
-      "snippet": "お米のねんど・小麦のねんどに関しては以下の方法をお試しください。 ①ウェットシートや汚れても良い濡れふきんでねんどを包む②付属のねんどケースやチャック付き……",
+      "snippet": "お米のねんど・小麦のねんどに関しては以下の方法をお試しください。 ①ウェットシートや汚れても良い濡れふきんでねんどを包む②付属のねんどケースやチャック付き……Read more",
       "host": "gincho.co.jp",
       "link": {
         "status": "unknown",
         "checked_at": "2026-10-29"
       }
+    }
+  ],
+  "dropped": [
+    {
+      "host": "gincho.shop12.makeshop.jp",
+      "reason": "retail"
     },
     {
-      "title": "お米のねんど押し型シリーズ - 銀鳥産業株式会社",
-      "url": "https://www.atpress.ne.jp/news/400646",
-      "snippet": "どんぶり、お皿、ぎょうざ型、押し出し器がついています。押し出し器にねんどを入れ押し出すと、麺を作ることができます。 〈ねんど板〉. オモテ面…色の",
-      "host": "atpress.ne.jp",
-      "link": {
-        "status": "ok",
-        "checked_at": "2026-10-29",
-        "http": 200
-      }
+      "host": "item.fril.jp",
+      "reason": "retail"
+    },
+    {
+      "host": "item.rakuten.co.jp",
+      "reason": "retail"
+    },
+    {
+      "host": "gincho.shop12.makeshop.jp",
+      "reason": "retail"
+    },
+    {
+      "host": "shimojima.jp",
+      "reason": "retail"
+    },
+    {
+      "host": "store.shopping.yahoo.co.jp",
+      "reason": "retail"
+    },
+    {
+      "host": "yodobashi.com",
+      "reason": "retail"
+    },
+    {
+      "host": "search.kakaku.com",
+      "reason": "search_result"
+    },
+    {
+      "host": "amazon.co.jp",
+      "reason": "retail"
+    },
+    {
+      "host": "youtube.com",
+      "reason": "duplicate_host"
+    },
+    {
+      "host": "amazon.co.jp",
+      "reason": "retail"
+    },
+    {
+      "host": "youtube.com",
+      "reason": "duplicate_host"
+    },
+    {
+      "host": "youtube.com",
+      "reason": "off_topic"
+    },
+    {
+      "host": "gourmet.watch.impress.co.jp",
+      "reason": "off_topic"
+    },
+    {
+      "host": "indeed.com",
+      "reason": "unrelated"
+    },
+    {
+      "host": "tfnorenkai.jp",
+      "reason": "off_topic"
+    },
+    {
+      "host": "finance.yahoo.com",
+      "reason": "unrelated"
+    },
+    {
+      "host": "finance.yahoo.com",
+      "reason": "unrelated"
     }
   ]
 }
