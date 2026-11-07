@@ -126,7 +126,7 @@ UNKNOWN_ESCALATE_MULTIPLIER = 6
 
 PR_FIELDS = (
     "number,headRefName,headRefOid,baseRefName,isDraft,isCrossRepository,"
-    "statusCheckRollup,labels,mergeable,autoMergeRequest"
+    "statusCheckRollup,labels,mergeable,autoMergeRequest,author,createdAt"
 )
 
 # --- 自動マージ外れの復旧 (2026-11-07) -------------------------------------
@@ -155,8 +155,32 @@ AUTO_MERGE_SKIPPED_LABEL = "auto-merge-skipped"
 # GitHub 側の遅れ (mergeable の計算・auto-merge の反映) を誤検知しない。
 AUTO_MERGE_GRACE_MINUTES = 20
 
+# --- データ更新 PR の自動マージ外れ (2026-11-07) ---------------------------
+#
+# 上の復旧は 05 が走った記事 PR だけが対象で、05 の対象外のデータ更新 PR
+# (01 / 13 / 34 / home-ops の 21-semantic-related-ruri など約 50 本の作り手) は
+# noop だった。作り手はどれも `gh pr create` 直後に 1 回だけ `gh pr merge --auto`
+# を叩き、失敗しても ::warning:: で緑終了する。実例: #11299 (home-ops 21 の run
+# 42313827936 で有効化に失敗。required check は全部緑・CLEAN のまま止まった)。
+#
+# 05 のスコープ検査が無いので、ここでは対象を絞って auto-merge を直接付ける:
+#   - 作成者が作り手の App (DATA_PR_AUTHORS)。人・Jules・dependabot の PR は触らない
+#   - 人の確認を前提に auto-merge を付けない作り手のブランチは除く
+#     (MANUAL_REVIEW_BRANCH_PREFIXES。新しくそういう作り手を足したらここにも足す)
+#   - mergeable=MERGEABLE のときだけ (UNKNOWN は次の run を待つ。CONFLICTING は
+#     付けても base の取り込みが要るので意味が無い)
+#   - 1 PR につき 1 回 (記事 PR と同じラベルで冪等化)
+DATA_PR_AUTHORS = frozenset({"app/omochairo-fetch-bot"})
+MANUAL_REVIEW_BRANCH_PREFIXES = (
+    "data/demand-supply-probe-",     # 49 (観測レポート。PR を作るだけ)
+    "data/ubersuggest-product-probe-",  # 50
+    "data/ubersuggest-llm-judge-",   # home-ops 44
+    "pip-compile-hashes/",           # 54 (依存のハッシュ。人が見てからマージ)
+)
+
 MERGEABLE_CONFLICTING = "CONFLICTING"
 MERGEABLE_UNKNOWN = "UNKNOWN"
+MERGEABLE_MERGEABLE = "MERGEABLE"
 
 
 def emit_warning_annotation(message: str) -> None:
@@ -389,6 +413,39 @@ def evaluate_auto_merge(
     return "rerun"
 
 
+def evaluate_data_pr_auto_merge(
+    *,
+    required_satisfied: bool,
+    auto_merge_armed: bool,
+    labels: List[str],
+    mergeable: Optional[str],
+    author: Optional[str],
+    branch: str,
+    created_at: Optional[str],
+    now: dt.datetime,
+    grace_minutes: int = AUTO_MERGE_GRACE_MINUTES,
+) -> str:
+    """05 の対象外のデータ更新 PR で、auto-merge が外れたものの次のアクション。
+
+    戻り値: noop | arm | exhausted
+    """
+    if not required_satisfied or auto_merge_armed:
+        return "noop"
+    if author not in DATA_PR_AUTHORS:
+        return "noop"
+    if branch.startswith(MANUAL_REVIEW_BRANCH_PREFIXES):
+        return "noop"  # 人の確認が前提の作り手
+    if AUTO_MERGE_SKIPPED_LABEL in labels:
+        return "noop"
+    if mergeable != MERGEABLE_MERGEABLE:
+        return "noop"
+    if not created_at or now - _parse_ts(created_at) < dt.timedelta(minutes=grace_minutes):
+        return "noop"  # 作り手の有効化が GitHub 側に反映されるのを待つ
+    if AUTO_MERGE_RECOVERY_LABEL in labels:
+        return "exhausted"
+    return "arm"
+
+
 # --- I/O 層 (gh CLI 経由。単体テストでは触らない) -----------------------------
 
 def fetch_last_auto_merge_run(repo: str, branch: str) -> Optional[Dict[str, Any]]:
@@ -436,10 +493,18 @@ def rerun_auto_merge(repo: str, run_id: int) -> None:
                     check=True, capture_output=True, text=True, env=reopen_env())
 
 
+def arm_auto_merge(repo: str, pr_number: int, head_sha: str) -> None:
+    # 作り手と同じ App token で付ける (GITHUB_TOKEN で付けたマージは後続の push
+    # workflow を発火しない)。head が動いていたら付けない (--match-head-commit)。
+    subprocess.run(["gh", "pr", "merge", str(pr_number), "-R", repo, "--auto", "--squash",
+                    "--delete-branch", "--match-head-commit", head_sha],
+                   check=True, capture_output=True, text=True, env=reopen_env())
+
+
 def recover_auto_merge(repo: str, prs: List[Dict[str, Any]], now: dt.datetime,
                        dry_run: bool) -> Dict[str, int]:
-    """required check 済みで auto-merge が外れた記事 PR を復旧する。"""
-    counts = {"rerun": 0, "desync": 0, "exhausted": 0}
+    """required check 済みで auto-merge が外れた記事 PR・データ更新 PR を復旧する。"""
+    counts = {"rerun": 0, "desync": 0, "armed": 0, "exhausted": 0}
     for pr in prs:
         rollup = pr.get("statusCheckRollup") or []
         if not required_checks_satisfied(rollup) or pr.get("autoMergeRequest"):
@@ -450,6 +515,32 @@ def recover_auto_merge(repo: str, prs: List[Dict[str, Any]], now: dt.datetime,
         branch = pr["headRefName"]
         last_run = fetch_last_auto_merge_run(repo, branch)
         if last_run is None:
+            # 05 の対象外。作り手の App が作ったデータ更新 PR なら直接付ける
+            action = evaluate_data_pr_auto_merge(
+                required_satisfied=True,
+                auto_merge_armed=False,
+                labels=labels,
+                mergeable=pr.get("mergeable"),
+                author=(pr.get("author") or {}).get("login"),
+                branch=branch,
+                created_at=pr.get("createdAt"),
+                now=now,
+            )
+            if action == "noop":
+                continue
+            counts["armed" if action == "arm" else action] += 1
+            if action == "exhausted":
+                emit_warning_annotation(
+                    f"pr={pr['number']} auto_merge_recovery=exhausted "
+                    "(data PR: checks passed but auto-merge is still off after one "
+                    "recovery; needs human)")
+                continue
+            logger.info("pr=%s auto_merge_recovery=arm head=%s branch=%s", pr["number"],
+                        pr["headRefOid"], branch)
+            if dry_run:
+                continue
+            mark_auto_merge_recovered(repo, pr["number"])
+            arm_auto_merge(repo, pr["number"], pr["headRefOid"])
             continue
         action = evaluate_auto_merge(
             required_satisfied=True,
@@ -634,8 +725,9 @@ def main() -> int:
 
     auto_merge = recover_auto_merge(args.repo, prs, now, args.dry_run)
     logger.info(
-        "auto-merge recovery: rerun=%d desync_reopened=%d exhausted=%d",
-        auto_merge["rerun"], auto_merge["desync"], auto_merge["exhausted"],
+        "auto-merge recovery: rerun=%d desync_reopened=%d data_armed=%d exhausted=%d",
+        auto_merge["rerun"], auto_merge["desync"], auto_merge["armed"],
+        auto_merge["exhausted"],
     )
 
     logger.info(
