@@ -159,6 +159,58 @@ def eligible_rewrite_asins(
     return out
 
 
+def backlog_asins(
+    articles_dir: str = "data/articles",
+    queue_dir: str = QUEUE_DIR,
+    closed_prs_path: str | None = None,
+    now=None,
+) -> set[str]:
+    """12-rewrite-idle-fill の待ち行列上限 (#5490) で数えるマーカー。
+
+    = ``eligible_rewrite_asins`` から、生成側の pick が #9239 で外している ASIN
+    (マージされずに close された直後の冷却中・繰り返し close で人の判断待ち) を除いたもの。
+
+    **なぜ除くか**: 上限は「生成側が 1〜2 日で消化できる量まで積む」ためにある。
+    冷却中のマーカーは生成側が pick しないので消化されないのに、上限の枠だけを
+    埋める。実測 (2026-11-07): マーカー 12 件 = 上限ちょうどのうち 9 件が冷却中・
+    人の判断待ちで、残り 3 件は素材待ち。12 は「上限に到達」で積まず、03 は
+    リライト候補 0 件の run が 4 回続いた (リライトのレーンが止まった)。
+
+    素材待ち (``is_generatable`` が False) はここでは除かない。34 が集めれば消化
+    される見込みがあり、除くと素材待ちのマーカーが際限なく積まれる。
+
+    closed_prs_path は 03 と同じ ``gh pr list --state closed --search is:unmerged
+    --json title,closedAt`` の JSON (既定は環境変数 CLOSED_ARTICLE_PRS)。無い・
+    読めないときは除かない (従来どおり全マーカーを数える。上限は緩まない側に倒す)。
+    """
+    pending = eligible_rewrite_asins(articles_dir, queue_dir)
+    if not pending:
+        return pending
+    return pending - cooling_asins(closed_prs_path, now)
+
+
+def cooling_asins(closed_prs_path: str | None = None, now=None) -> set[str]:
+    """生成側の pick が #9239 で外している ASIN (冷却中 + 繰り返し close で人の判断待ち)。
+
+    判定は ``article_pick.recently_failed`` そのもの (03 と同じ規則)。close 一覧が
+    無い・読めないときは空集合 (何も除かない)。
+    """
+    path = closed_prs_path if closed_prs_path is not None else os.environ.get("CLOSED_ARTICLE_PRS", "")
+    if not path:
+        return set()
+    try:
+        with open(path, encoding="utf-8") as f:
+            rows = json.load(f)
+        import article_pick as ap
+
+        cooling, stuck = ap.recently_failed(
+            rows, now or datetime.now(timezone.utc), ap._third_party_fetched_at
+        )
+    except Exception:
+        return set()
+    return cooling | stuck
+
+
 def is_generatable(asin: str) -> bool:
     """`03-invoke-jules` がこの ASIN の生成に**今**進むか (#5490 / #9199)。
 
@@ -377,7 +429,32 @@ def main() -> int:
         action="store_true",
         help="Print ASINs still awaiting a fresh body (one per line).",
     )
+    ap.add_argument(
+        "--backlog-count",
+        action="store_true",
+        help="12-rewrite-idle-fill の待ち行列上限で数えるマーカーの件数だけを出す "
+        "(#9239 で pick から外れている ASIN を除く)。",
+    )
+    ap.add_argument(
+        "--closed-prs",
+        default=None,
+        help="--backlog-count で使う、マージされずに close された PR の JSON "
+        "(既定は環境変数 CLOSED_ARTICLE_PRS)。",
+    )
+    ap.add_argument(
+        "--list-cooling",
+        action="store_true",
+        help="#9239 で生成側の pick から外れている ASIN を 1 行ずつ出す (--closed-prs を使う)。",
+    )
     args = ap.parse_args()
+    if args.list_cooling:
+        for asin in sorted(cooling_asins(args.closed_prs)):
+            print(asin)
+        return 0
+    if args.backlog_count:
+        # 呼び出し側は標準出力をそのまま数値として読むので、件数以外を出さない。
+        print(len(backlog_asins(args.articles_dir, args.queue_dir, args.closed_prs)))
+        return 0
     if args.cleanup:
         files, markers = cleanup_completed(args.articles_dir, args.queue_dir, args.ledger_path)
         print(f"[rewrite_queue] cleanup removed_files={files} cleared_markers={markers}")
