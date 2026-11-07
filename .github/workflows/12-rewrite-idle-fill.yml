@@ -140,10 +140,28 @@ jobs:
           # 超えて積むと、消化されないマーカーが増え続け、同じ対象を選び直して
           # 同じ PR を作り直すだけになる (実測 2026-08-31: マーカー 172 件・
           # 消化 0 件)。積むのは「1〜2 日で消化できる量」まで。
-          BACKLOG=$(python -c "import sys; sys.path.insert(0,'scripts'); import rewrite_queue as rq; print(len(rq.eligible_rewrite_asins('data/articles')))")
+          #
+          # 数えるのは生成側が pick しうるマーカーだけ。マージされずに close された
+          # 直後の ASIN は 03 が #9239 で pick から外すので、そのマーカーは消化されず
+          # 上限の枠だけを埋める (実測 2026-11-07: 12 件中 9 件がそれで、03 の
+          # リライト候補が 0 件のまま止まった)。close 一覧は 03 と同じ取り方。
+          # 取れなければ従来どおり全マーカーを数える (上限は緩まない側に倒す)。
+          if gh pr list --repo "$REPO" --state closed --search "is:unmerged sort:updated-desc" \
+               --limit 300 --json title,closedAt > /tmp/closed_article_prs.json; then
+            export CLOSED_ARTICLE_PRS=/tmp/closed_article_prs.json
+            # 選定側も同じ ASIN を選ばない (選んでも 03 が pick しないマーカーになるだけ)。
+            python scripts/rewrite_queue.py --list-cooling >> /tmp/excluded.txt || true
+          else
+            echo "::warning::closed PR list failed; backlog counts every marker (#9239 cooldown not applied)"
+          fi
+          ALL_MARKERS=$(python scripts/rewrite_queue.py --list-eligible | grep -cE 'B0[A-Z0-9]{8}' || true)
+          BACKLOG=$(python scripts/rewrite_queue.py --backlog-count)
           CAP="${REWRITE_QUEUE_CAP:-12}"
-          echo "rewrite backlog=$BACKLOG cap=$CAP"
-          if [ "$BACKLOG" -ge "$CAP" ]; then
+          echo "rewrite backlog=$BACKLOG cap=$CAP (markers=$ALL_MARKERS; the rest are cooling after an unmerged close, #9239)"
+          # 冷却中を数えないぶん、繰り返し close (人の判断待ち) のマーカーが積もっても
+          # 上限に掛からない。全マーカーにも上限の 2 倍の天井を置き、#5490 の
+          # 「消化されないマーカーが増え続ける」形には戻さない。
+          if [ "$BACKLOG" -ge "$CAP" ] || [ "${ALL_MARKERS:-0}" -ge $((CAP * 2)) ]; then
             echo "Backlog at/over cap; not enqueueing more (cleanup already ran)."
             echo "count=0" >> "$GITHUB_OUTPUT"
             exit 0

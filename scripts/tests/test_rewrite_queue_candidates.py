@@ -180,8 +180,11 @@ class WorkflowWiringTests(unittest.TestCase):
 
     def test_idle_fill_caps_the_backlog(self):
         src = self._wf("12-rewrite-idle-fill.yml")
-        self.assertIn("eligible_rewrite_asins", src)
+        # 件数は rewrite_queue.backlog_asins (= eligible_rewrite_asins − #9239 の冷却中)。
+        self.assertIn("rewrite_queue.py --backlog-count", src)
         self.assertIn("REWRITE_QUEUE_CAP", src)
+        # close 一覧が無いと冷却中を除けない。03 と同じ取り方で渡しているか。
+        self.assertIn("CLOSED_ARTICLE_PRS=", src)
 
     def test_repoless_lane_uses_the_same_helper(self):
         # repoless は候補選定を article_pick に委ねる (#9073)

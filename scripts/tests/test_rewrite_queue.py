@@ -271,3 +271,77 @@ class WithdrawDeferredTest(unittest.TestCase):
         """判定できないことを理由に候補を減らさない (生成側の defer が独立に効く)。"""
         with mock.patch.dict("sys.modules", {"score_per_asin_info": None}):
             self.assertTrue(rq.is_generatable("B0AAAAAAAA"))
+
+
+class BacklogExcludesCoolingTest(unittest.TestCase):
+    """12 の待ち行列上限は、03 が #9239 で pick しないマーカーを数えない。
+
+    実測 (2026-11-07): マーカー 12 件 = 上限のうち 9 件が close 後の冷却中で、
+    12 は積まず 03 はリライト候補 0 件のまま止まった。
+    """
+
+    COOL = "B0COOL0001"
+    STUCK = "B0STUCK001"
+    READY = "B0READY001"
+
+    def _setup(self, d: str) -> tuple[str, str, str]:
+        articles = os.path.join(d, "articles")
+        queue = os.path.join(d, "queue")
+        for a in (self.COOL, self.STUCK, self.READY):
+            _touch(os.path.join(articles, f"2026-06-01-{a}.json"))
+            rq.write_marker(a, f"2026-06-01-{a}", queue, requested_at="2026-10-01T00:00:00Z")
+        closed = os.path.join(d, "closed.json")
+        rows = [
+            {"title": f"feat: add article for {self.COOL}", "closedAt": "2026-11-01T00:00:00Z"},
+            {"title": f"feat: add article for {self.STUCK}", "closedAt": "2026-10-20T00:00:00Z"},
+            {"title": f"feat: add article for {self.STUCK}", "closedAt": "2026-11-02T00:00:00Z"},
+        ]
+        with open(closed, "w", encoding="utf-8") as f:
+            json.dump(rows, f)
+        return articles, queue, closed
+
+    def test_cooling_and_stuck_markers_do_not_fill_the_cap(self) -> None:
+        import datetime as dt
+
+        now = dt.datetime(2026, 11, 7, tzinfo=dt.timezone.utc)
+        with tempfile.TemporaryDirectory() as d:
+            articles, queue, closed = self._setup(d)
+            self.assertEqual(len(rq.eligible_rewrite_asins(articles, queue)), 3)
+            self.assertEqual(rq.backlog_asins(articles, queue, closed, now=now), {self.READY})
+            self.assertEqual(rq.cooling_asins(closed, now=now), {self.COOL, self.STUCK})
+
+    def test_cooldown_over_counts_again(self) -> None:
+        import datetime as dt
+
+        # COOL は最後の close から 14 日経過。STUCK は 1 回目の close (10-20) が 30 日の
+        # 窓から出て 1 回扱いになり、最後の close (11-02) からも 14 日経過で戻る。
+        later = dt.datetime(2026, 11, 20, tzinfo=dt.timezone.utc)
+        with tempfile.TemporaryDirectory() as d:
+            articles, queue, closed = self._setup(d)
+            self.assertEqual(
+                rq.backlog_asins(articles, queue, closed, now=later),
+                {self.COOL, self.STUCK, self.READY},
+            )
+
+    def test_missing_or_broken_closed_list_counts_every_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            articles, queue, _ = self._setup(d)
+            with mock.patch.dict(os.environ, {"CLOSED_ARTICLE_PRS": ""}):
+                self.assertEqual(len(rq.backlog_asins(articles, queue)), 3)
+            broken = os.path.join(d, "broken.json")
+            with open(broken, "w", encoding="utf-8") as f:
+                f.write("{not json")
+            self.assertEqual(len(rq.backlog_asins(articles, queue, broken)), 3)
+
+    def test_cli_backlog_count_prints_only_the_number(self) -> None:
+        import contextlib
+        import io
+
+        with tempfile.TemporaryDirectory() as d:
+            articles, queue, closed = self._setup(d)
+            buf = io.StringIO()
+            argv = ["rewrite_queue.py", "--articles-dir", articles, "--queue-dir", queue,
+                    "--closed-prs", closed, "--backlog-count"]
+            with mock.patch.object(sys, "argv", argv), contextlib.redirect_stdout(buf):
+                self.assertEqual(rq.main(), 0)
+            self.assertRegex(buf.getvalue().strip(), r"^\d+$")
