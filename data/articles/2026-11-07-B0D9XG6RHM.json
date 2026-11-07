@@ -173,14 +173,14 @@
     },
     {
       "id": "src-2",
-      "name": "Amazon 商品ページ",
-      "url": "https://www.amazon.co.jp/dp/B0D9XG6RHM/?tag=chk01-22",
-      "tier": "medium",
-      "evidence_type": "primary",
+      "name": "ヨドバシ.com",
+      "url": "https://www.yodobashi.com/product/100000001008894168/",
+      "tier": "low",
+      "evidence_type": "secondary",
       "published_at": "2026-11-07",
       "author": "販売店",
-      "conflict_of_interest": "disclosed",
-      "notes": "商品の仕様と利用シーンの想定"
+      "conflict_of_interest": "possible",
+      "notes": "いろいろパンのつめあわせの製品仕様"
     }
   ],
   "claims": [
@@ -209,9 +209,10 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-2"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "製品仕様"
     },
     {
@@ -219,9 +220,10 @@
       "category": "safety",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-2"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "対象年齢"
     }
   ],
