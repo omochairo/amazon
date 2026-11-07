@@ -372,5 +372,125 @@ class ReopenTokenTest(unittest.TestCase):
         self.assertEqual(calls["reopen"]["GH_TOKEN"], "app")
 
 
+
+
+class EvaluateAutoMergeTests(unittest.TestCase):
+    """required check 済みで auto-merge が外れた記事 PR の復旧判定 (2026-11-07)。
+
+    実例: #11125 / #11289 (05 の有効化が GitHub の 500 で失敗 → 再実行で直った)、
+    #11124 (PR の head が古いコミットで止まり、close→reopen で直った)。
+    """
+
+    HEAD = "a" * 40
+
+    def _eval(self, **kw):
+        from recover_pending_pr_checks import evaluate_auto_merge
+        args = dict(
+            required_satisfied=True,
+            auto_merge_armed=False,
+            labels=[],
+            mergeable="MERGEABLE",
+            pr_head_sha=self.HEAD,
+            branch_sha=self.HEAD,
+            last_run={"status": "completed", "conclusion": "success",
+                      "updatedAt": "2026-09-08T11:00:00Z", "headSha": self.HEAD,
+                      "databaseId": 1},
+            now=NOW,
+        )
+        args.update(kw)
+        return evaluate_auto_merge(**args)
+
+    def test_checks_passed_but_not_armed_is_rerun(self):
+        self.assertEqual(self._eval(), "rerun")
+
+    def test_pr_head_behind_branch_is_desync(self):
+        self.assertEqual(self._eval(branch_sha="b" * 40), "desync")
+
+    def test_already_armed_or_checks_not_passed_is_noop(self):
+        self.assertEqual(self._eval(auto_merge_armed=True), "noop")
+        self.assertEqual(self._eval(required_satisfied=False), "noop")
+
+    def test_not_an_auto_merge_target_is_noop(self):
+        # 05 が一度も走っていない PR (記事以外) と、05 がスコープ外と判定した PR
+        self.assertEqual(self._eval(last_run=None), "noop")
+        self.assertEqual(self._eval(labels=["auto-merge-skipped"]), "noop")
+
+    def test_conflicting_is_noop(self):
+        self.assertEqual(self._eval(mergeable="CONFLICTING"), "noop")
+
+    def test_waits_while_05_is_running_or_just_finished(self):
+        running = {"status": "in_progress", "updatedAt": "2026-09-08T11:00:00Z",
+                   "headSha": self.HEAD, "databaseId": 1}
+        self.assertEqual(self._eval(last_run=running), "noop")
+        just = {"status": "completed", "updatedAt": "2026-09-08T11:50:00Z",
+                "headSha": self.HEAD, "databaseId": 1}
+        self.assertEqual(self._eval(last_run=just), "noop")
+
+    def test_newer_head_without_its_05_run_waits(self):
+        old = {"status": "completed", "updatedAt": "2026-09-08T11:00:00Z",
+               "headSha": "c" * 40, "databaseId": 1}
+        self.assertEqual(self._eval(last_run=old), "noop")
+
+    def test_only_once_per_pr(self):
+        self.assertEqual(self._eval(labels=["auto-merge-recovered"]), "exhausted")
+        self.assertEqual(
+            self._eval(labels=["auto-merge-recovered"], branch_sha="b" * 40), "exhausted")
+
+    def test_pr_fields_include_auto_merge_request(self):
+        self.assertIn("autoMergeRequest", PR_FIELDS)
+
+
+class RecoverAutoMergeIoTests(unittest.TestCase):
+    """I/O 層: 再実行・close→reopen を呼ぶ順と、dry-run で何もしないこと。"""
+
+    def _pr(self, **kw):
+        pr = {"number": 7, "headRefName": "feat/x", "headRefOid": "a" * 40,
+              "statusCheckRollup": [{"name": "validate", "conclusion": "SUCCESS"},
+                                    {"name": "unit-tests", "conclusion": "SUCCESS"}],
+              "labels": [], "mergeable": "MERGEABLE", "autoMergeRequest": None}
+        pr.update(kw)
+        return pr
+
+    def _run(self, prs, branch_sha, dry_run=False):
+        import recover_pending_pr_checks as m
+        last = {"status": "completed", "updatedAt": "2026-09-08T11:00:00Z",
+                "headSha": "a" * 40, "databaseId": 99}
+        with mock.patch.object(m, "fetch_last_auto_merge_run", return_value=last), \
+                mock.patch.object(m, "fetch_branch_sha", return_value=branch_sha), \
+                mock.patch.object(m, "mark_auto_merge_recovered") as mark, \
+                mock.patch.object(m, "rerun_auto_merge") as rerun, \
+                mock.patch.object(m.subprocess, "run") as run, \
+                mock.patch.object(m, "reopen_env", return_value=None):
+            counts = m.recover_auto_merge("o/r", prs, NOW, dry_run)
+        return counts, mark, rerun, run
+
+    def test_rerun_marks_then_reruns_05(self):
+        counts, mark, rerun, run = self._run([self._pr()], "a" * 40)
+        self.assertEqual(counts["rerun"], 1)
+        mark.assert_called_once_with("o/r", 7)
+        rerun.assert_called_once_with("o/r", 99)
+        run.assert_not_called()
+
+    def test_desync_closes_and_reopens(self):
+        counts, mark, rerun, run = self._run([self._pr()], "b" * 40)
+        self.assertEqual(counts["desync"], 1)
+        rerun.assert_not_called()
+        cmds = [c.args[0][:3] for c in run.call_args_list]
+        self.assertEqual(cmds, [["gh", "pr", "close"], ["gh", "pr", "reopen"]])
+
+    def test_dry_run_changes_nothing(self):
+        counts, mark, rerun, run = self._run([self._pr()], "a" * 40, dry_run=True)
+        self.assertEqual(counts["rerun"], 1)
+        mark.assert_not_called()
+        rerun.assert_not_called()
+        run.assert_not_called()
+
+    def test_armed_pr_is_not_even_queried(self):
+        import recover_pending_pr_checks as m
+        with mock.patch.object(m, "fetch_last_auto_merge_run") as last:
+            m.recover_auto_merge("o/r", [self._pr(autoMergeRequest={"x": 1})], NOW, False)
+        last.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
