@@ -492,5 +492,113 @@ class RecoverAutoMergeIoTests(unittest.TestCase):
         last.assert_not_called()
 
 
+class EvaluateDataPrAutoMergeTests(unittest.TestCase):
+    """05 の対象外のデータ更新 PR の自動マージ外れ (2026-11-07)。
+
+    実例: #11299 (home-ops 21-semantic-related-ruri が `gh pr merge --auto` に失敗し、
+    ::warning:: だけで緑終了。required check は全部緑・CLEAN のまま止まった)。
+    """
+
+    def _eval(self, **kw):
+        from recover_pending_pr_checks import evaluate_data_pr_auto_merge
+        args = dict(
+            required_satisfied=True,
+            auto_merge_armed=False,
+            labels=[],
+            mergeable="MERGEABLE",
+            author="app/omochairo-fetch-bot",
+            branch="semantic-related-data/42313827936",
+            created_at="2026-09-08T11:00:00Z",
+            now=NOW,
+        )
+        args.update(kw)
+        return evaluate_data_pr_auto_merge(**args)
+
+    def test_bot_data_pr_with_checks_passed_is_armed(self):
+        self.assertEqual(self._eval(), "arm")
+
+    def test_already_armed_or_checks_not_passed_is_noop(self):
+        self.assertEqual(self._eval(auto_merge_armed=True), "noop")
+        self.assertEqual(self._eval(required_satisfied=False), "noop")
+
+    def test_human_jules_dependabot_prs_are_not_touched(self):
+        for login in ("omochairo", "google-labs-jules[bot]", "app/dependabot", None):
+            self.assertEqual(self._eval(author=login), "noop", login)
+
+    def test_manual_review_lanes_are_not_armed(self):
+        for branch in ("data/demand-supply-probe-1", "data/ubersuggest-product-probe-1",
+                       "data/ubersuggest-llm-judge-1", "pip-compile-hashes/1"):
+            self.assertEqual(self._eval(branch=branch), "noop", branch)
+        # 同じ data/ でも自動マージする作り手は対象
+        self.assertEqual(self._eval(branch="data/fetch-2026-11-07"), "arm")
+
+    def test_only_mergeable(self):
+        self.assertEqual(self._eval(mergeable="UNKNOWN"), "noop")
+        self.assertEqual(self._eval(mergeable="CONFLICTING"), "noop")
+        self.assertEqual(self._eval(mergeable=None), "noop")
+
+    def test_waits_after_creation(self):
+        self.assertEqual(self._eval(created_at="2026-09-08T11:50:00Z"), "noop")
+        self.assertEqual(self._eval(created_at=None), "noop")
+
+    def test_skipped_label_is_noop_and_only_once(self):
+        self.assertEqual(self._eval(labels=["auto-merge-skipped"]), "noop")
+        self.assertEqual(self._eval(labels=["auto-merge-recovered"]), "exhausted")
+
+    def test_pr_fields_include_author_and_created_at(self):
+        fields = PR_FIELDS.split(",")
+        self.assertIn("author", fields)
+        self.assertIn("createdAt", fields)
+
+
+class RecoverDataPrAutoMergeIoTests(unittest.TestCase):
+    """I/O 層: 05 が走っていないデータ PR は、ラベル → auto-merge の順で 1 回だけ付ける。"""
+
+    def _pr(self, **kw):
+        pr = {"number": 11299, "headRefName": "semantic-related-data/42313827936",
+              "headRefOid": "d" * 40,
+              "statusCheckRollup": [{"name": "validate", "conclusion": "SUCCESS"},
+                                    {"name": "unit-tests", "conclusion": "SUCCESS"}],
+              "labels": [], "mergeable": "MERGEABLE", "autoMergeRequest": None,
+              "author": {"login": "app/omochairo-fetch-bot"},
+              "createdAt": "2026-09-08T10:00:00Z"}
+        pr.update(kw)
+        return pr
+
+    def _run(self, prs, dry_run=False):
+        import recover_pending_pr_checks as m
+        calls = []
+        with mock.patch.object(m, "fetch_last_auto_merge_run", return_value=None), \
+                mock.patch.object(m, "fetch_branch_sha") as sha, \
+                mock.patch.object(m, "mark_auto_merge_recovered",
+                                  side_effect=lambda *a: calls.append("mark")) as mark, \
+                mock.patch.object(m, "rerun_auto_merge") as rerun, \
+                mock.patch.object(m.subprocess, "run",
+                                  side_effect=lambda *a, **k: calls.append(a[0])) as run, \
+                mock.patch.object(m, "reopen_env", return_value=None):
+            counts = m.recover_auto_merge("o/r", prs, NOW, dry_run)
+        return counts, calls, mark, rerun, sha
+
+    def test_marks_then_arms_with_head_pin(self):
+        counts, calls, mark, rerun, sha = self._run([self._pr()])
+        self.assertEqual(counts["armed"], 1)
+        self.assertEqual(calls[0], "mark")
+        self.assertEqual(calls[1][:4], ["gh", "pr", "merge", "11299"])
+        self.assertIn("--auto", calls[1])
+        self.assertEqual(calls[1][calls[1].index("--match-head-commit") + 1], "d" * 40)
+        rerun.assert_not_called()
+        sha.assert_not_called()
+
+    def test_dry_run_changes_nothing(self):
+        counts, calls, mark, rerun, _ = self._run([self._pr()], dry_run=True)
+        self.assertEqual(counts["armed"], 1)
+        self.assertEqual(calls, [])
+
+    def test_human_pr_without_05_run_is_left_alone(self):
+        counts, calls, *_ = self._run([self._pr(author={"login": "omochairo"})])
+        self.assertEqual(counts["armed"], 0)
+        self.assertEqual(calls, [])
+
+
 if __name__ == "__main__":
     unittest.main()
