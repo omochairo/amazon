@@ -1,30 +1,13 @@
 {
   "asin": "B0FPXDQQL2",
-  "fetched_at": "2026-10-02T00:59:53.971058+00:00",
+  "fetched_at": "2026-11-07T01:03:11.274748+00:00",
   "query": "レゴ デュプロ はじめてのデュプロ in",
   "engine": "tavily",
-  "raw_count": 10,
+  "raw_count": 20,
   "empty_streak": 0,
   "sources": [
     {
-      "title": "レゴ デュプロ | おもちゃ通販のトイザらス オンラインストア",
-      "url": "https://www.toysrus.co.jp/ja-jp/lego/lego-duplo",
-      "snippet": "レゴ(LEGO)デュプロは1.5歳(18ヶ月)から遊べる大きなブロック。はじめてのブロック遊びや知育に最適。動物・乗り物・数字など豊富なテーマで想像力を育む。",
-      "host": "toysrus.co.jp"
-    },
-    {
-      "title": "はじめてのデュプロ のりものをつくろう 10474 | DUPLO",
-      "url": "https://www.lego.com/ja-jp/product/creative-vehicles-10474",
-      "snippet": "レゴ®デュプロ® はじめてのデュプロ のりものをつくろう（10474）は、自由な発想でのりものがつくれる組み立てセットです。色や形の異なるブロックやパーツ、動く",
-      "host": "lego.com",
-      "link": {
-        "status": "unknown",
-        "checked_at": "2026-10-24",
-        "http": 403
-      }
-    },
-    {
-      "title": "デュプロ 10848 はじめてのデュプロ はじめてセット - ブロック",
+      "title": "デュプロ 10848 はじめてのデュプロ はじめてセット - レゴ - 価格.com",
       "url": "https://kakaku.com/item/S0000831391",
       "snippet": "レゴ. デュプロ 10848 はじめてのデュプロ はじめてセット. ¥12,290～: レビュー 5.00. ランキング: －位 · レビュー: 5.00: （1件） · クチコミ: －件: （募集中）.",
       "host": "kakaku.com",
@@ -35,7 +18,7 @@
       }
     },
     {
-      "title": "レゴ デュプロ はじめてのデュプロ”くるまとトラック” 1才半から 10816 ...",
+      "title": "レゴ デュプロ はじめてのデュプロ”くるまとトラック” 1 ... - YouTube",
       "url": "https://www.youtube.com/watch?v=yMjlWwDPPgM",
       "snippet": "レゴデュプロは、小さな手でもしっかり遊べる、1才半からのお子さまのための大きなブロック。カラフルな色や、絵付きのブロック、窓や車など、好奇心",
       "host": "youtube.com",
@@ -46,7 +29,18 @@
       }
     },
     {
-      "title": "レゴデュプロをはじめて買うならコレがおすすめ！1歳・2歳・3 ...",
+      "title": "お子さまといっしょに楽しむ はじめてのレゴ®デュプロ®の組み立て",
+      "url": "https://www.lego.com/ja-jp/preschool/articles/first-duplo-build",
+      "snippet": "ヒント：簡単なレゴ デュプロ セットからはじめてみましょう。あまり細かく指示を出さずに、まずはブロックを触らせてみるだけでもOK。積み上げたり、壊したりする動作は",
+      "host": "lego.com",
+      "link": {
+        "status": "ok",
+        "checked_at": "2026-11-07",
+        "http": 200
+      }
+    },
+    {
+      "title": "レゴデュプロをはじめて買うならコレがおすすめ！1歳・2歳・3歳や ...",
       "url": "https://ouchi-iku.com/toys/lego-duplo",
       "snippet": "レゴデュプロを初めて購入するなら、お子さんの年齢や興味に合わせて選ぶのがポイント！ 1歳・2歳・3歳、それぞれの発達段階にぴったり合ったセットを選べ",
       "host": "ouchi-iku.com",
@@ -55,6 +49,72 @@
         "checked_at": "2026-10-24",
         "http": 200
       }
+    }
+  ],
+  "dropped": [
+    {
+      "host": "toysrus.co.jp",
+      "reason": "retail"
+    },
+    {
+      "host": "amazon.co.jp",
+      "reason": "retail"
+    },
+    {
+      "host": "youtube.com",
+      "reason": "duplicate_host"
+    },
+    {
+      "host": "lego.com",
+      "reason": "duplicate_host"
+    },
+    {
+      "host": "lego.com",
+      "reason": "duplicate_host"
+    },
+    {
+      "host": "lego.com",
+      "reason": "duplicate_host"
+    },
+    {
+      "host": "search.rakuten.co.jp",
+      "reason": "search_result"
+    },
+    {
+      "host": "lego.com",
+      "reason": "duplicate_host"
+    },
+    {
+      "host": "lego.com",
+      "reason": "duplicate_host"
+    },
+    {
+      "host": "manuall.jp",
+      "reason": "off_topic"
+    },
+    {
+      "host": "yelp.com",
+      "reason": "unrelated"
+    },
+    {
+      "host": "biccamera.com",
+      "reason": "retail"
+    },
+    {
+      "host": "tradingkey.com",
+      "reason": "unrelated"
+    },
+    {
+      "host": "tradingkey.com",
+      "reason": "unrelated"
+    },
+    {
+      "host": "tradingkey.com",
+      "reason": "unrelated"
+    },
+    {
+      "host": "kumin.news",
+      "reason": "off_topic"
     }
   ]
 }
