@@ -37,6 +37,9 @@ permissions:
   # check-run / commit status に権限が無かった。
   checks: read
   statuses: read
+  # 2026-11-07: 自動マージ外れの復旧で 05 の直近 run を `gh run list` で読む。
+  # 再実行 (`gh run rerun`) は App token で行うので、ここは read で足りる。
+  actions: read
 
 concurrency:
   group: pr-check-recovery

@@ -126,8 +126,34 @@ UNKNOWN_ESCALATE_MULTIPLIER = 6
 
 PR_FIELDS = (
     "number,headRefName,headRefOid,baseRefName,isDraft,isCrossRepository,"
-    "statusCheckRollup,labels,mergeable"
+    "statusCheckRollup,labels,mergeable,autoMergeRequest"
 )
+
+# --- 自動マージ外れの復旧 (2026-11-07) -------------------------------------
+#
+# required check は全部通ったのに auto-merge が付いていない記事 PR を拾う。
+# 05-jules-auto-merge は有効化に失敗しても緑で終わり (::warning:: だけ)、ジョブ内の
+# 再試行は「6 分以内に mergeStateStatus=CLEAN になったとき」しか動かない。GitHub が
+# 500 を返したり mergeable の計算が遅れたりすると、そのまま 24h 後の
+# 45-stale-pr-sweeper (人手) まで誰も拾わなかった (2026-11-04〜06 の 3 日で 3 件:
+# #11124 / #11125 / #11289)。
+#
+# 型が 2 つある:
+#   rerun   : PR の head とブランチの実体が一致している。05 の run を再実行すれば
+#             スコープ検査からやり直して有効化される (#11125 / #11289 はこれで直った)
+#   desync  : GitHub 上の PR の head が古いコミットで止まり、ブランチの実体は先へ
+#             進んでいる (#11124)。05 を再実行しても古い head に pin して外れ続ける。
+#             close→reopen で PR が実体に同期し、synchronize 相当で 05 が走り直す
+#
+# どちらも 1 PR につき 1 回だけ (ラベル AUTO_MERGE_RECOVERY_LABEL で冪等化)。
+# 再実行は 05 のスコープ検査をそのまま通すので、記事以外のファイルが混ざった PR に
+# auto-merge を付けてしまうことはない (ここで auto-merge を直接付けない理由)。
+AUTO_MERGE_WORKFLOW = "05-jules-auto-merge.yml"
+AUTO_MERGE_RECOVERY_LABEL = "auto-merge-recovered"
+AUTO_MERGE_SKIPPED_LABEL = "auto-merge-skipped"
+# 05 は有効化後に最大 6 分 (15s × 24) マージを待つ。終わってから少し置いて、
+# GitHub 側の遅れ (mergeable の計算・auto-merge の反映) を誤検知しない。
+AUTO_MERGE_GRACE_MINUTES = 20
 
 MERGEABLE_CONFLICTING = "CONFLICTING"
 MERGEABLE_UNKNOWN = "UNKNOWN"
@@ -321,7 +347,146 @@ def evaluate_pr(
     return Action("close_reopen")
 
 
+def evaluate_auto_merge(
+    *,
+    required_satisfied: bool,
+    auto_merge_armed: bool,
+    labels: List[str],
+    mergeable: Optional[str],
+    pr_head_sha: str,
+    branch_sha: Optional[str],
+    last_run: Optional[Dict[str, Any]],
+    now: dt.datetime,
+    grace_minutes: int = AUTO_MERGE_GRACE_MINUTES,
+) -> str:
+    """自動マージ外れの PR に次に取るアクションを返す純粋関数 (2026-11-07)。
+
+    戻り値: noop | rerun | desync | exhausted
+
+    last_run は 05 の直近 run (``status`` / ``conclusion`` / ``updatedAt`` /
+    ``headSha`` / ``databaseId``)。05 が一度も走っていない PR (記事以外の PR) は
+    対象外なので noop。
+    """
+    if not required_satisfied or auto_merge_armed:
+        return "noop"
+    if AUTO_MERGE_SKIPPED_LABEL in labels:
+        return "noop"  # 05 がスコープ外と判定した。人が中身を見る PR
+    if last_run is None:
+        return "noop"  # 05 の対象 (記事・ブランドの PR) ではない
+    if mergeable == MERGEABLE_CONFLICTING:
+        return "noop"  # dirty は base の取り込みが要る。再実行では直らない
+    if last_run.get("status") != "completed":
+        return "noop"  # 05 がまだ動いている
+    updated = last_run.get("updatedAt")
+    if not updated or now - _parse_ts(updated) < dt.timedelta(minutes=grace_minutes):
+        return "noop"  # 終わった直後。GitHub 側の反映待ちかもしれない
+    if AUTO_MERGE_RECOVERY_LABEL in labels:
+        return "exhausted"  # 1 回試して直らなかった。人に回す
+    if branch_sha and branch_sha != pr_head_sha:
+        return "desync"
+    if last_run.get("headSha") != pr_head_sha:
+        return "noop"  # 新しい head の 05 がまだ来ていない (synchronize 待ち)
+    return "rerun"
+
+
 # --- I/O 層 (gh CLI 経由。単体テストでは触らない) -----------------------------
+
+def fetch_last_auto_merge_run(repo: str, branch: str) -> Optional[Dict[str, Any]]:
+    res = subprocess.run(
+        ["gh", "run", "list", "-R", repo, "--workflow", AUTO_MERGE_WORKFLOW,
+         "--branch", branch, "--limit", "1",
+         "--json", "databaseId,status,conclusion,updatedAt,headSha"],
+        capture_output=True, text=True,
+    )
+    if res.returncode != 0:
+        logger.warning("could not list %s runs for %s: %s", AUTO_MERGE_WORKFLOW, branch,
+                       (res.stderr or "").strip())
+        return None
+    runs = json.loads(res.stdout or "[]")
+    return runs[0] if runs else None
+
+
+def fetch_branch_sha(repo: str, branch: str) -> Optional[str]:
+    res = subprocess.run(
+        ["gh", "api", f"repos/{repo}/git/ref/heads/{branch}", "-q", ".object.sha"],
+        capture_output=True, text=True,
+    )
+    if res.returncode != 0:
+        logger.warning("could not resolve branch %s: %s", branch, (res.stderr or "").strip())
+        return None
+    return res.stdout.strip() or None
+
+
+def mark_auto_merge_recovered(repo: str, pr_number: int) -> None:
+    subprocess.run(
+        ["gh", "label", "create", AUTO_MERGE_RECOVERY_LABEL, "-R", repo,
+         "--color", "ededed",
+         "--description", "PR Check Recovery が自動マージ外れの復旧を実施済み"],
+        capture_output=True, text=True,
+    )
+    subprocess.run(["gh", "pr", "edit", str(pr_number), "-R", repo,
+                     "--add-label", AUTO_MERGE_RECOVERY_LABEL],
+                    check=True, capture_output=True, text=True)
+
+
+def rerun_auto_merge(repo: str, run_id: int) -> None:
+    # App token で叩く (11-link-report-aggregate が同じ App で `gh workflow run` している)。
+    # workflow の GITHUB_TOKEN は actions: read のまま据え置く。
+    subprocess.run(["gh", "run", "rerun", str(run_id), "-R", repo],
+                    check=True, capture_output=True, text=True, env=reopen_env())
+
+
+def recover_auto_merge(repo: str, prs: List[Dict[str, Any]], now: dt.datetime,
+                       dry_run: bool) -> Dict[str, int]:
+    """required check 済みで auto-merge が外れた記事 PR を復旧する。"""
+    counts = {"rerun": 0, "desync": 0, "exhausted": 0}
+    for pr in prs:
+        rollup = pr.get("statusCheckRollup") or []
+        if not required_checks_satisfied(rollup) or pr.get("autoMergeRequest"):
+            continue  # 安い条件で先に落とし、API を叩く PR を絞る
+        labels = [l.get("name") for l in (pr.get("labels") or [])]
+        if AUTO_MERGE_SKIPPED_LABEL in labels:
+            continue
+        branch = pr["headRefName"]
+        last_run = fetch_last_auto_merge_run(repo, branch)
+        if last_run is None:
+            continue
+        action = evaluate_auto_merge(
+            required_satisfied=True,
+            auto_merge_armed=False,
+            labels=labels,
+            mergeable=pr.get("mergeable"),
+            pr_head_sha=pr["headRefOid"],
+            branch_sha=fetch_branch_sha(repo, branch),
+            last_run=last_run,
+            now=now,
+        )
+        if action == "noop":
+            continue
+        counts[action] += 1
+        if action == "exhausted":
+            emit_warning_annotation(
+                f"pr={pr['number']} auto_merge_recovery=exhausted "
+                "(checks passed but auto-merge is still off after one recovery; needs human)")
+            continue
+        logger.info("pr=%s auto_merge_recovery=%s head=%s", pr["number"], action,
+                    pr["headRefOid"])
+        if dry_run:
+            continue
+        # 先にラベルを付ける: 操作が途中で落ちても次の run で繰り返さない (無限ループ
+        # 禁止)。落ちたら check=True で run が赤くなるので、黙って枠が消えることはない。
+        mark_auto_merge_recovered(repo, pr["number"])
+        if action == "desync":
+            # PR の head が実体に追いつけば synchronize 相当で 05 が走り直す
+            env = reopen_env()
+            subprocess.run(["gh", "pr", "close", str(pr["number"]), "-R", repo],
+                            check=True, capture_output=True, text=True, env=env)
+            subprocess.run(["gh", "pr", "reopen", str(pr["number"]), "-R", repo],
+                            check=True, capture_output=True, text=True, env=env)
+        else:
+            rerun_auto_merge(repo, int(last_run["databaseId"]))
+    return counts
+
 
 def list_candidate_prs(repo: str) -> List[Dict[str, Any]]:
     res = subprocess.run(
@@ -467,6 +632,12 @@ def main() -> int:
         else:
             logger.debug("pr=%s action=noop", pr["number"])
 
+    auto_merge = recover_auto_merge(args.repo, prs, now, args.dry_run)
+    logger.info(
+        "auto-merge recovery: rerun=%d desync_reopened=%d exhausted=%d",
+        auto_merge["rerun"], auto_merge["desync"], auto_merge["exhausted"],
+    )
+
     logger.info(
         "summary: candidates=%d close_reopened=%d "
         "recovered_close_reopen=%d recovered_none=%d dirty=%d deferred_unknown=%d",
@@ -479,7 +650,7 @@ def main() -> int:
     # summary と矛盾していた。recovered_none>0 でも同じ矛盾が 2026-09-20 の
     # run 35536800101 / 35543469464 で実際に出ていた)。
     if (close_reopened == 0 and recovered["none"] == 0 and dirty == 0
-            and deferred_unknown_escalated == 0):
+            and deferred_unknown_escalated == 0 and not any(auto_merge.values())):
         logger.info("no recovery action needed this run")
 
     return 0
