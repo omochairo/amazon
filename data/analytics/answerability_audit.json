@@ -1,45 +1,30 @@
 {
-  "generated_at": "2026-11-07T23:38:46Z",
+  "generated_at": "2026-11-08T23:43:12Z",
   "model": "gemma4:26b-a4b-it-qat",
-  "source_week": "2026-W44",
-  "baseline_ctr": 0.026847757422615286,
+  "source_week": "2026-W45",
+  "baseline_ctr": 0.0360555255092843,
   "pages": [
     {
       "page": "https://navi.omcha.jp/products/b0h691176h/",
       "asin": "B0H691176H",
-      "page_coverage_avg": 0.84,
+      "page_coverage_avg": 0.82,
       "queries": [
         {
-          "query": "むぎゅぽこアンパンマン",
-          "impressions": 228,
-          "position": 10.092105263157896,
+          "query": "むぎ ゅ ぽこ アンパンマン どこに 売っ てる",
+          "impressions": 19,
+          "position": 9.631578947368421,
           "answered": true,
           "coverage": 0.8,
           "missing_aspects": [
-            "具体的な遊び方のバリエーション",
-            "商品のサイズ感や重量",
-            "実際のユーザーによる具体的な口コミ内容"
+            "実店舗での販売状況（トイザらスや家電量販店など）"
           ],
-          "note": "商品名での検索に対し、対象年齢、価格、安全性、特徴といった主要な情報を網羅しており、購買検討に必要な基本情報は十分に提供されています。",
-          "error": null
-        },
-        {
-          "query": "アンパンマン むぎゅぽこ",
-          "impressions": 80,
-          "position": 9.8625,
-          "answered": true,
-          "coverage": 0.9,
-          "missing_aspects": [
-            "具体的な遊び方のバリエーション",
-            "商品のサイズ感や重量"
-          ],
-          "note": "商品名に関する主要な情報（対象年齢、価格、安全性、特徴）が網羅されており、ユーザーの購買検討に必要な情報が十分に提供されています。",
+          "note": "オンラインショップの価格比較については詳しく述べられていますが、実店舗での取り扱いについては触れられていません。",
           "error": null
         },
         {
           "query": "むぎゅぽこアンパンマン販売店",
-          "impressions": 75,
-          "position": 7.613333333333333,
+          "impressions": 18,
+          "position": 10.5,
           "answered": true,
           "coverage": 0.8,
           "missing_aspects": [
@@ -50,27 +35,179 @@
           "error": null
         },
         {
+          "query": "アンパンマン むぎ ゅ ぽこ どこで 売っ てる",
+          "impressions": 18,
+          "position": 5.888888888888889,
+          "answered": true,
+          "coverage": 0.8,
+          "missing_aspects": [
+            "実店舗での販売状況"
+          ],
+          "note": "オンラインショップでの最安値や販売サイトについては具体的に回答されていますが、実店舗での取り扱いについては触れられていません。",
+          "error": null
+        },
+        {
+          "query": "どこで買うの？",
+          "impressions": 1,
+          "position": 19.0,
+          "answered": true,
+          "coverage": 0.9,
+          "missing_aspects": [],
+          "note": "Amazon、楽天、Yahooの3サイトが挙げられており、最安値に関する情報も含まれているため、十分に回答しています。",
+          "error": null
+        },
+        {
           "query": "むぎゅぽこ アンパンマン",
-          "impressions": 38,
-          "position": 9.789473684210526,
+          "impressions": 1,
+          "position": 11.0,
           "answered": true,
           "coverage": 0.8,
           "missing_aspects": [
             "商品の具体的なサイズや重量",
             "具体的な遊び方のバリエーション",
-            "購入者の具体的な口コミ内容（テキスト）」"
+            "購入者の具体的な口コミ内容（テキスト）"
           ],
           "note": "商品名での検索に対し、対象年齢、価格、特徴、安全性といった主要な情報を網羅しており、購買検討に必要な基本情報は十分に提供されています。",
           "error": null
+        }
+      ]
+    },
+    {
+      "page": "https://navi.omcha.jp/products/b0hdb6x1cn/",
+      "asin": "B0HDB6X1CN",
+      "page_coverage_avg": 0.5,
+      "queries": [
+        {
+          "query": "シャイン アルカナ ロッド 最 安値",
+          "impressions": 22,
+          "position": 8.09090909090909,
+          "answered": true,
+          "coverage": 1.0,
+          "missing_aspects": [],
+          "note": "検索クエリである「最安値」に対し、執筆時点でのAmazonの価格を明示し、他の主要サイトでは確認できない旨を回答しているため、十分に回答しています。",
+          "error": null
         },
         {
-          "query": "アンパンマンむぎゅぽこ",
-          "impressions": 28,
-          "position": 10.107142857142858,
+          "query": "シャインアルカナロッド どこで売ってる",
+          "impressions": 5,
+          "position": 9.2,
           "answered": true,
-          "coverage": 0.9,
+          "coverage": 0.7,
+          "missing_aspects": [
+            "実店舗（玩具店、家電量販店など）での販売状況",
+            "その他のオンラインショップの有無"
+          ],
+          "note": "Amazonでの価格と販売状況には触れていますが、実店舗での取り扱いについては言及されていません。",
+          "error": null
+        },
+        {
+          "query": "シャインアルカナロッド イオン",
+          "impressions": 5,
+          "position": 11.2,
+          "answered": false,
+          "coverage": 0.0,
+          "missing_aspects": [
+            "イオンでの取り扱い有無",
+            "イオンでの販売価格",
+            "イオンでの在庫状況"
+          ],
+          "note": "検索クエリは「イオン」での販売に関する情報を求めていますが、記事内にはAmazon、楽天、Yahoo!ショッピングの情報しか含まれていません。",
+          "error": null
+        },
+        {
+          "query": "シャインアルカナロッド 定価",
+          "impressions": 5,
+          "position": 16.0,
+          "answered": false,
+          "coverage": 0.0,
+          "missing_aspects": [
+            "商品の定価（メーカー希望小売価格）"
+          ],
+          "note": "記事内にはAmazonでの販売価格は記載されていますが、ユーザーが求めている「定価」に関する情報が一切含まれていません。",
+          "error": null
+        },
+        {
+          "query": "シャインアルカナロッド 最安値",
+          "impressions": 4,
+          "position": 3.75,
+          "answered": true,
+          "coverage": 0.8,
+          "missing_aspects": [
+            "他のECサイト（楽天・Yahoo!ショッピング）での価格情報（在庫なしの旨だけでなく、比較対象としての現状）",
+            "送料の有無"
+          ],
+          "note": "執筆時点でのAmazonの価格を明示しており、他の主要サイトには在庫がないことも述べているため、最安値を知りたいユーザーの意図には概ね応えられています。",
+          "error": null
+        }
+      ]
+    },
+    {
+      "page": "https://navi.omcha.jp/products/b0h1knthwz/",
+      "asin": "B0H1KNTHWZ",
+      "page_coverage_avg": 0.38,
+      "queries": [
+        {
+          "query": "たまごっちパラダイス amazon",
+          "impressions": 28,
+          "position": 3.357142857142857,
+          "answered": false,
+          "coverage": 0.2,
+          "missing_aspects": [
+            "Amazonでの価格情報",
+            "Amazonでの取り扱い状況",
+            "Amazonでのレビュー・口コミ"
+          ],
+          "note": "ユーザーはAmazonでの販売状況や価格を求めていますが、記事は楽天の価格情報に終始しており、Amazonに関する直接的な回答がありません。",
+          "error": null
+        },
+        {
+          "query": "amazon たまごっちパラダイス",
+          "impressions": 24,
+          "position": 2.541666666666667,
+          "answered": false,
+          "coverage": 0.2,
+          "missing_aspects": [
+            "Amazonでの価格情報",
+            "Amazonでの取り扱い状況"
+          ],
+          "note": "ユーザーはAmazonでの販売状況や価格を求めていますが、記事は楽天の価格情報に終始しており、Amazonに関する直接的な回答がありません。",
+          "error": null
+        },
+        {
+          "query": "amazonたまごっちパラダイス",
+          "impressions": 8,
+          "position": 2.25,
+          "answered": false,
+          "coverage": 0.3,
+          "missing_aspects": [
+            "Amazonでの価格情報",
+            "Amazonでの取り扱い状況",
+            "Amazonの口コミ・レビュー"
+          ],
+          "note": "検索クエリがAmazonでの購入を意図しているのに対し、記事は楽天の価格情報に偏っており、Amazonに関する具体的な情報が欠落しています。",
+          "error": null
+        },
+        {
+          "query": "たまごっちパラダイスamazon",
+          "impressions": 8,
+          "position": 7.5,
+          "answered": false,
+          "coverage": 0.2,
+          "missing_aspects": [
+            "Amazonでの価格情報",
+            "Amazonでの取り扱い状況"
+          ],
+          "note": "検索クエリはAmazonでの販売情報を求めていますが、記事内では楽天の価格情報しか記載されていません。",
+          "error": null
+        },
+        {
+          "query": "たまごっちパラダイス 値段",
+          "impressions": 5,
+          "position": 17.4,
+          "answered": true,
+          "coverage": 1.0,
           "missing_aspects": [],
-          "note": "商品名に関する主要な情報（対象年齢、価格、特徴、安全性）が簡潔にまとめられており、ユーザーの疑問に応える内容となっています。",
+          "note": "最安値のサイトと価格が明記されており、ユーザーの疑問に直接回答しています。",
           "error": null
         }
       ]
@@ -78,17 +215,18 @@
     {
       "page": "https://navi.omcha.jp/products/b0hdb8kg6g/",
       "asin": "B0HDB8KG6G",
-      "page_coverage_avg": 0.28,
+      "page_coverage_avg": 0.42,
       "queries": [
         {
           "query": "シャイン アルカナ ロッド 最 安値",
           "impressions": 11,
-          "position": 9.636363636363637,
+          "position": 10.909090909090908,
           "answered": true,
           "coverage": 0.8,
           "missing_aspects": [
             "他のECサイト（楽天、Yahoo!ショッピング等）との価格比較",
-            "送料の有無"
+            "送料の有無",
+            "中古品やセール情報の有無"
           ],
           "note": "Amazonの価格を提示しており、最安値を知りたいという意図には応えていますが、比較対象がAmazonのみであるため網羅性は限定的です。",
           "error": null
@@ -96,7 +234,7 @@
         {
           "query": "シャインアルカナロッド 予約 イオン",
           "impressions": 8,
-          "position": 10.25,
+          "position": 7.0,
           "answered": false,
           "coverage": 0.0,
           "missing_aspects": [
@@ -108,114 +246,71 @@
           "error": null
         },
         {
-          "query": "シャインアルカナロッド どこで売ってる",
-          "impressions": 4,
-          "position": 15.25,
+          "query": "どこで売ってる",
+          "impressions": 2,
+          "position": 20.5,
           "answered": false,
           "coverage": 0.3,
           "missing_aspects": [
             "実店舗での販売状況（トイザらス、家電量販店など）",
             "その他のオンラインショップ（楽天、Yahoo!ショッピングなど）の有無"
           ],
-          "note": "Amazonでの価格には触れていますが、具体的な販売店（どこで売っているか）の選択肢が不足しています。",
+          "note": "Amazonでの価格には触れていますが、具体的な販売店（どこで売っているか）の選択肢がAmazonのみに限定されており、実店舗の情報が不足しています。",
           "error": null
         },
         {
-          "query": "シャインアルカナロッド どこに売ってる",
-          "impressions": 2,
-          "position": 13.0,
-          "answered": false,
-          "coverage": 0.3,
-          "missing_aspects": [
-            "実店舗（玩具店、家電量販店、100円ショップ等）での販売状況",
-            "その他のオンラインショップ（楽天、Yahoo!ショッピング等）の有無"
-          ],
-          "note": "Amazonでの価格には触れていますが、「どこに売っているか」という販売チャネル（店舗・サイトの種類）に関する情報が不足しています。",
+          "query": "シャインアルカナロッド 値段",
+          "impressions": 1,
+          "position": 19.0,
+          "answered": true,
+          "coverage": 1.0,
+          "missing_aspects": [],
+          "note": "執筆時点のAmazonでの価格が明記されており、ユーザーの知りたい「値段」という疑問に直接回答しています。",
           "error": null
         },
         {
-          "query": "シャインアルカナロッド 在庫",
-          "impressions": 2,
-          "position": 13.0,
+          "query": "シャインアルカナロッド 品薄",
+          "impressions": 1,
+          "position": 10.0,
           "answered": false,
           "coverage": 0.0,
           "missing_aspects": [
-            "現在の在庫状況",
-            "在庫がある販売サイトの情報"
+            "商品の在庫状況",
+            "品薄の理由",
+            "再入荷情報",
+            "どこで買えるか（在庫があるショップ）"
           ],
-          "note": "記事には価格や対象年齢の情報はありますが、ユーザーが求めている「在庫の有無」に関する情報は一切含まれていません。",
+          "note": "記事は商品の特徴や価格、対象年齢に関する情報のみであり、検索クエリである「品薄」に関する情報は一切含まれていません。",
           "error": null
         }
       ]
     },
     {
-      "page": "https://navi.omcha.jp/products/b0h1kq5cmd/",
-      "asin": "B0H1KQ5CMD",
-      "page_coverage_avg": 0.7,
+      "page": "https://navi.omcha.jp/products/b0gc4mql8n/",
+      "asin": "B0GC4MQL8N",
+      "page_coverage_avg": 0.9,
       "queries": [
         {
-          "query": "たまごっちパラダイス 最安値",
-          "impressions": 24,
-          "position": 9.75,
+          "query": "はむにぎり 口コミ",
+          "impressions": 6,
+          "position": 10.5,
           "answered": true,
           "coverage": 0.8,
           "missing_aspects": [
-            "他のECサイト（楽天、Yahoo!ショッピング等）の具体的な価格比較情報"
+            "具体的なユーザーの体験談（良い点・悪い点の詳細）",
+            "購入者の具体的な評価（星の数やレビュー内容の引用）"
           ],
-          "note": "Amazonの価格を提示し、最安値圏であることには触れていますが、比較対象となる他のサイトの価格が明記されていないため、完全な「比較」としては不十分です。",
+          "note": "商品の特徴や仕様、価格に関する情報は網羅されていますが、実際の利用者の具体的な声（レビュー内容）が不足しています。",
           "error": null
         },
         {
-          "query": "たまごっちパラダイス 価格ドットコム",
-          "impressions": 11,
-          "position": 8.272727272727273,
-          "answered": false,
-          "coverage": 0.2,
-          "missing_aspects": [
-            "価格.comにおける現在の最安値情報",
-            "価格.comでのユーザーレビューや評価",
-            "価格.comでの価格推移グラフ",
-            "価格.comにおけるショップごとの価格比較"
-          ],
-          "note": "ユーザーは価格.comでの価格比較や評価を求めていますが、記事はAmazonの価格情報に限定されており、価格.comに関する情報が一切含まれていません。",
-          "error": null
-        },
-        {
-          "query": "たまごっちパラダイス 値段",
-          "impressions": 7,
-          "position": 11.857142857142858,
+          "query": "はむにぎり 洗う",
+          "impressions": 5,
+          "position": 15.2,
           "answered": true,
           "coverage": 1.0,
           "missing_aspects": [],
-          "note": "Amazonでの販売価格が明記されており、ユーザーが知りたい値段に関する情報に直接回答しています。",
-          "error": null
-        },
-        {
-          "query": "たまごっちパラダイス最安値",
-          "impressions": 2,
-          "position": 5.0,
-          "answered": true,
-          "coverage": 0.8,
-          "missing_aspects": [
-            "他のECサイト（楽天、Yahoo!ショッピング等）の具体的な価格比較",
-            "送料の有無",
-            "中古市場の価格情報"
-          ],
-          "note": "Amazonの価格を提示し、最安値圏であることには触れていますが、比較対象となる他のサイトの具体的な価格が示されていないため、完全な「徹底比較」には至っていません。",
-          "error": null
-        },
-        {
-          "query": "たまごっちパラダイス レビュー",
-          "impressions": 1,
-          "position": 24.0,
-          "answered": true,
-          "coverage": 0.7,
-          "missing_aspects": [
-            "実際の使用感（メリット・デメリット）",
-            "具体的な遊び方の詳細（ズームダイヤルの操作感など）",
-            "購入者の具体的な口コミ内容"
-          ],
-          "note": "製品の基本スペックや価格、対象年齢については網羅されていますが、「レビュー」を求めるユーザーが期待する具体的な使用感や体験談が不足しています。",
+          "note": "「洗えるか」という疑問に対し、洗濯不可であることと、汚れた際の具体的な対処法が明記されています。",
           "error": null
         }
       ]
