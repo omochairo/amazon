@@ -135,8 +135,8 @@
       "longevity": 3.5,
       "safety": 4.5,
       "cost_performance": 4.3,
-      "total": 14.8,
-      "total_100": 74,
+      "total": 15.8,
+      "total_100": 79,
       "score_rationale": [
         {
           "factor": "教育性",
@@ -182,6 +182,17 @@
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
       "notes": "キッズ用のメイクコスメセットとの記載あり。"
+    },
+    {
+      "id": "src-5",
+      "name": "レイス 会社概要",
+      "url": "https://www.race.co.jp/company/",
+      "tier": "high",
+      "evidence_type": "primary",
+      "published_at": "2026-11-08",
+      "author": "メーカー公式",
+      "conflict_of_interest": "possible",
+      "notes": "レイスグループの公式企業情報。"
     }
   ],
   "claims": [
@@ -190,9 +201,10 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-1"
+        "src-1",
+        "src-5"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "企業データベースにて子供用コスメの専門企業であることが確認できる"
     },
     {
@@ -244,7 +256,8 @@
       {
         "text": "子ども用コスメ専門企業による製品という安心感",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-5"
         ]
       },
       {
@@ -293,7 +306,8 @@
         "segment_label": "初めてキッズコスメを購入する層",
         "summary": "子ども用化粧品を専門に扱う企業の製品として、初めてのメイク遊びの候補になっています。",
         "supporting_source_ids": [
-          "src-1"
+          "src-1",
+          "src-5"
         ]
       }
     ]
