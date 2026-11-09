@@ -1,106 +1,106 @@
 {
-  "date": "2026-11-02",
-  "articles": 3180,
-  "failing": 61,
-  "failing_rate": 0.01918,
+  "date": "2026-11-09",
+  "articles": 3273,
+  "failing": 60,
+  "failing_rate": 0.01833,
   "by_check": {
     "how_to_choose": 33,
-    "sources_v5": 28
+    "sources_v5": 27
   },
   "by_deduction": {
-    "prices_verified": 896,
-    "title_serp_fit": 814,
-    "faq": 445,
-    "keywords": 363,
-    "howto_title_promise": 317,
-    "narrative": 299,
-    "verdict_headline": 246,
-    "review_signals": 227,
-    "tag_granularity": 208,
-    "claims_discipline": 192,
-    "product_image": 124,
+    "prices_verified": 927,
+    "title_serp_fit": 799,
+    "faq": 429,
+    "keywords": 352,
+    "howto_title_promise": 311,
+    "narrative": 292,
+    "verdict_headline": 236,
+    "review_signals": 225,
+    "tag_granularity": 205,
+    "claims_discipline": 194,
+    "product_image": 133,
     "how_to_choose": 64,
-    "cert_claims_declared": 21,
+    "cert_claims_declared": 18,
     "persona_fit_counts": 2
   },
   "deduction_reasons": {
     "cert_claims_declared": {
-      "claim が ['食品衛生法'] を主張しているが product.certifications 未申告 → 裏取りが走らない": 8,
+      "claim が ['食品衛生法'] を主張しているが product.certifications 未申告 → 裏取りが走らない": 7,
       "claim が ['ST'] を主張しているが product.certifications 未申告 → 裏取りが走らない": 6,
       "claim が ['CE', '食品衛生法'] を主張しているが product.certifications 未申告 → 裏取りが走らない": 2,
       "claim が ['CE'] を主張しているが product.certifications 未申告 → 裏取りが走らない": 2,
       "claim が ['ASTM'] を主張しているが product.certifications 未申告 → 裏取りが走らない": 1
     },
     "claims_discipline": {
-      "cross_checked=true が N 件未満": 171,
-      "claims が N 件未満": 21
+      "cross_checked=true が N 件未満": 174,
+      "claims が N 件未満": 20
     },
     "faq": {
-      "only N questions contain product name (recommend >=N)": 445
+      "only N questions contain product name (recommend >=N)": 429
     },
     "how_to_choose": {
       "how_to_choose に生の ASIN コード: ['BNCNHNLNNW', 'BNCVKMNNNZ'] (soft: 表記規律。読者に意味がないので生成側で書かないこと)": 2,
       "how_to_choose に生の ASIN コード: ['BNBLPNMCQL'] (soft: 表記規律。読者に意味がないので生成側で書かないこと)": 1,
       "how_to_choose に生の ASIN コード: ['BNBNCDNGSB'] (soft: 表記規律。読者に意味がないので生成側で書かないこと)": 1,
-      "how_to_choose に生の ASIN コード: ['BNBQYKNVVV'] (soft: 表記規律。読者に意味がないので生成側で書かないこと)": 1,
-      "how_to_choose に生の ASIN コード: ['BNBSNNRNFN'] (soft: 表記規律。読者に意味がないので生成側で書かないこと)": 1
+      "how_to_choose に生の ASIN コード: ['BNBNNRVNNF', 'BNFPQQXXNV'] (soft: 表記規律。読者に意味がないので生成側で書かないこと)": 1,
+      "how_to_choose に生の ASIN コード: ['BNBQYKNVVV'] (soft: 表記規律。読者に意味がないので生成側で書かないこと)": 1
     },
     "howto_title_promise": {
       "howto-promise-without-official-source: title が「ルール」で手順を約束しているが data/raw/per_asin/BNDWDSMBYH/official_howto.json に公式 URL が無い (#NNNN: 公式の取説・あそびかたが無い商品では手順を約束しない)": 1,
       "howto-promise-without-official-source: title が「ルール」で手順を約束しているが data/raw/per_asin/BNFVNGPJZN/official_howto.json に公式 URL が無い (#NNNN: 公式の取説・あそびかたが無い商品では手順を約束しない)": 1,
-      "howto-promise-without-official-source: title が「ルール」で手順を約束しているが data/raw/per_asin/BNNBNNPNZQ/official_howto.json に公式 URL が無い (#NNNN: 公式の取説・あそびかたが無い商品では手順を約束しない)": 1,
       "howto-promise-without-official-source: title が「作り方」で手順を約束しているが data/raw/per_asin/BNCNNFNYQK/official_howto.json に公式 URL が無い (#NNNN: 公式の取説・あそびかたが無い商品では手順を約束しない)": 1,
-      "howto-promise-without-official-source: title が「作り方」で手順を約束しているが data/raw/per_asin/BNCNNMZNNN/official_howto.json に公式 URL が無い (#NNNN: 公式の取説・あそびかたが無い商品では手順を約束しない)": 1
+      "howto-promise-without-official-source: title が「作り方」で手順を約束しているが data/raw/per_asin/BNCNNMZNNN/official_howto.json に公式 URL が無い (#NNNN: 公式の取説・あそびかたが無い商品では手順を約束しない)": 1,
+      "howto-promise-without-official-source: title が「作り方」で手順を約束しているが data/raw/per_asin/BNDBHNNWRY/official_howto.json に公式 URL が無い (#NNNN: 公式の取説・あそびかたが無い商品では手順を約束しない)": 1
     },
     "keywords": {
-      "product name not in any keyword": 194,
+      "product name not in any keyword": 188,
       "brand 'レゴ(LEGO)' not in any keyword": 13,
-      "brand 'バンダイ(BANDAI)' not in any keyword": 9,
       "brand 'アガツマ(AGATSUMA)' not in any keyword": 8,
+      "brand 'バンダイ(BANDAI)' not in any keyword": 7,
       "brand 'くもん出版' not in any keyword": 4
     },
     "narrative": {
-      "closing NN<NNN": 109,
-      "closing NNN<NNN": 102,
-      "daily_use NNN<NNN": 43,
-      "why_this_product NNN<NNN": 38,
+      "closing NN<NNN": 107,
+      "closing NNN<NNN": 97,
+      "daily_use NNN<NNN": 44,
+      "why_this_product NNN<NNN": 37,
       "gift_appeal NNN<NNN": 3
     },
     "persona_fit_counts": {
       "not_recommended_for が N-N 件でない": 2
     },
     "prices_verified": {
-      "unverified=rakuten,yahoo verified=none (warn-only": 308,
-      "unverified=yahoo verified=rakuten (warn-only": 284,
-      "unverified=rakuten verified=yahoo (warn-only": 191,
-      "unverified=yahoo verified=none (warn-only": 94,
-      "unverified=rakuten verified=none (warn-only": 19
+      "unverified=rakuten,yahoo verified=none (warn-only": 318,
+      "unverified=yahoo verified=rakuten (warn-only": 291,
+      "unverified=rakuten verified=yahoo (warn-only": 201,
+      "unverified=yahoo verified=none (warn-only": 96,
+      "unverified=rakuten verified=none (warn-only": 21
     },
     "product_image": {
-      "product-image-not-in-amazon-json (warn-only": 115,
+      "product-image-not-in-amazon-json (warn-only": 124,
       "product-image-missing: product.image が空 (表示は amazon.json の画像で補う)": 9
     },
     "review_signals": {
       "high_points が N-N 件でない": 94,
-      "summary_one_line が NN-NN 字でない": 67,
+      "summary_one_line が NN-NN 字でない": 66,
       "use_scenes が N-N 件でない": 45,
-      "concerns が N-N 件でない": 21
+      "concerns が N-N 件でない": 20
     },
     "tag_granularity": {
+      "product-name tags=['リップスティックデラックスミニ'] (warn-only, #NNNN)": 4,
       "product-name tags=['たまごっちパラダイス'] (warn-only, #NNNN)": 3,
-      "product-name tags=['リップスティックデラックスミニ'] (warn-only, #NNNN)": 3,
       "product-name tags=['いろいろドミノDX'] (warn-only, #NNNN)": 2,
       "product-name tags=['ふんわりえほん'] (warn-only, #NNNN)": 2,
       "product-name tags=['一頭買い!! 黒豚パズル'] (warn-only, #NNNN)": 2
     },
     "title_serp_fit": {
-      "検索意図語が先頭 NN 字に無い (NN 字目): 商品名の直後に N つ置く (warn-only, #NNNN 項目N)": 556,
-      "product.name が NN 字 (先頭 NN 字に意図語を置くには NN 字以下): §N の「短い通称」に寄せる": 156,
-      "先頭 NN 字に product.name が無い (name=NN 字): title で型番・シリーズ・ブランドの英字併記などを足し直さない": 97,
+      "検索意図語が先頭 NN 字に無い (NN 字目): 商品名の直後に N つ置く (warn-only, #NNNN 項目N)": 550,
+      "product.name が NN 字 (先頭 NN 字に意図語を置くには NN 字以下): §N の「短い通称」に寄せる": 149,
+      "先頭 NN 字に product.name が無い (name=NN 字): title で型番・シリーズ・ブランドの英字併記などを足し直さない": 95,
       "検索意図語が先頭 NN 字に無い (タイトル全体に無し): 商品名の直後に N つ置く (warn-only, #NNNN 項目N)": 5
     },
     "verdict_headline": {
-      "verdict.headline が長い (NN 字超) = N 行の結論ではなく説明文になっている": 237,
+      "verdict.headline が長い (NN 字超) = N 行の結論ではなく説明文になっている": 227,
       "verdict.headline が短い (NN 字未満)": 9
     }
   },
@@ -110,66 +110,72 @@
   "cert_fetch": false,
   "md_evaluated": 0,
   "cross_checked": {
-    "articles_with_claims": 3177,
-    "zero": 120,
-    "zero_rate": 0.03777
+    "articles_with_claims": 3270,
+    "zero": 117,
+    "zero_rate": 0.03578
   },
   "cohorts": {
     "recent_100": {
       "n": 100,
-      "from": "2026-10-27-B0H1KQBF22",
-      "to": "2026-11-02-B0HD5WS36T",
+      "from": "2026-11-04-B0DGSM92WC",
+      "to": "2026-11-09-B0HQ2PB21W",
       "failing": 0,
       "failing_rate": 0.0,
       "by_deduction": {
-        "prices_verified": 35,
+        "prices_verified": 33,
         "claims_discipline": 8,
-        "narrative": 4
+        "title_serp_fit": 3,
+        "narrative": 1,
+        "tag_granularity": 1
       },
       "zero_firing_95_upper": 0.03,
       "cross_checked": {
         "articles_with_claims": 100,
-        "zero": 4,
-        "zero_rate": 0.04
+        "zero": 1,
+        "zero_rate": 0.01
       }
     },
     "recent_200": {
       "n": 200,
-      "from": "2026-10-22-B0G3NFCNJ2",
-      "to": "2026-11-02-B0HD5WS36T",
-      "failing": 1,
-      "failing_rate": 0.005,
+      "from": "2026-10-29-B0CGQN721W",
+      "to": "2026-11-09-B0HQ2PB21W",
+      "failing": 0,
+      "failing_rate": 0.0,
       "by_deduction": {
-        "prices_verified": 54,
-        "claims_discipline": 17,
-        "narrative": 4,
-        "product_image": 1
+        "prices_verified": 73,
+        "claims_discipline": 15,
+        "title_serp_fit": 3,
+        "narrative": 2,
+        "faq": 1,
+        "tag_granularity": 1
       },
       "zero_firing_95_upper": 0.015,
       "cross_checked": {
         "articles_with_claims": 200,
-        "zero": 8,
-        "zero_rate": 0.04
+        "zero": 5,
+        "zero_rate": 0.025
       }
     },
     "recent_300": {
       "n": 300,
-      "from": "2026-10-18-B0876QHR74",
-      "to": "2026-11-02-B0HD5WS36T",
-      "failing": 1,
-      "failing_rate": 0.00333,
+      "from": "2026-10-24-B01KZ8495I",
+      "to": "2026-11-09-B0HQ2PB21W",
+      "failing": 0,
+      "failing_rate": 0.0,
       "by_deduction": {
-        "prices_verified": 80,
-        "claims_discipline": 20,
-        "narrative": 7,
-        "title_serp_fit": 3,
-        "product_image": 2
+        "prices_verified": 97,
+        "claims_discipline": 21,
+        "narrative": 6,
+        "title_serp_fit": 4,
+        "faq": 1,
+        "product_image": 1,
+        "tag_granularity": 1
       },
       "zero_firing_95_upper": 0.01,
       "cross_checked": {
         "articles_with_claims": 300,
-        "zero": 9,
-        "zero_rate": 0.03
+        "zero": 7,
+        "zero_rate": 0.02333
       }
     }
   },
@@ -191,6 +197,16 @@
         {
           "name": "sources_v5",
           "message": "navi.omcha.jp (このサイト自身) を出典にしている: https://navi.omcha.jp/products/b0chv6xdnr/ (自己引用は不可。外して別のサイトの出典で裏付ける)"
+        }
+      ]
+    },
+    {
+      "slug": "2026-07-16-B07B7FDZT6",
+      "total_score": 96,
+      "failed_checks": [
+        {
+          "name": "how_to_choose",
+          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0BSXDRT7R']"
         }
       ]
     },
@@ -245,6 +261,16 @@
       ]
     },
     {
+      "slug": "2026-07-23-B0B27RV45F",
+      "total_score": 96,
+      "failed_checks": [
+        {
+          "name": "how_to_choose",
+          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0FB8VHD8W']"
+        }
+      ]
+    },
+    {
       "slug": "2026-07-23-B0BGRFVZQY",
       "total_score": 96,
       "failed_checks": [
@@ -260,7 +286,7 @@
       "failed_checks": [
         {
           "name": "how_to_choose",
-          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0CFVZDDPL', 'B0CWH3BRYZ']"
+          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0CFVZDDPL']"
         }
       ]
     },
@@ -285,22 +311,22 @@
       ]
     },
     {
-      "slug": "2026-07-27-B00RZ4LM74",
-      "total_score": 95,
-      "failed_checks": [
-        {
-          "name": "how_to_choose",
-          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B00RZ4LL3Y']"
-        }
-      ]
-    },
-    {
       "slug": "2026-07-27-B0DT9CMSDR",
       "total_score": 96,
       "failed_checks": [
         {
           "name": "how_to_choose",
           "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B08HQ1P319']"
+        }
+      ]
+    },
+    {
+      "slug": "2026-07-28-B000FUTQN2",
+      "total_score": 95,
+      "failed_checks": [
+        {
+          "name": "how_to_choose",
+          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B08LNLC2KC']"
         }
       ]
     },
@@ -415,16 +441,6 @@
       ]
     },
     {
-      "slug": "2026-08-01-B0DM9YCV8T",
-      "total_score": 96,
-      "failed_checks": [
-        {
-          "name": "how_to_choose",
-          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B00P871NOW']"
-        }
-      ]
-    },
-    {
       "slug": "2026-08-01-B0H2XGRN73",
       "total_score": 96,
       "failed_checks": [
@@ -440,7 +456,7 @@
       "failed_checks": [
         {
           "name": "how_to_choose",
-          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0D1H819X8']"
+          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0BD3WZG32', 'B0D1H819X8']"
         }
       ]
     },
@@ -460,7 +476,7 @@
       "failed_checks": [
         {
           "name": "how_to_choose",
-          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0FDJQH3WW']"
+          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0GVCPWNJC']"
         }
       ]
     },
@@ -471,16 +487,6 @@
         {
           "name": "how_to_choose",
           "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0837KQXBG']"
-        }
-      ]
-    },
-    {
-      "slug": "2026-08-05-B0FPQQXX7V",
-      "total_score": 96,
-      "failed_checks": [
-        {
-          "name": "how_to_choose",
-          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0B27RV45F']"
         }
       ]
     },
@@ -773,28 +779,20 @@
           "message": "本文 (claims / review_signals の supporting_source_ids) から参照された非販売の出典が 1 サイト (omcha.jp)。別々のサイトで 2 件以上必須 (v5 §6.5.1。サイトはドメイン単位・SNS は合わせて 1・販売ページと通販サイトは数えない)"
         }
       ]
-    },
-    {
-      "slug": "2026-10-23-B0FMNLH28K",
-      "total_score": 96,
-      "failed_checks": [
-        {
-          "name": "sources_v5",
-          "message": "本文 (claims / review_signals の supporting_source_ids) から参照された非販売の出典が 1 サイト (freeconsultant.jp)。別々のサイトで 2 件以上必須 (v5 §6.5.1。サイトはドメイン単位・SNS は合わせて 1・販売ページと通販サイトは数えない)"
-        }
-      ]
     }
   ],
   "diff": {
-    "previous_date": "2026-10-26",
+    "previous_date": "2026-11-02",
     "new": [
-      "2026-07-28-B07PGSD41M",
-      "2026-08-06-B0FB2DXDF3",
-      "2026-08-09-B0FQNCBL3F",
-      "2026-10-23-B0FMNLH28K"
+      "2026-07-16-B07B7FDZT6",
+      "2026-07-23-B0B27RV45F",
+      "2026-07-28-B000FUTQN2"
     ],
     "recovered": [
-      "2026-08-10-B0CHLYDSDH"
+      "2026-07-27-B00RZ4LM74",
+      "2026-08-01-B0DM9YCV8T",
+      "2026-08-05-B0FPQQXX7V",
+      "2026-10-23-B0FMNLH28K"
     ],
     "persisting": [
       "2026-06-07-B0F1STNMN9",
@@ -808,8 +806,8 @@
       "2026-07-23-B0CWH2ZLVL",
       "2026-07-26-B085TTFQTH",
       "2026-07-26-B0GL7CRD8L",
-      "2026-07-27-B00RZ4LM74",
       "2026-07-27-B0DT9CMSDR",
+      "2026-07-28-B07PGSD41M",
       "2026-07-28-B0CS9NM5YP",
       "2026-07-28-B0GVXLS2J6",
       "2026-07-29-B0CGLNPRHF",
@@ -820,17 +818,17 @@
       "2026-07-31-B074L8RV1F",
       "2026-07-31-B08152B7W1",
       "2026-08-01-B07JG53FL4",
-      "2026-08-01-B0DM9YCV8T",
       "2026-08-01-B0H2XGRN73",
       "2026-08-02-B0041X6SEO",
       "2026-08-02-B0BPSRT9SK",
       "2026-08-03-B089JYCQKC",
       "2026-08-05-B0837KSKK9",
-      "2026-08-05-B0FPQQXX7V",
       "2026-08-06-B0BWQWSBH6",
+      "2026-08-06-B0FB2DXDF3",
       "2026-08-06-B0FRD8Q1P5",
       "2026-08-09-B0C9THFSQ4",
       "2026-08-09-B0D8HSKBBR",
+      "2026-08-09-B0FQNCBL3F",
       "2026-08-20-B0F9YGNZGY",
       "2026-08-23-B0H8S2Y11G",
       "2026-08-24-B0B5X37328",
