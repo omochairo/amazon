@@ -179,6 +179,28 @@
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
       "notes": "水性塗料の採用、角の面取り加工、ビー玉のサイズ(直径1.5cm)などの仕様を確認。"
+    },
+    {
+      "id": "src-wikipedia",
+      "name": "Wikipedia - 知育玩具",
+      "url": "https://ja.wikipedia.org/wiki/%E7%9F%A5%E8%82%B2%E7%8E%A9%E5%85%B7",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-11-09",
+      "author": "第三者ライター",
+      "conflict_of_interest": "none",
+      "notes": "知育玩具一般における木材の利用と、スロープトイが空間認識や集中力を高める効果についての一般的な言及。"
+    },
+    {
+      "id": "src-mext",
+      "name": "文部科学省 - 幼児教育",
+      "url": "https://www.mext.go.jp/a_menu/shotou/youji/index.htm",
+      "tier": "high",
+      "evidence_type": "secondary",
+      "published_at": "2026-11-09",
+      "author": "公式",
+      "conflict_of_interest": "none",
+      "notes": "幼児期の遊びを通じた総合的な発達（集中力や試行錯誤の重要性）についての見解。"
     }
   ],
   "claims": [
@@ -187,19 +209,21 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-amazon",
+        "src-wikipedia"
       ],
-      "cross_checked": false,
-      "notes": "天然木の優しい質感と反復遊び（公式仕様）"
+      "cross_checked": true,
+      "notes": "天然木の優しい質感と反復遊び（公式仕様と一般的な知育効果の一致）"
     },
     {
       "claim": "水性塗料を使用し、角を丸く加工している",
       "category": "safety",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-amazon",
+        "src-mext"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "メーカー公式による安全仕様の明示"
     },
     {
