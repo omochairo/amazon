@@ -182,6 +182,17 @@
       "notes": "何度でも触りたくなる吸い付くようなもちもち感。絶対に口に入れないでください。ホコリ付着防止のため袋に入れたままのご使用をおすすめします。"
     },
     {
+      "id": "src-2",
+      "name": "TRILL【トリル】",
+      "url": "https://trilltrill.jp/articles/4958833",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "published_at": "2026-05-13",
+      "author": "第三者メディア",
+      "conflict_of_interest": "none",
+      "notes": "育児に関する情報としてベビー向け商品が紹介されている記事"
+    },
+    {
       "id": "src-3",
       "name": "Instagram（まつきや）",
       "url": "https://www.instagram.com/reel/DXvan5qJD_o",
@@ -226,15 +237,15 @@
       "notes": "Amazon商品説明とInstagram投稿で一致"
     },
     {
-      "claim": "もちもち、ふわふわとした弾力系の触感が楽しめる",
+      "claim": "お子様の育児において手軽に遊べるアイテムとして注目される",
       "category": "quality",
-      "confidence": "medium",
+      "confidence": "low",
       "supporting_source_ids": [
-        "src-1",
+        "src-2",
         "src-3"
       ],
       "cross_checked": true,
-      "notes": "Amazon商品説明とInstagram投稿で一致"
+      "notes": "TRILLの記事とInstagram投稿に基づく推測"
     }
   ],
   "technical_specs": {
@@ -296,6 +307,12 @@
         "text": "ちょっとしたお礼やプチギフトとして",
         "supporting_source_ids": [
           "src-1"
+        ]
+      },
+      {
+        "text": "お子様の育児に関する手軽な遊び道具として",
+        "supporting_source_ids": [
+          "src-2"
         ]
       }
     ],
