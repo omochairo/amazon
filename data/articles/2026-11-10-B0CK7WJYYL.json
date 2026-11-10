@@ -188,6 +188,17 @@
       "author": "販売ページ",
       "conflict_of_interest": "possible",
       "notes": "アーテック シールあそびえほん りょうり&たべもの の商品仕様"
+    },
+    {
+      "id": "src-artec",
+      "name": "株式会社アーテック 企業情報",
+      "url": "https://tavily.com/knowledge/company/RIm1ufGztV8r",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-07-15",
+      "author": "企業情報サイト",
+      "conflict_of_interest": "none",
+      "notes": "愛知県岡崎市に本社を置く株式会社アーテックの企業情報"
     }
   ],
   "claims": [
@@ -223,15 +234,14 @@
       "notes": "Amazon商品仕様に基づく"
     },
     {
-      "claim": "食べ物のイラストのシールを貼って遊ぶシールブックである",
+      "claim": "本製品の販売元である株式会社アーテックは愛知県岡崎市に本社を置く",
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-yumegazai",
-        "src-amazon"
+        "src-artec"
       ],
-      "cross_checked": true,
-      "notes": "Amazonおよびゆめ画材の商品説明に基づく"
+      "cross_checked": false,
+      "notes": "tavilyの企業情報に基づく"
     }
   ],
   "technical_specs": {
