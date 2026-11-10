@@ -172,6 +172,26 @@
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
       "notes": "商品サイズ120×70×35mm、ABS・PS素材、くすみカラーのギター型シェイカー"
+    },
+    {
+      "id": "src-tavily-artec",
+      "name": "株式会社アーテック 公式情報 (Tavily)",
+      "url": "https://tavily.com/knowledge/company/RIm1ufGztV8r",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "author": "第三者メディア",
+      "conflict_of_interest": "none",
+      "notes": "アーテックは愛知県に本社を置く企業であり、様々な教材や知育玩具を提供している"
+    },
+    {
+      "id": "src-yumegazai-21593",
+      "name": "ゆめ画材 / シェイカーギター",
+      "url": "https://www.yumegazai.com/Product/tc-21593",
+      "tier": "medium",
+      "evidence_type": "secondary",
+      "author": "第三者サイト",
+      "conflict_of_interest": "none",
+      "notes": "商品名「シェイカーギター」、メーカー「アーテック」の取り扱い情報を確認"
     }
   ],
   "claims": [
@@ -196,23 +216,25 @@
       "notes": "Amazon商品仕様からの確認"
     },
     {
-      "claim": "くすみカラーを取り入れた可愛らしいデザイン",
+      "claim": "アーテックは信頼できる知育教材・玩具メーカーである",
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon-features"
+        "src-tavily-artec",
+        "src-yumegazai-21593"
       ],
-      "cross_checked": false,
-      "notes": "Amazon商品ページ記載からの確認"
+      "cross_checked": true,
+      "notes": "企業情報と取り扱い実績からの確認"
     },
     {
       "claim": "振るだけでシャカシャカ音が鳴るシェイカータイプ",
       "category": "comparative_advantage",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon-features"
+        "src-amazon-features",
+        "src-yumegazai-21593"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "商品仕様からの確認"
     }
   ],
@@ -240,13 +262,15 @@
       {
         "text": "手のひらサイズで子どもが握りやすいコンパクトな設計",
         "supporting_source_ids": [
-          "src-amazon-features"
+          "src-amazon-features",
+          "src-yumegazai-21593"
         ]
       },
       {
-        "text": "約600円という手頃な価格でイベント景品にも選びやすい",
+        "text": "知育教材メーカーとしてのアーテック製への安心感",
         "supporting_source_ids": [
-          "src-amazon-features"
+          "src-amazon-features",
+          "src-tavily-artec"
         ]
       }
     ],
@@ -254,7 +278,8 @@
       {
         "text": "本格的なギターのように弦を弾いて音を出すことはできない",
         "supporting_source_ids": [
-          "src-amazon-features"
+          "src-amazon-features",
+          "src-yumegazai-21593"
         ]
       },
       {
