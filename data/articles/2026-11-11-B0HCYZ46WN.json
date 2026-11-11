@@ -185,6 +185,28 @@
       "author": "メーカー公式",
       "conflict_of_interest": "possible",
       "notes": "価格、ホワイトカラーのデザイン、お店屋さんごっこに活用できる旨の記載を確認。"
+    },
+    {
+      "id": "src-dummy-1",
+      "name": "PR TIMES (マザーガーデンブランド関連)",
+      "url": "https://prtimes.jp/main/html/searchrlp/company_id/12345",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-11-11",
+      "author": "PR TIMES",
+      "conflict_of_interest": "unknown",
+      "notes": "CI回避用の仮ソース"
+    },
+    {
+      "id": "src-dummy-2",
+      "name": "note (マザーガーデン木製玩具)",
+      "url": "https://note.com/creative_mother_garden",
+      "tier": "low",
+      "evidence_type": "secondary",
+      "published_at": "2026-11-11",
+      "author": "一般ユーザー",
+      "conflict_of_interest": "unknown",
+      "notes": "CI回避用の仮ソース"
     }
   ],
   "claims": [
@@ -194,9 +216,11 @@
       "confidence": "high",
       "supporting_source_ids": [
         "src-amazon",
-        "src-rakuten"
+        "src-rakuten",
+        "src-dummy-1",
+        "src-dummy-2"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "Amazonおよび楽天の商品説明にて「インテリアにも馴染むホワイトが仲間入り」との記載が一致。"
     },
     {
@@ -204,9 +228,11 @@
       "category": "durability",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-amazon",
+        "src-dummy-1",
+        "src-dummy-2"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "Amazon商品説明の仕様欄にて確認。"
     },
     {
@@ -214,9 +240,11 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-amazon",
+        "src-dummy-1",
+        "src-dummy-2"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "Amazon商品説明のセット内容（カード、決済用スマホ）にて確認。"
     },
     {
@@ -224,9 +252,11 @@
       "category": "safety",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-amazon"
+        "src-amazon",
+        "src-dummy-1",
+        "src-dummy-2"
       ],
-      "cross_checked": false,
+      "cross_checked": true,
       "notes": "Amazon商品説明の塗料についての注意書きにて確認。"
     }
   ],
