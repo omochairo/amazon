@@ -1,9 +1,10 @@
 {
   "asin": "B000P4LG2W",
-  "fetched_at": "2026-07-07T21:37:06.836074+00:00",
+  "fetched_at": "2026-11-11T01:21:57.574687+00:00",
   "query": "ボーネルンドオリジナル おさかなシロフォン BZ8000Y",
   "engine": "tavily",
-  "raw_count": 10,
+  "raw_count": 20,
+  "empty_streak": 0,
   "sources": [
     {
       "title": "おさかなシロフォン - YouTube",
@@ -26,6 +27,87 @@
         "checked_at": "2026-10-18",
         "http": 200
       }
+    },
+    {
+      "title": "おさかなシロフォン  ｜ボーネルンドショップ 鶴屋店ブログ",
+      "url": "https://www.bornelund.co.jp/tsuruya/blog/1430",
+      "snippet": "入門用にふさわしくドからドまでの1オクターブあるので、楽しいメロディを奏でるのに最適です。 正確な音階は、美しいものに共鳴する心を育みます。",
+      "host": "bornelund.co.jp",
+      "link": {
+        "status": "ok",
+        "checked_at": "2026-11-11",
+        "http": 200
+      }
+    }
+  ],
+  "dropped": [
+    {
+      "host": "amazon.co.jp",
+      "reason": "retail"
+    },
+    {
+      "host": "search.rakuten.co.jp",
+      "reason": "search_result"
+    },
+    {
+      "host": "search.rakuten.co.jp",
+      "reason": "search_result"
+    },
+    {
+      "host": "sky-muse.com",
+      "reason": "retail"
+    },
+    {
+      "host": "store.shopping.yahoo.co.jp",
+      "reason": "retail"
+    },
+    {
+      "host": "ec.bornelund.co.jp",
+      "reason": "retail"
+    },
+    {
+      "host": "shop.d-kintetsu.co.jp",
+      "reason": "retail"
+    },
+    {
+      "host": "ec.bornelund.co.jp",
+      "reason": "retail"
+    },
+    {
+      "host": "youtube.com",
+      "reason": "duplicate_host"
+    },
+    {
+      "host": "ec.bornelund.co.jp",
+      "reason": "retail"
+    },
+    {
+      "host": "ec.bornelund.co.jp",
+      "reason": "retail"
+    },
+    {
+      "host": "ec.bornelund.co.jp",
+      "reason": "retail"
+    },
+    {
+      "host": "yelp.com",
+      "reason": "unrelated"
+    },
+    {
+      "host": "yelp.com",
+      "reason": "unrelated"
+    },
+    {
+      "host": "yelp.com",
+      "reason": "unrelated"
+    },
+    {
+      "host": "tradingkey.com",
+      "reason": "unrelated"
+    },
+    {
+      "host": "sumitomolife.co.jp",
+      "reason": "off_topic"
     }
   ]
 }
