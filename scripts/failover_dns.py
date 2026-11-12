@@ -43,7 +43,14 @@ Cloudflare 自体が落ちているとき待機系に倒しても待機系も CF
 - **kill switch**。`FAILOVER_ENABLED` が真でない限り書き換えない (判定と起票だけ)。
   投入直後はこれを外したまま数日回して較正する
 
-## 戻しかた (手動)
+## 戻しかた
+
+待機系で配信している間は、run ごとに NAS の直通 (`--nas-probe`、既定
+`navi-origin.omcha.jp`) を見る。健全が `--failback-stable-hours` (既定 2h) 続き、
+配信物の sha が待機系と同じで、倒してから cooldown が過ぎていれば
+`failback_ready` にしてコメントで知らせる。リポジトリ変数 `FAILBACK_AUTO` が
+真なら、そのまま本番へ戻す (`failback`)。「いつから健全か」は状態 issue の本文に
+刻む (`decide_failback` の前の注記)。手で戻すときは:
 
     python scripts/failover_dns.py --to nas
 
@@ -362,6 +369,175 @@ def decide(probes: List[Dict[str, Any]], standby: Dict[str, Any],
     return row
 
 
+# --- 戻し (待機系 → NAS) の判定 ----------------------------------------------
+#
+# **なぜ「続けて健全」を要求するか (2026-11-12 実測)。** 自宅ルーターが夜に落ちた
+# 翌朝、回線は戻っても NAS のトンネルは 08:51 / 09:37 / 10:10 JST と断続的に
+# 切れ続けた (最後は LAN ごと約 90 秒)。1 run の中で 3 回健全を見て戻す作りだと、
+# この「直りかけ」の時間に戻して、次の断で本番を落とす。倒すのは速く・戻すのは
+# 遅く、の非対称を崩さないために、健全が **STABLE_HOURS 続いたこと**を要求する。
+#
+# 状態は持たない方針 (冒頭の docstring) なので、「いつから健全か」は**状態 issue の
+# 本文**に HTML コメントで刻む。待機系を向いている間は issue が必ず開いているので
+# 置き場が消えることはない。1 回でも不健全を見たら刻みを消してやり直す。
+
+NAS_HEALTHY_SINCE_RE_PREFIX = "<!-- nas-healthy-since: "
+DEFAULT_NAS_PROBE = "https://navi-origin.omcha.jp/build.json"
+DEFAULT_FAILBACK_STABLE_HOURS = 2.0
+
+
+def healthy_since_marker(since: Optional[dt.datetime]) -> str:
+    if since is None:
+        return ""
+    return "{}{} -->".format(NAS_HEALTHY_SINCE_RE_PREFIX,
+                             since.astimezone(dt.timezone.utc).isoformat())
+
+
+PENDING_REASON_PREFIX = "<!-- failback-reason: "
+
+
+def pending_reason_marker(reason: str) -> str:
+    return "{}{} -->".format(PENDING_REASON_PREFIX, reason)
+
+
+def parse_pending_reason(body: str) -> Optional[str]:
+    text = body or ""
+    start = text.find(PENDING_REASON_PREFIX)
+    if start < 0:
+        return None
+    rest = text[start + len(PENDING_REASON_PREFIX):]
+    end = rest.find(" -->")
+    return rest[:end] if end >= 0 else None
+
+
+def parse_healthy_since(body: str) -> Optional[dt.datetime]:
+    """状態 issue の本文から「NAS が健全になった時刻」を読み戻す。無ければ None。"""
+    text = body or ""
+    start = text.find(NAS_HEALTHY_SINCE_RE_PREFIX)
+    if start < 0:
+        return None
+    rest = text[start + len(NAS_HEALTHY_SINCE_RE_PREFIX):]
+    end = rest.find(" -->")
+    if end < 0:
+        return None
+    return parse_iso(rest[:end])
+
+
+def probe_stable(url: str, attempts: int, interval: float, timeout: float,
+                 sleep: Callable[[float], None] = time.sleep,
+                 probe: Optional[Callable[[str], Dict[str, Any]]] = None
+                 ) -> List[Dict[str, Any]]:
+    """``probe_origin`` の逆。**全部**健全であることを確かめ、1 回でも崩れたら打ち切る。"""
+    fn = probe or (lambda u: http_probe(u, timeout=timeout))
+    out: List[Dict[str, Any]] = []
+    for i in range(max(1, attempts)):
+        if i:
+            sleep(interval)
+        result = fn(url)
+        out.append(result)
+        if classify_probe(result) != "healthy":
+            break
+    return out
+
+
+def _sha_of(probe: Dict[str, Any]) -> Optional[str]:
+    try:
+        data = json.loads(probe.get("body") or "")
+    except ValueError:
+        return None
+    return data.get("sha") if isinstance(data, dict) else None
+
+
+def decide_failback(row: Dict[str, Any], nas_probes: List[Dict[str, Any]],
+                    served: Optional[Dict[str, Any]],
+                    record: Dict[str, Any], now: dt.datetime,
+                    healthy_since: Optional[dt.datetime], *,
+                    auto: bool,
+                    emergency_ok: bool = False,
+                    stable_hours: float = DEFAULT_FAILBACK_STABLE_HOURS,
+                    cooldown_hours: float = DEFAULT_COOLDOWN_HOURS,
+                    ) -> Dict[str, Any]:
+    """待機系で配信中 (``already``) のとき、NAS へ戻してよいかを決める純関数。
+
+    ``row`` は ``decide`` が返した ``already`` の row (書き換えて返す)。
+    ``served`` は navi.omcha.jp (= 今は待機系) の健全な観測で、sha の突き合わせに使う。
+    **None は待機系も応えていない** (CF は届いて 5xx) という意味。そのとき NAS が
+    応えていれば、安定も sha も待たずに戻す —— 読者は今どこからも配信を受けて
+    いないので、倒すときと同じ理屈 (``emergency_ok`` = ``FAILOVER_ENABLED``) で動く。
+
+    返す ``action``:
+      already          NAS が応えていない (刻みを消す)
+      failback_pending NAS は健全。安定を見ている途中 / sha が追いついていない
+      failback_ready   戻してよい。自動戻しが未武装なので人に知らせるだけ
+      failback_auto    戻してよい。自動戻しが武装しているので書き換える
+    """
+    verdicts = [classify_probe(p) for p in nas_probes]
+    row["nas_probes"] = nas_probes
+    row["nas_verdicts"] = verdicts
+    row["failback_auto_enabled"] = bool(auto)
+    if not verdicts or any(v != "healthy" for v in verdicts):
+        row["action"] = "already"
+        row["healthy_since"] = None
+        row["detail"] = (
+            "待機系で配信中。NAS の直通 ({}) は応えていない — 戻せない".format(
+                "/".join(verdicts) or "未観測"))
+        return row
+
+    since = healthy_since or now
+    row["healthy_since"] = since
+    stable_for = (now - since).total_seconds() / 3600.0
+    nas_sha = _sha_of(nas_probes[-1])
+    served_sha = _sha_of(served or {})
+
+    if served is None:
+        # 待機系も落ちている = 全断。NAS が応えるなら戻すのが唯一の改善。
+        row["pending_reason"] = "standby_down"
+        if auto or emergency_ok:
+            row["action"] = "failback_auto"
+            row["detail"] = "待機系も応えていない (全断)。NAS は応えているので本番 (NAS) へ戻す"
+        else:
+            row["action"] = "failback_ready"
+            row["detail"] = ("待機系も応えていない (全断)。NAS は応えている。"
+                             "自動切替が未武装なので手で戻すこと")
+        return row
+
+    if stable_for < stable_hours:
+        row["pending_reason"] = "stabilizing"
+        row["action"] = "failback_pending"
+        row["detail"] = (
+            "NAS は応答している。健全が {:.1f}h 続いたら戻せる (今 {:.2f}h)".format(
+                stable_hours, stable_for))
+        return row
+    if not nas_sha or nas_sha != served_sha:
+        # 刻みは残す (NAS は生きている)。deploy-nas が追いつけば次の run で進む。
+        # 追いつかないまま続くなら deploy-nas が落ちている —— 本文に理由が出るので人が見る。
+        row["pending_reason"] = "sha_mismatch"
+        row["action"] = "failback_pending"
+        row["detail"] = (
+            "NAS は {:.1f}h 健全だが、配信物の sha が待機系と揃っていない "
+            "(NAS {} / 待機系 {})".format(
+                stable_for, (nas_sha or "-")[:10], (served_sha or "-")[:10]))
+        return row
+    modified = parse_iso(record.get("modified_on"))
+    if modified is not None and (now - modified).total_seconds() / 3600.0 < cooldown_hours:
+        row["pending_reason"] = "cooldown"
+        row["action"] = "failback_pending"
+        row["detail"] = "倒してから {:.1f}h 経っていない (フラップ抑止)".format(cooldown_hours)
+        return row
+
+    if auto:
+        row["action"] = "failback_auto"
+        row["detail"] = (
+            "NAS が {:.1f}h 続けて健全で、sha も待機系と同じ ({})。本番 (NAS) へ戻す".format(
+                stable_for, nas_sha[:10]))
+    else:
+        row["action"] = "failback_ready"
+        row["detail"] = (
+            "NAS が {:.1f}h 続けて健全で、sha も待機系と同じ ({})。戻せます "
+            "(自動戻し `FAILBACK_AUTO` は未武装)".format(stable_for, nas_sha[:10]))
+    return row
+
+
 # --- HTTP -------------------------------------------------------------------
 
 def http_probe(url: str, timeout: float = DEFAULT_TIMEOUT,
@@ -567,7 +743,9 @@ TITLES = {
     "disabled": "[delivery][failover] オリジン障害を検出しました (自動切替は未武装)",
     "blocked": "[delivery][failover] オリジン障害。待機系に倒せません",
     "throttled": "[delivery][failover] オリジン障害。クールダウン中で倒しません",
-    "already": "[delivery][failover] 待機系で配信中です (戻しは手動)",
+    "already": "[delivery][failover] 待機系で配信中です (NAS は未復旧)",
+    "failback_pending": "[delivery][failover] 待機系で配信中です (NAS の復旧を観測中)",
+    "failback_ready": "[delivery][failover] NAS は復旧済みです。本番へ戻せます",
     "ambiguous": "[delivery][failover] 配信に到達できません (オリジン障害と断定できず)",
     "no_record": "[delivery][failover] 対象の CNAME レコードが見つかりません",
 }
@@ -591,6 +769,13 @@ def render_body(row: Dict[str, Any]) -> str:
     parts: List[str] = [
         "<!-- {} -->".format(MARKER),
     ]
+    if row.get("healthy_since"):
+        # 「いつから NAS が健全か」の刻み。次の run が読み戻す (decide_failback)
+        parts.append(healthy_since_marker(row["healthy_since"]))
+    if row.get("pending_reason"):
+        # 同じ failback_pending でも「安定待ち」と「sha 待ち」は別の状態。
+        # 理由が変わったら本文を書き換えるために刻む (_same_state)。
+        parts.append(pending_reason_marker(row["pending_reason"]))
     parts += [
         "",
         "**{}** ({} 時点)。".format(title_for(row).split("] ", 1)[-1], row["now"]),
@@ -603,6 +788,12 @@ def render_body(row: Dict[str, Any]) -> str:
         "| プローブ | {} |".format(" / ".join(row.get("probe_verdicts") or []) or "-"),
         "| 待機系 | {} |".format(standby.get("reason") or "未確認"),
     ]
+    if row.get("nas_verdicts") is not None:
+        parts.append("| NAS 直通 | {} |".format(" / ".join(row["nas_verdicts"]) or "-"))
+        parts.append("| NAS が健全になった時刻 | {} |".format(
+            row["healthy_since"].isoformat() if row.get("healthy_since") else "-"))
+        parts.append("| 自動戻し | {} |".format(
+            "武装" if row.get("failback_auto_enabled") else "**未武装** (`FAILBACK_AUTO`)"))
     if row.get("new_label"):
         parts.append("| 書き換え後 | {} |".format(row["new_label"]))
     parts += [
@@ -634,8 +825,14 @@ def render_body(row: Dict[str, Any]) -> str:
         "- `ambiguous` — `cf-ray` が無い失敗が混ざっています。"
         "CF 自体か手元の回線の問題である可能性を否定できないため、"
         "**CNAME は触りません**。GitHub Actions runner 側の一時障害でも出ます",
-        "- `already` — すでに待機系で配信中です。**本番に戻すまでこの issue は開いたままです**"
+        "- `already` — すでに待機系で配信中で、NAS の直通はまだ応えていません。"
+        "**本番に戻すまでこの issue は開いたままです**"
         "(待機系では noindex のタグ・ブランドが 404 になるので、長く放置しないこと)",
+        "- `failback_pending` — NAS は応えています。健全が {:.0f}h 続き、配信物の sha が"
+        "待機系と揃うまで待っています (直りかけの回線で戻して、次の断で落とさないため)".format(
+            DEFAULT_FAILBACK_STABLE_HOURS),
+        "- `failback_ready` — 戻してよい状態です。自動戻し (`FAILBACK_AUTO`) が未武装なので、"
+        "下のコマンドで戻してください。武装していれば次の run で自動で戻ります",
         "",
         "## 戻しかた",
         "",
@@ -653,6 +850,7 @@ def render_body(row: Dict[str, Any]) -> str:
         "- ラベル `{}` + マーカー `{}` で同一 open Issue を特定し body を更新します".format(
             STATE_LABEL, MARKER_COMMENT),
         "- オリジンが応答に戻り、かつ本番を向いていれば自動 close します",
+        "- `failback_ready` になったときだけコメントを 1 件付けます (本文の書き換えは通知されないため)",
         "",
         "Refs #6205, amazon-home-ops#70",
     ]
@@ -663,6 +861,25 @@ def render_body(row: Dict[str, Any]) -> str:
 
 def _env_true(name: str) -> bool:
     return (os.environ.get(name) or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def resolve_failback_target(args: argparse.Namespace) -> "tuple[str, str]":
+    """戻し先を (値, 問題) で返す。問題が空でなければ戻さない。
+
+    戻し先は secret から取る。**issue 本文には置かない** ——
+    public repo なので、置いた時点でトンネルのホスト名が恒久的に公開される。
+    """
+    target = args.target or (os.environ.get("NAS_ORIGIN_CNAME") or "").strip()
+    if not target:
+        return "", (
+            "戻し先が分からない。secret `NAS_ORIGIN_CNAME` を設定すること"
+            "(手元からは `--target`。`-f target=...` はログに出るので使わない)。"
+            "値は Cloudflare の navi.omcha.jp の CNAME レコードそのもの "
+            "(本番稼働中に読める) か、NAS の cloudflared volume の config.yml にある"
+        )
+    if side_of(target, args.standby_cname) != "nas":
+        return "", "戻し先が cfargotunnel.com ではない (値は載せない)"
+    return target, ""
 
 
 def run_failback(args: argparse.Namespace, token: str, now: dt.datetime) -> Dict[str, Any]:
@@ -682,21 +899,10 @@ def run_failback(args: argparse.Namespace, token: str, now: dt.datetime) -> Dict
         row["detail"] = "対象の CNAME レコードが見つからない"
         return row
 
-    # 戻し先は secret から取る。**issue 本文には置かない** ——
-    # public repo なので、置いた時点でトンネルのホスト名が恒久的に公開される。
-    target = args.target or (os.environ.get("NAS_ORIGIN_CNAME") or "").strip()
-    if not target:
+    target, problem = resolve_failback_target(args)
+    if problem:
         row["action"] = "blocked"
-        row["detail"] = (
-            "戻し先が分からない。secret `NAS_ORIGIN_CNAME` を設定すること"
-            "(手元からは `--target`。`-f target=...` はログに出るので使わない)。"
-            "値は Cloudflare の navi.omcha.jp の CNAME レコードそのもの "
-            "(本番稼働中に読める) か、NAS の cloudflared volume の config.yml にある"
-        )
-        return row
-    if side_of(target, args.standby_cname) != "nas":
-        row["action"] = "blocked"
-        row["detail"] = "戻し先が cfargotunnel.com ではない (値は載せない)"
+        row["detail"] = problem
         return row
     if row["current_side"] == "nas":
         row["action"] = "none"
@@ -719,13 +925,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     p.add_argument("--to", choices=("standby", "nas"), default="standby",
                    help="standby=障害を判定して倒す (既定) / nas=手動で戻す")
     p.add_argument("--target", default=None,
-                   help="--to nas の戻し先 CNAME。省くと issue から取り出す")
+                   help="--to nas の戻し先 CNAME。省くと環境変数 NAS_ORIGIN_CNAME (Actions では secret)")
     p.add_argument("--zone-name", default=DEFAULT_ZONE_NAME)
     p.add_argument("--zone-id", default=os.environ.get("CF_ZONE_ID"))
     p.add_argument("--record-name", default=DEFAULT_RECORD_NAME)
     p.add_argument("--origin-probe", default=DEFAULT_ORIGIN_PROBE)
     p.add_argument("--standby-probe", default=DEFAULT_STANDBY_PROBE)
     p.add_argument("--standby-cname", default=DEFAULT_STANDBY_CNAME)
+    p.add_argument("--nas-probe", default=DEFAULT_NAS_PROBE,
+                   help="待機系で配信中に NAS の生死を見る直通の URL")
+    p.add_argument("--failback-stable-hours", type=float,
+                   default=DEFAULT_FAILBACK_STABLE_HOURS,
+                   help="NAS の健全がこれだけ続いたら戻してよい")
     p.add_argument("--attempts", type=int, default=DEFAULT_ATTEMPTS)
     p.add_argument("--probe-interval", type=float, default=DEFAULT_PROBE_INTERVAL)
     p.add_argument("--cooldown-hours", type=float, default=DEFAULT_COOLDOWN_HOURS)
@@ -745,6 +956,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         logger.error("CF_DNS_TOKEN が要ります")
         return 2
 
+    existing: Optional[Dict[str, Any]] = None
+    existing_loaded = False
     if args.to == "nas":
         row = run_failback(args, token, now)
     else:
@@ -773,6 +986,43 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         elif row["action"] == "failover":
             row["detail"] += " [dry-run のため書き換えていない]"
 
+        # 待機系を向いているなら、NAS が戻ってきたかを直通で見る。待機系が応えて
+        # いるとき (healthy) に加えて、待機系も CF の裏で 5xx を返しているとき
+        # (= 全断・decide は already を返す) も見る。後者で見ないと、NAS が直って
+        # いるのに全断のまま居座る。
+        if row["action"] == "already" and row["current_side"] == "standby":
+            if not args.dry_run and args.repo:
+                try:
+                    existing = get_open_issue(args.repo)
+                except MultipleStateIssues as e:
+                    logger.error("状態 issue を特定できませんでした (%s) — issue は触りません", e)
+                    return 3
+                existing_loaded = True
+            served = next((x for x in probes if classify_probe(x) == "healthy"), None)
+            nas_probes = probe_stable(args.nas_probe, args.attempts,
+                                      args.probe_interval, args.timeout)
+            row = decide_failback(
+                row, nas_probes, served, record, now,
+                parse_healthy_since((existing or {}).get("body") or ""),
+                auto=_env_true("FAILBACK_AUTO"),
+                emergency_ok=_env_true("FAILOVER_ENABLED"),
+                stable_hours=args.failback_stable_hours,
+                cooldown_hours=args.cooldown_hours)
+            if row["action"] == "failback_auto":
+                target, problem = resolve_failback_target(args)
+                if problem:
+                    row["action"] = "failback_ready"
+                    row["detail"] += " — ただし自動で戻せない: " + problem
+                elif args.dry_run:
+                    row["detail"] += " [dry-run のため書き換えていない]"
+                else:
+                    result = patch_record(token, zone_id, record, target)
+                    row["new_label"] = describe_side(
+                        result.get("content", target), args.standby_cname)
+                    logger.warning("向き先を %s → %s に戻した",
+                                   row["current_label"], row["new_label"])
+                    row["action"] = "failback"
+
     # **CNAME の値をログに出さない。** public repo の Actions ログは
     # 全世界に残り、proxied な DNS からは見えないホスト名がここで公開される。
     logger.info("action=%s side=%s %s",
@@ -788,13 +1038,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         logger.error("--repo (または環境変数 REPO) が要ります")
         return 2
 
-    try:
-        existing = get_open_issue(args.repo)
-    except MultipleStateIssues as e:
-        # DNS の判定と切り替えはもう終わっている。ここで落ちても配信は守られる。
-        # issue を触らずに非 0 で終わり、人に整理させる方が安全
-        logger.error("状態 issue を特定できませんでした (%s) — issue は触りません", e)
-        return 3
+    if not existing_loaded:
+        try:
+            existing = get_open_issue(args.repo)
+        except MultipleStateIssues as e:
+            # DNS の判定と切り替えはもう終わっている。ここで落ちても配信は守られる。
+            # issue を触らずに非 0 で終わり、人に整理させる方が安全
+            logger.error("状態 issue を特定できませんでした (%s) — issue は触りません", e)
+            return 3
     if healthy:
         if existing:
             close_issue(args.repo, existing["number"],
@@ -807,16 +1058,36 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     title = title_for(row)
-    if existing and row["action"] == "already" and _action_line("already") in existing["body"]:
+    if existing and _same_state(existing["body"], row):
         # 待機系での配信は戻すまで続くので、30 分毎に同じ内容で body を書き換えない
         # (GitHub API を無駄に叩かない。CLAUDE.md のバースト規律)。
-        logger.info("#%d はすでに already — 書き換えません", existing["number"])
+        logger.info("#%d はすでに %s — 書き換えません", existing["number"], row["action"])
         return 0
     if existing:
         logger.info("updated %s", update_issue(args.repo, existing["number"], title, body))
+        if row["action"] == "failback_ready":
+            # 本文の書き換えは通知されない。戻せる状態になったことは人に届けたいので、
+            # この遷移のときだけコメントを 1 件付ける (同じ状態の間は上で止まる)。
+            comment_issue(args.repo, existing["number"],
+                          "NAS は復旧済みです。{}\n\n```\ngh workflow run "
+                          "53-origin-failover.yml -R {} -f direction=nas\n```".format(
+                              row.get("detail") or "", args.repo))
     else:
         logger.info("created %s", create_issue(args.repo, title, body))
     return 0
+
+
+def _same_state(existing_body: str, row: Dict[str, Any]) -> bool:
+    """前回の run と判定も「NAS が健全になった時刻」の刻みも同じか。"""
+    if _action_line(row["action"]) not in (existing_body or ""):
+        return False
+    if parse_pending_reason(existing_body) != row.get("pending_reason"):
+        return False
+    return parse_healthy_since(existing_body) == row.get("healthy_since")
+
+
+def comment_issue(repo: str, number: int, body: str) -> None:
+    _gh(["issue", "comment", str(number), "-R", repo, "--body", body])
 
 
 if __name__ == "__main__":

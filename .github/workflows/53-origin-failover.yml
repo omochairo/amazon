@@ -7,8 +7,9 @@ name: Origin Failover (NAS -> GitLab Pages 待機系)
 #   待機系は劣化した代替ではない。`.gitlab-ci.yml` の `pages` ジョブが push
 #   ごとに走るので本番とバイト同一・同 sha で、301 リダイレクト 512 本も 404 も
 #   同じに返る (2026-08-31 実測)。**倒すことのコストがほぼゼロ**なので自動化に
-#   見合う。逆に**戻すことは急がない**ので、戻しは手動 (workflow_dispatch) に
-#   している。非対称なのは意図的。
+#   見合う。逆に**戻すことは急がない**ので、NAS の健全が 2h 続くまで戻さない
+#   (既定は知らせるだけ・`FAILBACK_AUTO` で自動。docs/failover-to-gitlab.md)。
+#   非対称なのは意図的。
 #
 # なぜ 51-delivery-freshness-monitor では代替できないか:
 #   51 が見るのは「配信が更新され続けているか」で、閾値は 8h・原因非依存。
@@ -128,6 +129,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           FAILOVER_ENABLED: ${{ vars.FAILOVER_ENABLED }}
+          # 待機系 → NAS の自動戻し。未設定なら failback_ready で知らせるだけ
+          # (scripts/failover_dns.py の decide_failback)。
+          FAILBACK_AUTO: ${{ vars.FAILBACK_AUTO }}
           # 戻し先。**issue にもログにも出さないので secret から取る** (冒頭の注記)。
           NAS_ORIGIN_CNAME: ${{ secrets.NAS_ORIGIN_CNAME }}
           INPUT_DIRECTION: ${{ github.event.inputs.direction || 'standby' }}

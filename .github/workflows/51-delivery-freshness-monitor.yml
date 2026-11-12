@@ -118,3 +118,14 @@ jobs:
         run: |
           python scripts/check_delivery_freshness.py \
             --max-age-hours "$INPUT_MAX_AGE_HOURS"
+
+      # 2026-11-12: 自宅の回線断でランナーが GitLab に届かず、配信のビルドが
+      # `stuck_pending_no_matching_runners` で落ちたまま、次の push まで誰もやり直さ
+      # なかった。ランナー不在が理由の失敗だけを 1 回やり直す (判定は script の docstring)。
+      # 上の監視とは別のステップにする —— 監視は GitLab に依存させない (#5042) が、
+      # こちらは復旧の手なので GitLab に依存してよい。監視が落ちても走るよう always()。
+      - name: Retry pipeline that failed for lack of runners
+        if: always()
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: python scripts/retry_stuck_pipeline.py
