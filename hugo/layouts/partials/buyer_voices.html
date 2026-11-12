@@ -9,7 +9,7 @@
 {{- if and $v (ge $v.show_until (now.Format "2006-01-02")) (or $v.good $v.concerns) -}}
 {{- $groups := slice (dict "key" "good" "label" "良かったという声" "mod" "good") (dict "key" "concerns" "label" "気になったという声" "mod" "concern") (dict "key" "age" "label" "年齢の実感" "mod" "age") -}}
 <section class="buyer-voices" aria-labelledby="buyer-voices-h">
-  <h2 id="buyer-voices-h" class="buyer-voices__title">💬 購入者の声（SNS・レビューから）</h2>
+  <h2 id="buyer-voices-h" class="buyer-voices__title">💬 購入者の声<span class="buyer-voices__title-sub">（SNS・レビューから）</span></h2>
   {{- with $v.subject }}
   <p class="buyer-voices__subject">{{ . }}についての声です。</p>
   {{- end }}
