@@ -1,16 +1,11 @@
 {
   "asin": "B01MYVG86M",
-  "fetched_at": "2026-08-23T21:45:55.681599+00:00",
+  "fetched_at": "2026-11-12T02:22:41.504582+00:00",
   "query": "レゴ デュプロ デュプロのまち 3in1",
   "engine": "tavily",
-  "raw_count": 9,
+  "raw_count": 20,
+  "empty_streak": 0,
   "sources": [
-    {
-      "title": "LEGO レゴ 10448 LEGO（レゴ） デュプロ デュプロのまち 3in1 ...",
-      "url": "https://www.yodobashi.com/product/100000001009099050",
-      "snippet": "LEGO レゴ 10448 LEGO(レゴ) デュプロ デュプロのまち 3in1 : ¥5,980(税込) LEGO 販売開始日: 2025/06/01",
-      "host": "yodobashi.com"
-    },
     {
       "title": "デュプロ 10446 デュプロのまち 3in1 どうぶつのかぞく - レゴ",
       "url": "https://kakaku.com/item/S0001017135",
@@ -34,7 +29,7 @@
       }
     },
     {
-      "title": "レゴ LEGO デュプロ デュプロのまち 3in1 どうぶつのかぞく ...",
+      "title": "レゴ LEGO デュプロ デュプロのまち 3in1 どうぶつのかぞく 10446",
       "url": "https://www.youtube.com/watch?v=YtP1nFkMlMc",
       "snippet": "どうぶつがテーマの知育玩具 - 世界中のどうぶつたちと遊びながら、幼少期に必要なライフスキルを身につけられます商品詳細はこちら→",
       "host": "youtube.com",
@@ -43,6 +38,76 @@
         "checked_at": "2026-10-23",
         "http": 200
       }
+    }
+  ],
+  "dropped": [
+    {
+      "host": "shopping.yahoo.co.jp",
+      "reason": "search_result"
+    },
+    {
+      "host": "yodobashi.com",
+      "reason": "retail"
+    },
+    {
+      "host": "search.rakuten.co.jp",
+      "reason": "search_result"
+    },
+    {
+      "host": "amazon.co.jp",
+      "reason": "retail"
+    },
+    {
+      "host": "biccamera.com",
+      "reason": "retail"
+    },
+    {
+      "host": "lego.com",
+      "reason": "duplicate_host"
+    },
+    {
+      "host": "lego.com",
+      "reason": "duplicate_host"
+    },
+    {
+      "host": "lego.com",
+      "reason": "duplicate_host"
+    },
+    {
+      "host": "lego.com",
+      "reason": "duplicate_host"
+    },
+    {
+      "host": "amazon.co.jp",
+      "reason": "retail"
+    },
+    {
+      "host": "youtube.com",
+      "reason": "duplicate_host"
+    },
+    {
+      "host": "youtube.com",
+      "reason": "duplicate_host"
+    },
+    {
+      "host": "yelp.com",
+      "reason": "unrelated"
+    },
+    {
+      "host": "yelp.com",
+      "reason": "unrelated"
+    },
+    {
+      "host": "yelp.com",
+      "reason": "unrelated"
+    },
+    {
+      "host": "yelp.com",
+      "reason": "unrelated"
+    },
+    {
+      "host": "yelp.com",
+      "reason": "unrelated"
     }
   ]
 }
