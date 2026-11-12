@@ -7077,6 +7077,58 @@ body:has(#compare-floating-bar) .favorites-wrapper {
 }
 [data-theme="dark"] .toy-safety__alert > p > strong { color: #fbbf24; }
 
+/* ---------- 購入者の声 (navi-brain#164 R2) ---------- */
+.buyer-voices {
+  margin: 32px 0 8px;
+  padding: 20px 22px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  background: var(--entry, #fff);
+}
+.buyer-voices__title {
+  margin: 0 0 10px;
+  font-size: 1.2rem;
+  color: var(--primary, #222);
+}
+.buyer-voices__subject {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  color: var(--secondary, #4b5563);
+}
+.buyer-voices__group { margin: 0 0 14px; }
+.buyer-voices__h3 {
+  margin: 0 0 6px;
+  padding-left: 10px;
+  border-left: 4px solid #9ca3af;
+  font-size: 1rem;
+  color: var(--primary, #333);
+}
+.buyer-voices__group--good .buyer-voices__h3 { border-left-color: #16a34a; }
+.buyer-voices__group--concern .buyer-voices__h3 { border-left-color: #f59e0b; }
+.buyer-voices__group--age .buyer-voices__h3 { border-left-color: #3b82f6; }
+.buyer-voices__list { margin: 0; padding-left: 20px; }
+.buyer-voices__list li {
+  margin: 4px 0;
+  font-size: 0.94rem;
+  line-height: 1.7;
+  color: var(--content, #444);
+}
+.buyer-voices__src {
+  font-size: 0.82rem;
+  color: var(--secondary, #6b7280);
+  overflow-wrap: anywhere;
+}
+.buyer-voices__note {
+  margin: 10px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--secondary, #6b7280);
+}
+[data-theme="dark"] .buyer-voices {
+  border-color: #3a3a3a;
+  background: #1f1f1f;
+}
+
 /* ---------- カテゴリ探索バー (Issue #2164 #6 / session 144 usability) ---------- */
 /* 主メニュー下の「おもちゃの種類から探す」ナビ。親グループ button を押すと
    子タグ (既存 /tags/ term ページ) へのリンクが件数バッジ付きで、バー全体の
