@@ -34,6 +34,7 @@ import frontmatter
 import jinja2
 
 import article_format_log
+import asin_redirects
 import market_prices
 import official_howto
 import official_howto_format
@@ -3318,6 +3319,7 @@ def _frontmatter_meta(
     query_intent_map: dict[str, str] | None = None,
     canonical_overrides: dict[str, str] | None = None,
     stock_title_override: str | None = None,
+    asin_redirect_map: dict[str, list[str]] | None = None,
 ) -> dict[str, Any]:
     # #2686 / #4964: 「どこで買える/在庫」型が適用された記事は決定的生成の
     # タイトルを最優先で使う (元 JSON の title / title_variants は書き換えず、
@@ -3365,7 +3367,8 @@ def _frontmatter_meta(
         "tags": [_term_to_slug(t.rstrip(". ")) for t in data.get("tags", []) if t],
         "slug": slug,
         "url": f"/products/{asin.lower()}/",
-        "aliases": [f"/posts/{slug.lower()}/"],
+        # navi-brain#164 R1: 外したページ (data/asin_redirects.json) の旧 URL をここへ転送する
+        "aliases": [f"/posts/{slug.lower()}/"] + asin_redirects.aliases_for(asin, asin_redirect_map or {}),
         "draft": draft,
         "description": description,
         "keywords": data.get("keywords", []),
@@ -3634,6 +3637,9 @@ def main() -> None:
                         help="A-7 query intent classification (#1980); used to set cta_layout front matter")
     parser.add_argument("--canonical-overrides", default="data/analytics/canonical_overrides.json",
                         help="A-3 query cannibalization canonical consolidation (#2370); used to set canonicalURL front matter")
+    parser.add_argument("--asin-redirects", default=str(asin_redirects.DEFAULT_PATH),
+                        help="navi-brain#164: retired ASIN -> replacement ASIN; adds the old /products/ URL "
+                             "to the replacement page's aliases")
     parser.add_argument("--format-log", default=None,
                         help="#7954: path to append the per-page article-format transition log "
                              "(e.g. data/analytics/history/article_format.jsonl). Unset by default "
@@ -3695,6 +3701,9 @@ def main() -> None:
     canonical_overrides = _load_canonical_overrides(pathlib.Path(args.canonical_overrides))
     if canonical_overrides:
         print(f"canonicalURL: loaded {len(canonical_overrides)} page(s) with A-3 canonical override")
+    asin_redirect_map = asin_redirects.load(pathlib.Path(args.asin_redirects))
+    if asin_redirect_map:
+        print(f"aliases: {sum(map(len, asin_redirect_map.values()))} retired product URL(s) redirected")
 
     # 年齢別発達段階目安データのロード
     stages_path = pathlib.Path("hugo/data/development_stages.json")
@@ -4066,6 +4075,7 @@ def main() -> None:
                 score_result=fresh_sr, query_intent_map=query_intent_map,
                 canonical_overrides=canonical_overrides,
                 stock_title_override=stock_title_override,
+                asin_redirect_map=asin_redirect_map,
             )
             if fm_meta.get("cta_layout"):
                 cta_layout_applied += 1

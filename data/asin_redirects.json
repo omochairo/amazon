@@ -1,0 +1,17 @@
+{
+  "_doc": "外した商品ページの旧 URL → 代わりに見せる商品ページ（navi-brain#164 R1）。build_post.py が to の記事の aliases に /products/<from>/ を足す。from の記事は消して asin_blocklist.json に入れること（scripts/asin_redirects.py）。",
+  "redirects": [
+    {
+      "from": "B0H1KNTHWZ",
+      "to": "B0H1KQ5CMD",
+      "reason": "White Case（専用ケース）のページが本体の説明になっていた（#11647）。同じ色の本体 White Glacier へ",
+      "added_at": "2026-11-13"
+    },
+    {
+      "from": "B0H1KGNVX2",
+      "to": "B0F8H35HG3",
+      "reason": "Pink Case（専用ケース）のページが本体の説明になっていた（#11647 の洗い出し）。ピンクの本体 Pink Land へ",
+      "added_at": "2026-11-13"
+    }
+  ]
+}

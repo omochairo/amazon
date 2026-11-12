@@ -76,6 +76,11 @@
   </div>
   {{- end }}
 
+  {{- /* navi-brain#164 R2: 購入者の声 (hugo/data/voices/<ASIN>.json がある商品だけ) */ -}}
+  {{- if $asin }}
+    {{- partial "buyer_voices.html" (dict "asin" $asin) -}}
+  {{- end }}
+
   {{- /* Issue #600: 楽天ランキング履歴チャート (該当 ASIN のみ描画) */ -}}
   {{- if $asin }}
     {{- partial "ranking-history-chart.html" (dict "asin" $asin "title" .Title) -}}

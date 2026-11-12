@@ -1,0 +1,32 @@
+{{- /* navi-brain#164 R2: 購入者・利用者の声 (SNS・レビュー) を、出典の種類と件数つきで載せる。
+       データは hugo/data/voices/<ASIN>.json (書式と決まりは scripts/tests/test_buyer_voices.py)。
+       - 声は要点を自分の言葉でまとめたもの。投稿の丸写し・投稿者や子どもが分かる情報は載せない
+       - 良い声だけでなく不満も載せる。宣伝の投稿は件数から除き、除いた数を添える
+       - show_until を過ぎたら出さない (古くなった声の取り下げ)。ビルドは毎日なので翌日には消える
+       - 価格・日付・対象年齢などの値はここに書かない (値は記事本文の工程で公式と照らす) */ -}}
+{{- $asin := .asin -}}
+{{- $v := index (site.Data.voices | default dict) $asin -}}
+{{- if and $v (ge $v.show_until (now.Format "2006-01-02")) (or $v.good $v.concerns) -}}
+{{- $groups := slice (dict "key" "good" "label" "良かったという声" "mod" "good") (dict "key" "concerns" "label" "気になったという声" "mod" "concern") (dict "key" "age" "label" "年齢の実感" "mod" "age") -}}
+<section class="buyer-voices" aria-labelledby="buyer-voices-h">
+  <h2 id="buyer-voices-h" class="buyer-voices__title">💬 購入者の声（SNS・レビューから）</h2>
+  {{- with $v.subject }}
+  <p class="buyer-voices__subject">{{ . }}についての声です。</p>
+  {{- end }}
+  {{- range $groups }}
+  {{- $rows := index $v .key -}}
+  {{- if $rows }}
+  <div class="buyer-voices__group buyer-voices__group--{{ .mod }}">
+    <h3 class="buyer-voices__h3">{{ .label }}</h3>
+    <ul class="buyer-voices__list">
+      {{- range $rows }}
+      <li>{{ .text }}<span class="buyer-voices__src">（{{ .where }}・{{ .count }} 件）</span></li>
+      {{- end }}
+    </ul>
+  </div>
+  {{- end }}
+  {{- end }}
+  {{- $collected := time.AsTime $v.collected_on }}
+  <p class="buyer-voices__note">{{ $collected.Year }} 年 {{ int $collected.Month }} 月 {{ $collected.Day }} 日に、{{ $v.scope }}から集めた声を要点にまとめています。件数は見つかった範囲の数です。{{ with $v.excluded_promotions }}宣伝の投稿（{{ . }} 件）は数えていません。{{ end }}</p>
+</section>
+{{- end -}}
