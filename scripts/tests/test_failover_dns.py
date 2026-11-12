@@ -421,22 +421,37 @@ def test_created_issue_carries_the_state_label(monkeypatch):
 # main: 待機系を向いている間の状態 issue
 # --------------------------------------------------------------------------
 
-def _run_main(monkeypatch, *, rec_content, existing_body=None):
-    """main を DNS・HTTP・gh を差し替えて 1 回走らせ、gh の呼び出しを返す。"""
+def _run_main(monkeypatch, *, rec_content, existing_body=None, nas_probes=None,
+              now="2026-08-31T12:00:00+00:00", auto=False, patched=None):
+    """main を DNS・HTTP・gh を差し替えて 1 回走らせ、gh の呼び出しを返す。
+
+    ``nas_probes`` は NAS 直通の観測 (既定は到達不能 = 戻さない)。
+    ``patched`` に list を渡すと DNS の書き換えを許し、書き換え先を積む。
+    """
     calls = []
     label_items = ([{"number": 9704, "body": existing_body}]
                    if existing_body is not None else [])
     _install_fake_gh(monkeypatch, label_items=label_items, calls=calls)
     monkeypatch.setattr(fd, "probe_origin", lambda *a, **k: [probe_ok()])
+    monkeypatch.setattr(fd, "probe_stable",
+                        lambda *a, **k: list(nas_probes or [probe_unreachable()]))
     monkeypatch.setattr(fd, "get_zone_id", lambda *a, **k: "zone")
     monkeypatch.setattr(fd, "get_record", lambda *a, **k: record(content=rec_content))
 
-    def no_patch(*a, **k):
-        raise AssertionError("健全な応答で DNS を書き換えてはいけない")
-    monkeypatch.setattr(fd, "patch_record", no_patch)
+    def fake_patch(token, zone_id, rec, content):
+        if patched is None:
+            raise AssertionError("この場面で DNS を書き換えてはいけない")
+        patched.append(content)
+        return {"content": content}
+    monkeypatch.setattr(fd, "patch_record", fake_patch)
     monkeypatch.setenv("CF_DNS_TOKEN", "t")
     monkeypatch.setenv("FAILOVER_ENABLED", "true")
-    assert fd.main(["--repo", "omochairo/amazon"]) == 0
+    monkeypatch.setenv("NAS_ORIGIN_CNAME", TUNNEL)
+    if auto:
+        monkeypatch.setenv("FAILBACK_AUTO", "true")
+    else:
+        monkeypatch.delenv("FAILBACK_AUTO", raising=False)
+    assert fd.main(["--repo", "omochairo/amazon", "--now", now]) == 0
     return calls
 
 
@@ -483,3 +498,197 @@ def test_marker_comment_is_the_full_html_comment():
     assert fd.MARKER_COMMENT.startswith("<!--")
     assert fd.MARKER_COMMENT.endswith("-->")
     assert fd.MARKER in fd.MARKER_COMMENT
+
+
+# --------------------------------------------------------------------------
+# 戻し (待機系 → NAS): 直りかけの回線で戻さないこと (2026-11-12)
+# --------------------------------------------------------------------------
+
+def _already_row():
+    return fd.decide([probe_ok()], {}, record(content=STANDBY), NOW, enabled=True)
+
+
+def _since(hours_ago: float) -> dt.datetime:
+    return NOW - dt.timedelta(hours=hours_ago)
+
+
+def test_failback_nas_down_stays_already_and_clears_the_mark():
+    row = fd.decide_failback(_already_row(), [probe_origin_down(530)], probe_ok(),
+                             record(content=STANDBY), NOW, _since(5), auto=True)
+    assert row["action"] == "already"
+    assert row["healthy_since"] is None
+
+
+def test_failback_one_bad_probe_among_good_is_not_healthy():
+    row = fd.decide_failback(_already_row(), [probe_ok(), probe_unreachable()], probe_ok(),
+                             record(content=STANDBY), NOW, _since(5), auto=True)
+    assert row["action"] == "already"
+
+
+def test_failback_first_healthy_sighting_starts_the_clock():
+    row = fd.decide_failback(_already_row(), [probe_ok()] * 3, probe_ok(),
+                             record(content=STANDBY), NOW, None, auto=True)
+    assert row["action"] == "failback_pending"
+    assert row["healthy_since"] == NOW
+
+
+def test_failback_waits_until_stable_hours():
+    row = fd.decide_failback(_already_row(), [probe_ok()] * 3, probe_ok(),
+                             record(content=STANDBY), NOW, _since(1.5), auto=True)
+    assert row["action"] == "failback_pending"
+    assert row["healthy_since"] == _since(1.5)
+
+
+def test_failback_waits_while_sha_differs():
+    other = probe_ok()
+    other["body"] = json.dumps({"sha": "0" * 40, "built_at": "2026-08-31T11:00:00Z"})
+    row = fd.decide_failback(_already_row(), [other] * 3, probe_ok(),
+                             record(content=STANDBY), NOW, _since(3), auto=True)
+    assert row["action"] == "failback_pending"
+    assert row["healthy_since"] == _since(3)  # NAS は生きているので刻みは残す
+
+
+def test_failback_respects_cooldown_after_failover():
+    rec = record(content=STANDBY, modified_on="2026-08-31T11:00:00Z")
+    row = fd.decide_failback(_already_row(), [probe_ok()] * 3, probe_ok(),
+                             rec, NOW, _since(3), auto=True)
+    assert row["action"] == "failback_pending"
+
+
+def test_failback_ready_when_unarmed():
+    row = fd.decide_failback(_already_row(), [probe_ok()] * 3, probe_ok(),
+                             record(content=STANDBY), NOW, _since(2.5), auto=False)
+    assert row["action"] == "failback_ready"
+
+
+def test_failback_auto_when_armed():
+    row = fd.decide_failback(_already_row(), [probe_ok()] * 3, probe_ok(),
+                             record(content=STANDBY), NOW, _since(2.5), auto=True)
+    assert row["action"] == "failback_auto"
+
+
+def test_healthy_since_roundtrips_through_the_issue_body():
+    row = fd.decide_failback(_already_row(), [probe_ok()] * 3, probe_ok(),
+                             record(content=STANDBY), NOW, None, auto=False)
+    body = fd.render_body(row)
+    assert fd.parse_healthy_since(body) == NOW
+    assert fd.parse_healthy_since("no mark") is None
+
+
+def test_probe_stable_stops_at_first_failure():
+    seq = [probe_ok(), probe_unreachable(), probe_ok()]
+    got = fd.probe_stable("u", 3, 0, 1, sleep=lambda s: None, probe=lambda u: seq.pop(0))
+    assert len(got) == 2
+
+
+def _body_with(action, since=None):
+    reason = fd.pending_reason_marker("stabilizing") if action == "failback_pending" else ""
+    return "\n".join([fd.MARKER_COMMENT, fd.healthy_since_marker(since), reason,
+                      fd._action_line(action)])
+
+
+def test_main_records_first_healthy_sighting(monkeypatch):
+    calls = _run_main(monkeypatch, rec_content=STANDBY, existing_body=_body_with("already"),
+                      nas_probes=[probe_ok()] * 3)
+    edit = [c for c in calls if c[:2] == ["issue", "edit"]][0]
+    body = edit[edit.index("--body") + 1]
+    assert fd.parse_healthy_since(body) == NOW
+    assert fd._action_line("failback_pending") in body
+
+
+def test_main_does_not_rewrite_while_pending_with_same_mark(monkeypatch):
+    calls = _run_main(monkeypatch, rec_content=STANDBY,
+                      existing_body=_body_with("failback_pending", _since(1)),
+                      nas_probes=[probe_ok()] * 3)
+    assert _issue_ops(calls) == []
+
+
+def test_main_resets_the_mark_when_nas_drops_again(monkeypatch):
+    calls = _run_main(monkeypatch, rec_content=STANDBY,
+                      existing_body=_body_with("failback_pending", _since(1)),
+                      nas_probes=[probe_origin_down(530)])
+    edit = [c for c in calls if c[:2] == ["issue", "edit"]][0]
+    body = edit[edit.index("--body") + 1]
+    assert fd.parse_healthy_since(body) is None
+    assert fd._action_line("already") in body
+
+
+def test_main_comments_once_when_ready(monkeypatch):
+    calls = _run_main(monkeypatch, rec_content=STANDBY,
+                      existing_body=_body_with("failback_pending", _since(3)),
+                      nas_probes=[probe_ok()] * 3)
+    assert _issue_ops(calls) == ["edit", "comment"]
+    again = _run_main(monkeypatch, rec_content=STANDBY,
+                      existing_body=_body_with("failback_ready", _since(3)),
+                      nas_probes=[probe_ok()] * 3)
+    assert _issue_ops(again) == []
+
+
+def test_main_auto_failback_patches_and_closes(monkeypatch):
+    patched = []
+    calls = _run_main(monkeypatch, rec_content=STANDBY,
+                      existing_body=_body_with("failback_pending", _since(3)),
+                      nas_probes=[probe_ok()] * 3, auto=True, patched=patched)
+    assert patched == [TUNNEL]
+    assert _issue_ops(calls) == ["close"]
+    for c in calls:
+        assert TUNNEL not in " ".join(c)
+
+
+def test_main_auto_failback_without_target_only_notifies(monkeypatch):
+    monkeypatch.setattr(fd, "resolve_failback_target", lambda a: ("", "戻し先が分からない"))
+    calls = _run_main(monkeypatch, rec_content=STANDBY,
+                      existing_body=_body_with("failback_pending", _since(3)),
+                      nas_probes=[probe_ok()] * 3, auto=True)
+    assert _issue_ops(calls) == ["edit", "comment"]
+
+
+# --- agy レビューで足した分 (2026-11-12) ----------------------------------------
+
+def test_failback_when_standby_is_also_down_does_not_wait():
+    """全断 (待機系も 5xx) で NAS が応えるなら、安定も sha も待たずに戻す。"""
+    row = fd.decide_failback(_already_row(), [probe_ok()] * 3, None,
+                             record(content=STANDBY, modified_on="2026-08-31T11:50:00Z"),
+                             NOW, None, auto=False, emergency_ok=True)
+    assert row["action"] == "failback_auto"
+
+
+def test_failback_when_standby_down_but_unarmed_only_notifies():
+    row = fd.decide_failback(_already_row(), [probe_ok()] * 3, None,
+                             record(content=STANDBY), NOW, None, auto=False, emergency_ok=False)
+    assert row["action"] == "failback_ready"
+
+
+def test_main_checks_nas_even_when_standby_is_down(monkeypatch):
+    patched = []
+    calls = []
+    _install_fake_gh(monkeypatch, label_items=[], calls=calls)
+    monkeypatch.setattr(fd, "probe_origin", lambda *a, **k: [probe_origin_down(530)] * 3)
+    monkeypatch.setattr(fd, "probe_stable", lambda *a, **k: [probe_ok()] * 3)
+    monkeypatch.setattr(fd, "http_probe", lambda *a, **k: probe_origin_down(530))
+    monkeypatch.setattr(fd, "get_zone_id", lambda *a, **k: "zone")
+    monkeypatch.setattr(fd, "get_record", lambda *a, **k: record(content=STANDBY))
+    monkeypatch.setattr(fd, "patch_record",
+                        lambda t, z, r, c: patched.append(c) or {"content": c})
+    monkeypatch.setenv("CF_DNS_TOKEN", "t")
+    monkeypatch.setenv("FAILOVER_ENABLED", "true")
+    monkeypatch.setenv("NAS_ORIGIN_CNAME", TUNNEL)
+    monkeypatch.delenv("FAILBACK_AUTO", raising=False)
+    assert fd.main(["--repo", "omochairo/amazon", "--now", NOW.isoformat()]) == 0
+    assert patched == [TUNNEL]
+
+
+def test_pending_reason_change_rewrites_the_body(monkeypatch):
+    """安定待ち → sha 待ちに変わったら、同じ failback_pending でも書き換える。"""
+    other = probe_ok()
+    other["body"] = json.dumps({"sha": "0" * 40, "built_at": "2026-08-31T11:00:00Z"})
+    body = "\n".join([fd.MARKER_COMMENT, fd.healthy_since_marker(_since(3)),
+                      fd.pending_reason_marker("stabilizing"),
+                      fd._action_line("failback_pending")])
+    calls = _run_main(monkeypatch, rec_content=STANDBY, existing_body=body,
+                      nas_probes=[other] * 3)
+    edit = [c for c in calls if c[:2] == ["issue", "edit"]][0]
+    assert fd.parse_pending_reason(edit[edit.index("--body") + 1]) == "sha_mismatch"
+    again = _run_main(monkeypatch, rec_content=STANDBY,
+                      existing_body=edit[edit.index("--body") + 1], nas_probes=[other] * 3)
+    assert _issue_ops(again) == []

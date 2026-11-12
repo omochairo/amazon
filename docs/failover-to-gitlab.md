@@ -63,10 +63,14 @@
 待機系は本番とバイト同一・同 sha で、301 リダイレクト 512 本も 404 も同じに返る
 (2026-08-31 実測)。倒すことのコストがほぼゼロなので自動化に見合う。
 
-裏返すと **戻すことは急がない。** だから戻しは手動にしてある。この非対称は意図的で、
-「自動で戻す」を成立させるには待機系を向いている間もトンネルの生死を見る経路
-(常設の `navi-origin.omcha.jp` + cloudflared の ingress 追加 = NAS 側の手作業) が
-必要になる。得られるものに見合わない。
+裏返すと **戻すことは急がない。** 倒すのは速く、戻すのは遅く、の非対称は意図的。
+
+2026-11-12 から、待機系を向いている間は常設の `navi-origin.omcha.jp`
+(NAS のトンネルの直通) を run ごとに見て、**NAS の健全が 2h 続き、配信物の sha が
+待機系と揃ったら** `failback_ready` で知らせる (コメント 1 件)。リポジトリ変数
+`FAILBACK_AUTO` が真なら、そのまま戻す。「2h 続いた」を要求するのは、自宅ルーターが
+落ちた翌朝にトンネルが 08:51 / 09:37 / 10:10 と断続的に切れ続けた実測があるため
+(直りかけの回線で戻すと、次の断で本番を落とす)。
 
 ### 何を「オリジン障害」と呼ぶか
 
@@ -98,11 +102,20 @@ Cloudflare 自体が落ちているとき待機系に倒しても、待機系も
 gh variable set FAILOVER_ENABLED --body true -R omochairo/amazon
 ```
 
-### 戻しかた (手動)
+### 戻しかた
 
-倒したあとは、状態 issue（ラベル `origin-failover-state`）が `already`（待機系で配信中）のまま**開き続ける**。
-`navi.omcha.jp` は待機系から 200 を返すので、53 からは NAS が直ったかどうかは見えない。
-戻して本番を向いた時点で閉じる。
+倒したあとは、状態 issue（ラベル `origin-failover-state`）が開き続け、判定が
+`already`（NAS 未復旧）→ `failback_pending`（NAS の復旧を観測中）→ `failback_ready`
+（戻せる）と進む。NAS が 1 回でも応えなければ `already` に戻ってやり直す。
+「いつから健全か」は issue 本文の `<!-- nas-healthy-since: … -->` に刻んである。
+`FAILBACK_AUTO` が真なら `failback_ready` の代わりに自動で戻し、issue を閉じる。
+**待機系も CF の裏で 5xx を返している (全断) ときに NAS が応えれば、安定も sha も待たずに
+戻す** (倒すときと同じく `FAILOVER_ENABLED` で動く)。読者が今どこからも配信を受けていないため。
+手で戻すときは下のとおり。戻して本番を向いた時点で閉じる。
+
+```bash
+gh variable set FAILBACK_AUTO --body true -R omochairo/amazon   # 自動戻しを武装する
+```
 
 **先に NAS 側 (cloudflared / nginx / navi-switch) の復旧を確認すること。**
 
