@@ -7090,6 +7090,8 @@ body:has(#compare-floating-bar) .favorites-wrapper {
   font-size: 1.2rem;
   color: var(--primary, #222);
 }
+/* 狭い画面で「ら）」だけが次の行に落ちないよう、括弧の部分はまとめて折り返す */
+.buyer-voices__title-sub { display: inline-block; }
 .buyer-voices__subject {
   margin: 0 0 10px;
   font-size: 0.9rem;
