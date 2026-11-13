@@ -201,6 +201,19 @@ class BuildCacheTest(unittest.TestCase):
         # K0 はキャッシュがあるので reused (fresh ではないが limit 到達後に流用)
         self.assertIn("K0", entries)
 
+    def test_term_removed_from_mapping_is_dropped_from_cache(self):
+        """mapping から外した語は、prior cache に残っていても再生成で復活しない (#165 T5)。"""
+        mapping = {"K": {"type": "wikipedia", "target": "K"}}
+        fresh = datetime.now(timezone.utc).isoformat()
+        prior = {
+            "K": {"type": "wikipedia", "title": "K", "extract": "x", "url": "u", "updated_at": fresh},
+            "感覚": {"type": "wikipedia", "title": "感覚", "extract": "x", "url": "u2", "updated_at": fresh},
+        }
+        with patch.object(fetch_wiki_data, "fetch_summary") as m:
+            entries, _ = fetch_wiki_data.build_cache(mapping, prior, ttl_days=30, sleep_sec=0)
+            m.assert_not_called()
+        self.assertEqual(list(entries), ["K"])
+
 
 if __name__ == "__main__":
     unittest.main()
