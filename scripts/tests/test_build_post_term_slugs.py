@@ -108,6 +108,24 @@ class FrontmatterMetaTagsBrandsTest(unittest.TestCase):
         self.assertEqual(meta["tags"], ["lego"])
         self.assertEqual(meta["brands"], ["lego"])
 
+    # navi-brain#165 T1: 辞書に無いブランドは元の名前を表示名にする。
+    # tier D・ハブを作らない・brands タクソノミーに入れない扱いは変えない。
+    def test_unknown_brand_shows_raw_name(self):
+        data = _article(brand="Hueyaus")
+        meta = self._meta_for(data)
+        self.assertEqual(meta["brand"], "Hueyaus")
+        self.assertEqual(meta["brand_raw"], "Hueyaus")
+        self.assertEqual(meta["brand_tier"], "D")
+        self.assertEqual(meta["brand_match_type"], "unknown")
+        self.assertNotIn("brands", meta)
+
+    def test_non_brand_word_stays_noburand(self):
+        for raw in ("ノーブランド品", "ブランドなし", "Unknown", "メーカー不明"):
+            with self.subTest(raw=raw):
+                meta = self._meta_for(_article(brand=raw))
+                self.assertEqual(meta["brand"], "ノーブランド")
+                self.assertNotIn("brands", meta)
+
 
 if __name__ == "__main__":
     unittest.main()

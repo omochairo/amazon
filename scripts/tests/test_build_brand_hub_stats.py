@@ -24,8 +24,22 @@ if SCRIPTS_DIR not in sys.path:
 import build_brand_hub_stats as bhs  # noqa: E402
 
 
+# ASIN -> build の計算 (score_calculator) が返すことにする総合点。
+# aggregate は ivs_detail (Jules の点) ではなく build の計算を使う (navi-brain#165 T1)
+# ので、テストでは計算を差し替えて点を固定する。
+_CALC_TOTALS: dict[str, int] = {}
+
+
+def _fake_calculate(article, brand, asin=None, repo_root=None):
+    from score_calculator import ScoreResult
+    total = _CALC_TOTALS[asin or article["product"]["asin"]]
+    return ScoreResult(total_100=total, ivs_score=round(total / 20.0, 2))
+
+
 def _article(asin: str, brand: str, ivs_100: int, price: int, age: str,
              tags: list[str], image: str = "https://x/i.jpg") -> dict:
+    """ivs_100 は build の計算が返す点。Jules の ivs_detail はわざと別の値にしておく。"""
+    _CALC_TOTALS[asin] = ivs_100
     return {
         "slug": f"2026-05-30-{asin}",
         "tags": tags,
@@ -34,10 +48,17 @@ def _article(asin: str, brand: str, ivs_100: int, price: int, age: str,
             "asin": asin,
             "brand": brand,
             "image": image,
-            "ivs_detail": {"total_100": ivs_100},
+            "ivs_detail": {"total_100": 100 - ivs_100},
             "best_price": price,
         },
     }
+
+
+class _PatchedCalc(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.object(bhs, "calculate_score", side_effect=_fake_calculate)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
 
 def _write_articles(root: pathlib.Path, items: list[dict]) -> None:
@@ -80,7 +101,7 @@ class TestAgeParser(unittest.TestCase):
         self.assertEqual(bhs.parse_age_min_months("1歳6ヶ月〜"), 18)
 
 
-class TestAggregateAgeRules(unittest.TestCase):
+class TestAggregateAgeRules(_PatchedCalc):
     """平均年齢に age_semantics の規則が効くこと (#9217)。"""
 
     def _avg(self, items: list[dict]) -> float | None:
@@ -454,7 +475,7 @@ class TestRelatedBrands(unittest.TestCase):
         self.assertEqual(brands["A"]["related_brands"], [])
 
 
-class TestAggregate(unittest.TestCase):
+class TestAggregate(_PatchedCalc):
     def test_threshold_under_three_returns_count_only(self):
         with tempfile.TemporaryDirectory() as td:
             root = pathlib.Path(td) / "articles"
@@ -621,6 +642,43 @@ class TestAggregate(unittest.TestCase):
             self.assertTrue(out.exists())
             loaded = json.loads(out.read_text(encoding="utf-8"))
             self.assertEqual(loaded["brands"]["レゴ"]["count"], 3)
+
+
+
+class TestScoreSource(unittest.TestCase):
+    """ハブの点は build の計算 (記事ページと同じ値) で、Jules の ivs_detail ではない。"""
+
+    def test_ignores_jules_ivs_detail(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td) / "articles"
+            arts = [
+                _article(f"S{i}", "レゴ(LEGO)", 60, 1000, "3歳以上", ["レゴ"])
+                for i in range(3)
+            ]
+            for a in arts:
+                a["product"]["ivs_detail"] = {"total_100": 99}
+            _write_articles(root, arts)
+            with mock.patch.object(bhs, "calculate_score", side_effect=_fake_calculate):
+                payload = bhs.aggregate(root)
+        self.assertEqual(payload["brands"]["レゴ"]["avg_ivs_100"], 60.0)
+
+    def test_matches_score_calculator(self):
+        """差し替えなしで、score_calculator.calculate の総合点と一致する。"""
+        from brand_normalizer import normalize
+        from score_calculator import calculate
+
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td) / "articles"
+            arts = [
+                _article(f"B0TESTHUB{i}", "レゴ(LEGO)", 0, 1000 * (i + 1), "3歳以上", ["レゴ"])
+                for i in range(3)
+            ]
+            _write_articles(root, arts)
+            payload = bhs.aggregate(root)
+        want = [calculate(a, normalize("レゴ(LEGO)"), asin=a["product"]["asin"]).total_100
+                for a in arts]
+        self.assertEqual(payload["brands"]["レゴ"]["avg_ivs_100"],
+                         round(sum(want) / len(want), 1))
 
 
 if __name__ == "__main__":

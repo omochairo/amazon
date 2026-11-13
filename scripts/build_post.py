@@ -44,6 +44,8 @@ import seo_title
 import stock_status
 import where_to_buy_format
 from brand_normalizer import normalize as normalize_brand
+from brand_normalizer import display_name as brand_display_name
+import score_claims
 from age_semantics import (
     ADULT_AGE_MONTHS,
     is_seasonal_decoration,
@@ -3451,7 +3453,10 @@ def _frontmatter_meta(
     raw_brand = product.get("brand")
     if raw_brand:
         nb = normalize_brand(raw_brand)
-        meta["brand"] = nb.canonical
+        # navi-brain#165 T1: 辞書に無いブランドは元の名前を表示名にする
+        # (ブランド名でない語は「ノーブランド」のまま)。tier・ハブ・タクソノミーの
+        # 扱いは nb のまま (下の brands は exclude_from_taxonomy で入らない)。
+        meta["brand"] = brand_display_name(raw_brand, nb)
         meta["brand_raw"] = raw_brand
         meta["brand_tier"] = nb.tier
         meta["brand_region"] = nb.region
@@ -3753,6 +3758,8 @@ def main() -> None:
     # #3332 N3 消費側: internal_link_suggestions の注入/drop 件数を run 全体で合算。
     internal_links_injected_total = 0
     internal_links_dropped_total = 0
+    # navi-brain#165 T1: closing の定型句を置き換えた記事 / 置き換え後も点数と食い違う記事
+    score_claim_stats = {"closing_replaced": 0, "remaining": 0}
 
     # 充足率統計データの初期化
     stats = {
@@ -3920,14 +3927,6 @@ def main() -> None:
                 if isinstance(v, str):
                     data[top_key] = _meta_re.sub("", v).strip()
 
-            # #3332 N3 消費側: 逐語一致検証はレンダリングされる最終テキストに対して
-            # 行う必要があるため、narrative クリーンアップの後・template.render の前に呼ぶ。
-            links_injected, links_dropped = _inject_internal_links(
-                data, article_index, site_base_path
-            )
-            internal_links_injected_total += links_injected
-            internal_links_dropped_total += links_dropped
-
             # #1107: enrichment + 価格 backfill 後の data から ScoreResult を 1 回だけ算出し、
             # 本文 (data["score"]) と frontmatter (_frontmatter_meta) で再利用する
             # (本文 / frontmatter 用の calculate_score 呼出を 2 回 → 1 回に削減)。
@@ -3946,6 +3945,24 @@ def main() -> None:
                         )
                     except Exception:
                         fresh_sr = None
+
+            # navi-brain#165 T1: 総合が低い記事の closing にある強い推奨の定型句を
+            # 中立の固定文にする (点数と矛盾させない)。内部リンクの挿入は本文の
+            # 逐語一致で行うので、その前に置き換える。安全性の言い切りは数えるだけ。
+            score_view = score_claims.view_from_result(fresh_sr) if fresh_sr is not None else None
+            if score_claims.replace_low_score_closing(data, score_view):
+                score_claim_stats["closing_replaced"] += 1
+            if score_claims.find_claims(data, score_view):
+                score_claim_stats["remaining"] += 1
+
+            # #3332 N3 消費側: 逐語一致検証はレンダリングされる最終テキストに対して
+            # 行う必要があるため、narrative クリーンアップの後・template.render の前に呼ぶ。
+            links_injected, links_dropped = _inject_internal_links(
+                data, article_index, site_base_path
+            )
+            internal_links_injected_total += links_injected
+            internal_links_dropped_total += links_dropped
+
             # #1111: テンプレへは data["score"] を直接渡す (旧 product.ivs_detail の
             # in-place mutation = _sync_ivs_for_render は廃止)。
             # #1124: product.ivs_score の上書きも廃止 (frontmatter は
@@ -4200,6 +4217,11 @@ def main() -> None:
     print(
         f"internal_links: {internal_links_injected_total} injected / "
         f"{internal_links_dropped_total} dropped"
+    )
+    print(
+        f"score_claims: closing 置き換え {score_claim_stats['closing_replaced']} 記事 / "
+        f"点数と食い違う言い切りが残る {score_claim_stats['remaining']} 記事 "
+        f"(一覧は scripts/audit_score_claims.py)"
     )
     print(
         f"price_overlay: {price_overlay_stats['price_watch']} price_watch / "
