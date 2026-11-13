@@ -52,6 +52,34 @@ def _fold(s: str) -> str:
     return s
 
 
+# 辞書に無いブランドの表示名 (canonical) は「ノーブランド」になる。
+UNKNOWN_BRAND_LABEL = "ノーブランド"
+
+# product.brand に入りうる「ブランドではない」raw 値。辞書に無いブランドを
+# 元の名前で表示するとき (display_name) と、辞書登録の候補を集めるとき
+# (suggest_brand_taxonomy_from_catalog) の両方がこれで除外する。
+NON_BRAND_RAW: tuple[str, ...] = (
+    "ノーブランド", "ノーブランド品", "ブランドなし", "なし",
+    "Generic", "generic", "ジェネリック", "NoBrand", "No Brand",
+    "不明", "メーカー不明", "不明 / 不明", "-", "—", "その他", "Other",
+    "Unknown", "N/A", "NA",
+)
+
+
+def _non_brand_folded() -> frozenset[str]:
+    # "-" / "—" / "不明 / 不明" は記号除去で空文字や別の語になるので、空は捨てる
+    return frozenset(f for f in (_fold(s) for s in NON_BRAND_RAW) if f)
+
+
+NON_BRAND_RAW_FOLDED: frozenset[str] = _non_brand_folded()
+
+
+def is_non_brand_raw(raw: str | None) -> bool:
+    """raw がブランド名として意味を持たない (空・記号だけ・「ノーブランド」等) か。"""
+    folded = _fold(raw or "")
+    return not folded or folded in NON_BRAND_RAW_FOLDED
+
+
 class Taxonomy:
     def __init__(self, path: pathlib.Path | None = None) -> None:
         path = path or _DEFAULT_PATH
@@ -165,6 +193,25 @@ def get_taxonomy() -> Taxonomy:
 
 def normalize(raw: str | None) -> NormalizedBrand:
     return get_taxonomy().lookup(raw)
+
+
+def display_name(raw: str | None, nb: NormalizedBrand | None = None) -> str:
+    """記事ページ・カードに出すブランド名。
+
+    辞書 (brand_taxonomy.yaml) にあるブランドは canonical。辞書に無いブランドは
+    元の名前 (product.brand) をそのまま出す (navi-brain#165 T1。JSON に
+    「Hueyaus」とあるのに「ノーブランド」と出ていた)。ただし元の名前が
+    ブランド名でない語 (NON_BRAND_RAW) なら「ノーブランド」のまま。
+
+    表示名だけの話で、tier D・ハブを作らない (exclude_from_taxonomy)・brands
+    タクソノミーに入れない扱いは nb のまま変わらない。
+    """
+    nb = nb or normalize(raw)
+    if nb.match_type != "unknown":
+        return nb.canonical
+    if is_non_brand_raw(raw):
+        return UNKNOWN_BRAND_LABEL
+    return (raw or "").strip()
 
 
 def name_variants(canonical: str | None) -> frozenset[str]:

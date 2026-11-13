@@ -195,9 +195,11 @@ def evaluate_corpus(
                 {c.name: c.message for c in report.checks if not c.passed}.items()
             ),
             # passed=True だが満点でない check (減点のみ)。合否には出ない soft signal。
+            # 減点しない警告だけの check (warn=True。score_claim_consistency 等) もここに
+            # 出す。score だけで拾うと全量観察から消える。
             "deducted_checks": sorted(
                 {c.name: c.message for c in report.checks
-                 if c.passed and c.score < 1.0}.items()
+                 if c.passed and (c.score < 1.0 or getattr(c, "warn", False))}.items()
             ),
             # claims に cross_checked=true が 1 件も無いか (claims 自体が無い記事は None)。
             # claims_discipline の発火率とは別系列。理由は _cross_checked_zero を参照。

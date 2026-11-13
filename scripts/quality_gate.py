@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import copy
 import json
 import pathlib
 import re
@@ -88,6 +89,10 @@ try:
     import source_sites
 except ModuleNotFoundError:  # package 形式
     from scripts import source_sites  # type: ignore[no-redef]
+try:
+    import score_claims
+except ModuleNotFoundError:  # package 形式
+    from scripts import score_claims  # type: ignore[no-redef]
 
 
 # 幼児口調・子ども向け演出は禁止（女性誌調をキープするため）。
@@ -286,6 +291,11 @@ class CheckResult:
     passed: bool
     score: float  # 0.0 - 1.0
     message: str = ""
+    # scored=False の check は total_score の平均に入れない (合否 passed には入る)。
+    # 足しただけで既存記事の total_score (= --min-score の判定) が動かないようにする。
+    scored: bool = True
+    # warn=True なら passed かつ score 1.0 でも CLI に「!」行で出す (警告だけの check)。
+    warn: bool = False
 
 
 @dataclass
@@ -296,9 +306,10 @@ class ArticleReport:
 
     @property
     def total_score(self) -> int:
-        if not self.checks:
+        scored = [c for c in self.checks if c.scored]
+        if not scored:
             return 0
-        return int(round(sum(c.score for c in self.checks) / len(self.checks) * 100))
+        return int(round(sum(c.score for c in scored) / len(scored) * 100))
 
     @property
     def passed(self) -> bool:
@@ -853,6 +864,65 @@ def check_cert_claims_declared(data: dict) -> CheckResult:
         head + tail
         + " (soft: 施行日前の slug。主張するなら certifications に載せ、非販売ソースで裏を取ること)",
     )
+
+
+# navi-brain#165 T1: 表示する点数 (build の score_calculator) と本文の言い切りの食い違い。
+#
+# 今は**警告だけ** (合否も total_score も変えない)。施行日を入れると、その日以降の
+# slug だけ不合格にできる (check_cert_claims_declared と同じ切りかた)。None は未施行。
+# 数え方 (どの語を強い言い切りとするか) は score_claims のモジュール docstring。
+SCORE_CLAIM_ENFORCE_FROM: Optional[str] = None
+
+
+def check_score_claim_consistency(data: dict) -> CheckResult:
+    """点数と矛盾する言い切りが本文に残っていないか (警告のみ・施行日で hard)。
+
+    判定は build と同じ: closing の定型句は build 時に中立の文へ置き換わるので
+    (score_claims.replace_low_score_closing)、置き換えたあとに残るものだけを数える。
+
+    点は data/raw (per_asin・rakuten/yahoo_matched) を読んで計算する。PR 検証は
+    リポジトリを丸ごと checkout しているので揃っているが、対象 ASIN の
+    per_asin が無いときは点が暫定になる。計算できないときは黙って通さず
+    「計算不能」と警告に出す。
+    """
+    name = "score_claim_consistency"
+    product = data.get("product")
+    if not isinstance(product, dict) or not product.get("brand"):
+        # build もブランドが無い記事には点を出さない (照らす相手が無い)
+        return CheckResult(name, True, 1.0, "no brand: build shows no score (skipped)",
+                           scored=False)
+    try:
+        view = score_claims.compute_view(data)
+    except Exception as e:  # noqa: BLE001
+        return CheckResult(name, True, 1.0, f"計算不能: 点数を計算できない ({type(e).__name__})",
+                           scored=False, warn=True)
+    if view is None:
+        return CheckResult(name, True, 1.0, "計算不能: 点数を計算できない",
+                           scored=False, warn=True)
+    notes = []
+    asin = product.get("asin") or ""
+    per_asin_dir = score_claims.REPO_ROOT / "data" / "raw" / "per_asin" / asin
+    if not asin or not per_asin_dir.is_dir():
+        notes.append("per_asin 不在のため点は暫定")
+    rendered = copy.deepcopy(data)
+    replaced = score_claims.replace_low_score_closing(rendered, view)
+    hits = score_claims.find_claims(rendered, view)
+    if replaced:
+        notes.append(f"closing の定型句 {replaced} 箇所は build で置き換わる")
+    if not hits:
+        msg = "OK" + (f" ({'; '.join(notes)})" if notes else "")
+        return CheckResult(name, True, 1.0, msg, scored=False)
+    kinds = sorted({h.kind for h in hits})
+    first = hits[0]
+    # quality_census.normalize_reason は ";" より前を集計キーにするので、可変部は後ろへ
+    head = f"点数と食い違う言い切り {kinds}"
+    tail = (f"; 総合 {view.total_100} / 安全性 {view.safety}: "
+            f"{first.section}「{first.phrase}」 ほか {len(hits) - 1} 件")
+    if notes:
+        tail += f" ({'; '.join(notes)})"
+    if SCORE_CLAIM_ENFORCE_FROM and _enforced_from(data, SCORE_CLAIM_ENFORCE_FROM):
+        return CheckResult(name, False, 1.0, head + tail, scored=False)
+    return CheckResult(name, True, 1.0, head + tail + " (警告のみ)", scored=False, warn=True)
 
 
 # #5490 信頼レーン: v5 拡張フィールドの規律 soft スコア。
@@ -2056,6 +2126,7 @@ def evaluate_article(
     report.checks.append(check_target_age(data))
     report.checks.append(check_certifications(data))
     report.checks.append(check_cert_claims_declared(data))
+    report.checks.append(check_score_claim_consistency(data))
     report.checks.append(check_review_signals(data))
     report.checks.append(check_verdict_headline(data))
     report.checks.append(check_claims_discipline(data))
@@ -2170,7 +2241,7 @@ def main() -> int:
             for c in report.checks:
                 if not c.passed:
                     print(f"    - {c.name}: {c.message}")
-                elif c.score < 1.0:
+                elif c.score < 1.0 or c.warn:
                     # warn-only の check (tag_granularity #5088 等) は passed のまま
                     # 減点だけする。ここで出さないと PR ログから完全に消え、
                     # 「黙って死ぬゲート」になる。

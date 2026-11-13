@@ -44,6 +44,7 @@ from brand_normalizer import (
 from age_semantics import ADULT_AGE_MONTHS
 from build_feature_lists import age_min_months_from_article, parse_min_months
 from product_image import resolve_product_image
+from score_calculator import calculate as calculate_score
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 _DEFAULT_ARTICLES = _REPO_ROOT / "data" / "articles"
@@ -299,6 +300,14 @@ def build_related_brands(brands: dict[str, dict]) -> None:
         ]
 
 
+def _calc_total_100(article: dict, norm, asin: str | None) -> int | None:
+    """build_post と同じ計算の総合点 (0-100)。計算できなければ None。"""
+    try:
+        return int(calculate_score(article, norm, asin=asin).total_100)
+    except Exception:  # noqa: BLE001 — 1 記事の計算失敗でハブ全体を止めない
+        return None
+
+
 def _load_article(path: str) -> dict | None:
     try:
         with open(path, encoding="utf-8") as f:
@@ -337,7 +346,10 @@ def aggregate(
         if norm.exclude_from_taxonomy:
             # ノーブランド系はハブを作らない
             continue
-        ivs = (product.get("ivs_detail") or {}).get("total_100")
+        # 点数は記事ページと同じ build の計算 (score_calculator) を正本にする。
+        # Jules が書く product.ivs_detail は主観の点で、ページの表示とずれる
+        # (navi-brain#165 T1)。
+        ivs = _calc_total_100(d, norm, product.get("asin"))
         # age_overrides.json の確認済み年齢を優先し、節句・正月の飾り物は年齢を
         # 持たない扱い (None) にする。特集リスト・年齢別 hub と同じ規則 (#9217)
         age = age_min_months_from_article(d)

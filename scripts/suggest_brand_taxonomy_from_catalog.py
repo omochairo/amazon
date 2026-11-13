@@ -40,6 +40,7 @@ import yaml
 
 # brand_normalizer は同じ scripts/ ディレクトリに在る
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from brand_normalizer import NON_BRAND_RAW_FOLDED as _NON_BRAND_RAW_FOLDED  # noqa: E402
 from brand_normalizer import _fold, get_taxonomy  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -56,15 +57,8 @@ _SIDECAR_SUFFIXES = (".enrichment.json", ".quality.json", ".seo.json")
 
 # product.brand に入りうる「ブランドではない」raw 値 (fold 済みで比較)。
 # これらは候補から除外する (taxonomy に登録すべき実ブランドではない)。
-NON_BRAND_RAW_FOLDED: set[str] = {
-    _fold(s)
-    for s in (
-        "ノーブランド", "ノーブランド品", "ブランドなし", "なし",
-        "Generic", "generic", "ジェネリック", "NoBrand", "No Brand",
-        "不明", "メーカー不明", "-", "—", "その他", "Other",
-        "Unknown", "N/A", "NA",
-    )
-}
+# 語の一覧は記事の表示名 (brand_normalizer.display_name) と共有する。
+NON_BRAND_RAW_FOLDED: set[str] = set(_NON_BRAND_RAW_FOLDED)
 
 
 def iter_article_files(articles_glob: str) -> list[str]:

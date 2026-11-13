@@ -183,6 +183,145 @@ def _first_party_note(asin):
 - navi.omcha.jp (この比較サイト自身) の URL は出典にしないでください。自分の記事を自分の根拠にする循環になります。"""
 
 
+def _prior_article(asin, articles_dir="data/articles"):
+    """書き直しの対象なら、いまサイトに出ている記事 (ASIN ごとに最新の本文) を返す。"""
+    paths = sorted(
+        p for p in glob.glob(os.path.join(articles_dir, f"*-{asin}.json"))
+        if not p.endswith((".enrichment.json", ".seo.json", ".quality.json"))
+    )
+    if not paths:
+        return None
+    try:
+        data = _jload(paths[-1])
+    except Exception:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _guess_brand(title):
+    """新規の商品は記事が無いのでブランドが決まっていない。商品名の先頭の語から辞書を引く。
+
+    当たらなければ None (辞書に無いブランド = tier D と見込む)。
+    """
+    from brand_normalizer import UNKNOWN_BRAND_LABEL, is_non_brand_raw, normalize
+    import re as _re
+    tokens = [t for t in _re.split(r"[\s　【】\[\]（）()／/|｜,、]+", title or "") if t]
+    for tok in tokens[:3]:
+        if is_non_brand_raw(tok):
+            continue
+        nb = normalize(tok)
+        if nb.match_type != "unknown" and nb.canonical != UNKNOWN_BRAND_LABEL:
+            return tok
+    return None
+
+
+def _score_scenarios(asin):
+    """build と同じ計算で、生成前に分かる範囲の点を出す。
+
+    戻り値は (種類, [(説明, ScoreView), ...], ブランド名)。種類は
+    "prior" (書き直し: 前の記事の certifications / edu_domains / target_age で計算) か
+    "projected" (新規: 認証・知育分野・対象年齢が決まっていないので低い側と高い側)。
+    """
+    import copy
+    import score_claims
+
+    prior = _prior_article(asin)
+    if prior is not None and (prior.get("product") or {}).get("brand"):
+        view = score_claims.compute_view(prior)
+        if view is not None:
+            return "prior", [("前の記事の内容のまま", view)], prior["product"]["brand"]
+
+    item = _amazon_item(asin)
+    brand = _guess_brand(item.get("title") or "")
+    base = {
+        "slug": f"0000-00-00-{asin}",
+        "tags": [],
+        "keywords": [],
+        "product": {
+            "asin": asin,
+            "name": item.get("title") or "",
+            # 辞書に無いブランドとして計算する (tier D)。名前は表示に使わない
+            "brand": brand or "（辞書に無いブランド）",
+            "best_price": item.get("price") or 0,
+        },
+    }
+    low = copy.deepcopy(base)
+    low["product"].update({"certifications": [], "edu_domains": [], "target_age": ""})
+    high = copy.deepcopy(base)
+    high["product"].update({
+        "certifications": ["ST"],
+        "edu_domains": ["STEM", "言語", "運動", "想像"],
+        "target_age": "3歳以上",
+    })
+    out = []
+    for label, art in (("認証を裏取りできず・知育分野と対象年齢も不明のとき", low),
+                       ("ST 等の認証を非販売ページで裏取りでき・知育 4 分野・対象年齢が明確なとき", high)):
+        view = score_claims.compute_view(art)
+        if view is not None:
+            out.append((label, view))
+    return "projected", out, brand
+
+
+def _score_note(asin):
+    """navi-brain#165 T1: サイトに出る点数と、点の帯ごとに本文で書かない表現を渡す。
+
+    サイトの点数は build 時に score_calculator が計算し、product.ivs_detail は表示に
+    使わない。生成 AI が主観の点を前提に「安全性の高さも魅力」「自信を持って推せる」と
+    書くと、表示 (例: 59 点・安全性 2.0) と食い違うので、生成前に build の点を渡す。
+    03-invoke-jules.yml は --print-note score で同じ文面を受け取る。
+    """
+    import score_claims
+
+    try:
+        kind, scenarios, brand = _score_scenarios(asin)
+    except SystemExit:
+        return ""
+    except Exception as e:  # noqa: BLE001 — 注記が作れなくても生成は止めない
+        print(f"warning: score note failed, skipping: {e}", file=sys.stderr)
+        return ""
+    if not scenarios:
+        return ""
+
+    def fmt(v):
+        a = v.axes
+        return (f"総合 {v.total_100} 点 / 安全性 {a['safety']} / 知育 {a['education']} / "
+                f"長く遊べる {a['longevity']} / コスパ {a['cost_performance']} (各 5 点満点)")
+
+    lines = ["【この商品のサイト表示の点数 (システムが計算する。product.ivs_detail はサイトに表示されない)】"]
+    if kind == "prior":
+        lines.append(f"- {scenarios[0][0]}: {fmt(scenarios[0][1])}")
+        lines.append("  (certifications / edu_domains / target_age を変えると点も変わる。認証は裏取りできたものだけ)")
+    else:
+        who = f"ブランド「{brand}」" if brand else "ブランドが辞書に無い (tier D) 前提"
+        lines.append(f"- 見込み ({who}。価格は Amazon の現在値):")
+        for label, v in scenarios:
+            lines.append(f"  - {label}: {fmt(v)}")
+    views = [v for _, v in scenarios]
+    lo_safety = min(v.safety for v in views)
+    lo_total = min(v.total_100 for v in views)
+    hi_safety = max(v.safety for v in views)
+    hi_total = max(v.total_100 for v in views)
+    lines.append("- product.ivs_detail を出力する場合は、上の点 (見込みなら該当する側) と同じ値にする。本文に点数の数字は書かない")
+    lines.append("")
+    lines.append("【点数の帯ごとに本文 (narrative 全体) で書かない表現 (サイトの点数と矛盾するため)】")
+    lines.append(f"- 安全性が {score_claims.SAFETY_CLAIM_MAX_AXIS} 以下: "
+                 f"安全性の言い切り ({score_claims.SAFETY_CLAIM_EXAMPLES} など)。"
+                 "素材・設計の事実 (「角が丸い」「水性塗料」) と"
+                 "注意点は書いてよいが、安全性を高く評価する言い方にしない")
+    lines.append(f"- 総合が {score_claims.LOW_TOTAL_MAX} 点以下: "
+                 f"強い推奨の定型句 ({score_claims.RECOMMEND_CLAIM_EXAMPLES} など)。"
+                 "closing は「どんな家庭に向くか・どんな家庭には向かないか」で締める")
+    if hi_safety <= score_claims.SAFETY_CLAIM_MAX_AXIS:
+        lines.append(f"- この商品は安全性が {hi_safety} 以下になる → 安全性の言い切りは書かない")
+    elif lo_safety <= score_claims.SAFETY_CLAIM_MAX_AXIS:
+        lines.append(f"- この商品は認証を裏取りできなければ安全性が {lo_safety} になる → その場合は安全性の言い切りを書かない")
+    if hi_total <= score_claims.LOW_TOTAL_MAX:
+        lines.append(f"- この商品は総合が {hi_total} 点以下になる → 強い推奨の定型句は書かない")
+    elif lo_total <= score_claims.LOW_TOTAL_MAX:
+        lines.append(f"- この商品は条件次第で総合が {lo_total} 点まで下がる → 認証・知育分野・対象年齢を裏取りできないときは強い推奨の定型句を書かない")
+    return "\n".join(lines)
+
+
 def _unwrap_affiliate(url):
     """楽天 (hb.afl ?pc=) / Yahoo (valuecommerce ?vc_url=) のアフィリエイト URL から商品ページを取り出す。"""
     try:
@@ -405,6 +544,7 @@ def build_prompt(asin, today=None):
     audit_note = _audit_note(asin)
     experience_note = _experience_note(asin)
     first_party_note = _first_party_note(asin)
+    score_note = _score_note(asin)
     try:
         sources_note = _sources_note(asin)
     except Exception as e:  # best-effort: 注記が作れなくてもプロンプトは出す
@@ -433,6 +573,8 @@ def build_prompt(asin, today=None):
 {experience_note}
 
 {first_party_note}
+
+{score_note}
 
 {sources_note}
 
@@ -491,9 +633,9 @@ def main():
     ap.add_argument("--out", help="出力先ファイル (省略時 stdout)")
     ap.add_argument(
         "--print-note",
-        choices=["audit", "experience", "first_party", "sources"],
+        choices=["audit", "experience", "first_party", "sources", "score"],
         help=(
-            "指定時は _audit_note/_experience_note/_first_party_note/_sources_note の戻り値のみを stdout に出力して終了する"
+            "指定時は _audit_note/_experience_note/_first_party_note/_sources_note/_score_note の戻り値のみを stdout に出力して終了する"
             " (03-invoke-jules.yml から高頻度に呼ばれる軽量モード。--out は無視される)。"
         ),
     )
@@ -510,6 +652,8 @@ def main():
                 note = _audit_note(args.asin)
             elif args.print_note == "first_party":
                 note = _first_party_note(args.asin)
+            elif args.print_note == "score":
+                note = _score_note(args.asin)
             elif args.print_note == "sources":
                 note = _sources_note(args.asin, fetch_excerpts=args.fetch_excerpts)
             else:
