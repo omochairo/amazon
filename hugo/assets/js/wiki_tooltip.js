@@ -8,8 +8,22 @@
 
   var CACHE_URL = '/wiki_cache.json';
   var CONTENT_SEL = '.post-content';
-  var SKIP_TAGS = { A: 1, CODE: 1, PRE: 1, SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, BUTTON: 1, TEXTAREA: 1, INPUT: 1 };
+  // 💡 を差し込まない要素。見出し・summary・small・強調・リンクの中は、本文の流れを
+  // 邪魔する (見出しに 💡 が出る・強調の語が二重に目立つ) ので当てない (#165 T5)。
+  var SKIP_TAGS = {
+    A: 1, CODE: 1, PRE: 1, SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, BUTTON: 1, TEXTAREA: 1, INPUT: 1,
+    H1: 1, H2: 1, H3: 1, H4: 1, H5: 1, H6: 1, SUMMARY: 1, SMALL: 1, STRONG: 1, B: 1
+  };
   var SKIP_ATTR = 'data-wiki-skip';
+  // テンプレートが全ページに入れる決まり文句の塊。語の解説を出す場所ではないので当てない。
+  // score-breakdown-doc は加減点根拠の機械的な箇条書き (知育領域の列挙) で、ここに 💡 が出ると
+  // 全ページの同じ位置に同じ語が付く。
+  var SKIP_CLASSES = ['score-axes-doc', 'score-breakdown-doc', 'development-stage-accordion', 'where-to-buy-offline-note', 'auto-gen-notice'];
+  // 語を含むが別のもの (別の会社・別の語) を指す句。字種の規則では防げないものをここで除く。
+  // 例: 「フレーベル館」(出版社) の「フレーベル」は教育者フレーベルの解説とは無関係。
+  var STOP_PHRASES = ['フレーベル館'];
+  // 1 ページに出す 💡 の上限。同じ解説 (同じリンク先) は 1 回まで。
+  var MAX_TERMS_PER_PAGE = 5;
   var STATE = { cache: null, opened: false, lastFocus: null, sheet: null, overlay: null, popHandler: null, detachSwipe: null };
   var REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -24,68 +38,121 @@
       .catch(function () { return null; });
   }
 
-  function isAscii(s) { return /^[\x20-\x7E]+$/.test(s); }
+  // ---- 語の選定 (DOM に触らない純粋な関数。tests/js/wiki_tooltip.test.mjs で検証) ----
 
-  function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  // 字種。カタカナ・漢字・英数字は「同じ字種が続く = 語の途中」とみなす。
+  // ひらがなは助詞が続くので対象外 (null)。
+  function charClass(ch) {
+    if (!ch) return null;
+    var c = ch.charCodeAt(0);
+    if ((c >= 0x30A1 && c <= 0x30FA) || c === 0x30FC || (c >= 0x30FD && c <= 0x30FF) ||
+        (c >= 0x31F0 && c <= 0x31FF) || (c >= 0xFF66 && c <= 0xFF9F)) return 'kata';
+    if ((c >= 0x4E00 && c <= 0x9FFF) || (c >= 0x3400 && c <= 0x4DBF) || c === 0x3005 || c === 0x3007) return 'kanji';
+    if ((c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A)) return 'alnum';
+    return null;
+  }
 
-  // 最長一致用に長さ降順でソート。ASCII キーは単語境界を付与して英単語誤マッチを防ぐ。
-  function buildPatterns(keys) {
-    var ascii = [], cjk = [];
-    keys.forEach(function (k) { (isAscii(k) ? ascii : cjk).push(k); });
-    ascii.sort(function (a, b) { return b.length - a.length; });
-    cjk.sort(function (a, b) { return b.length - a.length; });
-    var patterns = [];
-    if (ascii.length) {
-      // lookbehind (?<=...) は iOS Safari 16.4 未満で SyntaxError になるため、
-      // 先頭側は「文字列先頭 または 英数字以外の1文字」を消費するグループに置き換える
-      // (\b だと Toys"R"Us のように非英数字で始まる/終わる用語がマッチしなくなるため
-      // 用語自体の文字種には依存しない元の lookbehind と同じ判定にする)。
-      // 末尾側は元々 lookahead (幅ゼロ) なのでそのまま使える。
-      // m[0] は消費した1文字を含みうるため、呼び出し側は m[0].indexOf(term) で
-      // 実際の用語位置を再計算する (#8319 5c)。
-      patterns.push(new RegExp('(?:^|[^A-Za-z0-9])(' + ascii.map(escapeRe).join('|') + ')(?=$|[^A-Za-z0-9])', 'g'));
+  // text[start,end) の前後に、語の端と同じ字種が続くなら false (別の語の一部)。
+  // 例: 「マルカン」の「マルカ」。ひらがなの続き (「お試し感覚」の「感覚」) と、字種が変わる続き
+  // (「フレーベル館」の「フレーベル」) はここでは防げない。前者は一覧から外し、後者は STOP_PHRASES で防ぐ。
+  // 英数字の語 (Hape など) は元々の「前後が英数字なら不可」と同じ判定になる。
+  function boundaryOk(text, start, end) {
+    var first = charClass(text.charAt(start));
+    if (first && charClass(text.charAt(start - 1)) === first) return false;
+    var last = charClass(text.charAt(end - 1));
+    if (last && charClass(text.charAt(end)) === last) return false;
+    return true;
+  }
+
+  // 「同じ解説」を表すキー。別名 (コナミ / KONAMI) は同じ url なので 1 回にまとまる。
+  function explanationKey(entries, term) {
+    var e = entries[term] || {};
+    return e.url || ('title:' + (e.title || term));
+  }
+
+  // 最長一致を優先するため長さ降順に並べる。
+  function sortKeys(keys) {
+    return keys.slice().sort(function (a, b) { return b.length - a.length; });
+  }
+
+  function inStopPhrase(stops, start, end) {
+    for (var i = 0; i < stops.length; i++) if (start >= stops[i][0] && end <= stops[i][1]) return true;
+    return false;
+  }
+
+  // text の中から、語の境界が正しい候補をすべて集める。
+  function findCandidates(text, sortedKeys) {
+    var out = [];
+    var stops = [];
+    for (var j = 0; j < STOP_PHRASES.length; j++) {
+      var sp = STOP_PHRASES[j], sf = 0, sa;
+      while ((sa = text.indexOf(sp, sf)) !== -1) { stops.push([sa, sa + sp.length]); sf = sa + sp.length; }
     }
-    if (cjk.length) {
-      patterns.push(new RegExp('(' + cjk.map(escapeRe).join('|') + ')', 'g'));
+    for (var i = 0; i < sortedKeys.length; i++) {
+      var term = sortedKeys[i];
+      if (!term) continue;
+      var from = 0, at;
+      while ((at = text.indexOf(term, from)) !== -1) {
+        if (boundaryOk(text, at, at + term.length) && !inStopPhrase(stops, at, at + term.length)) {
+          out.push({ start: at, end: at + term.length, term: term });
+        }
+        from = at + 1;
+      }
     }
-    return patterns;
+    return out;
+  }
+
+  // state: { seen: {term:true}, groups: {explanationKey:true}, count: n, max: n }
+  // 採用した候補を返し、state を更新する。上限・同じ解説・同じ語・重なりを除く。
+  function selectMatches(text, sortedKeys, entries, state) {
+    if (!text || text.length < 2 || state.count >= state.max) return [];
+    var cands = findCandidates(text, sortedKeys);
+    if (!cands.length) return [];
+    cands.sort(function (a, b) { return a.start - b.start || (b.end - b.start) - (a.end - a.start); });
+    var picked = [], cursor = 0;
+    for (var i = 0; i < cands.length; i++) {
+      var m = cands[i];
+      if (state.count >= state.max) break;
+      if (m.start < cursor || state.seen[m.term]) continue;
+      var g = explanationKey(entries, m.term);
+      if (state.groups[g]) continue;
+      picked.push(m);
+      state.seen[m.term] = true;
+      state.groups[g] = true;
+      state.count++;
+      cursor = m.end;
+    }
+    return picked;
+  }
+
+  function newState(max) {
+    return { seen: Object.create(null), groups: Object.create(null), count: 0, max: max == null ? MAX_TERMS_PER_PAGE : max };
+  }
+
+  // 要素単体で 💡 を避けるか。祖先をたどる側 (shouldSkipNode) から使う。
+  function isSkipElement(el) {
+    if (!el || el.nodeType !== 1) return false;
+    if (SKIP_TAGS[el.tagName]) return true;
+    if (el.hasAttribute && el.hasAttribute(SKIP_ATTR)) return true;
+    var cl = el.classList;
+    if (cl) {
+      if (cl.contains('wiki-term')) return true;
+      for (var i = 0; i < SKIP_CLASSES.length; i++) if (cl.contains(SKIP_CLASSES[i])) return true;
+    }
+    return false;
   }
 
   function shouldSkipNode(node) {
     for (var p = node.parentNode; p && p !== document.body; p = p.parentNode) {
-      if (p.nodeType !== 1) continue;
-      if (SKIP_TAGS[p.tagName]) return true;
-      if (p.hasAttribute && p.hasAttribute(SKIP_ATTR)) return true;
-      if (p.classList && p.classList.contains('wiki-term')) return true;
+      if (isSkipElement(p)) return true;
     }
     return false;
   }
 
   // テキストノードをスキャンして、マッチを <button.wiki-term> に置換。
-  // seen: ページ全体で一度マークしたキーは以後スキップ (first-occurrence-only)。
-  function replaceInNode(node, patterns, seen) {
+  function replaceInNode(node, sortedKeys, entries, state) {
     var text = node.nodeValue;
-    if (!text || text.length < 2) return 0;
-    var matches = [];
-    patterns.forEach(function (re) {
-      re.lastIndex = 0;
-      var m;
-      while ((m = re.exec(text)) !== null) {
-        var term = m[1];
-        if (seen[term]) continue;
-        matches.push({ start: m.index + m[0].indexOf(term), end: m.index + m[0].indexOf(term) + term.length, term: term });
-      }
-    });
-    if (!matches.length) return 0;
-    matches.sort(function (a, b) { return a.start - b.start || b.end - b.start - (a.end - a.start); });
-    var picked = [], cursor = 0;
-    matches.forEach(function (m) {
-      if (m.start >= cursor && !seen[m.term]) {
-        picked.push(m);
-        seen[m.term] = true;
-        cursor = m.end;
-      }
-    });
+    var picked = selectMatches(text, sortedKeys, entries, state);
     if (!picked.length) return 0;
     var frag = document.createDocumentFragment();
     var pos = 0;
@@ -114,7 +181,7 @@
   function decorate(root, entries) {
     var keys = Object.keys(entries);
     if (!keys.length) return;
-    var patterns = buildPatterns(keys);
+    var sorted = sortKeys(keys);
     var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode: function (n) {
         if (shouldSkipNode(n)) return NodeFilter.FILTER_REJECT;
@@ -123,8 +190,10 @@
     });
     var nodes = [], n;
     while ((n = walker.nextNode())) nodes.push(n);
-    var seen = {};
-    nodes.forEach(function (node) { replaceInNode(node, patterns, seen); });
+    var state = newState();
+    for (var i = 0; i < nodes.length && state.count < state.max; i++) {
+      replaceInNode(nodes[i], sorted, entries, state);
+    }
   }
 
   function buildSheet(entry, term) {
@@ -276,6 +345,12 @@
   else boot();
 
   // expose for tests / debug
-  window.__wikiTooltip = { buildPatterns: buildPatterns, decorate: decorate, state: STATE };
+  window.__wikiTooltip = {
+    decorate: decorate, state: STATE,
+    // 純粋な関数 (テスト用)
+    charClass: charClass, boundaryOk: boundaryOk, explanationKey: explanationKey, sortKeys: sortKeys,
+    findCandidates: findCandidates, selectMatches: selectMatches, newState: newState, isSkipElement: isSkipElement,
+    MAX_TERMS_PER_PAGE: MAX_TERMS_PER_PAGE
+  };
   // WIKI_TOOLTIP_UI_BELOW
 })();
