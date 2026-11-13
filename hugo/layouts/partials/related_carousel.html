@@ -16,6 +16,7 @@
 
 {{- /* --- self axes --- */ -}}
 {{- $selfBrand := .Params.brand -}}
+{{- $selfBrandRaw := .Params.brand_raw | default "" -}}
 {{- $selfTier  := .Params.brand_tier -}}
 {{- $selfTags  := .Params.tags | default slice -}}
 {{- $selfAge   := int (.Params.age_min_months | default 0) -}}
@@ -353,7 +354,9 @@
                 {{- if eq $sharedTag "" -}}
                   {{- with site.GetPage (printf "/tags/%s" (lower .)) -}}
                     {{- $tn := .Title -}}
-                    {{- $skip := or (eq $tn $selfBrand) (in $genericTags $tn) (findRE "[0-9０-９]+\\s*(歳|才|ヶ月|か月|カ月)" $tn 1) -}}
+                    {{- /* ブランドの英字表記 (BRIO・Hape など) は brand_hub のキー (日本語の正規名) に
+                           無いので、記事の brand_raw とも比べる */ -}}
+                    {{- $skip := or (eq $tn $selfBrand) (eq $tn $selfBrandRaw) (eq $tn ($p.Params.brand_raw | default "")) (in $genericTags $tn) (findRE "[0-9０-９]+\\s*(歳|才|ヶ月|か月|カ月)" $tn 1) -}}
                     {{- if not $skip -}}{{- $skip = or (ne (partial "is_brand_tag.html" $tn | string) "") (ne (partial "is_low_value_tag.html" $tn | string) "") -}}{{- end -}}
                     {{- if not $skip -}}{{- $sharedTag = $tn -}}{{- end -}}
                   {{- end -}}
