@@ -70,6 +70,8 @@ SIDECAR_SUFFIXES = (".enrichment", ".seo", ".quality")
 _DROP_PCT_THRESHOLD = 0.05       # 値下げ率 5% 未満は採択しない
 _DROP_YEN_THRESHOLD = 100        # 値下げ幅 100円 未満は採択しない (端数ノイズ除け)
 _WINDOW_DAYS = 90                # 「以前の価格」を探す直近日数
+_USUAL_MIN_DAYS = 7              # 窓内の観測が合計これ未満なら「ふだんの価格」を決めない (#166 F1)
+_MAX_GAP_DAYS = 14               # 観測間隔が長い場合、古い価格が続いたとみなす日数を制限する
 _TOP_N_CAP = 150                 # JSON / ページ肥大回避の上限件数
 
 # 在庫: 「明確に購入不可」と読めるマーカーの一覧は price_overlay に移した
@@ -212,20 +214,50 @@ def evaluate_drop(
     """1 ASIN 分の値下げ判定を行う。採択されなければ None を返す。
 
     Returns (採択時):
-        {"reference": int, "drop_yen": int, "drop_pct": float, "all_time_low": bool}
+        {"reference": int, "reference_days": int, "drop_yen": int,
+         "drop_pct": float, "all_time_low": bool}
     """
     # current を含めた全観測点プール ("全履歴" = 履歴 + current)。
     all_points = history_points + [(current_ts, current_price)]
 
     window_start = current_ts - timedelta(days=window_days)
     window_points = [
-        p for (t, p) in all_points if window_start <= t <= current_ts
+        (t, p) for (t, p) in all_points if window_start <= t <= current_ts
     ]
     if len(window_points) < 2:
         # current 以外に窓内観測点が無い = 「以前の価格」と比較できない
         return None
 
-    reference = max(window_points)
+    # 各価格の保持時間を集計する。窓の開始前から続く価格も、窓内部分だけを
+    # 数える。長い観測空白は _MAX_GAP_DAYS で打ち切り、 stale な価格が
+    # 通常価格として過大評価されるのを防ぐ。
+    window_points.sort(key=lambda p: p[0])
+    held_days: dict[int, float] = {}
+    for index, (ts, price) in enumerate(window_points):
+        next_ts = window_points[index + 1][0] if index + 1 < len(window_points) else current_ts
+        start = max(ts, window_start)
+        elapsed = max(0.0, (next_ts - start).total_seconds() / 86400)
+        held_days[price] = held_days.get(price, 0.0) + min(elapsed, _MAX_GAP_DAYS)
+
+    # 「ふだんの価格」= 保持日数で重み付けした中央値 (#166 F1)。
+    # 最高値を元値にすると、出品者の入れ替わりで 1〜2 週間だけ付いた高値
+    # (実例: 2,055 円の商品に 10/19〜11/02 だけ 10,287 円) が「以前の価格」に
+    # なり、偽の 80% OFF が先頭に並んだ。「7 日以上続いた価格の最高値」でも
+    # この 2 週間の高値は残ったため、中央値にする。値下がりが窓の半分を超えて
+    # 続いた価格は、もう「ふだんの価格」なので値下げとしては出さない。
+    total_days = sum(held_days.values())
+    if total_days < _USUAL_MIN_DAYS:
+        return None
+    reference = None
+    acc = 0.0
+    for price in sorted(held_days):
+        acc += held_days[price]
+        if acc >= total_days / 2:
+            reference = price
+            break
+    if reference is None:
+        return None
+    reference_days = int(held_days[reference])
     drop_yen = reference - current_price
     drop_pct = (drop_yen / reference) if reference > 0 else 0.0
 
@@ -236,6 +268,7 @@ def evaluate_drop(
 
     return {
         "reference": reference,
+        "reference_days": reference_days,
         "drop_yen": drop_yen,
         "drop_pct": round(drop_pct, 3),
         "all_time_low": all_time_low,
@@ -327,7 +360,7 @@ def build_items(
         return []
 
     out: list[dict[str, Any]] = []
-    for asin_raw, rec in items_in.items():
+    for asin_raw, rec in sorted(items_in.items(), key=lambda pair: str(pair[0]).upper()):
         if not isinstance(rec, dict):
             continue
         asin = str(asin_raw).strip().upper()
@@ -360,12 +393,21 @@ def build_items(
             "url": meta.get("url"),
             "current": current_price,
             "reference": drop["reference"],
+            "reference_days": drop["reference_days"],
             "drop_yen": drop["drop_yen"],
             "drop_pct": drop["drop_pct"],
             "all_time_low": drop["all_time_low"],
             "last_updated": rec.get("ts"),
         })
 
+    # ASIN 表記ゆれがあっても一商品一件にする。より大きな値下がりを採用し、
+    # 同率なら先に処理した (正規化キー順) 項目を残す。
+    deduped: dict[str, dict[str, Any]] = {}
+    for item in out:
+        previous = deduped.get(item["asin"])
+        if previous is None or item["drop_pct"] > previous["drop_pct"]:
+            deduped[item["asin"]] = item
+    out = list(deduped.values())
     out.sort(key=lambda e: e["drop_pct"], reverse=True)
     selected = out[:top_n_cap]
     # #3563: スコア計算 (enrich_items) は採択後の最大 top_n_cap 件だけに適用する

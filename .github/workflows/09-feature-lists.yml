@@ -75,7 +75,7 @@ jobs:
             --raw-root data/raw \
             --out-hugo hugo/data/features \
             --out-manifest data/features/_build_manifest.json \
-            --top-n 20
+            --top-n 40
 
       - name: Build category hubs (#2687 柱1 — テーマ別 + 年齢別)
         run: |

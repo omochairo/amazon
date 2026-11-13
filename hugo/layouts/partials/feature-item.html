@@ -28,6 +28,7 @@
   {{- end }}
 
   <div class="ranking-body">
+    {{- if eq $type "cospa" }}{{- with $item.brand }}<p class="ranking-shop">{{ . }}</p>{{- end }}{{- end }}
     <h2 class="ranking-title">
       {{- if $internal -}}
       <a href="{{ $internal }}">{{ $item.name }}</a>

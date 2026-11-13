@@ -313,7 +313,11 @@ class ResolvePriceBandTests(unittest.TestCase):
     def test_returns_none_for_out_of_range(self):
         self.assertIsNone(bp._resolve_price_band(0))
         self.assertIsNone(bp._resolve_price_band(-100))
-        self.assertIsNone(bp._resolve_price_band(50000))
+
+    def test_high_prices_resolve_to_top_bands(self):
+        # navi-brain#166 F5: /cospa/ に 1〜2 万円・2 万円以上の帯を足した
+        self.assertEqual(bp._resolve_price_band(15000)["key"], "10000-20000")
+        self.assertEqual(bp._resolve_price_band(50000)["key"], "20000plus")
 
 
 if __name__ == "__main__":

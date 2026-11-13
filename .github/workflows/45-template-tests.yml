@@ -106,7 +106,7 @@ jobs:
           python scripts/build_price_sparks.py
           python scripts/build_discounts.py
           python scripts/build_age_concerns.py
-          python scripts/build_feature_lists.py --top-n 20
+          python scripts/build_feature_lists.py --top-n 40
           python scripts/build_category_hubs.py --top-n 24
 
       - name: Run template tests

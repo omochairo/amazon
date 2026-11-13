@@ -50,7 +50,7 @@ from age_semantics import (  # noqa: E402
     override_age_months,
     seasonal_names,
 )
-from brand_normalizer import normalize as normalize_brand  # noqa: E402
+from brand_normalizer import is_non_brand_raw, normalize as normalize_brand  # noqa: E402
 from score_calculator import calculate as calculate_score, compute_ivs_axes  # noqa: E402
 
 logger = logging.getLogger("build_feature_lists")
@@ -85,6 +85,7 @@ class ArticleRecord:
     # 対象年齢の最小月数 (#3563 カード情報統一 / cospa・deals・テーマ hub 全ての
     # feature JSON に伝播する)。ソース優先順は build_post.py L2668-2699 と同じ。
     age_min_months: int | None = None
+    brand: str | None = None
     # 最新観測の在庫文字列 (#5130 残件3)。overlay_current_prices が
     # price_overlay の観測から埋める。観測が無ければ None のまま。
     availability: str | None = None
@@ -214,9 +215,19 @@ def load_articles(articles_dir: Path) -> list[ArticleRecord]:
         # ivs_score gate 撤去でプール対象が 1713 記事全体に広がるため、
         # calculate_score が想定外の例外を投げた場合に備えて防御する
         # (実測では 0 件だが、母数が増えるので fail-soft にしておく)。
-        brand = normalize_brand(prod.get("brand") or "")
+        raw_brand = str(prod.get("brand") or "").strip()
+        brand_info = normalize_brand(raw_brand)
+        # #166 F4 のブランド上限は正規化名で数える (「タカラトミー(TAKARA TOMY)」と
+        # 「タカラトミー」を同じブランドにする)。辞書に無いブランドは元の表記のまま。
+        if is_non_brand_raw(raw_brand):
+            brand = None
+        elif brand_info.match_type == "unknown":
+            # 辞書に無いと canonical が一律「ノーブランド」になるので、元の表記で数える
+            brand = raw_brand
+        else:
+            brand = brand_info.canonical
         try:
-            sr = calculate_score(raw, brand, asin=asin)
+            sr = calculate_score(raw, brand_info, asin=asin)
         except Exception as exc:  # noqa: BLE001 - fail-soft, log and skip
             logger.debug("skip article: calculate_score raised for %s: %s", path.name, exc)
             continue
@@ -234,6 +245,7 @@ def load_articles(articles_dir: Path) -> list[ArticleRecord]:
             amazon_url=amazon_block.get("url"),
             ivs_axes=compute_ivs_axes(sr.breakdown),
             age_min_months=age_min_months_from_article(raw),
+            brand=brand,
             price_amazon=_safe_int(amazon_block.get("price")),
             price_rakuten=_safe_int((prices.get("rakuten") or {}).get("price")),
             price_yahoo=_safe_int((prices.get("yahoo") or {}).get("price")),
@@ -523,7 +535,12 @@ PRICE_BANDS: list[dict[str, Any]] = [
     {"key": "3000-5000",  "label": "¥3,000-¥5,000",  "price_min": 3000,  "price_max": 4999, "default": True},
     {"key": "5000-7000",  "label": "¥5,000-¥7,000",  "price_min": 5000,  "price_max": 6999},
     {"key": "7000-10000", "label": "¥7,000-¥10,000", "price_min": 7000,  "price_max": 9999},
+    {"key": "10000-20000", "label": "¥10,000-¥20,000", "price_min": 10000, "price_max": 19999},
+    {"key": "20000plus", "label": "¥20,000以上", "price_min": 20000, "price_max": 2**31 - 1},
 ]
+
+COSPA_MAX_PER_BRAND = 3
+COSPA_TOP_N = 40
 
 
 def build_cospa(
@@ -532,7 +549,7 @@ def build_cospa(
     min_ivs: float = 4.0,
     price_min: int = 500,
     price_max: int = 5000,
-    top_n: int = 20,
+    top_n: int = COSPA_TOP_N,
     sort_key: str = "cospa",
 ) -> tuple[list[ArticleRecord], dict[str, int]]:
     """Select TOP-N cospa picks.
@@ -578,14 +595,30 @@ def build_cospa(
         survivors.sort(
             key=lambda r: (-(r.score_cospa or 0.0), -(r.ivs_100 or 0)),
         )
-    return survivors[:top_n], drops
+    if top_n <= 0:
+        return [], drops
+    # navi-brain#166 F4: 価格帯ごとの一覧が特定ブランドに偏らないよう、上位から
+    # 同一ブランド3件まで採用し、上限後も候補を走査して掲載枠を埋める。
+    selected: list[ArticleRecord] = []
+    brand_counts: dict[str, int] = {}
+    for rec in survivors:
+        brand_key = (rec.brand or "").strip().casefold()
+        if brand_key:
+            count = brand_counts.get(brand_key, 0)
+            if count >= COSPA_MAX_PER_BRAND:
+                continue
+            brand_counts[brand_key] = count + 1
+        selected.append(rec)
+        if len(selected) >= top_n:
+            break
+    return selected, drops
 
 
 def build_cospa_bands(
     records: Iterable[ArticleRecord],
     *,
     min_ivs: float = 4.0,
-    top_n_per_band: int = 10,
+    top_n_per_band: int = COSPA_TOP_N,
 ) -> list[dict[str, Any]]:
     """Build per-price-band cospa lists.
 
@@ -632,6 +665,7 @@ def _parse_iso8601(value: str | None) -> datetime | None:
 # ときに 1〜5 件まで減っていた。2026-10-10 の実測で候補 (割引率 20% 以上) は 498 件あり、
 # 60 件目でも割引率 42%。ページは 20 件ずつ「さらに表示」で出す。
 DEALS_TOP_N = 60
+DEALS_MIN_PRICE = 1000
 
 
 def build_deals(
@@ -678,6 +712,7 @@ def build_deals(
         "savings_below_threshold": 0,
         "stale_or_unknown_fetch": 0,
         "unavailable": 0,
+        "below_min_price": 0,
     }
     if now is None:
         now = datetime.now(timezone.utc)
@@ -693,6 +728,9 @@ def build_deals(
             continue
         if rec.savings_percentage < min_savings:
             drops["savings_below_threshold"] += 1
+            continue
+        if rec.best_price is not None and rec.best_price < DEALS_MIN_PRICE:
+            drops["below_min_price"] += 1
             continue
         fetched = _parse_iso8601(rec.fetched_at)
         if fetched is None or fetched < cutoff:
@@ -817,6 +855,7 @@ def serialize_cospa_bands(
             entry["score_cospa"] = (
                 round(rec.score_cospa, 4) if rec.score_cospa is not None else None
             )
+            entry["brand"] = rec.brand
             payload_items.append(entry)
         total += len(payload_items)
         payload_bands.append({
@@ -901,7 +940,7 @@ def run(
     per_asin_dir: Path,
     out_hugo: Path,
     out_manifest: Path,
-    top_n: int = 20,
+    top_n: int = COSPA_TOP_N,
     deals_top_n: int | None = None,
     min_ivs: float = 4.0,
     price_min: int = 500,
@@ -1009,7 +1048,7 @@ def main(argv: list[str] | None = None) -> int:
         default="data/features/_build_manifest.json",
         type=Path,
     )
-    parser.add_argument("--top-n", type=int, default=20)
+    parser.add_argument("--top-n", type=int, default=COSPA_TOP_N)
     parser.add_argument(
         "--deals-top-n",
         type=int,

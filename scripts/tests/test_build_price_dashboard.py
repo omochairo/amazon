@@ -1,7 +1,7 @@
 """Unit tests for build_price_dashboard.py (#3332 N4-P2).
 
 Coverage:
-1. evaluate_drop  - reference=90日窓内max、drop_pct/drop_yen 算出。
+1. evaluate_drop  - 7日以上保持された価格から通常価格を算出。
 2. evaluate_drop  - 閾値未満 (5%未満 / 100円未満 / 窓内1点のみ) の除外。
 3. is_unavailable - 在庫切れ系文字列 / None を除外、在庫あり系は残す。
 4. evaluate_drop  - all_time_low フラグ。
@@ -43,7 +43,9 @@ def _iso(dt: datetime) -> str:
 # ---------------------------------------------------------------------------
 
 class TestEvaluateDrop:
-    def test_basic_drop_uses_90_day_window_max_as_reference(self):
+    def test_basic_drop_uses_duration_weighted_median(self):
+        # 保持日数 (1 区間 14 日で打ち切り): 3000=14, 2800=14, 2500=10 → 計 38 日。
+        # 安い順に足して半分 (19 日) に届くのは 2800。
         history = [
             (_ts(80), 3000),
             (_ts(40), 2800),
@@ -51,10 +53,31 @@ class TestEvaluateDrop:
         ]
         result = bpd.evaluate_drop(2000, NOW, history)
         assert result is not None
-        assert result["reference"] == 3000
-        assert result["drop_yen"] == 1000
-        assert result["drop_pct"] == pytest.approx(1000 / 3000, abs=1e-3)
+        assert result["reference"] == 2800
+        assert result["reference_days"] == 14
+        assert result["drop_yen"] == 800
+        assert result["drop_pct"] == pytest.approx(800 / 2800, abs=1e-3)
         assert result["all_time_low"] is True
+
+    def test_two_week_high_seller_is_not_the_usual_price(self):
+        # 実例 (#166 F1): 2,055 円の商品に 2 週間だけ 10,287 円が付いた。
+        # 最高値や「7 日以上続いた最高値」だと偽の 80% OFF になっていた。
+        history = [
+            (_ts(85), 2182),
+            (_ts(27), 2055),
+            (_ts(26), 10287),
+            (_ts(12), 2055),
+        ]
+        result = bpd.evaluate_drop(2055, NOW, history)
+        # ふだんは 2,182 円 (14 日で打ち切った長い区間) で、6% の値下がりとして出る
+        assert result is not None
+        assert result["reference"] == 2182
+        assert result["drop_pct"] < 0.1
+
+    def test_long_lasting_lower_price_becomes_usual(self):
+        # 窓の半分以上続いた安値は、もう「ふだんの価格」なので値下げではない
+        history = [(_ts(80), 3000), (_ts(60), 2000)]
+        assert bpd.evaluate_drop(2000, NOW, history) is None
 
     def test_points_outside_90_day_window_are_ignored(self):
         history = [
@@ -64,6 +87,23 @@ class TestEvaluateDrop:
         result = bpd.evaluate_drop(2000, NOW, history)
         assert result is not None
         assert result["reference"] == 2200  # 9000 は無視される
+
+    def test_one_day_spike_is_ignored(self):
+        history = [(_ts(20), 3000), (_ts(1), 10000)]
+        result = bpd.evaluate_drop(2000, NOW, history)
+        assert result is not None
+        assert result["reference"] == 3000
+
+    def test_higher_price_held_seven_days_qualifies(self):
+        result = bpd.evaluate_drop(2000, NOW, [(_ts(10), 4000)])
+        assert result is not None
+        assert result["reference"] == 4000
+        assert result["reference_days"] == 10
+
+    def test_stale_gap_is_capped(self):
+        result = bpd.evaluate_drop(2000, NOW, [(_ts(60), 4000)])
+        assert result is not None
+        assert result["reference_days"] == bpd._MAX_GAP_DAYS
 
     def test_below_pct_threshold_is_excluded(self):
         # 100 -> 96 は 4% 未満 (閾値5%) で除外
@@ -84,8 +124,8 @@ class TestEvaluateDrop:
 
     def test_all_time_low_false_when_lower_price_existed(self):
         history = [
-            (_ts(10), 3000),
-            (_ts(5), 1500),  # current (2000) より安い過去点がある
+            (_ts(30), 3000),
+            (_ts(10), 1500),  # current (2000) より安い過去点がある
         ]
         result = bpd.evaluate_drop(2000, NOW, history)
         assert result is not None
@@ -180,6 +220,20 @@ class TestBuildItems:
         # AAAA000003 excluded by threshold (3.3% < 5%); remaining 2 fit under cap=2.
         assert [i["asin"] for i in items] == ["AAAA000001", "AAAA000002"]
         assert items[0]["drop_pct"] >= items[1]["drop_pct"]
+
+    def test_duplicate_normalized_asin_appears_once(self, dashboard_dirs):
+        price_watch_dir, price_history_dir = dashboard_dirs
+        asin = "DUPLICATE01"
+        _write_history_file(price_watch_dir / "history" / f"{asin}.jsonl", [(_ts(30), 4000)])
+        latest = {"items": {
+            asin.lower(): {"avail": "在庫あり。", "p": 2500, "ts": _iso(NOW)},
+            asin: {"avail": "在庫あり。", "p": 2000, "ts": _iso(NOW)},
+        }}
+        meta = {asin: {"name": "n", "brand": "b", "image": "i", "url": "/p/"}}
+        items = bpd.build_items(latest, meta, price_watch_dir, price_history_dir)
+        assert len(items) == 1
+        assert items[0]["asin"] == asin
+        assert items[0]["current"] == 2000
 
     def test_unavailable_asin_excluded(self, dashboard_dirs):
         price_watch_dir, price_history_dir = dashboard_dirs
@@ -406,5 +460,6 @@ class TestRunGraceful:
         assert item["asin"] == asin
         assert item["current"] == 2000
         assert item["reference"] == 3000
+        assert item["reference_days"] == 14
         assert item["drop_yen"] == 1000
         assert item["url"] == f"/products/{asin.lower()}/"

@@ -73,6 +73,7 @@
     <p class="dx-disclaimer">※ おすすめは、対象年齢・最安値・タグ・知育スコアをもとに自動で選んでいます。価格や在庫は日々変わるため、購入前に各ショップでご確認ください。</p>
   </section>
 </div>
+{{- partial "explore_links.html" . }}
 
 {{- $core := resources.Get "js/diagnosis_core.js" | minify | fingerprint -}}
 {{- $js := resources.Get "js/diagnosis.js" | minify | fingerprint -}}

@@ -876,8 +876,8 @@ class RunEndToEndTest(unittest.TestCase):
             # cospa: 価格帯ナビ構造。記事 3 件はそれぞれ別の帯に入る
             # (¥1,200 -> 1000-2000, ¥2,500 -> 2000-3000, ¥3,000 -> 3000-5000)
             self.assertEqual(cospa["count"], 3)
-            # bands は PRICE_BANDS の順で 6 要素
-            self.assertEqual(len(cospa["bands"]), 6)
+            # bands は PRICE_BANDS の順で 8 要素
+            self.assertEqual(len(cospa["bands"]), 8)
             band_by_key = {b["key"]: b for b in cospa["bands"]}
             self.assertEqual(band_by_key["1000-2000"]["items"][0]["asin"], "B0AAA1")
             self.assertEqual(band_by_key["2000-3000"]["items"][0]["asin"], "B0CCC3")
@@ -1276,6 +1276,20 @@ class UnavailableGateTest(unittest.TestCase):
         )
         self.assertEqual(sorted(r.asin for r in items), ["A1", "A2"])
 
+    def test_deals_excludes_prices_below_one_thousand_yen(self):
+        now = datetime(2026, 8, 18, tzinfo=timezone.utc)
+        fresh = (now - timedelta(hours=12)).isoformat()
+        items, drops = bfl.build_deals(
+            [
+                self._rec("REFILL", None, fetched_at=fresh, best_price=172),
+                self._rec("TOY", None, fetched_at=fresh, best_price=1000),
+            ],
+            now=now,
+        )
+        self.assertEqual([r.asin for r in items], ["TOY"])
+        self.assertEqual(drops["below_min_price"], 1)
+
+
     def test_cospa_drops_out_of_stock(self):
         items, drops = bfl.build_cospa(
             [
@@ -1302,3 +1316,23 @@ class UnavailableGateTest(unittest.TestCase):
                                    watch_index={"A1": obs})
         self.assertEqual(rec.availability, "一時的に在庫切れ; 入荷時期は未定です。")
         self.assertEqual(rec.best_price, 2000, "価格は上書きされない")
+
+
+class CospaBrandCapTest(unittest.TestCase):
+    def _rec(self, asin, brand, score):
+        return bfl.ArticleRecord(
+            asin=asin, slug=asin.lower(), name=asin, image=None,
+            ivs_score=4.5, ivs_100=score, best_price=1500,
+            best_platform="Amazon", amazon_url=None, brand=brand,
+        )
+
+    def test_cap_skips_overflow_and_continues_to_fill_top_n(self):
+        records = [self._rec(f"A{i}", "トミカ" if i < 5 else "別ブランド", 100 - i)
+                   for i in range(7)]
+        items, _ = bfl.build_cospa(records, price_min=1000, price_max=1999, top_n=5)
+        self.assertEqual([r.asin for r in items], ["A0", "A1", "A2", "A5", "A6"])
+
+    def test_unbranded_records_are_not_capped(self):
+        records = [self._rec(f"U{i}", None, 100 - i) for i in range(5)]
+        items, _ = bfl.build_cospa(records, price_min=1000, price_max=1999, top_n=5)
+        self.assertEqual(len(items), 5)

@@ -4132,6 +4132,37 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   border-bottom: 2px solid #fff7ed;
   font-weight: 600;
 }
+/* #166 F4: 予算別おすすめの年齢絞り込み */
+.cospa-age-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+}
+.cospa-age-filters button {
+  padding: 4px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  background: #f9fafb;
+  color: #374151;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.cospa-age-filters button:hover {
+  background: #fffbeb;
+  color: #b45309;
+}
+.cospa-age-filters button[aria-pressed="true"] {
+  background: #fff7ed;
+  color: #b45309;
+  border-color: #fbbf24;
+  font-weight: 600;
+}
+.cospa-age-empty {
+  color: #6b7280;
+}
 .cospa-band-tab-label {
   white-space: nowrap;
 }
@@ -4150,6 +4181,19 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 }
 
 /* ダークモード */
+[data-theme="dark"] .cospa-age-filters button {
+  background: #1e293b;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+[data-theme="dark"] .cospa-age-filters button[aria-pressed="true"] {
+  background: rgba(217, 119, 6, 0.25);
+  color: #fde68a;
+  border-color: #d97706;
+}
+[data-theme="dark"] .cospa-age-empty {
+  color: #94a3b8;
+}
 [data-theme="dark"] .cospa-band-tabs {
   border-bottom-color: #334155;
 }

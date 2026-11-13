@@ -1,0 +1,31 @@
+{{- /*
+  itemlist_jsonld.html — 特集ページの並びを schema.org/ItemList で出す (navi-brain#166 F13)。
+
+  Expects context = dict
+    name  … 一覧の名前 (ページの title)
+    items … slice of dict "name" "url" (表示の順)。url は絶対 URL か "/..." の相対
+    max   … 出す件数の上限 (省略時 30)。長い一覧を全部載せても検索側は使わない
+
+  /brands/<brand>/ の brand_hub_jsonld.html と同じ形。items が空なら何も出さない。
+*/ -}}
+{{- $max := int (.max | default 30) -}}
+{{- $list := slice -}}
+{{- range $i, $it := first $max (.items | default slice) -}}
+  {{- $url := $it.url | default "" -}}
+  {{- if hasPrefix $url "/" }}{{ $url = $url | absURL }}{{ end -}}
+  {{- if and $url $it.name -}}
+    {{- $list = $list | append (dict "@type" "ListItem" "position" (add (len $list) 1) "url" $url "name" $it.name) -}}
+  {{- end -}}
+{{- end -}}
+{{- with $list -}}
+{{- $payload := dict
+    "@context" "https://schema.org"
+    "@type" "ItemList"
+    "name" $.name
+    "numberOfItems" (len $list)
+    "itemListElement" $list
+-}}
+<script type="application/ld+json">
+{{ $payload | jsonify (dict "indent" "  ") | safeJS }}
+</script>
+{{- end -}}
