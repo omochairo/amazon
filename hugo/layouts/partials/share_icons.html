@@ -15,9 +15,12 @@
 
 {{- $.Scratch.Set "tags" ""}}
 
+{{- /* .Params.tags はローマ字の slug (#2817)。X のハッシュタグは /tags/<slug>/ の .Title
+       (日本語の表示名) にする。タグのページが無いものは slug のまま (navi-brain#165 T5)。
+       表示名の空白と記号 (・〜！など) はハッシュタグを途中で切るので取り除く */ -}}
 {{- with .Params.Tags }}
 {{- $hashtags := newScratch}}
-{{- range . }}{{ $hashtags.Add "tags" (slice (replaceRE "(\\s)" "" . ))}}{{end}}
+{{- range . }}{{ $tn := . }}{{ with site.GetPage (printf "/tags/%s" (lower .)) }}{{ $tn = .Title }}{{ end }}{{ $tn = replaceRE `[\s・･〜~\-－!！?？&＆'’".,，、。/／()（）「」【】:：;；+＋]` "" $tn }}{{ with $tn }}{{ $hashtags.Add "tags" (slice .) }}{{ end }}{{end}}
 {{- $.Scratch.Set "tags" (delimit ($hashtags.Get "tags") ",") }}
 {{- end -}}
 

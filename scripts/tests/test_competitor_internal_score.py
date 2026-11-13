@@ -134,20 +134,26 @@ class AttachInternalLinksTests(unittest.TestCase):
 
 
 class RecommendNearbyCompetitorsTests(unittest.TestCase):
+    # navi-brain#165 T2: 自記事の点数は呼び出し側が渡す self_score (build が計算した
+    # data["score"] と同じ値) になり、候補は年齢・種類の条件を満たす記事だけになった。
+    # ここでは条件を全員が満たすようにそろえ (3 歳・ブロック)、点数の窓の挙動だけを見る。
+    # 年齢・種類の条件は test_related_recommend.py。
     def _data(self, self_asin="B00SELFSELF", target_score=80, target_price=3000, ca=None):
         return {
             "product": {
                 "asin": self_asin,
-                "ivs_detail": {"total_100": target_score},
+                "target_age": "3歳以上",
                 "prices": {"amazon": {"price": target_price}},
             },
+            "tags": ["ブロック"],
             "competitive_analysis": ca if ca is not None else [],
         }
 
     def _index(self, *entries):
         return {
             a: {"slug": f"slug-{a}", "ivs_score_100": s, "ivs_score": s / 20.0,
-                "name": f"name-{a}", "image": f"img-{a}", "amazon_price": p}
+                "name": f"name-{a}", "image": f"img-{a}", "amazon_price": p,
+                "age_min_months": 36, "toy_types": ["blocks"]}
             for a, s, p in entries
         }
 
@@ -159,7 +165,9 @@ class RecommendNearbyCompetitorsTests(unittest.TestCase):
             ("B04NEAR0004", 80, 3000),  # delta 0
         )
         data = self._data(target_score=80)
-        bp._recommend_nearby_competitors(data, idx, "/amazon", window=5, limit=3)
+        # wide_window=5: ±10 への広げ方は test_related_recommend.py で見る
+        bp._recommend_nearby_competitors(data, idx, "/amazon", window=5, limit=3,
+                                         self_score=80, wide_window=5)
         rec = [c["asin"] for c in data["competitive_analysis"]]
         self.assertEqual(rec, ["B04NEAR0004", "B01NEAR0001", "B02NEAR0002"])
         for c in data["competitive_analysis"]:
@@ -175,44 +183,51 @@ class RecommendNearbyCompetitorsTests(unittest.TestCase):
         data = self._data(target_score=80, ca=[
             {"asin": "B01EXIST001", "name": "existing"},
         ])
-        bp._recommend_nearby_competitors(data, idx, "", limit=5)
+        bp._recommend_nearby_competitors(data, idx, "", limit=5, self_score=80)
         new_asins = [c["asin"] for c in data["competitive_analysis"] if c.get("recommended_by_score")]
         self.assertEqual(new_asins, ["B02NEW00002"])
 
     def test_no_target_score_is_noop(self):
+        # 自記事の点数 (self_score) が無ければ足さない。古い ivs_detail.total_100 は見ない
         idx = self._index(("B01N0SCORE0", 80, 3000))
-        data = {"product": {"asin": "X", "ivs_detail": {}}, "competitive_analysis": []}
+        data = {"product": {"asin": "X", "target_age": "3歳", "ivs_detail": {"total_100": 80}},
+                "tags": ["ブロック"], "competitive_analysis": []}
         bp._recommend_nearby_competitors(data, idx, "")
         self.assertEqual(data["competitive_analysis"], [])
 
     def test_zero_score_index_entries_skipped(self):
         idx = self._index(("B01ZERO0001", 0, 2000), ("B02HAS00002", 79, 2800))
         data = self._data(target_score=80)
-        bp._recommend_nearby_competitors(data, idx, "", limit=3)
+        bp._recommend_nearby_competitors(data, idx, "", limit=3, self_score=80)
         self.assertEqual([c["asin"] for c in data["competitive_analysis"]], ["B02HAS00002"])
 
     def test_limit_caps_recommendations(self):
         idx = self._index(*[(f"B0{i:02d}NEAR000", 80, 2500) for i in range(1, 6)])
         data = self._data(target_score=80)
-        bp._recommend_nearby_competitors(data, idx, "", limit=2)
+        bp._recommend_nearby_competitors(data, idx, "", limit=2, self_score=80)
         self.assertEqual(len(data["competitive_analysis"]), 2)
 
 
 class SamePriceBandTests(unittest.TestCase):
     """#586: 同価格帯リンク — PRICE_BANDS と整合し /cospa/#anchor で抜け出せる。"""
 
+    # navi-brain#165 T2: 候補は年齢・種類の条件を満たす記事だけ、2 件未満なら帯を出さない
+    # ようになった。ここでは全員を条件に合わせ (3 歳・ブロック)、価格帯の挙動だけを見る。
+    # 1 件だけ残る想定だったテストは、2 件目の候補を足している。
     def _index(self, *entries):
         idx = {}
         for asin, score_100, price in entries:
             idx[asin] = {"slug": f"2026-05-30-{asin}", "ivs_score_100": score_100,
                          "ivs_score": float(score_100) / 20, "name": f"商品 {asin}",
-                         "image": f"https://example.com/{asin}.jpg", "amazon_price": price}
+                         "image": f"https://example.com/{asin}.jpg", "amazon_price": price,
+                         "age_min_months": 36, "toy_types": ["blocks"]}
         return idx
 
     def _data(self, *, target_price=3500, target_asin="B00SELFSELF", ca=None):
         return {
-            "product": {"asin": target_asin, "ivs_detail": {"total_100": 80},
+            "product": {"asin": target_asin, "target_age": "3歳以上",
                         "prices": {"amazon": {"price": target_price}}},
+            "tags": ["ブロック"],
             "competitive_analysis": ca or [],
         }
 
@@ -233,7 +248,7 @@ class SamePriceBandTests(unittest.TestCase):
         self.assertEqual(spb["cards"][0]["internal_ivs_score_100"], 88)
 
     def test_band_url_uses_site_base_path(self):
-        idx = self._index(("B01SAMEX001", 80, 3500))
+        idx = self._index(("B01SAMEX001", 80, 3500), ("B02SAMEX002", 70, 3600))
         data = self._data(target_price=3500)
         bp._recommend_same_price_band(data, idx, "/amazon", limit=2)
         self.assertEqual(data["same_price_band"]["band_url"],
@@ -246,12 +261,13 @@ class SamePriceBandTests(unittest.TestCase):
             ("B00SELFSELF", 80, 3500),   # self
             ("B01ALREADYY1", 78, 3300),  # already in CA
             ("B02FRESH0002", 70, 3800),  # eligible
+            ("B03FRESH0003", 60, 3900),  # eligible (2 件以上で帯を出す)
         )
         data = self._data(target_price=3500, target_asin="B00SELFSELF",
                           ca=[{"asin": "B01ALREADYY1", "name": "x"}])
         bp._recommend_same_price_band(data, idx, "", limit=4)
         self.assertEqual([s["asin"] for s in data["same_price_band"]["cards"]],
-                         ["B02FRESH0002"])
+                         ["B02FRESH0002", "B03FRESH0003"])
 
     def test_skips_when_price_outside_all_bands(self):
         idx = self._index(("B01ANYTHIN1", 80, 3500))
@@ -261,8 +277,8 @@ class SamePriceBandTests(unittest.TestCase):
 
     def test_skips_when_no_amazon_price(self):
         idx = self._index(("B01ANYTHIN2", 80, 3500))
-        data = {"product": {"asin": "X", "ivs_detail": {"total_100": 80}, "prices": {"amazon": {}}},
-                "competitive_analysis": []}
+        data = {"product": {"asin": "X", "target_age": "3歳", "prices": {"amazon": {}}},
+                "tags": ["ブロック"], "competitive_analysis": []}
         bp._recommend_same_price_band(data, idx, "")
         self.assertNotIn("same_price_band", data)
 
@@ -273,11 +289,12 @@ class SamePriceBandTests(unittest.TestCase):
         self.assertNotIn("same_price_band", data)
 
     def test_skips_zero_score_peers(self):
-        idx = self._index(("B01ZEROSCO1", 0, 3500), ("B02OK000002", 65, 3600))
+        idx = self._index(("B01ZEROSCO1", 0, 3500), ("B02OK000002", 65, 3600),
+                          ("B03OK000003", 60, 3700))
         data = self._data(target_price=3500)
         bp._recommend_same_price_band(data, idx, "", limit=3)
         self.assertEqual([s["asin"] for s in data["same_price_band"]["cards"]],
-                         ["B02OK000002"])
+                         ["B02OK000002", "B03OK000003"])
 
     def test_limit_caps_output(self):
         idx = self._index(*[(f"B0{i:02d}MANY000", 90 - i, 3500) for i in range(1, 9)])
