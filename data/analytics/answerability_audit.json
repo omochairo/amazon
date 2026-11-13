@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-12T01:55:45Z",
+  "generated_at": "2026-11-13T01:03:26Z",
   "model": "gemma4:26b-a4b-it-qat",
   "source_week": "2026-W45",
   "baseline_ctr": 0.0360555255092843,
@@ -142,77 +142,6 @@
       ]
     },
     {
-      "page": "https://navi.omcha.jp/products/b0h1knthwz/",
-      "asin": "B0H1KNTHWZ",
-      "page_coverage_avg": 0.38,
-      "queries": [
-        {
-          "query": "たまごっちパラダイス amazon",
-          "impressions": 28,
-          "position": 3.357142857142857,
-          "answered": false,
-          "coverage": 0.2,
-          "missing_aspects": [
-            "Amazonでの価格情報",
-            "Amazonでの取り扱い状況",
-            "Amazonでのレビュー・口コミ"
-          ],
-          "note": "ユーザーはAmazonでの販売状況や価格を求めていますが、記事は楽天の価格情報に終始しており、Amazonに関する直接的な回答がありません。",
-          "error": null
-        },
-        {
-          "query": "amazon たまごっちパラダイス",
-          "impressions": 24,
-          "position": 2.541666666666667,
-          "answered": false,
-          "coverage": 0.2,
-          "missing_aspects": [
-            "Amazonでの価格情報",
-            "Amazonでの取り扱い状況"
-          ],
-          "note": "ユーザーはAmazonでの販売状況や価格を求めていますが、記事は楽天の価格情報に終始しており、Amazonに関する直接的な回答がありません。",
-          "error": null
-        },
-        {
-          "query": "amazonたまごっちパラダイス",
-          "impressions": 8,
-          "position": 2.25,
-          "answered": false,
-          "coverage": 0.3,
-          "missing_aspects": [
-            "Amazonでの価格情報",
-            "Amazonでの取り扱い状況",
-            "Amazonの口コミ・レビュー"
-          ],
-          "note": "検索クエリがAmazonでの購入を意図しているのに対し、記事は楽天の価格情報に偏っており、Amazonに関する具体的な情報が欠落しています。",
-          "error": null
-        },
-        {
-          "query": "たまごっちパラダイスamazon",
-          "impressions": 8,
-          "position": 7.5,
-          "answered": false,
-          "coverage": 0.2,
-          "missing_aspects": [
-            "Amazonでの価格情報",
-            "Amazonでの取り扱い状況"
-          ],
-          "note": "検索クエリはAmazonでの販売情報を求めていますが、記事内では楽天の価格情報しか記載されていません。",
-          "error": null
-        },
-        {
-          "query": "たまごっちパラダイス 値段",
-          "impressions": 5,
-          "position": 17.4,
-          "answered": true,
-          "coverage": 1.0,
-          "missing_aspects": [],
-          "note": "最安値のサイトと価格が明記されており、ユーザーの疑問に直接回答しています。",
-          "error": null
-        }
-      ]
-    },
-    {
       "page": "https://navi.omcha.jp/products/b0hdb8kg6g/",
       "asin": "B0HDB8KG6G",
       "page_coverage_avg": 0.42,
@@ -228,7 +157,7 @@
             "送料の有無",
             "中古品やセール情報の有無"
           ],
-          "note": "Amazonの価格を提示しており、最安値を知りたいという意図には応えていますが、比較対象がAmazonのみであるため網羅性は限定的です。",
+          "note": "Amazonの価格を提示しており、最安値を知りたいという意図には応えていますが、比較対象がAmazonのみであるため網羅性に欠けます。",
           "error": null
         },
         {
@@ -240,9 +169,9 @@
           "missing_aspects": [
             "イオンでの予約方法",
             "イオンでの販売状況",
-            "イオンでの取り扱い有無"
+            "イオンでの予約開始時期"
           ],
-          "note": "検索クエリが「イオンでの予約」について尋ねているのに対し、記事内にはイオンに関する情報が一切含まれていません。",
+          "note": "検索クエリが「イオンでの予約」に特化していますが、記事内にはイオンに関する情報が一切含まれていません。",
           "error": null
         },
         {
@@ -298,9 +227,9 @@
           "coverage": 0.8,
           "missing_aspects": [
             "具体的なユーザーの体験談（良い点・悪い点の詳細）",
-            "購入者の具体的な評価（星の数やレビュー内容の引用）"
+            "購入者の具体的な評価（星の数やレビュー内容の要約）"
           ],
-          "note": "商品の特徴や仕様、価格に関する情報は網羅されていますが、実際の利用者の具体的な声（レビュー内容）が不足しています。",
+          "note": "商品の特徴や仕様、価格情報は網羅されていますが、「口コミ」というクエリに対しては、実際の利用者の具体的な声（レビュー内容）が不足しています。",
           "error": null
         },
         {
