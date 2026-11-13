@@ -3209,6 +3209,132 @@ def _recompute_best_price(product: dict[str, Any]) -> None:
     product["best_platform"] = best[1]
 
 
+# navi-brain#165 T3/T4: 購入ボタン (.buy-box) の行き先と、💴 価格の節の見出し・導入文。
+# (key, ボタンに出す名前, 導入文で使う短い名前)。並びは価格カードと同じで、同額のときは前を採る。
+_BUY_SITES = (
+    ("amazon", "Amazon", "Amazon"),
+    ("rakuten", "楽天市場", "楽天"),
+    ("yahoo", "Yahoo!ショッピング", "Yahoo!ショッピング"),
+)
+
+
+def _buy_entry_price(entry: dict[str, Any]) -> int:
+    try:
+        return int(entry.get("price") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _buy_entry_out_of_stock(key: str, entry: dict[str, Any]) -> bool:
+    if key == "amazon":
+        return amazon_stock_state(entry.get("availability")) == "outofstock"
+    return entry.get("availability") == "outofstock"
+
+
+def _resolve_buy_offer(data: dict[str, Any]) -> dict[str, Any]:
+    """記事の購入ボタン (.buy-box) をどこへ向けるかと、💴 価格の節の見出し・導入文を決める。
+
+    主ボタン (primary) は 1 つだけ:
+      1. 価格があり、販売終了・在庫切れ・検索リンク・同一商品と未確認 (verified=False)
+         のどれでもないサイトのうち最安 (kind="cheapest"。金額を持つ)
+      2. 無ければ Amazon の商品ページ (kind="direct")
+      3. それも無ければ検索リンク (kind="search"。控えめな見た目で出す)
+    purchase_unavailable (3 サイトとも販売ページが無い) の記事にはアフィリエイトの
+    ボタンを出さない (unavailable=True。テンプレは「類似のおすすめ ↓」だけにする)。
+
+    product.best_price は未確認の価格も最安に数えるので、ボタンの行き先には使わない。
+    """
+    product = data.get("product") if isinstance(data.get("product"), dict) else {}
+    prices = product.get("prices") if isinstance(product.get("prices"), dict) else {}
+
+    entries: dict[str, dict[str, Any]] = {}
+    for key, _label, _short in _BUY_SITES:
+        entry = prices.get(key)
+        entries[key] = entry if isinstance(entry, dict) else {}
+
+    def _direct(key: str) -> bool:
+        e = entries[key]
+        return (bool(e.get("url")) and not e.get("is_search") and not e.get("discontinued")
+                and e.get("verified") is not False)
+
+    eligible: list[tuple[int, int, str]] = []
+    for order, (key, _label, _short) in enumerate(_BUY_SITES):
+        e = entries[key]
+        price = _buy_entry_price(e)
+        if price > 0 and _direct(key) and not _buy_entry_out_of_stock(key, e):
+            eligible.append((price, order, key))
+
+    labels = {key: label for key, label, _short in _BUY_SITES}
+    primary: dict[str, Any] | None = None
+    if eligible:
+        price, _order, key = min(eligible)
+        primary = {"site": key, "label": labels[key], "url": entries[key]["url"],
+                   "price": price, "kind": "cheapest", "text": f"{labels[key]}で見る"}
+    elif _direct("amazon"):
+        oos = _buy_entry_out_of_stock("amazon", entries["amazon"])
+        primary = {"site": "amazon", "label": "Amazon", "url": entries["amazon"]["url"],
+                   "price": 0, "kind": "direct",
+                   "text": "Amazonで再入荷を確認" if oos else "Amazonで見る"}
+    else:
+        search = [("amazon", entries["amazon"].get("search_url"))]
+        # 楽天/Yahoo は検索モードの url か、未確認の出品に付けた検索の search_url
+        search += [(k, entries[k].get("url") if entries[k].get("is_search")
+                    else entries[k].get("search_url")) for k in ("rakuten", "yahoo")]
+        for key, url in search:
+            if url:
+                primary = {"site": key, "label": labels[key], "url": url, "price": 0,
+                           "kind": "search", "text": f"{labels[key]}で検索"}
+                break
+
+    others = [
+        {"site": key, "label": label, "url": entries[key]["url"]}
+        for key, label, _short in _BUY_SITES
+        if (primary is None or key != primary["site"]) and _direct(key)
+        and not _buy_entry_out_of_stock(key, entries[key])
+    ]
+
+    # T5: 価格カードに金額が出るサイト (price>0 かつ販売終了でない) の数で見出しと導入文を決める。
+    priced = [short for key, _label, short in _BUY_SITES
+              if _buy_entry_price(entries[key]) > 0 and not entries[key].get("discontinued")]
+    ended = [short for key, _label, short in _BUY_SITES
+             if entries[key].get("discontinued")]
+    not_found = [short for key, _label, short in _BUY_SITES
+                 if short not in priced and short not in ended]
+    missing: list[str] = []
+    if ended:
+        missing.append(f"{'・'.join(ended)}は取り扱い終了")
+    if not_found:
+        missing.append(f"{'・'.join(not_found)}では同じ商品の価格を確認できませんでした")
+    missing_text = "、".join(missing) + "。" if missing else ""
+    # 価格カードには「※確度低」でも金額が出るので数には入れるが、導入文で確認済みのように
+    # 読ませないよう一言添える (サイト名は priced と同じ短い名前)。
+    unverified = [short for key, _label, short in _BUY_SITES
+                  if short in priced and entries[key].get("verified") is False]
+    if unverified:
+        missing_text += f"{'・'.join(unverified)}の価格は同じ商品か確認できていません。"
+    if len(priced) == 3:
+        intro = ("当サイトが自動観測した最新価格をAmazon・楽天・Yahoo!ショッピングで横断比較しました。"
+                 + missing_text)
+    elif len(priced) == 2:
+        intro = f"当サイトが自動観測した最新価格を{'・'.join(priced)}で比較しました。{missing_text}"
+    elif len(priced) == 1:
+        intro = f"当サイトの自動観測で価格を確認できたのは{priced[0]}だけです。{missing_text}"
+    elif ended:
+        intro = (f"当サイトの自動観測では、{missing_text}"
+                 "各サイトでの取り扱いは下のリンクからご確認ください。")
+    else:
+        intro = ("当サイトの自動観測では、Amazon・楽天・Yahoo!ショッピングのいずれでも"
+                 "同じ商品の価格を確認できませんでした。各サイトでの取り扱いは下のリンクからご確認ください。")
+
+    return {
+        "unavailable": bool(data.get("purchase_unavailable")),
+        "primary": primary,
+        "others": others,
+        "price_site_count": len(priced),
+        "price_intro": intro,
+    }
+
+
 def _enforce_amazon_image(
     data: dict[str, Any],
     raw_index: dict[str, dict[str, Any]],
@@ -4321,6 +4447,9 @@ def main() -> None:
                 }
 
             data["amazon_partner_tag"] = amazon_partner_tag
+            # navi-brain#165 T3/T4: 購入ボタンの行き先と 💴 の見出し。表示だけに使い、
+            # front matter / JSON-LD には入れない。
+            data["buy_offer"] = _resolve_buy_offer(data)
             md_body = template.render(**data)
             # omcha-ops#19 P1: テンプレ/本文のどこを経由した Amazon リンクでも
             # tag= を持たせる最後の一点 (_force_amazon_partner_tag の comment 参照)。

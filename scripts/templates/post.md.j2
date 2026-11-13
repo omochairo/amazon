@@ -47,88 +47,71 @@
 {%- set title_default = '[link-report] ' ~ product.asin ~ ' ' ~ ec_site ~ ' のリンクが違う' -%}
 <a class="link-report-flag" href="https://github.com/omochairo/amazon/issues/new?template=link_report.yml&title={{ title_default|urlencode }}&article_url={{ article_url|urlencode }}&asin={{ product.asin|urlencode }}&ec_site={{ ec_site|urlencode }}&wrong_url={{ (wrong_url or '')|urlencode }}" target="_blank" rel="noopener nofollow" title="このリンクが違うと報告" aria-label="{{ ec_site }} のリンクを誤報告">🚩</a>
 {%- endmacro -%}
+{#- navi-brain#165 T3: 購入ボタンの箱 (.buy-box。価格カード .price-card とは別の部品)。
+    行き先は build_post._resolve_buy_offer が決める: 主ボタン 1 つ＋ほかのサイトへの文字リンク
+    ＋価格の節 (#price-compare) へのリンク。金額は冒頭の箱の一行にだけ出し、ボタンには出さない。
+    purchase_unavailable の記事はアフィリエイトのボタンを出さず「類似のおすすめ ↓」だけ
+    (#alternatives が無ければ箱ごと出さない)。Markdown の HTML ブロックが途中で切れないよう
+    1 行で出す。 -#}
+{%- macro buy_box(slot, variant='mid') -%}
+{%- if buy_offer -%}
+{%- if buy_offer.unavailable -%}
+{#- 買えない商品で同じリンクを何度も出さない (冒頭とまとめの後だけ) -#}
+{%- if competitive_analysis and variant in ('top', 'closing') -%}
+<div class="buy-box buy-box--{{ variant }} buy-box--unavailable"><a class="buy-box-alt" href="#alternatives">類似のおすすめを見る ↓</a></div>
+{%- endif -%}
+{%- else -%}
+{%- set p = buy_offer.primary -%}
+<div class="buy-box buy-box--{{ variant }}">{% if p %}<a class="buy-box-primary buy-box-primary--{{ p.site }}{% if p.kind == 'search' %} buy-box-primary--muted{% endif %}" href="{{ p.url }}" target="_blank" rel="noopener nofollow sponsored" data-cta-slot="{{ slot }}" data-buy-site="{{ p.label }}" data-buy-kind="{{ p.kind }}"{% if p.price %} data-buy-price="{{ p.price }}"{% endif %}>{{ p.text }} →</a>{% endif %}<span class="buy-box-sub">{% if buy_offer.others %}<span class="buy-box-others">ほかのサイト：{% for o in buy_offer.others %}<a href="{{ o.url }}" target="_blank" rel="noopener nofollow sponsored" data-cta-slot="{{ slot }}">{{ o.label }}</a>{% if not loop.last %}／{% endif %}{% endfor %}</span>{% endif %}<a class="buy-box-compare" href="#price-compare">価格を比べる ↓</a></span></div>
+{%- endif -%}
+{%- endif -%}
+{%- endmacro -%}
+{#- 景表法 (ステマ規制): [PR] の断り書きは最初のアフィリエイトリンクより前に置く。 -#}
 <aside class="auto-gen-notice"><span class="pr-badge">[PR]</span><span class="auto-gen-notice-text">おもちゃロボが市場データから自動生成しています。</span></aside>
 
-{#- 販売終了 notice (2026-07-07): build_post._apply_amazon_discontinued が
+{# 販売終了 notice (2026-07-07): build_post._apply_amazon_discontinued が
     snapshot status=gone かつ 楽天/Yahoo にも直リンク無しのとき
-    purchase_unavailable=True を立てる。-#}
+    purchase_unavailable=True を立てる。類似のおすすめへのリンクは直下の
+    buy-top の箱が持つので、ここには置かない (#165 T4: 同じ導線を 2 か所に出さない)。-#}
 {% if purchase_unavailable %}
-<aside class="discontinued-notice">🚫 <strong>この商品は現在、Amazon・楽天・Yahoo!ショッピングで販売ページを確認できません。</strong>販売終了または取り扱い停止の可能性があります。記事内の価格・仕様は執筆時点の情報です。{% if competitive_analysis %}<a href="#alternatives">類似のおすすめ商品を見る ↓</a>{% endif %}</aside>
+<aside class="discontinued-notice">🚫 <strong>この商品は現在、Amazon・楽天・Yahoo!ショッピングで販売ページを確認できません。</strong>販売終了または取り扱い停止の可能性があります。記事内の価格・仕様は執筆時点の情報です。</aside>
 {% endif %}
 
-{#- #2686 / #4964: 「どこで買える/在庫」記事型。build_post.py が
-    where_to_buy_format.build_stock_block() で決定的に組み立てた
-    stock_where_to_buy がある記事だけ、結論ブロック→在庫テーブル→
-    価格推移メモ→品薄サイン→実店舗注記を記事冒頭に出す。
-    この型が付かない記事 (ロールアウト日より前 / state=unknown) では
-    stock_where_to_buy は None のままなので、既存記事の描画は一切変化しない。 -#}
-{% if stock_where_to_buy %}
-<section class="where-to-buy-block" aria-label="在庫と価格のまとめ">
-<p class="where-to-buy-conclusion">{{ stock_where_to_buy.conclusion }}</p>
-<div class="where-to-buy-table-wrap">
-<table class="where-to-buy-table">
-<thead><tr><th>販売サイト</th><th>価格</th><th>在庫状況</th><th>取得日時</th><th>リンク</th></tr></thead>
-<tbody>
-{% for row in stock_where_to_buy.rows %}<tr><td>{{ row.site }}</td><td>{% if row.price %}￥{{ "{:,}".format(row.price) }}{% else %}—{% endif %}</td><td>{{ row.state_label }}</td><td>{{ row.observed_at_label }}</td><td>{% if row.url %}<a href="{{ row.url }}" target="_blank" rel="noopener nofollow sponsored">見る →</a>{% else %}—{% endif %}</td></tr>
-{% endfor %}</tbody>
-</table>
-</div>
-{% if stock_where_to_buy.price_history_note %}<p class="where-to-buy-price-history">📉 {{ stock_where_to_buy.price_history_note }}</p>{% endif %}
-{% if stock_where_to_buy.low_stock_note %}<p class="where-to-buy-low-stock">{{ stock_where_to_buy.low_stock_note }}</p>{% endif %}
-<p class="where-to-buy-offline-note"><small>{{ stock_where_to_buy.offline_note }}</small></p>
+{# navi-brain#165 T4: 冒頭の「決める箱」。結論 (知育スコア＋verdict)・最安値の一行・購入ボタンを
+    最初の画面に集める。商品画像は小さくするが、LCP 要素なので fetchpriority は残す。
+    在庫型 (#2686 / #4964) は最安値の一行の代わりに在庫の結論の一文を出す
+    (quality_gate の「YYYY-MM-DD 時点」チェックはこの一文で満たす)。
+    scroll_reveal.js はこの箱をアニメーションさせない。 -#}
+<section class="hero-score decide-box" aria-label="この商品の結論">
+<div class="decide-box-main">{% if product.image %}<figure class="product-hero-image decide-box-image"><img src="{{ product.image }}" alt="{{ product.name }}の商品画像"{% if product.image_width and product.image_height %} width="{{ product.image_width }}" height="{{ product.image_height }}"{% endif %} fetchpriority="high" decoding="async"><figcaption>出典：Amazon商品ページ</figcaption></figure>{% endif %}<div class="hero-total-row">{% if score %}<div class="hero-total-badge"><span class="hero-total-label">🌟 知育スコア</span><span class="hero-total-value">{{ score.total_100 }}<small>/100</small></span></div>{% endif %}{% if verdict and verdict.headline %}<p class="hero-verdict">「{{ verdict.headline }}」</p>{% endif %}</div></div>
+{% if stock_where_to_buy %}<p class="where-to-buy-conclusion">{{ stock_where_to_buy.conclusion }}</p>{% elif buy_offer and not buy_offer.unavailable and buy_offer.primary and buy_offer.primary.kind == 'cheapest' %}<p class="decide-box-price">🏷️ 最安値 <strong>￥{{ "{:,}".format(buy_offer.primary.price) }}</strong>（{{ buy_offer.primary.label }}{% if price_checked_at %}・{{ price_checked_at }} 時点{% endif %}）</p>{% endif %}
+{{ buy_box('buy-top', 'top') }}
 </section>
+
+{% if persona_fit %}
+<aside class="persona-fit"><strong>この記事はこんな方へ</strong>{% if persona_fit.age_range %}<span class="persona-fit__age">対象年齢：<strong>{{ persona_fit.age_range }}</strong></span>{% endif %}<ul>{% for r in persona_fit.recommended_for %}<li>{{ r }}</li>{% endfor %}</ul>{% if persona_fit.not_recommended_for %}<div class="persona-fit__caution"><strong>🤔 逆に、こんな方は別の商品も検討を</strong><ul>{% for n in persona_fit.not_recommended_for %}<li>{{ n }}</li>{% endfor %}</ul></div>{% endif %}</aside>
 {% endif %}
 
-{% if product.name_full and product.name_full != product.name %}
-<p class="product-full-name">正式商品名：<strong>{{ product.name_full }}</strong></p>
-{% endif %}
-{% if product.image %}
-<figure class="product-hero-image"><img src="{{ product.image }}" alt="{{ product.name }}の商品画像"{% if product.image_width and product.image_height %} width="{{ product.image_width }}" height="{{ product.image_height }}"{% endif %} fetchpriority="high" decoding="async"><figcaption>出典：Amazon商品ページ</figcaption></figure>
-{% endif %}
-
-{% if narrative.lead %}{{ narrative.lead }}{% endif %}
-
-{# ===== Hero score block (β v5.1): 総合スコア棒グラフ + 4軸レーダー + verdict + pros/cons =====
-   #1111: data["score"] (build_post._build_score_context が ScoreResult から構築) を参照する。
-   旧 product.ivs_detail.* は廃止 (Phase 2/3 完了 = _sync_ivs_for_render 削除済)。 #}
-{% if score %}
-<div class="hero-score">
-<div class="hero-total-row">
-<div class="hero-total-badge"><span class="hero-total-label">🌟 知育スコア</span><span class="hero-total-value">{{ score.total_100 }}<small>/100</small></span></div>
-{% if verdict and verdict.headline %}<p class="hero-verdict">「{{ verdict.headline }}」</p>{% endif %}
-</div>
-<div class="hero-total-bar" aria-label="知育スコア（総合）の棒グラフ">
-<div class="hero-total-bar-track"><div class="hero-total-bar-fill" style="--bar-w:{{ score.total_100 }}%"><span class="hero-total-bar-value">{{ score.total_100 }} / 100 点</span></div></div>
-<p class="hero-total-bar-caption">下のレーダー 4 軸（📚 知育効果 / 🕰️ 長く遊べる / 🛡️ 安全性 / 💰 コスパ）を加重平均し、100 点満点に換算したおもちゃロボ独自の総合スコアです。</p>
-</div>
-<div class="hero-radar" aria-label="4軸スコアのレーダーチャート（上=コスパ・下=長く遊べる・左=知育効果・右=安全性）">
-<svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="false">
-<g class="radar-grid"><polygon points="200,50 290,140 200,230 110,140"/><polygon points="200,80 260,140 200,200 140,140"/><polygon points="200,110 230,140 200,170 170,140"/></g>
-<g class="radar-axes"><line x1="200" y1="50" x2="200" y2="230"/><line x1="110" y1="140" x2="290" y2="140"/></g>
-<polygon class="radar-shape" points="{{ score.radar_points }}"/>
-<g class="radar-labels" font-size="14"><text x="200" y="22" text-anchor="middle">💰 コスパ<tspan x="200" dy="1.25em">{{ "%.1f"|format(score.cost_performance) }}/5.0</tspan></text><text x="298" y="136" text-anchor="start">🛡️ 安全性<tspan x="298" dy="1.25em">{{ "%.1f"|format(score.safety) }}/5.0</tspan></text><text x="200" y="246" text-anchor="middle">🕰️ 長く遊べる<tspan x="200" dy="1.25em">{{ "%.1f"|format(score.longevity) }}/5.0</tspan></text><text x="102" y="136" text-anchor="end">📚 知育効果<tspan x="102" dy="1.25em">{{ "%.1f"|format(score.education) }}/5.0</tspan></text></g>
-</svg>
-</div>
 {% if (product.pros and product.pros|length) or (product.cons and product.cons|length) %}
-<div class="hero-pros-cons">
+<div class="hero-pros-cons decide-pros-cons">
 <div class="hero-pros"><strong>👍 良いところ</strong><ul>{% for p in product.pros[:3] %}<li>{{ p }}</li>{% endfor %}</ul></div>
 <div class="hero-cons"><strong>⚠️ 気になるところ</strong><ul>{% for c in product.cons[:3] %}<li>{{ c }}</li>{% endfor %}</ul></div>
 </div>
 {% endif %}
-<div class="hero-meta">
-{% if persona_fit and persona_fit.age_range %}<div class="hero-meta-row">💡 対象年齢：<strong>{{ persona_fit.age_range }}</strong></div>{% endif %}
-{% if product.best_price > 0 %}<div class="hero-meta-row">🏷️ 最新観測時点の最安値：<strong>￥{{ "{:,}".format(product.best_price) }}</strong>（{{ product.best_platform }}）</div>{% endif %}
-</div>
-</div>
+
+{% if stock_where_to_buy and stock_where_to_buy.low_stock_note %}
+<p class="where-to-buy-low-stock">{{ stock_where_to_buy.low_stock_note }}</p>
 {% endif %}
 
-{% if persona_fit %}
-<aside class="persona-fit"><strong>この記事はこんな方へ</strong><ul>{% for r in persona_fit.recommended_for %}<li>{{ r }}</li>{% endfor %}</ul>{% if persona_fit.not_recommended_for %}<div class="persona-fit__caution"><strong>🤔 逆に、こんな方は別の商品も検討を</strong><ul>{% for n in persona_fit.not_recommended_for %}<li>{{ n }}</li>{% endfor %}</ul></div>{% endif %}{% if persona_fit.age_range %}<p>対象年齢：<strong>{{ persona_fit.age_range }}</strong></p>{% endif %}</aside>
-{% endif %}
+{# navi-brain#165 T4: 目次の差し込み位置。hugo/layouts/posts/single.html が
+    この印を目次に置き換える (印が無いページは従来どおり本文の前に出す)。 -#}
+<div class="toc-slot"></div>
+
+{% if narrative.lead %}{{ narrative.lead }}{% endif %}
 
 {% if development_stage %}
 <details class="development-stage-accordion">
-<summary>👶 このおもちゃの対象年齢（{{ development_stage.age_label }}）における発達の目安を見る</summary>
+<summary>👶 {% if persona_fit and persona_fit.age_range %}この年齢{% else %}このおもちゃの対象年齢（{{ development_stage.age_label }}）{% endif %}における発達の目安を見る</summary>
 <div class="development-stage-content">
 <p><strong>🧠 発達の特徴（認知・運動）：</strong><br>{{ development_stage.developmental_features }}</p>
 <p><strong>🎯 知育の目的と効果：</strong><br>{{ development_stage.educational_goals }}</p>
@@ -138,10 +121,19 @@
 </details>
 {% endif %}
 
+{# navi-brain#165 T5: 価格が出るサイト (price>0 かつ販売終了でない) が 1 以下なら
+    「3サイトで比較」と名乗らない。数と導入文は build_post._resolve_buy_offer が決める。
+    #price-compare は購入ボタンの箱の「価格を比べる ↓」の行き先。 -#}
 {% set price_comparison_md -%}
-## <small>{{ product.name }}の</small>💴 価格を3サイトで比較
+<div id="price-compare" class="price-compare-anchor"></div>
 
-当サイトが自動観測した最新価格をAmazon・楽天・Yahoo!ショッピングで横断比較しました。
+{% if buy_offer and buy_offer.price_site_count <= 1 -%}
+## <small>{{ product.name }}の</small>💴 価格と販売サイト
+{%- else -%}
+## <small>{{ product.name }}の</small>💴 価格を3サイトで比較
+{%- endif %}
+
+{{ buy_offer.price_intro if buy_offer else '当サイトが自動観測した最新価格をAmazon・楽天・Yahoo!ショッピングで横断比較しました。' }}
 
 {% set is_amazon_best = product.prices.amazon.price > 0 and product.prices.amazon.price == product.best_price %}
 {% set is_rakuten_best = product.prices.rakuten.price > 0 and product.prices.rakuten.price == product.best_price %}
@@ -165,8 +157,28 @@
 <p class="price-body-stale-note"><small>⚠️ 本文中に書かれた価格は執筆時点のものです。その後 Amazon 側で価格が大きく変動したため、上の価格カード（最新観測値）と食い違っています。ご購入前に必ず販売ページで最新価格をご確認ください。</small></p>
 {%- endif %}
 
-{% if product.best_price > 0 %}
-<div class="best-deal">💰 <strong>最新観測時点での最安値</strong>：{{ product.best_platform }} <strong class="best-deal-price">￥{{ "{:,}".format(product.best_price) }}</strong>（在庫や送料により変動する場合があります）</div>
+{# navi-brain#165 T4: 最安値は冒頭の決める箱の一行に 1 か所だけ出す (旧 .best-deal は廃止)。
+    正式商品名・在庫表・実店舗の注記は「価格と販売サイト」の情報なのでこの節に置く。 -#}
+{% if product.name_full and product.name_full != product.name %}
+<p class="product-full-name">販売ページでの表記：<strong>{{ product.name_full }}</strong></p>
+{% endif %}
+
+{# #2686 / #4964: 「どこで買える/在庫」記事型の在庫表。価格とリンクは上の価格カードに
+    あるので、ここは「サイト・在庫・取得日時」だけにする (#165 T4。サイト名は販売ページへの
+    リンクのまま残し、data-cta-slot=stock-table で計測する)。在庫の結論の一文は
+    冒頭の決める箱、品薄サインは冒頭の箱の下に出している。 -#}
+{% if stock_where_to_buy %}
+<section class="where-to-buy-block" aria-label="在庫のまとめ">
+<div class="where-to-buy-table-wrap">
+<table class="where-to-buy-table">
+<thead><tr><th>販売サイト</th><th>在庫状況</th><th>取得日時</th></tr></thead>
+<tbody>
+{% for row in stock_where_to_buy.rows %}<tr><td>{% if row.url %}<a href="{{ row.url }}" target="_blank" rel="noopener nofollow sponsored" data-cta-slot="stock-table">{{ row.site }}</a>{% else %}{{ row.site }}{% endif %}</td><td>{{ row.state_label }}</td><td>{{ row.observed_at_label }}</td></tr>
+{% endfor %}</tbody>
+</table>
+</div>
+<p class="where-to-buy-offline-note"><small>{{ stock_where_to_buy.offline_note }}</small></p>
+</section>
 {% endif %}
 
 {% if product.asin %}
@@ -174,6 +186,10 @@
 {%- if price_history %}
 <div class="price-history-block"><div class="price-history-label">{% if price_history.checked_daily %}📉 本サイト計測の価格記録（毎日巡回）{% else %}📉 本サイト計測の価格記録（週1巡回）{% endif %}{% if price_history.all_time_low %} <span class="price-history-lowest-badge">🏅 過去最安値</span>{% endif %}</div><p>過去{{ price_history.span_days }}日間の計測では、Amazon 価格は最安 ¥{{ "{:,}".format(price_history.min_price) }}（{{ price_history.min_price_date }}）〜最高 ¥{{ "{:,}".format(price_history.max_price) }} で推移し、{% if price_history.out_of_stock_now %}{{ price_history.out_of_stock_since }} を最後に価格が記録できていません（{{ price_history.out_of_stock_checked_date }} 時点で「{{ price_history.out_of_stock_message }}」）。グラフの点線区間がこの期間で、価格は記録されていません。{% else %}直近の計測値は ¥{{ "{:,}".format(price_history.latest_price) }} です。{% endif %}</p><svg class="price-history-spark" viewBox="0 0 {{ price_history.spark.width }} {{ price_history.spark.height }}" width="{{ price_history.spark.width }}" height="{{ price_history.spark.height }}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="価格推移スパークライン（横軸: 日付、縦軸: 価格）"><title>価格推移スパークライン</title><desc>縦軸は価格（円）、横軸は日付（実際の経過日数に比例）を表す折れ線グラフです。破線区間は未観測期間です。{% if price_history.spark.has_out_of_stock %}点線区間は在庫切れが観測された期間で、価格は記録されていません。{% endif %}</desc>{% for seg in price_history.spark.segments %}<polyline fill="none" stroke="currentColor" stroke-width="2"{% if seg.state == "unobserved" %} stroke-dasharray="3 3" stroke-opacity="0.45"{% elif seg.state == "out_of_stock" %} stroke-dasharray="1 3" stroke-linecap="round" stroke-opacity="0.35"{% endif %} points="{{ seg.points }}" />{% endfor %}{% for dot in price_history.spark.dots %}<circle cx="{{ dot.x }}" cy="{{ dot.y }}" r="1.8" fill="currentColor" />{% endfor %}{% for yl in price_history.spark.y_labels %}<text x="{{ yl.x }}" y="{{ yl.y }}" text-anchor="{{ yl.anchor }}" font-size="9" fill="currentColor" opacity="0.65">{{ yl.text }}</text>{% endfor %}{% for xl in price_history.spark.x_labels %}<text x="{{ xl.x }}" y="{{ xl.y }}" text-anchor="{{ xl.anchor }}" font-size="9" fill="currentColor" opacity="0.65">{{ xl.text }}</text>{% endfor %}{% for lg in price_history.spark.legends %}<line x1="{{ lg.dash_x1 }}" y1="{{ lg.y }}" x2="{{ lg.dash_x2 }}" y2="{{ lg.y }}" stroke="currentColor" stroke-width="2"{% if lg.state == "out_of_stock" %} stroke-dasharray="1 3" stroke-linecap="round" stroke-opacity="0.35"{% else %} stroke-dasharray="3 3" stroke-opacity="0.45"{% endif %} /><text x="{{ lg.text_x }}" y="{{ lg.y }}" text-anchor="start" font-size="9" fill="currentColor" opacity="0.65">{{ lg.text }}</text>{% endfor %}</svg><details class="price-history-table"><summary>記録した{{ price_history.table_rows|length }}件の価格を表で見る</summary><table><thead><tr><th scope="col">日付</th><th scope="col">価格</th></tr></thead><tbody>{% for pt in price_history.table_rows %}<tr><td>{{ pt.date }}</td><td>¥{{ "{:,}".format(pt.price) }}</td></tr>{% endfor %}</tbody></table></details><small class="price-history-note">{% if price_history.checked_daily and price_history.change_count > 0 %}※ この{{ price_history.span_days }}日間は毎日価格を確認し、値動きを{{ price_history.change_count }}回とらえました{% if price_history.last_checked_date %}（最終確認 {{ price_history.last_checked_date }}）{% endif %}。価格が動かない期間は記録を間引いているため、点の間隔は一定ではありません。最新価格は上の各ストアでご確認ください。{% elif price_history.checked_daily %}※ この{{ price_history.span_days }}日間は毎日価格を確認しましたが、値動きはありませんでした{% if price_history.last_checked_date %}（最終確認 {{ price_history.last_checked_date }}）{% endif %}。最新価格は上の各ストアでご確認ください。{% else %}※ 本サイトが約週1回の巡回で記録した参考値です。最新価格は上の各ストアでご確認ください。{% endif %}</small></div>
 {%- endif %}
+{% endif %}
+{# 在庫型の「過去 30 日の最安値」メモ。価格の記録と同じ話なので、その直後に置く (#165 T4)。 -#}
+{% if stock_where_to_buy and stock_where_to_buy.price_history_note %}
+<p class="where-to-buy-price-history">📉 {{ stock_where_to_buy.price_history_note }}</p>
 {% endif %}
 {%- endset -%}
 {#- #1980: A-7 query intent (commercial/informational) で購入 CTA (価格比較+Keepa) の
@@ -184,6 +200,25 @@
 {%- endif %}
 
 ## <small>{{ product.name }}の</small>🌟 知育スコアの内訳
+
+{# navi-brain#165 T4: 総合スコアの棒グラフと 4 軸レーダーは冒頭の決める箱から
+    この節へ移した (details の外に出して、開かなくても見えるようにする)。 -#}
+{% if score %}
+<div class="hero-score score-visual">
+<div class="hero-total-bar" aria-label="知育スコア（総合）の棒グラフ">
+<div class="hero-total-bar-track"><div class="hero-total-bar-fill" style="--bar-w:{{ score.total_100 }}%"><span class="hero-total-bar-value">{{ score.total_100 }} / 100 点</span></div></div>
+<p class="hero-total-bar-caption">下のレーダー 4 軸（📚 知育効果 / 🕰️ 長く遊べる / 🛡️ 安全性 / 💰 コスパ）を加重平均し、100 点満点に換算したおもちゃロボ独自の総合スコアです。</p>
+</div>
+<div class="hero-radar" aria-label="4軸スコアのレーダーチャート（上=コスパ・下=長く遊べる・左=知育効果・右=安全性）">
+<svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="false">
+<g class="radar-grid"><polygon points="200,50 290,140 200,230 110,140"/><polygon points="200,80 260,140 200,200 140,140"/><polygon points="200,110 230,140 200,170 170,140"/></g>
+<g class="radar-axes"><line x1="200" y1="50" x2="200" y2="230"/><line x1="110" y1="140" x2="290" y2="140"/></g>
+<polygon class="radar-shape" points="{{ score.radar_points }}"/>
+<g class="radar-labels" font-size="14"><text x="200" y="22" text-anchor="middle">💰 コスパ<tspan x="200" dy="1.25em">{{ "%.1f"|format(score.cost_performance) }}/5.0</tspan></text><text x="298" y="136" text-anchor="start">🛡️ 安全性<tspan x="298" dy="1.25em">{{ "%.1f"|format(score.safety) }}/5.0</tspan></text><text x="200" y="246" text-anchor="middle">🕰️ 長く遊べる<tspan x="200" dy="1.25em">{{ "%.1f"|format(score.longevity) }}/5.0</tspan></text><text x="102" y="136" text-anchor="end">📚 知育効果<tspan x="102" dy="1.25em">{{ "%.1f"|format(score.education) }}/5.0</tspan></text></g>
+</svg>
+</div>
+</div>
+{% endif %}
 
 <details class="score-breakdown-doc"><summary>4 軸の内訳と加減点根拠を見る</summary><div>
 <p>冒頭で示した知育スコア（おもちゃロボの知育評価スコア）の内訳を、まず 4 軸のスコアでおさらいしてから、寄与の大きい順に <strong>加減点根拠</strong> を並べました。</p>
@@ -265,12 +300,19 @@
 {% for c in competitive_analysis %}{% set score100 = c.internal_ivs_score_100 %}{% set tier = "score-gold" if score100 and score100 >= 90 else ("score-silver" if score100 and score100 >= 75 else "score-bronze") %}<div class="competitor-card{% if c.recommended_by_score %} competitor-card--similar{% endif %}">{% if c.asin and (c.image or c.internal_url) %}<div class="competitor-card-image"><img src="{{ c.image or ('https://images-na.ssl-images-amazon.com/images/P/' ~ c.asin ~ '.09.LZZZZZZZ.jpg') }}" alt="{{ c.name }}" loading="lazy" onload="if(this.naturalWidth<=1)this.style.display='none'" onerror="this.style.display='none'">{% if score100 %}<span class="competitor-card-score {{ tier }}" title="本サイトの知育スコア (100点満点)">🏆 <strong>{{ score100 }}</strong><span class="competitor-card-score-suffix">点</span></span>{% endif %}</div>{% endif %}{% if c.recommended_by_score %}<div class="competitor-card-similar-label">💡 知育スコアが近い既存記事</div>{% endif %}<h3>{{ c.name }}</h3>{% if c.price_comparison %}<div class="competitor-price-tag">💴 {{ c.price_comparison }}</div>{% endif %}{% if c.feature_comparison %}<ul class="competitor-features">{% for fc in c.feature_comparison %}<li>{{ fc }}</li>{% endfor %}</ul>{% endif %}{% if c.differentiators %}<details><summary>選び方のポイント</summary><ul>{% for d in c.differentiators %}<li>{{ d }}</li>{% endfor %}</ul></details>{% endif %}{% if c.internal_url %}<div class="competitor-cta-wrap"><a href="{{ c.internal_url }}" class="competitor-cta competitor-cta--internal">📝 詳しいレビューを読む →</a></div>{% endif %}{% if c.asin and (c.image or c.internal_url) %}<div class="competitor-cta-wrap competitor-cta-wrap--amazon"><a href="{{ c.url or ('https://www.amazon.co.jp/dp/' ~ c.asin ~ '/?tag=' ~ amazon_partner_tag) }}" target="_blank" rel="noopener nofollow sponsored" data-cta-slot="competitor" class="competitor-cta competitor-cta--amazon">Amazonで見る →</a></div>{% endif %}</div>
 {% endfor %}</div></div>
 </section>
+
+{# navi-brain#165 T3: 中盤の購入ボタンは「似た商品と比べて決める」場所だけに置く。
+   🆚 があればその後、無ければ 🧭 選び方の後 (下)。スマホは追従バーで補う。 -#}
+{{ buy_box('buy-mid-compare') }}
 {% endif %}
 
 {% if narrative.how_to_choose %}
 ## <small>{{ product.name }}の</small>🧭 選び方：似た商品とどう選び分ける？
 
 {{ narrative_section(narrative.how_to_choose) }}
+{% if not competitive_analysis %}
+{{ buy_box('buy-mid-choose') }}
+{% endif %}
 {% endif %}
 
 {% if same_price_band and same_price_band.cards %}
@@ -484,6 +526,15 @@
 {{ narrative_section(narrative.closing) }}
 {% endif %}
 
+{# navi-brain#165 T3: 買うと決めた場所 (まとめの直後) に購入ボタンを置く。まとめが無い記事でも出す。 -#}
+{{ buy_box('buy-closing', 'closing') }}
+
+{# navi-brain#165 T4: ひとことは記事末からまとめの直後へ移した (JSON-LD の reviewBody は
+    記事 JSON の editorial_comment から作るので、表示の位置を変えても変わらない)。 -#}
+{% if editorial_comment %}
+<aside class="editorial-comment"><strong>おもちゃロボのひとこと</strong><br>{{ editorial_comment }}</aside>
+{% endif %}
+
 {% raw %}{{< related_carousel >}}{% endraw %}
 
 {% raw %}{{< future_age_carousel >}}{% endraw %}
@@ -501,6 +552,7 @@
 {{ q.answer }}
 
 {% endfor %}
+{{ buy_box('buy-faq', 'faq') }}
 {% endif %}
 
 {% if news %}
@@ -521,10 +573,6 @@
 {% if claims %}
 <details class="claims-details"><summary><strong>検証済みの主要な主張（{{ claims|length }}件）を見る</strong></summary><ul>{% for cl in claims %}<li><strong>{{ cl.claim }}</strong> <small class="claim-meta">（{{ cl.category }} / 確度：{{ cl.confidence }}{% if cl.cross_checked %} / <span class="claim-cross-check">2系統以上で確認済み</span>{% endif %}）</small>{% if cl.notes %}<br><small class="claim-notes">{{ cl.notes }}</small>{% endif %}</li>{% endfor %}</ul></details>
 {% endif %}
-{% endif %}
-
-{% if editorial_comment %}
-<aside class="editorial-comment"><strong>おもちゃロボのひとこと</strong><br>{{ editorial_comment }}</aside>
 {% endif %}
 
 {#- omcha-ops#19 P2: らくらくベビー (ベビーレジストリ) 導線。build_post.py が
