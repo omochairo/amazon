@@ -60,8 +60,8 @@ def audit(src: pathlib.Path) -> dict:
         try:
             view = score_claims.compute_view(article)
         except Exception:  # noqa: BLE001 — 1 記事の失敗で集計を止めない
-            view = None
             totals["score_error"] += 1
+            continue
         if view is None:
             totals["no_score"] += 1
             continue

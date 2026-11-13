@@ -3927,6 +3927,14 @@ def main() -> None:
                 if isinstance(v, str):
                     data[top_key] = _meta_re.sub("", v).strip()
 
+            # #3332 N3 消費側: 逐語一致検証はレンダリングされる最終テキストに対して
+            # 行う必要があるため、narrative クリーンアップの後・template.render の前に呼ぶ。
+            links_injected, links_dropped = _inject_internal_links(
+                data, article_index, site_base_path
+            )
+            internal_links_injected_total += links_injected
+            internal_links_dropped_total += links_dropped
+
             # #1107: enrichment + 価格 backfill 後の data から ScoreResult を 1 回だけ算出し、
             # 本文 (data["score"]) と frontmatter (_frontmatter_meta) で再利用する
             # (本文 / frontmatter 用の calculate_score 呼出を 2 回 → 1 回に削減)。
@@ -3947,21 +3955,14 @@ def main() -> None:
                         fresh_sr = None
 
             # navi-brain#165 T1: 総合が低い記事の closing にある強い推奨の定型句を
-            # 中立の固定文にする (点数と矛盾させない)。内部リンクの挿入は本文の
-            # 逐語一致で行うので、その前に置き換える。安全性の言い切りは数えるだけ。
+            # 中立の固定文にする (点数と矛盾させない)。closing は内部リンクの挿入先
+            # (_inject_internal_links の許可セクション) に無いので、挿入の後でよい。
+            # 安全性の言い切りは自動で書き換えず数えるだけ。
             score_view = score_claims.view_from_result(fresh_sr) if fresh_sr is not None else None
             if score_claims.replace_low_score_closing(data, score_view):
                 score_claim_stats["closing_replaced"] += 1
             if score_claims.find_claims(data, score_view):
                 score_claim_stats["remaining"] += 1
-
-            # #3332 N3 消費側: 逐語一致検証はレンダリングされる最終テキストに対して
-            # 行う必要があるため、narrative クリーンアップの後・template.render の前に呼ぶ。
-            links_injected, links_dropped = _inject_internal_links(
-                data, article_index, site_base_path
-            )
-            internal_links_injected_total += links_injected
-            internal_links_dropped_total += links_dropped
 
             # #1111: テンプレへは data["score"] を直接渡す (旧 product.ivs_detail の
             # in-place mutation = _sync_ivs_for_render は廃止)。

@@ -50,7 +50,7 @@ SAFETY_CLAIM_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("安全性が抜群", re.compile(
         r"安全性(?:が|は|も|の)?(?:抜群|申し分|折り紙付き|お墨付き|優れ|優秀)")),
     ("安全面で優れる", re.compile(r"安全面(?:で|も|は|に)?(?:も)?(?:優れ|申し分|抜群|安心)")),
-    ("安心・安全", re.compile(r"安心[・･]?安全|安全[・･]?安心")),
+    ("安心・安全", re.compile(r"安心(?:[・･]|かつ|で)?安全|安全(?:[・･]|かつ|で)?安心")),
     ("口に入れても安心", re.compile(
         r"(?:口に入れ|舐め|なめ|かじ)ても(?:安心|安全|大丈夫|問題(?:ない|なく|ありません))")),
 )
@@ -69,6 +69,7 @@ RECOMMEND_CLAIM_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
 # (「安全性が高いとは言えない」「口に入れても安全か」「舐めても大丈夫な素材か？」)。
 _NEGATION_AFTER = re.compile(
     r"^.{0,4}(?:とは(?:言|い)え|とは限ら|かどうか|わけでは|ではな|ではありません|とまでは)"
+    r"|^(?:は|も)?(?:ない|なかっ|ありません|できな|できません)"
     r"|^.{0,6}?か(?:[」』？?、。]|どうか|と(?:心配|不安|悩|気))")
 
 # 安全性の語のあとにこれが来たら、商品の主張ではなく読者の選び方の話
@@ -93,6 +94,12 @@ NARRATIVE_SECTIONS = (
     "lead", "why_this_product", "gift_appeal", "daily_use",
     "safety_note", "closing", "how_to_choose",
 )
+
+# 生成前のプロンプト (build_jules_prompt._score_note) で「書かない表現」として示す例。
+SAFETY_CLAIM_EXAMPLES = ("「安全性が高い」「高い安全性」「安全性は抜群」「安全面で優れる」"
+                         "「安心・安全」「口に入れても安心」")
+RECOMMEND_CLAIM_EXAMPLES = ("「自信を持って推せる」「迷わず選べる」「太鼓判」"
+                            "「間違いなくおすすめ」「文句なし」")
 
 _SENTENCE_SPLIT = re.compile(r"(?<=[。！？!?])")
 
@@ -226,15 +233,3 @@ def replace_low_score_closing(article: dict, view: Optional[ScoreView]) -> int:
             out.append(item)
         narrative["closing"] = out
     return total
-
-
-def phrases_to_avoid(view: ScoreView) -> list[str]:
-    """生成前のプロンプトに渡す「この点数では書かない表現」(build_jules_prompt 用)。"""
-    out: list[str] = []
-    if view.safety <= SAFETY_CLAIM_MAX_AXIS:
-        out.append("安全性の言い切り (「安全性が高い」「高い安全性」「安全性は抜群」"
-                   "「安全面で優れる」「安心・安全」「口に入れても安心」など)")
-    if view.total_100 <= LOW_TOTAL_MAX:
-        out.append("強い推奨の定型句 (「自信を持って推せる」「迷わず選べる」「太鼓判」"
-                   "「間違いなくおすすめ」「文句なし」など)")
-    return out

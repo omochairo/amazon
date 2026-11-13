@@ -305,12 +305,12 @@ def _score_note(asin):
     lines.append("")
     lines.append("【点数の帯ごとに本文 (narrative 全体) で書かない表現 (サイトの点数と矛盾するため)】")
     lines.append(f"- 安全性が {score_claims.SAFETY_CLAIM_MAX_AXIS} 以下: "
-                 "安全性の言い切り (「安全性が高い」「高い安全性」「安全性は抜群」「安全面で優れる」"
-                 "「安心・安全」「口に入れても安心」など)。素材・設計の事実 (「角が丸い」「水性塗料」) と"
+                 f"安全性の言い切り ({score_claims.SAFETY_CLAIM_EXAMPLES} など)。"
+                 "素材・設計の事実 (「角が丸い」「水性塗料」) と"
                  "注意点は書いてよいが、安全性を高く評価する言い方にしない")
     lines.append(f"- 総合が {score_claims.LOW_TOTAL_MAX} 点以下: "
-                 "強い推奨の定型句 (「自信を持って推せる」「迷わず選べる」「太鼓判」「間違いなくおすすめ」"
-                 "「文句なし」など)。closing は「どんな家庭に向くか・どんな家庭には向かないか」で締める")
+                 f"強い推奨の定型句 ({score_claims.RECOMMEND_CLAIM_EXAMPLES} など)。"
+                 "closing は「どんな家庭に向くか・どんな家庭には向かないか」で締める")
     if hi_safety <= score_claims.SAFETY_CLAIM_MAX_AXIS:
         lines.append(f"- この商品は安全性が {hi_safety} 以下になる → 安全性の言い切りは書かない")
     elif lo_safety <= score_claims.SAFETY_CLAIM_MAX_AXIS:
