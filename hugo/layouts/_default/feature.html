@@ -51,6 +51,7 @@
         <button type="button"
                 class="cospa-band-tab{{ if $isDefault }} is-active{{ end }}"
                 role="tab"
+                id="cospa-band-tab-{{ $key }}"
                 data-band="{{ $key }}"
                 aria-selected="{{ if $isDefault }}true{{ else }}false{{ end }}"
                 aria-controls="cospa-band-pane-{{ $key }}">
@@ -59,6 +60,17 @@
         </button>
         {{- end }}
       </nav>
+
+      <nav class="cospa-age-filters" aria-label="対象年齢">
+        <span>対象年齢：</span>
+        <button type="button" data-age-filter="all" aria-pressed="true">すべて</button>
+        <button type="button" data-age-filter="0" aria-pressed="false">0歳</button>
+        <button type="button" data-age-filter="1" aria-pressed="false">1歳</button>
+        <button type="button" data-age-filter="2" aria-pressed="false">2歳</button>
+        <button type="button" data-age-filter="3-5" aria-pressed="false">3〜5歳</button>
+        <button type="button" data-age-filter="6" aria-pressed="false">6歳〜</button>
+      </nav>
+      <p class="cospa-age-empty" hidden>この価格帯・年齢に合う商品はありません。</p>
 
       {{- range $bands }}
       {{- $key := .key }}
@@ -86,13 +98,52 @@
       ※ <a href="/about-score/">知育スコア</a>と実売価格は集計時点のものです。各価格帯の中で知育スコアの高い順に並べています。価格・在庫はリンク先で必ずご確認ください。
     </p>
 
+    {{- $defaultItems := slice -}}
+    {{- range $bands -}}{{- if .default -}}{{- range .items -}}{{- $defaultItems = $defaultItems | append (dict "name" .name "url" .url_internal) -}}{{- end -}}{{- end -}}{{- end -}}
+    {{- partial "itemlist_jsonld.html" (dict "name" .Title "items" $defaultItems) }}
+
     <script>
       (function () {
         var root = document.querySelector('.cospa-bands');
         if (!root) return;
         var tabs = root.querySelectorAll('.cospa-band-tab');
         var panes = root.querySelectorAll('.cospa-band-pane');
-        function activate(key) {
+        var ageButtons = root.querySelectorAll('[data-age-filter]');
+        var empty = root.querySelector('.cospa-age-empty');
+        var defaultBand = root.querySelector('.cospa-band-tab[data-band]');
+        var defaultBandKey = (root.querySelector('.cospa-band-tab.is-active') || defaultBand).dataset.band;
+        var params = new URLSearchParams(window.location.search);
+        var validBands = Array.prototype.map.call(tabs, function (t) { return t.dataset.band; });
+        var validAges = ['all', '0', '1', '2', '3-5', '6'];
+        var activeAge = validAges.indexOf(params.get('age')) >= 0 ? (params.get('age') || 'all') : 'all';
+        var initialBand = validBands.indexOf(params.get('band')) >= 0 ? (params.get('band') || defaultBandKey) : defaultBandKey;
+        // 記事ページの「同じ価格帯をもっと見る」は /cospa/#cospa-band-pane-<key> で来る
+        var hashMatch = /^#cospa-band-pane-(.+)$/.exec(window.location.hash || '');
+        if (!params.get('band') && hashMatch && validBands.indexOf(hashMatch[1]) >= 0) initialBand = hashMatch[1];
+        function updateUrl() {
+          var url = new URL(window.location.href);
+          if (activeBand === defaultBandKey) url.searchParams.delete('band'); else url.searchParams.set('band', activeBand);
+          if (activeAge === 'all') url.searchParams.delete('age'); else url.searchParams.set('age', activeAge);
+          var hash = /^#cospa-band-pane-/.test(url.hash) ? '' : url.hash;
+          window.history.replaceState({}, '', url.pathname + url.search + hash);
+        }
+        var activeBand = defaultBandKey;
+        function applyAge() {
+          var pane = root.querySelector('.cospa-band-pane[data-band="' + activeBand + '"]');
+          var visible = 0;
+          pane.querySelectorAll('.feature-item').forEach(function (card) {
+            var raw = card.getAttribute('data-age');
+            var age = raw === null ? null : parseInt(raw, 10);
+            var match = activeAge === 'all' || (age !== null && (activeAge === '0' ? age < 12 : activeAge === '1' ? age >= 12 && age < 24 : activeAge === '2' ? age >= 24 && age < 36 : activeAge === '3-5' ? age >= 36 && age < 72 : age >= 72));
+            card.hidden = !match;
+            card.style.display = match ? '' : 'none';
+            if (match) visible++;
+          });
+          // 「すべて」で 0 件の帯は、帯側の「まだ件数が集まっていません」を出す
+          empty.hidden = visible > 0 || activeAge === 'all';
+        }
+        function activate(key, writeUrl) {
+          activeBand = key;
           tabs.forEach(function (t) {
             var on = t.dataset.band === key;
             t.classList.toggle('is-active', on);
@@ -103,10 +154,19 @@
             p.classList.toggle('is-active', on);
             if (on) { p.removeAttribute('hidden'); } else { p.setAttribute('hidden', ''); }
           });
+          applyAge();
+          if (writeUrl) updateUrl();
         }
         tabs.forEach(function (t) {
-          t.addEventListener('click', function () { activate(t.dataset.band); });
+          t.addEventListener('click', function () { activate(t.dataset.band, true); });
         });
+        ageButtons.forEach(function (b) { b.addEventListener('click', function () {
+          activeAge = b.dataset.ageFilter;
+          ageButtons.forEach(function (button) { button.setAttribute('aria-pressed', button === b ? 'true' : 'false'); });
+          applyAge(); updateUrl();
+        }); });
+        ageButtons.forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.ageFilter === activeAge ? 'true' : 'false'); });
+        activate(initialBand, false);
       })();
     </script>
     {{- end }}
@@ -125,9 +185,12 @@
       {{- partial "feature-item.html" (dict "item" . "type" $type) }}
       {{- end }}
     </ol>
+    {{- /* #166 F13: /deals/ とテーマ・年齢 hub の並びを ItemList で出す */ -}}
+    {{- $ld := slice -}}{{- range $items -}}{{- $ld = $ld | append (dict "name" .name "url" .url_internal) -}}{{- end -}}
+    {{- partial "itemlist_jsonld.html" (dict "name" $.Title "items" $ld) }}
     {{- if eq $type "deals" }}
     <div class="list-filter-empty" data-lf-empty data-list="deals-list" hidden>
-      <p>この条件に合う商品は、いまはありません。<a href="/price/">値下がり中のおもちゃ一覧</a>や<a href="/cospa/">価格帯別のコスパランキング</a>もご覧ください。</p>
+      <p>この条件に合う商品は、いまはありません。<a href="/price/">値下がり中のおもちゃ一覧</a>や<a href="/cospa/">予算別おすすめ</a>もご覧ください。</p>
       <button type="button" class="list-filter-reset" data-lf-reset>条件をクリア</button>
     </div>
     <button type="button" class="list-filter-more" data-lf-more data-list="deals-list" hidden>さらに表示</button>
@@ -154,7 +217,7 @@
 
     {{- if eq $type "deals" }}
     <p class="ranking-disclaimer">
-      ※ 割引率は Amazon が表示する参考価格に対する値引き率で、価格とともに取得時点のスナップショットです。直近で実際に値下がりした商品は <a href="/price/">値下がり中のおもちゃ一覧</a> をご覧ください。リンク先での最新の価格・在庫をご確認ください。
+      ※ 割引率は Amazon または販売事業者が設定した参考価格をもとにしています。直近で実際に値下がりした商品は <a href="/price/">値下がり中のおもちゃ一覧</a>（おもちゃいろが毎日記録する価格で、ふだんより安くなった商品）をご覧ください。リンク先で最新の価格・在庫をご確認ください。
     </p>
     {{- else }}
     {{- /* テーマ別 category hub (#2687): 知育スコア順の編集型ランキング */}}
@@ -165,11 +228,13 @@
     {{- end }}
   {{- end }}
 
+
   {{- /* #2687 Slice C: info hub 同士の相互リンク (cluster 形成)。cospa/deals/
          price には $isInfoHub が false のまま = 出ない。 */ -}}
   {{- if $isInfoHub }}
   {{- partial "hub_siblings.html" (dict "type" $type) }}
   {{- end }}
+  {{- partial "explore_links.html" . }}
 </div>
 
 {{- end }}

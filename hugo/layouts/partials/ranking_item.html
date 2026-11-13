@@ -1,0 +1,87 @@
+{{- /*
+  ranking_item.html — /ranking/ の 1 件分 (navi-brain#166 F3 で ranking.html から切り出し)。
+
+  Expects context = dict
+    item … hugo/data/ranking/weekly.json の items[] の 1 件
+    page … 記事ページ (Page)。記事が無ければ nil
+
+  見出しは楽天の商品名そのままだと平均 105 字で、「【ポイント20倍…】」「＼楽天1位／」の
+  ような店の宣伝文句が入る。ranking_title.html で宣伝文句を除いて短くする。記事がある
+  商品は、記事の商品名・知育スコア・対象年齢を出す (title が「知育スコアつき」と名乗って
+  いるのに 30 件中 0 件だったため)。
+*/ -}}
+{{- $item := .item -}}
+{{- $page := .page -}}
+{{- /* JSON 数値は float64 でアンマーシャルされるため eq の型整合で int 化が必要 */ -}}
+{{- $rank := int ($item.rank | default 0) -}}
+{{- $asin := $item.matched_asin -}}
+{{- $stage := $item.match_stage -}}
+{{- /* Issue #600 follow-up: matched_asin があれば Amazon 外部 CTA は記事不要で出す。
+       内部 /products/<asin>/ リンクは has_article が真のときだけ ($internal) — 記事の
+       無い ASIN へ内部リンクして 404 になるのを防ぐ (#1149 の意図をテンプレ側で担保)。 */ -}}
+{{- $internal := "" -}}
+{{- if and $asin $item.has_article }}{{ $internal = printf "/products/%s/" (lower $asin) }}{{ end -}}
+{{- $title := partial "ranking_title.html" $item.title -}}
+{{- with $page }}{{ with .Params.product_name }}{{ $title = . }}{{ end }}{{ end -}}
+{{- $axes := "" -}}
+{{- $ageStr := "" -}}
+{{- with $page -}}
+  {{- $axes = .Params.ivs_axes -}}
+  {{- if isset .Params "age_min_months" -}}
+    {{- with .Params.age_min_months -}}{{- $ageStr = partial "age_label.html" . -}}{{- end -}}
+    {{- if eq (printf "%v" .Params.age_min_months) "0" -}}{{- $ageStr = partial "age_label.html" 0 -}}{{- end -}}
+  {{- end -}}
+{{- end -}}
+<li class="ranking-item ranking-item--rank-{{ $rank }}{{ if not $asin }} ranking-item--external-only{{ end }}" data-rank="{{ $rank }}"{{ with $stage }} data-match-stage="{{ . }}"{{ end }}>
+  <div class="ranking-badge ranking-badge--rank-{{ $rank }}" aria-label="楽天 第 {{ $rank }} 位">
+    {{- if eq $rank 1 }}<span class="ranking-medal">🥇</span>
+    {{- else if eq $rank 2 }}<span class="ranking-medal">🥈</span>
+    {{- else if eq $rank 3 }}<span class="ranking-medal">🥉</span>
+    {{- else }}<span class="ranking-number">{{ $rank }}</span>
+    {{- end }}
+  </div>
+
+  {{- with $item.image }}
+  <a class="ranking-thumb" href="{{ $item.url }}" rel="sponsored nofollow noopener" target="_blank" aria-hidden="true" tabindex="-1">
+    <img src="{{ . }}" alt="" loading="lazy" decoding="async" width="200" height="200">
+  </a>
+  {{- end }}
+
+  <div class="ranking-body">
+    <h2 class="ranking-title">
+      {{- if $internal -}}
+      <a href="{{ $internal }}">{{ $title }}</a>
+      {{- else -}}
+      <a href="{{ $item.url }}" rel="sponsored nofollow noopener" target="_blank">{{ $title }}</a>
+      {{- end -}}
+    </h2>
+    {{- with $item.shopName }}
+    <p class="ranking-shop">{{ . }}</p>
+    {{- end }}
+    {{- with $ageStr }}
+    <p class="ranking-age">対象年齢 {{ . }}</p>
+    {{- end }}
+    {{- with $item.price }}
+    <p class="ranking-price">¥{{ lang.FormatNumberCustom 0 . }}</p>
+    {{- end }}
+    {{- with $item.reviewCount }}
+      {{- if gt . 0 }}
+    <p class="ranking-reviews">★ レビュー {{ . }} 件</p>
+      {{- end }}
+    {{- end }}
+    {{- /* #5225: matched_asin がある = 自社で価格観測している商品なので Amazon 価格の
+           推移を出せる。知育スコアは記事がある商品だけ (#166 F3)。 */ -}}
+    {{- if $asin }}{{ partial "card_metrics.html" (dict "axes" $axes "asin" $asin) }}{{ end }}
+    <div class="ranking-cta">
+      {{- if $internal }}
+      <a class="ranking-cta-internal" href="{{ $internal }}">💡 徹底解説レビューを見る</a>
+      {{- end }}
+      <a class="ranking-cta-external ranking-cta-rakuten" href="{{ $item.url }}" rel="sponsored nofollow noopener" target="_blank">🔴 楽天市場で見る</a>
+      {{- /* Issue #600 Phase C: matched_asin がある = 自社で扱っている商品なので
+             Amazon CTA を楽天 CTA の隣に並列表示し、読者の EC 選択肢を増やす。 */ -}}
+      {{- if $asin }}
+      <a data-cta-slot="ranking" class="ranking-cta-external ranking-cta-amazon" href="https://www.amazon.co.jp/dp/{{ upper $asin }}/?tag={{ site.Params.amazonPartnerTag }}" rel="sponsored nofollow noopener" target="_blank">🟠 Amazonで見る</a>
+      {{- end }}
+    </div>
+  </div>
+</li>
