@@ -2,6 +2,14 @@
   Related articles carousel partial (Issue #725 / #586 part).
   Selects up to 6 related posts using a multi-axis relevance score and
   surfaces "why related?" diff badges (price / age / shared tag) on each card.
+
+  navi-brain#165 T2: 加点の前に、build の関連のおすすめ (scripts/build_post.py の
+  _rel_age_compatible / _rel_type_stage) と同じ条件で候補を絞る。変えるときは両方。
+  - 年齢: 双方の age_min_months があり、差が 12 か月以内 (自記事が 72 か月以上なら 24)。
+    大人向け (216 以上) は大人向け同士だけ。自記事の年齢が不明なら帯を出さない
+  - 種類 (front matter の toy_types): 双方の種類が分かっていて共通が無い候補は出さない。
+    共通の種類がある候補 (1 段目) を、種類不明の候補 (2 段目) より先に並べる
+  - 2 件に満たなければ帯を出さない
 */ -}}
 {{- $pages := where site.RegularPages "Section" "posts" -}}
 {{- $pages = where $pages "Permalink" "!=" .Permalink -}}
@@ -14,6 +22,10 @@
 {{- /* #9186 対象年齢が不明な記事は age_min_months を持たない。0 は「0ヶ月〜」の意味だけなので、
        年齢の有無は gt 0 ではなく isset で見る */ -}}
 {{- $selfKnown := isset .Params "age_min_months" -}}
+{{- $selfTypes := .Params.toy_types | default slice -}}
+{{- $selfAdult := ge $selfAge 216 -}}
+{{- $ageTol := 12 -}}
+{{- if ge $selfAge 72 -}}{{- $ageTol = 24 -}}{{- end -}}
 {{- $selfPrice := 0 -}}
 {{- range slice (.Params.price_amazon | default 0) (.Params.price_rakuten | default 0) (.Params.price_yahoo | default 0) -}}
   {{- $p := int . -}}
@@ -33,8 +45,30 @@
 {{- end -}}
 
 {{- /* --- score each candidate --- */ -}}
+{{- /* 年齢の窓で先に where で絞る (全記事を template のループで回すと重い)。
+       age_min_months が無い記事は where の比較で落ちる */ -}}
+{{- $cands := slice -}}
+{{- if $selfKnown -}}
+  {{- $cands = where $pages "Params.age_min_months" "ge" (sub $selfAge $ageTol) -}}
+  {{- $cands = where $cands "Params.age_min_months" "le" (add $selfAge $ageTol) -}}
+{{- end -}}
 {{- $scored := slice -}}
-{{- range $pages -}}
+{{- range $cands -}}
+  {{- /* navi-brain#165 T2: 年齢・種類の条件 (加点の前に外す) */ -}}
+  {{- $ok := false -}}
+  {{- $stage := 2 -}}
+  {{- if and $selfKnown (isset .Params "age_min_months") -}}
+    {{- $cAge := int .Params.age_min_months -}}
+    {{- if and (eq $selfAdult (ge $cAge 216)) (le (math.Abs (sub $cAge $selfAge)) $ageTol) -}}
+      {{- $cTypes := .Params.toy_types | default slice -}}
+      {{- if and (gt (len $selfTypes) 0) (gt (len $cTypes) 0) -}}
+        {{- if gt (len (intersect $selfTypes $cTypes)) 0 -}}{{- $ok = true -}}{{- $stage = 1 -}}{{- end -}}
+      {{- else -}}
+        {{- $ok = true -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if $ok -}}
   {{- $s := 0 -}}
   {{- if and $selfBrand .Params.brand (eq .Params.brand $selfBrand) -}}{{- $s = add $s 100 -}}{{- end -}}
   {{- if and $selfTier .Params.brand_tier (eq .Params.brand_tier $selfTier) -}}{{- $s = add $s 15 -}}{{- end -}}
@@ -77,11 +111,15 @@
   {{- end -}}
 
   {{- if gt $s 0 -}}
-    {{- $scored = $scored | append (dict "page" . "score" $s "priceDiffPct" $priceDiffPct "candPrice" $cp "candAge" $ca "common" $common "semScore" $semScore) -}}
+    {{- /* 1 段目 (共通の種類あり) を 2 段目 (種類不明) より必ず先に並べる */ -}}
+    {{- $rank := $s -}}
+    {{- if eq $stage 1 -}}{{- $rank = add $s 100000 -}}{{- end -}}
+    {{- $scored = $scored | append (dict "page" . "score" $s "rank" $rank "priceDiffPct" $priceDiffPct "candPrice" $cp "candAge" $ca "common" $common "semScore" $semScore) -}}
+  {{- end -}}
   {{- end -}}
 {{- end -}}
 
-{{- $sorted := sort $scored "score" "desc" -}}
+{{- $sorted := sort $scored "rank" "desc" -}}
 {{- /* 同 brand 偏重を回避: 同 brand は最大 4 件、残り 2 枠は別 brand に優先割当 */ -}}
 {{- $top := slice -}}
 {{- $sameBrandCount := 0 -}}
@@ -235,7 +273,7 @@
   {{- else -}}{{- $ageText = printf "%dヶ月" $selfAge -}}{{- end -}}
 {{- end -}}
 
-{{- if gt (len $top) 0 }}
+{{- if ge (len $top) 2 }}
 <section class="related-carousel-section">
   <header class="home-section-header">
     <h2>📚 関連する比較レビュー</h2>
@@ -304,10 +342,22 @@
                 {{- end -}}
                 <span class="carousel-card-badge cc-badge-age">👶 {{ $ageLabel }}</span>
               {{- end -}}
-              {{- /* shared tag badge (brand 名は除外、先頭 1 件) */ -}}
+              {{- /* shared tag badge (先頭 1 件)。.Params.tags はローマ字の slug (#2817) なので、
+                     タグのページ (/tags/<slug>/) の .Title で日本語の表示名を引く (hub_for_tag.html
+                     と同じ)。ブランド・価値の低いタグ・どの記事にも付く一般的なタグ・年齢の
+                     タグ (年齢は隣のバッジに出る) は出さない。残らなければバッジを出さない
+                     (navi-brain#165 T5) */ -}}
               {{- $sharedTag := "" -}}
+              {{- $genericTags := slice "知育玩具" "プレゼント" "おもちゃ" "出産祝い" "誕生日プレゼント" "クリスマスプレゼント" "ギフト" "男の子" "女の子" "価格比較" "コレクション" -}}
               {{- range .common -}}
-                {{- if and (eq $sharedTag "") (ne . $selfBrand) -}}{{- $sharedTag = . -}}{{- end -}}
+                {{- if eq $sharedTag "" -}}
+                  {{- with site.GetPage (printf "/tags/%s" (lower .)) -}}
+                    {{- $tn := .Title -}}
+                    {{- $skip := or (eq $tn $selfBrand) (in $genericTags $tn) (findRE "[0-9０-９]+\\s*(歳|才|ヶ月|か月|カ月)" $tn 1) -}}
+                    {{- if not $skip -}}{{- $skip = or (ne (partial "is_brand_tag.html" $tn | string) "") (ne (partial "is_low_value_tag.html" $tn | string) "") -}}{{- end -}}
+                    {{- if not $skip -}}{{- $sharedTag = $tn -}}{{- end -}}
+                  {{- end -}}
+                {{- end -}}
               {{- end -}}
               {{- if ne $sharedTag "" -}}
                 <span class="carousel-card-badge cc-badge-tag">🏷️ {{ $sharedTag }}</span>

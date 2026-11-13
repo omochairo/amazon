@@ -39,10 +39,13 @@ import market_prices
 import official_howto
 import official_howto_format
 import price_overlay
-from product_image import resolve_product_image
+from product_image import amazon_image, load_amazon_item, resolve_product_image
 import seo_title
 import stock_status
+import toy_type
 import where_to_buy_format
+from brand_normalizer import _fold as _fold_brand_name
+from brand_normalizer import name_variants as brand_name_variants
 from brand_normalizer import normalize as normalize_brand
 from age_semantics import (
     ADULT_AGE_MONTHS,
@@ -465,6 +468,62 @@ def _parse_age_min_months_or_none(raw: Any) -> int | None:
         return int(m_num.group(1)) * 12
 
     return None
+
+
+_NAME_FULL_AGE_RE = re.compile(r"(\d+)\s*(歳|才|ヶ月|ヶ月以上|歳以上)")
+
+
+def _raw_age_text(data: dict[str, Any]) -> Any:
+    """記事 JSON から対象年齢の文字列を拾う (front matter の age_min_months と同じ順番)。
+
+    product の target_age → age_range → age → age_band、無ければ persona_fit /
+    technical_specs の age_range、technical_specs.other の年齢らしい行、
+    最後に name_full の「N歳」。
+    """
+    product = data.get("product") if isinstance(data.get("product"), dict) else {}
+    raw_age = (
+        product.get("target_age")
+        or product.get("age_range")
+        or product.get("age")
+        or product.get("age_band")
+        or ""
+    )
+    if raw_age:
+        return raw_age
+    persona = data.get("persona_fit") if isinstance(data.get("persona_fit"), dict) else {}
+    specs = data.get("technical_specs") if isinstance(data.get("technical_specs"), dict) else {}
+    raw_age = persona.get("age_range") or specs.get("age_range") or ""
+    if raw_age:
+        return raw_age
+    for spec in specs.get("other") or []:
+        if isinstance(spec, str) and ("年齢" in spec or "才" in spec):
+            return spec
+    name_full = product.get("name_full")
+    if name_full:
+        match = _NAME_FULL_AGE_RE.search(str(name_full))
+        if match:
+            return match.group(0)
+    return ""
+
+
+def _resolve_age_min_months(data: dict[str, Any]) -> int | None:
+    """記事の対象年齢の下限 (月齢)。不明なら None。
+
+    front matter の ``age_min_months`` (Hugo の年齢フィルタ・関連の帯) と、関連の
+    おすすめを選ぶ索引 (_build_article_index) の両方がこれを使う。読み方を 1 か所に
+    して、Python で選んだカードと Hugo で見える年齢がずれないようにする
+    (navi-brain#165 T2)。
+
+    - 節句・正月の飾り物は None (「0歳〜」は初節句の赤ちゃんを指し、遊ぶ年齢ではない。#9186)
+    - data/age_overrides.json の確認済みの年齢 (出典付き) は、記事の表記より優先する
+    """
+    age = _parse_age_min_months_or_none(_raw_age_text(data))
+    if is_seasonal_decoration(*seasonal_names(data)):
+        age = None
+    override = override_age_months(data)
+    if override is not None:
+        age = override
+    return age
 
 
 # Issue #1301 B4 Stage 2: Article 単位 JSON-LD の reviewedBy / creator 用定数。
@@ -1013,9 +1072,10 @@ def _build_article_index(
         ivs_score_100: int | None = None
         ivs_score: float | None = None
         raw_brand = product.get("brand")
-        if raw_brand:
+        nb = normalize_brand(raw_brand) if raw_brand else None
+        if nb is not None:
             try:
-                sr = calculate_score(meta, normalize_brand(raw_brand), asin=asin)
+                sr = calculate_score(meta, nb, asin=asin)
                 ivs_score_100 = int(sr.total_100)
                 ivs_score = float(sr.ivs_score)
             except Exception:
@@ -1031,6 +1091,10 @@ def _build_article_index(
             if isinstance(cached_score, (int, float)) and cached_score > 0:
                 ivs_score = float(cached_score)
 
+        # amazon.json は画像と種類 (カテゴリ名) の両方に使うので 1 回だけ読む
+        amazon_item = load_amazon_item(per_asin_root, asin)
+        tags = [t for t in (meta.get("tags") or []) if isinstance(t, str) and t]
+        brand = nb.canonical if nb is not None and not nb.exclude_from_taxonomy else None
         index[asin] = {
             "slug": slug,
             "ivs_score_100": ivs_score_100,
@@ -1038,8 +1102,14 @@ def _build_article_index(
             "name": product.get("name") or "",
             # #2812: 関連商品・比較カードも記事ページと同じ amazon.json の画像に揃える
             # (記事ページ自身は _enforce_amazon_image で上書き済みだが、この索引は生 JSON)。
-            "image": resolve_product_image(asin, product.get("image"), per_asin_root),
+            "image": amazon_image(amazon_item)
+            or (product.get("image") if isinstance(product.get("image"), str) else ""),
             "amazon_price": amazon_price,
+            # navi-brain#165 T2: 関連のおすすめの共通条件 (年齢・種類・ブランド) に使う
+            "age_min_months": _resolve_age_min_months(meta),
+            "toy_types": toy_type.classify_article(meta, amazon_item),
+            "brand": brand,
+            "series": _series_tags(brand, tags),
         }
     return index
 
@@ -1320,7 +1390,97 @@ def _inject_internal_links(
     return (injected, dropped)
 
 
+# --- navi-brain#165 T2: 関連のおすすめの共通条件 ---------------------------------
+# 🆚 似た商品 / 💴 同じ価格帯 / 🌱 半年〜1年後 は、ここで決めた条件を満たす記事だけを
+# 候補にする (📚 関連は Hugo の related_carousel.html が同じ条件を持つ。変えるときは両方)。
+#
+# - 年齢: 双方の対象年齢の下限が分かっていて、差が 12 か月以内 (自記事が 6 歳以上なら
+#   24 か月以内)。大人向け (18 歳以上) は大人向け同士だけ。不明の記事は出さない
+# - 種類 (scripts/toy_type.py): 1 段目 = 共通の種類がある候補。足りなければ 2 段目 =
+#   どちらかの種類が不明の候補まで広げる。種類が分かっていて違う候補はどの段でも出さない
+# - 2 件に満たない帯は出さない (🆚 は Amazon の競合カードが別にあるので例外)
+_REL_AGE_TOLERANCE = 12
+_REL_AGE_TOLERANCE_OLDER = 24
+_REL_AGE_OLDER_FROM = 72
+_REL_MIN_CARDS = 2
+
+
+def _series_tags(brand: str | None, tags: list[str]) -> list[str]:
+    """記事のタグのうち、ブランドの傘下シリーズ名 (例: タカラトミーの「トミカ」) を返す。
+
+    data/brand_taxonomy.yaml の aliases に入っているシリーズ名だけを拾う
+    (「TAKARA TOMY」のような同じ名前の別表記 = name_variants は除く)。
+    """
+    if not brand:
+        return []
+    # name_variants は比較用に畳んだ (_fold) 表記の集合なので、タグも畳んでから比べる
+    variants = brand_name_variants(brand) | {_fold_brand_name(brand)}
+    out: list[str] = []
+    for t in tags:
+        if _fold_brand_name(t) in variants or t in out:
+            continue
+        nb = normalize_brand(t)
+        if nb.match_type == "exact" and nb.canonical == brand:
+            out.append(t)
+    return out
+
+
+def _rel_age_compatible(self_age: int | None, cand_age: int | None) -> bool:
+    if self_age is None or cand_age is None:
+        return False
+    if (self_age >= ADULT_AGE_MONTHS) != (cand_age >= ADULT_AGE_MONTHS):
+        return False
+    tol = _REL_AGE_TOLERANCE_OLDER if self_age >= _REL_AGE_OLDER_FROM else _REL_AGE_TOLERANCE
+    return abs(self_age - cand_age) <= tol
+
+
+def _rel_type_stage(self_types: Any, cand_types: Any) -> int | None:
+    """1 = 共通の種類あり / 2 = どちらかが種類不明 / None = 種類が違う (出さない)。"""
+    if self_types and cand_types:
+        return 1 if set(self_types) & set(cand_types) else None
+    return 2
+
+
+def _rel_self_profile(data: dict[str, Any], article_index: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """自記事の年齢・種類・ブランド。種類は索引 (amazon.json のカテゴリ名まで見たもの) を優先する。"""
+    product = data.get("product") if isinstance(data.get("product"), dict) else {}
+    asin = product.get("asin") or ""
+    entry = article_index.get(asin) or {}
+    types = entry.get("toy_types")
+    if types is None:
+        types = toy_type.classify_article(data, None)
+    if "brand" in entry:
+        brand = entry.get("brand")
+        series = entry.get("series") or []
+    else:
+        nb = normalize_brand(product.get("brand")) if product.get("brand") else None
+        brand = nb.canonical if nb is not None and not nb.exclude_from_taxonomy else None
+        series = _series_tags(brand, [t for t in (data.get("tags") or []) if isinstance(t, str)])
+    return {
+        "asin": asin,
+        "age": _resolve_age_min_months(data),
+        "types": list(types or []),
+        "brand": brand,
+        "series": list(series),
+    }
+
+
+def _rel_staged_pick(
+    candidates: list[tuple[int, Any, str, dict[str, Any]]],
+    limit: int,
+) -> list[tuple[int, Any, str, dict[str, Any]]]:
+    """(段, 並びのキー, asin, meta) を 1 段目から並びのキー順に詰め、足りなければ 2 段目で埋める。"""
+    picked: list[tuple[int, Any, str, dict[str, Any]]] = []
+    for stage in (1, 2):
+        for c in sorted((c for c in candidates if c[0] == stage), key=lambda c: (c[1], c[2])):
+            if len(picked) >= limit:
+                return picked
+            picked.append(c)
+    return picked
+
+
 _NEARBY_SCORE_WINDOW = 5
+_NEARBY_SCORE_WINDOW_WIDE = 10
 _NEARBY_MAX_RECOMMENDATIONS = 2
 
 
@@ -1331,25 +1491,29 @@ def _recommend_nearby_competitors(
     amazon_partner_tag: str = "",
     window: int = _NEARBY_SCORE_WINDOW,
     limit: int = _NEARBY_MAX_RECOMMENDATIONS,
+    self_score: int | float | None = None,
+    wide_window: int = _NEARBY_SCORE_WINDOW_WIDE,
 ) -> None:
-    """Append up to ``limit`` competitor cards picked from existing internal
-    articles whose IVS 100-point score is within ``±window`` of the current
-    article (#508). Cards are tagged ``recommended_by_score=True`` so the
-    template can label them as score-similar suggestions.
+    """🆚 に、知育スコアが近い既存記事のカードを最大 ``limit`` 件足す (#508)。
 
-    Skips ASINs already present in ``competitive_analysis`` and the article's
-    own ASIN. Sort key: score-proximity ascending, then ASIN for determinism.
+    自記事の点数は ``self_score`` (main が build 時に計算した ``data["score"]`` と
+    同じ値。記事ページに出ている点と同じ)。古い Jules の ``ivs_detail.total_100`` は
+    見ない (navi-brain#165 T2)。無ければ何も足さない。
+
+    候補は関連のおすすめの共通条件 (年齢・種類) を満たす記事だけ。まず点数差
+    ``±window`` から 1 段目 → 2 段目の順に詰め、足りなければ ``±wide_window`` まで
+    広げる。それでも無ければ足さない (Amazon から取った競合カードはそのまま残る)。
+    同じ段の中は点数差の小さい順、同点は ASIN 順。
     """
     if limit <= 0 or not article_index:
         return
     product = data.get("product") if isinstance(data.get("product"), dict) else None
     if not product:
         return
-    self_asin = product.get("asin") or ""
-    target_score = (product.get("ivs_detail") or {}).get("total_100")
-    if not isinstance(target_score, (int, float)) or target_score <= 0:
+    if not isinstance(self_score, (int, float)) or self_score <= 0:
         return
-    target_score = int(target_score)
+    target_score = int(self_score)
+    profile = _rel_self_profile(data, article_index)
     target_price = 0
     amazon_price = (product.get("prices") or {}).get("amazon") or {}
     if isinstance(amazon_price, dict):
@@ -1362,12 +1526,12 @@ def _recommend_nearby_competitors(
     if not isinstance(ca, list):
         ca = []
         data["competitive_analysis"] = ca
-    taken_asins = {self_asin}
+    taken_asins = {profile["asin"]}
     for c in ca:
         if isinstance(c, dict) and c.get("asin"):
             taken_asins.add(c["asin"])
 
-    candidates: list[tuple[int, str, dict[str, Any]]] = []
+    by_window: dict[int, list[tuple[int, Any, str, dict[str, Any]]]] = {window: [], wide_window: []}
     for asin, meta in article_index.items():
         if asin in taken_asins:
             continue
@@ -1375,13 +1539,20 @@ def _recommend_nearby_competitors(
         if not isinstance(score, (int, float)) or score <= 0:
             continue
         delta = abs(int(score) - target_score)
-        if delta > window:
+        if delta > max(window, wide_window):
             continue
-        candidates.append((delta, asin, meta))
+        if not _rel_age_compatible(profile["age"], meta.get("age_min_months")):
+            continue
+        stage = _rel_type_stage(profile["types"], meta.get("toy_types"))
+        if stage is None:
+            continue
+        by_window[window if delta <= window else wide_window].append((stage, delta, asin, meta))
 
-    candidates.sort(key=lambda t: (t[0], t[1]))
+    picked = _rel_staged_pick(by_window[window], limit)
+    if len(picked) < limit and wide_window > window:
+        picked += _rel_staged_pick(by_window[wide_window], limit - len(picked))
 
-    for delta, asin, meta in candidates[:limit]:
+    for _stage, delta, asin, meta in picked:
         ca.append({
             "asin": asin,
             "name": _shrink_competitor_name(meta.get("name") or ""),
@@ -1424,22 +1595,22 @@ def _recommend_same_price_band(
 ) -> None:
     """Attach ``data["same_price_band"]`` for #586 topic-cluster internal links.
 
-    Picks up to ``limit`` other published articles whose Amazon price falls in
-    the same /cospa/ price band as the current article. Excludes the article's
-    own ASIN and anything already surfaced via ``competitive_analysis`` (incl.
-    score-similar recommendations from #1018) so the section never repeats a
-    card the reader just saw above. Ordering: IVS score desc, then ASIN —
-    same band already controls for price-tier comparability.
+    同じ /cospa/ 価格帯の公開記事から最大 ``limit`` 件。自記事と、🆚 に出したもの
+    (#1018 のスコアが近い記事を含む) は除く。
+
+    navi-brain#165 T2: 関連のおすすめの共通条件 (年齢・種類) を満たす記事だけを候補にし、
+    1 段目 (共通の種類あり) を点数の高い順に詰め、足りなければ 2 段目 (種類不明) で埋める。
+    出す順は選んだカード全体を点数の高い順 (本文の「知育スコアの高い順に」と合わせる)。
+    2 件に満たなければ ``same_price_band`` を付けない (テンプレートは H2 ごと出さない)。
 
     Skips silently if the current article has no Amazon price, no price band
-    match, or no eligible same-band peers.
+    match, or fewer than 2 eligible same-band peers.
     """
     if limit <= 0 or not article_index:
         return
     product = data.get("product") if isinstance(data.get("product"), dict) else None
     if not product:
         return
-    self_asin = product.get("asin") or ""
     amazon_price_obj = (product.get("prices") or {}).get("amazon") or {}
     try:
         target_price = int(amazon_price_obj.get("price") or 0) if isinstance(amazon_price_obj, dict) else 0
@@ -1448,15 +1619,16 @@ def _recommend_same_price_band(
     band = _resolve_price_band(target_price)
     if band is None:
         return
+    profile = _rel_self_profile(data, article_index)
 
-    taken_asins = {self_asin}
+    taken_asins = {profile["asin"]}
     ca = data.get("competitive_analysis")
     if isinstance(ca, list):
         for c in ca:
             if isinstance(c, dict) and c.get("asin"):
                 taken_asins.add(c["asin"])
 
-    candidates: list[tuple[int, str, dict[str, Any]]] = []
+    candidates: list[tuple[int, Any, str, dict[str, Any]]] = []
     for asin, meta in article_index.items():
         if asin in taken_asins:
             continue
@@ -1466,20 +1638,26 @@ def _recommend_same_price_band(
         score = meta.get("ivs_score_100")
         if not isinstance(score, (int, float)) or score <= 0:
             continue
-        candidates.append((int(score), asin, meta))
+        if not _rel_age_compatible(profile["age"], meta.get("age_min_months")):
+            continue
+        stage = _rel_type_stage(profile["types"], meta.get("toy_types"))
+        if stage is None:
+            continue
+        candidates.append((stage, -int(score), asin, meta))
 
-    if not candidates:
+    picked = _rel_staged_pick(candidates, limit)
+    if len(picked) < min(_REL_MIN_CARDS, limit):
         return
-    candidates.sort(key=lambda t: (-t[0], t[1]))
+    picked.sort(key=lambda c: (c[1], c[2]))
 
     cards: list[dict[str, Any]] = []
-    for score, asin, meta in candidates[:limit]:
+    for _stage, neg_score, asin, meta in picked:
         cards.append({
             "asin": asin,
             "name": _shrink_competitor_name(meta.get("name") or ""),
             "image": meta.get("image") or "",
             "internal_url": f"{site_base_path}/products/{asin.lower()}/",
-            "internal_ivs_score_100": int(score),
+            "internal_ivs_score_100": -neg_score,
             "price": meta.get("amazon_price") or 0,
         })
 
@@ -1493,6 +1671,84 @@ def _recommend_same_price_band(
         "band_url": f"{site_base_path}/cospa/#cospa-band-pane-{band['key']}",
         "cards": cards,
     }
+
+
+# 🌱 半年〜1年後にこちら (epic #1365 Layer 2-⑤)。navi-brain#165 T2 で Hugo の
+# future_age_carousel.html (全記事×全記事のループ) から build に移した。
+_FUTURE_AGE_GAP_MIN = 4
+_FUTURE_AGE_GAP_MAX = 24
+_FUTURE_AGE_GAP_NEAR_MAX = 14
+_FUTURE_AGE_LIMIT = 6
+_FUTURE_AGE_SAME_BRAND_MAX = 3
+
+
+def _recommend_future_age(
+    data: dict[str, Any],
+    article_index: dict[str, dict[str, Any]],
+    limit: int = _FUTURE_AGE_LIMIT,
+) -> None:
+    """``data["future_age_cards"]`` に「半年〜1年後」のカードを入れる (front matter の future_age)。
+
+    候補: 自記事と候補の対象年齢の下限が分かっていて、どちらも大人向け (18 歳以上) でなく、
+    候補の方が 4〜24 か月上。種類は共通の種類が必須 (足りなければ種類不明まで。
+    違う種類は出さない)。
+    並び: ① 同じブランド (傘下シリーズのタグも同じならさらに先) → ② 年齢差 4〜14 か月 →
+    ③ 知育スコアの高い順。同じブランドは ``_FUTURE_AGE_SAME_BRAND_MAX`` 件まで。
+    2 件に満たなければ空 (Hugo は帯を H2 ごと出さない)。
+    """
+    data["future_age_cards"] = []
+    if limit <= 0 or not article_index:
+        return
+    profile = _rel_self_profile(data, article_index)
+    self_age = profile["age"]
+    if self_age is None or self_age >= ADULT_AGE_MONTHS:
+        return
+    self_series = set(profile["series"])
+
+    candidates: list[tuple[int, Any, str, dict[str, Any]]] = []
+    for asin, meta in article_index.items():
+        if asin == profile["asin"]:
+            continue
+        cand_age = meta.get("age_min_months")
+        if cand_age is None or cand_age >= ADULT_AGE_MONTHS:
+            continue
+        gap = cand_age - self_age
+        if not (_FUTURE_AGE_GAP_MIN <= gap <= _FUTURE_AGE_GAP_MAX):
+            continue
+        stage = _rel_type_stage(profile["types"], meta.get("toy_types"))
+        if stage is None:
+            continue
+        brand_rank = 0
+        if profile["brand"] and meta.get("brand") == profile["brand"]:
+            brand_rank = 2 if self_series & set(meta.get("series") or []) else 1
+        near = 0 if gap <= _FUTURE_AGE_GAP_NEAR_MAX else 1
+        score = int(meta.get("ivs_score_100") or 0)
+        candidates.append((stage, (-brand_rank, near, -score), asin, meta))
+
+    picked: list[tuple[str, dict[str, Any]]] = []
+    same_brand = 0
+    for stage in (1, 2):
+        for _stage, key, asin, meta in sorted(
+            (c for c in candidates if c[0] == stage), key=lambda c: (c[1], c[2])
+        ):
+            if len(picked) >= limit:
+                break
+            if key[0] < 0:  # 同じブランド
+                if same_brand >= _FUTURE_AGE_SAME_BRAND_MAX:
+                    continue
+                same_brand += 1
+            picked.append((asin, meta))
+    if len(picked) < _REL_MIN_CARDS:
+        return
+    data["future_age_cards"] = [
+        {
+            "path": f"/posts/{meta['slug']}",
+            "asin": asin,
+            "age": int(meta["age_min_months"]),
+            "gap": int(meta["age_min_months"]) - self_age,
+        }
+        for asin, meta in picked
+    ]
 
 
 def _override_competitive_analysis(
@@ -3466,46 +3722,19 @@ def _frontmatter_meta(
     if product.get("age_range"):
         meta["age_range"] = product["age_range"]
     
-    # 年齢フィルター用の最小月数メタデータを追加
-    raw_age = ""
-    if isinstance(product, dict):
-        raw_age = (
-            product.get("target_age")
-            or product.get("age_range")
-            or product.get("age")
-            or product.get("age_band")
-            or ""
-        )
-    if not raw_age and isinstance(data, dict):
-        raw_age = (
-            data.get("persona_fit", {}).get("age_range")
-            or data.get("technical_specs", {}).get("age_range")
-            or ""
-        )
-        if not raw_age and isinstance(data.get("technical_specs"), dict):
-            other_specs = data["technical_specs"].get("other", [])
-            for spec in other_specs:
-                if isinstance(spec, str) and ("年齢" in spec or "才" in spec):
-                    raw_age = spec
-                    break
-        if not raw_age and product and product.get("name_full"):
-            name_full = product["name_full"]
-            match = re.search(r"(\d+)\s*(歳|才|ヶ月|ヶ月以上|歳以上)", name_full)
-            if match:
-                raw_age = match.group(0)
-                
+    # 年齢フィルター用の最小月数メタデータを追加。読み方は _resolve_age_min_months
+    # (関連のおすすめを選ぶ索引 _build_article_index と共用。navi-brain#165 T2)。
     # 不明なら age_min_months を書かない。0 を書くと「0ヶ月から遊べる」と
     # 区別できず、年齢で絞る機能 (診断・年齢フィルタ) に乳児向けとして混ざる (#9186)。
-    # 節句・正月の飾り物も書かない。「0歳〜」は初節句の赤ちゃんを指し、遊ぶ年齢ではない。
-    age_min_months = _parse_age_min_months_or_none(raw_age)
-    if is_seasonal_decoration(*seasonal_names(data)):
-        age_min_months = None
-    # data/age_overrides.json の確認済みの年齢 (出典付き) は、記事の表記より優先する
-    override = override_age_months(data)
-    if override is not None:
-        age_min_months = override
+    age_min_months = _resolve_age_min_months(data)
     if age_min_months is not None:
         meta["age_min_months"] = age_min_months
+    # navi-brain#165 T2: 📚 関連 (related_carousel.html) が種類で候補を絞るための種類。
+    # 🌱 半年〜1年後は build 側で選んだカードの一覧を渡し、Hugo は表示だけにする。
+    if data.get("toy_types"):
+        meta["toy_types"] = list(data["toy_types"])
+    if data.get("future_age_cards"):
+        meta["future_age"] = list(data["future_age_cards"])
 
     # #1124: Jules 側の ivs_score / ivs_detail 生成は廃止。スコアは
     # brand_tier(25) + safety(10) + age(10) + edu(15) + media(15) + market(10) + price(15)
@@ -3865,8 +4094,9 @@ def main() -> None:
             _attach_omcha_related(data, per_asin_root)
             _attach_source_highlights(data, per_asin_root)
             _attach_internal_links(data, article_index, site_base_path)
-            _recommend_nearby_competitors(data, article_index, site_base_path, amazon_partner_tag)
-            _recommend_same_price_band(data, article_index, site_base_path)
+            # navi-brain#165 T2: 🆚 似た商品 / 💴 同じ価格帯 は自記事の点数 (fresh_sr) が
+            # 要るので、下で fresh_sr を出した後に選ぶ (_fill_jsonld / 価格の補完は
+            # competitive_analysis・same_price_band を読まない)。
             _fill_jsonld(data)
             # 価格を触る処理 (badges / market / discontinued / history) が
             # 出揃った後に、テンプレートが読む price キーの欠損を埋める。
@@ -3962,6 +4192,17 @@ def main() -> None:
                             f"https://www.amazon.co.jp/dp/{asin_for_review}"
                             f"/?tag={amazon_partner_tag}#customerReviews"
                         )
+            # navi-brain#165 T2: 関連のおすすめ。自記事の点数は記事ページに出す点
+            # (data["score"] と同じ fresh_sr) に揃える。年齢・種類の条件は共通。
+            _recommend_nearby_competitors(
+                data, article_index, site_base_path, amazon_partner_tag,
+                self_score=fresh_sr.total_100 if fresh_sr is not None else None,
+            )
+            _recommend_same_price_band(data, article_index, site_base_path)
+            _recommend_future_age(data, article_index)
+            # front matter の toy_types (📚 関連の種類の条件)。索引と同じ判定
+            data["toy_types"] = _rel_self_profile(data, article_index)["types"]
+
             # 年齢別発達段階目安データのマッピング
             target_age_raw = ""
             if isinstance(product_obj, dict):

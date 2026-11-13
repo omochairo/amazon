@@ -1,43 +1,24 @@
 {{- /*
   「半年〜1年後にこちら」成長先取りレコメンド (epic #1365 Layer 2-⑤)。
-  現商品の age_min_months を起点に、対象年齢が「これから上がる」方向の商品だけを
-  前向きに抽出し、お子さまの成長に合わせた次のステップとして提示する。
+  現商品より対象年齢が少し上の商品を、お子さまの成長に合わせた次のステップとして提示する。
 
-  related_carousel.html は年齢の近さを双方向 (±) でスコアするのに対し、本セクションは
-  forward-only (candAge > selfAge) に限定し「次に買うならこれ」という別の動機を作る。
+  navi-brain#165 T2: カードの選定は build (scripts/build_post.py の _recommend_future_age)
+  に移した。front matter の future_age に、選んだ記事のパス・対象年齢・年齢差が
+  並び順どおりに入っている。この partial は表示だけ (全記事×全記事のループは持たない)。
+  選定の条件: 年齢差 4〜24 か月・種類が同じ (足りなければ種類不明まで)・同じブランドは
+  3 件まで。2 件に満たない記事は build が future_age を書かないので、帯ごと出ない。
 
   設計判断 (session 122 トラップ): カタログから決定的に導ける静的レコメンドのため、
   JS injection ではなく server-render。02-publish の全記事再ビルドで既存記事にも届き、
   no-JS / SEO でも表示される。carousel の矢印・スワイプ・autoplay は
   carousel_swipe.js が .related-carousel-section に束ねるため同クラスで再利用する。
 */ -}}
-{{- $selfAge := int (.Params.age_min_months | default 0) -}}
-{{- /* #9186 対象年齢が不明な記事は age_min_months を持たない。0 か月の記事にも出すため isset で見る
-       (候補側の不明は 0 に落ちるが、gt $ca $selfAge で必ず外れる) */ -}}
-{{- /* 大人向け (216 = 18歳以上) の記事・候補は「成長の次のステップ」にしない */ -}}
-{{- if and (isset .Params "age_min_months") (lt $selfAge 216) -}}
-{{- $pages := where site.RegularPages "Section" "posts" -}}
-{{- $pages = where $pages "Permalink" "!=" .Permalink -}}
-
-{{- /* --- forward-only 候補をスコア --- */ -}}
-{{- $scored := slice -}}
-{{- range $pages -}}
-  {{- $ca := int (.Params.age_min_months | default 0) -}}
-  {{- if and (gt $ca $selfAge) (lt $ca 216) -}}
-    {{- $gap := sub $ca $selfAge -}}
-    {{- /* band: 半年〜1年上 (+4..+14ヶ月) を最優先、次いで +14..+24、僅差上、遠方 */ -}}
-    {{- $band := 1 -}}
-    {{- if and (ge $gap 4) (le $gap 14) -}}{{- $band = 4 -}}
-    {{- else if and (gt $gap 14) (le $gap 24) -}}{{- $band = 3 -}}
-    {{- else if lt $gap 4 -}}{{- $band = 2 -}}{{- end -}}
-    {{- $score100 := int (.Params.ivs_score_100 | default 0) -}}
-    {{- $composite := add (mul $band 1000) $score100 -}}
-    {{- $scored = $scored | append (dict "page" . "composite" $composite "candAge" $ca "gap" $gap) -}}
+{{- $top := slice -}}
+{{- range $c := (.Params.future_age | default slice) -}}
+  {{- with site.GetPage $c.path -}}
+    {{- $top = $top | append (dict "page" . "candAge" (int $c.age) "gap" (int $c.gap)) -}}
   {{- end -}}
 {{- end -}}
-
-{{- $sorted := sort $scored "composite" "desc" -}}
-{{- $top := first 6 $sorted -}}
 
 {{- if ge (len $top) 2 }}
 <section class="related-carousel-section future-age-section" aria-label="成長したらこちら">
@@ -99,4 +80,3 @@
   </div>
 </section>
 {{- end }}
-{{- end -}}
