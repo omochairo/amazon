@@ -4,8 +4,8 @@
 //
 // 動作:
 //   1. mount: #mobile-sticky-cta が存在し viewport ≤ 720px のとき表示
-//   2. buy URL 抽出: 記事内 .price-card.is-cheapest .price-card-cta の href を
-//      🛒 ボタンに反映 (見つからない場合は #price-comparison アンカーへ scroll)
+//   2. buy URL 抽出: 記事内 .buy-box の主ボタン (無ければ .price-card.is-cheapest
+//      .price-card-cta) の href を 🛒 ボタンに反映 (見つからなければ partial の Amazon 直リンク)
 //   3. ♡ / 📊 は OmochaFavorites / OmochaCompare と双方向同期
 //   4. IntersectionObserver で footer / 関連商品セクションが見えたら hide
 //   5. ヒーロー (記事冒頭) が見えている時は非表示、スクロールで本文に入ったら表示
@@ -27,7 +27,19 @@
   }
 
   function _extractBuyUrl() {
-    // 1. .price-card.is-cheapest の CTA を最優先
+    // 0. navi-brain#165: 記事の購入ボタンの箱 (.buy-box) の主ボタンを最優先する。
+    //    行き先は build_post._resolve_buy_offer が「同一商品と確認できた最安」で選んで
+    //    いる。.price-card.is-cheapest は未確認 (※確度低) の楽天/Yahoo を指すことがある。
+    var primary = _q(".buy-box .buy-box-primary[href]");
+    if (primary && primary.getAttribute("href") && !/^#/.test(primary.getAttribute("href"))) {
+      return {
+        url: primary.getAttribute("href"),
+        label: primary.getAttribute("data-buy-site") || "",
+        kind: primary.getAttribute("data-buy-kind") || "",
+        price: parseInt(primary.getAttribute("data-buy-price") || "0", 10) || 0
+      };
+    }
+    // 1. .price-card.is-cheapest の CTA
     var cheapest = _q(".price-card.is-cheapest .price-card-cta[href]");
     if (cheapest && cheapest.getAttribute("href") && !/^#/.test(cheapest.getAttribute("href"))) {
       return {
@@ -38,7 +50,9 @@
     // 2. fallback: 任意の amazon CTA
     var amazon = _q(".price-card-cta--amazon[href]");
     if (amazon && amazon.getAttribute("href") && !/^#/.test(amazon.getAttribute("href"))) {
-      return { url: amazon.getAttribute("href"), label: "Amazon" };
+      // 販売終了の商品では Amazon の検索リンク (/s?k=) しか無い。「最安」と書かない (#165)
+      var isSearch = /amazon\.co\.jp\/s\?/.test(amazon.getAttribute("href"));
+      return { url: amazon.getAttribute("href"), label: "Amazon", kind: isSearch ? "search" : "" };
     }
     return null;
   }
@@ -213,19 +227,30 @@
       anchor.setAttribute("href", info.url);
       anchor.setAttribute("target", "_blank");
       anchor.setAttribute("rel", "noopener nofollow sponsored");
+      var price = parseInt(bar.getAttribute("data-min-price") || "0", 10);
+      var suffix = " 最安";
+      if (info.kind) {
+        // .buy-box の主ボタン: 金額は front matter の最安 (未確認の価格も含む) ではなく
+        // 主ボタンの金額に合わせる。最安でない行き先 (商品ページ / 検索) は金額を出さない。
+        price = info.kind === "cheapest" ? info.price : 0;
+        suffix = info.kind === "cheapest" ? " 最安" : (info.kind === "search" ? "で検索" : "で見る");
+        var priceEl = anchor.querySelector(".m-sticky-buy-price");
+        if (priceEl && price > 0) priceEl.textContent = "¥" + price.toLocaleString("ja-JP");
+        var rowEl = anchor.querySelector(".m-sticky-buy-price-row");
+        if (rowEl && rowEl.style && !(price > 0)) rowEl.style.display = "none";
+      }
       if (info.label) {
         var labelEl = anchor.querySelector(".m-sticky-buy-label");
-        if (labelEl) labelEl.textContent = info.label + " 最安";
+        if (labelEl) labelEl.textContent = info.label + suffix;
       }
       // #9781: 固定の aria-label が見えている店名・価格を読み上げから隠していた。
       // リンク先が決まったここで、店名と価格を含めて付け直す。
-      anchor.setAttribute("aria-label", _buyAriaLabel(
-        (info.label || "").trim(),
-        parseInt(bar.getAttribute("data-min-price") || "0", 10)));
+      anchor.setAttribute("aria-label", _buyAriaLabel((info.label || "").trim(), price, info.kind));
     }
   }
 
-  function _buyAriaLabel(store, price) {
+  function _buyAriaLabel(store, price, kind) {
+    if (kind === "search") return (store || "販売サイト") + "で検索する";
     var head = store ? store + "で購入する" : "最安値の店で購入する";
     if (!(price > 0)) return head;
     return head + "（最安 " + price.toLocaleString("ja-JP") + "円）";

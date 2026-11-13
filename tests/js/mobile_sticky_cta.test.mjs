@@ -150,3 +150,78 @@ test("価格が無ければ店名だけ、店名が無ければ「最安値の�
   assert.equal(bootBuy({ cheapestLabel: "", minPrice: 980 }).anchor.getAttribute("aria-label"),
                "最安値の店で購入する（最安 980円）");
 });
+
+// navi-brain#165: 記事の購入ボタンの箱 (.buy-box) の主ボタンを、.price-card.is-cheapest
+// (未確認の楽天/Yahoo を指すことがある) より優先する。金額も主ボタンに合わせる。
+function bootBuyBox({ kind, price, site, minPrice }) {
+  function el(attrs = {}) {
+    return {
+      _attrs: { ...attrs },
+      textContent: "",
+      style: {},
+      getAttribute(n) { return n in this._attrs ? this._attrs[n] : null; },
+      setAttribute(n, v) { this._attrs[n] = String(v); },
+      addEventListener() {},
+      querySelector() { return null; },
+    };
+  }
+  const labelEl = el();
+  const priceEl = el();
+  priceEl.textContent = "¥" + Number(minPrice).toLocaleString("ja-JP");
+  const rowEl = el();
+  const anchor = el({ href: "https://www.amazon.co.jp/dp/B0TEST0001/", "aria-label": "最安値で購入する" });
+  anchor.querySelector = (sel) => ({
+    ".m-sticky-buy-label": labelEl,
+    ".m-sticky-buy-price": priceEl,
+    ".m-sticky-buy-price-row": rowEl,
+  })[sel] ?? null;
+  const bar = el({ "data-asin": "B0TEST0001", "data-min-price": String(minPrice) });
+  bar.toggleAttribute = () => {};
+  bar.querySelector = (sel) => (sel === ".m-sticky-buy" ? anchor : null);
+  const primaryAttrs = { href: "https://www.amazon.co.jp/dp/B0TEST0001/?tag=x-22",
+                         "data-buy-site": site, "data-buy-kind": kind };
+  if (price) primaryAttrs["data-buy-price"] = String(price);
+  const primary = el(primaryAttrs);
+  const cheapestCard = el({ href: "https://item.rakuten.co.jp/x/y/" });
+  const selectorMap = new Map([
+    [".buy-box .buy-box-primary[href]", primary],
+    [".price-card.is-cheapest .price-card-cta[href]", cheapestCard],
+    [".price-card.is-cheapest .price-card-label", { textContent: "楽天市場" }],
+  ]);
+  const sandbox = {
+    document: {
+      readyState: "complete",
+      getElementById: (id) => (id === "mobile-sticky-cta" ? bar : null),
+      querySelector: (sel) => selectorMap.get(sel) ?? null,
+      querySelectorAll: () => [],
+      addEventListener() {},
+    },
+    window: { location: { pathname: "/products/test/" } },
+    setTimeout: () => 0,
+    console,
+  };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(SRC, sandbox);
+  return { anchor, labelEl, priceEl, rowEl };
+}
+
+test("購入ボタンの箱の主ボタンを最安カードより優先し、金額も合わせる (#165)", () => {
+  const { anchor, labelEl, priceEl, rowEl } = bootBuyBox(
+    { kind: "cheapest", price: 3000, site: "Amazon", minPrice: 2500 });
+  assert.equal(anchor.getAttribute("href"), "https://www.amazon.co.jp/dp/B0TEST0001/?tag=x-22");
+  assert.equal(labelEl.textContent, "Amazon 最安");
+  assert.equal(priceEl.textContent, "¥3,000");
+  assert.equal(rowEl.style.display, undefined);
+  assert.equal(anchor.getAttribute("aria-label"), "Amazonで購入する（最安 3,000円）");
+});
+
+test("主ボタンが最安でない行き先 (商品ページ / 検索) なら金額を出さない (#165)", () => {
+  const direct = bootBuyBox({ kind: "direct", price: 0, site: "Amazon", minPrice: 2500 });
+  assert.equal(direct.labelEl.textContent, "Amazonで見る");
+  assert.equal(direct.rowEl.style.display, "none");
+  assert.equal(direct.anchor.getAttribute("aria-label"), "Amazonで購入する");
+  const search = bootBuyBox({ kind: "search", price: 0, site: "Amazon", minPrice: 0 });
+  assert.equal(search.labelEl.textContent, "Amazonで検索");
+  assert.equal(search.anchor.getAttribute("aria-label"), "Amazonで検索する");
+});

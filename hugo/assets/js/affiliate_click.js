@@ -36,6 +36,7 @@
      先頭から順に一致を見るので、より具体的なものを上に置く。 */
   var SLOT_BY_CLASS = [
     ['m-sticky-buy', 'sticky'],
+    ['buy-box-primary', 'buy-box'],
     ['competitor-cta', 'competitor'],
     ['price-card-cta', 'price-card'],
     ['price-search-fallback', 'price-search-fallback'],

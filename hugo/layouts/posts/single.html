@@ -64,15 +64,20 @@
   </header>
   {{- $isHidden := (.Param "cover.hiddenInSingle") | default (.Param "cover.hidden") | default false }}
   {{- partial "cover.html" (dict "cxt" . "IsSingle" true "isHidden" $isHidden) }}
-  {{- if (.Param "ShowToc") }}
-  {{- partial "toc.html" . }}
-  {{- end }}
+  {{- /* navi-brain#165 T4: 商品ページは本文の冒頭 (決める箱・向く人/向かない人の後) に
+         目次を差し込む。差し込み位置は post.md.j2 が出す印 ($tocSlot)。印の無いページは
+         従来どおり本文の前に出す。 */ -}}
+  {{- $tocSlot := `<div class="toc-slot"></div>` -}}
+  {{- $hasTocSlot := strings.Contains (string .Content) $tocSlot -}}
+  {{- $toc := "" -}}
+  {{- if (.Param "ShowToc") }}{{ $toc = partial "toc.html" . }}{{ end -}}
+  {{- if not $hasTocSlot }}{{ $toc }}{{ end }}
 
   {{- if .Content }}
   <div class="post-content md-content">
-    {{- if not (.Param "disableAnchoredHeadings") }}
-    {{- partial "anchored_headings.html" .Content -}}
-    {{- else }}{{ .Content }}{{ end }}
+    {{- $html := .Content -}}
+    {{- if not (.Param "disableAnchoredHeadings") }}{{ $html = partial "anchored_headings.html" .Content }}{{ end -}}
+    {{- if $hasTocSlot }}{{ replace (string $html) $tocSlot (string $toc) | safeHTML }}{{ else }}{{ $html }}{{ end }}
   </div>
   {{- end }}
 
