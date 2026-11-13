@@ -218,23 +218,40 @@ class BuyBoxRenderTest(unittest.TestCase):
         self.assertLess(closing, md.index('data-cta-slot="buy-closing"'))
         self.assertLess(md.index('data-cta-slot="buy-closing"'), md.index("❓ よくある質問"))
 
-    def test_mid_boxes_follow_sections_and_never_stack(self):
-        full = _render(_data(_prices(AMZ, RKT, YHO),
-                             review_signals={"summary_one_line": "x", "high_points": [{"text": "良い"}]},
-                             competitive_analysis=[{"name": "類似品"}],
-                             narrative={"closing": "c", "how_to_choose": "h", "why_this_product": "w",
-                                        "daily_use": "d", "gift_appeal": "g"},
-                             omcha_related=[{"url": "https://omcha.jp/x", "title": "t"}]))
-        slots = re.findall(r'data-cta-slot="(buy-[\w-]+)" data-buy-site', full)
-        self.assertEqual(slots, ["buy-top", "buy-mid-score", "buy-mid-compare", "buy-mid-choose",
-                                 "buy-mid-why", "buy-mid-related", "buy-mid-howto", "buy-mid-gift",
-                                 "buy-closing", "buy-mid-next", "buy-faq"])
-        # 中の節が省かれた記事では、見出しを挟まずにボタンが続かない
-        sparse = _render(_data(_prices(AMZ, RKT, YHO), narrative={"closing": "c", "gift_appeal": "g"}))
-        slots = re.findall(r'data-cta-slot="(buy-[\w-]+)" data-buy-site', sparse)
-        self.assertEqual(slots, ["buy-top", "buy-mid-score", "buy-closing", "buy-mid-next", "buy-faq"])
-        body = re.sub(r"\n+", "\n", sparse)
-        self.assertNotRegex(body, r'class="buy-box buy-box--mid">[^\n]*\n<div class="buy-box')
+    def test_mid_box_only_where_the_reader_decides(self):
+        narrative = {"closing": "c", "how_to_choose": "h", "why_this_product": "w",
+                     "daily_use": "d", "gift_appeal": "g"}
+        extra = dict(review_signals={"summary_one_line": "x", "high_points": [{"text": "良い"}]},
+                     omcha_related=[{"url": "https://omcha.jp/x", "title": "t"}])
+
+        def slots(md):
+            return re.findall(r'data-cta-slot="(buy-[\w-]+)" data-buy-site', md)
+
+        # 🆚 があれば、中盤はその後の 1 つだけ (🧭 の後には出さない)
+        md = _render(_data(_prices(AMZ, RKT, YHO), competitive_analysis=[{"name": "類似品"}],
+                           narrative=narrative, **extra))
+        self.assertEqual(slots(md), ["buy-top", "buy-mid-compare", "buy-closing", "buy-faq"])
+        self.assertLess(md.index('id="alternatives"'), md.index('data-cta-slot="buy-mid-compare"'))
+        self.assertLess(md.index('data-cta-slot="buy-mid-compare"'), md.index("🧭 選び方"))
+        # 🆚 が無ければ 🧭 選び方の後に 1 つ
+        md = _render(_data(_prices(AMZ, RKT, YHO), narrative=narrative, **extra))
+        self.assertEqual(slots(md), ["buy-top", "buy-mid-choose", "buy-closing", "buy-faq"])
+        self.assertLess(md.index("🧭 選び方"), md.index('data-cta-slot="buy-mid-choose"'))
+        # 🆚 だけで 🧭 が無い記事も 🆚 の後の 1 つ。中盤のボタンに金額は出さない
+        md = _render(_data(_prices(AMZ, RKT, YHO), competitive_analysis=[{"name": "類似品"}],
+                           narrative={"closing": "c"}))
+        self.assertEqual(slots(md), ["buy-top", "buy-mid-compare", "buy-closing", "buy-faq"])
+        mid = re.search(r'<div class="buy-box buy-box--mid">.*?</div>', md).group(0)
+        self.assertNotIn("￥", mid)
+        self.assertIn('href="#price-compare"', mid)
+        # 販売終了の記事は中盤に何も出さない
+        amz = {"price": 0, "url": "", "discontinued": True}
+        md = _render(_data(_prices(amz, RKT_SEARCH, YHO_SEARCH), purchase_unavailable=True,
+                           competitive_analysis=[{"name": "類似品"}], narrative=narrative))
+        self.assertNotIn("buy-box--mid", md)
+        # どちらも無ければ中盤は無し
+        md = _render(_data(_prices(AMZ, RKT, YHO), narrative={"closing": "c", "gift_appeal": "g"}))
+        self.assertEqual(slots(md), ["buy-top", "buy-closing", "buy-faq"])
 
     def test_unavailable_shows_only_alternatives_link(self):
         amz = {"price": 0, "url": "", "discontinued": True,

@@ -85,10 +85,7 @@
 <section class="hero-score decide-box" aria-label="この商品の結論">
 <div class="decide-box-main">{% if product.image %}<figure class="product-hero-image decide-box-image"><img src="{{ product.image }}" alt="{{ product.name }}の商品画像"{% if product.image_width and product.image_height %} width="{{ product.image_width }}" height="{{ product.image_height }}"{% endif %} fetchpriority="high" decoding="async"><figcaption>出典：Amazon商品ページ</figcaption></figure>{% endif %}<div class="hero-total-row">{% if score %}<div class="hero-total-badge"><span class="hero-total-label">🌟 知育スコア</span><span class="hero-total-value">{{ score.total_100 }}<small>/100</small></span></div>{% endif %}{% if verdict and verdict.headline %}<p class="hero-verdict">「{{ verdict.headline }}」</p>{% endif %}</div></div>
 {% if stock_where_to_buy %}<p class="where-to-buy-conclusion">{{ stock_where_to_buy.conclusion }}</p>{% elif buy_offer and not buy_offer.unavailable and buy_offer.primary and buy_offer.primary.kind == 'cheapest' %}<p class="decide-box-price">🏷️ 最安値 <strong>￥{{ "{:,}".format(buy_offer.primary.price) }}</strong>（{{ buy_offer.primary.label }}{% if price_checked_at %}・{{ price_checked_at }} 時点{% endif %}）</p>{% endif %}
-{#- navi-brain#165 T3: 中盤の購入ボタン (buy-mid-*)。スマホ幅 375×812 の実測で「どの H2 からも
-    812px 以内に購入ボタン」を満たすよう、長くなりがちな節の前に置く。mid.fresh は「前の購入
-    ボタンの後に見出しが 1 つ以上出た」印で、節が省かれた記事でボタンが続けて並ばないようにする。 -#}
-{% set mid = namespace(fresh=False) %}{{ buy_box('buy-top', 'top') }}
+{{ buy_box('buy-top', 'top') }}
 </section>
 
 {% if persona_fit %}
@@ -203,7 +200,6 @@
 {%- endif %}
 
 ## <small>{{ product.name }}の</small>🌟 知育スコアの内訳
-{% set mid.fresh = True %}
 
 {# navi-brain#165 T4: 総合スコアの棒グラフと 4 軸レーダーは冒頭の決める箱から
     この節へ移した (details の外に出して、開かなくても見えるようにする)。 -#}
@@ -240,11 +236,8 @@
 <details class="score-axes-doc"><summary>📖 知育スコアの 4 軸（評価軸の説明を見る）</summary><div><p><strong>知育スコア（おもちゃロボの知育評価スコア）</strong>は、おもちゃロボが知育玩具を 4 つの観点から 5 点満点で評価し、加重平均で 100 点満点に換算した独自スコアです。</p><ul><li><strong>📚 知育効果 (5点満点)</strong>：年齢に応じた学びや、思考力・想像力・手先の発達への刺激度を評価。</li><li><strong>🕰️ 長く遊べる (5点満点)</strong>：遊び方の幅、年齢を超えた長期的な遊び寿命を評価。</li><li><strong>🛡️ 安全性 (5点満点)</strong>：対象年齢の妥当性、素材・形状・誤飲リスク等の安全配慮を評価。</li><li><strong>💰 コスパ (5点満点)</strong>：価格に対する品質・遊び寿命・教育効果のバランスを評価。</li></ul><p class="score-axes-note">※ スコアは執筆時点の市場データ・レビュー・公式情報をもとに付与しています。実際の感じ方には個人差があります。</p></div></details>
 </div></details>
 
-{% if mid.fresh and (true) %}{{ buy_box('buy-mid-score') }}{% set mid.fresh = False %}{% endif %}
-
 {% if review_signals %}
 ## <small>{{ product.name }}の</small>💭 レビュー傾向の分析
-{% set mid.fresh = True %}
 
 {% if review_signals.summary_one_line %}{{ review_signals.summary_one_line }}{% endif %}
 
@@ -280,14 +273,10 @@
 {#- #1980: informational 意図ページはここ (レビュー傾向の分析の後) まで購入 CTA を遅延。 -#}
 {%- if cta_layout == 'informational' -%}
 {{ price_comparison_md }}
-{% set mid.fresh = True %}
 {%- endif %}
-
-{% if mid.fresh and (cta_layout == 'informational') %}{{ buy_box('buy-mid-price') }}{% set mid.fresh = False %}{% endif %}
 
 {% if product.images and product.images|length > 1 %}
 ## <small>{{ product.name }}の</small>📸 関連画像情報
-{% set mid.fresh = True %}
 
 {{ product.name }}の角度違いや使用イメージなど、Amazon掲載の追加画像をスライドショーでご紹介します。
 
@@ -300,11 +289,8 @@
 </div>
 {% endif %}
 
-{% if mid.fresh and (competitive_analysis) %}{{ buy_box('buy-mid-compare') }}{% set mid.fresh = False %}{% endif %}
-
 {% if competitive_analysis %}
 ## <small>{{ product.name }}と</small>🆚 似た商品との比較
-{% set mid.fresh = True %}
 
 近い価格帯・コンセプトの競合商品と並べて、{{ product.name }}を選ぶ判断材料を整理しました。
 
@@ -314,20 +300,23 @@
 {% for c in competitive_analysis %}{% set score100 = c.internal_ivs_score_100 %}{% set tier = "score-gold" if score100 and score100 >= 90 else ("score-silver" if score100 and score100 >= 75 else "score-bronze") %}<div class="competitor-card{% if c.recommended_by_score %} competitor-card--similar{% endif %}">{% if c.asin and (c.image or c.internal_url) %}<div class="competitor-card-image"><img src="{{ c.image or ('https://images-na.ssl-images-amazon.com/images/P/' ~ c.asin ~ '.09.LZZZZZZZ.jpg') }}" alt="{{ c.name }}" loading="lazy" onload="if(this.naturalWidth<=1)this.style.display='none'" onerror="this.style.display='none'">{% if score100 %}<span class="competitor-card-score {{ tier }}" title="本サイトの知育スコア (100点満点)">🏆 <strong>{{ score100 }}</strong><span class="competitor-card-score-suffix">点</span></span>{% endif %}</div>{% endif %}{% if c.recommended_by_score %}<div class="competitor-card-similar-label">💡 知育スコアが近い既存記事</div>{% endif %}<h3>{{ c.name }}</h3>{% if c.price_comparison %}<div class="competitor-price-tag">💴 {{ c.price_comparison }}</div>{% endif %}{% if c.feature_comparison %}<ul class="competitor-features">{% for fc in c.feature_comparison %}<li>{{ fc }}</li>{% endfor %}</ul>{% endif %}{% if c.differentiators %}<details><summary>選び方のポイント</summary><ul>{% for d in c.differentiators %}<li>{{ d }}</li>{% endfor %}</ul></details>{% endif %}{% if c.internal_url %}<div class="competitor-cta-wrap"><a href="{{ c.internal_url }}" class="competitor-cta competitor-cta--internal">📝 詳しいレビューを読む →</a></div>{% endif %}{% if c.asin and (c.image or c.internal_url) %}<div class="competitor-cta-wrap competitor-cta-wrap--amazon"><a href="{{ c.url or ('https://www.amazon.co.jp/dp/' ~ c.asin ~ '/?tag=' ~ amazon_partner_tag) }}" target="_blank" rel="noopener nofollow sponsored" data-cta-slot="competitor" class="competitor-cta competitor-cta--amazon">Amazonで見る →</a></div>{% endif %}</div>
 {% endfor %}</div></div>
 </section>
-{% endif %}
 
-{% if mid.fresh and (narrative.how_to_choose) %}{{ buy_box('buy-mid-choose') }}{% set mid.fresh = False %}{% endif %}
+{# navi-brain#165 T3: 中盤の購入ボタンは「似た商品と比べて決める」場所だけに置く。
+   🆚 があればその後、無ければ 🧭 選び方の後 (下)。スマホは追従バーで補う。 -#}
+{{ buy_box('buy-mid-compare') }}
+{% endif %}
 
 {% if narrative.how_to_choose %}
 ## <small>{{ product.name }}の</small>🧭 選び方：似た商品とどう選び分ける？
-{% set mid.fresh = True %}
 
 {{ narrative_section(narrative.how_to_choose) }}
+{% if not competitive_analysis %}
+{{ buy_box('buy-mid-choose') }}
+{% endif %}
 {% endif %}
 
 {% if same_price_band and same_price_band.cards %}
 ## <small>{{ product.name }}と</small>💴 同じ価格帯のおすすめ（{{ same_price_band.band_label }}）
-{% set mid.fresh = True %}
 
 予算を変えずに比べたい方へ。{{ same_price_band.band_label }} の価格帯で公開中の知育玩具レビューから、知育スコアの高い順に {{ same_price_band.cards|length }} 件をご紹介します。
 
@@ -341,18 +330,14 @@
 <p class="same-price-more"><a href="{{ same_price_band.band_url }}">{{ same_price_band.band_label }} の知育玩具をもっと見る →</a></p>
 {% endif %}
 
-{% if mid.fresh and (narrative.why_this_product) %}{{ buy_box('buy-mid-why') }}{% set mid.fresh = False %}{% endif %}
-
 {% if narrative.why_this_product %}
 ## <small>{{ product.name }}が</small>📦 選ばれている理由
-{% set mid.fresh = True %}
 
 {{ narrative_section(narrative.why_this_product) }}
 {% endif %}
 
 {% if product.features %}
 ### <small>{{ product.name }}の</small>主な特徴
-{% set mid.fresh = True %}
 
 {% for f in product.features %}- {{ f }}
 {% endfor %}
@@ -360,7 +345,6 @@
 
 {% if technical_specs %}
 ### <small>{{ product.name }}の</small>基本スペック
-{% set mid.fresh = True %}
 
 <table class="spec-table"><tbody>
 {%- if technical_specs.dimensions and (technical_specs.dimensions.width or technical_specs.dimensions.height or technical_specs.dimensions.depth) %}
@@ -384,11 +368,8 @@
 </tbody></table>
 {% endif %}
 
-{% if mid.fresh and (omcha_related) %}{{ buy_box('buy-mid-related') }}{% set mid.fresh = False %}{% endif %}
-
 {% if omcha_related %}
 ## 🔗 おもちゃいろの関連記事
-{% set mid.fresh = True %}
 
 <div class="omcha-card-grid">
 {%- for link in omcha_related %}
@@ -400,11 +381,8 @@
 </div>
 {% endif %}
 
-{% if mid.fresh and (youtube_embeds) %}{{ buy_box('buy-mid-video') }}{% set mid.fresh = False %}{% endif %}
-
 {% if youtube_embeds %}
 ## <small>{{ product.name }}の</small>🎬 関連動画
-{% set mid.fresh = True %}
 
 {% for vid in youtube_embeds %}
 {%- set _u = vid.url | default('') -%}
@@ -443,8 +421,6 @@
     url が無いページでは official_howto_block は None のままなので、既存記事
     の出力は一切変化しない。リンクはアフィリエイトではないので rel は
     noopener のみ (sponsored/nofollow を付けない)。構造化データは付けない。 -#}
-{% if mid.fresh and (official_howto_block or narrative.daily_use) %}{{ buy_box('buy-mid-howto') }}{% set mid.fresh = False %}{% endif %}
-
 {% if official_howto_block %}
 ## <small>{{ product.name }}の</small>📘 公式の取扱説明書・遊び方
 
@@ -463,7 +439,6 @@
 
 {% if narrative.daily_use %}
 ## <small>{{ product.name }}の</small>🎮 家庭での遊ばれ方
-{% set mid.fresh = True %}
 
 {{ narrative_section(narrative.daily_use) }}
 {% endif %}
@@ -493,14 +468,12 @@
 
 {% if narrative.safety_note %}
 ## <small>{{ product.name }}の</small>🛡️ 安全性で気になること
-{% set mid.fresh = True %}
 
 {{ narrative_section(narrative.safety_note) }}
 {% endif %}
 
 {% if review_summary %}
 ## <small>{{ product.name }}の</small>📊 レビューから見る評判
-{% set mid.fresh = True %}
 
 {% if review_summary.review_count %}口コミ件数：**{{ review_summary.review_count }}件**（平均評価 {{ review_summary.avg_rating }} / 5.0｜信頼度：{{ review_summary.confidence }}）{% endif %}
 
@@ -519,11 +492,8 @@
 {% endif %}
 {% endif %}
 
-{% if mid.fresh and (narrative.gift_appeal) %}{{ buy_box('buy-mid-gift') }}{% set mid.fresh = False %}{% endif %}
-
 {% if narrative.gift_appeal %}
 ## <small>{{ product.name }}の</small>🎁 プレゼントに選ぶなら（贈り物としての魅力）
-{% set mid.fresh = True %}
 
 {{ narrative_section(narrative.gift_appeal) }}
 {% endif %}
@@ -542,7 +512,6 @@
 
 {% if competitive_position %}
 ## <small>{{ product.name }}の</small>ポジショニング（補足）
-{% set mid.fresh = True %}
 
 {{ competitive_position.position_explain }}
 
@@ -567,11 +536,6 @@
 {% endif %}
 
 {% raw %}{{< related_carousel >}}{% endraw %}
-
-{# navi-brain#165 T3: 関連カルーセル (📚) と「🌱 半年〜1年後」の間。まとめ後と FAQ 後の
-   ボタンだけでは 🌱 の見出しから 1 画面を超える (375×812 の実測) ため。関連カルーセルは
-   公開中の記事から候補を選ぶので通常は空にならず、まとめ直後のボタンと隣り合わない。 -#}
-{{ buy_box('buy-mid-next') }}
 
 {% raw %}{{< future_age_carousel >}}{% endraw %}
 
