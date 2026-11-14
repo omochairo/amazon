@@ -1,0 +1,37 @@
+{{- $items := .items -}}
+{{- with $items }}
+<section class="home-section related-carousel-section new-arrivals" aria-label="新しく売れ筋に入ったおもちゃ">
+  <header class="home-section-header">
+    <h2>✨ 新しく売れ筋に入ったおもちゃ</h2>
+    <span class="home-section-note">{{ $.note }}</span>
+    <div class="carousel-nav-arrows">
+      <button class="carousel-arrow prev" type="button" aria-label="左にスクロール" disabled>‹</button>
+      <button class="carousel-arrow next" type="button" aria-label="右にスクロール">›</button>
+    </div>
+  </header>
+  <div class="carousel-wrapper"><div class="carousel-track">
+    {{- range . }}
+    {{- $item := . -}}
+    <a class="carousel-card" href="{{ .url_internal }}" aria-label="{{ .name }} の比較レビューを読む">
+      <div class="carousel-card-image">
+        {{- with .image }}<img src="{{ . }}" alt="{{ $item.name }}" loading="lazy" referrerpolicy="no-referrer" width="200" height="200">
+        {{- else }}<div class="carousel-card-image-fallback">🧸</div>{{- end }}
+        {{- with .ivs_100 }}<span class="carousel-card-score">🏆 {{ . }}点</span>{{- end }}
+      </div>
+      <div class="carousel-card-body">
+        {{- with .brand }}<span class="carousel-card-brand">{{ . }}</span>{{- end }}
+        <h3 class="carousel-card-title">{{ .name }}</h3>
+        <div class="carousel-card-badges">
+          <span class="carousel-card-badge cc-badge-new">✨ {{ .first_seen_label }} 売れ筋入り</span>
+          {{- with .release_label }}<span class="carousel-card-badge cc-badge-release">📅 {{ . }} {{ if $item.release_upcoming }}発売予定{{ else }}発売{{ end }}</span>{{- end }}
+          {{- $age := index . "age_min_months" -}}
+          {{- if ne (printf "%v" $age) "<nil>" }}<span class="carousel-card-badge cc-badge-age">👶 {{ partial "age_label.html" $age }}</span>{{- end }}
+          {{- with .best_price }}<span class="carousel-card-badge cc-badge-price">💰 ¥{{ lang.FormatNumber 0 . }}〜</span>{{- end }}
+        </div>
+      </div>
+    </a>
+    {{- end }}
+  </div></div>
+  <p class="new-arrivals-more"><a href="/ranking/">楽天の売れ筋ランキングを見る →</a></p>
+</section>
+{{- end }}
