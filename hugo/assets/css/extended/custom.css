@@ -6049,6 +6049,43 @@ details.development-stage-accordion[open] > summary::before {
   }
 }
 
+/* navi-brain#166: 吹き出しを絶対配置で重ねると器の高さ (min-height) を超えた文が
+   カードの下で切れる (スマホ幅で「予算別おすすめ」「おトク特集」の吹き出しが欠けた)。
+   同じグリッドのマスに重ねて、器の高さをいちばん長い吹き出しに合わせる。 */
+.spotlight-bubbles {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr); /* 長い英数字でも列が広がってはみ出さない */
+  min-height: 0;
+}
+.spotlight-bubble {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  display: block;
+  grid-area: 1 / 1;
+  align-self: start; /* 短い吹き出しの枠を、いちばん長い吹き出しの高さまで伸ばさない */
+  line-break: strict; /* 小書きの「ゃ」などを行頭に置かない */
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .spotlight-grid--4col .spotlight-bubbles { min-height: 0; }
+  /* 2 列のカードでアイコンを横に置くと文字の列が狭く、見出しが語の途中で折り返す。
+     スマホではアイコンを上に置いて、カードの幅を文字に使う */
+  .spotlight-grid--4col .spotlight-card {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+  .spotlight-grid--4col .spotlight-card-icon { font-size: 1.4rem; }
+  /* 見出しと一言は語の途中で折らない (「予算別<wbr>おすすめ」の wbr と空白だけで折る)。
+     入りきらないときだけ anywhere で折ってはみ出しを防ぐ */
+  .spotlight-grid--4col .spotlight-card-name,
+  .spotlight-grid--4col .spotlight-card-tagline {
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+}
+
 /* ==========================================
    お気に入り (♡) #1366 (epic #1365 Layer 1-①)
    ========================================== */
