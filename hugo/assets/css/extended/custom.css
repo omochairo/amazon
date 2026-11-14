@@ -7838,3 +7838,18 @@ a.sale-notice-main::after {
 [data-theme="dark"] .ranking-move--down { background: rgba(220, 38, 38, 0.25); color: #fecaca; }
 [data-theme="dark"] .ranking-move--streak { background: rgba(79, 70, 229, 0.3); color: #c7d2fe; }
 [data-theme="dark"] .price-item-since { color: #fbbf24; }
+
+/* navi-brain#166 F15 */
+.cc-badge-new { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+.cc-badge-release { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
+[data-theme="dark"] .cc-badge-new { background: rgba(4, 120, 87, .2); color: #6ee7b7; border-color: rgba(110, 231, 183, .35); }
+[data-theme="dark"] .cc-badge-release { background: rgba(154, 52, 18, .2); color: #fdba74; border-color: rgba(253, 186, 116, .35); }
+.new-arrivals { margin: 1.25rem auto 1.75rem; }
+.new-arrivals .home-section-header { gap: .35rem .75rem; }
+.new-arrivals .home-section-header h2 { margin: 0; }
+.post-content .new-arrivals { margin: 1.5rem 0; }
+.post-content .new-arrivals .home-section-header h2 { margin: 0; }
+/* 年齢 hub では .post-content の中に置くので、本文用の h3 の飾り (左の縦線・字体) を外す */
+.post-content .new-arrivals .carousel-card-title { border-left: none; padding-left: 0; font-family: inherit !important; }
+.new-arrivals-more { margin: .65rem 0 0; text-align: right; font-size: .82rem; }
+.new-arrivals-more a { color: var(--primary); text-decoration: underline; text-underline-offset: .15em; }

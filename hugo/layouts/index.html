@@ -40,6 +40,11 @@
   </div>
 </section>
 
+{{- /* === Section: 新しく売れ筋に入ったおもちゃ (navi-brain#166 F15) — 楽天ランキングに
+       この 30 日で初めて入り、記事がある品。new_arrivals.json はビルド時生成 (コミットしない)。
+       ファイルが無い・4 件未満なら何も出さない。 */ -}}
+{{- with site.Data.features.new_arrivals }}{{ partial "new_arrivals.html" (dict "items" .top "note" "楽天のおもちゃ売れ筋に、この30日で初めて入った品です") }}{{ end }}
+
 {{- /* === Section: 特集スポットライト (#1363 / #1365 UX)
        「こんな探し方ができます」— 4 つの探索軸 (予算 / 割引 / 人気 / 悩み相談)。
        各カードは distinct な役割を持つ:

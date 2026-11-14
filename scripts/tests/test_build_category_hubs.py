@@ -16,7 +16,7 @@ import pathlib
 import sys
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, timedelta
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS_DIR = os.path.dirname(THIS_DIR)
@@ -511,9 +511,6 @@ class HubIndexTest(unittest.TestCase):
             ])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class RankingHistoryTests(unittest.TestCase):
     def test_window_and_year_boundary_deduplicate_days(self):
@@ -534,3 +531,135 @@ class RankingHistoryTests(unittest.TestCase):
         payload = bch.serialize_hub(items, "math", "now")
         self.assertEqual(payload["items"][0]["rank_days_30"], 3)
         self.assertEqual(payload["items"][0]["best_rank_30"], 20)
+
+
+class NewArrivalsTests(unittest.TestCase):
+    def test_first_last_seen_and_year_boundary(self):
+        history = {"A": {"history": [{"d": "12-28", "r": 8}, {"d": "01-02", "r": 5}, {"d": "01-05", "r": 3}]}}
+        self.assertEqual(bch.first_last_seen(history, "A", date(2027, 1, 5)),
+                         (date(2026, 12, 28), date(2027, 1, 5)))
+
+    def test_release_date_patterns(self):
+        for title in ("【2026年11月21日発売 予約商品】Tamagotchi", "Tamagotchi ｜【予約 2026/11/21】発売日前日出荷｜"):
+            self.assertEqual(bch.parse_release_date(title), date(2026, 11, 21))
+        for title in ("【ご予約 11月中旬発送予定】", "[2026年11月21日出荷予定] タカラトミー", "2026年2月30日発売",
+                      # 予約が付いていても、出荷日・発送日・予約の受付開始日は発売日ではない
+                      "【予約】2026年11月21日出荷予定", "【予約商品】2026/11/21発送予定", "予約開始 2026/11/01",
+                      "【予約受付中】2026/11/30まで",
+                      # 型番などの長い数字の一部には当てない
+                      "【予約】型番2026-11-210", "JAN 12026-11-21発売"):
+            self.assertIsNone(bch.parse_release_date(title), title)
+        # 「発売」が出荷より先なら発売日として採る
+        self.assertEqual(bch.parse_release_date("【予約 2026/11/21】発売日前日出荷"), date(2026, 11, 21))
+
+    def test_window_boundaries(self):
+        # 初登場は今日を含む 30 日 (29 日前まで)、最終観測は今日を含む 7 日 (6 日前まで)
+        today = date(2026, 11, 14)
+        cases = {"F29": (29, 1), "F30": (30, 1), "L6": (10, 6), "L7": (10, 7)}
+        records, history, ages = [], {}, {}
+        for asin, (first_days, last_days) in cases.items():
+            records.append(_rec(asin, 4.5, 80, 1000))
+            history[asin] = {"history": [
+                {"d": (today - timedelta(days=first_days)).strftime("%m-%d"), "r": 5},
+                {"d": (today - timedelta(days=last_days)).strftime("%m-%d"), "r": 5},
+            ]}
+            ages[asin] = 36
+        chosen = {r.asin for r in bch.select_new_arrivals(records, history, ages, {}, today=today)}
+        self.assertEqual(chosen, {"F29", "L6"})
+
+    def test_release_info_in_payload(self):
+        today = date(2026, 11, 14)
+        names = {"UP": "【2026年11月21日発売 予約商品】A", "RECENT": "2026年11月1日発売 B",
+                 "OLD": "2026年9月1日発売 C", "NONE": "D"}
+        records = [_rec(a, 4.5, 80, 1000) for a in names]
+        history = {a: {"name": n, "history": [{"d": "11-10", "r": 3}, {"d": "11-13", "r": 3}]}
+                   for a, n in names.items()}
+        ages = {a: 36 for a in names}
+        payload = {p["asin"]: p for p in bch._new_arrivals_payload(
+            bch.select_new_arrivals(records, history, ages, {}, today=today))}
+        self.assertEqual((payload["UP"]["release_label"], payload["UP"]["release_upcoming"]), ("11/21", True))
+        self.assertEqual((payload["RECENT"]["release_label"], payload["RECENT"]["release_upcoming"]), ("11/1", False))
+        self.assertNotIn("release_label", payload["OLD"])  # 30 日より前の発売は出さない
+        self.assertNotIn("release_label", payload["NONE"])
+        self.assertEqual(payload["UP"]["first_seen_label"], "11/10")
+
+    def test_selection_windows_score_age_brand_and_limit(self):
+        today = date(2026, 11, 14)
+        records, history, ages, brands = [], {}, {}, {}
+        for n in range(9):
+            asin = f"A{n}"
+            records.append(_rec(asin, 4.5, 61 if n != 8 else 60, 1000))
+            first = (today - timedelta(days=10 if n < 6 else 40)).strftime("%m-%d")
+            last = (today - timedelta(days=10 if n == 6 else 1)).strftime("%m-%d")
+            history[asin] = {"history": [{"d": first, "r": 10}, {"d": last, "r": n + 1}]}
+            ages[asin] = 36 if n != 7 else 72
+            brands[asin] = "same" if n < 4 else f"brand{n}"
+        del ages["A5"]
+        chosen = bch.select_new_arrivals(records, history, ages, brands, today=today)
+        # 上限内は A0, A1 (same) と A4 の 3 件。MIN (4) に足りないので A2 を 1 件だけ戻す
+        self.assertEqual([r.asin for r in chosen], ["A0", "A1", "A2", "A4"])
+        self.assertNotIn("A6", [r.asin for r in chosen])
+        self.assertNotIn("A7", [r.asin for r in chosen])
+        self.assertNotIn("A8", [r.asin for r in chosen])
+        self.assertEqual(len(bch.select_new_arrivals(records, history, ages, brands, today=today,
+                                                     age_range=(0, 36))), 0)
+
+    def test_first_seen_and_last_seen_boundaries_and_maximum(self):
+        today = date(2026, 11, 14)
+        records, history, ages, brands = [], {}, {}, {}
+        for n in range(10):
+            asin = f"M{n}"
+            records.append(_rec(asin, 4.5, 70, 1000))
+            first_days = 10 if n < 8 else 20
+            last_days = 10 if n >= 8 else 1
+            history[asin] = {"history": [
+                {"d": (today - timedelta(days=first_days)).strftime("%m-%d"), "r": n + 1},
+                {"d": (today - timedelta(days=last_days)).strftime("%m-%d"), "r": n + 1},
+            ]}
+            ages[asin] = 36 if n < 8 else 48
+            brands[asin] = f"brand{n}"
+        # M8 は初登場が範囲内でも最終掲載が10日前なので除外。M9 は同様に除外。
+        result = bch.select_new_arrivals(records, history, ages, brands, today=today)
+        self.assertEqual(len(result), bch.NEW_ARRIVAL_MAX)
+        self.assertEqual([r.asin for r in result], [f"M{n}" for n in range(6)])
+        # 20日前に初登場した商品は期間内、40日前なら期間外。
+        history["M8"]["history"][-1]["d"] = (today - timedelta(days=1)).strftime("%m-%d")
+        history["M9"]["history"][0]["d"] = (today - timedelta(days=40)).strftime("%m-%d")
+        self.assertNotIn("M8", [r.asin for r in bch.select_new_arrivals(records, history, ages, brands, today=today)])
+
+    def test_brand_cap_backfills_only_up_to_minimum(self):
+        # 同じメーカーばかりで上限 2 件だと MIN (4) に届かない → 外した品を MIN まで戻す
+        today = date(2026, 11, 14)
+        records = [_rec(f"B{i}", 4.5, 80, 1000) for i in range(6)]
+        history = {f"B{i}": {"history": [{"d": f"11-{10 - i:02d}", "r": i + 1}, {"d": "11-13", "r": i + 1}]}
+                   for i in range(6)}
+        ages = {f"B{i}": 36 for i in range(6)}
+        brands = {f"B{i}": "bandai" for i in range(5)}
+        brands["B5"] = "other"
+        chosen = bch.select_new_arrivals(records, history, ages, brands, today=today)
+        # 上限内: B0, B1 (bandai) と B5 (other) の 3 件 → B2 を 1 件だけ戻し、初登場の新しい順に並べる
+        self.assertEqual([r.asin for r in chosen], ["B0", "B1", "B2", "B5"])
+
+    def test_minimum_age_range(self):
+        today = date(2026, 11, 14)
+        records = [_rec(str(i), 4.5, 80, 1000) for i in range(4)]
+        history = {str(i): {"history": [{"d": "11-04", "r": i + 1}, {"d": "11-13", "r": i + 1}]}
+                   for i in range(4)}
+        ages = {"0": 0, "1": 11, "2": 12, "3": 24}
+        selected = bch.select_new_arrivals(records, history, ages, {}, today=today, age_range=(0, 12))
+        self.assertEqual([r.asin for r in selected], ["0", "1"])
+
+    def test_run_writes_new_arrivals_empty_when_history_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            adir = pathlib.Path(tmp) / "articles"
+            adir.mkdir()
+            out = pathlib.Path(tmp) / "features"
+            counts = bch.run(adir, out, top_n=24, min_ivs=0.0, themes=[], age_hubs=[], today=date(2026, 11, 14))
+            data = json.loads((out / "new_arrivals.json").read_text(encoding="utf-8"))
+            self.assertEqual(data["top"], [])
+            self.assertEqual(data["age"], {})
+            self.assertEqual(counts["new_arrivals_top"], 0)
+
+
+if __name__ == "__main__":
+    unittest.main()

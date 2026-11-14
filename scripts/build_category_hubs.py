@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import re
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -29,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from age_semantics import is_seasonal_decoration, override_age_months, seasonal_names  # noqa: E402
 from brand_normalizer import normalize as normalize_brand  # noqa: E402
 from ranking_dates import resolve_entry_dates, today_jst  # noqa: E402
+from score_claims import LOW_TOTAL_MAX  # noqa: E402
 from build_feature_lists import (  # noqa: E402
     _dedupe_by_asin,
     _is_article_json,
@@ -167,6 +169,14 @@ AGE_HUBS: dict[str, dict[str, Any]] = {
 # 年齢 hub の上位 (top-n) に載せる同一メーカーの上限。24 件なら 6 メーカー以上が並ぶ。
 AGE_MAX_PER_BRAND = 4
 
+# navi-brain#166 F15: ランキング初登場を発売・予約商品の代理指標として扱う。
+NEW_ARRIVAL_WINDOW_DAYS = 30
+NEW_ARRIVAL_RECENT_DAYS = 7
+NEW_ARRIVAL_MAX = 6
+NEW_ARRIVAL_MIN = 4
+NEW_ARRIVAL_MAX_PER_BRAND = 2
+NEW_ARRIVAL_AGE_LOOKBACK_MONTHS = 12
+
 # 直近30日で3日以上ランク入りした商品を、販売実績が見える候補として前に出す。
 RANK_DAYS_PRIORITY_THRESHOLD = 3
 
@@ -200,6 +210,111 @@ def rank_metrics(history: dict[str, Any], asin: str, today: date | None = None) 
         if start <= appeared <= today:
             days[appeared] = min(rank, days.get(appeared, rank))
     return len(days), min(days.values(), default=0)
+
+
+def first_last_seen(history: dict[str, Any], asin: str, today: date | None = None) -> tuple[date | None, date | None]:
+    """navi-brain#166 F15: 挿入順のランキング履歴から初回・最終観測日を得る。"""
+    today = today or today_jst()
+    rows = (history.get(asin) or {}).get("history", [])
+    if not isinstance(rows, list):
+        return None, None
+    dates = [d for d in resolve_entry_dates(rows, today) if d is not None and d <= today]
+    return (min(dates), max(dates)) if dates else (None, None)
+
+
+_RELEASE_DATE_RE = re.compile(
+    r"(?<!\d)(?P<y>\d{4})(?:年|[/.\-])(?P<m>\d{1,2})(?:月|[/.\-])(?P<d>\d{1,2})(?!\d)日?")
+# 日付の直後にこれが「発売」より先に来たら、発売日ではなく出荷日・予約開始日などとみなす
+_NOT_RELEASE_WORDS = ("出荷", "発送", "入荷", "お届け", "到着", "開始", "受付", "締切", "まで")
+
+
+def parse_release_date(name: str) -> date | None:
+    """navi-brain#166 F15: 楽天タイトルの発売日表記だけを安全に抽出する。
+
+    採るのは「2026年11月21日発売」(日付の直後 8 字以内に「発売」) と
+    「【予約 2026/11/21】」(日付の直前 8 字以内に「予約」) の形だけ。
+    直後に「出荷・発送・開始」などが「発売」より先に来るもの、直前が「予約開始・予約受付」
+    のものは採らない (出荷日・予約の受付開始日を発売日と取り違えないため)。
+    型番などの長い数字の一部には当てない (前後が数字なら不一致)。
+    """
+    if not isinstance(name, str):
+        return None
+    for match in _RELEASE_DATE_RE.finditer(name):
+        tail = name[match.end():match.end() + 8]
+        head = name[max(0, match.start() - 8):match.start()]
+        release_at = tail.find("発売")
+        not_release_at = min((i for i in (tail.find(w) for w in _NOT_RELEASE_WORDS) if i >= 0), default=-1)
+        if not_release_at >= 0 and (release_at < 0 or not_release_at < release_at):
+            continue
+        reserved = "予約" in head and "予約開始" not in head and "予約受付" not in head
+        if release_at < 0 and not reserved:
+            continue
+        try:
+            return date(int(match.group("y")), int(match.group("m")), int(match.group("d")))
+        except ValueError:
+            continue
+    return None
+
+
+def select_new_arrivals(records, history, min_months_index, brand_index, *, today=None,
+                        age_range=None, low_total_max=LOW_TOTAL_MAX):
+    """navi-brain#166 F15: 初登場・直近掲載・年齢・スコアで新着商品を選ぶ。"""
+    today = today or today_jst()
+    start = today - timedelta(days=NEW_ARRIVAL_WINDOW_DAYS - 1)
+    recent_start = today - timedelta(days=NEW_ARRIVAL_RECENT_DAYS - 1)
+    candidates = []
+    for rec in records:
+        first, last = first_last_seen(history, rec.asin, today)
+        mm = min_months_index.get(rec.asin)
+        if first is None or last is None or not (start <= first <= today) or not (recent_start <= last <= today):
+            continue
+        if mm is None or rec.ivs_100 is None or rec.ivs_100 <= low_total_max:
+            continue
+        if age_range is not None and not (age_range[0] <= mm < age_range[1]):
+            continue
+        days, best = rank_metrics(history, rec.asin, today)
+        rec.first_seen, rec.rank_days_30, rec.best_rank_30 = first, days, best
+        release = parse_release_date((history.get(rec.asin) or {}).get("name", ""))
+        rec.release_date = release if release and (release >= today or 0 < (today - release).days <= 30) else None
+        rec.release_upcoming = bool(rec.release_date and rec.release_date >= today)
+        candidates.append(rec)
+    candidates.sort(key=lambda r: (-r.first_seen.toordinal(), rank_metrics(history, r.asin, today)[1] or 10**9,
+                                   -(r.ivs_100 or 0), r.asin))
+    picked, held, used = [], [], {}
+    for rec in candidates:
+        brand = brand_index.get(rec.asin)
+        if brand is not None and used.get(brand, 0) >= NEW_ARRIVAL_MAX_PER_BRAND:
+            held.append(rec)
+            continue
+        if brand is not None:
+            used[brand] = used.get(brand, 0) + 1
+        picked.append(rec)
+        if len(picked) >= NEW_ARRIVAL_MAX:
+            break
+    # 上限で外した品だけで NEW_ARRIVAL_MIN に届かないとき (例: 3 歳はバンダイが多い) は、
+    # 枠ごと消すより偏りを残す (_cap_per_brand と同じ考え方)。戻すのは MIN までで、
+    # 並びは元の順 (初登場の新しい順) に揃える。
+    if len(picked) < NEW_ARRIVAL_MIN and held:
+        order = {id(rec): pos for pos, rec in enumerate(candidates)}
+        picked.extend(held[:NEW_ARRIVAL_MIN - len(picked)])
+        picked.sort(key=lambda r: order[id(r)])
+    return picked
+
+
+def _new_arrivals_payload(items):
+    payload = []
+    for idx, rec in enumerate(items, start=1):
+        item = _record_to_payload_common(rec, idx)
+        if hasattr(rec, "brand"):
+            item["brand"] = rec.brand
+        item.update({"first_seen": rec.first_seen.isoformat(), "first_seen_label": f"{rec.first_seen.month}/{rec.first_seen.day}",
+                     "rank_days_30": rec.rank_days_30, "best_rank_30": rec.best_rank_30})
+        if rec.release_date:
+            item.update({"release_date": rec.release_date.isoformat(),
+                         "release_label": f"{rec.release_date.month}/{rec.release_date.day}",
+                         "release_upcoming": rec.release_upcoming})
+        payload.append(item)
+    return payload
 
 
 def prioritize_ranked(items, history: dict[str, Any], today: date | None = None):
@@ -509,14 +624,14 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
             _write_hub(out_hugo, key, items, generated_at, counts, theme["label"])
             hub_index.append({"key": key, "label": theme["label"],
                               "url": f"/{key}-toys/"})
+    mm_index = build_min_months_index(articles_dir) if age_hubs else None
+    age_brand_index = build_brand_index(articles_dir) if age_hubs and age_max_per_brand > 0 else None
     if age_hubs:
-        mm_index = build_min_months_index(articles_dir)
-        brand_index = build_brand_index(articles_dir) if age_max_per_brand > 0 else None
         for key in age_hubs:
             hub = AGE_HUBS[key]
             items = build_age_hub(records, mm_index, hub,
                                   top_n=top_n, min_ivs=min_ivs,
-                                  brand_index=brand_index,
+                                  brand_index=age_brand_index,
                                   max_per_brand=age_max_per_brand)
             items = prioritize_ranked(items, ranking_history, today)
             lineup_recs = build_age_lineup(
@@ -526,6 +641,24 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
                       lineup=lineup)
             hub_index.append({"key": key, "label": hub["label"],
                               "url": f"/toys-{key}/"})
+    # navi-brain#166 F15: 新着棚は年齢 hub の生成有無にかかわらず毎回出力する。
+    if mm_index is None:
+        mm_index = build_min_months_index(articles_dir)
+    new_brand_index = age_brand_index if age_brand_index is not None else build_brand_index(articles_dir)
+    top_items = select_new_arrivals(records, ranking_history, mm_index, new_brand_index, today=today)
+    top_payload = _new_arrivals_payload(top_items) if len(top_items) >= NEW_ARRIVAL_MIN else []
+    age_payload = {}
+    for key, hub in AGE_HUBS.items():
+        lo = max(0, hub["min_months"] - NEW_ARRIVAL_AGE_LOOKBACK_MONTHS)
+        selected = select_new_arrivals(records, ranking_history, mm_index, new_brand_index,
+                                       today=today, age_range=(lo, hub["max_months"]))
+        if len(selected) >= NEW_ARRIVAL_MIN:
+            age_payload[key] = _new_arrivals_payload(selected)
+    (out_hugo / "new_arrivals.json").write_text(json.dumps({
+        "generated_at": generated_at, "window_days": NEW_ARRIVAL_WINDOW_DAYS,
+        "top": top_payload, "age": age_payload,
+    }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    counts["new_arrivals_top"] = len(top_payload)
     if themes or age_hubs:
         _write_hub_index(out_hugo, hub_index)
     return counts
