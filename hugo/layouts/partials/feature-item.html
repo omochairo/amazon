@@ -61,10 +61,11 @@
     <span class="feature-cospa-badge"><a href="/about-score/" class="feature-cospa-badge-link">知育スコア</a> <strong>{{ int . }}</strong> / 100</span>
     {{- end }}
 
-    {{- with $item.age_min_months }}
-    <span class="feature-age-badge" title="対象年齢">&#128118; {{ partial "age_label.html" . }}</span>
+    {{- /* 0 (0歳〜) も出す。with だと 0 が偽になって 0歳の商品だけバッジが消えていた */ -}}
+    {{- with $ageAttr }}
+    <span class="feature-age-badge" title="対象年齢">&#128118; {{ partial "age_label.html" (int .) }}</span>
     {{- end }}
-    {{- if and (gt (int ($item.rank_days_30 | default 0)) 0) (or (eq $type "cospa") $isInfoHub) }}
+    {{- if and (gt (int ($item.rank_days_30 | default 0)) 0) (or (eq $type "cospa") $isInfoHub (hasPrefix $type "xmas-")) }}
     <span class="feature-rank-days-badge">🔥 楽天ランキング入り（30日で{{ $item.rank_days_30 }}日・最高{{ $item.best_rank_30 }}位）</span>
     {{- end }}
     </div>

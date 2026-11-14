@@ -1,4 +1,4 @@
-"""format_ga4_report の「特集 5 ページ・診断（月ごと）」の集計と表示 (navi-brain#166 F18)。"""
+"""format_ga4_report の「特集ページ・診断（月ごと）」の集計と表示 (navi-brain#166 F18)。"""
 from __future__ import annotations
 
 from scripts.format_ga4_report import render, summarize_feature_events
@@ -26,19 +26,20 @@ def test_render_feature_events_includes_tables_and_zero_start_rate():
         {"yearMonth": "202611", "eventName": "diagnosis_complete", "pagePath": "/diagnosis/", "eventCount": 1},
         {"yearMonth": "202611", "eventName": "affiliate_click", "pagePath": "/price/", "eventCount": 2},
     ]}}, 20, 10)
-    assert "## 特集 5 ページ・診断（月ごと）" in report
+    assert "## 特集ページ・診断（月ごと）" in report
     assert "対象期間: 2026-10-01 〜 2026-11-14" in report
     assert "| 2026-11 | 0 | 1 | — | 0 | 0 |" in report
-    assert "| 2026-11 | 0 | 0 | 0 | 0 | 2 | 2 |" in report
+    assert "| 月 | 診断 | ランキング | 予算別 | おトク | 値下げ | クリスマス | 合計 |" in report
+    assert "| 2026-11 | 0 | 0 | 0 | 0 | 2 | 0 | 2 |" in report
     assert "今月は途中まで。" in report
 
 
 def test_render_empty_feature_events_and_legacy_without_section():
     empty = render({"feature_events": {"range": {}, "rows": []}}, 20, 10)
-    assert "## 特集 5 ページ・診断（月ごと）" in empty
+    assert "## 特集ページ・診断（月ごと）" in empty
     assert "（データなし）" in empty
     legacy = render({}, 20, 10)
-    assert "## 特集 5 ページ・診断（月ごと）" not in legacy
+    assert "## 特集ページ・診断（月ごと）" not in legacy
 
 
 def test_summarize_normalizes_query_and_counts_every_feature_page():
@@ -51,7 +52,8 @@ def test_summarize_normalizes_query_and_counts_every_feature_page():
         {"yearMonth": "202611", "eventName": "affiliate_click", "pagePath": "/price/b0xxxx/", "eventCount": 9},
     ]
     month = summarize_feature_events(rows)[0]
-    assert month["affiliate"] == {"/diagnosis/": 1, "/ranking/": 1, "/cospa/": 1, "/deals/": 1, "/price/": 1}
+    assert month["affiliate"] == {"/diagnosis/": 1, "/ranking/": 1, "/cospa/": 1, "/deals/": 1, "/price/": 1,
+                                  "/xmas-age-*/": 0}
     assert month["affiliate_total"] == 5, "特集ページの配下 (/price/<asin>/) は数えない"
     assert month["diagnosis_pick_click"] == 3
     assert month["diagnosis_share"] == 2
@@ -67,3 +69,17 @@ def test_render_completion_rate_and_broken_feature_payload():
     assert "（データなし）" in broken
     no_month = render({"feature_events": {"range": {}, "rows": [{"yearMonth": "", "eventName": "diagnosis_start", "pagePath": "/diagnosis/", "eventCount": 1}]}}, 20, 10)
     assert "（データなし）" in no_month
+
+
+def test_xmas_pages_are_summed_into_one_column():
+    """navi-brain#166 F10: /xmas-age-N/ の 7 ページは「クリスマス」の 1 列にまとめる。"""
+    rows = [
+        {"yearMonth": "202612", "eventName": "affiliate_click", "pagePath": p, "eventCount": n}
+        for p, n in [("/xmas-age-0/", 2), ("/xmas-age-6", 3), ("/xmas-age-3/index.html", 1),
+                     ("/xmas-age-x/", 50), ("/xmas-age-3/foo/", 50)]
+    ]
+    month = summarize_feature_events(rows)[0]
+    assert month["affiliate"]["/xmas-age-*/"] == 6
+    assert month["affiliate_total"] == 6
+    report = render({"feature_events": {"range": {"start": "2026-11-01", "end": "2026-12-20"}, "rows": rows}}, 20, 10)
+    assert "| 2026-12 | 0 | 0 | 0 | 0 | 0 | 6 | 6 |" in report

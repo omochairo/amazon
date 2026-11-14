@@ -32,6 +32,8 @@
          ブランド名と一致する tag / hub と同一トピックの tag / 低価値 tag /
          空 taxonomy) は head.html と同じ述語を見る。ここに条件を書き足さないこと。 */ -}}
   {{- if partial "is_noindex_term.html" $p -}}{{- $skip = true -}}{{- end -}}
+  {{- /* navi-brain#166 F10: その日のデータに商品が無い特集ページ (head.html と同じ述語で noindex) */ -}}
+  {{- if partial "is_empty_feature.html" $p -}}{{- $skip = true -}}{{- end -}}
   {{- /* #2370 A-3: canonical を他 URL に寄せたページ (build_post.py が
          data/analytics/canonical_overrides.json から .Params.canonicalURL を付ける)。
          実測 (2026-08-17): /products/b0gfvtpdbm/ が /products/b0gl815n6k/ へ統合済み

@@ -10,16 +10,21 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
+import re
 import sys
 
 TOP_PAGE_DEFAULT = 20
 TOP_SOURCE_DEFAULT = 10
+XMAS_PAGES_KEY = "/xmas-age-*/"
+_XMAS_PATH_RE = re.compile(r"/xmas-age-\d+/")
 FEATURE_PAGES = {
     "/diagnosis/": "診断",
     "/ranking/": "ランキング",
     "/cospa/": "予算別",
     "/deals/": "おトク",
     "/price/": "値下げ",
+    # navi-brain#166 F10: クリスマス × 年齢の 7 ページ (/xmas-age-N/) はまとめて 1 列
+    XMAS_PAGES_KEY: "クリスマス",
 }
 DIAGNOSIS_EVENTS = ("diagnosis_start", "diagnosis_complete",
                     "diagnosis_pick_click", "diagnosis_share")
@@ -57,9 +62,11 @@ def summarize_feature_events(rows: list[dict]) -> list[dict]:
         event = row.get("eventName", "")
         if event in DIAGNOSIS_EVENTS and path == "/diagnosis/":
             summary[event] += count
-        elif event == "affiliate_click" and path in FEATURE_PAGES:
-            summary["affiliate"][path] += count
-            summary["affiliate_total"] += count
+        elif event == "affiliate_click":
+            key = XMAS_PAGES_KEY if _XMAS_PATH_RE.fullmatch(path) else path
+            if key in FEATURE_PAGES:
+                summary["affiliate"][key] += count
+                summary["affiliate_total"] += count
     return [months[key] for key in sorted(months)]
 
 
@@ -167,7 +174,7 @@ def render(data: dict, top_page: int, top_source: int) -> str:
 
     if "feature_events" in data:
         feature = data.get("feature_events") or {}
-        lines.append("## 特集 5 ページ・診断（月ごと）")
+        lines.append("## 特集ページ・診断（月ごと）")
         lines.append("")
         fr = feature.get("range") or {}
         lines.append(f"対象期間: {fr.get('start', '?')} 〜 {fr.get('end', '?')}")
@@ -190,8 +197,8 @@ def render(data: dict, top_page: int, top_source: int) -> str:
                     f"| {_fmt_int(month['diagnosis_share'])} |"
                 )
             lines.append("")
-            lines.append("| 月 | 診断 | ランキング | 予算別 | おトク | 値下げ | 合計 |")
-            lines.append("|---|---:|---:|---:|---:|---:|---:|")
+            lines.append("| 月 | " + " | ".join(FEATURE_PAGES.values()) + " | 合計 |")
+            lines.append("|---|" + "---:|" * (len(FEATURE_PAGES) + 1))
             for month in summaries:
                 affiliate = month["affiliate"]
                 vals = [affiliate[path] for path in FEATURE_PAGES]
