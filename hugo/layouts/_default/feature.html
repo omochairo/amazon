@@ -16,6 +16,17 @@
   {{- if eq .key $type -}}{{- $isInfoHub = true -}}{{- end -}}
 {{- end -}}
 
+{{- /* navi-brain#166 F10: クリスマス × 年齢のページ (xmas-age-N)。
+       クリスマスの時期 (10/1〜12/25) かどうかと、次のクリスマスの年はビルド時に決める
+       (配信ビルドは毎日走る)。URL は毎年使い回し、季節の一文だけを変える。 */ -}}
+{{- $isXmas := hasPrefix $type "xmas-" -}}
+{{- /* 配信ビルドの時計は UTC なので、日本時間 (UTC+9) に直してから月日を見る */ -}}
+{{- $jst := now.UTC.Add (time.ParseDuration "9h") -}}
+{{- $month := int $jst.Month -}}
+{{- $xmasSeason := or (and (ge $month 10) (lt $month 12)) (and (eq $month 12) (le $jst.Day 25)) -}}
+{{- $xmasYear := $jst.Year -}}
+{{- if and (eq $month 12) (gt $jst.Day 25) }}{{ $xmasYear = add $xmasYear 1 }}{{ end -}}
+
 <header class="page-header ranking-header feature-header feature-header--{{ $type }}">
   <h1>{{ .Title }}</h1>
   {{- /* #5227: 広告表記はファーストビュー (h1 直下)。詳細は下部 .ranking-disclaimer。
@@ -39,6 +50,12 @@
   {{- /* navi-brain#166 F15: 年齢 hub の先頭に「新しく売れ筋に入ったおもちゃ」。
          new_arrivals.json は build_category_hubs.py がビルド時に作る (コミットしない)。
          ファイル・age・その年齢のキーのどれが無くても何も出さない (4 件未満の年齢はキーが無い)。 */ -}}
+  {{- if and (hasPrefix $type "age-") $xmasSeason }}
+    {{- partial "xmas_links.html" (dict "type" $type "mode" "hub") }}
+  {{- end }}
+  {{- if and $isXmas $data $data.items }}
+  <p class="xmas-season">🎄 {{ if $xmasSeason }}{{ $xmasYear }}年のクリスマスに向けて、いまの価格で選んでいます。{{ else }}次のクリスマス（{{ $xmasYear }}年）に向けて、いまの価格で選んでいます。{{ end }}</p>
+  {{- end }}
   {{- if hasPrefix $type "age-" }}
     {{- with site.Data.features.new_arrivals }}
       {{- with .age }}
@@ -184,7 +201,10 @@
   {{- else }}
     {{- /* ===== /deals/ : 従来通りのフラットリスト ===== */}}
     {{- $items := and $data $data.items }}
-    {{- if not $items }}
+    {{- if and (not $items) $isXmas }}
+    {{- /* 歯止めで作らなかった日・データが無い日。noindex でサイトマップからも外れる (is_empty_feature.html) */ -}}
+    <p class="ranking-empty">いまはこの年齢・予算に合う商品を集計中です。{{ with .Params.xmas_hub_url }}<a href="{{ . }}">{{ $.Params.xmas_hub_title | default "年齢別の知育玩具ランキング" }}</a>もご覧ください。{{ end }}</p>
+    {{- else if not $items }}
     <p class="ranking-empty">現在データを集計中です。次回の自動更新までしばらくお待ちください。</p>
     {{- else }}
     {{- if eq $type "deals" }}
@@ -225,7 +245,14 @@
     {{- end }}
     {{- end }}
 
-    {{- if eq $type "deals" }}
+    {{- if $isXmas }}
+    {{- with .Params.xmas_hub_url }}
+    <p class="xmas-hub-back">誕生日のプレゼントや、予算を決めずに選ぶなら → <a href="{{ . }}">{{ $.Params.xmas_hub_title | default "年齢別の知育玩具ランキング" }}</a></p>
+    {{- end }}
+    <p class="ranking-disclaimer">
+      ※ 対象年齢が{{ $data.label | default "この年齢" }}に合い、最安値が{{ lang.FormatNumberCustom 0 ($data.budget_max | default 10000) }}円までの商品から、<a href="/about-score/">知育スコア</a>と年齢の合い方で選んでいます。同じメーカーは 2 件まで、{{ with .Params.xmas_hub_url }}<a href="{{ . }}">年齢別のランキング</a>{{ else }}年齢別のランキング{{ end }}の上位と同じ商品は半分までにして、ほかの候補も見比べられるようにしています。知育スコアと実売価格は集計時点のものです。価格・在庫はリンク先で必ずご確認ください。
+    </p>
+    {{- else if eq $type "deals" }}
     <p class="ranking-disclaimer">
       ※ 割引率は Amazon または販売事業者が設定した参考価格をもとにしています。直近で実際に値下がりした商品は <a href="/price/">値下がり中のおもちゃ一覧</a>（おもちゃいろが毎日記録する価格で、ふだんより安くなった商品）をご覧ください。リンク先で最新の価格・在庫をご確認ください。
     </p>
@@ -241,6 +268,12 @@
 
   {{- /* #2687 Slice C: info hub 同士の相互リンク (cluster 形成)。cospa/deals/
          price には $isInfoHub が false のまま = 出ない。 */ -}}
+  {{- if $isXmas }}
+  {{- partial "xmas_links.html" (dict "type" $type "mode" "siblings") }}
+  {{- else if and (hasPrefix $type "age-") (not $xmasSeason) }}
+  {{- /* 季節外は年齢 hub の下のほうに置く (時期中はページの先頭) */ -}}
+  {{- partial "xmas_links.html" (dict "type" $type "mode" "hub") }}
+  {{- end }}
   {{- if $isInfoHub }}
   {{- partial "hub_siblings.html" (dict "type" $type) }}
   {{- end }}

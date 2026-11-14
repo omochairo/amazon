@@ -40,6 +40,8 @@ META = {"range": {"start": "2026-09-19", "end": "2026-11-13"}, "warnings": [],
     ("/diagnosis/", "診断"),
     ("/toys-age-0/", "年齢別"),
     ("/toys-age-6/", "年齢別"),
+    ("/xmas-age-0/", "クリスマス"),
+    ("/xmas-age-6/", "クリスマス"),
     ("/montessori-toys/", "テーマ別"),
     ("/programming-toys/", "テーマ別"),
     ("/tags/0toshi/", "タグ"),
@@ -75,7 +77,8 @@ def test_hugo_content_urls_match_page_types():
     """固定ページの url が page_type の想定どおりか (URL を変えたらここで気づく)。"""
     lookup_root = f.REPO_ROOT / "hugo" / "content"
     expect = {"ranking.md": "ランキング", "cospa.md": "予算別", "deals.md": "おトク",
-              "diagnosis.md": "診断", "toys-age-0.md": "年齢別", "math-toys.md": "テーマ別"}
+              "diagnosis.md": "診断", "toys-age-0.md": "年齢別", "math-toys.md": "テーマ別",
+              "xmas-age-3.md": "クリスマス"}
     for name, kind in expect.items():
         fm = f._front_matter((lookup_root / name).read_text(encoding="utf-8"))
         url = fm.get("url") or f"/{name[:-3]}/"

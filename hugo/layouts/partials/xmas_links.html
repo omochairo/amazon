@@ -1,0 +1,40 @@
+{{- /*
+  xmas_links.html (navi-brain#166 F10)
+  クリスマス × 年齢のページへのリンク。build_category_hubs.py が作る
+  hugo/data/features/xmas_index.json ([{key,label,hub,url}]、歯止めを通って作ったページだけ)
+  を読むので、作らなかったページへはリンクしない。ファイルが無ければ何も出さない。
+
+  Expected context: dict
+    "type" : 呼び出し元の feature_type
+    "mode" : "siblings" = クリスマスページの下に、ほかの年齢のクリスマスページを並べる
+             "hub"      = 年齢 hub に、その年齢のクリスマスページへの案内を出す
+*/ -}}
+{{- $type := .type -}}
+{{- $pages := site.Data.features.xmas_index -}}
+{{- if $pages }}
+  {{- if eq .mode "siblings" }}
+  <nav class="xmas-links" aria-label="年齢別のクリスマスプレゼント">
+    <h2 class="xmas-links-title">🎄 年齢別のクリスマスプレゼント</h2>
+    <div class="tag-chips xmas-links-list">
+      {{- range $pages }}
+      {{- if eq .key $type }}
+      <span class="tag-chip is-current" aria-current="page">{{ .label }}</span>
+      {{- else }}
+      <a class="tag-chip" href="{{ .url }}">{{ .label }}</a>
+      {{- end }}
+      {{- end }}
+    </div>
+  </nav>
+  {{- else }}
+    {{- $mine := slice -}}
+    {{- range $pages }}{{ if eq .hub $type }}{{ $mine = $mine | append . }}{{ end }}{{ end -}}
+    {{- with $mine }}
+  <p class="xmas-hub-callout">
+    <span class="xmas-hub-callout-label">🎄 クリスマスプレゼントに選ぶなら</span>
+    {{- range $i, $p := . }}
+    <a href="{{ $p.url }}">{{ $p.label }}のクリスマスプレゼント（1万円まで）</a>
+    {{- end }}
+  </p>
+    {{- end }}
+  {{- end }}
+{{- end }}

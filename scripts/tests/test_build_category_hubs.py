@@ -661,5 +661,204 @@ class NewArrivalsTests(unittest.TestCase):
             self.assertEqual(counts["new_arrivals_top"], 0)
 
 
+class XmasScoreTest(unittest.TestCase):
+    """navi-brain#166 F10: クリスマスページ 1 件の採点 (診断の scoreItem と同じ配点)。"""
+
+    PAGE3 = bch.XMAS_PAGES["xmas-age-3"]  # lo=36, hi=47
+
+    def test_age_tiers(self):
+        rec = _rec("A", 4.5, 80, 5000)
+        exact = bch.xmas_score(rec, 36, self.PAGE3)
+        one_below = bch.xmas_score(rec, 24, self.PAGE3)
+        two_below = bch.xmas_score(rec, 12, self.PAGE3)
+        self.assertAlmostEqual(exact, 20 + 14 + 80 * 0.45)
+        self.assertAlmostEqual(one_below, 14 + 14 + 80 * 0.45)
+        self.assertAlmostEqual(two_below, 6 + 14 + 80 * 0.45)
+
+    def test_excludes_older_and_too_young(self):
+        rec = _rec("A", 4.5, 80, 5000)
+        self.assertIsNone(bch.xmas_score(rec, 48, self.PAGE3))   # 対象年齢がその年齢より上
+        self.assertIsNone(bch.xmas_score(rec, 11, self.PAGE3))   # 36-24 より幼い
+        self.assertIsNone(bch.xmas_score(rec, None, self.PAGE3))
+
+    def test_price_gate_and_tier(self):
+        self.assertIsNone(bch.xmas_score(_rec("A", 4.5, 80, None), 36, self.PAGE3))
+        self.assertIsNone(bch.xmas_score(_rec("A", 4.5, 80, 0), 36, self.PAGE3))
+        self.assertIsNone(bch.xmas_score(_rec("A", 4.5, 80, 10001), 36, self.PAGE3))
+        self.assertIsNotNone(bch.xmas_score(_rec("A", 4.5, 80, 10000), 36, self.PAGE3))
+        cheap = bch.xmas_score(_rec("A", 4.5, 80, 2999), 36, self.PAGE3)
+        self.assertAlmostEqual(cheap, 20 + 7 + 80 * 0.45)
+
+
+class SelectXmasItemsTest(unittest.TestCase):
+    PAGE3 = bch.XMAS_PAGES["xmas-age-3"]
+
+    def _pool(self, n, prefix="X", ivs100=90):
+        recs = [_rec(f"{prefix}{i:02d}", 4.5, ivs100 - i, 5000) for i in range(n)]
+        for r in recs:
+            r.name = f"ユニークな商品 {r.asin}"
+        return recs
+
+    def test_brand_cap_and_fill_back(self):
+        recs = self._pool(4)
+        mm = {r.asin: 36 for r in recs}
+        brands = {r.asin: "lego" for r in recs}
+        got = bch.select_xmas_items(recs, mm, brands, self.PAGE3, min_ivs=0.0, top_n=3)
+        # 同じメーカーは 2 件まで。ほかに候補が無いときだけ 3 件目を戻す
+        self.assertEqual([r.asin for r in got], ["X00", "X01", "X02"])
+        more = recs + [_rec("Y00", 4.5, 50, 5000)]
+        more[-1].name = "べつの商品 Y00"
+        mm["Y00"] = 36
+        got = bch.select_xmas_items(more, mm, brands, self.PAGE3, min_ivs=0.0, top_n=3)
+        self.assertEqual([r.asin for r in got], ["X00", "X01", "Y00"])
+
+    def test_same_product_listed_twice_is_deduped(self):
+        a = _rec("A", 4.5, 90, 5000)
+        a.name = "ナーフ エリート2.0 エコー CS-10"
+        b = _rec("B", 4.5, 90, 5100)
+        b.name = "ナーフ エリート2.0 エコー CS-10"
+        c = _rec("C", 4.5, 80, 5000)
+        c.name = "べつの商品"
+        mm = {"A": 36, "B": 36, "C": 36}
+        got = bch.select_xmas_items([a, b, c], mm, {}, self.PAGE3, min_ivs=0.0)
+        self.assertEqual([r.asin for r in got], ["A", "C"])
+
+    def test_at_most_half_from_age_hub_top(self):
+        hub = self._pool(10, prefix="H", ivs100=99)
+        others = self._pool(10, prefix="O", ivs100=70)
+        mm = {r.asin: 36 for r in hub + others}
+        got = bch.select_xmas_items(hub + others, mm, {}, self.PAGE3, min_ivs=0.0,
+                                    hub_top={r.asin for r in hub})
+        asins = [r.asin for r in got]
+        self.assertEqual(len(asins), bch.XMAS_TOP_N)
+        self.assertEqual(sum(a.startswith("H") for a in asins), bch.XMAS_MAX_FROM_HUB)
+        # 並びは採点順のまま (年齢 hub の上位が先頭に残る)
+        self.assertEqual(asins[:6], ["H00", "H01", "H02", "H03", "H04", "H05"])
+
+    def test_min_ivs_floor(self):
+        low = _rec("L", 3.0, 99, 5000)
+        mm = {"L": 36}
+        self.assertEqual(bch.select_xmas_items([low], mm, {}, self.PAGE3, min_ivs=3.8), [])
+
+
+class BuildXmasPagesTest(unittest.TestCase):
+    """歯止め: 件数不足・年齢 hub との重複・クリスマスページどうしの重複。"""
+
+    def _recs(self, n, prefix, mm_value, mm, ivs100=90):
+        out = []
+        for i in range(n):
+            r = _rec(f"{prefix}{i:02d}", 4.5, ivs100 - i, 5000)
+            r.name = f"商品 {prefix}{i:02d} のなまえ"
+            mm[r.asin] = mm_value
+            out.append(r)
+        return out
+
+    def test_too_few_items_is_skipped(self):
+        mm = {}
+        recs = self._recs(bch.XMAS_MIN_ITEMS - 1, "A", 36, mm)
+        accepted, skipped = bch.build_xmas_pages(recs, mm, {}, {}, min_ivs=0.0)
+        self.assertNotIn("xmas-age-3", accepted)
+        self.assertTrue(skipped["xmas-age-3"].startswith("too_few"))
+
+    def test_overlap_with_age_hub_is_skipped(self):
+        # 年齢 hub の上位が 6 件、それ以外が 2 件しかない → 8 件中 6 件 (75%) が同じ
+        mm = {}
+        hub = self._recs(10, "H", 36, mm, ivs100=99)
+        others = self._recs(2, "O", 36, mm, ivs100=70)
+        accepted, skipped = bch.build_xmas_pages(
+            hub + others, mm, {}, {"age-3": {r.asin for r in hub}}, min_ivs=0.0)
+        self.assertNotIn("xmas-age-3", accepted)
+        self.assertTrue(skipped["xmas-age-3"].startswith("overlap_hub: age-3"))
+
+    def test_overlap_between_xmas_pages_keeps_the_first(self):
+        # 4歳〜 の商品しか無いと、4歳と 5歳のページが同じ 12 件になる → 5歳は作らない
+        mm = {}
+        recs = self._recs(14, "F", 48, mm)
+        accepted, skipped = bch.build_xmas_pages(recs, mm, {}, {}, min_ivs=0.0)
+        self.assertIn("xmas-age-4", accepted)
+        self.assertEqual(skipped["xmas-age-5"], "overlap_xmas: xmas-age-4 100%")
+
+    def test_distinct_pages_are_all_built(self):
+        mm = {}
+        recs = []
+        for key, page in bch.XMAS_PAGES.items():
+            recs += self._recs(12, key.replace("-", "")[-4:], page["lo"], mm)
+        accepted, skipped = bch.build_xmas_pages(recs, mm, {}, {}, min_ivs=0.0)
+        self.assertEqual(skipped, {})
+        self.assertEqual(list(accepted), list(bch.XMAS_PAGES))
+
+
+class RunXmasPagesTest(unittest.TestCase):
+    def test_writes_all_pages_and_index_of_built_ones(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            adir = pathlib.Path(tmp) / "articles"
+            adir.mkdir()
+            for i in range(10):
+                asin = f"B0XMAS3{i:03d}"
+                doc = {
+                    "slug": asin, "title": "t",
+                    "persona_fit": {"age_range": "3歳〜"},
+                    "product": {"asin": asin, "name": f"三歳のおもちゃ その{i}",
+                                "brand": f"メーカー{i}", "ivs_score": 4.5,
+                                "best_price": 4000, "best_platform": "amazon",
+                                "prices": {"amazon": {"url": f"https://amazon/{asin}"}}},
+                }
+                (adir / f"2026-06-01-{asin}.json").write_text(
+                    json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+            out = pathlib.Path(tmp) / "features"
+            # 年齢 hub を作らない呼び方でも、比べる相手 (age-3 の上位) は作って比べる
+            counts = bch.run(adir, out, top_n=24, min_ivs=0.0, themes=[], age_hubs=[],
+                             history_path=pathlib.Path(tmp) / "none.json")
+            files = {p.name for p in out.glob("xmas-*.json")}
+            page3 = json.loads((out / "xmas-age-3.json").read_text(encoding="utf-8"))
+            page0 = json.loads((out / "xmas-age-0.json").read_text(encoding="utf-8"))
+            index = json.loads((out / "xmas_index.json").read_text(encoding="utf-8"))
+        self.assertEqual(files, {f"{k}.json" for k in bch.XMAS_PAGES})
+        # 10 件すべてが age-3 の上位 24 件に入るので、3歳のページで選べるのは 6 件 → 8 件に届かず作らない
+        self.assertEqual(counts["xmas-age-3"], 0)
+        self.assertTrue(page3["skipped"].startswith("too_few"))
+        self.assertEqual(page3["items"], [])
+        self.assertTrue(page0["skipped"].startswith("too_few"))
+        # 4歳のページは「1 歳下から」の 3歳〜 の品で 10 件そろう (比べる age-4 の上位とは重ならない)。
+        # 5歳・小学生は同じ 10 件になるので、先に作った 4歳と重なって作らない
+        self.assertEqual(index, [{"key": "xmas-age-4", "label": "4歳", "hub": "age-4",
+                                  "url": "/xmas-age-4/"}])
+        self.assertEqual(counts["xmas-age-4"], 10)
+
+    def test_generated_age_hub_is_used_for_the_cap(self):
+        """年齢 hub を作る通常の呼び方でも、作った age-3 の上位と比べて 3歳のページを作らない。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            adir = pathlib.Path(tmp) / "articles"
+            adir.mkdir()
+            for i in range(10):
+                asin = f"B0XMAS3{i:03d}"
+                doc = {
+                    "slug": asin, "title": "t",
+                    "persona_fit": {"age_range": "3歳〜"},
+                    "product": {"asin": asin, "name": f"三歳のおもちゃ その{i}",
+                                "brand": f"メーカー{i}", "ivs_score": 4.5,
+                                "best_price": 4000, "best_platform": "amazon",
+                                "prices": {"amazon": {"url": f"https://amazon/{asin}"}}},
+                }
+                (adir / f"2026-06-01-{asin}.json").write_text(
+                    json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+            out = pathlib.Path(tmp) / "features"
+            counts = bch.run(adir, out, top_n=24, min_ivs=0.0, themes=[], age_hubs=["age-3"],
+                             history_path=pathlib.Path(tmp) / "none.json")
+            page3 = json.loads((out / "xmas-age-3.json").read_text(encoding="utf-8"))
+        self.assertEqual(counts["age-3"], 10)
+        self.assertEqual(counts["xmas-age-3"], 0)
+        self.assertTrue(page3["skipped"].startswith("too_few"))
+
+    def test_xmas_false_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            adir = pathlib.Path(tmp) / "articles"
+            adir.mkdir()
+            out = pathlib.Path(tmp) / "features"
+            bch.run(adir, out, top_n=24, min_ivs=0.0, themes=[], age_hubs=[], xmas=False,
+                    history_path=pathlib.Path(tmp) / "none.json")
+            self.assertFalse((out / "xmas_index.json").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

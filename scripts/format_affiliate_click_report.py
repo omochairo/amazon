@@ -35,7 +35,7 @@ BUY_BOX_LAUNCH = date(2026, 11, 13)
 NETWORKS = ("amazon", "rakuten", "yahoo")
 
 PAGE_TYPES = ("記事", "ランキング", "予算別", "おトク", "値下げ", "診断", "年齢別",
-              "テーマ別", "タグ", "ブランド", "トップ", "その他")
+              "クリスマス", "テーマ別", "タグ", "ブランド", "トップ", "その他")
 _ARTICLE_RE = re.compile(r"^/products/([a-z0-9]{10})/", re.IGNORECASE)
 
 SLOT_GROUPS = ("記事の購入ボタン", "在庫表", "価格カード", "追従バー", "特集・一覧", "その他")
@@ -63,6 +63,8 @@ def page_type(path: str) -> str:
         return "診断"
     if re.fullmatch(r"toys-age-\d+", first):
         return "年齢別"
+    if re.fullmatch(r"xmas-age-\d+", first):  # navi-brain#166 F10
+        return "クリスマス"
     if first.endswith("-toys"):
         return "テーマ別"
     if first == "tags":

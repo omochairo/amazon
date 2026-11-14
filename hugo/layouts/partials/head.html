@@ -99,9 +99,11 @@
   {{- end -}}
 {{- end -}}
 {{- $isProd := or hugo.IsProduction (eq site.Params.env "production") -}}
-{{- if and $isProd (ne .Params.robotsNoIndex true) (not $isNoindexTerm) (not $isPaginated) }}
+{{- /* navi-brain#166 F10: データが要る特集ページで、その日のデータに商品が無いとき (sitemap.xml と同じ述語) */ -}}
+{{- $isEmptyFeature := partial "is_empty_feature.html" . -}}
+{{- if and $isProd (ne .Params.robotsNoIndex true) (not $isNoindexTerm) (not $isPaginated) (not $isEmptyFeature) }}
 <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
-{{- else if and $isProd (or $isNoindexTerm $isPaginated) (ne .Params.robotsNoIndex true) }}
+{{- else if and $isProd (or $isNoindexTerm $isPaginated $isEmptyFeature) (ne .Params.robotsNoIndex true) }}
 <meta name="robots" content="noindex, follow">
 {{- else }}
 <meta name="robots" content="noindex, nofollow">

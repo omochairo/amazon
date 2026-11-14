@@ -7890,3 +7890,34 @@ a.sale-notice-main::after {
 .post-content .new-arrivals .carousel-card-title { border-left: none; padding-left: 0; font-family: inherit !important; }
 .new-arrivals-more { margin: .65rem 0 0; text-align: right; font-size: .82rem; }
 .new-arrivals-more a { color: var(--primary); text-decoration: underline; text-underline-offset: .15em; }
+
+/* navi-brain#166 F10: クリスマス × 年齢のページ (xmas-age-N) と、年齢 hub からの案内 */
+.post-content .xmas-season {
+  margin: 1rem 0;
+  padding: .6rem .9rem;
+  border-left: 4px solid #2f8f4e;
+  border-radius: 8px;
+  background: #f1f8f2;
+  font-size: .92rem;
+}
+[data-theme="dark"] .post-content .xmas-season { background: #1c2a20; border-left-color: #5cc27e; }
+.post-content .xmas-hub-callout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .35rem .75rem;
+  margin: 1rem 0;
+  padding: .6rem .9rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: .92rem;
+}
+.xmas-hub-callout-label { font-weight: 700; }
+.post-content .xmas-hub-callout a { display: inline-block; padding: .3rem 0; font-weight: 600; text-decoration: underline; text-underline-offset: .15em; }
+.post-content .xmas-links { margin: 2rem 0 1rem; }
+.post-content .xmas-links-title { margin: 0 0 .6rem; font-size: 1.05rem; }
+/* 白文字とのコントラスト 5.9:1 (#23733d)。ダークでも同じ色にする */
+.xmas-links-list .tag-chip.is-current,
+[data-theme="dark"] .xmas-links-list .tag-chip.is-current { background: #23733d; color: #fff !important; box-shadow: none; }
+.post-content .xmas-hub-back { margin: 1.25rem 0 .5rem; font-size: .95rem; }
+.post-content .xmas-hub-back a { font-weight: 600; text-decoration: underline; text-underline-offset: .15em; }

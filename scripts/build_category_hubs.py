@@ -21,6 +21,7 @@ import argparse
 import json
 import logging
 import re
+import unicodedata
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -179,6 +180,29 @@ NEW_ARRIVAL_AGE_LOOKBACK_MONTHS = 12
 
 # 直近30日で3日以上ランク入りした商品を、販売実績が見える候補として前に出す。
 RANK_DAYS_PRIORITY_THRESHOLD = 3
+
+# navi-brain#166 F10: クリスマス × 年齢の特集ページ (K が案 A を選んだ)。
+# 一覧は検索語のデータに出た組み合わせだけ (集計は navi-brain#166)。ここに無いページは作らない。
+# 誕生日 × 年齢は年齢 hub の題 (「誕生日プレゼントにも」) と同じ語を狙って食い合うので作らない。
+# lo / hi は診断 (hugo/assets/js/diagnosis_core.js の AGES) と同じ月齢の幅で、選び方も
+# 診断の「プレゼント・〜10,000円・バランスよく」の採点 (scoreItem) に合わせている。
+# hub は歯止めで比べる年齢 hub。4歳・5歳はどちらも age-4 (4〜5歳) と比べる。
+XMAS_PAGES: dict[str, dict[str, Any]] = {
+    "xmas-age-0": {"label": "0歳", "lo": 0, "hi": 11, "hub": "age-0"},
+    "xmas-age-1": {"label": "1歳", "lo": 12, "hi": 23, "hub": "age-1"},
+    "xmas-age-2": {"label": "2歳", "lo": 24, "hi": 35, "hub": "age-2"},
+    "xmas-age-3": {"label": "3歳", "lo": 36, "hi": 47, "hub": "age-3"},
+    "xmas-age-4": {"label": "4歳", "lo": 48, "hi": 59, "hub": "age-4"},
+    "xmas-age-5": {"label": "5歳", "lo": 60, "hi": 71, "hub": "age-4"},
+    "xmas-age-6": {"label": "小学生", "lo": 72, "hi": 155, "hub": "age-6"},
+}
+XMAS_TOP_N = 12
+XMAS_MIN_ITEMS = 8           # これに届かないページは作らない (薄いページを出さない)
+XMAS_BUDGET_MAX = 10000      # 診断の「〜10,000円 クリスマス・特別な日に」
+XMAS_MAX_PER_BRAND = 2       # 診断の diversify と同じ
+XMAS_OVERLAP_MAX = 0.6       # 年齢 hub の上位・ほかのクリスマスページとこの割合以上同じなら作らない
+XMAS_HUB_COMPARE_N = 24      # 比べる年齢 hub の上位件数
+XMAS_MAX_FROM_HUB = 6        # 年齢 hub の上位から選ぶのはここまで (12 件の半分。select_xmas_items)
 
 
 def load_rank_history(path: Path) -> dict[str, Any]:
@@ -507,6 +531,164 @@ def _cap_per_brand(pool, brand_index, top_n, max_per_brand):
     return picked
 
 
+def _xmas_lower_window(lo: int) -> int:
+    """診断の lowerWindow と同じ。これより幼い対象年齢の物は物足りないので出さない。"""
+    if lo < 24:
+        return 12
+    if lo < 72:
+        return 24
+    return 36
+
+
+def xmas_score(rec, min_months: int | None, page: dict[str, Any]) -> float | None:
+    """クリスマスページ 1 件の採点。None は「このページには出さない」。
+
+    診断の scoreItem (プレゼント・〜10,000円・バランスよく) と同じ配点:
+    年齢 (その年齢から 20 / 1 歳下から 14 / それより下 6) + 予算 (上限の 3 割以上 14 / 未満 7)
+    + 知育スコア×0.45。対象年齢がその年齢より上の物と、価格が分からない物は出さない。
+    """
+    lo, hi = page["lo"], page["hi"]
+    if min_months is None or min_months > hi:
+        return None
+    if min_months < lo - _xmas_lower_window(lo):
+        return None
+    price = rec.best_price
+    if not isinstance(price, (int, float)) or price <= 0 or price > XMAS_BUDGET_MAX:
+        return None
+    if min_months >= lo:
+        score = 20.0
+    elif min_months >= lo - 12:
+        score = 14.0
+    else:
+        score = 6.0
+    score += 14 if price >= XMAS_BUDGET_MAX * 0.3 else 7
+    score += (rec.ivs_100 or 0) * 0.45
+    return score
+
+
+_NAME_KEY_DROP_RE = re.compile(r"[\s　・、。,.!！?？()（）「」『』【】\[\]\-—ー_/]")
+
+
+def _name_key(name: str | None) -> str:
+    """同じ商品の別出品をまとめるための名前キー (診断の nameKey と同じ考え方)。"""
+    return _NAME_KEY_DROP_RE.sub("", unicodedata.normalize("NFKC", name or "").lower())
+
+
+def _same_product(key: str, seen: list[str]) -> bool:
+    """診断の sameProduct と同じ。一致か、6 文字以上の名前がもう一方に含まれていれば同じ商品。"""
+    if len(key) < 4:
+        return False
+    for s in seen:
+        if len(s) < 4:
+            continue
+        if s == key or (len(s) >= 6 and s in key) or (len(key) >= 6 and key in s):
+            return True
+    return False
+
+
+def select_xmas_items(records, min_months_index, brand_index, page, *, min_ivs,
+                      hub_top: set[str] | frozenset[str] = frozenset(),
+                      top_n: int = XMAS_TOP_N):
+    """クリスマスページの候補を採点順に top_n 件選ぶ。
+
+    - 同じ商品の別出品 (名前がほぼ同じ) は 1 件にする
+    - 同じメーカーは XMAS_MAX_PER_BRAND 件まで (届かないときだけ戻して埋める)
+    - 年齢 hub の上位 (hub_top) からは XMAS_MAX_FROM_HUB 件まで。年齢 hub と同じ商品が
+      並ぶだけのページにしないため。2026-11-14 の実データでは、この上限なしだと
+      0歳・2歳・3歳が年齢 hub と 67〜83% 同じになり、歯止め (6 割) で作られなかった
+    """
+    brand_index = brand_index or {}
+    scored = []
+    for rec in records:
+        if rec.ivs_score is None or rec.ivs_score < min_ivs:
+            continue
+        s = xmas_score(rec, min_months_index.get(rec.asin), page)
+        if s is not None:
+            scored.append((s, rec))
+    scored.sort(key=lambda x: (-x[0], -(x[1].ivs_100 or 0), x[1].best_price or 10**9, x[1].asin))
+    order = {rec.asin: pos for pos, (_, rec) in enumerate(scored)}
+    picked, held, seen = [], [], []
+    used: dict[str, int] = {}
+    from_hub = 0
+    for _, rec in scored:
+        if len(picked) >= top_n:
+            break
+        key = _name_key(rec.name)
+        if _same_product(key, seen):
+            continue
+        # 年齢 hub の上限で外す商品の名前も seen に残す。その別出品 (ASIN 違い) を
+        # 代わりに載せると、年齢 hub と同じ商品が並ぶことになるため
+        seen.append(key)
+        in_hub = rec.asin in hub_top
+        if in_hub and from_hub >= XMAS_MAX_FROM_HUB:
+            continue
+        brand = brand_index.get(rec.asin)
+        if brand is not None and used.get(brand, 0) >= XMAS_MAX_PER_BRAND:
+            held.append(rec)
+            continue
+        if brand is not None:
+            used[brand] = used.get(brand, 0) + 1
+        from_hub += in_hub
+        picked.append(rec)
+    for rec in held:
+        if len(picked) >= top_n:
+            break
+        in_hub = rec.asin in hub_top
+        if in_hub and from_hub >= XMAS_MAX_FROM_HUB:
+            continue
+        from_hub += in_hub
+        picked.append(rec)
+    picked.sort(key=lambda r: order[r.asin])
+    return picked
+
+
+def _overlap_ratio(asins: list[str], other: set[str]) -> float:
+    """asins のうち other にも入っている割合 (asins が空なら 0)。"""
+    if not asins:
+        return 0.0
+    return sum(1 for a in asins if a in other) / len(asins)
+
+
+def build_xmas_pages(records, min_months_index, brand_index, hub_tops: dict[str, set[str]],
+                     *, min_ivs: float):
+    """XMAS_PAGES を順に選び、歯止めを通ったページだけ返す。
+
+    歯止め (navi-brain#166 F10 の設計):
+      1. XMAS_MIN_ITEMS 件に届かない → 作らない
+      2. 同じ年齢の年齢 hub の上位 XMAS_HUB_COMPARE_N 件と XMAS_OVERLAP_MAX 以上同じ → 作らない
+      3. 先に作ると決めたクリスマスページと XMAS_OVERLAP_MAX 以上同じ → 作らない
+    戻り値は ({key: items}, {key: 作らない理由})。
+    """
+    accepted: dict[str, list] = {}
+    skipped: dict[str, str] = {}
+    for key, page in XMAS_PAGES.items():
+        items = select_xmas_items(records, min_months_index, brand_index, page, min_ivs=min_ivs,
+                                  hub_top=hub_tops.get(page["hub"], set()))
+        asins = [r.asin for r in items]
+        if len(items) < XMAS_MIN_ITEMS:
+            skipped[key] = f"too_few: {len(items)} < {XMAS_MIN_ITEMS}"
+            continue
+        hub_ratio = _overlap_ratio(asins, hub_tops.get(page["hub"], set()))
+        if hub_ratio >= XMAS_OVERLAP_MAX:
+            skipped[key] = f"overlap_hub: {page['hub']} {hub_ratio:.0%}"
+            continue
+        reason = ""
+        for other_key, other_items in accepted.items():
+            ratio = _overlap_ratio(asins, {r.asin for r in other_items})
+            if ratio >= XMAS_OVERLAP_MAX:
+                reason = f"overlap_xmas: {other_key} {ratio:.0%}"
+                break
+        if reason:
+            skipped[key] = reason
+            continue
+        accepted[key] = items
+        logger.info("%s (%s): %d items, overlap with %s top%d = %.0f%%", key, page["label"],
+                    len(items), page["hub"], XMAS_HUB_COMPARE_N, hub_ratio * 100)
+    for key, reason in skipped.items():
+        logger.warning("%s: not built (%s)", key, reason)
+    return accepted, skipped
+
+
 def build_age_lineup(records, min_months_index, hub, exclude_asins):
     """年齢hub の全ラインナップ節 (#2687 Slice A) 用に bucket 全 member を返す。
 
@@ -591,7 +773,7 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
         per_asin_dir: Path | None = None,
         raw_root: Path | None = None,
         age_max_per_brand: int = 0, history_path: Path | None = None,
-        today: date | None = None) -> dict[str, int]:
+        today: date | None = None, xmas: bool = True) -> dict[str, int]:
     records = _dedupe_by_asin(load_articles(articles_dir))
     # #2812: カード画像も記事ページと同じ amazon.json の検証済み画像に揃える。
     logger.info("amazon image overlay: %d replaced",
@@ -626,6 +808,7 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
                               "url": f"/{key}-toys/"})
     mm_index = build_min_months_index(articles_dir) if age_hubs else None
     age_brand_index = build_brand_index(articles_dir) if age_hubs and age_max_per_brand > 0 else None
+    age_tops: dict[str, set[str]] = {}
     if age_hubs:
         for key in age_hubs:
             hub = AGE_HUBS[key]
@@ -634,6 +817,9 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
                                   brand_index=age_brand_index,
                                   max_per_brand=age_max_per_brand)
             items = prioritize_ranked(items, ranking_history, today)
+            # クリスマスページの歯止めは、実際に載る年齢 hub の上位と比べる
+            # (配信ビルドは --top-n 24 なので XMAS_HUB_COMPARE_N と同じ件数になる)
+            age_tops[key] = {r.asin for r in items[:XMAS_HUB_COMPARE_N]}
             lineup_recs = build_age_lineup(
                 records, mm_index, hub, exclude_asins={r.asin for r in items})
             lineup = [_lineup_entry(r, mm_index.get(r.asin)) for r in lineup_recs]
@@ -659,9 +845,48 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
         "top": top_payload, "age": age_payload,
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     counts["new_arrivals_top"] = len(top_payload)
+    if xmas:
+        _write_xmas_pages(records, mm_index, new_brand_index, age_tops, out_hugo, generated_at,
+                          counts, min_ivs=min_ivs, age_max_per_brand=age_max_per_brand,
+                          ranking_history=ranking_history, today=today)
     if themes or age_hubs:
         _write_hub_index(out_hugo, hub_index)
     return counts
+
+
+def _write_xmas_pages(records, mm_index, brand_index, age_tops, out_hugo: Path, generated_at: str,
+                      counts: dict[str, int], *, min_ivs: float, age_max_per_brand: int,
+                      ranking_history, today) -> None:
+    """navi-brain#166 F10: クリスマスページ 7 本分の JSON と xmas_index.json を書く。
+
+    作らないページも items を空にして書く (Hugo 側は items が空なら noindex にして
+    サイトマップから外す。partials/is_empty_feature.html)。xmas_index.json には作った
+    ページだけを載せ、年齢 hub とクリスマスページどうしのリンクはこれだけを見る。
+    """
+    hub_tops = dict(age_tops)
+    for hub_key in {p["hub"] for p in XMAS_PAGES.values()} - set(hub_tops):
+        # --age-hubs で年齢 hub を絞ったときも、比べる相手は本番と同じ選び方で作る
+        hub_items = build_age_hub(records, mm_index, AGE_HUBS[hub_key],
+                                  top_n=XMAS_HUB_COMPARE_N, min_ivs=min_ivs,
+                                  brand_index=brand_index, max_per_brand=age_max_per_brand)
+        hub_tops[hub_key] = {r.asin for r in hub_items}
+    accepted, skipped = build_xmas_pages(records, mm_index, brand_index, hub_tops, min_ivs=min_ivs)
+    index = []
+    for key, page in XMAS_PAGES.items():
+        items = prioritize_ranked(accepted.get(key, []), ranking_history, today)
+        payload = serialize_hub(items, key, generated_at)
+        payload["label"] = page["label"]
+        payload["budget_max"] = XMAS_BUDGET_MAX
+        if key in skipped:
+            payload["skipped"] = skipped[key]
+        (out_hugo / f"{key}.json").write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        counts[key] = len(items)
+        if items:
+            index.append({"key": key, "label": page["label"], "hub": page["hub"],
+                          "url": f"/{key}/"})
+    (out_hugo / "xmas_index.json").write_text(
+        json.dumps(index, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def main(argv: list[str] | None = None) -> int:

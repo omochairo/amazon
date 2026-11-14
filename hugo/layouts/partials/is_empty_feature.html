@@ -1,0 +1,17 @@
+{{- /*
+  is_empty_feature.html (navi-brain#166 F10)
+  データが要るページ (front matter の params.feature_requires_data: true) で、ビルド時に
+  作るデータ (hugo/data/features/<feature_type>.json) に商品が 1 件も無いときに真を返す。
+  クリスマス × 年齢のページは、build_category_hubs.py の歯止め (件数不足・年齢 hub や
+  ほかのページとの重複) で作らない日があり、その日は items が空になる (データが
+  作られなかったときはファイルごと無い)。
+
+  head.html (noindex) と sitemap.xml (除外) とで同じ述語を見る。条件を片方にだけ
+  書き足さないこと (is_noindex_term.html と同じ理由)。
+*/ -}}
+{{- $empty := false -}}
+{{- if eq .Params.feature_requires_data true -}}
+  {{- $data := index site.Data.features (.Params.feature_type | default "") -}}
+  {{- if not (and $data $data.items) -}}{{- $empty = true -}}{{- end -}}
+{{- end -}}
+{{- return $empty -}}
