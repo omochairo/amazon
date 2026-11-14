@@ -42,7 +42,7 @@
   </div>
 
   {{- with $item.image }}
-  <a class="ranking-thumb" href="{{ $item.url }}" rel="sponsored nofollow noopener" target="_blank" aria-hidden="true" tabindex="-1">
+  <a class="ranking-thumb" data-cta-slot="ranking-thumb" href="{{ $item.url }}" rel="sponsored nofollow noopener" target="_blank" aria-hidden="true" tabindex="-1">
     <img src="{{ . }}" alt="" loading="lazy" decoding="async" width="200" height="200">
   </a>
   {{- end }}
@@ -52,7 +52,7 @@
       {{- if $internal -}}
       <a href="{{ $internal }}">{{ $title }}</a>
       {{- else -}}
-      <a href="{{ $item.url }}" rel="sponsored nofollow noopener" target="_blank">{{ $title }}</a>
+      <a data-cta-slot="ranking-name" href="{{ $item.url }}" rel="sponsored nofollow noopener" target="_blank">{{ $title }}</a>
       {{- end -}}
     </h2>
     {{- /* #166 F8: 前回からの動き。hugo/data/ranking/movement.json は
@@ -96,7 +96,7 @@
       {{- if $internal }}
       <a class="ranking-cta-internal" href="{{ $internal }}">💡 徹底解説レビューを見る</a>
       {{- end }}
-      <a class="ranking-cta-external ranking-cta-rakuten" href="{{ $item.url }}" rel="sponsored nofollow noopener" target="_blank">🔴 楽天市場で見る</a>
+      <a data-cta-slot="ranking" class="ranking-cta-external ranking-cta-rakuten" href="{{ $item.url }}" rel="sponsored nofollow noopener" target="_blank">🔴 楽天市場で見る</a>
       {{- /* Issue #600 Phase C: matched_asin がある = 自社で扱っている商品なので
              Amazon CTA を楽天 CTA の隣に並列表示し、読者の EC 選択肢を増やす。 */ -}}
       {{- if $asin }}

@@ -27,7 +27,7 @@
 {{- range $live }}
 <div class="sale-notice sale-notice--{{ .shop }}" role="note" data-sale-notice data-sale-slot="header-band" data-sale-id="{{ .id }}" data-sale-shop="{{ .shop }}" data-phases="{{ .phases | jsonify }}" hidden>
   {{- with partial "sale_event_url.html" . }}
-  <a class="sale-notice-main" data-sale-notice-main href="{{ . }}" rel="sponsored nofollow noopener" target="_blank"></a>
+  <a class="sale-notice-main" data-sale-notice-main data-cta-slot="sale-notice" href="{{ . }}" rel="sponsored nofollow noopener" target="_blank"></a>
   {{- else }}
   <span class="sale-notice-main" data-sale-notice-main></span>
   {{- end }}
