@@ -835,7 +835,7 @@ def build_report(rows, pr_states, now, days=7):
 def cmd_report(args, env):
     rows = read_ledger(args.state_dir)
     data = env.gh_json(["pr", "list", "-R", args.repo_slug, "--state", "all",
-                        "--search", "k8-writer in:title", "--limit", "100",
+                        "--search", "\"記事生成\" k8-writer in:title", "--limit", "100",
                         "--json", "number,url,state,createdAt,title"])
     prefix = PR_TITLE.split("{", 1)[0]
     pr_states = ({r.get("url"): r.get("state") for r in data if str(r.get("title") or "").startswith(prefix)}

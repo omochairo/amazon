@@ -33,9 +33,12 @@ jobs:
           MAX_AGE_HOURS: '48'
         run: |
           set -euo pipefail
+          # 検索は「k8-writer」を k8 と writer に分けて当てるので、題に K8 と writer を含む
+          # 別の PR (レーン本体の修正など) にも当たる。記事 PR の題の先頭で絞る
           latest=$(gh pr list -R "$REPO" --state all \
-            --search 'k8-writer in:title sort:created-desc' --limit 1 \
-            --json createdAt --jq '.[0].createdAt // ""')
+            --search '"記事生成" k8-writer in:title sort:created-desc' --limit 30 \
+            --json createdAt,title \
+            --jq '[.[] | select(.title | startswith("[k8-writer] 記事生成"))] | .[0].createdAt // ""')
           if [ -z "$latest" ]; then
             echo "::notice::k8-writer の記事 PR はまだ無い (レーンが PR を出し始める前)。見張りは何もしない"
             exit 0
