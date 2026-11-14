@@ -132,3 +132,11 @@ def test_amazon_other_domains_are_not_citable(repo, monkeypatch):
                                   ("https://review.example.jp/a", "")], "prior": [], "dead": set()}
     ex = {"https://www.amazon.jp/dp/B0TEST0001?psc=1": OK_STRONG, "https://review.example.jp/a": OK_STRONG}
     assert bjp.citable_urls(cand, ex) == ["https://review.example.jp/a"]
+
+
+def test_shop_and_price_list_hosts_are_not_third_party():
+    # 2026-11-15 の試運転で非販売の出典に入った通販モール・価格比較 (読み物の kinarino.jp は第三者のまま)
+    assert sc.host_kind("mall.kinarino.jp") == "retail"
+    assert sc.host_kind("www.saiyasune.com") == "retail"
+    assert sc.host_kind("www.amazon.jp") == "retail"
+    assert sc.host_kind("kinarino.jp") == "third_party"

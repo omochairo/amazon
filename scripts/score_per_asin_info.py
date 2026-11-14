@@ -217,6 +217,10 @@ _CANDIDATE_SHOP_HOSTS = frozenset({
     "nicoly.net", "orange-baby.com", "basicandaccent-online.com", "goods-station.jp",
     "mrmax.jp", "inokuchi.net", "expjapon.jp", "ganguoroshi.jp", "hlj.co.jp",
     "1999.co.jp", "hoobby.net", "doorzo.com", "buyee.jp", "ed-inter.co.jp",
+    # 2026-11-15 navi-brain#170 の試運転で、非販売 2 サイトの片方・両方として出典に入った。
+    # キナリノは読み物の kinarino.jp 本体は第三者なので、通販の mall. だけを入れる。
+    # amazon.jp は amazon.co.jp の別ドメイン (欲しいものリスト等の商品ページ)
+    "mall.kinarino.jp", "saiyasune.com", "amazon.jp",
 })
 # カラーミーショップのテンプレート (/view/item/<番号>・/view/category/<番号>)。店ごとに
 # ホスト名が違うので path で拾う。メーカー公式の商品ページはこの形をとらない。
