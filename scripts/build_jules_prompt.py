@@ -159,7 +159,7 @@ def _experience_note(asin):
 - note が空でない snippet は、実使用対象が本記事の商品と異なるモデル・型番であることを示す注記です。本商品固有の体験として書かず、note の内容 (例: 旧モデルでの使用感) を明記するか、この snippet は使わないでください。"""
 
 
-def _first_party_note(asin):
+def _first_party_note(asin, no_web=False):
     """#9199 案(b): omcha.jp の実使用記事を出典に使ってよいことの注記。
 
     この ASIN を主役にした omcha.jp の記事 (first_party_sources.json の role=primary) が
@@ -176,9 +176,12 @@ def _first_party_note(asin):
     if not posts:
         return ""
     urls = "\n".join(f"- {u}" for u in posts[:3])
+    # navi-brain#170: Web を使えない書き手は開いて確かめられないので、抜粋が付いたときだけ使わせる
+    check = ("下の【sources の組み立て】で抜粋が付いていれば" if no_web
+             else "内容を閲覧ツールで確認したうえで")
     return f"""【おもちゃいろ (omcha.jp) の実使用記事 (出典に使ってよい)】
 {urls}
-- サイト運営者がこの商品を実際に使って書いた omcha.jp (おもちゃいろ本家) の記事です。販売ページではない一次情報なので、内容を閲覧ツールで確認したうえで **sources に 1 件まで採用してよい** (title / notes は記事の中身から書く)。
+- サイト運営者がこの商品を実際に使って書いた omcha.jp (おもちゃいろ本家) の記事です。販売ページではない一次情報なので、{check} **sources に 1 件まで採用してよい** (title / notes は記事の中身から書く)。
 - これは第三者ソースではありません。sources の非販売ソースのうち**少なくとも 1 件は外部のサイト**から確保してください (同梱 third_party_sources.json / news.json 等)。
 - navi.omcha.jp (この比較サイト自身) の URL は出典にしないでください。自分の記事を自分の根拠にする循環になります。"""
 
@@ -367,8 +370,36 @@ def _fetch_excerpts(asin, urls, fetch=None):
     return out
 
 
-def _excerpt_line(res):
-    """候補 1 件の下に付ける 1 行。開けなかった・語が無いときもそう書く (黙って外さない)。"""
+def identifies_product(hits):
+    """本文に出た語に、商品を特定できる語 (JAN・数字 3 桁以上を含む型番・辞書にあるブランド名) があるか。
+
+    navi-brain#170 の Web を使えない書き手向けの追加の条件。strong_match は「分類語でない
+    6 字以上の語」も強い一致にするが、ブランドの無い商品では「星空プロジェクター」のような
+    説明の語がそれに当たり、カテゴリのランキング記事 (この商品は載っていない) が通ってしまう
+    (2026-11-14 の試運転で実際に起きた)。書き手はページを開けないので、ここで絞る。
+    """
+    import brand_normalizer
+    for h in hits or []:
+        if _is_jan(h) or sum(c.isdigit() for c in h) >= 3:
+            return True
+        try:
+            if brand_normalizer.normalize(h).tier not in ("", "D", None):
+                return True
+        except Exception:  # noqa: BLE001 — 辞書が読めないときは特定できたことにしない
+            continue
+    return False
+
+
+def _is_jan(token):
+    import source_pages
+    return bool(source_pages._JAN_RE.fullmatch(token or ""))
+
+
+def _excerpt_line(res, strict=False):
+    """候補 1 件の下に付ける 1 行。開けなかった・語が無いときもそう書く (黙って外さない)。
+
+    strict=True (Web を使えない書き手) では、商品を特定できる語が無い一致も「参考」にする。
+    """
     if res is None:
         return None
     status, snip, hits, http = res
@@ -387,23 +418,23 @@ def _excerpt_line(res):
         # 分類語や語 1 つだけの一致は、別の商品のページでも起きる。採用の根拠にさせない
         return (f"     参考 (本文に出たのは「{shown}」だけ。別の商品の可能性があるので、"
                 f"開いて確かめてから採用する): {snip}")
+    if strict and not identifies_product(hits):
+        return (f"     参考 (本文に出たのは「{shown}」だけで、ブランド名・型番が無い。この商品ではなく"
+                f"同じ種類の商品の一般的な話の可能性が高いので、出典にしない): {snip}")
     return f"     抜粋 (システムが取得。本文に商品名の語「{shown}」あり): {snip}"
 
 
-def _sources_note(asin, fetch_excerpts=False, fetch=None):
-    """sources_v5 を満たす組み立て方の注記 (#9239 → navi-brain#92 案 C)。
+def source_candidates(asin, no_web=False):
+    """出典の候補を集める (_sources_note と navi-brain#170 の記事レーンが共有する)。
 
-    gate の条件は「本文 (claims / review_signals) の supporting_source_ids から参照された
-    非販売の出典が、別々のサイトで 2 件以上」。合計件数の条件は無い。使ってよい URL を
-    具体的に並べ、数え方 (サイト単位・SNS は 1・通販は数えない) を渡す。
-    03-invoke-jules.yml は --print-note sources --fetch-excerpts で同じ文面を受け取る。
-
-    fetch_excerpts=True のとき (navi-brain#117 段階 3) は候補と前の記事の出典を開き、
-    抜粋を付ける。抜粋のある候補は、Jules が閲覧で開けなくても採用してよいと伝える。
-    リンク切れと記録された候補 (score_per_asin_info.link_dead) は並べない。
+    戻り値: {"mall": [(ラベル, URL)], "third": [(URL, 題)], "prior": [URL], "dead": {URL}}。
+    mall は販売ページ (価格・仕様の出典にだけ使える)、third は事前収集の第三者候補
+    (最大 8 件)、prior は書き直しのとき前の記事が出典にしていた非販売のページ (最大 8 件)。
+    no_web=True (Web を使えない書き手, navi-brain#170) では、omcha.jp の実使用記事も
+    third の先頭に足す。書き手はページを開けないので、抜粋を取って確かめる対象にするため。
     """
     import score_per_asin_info as sc
-    mall = [f"- Amazon 商品ページ: https://www.amazon.co.jp/dp/{asin}/"]
+    mall = [("Amazon 商品ページ", f"https://www.amazon.co.jp/dp/{asin}/")]
     for label, path in (("楽天", "data/raw/rakuten_matched.json"),
                         ("Yahoo!ショッピング", "data/raw/yahoo_matched.json")):
         for row in _matched(path, asin)[:1]:
@@ -413,7 +444,7 @@ def _sources_note(asin, fetch_excerpts=False, fetch=None):
             if url and sc.other_asin_in_url(url, asin):
                 continue
             if url:
-                mall.append(f"- {label} 商品ページ (照合済み): {url}")
+                mall.append((f"{label} 商品ページ (照合済み)", url))
     third = []  # [(url, title)]
     dead = set()
     try:
@@ -432,32 +463,106 @@ def _sources_note(asin, fetch_excerpts=False, fetch=None):
             continue
         third.append((url, (src.get("title") or "").strip()))
     third = third[:8]
+    if no_web:
+        try:
+            posts = list(sc.first_party_posts(asin))[:3]
+        except Exception as e:  # noqa: BLE001 — 読めなければ足さないだけ
+            print(f"warning: first-party posts read failed: {e}", file=sys.stderr)
+            posts = []
+        listed_third = {u for u, _ in third}
+        third = [(u, "おもちゃいろ (omcha.jp) の実使用記事") for u in posts
+                 if u not in listed_third and u not in dead] + third
     # navi-brain#92: 書き直しでは、前の記事が見つけた非販売の出典も材料になる。
     # 前の記事は「本文から参照していない」だけで非販売を 2 サイト以上持っていることが多い
     listed = {u for u, _ in third} | dead  # リンク切れは前の記事の出典としても出さない
     prior = [u for u in sc.prior_article_urls(asin) if u not in listed][:8]
-    excerpts = {}
-    if fetch_excerpts and (third or prior):
-        try:
-            excerpts = _fetch_excerpts(asin, [u for u, _ in third] + prior, fetch=fetch)
-        except Exception as e:  # noqa: BLE001 — 抜粋は補助。取れなくても注記は出す
-            print(f"warning: excerpt fetch failed, listing URLs only: {e}", file=sys.stderr)
+    return {"mall": mall, "third": third, "prior": prior, "dead": dead}
+
+
+def excerpt_targets(candidates):
+    """抜粋を取りに行く URL (候補の順。_fetch_excerpts が先頭 _EXCERPT_MAX_URLS 件で切る)。"""
+    return list(dict.fromkeys([u for u, _ in candidates["third"]] + list(candidates["prior"])))
+
+
+def citable_urls(candidates, excerpts):
+    """Web を使えない書き手が sources の非販売に使ってよい URL (navi-brain#170)。
+
+    システムが開けて (status ok)、抜粋があり、本文の語の一致が強く (source_pages.strong_match)、
+    商品を特定できる語が出た (identifies_product) 候補だけ。「参考」(一致が弱い)・開けなかった・リンク切れは、書き手が自分で確かめられない
+    ので使わせない。順序は候補の順。
+    """
+    import source_pages
+    import source_sites
+    out = []
+    for url in excerpt_targets(candidates):
+        res = (excerpts or {}).get(url)
+        if not res:
+            continue
+        host = source_sites.host_of(url)
+        # 事前収集に販売ページが混ざることがある (amazon.jp の欲しいものリスト等)。amazon.jp は
+        # quality_gate の販売判定 (amazon.co.jp の部分一致) に掛からず非販売のサイトに数えられるので、
+        # ここで外す (販売ページは非販売の出典にならない)
+        if not host or source_sites.is_retail(host) or source_sites.registered_domain(host).split(".")[0] == "amazon":
+            continue
+        status, snip, hits = res[0], res[1], res[2]
+        if status == "ok" and snip and source_pages.strong_match(hits) and identifies_product(hits):
+            out.append(url)
+    return out
+
+
+def _sources_note(asin, fetch_excerpts=False, fetch=None, no_web=False, excerpts=None):
+    """sources_v5 を満たす組み立て方の注記 (#9239 → navi-brain#92 案 C)。
+
+    gate の条件は「本文 (claims / review_signals) の supporting_source_ids から参照された
+    非販売の出典が、別々のサイトで 2 件以上」。合計件数の条件は無い。使ってよい URL を
+    具体的に並べ、数え方 (サイト単位・SNS は 1・通販は数えない) を渡す。
+    03-invoke-jules.yml は --print-note sources --fetch-excerpts で同じ文面を受け取る。
+
+    fetch_excerpts=True のとき (navi-brain#117 段階 3) は候補と前の記事の出典を開き、
+    抜粋を付ける。抜粋のある候補は、Jules が閲覧で開けなくても採用してよいと伝える。
+    リンク切れと記録された候補 (score_per_asin_info.link_dead) は並べない。
+
+    no_web=True (navi-brain#170: Web を使えない書き手) では、非販売の出典を「抜粋」付きの
+    候補からだけ選ばせる文面にする。excerpts を渡されたら取得し直さずにそれを使う
+    (記事レーンが出典の事前確認で取得した結果を使い回す)。
+    """
+    cand = source_candidates(asin, no_web=no_web)
+    mall = [f"- {label}: {url}" for label, url in cand["mall"]]
+    third, prior = cand["third"], cand["prior"]
+    if excerpts is None:
+        excerpts = {}
+        if (fetch_excerpts or no_web) and (third or prior):
+            try:
+                excerpts = _fetch_excerpts(asin, excerpt_targets(cand), fetch=fetch)
+            except Exception as e:  # noqa: BLE001 — 抜粋は補助。取れなくても注記は出す
+                print(f"warning: excerpt fetch failed, listing URLs only: {e}", file=sys.stderr)
 
     def lines(url, title=""):
         out = [f"   - {url}" + (f" ({title[:60]})" if title else "")]
-        extra = _excerpt_line(excerpts.get(url)) if excerpts else None
+        extra = _excerpt_line(excerpts.get(url), strict=no_web) if excerpts else None
         if extra:
             out.append(extra)
         return out
 
-    first = ("1. 非販売 (第三者) の出典を、別々のサイトから 2 件以上確保する。まず下の候補を"
-             "閲覧ツールで開き、対象商品について書かれているものを採用する。足りなければ検索で探す。")
+    if no_web:
+        first = ("1. 非販売 (第三者) の出典は、下の候補のうち「抜粋」が付いたもの (システムが本文を"
+                 "取得して商品名・型番の語を確かめたもの) からだけ選ぶ。あなたは Web 検索・URL 閲覧を"
+                 "使えない。「参考」「システムからは開けなかった」「リンク切れ」「語が見つからなかった」の"
+                 "候補と、このプロンプトに無い URL は sources に載せない (載っていたら記事は公開されない)。")
+    else:
+        first = ("1. 非販売 (第三者) の出典を、別々のサイトから 2 件以上確保する。まず下の候補を"
+                 "閲覧ツールで開き、対象商品について書かれているものを採用する。足りなければ検索で探す。")
     blocks = [
         "【sources の組み立て (品質ゲート sources_v5: 本文から参照された非販売の出典が、"
         "別々のサイトで 2 件以上)】",
         first,
     ]
-    if excerpts:
+    if excerpts and no_web:
+        blocks.append(
+            "   **「抜粋」が付いた候補は、システムが本文を取得して商品名・型番の語を確かめたもの。**"
+            "notes と本文は抜粋に書かれている範囲で書き、抜粋に無いことは書かない。同じブランドの"
+            "別の商品の話なら採用しない。")
+    elif excerpts:
         blocks.append(
             "   **「抜粋」が付いた候補は、システムが本文を取得して商品名・型番の語を確かめたもの。**"
             "閲覧ツールで開けない・本文が読めないときも、抜粋を読んで対象商品についての記述だと"
@@ -489,9 +594,14 @@ def _sources_note(asin, fetch_excerpts=False, fetch=None):
         "使ってよい販売ページ:",
     ])
     blocks.extend("   " + m for m in mall)
-    blocks.append(
-        "5. 保存する前に、参照された非販売の出典のサイト数を数える。2 未満なら 1 に戻って足す。"
-        "件数を埋めるための出典・架空の URL・別の商品のページは引き続き禁止。")
+    if no_web:
+        blocks.append(
+            "5. 保存する前に、参照された非販売の出典のサイト数を数える。足りなくても、抜粋の付いて"
+            "いない URL・架空の URL・別の商品のページで埋めない。")
+    else:
+        blocks.append(
+            "5. 保存する前に、参照された非販売の出典のサイト数を数える。2 未満なら 1 に戻って足す。"
+            "件数を埋めるための出典・架空の URL・別の商品のページは引き続き禁止。")
     return "\n".join(blocks)
 
 
@@ -518,7 +628,36 @@ def _matched(path, asin):
         return []
 
 
-def build_prompt(asin, today=None):
+_SOURCES_RULES_REPOLESS_HEAD = "【sources のルール (リポジトリ非接続環境向けの明確化・必読)】"
+_SOURCES_RULES_END = "【品質ゲートで機械検査される項目】"
+# navi-brain#170: Web を使えない書き手 (K8 の記事レーン・agy の道具は read_file だけ) 向けの差し替え。
+# 非接続用の段落は「まず検索・URL 閲覧で裏取りを」と指示しているので、そのまま渡すと
+# 書き手は使えない道具を探し、プロンプトに無い URL を足しうる (11-14 の試験で 404 / 403 の URL が入った)。
+_SOURCES_RULES_NO_WEB = """【sources のルール (Web を使えない書き手向け・必読)】
+- あなたは Web 検索・URL 閲覧を使えません。使えるのは本プロンプトの中身だけです。
+- 非販売 (第三者) の出典は、上の【sources の組み立て】で「抜粋」が付いた候補からだけ選び、notes と本文は抜粋に書かれている範囲で書く。抜粋に無いことは書かない。
+- 「参考」「開けなかった」「リンク切れ」の候補と、本プロンプトに無い URL は sources に載せない (システムが検査し、載っていたら記事は公開されない)。
+- 同梱の per_asin の news.json / books.json / youtube.json の URL は、記事の news / books / youtube_embeds 欄にだけ使ってよい。sources には載せない。
+- 販売ページ (Amazon / 楽天 / Yahoo の対象商品ページ) は価格・仕様の出典にしてよい。ただし非販売の 2 サイトの代わりにはならない (上の【sources の組み立て】)。
+- **claims / review_signals の supporting_source_ids から参照された非販売の出典が、別々のサイトで 2 件以上必須** (品質ゲートで機械検査されます。合計件数の下限は無いので、参照しない出典で件数を埋めない)。
+
+"""
+
+
+def _swap_sources_rules_for_no_web(prompt):
+    """非接続用の【sources のルール】段落を Web 無し用に置き換える (見つからなければ例外)。"""
+    a = prompt.index(_SOURCES_RULES_REPOLESS_HEAD)
+    b = prompt.index(_SOURCES_RULES_END, a)
+    return prompt[:a] + _SOURCES_RULES_NO_WEB + prompt[b:]
+
+
+def build_prompt(asin, today=None, no_web=False, excerpts=None, fetch=None):
+    """自己完結のプロンプトを返す。
+
+    no_web=True は navi-brain#170 の記事レーン用: 出典の注記を抜粋付き・Web 無しの文面にし、
+    【sources のルール】段落を差し替える。excerpts は事前確認で取得した抜粋 (渡さなければ取得する)。
+    no_web=False の出力は従来と同じ。
+    """
     today = today or datetime.now(JST).strftime("%Y-%m-%d")
     today_iso = f"{today}T10:00:00+09:00"
 
@@ -543,13 +682,17 @@ def build_prompt(asin, today=None):
     gsc_note = _gsc_note(asin)
     audit_note = _audit_note(asin)
     experience_note = _experience_note(asin)
-    first_party_note = _first_party_note(asin)
+    first_party_note = _first_party_note(asin, no_web=no_web) if no_web else _first_party_note(asin)
     score_note = _score_note(asin)
-    try:
-        sources_note = _sources_note(asin)
-    except Exception as e:  # best-effort: 注記が作れなくてもプロンプトは出す
-        print(f"warning: sources note failed: {e}", file=sys.stderr)
-        sources_note = ""
+    if no_web:
+        # Web 無しの書き手には出典の注記が要 (無ければ非販売の出典を選べない)。失敗は呼び出し側へ
+        sources_note = _sources_note(asin, no_web=True, excerpts=excerpts, fetch=fetch)
+    else:
+        try:
+            sources_note = _sources_note(asin)
+        except Exception as e:  # best-effort: 注記が作れなくてもプロンプトは出す
+            print(f"warning: sources note failed: {e}", file=sys.stderr)
+            sources_note = ""
 
     prompt = f"""あなたは知育玩具メディア「おもちゃいろ」の記事生成エージェントです。
 このセッションはリポジトリ非接続 (repoless) です。必要な入力データは本プロンプト末尾に全て同梱しています。
@@ -618,6 +761,8 @@ product.name の通称ルール (最大 40 字) と機械検査項目は、下�
 """
     for name, data in per_asin.items():
         prompt += f"--- per_asin/{name} ---\n{_jdump(data)}\n"
+    if no_web:
+        prompt = _swap_sources_rules_for_no_web(prompt)
     return prompt
 
 
@@ -643,6 +788,10 @@ def main():
         "--fetch-excerpts", action="store_true",
         help="--print-note sources で、候補ページを開いて抜粋を付ける (navi-brain#117。外部へ HTTP する)",
     )
+    ap.add_argument(
+        "--no-web", action="store_true",
+        help="Web を使えない書き手向け (navi-brain#170)。候補ページを開いて抜粋を付ける (外部へ HTTP する)",
+    )
     args = ap.parse_args()
 
     if args.print_note:
@@ -664,8 +813,8 @@ def main():
         sys.stdout.write(note)
         return 0
 
-    prompt = build_prompt(args.asin)
-    size = len(prompt.encode("utf-8"))
+    prompt = build_prompt(args.asin, no_web=args.no_web)
+    size =len(prompt.encode("utf-8"))
     print(f"prompt size: {size} bytes", file=sys.stderr)
     if args.out:
         with open(args.out, "w", encoding="utf-8") as f:

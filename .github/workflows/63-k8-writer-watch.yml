@@ -1,0 +1,48 @@
+name: K8 Writer Lane Watch
+
+# navi-brain#170 C1: K8 の記事レーン (scripts/writer_lane.py・タスク \k8\navi_writer) が
+# 黙って止まったことに気付くための見張り。
+#
+# レーンの数字 (本数・合格率・不合格の理由・枠切れ) は private の navi-brain の記録用 issue に
+# K8 自身が毎回書く。ただし K8 そのものが止まる (電源・ネット断・ログオフ) と、その書き込みも
+# 来ないので気付けない。ここは K8 の外 (GitHub Actions) から「`[k8-writer]` の記事 PR が
+# 48 時間出ていない」を見て run を赤にする (失敗の通知が届く)。public なので数字は書かない。
+#
+# 48 時間にしているのは、枠切れや出典不足で 1 日 0 本になることは普通にあるため。
+# 2 日続けて 0 本なら、K8 の停止・agy の枠切れの連続・不合格の連続のどれかを疑う。
+# レーンがまだ 1 本も PR を出していない間 (試運転中) は見ない。
+
+on:
+  schedule:
+    # 03:20 UTC = 12:20 JST。レーンは 02:30 JST に回る
+    - cron: '20 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the latest k8-writer article PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          MAX_AGE_HOURS: '48'
+        run: |
+          set -euo pipefail
+          latest=$(gh pr list -R "$REPO" --state all \
+            --search 'k8-writer in:title sort:created-desc' --limit 1 \
+            --json createdAt --jq '.[0].createdAt // ""')
+          if [ -z "$latest" ]; then
+            echo "::notice::k8-writer の記事 PR はまだ無い (レーンが PR を出し始める前)。見張りは何もしない"
+            exit 0
+          fi
+          age=$(( ( $(date -u +%s) - $(date -u -d "$latest" +%s) ) / 3600 ))
+          echo "latest k8-writer article PR: created ${latest} (${age}h ago)"
+          if [ "$age" -ge "$MAX_AGE_HOURS" ]; then
+            echo "::error::K8 の記事レーンの PR が ${age} 時間出ていない。K8 の停止・agy の枠切れ・不合格の連続を疑う (理由は navi-brain の記録用 issue と K8 の C:\\Users\\AIsys\\k8jobs\\navi-writer\\lane.log)"
+            exit 1
+          fi
