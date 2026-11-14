@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from datetime import date
 
-from scripts.fetch_ga4 import _build_entrances_by_key, _merge_unique_rows, compute_range
+from scripts.fetch_ga4 import (_build_entrances_by_key, _merge_unique_rows,
+                               build_parser, compute_range, feature_events_range)
 
 
 def test_merge_unique_rows_appends_new_keys_only():
@@ -89,3 +90,16 @@ def test_compute_range_weekly_processed_exact_seven_days():
 def test_compute_range_end_date_wins_over_lag():
     assert compute_range(7, end_date="2026-09-10", lag_days=2, inclusive_days=True,
                          today=date(2026, 9, 27)) == (date(2026, 9, 4), date(2026, 9, 10))
+
+
+def test_feature_events_range_includes_previous_month_and_end():
+    assert feature_events_range(date(2026, 11, 14)) == (date(2026, 10, 1), date(2026, 11, 14))
+
+
+def test_feature_events_range_january_starts_previous_december():
+    assert feature_events_range(date(2026, 1, 8)) == (date(2025, 12, 1), date(2026, 1, 8))
+
+
+def test_parser_accepts_feature_events_flag():
+    args = build_parser().parse_args(["--feature-events"])
+    assert args.feature_events is True

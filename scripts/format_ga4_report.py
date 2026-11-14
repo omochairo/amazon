@@ -14,6 +14,53 @@ import sys
 
 TOP_PAGE_DEFAULT = 20
 TOP_SOURCE_DEFAULT = 10
+FEATURE_PAGES = {
+    "/diagnosis/": "診断",
+    "/ranking/": "ランキング",
+    "/cospa/": "予算別",
+    "/deals/": "おトク",
+    "/price/": "値下げ",
+}
+DIAGNOSIS_EVENTS = ("diagnosis_start", "diagnosis_complete",
+                    "diagnosis_pick_click", "diagnosis_share")
+
+
+def _normalize_page_path(path: str) -> str:
+    path = (path or "").split("?", 1)[0]
+    if path.endswith("index.html"):
+        path = path[:-len("index.html")]
+    if path and not path.endswith("/"):
+        path += "/"
+    return path
+
+
+def _month_label(year_month: str) -> str:
+    """GA4 の yearMonth (YYYYMM) を YYYY-MM にする。形が違えばそのまま返す。"""
+    ym = str(year_month)
+    return f"{ym[:4]}-{ym[4:]}" if len(ym) == 6 and ym.isdigit() else ym
+
+
+def summarize_feature_events(rows: list[dict]) -> list[dict]:
+    """GA4 event rows を月別の診断ファネル・特集ページクリックへ集約する。"""
+    months: dict[str, dict] = {}
+    for row in rows:
+        month = str(row.get("yearMonth", ""))
+        if not month:
+            continue
+        summary = months.setdefault(month, {
+            "yearMonth": month, **{event: 0 for event in DIAGNOSIS_EVENTS},
+            "affiliate": {path: 0 for path in FEATURE_PAGES},
+            "affiliate_total": 0,
+        })
+        count = int(row.get("eventCount", 0) or 0)
+        path = _normalize_page_path(row.get("pagePath", ""))
+        event = row.get("eventName", "")
+        if event in DIAGNOSIS_EVENTS and path == "/diagnosis/":
+            summary[event] += count
+        elif event == "affiliate_click" and path in FEATURE_PAGES:
+            summary["affiliate"][path] += count
+            summary["affiliate_total"] += count
+    return [months[key] for key in sorted(months)]
 
 
 def _fmt_int(v) -> str:
@@ -116,6 +163,44 @@ def render(data: dict, top_page: int, top_source: int) -> str:
                 f"| {_fmt_dur(row.get('averageSessionDuration'))} "
                 f"| {_fmt_rate(row.get('bounceRate'))} |"
             )
+        lines.append("")
+
+    if "feature_events" in data:
+        feature = data.get("feature_events") or {}
+        lines.append("## 特集 5 ページ・診断（月ごと）")
+        lines.append("")
+        fr = feature.get("range") or {}
+        lines.append(f"対象期間: {fr.get('start', '?')} 〜 {fr.get('end', '?')}")
+        rows = feature.get("rows") or []
+        summaries = summarize_feature_events(rows)
+        if not summaries:
+            lines.append("")
+            lines.append("（データなし）")
+        else:
+            lines.append("")
+            lines.append("| 月 | 診断 開始 | 完了 | 完了率 | 結果クリック | シェア |")
+            lines.append("|---|---:|---:|---:|---:|---:|")
+            for month in summaries:
+                starts = month["diagnosis_start"]
+                completes = month["diagnosis_complete"]
+                rate = _fmt_rate(completes / starts) if starts else "—"
+                lines.append(
+                    f"| {_month_label(month['yearMonth'])} | {_fmt_int(starts)} | {_fmt_int(completes)} "
+                    f"| {rate} | {_fmt_int(month['diagnosis_pick_click'])} "
+                    f"| {_fmt_int(month['diagnosis_share'])} |"
+                )
+            lines.append("")
+            lines.append("| 月 | 診断 | ランキング | 予算別 | おトク | 値下げ | 合計 |")
+            lines.append("|---|---:|---:|---:|---:|---:|---:|")
+            for month in summaries:
+                affiliate = month["affiliate"]
+                vals = [affiliate[path] for path in FEATURE_PAGES]
+                lines.append(
+                    f"| {_month_label(month['yearMonth'])} | " + " | ".join(_fmt_int(v) for v in vals)
+                    + f" | {_fmt_int(month['affiliate_total'])} |"
+                )
+        lines.append("")
+        lines.append("※ 件数が少ないため月ごとに見る。アフィリエイトクリックは GA4 の affiliate_click（Amazon・楽天・Yahoo のリンク）をページ別に数えたもの。今月は途中まで。")
         lines.append("")
 
     lines.append("---")
