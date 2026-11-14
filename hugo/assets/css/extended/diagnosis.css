@@ -406,6 +406,34 @@
     word-break: break-all;
 }
 .dx-share-msg:empty { display: none; }
+/* navi-brain#166 F17 */
+.dx-persona-catch { margin: 0.25rem 0 0.65rem; color: var(--dx-accent); font-size: 1.08rem; font-weight: 800; text-align: center; }
+.dx-persona-strengths { margin: 0.8rem auto 0; }
+.dx-persona-strengths-label { margin: 0 0 0.4rem; color: var(--secondary); font-size: 0.78rem; font-weight: 700; }
+.dx-persona-strengths-list, .dx-types-list { list-style: none; margin: 0; padding: 0; }
+.dx-persona-strengths-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4rem; }
+.dx-persona-strengths-list li { padding: 0.3rem 0.65rem; border-radius: 999px; background: var(--theme); border: 1px solid var(--border); font-size: 0.8rem; }
+.dx-persona-pair { margin: 0.8rem auto 0; padding: 0.55rem 0.75rem; max-width: 40em; border-radius: var(--radius-sm, 8px); background: var(--theme); color: var(--secondary); font-size: 0.84rem; line-height: 1.6; }
+.dx-compare { max-width: 760px; margin: 1rem auto 0; }
+.dx-compare h3 { margin: 0 0 0.7rem; }
+.dx-compare-rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.65rem; }
+.dx-compare-row { margin: 0; padding: 0.7rem; border-radius: var(--radius-sm, 8px); background: var(--theme); }
+.dx-compare-row span { display: block; color: var(--secondary); font-size: 0.78rem; }
+.dx-compare-note { margin: 0.75rem 0 0; color: var(--primary); }
+.dx-types { max-width: 760px; margin: 1rem auto 0; color: var(--primary); }
+.dx-types summary { cursor: pointer; font-weight: 700; padding: 0.7rem 1rem; border: 1px dashed var(--border); border-radius: var(--radius-sm, 8px); background: var(--entry); text-align: center; }
+.dx-types[open] summary { border-style: solid; }
+.dx-types-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem; margin-top: 0.65rem; }
+.dx-types-list li { position: relative; padding: 0.6rem; border: 1px solid var(--border); border-radius: var(--radius-sm, 8px); background: var(--entry); }
+.dx-types-list li span { display: block; color: var(--secondary); font-size: 0.78rem; }
+.dx-types-list li.is-current { border-color: var(--dx-accent); background: rgba(46, 196, 182, 0.12); }
+.dx-types-list li strong { display: block; }
+.dx-types-list li.is-current strong { padding-right: 3.4rem; }
+.dx-types-list li small { position: absolute; top: 0.55rem; right: 0.55rem; padding: 0.1rem 0.5rem; border-radius: 999px; background: var(--dx-accent); color: #1b1b1b; font-size: 0.72rem; font-weight: 800; line-height: 1.5; }
+.dx-btn--line, .dx-btn--x { display: inline-flex; align-items: center; justify-content: center; text-align: center; text-decoration: none; }
+.dx-btn--line { background: #06C755; color: #fff; border-color: #06C755; }
+.dx-btn--x { background: #000; color: #fff; border-color: #000; }
+[data-theme="dark"] .dx-btn--x { border-color: #fff; }
 .dx-disclaimer {
     margin: 1.5rem 0 0;
     font-size: 0.75rem;
@@ -443,6 +471,7 @@
         padding: 0.8rem;
     }
     .dx-actions .dx-btn { flex: 1 1 100%; }
+    .dx-compare-rows, .dx-types-list { grid-template-columns: 1fr; }
 }
 
 /* ---------- アニメーション ---------- */

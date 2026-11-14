@@ -492,19 +492,60 @@
   }
 
   // ---------------------------------------------------------------- 結果の言語化
+  // navi-brain#166 F17: タイプごとに、ひとことのキャッチ (catch)・得意なこと 3 つ (strengths)・
+  // 一緒に遊ぶと盛り上がるタイプ (pair: きょうだい・友だちと見比べたくなるように)・
+  // シェアの一言 (share) を持つ。発達や能力の効果は言い切らない。どのタイプにも優劣を付けない。
+  // pair は birth / any 以外を指し、同じタイプが 3 回以上選ばれないようにしている (テストで固定)。
   var PERSONAS = {
-    sense: { emoji: "🤲", title: "さわって発見タイプ", text: "手にしたものを握る・振る・なめるのも大切な学びの時間。音や手ざわりの変化があるおもちゃに夢中になりやすい時期です。" },
-    build: { emoji: "🧱", title: "つくって発見タイプ", text: "積んで・崩して・また作る。正解がひとつではない遊びは、成長に合わせて遊び方が変わるので長く使えます。" },
-    pretend: { emoji: "🍳", title: "なりきり名人タイプ", text: "大人のまねをしながら、言葉ややりとりを覚えていく時期。家族が一緒に「お客さん役」になると盛り上がります。" },
-    vehicle: { emoji: "🚗", title: "のりもの博士タイプ", text: "走らせる・並べる・つなげる。好きなものへの「こだわり」は集中力の芽です。セットを少しずつ広げる楽しみもあります。" },
-    think: { emoji: "🧩", title: "ひらめき作戦タイプ", text: "考えて、試して、できた！をくり返す遊びが好き。少しだけ難しいものを選ぶと、達成感が次の挑戦につながります。" },
-    art: { emoji: "🎨", title: "ひらめきアーティストタイプ", text: "描く・貼る・こねる。自由に表現できる素材があると、思いがけない作品が生まれます。汚れ対策もしやすいものが安心です。" },
-    words: { emoji: "🔤", title: "ことば・かず探検タイプ", text: "文字や数、英語への「なんで？」が増えてくる時期。遊びの中で自然に触れられるものだと、無理なく続きます。" },
-    music: { emoji: "🎵", title: "リズムでノリノリタイプ", text: "音が鳴ると体が動く！音やリズムは、聞く力やまねする力につながります。音量を調節できるものだと家でも使いやすいです。" },
-    science: { emoji: "🔬", title: "しくみ研究家タイプ", text: "「どうして動くの？」を確かめたい好奇心のかたまり。組み立てて動かすおもちゃは、試行錯誤そのものが学びになります。" },
-    active: { emoji: "⚽", title: "元気いっぱい冒険家タイプ", text: "体を動かすのが何より好き。外でも家の中でも使えるものを選ぶと、天気に左右されずに遊べます。" },
-    any: { emoji: "✨", title: "なんでも楽しむオールラウンダー", text: "いろいろな遊びに興味がある時期。まずは知育スコアの高い定番から、反応が良かった遊びを広げていきましょう。" },
-    birth: { emoji: "👶", title: "はじめてのおもちゃ", text: "赤ちゃんの最初のおもちゃは、安全な素材と、見る・聞く・握るを楽しめるものが定番。名入れやギフト包装の可否も商品ページで確認を。" }
+    sense: { key: "sense", emoji: "🤲", title: "さわって発見タイプ", text: "手にしたものを握る・振る・なめるのも大切な学びの時間。音や手ざわりの変化があるおもちゃに夢中になりやすい時期です。",
+      catch: "手のひらいっぱいで、世界をたしかめ中。", strengths: ["手ざわりを味わう", "ちがいに気づく", "夢中でさわる"],
+      pair: { key: "music", reason: "音や手ざわりに反応し合うふたり。一緒に鳴らすと笑顔がふえます。" },
+      share: "おもちゃ診断の結果は「🤲さわって発見タイプ」でした！音や手ざわりに夢中です。あなたの子は何タイプ？" },
+    build: { key: "build", emoji: "🧱", title: "つくって発見タイプ", text: "積んで・崩して・また作る。正解がひとつではない遊びは、成長に合わせて遊び方が変わるので長く使えます。",
+      catch: "頭の中の設計図を、手でかたちにする建築家。", strengths: ["形を思いえがく", "工夫して直す", "コツコツ作る"],
+      pair: { key: "vehicle", reason: "作った街やコースに車を走らせれば、遊び場がどんどん広がります。" },
+      share: "おもちゃ診断の結果は「🧱つくって発見タイプ」でした！今日も何かを組み立て中。あなたの子は何タイプ？" },
+    pretend: { key: "pretend", emoji: "🍳", title: "なりきり名人タイプ", text: "大人のまねをしながら、言葉ややりとりを覚えていく時期。家族が一緒に「お客さん役」になると盛り上がります。",
+      catch: "「いらっしゃいませ！」今日もなりきり中。", strengths: ["まねっこ上手", "やりとりを楽しむ", "お話を広げる"],
+      pair: { key: "art", reason: "作った小道具でごっこ遊び。ふたりの世界がぐんと広がります。" },
+      share: "おもちゃ診断の結果は「🍳なりきり名人タイプ」でした！おうちが毎日お店に変身中。あなたの子は何タイプ？" },
+    vehicle: { key: "vehicle", emoji: "🚗", title: "のりもの博士タイプ", text: "走らせる・並べる・つなげる。好きなものへの「こだわり」は集中力の芽です。セットを少しずつ広げる楽しみもあります。",
+      catch: "お気に入りの車と線路で、どこまでも出発進行。", strengths: ["並べてつなげる", "ちがいを見分ける", "好きをとことん"],
+      pair: { key: "build", reason: "橋や駅を作ってもらえば、お気に入りの車両が大活躍します。" },
+      share: "おもちゃ診断の結果は「🚗のりもの博士タイプ」でした！お気に入りを並べてごきげんです。あなたの子は何タイプ？" },
+    think: { key: "think", emoji: "🧩", title: "ひらめき作戦タイプ", text: "考えて、試して、できた！をくり返す遊びが好き。少しだけ難しいものを選ぶと、達成感が次の挑戦につながります。",
+      catch: "パズルも作戦も、じっくり考えるのが楽しい。", strengths: ["くり返し試す", "先を読む", "ルールを楽しむ"],
+      pair: { key: "science", reason: "「どうして？」と「どうやる？」が合わさって、難問も楽しく挑めます。" },
+      share: "おもちゃ診断の結果は「🧩ひらめき作戦タイプ」でした！「できた！」の笑顔がたまりません。あなたの子は何タイプ？" },
+    art: { key: "art", emoji: "🎨", title: "ひらめきアーティストタイプ", text: "描く・貼る・こねる。自由に表現できる素材があると、思いがけない作品が生まれます。汚れ対策もしやすいものが安心です。",
+      catch: "白い紙も粘土も、この子の手で作品になる。", strengths: ["自由に表現する", "色や形をえらぶ", "手でこねて作る"],
+      pair: { key: "pretend", reason: "描いた絵や工作が、ごっこ遊びの舞台に早変わりします。" },
+      share: "おもちゃ診断の結果は「🎨ひらめきアーティストタイプ」でした！作品がどんどん増えています。あなたの子は何タイプ？" },
+    words: { key: "words", emoji: "🔤", title: "ことば・かず探検タイプ", text: "文字や数、英語への「なんで？」が増えてくる時期。遊びの中で自然に触れられるものだと、無理なく続きます。",
+      catch: "「これなあに？」の毎日に、発見がいっぱい。", strengths: ["文字や数に親しむ", "数えてくらべる", "言葉でつたえる"],
+      pair: { key: "think", reason: "ルールを読み解いて作戦会議。おしゃべりも弾むコンビです。" },
+      share: "おもちゃ診断の結果は「🔤ことば・かず探検タイプ」でした！遊びの中で文字や数を探しています。あなたの子は何タイプ？" },
+    music: { key: "music", emoji: "🎵", title: "リズムでノリノリタイプ", text: "音が鳴ると体が動く！音やリズムは、聞く力やまねする力につながります。音量を調節できるものだと家でも使いやすいです。",
+      catch: "おうちはいつでも、この子のライブ会場。", strengths: ["音に耳をすます", "リズムにのる", "声や音でまねる"],
+      pair: { key: "active", reason: "リズムに合わせて体を動かせば、お部屋が楽しいステージに。" },
+      share: "おもちゃ診断の結果は「🎵リズムでノリノリタイプ」でした！音が鳴ると体が動き出します。あなたの子は何タイプ？" },
+    science: { key: "science", emoji: "🔬", title: "しくみ研究家タイプ", text: "「どうして動くの？」を確かめたい好奇心のかたまり。組み立てて動かすおもちゃは、試行錯誤そのものが学びになります。",
+      catch: "ねじを回して、中をのぞいて、しくみに夢中。", strengths: ["ふしぎを見つける", "しくみを探る", "試してくらべる"],
+      pair: { key: "build", reason: "工夫して組み立てた仕掛けが動いたとき、ふたりで大喜びできます。" },
+      share: "おもちゃ診断の結果は「🔬しくみ研究家タイプ」でした！試して動かすのが止まりません。あなたの子は何タイプ？" },
+    active: { key: "active", emoji: "⚽", title: "元気いっぱい冒険家タイプ", text: "体を動かすのが何より好き。外でも家の中でも使えるものを選ぶと、天気に左右されずに遊べます。",
+      catch: "走って、跳んで、毎日が大冒険。", strengths: ["体を動かす", "新しいことに挑む", "外でも家でも遊ぶ"],
+      pair: { key: "sense", reason: "のびのび体を動かしたあとは、手ざわりや音の発見をいっしょに楽しめます。" },
+      share: "おもちゃ診断の結果は「⚽元気いっぱい冒険家タイプ」でした！体を動かす遊びが大好きです。あなたの子は何タイプ？" },
+    any: { key: "any", emoji: "✨", title: "なんでも楽しむオールラウンダー", text: "いろいろな遊びに興味がある時期。まずは知育スコアの高い定番から、反応が良かった遊びを広げていきましょう。",
+      catch: "いろんな遊びに目をかがやかせる、わくわく上手。", strengths: ["好奇心がひろい", "なんでも楽しむ", "すぐになじむ"],
+      pair: { key: "words", reason: "どんな遊びにも乗ってくれるので、クイズやことば遊びも盛り上がります。" },
+      share: "おもちゃ診断の結果は「✨なんでも楽しむオールラウンダー」でした！好きな遊びを探している毎日です。あなたの子は何タイプ？" },
+    // birth は子どもの好みではなく「赤ちゃんへの最初の贈り物」を選ぶ人向け。得意なことの代わりに選ぶポイントを出し、pair は持たない。
+    birth: { key: "birth", emoji: "👶", title: "はじめてのおもちゃ", text: "赤ちゃんの最初のおもちゃは、安全な素材と、見る・聞く・握るを楽しめるものが定番。名入れやギフト包装の可否も商品ページで確認を。",
+      catch: "赤ちゃんの毎日に寄りそう、はじめての贈り物。", strengthsLabel: "選ぶポイント", strengths: ["安心な素材", "見る・聞く・にぎる", "名入れ・包装"],
+      pair: null,
+      share: "おもちゃ診断で「👶はじめてのおもちゃ」を探しました！出産祝い選びの参考に、あなたも試してみませんか？" }
   };
 
   // 年齢ごとの「この時期のポイント」(一般的な目安として控えめに書く)。
@@ -523,6 +564,17 @@
   function persona(a) {
     if (a.who === "birth" && (!a.interest || a.interest === "any")) return PERSONAS.birth;
     return PERSONAS[a.interest] || PERSONAS.any;
+  }
+
+  // sessionStorage から読んだキー ("toString" など) で Object.prototype を拾わないように
+  function personaByKey(key) { return Object.prototype.hasOwnProperty.call(PERSONAS, key) ? PERSONAS[key] : null; }
+
+  function pairNote(prevKey, curKey) {
+    if (!personaByKey(prevKey) || !personaByKey(curKey) || prevKey === "birth" || curKey === "birth") return null;
+    if (prevKey === curKey) return { kind: "same", text: "同じタイプ！好きな遊びが似ているので、一緒に遊びやすいふたりです。" };
+    if (PERSONAS[prevKey].pair && PERSONAS[prevKey].pair.key === curKey) return { kind: "pair", text: PERSONAS[prevKey].pair.reason };
+    if (PERSONAS[curKey].pair && PERSONAS[curKey].pair.key === prevKey) return { kind: "pair", text: PERSONAS[curKey].pair.reason };
+    return null;
   }
 
   function ageTip(a) {
@@ -629,8 +681,10 @@
 
   function toSaved(a, picks) {
     var top = picks && picks[0] ? picks[0].item : null;
+    var p = persona(a);
     return {
       v: 2,
+      persona: { key: p.key, emoji: p.emoji, title: p.title },
       answers: { who: a.who, age: a.age, interest: a.interest, budget: a.budget, priority: a.priority, owned: (a.owned || []).slice() },
       top: top ? { title: top.product_name || top.title || "", permalink: top.permalink || "", image: top.image || "" } : null,
       count: picks ? picks.length : 0,
@@ -643,6 +697,7 @@
     LEGACY_AGE_BANDS: LEGACY_AGE_BANDS, RELAX_NOTES: RELAX_NOTES,
     find: find, stepsFor: stepsFor, question: question, emptyAnswers: emptyAnswers, isComplete: isComplete,
     scoreItem: scoreItem, recommend: recommend, ageBand: ageBand, ageBest: ageBest, minPrice: minPrice, formatMonths: formatMonths,
+    PERSONAS: PERSONAS, personaByKey: personaByKey, pairNote: pairNote,
     persona: persona, ageTip: ageTip, summaryChips: summaryChips,
     toQuery: toQuery, fromParams: fromParams, fromSaved: fromSaved, toSaved: toSaved
   };

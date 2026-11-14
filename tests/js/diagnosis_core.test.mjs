@@ -322,3 +322,27 @@ test("弱い興味語は別カテゴリのコア語があれば一致扱いに�
   const coreScore = D.scoreItem(rattle, answersForSense, {});
   assert.ok(weakScore.score < coreScore.score, "弱一致はコア一致より低得点");
 });
+
+test("F17 persona metadata, pairing, and saved persona", () => {
+  for (const [key, p] of Object.entries(D.PERSONAS)) {
+    assert.equal(p.key, key);
+    assert.ok(p.catch.length <= 26);
+    assert.equal(p.strengths.length, 3);
+    assert.ok(p.strengths.every((s) => s.length <= 10));
+    assert.ok(p.share.includes(p.title));
+    assert.ok(p.share.length <= 70);
+    if (key === "birth") assert.equal(p.pair, null);
+    else { assert.ok(p.pair); assert.ok(D.PERSONAS[p.pair.key]); assert.ok(!["birth", "any", key].includes(p.pair.key)); }
+  }
+  // 相性の相手が 1 タイプに集中しないように (どのタイプも「相手」に選ばれるのは 2 回まで)
+  const chosen = {};
+  for (const p of Object.values(D.PERSONAS)) if (p.pair) chosen[p.pair.key] = (chosen[p.pair.key] || 0) + 1;
+  assert.ok(Object.values(chosen).every((n) => n <= 2), JSON.stringify(chosen));
+  assert.equal(D.pairNote("build", "build").kind, "same");
+  assert.equal(D.pairNote("build", "vehicle").kind, "pair");
+  assert.equal(D.pairNote("vehicle", "build").kind, "pair");
+  assert.equal(D.pairNote("build", "art"), null);
+  assert.equal(D.pairNote("birth", "build"), null);
+  const a = answers({ interest: "build" });
+  assert.deepEqual(plain(D.toSaved(a, []).persona), { key: "build", emoji: "🧱", title: D.PERSONAS.build.title });
+});
