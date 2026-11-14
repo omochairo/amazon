@@ -79,3 +79,43 @@ test("B: 商品ページ訪問時、#mobile-sticky-cta の data-min-price から
   assert.equal(list[0].asin, "B0AAAAAAAA");
   assert.equal(list[0].min_price, 2980, "data-min-price から最安値が入る (回帰防止)");
 });
+
+function bootArticle(h1) {
+  const sandbox = {
+    document: {
+      readyState: "complete",
+      title: "テスト商品ページ",
+      addEventListener() {},
+      querySelector: (sel) => (sel === ".post-title" ? h1 : null),
+      querySelectorAll: () => [],
+      getElementById: () => null,
+    },
+    window: {
+      location: { pathname: "/products/b0aaaaaaaa/" },
+      dispatchEvent() {},
+    },
+    Event: class { constructor(type) { this.type = type; } },
+    localStorage: memStorage(),
+    sessionStorage: memStorage(),
+    console,
+  };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(SRC, sandbox);
+  return Array.from(sandbox.window.OmochaRecent.list());
+}
+
+test("C: H1 に data-product-name があれば、それを題として記録する", () => {
+  const h1 = {
+    textContent: "  レゴ クラシックはどこで買える？在庫と価格を毎日チェック  ",
+    getAttribute: (n) => (n === "data-product-name" ? "レゴ クラシック" : null),
+  };
+  const list = bootArticle(h1);
+  assert.equal(list[0].title, "レゴ クラシック");
+});
+
+test("D: data-product-name が無ければ従来どおり H1 の文字を記録する", () => {
+  const h1 = { textContent: "  長い題  ", getAttribute: () => null };
+  const list = bootArticle(h1);
+  assert.equal(list[0].title, "長い題");
+});

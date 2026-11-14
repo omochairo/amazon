@@ -87,7 +87,8 @@
     var image = document.querySelector(".post-content img, .cover img, article img");
     var meta = {
       asin: asin,
-      title: title ? (title.textContent || "").trim() : document.title,
+      // 商品名 (data-product-name) を優先。無ければ従来どおり H1 の文字
+      title: title ? ((title.getAttribute("data-product-name") || title.textContent || "").trim()) : document.title,
       image: image ? image.getAttribute("src") : null,
       score: null,
       min_price: null,

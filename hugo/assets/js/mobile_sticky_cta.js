@@ -59,7 +59,9 @@
 
   function _buildMeta(bar) {
     var asin = bar.getAttribute("data-asin");
-    var title = (_q(".post-title") || {}).textContent || "";
+    var titleEl = _q(".post-title");
+    // 商品名 (data-product-name) を優先。無ければ従来どおり H1 の文字
+    var title = (titleEl && titleEl.getAttribute("data-product-name")) || (titleEl || {}).textContent || "";
     var img = _q(".post-content img, .cover img, article img");
     var image = img ? img.getAttribute("src") : null;
     var scoreEl = _q("[data-ivs100]");
