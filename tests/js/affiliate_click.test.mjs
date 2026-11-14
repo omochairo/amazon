@@ -178,3 +178,52 @@ test("D: gtag が無くても例外を投げない", () => {
     target: makeAnchor({ href: "https://www.amazon.co.jp/dp/B0BSH34YR8/?tag=chk01-22" }),
   }));
 });
+
+// navi-brain#165 T6: 一覧カード・ランキングのサムネイルと商品名、ランキングの楽天ボタン、
+// セール告知の帯は、これまで class 推測に頼るか body に落ちていた。
+// テンプレートが明示した slot がそのまま送られることと、テンプレートがその属性を
+// 出し続けていることを固定する (ボタンと区別できる名前にしてある)。
+const LAYOUT_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../hugo/layouts/partials"
+);
+
+test("B: 一覧・ランキング・セール告知の新しい slot がそのまま送られる", () => {
+  const cases = [
+    ["https://www.amazon.co.jp/dp/B0BSH34YR8/?tag=chk01-22", "ranking-thumb", "list-card-thumb"],
+    ["https://www.amazon.co.jp/dp/B0BSH34YR8/?tag=chk01-22", "", "list-card-name"],
+    ["https://item.rakuten.co.jp/shop/xyz/", "ranking-thumb", "ranking-thumb"],
+    ["https://item.rakuten.co.jp/shop/xyz/", "", "ranking-name"],
+    ["https://item.rakuten.co.jp/shop/xyz/", "ranking-cta-external ranking-cta-rakuten", "ranking"],
+    ["https://www.amazon.co.jp/events/blackfriday/?tag=chk01-22", "sale-notice-main", "sale-notice"],
+  ];
+  for (const [href, className, slot] of cases) {
+    const { events } = run(makeAnchor({ href, className, slot }));
+    assert.equal(events.length, 1, slot);
+    assert.equal(events[0].name, "affiliate_click");
+    assert.equal(events[0].params.slot, slot);
+  }
+});
+
+test("B: 属性の無いサムネイルは body に落ちる (属性を外すと位置が分からなくなる)", () => {
+  const { events } = run(makeAnchor({
+    href: "https://item.rakuten.co.jp/shop/xyz/",
+    className: "ranking-thumb",
+  }));
+  assert.equal(events[0].params.slot, "body");
+});
+
+test("B: テンプレートが新しい slot を出している", () => {
+  const expect = {
+    "feature-item.html": ['class="ranking-thumb" data-cta-slot="list-card-thumb"',
+                          'data-cta-slot="list-card-name"'],
+    "ranking_item.html": ['class="ranking-thumb" data-cta-slot="ranking-thumb"',
+                          'data-cta-slot="ranking-name"',
+                          'data-cta-slot="ranking" class="ranking-cta-external ranking-cta-rakuten"'],
+    "sale_notice.html": ['class="sale-notice-main" data-sale-notice-main data-cta-slot="sale-notice"'],
+  };
+  for (const [file, needles] of Object.entries(expect)) {
+    const html = readFileSync(path.join(LAYOUT_DIR, file), "utf8");
+    for (const needle of needles) assert.ok(html.includes(needle), `${file}: ${needle}`);
+  }
+});

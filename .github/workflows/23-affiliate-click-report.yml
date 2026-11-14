@@ -1,0 +1,139 @@
+name: Affiliate Click Report (GA4, weekly)
+
+# navi-brain#165 T6 — 購入リンクのクリック (affiliate_click) を、記事別・位置別の表にして
+# private の omochairo/amazon-navi-brain#169 (ダッシュボードの issue) に週 1 回コメントする。
+#
+# 何をどこに出すか:
+#   - 取得: scripts/fetch_ga4_affiliate_clicks.py (GA4 Data API、navi.omcha.jp だけ・日ごと)
+#   - 整形: scripts/format_affiliate_click_report.py (クリックの多いページ / slot × network /
+#     ページ種類 × slot / 週ごとの推移 / 診断の流れ)
+#   - 出し先: navi-brain#169 のコメントだけ。行は $RUNNER_TEMP の一時ファイルに置き、
+#     コミットも artifact の upload もしない
+#
+# 数字を private の issue にだけ出す理由: このリポジトリは public で、コミット・issue・
+# Actions のログ・job summary・artifact は誰でも読める (第三者のミラーにも残り、後から
+# 消せない)。17-analytics-report.yml と同じく、GA4 の実数は navi-brain に置く。
+# このため dry_run でも job summary には表の見出しと行数だけを出し、数字は出さない。
+#
+# クリックは affiliate_click だけで数える (追従バーの m_sticky_tap・セール告知の
+# sale_notice_click は affiliate_click と同時に飛ぶので足さない)。
+#
+# 必須 secrets:
+#   - GA4_SA_JSON / GA4_PROPERTY_ID   17 と同じ
+#   - NAVI_BRAIN_PAT                  navi-brain への issues:write (17 と同じ)
+# どれかが無い・届かないときは ::error:: で落とす (黙って緑終了させない。#4793)。
+
+on:
+  schedule:
+    # 日曜 00:30 UTC (= 日曜 09:30 JST)。17 (日曜 00:00 UTC) の後
+    - cron: '30 0 * * 0'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'コメントせず、表の見出しと行数だけを job summary に出す'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: affiliate-click-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      REPORT_REPO: omochairo/amazon-navi-brain
+      REPORT_ISSUE: '169'
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-analytics-data google-auth
+
+      # 取得の前に、private 側へ書けることを確かめる (取ってから落ちるのを避ける)。
+      - name: Preflight — navi-brain への書き込み資格を確認
+        if: env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.NAVI_BRAIN_PAT }}
+        run: |
+          set -e
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::NAVI_BRAIN_PAT が未設定です。クリックの実数は public には出せないため停止します。"
+            exit 1
+          fi
+          if ! gh api "repos/${REPORT_REPO}/issues/${REPORT_ISSUE}" --jq .number >/dev/null; then
+            echo "::error::NAVI_BRAIN_PAT で ${REPORT_REPO}#${REPORT_ISSUE} を読めません (PAT の失効かスコープ不足)。"
+            exit 1
+          fi
+
+      - name: Fetch GA4 affiliate clicks
+        env:
+          GA4_SA_JSON: ${{ secrets.GA4_SA_JSON }}
+          GA4_PROPERTY_ID: ${{ secrets.GA4_PROPERTY_ID }}
+        run: |
+          set -e
+          if [ -z "$GA4_SA_JSON" ] || [ -z "$GA4_PROPERTY_ID" ]; then
+            echo "::error::GA4_SA_JSON または GA4_PROPERTY_ID が未設定です"
+            exit 1
+          fi
+          # 週ごとの推移を 8 週ぶん出すため 56 日取る (表 (a)〜(c)・(e) は直近 28 日)。
+          # 終わりは今日 (日本時間) の 2 日前 (当日・前日は未確定)。
+          python scripts/fetch_ga4_affiliate_clicks.py --days 56 \
+            --out "$RUNNER_TEMP/affiliate_clicks.jsonl" \
+            --meta-out "$RUNNER_TEMP/affiliate_clicks_meta.json"
+
+      - name: Format report
+        run: |
+          set -e
+          python scripts/format_affiliate_click_report.py \
+            --rows "$RUNNER_TEMP/affiliate_clicks.jsonl" \
+            --meta "$RUNNER_TEMP/affiliate_clicks_meta.json" \
+            --out "$RUNNER_TEMP/affiliate_click_report.md" \
+            --summary-days 28 --trend-weeks 8 --top 20
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          printf '\n<sub>%s</sub>\n' "$RUN_URL" >> "$RUNNER_TEMP/affiliate_click_report.md"
+
+      - name: Comment on navi-brain#169
+        if: env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.NAVI_BRAIN_PAT }}
+        run: |
+          set -e
+          gh issue comment "$REPORT_ISSUE" -R "$REPORT_REPO" \
+            --body-file "$RUNNER_TEMP/affiliate_click_report.md" >/dev/null
+          echo "${REPORT_REPO}#${REPORT_ISSUE} にコメントしました"
+
+      # dry_run: job summary は public なので、見出しと表の行数だけを出す (数字・ページ名は出さない)。
+      - name: Dry run summary (数字は出さない)
+        if: env.DRY_RUN == 'true'
+        run: |
+          set -e
+          REPORT="$RUNNER_TEMP/affiliate_click_report.md"
+          {
+            echo "## Affiliate Click Report (dry run)"
+            echo
+            echo "コメントはしていません。public の job summary には見出しと表の行数だけを出します。"
+            echo
+            # 表の行数 = 罫線を除いた "| " の行から見出しの 1 行を引いたもの
+            awk '
+              function out() { if (h != "") printf "- %s: %d 行\n", h, (n > 0 ? n - 1 : 0) }
+              /^### / { out(); h = substr($0, 5); n = 0; next }
+              /^\| / && !/^\| *:?---/ { n++ }
+              END { out() }
+            ' "$REPORT"
+          } >> "$GITHUB_STEP_SUMMARY"
