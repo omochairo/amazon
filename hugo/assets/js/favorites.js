@@ -261,6 +261,7 @@
         var removedMeta = snap;
         remove(asin);
         card.remove();
+        _decorateFavoritesDrops();
         _syncAllToggles();
         _renderHeaderBadge();
         _showToast("お気に入りから削除しました", "元に戻す", function () {
@@ -337,6 +338,7 @@
       _syncAllToggles();
       _renderHeaderBadge();
       hydrateFavoritesPage();
+      _decorateFavoritesDrops();
     });
   }
 
@@ -600,21 +602,48 @@
   function _decorateFavoritesDrops() {
     if (!/\/favorites\/?$/.test(global.location.pathname)) return;
     _loadCatalog().then(function (map) {
-      var cards = document.querySelectorAll(".favorites-card[data-asin]");
+      var container = document.getElementById("favorites-list");
+      if (!container) return;
+      var cards = container.querySelectorAll(".favorites-card[data-asin]");
+      var drops = [];
+      var others = [];
       for (var i = 0; i < cards.length; i++) {
         var card = cards[i];
         var asin = card.getAttribute("data-asin");
         var info = _dropInfo(asin, map[asin]);
-        if (!info) continue;
-        var meta = card.querySelector(".favorites-card-meta");
-        if (!meta || meta.querySelector(".price-drop-badge")) continue;
-        var badge = document.createElement("span");
-        badge.className = "price-drop-badge";
-        badge.title = "登録時 " + _yen(info.was) + " → 現在 " + _yen(info.now);
-        badge.textContent = "🔻 " + info.pct + "% 値下げ";
-        meta.appendChild(badge);
-        card.classList.add("has-price-drop");
+        if (info) {
+          var meta = card.querySelector(".favorites-card-meta");
+          if (meta && !meta.querySelector(".price-drop-badge")) {
+            var badge = document.createElement("span");
+            badge.className = "price-drop-badge";
+            badge.title = "登録時 " + _yen(info.was) + " → 現在 " + _yen(info.now);
+            badge.textContent = "🔻 " + info.pct + "% 値下げ";
+            meta.appendChild(badge);
+          }
+          card.classList.add("has-price-drop");
+          drops.push({ card: card, pct: info.pct, index: i });
+        } else {
+          others.push(card);
+        }
       }
+      var existingNotice = document.querySelector(".favorites-drop-notice");
+      if (!drops.length) {
+        // 削除で値下げ商品がなくなったら一言も消す
+        if (existingNotice) existingNotice.remove();
+        return;
+      }
+      // 安定ソート: 値下げ率が同じカードと、値下げのないカードは元順を維持。
+      drops.sort(function (a, b) { return b.pct - a.pct || a.index - b.index; });
+      drops.concat(others).forEach(function (entry) {
+        container.appendChild(entry.card || entry);
+      });
+      var notice = existingNotice;
+      if (!notice) {
+        notice = document.createElement("p");
+        notice.className = "favorites-drop-notice";
+        container.parentNode.insertBefore(notice, container);
+      }
+      notice.innerHTML = "お気に入りのうち <strong>" + drops.length + "件</strong> が、登録したときより安くなっています。";
     });
   }
 

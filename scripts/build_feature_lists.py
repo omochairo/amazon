@@ -52,6 +52,7 @@ from age_semantics import (  # noqa: E402
 )
 from brand_normalizer import is_non_brand_raw, normalize as normalize_brand  # noqa: E402
 from score_calculator import calculate as calculate_score, compute_ivs_axes  # noqa: E402
+from card_reason import card_reason  # noqa: E402
 
 logger = logging.getLogger("build_feature_lists")
 
@@ -89,6 +90,7 @@ class ArticleRecord:
     # 最新観測の在庫文字列 (#5130 残件3)。overlay_current_prices が
     # price_overlay の観測から埋める。観測が無ければ None のまま。
     availability: str | None = None
+    reason: str | None = None
     score_cospa: float | None = field(default=None, init=False)
 
 
@@ -240,6 +242,7 @@ def load_articles(articles_dir: Path) -> list[ArticleRecord]:
             image=prod.get("image"),
             ivs_score=sr.ivs_score,
             ivs_100=sr.total_100,
+            reason=card_reason(raw, sr.total_100),
             best_price=_safe_int(best_price),
             best_platform=prod.get("best_platform"),
             amazon_url=amazon_block.get("url"),
@@ -833,6 +836,7 @@ def _record_to_payload_common(rec: ArticleRecord, rank: int) -> dict[str, Any]:
         "best_platform": rec.best_platform,
         "amazon_url": rec.amazon_url,
         "age_min_months": rec.age_min_months,
+        "reason": rec.reason,
     }
     if rec.ivs_axes:
         payload["ivs_axes"] = rec.ivs_axes

@@ -307,3 +307,18 @@ test("結果のチップは回答した設問ぶん出て、出産祝いでは�
   const b = D.summaryChips({ ...D.emptyAnswers(), who: "birth", interest: "any", budget: "any", priority: "balance" });
   assert.ok(!b.some((c) => c.step === "age"));
 });
+
+test("弱い興味語は別カテゴリのコア語があれば一致扱いにせず、単独なら弱一致する", () => {
+  const base = { age: 24, price: 2000, score: 80 };
+  const arithmetic = item({ ...base, name: "アーテック 算数教育5点セット", tags: ["算数教育5点セット", "モンテッソーリ", "知育玩具", "数字"] });
+  const rattle = item({ ...base, name: "木製ラトル", tags: ["ラトル", "モンテッソーリ"] });
+  const weakOnly = item({ ...base, name: "感触あそびセット", tags: ["感触", "知育玩具"] });
+  const answersForSense = answers({ age: "2y", interest: "sense", budget: "any" });
+  assert.equal(D.scoreItem(arithmetic, answersForSense, {}), null, "算数・数字のコア語がある商品は sense の弱語で通らない");
+  assert.ok(D.scoreItem(rattle, answersForSense, {}).score !== null, "ラトルは sense のコア語で一致する");
+  const weakScore = D.scoreItem(weakOnly, answersForSense, {});
+  assert.ok(weakScore.score !== null);
+  assert.match(weakScore.reasons[0].text, /さわる・にぎる/);
+  const coreScore = D.scoreItem(rattle, answersForSense, {});
+  assert.ok(weakScore.score < coreScore.score, "弱一致はコア一致より低得点");
+});

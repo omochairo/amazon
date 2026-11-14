@@ -55,6 +55,26 @@
       <a href="{{ $item.url }}" rel="sponsored nofollow noopener" target="_blank">{{ $title }}</a>
       {{- end -}}
     </h2>
+    {{- /* #166 F8: 前回からの動き。hugo/data/ranking/movement.json は
+           append_ranking_history.py が楽天の itemCode ごとに毎日書く。無ければ出さない。 */ -}}
+    {{- $mv := "" -}}
+    {{- with site.Data.ranking.movement }}{{ $mvi := .items }}{{ if and $mvi $item.itemCode }}{{ $mv = index $mvi $item.itemCode }}{{ end }}{{ end -}}
+    {{- /* weekly.json だけ更新されて movement.json が古いときは、今の順位と食い違うので出さない。
+           中身が何も無い (初回の記録など) ときも空の段落を出さない。 */ -}}
+    {{- if $mv }}{{ if or (ne (int $mv.rank) $rank) (not (or $mv.is_new $mv.prev_rank (ge (int ($mv.streak_days | default 0)) 2))) }}{{ $mv = "" }}{{ end }}{{ end -}}
+    {{- with $mv }}
+    <p class="ranking-move">
+      {{- if .is_new }}<span class="ranking-move-badge ranking-move--new">🆕 初登場</span>
+      {{- else if and .delta (gt (int .delta) 0) }}<span class="ranking-move-badge ranking-move--up">↑{{ int .delta }}（前回{{ int .prev_rank }}位）</span>
+      {{- else if and .delta (lt (int .delta) 0) }}<span class="ranking-move-badge ranking-move--down">↓{{ sub 0 (int .delta) }}（前回{{ int .prev_rank }}位）</span>
+      {{- else if .prev_rank }}<span class="ranking-move-badge ranking-move--stay">→ 前回と同じ</span>
+      {{- end }}
+      {{- with .streak_days }}{{ if ge (int .) 2 }}<span class="ranking-move-badge ranking-move--streak">{{ int . }}日連続</span>{{ end }}{{ end -}}
+    </p>
+    {{- end }}
+    {{- with $page }}{{ with .Params.card_reason }}
+    <p class="card-reason">&#128161; {{ . }}</p>
+    {{- end }}{{ end }}
     {{- with $item.shopName }}
     <p class="ranking-shop">{{ . }}</p>
     {{- end }}

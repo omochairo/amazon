@@ -11,7 +11,7 @@
 
 {{- /* 設問・選択肢は diagnosis_core.js が回答に応じて組み立てる (分岐・年齢による絞り込みがあるため)。
        ここに置くのは枠だけ。id は diagnosis.js と tests/js/diagnosis.test.mjs が参照する。 */}}
-<div class="dx" id="dx-root">
+<div class="dx" id="dx-root" data-amazon-tag="{{ site.Params.amazonPartnerTag }}">
   <ul class="dx-promises" aria-label="この診断について">
     <li>⏱️ 約1分・最大6問</li>
     <li>🛡️ 対象年齢をこえる商品は出しません</li>
