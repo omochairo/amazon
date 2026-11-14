@@ -127,7 +127,7 @@ def _front_matter(text: str) -> dict[str, str]:
         return {}
     out = {}
     for line in text[3:end].splitlines():
-        m = re.match(r'^(title|url):\s*"?(.*?)"?\s*$', line)
+        m = re.match(r'''^(title|url):\s*["']?(.*?)["']?\s*$''', line)
         if m:
             out[m.group(1)] = m.group(2)
     return out

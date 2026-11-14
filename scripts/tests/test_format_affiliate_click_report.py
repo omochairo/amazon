@@ -214,7 +214,7 @@ def test_name_lookup(tmp_path):
     (tmp_path / "hugo" / "content" / "cospa.md").write_text(
         '---\ntitle: "予算別おすすめ"\nurl: /cospa/\n---\n本文', encoding="utf-8")
     (tmp_path / "hugo" / "content" / "diagnosis.md").write_text(
-        '---\ntitle: "診断"\n---\n', encoding="utf-8")
+        "---\ntitle: '診断'\n---\n", encoding="utf-8")
     (tmp_path / "hugo" / "content" / "price").mkdir()
     (tmp_path / "hugo" / "content" / "price" / "_index.md").write_text(
         '---\ntitle: "値下がり中"\n---\n', encoding="utf-8")
