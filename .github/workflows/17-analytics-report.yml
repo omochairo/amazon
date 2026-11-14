@@ -116,7 +116,7 @@ jobs:
           # 当日・前日は流入元の処理が終わっておらず、sessionSourceMedium が
           # `(data not available)` に寄る。2 日前までの処理済みの日だけで、
           # ちょうど DAYS 日間を取る (既定の --days だけだと DAYS+1 日間になる)。
-          python scripts/fetch_ga4.py --days "$DAYS" --lag-days 2 --inclusive-days
+          python scripts/fetch_ga4.py --days "$DAYS" --lag-days 2 --inclusive-days --feature-events
 
       - name: Fetch GSC data (optional)
         id: gsc

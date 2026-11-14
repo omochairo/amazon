@@ -32,6 +32,8 @@ TOP_N_DEFAULT = 100
 # truncate すると、omcha.jp (数百ページ・日次PV数千) の陰で navi (1桁PV) がほぼ
 # 全て弾かれる。detect_orphan_pages.py の DEFAULT_TARGET_HOST と同値。
 NAVI_HOST = "navi.omcha.jp"
+FEATURE_EVENTS = ["affiliate_click", "diagnosis_start", "diagnosis_complete",
+                  "diagnosis_pick_click", "diagnosis_share"]
 
 
 def _load_credentials(sa_json: str):
@@ -89,6 +91,27 @@ def _navi_dimension_filter():
             ),
         )
     )
+
+
+def _feature_events_filter():
+    """navi host と対象イベント名を AND した GA4 dimension filter を構築する。"""
+    from google.analytics.data_v1beta.types import Filter, FilterExpression, FilterExpressionList
+    return FilterExpression(
+        and_group=FilterExpressionList(expressions=[
+            _navi_dimension_filter(),
+            FilterExpression(filter=Filter(
+                field_name="eventName",
+                in_list_filter=Filter.InListFilter(values=FEATURE_EVENTS),
+            )),
+        ])
+    )
+
+
+def feature_events_range(end: date) -> tuple[date, date]:
+    """end を終端として、前月初日から end までの GA4 範囲を返す。"""
+    first_this_month = end.replace(day=1)
+    previous_month_end = first_this_month - timedelta(days=1)
+    return previous_month_end.replace(day=1), end
 
 
 def _metric_order_by(metric_name: str, desc: bool = True):
@@ -166,7 +189,7 @@ def compute_range(days: int, end_date: str | None = None, lag_days: int = 0,
 
 def fetch(property_id: str, sa_json: str, days: int, top_n: int,
           end_date: str | None = None, lag_days: int = 0,
-          inclusive_days: bool = False) -> dict[str, Any]:
+          inclusive_days: bool = False, feature_events: bool = False) -> dict[str, Any]:
     from google.analytics.data_v1beta import BetaAnalyticsDataClient
     creds = _load_credentials(sa_json)
     client = BetaAnalyticsDataClient(credentials=creds)
@@ -254,7 +277,7 @@ def fetch(property_id: str, sa_json: str, days: int, top_n: int,
     )
     by_source.sort(key=lambda r: r.get("screenPageViews", 0), reverse=True)
 
-    return {
+    result = {
         "fetched_at": datetime.now(timezone.utc).isoformat(),
         "property_id": property_id,
         "range": {"start": start_s, "end": end_s, "days": days},
@@ -268,9 +291,29 @@ def fetch(property_id: str, sa_json: str, days: int, top_n: int,
         "by_device": by_device,
         "by_source": by_source,
     }
+    if feature_events:
+        feature_start, feature_end = feature_events_range(end)
+        feature_rows = []
+        try:
+            feature_rows = _run_report(
+                client, property_id, feature_start.isoformat(), feature_end.isoformat(),
+                dims=["yearMonth", "eventName", "pagePath"],
+                metrics=["eventCount"],
+                dimension_filter=_feature_events_filter(),
+                # 商品ページの affiliate_click も含むので行数が多い。上限で切られるときは
+                # 件数の少ない行から落ちるように並びを明示する (#2710 と同じ理由)
+                order_bys=[_metric_order_by("eventCount")],
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("feature events fetch failed; report will show no data: %s", e)
+        result["feature_events"] = {
+            "range": {"start": feature_start.isoformat(), "end": feature_end.isoformat()},
+            "rows": feature_rows,
+        }
+    return result
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--property-id", default=os.environ.get("GA4_PROPERTY_ID"))
     p.add_argument("--sa-json", default=os.environ.get("GA4_SA_JSON"),
@@ -283,8 +326,14 @@ def main() -> int:
                    help="range終端を today - N 日にする (処理中の直近日を外す。--end-date 指定時は無視)")
     p.add_argument("--inclusive-days", action="store_true",
                    help="--days を両端込みの日数として扱う (未指定だと days+1 日間になる)")
+    p.add_argument("--feature-events", action="store_true",
+                   help="特集ページ・診断イベントを追加取得する")
     p.add_argument("--out", default=DEFAULT_OUT)
-    args = p.parse_args()
+    return p
+
+
+def main() -> int:
+    args = build_parser().parse_args()
 
     if not args.property_id:
         logger.error("GA4_PROPERTY_ID が未設定")
@@ -298,7 +347,7 @@ def main() -> int:
 
     try:
         result = fetch(args.property_id, sa_json, args.days, args.top_n, args.end_date,
-                       args.lag_days, args.inclusive_days)
+                       args.lag_days, args.inclusive_days, args.feature_events)
     except Exception as e:
         logger.exception("GA4 fetch failed: %s", e)
         return 1
