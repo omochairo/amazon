@@ -99,7 +99,8 @@
     {{- if $brand }}
       <div class="product-card-brand">{{ $brand }}</div>
     {{- end }}
-    <h3 class="product-card-title">{{ .Title }}</h3>
+    <h3 class="product-card-title">{{ $name }}</h3>
+    {{ with .Params.card_reason }}<p class="card-reason">&#128161; {{ . }}</p>{{ end }}
     {{- /* #5225: 知育スコアと Amazon価格の推移。ASIN は上で url から導出済み。
            このカードは home / /posts/ / /brands/ / /tags/ / /categories/ の全部で
            使われるので、ここ1箇所でそれら全ページにチャートが乗る。 */ -}}

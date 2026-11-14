@@ -13,6 +13,9 @@ hugo/data/ranking/history.json に append する。同日 re-run は r を上書
 }
 
 MM-DD は JST。年境界の前後関係は配列の挿入順 (= chronological) で表現する。
+
+navi-brain#166 F8: ASIN が付かない商品も前回比を出せるよう、楽天の itemCode ごとの
+履歴 by_item を同じ形で持ち、--movement に今日の順位・前回順位・連続日数を書く。
 """
 from __future__ import annotations
 
@@ -24,8 +27,9 @@ import pathlib
 import sys
 from zoneinfo import ZoneInfo
 
-logger = logging.getLogger(__name__)
+from ranking_dates import resolve_entry_dates
 
+logger = logging.getLogger(__name__)
 MAX_HISTORY = 90
 JST = ZoneInfo("Asia/Tokyo")
 
@@ -39,8 +43,7 @@ def _today_jst() -> tuple[str, str]:
 def _load_weekly(weekly_path: pathlib.Path) -> list[dict]:
     if not weekly_path.exists():
         raise FileNotFoundError(f"weekly.json not found: {weekly_path}")
-    payload = json.loads(weekly_path.read_text(encoding="utf-8"))
-    return payload.get("items", [])
+    return json.loads(weekly_path.read_text(encoding="utf-8")).get("items", [])
 
 
 def _load_history(history_path: pathlib.Path) -> dict:
@@ -67,73 +70,95 @@ def _upsert_today(entries: list[dict], today_mm_dd: str, rank: int) -> None:
         entries.pop(0)
 
 
-def append_history(
-    weekly_path: pathlib.Path,
-    history_path: pathlib.Path,
-    *,
-    today_mm_dd: str | None = None,
-    now_iso: str | None = None,
-) -> dict:
-    """Run one append cycle. Returns stats dict for logging/tests."""
-    if today_mm_dd is None or now_iso is None:
-        today_mm_dd, now_iso = _today_jst()
+def _date_for_mm_dd(mm_dd: str, today: datetime.date) -> datetime.date:
+    """今日の MM-DD を日付にする (今日の点にだけ使う。過去の点は resolve_entry_dates)。"""
+    return resolve_entry_dates([{"d": mm_dd}], today)[0] or today
 
+
+def _movement_entry(entries: list[dict], rank: int, today_mm_dd: str,
+                    today: datetime.date, first_run: bool) -> dict:
+    dates = resolve_entry_dates(entries, today)
+    prior = [(d, item) for d, item in zip(dates, entries) if d is not None and d < today]
+    latest = max(prior, key=lambda pair: pair[0]) if prior else None
+    prev_rank = int(latest[1]["r"]) if latest else None
+    prev_d = latest[1]["d"] if latest else None
+    recent = [d for d, _ in prior if 0 < (today - d).days <= 30]
+    streak = 1
+    dated = {d for d in dates if d is not None}
+    while today - datetime.timedelta(days=streak) in dated:
+        streak += 1
+    return {
+        "rank": rank,
+        "prev_rank": prev_rank,
+        "prev_d": prev_d,
+        "delta": prev_rank - rank if prev_rank is not None else None,
+        "is_new": False if first_run else not recent,
+        "streak_days": streak,
+    }
+
+
+def append_history(weekly_path: pathlib.Path, history_path: pathlib.Path, *,
+                   movement_path: pathlib.Path | None = None,
+                   today_mm_dd: str | None = None, now_iso: str | None = None) -> dict:
+    """Append one snapshot and write movement data; retain legacy stats keys."""
+    if today_mm_dd is None or now_iso is None:
+        actual_today, actual_iso = _today_jst()
+        today_mm_dd = today_mm_dd or actual_today
+        now_iso = now_iso or actual_iso
     items = _load_weekly(weekly_path)
     state = _load_history(history_path)
     history = state.setdefault("history", {})
-
-    matched, skipped = 0, 0
+    by_item = state.setdefault("by_item", {})
+    asins, skipped = 0, 0
+    movements = {}
+    today = _date_for_mm_dd(today_mm_dd, datetime.date.fromisoformat(now_iso[:10]))
+    # 初回 (by_item に今日より前の点がまだ無い) は前回が分からないので、全部を「初登場」にしない。
+    # 同じ日に 2 回走ったときも、前の日の点が無ければ初回扱いのまま。
+    first_run = not any(
+        d is not None and d < today
+        for entry in by_item.values() if isinstance(entry, dict)
+        for d in resolve_entry_dates(entry.get("history") or [], today)
+    )
     for it in items:
-        asin = it.get("matched_asin")
-        rank = it.get("rank")
-        if not asin or rank is None:
+        asin, rank, code = it.get("matched_asin"), it.get("rank"), it.get("itemCode")
+        if rank is None:
             skipped += 1
             continue
-        entry = history.setdefault(asin, {"name": "", "history": []})
-        name = it.get("title") or entry.get("name") or ""
-        entry["name"] = name
-        _upsert_today(entry["history"], today_mm_dd, int(rank))
-        matched += 1
-
+        rank = int(rank)
+        if asin:
+            entry = history.setdefault(asin, {"name": "", "history": []})
+            entry["name"] = it.get("title") or entry.get("name") or ""
+            _upsert_today(entry["history"], today_mm_dd, rank)
+            asins += 1
+        else:
+            skipped += 1
+        if code:
+            entry = by_item.setdefault(code, {"name": "", "history": []})
+            entry["name"] = it.get("title") or entry.get("name") or ""
+            _upsert_today(entry["history"], today_mm_dd, rank)
+            movements[code] = _movement_entry(entry["history"], rank, today_mm_dd, today, first_run)
     state["updated_at"] = now_iso
     history_path.parent.mkdir(parents=True, exist_ok=True)
-    history_path.write_text(
-        json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
-    return {
-        "matched": matched,
-        "skipped": skipped,
-        "total_items": len(items),
-        "tracked_asins": len(history),
-        "today": today_mm_dd,
-    }
+    history_path.write_text(json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    if movement_path is not None:
+        movement_path.parent.mkdir(parents=True, exist_ok=True)
+        movement_path.write_text(json.dumps({"generated_at": now_iso, "today": today_mm_dd, "items": movements},
+                                            ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    return {"matched": asins, "skipped": skipped, "total_items": len(items),
+            "tracked_asins": len(history), "today": today_mm_dd,
+            "tracked_items": len(by_item), "movement_items": len(movements)}
 
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--weekly",
-        default="hugo/data/ranking/weekly.json",
-        help="Source weekly.json with rematched matched_asin",
-    )
-    parser.add_argument(
-        "--history",
-        default="hugo/data/ranking/history.json",
-        help="Target history.json (created if missing)",
-    )
+    parser.add_argument("--weekly", default="hugo/data/ranking/weekly.json")
+    parser.add_argument("--history", default="hugo/data/ranking/history.json")
+    parser.add_argument("--movement", default="hugo/data/ranking/movement.json")
     args = parser.parse_args()
-
-    stats = append_history(pathlib.Path(args.weekly), pathlib.Path(args.history))
-    logger.info(
-        "ranking-history append: matched=%d skipped=%d total=%d tracked=%d today=%s",
-        stats["matched"],
-        stats["skipped"],
-        stats["total_items"],
-        stats["tracked_asins"],
-        stats["today"],
-    )
+    stats = append_history(pathlib.Path(args.weekly), pathlib.Path(args.history), movement_path=pathlib.Path(args.movement))
+    logger.info("ranking-history append: matched=%d skipped=%d total=%d tracked=%d today=%s",
+                stats["matched"], stats["skipped"], stats["total_items"], stats["tracked_asins"], stats["today"])
     return 0
 
 

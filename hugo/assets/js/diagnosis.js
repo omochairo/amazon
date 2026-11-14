@@ -364,10 +364,23 @@
         }
         wrap.appendChild(card);
       }
+      var tag = els.root && els.root.getAttribute("data-amazon-tag");
+      var permalink = String(pick.item.permalink || "");
+      var asinMatch = permalink.match(/\/products\/([^/]+)\/?$/i);
+      if (Number(pick.item.price_amazon) > 0 && tag && tag.trim() && asinMatch) {
+        var buy = make("a", "dx-buy dx-buy-amazon", "🟠 Amazonで見る");
+        buy.setAttribute("href", "https://www.amazon.co.jp/dp/" + asinMatch[1].toUpperCase() + "/?tag=" + tag.trim());
+        buy.setAttribute("data-cta-slot", "diagnosis");
+        buy.setAttribute("rel", "sponsored nofollow noopener");
+        buy.setAttribute("target", "_blank");
+        wrap.appendChild(buy);
+      }
+      // 商品ならではの一言 (card_reason) はカード本体 (utils/product-card.js) が出すので、
+      // ここでは診断の答えに対する理由だけを並べる (#166 F6/F7。2 重に出ていた)。
       if (pick.reasons && pick.reasons.length) {
         var ul = make("ul", "dx-reasons");
         ul.setAttribute("aria-label", "おすすめの理由");
-        pick.reasons.forEach(function (r) {
+        (pick.reasons || []).slice(0, 3).forEach(function (r) {
           ul.appendChild(make("li", "dx-reason dx-reason--" + r.kind, r.text));
         });
         wrap.appendChild(ul);

@@ -79,6 +79,26 @@ class TestEvaluateDrop:
         history = [(_ts(80), 3000), (_ts(60), 2000)]
         assert bpd.evaluate_drop(2000, NOW, history) is None
 
+    def test_low_since_days_counts_the_current_low_run(self):
+        # 3000 が続いたあと、10 日前から 2000 前後 (2% 以内の揺れ) が続いている
+        history = [(_ts(80), 3000), (_ts(10), 2000), (_ts(5), 2030), (_ts(2), 2000)]
+        result = bpd.evaluate_drop(2000, NOW, history)
+        assert result is not None
+        assert result["low_since_days"] == 10
+
+    def test_low_since_days_zero_when_dropped_today(self):
+        history = [(_ts(80), 3000), (_ts(1), 3000)]
+        result = bpd.evaluate_drop(2000, NOW, history)
+        assert result is not None
+        assert result["low_since_days"] == 0
+
+    def test_low_since_days_counts_jst_calendar_days(self):
+        # NOW は 7/18 9:00 JST。前日 7/17 20:00 JST に下がった商品は 13 時間後でも「1日前から」
+        history = [(_ts(80), 3000), (_ts(13 / 24), 2000)]
+        result = bpd.evaluate_drop(2000, NOW, history)
+        assert result is not None
+        assert result["low_since_days"] == 1
+
     def test_points_outside_90_day_window_are_ignored(self):
         history = [
             (_ts(200), 9000),  # 窓外: reference に使われてはいけない

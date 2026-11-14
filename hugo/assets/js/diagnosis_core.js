@@ -40,9 +40,11 @@
   // minM / maxM はその選択肢を出す月齢の範囲 (赤ちゃんに「プログラミング」を出さない等)。
   var INTERESTS = [
     { value: "sense", emoji: "🤲", label: "さわる・にぎる", sub: "音や感触を確かめる", maxM: 35,
-      kw: ["ラトル", "歯固め", "ベビージム", "布絵本", "にぎにぎ", "ガラガラ", "メリー", "ファーストトイ", "型はめ", "ひもとおし", "指先", "感触", "モンテッソーリ", "プレイジム", "ベビー"] },
+      kw: ["ラトル", "歯固め", "ベビージム", "布絵本", "にぎにぎ", "ガラガラ", "メリー", "ファーストトイ", "型はめ", "ひもとおし", "プレイジム"],
+      weak: ["指先", "感触", "モンテッソーリ", "ベビー"] },
     { value: "build", emoji: "🧱", label: "つくる・組み立てる", sub: "ブロック・積み木",
-      kw: ["ブロック", "積み木", "つみき", "レゴ", "lego", "デュプロ", "laq", "マグ・フォーマー", "ピカソタイル", "picassotiles", "スロープ", "gravitrax", "ドミノ", "組み立て"] },
+      kw: ["ブロック", "積み木", "つみき", "レゴ", "lego", "デュプロ", "laq", "マグ・フォーマー", "ピカソタイル", "picassotiles", "スロープ", "gravitrax", "ドミノ"],
+      weak: ["組み立て"] }, // 「組み立て」は多くの商品説明に出る一般語
     { value: "pretend", emoji: "🍳", label: "なりきる・ごっこ遊び", sub: "ままごと・お世話・変身", minM: 12,
       kw: ["ごっこ", "ままごと", "キッチン", "お医者さん", "お店", "人形", "メルちゃん", "シルバニア", "ドールハウス", "なりきり", "変身", "ぬいぐるみ", "お世話"] },
     { value: "vehicle", emoji: "🚗", label: "のりもの・うごくもの", sub: "電車・車・レール",
@@ -50,15 +52,18 @@
     { value: "think", emoji: "🧩", label: "考える・ゲーム", sub: "パズル・ボードゲーム", minM: 18,
       kw: ["パズル", "ボードゲーム", "カードゲーム", "バランスゲーム", "脳トレ", "知恵の輪", "すごろく", "迷路", "オセロ", "将棋", "かるた", "パーティーゲーム", "アナログゲーム"] },
     { value: "art", emoji: "🎨", label: "描く・工作", sub: "お絵かき・ねんど・シール", minM: 18,
-      kw: ["お絵かき", "お絵描き", "おえかき", "工作", "粘土", "ねんど", "シール", "ぬりえ", "塗り絵", "アート", "クレヨン", "ペイント", "diy", "メイキング", "ビーズ"] },
+      kw: ["お絵かき", "お絵描き", "おえかき", "工作", "粘土", "ねんど", "シール", "ぬりえ", "塗り絵", "クレヨン", "ペイント", "diy", "メイキング", "ビーズ"],
+      weak: ["アート"] }, // 「アート」は遊びの種類を特定しない一般語
     { value: "words", emoji: "🔤", label: "ことば・数・英語", sub: "ひらがな・算数・えいご",
-      kw: ["ことば", "英語", "えいご", "ひらがな", "文字", "もじ", "数字", "かず", "算数", "絵本", "図鑑", "フォニックス", "フラッシュカード", "くもん", "kumon", "学習", "時計", "知育パッド"] },
+      kw: ["ことば", "英語", "えいご", "ひらがな", "文字", "もじ", "数字", "かず", "算数", "図鑑", "フォニックス", "フラッシュカード", "くもん", "kumon", "時計", "知育パッド"],
+      weak: ["絵本", "学習"] }, // 絵本は物の形態、「学習」は目的の一般語
     { value: "music", emoji: "🎵", label: "音・リズム", sub: "楽器・うた",
       kw: ["楽器", "リズム", "ピアノ", "太鼓", "ドラム", "木琴", "鉄琴", "マラカス", "メロディ", "うた", "歌"] },
     { value: "science", emoji: "🔬", label: "しくみ・科学", sub: "プログラミング・実験", minM: 36,
       kw: ["stem", "プログラミング", "ロボット", "科学", "実験", "回路", "snap circuits", "自由研究", "顕微鏡", "天体", "磁石"] },
     { value: "active", emoji: "⚽", label: "体を動かす", sub: "外遊び・水遊び・乗用",
-      kw: ["外遊び", "スポーツ", "ボール", "水遊び", "乗用", "三輪車", "キックバイク", "トランポリン", "お風呂", "砂場", "シャボン"] },
+      kw: ["外遊び", "スポーツ", "水遊び", "乗用", "三輪車", "キックバイク", "トランポリン", "お風呂", "砂場", "シャボン"],
+      weak: ["ボール"] }, // 「ボール」は教材・景品など用途が幅広い一般語
     { value: "any", emoji: "✨", label: "おまかせ", sub: "知育スコアの高い定番から", kw: [] }
   ];
 
@@ -156,6 +161,14 @@
   function matchInterest(hs, value) {
     var it = find(INTERESTS, value);
     if (!it || !it.kw.length) return null;
+    function matchesCore(other) {
+      for (var oi = 0; oi < other.kw.length; oi++) {
+        var core = other.kw[oi].toLowerCase();
+        for (var tj = 0; tj < hs.tags.length; tj++) if (hs.tags[tj].indexOf(core) !== -1) return true;
+        if (hs.name.indexOf(core) !== -1) return true;
+      }
+      return false;
+    }
     for (var i = 0; i < it.kw.length; i++) {
       var kw = it.kw[i].toLowerCase();
       for (var j = 0; j < hs.tags.length; j++) {
@@ -164,6 +177,15 @@
     }
     for (var k = 0; k < it.kw.length; k++) {
       if (hs.name.indexOf(it.kw[k].toLowerCase()) !== -1) return { strength: "name", word: it.kw[k] };
+    }
+    for (var w = 0; w < (it.weak || []).length; w++) {
+      var weak = it.weak[w].toLowerCase();
+      var weakMatch = hs.tags.some(function (tag) { return tag.indexOf(weak) !== -1; }) || hs.name.indexOf(weak) !== -1;
+      if (!weakMatch) continue;
+      var belongsElsewhere = INTERESTS.some(function (other) {
+        return other.value !== value && matchesCore(other);
+      });
+      if (!belongsElsewhere) return { strength: "weak", word: it.weak[w] };
     }
     return null;
   }
@@ -239,7 +261,7 @@
       var m = matchInterest(hs, a.interest);
       var it = find(INTERESTS, a.interest);
       if (m) {
-        score += m.strength === "tag" ? 26 : 16;
+        score += m.strength === "tag" ? 26 : m.strength === "weak" ? 10 : 16;
         reasons.push({ kind: "interest", text: "「" + it.label + "」が好きな子に" });
       } else if (!relax.interest) {
         return null;

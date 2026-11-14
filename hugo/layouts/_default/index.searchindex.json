@@ -20,6 +20,7 @@
         "brand"        (.Params.brand | default "")
         "brands"       (.Params.brands | default slice)
         "product_name" (.Params.product_name | default "")
+        "card_reason" (.Params.card_reason | default "")
         "ivs_score"    (.Params.ivs_score | default 0)
         "ivs_score_100" (.Params.ivs_score_100 | default 0)
         "ivs_axes"     (.Params.ivs_axes | default dict)

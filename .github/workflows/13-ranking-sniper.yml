@@ -170,6 +170,7 @@ jobs:
           # hugo/ は .gitignore 対象 → -f が必須 ([[hugo-gitignore-trap]] / [[hugo-output-cron-trio]])。
           git add -f hugo/data/ranking/weekly.json hugo/data/ranking/_match_manifest.json || true
           git add -f hugo/data/ranking/history.json || true
+          git add -f hugo/data/ranking/movement.json || true
           git add data/raw/rakuten_ranking.json data/raw/_rakuten_ranking_manifest.json || true
           # Yahoo JAN 仲介の /ranking/ 照合キャッシュ (fetch_rakuten の stage3_yahoo_jan が読む)
           git add data/raw/_ranking_yahoo_jan.json || true

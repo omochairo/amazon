@@ -5,6 +5,8 @@
 {{- $item := .item }}
 {{- $type := .type }}
 {{- $rank := int ($item.rank | default 0) }}
+{{- $isInfoHub := false -}}
+{{- range site.Data.features.hub_index }}{{- if eq .key $type }}{{- $isInfoHub = true }}{{- end }}{{- end }}
 {{- $internal := $item.url_internal }}
 {{- $external := $item.amazon_url }}
 {{- /* data-price / data-age は /deals/ の絞り込み (list_filter.js) が読む。
@@ -36,6 +38,7 @@
       <a href="{{ $external }}" rel="sponsored nofollow noopener" target="_blank">{{ $item.name }}</a>
       {{- end -}}
     </h2>
+    {{ with $item.reason }}<p class="card-reason">&#128161; {{ . }}</p>{{ end }}
 
     {{- /* #3563 カード情報統一 (フィードバックA): OFF% → スコア → 年齢の順で
            単一の .feature-badges 行にまとめ、縦積みではなく1行の flex 行に圧縮する。
@@ -60,6 +63,9 @@
 
     {{- with $item.age_min_months }}
     <span class="feature-age-badge" title="対象年齢">&#128118; {{ partial "age_label.html" . }}</span>
+    {{- end }}
+    {{- if and (gt (int ($item.rank_days_30 | default 0)) 0) (or (eq $type "cospa") $isInfoHub) }}
+    <span class="feature-rank-days-badge">🔥 楽天ランキング入り（30日で{{ $item.rank_days_30 }}日・最高{{ $item.best_rank_30 }}位）</span>
     {{- end }}
     </div>
 

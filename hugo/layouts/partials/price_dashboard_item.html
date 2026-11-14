@@ -28,6 +28,7 @@
     <p class="price-item-lowest-badge">🏅 過去最安値</p>
     {{- end }}
     <h2 class="ranking-title"><a href="{{ $url }}">{{ $item.name }}</a></h2>
+    {{ with $item.reason }}<p class="card-reason">&#128161; {{ . }}</p>{{ end }}
     {{- with $item.brand }}<p class="ranking-shop">{{ . }}</p>{{- end }}
 
     {{- /* #3563 カード情報統一 (フィードバックA): OFF% → スコア → 年齢を
@@ -49,6 +50,10 @@
       {{- with $item.reference }}<span class="price-item-old">ふだん &yen;{{ lang.FormatNumberCustom 0 . }}</span>{{ end }}
       <span class="price-item-current">&yen;{{ lang.FormatNumberCustom 0 $item.current }}</span>
     </p>
+    {{- /* #166 F8 (P4): 「ふだんより何円安いか」「いつから安いか」 */ -}}
+    {{- with $item.drop_yen }}
+    <p class="price-item-since">ふだんより <strong>&yen;{{ lang.FormatNumberCustom 0 . }}</strong> 安い{{ with $item.low_since_days }}・{{ int . }}日前からこの価格{{ else }}{{ if isset $item "low_since_days" }}・きょう値下がり{{ end }}{{ end }}</p>
+    {{- end }}
 
     {{- /* #5167: スコアと価格推移を横並びにして、カードを縦に伸ばさずに情報を増やす。
            #5225: チャートは ASIN 引き (hugo/data/price_sparks.json) に統一した。 */ -}}

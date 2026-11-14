@@ -236,6 +236,17 @@
 <details class="score-axes-doc"><summary>📖 知育スコアの 4 軸（評価軸の説明を見る）</summary><div><p><strong>知育スコア（おもちゃロボの知育評価スコア）</strong>は、おもちゃロボが知育玩具を 4 つの観点から 5 点満点で評価し、加重平均で 100 点満点に換算した独自スコアです。</p><ul><li><strong>📚 知育効果 (5点満点)</strong>：年齢に応じた学びや、思考力・想像力・手先の発達への刺激度を評価。</li><li><strong>🕰️ 長く遊べる (5点満点)</strong>：遊び方の幅、年齢を超えた長期的な遊び寿命を評価。</li><li><strong>🛡️ 安全性 (5点満点)</strong>：対象年齢の妥当性、素材・形状・誤飲リスク等の安全配慮を評価。</li><li><strong>💰 コスパ (5点満点)</strong>：価格に対する品質・遊び寿命・教育効果のバランスを評価。</li></ul><p class="score-axes-note">※ スコアは執筆時点の市場データ・レビュー・公式情報をもとに付与しています。実際の感じ方には個人差があります。</p></div></details>
 </div></details>
 
+{% if alternatives %}
+## 🔁 代わりに選ぶなら
+
+知育スコアが高く、対象年齢が近い商品です。
+
+<section class="related-carousel-section same-price-carousel-section">
+<div class="carousel-wrapper"><div class="carousel-track same-price-grid">
+{% for s in alternatives %}<a class="same-price-card" href="{{ s.internal_url }}">{% if s.image %}<div class="same-price-card-image"><img src="{{ s.image }}" alt="{{ s.name }}" loading="lazy">{% if s.asin %}{{ '{{< discount_badge ' ~ s.asin ~ ' >}}' }}{% endif %}</div>{% endif %}<div class="same-price-card-body"><div class="same-price-card-name">{{ s.name }}</div><div class="same-price-card-meta">🏆 <strong>{{ s.internal_ivs_score_100 }}</strong>点{% if s.price %}<span class="same-price-card-price">／￥{{ "{:,}".format(s.price) }}</span>{% endif %}</div></div></a>
+{% endfor %}</div></div></section>
+{% endif %}
+
 {% if review_signals %}
 ## <small>{{ product.name }}の</small>💭 レビュー傾向の分析
 
@@ -553,6 +564,13 @@
 
 {% endfor %}
 {{ buy_box('buy-faq', 'faq') }}
+{% endif %}
+
+{% if next_steps %}
+## 🔎 ほかの候補も見てみる
+
+{% for link in next_steps %}- [{{ link.label }}]({{ link.url }})
+{% endfor %}
 {% endif %}
 
 {% if news %}

@@ -16,6 +16,7 @@ import pathlib
 import sys
 import tempfile
 import unittest
+from datetime import date
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS_DIR = os.path.dirname(THIS_DIR)
@@ -512,3 +513,24 @@ class HubIndexTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RankingHistoryTests(unittest.TestCase):
+    def test_window_and_year_boundary_deduplicate_days(self):
+        # history は挿入順 (= 古い順)。12-01 は窓 (30 日) の外、01-01 の重複は 1 日として最高順位を取る。
+        history = {"A": {"history": [
+            {"d": "12-01", "r": 2}, {"d": "12-31", "r": 12},
+            {"d": "01-01", "r": 8}, {"d": "01-01", "r": 5},
+        ]}}
+        self.assertEqual(bch.rank_metrics(history, "A", date(2026, 1, 2)), (2, 5))
+
+    def test_priority_and_serialization(self):
+        low_score = _rec("A", 3.8, 75, 1000)
+        high_score = _rec("B", 4.5, 90, 1000)
+        ordinary = _rec("C", 4.9, 99, 1000)
+        history = {"A": {"history": [{"d": f"01-{n:02d}", "r": 20} for n in (1, 2, 3)]}}
+        items = bch.prioritize_ranked([high_score, ordinary, low_score], history, date(2026, 1, 3))
+        self.assertEqual([x.asin for x in items], ["A", "B", "C"])
+        payload = bch.serialize_hub(items, "math", "now")
+        self.assertEqual(payload["items"][0]["rank_days_30"], 3)
+        self.assertEqual(payload["items"][0]["best_rank_30"], 20)

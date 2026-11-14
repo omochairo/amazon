@@ -21,12 +21,14 @@ import argparse
 import json
 import logging
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from age_semantics import is_seasonal_decoration, override_age_months, seasonal_names  # noqa: E402
 from brand_normalizer import normalize as normalize_brand  # noqa: E402
+from ranking_dates import resolve_entry_dates, today_jst  # noqa: E402
 from build_feature_lists import (  # noqa: E402
     _dedupe_by_asin,
     _is_article_json,
@@ -164,6 +166,55 @@ AGE_HUBS: dict[str, dict[str, Any]] = {
 
 # 年齢 hub の上位 (top-n) に載せる同一メーカーの上限。24 件なら 6 メーカー以上が並ぶ。
 AGE_MAX_PER_BRAND = 4
+
+# 直近30日で3日以上ランク入りした商品を、販売実績が見える候補として前に出す。
+RANK_DAYS_PRIORITY_THRESHOLD = 3
+
+
+def load_rank_history(path: Path) -> dict[str, Any]:
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("history", {})
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def rank_metrics(history: dict[str, Any], asin: str, today: date | None = None) -> tuple[int, int]:
+    """historyのMM-DDを直近30日の日付に展開し、distinct日数と最高順位を返す。
+
+    MM-DD は JST。today を省くと JST の今日 (GitLab の UTC ビルドでも 0〜9 時 JST の当日分を落とさない)。
+    年の解釈は ranking_dates.resolve_entry_dates (挿入順で遡る) に任せる。
+    """
+    today = today or today_jst()
+    start = today - timedelta(days=29)
+    days: dict[date, int] = {}
+    rows = (history.get(asin) or {}).get("history", [])
+    if not isinstance(rows, list):
+        return 0, 0
+    for row, appeared in zip(rows, resolve_entry_dates(rows, today)):
+        if appeared is None:
+            continue
+        try:
+            rank = int(row["r"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if start <= appeared <= today:
+            days[appeared] = min(rank, days.get(appeared, rank))
+    return len(days), min(days.values(), default=0)
+
+
+def prioritize_ranked(items, history: dict[str, Any], today: date | None = None):
+    """既存の選抜済み商品内で閾値商品だけを優先し、実績値を付与する。"""
+    decorated = []
+    for pos, rec in enumerate(items):
+        days, best = rank_metrics(history, rec.asin, today)
+        if days:
+            rec.rank_days_30, rec.best_rank_30 = days, best
+        decorated.append((pos, rec, days))
+    decorated.sort(key=lambda x: (0 if x[2] >= RANK_DAYS_PRIORITY_THRESHOLD else 1,
+                                  -x[2] if x[2] >= RANK_DAYS_PRIORITY_THRESHOLD else x[0],
+                                  -(x[1].ivs_100 or 0) if x[2] >= RANK_DAYS_PRIORITY_THRESHOLD else 0,
+                                  x[0]))
+    return [x[1] for x in decorated]
 
 
 def build_min_months_index(articles_dir: Path) -> dict[str, int]:
@@ -379,6 +430,10 @@ def serialize_hub(items, theme_key: str, generated_at: str,
     payload_items = [
         _record_to_payload_common(rec, idx) for idx, rec in enumerate(items, start=1)
     ]
+    for rec, item in zip(items, payload_items):
+        if getattr(rec, "rank_days_30", 0) > 0:
+            item["rank_days_30"] = rec.rank_days_30
+            item["best_rank_30"] = rec.best_rank_30
     payload: dict[str, Any] = {
         "generated_at": generated_at,
         "type": theme_key,
@@ -420,7 +475,8 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
         themes: list[str], age_hubs: list[str] | None = None,
         per_asin_dir: Path | None = None,
         raw_root: Path | None = None,
-        age_max_per_brand: int = 0) -> dict[str, int]:
+        age_max_per_brand: int = 0, history_path: Path | None = None,
+        today: date | None = None) -> dict[str, int]:
     records = _dedupe_by_asin(load_articles(articles_dir))
     # #2812: カード画像も記事ページと同じ amazon.json の検証済み画像に揃える。
     logger.info("amazon image overlay: %d replaced",
@@ -437,6 +493,7 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
         stats["market_rakuten"], stats["market_yahoo"], stats["market_extreme_dropped"],
     )
     generated_at = _now_iso()
+    ranking_history = load_rank_history(history_path or Path("hugo/data/ranking/history.json"))
     out_hugo.mkdir(parents=True, exist_ok=True)
     counts: dict[str, int] = {}
     hub_index: list[dict[str, str]] = []
@@ -448,6 +505,7 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
             theme_min_ivs = theme.get("min_ivs", min_ivs)
             items = build_hub(records, text_index, theme,
                               top_n=top_n, min_ivs=theme_min_ivs)
+            items = prioritize_ranked(items, ranking_history, today)
             _write_hub(out_hugo, key, items, generated_at, counts, theme["label"])
             hub_index.append({"key": key, "label": theme["label"],
                               "url": f"/{key}-toys/"})
@@ -460,6 +518,7 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
                                   top_n=top_n, min_ivs=min_ivs,
                                   brand_index=brand_index,
                                   max_per_brand=age_max_per_brand)
+            items = prioritize_ranked(items, ranking_history, today)
             lineup_recs = build_age_lineup(
                 records, mm_index, hub, exclude_asins={r.asin for r in items})
             lineup = [_lineup_entry(r, mm_index.get(r.asin)) for r in lineup_recs]

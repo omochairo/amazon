@@ -52,6 +52,7 @@ from build_feature_lists import age_min_months_from_article  # noqa: E402
 import price_overlay  # noqa: E402
 from product_image import resolve_product_image  # noqa: E402
 from score_calculator import calculate as calculate_score, compute_ivs_axes  # noqa: E402
+from card_reason import card_reason  # noqa: E402
 
 logger = logging.getLogger("build_price_dashboard")
 
@@ -71,6 +72,7 @@ _DROP_PCT_THRESHOLD = 0.05       # 値下げ率 5% 未満は採択しない
 _DROP_YEN_THRESHOLD = 100        # 値下げ幅 100円 未満は採択しない (端数ノイズ除け)
 _WINDOW_DAYS = 90                # 「以前の価格」を探す直近日数
 _USUAL_MIN_DAYS = 7              # 窓内の観測が合計これ未満なら「ふだんの価格」を決めない (#166 F1)
+_LOW_SINCE_TOLERANCE = 1.02      # 「◯日前からこの価格」を数えるとき同じ価格とみなす幅 (#166 F8)
 _MAX_GAP_DAYS = 14               # 観測間隔が長い場合、古い価格が続いたとみなす日数を制限する
 _TOP_N_CAP = 150                 # JSON / ページ肥大回避の上限件数
 
@@ -266,9 +268,22 @@ def evaluate_drop(
 
     all_time_low = current_price <= min(p for (_, p) in all_points)
 
+    # #166 F8 (P4): いまの安値が何日前から続いているか。最新から遡り、
+    # いまの価格の 2% 以内 (端数の揺れ) が続く最初の観測時刻を取る。
+    low_since = current_ts
+    for ts, price in reversed(window_points):
+        if price <= current_price * _LOW_SINCE_TOLERANCE:
+            low_since = min(low_since, ts)
+        else:
+            break
+    # 24 時間単位でなく日本時間の暦日で数える (前日の夜に下がった商品を「きょう」と言わない)
+    _jst = timezone(timedelta(hours=9))
+    low_since_days = max(0, (current_ts.astimezone(_jst).date() - low_since.astimezone(_jst).date()).days)
+
     return {
         "reference": reference,
         "reference_days": reference_days,
+        "low_since_days": low_since_days,
         "drop_yen": drop_yen,
         "drop_pct": round(drop_pct, 3),
         "all_time_low": all_time_low,
@@ -295,6 +310,7 @@ def enrich_items(
         item.setdefault("amazon_url", None)
         item.setdefault("ivs_100", None)
         item.setdefault("ivs_axes", None)
+        item.setdefault("reason", None)
 
         # #5225: 価格推移チャートはここで埋め込まない。build_price_sparks.py が
         # ASIN キーの hugo/data/price_sparks.json を作り、Hugo 側が partial
@@ -325,6 +341,7 @@ def enrich_items(
             brand = normalize_brand(product.get("brand") or "")
             sr = calculate_score(raw, brand, asin=item["asin"])
             item["ivs_100"] = sr.total_100
+            item["reason"] = card_reason(raw, sr.total_100)
             item["ivs_axes"] = compute_ivs_axes(sr.breakdown)
         except Exception as e:  # noqa: BLE001 - fail-soft, スコア計算失敗で全体を落とさない
             logger.warning(f"enrich_items: score calc failed for {item['asin']}: {e}")
@@ -394,6 +411,7 @@ def build_items(
             "current": current_price,
             "reference": drop["reference"],
             "reference_days": drop["reference_days"],
+            "low_since_days": drop["low_since_days"],
             "drop_yen": drop["drop_yen"],
             "drop_pct": drop["drop_pct"],
             "all_time_low": drop["all_time_low"],

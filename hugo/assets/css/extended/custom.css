@@ -6272,6 +6272,9 @@ body:has(#compare-floating-bar) .favorites-wrapper {
 [data-theme="dark"] .price-drop-badge { background: #3a1f22; color: #ff8a80; }
 .favorites-card.has-price-drop { box-shadow: 0 0 0 2px rgba(192, 57, 43, 0.35); }
 [data-theme="dark"] .favorites-card.has-price-drop { box-shadow: 0 0 0 2px rgba(255, 138, 128, 0.4); }
+/* お気に入り: 値下げした商品を先頭に並べたときの一言 (navi-brain#166 F16) */
+.favorites-drop-notice { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: #fdecea; color: #8e2a1f; font-size: 0.9rem; }
+[data-theme="dark"] .favorites-drop-notice { background: #3a1f22; color: #ffb4ab; }
 
 /* 商品ページ: お気に入り登録時より値下げした際のタイトル直下バナー */
 .price-drop-banner {
@@ -7791,3 +7794,47 @@ a.sale-notice-main::after {
 @media print {
   .post-content .buy-box { display: none !important; }
 }
+
+
+/* Concise product reason shown directly below card titles. */
+.card-reason {
+  margin: 0.25rem 0 0.5rem;
+  color: #666;
+  font-size: 0.85rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+[data-theme="dark"] .card-reason {
+  color: #aaa;
+}
+
+/* navi-brain#166 F8: ランキングの動きと、値下げの「いつから」 */
+.ranking-move {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 2px 0 4px;
+}
+.ranking-move-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  background: #f3f4f6;
+  color: #374151;
+}
+.ranking-move--new { background: #fef3c7; color: #92400e; }
+.ranking-move--up { background: #dcfce7; color: #166534; }
+.ranking-move--down { background: #fee2e2; color: #991b1b; }
+.ranking-move--streak { background: #e0e7ff; color: #3730a3; }
+.ranking-age { font-size: 0.85rem; margin: 2px 0; }
+.price-item-since { font-size: 0.85rem; margin: 2px 0 6px; color: #b45309; }
+[data-theme="dark"] .ranking-move-badge { background: #1e293b; color: #cbd5e1; }
+[data-theme="dark"] .ranking-move--new { background: rgba(217, 119, 6, 0.25); color: #fde68a; }
+[data-theme="dark"] .ranking-move--up { background: rgba(22, 163, 74, 0.25); color: #bbf7d0; }
+[data-theme="dark"] .ranking-move--down { background: rgba(220, 38, 38, 0.25); color: #fecaca; }
+[data-theme="dark"] .ranking-move--streak { background: rgba(79, 70, 229, 0.3); color: #c7d2fe; }
+[data-theme="dark"] .price-item-since { color: #fbbf24; }

@@ -101,6 +101,9 @@
     }
 
     var dateStr = item.date || "";
+    var reasonHtml = item.card_reason
+      ? '<p class="card-reason">&#128161; ' + escapeText(item.card_reason) + '</p>'
+      : "";
 
     var a = document.createElement("a");
     a.className = "product-card";
@@ -116,7 +119,8 @@
       '</div>' +
       '<div class="product-card-body">' +
         brandHtml +
-        '<h3 class="product-card-title">' + escapeText(item.title || "") + '</h3>' +
+        '<h3 class="product-card-title">' + escapeText(displayName) + '</h3>' +
+        reasonHtml +
         '<div class="product-card-meta">' +
           '<time datetime="' + escapeAttr(dateStr) + '">' + escapeText(dateStr) + '</time>' +
           tagsHtml +

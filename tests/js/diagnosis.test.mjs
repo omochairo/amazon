@@ -59,9 +59,10 @@ const IDS = [...LAYOUT.matchAll(/id="(dx-[a-z0-9-]+)"/g)].map((m) => m[1]);
 
 const tick = (ms = 5) => new Promise((r) => setTimeout(r, ms));
 
-function boot({ fetchImpl, search = "", saved = null, compare, favorites, gtag } = {}) {
+function boot({ fetchImpl, search = "", saved = null, compare, favorites, gtag, amazonTag = "test-tag" } = {}) {
   const byId = {};
   for (const id of IDS) byId[id] = new El("div", id);
+  if (amazonTag) byId["dx-root"].setAttribute("data-amazon-tag", amazonTag);
   // テンプレートの初期状態で hidden のもの
   for (const id of ["dx-back", "dx-multi-next", "dx-loading", "dx-result", "dx-note", "dx-error", "dx-grid-title", "dx-more"]) {
     byId[id].hidden = true;
@@ -114,7 +115,7 @@ function boot({ fetchImpl, search = "", saved = null, compare, favorites, gtag }
 }
 
 const ITEMS = [
-  { title: "ブロックA", product_name: "ブロックA", brand: "A", permalink: "/products/b0000000a1/", tags: ["ブロック"], age_min_months: 36, price_amazon: 2800, ivs_score_100: 80, ivs_axes: { safety: 4.5 } },
+  { title: "ブロックA", product_name: "ブロックA", brand: "A", permalink: "/products/b0000000a1/", tags: ["ブロック"], age_min_months: 36, price_amazon: 2800, ivs_score_100: 80, ivs_axes: { safety: 4.5 }, card_reason: "積み重ねて遊べます" },
   { title: "キッチンB", product_name: "キッチンB", brand: "B", permalink: "/products/b0000000b1/", tags: ["ままごと"], age_min_months: 36, price_amazon: 4500, ivs_score_100: 75, ivs_axes: { safety: 4.0 } },
   { title: "ラトルC", product_name: "ラトルC", brand: "C", permalink: "/products/b0000000c1/", tags: ["ラトル", "出産祝い"], age_min_months: 0, price_amazon: 1500, ivs_score_100: 70, ivs_axes: { safety: 4.8 } },
   { title: "パズルD", product_name: "パズルD", brand: "D", permalink: "/products/b0000000d1/", tags: ["パズル"], age_min_months: 48, price_amazon: 1800, ivs_score_100: 85, ivs_axes: {} },
@@ -146,13 +147,34 @@ test("わが子: 6 問 (持っているものは任意) で結果が出て、理
   assert.equal(ui.$("dx-persona-title").textContent, "つくって発見タイプ");
   const top = ui.$("dx-top").children[0];
   assert.equal(top.children[1].textContent, "ブロックA");
-  assert.match(top.children[2].textContent, /つくる・組み立てる/, "1 位に選んだ理由が付く");
+  assert.match(top.children.find((c) => c.className === "dx-reasons").textContent, /つくる・組み立てる/, "1 位に選んだ理由が付く");
+  const buy = top.children.find((c) => c.className === "dx-buy dx-buy-amazon");
+  assert.ok(buy);
+  assert.equal(buy.getAttribute("href"), "https://www.amazon.co.jp/dp/B0000000A1/?tag=test-tag");
+  assert.equal(buy.getAttribute("data-cta-slot"), "diagnosis");
+  // card_reason はカード本体 (product-card.js) が出す。理由リストには重ねて出さない
+  assert.ok(!top.children.find((c) => c.className === "dx-reasons").textContent.includes("積み重ねて遊べます"));
   assert.equal(ui.$("dx-chips").children.length, 5);
   const saved = JSON.parse(ui.storage.omcha_last_diagnosis);
   assert.equal(saved.v, 2);
   assert.equal(saved.answers.interest, "build");
   assert.equal(ui.history.urls.at(-1), "/diagnosis/?w=child&a=3y&i=build&b=3000&p=safety");
   assert.ok(ui.$("dx-root").classList.contains("dx--wide"), "結果は全幅");
+});
+
+test("Amazonボタンはタグと価格が揃った商品だけに出る", async () => {
+  async function resultWith(options) {
+    const ui = boot(options);
+    await answerChild3y(ui);
+    ui.$("dx-multi-next").click();
+    await tick(20);
+    return ui.$("dx-top").children[0];
+  }
+  const noTag = await resultWith({ amazonTag: "" });
+  assert.ok(!noTag.children.some((c) => c.className === "dx-buy dx-buy-amazon"));
+  const noPriceItem = { ...ITEMS[0], price_amazon: 0, price_rakuten: 2800 };
+  const noPrice = await resultWith({ fetchImpl: async () => ({ json: async () => [noPriceItem] }) });
+  assert.ok(!noPrice.children.some((c) => c.className === "dx-buy dx-buy-amazon"));
 });
 
 test("出産祝い: 年齢を聞かずに 4 問で終わる", async () => {

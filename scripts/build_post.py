@@ -49,6 +49,7 @@ from brand_normalizer import name_variants as brand_name_variants
 from brand_normalizer import normalize as normalize_brand
 from brand_normalizer import display_name as brand_display_name
 import score_claims
+from card_reason import card_reason
 from age_semantics import (
     ADULT_AGE_MONTHS,
     is_seasonal_decoration,
@@ -56,6 +57,7 @@ from age_semantics import (
     seasonal_names,
 )
 from build_feature_lists import PRICE_BANDS, parse_min_months
+import build_category_hubs
 from fetch_amazon import get_secret
 from filter_raw_per_asin import exclude_title_only
 from score_per_asin_info import is_search_result_url
@@ -1110,6 +1112,11 @@ def _build_article_index(
             # navi-brain#165 T2: 関連のおすすめの共通条件 (年齢・種類・ブランド) に使う
             "age_min_months": _resolve_age_min_months(meta),
             "toy_types": toy_type.classify_article(meta, amazon_item),
+            "theme_text": " ".join([str(meta.get("title") or ""), str(product.get("name") or ""),
+                                     str(product.get("name_full") or ""), *tags,
+                                     *[str(x) for x in (meta.get("keywords") or [])],
+                                     *[str(x) for x in (product.get("features") or [])],
+                                     *[str(x) for x in (product.get("edu_domains") or [])]]).lower(),
             "brand": brand,
             "series": _series_tags(brand, tags),
         }
@@ -1673,6 +1680,102 @@ def _recommend_same_price_band(
         "band_url": f"{site_base_path}/cospa/#cospa-band-pane-{band['key']}",
         "cards": cards,
     }
+
+
+def _recommend_next_steps(data: dict[str, Any], article_index: dict[str, dict[str, Any]],
+                          site_base_path: str, *, feature_root: pathlib.Path | None = None) -> None:
+    """公開中の年齢/テーマ hub と診断へ記事末の導線を付ける。"""
+    feature_root = feature_root or pathlib.Path("hugo/data/features")
+    try:
+        entries = json.loads((feature_root / "hub_index.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        entries = []
+    published = {str(e.get("key")): e for e in entries if isinstance(e, dict)}
+    links: list[dict[str, str]] = []
+
+    def add_hub(key: str) -> None:
+        entry = published.get(key)
+        if entry and (feature_root / f"{key}.json").is_file():
+            links.append({"label": f'{entry.get("label", key)}の知育玩具ランキング',
+                          "url": site_base_path + str(entry.get("url", ""))})
+
+    profile = _rel_self_profile(data, article_index)
+    age = profile["age"]
+    if age is not None:
+        for key, bucket in build_category_hubs.AGE_HUBS.items():
+            if bucket["min_months"] <= age < bucket["max_months"]:
+                add_hub(key)
+                break
+    prod = data.get("product") if isinstance(data.get("product"), dict) else {}
+    # 記事の下に出すテーマのリンクは、題・商品名・タグだけで判定する。hub の候補選び
+    # (build_category_hubs) と同じく features / keywords まで見ると、「英語の説明書」の
+    # ような付随の語で「英語の知育玩具」へ送ってしまう (マグフォーマー等で実測)。
+    text = " ".join([str(data.get("title") or ""), str(prod.get("name") or ""),
+                     str(prod.get("name_full") or ""), *map(str, data.get("tags") or [])]).lower()
+    matched = [k for k, theme in build_category_hubs.THEMES.items()
+               if k in published and (feature_root / f"{k}.json").is_file()
+               and build_category_hubs._matches(text, theme)]
+    for key in matched[:2]:
+        add_hub(key)
+    links.append({"label": "おもちゃ診断（約1分）", "url": site_base_path + "/diagnosis/"})
+    band = data.get("same_price_band")
+    if isinstance(band, dict) and band.get("band_url"):
+        links.append({"label": "予算別おすすめ（同じ価格帯）", "url": band["band_url"]})
+    data["next_steps"] = links if len(links) >= 2 else []
+
+
+def _recommend_alternatives(data: dict[str, Any], article_index: dict[str, dict[str, Any]],
+                            site_base_path: str, self_score: int | None) -> None:
+    """低スコア記事向けに、同じ年齢 bucket の高スコア記事を選ぶ。"""
+    data["alternatives"] = []
+    if self_score is None or self_score > score_claims.LOW_TOTAL_MAX:
+        return
+    profile = _rel_self_profile(data, article_index)
+    age = profile["age"]
+    if age is None:
+        return
+    bucket = next((b for b in build_category_hubs.AGE_HUBS.values()
+                   if b["min_months"] <= age < b["max_months"]), None)
+    if bucket is None:
+        return
+    excluded = {profile["asin"]}
+    for field in ("competitive_analysis",):
+        for item in data.get(field, []) if isinstance(data.get(field), list) else []:
+            if isinstance(item, dict) and item.get("asin"):
+                excluded.add(item["asin"])
+    band = data.get("same_price_band") or {}
+    excluded.update(c.get("asin") for c in band.get("cards", []) if c.get("asin"))
+    prod = data.get("product") if isinstance(data.get("product"), dict) else {}
+    text = " ".join([str(data.get("title") or ""), str(prod.get("name") or ""),
+                     *map(str, data.get("tags") or []), *map(str, data.get("keywords") or []),
+                     *map(str, prod.get("features") or []), *map(str, prod.get("edu_domains") or [])]).lower()
+    themes = {k for k, theme in build_category_hubs.THEMES.items()
+              if build_category_hubs._matches(text, theme)}
+    types = set(profile["types"])
+    candidates = []
+    for asin, meta in article_index.items():
+        score = meta.get("ivs_score_100")
+        cand_age = meta.get("age_min_months")
+        if asin in excluded or not isinstance(score, (int, float)) or score < 75 or cand_age is None:
+            continue
+        if not (bucket["min_months"] <= cand_age < bucket["max_months"]):
+            continue
+        mtext = str(meta.get("theme_text") or meta.get("name") or "").lower()
+        shared = bool(types & set(meta.get("toy_types") or [])) or any(
+            build_category_hubs._matches(mtext, build_category_hubs.THEMES[k]) for k in themes)
+        candidates.append((not shared, -int(score), asin, meta))
+    candidates.sort(key=lambda x: (x[0], x[1], x[2]))
+    # 可能なら共通テーマ/種類の商品だけに絞り、3件に届かない場合は同年齢 bucket で補う。
+    shared = [x for x in candidates if not x[0]]
+    picked = (shared if len(shared) >= 3 else candidates)[:3]
+    if len(picked) < 3:
+        return
+    data["alternatives"] = [{"asin": asin, "name": _shrink_competitor_name(meta.get("name") or ""),
+                             "image": meta.get("image") or "",
+                             "internal_url": f"{site_base_path}/products/{asin.lower()}/",
+                             "internal_ivs_score_100": -neg_score,
+                             "price": meta.get("amazon_price") or 0}
+                            for _not_shared, neg_score, asin, meta in picked]
 
 
 # 🌱 半年〜1年後にこちら (epic #1365 Layer 2-⑤)。navi-brain#165 T2 で Hugo の
@@ -3878,6 +3981,9 @@ def _frontmatter_meta(
         )
         meta["ivs_score"] = sr.ivs_score
         meta["ivs_score_100"] = sr.total_100
+        reason = card_reason(data, sr.total_100)
+        if reason is not None:
+            meta["card_reason"] = reason
         meta["score_breakdown"] = sr.breakdown
         # 4 軸 (#589) — カード一覧で簡易バーを描くために frontmatter に持たせる。
         # index.json / Hugo partial がここを読む。スケール定義は score_calculator 一元管理。
@@ -4343,6 +4449,11 @@ def main() -> None:
                 self_score=fresh_sr.total_100 if fresh_sr is not None else None,
             )
             _recommend_same_price_band(data, article_index, site_base_path)
+            _recommend_next_steps(data, article_index, site_base_path)
+            _recommend_alternatives(
+                data, article_index, site_base_path,
+                fresh_sr.total_100 if fresh_sr is not None else None,
+            )
             _recommend_future_age(data, article_index)
             # front matter の toy_types (📚 関連の種類の条件)。索引と同じ判定
             data["toy_types"] = _rel_self_profile(data, article_index)["types"]
