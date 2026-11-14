@@ -100,7 +100,10 @@
     if (!parts.length) return;
 
     var summaryEl = mount.querySelector(".last-diagnosis-summary");
-    if (summaryEl) summaryEl.textContent = parts.join("・");
+    // navi-brain#166 F17: 診断タイプを保存していれば頭に付ける (旧い保存には無いので従来の要約だけ)
+    var pTitle = saved.persona && typeof saved.persona.title === "string" ? saved.persona.title : "";
+    var pEmoji = pTitle && typeof saved.persona.emoji === "string" ? saved.persona.emoji + " " : "";
+    if (summaryEl) summaryEl.textContent = (pTitle ? pEmoji + pTitle + "｜" : "") + parts.join("・");
 
     var when = relativeDays(saved.ts);
     var metaEl = mount.querySelector(".last-diagnosis-meta");

@@ -47,11 +47,15 @@
       <p class="dx-eyebrow" id="dx-result-eyebrow">診断結果</p>
       <div class="dx-persona-emoji" id="dx-persona-emoji" aria-hidden="true"></div>
       <h2 class="dx-persona-title" id="dx-persona-title" tabindex="-1"></h2>
+      <p class="dx-persona-catch" id="dx-persona-catch"></p>
       <p class="dx-persona-text" id="dx-persona-text"></p>
+      <div class="dx-persona-strengths" id="dx-persona-strengths" hidden><p class="dx-persona-strengths-label" id="dx-persona-strengths-label">得意なこと</p><ul class="dx-persona-strengths-list" id="dx-persona-strengths-list"></ul></div>
+      <p class="dx-persona-pair" id="dx-persona-pair" hidden></p>
       <p class="dx-age-tip" id="dx-age-tip"></p>
       <p class="dx-chips-label" id="dx-chips-label" hidden>条件をタップすると、その質問だけ答え直せます</p>
       <div class="dx-chips" id="dx-chips" role="group" aria-label="診断の条件（タップで変更）"></div>
     </div>
+    <div class="dx-card dx-compare" id="dx-compare" hidden aria-live="polite"></div>
 
     <p class="dx-note" id="dx-note" hidden></p>
     <div class="dx-error" id="dx-error" hidden>
@@ -67,9 +71,13 @@
 
     <div class="dx-actions">
       <button type="button" class="dx-btn dx-btn--primary" id="dx-share">🔗 結果をシェア</button>
+      <a class="dx-btn dx-btn--line" id="dx-share-line" href="#" target="_blank" rel="noopener noreferrer">LINEで送る</a>
+      <a class="dx-btn dx-btn--x" id="dx-share-x" href="#" target="_blank" rel="noopener noreferrer">Xでポスト</a>
+      <button type="button" class="dx-btn" id="dx-compare-start">👫 きょうだい・友だちも診断する</button>
       <button type="button" class="dx-btn" id="dx-retry">🔄 最初から診断する</button>
     </div>
     <p class="dx-share-msg" id="dx-share-msg" aria-live="polite"></p>
+    <details class="dx-types" id="dx-types" hidden><summary>ほかのタイプも見てみる</summary><ul class="dx-types-list" id="dx-types-list"></ul></details>
     <p class="dx-disclaimer">※ おすすめは、対象年齢・最安値・タグ・知育スコアをもとに自動で選んでいます。価格や在庫は日々変わるため、購入前に各ショップでご確認ください。</p>
   </section>
 </div>

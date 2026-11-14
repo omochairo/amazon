@@ -33,6 +33,8 @@
       loading: $("dx-loading"), result: $("dx-result"),
       eyebrow: $("dx-result-eyebrow"), pEmoji: $("dx-persona-emoji"), pTitle: $("dx-persona-title"),
       pText: $("dx-persona-text"), ageTip: $("dx-age-tip"), chips: $("dx-chips"), chipsLabel: $("dx-chips-label"), note: $("dx-note"),
+      pCatch: $("dx-persona-catch"), strengths: $("dx-persona-strengths"), strengthsLabel: $("dx-persona-strengths-label"), strengthsList: $("dx-persona-strengths-list"), pPair: $("dx-persona-pair"),
+      compare: $("dx-compare"), compareStart: $("dx-compare-start"), types: $("dx-types"), typesList: $("dx-types-list"), shareLine: $("dx-share-line"), shareX: $("dx-share-x"),
       error: $("dx-error"), errorRetry: $("dx-error-retry"),
       top: $("dx-top"), gridTitle: $("dx-grid-title"), grid: $("dx-grid"), more: $("dx-more"),
       share: $("dx-share"), shareMsg: $("dx-share-msg"), retry: $("dx-retry")
@@ -313,6 +315,11 @@
       els.more.hidden = true;
       els.gridTitle.hidden = true;
       els.shareMsg.textContent = "";
+      // navi-brain#166 F17: タイプの飾りはいったん全部隠す。診断結果の描画 (renderDiagnosis) だけが
+      // 出し直すので、エラー表示・年齢別ベスト10 に LINE/X・比較ボタンが残らない
+      [els.shareLine, els.shareX, els.compareStart, els.compare, els.types, els.strengths, els.pPair].forEach(function (el) { if (el) el.hidden = true; });
+      if (els.pCatch) els.pCatch.textContent = "";
+      if (els.strengthsList) clear(els.strengthsList);
     }
 
     var retryAction = null;
@@ -440,9 +447,29 @@
       els.pEmoji.textContent = p.emoji;
       els.pTitle.textContent = p.title;
       els.pText.textContent = p.text;
+      if (els.pCatch) els.pCatch.textContent = p.catch || "";
+      if (els.strengths && els.strengthsList) {
+        clear(els.strengthsList);
+        var strengths = p.strengths || [];
+        strengths.forEach(function (s) { els.strengthsList.appendChild(make("li", "", s)); });
+        if (els.strengthsLabel) els.strengthsLabel.textContent = p.strengthsLabel || "得意なこと";
+        els.strengths.hidden = !strengths.length;
+      }
+      if (els.pPair) {
+        var pairPersona = p.pair && D.personaByKey && D.personaByKey(p.pair.key);
+        els.pPair.textContent = pairPersona ? "一緒に遊ぶと盛り上がるのは「" + pairPersona.emoji + " " + pairPersona.title + "」。" + p.pair.reason : "";
+        els.pPair.hidden = !pairPersona;
+      }
       var tip = D.ageTip(answers);
       els.ageTip.textContent = tip ? "この時期のポイント: " + tip : "";
       els.share.hidden = false;
+      [els.shareLine, els.shareX, els.compareStart].forEach(function (el) { if (el) el.hidden = false; });
+      var resultUrl = shareUrl();
+      var shareText = p.share || ("おもちゃ診断の結果は「" + p.title + "」でした！");
+      if (els.shareLine) els.shareLine.setAttribute("href", "https://social-plugins.line.me/lineit/share?url=" + encodeURIComponent(resultUrl) + "&text=" + encodeURIComponent(shareText));
+      if (els.shareX) els.shareX.setAttribute("href", "https://x.com/intent/tweet?text=" + encodeURIComponent(shareText) + "&url=" + encodeURIComponent(resultUrl));
+      renderCompare(p);
+      renderTypes(p);
       els.retry.textContent = "🔄 最初から診断する";
 
       D.summaryChips(answers).forEach(function (c) {
@@ -471,7 +498,8 @@
         priority: answers.priority,
         owned_count: (answers.owned || []).length,
         relaxed: r.relaxed || "none",
-        result_count: picks.length
+        result_count: picks.length,
+        persona: p.key // navi-brain#166 F17/F18: タイプ別に完了を数えられるように
       });
       entry = "quiz";
       if (els.pTitle.focus) els.pTitle.focus();
@@ -502,20 +530,60 @@
       return origin + loc.pathname + (q ? "?" + q : "");
     }
 
+    function renderCompare(current) {
+      if (!els.compare) return;
+      clear(els.compare);
+      els.compare.hidden = true;
+      try {
+        var entry = JSON.parse(window.sessionStorage.getItem("omcha_dx_compare") || "null");
+        var oldPersona = entry && D.personaByKey && D.personaByKey(entry.key);
+        var url = shareUrl();
+        var loc = window.location;
+        var base = (loc.origin || (loc.protocol + "//" + loc.host)) + loc.pathname;
+        if (!oldPersona || typeof entry.url !== "string" || entry.url.indexOf(base) !== 0 || entry.url === url) return;
+        els.compare.appendChild(make("h3", "", "👫 くらべてみよう"));
+        var rows = make("div", "dx-compare-rows");
+        [["さっきの子", oldPersona, entry.url], ["この子", current, ""]].forEach(function (row) {
+          var item = make("p", "dx-compare-row"); item.appendChild(make("span", "", row[0]));
+          if (row[2]) { var a = make("a", "", row[1].emoji + " " + row[1].title); a.setAttribute("href", row[2]); item.appendChild(a); }
+          else item.appendChild(make("strong", "", row[1].emoji + " " + row[1].title));
+          rows.appendChild(item);
+        });
+        els.compare.appendChild(rows);
+        var note = D.pairNote && D.pairNote(entry.key, current.key);
+        if (note) els.compare.appendChild(make("p", "dx-compare-note", (note.kind === "pair" ? "💞 相性ぴったり！" : "🤝 ") + note.text));
+        els.compare.hidden = false;
+      } catch (e) { els.compare.hidden = true; }
+    }
+
+    function renderTypes(current) {
+      if (!els.types || !els.typesList) return;
+      clear(els.typesList);
+      if (!current || current.key === "birth" || !D.PERSONAS) { els.types.hidden = true; return; }
+      Object.keys(D.PERSONAS).forEach(function (key) {
+        if (key === "birth") return;
+        var p = D.PERSONAS[key]; var li = make("li", key === current.key ? "is-current" : "");
+        li.appendChild(make("strong", "", p.emoji + " " + p.title)); li.appendChild(make("span", "", p.catch || ""));
+        if (key === current.key) { li.setAttribute("aria-current", "true"); li.appendChild(make("small", "", "この子")); }
+        els.typesList.appendChild(li);
+      });
+      els.types.hidden = false;
+    }
+
     els.share.addEventListener("click", function () {
       var url = shareUrl();
       var p = D.persona(answers);
-      var text = "おもちゃ診断の結果は「" + p.title + "」でした！";
+      var text = p.share || ("おもちゃ診断の結果は「" + p.title + "」でした！");
       var nav = window.navigator || {};
       if (nav.share) {
-        track("diagnosis_share", { method: "web_share" });
+        track("diagnosis_share", { method: "web_share", persona: p.key });
         nav.share({ title: document.title, text: text, url: url }).catch(function () {});
         return;
       }
       if (nav.clipboard && nav.clipboard.writeText) {
-        track("diagnosis_share", { method: "clipboard" });
-        nav.clipboard.writeText(url).then(function () {
-          els.shareMsg.textContent = "✅ 結果のリンクをコピーしました。家族やパートナーに送ってみてください。";
+        track("diagnosis_share", { method: "clipboard", persona: p.key });
+        nav.clipboard.writeText(text + "\n" + url).then(function () {
+          els.shareMsg.textContent = "✅ 結果の文とリンクをコピーしました。家族や友だちに送ってみてください。";
         }, function () {
           els.shareMsg.textContent = url;
         });
@@ -524,7 +592,19 @@
       els.shareMsg.textContent = url;
     });
 
+    [[els.shareLine, "line"], [els.shareX, "x"]].forEach(function (pair) {
+      if (pair[0]) pair[0].addEventListener("click", function () { track("diagnosis_share", { method: pair[1], persona: D.persona(answers).key }); });
+    });
+
+    if (els.compareStart) els.compareStart.addEventListener("click", function () {
+      var p = D.persona(answers);
+      try { window.sessionStorage.setItem("omcha_dx_compare", JSON.stringify({ key: p.key, emoji: p.emoji, title: p.title, url: shareUrl() })); } catch (e) { /* storage unavailable */ }
+      track("diagnosis_compare_start", { persona: p.key });
+      writeUrl(""); startQuiz(false); scrollToTop(els.quiz);
+    });
+
     els.retry.addEventListener("click", function () {
+      try { window.sessionStorage.removeItem("omcha_dx_compare"); } catch (e) { /* storage unavailable */ }
       writeUrl("");
       startQuiz(false);
       scrollToTop(els.quiz);
@@ -562,6 +642,9 @@
 
     // ------------------------------------------------------------ 入口
     function route() {
+      // navi-brain#166 F17: 比較の相手は「きょうだい・友だちも診断する」からページ内で続けて
+      // 診断したときだけ使う。開き直し (共有リンク・?restore=1・再訪問) では前の子を持ち越さない
+      try { window.sessionStorage.removeItem("omcha_dx_compare"); } catch (e) { /* storage unavailable */ }
       var params = new URLSearchParams(window.location.search);
       var band = params.get("age");
       if (band && D.ageBand(band)) { showAgeBest(band); return; }

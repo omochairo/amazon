@@ -59,7 +59,7 @@ const IDS = [...LAYOUT.matchAll(/id="(dx-[a-z0-9-]+)"/g)].map((m) => m[1]);
 
 const tick = (ms = 5) => new Promise((r) => setTimeout(r, ms));
 
-function boot({ fetchImpl, search = "", saved = null, compare, favorites, gtag, amazonTag = "test-tag" } = {}) {
+function boot({ fetchImpl, search = "", saved = null, compare, favorites, gtag, amazonTag = "test-tag", sessionData = {}, sessionThrows = false } = {}) {
   const byId = {};
   for (const id of IDS) byId[id] = new El("div", id);
   if (amazonTag) byId["dx-root"].setAttribute("data-amazon-tag", amazonTag);
@@ -68,6 +68,8 @@ function boot({ fetchImpl, search = "", saved = null, compare, favorites, gtag, 
     byId[id].hidden = true;
   }
   const storage = { omcha_last_diagnosis: saved ? JSON.stringify(saved) : null };
+  // navi-brain#166 F17: 「きょうだい・友だちも診断する」の比較は sessionStorage に持つ
+  const session = { ...sessionData };
   const location = { search, pathname: "/diagnosis/", origin: "https://example.com", href: "https://example.com/diagnosis/" + search };
   const history = { urls: [], replaceState(_s, _t, url) { this.urls.push(url); } };
   const docListeners = {};
@@ -84,6 +86,15 @@ function boot({ fetchImpl, search = "", saved = null, compare, favorites, gtag, 
     // reduce-motion 扱いにして演出の待ち時間を 0 にする
     matchMedia: () => ({ matches: true }),
     navigator: {},
+    sessionStorage: sessionThrows ? {
+      getItem: () => { throw new Error("SecurityError"); },
+      setItem: () => { throw new Error("SecurityError"); },
+      removeItem: () => { throw new Error("SecurityError"); },
+    } : {
+      getItem: (k) => (k in session ? session[k] : null),
+      setItem: (k, v) => { session[k] = String(v); },
+      removeItem: (k) => { delete session[k]; },
+    },
     OmochaCompare: compare,
     OmochaFavorites: favorites,
     gtag,
@@ -111,7 +122,7 @@ function boot({ fetchImpl, search = "", saved = null, compare, favorites, gtag, 
     btn.click();
     await tick();
   }
-  return { $, options, pick, storage, history, docListeners };
+  return { $, options, pick, storage, session, history, docListeners };
 }
 
 const ITEMS = [
@@ -145,6 +156,11 @@ test("わが子: 6 問 (持っているものは任意) で結果が出て、理
   assert.equal(ui.$("dx-result").hidden, false);
   assert.equal(ui.$("dx-quiz").hidden, true);
   assert.equal(ui.$("dx-persona-title").textContent, "つくって発見タイプ");
+  assert.ok(ui.$("dx-persona-catch").textContent);
+  assert.equal(ui.$("dx-persona-strengths-list").children.length, 3);
+  assert.ok(ui.$("dx-persona-pair").textContent);
+  assert.match(ui.$("dx-share-line").getAttribute("href"), /text=/);
+  assert.match(ui.$("dx-share-x").getAttribute("href"), /url=/);
   const top = ui.$("dx-top").children[0];
   assert.equal(top.children[1].textContent, "ブロックA");
   assert.match(top.children.find((c) => c.className === "dx-reasons").textContent, /つくる・組み立てる/, "1 位に選んだ理由が付く");
@@ -264,6 +280,9 @@ test("A: 通信失敗で固まらず、エラー表示 + 手動リトライボ�
   assert.equal(ui.$("dx-persona-title").textContent, "おもちゃ情報の読み込みに失敗しました");
   assert.equal(ui.$("dx-error").hidden, false);
   assert.equal(ui.$("dx-share").hidden, true);
+  for (const id of ["dx-share-line", "dx-share-x", "dx-compare-start", "dx-types", "dx-persona-strengths", "dx-persona-pair"]) {
+    assert.equal(ui.$(id).hidden, true, `エラー表示に ${id} を残さない (navi-brain#166 F17)`);
+  }
   assert.ok(calls >= 2, "結果を出すときに再取得を試みている");
 });
 
@@ -474,4 +493,150 @@ test("GA4: 共有リンクと年齢別ベスト10 は経路を区別して送る
   assert.deepEqual(JSON.parse(JSON.stringify(ev2)), [{ n: "diagnosis_age_best", p: { band: "0-1" } }]);
   age.$("dx-top").children[0].children[1].click();
   assert.equal(ev2.at(-1).p.view, "age_best");
+});
+
+// ------------------------------------------------------------ navi-brain#166 F17
+async function answerChildVehicle3y(ui) {
+  await ui.pick("わが子に");
+  await ui.pick("3歳");
+  await ui.pick("のりもの・うごくもの");
+  await ui.pick("〜3,000円");
+  await ui.pick("安全・安心");
+  ui.$("dx-multi-next").click();
+  await tick(20);
+}
+
+test("F17: 結果にタイプの一言・得意なこと・相性・全タイプ一覧が出て、完了イベントにタイプが付く", async () => {
+  const events = [];
+  const ui = boot({ gtag: (t, n, p) => events.push({ n, p }) });
+  await answerChild3y(ui);
+  ui.$("dx-multi-next").click();
+  await tick(20);
+  assert.equal(ui.$("dx-persona-strengths").hidden, false);
+  assert.match(ui.$("dx-persona-pair").textContent, /^一緒に遊ぶと盛り上がるのは「.+」。/);
+  assert.equal(ui.$("dx-types").hidden, false);
+  const items = ui.$("dx-types-list").children;
+  assert.ok(items.length >= 10, "出産祝い以外の全タイプ");
+  const cur = items.filter((li) => li.className === "is-current");
+  assert.equal(cur.length, 1);
+  assert.equal(cur[0].getAttribute("aria-current"), "true");
+  assert.match(cur[0].textContent, /つくって発見タイプ/);
+  assert.equal(ui.$("dx-compare").hidden, true, "比較の相手がいなければ出さない");
+  assert.equal(events.find((e) => e.n === "diagnosis_complete").p.persona, "build");
+  ui.$("dx-share-line").click();
+  assert.deepEqual(JSON.parse(JSON.stringify(events.at(-1))), { n: "diagnosis_share", p: { method: "line", persona: "build" } });
+});
+
+test("F17: 「きょうだい・友だちも診断する」で 2 人目を診断すると、さっきの子と並べて相性を出す。最初からやり直すと消える", async () => {
+  const events = [];
+  const ui = boot({ gtag: (t, n, p) => events.push({ n, p }) });
+  await answerChild3y(ui);
+  ui.$("dx-multi-next").click();
+  await tick(20);
+  ui.$("dx-compare-start").click();
+  assert.equal(events.at(-1).n, "diagnosis_compare_start");
+  assert.equal(events.at(-1).p.persona, "build");
+  assert.equal(ui.$("dx-quiz").hidden, false, "1 問目に戻る");
+  assert.equal(ui.$("dx-q-title").textContent, "だれのためのおもちゃ？");
+  assert.equal(JSON.parse(ui.session.omcha_dx_compare).key, "build");
+
+  await answerChildVehicle3y(ui);
+  assert.equal(ui.$("dx-compare").hidden, false);
+  const text = ui.$("dx-compare").textContent;
+  assert.match(text, /さっきの子/);
+  assert.match(text, /つくって発見タイプ/);
+  assert.match(text, new RegExp(ui.$("dx-persona-title").textContent));
+  assert.match(text, /相性ぴったり/, "build の相性の相手は vehicle");
+  const link = ui.$("dx-compare").children[1].children[0].children[1];
+  assert.equal(link.getAttribute("href"), "https://example.com/diagnosis/?w=child&a=3y&i=build&b=3000&p=safety", "さっきの子の結果へ戻れる");
+
+  ui.$("dx-retry").click();
+  assert.equal(ui.session.omcha_dx_compare, undefined);
+  await answerChildVehicle3y(ui);
+  assert.equal(ui.$("dx-compare").hidden, true);
+});
+
+test("F17: 同じ結果のまま比べても比較枠は出さない (自分どうしを並べない)", async () => {
+  const ui = boot();
+  await answerChild3y(ui);
+  ui.$("dx-multi-next").click();
+  await tick(20);
+  ui.$("dx-compare-start").click();
+  await answerChild3y(ui);
+  ui.$("dx-multi-next").click();
+  await tick(20);
+  assert.equal(ui.$("dx-compare").hidden, true);
+});
+
+test("F17: 年齢別ベスト10 ではタイプの飾り (得意なこと・相性・共有・比較・一覧) を出さない", async () => {
+  // 簡易 DOM はテンプレートの hidden を引き継がない (全部 hidden=false で始まる) ので、
+  // ここで hidden になっていれば showAgeBest が明示的に隠している
+  const age = boot({ search: "?age=0-1" });
+  await tick(20);
+  for (const id of ["dx-share-line", "dx-share-x", "dx-compare-start", "dx-compare", "dx-types", "dx-persona-strengths", "dx-persona-pair"]) {
+    assert.equal(age.$(id).hidden, true, id);
+  }
+  assert.equal(age.$("dx-persona-catch").textContent, "");
+});
+
+test("F17: 開き直し (共有リンク・?restore=1) では、前のタブ操作で残った比較の相手を持ち越さない", async () => {
+  const stale = { omcha_dx_compare: JSON.stringify({ key: "build", emoji: "🧱", title: "つくって発見タイプ", url: "https://example.com/diagnosis/?w=child&a=3y&i=build&b=3000&p=safety" }) };
+  const shared = boot({ search: "?w=child&a=3y&i=vehicle&b=3000&p=safety", sessionData: stale });
+  await tick(20);
+  assert.equal(shared.$("dx-persona-title").textContent, "のりもの博士タイプ");
+  assert.equal(shared.$("dx-compare").hidden, true);
+  assert.equal(shared.session.omcha_dx_compare, undefined, "ページを開いた時点で消す");
+  // 開き直したあとチップで 1 問直しても、比較枠は出てこない
+  shared.$("dx-chips").children.find((c) => c.textContent.includes("3,000円")).click();
+  await shared.pick("〜10,000円");
+  await tick(20);
+  assert.equal(shared.$("dx-compare").hidden, true);
+
+  const savedV2 = { v: 2, answers: { who: "child", age: "3y", interest: "vehicle", budget: "3000", priority: "safety", owned: [] } };
+  const restored = boot({ search: "?restore=1", saved: savedV2, sessionData: stale });
+  await tick(20);
+  assert.equal(restored.$("dx-persona-title").textContent, "のりもの博士タイプ");
+  assert.equal(restored.$("dx-compare").hidden, true);
+});
+
+test("F17: 年齢別ベスト10 から診断に戻ると、タイプの飾りが出し直される", async () => {
+  const ui = boot({ search: "?age=0-1" });
+  await tick(20);
+  assert.equal(ui.$("dx-types").hidden, true);
+  ui.$("dx-retry").click();
+  await answerChild3y(ui);
+  ui.$("dx-multi-next").click();
+  await tick(20);
+  for (const id of ["dx-share-line", "dx-share-x", "dx-compare-start", "dx-types", "dx-persona-strengths", "dx-persona-pair"]) {
+    assert.equal(ui.$(id).hidden, false, id);
+  }
+  assert.ok(ui.$("dx-persona-catch").textContent);
+});
+
+test("F17: sessionStorage が使えない環境でも結果が出て、比較ボタンを押しても止まらない", async () => {
+  const ui = boot({ sessionThrows: true });
+  await answerChild3y(ui);
+  ui.$("dx-multi-next").click();
+  await tick(20);
+  assert.equal(ui.$("dx-persona-title").textContent, "つくって発見タイプ");
+  ui.$("dx-compare-start").click();
+  assert.equal(ui.$("dx-quiz").hidden, false);
+  await answerChildVehicle3y(ui);
+  assert.equal(ui.$("dx-persona-title").textContent, "のりもの博士タイプ");
+  assert.equal(ui.$("dx-compare").hidden, true);
+});
+
+test("F17: 出産祝いは「選ぶポイント」を出し、相性とタイプ一覧は出さない", async () => {
+  const ui = boot();
+  await ui.pick("出産祝いに");
+  await ui.pick("おまかせ");
+  await ui.pick("〜3,000円");
+  await ui.pick("安全・安心");
+  await tick(20);
+  assert.equal(ui.$("dx-result").hidden, false);
+  assert.equal(ui.$("dx-persona-title").textContent, "はじめてのおもちゃ");
+  assert.equal(ui.$("dx-persona-strengths-label").textContent, "選ぶポイント");
+  assert.equal(ui.$("dx-persona-strengths").hidden, false);
+  assert.equal(ui.$("dx-persona-pair").hidden, true);
+  assert.equal(ui.$("dx-types").hidden, true);
 });
