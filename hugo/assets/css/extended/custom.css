@@ -6054,6 +6054,7 @@ details.development-stage-accordion[open] > summary::before {
    同じグリッドのマスに重ねて、器の高さをいちばん長い吹き出しに合わせる。 */
 .spotlight-bubbles {
   display: grid;
+  grid-template-columns: minmax(0, 1fr); /* 長い英数字でも列が広がってはみ出さない */
   min-height: 0;
 }
 .spotlight-bubble {
@@ -6063,7 +6064,9 @@ details.development-stage-accordion[open] > summary::before {
   right: auto;
   display: block;
   grid-area: 1 / 1;
+  align-self: start; /* 短い吹き出しの枠を、いちばん長い吹き出しの高さまで伸ばさない */
   line-break: strict; /* 小書きの「ゃ」などを行頭に置かない */
+  overflow-wrap: anywhere;
 }
 @media (max-width: 700px) {
   .spotlight-grid--4col .spotlight-bubbles { min-height: 0; }
