@@ -29,20 +29,25 @@ def now_iso() -> str:
 
 
 def make_record(*, ts: str, run_id: str, workflow: str, asin: str,
-                 pool: str, source_keyword: str | None) -> dict:
+                 pool: str, source_keyword: str | None, priority_score=None,
+                 priority_breakdown=None, character=None) -> dict:
     """1 行分のレコードを組み立てる。pool が不正なら ValueError。"""
     if pool not in POOLS:
         raise ValueError(f"pool must be one of {sorted(POOLS)}, got {pool!r}")
     if not asin:
         raise ValueError("asin must be non-empty")
-    return {
+    record = {
         "ts": ts,
         "run_id": run_id,
         "workflow": workflow,
         "asin": asin,
         "pool": pool,
         "source_keyword": source_keyword or None,
+        "priority_score": int(priority_score) if priority_score is not None else None,
+        "priority_breakdown": dict(priority_breakdown) if priority_breakdown is not None else None,
+        "character": character or None,
     }
+    return record
 
 
 def record_key(record: dict) -> tuple:
@@ -127,7 +132,10 @@ def main() -> int:
         records = [
             make_record(ts=ts, run_id=args.run_id, workflow=args.workflow,
                         asin=c["asin"], pool=c["pool"],
-                        source_keyword=c.get("source_keyword"))
+                        source_keyword=c.get("source_keyword"),
+                        priority_score=c.get("priority_score"),
+                        priority_breakdown=c.get("priority_breakdown"),
+                        character=c.get("character"))
             for c in candidates
         ]
     elif args.asin:

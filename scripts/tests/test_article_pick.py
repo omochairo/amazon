@@ -271,7 +271,9 @@ class SelectCandidatesTest(unittest.TestCase):
         with contextlib.redirect_stdout(open(os.devnull, "w", encoding="utf-8")):
             out = article_pick.select_candidates(
                 [{"asin": _asin(1)}], set(), [], [], None, "s", broken)
-        self.assertEqual(out, [{"asin": _asin(1), "pool": "", "source_keyword": None}])
+        self.assertEqual(out, [{"asin": _asin(1), "pool": "", "source_keyword": None,
+                               "priority_score": None, "priority_breakdown": None,
+                               "character": None}])
 
     def test_genre_check_failure_does_not_stop_pick(self):
         # 判定不能・判定の例外は通す (fail-open)。pick を止めない。

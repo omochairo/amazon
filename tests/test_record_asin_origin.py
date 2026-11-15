@@ -23,7 +23,20 @@ def test_make_record_shape():
         "asin": "B0XXXXXXXX",
         "pool": "demand",
         "source_keyword": "トミカ 収納",
+        "priority_score": None,
+        "priority_breakdown": None,
+        "character": None,
     }
+
+
+def test_priority_fields_are_preserved_when_present():
+    rec = R.make_record(ts="t", run_id="1", workflow="w", asin="B0XXXXXXXX",
+                        pool="demand", source_keyword="toy",
+                        priority_score=5, priority_breakdown={"character": 2},
+                        character="ポケモン")
+    assert rec["priority_score"] == 5
+    assert rec["priority_breakdown"] == {"character": 2}
+    assert rec["character"] == "ポケモン"
 
 
 def test_make_record_rejects_unknown_pool():
@@ -61,6 +74,9 @@ def test_make_record_accepts_first_party_pool_with_no_source_keyword():
         "asin": "B0X",
         "pool": "first-party",
         "source_keyword": None,
+        "priority_score": None,
+        "priority_breakdown": None,
+        "character": None,
     }
 
 
