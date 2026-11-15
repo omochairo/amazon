@@ -1,0 +1,54 @@
+{{- /*
+  hub_compare_table.html (#165 T8)
+  年齢 hub (/toys-age-N/) の冒頭に置く予算別の比較表。feature.html が年齢 hub の
+  ときだけ、本文のリード (最初の h2 より前) の直後に呼ぶ。
+
+  入力 (dict):
+    .table : age-N.json の compare_table (build_category_hubs.build_compare_table)。
+             {sections: [{key, label, count, bands: [{key, label, items: [...]}]}]}
+             label は 4〜5 歳 hub の節 (「4歳向け」「5歳（年長）向け」) だけが持つ。
+    .label : 見出しに使う年齢の言い方 (front matter の params.age_label)。
+
+  件数の判定 (帯に該当なし・節が 5 件未満) は Python 側で済ませてあるので、
+  ここでは compare_table が無ければ何も出さない。価格は日次観測で上書きした
+  best_price。スマホ 375px で横にはみ出さないよう 3 列・table-layout: fixed。
+*/ -}}
+{{- $label := .label -}}
+{{- with .table }}{{ with .sections }}
+<section class="hub-compare" aria-labelledby="hub-compare-title">
+  <h2 id="hub-compare-title">{{ $label }}におすすめの知育玩具 比較表（予算別）</h2>
+  <p class="hub-compare-note">予算の帯ごとに、<a href="/about-score/">知育スコア</a>の高い順に最大 3 件を選びました。価格は毎日の記録による集計時点の最安値です。</p>
+  {{- range . }}
+  {{- with .label }}
+  <h3 class="hub-compare-section-title">{{ . }}</h3>
+  {{- end }}
+  <table class="hub-compare-table">
+    <thead>
+      <tr>
+        <th scope="col" class="hub-compare-col-name">商品</th>
+        <th scope="col" class="hub-compare-col-meta">対象年齢・価格</th>
+        <th scope="col" class="hub-compare-col-score">知育<br>スコア</th>
+      </tr>
+    </thead>
+    {{- range .bands }}
+    <tbody>
+      <tr class="hub-compare-band"><th scope="rowgroup" colspan="3">予算 {{ .label }}</th></tr>
+      {{- range .items }}
+      {{- $age := index . "age_min_months" }}
+      {{- $url := .url_internal }}
+      <tr>
+        <td class="hub-compare-name">{{ with .image }}<a class="hub-compare-thumb" href="{{ $url }}" aria-hidden="true" tabindex="-1"><img src="{{ . }}" alt="" loading="lazy" decoding="async" width="56" height="56"></a>{{ end }}<a href="{{ .url_internal }}">{{ .name }}</a>{{ with .reason }}<span class="hub-compare-reason">{{ . }}</span>{{ end }}</td>
+        <td class="hub-compare-meta">
+          {{- if ne (printf "%v" $age) "<nil>" }}<span class="hub-compare-age">{{ partial "age_label.html" (int $age) }}</span>{{ end }}
+          {{- with .best_price }}<span class="hub-compare-price">¥{{ lang.FormatNumberCustom 0 . }}</span>{{ end }}
+          {{- with .best_platform }}<span class="hub-compare-shop">{{ replace (replace . "Yahoo!ショッピング" "Yahoo!") "楽天市場" "楽天" }} 最安</span>{{ end -}}
+        </td>
+        <td class="hub-compare-score">{{ with .ivs_100 }}<strong>{{ int . }}</strong>{{ end }}</td>
+      </tr>
+      {{- end }}
+    </tbody>
+    {{- end }}
+  </table>
+  {{- end }}
+</section>
+{{- end }}{{ end }}

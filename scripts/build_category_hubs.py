@@ -28,19 +28,21 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from age_semantics import is_seasonal_decoration, override_age_months, seasonal_names  # noqa: E402
 from brand_normalizer import normalize as normalize_brand  # noqa: E402
 from ranking_dates import resolve_entry_dates, today_jst  # noqa: E402
+import price_overlay  # noqa: E402
 from score_claims import LOW_TOTAL_MAX  # noqa: E402
 from build_feature_lists import (  # noqa: E402
+    PRICE_BANDS,
     _dedupe_by_asin,
     _is_article_json,
     _now_iso,
     _record_to_payload_common,
+    age_min_months_from_article,
     load_articles,
     overlay_amazon_images,
     overlay_current_prices,
-    parse_min_months,
+    parse_min_months,  # noqa: F401 - 互換のため bch.parse_min_months を残す
 )
 
 logger = logging.getLogger("build_category_hubs")
@@ -153,8 +155,9 @@ THEMES: dict[str, dict[str, Any]] = {
 }
 
 
-# 年齢 hub 定義 (#2687 柱1・年齢軸)。テーマ hub と異なり数値軸 = persona_fit.age_range
-# から抽出した「最小推奨年齢 (月)」でバケットへ単一所属させる。範囲オーバーラップ
+# 年齢 hub 定義 (#2687 柱1・年齢軸)。テーマ hub と異なり数値軸 = 対象年齢から
+# 抽出した「最小推奨年齢 (月)」でバケットへ単一所属させる。年齢の読み方はカードの
+# 年齢表示と同じ age_min_months_from_article (product.target_age 優先。#165 T8)。範囲オーバーラップ
 # (3歳以上 を 3/4/5歳 hub に重複所属) させると隣接 age hub が near-duplicate 化し
 # #2765 で潰した hub カニバリを再発させるため、最小年齢アンカーで 1 商品 1 hub に限定。
 # min_months <= x < max_months。max=216 (18歳) で adult 玩具を全 hub から除外。
@@ -163,7 +166,13 @@ AGE_HUBS: dict[str, dict[str, Any]] = {
     "age-1": {"label": "1歳", "min_months": 12, "max_months": 24},
     "age-2": {"label": "2歳", "min_months": 24, "max_months": 36},
     "age-3": {"label": "3歳", "min_months": 36, "max_months": 48},
-    "age-4": {"label": "4〜5歳", "min_months": 48, "max_months": 72},
+    "age-4": {"label": "4〜5歳", "min_months": 48, "max_months": 72,
+              # 比較表だけ 4 歳と 5 歳 (年長) の 2 節に分ける (#165 T8)。
+              # 年齢の読み方は hub と同じ最小推奨年齢 (月)。
+              "compare_sections": [
+                  {"key": "age-4y", "label": "4歳向け", "min_months": 48, "max_months": 60},
+                  {"key": "age-5y", "label": "5歳（年長）向け", "min_months": 60, "max_months": 72},
+              ]},
     "age-6": {"label": "6歳以上", "min_months": 72, "max_months": 216},
 }
 
@@ -203,6 +212,31 @@ XMAS_MAX_PER_BRAND = 2       # 診断の diversify と同じ
 XMAS_OVERLAP_MAX = 0.6       # 年齢 hub の上位・ほかのクリスマスページとこの割合以上同じなら作らない
 XMAS_HUB_COMPARE_N = 24      # 比べる年齢 hub の上位件数
 XMAS_MAX_FROM_HUB = 6        # 年齢 hub の上位から選ぶのはここまで (12 件の半分。select_xmas_items)
+
+
+def _merge_price_bands(keys: list[str]) -> tuple[int, int]:
+    members = [b for b in PRICE_BANDS if b["key"] in keys]
+    if len(members) != len(keys):
+        raise ValueError(f"unknown PRICE_BANDS key in {keys}")
+    return min(b["price_min"] for b in members), max(b["price_max"] for b in members)
+
+
+# 年齢 hub 冒頭の予算別比較表 (#165 T8)。帯の区切りは /cospa/ の価格帯
+# (build_feature_lists.PRICE_BANDS) をまとめたもので、境目を /cospa/ と揃える。
+COMPARE_BANDS: list[dict[str, Any]] = []
+for _key, _label, _members in (
+    ("lt3000", "〜¥3,000", ["lt1000", "1000-2000", "2000-3000"]),
+    ("3000-5000", "¥3,000-¥5,000", ["3000-5000"]),
+    ("5000-10000", "¥5,000-¥10,000", ["5000-7000", "7000-10000"]),
+    ("10000plus", "¥10,000以上", ["10000-20000", "20000plus"]),
+):
+    _lo, _hi = _merge_price_bands(_members)
+    COMPARE_BANDS.append({"key": _key, "label": _label, "price_min": _lo, "price_max": _hi})
+
+# 帯ごとの件数。4 帯 x 3 件 = 最大 12 件。
+COMPARE_PER_BAND = 3
+# 表 (節) 全体がこれ未満なら出さない。比べる相手が少ない表は役に立たない。
+COMPARE_MIN_ITEMS = 5
 
 
 def load_rank_history(path: Path) -> dict[str, Any]:
@@ -373,12 +407,11 @@ def build_min_months_index(articles_dir: Path) -> dict[str, int]:
         asin = (raw.get("product") or {}).get("asin")
         if not asin:
             continue
-        # 節句・正月の飾り物は年齢別 hub に入れない。「0歳〜」は初節句の赤ちゃんの意味 (#9186)
-        mm = override_age_months(raw)  # 確認済みの年齢 (data/age_overrides.json) が最優先
-        if mm is None:
-            if is_seasonal_decoration(*seasonal_names(raw)):
-                continue
-            mm = parse_min_months((raw.get("persona_fit") or {}).get("age_range"))
+        # カードの年齢表示と同じ読み方 (#165 T8)。確認済みの年齢 (data/age_overrides.json)
+        # が最優先、節句・正月の飾り物は None (#9186)、その後は product.target_age →
+        # product.age_range → persona_fit.age_range → technical_specs.age_range。
+        # 以前は persona_fit.age_range だけを読み、カードと 34 商品で入る hub がずれていた。
+        mm = age_min_months_from_article(raw)
         if mm is None:
             continue
         prev = index.get(str(asin))
@@ -711,6 +744,113 @@ def build_age_lineup(records, min_months_index, hub, exclude_asins):
     return pool
 
 
+def _pick_band(pool, per_band: int):
+    """スコア順の pool から per_band 件選ぶ。同じ帯ではメーカーを散らす。
+
+    メーカーの重複を避けて埋まらないときは、外した商品をスコア順に戻して埋める。
+    メーカーが分からない商品 (brand=None) は重複の対象にしない。
+    """
+    picked, held, seen = [], [], set()
+    for rec in pool:
+        if len(picked) >= per_band:
+            break
+        brand = (rec.brand or "").strip().casefold()
+        if brand and brand in seen:
+            held.append(rec)
+            continue
+        if brand:
+            seen.add(brand)
+        picked.append(rec)
+    if len(picked) < per_band:
+        picked.extend(held[:per_band - len(picked)])
+        picked.sort(key=_rank_key)
+    return picked
+
+
+def _compare_entry(rec, age_min_months: int | None) -> dict[str, Any]:
+    return {
+        "asin": rec.asin,
+        "name": rec.name,
+        "url_internal": f"/products/{rec.asin.lower()}/",
+        # 表の中の小さな画像 (どの商品か一目で分かるように)。カードと同じ画像
+        "image": rec.image,
+        "reason": rec.reason,
+        # 表の年齢はカードと同じ値 (rec.age_min_months) を出す。無ければ hub の読み。
+        "age_min_months": rec.age_min_months if rec.age_min_months is not None else age_min_months,
+        "best_price": rec.best_price,
+        "best_platform": rec.best_platform,
+        "ivs_100": rec.ivs_100,
+    }
+
+
+def build_compare_section(records, min_months_index, lo: int, hi: int, *,
+                          min_ivs: float, per_band: int = COMPARE_PER_BAND,
+                          min_items: int = COMPARE_MIN_ITEMS) -> dict[str, Any] | None:
+    """最小推奨年齢が [lo, hi) の商品を予算の帯に分け、帯ごとに知育スコア順で選ぶ。
+
+    価格は overlay_current_prices で日次観測に上書き済みの best_price を使う
+    (記事 JSON の凍結した価格は使わない)。価格が無い・最新観測で購入不可の
+    商品は入れない (/cospa/ と同じ在庫ガード)。該当の無い帯は出さず、
+    全体が min_items 未満なら None (= 表を出さない)。
+    """
+    pool = []
+    for rec in records:
+        if rec.ivs_score is None or rec.ivs_score < min_ivs or rec.ivs_100 is None:
+            continue
+        if rec.best_price is None or rec.best_price <= 0:
+            continue
+        if price_overlay.is_explicitly_unavailable(rec.availability):
+            continue
+        mm = min_months_index.get(rec.asin)
+        if mm is None or not (lo <= mm < hi):
+            continue
+        pool.append(rec)
+    pool.sort(key=_rank_key)
+    bands = []
+    total = 0
+    for band in COMPARE_BANDS:
+        in_band = [r for r in pool
+                   if band["price_min"] <= r.best_price <= band["price_max"]]
+        picked = _pick_band(in_band, per_band)
+        if not picked:
+            continue
+        total += len(picked)
+        bands.append({
+            "key": band["key"],
+            "label": band["label"],
+            "items": [_compare_entry(r, min_months_index.get(r.asin)) for r in picked],
+        })
+    if total < min_items:
+        return None
+    return {"count": total, "bands": bands}
+
+
+def build_compare_table(records, min_months_index, hub, *, min_ivs: float,
+                        per_band: int = COMPARE_PER_BAND,
+                        min_items: int = COMPARE_MIN_ITEMS) -> dict[str, Any] | None:
+    """年齢 hub 冒頭の予算別比較表 (#165 T8)。節ごとに build_compare_section。
+
+    hub に compare_sections があれば (4〜5 歳) その節に分け、無ければ hub の年齢幅で
+    1 節にする。件数の足りない節は落とし、節が 1 つも残らなければ None。
+    """
+    specs = hub.get("compare_sections") or [
+        {"key": None, "label": None,
+         "min_months": hub["min_months"], "max_months": hub["max_months"]},
+    ]
+    sections = []
+    for spec in specs:
+        sec = build_compare_section(records, min_months_index,
+                                    spec["min_months"], spec["max_months"],
+                                    min_ivs=min_ivs, per_band=per_band,
+                                    min_items=min_items)
+        if sec is None:
+            continue
+        sections.append({"key": spec["key"], "label": spec["label"], **sec})
+    if not sections:
+        return None
+    return {"sections": sections}
+
+
 def _lineup_entry(rec, age_min_months: int | None) -> dict[str, Any]:
     """全ラインナップ節用の最小 payload (カード用の重い項目は持たない)。"""
     return {
@@ -723,7 +863,8 @@ def _lineup_entry(rec, age_min_months: int | None) -> dict[str, Any]:
 
 
 def serialize_hub(items, theme_key: str, generated_at: str,
-                   *, lineup: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+                   *, lineup: list[dict[str, Any]] | None = None,
+                   compare_table: dict[str, Any] | None = None) -> dict[str, Any]:
     payload_items = [
         _record_to_payload_common(rec, idx) for idx, rec in enumerate(items, start=1)
     ]
@@ -739,13 +880,17 @@ def serialize_hub(items, theme_key: str, generated_at: str,
     }
     if lineup is not None:
         payload["lineup"] = lineup
+    if compare_table is not None:
+        payload["compare_table"] = compare_table
     return payload
 
 
 def _write_hub(out_hugo: Path, key: str, items, generated_at: str,
                counts: dict[str, int], label: str,
-               *, lineup: list[dict[str, Any]] | None = None) -> None:
-    payload = serialize_hub(items, key, generated_at, lineup=lineup)
+               *, lineup: list[dict[str, Any]] | None = None,
+               compare_table: dict[str, Any] | None = None) -> None:
+    payload = serialize_hub(items, key, generated_at, lineup=lineup,
+                            compare_table=compare_table)
     (out_hugo / f"{key}.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -823,8 +968,9 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
             lineup_recs = build_age_lineup(
                 records, mm_index, hub, exclude_asins={r.asin for r in items})
             lineup = [_lineup_entry(r, mm_index.get(r.asin)) for r in lineup_recs]
+            compare_table = build_compare_table(records, mm_index, hub, min_ivs=min_ivs)
             _write_hub(out_hugo, key, items, generated_at, counts, hub["label"],
-                      lineup=lineup)
+                      lineup=lineup, compare_table=compare_table)
             hub_index.append({"key": key, "label": hub["label"],
                               "url": f"/toys-{key}/"})
     # navi-brain#166 F15: 新着棚は年齢 hub の生成有無にかかわらず毎回出力する。

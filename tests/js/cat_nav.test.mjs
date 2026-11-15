@@ -47,7 +47,7 @@ function makeEl(doc, attrs = {}, extra = {}) {
 
 // groups: [{ id, links: [pathname, ...] }]。links が 1 個のグループは直接リンク。
 function setup({ pathname = "/", hash = "", groups, scrollWidth = 300, clientWidth = 300,
-                 chipRect = { left: 0, right: 10 } }) {
+                 chipRect = { left: 0, right: 10 }, listCount = 1 }) {
   const docListeners = {};
   const winListeners = {};
   const doc = {
@@ -55,19 +55,24 @@ function setup({ pathname = "/", hash = "", groups, scrollWidth = 300, clientWid
     addEventListener(type, fn) { docListeners[type] = fn; },
   };
   const panels = {};
+  const lists = Array.from({ length: listCount }, () => makeEl(doc, {}, {
+    scrollWidth, clientWidth, scrollLeft: 0,
+    getBoundingClientRect: () => ({ left: 0, right: clientWidth }),
+  }));
+  const listFor = (index) => lists[Math.min(index, lists.length - 1)];
   const btns = [];
   const direct = [];
   const links = [];
-  for (const g of groups) {
+  for (const [groupIndex, g] of groups.entries()) {
     if (g.links.length === 1) {
-      const a = makeEl(doc, { href: g.links[0] }, { pathname: g.links[0], closest: () => null });
+      const a = makeEl(doc, { href: g.links[0] }, { pathname: g.links[0], closest: (sel) => sel === ".cat-nav-list" ? listFor(groupIndex) : null });
       direct.push(a);
       links.push(a);
       continue;
     }
     const panel = { id: "cat-panel-" + g.id, hidden: true, links: [] };
     for (const p of g.links) {
-      const a = makeEl(doc, { href: p }, { pathname: p, closest: () => panel });
+      const a = makeEl(doc, { href: p }, { pathname: p, closest: (sel) => sel === ".cat-nav-list" ? listFor(groupIndex) : panel });
       panel.links.push(a);
       links.push(a);
     }
@@ -77,23 +82,20 @@ function setup({ pathname = "/", hash = "", groups, scrollWidth = 300, clientWid
     // 開閉 chip は <a href="#cat-panel-..."> なので、pathname は今のページと同じになる。
     btns.push(makeEl(doc,
       { "aria-expanded": "false", "aria-controls": panel.id, href: "#" + panel.id },
-      { panel, pathname, closest: () => null,
+      { panel, pathname, closest: (sel) => sel === ".cat-nav-list" ? listFor(groupIndex) : null,
         click() { this.fire("click", { detail: 0 }); } }));
   }
-  const list = makeEl(doc, {}, {
-    scrollWidth, clientWidth, scrollLeft: 0,
-    getBoundingClientRect: () => ({ left: 0, right: clientWidth }),
-  });
   for (const el of [...btns, ...direct]) {
     el.getBoundingClientRect = () => chipRect;
   }
   const nav = {
     querySelector(sel) {
-      if (sel === ".cat-nav-list") { return list; }
+
       const m = /aria-controls="([^"]+)"/.exec(sel);
       return m ? btns.find((b) => b.getAttribute("aria-controls") === m[1]) || null : null;
     },
     querySelectorAll(sel) {
+      if (sel === ".cat-nav-list") { return lists; }
       if (sel === ".cat-summary[aria-controls]") { return btns; }
       if (sel === ".cat-summary") { return [...btns, ...direct]; }
       if (sel === "a[href]") { return [...btns, ...links]; }
@@ -109,7 +111,7 @@ function setup({ pathname = "/", hash = "", groups, scrollWidth = 300, clientWid
   const win = { history, addEventListener(type, fn) { winListeners[type] = fn; } };
   vm.runInNewContext(SRC, { document: doc, window: win, history,
                             location: { pathname, hash, search: "" } });
-  return { doc, nav, replaced, btns, direct, links, list, panels, docListeners, winListeners };
+  return { doc, nav, replaced, btns, direct, links, list: lists[0], lists, panels, docListeners, winListeners };
 }
 
 const GROUPS = [
@@ -319,4 +321,16 @@ test("現在地の chip が見えていればスクロールしない", () => {
     scrollWidth: 1600, clientWidth: 350, chipRect: { left: 100, right: 250 },
   });
   assert.equal(list.scrollLeft, 0);
+});
+
+
+test("2 本の横スクロール行は両方にヒントを付け、現在地の行だけをスクロールする", () => {
+  const { lists } = setup({
+    groups: GROUPS, pathname: "/tags/jigusoo/", scrollWidth: 1600,
+    clientWidth: 350, chipRect: { left: 900, right: 1050 }, listCount: 2,
+  });
+  assert.equal(lists[0].classList.contains("has-more-right"), true);
+  assert.equal(lists[1].classList.contains("has-more-right"), true);
+  assert.equal(lists[0].scrollLeft, 0);
+  assert.equal(lists[1].scrollLeft, 860);
 });
