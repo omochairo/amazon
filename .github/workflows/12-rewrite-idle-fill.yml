@@ -84,6 +84,14 @@ jobs:
       # Safe by construction: cleanup_completed deletes only when a newer body
       # exists, so this can never orphan a page. Deletions ride along in the PR
       # created below (the commit step stages data/articles + data/rewrite_queue).
+      # #165 T16: 印の付いた ASIN の書き直し前の題・商品名・date を台帳
+      # (data/analytics/rewrite_identity.jsonl) に残す。build はこの値で表示するので、
+      # 書き直しで題・見出し・在庫型・公開日が変わらない。新しく付ける印は
+      # apply_rewrite_targets が記録する。ここはこの仕組みより前に付いた印を、
+      # 旧本体が下の cleanup で消える前に拾う (台帳に既にある ASIN・slug は足さない)。
+      - name: Record pre-rewrite identity for pending markers
+        run: python scripts/rewrite_identity.py --ensure-pending
+
       - name: Cleanup completed rewrites
         run: python scripts/rewrite_queue.py --cleanup
 
@@ -229,7 +237,9 @@ jobs:
           # rewrite_ledger.jsonl: step 0 の --cleanup が旧本体を消すときに完了行を追記する
           # (navi-brain#39 Step 0-a)。ここに無かったため 2026-09-11 以降の追記が毎回捨てられ、
           # audit_uniqueness がリライト済みの記事を新規として数えていた。
-          git add -A data/raw/amazon.json data/raw/per_asin/ data/articles/ data/rewrite_queue/ data/price_history/ data/analytics/rewrite_ledger.jsonl
+          # rewrite_identity.jsonl: #165 T16 の書き直し前の題・商品名・date (追記専用)。
+          # ここに無いと台帳が捨てられ、build が元の値で表示できない。
+          git add -A data/raw/amazon.json data/raw/per_asin/ data/articles/ data/rewrite_queue/ data/price_history/ data/analytics/rewrite_ledger.jsonl data/analytics/rewrite_identity.jsonl
           if git diff --cached --quiet; then
             echo "Nothing staged after git add; skipping."
             exit 0

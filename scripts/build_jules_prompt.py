@@ -85,6 +85,29 @@ def _info_note(asin):
 - sources には実在し検証可能な URL のみ記載。検索エンジンの結果ページ URL は出典にしないでください。"""
 
 
+# #165 T16: 書き直しの記事では、サイトは元の title と商品名で表示する (build_post が
+# data/analytics/rewrite_identity.jsonl の値を使う)。「title の検索意図選定にこのクエリを
+# 最優先で使え」は title の書き換えを促すので、書き直しでは本文・FAQ・meta_description で
+# 答える指示に替える。03-invoke-jules.yml の GSC_NOTE も同じ文面 (パリティ維持)。
+GSC_TITLE_LINE_NEW = (
+    "- これは読者が実際に検索窓に打った語です。title / meta_description の検索意図選定 "
+    "(テンプレート §4 の意図差別化) では、このクエリ群を最優先のシグナルとして使ってください"
+)
+GSC_TITLE_LINE_REWRITE = (
+    "- これは読者が実際に検索窓に打った語です。この記事は書き直しで、サイトでは元の title と"
+    "商品名で表示されます。本文・FAQ・meta_description で、これらの検索語と足りない観点に答えてください"
+)
+
+
+def _is_rewrite(asin, articles_dir="data/articles"):
+    """その ASIN の記事が既にある (= 今回の生成は書き直し) か。"""
+    try:
+        import rewrite_queue
+        return rewrite_queue.newest_body_slug(asin, articles_dir) is not None
+    except Exception:
+        return False
+
+
 def _gsc_note(asin):
     """#2953 B案 (#1329 記事版): GSC 実流入クエリ注記 (03 の GSC_NOTE 移植・パリティ維持)。
     取得失敗/データ無しは best-effort で空文字を返し、生成は止めない。"""
@@ -100,9 +123,10 @@ def _gsc_note(asin):
         f"- 「{q['query']}」 (表示 {q['impressions']} 回 / 平均掲載順位 {q['position']})"
         for q in ctx.get("queries", [])
     )
+    title_line = GSC_TITLE_LINE_REWRITE if _is_rewrite(asin) else GSC_TITLE_LINE_NEW
     return f"""【このページに実際に流入している検索クエリ (GSC 直近4週)】
 {lines}
-- これは読者が実際に検索窓に打った語です。title / meta_description の検索意図選定 (テンプレート §4 の意図差別化) では、このクエリ群を最優先のシグナルとして使ってください
+{title_line}
 - faq のうち最低 1 問は、上記クエリが示す疑問への直接回答にしてください (クエリの語をそのまま質問文に活かす)
 - クエリが示す疑問 (例: 「○○ 対象年齢」「○○ 違い」) に本文が答えていない場合、narrative の該当セクションで必ず回答してください"""
 

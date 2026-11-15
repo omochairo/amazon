@@ -39,6 +39,8 @@ import market_prices
 import official_howto
 import official_howto_format
 import price_overlay
+import rewrite_identity
+import rewrite_queue
 from product_image import amazon_image, load_amazon_item, resolve_product_image
 import seo_title
 import stock_status
@@ -3807,6 +3809,8 @@ def _frontmatter_meta(
     canonical_overrides: dict[str, str] | None = None,
     stock_title_override: str | None = None,
     asin_redirect_map: dict[str, list[str]] | None = None,
+    extra_aliases: list[str] | None = None,
+    rewrite_ident: rewrite_identity.Identity | None = None,
 ) -> dict[str, Any]:
     # #2686 / #4964: 「どこで買える/在庫」型が適用された記事は決定的生成の
     # タイトルを最優先で使う (元 JSON の title / title_variants は書き換えず、
@@ -3855,7 +3859,9 @@ def _frontmatter_meta(
         "slug": slug,
         "url": f"/products/{asin.lower()}/",
         # navi-brain#164 R1: 外したページ (data/asin_redirects.json) の旧 URL をここへ転送する
-        "aliases": [f"/posts/{slug.lower()}/"] + asin_redirects.aliases_for(asin, asin_redirect_map or {}),
+        # #165 T16: extra_aliases は書き直しで消えた旧 slug の /posts/<old_slug>/ (重複は呼び出し側で除く)
+        "aliases": [f"/posts/{slug.lower()}/"] + asin_redirects.aliases_for(asin, asin_redirect_map or {})
+        + [a for a in (extra_aliases or []) if a != f"/posts/{slug.lower()}/"],
         "draft": draft,
         "description": description,
         "keywords": data.get("keywords", []),
@@ -3863,8 +3869,20 @@ def _frontmatter_meta(
     # #5083 項目2: SERP に出る <title> だけを詰める。`title` は <h1> と一覧の
     # アンカーにも使われる読者向けの文字列なので触らない。組み上がりが現行より
     # **短くなるページにだけ** front matter を出す (根拠は scripts/seo_title.py)。
+    seo_article = data
+    if rewrite_ident is not None and (
+        rewrite_ident.has_review_signals is not None or rewrite_ident.has_target_age is not None
+    ):
+        # 台帳に保存した判定を <title> の構成にだけ反映し、記事 JSON は変更しない。
+        seo_article = dict(data)
+        if rewrite_ident.has_review_signals is not None:
+            seo_article["review_signals"] = [True] if rewrite_ident.has_review_signals else []
+        if rewrite_ident.has_target_age is not None:
+            seo_product = dict(data.get("product") or {})
+            seo_product["target_age"] = "記録済み" if rewrite_ident.has_target_age else ""
+            seo_article["product"] = seo_product
     seo_title_value = seo_title.build_seo_title(
-        data, title, where_to_buy=bool(stock_title_override)
+        seo_article, title, where_to_buy=bool(stock_title_override)
     )
     if seo_title_value:
         meta["seo_title"] = seo_title_value
@@ -4106,6 +4124,10 @@ def main() -> None:
     parser.add_argument("--asin-redirects", default=str(asin_redirects.DEFAULT_PATH),
                         help="navi-brain#164: retired ASIN -> replacement ASIN; adds the old /products/ URL "
                              "to the replacement page's aliases")
+    parser.add_argument("--rewrite-identity", default=rewrite_identity.LEDGER_PATH,
+                        help="#165 T16: 書き直し前の題・商品名・date の台帳。行がある ASIN だけ、表示を元の値にする")
+    parser.add_argument("--rewrite-ledger", default=rewrite_queue.LEDGER_PATH,
+                        help="#165 T16: 書き直しの完了台帳。過去の old_slug の /posts/<old_slug>/ を aliases に足す")
     parser.add_argument("--format-log", default=None,
                         help="#7954: path to append the per-page article-format transition log "
                              "(e.g. data/analytics/history/article_format.jsonl). Unset by default "
@@ -4170,6 +4192,14 @@ def main() -> None:
     asin_redirect_map = asin_redirects.load(pathlib.Path(args.asin_redirects))
     if asin_redirect_map:
         print(f"aliases: {sum(map(len, asin_redirect_map.values()))} retired product URL(s) redirected")
+    # #165 T16: 書き直しで題・見出し・在庫型・公開日・旧 URL の転送が変わるのを防ぐ。
+    # 台帳に行が無い記事 (= 書き直しの印を付けていない記事) には何もしない。
+    rewrite_old_slugs = rewrite_identity.load_old_slugs(args.rewrite_ledger)
+    rewrite_identities = rewrite_identity.load(args.rewrite_identity, rewrite_old_slugs)
+    if rewrite_identities:
+        print(f"rewrite_identity (#165 T16): {len(rewrite_identities)} ASIN(s) keep their original title/name/date")
+    rewrite_identity_applied = 0
+    rewrite_alias_pages = 0
 
     # 年齢別発達段階目安データのロード
     stages_path = pathlib.Path("hugo/data/development_stages.json")
@@ -4295,6 +4325,15 @@ def main() -> None:
 
             _merge(data, _load_optional_json(src_path / f"{slug}.enrichment.json"), ENRICHMENT_KEYS)
             _merge(data, _load_optional_json(src_path / f"{slug}.seo.json"), SEO_KEYS)
+            # #165 T16: 書き直しの台帳に行がある ASIN は、題・商品名・公開日を書き直し前の値に
+            # する (メモリ上だけ。JSON は書き換えない)。以降の H1・og:title・JSON-LD・
+            # seo_title・H2 (product.name)・front matter の date はすべてこの値から作られる。
+            # redated の判定は本体の date を使う (書き直しで date が新しくなったかの記録)。
+            body_date = data.get("date")
+            rewrite_ident = rewrite_identities.get(_resolve_page_asin(data.get("product"), slug))
+            if rewrite_ident is not None:
+                rewrite_identity.apply(data, rewrite_ident)
+                rewrite_identity_applied += 1
             # #7957 (#7955 A-4): 公式の手順 (official_howto.json の reviewed steps) が
             # 無いページでは「遊び方は？」「使い方は？」の FAQ を出さない。Jules の faq と
             # FAQ サイドカーの faq_extended の両方が「遊び方」を問いに立てて手順ゼロで
@@ -4496,8 +4535,12 @@ def main() -> None:
             # is_stock_format_eligible が False を返すため一切変化しない。
             stock_title_override: str | None = None
             data["stock_where_to_buy"] = None
+            # #165 T16: 在庫型かは印を付けた時点の記事の date で保つ。
+            # first_date は front matter の初回公開日として別に使う。
+            stock_date = ((rewrite_ident.recorded_date or rewrite_ident.first_date or data.get("date"))
+                          if rewrite_ident else data.get("date"))
             if page_asin and where_to_buy_format.is_stock_format_eligible(
-                page_asin, data.get("date"), stock_index,
+                page_asin, stock_date, stock_index,
                 history_root=price_watch_history_root,
                 price_history_root=price_history_root,
             ):
@@ -4551,7 +4594,7 @@ def main() -> None:
                     "official_howto": _howto_state,
                     "redated": article_format_log.compute_redated(
                         page_asin,
-                        data.get("date"),
+                        body_date,
                         format_log_asin_origin_pool.get(page_asin),
                         format_log_earliest_dates.get(page_asin),
                     ),
@@ -4561,6 +4604,10 @@ def main() -> None:
             # navi-brain#165 T3/T4: 購入ボタンの行き先と 💴 の見出し。表示だけに使い、
             # front matter / JSON-LD には入れない。
             data["buy_offer"] = _resolve_buy_offer(data)
+            # #165 T16: 書き直しで消えた旧 slug の転送 (rewrite_ledger の old_slug すべてと台帳の slug)
+            old_aliases = rewrite_identity.old_slug_aliases(page_asin, slug, rewrite_old_slugs, rewrite_ident)
+            if old_aliases:
+                rewrite_alias_pages += 1
             md_body = template.render(**data)
             # omcha-ops#19 P1: テンプレ/本文のどこを経由した Amazon リンクでも
             # tag= を持たせる最後の一点 (_force_amazon_partner_tag の comment 参照)。
@@ -4575,6 +4622,8 @@ def main() -> None:
                 canonical_overrides=canonical_overrides,
                 stock_title_override=stock_title_override,
                 asin_redirect_map=asin_redirect_map,
+                extra_aliases=old_aliases,
+                rewrite_ident=rewrite_ident,
             )
             if fm_meta.get("cta_layout"):
                 cta_layout_applied += 1
@@ -4713,6 +4762,10 @@ def main() -> None:
         f"{price_overlay_stats['unpriced_cleared']} 凍結価格を無価格化)"
     )
     print(f"stock_title (#2686): {stock_title_applied} page(s) rendered with 「どこで買える」format")
+    print(
+        f"rewrite_identity (#165 T16): 元の題・商品名・date で出した記事 {rewrite_identity_applied} / "
+        f"旧 slug の転送を足した記事 {rewrite_alias_pages}"
+    )
     print(f"howto_faq (#7957): {howto_faq_dropped} FAQ item(s) dropped (no reviewed official steps)")
     print(
         f"official_howto_block (#7959): {official_howto_block_applied} page(s) "

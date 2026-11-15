@@ -31,6 +31,7 @@ import os
 import re
 import sys
 
+import rewrite_identity
 import rewrite_queue
 
 _ASIN_RE = re.compile(r"^B0[A-Z0-9]{8}$")
@@ -78,7 +79,12 @@ def inject_targets(pool_path: str, per_asin_root: str, targets: list[str]) -> in
     return injected
 
 
-def write_markers(targets: list[str], articles_dir: str, queue_dir: str) -> int:
+def write_markers(
+    targets: list[str],
+    articles_dir: str,
+    queue_dir: str,
+    identity_path: str | None = None,
+) -> int:
     """Write a rewrite-request marker per target ASIN. Returns count written.
 
     The marker records the ASIN's current (newest) body slug as ``old_slug`` so
@@ -86,12 +92,19 @@ def write_markers(targets: list[str], articles_dir: str, queue_dir: str) -> int:
     with no existing body is still marked (old_slug=None): it is simply an
     uncovered ASIN that pick-asin would pick anyway, and the harmless marker is
     cleared on the next cleanup pass.
+
+    #165 T16: ``identity_path`` が渡されたら、印を付ける時点の題・商品名・date を
+    書き直しの台帳 (rewrite_identity) に 1 行足す。build はこの値で表示するので、
+    書き直しで題・見出しが変わらない。marker や旧 JSON には置かない (cleanup が消す)。
     """
     written = 0
     for asin in targets:
         old_slug = rewrite_queue.newest_body_slug(asin, articles_dir)
         rewrite_queue.write_marker(asin, old_slug or "", queue_dir)
-        print(f"MARK: {asin} old_slug={old_slug}")
+        recorded = False
+        if identity_path and old_slug:
+            recorded = rewrite_identity.record(asin, old_slug, articles_dir, identity_path)
+        print(f"MARK: {asin} old_slug={old_slug} identity_recorded={recorded}")
         written += 1
     return written
 
@@ -115,13 +128,15 @@ def main() -> int:
     ap.add_argument("--per-asin-root", default="data/raw/per_asin")
     ap.add_argument("--articles-dir", default="data/articles")
     ap.add_argument("--queue-dir", default=rewrite_queue.QUEUE_DIR)
+    ap.add_argument("--identity-path", default=rewrite_identity.LEDGER_PATH,
+                    help="#165 T16: 書き直し前の題・商品名・date を残す台帳 (追記専用)")
     args = ap.parse_args()
     targets = _parse_targets(args.asins)
     if not targets:
         print("No targets; nothing to do.")
         return 0
     injected = inject_targets(args.pool, args.per_asin_root, targets)
-    marked = write_markers(targets, args.articles_dir, args.queue_dir)
+    marked = write_markers(targets, args.articles_dir, args.queue_dir, args.identity_path)
     print(f"[apply_rewrite_targets] injected={injected} marked={marked} targets={len(targets)}")
     return 0
 
