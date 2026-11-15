@@ -93,7 +93,16 @@
        件数は並び順 (降順) とグループの出し分け (0 件は描画しない) にだけ使う。
        並び順が入れ替わったときは同じく全ページが変わるが、1 本の追加では稀。 */ -}}
 {{- if gt (len $groups) 0 }}
-<nav class="cat-nav" aria-label="おもちゃの種類から探す">
+<nav class="cat-nav" aria-label="年齢・おもちゃの種類から探す">
+    <p class="cat-nav-title"><span aria-hidden="true">🎂</span> 年齢から探す</p>
+    <ul class="cat-nav-list">
+        <li class="cat-group cat-age-link"><a class="cat-summary" href="/toys-age-0/">0歳</a></li>
+        <li class="cat-group cat-age-link"><a class="cat-summary" href="/toys-age-1/">1歳</a></li>
+        <li class="cat-group cat-age-link"><a class="cat-summary" href="/toys-age-2/">2歳</a></li>
+        <li class="cat-group cat-age-link"><a class="cat-summary" href="/toys-age-3/">3歳</a></li>
+        <li class="cat-group cat-age-link"><a class="cat-summary" href="/toys-age-4/">4〜5歳</a></li>
+        <li class="cat-group cat-age-link"><a class="cat-summary" href="/toys-age-6/">6歳〜</a></li>
+    </ul>
     <p class="cat-nav-title"><span aria-hidden="true">🧸</span> おもちゃの種類から探す</p>
     <ul class="cat-nav-list">
         {{- range $groups }}

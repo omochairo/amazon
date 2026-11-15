@@ -255,6 +255,40 @@ header .logo a {
   border-bottom: 1px solid rgba(255,255,255,0.08) !important;
 }
 
+/* 年齢 hub の予算別比較表。3 列を固定し、商品名と理由はセル内で折り返す。 */
+.post-content .hub-compare { margin: 1.25rem 0 2rem; }
+.post-content .hub-compare h2 { margin-bottom: .45rem; }
+.post-content .hub-compare-note { font-size: .9rem; color: var(--secondary); }
+.post-content table.hub-compare-table {
+  table-layout: fixed;
+  font-size: .88rem;
+  overflow-wrap: anywhere;
+}
+.hub-compare-table .hub-compare-col-name { width: 48%; }
+.hub-compare-table .hub-compare-col-meta { width: 34%; }
+.hub-compare-table .hub-compare-col-score { width: 18%; }
+.post-content .hub-compare-table th,
+.post-content .hub-compare-table td { padding: 8px 9px; vertical-align: top; }
+.hub-compare-table .hub-compare-band th { text-align: left; background: var(--brand-gradient-subtle); }
+.hub-compare-table .hub-compare-reason,
+.hub-compare-table .hub-compare-age,
+.hub-compare-table .hub-compare-price,
+.hub-compare-table .hub-compare-shop { display: block; line-height: 1.45; }
+.hub-compare-table .hub-compare-reason { margin-top: .25rem; color: var(--secondary); font-size: .9em; }
+.hub-compare-table .hub-compare-shop { color: var(--secondary); font-size: .88em; white-space: nowrap; }
+.hub-compare-table .hub-compare-name a { font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.hub-compare-table .hub-compare-score { text-align: center; font-size: 1rem; }
+[data-theme="dark"] .hub-compare-table .hub-compare-band th { color: #e2e8f0; }
+@media (max-width: 420px) {
+  .post-content table.hub-compare-table { font-size: .82rem; }
+  .post-content .hub-compare-table th,
+  .post-content .hub-compare-table td { padding: 7px 5px; }
+  .hub-compare-table .hub-compare-col-name { width: 45%; }
+  .hub-compare-table .hub-compare-col-meta { width: 37%; }
+  .hub-compare-table .hub-compare-col-score { width: 18%; }
+}
+
+
 /* ---------- 基本スペック表 (Layer 2-③ spec table) ---------- */
 /* key-value 形式。thead を持たず行頭 th をラベル列として使う。
    視線往復を減らすため素材/サイズ/原産国などを一覧化 (#1365)。*/
@@ -646,6 +680,11 @@ header .logo a {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     max-width: 100%;
+  }
+  .post-content table.hub-compare-table {
+    display: table;
+    width: 100%;
+    overflow-x: visible;
   }
   .post-content table thead th,
   .post-content table td {

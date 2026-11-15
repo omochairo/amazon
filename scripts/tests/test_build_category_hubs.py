@@ -860,5 +860,165 @@ class RunXmasPagesTest(unittest.TestCase):
             self.assertFalse((out / "xmas_index.json").exists())
 
 
+
+
+def _crec(asin, ivs_100, price, *, brand=None, age=None, availability=None):
+    rec = _rec(asin, ivs_100 / 20, ivs_100, price)
+    rec.brand = brand
+    rec.age_min_months = age
+    rec.availability = availability
+    rec.reason = f"reason-{asin}"
+    return rec
+
+
+class CompareTableTest(unittest.TestCase):
+    """#165 T8: 年齢 hub 冒頭の予算別比較表。"""
+
+    def test_bands_follow_cospa_edges(self):
+        # 帯の境目は /cospa/ の価格帯 (PRICE_BANDS) の境目と一致する
+        from build_feature_lists import PRICE_BANDS
+        edges = {b["price_min"] for b in PRICE_BANDS}
+        for band in bch.COMPARE_BANDS:
+            self.assertIn(band["price_min"], edges)
+        self.assertEqual([b["key"] for b in bch.COMPARE_BANDS],
+                         ["lt3000", "3000-5000", "5000-10000", "10000plus"])
+        self.assertEqual(bch.COMPARE_BANDS[0]["price_max"], 2999)
+        self.assertEqual(bch.COMPARE_BANDS[1]["price_min"], 3000)
+
+    def test_band_split_order_and_cap(self):
+        recs = [
+            _crec("A", 90, 1000), _crec("B", 95, 2999), _crec("C", 80, 500),
+            _crec("D", 70, 1500),                       # 帯の 4 件目 = 落ちる
+            _crec("E", 85, 3000), _crec("F", 88, 4999),
+            _crec("G", 99, 20000),
+        ]
+        mm = {r.asin: 12 for r in recs}
+        sec = bch.build_compare_section(recs, mm, 12, 24, min_ivs=0.0)
+        # 5000-10000 は該当なしで出さない
+        self.assertEqual([b["key"] for b in sec["bands"]],
+                         ["lt3000", "3000-5000", "10000plus"])
+        self.assertEqual([i["asin"] for i in sec["bands"][0]["items"]], ["B", "A", "C"])
+        self.assertEqual([i["asin"] for i in sec["bands"][1]["items"]], ["F", "E"])
+        self.assertEqual(sec["count"], 6)
+        first = sec["bands"][0]["items"][0]
+        self.assertEqual(first["url_internal"], "/products/b/")
+        self.assertEqual(first["reason"], "reason-B")
+        self.assertEqual(first["best_price"], 2999)
+
+    def test_age_range_price_and_stock_gates(self):
+        recs = [
+            _crec("A", 90, 1000), _crec("B", 89, 1100), _crec("C", 88, 1200),
+            _crec("D", 87, 3500), _crec("E", 86, 3600),
+            _crec("OUT", 99, 1000),                     # 年齢が範囲外
+            _crec("NOP", 99, None),                     # 価格なし
+            _crec("SOLD", 99, 3700, availability="在庫切れ"),
+            _crec("LOW", 10, 3800),                     # min_ivs 未満
+        ]
+        mm = {r.asin: 12 for r in recs}
+        mm["OUT"] = 24
+        sec = bch.build_compare_section(recs, mm, 12, 24, min_ivs=3.0)
+        asins = [i["asin"] for b in sec["bands"] for i in b["items"]]
+        self.assertEqual(asins, ["A", "B", "C", "D", "E"])
+
+    def test_too_few_items_hides_table(self):
+        recs = [_crec(x, 90, 1000 + i * 3000) for i, x in enumerate("ABCD")]
+        mm = {r.asin: 12 for r in recs}
+        self.assertIsNone(bch.build_compare_section(recs, mm, 12, 24, min_ivs=0.0))
+        self.assertIsNone(bch.build_compare_table(recs, mm, bch.AGE_HUBS["age-1"], min_ivs=0.0))
+        recs.append(_crec("E", 90, 1000))
+        mm["E"] = 12
+        table = bch.build_compare_table(recs, mm, bch.AGE_HUBS["age-1"], min_ivs=0.0)
+        self.assertEqual(len(table["sections"]), 1)
+        self.assertIsNone(table["sections"][0]["label"])
+        self.assertEqual(table["sections"][0]["count"], 5)
+
+    def test_brand_spread_within_band(self):
+        recs = [
+            _crec("L1", 99, 1000, brand="レゴ"), _crec("L2", 98, 1000, brand="レゴ"),
+            _crec("L3", 97, 1000, brand="レゴ"), _crec("X", 80, 1000, brand="X社"),
+            _crec("N", 70, 1000),
+        ]
+        mm = {r.asin: 30 for r in recs}
+        sec = bch.build_compare_section(recs, mm, 24, 36, min_ivs=0.0, min_items=1)
+        self.assertEqual([i["asin"] for i in sec["bands"][0]["items"]], ["L1", "X", "N"])
+        # メーカーが足りなければ埋め戻す
+        sec = bch.build_compare_section(recs[:3], mm, 24, 36, min_ivs=0.0, min_items=1)
+        self.assertEqual([i["asin"] for i in sec["bands"][0]["items"]], ["L1", "L2", "L3"])
+
+    def test_age4_hub_splits_four_and_five(self):
+        recs, mm = [], {}
+        for i in range(6):
+            r4 = _crec(f"F{i}", 90 - i, 1000 + i * 1000, age=48)
+            r5 = _crec(f"V{i}", 90 - i, 1000 + i * 1000, age=60)
+            recs += [r4, r5]
+            mm[r4.asin], mm[r5.asin] = 48 + i, 60 + i
+        recs.append(_crec("SIX", 99, 1000, age=72))
+        mm["SIX"] = 72
+        table = bch.build_compare_table(recs, mm, bch.AGE_HUBS["age-4"], min_ivs=0.0)
+        self.assertEqual([s["label"] for s in table["sections"]],
+                         ["4歳向け", "5歳（年長）向け"])
+        four = {i["asin"] for b in table["sections"][0]["bands"] for i in b["items"]}
+        five = {i["asin"] for b in table["sections"][1]["bands"] for i in b["items"]}
+        self.assertEqual(len(four), 6)
+        self.assertTrue(all(a.startswith("F") for a in four))
+        self.assertEqual(len(five), 6)
+        self.assertTrue(all(a.startswith("V") for a in five))
+
+    def test_age4_drops_thin_section(self):
+        recs = [_crec(f"F{i}", 90, 1000 + i * 1500) for i in range(6)]
+        mm = {r.asin: 50 for r in recs}
+        recs.append(_crec("V", 90, 1000))
+        mm["V"] = 61
+        table = bch.build_compare_table(recs, mm, bch.AGE_HUBS["age-4"], min_ivs=0.0)
+        self.assertEqual([s["label"] for s in table["sections"]], ["4歳向け"])
+
+    def test_end_to_end_uses_daily_price(self):
+        """表の価格は日次観測で上書きした best_price。記事 JSON の価格ではない。"""
+        from datetime import datetime, timezone
+        with tempfile.TemporaryDirectory() as tmp:
+            adir = pathlib.Path(tmp) / "articles"
+            adir.mkdir()
+            per = pathlib.Path(tmp) / "per_asin"
+            for i in range(6):
+                asin = f"B0CMP0000{i}"
+                price = {4: 12000, 5: 6000}.get(i, 2000)
+                doc = {
+                    "slug": f"cmp-{i}",
+                    "title": "1歳のおもちゃ",
+                    # カードと同じく target_age を優先する (persona_fit だけなら 3 歳 hub)
+                    "persona_fit": {"age_range": "3歳〜"},
+                    "product": {
+                        "asin": asin, "name": f"toy{i}", "brand": f"brand{i}",
+                        "target_age": "1歳〜",
+                        "ivs_score": 4.5, "best_price": price, "best_platform": "Amazon",
+                        "prices": {"amazon": {"url": f"https://amazon/{asin}", "price": price}},
+                    },
+                }
+                (adir / f"2026-06-01-{asin}.json").write_text(
+                    json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+            d = per / "B0CMP00000"
+            d.mkdir(parents=True)
+            (d / "amazon.json").write_text(json.dumps({
+                "asin": "B0CMP00000",
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+                "item": {"asin": "B0CMP00000", "price": 4500},
+            }), encoding="utf-8")
+            out = pathlib.Path(tmp) / "features"
+            bch.run(adir, out, top_n=24, min_ivs=0.0, themes=[],
+                    age_hubs=["age-1", "age-3"], per_asin_dir=per,
+                    history_path=pathlib.Path(tmp) / "none.json")
+            data = json.loads((out / "age-1.json").read_text(encoding="utf-8"))
+            age3 = json.loads((out / "age-3.json").read_text(encoding="utf-8"))
+        self.assertEqual(age3["count"], 0)
+        self.assertNotIn("compare_table", age3)
+        self.assertEqual(data["count"], 6)
+        bands = {b["key"]: b for b in data["compare_table"]["sections"][0]["bands"]}
+        moved = bands["3000-5000"]["items"]
+        self.assertEqual([i["asin"] for i in moved], ["B0CMP00000"])
+        self.assertEqual(moved[0]["best_price"], 4500)
+        self.assertEqual(moved[0]["age_min_months"], 12)
+        self.assertEqual(len(bands["lt3000"]["items"]), 3)
+
+
 if __name__ == "__main__":
     unittest.main()

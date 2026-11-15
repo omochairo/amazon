@@ -5,7 +5,7 @@
 (function () {
     var nav = document.querySelector(".cat-nav");
     if (!nav) { return; }
-    var list = nav.querySelector(".cat-nav-list");
+    var lists = Array.prototype.slice.call(nav.querySelectorAll(".cat-nav-list"));
     // 子が 1 個のグループは直接リンクで出るので、開閉の対象はパネルを持つ chip
     // (aria-controls 付き) だけに絞る。chip は <a href="#cat-panel-..." role="button">
     // で、JS が無いときは CSS の :target でパネルが開く。ここから先は JS が開閉を
@@ -141,21 +141,23 @@
 
     // スマホの横スクロール。スクロールバーを隠しているので、続きがある側の端を
     // ぼかして知らせる (PC は折り返し表示で scrollWidth == clientWidth になり付かない)。
-    if (!list) { return; }
-    function updateHint() {
-        var max = list.scrollWidth - list.clientWidth;
-        list.classList.toggle("has-more-left", list.scrollLeft > 4);
-        list.classList.toggle("has-more-right", list.scrollLeft < max - 4);
-    }
-    if (currentChip && list.scrollWidth > list.clientWidth) {
-        var lr = list.getBoundingClientRect();
-        var cr = currentChip.getBoundingClientRect();
-        if (cr.right > lr.right || cr.left < lr.left) {
-            // 左端のぼかし (36px) に現在地の chip が掛からない位置で止める。
-            list.scrollLeft += cr.left - lr.left - 40;
+    lists.forEach(function (list) {
+        function updateHint() {
+            var max = list.scrollWidth - list.clientWidth;
+            list.classList.toggle("has-more-left", list.scrollLeft > 4);
+            list.classList.toggle("has-more-right", list.scrollLeft < max - 4);
         }
-    }
-    list.addEventListener("scroll", updateHint, { passive: true });
-    window.addEventListener("resize", updateHint);
-    updateHint();
+        if (currentChip && currentChip.closest(".cat-nav-list") === list &&
+                list.scrollWidth > list.clientWidth) {
+            var lr = list.getBoundingClientRect();
+            var cr = currentChip.getBoundingClientRect();
+            if (cr.right > lr.right || cr.left < lr.left) {
+                // 左端のぼかし (36px) に現在地の chip が掛からない位置で止める。
+                list.scrollLeft += cr.left - lr.left - 40;
+            }
+        }
+        list.addEventListener("scroll", updateHint, { passive: true });
+        window.addEventListener("resize", updateHint);
+        updateHint();
+    });
 })();
