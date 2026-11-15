@@ -15,6 +15,7 @@ extend_head.html の GA4 ラボ/自動化トラフィック除外ガード (brai
 from __future__ import annotations
 
 import os
+import json
 import re
 import shutil
 import subprocess
@@ -27,6 +28,8 @@ from scripts.run_lighthouse_lane import LAB_UA_MARKER
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 HUGO_DIR = REPO_ROOT / "hugo"
+# テーマの submodule を持たない作業ツリーでは、環境変数でテーマの置き場を渡せる (任意)
+THEMES_DIR_ENV = "HUGO_THEMES_DIR"
 
 ROBOTS_RE = re.compile(r'<meta name=robots content="([^"]*)">')
 LOC_RE = re.compile(r"<loc>(.*?)</loc>")
@@ -54,7 +57,10 @@ def _unavailable(reason: str):
 def hugo_build_dir():
     if shutil.which("hugo") is None:
         _unavailable("hugo binary not found")
-    if not (HUGO_DIR / "themes" / "PaperMod" / "layouts").exists():
+    themes_dir = HUGO_DIR / "themes"
+    if not (themes_dir / "PaperMod" / "layouts").exists() and os.environ.get(THEMES_DIR_ENV):
+        themes_dir = Path(os.environ[THEMES_DIR_ENV])
+    if not (themes_dir / "PaperMod" / "layouts").exists():
         _unavailable("PaperMod theme submodule not initialized")
 
     with tempfile.TemporaryDirectory(prefix="hugo_robots_test_") as tmp:
@@ -66,6 +72,8 @@ def hugo_build_dir():
                     "--environment",
                     "production",
                     "--minify",
+                    "--themesDir",
+                    str(themes_dir),
                     "-d",
                     str(out_dir),
                 ],
@@ -90,6 +98,71 @@ def _robots_content(out_dir: Path, rel_path: str) -> str:
     m = ROBOTS_RE.search(text)
     assert m, f"no <meta name=robots> found in {html_path}"
     return m.group(1)
+
+
+def _html(out_dir: Path, rel_path: str) -> str:
+    path = out_dir / rel_path / "index.html"
+    assert path.exists(), f"missing build output: {path}"
+    return path.read_text(encoding="utf-8")
+
+
+def _breadcrumb_schema(html: str) -> dict:
+    for raw in re.findall(
+        r'<script\s+type=["\']?application/ld\+json["\']?>(.*?)</script>', html, re.S
+    ):
+        try:
+            value = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if value.get("@type") == "BreadcrumbList":
+            return value
+    raise AssertionError("BreadcrumbList JSON-LD not found")
+
+
+def test_age_article_breadcrumb_and_schema(hugo_build_dir):
+    html = _html(hugo_build_dir, "products/b0f99n8ctd")
+    assert re.search(
+        r'href=["\']?/toys-age-1/["\']?\s+data-nav=["\']?breadcrumb-age["\']?\s+'
+        r'data-age-hub=["\']?age-1', html
+    )
+    assert "1歳のおもちゃ" in html
+    items = _breadcrumb_schema(html)["itemListElement"]
+    assert [(i["position"], i["name"], i["item"]) for i in items] == [
+        (1, "1歳のおもちゃ", "https://navi.omcha.jp/toys-age-1/"),
+        (2, "Vanplay モンテッソーリ 知育玩具の最安値・対象年齢を横断比較！1歳からの指先訓練に",
+         "https://navi.omcha.jp/products/b0f99n8ctd/"),
+    ]
+
+
+def test_age_four_five_breadcrumb_uses_combined_hub_name(hugo_build_dir):
+    html = _html(hugo_build_dir, "products/b0f1tqblld")
+    assert re.search(r'data-nav=["\']?breadcrumb-age["\']?\s+data-age-hub=["\']?age-4', html)
+    assert "4歳・5歳のおもちゃ" in html
+    first = _breadcrumb_schema(html)["itemListElement"][0]
+    assert first["position"] == 1
+    assert first["name"] == "4歳・5歳のおもちゃ"
+    assert first["item"] == "https://navi.omcha.jp/toys-age-4/"
+
+
+def test_article_without_age_keeps_section_breadcrumb(hugo_build_dir):
+    html = _html(hugo_build_dir, "products/b008dc0gss")
+    assert 'data-nav="breadcrumb-age"' not in html
+    assert "📚 記事一覧" in html
+    items = _breadcrumb_schema(html)["itemListElement"]
+    assert items[0] == {
+        "@type": "ListItem", "position": 1, "name": "📚 記事一覧",
+        "item": "https://navi.omcha.jp/posts/",
+    }
+    assert items[1]["position"] == 2
+
+
+@pytest.mark.parametrize("path", ["toys-age-1", "ranking"])
+def test_non_article_breadcrumb_schema_remains_section_based(hugo_build_dir, path):
+    html = _html(hugo_build_dir, path)
+    items = _breadcrumb_schema(html)["itemListElement"]
+    assert len(items) == 1
+    assert items[0]["position"] == 1
+    assert f"https://navi.omcha.jp/{path}/" == items[0]["item"]
 
 
 def test_indexed_product_page_has_max_image_preview(hugo_build_dir):

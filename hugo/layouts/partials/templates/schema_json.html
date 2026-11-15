@@ -33,6 +33,31 @@
 </script>
 {{- else if (or .IsPage .IsSection) }}
 {{/* BreadcrumbList */}}
+{{- $age_hubs := partial "age_hub_breadcrumb_data.html" . -}}
+{{- $age_hub := dict -}}
+{{- with .Params.age_hub }}{{ $age_hub = index $age_hubs . }}{{ end -}}
+{{- if and .IsPage (eq .Section "posts") .Params.age_hub $age_hub }}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": {{ $age_hub.name }},
+      "item": {{ $age_hub.url | absURL }}
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": {{ .Name }},
+      "item": {{ .Permalink | safeHTML }}
+    }
+  ]
+}
+</script>
+{{- else }}
 {{- $url := replace .Parent.Permalink ( printf "%s" site.Home.Permalink) "" }}
 {{- $lang_url := strings.TrimPrefix ( printf "%s/" .Lang) $url }}
 {{- $bc_list := (split $lang_url "/")}}
@@ -70,6 +95,7 @@
   ]
 }
 </script>
+{{- end }}
 {{- if .IsPage }}
 {{- if .PublishDate.IsZero }}
 {{/* date を持たない leaf ページ (feature/ranking/compare/diagnosis/favorites/search 等):

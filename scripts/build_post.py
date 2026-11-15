@@ -3866,6 +3866,12 @@ def _frontmatter_meta(
         "description": description,
         "keywords": data.get("keywords", []),
     }
+    age_months = build_category_hubs.age_min_months_from_article(data)
+    if age_months is not None:
+        age_hub = next((key for key, bucket in build_category_hubs.AGE_HUBS.items()
+                        if bucket["min_months"] <= age_months < bucket["max_months"]), None)
+        if age_hub:
+            meta["age_hub"] = age_hub
     # #5083 項目2: SERP に出る <title> だけを詰める。`title` は <h1> と一覧の
     # アンカーにも使われる読者向けの文字列なので触らない。組み上がりが現行より
     # **短くなるページにだけ** front matter を出す (根拠は scripts/seo_title.py)。
