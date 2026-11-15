@@ -43,12 +43,14 @@ try:
     import market_prices
     import source_sites
     from filter_raw_per_asin import exclude_title_only
+    from source_rules import DEFAULT_NON_SALES_SITES, required_non_sales_sites
 except ImportError:  # スクリプトを scripts/ 外から呼ぶ場合のフォールバック
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
     import brand_normalizer  # type: ignore
     import market_prices  # type: ignore
     import source_sites  # type: ignore
     from filter_raw_per_asin import exclude_title_only  # type: ignore
+    from scripts.source_rules import DEFAULT_NON_SALES_SITES, required_non_sales_sites  # type: ignore
 
 RAW_DIR = pathlib.Path("data/raw")
 PER_ASIN_DIR = RAW_DIR / "per_asin"
@@ -83,7 +85,7 @@ _THIRD_PARTY_CAP = 3
 # なぜ 2 か: band=="zero" が主張しているのは「v5 §6.5.1 の非販売ソース 2 件を
 # 満たす材料が per_asin に無い」であって「情報が少ない」ではない。閾値を 2 に
 # 揃えることで、band の意味と実際のゲート条件が一致する。
-_THIRD_PARTY_MIN_HOSTS = 2
+_THIRD_PARTY_MIN_HOSTS = DEFAULT_NON_SALES_SITES
 
 # band 判定。evidence = news/youtube/books の合算点 (商品そのものの第三者材料)。
 # zero  : 商品固有の第三者材料が皆無 (evidence==0) かつ tier が D/unknown かつ
@@ -471,7 +473,7 @@ def score_asin(asin: str, base: pathlib.Path = PER_ASIN_DIR) -> dict:
     # あっても先に本流の収集を回すべきで、defer 対象ではない (enrich 待ち) のは同じ。
     if not evidence_fetched and evidence == 0:
         band = "unfetched"  # fetch 未実行 → enrich すべき。defer 対象ではない
-    elif evidence == 0 and tier == "D" and tp_sites + prior_extra < _THIRD_PARTY_MIN_HOSTS:
+    elif evidence == 0 and tier == "D" and tp_sites + prior_extra < required_non_sales_sites(asin):
         band = "zero"  # fetch 済みで真ゼロ かつ フォールバックも事前収集も弱い → defer
     elif evidence <= _THIN_EVIDENCE_CEILING:
         band = "thin"
@@ -550,7 +552,7 @@ def awaiting_sources(result: dict) -> bool:
     """
     if result.get("band") not in ("thin", "unfetched"):
         return False
-    return non_sales_material({**result, "prior_article_sites": 0}) < _THIRD_PARTY_MIN_HOSTS
+    return non_sales_material({**result, "prior_article_sites": 0}) < required_non_sales_sites(result.get("asin"))
 
 
 def should_defer(result: dict) -> bool:

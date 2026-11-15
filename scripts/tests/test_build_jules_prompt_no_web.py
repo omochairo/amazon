@@ -86,7 +86,9 @@ def test_sources_note_does_not_fetch_when_excerpts_given(repo, monkeypatch):
     bjp._sources_note(ASIN, no_web=True, excerpts=excerpts())
 
 
-def test_sources_note_legacy_wording_unchanged(repo):
+def test_sources_note_legacy_wording_unchanged(repo, monkeypatch):
+    # 新発売でない品 (必要な非販売のサイト数 2) の文面は変わらない
+    monkeypatch.setattr(bjp, "required_non_sales_sites", lambda asin: 2)
     note = bjp._sources_note(ASIN)
     assert ("1. 非販売 (第三者) の出典を、別々のサイトから 2 件以上確保する。まず下の候補を"
             "閲覧ツールで開き、対象商品について書かれているものを採用する。足りなければ検索で探す。") in note
@@ -140,3 +142,12 @@ def test_shop_and_price_list_hosts_are_not_third_party():
     assert sc.host_kind("www.saiyasune.com") == "retail"
     assert sc.host_kind("www.amazon.jp") == "retail"
     assert sc.host_kind("kinarino.jp") == "third_party"
+
+
+def test_sources_note_new_product_reads_one_site(repo):
+    # ASIN が B0G 以降 (このテストの ASIN は B0T…) は新発売: 1 サイトで足りる・読み替えの指示・作らない口コミ
+    note = bjp._sources_note(ASIN)
+    assert "別々のサイトで 1 件以上)】" in note
+    assert "1 未満なら 1 に戻って足す" in note
+    assert "「1 サイト (1 件以上)」と読み替えて" in note
+    assert "出典に無い口コミは作らないでください" in note

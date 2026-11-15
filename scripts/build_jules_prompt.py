@@ -45,6 +45,10 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from source_rules import required_non_sales_sites
+except ModuleNotFoundError:  # package 形式
+    from scripts.source_rules import required_non_sales_sites
 
 from filter_raw_per_asin import exclude_title_only  # noqa: E402
 
@@ -568,19 +572,28 @@ def _sources_note(asin, fetch_excerpts=False, fetch=None, no_web=False, excerpts
             out.append(extra)
         return out
 
+    required = required_non_sales_sites(asin)
+    new_note = ("※この商品は新発売のため、業務規定・テンプレート・本プロンプトで「非販売の出典 2 サイト (2 件以上)」とある箇所は、"
+                "すべて「1 サイト (1 件以上)」と読み替えてください。"
+                "発売まもない商品で第三者のレビューが少ないため、非販売の出典は 1 サイト (メーカー公式でも可) で足ります。"
+                "口コミ (review_signals) は、出典に実際にある第三者の声だけ書いてください。"
+                "無ければ review_signals は空でよく、本文に『発売まもなく口コミはまだ少ない』と書いてください。"
+                "出典に無い口コミは作らないでください。書いた要素の supporting_source_ids は実在する非販売の出典を指してください。") if required == 1 else ""
     if no_web:
         first = ("1. 非販売 (第三者) の出典は、下の候補のうち「抜粋」が付いたもの (システムが本文を"
                  "取得して商品名・型番の語を確かめたもの) からだけ選ぶ。あなたは Web 検索・URL 閲覧を"
                  "使えない。「参考」「システムからは開けなかった」「リンク切れ」「語が見つからなかった」の"
                  "候補と、このプロンプトに無い URL は sources に載せない (載っていたら記事は公開されない)。")
     else:
-        first = ("1. 非販売 (第三者) の出典を、別々のサイトから 2 件以上確保する。まず下の候補を"
+        first = (f"1. 非販売 (第三者) の出典を、別々のサイトから {required} 件以上確保する。まず下の候補を"
                  "閲覧ツールで開き、対象商品について書かれているものを採用する。足りなければ検索で探す。")
     blocks = [
         "【sources の組み立て (品質ゲート sources_v5: 本文から参照された非販売の出典が、"
-        "別々のサイトで 2 件以上)】",
+        f"別々のサイトで {required} 件以上)】",
         first,
     ]
+    if new_note:
+        blocks.append(new_note)
     if excerpts and no_web:
         blocks.append(
             "   **「抜粋」が付いた候補は、システムが本文を取得して商品名・型番の語を確かめたもの。**"
@@ -624,7 +637,7 @@ def _sources_note(asin, fetch_excerpts=False, fetch=None, no_web=False, excerpts
             "いない URL・架空の URL・別の商品のページで埋めない。")
     else:
         blocks.append(
-            "5. 保存する前に、参照された非販売の出典のサイト数を数える。2 未満なら 1 に戻って足す。"
+            f"5. 保存する前に、参照された非販売の出典のサイト数を数える。{required} 未満なら 1 に戻って足す。"
             "件数を埋めるための出典・架空の URL・別の商品のページは引き続き禁止。")
     return "\n".join(blocks)
 
@@ -787,6 +800,11 @@ product.name の通称ルール (最大 40 字) と機械検査項目は、下�
         prompt += f"--- per_asin/{name} ---\n{_jdump(data)}\n"
     if no_web:
         prompt = _swap_sources_rules_for_no_web(prompt)
+    # navi-brain#165 (K の決定): 新発売の品は非販売の出典 1 サイトで足りる。本文の決まり文句の
+    # 「2 サイト」「2 件以上必須」を、品質ゲートと同じ値 (source_rules) に揃える。
+    if required_non_sales_sites(asin) == 1:
+        prompt = (prompt.replace("非販売の 2 サイト", "非販売の 1 サイト")
+                  .replace("別々のサイトで 2 件以上必須", "別々のサイトで 1 件以上必須 (新発売のため)"))
     return prompt
 
 

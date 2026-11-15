@@ -14,7 +14,7 @@ from quality_gate import SOURCES_REF_ENFORCE_FROM, check_sources_v5  # noqa: E40
 import source_sites  # noqa: E402
 
 # 施行日以降の slug (新条件だけで判定される)
-NEW_SLUG = f"{SOURCES_REF_ENFORCE_FROM}-B0TEST0001"
+NEW_SLUG = f"{SOURCES_REF_ENFORCE_FROM}-B0FTEST0001"
 # 施行日より前の slug (旧条件でも合格できる)
 OLD_SLUG = "2026-09-26-B0TEST0001"
 
@@ -38,6 +38,17 @@ def test_absent_sources_fails_for_new_article():
     r = check_sources_v5({"date": "2026-09-26"})
     assert r.passed is False
     assert "field 無し" in r.message
+
+
+def test_new_product_one_site_passes_and_old_requires_two():
+    srcs = [_src(1, "one.example.org")]
+    modern = _article(srcs, claim_ids=["s1"], slug=f"{SOURCES_REF_ENFORCE_FROM}-B0GTEST001")
+    old_asin = _article(srcs, claim_ids=["s1"], slug=f"{SOURCES_REF_ENFORCE_FROM}-B0FTEST0001")
+    assert check_sources_v5(modern).passed is True
+    assert "新発売" in check_sources_v5(modern).message
+    assert check_sources_v5(old_asin).passed is False
+    both = [_src(1, "one.example.org"), _src(2, "two.example.com")]
+    assert check_sources_v5(_article(both, claim_ids=["s1", "s2"], slug=f"{SOURCES_REF_ENFORCE_FROM}-B0FTEST0001")).passed
 
 
 def test_absent_sources_skipped_for_legacy_article():
