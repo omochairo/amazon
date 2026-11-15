@@ -590,7 +590,8 @@ def process(env, ledger, locks, args, state_dir, run_dir, origin, today, stats, 
     asin = origin["asin"]
     stats["prechecked"] += 1
     cand, excerpts, citable, sites = precheck(asin, env.fetch)
-    if len(sites) < 2:
+    from source_rules import required_non_sales_sites
+    if len(sites) < required_non_sales_sites(asin):
         stats["skip_sources"] += 1
         ledger.add("skip_sources", asin=asin, sites=len(sites), n_citable=len(citable),
                    n_candidates=len(excerpts))

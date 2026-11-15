@@ -290,6 +290,10 @@ def test_sources_note_without_candidates_still_gives_amazon(tmp_path, monkeypatc
     note = build_jules_prompt._sources_note("B0FNM4Y35G")
     assert "https://www.amazon.co.jp/dp/B0FNM4Y35G/" in note
     assert "第三者の候補" not in note
+    new_note = build_jules_prompt._sources_note("B0GABCDEF1")
+    assert "発売まもなく口コミはまだ少ない" in new_note
+    assert "別々のサイトで 1 件以上" in new_note
+    assert "発売まもなく口コミはまだ少ない" not in note
 
 
 def test_sources_note_lists_prior_article_sources(tmp_path, monkeypatch):

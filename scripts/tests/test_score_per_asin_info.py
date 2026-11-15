@@ -20,6 +20,17 @@ if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
 import score_per_asin_info as S  # noqa: E402
+from source_rules import is_new_product
+
+
+def test_new_product_asin_boundary():
+    assert not is_new_product("B0FABCDEF1")
+    assert is_new_product("B0GABCDEF1")
+    assert is_new_product("B0HABCDEF1")
+    assert is_new_product("b0GABCDEF1")
+    assert not is_new_product("BZZABCDEF1")
+    assert not is_new_product("B0G")
+    assert not is_new_product("")
 
 
 def _write(d: pathlib.Path, name: str, obj) -> None:
@@ -247,8 +258,8 @@ class ShouldDeferTest(unittest.TestCase):
         self.assertTrue(S.should_defer(r))
 
     def test_unfetched_with_one_host_is_deferred(self):
-        self._mk_unfetched("B0SD000002", [{"url": "https://note.com/a/n/1", "host": "note.com"}])
-        self.assertTrue(S.should_defer(S.score_asin("B0SD000002", self.base)))
+        self._mk_unfetched("B0F0000002", [{"url": "https://note.com/a/n/1", "host": "note.com"}])
+        self.assertTrue(S.should_defer(S.score_asin("B0F0000002", self.base)))
 
     def test_unfetched_with_two_sites_is_picked(self):
         # navi-brain#92: 合計 5 件の見込みは見ない。非販売 2 サイトで生成に回す
@@ -276,11 +287,11 @@ class ShouldDeferTest(unittest.TestCase):
         self.assertEqual(S.non_sales_material(r), 2)
 
     def test_one_site_with_two_hosts_waits(self):
-        self._mk_unfetched("B0SD000010", [
+        self._mk_unfetched("B0F0000010", [
             {"url": "https://toy.bandai.co.jp/x", "host": "toy.bandai.co.jp"},
             {"url": "https://www.bandai.co.jp/y", "host": "bandai.co.jp"},
         ])
-        r = S.score_asin("B0SD000010", self.base)
+        r = S.score_asin("B0F0000010", self.base)
         self.assertEqual(r["third_party_sites"], 1)
         self.assertTrue(S.should_defer(r))
 
@@ -406,6 +417,7 @@ class ShouldDeferTest(unittest.TestCase):
         self.assertTrue(S.should_defer({"band": "thin", "third_party_hosts": 0}))
         self.assertTrue(S.should_defer({"band": "thin", "third_party_hosts": 1}))
         self.assertFalse(S.should_defer({"band": "thin", "third_party_hosts": 2}))
+        self.assertFalse(S.awaiting_sources({"band": "thin", "third_party_hosts": 1, "asin": "B0GABCDEF1"}))
         self.assertFalse(S.should_defer(
             {"band": "thin", "third_party_hosts": 1, "news_sources": 1}))
         # navi-brain#92: news は Google ニュースの転送 URL (news.google.com) で出典に入り、

@@ -83,7 +83,8 @@ _THIRD_PARTY_CAP = 3
 # なぜ 2 か: band=="zero" が主張しているのは「v5 §6.5.1 の非販売ソース 2 件を
 # 満たす材料が per_asin に無い」であって「情報が少ない」ではない。閾値を 2 に
 # 揃えることで、band の意味と実際のゲート条件が一致する。
-_THIRD_PARTY_MIN_HOSTS = 2
+from source_rules import DEFAULT_NON_SALES_SITES, required_non_sales_sites
+_THIRD_PARTY_MIN_HOSTS = DEFAULT_NON_SALES_SITES
 
 # band 判定。evidence = news/youtube/books の合算点 (商品そのものの第三者材料)。
 # zero  : 商品固有の第三者材料が皆無 (evidence==0) かつ tier が D/unknown かつ
@@ -550,7 +551,7 @@ def awaiting_sources(result: dict) -> bool:
     """
     if result.get("band") not in ("thin", "unfetched"):
         return False
-    return non_sales_material({**result, "prior_article_sites": 0}) < _THIRD_PARTY_MIN_HOSTS
+    return non_sales_material({**result, "prior_article_sites": 0}) < required_non_sales_sites(result.get("asin"))
 
 
 def should_defer(result: dict) -> bool:

@@ -1205,7 +1205,8 @@ SOURCES_REF_ENFORCE_FROM = "2026-10-12"
 _SOURCE_REF_REVIEW_KEYS = ("high_points", "use_scenes", "concerns", "segment_voices")
 
 # 非販売の出典に要るサイト数。
-_SOURCES_MIN_NON_SALES_SITES = 2
+from source_rules import DEFAULT_NON_SALES_SITES, required_non_sales_sites
+_SOURCES_MIN_NON_SALES_SITES = DEFAULT_NON_SALES_SITES
 
 
 def _referenced_source_ids(data: dict) -> set[str]:
@@ -1306,10 +1307,16 @@ def check_sources_v5(data: dict) -> CheckResult:
         )
 
     sites = _referenced_non_sales_sites(valid, data)
-    if len(sites) >= _SOURCES_MIN_NON_SALES_SITES:
+    asin = (data.get("product") or {}).get("asin") if isinstance(data.get("product"), dict) else None
+    if not asin:
+        slug = data.get("slug") or ""
+        asin = slug.rsplit("-", 1)[-1] if isinstance(slug, str) else None
+    required = required_non_sales_sites(asin)
+    if len(sites) >= required:
+        detail = "新発売のため 1 サイトで可。" if required == 1 else ""
         return CheckResult(
             "sources_v5", True, 1.0,
-            f"OK (参照された非販売 {len(sites)} サイト: {', '.join(sites[:5])})",
+            f"OK ({detail}参照された非販売 {len(sites)} サイト: {', '.join(sites[:5])})",
         )
     if not _enforced_from(data, SOURCES_REF_ENFORCE_FROM) and _legacy_count_ok(valid):
         return CheckResult(
@@ -1321,7 +1328,7 @@ def check_sources_v5(data: dict) -> CheckResult:
     return CheckResult(
         "sources_v5", False, 0.0,
         f"本文 (claims / review_signals の supporting_source_ids) から参照された非販売の出典が "
-        f"{len(sites)} サイト ({shown})。別々のサイトで {_SOURCES_MIN_NON_SALES_SITES} 件以上必須 "
+        f"{len(sites)} サイト ({shown})。別々のサイトで {required} 件以上必須 "
         f"(v5 §6.5.1。サイトはドメイン単位・SNS は合わせて 1・販売ページと通販サイトは数えない)",
     )
 

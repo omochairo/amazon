@@ -45,6 +45,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from source_rules import required_non_sales_sites
 
 from filter_raw_per_asin import exclude_title_only  # noqa: E402
 
@@ -568,19 +569,25 @@ def _sources_note(asin, fetch_excerpts=False, fetch=None, no_web=False, excerpts
             out.append(extra)
         return out
 
+    required = required_non_sales_sites(asin)
+    new_note = ("発売まもない商品で第三者のレビューが少ないため、非販売の出典は 1 サイト (メーカー公式でも可) で足ります。"
+                "口コミ・利用者の声 (review_signals など) は出典に実際にあるものだけ書き、無ければ『発売まもなく口コミはまだ少ない』と書いてください。"
+                "出典に無い口コミは作らないでください。") if required == 1 else ""
     if no_web:
         first = ("1. 非販売 (第三者) の出典は、下の候補のうち「抜粋」が付いたもの (システムが本文を"
                  "取得して商品名・型番の語を確かめたもの) からだけ選ぶ。あなたは Web 検索・URL 閲覧を"
                  "使えない。「参考」「システムからは開けなかった」「リンク切れ」「語が見つからなかった」の"
                  "候補と、このプロンプトに無い URL は sources に載せない (載っていたら記事は公開されない)。")
     else:
-        first = ("1. 非販売 (第三者) の出典を、別々のサイトから 2 件以上確保する。まず下の候補を"
+        first = (f"1. 非販売 (第三者) の出典を、別々のサイトから {required} 件以上確保する。まず下の候補を"
                  "閲覧ツールで開き、対象商品について書かれているものを採用する。足りなければ検索で探す。")
     blocks = [
         "【sources の組み立て (品質ゲート sources_v5: 本文から参照された非販売の出典が、"
-        "別々のサイトで 2 件以上)】",
+        f"別々のサイトで {required} 件以上)】",
         first,
     ]
+    if new_note:
+        blocks.append(new_note)
     if excerpts and no_web:
         blocks.append(
             "   **「抜粋」が付いた候補は、システムが本文を取得して商品名・型番の語を確かめたもの。**"
