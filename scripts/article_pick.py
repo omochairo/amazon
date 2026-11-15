@@ -37,6 +37,8 @@ import random
 import re
 import sys
 
+import candidate_priority
+
 ASIN_RE = re.compile(r"^B0[A-Z0-9]{8}$")
 
 
@@ -116,7 +118,9 @@ def _exclusion_filter(blocked, genre_flagged):
 def select_candidates(items, existing, ranking_pool, first_party_all,
                       rewrite_candidates, seed, scorer=None,
                       first_party_cap: int = 2, rewrite_cap: int = 2,
-                      has_amazon_item=None, genre_flagged=None, blocked=None) -> list:
+                      has_amazon_item=None, genre_flagged=None, blocked=None,
+                      recent_character_counts=None, character_terms_path=None,
+                      existing_class_counts=None, has_browse_nodes=True) -> list:
     """候補を優先順に並べ、``{"asin", "pool", "source_keyword"}`` のリストで返す。
 
     items: amazon.json の items[]。existing: 除外する ASIN (既存記事・open PR/MR・lock)。
@@ -206,6 +210,59 @@ def select_candidates(items, existing, ranking_pool, first_party_all,
     rng = random.Random(seed)
     rng.shuffle(remaining_ranking)
     rng.shuffle(remaining_kw)
+    # keyword 枠のみ優先スコア順。同点は上の seed shuffle 順を保つ。
+    remaining_kw = list(dict.fromkeys(remaining_kw))  # 同じ ASIN が重複していても 1 件に
+    _zero = (0, {"asin_prefix": 0, "character": 0, "origin_demand": 0,
+                 "brand_tier": 0, "price": 0, "similarity": 0}, None)
+    priority = {}
+    try:
+        terms = candidate_priority.load_character_terms(
+            character_terms_path or candidate_priority.DEFAULT_CHARACTER_PATH)
+        terms_file_exists = os.path.isfile(character_terms_path or candidate_priority.DEFAULT_CHARACTER_PATH)
+        class_counts = existing_class_counts or {}
+        by_asin = {i.get("asin"): i for i in items if isinstance(i, dict)}
+        for a in remaining_kw:
+            priority[a] = (candidate_priority.score_candidate(
+                by_asin.get(a) or {}, existing_class_counts=class_counts, character_terms=terms,
+                has_browse_nodes=has_browse_nodes) if terms_file_exists else _zero)
+    except Exception as e:  # 点数の計算の失敗で pick を止めない (今までどおりの無作為の順に戻す)
+        _warn(f"candidate priority skipped, keeping seeded order: {e}")
+        priority = {a: _zero for a in remaining_kw}
+    remaining_kw.sort(key=lambda a: -priority[a][0])
+    # supply-random の類似品は最大1件、同一キャラクターは最大1件に制限。
+    # 直近7日の既選出が3件以上あるキャラクターも今回の候補から除外する。
+    try:
+        recent = (recent_character_counts if recent_character_counts is not None
+                  else candidate_priority.load_recent_character_counts())
+    except Exception as e:  # 記録が読めなくても pick を止めない (直近 7 日の上限だけ掛けない)
+        _warn(f"recent character counts skipped: {e}")
+        recent = {}
+    selected_chars, similar_kept, capped, cap_examples = set(), False, [], []
+    similar_excluded, character_excluded = [], []
+    for a in remaining_kw:
+        score, breakdown, char = priority[a]
+        if char and recent.get(char, 0) >= 3:
+            character_excluded.append(a)
+            continue
+        if char and char in selected_chars:
+            character_excluded.append(a)
+            continue
+        if breakdown["similarity"] and similar_kept:
+            similar_excluded.append(a)
+            continue
+        capped.append(a)
+        if char:
+            selected_chars.add(char)
+        if breakdown["similarity"]:
+            similar_kept = True
+    # 上限に掛かった候補は捨てずに後ろへ回す (点数順のまま)。出典待ちの defer で
+    # 前の候補が減ったときに、1 日の本数が落ちないようにするため。
+    demoted = [a for a in remaining_kw if a in set(similar_excluded) | set(character_excluded)]
+    remaining_kw = capped + demoted
+    if similar_excluded or character_excluded:
+        print(f"priority caps demoted: total={len(similar_excluded) + len(character_excluded)} "
+              f"similar={len(similar_excluded)} e.g. {similar_excluded[:5]} "
+              f"character={len(character_excluded)} e.g. {character_excluded[:5]}")
     remaining = first_party_pool + remaining_ranking + rewrite_first + [
         a for a in remaining_kw if a not in rewrite_first
     ]
@@ -243,17 +300,22 @@ def select_candidates(items, existing, ranking_pool, first_party_all,
                  if isinstance(i, dict) and isinstance(i.get("asin"), str)}
 
     def origin_for(a):
+        empty_priority = {"priority_score": None, "priority_breakdown": None,
+                          "character": None}
         if a in first_party_set:
-            return {"asin": a, "pool": "first-party", "source_keyword": None}
+            return {"asin": a, "pool": "first-party", "source_keyword": None, **empty_priority}
         if a in ranking_set:
-            return {"asin": a, "pool": "ranking-sniper", "source_keyword": None}
+            return {"asin": a, "pool": "ranking-sniper", "source_keyword": None, **empty_priority}
         if a in rewrite_set:
-            return {"asin": a, "pool": "rewrite-queue", "source_keyword": None}
+            return {"asin": a, "pool": "rewrite-queue", "source_keyword": None, **empty_priority}
         meta = asin_meta.get(a) or {}
         lane = meta.get("lane")
         if lane in ("demand", "supply-random"):
-            return {"asin": a, "pool": lane, "source_keyword": meta.get("source_keyword")}
-        return {"asin": a, "pool": "", "source_keyword": None}
+            score, breakdown, character = priority.get(a, (0, {}, None))
+            return {"asin": a, "pool": lane, "source_keyword": meta.get("source_keyword"),
+                    "priority_score": score, "priority_breakdown": breakdown,
+                    "character": character}
+        return {"asin": a, "pool": "", "source_keyword": None, **empty_priority}
 
     return [origin_for(a) for a in remaining]
 
@@ -434,6 +496,11 @@ def pick_from_repo(existing, seed) -> list:
     with open("data/raw/amazon.json", encoding="utf-8") as f:
         items = json.load(f).get("items", [])
     try:
+        existing_class_counts = candidate_priority.existing_browse_counts(items, set(existing))
+    except Exception as e:  # 集計の失敗で pick を止めない
+        _warn(f"existing browse counts skipped: {e}")
+        existing_class_counts = {}
+    try:
         import rewrite_queue as rq
         rewrite_candidates = rq.pending_rewrite_candidates("data/articles")
     except Exception as e:
@@ -468,4 +535,7 @@ def pick_from_repo(existing, seed) -> list:
         has_amazon_item=has_amazon_item,
         genre_flagged=genre_flagged,
         blocked=load_blocklist(),
+        recent_character_counts=candidate_priority.load_recent_character_counts(),
+        existing_class_counts=existing_class_counts,
+        has_browse_nodes=any(isinstance(i, dict) and "browse_nodes" in i for i in items),
     )

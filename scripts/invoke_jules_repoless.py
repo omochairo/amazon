@@ -372,7 +372,10 @@ def record_origin_ledger(origins, path="data/analytics/asin_origin.jsonl"):
         ts = rao.now_iso()
         records = [rao.make_record(ts=ts, run_id=run_id, workflow="invoke-jules-repoless",
                                    asin=o["asin"], pool=o["pool"],
-                                   source_keyword=o.get("source_keyword"))
+                                   source_keyword=o.get("source_keyword"),
+                                   priority_score=o.get("priority_score"),
+                                   priority_breakdown=o.get("priority_breakdown"),
+                                   character=o.get("character"))
                    for o in origins]
         if rao.append_records(path, records) == 0:
             print("no new origin record; nothing to commit")

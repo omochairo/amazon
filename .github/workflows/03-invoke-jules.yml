@@ -210,7 +210,6 @@ jobs:
             [ "$ACQUIRED" -ge "$MAX_LOCKS" ] && break
             asin=$(jq -r '.asin' <<< "$line")
             pool=$(jq -r '.pool // ""' <<< "$line")
-            source_keyword=$(jq -r '.source_keyword // ""' <<< "$line")
             [ -z "$asin" ] && continue
             TS=$(date -u +%FT%TZ)
             COMMIT=$(jq -n --arg msg "jules-lock $asin" --arg tree "$MAIN_TREE" --arg parent "$MAIN_SHA" --arg ts "$TS" \
@@ -224,9 +223,10 @@ jobs:
               # #4964: pool が空 = 出自不明 (手動 ASIN 指定 / 旧 amazon.json)。
               # 事実を捏造しないので台帳には書かない。
               if [ -n "$pool" ]; then
-                jq -cn --arg asin "$asin" --arg pool "$pool" --arg kw "$source_keyword" \
-                  '{asin: $asin, pool: $pool, source_keyword: (if $kw == "" then null else $kw end)}' \
-                  >> /tmp/picked_origin.jsonl
+                # 入力は必ずこの行から読む (渡さないと jq がループの stdin = shuffled.jsonl の
+                # 残りを吸い込み、台帳が化けたうえにロック取得のループも途中で終わる)
+                jq -c '{asin, pool, source_keyword, priority_score, priority_breakdown, character}' \
+                  <<< "$line" >> /tmp/picked_origin.jsonl
               fi
               ACQUIRED=$((ACQUIRED + 1))
             else
