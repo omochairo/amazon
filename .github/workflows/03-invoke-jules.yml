@@ -319,9 +319,17 @@ jobs:
             GSC_FALLBACK=$(echo "$GSC_JSON" | jq -r '.fallback // true')
             if [ "$GSC_FALLBACK" = "false" ]; then
               GSC_LINES=$(echo "$GSC_JSON" | jq -r '.queries[] | "- 「\(.query)」 (表示 \(.impressions) 回 / 平均掲載順位 \(.position))"')
+              # #165 T16: 書き直し (この ASIN の記事が既にある) では、サイトは元の title と
+              # 商品名で表示する。title の書き換えを促さず、本文・FAQ・meta_description で答えさせる
+              # (build_jules_prompt.GSC_TITLE_LINE_REWRITE と同じ文面)。新規記事の文面は変えない。
+              if compgen -G "data/articles/????-??-??-${TARGET_ASIN}.json" > /dev/null; then
+                GSC_TITLE_LINE="- これは読者が実際に検索窓に打った語です。この記事は書き直しで、サイトでは元の title と商品名で表示されます。本文・FAQ・meta_description で、これらの検索語と足りない観点に答えてください"
+              else
+                GSC_TITLE_LINE="- これは読者が実際に検索窓に打った語です。title / meta_description の検索意図選定 (テンプレート §4 の意図差別化) では、このクエリ群を最優先のシグナルとして使ってください"
+              fi
               GSC_NOTE="【このページに実際に流入している検索クエリ (GSC 直近4週)】
             ${GSC_LINES}
-            - これは読者が実際に検索窓に打った語です。title / meta_description の検索意図選定 (テンプレート §4 の意図差別化) では、このクエリ群を最優先のシグナルとして使ってください
+            ${GSC_TITLE_LINE}
             - faq のうち最低 1 問は、上記クエリが示す疑問への直接回答にしてください (クエリの語をそのまま質問文に活かす)
             - クエリが示す疑問 (例: 「○○ 対象年齢」「○○ 違い」) に本文が答えていない場合、narrative の該当セクションで必ず回答してください"
             else

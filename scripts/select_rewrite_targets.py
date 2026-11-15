@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import datetime as _dt
 import glob
 import json
 import os
@@ -77,6 +78,83 @@ _SIDECAR_SUFFIXES = (".quality.json", ".enrichment.json", ".seo.json")
 
 # 書き直しの優先度 (navi-brain#92)。数字が小さいほど先。出典で優先しない記事は _TIER_REST
 _TIER_REST = 3
+
+# #165 T16: 検索に出ているページは自動の書き直しから外す。直近 PROTECT_WINDOW_DAYS 日の
+# 表示回数の合計が PROTECT_MIN_IMPRESSIONS 以上の商品ページ (しきい値はここ 1 か所)。
+# 書き直しは題・見出し・本文を丸ごと作り直すので、表示のあるページほど失うものが大きい。
+PROTECT_MIN_IMPRESSIONS = 200
+PROTECT_WINDOW_DAYS = 28
+GSC_BY_PAGE = "data/analytics/history/gsc_by_page.jsonl"
+_PRODUCT_PAGE_RE = re.compile(r"/products/(b0[a-z0-9]{8})/?(?:[?#]|$)", re.IGNORECASE)
+
+
+def page_impressions(path: str = GSC_BY_PAGE, days: int = PROTECT_WINDOW_DAYS) -> dict[str, int]:
+    """gsc_by_page.jsonl の直近 ``days`` 日を ASIN ごとに表示回数で合計する。
+
+    窓の右端は今日ではなくデータ側の最新日 (GSC は数日遅れて届き、日が欠けることもある。
+    fetch_third_party_sources._gsc_page_impressions と同じ数え方)。ファイルが無い・空・
+    壊れた行は数えない (空の dict を返し、選定を止めない)。
+    """
+    rows: list[tuple[str, str, int]] = []
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    r = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(r, dict) or not isinstance(r.get("date"), str):
+                    continue
+                try:
+                    parsed_date = _dt.date.fromisoformat(r["date"][:10])
+                except ValueError:
+                    continue
+                date_text = parsed_date.isoformat()
+                m = _PRODUCT_PAGE_RE.search(str(r.get("page") or ""))
+                if not m:
+                    continue
+                try:
+                    imp = int(r.get("impressions") or 0)
+                except (TypeError, ValueError):
+                    continue
+                rows.append((date_text, m.group(1).upper(), imp))
+    except OSError:
+        return {}
+    if not rows:
+        return {}
+    end = max(d for d, _, _ in rows)
+    try:
+        start = (_dt.date.fromisoformat(end) - _dt.timedelta(days=max(1, days) - 1)).isoformat()
+    except ValueError:
+        return {}
+    out: dict[str, int] = {}
+    for d, asin, imp in rows:
+        if start <= d <= end:
+            out[asin] = out.get(asin, 0) + imp
+    return out
+
+
+def split_protected(
+    candidates: Iterable[dict],
+    impressions: dict[str, int],
+    threshold: int = PROTECT_MIN_IMPRESSIONS,
+) -> tuple[list[dict], list[str]]:
+    """``(残す候補, 外した ASIN)`` を返す。外すのは表示回数が ``threshold`` 以上の ASIN。
+
+    並び順は変えない。外した ASIN は ``select`` の deferred と同じく捨てずに返し、
+    呼び出し側がログに出す。
+    """
+    kept: list[dict] = []
+    protected: list[str] = []
+    for c in candidates:
+        if impressions.get(c["asin"], 0) >= threshold:
+            protected.append(c["asin"])
+        else:
+            kept.append(c)
+    return kept, protected
 
 
 def _source_outlook(path: str, asin: str, date: str,
@@ -241,6 +319,11 @@ def main() -> int:
         default=rewrite_queue.QUEUE_DIR,
         help="#5490: 既に依頼済み (マーカーあり) の ASIN を選び直さないために読む。",
     )
+    ap.add_argument(
+        "--gsc-by-page",
+        default=GSC_BY_PAGE,
+        help="#165 T16: 検索の表示が多いページを外すために読む (無い・空なら外さない)。",
+    )
     args = ap.parse_args()
 
     # 生成前の判定 (score_asin) が前の記事を読むときも同じディレクトリを見る
@@ -257,7 +340,10 @@ def main() -> int:
     pending = set(load_markers(args.queue_dir))
     if pending:
         excluded = excluded | pending
-    picked, deferred = select(candidates, excluded, args.limit)
+    # #165 T16: 検索に出ているページは自動の書き直しから外す
+    impressions = page_impressions(args.gsc_by_page)
+    candidates_for_select, protected = split_protected(candidates, impressions)
+    picked, deferred = select(candidates_for_select, excluded, args.limit)
 
     body = "\n".join(c["asin"] for c in picked)
     if args.out:
@@ -270,7 +356,7 @@ def main() -> int:
     print(
         f"[select_rewrite_targets] candidates={len(candidates)} "
         f"excluded={len(excluded)} pending_markers={len(pending)} "
-        f"deferred={len(deferred)} "
+        f"deferred={len(deferred)} protected={len(protected)} "
         f"picked={len(picked)} limit={args.limit}",
         file=sys.stderr,
     )
@@ -280,6 +366,12 @@ def main() -> int:
     for c in picked:
         print(f"  -> {c['asin']} slug={c['slug']} ref_sites={c.get('ref_sites')} "
               f"tier={c.get('tier')}", file=sys.stderr)
+    if protected:
+        print(
+            f"  protected (直近 {PROTECT_WINDOW_DAYS} 日の検索の表示が {PROTECT_MIN_IMPRESSIONS} 回以上"
+            f"なので自動の書き直しから外す, #165 T16): {', '.join(protected)}",
+            file=sys.stderr,
+        )
     if deferred:
         # #5490: 黙って落とさない。ここに出続ける ASIN は「素材が無くてリライト
         # できない記事」であり、放置すると古いまま配信され続ける (対処は #5490 案B の
