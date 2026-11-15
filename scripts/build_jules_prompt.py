@@ -570,7 +570,9 @@ def _sources_note(asin, fetch_excerpts=False, fetch=None, no_web=False, excerpts
         return out
 
     required = required_non_sales_sites(asin)
-    new_note = ("発売まもない商品で第三者のレビューが少ないため、非販売の出典は 1 サイト (メーカー公式でも可) で足ります。"
+    new_note = ("※この商品は新発売のため、業務規定・テンプレート・本プロンプトで「非販売の出典 2 サイト (2 件以上)」とある箇所は、"
+                "すべて「1 サイト (1 件以上)」と読み替えてください。"
+                "発売まもない商品で第三者のレビューが少ないため、非販売の出典は 1 サイト (メーカー公式でも可) で足ります。"
                 "口コミ・利用者の声 (review_signals など) は出典に実際にあるものだけ書き、無ければ『発売まもなく口コミはまだ少ない』と書いてください。"
                 "出典に無い口コミは作らないでください。") if required == 1 else ""
     if no_web:
@@ -631,7 +633,7 @@ def _sources_note(asin, fetch_excerpts=False, fetch=None, no_web=False, excerpts
             "いない URL・架空の URL・別の商品のページで埋めない。")
     else:
         blocks.append(
-            "5. 保存する前に、参照された非販売の出典のサイト数を数える。2 未満なら 1 に戻って足す。"
+            f"5. 保存する前に、参照された非販売の出典のサイト数を数える。{required} 未満なら 1 に戻って足す。"
             "件数を埋めるための出典・架空の URL・別の商品のページは引き続き禁止。")
     return "\n".join(blocks)
 
@@ -794,6 +796,11 @@ product.name の通称ルール (最大 40 字) と機械検査項目は、下�
         prompt += f"--- per_asin/{name} ---\n{_jdump(data)}\n"
     if no_web:
         prompt = _swap_sources_rules_for_no_web(prompt)
+    # navi-brain#165 (K の決定): 新発売の品は非販売の出典 1 サイトで足りる。本文の決まり文句の
+    # 「2 サイト」「2 件以上必須」を、品質ゲートと同じ値 (source_rules) に揃える。
+    if required_non_sales_sites(asin) == 1:
+        prompt = (prompt.replace("非販売の 2 サイト", "非販売の 1 サイト")
+                  .replace("別々のサイトで 2 件以上必須", "別々のサイトで 1 件以上必須 (新発売のため)"))
     return prompt
 
 

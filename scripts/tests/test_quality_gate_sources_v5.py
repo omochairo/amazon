@@ -42,7 +42,7 @@ def test_absent_sources_fails_for_new_article():
 
 def test_new_product_one_site_passes_and_old_requires_two():
     srcs = [_src(1, "one.example.org")]
-    modern = _article(srcs, claim_ids=["s1"], slug=f"{SOURCES_REF_ENFORCE_FROM}-B0GTEST0001")
+    modern = _article(srcs, claim_ids=["s1"], slug=f"{SOURCES_REF_ENFORCE_FROM}-B0GTEST001")
     old_asin = _article(srcs, claim_ids=["s1"], slug=f"{SOURCES_REF_ENFORCE_FROM}-B0FTEST0001")
     assert check_sources_v5(modern).passed is True
     assert "新発売" in check_sources_v5(modern).message
