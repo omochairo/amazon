@@ -772,6 +772,8 @@ def _compare_entry(rec, age_min_months: int | None) -> dict[str, Any]:
         "asin": rec.asin,
         "name": rec.name,
         "url_internal": f"/products/{rec.asin.lower()}/",
+        # 表の中の小さな画像 (どの商品か一目で分かるように)。カードと同じ画像
+        "image": rec.image,
         "reason": rec.reason,
         # 表の年齢はカードと同じ値 (rec.age_min_months) を出す。無ければ hub の読み。
         "age_min_months": rec.age_min_months if rec.age_min_months is not None else age_min_months,

@@ -35,8 +35,9 @@
       <tr class="hub-compare-band"><th scope="rowgroup" colspan="3">予算 {{ .label }}</th></tr>
       {{- range .items }}
       {{- $age := index . "age_min_months" }}
+      {{- $url := .url_internal }}
       <tr>
-        <td class="hub-compare-name"><a href="{{ .url_internal }}">{{ .name }}</a>{{ with .reason }}<span class="hub-compare-reason">{{ . }}</span>{{ end }}</td>
+        <td class="hub-compare-name">{{ with .image }}<a class="hub-compare-thumb" href="{{ $url }}" aria-hidden="true" tabindex="-1"><img src="{{ . }}" alt="" loading="lazy" decoding="async" width="56" height="56"></a>{{ end }}<a href="{{ .url_internal }}">{{ .name }}</a>{{ with .reason }}<span class="hub-compare-reason">{{ . }}</span>{{ end }}</td>
         <td class="hub-compare-meta">
           {{- if ne (printf "%v" $age) "<nil>" }}<span class="hub-compare-age">{{ partial "age_label.html" (int $age) }}</span>{{ end }}
           {{- with .best_price }}<span class="hub-compare-price">¥{{ lang.FormatNumberCustom 0 . }}</span>{{ end }}

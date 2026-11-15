@@ -277,6 +277,8 @@ header .logo a {
 .hub-compare-table .hub-compare-reason { margin-top: .25rem; color: var(--secondary); font-size: .9em; }
 .hub-compare-table .hub-compare-shop { color: var(--secondary); font-size: .88em; white-space: nowrap; }
 .hub-compare-table .hub-compare-name a { font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.hub-compare-table .hub-compare-thumb { display: block; width: 56px; height: 56px; margin-bottom: .3rem; text-decoration: none; }
+.hub-compare-table .hub-compare-thumb img { width: 100%; height: 100%; object-fit: contain; background: #fff; border-radius: 6px; margin: 0; }
 .hub-compare-table .hub-compare-score { text-align: center; font-size: 1rem; }
 [data-theme="dark"] .hub-compare-table .hub-compare-band th { color: #e2e8f0; }
 @media (max-width: 420px) {
@@ -284,6 +286,7 @@ header .logo a {
   .post-content .hub-compare-table th,
   .post-content .hub-compare-table td { padding: 7px 5px; }
   .hub-compare-table .hub-compare-col-name { width: 45%; }
+  .hub-compare-table .hub-compare-thumb { width: 48px; height: 48px; }
   .hub-compare-table .hub-compare-col-meta { width: 37%; }
   .hub-compare-table .hub-compare-col-score { width: 18%; }
 }
