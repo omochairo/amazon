@@ -19,6 +19,11 @@
 <script defer src="{{ $affClick.RelPermalink }}" integrity="{{ $affClick.Data.Integrity }}" crossorigin="anonymous"></script>
 {{- end }}
 
+{{- $breadcrumbAgeClick := resources.Get "js/breadcrumb_age_click.js" | resources.Minify | resources.Fingerprint "sha256" }}
+{{- if $breadcrumbAgeClick }}
+<script defer src="{{ $breadcrumbAgeClick.RelPermalink }}" integrity="{{ $breadcrumbAgeClick.Data.Integrity }}" crossorigin="anonymous"></script>
+{{- end }}
+
 {{- /* #1367 最近見た商品 — 全ページで読み込み (商品ページで auto-push、home + post pages で render)。 */ -}}
 {{- $recent := resources.Get "js/recently_viewed.js" | resources.Minify | resources.Fingerprint "sha256" }}
 {{- if $recent }}
