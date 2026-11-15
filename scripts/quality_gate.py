@@ -93,6 +93,10 @@ try:
     import score_claims
 except ModuleNotFoundError:  # package 形式
     from scripts import score_claims  # type: ignore[no-redef]
+try:
+    from source_rules import is_new_product, required_non_sales_sites
+except ModuleNotFoundError:  # package 形式
+    from scripts.source_rules import is_new_product, required_non_sales_sites
 
 
 # 幼児口調・子ども向け演出は禁止（女性誌調をキープするため）。
@@ -1048,8 +1052,11 @@ def check_review_signals(data: dict) -> CheckResult:
     """
     if _is_legacy_article(data):
         return CheckResult("review_signals", True, 1.0, "legacy article (skipped)")
+    new_product = is_new_product(_article_asin(data))
     rs = data.get("review_signals")
     if rs is None:
+        if new_product:
+            return CheckResult("review_signals", True, 1.0, "新発売商品の口コミ情報なし")
         return _enforce_rs(data, ["review_signals 欠落 (§5.D 必須)"])
     if not isinstance(rs, dict):
         return _enforce_rs(data, ["review_signals が dict でない"])
@@ -1057,12 +1064,13 @@ def check_review_signals(data: dict) -> CheckResult:
     issues: list[str] = []
     lo, hi = _SUMMARY_ONE_LINE_RANGE
     summary = rs.get("summary_one_line")
-    if not isinstance(summary, str) or not (lo <= _count_chars(summary) <= hi):
+    if (not (new_product and summary is None)
+            and (not isinstance(summary, str) or not (lo <= _count_chars(summary) <= hi))):
         issues.append(f"summary_one_line が {lo}-{hi} 字でない")
     for key, (klo, khi) in _REVIEW_SIGNAL_RANGES.items():
         val = rs.get(key)
         n = len(val) if isinstance(val, list) else 0
-        if not (klo <= n <= khi):
+        if not ((new_product or n >= klo) and n <= khi):
             issues.append(f"{key} が {klo}-{khi} 件でない")
     missing = [
         key for key in _REVIEW_SIGNAL_RANGES
@@ -1071,7 +1079,27 @@ def check_review_signals(data: dict) -> CheckResult:
     ]
     if missing:
         issues.append(f"supporting_source_ids が空のエントリ: {sorted(set(missing))}")
+    if new_product:
+        srcs = data.get("sources")
+        src_by_id = {s.get("id"): s for s in srcs if isinstance(s, dict) and isinstance(s.get("id"), str)} if isinstance(srcs, list) else {}
+        for key in _REVIEW_SIGNAL_RANGES:
+            entries = rs.get(key)
+            for idx, entry in enumerate(entries if isinstance(entries, list) else []):
+                refs = entry.get("supporting_source_ids") if isinstance(entry, dict) else None
+                referenced = [src_by_id.get(ref) for ref in refs if isinstance(ref, str)] if isinstance(refs, list) else []
+                if not referenced or any(s is None for s in referenced) or not any(not _is_sales_source(s) for s in referenced if s):
+                    issues.append(f"{key}[{idx}] の supporting_source_ids は実在する非販売出典を含める必要があります")
     return _enforce_rs(data, issues)
+
+
+def _article_asin(data: dict) -> str | None:
+    """記事 ASIN の取得規則を各チェックで共有する。"""
+    product = data.get("product")
+    asin = product.get("asin") if isinstance(product, dict) else None
+    if not asin:
+        slug = data.get("slug") or ""
+        asin = slug.rsplit("-", 1)[-1] if isinstance(slug, str) else None
+    return asin
 
 
 def check_verdict_headline(data: dict) -> CheckResult:
@@ -1307,10 +1335,7 @@ def check_sources_v5(data: dict) -> CheckResult:
         )
 
     sites = _referenced_non_sales_sites(valid, data)
-    asin = (data.get("product") or {}).get("asin") if isinstance(data.get("product"), dict) else None
-    if not asin:
-        slug = data.get("slug") or ""
-        asin = slug.rsplit("-", 1)[-1] if isinstance(slug, str) else None
+    asin = _article_asin(data)
     required = required_non_sales_sites(asin)
     if len(sites) >= required:
         detail = "新発売のため 1 サイトで可。" if required == 1 else ""

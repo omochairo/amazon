@@ -65,7 +65,7 @@ def _review_signals(**over):
 
 def _art(date=RECENT, **over):
     d = {
-        "slug": "2026-08-14-B0XXXXXXXX",
+        "slug": "2026-08-14-B0FTEST0001",
         "date": date,
         "product": {"name": "テスト玩具"},
         "persona_fit": {"not_recommended_for": ["a", "b"]},
@@ -115,6 +115,37 @@ def test_review_signals_missing_field_fires():
 def test_review_signals_legacy_skipped():
     r = check_review_signals(_art(date=LEGACY, review_signals=None))
     assert r.passed and r.score == 1.0 and "legacy" in r.message
+
+
+def test_new_product_review_signals_may_be_empty_or_omitted():
+    for article in (_art(slug="2026-11-01-B0GTEST001", review_signals={}),
+                    _art(slug="2026-11-01-B0GTEST001", review_signals=None)):
+        r = check_review_signals(article)
+        assert r.passed and r.score == 1.0, r.message
+
+
+def test_new_product_review_signal_must_reference_real_non_sales_source():
+    base = _art(slug="2026-11-01-B0GTEST001", sources=[
+        {"id": "shop", "url": "https://www.amazon.co.jp/dp/B0GTEST001"},
+        {"id": "voice", "url": "https://example.org/review"},
+    ])
+    base["review_signals"] = {
+        "summary_one_line": "出典に実際に掲載された第三者の声を内容まで確認し、確認できた範囲を丁寧に整理しました。",
+        "high_points": [
+            {"text": "実際に確認された声です", "supporting_source_ids": ["shop"]},
+        ],
+    }
+    assert not check_review_signals(base).passed
+    base["review_signals"]["high_points"][0]["supporting_source_ids"] = ["missing"]
+    assert not check_review_signals(base).passed
+    base["review_signals"]["high_points"][0]["supporting_source_ids"] = ["voice"]
+    assert check_review_signals(base).passed
+
+
+def test_old_product_review_signal_counts_remain_required():
+    r = check_review_signals(_art(slug="2026-11-01-B0FTEST0001",
+                                  review_signals={"summary_one_line": "ギフト用途を中心にした説明です。"}))
+    assert not r.passed and "件でない" in r.message
 
 
 # --- verdict.headline (§5.E) ----------------------------------------------
@@ -214,7 +245,7 @@ def test_malformed_inputs_do_not_crash():
 
 def test_persona_fit_counts_is_hard_on_or_after_enforce_date():
     d = _art(persona_fit={"not_recommended_for": []})
-    d["slug"] = "2026-08-20-B0XXXXXXXX"
+    d["slug"] = "2026-08-20-B0FTEST0001"
     r = check_persona_fit_counts(d)
     assert not r.passed, "施行日以降は hard"
     assert r.score == V5_EXTENSION_SOFT_SCORE
@@ -222,14 +253,14 @@ def test_persona_fit_counts_is_hard_on_or_after_enforce_date():
 
 def test_persona_fit_counts_stays_soft_before_enforce_date():
     d = _art(persona_fit={"not_recommended_for": []})
-    d["slug"] = "2026-08-19-B0XXXXXXXX"
+    d["slug"] = "2026-08-19-B0FTEST0001"
     r = check_persona_fit_counts(d)
     assert r.passed and r.score == V5_EXTENSION_SOFT_SCORE
 
 
 def test_persona_fit_counts_ok_after_enforce_date():
     d = _art(persona_fit={"not_recommended_for": ["a", "b"]})
-    d["slug"] = "2026-08-20-B0XXXXXXXX"
+    d["slug"] = "2026-08-20-B0FTEST0001"
     r = check_persona_fit_counts(d)
     assert r.passed and r.score == 1.0
 
@@ -242,7 +273,7 @@ def test_persona_fit_counts_ok_after_enforce_date():
 
 def test_review_signals_is_hard_on_or_after_enforce_date():
     d = _art(review_signals=_review_signals(high_points=[_entry(1)]))
-    d["slug"] = "2026-08-20-B0XXXXXXXX"
+    d["slug"] = "2026-08-20-B0FTEST0001"
     r = check_review_signals(d)
     assert not r.passed, "施行日以降は hard"
     assert r.score == V5_EXTENSION_SOFT_SCORE
@@ -255,7 +286,7 @@ def test_review_signals_missing_is_hard_after_enforce_date():
     del missing["review_signals"]
     not_a_dict = _art(review_signals=[])
     for d in (missing, not_a_dict):
-        d["slug"] = "2026-08-20-B0XXXXXXXX"
+        d["slug"] = "2026-08-20-B0FTEST0001"
         r = check_review_signals(d)
         assert not r.passed
         assert r.score == V5_EXTENSION_SOFT_SCORE
@@ -263,7 +294,7 @@ def test_review_signals_missing_is_hard_after_enforce_date():
 
 def test_review_signals_stays_soft_before_enforce_date():
     d = _art(review_signals=_review_signals(high_points=[_entry(1)]))
-    d["slug"] = "2026-08-19-B0XXXXXXXX"
+    d["slug"] = "2026-08-19-B0FTEST0001"
     r = check_review_signals(d)
     assert r.passed and r.score == V5_EXTENSION_SOFT_SCORE
 
@@ -271,7 +302,7 @@ def test_review_signals_stays_soft_before_enforce_date():
 def test_verdict_headline_is_hard_on_or_after_enforce_date():
     for headline in ("短", "あ" * 60):
         d = _art(verdict={"headline": headline})
-        d["slug"] = "2026-08-20-B0XXXXXXXX"
+        d["slug"] = "2026-08-20-B0FTEST0001"
         r = check_verdict_headline(d)
         assert not r.passed, headline
         assert r.score == V5_EXTENSION_SOFT_SCORE
@@ -279,14 +310,14 @@ def test_verdict_headline_is_hard_on_or_after_enforce_date():
 
 def test_verdict_headline_stays_soft_before_enforce_date():
     d = _art(verdict={"headline": "短"})
-    d["slug"] = "2026-08-19-B0XXXXXXXX"
+    d["slug"] = "2026-08-19-B0FTEST0001"
     r = check_verdict_headline(d)
     assert r.passed and r.score == V5_EXTENSION_SOFT_SCORE
 
 
 def test_promoted_checks_pass_cleanly_after_enforce_date():
     d = _art()
-    d["slug"] = "2026-08-20-B0XXXXXXXX"
+    d["slug"] = "2026-08-20-B0FTEST0001"
     for fn in (check_review_signals, check_verdict_headline):
         r = fn(d)
         assert r.passed and r.score == 1.0, fn.__name__
@@ -296,7 +327,7 @@ def test_claims_discipline_stays_soft_after_enforce_date():
     # 据え置きは claims_discipline のみ (直近 100 本で 5% 発火・横ばい)。
     # 施行日以降の slug でも合否を変えないこと。
     d = _art(claims=[])
-    d["slug"] = "2026-08-20-B0XXXXXXXX"
+    d["slug"] = "2026-08-20-B0FTEST0001"
     r = check_claims_discipline(d)
     assert r.passed
     assert r.score == V5_EXTENSION_SOFT_SCORE
@@ -306,7 +337,9 @@ def test_legacy_articles_are_skipped_even_after_enforce_date():
     # 施行日以降の slug でも date が legacy なら素通りする (既存の切りかたを壊さない)。
     d = _art(date=LEGACY, review_signals={"summary_one_line": "短い"},
              verdict={"headline": "短"})
-    d["slug"] = "2026-08-31-B0XXXXXXXX"
+    d["slug"] = "2026-08-31-B0FTEST0001"
     for fn in (check_review_signals, check_verdict_headline):
         r = fn(d)
         assert r.passed and r.score == 1.0, fn.__name__
+
+

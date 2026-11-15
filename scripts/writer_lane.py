@@ -43,6 +43,10 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+try:
+    from source_rules import required_non_sales_sites
+except ModuleNotFoundError:  # package 形式
+    from scripts.source_rules import required_non_sales_sites
 
 JST = dt.timezone(dt.timedelta(hours=9))
 ASIN_RE = re.compile(r"B0[A-Z0-9]{8}")
@@ -590,7 +594,6 @@ def process(env, ledger, locks, args, state_dir, run_dir, origin, today, stats, 
     asin = origin["asin"]
     stats["prechecked"] += 1
     cand, excerpts, citable, sites = precheck(asin, env.fetch)
-    from source_rules import required_non_sales_sites
     if len(sites) < required_non_sales_sites(asin):
         stats["skip_sources"] += 1
         ledger.add("skip_sources", asin=asin, sites=len(sites), n_citable=len(citable),

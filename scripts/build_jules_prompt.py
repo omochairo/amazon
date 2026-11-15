@@ -45,7 +45,10 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from source_rules import required_non_sales_sites
+try:
+    from source_rules import required_non_sales_sites
+except ModuleNotFoundError:  # package 形式
+    from scripts.source_rules import required_non_sales_sites
 
 from filter_raw_per_asin import exclude_title_only  # noqa: E402
 
@@ -573,8 +576,9 @@ def _sources_note(asin, fetch_excerpts=False, fetch=None, no_web=False, excerpts
     new_note = ("※この商品は新発売のため、業務規定・テンプレート・本プロンプトで「非販売の出典 2 サイト (2 件以上)」とある箇所は、"
                 "すべて「1 サイト (1 件以上)」と読み替えてください。"
                 "発売まもない商品で第三者のレビューが少ないため、非販売の出典は 1 サイト (メーカー公式でも可) で足ります。"
-                "口コミ・利用者の声 (review_signals など) は出典に実際にあるものだけ書き、無ければ『発売まもなく口コミはまだ少ない』と書いてください。"
-                "出典に無い口コミは作らないでください。") if required == 1 else ""
+                "口コミ (review_signals) は、出典に実際にある第三者の声だけ書いてください。"
+                "無ければ review_signals は空でよく、本文に『発売まもなく口コミはまだ少ない』と書いてください。"
+                "出典に無い口コミは作らないでください。書いた要素の supporting_source_ids は実在する非販売の出典を指してください。") if required == 1 else ""
     if no_web:
         first = ("1. 非販売 (第三者) の出典は、下の候補のうち「抜粋」が付いたもの (システムが本文を"
                  "取得して商品名・型番の語を確かめたもの) からだけ選ぶ。あなたは Web 検索・URL 閲覧を"

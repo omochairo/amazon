@@ -145,89 +145,97 @@ class ThirdPartySourcesBandTest(unittest.TestCase):
         return d
 
     def test_no_third_party_stays_zero(self):
-        self._mk_zero_asin("B0TP000000")
-        r = S.score_asin("B0TP000000", self.base)
+        self._mk_zero_asin("B0FP000000")
+        r = S.score_asin("B0FP000000", self.base)
         self.assertEqual(r["band"], "zero")
         self.assertEqual(r["third_party_hosts"], 0)
 
     def test_one_host_stays_zero(self):
         # §6.5.1 は非販売 2 件必須。1 件では zero を外さない。
-        self._mk_zero_asin("B0TP000001", [
+        self._mk_zero_asin("B0FP000001", [
             {"url": "https://note.com/a/n/1", "host": "note.com"},
         ])
-        r = S.score_asin("B0TP000001", self.base)
+        r = S.score_asin("B0FP000001", self.base)
         self.assertEqual(r["band"], "zero")
         self.assertEqual(r["third_party_hosts"], 1)
 
+    def test_new_product_one_site_is_not_zero_or_deferred(self):
+        self._mk_zero_asin("B0GTP00001", [
+            {"url": "https://note.com/a/n/1", "host": "note.com"},
+        ])
+        r = S.score_asin("B0GTP00001", self.base)
+        self.assertNotEqual(r["band"], "zero")
+        self.assertFalse(S.should_defer(r))
+
     def test_two_hosts_escape_zero_to_thin(self):
-        self._mk_zero_asin("B0TP000002", [
+        self._mk_zero_asin("B0FP000002", [
             {"url": "https://note.com/a/n/1", "host": "note.com"},
             {"url": "https://mokutopia.com/products/x", "host": "mokutopia.com"},
         ])
-        r = S.score_asin("B0TP000002", self.base)
+        r = S.score_asin("B0FP000002", self.base)
         self.assertEqual(r["band"], "thin")
         self.assertEqual(r["third_party_hosts"], 2)
         # evidence は動かさない (thin/ok の境界を third_party で越えさせない)
         self.assertEqual(r["evidence_score"], 0)
 
     def test_same_host_twice_is_one(self):
-        self._mk_zero_asin("B0TP000003", [
+        self._mk_zero_asin("B0FP000003", [
             {"url": "https://note.com/a/n/1", "host": "note.com"},
             {"url": "https://www.note.com/a/n/2"},  # host 欠落 + www → 同一に畳む
         ])
-        r = S.score_asin("B0TP000003", self.base)
+        r = S.score_asin("B0FP000003", self.base)
         self.assertEqual(r["third_party_hosts"], 1)
         self.assertEqual(r["band"], "zero")
 
     def test_search_result_pages_do_not_count(self):
         # 既に書かれた JSON には search.kakaku.com が 409 件残っている (2026-08-18 実測)。
         # fetch 側を直しても過去分は残るので、採点側でも落ちること。
-        self._mk_zero_asin("B0TP000004", [
+        self._mk_zero_asin("B0FP000004", [
             {"url": "https://search.kakaku.com/gravitrax", "host": "search.kakaku.com"},
             {"url": "https://www.yamada-denkiweb.com/search/x", "host": "yamada-denkiweb.com"},
             {"url": "https://www.biccamera.com/bc/category?q=x", "host": "biccamera.com"},
         ])
-        r = S.score_asin("B0TP000004", self.base)
+        r = S.score_asin("B0FP000004", self.base)
         self.assertEqual(r["third_party_hosts"], 0)
         self.assertEqual(r["band"], "zero")
 
     def test_third_party_alone_never_reaches_ok(self):
         # host を上限まで積んでも evidence は 0 のままなので ok にはならない。
-        self._mk_zero_asin("B0TP000005", [
+        self._mk_zero_asin("B0FP000005", [
             {"url": f"https://ex{i}.com/a", "host": f"ex{i}.com"} for i in range(8)
         ])
-        r = S.score_asin("B0TP000005", self.base)
+        r = S.score_asin("B0FP000005", self.base)
         self.assertEqual(r["band"], "thin")
         self.assertEqual(r["third_party_hosts"], 8)
         self.assertEqual(r["info_score"], 4 * 3 + 4)  # third_party 上限 12 + tier D 4
 
     def test_unfetched_is_unchanged_by_third_party(self):
         # news/youtube/books が未収集なら third_party があっても enrich 待ち (defer 対象外)。
-        d = self.base / "B0TP000006"
+        d = self.base / "B0FP000006"
         d.mkdir(parents=True)
         _write(d, "amazon.json", {"item": {"title": "謎ブランドのおもちゃ"}})
         _write(d, "third_party_sources.json", {"sources": [
             {"url": "https://note.com/a/n/1", "host": "note.com"},
             {"url": "https://mokutopia.com/products/x", "host": "mokutopia.com"},
         ]})
-        r = S.score_asin("B0TP000006", self.base)
+        r = S.score_asin("B0FP000006", self.base)
         self.assertEqual(r["band"], "unfetched")
 
     def test_known_brand_zero_evidence_still_thin(self):
         # tier が D でなければ third_party の有無に関係なく従来どおり thin。
-        d = self.base / "B0TP000007"
+        d = self.base / "B0FP000007"
         d.mkdir(parents=True)
         _write(d, "amazon.json", {"item": {"title": "レゴ クラシック アイデアボックス"}})
         for name in ("news.json", "youtube.json", "books.json"):
             _write(d, name, {"items": []})
-        r = S.score_asin("B0TP000007", self.base)
+        r = S.score_asin("B0FP000007", self.base)
         self.assertEqual(r["band"], "thin")
 
     def test_malformed_third_party_file_is_ignored(self):
-        self._mk_zero_asin("B0TP000008")
-        (self.base / "B0TP000008" / "third_party_sources.json").write_text(
+        self._mk_zero_asin("B0FP000008")
+        (self.base / "B0FP000008" / "third_party_sources.json").write_text(
             "{ not json", encoding="utf-8")
-        r = S.score_asin("B0TP000008", self.base)
+        r = S.score_asin("B0FP000008", self.base)
         self.assertEqual(r["third_party_hosts"], 0)
         self.assertEqual(r["band"], "zero")
 
@@ -606,3 +614,4 @@ class PriorArticleSitesTest(unittest.TestCase):
         r = S.score_asin("B0PA000005", self.base)
         self.assertEqual(r["third_party_sites"], 2)
         self.assertFalse(S.awaiting_sources(r))
+
