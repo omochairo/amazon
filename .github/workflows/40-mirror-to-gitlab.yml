@@ -37,6 +37,15 @@ name: Mirror main to GitLab
 #
 # ⚠️ GitHub の cron はベストエフォートで数分〜十数分遅れることがある。
 #    bot コミットの配信反映は最悪 30 分 + その遅れを見込むこと。
+#
+# --- 2026-11-16: 定時が来ないときは、次の push が代わりに転送する ----------------
+# 実測では `*/30` の定時は 30 分毎に動いていない (2026-11-13〜16 の 14 回の間隔は
+# 4〜8.5 時間)。その間、記事・データだけの push は本番に出ないまま溜まっていた。
+# そこで、記事・データだけの push でも **まだ転送していない最古のコミットが
+# MAX_BATCH_AGE_MIN 分より前のものなら、定時を待たずに今転送する**。
+#   - まとめる効果は変わらない (前の転送から 30 分以内の push は今まで通り待つ)
+#   - GitLab の今の先頭が読めないとき・手元に無いときは今まで通り待つ (fail-safe)
+#   - 定時は「その後 push が 1 本も来なかった」ときの保険として残す
 on:
   push:
     branches: [main]
@@ -76,6 +85,8 @@ jobs:
           EVENT: ${{ github.event_name }}
           BEFORE: ${{ github.event.before }}
           SHA: ${{ github.sha }}
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          MAX_BATCH_AGE_MIN: '30'
         run: |
           set -euo pipefail
           if [ "$EVENT" != "push" ]; then
@@ -97,8 +108,25 @@ jobs:
             echo "go=true" >> "$GITHUB_OUTPUT"
             echo "::notice::コンテンツ以外の変更を含むため即時転送する: $(printf '%s\n' "$urgent" | head -3 | tr '\n' ' ')"
           else
-            echo "go=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::記事・データのみの push。30 分毎の schedule 実行にまとめる (配信は最大 30 分遅延)。今すぐ配信したいときは本 workflow を workflow_dispatch で起動する"
+            # 定時が来ていないときの保険: まだ転送していない最古のコミットの古さを見る。
+            # 読めないとき (token 無し・GitLab に届かない・先頭が手元に無い) は待つ側に倒す。
+            stale_min=""
+            if [ -n "${GITLAB_TOKEN:-}" ]; then
+              gl_head="$(git ls-remote "https://oauth2:${GITLAB_TOKEN}@gitlab.com/omocha/navi.git" refs/heads/main 2>/dev/null | cut -f1 || true)"
+              if [ -n "$gl_head" ] && git cat-file -e "${gl_head}^{commit}" 2>/dev/null; then
+                oldest="$(git log --first-parent --reverse --format=%ct "${gl_head}..${SHA}" | head -n 1 || true)"
+                if [ -n "$oldest" ]; then
+                  stale_min=$(( ( $(date +%s) - oldest ) / 60 ))
+                fi
+              fi
+            fi
+            if [ -n "$stale_min" ] && [ "$stale_min" -ge "$MAX_BATCH_AGE_MIN" ]; then
+              echo "go=true" >> "$GITHUB_OUTPUT"
+              echo "::notice::記事・データのみの push だが、未転送の最古のコミットが ${stale_min} 分前 (定時の転送が来ていない)。今転送する"
+            else
+              echo "go=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::記事・データのみの push。30 分毎の schedule 実行にまとめる (配信は最大 30 分遅延)。今すぐ配信したいときは本 workflow を workflow_dispatch で起動する"
+            fi
           fi
 
       - name: Push main to GitLab
