@@ -1,25 +1,27 @@
 {
-  "date": "2026-11-09",
-  "articles": 3273,
-  "failing": 60,
-  "failing_rate": 0.01833,
+  "date": "2026-11-16",
+  "articles": 3311,
+  "failing": 331,
+  "failing_rate": 0.09997,
   "by_check": {
-    "how_to_choose": 33,
-    "sources_v5": 27
+    "review_signals": 272,
+    "how_to_choose": 36,
+    "sources_v5": 26
   },
   "by_deduction": {
-    "prices_verified": 927,
-    "title_serp_fit": 799,
-    "faq": 429,
-    "keywords": 352,
-    "howto_title_promise": 311,
-    "narrative": 292,
-    "verdict_headline": 236,
-    "review_signals": 225,
-    "tag_granularity": 205,
-    "claims_discipline": 194,
-    "product_image": 133,
-    "how_to_choose": 64,
+    "prices_verified": 939,
+    "title_serp_fit": 790,
+    "faq": 416,
+    "review_signals": 375,
+    "keywords": 342,
+    "howto_title_promise": 307,
+    "narrative": 286,
+    "verdict_headline": 234,
+    "tag_granularity": 207,
+    "claims_discipline": 199,
+    "product_image": 151,
+    "score_claim_consistency": 105,
+    "how_to_choose": 61,
     "cert_claims_declared": 18,
     "persona_fit_counts": 2
   },
@@ -32,11 +34,11 @@
       "claim が ['ASTM'] を主張しているが product.certifications 未申告 → 裏取りが走らない": 1
     },
     "claims_discipline": {
-      "cross_checked=true が N 件未満": 174,
+      "cross_checked=true が N 件未満": 179,
       "claims が N 件未満": 20
     },
     "faq": {
-      "only N questions contain product name (recommend >=N)": 429
+      "only N questions contain product name (recommend >=N)": 416
     },
     "how_to_choose": {
       "how_to_choose に生の ASIN コード: ['BNCNHNLNNW', 'BNCVKMNNNZ'] (soft: 表記規律。読者に意味がないので生成側で書かないこと)": 2,
@@ -53,38 +55,44 @@
       "howto-promise-without-official-source: title が「作り方」で手順を約束しているが data/raw/per_asin/BNDBHNNWRY/official_howto.json に公式 URL が無い (#NNNN: 公式の取説・あそびかたが無い商品では手順を約束しない)": 1
     },
     "keywords": {
-      "product name not in any keyword": 188,
+      "product name not in any keyword": 182,
       "brand 'レゴ(LEGO)' not in any keyword": 13,
-      "brand 'アガツマ(AGATSUMA)' not in any keyword": 8,
+      "brand 'アガツマ(AGATSUMA)' not in any keyword": 7,
       "brand 'バンダイ(BANDAI)' not in any keyword": 7,
       "brand 'くもん出版' not in any keyword": 4
     },
     "narrative": {
-      "closing NN<NNN": 107,
-      "closing NNN<NNN": 97,
-      "daily_use NNN<NNN": 44,
-      "why_this_product NNN<NNN": 37,
+      "closing NN<NNN": 104,
+      "closing NNN<NNN": 96,
+      "daily_use NNN<NNN": 43,
+      "why_this_product NNN<NNN": 36,
       "gift_appeal NNN<NNN": 3
     },
     "persona_fit_counts": {
       "not_recommended_for が N-N 件でない": 2
     },
     "prices_verified": {
-      "unverified=rakuten,yahoo verified=none (warn-only": 318,
-      "unverified=yahoo verified=rakuten (warn-only": 291,
-      "unverified=rakuten verified=yahoo (warn-only": 201,
-      "unverified=yahoo verified=none (warn-only": 96,
+      "unverified=rakuten,yahoo verified=none (warn-only": 325,
+      "unverified=yahoo verified=rakuten (warn-only": 292,
+      "unverified=rakuten verified=yahoo (warn-only": 206,
+      "unverified=yahoo verified=none (warn-only": 95,
       "unverified=rakuten verified=none (warn-only": 21
     },
     "product_image": {
-      "product-image-not-in-amazon-json (warn-only": 124,
+      "product-image-not-in-amazon-json (warn-only": 142,
       "product-image-missing: product.image が空 (表示は amazon.json の画像で補う)": 9
     },
     "review_signals": {
-      "high_points が N-N 件でない": 94,
+      "high_points[N] の supporting_source_ids は実在する非販売出典を含める必要があります": 136,
+      "high_points が N-N 件でない": 82,
       "summary_one_line が NN-NN 字でない": 66,
-      "use_scenes が N-N 件でない": 45,
-      "concerns が N-N 件でない": 20
+      "use_scenes が N-N 件でない": 35,
+      "concerns[N] の supporting_source_ids は実在する非販売出典を含める必要があります": 32
+    },
+    "score_claim_consistency": {
+      "点数と食い違う言い切り ['safety_claim']": 70,
+      "点数と食い違う言い切り ['recommend_claim']": 31,
+      "点数と食い違う言い切り ['recommend_claim', 'safety_claim']": 4
     },
     "tag_granularity": {
       "product-name tags=['リップスティックデラックスミニ'] (warn-only, #NNNN)": 4,
@@ -94,13 +102,13 @@
       "product-name tags=['一頭買い!! 黒豚パズル'] (warn-only, #NNNN)": 2
     },
     "title_serp_fit": {
-      "検索意図語が先頭 NN 字に無い (NN 字目): 商品名の直後に N つ置く (warn-only, #NNNN 項目N)": 550,
-      "product.name が NN 字 (先頭 NN 字に意図語を置くには NN 字以下): §N の「短い通称」に寄せる": 149,
-      "先頭 NN 字に product.name が無い (name=NN 字): title で型番・シリーズ・ブランドの英字併記などを足し直さない": 95,
+      "検索意図語が先頭 NN 字に無い (NN 字目): 商品名の直後に N つ置く (warn-only, #NNNN 項目N)": 545,
+      "product.name が NN 字 (先頭 NN 字に意図語を置くには NN 字以下): §N の「短い通称」に寄せる": 146,
+      "先頭 NN 字に product.name が無い (name=NN 字): title で型番・シリーズ・ブランドの英字併記などを足し直さない": 94,
       "検索意図語が先頭 NN 字に無い (タイトル全体に無し): 商品名の直後に N つ置く (warn-only, #NNNN 項目N)": 5
     },
     "verdict_headline": {
-      "verdict.headline が長い (NN 字超) = N 行の結論ではなく説明文になっている": 227,
+      "verdict.headline が長い (NN 字超) = N 行の結論ではなく説明文になっている": 225,
       "verdict.headline が短い (NN 字未満)": 9
     }
   },
@@ -110,72 +118,77 @@
   "cert_fetch": false,
   "md_evaluated": 0,
   "cross_checked": {
-    "articles_with_claims": 3270,
-    "zero": 117,
-    "zero_rate": 0.03578
+    "articles_with_claims": 3308,
+    "zero": 120,
+    "zero_rate": 0.03628
   },
   "cohorts": {
     "recent_100": {
       "n": 100,
-      "from": "2026-11-04-B0DGSM92WC",
-      "to": "2026-11-09-B0HQ2PB21W",
-      "failing": 0,
-      "failing_rate": 0.0,
+      "from": "2026-11-07-B0GYCB74YR",
+      "to": "2026-11-16-B0GYCDQ471",
+      "failing": 11,
+      "failing_rate": 0.11,
       "by_deduction": {
-        "prices_verified": 33,
+        "prices_verified": 32,
         "claims_discipline": 8,
-        "title_serp_fit": 3,
+        "score_claim_consistency": 2,
+        "tag_granularity": 2,
+        "title_serp_fit": 2,
         "narrative": 1,
-        "tag_granularity": 1
+        "product_image": 1
       },
       "zero_firing_95_upper": 0.03,
       "cross_checked": {
         "articles_with_claims": 100,
-        "zero": 1,
-        "zero_rate": 0.01
+        "zero": 5,
+        "zero_rate": 0.05
       }
     },
     "recent_200": {
       "n": 200,
-      "from": "2026-10-29-B0CGQN721W",
-      "to": "2026-11-09-B0HQ2PB21W",
-      "failing": 0,
-      "failing_rate": 0.0,
+      "from": "2026-11-01-B0HPDNNDP2",
+      "to": "2026-11-16-B0GYCDQ471",
+      "failing": 19,
+      "failing_rate": 0.095,
       "by_deduction": {
-        "prices_verified": 73,
-        "claims_discipline": 15,
+        "prices_verified": 70,
+        "claims_discipline": 18,
+        "narrative": 3,
+        "score_claim_consistency": 3,
+        "tag_granularity": 3,
         "title_serp_fit": 3,
-        "narrative": 2,
         "faq": 1,
-        "tag_granularity": 1
+        "product_image": 1
       },
       "zero_firing_95_upper": 0.015,
       "cross_checked": {
         "articles_with_claims": 200,
-        "zero": 5,
-        "zero_rate": 0.025
+        "zero": 7,
+        "zero_rate": 0.035
       }
     },
     "recent_300": {
       "n": 300,
-      "from": "2026-10-24-B01KZ8495I",
-      "to": "2026-11-09-B0HQ2PB21W",
-      "failing": 0,
-      "failing_rate": 0.0,
+      "from": "2026-10-27-B0CC5M4LG8",
+      "to": "2026-11-16-B0GYCDQ471",
+      "failing": 32,
+      "failing_rate": 0.10667,
       "by_deduction": {
-        "prices_verified": 97,
-        "claims_discipline": 21,
-        "narrative": 6,
-        "title_serp_fit": 4,
-        "faq": 1,
-        "product_image": 1,
-        "tag_granularity": 1
+        "prices_verified": 103,
+        "claims_discipline": 25,
+        "narrative": 7,
+        "score_claim_consistency": 5,
+        "tag_granularity": 3,
+        "title_serp_fit": 3,
+        "product_image": 2,
+        "faq": 1
       },
       "zero_firing_95_upper": 0.01,
       "cross_checked": {
         "articles_with_claims": 300,
-        "zero": 7,
-        "zero_rate": 0.02333
+        "zero": 10,
+        "zero_rate": 0.03333
       }
     }
   },
@@ -286,7 +299,17 @@
       "failed_checks": [
         {
           "name": "how_to_choose",
-          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0CFVZDDPL']"
+          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0CFVZDDPL', 'B0CWH3BRYZ']"
+        }
+      ]
+    },
+    {
+      "slug": "2026-07-24-B000301Z24",
+      "total_score": 95,
+      "failed_checks": [
+        {
+          "name": "how_to_choose",
+          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B0C3C5KXM6']"
         }
       ]
     },
@@ -307,6 +330,16 @@
         {
           "name": "sources_v5",
           "message": "navi.omcha.jp (このサイト自身) を出典にしている: https://navi.omcha.jp/products/b0gl815n6k/ (自己引用は不可。外して別のサイトの出典で裏付ける)"
+        }
+      ]
+    },
+    {
+      "slug": "2026-07-27-B0053VTGQK",
+      "total_score": 95,
+      "failed_checks": [
+        {
+          "name": "how_to_choose",
+          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B000LVJSLK']"
         }
       ]
     },
@@ -491,6 +524,16 @@
       ]
     },
     {
+      "slug": "2026-08-06-B09JYR9CCX",
+      "total_score": 95,
+      "failed_checks": [
+        {
+          "name": "how_to_choose",
+          "message": "how_to_choose mentions ASIN(s) not in competitors.json: ['B09K4RH6KT']"
+        }
+      ]
+    },
+    {
       "slug": "2026-08-06-B0BWQWSBH6",
       "total_score": 97,
       "failed_checks": [
@@ -561,12 +604,366 @@
       ]
     },
     {
+      "slug": "2026-08-20-B0G5FTTZ7T",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-20-B0H1KSZZTG",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-20-B0H6F7M23D",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-20-B0H6NV7JWN",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-20-B0H9W8KYJ6",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-20-B0HBVLM13G",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-20-B0HCT5S5TV",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-20-B0HD5PVFS7",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-21-B0G23TSNMF",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-21-B0G2N7SKLD",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-21-B0GFNL848L",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-21-B0GN83BWSQ",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-21-B0GPWNSS95",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-21-B0GV8Q8H9T",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-21-B0GWSVP4DY",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-21-B0H2XJBJX7",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-21-B0HBV2C4JM",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-21-B0HCT3B45V",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-22-B0G1QZR681",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-22-B0GVN1GGNP",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-22-B0GVN7KZT1",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-22-B0GVN8FLFM",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-22-B0GVNDPG3N",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-22-B0HBVLH5VT",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-22-B0HC1PD1K6",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-23-B0H67J3VY4",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-23-B0H7MKJQ9G",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
       "slug": "2026-08-23-B0H8S2Y11G",
       "total_score": 96,
       "failed_checks": [
         {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        },
+        {
           "name": "sources_v5",
           "message": "navi.omcha.jp (このサイト自身) を出典にしている: https://navi.omcha.jp/products/b0gl815n6k/ (自己引用は不可。外して別のサイトの出典で裏付ける)"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-23-B0HD9VQ8SY",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-23-B0HDB2KGJT",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-23-B0HDB4HTZG",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-23-B0HDB4TTK4",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-23-B0HDB6X1CN",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-23-B0HDB8KG6G",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-23-B0HDBSNNSP",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-23-B0HDBTQRGZ",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
         }
       ]
     },
@@ -581,12 +978,436 @@
       ]
     },
     {
-      "slug": "2026-08-26-B0H4PVR55T",
-      "total_score": 96,
+      "slug": "2026-08-24-B0G65QB1PC",
+      "total_score": 99,
       "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-24-B0GZTDBPGP",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-24-B0H3NSRBHC",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-24-B0H454QHLX",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[3] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-24-B0H4PQLRC5",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-24-B0HFQZBWNK",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-25-B0GMPL37LX",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-25-B0GWCXK4CZ",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-26-B0GCHH7D4P",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-26-B0GCPLDYGL",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-26-B0GSFQYL89",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-26-B0GSFX7163",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-26-B0H4PVR55T",
+      "total_score": 95,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        },
         {
           "name": "sources_v5",
           "message": "sources field 無し (v5 §6.5.1 必須。消して通さない)"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-26-B0H9LCQK4C",
+      "total_score": 98,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-27-B0GC26M3D5",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-28-B0H3QP5DRY",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-28-B0HG8P58W9",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-28-B0HG8P5P5Z",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-29-B0GG2PTZW1",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-29-B0GJXM1QVB",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-29-B0H1QBN67D",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-29-B0H2XCBPRV",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-29-B0HFLKKBX3",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-29-B0HFLYTRC4",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-29-B0HG8NT11M",
+      "total_score": 98,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-31-B0GNQ56SV9",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-31-B0GTT9GHG4",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-31-B0H8S75GPR",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-31-B0HFM4X2JN",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-08-31-B0HG8LYCT6",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-03-B0GMDXM7LN",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-04-B0H2XMR2SX",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-05-B0H45JBT5F",
+      "total_score": 98,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-05-B0H6Q8JM4N",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-05-B0HFQVSV1K",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "segment_voices[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-05-B0HG8N2LBR",
+      "total_score": 98,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-05-B0HH8H7LLR",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-06-B0H453FHFQ",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-07-B0G2TFG4HW",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-07-B0GCGT5ZDZ",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-07-B0GWVB9CLW",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-07-B0H2XMSDW2",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-07-B0H73P7ZNP",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
         }
       ]
     },
@@ -597,6 +1418,206 @@
         {
           "name": "sources_v5",
           "message": "sources field 無し (v5 §6.5.1 必須。消して通さない)"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-08-B0G3DXNS24",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-08-B0GJX8ZWCK",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-08-B0GPPVQCBR",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-08-B0GPQ7676T",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-08-B0GSD2MRG8",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-08-B0GYCLMPQW",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-08-B0H451LR68",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-08-B0H86JNWT9",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-09-B0GSVQTP4W",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-09-B0GTTH56ZR",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-09-B0GWC6DXJN",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-09-B0GYCBHKT7",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-09-B0GYCBNTX2",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-09-B0GYCDJ46N",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-09-B0H62FPQ4S",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-10-B0GFS7D7Q2",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-10-B0GL23NWVN",
+      "total_score": 98,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-10-B0GQ3KTZ6H",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-10-B0GZTL3HQL",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-10-B0HFL9ZWGS",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
         }
       ]
     },
@@ -612,11 +1633,431 @@
     },
     {
       "slug": "2026-09-11-B0GPPHZR1G",
-      "total_score": 97,
+      "total_score": 99,
       "failed_checks": [
         {
-          "name": "sources_v5",
-          "message": "本文 (claims / review_signals の supporting_source_ids) から参照された非販売の出典が 1 サイト (omcha.jp)。別々のサイトで 2 件以上必須 (v5 §6.5.1。サイトはドメイン単位・SNS は合わせて 1・販売ページと通販サイトは数えない)"
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-11-B0GYCFDY41",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-11-B0H8DSC89X",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-11-B0HHM54RJP",
+      "total_score": 98,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-11-B0HHM6846X",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-11-B0HHM8F5NZ",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-11-B0HHMCZP7N",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-12-B0GFHJ9GL8",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-12-B0GSG2VQK3",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-12-B0H2LJW3N2",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-12-B0H7B9NPWG",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-12-B0HHM33JY7",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-12-B0HHM6RJBC",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-13-B0GFHLMN84",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-13-B0H3389KK7",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-13-B0HJ1CD9NP",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-14-B0G4Q91CTM",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-14-B0GVZ82W31",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-14-B0H4V6LPVV",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-14-B0H5V35KF3",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-14-B0H6ZMZ65K",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-14-B0H7QYBCLN",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-14-B0HD6LG3LB",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-15-B0G2TGT9ZT",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-15-B0GG8QM8YS",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-15-B0GKLHVZVK",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-15-B0HGYCV75Y",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-16-B0H1B5QDJK",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-16-B0H2XHCVJK",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-16-B0H3KKRRWG",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-16-B0HHLZQHHG",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-18-B0GQGRPD7K",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[2] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-18-B0HHM71WPC",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-19-B0GGNFZ9CW",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-19-B0GHR12FB6",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-19-B0GVN4B2DV",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-19-B0GVN4GL2L",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-19-B0GVN8SLHQ",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-19-B0GYCLLJ76",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-20-B0GR3X5Z3C",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-20-B0GS93XLGS",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-20-B0GS9FJ17G",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-20-B0H6LLZFSB",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
         }
       ]
     },
@@ -627,6 +2068,56 @@
         {
           "name": "sources_v5",
           "message": "本文 (claims / review_signals の supporting_source_ids) から参照された非販売の出典が 1 サイト (omcha.jp)。別々のサイトで 2 件以上必須 (v5 §6.5.1。サイトはドメイン単位・SNS は合わせて 1・販売ページと通販サイトは数えない)"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-21-B0GHCWZG87",
+      "total_score": 98,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-21-B0GYCCZ3D1",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-21-B0HJ4WQ1CV",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-22-B0GWF3B9X8",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-22-B0H8CJJP4Q",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
         }
       ]
     },
@@ -647,6 +2138,16 @@
         {
           "name": "sources_v5",
           "message": "本文 (claims / review_signals の supporting_source_ids) から参照された非販売の出典が 1 サイト (omcha.jp)。別々のサイトで 2 件以上必須 (v5 §6.5.1。サイトはドメイン単位・SNS は合わせて 1・販売ページと通販サイトは数えない)"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-23-B0HB3K8DR6",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
         }
       ]
     },
@@ -681,6 +2182,16 @@
       ]
     },
     {
+      "slug": "2026-09-24-B0H1M64QNB",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
       "slug": "2026-09-25-B0D93GZT3W",
       "total_score": 96,
       "failed_checks": [
@@ -697,6 +2208,36 @@
         {
           "name": "sources_v5",
           "message": "本文 (claims / review_signals の supporting_source_ids) から参照された非販売の出典が 1 サイト (omcha.jp)。別々のサイトで 2 件以上必須 (v5 §6.5.1。サイトはドメイン単位・SNS は合わせて 1・販売ページと通販サイトは数えない)"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-25-B0GCY1Y6G5",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-25-B0GVF2Q6RJ",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-25-B0HKN9CWBM",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
         }
       ]
     },
@@ -721,6 +2262,156 @@
       ]
     },
     {
+      "slug": "2026-09-26-B0G2TGRKFK",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-26-B0GTXY2XP2",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-26-B0GXV1RXL9",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-26-B0H1GFBMPK",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-26-B0H8CM5FPP",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-26-B0HB995PZC",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-27-B0GCQ291D9",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-27-B0GD6G6SBT",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-27-B0GYNQQFLB",
+      "total_score": 98,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-28-B0G29K2XQF",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-28-B0G5DHX1T3",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-28-B0GJZQLS8W",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-28-B0H6LD9VRM",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-29-B0GR4K3JH7",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-09-29-B0H86RPR71",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
       "slug": "2026-09-30-B0CLQX6XDT",
       "total_score": 96,
       "failed_checks": [
@@ -731,12 +2422,276 @@
       ]
     },
     {
-      "slug": "2026-10-01-B0GL815N6K",
-      "total_score": 97,
+      "slug": "2026-09-30-B0GP22FMHL",
+      "total_score": 99,
       "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-01-B0G4WPJPZG",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-01-B0G6KZF6JP",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-01-B0GL1G69N6",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-01-B0GL815N6K",
+      "total_score": 96,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        },
         {
           "name": "sources_v5",
           "message": "navi.omcha.jp (このサイト自身) を出典にしている: https://navi.omcha.jp/products/b0gl7kr1xq/ (自己引用は不可。外して別のサイトの出典で裏付ける)"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-01-B0GSVJXX64",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-01-B0GTX9KVFY",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-01-B0GVQ7NLPR",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-01-B0GVXZRSFV",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-01-B0H9L6DTHB",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-01-B0H9L9NDW9",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-02-B0GYCHB5PX",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-02-B0GZNN3T5J",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-02-B0H1KL1P2P",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-02-B0H2XC38VP",
+      "total_score": 98,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-02-B0H97523WB",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-02-B0HBJP2G2T",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-02-B0HCBS6G4C",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-02-B0HHMJBKVM",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-02-B0HKYW9DSY",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-03-B0GXGYD88G",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-03-B0H1X6WCTL",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-03-B0H1YB49PF",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-03-B0H6LM1VS7",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-03-B0H7BMBQLR",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-03-B0HG8NM85S",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-03-B0HG8PB14P",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
         }
       ]
     },
@@ -751,12 +2706,72 @@
       ]
     },
     {
+      "slug": "2026-10-04-B0HG8QSCC7",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
       "slug": "2026-10-05-B0BL9BQGNM",
       "total_score": 96,
       "failed_checks": [
         {
           "name": "sources_v5",
           "message": "本文 (claims / review_signals の supporting_source_ids) から参照された非販売の出典が 1 サイト (omcha.jp)。別々のサイトで 2 件以上必須 (v5 §6.5.1。サイトはドメイン単位・SNS は合わせて 1・販売ページと通販サイトは数えない)"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-05-B0GJNFZYP6",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-05-B0HH8BB479",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-05-B0HHD4QVKF",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-05-B0HLCZFRYD",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-05-B0HLDB3GS7",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
         }
       ]
     },
@@ -779,34 +2794,1020 @@
           "message": "本文 (claims / review_signals の supporting_source_ids) から参照された非販売の出典が 1 サイト (omcha.jp)。別々のサイトで 2 件以上必須 (v5 §6.5.1。サイトはドメイン単位・SNS は合わせて 1・販売ページと通販サイトは数えない)"
         }
       ]
+    },
+    {
+      "slug": "2026-10-06-B0GKLTCKM4",
+      "total_score": 98,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-07-B0HC1CX9ZT",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-07-B0HG8J6CD9",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-08-B0H2TDG6SF",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-08-B0H43ZX8LK",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-11-B0HLCL84SB",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-12-B0GLF7KQYS",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-12-B0GYCD79SS",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-13-B0H82W67ZJ",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-13-B0HBV9Z4GH",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-15-B0HLYP7TYL",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-16-B0GMWSJGDQ",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-16-B0GVDGXD49",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-16-B0H2XKZWRQ",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-16-B0H5VPT5SS",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-16-B0HCXQB57M",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-17-B0GF5ZBG1B",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-17-B0GKSNP34L",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-18-B0G2TN2NC6",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-18-B0H61VB14R",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-19-B0GLXBCHCL",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-20-B0G2LFDV7B",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-20-B0GR3L6Q4N",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-20-B0GWPZRBXD",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-21-B0HHHSNHHV",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-21-B0HJ7CPXJ6",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-22-B0G3NFCNJ2",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-22-B0GFMTDR3B",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-22-B0GPQJMG9S",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-22-B0GW536YTH",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-22-B0H2T9W4NQ",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-22-B0HB3CY6GG",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-23-B0HMW6FRKJ",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-24-B0GT43YHR2",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-24-B0H3NP83XC",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-24-B0HG8HM26J",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-25-B0G2KRV9TR",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-25-B0GSVHMBWG",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-26-B0G233N5BS",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-26-B0HG8XL46W",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-27-B0GLFMN6RQ",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-27-B0GPYC3C8G",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-27-B0H1KQBF22",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-27-B0H7LZJ3NB",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-27-B0HLJSD561",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-29-B0H25W39LP",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-29-B0HLVQZ644",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-30-B0H9K9MQWY",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-31-B0GJD3WBQB",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-31-B0H5JTKCRH",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-10-31-B0HPF23NHB",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-11-01-B0GFHCF22H",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-11-01-B0HPDJ4G9R",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-11-01-B0HPDNNDP2",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-11-01-B0HPDV2D7F",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-11-02-B0G1Y3SG6D",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-11-03-B0GGT42VWN",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-11-04-B0GPPKRSJN",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-11-05-B0HPDQ7ZSM",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-11-06-B0GCP48MCN",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-11-07-B0GW775CPY",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-11-07-B0GYCB74YR",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-11-07-B0HPDS735M",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-11-07-B0HPDY44LC",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-11-07-B0HQ2Q9LPM",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-11-07-B0HQHZKWBD",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-11-10-B0G2365L72",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[1] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-11-11-B0H2L6KCK3",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-11-11-B0HCC1P7GJ",
+      "total_score": 98,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-11-11-B0HCYZ46WN",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[1] の supporting_source_ids は実在する非販売出典を含める必要があります; high_points[2] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[1] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[2] の supporting_source_ids は実在する非販売出典を含める必要があります; segment_voices[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-11-11-B0HNW2T3VC",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
+    },
+    {
+      "slug": "2026-11-15-B0GPPD991S",
+      "total_score": 99,
+      "failed_checks": [
+        {
+          "name": "review_signals",
+          "message": "high_points[0] の supporting_source_ids は実在する非販売出典を含める必要があります; concerns[2] の supporting_source_ids は実在する非販売出典を含める必要があります; use_scenes[0] の supporting_source_ids は実在する非販売出典を含める必要があります"
+        }
+      ]
     }
   ],
   "diff": {
-    "previous_date": "2026-11-02",
+    "previous_date": "2026-11-09",
     "new": [
-      "2026-07-16-B07B7FDZT6",
-      "2026-07-23-B0B27RV45F",
-      "2026-07-28-B000FUTQN2"
+      "2026-07-24-B000301Z24",
+      "2026-07-27-B0053VTGQK",
+      "2026-08-06-B09JYR9CCX",
+      "2026-08-20-B0G5FTTZ7T",
+      "2026-08-20-B0H1KSZZTG",
+      "2026-08-20-B0H6F7M23D",
+      "2026-08-20-B0H6NV7JWN",
+      "2026-08-20-B0H9W8KYJ6",
+      "2026-08-20-B0HBVLM13G",
+      "2026-08-20-B0HCT5S5TV",
+      "2026-08-20-B0HD5PVFS7",
+      "2026-08-21-B0G23TSNMF",
+      "2026-08-21-B0G2N7SKLD",
+      "2026-08-21-B0GFNL848L",
+      "2026-08-21-B0GN83BWSQ",
+      "2026-08-21-B0GPWNSS95",
+      "2026-08-21-B0GV8Q8H9T",
+      "2026-08-21-B0GWSVP4DY",
+      "2026-08-21-B0H2XJBJX7",
+      "2026-08-21-B0HBV2C4JM",
+      "2026-08-21-B0HCT3B45V",
+      "2026-08-22-B0G1QZR681",
+      "2026-08-22-B0GVN1GGNP",
+      "2026-08-22-B0GVN7KZT1",
+      "2026-08-22-B0GVN8FLFM",
+      "2026-08-22-B0GVNDPG3N",
+      "2026-08-22-B0HBVLH5VT",
+      "2026-08-22-B0HC1PD1K6",
+      "2026-08-23-B0H67J3VY4",
+      "2026-08-23-B0H7MKJQ9G",
+      "2026-08-23-B0HD9VQ8SY",
+      "2026-08-23-B0HDB2KGJT",
+      "2026-08-23-B0HDB4HTZG",
+      "2026-08-23-B0HDB4TTK4",
+      "2026-08-23-B0HDB6X1CN",
+      "2026-08-23-B0HDB8KG6G",
+      "2026-08-23-B0HDBSNNSP",
+      "2026-08-23-B0HDBTQRGZ",
+      "2026-08-24-B0G65QB1PC",
+      "2026-08-24-B0GZTDBPGP",
+      "2026-08-24-B0H3NSRBHC",
+      "2026-08-24-B0H454QHLX",
+      "2026-08-24-B0H4PQLRC5",
+      "2026-08-24-B0HFQZBWNK",
+      "2026-08-25-B0GMPL37LX",
+      "2026-08-25-B0GWCXK4CZ",
+      "2026-08-26-B0GCHH7D4P",
+      "2026-08-26-B0GCPLDYGL",
+      "2026-08-26-B0GSFQYL89",
+      "2026-08-26-B0GSFX7163",
+      "2026-08-26-B0H9LCQK4C",
+      "2026-08-27-B0GC26M3D5",
+      "2026-08-28-B0H3QP5DRY",
+      "2026-08-28-B0HG8P58W9",
+      "2026-08-28-B0HG8P5P5Z",
+      "2026-08-29-B0GG2PTZW1",
+      "2026-08-29-B0GJXM1QVB",
+      "2026-08-29-B0H1QBN67D",
+      "2026-08-29-B0H2XCBPRV",
+      "2026-08-29-B0HFLKKBX3",
+      "2026-08-29-B0HFLYTRC4",
+      "2026-08-29-B0HG8NT11M",
+      "2026-08-31-B0GNQ56SV9",
+      "2026-08-31-B0GTT9GHG4",
+      "2026-08-31-B0H8S75GPR",
+      "2026-08-31-B0HFM4X2JN",
+      "2026-08-31-B0HG8LYCT6",
+      "2026-09-03-B0GMDXM7LN",
+      "2026-09-04-B0H2XMR2SX",
+      "2026-09-05-B0H45JBT5F",
+      "2026-09-05-B0H6Q8JM4N",
+      "2026-09-05-B0HFQVSV1K",
+      "2026-09-05-B0HG8N2LBR",
+      "2026-09-05-B0HH8H7LLR",
+      "2026-09-06-B0H453FHFQ",
+      "2026-09-07-B0G2TFG4HW",
+      "2026-09-07-B0GCGT5ZDZ",
+      "2026-09-07-B0GWVB9CLW",
+      "2026-09-07-B0H2XMSDW2",
+      "2026-09-07-B0H73P7ZNP",
+      "2026-09-08-B0G3DXNS24",
+      "2026-09-08-B0GJX8ZWCK",
+      "2026-09-08-B0GPPVQCBR",
+      "2026-09-08-B0GPQ7676T",
+      "2026-09-08-B0GSD2MRG8",
+      "2026-09-08-B0GYCLMPQW",
+      "2026-09-08-B0H451LR68",
+      "2026-09-08-B0H86JNWT9",
+      "2026-09-09-B0GSVQTP4W",
+      "2026-09-09-B0GTTH56ZR",
+      "2026-09-09-B0GWC6DXJN",
+      "2026-09-09-B0GYCBHKT7",
+      "2026-09-09-B0GYCBNTX2",
+      "2026-09-09-B0GYCDJ46N",
+      "2026-09-09-B0H62FPQ4S",
+      "2026-09-10-B0GFS7D7Q2",
+      "2026-09-10-B0GL23NWVN",
+      "2026-09-10-B0GQ3KTZ6H",
+      "2026-09-10-B0GZTL3HQL",
+      "2026-09-10-B0HFL9ZWGS",
+      "2026-09-11-B0GYCFDY41",
+      "2026-09-11-B0H8DSC89X",
+      "2026-09-11-B0HHM54RJP",
+      "2026-09-11-B0HHM6846X",
+      "2026-09-11-B0HHM8F5NZ",
+      "2026-09-11-B0HHMCZP7N",
+      "2026-09-12-B0GFHJ9GL8",
+      "2026-09-12-B0GSG2VQK3",
+      "2026-09-12-B0H2LJW3N2",
+      "2026-09-12-B0H7B9NPWG",
+      "2026-09-12-B0HHM33JY7",
+      "2026-09-12-B0HHM6RJBC",
+      "2026-09-13-B0GFHLMN84",
+      "2026-09-13-B0H3389KK7",
+      "2026-09-13-B0HJ1CD9NP",
+      "2026-09-14-B0G4Q91CTM",
+      "2026-09-14-B0GVZ82W31",
+      "2026-09-14-B0H4V6LPVV",
+      "2026-09-14-B0H5V35KF3",
+      "2026-09-14-B0H6ZMZ65K",
+      "2026-09-14-B0H7QYBCLN",
+      "2026-09-14-B0HD6LG3LB",
+      "2026-09-15-B0G2TGT9ZT",
+      "2026-09-15-B0GG8QM8YS",
+      "2026-09-15-B0GKLHVZVK",
+      "2026-09-15-B0HGYCV75Y",
+      "2026-09-16-B0H1B5QDJK",
+      "2026-09-16-B0H2XHCVJK",
+      "2026-09-16-B0H3KKRRWG",
+      "2026-09-16-B0HHLZQHHG",
+      "2026-09-18-B0GQGRPD7K",
+      "2026-09-18-B0HHM71WPC",
+      "2026-09-19-B0GGNFZ9CW",
+      "2026-09-19-B0GHR12FB6",
+      "2026-09-19-B0GVN4B2DV",
+      "2026-09-19-B0GVN4GL2L",
+      "2026-09-19-B0GVN8SLHQ",
+      "2026-09-19-B0GYCLLJ76",
+      "2026-09-20-B0GR3X5Z3C",
+      "2026-09-20-B0GS93XLGS",
+      "2026-09-20-B0GS9FJ17G",
+      "2026-09-20-B0H6LLZFSB",
+      "2026-09-21-B0GHCWZG87",
+      "2026-09-21-B0GYCCZ3D1",
+      "2026-09-21-B0HJ4WQ1CV",
+      "2026-09-22-B0GWF3B9X8",
+      "2026-09-22-B0H8CJJP4Q",
+      "2026-09-23-B0HB3K8DR6",
+      "2026-09-24-B0H1M64QNB",
+      "2026-09-25-B0GCY1Y6G5",
+      "2026-09-25-B0GVF2Q6RJ",
+      "2026-09-25-B0HKN9CWBM",
+      "2026-09-26-B0G2TGRKFK",
+      "2026-09-26-B0GTXY2XP2",
+      "2026-09-26-B0GXV1RXL9",
+      "2026-09-26-B0H1GFBMPK",
+      "2026-09-26-B0H8CM5FPP",
+      "2026-09-26-B0HB995PZC",
+      "2026-09-27-B0GCQ291D9",
+      "2026-09-27-B0GD6G6SBT",
+      "2026-09-27-B0GYNQQFLB",
+      "2026-09-28-B0G29K2XQF",
+      "2026-09-28-B0G5DHX1T3",
+      "2026-09-28-B0GJZQLS8W",
+      "2026-09-28-B0H6LD9VRM",
+      "2026-09-29-B0GR4K3JH7",
+      "2026-09-29-B0H86RPR71",
+      "2026-09-30-B0GP22FMHL",
+      "2026-10-01-B0G4WPJPZG",
+      "2026-10-01-B0G6KZF6JP",
+      "2026-10-01-B0GL1G69N6",
+      "2026-10-01-B0GSVJXX64",
+      "2026-10-01-B0GTX9KVFY",
+      "2026-10-01-B0GVQ7NLPR",
+      "2026-10-01-B0GVXZRSFV",
+      "2026-10-01-B0H9L6DTHB",
+      "2026-10-01-B0H9L9NDW9",
+      "2026-10-02-B0GYCHB5PX",
+      "2026-10-02-B0GZNN3T5J",
+      "2026-10-02-B0H1KL1P2P",
+      "2026-10-02-B0H2XC38VP",
+      "2026-10-02-B0H97523WB",
+      "2026-10-02-B0HBJP2G2T",
+      "2026-10-02-B0HCBS6G4C",
+      "2026-10-02-B0HHMJBKVM",
+      "2026-10-02-B0HKYW9DSY",
+      "2026-10-03-B0GXGYD88G",
+      "2026-10-03-B0H1X6WCTL",
+      "2026-10-03-B0H1YB49PF",
+      "2026-10-03-B0H6LM1VS7",
+      "2026-10-03-B0H7BMBQLR",
+      "2026-10-03-B0HG8NM85S",
+      "2026-10-03-B0HG8PB14P",
+      "2026-10-04-B0HG8QSCC7",
+      "2026-10-05-B0GJNFZYP6",
+      "2026-10-05-B0HH8BB479",
+      "2026-10-05-B0HHD4QVKF",
+      "2026-10-05-B0HLCZFRYD",
+      "2026-10-05-B0HLDB3GS7",
+      "2026-10-06-B0GKLTCKM4",
+      "2026-10-07-B0HC1CX9ZT",
+      "2026-10-07-B0HG8J6CD9",
+      "2026-10-08-B0H2TDG6SF",
+      "2026-10-08-B0H43ZX8LK",
+      "2026-10-11-B0HLCL84SB",
+      "2026-10-12-B0GLF7KQYS",
+      "2026-10-12-B0GYCD79SS",
+      "2026-10-13-B0H82W67ZJ",
+      "2026-10-13-B0HBV9Z4GH",
+      "2026-10-15-B0HLYP7TYL",
+      "2026-10-16-B0GMWSJGDQ",
+      "2026-10-16-B0GVDGXD49",
+      "2026-10-16-B0H2XKZWRQ",
+      "2026-10-16-B0H5VPT5SS",
+      "2026-10-16-B0HCXQB57M",
+      "2026-10-17-B0GF5ZBG1B",
+      "2026-10-17-B0GKSNP34L",
+      "2026-10-18-B0G2TN2NC6",
+      "2026-10-18-B0H61VB14R",
+      "2026-10-19-B0GLXBCHCL",
+      "2026-10-20-B0G2LFDV7B",
+      "2026-10-20-B0GR3L6Q4N",
+      "2026-10-20-B0GWPZRBXD",
+      "2026-10-21-B0HHHSNHHV",
+      "2026-10-21-B0HJ7CPXJ6",
+      "2026-10-22-B0G3NFCNJ2",
+      "2026-10-22-B0GFMTDR3B",
+      "2026-10-22-B0GPQJMG9S",
+      "2026-10-22-B0GW536YTH",
+      "2026-10-22-B0H2T9W4NQ",
+      "2026-10-22-B0HB3CY6GG",
+      "2026-10-23-B0HMW6FRKJ",
+      "2026-10-24-B0GT43YHR2",
+      "2026-10-24-B0H3NP83XC",
+      "2026-10-24-B0HG8HM26J",
+      "2026-10-25-B0G2KRV9TR",
+      "2026-10-25-B0GSVHMBWG",
+      "2026-10-26-B0G233N5BS",
+      "2026-10-26-B0HG8XL46W",
+      "2026-10-27-B0GLFMN6RQ",
+      "2026-10-27-B0GPYC3C8G",
+      "2026-10-27-B0H1KQBF22",
+      "2026-10-27-B0H7LZJ3NB",
+      "2026-10-27-B0HLJSD561",
+      "2026-10-29-B0H25W39LP",
+      "2026-10-29-B0HLVQZ644",
+      "2026-10-30-B0H9K9MQWY",
+      "2026-10-31-B0GJD3WBQB",
+      "2026-10-31-B0H5JTKCRH",
+      "2026-10-31-B0HPF23NHB",
+      "2026-11-01-B0GFHCF22H",
+      "2026-11-01-B0HPDJ4G9R",
+      "2026-11-01-B0HPDNNDP2",
+      "2026-11-01-B0HPDV2D7F",
+      "2026-11-02-B0G1Y3SG6D",
+      "2026-11-03-B0GGT42VWN",
+      "2026-11-04-B0GPPKRSJN",
+      "2026-11-05-B0HPDQ7ZSM",
+      "2026-11-06-B0GCP48MCN",
+      "2026-11-07-B0GW775CPY",
+      "2026-11-07-B0GYCB74YR",
+      "2026-11-07-B0HPDS735M",
+      "2026-11-07-B0HPDY44LC",
+      "2026-11-07-B0HQ2Q9LPM",
+      "2026-11-07-B0HQHZKWBD",
+      "2026-11-10-B0G2365L72",
+      "2026-11-11-B0H2L6KCK3",
+      "2026-11-11-B0HCC1P7GJ",
+      "2026-11-11-B0HCYZ46WN",
+      "2026-11-11-B0HNW2T3VC",
+      "2026-11-15-B0GPPD991S"
     ],
-    "recovered": [
-      "2026-07-27-B00RZ4LM74",
-      "2026-08-01-B0DM9YCV8T",
-      "2026-08-05-B0FPQQXX7V",
-      "2026-10-23-B0FMNLH28K"
-    ],
+    "recovered": [],
     "persisting": [
       "2026-06-07-B0F1STNMN9",
       "2026-06-09-B0CHY7FK28",
+      "2026-07-16-B07B7FDZT6",
       "2026-07-16-B08WRPSMMR",
       "2026-07-18-B0D6BPHLX6",
       "2026-07-19-B093XQCJ87",
       "2026-07-19-B0GD64HNCS",
       "2026-07-21-B01C9AP64I",
+      "2026-07-23-B0B27RV45F",
       "2026-07-23-B0BGRFVZQY",
       "2026-07-23-B0CWH2ZLVL",
       "2026-07-26-B085TTFQTH",
       "2026-07-26-B0GL7CRD8L",
       "2026-07-27-B0DT9CMSDR",
+      "2026-07-28-B000FUTQN2",
       "2026-07-28-B07PGSD41M",
       "2026-07-28-B0CS9NM5YP",
       "2026-07-28-B0GVXLS2J6",
