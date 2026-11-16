@@ -1,169 +1,18 @@
 {
-  "generated_at": "2026-11-14T23:53:57Z",
+  "generated_at": "2026-11-15T23:59:40Z",
   "model": "gemma4:26b-a4b-it-qat",
-  "source_week": "2026-W45",
-  "baseline_ctr": 0.0360555255092843,
+  "source_week": "2026-W46",
+  "baseline_ctr": 0.030155385830919146,
   "pages": [
-    {
-      "page": "https://navi.omcha.jp/products/b0h691176h/",
-      "asin": "B0H691176H",
-      "page_coverage_avg": 0.82,
-      "queries": [
-        {
-          "query": "むぎ ゅ ぽこ アンパンマン どこに 売っ てる",
-          "impressions": 19,
-          "position": 9.631578947368421,
-          "answered": true,
-          "coverage": 0.8,
-          "missing_aspects": [
-            "実店舗での販売状況（トイザらスや家電量販店など）"
-          ],
-          "note": "オンラインショップの価格比較については詳しく述べられていますが、実店舗での取り扱いについては触れられていません。",
-          "error": null
-        },
-        {
-          "query": "むぎゅぽこアンパンマン販売店",
-          "impressions": 18,
-          "position": 10.5,
-          "answered": true,
-          "coverage": 0.8,
-          "missing_aspects": [
-            "実店舗での取り扱い有無",
-            "その他のオンラインショップ（公式サイトなど）の有無"
-          ],
-          "note": "主要なオンライン販売サイト（Amazon, 楽天, Yahoo）の価格比較が含まれており、購入場所を知りたいユーザーの意図には概ね応えられています。",
-          "error": null
-        },
-        {
-          "query": "アンパンマン むぎ ゅ ぽこ どこで 売っ てる",
-          "impressions": 18,
-          "position": 5.888888888888889,
-          "answered": true,
-          "coverage": 0.8,
-          "missing_aspects": [
-            "実店舗での販売状況"
-          ],
-          "note": "オンラインショップでの最安値や販売サイトについては具体的に回答されていますが、実店舗での取り扱いについては触れられていません。",
-          "error": null
-        },
-        {
-          "query": "どこで買うの？",
-          "impressions": 1,
-          "position": 19.0,
-          "answered": true,
-          "coverage": 0.9,
-          "missing_aspects": [],
-          "note": "Amazon、楽天、Yahooの3サイトが挙げられており、最安値に関する情報も含まれているため、十分に回答しています。",
-          "error": null
-        },
-        {
-          "query": "むぎゅぽこ アンパンマン",
-          "impressions": 1,
-          "position": 11.0,
-          "answered": true,
-          "coverage": 0.8,
-          "missing_aspects": [
-            "商品の具体的なサイズや重量",
-            "具体的な遊び方のバリエーション",
-            "購入者の具体的な口コミ内容（テキスト）"
-          ],
-          "note": "商品名での検索に対し、対象年齢、価格、特徴、安全性といった主要な情報を網羅しており、購買検討に必要な基本情報は十分に提供されています。",
-          "error": null
-        }
-      ]
-    },
-    {
-      "page": "https://navi.omcha.jp/products/b0hdb6x1cn/",
-      "asin": "B0HDB6X1CN",
-      "page_coverage_avg": 0.5,
-      "queries": [
-        {
-          "query": "シャイン アルカナ ロッド 最 安値",
-          "impressions": 22,
-          "position": 8.09090909090909,
-          "answered": true,
-          "coverage": 1.0,
-          "missing_aspects": [],
-          "note": "検索クエリである「最安値」に対し、執筆時点でのAmazonの価格を明示し、他の主要サイトでは確認できない旨を回答しているため、十分に回答しています。",
-          "error": null
-        },
-        {
-          "query": "シャインアルカナロッド どこで売ってる",
-          "impressions": 5,
-          "position": 9.2,
-          "answered": true,
-          "coverage": 0.7,
-          "missing_aspects": [
-            "実店舗（玩具店、家電量販店など）での販売状況",
-            "その他のオンラインショップの有無"
-          ],
-          "note": "Amazonでの価格と販売状況には触れていますが、実店舗での取り扱いについては言及されていません。",
-          "error": null
-        },
-        {
-          "query": "シャインアルカナロッド イオン",
-          "impressions": 5,
-          "position": 11.2,
-          "answered": false,
-          "coverage": 0.0,
-          "missing_aspects": [
-            "イオンでの取り扱い有無",
-            "イオンでの販売価格",
-            "イオンでの在庫状況"
-          ],
-          "note": "検索クエリは「イオン」での販売に関する情報を求めていますが、記事内にはAmazon、楽天、Yahoo!ショッピングの情報しか含まれていません。",
-          "error": null
-        },
-        {
-          "query": "シャインアルカナロッド 定価",
-          "impressions": 5,
-          "position": 16.0,
-          "answered": false,
-          "coverage": 0.0,
-          "missing_aspects": [
-            "商品の定価（メーカー希望小売価格）"
-          ],
-          "note": "記事内にはAmazonでの販売価格は記載されていますが、ユーザーが求めている「定価」に関する情報が一切含まれていません。",
-          "error": null
-        },
-        {
-          "query": "シャインアルカナロッド 最安値",
-          "impressions": 4,
-          "position": 3.75,
-          "answered": true,
-          "coverage": 0.8,
-          "missing_aspects": [
-            "他のECサイト（楽天・Yahoo!ショッピング）での価格情報（在庫なしの旨だけでなく、比較対象としての現状）",
-            "送料の有無"
-          ],
-          "note": "執筆時点でのAmazonの価格を明示しており、他の主要サイトには在庫がないことも述べているため、最安値を知りたいユーザーの意図には概ね応えられています。",
-          "error": null
-        }
-      ]
-    },
     {
       "page": "https://navi.omcha.jp/products/b0hdb8kg6g/",
       "asin": "B0HDB8KG6G",
-      "page_coverage_avg": 0.42,
+      "page_coverage_avg": 0.48,
       "queries": [
         {
-          "query": "シャイン アルカナ ロッド 最 安値",
-          "impressions": 11,
-          "position": 10.909090909090908,
-          "answered": true,
-          "coverage": 0.8,
-          "missing_aspects": [
-            "他のECサイト（楽天、Yahoo!ショッピング等）との価格比較",
-            "送料の有無",
-            "中古品やセール情報の有無"
-          ],
-          "note": "Amazonの価格を提示しており、最安値を知りたいという意図には応えていますが、比較対象がAmazonのみであるため網羅性に欠けます。",
-          "error": null
-        },
-        {
           "query": "シャインアルカナロッド 予約 イオン",
-          "impressions": 8,
-          "position": 7.0,
+          "impressions": 38,
+          "position": 7.2631578947368425,
           "answered": false,
           "coverage": 0.0,
           "missing_aspects": [
@@ -171,36 +20,41 @@
             "イオンでの販売状況",
             "イオンでの予約開始時期"
           ],
-          "note": "検索クエリが「イオンでの予約」に特化していますが、記事内にはイオンに関する情報が一切含まれていません。",
+          "note": "検索クエリが「イオンでの予約」について尋ねているのに対し、記事内にはイオンに関する情報が一切含まれていません。",
           "error": null
         },
         {
-          "query": "どこで売ってる",
-          "impressions": 2,
-          "position": 20.5,
-          "answered": false,
-          "coverage": 0.3,
+          "query": "シャイン アルカナ ロッド 最 安値",
+          "impressions": 5,
+          "position": 9.8,
+          "answered": true,
+          "coverage": 0.8,
           "missing_aspects": [
-            "実店舗での販売状況（トイザらス、家電量販店など）",
-            "その他のオンラインショップ（楽天、Yahoo!ショッピングなど）の有無"
+            "他のECサイト（楽天、Yahoo!ショッピング等）との価格比較",
+            "送料の有無",
+            "中古品やフリマアプリでの相場"
           ],
-          "note": "Amazonでの価格には触れていますが、具体的な販売店（どこで売っているか）の選択肢がAmazonのみに限定されており、実店舗の情報が不足しています。",
+          "note": "Amazonの価格を提示しており、最安値を知りたいという意図には応えていますが、比較対象がAmazonのみであるため網羅性は限定的です。",
           "error": null
         },
         {
-          "query": "シャインアルカナロッド 値段",
-          "impressions": 1,
+          "query": "シャインアルカナロッド",
+          "impressions": 2,
           "position": 19.0,
           "answered": true,
-          "coverage": 1.0,
-          "missing_aspects": [],
-          "note": "執筆時点のAmazonでの価格が明記されており、ユーザーの知りたい「値段」という疑問に直接回答しています。",
+          "coverage": 0.8,
+          "missing_aspects": [
+            "商品の詳細な外観やサイズ感",
+            "具体的な遊び方（なりきり遊びの具体的な動作など）",
+            "他の販売サイト（楽天、Yahoo!ショッピング等）との比較情報"
+          ],
+          "note": "商品名での検索に対し、対象年齢、電池の有無、価格といった基本情報は網羅されていますが、商品の詳細な仕様や具体的な遊び方の記述が不足しています。",
           "error": null
         },
         {
           "query": "シャインアルカナロッド 品薄",
-          "impressions": 1,
-          "position": 10.0,
+          "impressions": 2,
+          "position": 10.5,
           "answered": false,
           "coverage": 0.0,
           "missing_aspects": [
@@ -211,35 +65,210 @@
           ],
           "note": "記事は商品の特徴や価格、対象年齢に関する情報のみであり、検索クエリである「品薄」に関する情報は一切含まれていません。",
           "error": null
+        },
+        {
+          "query": "シャインアルカナロッド 最安値",
+          "impressions": 2,
+          "position": 12.5,
+          "answered": true,
+          "coverage": 0.8,
+          "missing_aspects": [
+            "他のECサイト（楽天、Yahoo!ショッピング等）との価格比較",
+            "送料の有無",
+            "中古品やフリマアプリでの価格相場"
+          ],
+          "note": "執筆時点でのAmazonの価格を提示しており、ユーザーの「最安値を知りたい」という意図には応えられていますが、比較対象がAmazonのみであるため網羅性に欠けます。",
+          "error": null
+        }
+      ]
+    },
+    {
+      "page": "https://navi.omcha.jp/products/b0875fv2bq/",
+      "asin": "B0875FV2BQ",
+      "page_coverage_avg": 0.9,
+      "queries": [
+        {
+          "query": "ロンビー おもちゃ",
+          "impressions": 37,
+          "position": 11.675675675675675,
+          "answered": true,
+          "coverage": 0.9,
+          "missing_aspects": [
+            "具体的な遊び方の動画や写真（視覚情報）",
+            "実際の利用者の具体的な口コミ内容（レビューの詳細）"
+          ],
+          "note": "製品の特徴、対象年齢、価格、安全性といった「おもちゃ」としての基本情報は網羅されており、検索意図に十分応えています。",
+          "error": null
+        },
+        {
+          "query": "ロンビー",
+          "impressions": 15,
+          "position": 12.533333333333333,
+          "answered": true,
+          "coverage": 0.9,
+          "missing_aspects": [
+            "具体的な口コミの内容（ユーザーの声）",
+            "購入方法のリンクや詳細"
+          ],
+          "note": "製品の概要、対象年齢、価格、安全性、遊び方といった主要な情報は網羅されており、検索意図に対して十分に回答できています。",
+          "error": null
+        },
+        {
+          "query": "ロンビー トイザらス",
+          "impressions": 4,
+          "position": 11.0,
+          "answered": null,
+          "coverage": null,
+          "missing_aspects": [],
+          "note": "",
+          "error": "500 Server Error: Internal Server Error for url: http://host.docker.internal:11434/api/generate"
+        },
+        {
+          "query": "どこで売ってるの？",
+          "impressions": 1,
+          "position": 4.0,
+          "answered": null,
+          "coverage": null,
+          "missing_aspects": [],
+          "note": "",
+          "error": "500 Server Error: Internal Server Error for url: http://host.docker.internal:11434/api/generate"
+        }
+      ]
+    },
+    {
+      "page": "https://navi.omcha.jp/products/b0fnm3s4wv/",
+      "asin": "B0FNM3S4WV",
+      "page_coverage_avg": 0.72,
+      "queries": [
+        {
+          "query": "クロミスマホワイド 口コミ",
+          "impressions": 31,
+          "position": 8.064516129032258,
+          "answered": true,
+          "coverage": 0.6,
+          "missing_aspects": [
+            "具体的なユーザーのレビュー内容（良い点・悪い点の詳細）",
+            "実際の使用感に関するエピソード"
+          ],
+          "note": "「口コミ」というクエリに対し、評価されている傾向（声で楽しめる等）には触れていますが、具体的な購入者の生の声が不足しています。",
+          "error": null
+        },
+        {
+          "query": "クロミ スマホ ワイド 口コミ",
+          "impressions": 5,
+          "position": 7.0,
+          "answered": true,
+          "coverage": 0.6,
+          "missing_aspects": [
+            "具体的なユーザーの口コミ内容（良い点・悪い点の詳細）",
+            "実際の使用感に関するレビュー情報"
+          ],
+          "note": "最安値や仕様などの情報は網羅されていますが、検索クエリの核心である「口コミ（具体的な評価内容）」が要約レベルに留まっており、不足しています。",
+          "error": null
+        },
+        {
+          "query": "クロミ 携帯 おもちゃ 口コミ",
+          "impressions": 2,
+          "position": 7.5,
+          "answered": true,
+          "coverage": 0.7,
+          "missing_aspects": [
+            "具体的なユーザーの口コミ内容（具体的な感想や評価の詳細）",
+            "遊び方のバリエーション（アプリの種類など）の詳細"
+          ],
+          "note": "最安値や対象年齢、通信機能の有無といった重要な情報は網羅されていますが、クエリが求める「口コミ」については、要約された記述に留まっており具体的な声が不足しています。",
+          "error": null
+        },
+        {
+          "query": "クロミ スマホ おもちゃ 口コミ",
+          "impressions": 1,
+          "position": 10.0,
+          "answered": true,
+          "coverage": 0.7,
+          "missing_aspects": [
+            "具体的なユーザーの口コミ内容（テキストや評価の詳細）",
+            "商品のメリット・デメリットの具体的な詳細"
+          ],
+          "note": "最安値や対象年齢などの基本情報は網羅されていますが、「口コミ」を求めるクエリに対しては、具体的な使用感や評価の記述が不足しています。",
+          "error": null
+        },
+        {
+          "query": "クロミ スマホ ワイド 最安値",
+          "impressions": 1,
+          "position": 13.0,
+          "answered": true,
+          "coverage": 1.0,
+          "missing_aspects": [],
+          "note": "検索クエリの核心である「最安値」について、具体的な金額と販売サイトを明記して回答しています。",
+          "error": null
         }
       ]
     },
     {
       "page": "https://navi.omcha.jp/products/b0gc4mql8n/",
       "asin": "B0GC4MQL8N",
-      "page_coverage_avg": 0.9,
+      "page_coverage_avg": 0.7,
       "queries": [
         {
           "query": "はむにぎり 口コミ",
-          "impressions": 6,
-          "position": 10.5,
+          "impressions": 9,
+          "position": 10.222222222222221,
           "answered": true,
           "coverage": 0.8,
           "missing_aspects": [
             "具体的なユーザーの体験談（良い点・悪い点の詳細）",
-            "購入者の具体的な評価（星の数やレビュー内容の要約）"
+            "購入者の具体的な評価（星の数やレビュー内容の引用）"
           ],
-          "note": "商品の特徴や仕様、価格情報は網羅されていますが、「口コミ」というクエリに対しては、実際の利用者の具体的な声（レビュー内容）が不足しています。",
+          "note": "商品の特徴や仕様、価格に関する情報は網羅されていますが、実際の利用者の具体的な声（レビュー内容）が不足しています。",
           "error": null
         },
         {
           "query": "はむにぎり 洗う",
           "impressions": 5,
-          "position": 15.2,
+          "position": 10.8,
           "answered": true,
           "coverage": 1.0,
           "missing_aspects": [],
           "note": "「洗えるか」という疑問に対し、洗濯不可であることと、汚れた際の具体的な対処法が明記されています。",
+          "error": null
+        },
+        {
+          "query": "どこで買えるの？",
+          "impressions": 1,
+          "position": 28.0,
+          "answered": true,
+          "coverage": 0.8,
+          "missing_aspects": [
+            "具体的な販売サイトの名称（Amazon以外にどこで買えるか）",
+            "実店舗での取り扱い有無"
+          ],
+          "note": "Amazonが最も安いという具体的な情報が含まれていますが、他の具体的な販売店名や実店舗での購入可否については触れられていません。",
+          "error": null
+        },
+        {
+          "query": "レビュー",
+          "impressions": 1,
+          "position": 1.0,
+          "answered": true,
+          "coverage": 0.8,
+          "missing_aspects": [
+            "実際の使用感（触り心地の詳細など）の具体的なエピソード",
+            "デメリットや気になる点（価格、耐久性など）"
+          ],
+          "note": "商品の特徴やサイズ、価格、お手入れ方法といった基本情報は網羅されており、レビューとしての要件は満たしています。",
+          "error": null
+        },
+        {
+          "query": "日本賣多少錢",
+          "impressions": 1,
+          "position": 4.0,
+          "answered": false,
+          "coverage": 0.1,
+          "missing_aspects": [
+            "具体的な販売価格（日本円での金額）",
+            "現在の正確な価格情報"
+          ],
+          "note": "「Amazonが最も手頃」という記述はありますが、具体的な金額が記載されていないため、価格を知りたいユーザーの疑問には答えていません。",
           "error": null
         }
       ]
