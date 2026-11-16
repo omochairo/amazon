@@ -3,7 +3,9 @@
        - 声は要点を自分の言葉でまとめたもの。投稿の丸写し・投稿者や子どもが分かる情報は載せない
        - 良い声だけでなく不満も載せる。宣伝の投稿は件数から除き、除いた数を添える
        - show_until を過ぎたら出さない (古くなった声の取り下げ)。ビルドは毎日なので翌日には消える
-       - 価格・日付・対象年齢などの値はここに書かない (値は記事本文の工程で公式と照らす) */ -}}
+       - 価格・日付・対象年齢などの値はここに書かない (値は記事本文の工程で公式と照らす)
+       - 不満の声が 1 件も見つからなかったときは、探した投稿の数 (searched_posts) があるときに限り
+         「見つかっていません (N 件の投稿を確認)」と出す (navi-brain#185 D6)。探していないのに「無い」とは書かない */ -}}
 {{- $asin := .asin -}}
 {{- $v := index (site.Data.voices | default dict) $asin -}}
 {{- if and $v (ge $v.show_until (now.Format "2006-01-02")) (or $v.good $v.concerns) -}}
@@ -22,6 +24,13 @@
       {{- range $rows }}
       <li>{{ .text }}<span class="buyer-voices__src">（{{ .where }}・{{ .count }} 件）</span></li>
       {{- end }}
+    </ul>
+  </div>
+  {{- else if and (eq .key "concerns") $v.searched_posts }}
+  <div class="buyer-voices__group buyer-voices__group--{{ .mod }}">
+    <h3 class="buyer-voices__h3">{{ .label }}</h3>
+    <ul class="buyer-voices__list">
+      <li>いまのところ見つかっていません<span class="buyer-voices__src">（{{ $v.searched_posts }} 件の投稿を確認）</span></li>
     </ul>
   </div>
   {{- end }}

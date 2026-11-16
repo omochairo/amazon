@@ -11,7 +11,9 @@
       "scope": "Instagram・Threads・X の投稿と、…",   # どこから集めたか（出典の種類）
       "excluded_promotions": 2,        # 数えなかった宣伝の投稿の数
       "good": [{"text": "...", "count": 4, "where": "Instagram の実演動画"}],
-      "concerns": [...],               # 不満も必ず載せる（1 件以上）
+      "concerns": [...],               # 不満も載せる。1 件も見つからなかったときは空にして searched_posts を書く
+      "searched_posts": 17,            # 任意。探した投稿の数。不満が空のときは必須（5 以上）で、
+                                       # ページには「見つかっていません（17 件の投稿を確認）」と出る（navi-brain#185 D6）
       "age": [...]                     # 年齢の実感（任意）
     }
 """
@@ -28,6 +30,7 @@ FILES = sorted(VOICES.glob("*.json"))
 # 読む人が引っかかる言い方（navi-brain#164 R2）と、個別の値引きの断定（#6285）
 BANNED = ("未確認", "要確認", "未検証", "真偽", "噂", "値引き", "割引", "% OFF", "%OFF")
 GROUPS = ("good", "concerns", "age")
+MIN_SEARCHED_POSTS = 5   # 「不満は見つかっていません」と書くのに要る、探した投稿の数
 
 
 def _live_asins() -> set[str]:
@@ -54,7 +57,12 @@ def test_voices_file_follows_the_rules(path):
     assert re.fullmatch(r"MUSE-\d{3,}", d["origin"]) or d["origin"] == "manual"
     assert d["scope"].strip()
     assert isinstance(d["excluded_promotions"], int) and d["excluded_promotions"] >= 0
-    assert d.get("good") and d.get("concerns"), "良い声と不満の両方を載せる"
+    assert d.get("good"), "良い声が無いページは載せない"
+    searched = d.get("searched_posts")
+    if searched is not None:
+        assert isinstance(searched, int) and not isinstance(searched, bool) and searched >= MIN_SEARCHED_POSTS
+    # 不満が 1 件も無いページは、探した投稿の数があるときだけ載せる（探していないのに「無い」と書かない）
+    assert d.get("concerns") or searched is not None, "不満の声が無いときは searched_posts（探した投稿の数）が要る"
     for g in GROUPS:
         for row in d.get(g, []):
             assert set(row) == {"text", "count", "where"}
@@ -74,5 +82,6 @@ def test_partial_hides_expired_voices():
     """show_until を過ぎた声を出さない判定が partial にあること（取り下げの決まり）。"""
     src = (REPO / "hugo" / "layouts" / "partials" / "buyer_voices.html").read_text(encoding="utf-8")
     assert "show_until" in src and 'now.Format "2006-01-02"' in src
+    assert "searched_posts" in src and "見つかっていません" in src
     single = (REPO / "hugo" / "layouts" / "posts" / "single.html").read_text(encoding="utf-8")
     assert 'partial "buyer_voices.html"' in single
