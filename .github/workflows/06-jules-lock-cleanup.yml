@@ -22,10 +22,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
-          ASIN=$(echo "$PR_TITLE" | grep -oE 'B0[A-Z0-9]{8}' | head -1 || true)
+          # #11311: 題名に ASIN が無ければブランチ名 (add-article-<ASIN>-...) から取る (05 と同じ)。
+          HEAD_UPPER=$(printf '%s' "$PR_HEAD_REF" | tr '[:lower:]' '[:upper:]')
+          ASIN=$(printf '%s\n%s\n' "$PR_TITLE" "$HEAD_UPPER" | grep -oE 'B0[A-Z0-9]{8}' | head -1 || true)
           if [ -z "$ASIN" ]; then
-            echo "PR title has no ASIN; skipping"
+            echo "PR title / branch has no ASIN; skipping"
             exit 0
           fi
           if gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/jules-lock/$ASIN" 2>/dev/null; then

@@ -164,6 +164,7 @@ def backlog_asins(
     queue_dir: str = QUEUE_DIR,
     closed_prs_path: str | None = None,
     now=None,
+    pick_exclusion_paths: dict | None = None,
 ) -> set[str]:
     """12-rewrite-idle-fill の待ち行列上限 (#5490) で数えるマーカー。
 
@@ -182,11 +183,87 @@ def backlog_asins(
     closed_prs_path は 03 と同じ ``gh pr list --state closed --search is:unmerged
     --json title,closedAt`` の JSON (既定は環境変数 CLOSED_ARTICLE_PRS)。無い・
     読めないときは除かない (従来どおり全マーカーを数える。上限は緩まない側に倒す)。
+
+    #11311: 冷却中と同じ理由で、pick が全プール共通で外す ASIN (FAILED 続き・
+    blocklist・退避中・ジャンル不一致) も除く (``pick_excluded_asins``)。
+    pick_exclusion_paths はその読み先の差し替え (テスト用)。
     """
     pending = eligible_rewrite_asins(articles_dir, queue_dir)
     if not pending:
         return pending
-    return pending - cooling_asins(closed_prs_path, now)
+    pending = pending - cooling_asins(closed_prs_path, now)
+    return pending - pick_excluded_asins(pending, now=now, **(pick_exclusion_paths or {}))
+
+
+def pick_excluded_asins(
+    asins: set[str],
+    now=None,
+    sessions_path: str | None = None,
+    blocklist_path: str = "data/asin_blocklist.json",
+    quarantine_path: str = "data/asin_quarantine.json",
+    per_asin_root: str = "data/raw/per_asin",
+) -> set[str]:
+    """asins のうち、生成側の pick が #9239 以外の理由で外すもの (#11311)。
+
+    ``article_pick.pick_from_repo`` が全プール共通で外すものと同じ:
+      - FAILED が続く session の ASIN (#9410。``exclude_failing_sessions``。sessions_path
+        の既定は環境変数 JULES_RECENT_SESSIONS。無ければ除かない)
+      - blocklist (``load_blocklist``) と退避中 (``load_quarantine``)
+      - ジャンル不一致 (``genre_gate.is_flagged_snapshot``)
+
+    どれも生成側が pick しないので、マーカーは消化されずに上限の枠だけを埋める
+    (#11304 の冷却中と同じ形)。判定に失敗したものは除かない (上限は緩まない側に倒す)。
+
+    article_pick の警告は GITHUB_ACTIONS 下で標準出力に ``::warning::`` を出すが、
+    ``--backlog-count`` は標準出力を数値として読まれるので標準エラーへ逃がす。
+    """
+    if not asins:
+        return set()
+    import contextlib
+    import sys
+
+    out = asins & listed_pick_exclusions(now, sessions_path, blocklist_path, quarantine_path)
+    with contextlib.redirect_stdout(sys.stderr):
+        try:
+            import genre_gate
+
+            out |= {a for a in asins if genre_gate.is_flagged_snapshot(per_asin_root, a)}
+        except Exception:
+            pass
+    return out
+
+
+def listed_pick_exclusions(
+    now=None,
+    sessions_path: str | None = None,
+    blocklist_path: str = "data/asin_blocklist.json",
+    quarantine_path: str = "data/asin_quarantine.json",
+) -> set[str]:
+    """``pick_excluded_asins`` のうち、候補を見ずに列挙できるもの (#11311)。
+
+    = FAILED が続く session の ASIN ∪ blocklist ∪ 退避中。ジャンル不一致は ASIN ごとに
+    snapshot を読むので含めない。12 の選定側 (``--list-pick-excluded``) が
+    /tmp/excluded.txt に足して、03 が pick しない ASIN にマーカーを積まないために使う。
+    それぞれ独立に読み、読めなかったものだけ除かない。
+    """
+    import contextlib
+    import sys
+
+    out: set[str] = set()
+    with contextlib.redirect_stdout(sys.stderr):
+        try:
+            import article_pick as ap
+        except Exception:
+            return out
+        for load in (lambda: ap.load_blocklist(blocklist_path),
+                     lambda: ap.load_quarantine(quarantine_path),
+                     lambda: ap.exclude_failing_sessions(
+                         set(), path=sessions_path, now=now or datetime.now(timezone.utc))):
+            try:
+                out |= load()
+            except Exception:
+                pass
+    return out
 
 
 def cooling_asins(closed_prs_path: str | None = None, now=None) -> set[str]:
@@ -433,7 +510,7 @@ def main() -> int:
         "--backlog-count",
         action="store_true",
         help="12-rewrite-idle-fill の待ち行列上限で数えるマーカーの件数だけを出す "
-        "(#9239 で pick から外れている ASIN を除く)。",
+        "(#9239 / #11311 で pick から外れている ASIN を除く)。",
     )
     ap.add_argument(
         "--closed-prs",
@@ -446,7 +523,17 @@ def main() -> int:
         action="store_true",
         help="#9239 で生成側の pick から外れている ASIN を 1 行ずつ出す (--closed-prs を使う)。",
     )
+    ap.add_argument(
+        "--list-pick-excluded",
+        action="store_true",
+        help="#11311: 生成側の pick が全プール共通で外す ASIN (FAILED 続き・blocklist・退避中) を "
+        "1 行ずつ出す。12 の選定から外すため。",
+    )
     args = ap.parse_args()
+    if args.list_pick_excluded:
+        for asin in sorted(listed_pick_exclusions()):
+            print(asin)
+        return 0
     if args.list_cooling:
         for asin in sorted(cooling_asins(args.closed_prs)):
             print(asin)

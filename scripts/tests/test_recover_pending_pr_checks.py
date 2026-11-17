@@ -418,6 +418,15 @@ class EvaluateAutoMergeTests(unittest.TestCase):
     def test_conflicting_is_noop(self):
         self.assertEqual(self._eval(mergeable="CONFLICTING"), "noop")
 
+    def test_unknown_mergeable_waits_without_using_the_one_shot(self):
+        """#11311: mergeable の計算待ちで 1 回限りの rerun / exhausted / desync に進まない。"""
+        self.assertEqual(self._eval(mergeable="UNKNOWN"), "noop")
+        self.assertEqual(
+            self._eval(mergeable="UNKNOWN", labels=["auto-merge-recovered"]), "noop")
+        self.assertEqual(self._eval(mergeable="UNKNOWN", branch_sha="b" * 40), "noop")
+        # 計算が終われば従来どおり
+        self.assertEqual(self._eval(mergeable="MERGEABLE"), "rerun")
+
     def test_waits_while_05_is_running_or_just_finished(self):
         running = {"status": "in_progress", "updatedAt": "2026-09-08T11:00:00Z",
                    "headSha": self.HEAD, "databaseId": 1}

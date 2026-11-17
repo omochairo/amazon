@@ -12,6 +12,8 @@ old body AFTER a newer one exists. These tests pin the load-bearing invariants:
 """
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import pathlib
@@ -332,6 +334,93 @@ class BacklogExcludesCoolingTest(unittest.TestCase):
             with open(broken, "w", encoding="utf-8") as f:
                 f.write("{not json")
             self.assertEqual(len(rq.backlog_asins(articles, queue, broken)), 3)
+
+    def test_pick_exclusions_do_not_fill_the_cap(self) -> None:
+        """#11311: FAILED 続き・blocklist・退避中・ジャンル不一致のマーカーも数えない。"""
+        import datetime as dt
+
+        now = dt.datetime(2026, 11, 7, tzinfo=dt.timezone.utc)
+        fail, block, quar, genre = "B0FAIL0001", "B0BLOCK001", "B0QUAR0001", "B0GENRE001"
+        with tempfile.TemporaryDirectory() as d:
+            articles, queue, closed = self._setup(d)
+            for a in (fail, block, quar, genre):
+                _touch(os.path.join(articles, f"2026-06-01-{a}.json"))
+                rq.write_marker(a, f"2026-06-01-{a}", queue, requested_at="2026-10-01T00:00:00Z")
+            sessions = os.path.join(d, "sessions.json")
+            with open(sessions, "w", encoding="utf-8") as f:
+                json.dump([{"title": f"[wf03] {fail}", "state": "FAILED",
+                            "createTime": f"2026-11-06T0{h}:00:00Z"} for h in range(3)], f)
+            blocklist = os.path.join(d, "blocklist.json")
+            with open(blocklist, "w", encoding="utf-8") as f:
+                json.dump({"blocked": [{"asin": block}]}, f)
+            quarantine = os.path.join(d, "quarantine.json")
+            with open(quarantine, "w", encoding="utf-8") as f:
+                json.dump({"candidates": [{"asin": quar}]}, f)
+            paths = {"sessions_path": sessions, "blocklist_path": blocklist,
+                     "quarantine_path": quarantine, "per_asin_root": os.path.join(d, "per_asin")}
+            import genre_gate
+
+            with mock.patch.object(genre_gate, "is_flagged_snapshot",
+                                   side_effect=lambda root, a: a == genre):
+                got = rq.backlog_asins(articles, queue, closed, now=now,
+                                       pick_exclusion_paths=paths)
+            self.assertEqual(got, {self.READY})
+
+    def test_listed_pick_exclusions_reads_each_source_independently(self) -> None:
+        """12 の選定側に渡す一覧。1 つが壊れていても他は効く。ジャンルは含めない。"""
+        import datetime as dt
+
+        now = dt.datetime(2026, 11, 7, tzinfo=dt.timezone.utc)
+        with tempfile.TemporaryDirectory() as d:
+            broken = os.path.join(d, "broken.json")
+            with open(broken, "w", encoding="utf-8") as f:
+                f.write("{not json")
+            quarantine = os.path.join(d, "q.json")
+            with open(quarantine, "w", encoding="utf-8") as f:
+                json.dump({"candidates": [{"asin": "B0QUAR0001"}]}, f)
+            with contextlib.redirect_stdout(io.StringIO()), \
+                    contextlib.redirect_stderr(io.StringIO()):
+                got = rq.listed_pick_exclusions(now, sessions_path=broken,
+                                                blocklist_path=broken,
+                                                quarantine_path=quarantine)
+            self.assertEqual(got, {"B0QUAR0001"})
+
+    def test_pick_exclusions_fail_open(self) -> None:
+        """読めない・無いときは除かない (上限は緩まない側に倒す)。"""
+        import datetime as dt
+
+        now = dt.datetime(2026, 11, 7, tzinfo=dt.timezone.utc)
+        with tempfile.TemporaryDirectory() as d:
+            articles, queue, closed = self._setup(d)
+            broken = os.path.join(d, "broken.json")
+            with open(broken, "w", encoding="utf-8") as f:
+                f.write("{not json")
+            paths = {"sessions_path": broken, "blocklist_path": broken,
+                     "quarantine_path": os.path.join(d, "missing.json"),
+                     "per_asin_root": os.path.join(d, "per_asin")}
+            self.assertEqual(
+                rq.backlog_asins(articles, queue, closed, now=now, pick_exclusion_paths=paths),
+                {self.READY})
+
+    def test_cli_backlog_count_stays_numeric_under_actions_warnings(self) -> None:
+        """article_pick は GITHUB_ACTIONS 下で ::warning:: を標準出力に出す。数値を汚さない。"""
+        import contextlib
+        import io
+
+        with tempfile.TemporaryDirectory() as d:
+            articles, queue, closed = self._setup(d)
+            broken = os.path.join(d, "broken.json")
+            with open(broken, "w", encoding="utf-8") as f:
+                f.write("{not json")
+            buf = io.StringIO()
+            argv = ["rewrite_queue.py", "--articles-dir", articles, "--queue-dir", queue,
+                    "--closed-prs", closed, "--backlog-count"]
+            env = {"GITHUB_ACTIONS": "true", "JULES_RECENT_SESSIONS": broken}
+            with mock.patch.object(sys, "argv", argv), mock.patch.dict(os.environ, env), \
+                    contextlib.redirect_stdout(buf), \
+                    contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(rq.main(), 0)
+            self.assertRegex(buf.getvalue().strip(), r"^\d+$")
 
     def test_cli_backlog_count_prints_only_the_number(self) -> None:
         import contextlib

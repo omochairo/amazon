@@ -18,6 +18,7 @@ import tempfile
 import textwrap
 import types
 import unittest
+from unittest import mock
 
 THIS_DIR = pathlib.Path(__file__).resolve().parent
 REPO_ROOT = THIS_DIR.parent.parent
@@ -311,6 +312,59 @@ class SelectCandidatesTest(unittest.TestCase):
             with open(p, "w", encoding="utf-8") as f:
                 json.dump({"blocked": [{"asin": _asin(1)}, {"reason": "no asin"}, "x"]}, f)
             self.assertEqual(article_pick.load_blocklist(p), {_asin(1)})
+
+    def test_load_quarantine(self):
+        """#11311: 退避中 (人のレビュー待ち) の ASIN。無い・壊れていれば空。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = os.path.join(tmp, "q.json")
+            self.assertEqual(article_pick.load_quarantine(p), set())
+            with open(p, "w", encoding="utf-8") as f:
+                f.write("{broken")
+            with open(os.devnull, "w", encoding="utf-8") as null, \
+                    contextlib.redirect_stdout(null), contextlib.redirect_stderr(null):
+                self.assertEqual(article_pick.load_quarantine(p), set())
+            with open(p, "w", encoding="utf-8") as f:
+                json.dump({"_doc": "x", "candidates": [
+                    {"asin": _asin(2), "ratio": 1.5}, {"reason": "no asin"}, "x"]}, f)
+            self.assertEqual(article_pick.load_quarantine(p), {_asin(2)})
+            # 配列欄が null・dict でない最上位でも止めない
+            for bad in ({"candidates": None}, {"candidates": "x"}, [1, 2]):
+                with open(p, "w", encoding="utf-8") as f:
+                    json.dump(bad, f)
+                self.assertEqual(article_pick.load_quarantine(p), set())
+                with open(p, "w", encoding="utf-8") as f:
+                    json.dump({"blocked": None} if isinstance(bad, dict) else bad, f)
+                self.assertEqual(article_pick.load_blocklist(p), set())
+
+    def test_pick_from_repo_excludes_quarantined(self):
+        """#11311: pick_from_repo は blocklist と退避中の両方を blocked に渡す。"""
+        captured = {}
+
+        def fake_select(*args, **kw):
+            captured.update(kw)
+            return []
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "data", "raw"))
+            with open(os.path.join(tmp, "data", "raw", "amazon.json"), "w",
+                      encoding="utf-8") as f:
+                json.dump({"items": []}, f)
+            cwd = os.getcwd()
+            os.chdir(tmp)
+            try:
+                with mock.patch.object(article_pick, "select_candidates", fake_select), \
+                        mock.patch.object(article_pick, "load_blocklist",
+                                          return_value={_asin(1)}), \
+                        mock.patch.object(article_pick, "load_quarantine",
+                                          return_value={_asin(2)}), \
+                        mock.patch.dict(os.environ, {"JULES_RECENT_SESSIONS": "",
+                                                     "CLOSED_ARTICLE_PRS": ""}), \
+                        open(os.devnull, "w", encoding="utf-8") as null, \
+                        contextlib.redirect_stdout(null), contextlib.redirect_stderr(null):
+                    article_pick.pick_from_repo(set(), "seed")
+            finally:
+                os.chdir(cwd)
+        self.assertEqual(captured["blocked"], {_asin(1), _asin(2)})
 
 
 class OriginLedgerTest(unittest.TestCase):
