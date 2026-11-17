@@ -609,5 +609,156 @@ class RecoverDataPrAutoMergeIoTests(unittest.TestCase):
         self.assertEqual(calls, [])
 
 
+class SelectAutoMergeRunTests(unittest.TestCase):
+    """#11311: 05 / 31 / 36 の直近 run から、今の head で走ったものを優先して選ぶ。"""
+
+    def _r(self, wf, sha, updated):
+        return {"workflow": wf, "headSha": sha, "updatedAt": updated}
+
+    def test_workflows_cover_05_31_36(self):
+        import recover_pending_pr_checks as m
+        self.assertEqual(m.AUTO_MERGE_WORKFLOWS, (
+            "05-jules-auto-merge.yml",
+            "31-engagement-auto-merge.yml",
+            "36-sns-copy-auto-merge.yml",
+        ))
+
+    def test_empty_is_none(self):
+        from recover_pending_pr_checks import select_auto_merge_run
+        self.assertIsNone(select_auto_merge_run([], "a" * 40))
+
+    def test_head_match_beats_newer_stale_run(self):
+        from recover_pending_pr_checks import select_auto_merge_run
+        old05 = self._r("05", "o" * 40, "2026-09-08T11:30:00Z")
+        cur36 = self._r("36", "a" * 40, "2026-09-08T11:00:00Z")
+        self.assertIs(select_auto_merge_run([old05, cur36], "a" * 40), cur36)
+
+    def test_stale_05_does_not_hide_current_31(self):
+        from recover_pending_pr_checks import select_auto_merge_run
+        old05 = self._r("05", "o" * 40, "2026-09-08T10:00:00Z")
+        cur31 = self._r("31", "a" * 40, "2026-09-08T11:00:00Z")
+        self.assertIs(select_auto_merge_run([old05, cur31], "a" * 40), cur31)
+
+    def test_several_matches_pick_newest(self):
+        from recover_pending_pr_checks import select_auto_merge_run
+        a = self._r("05", "a" * 40, "2026-09-08T10:00:00Z")
+        b = self._r("31", "a" * 40, "2026-09-08T11:00:00Z")
+        self.assertIs(select_auto_merge_run([a, b], "a" * 40), b)
+
+    def test_no_match_falls_back_to_newest(self):
+        from recover_pending_pr_checks import select_auto_merge_run
+        a = self._r("05", "o" * 40, "2026-09-08T10:00:00Z")
+        b = self._r("36", "p" * 40, "2026-09-08T11:00:00Z")
+        self.assertIs(select_auto_merge_run([a, b], "a" * 40), b)
+
+
+class FetchLastAutoMergeRunTests(unittest.TestCase):
+    """#11311: 3 本の workflow を全部見て、select_auto_merge_run で選ぶ。"""
+
+    def _fetch(self, runs_by_workflow, head="a" * 40):
+        import recover_pending_pr_checks as m
+        asked = []
+
+        def fake(repo, workflow, branch):
+            asked.append(workflow)
+            run = runs_by_workflow.get(workflow)
+            return None if run is None else dict(run, workflow=workflow)
+
+        with mock.patch.object(m, "_fetch_last_run", side_effect=fake):
+            got = m.fetch_last_auto_merge_run("o/r", "feat/x", head)
+        return got, asked
+
+    def test_sns_copy_pr_finds_36(self):
+        got, asked = self._fetch({"36-sns-copy-auto-merge.yml": {
+            "databaseId": 36, "headSha": "a" * 40, "updatedAt": "2026-09-08T11:00:00Z"}})
+        self.assertEqual(got["databaseId"], 36)
+        self.assertEqual(got["workflow"], "36-sns-copy-auto-merge.yml")
+        self.assertEqual(len(asked), 3)
+
+    def test_no_run_anywhere_is_none(self):
+        got, asked = self._fetch({})
+        self.assertIsNone(got)
+        self.assertEqual(len(asked), 3)
+
+    def test_fetch_last_run_tags_workflow(self):
+        import recover_pending_pr_checks as m
+        out = mock.Mock(returncode=0, stdout='[{"databaseId": 5, "status": "completed"}]',
+                        stderr="")
+        with mock.patch.object(m.subprocess, "run", return_value=out) as run:
+            got = m._fetch_last_run("o/r", "31-engagement-auto-merge.yml", "b")
+        self.assertEqual(got, {"databaseId": 5, "status": "completed",
+                               "workflow": "31-engagement-auto-merge.yml"})
+        cmd = run.call_args.args[0]
+        self.assertEqual(cmd[cmd.index("--workflow") + 1], "31-engagement-auto-merge.yml")
+
+    def test_fetch_last_run_error_is_none(self):
+        import recover_pending_pr_checks as m
+        out = mock.Mock(returncode=1, stdout="", stderr="boom")
+        with mock.patch.object(m.subprocess, "run", return_value=out):
+            self.assertIsNone(m._fetch_last_run("o/r", "36-sns-copy-auto-merge.yml", "b"))
+
+
+class RecoverSnsPrAutoMergeIoTests(unittest.TestCase):
+    """#11311: Jules の SNS PR は 31 / 36 を再実行し、作り手の App の PR は直接付ける。"""
+
+    def _pr(self, **kw):
+        pr = {"number": 11700, "headRefName": "add-sns-copy-json-1", "headRefOid": "e" * 40,
+              "statusCheckRollup": [{"name": "validate", "conclusion": "SUCCESS"},
+                                    {"name": "unit-tests", "conclusion": "SUCCESS"}],
+              "labels": [], "mergeable": "MERGEABLE", "autoMergeRequest": None,
+              "author": {"login": "google-labs-jules[bot]"},
+              "createdAt": "2026-09-08T10:00:00Z"}
+        pr.update(kw)
+        return pr
+
+    def _run(self, pr, workflow):
+        import recover_pending_pr_checks as m
+        last = {"status": "completed", "conclusion": "success",
+                "updatedAt": "2026-09-08T11:00:00Z", "headSha": "e" * 40,
+                "databaseId": 3636, "workflow": workflow}
+        calls = []
+        with mock.patch.object(m, "fetch_last_auto_merge_run", return_value=last) as fetch, \
+                mock.patch.object(m, "fetch_branch_sha", return_value="e" * 40), \
+                mock.patch.object(m, "mark_auto_merge_recovered") as mark, \
+                mock.patch.object(m, "rerun_auto_merge") as rerun, \
+                mock.patch.object(m.subprocess, "run",
+                                  side_effect=lambda *a, **k: calls.append(a[0])), \
+                mock.patch.object(m, "reopen_env", return_value=None):
+            counts = m.recover_auto_merge("o/r", [pr], NOW, False)
+        return counts, mark, rerun, calls, fetch
+
+    def test_reruns_36_for_jules_pr(self):
+        counts, mark, rerun, calls, fetch = self._run(self._pr(), "36-sns-copy-auto-merge.yml")
+        self.assertEqual(counts["rerun"], 1)
+        mark.assert_called_once_with("o/r", 11700)
+        rerun.assert_called_once_with("o/r", 3636)
+        self.assertEqual(calls, [])
+        fetch.assert_called_once_with("o/r", "add-sns-copy-json-1", "e" * 40)
+
+    def test_reruns_31_for_jules_engagement_pr(self):
+        counts, _, rerun, _, _ = self._run(
+            self._pr(headRefName="jules/engagement-1"), "31-engagement-auto-merge.yml")
+        self.assertEqual(counts["rerun"], 1)
+        rerun.assert_called_once_with("o/r", 3636)
+
+    def test_fetch_bot_pr_with_31_run_is_armed_directly(self):
+        # 30 の engagement queue の書き戻し。App token で付ける従来の経路を保つ
+        pr = self._pr(headRefName="sns-engagement-publish/1-1",
+                      author={"login": "app/omochairo-fetch-bot"})
+        counts, mark, rerun, calls, _ = self._run(pr, "31-engagement-auto-merge.yml")
+        self.assertEqual(counts["armed"], 1)
+        self.assertEqual(counts["rerun"], 0)
+        rerun.assert_not_called()
+        mark.assert_called_once_with("o/r", 11700)
+        self.assertEqual(calls[0][:4], ["gh", "pr", "merge", "11700"])
+
+    def test_fetch_bot_article_pr_still_reruns_05(self):
+        pr = self._pr(headRefName="add-article-x",
+                      author={"login": "app/omochairo-fetch-bot"})
+        counts, _, rerun, _, _ = self._run(pr, "05-jules-auto-merge.yml")
+        self.assertEqual(counts["rerun"], 1)
+        rerun.assert_called_once_with("o/r", 3636)
+
+
 if __name__ == "__main__":
     unittest.main()
