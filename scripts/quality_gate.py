@@ -1010,6 +1010,14 @@ _PERSONA_FIT_COUNTS_ENFORCE_FROM = "2026-08-20"
 # 横ばいで、2026-08-25 / 08-26 / 08-29 にも発火している (amazon-navi-brain#13)。
 _REVIEW_SIGNALS_ENFORCE_FROM = "2026-08-20"
 _VERDICT_HEADLINE_ENFORCE_FROM = "2026-08-20"
+# 新発売の品 (source_rules.is_new_product) の review_signals の要素は、実在する
+# 非販売の出典を指すこと (#11736 で追加)。#11736 は新発売の品の出典条件を「緩める」
+# 変更で、件数を必須にしない代わりの歯止めとしてこの規則を足した。ところが規則は
+# 既存の記事にもさかのぼって当たり、census (#4828) の 2026-11-16 の回で、
+# 口コミ欄が販売サイトの出典だけを指す既存記事 272 件が一度に不合格になった
+# (それまでの規則では合格していた記事)。ほかの施行日と同じく、#11736 のマージ日で
+# 切って既存記事は減点に留める。
+_NEW_PRODUCT_RS_SOURCES_ENFORCE_FROM = "2026-11-15"
 
 
 def _v5_soft(name: str, issues: list[str], ok_message: str = "OK") -> CheckResult:
@@ -1079,6 +1087,7 @@ def check_review_signals(data: dict) -> CheckResult:
     ]
     if missing:
         issues.append(f"supporting_source_ids が空のエントリ: {sorted(set(missing))}")
+    src_issues: list[str] = []
     if new_product:
         srcs = data.get("sources")
         src_by_id = {s.get("id"): s for s in srcs if isinstance(s, dict) and isinstance(s.get("id"), str)} if isinstance(srcs, list) else {}
@@ -1088,8 +1097,12 @@ def check_review_signals(data: dict) -> CheckResult:
                 refs = entry.get("supporting_source_ids") if isinstance(entry, dict) else None
                 referenced = [src_by_id.get(ref) for ref in refs if isinstance(ref, str)] if isinstance(refs, list) else []
                 if not referenced or any(s is None for s in referenced) or not any(not _is_sales_source(s) for s in referenced if s):
-                    issues.append(f"{key}[{idx}] の supporting_source_ids は実在する非販売出典を含める必要があります")
-    return _enforce_rs(data, issues)
+                    src_issues.append(f"{key}[{idx}] の supporting_source_ids は実在する非販売出典を含める必要があります")
+    if src_issues and not issues and not _enforced_from(
+            data, _NEW_PRODUCT_RS_SOURCES_ENFORCE_FROM):
+        # 施行日より前の記事は、この規則だけなら減点に留める (#4828)
+        return _v5_soft("review_signals", src_issues)
+    return _enforce_rs(data, issues + src_issues)
 
 
 def _article_asin(data: dict) -> str | None:

@@ -125,7 +125,7 @@ def test_new_product_review_signals_may_be_empty_or_omitted():
 
 
 def test_new_product_review_signal_must_reference_real_non_sales_source():
-    base = _art(slug="2026-11-01-B0GTEST001", sources=[
+    base = _art(slug="2026-11-15-B0GTEST001", sources=[
         {"id": "shop", "url": "https://www.amazon.co.jp/dp/B0GTEST001"},
         {"id": "voice", "url": "https://example.org/review"},
     ])
@@ -140,6 +140,33 @@ def test_new_product_review_signal_must_reference_real_non_sales_source():
     assert not check_review_signals(base).passed
     base["review_signals"]["high_points"][0]["supporting_source_ids"] = ["voice"]
     assert check_review_signals(base).passed
+
+
+def _new_product_sales_only(slug):
+    """件数は満たすが、口コミ欄が販売サイトの出典だけを指す新発売の品の記事。"""
+    art = _art(slug=slug, sources=[
+        {"id": f"src-{i}", "url": f"https://www.amazon.co.jp/dp/B0GTEST00{i}"}
+        for i in range(3)
+    ])
+    return art
+
+
+def test_new_product_sales_only_sources_soft_before_enforce_date():
+    """#11736 の非販売出典の規則は、施行日より前の既存記事では減点に留める (#4828)。"""
+    r = check_review_signals(_new_product_sales_only("2026-11-14-B0GTEST001"))
+    assert r.passed and r.score == V5_EXTENSION_SOFT_SCORE, r.message
+    assert "非販売出典" in r.message
+    hard = check_review_signals(_new_product_sales_only("2026-11-15-B0GTEST001"))
+    assert not hard.passed and "非販売出典" in hard.message
+
+
+def test_new_product_pre_date_other_issues_stay_hard():
+    """施行日より前でも、従来の規則 (2026-08-20 施行) の違反があれば従来どおり hard。"""
+    art = _new_product_sales_only("2026-11-14-B0GTEST001")
+    art["review_signals"]["summary_one_line"] = "短い"
+    r = check_review_signals(art)
+    assert not r.passed
+    assert "summary_one_line" in r.message and "非販売出典" in r.message
 
 
 def test_old_product_review_signal_counts_remain_required():
