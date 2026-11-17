@@ -64,8 +64,19 @@ DEFAULT_NUM_CTX = 8192
 
 REQUEST_TIMEOUT = 180
 MAX_JUDGE_TEXT_LEN = 8000
-_MAX_EXTRA_RETRIES = 2  # 初回 + 2 リトライ = 最大 3 回試行
-_RETRY_SLEEP_SECONDS = 2.0
+# 再試行の待ち時間 (秒)。要素数 = 追加で試す回数 (#3300)。
+# 2026-11-15 の run で 2 クエリが 2 秒おきの 3 回とも 500 Server Error で失敗したため、
+# gemma 側の一時的な不安定から回復できるよう待ちを段階的に伸ばす (#3300)。
+_RETRY_SLEEPS_SECONDS = (5.0, 30.0, 60.0)
+_MAX_EXTRA_RETRIES = len(_RETRY_SLEEPS_SECONDS)
+
+# 途中打ち切り閾値: Ollama 停止時は 1 クエリあたり再試行待ちだけで 95 秒かかるため、
+# 22-answerability-audit.yml (limit=0、通常 20 クエリ前後、job timeout 30 分) で
+# 全件完走を待つと #11004 の「全件失敗なら書かずに exit 1」に到達する前にタイムアウトする。
+# 対象の総クエリ数 (total_queries) に対する失敗率が閾値を超えた時点で run 全体の失敗率超が
+# 確定するため、残りを試さず即打ち切り・不書き込みで exit 1 とする (audit_information_gain.py
+# #11816 と同じ判定。総数分母なので序盤の一時的な失敗が数件続いても総数比 20% 以下なら完走する)。
+_ABORT_MAX_FAILURE_RATE = 0.2
 
 # #4826 項目6: 除外していたのは .quality.json だけだった。あの sidecar は
 # 廃止されて実体が 0 件になった一方、実在するのは .seo.json / .enrichment.json で、
@@ -226,15 +237,17 @@ def judge_query(
     ollama_url: str,
     model: str,
     session: requests.Session,
-    sleeper=time.sleep,
+    sleeper=None,
     num_ctx: int = DEFAULT_NUM_CTX,
 ) -> dict[str, Any]:
     """1 クエリ分を gemma judge (`/api/generate`) に問い合わせる。
 
-    HTTP エラー / 接続エラー / JSON パース失敗は最大 ``_MAX_EXTRA_RETRIES`` 回まで
-    再試行する。それでも失敗したら例外を送出せず、``error`` フィールド付きの
-    dict を返す (1 クエリの失敗で監査全体を止めない)。
+    HTTP エラー / 接続エラー / JSON パース失敗 / ``done_reason`` が ``stop`` 以外の
+    未完応答は最大 ``_MAX_EXTRA_RETRIES`` 回まで段階待機 (5/30/60 秒) で再試行する。
+    それでも失敗したら例外を送出せず、``error`` フィールド付きの dict を返す
+    (1 クエリの失敗で監査全体を止めない)。
     """
+    sleeper = sleeper or time.sleep  # 呼び出し時に解決する (テストが time.sleep を差し替えられるように)
     url = f"{ollama_url.rstrip('/')}/api/generate"
     prompt = JUDGE_PROMPT_TEMPLATE.format(article_text=article_text, query=query)
     body = {
@@ -257,6 +270,10 @@ def judge_query(
             raw = payload.get("response") if isinstance(payload, dict) else None
             if not isinstance(raw, str) or not raw.strip():
                 raise JudgeError("empty /api/generate response")
+            done_reason = payload.get("done_reason")
+            if done_reason not in (None, "stop"):
+                # "length" など、生成が最後まで終わっていない (#3300)
+                raise JudgeError(f"incomplete /api/generate response (done_reason={done_reason})")
             parsed = json.loads(raw)
             if not isinstance(parsed, dict):
                 raise JudgeError("judge response is not a JSON object")
@@ -271,8 +288,12 @@ def judge_query(
         except (requests.RequestException, JudgeError, ValueError, json.JSONDecodeError) as e:
             last_err = e
             if attempt < attempts:
-                logger.warning("judge call failed (attempt %d/%d) for query=%r: %s", attempt, attempts, query, e)
-                sleeper(_RETRY_SLEEP_SECONDS)
+                wait = _RETRY_SLEEPS_SECONDS[attempt - 1]
+                logger.warning(
+                    "judge call failed (attempt %d/%d) for query=%r: %s; retrying in %.0fs",
+                    attempt, attempts, query, e, wait,
+                )
+                sleeper(wait)
             else:
                 logger.error("judge call failed after %d attempt(s) for query=%r: %s", attempts, query, e)
 
@@ -289,6 +310,11 @@ def judge_query(
 # 実行本体
 # --------------------------------------------------------------------------
 
+def _should_abort_remaining(total_queries: int, failed: int) -> bool:
+    """対象の総クエリ数に対する失敗率が上限を超えたかを判定する。"""
+    return total_queries > 0 and (failed / total_queries) > _ABORT_MAX_FAILURE_RATE
+
+
 def run(
     history_dir: pathlib.Path,
     articles_dir: pathlib.Path,
@@ -300,10 +326,22 @@ def run(
     max_queries_per_page: int = DEFAULT_MAX_QUERIES_PER_PAGE,
     limit: int = DEFAULT_LIMIT,
     session: requests.Session | None = None,
-    sleeper=time.sleep,
+    sleeper=None,
     num_ctx: int = DEFAULT_NUM_CTX,
 ) -> dict[str, Any]:
-    """全体を実行し、書き込んだ payload を返す (テスト・main 双方から呼べるように分離)。"""
+    """全体を実行し、結果 dict を返す (テスト・main 双方から呼べるように分離)。
+
+    失敗時の不書き込みポリシー (2 段階の保護):
+      1. **途中打ち切り**: クエリ失敗時に、対象の総クエリ数 (``total_queries``) に
+         対する失敗率が ``_ABORT_MAX_FAILURE_RATE`` (20%) を超えていれば、この時点で
+         run 全体の失敗率 20% 超が確定するため残りのクエリを試さず打ち切る。
+         部分的な監査結果で前回の有効な出力を上書きしないよう ``out_path`` には書かず、
+         ``written=False`` と ``aborted_remaining`` (未試行クエリ数) を返して
+         ``main()`` を exit 1 にする。失敗が 20% 以下なら完走して書き出す。
+      2. **全件失敗 (#11004)**: 万一途中打ち切りを経ずに完走した場合でも、結果的に
+         全クエリが失敗していれば ``out_path`` へは書かず ``written=False`` を返して
+         exit 1 にする。
+    """
     src = history_file or find_latest_history_file(history_dir)
     if src is None or not src.exists():
         logger.error("no gsc_history file found under %s", history_dir)
@@ -322,7 +360,7 @@ def run(
     article_index = discover_articles(articles_dir)
     session = session or requests.Session()
 
-    pages_out: list[dict[str, Any]] = []
+    page_tasks: list[dict[str, Any]] = []
     for d in detected:
         page = d["page"]
         asin = extract_asin_from_page(page)
@@ -337,15 +375,37 @@ def run(
             continue
 
         article_text = build_judge_text(article)
-        top_queries = (d.get("top_queries") or [])[:max_queries_per_page]
+        top_queries = [
+            q for q in (d.get("top_queries") or [])[:max_queries_per_page]
+            if q.get("query", "")
+        ]
+        page_tasks.append({
+            "page": page,
+            "asin": asin,
+            "article_text": article_text,
+            "queries": top_queries,
+        })
 
+    total_queries = sum(len(t["queries"]) for t in page_tasks)
+    attempted = 0
+    failed = 0
+    aborted = False
+    pages_out: list[dict[str, Any]] = []
+
+    for task in page_tasks:
         queries_out: list[dict[str, Any]] = []
         coverages: list[float] = []
-        for q in top_queries:
-            query = q.get("query", "")
-            if not query:
-                continue
-            verdict = judge_query(article_text, query, ollama_url, model, session, sleeper, num_ctx)
+        for q in task["queries"]:
+            query = q["query"]
+            verdict = judge_query(
+                task["article_text"], query, ollama_url, model, session, sleeper, num_ctx
+            )
+            attempted += 1
+            if verdict.get("error"):
+                failed += 1
+                if _should_abort_remaining(total_queries, failed):
+                    aborted = True
+                    break
             if isinstance(verdict.get("coverage"), (int, float)):
                 coverages.append(float(verdict["coverage"]))
             queries_out.append({
@@ -355,18 +415,35 @@ def run(
                 **verdict,
             })
 
+        if aborted:
+            break
+
         pages_out.append({
-            "page": page,
-            "asin": asin,
+            "page": task["page"],
+            "asin": task["asin"],
             "page_coverage_avg": round(sum(coverages) / len(coverages), 3) if coverages else None,
             "queries": queries_out,
         })
 
-    attempted = sum(len(p["queries"]) for p in pages_out)
-    succeeded = sum(1 for p in pages_out for q in p["queries"] if not q.get("error"))
+    if aborted:
+        aborted_remaining = total_queries - attempted
+        logger.error(
+            "judge の失敗率が閾値を超えたため残り %d クエリを打ち切り "
+            "(attempted=%d, failed=%d, total=%d): %s は更新しない",
+            aborted_remaining, attempted, failed, total_queries, out_path,
+        )
+        return {
+            "written": False,
+            "pages": len(pages_out),
+            "attempted": attempted,
+            "failed": failed,
+            "aborted_remaining": aborted_remaining,
+        }
+
+    succeeded = attempted - failed
     if attempted and not succeeded:
-        # Ollama 停止・モデル未ロード等で全クエリが失敗したとき、前回の有効な結果を
-        # 全件 null で上書きしてしまう (#11004)。書かずに失敗として返す
+        # 万一途中打ち切りを経ずに完走し全クエリが失敗したときの最後の防波堤 (#11004)。
+        # Ollama 停止・モデル未ロード等で前回の有効な結果を全件 null で上書きしないよう書かずに失敗で返す
         logger.error("judge が全 %d クエリで失敗: %s は更新しない", attempted, out_path)
         return {"written": False, "pages": len(pages_out), "failed": attempted}
 
@@ -410,7 +487,7 @@ def main() -> int:
         limit=args.limit,
         num_ctx=args.num_ctx,
     )
-    # 入力が無い・全クエリ失敗のときは 0 で終わらせない (#11004)
+    # 入力が無い・途中打ち切り・全クエリ失敗のときは 0 で終わらせない (#11004)
     return 0 if result.get("written") else 1
 
 
