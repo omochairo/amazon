@@ -675,6 +675,64 @@ def test_get_targets_merges_gsc_top_and_extra(tmp_path: pathlib.Path):
     assert "https://navi.omcha.jp/extra/" in t
 
 
+def test_get_targets_skips_removed_products_and_backfills(tmp_path: pathlib.Path):
+    """記事を外した ASIN の旧 URL (転送/404) は飛ばし、次の順位で埋める (#11576)。"""
+    gsc = tmp_path / "gsc.json"
+    gsc.write_text(json.dumps({"by_page": [
+        {"page": "/products/b0h86rpr71/", "impressions": 90},
+        {"page": "/products/b0h1knthwz/", "impressions": 80},
+        {"page": "https://navi.omcha.jp/products/B0H1KNTHWZ/?utm=x#top", "impressions": 75},
+        {"page": "/math-toys/", "impressions": 70},
+        {"page": "/products/b0hdb6x1cn/", "impressions": 60},
+    ]}), encoding="utf-8")
+    t = get_targets("https://navi.omcha.jp", gsc, 3, [],
+                    excluded_asins={"B0H1KNTHWZ"})
+    assert t == [
+        "https://navi.omcha.jp/",
+        "https://navi.omcha.jp/products/b0h86rpr71/",
+        "https://navi.omcha.jp/math-toys/",
+        "https://navi.omcha.jp/products/b0hdb6x1cn/",
+    ]
+
+
+def test_get_targets_keeps_explicit_url_even_if_removed(tmp_path: pathlib.Path, monkeypatch):
+    """--url で明示した URL は、記事を外した ASIN でも計測する。"""
+    monkeypatch.setattr(rll, "latest_gsc_history", lambda: None)
+    url = "https://navi.omcha.jp/products/b0h1knthwz/"
+    t = get_targets("https://navi.omcha.jp", tmp_path / "x.json", 3, [url],
+                    excluded_asins={"B0H1KNTHWZ"})
+    assert url in t
+
+
+def test_removed_product_asins_reads_blocklist_and_redirect_sources(tmp_path: pathlib.Path):
+    bl = tmp_path / "bl.json"
+    bl.write_text(json.dumps({"blocked": [{"asin": "B0AAAAAAAA"}, {"asin": None}, "x"]}),
+                  encoding="utf-8")
+    rd = tmp_path / "rd.json"
+    rd.write_text(json.dumps({"redirects": [{"from": "b0bbbbbbbb", "to": "B0CCCCCCCC"}]}),
+                  encoding="utf-8")
+    # 転送先 (to) は生きているページなので入らない
+    assert rll.removed_product_asins(bl, rd) == {"B0AAAAAAAA", "B0BBBBBBBB"}
+
+
+def test_removed_product_asins_fails_open(tmp_path: pathlib.Path):
+    broken = tmp_path / "broken.json"
+    broken.write_text("{", encoding="utf-8")
+    odd = tmp_path / "odd.json"
+    odd.write_text(json.dumps({"redirects": None}), encoding="utf-8")
+    assert rll.removed_product_asins(tmp_path / "missing.json", broken) == set()
+    assert rll.removed_product_asins(odd, odd) == set()
+
+
+def test_removed_product_asins_default_paths_exist_in_repo():
+    """既定パスの台帳が実在し、中身が読める (パスの書き間違いで黙って空にならない)。"""
+    root = pathlib.Path(__file__).resolve().parents[2]
+    bl = root / rll.ASIN_BLOCKLIST_PATH
+    rd = root / rll.ASIN_REDIRECTS_PATH
+    assert bl.is_file() and rd.is_file()
+    assert rll.removed_product_asins(bl, rd)
+
+
 def test_get_targets_dedupes(tmp_path: pathlib.Path, monkeypatch):
     monkeypatch.setattr(rll, "latest_gsc_history", lambda: None)
     t = get_targets("https://navi.omcha.jp", tmp_path / "x.json", 3,

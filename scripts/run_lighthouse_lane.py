@@ -88,6 +88,7 @@ import sys
 import tempfile
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
+from urllib.parse import urlsplit
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("run_lighthouse_lane")
@@ -114,6 +115,11 @@ DEFAULT_DAY_OFFSET_HOURS = float(os.environ.get("LH_DAY_OFFSET_HOURS", "6"))
 # 明示パスが無ければ gsc_history の最新週に自動フォールバックする。
 DEFAULT_GSC_INPUT = "data/analytics/gsc_weekly.json"
 GSC_HISTORY_DIR = "data/analytics/gsc_history"
+# 記事を外した ASIN の台帳 (#11576)。article_pick.load_blocklist / asin_redirects.load と
+# 同じファイルだが、テストが `scripts.run_lighthouse_lane` として読み込むので、
+# 兄弟モジュールは import せず JSON を直接読む。
+ASIN_BLOCKLIST_PATH = "data/asin_blocklist.json"
+ASIN_REDIRECTS_PATH = "data/asin_redirects.json"
 DEFAULT_ORIGIN = "https://navi.omcha.jp"
 DEFAULT_RUNS = 3
 DEFAULT_TOP_URLS = 5
@@ -1272,14 +1278,65 @@ def latest_gsc_history() -> Optional[pathlib.Path]:
     return files[-1] if files else None
 
 
+_PRODUCT_PATH_RE = re.compile(r"/products/([0-9a-z]{10})/?$", re.IGNORECASE)
+
+
+def _product_asin(url: str) -> Optional[str]:
+    """`/products/<asin>/` の ASIN (大文字)。クエリ・フラグメントは見ない。"""
+    m = _PRODUCT_PATH_RE.search(urlsplit(url).path)
+    return m.group(1).upper() if m else None
+
+
+def _read_asins(path: pathlib.Path, list_key: str, asin_key: str) -> set:
+    """``{list_key: [{asin_key: ...}]}`` の ASIN 集合。無い/壊れていれば空 (計測を止めない)。
+
+    どちらの台帳もリポジトリに常にあるので、無いのは cwd がリポジトリ直下でない
+    などの異常。除外が黙って効かなくならないよう、空にするときは必ず警告を出す。
+    """
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:  # FileNotFoundError も含む
+        logger.warning("failed to read %s: %s — not excluding from it", path, e)
+        return set()
+    rows = data.get(list_key) if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        logger.warning("%s has no %r list — not excluding from it", path, list_key)
+        return set()
+    return {str(r[asin_key]).strip().upper() for r in rows
+            if isinstance(r, dict) and isinstance(r.get(asin_key), str)}
+
+
+def removed_product_asins(
+    blocklist_path: pathlib.Path = pathlib.Path(ASIN_BLOCKLIST_PATH),
+    redirects_path: pathlib.Path = pathlib.Path(ASIN_REDIRECTS_PATH),
+) -> set:
+    """記事を外した ASIN (#11576)。この商品ページは転送か 404 なので計測対象にしない。
+
+    GSC の上位 URL は過去 1 週間の表示で決まるので、記事を外した直後の旧 URL も
+    しばらく上位に残る。2026-11-12 から `/products/b0h1knthwz/` が
+    `asin_redirects.json` で本体のページへ転送されるようになったが、計測は続き、
+    meta refresh の転送ごと測った TBT が 50 前後から約 400 に跳ねた。
+    ページは劣化していないのに劣化に見える行が history に溜まる
+    (404 の旧 URL なら毎日 kind="error" で鳴る) ので、選ぶ段階で外す。
+    """
+    return (_read_asins(blocklist_path, "blocked", "asin")
+            | _read_asins(redirects_path, "redirects", "from"))
+
+
 def get_targets(
-    origin: str, gsc_path: pathlib.Path, top_urls: int, extra: Sequence[str]
+    origin: str, gsc_path: pathlib.Path, top_urls: int, extra: Sequence[str],
+    excluded_asins: Optional[set] = None,
 ) -> List[str]:
     """計測対象 URL を決める。
 
     origin (ホーム) + GSC 上位 URL + 明示指定分。ページ種別の代表性より
     「実際に流入がある URL の劣化を早く知る」ことを優先する。
+
+    GSC 由来の `/products/<asin>/` のうち `excluded_asins` に入る ASIN は飛ばし、
+    次の順位の URL で埋める (#11576、removed_product_asins 参照)。`--url` で
+    明示した URL は外さない。
     """
+    excluded = {a.upper() for a in (excluded_asins or ())}
     targets: List[str] = [origin.rstrip("/") + "/"]
 
     if not gsc_path.exists():
@@ -1298,6 +1355,9 @@ def get_targets(
                 if not path:
                     continue
                 url = path if path.startswith("http") else origin.rstrip("/") + "/" + path.lstrip("/")
+                if _product_asin(url) in excluded:
+                    logger.info("skip %s — article removed (blocklist / redirect)", url)
+                    continue
                 if url not in targets:
                     targets.append(url)
                 if len(targets) > top_urls:
@@ -1473,7 +1533,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     seen_path = history_dir / SEEN_DATES_FILENAME
 
     targets = get_targets(
-        args.origin, pathlib.Path(args.gsc_input), args.top_urls, args.url
+        args.origin, pathlib.Path(args.gsc_input), args.top_urls, args.url,
+        excluded_asins=removed_product_asins(),
     )
     logger.info("targets: %d URL x %s x %d runs",
                 len(targets), args.form_factors, args.runs)
