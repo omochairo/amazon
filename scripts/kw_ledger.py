@@ -119,6 +119,11 @@ DEFAULT_EXTERNAL = "data/keywords/external.jsonl"
 DEFAULT_ASSIGN = "data/keywords/assign.jsonl"
 DEFAULT_QUEUE_DIR = "data/keywords/queue.d"
 DEFAULT_QUOTA = "data/keywords/quota.jsonl"
+# K8 の毎朝の選別 (omcha-ops seed_screen.py) の記録。state=no_data は
+# 「Ubersuggest にデータが無い語」で、測っても数字が出ない (omcha-ops#999)
+DEFAULT_SCREEN = "data/keywords/screen.jsonl"
+# omcha-ops の scripts/seeds.py `SCREEN_NO_DATA_DAYS` と同じ値にしておく
+DEFAULT_SCREEN_NO_DATA_DAYS = 90
 DEFAULT_LOC_ID = 2392   # Japan。location_suggest で引いた実 ID 以外を入れない
 DEFAULT_LANGUAGE = "ja"
 # 採否を分けた語 (assign に載っている語) だけを再取得する間隔。全件リフレッシュは
@@ -597,6 +602,27 @@ def load_reserved(dirpath: pathlib.Path, cur, loc_id: str, language: str,
     return out
 
 
+def load_screen_no_data(path: pathlib.Path, today: str, days: int) -> set[str]:
+    """選別で `no_data` と判定され、まだ `days` 日たっていない語の norm 集合。
+
+    omcha-ops の `seeds.py` と同じ境界: `screened_at` が today の `days` 日前
+    (含む) より前なら期限切れで、集合に入れない (データは後から付くことがある)。
+    語ごとに**最新の判定**だけを見る。後で ok になった語は外す。
+    """
+    since = (datetime.date.fromisoformat(today)
+             - datetime.timedelta(days=days)).isoformat()
+    last: dict[str, dict] = {}
+    for r in read_jsonl(path):
+        norm = r.get("norm") or normalize_key(r.get("keyword"))
+        if not norm:
+            continue
+        cur = last.get(norm)
+        if cur is None or (r.get("screened_at") or "") >= (cur.get("screened_at") or ""):
+            last[norm] = r
+    return {n for n, r in last.items()
+            if r.get("state") == "no_data" and (r.get("screened_at") or "") > since}
+
+
 def cmd_next(args) -> int:
     """**今日の 100 語を出す。毎日の入口はこれ。**
 
@@ -625,6 +651,14 @@ def cmd_next(args) -> int:
                         - datetime.timedelta(days=args.stale_days)).isoformat()
     reserved = load_reserved(pathlib.Path(args.queue_dir), cur,
                              args.loc_id, args.language, stale_before)
+    no_data = load_screen_no_data(pathlib.Path(args.screen), _today(),
+                                  args.screen_no_data_days)
+    if no_data:
+        n_before = len(reserved)
+        reserved = [t for t in reserved if normalize_key(t[0]) not in no_data]
+        if n_before != len(reserved):
+            print("# next: 選別で no_data の語を予約から %d 語外した" % (n_before - len(reserved)),
+                  file=sys.stderr)
     take = reserved[:args.limit]
     for kw, _block, _src in take:
         print(kw)
@@ -646,6 +680,13 @@ def cmd_next(args) -> int:
             print("# 台帳の裾は見ていない (予約で枠が埋まった)", file=sys.stderr)
         return 0
     cand, ex = refetch_candidates(args, cur, also_taken=[kw for kw, _b, _s in take])
+    if no_data:
+        n_before = len(cand)
+        cand = [r for r in cand
+                if (r.get("norm") or normalize_key(r.get("keyword"))) not in no_data]
+        if n_before != len(cand):
+            print("# next: 選別で no_data の語を裾から %d 語外した" % (n_before - len(cand)),
+                  file=sys.stderr)
     for r in cand[:room]:
         print(r.get("keyword"))
     print("# next: 台帳の裾から %d 語 (候補 %d / 除外 suspect=%d wp既得=%d リスト外=%d 表記揺れは後回し=%d)"
@@ -954,6 +995,11 @@ def main(argv=None) -> int:
                    help="予約だけを出す (既定と同じ。意図の明示用)")
     p.add_argument("--include-tail", action="store_true",
                    help="予約で枠が余ったとき台帳の裾で埋める (既定は埋めない)")
+    p.add_argument("--screen", default=DEFAULT_SCREEN,
+                   help="選別の記録 (screen.jsonl)。state=no_data の語は出さない")
+    p.add_argument("--screen-no-data-days", type=int,
+                   default=DEFAULT_SCREEN_NO_DATA_DAYS,
+                   help="no_data の語を出さない日数 (omcha-ops の SCREEN_NO_DATA_DAYS と揃える)")
     p.add_argument("--loc-id", type=int, default=DEFAULT_LOC_ID)
     p.add_argument("--language", default=DEFAULT_LANGUAGE)
     p.add_argument("--refresh-stale", action="store_true")
