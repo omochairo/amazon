@@ -12,6 +12,7 @@ import json
 import subprocess
 import sys
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from scripts.audit_information_gain import (
@@ -20,6 +21,7 @@ from scripts.audit_information_gain import (
     GitLogError,
     ResultCache,
     ShallowRepositoryError,
+    GemmaCallError,
     TruncationError,
     article_category,
     build_category_index,
@@ -261,6 +263,73 @@ class CallGemmaTruncationTest(unittest.TestCase):
                 "非常に長いプロンプト" * 200, session=self._TruncatingSession(),
                 sleeper=lambda s: None,
             )
+
+
+class CallGemmaRetryTest(unittest.TestCase):
+    """途中で切れた JSON・未完の生成も再試行する (#3300 の 2026-W46)。"""
+
+    class _SeqSession:
+        def __init__(self, payloads):
+            self.payloads = list(payloads)
+            self.calls = 0
+
+        def post(self, url, json=None, timeout=None, headers=None):
+            self.calls += 1
+            return _FakeResp(self.payloads.pop(0))
+
+    @staticmethod
+    def _payload(text, **over):
+        p = {"response": text, "model": "gemma4:26b-a4b-it-qat",
+             "prompt_eval_count": 10, "eval_count": 5, "done_reason": "stop"}
+        p.update(over)
+        return p
+
+    def test_retries_broken_json_then_succeeds(self):
+        good = '{"judgments": [{"index": 1, "supported": true}]}'
+        session = self._SeqSession([
+            self._payload('{"judgments": [{"index": 1, "supported": true}, {"index'),
+            self._payload(good),
+        ])
+        waits = []
+        result = call_gemma("短い", session=session, sleeper=waits.append)
+        self.assertEqual(result["text"], good)
+        self.assertEqual(session.calls, 2)
+        self.assertEqual(waits, [5.0])
+
+    def test_retries_incomplete_done_reason(self):
+        good = '{"judgments": []}'
+        session = self._SeqSession([
+            self._payload('{"judgments": []}', done_reason="length"),
+            self._payload(good),
+        ])
+        result = call_gemma("短い", session=session, sleeper=lambda s: None)
+        self.assertEqual(session.calls, 2)
+        self.assertEqual(result["text"], good)
+
+    def test_gives_up_after_backoff_schedule(self):
+        session = self._SeqSession([self._payload("{broken")] * 4)
+        waits = []
+        with self.assertRaises(GemmaCallError):
+            call_gemma("短い", session=session, sleeper=waits.append)
+        self.assertEqual(session.calls, 4)
+        self.assertEqual(waits, [5.0, 30.0, 60.0])
+
+    def test_truncation_is_not_retried_even_with_length(self):
+        """入力の切り詰めは再試行しても直らないので、done_reason=length と重なっても即座に上げる。"""
+        session = self._SeqSession([
+            self._payload("{}", prompt_eval_count=1, done_reason="length"),
+        ])
+        waits = []
+        with self.assertRaises(TruncationError):
+            call_gemma("非常に長いプロンプト" * 200, session=session, sleeper=waits.append)
+        self.assertEqual(session.calls, 1)
+        self.assertEqual(waits, [])
+
+    def test_plain_text_mode_does_not_require_json(self):
+        session = self._SeqSession([self._payload("ただの文章")])
+        result = call_gemma("短い", session=session, sleeper=lambda s: None, format_json=False)
+        self.assertEqual(result["text"], "ただの文章")
+        self.assertEqual(session.calls, 1)
 
 
 # --------------------------------------------------------------------------
@@ -724,6 +793,12 @@ def _commit_all(repo: Path, message: str) -> None:
 
 
 class RunIntegrationTest(unittest.TestCase):
+    def setUp(self):
+        # 壊れた JSON の記事は再試行の待ち (5/30/60 秒) を踏むので、本物の sleep を止める
+        patcher = mock.patch("scripts.audit_information_gain.time.sleep")
+        self.sleep = patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _build_repo(self, tmp_path: Path, n: int = 3) -> tuple[Path, Path]:
         repo = tmp_path
         _init_repo(repo)
@@ -766,19 +841,39 @@ class RunIntegrationTest(unittest.TestCase):
         from scripts.audit_information_gain import run
         with tempfile.TemporaryDirectory() as td:
             repo = Path(td)
-            articles_dir, raw_dir = self._build_repo(repo, n=3)
+            # 5 件中 1 件 (20%) は打ち切りの閾値 (20% 超) に届かない
+            articles_dir, raw_dir = self._build_repo(repo, n=5)
             payload = run(
                 articles_dir=articles_dir, raw_dir=raw_dir, repo_dir=repo,
                 out_path=repo / "out.json", cache_path=None,
                 since="1980-01-01", until="2099-01-01", limit=0, seed=1,
                 session=_RunFakeSession(fail_markers=frozenset({"記事0の特徴"})),
             )
-            self.assertEqual(payload["summary"]["target_count"], 3)
-            self.assertEqual(payload["summary"]["processed_count"], 2)
+            self.assertEqual(payload["summary"]["target_count"], 5)
+            self.assertEqual(payload["summary"]["processed_count"], 4)
             self.assertEqual(payload["summary"]["failed_count"], 1)
+            self.assertEqual(payload["summary"]["aborted_remaining"], 0)
             self.assertEqual(payload["failed"][0]["asin"], "ASIN000000")
-            # 1/3 (33%) は20%を超えるが、ここで見たいのは「壊れた1件が他の処理を
-            # 止めないこと」。run_ok の閾値判定は別テストで見る。
+            self.assertTrue(payload["run_ok"])
+
+    def test_aborts_remaining_once_failure_ratio_is_exceeded(self):
+        """失敗が 20% を超えた時点で run の失敗は確定するので、残りは試さない (#3300)。"""
+        import tempfile
+        from scripts.audit_information_gain import run
+        with tempfile.TemporaryDirectory() as td:
+            repo = Path(td)
+            articles_dir, raw_dir = self._build_repo(repo, n=10)
+            session = _RunFakeSession(fail_markers=frozenset(f"記事{i}の特徴" for i in range(10)))
+            payload = run(
+                articles_dir=articles_dir, raw_dir=raw_dir, repo_dir=repo,
+                out_path=repo / "out.json", cache_path=None,
+                since="1980-01-01", until="2099-01-01", limit=0, seed=1,
+                session=session,
+            )
+            summary = payload["summary"]
+            self.assertEqual(summary["failed_count"], 3)  # 3/10 で 20% を超える
+            self.assertEqual(summary["processed_count"], 0)
+            self.assertEqual(summary["aborted_remaining"], 7)
             self.assertFalse(payload["run_ok"])
 
     def test_run_not_ok_when_failure_ratio_exceeds_20_percent(self):

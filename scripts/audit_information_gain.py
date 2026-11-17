@@ -27,7 +27,10 @@ M1 (#4841) で採用した物差し「固有かつ裏付けありの文」
     (#4841 M2 で 1 件の破損が run 全体を落とした反省)
   - num_ctx を明示し、切り詰め (ollama が無言で入力を約半分に切り詰める挙動、
     #4528 実測) を検出した試行は失敗として扱う
-  - 失敗が対象の 20% を超えたら run を失敗として報告する (呼び出し元が exit code で判定)
+  - 失敗が対象の 20% を超えたら run を失敗として報告する (呼び出し元が exit code で判定)。
+    超えた時点で失敗は確定するので、残りの記事は試さずに打ち切る (#3300)
+  - 空の応答・500・途中で切れた JSON・done_reason が stop でない応答は、
+    5/30/60 秒おきに再試行する (#3300)
 
 キャッシュ:
   結果は narrative のハッシュ + 素材テキストのハッシュ + モデル ID をキーに
@@ -85,8 +88,15 @@ THRESHOLD_PERCENTILE = 95.0
 # #4841 実装依頼 S3: 失敗がこの割合を超えたら run を失敗として報告する。
 MAX_FAILURE_RATIO = 0.20
 REQUEST_TIMEOUT = 300
-_MAX_EXTRA_RETRIES = 2
-_RETRY_SLEEP_SECONDS = 2.0
+# 再試行の待ち時間 (秒)。要素数 = 追加で試す回数 (#3300)。
+# 2026-W46 (2026-11-13) の run は 40 件中 8 件が失敗した (空の応答 2・500 が 1・
+# JSON が途中で切れた 5)。同じ 5 件を同じ問い合わせで再実行すると 5 件とも
+# done_reason=stop で正しい JSON が返り、入力も 1,500〜1,800 トークンで num_ctx に
+# 遠い。ollama 側がその時間帯だけ不安定だったと読める。当時は 2 秒おきに 2 回しか
+# 試さず、しかも JSON の読み取りは再試行の外だったので、途中で切れた応答は一度で
+# 記事ごと失敗になっていた。待ちを段階的に伸ばし、JSON の検査も再試行に含める。
+_RETRY_SLEEPS_SECONDS = (5.0, 30.0, 60.0)
+_MAX_EXTRA_RETRIES = len(_RETRY_SLEEPS_SECONDS)
 
 # ollama が num_ctx 超過時に入力を無言で切り詰める挙動の検出しきい値
 # (scripts/experimental/multistage_brief/ollama_client.py と同じ、#4841 実装依頼)。
@@ -128,7 +138,7 @@ def call_gemma(
     seed: int = DEFAULT_SEED,
     format_json: bool = True,
     session: requests.Session | None = None,
-    sleeper=time.sleep,
+    sleeper=None,
     timeout: int = REQUEST_TIMEOUT,
 ) -> dict[str, Any]:
     """gemma に1回問い合わせ、テキストと呼び出しメタデータを返す。
@@ -137,6 +147,7 @@ def call_gemma(
     その試行を失敗として扱うこと。黙って続行しない)。
     """
     session = session or requests.Session()
+    sleeper = sleeper or time.sleep  # 呼び出し時に解決する (テストが time.sleep を差し替えられるように)
     url = f"{ollama_url.rstrip('/')}/api/generate"
     body: dict[str, Any] = {
         "model": model,
@@ -187,12 +198,22 @@ def call_gemma(
             if result["truncated"]:
                 logger.error("gemma call truncated: %s", result["truncation_reason"])
                 raise TruncationError(result["truncation_reason"])
+            # 入力の切り詰め (再試行しない) を先に見てから、出力の未完を見る
+            done_reason = payload.get("done_reason")
+            if done_reason not in (None, "stop"):
+                # "length" など、生成が最後まで終わっていない
+                raise GemmaCallError(f"incomplete /api/generate response (done_reason={done_reason})")
+            if format_json:
+                # 途中で切れた JSON も再試行の対象にする (呼び出し元は改めて読む)
+                parse_json_response(text)
             return result
         except (requests.RequestException, GemmaCallError, ValueError, json.JSONDecodeError) as e:
             last_err = e
             if attempt < attempts:
-                logger.warning("gemma call failed (attempt %d/%d): %s; retrying", attempt, attempts, e)
-                sleeper(_RETRY_SLEEP_SECONDS)
+                wait = _RETRY_SLEEPS_SECONDS[attempt - 1]
+                logger.warning("gemma call failed (attempt %d/%d): %s; retrying in %.0fs",
+                               attempt, attempts, e, wait)
+                sleeper(wait)
             else:
                 logger.error("gemma call failed after %d attempt(s): %s", attempts, e)
 
@@ -1152,6 +1173,7 @@ def run(
 
     processed: list[dict[str, Any]] = []
     failed: list[dict[str, Any]] = []
+    aborted_remaining = 0
 
     for asin in target_asins:
         path = article_paths.get(asin)
@@ -1168,12 +1190,22 @@ def run(
         except (TruncationError, GemmaCallError, ValueError, requests.RequestException, json.JSONDecodeError) as e:
             logger.warning("skip %s: %s: %s", asin, type(e).__name__, e)
             failed.append({"asin": asin, "reason": f"{type(e).__name__}: {e}"})
+            if len(failed) / len(target_asins) > MAX_FAILURE_RATIO:
+                # run の失敗はもう確定している。ollama が止まっていると 1 件ごとに
+                # 再試行の待ち (計 95 秒) とタイムアウトを踏むので、残りは試さない (#3300)
+                aborted_remaining = len(target_asins) - len(processed) - len(failed)
+                logger.error(
+                    "failure ratio exceeded %.0f%% (%d/%d) — aborting the remaining %d article(s)",
+                    MAX_FAILURE_RATIO * 100, len(failed), len(target_asins), aborted_remaining,
+                )
+                break
             continue
         processed.append(result)
 
     cache.save()
 
     summary = _summarize_run(processed, failed, len(target_asins))
+    summary["aborted_remaining"] = aborted_remaining
     if target_asins:
         run_ok = summary["failure_ratio"] <= MAX_FAILURE_RATIO
         summary["zero_target_articles"] = False
