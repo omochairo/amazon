@@ -86,8 +86,10 @@ DEFAULT_RERANK_TOP_N = 8
 DEFAULT_EMBED_BATCH_SIZE = 32
 
 REQUEST_TIMEOUT = 30
-_MAX_EXTRA_RETRIES = 2  # 初回 + 2 リトライ = 最大 3 回試行
-_RETRY_SLEEP_SECONDS = 2.0
+# 再試行の待ち時間 (秒)。WP REST / Ruri の一時的な障害に備える (#3300)
+_RETRY_SLEEPS_SECONDS = (5.0, 30.0, 60.0)
+_MAX_EXTRA_RETRIES = len(_RETRY_SLEEPS_SECONDS)
+_RERANK_RETRY_SLEEPS_SECONDS = (2.0, 2.0)
 MAX_TEXT_LEN = 1200
 
 WP_USER_AGENT = "omochairo-wp-navi-link-bot/1.0 (+https://navi.omcha.jp; read-only WP REST fetch, #3333)"
@@ -275,9 +277,10 @@ def parse_wp_post(raw: Any) -> dict[str, Any] | None:
 
 
 def _fetch_wp_page(
-    url: str, params: dict[str, Any], session: requests.Session, headers: dict[str, str], sleeper=time.sleep,
+    url: str, params: dict[str, Any], session: requests.Session, headers: dict[str, str], sleeper=None,
 ) -> list[Any] | None:
     """WP REST の 1 ページを取得する。ページ範囲外 (400) や再試行上限到達時は None を返す。"""
+    sleeper = sleeper or time.sleep  # 呼び出し時に解決する (テストが time.sleep を差し替えられるように)
     last_err: Exception | None = None
     attempts = _MAX_EXTRA_RETRIES + 1
     for attempt in range(1, attempts + 1):
@@ -295,8 +298,9 @@ def _fetch_wp_page(
         except (requests.RequestException, ValueError) as e:
             last_err = e
             if attempt < attempts:
-                logger.warning("WP posts page fetch failed (attempt %d/%d): %s; retrying", attempt, attempts, e)
-                sleeper(_RETRY_SLEEP_SECONDS)
+                wait = _RETRY_SLEEPS_SECONDS[attempt - 1]
+                logger.warning("WP posts page fetch failed (attempt %d/%d): %s; retrying in %.0fs", attempt, attempts, e, wait)
+                sleeper(wait)
             else:
                 logger.error("WP posts page fetch failed after %d attempt(s): %s", attempts, e)
     return None
@@ -310,7 +314,7 @@ def fetch_wp_posts(
     sleep_seconds: float = DEFAULT_SLEEP_SECONDS,
     max_pages: int = DEFAULT_MAX_PAGES,
     limit: int = 0,
-    sleeper=time.sleep,
+    sleeper=None,
 ) -> list[dict[str, Any]]:
     """WP REST API (``/wp-json/wp/v2/posts``) から published 記事を全件 (read-only) 取得する。
 
@@ -322,6 +326,7 @@ def fetch_wp_posts(
     途中のページ取得が (再試行しても) 失敗した場合はそこまでの取得結果を返す
     (レポートは部分的でも出す方が、全体を諦めるより有用なため)。
     """
+    sleeper = sleeper or time.sleep  # 呼び出し時に解決する
     url = f"{wp_base_url.rstrip('/')}/wp-json/wp/v2/posts"
     headers = {"User-Agent": WP_USER_AGENT}
     posts: list[dict[str, Any]] = []
@@ -364,13 +369,14 @@ def fetch_wp_posts(
 # --------------------------------------------------------------------------
 
 def embed_batch_ruri(
-    texts: list[str], kind: str, ruri_url: str, session: requests.Session, sleeper=time.sleep,
+    texts: list[str], kind: str, ruri_url: str, session: requests.Session, sleeper=None,
 ) -> list[list[float]]:
     """1 バッチ分のテキストを Ruri v3 API (``/embed``) でベクトル化する。
 
     ``kind`` は "query" (WP 記事側) か "document" (navi 候補側) を指定する
     (ruri app.py がクエリ/文書プレフィックスを自動付与する)。
     """
+    sleeper = sleeper or time.sleep  # 呼び出し時に解決する (テストが time.sleep を差し替えられるように)
     url = f"{ruri_url.rstrip('/')}/embed"
     last_err: Exception | None = None
     attempts = _MAX_EXTRA_RETRIES + 1
@@ -388,8 +394,9 @@ def embed_batch_ruri(
         except (requests.RequestException, EmbeddingBatchError, ValueError) as e:
             last_err = e
             if attempt < attempts:
-                logger.warning("ruri embed batch failed (attempt %d/%d): %s; retrying", attempt, attempts, e)
-                sleeper(_RETRY_SLEEP_SECONDS)
+                wait = _RETRY_SLEEPS_SECONDS[attempt - 1]
+                logger.warning("ruri embed batch failed (attempt %d/%d): %s; retrying in %.0fs", attempt, attempts, e, wait)
+                sleeper(wait)
             else:
                 logger.error("ruri embed batch failed after %d attempt(s): %s", attempts, e)
     raise EmbeddingBatchError(str(last_err)) from last_err
@@ -402,7 +409,7 @@ def embed_texts_ruri(
     session: requests.Session,
     *,
     batch_size: int = DEFAULT_EMBED_BATCH_SIZE,
-    sleeper=time.sleep,
+    sleeper=None,
 ) -> list[list[float]]:
     """テキスト全件を ``batch_size`` ごとに ``embed_batch_ruri`` へ渡す。"""
     vectors: list[list[float]] = []
@@ -418,7 +425,7 @@ def rerank_candidates(
     ruri_url: str,
     session: requests.Session,
     *,
-    sleeper=time.sleep,
+    sleeper=None,
 ) -> list[dict[str, Any]] | None:
     """Ruri v3 reranker (``/rerank``) を呼ぶ。
 
@@ -430,9 +437,10 @@ def rerank_candidates(
     if not doc_texts:
         return None
     url = f"{ruri_url.rstrip('/')}/rerank"
+    sleeper = sleeper or time.sleep  # 呼び出し時に解決する (テストが time.sleep を差し替えられるように)
     body: dict[str, Any] = {"query": query_text, "documents": doc_texts}
     last_err: Exception | None = None
-    attempts = _MAX_EXTRA_RETRIES + 1
+    attempts = len(_RERANK_RETRY_SLEEPS_SECONDS) + 1
     for attempt in range(1, attempts + 1):
         try:
             resp = session.post(url, json=body, headers=ruri_headers(), timeout=REQUEST_TIMEOUT)
@@ -446,8 +454,9 @@ def rerank_candidates(
         except (requests.RequestException, ValueError) as e:
             last_err = e
             if attempt < attempts:
-                logger.warning("ruri rerank failed (attempt %d/%d): %s; retrying", attempt, attempts, e)
-                sleeper(_RETRY_SLEEP_SECONDS)
+                wait = _RERANK_RETRY_SLEEPS_SECONDS[attempt - 1]
+                logger.warning("ruri rerank failed (attempt %d/%d): %s; retrying in %.0fs", attempt, attempts, e, wait)
+                sleeper(wait)
             else:
                 logger.error(
                     "ruri rerank failed after %d attempt(s); falling back to cosine order: %s", attempts, e
@@ -627,7 +636,7 @@ def run(
     rerank_top_n: int = DEFAULT_RERANK_TOP_N,
     use_reranker: bool = True,
     session: requests.Session | None = None,
-    sleeper=time.sleep,
+    sleeper=None,
 ) -> dict[str, Any]:
     """WP 記事取得 → navi 候補構築 → 埋め込み照合 → レポート書き込みを行う。"""
     summary: dict[str, Any] = {

@@ -155,6 +155,17 @@ class FetchWpPostsTest(unittest.TestCase):
         self.assertEqual(session.get.call_count, 2)
         sleeper.assert_called_once_with(1.5)
 
+    def test_default_sleeper_handles_pagination(self):
+        session = mock.Mock()
+        session.get.side_effect = [
+            _resp(200, [_wp_raw(1), _wp_raw(2)]),
+            _resp(200, [_wp_raw(3)]),
+        ]
+        with mock.patch("scripts.build_wp_navi_link_candidates.time.sleep") as sleep:
+            posts = fetch_wp_posts("https://omcha.jp", session, per_page=2)
+        self.assertEqual([p["id"] for p in posts], [1, 2, 3])
+        sleep.assert_called_once_with(1.0)
+
     def test_400_past_last_page_stops_cleanly(self):
         session = mock.Mock()
         session.get.side_effect = [_resp(200, [_wp_raw(1)] * 2), _resp(400, {})]
@@ -175,7 +186,7 @@ class FetchWpPostsTest(unittest.TestCase):
         session = mock.Mock()
         ok_page = _resp(200, [_wp_raw(1)] * 2)
         failing = requests.ConnectionError("boom")
-        session.get.side_effect = [ok_page, failing, failing, failing]
+        session.get.side_effect = [ok_page, failing, failing, failing, failing]
         posts = fetch_wp_posts(
             "https://omcha.jp", session, per_page=2, sleep_seconds=0, sleeper=_no_sleep,
         )
@@ -423,12 +434,28 @@ class EmbedBatchRuriTest(unittest.TestCase):
         out = embed_batch_ruri(["a"], "query", "http://ruri:8000", session, sleeper=_no_sleep)
         self.assertEqual(out, [[1.0]])
 
+    def test_uses_progressive_retry_waits_then_succeeds(self):
+        session = mock.Mock()
+        session.post.side_effect = [
+            requests.ConnectionError("temporary 1"),
+            requests.ConnectionError("temporary 2"),
+            requests.ConnectionError("temporary 3"),
+            _post_resp({"vectors": [[1.0]]}),
+        ]
+        waits = []
+        out = embed_batch_ruri(
+            ["a"], "query", "http://ruri:8000", session, sleeper=waits.append,
+        )
+        self.assertEqual(out, [[1.0]])
+        self.assertEqual(waits, [5.0, 30.0, 60.0])
+        self.assertEqual(session.post.call_count, 4)
+
     def test_gives_up_after_retry_limit_raises(self):
         session = mock.Mock()
         session.post.side_effect = requests.ConnectionError("boom")
         with self.assertRaises(EmbeddingBatchError):
             embed_batch_ruri(["a"], "query", "http://ruri:8000", session, sleeper=_no_sleep)
-        self.assertEqual(session.post.call_count, 3)  # 初回 + 2 リトライ
+        self.assertEqual(session.post.call_count, 4)  # 初回 + 3 リトライ
 
     def test_bad_shape_raises(self):
         session = mock.Mock()
@@ -453,8 +480,11 @@ class RerankCandidatesTest(unittest.TestCase):
     def test_failure_after_retries_returns_none_not_raise(self):
         session = mock.Mock()
         session.post.side_effect = requests.ConnectionError("boom")
-        out = rerank_candidates("q", ["d1"], "http://ruri:8000", session, sleeper=_no_sleep)
+        waits = []
+        out = rerank_candidates("q", ["d1"], "http://ruri:8000", session, sleeper=waits.append)
         self.assertIsNone(out)
+        self.assertEqual(waits, [2.0, 2.0])
+        self.assertEqual(session.post.call_count, 3)
 
 
 # --------------------------------------------------------------------------
