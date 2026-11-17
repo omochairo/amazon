@@ -83,8 +83,14 @@ DEFAULT_OUT_CAVEAT = "data/analytics/experience_usage_caveat.json"
 DEFAULT_MODEL_RURI = "cl-nagoya/ruri-v3-310m"
 DEFAULT_BATCH_SIZE = 32
 REQUEST_TIMEOUT = 120
-_MAX_EXTRA_RETRIES = 2
-_RETRY_SLEEP_SECONDS = 2.0
+# 再試行の待ち時間 (秒)。要素数 = 追加で試す回数 (#3300)。
+# run は途中保存なしで埋め込みを 4 回 (正例 doc/query・対照 doc/query) 順に呼び、
+# 1 バッチの失敗で run 全体が落ちる。2 秒×2 回では Ruri の再起動や一時的な高負荷を
+# 待ちきれず、それまでの埋め込みが全部無駄になるので、audit_information_gain.py と
+# 同じく待ちを段階的に伸ばす。失敗は 1 回で run を止めるので、待ちが件数分
+# 積み上がることはない (同 PR の「20% で打ち切り」は件数で失敗を数える経路が無いため不要)。
+_RETRY_SLEEPS_SECONDS = (5.0, 30.0, 60.0)
+_MAX_EXTRA_RETRIES = len(_RETRY_SLEEPS_SECONDS)
 
 # 負の対照サンプリングの固定 seed。較正の再現性のため変更しない
 # (変えると閾値そのものが動き、過去の計測結果と比較できなくなる)。
@@ -409,9 +415,10 @@ def sample_negative_snippet(
 # --------------------------------------------------------------------------
 
 def embed_batch_ruri(
-    texts: list[str], kind: str, ruri_url: str, session: requests.Session, sleeper=time.sleep,
+    texts: list[str], kind: str, ruri_url: str, session: requests.Session, sleeper=None,
 ) -> list[list[float]]:
     """1 バッチ分のテキストを Ruri v3 API (``/embed``) でベクトル化する。"""
+    sleeper = sleeper or time.sleep  # 呼び出し時に解決する (テストが time.sleep を差し替えられるように)
     url = f"{ruri_url.rstrip('/')}/embed"
     last_err: Exception | None = None
     attempts = _MAX_EXTRA_RETRIES + 1
@@ -429,8 +436,9 @@ def embed_batch_ruri(
         except (requests.RequestException, EmbeddingBatchError, ValueError) as e:
             last_err = e
             if attempt < attempts:
-                logger.warning("ruri embed batch failed (attempt %d/%d): %s; retrying", attempt, attempts, e)
-                sleeper(_RETRY_SLEEP_SECONDS)
+                wait = _RETRY_SLEEPS_SECONDS[attempt - 1]
+                logger.warning("ruri embed batch failed (attempt %d/%d): %s; retrying in %.0fs", attempt, attempts, e, wait)
+                sleeper(wait)
             else:
                 logger.error("ruri embed batch failed after %d attempt(s): %s", attempts, e)
     raise EmbeddingBatchError(str(last_err)) from last_err
@@ -443,7 +451,7 @@ def embed_texts_ruri(
     session: requests.Session,
     *,
     batch_size: int = DEFAULT_BATCH_SIZE,
-    sleeper=time.sleep,
+    sleeper=None,
 ) -> list[list[float]]:
     if not texts:
         return []
@@ -587,7 +595,7 @@ def run(
     threshold_percentile: float = THRESHOLD_PERCENTILE,
     include_caveat_fields: bool = False,
     session: requests.Session | None = None,
-    sleeper=time.sleep,
+    sleeper=None,
 ) -> dict[str, Any]:
     started = time.monotonic()
     session = session or requests.Session()

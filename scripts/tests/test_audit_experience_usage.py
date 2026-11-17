@@ -39,6 +39,9 @@ from scripts.audit_experience_usage import (
     _bucket_matched_key,
     _diff_rate,
     _rate_stats,
+    EmbeddingBatchError,
+    embed_batch_ruri,
+    embed_texts_ruri,
 )
 
 
@@ -672,6 +675,67 @@ class RunWithCaveatFieldsTest(unittest.TestCase):
             self.assertEqual(result["included"], 0)
             self.assertIsNone(result["payload"]["threshold"])
             self.assertTrue(out_path.exists())
+
+
+class _FlakyResp:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return self._payload
+
+
+class _FlakySession:
+    """先頭から順に例外 or ペイロードを返す /embed のモック (#3300)。"""
+
+    def __init__(self, outcomes):
+        self._outcomes = list(outcomes)
+        self.calls = 0
+
+    def post(self, url, json=None, headers=None, timeout=None):
+        self.calls += 1
+        item = self._outcomes.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return _FlakyResp(item)
+
+
+class EmbedRetryTest(unittest.TestCase):
+    """#3300: 再試行の待ちが 5/30/60 秒で、既定の sleeper が呼び出し時に解決されること。"""
+
+    def test_waits_5_30_60_then_succeeds(self):
+        import requests
+        session = _FlakySession([
+            requests.ConnectionError("1"), requests.ConnectionError("2"),
+            {"vectors": "broken"},  # 形の不一致も再試行の対象
+            {"vectors": [[1.0]]},
+        ])
+        waits = []
+        out = embed_batch_ruri(["a"], "query", "http://ruri:8000", session, sleeper=waits.append)
+        self.assertEqual(out, [[1.0]])
+        self.assertEqual(waits, [5.0, 30.0, 60.0])
+        self.assertEqual(session.calls, 4)
+
+    def test_gives_up_after_three_retries(self):
+        import requests
+        session = _FlakySession([requests.ConnectionError("x")] * 4)
+        waits = []
+        with self.assertRaises(EmbeddingBatchError):
+            embed_batch_ruri(["a"], "query", "http://ruri:8000", session, sleeper=waits.append)
+        self.assertEqual(session.calls, 4)
+        self.assertEqual(waits, [5.0, 30.0, 60.0])
+
+    def test_default_sleeper_resolved_at_call_time(self):
+        import requests
+        from unittest import mock
+        session = _FlakySession([requests.ConnectionError("x"), {"vectors": [[1.0]]}])
+        waits = []
+        with mock.patch("scripts.audit_experience_usage.time.sleep", side_effect=waits.append):
+            embed_texts_ruri(["a"], "query", "http://ruri:8000", session)
+        self.assertEqual(waits, [5.0])
 
 
 if __name__ == "__main__":
