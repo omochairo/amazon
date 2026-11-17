@@ -399,6 +399,11 @@ def evaluate_auto_merge(
         return "noop"  # 05 の対象 (記事・ブランドの PR) ではない
     if mergeable == MERGEABLE_CONFLICTING:
         return "noop"  # dirty は base の取り込みが要る。再実行では直らない
+    if mergeable == MERGEABLE_UNKNOWN:
+        # GitHub 側の計算待ち。evaluate_pr と同じく次の run で判定し直す (#11311)。
+        # ここで rerun すると 1 回限りの復旧 (AUTO_MERGE_RECOVERY_LABEL) を、
+        # dirty かもしれない PR に使い切ってしまう。
+        return "noop"
     if last_run.get("status") != "completed":
         return "noop"  # 05 がまだ動いている
     updated = last_run.get("updatedAt")

@@ -118,7 +118,8 @@ jobs:
           JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
         run: |
           set -e
-          gh pr list --repo "$REPO" --state open --json title --jq '.[].title' > /tmp/open_titles.txt || echo "" > /tmp/open_titles.txt
+          # #11311: 題名に ASIN が無い PR もブランチ名で外す (ACTIVE は sort -u で数えるので二重にならない)。
+          gh pr list --repo "$REPO" --state open --json title,headRefName --jq '.[] | .title, (.headRefName | ascii_upcase)' > /tmp/open_titles.txt || echo "" > /tmp/open_titles.txt
           gh api "repos/$REPO/git/matching-refs/heads/jules-lock/" \
             --jq '.[] | .ref | sub("refs/heads/jules-lock/"; "")' > /tmp/locked.txt 2>/dev/null || echo "" > /tmp/locked.txt
           cat /tmp/open_titles.txt /tmp/locked.txt > /tmp/excluded.txt
@@ -133,8 +134,15 @@ jobs:
           # session を作る "03 に次ぐ producer"。03 と同じ rolling-24h 実 quota を尊重し、
           # 残り予算 (cap 80 = 100 から 20 margin) で SLACK を絞る。budget 0 なら count=0 で
           # green skip ([[reference-omochairo-jules-api-limits]] / prevent 側 graceful skip)。
-          BUDGET=$(python scripts/jules_quota_gate.py --cap 80 --max "$SLACK" || echo 0)
+          # #11311: ゲートが読んだ session 一覧を待ち行列の上限計算に渡す (FAILED が続く
+          # ASIN は 03 が pick しないので数えない。03 と同じ取り方で LIST を増やさない)。
+          rm -f /tmp/jules_recent_sessions.json
+          BUDGET=$(python scripts/jules_quota_gate.py --cap 80 --max "$SLACK" \
+            --sessions-out /tmp/jules_recent_sessions.json || echo 0)
           echo "Jules quota gate budget: $BUDGET (rolling-24h 作成数ベース)"
+          if [ -s /tmp/jules_recent_sessions.json ]; then
+            export JULES_RECENT_SESSIONS=/tmp/jules_recent_sessions.json
+          fi
           if [ "${BUDGET:-0}" -lt "$SLACK" ]; then SLACK="${BUDGET:-0}"; fi
           [ "$SLACK" -lt 0 ] && SLACK=0
           echo "active=$ACTIVE max=$MAX_LOCKS slack=$SLACK"
@@ -162,6 +170,9 @@ jobs:
           else
             echo "::warning::closed PR list failed; backlog counts every marker (#9239 cooldown not applied)"
           fi
+          # #11311: 03 が全プール共通で pick しない ASIN (FAILED 続き・blocklist・退避中) も
+          # 選ばない。選んでも消化されないマーカーになるだけ。
+          python scripts/rewrite_queue.py --list-pick-excluded >> /tmp/excluded.txt || true
           ALL_MARKERS=$(python scripts/rewrite_queue.py --list-eligible | grep -cE 'B0[A-Z0-9]{8}' || true)
           BACKLOG=$(python scripts/rewrite_queue.py --backlog-count)
           CAP="${REWRITE_QUEUE_CAP:-12}"

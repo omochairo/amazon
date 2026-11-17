@@ -86,8 +86,33 @@ def load_blocklist(path: str = "data/asin_blocklist.json") -> set:
     except (OSError, ValueError) as e:  # ValueError: JSONDecodeError / UnicodeDecodeError
         _warn(f"asin blocklist skipped: {e}")
         return set()
-    blocked = data.get("blocked", []) if isinstance(data, dict) else []
+    blocked = data.get("blocked") if isinstance(data, dict) else None
+    if not isinstance(blocked, list):  # {"blocked": null} などで pick を止めない
+        return set()
     return {e["asin"] for e in blocked
+            if isinstance(e, dict) and isinstance(e.get("asin"), str)}
+
+
+def load_quarantine(path: str = "data/asin_quarantine.json") -> set:
+    """``{"candidates": [{"asin": ...}]}`` の ASIN 集合 (#11311)。
+
+    リセラー高値の疑いで退避され、人のレビュー待ちの ASIN (#2186)。恒久ブロックでは
+    ないが、レビュー前に pick し直しても同じ判定で退避されるだけなので、
+    candidates に載っている間は pick しない (取り除けば次の run で候補に戻る)。
+    無い/壊れていれば空 (pick を止めない)。
+    """
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return set()
+    except (OSError, ValueError) as e:
+        _warn(f"asin quarantine skipped: {e}")
+        return set()
+    rows = data.get("candidates") if isinstance(data, dict) else None
+    if not isinstance(rows, list):  # {"candidates": null} などで pick を止めない
+        return set()
+    return {e["asin"] for e in rows
             if isinstance(e, dict) and isinstance(e.get("asin"), str)}
 
 
@@ -534,7 +559,7 @@ def pick_from_repo(existing, seed) -> list:
         rewrite_cap=int(os.environ.get("REWRITE_PICKS_PER_RUN", "2")),
         has_amazon_item=has_amazon_item,
         genre_flagged=genre_flagged,
-        blocked=load_blocklist(),
+        blocked=load_blocklist() | load_quarantine(),
         recent_character_counts=candidate_priority.load_recent_character_counts(),
         existing_class_counts=existing_class_counts,
         has_browse_nodes=any(isinstance(i, dict) and "browse_nodes" in i for i in items),

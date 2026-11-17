@@ -114,8 +114,9 @@ jobs:
               exit 0
             fi
           fi
-          gh pr list --repo $REPO --state open --json title \
-            --jq '.[].title' > /tmp/open_titles.txt || echo "" > /tmp/open_titles.txt
+          # #11311: 題名に ASIN が無い PR もブランチ名 (add-article-<ASIN>-...) で外す。
+          gh pr list --repo $REPO --state open --json title,headRefName \
+            --jq '.[] | .title, (.headRefName | ascii_upcase)' > /tmp/open_titles.txt || echo "" > /tmp/open_titles.txt
           # 既存 lock ブランチ (jules-lock/<ASIN>) を exclusion に追加。
           # 2026-05-17 Step C-2: inter-run race (前 run の Jules セッションが PR 出す前に
           # 次 run が同 ASIN を picking) を防ぐ。lock ブランチは ref 作成が atomic (422 on conflict)。
