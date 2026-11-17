@@ -83,8 +83,9 @@ brands:
     tier: A
     region: JP
     safety_default: [ST]
+  # カッチポッチはピープルのベビー向け商品 (#11730。商品名として検索される)
   - canonical: ピープル
-    aliases: [ピープル(People), People]
+    aliases: [ピープル(People), People, カッチポッチ]
     tier: A
     region: JP
     safety_default: [ST]
@@ -1706,8 +1707,9 @@ brands:
     region: JP
   # めろジョイ=中華発の水感スクイーズブーム発端ブランド。@DIME/ロケットニュース24等の
   # メディアが模倣品と区別して報じており実体が確認できる (Cninyck 名義の模倣品は却下側)。
+  # merojoi はローマ字で打った検索語 (#11730)
   - canonical: めろジョイ
-    aliases: [めろジョイ]
+    aliases: [めろジョイ, merojoi]
     tier: D
     region: CN
   # 以下は実在する Amazon 出品者名だが薄いハブ不要 = noindex (既存 Jasonwell/beiens 等と同方針)。
@@ -1727,6 +1729,24 @@ brands:
     aliases: [ねずみスマイル]
     tier: D
     region: JP
+  # #11731: まなぶろ=ノルコーポレーション (東京) のお風呂の知育ブランド (公式サイトの
+  # 「ピックアップブランド」)。サンフェルト=東京・浅草橋のフェルトメーカー (公式サイト)。
+  # 子ども向けのフェルト手芸・ままごとキット。どちらも国内の実ブランド。
+  - canonical: まなぶろ
+    aliases: [まなぶろ]
+    tier: B
+    region: JP
+  - canonical: サンフェルト
+    aliases: [サンフェルト, SUNFELT]
+    tier: B
+    region: JP
+  # キューフラ (Q-FLA)=九州フラワーサービスの雑貨ブランド。Amazon の「おもちゃ > ねんど」
+  # の粘土ぬりえキット (マジックねんど) を Q-FLA 名義で出しており、記事に 7 件ある。
+  # #2158 で「入浴剤ブランドの誤マッチ」として却下していたが、商品は玩具で名義も本人の
+  # ものなので登録に改める (#11731)。薄いハブなので noindex。
+  # kebo=磁石ブロックの出品名 (Amazon・楽天で同じ商品名)。運営会社は未確認 (#11730)。
+  - {canonical: キューフラ, tier: D, region: JP, noindex: true, aliases: [キューフラ, キューフラ(Q-FLA), Q-FLA]}
+  - {canonical: kebo, tier: D, region: unknown, noindex: true, aliases: [kebo, KEBO]}
   # #9819: 楽天ランキング常連のキックバイク。題名照合 (resolve_ranking_asins) のブランド判定に要る。
   # 「ゴーストライダー」にも部分一致するので、ほかのブランドに負けるよう末尾に置く
   # (brand_normalizer の fuzzy 一致は taxonomy の並び順で最初に当たったものを採る)。

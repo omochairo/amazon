@@ -20,11 +20,8 @@
 
 rejected:
   # --- 同名別業種の誤マッチ ---
-  - brand: "キューフラ(Q-FLA)"
-    category: mismatch
-    reason: 九州フラワーサービスの入浴剤ブランド ≠ マジックねんど玩具
-    reviewed: 2026-06-09
-    source: "#2158"
+  # (キューフラ(Q-FLA) は #2158 でここに入れていたが、商品は Q-FLA 名義の粘土玩具だった
+  #  ので brand_taxonomy.yaml に登録した。#11731)
 
   # --- 玩具カテゴリ外 ---
   - brand: ワークアップ
