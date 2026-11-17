@@ -68,9 +68,9 @@ Issue #2686 案2「ambiguous 語のローカル LLM 判定レーン」の計算�
   scripts/audit_query_entailment.py が同じ経路 (Ollama `/api/generate`、
   think: False、format: "json"、keep_alive、options.temperature 0、
   HTTP/JSON 失敗時のリトライ、「1件の失敗で全体を止めない」設計) を
-  実装済み。呼び出し方・リトライ・エラー畳み込みの定数
-  (REQUEST_TIMEOUT / _MAX_EXTRA_RETRIES / _RETRY_SLEEP_SECONDS /
-  JudgeError) をそのまま import して使う。
+  実装済み。REQUEST_TIMEOUT と JudgeError はそのまま import して使う。
+  再試行の回数と待ちは自前で持つ (audit_query_entailment.py は #3300 で
+  5/30/60 秒の待ちと打ち切りに変えたが、この語の判定には持ち込まない)。
 
 制約 (probe_ubersuggest_products.py / audit_query_entailment.py の流儀を踏襲):
   - LLM の失敗は語単位で error に畳んで次へ進む (1語の失敗で全体を止めない)
@@ -102,9 +102,12 @@ import requests
 from scripts.audit_query_entailment import (
     JudgeError,
     REQUEST_TIMEOUT,
-    _MAX_EXTRA_RETRIES,
-    _RETRY_SLEEP_SECONDS,
 )
+
+# 初回 + 2 リトライ = 最大 3 回試行。#3300 以前に audit_query_entailment.py から
+# import していた値をそのまま持つ (振る舞いを変えない)
+_MAX_EXTRA_RETRIES = 2
+_RETRY_SLEEP_SECONDS = 2.0
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("judge_ambiguous_products")
