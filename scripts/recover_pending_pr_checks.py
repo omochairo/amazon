@@ -148,7 +148,24 @@ PR_FIELDS = (
 # どちらも 1 PR につき 1 回だけ (ラベル AUTO_MERGE_RECOVERY_LABEL で冪等化)。
 # 再実行は 05 のスコープ検査をそのまま通すので、記事以外のファイルが混ざった PR に
 # auto-merge を付けてしまうことはない (ここで auto-merge を直接付けない理由)。
+#
+# 2026-11-17 (#11311): 31 (engagement queue) / 36 (SNS コピー) も 05 と同じく、
+# `gh pr merge --auto` が 1 回失敗すると ::warning:: だけで緑終了し、拾い直しが無かった。
+# どちらも作り手が Jules なので下のデータ更新 PR の経路 (作成者で絞る) にも入らない。
+# 05 と同じ「自分の run を再実行してスコープ検査からやり直す」で直るので、探す
+# workflow を並べる。途中のコミットで別の paths に触れた PR では複数に run が残るので、
+# 今の head で走った run を優先して選ぶ (select_auto_merge_run)。
+# 作り手の App の PR (30 の書き戻し) は 31 の run があっても、従来どおり下の
+# データ更新 PR の経路で App token で直接付ける (recover_auto_merge を参照)。
+# 31 / 36 のスコープ外の PR は再実行しても直らないので、1 回だけ空打ちして exhausted
+# の警告で人に回る (05 のような auto-merge-skipped は付けない。05 の自動修復と同時に
+# 走ると、修復後も古い印が残って復旧を止めるため)。
 AUTO_MERGE_WORKFLOW = "05-jules-auto-merge.yml"
+AUTO_MERGE_WORKFLOWS = (
+    AUTO_MERGE_WORKFLOW,
+    "31-engagement-auto-merge.yml",
+    "36-sns-copy-auto-merge.yml",
+)
 AUTO_MERGE_RECOVERY_LABEL = "auto-merge-recovered"
 AUTO_MERGE_SKIPPED_LABEL = "auto-merge-skipped"
 # 05 は有効化後に最大 6 分 (15s × 24) マージを待つ。終わってから少し置いて、
@@ -387,9 +404,9 @@ def evaluate_auto_merge(
 
     戻り値: noop | rerun | desync | exhausted
 
-    last_run は 05 の直近 run (``status`` / ``conclusion`` / ``updatedAt`` /
-    ``headSha`` / ``databaseId``)。05 が一度も走っていない PR (記事以外の PR) は
-    対象外なので noop。
+    last_run は AUTO_MERGE_WORKFLOWS (05 / 31 / 36) の直近 run (``status`` /
+    ``conclusion`` / ``updatedAt`` / ``headSha`` / ``databaseId``)。どれも一度も
+    走っていない PR は対象外なので noop。
     """
     if not required_satisfied or auto_merge_armed:
         return "noop"
@@ -453,19 +470,50 @@ def evaluate_data_pr_auto_merge(
 
 # --- I/O 層 (gh CLI 経由。単体テストでは触らない) -----------------------------
 
-def fetch_last_auto_merge_run(repo: str, branch: str) -> Optional[Dict[str, Any]]:
+def _fetch_last_run(repo: str, workflow: str, branch: str) -> Optional[Dict[str, Any]]:
     res = subprocess.run(
-        ["gh", "run", "list", "-R", repo, "--workflow", AUTO_MERGE_WORKFLOW,
+        ["gh", "run", "list", "-R", repo, "--workflow", workflow,
          "--branch", branch, "--limit", "1",
          "--json", "databaseId,status,conclusion,updatedAt,headSha"],
         capture_output=True, text=True,
     )
     if res.returncode != 0:
-        logger.warning("could not list %s runs for %s: %s", AUTO_MERGE_WORKFLOW, branch,
+        logger.warning("could not list %s runs for %s: %s", workflow, branch,
                        (res.stderr or "").strip())
         return None
     runs = json.loads(res.stdout or "[]")
-    return runs[0] if runs else None
+    if not runs:
+        return None
+    run = dict(runs[0])
+    run["workflow"] = workflow
+    return run
+
+
+def select_auto_merge_run(runs: List[Dict[str, Any]],
+                          head_sha: Optional[str]) -> Optional[Dict[str, Any]]:
+    """workflow ごとの直近 run から、復旧に使う 1 本を選ぶ純粋関数 (#11311)。
+
+    PR の今の head で走った run を優先し、その中で updatedAt が新しいものを選ぶ。
+    無ければ全体で updatedAt が新しいもの (evaluate_auto_merge が head の不一致を
+    synchronize 待ちとして扱う)。途中のコミットで別の workflow の paths に触れた
+    PR で、古い head の run が今の head の run を隠さないようにする。
+    """
+    if not runs:
+        return None
+    matching = [r for r in runs if head_sha and r.get("headSha") == head_sha]
+    pool = matching or runs
+    return max(pool, key=lambda r: r.get("updatedAt") or "")
+
+
+def fetch_last_auto_merge_run(repo: str, branch: str,
+                              head_sha: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """AUTO_MERGE_WORKFLOWS それぞれの直近 run を取り、select_auto_merge_run で選ぶ。
+
+    返す dict には、どの workflow の run かを ``workflow`` に入れる。
+    """
+    runs = [r for r in (_fetch_last_run(repo, w, branch) for w in AUTO_MERGE_WORKFLOWS)
+            if r is not None]
+    return select_auto_merge_run(runs, head_sha)
 
 
 def fetch_branch_sha(repo: str, branch: str) -> Optional[str]:
@@ -518,15 +566,20 @@ def recover_auto_merge(repo: str, prs: List[Dict[str, Any]], now: dt.datetime,
         if AUTO_MERGE_SKIPPED_LABEL in labels:
             continue
         branch = pr["headRefName"]
-        last_run = fetch_last_auto_merge_run(repo, branch)
-        if last_run is None:
-            # 05 の対象外。作り手の App が作ったデータ更新 PR なら直接付ける
+        author = (pr.get("author") or {}).get("login")
+        last_run = fetch_last_auto_merge_run(repo, branch, pr["headRefOid"])
+        # 31 / 36 の run があっても、作り手の App が作った PR (30 の engagement queue の
+        # 書き戻しなど) は従来どおり App token で直接付ける。31 / 36 の run を再実行すると
+        # GITHUB_TOKEN で付くことになり、マージが後続の push workflow を発火しない (#11311)
+        if last_run is None or (last_run.get("workflow") != AUTO_MERGE_WORKFLOW
+                                and author in DATA_PR_AUTHORS):
+            # 05 / 31 / 36 の対象外。作り手の App が作ったデータ更新 PR なら直接付ける
             action = evaluate_data_pr_auto_merge(
                 required_satisfied=True,
                 auto_merge_armed=False,
                 labels=labels,
                 mergeable=pr.get("mergeable"),
-                author=(pr.get("author") or {}).get("login"),
+                author=author,
                 branch=branch,
                 created_at=pr.get("createdAt"),
                 now=now,
@@ -563,10 +616,11 @@ def recover_auto_merge(repo: str, prs: List[Dict[str, Any]], now: dt.datetime,
         if action == "exhausted":
             emit_warning_annotation(
                 f"pr={pr['number']} auto_merge_recovery=exhausted "
+                f"workflow={last_run.get('workflow')} conclusion={last_run.get('conclusion')} "
                 "(checks passed but auto-merge is still off after one recovery; needs human)")
             continue
-        logger.info("pr=%s auto_merge_recovery=%s head=%s", pr["number"], action,
-                    pr["headRefOid"])
+        logger.info("pr=%s auto_merge_recovery=%s head=%s workflow=%s", pr["number"], action,
+                    pr["headRefOid"], last_run.get("workflow"))
         if dry_run:
             continue
         # 先にラベルを付ける: 操作が途中で落ちても次の run で繰り返さない (無限ループ
