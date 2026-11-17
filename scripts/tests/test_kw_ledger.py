@@ -498,3 +498,88 @@ def test_refetch_queue_still_available_explicitly(tmp_path, capsys):
     capsys.readouterr()
     _run(tmp_path, "refetch-queue", "--limit", "5", "--wp-demand", "")
     assert capsys.readouterr().out.splitlines() == ["裾の語"]
+
+
+# --- next: 選別で no_data の語を一定期間出さない (omcha-ops#999) ---------------
+
+
+def _screen(tmp_path, rows):
+    p = tmp_path / "screen.jsonl"
+    p.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows),
+                 encoding="utf-8")
+    return p
+
+
+def _next_out(tmp_path, capsys, screen, *extra):
+    q = tmp_path / "queue.d"
+    q.mkdir(exist_ok=True)
+    capsys.readouterr()
+    _run(tmp_path, "next", "--queue-dir", str(q), "--wp-demand", "",
+         "--include-tail", "--screen", str(screen), *extra)
+    return capsys.readouterr().out.splitlines()
+
+
+def _days_ago(n):
+    return (datetime.date.today() - datetime.timedelta(days=n)).isoformat()
+
+
+def test_next_skips_recent_no_data_words(tmp_path, capsys):
+    _ledger_with_csv(tmp_path, [
+        {"query": "データ無し語", "raw_query": "データ無し語", "volume": 100.0},
+        {"query": "普通の語", "raw_query": "普通の語", "volume": 100.0},
+    ])
+    q = tmp_path / "queue.d"
+    q.mkdir()
+    (q / "010-x.txt").write_text("# 予約\n予約のデータ無し\n予約の普通\n", encoding="utf-8")
+    screen = _screen(tmp_path, [
+        {"keyword": "データ無し語", "norm": K.normalize_key("データ無し語"),
+         "sv": 0, "state": "no_data", "screened_at": _days_ago(10)},
+        {"keyword": "予約のデータ無し", "norm": K.normalize_key("予約のデータ無し"),
+         "sv": 0, "state": "no_data", "screened_at": _days_ago(1)},
+    ])
+    capsys.readouterr()
+    _run(tmp_path, "next", "--queue-dir", str(q), "--wp-demand", "",
+         "--include-tail", "--screen", str(screen))
+    assert capsys.readouterr().out.splitlines() == ["予約の普通", "普通の語"]
+
+
+def test_next_no_data_expires_at_boundary(tmp_path, capsys):
+    """omcha-ops seeds.py と同じ境界: ちょうど 90 日前は期限切れ (出してよい)。"""
+    _ledger_with_csv(tmp_path, [
+        {"query": "境界の語", "raw_query": "境界の語", "volume": 100.0},
+        {"query": "まだの語", "raw_query": "まだの語", "volume": 100.0},
+    ])
+    screen = _screen(tmp_path, [
+        {"keyword": "境界の語", "norm": K.normalize_key("境界の語"),
+         "state": "no_data", "screened_at": _days_ago(90)},
+        {"keyword": "まだの語", "norm": K.normalize_key("まだの語"),
+         "state": "no_data", "screened_at": _days_ago(89)},
+    ])
+    assert _next_out(tmp_path, capsys, screen) == ["境界の語"]
+
+
+def test_next_ignores_ok_unknown_and_uses_latest_judgement(tmp_path, capsys):
+    _ledger_with_csv(tmp_path, [
+        {"query": "okの語", "raw_query": "okの語", "volume": 100.0},
+        {"query": "unknownの語", "raw_query": "unknownの語", "volume": 100.0},
+        {"query": "後でokの語", "raw_query": "後でokの語", "volume": 100.0},
+    ])
+    n = K.normalize_key
+    screen = _screen(tmp_path, [
+        {"keyword": "okの語", "norm": n("okの語"), "state": "ok",
+         "screened_at": _days_ago(1)},
+        {"keyword": "unknownの語", "norm": n("unknownの語"), "state": "unknown",
+         "screened_at": _days_ago(1)},
+        {"keyword": "後でokの語", "norm": n("後でokの語"), "state": "no_data",
+         "screened_at": _days_ago(20)},
+        {"keyword": "後でokの語", "norm": n("後でokの語"), "state": "ok",
+         "screened_at": _days_ago(2)},
+    ])
+    assert sorted(_next_out(tmp_path, capsys, screen)) == sorted(
+        ["okの語", "unknownの語", "後でokの語"])
+
+
+def test_next_without_screen_file_is_unchanged(tmp_path, capsys):
+    _ledger_with_csv(tmp_path, [
+        {"query": "語", "raw_query": "語", "volume": 100.0}])
+    assert _next_out(tmp_path, capsys, tmp_path / "none.jsonl") == ["語"]
