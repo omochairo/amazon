@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-15T23:59:40Z",
+  "generated_at": "2026-11-17T02:56:10Z",
   "model": "gemma4:26b-a4b-it-qat",
   "source_week": "2026-W46",
   "baseline_ctr": 0.030155385830919146,
@@ -85,7 +85,7 @@
     {
       "page": "https://navi.omcha.jp/products/b0875fv2bq/",
       "asin": "B0875FV2BQ",
-      "page_coverage_avg": 0.9,
+      "page_coverage_avg": 0.675,
       "queries": [
         {
           "query": "ロンビー おもちゃ",
@@ -117,21 +117,27 @@
           "query": "ロンビー トイザらス",
           "impressions": 4,
           "position": 11.0,
-          "answered": null,
-          "coverage": null,
-          "missing_aspects": [],
-          "note": "",
-          "error": "500 Server Error: Internal Server Error for url: http://host.docker.internal:11434/api/generate"
+          "answered": false,
+          "coverage": 0.1,
+          "missing_aspects": [
+            "トイザらスでの取り扱い有無",
+            "トイザらスでの販売価格",
+            "トイザらスでの在庫状況"
+          ],
+          "note": "検索クエリは「トイザらス」での販売に関する情報を求めていますが、記事内にはAmazonと楽天の価格情報しかなく、トイザらスに関する記述が一切ありません。",
+          "error": null
         },
         {
           "query": "どこで売ってるの？",
           "impressions": 1,
           "position": 4.0,
-          "answered": null,
-          "coverage": null,
-          "missing_aspects": [],
-          "note": "",
-          "error": "500 Server Error: Internal Server Error for url: http://host.docker.internal:11434/api/generate"
+          "answered": true,
+          "coverage": 0.8,
+          "missing_aspects": [
+            "実店舗での販売状況（トイザらスなどの店舗での取り扱い有無）"
+          ],
+          "note": "Amazonが最安値であることや、楽天との価格差について触れられており、オンラインでの購入先については十分に回答されています。",
+          "error": null
         }
       ]
     },
