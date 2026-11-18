@@ -269,17 +269,33 @@ def write_closed_rows(env, rows, state_dir):
     return path, closed is not None
 
 
-def pick(env, rows, state_dir, run_id, forced):
+def pick(env, rows, state_dir, run_id, forced, max_rewrites=0):
+    """候補を選ぶ。max_rewrites > 0 なら書き直し待ち (rewrite_queue) を最大その件数、先頭に置く。
+
+    書き直し (navi-brain#170 B1) は 03 と同じ方式: 待ち行列に印 (12-rewrite-idle-fill が
+    元の title・商品名を rewrite_identity に記録済み) がある商品だけを、新しい日付の記事
+    ファイルとして書く。古い記事ファイルは本番に載った後で 12 の --cleanup が消し、
+    rewrite_ledger に記録する。印の無い既存記事は選ばない (元の title が記録されないため)。
+    """
     if forced:
         return [{"asin": a, "pool": "", "source_keyword": None} for a in forced]
-    existing = article_asins() | open_pr_asins(env) | locked_asins(env) | recent_skips(rows, env.now())
-    # 03 は書き直し待ち (rewrite_queue) を除外から外して候補に戻すが、このレーンはまだ新記事だけ
+    existing = article_asins()
+    if max_rewrites > 0:
+        # 03 と同じく、書き直し待ちは「記事がある」除外から外して候補に戻す。進行中の
+        # 二重 pick (open PR・ロック) の除外はその後で足す
+        import rewrite_queue
+        existing -= set(rewrite_queue.eligible_rewrite_asins("data/articles"))
+    existing |= open_pr_asins(env) | locked_asins(env) | recent_skips(rows, env.now())
     path, _ = write_closed_rows(env, rows, state_dir)
     os.environ["CLOSED_ARTICLE_PRS"] = str(path)
-    os.environ["REWRITE_PICKS_PER_RUN"] = "0"
+    os.environ["REWRITE_PICKS_PER_RUN"] = str(max(0, int(max_rewrites)))
     os.environ.pop("JULES_RECENT_SESSIONS", None)
     import article_pick
-    return article_pick.pick_from_repo(existing, run_id)
+    origins = article_pick.pick_from_repo(existing, run_id)
+    # article_pick は書き直しをランキングの後に置く。このレーンは 1 日 1 回なので、先頭に
+    # 回さないと上限 (本数) に届いた時点で書き直しまで来ない
+    rewrites = [o for o in origins if o.get("pool") == "rewrite-queue"]
+    return rewrites + [o for o in origins if o.get("pool") != "rewrite-queue"]
 
 
 # ---------------------------------------------------------------- 出典の事前確認 (A4)
@@ -697,7 +713,7 @@ def cmd_run(args, env):
             ledger.add("gate", reason=gate)
         else:
             run_dir = state / "runs" / run_id
-            origins = pick(env, rows, state, run_id, args.asin)
+            origins = pick(env, rows, state, run_id, args.asin, args.max_rewrites)
             stats["candidates"] = len(origins)
             for origin in origins:
                 if done + stats["prs" if not args.dry_run else "passed"] >= args.max_articles:
@@ -866,6 +882,8 @@ def main(argv=None):
     r.add_argument("--max-calls", type=int, default=10)
     r.add_argument("--max-tokens", type=int, default=1500000)
     r.add_argument("--max-prechecks", type=int, default=40)
+    r.add_argument("--max-rewrites", type=int, default=0,
+                   help="書き直し待ち (rewrite_queue) から選ぶ上限 (本数に含む)。0 なら新記事だけ")
     r.add_argument("--backend", choices=["agy", "ollama"], default="agy")
     r.add_argument("--model", default=DEFAULT_MODEL)
     r.add_argument("--timeout", type=int, default=900)

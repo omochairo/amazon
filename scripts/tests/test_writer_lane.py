@@ -472,3 +472,35 @@ def test_run_stops_when_jst_date_changes(lane):
     lane.run(w, "--max-articles", "5", "--dry-run", clock=lambda: t["now"])
     assert len(w.calls) == 1
     assert any(e.get("reason") == "JST date changed during run" for e in events(lane, "gate"))
+
+
+def test_rewrites_are_picked_first_when_enabled(lane):
+    """navi-brain#170 B1: --max-rewrites で書き直し待ちを除外から外し、先頭に回す。"""
+    rq_dir = lane.repo / "data" / "rewrite_queue"
+    rq_dir.mkdir(parents=True)
+    (rq_dir / "B0REWRITE1.json").write_text(json.dumps(
+        {"asin": "B0REWRITE1", "old_slug": "2026-06-01-B0REWRITE1", "requested_at": "2026-11-10T00:00:00Z"}))
+    (lane.repo / "data" / "articles" / "2026-06-01-B0REWRITE1.json").write_text("{}")
+    # 書き直し済み (新しい日付の本文がある) の印は候補に戻さない
+    (rq_dir / "B0DONE0001.json").write_text(json.dumps(
+        {"asin": "B0DONE0001", "old_slug": "2026-06-01-B0DONE0001", "requested_at": "2026-11-10T00:00:00Z"}))
+    (lane.repo / "data" / "articles" / "2026-06-01-B0DONE0001.json").write_text("{}")
+    (lane.repo / "data" / "articles" / "2026-11-12-B0DONE0001.json").write_text("{}")
+    lane.picked["origins"] = [{"asin": A1, "pool": "ranking", "source_keyword": None},
+                              {"asin": "B0REWRITE1", "pool": "rewrite-queue", "source_keyword": None}]
+    lane.sites["B0REWRITE1"] = 2
+    w = Writer([wresult(article("B0REWRITE1"))])
+    lane.run(w, "--max-articles", "1", "--max-rewrites", "2", "--dry-run")
+    assert lane.seen["rewrite_cap"] == "2"
+    assert "B0REWRITE1" not in lane.seen["existing"] and "B0DONE0001" in lane.seen["existing"]
+    assert [e["asin"] for e in events(lane, "write")] == ["B0REWRITE1"]
+
+
+def test_rewrites_off_by_default(lane):
+    rq_dir = lane.repo / "data" / "rewrite_queue"
+    rq_dir.mkdir(parents=True)
+    (rq_dir / "B0REWRITE1.json").write_text(json.dumps(
+        {"asin": "B0REWRITE1", "old_slug": "2026-06-01-B0REWRITE1", "requested_at": "2026-11-10T00:00:00Z"}))
+    (lane.repo / "data" / "articles" / "2026-06-01-B0REWRITE1.json").write_text("{}")
+    lane.run(Writer([wresult(article(A1))]), "--max-articles", "1", "--dry-run")
+    assert lane.seen["rewrite_cap"] == "0" and "B0REWRITE1" in lane.seen["existing"]
