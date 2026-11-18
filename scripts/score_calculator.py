@@ -487,29 +487,32 @@ def _multi_market_score(
         return floor, "ASIN 情報が不足しているため、取扱マーケットは中立評価としています。"
     prices = (product or {}).get("prices")
     if isinstance(prices, dict):
-        # 価格欄 (build_post._resolve_buy_offer の priced) と同じ判定: 価格が出るサイトだけ数える。
-        # 同一商品と未確認 (verified=False) の出品は、同一商品の取扱とは言えないので数えない。
+        # 価格欄 (build_post._resolve_buy_offer の priced / price_site_count) と同じ数え方:
+        # 価格が出るサイトを数える。同一商品か未確認 (verified=False) の出品も価格欄は金額を出して
+        # 数えるので同じく数え、文言の末尾に「同じ商品か確認できていない」旨を添える。
         keys = priced_site_keys(prices)
-        a, r, y = (k in keys and prices[k].get("verified") is not False
-                   for k in ("amazon", "rakuten", "yahoo"))
+        a, r, y = (k in keys for k in ("amazon", "rakuten", "yahoo"))
+        unv = [nm for k, nm in (("amazon", "Amazon"), ("rakuten", "楽天市場"), ("yahoo", "Yahoo!ショッピング"))
+               if k in keys and prices[k].get("verified") is False]
+        note = (f"ただし{'・'.join(unv)}の価格は同じ商品か確認できていません。" if unv else "")
         n = a + r + y
         if n == 3:
-            return 10, "Amazon・楽天市場・Yahoo!ショッピングの3サイトで取扱があり、ポイント還元・セール・送料を比較して最適な購入先を選べます。"
+            return 10, "Amazon・楽天市場・Yahoo!ショッピングの3サイトで取扱があり、ポイント還元・セール・送料を比較して最適な購入先を選べます。" + note
         if a and r:
-            return max(floor, 7), "Amazon と楽天市場で取扱があり、楽天ポイント還元やセール時の価格差を比較しながら購入できます。"
+            return max(floor, 7), "Amazon と楽天市場で取扱があり、楽天ポイント還元やセール時の価格差を比較しながら購入できます。" + note
         if a and y:
-            return max(floor, 7), "Amazon と Yahoo!ショッピングで取扱があり、PayPayポイントやキャンペーン併用で実質価格を抑えられる場合があります。"
+            return max(floor, 7), "Amazon と Yahoo!ショッピングで取扱があり、PayPayポイントやキャンペーン併用で実質価格を抑えられる場合があります。" + note
         if a:
             if is_overseas:
-                return floor, "海外ブランドのため正規流通は限定的で、Amazon が現時点で最も入手しやすいルートです。"
-            return floor, "現時点では Amazon が主要な購入経路です。楽天・Yahoo! の取扱は時期により変動するため、本文の価格比較セクションをご参照ください。"
+                return floor, "海外ブランドのため正規流通は限定的で、Amazon が現時点で最も入手しやすいルートです。" + note
+            return floor, "現時点では Amazon が主要な購入経路です。楽天・Yahoo! の取扱は時期により変動するため、本文の価格比較セクションをご参照ください。" + note
         if r and y:
-            return max(floor, 7), "楽天市場と Yahoo!ショッピングで取扱があり、ポイント還元・セール・送料を比較して購入先を選べます。"
+            return max(floor, 7), "楽天市場と Yahoo!ショッピングで取扱があり、ポイント還元・セール・送料を比較して購入先を選べます。" + note
         if r:
-            return floor, "現時点で価格を確認できたのは楽天市場のみです。本文の価格比較セクションをご参照ください。"
+            return floor, "現時点で価格を確認できたのは楽天市場のみです。本文の価格比較セクションをご参照ください。" + note
         if y:
-            return floor, "現時点で価格を確認できたのは Yahoo!ショッピングのみです。本文の価格比較セクションをご参照ください。"
-        return floor, "現時点では価格を確認できる販売サイトが限られます。本文の価格比較セクションをご参照ください。"
+            return floor, "現時点で価格を確認できたのは Yahoo!ショッピングのみです。本文の価格比較セクションをご参照ください。" + note
+        return floor, "現時点では価格を確認できる販売サイトが限られます。本文の価格比較セクションをご参照ください。" + note
     mm = _load_market(repo_root)
     if not mm["rakuten"] and not mm["yahoo"]:
         return floor, "本記事執筆時点では Amazon を主要な購入経路としています。楽天・Yahoo! の取扱状況は変動するため最新情報をご確認ください。"

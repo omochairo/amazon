@@ -2,7 +2,8 @@
 
 固定すること:
   - 正規流通: 価格が出るサイトだけを取扱として数える。市場キャッシュに ASIN があっても
-    価格が出なければ数えない。同一商品と未確認 (verified=False) の出品も数えない。
+    価格が出なければ数えない。同一商品か未確認 (verified=False) の出品は、価格欄
+    (price_site_count) と同じく数え、文言に「同じ商品か確認できていない」旨を添える。
     prices が dict でない記事だけ従来のキャッシュ判定
   - コスパ: 価格欄のボタンと同じ「購入できる最安」(在庫切れ除外) で計算する。在庫切れしか
     無いときは在庫切れ込みの最安で計算し、その旨を文言に出す
@@ -65,11 +66,16 @@ class MultiMarketTest(unittest.TestCase):
         self.assertEqual(pts, 10)
         self.assertIn("3サイト", reason)
 
-    def test_unverified_site_is_not_counted(self):
+    def test_unverified_site_is_counted_with_note(self):
+        # 価格欄は未確認でも金額を出して price_site_count に数える。内訳も同じ数え方にする
         pts, reason = _mm(_prices(AMZ, dict(RKT, verified=False), YHO))
-        self.assertEqual(pts, 7)
-        self.assertIn("Yahoo!ショッピング", reason)
-        self.assertNotIn("楽天", reason)
+        self.assertEqual(pts, 10)
+        self.assertIn("3サイト", reason)
+        self.assertIn("楽天市場の価格は同じ商品か確認できていません", reason)
+
+    def test_all_verified_has_no_note(self):
+        _pts, reason = _mm(_prices(AMZ, RKT, YHO))
+        self.assertNotIn("確認できていません", reason)
 
     def test_discontinued_site_is_not_counted(self):
         pts, _ = _mm(_prices(AMZ, dict(RKT, discontinued=True), NONE))
