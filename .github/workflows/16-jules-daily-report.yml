@@ -14,9 +14,8 @@ name: Jules Daily Usage Report
 
 on:
   # cron re-registered 2026-07-08 after unsuspension
-  schedule:
-    # 23:00 UTC = 08:00 JST 翌朝 (UTC date は前日のまま、JST date は翌朝)。
-    - cron: '0 23 * * *'
+  # 2026-11-18 navi-brain#170 C2: Jules は 2026-11-11 で終了。定時起動 (schedule) を外した。
+  # 戻すときは git の履歴から schedule を戻す。手動起動 (workflow_dispatch) は残す
   workflow_dispatch:
     inputs:
       date:

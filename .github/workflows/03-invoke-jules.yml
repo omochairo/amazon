@@ -9,14 +9,8 @@ on:
   # 2026-07-16 (#3203): build_jules_prompt.py の _audit_note/_experience_note が
   # repoless 移行用スクリプトにのみ実装され主力ワークフローに未配線だったのを修正
   # (AUDIT_NOTE/EXPERIENCE_NOTE を INFO_NOTE/GSC_NOTE と同じパターンで追加)。
-  schedule:
-    - cron: '0 */6 * * *'
-    # 2026-08-10 (#2686): owner 要望で #2686 の需要駆動 (demand_keywords 合流) の効果を
-    # 早く観察したいため記事生成数を増便。既存4回 (00/06/12/18 UTC) の時刻は動かさず、
-    # 00→06 UTC の谷 (6時間空く区間) を埋める形で 03 UTC を追加し 1日5回にする。
-    # cap (rolling-24h 安全予算 80) / per-run max (6 session) はどちらも据え置き。
-    # 増やすのは実行回数のみで、1 run あたりの消費上限は変えない。
-    - cron: '0 3 * * *'
+  # 2026-11-18 navi-brain#170 C2: Jules は 2026-11-11 で終了。定時起動 (schedule) を外した。
+  # 戻すときは git の履歴から schedule を戻す。手動起動 (workflow_dispatch) は残す
   workflow_dispatch:
     inputs:
       asin:

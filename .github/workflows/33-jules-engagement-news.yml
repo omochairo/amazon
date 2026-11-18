@@ -16,9 +16,8 @@ name: Jules Engagement News (Dual persona X mama + Threads papa)
 #     最終調整するのが理想
 
 on:
-  schedule:
-    # 06:00 JST = 21:00 UTC (前日)
-    - cron: '0 21 * * *'
+  # 2026-11-18 navi-brain#170 C2: Jules は 2026-11-11 で終了。定時起動 (schedule) を外した。
+  # 戻すときは git の履歴から schedule を戻す。手動起動 (workflow_dispatch) は残す
   workflow_dispatch:
 
 permissions:

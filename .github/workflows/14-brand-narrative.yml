@@ -22,8 +22,8 @@ name: Generate Brand Narrative
 
 on:
   # cron re-registered 2026-07-08 after unsuspension
-  schedule:
-    - cron: '0 3 * * 1'
+  # 2026-11-18 navi-brain#170 C2: Jules は 2026-11-11 で終了。定時起動 (schedule) を外した。
+  # 戻すときは git の履歴から schedule を戻す。手動起動 (workflow_dispatch) は残す
   workflow_dispatch:
     inputs:
       brand:
