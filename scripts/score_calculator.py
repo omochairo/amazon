@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from brand_normalizer import NormalizedBrand
+from buy_offer_rules import cheapest_purchasable, priced_site_keys
 from filter_raw_per_asin import exclude_title_only
 
 
@@ -477,12 +478,38 @@ def _load_market(repo_root: pathlib.Path) -> dict[str, set[str]]:
 
 
 def _multi_market_score(
-    asin: str, brand: NormalizedBrand, repo_root: pathlib.Path
+    asin: str, brand: NormalizedBrand, repo_root: pathlib.Path,
+    product: Optional[dict] = None,
 ) -> tuple[int, str]:
     is_overseas = brand.region not in ("JP", "unknown", "")
     floor = 5 if is_overseas else 3
     if not asin:
         return floor, "ASIN 情報が不足しているため、取扱マーケットは中立評価としています。"
+    prices = (product or {}).get("prices")
+    if isinstance(prices, dict):
+        # 価格欄 (build_post._resolve_buy_offer の priced) と同じ判定: 価格が出るサイトだけ数える。
+        # 同一商品と未確認 (verified=False) の出品は、同一商品の取扱とは言えないので数えない。
+        keys = priced_site_keys(prices)
+        a, r, y = (k in keys and prices[k].get("verified") is not False
+                   for k in ("amazon", "rakuten", "yahoo"))
+        n = a + r + y
+        if n == 3:
+            return 10, "Amazon・楽天市場・Yahoo!ショッピングの3サイトで取扱があり、ポイント還元・セール・送料を比較して最適な購入先を選べます。"
+        if a and r:
+            return max(floor, 7), "Amazon と楽天市場で取扱があり、楽天ポイント還元やセール時の価格差を比較しながら購入できます。"
+        if a and y:
+            return max(floor, 7), "Amazon と Yahoo!ショッピングで取扱があり、PayPayポイントやキャンペーン併用で実質価格を抑えられる場合があります。"
+        if a:
+            if is_overseas:
+                return floor, "海外ブランドのため正規流通は限定的で、Amazon が現時点で最も入手しやすいルートです。"
+            return floor, "現時点では Amazon が主要な購入経路です。楽天・Yahoo! の取扱は時期により変動するため、本文の価格比較セクションをご参照ください。"
+        if r and y:
+            return max(floor, 7), "楽天市場と Yahoo!ショッピングで取扱があり、ポイント還元・セール・送料を比較して購入先を選べます。"
+        if r:
+            return floor, "現時点で価格を確認できたのは楽天市場のみです。本文の価格比較セクションをご参照ください。"
+        if y:
+            return floor, "現時点で価格を確認できたのは Yahoo!ショッピングのみです。本文の価格比較セクションをご参照ください。"
+        return floor, "現時点では価格を確認できる販売サイトが限られます。本文の価格比較セクションをご参照ください。"
     mm = _load_market(repo_root)
     if not mm["rakuten"] and not mm["yahoo"]:
         return floor, "本記事執筆時点では Amazon を主要な購入経路としています。楽天・Yahoo! の取扱状況は変動するため最新情報をご確認ください。"
@@ -501,7 +528,20 @@ def _multi_market_score(
 def _price_value_score(
     product: dict, age_range: Optional[tuple[int, int]]
 ) -> tuple[int, str]:
-    price = product.get("best_price") or product.get("price")
+    prices = product.get("prices")
+    oos_note = ""
+    if isinstance(prices, dict):
+        # 価格欄のボタンと同じ「購入できる最安」。在庫切れだけが理由で無いときは
+        # 在庫切れを含む最安で計算し続ける (価格が不明になって「取得中」に落とさない)。
+        found = cheapest_purchasable(prices)
+        if found is None:
+            found = cheapest_purchasable(prices, include_out_of_stock=True)
+            if found is not None:
+                oos_note = "現在在庫切れのため、"
+        # どちらにも候補が無い (価格カードに金額はあるが url 欠落など) ときは従来の値。注記は付けない。
+        price = found[0] if found else (product.get("best_price") or product.get("price"))
+    else:
+        price = product.get("best_price") or product.get("price")
     if not isinstance(price, (int, float)) or price <= 0:
         return 5, "本記事執筆時点での価格情報を取得中です。最新の価格は本文の比較セクションでご確認ください。"
     years = max(1.0, (age_range[1] - age_range[0] + 1) if age_range else 3.0)
@@ -510,19 +550,19 @@ def _price_value_score(
     yp_yen = f"¥{int(yp):,}"
     if yp <= 1000:
         pts = 15
-        reason = f"価格は{price_yen}で、対象年齢の幅から見ると年間{yp_yen}相当。長く遊べる前提で考えるとコストパフォーマンスは非常に高い水準です。"
+        reason = f"{oos_note}価格は{price_yen}で、対象年齢の幅から見ると年間{yp_yen}相当。長く遊べる前提で考えるとコストパフォーマンスは非常に高い水準です。"
     elif yp <= 2000:
         pts = 12
-        reason = f"価格は{price_yen}で、年間コスト換算で{yp_yen}前後。ブランド品質と遊び込める期間を踏まえると良好なコストパフォーマンスです。"
+        reason = f"{oos_note}価格は{price_yen}で、年間コスト換算で{yp_yen}前後。ブランド品質と遊び込める期間を踏まえると良好なコストパフォーマンスです。"
     elif yp <= 5000:
         pts = 8
-        reason = f"価格は{price_yen}で、年間換算{yp_yen}相当。やや投資感はありますが、機能性とブランド信頼度を考慮すると妥当な価格帯です。"
+        reason = f"{oos_note}価格は{price_yen}で、年間換算{yp_yen}相当。やや投資感はありますが、機能性とブランド信頼度を考慮すると妥当な価格帯です。"
     elif yp <= 10000:
         pts = 5
-        reason = f"価格は{price_yen}とやや高めの設定です。ギフトや特別な機会の選択肢として、品質・耐久性を重視する方に向いた価格帯です。"
+        reason = f"{oos_note}価格は{price_yen}とやや高めの設定です。ギフトや特別な機会の選択肢として、品質・耐久性を重視する方に向いた価格帯です。"
     else:
         pts = 2
-        reason = f"価格は{price_yen}とプレミアム帯です。コレクション目的・ギフト・専門用途など、特定の目的にこだわる方に向いた商品です。"
+        reason = f"{oos_note}価格は{price_yen}とプレミアム帯です。コレクション目的・ギフト・専門用途など、特定の目的にこだわる方に向いた商品です。"
     return pts, reason
 
 
@@ -541,7 +581,7 @@ def calculate(
     ag, ar, age_range = _age_fit_score(product)
     ev, er = _edu_value_score(article, brand)
     me, mr = _media_exposure_score(asin, brand, repo_root)
-    mm, mmr = _multi_market_score(asin, brand, repo_root)
+    mm, mmr = _multi_market_score(asin, brand, repo_root, product)
     pv, pr = _price_value_score(product, age_range)
 
     # 各要素配点: brand_tier(25) + safety(10) + age(10) + edu(15) + media(15) + market(10) + price(15) = max 100

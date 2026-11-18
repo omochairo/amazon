@@ -5,7 +5,7 @@
     (verified=False) のどれでもない」サイトの最安 1 つ。無ければ Amazon の商品ページ、
     それも無ければ検索リンク (控えめな見た目)
   - purchase_unavailable の記事ではアフィリエイトのボタンを出さず「類似のおすすめ ↓」だけ
-  - 価格の出るサイトが 2 以上なら H2 は「価格を3サイトで比較」のまま (導入文だけ合わせる)。
+  - 価格の出るサイト数が 2 なら H2 は「価格を2サイトで比較」、3 なら「価格を3サイトで比較」。
     1 以下なら H2 を「価格と販売サイト」にする (サイト数 0〜3 をテンプレートで描画して確かめる)
   - 購入ボタンは冒頭 / まとめの直後 / FAQ の後に出て、中盤のボタンには金額を出さない
 """
@@ -157,7 +157,8 @@ class PriceHeadingRenderTest(unittest.TestCase):
 
     def test_two_sites(self):
         md = _render(_data(_prices(AMZ, RKT, YHO_SEARCH)))
-        self.assertEqual(_price_h2(md), "価格を3サイトで比較")
+        self.assertEqual(_price_h2(md), "価格を2サイトで比較")
+        self.assertNotIn("3サイトで比較", md)
         self.assertEqual(_price_intro(md),
                          "当サイトが自動観測した最新価格をAmazon・楽天で比較しました。"
                          "Yahoo!ショッピングでは同じ商品の価格を確認できませんでした。")
