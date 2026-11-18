@@ -15,9 +15,8 @@ name: Jules SNS Copy (product post short copy)
 #     十分前にコピーを用意する。Jules session 数十分 + auto-merge を見込んでも余裕。
 
 on:
-  schedule:
-    # 02:00 JST = 17:00 UTC (前日)
-    - cron: '0 17 * * *'
+  # 2026-11-18 navi-brain#170 C2: Jules は 2026-11-11 で終了。定時起動 (schedule) を外した。
+  # 戻すときは git の履歴から schedule を戻す。手動起動 (workflow_dispatch) は残す
   workflow_dispatch:
     inputs:
       top:

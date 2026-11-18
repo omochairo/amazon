@@ -21,11 +21,8 @@ on:
         type: choice
         options: [x, threads]
         default: x
-  schedule:
-    - cron: '0 3 * * 1'  # Mon -> X (iromama) #1 of week
-    - cron: '0 3 * * 2'  # Tue -> Threads (iropapa) #1 of week
-    - cron: '0 3 * * 4'  # Thu -> X (iromama) #2 of week
-    - cron: '0 3 * * 5'  # Fri -> Threads (iropapa) #2 of week
+  # 2026-11-18 navi-brain#170 C2: Jules は 2026-11-11 で終了。定時起動 (schedule) を外した。
+  # 戻すときは git の履歴から schedule を戻す。手動起動 (workflow_dispatch) は残す
 
 # GITHUB_TOKEN の権限を明記する (#5045)。このレーンは Jules への dispatch と
 # 生成物の受け取りだけで、GITHUB_TOKEN による書き込みは無い (private repo の
