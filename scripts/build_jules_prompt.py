@@ -40,6 +40,7 @@ import argparse
 import glob
 import json
 import os
+import re
 import sys
 from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlparse
@@ -390,7 +391,9 @@ def _fetch_excerpts(asin, urls, fetch=None):
     def one(u):
         page = fetch(u, timeout=_EXCERPT_TIMEOUT)
         snip, hits = source_pages.excerpt(page.text, tokens) if page.status == "ok" else ("", [])
-        return u, (page.status, snip, hits, page.http)
+        # navi-brain#170 E1: 一覧に無い通販・卸の商品ページは "shop" にして、引用可にしない
+        status = "shop" if page.status == "ok" and getattr(page, "shop", False) else page.status
+        return u, (status, snip, hits, page.http)
 
     with cf.ThreadPoolExecutor(max_workers=_EXCERPT_WORKERS) as ex:
         for u, res in ex.map(one, list(dict.fromkeys(urls))[:_EXCERPT_MAX_URLS]):
@@ -405,17 +408,50 @@ def identifies_product(hits):
     6 字以上の語」も強い一致にするが、ブランドの無い商品では「星空プロジェクター」のような
     説明の語がそれに当たり、カテゴリのランキング記事 (この商品は載っていない) が通ってしまう
     (2026-11-14 の試運転で実際に起きた)。書き手はページを開けないので、ここで絞る。
+
+    ブランド名は、商品固有の語 (_is_distinctive_word) も一緒に出たときだけ数える
+    (navi-brain#170 2026-11-18)。「タカラトミー」「トミカ」「プラレール」はサイトのナビや同じメーカーの
+    別の商品のページにも出るので、ブランド名だけでは別の商品のページが通った (B09R73H4BR・
+    B0HPF6J1D6: 書き手が「別の商品のページしか無い」と答えて不合格。11-18 の 14 回中 4 回)。
     """
     import brand_normalizer
+    brand = False
+    distinctive = False
     for h in hits or []:
         if _is_jan(h) or sum(c.isdigit() for c in h) >= 3:
             return True
         try:
-            if brand_normalizer.normalize(h).tier not in ("", "D", None):
-                return True
+            nb = brand_normalizer.normalize(h)
+            # 辞書の語と完全に一致したものだけブランド名にする。部分一致 (fuzzy) は
+            # 「プラレールブロック」のように辞書の語 (プラレール) を含む商品・シリーズ固有の
+            # 名前なので、下の商品固有の語として見る
+            is_brand = nb.tier not in ("", "D", None) and nb.match_type == "exact"
         except Exception:  # noqa: BLE001 — 辞書が読めないときは特定できたことにしない
-            continue
-    return False
+            is_brand = False
+        if is_brand:
+            brand = True
+        elif _is_distinctive_word(h):
+            distinctive = True
+    return brand and distinctive
+
+
+_ASCII_WORD_RE = re.compile(r"[A-Za-z'&\-]+")
+_AGE_WORD_RE = re.compile(r"歳|以上|向け|向$")
+
+
+def _is_distinctive_word(token):
+    """ブランド名と一緒に出たとき、商品を特定する語として数えるか (identifies_product)。
+
+    5 字以上の和文の語で、分類語・対象年齢の語でないもの (例: ロジカルニュートン・クジラバランス)。
+    英字だけの語は数えない。「(TAKARA TOMY)」のようなブランドの英字表記や「SPARK」のような
+    シリーズ名が、別の商品のページにも出るため。
+    """
+    import source_pages
+    if not token or token in source_pages._GENERIC_TOKENS:
+        return False
+    if _ASCII_WORD_RE.fullmatch(token) or _AGE_WORD_RE.search(token):
+        return False
+    return len(token) >= 5
 
 
 def _is_jan(token):
@@ -433,6 +469,9 @@ def _excerpt_line(res, strict=False):
     status, snip, hits, http = res
     if status == "dead":
         return "     → リンク切れ (システムが確認)。採用しない"
+    if status == "shop":
+        return ("     → 通販・卸の商品ページ (システムが確認: カートのボタンと価格の表示など)。"
+                "非販売の出典に数えないので採用しない")
     if status != "ok":
         return (f"     → システムからは開けなかった ({'HTTP ' + str(http) if http else '接続できず'})。"
                 "閲覧ツールで開けて対象商品の話なら採用してよい")
@@ -447,7 +486,7 @@ def _excerpt_line(res, strict=False):
         return (f"     参考 (本文に出たのは「{shown}」だけ。別の商品の可能性があるので、"
                 f"開いて確かめてから採用する): {snip}")
     if strict and not identifies_product(hits):
-        return (f"     参考 (本文に出たのは「{shown}」だけで、ブランド名・型番が無い。この商品ではなく"
+        return (f"     参考 (本文に出たのは「{shown}」だけで、型番か、ブランド名と商品固有の名前の組が無い。この商品ではなく"
                 f"同じ種類の商品の一般的な話の可能性が高いので、出典にしない): {snip}")
     return f"     抜粋 (システムが取得。本文に商品名の語「{shown}」あり): {snip}"
 

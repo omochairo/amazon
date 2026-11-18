@@ -57,6 +57,58 @@ class Page:
     http: int | None     # HTTP ステータス (取れなかったら None)
     text: str = ""       # タグを剥がした本文 (ok のときだけ)
     reason: str = ""     # unknown / dead の理由 (例外名など)
+    shop: bool = False   # 通販・卸の商品ページらしい (looks_like_shop。ok のときだけ)
+
+
+# 通販・卸の商品ページらしさ (navi-brain#170 E1)。ホストの一覧 (score_per_asin_info の
+# _CANDIDATE_SHOP_HOSTS) では海外の玩具店・海外向けの日本商品の通販・卸が追いつかないので、
+# ページの中身で見る。カートのボタンの文言は、文中の「カートに入れる前に」「カゴに入れるのも」を
+# 外すため、直後に助詞などが続くものは数えない。
+_CART_WORDS = (
+    r"カートに入れる|カートへ入れる|カートに追加|カートへ追加|買い物かごに入れる|買い物カゴに入れる|"
+    r"かごに入れる|カゴに入れる|カートへ進む|"
+    r"Add to cart|Add to basket|Add to bag|In den Warenkorb|Dodaj do koszyka|Do koszyka|"
+    r"Ajouter au panier|Aggiungi al carrello|A[ñn]adir al carrito|In winkelwagen|"
+    r"加入购物车|加入購物車|장바구니\s?(?:담기|에\s?담기|추가)")
+# 直後が助詞・「こと」「遊び」「だけ」・句読点なら記事の文 (「かごに入れる遊び」「カートに入れる前に」)
+_CART_BUTTON_RE = re.compile(r"(?:" + _CART_WORDS + r")(?![前のとまでにはたらこ遊だ。、])", re.IGNORECASE)
+# <input value="カートに入れる"> や <img alt="買い物かごに入れる"> は本文化で消えるので HTML から見る
+_CART_ATTR_RE = re.compile(r"""(?:value|alt|aria-label)=["'](?:""" + _CART_WORDS + r""")["']""", re.IGNORECASE)
+_PRICE_RE = re.compile(
+    r"[¥￥£]\s?\d[\d,]*|\d[\d,]*\s?円|(?:US)?\$\s?\d+(?:[.,]\d{2})?|€\s?\d|"
+    r"\d+(?:[.,]\d{2})?\s?(?:€|zł|PLN|EUR|USD|GBP)")
+_OG_PRODUCT_RE = re.compile(
+    r"""property=["']og:type["'][^>]*content=["']product["']|content=["']product["'][^>]*property=["']og:type["']""",
+    re.IGNORECASE)
+_OFFER_RE = re.compile(r'"@type"\s*:\s*"Offer"', re.IGNORECASE)
+_PRICE_META_RE = re.compile(
+    r"""<meta[^>]+property=["']product:price:amount["'][^>]*content=["'][^"']+|"""
+    r"""<meta[^>]+content=["'][^"']+["'][^>]*property=["']product:price:amount["']""",
+    re.IGNORECASE)
+
+
+def looks_like_shop(raw_html: str, text: str) -> bool:
+    """通販・卸の商品ページか。
+
+    - 本文にカートのボタンの文言があり、価格の表示か商品のメタ (og:type=product・schema.org の Offer) がある
+    - または、販売価格のメタ (product:price:amount。Shopify などが出す) がある
+    - または、og:type=product と Offer の両方がある (カートを JS で描くページ)
+
+    2026-11-18 の測定: 既存記事 321 本の出典 711 ページで、第三者の記事を通販とした誤りは
+    sakura-checker.jp (Amazon のカートの部品を載せている) の 2 ページだけ。メーカー公式でも
+    カートのある直販の商品ページは通販に入る (販売ページは非販売の出典にならない)。
+    og:type=product だけ・Offer だけはメーカーの製品紹介や個人ブログのレビューにもあるので数えない。
+    """
+    raw_html = raw_html or ""
+    if _PRICE_META_RE.search(raw_html):
+        return True
+    og = bool(_OG_PRODUCT_RE.search(raw_html))
+    offer = bool(_OFFER_RE.search(raw_html))
+    if og and offer:
+        return True
+    if _CART_BUTTON_RE.search(text or "") or _CART_ATTR_RE.search(raw_html):
+        return bool(_PRICE_RE.search(text or "") or og or offer)
+    return False
 
 
 def html_to_text(raw: str) -> str:
@@ -110,7 +162,8 @@ def fetch_page(url: str, timeout: float = 8.0) -> Page:
                 # MAX_BYTES で切れた gzip も、読めたところまで展開する
                 raw = zlib.decompressobj(16 + zlib.MAX_WBITS).decompress(raw)
             body = _decode(raw, r.headers.get_content_charset())
-            return Page("ok", code, html_to_text(body))
+            text = html_to_text(body)
+            return Page("ok", code, text, shop=looks_like_shop(body, text))
     except urllib.error.HTTPError as e:
         return Page("dead" if e.code in DEAD_HTTP else "unknown", e.code)
     except Exception as e:  # noqa: BLE001 — 取得の失敗はすべて状態に倒す

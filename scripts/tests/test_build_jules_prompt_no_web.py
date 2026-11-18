@@ -125,8 +125,29 @@ def test_generic_category_page_is_not_citable_for_no_web(repo):
     assert "出典にしない" in bjp._excerpt_line(generic, strict=True)
     assert bjp._excerpt_line(generic).lstrip().startswith("抜粋")  # 従来の経路は変えない
     assert bjp.identifies_product(["4901234567894"])  # JAN
-    assert bjp.identifies_product(["PX-120"]) and bjp.identifies_product(["ブリオ"])
+    assert bjp.identifies_product(["PX-120"])
     assert not bjp.identifies_product(["2way", "星空プロジェクター"])
+
+
+def test_brand_name_alone_does_not_identify_product():
+    """2026-11-18 の本番: 「タカラトミー」「トミカ」だけ出た別の商品のページ・サイトのナビが通り、
+    書き手が出典を揃えられずに不合格になった (B09R73H4BR・B0HPF6J1D6)。"""
+    assert not bjp.identifies_product(["ブリオ"])
+    assert not bjp.identifies_product(["タカラトミー", "プラレール"])  # ブランドとシリーズだけ
+    # 英字のブランド表記・シリーズ名・対象年齢の語は商品固有の語に数えない
+    assert not bjp.identifies_product(["タカラトミー", "TAKARA", "TOMY", "歳以上"])
+    assert not bjp.identifies_product(["トランスフォーマー", "SPARK"])
+    # ブランド名 + 商品固有の名前なら特定できた
+    assert bjp.identifies_product(["ハナヤマ", "ロジカルニュートン"])
+    assert bjp.identifies_product(["ブリオ", "バッテリーパワートラベルトレイン"])
+    # 辞書の語を含む商品・シリーズ固有の名前 (部分一致) は、ブランド名ではなく商品固有の語に数える
+    assert bjp.identifies_product(["タカラトミー", "プラレールブロック"])
+
+
+def test_shop_line_on_legacy_route():
+    """Web を使える従来の経路 (strict=False) でも、通販のページは採用しないと書く。"""
+    line = bjp._excerpt_line(("shop", "抜粋", ["33506"], 200), strict=False)
+    assert "通販・卸の商品ページ" in line and "採用しない" in line
 
 
 def test_amazon_other_domains_are_not_citable(repo, monkeypatch):
@@ -151,3 +172,21 @@ def test_sources_note_new_product_reads_one_site(repo):
     assert "1 未満なら 1 に戻って足す" in note
     assert "「1 サイト (1 件以上)」と読み替えて" in note
     assert "出典に無い口コミは作らないでください" in note
+
+
+def test_shop_page_by_content_is_not_citable(repo, monkeypatch):
+    """navi-brain#170 E1: 一覧に無い通販・卸のページは、中身 (カート・価格) で引用可から外す。"""
+    import source_pages
+    monkeypatch.setattr(bjp, "_amazon_item", lambda asin: {"title": "ブリオ レールウェイ 33506", "jan_code": ""})
+
+    def fake_fetch(url, timeout=0):
+        shop = "shop" in url
+        return source_pages.Page("ok", 200, "ブリオ レールウェイ 33506 の紹介", shop=shop)
+
+    cand = {"mall": [], "third": [("https://toyshop.example.pl/p/1", ""), ("https://review.example.jp/a", "")],
+            "prior": [], "dead": set()}
+    ex = bjp._fetch_excerpts(ASIN, bjp.excerpt_targets(cand), fetch=fake_fetch)
+    assert ex["https://toyshop.example.pl/p/1"][0] == "shop"
+    assert bjp.citable_urls(cand, ex) == ["https://review.example.jp/a"]
+    line = bjp._excerpt_line(ex["https://toyshop.example.pl/p/1"], strict=True)
+    assert "通販・卸の商品ページ" in line and "採用しない" in line
