@@ -2,11 +2,11 @@
 
 Claude Code / 人間の開発者がこのリポジトリで作業するときの入口。
 
-**記事の中身（文体・スキーマ・SEO 方針）を触るなら [AGENTS.md](./AGENTS.md) と [instructions.md](./instructions.md) を読むこと。** そちらが記事生成 AI (Jules) の業務規定であり、文体や JSON スキーマの SSOT。本ファイルはリポジトリ側（scripts / workflows / テーマ）を触るときの手引き。
+**記事の中身（文体・スキーマ・SEO 方針）を触るなら [AGENTS.md](./AGENTS.md) と [instructions.md](./instructions.md) を読むこと。** そちらが記事を書く AI の業務規定であり（文中の「Jules」は書き手を指す。今の書き手は下の「記事の書き手」）、文体や JSON スキーマの SSOT。本ファイルはリポジトリ側（scripts / workflows / テーマ）を触るときの手引き。
 
 ## このリポジトリの位置づけ
 
-`navi.omcha.jp`（知育玩具比較サイト）のソース。市場データ収集 → Jules が記事生成 → Hugo でビルド → 配信、までを自動化している。**public** なのは Actions の無料枠を使うため。
+`navi.omcha.jp`（知育玩具比較サイト）のソース。市場データ収集 → 記事の書き手（下の「記事の書き手」）が記事生成 → Hugo でビルド → 配信、までを自動化している。**public** なのは Actions の無料枠を使うため。
 
 **配信は GitLab Pages。GitHub Pages は使っていない**（リポジトリ設定でも無効化済み）。`main` への push を `40-mirror-to-gitlab.yml` が GitLab へ転送し、GitLab 側の `pages` ジョブ（`.gitlab-ci.yml`）がビルドして配信する。経緯と復帰手順は [docs/failover-to-gitlab.md](./docs/failover-to-gitlab.md)。
 
@@ -24,8 +24,18 @@ GitHub Actions（開発・自動化・データ収集・記事生成）
 | リポジトリ | 可視性 | 役割 |
 |---|---|---|
 | `omochairo/amazon`（本リポジトリ） | public | navi のソース + 自動化 + 共通スクリプト |
-| `omochairo/amazon-navi-brain` | private | Jules の生成プロンプト（`jules/` に overlay checkout される） |
+| `omochairo/amazon-navi-brain` | private | 記事生成のプロンプト（`jules/` に overlay checkout される。ディレクトリ名は Jules 時代のまま） |
 | `omochairo/omcha-ops` | private | omcha.jp（WordPress 本家）の分析・改善 + ファイル受け渡し用 `exchange/` |
+
+## 記事の書き手
+
+**書き手が誰かはここにだけ書く。** ほかの手引き（`AGENTS.md`・`instructions.md`・navi-brain の README）の「Jules」は、ここを指す。
+
+- **新記事と書き直し: K8 の記事レーン**（2026-11-15 から）。K8 の定時タスクが毎日 1 回 `scripts/writer_lane.py` を回し、書き手は `scripts/article_writer.py` の口（agy。予備に ollama）。商品の選定 → 出典の事前チェック → `jules-lock/<ASIN>` → 執筆 → K8 の中で検査 → 1 回だけ書き直し → 合格分だけ PR（題 `[k8-writer] 記事生成: <ASIN>`）。下流（04 の検証・05 の自動マージ・06 のロック掃除）は Jules のときと同じ
+- 書き直しは `--max-rewrites` で `12-rewrite-idle-fill` の待ち行列から選ぶ。古い記事ファイルの削除と `rewrite_ledger` の記録は 12 の `--cleanup`
+- 毎回の数字は navi-brain の記録用 issue に自動で投稿される。止まったら `63-k8-writer-watch.yml` が赤くなる（記事 PR が 48 時間出ていない）
+- **Jules（Google の外部エージェント）は 2026-11-11 で終了。** 03・14・29・33・35 は定時起動を外した（ファイルは残してある）。SNS コピー・エンゲージ投稿・ブランド紹介の代わりはまだ無い
+- 経緯と残りは navi-brain#170
 
 ## 共同開発の会話は private 側でやる
 
@@ -112,7 +122,7 @@ Amazon の大型セールなどの期間は `hugo/data/sale_events.yaml` に 1 �
 
 ## 触ってよい / いけない
 
-`AGENTS.md` の「リポジトリ保護ルール」は Jules 向けの制約だが、そこに挙がっている `hugo/config.toml` / `hugo/themes/` / `data/schema/` / `data/raw/` は自動化パイプラインの前提になっているので、人間が変更する場合も影響範囲を確認してから触ること。
+`AGENTS.md` の「リポジトリ保護ルール」は記事の書き手向けの制約だが、そこに挙がっている `hugo/config.toml` / `hugo/themes/` / `data/schema/` / `data/raw/` は自動化パイプラインの前提になっているので、人間が変更する場合も影響範囲を確認してから触ること。
 
 **`scripts/fetch_*.py` を手元で実行しない。** API キーが要るうえ、外部 API のレート制限に当たる。
 
@@ -161,5 +171,5 @@ scripts/agent_worktree.sh remove my-task
 ## PR の作法
 
 - ブランチを切って PR を出す。`main` に直接コミットしない
-- `add-article-*` / `add-*-brand-narrative-*` のような大量のブランチは cron と Jules が作る正常な状態。掃除しようとしない（`46-prune-stale-branches.yml` が担当）
+- `add-article-*` / `add-*-brand-narrative-*` のような大量のブランチは cron と記事の書き手が作る正常な状態。掃除しようとしない（`46-prune-stale-branches.yml` が担当）
 - ライセンスは All Rights Reserved。OSS ではない
