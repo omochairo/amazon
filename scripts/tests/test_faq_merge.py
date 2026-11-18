@@ -31,7 +31,7 @@ def test_extended_first_then_article_only_additions():
     assert [x["question"] for x in out] == [
         "素材は何ですか？", "お手入れの方法は？", "発売日と定価はいくらですか？", "収納サイズは？",
     ]
-    assert stats == {"dup_dropped": 0, "cap_dropped": 0, "added": 2, "dynamic_dropped": 0, "age_dropped": 0, "where_kept": 0}
+    assert stats == {"dup_dropped": 0, "cap_dropped": 0, "added": 2, "dynamic_dropped": 0, "stock_dropped": 0, "age_dropped": 0, "where_kept": 0}
 
 
 def test_exact_duplicate_dropped_and_extended_wins():
@@ -155,3 +155,13 @@ def test_age_restatement_dropped_only_when_age_shown():
     assert merge_faq([rest, real], None, NAME, age_shown=True, stats=stats) == [real]
     assert stats["age_dropped"] == 1
     assert merge_faq([rest, real], None, NAME, age_shown=False) == [rest, real]
+
+
+def test_timestamped_stock_statement_dropped_but_plain_genzai_kept():
+    stock = qa("どこで買えますか？", "本記事執筆時点ではAmazon等での取り扱いは品切れとなっています。")
+    seen = qa("取り扱いは？", "2点セットとしてAmazonでの取り扱いが確認できました。")
+    plain = qa("どこの国のブランドですか？", "ドイツの玩具メーカーです。現在は世界50ヵ国以上で販売されており、高い品質で知られています。")
+    stats: dict = {}
+    out = merge_faq([stock, seen, plain], None, NAME, stats=stats)
+    assert out == [plain]
+    assert stats["stock_dropped"] == 2
