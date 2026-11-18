@@ -52,6 +52,10 @@ from typing import Any
 import requests
 
 from scripts import official_howto
+from scripts.faq_merge import (  # noqa: F401  動的事実の禁止語は build_post の faq_merge と共有する
+    DYNAMIC_FACT_WORDS,
+    contains_dynamic_fact as _contains_dynamic_fact,
+)
 from scripts._seo_sidecar import load_sidecar, sidecar_path, update_sidecar
 from scripts.audit_query_entailment import (
     build_judge_text,
@@ -96,19 +100,6 @@ MAX_FAQ_ITEMS = 6
 MIN_META_LEN = 60
 MAX_META_LEN = 140
 
-DYNAMIC_FACT_WORDS: tuple[str, ...] = (
-    "価格", "最安", "在庫", "セール", "割引", "%オフ",
-    "送料", "キャンペーン", "タイムセール",
-)
-# 「円」「ポイント」は素の語で弾くと知育玩具の記事で誤検出が出る (実測: 既存 FAQ
-# 4,627 件中 12 件)。「楕円形・円盤・円が4個」(図形パズル/形合わせ商品の説明) や
-# 「着目ポイント」(= 要点の意味) は動的事実ではないので残す。禁止したいのは
-# 「2,955円」「数百円」のような金額と、Amazon のポイント還元のみ。
-_PRICE_NUMBER_RE = re.compile(r"[\d０-９一二三四五六七八九十百千万数][\d,，]*\s*円")
-_POINT_REWARD_RE = re.compile(
-    r"ポイント(還元|付与|進呈|アップ|バック|倍)|ポイントが?(貯ま|付く|つく)|ポイ活"
-)
-
 GENERATION_PROMPT_TEMPLATE = """あなたは記事の FAQ を実需要クエリで拡張し、meta_description を刷新するアシスタントです。
 
 # 記事本文
@@ -138,19 +129,6 @@ class GenerationError(Exception):
 # --------------------------------------------------------------------------
 # validator (pure function)
 # --------------------------------------------------------------------------
-
-def _contains_dynamic_fact(text: str) -> bool:
-    """時間で変化する事実 (価格・在庫・セール等) の禁止語を含むかを判定する。
-
-    「円」「ポイント」は金額・ポイント還元の文脈でのみ弾く (素の語で弾くと
-    「楕円形」「着目ポイント」のような静的な記述まで落ちるため)。
-    """
-    if any(word in text for word in DYNAMIC_FACT_WORDS):
-        return True
-    if _PRICE_NUMBER_RE.search(text):
-        return True
-    return bool(_POINT_REWARD_RE.search(text))
-
 
 def validate_faq(faq: Any, *, max_items: int = MAX_FAQ_ITEMS) -> list[dict[str, str]]:
     """gemma が生成した FAQ 候補を検証し、有効な Q&A だけを返す (fail-closed)。
