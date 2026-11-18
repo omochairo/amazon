@@ -280,11 +280,13 @@ def pick(env, rows, state_dir, run_id, forced, max_rewrites=0):
     if forced:
         return [{"asin": a, "pool": "", "source_keyword": None} for a in forced]
     existing = article_asins()
+    pending = set()
     if max_rewrites > 0:
         # 03 と同じく、書き直し待ちは「記事がある」除外から外して候補に戻す。進行中の
         # 二重 pick (open PR・ロック) の除外はその後で足す
         import rewrite_queue
-        existing -= set(rewrite_queue.eligible_rewrite_asins("data/articles"))
+        pending = set(rewrite_queue.eligible_rewrite_asins("data/articles"))
+        existing -= pending
     existing |= open_pr_asins(env) | locked_asins(env) | recent_skips(rows, env.now())
     path, _ = write_closed_rows(env, rows, state_dir)
     os.environ["CLOSED_ARTICLE_PRS"] = str(path)
@@ -295,7 +297,10 @@ def pick(env, rows, state_dir, run_id, forced, max_rewrites=0):
     # article_pick は書き直しをランキングの後に置く。このレーンは 1 日 1 回なので、先頭に
     # 回さないと上限 (本数) に届いた時点で書き直しまで来ない
     rewrites = [o for o in origins if o.get("pool") == "rewrite-queue"]
-    return rewrites + [o for o in origins if o.get("pool") != "rewrite-queue"]
+    # 上限を超えた書き直し待ちは、12 が amazon.json に足した商品として別の枠 (pool 無し) で
+    # 候補に残ることがある。そこから書くと --max-rewrites を超え、出自台帳にも載らないので外す
+    rest = [o for o in origins if o.get("pool") != "rewrite-queue" and o.get("asin") not in pending]
+    return rewrites + rest
 
 
 # ---------------------------------------------------------------- 出典の事前確認 (A4)
