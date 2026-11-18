@@ -31,7 +31,7 @@ def test_extended_first_then_article_only_additions():
     assert [x["question"] for x in out] == [
         "素材は何ですか？", "お手入れの方法は？", "発売日と定価はいくらですか？", "収納サイズは？",
     ]
-    assert stats == {"dup_dropped": 0, "cap_dropped": 0, "added": 2, "dynamic_dropped": 0}
+    assert stats == {"dup_dropped": 0, "cap_dropped": 0, "added": 2, "dynamic_dropped": 0, "age_dropped": 0, "where_kept": 0}
 
 
 def test_exact_duplicate_dropped_and_extended_wins():
@@ -92,15 +92,15 @@ def test_malformed_items_skipped():
     assert out == [qa("収納サイズは？")]
 
 
-def test_dynamic_fact_in_article_item_dropped_only_when_extended_exists():
+def test_dynamic_fact_in_article_item_dropped_everywhere():
     price = qa("どこで買うのが一番安いですか？", "本記事執筆時点ではAmazonが1,980円で最安値です。")
     other = qa("収納サイズは？")
     stats: dict = {}
     out = merge_faq([price, other], [qa("素材は何ですか？")], NAME, stats=stats)
     assert [x["question"] for x in out] == ["素材は何ですか？", "収納サイズは？"]
     assert stats["dynamic_dropped"] == 1
-    # faq_extended の無い記事は従来どおりそのまま出る
-    assert merge_faq([price, other], None, NAME) == [price, other]
+    # faq_extended の無い記事でも外す (K の決定 2026-11-18)
+    assert merge_faq([price, other], None, NAME) == [other]
 
 
 def test_long_vs_short_product_name_is_duplicate():
@@ -132,3 +132,26 @@ def test_release_date_and_list_price_are_separate_intents():
     art = [qa("定価はいくらですか？", "メーカー希望の販売額はありません。")]
     # 「定価」は動的事実ではない (価格 の語を含まない) ので足される
     assert len(merge_faq(art, ext, NAME)) == 2
+
+
+def test_fixed_price_faq_is_kept():
+    keep = qa("メーカー希望小売価格はいくらですか？", "メーカー希望小売価格は1,980円（税込）です。")
+    assert merge_faq([keep], None, NAME) == [keep]
+    stale = qa("定価はいくらですか？", "定価は1,980円ですが、現在の最安は1,500円です。")
+    assert merge_faq([stale], None, NAME) == []
+
+
+def test_where_to_buy_without_price_is_kept_and_counted():
+    keep = qa("どこで買えますか？", "全国のおもちゃ売り場や、公式の直営店で取り扱いがあります。")
+    stats: dict = {}
+    assert merge_faq([keep], None, NAME, stats=stats) == [keep]
+    assert stats["where_kept"] == 1
+
+
+def test_age_restatement_dropped_only_when_age_shown():
+    rest = qa("何歳から遊べますか？", "対象年齢は3歳以上です。小さな部品があるので誤飲にご注意ください。")
+    real = qa("何歳から遊べますか？", "対象年齢は3歳以上ですが、ルールが複雑なので5歳ごろから楽しめます。")
+    stats: dict = {}
+    assert merge_faq([rest, real], None, NAME, age_shown=True, stats=stats) == [real]
+    assert stats["age_dropped"] == 1
+    assert merge_faq([rest, real], None, NAME, age_shown=False) == [rest, real]

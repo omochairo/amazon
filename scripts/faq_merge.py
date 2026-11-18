@@ -82,6 +82,60 @@ def contains_dynamic_fact(text: str) -> bool:
     return bool(_POINT_REWARD_RE.search(text))
 
 
+# --- 読者の邪魔になる FAQ を外す (K の決定 2026-11-18) ---
+# 凍った価格・最安の Q&A は、冒頭の箱と価格カードが最新の値で答えているので出さない。
+# ただしメーカー希望小売価格・定価・発売日の Q&A (変わらない値) は残す。
+_FIXED_PRICE_RE = re.compile(r"希望小売価格|メーカー希望|定価|発売日")
+_STRONG_DYNAMIC_RE = re.compile(r"最安|在庫|セール|割引|%オフ|ポイント|送料|キャンペーン|執筆時点|現在")
+_WHERE_TO_BUY_RE = re.compile(r"どこで(買|購入|売)|販売店|どこに売")
+
+# 対象年齢を言い直すだけの Q&A: 答えを文に分け、年齢の文と定型の注意文を除いて何も
+# 残らなければ外す。年齢は冒頭の「対象年齢：」と題に出ている。
+_AGE_Q_RE = re.compile(r"何歳から|何歳ですか|何歳でも|何ヶ月から|対象年齢|いつから(遊|使)")
+_AGE_SENT_RE = re.compile(
+    r"(対象年齢|推奨年齢|公式).*\d+\s*(歳|才|ヶ月|か月|カ月|ケ月)(以上|から|〜|~)?"
+    r"|\d+\s*(歳|才|ヶ月|か月|カ月|ケ月)(以上|から)(の|を|が)?.*(対象|推奨|遊べ|使え)"
+)
+_AGE_BOILER_RE = re.compile(
+    r"小さな部品|小さい部品|小さなパーツ|パーツ|誤飲|口に入れ|手の届かない|年齢を守|見守り|"
+    r"安全のため|注意|推奨されます|設定されています|ご使用ください|ご利用ください"
+)
+
+
+# 年齢の文でも、ここに当たれば年齢以外の中身 (目安・難しさ・口コミなど) を言っているので残す
+_AGE_EXTRA_RE = re.compile(
+    r"ごろ|頃|くらい|ぐらい|ですが|しかし|難し|ルール|楽しめ|口コミ|レビュー|実際|握りやすい|誤飲しにく|"
+    r"設計|理解|操作|表記|赤ちゃん|ふれあい|上手|道具|動き|指先|大人の|コレクション|"
+    r"ませんが|ますが|部品がなく|安全な|出産祝い|0歳|下限|一般的|想定|新生児|ファースト|最適|大人向け|ホビー|始める"
+)
+
+
+def is_frozen_price_faq(question: str, answer: str) -> bool:
+    """凍った価格・最安などの動的事実を言う Q&A か (定価・希望小売価格・発売日の Q&A は除く)。"""
+    if not (contains_dynamic_fact(question) or contains_dynamic_fact(answer)):
+        return False
+    if _FIXED_PRICE_RE.search(answer) and not _STRONG_DYNAMIC_RE.search(answer + question):
+        return False
+    return True
+
+
+def is_age_restatement_faq(question: str, answer: str) -> bool:
+    """対象年齢を言い直すだけ (年齢の文と定型の注意文しか答えに無い) の Q&A か。"""
+    if not _AGE_Q_RE.search(unicodedata.normalize("NFKC", question)):
+        return False
+    text = unicodedata.normalize("NFKC", answer)
+    sentences = [s.strip() for s in re.split(r"[。！？!?\n]+", text) if s.strip()]
+    if not sentences:
+        return False
+    for s in sentences:
+        if _AGE_EXTRA_RE.search(s):
+            return False
+        if _AGE_SENT_RE.search(s) or _AGE_BOILER_RE.search(s):
+            continue
+        return False
+    return True
+
+
 def _norm(text: str) -> str:
     return _PUNCT_RE.sub("", unicodedata.normalize("NFKC", text).lower())
 
@@ -151,15 +205,32 @@ def merge_faq(
     product_names: list[str] | None = None,
     *,
     max_items: int = MAX_MERGED_FAQ_ITEMS,
+    age_shown: bool = False,
     stats: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     """``faq_extended`` を先に、``faq`` の重複しないものを後ろに並べて ``max_items`` で切る。
 
     ``stats`` を渡すと ``dup_dropped`` (重複で落とした数) と ``cap_dropped`` (上限で落とした数)、
-    ``dynamic_dropped`` (価格などの動的事実で落とした数)、``added`` (faq_extended のある記事で ``faq`` から足した数) を加算する。入力は変更しない。
+    ``dynamic_dropped`` (凍った価格などで落とした数。ext/faq 両方)、``age_dropped`` (年齢の言い直しで落とした数。``age_shown`` が真のときだけ)、``where_kept`` (「どこで買える」型で残した数)、``added`` (faq_extended のある記事で ``faq`` から足した数) を加算する。入力は変更しない。
     """
-    ext_items = _clean_items(faq_extended)
-    art_items = _clean_items(faq)
+    dyn = age_dropped = where_kept = 0
+
+    def _reader_filter(items: list[dict[str, str]]) -> list[dict[str, str]]:
+        nonlocal dyn, age_dropped, where_kept
+        kept: list[dict[str, str]] = []
+        for it in items:
+            if is_frozen_price_faq(it["question"], it["answer"]):
+                dyn += 1
+            elif age_shown and is_age_restatement_faq(it["question"], it["answer"]):
+                age_dropped += 1
+            else:
+                if _WHERE_TO_BUY_RE.search(unicodedata.normalize("NFKC", it["question"])):
+                    where_kept += 1
+                kept.append(it)
+        return kept
+
+    ext_items = _reader_filter(_clean_items(faq_extended))
+    art_items = _reader_filter(_clean_items(faq))
     # 商品名の語: product.name に加え、同じページの複数の質問に共通して出る語
     # (記事側は長い商品名、サイドカー側は短い商品名で書くことが多いため)。
     names = list(product_names or [])
@@ -173,7 +244,7 @@ def merge_faq(
     tokens = _name_tokens(names)
     merged: list[dict[str, Any]] = []
     keys: list[tuple[str, set[str]]] = []  # (residual, intents)
-    dup = cap = added = dyn = 0
+    dup = cap = added = 0
 
     ext_merged: list[dict[str, Any]] = []
     for src_is_article, items in ((False, ext_items), (True, art_items)):
@@ -185,15 +256,6 @@ def merge_faq(
             norm_full = _norm(question)
             intents = _intents(question)
             is_dup = False
-            # faq_extended のある記事に足す記事側の Q&A には、generate_faq_seo と同じ
-            # 動的事実 (価格・最安・在庫など) の禁止を掛ける。記事側の「どこで買うのが一番
-            # 安いですか？ → 執筆時点で Amazon が○円で最安」は凍った価格で、サイドカーが
-            # 意図して外している種類のもの。faq_extended の無い記事は従来通り素通し。
-            if src_is_article and ext_items and (
-                contains_dynamic_fact(question) or contains_dynamic_fact(it["answer"])
-            ):
-                dyn += 1
-                continue
             # faq_extended は今までそのまま出ていたので、その中身は落とさない。
             # 照合先は faq_extended だけ (記事側どうしは同じ書き手が一緒に書いたもので、
             # これまで faq_extended の無い記事ではそのまま出ていたので落とさない)。
@@ -225,4 +287,6 @@ def merge_faq(
         stats["cap_dropped"] = stats.get("cap_dropped", 0) + cap
         stats["added"] = stats.get("added", 0) + added
         stats["dynamic_dropped"] = stats.get("dynamic_dropped", 0) + dyn
+        stats["age_dropped"] = stats.get("age_dropped", 0) + age_dropped
+        stats["where_kept"] = stats.get("where_kept", 0) + where_kept
     return merged
