@@ -51,6 +51,14 @@ from brand_normalizer import name_variants as brand_name_variants
 from brand_normalizer import normalize as normalize_brand
 from brand_normalizer import display_name as brand_display_name
 import score_claims
+from buy_offer_rules import (
+    BUY_SITES as _BUY_SITES,
+    amazon_stock_state,
+    entry_is_direct as _buy_entry_is_direct,
+    entry_is_priced as _buy_entry_is_priced,
+    entry_out_of_stock as _buy_entry_out_of_stock,
+    entry_price as _buy_entry_price,
+)
 from card_reason import card_reason
 from age_semantics import (
     ADULT_AGE_MONTHS,
@@ -321,28 +329,6 @@ def _build_score_context(sr: ScoreResult) -> dict[str, Any]:
 
 BADGE_FIELDS = ("availability", "loyalty_points", "savings_percentage", "free_shipping")
 
-
-def amazon_stock_state(availability: Any) -> str:
-    """Amazon PA-API の availability メッセージから在庫状態を分類する。
-
-    返り値: "instock" / "low_stock" / "outofstock" / "preorder" / "unknown"
-    楽天/Yahoo は fetch_cross_search.py で正規化済 (instock/outofstock) だが
-    Amazon は自由記述文字列のためテンプレ側で分類する必要がある。
-    """
-    if not availability or not isinstance(availability, str):
-        return "unknown"
-    text = availability.strip()
-    if not text:
-        return "unknown"
-    if "在庫切れ" in text or "入荷時期は未定" in text or "取扱い終了" in text:
-        return "outofstock"
-    if "発売予定日" in text or "予約受付" in text:
-        return "preorder"
-    if "残り" in text and "点" in text:
-        return "low_stock"
-    if "在庫あり" in text or text.startswith("通常"):
-        return "instock"
-    return "unknown"
 
 ENRICHMENT_KEYS = (
     "review_summary",
@@ -3315,25 +3301,7 @@ def _recompute_best_price(product: dict[str, Any]) -> None:
 
 
 # navi-brain#165 T3/T4: 購入ボタン (.buy-box) の行き先と、💴 価格の節の見出し・導入文。
-# (key, ボタンに出す名前, 導入文で使う短い名前)。並びは価格カードと同じで、同額のときは前を採る。
-_BUY_SITES = (
-    ("amazon", "Amazon", "Amazon"),
-    ("rakuten", "楽天市場", "楽天"),
-    ("yahoo", "Yahoo!ショッピング", "Yahoo!ショッピング"),
-)
-
-
-def _buy_entry_price(entry: dict[str, Any]) -> int:
-    try:
-        return int(entry.get("price") or 0)
-    except (TypeError, ValueError):
-        return 0
-
-
-def _buy_entry_out_of_stock(key: str, entry: dict[str, Any]) -> bool:
-    if key == "amazon":
-        return amazon_stock_state(entry.get("availability")) == "outofstock"
-    return entry.get("availability") == "outofstock"
+# サイト一覧・在庫/価格の判定は buy_offer_rules (知育スコアの内訳と共有)。
 
 
 def _resolve_buy_offer(data: dict[str, Any]) -> dict[str, Any]:
@@ -3358,9 +3326,7 @@ def _resolve_buy_offer(data: dict[str, Any]) -> dict[str, Any]:
         entries[key] = entry if isinstance(entry, dict) else {}
 
     def _direct(key: str) -> bool:
-        e = entries[key]
-        return (bool(e.get("url")) and not e.get("is_search") and not e.get("discontinued")
-                and e.get("verified") is not False)
+        return _buy_entry_is_direct(entries[key])
 
     eligible: list[tuple[int, int, str]] = []
     for order, (key, _label, _short) in enumerate(_BUY_SITES):
@@ -3400,7 +3366,7 @@ def _resolve_buy_offer(data: dict[str, Any]) -> dict[str, Any]:
 
     # T5: 価格カードに金額が出るサイト (price>0 かつ販売終了でない) の数で見出しと導入文を決める。
     priced = [short for key, _label, short in _BUY_SITES
-              if _buy_entry_price(entries[key]) > 0 and not entries[key].get("discontinued")]
+              if _buy_entry_is_priced(entries[key])]
     ended = [short for key, _label, short in _BUY_SITES
              if entries[key].get("discontinued")]
     not_found = [short for key, _label, short in _BUY_SITES

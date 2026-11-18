@@ -130,7 +130,7 @@
 {% if buy_offer and buy_offer.price_site_count <= 1 -%}
 ## <small>{{ product.name }}の</small>💴 価格と販売サイト
 {%- else -%}
-## <small>{{ product.name }}の</small>💴 価格を3サイトで比較
+## <small>{{ product.name }}の</small>💴 価格を{{ buy_offer.price_site_count if buy_offer and buy_offer.price_site_count in (2, 3) else 3 }}サイトで比較
 {%- endif %}
 
 {{ buy_offer.price_intro if buy_offer else '当サイトが自動観測した最新価格をAmazon・楽天・Yahoo!ショッピングで横断比較しました。' }}
