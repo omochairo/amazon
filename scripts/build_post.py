@@ -36,6 +36,7 @@ import jinja2
 import article_format_log
 import asin_redirects
 import market_prices
+import faq_merge
 import official_howto
 import official_howto_format
 import price_overlay
@@ -3635,7 +3636,7 @@ def _fill_jsonld(data: dict[str, Any]) -> None:
         product_ld.pop("offers", None)
 
     # 2. FAQ スキーマの動的生成
-    faq = data.get("faq_extended") or data.get("faq") or []
+    faq = data["faq_merged"] if "faq_merged" in data else (data.get("faq_extended") or data.get("faq") or [])
     if faq:
         if "faq" not in jsonld or not isinstance(jsonld["faq"], dict):
             jsonld["faq"] = {
@@ -4209,6 +4210,7 @@ def main() -> None:
     stock_index = stock_status.load_stock_index()
     stock_title_applied = 0
     howto_faq_dropped = 0
+    faq_merge_stats: dict[str, int] = {}
     # #7959 (#7955 C 改訂版): official_howto_block を出したページ数と、
     # そのうち reviewed steps 付きだった件数。
     official_howto_block_applied = 0
@@ -4314,6 +4316,15 @@ def main() -> None:
             for _faq_key in ("faq", "faq_extended"):
                 data[_faq_key], _dropped = official_howto.filter_howto_faq(data.get(_faq_key), _howto_obj)
                 howto_faq_dropped += _dropped
+            # 記事本体の faq とサイドカーの faq_extended を 1 本にして表示と JSON-LD に使う
+            # (faq_extended があると faq が出なかった。#11865)。
+            _prod = data.get("product")
+            data["faq_merged"] = faq_merge.merge_faq(
+                data.get("faq"), data.get("faq_extended"),
+                [_prod.get("name") if isinstance(_prod, dict) else None],
+                age_shown=bool((data.get("persona_fit") or {}).get("age_range")),
+                stats=faq_merge_stats,
+            )
             _backfill_amazon_badges(data, raw_amazon_index, per_asin_root)
             # #4007: 凍結した Amazon 価格を日次観測で上書き (_attach_market_prices の
             # _recompute_best_price より前に置くことで最安バッジまで整合する)。
@@ -4739,6 +4750,14 @@ def main() -> None:
         f"旧 slug の転送を足した記事 {rewrite_alias_pages}"
     )
     print(f"howto_faq (#7957): {howto_faq_dropped} FAQ item(s) dropped (no reviewed official steps)")
+    print(
+        f"faq_merge (#11865): added={faq_merge_stats.get('added', 0)} "
+        f"dup_dropped={faq_merge_stats.get('dup_dropped', 0)} "
+        f"dynamic_dropped={faq_merge_stats.get('dynamic_dropped', 0)} "
+        f"age_dropped={faq_merge_stats.get('age_dropped', 0)} "
+        f"where_kept={faq_merge_stats.get('where_kept', 0)} "
+        f"cap_dropped={faq_merge_stats.get('cap_dropped', 0)}"
+    )
     print(
         f"official_howto_block (#7959): {official_howto_block_applied} page(s) "
         f"(steps: {official_howto_block_with_steps})"

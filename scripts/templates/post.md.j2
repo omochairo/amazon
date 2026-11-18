@@ -554,10 +554,11 @@
 <aside class="expert-take"><strong>おもちゃロボの見立て</strong><br>{{ expert_take }}</aside>
 {% endif %}
 
-{% if faq_extended or faq %}
+{% set _faq_items = faq_merged if faq_merged is defined else (faq_extended or faq) %}
+{% if _faq_items %}
 ## ❓ よくある質問（FAQ）
 
-{% for q in (faq_extended or faq) %}
+{% for q in _faq_items %}
 ### {{ q.question }}
 
 {{ q.answer }}
