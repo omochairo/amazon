@@ -20,6 +20,7 @@ Public API:
 from __future__ import annotations
 
 import json
+import math
 import pathlib
 import re
 from dataclasses import dataclass, field
@@ -148,29 +149,47 @@ def _age_fit_score(product: dict) -> tuple[int, str, Optional[tuple[int, int]]]:
         # 対象年齢の記載が一切ない: 安全に与えられる下限が分からない真の情報不足
         return 4, "対象年齢の詳細は商品ページに準じます。お子さまの発達段階に合わせて選んでください。", None
 
-    # 範囲: "3歳〜7歳" / "6ヶ月〜2歳"
-    # 月単位の場合は age_range タプルでは歳換算 (months/12, 小数切上げ) を返す
-    def _to_years(n: int, unit: str) -> int:
-        return max(1, (n + 11) // 12) if "ヶ月" in unit else n
+    # 範囲: "3歳〜7歳" / "6ヶ月〜2歳" / "1.5歳〜3歳"
+    # 数字は小数も読む。(\d+) だけだと "1.5歳" の "5歳" だけを拾ってしまう。
+    # 表示の文は原文の数字のまま出し、age_range (歳の整数の組) にだけ丸めを掛ける。
+    # age_range は _price_value_score の「年数 = hi - lo + 1」に使われる。
+    # 歳表記の丸め: 下限は切り捨て・上限は切り上げ (整数表記 "1歳〜3歳" と同じ
+    # 「含まれる歳の数え方」に揃え、期間を実際より短く見積もって年あたりの価格を
+    # 高く出さない)。下限のみ表記は 1.5歳以上 → lo=1 (安全側に長めの利用期間)。
+    # 月表記は従来どおり切り上げで歳換算 (最低 1)。整数の入力は従来と同じ結果。
+    def _lo_years(n: float, unit: str) -> int:
+        return max(1, math.ceil(n / 12)) if "ヶ月" in unit else int(math.floor(n))
 
-    m = re.search(r"(\d+)\s*(歳|才|ヶ月)\s*[〜~\-]\s*(\d+)\s*(歳|才|ヶ月)", raw)
+    def _hi_years(n: float, unit: str) -> int:
+        return max(1, math.ceil(n / 12)) if "ヶ月" in unit else int(math.ceil(n))
+
+    # 「1歳半」は 1.5 歳、「3歳頃」は 3 歳として読む (表示は原文の表記のまま)。
+    # 半は歳・才のときだけ (「6ヶ月半」は対象外)。
+    def _val(n_t: str, u: str, sfx: str) -> float:
+        return float(n_t) + (0.5 if sfx == "半" and "ヶ月" not in u else 0.0)
+
+    tok = r"(\d+(?:\.\d+)?)\s*(歳|才|ヶ月)(半|頃)?"
+    # 区切りは全角チルダ「～」(U+FF5E) も受ける (記事 JSON に実在する表記)
+    m = re.search(tok + r"\s*[〜～~\-]\s*" + tok, raw)
     if m:
-        lo_n, lo_u, hi_n, hi_u = int(m.group(1)), m.group(2), int(m.group(3)), m.group(4)
-        lo, hi = _to_years(lo_n, lo_u), _to_years(hi_n, hi_u)
+        lo_t, lo_u, lo_s, hi_t, hi_u, hi_s = (g or "" for g in m.groups())
+        lo, hi = _lo_years(_val(lo_t, lo_u, lo_s), lo_u), _hi_years(_val(hi_t, hi_u, hi_s), hi_u)
         span = hi - lo
-        label = f"{lo_n}{lo_u}〜{hi_n}{hi_u}"
+        label = f"{lo_t}{lo_u}{lo_s}〜{hi_t}{hi_u}{hi_s}"
         if span >= 5:
             return 10, f"対象年齢は{label}と幅広く、成長段階に合わせて長く遊べる設計です。きょうだいで共用しやすいのも魅力です。", (lo, hi)
         return 10, f"対象年齢は{label}に明確に設定されており、その年齢帯のお子さまに最適化された遊び方ができます。", (lo, hi)
 
-    # 下限のみ: "6歳以上" / "3歳〜" / "12ヶ月から"
+    # 下限のみ: "6歳以上" / "3歳〜" / "12ヶ月から" / "1.5歳以上"
     # 玩具安全基準の標準表記。下限が parseable なら買い手は「安全に与えられる年齢」を
     # 判断できる十分な情報を持つため満点とする (#1107 follow-up)。
-    m = re.search(r"(\d+)\s*(歳|才|ヶ月)\s*(?:〜|~|から|以上|\+)", raw)
+    m = re.search(tok + r"\s*(?:〜|～|~|から|以上|\+)", raw)
     if m:
-        n, u = int(m.group(1)), m.group(2)
-        lo = _to_years(n, u)
-        return 10, f"{n}{u}以上の対象年齢が明示されており、安全に遊び始められる年齢が明確です。上限の指定はなく、興味があれば長く楽しめる設計です。", (lo, lo + 5)
+        n_t, u, s_ = (g or "" for g in m.groups())
+        lo = _lo_years(_val(n_t, u, s_), u)
+        # 「3歳頃以上」とは書かない。頃のときは「3歳頃から」にする
+        floor_label = f"{n_t}{u}頃から" if s_ == "頃" else f"{n_t}{u}{s_}以上"
+        return 10, f"{floor_label}の対象年齢が明示されており、安全に遊び始められる年齢が明確です。上限の指定はなく、興味があれば長く楽しめる設計です。", (lo, lo + 5)
 
     # 数値が抽出できない textual mention のみ ("幼児向け" 等)
     return 6, f"対象年齢の記載は『{raw[:20]}』です。お子さまの月齢・発達状況に合わせてご検討ください。", None
