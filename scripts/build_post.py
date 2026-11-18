@@ -4754,6 +4754,7 @@ def main() -> None:
         f"faq_merge (#11865): added={faq_merge_stats.get('added', 0)} "
         f"dup_dropped={faq_merge_stats.get('dup_dropped', 0)} "
         f"dynamic_dropped={faq_merge_stats.get('dynamic_dropped', 0)} "
+        f"stock_dropped={faq_merge_stats.get('stock_dropped', 0)} "
         f"age_dropped={faq_merge_stats.get('age_dropped', 0)} "
         f"where_kept={faq_merge_stats.get('where_kept', 0)} "
         f"cap_dropped={faq_merge_stats.get('cap_dropped', 0)}"

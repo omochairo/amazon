@@ -119,6 +119,16 @@ def is_frozen_price_faq(question: str, answer: str) -> bool:
     return True
 
 
+# 「執筆時点では品切れ」「取り扱いが確認できました」のような、時点付きの在庫・取り扱いの記述。
+# 価格の語を含まなくても凍った情報なので外す (答えだけを見る)。「現在」は「現在は世界 50 ヵ国で」
+# のような無関係な用法が多いので単独では使わない。
+_STOCK_STATEMENT_RE = re.compile(r"執筆時点|品切れ|在庫|取り扱い(が|を)?確認|取扱い(が|を)?確認")
+
+
+def is_frozen_stock_faq(answer: str) -> bool:
+    return bool(_STOCK_STATEMENT_RE.search(answer))
+
+
 def is_age_restatement_faq(question: str, answer: str) -> bool:
     """対象年齢を言い直すだけ (年齢の文と定型の注意文しか答えに無い) の Q&A か。"""
     if not _AGE_Q_RE.search(unicodedata.normalize("NFKC", question)):
@@ -213,14 +223,16 @@ def merge_faq(
     ``stats`` を渡すと ``dup_dropped`` (重複で落とした数) と ``cap_dropped`` (上限で落とした数)、
     ``dynamic_dropped`` (凍った価格などで落とした数。ext/faq 両方)、``age_dropped`` (年齢の言い直しで落とした数。``age_shown`` が真のときだけ)、``where_kept`` (「どこで買える」型で残した数)、``added`` (faq_extended のある記事で ``faq`` から足した数) を加算する。入力は変更しない。
     """
-    dyn = age_dropped = where_kept = 0
+    dyn = age_dropped = where_kept = stock_dropped = 0
 
     def _reader_filter(items: list[dict[str, str]]) -> list[dict[str, str]]:
-        nonlocal dyn, age_dropped, where_kept
+        nonlocal dyn, age_dropped, where_kept, stock_dropped
         kept: list[dict[str, str]] = []
         for it in items:
             if is_frozen_price_faq(it["question"], it["answer"]):
                 dyn += 1
+            elif is_frozen_stock_faq(it["answer"]):
+                stock_dropped += 1
             elif age_shown and is_age_restatement_faq(it["question"], it["answer"]):
                 age_dropped += 1
             else:
@@ -287,6 +299,7 @@ def merge_faq(
         stats["cap_dropped"] = stats.get("cap_dropped", 0) + cap
         stats["added"] = stats.get("added", 0) + added
         stats["dynamic_dropped"] = stats.get("dynamic_dropped", 0) + dyn
+        stats["stock_dropped"] = stats.get("stock_dropped", 0) + stock_dropped
         stats["age_dropped"] = stats.get("age_dropped", 0) + age_dropped
         stats["where_kept"] = stats.get("where_kept", 0) + where_kept
     return merged
