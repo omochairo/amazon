@@ -115,7 +115,6 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPO: ${{ github.repository }}
           INPUT_LIMIT: ${{ github.event.inputs.limit }}
-          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
         run: |
           set -e
           # #11311: 題名に ASIN が無い PR もブランチ名で外す (ACTIVE は sort -u で数えるので二重にならない)。
@@ -129,22 +128,11 @@ jobs:
           SLACK=$((MAX_LOCKS - ACTIVE))
           [ "$SLACK" -lt 0 ] && SLACK=0
           if [ -n "$INPUT_LIMIT" ]; then SLACK="$INPUT_LIMIT"; fi
-          # 2026-06-08 (session 117 / #2008): Jules daily quota 共有ゲート。
-          # この workflow は ASIN を amazon.json へ注入し 03-invoke-jules (6h cron) が
-          # session を作る "03 に次ぐ producer"。03 と同じ rolling-24h 実 quota を尊重し、
-          # 残り予算 (cap 80 = 100 から 20 margin) で SLACK を絞る。budget 0 なら count=0 で
-          # green skip ([[reference-omochairo-jules-api-limits]] / prevent 側 graceful skip)。
-          # #11311: ゲートが読んだ session 一覧を待ち行列の上限計算に渡す (FAILED が続く
-          # ASIN は 03 が pick しないので数えない。03 と同じ取り方で LIST を増やさない)。
-          rm -f /tmp/jules_recent_sessions.json
-          BUDGET=$(python scripts/jules_quota_gate.py --cap 80 --max "$SLACK" \
-            --sessions-out /tmp/jules_recent_sessions.json || echo 0)
-          echo "Jules quota gate budget: $BUDGET (rolling-24h 作成数ベース)"
-          if [ -s /tmp/jules_recent_sessions.json ]; then
-            export JULES_RECENT_SESSIONS=/tmp/jules_recent_sessions.json
-          fi
-          if [ "${BUDGET:-0}" -lt "$SLACK" ]; then SLACK="${BUDGET:-0}"; fi
-          [ "$SLACK" -lt 0 ] && SLACK=0
+          # amazon-navi-brain#170 C2: Jules の枠のゲート (jules_quota_gate.py) を外した。
+          # Jules は 2026-11-11 に終了し、待ち行列の消費者は K8 の記事レーン (writer_lane.py
+          # --max-rewrites) になった。ゲートは Jules の API が失敗すると 1 を返すので、API が
+          # 止まった日から緑のまま 1 件/回に落ちる。積む量は下の待ち行列の上限だけで決める。
+          # JULES_RECENT_SESSIONS は渡さない (article_pick は無ければ除外しない = fail-open)。
           echo "active=$ACTIVE max=$MAX_LOCKS slack=$SLACK"
           if [ "$SLACK" -le 0 ]; then
             echo "No idle slots; skipping."
