@@ -2818,6 +2818,64 @@ def _strip_inline_asin_codes(value: Any) -> Any:
     return re.sub(r"[ 　]{2,}", " ", out).strip()
 
 
+# #11926 項目 1: 冒頭 (narrative.lead) から金額を外し、価格は価格カードに任せる。
+# 記事の書き手は冒頭に「価格は本記事執筆時点で Amazon が N 円と最も手頃で、…」と
+# 生成時の価格を書く。価格カードは日次の観測値で更新されるが冒頭は凍結したままなので、
+# 公開中の記事の約 3 分の 1 で冒頭の金額と価格カードが 5% 以上食い違い、
+# 古い金額のまま「最安」「最も手頃」と言い切っていた (注記は 20% 以上のずれにしか出ない)。
+#
+# 文を「、」で句に分け、先頭から続く「金額・店の比較」の句を落とす。残りの句に
+# 金額も店の名前も無ければ、それを文として残す (「…最も手頃で、木製の温かみも
+# 評価されています。」→「木製の温かみも評価されています。」)。残した句の後ろに
+# また金額の句が来る文は、途中で切ると文にならないので文ごと落とす。
+_LEAD_YEN_RE = re.compile(r"[0-9０-９][0-9０-９,，]*\s*円|[￥¥]\s*[0-9０-９]")
+_LEAD_PRICE_CLAUSE_RE = re.compile(
+    r"[0-9０-９][0-9０-９,，]*\s*円|[￥¥]\s*[0-9０-９]|最安|手頃|価格|値段|横並び|同水準|"
+    r"差額|価格差|[0-9０-９]円?差|お得|お買い得|一択|執筆時点|販売され|取り扱|取扱|"
+    r"お求めやす|リーズナブル|コスパ|コストパフォーマンス|安く|安価|割安|在庫|"
+    r"ポイント|還元|ショップ|買い回り|セール|送料|サイト|通販|設定(?:でした|です)|"
+    r"買いやす|購入でき|どちらを選んでも|負担が少な|"
+    r"Amazon|amazon|アマゾン|楽天|Yahoo|ヤフー|プラットフォーム|他サイト|各サイト"
+)
+# 「Yahoo!ショッピング」の「!」で文を切らないよう、文の区切りは「。」と全角の「！？」だけ。
+_LEAD_SENT_SPLIT_RE = re.compile(r"(?<=[。！？])")
+# 手を入れる文: 金額がある文・「価格は」で始まる文・「最安」「最も手頃」と言い切る文
+# (金額を書かずに「価格は Amazon が最も手頃で、…」とだけ書いた冒頭も古い言い切りになる)。
+_LEAD_TARGET_RE = re.compile(
+    r"[0-9０-９][0-9０-９,，]*\s*円|[￥¥]\s*[0-9０-９]|^\s*価格は|最安|最も手頃"
+)
+
+
+def _strip_lead_prices(lead: Any) -> Any:
+    """冒頭の文から、生成時の金額と店の比較の句を取り除く (#11926)。"""
+    if not isinstance(lead, str):
+        return lead
+    sents = _LEAD_SENT_SPLIT_RE.split(lead)
+    if not any(_LEAD_TARGET_RE.search(s) for s in sents):
+        return lead
+    out: list[str] = []
+    for sent in sents:
+        if not sent.strip():
+            continue
+        if not _LEAD_TARGET_RE.search(sent):
+            out.append(sent)
+            continue
+        body = sent.strip()
+        end = body[-1] if body[-1] in "。！？" else ""
+        clauses = (body[:-1] if end else body).split("、")
+        i = 0
+        while i < len(clauses) and _LEAD_PRICE_CLAUSE_RE.search(clauses[i]):
+            i += 1
+        rest = clauses[i:]
+        if not rest or any(_LEAD_PRICE_CLAUSE_RE.search(c) for c in rest):
+            continue
+        kept = "、".join(rest).strip()
+        if len(kept) < 8:
+            continue
+        out.append(kept + (end or "。"))
+    return "".join(out).strip()
+
+
 def _apply_amazon_unpriced(data: dict[str, Any], per_asin_root: pathlib.Path) -> bool:
     """最新 snapshot が価格を返さない ASIN の凍結価格を落とす (2026-08-09)。
 
@@ -4404,6 +4462,8 @@ def main() -> None:
                     # how_to_choose は配列で来ることが多く、上の 字数メタ除去は
                     # str しか見ていなかったため配列側は素通りしていた。
                     v = _strip_inline_asin_codes(v)
+                    if k == "lead":
+                        v = _strip_lead_prices(v)
                     if v is not None and k in data["narrative"]:
                         data["narrative"][k] = v
             for top_key in ("editorial_comment", "expert_take"):
