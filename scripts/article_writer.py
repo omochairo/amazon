@@ -141,7 +141,10 @@ def _audit(conversation_id, brain_dir=None):
 
 def write(prompt_text: str, *, workdir: str, backend: str = "agy", model: str | None = None,
           timeout_s: int = 900, previous_text: str | None = None, feedback: str | None = None,
-          runner=None, brain_dir=None, sleep=None) -> WriteResult:
+          runner=None, brain_dir=None, sleep=None, instruction: str | None = None,
+          num_ctx: int | None = None) -> WriteResult:
+    """instruction: 「プロンプトを読んで…」の続きの文 (None なら記事 1 本を書かせる今の文)。
+    num_ctx: ollama の文脈長 (None なら 65536)。agy では使わない。"""
     started = time.monotonic()
     chosen_model = model or ("gemini-4-hydrogen-high" if backend == "agy" else "gemma4:26b-a4b-it-qat")
     def result(ok=False, article=None, text="", error="", error_text="", usage=None, reset_s=None,
@@ -149,11 +152,12 @@ def write(prompt_text: str, *, workdir: str, backend: str = "agy", model: str | 
         return WriteResult(ok, article, text, error, error_text, usage or {}, time.monotonic()-started,
                            backend, chosen_model, reset_s, conversation_id, tool_calls or {}, web_calls)
     if backend == "ollama":
-        prompt = "Write exactly one article JSON using only the supplied material. Output one ```json code block and nothing else. Never invent URLs.\n\n" + prompt_text
+        head = instruction or "Write exactly one article JSON using only the supplied material. Output one ```json code block and nothing else. Never invent URLs."
+        prompt = head + "\n\n" + prompt_text
         if previous_text is not None or feedback is not None:
             prompt += "\n\nPrevious output:\n" + (previous_text or "") + "\n\nFailed checks:\n" + (feedback or "")
         payload = json.dumps({"model": chosen_model, "prompt": prompt, "stream": False,
-                              "options": {"num_ctx": 65536}}).encode("utf-8")
+                              "options": {"num_ctx": num_ctx or 65536}}).encode("utf-8")
         try:
             req = urllib.request.Request(os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434") + "/api/generate",
                                          data=payload, headers={"Content-Type": "application/json"}, method="POST")
@@ -190,10 +194,12 @@ def write(prompt_text: str, *, workdir: str, backend: str = "agy", model: str | 
         exe = str(candidate) if candidate.is_file() else shutil.which("agy")
     if not exe:
         return result(error="not_found", error_text="agy executable not found")
-    instruction = "Read the file " + str(prompt_file) + " completely (it is long: keep reading until the end) and follow its instructions to write exactly one article JSON. You cannot create files: output the article JSON as a single ```json code block and nothing else (no preface, no explanation). You have no web access. Use only the material in that file and never invent URLs."
+    tail = instruction or "write exactly one article JSON. You cannot create files: output the article JSON as a single ```json code block and nothing else (no preface, no explanation). You have no web access. Use only the material in that file and never invent URLs."
+    agy_instruction = "Read the file " + str(prompt_file) + " completely (it is long: keep reading until the end) and follow its instructions to " + tail
     if previous_text is not None and feedback is not None:
-        instruction += " Your previous attempt failed automated checks. Read " + str(previous_file) + " (your previous output) and " + str(feedback_file) + " (the failed checks), fix every problem, and output the complete corrected article JSON in the same format."
-    argv = [exe, "--print", instruction, "--agent", "navi-writer", "--model", chosen_model, "--mode", "plan",
+        what = "article JSON" if instruction is None else "JSON"
+        agy_instruction += " Your previous attempt failed automated checks. Read " + str(previous_file) + " (your previous output) and " + str(feedback_file) + " (the failed checks), fix every problem, and output the complete corrected " + what + " in the same format."
+    argv = [exe, "--print", agy_instruction, "--agent", "navi-writer", "--model", chosen_model, "--mode", "plan",
             "--print-timeout", str(timeout_s) + "s", "--output-format", "json", "--settings", str(settings)]
     run = runner or subprocess.run
     for attempt in range(2):

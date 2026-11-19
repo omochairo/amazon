@@ -94,6 +94,16 @@ def test_news_refill_stalled_alerts():
     assert "news refill stalled" in alerts[0]
 
 
+def test_alerts_point_at_the_k8_lane_not_the_retired_workflows():
+    """29 / 33 (Jules) は終了。警告は K8 のレーン (engagement_lane.py) を指す。"""
+    rows = [_row("daily", "2026-08-01T06:00:00+09:00"), _row("news", "2026-08-01T06:00:00+09:00")]
+    alerts = assess(rows, NOW)["alerts"]
+    assert len(alerts) == 2
+    for a in alerts:
+        assert "engagement_lane.py" in a and "navi_engagement" in a
+        assert "29-jules" not in a and "33-jules" not in a
+
+
 def test_news_refill_within_one_cycle_is_silent():
     """実測の補充は毎日 06:00 JST。定常時の age は 24h 未満なので鳴らない。
 

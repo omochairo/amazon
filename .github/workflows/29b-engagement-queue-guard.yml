@@ -28,8 +28,8 @@ on:
         required: false
         type: boolean
         default: false
-  schedule:
-    - cron: '0 20 * * *'  # 毎日 05:00 JST。低下を検知したら早朝に補充 dispatch
+  # schedule は外した (amazon-navi-brain#170 B3): 補充の 29 は Jules 終了で止まっており、毎朝 dispatch しても失敗するだけ。
+  # 補充は K8 の scripts/engagement_lane.py (予約タスク \k8\navi_engagement) が担う。手動の点検用に workflow_dispatch だけ残す。
 
 permissions:
   contents: read
