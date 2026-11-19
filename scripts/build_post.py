@@ -2833,7 +2833,9 @@ _LEAD_PRICE_CLAUSE_RE = re.compile(
     r"[0-9０-９][0-9０-９,，]*\s*円|[￥¥]\s*[0-9０-９]|最安|手頃|価格|値段|横並び|同水準|"
     r"差額|価格差|[0-9０-９]円?差|お得|お買い得|一択|執筆時点|販売され|取り扱|取扱|"
     r"お求めやす|リーズナブル|コスパ|コストパフォーマンス|安く|安価|割安|在庫|"
-    r"ポイント|還元|ショップ|買い回り|セール|送料|サイト|通販|設定(?:でした|です)|"
+    # 「ポイント」は買い物のポイントだけ (「安心できるポイントでした」の商品の話は残す)
+    r"ポイント(?:還元|付与|進呈|アップ|バック|倍|圏|を加味|が?(?:貯ま|付く|つく))|還元|ショップ|買い回り|セール|送料|"
+    r"サイト|通販|設定(?:でした|です)|入手|ポイント等|で選んで問題|"
     r"買いやす|購入でき|どちらを選んでも|負担が少な|"
     r"Amazon|amazon|アマゾン|楽天|Yahoo|ヤフー|プラットフォーム|他サイト|各サイト"
 )
@@ -2842,8 +2844,21 @@ _LEAD_SENT_SPLIT_RE = re.compile(r"(?<=[。！？])")
 # 手を入れる文: 金額がある文・「価格は」で始まる文・「最安」「最も手頃」と言い切る文
 # (金額を書かずに「価格は Amazon が最も手頃で、…」とだけ書いた冒頭も古い言い切りになる)。
 _LEAD_TARGET_RE = re.compile(
-    r"[0-9０-９][0-9０-９,，]*\s*円|[￥¥]\s*[0-9０-９]|^\s*価格は|最安|最も手頃"
+    r"[0-9０-９][0-9０-９,，]*\s*円|[￥¥]\s*[0-9０-９]|^\s*価格は|最安|最も手頃|"
+    # 金額なしの「本記事執筆時点で Amazon にて販売されており、…」も生成時の販売状況の言い切り
+    r"(?:執筆|確認|調査)時点"
 )
+
+
+def _body_has_price(data: dict[str, Any]) -> bool:
+    """本文 (narrative の各節・editorial_comment・expert_take・verdict) に金額が書かれているか (#11926)。"""
+    parts: list[Any] = []
+    nar = data.get("narrative")
+    if isinstance(nar, dict):
+        parts.extend(nar.values())
+    parts.extend(data.get(k) for k in ("editorial_comment", "expert_take", "verdict"))
+    blob = json.dumps(parts, ensure_ascii=False)
+    return bool(_LEAD_YEN_RE.search(blob))
 
 
 def _strip_lead_prices(lead: Any) -> Any:
@@ -4470,6 +4485,10 @@ def main() -> None:
                 v = data.get(top_key)
                 if isinstance(v, str):
                     data[top_key] = _meta_re.sub("", v).strip()
+            # #11926: 冒頭から金額を外した結果、本文のどこにも金額が残らない記事では
+            # 「本文中に書かれた価格は執筆時点のものです」の注記が指す先が無くなるので出さない。
+            if data.get("price_body_stale") and not _body_has_price(data):
+                data["price_body_stale"] = False
 
             # #3332 N3 消費側: 逐語一致検証はレンダリングされる最終テキストに対して
             # 行う必要があるため、narrative クリーンアップの後・template.render の前に呼ぶ。

@@ -76,6 +76,24 @@ class StripLeadPricesTest(unittest.TestCase):
                 self.assertEqual(self.strip(lead), lead)
         self.assertIsNone(self.strip(None))
 
+    def test_shopping_point_vs_product_point(self) -> None:
+        # 「嬉しいポイント」は商品の話なので残す。買い物のポイントは落とす (agy のレビュー・実データで 31 件)
+        lead = HEAD + "価格はAmazonが5689円と最も手頃で、パーツを本体に収納できる片付けのしやすさも嬉しいポイントでした。" + TAIL
+        self.assertEqual(self.strip(lead), HEAD + "パーツを本体に収納できる片付けのしやすさも嬉しいポイントでした。" + TAIL)
+        lead = HEAD + "価格は本記事執筆時点でAmazon・楽天ともに5478円で横並びとなっており、普段利用するポイント圏で選んで問題ありません。" + TAIL
+        self.assertEqual(self.strip(lead), HEAD + TAIL)
+
+    def test_point_in_time_without_amount(self) -> None:
+        lead = HEAD + "本記事執筆時点でAmazonにて販売されており、楽しく創造的なストーリーが子どものやる気を引き出します。" + TAIL
+        self.assertEqual(self.strip(lead), HEAD + "楽しく創造的なストーリーが子どものやる気を引き出します。" + TAIL)
+
+    def test_body_has_price(self) -> None:
+        lead_only = {"narrative": {"lead": HEAD + TAIL, "closing": "長く遊べる一品です。"}, "verdict": "おすすめ"}
+        self.assertFalse(bp._body_has_price(lead_only))
+        elsewhere = {"narrative": {"lead": HEAD, "closing": "Amazonでは2,980円でした。"}}
+        self.assertTrue(bp._body_has_price(elsewhere))
+        self.assertTrue(bp._body_has_price({"narrative": {"lead": ""}, "editorial_comment": "￥1,200 前後"}))
+
     def test_idempotent(self) -> None:
         lead = HEAD + "価格は本記事執筆時点でAmazonが1387円と最も手頃で、木製の温かみも高く評価されています。" + TAIL
         once = self.strip(lead)
