@@ -218,3 +218,57 @@ def test_ollama_success_and_failure(monkeypatch):
     monkeypatch.setattr(aw.urllib.request, "urlopen", refuse)
     r = aw.write("p", workdir=".", backend="ollama")
     assert not r.ok and r.error == "exit" and "refused" in r.error_text
+
+
+def test_ollama_instruction_and_num_ctx_override(monkeypatch):
+    sent = {}
+
+    class Response:
+        def read(self):
+            return json.dumps({"response": '```json\n{"posts":[]}\n```', "prompt_eval_count": 1, "eval_count": 1}).encode()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def urlopen(req, timeout=None):
+        sent["body"] = json.loads(req.data.decode("utf-8"))
+        return Response()
+
+    monkeypatch.setattr(aw.urllib.request, "urlopen", urlopen)
+    # 既定 (記事レーン): 記事の指示文と 65536 のまま
+    aw.write("材料", workdir=".", backend="ollama")
+    assert sent["body"]["options"]["num_ctx"] == 65536
+    assert sent["body"]["prompt"].startswith("Write exactly one article JSON")
+    # 引数で差し替え
+    aw.write("材料", workdir=".", backend="ollama", instruction="DRAFTS ONLY", num_ctx=8192)
+    assert sent["body"]["options"]["num_ctx"] == 8192
+    assert sent["body"]["prompt"].startswith("DRAFTS ONLY\n\n材料")
+    assert "article JSON" not in sent["body"]["prompt"]
+
+
+def test_agy_instruction_replaces_tail_only(tmp_path, monkeypatch):
+    brain, ws = setup(tmp_path, monkeypatch)
+    seen = {}
+
+    def runner(argv, **kw):
+        seen["argv"] = argv
+        return Proc(stdout=agy_json('```json\n{"posts": []}\n```'))
+
+    aw.write("p", workdir=str(ws), brain_dir=brain, runner=runner)
+    default = seen["argv"][2]
+    assert "follow its instructions to write exactly one article JSON." in default
+    aw.write("p", workdir=str(ws), brain_dir=brain, runner=runner, instruction="write the drafts.")
+    custom = seen["argv"][2]
+    # 「プロンプトファイルを読ませる」前半は同じで、「write exactly one article JSON」以降だけ差し替わる
+    head = default.split("write exactly one article JSON")[0]
+    assert custom == head + "write the drafts."
+    assert "prompt.txt" in custom and "article JSON" not in custom
+    # 書き直しの付け足しも残り、「記事」の語は出ない
+    aw.write("p", workdir=str(ws), brain_dir=brain, runner=runner, instruction="write the drafts.",
+             previous_text="前", feedback="理由")
+    rewrite = seen["argv"][2]
+    assert rewrite.startswith(custom) and "previous.txt" in rewrite and "feedback.txt" in rewrite
+    assert "article JSON" not in rewrite

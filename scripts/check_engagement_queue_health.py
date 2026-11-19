@@ -20,7 +20,7 @@
 較正の方針:
   - news: 在庫ではなく**補充レーンが動いているか**を見る。直近
     NEWS_REFILL_STALE_HOURS 以内に 1 件も created されていなければ
-    33-jules-engagement-news.yml が止まっている。実測では 12 日連続で
+    補充レーン (K8 の engagement_lane.py。旧 33) が止まっている。実測では 12 日連続で
     2 件/日 created なので平常時は鳴らない。
   - daily: 同じく在庫ではなく補充レーンの健全性を見る。在庫 0 は補充が届く
     直前の一瞬でも起きるので (replay 実測)、それ自体では鳴らさない。
@@ -52,6 +52,8 @@ DAILY_REFILL_STALE_HOURS = 120
 # 定常時の経過は常に 24h 未満。1 日飛ぶと news スロット 2 枠が落ちる実害なので、
 # 24h の上に余裕を取りつつ 1 日飛べば鳴る 36h に置く。
 NEWS_REFILL_STALE_HOURS = 36
+# 補充レーン。旧 29 / 33 (Jules) は終了し、K8 の scripts/engagement_lane.py が担う (navi-brain#170 B3)
+REFILL_LANE = "scripts/engagement_lane.py (K8 task \\k8\\navi_engagement)"
 
 CHANNELS: Sequence[Tuple[str, str]] = (
     ("X", "data/engagement_queue_x.jsonl"),
@@ -104,8 +106,8 @@ def assess(rows: Sequence[Dict[str, Any]], now: dt.datetime) -> Dict[str, Any]:
     # (absorb_sns_published.py / pick_sns_target.py と同方針)。
     alerts: List[str] = []
     ages: Dict[str, Optional[float]] = {}
-    for cat, limit, lane in (("news", NEWS_REFILL_STALE_HOURS, "33-jules-engagement-news.yml"),
-                             ("daily", DAILY_REFILL_STALE_HOURS, "29-jules-engagement-refill.yml")):
+    for cat, limit, lane in (("news", NEWS_REFILL_STALE_HOURS, REFILL_LANE),
+                             ("daily", DAILY_REFILL_STALE_HOURS, REFILL_LANE)):
         last = latest_created(rows, cat)
         if last is None:
             ages[cat] = None
