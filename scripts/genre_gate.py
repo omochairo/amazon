@@ -7,6 +7,8 @@ per_asin snapshot / search 応答の browse_nodes ([{id, name, root}]) から、
 商品が知育玩具メディア (navi.omcha.jp) の対象ジャンルかどうかを判定する。
 """
 
+import re
+
 # 対象ジャンルとみなす root カテゴリ (ancestor チェーン最上位の displayName)。
 ALLOWED_ROOTS = {"おもちゃ", "ベビー＆マタニティ", "ベビー&マタニティ"}
 
@@ -50,6 +52,19 @@ ALLOWED_ASINS = {
 }
 
 
+# browse_nodes では「おもちゃ」に入るが、知育玩具ではない商品の名前 (navi-brain#166 F14)。
+# 楽天のおもちゃランキングで Amazon と結べない品の半分がサンリオのマスコットホルダーで、
+# Amazon でも「おもちゃ > ぬいぐるみ」に入るので classify_genre では落ちない。
+# 「マスコット」だけで外すと ALLOWED_ASINS の「ぬいぐるみマスコット はむにぎり」など
+# 対象の品まで巻き込むので、商品の種類を表す語だけにする。K の決定 (2026-11-21)。
+NON_TARGET_TITLE_RE = re.compile(r"マスコット\s*ホルダー")
+
+
+def is_non_target_title(title) -> bool:
+    """商品名が知育玩具でない種類 (NON_TARGET_TITLE_RE) を指すか。"""
+    return isinstance(title, str) and bool(NON_TARGET_TITLE_RE.search(title))
+
+
 def classify_genre(browse_nodes, asin=None):
     """browse_nodes からジャンル判定を返す。
 
@@ -81,6 +96,7 @@ def classify_genre(browse_nodes, asin=None):
 
 def is_flagged_snapshot(per_asin_root, asin) -> bool:
     """``<per_asin_root>/<ASIN>/amazon.json`` の browse_nodes がジャンル不一致 ("flag") か。
+    商品名が知育玩具でない種類 (is_non_target_title) のときも True。
 
     first-party (omcha-ops#264) は検索を通らないので取得時ゲートが効かない。
     pick 時にこれで外す (#9155)。snapshot が無い・壊れている・判定不能なら False
@@ -94,6 +110,8 @@ def is_flagged_snapshot(per_asin_root, asin) -> bool:
         item = product_image.load_amazon_item(per_asin_root, asin)
         if not item:
             return False
+        if asin not in ALLOWED_ASINS and is_non_target_title(item.get("title")):
+            return True
         verdict, _ = classify_genre(item.get("browse_nodes"), asin=asin)
     except Exception:
         return False
