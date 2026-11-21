@@ -391,6 +391,24 @@ def test_writer_errors(lane):
     assert len(w2.calls) == 1  # 認証切れはその回をやめる
 
 
+def test_refusal_on_rewrite_is_recorded_as_refused(lane):
+    """navi-brain#170 R4: 1 回目は記事として読めて出典不足、2 回目は書き手が断って JSON を出さない。
+    parse でなく、本当の原因 (1 回目の理由) と refused を残す。"""
+    lane.world.gate_rc = 2
+    lane.world.gate_out = "[NG] x score=88 (38/40 checks)\n    - sources_v5: 非販売 0 サイト\n"
+    w = Writer([wresult(article(A1)), wresult(error="parse", text="この材料では直せません。")])
+    lane.run(w, "--max-articles", "1", "--max-prechecks", "1")
+    f = events(lane, "failed")
+    assert len(f) == 1 and f[0]["reasons"] == ["quality_gate:sources_v5", "refused"]
+    assert "この材料では直せません" in f[0]["details"]
+
+
+def test_parse_twice_stays_parse(lane):
+    w = Writer([wresult(error="parse"), wresult(error="parse")])
+    lane.run(w, "--max-articles", "1", "--max-prechecks", "1")
+    assert events(lane, "failed")[0]["reasons"] == ["parse"]
+
+
 def test_parse_error_gets_one_rewrite(lane):
     w = Writer([wresult(error="parse"), wresult(article(A1))])
     lane.run(w, "--max-articles", "1")

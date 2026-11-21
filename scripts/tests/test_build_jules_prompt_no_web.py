@@ -144,6 +144,22 @@ def test_brand_name_alone_does_not_identify_product():
     assert bjp.identifies_product(["タカラトミー", "プラレールブロック"])
 
 
+def test_year_alone_does_not_identify_product():
+    """navi-brain#170 R1: B0FHVH6JML は抜粋 5 件とも「2025」だけの一致で通り、書き手が断った。
+    ただし年と商品名の語が一緒なら、その年に出た商品のページ (B0HQYW2TFL) なので数える。"""
+    assert not bjp.identifies_product(["2025"])
+    assert not bjp.identifies_product(["2025年"])
+    assert bjp.identifies_product(["2026", "Tamagotchi", "Paradise"])
+    assert bjp.identifies_product(["897729001"])  # 年でない数字の型番は従来どおり
+
+
+def test_generic_kind_word_is_not_distinctive():
+    """navi-brain#170 R3: 「Pinkfong」「タブレット」の一致で同じブランドの別の商品の投稿が通った
+    (B0HCMM6XJN)。キャラクター名は外さない (正しい商品ページを誤って外すため)。"""
+    assert not bjp._is_distinctive_word("タブレット")
+    assert bjp._is_distinctive_word("ポケットモンスター")
+
+
 def test_shop_line_on_legacy_route():
     """Web を使える従来の経路 (strict=False) でも、通販のページは採用しないと書く。"""
     line = bjp._excerpt_line(("shop", "抜粋", ["33506"], 200), strict=False)

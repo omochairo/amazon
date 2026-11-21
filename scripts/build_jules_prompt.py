@@ -417,9 +417,13 @@ def identifies_product(hits):
     import brand_normalizer
     brand = False
     distinctive = False
+    year = False
     for h in hits or []:
-        if _is_jan(h) or sum(c.isdigit() for c in h) >= 3:
+        if _is_model_number(h):
             return True
+        if _is_year(h):
+            year = True
+            continue
         try:
             nb = brand_normalizer.normalize(h)
             # 辞書の語と完全に一致したものだけブランド名にする。部分一致 (fuzzy) は
@@ -432,11 +436,44 @@ def identifies_product(hits):
             brand = True
         elif _is_distinctive_word(h):
             distinctive = True
+    if year and _has_other_specific_word(hits):
+        # 年は「別の語と一緒に出たとき」だけ型番の代わりに数える (R1)。年だけの一致は賞・
+        # イベントの記事でも起きるが、「2026」「Tamagotchi」「Paradise」のように商品名の語と
+        # 一緒なら、その年に出た商品のページ (B0HQYW2TFL は年を外すと正しいページ 7 件を失った)
+        return True
     return brand and distinctive
+
+
+def _has_other_specific_word(hits):
+    """年以外に、分類語でない 5 字以上の語 (英字も含む) が出たか。"""
+    import source_pages
+    return any(len(h) >= 5 and not _is_year(h) and h not in source_pages._GENERIC_TOKENS
+               and h not in _NON_DISTINCTIVE_WORDS for h in hits or [])
 
 
 _ASCII_WORD_RE = re.compile(r"[A-Za-z'&\-]+")
 _AGE_WORD_RE = re.compile(r"歳|以上|向け|向$")
+# 西暦の年 (「2025」「2024年」)。数字 3 桁以上の語は型番として商品を特定する扱いだが、年は
+# 賞・イベント・記事の日付でどのページにも出る。B0FHVH6JML は抜粋 5 件とも「2025」だけの一致で
+# 事前チェックを通り、書き手が「対象商品の出典が無い」と断った (navi-brain#170 R1)。
+# 年だけの一致は数えず、ほかの語と一緒のときだけ数える (identifies_product)
+_YEAR_RE = re.compile(r"(?:19|20)\d{2}年?")
+# 5 字以上でも、商品の種類を言うだけで商品を特定しない語 (navi-brain#170 R3)。
+# B0HCMM6XJN は「Pinkfong」「タブレット」の一致で、同じブランドの別の商品の投稿が通った
+# キャラクター名 (ポケットモンスター等) は外さない。過去の記事で当て直すと、外して防げた不合格 1 件に対し、
+# 正しい商品ページ (カワダのナノブロック等) を 2 件誤って外した
+_NON_DISTINCTIVE_WORDS = {"タブレット", "スマートパッド", "プレゼント", "コレクション"}
+
+
+def _is_model_number(token):
+    """JAN か、数字 3 桁以上を含む型番らしい語か (西暦の年は除く)。"""
+    if _is_jan(token):
+        return True
+    return sum(c.isdigit() for c in token) >= 3 and not _YEAR_RE.fullmatch(token)
+
+
+def _is_year(token):
+    return bool(_YEAR_RE.fullmatch(token or ""))
 
 
 def _is_distinctive_word(token):
@@ -450,6 +487,8 @@ def _is_distinctive_word(token):
     if not token or token in source_pages._GENERIC_TOKENS:
         return False
     if _ASCII_WORD_RE.fullmatch(token) or _AGE_WORD_RE.search(token):
+        return False
+    if token in _NON_DISTINCTIVE_WORDS:
         return False
     return len(token) >= 5
 
