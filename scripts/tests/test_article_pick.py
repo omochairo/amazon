@@ -1,7 +1,10 @@
-"""article_pick (記事の候補選定) のテスト。
+"""#9073 — 記事の候補選定 (article_pick) が 03-invoke-jules.yml の pick-asin と
+同じ結果を返すことを固定する。
 
-元は GitLab 側の Jules 記事生成の候補選定と 03 の pick-asin が同じ結果を返すかも
-比べていたが、GitLab 側の Jules 記事生成は削除した (amazon-navi-brain#170)。
+03 の inline Python (heredoc) をそのまま取り出し、同じ入力ファイル・同じ seed・
+同じ偽モジュール (rewrite_queue / score_per_asin_info) で両方を実行して、
+出力 (並び順と出自) を比べる。元は GitLab 側の Jules 記事生成とも比べていたが、
+そちらは削除した (amazon-navi-brain#170)。
 """
 from __future__ import annotations
 
@@ -27,6 +30,256 @@ import score_per_asin_info as real_scorer  # noqa: E402
 
 def _asin(n: int) -> str:
     return f"B0TEST{n:04d}"
+
+
+def _wf03_pick_source() -> str:
+    text = (REPO_ROOT / ".github" / "workflows" / "03-invoke-jules.yml").read_text(encoding="utf-8")
+    m = re.search(r"python3 - <<'PY'\n(.*?)\n\s*PY\n", text, re.S)
+    assert m, "03-invoke-jules.yml の pick-asin heredoc が見つからない"
+    return textwrap.dedent(m.group(1))
+
+
+def _pick_like_writer(gl):
+    """記事の候補選定を、既存記事・open の PR・ロックを除いて article_pick に渡す。
+
+    元は GitLab 側の Jules 記事生成 (invoke_jules_repoless.pick_candidates) をここで
+    呼んでいた。そちらは削除した (amazon-navi-brain#170) ので、同じ手順をここに持ち、
+    03 の pick-asin と article_pick が同じ結果を返すことを引き続き確かめる。
+    """
+    import glob
+    existing = set()
+    for path in glob.glob("data/articles/*.json"):
+        base = os.path.basename(path)
+        if base.endswith((".enrichment.json", ".quality.json", ".seo.json")):
+            continue
+        m = re.search(r"(B0[A-Z0-9]{8})", base)
+        if m:
+            existing.add(m.group(1))
+    try:
+        import rewrite_queue as rq
+        existing -= rq.eligible_rewrite_asins("data/articles")
+    except Exception:
+        pass
+    for text in gl.open_mr_titles():
+        for m in re.finditer(r"(B0[A-Z0-9]{8})", text.upper()):
+            existing.add(m.group(1))
+    for asin in gl.lock_branches():
+        if re.fullmatch(r"B0[A-Z0-9]{8}", asin):
+            existing.add(asin)
+    return article_pick.pick_from_repo(existing, os.environ.get("CI_PIPELINE_ID", ""))
+
+
+class FakeGitLab:
+    def __init__(self, open_titles, locked):
+        self._open, self._locked = open_titles, locked
+
+    def open_mr_titles(self):
+        return list(self._open)
+
+    def lock_branches(self):
+        return list(self._locked)
+
+
+class ParityTest(unittest.TestCase):
+    def _fixture(self, tmp, *, first_party=None, bands=None, hosts=None, no_amazon=(),
+                 off_genre=(), blocked=()):
+        root = pathlib.Path(tmp)
+        (root / "data" / "raw").mkdir(parents=True)
+        (root / "data" / "articles").mkdir(parents=True)
+        (root / "tmp").mkdir()
+        items = []
+        for n in range(1, 21):
+            item = {"asin": _asin(n)}
+            if n % 3 == 0:
+                item.update(lane="demand", source_keyword=f"kw{n}")
+            elif n % 3 == 1:
+                item["lane"] = "supply-random"
+            items.append(item)
+        items.append({"asin": "4910762175"})  # B0 形式でないものは候補にしない
+        (root / "data" / "raw" / "amazon.json").write_text(
+            json.dumps({"items": items}), encoding="utf-8")
+        ranking = [_asin(n) for n in (2, 5, 31, 32, 33, 34)]
+        (root / "data" / "raw" / "ranking_pool.json").write_text(
+            json.dumps({"asins": ranking + ["9784000000000"]}), encoding="utf-8")
+        if first_party is not None:
+            (root / "data" / "raw" / "first_party_pool.json").write_text(
+                json.dumps({"asins": first_party}), encoding="utf-8")
+            # #9155: 商品データ (per_asin amazon.json の item) がある ASIN だけ pick される
+            for a in first_party:
+                if a in no_amazon:
+                    continue
+                d = root / "data" / "raw" / "per_asin" / a
+                d.mkdir(parents=True, exist_ok=True)
+                item = {"asin": a, "title": f"商品 {a}"}
+                if a in off_genre:  # #9155: 取得時ゲートを通らない first-party のジャンル不一致
+                    item["browse_nodes"] = [{"id": "1", "name": "漂白剤", "root": "ドラッグストア"}]
+                (d / "amazon.json").write_text(
+                    json.dumps({"asin": a, "item": item}), encoding="utf-8")
+        # #9155: first-party 以外のプールにも、取得時ゲートを素通りしたジャンル不一致が居うる
+        for a in off_genre:
+            if first_party and a in first_party:
+                continue
+            d = root / "data" / "raw" / "per_asin" / a
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "amazon.json").write_text(json.dumps({"asin": a, "item": {
+                "asin": a, "title": f"工作材料 {a}",
+                "browse_nodes": [{"id": "2033480051", "name": "木材", "root": "DIY・工具・ガーデン"}],
+            }}), encoding="utf-8")
+        if blocked:
+            (root / "data" / "asin_blocklist.json").write_text(json.dumps(
+                {"blocked": [{"asin": a, "reason": "test"} for a in blocked]}), encoding="utf-8")
+        for n in (1, 4, 50):  # 既存記事 (50 はリライト待ち)
+            (root / "data" / "articles" / f"2026-01-01-{_asin(n)}.json").write_text("{}")
+        (root / "data" / "articles" / f"2026-01-01-{_asin(7)}.quality.json").write_text("{}")
+        open_titles = [f"feat: generate article JSON for {_asin(8)}"]
+        locked = [_asin(9), _asin(32)]
+        (root / "tmp" / "open_titles.txt").write_text("\n".join(open_titles) + "\n", encoding="utf-8")
+        (root / "tmp" / "locked.txt").write_text("\n".join(locked) + "\n", encoding="utf-8")
+
+        bands = bands or {}
+        hosts = hosts or {}
+        scorer = types.ModuleType("score_per_asin_info")
+        scorer.score_asin = lambda a: {"band": bands.get(a, "rich"),
+                                       "third_party_hosts": hosts.get(a, 0)}
+        scorer.should_defer = real_scorer.should_defer
+        rq = types.ModuleType("rewrite_queue")
+        rq.eligible_rewrite_asins = lambda d: {_asin(50)}
+        rq.pending_rewrite_candidates = lambda d: [_asin(50), _asin(51), _asin(52), _asin(5)]
+        return root, FakeGitLab(open_titles, locked), {"score_per_asin_info": scorer,
+                                                       "rewrite_queue": rq}
+
+    @contextlib.contextmanager
+    def _env(self, root, modules, seed):
+        saved_mods = {k: sys.modules.get(k) for k in modules}
+        saved_env = {k: os.environ.get(k) for k in
+                     ("GITHUB_RUN_ID", "CI_PIPELINE_ID", "INPUT_ASIN",
+                      "FIRST_PARTY_PICKS_PER_RUN", "REWRITE_PICKS_PER_RUN")}
+        cwd = os.getcwd()
+        sys.modules.update(modules)
+        for k in saved_env:
+            os.environ.pop(k, None)
+        os.environ["GITHUB_RUN_ID"] = os.environ["CI_PIPELINE_ID"] = seed
+        os.chdir(root)
+        try:
+            with contextlib.redirect_stdout(open(os.devnull, "w", encoding="utf-8")):
+                yield
+        finally:
+            os.chdir(cwd)
+            for k, v in saved_mods.items():
+                if v is None:
+                    sys.modules.pop(k, None)
+                else:
+                    sys.modules[k] = v
+            for k, v in saved_env.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+
+    def _both(self, seed="12345", **fixture):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, gl, modules = self._fixture(tmp, **fixture)
+            src = _wf03_pick_source().replace("/tmp/", (root / "tmp").as_posix() + "/")
+            with self._env(root, modules, seed):
+                exec(compile(src, "03-invoke-jules.yml:pick-asin", "exec"), {"__name__": "__wf03__"})
+                with open(root / "tmp" / "shuffled.jsonl", encoding="utf-8") as f:
+                    wf03 = [json.loads(line) for line in f if line.strip()]
+                ours = _pick_like_writer(gl)
+        return wf03, ours
+
+    def test_mixed_pools_match(self):
+        fp = [_asin(60), _asin(1), _asin(61), _asin(62)]  # 1 は既存記事 → 除外、上限 2 件
+        bands = {_asin(n): "zero" for n in (3, 60)}
+        bands.update({_asin(31): "unfetched", _asin(33): "unfetched"})
+        for seed in ("1", "12345", "37399969493"):
+            with self.subTest(seed=seed):
+                wf03, ours = self._both(seed, first_party=fp, bands=bands,
+                                        hosts={_asin(33): 2})
+                self.assertEqual(ours, wf03)
+        pools = {o["pool"] for o in ours}
+        self.assertTrue({"first-party", "ranking-sniper", "rewrite-queue",
+                         "demand", "supply-random"} <= pools)
+        picked = [o["asin"] for o in ours]
+        # #9199: first-party も素材ゼロなら待たせ、上限 2 件の枠は次の ASIN に回す
+        self.assertEqual(picked[:2], [_asin(61), _asin(62)])
+        self.assertNotIn(_asin(60), picked)
+        self.assertNotIn(_asin(31), picked)  # unfetched + host 不足は defer
+        self.assertIn(_asin(33), picked)  # unfetched でも host 2 件あれば残る
+
+    def test_first_party_waits_for_third_party_sources(self):
+        # #9199: thin / unfetched の first-party は非販売ソースが 2 件揃うまで待たせる。
+        # 安全弁 (全候補 defer) が働いても first-party の待ちは解除しない。
+        fp = [_asin(60), _asin(61), _asin(62), _asin(63)]
+        bands = {_asin(60): "thin", _asin(61): "unfetched", _asin(62): "thin"}
+        for seed in ("1", "12345"):
+            with self.subTest(seed=seed):
+                wf03, ours = self._both(seed, first_party=fp, bands=bands,
+                                        hosts={_asin(62): 2})
+                self.assertEqual(ours, wf03)
+                fp_picked = [o["asin"] for o in ours if o["pool"] == "first-party"]
+                self.assertEqual(fp_picked, [_asin(62), _asin(63)])
+        valve = {_asin(n): "zero" for n in range(1, 60)}
+        valve[_asin(60)] = "thin"
+        wf03, ours = self._both(first_party=[_asin(60)], bands=valve)
+        self.assertEqual(ours, wf03)
+        self.assertGreater(len(ours), 1)  # 安全弁は働く
+        self.assertNotIn(_asin(60), [o["asin"] for o in ours])
+
+    def test_all_deferred_valve_ignores_first_party(self):
+        bands = {_asin(n): "zero" for n in range(1, 60)}
+        wf03, ours = self._both(first_party=[_asin(60)], bands=bands)
+        self.assertEqual(ours, wf03)
+        self.assertGreater(len(ours), 1)  # 安全弁で defer が無効化される
+
+    def test_first_party_waits_for_amazon_data(self):
+        # #9155: 商品データの無い first-party は待たせ、上限 2 件の枠は次の ASIN に回す。
+        # miss だけ記録された snapshot (item 無し) もデータ無し扱い。
+        fp = [_asin(60), _asin(61), _asin(62), _asin(63)]
+        for seed in ("1", "12345"):
+            with self.subTest(seed=seed):
+                wf03, ours = self._both(seed, first_party=fp, no_amazon={_asin(60), _asin(62)})
+                self.assertEqual(ours, wf03)
+                fp_picked = [o["asin"] for o in ours if o["pool"] == "first-party"]
+                self.assertEqual(fp_picked, [_asin(61), _asin(63)])
+                self.assertNotIn(_asin(60), [o["asin"] for o in ours])
+
+    def test_first_party_skips_genre_mismatch(self):
+        # #9155: ジャンル不一致の first-party は外し、上限 2 件の枠は次の ASIN に回す。
+        fp = [_asin(60), _asin(61), _asin(62), _asin(63)]
+        for seed in ("1", "12345"):
+            with self.subTest(seed=seed):
+                wf03, ours = self._both(seed, first_party=fp, off_genre={_asin(60)},
+                                        no_amazon={_asin(62)})
+                self.assertEqual(ours, wf03)
+                fp_picked = [o["asin"] for o in ours if o["pool"] == "first-party"]
+                self.assertEqual(fp_picked, [_asin(61), _asin(63)])
+                self.assertNotIn(_asin(60), [o["asin"] for o in ours])
+
+    def test_every_pool_excludes_genre_mismatch_and_blocklist(self):
+        # #9155: ranking-sniper 経由 (2026-07-16〜19) のように入口のゲートを素通りしても、
+        # pick で全プールから外す。rewrite は上限 2 件で切る前に外す (枠を占有させない)。
+        off_genre = {_asin(2), _asin(51), _asin(10)}  # ranking / rewrite / keyword
+        blocked = {_asin(31), _asin(52), _asin(11), _asin(60)}  # ranking / rewrite / keyword / first-party
+        fp = [_asin(60), _asin(61)]
+        for seed in ("1", "12345"):
+            with self.subTest(seed=seed):
+                wf03, ours = self._both(seed, first_party=fp, off_genre=off_genre,
+                                        blocked=blocked)
+                self.assertEqual(ours, wf03)
+                picked = [o["asin"] for o in ours]
+                for a in off_genre | blocked:
+                    self.assertNotIn(a, picked)
+                self.assertEqual([o["asin"] for o in ours if o["pool"] == "first-party"],
+                                 [_asin(61)])
+                self.assertIn(_asin(5), [o["asin"] for o in ours if o["pool"] == "ranking-sniper"])
+                # rewrite 候補 50/51/52/5 のうち 51/52 は除外、5 は ranking 側 → 50 だけ
+                self.assertEqual([o["asin"] for o in ours if o["pool"] == "rewrite-queue"],
+                                 [_asin(50)])
+
+    def test_without_first_party_pool_file(self):
+        wf03, ours = self._both(first_party=None)
+        self.assertEqual(ours, wf03)
+        self.assertNotIn("first-party", {o["pool"] for o in ours})
 
 
 class SelectCandidatesTest(unittest.TestCase):

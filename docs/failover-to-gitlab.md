@@ -47,7 +47,7 @@
 
 ## 復帰手順 (GitHub が回復したとき)
 
-1. GitLab スケジュール5本を inactive 化 (上記 curl の `active=false`)
+1. GitLab スケジュール4本を inactive 化 (上記 curl の `active=false`)
 2. reconcile: `git fetch origin gitlab` → GitLab 期の main を正として `git merge origin/main` (GitHub 期の有効な差分だけ取り込む) → gitlab main と origin main の両方へ push
 3. GitHub workflows を **段階再開** (下記 wave 順)。一斉再開しない
 4. ミラー workflow の成功を確認
