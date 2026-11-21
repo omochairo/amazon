@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-20T01:47:53Z",
+  "generated_at": "2026-11-21T01:30:54Z",
   "model": "gemma4:26b-a4b-it-qat",
   "source_week": "2026-W46",
   "baseline_ctr": 0.030155385830919146,
@@ -208,7 +208,7 @@
     {
       "page": "https://navi.omcha.jp/products/b0gc4mql8n/",
       "asin": "B0GC4MQL8N",
-      "page_coverage_avg": 0.7,
+      "page_coverage_avg": 0.85,
       "queries": [
         {
           "query": "はむにぎり 口コミ",
@@ -263,14 +263,11 @@
           "query": "日本賣多少錢",
           "impressions": 1,
           "position": 4.0,
-          "answered": false,
-          "coverage": 0.1,
-          "missing_aspects": [
-            "具体的な販売価格（日本円での金額）",
-            "現在の正確な価格情報"
-          ],
-          "note": "「Amazonが最も手頃」という記述はありますが、具体的な金額が記載されていないため、価格を知りたいユーザーの疑問には答えていません。",
-          "error": null
+          "answered": null,
+          "coverage": null,
+          "missing_aspects": [],
+          "note": "",
+          "error": "500 Server Error: Internal Server Error for url: http://host.docker.internal:11434/api/generate"
         }
       ]
     }
