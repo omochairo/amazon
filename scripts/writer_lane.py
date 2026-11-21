@@ -631,6 +631,7 @@ def process(env, ledger, locks, args, state_dir, run_dir, origin, today, stats, 
     allowed = urls_in_text(prompt)
     previous = feedback = None
     fails = []
+    first_fails = []
     for attempt in (1, 2):
         stats["calls"] += 1
         wr = write_once(env, ledger, prompt, asin, attempt, args, state_dir, previous, feedback)
@@ -644,7 +645,13 @@ def process(env, ledger, locks, args, state_dir, run_dir, origin, today, stats, 
             ledger.add("quota", asin=asin, reset_s=wr.reset_s,
                        until=iso(dt.datetime.fromtimestamp(until, dt.timezone.utc)))
             return "stop"
-        if wr.error in ("empty", "parse"):
+        if wr.error in ("empty", "parse") and attempt == 2 and first_fails:
+            # navi-brain#170 R4: 1 回目は記事として読めたのに、書き直しで JSON を出さなかった
+            # = 書き手が「この材料では直せない」と断った。parse と記録すると #171 の表で
+            # 書式の崩れに見えるので、1 回目の理由 (本当の原因) と refused を残す
+            fails = first_fails + [("refused", "書き直しで記事 JSON を出さなかった (書き手の断り): "
+                                    + " ".join((wr.text or "").split())[:300])]
+        elif wr.error in ("empty", "parse"):
             fails = [(wr.error, "記事 JSON として読めなかった。```json のコードブロック 1 個だけを出す")]
         elif wr.error:
             locks.release(asin)
@@ -677,6 +684,8 @@ def process(env, ledger, locks, args, state_dir, run_dir, origin, today, stats, 
                            pool=origin.get("pool") or "", source_keyword=origin.get("source_keyword"))
                 return ""
         if attempt == 1:
+            # 1 回目の不合格の理由 (記事として読めたときだけ。読めなかったときは断りと区別できない)
+            first_fails = [] if wr.error else list(fails)
             previous = wr.text or ""
             feedback = feedback_text(fails)
             save(adir, "feedback.txt", feedback)
