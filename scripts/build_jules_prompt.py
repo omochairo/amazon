@@ -445,10 +445,24 @@ def identifies_product(hits):
 
 
 def _has_other_specific_word(hits):
-    """年以外に、分類語でない 5 字以上の語 (英字も含む) が出たか。"""
+    """年以外に、商品名の語 (分類語・種類の語・年齢の語・辞書のブランド名でない 5 字以上。英字も可) が出たか。
+
+    ブランド名は数えない。「2025」「タカラトミー」はメーカーの年次ニュースや賞の一覧でも並ぶ。
+    """
+    import brand_normalizer
     import source_pages
-    return any(len(h) >= 5 and not _is_year(h) and h not in source_pages._GENERIC_TOKENS
-               and h not in _NON_DISTINCTIVE_WORDS for h in hits or [])
+    for h in hits or []:
+        if (not h or len(h) < 5 or _is_year(h) or h in source_pages._GENERIC_TOKENS
+                or h in _NON_DISTINCTIVE_WORDS or _AGE_WORD_RE.search(h)):
+            continue
+        try:
+            nb = brand_normalizer.normalize(h)
+            if nb.tier not in ("", "D", None) and nb.match_type == "exact":
+                continue
+        except Exception:  # noqa: BLE001 — 辞書が読めなければ商品名の語として数える
+            pass
+        return True
+    return False
 
 
 _ASCII_WORD_RE = re.compile(r"[A-Za-z'&\-]+")
@@ -467,6 +481,7 @@ _NON_DISTINCTIVE_WORDS = {"タブレット", "スマートパッド", "プレゼ
 
 def _is_model_number(token):
     """JAN か、数字 3 桁以上を含む型番らしい語か (西暦の年は除く)。"""
+    token = token or ""
     if _is_jan(token):
         return True
     return sum(c.isdigit() for c in token) >= 3 and not _YEAR_RE.fullmatch(token)

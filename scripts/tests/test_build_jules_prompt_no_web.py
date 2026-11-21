@@ -150,6 +150,9 @@ def test_year_alone_does_not_identify_product():
     assert not bjp.identifies_product(["2025"])
     assert not bjp.identifies_product(["2025年"])
     assert bjp.identifies_product(["2026", "Tamagotchi", "Paradise"])
+    # 年 + ブランド名・年齢の語だけは、メーカーの年次ニュースや賞の一覧でも並ぶので数えない
+    assert not bjp.identifies_product(["2025", "タカラトミー"])
+    assert not bjp.identifies_product(["2025", "3歳以上向け"])
     assert bjp.identifies_product(["897729001"])  # 年でない数字の型番は従来どおり
 
 
