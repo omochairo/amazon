@@ -1,10 +1,10 @@
-"""#9073 — GitLab 側の候補選定 (article_pick / invoke_jules_repoless) が
-03-invoke-jules.yml の pick-asin と同じ結果を返すことを固定する。
+"""#9073 — 記事の候補選定 (article_pick) が 03-invoke-jules.yml の pick-asin と
+同じ結果を返すことを固定する。
 
 03 の inline Python (heredoc) をそのまま取り出し、同じ入力ファイル・同じ seed・
 同じ偽モジュール (rewrite_queue / score_per_asin_info) で両方を実行して、
-出力 (並び順と出自) を比べる。03 だけ直して repoless が置いていかれると
-ここが落ちる。
+出力 (並び順と出自) を比べる。元は GitLab 側の Jules 記事生成とも比べていたが、
+そちらは削除した (amazon-navi-brain#170)。
 """
 from __future__ import annotations
 
@@ -25,7 +25,6 @@ REPO_ROOT = THIS_DIR.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import article_pick  # noqa: E402
-import invoke_jules_repoless as repoless  # noqa: E402
 import score_per_asin_info as real_scorer  # noqa: E402
 
 
@@ -38,6 +37,36 @@ def _wf03_pick_source() -> str:
     m = re.search(r"python3 - <<'PY'\n(.*?)\n\s*PY\n", text, re.S)
     assert m, "03-invoke-jules.yml の pick-asin heredoc が見つからない"
     return textwrap.dedent(m.group(1))
+
+
+def _pick_like_writer(gl):
+    """記事の候補選定を、既存記事・open の PR・ロックを除いて article_pick に渡す。
+
+    元は GitLab 側の Jules 記事生成 (invoke_jules_repoless.pick_candidates) をここで
+    呼んでいた。そちらは削除した (amazon-navi-brain#170) ので、同じ手順をここに持ち、
+    03 の pick-asin と article_pick が同じ結果を返すことを引き続き確かめる。
+    """
+    import glob
+    existing = set()
+    for path in glob.glob("data/articles/*.json"):
+        base = os.path.basename(path)
+        if base.endswith((".enrichment.json", ".quality.json", ".seo.json")):
+            continue
+        m = re.search(r"(B0[A-Z0-9]{8})", base)
+        if m:
+            existing.add(m.group(1))
+    try:
+        import rewrite_queue as rq
+        existing -= rq.eligible_rewrite_asins("data/articles")
+    except Exception:
+        pass
+    for text in gl.open_mr_titles():
+        for m in re.finditer(r"(B0[A-Z0-9]{8})", text.upper()):
+            existing.add(m.group(1))
+    for asin in gl.lock_branches():
+        if re.fullmatch(r"B0[A-Z0-9]{8}", asin):
+            existing.add(asin)
+    return article_pick.pick_from_repo(existing, os.environ.get("CI_PIPELINE_ID", ""))
 
 
 class FakeGitLab:
@@ -155,7 +184,7 @@ class ParityTest(unittest.TestCase):
                 exec(compile(src, "03-invoke-jules.yml:pick-asin", "exec"), {"__name__": "__wf03__"})
                 with open(root / "tmp" / "shuffled.jsonl", encoding="utf-8") as f:
                     wf03 = [json.loads(line) for line in f if line.strip()]
-                ours = repoless.pick_candidates(gl, budget=6)
+                ours = _pick_like_writer(gl)
         return wf03, ours
 
     def test_mixed_pools_match(self):
@@ -365,43 +394,6 @@ class SelectCandidatesTest(unittest.TestCase):
             finally:
                 os.chdir(cwd)
         self.assertEqual(captured["blocked"], {_asin(1), _asin(2)})
-
-
-class OriginLedgerTest(unittest.TestCase):
-    def test_records_are_appended_and_mr_requested(self):
-        calls = []
-        orig_run = repoless.subprocess.run
-        repoless.subprocess.run = lambda args, **kw: calls.append(args)
-        try:
-            with tempfile.TemporaryDirectory() as tmp:
-                path = os.path.join(tmp, "asin_origin.jsonl")
-                origins = [{"asin": _asin(1), "pool": "ranking-sniper", "source_keyword": None},
-                           {"asin": _asin(2), "pool": "demand", "source_keyword": "kw"}]
-                repoless.record_origin_ledger(origins, path=path)
-                repoless.record_origin_ledger(origins, path=path)  # 同じ run の再記録は足さない
-                with open(path, encoding="utf-8") as f:
-                    rows = [json.loads(line) for line in f]
-        finally:
-            repoless.subprocess.run = orig_run
-        self.assertEqual([(r["asin"], r["pool"]) for r in rows],
-                         [(_asin(1), "ranking-sniper"), (_asin(2), "demand")])
-        self.assertEqual(rows[0]["workflow"], "invoke-jules-repoless")
-        self.assertEqual(len(calls), 1)
-        self.assertIn("create_data_mr.py", calls[0][1])
-
-    def test_failure_is_swallowed(self):
-        orig_run = repoless.subprocess.run
-
-        def boom(*a, **kw):
-            raise RuntimeError("push failed")
-        repoless.subprocess.run = boom
-        try:
-            with tempfile.TemporaryDirectory() as tmp:
-                repoless.record_origin_ledger(
-                    [{"asin": _asin(1), "pool": "demand", "source_keyword": None}],
-                    path=os.path.join(tmp, "a.jsonl"))
-        finally:
-            repoless.subprocess.run = orig_run
 
 
 class RecentlyFailedTest(unittest.TestCase):

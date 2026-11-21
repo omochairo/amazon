@@ -20,8 +20,9 @@
 | **GitHub 障害** | GitHub が使えない | 新規生成だけ。**配信は継続** | 下記「フェイルオーバー手順」 |
 | **オリジン障害** | NAS / 自宅回線 / トンネル | **配信そのもの** | 下記「オリジン障害時の自動フェイルオーバー」 |
 
-- GitLab 側スケジュール5本は **inactive で温存** (フェイルオーバー時に active 化するだけで生成が再開する):
-  - 4326910 invoke-jules (6h毎) / 4327609・4327610 fetch-data (01:00/10:00 UTC) / 4327611 rakuten-ranking (月 21:00 UTC) / 4327612 third-party-sources (21:30 UTC)
+- GitLab 側スケジュール4本は **inactive で温存** (フェイルオーバー時に active 化するだけでデータ更新が再開する):
+  - 4327609・4327610 fetch-data (01:00/10:00 UTC) / 4327611 rakuten-ranking (月 21:00 UTC) / 4327612 third-party-sources (21:30 UTC)
+  - 記事生成の予備 (4326910 invoke-jules = repoless Jules) は Jules の終了 (2026-11-11) に伴いジョブを削除した (amazon-navi-brain#170)。スケジュール 4326910 が残っていても、対応するジョブが無いので何も走らない。GitHub 障害時は記事の新規生成は止まる (記事は K8 の記事レーンが GitHub に PR を出す)
 - GitLab の CI/CD 変数 18個・NAS runner (UGREEN DXP4800Plus, runner id 54145618) は登録・常駐のまま維持
   - **LAN の実 IP はこの public repo に置かない。** 実体は private の `omochairo/amazon-home-ops`
     (`docker/navi/README.md` と `.github/workflows/90-heartbeat-check.yml`) にある
@@ -34,19 +35,19 @@
 
 **配信は何もしなくても継続する** (GitLab Pages は独立)。止まるのは新規生成のみ。
 
-1. GitLab スケジュール5本を active 化:
+1. GitLab スケジュール4本を active 化:
    ```
-   for id in 4326910 4327609 4327610 4327611 4327612; do
+   for id in 4327609 4327610 4327611 4327612; do
      curl -X PUT -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
        "https://gitlab.com/api/v4/projects/84175362/pipeline_schedules/$id?active=true"; done
    ```
-2. 以後、repoless Jules パイプライン (scripts/invoke_jules_repoless.py + scripts/build_jules_prompt.py) と fetch 系 (scripts/ci_fetch_data.sh + scripts/create_data_mr.py) が GitLab MR + MWPS で無人運転する (2026-07-07 に E2E 実証済)
-   - **⚠️ 2026-07-22 以降の前提**: `jules/` プロンプトは private repo `omochairo/amazon-navi-brain` に分離済み (public repo では .gitignore・非追跡)。GitLab/NAS 側で生成を再開する場合、`build_jules_prompt.py` が `jules/PROMPT_TEMPLATE.md` を要求するため、**NAS runner に amazon-navi-brain を `jules/` へ取得させる必要がある** (GitLab CI 変数に github read PAT を置き、invoke-jules ジョブの before_script で clone するか、NAS 上に常設 clone を bind mount)。GitHub 側の overlay checkout に相当する処理を GitLab 側にも用意しないと生成が空プロンプトで失敗する。詳細: docs/navi-brain-split.md
+2. 以後、fetch 系 (scripts/ci_fetch_data.sh + scripts/create_data_mr.py) が GitLab MR + MWPS で無人運転する (2026-07-07 に E2E 実証済)
+   - (記事生成の予備は削除済み。旧手順の `jules/` プロンプト取得の注意は不要になった)
 3. ミラー workflow は GitHub 側が止まるので自然停止。手動で止める必要なし
 
 ## 復帰手順 (GitHub が回復したとき)
 
-1. GitLab スケジュール5本を inactive 化 (上記 curl の `active=false`)
+1. GitLab スケジュール4本を inactive 化 (上記 curl の `active=false`)
 2. reconcile: `git fetch origin gitlab` → GitLab 期の main を正として `git merge origin/main` (GitHub 期の有効な差分だけ取り込む) → gitlab main と origin main の両方へ push
 3. GitHub workflows を **段階再開** (下記 wave 順)。一斉再開しない
 4. ミラー workflow の成功を確認
