@@ -20,7 +20,7 @@ SCRIPTS_DIR = os.path.dirname(THIS_DIR)
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
-from genre_gate import classify_genre, is_flagged_snapshot  # noqa: E402
+from genre_gate import classify_genre, is_flagged_snapshot, is_non_target_title  # noqa: E402
 
 TOY_STORE = {"id": "8184989051", "name": "おもちゃ ストア", "root": "おもちゃ"}
 TOY_GLOBAL = {"id": "5830559051", "name": "Toys - AmazonGlobal free shipping", "root": "おもちゃ"}
@@ -119,6 +119,18 @@ class TestAllowedAsins(unittest.TestCase):
         self.assertEqual(classify_genre([BLOCKS], None)[0], "pass")
 
 
+class NonTargetTitleTest(unittest.TestCase):
+    """navi-brain#166 F14: browse_nodes は「おもちゃ」でも知育玩具でない種類を商品名で外す。"""
+
+    def test_mascot_holder_only(self):
+        self.assertTrue(is_non_target_title("サンリオ(SANRIO) マスコットホルダー Y2K"))
+        self.assertTrue(is_non_target_title("ポチャッコ マスコット ホルダー（ふわわんフレンズ）"))
+        # 「マスコット」だけの対象の品 (ALLOWED_ASINS の はむにぎり 等) は巻き込まない
+        self.assertFalse(is_non_target_title("りぶはあと ぬいぐるみマスコット はむにぎり"))
+        self.assertFalse(is_non_target_title("シナモロール ぬいぐるみ"))
+        self.assertFalse(is_non_target_title(None))
+
+
 class IsFlaggedSnapshotTest(unittest.TestCase):
     """#9155: first-party の pick 時に per_asin の snapshot で判定する。"""
 
@@ -141,6 +153,10 @@ class IsFlaggedSnapshotTest(unittest.TestCase):
                                             "item": {"title": "旧 snapshot", "browse_nodes": [UNROOTED]}})
             self.assertTrue(is_flagged_snapshot(root, "B000FQMTIU"))
             self.assertFalse(is_flagged_snapshot(root, "B0TOY00001"))
+            # 「おもちゃ」の中でもマスコットホルダーは外す (navi-brain#166 F14)
+            self._snap(root, "B0MASCOT01", {"asin": "B0MASCOT01",
+                                            "item": {"title": "サンリオ マスコットホルダー", "browse_nodes": [BLOCKS]}})
+            self.assertTrue(is_flagged_snapshot(root, "B0MASCOT01"))
             # データ無し・root 未取得・ファイル無しは fail-open で False
             self.assertFalse(is_flagged_snapshot(root, "B0MISS0001"))
             self.assertFalse(is_flagged_snapshot(root, "B0OLD00001"))

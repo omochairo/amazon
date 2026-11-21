@@ -68,6 +68,26 @@ class CollectUnmatchedJansTest(unittest.TestCase):
         )
 
 
+class NonTargetTitleSkipTest(unittest.TestCase):
+    """navi-brain#166 F14: マスコットホルダーは照合の API に回さず、Amazon 側でも不採用。"""
+
+    def test_collectors_skip_mascot_holder(self):
+        items = [
+            {"rank": 6, "matched_asin": None, "title": "ポチャッコ マスコットホルダー 4904810000009"},
+            {"rank": 7, "matched_asin": None, "title": "ポムポムプリン マスコットホルダー（ふわわんフレンズ）"},
+            {"rank": 8, "matched_asin": None, "title": "ポチャッコ ぬいぐるみ（ふわわんフレンズ）"},
+        ]
+        self.assertEqual(rr._collect_unmatched_jans(items), [])
+        self.assertEqual([it["rank"] for it in rr._collect_unmatched_no_jan(items)], [8])
+
+    def test_amazon_item_with_mascot_holder_title_is_flagged(self):
+        toy = [{"id": "2189388051", "name": "ブロック", "root": "おもちゃ"}]
+        item = {"asin": "B0HMK582NJ", "title": "サンリオ(SANRIO) マスコットホルダー Y2K",
+                "browse_nodes": toy}
+        verdict, _ = rr._genre_verdict_for_item(item)
+        self.assertEqual(verdict, "flag")
+
+
 class CollectUnmatchedJansItemNumberTest(unittest.TestCase):
     def test_prefers_item_number_over_caption(self):
         # #2818 対策1: itemNumber がある場合はそちらを優先して JAN を抽出する。

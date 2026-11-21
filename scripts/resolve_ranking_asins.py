@@ -70,7 +70,7 @@ if THIS_DIR not in sys.path:
 from fetch_rakuten import _extract_jan_from_item  # noqa: E402
 from brand_normalizer import _fold as _fold_brand_text  # noqa: E402
 from brand_normalizer import normalize as _normalize_brand  # noqa: E402
-from genre_gate import classify_genre  # noqa: E402
+from genre_gate import ALLOWED_ASINS, classify_genre, is_non_target_title  # noqa: E402
 # browse_nodes の抽出ロジックは fetch_amazon 側の実装を再利用する (同等ロジックを
 # 書き直すと ancestor チェーンの遡り方が二重管理になり、#2823 のジャンル判定が
 # 経路ごとにズレるため)。fetch_amazon の import は副作用なし (module 直下は
@@ -179,8 +179,11 @@ def _genre_verdict_for_item(item: dict):
     roots は判定に使った実カテゴリノードの root カテゴリ名 (manifest 記録用)。
     """
     item = item or {}
-    nodes = extract_browse_nodes(item)
     asin = (item.get("asin") or "").strip()
+    # navi-brain#166 F14: browse_nodes は「おもちゃ」でも知育玩具でない種類 (マスコットホルダー)
+    if asin not in ALLOWED_ASINS and is_non_target_title(item.get("title")):
+        return "flag", ["(商品名: 知育玩具でない種類)"]
+    nodes = extract_browse_nodes(item)
     verdict, cat_nodes = classify_genre(nodes, asin)
     roots = sorted({nd.get("root") for nd in cat_nodes if nd.get("root")})
     return verdict, roots
@@ -482,6 +485,7 @@ def _collect_unmatched_no_jan(ranking_items: list) -> list:
     return [
         it for it in ranking_items
         if not it.get("matched_asin") and not _extract_jan_from_item(it) and it.get("title")
+        and not is_non_target_title(it.get("title"))  # navi-brain#166 F14: API を使わない
     ]
 
 
@@ -943,6 +947,8 @@ def _collect_unmatched_jans(ranking_items: list) -> list:
     out = []
     for it in ranking_items:
         if it.get("matched_asin"):
+            continue
+        if is_non_target_title(it.get("title")):  # navi-brain#166 F14: API を使わない
             continue
         jan = _extract_jan_from_item(it)
         if jan and jan not in seen:
