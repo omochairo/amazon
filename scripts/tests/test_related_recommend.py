@@ -210,5 +210,60 @@ class AgeExtractionTests(unittest.TestCase):
         self.assertEqual(fm["toy_types"], ["puzzle"])
 
 
+class IndexCurrentPriceTests(unittest.TestCase):
+    """候補の価格も記事ページ自身と同じく「今の Amazon 価格」に揃える (navi-brain#165)。"""
+
+    def _write(self, root, asin, price):
+        art = {"slug": f"2026-01-01-{asin}", "tags": ["パズル"],
+               "product": {"asin": asin, "name": "木のパズル", "age_range": "2歳〜",
+                           "prices": {"amazon": {"price": price}}}}
+        (root / f"2026-01-01-{asin}.json").write_text(json.dumps(art, ensure_ascii=False), encoding="utf-8")
+
+    def _snap(self, root, asin, snap):
+        d = root / "per_asin" / asin
+        d.mkdir(parents=True)
+        (d / "amazon.json").write_text(json.dumps(snap), encoding="utf-8")
+
+    def test_daily_observation_wins_over_frozen_json(self):
+        import price_overlay
+        obs = price_overlay.PriceObservation(asin="B0PRICE0001", price=5800, savings_percentage=None,
+                                             availability=None, observed_at="2026-11-20T00:00:00Z",
+                                             source="price_watch")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            self._write(root, "B0PRICE0001", 2980)
+            idx = bp._build_article_index(root, root / "per_asin", {"B0PRICE0001": obs})
+        self.assertEqual(idx["B0PRICE0001"]["amazon_price"], 5800)
+
+    def test_gone_and_unpriced_snapshot_drop_to_zero(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            self._write(root, "B0GONE00001", 2980)
+            self._snap(root, "B0GONE00001", {"status": "gone", "item": {"price": 2980}})
+            self._write(root, "B0UNPRIC001", 2980)
+            self._snap(root, "B0UNPRIC001", {"fetched_at": "2026-11-20T00:00:00Z", "item": {"price": None}})
+            idx = bp._build_article_index(root, root / "per_asin", {})
+        self.assertEqual(idx["B0GONE00001"]["amazon_price"], 0)
+        self.assertEqual(idx["B0UNPRIC001"]["amazon_price"], 0)
+
+    def test_unpriced_peer_is_not_in_cheapest_band(self):
+        idx = {
+            "B0ZERO00001": _entry("B0ZERO00001", price=0, score=90),
+            "B0CHEAP0001": _entry("B0CHEAP0001", price=800),
+            "B0CHEAP0002": _entry("B0CHEAP0002", price=900),
+        }
+        data = _data(price=700)
+        bp._recommend_same_price_band(data, idx, "")
+        self.assertEqual([c["asin"] for c in data["same_price_band"]["cards"]],
+                         ["B0CHEAP0001", "B0CHEAP0002"])
+
+    def test_no_observation_keeps_frozen_price(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            self._write(root, "B0KEEP00001", 2980)
+            idx = bp._build_article_index(root, root / "per_asin", {})
+        self.assertEqual(idx["B0KEEP00001"]["amazon_price"], 2980)
+
+
 if __name__ == "__main__":
     unittest.main()
