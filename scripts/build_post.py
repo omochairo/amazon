@@ -1015,9 +1015,44 @@ def _shrink_competitor_feature(text: str) -> str:
     return s[: _COMPETITOR_FEATURE_MAX - 1].rstrip("、。・,. ") + "…"
 
 
+def _current_amazon_price(
+    asin: str,
+    frozen_price: int,
+    watch_index: dict[str, "price_overlay.PriceObservation"] | None,
+    per_asin_root: pathlib.Path | None,
+) -> int:
+    """記事ページ自身と同じ規則で「今の Amazon 価格」を返す (navi-brain#165)。
+
+    main loop の ``_apply_price_overlay`` (日次 → 週次の観測で上書き) →
+    ``_apply_amazon_discontinued`` (snapshot が gone なら 0) →
+    ``_apply_amazon_unpriced`` (観測なし・snapshot が価格を返さないなら 0) と同じ結果になる。
+    観測源を渡されなければ (``watch_index`` も ``per_asin_root`` も無い) 凍結価格のまま。
+    """
+    if per_asin_root is not None and _amazon_snapshot_status(per_asin_root, asin) == "gone":
+        return 0
+    obs = None
+    if watch_index:
+        obs = watch_index.get(asin.strip().upper())
+    if obs is None and per_asin_root is not None:
+        obs = price_overlay.resolve(asin, per_asin_root=per_asin_root)
+    if obs is not None and isinstance(obs.price, int) and obs.price > 0:
+        return obs.price
+    if frozen_price > 0 and per_asin_root is not None:
+        item = _load_per_asin_amazon(per_asin_root, asin)
+        if item is not None:
+            try:
+                observed = int(item.get("price") or 0)
+            except (TypeError, ValueError):
+                observed = 0
+            if observed <= 0:
+                return 0
+    return frozen_price
+
+
 def _build_article_index(
     src_path: pathlib.Path,
     per_asin_root: pathlib.Path | None = None,
+    watch_index: dict[str, "price_overlay.PriceObservation"] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Return {asin: {slug, ivs_score_100, ivs_score, name, image, amazon_price}}.
 
@@ -1061,6 +1096,11 @@ def _build_article_index(
             amazon_price = int(amazon_price_obj.get("price") or 0) if isinstance(amazon_price_obj, dict) else 0
         except (TypeError, ValueError):
             amazon_price = 0
+        # navi-brain#165: 自記事の価格は main loop で日次観測に上書きされる
+        # (_apply_price_overlay → _apply_amazon_discontinued → _apply_amazon_unpriced)。
+        # 候補側も同じ順で揃えないと、💴 同じ価格帯の帯判定・🆚 の「◯円安い」が
+        # 自記事 = 今の価格 / 候補 = 執筆時点の価格 で比べることになる。
+        amazon_price = _current_amazon_price(asin, amazon_price, watch_index, per_asin_root)
 
         ivs_score_100: int | None = None
         ivs_score: float | None = None
@@ -1631,7 +1671,9 @@ def _recommend_same_price_band(
         if asin in taken_asins:
             continue
         peer_price = meta.get("amazon_price") or 0
-        if not (band["price_min"] <= peer_price <= band["price_max"]):
+        # 価格不明 (取り扱い終了・価格を返さない出品) は 0。最安帯は price_min=0 なので
+        # 明示的に外さないと「〜¥1,000」に ¥0 のカードが混ざる。
+        if peer_price <= 0 or not (band["price_min"] <= peer_price <= band["price_max"]):
             continue
         score = meta.get("ivs_score_100")
         if not isinstance(score, (int, float)) or score <= 0:
@@ -4226,7 +4268,11 @@ def main() -> None:
     price_watch_latest_path = price_watch_history_root.parent / "latest.json"
     rakuten_matched_index = _load_matched_index(raw_root / "rakuten_matched.json")
     yahoo_matched_index = _load_matched_index(raw_root / "yahoo_matched.json")
-    article_index = _build_article_index(src_path, per_asin_root)
+    # #4007: 「現在の Amazon 価格」の日次観測 index。latest.json を 1 回読んで
+    # 全記事と関連のおすすめの索引で使い回す (無い/古い場合は per_asin 週次レーンへ自動フォールバック)。
+    price_watch_index = price_overlay.load_watch_index()
+    print(f"price_overlay: price_watch index = {len(price_watch_index)} ASIN")
+    article_index = _build_article_index(src_path, per_asin_root, price_watch_index)
     site_base_path = _site_base_path(pathlib.Path(args.hugo_config))
     git_history = _load_git_history(src_path)
     query_intent_map = _load_query_intent_map(pathlib.Path(args.query_intent))
@@ -4269,10 +4315,6 @@ def main() -> None:
     env.filters["amazon_stock_state"] = amazon_stock_state
     template = env.get_template(template_file.name)
 
-    # #4007: 「現在の Amazon 価格」の日次観測 index。latest.json を 1 回読んで
-    # 全記事で使い回す (無い/古い場合は per_asin 週次レーンへ自動フォールバック)。
-    price_watch_index = price_overlay.load_watch_index()
-    print(f"price_overlay: price_watch index = {len(price_watch_index)} ASIN")
     price_overlay_stats = {"price_watch": 0, "per_asin": 0, "none": 0, "body_stale": 0,
                            "unpriced_cleared": 0}
 
