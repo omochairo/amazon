@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """記事生成の候補選定 (03-invoke-jules.yml の pick-asin の Python 版, #9073)。
 
-GitLab 側の ``invoke_jules_repoless.py`` が使う。03 の inline Python
+K8 の記事レーン (``writer_lane.py``) が使う。03 の inline Python
 (``.github/workflows/03-invoke-jules.yml`` の pick-asin step) と同じ規則で候補を並べ、
 各 ASIN の出自 (#4964 の台帳用) を付けて返す:
 
@@ -449,7 +449,7 @@ def exclude_recently_failed(existing, path=None, now=None) -> set:
 # 5 回目で PR が出た。
 FAILED_SESSION_WINDOW_HOURS = 72
 FAILED_SESSION_STREAK_LIMIT = 3
-# 記事生成 (03 / invoke_jules_repoless) の session だけを見る。題名の ASIN は #9419 以降。
+# 記事生成 (03) の session だけを見る。題名の ASIN は #9419 以降。
 _ARTICLE_SESSION_PREFIX = "[wf03]"
 
 

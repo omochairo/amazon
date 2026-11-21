@@ -22,9 +22,9 @@ stages:
 # ビルドを完走させる価値はない (次のビルドが上位互換の成果物を出す)。
 #   - on_new_commit: interruptible → **新しいコミットが来たときだけ**・
 #     **interruptible: true のジョブだけ**キャンセルする。
-#   - schedule 起動 (invoke-jules 6h 毎) は新規コミットではないので発火しない。
-#     加えて invoke-jules / fetch-data 等は interruptible を付けていない (既定 false) ため
-#     二重に保護されている。記事生成が途中で殺されることはない。
+#   - schedule 起動 (fetch-data 等) は新規コミットではないので発火しない。
+#     加えて fetch-data 等は interruptible を付けていない (既定 false) ため
+#     二重に保護されている。データ更新が途中で殺されることはない。
 # 併せて project 設定 auto_cancel_pending_pipelines も enabled にしてある
 # (この keyword はプロジェクト側のマスタースイッチが前提)。
 workflow:
@@ -61,29 +61,8 @@ validate-article:
       done
       python scripts/quality_gate.py --src "$tmp/" --posts hugo/content/posts/ --schema data/schema/article.schema.json --strict
 
-# 記事生成 (旧 03-invoke-jules.yml の移植, フェーズ2)。
-# schedule (6h 毎, SCHEDULE_JOB=invoke-jules) または API/web 起動の同変数指定で発火。
-# repoless Jules セッション → 検証 → MR 作成まで scripts/invoke_jules_repoless.py が行う。
-invoke-jules:
-  stage: generate
-  image: python:3.11-bookworm
-  rules:
-    # スケジュール多重化 (フェーズ4): project bot はスケジュール「変数」を追加
-    # できない (API 403) ため、description の前方一致でジョブを振り分ける
-    # (CI_PIPELINE_SCHEDULE_DESCRIPTION は GitLab 17.8+)。
-    # 既存 schedule id 4326910 の description は "invoke-jules (記事生成 6h毎)"。
-    - if: '$CI_PIPELINE_SOURCE == "schedule" && $CI_PIPELINE_SCHEDULE_DESCRIPTION =~ /^invoke-jules/'
-    - if: '$SCHEDULE_JOB == "invoke-jules"'
-  timeout: 75 minutes
-  variables:
-    # 出自台帳 (#4964) を create_data_mr.py で push するため、他のデータ MR ジョブと揃える
-    GIT_DEPTH: "0"
-  before_script:
-    - pip install -r requirements.txt
-    # hugo/ は gitignore 配下で checkout に posts が無い。quality_gate の --posts 用に空で用意
-    - mkdir -p hugo/content/posts
-  script:
-    - python scripts/invoke_jules_repoless.py
+# 記事生成の予備ジョブ (repoless Jules → MR) は Jules の終了 (2026-11-11) に伴い
+# 削除した (amazon-navi-brain#170)。記事は K8 の記事レーン (scripts/writer_lane.py) が書く。
 
 # ---- データ更新系 (フェーズ4, 2026-07-07) --------------------------------
 # 旧 GitHub Actions 01-fetch / 07-rakuten / 34-third-party の移植。
@@ -98,8 +77,7 @@ invoke-jules:
 #   rakuten-ranking: RAKUTEN_APP_ID / RAKUTEN_ACCESS_KEY / RAKUTEN_AFFILIATE_ID
 #   third-party    : TAVILY_API_KEY
 
-# 日次データ更新 (旧 01-fetch-products.yml)。schedule 2 本 (朝/夕, 1h オフセットで
-# invoke-jules の 6h グリッドと衝突させない)。
+# 日次データ更新 (旧 01-fetch-products.yml)。schedule 2 本 (朝/夕)。
 fetch-data:
   stage: generate
   image: python:3.11-bookworm
@@ -186,7 +164,7 @@ build-site:
   # NAS で回していた頃の実測は 1 回 13.1 分 (build_post 301s / hugo 159s /
   # brotli 174s / pip 71s / artifacts 63s)。スループット比は K8 が 4.3 倍。
   rules:
-    # push 起動のみ (schedule 起動の invoke-jules と分離する, 設計 H8)
+    # push 起動のみ (schedule 起動のデータ更新ジョブと分離する, 設計 H8)
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
   variables:
     # PaperMod テーマは submodule (public repo) なので recursive 取得が必須

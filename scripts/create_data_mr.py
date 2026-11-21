@@ -30,7 +30,7 @@ import urllib.error
 import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from invoke_jules_repoless import GitLab  # noqa: E402
+from gitlab_api import GitLab  # noqa: E402
 
 
 def sh(*args, check=True, quiet=False):

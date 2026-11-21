@@ -186,10 +186,7 @@ class WorkflowWiringTests(unittest.TestCase):
         # close 一覧が無いと冷却中を除けない。03 と同じ取り方で渡しているか。
         self.assertIn("CLOSED_ARTICLE_PRS=", src)
 
-    def test_repoless_lane_uses_the_same_helper(self):
-        # repoless は候補選定を article_pick に委ねる (#9073)
-        src = (REPO_ROOT / "scripts" / "invoke_jules_repoless.py").read_text(encoding="utf-8")
-        self.assertIn("article_pick.pick_from_repo", src)
+    def test_article_pick_uses_the_same_helper(self):
         src = (REPO_ROOT / "scripts" / "article_pick.py").read_text(encoding="utf-8")
         self.assertIn("pending_rewrite_candidates", src)
         self.assertIn("REWRITE_PICKS_PER_RUN", src)
