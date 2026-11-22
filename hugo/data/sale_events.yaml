@@ -69,10 +69,39 @@
   url: "https://www.amazon.co.jp/s?rh=n%3A13299531%2Cp_n_deal_type%3A10343614051"
   name: "Amazon ブラックフライデー"
   source: "https://prtimes.jp/main/html/rd/p/000002218.000004612.html"
-  verified_on: 2026-11-19
-  auto: shop_sale_watch
+  # 本番は 62-shop-sale-watch.yml が題名から自動登録 (11-19)。先行セールは題名に無く
+  # 本文にしか無いので人が足した (2026-11-22・navi-brain#206)
+  verified_on: 2026-11-22
   phases:
-    - label: "Amazon ブラックフライデー"
+    - label: 先行セール
+      headline: Amazon ブラックフライデー 先行セール
+      start: "2026-11-27T00:00:00+09:00"
+      end: "2026-11-29T23:59:59+09:00"
+    - label: 本番
       headline: "Amazon ブラックフライデー"
       start: "2026-11-30T00:00:00+09:00"
       end: "2026-12-07T23:59:59+09:00"
+- id: rakuten-blackfriday-2026
+  shop: rakuten
+  url: "https://event.rakuten.co.jp/campaign/point-up/blackfriday/"
+  name: 楽天市場 ブラックフライデー
+  source: "https://event.rakuten.co.jp/campaign/point-up/blackfriday/ (ポイントアップ期間)"
+  verified_on: 2026-11-22
+  notes:
+    - ポイントアップは要エントリー
+  phases:
+    - label: 楽天市場 ブラックフライデー
+      headline: 楽天市場 ブラックフライデー
+      start: "2026-11-19T20:00:00+09:00"
+      end: "2026-11-25T01:59:59+09:00"
+- id: yahoo-blackfriday-2026
+  shop: yahoo
+  url: "https://shopping.yahoo.co.jp/promotion/campaign/blackfriday/"
+  name: Yahoo!ショッピング ブラックフライデー
+  source: "https://shopping.yahoo.co.jp/promotion/campaign/blackfriday/ と LINEヤフーのプレスリリース (2026-11-02)"
+  verified_on: 2026-11-22
+  phases:
+    - label: Yahoo!ショッピング ブラックフライデー
+      headline: Yahoo!ショッピング ブラックフライデー
+      start: "2026-11-22T00:00:00+09:00"
+      end: "2026-11-30T01:59:59+09:00"
