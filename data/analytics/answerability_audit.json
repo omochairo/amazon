@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-21T01:30:54Z",
+  "generated_at": "2026-11-22T00:20:45Z",
   "model": "gemma4:26b-a4b-it-qat",
   "source_week": "2026-W46",
   "baseline_ctr": 0.030155385830919146,
@@ -120,7 +120,7 @@
             "トイザらスでの販売価格",
             "トイザらスでの在庫状況"
           ],
-          "note": "検索クエリは「トイザらス」での販売に関する情報を求めていますが、記事内にはAmazonと楽天の価格情報しかなく、トイザらスに関する記述が一切ありません。",
+          "note": "ユーザーはトイザらスでの販売状況や価格を求めていますが、記事内にはAmazonと楽天の価格情報しか記載されていません。",
           "error": null
         },
         {
@@ -130,9 +130,9 @@
           "answered": true,
           "coverage": 0.8,
           "missing_aspects": [
-            "実店舗での販売状況（トイザらスなどの店舗での取り扱い有無）"
+            "実店舗での販売状況（トイザらスなどの玩具店や家電量販店での取り扱い有無）"
           ],
-          "note": "Amazonが最安値であることや、楽天との価格差について触れられており、オンラインでの購入先については十分に回答されています。",
+          "note": "Amazonが最安値であることや、楽天との価格差については具体的に述べられていますが、実店舗での販売有無については触れられていません。",
           "error": null
         }
       ]
@@ -208,7 +208,7 @@
     {
       "page": "https://navi.omcha.jp/products/b0gc4mql8n/",
       "asin": "B0GC4MQL8N",
-      "page_coverage_avg": 0.85,
+      "page_coverage_avg": 0.7,
       "queries": [
         {
           "query": "はむにぎり 口コミ",
@@ -263,11 +263,14 @@
           "query": "日本賣多少錢",
           "impressions": 1,
           "position": 4.0,
-          "answered": null,
-          "coverage": null,
-          "missing_aspects": [],
-          "note": "",
-          "error": "500 Server Error: Internal Server Error for url: http://host.docker.internal:11434/api/generate"
+          "answered": false,
+          "coverage": 0.1,
+          "missing_aspects": [
+            "具体的な販売価格（日本円での金額）",
+            "現在の正確な価格情報"
+          ],
+          "note": "「Amazonが最も手頃」という記述はありますが、具体的な金額が記載されていないため、価格を知りたいユーザーの疑問には答えていません。",
+          "error": null
         }
       ]
     }
