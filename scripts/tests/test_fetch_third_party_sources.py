@@ -862,3 +862,115 @@ class SufficientIsFreshTest(unittest.TestCase):
             p = self._write(d, "2026-10-09T07:00:00+00:00",
                             ["ja.wikipedia.org", "en.wikipedia.org", "yodobashi.com"])
             self.assertFalse(F._is_fresh(p, max_age_days=0))
+
+
+class SourceStatusTargetingTest(unittest.TestCase):
+    """候補供給 P1c: 記事レーンの出典の状態 (data/source_status.json) と日割りで、Tavily の枠の使い道を絞る。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self._cwd = os.getcwd()
+        root = pathlib.Path(self._tmp.name)
+        (root / "data" / "raw" / "per_asin").mkdir(parents=True)
+        (root / "data" / "articles").mkdir(parents=True)
+        os.chdir(root)
+        self.base = root / "data" / "raw" / "per_asin"
+        F._status_cache.clear()
+
+    def tearDown(self):
+        os.chdir(self._cwd)
+        F._status_cache.clear()
+        self._tmp.cleanup()
+
+    def _status(self, d):
+        pathlib.Path("data/source_status.json").write_text(json.dumps(d), encoding="utf-8")
+        F._status_cache.clear()
+
+    def test_daily_limit(self):
+        import datetime as dt
+        self.assertEqual(F.daily_limit(900, dt.date(2026, 12, 1), 0.6), 17)  # 900*0.6/31
+        self.assertEqual(F.daily_limit(30, dt.date(2026, 12, 31), 0.4), 12)  # 最終日は残りを全部
+        self.assertEqual(F.daily_limit(5, dt.date(2026, 12, 1), 0.4), 1)    # 0 にはしない
+        self.assertEqual(F.daily_limit(0, dt.date(2026, 12, 1), 0.6), 0)
+
+    def test_status_skip_only_insufficient_before_recheck(self):
+        import datetime as dt
+        self._status({"B0A0000001": {"state": "insufficient", "recheck_after": "2027-02-01"},
+                      "B0A0000002": {"state": "insufficient", "recheck_after": "2026-11-01"},
+                      "B0A0000003": {"state": "waiting_new", "recheck_after": "2027-02-01"},
+                      "B0A0000004": {"state": "article_short", "recheck_after": "2027-02-01"}})
+        today = dt.date(2026, 11, 23)
+        self.assertTrue(F._status_skip("B0A0000001", today))
+        self.assertFalse(F._status_skip("B0A0000002", today))
+        self.assertFalse(F._status_skip("B0A0000003", today))
+        self.assertFalse(F._status_skip("B0A0000004", today))
+        self.assertFalse(F._status_skip("B0ZZZZZZZZ", today))
+
+    def test_sufficient_extension_not_applied_to_short(self):
+        src = [{"url": "https://a.example.jp/x", "host": "a.example.jp"},
+               {"url": "https://b.example.com/y", "host": "b.example.com"}]
+        old = (F._dt.datetime.now(F._dt.timezone.utc) - F._dt.timedelta(days=40)).isoformat()
+        for asin in ("B0A0000001", "B0A0000002"):
+            (self.base / asin).mkdir()
+            (self.base / asin / F.OUT_NAME).write_text(
+                json.dumps({"fetched_at": old, "sources": src}), encoding="utf-8")
+        self._status({"B0A0000002": {"state": "waiting_new"}})
+        self.assertTrue(F._is_fresh(self.base / "B0A0000001" / F.OUT_NAME, 30))   # 2 サイト → 365 日
+        self.assertFalse(F._is_fresh(self.base / "B0A0000002" / F.OUT_NAME, 30))  # 足りない → 30 日
+
+    def test_pool_adds_article_short_and_drops_excluded(self):
+        pathlib.Path("data/articles/2026-11-19-B0ART00001.json").write_text("{}", encoding="utf-8")
+        pathlib.Path("data/raw/amazon.json").write_text(json.dumps(
+            {"items": [{"asin": "B0NEW00001"}, {"asin": "B0BLK00001"}, {"asin": "B0INS00001"}]}),
+            encoding="utf-8")
+        pathlib.Path("data/asin_blocklist.json").write_text(json.dumps({"blocked": [{"asin": "B0BLK00001"}]}), encoding="utf-8")
+        self._status({"B0ART00001": {"state": "article_short"},
+                      "B0INS00001": {"state": "insufficient", "recheck_after": "2099-01-01"}})
+        self.assertIn("B0ART00001", F._pickable_pool())
+        order = []
+
+        def _ok(asin, api_key, base, max_sources=8, dry_run=False):
+            order.append(asin)
+            return {"asin": asin, "status": "ok", "sources": 2}
+
+        bands = {"B0ART00001": "ok", "B0NEW00001": "zero", "B0BLK00001": "zero", "B0INS00001": "zero"}
+        argv = ["prog", "--pool", "--bands", "zero,thin,unfetched", "--base", str(self.base),
+                "--max-queries", "10", "--monthly-budget", "0"]
+        with mock.patch.dict(os.environ, {"TAVILY_API_KEY": "k", "GITHUB_ACTIONS": ""}), \
+                mock.patch.object(F._sc, "score_asin", lambda a, base: {"band": bands[a]}), \
+                mock.patch.object(F, "fetch_for_asin", _ok), \
+                mock.patch.object(F, "_is_fresh", return_value=False), \
+                mock.patch.object(F.time, "sleep", lambda *_: None), \
+                mock.patch.object(sys, "argv", argv):
+            self.assertEqual(F._cli(), 0)
+        # 記事の出典が足りない商品 (band は古い数え方で ok) を先に、blocklist と insufficient は使わない
+        self.assertEqual(order, ["B0ART00001", "B0NEW00001"])
+
+    def test_daily_share_caps_queries(self):
+        pool = ["B0A00000%02d" % i for i in range(1, 40)]
+        calls = []
+
+        def _ok(asin, api_key, base, max_sources=8, dry_run=False):
+            calls.append(asin)
+            return {"asin": asin, "status": "ok", "sources": 2}
+
+        argv = ["prog", "--pool", "--base", str(self.base), "--max-queries", "30",
+                "--monthly-budget", "900", "--daily-share", "0.6"]
+        with mock.patch.dict(os.environ, {"TAVILY_API_KEY": "k", "GITHUB_ACTIONS": ""}), \
+                mock.patch.object(F, "month_usage", return_value=0), \
+                mock.patch.object(F, "daily_limit", return_value=17), \
+                mock.patch.object(F, "_pickable_pool", return_value=pool), \
+                mock.patch.object(F._sc, "score_asin", return_value={"band": "zero"}), \
+                mock.patch.object(F, "fetch_for_asin", _ok), \
+                mock.patch.object(F, "_is_fresh", return_value=False), \
+                mock.patch.object(F.time, "sleep", lambda *_: None), \
+                mock.patch.object(sys, "argv", argv):
+            self.assertEqual(F._cli(), 0)
+        self.assertEqual(len(calls), 17)
+
+    def test_tier_orders_within_same_priority(self):
+        for asin, title in (("B0A0000001", "ノーブランド品 おもちゃ"), ("B0A0000002", "【公式】レゴ(LEGO) ブロック")):
+            (self.base / asin).mkdir()
+            (self.base / asin / "amazon.json").write_text(
+                json.dumps({"item": {"asin": asin, "title": title}}), encoding="utf-8")
+        self.assertLess(F._tier_rank("B0A0000002", self.base), F._tier_rank("B0A0000001", self.base))
