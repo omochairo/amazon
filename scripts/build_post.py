@@ -64,7 +64,9 @@ from card_reason import card_reason
 from age_semantics import (
     ADULT_AGE_MONTHS,
     age_is_estimate,
+    faq_says_no_official_age,
     is_seasonal_decoration,
+    override_age_label,
     override_age_months,
     seasonal_names,
 )
@@ -4460,6 +4462,13 @@ def main() -> None:
                 age_shown=bool((data.get("persona_fit") or {}).get("age_range")),
                 stats=faq_merge_stats,
             )
+            # #9217: メーカー公表の年齢を確かめてある商品で「公式の対象年齢の記載は
+            # ありません」と答える FAQ は古い (冒頭はメーカー公表の年齢を出す)。外す。
+            if override_age_months(data) is not None:
+                data["faq_merged"] = [
+                    q for q in data["faq_merged"]
+                    if not faq_says_no_official_age({"faq": [q]})
+                ]
             _backfill_amazon_badges(data, raw_amazon_index, per_asin_root)
             # #4007: 凍結した Amazon 価格を日次観測で上書き (_attach_market_prices の
             # _recompute_best_price より前に置くことで最安バッジまで整合する)。
@@ -4731,6 +4740,8 @@ def main() -> None:
             # #9217: FAQ が「公式の対象年齢の記載は無い」と答えている記事は、冒頭の
             # 「対象年齢：」を「対象年齢（目安）：」と書く。表示だけに使う。
             data["age_is_estimate"] = age_is_estimate(data)
+            # メーカー公表の年齢 (data/age_overrides.json) があれば、冒頭はそれを出す
+            data["age_override_label"] = override_age_label(data)
             # #165 T16: 書き直しで消えた旧 slug の転送 (rewrite_ledger の old_slug すべてと台帳の slug)
             old_aliases = rewrite_identity.old_slug_aliases(page_asin, slug, rewrite_old_slugs, rewrite_ident)
             if old_aliases:
