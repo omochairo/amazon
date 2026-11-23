@@ -130,11 +130,18 @@ jobs:
             ASIN=$(echo "$INPUT_ASIN" | tr '[:lower:]' '[:upper:]')
             echo "Manual ASIN override: $ASIN"
           else
-            ASIN=$(python scripts/pick_sns_target.py) || {
+            # rc=3 (NO_CANDIDATE_EXIT) だけが「未投稿の記事が無い」。例外 (rc=1) などを
+            # 同じ skip に丸めると、SNS レーンが緑のまま黙って止まる
+            PICK_RC=0
+            ASIN=$(python scripts/pick_sns_target.py) || PICK_RC=$?
+            if [ "$PICK_RC" -eq 3 ]; then
               echo "::notice::No unpublished article available; skipping."
               echo "skip=true" >> "$GITHUB_OUTPUT"
               exit 0
-            }
+            elif [ "$PICK_RC" -ne 0 ]; then
+              echo "::error::pick_sns_target.py failed (rc=$PICK_RC)"
+              exit 1
+            fi
             echo "Auto-picked ASIN: $ASIN"
           fi
           echo "asin=$ASIN" >> "$GITHUB_OUTPUT"

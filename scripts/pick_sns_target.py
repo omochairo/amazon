@@ -279,6 +279,12 @@ def _date_int(filename: str) -> int:
         return 0
 
 
+# 「未投稿の記事が無い」専用の終了コード。例外で落ちたとき (Python は 1 で終わる) と
+# 区別するため 1 を使わない。20-sns-publish はこの値だけを「投稿なしで skip」として扱い、
+# それ以外の非 0 は赤にする (以前はどの失敗も「記事なし」に丸めて緑だった)。
+NO_CANDIDATE_EXIT = 3
+
+
 def rank_candidates(published: set[str]) -> list[Candidate]:
     """未投稿 ASIN を score 降順 (同点は date 降順 → ASIN) で返す。"""
     out: list[Candidate] = []
@@ -380,7 +386,7 @@ def main() -> int:
 
     if not ranked:
         print("[skip] no unpublished article found", file=sys.stderr)
-        return 1
+        return NO_CANDIDATE_EXIT
     print(ranked[0].asin)
     return 0
 

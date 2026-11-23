@@ -49,7 +49,7 @@ def test_render_match_comment_lists_asin_links_and_reason():
 
 def test_find_open_issue_number_returns_number_when_found(monkeypatch):
     def fake_run(cmd, **kwargs):
-        return _FakeCompletedProcess(stdout=json.dumps({"items": [{"number": 4320}]}))
+        return _FakeCompletedProcess(stdout=json.dumps({"items": [{"number": 4320, "body": f"<!-- {otri.MARKER} -->"}]}))
 
     monkeypatch.setattr("scripts.open_toy_recall_issue.subprocess.run", fake_run)
     assert otri.find_open_issue_number("owner/repo") == 4320
@@ -196,3 +196,18 @@ def test_post_match_comment_posts_comment_when_issue_found(tmp_path, monkeypatch
     assert posted["issue_number"] == 4320
     assert posted["repo"] == "owner/repo"
     assert "B0BD3GW7S8" in posted["body"]
+
+
+def test_find_open_issue_number_ignores_issue_only_mentioning_marker(monkeypatch):
+    # #6622: この番号には close / comment をするので、言及しただけの issue を掴まない
+    items = [
+        {"number": 10, "body": f"{otri.MARKER} の閾値を見直す"},
+        {"number": 11},
+        {"number": 12, "body": f"<!-- {otri.MARKER} -->"},
+    ]
+
+    def fake_run(cmd, **kwargs):
+        return _FakeCompletedProcess(stdout=json.dumps({"items": items}))
+
+    monkeypatch.setattr("scripts.open_toy_recall_issue.subprocess.run", fake_run)
+    assert otri.find_open_issue_number("owner/repo") == 12

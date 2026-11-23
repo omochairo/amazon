@@ -31,6 +31,7 @@ import sys
 from datetime import datetime, timezone
 
 from scripts import gh_rest
+from scripts._marker_issue import verified_matches
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("open_article_feedback_issue")
@@ -58,10 +59,11 @@ def find_open_issue_number(repo: str, month: str) -> int | None:
     )
     res = subprocess.run(
         ["gh", "api", "-X", "GET", "search/issues",
-         "-f", f"q={query}", "-f", "per_page=5"],
+         "-f", f"q={query}", "-f", "per_page=100"],
         check=True, capture_output=True, text=True,
     )
-    items = json.loads(res.stdout).get("items", [])
+    # #6622: 検索はトークン一致なので、本文にマーカーを持つものだけ採る
+    items = verified_matches(json.loads(res.stdout).get("items", []), marker)
     if not items:
         return None
     return items[0]["number"]

@@ -10,7 +10,7 @@ name: K8 Writer Lane Watch
 #
 # 48 時間にしているのは、枠切れや出典不足で 1 日 0 本になることは普通にあるため。
 # 2 日続けて 0 本なら、K8 の停止・agy の枠切れの連続・不合格の連続のどれかを疑う。
-# レーンがまだ 1 本も PR を出していない間 (試運転中) は見ない。
+# 記事 PR が 1 件も見つからないときも赤にする (題の形式が変わると見張りが黙って死ぬため)。
 
 on:
   schedule:
@@ -40,8 +40,11 @@ jobs:
             --json createdAt,title \
             --jq '[.[] | select(.title | startswith("[k8-writer] 記事生成"))] | .[0].createdAt // ""')
           if [ -z "$latest" ]; then
-            echo "::notice::k8-writer の記事 PR はまだ無い (レーンが PR を出し始める前)。見張りは何もしない"
-            exit 0
+            # レーンは 2026-11-15 から PR を出している。0 件は「試運転前」ではなく、題の形式が
+            # 変わって絞り込みに当たらなくなったか、検索が壊れたかのどちらか。緑で抜けると
+            # 見張りが永久に何もしなくなるので赤にする
+            echo "::error::'[k8-writer] 記事生成' で始まる PR が直近の検索結果に 1 件も無い。記事 PR の題の形式 (scripts/writer_lane.py) が変わっていないか確かめる"
+            exit 1
           fi
           age=$(( ( $(date -u +%s) - $(date -u -d "$latest" +%s) ) / 3600 ))
           echo "latest k8-writer article PR: created ${latest} (${age}h ago)"

@@ -203,13 +203,27 @@ def main() -> int:
         print("no brands in brand_hub.json", file=sys.stderr)
         return 1
 
+    # 取得に失敗したブランドは前回の記録を残す。以前は失敗したブランドを結果から落として
+    # いたので、API 障害の回は brands が丸ごと空で上書きされ、そのまま PR が自動マージされた
+    prior: dict = {}
+    if OUT.exists():
+        try:
+            prior = json.loads(OUT.read_text(encoding="utf-8")).get("brands") or {}
+        except (ValueError, OSError):
+            prior = {}
+
     result: dict = {}
     matched = 0
+    errors = 0
     for i, brand in enumerate(brands, 1):
         try:
             rec = build_record(brand)
         except Exception as e:  # noqa: BLE001 — 1 ブランド失敗で全体を落とさない
+            errors += 1
             print(f"[{i}/{len(brands)}] {brand}: ERROR {e}", file=sys.stderr, flush=True)
+            if brand in prior:
+                result[brand] = prior[brand]
+                matched += 1
             time.sleep(1)
             continue
         if rec:
@@ -221,6 +235,15 @@ def main() -> int:
         else:
             print(f"[{i}/{len(brands)}] {brand}: no match", flush=True)
         time.sleep(0.4)
+
+    # BRAND_OVERRIDES で None のブランドは API を呼ばないので分母から外す
+    attempted = sum(1 for b in brands
+                    if not (b in BRAND_OVERRIDES and BRAND_OVERRIDES[b] is None))
+    if errors and errors == attempted:
+        # 全滅はデータ不足ではなく API 障害。書かずに赤にする (38 は PR まで進まない)
+        print(f"every brand failed ({errors}/{attempted}) — not writing {OUT.name}",
+              file=sys.stderr, flush=True)
+        return 1
 
     payload = {
         "_source": "Wikidata (MediaWiki Action API, www.wikidata.org)",
