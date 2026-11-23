@@ -586,6 +586,15 @@ def fetch_for_asin(
             "sources": len(sources), "empty_streak": streak}
 
 
+def _tp_queue_asins() -> set[str]:
+    import tp_queue as _tq
+    try:
+        return set(_tq.load(_tq.QUEUE_PATH))
+    except Exception as e:  # noqa: BLE001 — 列が読めなくても本流は止めない
+        logger.warning("収集待ち列を読めない — 窓だけで進める: %s", e)
+        return set()
+
+
 SOURCE_STATUS = pathlib.Path("data/source_status.json")
 # 記事レーンの出典の状態 (候補供給 P1b, scripts/source_status.py) のうち、
 # 「今の判定で引用できる出典が足りない」もの
@@ -702,6 +711,8 @@ def _pickable_pool() -> list[str]:
         pending = set()
     cand |= pending
     existing -= pending
+    # 候補供給 P2 (仕様 §4.5): 01-fetch-products の 09:00 / 18:00 の回で初めて入った商品。窓から落ちても拾う
+    cand |= _tp_queue_asins()
     # 候補供給 P1c (仕様 §10.6): 記事はあるが今の判定で出典が足りない商品も集め直す
     short = _article_short_asins()
     cand |= short
@@ -855,6 +866,9 @@ def _cli() -> int:
         # 飢える。レーンは必ず別々に (別 --max-queries で) 起動する。
         ap.error("--pool と --from-gsc は同時に指定できません (レーンを分けてください)")
 
+    excluded: set[str] = set()
+    skipped: set[str] = set()
+    bands: dict = {}
     if args.asin:
         targets = [args.asin]
     elif args.from_gsc:
@@ -940,6 +954,7 @@ def _cli() -> int:
     # 余分に回っていた。credit は消えているので、日次上限も実消費で見る。
     done = 0
     spent = 0
+    settled: set[str] = set()  # 取れた・十分新しい (= 待ち列から外してよい) ASIN
     for asin in targets:
         if done >= limit:
             logger.info("上限 (%d) 到達 — 残りは次回", limit)
@@ -955,6 +970,7 @@ def _cli() -> int:
             logger.info("%s: fresh skip (max-age %dd / empty-max-age %dd, streak %d)",
                         asin, args.max_age_days, args.empty_max_age_days,
                         _empty_streak(_load(out_path)))
+            settled.add(asin)
             continue
         try:
             r = fetch_for_asin(asin, api_key, base,
@@ -980,8 +996,21 @@ def _cli() -> int:
             spent += 1
         if r.get("status") in ("ok", "dry_run"):
             done += 1
+            settled.add(asin)
         if not args.dry_run:
             time.sleep(1)  # Tavily への礼儀 (秒間 1 query)
+    if args.pool and not args.dry_run:
+        # 待ち列: 拾い終えた・除外になった ASIN を外す。上限や失敗で拾えなかった ASIN だけ次回に残す
+        import tp_queue as _tq
+        # 外すのは: 取れた・十分新しい・生成側の除外・見直し日前・出典が足りている (band ok)。
+        # --bands を絞った実行で対象外になった他の band の ASIN は残す
+        drop = settled | excluded | skipped
+        keep = {a for a in _tq.load(_tq.QUEUE_PATH) if a not in drop and bands.get(a) != "ok"}
+        try:
+            n = _tq.settle(_tq.QUEUE_PATH, keep, _dt.datetime.now(_dt.timezone(_dt.timedelta(hours=9))).date())
+            logger.info("収集待ち列: %d 件を外した (残り %d 件)", n, len(_tq.load(_tq.QUEUE_PATH)))
+        except Exception as e:  # noqa: BLE001
+            logger.warning("収集待ち列を更新できない: %s", e)
     logger.info("完了: %d 件処理 / API %d 回 (max %d)", done, spent, args.max_queries)
     return 0
 

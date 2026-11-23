@@ -764,7 +764,9 @@ def process(env, ledger, locks, args, state_dir, run_dir, origin, today, stats, 
                              checked_urls=checked_urls(cand, excerpts),
                              today=today_d, new_product=need < 2,
                              has_article=origin.get("pool") == "rewrite-queue",
-                             first=source_status.first_seen(asin))
+                             # 初観測は新発売の見直し日にだけ要る。git log は 1 回だけ計算して状態に持つ
+                             first=source_status.first_seen(asin, cached=status.get(asin),
+                                                            use_git=need < 2))
     if len(sites) < need:
         stats["skip_sources"] += 1
         ledger.add("skip_sources", asin=asin, sites=len(sites), n_citable=len(citable),

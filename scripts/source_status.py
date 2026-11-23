@@ -67,8 +67,58 @@ def _date(s):
         return None
 
 
-def first_seen(asin: str, history_dir: str = "data/price_watch/history") -> str | None:
-    """初観測日 (price_watch の最古の観測)。無ければ None (状態を書いた日では代用しない)。"""
+GIT_FIRST_SEEN_LIMIT = 30   # 1 回の実行で git log を呼ぶ上限 (K8 の実測: 1 回 0.5〜2 秒)
+GIT_TIMEOUT = 20
+_git_calls = 0
+_shallow: dict = {}
+
+
+def _is_shallow(cwd) -> bool:
+    import subprocess
+    key = str(cwd)
+    if key not in _shallow:
+        try:
+            r = subprocess.run(["git", "rev-parse", "--is-shallow-repository"], cwd=cwd,
+                               capture_output=True, text=True, timeout=GIT_TIMEOUT)
+            _shallow[key] = r.returncode != 0 or r.stdout.strip() != "false"
+        except (OSError, subprocess.SubprocessError):
+            _shallow[key] = True
+    return _shallow[key]
+
+
+def git_first_seen(asin: str, cwd=None, rel: str = "data/raw/per_asin") -> str | None:
+    """`per_asin/<ASIN>/amazon.json` が初めて入ったコミットの日 (git log)。
+
+    浅い clone では履歴が途中で切れて新しい日付が出るので使わない。1 回の実行で
+    GIT_FIRST_SEEN_LIMIT 回まで (上限に達したら None で、次の回に持ち越す)。
+    """
+    global _git_calls
+    import subprocess
+    cwd = cwd or "."
+    if _git_calls >= GIT_FIRST_SEEN_LIMIT or _is_shallow(cwd):
+        return None
+    _git_calls += 1
+    try:
+        r = subprocess.run(["git", "log", "--diff-filter=A", "--format=%as", "--",
+                            f"{rel}/{asin}/amazon.json"], cwd=cwd, capture_output=True,
+                           text=True, timeout=GIT_TIMEOUT)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0:
+        return None
+    days = [d for d in r.stdout.split() if _date(d)]
+    return min(days) if days else None  # 追加が複数回 (消えて戻った) なら一番古い日
+
+
+def first_seen(asin: str, history_dir: str = "data/price_watch/history", cached=None,
+               use_git: bool = True, git_cwd=None) -> str | None:
+    """初観測日。状態を書いた日では代用しない (古い商品が新しく見える)。
+
+    順に: 状態に持っている正確な値 (近似でないもの) → price_watch の最古の観測 →
+    git log で商品データが初めて入った日 (1 回だけ計算して状態に持つ)。無ければ None。
+    """
+    if isinstance(cached, dict) and cached.get("first_seen") and not cached.get("first_seen_approx"):
+        return cached["first_seen"]
     try:
         with open(os.path.join(history_dir, f"{asin}.jsonl"), encoding="utf-8") as f:
             for line in f:
@@ -80,7 +130,7 @@ def first_seen(asin: str, history_dir: str = "data/price_watch/history") -> str 
                     return ts[:10]
     except FileNotFoundError:
         pass
-    return None
+    return git_first_seen(asin, git_cwd) if use_git else None
 
 
 def _new_recheck(first: str | None, today: dt.date):
@@ -102,14 +152,15 @@ def record(status: dict, asin: str, *, sites: int, need: int, checked_urls, toda
         "sites": int(sites), "need": int(need), "checked_at": today.isoformat(),
         "checked_urls": sorted(set(checked_urls)), "checks": int(prev.get("checks") or 0) + 1,
     }
-    fs = prev.get("first_seen") or first
+    # 近似 (最初に調べた日) は、正確な日 (first) が分かったら置き換える
+    fs = first if (first and prev.get("first_seen_approx")) else (prev.get("first_seen") or first)
     if not fs and new_product:
         # 初観測 (price_watch) が無い新発売は、最初に調べた日を起点にする。毎回の今日を起点にすると
         # 見直し日が 14 日先に延び続けて 60 日に届かない。古い商品は新発売にならない (ASIN で判定) ので
         # 「古い商品が新しく見える」心配は無い
         fs = today.isoformat()
         e["first_seen_approx"] = True
-    elif prev.get("first_seen_approx") and fs == prev.get("first_seen"):
+    elif prev.get("first_seen_approx") and fs == prev.get("first_seen") and fs != first:
         e["first_seen_approx"] = True
     if fs:
         e["first_seen"] = fs

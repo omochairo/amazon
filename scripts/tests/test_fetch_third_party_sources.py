@@ -968,6 +968,43 @@ class SourceStatusTargetingTest(unittest.TestCase):
             self.assertEqual(F._cli(), 0)
         self.assertEqual(len(calls), 17)
 
+    def test_queue_picked_after_leaving_window_and_settled(self):
+        """窓から落ちた待ち列の ASIN を拾い、拾えたものは列から外す。上限で拾えなかったものは残す (候補供給 P2)。"""
+        import tp_queue
+        pathlib.Path("data/raw/amazon.json").write_text(json.dumps({"items": []}), encoding="utf-8")
+        tp_queue.save({"B0Q0000001": "2026-11-23", "B0Q0000002": "2026-11-23", "B0Q0000003": "2026-11-23",
+                       "B0Q0000004": "2026-11-23"}, tp_queue.QUEUE_PATH)
+        pathlib.Path("data/asin_blocklist.json").write_text(
+            json.dumps({"blocked": [{"asin": "B0Q0000004"}]}), encoding="utf-8")
+        self.assertEqual(F._pickable_pool(), ["B0Q0000001", "B0Q0000002", "B0Q0000003", "B0Q0000004"])
+        order = []
+
+        def _ok(asin, api_key, base, max_sources=8, dry_run=False):
+            order.append(asin)
+            return {"asin": asin, "status": "ok", "sources": 2}
+
+        argv = ["prog", "--pool", "--bands", "zero", "--base", str(self.base),
+                "--max-queries", "2", "--monthly-budget", "0"]
+        with mock.patch.dict(os.environ, {"TAVILY_API_KEY": "k", "GITHUB_ACTIONS": ""}),                 mock.patch.object(F._sc, "score_asin", return_value={"band": "zero"}),                 mock.patch.object(F, "fetch_for_asin", _ok),                 mock.patch.object(F, "_is_fresh", return_value=False),                 mock.patch.object(F.time, "sleep", lambda *_: None),                 mock.patch.object(sys, "argv", argv):
+            self.assertEqual(F._cli(), 0)
+        self.assertEqual(order, ["B0Q0000001", "B0Q0000002"])
+        # 拾えた 2 件と、blocklist で除外になった 1 件は外れ、上限で残った 1 件だけ次回に残る
+        self.assertEqual(list(tp_queue.load(tp_queue.QUEUE_PATH)), ["B0Q0000003"])
+
+    def test_queue_keeps_other_band_when_bands_narrowed(self):
+        """--bands で絞った実行は、対象外の band の待ち列を消さない。出典が足りている (ok) ものは外す。"""
+        import tp_queue
+        pathlib.Path("data/raw/amazon.json").write_text(json.dumps({"items": []}), encoding="utf-8")
+        tp_queue.save({"B0Q0000001": "2026-11-23", "B0Q0000002": "2026-11-23", "B0Q0000003": "2026-11-23"},
+                      tp_queue.QUEUE_PATH)
+        bands = {"B0Q0000001": "zero", "B0Q0000002": "thin", "B0Q0000003": "ok"}
+        argv = ["prog", "--pool", "--bands", "zero", "--base", str(self.base),
+                "--max-queries", "5", "--monthly-budget", "0"]
+        ok = lambda asin, api_key, base, max_sources=8, dry_run=False: {"asin": asin, "status": "ok", "sources": 2}  # noqa: E731
+        with mock.patch.dict(os.environ, {"TAVILY_API_KEY": "k", "GITHUB_ACTIONS": ""}),                 mock.patch.object(F._sc, "score_asin", lambda a, base: {"band": bands[a]}),                 mock.patch.object(F, "fetch_for_asin", ok),                 mock.patch.object(F, "_is_fresh", return_value=False),                 mock.patch.object(F.time, "sleep", lambda *_: None),                 mock.patch.object(sys, "argv", argv):
+            self.assertEqual(F._cli(), 0)
+        self.assertEqual(list(tp_queue.load(tp_queue.QUEUE_PATH)), ["B0Q0000002"])
+
     def test_tier_orders_within_same_priority(self):
         for asin, title in (("B0A0000001", "ノーブランド品 おもちゃ"), ("B0A0000002", "【公式】レゴ(LEGO) ブロック")):
             (self.base / asin).mkdir()
