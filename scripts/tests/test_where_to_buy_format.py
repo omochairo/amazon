@@ -762,3 +762,25 @@ def test_title_drops_amazon_when_not_listed():
     }
     title = wtb.build_title("テスト商品", options)
     assert "（" not in title
+
+
+# navi-brain#207: 照合できず検索リンクに落ちたサイト (is_search) は「取扱なし」と書かない
+def test_conclusion_search_fallback_is_not_claimed_unavailable():
+    opts = _options()
+    opts["rakuten"] = {"available": False, "price": None,
+                       "url": "https://search.rakuten.co.jp/search/mall/x/", "is_search": True}
+    opts["yahoo"] = {"available": False, "price": None,
+                     "url": "https://shopping.yahoo.co.jp/search?p=x", "is_search": True}
+    text = wtb.build_conclusion("テスト商品", _obs(ss.STATE_IN_STOCK), opts)
+    assert "取扱を確認できませんでした" not in text
+    assert "楽天・Yahoo!ショッピングでは同じ商品の出品を特定できませんでした" in text
+
+
+def test_conclusion_mixed_available_search_missing():
+    opts = _options(rakuten=True)
+    opts["yahoo"] = {"available": False, "price": None,
+                     "url": "https://shopping.yahoo.co.jp/search?p=x", "is_search": True}
+    text = wtb.build_conclusion("テスト商品", _obs(ss.STATE_IN_STOCK), opts)
+    assert "楽天でも取扱を確認できました。" in text
+    assert "Yahoo!ショッピングでは同じ商品の出品を特定できませんでした" in text
+    assert "取扱を確認できませんでした" not in text
