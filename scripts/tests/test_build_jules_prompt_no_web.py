@@ -38,6 +38,8 @@ def repo(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(sc, "prior_article_urls", lambda asin, *a, **k: ())
     monkeypatch.setattr(sc, "first_party_posts", lambda asin, *a, **k: ["https://omcha.jp/1234"])
+    # 商品に固有の珍しい語 (カタログで数える) は、ここでは型番だけにする
+    monkeypatch.setattr(bjp, "rare_tokens", lambda asin: {"33506"})
     return tmp_path
 
 
@@ -209,3 +211,33 @@ def test_shop_page_by_content_is_not_citable(repo, monkeypatch):
     assert bjp.citable_urls(cand, ex) == ["https://review.example.jp/a"]
     line = bjp._excerpt_line(ex["https://toyshop.example.pl/p/1"], strict=True)
     assert "通販・卸の商品ページ" in line and "採用しない" in line
+
+
+def test_third_party_needs_rare_word_except_first_party(repo, monkeypatch):
+    # 2026-11-23: シリーズ名・ブランド名だけの一致 (タグの一覧・メーカーのトップ) が通っていた
+    series_only = ("ok", "ブリオ レールウェイ の一覧", ["ブリオ", "レールウェイシリーズ"], 200)
+    monkeypatch.setattr(bjp, "identifies_product", lambda hits: True)
+    cand = bjp.source_candidates(ASIN, no_web=True)
+    ex = {"https://omcha.jp/1234": series_only, "https://review.example.jp/a": series_only,
+          "https://blog.example.com/b": OK_STRONG}
+    # omcha.jp の実使用記事 (ASIN で紐づけ済み) は珍しい語を求めない
+    assert bjp.citable_urls(cand, ex) == ["https://omcha.jp/1234", "https://blog.example.com/b"]
+    note = bjp._sources_note(ASIN, no_web=True, excerpts=ex)
+    assert note.count("本文にこの商品に固有の名前・型番が無い") == 1
+    # Web を使える書き手 (Jules) の文面は変えない
+    assert "本文にこの商品に固有の名前・型番が無い" not in bjp._sources_note(ASIN, excerpts=ex)
+
+
+def test_first_party_already_in_third_is_exempt(repo, monkeypatch):
+    # 事前収集 (Tavily) が omcha.jp の同じ記事を拾っていても、ASIN で紐づいた実使用記事として扱う
+    monkeypatch.setattr(sc, "first_party_posts", lambda asin, *a, **k: ["https://review.example.jp/a"])
+    monkeypatch.setattr(bjp, "identifies_product", lambda hits: True)
+    cand = bjp.source_candidates(ASIN, no_web=True)
+    assert "https://review.example.jp/a" in cand["first_party"]
+    series_only = ("ok", "ブリオ の一覧", ["ブリオ", "レールウェイシリーズ"], 200)
+    assert bjp.citable_urls(cand, {"https://review.example.jp/a": series_only}) == ["https://review.example.jp/a"]
+
+
+def test_rare_tokens_without_product_data_is_empty(repo, monkeypatch):
+    monkeypatch.undo()
+    assert bjp.rare_tokens(None) == set()

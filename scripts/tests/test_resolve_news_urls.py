@@ -173,12 +173,11 @@ def test_news_candidate_needs_rare_word(repo, monkeypatch):
         NEWS_B: ("ok", "ブリオの新シリーズ", ["ブリオ", "レールウェイ", "木のおもちゃ"], 200),
     }
     assert bjp.citable_urls(cand, ex) == [NEWS_A]
-    # 同じ一致でも、ニュース以外の候補には追加の条件を掛けない
-    cand2 = dict(cand, news=set())
+    # omcha.jp の実使用記事として紐づいた URL なら追加の条件を掛けない
+    cand2 = dict(cand, first_party={NEWS_B})
     assert bjp.citable_urls(cand2, ex) == [NEWS_A, NEWS_B]
     note = bjp._sources_note(ASIN, no_web=True, excerpts=ex)
-    assert "ニュース検索の結果で、本文にこの商品に固有の名前・型番が無い" in note
-    assert note.count("ニュース検索の結果で") == 1
+    assert note.count("本文にこの商品に固有の名前・型番が無い") == 1
 
 
 def test_rare_tokens_uses_catalog_frequency(repo, monkeypatch):
