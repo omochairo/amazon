@@ -162,7 +162,10 @@ def extract_fallback_keyword(title: str) -> str:
     return " ".join(tokens[:2]).strip()
 
 
-def books_search(api_key: str, query: str, max_results: int = 3) -> list:
+def books_search(api_key: str, query: str, max_results: int = 3,
+                 errors: list | None = None) -> list:
+    """Google Books を検索する。失敗 (5xx・4xx・通信/パース例外) は ``[]`` を返し、
+    ``errors`` が渡されていれば理由を積む。0 件ヒットは積まない。"""
     params = {
         "q": query,
         "key": api_key,
@@ -174,11 +177,15 @@ def books_search(api_key: str, query: str, max_results: int = 3) -> list:
         resp = requests.get(BOOKS_URL, params=params, timeout=15)
         if resp.status_code >= 500:
             logger.warning(f"Google Books 5xx for '{query}'")
+            if errors is not None:
+                errors.append(f"HTTP {resp.status_code}")
             return []
         resp.raise_for_status()
         data = resp.json()
     except Exception as e:
         logger.warning(f"Books search error for '{query}': {e}")
+        if errors is not None:
+            errors.append(str(e))
         return []
 
     out = []
@@ -204,7 +211,7 @@ def books_search(api_key: str, query: str, max_results: int = 3) -> list:
     return out
 
 
-def main():
+def main() -> int:
     import argparse
     parser = argparse.ArgumentParser()
     # sys.argv[1] 互換のための positional (旧呼出 `fetch_books.py "<keyword>"`)
@@ -233,18 +240,23 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if not api_key:
-        logger.warning("GOOGLEBOOKS_API_KEY missing. Skipping fetch.")
-        save_path.write_text(json.dumps({"keyword": keyword, "items": []}, ensure_ascii=False, indent=4),
-                             encoding="utf-8")
-        return
+        # キー欠けは「取れなかった」であって「該当なし」ではない。空で上書きせず赤にする。
+        logger.error("GOOGLEBOOKS_API_KEY missing. Not writing books_result.json.")
+        return 1
 
     items = []
     seen_urls = set()
+    attempts = 0
+    failures = 0
 
     # 1. ジャンル全体検索
     genre_query = f"{keyword} 絵本" if "知育" in keyword else f"{keyword} 知育 絵本"
     logger.info(f"Genre search: {genre_query}")
-    for b in books_search(api_key, genre_query, max_results=3):
+    errs: list = []
+    attempts += 1
+    genre_items = books_search(api_key, genre_query, max_results=3, errors=errs)
+    failures += 1 if errs else 0
+    for b in genre_items:
         url = b.get("url") or ""
         if url and url not in seen_urls:
             items.append(b)
@@ -283,6 +295,7 @@ def main():
             continue
         per_asin_items: list = []
         used_query = ""
+        asin_failed = False
         for query in query_chain:
             if query in seen_queries:
                 # 既に他 ASIN で叩いた query は再度叩かない (API 節約)。
@@ -292,7 +305,14 @@ def main():
                 continue
             seen_queries.add(query)
             logger.info(f"  [{asin}] brand='{brand or '-'}' query='{query}'")
-            fetched = books_search(api_key, query, max_results=2)
+            errs = []
+            attempts += 1
+            fetched = books_search(api_key, query, max_results=2, errors=errs)
+            if errs:
+                failures += 1
+                asin_failed = True
+                seen_queries.discard(query)  # 兄弟 ASIN が空で「済」にならないよう
+                break
             for b in fetched:
                 per_asin_items.append(b)
                 url = b.get("url") or ""
@@ -303,10 +323,20 @@ def main():
             if per_asin_items:
                 # primary で hit したら fallback 段は試さない。
                 break
+        if asin_failed and not per_asin_items:
+            # 取得失敗の ASIN は空で記録も queried 印も付けない (次回また試す)。
+            continue
         _fetch_targets.write_per_asin_raw(
             out_dir, "books", asin, used_query or query_chain[0], per_asin_items
         )
         queried_asins.append(asin)
+
+    if attempts and failures == attempts:
+        # 全件失敗: 空の books_result.json で前回分を潰さず、queried 印も付けずに赤にする。
+        logger.error("Google Books: all %d request(s) failed; not writing books_result.json", attempts)
+        return 1
+    if failures:
+        logger.warning("Google Books: %d/%d request(s) failed (partial)", failures, attempts)
 
     if queried_asins:
         _fetch_targets.mark_queried(out_dir, "books", queried_asins)
@@ -314,7 +344,8 @@ def main():
     save_path.write_text(json.dumps({"keyword": keyword, "items": items}, ensure_ascii=False, indent=4),
                          encoding="utf-8")
     logger.info(f"Saved {len(items)} books to {save_path} (queried {len(queried_asins)} ASINs)")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

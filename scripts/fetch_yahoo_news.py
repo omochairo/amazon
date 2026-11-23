@@ -118,16 +118,26 @@ def extract_keyword(title: str) -> str:
     return " ".join(parts)[:60].strip()
 
 
-def gnews_search(query: str, max_results: int = 5) -> list:
+def gnews_search(query: str, max_results: int = 5, errors: list | None = None) -> list:
+    """Google News RSS を検索する。
+
+    取得に失敗したとき (HTTP 4xx/5xx・通信/パース例外) は ``[]`` を返し、
+    ``errors`` が渡されていればそこへ理由を積む。0 件ヒットは errors に積まない
+    (呼び出し側が「失敗」と「該当なし」を区別するため)。
+    """
     params = {"q": query, "hl": "ja", "gl": "JP", "ceid": "JP:ja"}
     try:
         resp = requests.get(GNEWS_URL, params=params, timeout=15)
         if resp.status_code >= 400:
             logger.warning(f"Google News {resp.status_code} for '{query}'")
+            if errors is not None:
+                errors.append(f"HTTP {resp.status_code}")
             return []
         root = ET.fromstring(resp.content)
     except Exception as e:
         logger.warning(f"Google News error for '{query}': {e}")
+        if errors is not None:
+            errors.append(str(e))
         return []
     out = []
     for item in root.findall(".//item")[:max_results]:
@@ -151,7 +161,7 @@ def gnews_search(query: str, max_results: int = 5) -> list:
     return out
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="data/raw/")
     parser.add_argument("--keyword", default="知育玩具",
@@ -168,9 +178,16 @@ def main():
     items = []
     seen_urls = set()
 
+    attempts = 0
+    failures = 0
+
     # 1. ジャンル全体検索
     logger.info(f"Genre search: {args.keyword}")
-    for n in gnews_search(args.keyword, max_results=5):
+    errs: list = []
+    attempts += 1
+    genre_items = gnews_search(args.keyword, max_results=5, errors=errs)
+    failures += 1 if errs else 0
+    for n in genre_items:
         url = n.get("url") or ""
         if url and url not in seen_urls:
             items.append(n)
@@ -205,7 +222,15 @@ def main():
         if query not in seen_queries:
             seen_queries.add(query)
             logger.info(f"  [{asin}] query='{query}'")
-            for n in gnews_search(query, max_results=3):
+            errs = []
+            attempts += 1
+            fetched = gnews_search(query, max_results=3, errors=errs)
+            if errs:
+                # 取得失敗の ASIN は空で記録も queried 印も付けない (次回また試す)。
+                failures += 1
+                seen_queries.discard(query)  # 兄弟 ASIN が空で「済」にならないよう
+                continue
+            for n in fetched:
                 per_asin_items.append(n)
                 url = n.get("url") or ""
                 if url and url not in seen_urls:
@@ -216,6 +241,13 @@ def main():
         _fetch_targets.write_per_asin_raw(out_dir, "news", asin, query, per_asin_items)
         queried_asins.append(asin)
 
+    if attempts and failures == attempts:
+        # 全件失敗: 空の news.json で前回分を潰さず、queried 印も付けずに赤にする。
+        logger.error("Google News: all %d request(s) failed; not writing news.json", attempts)
+        return 1
+    if failures:
+        logger.warning("Google News: %d/%d request(s) failed (partial)", failures, attempts)
+
     if queried_asins:
         _fetch_targets.mark_queried(out_dir, "news", queried_asins)
 
@@ -223,7 +255,8 @@ def main():
     save_path = out_dir / "news.json"
     save_path.write_text(json.dumps({"items": items}, ensure_ascii=False, indent=4), encoding="utf-8")
     logger.info(f"Saved {len(items)} news items to {save_path} (queried {len(queried_asins)} ASINs)")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

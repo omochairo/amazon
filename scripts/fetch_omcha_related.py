@@ -213,7 +213,7 @@ def _write_per_asin_cache(
     )
 
 
-def main():
+def main() -> int:
     ap = argparse.ArgumentParser(description="Per-ASIN omcha.jp related article fetcher")
     ap.add_argument("--out", default="data/raw", help="data/raw ルート")
     ap.add_argument("--articles-dir", default="data/articles", help="記事 JSON dir")
@@ -257,7 +257,7 @@ def main():
     keyword_pairs = _collect_keyword_pairs(articles_dir)
     if not keyword_pairs:
         logger.warning("No (asin, keyword) pairs found under %s; nothing to fetch", articles_dir)
-        return
+        return 0
 
     if args.asins:
         requested = _parse_asins_csv(args.asins)
@@ -273,7 +273,7 @@ def main():
             targets.append((asin, keyword))
         if not targets:
             logger.warning(f"[{SOURCE}] --asins: no valid targets, nothing to fetch")
-            return
+            return 0
     else:
         max_per_run = _resolve_max_per_run(
             args.max_per_run, len(keyword_pairs), args.stale_after_days,
@@ -284,16 +284,22 @@ def main():
         )
         if not targets:
             logger.info("No stale ASINs to refresh this run")
-            return
+            return 0
 
     queried: list[str] = []
     hits = 0
+    failures = 0
     for asin, keyword in targets:
         try:
-            items = get_related_articles(keyword, count=args.count, min_score=args.min_score)
+            items = get_related_articles(
+                keyword, count=args.count, min_score=args.min_score, strict=True,
+            )
         except Exception as e:
-            logger.error(f"  {asin} ({keyword[:30]}): omcha fetch raised {e}")
-            items = []
+            # 失敗は「関連記事なし」と区別する: 空キャッシュで上書きせず queried 印も付けない。
+            logger.error(f"  {asin} ({keyword[:30]}): omcha fetch failed: {e}")
+            failures += 1
+            time.sleep(args.sleep)
+            continue
         _write_per_asin_cache(per_asin_root, asin, keyword, items)
         queried.append(asin)
         if items:
@@ -301,12 +307,18 @@ def main():
         logger.info(f"  {asin} ({keyword[:30]}) → {len(items)} item(s)")
         time.sleep(args.sleep)
 
+    if failures and not queried:
+        logger.error(f"[{SOURCE}] all {failures} request(s) failed; nothing saved")
+        return 1
+    if failures:
+        logger.warning(f"[{SOURCE}] {failures}/{len(targets)} request(s) failed (partial)")
     _fetch_targets.mark_queried(out_dir, SOURCE, queried)
     logger.info(
         f"omcha_related saved: queried={len(queried)}, with_hits={hits}, "
         f"no_hits={len(queried) - hits}"
     )
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
