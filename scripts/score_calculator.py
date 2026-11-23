@@ -26,7 +26,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
-from age_semantics import age_is_estimate
+from age_semantics import age_is_estimate, months_label, override_age_months
 from brand_normalizer import NormalizedBrand
 from buy_offer_rules import cheapest_purchasable, priced_site_keys
 from filter_raw_per_asin import exclude_title_only
@@ -589,6 +589,13 @@ def calculate(
     bt, br = _brand_tier_score(brand)
     sf, sr = _safety_score(brand, product)
     ag, ar, age_range = _age_fit_score(product)
+    # #9217: メーカー公表の年齢が data/age_overrides.json にある商品は、記事の表記に
+    # 関わらず明記 (10) として採点する (記事側は「記載なし」と書いていることが多い)。
+    ov_months = override_age_months(article, repo_root / "data" / "age_overrides.json")
+    if ov_months is not None:
+        lo = max(1, math.ceil(ov_months / 12))
+        ag, age_range = 10, (lo, lo + 5)
+        ar = f"メーカー公表の対象年齢は{months_label(ov_months)}で、安全に遊び始められる年齢が明確です。"
     # #9217: FAQ が「公式の対象年齢の記載は無い」と答えている記事の年齢は、生成時の
     # 目安でしかない。明記 (10) の扱いをやめ、数字の無い表記と同じ 6 にする。
     # age_range (コスパの年数) は目安として使い続ける。

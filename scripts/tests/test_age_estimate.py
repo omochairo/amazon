@@ -85,5 +85,36 @@ class AgeFitScoreEstimateTest(unittest.TestCase):
         self.assertEqual(r.breakdown["age_fit"], 10)
 
 
+class OverrideReachesHeaderAndScoreTest(unittest.TestCase):
+    """#9217: override は年齢で絞る機能だけでなく、表示・点数・FAQ にも効く。"""
+
+    def _ov(self, td, asin="B000TEST01", months=72):
+        p = pathlib.Path(td) / "data" / "age_overrides.json"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps({"overrides": {asin: {
+            "age_min_months": months, "source": "https://example.com/", "quote": "対象年齢 6歳以上"}}}),
+            encoding="utf-8")
+        return p
+
+    def test_months_label(self):
+        self.assertEqual(age_semantics.months_label(72), "6歳以上")
+        self.assertEqual(age_semantics.months_label(18), "18ヶ月以上")
+
+    def test_override_label(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = self._ov(td)
+            self.assertEqual(age_semantics.override_age_label(_article("x"), p), "6歳以上")
+            self.assertIsNone(age_semantics.override_age_label(_article("x", "B000OTHER1"), p))
+
+    def test_override_scores_as_stated(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._ov(td)
+            art = _article(NO_AGE_ANSWERS[0], target_age="")
+            brand = NormalizedBrand(canonical="", tier="D", region="unknown")
+            r = score_calculator.calculate(art, brand, repo_root=pathlib.Path(td))
+            self.assertEqual(r.breakdown["age_fit"], 10)
+            self.assertTrue(any("メーカー公表の対象年齢は6歳以上" in x for x in r.rationale))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -89,7 +89,7 @@
 </section>
 
 {% if persona_fit %}
-<aside class="persona-fit"><strong>この記事はこんな方へ</strong>{% if persona_fit.age_range %}<span class="persona-fit__age">{% if age_is_estimate %}対象年齢（目安）：{% else %}対象年齢：{% endif %}<strong>{{ persona_fit.age_range }}</strong></span>{% endif %}<ul>{% for r in persona_fit.recommended_for %}<li>{{ r }}</li>{% endfor %}</ul>{% if persona_fit.not_recommended_for %}<div class="persona-fit__caution"><strong>🤔 逆に、こんな方は別の商品も検討を</strong><ul>{% for n in persona_fit.not_recommended_for %}<li>{{ n }}</li>{% endfor %}</ul></div>{% endif %}</aside>
+<aside class="persona-fit"><strong>この記事はこんな方へ</strong>{% if age_override_label %}<span class="persona-fit__age">対象年齢：<strong>{{ age_override_label }}</strong>（メーカー公表）</span>{% elif persona_fit.age_range %}<span class="persona-fit__age">{% if age_is_estimate %}対象年齢（目安）：{% else %}対象年齢：{% endif %}<strong>{{ persona_fit.age_range }}</strong></span>{% endif %}<ul>{% for r in persona_fit.recommended_for %}<li>{{ r }}</li>{% endfor %}</ul>{% if persona_fit.not_recommended_for %}<div class="persona-fit__caution"><strong>🤔 逆に、こんな方は別の商品も検討を</strong><ul>{% for n in persona_fit.not_recommended_for %}<li>{{ n }}</li>{% endfor %}</ul></div>{% endif %}</aside>
 {% endif %}
 
 {% if (product.pros and product.pros|length) or (product.cons and product.cons|length) %}

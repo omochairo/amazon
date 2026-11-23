@@ -103,6 +103,23 @@ def faq_says_no_official_age(raw: dict[str, Any]) -> bool:
     return False
 
 
+def months_label(months: int) -> str:
+    """月齢を「6歳以上」「18ヶ月以上」の表記にする。"""
+    if months % 12 == 0:
+        return f"{months // 12}歳以上"
+    return f"{months}ヶ月以上"
+
+
+def override_age_label(raw: dict[str, Any], path: Path | None = None) -> str | None:
+    """data/age_overrides.json の確認済み年齢を表示用の文字列で返す (無ければ None)。
+
+    override は age_min_months (一覧・年齢で絞る機能) だけでなく、記事ページの
+    「対象年齢」の表示と知育スコアにも効かせる (#9217。片方だけ直っていた)。
+    """
+    months = override_age_months(raw, path)
+    return months_label(months) if months is not None else None
+
+
 def age_is_estimate(raw: dict[str, Any], path: Path | None = None) -> bool:
     """記事 json の対象年齢が、メーカーの表記ではなく生成時の目安か (#9217)。
 
