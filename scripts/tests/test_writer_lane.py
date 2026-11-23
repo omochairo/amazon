@@ -134,13 +134,16 @@ def lane(tmp_path, monkeypatch):
     world = FakeWorld()
     sites = {A1: 2, A2: 2, A3: 2}
 
-    def fake_precheck(asin, fetch):
+    def fake_precheck(asin, fetch, cand=None):
         n = sites.get(asin, 2)
         cit = CITABLE[:n]
         return {"third": [], "prior": []}, {u: ("ok", "x", ["33506"], 200) for u in cit}, cit, \
             [f"site{i}" for i in range(n)]
 
     monkeypatch.setattr(wl, "precheck", fake_precheck)
+    # 出典の状態 (P1b) が読む候補 URL。事前チェックは上の偽物なので、候補は空でよい
+    monkeypatch.setattr(bjp, "source_candidates", lambda asin, no_web=False: {
+        "mall": [], "third": [], "prior": [], "dead": set(), "news": set(), "first_party": set(), "asin": asin})
     monkeypatch.setattr(bjp, "build_prompt", lambda asin, **kw: (
         f"PROMPT {asin} https://www.amazon.co.jp/dp/{asin}/ {CITABLE[0]} {CITABLE[1]} "
         f"https://m.media-amazon.com/images/I/x.jpg"))
@@ -537,3 +540,175 @@ def test_rewrites_off_by_default(lane):
     (lane.repo / "data" / "articles" / "2026-06-01-B0REWRITE1.json").write_text("{}")
     lane.run(Writer([wresult(article(A1))]), "--max-articles", "1", "--dry-run")
     assert lane.seen["rewrite_cap"] == "0" and "B0REWRITE1" in lane.seen["existing"]
+
+
+# ---------------------------------------------------------------- 出典の状態 (候補供給 P1b)
+
+def _status(lane):
+    import source_status
+    return source_status.load(lane.state / "source_status.json")
+
+
+def test_status_skips_not_due_and_records_results(lane):
+    import source_status
+    lane.state.mkdir(parents=True, exist_ok=True)
+    source_status.save(lane.state / "source_status.json", {
+        A1: {"state": "insufficient", "checked_at": "2026-11-10", "checked_urls": [],
+             "recheck_after": "2027-02-08"}})
+    lane.sites[A3] = 1
+    w = Writer([wresult(article(A2))])
+    assert lane.run(w, "--max-articles", "2") == 0
+    # 候補選びの除外に入る (キーワード枠・ランキング枠・first-party 枠で同じ判定)
+    assert A1 in lane.seen["existing"]
+    # 候補に来ても開かない
+    assert [r["asin"] for r in events(lane, "skip_status")] == [A1]
+    st = _status(lane)
+    assert st[A2]["state"] == "written"  # 記事ができた (行を消すとリポジトリの写しで戻る)
+    assert st[A3]["state"] == "insufficient" and st[A3]["sites"] == 1 and st[A3]["need"] == 2
+    assert st[A1]["checked_at"] == "2026-11-10"  # 開いていないので変えない
+
+
+def test_status_new_urls_trigger_recheck(lane, monkeypatch):
+    import source_status
+    lane.state.mkdir(parents=True, exist_ok=True)
+    source_status.save(lane.state / "source_status.json", {
+        A1: {"state": "insufficient", "checked_at": "2026-11-10", "checked_urls": ["https://old.example.jp/"],
+             "recheck_after": "2027-02-08"}})
+    monkeypatch.setattr(bjp, "source_candidates", lambda asin, no_web=False: {
+        "mall": [], "third": [("https://new.example.jp/", "")], "prior": [], "dead": set(),
+        "news": set(), "first_party": set(), "asin": asin})
+    w = Writer([wresult(article(A1))])
+    assert lane.run(w, "--max-articles", "1") == 0
+    assert A1 not in lane.seen["existing"]
+    assert events(lane, "pr")[0]["asin"] == A1
+
+
+def test_second_stage_fills_with_rewrites(lane, monkeypatch):
+    import article_pick
+    calls = []
+
+    def fake_pick(existing, seed):
+        calls.append(__import__("os").environ.get("REWRITE_PICKS_PER_RUN"))
+        if len(calls) == 1:
+            return [{"asin": A1, "pool": "ranking", "source_keyword": None}]
+        return [{"asin": A1, "pool": "ranking", "source_keyword": None},
+                {"asin": "B0REWRITE1", "pool": "rewrite-queue", "source_keyword": None}]
+
+    monkeypatch.setattr(article_pick, "pick_from_repo", fake_pick)
+    lane.sites[A1] = 1  # 新規は出典不足
+    w = Writer([wresult(article("B0REWRITE1"))])
+    assert lane.run(w, "--max-articles", "2", "--max-rewrites", "1") == 0
+    assert calls == ["1", "2"]  # 2 段目は残りの本数 (2) だけ書き直しを拾う
+    assert [r["asin"] for r in events(lane, "pr")] == ["B0REWRITE1"]
+    assert ledger(lane)[-1]["second_stage"] == 1
+
+
+def test_article_short_becomes_writable_article(lane):
+    import source_status
+    lane.state.mkdir(parents=True, exist_ok=True)
+    source_status.save(lane.state / "source_status.json", {
+        "B0ARTICLE1": {"state": "article_short", "checked_at": "2026-10-01", "checked_urls": [],
+                       "recheck_after": "2026-10-31"},
+        "B0ARTICLE2": {"state": "article_short", "checked_at": "2026-11-14", "checked_urls": [],
+                       "recheck_after": "2026-12-14"}})
+    lane.picked["origins"] = []
+    lane.sites["B0ARTICLE1"] = 2
+    assert lane.run(Writer([]), "--max-articles", "1") == 0
+    st = _status(lane)
+    assert st["B0ARTICLE1"]["state"] == "writable_article"
+    assert st["B0ARTICLE2"]["state"] == "article_short"  # 期限前・候補が増えていない
+    assert [r["asin"] for r in events(lane, "article_recheck")] == ["B0ARTICLE1"]
+
+
+def test_dry_run_does_not_save_status(lane):
+    lane.sites.update({A1: 1, A2: 1, A3: 1})
+    assert lane.run(Writer([]), "--max-articles", "1", "--dry-run") == 0
+    assert not (lane.state / "source_status.json").exists()
+
+
+class StatusWorld(FakeWorld):
+    def __init__(self, old_heads=()):
+        super().__init__()
+        self.old_heads = list(old_heads)
+
+    def __call__(self, argv, input=None, **kw):
+        if argv[:2] == ["git", "diff"]:
+            self.calls.append((list(argv), input))
+            return proc(1)  # 変更あり
+        return super().__call__(argv, input, **kw)
+
+    def gh(self, a, input_text):
+        if a[:2] == ["pr", "list"] and "headRefName" in " ".join(a):
+            return proc(0, json.dumps([{"number": 77, "headRefName": h} for h in self.old_heads]))
+        if a[:2] == ["pr", "close"]:
+            return proc(0)
+        return super().gh(a, input_text)
+
+
+def test_publish_status_merges_marks_and_replaces_old_pr(tmp_path, monkeypatch):
+    import source_status
+    repo = tmp_path / "repo"
+    (repo / "data" / "articles").mkdir(parents=True)
+    (repo / "data" / "articles" / "2026-11-19-B0ARTICLE1.json").write_text(
+        json.dumps({"title": "題", "product_name": "商品"}), encoding="utf-8")
+    monkeypatch.chdir(repo)
+    source_status.save(source_status.REPO_PATH, {
+        "B0OLD00001": {"state": "insufficient", "checked_at": "2026-11-01"},
+        "B0ARTICLE1": {"state": "article_short", "checked_at": "2026-11-01"}})
+    world = StatusWorld(old_heads=["data/source-status-k8w-20261122-023000"])
+    env = wl.Env(runner=world, python="py", clock=lambda: NOW)
+    ours = {"B0ARTICLE1": {"state": "writable_article", "checked_at": "2026-11-15"},
+            "B0NEW00001": {"state": "insufficient", "checked_at": "2026-11-15"}}
+    url = wl.publish_status(env, "20261115-023000", tmp_path, ours)
+    assert url.endswith("/pull/9001")
+    merged = source_status.load(source_status.REPO_PATH)
+    assert set(merged) == {"B0OLD00001", "B0ARTICLE1", "B0NEW00001"}
+    assert merged["B0ARTICLE1"]["state"] == "writable_article"
+    marker = json.loads((repo / "data" / "rewrite_queue" / "B0ARTICLE1.json").read_text(encoding="utf-8"))
+    assert marker["old_slug"] == "2026-11-19-B0ARTICLE1"
+    assert world.gh_cmds("pr", "close")[0][3] == "77"
+    title = world.gh_cmds("pr", "create")[0]
+    assert "k8-writer" not in " ".join(title)  # 記事 PR の見張りに拾わせない
+    assert world.gh_cmds("pr", "merge")
+
+
+def test_queued_rewrite_is_written_when_its_turn_comes(lane):
+    """writable_article (記事の点検で届いて書き直しの待ちに入れた) は、候補に来たら書く。"""
+    import source_status
+    lane.state.mkdir(parents=True, exist_ok=True)
+    source_status.save(lane.state / "source_status.json", {
+        A1: {"state": "writable_article", "checked_at": "2026-11-14", "checked_urls": []}})
+    w = Writer([wresult(article(A1))])
+    assert lane.run(w, "--max-articles", "1") == 0
+    assert events(lane, "pr")[0]["asin"] == A1
+    assert _status(lane)[A1]["state"] == "written"
+
+
+def test_written_is_not_revived_by_repo_copy(lane):
+    """記事を書いた商品の状態が、リポジトリの写し (古い insufficient) との合わせで戻らない。"""
+    import source_status
+    (lane.repo / "data").mkdir(exist_ok=True)
+    source_status.save(lane.repo / source_status.REPO_PATH, {
+        A1: {"state": "writable_article", "checked_at": "2026-11-10", "checked_urls": []}})
+    w = Writer([wresult(article(A1))])
+    assert lane.run(w, "--max-articles", "1") == 0
+    st = source_status.merge(source_status.load(lane.repo / source_status.REPO_PATH), _status(lane))
+    assert st[A1]["state"] == "written"
+
+
+def test_forced_asin_is_not_skipped_by_status(lane):
+    import source_status
+    lane.state.mkdir(parents=True, exist_ok=True)
+    source_status.save(lane.state / "source_status.json", {
+        A1: {"state": "insufficient", "checked_at": "2026-11-10", "checked_urls": [],
+             "recheck_after": "2027-02-08"}})
+    w = Writer([wresult(article(A1))])
+    assert lane.run(w, "--max-articles", "1", "--asin", A1) == 0
+    assert not events(lane, "skip_status") and events(lane, "pr")[0]["asin"] == A1
+
+
+def test_rewrite_candidate_short_becomes_article_short(lane):
+    lane.picked["origins"] = [{"asin": "B0REWRITE1", "pool": "rewrite-queue", "source_keyword": None}]
+    lane.sites["B0REWRITE1"] = 0  # B0R… は新発売の扱い (要るのは 1 サイト)
+    assert lane.run(Writer([]), "--max-articles", "1") == 0
+    assert _status(lane)["B0REWRITE1"]["state"] == "article_short"

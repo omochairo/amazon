@@ -45,8 +45,10 @@ from urllib.parse import urlparse
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 try:
     from source_rules import required_non_sales_sites
+    import source_status
 except ModuleNotFoundError:  # package 形式
     from scripts.source_rules import required_non_sales_sites
+    from scripts import source_status
 
 JST = dt.timezone(dt.timedelta(hours=9))
 ASIN_RE = re.compile(r"B0[A-Z0-9]{8}")
@@ -55,6 +57,9 @@ URL_TRAIL = ".,)]」』、。）"
 LOCK_PREFIX = "jules-lock/"
 PR_TITLE = "[k8-writer] 記事生成: {asin}"
 FAILED_TITLE = "[k8-writer] 不合格: {asin}"
+STATUS_BRANCH_PREFIX = "data/source-status-k8w-"
+# 記事はあるが出典が足りない商品 (source_status の article_short) を 1 回で見直す上限 (候補供給 P1b)
+ARTICLE_RECHECKS = 10
 DEFAULT_MODEL = "gemini-4-hydrogen-high"
 # 出典不足で外した ASIN を選び直さない日数。素材 (34 / 57 の事前収集) は日次で増えるので短めにする
 SKIP_SOURCES_DAYS = 3
@@ -269,7 +274,36 @@ def write_closed_rows(env, rows, state_dir):
     return path, closed is not None
 
 
-def pick(env, rows, state_dir, run_id, forced, max_rewrites=0):
+def not_due_asins(status, today, candidates_of=None):
+    """出典の状態で、今は見直さない (事前チェックで開かない) ASIN (候補供給 P1b, §4.2・§4.3)。
+
+    候補選びの前に「記事がある」と同じ除外に足すので、キーワード枠・ランキング枠・first-party 枠・
+    書き直し待ちのどれから来ても同じ判定になる。今の候補 URL に前回開いていない URL があれば外さない。
+    """
+    if not status:
+        return set()
+    if candidates_of is None:
+        import build_jules_prompt as bjp
+
+        def candidates_of(asin):
+            return bjp.excerpt_targets(bjp.source_candidates(asin, no_web=True))
+    out = set()
+    for asin, e in status.items():
+        if not isinstance(e, dict) or e.get("state") not in ("insufficient", "waiting_new"):
+            continue
+        ra = source_status._date(e.get("recheck_after"))
+        if ra is None or today >= ra:
+            continue  # 期限が来た: 見直す
+        try:
+            urls = candidates_of(asin)
+        except Exception:  # noqa: BLE001,S112 — 候補が組めない商品は外す (どのみち書けない)
+            urls = []
+        if not source_status.due(e, urls, today)[0]:
+            out.add(asin)
+    return out
+
+
+def pick(env, rows, state_dir, run_id, forced, max_rewrites=0, exclude=()):
     """候補を選ぶ。max_rewrites > 0 なら書き直し待ち (rewrite_queue) を最大その件数、先頭に置く。
 
     書き直し (navi-brain#170 B1) は 03 と同じ方式: 待ち行列に印 (12-rewrite-idle-fill が
@@ -287,7 +321,7 @@ def pick(env, rows, state_dir, run_id, forced, max_rewrites=0):
         import rewrite_queue
         pending = set(rewrite_queue.eligible_rewrite_asins("data/articles"))
         existing -= pending
-    existing |= open_pr_asins(env) | locked_asins(env) | recent_skips(rows, env.now())
+    existing |= open_pr_asins(env) | locked_asins(env) | recent_skips(rows, env.now()) | set(exclude)
     path, _ = write_closed_rows(env, rows, state_dir)
     os.environ["CLOSED_ARTICLE_PRS"] = str(path)
     os.environ["REWRITE_PICKS_PER_RUN"] = str(max(0, int(max_rewrites)))
@@ -305,10 +339,10 @@ def pick(env, rows, state_dir, run_id, forced, max_rewrites=0):
 
 # ---------------------------------------------------------------- 出典の事前確認 (A4)
 
-def precheck(asin, fetch):
+def precheck(asin, fetch, cand=None):
     import build_jules_prompt as bjp
     import quality_gate
-    cand = bjp.source_candidates(asin, no_web=True)
+    cand = cand if cand is not None else bjp.source_candidates(asin, no_web=True)
     targets = bjp.excerpt_targets(cand)
     excerpts = bjp._fetch_excerpts(asin, targets, fetch=fetch) if targets else {}
     citable = bjp.citable_urls(cand, excerpts)
@@ -594,6 +628,64 @@ def record_origin(env, prs, run_id, state_dir):
         back_to_main(env, branch)
 
 
+def publish_status(env, run_id, state_dir, status):
+    """出典の状態を data/source_status.json に入れる PR を出す (候補供給 P1b, §4.1)。
+
+    K8 の state_dir の写しが正。origin/main の写しと ASIN ごとに新しい方を合わせて書く。
+    writable_article (記事の出典が足りなかったが今は届く) の商品には、書き直しの待ちの印と
+    元の題 (apply_rewrite_targets と同じ方法) を同じ PR で付ける。状態は累積なので、前の回の
+    PR が開いたままなら閉じて作り直す (同じファイルを触る PR が 2 本並ぶと衝突して止まる)。
+    """
+    branch = STATUS_BRANCH_PREFIX + run_id
+    try:
+        fresh_branch(env, branch)
+        merged = source_status.merge(source_status.load(source_status.REPO_PATH), status)
+        source_status.save(source_status.REPO_PATH, merged)
+        paths = [source_status.REPO_PATH]
+        marks = sorted(a for a, e in merged.items()
+                       if isinstance(e, dict) and e.get("state") == "writable_article")
+        if marks:
+            import apply_rewrite_targets
+            import rewrite_identity
+            import rewrite_queue
+            todo = [a for a in marks if not os.path.exists(rewrite_queue.marker_path(a))
+                    and rewrite_queue.newest_body_slug(a)]
+            if todo:
+                apply_rewrite_targets.write_markers(todo, "data/articles", rewrite_queue.QUEUE_DIR,
+                                                    rewrite_identity.LEDGER_PATH)
+                paths += [rewrite_queue.QUEUE_DIR, rewrite_identity.LEDGER_PATH]
+        r = git(env, "add", "--", *paths)
+        if r.returncode != 0:
+            raise RuntimeError("git add failed")
+        if git(env, "diff", "--cached", "--quiet").returncode == 0:
+            return ""
+        title = f"data(analytics): source status (k8w-{run_id})"
+        for a in (("commit", "-m", title), ("push", "-u", "origin", branch)):
+            r = git(env, *a)
+            if r.returncode != 0:
+                raise RuntimeError(f"git {a[0]} failed")
+        old = env.gh_json(["pr", "list", "-R", env.repo_slug, "--state", "open", "--search",
+                           f"head:{STATUS_BRANCH_PREFIX}", "--json", "number,headRefName"]) or []
+        for pr in old:
+            head = str(pr.get("headRefName") or "")
+            if head.startswith(STATUS_BRANCH_PREFIX) and head != branch:
+                env.gh(["pr", "close", str(pr["number"]), "-R", env.repo_slug, "--delete-branch",
+                        "--comment", f"{branch} に置き換え (状態は累積)"])
+        r = env.gh(["pr", "create", "-R", env.repo_slug, "--base", "main", "--head", branch,
+                    "--title", title, "--body",
+                    "K8 の記事レーンの出典の状態 (候補供給 P1b)。記事はあるが出典が足りなかった商品で、"
+                    "今は引用できる出典が届くものは書き直しの待ちに入れる。"])
+        if r.returncode != 0:
+            raise RuntimeError("gh pr create failed")
+        url = (r.stdout or "").strip().splitlines()[-1]
+        env.gh(["pr", "merge", "--auto", "--squash", "--delete-branch", url, "-R", env.repo_slug])
+        return url
+    finally:
+        # 途中で落ちたときに、追跡外の印・初めての状態ファイルを作業ツリーに残さない
+        # (残ると次の回の候補選びが読む)
+        back_to_main(env, branch, ("data/rewrite_queue", source_status.REPO_PATH))
+
+
 # ---------------------------------------------------------------- run
 
 def save(dirpath, name, text):
@@ -610,12 +702,70 @@ def write_once(env, ledger, prompt, asin, attempt, args, state_dir, previous=Non
     return wr
 
 
-def process(env, ledger, locks, args, state_dir, run_dir, origin, today, stats, prs):
-    """候補 1 件を書いて検査し、合格なら PR。戻り値 "stop" ならその回をやめる。"""
+def checked_urls(cand, excerpts=None):
+    """記録する「見た候補 URL」。今の候補全部 (抜粋の取得上限で開かなかった分・リンク切れも含む)。
+
+    見直しのきっかけは「この一覧に無い URL が候補に増えたこと」なので、開かなかった分や
+    リンク切れ (次の回も候補に残る) を外すと、毎回「増えた」に見えて見直しが止まらない。
+    """
+    import build_jules_prompt as bjp
+    return list(bjp.excerpt_targets(cand))
+
+
+def recheck_articles(env, ledger, args, status, today, stats):
+    """記事はあるが出典が足りない商品 (article_short) を見直す (候補供給 P1b, 仕様 §10.6)。
+
+    今の判定で引用できる出典が要るサイト数に届いたら writable_article にする。書き直しの待ちの印は
+    publish_status が付ける。事前チェックの上限 (--max-prechecks) の残りの中で、最大 ARTICLE_RECHECKS 件。
+    """
+    import build_jules_prompt as bjp
+    today_d = dt.date.fromisoformat(today)
+    n = 0
+    for asin, e in sorted(status.items()):
+        if n >= ARTICLE_RECHECKS or stats["prechecked"] >= args.max_prechecks:
+            break
+        if not isinstance(e, dict) or e.get("state") != "article_short":
+            continue
+        cand = bjp.source_candidates(asin, no_web=True)
+        if not source_status.due(e, bjp.excerpt_targets(cand), today_d)[0]:
+            continue
+        n += 1
+        stats["prechecked"] += 1
+        cand, excerpts, citable, sites = precheck(asin, env.fetch, cand)
+        need = required_non_sales_sites(asin)
+        row = source_status.record(status, asin, sites=len(sites), need=need,
+                                   checked_urls=checked_urls(cand, excerpts), today=today_d,
+                                   new_product=need < 2, has_article=True)
+        ledger.add("article_recheck", asin=asin, sites=len(sites), need=need, state=row["state"])
+
+
+def process(env, ledger, locks, args, state_dir, run_dir, origin, today, stats, prs, status=None,
+            check_due=True):
+    """候補 1 件を書いて検査し、合格なら PR。戻り値 "stop" ならその回をやめる。
+
+    status (source_status の dict) を渡すと、今は見直さない商品は開かずに飛ばし、事前チェックの
+    結果を記録する (候補供給 P1b)。check_due=False (--asin で指定した商品) は飛ばさない。
+    """
+    import build_jules_prompt as bjp
     asin = origin["asin"]
+    cand = bjp.source_candidates(asin, no_web=True)
+    today_d = dt.date.fromisoformat(today)
+    if status is not None and check_due:
+        ok, why = source_status.due(status.get(asin), bjp.excerpt_targets(cand), today_d)
+        if not ok:
+            stats["skip_status"] = stats.get("skip_status", 0) + 1
+            ledger.add("skip_status", asin=asin, state=why)
+            return ""
     stats["prechecked"] += 1
-    cand, excerpts, citable, sites = precheck(asin, env.fetch)
-    if len(sites) < required_non_sales_sites(asin):
+    cand, excerpts, citable, sites = precheck(asin, env.fetch, cand)
+    need = required_non_sales_sites(asin)
+    if status is not None:
+        source_status.record(status, asin, sites=len(sites), need=need,
+                             checked_urls=checked_urls(cand, excerpts),
+                             today=today_d, new_product=need < 2,
+                             has_article=origin.get("pool") == "rewrite-queue",
+                             first=source_status.first_seen(asin))
+    if len(sites) < need:
         stats["skip_sources"] += 1
         ledger.add("skip_sources", asin=asin, sites=len(sites), n_citable=len(citable),
                    n_candidates=len(excerpts))
@@ -624,7 +774,6 @@ def process(env, ledger, locks, args, state_dir, run_dir, origin, today, stats, 
         stats["lock_busy"] += 1
         ledger.add("lock_busy", asin=asin)
         return ""
-    import build_jules_prompt as bjp
     prompt = bjp.build_prompt(asin, today=today, no_web=True, excerpts=excerpts)
     adir = run_dir / asin
     save(adir, "prompt.txt", prompt)
@@ -677,6 +826,9 @@ def process(env, ledger, locks, args, state_dir, run_dir, origin, today, stats, 
                     ledger.add("error", asin=asin, stage="pr", error="pr", detail=str(e)[:500])
                     return ""
                 locks.keep(asin)
+                if status is not None:
+                    # 記事ができた。行を消すとリポジトリの写しとの合わせで前の状態が戻るので、印を残す
+                    status[asin] = {"state": "written", "checked_at": today}
                 stats["prs"] += 1
                 prs.append({"asin": asin, "pool": origin.get("pool") or "",
                             "source_keyword": origin.get("source_keyword")})
@@ -712,8 +864,13 @@ def cmd_run(args, env):
     locks = LockSession(env)
     prs = []
     code = 0
+    status_path = state / source_status.FILE_NAME
+    status = None
     try:
         rows = read_ledger(state)
+        # 出典の状態 (候補供給 P1b)。K8 の写しが正。無ければリポジトリの写しから始める
+        status = source_status.merge(source_status.load(source_status.REPO_PATH),
+                                     source_status.load(status_path))
         gate = quota_gate(state, args.model, now) if args.backend == "agy" else ""
         calls, tokens, done = day_usage(rows, today, args.dry_run)
         if not gate and calls >= args.max_calls:
@@ -727,22 +884,52 @@ def cmd_run(args, env):
             ledger.add("gate", reason=gate)
         else:
             run_dir = state / "runs" / run_id
-            origins = pick(env, rows, state, run_id, args.asin, args.max_rewrites)
+            today_d = dt.date.fromisoformat(today)
+            skip = set() if args.asin else not_due_asins(status, today_d)
+            origins = pick(env, rows, state, run_id, args.asin, args.max_rewrites, exclude=skip)
             stats["candidates"] = len(origins)
-            for origin in origins:
+            seen = set()
+
+            def room():
                 if done + stats["prs" if not args.dry_run else "passed"] >= args.max_articles:
-                    break
+                    return False
                 if calls + stats["calls"] >= args.max_calls or tokens + stats["tokens"] >= args.max_tokens:
                     ledger.add("gate", reason="daily cap reached during run")
-                    break
+                    return False
                 if stats["prechecked"] >= args.max_prechecks:
-                    break
+                    return False
                 if jst_day(env.now()) != today:
                     # 日をまたいだら止める (slug の日付と 1 日の上限の数え方がずれる)。続きは次の回
                     ledger.add("gate", reason="JST date changed during run")
+                    return False
+                return True
+
+            stopped = False
+            for origin in origins:
+                if not room():
                     break
-                if process(env, ledger, locks, args, state, run_dir, origin, today, stats, prs) == "stop":
+                seen.add(origin["asin"])
+                if process(env, ledger, locks, args, state, run_dir, origin, today, stats, prs,
+                           status=status, check_due=not args.asin) == "stop":
+                    stopped = True
                     break
+            # 2 段目 (候補供給 P1b, §4.7 M4): 新規の候補を見終わって本数に届かなければ、
+            # 同じ回の残りの枠で書き直し待ちから拾う
+            left = args.max_articles - done - stats["prs" if not args.dry_run else "passed"]
+            if not stopped and not args.asin and args.max_rewrites > 0 and left > 0 and room():
+                more = [o for o in pick(env, rows, state, run_id, None, left, exclude=skip | seen)
+                        if o.get("pool") == "rewrite-queue" and o["asin"] not in seen]
+                stats["second_stage"] = len(more)
+                for origin in more:
+                    if not room():
+                        break
+                    seen.add(origin["asin"])
+                    if process(env, ledger, locks, args, state, run_dir, origin, today, stats, prs,
+                               status=status) == "stop":
+                        stopped = True
+                        break
+            if not stopped and not args.asin:
+                recheck_articles(env, ledger, args, status, today, stats)
             if prs and not args.dry_run:
                 try:
                     url = record_origin(env, prs, run_id, state)
@@ -750,6 +937,14 @@ def cmd_run(args, env):
                         ledger.add("origin", url=url)
                 except Exception as e:  # noqa: BLE001 — 台帳の PR が出なくても記事は出ている
                     ledger.add("error", stage="origin", error="origin", detail=str(e)[:500])
+            if not args.dry_run:
+                source_status.save(status_path, status)
+                try:
+                    url = publish_status(env, run_id, state, status)
+                    if url:
+                        ledger.add("status_pr", url=url)
+                except Exception as e:  # noqa: BLE001 — 状態の PR が出なくても K8 の写しは残る
+                    ledger.add("error", stage="status", error="status", detail=str(e)[:500])
         if stats["quota_stop"]:
             code = 3
     except Exception as e:  # noqa: BLE001
@@ -759,6 +954,11 @@ def cmd_run(args, env):
                    detail=traceback.format_exc()[-1500:])
     finally:
         locks.release_all()
+        if status is not None and not args.dry_run:
+            try:
+                source_status.save(status_path, status)  # 途中で落ちても調べた結果は残す
+            except OSError:
+                pass
     stats["secs"] = round(stats["secs"], 1)
     ledger.add("run_end", **stats)
     print(json.dumps(dict(stats, run_id=run_id), ensure_ascii=False))
