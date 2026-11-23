@@ -585,6 +585,7 @@ def source_candidates(asin, no_web=False):
         third.append((url, (src.get("title") or "").strip()))
     third = third[:8]
     news = set()
+    first_party = set()
     if no_web:
         try:
             posts = list(sc.first_party_posts(asin))[:3]
@@ -592,12 +593,14 @@ def source_candidates(asin, no_web=False):
             print(f"warning: first-party posts read failed: {e}", file=sys.stderr)
             posts = []
         listed_third = {u for u, _ in third}
+        # ASIN で紐づいた実使用記事は、事前収集 (third) に同じ URL があっても珍しい語を求めない
+        first_party.update(u for u in posts if u not in dead)
         third = [(u, "おもちゃいろ (omcha.jp) の実使用記事") for u in posts
                  if u not in listed_third and u not in dead] + third
         # 候補供給 P1a: Google ニュースの転送 URL を 01-fetch-products が元記事に解いた分
         # (data/raw/news_resolved.json)。書き手はページを開けないので、元記事の URL を抜粋の
         # 対象にする。ニュース検索は商品名の語で引くため、同じブランド・シリーズの別の商品の
-        # 記事が混ざる。citable_urls は、この候補にだけ「商品に固有の珍しい語」を追加で求める
+        # 記事が混ざる (citable_urls が「商品に固有の珍しい語」を求める。下の rare_tokens)
         listed_third = {u for u, _ in third} | dead
         for u, t in _resolved_news(asin)[:_NEWS_MAX]:
             if u not in listed_third:
@@ -608,7 +611,8 @@ def source_candidates(asin, no_web=False):
     # 前の記事は「本文から参照していない」だけで非販売を 2 サイト以上持っていることが多い
     listed = {u for u, _ in third} | dead  # リンク切れは前の記事の出典としても出さない
     prior = [u for u in sc.prior_article_urls(asin) if u not in listed][:8]
-    return {"mall": mall, "third": third, "prior": prior, "dead": dead, "news": news, "asin": asin}
+    return {"mall": mall, "third": third, "prior": prior, "dead": dead, "news": news,
+            "first_party": first_party, "asin": asin}
 
 
 _NEWS_MAX = 3  # ニュースの候補は 1 商品 3 件まで (抜粋の取得は合計 _EXCERPT_MAX_URLS 件で切る)
@@ -675,18 +679,37 @@ def rare_tokens(asin):
     9 件・うち本物が 6〜7 件になった。
     """
     import source_pages
+    if not asin:
+        return set()
     try:
         item = _amazon_item(asin)
-    except SystemExit:
+    except (SystemExit, OSError, ValueError):
         return set()
     toks = source_pages.identity_tokens(item.get("title") or "", (item.get("jan_code") or "",))
     df = _catalog_token_df()
     return {t for t in toks if t not in source_pages._GENERIC_TOKENS and df.get(t, 0) <= _RARE_MAX_DF}
 
 
-def _news_identifies(asin, hits):
+def _rare_word_hit(asin, hits):
     rare = rare_tokens(asin)
     return any(h in rare for h in hits or [])
+
+
+def _strong(hits):
+    import source_pages
+    return source_pages.strong_match(hits)
+
+
+def _needs_rare_word(candidates, url):
+    """この候補に「商品に固有の珍しい語」を求めるか。omcha.jp の実使用記事 (ASIN で紐づけ済み) 以外の全部。
+
+    最初はニュースの候補だけに求めた (P1a)。同じ測り方で Tavily の事前収集・前の記事の出典を見ると、
+    今の条件 (strong_match + identifies_product) を通った 39 件のうち 10 件は珍しい語が無く、10 件とも
+    タグ・カテゴリの一覧、メーカーのトップ、別の商品のページ、2012 年の別の記事だった (2026-11-23)。
+    「仮面ライダーマイス」「マンハッタントーイ」のようなシリーズ名・ブランド名が 5 字以上の
+    商品固有の語として数えられ、ブランド名と組で identifies_product を通っていた。
+    """
+    return url not in (candidates.get("first_party") or ())
 
 
 def excerpt_targets(candidates):
@@ -716,7 +739,7 @@ def citable_urls(candidates, excerpts):
             continue
         status, snip, hits = res[0], res[1], res[2]
         if status == "ok" and snip and source_pages.strong_match(hits) and identifies_product(hits):
-            if url in (candidates.get("news") or ()) and not _news_identifies(candidates.get("asin"), hits):
+            if _needs_rare_word(candidates, url) and not _rare_word_hit(candidates.get("asin"), hits):
                 continue
             out.append(url)
     return out
@@ -753,11 +776,12 @@ def _sources_note(asin, fetch_excerpts=False, fetch=None, no_web=False, excerpts
         out = [f"   - {url}" + (f" ({title[:60]})" if title else "")]
         extra = _excerpt_line(excerpts.get(url), strict=no_web) if excerpts else None
         res = excerpts.get(url) if excerpts else None
-        if (extra and url in cand.get("news", ()) and res and res[0] == "ok" and res[1]
-                and not _news_identifies(asin, res[2])):
-            # citable_urls と同じ判定。ニュース検索の結果で、商品に固有の語が本文に無いもの
-            extra = ("     参考 (ニュース検索の結果で、本文にこの商品に固有の名前・型番が無い。同じブランド・"
-                     f"シリーズの別の商品の記事の可能性が高いので、出典にしない): {res[1]}")
+        if (no_web and extra and _needs_rare_word(cand, url) and res and res[0] == "ok" and res[1]
+                and _strong(res[2]) and identifies_product(res[2])
+                and not _rare_word_hit(asin, res[2])):
+            # citable_urls と同じ判定。本文に商品に固有の語が無いもの
+            extra = ("     参考 (本文にこの商品に固有の名前・型番が無い。同じブランド・シリーズの別の商品や"
+                     f"一覧のページの可能性が高いので、出典にしない): {res[1]}")
         if extra:
             out.append(extra)
         return out
