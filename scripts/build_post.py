@@ -63,6 +63,7 @@ from buy_offer_rules import (
 from card_reason import card_reason
 from age_semantics import (
     ADULT_AGE_MONTHS,
+    age_is_estimate,
     is_seasonal_decoration,
     override_age_months,
     seasonal_names,
@@ -4727,6 +4728,9 @@ def main() -> None:
             # navi-brain#165 T3/T4: 購入ボタンの行き先と 💴 の見出し。表示だけに使い、
             # front matter / JSON-LD には入れない。
             data["buy_offer"] = _resolve_buy_offer(data)
+            # #9217: FAQ が「公式の対象年齢の記載は無い」と答えている記事は、冒頭の
+            # 「対象年齢：」を「対象年齢（目安）：」と書く。表示だけに使う。
+            data["age_is_estimate"] = age_is_estimate(data)
             # #165 T16: 書き直しで消えた旧 slug の転送 (rewrite_ledger の old_slug すべてと台帳の slug)
             old_aliases = rewrite_identity.old_slug_aliases(page_asin, slug, rewrite_old_slugs, rewrite_ident)
             if old_aliases:

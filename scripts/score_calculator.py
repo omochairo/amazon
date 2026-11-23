@@ -26,6 +26,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
+from age_semantics import age_is_estimate
 from brand_normalizer import NormalizedBrand
 from buy_offer_rules import cheapest_purchasable, priced_site_keys
 from filter_raw_per_asin import exclude_title_only
@@ -588,6 +589,13 @@ def calculate(
     bt, br = _brand_tier_score(brand)
     sf, sr = _safety_score(brand, product)
     ag, ar, age_range = _age_fit_score(product)
+    # #9217: FAQ が「公式の対象年齢の記載は無い」と答えている記事の年齢は、生成時の
+    # 目安でしかない。明記 (10) の扱いをやめ、数字の無い表記と同じ 6 にする。
+    # age_range (コスパの年数) は目安として使い続ける。
+    if ag > 6 and age_is_estimate(article, repo_root / "data" / "age_overrides.json"):
+        shown = str(product.get("target_age") or product.get("age") or product.get("age_band") or "").strip()
+        ag = 6
+        ar = f"メーカーの対象年齢の表記は見つかっていません。『{shown[:20]}』は目安です。お子さまの月齢・発達状況に合わせてご検討ください。"
     ev, er = _edu_value_score(article, brand)
     me, mr = _media_exposure_score(asin, brand, repo_root)
     mm, mmr = _multi_market_score(asin, brand, repo_root, product)
