@@ -4,7 +4,7 @@
     python scripts/shop_sale_watch.py            # 読んで、足すものを出すだけ (書かない)
     python scripts/shop_sale_watch.py --write    # sale_events.yaml の末尾に足す
 
-60-shop-sale-watch.yml が毎日回し、足したものを PR にして自動マージする。
+62-shop-sale-watch.yml が毎日 2 回回し、足したものを PR にして自動マージする。
 sale_events.yaml は navi と omcha.jp・home.omcha.jp のセール日程の正本なので、
 ここで足した日程は両方のサイトに出る。元は omochairo/omcha-ops の
 scripts/shop_sale_watch.py (2026-10-22) で、正本をこちらに寄せたときに移した。
@@ -30,9 +30,12 @@ Amazon は sale_announcements.py が読む公式フィードの発表のうち�
 題名に全部あるものだけ足す (amazon_events)。Amazon.co.jp 本体は読まない。
 
 決めごと:
-  - **人が書いたイベントは書き換えない。** 足すのは、id が無く、同じモールの登録済みの
-    期間とも重ならないものだけ。読んだ期間が既にある自動のイベントと食い違えば、
-    書き換えずに赤で終わる (公式が日程を変えたのか読み違いかは人が見る)
+  - **人が書いたイベントは書き換えない。** 足すのは、id が無く、同じモールに段階の開始日が
+    前後 1 日のイベントも無いものだけ (期間が重なるだけの別のセールは足す。
+    navi-brain#206 の課題 ⑥)。読んだ期間が既にある自動のイベント (auto: shop_sale_watch) と
+    食い違えば、書き換えずに赤で終わる (公式が日程を変えたのか読み違いかは人が見る)。
+    id が同じでも auto の無いイベントは人のものとして読み飛ばす (人が先行セールを足す・
+    時刻を直すと、セールが終わるまで赤が続いていた。課題 ⑦)
   - **ページは読めたが期間が無いのは普通** (開催していない時期)。ページそのものが
     読めない・期待する見出しが無いときは赤で終わる (検知が止まったまま緑にしない)
   - **Yahoo の「25時59分」は翌日 1:59 にする**
@@ -74,6 +77,8 @@ MAX_RELEASES = 2
 # これより長い期間・先の日付は読み違いとみなす
 MAX_SPAN_DAYS = 31
 MAX_LEAD_DAYS = 120
+# 自動で足したイベントの印 (sale_events.yaml の auto)。人が直したら消してもらう
+AUTO_MARK = "shop_sale_watch"
 
 RAKUTEN_PAGES = (
     {"kind": "marathon", "name": "楽天市場 お買い物マラソン",
@@ -273,7 +278,9 @@ def amazon_events(candidates: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]
     for cand in candidates.values():
         if not sale_announcements.auto_eligible(cand):
             continue
-        official = [s for s in cand["sources"] if not s.get("news")]
+        # 出典は期間を読めた公式の発表 (日付の無い第 1 報を出典にしない)
+        official = ([s for s in cand["sources"] if not s.get("news") and s.get("dated")]
+                    or [s for s in cand["sources"] if not s.get("news")])
         period = cand["official_periods"][0]
         start = dt.datetime.combine(period["start"], dt.time(*period["start_time"]), JST)
         end = dt.datetime.combine(period["end"], dt.time(*period["end_time"]), JST)
@@ -289,10 +296,13 @@ def plan(found: Sequence[Dict[str, Any]], events: Sequence[Dict[str, Any]]
          ) -> Tuple[List[Dict[str, Any]], List[str]]:
     """足すイベントと、食い違い (赤で終わる理由) を返す。"""
     by_id = {e.get("id"): e for e in events if isinstance(e, dict)}
-    spans = scr.registered_spans(events)
+    infos = scr.registered_events(events)
     add, conflicts = [], []
     for f in found:
         have = by_id.get(f["id"])
+        if have is not None and have.get("auto") != AUTO_MARK:
+            # 人が書いた・人が直して auto を消したイベント。突き合わせも追加もしない
+            continue
         if have is None:
             # 同じ回のリリースが 2 本あると同じ id を 2 回読む。2 本目は 1 本目と突き合わせる
             have = next(({"phases": [{"start": _stamp(a["start"]), "end": _stamp(a["end"])}]}
@@ -304,9 +314,12 @@ def plan(found: Sequence[Dict[str, Any]], events: Sequence[Dict[str, Any]]
                 conflicts.append("{}: 登録済みの期間と読んだ期間が違う ({} 〜 {})".format(
                     f["id"], _stamp(f["start"]), _stamp(f["end"])))
             continue
-        day = f["start"].date()
-        if any(lo <= day <= hi and shop == f["shop"] for lo, hi, shop in spans):
-            # 人が別の id で登録済み
+        day = f["start"].astimezone(JST).date()
+        one = dt.timedelta(days=1)
+        if any(info["shop"] == f["shop"] and any(abs(s - day) <= one for s in info["starts"])
+               and not sale_announcements.clearly_different(f["name"], info["name"])
+               for info in infos):
+            # 人が別の id で登録済み (段階の開始日が前後 1 日。名前が別のセールなら足す)
             continue
         add.append(f)
     return add, conflicts
@@ -327,7 +340,7 @@ def render(f: Dict[str, Any], today: dt.date) -> str:
         "  name: {}".format(q(f["name"])),
         "  source: {}".format(q(f["source"])),
         "  verified_on: {}".format(today.isoformat()),
-        "  auto: shop_sale_watch",
+        "  auto: {}".format(AUTO_MARK),
         "  phases:",
         "    - label: {}".format(q(f["name"])),
         "      headline: {}".format(q(f["name"])),
@@ -357,7 +370,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # Amazon は公式フィードの発表から (フィードが読めないのは reminder 側が赤にする)
     candidates, _ = sale_announcements.collect(
         scr.load_yaml(scr.CALENDAR), scr.registered_ids(events), now.astimezone(JST).date(),
-        scr.registered_spans(events))
+        scr.registered_spans(events), scr.registered_events(events))
     found += amazon_events(candidates)
     add, conflicts = plan(found, events)
     for f in found:

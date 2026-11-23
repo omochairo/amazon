@@ -262,7 +262,7 @@ def test_plan_skips_period_registered_by_hand_for_same_shop_only():
 
 
 def test_plan_does_not_rewrite_and_reports_changed_period():
-    events = [{"id": "rakuten-marathon-2026-10-24", "shop": "rakuten",
+    events = [{"id": "rakuten-marathon-2026-10-24", "shop": "rakuten", "auto": "shop_sale_watch",
                "phases": [{"start": "2026-10-24T20:00:00+09:00",
                            "end": "2026-10-27T01:59:59+09:00"}]}]
     add, conflicts = w.plan(_found(), events)
