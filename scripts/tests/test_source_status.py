@@ -89,3 +89,59 @@ def test_first_seen_and_save_load(tmp_path):
     assert list(json.loads(p.read_text(encoding="utf-8"))) == ["B0A", "B0B"]
     assert ss.load(p)["B0A"]["state"] == "insufficient"
     assert ss.load(tmp_path / "missing.json") == {}
+
+
+def _git(cwd, *a, env=None):
+    import subprocess
+    subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True, env=env)
+
+
+def test_first_seen_from_git_log_once(tmp_path, monkeypatch):
+    import os
+    env = {**os.environ, "GIT_AUTHOR_DATE": "2026-10-05T12:00:00", "GIT_COMMITTER_DATE": "2026-10-05T12:00:00",
+           "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@e", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@e"}
+    _git(tmp_path, "init", "-q")
+    f = tmp_path / "data/raw/per_asin/B0GAAAAAAA/amazon.json"
+    f.parent.mkdir(parents=True)
+    f.write_text("{}", encoding="utf-8")
+    _git(tmp_path, "add", "."); _git(tmp_path, "commit", "-qm", "a", env=env)
+    env2 = {**env, "GIT_AUTHOR_DATE": "2026-11-10T12:00:00", "GIT_COMMITTER_DATE": "2026-11-10T12:00:00"}
+    f.write_text('{"x":1}', encoding="utf-8")  # 更新は「初めて入った日」を動かさない
+    _git(tmp_path, "commit", "-qam", "b", env=env2)
+    monkeypatch.setattr(ss, "_git_calls", 0)
+    ss._shallow.clear()
+    hist = str(tmp_path / "none")
+    assert ss.first_seen("B0GAAAAAAA", hist, git_cwd=tmp_path) == "2026-10-05"
+    assert ss.first_seen("B0GZZZZZZZ", hist, git_cwd=tmp_path) is None  # ファイルが無い
+    # 状態に持っている正確な値があれば git を呼ばない
+    n = ss._git_calls
+    assert ss.first_seen("B0GAAAAAAA", hist, cached={"first_seen": "2026-10-05"}, git_cwd=tmp_path) == "2026-10-05"
+    assert ss._git_calls == n
+    # use_git=False (通常品) も呼ばない
+    assert ss.first_seen("B0GAAAAAAA", hist, use_git=False, git_cwd=tmp_path) is None
+    assert ss._git_calls == n
+    # 実行 1 回あたりの上限
+    monkeypatch.setattr(ss, "_git_calls", ss.GIT_FIRST_SEEN_LIMIT)
+    assert ss.first_seen("B0GAAAAAAA", hist, git_cwd=tmp_path) is None
+
+
+def test_first_seen_price_history_wins_and_no_git_outside_repo(tmp_path, monkeypatch):
+    monkeypatch.setattr(ss, "_git_calls", 0)
+    ss._shallow.clear()
+    (tmp_path / "B0H.jsonl").write_text('{"ts":"2026-09-01T00:00:00Z"}\n', encoding="utf-8")
+    assert ss.first_seen("B0H", str(tmp_path), git_cwd=tmp_path) == "2026-09-01"
+    assert ss.first_seen("B0X", str(tmp_path), git_cwd=tmp_path) is None  # git 管理外 → None (落ちない)
+
+
+def test_record_replaces_approx_with_exact():
+    st = {}
+    e = ss.record(st, "B0N", sites=0, need=1, checked_urls=[], today=TODAY, new_product=True)
+    assert e["first_seen_approx"] and e["first_seen"] == "2026-11-23"
+    e = ss.record(st, "B0N", sites=0, need=1, checked_urls=[], today=dt.date(2026, 11, 24), new_product=True,
+                  first="2026-10-05")
+    assert e["first_seen"] == "2026-10-05" and "first_seen_approx" not in e
+    # 近似のまま (git が使えない) なら近似を保つ
+    st = {}
+    ss.record(st, "B0M", sites=0, need=1, checked_urls=[], today=TODAY, new_product=True)
+    e = ss.record(st, "B0M", sites=0, need=1, checked_urls=[], today=dt.date(2026, 11, 24), new_product=True)
+    assert e["first_seen"] == "2026-11-23" and e["first_seen_approx"]

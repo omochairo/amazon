@@ -62,6 +62,11 @@ jobs:
       - name: Set API health log path
         run: echo "API_HEALTH_LOG=$RUNNER_TEMP/api_health.jsonl" >> "$GITHUB_ENV"
 
+      # 候補供給 P2 (仕様 §4.5): この回で初めて窓に入った商品を、34-third-party-sources の
+      # 収集待ち列 (data/raw/per_asin/_tp_queue.json) に足す。取り込みの前の窓を覚えておく。
+      - name: Snapshot window before fetch (third-party queue)
+        run: python scripts/tp_queue.py snapshot --out "$RUNNER_TEMP/window_before.json"
+
       - name: Fetch Amazon Data
         run: |
           # #810 follow-up: keyword×top100 が saturation し fresh ASIN 供給が
@@ -188,6 +193,11 @@ jobs:
       - name: Filter raw per ASIN (Layer 2.5)
         if: ${{ always() }}
         run: python scripts/filter_raw_per_asin.py
+
+      # 候補供給 P2: この回で初めて入った商品を収集待ち列に足す (34 が窓から落ちた後も拾う)
+      - name: Queue newly seen ASINs for third-party sources
+        if: ${{ always() }}
+        run: python scripts/tp_queue.py add --before "$RUNNER_TEMP/window_before.json"
 
       # 候補供給 P1a: per_asin/<ASIN>/news.json の Google ニュースの転送 URL を元記事の URL に
       # 解き、data/raw/news_resolved.json に覚える (記事レーンが本文を開いて出典の候補にする)。
