@@ -81,6 +81,38 @@ def override_age_months(raw: dict[str, Any], path: Path | None = None) -> int | 
     return _load_overrides(str(path or AGE_OVERRIDES_PATH)).get(str(asin).upper())
 
 
+# FAQ の答えで「公式の対象年齢の記載は無い」と言っている文 (#9217)。
+# 例: 「明確な対象年齢の記載はありませんが」「公式の対象年齢は明記されていませんが」
+#     「対象年齢は特に明記されていませんが」「明確な対象年齢の下限は記載されていませんが」
+# 誤検知よけ: 「上限年齢の記載はありません」(下限は書いてある) は拾わない。主語と「記載」の
+# 間に数字があれば年齢を言い切っている文 (「3歳以上と明記されており、…ありません」) なので
+# 拾わない。「記載」と否定の間に読点を挟ませない (「記載があり、問題はありません」)。
+_NO_OFFICIAL_AGE_RE = re.compile(
+    r"(?<!上限)(?<!下限)(対象年齢|推奨年齢|年齢)(?!別)[^。\d０-９]{0,20}"
+    r"(記載|明記|表記|公表|明示|設定|指定|定め)[^。、]{0,10}"
+    r"(なし|無し|ありません|ございません|されていません|されておらず|されていない|がない|が無い|はない|は無い|はなく)"
+)
+
+
+def faq_says_no_official_age(raw: dict[str, Any]) -> bool:
+    """記事 json の FAQ (faq / faq_extended) が「公式の対象年齢の記載は無い」と答えているか。"""
+    for key in ("faq", "faq_extended"):
+        for item in raw.get(key) or []:
+            if isinstance(item, dict) and _NO_OFFICIAL_AGE_RE.search(str(item.get("answer") or "")):
+                return True
+    return False
+
+
+def age_is_estimate(raw: dict[str, Any], path: Path | None = None) -> bool:
+    """記事 json の対象年齢が、メーカーの表記ではなく生成時の目安か (#9217)。
+
+    FAQ が「公式の記載は無い」と答えていて、data/age_overrides.json に出典付きの
+    値も無いとき真。真なら、ページの「対象年齢」は目安と書き、知育スコアも明記扱い
+    にしない (推測で埋めないための約束。#9186)。
+    """
+    return override_age_months(raw, path) is None and faq_says_no_official_age(raw)
+
+
 def seasonal_names(raw: dict[str, Any]) -> tuple[Any, ...]:
     """記事 json から、is_seasonal_decoration に渡す商品名を集める。"""
     product = raw.get("product") or {}
