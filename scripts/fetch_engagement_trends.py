@@ -78,14 +78,24 @@ SOURCES: dict[str, dict[str, str]] = {
 }
 
 
-def fetch_feed(url: str, label: str) -> list[dict[str, Any]]:
+def fetch_feed(url: str, label: str, errors: list | None = None) -> list[dict[str, Any]]:
+    """RSS を取得する。通信失敗は ``[]`` を返し、``errors`` が渡されていれば理由を積む
+    (0 件の正常応答は積まない)。"""
     try:
         resp = requests.get(url, headers={"User-Agent": UA}, timeout=15, allow_redirects=True)
         resp.raise_for_status()
     except Exception as e:
         print(f"[WARN] {label} fetch failed: {e}", file=sys.stderr)
+        if errors is not None:
+            errors.append(str(e))
         return []
     feed = feedparser.parse(resp.content)
+    if not feed.entries and not getattr(feed, "version", ""):
+        # HTML のブロック画面や壊れた XML は「0 件の正常応答」ではなく失敗として扱う。
+        print(f"[WARN] {label} unparsable feed (no RSS/Atom structure)", file=sys.stderr)
+        if errors is not None:
+            errors.append("unparsable feed")
+        return []
     entries: list[dict[str, Any]] = []
     for e in feed.entries:
         title = (e.get("title") or "").strip()
@@ -160,9 +170,13 @@ def collect_candidates(now: datetime) -> dict[str, Any]:
     candidates: list[dict[str, Any]] = []
     raw_trends: list[dict[str, Any]] = []
     fetch_summary: dict[str, dict[str, int]] = {}
+    failed_sources: list[str] = []
 
     for source, cfg in SOURCES.items():
-        entries = fetch_feed(cfg["url"], source)
+        errs: list = []
+        entries = fetch_feed(cfg["url"], source, errors=errs)
+        if errs:
+            failed_sources.append(source)
         mode = cfg["mode"]
         fetch_summary[source] = {"entries": len(entries), "kept": 0}
 
@@ -197,6 +211,7 @@ def collect_candidates(now: datetime) -> dict[str, Any]:
         "candidates": unique,
         "raw_trends": raw_trends,
         "fetch_summary": fetch_summary,
+        "failed_sources": failed_sources,
     }
 
 
@@ -214,6 +229,13 @@ def main() -> int:
     out_path = out_dir / f"{today}.json"
 
     result = collect_candidates(now)
+    failed = result["failed_sources"]
+    if failed and len(failed) == len(SOURCES):
+        # 全フィード失敗 (ネット断・UA ブロック等): 空のファイルを書いて緑にしない。
+        print(f"[ERROR] all {len(failed)} feeds failed; not writing {out_path}", file=sys.stderr)
+        return 1
+    if failed:
+        print(f"[WARN] {len(failed)}/{len(SOURCES)} feeds failed: {', '.join(failed)}", file=sys.stderr)
     top_candidates = result["candidates"][: args.top_n]
 
     payload = {

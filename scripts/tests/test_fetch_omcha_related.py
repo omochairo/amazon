@@ -245,7 +245,8 @@ class MainFlowTest(unittest.TestCase):
             fetch_omcha_related.main()
         # min_score は iro/v2 の 0..100 スケール既定値 (Issue #6103)。
         mock_get.assert_called_once_with(
-            "木製 知育", count=3, min_score=internal_links.DEFAULT_MIN_SCORE
+            "木製 知育", count=3, min_score=internal_links.DEFAULT_MIN_SCORE,
+            strict=True,
         )
         # cache 書き込み確認
         cache = self.out_dir / "per_asin" / "B000NEW001" / "omcha_related.json"
@@ -303,7 +304,8 @@ class AsinsArgTest(unittest.TestCase):
                           return_value=fake_items) as mock_get:
             fetch_omcha_related.main()
         mock_get.assert_called_once_with(
-            "木製 知育", count=3, min_score=internal_links.DEFAULT_MIN_SCORE
+            "木製 知育", count=3, min_score=internal_links.DEFAULT_MIN_SCORE,
+            strict=True,
         )
         cache = self.out_dir / "per_asin" / "B000AAAA01" / "omcha_related.json"
         self.assertTrue(cache.exists())
@@ -321,7 +323,8 @@ class AsinsArgTest(unittest.TestCase):
                           return_value=[]) as mock_get:
             fetch_omcha_related.main()  # raise しないこと
         mock_get.assert_called_once_with(
-            "ブロック", count=3, min_score=internal_links.DEFAULT_MIN_SCORE
+            "ブロック", count=3, min_score=internal_links.DEFAULT_MIN_SCORE,
+            strict=True,
         )
         self.assertFalse((self.out_dir / "per_asin" / "B000UNKNOWN").exists())
         self.assertTrue(
@@ -337,7 +340,7 @@ class AsinsArgTest(unittest.TestCase):
             "--sleep", "0",
         ]
 
-        def raise_for_first(keyword, count, min_score):
+        def raise_for_first(keyword, count, min_score, strict):
             if keyword == "木製 知育":
                 raise RuntimeError("boom")
             return []
@@ -345,15 +348,29 @@ class AsinsArgTest(unittest.TestCase):
         with patch.object(sys, "argv", argv), \
              patch.object(fetch_omcha_related, "get_related_articles",
                           side_effect=raise_for_first):
-            fetch_omcha_related.main()  # 例外を外に投げず継続すること (終了コード0)
-        cache1 = json.loads(
-            (self.out_dir / "per_asin" / "B000AAAA01" / "omcha_related.json")
-            .read_text(encoding="utf-8")
+            rc = fetch_omcha_related.main()  # 一部失敗は継続・終了コード0
+        self.assertEqual(rc, 0)
+        # 失敗した ASIN は空キャッシュを書かず、queried 印も付けない (次回再試行)
+        self.assertFalse(
+            (self.out_dir / "per_asin" / "B000AAAA01" / "omcha_related.json").exists()
         )
-        self.assertEqual(cache1["items"], [])
         self.assertTrue(
             (self.out_dir / "per_asin" / "B000BBBB02" / "omcha_related.json").exists()
         )
+
+    def test_all_fetches_fail_returns_nonzero_and_writes_nothing(self):
+        argv = [
+            "fetch_omcha_related.py",
+            "--out", str(self.out_dir),
+            "--articles-dir", str(self.articles),
+            "--asins", "B000AAAA01,B000BBBB02",
+            "--sleep", "0",
+        ]
+        with patch.object(sys, "argv", argv),              patch.object(fetch_omcha_related, "get_related_articles",
+                          side_effect=RuntimeError("down")):
+            rc = fetch_omcha_related.main()
+        self.assertEqual(rc, 1)
+        self.assertFalse((self.out_dir / "per_asin").exists())
 
     def test_no_asins_flag_keeps_default_stale_first_behavior(self):
         # --asins 未指定なら、fresh (直近 query 済み) ASIN を除外する既存挙動のまま。
@@ -370,7 +387,8 @@ class AsinsArgTest(unittest.TestCase):
                           return_value=[]) as mock_get:
             fetch_omcha_related.main()
         mock_get.assert_called_once_with(
-            "ブロック", count=3, min_score=internal_links.DEFAULT_MIN_SCORE
+            "ブロック", count=3, min_score=internal_links.DEFAULT_MIN_SCORE,
+            strict=True,
         )
 
 

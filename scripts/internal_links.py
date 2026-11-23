@@ -68,6 +68,7 @@ def get_related_articles(
     min_score: int = DEFAULT_MIN_SCORE,
     base_url: str | None = None,
     timeout: int = DEFAULT_TIMEOUT,
+    strict: bool = False,
 ) -> list[dict[str, Any]]:
     """Return up to ``count`` omcha.jp posts matching ``keyword``.
 
@@ -76,6 +77,9 @@ def get_related_articles(
     contract guarantee (it also covers a v1 base set via ``OMCHA_API_BASE``);
     against v2 it is a no-op. Returns ``[]`` on any failure so callers can
     treat absence as "no related content" without try/except.
+    With ``strict=True`` a request/parse failure (or a body without a
+    ``results`` list) raises instead, so batch callers can tell "failed"
+    from "no hits".
 
     Honors two env vars:
     - ``OMCHA_API_BASE`` overrides the API base URL (default omcha.jp v2).
@@ -102,9 +106,13 @@ def get_related_articles(
         body = resp.json()
     except Exception as e:
         logger.warning("omcha related fetch failed: keyword=%r err=%s", keyword, e)
+        if strict:
+            raise
         return []
     results = body.get("results") if isinstance(body, dict) else None
     if not isinstance(results, list):
+        if strict:
+            raise ValueError("omcha related: response has no 'results' list")
         return []
     out: list[dict[str, Any]] = []
     for r in results:

@@ -100,8 +100,12 @@ def _is_acceptable_redirect(key: str, target: str, returned_title: str) -> bool:
 
 
 def fetch_summary(target: str, session: requests.Session, timeout: float = 8.0,
-                  source_key: str | None = None) -> dict[str, Any] | None:
+                  source_key: str | None = None,
+                  errors: list | None = None) -> dict[str, Any] | None:
     """Wikipedia 要約を 1 件取得。404/disambig/error は None を返す。
+
+    ``errors`` が渡されていれば、通信失敗・404 以外の HTTP エラー・壊れた JSON のとき
+    だけ理由を積む (404 / disambig / 空 extract / redirect 不一致は「該当なし」で積まない)。
 
     source_key は wiki_mapping のキー (brand 名)。title!=target の redirect が
     関係ない記事かを判定するために使う (#1363)。
@@ -111,17 +115,23 @@ def fetch_summary(target: str, session: requests.Session, timeout: float = 8.0,
         resp = session.get(url, timeout=timeout, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
     except requests.RequestException as e:
         logger.warning("net error for %r: %s", target, e)
+        if errors is not None:
+            errors.append(str(e))
         return None
     if resp.status_code == 404:
         logger.info("404 for %r", target)
         return None
     if resp.status_code != 200:
         logger.warning("HTTP %s for %r", resp.status_code, target)
+        if errors is not None:
+            errors.append(f"HTTP {resp.status_code}")
         return None
     try:
         data = resp.json()
     except ValueError:
         logger.warning("invalid JSON for %r", target)
+        if errors is not None:
+            errors.append("invalid JSON")
         return None
     if data.get("type") == "disambiguation":
         logger.info("disambig for %r, skipping", target)
@@ -160,7 +170,8 @@ def build_cache(
     limit: int | None = None,
 ) -> tuple[dict[str, Any], dict[str, int]]:
     out: dict[str, Any] = {}
-    stats = {"local": 0, "wiki_fresh": 0, "wiki_fetched": 0, "wiki_skipped": 0}
+    stats = {"local": 0, "wiki_fresh": 0, "wiki_fetched": 0, "wiki_skipped": 0, "wiki_failed": 0,
+             "wiki_attempted": 0}
     ttl = timedelta(days=ttl_days)
     session = requests.Session()
     fetched = 0
@@ -192,9 +203,17 @@ def build_cache(
             else:
                 stats["wiki_skipped"] += 1
             continue
-        result = fetch_summary(target, session, source_key=key)
+        errs: list = []
+        result = fetch_summary(target, session, source_key=key, errors=errs)
         fetched += 1
-        if result is None:
+        stats["wiki_attempted"] += 1
+        if errs:
+            # 通信・HTTP 障害: 「該当なし」と区別し、前回の記録があれば残す
+            # (落とすと障害のたびにツールチップが消える)。
+            stats["wiki_failed"] += 1
+            if cached:
+                out[key] = cached
+        elif result is None:
             stats["wiki_skipped"] += 1
         else:
             result["target"] = target
@@ -225,6 +244,12 @@ def main() -> int:
             logger.warning("could not read prior cache %s, starting fresh", out_path)
 
     entries, stats = build_cache(mapping, prior_entries, args.ttl_days, args.sleep, args.limit)
+    if stats["wiki_failed"] and stats["wiki_failed"] == stats["wiki_attempted"]:
+        # 取りに行った分が全部通信・HTTP 障害: 何も更新できていないので赤にする。
+        logger.error("all %d Wikipedia request(s) failed; not writing %s", stats["wiki_failed"], out_path)
+        return 1
+    if stats["wiki_failed"]:
+        logger.warning("%d Wikipedia request(s) failed (partial) | stats=%s", stats["wiki_failed"], stats)
     doc = {
         "version": 1,
         "generated_at": _now_iso(),
