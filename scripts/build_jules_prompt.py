@@ -584,6 +584,7 @@ def source_candidates(asin, no_web=False):
             continue
         third.append((url, (src.get("title") or "").strip()))
     third = third[:8]
+    news = set()
     if no_web:
         try:
             posts = list(sc.first_party_posts(asin))[:3]
@@ -593,11 +594,99 @@ def source_candidates(asin, no_web=False):
         listed_third = {u for u, _ in third}
         third = [(u, "おもちゃいろ (omcha.jp) の実使用記事") for u in posts
                  if u not in listed_third and u not in dead] + third
+        # 候補供給 P1a: Google ニュースの転送 URL を 01-fetch-products が元記事に解いた分
+        # (data/raw/news_resolved.json)。書き手はページを開けないので、元記事の URL を抜粋の
+        # 対象にする。ニュース検索は商品名の語で引くため、同じブランド・シリーズの別の商品の
+        # 記事が混ざる。citable_urls は、この候補にだけ「商品に固有の珍しい語」を追加で求める
+        listed_third = {u for u, _ in third} | dead
+        for u, t in _resolved_news(asin)[:_NEWS_MAX]:
+            if u not in listed_third:
+                third.append((u, ("ニュース: " + t) if t else "ニュース"))
+                news.add(u)
+                listed_third.add(u)
     # navi-brain#92: 書き直しでは、前の記事が見つけた非販売の出典も材料になる。
     # 前の記事は「本文から参照していない」だけで非販売を 2 サイト以上持っていることが多い
     listed = {u for u, _ in third} | dead  # リンク切れは前の記事の出典としても出さない
     prior = [u for u in sc.prior_article_urls(asin) if u not in listed][:8]
-    return {"mall": mall, "third": third, "prior": prior, "dead": dead}
+    return {"mall": mall, "third": third, "prior": prior, "dead": dead, "news": news, "asin": asin}
+
+
+_NEWS_MAX = 3  # ニュースの候補は 1 商品 3 件まで (抜粋の取得は合計 _EXCERPT_MAX_URLS 件で切る)
+_RARE_MAX_DF = 3  # カタログの商品名のうち、この件数以下にしか出ない語を「商品に固有」とみなす
+
+
+def _resolved_news(asin):
+    """per_asin の news.json のうち、元記事の URL に解けたもの [(URL, 題)]。"""
+    import score_per_asin_info as sc
+    try:
+        cache = _jload("data/raw/news_resolved.json")
+        news = _jload(f"data/raw/per_asin/{asin}/news.json")
+    except (FileNotFoundError, ValueError):
+        return []
+    urls = (cache.get("urls") or {}) if isinstance(cache, dict) else {}
+    items = (news.get("items") or []) if isinstance(news, dict) else []
+    out = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        e = urls.get(it.get("url") or "")
+        u = e.get("url") if isinstance(e, dict) and e.get("status") == "ok" else None
+        if not u or sc.is_search_result_url(u):
+            continue
+        if sc.host_kind(urlparse(u).netloc, u) != "third_party":
+            continue
+        out.append((u, (it.get("title") or "").strip()))
+    return list(dict.fromkeys(out))
+
+
+_catalog_df_cache = None  # (作業ディレクトリ, Counter)
+
+
+def _catalog_token_df():
+    """per_asin の全商品名で、識別語 (source_pages.identity_tokens) ごとに出る商品の数。
+
+    1 プロセスで 1 回だけ数える (約 2 万件で数秒)。作業ディレクトリが変わったら数え直す。
+    """
+    global _catalog_df_cache
+    cwd = os.getcwd()
+    if _catalog_df_cache is None or _catalog_df_cache[0] != cwd:
+        import collections
+        import source_pages
+        df = collections.Counter()
+        for p in glob.glob("data/raw/per_asin/*/amazon.json"):
+            try:
+                d = _jload(p)
+            except (OSError, ValueError):
+                continue
+            item = d.get("item") if isinstance(d, dict) else None
+            title = (item or {}).get("title") if isinstance(item, dict) else None
+            if title:
+                df.update(set(source_pages.identity_tokens(title, ())))
+        _catalog_df_cache = (cwd, df)
+    return _catalog_df_cache[1]
+
+
+def rare_tokens(asin):
+    """この商品の識別語のうち、カタログの商品名にほとんど出ない語 (_RARE_MAX_DF 件以下)。
+
+    ニュースの候補の追加の条件 (候補供給 P1a)。ブランド名・シリーズ名・キャラクター名は
+    多くの商品名に出るので外れ、型番・商品固有の名前が残る。2026-11-23 の試し (38 商品) では、
+    今の条件だけだと要るサイト数に届いた 13 件のうち約 6 件が別の商品の記事で、この条件を足すと
+    9 件・うち本物が 6〜7 件になった。
+    """
+    import source_pages
+    try:
+        item = _amazon_item(asin)
+    except SystemExit:
+        return set()
+    toks = source_pages.identity_tokens(item.get("title") or "", (item.get("jan_code") or "",))
+    df = _catalog_token_df()
+    return {t for t in toks if t not in source_pages._GENERIC_TOKENS and df.get(t, 0) <= _RARE_MAX_DF}
+
+
+def _news_identifies(asin, hits):
+    rare = rare_tokens(asin)
+    return any(h in rare for h in hits or [])
 
 
 def excerpt_targets(candidates):
@@ -627,6 +716,8 @@ def citable_urls(candidates, excerpts):
             continue
         status, snip, hits = res[0], res[1], res[2]
         if status == "ok" and snip and source_pages.strong_match(hits) and identifies_product(hits):
+            if url in (candidates.get("news") or ()) and not _news_identifies(candidates.get("asin"), hits):
+                continue
             out.append(url)
     return out
 
@@ -661,6 +752,12 @@ def _sources_note(asin, fetch_excerpts=False, fetch=None, no_web=False, excerpts
     def lines(url, title=""):
         out = [f"   - {url}" + (f" ({title[:60]})" if title else "")]
         extra = _excerpt_line(excerpts.get(url), strict=no_web) if excerpts else None
+        res = excerpts.get(url) if excerpts else None
+        if (extra and url in cand.get("news", ()) and res and res[0] == "ok" and res[1]
+                and not _news_identifies(asin, res[2])):
+            # citable_urls と同じ判定。ニュース検索の結果で、商品に固有の語が本文に無いもの
+            extra = ("     参考 (ニュース検索の結果で、本文にこの商品に固有の名前・型番が無い。同じブランド・"
+                     f"シリーズの別の商品の記事の可能性が高いので、出典にしない): {res[1]}")
         if extra:
             out.append(extra)
         return out

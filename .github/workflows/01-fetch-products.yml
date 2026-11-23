@@ -189,6 +189,16 @@ jobs:
         if: ${{ always() }}
         run: python scripts/filter_raw_per_asin.py
 
+      # 候補供給 P1a: per_asin/<ASIN>/news.json の Google ニュースの転送 URL を元記事の URL に
+      # 解き、data/raw/news_resolved.json に覚える (記事レーンが本文を開いて出典の候補にする)。
+      # Google は短い間に約 30 件解くと 429 で長く止めてくるので、1 run 10 件・1 日 20 件
+      # (JST・run をまたいで数える)・8 秒間隔。429 を受けたらその日はやめる。
+      # 失敗しても他の fetch と同じく data PR は出す (if: always() の後段が拾う)。
+      - name: Resolve Google News URLs
+        if: ${{ always() }}
+        timeout-minutes: 10
+        run: python scripts/resolve_news_urls.py --per-run 10 --daily-limit 20 --interval 8
+
       # 2026-05-19 (session 29): App token で PR 起票するため anti-recursion guard 対象外。
       # pull_request event が通常通り発火し、04-validate-article-pr.yml が required check
       # `validate` を満たす SUCCESS で返す → auto-merge SQUASH 即発火。
