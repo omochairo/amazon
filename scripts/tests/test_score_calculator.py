@@ -280,5 +280,36 @@ class TitleOnlyYoutubeExclusionTest(unittest.TestCase):
         self.assertEqual(res.breakdown["media_exposure"], 3)  # yt=1 -> 3点
 
 
+class SafetyReasonUnverifiedTest(unittest.TestCase):
+    """#11926 項目2: 認証が見つからないときに「確認できます」と書かない。"""
+
+    def _brand(self, tier="D"):
+        from brand_normalizer import NormalizedBrand
+        return NormalizedBrand(canonical="", tier=tier, region="unknown")
+
+    def test_no_cert_no_tier_says_not_found(self):
+        pts, reason = score_calculator._safety_score(self._brand(), {"certifications": []})
+        self.assertEqual(pts, 0)
+        self.assertIn("見つかっていません", reason)
+        self.assertNotIn("確認できます", reason)
+
+    def test_legacy_fallback_without_field(self):
+        pts, reason = score_calculator._safety_score(self._brand(), {})
+        self.assertEqual(pts, 0)
+        self.assertIn("見つかっていません", reason)
+
+    def test_food_sanitation_only(self):
+        pts, reason = score_calculator._safety_score(
+            self._brand(), {"certifications": ["食品衛生法"]})
+        self.assertEqual(pts, 1)
+        self.assertIn("食品衛生法", reason)
+        self.assertIn("見つかっていません", reason)
+        self.assertNotIn("確認できます", reason)
+
+    def test_st_cert_unchanged(self):
+        _, reason = score_calculator._safety_score(self._brand(), {"certifications": ["ST"]})
+        self.assertIn("STマーク取得済み", reason)
+
+
 if __name__ == "__main__":
     unittest.main()

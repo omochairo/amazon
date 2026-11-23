@@ -1928,6 +1928,25 @@ def _override_competitive_analysis(
         except (TypeError, ValueError):
             target_price = 0
 
+    # #11926 項目3: competitors.json はタイトルの文字の近さと価格の近さだけで
+    # 選ばれていて、種類を見ない (算数キューブにナーフ、ボードゲームにミニ四駆)。
+    # 🆚 の後半 (_recommend_nearby_competitors) と同じ _rel_type_stage で
+    # 種類が違う候補を外し、残りの上から _COMPETITOR_TOP_N 件を出す。
+    # 種類が分からない候補は、もとの上位 _COMPETITOR_TOP_N 件にいたときだけ残す
+    # (従来どおり)。外した枠を下位から埋めるのは、種類が同じ候補だけにする
+    # (下位の種類不明で埋めると、算数キューブにソニーエンジェルが入った)。
+    self_types = toy_type.classify_article(data, load_amazon_item(per_asin_root, asin))
+    if self_types:
+        kept = []
+        for idx, c in enumerate(competitors):
+            cand_item = load_amazon_item(per_asin_root, c.get("asin") or "")
+            cand_types, _src = toy_type.classify(
+                toy_type.browse_node_names(cand_item), [], str(c.get("name") or ""))
+            stage = _rel_type_stage(self_types, cand_types)
+            if stage == 1 or (stage == 2 and idx < _COMPETITOR_TOP_N):
+                kept.append(c)
+        competitors = kept
+
     new_entries: list[dict[str, Any]] = []
     for c in competitors[:_COMPETITOR_TOP_N]:
         try:
