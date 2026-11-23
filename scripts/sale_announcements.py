@@ -124,8 +124,8 @@ MALL_MAX_AGE_DAYS = 14
 MALL_SITES = {"amazon": "Amazon", "rakuten": "楽天市場", "yahoo": "Yahoo!ショッピング"}
 # 題名のどこかからセールの名前を切り出す (楽天は名前を「」で囲まない)。助詞 (ひらがな) で切る
 SALE_PHRASE_RE = re.compile(
-    r"[ァ-ヴーA-Za-z0-9一-龠々!]{0,20}(?:セール|SALE|Sale|sale|祭|フライデー|初売り|サイバーマンデー)"
-    r"[ァ-ヴーA-Za-z0-9]*")
+    r"[ァ-ヴーA-Za-z0-9一-龠々!・&+]{0,20}(?:セール|sale|祭|フライデー|初売り|サイバーマンデー)"
+    r"[ァ-ヴーA-Za-z0-9]*", re.IGNORECASE)
 TODAY_START_RE = re.compile(r"本日(?:から|より)")
 # 日付の無い Amazon の公式の題名を候補にするときの開催の書き方。
 # 「「プライムデー」の開催に向けた…調査を実施」を拾わないため「を…開催」だけにする
@@ -338,6 +338,35 @@ def _cores(key: str) -> set:
     return {CORE_ALIASES.get(c, c) for c in SALE_CORES if c in key}
 
 
+def clearly_different(a: str, b: str) -> bool:
+    """名前から、別のセールだと言い切れるか (両方に核の語があり、共有しない)。
+
+    開始日の近さで「人が別の id で書いた同じ回」とみなすとき (_covered・62 の plan) の歯止め。
+    名前が無い・核の語が無いときは言い切れない (同じ回とみなす側に倒す)。
+    """
+    ca, cb = _cores(sale_key(a)), _cores(sale_key(b))
+    return bool(ca and cb and not ca & cb)
+
+
+def name_digest(name: str) -> str:
+    """カレンダーに無いセールの id に使う、名前の表記の揺れに左右されないハッシュ 6 桁。
+
+    核の語があればその集合、無ければ末尾の「セール」「sale」を落とした形から作る
+    (「ブラックフライデー」と「ブラックフライデーセール」で別の id にしない)。
+    """
+    key = sale_key(name)
+    cores = sorted(_cores(key))
+    if cores:
+        basis = "|".join(cores)
+    else:
+        basis = key
+        for word in ("セール", "sale"):
+            if basis.endswith(word) and len(basis) > len(word):
+                basis = basis[:-len(word)]
+                break
+    return hashlib.sha1(basis.encode("utf-8")).hexdigest()[:6]
+
+
 def same_sale(a: str, b: str) -> bool:
     """2 つの名前が同じセールか。核の語があれば共有するか、無ければ完全一致で見る。
 
@@ -429,7 +458,9 @@ def registered_by_name(name: str, shop: str, published: dt.date,
             continue
         if ev["hi"] < published or ev["lo"] > published + dt.timedelta(days=NAME_MATCH_LEAD_DAYS):
             continue
-        ref_start = reference and reference.get("start")
+        # 「本日から開催」から作った参考の日付は事前期間の始まりのことがあり、62 が登録する
+        # 「最終3日間」とずれる (超PayPay祭)。時期の突き合わせには使わない
+        ref_start = reference and not reference.get("from_today") and reference.get("start")
         if ref_start and not ev["lo"] - slack <= ref_start <= ev["hi"] + slack:
             continue
         return True
@@ -566,8 +597,11 @@ def shop_of(entry: Dict[str, Any]) -> str:
     return entry.get("shop") or "amazon"
 
 
-def _covered(start: dt.date, shop: str, events: Sequence[Dict[str, Any]]) -> bool:
+def _covered(start: dt.date, shop: str, events: Sequence[Dict[str, Any]],
+             name: str = "") -> bool:
     """同じモールに、どれかの段階の開始日が start の前後 1 日にあるイベントがあるか。
+
+    名前から別のセールだと言い切れるもの (clearly_different) は数えない。
 
     「期間の中に開始日が入る」では見ない。期間が重なる別のセール (楽天のブラックフライデーの
     最中のマラソンなど) を黙って捨てるため (navi-brain#206 の課題 ⑥)。
@@ -575,6 +609,7 @@ def _covered(start: dt.date, shop: str, events: Sequence[Dict[str, Any]]) -> boo
     """
     one = dt.timedelta(days=1)
     return any(ev.get("shop") == shop and any(abs(s - start) <= one for s in ev["starts"])
+               and not clearly_different(name, ev.get("name") or "")
                for ev in events)
 
 
@@ -623,7 +658,7 @@ def mall_event_id(entry: Optional[Dict[str, Any]], year: Optional[int], shop: st
     """
     if entry is not None:
         return "{}-{}".format(entry["id"], year), year
-    digest = hashlib.sha1(sale_key(name).encode("utf-8")).hexdigest()[:6]
+    digest = name_digest(name)
     return ("adhoc-{}-{}-{:02d}-{}".format(shop, published.year, published.month, digest),
             "{}年{}月".format(published.year, published.month))
 
@@ -644,7 +679,8 @@ def _detect_mall(item: Dict[str, Any], feed: Dict[str, Any], shop: str,
     reference = parse_period(item["title"], published) or parse_loose_period(
         item["title"], published)
     if reference is None and TODAY_START_RE.search(unicodedata.normalize("NFKC", item["title"])):
-        reference = {"start": published, "end": None, "start_time": None, "end_time": None}
+        reference = {"start": published, "end": None, "start_time": None, "end_time": None,
+                     "from_today": True}
     hit = calendar_match(name, shop_calendar, published)
     entry, year = hit if hit else (None, None)
     event_id, label = mall_event_id(entry, year, shop, name, published)
@@ -730,9 +766,11 @@ def detect(
             if last_day < today:
                 continue
             event_id, label = event_key(entry, name, period["start"])
-            if event_id in registered or _covered(period["start"], shop, events):
+            if event_id in registered or _covered(period["start"], shop, events, name):
                 continue
             cand = add(event_id, entry, shop, name, label, feed, item)
+            # 自動登録の出典 (amazon_events) には、期間を読めた発表を使う
+            cand["sources"][-1]["dated"] = True
             _merge_period(cand["periods"], period)
             if not news:
                 # 自動登録の判定 (auto_eligible) は公式の発表だけで見る。報道の時刻で補わない

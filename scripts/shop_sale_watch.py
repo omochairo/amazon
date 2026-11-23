@@ -278,7 +278,9 @@ def amazon_events(candidates: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]
     for cand in candidates.values():
         if not sale_announcements.auto_eligible(cand):
             continue
-        official = [s for s in cand["sources"] if not s.get("news")]
+        # 出典は期間を読めた公式の発表 (日付の無い第 1 報を出典にしない)
+        official = ([s for s in cand["sources"] if not s.get("news") and s.get("dated")]
+                    or [s for s in cand["sources"] if not s.get("news")])
         period = cand["official_periods"][0]
         start = dt.datetime.combine(period["start"], dt.time(*period["start_time"]), JST)
         end = dt.datetime.combine(period["end"], dt.time(*period["end_time"]), JST)
@@ -315,8 +317,9 @@ def plan(found: Sequence[Dict[str, Any]], events: Sequence[Dict[str, Any]]
         day = f["start"].astimezone(JST).date()
         one = dt.timedelta(days=1)
         if any(info["shop"] == f["shop"] and any(abs(s - day) <= one for s in info["starts"])
+               and not sale_announcements.clearly_different(f["name"], info["name"])
                for info in infos):
-            # 人が別の id で登録済み (段階の開始日が前後 1 日)
+            # 人が別の id で登録済み (段階の開始日が前後 1 日。名前が別のセールなら足す)
             continue
         add.append(f)
     return add, conflicts

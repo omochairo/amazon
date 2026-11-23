@@ -40,6 +40,7 @@ import os
 import pathlib
 import re
 import sys
+import urllib.parse
 from typing import Any, Dict, List, Optional, Sequence
 
 import yaml
@@ -71,6 +72,10 @@ ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 MMDD_RE = re.compile(r"^(\d{2})-(\d{2})$")
 CYCLES = ("yearly", "monthly")
 SHOP_SITES = {"amazon": "Amazon.co.jp", "rakuten": "楽天市場", "yahoo": "Yahoo!ショッピング"}
+# カレンダーの url に書いてよいホスト (scripts/tests/test_sale_events.py の SHOP_HOSTS と同じ)
+SHOP_HOSTS = {"amazon": ("www.amazon.co.jp",),
+              "rakuten": ("event.rakuten.co.jp", "www.rakuten.co.jp"),
+              "yahoo": ("shopping.yahoo.co.jp",)}
 
 
 class CalendarError(ValueError):
@@ -108,8 +113,14 @@ def validate_calendar(entries: Sequence[Dict[str, Any]]) -> None:
         if not isinstance(entry.get("pre_sale", False), bool):
             raise CalendarError("{}: pre_sale は true / false".format(cal_id))
         url = entry.get("url")
-        if url is not None and not (isinstance(url, str) and url.startswith("https://")):
-            raise CalendarError("{}: url は https:// で始まる文字列: {!r}".format(cal_id, url))
+        if url is not None:
+            # issue の貼り付け用 YAML にそのまま出る。test_sale_events.py の決まりと揃える
+            parts = urllib.parse.urlsplit(url) if isinstance(url, str) else None
+            if (parts is None or parts.scheme != "https" or parts.query
+                    or parts.hostname not in SHOP_HOSTS.get(entry.get("shop", "amazon"), ())):
+                raise CalendarError(
+                    "{}: url はそのモールの公式の https のページ (クエリ無し): {!r}".format(
+                        cal_id, url))
         cycle = entry.get("cycle", "yearly")
         if cycle not in CYCLES:
             raise CalendarError("{}: cycle は {} のどれか: {!r}".format(

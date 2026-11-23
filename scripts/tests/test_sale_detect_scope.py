@@ -238,8 +238,10 @@ def test_plan_adds_sale_that_only_overlaps_another_one():
                 "2026-11-19T20:00:00+09:00", "2026-11-25T01:59:59+09:00")
     add, conflicts = w.plan(_found_marathon(), [bf])
     assert [f["id"] for f in add] == ["rakuten-marathon-2026-11-21"] and conflicts == []
-    # 開始日が前後 1 日なら、人が別の id で書いた同じ回とみなす
-    add, _ = w.plan(_found_marathon("2026-11-20T20:00:00+09:00"), [bf])
+    # 開始日が前後 1 日で名前も同じセールなら、人が別の id で書いた同じ回とみなす
+    hand = _event("marathon-by-hand", "rakuten", "楽天 マラソン",
+                  "2026-11-21T10:00:00+09:00", "2026-11-25T01:59:59+09:00")
+    add, _ = w.plan(_found_marathon("2026-11-20T20:00:00+09:00"), [bf, hand])
     assert add == []
 
 
@@ -400,3 +402,54 @@ def test_only_one_write_per_run_and_no_search_after_write(bf_files, monkeypatch)
     # 発表の候補が先。先行セールの確認は次の run に回し、検索もしない
     assert len(gh.created) == 1 and "adhoc-yahoo-2027-11-abcdef" in _body(gh.created[0])
     assert len(gh.searched) == 1
+
+
+# ---- レビューの反映 (agy・Codex, 2026-11-23) ----
+
+def test_paypay_announced_today_is_quiet_when_final_days_are_auto_registered():
+    # 62 が「最終3日間」だけを登録した後の「本日から開催」の発表で issue を立てない (agy 指摘)
+    final = scr.registered_events([_event(
+        "yahoo-paypay-final-2026-07-10", "yahoo", "Yahoo!ショッピング 超PayPay祭 最終3日間",
+        "2026-07-10T00:00:00+09:00", "2026-07-13T01:59:00+09:00", auto="shop_sale_watch")])
+    assert _mall(YAHOO_FEED, YAHOO_PAYPAY, D(2026, 6, 26), events=final) == {}
+
+
+def test_adhoc_id_ignores_sale_suffix_variants():
+    # 「ブラックフライデー」と「ブラックフライデーセール」で別の id にしない (Codex 指摘)
+    assert sa.name_digest("ジャンル祭") == sa.name_digest("ジャンル祭セール")
+    assert sa.name_digest("Yahoo!ショッピング ブラックフライデー") == sa.name_digest("ブラックフライデーセール")
+    assert sa.name_digest("ジャンル祭") != sa.name_digest("食いしんぼう祭")
+
+
+def test_start_date_alone_does_not_hide_clearly_different_sale():
+    # 開始日が前後 1 日でも、名前が別のセールなら登録済みとみなさない (Codex 指摘)
+    bf = _event("rakuten-blackfriday-2026", "rakuten", "楽天市場 ブラックフライデー",
+                "2026-11-19T20:00:00+09:00", "2026-11-25T01:59:59+09:00")
+    add, _ = w.plan(_found_marathon("2026-11-19T20:00:00+09:00"), [bf])
+    assert [f["id"] for f in add] == ["rakuten-marathon-2026-11-19"]
+    # 名前の無い (古い呼び方の) 期間は今までどおり登録済み側に倒す
+    assert sa._covered(D(2026, 11, 19), "rakuten",
+                       sa._span_events([(D(2026, 11, 19), D(2026, 11, 25), "rakuten")]),
+                       "楽天市場 お買い物マラソン")
+
+
+def test_auto_registration_source_is_the_dated_announcement():
+    prtimes = sa.FEEDS[1]
+    first = _item("Amazon、年末最後のビッグセール「Amazon ブラックフライデー」を開催", D(2027, 11, 10),
+                  "https://prtimes.jp/main/html/rd/p/1.html")
+    dated = _item("Amazon、「Amazon ブラックフライデー」を11月26日（金）0時から12月3日（金）23時59分まで開催",
+                  D(2027, 11, 12), "https://prtimes.jp/main/html/rd/p/2.html")
+    found = sa.detect([(prtimes, [first, dated])], REAL_CALENDAR, set(), D(2027, 11, 12))
+    (ev,) = w.amazon_events(found)
+    assert ev["source"] == "https://prtimes.jp/main/html/rd/p/2.html"
+
+
+@pytest.mark.parametrize("url", [
+    "http://event.rakuten.co.jp/campaign/supersale/",
+    "https://example.com/campaign/",
+    "https://event.rakuten.co.jp/campaign/supersale/?scid=x",
+])
+def test_calendar_url_must_be_shop_page_without_query(url):
+    entry = {"id": "x", "name": "X", "shop": "rakuten", "typical_start": "03-04", "url": url}
+    with pytest.raises(scr.CalendarError):
+        scr.validate_calendar([entry])
