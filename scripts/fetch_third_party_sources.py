@@ -426,7 +426,10 @@ def _is_fresh(path: pathlib.Path, max_age_days: int,
     # あった。その判定 (#9254) より前に取ったものは、通常の有効期限で 1 度取り直す。
     # 永久にしないのは、候補が実は使えず生成が落ち続ける ASIN に取り直しの機会を残すため。
     sites = _site_count(data.get("sources") or [])
-    if ts >= _RELEVANCE_FILTER_FROM and sites >= _sc._THIRD_PARTY_MIN_HOSTS:
+    # 候補供給 P1c: 記事レーンの事前チェックで「今の判定では足りない」と分かった商品は、
+    # 2 サイトあっても (一覧・別の商品のページで数が合っているだけ) 延ばさない
+    short = _status_state(path.parent.name) in _SHORT_STATES
+    if ts >= _RELEVANCE_FILTER_FROM and sites >= _sc._THIRD_PARTY_MIN_HOSTS and not short:
         age_limit = max(age_limit, _SUFFICIENT_MAX_AGE_DAYS)
     now = _dt.datetime.now(_dt.timezone.utc)
     return (now - when).days < age_limit
@@ -583,6 +586,77 @@ def fetch_for_asin(
             "sources": len(sources), "empty_streak": streak}
 
 
+SOURCE_STATUS = pathlib.Path("data/source_status.json")
+# 記事レーンの出典の状態 (候補供給 P1b, scripts/source_status.py) のうち、
+# 「今の判定で引用できる出典が足りない」もの
+_SHORT_STATES = ("insufficient", "article_short", "waiting_new")
+_status_cache: dict = {}
+
+
+def _source_status() -> dict:
+    """data/source_status.json (K8 の記事レーンが PR で入れる写し。数時間古くてよい使い方だけ)。"""
+    key = str(SOURCE_STATUS.resolve())
+    if key not in _status_cache:
+        d = _load(SOURCE_STATUS)
+        _status_cache[key] = d if isinstance(d, dict) else {}
+    return _status_cache[key]
+
+
+def _status_state(asin: str):
+    e = _source_status().get(asin)
+    return e.get("state") if isinstance(e, dict) else None
+
+
+def _status_skip(asin: str, today: _dt.date) -> bool:
+    """Tavily を使わない商品か: insufficient で見直し日の前 (候補供給 P1c, 仕様 §4.5)。
+
+    記事レーンが開いて「足りない」と分かった商品に、見直し日の前に何度も取り直さない。
+    新発売 (waiting_new) と記事の出典が足りない商品 (article_short) は外さない (集め直す対象)。
+    """
+    e = _source_status().get(asin)
+    if not isinstance(e, dict) or e.get("state") != "insufficient":
+        return False
+    try:
+        ra = _dt.date.fromisoformat((e.get("recheck_after") or "")[:10])
+    except ValueError:
+        return False
+    return today < ra
+
+
+def _article_short_asins() -> set[str]:
+    """記事はあるが出典が足りない商品 (仕様 §10.6)。集め直して、届けば記事レーンが書き直しに回す。"""
+    return {a for a, e in _source_status().items()
+            if isinstance(e, dict) and e.get("state") == "article_short" and _ASIN_RE.match(a)}
+
+
+_TIER_RANK = {"S": 0, "A": 1, "B": 2, "C": 3}
+
+
+def _tier_rank(asin: str, base: pathlib.Path) -> int:
+    """ブランドの格の順 (S=0 … 不明=4)。書ける見込みをよく表す (候補供給 §1.4・§4.5 の並び)。"""
+    try:
+        # 題名の先頭語だけだと【】で始まる題名や「タカラトミー アーツ」を落とすので、
+        # 情報量スコアと同じ推定 (語ごと + 販売者の最上位) を使う
+        amazon = _load(base / asin / "amazon.json")
+        if not isinstance(amazon, dict):
+            return 4
+        return _TIER_RANK.get(_sc._brand_tier(amazon), 4)
+    except Exception:  # noqa: BLE001 — 並びの補助。読めなければ最後
+        return 4
+
+
+def daily_limit(remaining: int, today: _dt.date, share: float) -> int:
+    """月の残り枠を、残りの日数で割った今日の上限 (このレーンの取り分 share を掛ける)。
+
+    日割りしないと、月の前半で枠を使い切り、月末に新しく入った商品が集まらない
+    (2026-11 は月末前に枠切れ)。残りの日数は今日を含む。
+    """
+    import calendar
+    last = calendar.monthrange(today.year, today.month)[1]
+    days_left = last - today.day + 1
+    return max(1, int(remaining * share // days_left)) if remaining > 0 else 0
+
+
 def _pickable_pool() -> list[str]:
     """03-invoke-jules と同じ候補母集合
     (amazon.json items + ranking_pool + first_party_pool + rewrite_queue 待ち
@@ -628,6 +702,10 @@ def _pickable_pool() -> list[str]:
         pending = set()
     cand |= pending
     existing -= pending
+    # 候補供給 P1c (仕様 §10.6): 記事はあるが今の判定で出典が足りない商品も集め直す
+    short = _article_short_asins()
+    cand |= short
+    existing -= short
     return sorted(cand - existing)
 
 
@@ -640,7 +718,7 @@ def _waiting_priority() -> dict[str, int]:
     1: 書き直し待ち (rewrite_queue)。first-party と同じく揃うまで待たせている。
     どちらも ``_pickable_pool`` と同じファイルから読む。読めなければ空 (本流は止めない)。
     """
-    prio: dict[str, int] = {}
+    prio: dict[str, int] = {a: 1 for a in _article_short_asins()}
     try:
         import rewrite_queue as _rq
         for a in _rq.eligible_rewrite_asins("data/articles"):
@@ -758,6 +836,8 @@ def _cli() -> int:
     ap.add_argument("--monthly-budget", type=int, default=900,
                     help="今月ぶんの取得上限 (Tavily 無料=1000/月。0 で無効)。"
                          "2 本のレーンで共有し、_tavily_usage.json の実呼び出し回数で数える")
+    ap.add_argument("--daily-share", type=float, default=0.0,
+                    help="月の残り枠を残りの日数で割った値のうち、このレーンの取り分 (0 なら日割りしない)")
     ap.add_argument("--force", action="store_true", help="freshness を無視して再取得")
     ap.add_argument("--dry-run", action="store_true", help="API を叩かず計画のみ表示")
     ap.add_argument("--base", default=str(PER_ASIN_DIR))
@@ -788,7 +868,9 @@ def _cli() -> int:
     elif args.pool:
         want = {b.strip() for b in args.bands.split(",") if b.strip()}
         bands = {a: _sc.score_asin(a, base).get("band") for a in _pickable_pool()}
-        targets = [a for a, b in bands.items() if b in want]
+        # 記事の出典が足りない商品 (仕様 §10.6) は、古い数え方で band が ok でも集め直す
+        short = _article_short_asins()
+        targets = [a for a, b in bands.items() if b in want or a in short]
         # unfetched (= ranking_pool 品) を先頭に回す。03-invoke-jules はこれらを
         # 第三者 host が 2 件集まるまで pick しない (should_defer) ので、ここで後回しに
         # されると永久に記事にならない。ASIN の辞書順だと新しい B0H... は日次上限の外に
@@ -798,9 +880,23 @@ def _cli() -> int:
         # #9199: さらに前に、生成が第三者ソース待ちで止まっている first-party と
         # 書き直し待ちを置く。03-invoke-jules はこれらを落とさず待たせているので、
         # 集めるのが遅れるほど記事にならない期間が延びる。
+        # 候補供給 P1c (仕様 §4.5): 記事にならない商品に枠を使わない。生成側が全プール共通で
+        # 外すもの (blocklist・退避中・ジャンル不一致・FAILED 続き) と、記事レーンが開いて
+        # 「足りない」と分かった商品 (見直し日の前)
+        today = _dt.datetime.now(_dt.timezone(_dt.timedelta(hours=9))).date()
+        try:
+            import rewrite_queue as _rq
+            excluded = _rq.pick_excluded_asins(set(targets))
+        except Exception as e:  # noqa: BLE001 — 読めなければ除かない
+            logger.warning("生成側の除外を読めない — 除かずに進める: %s", e)
+            excluded = set()
+        skipped = {a for a in targets if _status_skip(a, today)}
+        targets = [a for a in targets if a not in excluded and a not in skipped]
         prio = _waiting_priority()
-        targets.sort(key=lambda a: (prio.get(a, 2), bands[a] != "unfetched"))
-        logger.info("pool 対象 (band in %s): %d 件", sorted(want), len(targets))
+        # 並び: 待たせている商品 → 商品データ未取得 → ブランドの格 (S〜B が書ける見込みが高い)
+        targets.sort(key=lambda a: (prio.get(a, 2), bands[a] != "unfetched", _tier_rank(a, base)))
+        logger.info("pool 対象 (band in %s): %d 件 (生成側の除外 %d・出典の状態で見送り %d)",
+                    sorted(want), len(targets), len(excluded), len(skipped))
     else:
         ap.error("ASIN / --pool / --from-gsc のいずれかが必要です")
 
@@ -830,6 +926,13 @@ def _cli() -> int:
         if remaining < limit:
             logger.info("残枠 %d < max-queries %d — 今回は残枠に合わせる", remaining, limit)
             limit = remaining
+        if args.daily_share > 0:
+            today = _dt.datetime.now(_dt.timezone.utc).date()  # month_usage と同じ UTC の月
+            d = daily_limit(remaining, today, args.daily_share)
+            if d < limit:
+                logger.info("日割り: 残枠 %d × 取り分 %.2f ÷ 残り日数 = %d 件 (max-queries %d)",
+                            remaining, args.daily_share, d, limit)
+                limit = d
 
     # done = 書き出せた件数 / spent = 実際に API を投げた回数。両方で上限を切る。
     # done だけで切っていたときは、**API を叩いてから落ちた呼び出し** (429 以外の

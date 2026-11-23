@@ -97,7 +97,10 @@ jobs:
       - name: Install Dependencies
         run: pip install -r requirements.txt
 
-      # レーン1: 新規候補 (まだ記事になっていない ASIN)。従来どおり。
+      # レーン1: 新規候補 (まだ記事になっていない ASIN)。
+      # 候補供給 P1c: 月の残り枠を残りの日数で割り、新規 0.6・既存記事 0.4 で分ける
+      # (日割りしないと月の前半で使い切り、月末に入った商品が集まらない)。
+      # 生成側が外す商品と、記事レーンが「足りない」と分かった商品 (data/source_status.json) には使わない。
       - name: Pre-fetch third-party sources (new candidates)
         env:
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
@@ -109,7 +112,8 @@ jobs:
             --pool \
             --bands "$INPUT_BANDS" \
             --max-queries "$INPUT_MAX_QUERIES" \
-            --monthly-budget "$INPUT_MONTHLY_BUDGET"
+            --monthly-budget "$INPUT_MONTHLY_BUDGET" \
+            --daily-share 0.6
 
       # レーン2: 既存記事 (リライト対象)。母集合は GSC の需要で、band では絞らない。
       # レーン1 とは別プロセス・別 --max-queries で回す。枠を共有させると、母集合が
@@ -132,7 +136,8 @@ jobs:
             --gsc-min-impressions "$INPUT_GSC_MIN_IMPRESSIONS" \
             --max-age-days 90 \
             --max-queries "$INPUT_GSC_MAX_QUERIES" \
-            --monthly-budget "$INPUT_MONTHLY_BUDGET"
+            --monthly-budget "$INPUT_MONTHLY_BUDGET" \
+            --daily-share 0.4
 
       # navi-brain#117 段階 1: 候補 URL を 1 回ずつ開き、リンク切れ (404 / 410 / DNS) を
       # third_party_sources.json の各行の `link` に記録する。生成前の判定はリンク切れの
