@@ -27,7 +27,7 @@ from scripts import sale_calendar_reminder as scr  # noqa: E402
 
 D = dt.date
 REAL_CALENDAR = scr.load_yaml(scr.CALENDAR)
-ABOUT, PRTIMES, PHILEWEB = sa.FEEDS
+ABOUT, PRTIMES, PHILEWEB, RAKUTEN_PRT, YAHOO_PRT = sa.FEEDS
 
 # (発表日, 題名, セールの id, 開始, 終了, 開始時刻, 終了時刻)。題名は実際に出たもの
 REAL_ANNOUNCEMENTS = [
@@ -300,7 +300,7 @@ def test_same_announcement_in_both_feeds_is_one_candidate(monkeypatch):
     assert errors == []
     cand = found["prime-day-2026"]
     # 報道のフィードにも同じ題名を返している (「Amazon、「プライムデー」」は報道でも拾う)
-    assert len(cand["periods"]) == 1 and len(cand["sources"]) == len(sa.FEEDS)
+    assert len(cand["periods"]) == 1 and len(cand["sources"]) == len([f for f in sa.FEEDS if not f.get("mall")])
     assert cand["sources"][0]["link"] == "https://prtimes.jp/main/html/rd/p/000002145.000004612.html"
 
 

@@ -35,7 +35,7 @@ def no_network(monkeypatch):
     def refuse(url):
         raise AssertionError("テストから外部へ取りに行こうとした: {}".format(url))
     monkeypatch.setattr(sa, "fetch", refuse)
-    monkeypatch.setattr(sa, "collect", lambda calendar, registered, today, spans=(): ({}, []))
+    monkeypatch.setattr(sa, "collect", lambda calendar, registered, today, spans=(), events=None: ({}, []))
 
 CAL = [
     {"id": "prime-day", "name": "Amazon プライムデー", "typical_start": "07-08",
@@ -295,7 +295,7 @@ def _detected(event_id="a-2027", feed_errors=()):
                      "link": "https://prtimes.jp/main/html/rd/p/1.html",
                      "published": dt.date(2027, 6, 15)}],
     }
-    return lambda calendar, registered, today, spans=(): ({event_id: cand}, list(feed_errors))
+    return lambda calendar, registered, today, spans=(), events=None: ({event_id: cand}, list(feed_errors))
 
 
 def test_auto_eligible_announcement_is_left_to_shop_sale_watch(files, monkeypatch):
@@ -305,7 +305,7 @@ def test_auto_eligible_announcement_is_left_to_shop_sale_watch(files, monkeypatc
     cand = cands["a-2027"]
     cand["official_periods"] = [dict(cand["periods"][0])]
     assert sa.auto_eligible(cand)
-    monkeypatch.setattr(sa, "collect", lambda calendar, registered, today, spans=(): (cands, errors))
+    monkeypatch.setattr(sa, "collect", lambda calendar, registered, today, spans=(), events=None: (cands, errors))
     gh = FakeGhWithComments()
     monkeypatch.setattr(scr, "_gh", gh)
     assert scr.main(["--repo", "o/r", "--today", "2027-06-15"]) == 0
@@ -398,7 +398,7 @@ def test_dry_run_with_announcement_writes_nothing(files, monkeypatch):
 def test_feed_failure_still_reminds_then_exits_nonzero(files, monkeypatch):
     # 検知が止まっても目安のリマインドは出す。ただし緑では終わらない
     monkeypatch.setattr(
-        sa, "collect", lambda calendar, registered, today, spans=(): ({}, ["About Amazon Japan: 403"]))
+        sa, "collect", lambda calendar, registered, today, spans=(), events=None: ({}, ["About Amazon Japan: 403"]))
     gh = FakeGhWithComments()
     assert _run(monkeypatch, gh) == 1
     assert len(gh.created) == 1
@@ -413,7 +413,7 @@ def test_main_passes_registered_ids_to_detection(files, monkeypatch):
         encoding="utf-8")
     seen = {}
 
-    def collect(calendar, registered, today, spans=()):
+    def collect(calendar, registered, today, spans=(), events=None):
         seen.update(registered=registered, today=today, ids=[e["id"] for e in calendar],
                     spans=spans)
         return {}, []

@@ -28,6 +28,15 @@
 #     関連の発表を取り違えないため
 #   - ここに書く時期は過去の開催時期からの目安で、公式に確認した日程ではない。
 #     実際の日程は毎回、公式の告知で確認する
+#   - shop は amazon (省略時) / rakuten / yahoo。楽天・Yahoo の発表は名前を決め打ちせずに
+#     拾う (navi-brain#206) が、ここにあるセールと名前が合えば id が「<この id>-<年>」になり、
+#     目安のリマインドと同じ issue にまとまる。別の id で登録済みでも (62 の自動登録の
+#     rakuten-supersale-2026-12-04 など)、同じモール・目安の時期・名前が合えば登録済みとみなす
+#   - 62 がページから自動登録するセール (楽天スーパーSALE など) は、remind_days_before を
+#     自動登録が済むはずの時期より後 (開始の 1 日前など) にする。先に立てると毎回 issue が立つ
+#   - pre_sale: true は例年、本番の前に先行セールがあるセール。本番だけが自動登録されたら、
+#     先行セールの有無を確かめる issue を 1 件立てる
+#   - url は issue に載せる公式のキャンペーンページ (楽天・Yahoo)。https:// で始める
 #
 # 検証: scripts/tests/test_sale_calendar_reminder.py
 - id: hatsuuri
@@ -46,18 +55,79 @@
   name: Amazon プライムデー
   typical_start: "07-08"
   remind_days_before: 21
+  pre_sale: true
   note: 例年 7 月中旬。先行セールが数日前から始まる
 - id: prime-kanshasai
   name: Amazon プライム感謝祭
   typical_start: "10-04"
   remind_days_before: 21
+  pre_sale: true
   note: 例年 10 月上旬〜中旬。先行セールが数日前から始まる
 - id: black-friday
   name: Amazon ブラックフライデー
   typical_start: "11-21"
   remind_days_before: 7
+  pre_sale: true
   note: 例年 11 月下旬〜12 月上旬。先行セールが数日前から始まる。発表は 11 月中旬
 - id: smile-sale
   name: Amazon スマイルSALE
   cycle: monthly
   note: ほぼ毎月 1 週間ほど。公式のフィードには発表が出ず、報道 (PHILE WEB) とサイト上の告知だけ
+# --- 楽天市場 (navi-brain#206)。時期は過去の開催から (2026-11-23 時点の実績) ---
+- id: rakuten-blackfriday
+  name: 楽天市場 ブラックフライデー
+  shop: rakuten
+  url: https://event.rakuten.co.jp/campaign/point-up/blackfriday/
+  typical_start: "11-18"
+  remind_days_before: 5
+  note: 例年 11/18〜21 ごろ 20 時開始。PR TIMES の発表は開始の 7 日前ごろ (2026 は 11/12 発表・11/19 開始)
+- id: rakuten-kanshasai
+  name: 楽天市場 大感謝祭
+  shop: rakuten
+  url: https://event.rakuten.co.jp/campaign/thanks/
+  typical_start: "12-19"
+  remind_days_before: 3
+  note: 例年 12/19 ごろ 20 時開始。PR TIMES には出ず、ページに期間が出るのは 2〜3 日前
+- id: rakuten-hatsuuri
+  name: 楽天市場 初売り
+  announce_names:
+    - Rakuten初売り
+  shop: rakuten
+  typical_start: "01-01"
+  remind_days_before: 5
+  note: 例年 1/1 開始。PR TIMES の発表は 12/26 ごろ
+# 楽天スーパーSALE は 3・6・9・12 月の 4 日ごろ 20 時開始。62 がページから 2〜4 日前に自動登録するので、
+# 目安のリマインドはその後 (1 日前) にする
+- id: rakuten-supersale-03
+  name: 楽天スーパーSALE（3月）
+  shop: rakuten
+  url: https://event.rakuten.co.jp/campaign/supersale/
+  typical_start: "03-04"
+  remind_days_before: 1
+- id: rakuten-supersale-06
+  name: 楽天スーパーSALE（6月）
+  shop: rakuten
+  url: https://event.rakuten.co.jp/campaign/supersale/
+  typical_start: "06-04"
+  remind_days_before: 1
+- id: rakuten-supersale-09
+  name: 楽天スーパーSALE（9月）
+  shop: rakuten
+  url: https://event.rakuten.co.jp/campaign/supersale/
+  typical_start: "09-04"
+  remind_days_before: 1
+- id: rakuten-supersale-12
+  name: 楽天スーパーSALE（12月）
+  shop: rakuten
+  url: https://event.rakuten.co.jp/campaign/supersale/
+  typical_start: "12-04"
+  remind_days_before: 1
+# --- Yahoo!ショッピング (navi-brain#206)。超PayPay祭・爆買ウルトラSALE は時期が不規則なので書かない
+#     (公式の発表の検知と 62 の「最終3日間」の自動登録で拾う) ---
+- id: yahoo-blackfriday
+  name: Yahoo!ショッピング ブラックフライデー
+  shop: yahoo
+  url: https://shopping.yahoo.co.jp/promotion/campaign/blackfriday/
+  typical_start: "11-21"
+  remind_days_before: 7
+  note: 例年 11 月下旬 (2025 は 11/25・2026 は 11/22 開始)。2026 は PR TIMES の発表が 20 日前

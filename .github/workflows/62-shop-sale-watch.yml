@@ -1,4 +1,4 @@
-# 楽天・Yahoo のセール日程を公式告知から読み、hugo/data/sale_events.yaml に足す (#9449)。
+# 楽天・Yahoo・Amazon のセール日程を公式告知から読み、hugo/data/sale_events.yaml に足す (#9449)。
 #
 # scripts/shop_sale_watch.py が関門 (公式の決まった場所から読めた・日時が全部ある・
 # 曜日と長さが合う) を通ったものだけ足し、ここで PR にして自動マージする。
@@ -89,12 +89,12 @@ jobs:
           fi
           git checkout -B "$BRANCH"
           git add hugo/data/sale_events.yaml
-          git commit -m "data(sale): 楽天・Yahoo のセール日程を公式告知から登録 (run ${{ github.run_id }})"
+          git commit -m "data(sale): セール日程を公式告知から登録 (run ${{ github.run_id }})"
           # 前の PR がまだ開いていれば、main から作り直したもので置き換える (PR を二重に出さない)
           git push --force origin "$BRANCH"
           if [ "$OPEN" = "0" ]; then
             gh pr create --base main --head "$BRANCH" \
-              --title "data(sale): 楽天・Yahoo のセール日程を公式告知から登録" \
+              --title "data(sale): セール日程を公式告知から登録" \
               --body "[62-shop-sale-watch.yml](.github/workflows/62-shop-sale-watch.yml) run ${{ github.run_id }} が公式のキャンペーンページ・リリースから読んだ日程です。関門 (決まった場所から読めた・日時が全部ある・曜日と長さが合う・test_sale_events.py) を通ったので自動でマージします。Refs #9449" \
               --label todo
           fi

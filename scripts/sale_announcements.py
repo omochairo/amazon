@@ -6,12 +6,24 @@ scripts/sale_calendar_reminder.py が呼ぶ。ここがやるのは候補を作�
 scripts/shop_sale_watch.py が登録し、残りの候補は issue に
 載り、人が出典を開いて確かめてから登録する。
 
-読むのは公開のフィード 3 本だけ (1 run で各 1 回):
+読むのは公開のフィード 5 本だけ (1 run で各 1 回):
   - About Amazon Japan (公式ニュースルーム) の RSS
   - PR TIMES のアマゾンジャパンの企業別 RSS
   - PHILE WEB の RSS (報道。公式の 2 本は大型セールしか発表しないので、月例の
     スマイルSALE などはここで拾う。2026-11 のスマイルSALE を取り逃した反省)
+  - PR TIMES の楽天グループ・LINEヤフーの企業別 RSS (楽天市場・Yahoo!ショッピングの
+    大型セールの発表。2026-11 の両モールのブラックフライデーを取り逃した反省。navi-brain#206)
 Amazon.co.jp 本体は読まない (利用規約がロボットでの収集を認めていない)。
+
+楽天・Yahoo のフィード (mall) の決めごと (navi-brain#206 の決定 1):
+  - **セールの名前を決め打ちしない。** モールの名前・開催の語・セールの語を全部含む題名を
+    拾う (mall_sale_name)。誤検知 (年に 2 件ほど) は人が issue を閉じて捨てる
+  - **日付が無くても知らせる。** 楽天の題名にはほぼ日付が無い。題名の日付は参考
+    (reference_periods) にだけ持ち、自動登録の関門 (auto_eligible) には触れない
+  - id はカレンダーのセールなら「<id>-<年>」、無ければ「adhoc-<shop>-<発表年>-<発表月>-<名前の
+    ハッシュ>」(同じセールの第 2 報で立て直さず、同じ日の別のセールを潰さない)
+  - **登録済みとみなすのは慎重に。** 名前は核の語 (SALE_CORES) の共有か完全一致で見て、
+    時期も合うときだけ (registered_by_name)。迷ったら知らせる側に倒す
 
 決めごと:
   - **拾うのは題名だけ。** 本文は読まない。先行セールの日程は本文にしか無いので、
@@ -36,13 +48,15 @@ from __future__ import annotations
 
 import datetime as dt
 import email.utils
+import hashlib
+import json
 import logging
 import re
 import unicodedata
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 logger = logging.getLogger("sale_announcements")
 
@@ -56,6 +70,8 @@ SHOPS = ("amazon", "rakuten", "yahoo")
 SALE_URLS = {
     "amazon": "https://www.amazon.co.jp/s?rh=n%3A13299531%2Cp_n_deal_type%3A10343614051",
     "yahoo": "https://shopping.yahoo.co.jp/promotion/sale/ppf/",
+    # 楽天はセールごとにページが違う。カレンダーに url があればそちらを使う
+    "rakuten": "https://event.rakuten.co.jp/",
 }
 FEEDS: Tuple[Dict[str, Any], ...] = (
     {"name": "About Amazon Japan",
@@ -68,6 +84,14 @@ FEEDS: Tuple[Dict[str, Any], ...] = (
     {"name": "PHILE WEB", "news": True, "upgrade_http": True,
      "url": "https://www.phileweb.com/rss.php",
      "shop": "amazon", "hosts": ("www.phileweb.com",)},
+    # 楽天・Yahoo の公式の発表 (navi-brain#206)。どちらも企業全体のフィードで、別のサービスの
+    # 発表が混ざる。セールの名前は決め打ちせず、モールの名前・開催の語・セールの語で拾う (mall)
+    {"name": "PR TIMES（楽天グループ）", "mall": True,
+     "url": "https://prtimes.jp/companyrdf.php?company_id=5889",
+     "shop": "rakuten", "hosts": ("prtimes.jp",)},
+    {"name": "PR TIMES（LINEヤフー）", "mall": True,
+     "url": "https://prtimes.jp/companyrdf.php?company_id=129774",
+     "shop": "yahoo", "hosts": ("prtimes.jp",)},
 )
 USER_AGENT = "navi-omcha-sale-calendar/1.0 (+https://navi.omcha.jp/)"
 TIMEOUT_S = 20
@@ -85,6 +109,43 @@ QUOTED_RE = re.compile("「([^」]{1,40})」")
 AMAZON_QUOTED_RE = re.compile(r"amazon[\s、,:]*「([^」]{1,40})」", re.IGNORECASE)
 # カレンダーに無いセールを拾うときの、セールの名前らしさ (NFKC・小文字にしてから見る)
 SALE_WORDS = ("セール", "sale", "祭", "初売り", "フライデー", "サイバーマンデー")
+
+# --- 楽天・Yahoo のフィード (mall) の決めごと (navi-brain#206) ---
+# そのモールの発表とみなす名前 (NFKC・小文字・空白を除いた題名に含まれるか)。
+# 「【Yahoo!トラベル】」「「楽天ふるさと納税」」などの別のサービスはこれで落ちる
+MALL_NAMES = {"rakuten": ("楽天市場", "楽天スーパーsale"),
+              "yahoo": ("yahoo!ショッピング", "ヤフーショッピング", "ヤフショ")}
+# 開催の語。「開始」は「提供開始」が多いので入れない
+OPEN_WORDS = ("開催", "実施", "スタート")
+# 発表からこの日数までだけ候補にする (題名に日付が無いことが多く、終わったかを判定できない。
+# 初めて動かしたときに 2 か月前の終わったセールまで issue にしない)
+MALL_MAX_AGE_DAYS = 14
+# issue の題名で名前の前に付けるモールの名前
+MALL_SITES = {"amazon": "Amazon", "rakuten": "楽天市場", "yahoo": "Yahoo!ショッピング"}
+# 題名のどこかからセールの名前を切り出す (楽天は名前を「」で囲まない)。助詞 (ひらがな) で切る
+SALE_PHRASE_RE = re.compile(
+    r"[ァ-ヴーA-Za-z0-9一-龠々!]{0,20}(?:セール|SALE|Sale|sale|祭|フライデー|初売り|サイバーマンデー)"
+    r"[ァ-ヴーA-Za-z0-9]*")
+TODAY_START_RE = re.compile(r"本日(?:から|より)")
+# 日付の無い Amazon の公式の題名を候補にするときの開催の書き方。
+# 「「プライムデー」の開催に向けた…調査を実施」を拾わないため「を…開催」だけにする
+DATELESS_OPEN_RE = re.compile(r"を(?:本日(?:から|より))?開催")
+# 同じセールかを名前で見るとき (sale_key) に落とすモールの名前。長いものから
+MALL_WORDS = ("amazon.co.jp", "amazon", "アマゾン", "楽天市場", "rakuten", "楽天",
+              "yahoo!ショッピング", "yahooショッピング", "ヤフーショッピング", "ヤフショ",
+              "yahoo!", "yahoo")
+# 「同じセール」とみなす核の語 (sale_key の後の形)。**登録済みとみなす側にだけ使う。**
+# ここに無い新しいセールは一致せず、知らせる側に倒れる
+SALE_CORES = ("ブラックフライデー", "blackfriday", "サイバーマンデー", "スーパーsale",
+              "スーパーセール", "大感謝祭", "初売り", "超paypay祭", "爆買ウルトラ", "マラソン",
+              "プライムデー", "プライム感謝祭", "新生活", "スマイルsale", "ビッグボーナス")
+CORE_ALIASES = {"blackfriday": "ブラックフライデー", "スーパーセール": "スーパーsale"}
+# 名前が同じでも、登録済みのイベントがこの範囲に無ければ別の回とみなす
+NAME_MATCH_LEAD_DAYS = 45
+NAME_MATCH_SLACK_DAYS = 3
+# カレンダーのセールの何年の回か: 目安の日が発表日のこの範囲に来る年
+CAL_YEAR_BEFORE_DAYS = 28
+CAL_YEAR_AFTER_DAYS = 90
 
 
 def _date_pattern(prefix: str, month_required: bool) -> str:
@@ -265,6 +326,116 @@ def match_unknown_sale(title: str, calendar: Sequence[Dict[str, Any]],
     return names[0] if len(names) == 1 else None
 
 
+def sale_key(name: str) -> str:
+    """同じセールかを見るための名前の形。モールの名前・空白・記号を落とす。"""
+    text = re.sub(r"\s+", "", unicodedata.normalize("NFKC", name)).lower()
+    for word in MALL_WORDS:
+        text = text.replace(word, "")
+    return re.sub(r"[\W_]", "", text)
+
+
+def _cores(key: str) -> set:
+    return {CORE_ALIASES.get(c, c) for c in SALE_CORES if c in key}
+
+
+def same_sale(a: str, b: str) -> bool:
+    """2 つの名前が同じセールか。核の語があれば共有するか、無ければ完全一致で見る。
+
+    包含では見ない (「スーパー」「感謝祭」のような短い語で別のセールに吸われ、取り逃しが
+    再発するため)。空・2 字以下は一致にしない。
+    """
+    ka, kb = sale_key(a), sale_key(b)
+    ca, cb = _cores(ka), _cores(kb)
+    if ca or cb:
+        return bool(ca & cb)
+
+    def bare(key: str) -> str:
+        for word in ("セール", "sale"):
+            if key.endswith(word) and len(key) - len(word) >= 3:
+                return key[:-len(word)]
+        return key
+    ka, kb = bare(ka), bare(kb)
+    return len(ka) > 2 and ka == kb
+
+
+def mall_sale_name(title: str, shop: str) -> Optional[str]:
+    """楽天・Yahoo のフィードの題名が大型セールの開催の発表らしければ、セールの名前を返す。
+
+    名前は決め打ちしない (navi-brain#206 の決定 1)。条件は、モールの名前・開催の語・
+    セールの語を全部含むこと。誤検知は年に数件で、人が issue を閉じて捨てる。
+    """
+    text = unicodedata.normalize("NFKC", title)
+    flat = re.sub(r"\s+", "", text).lower()
+    if not any(m in flat for m in MALL_NAMES.get(shop, ())):
+        return None
+    if not any(w in flat for w in OPEN_WORDS) or not any(w in flat for w in SALE_WORDS):
+        return None
+    for quoted in QUOTED_RE.findall(text):
+        if any(w in normalize_name(quoted) for w in SALE_WORDS):
+            return re.sub(r"\s+", " ", quoted).strip()
+    m = SALE_PHRASE_RE.search(text)
+    if m:
+        return m.group(0)
+    return re.sub(r"\s+", " ", text).strip()[:40]
+
+
+def _typical(entry: Dict[str, Any], year: int) -> Optional[dt.date]:
+    m = re.match(r"^(\d{2})-(\d{2})$", str(entry.get("typical_start") or ""))
+    if not m:
+        return None
+    try:
+        return dt.date(year, int(m.group(1)), int(m.group(2)))
+    except ValueError:
+        return None
+
+
+def calendar_match(name: str, calendar: Sequence[Dict[str, Any]],
+                   published: dt.date) -> Optional[Tuple[Dict[str, Any], int]]:
+    """名前が同じで、目安の日が発表日に最も近い (カレンダーの項目, 年)。毎月のセールは見ない。
+
+    初売りは前年の 12 月に発表されるので、年は発表日の年に決め打ちしない。
+    """
+    best = None  # type: Optional[Tuple[int, Dict[str, Any], int]]
+    for entry in calendar:
+        if entry.get("cycle") == "monthly":
+            continue
+        names = [entry["name"]] + list(entry.get("announce_names") or [])
+        if not any(same_sale(name, n) for n in names):
+            continue
+        for year in (published.year - 1, published.year, published.year + 1):
+            day = _typical(entry, year)
+            if day is None:
+                continue
+            diff = (day - published).days
+            if -CAL_YEAR_BEFORE_DAYS <= diff <= CAL_YEAR_AFTER_DAYS and (
+                    best is None or abs(diff) < best[0]):
+                best = (abs(diff), entry, year)
+    return (best[1], best[2]) if best else None
+
+
+def registered_by_name(name: str, shop: str, published: dt.date,
+                       reference: Optional[Dict[str, Any]],
+                       events: Sequence[Dict[str, Any]]) -> bool:
+    """同じモールに、名前が同じで時期の合う登録済みのイベントがあるか。
+
+    events は sale_calendar_reminder.registered_events の形 ({shop, name, lo, hi, ...})。
+    時期は「終了 ≧ 発表日」かつ「開始 ≦ 発表日 + NAME_MATCH_LEAD_DAYS」。題名に日付が
+    あれば、それが期間 (前後 NAME_MATCH_SLACK_DAYS 日) に入ることも見る (6 月の超PayPay祭の
+    登録で、6 月中に出た 7 月の回の発表を黙らせない)。
+    """
+    slack = dt.timedelta(days=NAME_MATCH_SLACK_DAYS)
+    for ev in events:
+        if ev.get("shop") != shop or not ev.get("name") or not same_sale(name, ev["name"]):
+            continue
+        if ev["hi"] < published or ev["lo"] > published + dt.timedelta(days=NAME_MATCH_LEAD_DAYS):
+            continue
+        ref_start = reference and reference.get("start")
+        if ref_start and not ev["lo"] - slack <= ref_start <= ev["hi"] + slack:
+            continue
+        return True
+    return False
+
+
 def _checked_date(year: int, month: int, day: int, weekday: str) -> Optional[dt.date]:
     try:
         date = dt.date(year, month, day)
@@ -395,10 +566,21 @@ def shop_of(entry: Dict[str, Any]) -> str:
     return entry.get("shop") or "amazon"
 
 
-def _covered(start: dt.date, shop: str,
-             spans: Sequence[Tuple[dt.date, dt.date, str]]) -> bool:
-    # 別のモールのセールと期間が重なるのは普通 (楽天のマラソンとスマイルSALE など)
-    return any(lo <= start <= hi and s == shop for lo, hi, s in spans)
+def _covered(start: dt.date, shop: str, events: Sequence[Dict[str, Any]]) -> bool:
+    """同じモールに、どれかの段階の開始日が start の前後 1 日にあるイベントがあるか。
+
+    「期間の中に開始日が入る」では見ない。期間が重なる別のセール (楽天のブラックフライデーの
+    最中のマラソンなど) を黙って捨てるため (navi-brain#206 の課題 ⑥)。
+    別のモールのセールと期間が重なるのは普通 (楽天のマラソンとスマイルSALE など)。
+    """
+    one = dt.timedelta(days=1)
+    return any(ev.get("shop") == shop and any(abs(s - start) <= one for s in ev["starts"])
+               for ev in events)
+
+
+def _span_events(spans: Sequence[Tuple[dt.date, dt.date, str]]) -> List[Dict[str, Any]]:
+    """古い呼び方 (期間とモールだけ) を registered_events の形にする。開始日は期間の初日。"""
+    return [{"shop": s, "name": "", "lo": lo, "hi": hi, "starts": [lo]} for lo, hi, s in spans]
 
 
 def _merge_period(periods: List[Dict[str, Any]], period: Dict[str, Any]) -> None:
@@ -430,20 +612,85 @@ def auto_eligible(cand: Dict[str, Any]) -> bool:
     return None not in (period["end"], period["start_time"], period["end_time"])
 
 
+def mall_event_id(entry: Optional[Dict[str, Any]], year: Optional[int], shop: str,
+                  name: str, published: dt.date) -> Tuple[str, Any]:
+    """楽天・Yahoo の発表の候補の id と、issue の題名に出す回の呼び名。
+
+    カレンダーのセールなら「<id>-<年>」(目安のリマインドと同じ id になり、issue が 1 本に
+    まとまる)。無ければ「adhoc-<shop>-<発表年>-<発表月>-<名前のハッシュ 6 桁>」。
+    発表日では作らない: 同じセールの第 2 報で issue が立ち直り、同じ日の別のセールが 1 本に
+    潰れるため (2026-11-23 の要件レビュー)。
+    """
+    if entry is not None:
+        return "{}-{}".format(entry["id"], year), year
+    digest = hashlib.sha1(sale_key(name).encode("utf-8")).hexdigest()[:6]
+    return ("adhoc-{}-{}-{:02d}-{}".format(shop, published.year, published.month, digest),
+            "{}年{}月".format(published.year, published.month))
+
+
+def _detect_mall(item: Dict[str, Any], feed: Dict[str, Any], shop: str,
+                 shop_calendar: Sequence[Dict[str, Any]], registered: set,
+                 events: Sequence[Dict[str, Any]], add: Callable[..., Dict[str, Any]]) -> None:
+    """楽天・Yahoo のフィードの 1 件を候補にする (navi-brain#206 の決定 1)。
+
+    題名の日付は「参考」(reference_periods) にだけ入れる。Yahoo の題名の日付は山場の日付の
+    ことがあり、楽天はほぼ日付が無い。periods / official_periods には入れないので、
+    自動登録の関門 (auto_eligible) は通らない (自動登録は今の関門のまま)。
+    """
+    name = mall_sale_name(item["title"], shop)
+    if name is None:
+        return
+    published = item["published"]
+    reference = parse_period(item["title"], published) or parse_loose_period(
+        item["title"], published)
+    if reference is None and TODAY_START_RE.search(unicodedata.normalize("NFKC", item["title"])):
+        reference = {"start": published, "end": None, "start_time": None, "end_time": None}
+    hit = calendar_match(name, shop_calendar, published)
+    entry, year = hit if hit else (None, None)
+    event_id, label = mall_event_id(entry, year, shop, name, published)
+    if event_id in registered or registered_by_name(
+            entry["name"] if entry else name, shop, published, reference, events):
+        return
+    display = entry["name"] if entry else "{} {}".format(MALL_SITES[shop], name)
+    cand = add(event_id, entry, shop, display, label, feed, item)
+    if reference:
+        _merge_period(cand["reference_periods"], reference)
+
+
 def detect(
     feed_items: Sequence[Tuple[Dict[str, Any], Sequence[Dict[str, Any]]]],
     calendar: Sequence[Dict[str, Any]],
     registered: set,
     today: dt.date,
     registered_spans: Sequence[Tuple[dt.date, dt.date, str]] = (),
+    registered_events: Optional[Sequence[Dict[str, Any]]] = None,
 ) -> Dict[str, Dict[str, Any]]:
     """未登録・これから始まるセールの候補を、イベント id ごとにまとめて返す。
 
-    registered_spans は登録済みのイベントの期間 (JST の日付) とモール。開始日が同じ
-    モールの期間に入る候補は、id が違っても登録済みとみなす (カレンダーに無いセールは
-    id で突き合わせられないため)。
+    registered_events は登録済みのイベント (sale_calendar_reminder.registered_events の形:
+    モール・名前・期間・段階の開始日)。id が違っても、同じモールで段階の開始日が前後 1 日に
+    あるか (_covered)、名前と時期が合えば (registered_by_name) 登録済みとみなす
+    (カレンダーに無いセールや、62 が別の id で自動登録したものは id で突き合わせられないため)。
+    registered_spans は古い呼び方 (期間とモールだけ)。registered_events があればそちらを使う。
     """
+    events = (list(registered_events) if registered_events is not None
+              else _span_events(registered_spans))
     found = {}  # type: Dict[str, Dict[str, Any]]
+
+    def add(event_id: str, entry: Optional[Dict[str, Any]], shop: str, name: str,
+            label: Any, feed: Dict[str, Any], item: Dict[str, Any]) -> Dict[str, Any]:
+        cand = found.setdefault(event_id, {
+            "event_id": event_id, "calendar_id": entry["id"] if entry else None,
+            "shop": shop, "url": (entry or {}).get("url"),
+            "name": name, "year": label,
+            "periods": [], "official_periods": [], "reference_periods": [], "sources": [],
+        })
+        cand["sources"].append({
+            "feed": feed["name"], "news": bool(feed.get("news")), "title": item["title"],
+            "link": safe_link(item["link"], feed), "published": item["published"],
+        })
+        return cand
+
     for feed, items in feed_items:
         news = bool(feed.get("news"))
         shop = shop_of(feed)
@@ -451,6 +698,10 @@ def detect(
         shop_calendar = [e for e in calendar if shop_of(e) == shop]
         for item in items:
             age = (today - item["published"]).days
+            if feed.get("mall"):
+                if -1 <= age <= MALL_MAX_AGE_DAYS:
+                    _detect_mall(item, feed, shop, shop_calendar, registered, events, add)
+                continue
             if not -1 <= age <= MAX_AGE_DAYS:
                 continue
             entry = match_sale(item["title"], shop_calendar, news)
@@ -462,30 +713,33 @@ def detect(
             if period is None and news:
                 period = parse_loose_period(item["title"], item["published"])
             if period is None:
+                # 日付の無い公式の発表も、カレンダーのセールなら知らせる (navi-brain#206 R1-4)。
+                # 報道は Amazon 以外の記事が多いので、今までどおり日付が要る
+                if entry and not news and DATELESS_OPEN_RE.search(
+                        unicodedata.normalize("NFKC", item["title"])):
+                    hit = calendar_match(entry["name"], [entry], item["published"])
+                    if hit is None:
+                        continue
+                    event_id = "{}-{}".format(entry["id"], hit[1])
+                    if event_id in registered or registered_by_name(
+                            entry["name"], shop, item["published"], None, events):
+                        continue
+                    add(event_id, entry, shop, name, hit[1], feed, item)
                 continue
             last_day = period["end"] or period["start"] + dt.timedelta(days=MAX_SPAN_DAYS)
             if last_day < today:
                 continue
             event_id, label = event_key(entry, name, period["start"])
-            if event_id in registered or _covered(period["start"], shop, registered_spans):
+            if event_id in registered or _covered(period["start"], shop, events):
                 continue
-            cand = found.setdefault(event_id, {
-                "event_id": event_id, "calendar_id": entry["id"] if entry else None,
-                "shop": shop,
-                "name": name, "year": label,
-                "periods": [], "official_periods": [], "sources": [],
-            })
-            cand["sources"].append({
-                "feed": feed["name"], "news": news, "title": item["title"],
-                "link": safe_link(item["link"], feed), "published": item["published"],
-            })
+            cand = add(event_id, entry, shop, name, label, feed, item)
             _merge_period(cand["periods"], period)
             if not news:
                 # 自動登録の判定 (auto_eligible) は公式の発表だけで見る。報道の時刻で補わない
                 _merge_period(cand["official_periods"], dict(period))
     for cand in found.values():
         cand["sources"].sort(key=lambda s: (s["published"], s["link"]))
-        for key in ("periods", "official_periods"):
+        for key in ("periods", "official_periods", "reference_periods"):
             cand[key].sort(key=lambda p: (p["start"], p["end"] or dt.date.max))
     # 同じ開始日にカレンダーのセールの候補があれば、名前の違う adhoc はその別名とみなす
     # (「スマイルセール」と「スマイルSALE」で 2 本立てない)
@@ -501,6 +755,7 @@ def detect(
 def collect(
     calendar: Sequence[Dict[str, Any]], registered: set, today: dt.date,
     registered_spans: Sequence[Tuple[dt.date, dt.date, str]] = (),
+    registered_events: Optional[Sequence[Dict[str, Any]]] = None,
 ) -> Tuple[Dict[str, Dict[str, Any]], List[str]]:
     """フィードを読んで候補を返す。読めなかったフィードは 2 つ目の戻り値に積む。"""
     feed_items, errors = [], []
@@ -512,7 +767,8 @@ def collect(
             continue
         logger.info("feed %s: %d items", feed["name"], len(items))
         feed_items.append((feed, items))
-    return detect(feed_items, calendar, registered, today, registered_spans), errors
+    return detect(feed_items, calendar, registered, today, registered_spans,
+                  registered_events), errors
 
 
 # --- issue に載せる文面 -----------------------------------------------------
@@ -543,15 +799,16 @@ def render_yaml(cand: Dict[str, Any], period: Dict[str, Any]) -> str:
     return "\n".join([
         "- id: {}".format(cand["event_id"]),
         "  shop: {}".format(cand.get("shop", "amazon")),
-        '  url: "{}"'.format(SALE_URLS.get(cand.get("shop", "amazon"), "")),
-        "  name: {}".format(cand["name"]),
+        '  url: "{}"'.format(cand.get("url") or SALE_URLS.get(cand.get("shop", "amazon"), "")),
+        # 楽天・Yahoo の名前は題名から切り出したもので、「:」などを含みうる。YAML の文字列にする
+        "  name: {}".format(json.dumps(cand["name"], ensure_ascii=False)),
         # 報道は出典にしない (Amazon.co.jp の告知で確かめて書き直してもらう)
         "  source: {}".format("{} の記事 → Amazon.co.jp の告知で確認".format(source["feed"])
                                if source.get("news") else "{} の発表".format(source["feed"])),
         "  verified_on: ????-??-??",
         "  phases:",
         "    - label: 本番",
-        "      headline: {}".format(cand["name"]),
+        "      headline: {}".format(json.dumps(cand["name"], ensure_ascii=False)),
         '      start: "{}"'.format(_stamp(period["start"], period["start_time"], False)),
         '      end: "{}"'.format(_stamp(period["end"], period["end_time"], True)),
     ])
@@ -572,7 +829,19 @@ def render_candidate(cand: Dict[str, Any]) -> List[str]:
     if len(cand["periods"]) > 1:
         lines += ["", "**発表によって日程が食い違っています。** どれが正しいかを"
                       "出典で確かめてください。"]
-    for period in cand["periods"]:
+    references = cand.get("reference_periods") or []
+    if not cand["periods"]:
+        # 日付を題名から読めなかった・参考の日付しか無い (楽天・Yahoo の発表など)
+        lines += ["", "**題名から開催期間を読めませんでした。** 期間は出典か"
+                      "モールのキャンペーンページで確かめてください。"]
+        if references:
+            lines += ["", "題名にあった日付（参考。開始日ではなく山場の日付のことがあります）:"]
+            for ref in references:
+                lines.append("- {}{}".format(
+                    ref["start"].isoformat(),
+                    "〜{}".format(ref["end"].isoformat()) if ref["end"] else " から"))
+    blank = {"start": None, "end": None, "start_time": None, "end_time": None}
+    for period in cand["periods"] or [blank]:
         lines += ["", "```yaml", render_yaml(cand, period), "```"]
     lines += [
         "",

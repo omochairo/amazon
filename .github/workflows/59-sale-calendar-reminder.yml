@@ -6,7 +6,7 @@ name: Sale Calendar Reminder
 # 自動で出て自動で消える。足りなかったのは「追記を思い出す手段」で、忘れると
 # そのセールは告知されないまま過ぎる。
 #
-# - 公式のフィード 2 本 (About Amazon Japan / PR TIMES のアマゾンジャパン) を
+# - 公式のフィード (About Amazon Japan / PR TIMES のアマゾン・楽天・LINEヤフー) と報道 1 本を
 #   1 回ずつ読み、開催の発表が出ていたら、題名から読んだ日程を「候補」として
 #   issue に載せる (scripts/sale_announcements.py)。Amazon.co.jp 本体は読まない
 # - ここでは日程を登録しない。関門を通った発表は 62-shop-sale-watch.yml が自動で登録し、
@@ -24,6 +24,9 @@ on:
     # 毎日 15:23 JST。初売りは発表 (12/27 ごろ) から開始まで 7 日しか無く、
     # 週次では間に合わない。発表は 10〜14 時台に出るので、その日のうちに拾う
     - cron: '23 6 * * *'
+    # 09:23 JST も。楽天・Yahoo の発表を読むようになって候補が増えた (navi-brain#206)。
+    # 1 run で書くのは 1 件までなので、1 日 2 件まで
+    - cron: '23 0 * * *'
   workflow_dispatch:
     inputs:
       today:

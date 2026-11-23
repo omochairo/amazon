@@ -58,6 +58,9 @@ SALE_EVENTS = ROOT / "hugo" / "data" / "sale_events.yaml"
 MARKER_PREFIX = "sale-calendar-reminder"
 # 発表の候補を載せた印。本文かコメントにあれば、同じセールで 2 回載せない
 ANNOUNCE_MARKER_PREFIX = "sale-announcement"
+# 自動登録した本番に先行セールを足す確認の印 (navi-brain#206 R1-7)
+PRESALE_MARKER_PREFIX = "sale-presale"
+AUTO_MARK = "shop_sale_watch"
 LABELS = "todo"
 JST = dt.timezone(dt.timedelta(hours=9))
 DEFAULT_REMIND_DAYS = 21
@@ -102,6 +105,11 @@ def validate_calendar(entries: Sequence[Dict[str, Any]]) -> None:
         if entry.get("shop", "amazon") not in sale_announcements.SHOPS:
             raise CalendarError("{}: shop は {} のどれか: {!r}".format(
                 cal_id, " / ".join(sale_announcements.SHOPS), entry.get("shop")))
+        if not isinstance(entry.get("pre_sale", False), bool):
+            raise CalendarError("{}: pre_sale は true / false".format(cal_id))
+        url = entry.get("url")
+        if url is not None and not (isinstance(url, str) and url.startswith("https://")):
+            raise CalendarError("{}: url は https:// で始まる文字列: {!r}".format(cal_id, url))
         cycle = entry.get("cycle", "yearly")
         if cycle not in CYCLES:
             raise CalendarError("{}: cycle は {} のどれか: {!r}".format(
@@ -163,6 +171,50 @@ def registered_spans(events: Sequence[Dict[str, Any]]) -> List[tuple]:
     return spans
 
 
+def registered_events(events: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """登録済みのイベントを、検知の突き合わせに使う形にする (navi-brain#206)。
+
+    {id, shop, name, auto, lo, hi, starts, phases}。lo / hi は最初の区分の開始日〜最後の
+    区分の終了日 (JST)、starts は各区分の開始日。読めない区分は飛ばす。
+    """
+    out = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        starts, days = [], []
+        for phase in event.get("phases") or []:
+            for key in ("start", "end"):
+                try:
+                    day = dt.datetime.fromisoformat(str(phase[key])).astimezone(JST).date()
+                except (KeyError, TypeError, ValueError):
+                    continue
+                days.append(day)
+                if key == "start":
+                    starts.append(day)
+        if not days:
+            continue
+        out.append({"id": event.get("id"), "shop": event.get("shop") or "amazon",
+                    "name": str(event.get("name") or ""), "auto": event.get("auto"),
+                    "lo": min(days), "hi": max(days), "starts": starts,
+                    "phases": len(event.get("phases") or [])})
+    return out
+
+
+def _registered_like(entry: Dict[str, Any], start: dt.date, lead: int,
+                     infos: Sequence[Dict[str, Any]]) -> bool:
+    """カレンダーのセールが、別の id で登録済みか (62 の自動登録の id は開始日入り)。
+
+    同じモールで、どれかの段階の開始日が [目安 − lead, 目安 + GRACE_DAYS] にあり、
+    名前が同じセール (sale_announcements.same_sale) のイベントがあれば登録済み。
+    """
+    lo, hi = start - dt.timedelta(days=lead), start + dt.timedelta(days=GRACE_DAYS)
+    names = [entry["name"]] + list(entry.get("announce_names") or [])
+    shop = sale_announcements.shop_of(entry)
+    return any(info["shop"] == shop and any(lo <= s <= hi for s in info["starts"])
+               and any(sale_announcements.same_sale(n, info["name"]) for n in names)
+               for info in infos)
+
+
 def due_reminders(
     calendar: Sequence[Dict[str, Any]],
     events: Sequence[Dict[str, Any]],
@@ -171,6 +223,7 @@ def due_reminders(
     """今日の時点で知らせるべき (時期が近い・未登録の) セールを、目安の早い順に返す。"""
     validate_calendar(calendar)
     registered = registered_ids(events)
+    infos = registered_events(events)
     due = []
     for entry in calendar:
         if entry.get("cycle") == "monthly":
@@ -182,7 +235,7 @@ def due_reminders(
             if not start - dt.timedelta(days=lead) <= today <= start + dt.timedelta(days=GRACE_DAYS):
                 continue
             event_id = "{}-{}".format(entry["id"], year)
-            if event_id in registered:
+            if event_id in registered or _registered_like(entry, start, lead, infos):
                 continue
             due.append({
                 "event_id": event_id,
@@ -192,8 +245,37 @@ def due_reminders(
                 "year": year,
                 "typical_start": start,
                 "note": entry.get("note") or "",
+                "url": entry.get("url") or "",
             })
     return sorted(due, key=lambda r: (r["typical_start"], r["event_id"]))
+
+
+def presale_checks(
+    calendar: Sequence[Dict[str, Any]],
+    events: Sequence[Dict[str, Any]],
+    today: dt.date,
+) -> List[Dict[str, Any]]:
+    """自動登録した本番に、先行セールを足す確認が要るもの (navi-brain#206 R1-7)。
+
+    62 は題名から本番の期間だけを登録する (先行セールの日程は本文にしか無い)。本番が
+    自動登録されると目安のリマインドも立たなくなり、人が先行セールを確かめる経路が消える。
+    対象は、カレンダーで pre_sale: true のセールの「<id>-<年>」のイベントで、auto が付き、
+    段階が 1 つで、本番がまだ始まっていないもの。人が先行セールを足して auto を消せば外れる。
+    """
+    pre = {e["id"]: e for e in calendar if e.get("pre_sale")}
+    rows = []
+    for info in registered_events(events):
+        if info["auto"] != AUTO_MARK or info["phases"] != 1 or not info["starts"]:
+            continue
+        m = re.match(r"^(.+)-(\d{4})$", str(info["id"] or ""))
+        if not m or m.group(1) not in pre or not today < info["starts"][0]:
+            continue
+        entry = pre[m.group(1)]
+        rows.append({"event_id": info["id"], "calendar_id": entry["id"], "presale": True,
+                     "shop": sale_announcements.shop_of(entry), "name": entry["name"],
+                     "year": int(m.group(2)), "start": info["starts"][0],
+                     "note": entry.get("note") or ""})
+    return sorted(rows, key=lambda r: (r["start"], r["event_id"]))
 
 
 def marker_for(event_id: str) -> str:
@@ -204,7 +286,14 @@ def announce_marker_for(event_id: str) -> str:
     return "{}:{}".format(ANNOUNCE_MARKER_PREFIX, event_id)
 
 
+def presale_marker_for(event_id: str) -> str:
+    return "{}:{}".format(PRESALE_MARKER_PREFIX, event_id)
+
+
 def title_for(row: Dict[str, Any]) -> str:
+    if row.get("presale"):
+        return "[sale] {} {} の先行セールの有無を確かめる（本番だけ自動登録済み）".format(
+            row["name"], row["year"])
     if row.get("candidate"):
         return "[sale] {} {} の開催が発表された — 日程を確認して告知に登録する".format(
             row["name"], row["year"])
@@ -237,10 +326,15 @@ def render_body(row: Dict[str, Any], today: dt.date) -> str:
             "この目安は過去の開催時期からの概算で、今年の日程ではありません。"
             "公式の告知で日程を確認してから登録してください。",
             "",
+            # 決定 2 (navi-brain#206): 見つからないのを赤にはせず、この issue で知らせる
+            "公式の発表の自動検知・キャンペーンページの自動登録は、まだこのセールを"
+            "拾っていません（開催の発表が無い・読み取りの対象外・まだ発表前のどれか）。",
+            "",
             "## やること",
             "",
-            "1. {} の公式の告知で、開催期間（先行セールがあればその期間も）を確認する".format(
-                SHOP_SITES[row.get("shop", "amazon")]),
+            "1. {} の公式の告知{}で、開催期間（先行セールがあればその期間も）を確認する".format(
+                SHOP_SITES[row.get("shop", "amazon")],
+                "（{}）".format(row["url"]) if row.get("url") else ""),
         ]
     lines += [
         "2. `hugo/data/sale_events.yaml` に 1 件追記する PR を出す",
@@ -290,6 +384,43 @@ def render_comment(row: Dict[str, Any], today: dt.date) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _presale_lines(row: Dict[str, Any]) -> List[str]:
+    start = row["start"]
+    return [
+        "**{} {}** の本番（{}/{} から）は、公式の発表の題名から自動で登録されました。"
+        "**先行セールは題名に出ないので、自動では登録されていません。**".format(
+            row["name"], row["year"], start.month, start.day),
+        "",
+        "## やること",
+        "",
+        "1. 公式の発表の本文か {} の告知で、先行セールの有無と期間を確かめる".format(
+            SHOP_SITES[row.get("shop", "amazon")]),
+        "2. 先行セールがあれば、`hugo/data/sale_events.yaml` の **`{}`** の `phases` の"
+        "先頭に段階を足し、`auto: shop_sale_watch` の行を消す PR を出す"
+        "（消さないと、この確認が対象のまま残ります）".format(row["event_id"]),
+        "3. 先行セールが無ければ、`auto` の行だけ消すか、この issue を閉じる",
+    ]
+
+
+def render_presale_body(row: Dict[str, Any], today: dt.date) -> str:
+    lines = [marker_comment(presale_marker_for(row["event_id"])), "", *_presale_lines(row)]
+    if row.get("note"):
+        lines += ["", "メモ: {}".format(row["note"])]
+    lines += ["", "---",
+              "`scripts/sale_calendar_reminder.py` による自動起票（{} 判定）。"
+              "Refs #9449・navi-brain#206".format(today.isoformat())]
+    return "\n".join(lines) + "\n"
+
+
+def render_presale_comment(row: Dict[str, Any], today: dt.date) -> str:
+    """目安で立てた issue が開いているときは、新しく立てずにそこへ足す。"""
+    lines = [marker_comment(presale_marker_for(row["event_id"])), "", *_presale_lines(row),
+             "", "---",
+             "`scripts/sale_calendar_reminder.py` による自動コメント（{} 判定）。".format(
+                 today.isoformat())]
+    return "\n".join(lines) + "\n"
+
+
 # --- GitHub 側 (check_delivery_freshness.py と同じ作法) ----------------------
 
 def _gh(args: List[str]) -> str:
@@ -300,9 +431,13 @@ def _gh(args: List[str]) -> str:
     return res.stdout
 
 
-def find_existing(repo: str, event_id: str) -> Optional[Dict[str, Any]]:
-    """このセールのリマインド issue (open / closed とも) があれば返す。"""
-    marker = marker_for(event_id)
+def find_existing(repo: str, event_id: str,
+                  marker: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """このセールのリマインド issue (open / closed とも) があれば返す。
+
+    marker を渡すと、その印の issue を探す (先行セールの確認の issue)。
+    """
+    marker = marker or marker_for(event_id)
     query = 'repo:{} is:issue in:body "{}"'.format(repo, marker)
     out = _gh(["api", "-X", "GET", "search/issues", "-f", "q={}".format(query),
                "-f", "per_page=20"])
@@ -312,9 +447,10 @@ def find_existing(repo: str, event_id: str) -> Optional[Dict[str, Any]]:
     return matches[0] if matches else None
 
 
-def announcement_posted(repo: str, issue: Dict[str, Any], event_id: str) -> bool:
-    """発表の候補を、この issue の本文かコメントに既に載せたか。"""
-    needle = marker_comment(announce_marker_for(event_id))
+def announcement_posted(repo: str, issue: Dict[str, Any], event_id: str,
+                        marker: Optional[str] = None) -> bool:
+    """発表の候補 (marker を渡せばその印) を、この issue の本文かコメントに既に載せたか。"""
+    needle = marker_comment(marker or announce_marker_for(event_id))
     if needle in (issue.get("body") or ""):
         return True
     out = _gh(["api", "-X", "GET",
@@ -332,6 +468,41 @@ def create_issue(repo: str, title: str, body: str) -> str:
                 "--label", LABELS, "--body", body]).strip()
 
 
+def decide(repo: str, row: Dict[str, Any]) -> tuple:
+    """この行で何をするか: ("create", None) / ("comment", issue) / ("skip", None)。
+
+    - 目安のリマインド: 同じ印の issue が open / closed とも無ければ立てる
+    - 発表の候補: 目安の issue が開いていれば 1 回だけコメント、閉じていれば何もしない
+    - 先行セールの確認: 目安の issue が開いていれば 1 回だけコメント。そうでなければ
+      確認の印の issue が open / closed とも無いときだけ立てる
+    """
+    event_id = row["event_id"]
+    existing = find_existing(repo, event_id)
+    if row.get("presale"):
+        marker = presale_marker_for(event_id)
+        if existing and existing.get("state") == "open":
+            if announcement_posted(repo, existing, event_id, marker):
+                logger.info("%s: issue #%s に先行セールの確認を載せ済み", event_id, existing["number"])
+                return ("skip", None)
+            return ("comment", existing)
+        if find_existing(repo, event_id, marker):
+            logger.info("%s: 先行セールの確認の issue が既にある", event_id)
+            return ("skip", None)
+        return ("create", None)
+    if not existing:
+        return ("create", None)
+    if not row.get("candidate"):
+        logger.info("%s: issue #%s が既にあるので立てない", event_id, existing["number"])
+        return ("skip", None)
+    if existing.get("state") != "open":
+        logger.info("%s: issue #%s は閉じているので何もしない", event_id, existing["number"])
+        return ("skip", None)
+    if announcement_posted(repo, existing, event_id):
+        logger.info("%s: issue #%s に発表を載せ済み", event_id, existing["number"])
+        return ("skip", None)
+    return ("comment", existing)
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--repo", default=os.environ.get("REPO"))
@@ -346,52 +517,53 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
              else dt.datetime.now(JST).date())
     calendar, events = load_yaml(CALENDAR), load_yaml(SALE_EVENTS)
     due = due_reminders(calendar, events, today)
+    presales = presale_checks(calendar, events, today)
     detected, feed_errors = sale_announcements.collect(
-        calendar, registered_ids(events), today, registered_spans(events))
-    # 発表が出ているセールを先に。目安だけのセールはその後
+        calendar, registered_ids(events), today, registered_spans(events),
+        registered_events(events))
+    # 発表が出ているセールを先に (開始が近い順。日付が無ければ発表日)。次に先行セールの
+    # 確認、目安だけのセールは最後 (navi-brain#206 R3-1)
     # 関門を通る候補は 62-shop-sale-watch.yml が登録するので、issue にしない
     detected = {k: c for k, c in detected.items() if not sale_announcements.auto_eligible(c)}
+
+    def urgency(c: Dict[str, Any]) -> tuple:
+        starts = [p["start"] for p in c["periods"] + c.get("reference_periods", [])]
+        return (min(starts) if starts else c["sources"][0]["published"], c["event_id"])
     rows = [{"event_id": c["event_id"], "calendar_id": c["calendar_id"],
              "shop": c.get("shop", "amazon"), "name": c["name"], "year": c["year"], "candidate": c}
-            for _, c in sorted(detected.items())]
+            for c in sorted(detected.values(), key=urgency)]
+    rows += [r for r in presales if r["event_id"] not in detected]
     rows += [r for r in due if r["event_id"] not in detected]
-    logger.info("today=%s detected=%s due=%s", today.isoformat(),
-                sorted(detected) or "none", [r["event_id"] for r in due] or "none")
+    logger.info("today=%s detected=%s presale=%s due=%s", today.isoformat(),
+                sorted(detected) or "none", [r["event_id"] for r in presales] or "none",
+                [r["event_id"] for r in due] or "none")
+    if not args.repo and not args.dry_run and rows:
+        logger.error("--repo (または環境変数 REPO) が無いと issue を立てられない")
+        return 2
 
     written = False
     for row in rows:
         event_id = row["event_id"]
-        existing = None
-        if args.repo:
-            existing = find_existing(args.repo, event_id)
-        elif not args.dry_run:
-            logger.error("--repo (または環境変数 REPO) が無いと issue を立てられない")
-            return 2
-        comment = False
-        if existing:
-            if not row.get("candidate"):
-                logger.info("%s: issue #%s が既にあるので立てない", event_id, existing["number"])
-                continue
-            if existing.get("state") != "open":
-                logger.info("%s: issue #%s は閉じているので何もしない",
-                            event_id, existing["number"])
-                continue
-            if announcement_posted(args.repo, existing, event_id):
-                logger.info("%s: issue #%s に発表を載せ済み", event_id, existing["number"])
-                continue
-            comment = True
         if written:
+            # 書いた後は検索もしない (GitHub API を連打しない)
             logger.info("%s: 1 run で書くのは 1 件まで。次の run に回す", event_id)
             continue
-        if comment:
-            body = render_comment(row, today)
+        action = decide(args.repo, row) if args.repo else ("create", None)
+        if action[0] == "skip":
+            continue
+        kind, existing = action
+        presale = bool(row.get("presale"))
+        if kind == "comment":
+            body = (render_presale_comment if presale else render_comment)(row, today)
             if args.dry_run:
-                logger.info("[dry-run] issue #%s へのコメント:\n%s", existing["number"], body)
+                logger.info("[dry-run] issue #%s へのコメント:\n%s",
+                            existing["number"] if existing else "?", body)
             else:
                 logger.info("%s: issue #%s にコメントした %s", event_id, existing["number"],
                             create_comment(args.repo, existing["number"], body))
         else:
-            title, body = title_for(row), render_body(row, today)
+            title = title_for(row)
+            body = (render_presale_body if presale else render_body)(row, today)
             if args.dry_run:
                 logger.info("[dry-run] 立てる issue: %s\n%s", title, body)
             else:
