@@ -172,6 +172,17 @@ class MarkCliTest(unittest.TestCase):
     def _state(self):
         return json.loads(self.state_file.read_text(encoding="utf-8"))
 
+    def test_no_candidate_returns_dedicated_exit_code(self):
+        # 20-sns-publish は rc=3 だけを「記事なし」で skip し、例外の rc=1 は赤にする
+        orig = pst.rank_candidates
+        pst.rank_candidates = lambda published: []
+        try:
+            rc = self._run()
+        finally:
+            pst.rank_candidates = orig
+        self.assertEqual(rc, pst.NO_CANDIDATE_EXIT)
+        self.assertNotEqual(rc, 1)
+
     def test_all_channels_failed_does_not_mark(self):
         before = self.state_file.read_text(encoding="utf-8")
         rc = self._run("--mark", "B0NEW00001",

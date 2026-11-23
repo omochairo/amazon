@@ -91,9 +91,11 @@ jobs:
           python scripts/fetch_ga4_article_feedback.py $MONTH_ARG
           rc=$?
           if [ $rc -ne 0 ]; then
+            # secret 欠けと同じ理由で赤にする。API 失敗で緑のままだと、月次 issue が
+            # 来ないことにしか気付く手掛かりが無い (後続は available=false で全部飛ぶ)
             echo "::error::GA4 article_feedback fetch failed (rc=$rc)"
             echo "available=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            exit 1
           fi
           echo "available=true" >> "$GITHUB_OUTPUT"
 

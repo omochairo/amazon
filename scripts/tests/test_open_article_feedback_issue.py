@@ -90,7 +90,7 @@ def test_render_comment_is_shorter_update_style():
 
 
 def test_find_open_issue_number_returns_number_when_found():
-    fake = {"items": [{"number": 4242}]}
+    fake = {"items": [{"number": 4242, "body": f"<!-- {MARKER_PREFIX}2026-06 -->\n..."}]}
     with patch("scripts.open_article_feedback_issue.subprocess.run",
                return_value=subprocess.CompletedProcess(
                    args=[], returncode=0, stdout=json.dumps(fake), stderr="")):
@@ -101,4 +101,18 @@ def test_find_open_issue_number_returns_none_when_empty():
     with patch("scripts.open_article_feedback_issue.subprocess.run",
                return_value=subprocess.CompletedProcess(
                    args=[], returncode=0, stdout=json.dumps({"items": []}), stderr="")):
+        assert find_open_issue_number("owner/repo", "2026-06") is None
+
+
+def test_find_open_issue_number_ignores_issue_only_mentioning_marker():
+    # #6622: 検索はトークン一致。マーカー名に言及しただけの issue (別の月・本文での言及) を
+    # 自分の月次 issue として掴まない
+    fake = {"items": [
+        {"number": 100, "body": f"{MARKER_PREFIX}2026-06 の issue について"},
+        {"number": 101, "body": f"<!-- {MARKER_PREFIX}2026-05 -->"},
+        {"number": 102},
+    ]}
+    with patch("scripts.open_article_feedback_issue.subprocess.run",
+               return_value=subprocess.CompletedProcess(
+                   args=[], returncode=0, stdout=json.dumps(fake), stderr="")):
         assert find_open_issue_number("owner/repo", "2026-06") is None

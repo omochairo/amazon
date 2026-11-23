@@ -34,6 +34,10 @@ import os
 import pathlib
 import subprocess
 import sys
+try:  # package 実行と素実行の両対応
+    from scripts._marker_issue import verified_matches
+except ImportError:  # pragma: no cover
+    from _marker_issue import verified_matches
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("open_toy_recall_issue")
@@ -53,7 +57,9 @@ def find_open_issue_number(repo: str) -> int | None:
          "-f", f"q={query}", "-f", "per_page=10"],
         check=True, capture_output=True, text=True,
     )
-    items = json.loads(res.stdout).get("items", [])
+    # #6622: 検索はトークン一致なので、マーカー名に言及しただけの issue にも当たる。
+    # この番号には close / comment をするので、本文にマーカーを持つものだけ採る
+    items = verified_matches(json.loads(res.stdout).get("items", []), MARKER)
     return items[0]["number"] if items else None
 
 

@@ -119,3 +119,12 @@ def test_render_body_omits_suppressed_section_when_empty():
         "candidates": [],
     })
     assert "抑制した長いクエリ" not in body
+
+
+def test_has_open_suggestion_issue_ignores_mention_only():
+    # #6622: 言及しただけの issue で「起票済み」にすると新しい候補の issue が黙って出なくなる
+    fake = {"items": [{"number": 1, "body": f"{MARKER} について"}, {"number": 2}]}
+    with patch("scripts.open_brand_suggestion_issue.subprocess.run",
+               return_value=subprocess.CompletedProcess(
+                   args=[], returncode=0, stdout=json.dumps(fake), stderr="")):
+        assert has_open_suggestion_issue("repo") is False

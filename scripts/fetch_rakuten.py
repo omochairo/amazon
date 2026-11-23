@@ -391,18 +391,12 @@ def main():
     aff_id = os.environ.get("RAKUTEN_AFFILIATE_ID", "").strip()
 
     if not app_id or not access_key:
-        logger.warning("Rakuten API keys missing. Generating mock test data for Rakuten.")
-        os.makedirs(args.out, exist_ok=True)
-        items = [{
-            "title": "[テストデータ] 楽天モック知育玩具ブロック",
-            "price": 3500,
-            "url": "https://hb.afl.rakuten.co.jp/hgc/mock/?pc=https%3A%2F%2Fitem.rakuten.co.jp%2Fmock%2Fitem%2F",
-            "image": "https://via.placeholder.com/300x300.png?text=Rakuten+Mock",
-            "source": "Rakuten (Mock)"
-        }]
-        with open(os.path.join(args.out, "rakuten.json"), "w", encoding="utf-8") as f:
-            json.dump({"keyword": args.keyword, "items": items}, f, ensure_ascii=False, indent=4)
-        return
+        # 以前はここでモックの rakuten.json を書いて 0 で抜けていた。secret が欠けると
+        # 01 / 07 / 13 が緑のまま、01 はモック 1 件を data/raw/rakuten.json として
+        # コミットし、07 の週次ランキングは黙って止まっていた。何も書かずに赤にする
+        # (01 の後続は always() で進むので、他ソースのデータ更新は止まらない)。
+        logger.error("RAKUTEN_APP_ID / RAKUTEN_ACCESS_KEY missing — not writing any data")
+        sys.exit(1)
 
     # --- Fetch Search Data (Layer 1) ---
     url = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260701"

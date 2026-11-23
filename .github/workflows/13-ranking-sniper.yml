@@ -130,23 +130,32 @@ jobs:
           python scripts/fetch_amazon.py --asin "$ASINS" --competitors-only --out data/raw/
 
       - name: Rematch /ranking/ weekly.json with current per_asin + articles
+        id: rematch
         # Issue #1149: weekly.json は火曜 weekly cron でしか matched_asin が更新されない
         # ため、sniper backfill / Jules article publish で新しく追加された ASIN が
         # 「楽天ランキング → 自社レビュー」リンクに反映されるまで最大 7 日遅延する。
         # API を叩かず現行 per_asin + article インデックスで再マッチして即時反映する。
+        # 以前は `|| true` で失敗 (weekly.json 不在の rc=2・例外) を飲んでいて、run は緑のまま
+        # /ranking/ のリンクが黙って古くなっていた。backfill の PR は止めたくないので
+        # continue-on-error で先へ進め、最後の「Fail if ...」で run を赤にする
+        # (commit-back のステップではないので #4793 の注意には当たらない)。
         if: ${{ env.DRY_RUN != 'true' }}
+        continue-on-error: true
         run: |
           set -e
-          python scripts/fetch_rakuten.py --rematch-only --out data/raw/ || true
+          python scripts/fetch_rakuten.py --rematch-only --out data/raw/
 
       - name: Append ranking history snapshot
+        id: history
         # Issue #600 Phase A: rematch 済 weekly.json から matched_asin 付き item を
         # hugo/data/ranking/history.json に日次 append (90日 rotation)。チャート/
         # 「楽天N位」バッジ用の時系列ソース。日次 sniper cron に同梱して PR に乗せる。
+        # rematch と同じ: 失敗は飲まずに最後で run を赤にする
         if: ${{ env.DRY_RUN != 'true' }}
+        continue-on-error: true
         run: |
           set -e
-          python scripts/append_ranking_history.py || true
+          python scripts/append_ranking_history.py
 
       - name: Create backfill PR + enable auto-merge
         if: ${{ env.DRY_RUN != 'true' }}
@@ -227,3 +236,13 @@ jobs:
         # steps[].conclusion も success を返すため run 一覧でも step 一覧でも
         # 見えない (#4793 項目2 の方針 (c))。01 / 19 で 08-18〜08-24 の連続
         # グリーンを確認したうえで残り 8 本へ広げたもの。
+
+      - name: Fail if rematch / history append failed
+        # continue-on-error のステップは run の結論を success にするので、ここで拾って赤にする
+        if: ${{ always() && (steps.rematch.outcome == 'failure' || steps.history.outcome == 'failure') }}
+        env:
+          REMATCH: ${{ steps.rematch.outcome }}
+          HISTORY: ${{ steps.history.outcome }}
+        run: |
+          echo "::error::rematch=${REMATCH} history=${HISTORY} — /ranking/ の matched_asin か history.json が今日の分で更新されていない"
+          exit 1

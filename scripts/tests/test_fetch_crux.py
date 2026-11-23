@@ -405,3 +405,50 @@ def test_main_fetches_top_urls_per_origin(tmp_path, monkeypatch):
         {"origin": "https://omcha.jp", "formFactor": "PHONE"},
         {"url": "https://omcha.jp/b/", "formFactor": "PHONE"},
     ]
+
+
+def _run_main_with_call(tmp_path, monkeypatch, fake_call, origins):
+    history_dir = tmp_path / "history"
+    history_dir.mkdir()
+    monkeypatch.delenv("CRUX_ORIGIN", raising=False)
+    monkeypatch.setattr(sys, "argv", [
+        "fetch_crux.py", "--api-key", "KEY", "--history-dir", str(history_dir),
+        "--target-date", "2026-09-01", "--form-factors", "PHONE",
+        "--gsc-input", str(tmp_path / "no-gsc.jsonl"), "--origin", *origins])
+    with patch("scripts.fetch_crux.call_crux", side_effect=fake_call):
+        rc = main()
+    seen_path = history_dir / SEEN_DATES_FILENAME
+    seen = json.loads(seen_path.read_text(encoding="utf-8")) if seen_path.exists() else {}
+    return rc, seen
+
+
+def test_main_fails_and_does_not_mark_done_when_every_call_errors(tmp_path, monkeypatch):
+    """キー失効・枠切れで全部落ちたら、データ不足 (404) と区別して非 0 にし、取得済みにしない。"""
+    def fake_call(api_key, body, timeout=30):
+        raise RuntimeError("HTTP Error 403: Forbidden")
+
+    rc, seen = _run_main_with_call(tmp_path, monkeypatch, fake_call, ["https://omcha.jp"])
+    assert rc == 1
+    assert "2026-09-01" not in (seen.get("crux") or {})
+
+
+def test_main_all_404_is_still_success(tmp_path, monkeypatch):
+    """全部 404 (データ不足) は従来どおり正常系。"""
+    rc, seen = _run_main_with_call(
+        tmp_path, monkeypatch, lambda api_key, body, timeout=30: None, ["https://omcha.jp"])
+    assert rc == 0
+    assert seen["crux"]["2026-09-01"] == {"https://omcha.jp": True}
+
+
+def test_main_partial_errors_still_success(tmp_path, monkeypatch):
+    """一部だけ落ちたときは取れた分を残す (月 1 回のレーンで全部を捨てない)。"""
+    def fake_call(api_key, body, timeout=30):
+        if body["origin"] == "https://omcha.jp":
+            raise RuntimeError("HTTP Error 500")
+        return {"record": _make_record()}
+
+    rc, seen = _run_main_with_call(
+        tmp_path, monkeypatch, fake_call, ["https://navi.omcha.jp", "https://omcha.jp"])
+    assert rc == 0
+    # 全部落ちた origin は取得済みにしない (同じ日に再実行で取り直せる)
+    assert seen["crux"]["2026-09-01"] == {"https://navi.omcha.jp": True}

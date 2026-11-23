@@ -123,9 +123,14 @@ def _yyyymmdd(d: dict | None) -> str | None:
     return f"{y:04d}-{m:02d}-{day:02d}"
 
 
-def fetch_for_target(api_key: str, target: dict, form_factors: tuple[str, ...]) -> list[dict]:
+def fetch_for_target(api_key: str, target: dict, form_factors: tuple[str, ...],
+                     stats: dict | None = None) -> list[dict]:
     """target = {origin: ...} or {url: ...}。各 form_factor について 1 record を返す。
-    404 (データ不足) は skip。"""
+    404 (データ不足) は skip。
+
+    ``stats`` を渡すと ``answered`` (API が答えた回数。404 を含む) と ``errors``
+    (404 以外の失敗) を数える。全部が失敗したか (キー失効・枠切れ・API 停止) を
+    main が見分けるため。"""
     records: list[dict] = []
     key_type = "origin" if "origin" in target else "url"
     key_value = target.get("origin") or target.get("url") or ""
@@ -136,7 +141,11 @@ def fetch_for_target(api_key: str, target: dict, form_factors: tuple[str, ...]) 
             resp = call_crux(api_key, body)
         except Exception as e:
             logger.warning("CrUX call failed for %s (%s): %s", key_value, ff, e)
+            if stats is not None:
+                stats["errors"] = stats.get("errors", 0) + 1
             continue
+        if stats is not None:
+            stats["answered"] = stats.get("answered", 0) + 1
         if resp is None:
             logger.info("no CrUX data: %s (form_factor=%s)", key_value, ff)
             continue
@@ -324,14 +333,34 @@ def main() -> int:
     gsc_inputs = [pathlib.Path(p) for p in args.gsc_input]
 
     all_records: list[dict] = []
+    stats: dict = {"answered": 0, "errors": 0}
+    # origin ごとの集計。全部落ちた origin は取得済みにしない (同じ日に再実行で取り直せる)
+    failed_origins: set[str] = set()
     for origin in pending:
         logger.info("fetch origin: %s", origin)
+        o_stats: dict = {"answered": 0, "errors": 0}
         all_records.extend(
-            fetch_for_target(args.api_key, {"origin": origin}, form_factors))
+            fetch_for_target(args.api_key, {"origin": origin}, form_factors, o_stats))
 
         for url in get_top_urls_from_gsc(gsc_inputs, origin, args.top_urls):
             logger.info("fetch url: %s", url)
-            all_records.extend(fetch_for_target(args.api_key, {"url": url}, form_factors))
+            all_records.extend(
+                fetch_for_target(args.api_key, {"url": url}, form_factors, o_stats))
+        if o_stats["errors"] and not o_stats["answered"]:
+            failed_origins.add(origin)
+        stats["answered"] += o_stats["answered"]
+        stats["errors"] += o_stats["errors"]
+
+    # 1 回も答えが返らず全部 404 以外で落ちたら、データ不足ではなくキー失効・枠切れ・
+    # API 停止。以前は下の「データ無し (正常系)」と同じ扱いで緑になり、取得済みの印まで
+    # 付けていた。印を付けずに非 0 で返す (workflow はここで赤になる)。
+    if stats["errors"] and not stats["answered"]:
+        logger.error("every CrUX call failed (%d errors, no response) — "
+                     "check CRUX_API_KEY / quota; not marking as fetched", stats["errors"])
+        return 1
+    if stats["errors"]:
+        logger.warning("%d CrUX calls failed (non-404); %d answered",
+                       stats["errors"], stats["answered"])
 
     n = append_records(history_path, args.target_date, all_records)
     if n == 0:
@@ -343,6 +372,9 @@ def main() -> int:
     # 取得を試みた origin は、CrUX がデータを返さなかった場合も含めて済みにする
     # (掲載閾値未満の origin を月内に何度も叩いても結果は変わらない)。
     for origin in pending:
+        if origin in failed_origins:
+            logger.warning("every CrUX call for %s failed — not marking as fetched", origin)
+            continue
         mark_crux_done(seen_crux, args.target_date, origin)
     seen["_meta"] = {
         "crux_last_fetch_utc": datetime.now(timezone.utc).isoformat(),

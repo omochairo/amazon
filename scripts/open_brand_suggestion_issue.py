@@ -19,6 +19,10 @@ import os
 import pathlib
 import subprocess
 import sys
+try:  # package 実行と素実行の両対応
+    from scripts._marker_issue import verified_matches
+except ImportError:  # pragma: no cover
+    from _marker_issue import verified_matches
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("open_brand_suggestion_issue")
@@ -38,7 +42,9 @@ def has_open_suggestion_issue(repo: str) -> bool:
          "-f", f"q={query}", "-f", "per_page=10"],
         check=True, capture_output=True, text=True,
     )
-    items = json.loads(res.stdout).get("items", [])
+    # #6622: マーカー名に言及しただけの issue で「起票済み」と誤判定すると、
+    # 新しい候補の issue が黙って出なくなる。本文にマーカーを持つものだけ数える
+    items = verified_matches(json.loads(res.stdout).get("items", []), MARKER)
     return len(items) > 0
 
 
