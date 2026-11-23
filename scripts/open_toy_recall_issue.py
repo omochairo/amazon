@@ -54,7 +54,7 @@ def find_open_issue_number(repo: str) -> int | None:
     )
     res = subprocess.run(
         ["gh", "api", "-X", "GET", "search/issues",
-         "-f", f"q={query}", "-f", "per_page=10"],
+         "-f", f"q={query}", "-f", "per_page=100"],
         check=True, capture_output=True, text=True,
     )
     # #6622: 検索はトークン一致なので、マーカー名に言及しただけの issue にも当たる。

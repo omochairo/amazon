@@ -40,7 +40,7 @@ def has_open_issue(repo: str) -> bool:
     )
     res = subprocess.run(
         ["gh", "api", "-X", "GET", "search/issues",
-         "-f", f"q={query}", "-f", "per_page=10"],
+         "-f", f"q={query}", "-f", "per_page=100"],
         check=True, capture_output=True, text=True,
     )
     # #6622: マーカー名に言及しただけの issue で「起票済み」と誤判定すると、

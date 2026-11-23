@@ -59,7 +59,7 @@ def find_open_issue_number(repo: str, month: str) -> int | None:
     )
     res = subprocess.run(
         ["gh", "api", "-X", "GET", "search/issues",
-         "-f", f"q={query}", "-f", "per_page=5"],
+         "-f", f"q={query}", "-f", "per_page=100"],
         check=True, capture_output=True, text=True,
     )
     # #6622: 検索はトークン一致なので、本文にマーカーを持つものだけ採る
