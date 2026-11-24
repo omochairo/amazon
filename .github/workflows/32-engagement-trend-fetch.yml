@@ -3,8 +3,8 @@ name: Engagement Trend Fetch (news source aggregator)
 # Issue #1526 (session 93):
 #   毎日 05:00 JST に 7 source の RSS を fetch、parent-relevance スコアで採点し、
 #   data/engagement_trends/YYYY-MM-DD.json に top 候補を書き出す。
-#   後段の 33-jules-engagement-news.yml (06:00 JST) がこの JSON を読んで
-#   news draft を生成する。
+#   K8 の scripts/engagement_lane.py (navi-brain#170 B3、9:00〜17:30 JST の毎時) がこの JSON を
+#   読んで news draft を生成する (旧 33-jules-engagement-news.yml は navi-brain#139 で削除)。
 #
 # commit 方針: App token で feature branch を切って PR 起票 → auto-merge。
 #   - main 直 push は [[silent-push-reject]] (GH006) で詰むので避ける
@@ -12,7 +12,7 @@ name: Engagement Trend Fetch (news source aggregator)
 #
 # timing 余裕:
 #   - 05:00 JST 発火、~05:05 までに PR 起票、~05:10 までに auto-merge 完了想定
-#   - 33-jules workflow は 06:00 JST 発火、十分なバッファ
+#   - 読む側の engagement_lane.py は 9:00 JST から、十分なバッファ
 
 on:
   schedule:
