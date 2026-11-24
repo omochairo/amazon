@@ -106,17 +106,27 @@ class SourceError(RuntimeError):
 # これは書式が変わったか読み違いで、黙って緑にすると取り逃しに気づけない (#206)。
 # 赤にはせず (毎回赤だと他の失敗が埋もれる)、run の終わりに 1 件ずつ issue を立てる。
 
-# 期間の見出しの直後 (この字数以内) に日付らしきものがあれば「期間が書いてある」とみなす
+# 期間の見出しの近く (この字数以内) に「M月D日」があれば「期間が書いてある」とみなす。
+# 「D日」だけでは数えない (「14日後に付与」「3日間」のような日数の文で立ってしまう)
 _NEAR = 40
 RAKUTEN_PERIOD_HINT_RE = re.compile(r"ポイントアップ期間.{0,%d}?\d{1,2}月\d{1,2}日" % _NEAR)
-YAHOO_FINAL_HINT_RE = re.compile(r"最終3日間.{0,%d}?\d{1,2}日" % _NEAR)
+# Yahoo は「最終3日間：<日時>」と「実施期間：<日時>（最終3日間）」の両方の書き方がある
+YAHOO_FINAL_HINT_RE = re.compile(
+    r"最終3日間.{0,%d}?\d{1,2}月\d{1,2}日|\d{1,2}月\d{1,2}日.{0,%d}?最終3日間" % (_NEAR, _NEAR))
 
 
 def _misread(misreads: Optional[List[Dict[str, str]]], source: str, reason: str,
-             text: str) -> None:
-    logger.warning("%s: %s", reason, text)
+             text: str, context: Optional[str] = None) -> None:
+    """text は issue の印 (重複の判定) に使う。周りの文面は context で別に渡す
+    (印に入れると、日付の後ろの変わる文面で同じ件が別の issue になる)。"""
+    logger.warning("%s: %s", reason, context or text)
     if misreads is not None:
-        misreads.append({"source": source, "reason": reason, "text": text})
+        misreads.append({"source": source, "reason": reason, "text": text,
+                         "context": context or text})
+
+
+def _around(text: str, hint: "re.Match[str]") -> str:
+    return text[max(0, hint.start() - _NEAR):hint.end() + _NEAR]
 
 
 # --- 取得と整形 ---------------------------------------------------------------
@@ -189,8 +199,8 @@ def parse_rakuten(raw: str, page: Dict[str, str], now: dt.datetime,
     if not m:
         hint = RAKUTEN_PERIOD_HINT_RE.search(text)
         if hint:
-            _misread(misreads, page["url"], "「ポイントアップ期間」の後の日時を決まった形で読めない",
-                     text[hint.start():hint.end() + _NEAR])
+            _misread(misreads, page["url"], "「ポイントアップ期間」の日時を決まった形で読めない",
+                     hint.group(0), _around(text, hint))
         return []
     g = m.groups()
     sd = _day(int(g[0]), int(g[1]), int(g[2]), g[3])
@@ -256,8 +266,8 @@ def parse_paypay_release(raw: str, url: str, now: dt.datetime,
     if not m:
         hint = YAHOO_FINAL_HINT_RE.search(text)
         if hint:
-            _misread(misreads, url, "「最終3日間」の後の日時を決まった形で読めない",
-                     text[hint.start():hint.end() + _NEAR])
+            _misread(misreads, url, "「最終3日間」の日時を決まった形で読めない",
+                     hint.group(0), _around(text, hint))
         return []
     g = m.groups()
     g = g[:12] if g[0] else g[12:]
@@ -422,7 +432,7 @@ def misread_issue(m: Dict[str, str], now: dt.datetime) -> Tuple[str, str]:
         "",
         "- 出典: {}".format(m["source"]),
         "- 理由: {}".format(m["reason"]),
-        "- 読んだ文面: `{}`".format(m["text"].replace("`", "'")),
+        "- 読んだ文面: `{}`".format(m.get("context", m["text"]).replace("`", "'")),
         "",
         "やること:",
         "1. 出典を開いて、開催中・予定のセールかを確かめる。そうなら `hugo/data/sale_events.yaml` に"
