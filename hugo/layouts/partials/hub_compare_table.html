@@ -14,9 +14,11 @@
   best_price。スマホ 375px で横にはみ出さないよう 3 列・table-layout: fixed。
 */ -}}
 {{- $label := .label -}}
+{{- /* .title (任意): 見出しを差し替える。キャラクター別ページ (ip_hub.html) は年齢ではないので使う */ -}}
+{{- $title := .title -}}
 {{- with .table }}{{ with .sections }}
 <section class="hub-compare" aria-labelledby="hub-compare-title">
-  <h2 id="hub-compare-title">{{ $label }}におすすめの知育玩具 比較表（予算別）</h2>
+  <h2 id="hub-compare-title">{{ with $title }}{{ . }}{{ else }}{{ $label }}におすすめの知育玩具 比較表（予算別）{{ end }}</h2>
   <p class="hub-compare-note">予算の帯ごとに、<a href="/about-score/">知育スコア</a>の高い順に最大 3 件を選びました。価格は毎日の記録による集計時点の最安値です。</p>
   {{- range . }}
   {{- with .label }}

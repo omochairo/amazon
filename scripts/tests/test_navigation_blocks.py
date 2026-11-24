@@ -52,3 +52,16 @@ def test_alternatives_requires_three_candidates():
     data = article()
     bp._recommend_alternatives(data, {"SELF": entry("SELF"), "A": entry("A"), "B": entry("B")}, "", 60)
     assert data["alternatives"] == []
+
+
+def test_next_steps_links_character_hub_without_hub_index():
+    """navi-brain#211: キャラクターの商品は、hub_index に無くてもその選び方のページへ。"""
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        data = article()
+        data["product"]["name"] = "アンパンマン おしゃべりパソコン"
+        bp._recommend_next_steps(data, {"SELF": entry("SELF")}, "", feature_root=root)
+        assert {"label": "アンパンマンのおもちゃの選び方", "url": "/anpanman-toys/"} in data["next_steps"]
+        other = article()
+        bp._recommend_next_steps(other, {"SELF": entry("SELF")}, "", feature_root=root)
+        assert all("選び方" not in x["label"] for x in other["next_steps"])

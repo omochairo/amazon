@@ -7963,3 +7963,57 @@ a.sale-notice-main::after {
 [data-theme="dark"] .xmas-links-list .tag-chip.is-current { background: #23733d; color: #fff !important; box-shadow: none; }
 .post-content .xmas-hub-back { margin: 1.25rem 0 .5rem; font-size: .95rem; }
 .post-content .xmas-hub-back a { font-weight: 600; text-decoration: underline; text-underline-offset: .15em; }
+
+/* ---------- キャラクター別の束ねページ (navi-brain#211 / partials/ip_hub.html) ---------- */
+.post-content .ip-lead { font-size: 1.02rem; line-height: 1.85; margin: 1rem 0 1.5rem; }
+.post-content .ip-section { margin: 2rem 0; }
+.post-content .ip-sub { margin: 1.2rem 0 .4rem; font-size: 1.05rem; }
+.post-content .ip-count { font-size: .82rem; font-weight: normal; color: var(--secondary); margin-left: .3rem; }
+.post-content .ip-note { margin: .2rem 0 .6rem; line-height: 1.75; }
+.post-content .ip-choose-list { list-style: none; padding: 0; margin: 0; counter-reset: none; }
+.post-content .ip-choose-item { display: flex; gap: .8rem; padding: .9rem 0; border-bottom: 1px solid var(--border); }
+.post-content .ip-choose-thumb { flex: 0 0 88px; }
+.post-content .ip-choose-thumb img { width: 88px; height: 88px; object-fit: contain; background: #fff; border-radius: 8px; margin: 0; }
+.post-content .ip-choose-body p, .post-content .ip-choose-body .ip-card-meta { margin: 0 0 .3rem; }
+.post-content .ip-choose-body .ip-card-meta { align-items: center; }
+.post-content .ip-choose-when { font-weight: 700; color: var(--primary); }
+.post-content .ip-choose-name a { font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.post-content .ip-choose-why { line-height: 1.7; }
+.post-content .ip-card-meta { font-size: .82rem; color: var(--secondary); display: flex; flex-wrap: wrap; gap: .2rem .7rem; }
+.post-content .ip-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: .6rem; margin: .4rem 0 .8rem; }
+.post-content .ip-card { display: flex; flex-direction: column; gap: .3rem; padding: .55rem; border: 1px solid var(--border); border-radius: 10px; background: var(--entry); }
+.post-content .ip-card-link { display: flex; flex-direction: column; gap: .3rem; text-decoration: none; box-shadow: none; }
+.post-content .ip-card .amz-mini { margin-top: auto; align-self: flex-start; }
+/* 商品ごとの小さな Amazon リンク (navi-brain#211)。記事へのリンク (下線) と見分けがつくよう小さな枠 */
+.post-content .amz-mini { display: inline-flex; align-items: center; gap: .15rem; padding: .05rem .5rem; border: 1px solid #f0a000; border-radius: 999px; font-size: .78rem; font-weight: 600; line-height: 1.6; color: #a35b00; background: #fff8eb; text-decoration: none; box-shadow: none; white-space: nowrap; }
+.post-content .amz-mini:hover { background: #ffedc7; }
+.post-content .amz-mini-ext { font-size: .7rem; }
+[data-theme="dark"] .post-content .amz-mini { color: #ffc766; background: rgba(240, 160, 0, .12); border-color: #b97a00; }
+/* 予算別の比較 (ip_compare.html): 1 商品 1 行。スコアは右上の小さな囲み */
+.post-content .ip-compare-band { margin: 1rem 0 .2rem; padding: .3rem .6rem; font-size: .95rem; background: var(--brand-gradient-subtle); border-radius: 6px; }
+[data-theme="dark"] .post-content .ip-compare-band { color: #e2e8f0; }
+.post-content .ip-compare-list { list-style: none; padding: 0; margin: 0; }
+.post-content .ip-compare-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: .2rem .7rem; align-items: start; padding: .6rem 0; border-bottom: 1px solid var(--border); margin: 0; }
+.post-content .ip-compare-thumb { display: block; width: 64px; height: 64px; box-shadow: none; }
+.post-content .ip-compare-thumb img { width: 64px; height: 64px; object-fit: contain; background: #fff; border-radius: 6px; margin: 0; }
+.post-content .ip-compare-body p { margin: 0 0 .2rem; }
+.post-content .ip-compare-name a { font-weight: 600; text-decoration: underline; text-underline-offset: 2px; line-height: 1.5; }
+.post-content .ip-compare-meta { margin: 0 0 .2rem; display: flex; flex-wrap: wrap; align-items: center; gap: .15rem .6rem; font-size: .85rem; color: var(--secondary); }
+.post-content .ip-compare-price { font-weight: 700; color: var(--primary); }
+.post-content .ip-compare-reason { font-size: .85rem; color: var(--secondary); line-height: 1.55; }
+.post-content .ip-compare-score { margin: 0; min-width: 3.4rem; padding: .2rem .35rem; text-align: center; border-radius: 8px; background: var(--brand-gradient-subtle); line-height: 1.2; }
+.post-content .ip-compare-score span { display: block; font-size: .62rem; color: var(--secondary); }
+.post-content .ip-compare-score strong { font-size: 1.1rem; }
+.post-content .ip-card img { width: 100%; height: 96px; object-fit: contain; background: #fff; border-radius: 6px; margin: 0; }
+.post-content .ip-card-name { font-size: .86rem; font-weight: 600; line-height: 1.45; color: var(--primary); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.post-content .ip-series-all summary { cursor: pointer; font-weight: 600; margin: .6rem 0; }
+.post-content .ip-faq dt { font-weight: 700; margin-top: .9rem; }
+.post-content .ip-faq dd { margin: .3rem 0 0; line-height: 1.75; }
+@media (max-width: 420px) {
+  .post-content .ip-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .post-content .ip-choose-thumb { flex-basis: 72px; }
+  .post-content .ip-choose-thumb img { width: 72px; height: 72px; }
+  .post-content .ip-compare-row { grid-template-columns: 52px minmax(0, 1fr) auto; gap: .2rem .5rem; }
+  .post-content .ip-compare-thumb, .post-content .ip-compare-thumb img { width: 52px; height: 52px; }
+  .post-content .ip-compare-score { min-width: 2.9rem; }
+}

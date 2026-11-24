@@ -1,0 +1,11 @@
+{{- /*
+  amazon_mini_link.html (navi-brain#211)
+  商品ごとの小さな「Amazon で見る」リンク。キャラクター別ページ (ip_hub.html) の
+  選び分け・比較・カードに置き、記事を読まずに買い物へ進みたい人の近道にする。
+
+  入力 (dict): .url = amazon_url (タグは amazon_affiliate_url.html が強制), .slot = data-cta-slot
+  url が無いとき (Amazon に無い商品) は何も出さない。
+*/ -}}
+{{- with .url -}}
+<a class="amz-mini" data-cta-slot="{{ $.slot }}" href="{{ partial "amazon_affiliate_url.html" . }}" rel="sponsored nofollow noopener" target="_blank">Amazonで見る<span class="amz-mini-ext" aria-hidden="true">↗</span></a>
+{{- end -}}

@@ -73,6 +73,7 @@ from age_semantics import (
 )
 from build_feature_lists import PRICE_BANDS, parse_min_months
 import build_category_hubs
+import ip_hubs
 from fetch_amazon import get_secret
 from filter_raw_per_asin import exclude_title_only
 from score_per_asin_info import is_search_result_url
@@ -1717,6 +1718,26 @@ def _recommend_same_price_band(
     }
 
 
+_IP_ALIASES: dict[str, tuple[str, ...]] | None = None
+
+
+def _ip_hub_for(data: dict[str, Any]) -> str | None:
+    """記事の商品が当たるキャラクター別ページのキー (scripts/ip_hubs.py)。無ければ None。
+
+    判定は束ねページの商品選びと同じ ip_hubs.matches_character (商品名・正式名・ブランド)。
+    """
+    global _IP_ALIASES
+    if _IP_ALIASES is None:
+        from candidate_priority import load_character_terms
+        terms = load_character_terms()
+        _IP_ALIASES = {k: (h["character"], *terms.get(h["character"], ()))
+                       for k, h in ip_hubs.IP_HUBS.items()}
+    for key, aliases in _IP_ALIASES.items():
+        if ip_hubs.matches_character(data, aliases):
+            return key
+    return None
+
+
 def _recommend_next_steps(data: dict[str, Any], article_index: dict[str, dict[str, Any]],
                           site_base_path: str, *, feature_root: pathlib.Path | None = None) -> None:
     """公開中の年齢/テーマ hub と診断へ記事末の導線を付ける。"""
@@ -1752,6 +1773,13 @@ def _recommend_next_steps(data: dict[str, Any], article_index: dict[str, dict[st
                and build_category_hubs._matches(text, theme)]
     for key in matched[:2]:
         add_hub(key)
+    # navi-brain#211: キャラクターの商品なら、そのキャラクターの選び方のページへ。
+    # 配信ビルドでは build_post.py が build_category_hubs.py より先に走り、hub_index.json は
+    # まだ前回のものなので、hub_index ではなく IP_HUBS (ページの .md はリポジトリにある) を見る。
+    ip_key = _ip_hub_for(data)
+    if ip_key:
+        hub = ip_hubs.IP_HUBS[ip_key]
+        links.append({"label": f'{hub["label"]}のおもちゃの選び方', "url": site_base_path + hub["url"]})
     links.append({"label": "おもちゃ診断（約1分）", "url": site_base_path + "/diagnosis/"})
     band = data.get("same_price_band")
     if isinstance(band, dict) and band.get("band_url"):

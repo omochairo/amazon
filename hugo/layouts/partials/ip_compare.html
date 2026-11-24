@@ -1,0 +1,44 @@
+{{- /*
+  ip_compare.html (navi-brain#211)
+  キャラクター別ページの予算別比較。年齢 hub の 3 列の表 (hub_compare_table.html) は、
+  右の列が知育スコアの数字だけで空きが大きかったので、1 商品 1 行の詰めた並びにする。
+
+    [画像] 商品名 (記事へ)                    [スコア]
+           6歳〜 · ¥1,552 Amazon最安 · Amazonで見る↗
+           選んだ理由 (1 行)
+
+  入力 (dict): .table = compare_table (build_category_hubs.build_compare_section を 1 節で包んだもの),
+               .title = 見出し
+*/ -}}
+{{- $title := .title -}}
+{{- with .table }}{{ with .sections }}
+<section class="hub-compare ip-compare" aria-labelledby="hub-compare-title">
+  <h2 id="hub-compare-title">{{ $title }}</h2>
+  <p class="hub-compare-note">予算の帯ごとに、<a href="/about-score/">知育スコア</a>の高い順に最大 3 件を選びました。価格は毎日の記録による集計時点の最安値です。</p>
+  {{- range . }}
+  {{- range .bands }}
+  <h3 class="ip-compare-band">予算 {{ .label }}</h3>
+  <ul class="ip-compare-list">
+    {{- range .items }}
+    {{- $age := index . "age_min_months" }}
+    <li class="ip-compare-row" data-asin="{{ .asin }}">
+      <a class="ip-compare-thumb" href="{{ .url_internal }}" aria-hidden="true" tabindex="-1">{{ with .image }}<img src="{{ . }}" alt="" loading="lazy" decoding="async" width="64" height="64">{{ end }}</a>
+      <div class="ip-compare-body">
+        <p class="ip-compare-name"><a href="{{ .url_internal }}">{{ .name }}</a></p>
+        {{- /* <p> にしない: custom.css の p a[href*="amazon.co.jp"] が Amazon のリンクを大きなボタンにする */}}
+        <div class="ip-compare-meta">
+          {{- if ne (printf "%v" $age) "<nil>" }}<span>{{ partial "age_label.html" (int $age) }}</span>{{ end }}
+          {{- with .best_price }}<span class="ip-compare-price">¥{{ lang.FormatNumberCustom 0 . }}</span>{{ end }}
+          {{- with .best_platform }}<span class="ip-compare-shop">{{ replace (replace . "Yahoo!ショッピング" "Yahoo!") "楽天市場" "楽天" }}最安</span>{{ end }}
+          {{- partial "amazon_mini_link.html" (dict "url" .amazon_url "slot" "ip-hub-compare") }}
+        </div>
+        {{- with .reason }}<p class="ip-compare-reason">{{ . }}</p>{{ end }}
+      </div>
+      {{- with .ivs_100 }}<p class="ip-compare-score"><span>知育スコア</span><strong>{{ int . }}</strong></p>{{ end }}
+    </li>
+    {{- end }}
+  </ul>
+  {{- end }}
+  {{- end }}
+</section>
+{{- end }}{{ end }}

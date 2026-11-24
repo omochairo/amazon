@@ -1,0 +1,113 @@
+{{- /*
+  ip_hub.html (navi-brain#211 G1 試作)
+  キャラクター別の束ねページ (/anpanman-toys/ など) の本体。feature.html が
+  feature_type が "ip-" で始まるときに、本文 (content の .md) の直後に呼ぶ。
+
+  入力 (dict):
+    .data  : hugo/data/features/ip-<key>.json (scripts/ip_hubs.py build_ip_payload)
+    .label : キャラクター名
+
+  narrative (選び分けの文章) は検査 (ip_hubs.validate_narrative) を通ったときだけ JSON に入る。
+  無いときはデータの節 (年齢別・シリーズ・遊び方・比較表) だけを出す。
+  載せる商品は全部記事のある商品なので、リンクは常に /products/<asin>/。
+*/ -}}
+{{- $d := .data -}}
+{{- $label := .label -}}
+{{- $n := $d.narrative -}}
+
+
+{{- with $n }}
+<p class="ip-lead">{{ .lead }}</p>
+{{- end }}
+
+{{- with $n }}{{ with .choose }}
+<section class="ip-section ip-choose" aria-labelledby="ip-choose-title">
+  <h2 id="ip-choose-title">どれを選ぶ？ こんな子にはこれ</h2>
+  <ol class="ip-choose-list">
+    {{- range . }}
+    <li class="ip-choose-item" data-asin="{{ .asin }}">
+      <a class="ip-choose-thumb" href="{{ .url_internal }}" aria-hidden="true" tabindex="-1">{{ with .image }}<img src="{{ . }}" alt="" loading="lazy" decoding="async" width="96" height="96">{{ end }}</a>
+      <div class="ip-choose-body">
+        <p class="ip-choose-when">{{ .when }}</p>
+        <p class="ip-choose-name"><a href="{{ .url_internal }}">{{ .name }}</a></p>
+        <p class="ip-choose-why">{{ .why }}</p>
+        {{- /* Amazon のリンクを <p> の外に置く (custom.css の p a[href*="amazon.co.jp"] が大きなボタンにするため) */}}
+        <div class="ip-card-meta">
+          {{- $age := index . "age_min_months" -}}
+          {{- if ne (printf "%v" $age) "<nil>" }}<span>{{ partial "age_label.html" (int $age) }}</span>{{ end -}}
+          {{- with .ivs_100 }}<span>知育スコア {{ . }}</span>{{ end -}}
+          {{- partial "amazon_mini_link.html" (dict "url" .amazon_url "slot" "ip-hub-choose") -}}
+        </div>
+      </div>
+    </li>
+    {{- end }}
+  </ol>
+</section>
+{{- end }}{{ end }}
+
+{{- with $d.compare_table }}
+{{- partial "ip_compare.html" (dict "table" . "title" (printf "%sのおもちゃ 比較表（予算別）" $label)) }}
+{{- end }}
+
+{{- with $d.age_sections }}
+<section class="ip-section ip-ages" aria-labelledby="ip-ages-title">
+  <h2 id="ip-ages-title">年齢で選ぶ</h2>
+  {{- range . }}
+  <h3 class="ip-sub">{{ .label }}<span class="ip-count">（記事 {{ .count }} 本）</span></h3>
+  {{- $key := .key -}}
+  {{- with $n }}{{ with .by_age }}{{ with index . $key }}<p class="ip-note">{{ . }}</p>{{ end }}{{ end }}{{ end }}
+  <div class="ip-cards">{{ range .items }}{{ partial "ip_card.html" . }}{{ end }}</div>
+  {{- end }}
+</section>
+{{- end }}
+
+{{- if or $d.series_sections (and $n $n.series_tips) }}
+<section class="ip-section ip-series" aria-labelledby="ip-series-title">
+  <h2 id="ip-series-title">シリーズ・型の違い</h2>
+  {{- with $n }}{{ range .series_tips }}
+  <h3 class="ip-sub">{{ .title }}</h3>
+  <p class="ip-note">{{ .text }}</p>
+  <div class="ip-cards">{{ range .items }}{{ partial "ip_card.html" . }}{{ end }}</div>
+  {{- end }}{{ end }}
+  {{- with $d.series_sections }}
+  <details class="ip-series-all">
+    <summary>シリーズごとの記事を見る</summary>
+    {{- range . }}
+    <h3 class="ip-sub">{{ .label }}<span class="ip-count">（記事 {{ .count }} 本）</span></h3>
+    <div class="ip-cards">{{ range .items }}{{ partial "ip_card.html" . }}{{ end }}</div>
+    {{- end }}
+  </details>
+  {{- end }}
+</section>
+{{- end }}
+
+{{- with $d.type_sections }}
+<section class="ip-section ip-types" aria-labelledby="ip-types-title">
+  <h2 id="ip-types-title">遊び方で選ぶ</h2>
+  {{- range . }}
+  <h3 class="ip-sub">{{ .label }}<span class="ip-count">（記事 {{ .count }} 本）</span></h3>
+  <div class="ip-cards">{{ range .items }}{{ partial "ip_card.html" . }}{{ end }}</div>
+  {{- end }}
+</section>
+{{- end }}
+
+{{- with $d.accessories }}
+<section class="ip-section ip-acc" aria-labelledby="ip-acc-title">
+  <h2 id="ip-acc-title">関連グッズ（本体以外）</h2>
+  <div class="ip-cards">{{ range . }}{{ partial "ip_card.html" . }}{{ end }}</div>
+</section>
+{{- end }}
+
+{{- with $n }}{{ with .not_for }}
+<section class="ip-section ip-notfor" aria-labelledby="ip-notfor-title">
+  <h2 id="ip-notfor-title">選ぶ前に気をつけたいこと</h2>
+  <ul>{{ range . }}<li>{{ . }}</li>{{ end }}</ul>
+</section>
+{{- end }}{{ end }}
+
+{{- with $n }}{{ with .faq }}
+<section class="ip-section ip-faq" aria-labelledby="ip-faq-title">
+  <h2 id="ip-faq-title">よくある質問</h2>
+  <dl>{{ range . }}<dt>{{ .q }}</dt><dd>{{ .a }}</dd>{{ end }}</dl>
+</section>
+{{- end }}{{ end }}

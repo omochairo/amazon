@@ -780,6 +780,8 @@ def _compare_entry(rec, age_min_months: int | None) -> dict[str, Any]:
         "best_price": rec.best_price,
         "best_platform": rec.best_platform,
         "ivs_100": rec.ivs_100,
+        # キャラクター別ページの比較表が行ごとに出す「Amazon で見る」用 (navi-brain#211)
+        "amazon_url": rec.amazon_url,
     }
 
 
@@ -918,7 +920,9 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
         per_asin_dir: Path | None = None,
         raw_root: Path | None = None,
         age_max_per_brand: int = 0, history_path: Path | None = None,
-        today: date | None = None, xmas: bool = True) -> dict[str, int]:
+        today: date | None = None, xmas: bool = True,
+        ip_hubs: list[str] | None = None,
+        narrative_dir: Path | None = None) -> dict[str, int]:
     records = _dedupe_by_asin(load_articles(articles_dir))
     # #2812: カード画像も記事ページと同じ amazon.json の検証済み画像に揃える。
     logger.info("amazon image overlay: %d replaced",
@@ -995,9 +999,44 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
         _write_xmas_pages(records, mm_index, new_brand_index, age_tops, out_hugo, generated_at,
                           counts, min_ivs=min_ivs, age_max_per_brand=age_max_per_brand,
                           ranking_history=ranking_history, today=today)
-    if themes or age_hubs:
+    if ip_hubs:
+        if mm_index is None:
+            mm_index = build_min_months_index(articles_dir)
+        hub_index += _write_ip_hubs(records, articles_dir, mm_index, out_hugo, generated_at, counts,
+                                    ip_hubs, per_asin_dir=per_asin_dir or Path("data/raw/per_asin"),
+                                    narrative_dir=narrative_dir, min_ivs=min_ivs)
+    if themes or age_hubs or ip_hubs:
         _write_hub_index(out_hugo, hub_index)
     return counts
+
+
+def _write_ip_hubs(records, articles_dir: Path, mm_index, out_hugo: Path, generated_at: str,
+                   counts: dict[str, int], keys: list[str], *, per_asin_dir: Path,
+                   narrative_dir: Path | None, min_ivs: float) -> list[dict[str, str]]:
+    """navi-brain#211: キャラクター別の束ねページ (scripts/ip_hubs.py)。hub_index の行を返す。"""
+    import ip_hubs as iph
+    raw_index = iph.load_raw_articles(articles_dir)
+
+    def compare_builder(pool):
+        # 年齢 hub と同じ予算別の比較表。キャラクターのページは年齢で切らず全年齢で 1 節
+        sec = build_compare_section(pool, mm_index, 0, 216, min_ivs=iph.IP_MIN_IVS)
+        return {"sections": [{"key": None, "label": None, **sec}]} if sec else None
+
+    rows = []
+    for key in keys:
+        top, extra = iph.build_ip_payload(
+            key, records, raw_index, mm_index, per_asin_dir=per_asin_dir,
+            narrative_dir=narrative_dir or iph.NARRATIVE_DIR, compare_builder=compare_builder)
+        payload = serialize_hub(top, key, generated_at)
+        payload.update(extra)
+        (out_hugo / f"{key}.json").write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        counts[key] = len(top)
+        logger.info("%s (%s): %d items / %d articles, narrative=%s", key, extra["label"], len(top),
+                    extra["stats"]["articles"], "narrative" in extra)
+        if top:
+            rows.append({"key": key, "label": extra["label"], "url": iph.IP_HUBS[key]["url"]})
+    return rows
 
 
 def _write_xmas_pages(records, mm_index, brand_index, age_tops, out_hugo: Path, generated_at: str,
@@ -1053,6 +1092,10 @@ def main(argv: list[str] | None = None) -> int:
     # #4007 follow-up 1: data/raw/{rakuten,yahoo}_matched.json の親ディレクトリ。
     # 楽天/Yahoo 価格を build_post.py と同じ matched JSON で更新するために使う。
     parser.add_argument("--raw-root", default=Path("data/raw"), type=Path)
+    # navi-brain#211: キャラクター別の束ねページ (scripts/ip_hubs.py の IP_HUBS)
+    from ip_hubs import IP_HUBS
+    parser.add_argument("--ip-hubs", nargs="*", default=list(IP_HUBS.keys()),
+                        choices=list(IP_HUBS.keys()))
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args(argv)
     logging.basicConfig(level=args.log_level,
@@ -1062,7 +1105,8 @@ def main(argv: list[str] | None = None) -> int:
                  themes=args.themes, age_hubs=args.age_hubs,
                  per_asin_dir=args.per_asin_dir,
                  raw_root=args.raw_root,
-                 age_max_per_brand=args.age_max_per_brand)
+                 age_max_per_brand=args.age_max_per_brand,
+                 ip_hubs=args.ip_hubs)
     print(json.dumps(counts, ensure_ascii=False))
     return 0
 
