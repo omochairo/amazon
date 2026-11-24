@@ -1708,13 +1708,9 @@ brands:
     aliases: [童友社]
     tier: B
     region: JP
-  # めろジョイ=中華発の水感スクイーズブーム発端ブランド。@DIME/ロケットニュース24等の
-  # メディアが模倣品と区別して報じており実体が確認できる (Cninyck 名義の模倣品は却下側)。
-  # merojoi はローマ字で打った検索語 (#11730)
-  - canonical: めろジョイ
-    aliases: [めろジョイ, merojoi]
-    tier: D
-    region: CN
+  # めろジョイ は 2026-11-24 に外した (navi-brain#208)。記事にしていた Amazon の出品は
+  # 公式の Mellojoy (12 歳以上・公式ストア等で販売) とは別の安価な出品で、ブランドの
+  # ハブとして束ねると公式品の情報に見えるため。brand_rejected.yaml に理由を残した。
   # 以下は実在する Amazon 出品者名だが薄いハブ不要 = noindex (既存 Jasonwell/beiens 等と同方針)。
   # ALIVTAII/Chicer/Quikaboo/FLUFFYFUN/LAMPTOP/XIUXIUAI は各々カタログ内で商品ライン
   # が一貫しており独立出品者と判断。キュートジャパンは同名企業が複数存在し実体を
