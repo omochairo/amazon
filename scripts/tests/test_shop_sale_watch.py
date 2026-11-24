@@ -310,3 +310,67 @@ def test_appended_yaml_passes_sale_events_rules(tmp_path):
         assert dt.datetime.fromisoformat(phase["start"]) < dt.datetime.fromisoformat(phase["end"])
     # 読み直した期間と突き合わせても食い違わない (次の run で赤にならない)
     assert w.plan(_found(), events)[1] == []
+
+
+# --- 読めずに捨てたもの (navi-brain#206 ③: 赤にせず issue) ---------------------
+
+def test_normal_pages_have_no_misreads():
+    misreads = []
+    w.collect(at("2026-10-22 12:00"), get=fake(PAGES), misreads=misreads)
+    assert misreads == []
+    assert w.parse_rakuten(MARATHON_OFF, MARATHON, at("2026-10-22 12:00"), misreads) == []
+    assert misreads == []  # 期間が無いのは開催していない時期で、普通
+
+
+def test_weekday_mismatch_is_recorded_as_misread():
+    misreads = []
+    wrong = MARATHON_ON.replace("2026年10月24日(土)", "2026年10月24日(日)")
+    assert w.parse_rakuten(wrong, MARATHON, at("2026-10-22 12:00"), misreads) == []
+    assert len(misreads) == 1
+    assert misreads[0]["source"] == MARATHON["url"]
+    assert "曜日" in misreads[0]["reason"]
+
+
+def test_changed_format_is_recorded_as_misread():
+    # 曜日の括弧が無い書き方に変わった: 決まった形では読めないが、期間は書いてある
+    changed = MARATHON_ON.replace("2026年10月24日(土)20:00", "2026年10月24日 20:00")
+    misreads = []
+    assert w.parse_rakuten(changed, MARATHON, at("2026-10-22 12:00"), misreads) == []
+    assert len(misreads) == 1 and "決まった形" in misreads[0]["reason"]
+    assert "10月24日" in misreads[0]["text"]
+
+
+def test_yahoo_changed_format_is_recorded_as_misread():
+    page = "<p>最終3日間：2026年11月13日 0時00分～15日 25時59分</p>"
+    misreads = []
+    assert w.parse_paypay_release(page, "u", at("2026-11-01 12:00"), misreads) == []
+    assert len(misreads) == 1 and misreads[0]["source"] == "u"
+
+
+def test_misread_marker_is_stable_per_text():
+    a = {"source": "u", "reason": "r", "text": "t"}
+    assert w.misread_marker(a) == w.misread_marker(dict(a, reason="別の理由"))
+    assert w.misread_marker(a) != w.misread_marker(dict(a, text="t2"))
+    title, body = w.misread_issue(a, at("2026-11-24 09:00"))
+    assert "2026-11-24" in title
+    assert "<!-- {} -->".format(w.misread_marker(a)) in body
+
+
+def test_report_misreads_opens_one_issue_and_skips_existing(monkeypatch):
+    created, searched = [], []
+    existing = {w.misread_marker({"source": "u1", "text": "t1"})}
+
+    def find(repo, event_id, marker):
+        searched.append(marker)
+        return {"number": 1} if marker in existing else None
+
+    monkeypatch.setattr(w.scr, "find_existing", find)
+    monkeypatch.setattr(w.scr, "create_issue",
+                        lambda repo, title, body: created.append((repo, title)) or "url")
+    ms = [{"source": "u1", "reason": "r", "text": "t1"},
+          {"source": "u2", "reason": "r", "text": "t2"},
+          {"source": "u3", "reason": "r", "text": "t3"}]
+    w.report_misreads("o/r", ms, at("2026-11-24 09:00"))
+    # 既にあるものは飛ばし、立てるのは 1 run で 1 件まで (3 件目は検索もしない)
+    assert len(created) == 1 and created[0][0] == "o/r"
+    assert len(searched) == 2

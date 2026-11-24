@@ -38,6 +38,8 @@ Amazon は sale_announcements.py が読む公式フィードの発表のうち�
     時刻を直すと、セールが終わるまで赤が続いていた。課題 ⑦)
   - **ページは読めたが期間が無いのは普通** (開催していない時期)。ページそのものが
     読めない・期待する見出しが無いときは赤で終わる (検知が止まったまま緑にしない)
+  - **期間らしい書き方があるのに読めなかった・捨てたものは issue にする** (赤にはしない。
+    navi-brain#206 ③、2026-11-24 K 決定)。同じページの同じ文面には 1 回だけ立てる
   - **Yahoo の「25時59分」は翌日 1:59 にする**
   - 終わったイベントは消さない (sale_events_live.html がビルド時に落とす)
 """
@@ -45,6 +47,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import html
 import logging
 import pathlib
@@ -94,6 +97,26 @@ PAYPAY_NAME = "超PayPay祭"
 
 class SourceError(RuntimeError):
     """ページを取れなかった / 期待する形でなかった。"""
+
+
+# --- 読めずに捨てたものの記録 (navi-brain#206 ③・2026-11-24 K 決定: 赤でなく issue) ---
+#
+# 「期間が無い」は開催していない時期なので普通 (0 件で緑)。区別したいのは、期間らしい
+# 書き方がページにあるのに、決まった形で読めなかった・暦や長さが合わずに捨てたもの。
+# これは書式が変わったか読み違いで、黙って緑にすると取り逃しに気づけない (#206)。
+# 赤にはせず (毎回赤だと他の失敗が埋もれる)、run の終わりに 1 件ずつ issue を立てる。
+
+# 期間の見出しの直後 (この字数以内) に日付らしきものがあれば「期間が書いてある」とみなす
+_NEAR = 40
+RAKUTEN_PERIOD_HINT_RE = re.compile(r"ポイントアップ期間.{0,%d}?\d{1,2}月\d{1,2}日" % _NEAR)
+YAHOO_FINAL_HINT_RE = re.compile(r"最終3日間.{0,%d}?\d{1,2}日" % _NEAR)
+
+
+def _misread(misreads: Optional[List[Dict[str, str]]], source: str, reason: str,
+             text: str) -> None:
+    logger.warning("%s: %s", reason, text)
+    if misreads is not None:
+        misreads.append({"source": source, "reason": reason, "text": text})
 
 
 # --- 取得と整形 ---------------------------------------------------------------
@@ -152,24 +175,33 @@ _RK_DT = r"(\d{4})年(\d{1,2})月(\d{1,2})日\(([月火水木金土日])\)\s*(\d
 RAKUTEN_PERIOD_RE = re.compile(r"ポイントアップ期間\s*" + _RK_DT + r"\s*[~〜\-]\s*" + _RK_DT)
 
 
-def parse_rakuten(raw: str, page: Dict[str, str], now: dt.datetime) -> List[Dict[str, Any]]:
-    """ページから開催期間を読む。見出しが無ければ SourceError、期間が無ければ []。"""
+def parse_rakuten(raw: str, page: Dict[str, str], now: dt.datetime,
+                  misreads: Optional[List[Dict[str, str]]] = None) -> List[Dict[str, Any]]:
+    """ページから開催期間を読む。見出しが無ければ SourceError、期間が無ければ []。
+
+    期間らしい書き方があるのに読めなかった・捨てたものは misreads に足す。
+    """
     if page["title"] not in page_title(raw):
         raise SourceError("題名に「{}」が無い: {} (ページが変わった?)".format(
             page["title"], page["url"]))
-    m = RAKUTEN_PERIOD_RE.search(page_text(raw))
+    text = page_text(raw)
+    m = RAKUTEN_PERIOD_RE.search(text)
     if not m:
+        hint = RAKUTEN_PERIOD_HINT_RE.search(text)
+        if hint:
+            _misread(misreads, page["url"], "「ポイントアップ期間」の後の日時を決まった形で読めない",
+                     text[hint.start():hint.end() + _NEAR])
         return []
     g = m.groups()
     sd = _day(int(g[0]), int(g[1]), int(g[2]), g[3])
     ed = _day(int(g[6]), int(g[7]), int(g[8]), g[9])
     if not sd or not ed or int(g[4]) > 23 or int(g[10]) > 23:
-        logger.warning("曜日・時刻が暦と合わないので捨てた: %s", m.group(0))
+        _misread(misreads, page["url"], "曜日・時刻が暦と合わないので捨てた", m.group(0))
         return []
     start = dt.datetime.combine(sd, dt.time(int(g[4]), int(g[5])), JST)
     end = dt.datetime.combine(ed, dt.time(int(g[10]), int(g[11])), JST)
     if not _sane(start, end, now):
-        logger.warning("期間が不自然なので捨てた: %s", m.group(0))
+        _misread(misreads, page["url"], "期間が不自然なので捨てた", m.group(0))
         return []
     return [_event("rakuten-{}-{}".format(page["kind"], sd.isoformat()), "rakuten",
                    page["name"], start, end, page["url"], page["url"])]
@@ -217,9 +249,15 @@ YAHOO_FINAL_RE = re.compile(
     r"最終3日間\s*:\s*" + _LY_PERIOD + r"|実施期間\s*:\s*" + _LY_PERIOD + r"\s*\(最終3日間\)")
 
 
-def parse_paypay_release(raw: str, url: str, now: dt.datetime) -> List[Dict[str, Any]]:
-    m = YAHOO_FINAL_RE.search(page_text(raw))
+def parse_paypay_release(raw: str, url: str, now: dt.datetime,
+                         misreads: Optional[List[Dict[str, str]]] = None) -> List[Dict[str, Any]]:
+    text = page_text(raw)
+    m = YAHOO_FINAL_RE.search(text)
     if not m:
+        hint = YAHOO_FINAL_HINT_RE.search(text)
+        if hint:
+            _misread(misreads, url, "「最終3日間」の後の日時を決まった形で読めない",
+                     text[hint.start():hint.end() + _NEAR])
         return []
     g = m.groups()
     g = g[:12] if g[0] else g[12:]
@@ -232,13 +270,13 @@ def parse_paypay_release(raw: str, url: str, now: dt.datetime) -> List[Dict[str,
     sd = _day(sy, sm, sd_, sw)
     ed = _day(ey, em, ed_, ew)
     if not sd or not ed or sh > 23 or eh > 29 or smin > 59 or emin > 59:
-        logger.warning("日付・時刻が暦と合わないので捨てた: %s", m.group(0))
+        _misread(misreads, url, "日付・時刻が暦と合わないので捨てた", m.group(0))
         return []
     start = dt.datetime.combine(sd, dt.time(sh, smin), JST)
     # 「25時59分」は翌日 1:59
     end = dt.datetime.combine(ed, dt.time(0, emin), JST) + dt.timedelta(hours=eh)
     if not _sane(start, end, now):
-        logger.warning("期間が不自然なので捨てた: %s", m.group(0))
+        _misread(misreads, url, "期間が不自然なので捨てた", m.group(0))
         return []
     return [_event("yahoo-paypay-final-{}".format(sd.isoformat()), "yahoo",
                    "Yahoo!ショッピング {} 最終3日間".format(PAYPAY_NAME), start, end, url,
@@ -247,19 +285,23 @@ def parse_paypay_release(raw: str, url: str, now: dt.datetime) -> List[Dict[str,
 
 # --- まとめ -------------------------------------------------------------------
 
-def collect(now: dt.datetime, get: Callable[[str], str] = fetch
+def collect(now: dt.datetime, get: Callable[[str], str] = fetch,
+            misreads: Optional[List[Dict[str, str]]] = None
             ) -> Tuple[List[Dict[str, Any]], List[str]]:
-    """各出典から読む。1 つ失敗しても他は読む。(見つけたイベント, 失敗の一覧)"""
+    """各出典から読む。1 つ失敗しても他は読む。(見つけたイベント, 失敗の一覧)
+
+    misreads を渡すと、読めずに捨てたもの (_misread) をそこに足す。
+    """
     found = []  # type: List[Dict[str, Any]]
     errors = []  # type: List[str]
     for page in RAKUTEN_PAGES:
         try:
-            found += parse_rakuten(get(page["url"]), page, now)
+            found += parse_rakuten(get(page["url"]), page, now, misreads)
         except SourceError as exc:
             errors.append(str(exc))
     try:
         for rel in parse_news_list(get(LYCORP_NEWS), now)[:MAX_RELEASES]:
-            found += parse_paypay_release(get(rel["url"]), rel["url"], now)
+            found += parse_paypay_release(get(rel["url"]), rel["url"], now, misreads)
     except SourceError as exc:
         errors.append(str(exc))
     # 終わった回をページが出したままのことがある
@@ -359,15 +401,70 @@ def append_events(path: pathlib.Path, add: Sequence[Dict[str, Any]], today: dt.d
     path.write_text(text + "".join(render(f, today) for f in add), encoding="utf-8")
 
 
+MISREAD_MARKER_PREFIX = "shop-sale-misread"
+
+
+def misread_marker(m: Dict[str, str]) -> str:
+    """同じページの同じ文面には 1 回だけ issue を立てる (open / closed とも)。"""
+    digest = hashlib.sha1("{}\n{}".format(m["source"], m["text"]).encode("utf-8")).hexdigest()
+    return "{}:{}".format(MISREAD_MARKER_PREFIX, digest[:12])
+
+
+def misread_issue(m: Dict[str, str], now: dt.datetime) -> Tuple[str, str]:
+    title = "[セール検知] 公式ページの期間を読めずに捨てた ({})".format(
+        now.astimezone(JST).date().isoformat())
+    body = "\n".join([
+        scr.marker_comment(misread_marker(m)),
+        "",
+        "[62-shop-sale-watch.yml](.github/workflows/62-shop-sale-watch.yml) が、公式のページに"
+        "期間らしい書き方を見つけたのに、決まった形で読めなかった・暦や長さが合わずに捨てた"
+        " (navi-brain#206 ③)。書式が変わったか読み違いのどちらかで、このままだとセールを取り逃す。",
+        "",
+        "- 出典: {}".format(m["source"]),
+        "- 理由: {}".format(m["reason"]),
+        "- 読んだ文面: `{}`".format(m["text"].replace("`", "'")),
+        "",
+        "やること:",
+        "1. 出典を開いて、開催中・予定のセールかを確かめる。そうなら `hugo/data/sale_events.yaml` に"
+        "手で登録する (CLAUDE.md の「セール期間の告知を出す」)",
+        "2. 書式が変わったなら `scripts/shop_sale_watch.py` の読み取り (正規表現) を直す",
+        "",
+        "同じページの同じ文面には、この issue を閉じても立て直さない。",
+    ])
+    return title, body
+
+
+def report_misreads(repo: str, misreads: Sequence[Dict[str, str]], now: dt.datetime) -> None:
+    """読めずに捨てたものを issue にする。1 run で立てるのは 1 件まで (API を連打しない)。"""
+    seen = set()  # type: set
+    for m in misreads:
+        marker = misread_marker(m)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        existing = scr.find_existing(repo, "", marker)
+        if existing:
+            logger.info("読めなかった件は issue #%s が既にある: %s", existing["number"], m["source"])
+            continue
+        title, body = misread_issue(m, now)
+        logger.info("issue を立てた: %s", scr.create_issue(repo, title, body))
+        if len(seen) < len(misreads):
+            logger.info("残りは次の run に回す")
+        return
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--write", action="store_true", help="sale_events.yaml に足す")
     ap.add_argument("--now", help="判定の基準時刻 (ISO 8601)。検証用")
+    ap.add_argument("--report-repo", default=None,
+                    help="読めずに捨てたものの issue を立てるリポジトリ (無ければログだけ)")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     now = dt.datetime.fromisoformat(args.now) if args.now else dt.datetime.now(JST)
 
-    found, errors = collect(now)
+    misreads = []  # type: List[Dict[str, str]]
+    found, errors = collect(now, misreads=misreads)
     events = scr.load_yaml(SALE_EVENTS)
     # Amazon は公式フィードの発表から (フィードが読めないのは reminder 側が赤にする)
     candidates, _ = sale_announcements.collect(
@@ -379,10 +476,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         logger.info("見つけた: %s %s 〜 %s", f["id"], _stamp(f["start"]), _stamp(f["end"]))
     for f in add:
         logger.info("足す: %s", f["id"])
-    logger.info("見つけた %d 件・足す %d 件・失敗 %d 件・食い違い %d 件",
-                len(found), len(add), len(errors), len(conflicts))
+    logger.info("見つけた %d 件・足す %d 件・失敗 %d 件・食い違い %d 件・読めずに捨てた %d 件",
+                len(found), len(add), len(errors), len(conflicts), len(misreads))
     if args.write and add:
         append_events(SALE_EVENTS, add, now.astimezone(JST).date())
+    if misreads and args.report_repo:
+        try:
+            report_misreads(args.report_repo, misreads, now)
+        except Exception as exc:  # noqa: BLE001 - 起票に失敗したら検知が止まったのと同じく赤にする
+            errors.append("読めなかった件の issue を立てられない: {}".format(exc))
     for msg in errors + conflicts:
         logger.error("%s", msg)
     return 1 if errors or conflicts else 0

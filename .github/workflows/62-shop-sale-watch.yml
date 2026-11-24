@@ -9,6 +9,8 @@
 # 楽天のマラソンは開始の 2 日ほど前にページに期間が出るので、毎日 2 回見る。
 # ページが読めない・既にある自動のイベントと期間が食い違うときは赤で終わる
 # (足せたものの PR は出してから赤にする)。
+# 期間らしい書き方があるのに読めなかったときは、赤にせず issue を 1 件立てる
+# (同じ文面には 1 回だけ。navi-brain#206 ③)。
 name: Shop Sale Watch
 
 on:
@@ -24,6 +26,7 @@ on:
 
 permissions:
   contents: read
+  issues: write  # 読めずに捨てた期間を issue にする (navi-brain#206 ③)
 
 concurrency:
   group: shop-sale-watch
@@ -58,9 +61,10 @@ jobs:
         id: watch
         env:
           INPUT_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           args=()
-          if [ "$INPUT_DRY_RUN" != "true" ]; then args+=(--write); fi
+          if [ "$INPUT_DRY_RUN" != "true" ]; then args+=(--write --report-repo "${{ github.repository }}"); fi
           status=0
           python scripts/shop_sale_watch.py "${args[@]}" || status=$?
           echo "status=$status" >> "$GITHUB_OUTPUT"
