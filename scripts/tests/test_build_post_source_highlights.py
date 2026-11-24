@@ -201,5 +201,132 @@ class AttachTests(unittest.TestCase):
             self.assertEqual(data["source_highlights"], [{"x": 1}])
 
 
+class ReaderJunkTests(unittest.TestCase):
+    """2026-11-24: 本文抽出の残り・サイトのメニュー・別商品の引用が読者に出ていた。"""
+
+    def _attach(self, name: str, sources: list[dict]) -> list[dict]:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            AttachTests()._write(root, "BX", sources)
+            data = {"product": {"asin": "BX", "name": name}}
+            _attach_source_highlights(data, root)
+            return data.get("source_highlights") or []
+
+    def test_title_line_inline_heading_bold_and_url_are_removed(self):
+        raw = (
+            "Title: 変身ベルトのブログ\n# 変身ベルト. 発売日は12月5日. ## 遊んでみた感想. "
+            "**音声がとても**かっこいいです。 "
+            "[![[BANDAI] バンダイ 変身ベルト](https://m.media-amazon.com/a.jpg)]"
+            "(https://www.amazon.co.jp/dp/B0X?tag=other-22 psc=1&tag=other2-22"
+        )
+        out = _snippet_plain_text(raw)
+        self.assertNotIn("Title:", out)
+        self.assertNotIn("#", out)
+        self.assertNotIn("**", out)
+        self.assertNotIn("http", out)
+        self.assertNotIn("tag=", out)
+        self.assertIn("遊んでみた感想.", out)
+        self.assertIn("音声がとてもかっこいいです。", out)
+
+    def test_rejects_site_navigation_and_video_frame(self):
+        for s in (
+            "木のおもちゃ専門店 マイページログイン カートを見る おもちゃカテゴリー 日本製の木のおもちゃ",
+            "BRIO Toys Sign up for our newsletter for the latest news and offers from BRIO",
+            "DXライダーエグズセット02 仮面ライダーマイス. Channel: MAX HOBBY CHANNEL. Description.",
+        ):
+            self.assertFalse(_highlight_snippet_ok(s), s)
+
+    def test_rejects_mojibake_and_unreadable_script(self):
+        self.assertFalse(_highlight_snippet_ok(
+            "OYOBALEۥ˥å˥åȤä(-1388) 5,000(ǹ5,500) 145 21-40 ɽ 1 2 3 4 5 6 7 8 ڡξ | Ķ"
+        ))
+        self.assertFalse(_highlight_snippet_ok(
+            "How to change the face plate for tamagotchi paradise มาดูๆ พามาแกะเครื่องกัน"
+        ))
+        # フランス語のアクセント程度は残す
+        self.assertTrue(_highlight_snippet_ok(
+            "Vilac est une marque française de jouets en bois fabriqués dans le Jura depuis 1911."
+        ))
+
+    def test_drops_quotes_about_other_products(self):
+        hl = self._attach("DX Xライズスラッシャー", [
+            {"title": "仮面ライダーマイス", "url": "https://a.example.jp/1", "host": "a.example.jp",
+             "snippet": "仮面ライダーマイス「DX Xライズスラッシャー」が12/5発売。ライドエグズ5が付属します。"},
+            {"title": "変身ベルト DXマイスドライバー", "url": "https://b.example.jp/2", "host": "b.example.jp",
+             "snippet": "変身ベルト DXマイスドライバーを紹介します。音声はとてもかっこいいです。"},
+        ])
+        self.assertEqual([h["host"] for h in hl], ["a.example.jp"])
+
+    def test_word_order_and_script_boundaries_still_match(self):
+        hl = self._attach("パンどろぼう着脱式ぬいぐるみ", [
+            {"title": "パンどろぼう ぬいぐるみ着脱式", "url": "https://c.example.jp/3", "host": "c.example.jp",
+             "snippet": "パンを脱がしたり着せたりできる楽しいぬいぐるみです。サイズは17cmで贈り物にも。"},
+        ])
+        self.assertEqual(len(hl), 1)
+        hl = self._attach("ZipString替え紐 3色セット", [
+            {"title": "ZipString（ジップストリング）の使い方", "url": "https://d.example.jp/4",
+             "host": "d.example.jp",
+             "snippet": "まず、付属のひもを本体上部の溝へセットします。ひもの上下が交差しにくくなります。"},
+        ])
+        self.assertEqual(len(hl), 1)
+
+    def test_url_removal_does_not_eat_following_prose(self):
+        out = _snippet_plain_text("公式（https://example.com/page）によると、子どもが楽しく遊べます。")
+        self.assertIn("子どもが楽しく遊べます。", out)
+        out = _snippet_plain_text("詳細(https://example.com/a 以降のレビューでは音がやさしいと好評です。")
+        self.assertIn("音がやさしいと好評です。", out)
+        out = _snippet_plain_text("詳細(https://example.com/page詳細はレビューをご覧ください。")
+        self.assertIn("詳細はレビューをご覧ください。", out)
+        out = _snippet_plain_text("一行目の本文です。\nTitle: 別のページ題\n二行目の本文です。")
+        self.assertNotIn("別のページ題", out)
+        self.assertNotIn("**", _snippet_plain_text("**## 見出し** のあとに本文が続きます。"))
+        self.assertNotIn("#", _snippet_plain_text("**## 見出し** のあとに本文が続きます。"))
+
+    def test_cookie_toy_review_is_not_navigation(self):
+        self.assertTrue(_highlight_snippet_ok(
+            "クッキー型で生地を抜いて、チョコチップクッキーを作るおままごとが楽しめました。"
+        ))
+        self.assertFalse(_highlight_snippet_ok(
+            "当サイトではCookieを使用しています。サイトの利用を続けると同意したものとみなします。"
+        ))
+
+    def test_login_counts_as_navigation_only_with_shop_words(self):
+        self.assertFalse(_highlight_snippet_ok(
+            "木のおもちゃ ウッディモンキー 本店 検索 ログイン 会員登録 0 カート 0 臨時休業のお知らせ"
+        ))
+        self.assertTrue(_highlight_snippet_ok(
+            "アプリはログイン不要で、届いたその日から親子ですぐに遊び始められるのが便利でした。"
+        ))
+
+    def test_kana_proper_noun_and_digit_tokens(self):
+        hl = self._attach("パンどろぼう着脱式ぬいぐるみ", [
+            {"title": "絵本のキャラクター", "url": "https://h.example.jp/8", "host": "h.example.jp",
+             "snippet": "パンどろぼうのぬいぐるみは、絵本の世界そのままの表情でかわいいと評判です。"},
+        ])
+        self.assertEqual(len(hl), 1)
+        hl = self._attach("ジグソーパズル 500ピース", [
+            {"title": "別の商品", "url": "https://i.example.jp/9", "host": "i.example.jp",
+             "snippet": "送料は全国一律で、税込1,500円以上のご注文で無料になります。お届けまで3日です。"},
+        ])
+        self.assertEqual(hl, [])
+
+    def test_two_char_name_still_checks_relevance(self):
+        hl = self._attach("将棋セット", [
+            {"title": "将棋の駒の並べ方", "url": "https://f.example.jp/6", "host": "f.example.jp",
+             "snippet": "将棋の駒は木製で、初めての子どもでも並べ方を覚えやすいように駒に動きが書いてあります。"},
+            {"title": "別の店", "url": "https://g.example.jp/7", "host": "g.example.jp",
+             "snippet": "当店ではクリスマスのギフト包装を無料で承っております。お気軽にご相談ください。"},
+        ])
+        self.assertEqual([h["host"] for h in hl], ["f.example.jp"])
+
+    def test_generic_words_alone_do_not_count_as_about(self):
+        hl = self._attach("木製 知育玩具 セット", [
+            {"title": "別の店", "url": "https://e.example.jp/5", "host": "e.example.jp",
+             "snippet": "子どもが夢中になって遊んでいます。説明書もわかりやすく親子で楽しめました。"},
+        ])
+        # 商品名が一般語だけで語が作れないときは判定しない (従来どおり残す)
+        self.assertEqual(len(hl), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

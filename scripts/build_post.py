@@ -25,6 +25,7 @@ import json
 import logging
 import pathlib
 import re
+import unicodedata
 import tomllib
 import urllib.parse
 from datetime import datetime, timezone
@@ -2170,6 +2171,34 @@ _HIGHLIGHT_HOST_PREFER = (
 )
 # Parts-list / spec-dump markers — these read like a manual, not a评価.
 _HIGHLIGHT_JUNK_MARKERS = ("Item number", "Qty.", "Part #", "Quantity.", "Symbol Part")
+# サイトのメニュー・ログイン案内・動画ページの枠など、本文でない部分の印。
+# 2026-11-24 の全記事の再現で、選ばれた引用 5,665 件のうちこれらを含むものが
+# 読者に「外部ソースからわかること」として出ていた (例: YouTube の
+# 「## Channel: … ### Description.」、Instagram の「Sign up for Instagram」、
+# 通販サイトの「マイページログイン カートを見る」)。
+_HIGHLIGHT_NAV_MARKERS = (
+    "Log in", "Log In", "Sign up", "Sign Up", "Sign in", "マイページログイン",
+    "会員ログイン", "ログイン・会員登録", "新規会員登録", "カートを見る",
+    "カートに入れる", "コンテンツへスキップ", "Skip to content", "Channel:",
+    "views ·", "公式LINE", "Expand user menu", "Open settings menu",
+    "Cookie Policy", "Cookieポリシー", "Cookieを使用", "Cookieの使用", "Accept Cookies",
+    "クッキーを使用", "クッキーの使用", "クッキーポリシー", "safely connected to the",
+)
+# 「ログイン」は「ログイン不要で遊べる」のような本文にも出るので、店のメニューの
+# 語と一緒に出たときだけメニューとみなす
+_HIGHLIGHT_LOGIN_NEIGHBORS = ("カート", "会員", "登録", "ログアウト", "検索", "サインアップ")
+# 商品名から関係の判定に使う語を作るときに外す一般語。どの商品の引用にも
+# 当たってしまい、関係の無い引用を通すため。
+_HIGHLIGHT_GENERIC_TOKENS = frozenset({
+    "知育玩具", "おもちゃ", "玩具", "セット", "木製", "赤ちゃん", "ベビー", "子供",
+    "子ども", "こども", "キッズ", "男の子", "女の子", "プレゼント", "対象年齢",
+    "誕生日", "ギフト", "出産祝い", "人気", "おすすめ", "モンテッソーリ", "知育",
+    "正規品", "日本製", "シリーズ", "ブロック", "パズル", "ゲーム", "絵本", "図鑑",
+    "ぬいぐるみ", "カード", "ミニカー", "フィギュア", "toy", "toys", "set", "kids",
+    "baby", "the", "and", "for", "with", "large", "small", "mini", "sound",
+    "color", "colors", "wood", "wooden", "キューブ", "ボール", "シール", "カラー",
+    "ピース", "歳以上", "才以上", "ヶ月", "はじめての", "みんなで",
+})
 
 # Contact-info detectors (#4150 / Refs #2995): third-party snippets sometimes
 # *are* a seller's contact block (電話/FAX/Eメール) rather than editorial
@@ -2226,15 +2255,87 @@ _MD_LINK_DEST_RE = re.compile(r"\]\([^)\s]*\)")
 _MD_LINE_MARKER_RE = re.compile(r"^[ \t]*(?:#{1,6}|[-+*]|>)[ \t]+", re.MULTILINE)
 
 
+# 本文抽出 (r.jina.ai 等) が先頭に付ける「Title: <ページ題>」の行
+_SNIPPET_TITLE_LINE_RE = re.compile(r"^Title:[^\n]*\n?", re.MULTILINE)
+# 行の途中に残った見出し記号 (「…です. ## 救助チームの編成.」)
+_MD_INLINE_HEADING_RE = re.compile(r"(?:(?<=\s)|^)#{1,6}(?=\s)")
+# 括弧で始まる URL は、URL 本体と、空白で崩れた「key=value」の断片まで
+# (「(https://…?tag=a-22 psc=1&tag=b-22)」)。括弧の無い URL は URL に使う文字だけ
+# (日本語の文が直に続いても消さない)。
+_SNIPPET_URL_RE = re.compile(
+    r"\(https?://[A-Za-z0-9\-._~:/?#@!$&'*+,;=%]*(?:\s+[^\s)=]+=[A-Za-z0-9\-._~:/?#@!$&'*+,;=%]*)*\)?"
+    r"|https?://[A-Za-z0-9\-._~:/?#@!$&'*+,;=%]+"
+)
+
+
 def _snippet_plain_text(snippet: str) -> str:
     """Flatten a Markdown snippet into one line of plain text: images and link
     destinations dropped, bracket markup removed, heading / list / quote
-    markers stripped, whitespace (incl. blank lines) collapsed."""
-    s = _MD_IMAGE_RE.sub(" ", snippet or "")
+    markers stripped, whitespace (incl. blank lines) collapsed.
+
+    navi-brain#209 の続き (2026-11-24): 本文抽出の「Title:」行・行の途中の
+    見出し記号・強調の ``**``・崩れた URL (他サイトのアフィリエイトの tag 入り)
+    も消す。"""
+    s = _SNIPPET_TITLE_LINE_RE.sub("", snippet or "").replace("**", "")
+    s = _MD_IMAGE_RE.sub(" ", s)
     s = _MD_LINK_DEST_RE.sub("]", s)
-    s = s.replace("[", "").replace("]", "")
+    s = s.replace("![", " ").replace("[", "").replace("]", "")
     s = _MD_LINE_MARKER_RE.sub("", s)
+    s = _SNIPPET_URL_RE.sub(" ", s)
+    s = _MD_INLINE_HEADING_RE.sub(" ", s)
     return " ".join(s.split())
+
+
+_HIGHLIGHT_ODD_SCRIPT_RE = re.compile(
+    r"[\u0100-\u024f\u0370-\u03ff\u0590-\u06ff\u0e00-\u0e7f\ua960-\ua97f\ufffd]"
+)
+_HIGHLIGHT_SCRIPT_RUN_RE = re.compile(r"[a-z0-9]+|[ぁ-ゖー]+|[ァ-ヺー]+|[一-龥々]+")
+# 「パンどろぼう」「すみっコぐらし」のように、カタカナとひらがなが続く固有名詞
+_HIGHLIGHT_KANA_RUN_RE = re.compile(r"[ァ-ヺぁ-ゖー]+")
+
+
+def _highlight_name_tokens(name: str) -> list[str]:
+    """商品名から、引用が「この商品の話か」を見る語を作る (NFKC・小文字・空白抜き)。
+    3 文字未満と一般語は外す。"""
+    norm = unicodedata.normalize("NFKC", name or "").lower()
+    parts = re.split(r"[\s・/／()（）【】\[\]「」『』、,。!！?？&＆+＋~〜\-–—:：|｜]+", norm)
+    # 「パンどろぼう着脱式ぬいぐるみ」と「パンどろぼう ぬいぐるみ着脱式」、
+    # 「zipstring替え紐」と「ZipString の使い方」が当たるよう、文字の種類の
+    # 境目 (英数・ひらがな・カタカナ・漢字) で区切った語も足す
+    # ひらがなだけの語は「ちゃんと」のような普通の言葉になりやすいので使わない
+    subs = [
+        m.group(0) for p in parts for m in _HIGHLIGHT_SCRIPT_RUN_RE.finditer(p)
+        if not re.fullmatch(r"[ぁ-ゖー]+", m.group(0))
+    ] + [
+        m.group(0) for p in parts for m in _HIGHLIGHT_KANA_RUN_RE.finditer(p)
+        if re.search(r"[ァ-ヺ]", m.group(0)) and re.search(r"[ぁ-ゖ]", m.group(0))
+    ]
+    out: list[str] = []
+    for p in parts + subs:
+        if (len(p) >= 3 and p not in _HIGHLIGHT_GENERIC_TOKENS and not p.isdigit()
+                and p not in out):
+            out.append(p)
+    if not any(t in subs for t in out):
+        # 「将棋セット」のように、区切った後の 3 文字以上の語が無い名前は、
+        # 2 文字の語 (ひらがなだけの語・一般語を除く) も足す。「将棋セット」
+        # の丸ごとでは「将棋の駒の並べ方」に当たらないため
+        for p in parts + subs:
+            if (len(p) == 2 and p not in _HIGHLIGHT_GENERIC_TOKENS
+                    and not re.fullmatch(r"[ぁ-ゖー]+", p) and p not in out):
+                out.append(p)
+    return out
+
+
+def _highlight_is_about(src: dict[str, Any], tokens: list[str]) -> bool:
+    """引用の本文かページ題に、商品名の語が 1 つでも入っているか。語が作れない
+    (商品名が無い・一般語だけ) ときは判定しない。"""
+    if not tokens:
+        return True
+    hay = unicodedata.normalize(
+        "NFKC", (src.get("snippet") or "") + " " + (src.get("title") or "")
+    ).lower()
+    hay = "".join(hay.split())
+    return any(t in hay for t in tokens)
 
 
 def _highlight_snippet_ok(snippet: str) -> bool:
@@ -2245,6 +2346,15 @@ def _highlight_snippet_ok(snippet: str) -> bool:
     if len(s) < 30:
         return False
     if any(m in s for m in _HIGHLIGHT_JUNK_MARKERS):
+        return False
+    if any(m in s for m in _HIGHLIGHT_NAV_MARKERS):
+        return False
+    if "ログイン" in s and any(w in s for w in _HIGHLIGHT_LOGIN_NEIGHBORS):
+        return False
+    # 文字コードを取り違えて読んだ文字化け (「ۡ > եȡ」「ǹ5,500」) とタイ語など、
+    # 日本の読者が読めない文字が目立つもの
+    odd = len(_HIGHLIGHT_ODD_SCRIPT_RE.findall(s))
+    if odd >= 5 and odd / len(s) >= 0.02:
         return False
     if _highlight_has_contact_info(s):
         return False
@@ -2300,6 +2410,7 @@ def _attach_source_highlights(
     sources = payload.get("sources") if isinstance(payload, dict) else None
     if not isinstance(sources, list):
         return
+    name_tokens = _highlight_name_tokens(product.get("name") or "")
     candidates = [
         {**s, "snippet": _snippet_plain_text(s.get("snippet") or "")}
         for s in sources
@@ -2316,6 +2427,9 @@ def _attach_source_highlights(
         and not is_search_result_url(s.get("url") or "")
         and not any(d in (s.get("host") or "").lower() for d in _HIGHLIGHT_HOST_DENY)
         and _highlight_snippet_ok(s.get("snippet") or "")
+        # 2026-11-24: 検索で拾ったページには同じシリーズの別商品・ブランドの
+        # 告知・SNS の紹介文が多く、商品名の語を含まない引用の多くがそれだった
+        and _highlight_is_about(s, name_tokens)
     ]
     candidates.sort(key=_highlight_score, reverse=True)
     picked: list[dict[str, Any]] = []
