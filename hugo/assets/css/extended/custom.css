@@ -7963,3 +7963,31 @@ a.sale-notice-main::after {
 [data-theme="dark"] .xmas-links-list .tag-chip.is-current { background: #23733d; color: #fff !important; box-shadow: none; }
 .post-content .xmas-hub-back { margin: 1.25rem 0 .5rem; font-size: .95rem; }
 .post-content .xmas-hub-back a { font-weight: 600; text-decoration: underline; text-underline-offset: .15em; }
+
+/* ---------- キャラクター別の束ねページ (navi-brain#211 / partials/ip_hub.html) ---------- */
+.post-content .ip-lead { font-size: 1.02rem; line-height: 1.85; margin: 1rem 0 1.5rem; }
+.post-content .ip-section { margin: 2rem 0; }
+.post-content .ip-sub { margin: 1.2rem 0 .4rem; font-size: 1.05rem; }
+.post-content .ip-count { font-size: .82rem; font-weight: normal; color: var(--secondary); margin-left: .3rem; }
+.post-content .ip-note { margin: .2rem 0 .6rem; line-height: 1.75; }
+.post-content .ip-choose-list { list-style: none; padding: 0; margin: 0; counter-reset: none; }
+.post-content .ip-choose-item { display: flex; gap: .8rem; padding: .9rem 0; border-bottom: 1px solid var(--border); }
+.post-content .ip-choose-thumb { flex: 0 0 88px; }
+.post-content .ip-choose-thumb img { width: 88px; height: 88px; object-fit: contain; background: #fff; border-radius: 8px; margin: 0; }
+.post-content .ip-choose-body p { margin: 0 0 .3rem; }
+.post-content .ip-choose-when { font-weight: 700; color: var(--primary); }
+.post-content .ip-choose-name a { font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.post-content .ip-choose-why { line-height: 1.7; }
+.post-content .ip-card-meta { font-size: .82rem; color: var(--secondary); display: flex; flex-wrap: wrap; gap: .2rem .7rem; }
+.post-content .ip-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: .6rem; margin: .4rem 0 .8rem; }
+.post-content .ip-card { display: flex; flex-direction: column; gap: .3rem; padding: .55rem; border: 1px solid var(--border); border-radius: 10px; background: var(--entry); text-decoration: none; box-shadow: none; }
+.post-content .ip-card img { width: 100%; height: 96px; object-fit: contain; background: #fff; border-radius: 6px; margin: 0; }
+.post-content .ip-card-name { font-size: .86rem; font-weight: 600; line-height: 1.45; color: var(--primary); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.post-content .ip-series-all summary { cursor: pointer; font-weight: 600; margin: .6rem 0; }
+.post-content .ip-faq dt { font-weight: 700; margin-top: .9rem; }
+.post-content .ip-faq dd { margin: .3rem 0 0; line-height: 1.75; }
+@media (max-width: 420px) {
+  .post-content .ip-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .post-content .ip-choose-thumb { flex-basis: 72px; }
+  .post-content .ip-choose-thumb img { width: 72px; height: 72px; }
+}

@@ -60,6 +60,11 @@
     {{- end }}
   {{- end }}
   {{ $content }}
+  {{- /* navi-brain#211: キャラクター別の束ねページ。選び分け・比較表・年齢/シリーズ/遊び方の節 */ -}}
+  {{- $isIP := hasPrefix $type "ip-" -}}
+  {{- if and $isIP $data }}
+    {{- partial "ip_hub.html" (dict "data" $data "label" ($data.label | default .Title)) }}
+  {{- end }}
   {{- /* navi-brain#166 F15: 年齢 hub の先頭に「新しく売れ筋に入ったおもちゃ」。
          new_arrivals.json は build_category_hubs.py がビルド時に作る (コミットしない)。
          ファイル・age・その年齢のキーのどれが無くても何も出さない (4 件未満の年齢はキーが無い)。 */ -}}
@@ -225,6 +230,8 @@
     {{- end }}
     {{- if hasPrefix $type "age-" }}
     <h2 class="age-ranking-title">{{ $.Params.age_label | default $.Title }}の知育玩具ランキング</h2>
+    {{- else if $isIP }}
+    <h2 class="age-ranking-title">{{ $data.label }}のおもちゃ 知育スコアの高い順</h2>
     {{- end }}
     <ol class="ranking-list feature-list feature-list--{{ $type }}"{{ if eq $type "deals" }} id="deals-list"{{ end }}>
       {{- range $items }}
@@ -261,12 +268,29 @@
     {{- end }}
     {{- end }}
 
+    {{- if $isIP }}
+    {{- with $data.lineup }}
+    <details class="hub-lineup" aria-label="{{ $data.label }}のおもちゃの全記事">
+      <summary>{{ $data.label }}のおもちゃの全記事（ほか {{ len . }} 件）</summary>
+      <ul>
+        {{- range . }}
+        <li><a href="{{ .url_internal }}">{{ .name }}</a></li>
+        {{- end }}
+      </ul>
+    </details>
+    {{- end }}
+    {{- end }}
+
     {{- if $isXmas }}
     {{- with .Params.xmas_hub_url }}
     <p class="xmas-hub-back">誕生日のプレゼントや、予算を決めずに選ぶなら → <a href="{{ . }}">{{ $.Params.xmas_hub_title | default "年齢別の知育玩具ランキング" }}</a></p>
     {{- end }}
     <p class="ranking-disclaimer">
       ※ 対象年齢が{{ $data.label | default "この年齢" }}に合い、最安値が{{ lang.FormatNumberCustom 0 ($data.budget_max | default 10000) }}円までの商品から、<a href="/about-score/">知育スコア</a>と年齢の合い方で選んでいます。同じメーカーは 2 件まで、{{ with .Params.xmas_hub_url }}<a href="{{ . }}">年齢別のランキング</a>{{ else }}年齢別のランキング{{ end }}の上位と同じ商品は半分までにして、ほかの候補も見比べられるようにしています。知育スコアと実売価格は集計時点のものです。価格・在庫はリンク先で必ずご確認ください。
+    </p>
+    {{- else if $isIP }}
+    <p class="ranking-disclaimer">
+      ※ 当サイトに記事のある{{ $data.label }}のおもちゃを、<a href="/about-score/">知育スコア</a>と対象年齢で整理しています。同じシリーズの色違いは代表だけを並べています。選び分けの文章は各商品の記事（長所・短所・対象年齢・スコア）をもとに書いています。知育スコアと実売価格は集計時点のものです。価格・在庫はリンク先で必ずご確認ください。
     </p>
     {{- else if eq $type "deals" }}
     <p class="ranking-disclaimer">
