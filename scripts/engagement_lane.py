@@ -2,7 +2,7 @@
 """K8 のエンゲージ投稿レーン (amazon-navi-brain#170 B3): Jules の代わりに agy / ollama で下書きを書き、PR にする。
 
 下書きを作っていた 29-jules-engagement-refill.yml / 33-jules-engagement-news.yml は Jules の終了で
-止まった。このスクリプトは K8 の定時タスク (\\k8\\navi_engagement) から 1 時間おきに呼ばれる。
+止まり、navi-brain#139 で削除した (29b の補充見張りも)。このスクリプトは K8 の定時タスク (\\k8\\navi_engagement) から 1 時間おきに呼ばれる。
 
     news : 今日 (JST) のトレンドが origin/main にあり、今日作成の news 行が 2 本未満のチャネルだけ生成
     daily: 未投稿の daily が 6 本未満のチャネルだけ 10 本生成
