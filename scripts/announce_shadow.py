@@ -118,17 +118,21 @@ def parse_news_sitemap(raw: bytes, categories: list[str]) -> list[dict[str, Any]
     for url in root.iter():
         if _local(url.tag) != "url":
             continue
+        # loc は <url> 直下だけ、題名などは <news:news> の中だけを読む (<image:loc>・<image:title> で
+        # 上書きしない)
         loc, title, date, kws = "", "", None, []
-        for el in url.iter():
-            t = _local(el.tag)
-            if t == "loc":
+        for el in url:
+            if _local(el.tag) == "loc":
                 loc = (el.text or "").strip()
-            elif t == "title":
-                title = (el.text or "").strip()
-            elif t == "publication_date":
-                date = parse_date(el.text)
-            elif t == "keywords":
-                kws = [k.strip() for k in (el.text or "").split(",") if k.strip()]
+            elif _local(el.tag) == "news":
+                for c in el.iter():
+                    t = _local(c.tag)
+                    if t == "title" and not title:
+                        title = (c.text or "").strip()
+                    elif t == "publication_date" and date is None:
+                        date = parse_date(c.text)
+                    elif t == "keywords" and not kws:
+                        kws = [k.strip() for k in (c.text or "").split(",") if k.strip()]
         if want and not want.intersection(kws):
             continue
         out.append({"title": title, "link": loc, "date": date, "desc": ",".join(kws)[:300]})
@@ -166,7 +170,7 @@ def search_name(title: str, names: list[str]) -> str | None:
     それ以外は先頭の括弧 (たいてい商品名)。"""
     if not names:
         return None
-    t = _norm(title)
+    t = " ".join(_norm(_DROP_CHARS_RE.sub(" ", title or "")).split())
     if len(names) > 1 and "より" in t:
         cut = t.index("より")
         after = [n for n in names if t.find(n) > cut]
@@ -179,18 +183,34 @@ def is_release(title: str) -> bool:
     return bool(_RELEASE_RE.search(_norm(title)))
 
 
+_SPLIT_RE = re.compile(r"[\s・/／&＆×,、。!！?？()（）\[\]【】「」『』〈〉<>~〜:：\-–—]+")
+
+
 def name_tokens(name: str) -> list[str]:
+    """商品名を空白・記号で区切った語。source_pages.identity_tokens は記事本文向けで、ひらがなの語
+    (「おしりにぎり」) と 2 字の語 (「レゴ」「DX」) を落とすので使わない (agy のレビュー)。
+    1 字の語・ジャンルの汎用語 (ブロック・パズル等) は外す。"""
     import source_pages
-    return [t for t in source_pages.identity_tokens(name) if t not in source_pages._GENERIC_TOKENS]
+    out = []
+    for t in _SPLIT_RE.split(_norm(name).lower()):
+        if len(t) >= 2 and t not in source_pages._GENERIC_TOKENS and t not in out:
+            out.append(t)
+    return out
 
 
 def match_score(name: str, amazon_title: str) -> float:
-    """商品名の識別語のうち、Amazon の商品名に出た割合 (0〜1)。語が無ければ 0。"""
+    """商品名の語のうち、Amazon の商品名に出た割合 (0〜1)。語が無ければ 0。
+
+    語が 1 つだけで 4 字未満 (「UNO」など) は、別の商品の題にも出やすいので 0.5 を上限にする
+    (見つかった扱いの MATCH_OK に届かせない)。判断に迷うものは、記録した題名を後で見て数える。"""
     toks = name_tokens(name)
     if not toks:
         return 0.0
     t = _norm(amazon_title).lower()
-    return sum(1 for x in toks if _norm(x).lower() in t) / len(toks)
+    score = sum(1 for x in toks if x in t) / len(toks)
+    if len(toks) == 1 and len(toks[0]) < 4:
+        score = min(score, 0.5)
+    return score
 
 
 # ---------------------------------------------------------------- 対象の選び方
@@ -198,6 +218,7 @@ def match_score(name: str, amazon_title: str) -> float:
 def collect(feeds: list[dict], since: datetime, fetch=fetch_feed, sleeper=time.sleep) -> tuple[list[dict], list[dict]]:
     """取り元を全部読み、since 以降の発表を [{feed, kind, title, link, date, names, release}] で返す。"""
     entries, feed_stats = [], []
+    seen_links: set[str] = set()  # 同じ発表はサイトマップとメーカー別 RSS の両方に載る。先に読んだ方だけ残す
     for i, f in enumerate(feeds):
         if i:
             sleeper(FEED_INTERVAL)
@@ -215,6 +236,11 @@ def collect(feeds: list[dict], since: datetime, fetch=fetch_feed, sleeper=time.s
             if it["date"] is None or it["date"] < since:
                 continue
             stat["recent"] += 1
+            key = (it["link"] or "").split("?")[0].rstrip("/") or _norm(it["title"])
+            if key in seen_links:
+                stat["dup"] = stat.get("dup", 0) + 1
+                continue
+            seen_links.add(key)
             entries.append({"feed": f["id"], "kind": f.get("kind", ""), "title": it["title"],
                             "link": it["link"], "date": it["date"].isoformat(),
                             "names": extract_names(it["title"]), "release": is_release(it["title"])})
@@ -230,6 +256,8 @@ def pick_targets(entries: list[dict], max_search: int) -> list[tuple[dict, str]]
     """
     def key(e):
         return (e["kind"] == "media", not e["release"], -datetime.fromisoformat(e["date"]).timestamp())
+    if max_search <= 0:
+        return []
     out, seen = [], set()
     for e in sorted(entries, key=key):
         n = search_name(e["title"], e["names"])
@@ -306,7 +334,10 @@ def summarize(entries: list[dict], results: list[dict]) -> dict[str, int]:
         "searched": len(results),
         "search_errors": sum(1 for r in results if r.get("error")),
         "found": len(found),
-        "found_new_release": sum(1 for h in top if h["need_sites"] < 2),
+        # 要る非販売の出典が 1 サイトの商品 (source_rules: ASIN が B0G 以上 = 新発売の扱い)。発表 1 本で
+        # sources_v5 を満たせる。発表の題名の「新商品」の語 (release) とは別の物差し
+        "found_need1": sum(1 for h in top if h["need_sites"] < 2),
+        "found_release_word": sum(1 for r in found if r.get("release")),
         "found_not_in_catalog": sum(1 for h in top if not h["in_catalog"]),
         "found_no_article": sum(1 for h in top if not h["has_article"]),
         "found_writable_shape": sum(1 for h in top if not h["has_article"] and h["genre"] != "flag"
@@ -330,8 +361,14 @@ def run(since_hours: float, max_search: int, sources_path: pathlib.Path | None =
             if i:
                 sleeper(SEARCH_INTERVAL)
             r = search_one(api, name, catalog, articles)
+            if i == 2 and r.get("error") and all(x.get("error") for x in results):
+                # 最初の 3 回が全部失敗 = 認証・設定の障害。残りを連打しない
+                results.append({"feed": e["feed"], "title": e["title"], "link": e["link"], "date": e["date"],
+                                "release": e["release"], "name": name, **r})
+                logger.error("SearchItems failed 3 times in a row; stopping: %s", r["error"])
+                break
             results.append({"feed": e["feed"], "title": e["title"], "link": e["link"], "date": e["date"],
-                            "name": name, **r})
+                            "release": e["release"], "name": name, **r})
     return {"generated_at": now.isoformat(), "since_hours": since_hours, "dry_run": dry_run,
             "feeds": feed_stats, "entries": entries, "targets": [n for _, n in targets],
             "results": results, "summary": summarize(entries, results)}
@@ -342,7 +379,7 @@ def step_summary(report: dict) -> str:
     lines = ["## 発表起点の影運転 (navi-brain#210)", "",
              f"- 発表 {s['entries']}（商品名あり {s['with_name']}・新商品の語 {s['release']}）",
              f"- 検索 {s['searched']}（失敗 {s['search_errors']}）→ 見つかった {s['found']}"
-             f"（新発売 {s['found_new_release']}・取り込み外 {s['found_not_in_catalog']}・"
+             f"（出典 1 サイトで書ける {s['found_need1']}・取り込み外 {s['found_not_in_catalog']}・"
              f"記事なし {s['found_no_article']}・記事にできる形 {s['found_writable_shape']}）", ""]
     errs = [f for f in report["feeds"] if f["error"]]
     if errs:
@@ -379,6 +416,9 @@ def main() -> int:
     print(md)
     # 取り元が全部読めなかったら赤にする (黙って 0 件で緑にしない, #4793)
     if report["feeds"] and all(f["error"] for f in report["feeds"]):
+        return 1
+    s = report["summary"]
+    if s["searched"] and s["search_errors"] == s["searched"]:  # 検索が全部失敗 (認証切れ等) も赤
         return 1
     return 0
 

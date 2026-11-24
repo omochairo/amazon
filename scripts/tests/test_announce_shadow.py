@@ -153,7 +153,8 @@ def test_run_end_to_end_with_fake_api(tmp_path, monkeypatch):
     assert best["in_catalog"] is True and best["has_article"] is False
     assert best["need_sites"] == 1  # B0H は新発売
     s = rep["summary"]
-    assert s["searched"] == 2 and s["found"] == 1 and s["found_new_release"] == 1
+    assert s["searched"] == 2 and s["found"] == 1 and s["found_need1"] == 1
+    assert s["found_release_word"] == 1
     assert "発表起点の影運転" in a.step_summary(rep)
 
 
@@ -184,4 +185,78 @@ def test_main_fails_when_all_feeds_fail(tmp_path, monkeypatch):
     # run の既定引数は import 時に束縛されるので、main から呼ぶ run の fetch を差し替える
     orig = a.run
     monkeypatch.setattr(a, "run", lambda *ar, **kw: orig(*ar, fetch=_fetch, sleeper=lambda s: None, **kw))
+    assert a.main() == 1
+
+
+def test_same_announcement_in_two_feeds_counted_once(tmp_path):
+    p = tmp_path / "src.json"
+    p.write_text(json.dumps({"feeds": [
+        {"id": "sm", "kind": "sitemap", "url": "u3", "categories": ["おもちゃ・遊具・人形"]},
+        {"id": "maker", "kind": "maker", "url": "dup"},
+    ]}), encoding="utf-8")
+    dup = SITEMAP_DUP_RSS
+
+    def fetch(url):
+        return SITEMAP if url == "u3" else dup
+    rep = a.run(36, 5, sources_path=p, api=None, fetch=fetch, sleeper=lambda s: None, now=NOW, dry_run=True)
+    assert len(rep["entries"]) == 1
+    assert rep["feeds"][1]["dup"] == 1
+
+
+SITEMAP_DUP_RSS = """<?xml version="1.0"?><rss version="2.0"><channel><title>t</title>
+<item><title>【新商品】「おしりにぎり」全4種が登場！</title>
+<link>https://prtimes.jp/main/html/rd/p/000000001.000005808.html</link>
+<pubDate>Tue, 24 Nov 2026 19:00:00 +0900</pubDate></item></channel></rss>""".encode("utf-8")
+
+
+def test_match_score_hiragana_and_short_tokens():
+    # identity_tokens はひらがな・2 字の語を落とす。商品名の照合では残す (agy のレビュー)
+    assert a.match_score("おしりにぎり", "新感触ぬいぐるみ おしりにぎり 全4種") == 1.0
+    assert a.name_tokens("レゴ クラシック") == ["レゴ", "クラシック"]
+    assert a.match_score("UNO", "UNO カードゲーム") == 0.5  # 1 語・4 字未満は見つかった扱いにしない
+
+
+def test_search_name_with_trademark_in_title():
+    t = "映画『ゴジラ-0.0™』より「二式大型飛行艇(改)」が登場"
+    assert a.search_name(t, a.extract_names(t)) == "二式大型飛行艇(改)"
+
+
+def test_sitemap_image_tags_do_not_override():
+    raw = """<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+ xmlns:news="http://www.google.com/schemas/sitemap-news/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+<url><loc>https://prtimes.jp/a.html</loc>
+<news:news><news:publication_date>2026-11-24T19:00:00+09:00</news:publication_date>
+<news:title>「本物の題」登場</news:title><news:keywords>おもちゃ・遊具・人形</news:keywords></news:news>
+<image:image><image:loc>https://img/x.jpg</image:loc><image:title>画像の題</image:title></image:image>
+</url></urlset>""".encode("utf-8")
+    r = a.parse_news_sitemap(raw, ["おもちゃ・遊具・人形"])
+    assert r[0]["link"] == "https://prtimes.jp/a.html" and r[0]["title"] == "「本物の題」登場"
+
+
+def test_pick_targets_zero():
+    assert a.pick_targets([_entry("m", "maker", "「何か」発売", 1)], 0) == []
+
+
+def test_stops_after_three_errors_and_main_red(tmp_path, monkeypatch):
+    monkeypatch.setattr(a, "load_catalog", lambda: (set(), set()))
+    p = tmp_path / "src.json"
+    p.write_text(json.dumps({"feeds": [{"id": "x", "kind": "maker", "url": "many"}]}), encoding="utf-8")
+    items = "".join(f"<item><title>「商品{i}号」発売</title><link>https://e/{i}</link>"
+                    f"<pubDate>Tue, 24 Nov 2026 1{i}:00:00 +0900</pubDate></item>" for i in range(6))
+    raw = f'<?xml version="1.0"?><rss version="2.0"><channel>{items}</channel></rss>'.encode("utf-8")
+
+    class Boom:
+        n = 0
+
+        def search_items(self, **kw):
+            Boom.n += 1
+            raise RuntimeError("401")
+    rep = a.run(36, 10, sources_path=p, api=Boom(), fetch=lambda u: raw, sleeper=lambda s: None, now=NOW)
+    assert Boom.n == 3 and rep["summary"]["search_errors"] == 3
+    monkeypatch.setattr(a, "SOURCES_PATH", p)
+    monkeypatch.setattr(sys, "argv", ["x", "--out", str(tmp_path / "o.json")])
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    orig = a.run
+    monkeypatch.setattr(a, "run", lambda *ar, **kw: orig(*ar, api=Boom(), fetch=lambda u: raw,
+                                                          sleeper=lambda s: None, now=NOW, **kw))
     assert a.main() == 1
