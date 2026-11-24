@@ -209,3 +209,20 @@ def test_committed_narratives_pass_against_current_articles():
             assert errs == [], (path.name, errs)
     finally:
         os.chdir(cwd)
+
+
+def test_cards_carry_amazon_url_and_price_for_mini_links():
+    import dataclasses
+    r = dataclasses.replace(rec("B0TEST0001", "たまごっちパラダイス Orange"),
+                            amazon_url="https://www.amazon.co.jp/dp/B0TEST0001/")
+    b = iph._brief(r, 72, [])
+    assert b["amazon_url"] == "https://www.amazon.co.jp/dp/B0TEST0001/"
+    assert b["best_price"] == 3000
+
+
+def test_compare_entry_carries_amazon_url():
+    import dataclasses
+    import build_category_hubs as bch
+    r = dataclasses.replace(rec("B0TEST0002", "アンパンマン ブロックラボ"),
+                            amazon_url="https://www.amazon.co.jp/dp/B0TEST0002/")
+    assert bch._compare_entry(r, 36)["amazon_url"] == "https://www.amazon.co.jp/dp/B0TEST0002/"

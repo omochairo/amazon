@@ -25,17 +25,19 @@
   <h2 id="ip-choose-title">どれを選ぶ？ こんな子にはこれ</h2>
   <ol class="ip-choose-list">
     {{- range . }}
-    <li class="ip-choose-item">
+    <li class="ip-choose-item" data-asin="{{ .asin }}">
       <a class="ip-choose-thumb" href="{{ .url_internal }}" aria-hidden="true" tabindex="-1">{{ with .image }}<img src="{{ . }}" alt="" loading="lazy" decoding="async" width="96" height="96">{{ end }}</a>
       <div class="ip-choose-body">
         <p class="ip-choose-when">{{ .when }}</p>
         <p class="ip-choose-name"><a href="{{ .url_internal }}">{{ .name }}</a></p>
         <p class="ip-choose-why">{{ .why }}</p>
-        <p class="ip-card-meta">
+        {{- /* Amazon のリンクを <p> の外に置く (custom.css の p a[href*="amazon.co.jp"] が大きなボタンにするため) */}}
+        <div class="ip-card-meta">
           {{- $age := index . "age_min_months" -}}
           {{- if ne (printf "%v" $age) "<nil>" }}<span>{{ partial "age_label.html" (int $age) }}</span>{{ end -}}
           {{- with .ivs_100 }}<span>知育スコア {{ . }}</span>{{ end -}}
-        </p>
+          {{- partial "amazon_mini_link.html" (dict "url" .amazon_url "slot" "ip-hub-choose") -}}
+        </div>
       </div>
     </li>
     {{- end }}
@@ -44,7 +46,7 @@
 {{- end }}{{ end }}
 
 {{- with $d.compare_table }}
-{{- partial "hub_compare_table.html" (dict "table" . "label" $label "title" (printf "%sのおもちゃ 比較表（予算別）" $label)) }}
+{{- partial "ip_compare.html" (dict "table" . "title" (printf "%sのおもちゃ 比較表（予算別）" $label)) }}
 {{- end }}
 
 {{- with $d.age_sections }}

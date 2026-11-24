@@ -1,10 +1,14 @@
-{{- /* ip_card.html: キャラクター別ページ (ip_hub.html) の小さな商品カード。入力は ip_hubs._brief の dict */ -}}
-<a class="ip-card" href="{{ .url_internal }}">
-  {{- with .image }}<img src="{{ . }}" alt="" loading="lazy" decoding="async" width="96" height="96">{{ end }}
-  <span class="ip-card-name">{{ .name }}</span>
+{{- /* ip_card.html: キャラクター別ページ (ip_hub.html) の小さな商品カード。入力は ip_hubs._brief の dict。
+  カード全体を 1 つの <a> にすると中に Amazon のリンクを置けないので、画像と名前をそれぞれ記事へのリンクにする */ -}}
+<div class="ip-card" data-asin="{{ .asin }}">
+  <a class="ip-card-link" href="{{ .url_internal }}">
+    {{- with .image }}<img src="{{ . }}" alt="" loading="lazy" decoding="async" width="96" height="96">{{ end }}
+    <span class="ip-card-name">{{ .name }}</span>
+  </a>
   <span class="ip-card-meta">
     {{- $age := index . "age_min_months" -}}
     {{- if ne (printf "%v" $age) "<nil>" }}<span>{{ partial "age_label.html" (int $age) }}</span>{{ end -}}
     {{- with .ivs_100 }}<span>知育スコア {{ . }}</span>{{ end -}}
   </span>
-</a>
+  {{- partial "amazon_mini_link.html" (dict "url" .amazon_url "slot" "ip-hub-card") }}
+</div>

@@ -780,6 +780,8 @@ def _compare_entry(rec, age_min_months: int | None) -> dict[str, Any]:
         "best_price": rec.best_price,
         "best_platform": rec.best_platform,
         "ivs_100": rec.ivs_100,
+        # キャラクター別ページの比較表が行ごとに出す「Amazon で見る」用 (navi-brain#211)
+        "amazon_url": rec.amazon_url,
     }
 
 

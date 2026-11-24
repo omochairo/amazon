@@ -160,6 +160,10 @@ def _brief(rec, mm: int | None, types: list[str]) -> dict[str, Any]:
         "url_internal": f"/products/{rec.asin.lower()}/",
         "image": rec.image,
         "ivs_100": rec.ivs_100,
+        # 商品ごとの小さな「Amazon で見る」(表示側で amazon_affiliate_url.html がタグを強制)
+        "amazon_url": rec.amazon_url,
+        "best_price": rec.best_price,
+        "best_platform": rec.best_platform,
         "age_min_months": rec.age_min_months if rec.age_min_months is not None else mm,
         "types": [toy_type.label(t) for t in types],
     }
