@@ -34,6 +34,18 @@
   </div>
 </header>
 
+{{- /* navi-brain#209: ブランドページの最安値は、このページに並ぶ商品カードと同じ
+       「今の最安値」(partials/cheapest_price.html) の最小値。brand_hub.json の
+       lowest_price は記事を書いた時点の価格 (product.best_price) なので、表示には使わない。 */ -}}
+{{- $brandLow := 0 -}}
+{{- if eq $kind "brands" -}}
+  {{- /* 商品カードと同じ集合 (件数上限あり) から取る */ -}}
+  {{- range partial "term_list_pages.html" $ -}}
+    {{- $p := partial "cheapest_price.html" . -}}
+    {{- if and (gt $p 0) (or (eq $brandLow 0) (lt $p $brandLow)) -}}{{- $brandLow = $p -}}{{- end -}}
+  {{- end -}}
+{{- end -}}
+
 {{- /* #731 Part D: brand hub hero — narrative entry がある brand 限定 */ -}}
 {{- if eq $kind "brands" -}}
   {{- with site.Data.brand_hub -}}
@@ -44,7 +56,6 @@
       {{- $tier := index $entry "tier" -}}
       {{- $avgIvs := index $entry "avg_ivs_100" -}}
       {{- $avgAge := index $entry "avg_age_min_months" -}}
-      {{- $low := index $entry "lowest_price" -}}
       {{- $series := index $entry "top_3_series" -}}
       {{- $repAsin := index $entry "representative_asin" -}}
       {{- /* 代表商品ページが実在する場合のみリンク化 (未公開 ASIN への 404 防止, session 135)。
@@ -84,17 +95,8 @@
         {{- end }}
       <span class="brand-hub-stat">👶 平均対象年齢 {{ $ageLabel }}</span>
       {{- end }}
-      {{- if $low }}
-        {{- $lowInt := int $low -}}
-        {{- $lowFmt := "" -}}
-        {{- if ge $lowInt 1000 -}}
-          {{- $thousands := div $lowInt 1000 -}}
-          {{- $remainder := mod $lowInt 1000 -}}
-          {{- $lowFmt = printf "%d,%03d" $thousands $remainder -}}
-        {{- else -}}
-          {{- $lowFmt = printf "%d" $lowInt -}}
-        {{- end }}
-      <span class="brand-hub-stat">💴 最安 ¥{{ $lowFmt }} 〜</span>
+      {{- if gt $brandLow 0 }}
+      <span class="brand-hub-stat">💴 最安 ¥{{ lang.FormatNumber 0 $brandLow }} 〜</span>
       {{- end }}
     </div>
     {{- if $series }}
@@ -152,7 +154,23 @@
 {{- end -}}
 
 {{- if .Content }}
-<div class="post-content md-content">{{ .Content }}</div>
+  {{- $content := .Content -}}
+  {{- if eq $kind "brands" -}}
+    {{- /* navi-brain#209: ブランド紹介文 (hugo/content/brands/各ブランド/_index.md) は生成した
+           時点の「最安 約 ¥X」「本サイトでも N 点」を本文に固定で持っていて、日が経つと
+           上の欄やカードとずれる (2026-11-24 に価格 95 本中 37 本・件数 61 本中 48 本)。
+           本文は書き換えず、表示のたびに今の値へ差し替える。今の最安値が無いときは元の文のまま。 */ -}}
+    {{- if gt $brandLow 0 -}}
+      {{- $content = replaceRE `(最安で?\s*約\s*¥\s*)[0-9,]+` (printf "${1}%s" (lang.FormatNumber 0 $brandLow)) $content -}}
+    {{- end -}}
+    {{- /* 「本サイトでも N 点」のほか「本サイトでも**テグ**の商品を11点」のように
+           間に語が入る形も同じ文の中なら拾う (2026-11-24 の全 98 本で 101 か所、
+           「N 点満点」のような点数の意味の文は 0 か所) */ -}}
+    {{- with len $.Pages -}}
+      {{- $content = replaceRE `(本サイト[^。"=]{0,60}?)[0-9]+(\s*点)` (printf "${1}%d${2}" .) $content -}}
+    {{- end -}}
+  {{- end }}
+<div class="post-content md-content">{{ $content | safeHTML }}</div>
 {{- end }}
 
 {{- /* #5330: narrative の固定 CTA 段落は本文ではなくここで出す (84 本すべてで

@@ -261,3 +261,49 @@ def test_sitemap_and_robots_agree(hugo_build_dir):
         "sitemap に noindex ページが載っている "
         f"({len(offenders)}/{len(locs)} 件): {offenders[:5]}"
     )
+
+
+_HERO_LOW_RE = re.compile(r"💴 最安 ¥([\d,]+) 〜")
+_CARD_LOW_RE = re.compile(r"product-card-score-price>最安 &yen;([\d,]+)")
+_NARRATIVE_LOW_RE = re.compile(r"最安で?\s*約\s*¥\s*([\d,]+)")
+_HERO_COUNT_RE = re.compile(r"📚 (\d+) 件のレビュー")
+_NARRATIVE_COUNT_RE = re.compile(r"本サイトでも\s*(\d+)\s*点")
+
+
+def _yen(s: str) -> int:
+    return int(s.replace(",", ""))
+
+
+def test_brand_page_prices_and_counts_match_cards(hugo_build_dir):
+    """navi-brain#209: ブランドページの最安値・件数が、同じページの商品カードとずれない。
+
+    ヒーローの「💴 最安 ¥X 〜」は商品カード (全ページ送り分) の最安値の最小値、
+    紹介文の「最安 約 ¥X」はヒーローと同じ値、「本サイトでも N 点」はヒーローの件数。
+    紹介文は生成した時点の数字を本文に持っているので、term.html が表示のたびに
+    差し替えている。どちらかが崩れると古い数字が読者に見える。
+    """
+    checked = 0
+    offenders = []
+    for page in sorted((hugo_build_dir / "brands").glob("*/index.html")):
+        html = page.read_text(encoding="utf-8", errors="replace")
+        body = html.split("</head>", 1)[-1]
+        hero = _HERO_LOW_RE.search(body)
+        if not hero:
+            continue
+        cards = [_yen(v) for v in _CARD_LOW_RE.findall(body)]
+        for extra in sorted((page.parent / "page").glob("*/index.html")):
+            cards += [_yen(v) for v in _CARD_LOW_RE.findall(extra.read_text(encoding="utf-8", errors="replace"))]
+        low = _yen(hero.group(1))
+        checked += 1
+        if not cards or min(cards) != low:
+            offenders.append((page.parent.name, "hero", low, min(cards) if cards else None))
+        for m in _NARRATIVE_LOW_RE.finditer(body):
+            if _yen(m.group(1)) != low:
+                offenders.append((page.parent.name, "narrative price", m.group(1), low))
+        count = _HERO_COUNT_RE.search(body)
+        for m in _NARRATIVE_COUNT_RE.finditer(body):
+            if count and m.group(1) != count.group(1):
+                offenders.append((page.parent.name, "narrative count", m.group(1), count.group(1)))
+    if checked == 0:
+        _unavailable("最安値を出すブランドページが無い (build_post.py を回していない)")
+    assert not offenders, f"ブランドページの数字がずれている ({len(offenders)} 件): {offenders[:5]}"
