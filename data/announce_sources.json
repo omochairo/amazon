@@ -1,0 +1,129 @@
+{
+  "_comment": "新商品の発表の取り元 (navi-brain#210 の影運転)。PR TIMES の企業別 RSS は companyrdf.php?company_id=<ID>。ID は既存の出典 (per_asin の third_party_sources・記事の sources) に出た PR TIMES の URL から拾い、2026-11-24 に RSS を開いて社名を確かめた。共同通信 PR ワイヤー・おもちゃ情報net. は利用規約が非商業限定なので入れない。PR TIMES のニュース用サイトマップ (直近約 16 時間・2,000 件超) は news:keywords の公式カテゴリで絞る (2026-11-24 の 1 回で「おもちゃ・遊具・人形」32 件)",
+  "feeds": [
+    {
+      "id": "prtimes-sitemap-toys",
+      "name": "PR TIMES (おもちゃ・遊具・人形 / キッズ・ベビー・マタニティ)",
+      "kind": "sitemap",
+      "url": "https://prtimes.jp/sitemap-news.xml",
+      "categories": [
+        "おもちゃ・遊具・人形",
+        "キッズ・ベビー・マタニティ"
+      ]
+    },
+    {
+      "id": "prtimes-megahouse",
+      "name": "メガハウス",
+      "kind": "maker",
+      "url": "https://prtimes.jp/companyrdf.php?company_id=5808"
+    },
+    {
+      "id": "prtimes-mattel",
+      "name": "マテル・インターナショナル",
+      "kind": "maker",
+      "url": "https://prtimes.jp/companyrdf.php?company_id=12996"
+    },
+    {
+      "id": "prtimes-ravensburger",
+      "name": "ラベンスバーガージャパン",
+      "kind": "maker",
+      "url": "https://prtimes.jp/companyrdf.php?company_id=93114"
+    },
+    {
+      "id": "prtimes-people",
+      "name": "ピープル",
+      "kind": "maker",
+      "url": "https://prtimes.jp/companyrdf.php?company_id=45493"
+    },
+    {
+      "id": "prtimes-lego",
+      "name": "レゴジャパン",
+      "kind": "maker",
+      "url": "https://prtimes.jp/companyrdf.php?company_id=48417"
+    },
+    {
+      "id": "prtimes-yanoman",
+      "name": "やのまん",
+      "kind": "maker",
+      "url": "https://prtimes.jp/companyrdf.php?company_id=76359"
+    },
+    {
+      "id": "prtimes-hasbro",
+      "name": "ハズブロジャパン",
+      "kind": "maker",
+      "url": "https://prtimes.jp/companyrdf.php?company_id=111430"
+    },
+    {
+      "id": "prtimes-takaratomyarts",
+      "name": "タカラトミーアーツ",
+      "kind": "maker",
+      "url": "https://prtimes.jp/companyrdf.php?company_id=9185"
+    },
+    {
+      "id": "prtimes-ides",
+      "name": "アイデス",
+      "kind": "maker",
+      "url": "https://prtimes.jp/companyrdf.php?company_id=5401"
+    },
+    {
+      "id": "prtimes-oinkgames",
+      "name": "オインクゲームズ",
+      "kind": "maker",
+      "url": "https://prtimes.jp/companyrdf.php?company_id=51135"
+    },
+    {
+      "id": "prtimes-artec",
+      "name": "アーテック",
+      "kind": "maker",
+      "url": "https://prtimes.jp/companyrdf.php?company_id=31223"
+    },
+    {
+      "id": "prtimes-epoch",
+      "name": "エポック社",
+      "kind": "maker",
+      "url": "https://prtimes.jp/companyrdf.php?company_id=16095"
+    },
+    {
+      "id": "prtimes-arclight",
+      "name": "アークライト",
+      "kind": "maker",
+      "url": "https://prtimes.jp/companyrdf.php?company_id=41113"
+    },
+    {
+      "id": "prtimes-dadway",
+      "name": "ダッドウェイ",
+      "kind": "maker",
+      "url": "https://prtimes.jp/companyrdf.php?company_id=37140"
+    },
+    {
+      "id": "prtimes-gakken",
+      "name": "学研ホールディングス",
+      "kind": "maker",
+      "url": "https://prtimes.jp/companyrdf.php?company_id=2535"
+    },
+    {
+      "id": "prtimes-woodypuddy",
+      "name": "ウッディプッディ",
+      "kind": "maker",
+      "url": "https://prtimes.jp/companyrdf.php?company_id=93528"
+    },
+    {
+      "id": "prtimes-segafave",
+      "name": "セガ フェイブ",
+      "kind": "maker",
+      "url": "https://prtimes.jp/companyrdf.php?company_id=1909"
+    },
+    {
+      "id": "prtimes-bandai",
+      "name": "バンダイ",
+      "kind": "maker",
+      "url": "https://prtimes.jp/companyrdf.php?company_id=83086"
+    },
+    {
+      "id": "hobbywatch",
+      "name": "HOBBY Watch",
+      "kind": "media",
+      "url": "https://hobby.watch.impress.co.jp/data/rss/1.0/hbw/feed.rdf"
+    }
+  ]
+}
