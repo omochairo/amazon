@@ -315,6 +315,38 @@ def _release_date_label(raw_avail: Optional[str]) -> Optional[str]:
     return f"{year}年{int(month)}月{int(day)}日"
 
 
+def _other_sites_tail(purchase_options: dict[str, dict]) -> str:
+    """結論ブロック末尾の楽天/Yahoo の一文。
+
+    ``is_search`` (同じ商品の出品を照合できず、検索リンクに落としたもの) は
+    「取扱が無い」とは書かない。照合できなかっただけで、セット品の ASIN に
+    単品の出品が並んでいる場合などは実際に売られている
+    (navi-brain#207: 3 個セットの記事で、楽天・Yahoo に単品の取扱があった)。
+    表の状態ラベル「検索で確認」(``_other_state_label``) と言い分を揃える。
+    """
+    available, searched, missing = [], [], []
+    for site in ("rakuten", "yahoo"):
+        opt = purchase_options.get(site) or {}
+        if opt.get("available"):
+            available.append(_SITE_LABELS[site])
+        elif opt.get("is_search"):
+            searched.append(_SITE_LABELS[site])
+        else:
+            missing.append(_SITE_LABELS[site])
+
+    parts: list[str] = []
+    if available:
+        parts.append(f"{'・'.join(available)}でも取扱を確認できました。")
+    if missing:
+        parts.append(f"{'・'.join(missing)}では取扱を確認できませんでした。")
+    if searched:
+        parts.append(
+            f"{'・'.join(searched)}では同じ商品の出品を特定できませんでした"
+            "（在庫の表の検索リンクから探せます）。"
+        )
+    return "".join(parts)
+
+
 def build_conclusion(
     product_name: str,
     stock_obs: stock_status.StockObservation,
@@ -354,24 +386,7 @@ def build_conclusion(
             f"{date_label} 時点の記録を最後に、Amazon の在庫状況が"
             f"{STICKY_UNKNOWN_MARKER}。{price_sentence}"
         )
-        other_sites = [s for s in ("rakuten", "yahoo")]
-        available_others = [
-            _SITE_LABELS[s] for s in other_sites if (purchase_options.get(s) or {}).get("available")
-        ]
-        unavailable_others = [
-            _SITE_LABELS[s] for s in other_sites if not (purchase_options.get(s) or {}).get("available")
-        ]
-        tail = ""
-        if unavailable_others and available_others:
-            tail = (
-                f"{'・'.join(available_others)}では取扱を確認できましたが、"
-                f"{'・'.join(unavailable_others)}では取扱を確認できませんでした。"
-            )
-        elif unavailable_others:
-            tail = f"{'・'.join(unavailable_others)}では取扱を確認できませんでした。"
-        elif available_others:
-            tail = f"{'・'.join(available_others)}でも取扱を確認できました。"
-        return (head + tail).strip()
+        return (head + _other_sites_tail(purchase_options)).strip()
 
     date_label = to_jst_date(stock_obs.observed_at) or "確認日不明"
     state = stock_obs.state
@@ -405,26 +420,7 @@ def build_conclusion(
         # (「YYYY-MM-DD 時点では在庫あり (以降は取得できていません)」の形)。
         head += f"以降の在庫状況は{STICKY_UNKNOWN_MARKER}。"
 
-    other_sites = [s for s in ("rakuten", "yahoo")]
-    available_others = [
-        _SITE_LABELS[s] for s in other_sites if (purchase_options.get(s) or {}).get("available")
-    ]
-    unavailable_others = [
-        _SITE_LABELS[s] for s in other_sites if not (purchase_options.get(s) or {}).get("available")
-    ]
-
-    tail = ""
-    if unavailable_others and available_others:
-        tail = (
-            f"{'・'.join(available_others)}では取扱を確認できましたが、"
-            f"{'・'.join(unavailable_others)}では取扱を確認できませんでした。"
-        )
-    elif unavailable_others:
-        tail = f"{'・'.join(unavailable_others)}では取扱を確認できませんでした。"
-    elif available_others:
-        tail = f"{'・'.join(available_others)}でも取扱を確認できました。"
-
-    return (head + tail).strip()
+    return (head + _other_sites_tail(purchase_options)).strip()
 
 
 # ---------------------------------------------------------------------------
