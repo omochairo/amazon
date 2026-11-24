@@ -2177,11 +2177,16 @@ _HIGHLIGHT_JUNK_MARKERS = ("Item number", "Qty.", "Part #", "Quantity.", "Symbol
 # 「## Channel: … ### Description.」、Instagram の「Sign up for Instagram」、
 # 通販サイトの「マイページログイン カートを見る」)。
 _HIGHLIGHT_NAV_MARKERS = (
-    "Log in", "Log In", "Sign up", "Sign Up", "Sign in", "ログイン", "カートを見る",
+    "Log in", "Log In", "Sign up", "Sign Up", "Sign in", "マイページログイン",
+    "会員ログイン", "ログイン・会員登録", "新規会員登録", "カートを見る",
     "カートに入れる", "コンテンツへスキップ", "Skip to content", "Channel:",
     "views ·", "公式LINE", "Expand user menu", "Open settings menu",
-    "Cookie", "クッキー",
+    "Cookie Policy", "Cookieポリシー", "Cookieを使用", "Cookieの使用", "Accept Cookies",
+    "クッキーを使用", "クッキーの使用", "クッキーポリシー", "safely connected to the",
 )
+# 「ログイン」は「ログイン不要で遊べる」のような本文にも出るので、店のメニューの
+# 語と一緒に出たときだけメニューとみなす
+_HIGHLIGHT_LOGIN_NEIGHBORS = ("カート", "会員", "登録", "ログアウト", "検索", "サインアップ")
 # 商品名から関係の判定に使う語を作るときに外す一般語。どの商品の引用にも
 # 当たってしまい、関係の無い引用を通すため。
 _HIGHLIGHT_GENERIC_TOKENS = frozenset({
@@ -2192,6 +2197,7 @@ _HIGHLIGHT_GENERIC_TOKENS = frozenset({
     "ぬいぐるみ", "カード", "ミニカー", "フィギュア", "toy", "toys", "set", "kids",
     "baby", "the", "and", "for", "with", "large", "small", "mini", "sound",
     "color", "colors", "wood", "wooden", "キューブ", "ボール", "シール", "カラー",
+    "ピース", "歳以上", "才以上", "ヶ月", "はじめての", "みんなで",
 })
 
 # Contact-info detectors (#4150 / Refs #2995): third-party snippets sometimes
@@ -2253,9 +2259,13 @@ _MD_LINE_MARKER_RE = re.compile(r"^[ \t]*(?:#{1,6}|[-+*]|>)[ \t]+", re.MULTILINE
 _SNIPPET_TITLE_LINE_RE = re.compile(r"\ATitle:[^\n]*\n?")
 # 行の途中に残った見出し記号 (「…です. ## 救助チームの編成.」)
 _MD_INLINE_HEADING_RE = re.compile(r"(?:(?<=\s)|^)#{1,6}(?=\s)")
-# 括弧で始まる URL は閉じ括弧まで (中に空白が入って崩れた「(https://…?tag=a-22
-# psc=1&tag=b-22)」も丸ごと)。括弧の無い URL は空白まで。
-_SNIPPET_URL_RE = re.compile(r"\(https?://[^)]*\)?|https?://\S+")
+# 括弧で始まる URL は、URL 本体と、空白で崩れた「key=value」の断片まで
+# (「(https://…?tag=a-22 psc=1&tag=b-22)」)。括弧の無い URL は URL に使う文字だけ
+# (日本語の文が直に続いても消さない)。
+_SNIPPET_URL_RE = re.compile(
+    r"\(https?://[^)\s]*(?:\s+[^\s)=]+=[^\s)]*)*\)?"
+    r"|https?://[A-Za-z0-9\-._~:/?#@!$&'*+,;=%]+"
+)
 
 
 def _snippet_plain_text(snippet: str) -> str:
@@ -2266,21 +2276,22 @@ def _snippet_plain_text(snippet: str) -> str:
     navi-brain#209 の続き (2026-11-24): 本文抽出の「Title:」行・行の途中の
     見出し記号・強調の ``**``・崩れた URL (他サイトのアフィリエイトの tag 入り)
     も消す。"""
-    s = _SNIPPET_TITLE_LINE_RE.sub("", snippet or "")
+    s = _SNIPPET_TITLE_LINE_RE.sub("", snippet or "").replace("**", "")
     s = _MD_IMAGE_RE.sub(" ", s)
     s = _MD_LINK_DEST_RE.sub("]", s)
     s = s.replace("![", " ").replace("[", "").replace("]", "")
     s = _MD_LINE_MARKER_RE.sub("", s)
     s = _SNIPPET_URL_RE.sub(" ", s)
     s = _MD_INLINE_HEADING_RE.sub(" ", s)
-    s = s.replace("**", "")
     return " ".join(s.split())
 
 
 _HIGHLIGHT_ODD_SCRIPT_RE = re.compile(
-    "[Ā-ɏͰ-Ͽ֐-ۿ฀-๿ꥠ-꥿�]"
+    r"[\u0100-\u024f\u0370-\u03ff\u0590-\u06ff\u0e00-\u0e7f\ua960-\ua97f\ufffd]"
 )
 _HIGHLIGHT_SCRIPT_RUN_RE = re.compile(r"[a-z0-9]+|[ぁ-ゖー]+|[ァ-ヺー]+|[一-龥々]+")
+# 「パンどろぼう」「すみっコぐらし」のように、カタカナとひらがなが続く固有名詞
+_HIGHLIGHT_KANA_RUN_RE = re.compile(r"[ァ-ヺぁ-ゖー]+")
 
 
 def _highlight_name_tokens(name: str) -> list[str]:
@@ -2295,11 +2306,23 @@ def _highlight_name_tokens(name: str) -> list[str]:
     subs = [
         m.group(0) for p in parts for m in _HIGHLIGHT_SCRIPT_RUN_RE.finditer(p)
         if not re.fullmatch(r"[ぁ-ゖー]+", m.group(0))
+    ] + [
+        m.group(0) for p in parts for m in _HIGHLIGHT_KANA_RUN_RE.finditer(p)
+        if re.search(r"[ァ-ヺ]", m.group(0)) and re.search(r"[ぁ-ゖ]", m.group(0))
     ]
     out: list[str] = []
     for p in parts + subs:
-        if len(p) >= 3 and p not in _HIGHLIGHT_GENERIC_TOKENS and p not in out:
+        if (len(p) >= 3 and p not in _HIGHLIGHT_GENERIC_TOKENS and not p.isdigit()
+                and p not in out):
             out.append(p)
+    if not any(t in subs for t in out):
+        # 「将棋セット」のように、区切った後の 3 文字以上の語が無い名前は、
+        # 2 文字の語 (ひらがなだけの語・一般語を除く) も足す。「将棋セット」
+        # の丸ごとでは「将棋の駒の並べ方」に当たらないため
+        for p in parts + subs:
+            if (len(p) == 2 and p not in _HIGHLIGHT_GENERIC_TOKENS
+                    and not re.fullmatch(r"[ぁ-ゖー]+", p) and p not in out):
+                out.append(p)
     return out
 
 
@@ -2325,6 +2348,8 @@ def _highlight_snippet_ok(snippet: str) -> bool:
     if any(m in s for m in _HIGHLIGHT_JUNK_MARKERS):
         return False
     if any(m in s for m in _HIGHLIGHT_NAV_MARKERS):
+        return False
+    if "ログイン" in s and any(w in s for w in _HIGHLIGHT_LOGIN_NEIGHBORS):
         return False
     # 文字コードを取り違えて読んだ文字化け (「ۡ > եȡ」「ǹ5,500」) とタイ語など、
     # 日本の読者が読めない文字が目立つもの

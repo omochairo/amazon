@@ -270,6 +270,51 @@ class ReaderJunkTests(unittest.TestCase):
         ])
         self.assertEqual(len(hl), 1)
 
+    def test_url_removal_does_not_eat_following_prose(self):
+        out = _snippet_plain_text("公式（https://example.com/page）によると、子どもが楽しく遊べます。")
+        self.assertIn("子どもが楽しく遊べます。", out)
+        out = _snippet_plain_text("詳細(https://example.com/a 以降のレビューでは音がやさしいと好評です。")
+        self.assertIn("音がやさしいと好評です。", out)
+        self.assertNotIn("**", _snippet_plain_text("**## 見出し** のあとに本文が続きます。"))
+        self.assertNotIn("#", _snippet_plain_text("**## 見出し** のあとに本文が続きます。"))
+
+    def test_cookie_toy_review_is_not_navigation(self):
+        self.assertTrue(_highlight_snippet_ok(
+            "クッキー型で生地を抜いて、チョコチップクッキーを作るおままごとが楽しめました。"
+        ))
+        self.assertFalse(_highlight_snippet_ok(
+            "当サイトではCookieを使用しています。サイトの利用を続けると同意したものとみなします。"
+        ))
+
+    def test_login_counts_as_navigation_only_with_shop_words(self):
+        self.assertFalse(_highlight_snippet_ok(
+            "木のおもちゃ ウッディモンキー 本店 検索 ログイン 会員登録 0 カート 0 臨時休業のお知らせ"
+        ))
+        self.assertTrue(_highlight_snippet_ok(
+            "アプリはログイン不要で、届いたその日から親子ですぐに遊び始められるのが便利でした。"
+        ))
+
+    def test_kana_proper_noun_and_digit_tokens(self):
+        hl = self._attach("パンどろぼう着脱式ぬいぐるみ", [
+            {"title": "絵本のキャラクター", "url": "https://h.example.jp/8", "host": "h.example.jp",
+             "snippet": "パンどろぼうのぬいぐるみは、絵本の世界そのままの表情でかわいいと評判です。"},
+        ])
+        self.assertEqual(len(hl), 1)
+        hl = self._attach("ジグソーパズル 500ピース", [
+            {"title": "別の商品", "url": "https://i.example.jp/9", "host": "i.example.jp",
+             "snippet": "送料は全国一律で、税込1,500円以上のご注文で無料になります。お届けまで3日です。"},
+        ])
+        self.assertEqual(hl, [])
+
+    def test_two_char_name_still_checks_relevance(self):
+        hl = self._attach("将棋セット", [
+            {"title": "将棋の駒の並べ方", "url": "https://f.example.jp/6", "host": "f.example.jp",
+             "snippet": "将棋の駒は木製で、初めての子どもでも並べ方を覚えやすいように駒に動きが書いてあります。"},
+            {"title": "別の店", "url": "https://g.example.jp/7", "host": "g.example.jp",
+             "snippet": "当店ではクリスマスのギフト包装を無料で承っております。お気軽にご相談ください。"},
+        ])
+        self.assertEqual([h["host"] for h in hl], ["f.example.jp"])
+
     def test_generic_words_alone_do_not_count_as_about(self):
         hl = self._attach("木製 知育玩具 セット", [
             {"title": "別の店", "url": "https://e.example.jp/5", "host": "e.example.jp",
