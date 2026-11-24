@@ -170,6 +170,14 @@ test("short: 次の区分の予告を省く", () => {
   assert.equal(api.message(PHASES, at("2026-10-20T00:00:00+09:00"), true), "");
 });
 
+test("short: 区分のすき間は予告を出さない (開始前と同じ扱い)", () => {
+  const gap = [PHASES[0], { ...PHASES[1], start: "2026-10-17T00:00:00+09:00" }];
+  assert.equal(api.message(gap, at("2026-10-16T12:00:00+09:00"), true), "");
+  // 帯 (short でない) は従来どおり次の区分の開始を出す
+  assert.equal(api.message(gap, at("2026-10-16T12:00:00+09:00")),
+    "Amazon プライム感謝祭は 10/17 0:00 から");
+});
+
 test("apply: data-sale-notice-short の要素には短い文言と補足を入れる", () => {
   const node = makeNode(JSON.stringify(PHASES), {
     attrs: { "data-sale-notice-short": "", "data-sale-notice-sub": "販売ページでご確認ください" },

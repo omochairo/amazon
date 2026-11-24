@@ -686,6 +686,8 @@ def _detect_mall(item: Dict[str, Any], feed: Dict[str, Any], shop: str,
     event_id, label = mall_event_id(entry, year, shop, name, published)
     if event_id in registered or registered_by_name(
             entry["name"] if entry else name, shop, published, reference, events):
+        # 黙って捨てない (navi-brain#206 ⑥): どの発表を登録済みとして読み飛ばしたかを残す
+        logger.info("登録済みとして読み飛ばす: %s (%s)", event_id, item["title"])
         return
     display = entry["name"] if entry else "{} {}".format(MALL_SITES[shop], name)
     cand = add(event_id, entry, shop, display, label, feed, item)
@@ -759,6 +761,7 @@ def detect(
                     event_id = "{}-{}".format(entry["id"], hit[1])
                     if event_id in registered or registered_by_name(
                             entry["name"], shop, item["published"], None, events):
+                        logger.info("登録済みとして読み飛ばす: %s (%s)", event_id, item["title"])
                         continue
                     add(event_id, entry, shop, name, hit[1], feed, item)
                 continue
@@ -767,6 +770,7 @@ def detect(
                 continue
             event_id, label = event_key(entry, name, period["start"])
             if event_id in registered or _covered(period["start"], shop, events, name):
+                logger.info("登録済みとして読み飛ばす: %s (%s)", event_id, item["title"])
                 continue
             cand = add(event_id, entry, shop, name, label, feed, item)
             # 自動登録の出典 (amazon_events) には、期間を読めた発表を使う

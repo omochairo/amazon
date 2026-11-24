@@ -60,7 +60,10 @@
     for (var i = 0; i < list.length; i++) {
       var p = list[i];
       if (nowMs < p.start) {
-        // 区分と区分のすき間
+        // 区分と区分のすき間。short (商品ページの 1 行) は予告を出さない: 開始前と同じく
+        // 期間外の扱い。出すと購入ボタンの直下に「この商品が対象か」の補足付きで
+        // 開催前のセールが並ぶ (navi-brain#206 低)
+        if (short) return '';
         var from = jst(p.start);
         return p.headline + 'は ' + md(from) + ' ' + hm(from) + ' から';
       }

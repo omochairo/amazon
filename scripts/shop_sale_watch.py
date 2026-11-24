@@ -302,6 +302,7 @@ def plan(found: Sequence[Dict[str, Any]], events: Sequence[Dict[str, Any]]
         have = by_id.get(f["id"])
         if have is not None and have.get("auto") != AUTO_MARK:
             # 人が書いた・人が直して auto を消したイベント。突き合わせも追加もしない
+            logger.info("人が書いた登録があるので突き合わせない: %s", f["id"])
             continue
         if have is None:
             # 同じ回のリリースが 2 本あると同じ id を 2 回読む。2 本目は 1 本目と突き合わせる
@@ -320,6 +321,7 @@ def plan(found: Sequence[Dict[str, Any]], events: Sequence[Dict[str, Any]]
                and not sale_announcements.clearly_different(f["name"], info["name"])
                for info in infos):
             # 人が別の id で登録済み (段階の開始日が前後 1 日。名前が別のセールなら足す)
+            logger.info("別の id で登録済みとして足さない: %s", f["id"])
             continue
         add.append(f)
     return add, conflicts
