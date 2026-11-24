@@ -1,0 +1,106 @@
+name: Announce Shadow (発表起点の影運転)
+
+# navi-brain#210 — 新商品の発表を起点に Amazon の商品を探す案を、本番の取り込みを変えずに測る。
+#
+# なぜ: 記事レーンの新規は 1 日 4 本前後で頭打ち。出典不足で外した商品は判定をゆるめても
+# ほぼ救えず (仕様 v2 §11)、入口 (どの商品を候補にするか) を変えるしかない。発表 (PR TIMES の
+# 「おもちゃ・遊具・人形」カテゴリ・玩具メーカーの企業別 RSS・HOBBY Watch) から商品名を取り、
+# Amazon で見つかるか・今の取り込みに無いものがどれだけあるかを 2 週間数える。
+#
+# 契約:
+#   - **観測のみ**。data/ に何も書かない・commit しない・PR を作らない (下の確認ステップで機械的に見る)。
+#     結果は artifact (30 日保存) と step summary だけ
+#   - SearchItems は 1 回 20 回まで・1.1 秒間隔 (fetch_amazon と同じ)。01 (09:00 / 18:00 JST) と重ならない時刻
+#   - PR TIMES のニュース用サイトマップは直近約 16 時間分しか載らないので 12 時間おき。
+#     --since-hours 13 で、起動の遅れがあっても取りこぼさない (重なった分は集計で重複を除く)
+#   - 取り元が全部読めないときは赤 (黙って 0 件で緑にしない, #4793)
+#
+# 必須 secrets: AMAZON_CREATORS_APPLICATION_ID / _CREDENTIAL_ID / _CREDENTIAL_SECRET, AMAZON_PARTNER_TAG
+
+on:
+  schedule:
+    - cron: '47 2,14 * * *'  # 11:47 / 23:47 JST
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'true なら Amazon を検索せず、発表と商品名だけ出す'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: announce-shadow
+  cancel-in-progress: false
+
+jobs:
+  shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # secrets 欠落を無言 skip にしない (#4793)
+      - name: Assert secrets present
+        if: github.event.inputs.dry_run != 'true'
+        env:
+          APP: ${{ secrets.AMAZON_CREATORS_APPLICATION_ID }}
+          CID: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_ID }}
+          SEC: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_SECRET }}
+          TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
+        run: |
+          missing=""
+          [ -z "$APP" ] && missing="$missing AMAZON_CREATORS_APPLICATION_ID"
+          [ -z "$CID" ] && missing="$missing AMAZON_CREATORS_CREDENTIAL_ID"
+          [ -z "$SEC" ] && missing="$missing AMAZON_CREATORS_CREDENTIAL_SECRET"
+          [ -z "$TAG" ] && missing="$missing AMAZON_PARTNER_TAG"
+          if [ -n "$missing" ]; then
+            echo "::error::required secrets missing:$missing"
+            exit 1
+          fi
+
+      - name: Read announcements and search Amazon
+        env:
+          AMAZON_CREATORS_APPLICATION_ID: ${{ secrets.AMAZON_CREATORS_APPLICATION_ID }}
+          AMAZON_CREATORS_CREDENTIAL_ID: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_ID }}
+          AMAZON_CREATORS_CREDENTIAL_SECRET: ${{ secrets.AMAZON_CREATORS_CREDENTIAL_SECRET }}
+          AMAZON_PARTNER_TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
+          INPUT_DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          set -e
+          FLAGS="--since-hours 13 --max-search 20 --out ${RUNNER_TEMP}/announce_shadow.json"
+          if [ "$INPUT_DRY_RUN" = "true" ]; then
+            FLAGS="$FLAGS --dry-run"
+          fi
+          python scripts/announce_shadow.py $FLAGS
+
+      - name: Assert no data mutation
+        run: |
+          if ! git diff --quiet || [ -n "$(git status --porcelain)" ]; then
+            echo "::error::shadow lane must not modify the working tree"
+            git status --short
+            exit 1
+          fi
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: announce-shadow-${{ github.run_id }}
+          path: ${{ runner.temp }}/announce_shadow.json
+          retention-days: 30
+          if-no-files-found: warn
