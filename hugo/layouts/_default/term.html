@@ -39,7 +39,8 @@
        lowest_price は記事を書いた時点の価格 (product.best_price) なので、表示には使わない。 */ -}}
 {{- $brandLow := 0 -}}
 {{- if eq $kind "brands" -}}
-  {{- range $.Pages -}}
+  {{- /* 商品カードと同じ集合 (件数上限あり) から取る */ -}}
+  {{- range partial "term_list_pages.html" $ -}}
     {{- $p := partial "cheapest_price.html" . -}}
     {{- if and (gt $p 0) (or (eq $brandLow 0) (lt $p $brandLow)) -}}{{- $brandLow = $p -}}{{- end -}}
   {{- end -}}
@@ -160,10 +161,13 @@
            上の欄やカードとずれる (2026-11-24 に価格 95 本中 37 本・件数 61 本中 48 本)。
            本文は書き換えず、表示のたびに今の値へ差し替える。今の最安値が無いときは元の文のまま。 */ -}}
     {{- if gt $brandLow 0 -}}
-      {{- $content = replaceRE `(最安\s*約\s*¥\s*)[0-9,]+` (printf "${1}%s" (lang.FormatNumber 0 $brandLow)) $content -}}
+      {{- $content = replaceRE `(最安で?\s*約\s*¥\s*)[0-9,]+` (printf "${1}%s" (lang.FormatNumber 0 $brandLow)) $content -}}
     {{- end -}}
+    {{- /* 「本サイトでも N 点」のほか「本サイトでも**テグ**の商品を11点」のように
+           間に語が入る形も同じ文の中なら拾う (2026-11-24 の全 98 本で 101 か所、
+           「N 点満点」のような点数の意味の文は 0 か所) */ -}}
     {{- with len $.Pages -}}
-      {{- $content = replaceRE `(本サイトでも\s*)[0-9]+(\s*点)` (printf "${1}%d${2}" .) $content -}}
+      {{- $content = replaceRE `(本サイト[^。]{0,60}?)[0-9]+(\s*点)` (printf "${1}%d${2}" .) $content -}}
     {{- end -}}
   {{- end }}
 <div class="post-content md-content">{{ $content | safeHTML }}</div>
