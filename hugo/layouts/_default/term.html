@@ -167,7 +167,7 @@
            間に語が入る形も同じ文の中なら拾う (2026-11-24 の全 98 本で 101 か所、
            「N 点満点」のような点数の意味の文は 0 か所) */ -}}
     {{- with len $.Pages -}}
-      {{- $content = replaceRE `(本サイト[^。]{0,60}?)[0-9]+(\s*点)` (printf "${1}%d${2}" .) $content -}}
+      {{- $content = replaceRE `(本サイト[^。"=]{0,60}?)[0-9]+(\s*点)` (printf "${1}%d${2}" .) $content -}}
     {{- end -}}
   {{- end }}
 <div class="post-content md-content">{{ $content | safeHTML }}</div>
