@@ -17,10 +17,11 @@ name: SNS Engagement Publish (X + Threads + Bluesky non-link, 8-slot)
 #   - news スロット: category="news" AND created_at > now-48h で latest-first pick
 #   - daily スロット: category="daily" で FIFO (古い順) pick + rotation 多様性ペナルティ
 #   - queue 候補 0 件のスロットは穴開けで skip (健全)
-#   - queue 補充は 29-jules-engagement-refill.yml (daily) + 33-jules-engagement-news.yml (news)
+#   - queue 補充は K8 の scripts/engagement_lane.py (navi-brain#170 B3)。Jules 時代の
+#     29 (daily) / 29b (補充の見張り) / 33 (news) は Jules 終了で止まり、navi-brain#139 で削除
 #
 #   Issue #7847 (session 178): news は 17:00(news#3) / 21:30(news#4 予備) を撤去。
-#   news の実供給は 33-jules-engagement-news.yml の賛否テスト (§7-A, 論争回避
+#   news の実供給は (当時の) 33-jules-engagement-news.yml の賛否テスト (§7-A, 論争回避
 #   最優先ルール) で構造的に 2〜3 本/日に収束しており、4 枠は供給を上回る需要
 #   だった (直近 10 run 中 3 run が news#3/#4 で skip warning)。生成本数を増やす
 #   のは安全ゲートを緩める方向になるため見送り、実測で一度も skip していない
