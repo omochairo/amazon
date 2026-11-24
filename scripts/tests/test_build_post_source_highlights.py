@@ -275,6 +275,10 @@ class ReaderJunkTests(unittest.TestCase):
         self.assertIn("子どもが楽しく遊べます。", out)
         out = _snippet_plain_text("詳細(https://example.com/a 以降のレビューでは音がやさしいと好評です。")
         self.assertIn("音がやさしいと好評です。", out)
+        out = _snippet_plain_text("詳細(https://example.com/page詳細はレビューをご覧ください。")
+        self.assertIn("詳細はレビューをご覧ください。", out)
+        out = _snippet_plain_text("一行目の本文です。\nTitle: 別のページ題\n二行目の本文です。")
+        self.assertNotIn("別のページ題", out)
         self.assertNotIn("**", _snippet_plain_text("**## 見出し** のあとに本文が続きます。"))
         self.assertNotIn("#", _snippet_plain_text("**## 見出し** のあとに本文が続きます。"))
 

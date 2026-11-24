@@ -2256,14 +2256,14 @@ _MD_LINE_MARKER_RE = re.compile(r"^[ \t]*(?:#{1,6}|[-+*]|>)[ \t]+", re.MULTILINE
 
 
 # 本文抽出 (r.jina.ai 等) が先頭に付ける「Title: <ページ題>」の行
-_SNIPPET_TITLE_LINE_RE = re.compile(r"\ATitle:[^\n]*\n?")
+_SNIPPET_TITLE_LINE_RE = re.compile(r"^Title:[^\n]*\n?", re.MULTILINE)
 # 行の途中に残った見出し記号 (「…です. ## 救助チームの編成.」)
 _MD_INLINE_HEADING_RE = re.compile(r"(?:(?<=\s)|^)#{1,6}(?=\s)")
 # 括弧で始まる URL は、URL 本体と、空白で崩れた「key=value」の断片まで
 # (「(https://…?tag=a-22 psc=1&tag=b-22)」)。括弧の無い URL は URL に使う文字だけ
 # (日本語の文が直に続いても消さない)。
 _SNIPPET_URL_RE = re.compile(
-    r"\(https?://[^)\s]*(?:\s+[^\s)=]+=[^\s)]*)*\)?"
+    r"\(https?://[A-Za-z0-9\-._~:/?#@!$&'*+,;=%]*(?:\s+[^\s)=]+=[A-Za-z0-9\-._~:/?#@!$&'*+,;=%]*)*\)?"
     r"|https?://[A-Za-z0-9\-._~:/?#@!$&'*+,;=%]+"
 )
 
