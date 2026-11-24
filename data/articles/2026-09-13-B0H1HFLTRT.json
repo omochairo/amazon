@@ -182,16 +182,6 @@
       "notes": "ご褒美として購入し、袋に入ったまま触って楽しんでいる様子が紹介されている。"
     },
     {
-      "id": "src-2",
-      "name": "MellojoyJapan 公式",
-      "url": "https://www.mellojoyjapan.com/en",
-      "tier": "high",
-      "evidence_type": "primary",
-      "author": "メーカー公式",
-      "conflict_of_interest": "disclosed",
-      "notes": "Mellojoyブランドの公式ページ。インテリアとしても飾れる可愛らしさをアピール。"
-    },
-    {
       "id": "src-3",
       "name": "Amazon",
       "url": "https://www.amazon.co.jp/dp/B0H1HFLTRT",
@@ -228,11 +218,10 @@
       "category": "durability",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-2",
         "src-3"
       ],
       "cross_checked": false,
-      "notes": "メーカー情報および販売ページの仕様による（販売元情報のためFalse）"
+      "notes": "販売ページの仕様による"
     },
     {
       "claim": "ご褒美としての購入やプレゼントに適している",
@@ -260,11 +249,10 @@
       "category": "quality",
       "confidence": "high",
       "supporting_source_ids": [
-        "src-2",
         "src-3"
       ],
       "cross_checked": false,
-      "notes": "メーカー情報および販売ページの仕様による"
+      "notes": "販売ページの仕様による"
     },
     {
       "claim": "愛らしいデザインでインテリアとしても楽しめる",
@@ -337,12 +325,6 @@
         "text": "袋に入れたまま感触を楽しむ日常の癒やし",
         "supporting_source_ids": [
           "src-1"
-        ]
-      },
-      {
-        "text": "デスク周りに飾るインテリアとして",
-        "supporting_source_ids": [
-          "src-2"
         ]
       }
     ],
