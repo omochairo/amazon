@@ -308,18 +308,64 @@ def build_ip_payload(key: str, records, raw_index, mm_index, *, per_asin_dir: Pa
     narrative = load_narrative(narrative_dir / f"{key}.json")
     if narrative is not None:
         by_asin = {r.asin: r for r in pool}
-        errors = validate_narrative(narrative, set(by_asin), {s["key"] for s in age_sections},
+        age_keys = {s["key"] for s in age_sections}
+        accessory_asins = {r.asin for r in pool if is_accessory(r.name, hub)}
+        choose_ok = {r.asin for r in good} - accessory_asins
+        # 記事データの変化 (記事が消えた・スコアが下限を割った・年齢の節が無くなった・辞書で
+        # 付属品になった) で合わなくなった項目だけを外す。合格した文章がデータの小さな変化で
+        # 丸ごと消えないように (仕様 v2 §13・agy 指摘)。外したら WARNING を出し、書き直しを待つ
+        narrative, dropped = prune_for_data_drift(narrative, choose_ok, set(by_asin), age_keys)
+        errors = validate_narrative(narrative, set(by_asin), age_keys,
                                     names=[r.name or "" for r in pool],
-                                    accessory_asins={r.asin for r in pool if is_accessory(r.name, hub)},
-                                    choose_asins={r.asin for r in good})
+                                    accessory_asins=accessory_asins,
+                                    choose_asins=choose_ok,
+                                    choose_min=CHOOSE_MIN_AFTER_DRIFT if dropped else CHOOSE_MIN)
+        if dropped:
+            print(f"[ip_hubs] WARNING {key}: dropped for data drift: {dropped[:5]}", file=sys.stderr)
         if errors:
-            # 検査に落ちた文章は出さない (データの節だけのページにする)。記事が消えた・ASIN が
-            # 変わった・スコアが下限を割ったときもここに来る。1 件だけ外すと本文の言及と食い違う
-            # ので、文章ごと外して書き直しを待つ。理由はビルドのログへ
+            # 文章そのものの違反 (金額・煽り・作った数字など) や、外した結果足りなくなったときは
+            # 文章ごと出さない (データの節だけのページにする)。理由はビルドのログへ
             print(f"[ip_hubs] WARNING {key}: narrative rejected: {errors[:5]}", file=sys.stderr)
         else:
             extra["narrative"] = _render_narrative(narrative, by_asin, mm_index, types_of)
     return top, extra
+
+
+def prune_for_data_drift(n: Any, choose_ok: set[str], pool_asins: set[str],
+                         age_keys: set[str]) -> tuple[Any, list[str]]:
+    """データの変化で合わなくなった項目だけを外した写しと、外した項目の一覧を返す。
+
+    文章の中身の違反は外さない (validate_narrative がそのまま落とす)。形が崩れているときは触らない。
+    """
+    if not isinstance(n, dict) or _shape_errors(n):
+        return n, []
+    out = dict(n)
+    dropped: list[str] = []
+    choose = []
+    for c in n.get("choose") or []:
+        if c["asin"] in choose_ok:
+            choose.append(c)
+        else:
+            dropped.append(f"choose {c['asin']}")
+    out["choose"] = choose
+    by_age = []
+    for a in n.get("by_age") or []:
+        if a["age_key"] in age_keys:
+            by_age.append(a)
+        else:
+            dropped.append(f"by_age {a['age_key']}")
+    out["by_age"] = by_age
+    tips = []
+    for t in n.get("series_tips") or []:
+        asins = [a for a in t.get("asins") or [] if a in pool_asins]
+        if len(asins) >= 2:
+            tips.append({**t, "asins": asins})
+        elif len(asins) != len(t.get("asins") or []):
+            dropped.append(f"series_tips {t['title']}")
+        else:
+            tips.append(t)  # もともと 2 件未満の違反は文章の違反として検査に任せる
+    out["series_tips"] = tips
+    return out, dropped
 
 
 def _render_narrative(n: dict[str, Any], by_asin, mm_index, types_of) -> dict[str, Any]:
@@ -356,6 +402,8 @@ _HYPE = ("絶対", "必ず", "最強", "No.1", "ナンバーワン", "間違い�
 _PRICE_WORDS = ("最安", "値下がり", "値上がり", "セール", "特価", "割引", "今が買い")
 CHOOSE_MIN = 5
 CHOOSE_MAX = 8
+# データの変化で選び分けの商品を外したあと、表示を続ける下限 (書く時は CHOOSE_MIN)
+CHOOSE_MIN_AFTER_DRIFT = 3
 WHY_MIN_CHARS = 30
 LEAD_MIN_CHARS = 120
 LEAD_MAX_CHARS = 400
@@ -427,7 +475,8 @@ def _shape_errors(n: dict[str, Any]) -> list[str]:
 def validate_narrative(n: dict[str, Any], pool_asins: set[str], age_keys: set[str],
                        *, names: list[str] | None = None,
                        accessory_asins: set[str] | None = None,
-                       choose_asins: set[str] | None = None) -> list[str]:
+                       choose_asins: set[str] | None = None,
+                       choose_min: int | None = None) -> list[str]:
     """違反の一覧を返す (空なら合格)。choose_asins を渡すと、選び分けに出せる商品をそこに限る。"""
     errors: list[str] = []
     if not isinstance(n, dict):
@@ -439,8 +488,9 @@ def validate_narrative(n: dict[str, Any], pool_asins: set[str], age_keys: set[st
     if not (LEAD_MIN_CHARS <= len(lead) <= LEAD_MAX_CHARS):
         errors.append(f"lead length {len(lead)} not in {LEAD_MIN_CHARS}-{LEAD_MAX_CHARS}")
     choose = n.get("choose") or []
-    if not (CHOOSE_MIN <= len(choose) <= CHOOSE_MAX):
-        errors.append(f"choose count {len(choose)} not in {CHOOSE_MIN}-{CHOOSE_MAX}")
+    cmin = CHOOSE_MIN if choose_min is None else choose_min
+    if not (cmin <= len(choose) <= CHOOSE_MAX):
+        errors.append(f"choose count {len(choose)} not in {cmin}-{CHOOSE_MAX}")
     seen: set[str] = set()
     for i, c in enumerate(choose):
         asin = str(c.get("asin") or "")
@@ -535,7 +585,18 @@ def build_prompt(key: str, records, raw_index, mm_index, *, per_asin_dir: Path, 
     terms = load_character_terms()
     aliases = (hub["character"], *terms.get(hub["character"], ()))
     pool = select_ip_records(records, raw_index, aliases)
-    pool = [r for r in pool if r.ivs_score is not None and r.ivs_score >= IP_MIN_IVS][:top_k]
+    pool = [r for r in pool if r.ivs_score is not None and r.ivs_score >= IP_MIN_IVS]
+    import build_category_hubs as bch
+    # 同じ商品の別出品 (たまごっちパラダイス Blue Water / ブルーウォーター) を 1 件にしてから渡す。
+    # 重複が入ると書き手が同じ商品の ASIN 違いを選び分けや見分けの比較に使ってしまう
+    deduped, keys = [], []
+    for r in pool:
+        k = bch._name_key(r.name)
+        if bch._same_product(k, keys):
+            continue
+        keys.append(k)
+        deduped.append(r)
+    pool = deduped[:top_k]
     products = []
     for r in pool:
         raw = raw_index[r.asin]

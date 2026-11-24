@@ -226,3 +226,40 @@ def test_compare_entry_carries_amazon_url():
     r = dataclasses.replace(rec("B0TEST0002", "アンパンマン ブロックラボ"),
                             amazon_url="https://www.amazon.co.jp/dp/B0TEST0002/")
     assert bch._compare_entry(r, 36)["amazon_url"] == "https://www.amazon.co.jp/dp/B0TEST0002/"
+
+
+def test_build_keeps_narrative_when_only_some_products_drift(tmp_path):
+    names = ["たまごっちパラダイス Orange", "てんしっちのたまごっち ぴんく", "ドンジャラNEO たまごっち",
+             "Original Tamagotchi 初代", "たまごっち 新種発見 ほわいと"]
+    records = [rec(f"B0TEST000{i}", n, 4.5 - i * 0.05) for i, n in enumerate(names, start=1)]
+    raw_index = {r.asin: raw(r.asin, r.name) for r in records}
+    ndir = tmp_path / "n"
+    ndir.mkdir()
+    n = good_narrative([r.asin for r in records])
+    n["by_age"].append({"age_key": "age-0", "text": "この年齢の節は今は無い。"})
+    (ndir / "ip-tamagotchi.json").write_text(json.dumps(n, ensure_ascii=False), encoding="utf-8")
+    # 1 本の記事が消え、1 本のスコアが下限を割った
+    kept = records[:3] + [rec("B0TEST0004", names[3], 3.0)]
+    _top, extra = iph.build_ip_payload("ip-tamagotchi", kept, raw_index, {r.asin: 72 for r in kept},
+                                       per_asin_dir=tmp_path / "none", narrative_dir=ndir)
+    assert [c["asin"] for c in extra["narrative"]["choose"]] == ["B0TEST0001", "B0TEST0002", "B0TEST0003"]
+    assert set(extra["narrative"]["by_age"]) == {"age-6"}
+
+
+def test_build_drops_narrative_when_too_few_remain_or_text_is_bad(tmp_path):
+    names = ["たまごっちパラダイス Orange", "てんしっちのたまごっち ぴんく", "ドンジャラNEO たまごっち",
+             "Original Tamagotchi 初代", "たまごっち 新種発見 ほわいと"]
+    records = [rec(f"B0TEST000{i}", n, 4.5 - i * 0.05) for i, n in enumerate(names, start=1)]
+    raw_index = {r.asin: raw(r.asin, r.name) for r in records}
+    ndir = tmp_path / "n"
+    ndir.mkdir()
+    n = good_narrative([r.asin for r in records])
+    (ndir / "ip-tamagotchi.json").write_text(json.dumps(n, ensure_ascii=False), encoding="utf-8")
+    _top, extra = iph.build_ip_payload("ip-tamagotchi", records[:2], raw_index, {},
+                                       per_asin_dir=tmp_path / "none", narrative_dir=ndir)
+    assert "narrative" not in extra  # 残り 2 件では出さない
+    n["lead"] += "今なら3,980円。"
+    (ndir / "ip-tamagotchi.json").write_text(json.dumps(n, ensure_ascii=False), encoding="utf-8")
+    _top, extra = iph.build_ip_payload("ip-tamagotchi", records, raw_index, {},
+                                       per_asin_dir=tmp_path / "none", narrative_dir=ndir)
+    assert "narrative" not in extra  # 文章の違反は外さずに落とす
