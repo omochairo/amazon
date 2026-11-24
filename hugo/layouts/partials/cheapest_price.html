@@ -1,0 +1,12 @@
+{{- /* 商品ページ 1 本の「今の最安値」(円, int)。無ければ 0。
+       price_amazon / price_rakuten / price_yahoo は build_post.py が日次の価格
+       (price_watch → per_asin → 楽天・Yahoo の照合) で上書きした後の値を front matter
+       に書いたもの。商品カードとブランドページの「最安 ¥X 〜」が同じ数字になるよう、
+       両方ともこの partial を通す (navi-brain#209)。 */ -}}
+{{- $min := 0 -}}
+{{- range slice .Params.price_amazon .Params.price_rakuten .Params.price_yahoo -}}
+  {{- if and . (gt . 0) (or (eq $min 0) (lt . $min)) -}}
+    {{- $min = . -}}
+  {{- end -}}
+{{- end -}}
+{{- return (int $min) -}}

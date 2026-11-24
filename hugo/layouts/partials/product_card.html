@@ -50,14 +50,7 @@
     {{- if ge $score100 90 }}{{ $tierClass = "score-gold" }}{{ else if ge $score100 75 }}{{ $tierClass = "score-silver" }}{{ end -}}
 
     {{- /* Cheapest price */ -}}
-    {{- $prices := slice .Params.price_amazon .Params.price_rakuten .Params.price_yahoo -}}
-    {{- $minPrice := 99999999 -}}
-    {{- range $prices -}}
-      {{- if and . (gt . 0) (lt . $minPrice) -}}
-        {{- $minPrice = . -}}
-      {{- end -}}
-    {{- end -}}
-    {{- if eq $minPrice 99999999 }}{{ $minPrice = 0 }}{{ end -}}
+    {{- $minPrice := partial "cheapest_price.html" . -}}
 
     {{- $ageStr := "" -}}
     {{- if isset .Params "age_min_months" -}}
