@@ -13,6 +13,8 @@
     // :target は外れず、閉じられなくなるため)。
     var btns = Array.prototype.slice.call(nav.querySelectorAll(".cat-summary[aria-controls]"));
     nav.classList.add("is-js");
+    // navi-brain#213 R2: 3 段のナビは <details class="cat-fold"> で畳んである (既定は閉)。
+    var fold = nav.querySelector(".cat-fold");
     function panelOf(btn) {
         return document.getElementById(btn.getAttribute("aria-controls"));
     }
@@ -67,6 +69,8 @@
             b.setAttribute("aria-expanded", "true");
             var p = panelOf(b);
             if (p) { p.hidden = false; }
+            // 畳んだ details の中のパネルは見えないので、外側も開く。
+            if (fold) { fold.open = true; }
             // # を残すと、閉じたあとの再読み込みでまた開く。
             if (window.history && history.replaceState) {
                 history.replaceState(null, "", location.pathname + (location.search || ""));
@@ -139,25 +143,46 @@
         currentChip = currentChip || chip;
     });
 
+    // 現在地がナビの中にあるページ (タグページ・年齢ハブなど) では畳まずに開く。
+    // カテゴリを渡り歩く読者が、開き直さずに隣へ移れるようにする。
+    if (fold && currentChip) { fold.open = true; }
+
     // スマホの横スクロール。スクロールバーを隠しているので、続きがある側の端を
     // ぼかして知らせる (PC は折り返し表示で scrollWidth == clientWidth になり付かない)。
+    var refreshers = [];
     lists.forEach(function (list) {
         function updateHint() {
             var max = list.scrollWidth - list.clientWidth;
             list.classList.toggle("has-more-left", list.scrollLeft > 4);
             list.classList.toggle("has-more-right", list.scrollLeft < max - 4);
         }
-        if (currentChip && currentChip.closest(".cat-nav-list") === list &&
-                list.scrollWidth > list.clientWidth) {
-            var lr = list.getBoundingClientRect();
-            var cr = currentChip.getBoundingClientRect();
-            if (cr.right > lr.right || cr.left < lr.left) {
-                // 左端のぼかし (36px) に現在地の chip が掛からない位置で止める。
-                list.scrollLeft += cr.left - lr.left - 40;
+        // 現在地の chip を見える位置へ寄せてから端の印を計算する。
+        function reveal() {
+            if (currentChip && currentChip.closest(".cat-nav-list") === list &&
+                    list.scrollWidth > list.clientWidth) {
+                var lr = list.getBoundingClientRect();
+                var cr = currentChip.getBoundingClientRect();
+                if (cr.right > lr.right || cr.left < lr.left) {
+                    // 左端のぼかし (36px) に現在地の chip が掛からない位置で止める。
+                    list.scrollLeft += cr.left - lr.left - 40;
+                }
             }
+            updateHint();
         }
+        refreshers.push(reveal);
         list.addEventListener("scroll", updateHint, { passive: true });
         window.addEventListener("resize", updateHint);
-        updateHint();
+        reveal();
     });
+    // 閉じている間は details の中の幅が 0 で、上の計算が効かない。開いたときにやり直す。
+    // 閉じたら、開いていた子パネルも閉じる (次に開いたとき本文を押し下げたまま残さない)。
+    if (fold) {
+        fold.addEventListener("toggle", function () {
+            if (fold.open) {
+                refreshers.forEach(function (r) { r(); });
+            } else {
+                closeAll(null);
+            }
+        });
+    }
 })();

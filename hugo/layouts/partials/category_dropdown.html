@@ -94,6 +94,13 @@
        並び順が入れ替わったときは同じく全ページが変わるが、1 本の追加では稀。 */ -}}
 {{- if gt (len $groups) 0 }}
 <nav class="cat-nav" aria-label="年齢・おもちゃの種類から探す">
+  {{- /* navi-brain#213 R2: 3 段をまとめて畳む。既定は閉 (cat_nav.js が現在地のあるページでは開く)。
+         リンクは details の中に全部残る。 */}}
+  <details class="cat-fold">
+    <summary class="cat-fold-summary" data-nav-slot="catnav:toggle">
+        <span class="cat-fold-label"><span aria-hidden="true">🔎</span> 年齢・おもちゃの種類から探す</span>
+        <span class="cat-fold-hint">0歳〜・ブロック・パズル…</span>
+    </summary>
     <p class="cat-nav-title"><span aria-hidden="true">🎂</span> 年齢から探す</p>
     <ul class="cat-nav-list">
         <li class="cat-group cat-age-link"><a class="cat-summary" data-nav-slot="catnav:age-0" href="/toys-age-0/">0歳</a></li>
@@ -143,7 +150,13 @@
     </div>
     {{- end }}
     {{- end }}
+  </details>
 </nav>
+{{- /* navi-brain#213: 今いるページがナビの中のリンク先なら、描画の前に畳みを開く。
+       defer の cat_nav.js で開くと、初回描画の後に 3 段分ずれる (CLS)。
+       partialCached なのでページの判定はここ (閲覧時) でする。
+       "#cat-panel-..." の開閉チップは pathname が今のページと同じになるので除く。 */ -}}
+<script>(function(){var n=document.currentScript.previousElementSibling,f=n&&n.querySelector(".cat-fold");if(!f)return;function m(p){return p.replace(/\/?$/,"/")}var h=m(location.pathname),o=location.hash.indexOf("#cat-panel-")===0;if(!o){var a=n.querySelectorAll("a[href]");for(var i=0;i<a.length;i++){if(a[i].getAttribute("href").charAt(0)!=="#"&&m(a[i].pathname)===h){o=true;break}}}if(o)f.open=true})();</script>
 {{- /* #6206 chrome 削減: カテゴリメニューの開閉スクリプト (0.7KB × 6,369 枚
        = 4.7MB) を assets/js/cat_nav.js へ。.cat-nav を即座に querySelector するが、
        defer は DOM 構築後に走るのでこの partial の末尾にあったときと同条件。 */ -}}
