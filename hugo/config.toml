@@ -269,41 +269,32 @@ enableRobotsTXT = true
 # ナビゲーションメニュー
 [menu]
   [[menu.main]]
-    name = "🏠 ホーム"
-    url = "./"
+    name = "🧸 1分診断"
+    url = "diagnosis/"
     weight = 1
   [[menu.main]]
-    name = "🧸 診断"
-    url = "diagnosis/"
-    weight = 2
-  [[menu.main]]
-    name = "🔥 ランキング"
+    name = "🔥 売れ筋"
     url = "ranking/"
-    weight = 3
+    weight = 2
+  # params.emph = true の項目は header.html が menu-emph クラスを付けて強調する (位置決め打ちをやめた)。
   [[menu.main]]
-    name = "💎 予算別おすすめ"
+    name = "💎 予算別"
     url = "cospa/"
-    weight = 4
+    weight = 3
+    [menu.main.params]
+      emph = true
   [[menu.main]]
-    name = "🏷️ おトク"
-    url = "deals/"
-    weight = 5
-  [[menu.main]]
-    name = "💰 値下げ"
+    name = "📉 値下げ・特価"
     url = "price/"
-    weight = 6
-  [[menu.main]]
-    name = "🏢 メーカー"
-    url = "brands/"
-    weight = 7
+    weight = 4
+    [menu.main.params]
+      emph = true
   [[menu.main]]
     name = "🔍 検索"
     url = "search/"
-    weight = 8
-  [[menu.main]]
-    name = "📚 記事"
-    url = "posts/"
-    weight = 9
+    weight = 5
+  # 🏠 ホーム (ロゴがトップへのリンク)・🏷️ おトク (/price/ 上部から /deals/ へ)・
+  # 🏢 メーカー・📚 記事 (フッターへ) は navi-brain#213 R2 でヘッダーから外した。
   # 📖 編集部について はフッターに移動 (#1363 follow-up)。
   # ヘッダの導線を「比較・検索・購入」の主要 CTA に絞り、運営情報は
   # hugo/layouts/partials/footer.html の footer-editorial ブロックに集約。

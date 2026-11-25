@@ -92,8 +92,9 @@
             {{- $is_search := eq (site.GetPage .KeyName).Layout `search` }}
             {{- /* navi-brain#213: 計測用の slot。/diagnosis/ → menu:diagnosis、ホーム (./) → menu:home */}}
             {{- $nav_key := strings.Trim (strings.TrimPrefix "./" .URL) "/" | default "home" }}
+            {{- $emph := .Params.emph }}
             <li>
-                <a href="{{ .URL | absLangURL }}" data-nav-slot="menu:{{ $nav_key }}" title="{{ .Title | default .Name }} {{- cond $is_search (" (Alt + /)" | safeHTMLAttr) ("" | safeHTMLAttr ) }}"
+                <a href="{{ .URL | absLangURL }}"{{ if $emph }} class="menu-emph"{{ end }} data-nav-slot="menu:{{ $nav_key }}" title="{{ .Title | default .Name }} {{- cond $is_search (" (Alt + /)" | safeHTMLAttr) ("" | safeHTMLAttr ) }}"
                 {{- cond $is_search (" accesskey=/" | safeHTMLAttr) ("" | safeHTMLAttr ) }}>
                     <span {{- if eq $menu_item_url $page_url }} class="active" {{- end }}>
                         {{- .Pre }}

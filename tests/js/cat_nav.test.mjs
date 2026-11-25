@@ -47,7 +47,7 @@ function makeEl(doc, attrs = {}, extra = {}) {
 
 // groups: [{ id, links: [pathname, ...] }]。links が 1 個のグループは直接リンク。
 function setup({ pathname = "/", hash = "", groups, scrollWidth = 300, clientWidth = 300,
-                 chipRect = { left: 0, right: 10 }, listCount = 1 }) {
+                 chipRect = { left: 0, right: 10 }, listCount = 1, withFold = false }) {
   const docListeners = {};
   const winListeners = {};
   const doc = {
@@ -88,9 +88,12 @@ function setup({ pathname = "/", hash = "", groups, scrollWidth = 300, clientWid
   for (const el of [...btns, ...direct]) {
     el.getBoundingClientRect = () => chipRect;
   }
+  // <details class="cat-fold">。open の変更でブラウザが発火する toggle は、テストでは
+  // fold.fire("toggle") で再現する。
+  const fold = withFold ? makeEl(doc, {}, { open: false }) : null;
   const nav = {
     querySelector(sel) {
-
+      if (sel === ".cat-fold") { return fold; }
       const m = /aria-controls="([^"]+)"/.exec(sel);
       return m ? btns.find((b) => b.getAttribute("aria-controls") === m[1]) || null : null;
     },
@@ -111,7 +114,7 @@ function setup({ pathname = "/", hash = "", groups, scrollWidth = 300, clientWid
   const win = { history, addEventListener(type, fn) { winListeners[type] = fn; } };
   vm.runInNewContext(SRC, { document: doc, window: win, history,
                             location: { pathname, hash, search: "" } });
-  return { doc, nav, replaced, btns, direct, links, list: lists[0], lists, panels, docListeners, winListeners };
+  return { fold, doc, nav, replaced, btns, direct, links, list: lists[0], lists, panels, docListeners, winListeners };
 }
 
 const GROUPS = [
@@ -333,4 +336,61 @@ test("2 本の横スクロール行は両方にヒントを付け、現在地の
   assert.equal(lists[1].classList.contains("has-more-right"), true);
   assert.equal(lists[0].scrollLeft, 0);
   assert.equal(lists[1].scrollLeft, 860);
+});
+
+// ---- navi-brain#213 R2: 3 段のナビを <details class="cat-fold"> で畳む ----
+
+test("details: 現在地がナビの外のページでは閉じたまま", () => {
+  const { fold } = setup({ groups: GROUPS, pathname: "/diagnosis/", withFold: true });
+  assert.equal(fold.open, false);
+});
+
+test("details: 現在地がナビの中のページ (子リンク) なら開く", () => {
+  const { fold } = setup({ groups: GROUPS, pathname: "/tags/jigusoo/", withFold: true });
+  assert.equal(fold.open, true);
+});
+
+test("details: 現在地が直接リンクのグループでも開く", () => {
+  const { fold } = setup({ groups: GROUPS, pathname: "/tags/kinoomocha/", withFold: true });
+  assert.equal(fold.open, true);
+});
+
+test("details: #cat-panel-... 付きの URL で来たら外側も開く", () => {
+  const { fold, btns } = setup({ groups: GROUPS, hash: "#cat-panel-puzzle", withFold: true });
+  assert.equal(btns[1].panel.hidden, false);
+  assert.equal(fold.open, true);
+});
+
+test("details: 開いたとき (toggle) に端の印を計算し直す", () => {
+  // 閉じている間は幅が 0 で印が付かない。開いて幅が出たあとの toggle で付く。
+  const { fold, list } = setup({ groups: GROUPS, scrollWidth: 0, clientWidth: 0, withFold: true });
+  assert.equal(list.classList.contains("has-more-right"), false);
+  list.scrollWidth = 900;
+  list.clientWidth = 350;
+  fold.open = true;
+  fold.fire("toggle");
+  assert.equal(list.classList.contains("has-more-right"), true);
+  assert.equal(list.classList.contains("has-more-left"), false);
+});
+
+test("details: 開いたとき (toggle) に現在地のチップを見える位置へ寄せる", () => {
+  const { fold, list } = setup({ groups: GROUPS, pathname: "/tags/kinoomocha/",
+    scrollWidth: 0, clientWidth: 0, chipRect: { left: 600, right: 700 }, withFold: true });
+  assert.equal(list.scrollLeft, 0);
+  list.scrollWidth = 900;
+  list.clientWidth = 350;
+  fold.fire("toggle");
+  assert.equal(list.scrollLeft, 600 - 0 - 40);
+});
+
+test("details: 閉じると開いていた子パネルも閉じる", () => {
+  const { fold, btns } = setup({ groups: GROUPS, withFold: true });
+  fold.open = true;
+  fold.fire("toggle");
+  btns[0].fire("click", { detail: 1 });
+  assert.equal(btns[0].panel.hidden, false);
+  fold.open = false;
+  fold.fire("toggle");
+  assert.equal(btns[0].getAttribute("aria-expanded"), "false");
+  assert.equal(btns[0].panel.hidden, true);
 });

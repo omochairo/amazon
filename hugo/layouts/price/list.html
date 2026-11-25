@@ -14,6 +14,10 @@
   <h1>{{ .Title }}</h1>
   {{- /* #5227: 広告表記はファーストビュー (h1 直下)。詳細は下部 .ranking-disclaimer */ -}}
   {{- partial "pr_disclosure.html" (dict "network" "amazon") }}
+  {{- /* navi-brain#213 R2: メニューの「おトク」を外した代わりに、ここから /deals/ へ入れる */}}
+  <p class="tag-chips">
+    <a class="tag-chip" data-nav-slot="price:to-deals" href="{{ "deals/" | relURL }}"><span>🏷️ 参考価格から 20%OFF 以上の特価は <strong>特価の一覧</strong> へ →</span></a>
+  </p>
   {{- if .Description }}
   <div class="post-description">
     {{ .Description }}

@@ -12,6 +12,9 @@
         <a href="https://omcha.jp/" target="_blank" rel="noopener">🌐 おもちゃいろ公式</a>
         <a href="{{ "about-score/" | relURL }}">📊 スコアの仕組み</a>
         <a href="{{ "compare/" | relURL }}">🆚 比較</a>
+        {{- /* navi-brain#213 R2: メニューから外した全記事への網羅経路 (term ページは 240 件で打ち切り) */}}
+        <a href="{{ "posts/" | relURL }}" data-nav-slot="footer:posts">📚 記事一覧</a>
+        <a href="{{ "brands/" | relURL }}" data-nav-slot="footer:brands">🏢 メーカー一覧</a>
         <a href="{{ "privacy/" | relURL }}">📜 プライバシーポリシー</a>
         <a href="https://omcha.jp/contact/" target="_blank" rel="noopener">✉️ お問い合わせ</a>
     </div>

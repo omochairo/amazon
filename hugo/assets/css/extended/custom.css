@@ -5714,14 +5714,14 @@ details.development-stage-accordion[open] > summary::before {
   border-color: rgba(255, 107, 53, 0.55);
 }
 
-/* コスパ最強 / おトク特集 を強調 (3 番目=ranking, 4 番目=cospa, 5 番目=deals) */
-#menu li:nth-child(4) a,
-#menu li:nth-child(5) a {
+/* 強調する項目 (予算別・値下げ・特価)。位置ではなく config.toml の menu params.emph を
+   header.html が読んで付ける menu-emph クラスで決める (navi-brain#213 R2)。 */
+#menu li a.menu-emph {
   background: linear-gradient(135deg, rgba(247, 201, 72, 0.22), rgba(255, 107, 53, 0.22));
   border-color: rgba(247, 201, 72, 0.5);
 }
-#menu li:nth-child(4) a:hover,
-#menu li:nth-child(5) a:hover {
+/* 後ろの .header-nav #menu li a:hover (同じ詳細度) に負けないよう .header-nav を付ける */
+.header-nav #menu li a.menu-emph:hover {
   background: linear-gradient(135deg, rgba(247, 201, 72, 0.4), rgba(255, 107, 53, 0.4));
 }
 
@@ -5735,8 +5735,14 @@ details.development-stage-accordion[open] > summary::before {
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     padding-bottom: 0.2rem;
+    /* 右に続きがあると分かるよう右端をぼかす (navi-brain#213)。最後まで送ったときは
+       最後の項目 (♡) がぼかしの外に出るよう、末尾に 28px の空きを置く (下の ::after)。
+       padding-right だと Safari では flex の横スクロール量に入らず、♡ がぼかしに残る */
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
   }
   #menu::-webkit-scrollbar { display: none; }
+  #menu::after { content: ""; flex: 0 0 28px; }
   #menu li a {
     padding: 0.35rem 0.7rem;
     font-size: 13px;
@@ -7422,6 +7428,76 @@ body:has(#compare-floating-bar) .favorites-wrapper {
   .cat-summary { font-size: 0.8rem; padding: 6px 11px; min-height: 44px; }
 }
 
+/* navi-brain#213 R2: 年齢・種類のナビ 3 段を <details class="cat-fold"> で 1 行に畳む。
+   中身 (.cat-nav-title / .cat-nav-list / .cat-panel) は上の規則のまま。 */
+.cat-fold-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 6px 14px;
+  cursor: pointer;
+  list-style: none;
+  border-radius: 999px;
+  background: var(--entry, #fff);
+  border: 1.5px solid var(--border, rgba(0,0,0,0.12));
+  color: var(--primary, #2e2e33);
+  font-size: 0.84rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.cat-fold-summary::-webkit-details-marker { display: none; }
+.cat-fold-summary:hover,
+.cat-fold[open] > .cat-fold-summary {
+  border-color: var(--brand-primary);
+  background: var(--brand-gradient-subtle);
+}
+.cat-fold-summary:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+.cat-fold-label { white-space: nowrap; }
+.cat-fold-hint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: var(--secondary, #6b6b70);
+}
+/* ▾ (開いたら ▴)。.cat-summary[aria-expanded]::after と同じ作り。 */
+.cat-fold-summary::after {
+  content: "";
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  margin: -3px 2px 0 auto;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  opacity: 0.7;
+  transition: transform 0.18s ease;
+}
+.cat-fold[open] > .cat-fold-summary::after {
+  margin-top: 3px;
+  transform: rotate(-135deg);
+}
+.cat-fold[open] > .cat-fold-summary { margin-bottom: 10px; }
+/* 開いた中: 年齢の列と「種類から探す」の見出し、最後の列と下の告知帯の間を空ける */
+.cat-fold .cat-nav-list + .cat-nav-title { margin-top: 10px; }
+.cat-fold[open] { padding-bottom: 6px; }
+/* PC は中身の幅にして中央へ (全幅だと検索欄に見え、▾ が遠くて気づきにくい) */
+@media (min-width: 769px) {
+  .cat-fold-summary { width: fit-content; margin-inline: auto; }
+  .cat-fold-summary::after { margin-left: 4px; }
+}
+/* スマホで 1 行に収まらない補足は隠す。 */
+@media (max-width: 480px) {
+  .cat-fold-hint { display: none; }
+}
+
 /* ===== #3332 N4-P2 follow-up: グローバルナビの見やすさ改善 (PC/スマホ) ===== */
 /* 絵文字+日本語ラベルの多項目 (10件) がロゴ横に詰め込まれ 3 行に折返して雑然として
    いたのを改善。メニューをロゴ下の全幅行に落として中央寄せし、pill 化・余白圧縮で
@@ -7471,7 +7547,8 @@ body:has(#compare-floating-bar) .favorites-wrapper {
   /* 横 1 列スクロールで中央寄せにすると、はみ出した左端（ホーム・診断）が
      スクロールでも戻れない位置に切れる（navi-brain#213 R1）。左寄せにする。 */
   .header-nav #menu { gap: 5px 6px; justify-content: flex-start; }
-  .header-nav #menu li a { font-size: 13px; padding: 5px 10px; }
+  /* タップ高 44px 以上 (文字サイズは変えず、min-height と中央寄せで確保する)。 */
+  .header-nav #menu li a { font-size: 13px; padding: 5px 10px; min-height: 44px; box-sizing: border-box; }
 }
 @media (max-width: 380px) {
   .header-nav #menu li a { font-size: 12.5px; padding: 5px 9px; }
