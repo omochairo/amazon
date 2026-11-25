@@ -1614,7 +1614,8 @@ main.main:has(.card-grid) {
 .term-header-eyebrow {
   font-size: 0.85rem;
   font-weight: 700;
-  color: var(--brand-primary);
+  /* 淡い背景の上で読めるよう、ブランド色より濃いオレンジ (ダークは下で #FFB57A) */
+  color: #c2410c;
   letter-spacing: 0.04em;
   margin-bottom: 0.3rem;
 }
@@ -8278,3 +8279,8 @@ a.sale-notice-main::after {
 .hub-next-name { font-weight: 700; font-size: .92rem; line-height: 1.45; }
 .hub-next-reason { font-size: .78rem; color: var(--secondary); line-height: 1.4; }
 @media (max-width: 480px) { .hub-next-list { grid-template-columns: 1fr; } }
+
+/* navi-brain#213 R6: /price/ と /deals/ の見出し下の相互の入口。
+   広告表記の行と離し、行き先のページ名の途中で折り返さない */
+.feature-header .tag-chips { margin-top: 0.6rem; }
+.feature-header .tag-chip strong { white-space: nowrap; }

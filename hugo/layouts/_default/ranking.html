@@ -1,6 +1,8 @@
 {{- define "main" }}
 
 <header class="page-header ranking-header">
+  {{- /* navi-brain#213 R6: メニュー・トップのカードと同じ呼び名 (<title>・h1 は変えない) */}}
+  <p class="term-header-eyebrow">🔥 売れ筋TOP30</p>
   <h1>{{ .Title }}</h1>
   {{- /* #5227: 広告表記はファーストビュー (h1 直下)。このページのリンクは
          楽天アフィリエイトなので network に "rakuten" を渡す。 */ -}}

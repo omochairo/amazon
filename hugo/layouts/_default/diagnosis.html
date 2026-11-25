@@ -1,6 +1,8 @@
 {{- define "main" }}
 
 <header class="page-header">
+  {{- /* navi-brain#213 R6: メニュー・トップと同じ呼び名 (<title>・h1 は変えない) */}}
+  <p class="term-header-eyebrow">🧸 1分診断</p>
   <h1>{{ .Title }}</h1>
   {{- if .Description }}
   <div class="post-description">
