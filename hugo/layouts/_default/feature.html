@@ -28,11 +28,21 @@
 {{- if and (eq $month 12) (gt $jst.Day 25) }}{{ $xmasYear = add $xmasYear 1 }}{{ end -}}
 
 <header class="page-header ranking-header feature-header feature-header--{{ $type }}">
+  {{- /* navi-brain#213 R6: メニュー・トップのカードと同じ呼び名を見出しの上に出す
+         (<title>・h1 は検索結果に出るので変えない)。テーマ・年齢・キャラクターの hub には出さない */}}
+  {{- if eq $type "deals" }}<p class="term-header-eyebrow">🏷️ 20%OFF以上の特価</p>{{ end }}
+  {{- if eq $type "cospa" }}<p class="term-header-eyebrow">💎 予算別ベスト</p>{{ end }}
   <h1>{{ .Title }}</h1>
   {{- /* #5227: 広告表記はファーストビュー (h1 直下)。詳細は下部 .ranking-disclaimer。
          このヘッダは /deals/ /cospa/ とテーマ/年齢 hub が共有しており、いずれも
          Amazon アソシエイトのリンクを含むため出し分けはしない。 */ -}}
   {{- partial "pr_disclosure.html" (dict "network" "amazon" "short" true) }}
+  {{- if eq $type "deals" }}
+  {{- /* navi-brain#213 R6: /price/ からの入口と対にして、/deals/ からも /price/ へ入れる */}}
+  <p class="tag-chips">
+    <a class="tag-chip" data-nav-slot="deals:to-price" href="{{ "price/" | relURL }}"><span>📉 直近90日のふだんの価格より安い品は <strong>値下げ速報</strong> へ →</span></a>
+  </p>
+  {{- end }}
   {{- if .Description }}
   <div class="post-description">
     {{ .Description }}
@@ -255,7 +265,7 @@
     {{- partial "itemlist_jsonld.html" (dict "name" $.Title "items" $ld) }}
     {{- if eq $type "deals" }}
     <div class="list-filter-empty" data-lf-empty data-list="deals-list" hidden>
-      <p>この条件に合う商品は、いまはありません。<a href="/price/">値下がり中のおもちゃ一覧</a>や<a href="/cospa/">予算別おすすめ</a>もご覧ください。</p>
+      <p>この条件に合う商品は、いまはありません。<a href="/price/">値下げ速報</a>や<a href="/cospa/">予算別ベスト</a>もご覧ください。</p>
       <button type="button" class="list-filter-reset" data-lf-reset>条件をクリア</button>
     </div>
     <button type="button" class="list-filter-more" data-lf-more data-list="deals-list" hidden>さらに表示</button>
@@ -306,7 +316,7 @@
     </p>
     {{- else if eq $type "deals" }}
     <p class="ranking-disclaimer">
-      ※ 割引率は Amazon または販売事業者が設定した参考価格をもとにしています。直近で実際に値下がりした商品は <a href="/price/">値下がり中のおもちゃ一覧</a>（おもちゃいろが毎日記録する価格で、ふだんより安くなった商品）をご覧ください。リンク先で最新の価格・在庫をご確認ください。
+      ※ 割引率は Amazon または販売事業者が設定した参考価格をもとにしています。直近で実際に値下がりした商品は <a href="/price/">値下げ速報</a>（おもちゃいろが毎日記録する価格で、ふだんより安くなった商品）をご覧ください。リンク先で最新の価格・在庫をご確認ください。
     </p>
     {{- else }}
     {{- /* テーマ別 category hub (#2687): 知育スコア順の編集型ランキング */}}

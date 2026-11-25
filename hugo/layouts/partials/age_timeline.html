@@ -14,9 +14,9 @@
   (dict "v" "5y" "emoji" "🎒" "label" "5歳" "sub" "年長・就学前")
   (dict "v" "6-7y" "emoji" "📚" "label" "6〜7歳" "sub" "小学校低学年")
   (dict "v" "8y" "emoji" "🔭" "label" "8歳以上" "sub" "小学校中学年〜") -}}
-<section class="age-timeline"{{ with .section }} data-nav-section="{{ . }}"{{ end }} aria-label="年齢から探す">
+<section class="age-timeline"{{ with .section }} data-nav-section="{{ . }}"{{ end }} aria-label="年齢別ベスト10">
   <header class="age-timeline-header">
-    <h2 class="age-timeline-title">📅 年齢から探す</h2>
+    <h2 class="age-timeline-title">📅 年齢別ベスト10</h2>
     <span class="age-timeline-note">成長段階に合った知育おもちゃのベスト10へ</span>
   </header>
   <div class="age-timeline-track" role="list">
@@ -40,7 +40,7 @@
   {{- end -}}
   {{- with $ageHubs }}
   <div class="explore-links-group age-timeline-hubs">
-    <h3 class="explore-links-label">年齢別のランキングを一覧で見る</h3>
+    <h3 class="explore-links-label">年齢別ランキングを一覧で見る</h3>
     <div class="tag-chips">
       {{- range . }}
       <a class="tag-chip" data-nav-slot="age-tl-hub:{{ .key }}" href="{{ .url | relURL }}">{{ .label }}の知育玩具</a>
