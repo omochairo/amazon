@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -428,3 +429,34 @@ def test_article_links_to_every_hub_it_is_on_but_respects_exclude():
     # トミカのページから外した電車の商品は、プラレールのページだけへ
     assert build_post._ip_hubs_for(raw("B2", "トミカ・プラレールブロック ドクターイエロー")) == ["ip-plarail"]
     assert build_post._ip_hubs_for(raw("B3", "木のつみき")) == []
+
+
+def test_beyblade_split_by_kind_random_booster_before_booster():
+    bey = iph.IP_HUBS["ip-beyblade"]
+    assert iph.series_of("BX-50 ランダムブースターVol.11", bey) == "ランダムブースター"
+    assert iph.series_of("ベイブレードX BX-38 ブースター クリムゾンガルーダ4-70TP", bey) == "ブースター（ベイ単品）"
+    assert iph.series_of("ベイブレードX BX-10 エクストリームスタジアム", bey) == "スタジアム"
+    assert iph.series_of("ベイブレードX BX-51 ストリングランチャー", bey) == "ランチャー・ギア"
+    assert iph.series_of("UX-21 ヘルズネザーデッキセット", bey) == "バトルセット・デッキセット"
+
+
+def test_transformers_kids_line_apart_from_collector_lines():
+    tf = iph.IP_HUBS["ip-transformers"]
+    assert iph.series_of("トランスフォーマー ワイルドキング WKWM-02 エナジーマスター スピノエスクード", tf) == "ワイルドキング"
+    assert iph.series_of("T-SPARK エイジ・オブ・ザ・プライム トランスフォーマー AOTP-56", tf) == "エイジ・オブ・ザ・プライム"
+    assert iph.series_of("T-SPARK STUDIOSERIES スタジオシリーズ トランスフォーマー TS-43 バンブルビー", tf) == "スタジオシリーズ"
+    assert iph.series_of("Blokees トランスフォーマー バトルスターズ", tf) == "ブロック・プラモデル"
+
+
+def test_beyblade_starter_full_name_beats_launcher_and_set_beats_stadium():
+    bey = iph.IP_HUBS["ip-beyblade"]
+    rec = SimpleNamespace(name="ベイブレードX アントラースタッグ", name_full="ベイブレード X アントラー スタッグ CX スターターパック トップ&ランチャー",
+                          best_price=3090)
+    assert iph.series_of_rec(rec, bey) == "スターター（ベイ＋ランチャー）"
+    assert iph.series_of("バトルエントリーセット スタジアム付き", bey) == "バトルセット・デッキセット"
+    assert iph.is_accessory("BX-43 ギアケース ホワイトVer.", bey)
+
+
+def test_transformers_excludes_pc_security_lock():
+    ex = [iph._fold(t) for t in iph.IP_HUBS["ip-transformers"]["exclude"]]
+    assert any(t in iph._fold("トランスフォーマー IP セキュリティロック") for t in ex)
