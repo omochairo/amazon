@@ -478,3 +478,22 @@ def test_sylvanian_strip_family_and_furniture_before_house():
     assert iph.series_of("シルバニアファミリー アザラシファミリー", syl) == "人形（ファミリー・赤ちゃん）"
     assert iph.series_of("赤い屋根の大きなお家 デラックス家具セット", syl) == "家具・小物"
     assert iph.series_of("フクロウの星のみえるお家", syl) == "Little Tales Collection"
+
+
+def test_mario_lego_before_game_and_figures_grouped():
+    mar = iph.IP_HUBS["ip-mario"]
+    # 「LEGO Game Boy」はゲームでなくレゴ
+    assert iph.series_of("レゴ(LEGO) スーパーマリオ LEGO(R) Game Boy(TM)", mar, groups=True) == "レゴ スーパーマリオ"
+    assert iph.series_of("ジェンガ スーパーマリオ", mar, groups=True) == "バランス・ボードゲーム"
+    assert iph.series_of("エンスカイ クムクムパズル ピンクヨッシー", mar, groups=True) == "パズル"
+    assert iph.series_of("DXプレイセット クッパの牢屋", mar, groups=True) == "フィギュア・ぬいぐるみ"
+
+
+def test_precure_miniature_rod_not_transform_item_and_cosmetics_are_accessory():
+    pc = iph.IP_HUBS["ip-precure"]
+    assert iph.series_of("ミニチュアコレクション シャインアルカナロッド", pc, groups=True) == "ミニチュアコレクション"
+    assert iph.series_of("シャインアルカナロッド", pc, groups=True) == "変身・なりきりアイテム"
+    assert iph.series_of("マルカ 名探偵プリキュア お医者さんセット", pc, groups=True) == "ごっこ遊び・おえかき・パズル"
+    assert iph.is_accessory("プリティアッププリキットグロス キュアアルカナ", pc)
+    assert iph.is_accessory("キュアアルカナ＆マシュタンマスコット", pc)
+    assert not iph.is_accessory("プリコーデドール キュアアルカナ", pc)
