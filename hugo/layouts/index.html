@@ -16,8 +16,15 @@
   </p>
   <div class="home-hero-cta">
     <a class="home-hero-btn primary" data-nav-slot="hero:diagnosis" href="{{ "diagnosis/" | relURL }}">🧸 1分でぴったり診断</a>
-    <a class="home-hero-btn" data-nav-slot="hero:search" href="{{ "search/" | relURL }}">🔍 商品名で探す</a>
   </div>
+  {{- /* その場で打てる検索欄 (navi-brain#213 PR D)。送信で /search/?q=… へ移り、
+         fastsearch.js が ?q= を読んで結果を出す。計測は送信ボタンの nav_click
+         (Enter での送信もブラウザが送信ボタンの click を発火する) */}}
+  <form class="home-hero-search" action="{{ "search/" | relURL }}" method="get" role="search">
+    <input class="home-hero-search-input" type="search" name="q" maxlength="64" autocomplete="off" enterkeyhint="search"
+      placeholder="おもちゃ名・メーカー名" aria-label="おもちゃ名・メーカー名で探す">
+    <button class="home-hero-search-btn" type="submit" data-nav-slot="hero:search">🔍 検索</button>
+  </form>
 </section>
 {{- end }}
 

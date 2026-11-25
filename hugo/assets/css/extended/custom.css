@@ -1123,6 +1123,57 @@ main.main:has(.card-grid) {
 [data-theme="dark"] .home-hero-btn { background: #2a2a3a; color: #eee; }
 [data-theme="dark"] .home-hero-btn.primary { background: var(--brand-primary); color: #1e1e1e; }
 
+/* ヒーローの検索欄 (navi-brain#213 PR D) */
+.home-hero-search {
+  display: flex;
+  gap: 0.4rem;
+  max-width: 420px;
+  margin: 0.6rem auto 0;
+}
+.home-hero-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0 0.9rem;
+  border: 1.5px solid rgba(0,0,0,0.15);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--primary, #333);
+  font-size: 16px; /* 16px 未満だと iOS がフォーカス時に拡大する */
+}
+/* 入力の文字は 16px のまま、案内文だけ小さくして 375px でも切れないようにする */
+.home-hero-search-input::placeholder { font-size: 14px; }
+@media (max-width: 360px) {
+  .home-hero-search-input { padding: 0 0.7rem; }
+  .home-hero-search-input::placeholder { font-size: 12px; }
+  .home-hero-search-btn { padding: 0 0.7rem; }
+}
+.home-hero-search-input:focus {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+}
+.home-hero-search-btn {
+  flex: 0 0 auto;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0 0.85rem;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--primary, #333);
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+[data-theme="dark"] .home-hero-search-input {
+  background: #2a2a3a;
+  color: #f0f0f0;
+  border-color: rgba(255,255,255,0.2);
+}
+[data-theme="dark"] .home-hero-search-btn { background: #2a2a3a; color: #f0f0f0; }
+
 /* スマホ (navi-brain#213 R3): ファーストビューに「目的から探す」を入れるため、
    ヒーローの上下の余白とボタン間を詰める。 */
 @media (max-width: 700px) {
@@ -1134,6 +1185,7 @@ main.main:has(.card-grid) {
   .home-hero-subtitle { margin: 0 auto 0.4rem; font-size: 0.95rem; line-height: 1.45; }
   .home-hero-lead { margin: 0 auto 0.7rem; font-size: 0.82rem; line-height: 1.5; }
   .home-hero-cta { gap: 0.45rem; }
+  .home-hero-search { margin-top: 0.45rem; }
   .home-hero-btn {
     display: inline-flex;
     align-items: center;
