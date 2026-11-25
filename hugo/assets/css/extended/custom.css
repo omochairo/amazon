@@ -7468,7 +7468,9 @@ body:has(#compare-floating-bar) .favorites-wrapper {
   border-color: var(--brand-primary);
 }
 @media (max-width: 768px) {
-  .header-nav #menu { gap: 5px 6px; }
+  /* 横 1 列スクロールで中央寄せにすると、はみ出した左端（ホーム・診断）が
+     スクロールでも戻れない位置に切れる（navi-brain#213 R1）。左寄せにする。 */
+  .header-nav #menu { gap: 5px 6px; justify-content: flex-start; }
   .header-nav #menu li a { font-size: 13px; padding: 5px 10px; }
 }
 @media (max-width: 380px) {
