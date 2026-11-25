@@ -24,7 +24,7 @@
     <li class="ip-compare-row" data-asin="{{ .asin }}">
       <a class="ip-compare-thumb" href="{{ .url_internal }}" aria-hidden="true" tabindex="-1">{{ with .image }}<img src="{{ . }}" alt="" loading="lazy" decoding="async" width="64" height="64">{{ end }}</a>
       <div class="ip-compare-body">
-        <p class="ip-compare-name"><a href="{{ .url_internal }}">{{ .name }}</a></p>
+        <p class="ip-compare-name"><a href="{{ .url_internal }}">{{ .name }}</a>{{ partial "ip_badges.html" .badges }}</p>
         {{- /* <p> にしない: custom.css の p a[href*="amazon.co.jp"] が Amazon のリンクを大きなボタンにする */}}
         <div class="ip-compare-meta">
           {{- if ne (printf "%v" $age) "<nil>" }}<span>{{ partial "age_label.html" (int $age) }}</span>{{ end }}
@@ -33,6 +33,7 @@
           {{- partial "amazon_mini_link.html" (dict "url" .amazon_url "slot" "ip-hub-compare") }}
         </div>
         {{- with .reason }}<p class="ip-compare-reason">{{ . }}</p>{{ end }}
+        {{- partial "ip_voice.html" (dict "item" . "fit" true) }}
       </div>
       {{- with .ivs_100 }}<p class="ip-compare-score"><span>知育スコア</span><strong>{{ int . }}</strong></p>{{ end }}
     </li>

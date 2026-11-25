@@ -5,6 +5,7 @@
     {{- with .image }}<img src="{{ . }}" alt="" loading="lazy" decoding="async" width="96" height="96">{{ end }}
     <span class="ip-card-name">{{ .name }}</span>
   </a>
+  {{- partial "ip_badges.html" .badges }}
   <span class="ip-card-meta">
     {{- $age := index . "age_min_months" -}}
     {{- if ne (printf "%v" $age) "<nil>" }}<span>{{ partial "age_label.html" (int $age) }}</span>{{ end -}}

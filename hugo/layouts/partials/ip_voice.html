@@ -1,0 +1,17 @@
+{{- /* ip_voice.html (navi-brain#211 G1.5 部品 3・4)
+  商品 dict (ip_hubs.annotate_items が voice / fits / not_for を足したもの) から、
+    - 買った人の声の要約 (記事の review_signals.summary_one_line)
+    - 向いている子・向かない子の 1 件目 (記事の persona_fit)
+  を出す。作った文ではなく、各記事の出典付きの節からそのまま持ってくる。
+  入力 (dict): .item = 商品 dict, .fit = true なら向き・不向きも出す
+*/ -}}
+{{- $it := .item -}}
+{{- with $it.voice }}<p class="ip-voice"><span class="ip-voice-tag">買った人の声</span>{{ . }}</p>{{ end }}
+{{- if .fit }}
+{{- if or $it.fits $it.not_for }}
+<p class="ip-fitline">
+  {{- with $it.fits }}<span class="ip-fit-yes">向いている</span>{{ . }}{{ end }}
+  {{- with $it.not_for }}<span class="ip-fit-no">向かない</span>{{ . }}{{ end -}}
+</p>
+{{- end }}
+{{- end }}

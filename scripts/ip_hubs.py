@@ -46,20 +46,32 @@ IP_HUBS: dict[str, dict[str, Any]] = {
         "label": "アンパンマン", "character": "アンパンマン", "url": "/anpanman-toys/",
         "series": [
             {"label": "ブロックラボ", "terms": ["ブロックラボ"]},
-            {"label": "ベビラボ", "terms": ["ベビラボ"]},
+            {"label": "ベビラボ", "terms": ["ベビラボ", "べビラボ"]},
             {"label": "ことばずかん", "terms": ["ことばずかん"]},
             {"label": "おしゃべり・知育パソコン", "terms": ["パソコン", "タブレット"]},
-            {"label": "天才脳パズル", "terms": ["天才脳"]},
+            # 天才脳はつみかさねカップ・らくがき教室もあり、パズルだけではない
+            {"label": "天才脳シリーズ", "terms": ["天才脳"]},
             {"label": "くねくねチューブ", "terms": ["くねくね"]},
+            # 以下は G1.5 で足した (シリーズ外が 199 本中 174 本だったため。商品名の語を数えて決めた 2026-11-25)。
+            # group: 製品シリーズではなく種類のまとまり。シリーズの鳥瞰表・シリーズの節にだけ使い、
+            # 上位・年齢・遊び方の節の間引き (pick_distinct) には使わない (別の商品を同じシリーズとみなさないため)。
+            # 「おふろでピタッと」はおふろに入れたいので、ピタッより先に当てる。ブロックは最後 (ブロックラボを先に)
+            {"label": "よくばりシリーズ", "terms": ["よくばり"]},
+            {"label": "おふろあそび", "terms": ["おふろ", "お風呂"], "group": True},
+            {"label": "ピタッと貼る・マグネット", "terms": ["ピタッ", "マグネット", "マグパネル"], "group": True},
+            {"label": "楽器・音あそび", "terms": ["ドラム", "キーボード", "楽器"], "group": True},
+            {"label": "パズル", "terms": ["パズル"], "group": True},
+            {"label": "ブロック", "terms": ["ブロック"], "group": True},
         ],
         "accessory": ["保護フィルム", "シール", "ステッカー"],
     },
     "ip-tamagotchi": {
         "label": "たまごっち", "character": "たまごっち", "url": "/tamagotchi-toys/",
         "series": [
-            {"label": "たまごっちパラダイス", "terms": ["パラダイス", "paradise"]},
-            # 「Original Tamagotchi Angel Carousel」はオリジナルの柄違いなので、オリジナルを先に当てる
+            # 「Original Tamagotchi Angel Carousel」「たまごっちオリジナル パラダイス」(8 歳〜) はオリジナルの
+            # 柄違いなので、オリジナルを先に当てる
             {"label": "オリジナル・初代", "terms": ["original", "オリジナル", "初代", "オリたま"]},
+            {"label": "たまごっちパラダイス", "terms": ["パラダイス", "paradise"]},
             {"label": "てんしっち", "terms": ["てんしっち"]},
             {"label": "ケーたま", "terms": ["ケーたま"]},
             {"label": "新種発見", "terms": ["新種発見"]},
@@ -88,6 +100,15 @@ AGE_BUCKETS = [
 ]
 
 NARRATIVE_DIR = Path("data/hub_narratives")
+
+# 観点別の「いちばん」(仕様 v2 §13.9 部品 1)。表示名は score_minichart.html と同じ。
+AXES = (("education", "知育"), ("longevity", "長く遊べる"),
+        ("safety", "安全性"), ("cost_performance", "コスパ"))
+# 1 位の値を持つ商品がこれより多い観点は出さない。安全性・コスパは満点が数十〜百数十件並び
+# (アンパンマン 58 / 175 件、2026-11-25)、「いちばん」と呼べないため
+AXIS_BEST_MAX_TIES = 3
+AXIS_BEST_MIN_POOL = 5
+SERIES_TABLE_MIN = 2
 
 
 def _fold(value: Any) -> str:
@@ -169,9 +190,12 @@ def _brief(rec, mm: int | None, types: list[str]) -> dict[str, Any]:
     }
 
 
-def series_of(name: str | None, hub: dict[str, Any]) -> str | None:
+def series_of(name: str | None, hub: dict[str, Any], *, groups: bool = False) -> str | None:
+    """商品名のシリーズ。groups=False では種類のまとまり (group) を見ない (間引き用)。"""
     text = _fold(name)
     for s in hub.get("series") or []:
+        if s.get("group") and not groups:
+            continue
         if any(_fold(t) in text for t in s["terms"]):
             return s["label"]
     return None
@@ -188,6 +212,122 @@ def is_accessory(name: str | None, hub: dict[str, Any]) -> bool:
                 return True
             i = text.find(ft, i + 1)
     return False
+
+
+def axis_best(good) -> list[dict[str, Any]]:
+    """観点ごとの 1 位。1 位の値を持つ商品が AXIS_BEST_MAX_TIES 件を超える観点は出さない。
+
+    同じ値が並んだら総合の順 (_rank_key) で先の商品。返す値は 5 点満点の軸の値。
+    """
+    if len(good) < AXIS_BEST_MIN_POOL:
+        return []
+    out = []
+    for axis, label in AXES:
+        scored = [(r, (r.ivs_axes or {}).get(axis)) for r in good]
+        scored = [(r, v) for r, v in scored if isinstance(v, (int, float))]
+        if not scored:
+            continue
+        top = max(v for _, v in scored)
+        holders = sorted((r for r, v in scored if v == top), key=_rank_key)
+        if len(holders) > AXIS_BEST_MAX_TIES:
+            continue
+        out.append({"axis": axis, "label": label, "value": top, "asin": holders[0].asin,
+                    "ties": len(holders)})
+    return out
+
+
+# キャラクターそのものへの興味・好みの文だけ (「ブロック遊びに興味がない」のような商品の特徴の文は残す)
+_CHAR_ONLY_TAIL = r"(興味|知らない|避け|以外|好みでない|好まない)"
+
+
+def _is_character_interest(s: str, hub: dict[str, Any]) -> bool:
+    """「アンパンマンに興味がない子」「キャラクターものを避けたい方」「アンパンマン以外のキャラクターを好む子」か。"""
+    words = ("キャラクター", "キャラ", str(hub.get("character") or ""))
+    f = _fold(s)
+    if not any(w and _fold(w) in f for w in words):
+        return False
+    return re.search(_CHAR_ONLY_TAIL, s) is not None
+
+
+def voice_of(raw: dict[str, Any], hub: dict[str, Any]) -> dict[str, str]:
+    """記事にある「買った人の声の要約」と「こんな子に／向かない子」の 1 件目 (部品 3・4)。
+
+    作らない。記事に無ければ出さない。「キャラクターに興味がない子」は、このページに来る人には
+    当たり前で役に立たないので、向かない子の 1 件目から外す。
+    """
+    out: dict[str, str] = {}
+    rs = raw.get("review_signals") or {}
+    summary = rs.get("summary_one_line") if isinstance(rs, dict) else None
+    if isinstance(summary, str) and summary.strip():
+        out["voice"] = summary.strip()
+    pf = raw.get("persona_fit") or {}
+    if not isinstance(pf, dict):
+        return out
+    for s in pf.get("recommended_for") or []:
+        if isinstance(s, str) and s.strip():
+            out["fits"] = s.strip()
+            break
+    for s in pf.get("not_recommended_for") or []:
+        if not isinstance(s, str) or not s.strip():
+            continue
+        if _is_character_interest(s, hub):
+            continue
+        out["not_for"] = s.strip()
+        break
+    return out
+
+
+def series_overview(pool, hub: dict[str, Any], mm_index) -> list[dict[str, Any]]:
+    """シリーズの鳥瞰表 (部品 2): シリーズごとの記事数・対象年齢の幅・価格帯・代表 1 商品。
+
+    価格はビルド時の最安値 (price_overlay 済みの best_price)。在庫の無いものは価格帯に入れない。
+    代表は総合の順で先の商品。2 件未満のシリーズは出さない (表にする意味が無い)。
+    """
+    rows = []
+    for s in hub.get("series") or []:
+        members = sorted((r for r in pool if series_of(r.name, hub, groups=True) == s["label"]
+                          and not is_accessory(r.name, hub)), key=_rank_key)
+        if len(members) < SERIES_TABLE_MIN:
+            continue
+        ages = [mm_index.get(r.asin) for r in members]
+        ages = [a for a in ages if a is not None]
+        prices = [r.best_price for r in members if r.best_price
+                  and not price_overlay.is_explicitly_unavailable(r.availability)]
+        rep = members[0]
+        rows.append({
+            "label": s["label"], "count": len(members),
+            "age_min": min(ages) if ages else None, "age_max": max(ages) if ages else None,
+            "price_min": min(prices) if prices else None, "price_max": max(prices) if prices else None,
+            "rep": {"asin": rep.asin, "name": rep.name, "url_internal": f"/products/{rep.asin.lower()}/",
+                    "image": rep.image, "ivs_100": rep.ivs_100},
+        })
+    rows.sort(key=lambda x: -x["count"])
+    return rows
+
+
+# 商品の dict に声・バッジを差し込む節 (lineup は件数が多く、名前だけの一覧なので入れない)
+_ANNOTATE_KEYS = ("age_sections", "type_sections", "series_sections", "accessories",
+                  "compare_table", "narrative", "items", "sections", "bands", "choose", "series_tips",
+                  "axis_best", "item", "series_overview", "rep")
+
+
+def annotate_items(node: Any, voices: dict[str, dict[str, str]],
+                   badges: dict[str, list[str]], *, _key: str | None = None) -> None:
+    """extra の中の商品 dict (asin と url_internal を持つもの) に voice/fits/not_for/badges を足す。"""
+    if isinstance(node, list):
+        for x in node:
+            annotate_items(x, voices, badges, _key=_key)
+        return
+    if not isinstance(node, dict):
+        return
+    asin = node.get("asin")
+    if isinstance(asin, str) and "url_internal" in node:
+        node.update(voices.get(asin) or {})
+        if badges.get(asin):
+            node["badges"] = list(badges[asin])
+    for k in _ANNOTATE_KEYS:
+        if k in node:
+            annotate_items(node[k], voices, badges, _key=k)
 
 
 def pick_distinct(recs, hub: dict[str, Any], limit: int, *, per_series: int = 1):
@@ -269,7 +409,7 @@ def build_ip_payload(key: str, records, raw_index, mm_index, *, per_asin_dir: Pa
     # シリーズの節: 同じシリーズの型違い・色違いを 1 か所で見比べる (仕様 v2 §12.3 L3 の受け皿)
     series_sections = []
     for s in hub.get("series") or []:
-        members = [r for r in pool if series_of(r.name, hub) == s["label"] and not is_accessory(r.name, hub)]
+        members = [r for r in pool if series_of(r.name, hub, groups=True) == s["label"] and not is_accessory(r.name, hub)]
         if len(members) < 2:
             continue
         series_sections.append({
@@ -328,6 +468,23 @@ def build_ip_payload(key: str, records, raw_index, mm_index, *, per_asin_dir: Pa
             print(f"[ip_hubs] WARNING {key}: narrative rejected: {errors[:5]}", file=sys.stderr)
         else:
             extra["narrative"] = _render_narrative(narrative, by_asin, mm_index, types_of)
+
+    # 部品 1〜4 (仕様 v2 §13.9)。どれも記事データから決まり、LLM は使わない
+    best = axis_best(good)
+    by_pool = {r.asin: r for r in pool}
+    extra["axis_best"] = [
+        {**b, "item": _brief(by_pool[b["asin"]], mm_index.get(b["asin"]), types_of[b["asin"]]),
+         "of": len(good)}
+        for b in best
+    ]
+    badges: dict[str, list[str]] = {}
+    for b in best:
+        badges.setdefault(b["asin"], []).append(f"「{b['label']}」1位")
+    extra["series_overview"] = series_overview(pool, hub, mm_index)
+    voices = {r.asin: voice_of(raw_index[r.asin], hub) for r in pool}
+    annotate_items(extra, voices, badges)
+    stats["with_voice"] = sum(1 for v in voices.values() if v.get("voice"))
+    stats["in_series"] = sum(1 for r in pool if series_of(r.name, hub, groups=True) and not is_accessory(r.name, hub))
     return top, extra
 
 
