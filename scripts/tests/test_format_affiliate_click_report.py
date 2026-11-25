@@ -229,11 +229,12 @@ def test_nav_tables():
         f"| `sec:{s}`" for s in f.HOME_SECTIONS]
     assert gr[1] == "| `sec:last-diagnosis` | 0 | 0.0% | 条件付き（再訪者のみ表示） |"
     assert gr[2] == "| `sec:new-arrivals` | 0 | 0.0% |  |"
-    assert gr[3] == "| `sec:spotlight` | 90 | 45.0% |  |"
-    assert gr[5] == "| `sec:latest` | 40 | 20.0% |  |"
+    assert gr[3] == "| `sec:spotlight` | 90 | 90.0% |  |"
+    assert gr[5] == "| `sec:latest` | 40 | 40.0% |  |"
     assert gr[9] == "| `sec:recently-viewed` | 0 | 0.0% | 条件付き（再訪者のみ表示） |"
     assert gr[10] == "| `sec:reco` | 0 | 0.0% | 条件付き（再訪者のみ表示） |"
-    assert "トップ (`/`) の page_view 200（2026-11-26 以降）" in md
+    # 分母はトップの home_section_view が最初に出た日 (11-27) から。11-26 の nav_click では決めない
+    assert "トップ (`/`) の page_view 100（2026-11-27 以降）" in md
 
 
 def test_home_section_denominator_starts_with_first_nav_day():
@@ -246,6 +247,18 @@ def test_home_section_denominator_starts_with_first_nav_day():
     gr = _rows_of(md, "### (g)")
     assert gr[3] == "| `sec:spotlight` | 50 | 50.0% |  |"
     assert "トップ (`/`) の page_view 100（2026-11-27 以降）" in md
+
+
+def test_home_section_denominator_ignores_other_nav_dates():
+    """分母の開始日は トップの home_section_view で決める。別ページの nav_click や
+    "(other)" の日付に引っ張られない。"""
+    nav = [nav_row("2026-11-25", "/posts/a/", "nav_click", "header:ranking", 5),  # 別ページ
+           nav_row("(other)", "/", "home_section_view", "sec:spotlight", 1),
+           nav_row("2026-11-27", "/", "home_section_view", "sec:spotlight", 50)]
+    events = [event("2026-11-25", "/", "page_view", 300),
+              event("2026-11-27", "/", "page_view", 100)]
+    md = f.table_home_sections(nav, events)
+    assert "トップ (`/`) の page_view 100（2026-11-27 以降）" in md[-1]
 
 
 def test_nav_tables_top_30_limit():

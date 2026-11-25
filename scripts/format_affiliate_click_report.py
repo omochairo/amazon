@@ -136,6 +136,14 @@ def _in(d: str, start: date, end: date) -> bool:
     return start <= x <= end
 
 
+def _is_iso_date(d) -> bool:
+    try:
+        date.fromisoformat(str(d))
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
 def _sum(rows: Iterable[dict]) -> int:
     return sum(int(r.get("eventCount", 0)) for r in rows)
 
@@ -356,8 +364,11 @@ def table_home_sections(nav, events) -> list[str]:
             views[r.get("slot", "")] += int(r.get("eventCount", 0))
     # 分母は計測が始まった日以降の page_view だけにする。計測前の日の page_view を
     # 混ぜると、導入後の数週間は到達率が実際より低く出る。開始日は NAV_LAUNCH ではなく
-    # nav の行が最初に現れた日（マージ・配信が遅れた分も除くため）。
-    nav_dates = [r.get("date") for r in nav if r.get("date")]
+    # トップの区画の到達 (home_section_view) が最初に現れた日（マージ・配信が遅れた分も除くため）。
+    # 別のページの nav_click の日付や、ISO 日付でない値 ("(other)" 等) では決めない。
+    nav_dates = [str(r.get("date")) for r in nav
+                 if r.get("eventName") == "home_section_view" and r.get("pagePath") == "/"
+                 and _is_iso_date(r.get("date"))]
     first = min(nav_dates) if nav_dates else None
     pv = _sum(r for r in events if r.get("eventName") == "page_view" and r.get("pagePath") == "/"
               and (first is None or str(r.get("date")) >= first))
