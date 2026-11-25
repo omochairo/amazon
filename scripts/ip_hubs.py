@@ -80,6 +80,48 @@ IP_HUBS: dict[str, dict[str, Any]] = {
                       "リフィル", "保護フィルム", "たまもりアクセ", "コレクタブルズ", "コレクティブルズ",
                       "pop!", "キーホルダー", "ハンディファン", "ネックストラップ"],
     },
+    # G2 の 2 本 (記事数の順で次の 2 つ。商品名を数えて決めた 2026-11-25)
+    "ip-tomica": {
+        "label": "トミカ", "character": "トミカ", "url": "/tomica-toys/",
+        # どのシリーズにも当たらない 700 円以下 = 1 台もののトミカ (通常品は 330〜670 円、2026-11-25)
+        "basic": {"label": "ベーシックトミカ（1台）", "price_max": 700},
+        # 「トミカ・プラレールブロック」のシリーズ名でトミカに当たる、プラレール側の電車の商品
+        "exclude": ["新幹線", "ドクターイエロー", "トーマス", "ジェームス", "プラレールパッド"],
+        "series": [
+            # 「ユナイトファイヤブレイバー」「キャリーブレイバー」のようにジョブレイバーの語が無いものもある
+            {"label": "ジョブレイバー（変形ロボ）", "terms": ["ジョブレイバー", "ブレイバー"]},
+            {"label": "トミカ・プラレールブロック", "terms": ["プラレールブロック"]},
+            {"label": "トミカプレミアム", "terms": ["トミカプレミアム"]},
+            {"label": "頭文字D", "terms": ["頭文字d"]},
+            {"label": "トミカタウン・トミカワールド", "terms": ["トミカタウン", "トミカワールド", "ビークルタウン"]},
+            {"label": "トミカ限定・大人向けモデル", "terms": ["tomicacustomworks", "tomicaview", "tomicagarage",
+                                                  "tomicaトランスポーター", "lv-n", "tlv"], "group": True},
+            {"label": "パズル・ぬりえ", "terms": ["パズル", "ぬりえ"], "group": True},
+        ],
+        # 本体ではない収納・ケース。パーキングケースは車を並べて遊べるが、本体の比較には入れない
+        "accessory": ["収納", "ミニカーケース", "トミカケース", "パーキングケース", "パノラマケース",
+                      "おもちゃ収納ボックス"],
+    },
+    "ip-pokemon": {
+        "label": "ポケモン", "character": "ポケモン", "url": "/pokemon-toys/",
+        "series": [
+            {"label": "モンコレ（フィギュア）", "terms": ["モンコレ"]},
+            {"label": "ナノブロック", "terms": ["ナノブロック"]},
+            {"label": "ポケモンフレンダ", "terms": ["フレンダ"]},
+            {"label": "ポケなで", "terms": ["ポケなで"]},
+            {"label": "なりきりグッズ", "terms": ["テラスタルオーブ", "ダイマックスバンド", "メガリング", "スマホロトム"],
+             "group": True},
+            {"label": "パズル・ボードゲーム", "terms": ["パズル", "ウボンゴ", "ドブル", "ごいた", "リバーシ",
+                                                "ブロックスシャッフル", "ナインタイル", "危機一発", "whoareyou"],
+             "group": True},
+            {"label": "ぬいぐるみ", "terms": ["ぬいぐるみ", "すやすやフレンド", "mocchi", "ぽけふわ", "のんびりドール"],
+             "group": True},
+        ],
+        # 本体ではないカード入れ・日用品
+        "accessory": ["ふれんずポーチ", "フレンダフォルダー", "フレンダトランク", "フレンダキャリー", "フレンダボックス", "メザスタトランク",
+                      "メラミンカップ", "アンブレラチャーム", "エコバッグ", "カードホルダー", "コレクションポーチ",
+                      "コレクションファイル", "ストラップ", "ヘアバンド", "キャップ", "ビーチボール", "サッカーボール"],
+    },
 }
 
 # 上位・節に載せる知育スコアの下限 (0-5)。全ラインナップ節には下限をかけない。
@@ -201,6 +243,34 @@ def series_of(name: str | None, hub: dict[str, Any], *, groups: bool = False) ->
     return None
 
 
+def series_defs(hub: dict[str, Any]) -> list[dict[str, Any]]:
+    """表と節に出すシリーズの定義。価格で決める「ベーシック」(basic) を最後に足す。"""
+    out = list(hub.get("series") or [])
+    if hub.get("basic"):
+        out.append({"label": hub["basic"]["label"], "terms": []})
+    return out
+
+
+def series_of_rec(rec, hub: dict[str, Any], *, groups: bool = False) -> str | None:
+    """record のシリーズ。名前で当たらず、hub に basic があり価格がその上限以下なら basic のシリーズ。
+
+    トミカの 1 台もの (No.〜) は名前に共通の語が無く、上位がほぼ 370 円前後の 1 台ものだけで
+    埋まったため (2026-11-25)。間引き (groups=False) にも効かせ、上位に並ぶのを抑える。
+    """
+    # 短い商品名から削られたシリーズ名 (「トミカプレミアム 05 ランボルギーニ ミウラ」→「トミカ ランボルギーニ ミウラ」)
+    # を拾うため、短い商品名で当たらないときだけ正式名を見る (agy 指摘・2026-11-25)。
+    # 先に正式名を混ぜると、正式名に「オリジナル」と入る「てんしっち」がオリジナルに吸われた
+    s = series_of(rec.name, hub, groups=True) or series_of(getattr(rec, "name_full", None), hub, groups=True)
+    if s:
+        # 種類のまとまり (パズルなど) に当たったものは、間引きではシリーズ外。ベーシックにも落とさない
+        is_group = any(d.get("group") and d["label"] == s for d in hub.get("series") or [])
+        return None if (is_group and not groups) else s
+    basic = hub.get("basic")
+    if basic and not is_accessory(rec.name, hub) and rec.best_price and rec.best_price <= basic["price_max"]:
+        return basic["label"]
+    return None
+
+
 def is_accessory(name: str | None, hub: dict[str, Any]) -> bool:
     """付属品か。「特典ステッカー付き」のように本体に付いてくるものは付属品にしない。"""
     text = _fold(name)
@@ -284,8 +354,8 @@ def series_overview(pool, hub: dict[str, Any], mm_index) -> list[dict[str, Any]]
     代表は総合の順で先の商品。2 件未満のシリーズは出さない (表にする意味が無い)。
     """
     rows = []
-    for s in hub.get("series") or []:
-        members = sorted((r for r in pool if series_of(r.name, hub, groups=True) == s["label"]
+    for s in series_defs(hub):
+        members = sorted((r for r in pool if series_of_rec(r, hub, groups=True) == s["label"]
                           and not is_accessory(r.name, hub)), key=_rank_key)
         if len(members) < SERIES_TABLE_MIN:
             continue
@@ -342,7 +412,7 @@ def pick_distinct(recs, hub: dict[str, Any], limit: int, *, per_series: int = 1)
     for r in recs:
         if len(picked) >= limit:
             break
-        s = series_of(r.name, hub)
+        s = series_of_rec(r, hub)
         key = bch._name_key(r.name)
         # 同じ商品の別出品 (名前がほぼ同じ) はシリーズの内外を問わず 1 件に
         if (s and used[s] >= per_series) or bch._same_product(key, keys):
@@ -358,9 +428,15 @@ def pick_distinct(recs, hub: dict[str, Any], limit: int, *, per_series: int = 1)
     return picked
 
 
-def select_ip_records(records, raw_index: dict[str, dict[str, Any]], aliases: tuple[str, ...]):
-    """IP に当たる記事の record をスコア順で返す (記事のある商品だけ)。"""
-    pool = [r for r in records if r.asin in raw_index and matches_character(raw_index[r.asin], aliases)]
+def select_ip_records(records, raw_index: dict[str, dict[str, Any]], aliases: tuple[str, ...],
+                      exclude: tuple[str, ...] | list[str] = ()):
+    """IP に当たる記事の record をスコア順で返す (記事のある商品だけ)。
+
+    exclude: 商品名・正式名に含まれていたら外す語 (トミカのページからプラレール側の電車を外すなど)。
+    """
+    ex = [_fold(t) for t in exclude if _fold(t)]
+    pool = [r for r in records if r.asin in raw_index and matches_character(raw_index[r.asin], aliases)
+            and not any(t in ip_text(raw_index[r.asin]) for t in ex)]
     pool.sort(key=_rank_key)
     return pool
 
@@ -372,7 +448,7 @@ def build_ip_payload(key: str, records, raw_index, mm_index, *, per_asin_dir: Pa
     hub = IP_HUBS[key]
     terms = load_character_terms()
     aliases = (hub["character"], *terms.get(hub["character"], ()))
-    pool = select_ip_records(records, raw_index, aliases)
+    pool = select_ip_records(records, raw_index, aliases, hub.get("exclude") or ())
     rules = rules or toy_type.load_rules()
     types_of: dict[str, list[str]] = {}
     for rec in pool:
@@ -408,8 +484,8 @@ def build_ip_payload(key: str, records, raw_index, mm_index, *, per_asin_dir: Pa
 
     # シリーズの節: 同じシリーズの型違い・色違いを 1 か所で見比べる (仕様 v2 §12.3 L3 の受け皿)
     series_sections = []
-    for s in hub.get("series") or []:
-        members = [r for r in pool if series_of(r.name, hub, groups=True) == s["label"] and not is_accessory(r.name, hub)]
+    for s in series_defs(hub):
+        members = [r for r in pool if series_of_rec(r, hub, groups=True) == s["label"] and not is_accessory(r.name, hub)]
         if len(members) < 2:
             continue
         series_sections.append({
@@ -484,7 +560,7 @@ def build_ip_payload(key: str, records, raw_index, mm_index, *, per_asin_dir: Pa
     voices = {r.asin: voice_of(raw_index[r.asin], hub) for r in pool}
     annotate_items(extra, voices, badges)
     stats["with_voice"] = sum(1 for v in voices.values() if v.get("voice"))
-    stats["in_series"] = sum(1 for r in pool if series_of(r.name, hub, groups=True) and not is_accessory(r.name, hub))
+    stats["in_series"] = sum(1 for r in pool if series_of_rec(r, hub, groups=True) and not is_accessory(r.name, hub))
     return top, extra
 
 
@@ -553,6 +629,9 @@ _ASIN_RE = re.compile(r"\bB0[0-9A-Z]{8}\b")
 _YEN_RE = re.compile(r"[0-9,.]+\s*(万|千)?\s*円|[¥￥]\s*[0-9]|[一二三四五六七八九十百千万]+円")
 _NUM_RE = re.compile(r"[0-9０-９]+(?:[.．][0-9０-９]+)?")
 _AGE_TAIL_RE = re.compile(r"\s*(歳|才|ヶ月|か月|カ月|ヵ月|ケ月)")
+# 「4〜5歳」の 4 のように、年齢の幅の前の数字も年齢 (ページの節の名前「4〜5歳」と同じ書き方)
+# 区切りは波線だけ (ハイフンは型番「TJB-10」などと紛れる)
+_AGE_RANGE_RE = re.compile(r"\s*[〜~～]\s*[0-9]+(?:\.[0-9]+)?\s*(歳|才|ヶ月|か月|カ月|ヵ月|ケ月)")
 # 書かせない言い切り・誇大表現 (景表法・Google の品質方針)。
 _HYPE = ("絶対", "必ず", "最強", "No.1", "ナンバーワン", "間違いな", "100%", "誰でも")
 # 価格の動きは本文に書かない (凍った文になる。金額はビルド時に描く・amazon#11867)。
@@ -700,7 +779,7 @@ def validate_narrative(n: dict[str, Any], pool_asins: set[str], age_keys: set[st
         # 数字は年齢・月齢と、商品名に同じ数字として出るものだけ (渡していない数字 = 作った事実)
         for m in _NUM_RE.finditer(norm):
             num = m.group(0)
-            if _AGE_TAIL_RE.match(norm, m.end()):
+            if _AGE_TAIL_RE.match(norm, m.end()) or _AGE_RANGE_RE.match(norm, m.end()):
                 continue
             if num in allowed_numbers:
                 continue
@@ -741,7 +820,7 @@ def build_prompt(key: str, records, raw_index, mm_index, *, per_asin_dir: Path, 
                                   narrative_dir=Path("/nonexistent"))
     terms = load_character_terms()
     aliases = (hub["character"], *terms.get(hub["character"], ()))
-    pool = select_ip_records(records, raw_index, aliases)
+    pool = select_ip_records(records, raw_index, aliases, hub.get("exclude") or ())
     pool = [r for r in pool if r.ivs_score is not None and r.ivs_score >= IP_MIN_IVS]
     import build_category_hubs as bch
     # 同じ商品の別出品 (たまごっちパラダイス Blue Water / ブルーウォーター) を 1 件にしてから渡す。
@@ -763,7 +842,7 @@ def build_prompt(key: str, records, raw_index, mm_index, *, per_asin_dir: Path, 
             "asin": r.asin,
             "name": r.name,
             "brand": p.get("brand"),
-            "series": series_of(r.name, hub),
+            "series": series_of_rec(r, hub),
             "accessory": is_accessory(r.name, hub),
             "age_section": _bucket(mm_index.get(r.asin)),
             "target_age": p.get("target_age"),
@@ -803,7 +882,8 @@ def check_against_data(key: str, n: dict[str, Any], records, raw_index, mm_index
     _top, extra = build_ip_payload(key, records, raw_index, mm_index, per_asin_dir=per_asin_dir,
                                    narrative_dir=Path("/nonexistent"))
     terms = load_character_terms()
-    pool = select_ip_records(records, raw_index, (hub["character"], *terms.get(hub["character"], ())))
+    pool = select_ip_records(records, raw_index, (hub["character"], *terms.get(hub["character"], ())),
+                             hub.get("exclude") or ())
     good = {r.asin for r in pool if r.ivs_score is not None and r.ivs_score >= IP_MIN_IVS}
     return validate_narrative(n, {r.asin for r in pool}, {s["key"] for s in extra["age_sections"]},
                               names=[r.name or "" for r in pool],
