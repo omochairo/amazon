@@ -37,7 +37,7 @@
       compare: $("dx-compare"), compareStart: $("dx-compare-start"), types: $("dx-types"), typesList: $("dx-types-list"), shareLine: $("dx-share-line"), shareX: $("dx-share-x"),
       error: $("dx-error"), errorRetry: $("dx-error-retry"),
       top: $("dx-top"), gridTitle: $("dx-grid-title"), grid: $("dx-grid"), more: $("dx-more"),
-      share: $("dx-share"), shareMsg: $("dx-share-msg"), retry: $("dx-retry")
+      share: $("dx-share"), shareMsg: $("dx-share-msg"), retry: $("dx-retry"), refine: $("dx-refine")
     };
     if (!els.quiz || !els.options || !els.result) return;
 
@@ -306,6 +306,7 @@
     }
 
     function resetResultArea() {
+      if (els.refine) els.refine.hidden = true;
       els.error.hidden = true;
       els.note.hidden = true;
       clear(els.top);
@@ -355,11 +356,56 @@
       return rank + "位";
     }
 
+    // カードの底に付けるボタン。Amazon で買える商品は Amazon へ、買えない商品
+    // (Amazon 価格なし・タグ未設定) は同じ場所に「価格を比べる」を出して全カードの形をそろえる。
+    // 以前はカードの外に素の文字で置いていたため、PC の 1 位ではカードの右横に回り、
+    // 一覧では上下どちらのカードのリンクか分からなかった (有無が混在していたのも一因)。
+    function buildBuy(item, rank) {
+      var name = String(item.product_name || item.title || "");
+      var tag = els.root && els.root.getAttribute("data-amazon-tag");
+      var permalink = String(item.permalink || "");
+      var asinMatch = permalink.match(/\/products\/([^/]+)\/?$/i);
+      var buy;
+      var shop;
+      if (Number(item.price_amazon) > 0 && tag && tag.trim() && asinMatch) {
+        shop = "amazon";
+        buy = make("a", "dx-buy dx-buy-amazon");
+        buy.appendChild(make("span", "dx-buy-label", "Amazonで見る"));
+        buy.setAttribute("href", "https://www.amazon.co.jp/dp/" + asinMatch[1].toUpperCase() + "/?tag=" + tag.trim());
+        // 年齢ベストは診断を経ないので、診断の段 (diagnosis_complete → クリック) に混ぜない
+        buy.setAttribute("data-cta-slot", lastView === "age_best" ? "diagnosis-age-best" : "diagnosis");
+        buy.setAttribute("rel", "sponsored nofollow noopener");
+        buy.setAttribute("target", "_blank");
+        buy.setAttribute("aria-label", (name ? name + " を" : "") + "Amazonで見る（新しいタブで開きます）");
+      } else {
+        if (!permalink) return null;
+        var hasPrice = Number(item.price_rakuten) > 0 || Number(item.price_yahoo) > 0;
+        shop = hasPrice ? "compare" : "detail";
+        var text = hasPrice ? "価格を比べる" : "くわしく見る";
+        buy = make("a", "dx-buy dx-buy-compare");
+        buy.appendChild(make("span", "dx-buy-label", text));
+        // 商品ページの「価格を比較」の見出し (scripts/templates/post.md.j2 の #price-compare) へ直接飛ばす
+        buy.setAttribute("href", hasPrice ? permalink + "#price-compare" : permalink);
+        buy.setAttribute("aria-label", (name ? name + " の" : "") + (hasPrice ? "ショップごとの価格を比べる" : "くわしいレビューを見る"));
+      }
+      var icon = make("span", "dx-buy-icon", shop === "amazon" ? "↗" : "→");
+      icon.setAttribute("aria-hidden", "true");
+      buy.appendChild(icon);
+      buy.addEventListener("click", function () {
+        track("diagnosis_buy_click", { rank: rank, view: lastView, shop: shop });
+      });
+      return buy;
+    }
+
     function buildPick(pick, rank) {
-      var wrap = make("div", "dx-pick" + (rank === 1 ? " dx-pick--top" : ""));
+      var hasReasons = !!(pick.reasons && pick.reasons.length);
+      var wrap = make("div", "dx-pick" + (rank === 1 ? " dx-pick--top" : "") + (hasReasons ? "" : " dx-pick--solo"));
       var label = make("span", "dx-rank", rankLabel(rank));
       label.hidden = !label.textContent;
       wrap.appendChild(label);
+      // カードとボタンを 1 つの枠に入れて、同じ商品のまとまりに見せる。
+      // カードは <a> なので、ボタン (<a>) をカードの中には入れない (リンクの入れ子は不可)。
+      var body = make("div", "dx-pick-body");
       var render = window.OmochaUtils && window.OmochaUtils.renderProductCard;
       if (render) {
         var card = render(pick.item);
@@ -369,22 +415,16 @@
             track("diagnosis_pick_click", { rank: rank, view: lastView });
           });
         }
-        wrap.appendChild(card);
+        body.appendChild(card);
+        // 「もっと見る」のあとにフォーカスを移す先
+        wrap.dxFocus = card;
       }
-      var tag = els.root && els.root.getAttribute("data-amazon-tag");
-      var permalink = String(pick.item.permalink || "");
-      var asinMatch = permalink.match(/\/products\/([^/]+)\/?$/i);
-      if (Number(pick.item.price_amazon) > 0 && tag && tag.trim() && asinMatch) {
-        var buy = make("a", "dx-buy dx-buy-amazon", "🟠 Amazonで見る");
-        buy.setAttribute("href", "https://www.amazon.co.jp/dp/" + asinMatch[1].toUpperCase() + "/?tag=" + tag.trim());
-        buy.setAttribute("data-cta-slot", "diagnosis");
-        buy.setAttribute("rel", "sponsored nofollow noopener");
-        buy.setAttribute("target", "_blank");
-        wrap.appendChild(buy);
-      }
+      var buy = buildBuy(pick.item, rank);
+      if (buy) body.appendChild(buy);
+      wrap.appendChild(body);
       // 商品ならではの一言 (card_reason) はカード本体 (utils/product-card.js) が出すので、
       // ここでは診断の答えに対する理由だけを並べる (#166 F6/F7。2 重に出ていた)。
-      if (pick.reasons && pick.reasons.length) {
+      if (hasReasons) {
         var ul = make("ul", "dx-reasons");
         ul.setAttribute("aria-label", "おすすめの理由");
         (pick.reasons || []).slice(0, 3).forEach(function (r) {
@@ -429,7 +469,7 @@
       }
       els.more.hidden = picks.length <= shown;
       mountToggles(els.grid);
-      var link = first && first.children && first.children[1];
+      var link = first && first.dxFocus;
       if (link && link.focus) link.focus();
     });
 
@@ -603,12 +643,20 @@
       writeUrl(""); startQuiz(false); scrollToTop(els.quiz);
     });
 
-    els.retry.addEventListener("click", function () {
+    function restartQuiz() {
       try { window.sessionStorage.removeItem("omcha_dx_compare"); } catch (e) { /* storage unavailable */ }
       writeUrl("");
       startQuiz(false);
       scrollToTop(els.quiz);
-    });
+    }
+    els.retry.addEventListener("click", restartQuiz);
+    // 年齢ベストの冒頭の「絞り込む」。下の dx-retry と同じ動きで、10 件を見る前でも押せる場所に置く
+    if (els.refine) {
+      els.refine.addEventListener("click", function () {
+        track("diagnosis_refine", { from: "age_best_top" });
+        restartQuiz();
+      });
+    }
 
     // ------------------------------------------------------------ 年齢別ベスト10
     function showAgeBest(band) {
@@ -626,11 +674,12 @@
         els.eyebrow.textContent = "年齢別ベスト10";
         els.pEmoji.textContent = b.emoji;
         els.pTitle.textContent = b.label + "のベスト10";
-        els.pText.textContent = b.label + "のお子さんに、知育スコアの高いおもちゃをジャンルが偏らないように選びました。開くたびに顔ぶれが変わります。好きな遊びや予算で絞り込むなら、下のボタンから診断をどうぞ。";
+        els.pText.textContent = b.label + "のお子さんに、知育スコアの高いおもちゃをジャンルが偏らないように選びました。開くたびに顔ぶれが変わります。好きな遊びや予算で絞り込むなら、すぐ下のボタンから診断をどうぞ。";
         var tip = D.ageTip({ age: b.age });
         els.ageTip.textContent = tip ? "この時期のポイント: " + tip : "";
         els.share.hidden = true;
         els.retry.textContent = "🧸 好きな遊び・予算で絞り込む";
+        if (els.refine) els.refine.hidden = false;
         lastView = "age_best";
         renderPicks();
         track("diagnosis_age_best", { band: band });

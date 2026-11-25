@@ -294,6 +294,9 @@
     text-align: left;
 }
 .dx-age-tip:empty { display: none; }
+/* 文節の途中 (「絞り込むな/ら」「友/だち」) で折り返さない。対応していないブラウザでは今までどおり */
+.dx-persona-text, .dx-age-tip { word-break: auto-phrase; line-break: strict; }
+.dx-refine { margin-top: 0.9rem; }
 
 .dx-chips {
     display: flex;
@@ -354,9 +357,105 @@
     background: var(--entry);
 }
 .dx-pick--top .dx-rank { grid-area: rank; font-size: 1rem; }
-.dx-pick--top .product-card { grid-area: card; }
+.dx-pick--top .dx-pick-body { grid-area: card; }
 .dx-pick--top .dx-reasons { grid-area: reasons; align-self: center; }
 .dx-pick--top .dx-reason { font-size: 0.95rem; padding: 0.55rem 0.75rem; }
+/* 理由の無い 1 位 (年齢ベスト10) は右の列が空くので、1 列にして中央へ寄せる */
+.dx-pick--top.dx-pick--solo {
+    grid-template-columns: minmax(0, 320px);
+    grid-template-areas: "rank" "card";
+    justify-content: center;
+}
+
+/* カード + 購入ボタンを 1 つの枠にまとめる。影と角丸は外側の枠が持ち、
+   中のカードは平らにする (ボタンがカードの一部に見えるように)。 */
+.dx-pick-body {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-width: 0;
+    border-radius: var(--radius-md, 12px);
+    background: #fff;
+    box-shadow: var(--card-shadow);
+    overflow: hidden;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.dx-pick-body:hover { transform: translateY(-3px); box-shadow: var(--card-shadow-hover); }
+/* ダークのカード色と影は custom.css の [data-theme="dark"] .product-card (#232334) に合わせる */
+[data-theme="dark"] .dx-pick-body { background: #232334; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4); }
+[data-theme="dark"] .dx-pick-body:hover { box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55); }
+.dx-pick-body .product-card,
+.dx-pick-body .product-card:hover,
+[data-theme="dark"] .dx-pick-body .product-card,
+[data-theme="dark"] .dx-pick-body .product-card:hover {
+    flex: 1 1 auto;
+    border-radius: 0;
+    box-shadow: none;
+    transform: none;
+}
+
+/* 購入ボタン。カードの底に、カードと同じ幅で置く */
+.dx-buy {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 48px;
+    margin: 0 0.85rem 0.85rem;
+    padding: 0.6rem 1rem;
+    border-radius: 999px;
+    font-size: 0.98rem;
+    font-weight: 800;
+    line-height: 1.3;
+    text-decoration: none !important;
+    overflow: hidden;
+    isolation: isolate;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+.dx-buy-icon { font-size: 0.9em; transition: transform 0.15s ease; }
+.dx-buy:hover .dx-buy-icon { transform: translateX(2px); }
+.dx-buy-amazon:hover .dx-buy-icon { transform: translate(2px, -2px); }
+.dx-buy:hover { transform: translateY(-1px); }
+.dx-buy:active { transform: translateY(1px) scale(0.98); }
+.dx-buy:focus-visible { outline: 3px solid var(--dx-ring); outline-offset: 2px; }
+
+/* Amazon: ブランド色で塗る。白文字は #ff9900 の上で読めない (約 2:1) ので濃い文字にする */
+.dx-buy-amazon {
+    background: linear-gradient(135deg, #ffc266, #ff9900);
+    color: #1b1b1b !important;
+    box-shadow: 0 3px 10px rgba(255, 153, 0, 0.35), inset 0 -2px 0 rgba(0, 0, 0, 0.08);
+}
+.dx-buy-amazon:hover { box-shadow: 0 6px 16px rgba(255, 153, 0, 0.45), inset 0 -2px 0 rgba(0, 0, 0, 0.08); filter: brightness(1.03); }
+/* 光が横切る演出。マウスを乗せたときと、1 位のボタンでは数秒おきに 1 回 */
+.dx-buy-amazon::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.55) 50%, transparent 70%);
+    transform: translateX(-120%);
+    pointer-events: none;
+}
+.dx-buy-amazon > * { position: relative; }
+.dx-buy-amazon:hover::after { animation: dxShine 0.8s ease; }
+.dx-pick--top .dx-buy-amazon::after { animation: dxShine 4.5s ease 1s infinite; }
+@keyframes dxShine {
+    0% { transform: translateX(-120%); }
+    20%, 100% { transform: translateX(120%); }
+}
+
+/* Amazon で買えない商品: サイト内の価格比較へ。外部リンクと見分けられるよう枠線だけにする */
+.dx-buy-compare {
+    background: transparent;
+    /* ブランドのオレンジ (#FF6B35) の文字は白地で 3:1 に届かないので、文字だけ濃くする */
+    color: #c2410c !important;
+    border: 2px solid var(--dx-accent);
+}
+[data-theme="dark"] .dx-buy-compare { color: #ff9a70 !important; }
+.dx-buy-compare:hover { background: var(--dx-soft); }
 
 .dx-rank {
     align-self: flex-start;

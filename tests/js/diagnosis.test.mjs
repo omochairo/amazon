@@ -59,6 +59,11 @@ const IDS = [...LAYOUT.matchAll(/id="(dx-[a-z0-9-]+)"/g)].map((m) => m[1]);
 
 const tick = (ms = 5) => new Promise((r) => setTimeout(r, ms));
 
+// 結果の 1 件 (.dx-pick) から、カードと購入ボタンを取り出す (どちらも枠 .dx-pick-body の中)
+const bodyOf = (pick) => pick.children.find((c) => c.className === "dx-pick-body");
+const cardOf = (pick) => bodyOf(pick).children.find((c) => c.className === "product-card");
+const buyOf = (pick) => bodyOf(pick).children.find((c) => /(^| )dx-buy( |$)/.test(c.className));
+
 function boot({ fetchImpl, search = "", saved = null, compare, favorites, gtag, amazonTag = "test-tag", sessionData = {}, sessionThrows = false } = {}) {
   const byId = {};
   for (const id of IDS) byId[id] = new El("div", id);
@@ -162,10 +167,10 @@ test("わが子: 6 問 (持っているものは任意) で結果が出て、理
   assert.match(ui.$("dx-share-line").getAttribute("href"), /text=/);
   assert.match(ui.$("dx-share-x").getAttribute("href"), /url=/);
   const top = ui.$("dx-top").children[0];
-  assert.equal(top.children[1].textContent, "ブロックA");
+  assert.equal(cardOf(top).textContent, "ブロックA");
   assert.match(top.children.find((c) => c.className === "dx-reasons").textContent, /つくる・組み立てる/, "1 位に選んだ理由が付く");
-  const buy = top.children.find((c) => c.className === "dx-buy dx-buy-amazon");
-  assert.ok(buy);
+  const buy = buyOf(top);
+  assert.equal(buy.className, "dx-buy dx-buy-amazon");
   assert.equal(buy.getAttribute("href"), "https://www.amazon.co.jp/dp/B0000000A1/?tag=test-tag");
   assert.equal(buy.getAttribute("data-cta-slot"), "diagnosis");
   // card_reason はカード本体 (product-card.js) が出す。理由リストには重ねて出さない
@@ -178,7 +183,7 @@ test("わが子: 6 問 (持っているものは任意) で結果が出て、理
   assert.ok(ui.$("dx-root").classList.contains("dx--wide"), "結果は全幅");
 });
 
-test("Amazonボタンはタグと価格が揃った商品だけに出る", async () => {
+test("Amazonボタンはタグと価格が揃った商品だけ。それ以外は同じ場所に価格比較を出す", async () => {
   async function resultWith(options) {
     const ui = boot(options);
     await answerChild3y(ui);
@@ -186,11 +191,58 @@ test("Amazonボタンはタグと価格が揃った商品だけに出る", async
     await tick(20);
     return ui.$("dx-top").children[0];
   }
-  const noTag = await resultWith({ amazonTag: "" });
-  assert.ok(!noTag.children.some((c) => c.className === "dx-buy dx-buy-amazon"));
+  // タグが無い (Amazon のリンクを作れない) ときは、楽天/Yahoo の価格が無くても商品ページへ案内する
+  const noTag = buyOf(await resultWith({ amazonTag: "" }));
+  assert.equal(noTag.className, "dx-buy dx-buy-compare");
+  assert.equal(noTag.textContent, "くわしく見る→");
+  assert.equal(noTag.getAttribute("href"), "/products/b0000000a1/");
+  assert.equal(noTag.getAttribute("target"), null, "サイト内のリンクは同じタブで開く");
+  assert.equal(noTag.getAttribute("data-cta-slot"), null, "アフィリエイトではないので CTA の計測に数えない");
+
   const noPriceItem = { ...ITEMS[0], price_amazon: 0, price_rakuten: 2800 };
-  const noPrice = await resultWith({ fetchImpl: async () => ({ json: async () => [noPriceItem] }) });
-  assert.ok(!noPrice.children.some((c) => c.className === "dx-buy dx-buy-amazon"));
+  const rakutenOnly = buyOf(await resultWith({ fetchImpl: async () => ({ json: async () => [noPriceItem] }) }));
+  assert.equal(rakutenOnly.className, "dx-buy dx-buy-compare");
+  assert.equal(rakutenOnly.textContent, "価格を比べる→");
+  assert.equal(rakutenOnly.getAttribute("href"), "/products/b0000000a1/#price-compare");
+  assert.match(rakutenOnly.getAttribute("aria-label"), /^ブロックA の/);
+});
+
+test("Amazonボタン: 読み上げ用の名前・年齢ベストの計測枠・クリックの計測", async () => {
+  const events = [];
+  const ui = boot({ gtag: (t, n, p) => events.push({ n, p }) });
+  await answerChild3y(ui);
+  ui.$("dx-multi-next").click();
+  await tick(20);
+  const buy = buyOf(ui.$("dx-top").children[0]);
+  assert.equal(buy.textContent, "Amazonで見る↗");
+  assert.equal(buy.getAttribute("aria-label"), "ブロックA をAmazonで見る（新しいタブで開きます）");
+  assert.equal(buy.getAttribute("target"), "_blank");
+  buy.click();
+  assert.deepEqual(JSON.parse(JSON.stringify(events.at(-1))), { n: "diagnosis_buy_click", p: { rank: 1, view: "diagnosis", shop: "amazon" } });
+
+  // 年齢ベスト10 は診断を経ないので、診断の段の集計 (slot=diagnosis) に混ぜない
+  const age = boot({ search: "?age=0-1" });
+  await tick(20);
+  assert.equal(buyOf(age.$("dx-top").children[0]).getAttribute("data-cta-slot"), "diagnosis-age-best");
+});
+
+test("年齢ベスト10: 理由の無い 1 位は 1 列にし、冒頭に「絞り込む」を出す", async () => {
+  const age = boot({ search: "?age=0-1" });
+  await tick(20);
+  const top = age.$("dx-top").children[0];
+  assert.ok(top.classList.contains("dx-pick--solo"), "右の列が空かないように 1 列で並べる");
+  assert.equal(age.$("dx-refine").hidden, false);
+  age.$("dx-refine").click();
+  assert.equal(age.$("dx-quiz").hidden, false);
+  assert.equal(age.history.urls.at(-1), "/diagnosis/");
+
+  // 診断の結果には出さない (下の「最初から診断する」がある)
+  const ui = boot();
+  await answerChild3y(ui);
+  ui.$("dx-multi-next").click();
+  await tick(20);
+  assert.equal(ui.$("dx-refine").hidden, true);
+  assert.ok(!ui.$("dx-top").children[0].classList.contains("dx-pick--solo"), "理由がある 1 位は 2 列のまま");
 });
 
 test("出産祝い: 年齢を聞かずに 4 問で終わる", async () => {
@@ -204,7 +256,7 @@ test("出産祝い: 年齢を聞かずに 4 問で終わる", async () => {
   await tick(20);
   assert.equal(ui.$("dx-result").hidden, false);
   assert.equal(ui.$("dx-persona-title").textContent, "はじめてのおもちゃ");
-  assert.equal(ui.$("dx-top").children[0].children[1].textContent, "ラトルC");
+  assert.equal(cardOf(ui.$("dx-top").children[0]).textContent, "ラトルC");
 });
 
 test("プレゼント: 「持っているもの」を聞かずに結果へ進む", async () => {
@@ -253,7 +305,7 @@ test("共有リンク (?w=..) を開くと設問を飛ばして結果を出す",
   await tick(20);
   assert.equal(ui.$("dx-result").hidden, false);
   assert.equal(ui.$("dx-persona-title").textContent, "なりきり名人タイプ");
-  assert.equal(ui.$("dx-top").children[0].children[1].textContent, "キッチンB");
+  assert.equal(cardOf(ui.$("dx-top").children[0]).textContent, "キッチンB");
 });
 
 test("壊れた共有リンクは 1 問目から始める", async () => {
@@ -305,7 +357,7 @@ test("C: 年齢ベスト10 (?age=0-1) から診断をやり直すと、見出し
   const ui = boot({ search: "?age=0-1" });
   await tick(20);
   assert.equal(ui.$("dx-persona-title").textContent, "0〜1歳のベスト10");
-  const names = ui.$("dx-top").children.concat(ui.$("dx-grid").children).map((p) => p.children[1].textContent);
+  const names = ui.$("dx-top").children.concat(ui.$("dx-grid").children).map((p) => cardOf(p).textContent);
   assert.deepEqual(names, ["ラトルC"], "3歳〜の商品は 0〜1歳のベスト10 に入らない");
   ui.$("dx-retry").click();
   assert.equal(ui.$("dx-quiz").hidden, false);
@@ -468,7 +520,7 @@ test("GA4: 開始・完了 (回答の選択肢と経路)・順位つきクリッ
   assert.equal(done.relaxed, "age", "テスト用の 6 商品では条件緩和が年齢段階まで進む");
   assert.equal(done.owned_count, 0);
 
-  ui.$("dx-top").children[0].children[1].click();
+  cardOf(ui.$("dx-top").children[0]).click();
   assert.deepEqual(JSON.parse(JSON.stringify(events.at(-1))), { type: "event", name: "diagnosis_pick_click", params: { rank: 1, view: "diagnosis" } });
 
   ui.$("dx-chips").children.find((c) => c.textContent.includes("3,000円")).click();
@@ -491,7 +543,7 @@ test("GA4: 共有リンクと年齢別ベスト10 は経路を区別して送る
   const age = boot({ search: "?age=0-1", gtag: (t, n, p) => ev2.push({ n, p }) });
   await tick(20);
   assert.deepEqual(JSON.parse(JSON.stringify(ev2)), [{ n: "diagnosis_age_best", p: { band: "0-1" } }]);
-  age.$("dx-top").children[0].children[1].click();
+  cardOf(age.$("dx-top").children[0]).click();
   assert.equal(ev2.at(-1).p.view, "age_best");
 });
 
