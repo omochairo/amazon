@@ -105,8 +105,42 @@ def test_load_rows_splits_kinds(tmp_path):
     p.write_text("\n".join(json.dumps(r) for r in [
         click("2026-11-10", ART, "buy-top"), event("2026-11-10", ART, "page_view")]) + "\n\n",
         encoding="utf-8")
-    clicks, events = f.load_rows(p)
-    assert len(clicks) == 1 and len(events) == 1
+    clicks, events, nav = f.load_rows(p)
+    assert len(clicks) == 1 and len(events) == 1 and nav == []
+
+
+META_NAV = {"range": {"start": "2026-11-05", "end": "2026-12-02"}, "warnings": [],
+            "fetched_at": "2026-12-03T00:30:00+00:00"}
+
+
+def nav_row(d, path, name, slot, n=1):
+    return {"date": d, "pagePath": path, "eventName": name, "slot": slot, "eventCount": n}
+
+
+def test_load_rows_splits_nav_from_events_and_clicks(tmp_path):
+    p = tmp_path / "rows.jsonl"
+    p.write_text("\n".join(json.dumps(r) for r in [
+        click("2026-11-10", ART, "buy-top", n=4),
+        event("2026-11-10", ART, "page_view"),
+        nav_row("2026-11-26", "/", "nav_click", "hero:diagnosis", 3),
+        nav_row("2026-11-26", "/", "home_section_view", "sec:latest", 2)]) + "\n",
+        encoding="utf-8")
+    clicks, events, nav = f.load_rows(p)
+    assert [r["slot"] for r in clicks] == ["buy-top"]
+    assert [r["eventName"] for r in events] == ["page_view"]
+    assert sorted(r["eventName"] for r in nav) == ["home_section_view", "nav_click"]
+
+
+def test_nav_rows_do_not_change_affiliate_click_totals():
+    clicks = [click("2026-11-10", ART, "buy-top", n=5), click("2026-11-11", "/", "sticky", n=2)]
+    events = [event("2026-11-10", ART, "page_view", 70)]
+    nav = [nav_row("2026-11-12", "/", "nav_click", "hero:diagnosis", 9),
+           nav_row("2026-11-12", ART, "nav_click", "menu:home", 4)]
+    base = f.build_report(clicks, events, META)
+    with_nav = f.build_report(clicks, events, META, nav=nav)
+    for h in ("### (a)", "### (b)", "### (c)", "### (d)", "### (e)"):
+        assert _rows_of(base, h) == _rows_of(with_nav, h), h
+    assert _rows_of(with_nav, "### (b)")[-1] == "| **計** | 7 | 0 | 0 | 7 |"
 
 
 # ---------------------------------------------------------------- 表の中身
@@ -164,6 +198,83 @@ def test_report_tables():
     assert dg[1:] == ["| diagnosis_start | 10 | — |",
                       "| diagnosis_complete | 4 | 40.0% |",
                       "| affiliate_click (slot=diagnosis) | 1 | 25.0% |"]
+
+
+def test_nav_tables():
+    nav = [
+        nav_row("2026-11-26", "/", "nav_click", "hero:diagnosis", 5),
+        nav_row("2026-11-26", ART, "nav_click", "hero:diagnosis", 2),
+        nav_row("2026-11-27", "/ranking/", "nav_click", "menu:ranking", 9),
+        nav_row("2026-11-27", ART, "nav_click", "menu:ranking", 12),
+        nav_row("2026-11-27", "/cospa/", "nav_click", "menu:ranking", 3),
+        nav_row("2026-11-27", "/deals/", "nav_click", "menu:ranking", 1),
+        nav_row("2026-11-27", "/", "home_section_view", "sec:latest", 40),
+        nav_row("2026-11-27", "/", "home_section_view", "sec:spotlight", 90),
+        nav_row("2026-11-27", ART, "home_section_view", "sec:latest", 7),  # トップ以外は数えない
+        nav_row("2026-09-01", "/", "home_section_view", "sec:latest", 100),  # 期間外
+    ]
+    events = [event("2026-11-26", "/", "page_view", 100), event("2026-11-27", "/", "page_view", 100),
+              event("2026-11-27", ART, "page_view", 500)]
+    md = f.build_report([], events, META_NAV, nav=nav)
+
+    fr = _rows_of(md, "### (f)")
+    assert fr[0] == "| slot | 件数 | 押されたページの種類 |"
+    # 件数の多い順。内訳は上位 3 種類 (同数は PAGE_TYPES の順)
+    assert fr[1] == "| `menu:ranking` | 25 | 記事 12・ランキング 9・予算別 3 |"
+    assert fr[2] == "| `hero:diagnosis` | 7 | トップ 5・記事 2 |"
+
+    gr = _rows_of(md, "### (g)")
+    assert gr[0] == "| 区画 | 到達 | 到達率 | 備考 |"
+    assert [r.split(" | ")[0] for r in gr[1:]] == [
+        f"| `sec:{s}`" for s in f.HOME_SECTIONS]
+    assert gr[1] == "| `sec:last-diagnosis` | 0 | 0.0% | 条件付き（再訪者のみ表示） |"
+    assert gr[2] == "| `sec:new-arrivals` | 0 | 0.0% |  |"
+    assert gr[3] == "| `sec:spotlight` | 90 | 90.0% |  |"
+    assert gr[5] == "| `sec:latest` | 40 | 40.0% |  |"
+    assert gr[9] == "| `sec:recently-viewed` | 0 | 0.0% | 条件付き（再訪者のみ表示） |"
+    assert gr[10] == "| `sec:reco` | 0 | 0.0% | 条件付き（再訪者のみ表示） |"
+    # 分母はトップの home_section_view が最初に出た日 (11-27) から。11-26 の nav_click では決めない
+    assert "トップ (`/`) の page_view 100（2026-11-27 以降）" in md
+
+
+def test_home_section_denominator_starts_with_first_nav_day():
+    """計測前の日の page_view を分母に混ぜない (導入直後に到達率が低く出ないように)。"""
+    nav = [nav_row("2026-11-27", "/", "home_section_view", "sec:spotlight", 50)]
+    events = [event("2026-11-20", "/", "page_view", 300),  # 計測前
+              event("2026-11-26", "/", "page_view", 300),  # 計測前 (配信が遅れた日)
+              event("2026-11-27", "/", "page_view", 100)]
+    md = f.build_report([], events, META_NAV, nav=nav)
+    gr = _rows_of(md, "### (g)")
+    assert gr[3] == "| `sec:spotlight` | 50 | 50.0% |  |"
+    assert "トップ (`/`) の page_view 100（2026-11-27 以降）" in md
+
+
+def test_home_section_denominator_ignores_other_nav_dates():
+    """分母の開始日は トップの home_section_view で決める。別ページの nav_click や
+    "(other)" の日付に引っ張られない。"""
+    nav = [nav_row("2026-11-25", "/posts/a/", "nav_click", "header:ranking", 5),  # 別ページ
+           nav_row("(other)", "/", "home_section_view", "sec:spotlight", 1),
+           nav_row("2026-11-27", "/", "home_section_view", "sec:spotlight", 50)]
+    events = [event("2026-11-25", "/", "page_view", 300),
+              event("2026-11-27", "/", "page_view", 100)]
+    md = f.table_home_sections(nav, events)
+    assert "トップ (`/`) の page_view 100（2026-11-27 以降）" in md[-1]
+
+
+def test_nav_tables_top_30_limit():
+    nav = [nav_row("2026-11-26", "/", "nav_click", f"s:{i:02d}", i + 1) for i in range(40)]
+    md = f.build_report([], [], META_NAV, nav=nav)
+    assert len(_rows_of(md, "### (f)")) == 1 + 30
+
+
+def test_no_nav_rows_says_no_data_yet():
+    md = f.build_report([click("2026-11-10", ART, "buy-top")], [], META)
+    assert "まだデータがありません（計測を入れた日: 2026-11-25 以降）" in md
+    assert "### (f)(g)" in md
+    assert "### (f) " not in md and "### (g) " not in md
+    # 期間外の nav だけでも同じ
+    md2 = f.build_report([], [], META, nav=[nav_row("2026-09-01", "/", "nav_click", "x")])
+    assert "まだデータがありません" in md2
 
 
 def test_unknown_network_gets_its_own_column():
@@ -242,3 +353,16 @@ def test_main_writes_markdown(tmp_path):
     raw = out.read_bytes()
     assert b"\r\n" not in raw
     assert "### (a)" in raw.decode("utf-8")
+
+
+def test_main_passes_nav_rows(tmp_path):
+    rows = tmp_path / "rows.jsonl"
+    rows.write_text("\n".join(json.dumps(r) for r in [
+        click("2026-11-10", ART, "buy-top"),
+        nav_row("2026-11-12", "/", "nav_click", "hero:posts", 2)]) + "\n", encoding="utf-8")
+    meta = tmp_path / "meta.json"
+    meta.write_text(json.dumps(META), encoding="utf-8")
+    out = tmp_path / "report.md"
+    assert f.main(["--rows", str(rows), "--meta", str(meta), "--out", str(out),
+                   "--repo-root", str(tmp_path)]) == 0
+    assert "`hero:posts`" in out.read_text(encoding="utf-8")

@@ -14,14 +14,14 @@
   (dict "v" "5y" "emoji" "🎒" "label" "5歳" "sub" "年長・就学前")
   (dict "v" "6-7y" "emoji" "📚" "label" "6〜7歳" "sub" "小学校低学年")
   (dict "v" "8y" "emoji" "🔭" "label" "8歳以上" "sub" "小学校中学年〜") -}}
-<section class="age-timeline" aria-label="年齢から探す">
+<section class="age-timeline"{{ with .section }} data-nav-section="{{ . }}"{{ end }} aria-label="年齢から探す">
   <header class="age-timeline-header">
     <h2 class="age-timeline-title">📅 年齢から探す</h2>
     <span class="age-timeline-note">成長段階に合った知育おもちゃのベスト10へ</span>
   </header>
   <div class="age-timeline-track" role="list">
     {{- range $i, $b := $bands }}
-    <a class="age-timeline-card" role="listitem" href="{{ "diagnosis/" | relURL }}?age={{ $b.v }}" aria-label="{{ $b.label }}のベスト10を見る">
+    <a class="age-timeline-card" role="listitem" data-nav-slot="age-tl:{{ $b.v }}" href="{{ "diagnosis/" | relURL }}?age={{ $b.v }}" aria-label="{{ $b.label }}のベスト10を見る">
       <span class="age-timeline-step" aria-hidden="true">{{ add $i 1 }}</span>
       <span class="age-timeline-emoji" aria-hidden="true">{{ $b.emoji }}</span>
       <span class="age-timeline-label">{{ $b.label }}</span>
@@ -43,7 +43,7 @@
     <h3 class="explore-links-label">年齢別のランキングを一覧で見る</h3>
     <div class="tag-chips">
       {{- range . }}
-      <a class="tag-chip" href="{{ .url | relURL }}">{{ .label }}の知育玩具</a>
+      <a class="tag-chip" data-nav-slot="age-tl-hub:{{ .key }}" href="{{ .url | relURL }}">{{ .label }}の知育玩具</a>
       {{- end }}
     </div>
   </div>

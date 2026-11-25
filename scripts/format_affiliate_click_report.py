@@ -12,6 +12,8 @@ Actions のログ・job summary には出さない (workflow 23 の冒頭を参�
   (c) ページ種類 × slot
   (d) 週ごとの推移 (直近 --trend-weeks 週。主要な slot 群と記事ページのクリック率)
   (e) 診断の流れ (diagnosis_start → diagnosis_complete → slot=diagnosis のクリック)
+  (f) サイト内の移動 (nav_click の slot ごと。navi-brain#213)
+  (g) トップの区画の到達 (home_section_view ÷ トップの page_view)
 
 (a)〜(c)・(e) は期間の終わりから --summary-days 日、(d) は取得した期間ぜんぶを
 7 日ずつ区切る (期間の終わりにそろえる。7 日に満たない端の週は出さない)。
@@ -31,6 +33,16 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 CLICK_EVENT = "affiliate_click"
 # 記事の冒頭・中盤・まとめの後・FAQ の後に購入ボタンの箱を置いた日 (#11672)
 BUY_BOX_LAUNCH = date(2026, 11, 13)
+
+# navi-brain#213: hugo/assets/js/nav_click.js が送るイベント (fetch 側の NAV_EVENTS と同じ)。
+# 行は eventName を持つので、イベントの行と明示的に分ける (購入クリックに混ぜない)。
+NAV_EVENTS = ("nav_click", "home_section_view")
+# トップの区画 (index.html の data-nav-section) の上からの並び。条件付きは再訪者のみ表示
+HOME_SECTIONS = ("last-diagnosis", "new-arrivals", "spotlight", "age-timeline", "latest",
+                 "score", "tags", "brands", "recently-viewed", "reco")
+HOME_SECTIONS_CONDITIONAL = ("last-diagnosis", "recently-viewed", "reco")
+NAV_LAUNCH = "2026-11-25"
+NAV_TOP = 30
 
 NETWORKS = ("amazon", "rakuten", "yahoo")
 
@@ -96,15 +108,24 @@ def slot_group(slot: str) -> str:
 
 # ---------------------------------------------------------------- 読み込み
 
-def load_rows(path: pathlib.Path) -> tuple[list[dict], list[dict]]:
-    """JSONL を読み、(クリックの行, イベントの行) に分ける。"""
-    clicks, events = [], []
+def load_rows(path: pathlib.Path) -> tuple[list[dict], list[dict], list[dict]]:
+    """JSONL を読み、(クリックの行, イベントの行, サイト内の移動の行) に分ける。
+
+    nav の行も eventName を持つので、NAV_EVENTS を先に見る (見ないと events に入る)。
+    クリックの行は eventName を持たない。
+    """
+    clicks, events, nav = [], [], []
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         r = json.loads(line)
-        (events if "eventName" in r else clicks).append(r)
-    return clicks, events
+        if r.get("eventName") in NAV_EVENTS:
+            nav.append(r)
+        elif "eventName" in r:
+            events.append(r)
+        else:
+            clicks.append(r)
+    return clicks, events, nav
 
 
 def _in(d: str, start: date, end: date) -> bool:
@@ -113,6 +134,14 @@ def _in(d: str, start: date, end: date) -> bool:
     except (TypeError, ValueError):
         return False
     return start <= x <= end
+
+
+def _is_iso_date(d) -> bool:
+    try:
+        date.fromisoformat(str(d))
+    except (TypeError, ValueError):
+        return False
+    return True
 
 
 def _sum(rows: Iterable[dict]) -> int:
@@ -310,17 +339,63 @@ def table_diagnosis(clicks, events) -> list[str]:
     return _table(["段", "件数", "前の段からの割合"], rows, align="lrr")
 
 
+def _type_breakdown(counts: dict[str, int], top: int = 3) -> str:
+    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], PAGE_TYPES.index(kv[0])))[:top]
+    return "・".join(f"{t} {n}" for t, n in ranked)
+
+
+def table_nav_click(nav, top: int = NAV_TOP) -> list[str]:
+    by_slot: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for r in nav:
+        if r.get("eventName") != "nav_click":
+            continue
+        by_slot[r.get("slot", "")][page_type(r.get("pagePath", ""))] += int(r.get("eventCount", 0))
+    if not by_slot:
+        return ["(nav_click なし)"]
+    ranked = sorted(by_slot.items(), key=lambda kv: (-sum(kv[1].values()), kv[0]))[:top]
+    rows = [[f"`{slot}`", sum(c.values()), _type_breakdown(c)] for slot, c in ranked]
+    return _table(["slot", "件数", "押されたページの種類"], rows, align="lrl")
+
+
+def table_home_sections(nav, events) -> list[str]:
+    views: dict[str, int] = defaultdict(int)
+    for r in nav:
+        if r.get("eventName") == "home_section_view" and r.get("pagePath") == "/":
+            views[r.get("slot", "")] += int(r.get("eventCount", 0))
+    # 分母は計測が始まった日以降の page_view だけにする。計測前の日の page_view を
+    # 混ぜると、導入後の数週間は到達率が実際より低く出る。開始日は NAV_LAUNCH ではなく
+    # トップの区画の到達 (home_section_view) が最初に現れた日（マージ・配信が遅れた分も除くため）。
+    # 別のページの nav_click の日付や、ISO 日付でない値 ("(other)" 等) では決めない。
+    nav_dates = [str(r.get("date")) for r in nav
+                 if r.get("eventName") == "home_section_view" and r.get("pagePath") == "/"
+                 and _is_iso_date(r.get("date"))]
+    first = min(nav_dates) if nav_dates else None
+    pv = _sum(r for r in events if r.get("eventName") == "page_view" and r.get("pagePath") == "/"
+              and (first is None or str(r.get("date")) >= first))
+    known = [f"sec:{s}" for s in HOME_SECTIONS]
+    extra = sorted(k for k in views if k not in known)
+    rows = []
+    for slot in known + extra:
+        name = slot[4:] if slot.startswith("sec:") else slot
+        note = "条件付き（再訪者のみ表示）" if name in HOME_SECTIONS_CONDITIONAL else ""
+        rows.append([f"`{slot}`", views.get(slot, 0), _rate(views.get(slot, 0), pv), note])
+    out = _table(["区画", "到達", "到達率", "備考"], rows, align="lrrl")
+    since = f"（{first} 以降）" if first else ""
+    return out + ["", f"到達率の分母 = トップ (`/`) の page_view {pv}{since}"]
+
+
 # ---------------------------------------------------------------- 全体
 
 def build_report(clicks: list[dict], events: list[dict], meta: dict, *,
                  summary_days: int = 28, trend_weeks: int = 8, top: int = 20,
-                 name_of=None) -> str:
+                 name_of=None, nav: list[dict] | None = None) -> str:
     rng = meta.get("range") or {}
     fetched_start = date.fromisoformat(rng["start"])
     end = date.fromisoformat(rng["end"])
     s_start = max(fetched_start, end - timedelta(days=summary_days - 1))
     s_clicks = [r for r in clicks if _in(r.get("date"), s_start, end)]
     s_events = [r for r in events if _in(r.get("date"), s_start, end)]
+    s_nav = [r for r in (nav or []) if _in(r.get("date"), s_start, end)]
 
     out = [
         "## 購入リンクのクリック (navi.omcha.jp)",
@@ -349,6 +424,17 @@ def build_report(clicks: list[dict], events: list[dict], meta: dict, *,
     out += table_weekly(clicks, events, fetched_start, end, trend_weeks)
     out += ["", "### (e) 診断の流れ (診断ページの分)", ""]
     out += table_diagnosis(s_clicks, s_events)
+    if s_nav:
+        out += ["", "### (f) サイト内の移動 (nav_click)", "",
+                f"slot ごとの件数の上位 {NAV_TOP}。ヘッダー = `menu:*`・年齢ピル/カテゴリ = "
+                "`catnav:*`・トップの商品カードは `home:<区画>`", ""]
+        out += table_nav_click(s_nav)
+        out += ["", "### (g) トップの区画の到達 (home_section_view)", "",
+                "区画の見出しが初めて画面に入った数 ÷ 同期間のトップの page_view", ""]
+        out += table_home_sections(s_nav, s_events)
+    else:
+        out += ["", "### (f)(g) サイト内の移動・トップの区画の到達", "",
+                f"まだデータがありません（計測を入れた日: {NAV_LAUNCH} 以降）"]
     out += ["", f"<sub>fetched_at: {meta.get('fetched_at', '')}</sub>", ""]
     return "\n".join(out)
 
@@ -366,11 +452,11 @@ def main(argv: list[str] | None = None) -> int:
                    help="記事・固定ページの名前を引くリポジトリの場所")
     args = p.parse_args(argv)
 
-    clicks, events = load_rows(pathlib.Path(args.rows))
+    clicks, events, nav = load_rows(pathlib.Path(args.rows))
     meta = json.loads(pathlib.Path(args.meta).read_text(encoding="utf-8"))
     md = build_report(clicks, events, meta, summary_days=args.summary_days,
                       trend_weeks=args.trend_weeks, top=args.top,
-                      name_of=build_name_lookup(pathlib.Path(args.repo_root)))
+                      name_of=build_name_lookup(pathlib.Path(args.repo_root)), nav=nav)
     out = pathlib.Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", encoding="utf-8", newline="\n") as f:

@@ -96,12 +96,12 @@
 <nav class="cat-nav" aria-label="年齢・おもちゃの種類から探す">
     <p class="cat-nav-title"><span aria-hidden="true">🎂</span> 年齢から探す</p>
     <ul class="cat-nav-list">
-        <li class="cat-group cat-age-link"><a class="cat-summary" href="/toys-age-0/">0歳</a></li>
-        <li class="cat-group cat-age-link"><a class="cat-summary" href="/toys-age-1/">1歳</a></li>
-        <li class="cat-group cat-age-link"><a class="cat-summary" href="/toys-age-2/">2歳</a></li>
-        <li class="cat-group cat-age-link"><a class="cat-summary" href="/toys-age-3/">3歳</a></li>
-        <li class="cat-group cat-age-link"><a class="cat-summary" href="/toys-age-4/">4〜5歳</a></li>
-        <li class="cat-group cat-age-link"><a class="cat-summary" href="/toys-age-6/">6歳〜</a></li>
+        <li class="cat-group cat-age-link"><a class="cat-summary" data-nav-slot="catnav:age-0" href="/toys-age-0/">0歳</a></li>
+        <li class="cat-group cat-age-link"><a class="cat-summary" data-nav-slot="catnav:age-1" href="/toys-age-1/">1歳</a></li>
+        <li class="cat-group cat-age-link"><a class="cat-summary" data-nav-slot="catnav:age-2" href="/toys-age-2/">2歳</a></li>
+        <li class="cat-group cat-age-link"><a class="cat-summary" data-nav-slot="catnav:age-3" href="/toys-age-3/">3歳</a></li>
+        <li class="cat-group cat-age-link"><a class="cat-summary" data-nav-slot="catnav:age-4" href="/toys-age-4/">4〜5歳</a></li>
+        <li class="cat-group cat-age-link"><a class="cat-summary" data-nav-slot="catnav:age-6" href="/toys-age-6/">6歳〜</a></li>
     </ul>
     <p class="cat-nav-title"><span aria-hidden="true">🧸</span> おもちゃの種類から探す</p>
     <ul class="cat-nav-list">
@@ -110,7 +110,7 @@
             {{- /* 子が 1 個だけのグループ (例: 木のおもちゃ) は、開いても同じ行き先の
                    リンクが 1 個出るだけなので、パネルを作らず直接リンクにする。 */ -}}
             {{- if eq (len .children) 1 }}
-            <a class="cat-summary" href="{{ (index .children 0).url }}">
+            <a class="cat-summary" data-nav-slot="catnav:link-{{ .slug }}" href="{{ (index .children 0).url }}">
                 <span class="cat-summary-emoji" aria-hidden="true">{{ .emoji }}</span>
                 <span class="cat-summary-name">{{ .name }}</span>
             </a>
@@ -118,7 +118,7 @@
             {{- /* JS が無効・読み込み失敗でも子リンクへ届くよう、button ではなくパネルへの
                    ページ内リンクにする (CSS の :target でパネルが開く)。JS が動けば
                    cat_nav.js が遷移を止めて、これまで通りその場で開閉する。 */}}
-            <a class="cat-summary" href="#cat-panel-{{ .slug }}" role="button" aria-expanded="false"
+            <a class="cat-summary" data-nav-slot="catnav:group-{{ .slug }}" href="#cat-panel-{{ .slug }}" role="button" aria-expanded="false"
                 aria-controls="cat-panel-{{ .slug }}">
                 <span class="cat-summary-emoji" aria-hidden="true">{{ .emoji }}</span>
                 <span class="cat-summary-name">{{ .name }}</span>
@@ -129,11 +129,12 @@
     </ul>
     {{- range $groups }}
     {{- if gt (len .children) 1 }}
+    {{- $groupSlug := .slug }}
     <div class="cat-panel" id="cat-panel-{{ .slug }}" role="region" aria-label="{{ .name }}のタグ一覧" hidden>
         <ul class="cat-sublist">
             {{- range .children }}
             <li>
-                <a class="cat-link" href="{{ .url }}">
+                <a class="cat-link" data-nav-slot="catnav:link-{{ $groupSlug }}" href="{{ .url }}">
                     <span class="cat-link-name">{{ .name }}</span>
                 </a>
             </li>

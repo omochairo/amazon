@@ -149,6 +149,34 @@ def test_event_request_filters_by_event_names():
             "diagnosis_start", "diagnosis_complete", "article_feedback"} <= names
 
 
+def test_nav_request_dims_filter_and_order():
+    req = m.build_request("123", date(2026, 11, 1), date(2026, 11, 28), m.NAV_DIMS,
+                          m.nav_filter())
+    # 登録済みのカスタムディメンションは slot だけ (未登録を指定すると全体が 400)
+    assert [d.name for d in req.dimensions] == [
+        "date", "pagePath", "eventName", "customEvent:slot"]
+    assert [x.name for x in req.metrics] == ["eventCount"]
+    assert _filter_fields(req.dimension_filter) == [
+        ("hostName", "navi.omcha.jp", "EXACT"),
+        ("eventName", ("nav_click", "home_section_view"))]
+    assert [o.dimension.dimension_name for o in req.order_bys] == m.NAV_DIMS
+
+
+def test_nav_rows_have_slot_and_event_name():
+    res = _resp([(["20261126", "/", "nav_click", "hero:diagnosis"], 3)])
+    assert m.rows_from_response(res, m.NAV_DIMS, m.NAV_KEYS) == [
+        {"date": "2026-11-26", "pagePath": "/", "eventName": "nav_click",
+         "slot": "hero:diagnosis", "eventCount": 3}]
+
+
+def test_nav_event_names_exist_in_site_js():
+    import pathlib
+    js = (pathlib.Path(__file__).resolve().parents[2] / "hugo/assets/js/nav_click.js"
+          ).read_text(encoding="utf-8")
+    for name in m.NAV_EVENTS:
+        assert f"'{name}'" in js, name
+
+
 def test_event_names_exist_in_site_js():
     """EVENT_NAMES は実際に hugo/assets/js/ が送っている名前 (page_view は GA4 の自動送信)。"""
     import pathlib
@@ -195,13 +223,44 @@ def test_fetch_combines_both_queries():
     clicks = _resp([(["20261105", "/products/b0bsh34yr8/", "buy-top", "amazon", "B0BSH34YR8"], 2)])
     events = _resp([(["20261105", "/products/b0bsh34yr8/", "page_view"], 9)],
                    subject_to_thresholding=True)
-    client = FakeClient([clicks, events])
+    client = FakeClient([clicks, events, _resp([])])
     out = m.fetch(client, "1", date(2026, 11, 1), date(2026, 11, 7))
     assert out["meta"]["range"] == {"start": "2026-11-01", "end": "2026-11-07"}
     assert out["meta"]["host"] == "navi.omcha.jp"
     assert out["clicks"][0]["slot"] == "buy-top"
     assert out["events"][0]["eventName"] == "page_view"
     assert len(out["meta"]["warnings"]) == 1 and out["meta"]["warnings"][0].startswith("イベントの取得")
+
+
+def test_fetch_includes_nav_rows():
+    clicks = _resp([(["20261105", "/", "hero:x", "amazon", "B0BSH34YR8"], 1)])
+    events = _resp([(["20261105", "/", "page_view"], 9)])
+    nav = _resp([(["20261126", "/", "home_section_view", "sec:latest"], 4)])
+    client = FakeClient([clicks, events, nav])
+    out = m.fetch(client, "1", date(2026, 11, 1), date(2026, 11, 7))
+    assert out["nav"] == [{"date": "2026-11-26", "pagePath": "/", "eventName": "home_section_view",
+                           "slot": "sec:latest", "eventCount": 4}]
+    assert len(client.requests) == 3
+    assert [d.name for d in client.requests[2].dimensions][-1] == "customEvent:slot"
+
+
+def test_fetch_keeps_main_rows_when_nav_query_fails():
+    class _Boom(FakeClient):
+        def run_report(self, req):
+            if len(self.requests) == 2:
+                self.requests.append(req)
+                raise RuntimeError("400 bad dimension")
+            return super().run_report(req)
+
+    clicks = _resp([(["20261105", "/p/", "buy-top", "amazon", "B0BSH34YR8"], 2)])
+    events = _resp([(["20261105", "/p/", "page_view"], 9)])
+    out = m.fetch(_Boom([clicks, events]), "1", date(2026, 11, 1), date(2026, 11, 7))
+    assert len(out["clicks"]) == 1 and len(out["events"]) == 1
+    assert out["nav"] == []
+    assert any(w.startswith("サイト内の移動の取得") and "RuntimeError" in w
+               for w in out["meta"]["warnings"])
+    # 例外の本文 (API のエラー文) は warning に入れない
+    assert not any("bad dimension" in w for w in out["meta"]["warnings"])
 
 
 # ---------------------------------------------------------------- main
@@ -212,7 +271,9 @@ def test_main_writes_jsonl_and_meta(tmp_path, monkeypatch, capsys):
            "clicks": [{"date": "2026-11-05", "pagePath": "/", "slot": "sticky",
                        "network": "amazon", "asin": "", "eventCount": 1}],
            "events": [{"date": "2026-11-05", "pagePath": "/", "eventName": "page_view",
-                       "eventCount": 4}]}
+                       "eventCount": 4}],
+           "nav": [{"date": "2026-11-26", "pagePath": "/", "eventName": "nav_click",
+                    "slot": "menu:home", "eventCount": 2}]}
     monkeypatch.setattr(m, "fetch", lambda *a, **k: out)
     monkeypatch.setattr(m, "_load_credentials", lambda s: None)
 
@@ -230,7 +291,8 @@ def test_main_writes_jsonl_and_meta(tmp_path, monkeypatch, capsys):
     raw = rows_path.read_bytes()
     assert b"\r\n" not in raw
     lines = [json.loads(x) for x in raw.decode("utf-8").splitlines()]
-    assert len(lines) == 2 and lines[1]["eventName"] == "page_view"
+    assert len(lines) == 3 and lines[1]["eventName"] == "page_view"
+    assert lines[2]["eventName"] == "nav_click" and lines[2]["slot"] == "menu:home"
     assert json.loads(meta_path.read_text(encoding="utf-8"))["warnings"] == ["W"]
     assert "::warning::W" in capsys.readouterr().out
 
