@@ -38,9 +38,11 @@ BUY_BOX_LAUNCH = date(2026, 11, 13)
 # 行は eventName を持つので、イベントの行と明示的に分ける (購入クリックに混ぜない)。
 NAV_EVENTS = ("nav_click", "home_section_view")
 # トップの区画 (index.html の data-nav-section) の上からの並び。条件付きは再訪者のみ表示
-HOME_SECTIONS = ("last-diagnosis", "new-arrivals", "spotlight", "age-timeline", "latest",
-                 "score", "tags", "brands", "recently-viewed", "reco")
+HOME_SECTIONS = ("last-diagnosis", "spotlight", "xmas", "characters", "new-arrivals",
+                 "age-timeline", "latest", "score", "tags", "brands", "recently-viewed", "reco")
 HOME_SECTIONS_CONDITIONAL = ("last-diagnosis", "recently-viewed", "reco")
+# 時期だけ表示する区画 (クリスマスは 10/1〜12/25。index.html の $xmasSeason)
+HOME_SECTIONS_SEASONAL = ("xmas",)
 NAV_LAUNCH = "2026-11-25"
 NAV_TOP = 30
 
@@ -377,7 +379,12 @@ def table_home_sections(nav, events) -> list[str]:
     rows = []
     for slot in known + extra:
         name = slot[4:] if slot.startswith("sec:") else slot
-        note = "条件付き（再訪者のみ表示）" if name in HOME_SECTIONS_CONDITIONAL else ""
+        if name in HOME_SECTIONS_CONDITIONAL:
+            note = "条件付き（再訪者のみ表示）"
+        elif name in HOME_SECTIONS_SEASONAL:
+            note = "時期のみ表示（10/1〜12/25）"
+        else:
+            note = ""
         rows.append([f"`{slot}`", views.get(slot, 0), _rate(views.get(slot, 0), pv), note])
     out = _table(["区画", "到達", "到達率", "備考"], rows, align="lrrl")
     since = f"（{first} 以降）" if first else ""

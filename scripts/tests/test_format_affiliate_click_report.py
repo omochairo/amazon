@@ -228,11 +228,13 @@ def test_nav_tables():
     assert [r.split(" | ")[0] for r in gr[1:]] == [
         f"| `sec:{s}`" for s in f.HOME_SECTIONS]
     assert gr[1] == "| `sec:last-diagnosis` | 0 | 0.0% | 条件付き（再訪者のみ表示） |"
-    assert gr[2] == "| `sec:new-arrivals` | 0 | 0.0% |  |"
-    assert gr[3] == "| `sec:spotlight` | 90 | 90.0% |  |"
-    assert gr[5] == "| `sec:latest` | 40 | 40.0% |  |"
-    assert gr[9] == "| `sec:recently-viewed` | 0 | 0.0% | 条件付き（再訪者のみ表示） |"
-    assert gr[10] == "| `sec:reco` | 0 | 0.0% | 条件付き（再訪者のみ表示） |"
+    assert gr[2] == "| `sec:spotlight` | 90 | 90.0% |  |"
+    assert gr[3] == "| `sec:xmas` | 0 | 0.0% | 時期のみ表示（10/1〜12/25） |"
+    assert gr[4] == "| `sec:characters` | 0 | 0.0% |  |"
+    assert gr[5] == "| `sec:new-arrivals` | 0 | 0.0% |  |"
+    assert gr[7] == "| `sec:latest` | 40 | 40.0% |  |"
+    assert gr[11] == "| `sec:recently-viewed` | 0 | 0.0% | 条件付き（再訪者のみ表示） |"
+    assert gr[12] == "| `sec:reco` | 0 | 0.0% | 条件付き（再訪者のみ表示） |"
     # 分母はトップの home_section_view が最初に出た日 (11-27) から。11-26 の nav_click では決めない
     assert "トップ (`/`) の page_view 100（2026-11-27 以降）" in md
 
@@ -245,7 +247,7 @@ def test_home_section_denominator_starts_with_first_nav_day():
               event("2026-11-27", "/", "page_view", 100)]
     md = f.build_report([], events, META_NAV, nav=nav)
     gr = _rows_of(md, "### (g)")
-    assert gr[3] == "| `sec:spotlight` | 50 | 50.0% |  |"
+    assert gr[2] == "| `sec:spotlight` | 50 | 50.0% |  |"
     assert "トップ (`/`) の page_view 100（2026-11-27 以降）" in md
 
 
