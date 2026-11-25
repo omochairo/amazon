@@ -460,3 +460,21 @@ def test_beyblade_starter_full_name_beats_launcher_and_set_beats_stadium():
 def test_transformers_excludes_pc_security_lock():
     ex = [iph._fold(t) for t in iph.IP_HUBS["ip-transformers"]["exclude"]]
     assert any(t in iph._fold("トランスフォーマー IP セキュリティロック") for t in ex)
+
+
+def test_sanrio_pretend_play_before_talking_toys_and_non_toys_excluded():
+    san = iph.IP_HUBS["ip-sanrio"]
+    assert iph.series_of("サンリオキャラクターズ おしゃべりお医者さんセット", san, groups=True).startswith("ごっこ遊び")
+    assert iph.series_of("いつでもなかよし♪おしゃべりハローキティ", san, groups=True) == "音の出るおもちゃ"
+    ex = [iph._fold(t) for t in san["exclude"]]
+    for name in ("サンリオ メッセージカード お祝い 水引付き鯛", "レイス サンリオカオハナ リップクリーム クロミ"):
+        assert any(t in iph._fold(name) for t in ex)
+
+
+def test_sylvanian_strip_family_and_furniture_before_house():
+    syl = iph.IP_HUBS["ip-sylvanian"]
+    # 「シルバニアファミリー」の中の「ファミリー」では人形に当たらない
+    assert iph.series_of("シルバニアファミリー 赤い屋根の大きなお家", syl) == "お家・お城"
+    assert iph.series_of("シルバニアファミリー アザラシファミリー", syl) == "人形（ファミリー・赤ちゃん）"
+    assert iph.series_of("赤い屋根の大きなお家 デラックス家具セット", syl) == "家具・小物"
+    assert iph.series_of("フクロウの星のみえるお家", syl) == "Little Tales Collection"
