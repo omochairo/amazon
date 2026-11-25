@@ -51,7 +51,7 @@ class El {
   getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }
   addEventListener(t, fn) { (this._listeners[t] ||= []).push(fn); }
   click() { if (this.disabled) return; (this._listeners.click || []).forEach((f) => f({})); }
-  focus() {}
+  focus() { El.lastFocused = this; }
 }
 
 // テンプレートに実在する id だけで簡易 DOM を組む (テンプレートと JS の id のずれも検出する)。
@@ -64,7 +64,7 @@ const bodyOf = (pick) => pick.children.find((c) => c.className === "dx-pick-body
 const cardOf = (pick) => bodyOf(pick).children.find((c) => c.className === "product-card");
 const buyOf = (pick) => bodyOf(pick).children.find((c) => /(^| )dx-buy( |$)/.test(c.className));
 
-function boot({ fetchImpl, search = "", saved = null, compare, favorites, gtag, amazonTag = "test-tag", sessionData = {}, sessionThrows = false } = {}) {
+function boot({ fetchImpl, search = "", saved = null, compare, favorites, gtag, amazonTag = "test-tag", sessionData = {}, sessionThrows = false, noCard = false } = {}) {
   const byId = {};
   for (const id of IDS) byId[id] = new El("div", id);
   if (amazonTag) byId["dx-root"].setAttribute("data-amazon-tag", amazonTag);
@@ -103,7 +103,7 @@ function boot({ fetchImpl, search = "", saved = null, compare, favorites, gtag, 
     OmochaCompare: compare,
     OmochaFavorites: favorites,
     gtag,
-    OmochaUtils: { renderProductCard: (item) => { const e = new El("a"); e.className = "product-card"; e.textContent = item.product_name || item.title || ""; e.item = item; return e; } },
+    OmochaUtils: noCard ? undefined : { renderProductCard: (item) => { const e = new El("a"); e.className = "product-card"; e.textContent = item.product_name || item.title || ""; e.item = item; return e; } },
   };
   const sandbox = {
     window, document, location, history,
@@ -227,12 +227,14 @@ test("Amazonボタン: 読み上げ用の名前・年齢ベストの計測枠・
 });
 
 test("年齢ベスト10: 理由の無い 1 位は 1 列にし、冒頭に「絞り込む」を出す", async () => {
-  const age = boot({ search: "?age=0-1" });
+  const events = [];
+  const age = boot({ search: "?age=0-1", gtag: (t, n, p) => events.push({ n, p }) });
   await tick(20);
   const top = age.$("dx-top").children[0];
   assert.ok(top.classList.contains("dx-pick--solo"), "右の列が空かないように 1 列で並べる");
   assert.equal(age.$("dx-refine").hidden, false);
   age.$("dx-refine").click();
+  assert.ok(events.some((e) => e.n === "diagnosis_refine" && e.p.from === "age_best_top"));
   assert.equal(age.$("dx-quiz").hidden, false);
   assert.equal(age.history.urls.at(-1), "/diagnosis/");
 
@@ -394,6 +396,7 @@ test("年齢別ベスト10: 10 件ずつ「ほかのおもちゃも見る」で�
   assert.equal(ui.$("dx-more").hidden, false);
   ui.$("dx-more").click();
   assert.equal(ranks().length, 12);
+  assert.equal(El.lastFocused, cardOf(ui.$("dx-grid").children[9]), "足した 1 件目のカードへフォーカスを移す");
   assert.equal(ui.$("dx-more").hidden, true);
   assert.deepEqual(JSON.parse(JSON.stringify(events.at(-1))), { n: "diagnosis_more", p: { view: "age_best", shown: 12 } });
 
@@ -691,4 +694,10 @@ test("F17: 出産祝いは「選ぶポイント」を出し、相性とタイプ
   assert.equal(ui.$("dx-persona-strengths").hidden, false);
   assert.equal(ui.$("dx-persona-pair").hidden, true);
   assert.equal(ui.$("dx-types").hidden, true);
+});
+
+test("カードを描けないときは、どの商品か分からないボタンだけを出さない", async () => {
+  const ui = boot({ search: "?age=0-1", noCard: true });
+  await tick(20);
+  assert.equal(bodyOf(ui.$("dx-top").children[0]).children.length, 0);
 });

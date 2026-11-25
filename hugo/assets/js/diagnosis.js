@@ -419,7 +419,9 @@
         // 「もっと見る」のあとにフォーカスを移す先
         wrap.dxFocus = card;
       }
-      var buy = buildBuy(pick.item, rank);
+      // カードを描けなかったとき (utils/product-card.js の読み込み失敗など) は、
+      // どの商品のボタンか分からなくなるのでボタンも出さない
+      var buy = wrap.dxFocus ? buildBuy(pick.item, rank) : null;
       if (buy) body.appendChild(buy);
       wrap.appendChild(body);
       // 商品ならではの一言 (card_reason) はカード本体 (utils/product-card.js) が出すので、
