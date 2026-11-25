@@ -388,3 +388,43 @@ def test_pokenade_pouch_alone_is_accessory():
     pok = iph.IP_HUBS["ip-pokemon"]
     assert iph.is_accessory("ポケなで ピカチュウふれんずポーチ", pok)
     assert not iph.is_accessory("ポケなで モンスターボール ピカチュウふれんずセット", pok)
+
+
+def test_plarail_strip_keeps_rail_parts_apart_from_trains():
+    pla = iph.IP_HUBS["ip-plarail"]
+    assert iph.series_of("プラレール R-17 橋直線レール", pla) == "レール・駅・情景部品"
+    assert iph.series_of("プラレール DXレールキット", pla) == "レールキット・セット"
+    assert iph.series_of("プラレール J-14 ブロック橋脚", pla) == "レール・駅・情景部品"
+    assert iph.series_of("トミカ・プラレールブロック ヘリコプター", pla) == "トミカ・プラレールブロック"
+    # 「プラレール」の中の「レール」では当たらない
+    assert iph.series_of("プラレール 103系総武線", pla) is None
+    assert iph.series_of("プラレール 103系総武線", pla, groups=True) == "車両（電車・新幹線）"
+    # 「モノレール」の中の「レール」でも部品に入らない (agy 指摘・2026-11-25)
+    assert iph.series_of("プラレール 東京モノレール10000形セット", pla, groups=True) == "車両（電車・新幹線）"
+    assert iph.series_of("プラレール いっぱいつなごう 金太郎&貨車セット", pla, groups=True) == "車両（電車・新幹線）"
+
+
+def test_disney_pixar_group_takes_characters_not_mixed_learning_toys():
+    dis = iph.IP_HUBS["ip-disney"]
+    assert iph.series_of("やのまん リグミー ウッディ＆バズ", dis, groups=True) == "パズル・カードゲーム"
+    # 正式名に「ディズニー/ピクサーキャラクターズ」と並ぶ総合の学習玩具はピクサーに入れない
+    assert iph.series_of("ディズニー&ディズニー/ピクサーキャラクターズ ワンダフルドリームタッチパソコン", dis,
+                         groups=True) is None
+
+
+def test_disney_lego_before_characters_and_star_wars_excluded():
+    dis = iph.IP_HUBS["ip-disney"]
+    assert iph.series_of("レゴ エルサのアイスパレス", dis, groups=True) == "レゴ・デュプロ"
+    assert iph.series_of("ディズニーモータース ポティロン ベル", dis, groups=True) is None
+    recs = [rec("B01", "レゴ レイザー・クレスト 75447"), rec("B02", "レゴ ミッキーマウスのくるま")]
+    raws = {"B01": raw("B01", "レゴ スター・ウォーズ レイザー・クレスト", brand="ディズニー"),
+            "B02": raw("B02", "レゴ ディズニー ミッキーマウスのくるま")}
+    assert [r.asin for r in iph.select_ip_records(recs, raws, ("ディズニー",), dis["exclude"])] == ["B02"]
+
+
+def test_article_links_to_every_hub_it_is_on_but_respects_exclude():
+    import build_post
+    assert build_post._ip_hubs_for(raw("B1", "カーズ トミカ でるでるバケツ", brand="ディズニー")) == ["ip-tomica", "ip-disney"]
+    # トミカのページから外した電車の商品は、プラレールのページだけへ
+    assert build_post._ip_hubs_for(raw("B2", "トミカ・プラレールブロック ドクターイエロー")) == ["ip-plarail"]
+    assert build_post._ip_hubs_for(raw("B3", "木のつみき")) == []
