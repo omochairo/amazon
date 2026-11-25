@@ -5735,13 +5735,14 @@ details.development-stage-accordion[open] > summary::before {
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     padding-bottom: 0.2rem;
-    /* 右に続きがあると分かるよう右端をぼかす (navi-brain#213)。右に余白を足して、
-       最後まで送ったときは最後の項目 (♡) がぼかしの外に出るようにする */
-    padding-right: 28px;
+    /* 右に続きがあると分かるよう右端をぼかす (navi-brain#213)。最後まで送ったときは
+       最後の項目 (♡) がぼかしの外に出るよう、末尾に 28px の空きを置く (下の ::after)。
+       padding-right だと Safari では flex の横スクロール量に入らず、♡ がぼかしに残る */
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
     mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
   }
   #menu::-webkit-scrollbar { display: none; }
+  #menu::after { content: ""; flex: 0 0 28px; }
   #menu li a {
     padding: 0.35rem 0.7rem;
     font-size: 13px;
