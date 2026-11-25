@@ -1,6 +1,6 @@
 {{- $items := .items -}}
 {{- with $items }}
-<section class="home-section related-carousel-section new-arrivals" aria-label="新しく売れ筋に入ったおもちゃ">
+<section class="home-section related-carousel-section new-arrivals"{{ with $.section }} data-nav-section="{{ . }}"{{ end }} aria-label="新しく売れ筋に入ったおもちゃ">
   <header class="home-section-header">
     <h2>✨ 新しく売れ筋に入ったおもちゃ</h2>
     <span class="home-section-note">{{ $.note }}</span>

@@ -7,6 +7,11 @@
   1. affiliate_click を date × pagePath × slot × network × asin で eventCount
   2. 下の EVENT_NAMES を date × pagePath × eventName で eventCount
      (page_view を分母に、診断の流れを数えるのに使う)
+  3. NAV_EVENTS (nav_click / home_section_view) を date × pagePath × eventName × slot で
+     eventCount (navi-brain#213。サイト内の移動とトップの区画の到達)。slot は
+     affiliate_click と同じ登録済みのカスタムディメンションで、新イベントの内訳は
+     すべてこの 1 つに載せる (未登録のディメンションを指定するとリクエスト全体が 400)。
+     この取得だけが失敗しても 1・2 の結果は書き出す (warning を出して続ける)
 
 数え方: クリックは `affiliate_click` だけで数える。追従バーは押すと `m_sticky_tap` と
 `affiliate_click` の両方が、セール告知は `sale_notice_click` と両方が飛ぶので、
@@ -71,6 +76,12 @@ EVENT_NAMES = (
 )
 EVENT_DIMS = ["date", "pagePath", "eventName"]
 EVENT_KEYS = {"date": "date", "pagePath": "pagePath", "eventName": "eventName"}
+
+# navi-brain#213: hugo/assets/js/nav_click.js が送るイベント。内訳は slot に載る。
+NAV_EVENTS = ("nav_click", "home_section_view")
+NAV_DIMS = ["date", "pagePath", "eventName", "customEvent:slot"]
+NAV_KEYS = {"date": "date", "pagePath": "pagePath", "eventName": "eventName",
+            "customEvent:slot": "slot"}
 
 
 # ---------------------------------------------------------------- 純粋関数
@@ -185,6 +196,12 @@ def event_filter():
                 _in_list_filter("eventName", EVENT_NAMES))
 
 
+def nav_filter():
+    """hostName == navi かつ eventName が NAV_EVENTS のどれか。"""
+    return _and(_string_filter("hostName", NAVI_HOST),
+                _in_list_filter("eventName", NAV_EVENTS))
+
+
 def build_request(property_id: str, start: date, end: date, dims: list[str],
                   dimension_filter, *, offset: int = 0, limit: int = PAGE_SIZE):
     """RunReportRequest を組み立てる。
@@ -236,8 +253,17 @@ def fetch(client, property_id: str, start: date, end: date, *,
                            click_filter(), page_size=page_size)
     events, w2 = run_paged(client, property_id, start, end, EVENT_DIMS, EVENT_KEYS,
                            event_filter(), page_size=page_size)
+    # 3 本目 (navi-brain#213) が落ちても、本体の 2 本の結果は捨てない
+    nav: list[dict] = []
+    w3: list[str] = []
+    try:
+        nav, w3 = run_paged(client, property_id, start, end, NAV_DIMS, NAV_KEYS,
+                            nav_filter(), page_size=page_size)
+    except Exception as e:  # noqa: BLE001
+        nav, w3 = [], [f"取得に失敗 ({type(e).__name__})。この表だけ欠ける"]
     warnings = list(dict.fromkeys(
-        [f"クリックの取得: {w}" for w in w1] + [f"イベントの取得: {w}" for w in w2]))
+        [f"クリックの取得: {w}" for w in w1] + [f"イベントの取得: {w}" for w in w2]
+        + [f"サイト内の移動の取得: {w}" for w in w3]))
     return {
         "meta": {
             "fetched_at": datetime.now(timezone.utc).isoformat(),
@@ -247,6 +273,7 @@ def fetch(client, property_id: str, start: date, end: date, *,
         },
         "clicks": clicks,
         "events": events,
+        "nav": nav,
     }
 
 
@@ -285,7 +312,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--days", type=int, default=DEFAULT_DAYS,
                    help=f"--start が無いときの日数 (両端込み。既定 {DEFAULT_DAYS})")
     p.add_argument("--out", required=True,
-                   help="行の書き出し先 (JSONL)。クリックの行とイベントの行を 1 行ずつ")
+                   help="行の書き出し先 (JSONL)。クリック・イベント・サイト内の移動の行を 1 行ずつ")
     p.add_argument("--meta-out", help="期間・警告の書き出し先 (JSON)")
     args = p.parse_args(argv)
 
@@ -315,7 +342,8 @@ def main(argv: list[str] | None = None) -> int:
         logger.error("GA4 の取得に失敗: %s: %s", type(e).__name__, e)
         return 1
 
-    write_jsonl(pathlib.Path(args.out), result["clicks"] + result["events"])
+    write_jsonl(pathlib.Path(args.out),
+                result["clicks"] + result["events"] + result.get("nav", []))
     if args.meta_out:
         write_json(pathlib.Path(args.meta_out), result["meta"])
     in_actions = os.environ.get("GITHUB_ACTIONS") == "true"

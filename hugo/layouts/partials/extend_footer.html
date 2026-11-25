@@ -19,6 +19,13 @@
 <script defer src="{{ $affClick.RelPermalink }}" integrity="{{ $affClick.Data.Integrity }}" crossorigin="anonymous"></script>
 {{- end }}
 
+{{- /* navi-brain#213: サイト内の移動 (nav_click) とトップの区画の到達 (home_section_view)
+       の計測 — 全ページで読み込む。ヘッダー・カテゴリナビは全ページにある。 */ -}}
+{{- $navClick := resources.Get "js/nav_click.js" | resources.Minify | resources.Fingerprint "sha256" }}
+{{- if $navClick }}
+<script defer src="{{ $navClick.RelPermalink }}" integrity="{{ $navClick.Data.Integrity }}" crossorigin="anonymous"></script>
+{{- end }}
+
 {{- $breadcrumbAgeClick := resources.Get "js/breadcrumb_age_click.js" | resources.Minify | resources.Fingerprint "sha256" }}
 {{- if $breadcrumbAgeClick }}
 <script defer src="{{ $breadcrumbAgeClick.RelPermalink }}" integrity="{{ $breadcrumbAgeClick.Data.Integrity }}" crossorigin="anonymous"></script>
