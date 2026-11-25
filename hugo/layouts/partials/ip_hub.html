@@ -20,6 +20,34 @@
 <p class="ip-lead">{{ .lead }}</p>
 {{- end }}
 
+{{- /* 部品 1: 観点別の 1 位。1 位が 3 件を超えて並ぶ観点 (安全性・コスパに多い) は ip_hubs が出さない */ -}}
+{{- /* 1 観点だけでは「観点別」の節にならない (たまごっちは長く遊べるだけ)。そのときはバッジだけ出す */ -}}
+{{- if ge (len ($d.axis_best | default slice)) 2 }}{{ with $d.axis_best }}
+<section class="ip-section ip-best" aria-labelledby="ip-best-title">
+  <h2 id="ip-best-title">観点別のいちばん</h2>
+  <p class="ip-note"><a href="/about-score/">知育スコア</a>の観点ごとに、このページの {{ (index . 0).of }} 商品で最も高いものです。</p>
+  <ul class="ip-best-list">
+    {{- range . }}
+    {{- $it := .item }}
+    <li class="ip-best-item" data-asin="{{ $it.asin }}">
+      <p class="ip-best-axis">{{ .label }}<strong>{{ lang.FormatNumber 1 .value }}</strong><span>/ 5</span></p>
+      <a class="ip-best-thumb" href="{{ $it.url_internal }}" aria-hidden="true" tabindex="-1">{{ with $it.image }}<img src="{{ . }}" alt="" loading="lazy" decoding="async" width="72" height="72">{{ end }}</a>
+      <div class="ip-best-body">
+        <p class="ip-best-name"><a href="{{ $it.url_internal }}">{{ $it.name }}</a></p>
+        {{- partial "ip_voice.html" (dict "item" $it "fit" false) }}
+        <div class="ip-card-meta">
+          {{- $age := index $it "age_min_months" -}}
+          {{- if ne (printf "%v" $age) "<nil>" }}<span>{{ partial "age_label.html" (int $age) }}</span>{{ end -}}
+          {{- with $it.ivs_100 }}<span>知育スコア {{ . }}</span>{{ end -}}
+          {{- partial "amazon_mini_link.html" (dict "url" $it.amazon_url "slot" "ip-hub-best") -}}
+        </div>
+      </div>
+    </li>
+    {{- end }}
+  </ul>
+</section>
+{{- end }}{{ end }}
+
 {{- with $n }}{{ with .choose }}
 <section class="ip-section ip-choose" aria-labelledby="ip-choose-title">
   <h2 id="ip-choose-title">どれを選ぶ？ こんな子にはこれ</h2>
@@ -29,8 +57,9 @@
       <a class="ip-choose-thumb" href="{{ .url_internal }}" aria-hidden="true" tabindex="-1">{{ with .image }}<img src="{{ . }}" alt="" loading="lazy" decoding="async" width="96" height="96">{{ end }}</a>
       <div class="ip-choose-body">
         <p class="ip-choose-when">{{ .when }}</p>
-        <p class="ip-choose-name"><a href="{{ .url_internal }}">{{ .name }}</a></p>
+        <p class="ip-choose-name"><a href="{{ .url_internal }}">{{ .name }}</a>{{ partial "ip_badges.html" .badges }}</p>
         <p class="ip-choose-why">{{ .why }}</p>
+        {{- partial "ip_voice.html" (dict "item" . "fit" false) }}
         {{- /* Amazon のリンクを <p> の外に置く (custom.css の p a[href*="amazon.co.jp"] が大きなボタンにするため) */}}
         <div class="ip-card-meta">
           {{- $age := index . "age_min_months" -}}
@@ -44,6 +73,32 @@
   </ol>
 </section>
 {{- end }}{{ end }}
+
+{{- /* 部品 2: シリーズの鳥瞰。価格帯はビルド時の最安値 (在庫のあるもの) */ -}}
+{{- with $d.series_overview }}
+<section class="ip-section ip-series-map" aria-labelledby="ip-series-map-title">
+  <h2 id="ip-series-map-title">シリーズで見る</h2>
+  <p class="ip-note">同じシリーズの型違い・色違いをまとめました。価格は毎日の記録による集計時点の最安値の幅です。</p>
+  <ul class="ip-smap-list">
+    {{- range . }}
+    <li class="ip-smap-row">
+      <a class="ip-compare-thumb" href="{{ .rep.url_internal }}" aria-hidden="true" tabindex="-1">{{ with .rep.image }}<img src="{{ . }}" alt="" loading="lazy" decoding="async" width="64" height="64">{{ end }}</a>
+      <div class="ip-smap-body">
+        <p class="ip-smap-name">{{ .label }}<span class="ip-count">（記事 {{ .count }} 本）</span></p>
+        <div class="ip-compare-meta">
+          {{- if ne (printf "%v" .age_min) "<nil>" }}
+          <span>{{ partial "age_label.html" (int .age_min) }}{{ if and (ne (printf "%v" .age_max) "<nil>") (gt (int .age_max) (int .age_min)) }}{{ strings.TrimSuffix "〜" (partial "age_label.html" (int .age_max)) }}{{ end }}</span>
+          {{- end }}
+          {{- $pmax := .price_max }}
+          {{- with .price_min }}<span class="ip-compare-price">¥{{ lang.FormatNumberCustom 0 . }}{{ if and $pmax (gt $pmax .) }}〜¥{{ lang.FormatNumberCustom 0 $pmax }}{{ end }}</span>{{ end }}
+        </div>
+        <p class="ip-smap-rep">代表: <a href="{{ .rep.url_internal }}">{{ .rep.name }}</a></p>
+      </div>
+    </li>
+    {{- end }}
+  </ul>
+</section>
+{{- end }}
 
 {{- with $d.compare_table }}
 {{- partial "ip_compare.html" (dict "table" . "title" (printf "%sのおもちゃ 比較表（予算別）" $label)) }}

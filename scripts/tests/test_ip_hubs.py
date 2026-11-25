@@ -263,3 +263,88 @@ def test_build_drops_narrative_when_too_few_remain_or_text_is_bad(tmp_path):
     _top, extra = iph.build_ip_payload("ip-tamagotchi", records, raw_index, {},
                                        per_asin_dir=tmp_path / "none", narrative_dir=ndir)
     assert "narrative" not in extra  # 文章の違反は外さずに落とす
+
+
+# ---- G1.5 部品 1〜4 (仕様 v2 §13.9) ----
+import dataclasses  # noqa: E402
+
+ANPAN = iph.IP_HUBS["ip-anpanman"]
+
+
+def _axes(r, **axes):
+    return dataclasses.replace(r, ivs_axes={"education": 3.0, "longevity": 3.0, "safety": 5.0,
+                                            "cost_performance": 5.0, **axes})
+
+
+def test_axis_best_skips_axes_with_many_ties_and_breaks_ties_by_rank():
+    good = [_axes(rec(f"B0{i}", f"商品{i}", ivs=4.0 - i * 0.1)) for i in range(6)]
+    good[3] = _axes(good[3], education=4.8)
+    good[1] = _axes(good[1], longevity=4.4)
+    good[4] = _axes(good[4], longevity=4.4)
+    best = {b["axis"]: b for b in iph.axis_best(good)}
+    # 安全性・コスパは 6 件とも満点で並ぶので出さない
+    assert set(best) == {"education", "longevity"}
+    assert best["education"]["asin"] == "B03"
+    # 同点は総合の順 (スコアの高い B01) が先
+    assert best["longevity"]["asin"] == "B01" and best["longevity"]["ties"] == 2
+    assert iph.axis_best(good[:4]) == []  # 少なすぎるページには出さない
+
+
+def test_voice_of_skips_character_interest_and_keeps_article_text():
+    raw_ = {"review_signals": {"summary_one_line": " 音で遊べると好評です。 "},
+            "persona_fit": {"recommended_for": ["音あそびが好きな子"],
+                            "not_recommended_for": ["アンパンマンに興味がないお子さま",
+                                                    "キャラクターものを避けたい方",
+                                                    "静かなおもちゃを探している方"]}}
+    v = iph.voice_of(raw_, ANPAN)
+    assert v == {"voice": "音で遊べると好評です。", "fits": "音あそびが好きな子",
+                 "not_for": "静かなおもちゃを探している方"}
+    assert iph.voice_of({}, ANPAN) == {}
+
+
+def test_series_overview_counts_prices_in_stock_and_picks_top_as_rep():
+    pool = [rec("B01", "アンパンマン よくばりボックス", ivs=4.2, price=5000),
+            rec("B02", "アンパンマン よくばりキューブ", ivs=4.5, price=2000),
+            dataclasses.replace(rec("B03", "アンパンマン よくばりバケツ", ivs=3.9, price=900),
+                                availability="在庫切れ"),
+            rec("B04", "アンパンマン おふろでピッピ", ivs=4.0, price=800)]
+    mm = {"B01": 12, "B02": 18, "B03": 0}
+    rows = iph.series_overview(pool, ANPAN, mm)
+    assert [r["label"] for r in rows] == ["よくばりシリーズ"]  # おふろは 1 件なので出さない
+    r = rows[0]
+    assert (r["count"], r["age_min"], r["age_max"]) == (3, 0, 18)
+    assert (r["price_min"], r["price_max"]) == (2000, 5000)  # 在庫切れの 900 円は入れない
+    assert r["rep"]["asin"] == "B02"
+
+
+def test_annotate_items_reaches_compare_and_narrative_but_not_lineup():
+    extra = {"compare_table": {"sections": [{"bands": [{"items": [{"asin": "B01", "url_internal": "/p/"}]}]}]},
+             "narrative": {"choose": [{"asin": "B01", "url_internal": "/p/"}]},
+             "lineup": [{"asin": "B01", "url_internal": "/p/"}]}
+    iph.annotate_items(extra, {"B01": {"voice": "声"}}, {"B01": ["「知育」1位"]})
+    row = extra["compare_table"]["sections"][0]["bands"][0]["items"][0]
+    assert row["voice"] == "声" and row["badges"] == ["「知育」1位"]
+    assert extra["narrative"]["choose"][0]["voice"] == "声"
+    assert "voice" not in extra["lineup"][0]
+
+
+def test_genre_groups_are_for_the_series_table_only():
+    # パズル・ブロックは種類のまとまり。間引き (groups=False) では別の商品として扱う
+    assert iph.series_of("アンパンマン おべんとうパズル", ANPAN) is None
+    assert iph.series_of("アンパンマン おべんとうパズル", ANPAN, groups=True) == "パズル"
+    assert iph.series_of("アンパンマン 天才脳つみかさねカップ", ANPAN) == "天才脳シリーズ"
+    assert iph.series_of("アンパンマン おふろでピタッと! あいうえお教室", ANPAN, groups=True) == "おふろあそび"
+    recs = [rec("B01", "アンパンマン 木のかたちあわせパズル", 4.6), rec("B02", "アンパンマン おべんとうパズル", 4.5),
+            rec("B03", "アンパンマン ジグソーパズル", 4.4)]
+    assert [r.asin for r in iph.pick_distinct(recs, ANPAN, 3, per_series=1)] == ["B01", "B02", "B03"]
+    assert iph.series_of("たまごっちオリジナル パラダイス", TAMA) == "オリジナル・初代"
+
+
+def test_voice_of_keeps_product_feature_dislikes():
+    for keep in ("ブロック遊びに興味がないお子さま", "音の出るおもちゃを避けたい方",
+                 "電子音やキャラクターの音声が出ない静かなおもちゃを求めている方"):
+        v = iph.voice_of({"persona_fit": {"not_recommended_for": [keep]}}, ANPAN)
+        assert v.get("not_for") == keep, keep
+    for drop in ("アンパンマン以外のキャラクターを好むお子さま", "キャラクターものを避けたい方",
+                 "アンパンマンを知らないお子さま"):
+        assert "not_for" not in iph.voice_of({"persona_fit": {"not_recommended_for": [drop]}}, ANPAN), drop
