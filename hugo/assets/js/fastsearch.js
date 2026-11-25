@@ -19,9 +19,23 @@ window.onload = function () {
   const xhr = new XMLHttpRequest();
   xhr.onreadystatechange = function () {
     if (xhr.readyState !== 4) return;
-    if (xhr.status !== 200) { console.log(xhr.responseText); return; }
-    const data = JSON.parse(xhr.responseText);
-    if (!data) return;
+    if (xhr.status !== 200) {
+      console.log(xhr.responseText);
+      if (summary) summary.textContent = '検索データを読み込めませんでした。ページを再読み込みしてください';
+      return;
+    }
+    // オフライン時に SW が /offline/ の HTML を 200 で返すことがある。壊れた応答で
+    // 例外のまま止まらず、読み込めなかったことを表示する
+    let data = null;
+    try {
+      data = JSON.parse(xhr.responseText);
+    } catch (e) {
+      data = null;
+    }
+    if (!Array.isArray(data)) {
+      if (summary) summary.textContent = '検索データを読み込めませんでした。ページを再読み込みしてください';
+      return;
+    }
     let options = {
       distance: 1000,
       threshold: 0.3,
@@ -46,6 +60,9 @@ window.onload = function () {
     }
     fuse = new Fuse(data, options);
     if (summary) summary.textContent = `${data.length} 件の記事から検索できます`;
+    // トップの検索欄から ?q= で来たとき、または search.json の読み込み前に
+    // 打ち始めていたときは、準備ができた時点でその語で検索する (navi-brain#213 PR D)
+    if (sInput.value.trim()) runSearch(sInput.value);
   };
   xhr.open('GET', '/search.json');
   xhr.send();
@@ -58,9 +75,25 @@ function reset() {
   sInput.focus();
 }
 
+// ?q= の語を先に欄へ入れておく (結果は Fuse の準備ができてから出す)
+(function prefillFromQuery() {
+  let q = '';
+  try {
+    q = new URLSearchParams(window.location.search).get('q') || '';
+  } catch (e) {
+    return;
+  }
+  q = q.trim().slice(0, 64);
+  if (q) sInput.value = q;
+})();
+
 sInput.onkeyup = function () {
+  runSearch(this.value);
+};
+
+function runSearch(raw) {
   if (!fuse) return;
-  const q = this.value.trim();
+  const q = raw.trim();
   if (!q) {
     resList.innerHTML = '';
     if (summary) summary.textContent = '';
@@ -81,7 +114,7 @@ sInput.onkeyup = function () {
     if (card) frag.appendChild(card);
   });
   resList.appendChild(frag);
-};
+}
 
 sInput.addEventListener('search', function () {
   if (!this.value) reset();
