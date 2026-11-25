@@ -8042,9 +8042,46 @@ a.sale-notice-main::after {
   .post-content .ip-best-thumb img { width: 56px; height: 56px; }
   .post-content .ip-smap-row { grid-template-columns: 52px minmax(0, 1fr); gap: .2rem .5rem; }
   .post-content .ip-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .post-content .ip-choose-thumb { flex-basis: 72px; }
-  .post-content .ip-choose-thumb img { width: 72px; height: 72px; }
   .post-content .ip-compare-row { grid-template-columns: 52px minmax(0, 1fr) auto; gap: .2rem .5rem; }
   .post-content .ip-compare-thumb, .post-content .ip-compare-thumb img { width: 52px; height: 52px; }
   .post-content .ip-compare-score { min-width: 2.9rem; }
 }
+
+/* 特集ページの上部の広告表示を [PR] だけにしたとき、読み上げ用の補足文 (2026-11-25) */
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.page-pr-notice--short { justify-content: flex-start; } /* row-reverse なので start = 右端 */
+
+/* キャラクターのページ: 導入文とリードは閉じたアコーディオン (スマホのファーストビューから商品へ) */
+.post-content .ip-intro { margin: .6rem 0 1.2rem; border: 1px solid var(--border); border-radius: 10px; background: var(--entry); }
+.post-content .ip-intro > summary { display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding: .7rem .9rem; cursor: pointer; font-weight: 700; list-style: none; }
+.post-content .ip-intro > summary::-webkit-details-marker { display: none; }
+.post-content .ip-intro > summary::after { content: "▾"; color: var(--secondary); transition: transform .2s; }
+.post-content .ip-intro[open] > summary::after { transform: rotate(180deg); }
+.post-content .ip-intro-hint { margin-left: auto; font-size: .78rem; font-weight: 400; color: var(--secondary); white-space: nowrap; }
+.post-content .ip-intro[open] .ip-intro-hint { display: none; }
+.post-content .ip-intro-body { padding: 0 .9rem .4rem; }
+.post-content .ip-intro-body > p:first-child { margin-top: 0; }
+
+/* 「どれを選ぶ？」は画像を大きく (観点別のいちばん・比較表の小さな画像と緩急をつける。K の指摘・2026-11-25) */
+.post-content .ip-choose-item { gap: 1rem; padding: 1.1rem 0; }
+.post-content .ip-choose-thumb { flex: 0 0 160px; box-shadow: none; }
+.post-content .ip-choose-thumb img { width: 160px; height: 160px; border-radius: 10px; }
+@media (max-width: 600px) {
+  .post-content .ip-choose-item { flex-direction: column; gap: .6rem; }
+  .post-content .ip-choose-thumb { flex: none; display: block; }
+  .post-content .ip-choose-thumb img { width: 100%; height: 220px; padding: .5rem; box-sizing: border-box; }
+  .post-content .ip-choose-when { font-size: 1.02rem; }
+}
+
+/* 特集ページの「次に見るなら」(hub_siblings.html): 理由つきの数件をカードで (2026-11-25) */
+.hub-siblings { margin: 2rem 0 1rem; }
+.hub-siblings-title { margin: 0 0 .7rem; font-size: 1.1rem; }
+.hub-next-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+.hub-next-item { margin: 0; }
+.post-content .hub-next-link, .hub-next-link { display: flex; align-items: center; gap: .6rem; height: 100%; padding: .55rem .7rem; border: 1px solid var(--border); border-radius: 10px; background: var(--entry); text-decoration: none; box-shadow: none; color: var(--primary); }
+.hub-next-link:hover { border-color: var(--secondary); }
+.hub-next-link img { flex: 0 0 56px; width: 56px; height: 56px; object-fit: contain; background: #fff; border-radius: 8px; margin: 0; }
+.hub-next-text { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+.hub-next-name { font-weight: 700; font-size: .92rem; line-height: 1.45; }
+.hub-next-reason { font-size: .78rem; color: var(--secondary); line-height: 1.4; }
+@media (max-width: 480px) { .hub-next-list { grid-template-columns: 1fr; } }
