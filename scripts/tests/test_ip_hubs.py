@@ -348,3 +348,43 @@ def test_voice_of_keeps_product_feature_dislikes():
     for drop in ("アンパンマン以外のキャラクターを好むお子さま", "キャラクターものを避けたい方",
                  "アンパンマンを知らないお子さま"):
         assert "not_for" not in iph.voice_of({"persona_fit": {"not_recommended_for": [drop]}}, ANPAN), drop
+
+
+def test_age_range_numbers_are_ages_but_other_numbers_are_not():
+    n = good_narrative(ASINS, age_keys=("age-4",))
+    n["by_age"][0]["text"] = "4〜5歳になると遊び方が広がります。"
+    assert not any("number" in e for e in iph.validate_narrative(n, set(ASINS), {"age-4"}))
+    n["by_age"][0]["text"] = "4〜5個のパーツがあります。"
+    assert any("number '4'" in e for e in iph.validate_narrative(n, set(ASINS), {"age-4"}))
+
+
+def test_basic_series_by_price_for_tomica():
+    tom = iph.IP_HUBS["ip-tomica"]
+    assert iph.series_of_rec(rec("B01", "トミカ No.16 日本交通 タクシー", price=375), tom) == "ベーシックトミカ（1台）"
+    assert iph.series_of_rec(rec("B02", "トミカ おかたづけコンボイ", price=2170), tom) is None
+    assert iph.series_of_rec(rec("B03", "トミカプレミアム 13 カローラ", price=600), tom) == "トミカプレミアム"
+    assert iph.series_of_rec(rec("B04", "トミカ はじめてのパズル", price=600), tom) is None  # 種類のまとまりは間引きに使わない
+    assert iph.series_of_rec(rec("B04", "トミカ はじめてのパズル", price=600), tom, groups=True) == "パズル・ぬりえ"
+
+
+def test_series_uses_name_full_and_basic_skips_accessories():
+    tom = iph.IP_HUBS["ip-tomica"]
+    r = dataclasses.replace(rec("B01", "トミカ ランボルギーニ ミウラ", price=662),
+                            name_full="トミカプレミアム 05 ランボルギーニ ミウラ P400S")
+    assert iph.series_of_rec(r, tom) == "トミカプレミアム"
+    assert iph.series_of_rec(rec("B02", "トミカ 収納ケース", price=500), tom) is None
+
+
+def test_exclude_drops_plarail_trains_from_tomica():
+    tom = iph.IP_HUBS["ip-tomica"]
+    recs = [rec("B01", "トミカ・プラレールブロック タクシー"), rec("B02", "プラレールブロック ドクターイエロー")]
+    raws = {"B01": raw("B01", "トミカ・プラレールブロック タクシー"),
+            "B02": raw("B02", "トミカ・プラレールブロック ドクターイエロー")}
+    pool = iph.select_ip_records(recs, raws, ("トミカ",), tom["exclude"])
+    assert [r.asin for r in pool] == ["B01"]
+
+
+def test_pokenade_pouch_alone_is_accessory():
+    pok = iph.IP_HUBS["ip-pokemon"]
+    assert iph.is_accessory("ポケなで ピカチュウふれんずポーチ", pok)
+    assert not iph.is_accessory("ポケなで モンスターボール ピカチュウふれんずセット", pok)
