@@ -4,6 +4,9 @@
   {{- /* navi-brain#213 R6: メニュー・トップと同じ呼び名 (<title>・h1 は変えない) */}}
   <p class="term-header-eyebrow">🧸 1分診断</p>
   <h1>{{ .Title }}</h1>
+  {{- /* 結果に Amazon アソシエイトのリンクが出るので、ファーストビューに [PR] だけ置く。
+         補足の文はフッターのアソシエイト表記にあるので、ここでは繰り返さない (K 2026-11-26) */}}
+  {{- partial "pr_disclosure.html" (dict "network" "amazon" "short" true) }}
   {{- if .Description }}
   <div class="post-description">
     {{ .Description }}
@@ -54,6 +57,8 @@
       <div class="dx-persona-strengths" id="dx-persona-strengths" hidden><p class="dx-persona-strengths-label" id="dx-persona-strengths-label">得意なこと</p><ul class="dx-persona-strengths-list" id="dx-persona-strengths-list"></ul></div>
       <p class="dx-persona-pair" id="dx-persona-pair" hidden></p>
       <p class="dx-age-tip" id="dx-age-tip"></p>
+      {{- /* 年齢ベスト10 のときだけ出す (diagnosis.js の showAgeBest)。下の dx-retry と同じ動き */}}
+      <button type="button" class="dx-btn dx-refine" id="dx-refine" hidden>🧸 好きな遊び・予算で絞り込む</button>
       <p class="dx-chips-label" id="dx-chips-label" hidden>条件をタップすると、その質問だけ答え直せます</p>
       <div class="dx-chips" id="dx-chips" role="group" aria-label="診断の条件（タップで変更）"></div>
     </div>

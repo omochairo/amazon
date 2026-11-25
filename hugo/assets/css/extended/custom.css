@@ -1367,6 +1367,8 @@ main.main:has(.card-grid) {
   font-size: 0.78rem;
   color: var(--secondary, #888);
 }
+/* 日付が「2026-08- / 20」とハイフンで折り返さないように (タグが長いときに縮められていた) */
+.product-card-meta time { white-space: nowrap; flex-shrink: 0; }
 .product-card-tags { display: inline-flex; gap: 0.3rem; flex-wrap: wrap; justify-content: flex-end; }
 .product-card-tag {
   padding: 0.1rem 0.45rem;
