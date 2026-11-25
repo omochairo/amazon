@@ -1721,21 +1721,34 @@ def _recommend_same_price_band(
 _IP_ALIASES: dict[str, tuple[str, ...]] | None = None
 
 
-def _ip_hub_for(data: dict[str, Any]) -> str | None:
-    """記事の商品が当たるキャラクター別ページのキー (scripts/ip_hubs.py)。無ければ None。
-
-    判定は束ねページの商品選びと同じ ip_hubs.matches_character (商品名・正式名・ブランド)。
-    """
+def _ip_hub_for_init() -> None:
     global _IP_ALIASES
     if _IP_ALIASES is None:
         from candidate_priority import load_character_terms
         terms = load_character_terms()
         _IP_ALIASES = {k: (h["character"], *terms.get(h["character"], ()))
                        for k, h in ip_hubs.IP_HUBS.items()}
+
+
+IP_LINKS_MAX = 2
+
+
+def _ip_hubs_for(data: dict[str, Any]) -> list[str]:
+    """記事の商品が載るキャラクター別ページのキー (最大 IP_LINKS_MAX 件)。
+
+    束ねページの商品選び (ip_hubs.select_ip_records) と同じく exclude の語を守る。
+    「カーズ トミカ」のように 2 つのページに載る商品は両方へ (トミカとディズニー、トミカとプラレール)。
+    """
+    _ip_hub_for_init()
+    out = []
     for key, aliases in _IP_ALIASES.items():
-        if ip_hubs.matches_character(data, aliases):
-            return key
-    return None
+        if not ip_hubs.matches_character(data, aliases):
+            continue
+        ex = [ip_hubs._fold(t) for t in ip_hubs.IP_HUBS[key].get("exclude") or ()]
+        if any(t and t in ip_hubs.ip_text(data) for t in ex):
+            continue
+        out.append(key)
+    return out[:IP_LINKS_MAX]
 
 
 def _recommend_next_steps(data: dict[str, Any], article_index: dict[str, dict[str, Any]],
@@ -1776,8 +1789,7 @@ def _recommend_next_steps(data: dict[str, Any], article_index: dict[str, dict[st
     # navi-brain#211: キャラクターの商品なら、そのキャラクターの選び方のページへ。
     # 配信ビルドでは build_post.py が build_category_hubs.py より先に走り、hub_index.json は
     # まだ前回のものなので、hub_index ではなく IP_HUBS (ページの .md はリポジトリにある) を見る。
-    ip_key = _ip_hub_for(data)
-    if ip_key:
+    for ip_key in _ip_hubs_for(data):
         hub = ip_hubs.IP_HUBS[ip_key]
         links.append({"label": f'{hub["label"]}のおもちゃの選び方', "url": site_base_path + hub["url"]})
     links.append({"label": "おもちゃ診断（約1分）", "url": site_base_path + "/diagnosis/"})
