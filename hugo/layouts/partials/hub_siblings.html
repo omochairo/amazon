@@ -1,24 +1,111 @@
 {{- /*
-  hub_siblings.html (#2687 柱1 Slice C)
-  情報型 category hub (テーマ別 english/programming/math/montessori + 年齢別
-  toys-age-N) 同士の相互リンク。build_category_hubs.py が生成する
-  hugo/data/features/hub_index.json (= site.Data.features.hub_index、生成した
-  全 info hub の [{key,label,url}] 平坦配列) を読み、自ページ以外への nav を
-  描画する。cluster 形成が目的 (#2690 実測: hub→hub 相互リンクが未形成)。
+  hub_siblings.html (#2687 柱1 Slice C → 2026-11-25 作り直し)
+  特集ページ (年齢・テーマ・キャラクターの hub) の下に出す「次に見るなら」。
+
+  役割の分担 (K の指摘・2026-11-25「関連ランキングと条件から探すがかぶっている」):
+    - この partial = このページを読んだ人が次に開きそうなページを、理由つきで 2〜4 件だけ。
+      画像つきのカードで、なぜそのページかを 1 行で添える。
+    - explore_links.html (条件から探す) = サイト全体の索引。年齢・テーマ・キャラクター・予算を全部並べる。
+  以前はどちらも hub_index.json を全部並べていて、同じリンクが 2 回続いていた。
+
+  選び方 (データは hugo/data/features/<key>.json):
+    - 年齢 hub: ひとつ下・上の年齢 + その年齢の記事が多いキャラクター 2 件
+    - キャラクター hub: このキャラクターで記事が多い年齢 2 つ + その年齢の記事が多いほかのキャラクター 2 件
+    - テーマ hub: ほかのテーマ 4 件 (年齢の手がかりが無いため)
 
   Expected context: dict "type" $type (呼び出し元 feature.html の feature_type)。
-  hub_index.json 未生成/空なら何も出力しない (graceful degradation)。
+  hub_index.json 未生成/空なら何も出力しない。
 */ -}}
 {{- $type := .type -}}
 {{- $hubs := site.Data.features.hub_index -}}
-{{- if $hubs }}
-<nav class="hub-siblings" aria-label="関連ランキング">
-  <h2 class="hub-siblings-title">関連ランキングもチェック</h2>
-  <ul class="hub-siblings-list">
-    {{- range $hubs }}
-    {{- if ne .key $type }}
-    <li><a href="{{ .url }}">{{ .label }}</a></li>
-    {{- end }}
+{{- $feat := site.Data.features -}}
+{{- $ageKeys := slice "age-0" "age-1" "age-2" "age-3" "age-4" "age-6" -}}
+{{- $byKey := dict -}}
+{{- range $hubs }}{{ $byKey = merge $byKey (dict .key .) }}{{ end -}}
+{{- $picks := slice -}}
+
+{{- if hasPrefix $type "age-" -}}
+  {{- $idx := -1 -}}
+  {{- range $i, $k := $ageKeys }}{{ if eq $k $type }}{{ $idx = $i }}{{ end }}{{ end -}}
+  {{- if gt $idx 0 -}}
+    {{- with index $byKey (index $ageKeys (sub $idx 1)) }}{{ $picks = $picks | append (dict "row" . "reason" "ひとつ下の年齢") }}{{ end -}}
+  {{- end -}}
+  {{- if and (ge $idx 0) (lt $idx 5) -}}
+    {{- with index $byKey (index $ageKeys (add $idx 1)) }}{{ $picks = $picks | append (dict "row" . "reason" "ひとつ上の年齢") }}{{ end -}}
+  {{- end -}}
+  {{- $selfLabel := (index $byKey $type).label | default "" -}}
+  {{- $ips := slice -}}
+  {{- range $hubs -}}
+    {{- if hasPrefix .key "ip-" -}}
+      {{- $row := . -}}
+      {{- with index $feat .key -}}
+        {{- range .age_sections -}}
+          {{- if eq .key $type }}{{ $ips = $ips | append (dict "row" $row "count" .count) }}{{ end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- range first 2 (sort $ips "count" "desc") -}}
+    {{- $picks = $picks | append (dict "row" .row "reason" (printf "%s向けの記事が %d 本" $selfLabel (int .count))) -}}
+  {{- end -}}
+
+{{- else if hasPrefix $type "ip-" -}}
+  {{- /* ip-<key>.json が無いビルド (データ未生成) でも落ちないように with で受ける */ -}}
+  {{- $ages := slice -}}
+  {{- with index $feat $type }}{{ with .age_sections }}{{ $ages = sort . "count" "desc" }}{{ end }}{{ end -}}
+  {{- range $i, $a := first 2 $ages -}}
+    {{- with index $byKey $a.key -}}
+      {{- $picks = $picks | append (dict "row" . "reason" (cond (eq $i 0) "このキャラクターでいちばん記事が多い年齢" "次に記事が多い年齢")) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- with $ages -}}
+    {{- $top := index . 0 -}}
+    {{- $ips := slice -}}
+    {{- range $hubs -}}
+      {{- if and (hasPrefix .key "ip-") (ne .key $type) -}}
+        {{- $row := . -}}
+        {{- with index $feat .key -}}
+          {{- range .age_sections -}}
+            {{- if eq .key $top.key }}{{ $ips = $ips | append (dict "row" $row "count" .count) }}{{ end -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+    {{- range first 2 (sort $ips "count" "desc") -}}
+      {{- $picks = $picks | append (dict "row" .row "reason" (printf "同じ%s向けが多いキャラクター" $top.label)) -}}
+    {{- end -}}
+  {{- end -}}
+
+{{- else -}}
+  {{- $n := 0 -}}
+  {{- range $hubs -}}
+    {{- if and (lt $n 4) (ne .key $type) (not (hasPrefix .key "age-")) (not (hasPrefix .key "ip-")) -}}
+      {{- $picks = $picks | append (dict "row" . "reason" "ほかのテーマ") -}}
+      {{- $n = add $n 1 -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- with $picks }}
+<nav class="hub-siblings" aria-label="次に見るなら">
+  <h2 class="hub-siblings-title">次に見るなら</h2>
+  <ul class="hub-next-list">
+    {{- range . }}
+    {{- $row := .row -}}
+    {{- $img := "" -}}
+    {{- with index $feat $row.key }}{{ with .items }}{{ $img = (index . 0).image }}{{ end }}{{ end }}
+    {{- /* 見出しは行き先のページの title の「｜」より前 (related_carousel.html の hub バナーと同じ) */ -}}
+    {{- $title := printf "%sのおもちゃ" $row.label -}}
+    {{- with site.GetPage $row.url }}{{ $title = index (split (.Title | plainify) "｜") 0 }}{{ end }}
+    <li class="hub-next-item">
+      <a class="hub-next-link" href="{{ $row.url | relURL }}">
+        {{- with $img }}<img src="{{ . }}" alt="" loading="lazy" decoding="async" width="64" height="64">{{ end }}
+        <span class="hub-next-text">
+          <span class="hub-next-name">{{ $title }}</span>
+          <span class="hub-next-reason">{{ .reason }}</span>
+        </span>
+      </a>
+    </li>
     {{- end }}
   </ul>
 </nav>

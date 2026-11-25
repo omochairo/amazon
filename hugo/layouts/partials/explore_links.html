@@ -6,14 +6,21 @@
 
   hub の一覧は hub_siblings.html と同じ hugo/data/features/hub_index.json
   (build_category_hubs.py 生成) を読む。key が "age-" で始まるものを年齢別、
-  それ以外をテーマ別として分ける。未生成/空ならその段は出さない。
+  "ip-" で始まるものをキャラクター別 (navi-brain#211)、それ以外をテーマ別として分ける。
+  未生成/空ならその段は出さない。
+
+  役割: サイト全体の索引 (全部並べる)。特集ページの「次に見るなら」(hub_siblings.html) は
+  このページの次に読むページを理由つきで数件だけ出すので、こちらとは重ならない (2026-11-25)。
 */ -}}
 {{- $hubs := site.Data.features.hub_index -}}
 {{- $ages := slice -}}
 {{- $themes := slice -}}
+{{- $chars := slice -}}
 {{- range $hubs -}}
   {{- if hasPrefix .key "age-" -}}
     {{- $ages = $ages | append . -}}
+  {{- else if hasPrefix .key "ip-" -}}
+    {{- $chars = $chars | append . -}}
   {{- else -}}
     {{- $themes = $themes | append . -}}
   {{- end -}}
@@ -36,6 +43,16 @@
     <div class="tag-chips">
       {{- range . }}
       <a class="tag-chip" href="{{ .url | relURL }}">{{ .label }}のおもちゃ</a>
+      {{- end }}
+    </div>
+  </div>
+  {{- end }}
+  {{- with $chars }}
+  <div class="explore-links-group">
+    <h3 class="explore-links-label">キャラクターから</h3>
+    <div class="tag-chips">
+      {{- range . }}
+      <a class="tag-chip" href="{{ .url | relURL }}">{{ .label }}</a>
       {{- end }}
     </div>
   </div>

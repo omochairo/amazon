@@ -14,13 +14,22 @@
   mobile で本文が2行目に落ち、[PR] だけの行ができて占有が 56px に増える)。
 
   引数 (dict):
+    short   — true なら [PR] だけ (特集ページ /deals/ /cospa/ と年齢・テーマ・キャラクターの hub)。
     network — "amazon" (既定) / "rakuten"。/ranking/ は楽天アフィリエイトなので
               水平展開時に "rakuten" を渡す。
 */ -}}
 {{- $network := "amazon" -}}
-{{- if reflect.IsMap . -}}{{- $network = .network | default "amazon" -}}{{- end -}}
+{{- $short := false -}}
+{{- if reflect.IsMap . -}}{{- $network = .network | default "amazon" -}}{{- $short = .short | default false -}}{{- end -}}
 {{- $text := "Amazon アソシエイトの広告を含みます" -}}
 {{- if eq $network "rakuten" -}}{{- $text = "楽天アフィリエイトの広告を含みます" -}}{{- end -}}
 {{- /* span 間の空白は flex コンテナでは無視されるが、CSS 無効時に
        「[PR]Amazon…」と繋がって読めるのを防ぐために入れてある。 */ -}}
+{{- /* short: [PR] だけ出す (特集ページ。K の指摘・2026-11-25「詳しい文は一番下にあるので上は PR だけ、早く本題に」)。
+       広告であることの表示は [PR] で足り、アソシエイトの表示はフッターの .footer-associate-notice と
+       ページ下部の .ranking-disclaimer にある。読み上げでは補足文を読む (title と visually-hidden)。 */ -}}
+{{- if $short }}
+<p class="page-pr-notice page-pr-notice--short" title="{{ $text }}"><span class="pr-badge">[PR]</span><span class="visually-hidden">{{ $text }}</span></p>
+{{- else }}
 <p class="page-pr-notice"><span class="pr-badge">[PR]</span> <span class="page-pr-notice-text">{{ $text }}</span></p>
+{{- end }}
