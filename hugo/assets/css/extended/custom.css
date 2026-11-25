@@ -1144,11 +1144,6 @@ main.main:has(.card-grid) {
 }
 /* 入力の文字は 16px のまま、案内文だけ小さくして 375px でも切れないようにする */
 .home-hero-search-input::placeholder { font-size: 14px; }
-@media (max-width: 360px) {
-  .home-hero-search-input { padding: 0 0.7rem; }
-  .home-hero-search-input::placeholder { font-size: 12px; }
-  .home-hero-search-btn { padding: 0 0.7rem; }
-}
 .home-hero-search-input:focus {
   outline: 2px solid var(--brand-primary);
   outline-offset: 1px;
@@ -1173,6 +1168,13 @@ main.main:has(.card-grid) {
   border-color: rgba(255,255,255,0.2);
 }
 [data-theme="dark"] .home-hero-search-btn { background: #2a2a3a; color: #f0f0f0; }
+/* 360px 以下: 案内文と余白を縮めて「おもちゃ名・メーカー名」が切れないようにする。
+   上の基本の指定より後に置く (前に置くと padding が上書きされる) */
+@media (max-width: 360px) {
+  .home-hero-search-input { padding: 0 0.7rem; }
+  .home-hero-search-input::placeholder { font-size: 12px; }
+  .home-hero-search-btn { padding: 0 0.7rem; }
+}
 
 /* スマホ (navi-brain#213 R3): ファーストビューに「目的から探す」を入れるため、
    ヒーローの上下の余白とボタン間を詰める。 */

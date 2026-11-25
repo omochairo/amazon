@@ -186,6 +186,23 @@ test("トップ / は cache が新しくても stale を返さない (層1 の�
   assert.equal(await res.text(), "FRESH_TOP");
 });
 
+test("検索ページは ?q= を外した URL で取り・保存する (語ごとに cache が増えない)", async () => {
+  const sw = loadSW({ network: netOk("SEARCH_PAGE") });
+  const res = await sw.navigate("/search/?q=%E3%83%88%E3%83%9F%E3%82%AB");
+  assert.equal(await res.text(), "SEARCH_PAGE");
+  assert.equal(sw.fetchCalls[0].url, ORIGIN + "/search/");
+  await sw.navigate("/search/?q=lego");
+  const keys = (await (await sw.store()).keys()).map((k) => k.url);
+  assert.deepEqual(keys, [ORIGIN + "/search/"]);
+});
+
+test("オフライン: 未検索の語でも保存済みの検索ページを返す", async () => {
+  const sw = loadSW({ network: async () => { throw new TypeError("offline"); } });
+  await seed(sw, "/search/", "CACHED_SEARCH", 1000);
+  const res = await sw.navigate("/search/?q=new-word");
+  assert.equal(await res.text(), "CACHED_SEARCH");
+});
+
 test("トップ以外の静的パスは prefix 一致で誤って鮮度必須にならない", async () => {
   const sw = loadSW({ network: netOk("FRESH") });
   await seed(sw, "/about/", "CACHED_ABOUT", 1000);

@@ -24,8 +24,18 @@ window.onload = function () {
       if (summary) summary.textContent = '検索データを読み込めませんでした。ページを再読み込みしてください';
       return;
     }
-    const data = JSON.parse(xhr.responseText);
-    if (!data) return;
+    // オフライン時に SW が /offline/ の HTML を 200 で返すことがある。壊れた応答で
+    // 例外のまま止まらず、読み込めなかったことを表示する
+    let data = null;
+    try {
+      data = JSON.parse(xhr.responseText);
+    } catch (e) {
+      data = null;
+    }
+    if (!Array.isArray(data)) {
+      if (summary) summary.textContent = '検索データを読み込めませんでした。ページを再読み込みしてください';
+      return;
+    }
     let options = {
       distance: 1000,
       threshold: 0.3,

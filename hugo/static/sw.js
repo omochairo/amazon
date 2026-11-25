@@ -280,6 +280,14 @@ self.addEventListener("fetch", function (event) {
 
   // HTML ナビゲーション。
   if (req.mode === "navigate" || req.destination === "document") {
+    // 検索ページ (/search/?q=…) の HTML は q に関係なく同じ (語は fastsearch.js が
+    // ブラウザ側で読む)。q ごとに PAGE_CACHE へ別の項目を作ると検索するたびに増え続け、
+    // オフラインでは未検索の語が /offline/ に落ちるので、q を外した URL で取り・保存する
+    // (navi-brain#213 PR D)。
+    if (url.pathname.indexOf("/search") === 0 && url.search) {
+      event.respondWith(networkFirst(new Request(url.origin + url.pathname), PAGE_CACHE));
+      return;
+    }
     if (isFresh(url.pathname)) {
       event.respondWith(networkFirst(req, PAGE_CACHE));
     } else {
