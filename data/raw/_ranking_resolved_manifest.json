@@ -1,18 +1,24 @@
 {
-  "jan_candidates_before_limit": 0,
-  "input_unmatched_jans": 0,
+  "jan_candidates_before_limit": 1,
+  "input_unmatched_jans": 1,
   "resolved": [],
-  "unresolved": [],
+  "unresolved": [
+    {
+      "jan": "4550726015353",
+      "rank": 28,
+      "title": "【予約／2027年3月下旬以降の発送予定】 アニメ『僕のヒーローアカデミア』 超BIG！ぎゅ〜っとぬいぐるみ ＜ 全6種 ＞ ヒロアカ ぬいぐるみ インテリア デクシープ バクドッグ ショートキャット ラキラキ ダビヘビ トガケ プレゼント グッズ ジャンプ アニメ 粧美堂 SHOBIDO"
+    }
+  ],
   "skipped_already_covered": [],
   "skipped_non_b0": [],
   "new_asins": [],
   "title_fuzzy": {
-    "title_fuzzy_candidates_before_limit": 12,
-    "title_fuzzy_input": 12,
+    "title_fuzzy_candidates_before_limit": 11,
+    "title_fuzzy_input": 11,
     "title_fuzzy_resolved": [],
     "title_fuzzy_rejected": [
       {
-        "rank": 30,
+        "rank": 26,
         "title": "【辻ちゃんネルで紹介★ギフト対応可】 モルビー 三輪車 手押し棒付き 折りたたみ 三輪車 1歳 2歳 3歳 プレゼント 誕生日 赤ちゃん 手押し かじとり キックバイク 10段階変形 10in1 5点式ハーネス ロック付 バースデー 軽量 おしゃれ 子供 0歳～6歳まで MORBY",
         "reason": "no_guardrail_pass",
         "candidates": [
@@ -35,8 +41,8 @@
             "price_ok": false
           },
           {
-            "asin": "B0G52587KC",
-            "candidate_title": "【colulu】 モルビー 三輪車 手押し棒付き 折りたたみ キックバイク 1歳 2歳 3歳 10in1 子供 室内 MORBY (ブラック) | 10通りに変身,工具不要,おしゃれ,静音タイヤ,軽量,サンシェード付,手押し,男の子,女の子,0歳〜6歳,ベビー,誕生日,プレゼント,クリスマス,出産祝い,おもちゃ",
+            "asin": "B0G525N7LB",
+            "candidate_title": "【colulu】 モルビー 三輪車 手押し棒付き 折りたたみ キックバイク 1歳 2歳 3歳 10in1 子供 室内 MORBY (ベージュ) | 10通りに変身,工具不要,おしゃれ,静音タイヤ,軽量,サンシェード付,手押し,男の子,女の子,0歳〜6歳,ベビー,誕生日,プレゼント,クリスマス,出産祝い,おもちゃ",
             "candidate_price": 17980.0,
             "brand_match": false,
             "model_token_match": true,
@@ -46,135 +52,117 @@
         ]
       },
       {
-        "rank": 29,
-        "title": "MINI-GT 1/64 Nissan GT-R Nismo GT3 #23 スヌーピー×MINI GT コレクション(左ハンドル)【MGT01349-BL】 ミニカー",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0G19Z9ZDS",
-            "candidate_title": "サンリッチ (Sunrich) MINI GT 1/64 Nissan スカイライン GT-R ダークメタルグレー (NISMO BNR34 CRS バージョン) (右ハンドル) 完成品 MGT01160-R",
-            "candidate_price": 2640.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0DJLN6WRQ",
-            "candidate_title": "MINI GT 1/64 Nissan GT-R Nismo 2024 NISMO ステルスグレー (左ハンドル) 完成品 MGT00868-BL",
-            "candidate_price": 2220.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B07YSP8ZGX",
-            "candidate_title": "京商 CARNEL 1/64 ニッサン GT-R ニスモ GT3 (R35) 2015 Blue Metallic 完成品",
-            "candidate_price": 2634.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          }
-        ]
-      },
-      {
         "rank": 24,
-        "title": "たまごっちパラダイス オレンジトロピクス プレミアムセット(1セット)【バンダイ(たまごっち)】",
+        "title": "【正規品＼楽天1位／】 かみかみチキン 歯固め 【BF中P5倍！】 手にはめる歯がため シリコン 食品グレード おもちゃ 歯がため 安心素材 はがため 赤ちゃん 新生児 ベビー BPAフリー 3ヶ月 0歳 1歳 おしゃぶり ファーストトイ かわいい マッサージ プレゼント 出産祝い",
         "reason": "no_guardrail_pass",
         "candidates": [
           {
-            "asin": "B0HNV8WR77",
-            "candidate_title": "[バンダイ(BANDAI)] Tamagotchi Paradise - Neon Planets Premium Set 対象年齢 6 才以上 | たまごっちパラダイス",
-            "candidate_price": 7980.0,
+            "asin": "B071KBQWY3",
+            "candidate_title": "SASSY Sassy ABS 歯固めラトル 3ヶ月から対象 ひんやり 色々な感触 バンブル・バイツ・ファン TYSA80679 | ひんやり 色々な感触 知育玩具 好奇心 おもちゃ",
+            "candidate_price": 740.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          },
+          {
+            "asin": "B0BFDVQBXD",
+            "candidate_title": "【正規品】 かみかみチキン 歯固め シリコン おしゃぶり 歯がため バーピー 食品グレード おもちゃ 歯固め 安心素材 はがため 赤ちゃん 新生児 ベビー BPAフリー 0歳 3ヵ月 1歳 (ベージュ)",
+            "candidate_price": 1300.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0BFDTNGZY",
+            "candidate_title": "【正規品】 かみかみチキン 歯固め シリコン おしゃぶり 歯がため バーピー 食品グレード おもちゃ 歯固め 安心素材 はがため 赤ちゃん 新生児 ベビー BPAフリー 0歳 3ヵ月 1歳 (ブルー)",
+            "candidate_price": 1300.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          }
+        ]
+      },
+      {
+        "rank": 23,
+        "title": "【めえたん予約/納期要確認/P3倍！】あひる ひつじ 羊 犬のぬいぐるみ 洗える 子供 赤ちゃん ぬいぐるみ ファーストトイ 男の子 女の子 おもちゃ 犬 いぬ ソフトトイ 赤ちゃん ベビーギフト 出産祝い プレゼント 誕生日 羊 猿 くま",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B0D7HVN8JM",
+            "candidate_title": "MIHI ぬいぐるみ 【正規品 PSC基準適合・食品衛生法適合】 動物 アニマル ふわふわ もこもこ おもちゃ ファーストトイ 贈り物 ギフト 出産祝い ニューボンフォト こどもの日 バレンタイン ホワイトデー 母の日 約34㎝ (ひつじ)",
+            "candidate_price": 2115.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          }
+        ]
+      },
+      {
+        "rank": 21,
+        "title": "【サンタ帽子★メッセージカード付】24点セット スクイーズ ブラインドボックス アドベントカレンダー ランダム 全80種類 中華まんモチーフ 肉まん風 ぷにぷにミニサイズ 大人向け おもちゃ ストレス解消 おもちゃ 減圧グッズ 低反発 握って ストレス発散 触感いい",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B0HMD493YR",
+            "candidate_title": "CHALAN クリスマス スクイーズ アドベントカレンダー 24個セット ブラインドボックス | 中華まんモチーフ ぷにぷに触感 サンタ帽 トナカイ ミニマスコット カウントダウン 卓上飾り プレゼント 交換会",
+            "candidate_price": 2380.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0HQZCSF5Z",
+            "candidate_title": "クリスマス アドベントカレンダー スクイーズ 24個入り ツリー型 24日間 カウントダウン ギフト | 1から24まで番号が付いたツリー型ボックスから、クリスマスモチーフのスクイーズを毎日ひとつずつ。開ける楽しみと、指でぎゅっと押す遊びを楽しめるカウントダウンセットです。",
+            "candidate_price": 2188.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0HQGJX8RZ",
+            "candidate_title": "クリスマス アドベントカレンダー 24日 スクイーズ 24個セット ブラインドボックス クリスマスプレゼント | 【24日間のワクワクを楽しめる】中華まんモチーフのぷにぷにスクイーズが24個入り。サンタやトナカイなど可愛いミニマスコットを毎日ひとつずつ開けて、クリスマスまでのカウントダウンを楽しめます。",
+            "candidate_price": 2360.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          }
+        ]
+      },
+      {
+        "rank": 20,
+        "title": "パイロット かえちゃOh！！ まほうのサーティワンアイスクリーム",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B0BSX6VFWH",
+            "candidate_title": "パイロット かえちゃOh!! まほうのサーティワンアイスクリーム 3歳以上",
+            "candidate_price": 0.0,
             "brand_match": true,
             "model_token_match": false,
             "spec_match": false,
             "price_ok": false
           },
           {
-            "asin": "B0H1KPL4KY",
-            "candidate_title": "[バンダイ(BANDAI)] Tamagotchi Paradise - Orange Tropics（2026年7月特典2種付き） | 2026Amazon トイオブザイヤー ベーシックトイ部門 1位　『たまラボステッカー：おこじょっち』&『たまラボステッカー：ぱろろっち』付属　たまごっちパラダイス",
-            "candidate_price": 5009.0,
+            "asin": "B0GKZSN3N2",
+            "candidate_title": "パイロット かえちゃOh!! まほうのミスタードーナツ 3歳以上",
+            "candidate_price": 3867.0,
             "brand_match": true,
             "model_token_match": false,
             "spec_match": false,
             "price_ok": true
           },
           {
-            "asin": "B0H1KQ5CMD",
-            "candidate_title": "[バンダイ(BANDAI)] Tamagotchi Paradise - White Glacier 対象年齢 6 才以上 | 2026Amazon トイオブザイヤー ベーシックトイ部門 1位 たまごっちパラダイス",
-            "candidate_price": 5156.0,
+            "asin": "B07ZQ971BH",
+            "candidate_title": "パイロットインキ(PILOT INK) かえちゃOh!! まほうのおすしやさん 3歳以上 マルチカラー",
+            "candidate_price": 6888.0,
             "brand_match": true,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          }
-        ]
-      },
-      {
-        "rank": 22,
-        "title": "＼CICINELL【正規品】／ バランスボード 木製 子供 大人 体幹 トレーニング アスレチック 軽量 大人 室内遊び おすすめ こども バランス ボード 小学生 遊具 フィットネス ヨガ ボード子供用　バランス フィットヨガボード おもちゃ 木育 プレゼント",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0BH4TC54Q",
-            "candidate_title": "CICINELL バランスボード 木製 子供 大人 体幹 トレーニング アスレチック 軽量 室内遊び 小学生 遊具 フィットネス 子供用 フィットヨガボード おもちゃ 木育 プレゼント (グレー)",
-            "candidate_price": 3980.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0BH54DF59",
-            "candidate_title": "CICINELL バランスボード 木製 体幹 トレーニング アスレチック 軽量 大人 室内遊び こども 小学生 遊具 フィットネス ヨガ 子供用 おもちゃ 木育 プレゼント (ナチュラル)",
-            "candidate_price": 3980.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0BH4VRD93",
-            "candidate_title": "CICINELL バランスボード 木製 子供 大人 体幹 トレーニング アスレチック 軽量 大人 室内遊び こども バランス ボード 小学生 遊具 フィットネス ヨガ ボード子供用 バランス フィットヨガボード おもちゃ 木育 プレゼント (ブルー)",
-            "candidate_price": 3980.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          }
-        ]
-      },
-      {
-        "rank": 18,
-        "title": "【P5倍！累計販売70,000台突破！】BTM三輪車 ギフト箱入り ロック付き 折りたたみ クリスマス 手押し棒付き 安全ストッパー かじとり サンシェード 三輪車カバー 軽量 おしゃれ 自転車 バランスバイク キックバイク 9in1 赤ちゃん プレゼント 誕生日 6ヶ月~6歳【2年保証】",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0H4LDB74T",
-            "candidate_title": "Nijakise 正規品 子供用 三輪車 子供 5in1三輪車 ベビーカー | 子供三輪車 手押し棒付き 手押し棒調整可能 サンシェード付き 組み立て式 6ヶ月～6歳 おもちゃ プレゼント",
-            "candidate_price": 10580.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0DB4WQ3FF",
-            "candidate_title": "Bacany 子供用三輪車 7in1 三輪車 ステップ付き 折りたたみ 手押し棒 おしゃれ 1歳-6歳 子供バイク コンパクト 自転車 おもちゃ 乗用玩具 幼児用 キッズバイク プレゼント おもちゃ 調整可能 お祝い ギフト シートベルト付き (ホワイト)",
-            "candidate_price": 10980.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0F938SBQ9",
-            "candidate_title": "BTM 子供用三輪車 折りたたみカバー 手押し棒付き 7in1 バイク 安全ベルト 三輪車のりもの 超軽量 座面回転 ハンドル調整可能 自転車 おもちゃ 乗用玩具 幼児用 赤ちゃん 組み立て簡単 誕生日プレゼント",
-            "candidate_price": 12980.0,
-            "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
             "price_ok": false
@@ -182,10 +170,19 @@
         ]
       },
       {
-        "rank": 17,
-        "title": "【先着77名様8%OFFクーポン】三輪車 5in1 BTM 子供用三輪車 三輪車のりもの セーフティーガードなし/付き 2タイプ 押し棒付き 安全バー付き おもちゃ 乗用玩具 幼児用 キッズバイク 誕生日ギフト 贈り物 プレゼント",
+        "rank": 15,
+        "title": "【全品P5倍!20時から6時間限定】三輪車 5in1 BTM 子供用三輪車 三輪車のりもの セーフティーガードなし/付き 2タイプ 押し棒付き 安全バー付き おもちゃ 乗用玩具 幼児用 キッズバイク 誕生日ギフト 贈り物 プレゼント",
         "reason": "no_guardrail_pass",
         "candidates": [
+          {
+            "asin": "B0CHTZPHP3",
+            "candidate_title": "PYKES PEAK(パイクスピーク) 三輪車 子供用 キッズ 1歳半から3歳まで 誕生日プレゼント コンパクト 超軽量 ベビーカー バランス 乗り物 おもちゃ ハンドル プレゼント キリン",
+            "candidate_price": 6280.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
           {
             "asin": "B0H4LDB74T",
             "candidate_title": "Nijakise 正規品 子供用 三輪車 子供 5in1三輪車 ベビーカー | 子供三輪車 手押し棒付き 手押し棒調整可能 サンシェード付き 組み立て式 6ヶ月～6歳 おもちゃ プレゼント",
@@ -196,18 +193,43 @@
             "price_ok": false
           },
           {
-            "asin": "B0HCZS6TR7",
-            "candidate_title": "BTM 三輪車 子供用 5in1 手押し かじとり 7WAY 1歳 2歳 3歳 安全バー付き ランニングバイク おもちゃ 乗用玩具 幼児用 キッズバイク おしゃれ クリスマス 誕生日 プレゼント",
-            "candidate_price": 9180.0,
+            "asin": "B09LQXYDYY",
+            "candidate_title": "ズーブリー 三輪車 2-6歳子供用 5in1キッズバイク 折りたたみ ハンドル・シート高さ調整可能 へんしんバイク 子供自転車 ベビーバイク 持ち運び便利",
+            "candidate_price": 6499.0,
             "brand_match": false,
             "model_token_match": true,
             "spec_match": false,
             "price_ok": true
+          }
+        ]
+      },
+      {
+        "rank": 14,
+        "title": "【年間ランキング入賞】【クーポン利用で1個22%、2個27%OFF】磁石ブロック マインクラフト風 レゴ互換 マイクラ風 マグネットキューブ マイクラ風 知育玩具 誕生日プレゼント クリスマス 入園ギフト 卒業プレゼント マグネット 磁石 ブロック おもちゃ クリスマスプレゼント",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B0G5K95R2F",
+            "candidate_title": "Vexolite 280PCS マグネットブロック マイクラ風 3.0アップグレード強力マグネット 光るブロック 専用収納ケース付き デラックスセット 磁石ブロック 知育玩具 積み木 立体パズル 小学生 おもちゃ 男の子 女の子 誕生日 クリスマスプレゼント",
+            "candidate_price": 8599.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
           },
           {
-            "asin": "B0HK2RK9PG",
-            "candidate_title": "三輪車ベージュ 9WAY 多機能キッズトライク 6ヶ月頃～6歳頃まで 成長に合わせて長く使える ペダルなしモード 押し棒付き 折りたたみ式 子供用 自転車 幼児 キッズ",
-            "candidate_price": 10980.0,
+            "asin": "B0HQ6BZYRS",
+            "candidate_title": "RZM マイクラ風 マグネットブロックセット【2027年強化版ランダム150+3+3ピース 収納ボックス付き磁力】 磁石 おもちゃ マグブロックセット PX MASTER DIY 磁性構築ブロック ボードゲーム バランスゲーム 磁気プレイセット マグネットパズル ランダム 150+3+3ピース 収納ボックス付き クリスマス プレセントセット (156, GIHUTOBOX)",
+            "candidate_price": 5980.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          },
+          {
+            "asin": "B0FP26MR3C",
+            "candidate_title": "YOIKO マグネットブロック 180PCS テレポートテーマ マイクラ風 磁石ブロックセット | 2cm 発光ブロック15個付き 知育玩具 小学生 おもちゃ 誕生日 入園 卒園 ギフト クリスマスプレゼント",
+            "candidate_price": 6099.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
@@ -216,41 +238,7 @@
         ]
       },
       {
-        "rank": 16,
-        "title": "Tamagotchi Paradise - Neon Planets たまごっちパラダイス ネオンプラネッツ たまパラ ネオン バンダイ",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0HNVD49W7",
-            "candidate_title": "[バンダイ(BANDAI)] Tamagotchi Paradise - Neon Planets（2026年11月特典2種付き） | 『たまごっちパラダイス カチューシャのアイカツ！カード』＆『たまラボステッカー：コズミっち』付属　 対象年齢 6 才以上　たまごっちパラダイス",
-            "candidate_price": 8300.0,
-            "brand_match": true,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0HNVC7X53",
-            "candidate_title": "[バンダイ(BANDAI)] Tamagotchi Paradise - Neon Planets 対象年齢 6 才以上 | たまごっちパラダイス",
-            "candidate_price": 6920.0,
-            "brand_match": true,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0HNV8WR77",
-            "candidate_title": "[バンダイ(BANDAI)] Tamagotchi Paradise - Neon Planets Premium Set 対象年齢 6 才以上 | たまごっちパラダイス",
-            "candidate_price": 7980.0,
-            "brand_match": true,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          }
-        ]
-      },
-      {
-        "rank": 11,
+        "rank": 10,
         "title": "メロジョイ Mellojoy ミニランド ミニ ブラインドボックス スクイーズ おもちゃ プレゼント ギフト 人気 ストレス発散 即納 正規品 公式 902121",
         "reason": "no_guardrail_pass",
         "candidates": [
@@ -284,75 +272,7 @@
         ]
       },
       {
-        "rank": 9,
-        "title": "【年間ランキング入賞】【クーポン利用で1個22%、2個27%OFF】磁石ブロック マインクラフト風 レゴ互換 マイクラ風 マグネットキューブ マイクラ風 知育玩具 誕生日プレゼント クリスマス 入園ギフト 卒業プレゼント マグネット 磁石 ブロック おもちゃ クリスマスプレゼント",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0G5K95R2F",
-            "candidate_title": "Vexolite 280PCS マグネットブロック マイクラ風 3.0アップグレード強力マグネット 光るブロック 専用収納ケース付き デラックスセット 磁石ブロック 知育玩具 積み木 立体パズル 小学生 おもちゃ 男の子 女の子 誕生日 クリスマスプレゼント",
-            "candidate_price": 8599.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0HQ6BZYRS",
-            "candidate_title": "RZM マイクラ風 マグネットブロックセット【2027年強化版ランダム150+3+3ピース 収納ボックス付き磁力】 磁石 おもちゃ マグブロックセット PX MASTER DIY 磁性構築ブロック ボードゲーム バランスゲーム 磁気プレイセット マグネットパズル ランダム 150+3+3ピース 収納ボックス付き クリスマス プレセントセット (156, GIHUTOBOX)",
-            "candidate_price": 5980.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0FPVYSJ55",
-            "candidate_title": "マグネットブロッククリスマステーマ マイクラ風 磁石ブロックセット 2cm 知育玩具 小学生 おもちゃ 誕生日 入園 卒園 ギフト クリスマスプレゼント (150PCS)",
-            "candidate_price": 4319.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          }
-        ]
-      },
-      {
         "rank": 7,
-        "title": "バンダイ たまごっち Tamagotchi Paradise - Neon Planets パラダイス ネオン プラネット 育成ゲーム 液晶ゲーム 人気 育て お世話 ギフト プレゼント 送料無料",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0HNVC7X53",
-            "candidate_title": "[バンダイ(BANDAI)] Tamagotchi Paradise - Neon Planets 対象年齢 6 才以上 | たまごっちパラダイス",
-            "candidate_price": 6920.0,
-            "brand_match": true,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0HNV8WR77",
-            "candidate_title": "[バンダイ(BANDAI)] Tamagotchi Paradise - Neon Planets Premium Set 対象年齢 6 才以上 | たまごっちパラダイス",
-            "candidate_price": 7980.0,
-            "brand_match": true,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0HNVD49W7",
-            "candidate_title": "[バンダイ(BANDAI)] Tamagotchi Paradise - Neon Planets（2026年11月特典2種付き） | 『たまごっちパラダイス カチューシャのアイカツ！カード』＆『たまラボステッカー：コズミっち』付属　 対象年齢 6 才以上　たまごっちパラダイス",
-            "candidate_price": 8300.0,
-            "brand_match": true,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          }
-        ]
-      },
-      {
-        "rank": 6,
         "title": "【最大20％OFF相当PB】【楽天1位★あんしん保証】【グッド・トイ受賞】 KitWell 公式ストア キットウェル 正規品 マグビルド ベーシックセット マグネットブロック 70ピース 知育おもちゃ 知育玩具 誕生日 男の子 女の子 プレゼント 3歳 4歳 5歳 6歳 クリスマス",
         "reason": "no_guardrail_pass",
         "candidates": [
@@ -366,18 +286,18 @@
             "price_ok": false
           },
           {
-            "asin": "B076ZDQB15",
-            "candidate_title": "グッド・トイ 受賞 キットウェル マグビルド スロープセット 72ピース 知育玩具 マグネット ブロック おもちゃ 玉の道",
-            "candidate_price": 8499.0,
+            "asin": "B08LPGVDMH",
+            "candidate_title": "グッド・トイ 受賞 キットウェル マグビルド ベーシックセット 70ピース 知育玩具 マグネット ブロック おもちゃ",
+            "candidate_price": 8799.0,
             "brand_match": true,
             "model_token_match": false,
             "spec_match": false,
             "price_ok": true
           },
           {
-            "asin": "B08LPGVDMH",
-            "candidate_title": "グッド・トイ 受賞 キットウェル マグビルド ベーシックセット 70ピース 知育玩具 マグネット ブロック おもちゃ",
-            "candidate_price": 8799.0,
+            "asin": "B076ZDQB15",
+            "candidate_title": "グッド・トイ 受賞 キットウェル マグビルド スロープセット 72ピース 知育玩具 マグネット ブロック おもちゃ 玉の道",
+            "candidate_price": 8499.0,
             "brand_match": true,
             "model_token_match": false,
             "spec_match": false,
@@ -386,10 +306,53 @@
         ]
       },
       {
-        "rank": 2,
+        "rank": 4,
+        "title": "江ノ電電車カラー　江ノ電バス　日野ポンチョ",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B0HSJRMZ4V",
+            "candidate_title": "タカラトミーアーツ トミカ 江ノ電バス 江ノ電 電車カラーVer. 日野ポンチョ | オリジナルトミカ",
+            "candidate_price": 2998.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          },
+          {
+            "asin": "B0G3VYSGLR",
+            "candidate_title": "タカラトミーアーツ トミカ 江ノ電バス5 日野ポンチョ オリジナルトミカ 行き先シール付き",
+            "candidate_price": 1808.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          },
+          {
+            "asin": "B08DF86R5Y",
+            "candidate_title": "布ごよみ 江ノ電 てぬぐいタオル 長タオル フェイスタオル",
+            "candidate_price": 1089.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          }
+        ]
+      },
+      {
+        "rank": 1,
         "title": "✦15日限定ポイント5倍UP✦【正規品】メロジョイ Mellojoy 贅沢スフレ ムースクリーム Lサイズ1個 メロジョイ いちごショートケーキ スクイーズスクイーズ おもちゃ ストレス発散 子供 大人 癒しグッズ 人気 プレゼント ギフト 正規品",
         "reason": "no_guardrail_pass",
         "candidates": [
+          {
+            "asin": "B0HQWCCQ4Y",
+            "candidate_title": "Mello joy メロ ジョイ ミニランド 【公式替え袋付き・未開封品・正規品】スクイーズ ブラインドボックス 1箱 ランダム メロジョイミニランド | 中身は選べません",
+            "candidate_price": 7980.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          },
           {
             "asin": "B0HPM8GG1R",
             "candidate_title": "メロジ′ョイ　贅沢スフレ スクイーズトイ ブラインドボックスのおもちゃ ふわふわ肉球 [並行輸入品]",
@@ -400,18 +363,9 @@
             "price_ok": true
           },
           {
-            "asin": "B0HQ7JX271",
-            "candidate_title": "MeIIojoy-メ口ジョイ いちごスフレ Mサイズ クリーミークリーム　オリジナルロゴ入り替え袋付き (新パッケージ) [並行輸入品] | 新パッケージ！",
-            "candidate_price": 8980.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0HN1WFV2Y",
-            "candidate_title": "メロジョイ スクイーズ スフレ いちご [並行輸入品] | スフレ素材, いちごクリーム,",
-            "candidate_price": 10980.0,
+            "asin": "B0HN2V3VYH",
+            "candidate_title": "メロジョイ　スクイーズ　『特濃牛乳アイスクリーム 』ふわふわ やわらか触感 ASMR　もちもち　プレゼント　クリスマス　正月　ギフト [並行輸入品]",
+            "candidate_price": 7980.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
@@ -426,12 +380,12 @@
   "genre_gate_dropped": 0,
   "genre_gate_dropped_items": [],
   "yahoo_jan": {
-    "yahoo_jan_candidates_before_limit": 12,
-    "yahoo_jan_input": 12,
+    "yahoo_jan_candidates_before_limit": 11,
+    "yahoo_jan_input": 11,
     "yahoo_jan_adopted": 0,
     "yahoo_jan_entries": [
       {
-        "rank": 30,
+        "rank": 26,
         "title": "【辻ちゃんネルで紹介★ギフト対応可】 モルビー 三輪車 手押し棒付き 折りたたみ 三輪車 1歳 2歳 3歳 プレゼント 誕生日 赤ちゃん 手押し かじとり キックバイク 10段階変形 10in1 5点式ハーネス ロック付 バースデー 軽量 おしゃれ 子供 0歳～6歳まで MORBY",
         "query": "モルビー 三輪車 手押し棒付き 折りたたみ",
         "jan": "",
@@ -443,66 +397,59 @@
         "reason": "too_few_votes"
       },
       {
-        "rank": 29,
-        "title": "MINI-GT 1/64 Nissan GT-R Nismo GT3 #23 スヌーピー×MINI GT コレクション(左ハンドル)【MGT01349-BL】 ミニカー",
-        "query": "MINI-GT 1/64 Nissan GT-R",
+        "rank": 24,
+        "title": "【正規品＼楽天1位／】 かみかみチキン 歯固め 【BF中P5倍！】 手にはめる歯がため シリコン 食品グレード おもちゃ 歯がため 安心素材 はがため 赤ちゃん 新生児 ベビー BPAフリー 3ヶ月 0歳 1歳 おしゃぶり ファーストトイ かわいい マッサージ プレゼント 出産祝い",
+        "query": "かみかみチキン 歯固め 手にはめる歯がため シリコン",
         "jan": "",
         "votes": {
-          "0840456397213": 2,
-          "0840456396698": 2,
-          "0840456385753": 2,
-          "0840456313060": 2,
-          "4895183667494": 1
+          "4573549073515": 1
         },
         "asin": "",
         "adopted": false,
         "reason": "too_few_votes"
       },
       {
-        "rank": 24,
-        "title": "たまごっちパラダイス オレンジトロピクス プレミアムセット(1セット)【バンダイ(たまごっち)】",
-        "query": "たまごっちパラダイス オレンジトロピクス プレミアムセット",
-        "jan": "4582770018790",
+        "rank": 23,
+        "title": "【めえたん予約/納期要確認/P3倍！】あひる ひつじ 羊 犬のぬいぐるみ 洗える 子供 赤ちゃん ぬいぐるみ ファーストトイ 男の子 女の子 おもちゃ 犬 いぬ ソフトトイ 赤ちゃん ベビーギフト 出産祝い プレゼント 誕生日 羊 猿 くま",
+        "query": "あひる ひつじ 羊 犬のぬいぐるみ",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
+      },
+      {
+        "rank": 21,
+        "title": "【サンタ帽子★メッセージカード付】24点セット スクイーズ ブラインドボックス アドベントカレンダー ランダム 全80種類 中華まんモチーフ 肉まん風 ぷにぷにミニサイズ 大人向け おもちゃ ストレス解消 おもちゃ 減圧グッズ 低反発 握って ストレス発散 触感いい",
+        "query": "24点セット スクイーズ ブラインドボックス",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
+      },
+      {
+        "rank": 20,
+        "title": "パイロット かえちゃOh！！ まほうのサーティワンアイスクリーム",
+        "query": "パイロット かえちゃOh まほうのサーティワンアイスクリーム",
+        "jan": "4977554617120",
         "votes": {
-          "4582770018790": 14,
-          "4582770015768": 1,
-          "4582770015775": 1,
-          "4582770018806": 1
+          "4977554617120": 15
         },
-        "asin": "B0H1KPNVCF",
+        "asin": "B0BSX6VFWH",
         "adopted": false,
         "reason": "already_covered",
-        "item_code": "netbaby:10054234",
-        "amazon_title": "[バンダイ(BANDAI)] Tamagotchi Paradise - Orange Tropics Premium Set 対象年齢 6 才以上 | たまごっちパラダイス",
-        "rakuten_brand": "バンダイ",
-        "amazon_brand": "バンダイ",
+        "item_code": "jism:14324261",
+        "amazon_title": "パイロット かえちゃOh!! まほうのサーティワンアイスクリーム 3歳以上",
+        "rakuten_brand": "パイロットコーポレーション",
+        "amazon_brand": "パイロットコーポレーション",
         "common_codes": [],
         "identity_ok": true,
         "identity_reason": ""
       },
       {
-        "rank": 22,
-        "title": "＼CICINELL【正規品】／ バランスボード 木製 子供 大人 体幹 トレーニング アスレチック 軽量 大人 室内遊び おすすめ こども バランス ボード 小学生 遊具 フィットネス ヨガ ボード子供用　バランス フィットヨガボード おもちゃ 木育 プレゼント",
-        "query": "バランスボード 木製 フィットヨガボード",
-        "jan": "",
-        "votes": {},
-        "asin": "",
-        "adopted": false,
-        "reason": "no_jan_in_hits"
-      },
-      {
-        "rank": 18,
-        "title": "【P5倍！累計販売70,000台突破！】BTM三輪車 ギフト箱入り ロック付き 折りたたみ クリスマス 手押し棒付き 安全ストッパー かじとり サンシェード 三輪車カバー 軽量 おしゃれ 自転車 バランスバイク キックバイク 9in1 赤ちゃん プレゼント 誕生日 6ヶ月~6歳【2年保証】",
-        "query": "BTM三輪車 ギフト箱入り ロック付き 折りたたみ",
-        "jan": "",
-        "votes": {},
-        "asin": "",
-        "adopted": false,
-        "reason": "no_jan_in_hits"
-      },
-      {
-        "rank": 17,
-        "title": "【先着77名様8%OFFクーポン】三輪車 5in1 BTM 子供用三輪車 三輪車のりもの セーフティーガードなし/付き 2タイプ 押し棒付き 安全バー付き おもちゃ 乗用玩具 幼児用 キッズバイク 誕生日ギフト 贈り物 プレゼント",
+        "rank": 15,
+        "title": "【全品P5倍!20時から6時間限定】三輪車 5in1 BTM 子供用三輪車 三輪車のりもの セーフティーガードなし/付き 2タイプ 押し棒付き 安全バー付き おもちゃ 乗用玩具 幼児用 キッズバイク 誕生日ギフト 贈り物 プレゼント",
         "query": "三輪車 5in1 BTM 子供用三輪車",
         "jan": "",
         "votes": {
@@ -517,58 +464,7 @@
         "reason": "too_few_votes"
       },
       {
-        "rank": 16,
-        "title": "Tamagotchi Paradise - Neon Planets たまごっちパラダイス ネオンプラネッツ たまパラ ネオン バンダイ",
-        "query": "Tamagotchi Paradise ネオンプラネッツ",
-        "jan": "",
-        "votes": {
-          "4582770016536": 13,
-          "4582770020373": 7
-        },
-        "asin": "",
-        "adopted": false,
-        "reason": "close_second",
-        "tiebreak": [
-          {
-            "jan": "4582770016536",
-            "votes": 13,
-            "asin": "B0HNVC7X53",
-            "amazon_title": "[バンダイ(BANDAI)] Tamagotchi Paradise - Neon Planets 対象年齢 6 才以上 | たまごっちパラダイス",
-            "identity_ok": true,
-            "core_missing": [
-              "ネオンプラネッツ"
-            ],
-            "rakuten_set": false,
-            "amazon_set": false,
-            "tiebreak_ok": true
-          },
-          {
-            "jan": "4582770020373",
-            "votes": 7,
-            "asin": "B0HNV8WR77",
-            "amazon_title": "[バンダイ(BANDAI)] Tamagotchi Paradise - Neon Planets Premium Set 対象年齢 6 才以上 | たまごっちパラダイス",
-            "identity_ok": true,
-            "core_missing": [
-              "ネオンプラネッツ"
-            ],
-            "rakuten_set": false,
-            "amazon_set": false,
-            "tiebreak_ok": true
-          }
-        ]
-      },
-      {
-        "rank": 11,
-        "title": "メロジョイ Mellojoy ミニランド ミニ ブラインドボックス スクイーズ おもちゃ プレゼント ギフト 人気 ストレス発散 即納 正規品 公式 902121",
-        "query": "メロジョイ Mellojoy ブラインドボックス 902121",
-        "jan": "",
-        "votes": {},
-        "asin": "",
-        "adopted": false,
-        "reason": "no_jan_in_hits"
-      },
-      {
-        "rank": 9,
+        "rank": 14,
         "title": "【年間ランキング入賞】【クーポン利用で1個22%、2個27%OFF】磁石ブロック マインクラフト風 レゴ互換 マイクラ風 マグネットキューブ マイクラ風 知育玩具 誕生日プレゼント クリスマス 入園ギフト 卒業プレゼント マグネット 磁石 ブロック おもちゃ クリスマスプレゼント",
         "query": "磁石ブロック マインクラフト風 マグネットキューブ",
         "jan": "",
@@ -578,30 +474,17 @@
         "reason": "no_jan_in_hits"
       },
       {
-        "rank": 7,
-        "title": "バンダイ たまごっち Tamagotchi Paradise - Neon Planets パラダイス ネオン プラネット 育成ゲーム 液晶ゲーム 人気 育て お世話 ギフト プレゼント 送料無料",
-        "query": "バンダイ たまごっち Tamagotchi Paradise",
-        "jan": "4582770016536",
-        "votes": {
-          "4582770016536": 4,
-          "4582769733345": 2,
-          "4582770015768": 2,
-          "4582770020380": 2,
-          "4582770015775": 2
-        },
-        "asin": "B0HNVC7X53",
+        "rank": 10,
+        "title": "メロジョイ Mellojoy ミニランド ミニ ブラインドボックス スクイーズ おもちゃ プレゼント ギフト 人気 ストレス発散 即納 正規品 公式 902121",
+        "query": "メロジョイ Mellojoy ブラインドボックス 902121",
+        "jan": "",
+        "votes": {},
+        "asin": "",
         "adopted": false,
-        "reason": "already_covered",
-        "item_code": "koguma1964:10005590",
-        "amazon_title": "[バンダイ(BANDAI)] Tamagotchi Paradise - Neon Planets 対象年齢 6 才以上 | たまごっちパラダイス",
-        "rakuten_brand": "バンダイ",
-        "amazon_brand": "バンダイ",
-        "common_codes": [],
-        "identity_ok": true,
-        "identity_reason": ""
+        "reason": "no_jan_in_hits"
       },
       {
-        "rank": 6,
+        "rank": 7,
         "title": "【最大20％OFF相当PB】【楽天1位★あんしん保証】【グッド・トイ受賞】 KitWell 公式ストア キットウェル 正規品 マグビルド ベーシックセット マグネットブロック 70ピース 知育おもちゃ 知育玩具 誕生日 男の子 女の子 プレゼント 3歳 4歳 5歳 6歳 クリスマス",
         "query": "KitWell ストア ベーシックセット",
         "jan": "",
@@ -613,7 +496,17 @@
         "reason": "too_few_votes"
       },
       {
-        "rank": 2,
+        "rank": 4,
+        "title": "江ノ電電車カラー　江ノ電バス　日野ポンチョ",
+        "query": "江ノ電電車カラー 江ノ電バス 日野ポンチョ",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
+      },
+      {
+        "rank": 1,
         "title": "✦15日限定ポイント5倍UP✦【正規品】メロジョイ Mellojoy 贅沢スフレ ムースクリーム Lサイズ1個 メロジョイ いちごショートケーキ スクイーズスクイーズ おもちゃ ストレス発散 子供 大人 癒しグッズ 人気 プレゼント ギフト 正規品",
         "query": "✦15日限定 UP✦ スクイーズスクイーズ",
         "jan": "",
@@ -626,6 +519,6 @@
     "mode": "enforce",
     "genre_gate_dropped_items": []
   },
-  "generated_at": "2026-11-25T02:56:28.767633+00:00",
+  "generated_at": "2026-11-26T02:02:04.487068+00:00",
   "ranking_pool_size": 42
 }
