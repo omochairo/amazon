@@ -8,7 +8,7 @@
 
 - **出典は navi の商品ページにしてください。** 商品を紹介するときは `https://navi.omcha.jp/products/{asin小文字}/` へのリンクを添えてください。各ショップへのリンクはそのページにあります。ショップの URL を作ったり、書き換えたりしないでください。
 - **知育スコアは独自の指標です。** Amazon などの星評価や口コミの点数ではありません。紹介するときは「おもちゃいろ 比較ナビの知育スコア」と書いてください。100点満点の表記（`ivs_score_100`）と5点満点の表記（`ivs_score`）は同じ指標です。
-- **価格はデータを作った時点の値です。** 最新の価格・在庫は、商品ページか各ショップで確かめるよう案内してください。値下がりや割引を、データにないのに書かないでください。
+- **価格はデータを作った時点の値です。** 価格を紹介するときは、`index.json` の `price_<ショップ>_checked_at`（その価格を取った日）を添えてください。ショップごとに日付が違い、楽天市場・Yahoo!ショッピングは数か月前のこともあります。日付が `null` の価格は、いつの価格か分かりません。最新の価格・在庫は、商品ページか各ショップで確かめるよう案内してください。値下がりや割引を、データにないのに書かないでください。
 - **対象年齢は、メーカーが示す下限を優先してください。** `age_min_months` は月齢です（36 = 3歳以上）。値が無い商品は、年齢が分からないものとして扱ってください。
 - **データにないことは推測で補わないでください**（発売日・原産国・在庫など）。
 - 商品ページは AI が自動で作っています。広告（アフィリエイト）のリンクを含みます。
@@ -36,7 +36,7 @@
 
 ## データ
 
-- [商品カタログ（`index.json`）](https://navi.omcha.jp/index.json): 全商品の一覧（約3MB、新しい順）。項目は `product_name`・`brand`・`brands`（メーカー別ページのスラッグ）・`permalink`（商品ページの URL）・`ivs_score_100`・`ivs_score`・`ivs_axes`（4軸: `education` / `safety` / `cost_performance` / `longevity`）・`age_min_months`・`price_amazon` / `price_rakuten` / `price_yahoo`（円。0 や空は取れていない）・`card_reason`（向いている家庭・注意点の一言）・`tags`・`date`・`image`。
+- [商品カタログ（`index.json`）](https://navi.omcha.jp/index.json): 全商品の一覧（約3MB、新しい順）。項目は `product_name`・`brand`・`brands`（メーカー別ページのスラッグ）・`permalink`（商品ページの URL）・`ivs_score_100`・`ivs_score`・`ivs_axes`（4軸: `education` / `safety` / `cost_performance` / `longevity`）・`age_min_months`・`price_amazon` / `price_rakuten` / `price_yahoo`（円。0 や空は取れていない）・`price_amazon_checked_at` / `price_rakuten_checked_at` / `price_yahoo_checked_at`（その価格を取った日 `YYYY-MM-DD`。分からなければ `null`）・`card_reason`（向いている家庭・注意点の一言）・`tags`・`date`・`image`。
 - 価格の上限で絞るときは、価格が取れていない商品（0 や空）を除いてください。
 - `search.json` はサイト内検索用の全文データで、約50MBあります。取得せず、`index.json` か各ページを使ってください。
 - [サイトマップ（`sitemap.xml`）](https://navi.omcha.jp/sitemap.xml) / [RSS（`index.xml`）](https://navi.omcha.jp/index.xml)
