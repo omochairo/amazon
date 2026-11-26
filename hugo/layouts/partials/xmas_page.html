@@ -68,14 +68,23 @@
 {{- /* ===== 4. 比較表 (全件。横にスクロール) ===== */}}
 <section class="xmas-table" id="xmas-table" aria-labelledby="xmas-table-title">
   <h2 id="xmas-table-title">{{ $label }}へのクリスマスプレゼント {{ $n }}件の比較表</h2>
-  <p class="xmas-table-note">表は横にスクロールできます。価格は毎日の記録による集計時点の最安値です。「ふだん比」は Amazon の直近90日のふだんの価格との差（5%以上・100円以上安いときだけ）。声の出典は、評価のもとになった購入者の声・レビュー記事の数です。</p>
+  {{- /* 対象年齢はページの年齢でほぼそろう (2・3・5 歳は 15 件とも同じ) ので列にせず、
+       商品の画像を出す。年齢は、いちばん多い値と違う商品だけ商品名の下に出す (K 2026-11-26)。
+       0 か月 (0歳〜) も数えるので with でなく nil と比べる。同数なら月齢の小さい方 */}}
+  {{- $ageCount := dict }}
+  {{- range $items }}
+  {{- $a := index . "age_min_months" }}
+  {{- if ne (printf "%v" $a) "<nil>" }}{{ $k := printf "%d" (int $a) }}{{ $ageCount = merge $ageCount (dict $k (add (index $ageCount $k | default 0) 1)) }}{{ end }}
+  {{- end }}
+  {{- $ageMode := "" }}{{ $ageBest := 0 }}
+  {{- range $k, $v := $ageCount }}{{ if or (gt $v $ageBest) (and (eq $v $ageBest) (lt (int $k) (int $ageMode))) }}{{ $ageBest = $v }}{{ $ageMode = $k }}{{ end }}{{ end }}
+  <p class="xmas-table-note">表は横にスクロールできます。価格は毎日の記録による集計時点の最安値です。「ふだん比」は Amazon の直近90日のふだんの価格との差（5%以上・100円以上安いときだけ）。声の出典は、評価のもとになった購入者の声・レビュー記事の数です。{{ with $ageMode }}対象年齢は、商品名の下に書いたもの以外は{{ partial "age_label.html" (int .) }}です。{{ end }}</p>
   <div class="xmas-table-scroll" tabindex="0" role="region" aria-label="比較表（横にスクロールできます）">
     <table class="xmas-compare">
       <thead>
         <tr>
           <th scope="col">順位・商品</th>
           <th scope="col">最安値</th>
-          <th scope="col">対象年齢</th>
           <th scope="col">遊びのタイプ</th>
           <th scope="col">知育スコア</th>
           <th scope="col">声の出典</th>
@@ -86,9 +95,16 @@
         {{- $x := .xmas | default dict }}
         {{- $age := index . "age_min_months" }}
         <tr>
-          <th scope="row" class="xmas-compare-name"><span class="xmas-compare-rank">{{ .rank }}</span><a href="{{ .url_internal }}" data-nav-slot="xmas-table">{{ .name }}</a></th>
+          <th scope="row" class="xmas-compare-name">
+            <a class="xmas-compare-link" href="{{ .url_internal }}" data-nav-slot="xmas-table">
+              <span class="xmas-compare-head"><span class="xmas-compare-rank">{{ .rank }}</span>{{ with .image }}<img src="{{ . }}" alt="" loading="lazy" decoding="async" width="56" height="56">{{ end }}</span>
+              <span class="xmas-compare-title">{{ .name }}</span>
+            </a>
+            {{- if and (ne (printf "%v" $age) "<nil>") (ne (printf "%d" (int $age)) $ageMode) }}
+            <span class="xmas-compare-age">対象 {{ partial "age_label.html" (int $age) }}</span>
+            {{- end }}
+          </th>
           <td class="xmas-compare-price">{{ with .best_price }}¥{{ lang.FormatNumberCustom 0 . }}{{ end }}{{ with $x.price }}<br><span class="xmas-compare-drop">Amazon がふだんより{{ lang.FormatNumberCustom 0 .drop_yen }}円安い</span>{{ end }}</td>
-          <td>{{ if ne (printf "%v" $age) "<nil>" }}{{ partial "age_label.html" (int $age) }}{{ else }}—{{ end }}</td>
           <td>{{ with $x.play_type }}{{ .emoji }} {{ .label }}{{ else }}—{{ end }}</td>
           <td class="xmas-compare-num">{{ with .ivs_100 }}{{ int . }}{{ end }}</td>
           <td class="xmas-compare-num">{{ with $x.voice_sources }}{{ . }}件{{ else }}—{{ end }}</td>
