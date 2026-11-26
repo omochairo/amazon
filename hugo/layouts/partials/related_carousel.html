@@ -226,6 +226,38 @@
 </aside>
 {{- end }}
 
+{{- /* --- 家族で遊べるゲーム (navi-brain#216 案 A): ゲームの商品 → /family-games/ の同じ年齢帯。
+       front matter の family_games_band は build_post.py が family_games_page.band_for_article で
+       書く (ページの選び方と同じ種類・年齢の判定)。行き先の年齢帯に商品が無い日 (歯止めで出さない帯) は
+       ページの先頭へ、ページ自体にデータが無い日はバナーを出さない。 */ -}}
+{{- with .Params.family_games_band -}}
+  {{- $gk := . -}}
+  {{- with index site.Data.features "family-games" -}}
+    {{- if and .items .games_page -}}
+      {{- $gb := dict -}}
+      {{- range .games_page.bands }}{{ if and (eq .key $gk) (gt (int .count) 0) }}{{ $gb = . }}{{ end }}{{ end -}}
+      {{- $gHref := "/family-games/" -}}
+      {{- $gTitle := "家族で遊べるボードゲーム・かるた" -}}
+      {{- $gMeta := "3歳・4〜5歳・小学生の年齢別おすすめ" -}}
+      {{- with $gb.key -}}
+        {{- $gHref = printf "/family-games/#games-%s" . -}}
+        {{- $gTitle = printf "%sと家族で遊べるゲーム %d選" $gb.label (int $gb.count) -}}
+        {{- $gMeta = "ボードゲーム・かるた・カードゲームを人数・時間・最安値で比べる" -}}
+      {{- end }}
+<aside class="hub-banner" aria-label="{{ $gTitle }}">
+  <a class="hub-banner-link" href="{{ $gHref | relURL }}">
+    <span class="hub-banner-icon" aria-hidden="true">🎲</span>
+    <span class="hub-banner-text">
+      <span class="hub-banner-title">{{ $gTitle }}</span>
+      <span class="hub-banner-meta">{{ $gMeta }}</span>
+    </span>
+    <span class="hub-banner-cta" aria-hidden="true">比べて選ぶ →</span>
+  </a>
+</aside>
+    {{- end -}}
+  {{- end -}}
+{{- end }}
+
 {{- /* --- Age hub banner (#2687 柱1): サテライト商品 → 年齢別 category hub
        (/toys-age-N/) への逆リンク。age_min_months から単一 bucket を計算し該当する
        1 つの年齢 hub へ送る (build_category_hubs.py の AGE_HUBS と同じ境界・最小年齢

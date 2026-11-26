@@ -170,6 +170,21 @@ def band_of(mm: int | None) -> dict[str, Any] | None:
     return next((b for b in BANDS if b["min"] <= mm < b["max"]), None)
 
 
+def band_for_article(raw: dict[str, Any]) -> str | None:
+    """記事がこのページの対象のゲームなら、その年齢帯のキー。違えば None。
+
+    商品ページから /family-games/#games-<key> へ送るバナー (related_carousel.html) が使う
+    (build_post.py が front matter の family_games_band に書く)。種類と年齢の読み方は
+    ページの選び方 (kind_of・build_min_months_index) と同じにして、ページに載る商品と
+    バナーの出る商品の線引きを揃える。
+    """
+    if kind_of(raw) is None:
+        return None
+    from build_feature_lists import age_min_months_from_article  # 循環 import を避ける
+    band = band_of(age_min_months_from_article(raw))
+    return band["key"] if band else None
+
+
 def game_score(rec, mm: int, band: dict[str, Any]) -> float:
     """年齢の合い方 (その年齢から 20 / 1 歳下から 14 / それより下 6) + 知育スコア×0.45。
 

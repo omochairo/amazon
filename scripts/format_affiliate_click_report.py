@@ -40,11 +40,12 @@ BUY_BOX_LAUNCH = date(2026, 11, 13)
 # 行は eventName を持つので、イベントの行と明示的に分ける (購入クリックに混ぜない)。
 NAV_EVENTS = ("nav_click", "home_section_view")
 # トップの区画 (index.html の data-nav-section) の上からの並び。条件付きは再訪者のみ表示
-HOME_SECTIONS = ("last-diagnosis", "spotlight", "xmas", "characters", "new-arrivals",
+HOME_SECTIONS = ("last-diagnosis", "spotlight", "xmas", "games", "characters", "new-arrivals",
                  "age-timeline", "latest", "score", "tags", "brands", "recently-viewed", "reco")
 HOME_SECTIONS_CONDITIONAL = ("last-diagnosis", "recently-viewed", "reco")
-# 時期だけ表示する区画 (クリスマスは 10/1〜12/25。index.html の $xmasSeason)
-HOME_SECTIONS_SEASONAL = ("xmas",)
+# 時期だけ表示する区画と、その期間 (クリスマスは index.html の $xmasSeason、
+# お正月に家族で遊ぶゲームは $oshogatsu。navi-brain#216)
+HOME_SECTIONS_SEASONAL = {"xmas": "10/1〜12/25", "games": "12/1〜1/15"}
 NAV_LAUNCH = "2026-11-25"
 NAV_TOP = 30
 
@@ -72,6 +73,7 @@ GAMES_NAV_SLOTS = (
     ("games-card-open", "カードの「〜を見る」を開く"),
     ("games-oshogatsu", "お正月遊びの一覧 → 記事"),
     ("games-oshogatsu-jump", "結論 → お正月遊びの一覧 (12/1〜1/15 だけ)"),
+    ("games-hub", "年齢帯の下 → 同じ年齢の年齢別ランキング"),
 )
 GAMES_CTA_SLOTS = (("games-card-shop", "カード → 店"),)
 GAMES_TO_ARTICLE = ("games-top3", "games-table", "games-card-article", "games-oshogatsu")
@@ -414,7 +416,7 @@ def table_home_sections(nav, events) -> list[str]:
         if name in HOME_SECTIONS_CONDITIONAL:
             note = "条件付き（再訪者のみ表示）"
         elif name in HOME_SECTIONS_SEASONAL:
-            note = "時期のみ表示（10/1〜12/25）"
+            note = f"時期のみ表示（{HOME_SECTIONS_SEASONAL[name]}）"
         else:
             note = ""
         rows.append([f"`{slot}`", views.get(slot, 0), _rate(views.get(slot, 0), pv), note])

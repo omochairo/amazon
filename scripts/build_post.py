@@ -73,6 +73,7 @@ from age_semantics import (
 )
 from build_feature_lists import PRICE_BANDS, parse_min_months
 import build_category_hubs
+import family_games_page
 import ip_hubs
 from fetch_amazon import get_secret
 from filter_raw_per_asin import exclude_title_only
@@ -4251,6 +4252,11 @@ def _frontmatter_meta(
         meta["toy_types"] = list(data["toy_types"])
     if data.get("future_age_cards"):
         meta["future_age"] = list(data["future_age_cards"])
+    # navi-brain#216: ゲームの記事は「家族で遊べるゲーム」(/family-games/) の同じ年齢帯へ
+    # 送る (related_carousel.html のバナー)。判定は family_games_page.py と同じ。
+    games_band = family_games_page.band_for_article(data)
+    if games_band:
+        meta["family_games_band"] = games_band
 
     # #1124: Jules 側の ivs_score / ivs_detail 生成は廃止。スコアは
     # brand_tier(25) + safety(10) + age(10) + edu(15) + media(15) + market(10) + price(15)

@@ -34,6 +34,12 @@
   </div>
 </header>
 
+{{- /* navi-brain#216: ゲームのタグのページから、年齢で選べる /family-games/ へ (タグのページは新着順で、
+       年齢では選べない)。タグは category_taxonomy.yaml のゲームのグループ + かるた・すごろく */ -}}
+{{- if and (eq $kind "tags") (in (slice "ボードゲーム" "カードゲーム" "パーティーゲーム" "バランスゲーム" "かるた" "すごろく") .Title) }}
+{{- partial "games_links.html" (dict "band" "" "label" "🎲 年齢で選ぶなら") }}
+{{- end }}
+
 {{- /* navi-brain#209: ブランドページの最安値は、このページに並ぶ商品カードと同じ
        「今の最安値」(partials/cheapest_price.html) の最小値。brand_hub.json の
        lowest_price は記事を書いた時点の価格 (product.best_price) なので、表示には使わない。 */ -}}

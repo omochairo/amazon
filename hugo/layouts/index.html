@@ -139,6 +139,32 @@
 {{- end }}
 {{- end }}
 
+{{- /* === Section: お正月に家族で遊ぶゲームの入口 (navi-brain#216 案 A) — 12/1〜1/15 (日本時間) だけ。
+       /family-games/ のお正月遊びの節が出る期間 (feature.html の $oshogatsu) と同じ。12 月はクリスマスの区画の下に並ぶ。
+       行き先は build_category_hubs.py が作る family-games.json の年齢帯のうち商品があるものだけ
+       (partials/games_links.html と同じ)。データが無ければ区画ごと出さない。 */ -}}
+{{- $oshogatsu := or (eq $month 12) (and (eq $month 1) (le $jst.Day 15)) -}}
+{{- if $oshogatsu }}
+{{- $gameBands := slice }}
+{{- with index site.Data.features "family-games" }}
+  {{- if and .items .games_page }}
+    {{- range .games_page.bands }}{{ if gt (int .count) 0 }}{{ $gameBands = $gameBands | append . }}{{ end }}{{ end }}
+  {{- end }}
+{{- end }}
+{{- with $gameBands }}
+<section class="home-section home-games" data-nav-section="games">
+  <header class="home-section-header">
+    <h2>🎍 お正月に家族で遊ぶボードゲーム・かるた（年齢別）</h2>
+  </header>
+  <div class="tag-chips">
+    {{- range . }}
+    <a class="tag-chip" data-nav-slot="games:{{ .key }}" href="{{ printf "family-games/#games-%s" .key | relURL }}">{{ .label }}</a>
+    {{- end }}
+  </div>
+</section>
+{{- end }}
+{{- end }}
+
 {{- /* === Section: キャラクターから探す (navi-brain#213 R5) — キャラクター別の束ねページを自動で並べる。
        build_category_hubs.py が作る hub_index.json の key が ip- の行 ({key,label,url}) を使う。
        商品があって作られたページだけが載るので、集計中の空ページへはリンクしない。

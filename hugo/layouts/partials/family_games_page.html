@@ -136,6 +136,11 @@
     {{- end }}
   </ol>
   <p class="games-empty" data-gf-empty hidden>この年齢には、選んだ条件に合う商品がありません。</p>
+  {{- /* ゲーム以外も見たい人へ、同じ年齢の hub (年齢別ランキング)。小学生の帯は 6 歳以上の hub */ -}}
+  {{- $hubURL := index (dict "age3" "/toys-age-3/" "age4" "/toys-age-4/" "school" "/toys-age-6/") $key | default "" }}
+  {{- with $hubURL }}{{ with site.GetPage . }}
+  <p class="games-hub-link">ゲーム以外のおもちゃも見るなら: <a data-nav-slot="games-hub" href="{{ .RelPermalink }}">{{ index (split (.Title | plainify) "｜") 0 }} →</a></p>
+  {{- end }}{{ end }}
 </section>
 {{- end }}
 

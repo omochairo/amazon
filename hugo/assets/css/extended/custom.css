@@ -8672,6 +8672,13 @@ a.sale-notice-main::after {
 
 /* 家族で遊べるゲーム (年齢別) /family-games/ (navi-brain#216)。カード・表・結論はクリスマスページの xmas-* を共用 */
 .games-jump { margin: .4rem 0 0; font-size: .9rem; }
+/* navi-brain#216 サイト内リンク: 年齢 hub・クリスマス・ゲームのタグのページから /family-games/ への 1 行 (partials/games_links.html)。
+   タグのページは .post-content の外にあるので、.xmas-hub-callout と違って親で絞らない */
+.games-callout { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .75rem; margin: 1rem 0; padding: .6rem .9rem; border: 1px solid var(--border); border-radius: 10px; font-size: .92rem; }
+.games-callout-label { font-weight: 700; }
+.games-callout a { display: inline-block; padding: .55rem .1rem; font-weight: 600; text-decoration: underline; text-underline-offset: .15em; }
+.games-hub-link { margin: .8rem 0 0; font-size: .9rem; }
+.games-hub-link a { display: inline-block; padding: .4rem 0; font-weight: 600; text-decoration: underline; text-underline-offset: .15em; }
 .games-filter[hidden], .games-band [data-games-row][hidden], .games-empty[hidden] { display: none !important; }
 .games-filter { margin: 1rem 0; padding: .7rem .9rem; border: 1px solid var(--border); border-radius: 10px; background: var(--entry); }
 .games-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; margin: .25rem 0; }
