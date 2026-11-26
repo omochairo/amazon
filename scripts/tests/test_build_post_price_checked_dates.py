@@ -23,6 +23,7 @@ import build_post  # noqa: E402
 from test_build_post_buy_offer import _data, _prices, _render  # noqa: E402
 
 ASIN = "B0TESTBUY1"
+# 観測は UTC 11/25 21:10 = 日本時間 11/26 06:10。表示は日本時間の日付 (#12283)
 AMZ = {"price": 3000, "url": f"https://www.amazon.co.jp/dp/{ASIN}/", "availability": "在庫あり。",
        "price_observed_at": "2026-11-25T21:10:00+00:00"}
 RKT = {"price": 2800, "url": "https://item.rakuten.co.jp/shop/x/", "verified": True, "is_search": False,
@@ -35,14 +36,19 @@ class DatePartTest(unittest.TestCase):
     def test_shapes(self):
         self.assertEqual(build_post._date_part("2026-05-30T13:47:11.379837+00:00"), "2026-05-30")
         self.assertEqual(build_post._date_part("2026-05-30"), "2026-05-30")
-        for bad in (None, "", "05/30", 20260530, "2026-5-3"):
+        # 日本時間の日付にする (#12283)。UTC の 15 時以降は日本時間では翌日
+        self.assertEqual(build_post._date_part("2026-05-30T15:00:00+00:00"), "2026-05-31")
+        self.assertEqual(build_post._date_part("2026-05-30T14:59:59Z"), "2026-05-30")
+        self.assertEqual(build_post._date_part("2026-05-30T15:00:00"), "2026-05-31")   # 時差なしは UTC
+        self.assertEqual(build_post._date_part("2026-05-30T09:00:00+09:00"), "2026-05-30")
+        for bad in (None, "", "05/30", 20260530, "2026-5-3", "2026-05-30Tgarbage", "2026-02-30"):
             with self.subTest(bad=bad):
                 self.assertIsNone(build_post._date_part(bad))
 
 
 class PriceCheckedOnTest(unittest.TestCase):
     def test_amazon_uses_observation_time(self):
-        self.assertEqual(build_post._price_checked_on("amazon", AMZ), "2026-11-25")
+        self.assertEqual(build_post._price_checked_on("amazon", AMZ), "2026-11-26")
         self.assertIsNone(build_post._price_checked_on("amazon", {"price": 3000}))
 
     def test_market_uses_checked_at(self):
@@ -90,12 +96,12 @@ class AttachMarketPricesTest(unittest.TestCase):
 class PriceCheckedNoteTest(unittest.TestCase):
     def test_lists_each_priced_shop_with_its_own_date(self):
         note = build_post._price_checked_note(_data(_prices(AMZ, RKT, YHO)))
-        self.assertEqual(note, "Amazon 2026-11-25 時点・楽天市場 2026-08-14 時点・Yahoo!ショッピング 2026-11-02 時点")
+        self.assertEqual(note, "Amazon 2026-11-26 時点・楽天市場 2026-08-14 時点・Yahoo!ショッピング 2026-11-02 時点")
 
     def test_skips_shops_without_price_or_date(self):
         unverified = {"price": 2700, "url": "https://store.shopping.yahoo.co.jp/s/z.html", "verified": False}
         note = build_post._price_checked_note(_data(_prices(AMZ, {"price": 0, "url": ""}, unverified)))
-        self.assertEqual(note, "Amazon 2026-11-25 時点")
+        self.assertEqual(note, "Amazon 2026-11-26 時点")
 
     def test_discontinued_amazon_is_skipped(self):
         note = build_post._price_checked_note(_data(_prices(dict(AMZ, discontinued=True), RKT, None)))
@@ -124,7 +130,7 @@ class RenderTest(unittest.TestCase):
         data["price_checked_note"] = build_post._price_checked_note(data)
         md = _render(data)
         self.assertIn("🏷️ 最安値 <strong>￥2,800</strong>（楽天市場・2026-08-14 時点）", md)
-        self.assertIn("💹 価格情報: Amazon 2026-11-25 時点・楽天市場 2026-08-14 時点・"
+        self.assertIn("💹 価格情報: Amazon 2026-11-26 時点・楽天市場 2026-08-14 時点・"
                       "Yahoo!ショッピング 2026-11-02 時点", md)
 
     def test_cheapest_line_without_date_has_no_stamp(self):
@@ -133,7 +139,7 @@ class RenderTest(unittest.TestCase):
 
     def test_amazon_cheapest_uses_amazon_date(self):
         md = _render(_data(_prices(dict(AMZ, price=2000), RKT, YHO)))
-        self.assertIn("🏷️ 最安値 <strong>￥2,000</strong>（Amazon・2026-11-25 時点）", md)
+        self.assertIn("🏷️ 最安値 <strong>￥2,000</strong>（Amazon・2026-11-26 時点）", md)
 
 
 class FrontMatterTest(unittest.TestCase):
@@ -141,7 +147,7 @@ class FrontMatterTest(unittest.TestCase):
         data = {"product": {"asin": ASIN, "name": "テスト商品",
                             "prices": _prices(AMZ, RKT, dict(YHO, checked_at=None))}}
         meta = build_post._frontmatter_meta(data, f"2026-01-01-{ASIN}", False, {}, pathlib.Path("x.json"))
-        self.assertEqual(meta["price_amazon_checked_at"], "2026-11-25")
+        self.assertEqual(meta["price_amazon_checked_at"], "2026-11-26")
         self.assertEqual(meta["price_rakuten_checked_at"], "2026-08-14")
         self.assertNotIn("price_yahoo_checked_at", meta)
         self.assertEqual(meta["price_yahoo"], 2900)

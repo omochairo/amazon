@@ -14,7 +14,9 @@ from __future__ import annotations
 import json
 import pathlib
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+
+_JST = timezone(timedelta(hours=9))
 from typing import Any, Optional
 
 # 一覧カードにスパークラインを出す最低条件 (#5120 の商品ページ側とは別基準)。
@@ -136,11 +138,14 @@ def parse_ts(ts: str) -> Optional[datetime]:
     """観測点の ``ts`` (ISO8601, ``Z`` 表記あり) を aware datetime にパースする。
 
     失敗したら None（呼び出し側でその点をスパーク描画から除外する）。
+    時差の無い値は UTC とみなす (aware と混ざって比べると TypeError になるため。
+    2026-11-27 時点の記録はすべて時差付き。#12283)。
     """
     try:
-        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
     except ValueError:
         return None
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
 
 
 # セグメントの状態 (#5130 項目2)。#5120 の observed:bool を 3 値に広げたもの。
@@ -160,7 +165,15 @@ def empty_spark(geom: SparkGeom) -> dict[str, Any]:
 
 
 def _format_axis_date(dt: datetime, style: str) -> str:
-    """x 軸の日付ラベル。``%-m`` 等はプラットフォーム依存なので自前で組む。"""
+    """x 軸の日付ラベル。``%-m`` 等はプラットフォーム依存なので自前で組む。
+
+    日本時間の日付で出す (#12283)。観測時刻は UTC なので、そのまま出すと日本時間の
+    0〜9 時の観測が前の日になり、商品ページの表・在庫表の日付と 1 日ずれる。
+    時差の無い datetime は UTC とみなす。
+    """
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    dt = dt.astimezone(_JST)
     if style == "short":
         return f"{dt.month}/{dt.day}"
     return dt.strftime("%Y-%m-%d")

@@ -265,9 +265,10 @@ class OutOfStockSegmentTests(unittest.TestCase):
         spark = build_spark([_rec(40, 1000), _rec(30, 1100), _rec(20, 1200)],
                             1000, 1200, ARTICLE_GEOM, out_of_stock=[_oos(10), _oos(2)])
         self.assertEqual(self._states(spark)[-1], "out_of_stock")
-        # x 軸の右端ラベルは最新の在庫切れ観測日 (その日に観測したのは事実)。
+        # x 軸の右端ラベルは最新の在庫切れ観測日 (その日に観測したのは事実)。日本時間の日付 (#12283)
+        jst = timezone(timedelta(hours=9))
         self.assertEqual(spark["x_labels"][-1]["text"],
-                         (datetime.now(timezone.utc) - timedelta(days=2)).strftime("%Y-%m-%d"))
+                         (datetime.now(timezone.utc) - timedelta(days=2)).astimezone(jst).strftime("%Y-%m-%d"))
 
     def test_trailing_out_of_stock_does_not_extend_area_or_last_marker(self):
         """面塗りと最新点マーカーは価格観測点で止める (価格の無い区間に広げない)。"""
@@ -406,3 +407,18 @@ class CardOutOfStockSupplyTests(unittest.TestCase):
             {"ts": self._iso(2), "price": None, "source": "amazon"},
         ])
         self.assertFalse(sparks["B0AAAAAAAA"]["has_out_of_stock"])
+
+
+class AxisDateTimezoneTests(unittest.TestCase):
+    """x 軸の日付は日本時間 (#12283)。UTC の夕方以降の観測は日本時間では翌日になる。"""
+
+    def test_utc_evening_is_next_day_in_jst(self):
+        from price_spark import _format_axis_date
+        dt = datetime(2026, 11, 25, 20, 23, tzinfo=timezone.utc)   # 日本時間 11/26 05:23
+        self.assertEqual(_format_axis_date(dt, "iso"), "2026-11-26")
+        self.assertEqual(_format_axis_date(dt, "short"), "11/26")
+
+    def test_naive_is_treated_as_utc(self):
+        from price_spark import _format_axis_date
+        self.assertEqual(_format_axis_date(datetime(2026, 11, 25, 20, 23), "iso"), "2026-11-26")
+        self.assertEqual(_format_axis_date(datetime(2026, 11, 25, 10, 0), "iso"), "2026-11-25")
