@@ -49,10 +49,13 @@ CLICK_EVENT = "affiliate_click"
 # 参照元が付くのは、AI の回答の中のリンクを押して来た訪問だけ。AI のアプリの中のブラウザや
 # コピーした URL から来た訪問は direct になり、ここには出ない (少なめに出る)。
 AI_SERVICES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("ChatGPT", ("chatgpt.com", "chat.openai.com", "openai.com", "chatgpt")),
+    # "openai": utm_source=openai で来る ChatGPT の検索のリンク (2026-11-26 の初回の表で未分類に出た)
+    ("ChatGPT", ("chatgpt.com", "chat.openai.com", "openai.com", "chatgpt", "openai")),
     ("Perplexity", ("perplexity.ai", "perplexity")),
     ("Gemini", ("gemini.google.com", "bard.google.com", "gemini")),
-    ("Copilot", ("copilot.microsoft.com", "copilot.cloud.microsoft", "edgeservices.bing.com", "copilot")),
+    # copilot.com: Microsoft Copilot の参照元 (2026-11-26 の初回の表で未分類に出た)
+    ("Copilot", ("copilot.microsoft.com", "copilot.com", "copilot.cloud.microsoft", "edgeservices.bing.com",
+                 "copilot")),
     ("Claude", ("claude.ai", "claude")),
     ("Grok", ("grok.com", "x.ai", "grok")),
     ("DeepSeek", ("chat.deepseek.com", "deepseek.com", "deepseek")),
