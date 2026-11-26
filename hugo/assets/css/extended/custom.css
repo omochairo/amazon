@@ -3447,6 +3447,273 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   color: #38bdf8;
 }
 
+/* ==========================================
+   /ranking/ の作り直し (2026-11-26)
+   スマホで 1 件 814px・最初の商品が 1 画面目に入らなかったので、カードを
+   「画像 + 見出しの行」と「下の段 (ひとこと・くわしく・ボタン)」に分け、
+   記事の無いカードは小さな行 (--compact) にする。.ranking-item などのクラスは
+   /cospa/ /deals/ /price/ でも使っているので、ここの規則は必ず .rk-page の下に書く。
+   ========================================== */
+.rk-page .ranking-list { gap: .85rem; margin-top: .75rem; }
+.rk-page .ranking-item {
+  position: relative;
+  grid-template-columns: 168px minmax(0, 1fr);
+  grid-template-areas: "media head" "media foot";
+  align-items: start;
+  gap: .35rem 1.1rem;
+}
+.rk-page .rk-media { grid-area: media; position: relative; }
+.rk-page .rk-head { grid-area: head; min-width: 0; }
+.rk-page .rk-foot { grid-area: foot; min-width: 0; }
+.rk-page .ranking-thumb { width: 100%; height: auto; aspect-ratio: 1 / 1; }
+
+/* 順位: 画像の下に「🥇 楽天 1位」の札を重ねる (数字だけだと何の順位か分からなかった)。
+   カードの左上は比較の「＋」(compare.js)、右上は ♡ (favorites.js) が JS で置かれるので、
+   札は画像の下側に、見出しは ♡ の幅だけ右を空ける。 */
+.rk-page .rk-head { padding-right: 44px; }
+.rk-page .ranking-badge {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  z-index: 1;
+  width: auto;
+  height: auto;
+  gap: 2px;
+  padding: 2px 9px 2px 7px;
+  border-radius: 999px;
+  font-size: .78rem;
+  font-weight: 700;
+  line-height: 1.5;
+  background: rgba(15, 23, 42, .78);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, .25);
+}
+.rk-page .ranking-badge b { font-size: 1.1em; }
+.rk-page .ranking-medal { font-size: 1.05rem; filter: none; }
+.rk-page .ranking-badge--rank-1 { background: linear-gradient(135deg, #fde047, #eab308); color: #3b2a00; }
+.rk-page .ranking-badge--rank-2 { background: linear-gradient(135deg, #f1f5f9, #94a3b8); color: #1e293b; }
+.rk-page .ranking-badge--rank-3 { background: linear-gradient(135deg, #fcd34d, #d97706); color: #3b1d00; }
+
+/* 1〜3位はカードの枠の色で目立たせる */
+.rk-page .rk-top { border-width: 2px; }
+.rk-page .ranking-item--rank-1 { border-color: #facc15; box-shadow: 0 8px 22px rgba(234, 179, 8, .22); }
+.rk-page .ranking-item--rank-2 { border-color: #cbd5e1; }
+.rk-page .ranking-item--rank-3 { border-color: #f59e0b; }
+
+/* 見出し: 記事の h3 の飾り (左の線・色) を外す */
+.rk-page h3.ranking-title {
+  margin: 0 0 4px;
+  padding: 0;
+  border: 0;
+  font-size: 1.05rem;
+  line-height: 1.4;
+  color: inherit;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.rk-page .ranking-move { margin: 0 0 4px; }
+
+/* 値段・対象年齢・知育スコア・レビューを 1 行に */
+.rk-page .rk-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  margin: 0;
+  font-size: .85rem;
+  line-height: 1.6;
+}
+.rk-page .rk-meta .ranking-price { margin: 0; font-size: 1.1rem; }
+.rk-page .rk-meta .ranking-age,
+.rk-page .rk-meta .ranking-reviews { margin: 0; font-size: .82rem; color: #475569; }
+.rk-page .rk-score {
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #075985;
+  font-size: .8rem;
+}
+.rk-page .rk-score b { font-size: 1.05em; }
+.rk-page .card-reason { margin: .2rem 0 .35rem; }
+
+/* くわしく見る (知育スコアの 4 項目・値段の動き・店名) */
+.rk-page .rk-more { margin: .1rem 0 .2rem; }
+.rk-page .rk-more > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  cursor: pointer;
+  list-style: none;
+  font-size: .85rem;
+  font-weight: 700;
+  color: #0369a1;
+}
+.rk-page .rk-more > summary::-webkit-details-marker { display: none; }
+.rk-page .rk-more > summary::after { content: "▾"; transition: transform .2s; }
+.rk-page .rk-more[open] > summary::after { transform: rotate(180deg); }
+.rk-page .rk-more-body { padding: .1rem 0 .3rem; animation: rkFadeDown .25s ease-out; }
+.rk-page .rk-more-body .card-metrics { margin: 2px 0 4px; }
+.rk-page .rk-more-body .ranking-shop { margin: 0; }
+@keyframes rkFadeDown { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* ボタン: 解説は幅いっぱい、楽天と Amazon は同じ幅で横に並べる */
+.rk-page .ranking-cta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .5rem;
+  margin-top: .45rem;
+  max-width: 460px;
+}
+.rk-page .ranking-cta > a { min-height: 44px; padding: .55rem .6rem; font-size: .9rem; white-space: nowrap; }
+.rk-page .ranking-cta > .ranking-cta-internal,
+.rk-page .ranking-cta > a:only-child { grid-column: 1 / -1; }
+/* Amazon のオレンジに白い文字は読みにくい (約 2.1:1)。文字を黒にする */
+.rk-page .ranking-cta-amazon,
+.rk-page .ranking-cta-amazon:hover { color: #1b1b1b; }
+.rk-page .ranking-cta > a:active { transform: scale(.97); transition-duration: .08s; }
+
+/* 記事の無いカード: 画像・商品名・値段・ボタンだけの小さな行 */
+.rk-page .ranking-item--compact {
+  grid-template-columns: 96px minmax(0, 1fr);
+  padding: .7rem .9rem;
+}
+.rk-page .ranking-item--compact h3.ranking-title { font-size: .95rem; }
+/* 楽天の商品名は宣伝文句を除いても長いので、小さな行では 2 行で切る */
+.rk-page .ranking-item--compact h3.ranking-title a {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.rk-page .ranking-badge { white-space: nowrap; }
+.rk-page .ranking-item--compact .ranking-badge { font-size: .72rem; padding: 1px 7px 1px 6px; }
+.rk-page .ranking-group-title .rk-count { white-space: nowrap; }
+.rk-page .ranking-item--compact .ranking-cta { margin-top: .3rem; }
+
+/* 群の見出しとまわり */
+.rk-page .ranking-group-title { scroll-margin-top: 12px; }
+.rk-page .rk-group-note { margin: .2rem 0 0; font-size: .85rem; color: #64748b; }
+.rk-page .ranking-item { scroll-margin-top: 12px; }
+.rk-header-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: .3rem; }
+.rk-header-row .ranking-updated,
+.rk-header-row .page-pr-notice { margin: 0; }
+.rk-header-row .page-pr-notice { margin-left: auto; }
+.rk-page > p:first-child { margin: 0 0 .4rem; line-height: 1.75; }
+@media (max-width: 720px) {
+  .rk-page > p:first-child { font-size: .95rem; line-height: 1.7; }
+}
+.rk-page .rk-intro { margin: .4rem 0 .6rem; }
+.rk-page .rk-intro > summary { padding: .5rem .9rem; }
+.rk-page .rk-group:first-child .ranking-group-title { margin-top: 1rem; }
+.rk-page .rk-intro .ip-intro-body p { font-size: .92rem; line-height: 1.75; margin: 0 0 .7rem; }
+.rk-page .rk-xmas .xmas-links { margin-top: 1.6rem; }
+
+/* 並べ替えとページ内の移動 */
+.rk-page .rk-tools { display: flex; flex-direction: column; gap: .55rem; margin: .4rem 0 .2rem; }
+.rk-page .rk-sort {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 3px;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+.rk-page .rk-sort[hidden] { display: none; }
+.rk-page .rk-sort-btn {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #334155;
+  font: inherit;
+  font-size: .88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .2s, color .2s, box-shadow .2s;
+}
+.rk-page .rk-sort-btn[aria-pressed="true"] {
+  background: #fff;
+  color: #c2410c;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, .15);
+}
+.rk-page .rk-sort-btn:active { transform: scale(.97); }
+.rk-page .rk-sort-btn:focus-visible { outline: 2px solid #ea580c; outline-offset: 2px; }
+.rk-page .rk-jump {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.rk-page .rk-jump::-webkit-scrollbar { display: none; }
+.rk-page .rk-jump-link {
+  flex: 0 0 auto;
+  padding: 5px 12px;
+  border: 1px solid #fdba74;
+  border-radius: 999px;
+  font-size: .82rem;
+  font-weight: 700;
+  color: #c2410c;
+  text-decoration: none;
+  background: #fff7ed;
+}
+.rk-page.rk-order-rank .rk-jump-link[data-jump-group] { display: none; }
+/* 既存の section の display 指定が hidden 属性を打ち消すので、このページでは hidden を必ず効かせる */
+.rk-page [hidden] { display: none !important; }
+.rk-page.rk-order-rank .rk-xmas { display: none; }
+.rk-page .explore-links .tag-chip.is-current { opacity: .6; }
+
+/* 大きく順位を上げた印: 画面に入ったとき 1 回だけ跳ねる (ranking_sort.js が rk-pop を付ける) */
+.rk-page .rk-surge { font-weight: 700; }
+.rk-page .rk-surge.rk-pop { animation: rkPop .6s cubic-bezier(.22, 1, .36, 1) 1; }
+@keyframes rkPop {
+  0% { transform: translateY(6px) scale(.9); }
+  55% { transform: translateY(-3px) scale(1.06); }
+  100% { transform: none; }
+}
+
+@media (max-width: 720px) {
+  .rk-page .ranking-item {
+    grid-template-columns: 112px minmax(0, 1fr);
+    grid-template-areas: "media head" "foot foot";
+    gap: .3rem .75rem;
+    padding: .75rem;
+  }
+  .rk-page .ranking-thumb { max-height: none; }
+  .rk-page .ranking-thumb img { max-height: none; }
+  .rk-page h3.ranking-title { font-size: .95rem; }
+  .rk-page .ranking-badge { bottom: 4px; left: 4px; font-size: .72rem; padding: 1px 7px 1px 5px; }
+  .rk-page .ranking-medal { font-size: .95rem; }
+  .rk-page .ranking-cta { max-width: none; }
+  .rk-page .ranking-item--compact { grid-template-columns: 80px minmax(0, 1fr); padding: .6rem .7rem; }
+  .rk-page .ranking-item--compact .ranking-badge { font-size: .66rem; }
+}
+@media (max-width: 480px) {
+  .rk-page .ranking-item { grid-template-columns: 100px minmax(0, 1fr); padding: .7rem; }
+  .rk-page .ranking-item--compact { grid-template-columns: 76px minmax(0, 1fr); }
+}
+
+[data-theme="dark"] .rk-page .rk-meta .ranking-age,
+[data-theme="dark"] .rk-page .rk-meta .ranking-reviews { color: #cbd5e1; }
+[data-theme="dark"] .rk-page .rk-score { background: rgba(14, 165, 233, .2); color: #bae6fd; }
+[data-theme="dark"] .rk-page .rk-more > summary { color: #7dd3fc; }
+[data-theme="dark"] .rk-page .rk-group-note { color: #94a3b8; }
+[data-theme="dark"] .rk-page .rk-sort { background: #1e293b; }
+[data-theme="dark"] .rk-page .rk-sort-btn { color: #cbd5e1; }
+[data-theme="dark"] .rk-page .rk-sort-btn[aria-pressed="true"] { background: #334155; color: #fdba74; box-shadow: none; }
+[data-theme="dark"] .rk-page .rk-jump-link { background: rgba(234, 88, 12, .15); border-color: rgba(253, 186, 116, .45); color: #fdba74; }
+[data-theme="dark"] .rk-page .ranking-item--rank-1 { border-color: #ca8a04; }
+[data-theme="dark"] .rk-page .ranking-item--rank-2 { border-color: #64748b; }
+[data-theme="dark"] .rk-page .ranking-item--rank-3 { border-color: #b45309; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rk-page .rk-surge.rk-pop,
+  .rk-page .rk-more-body { animation: none; }
+  .rk-page .ranking-cta > a:active,
+  .rk-page .rk-sort-btn:active { transform: none; }
+}
+
 /* ---------- 最安値パルスアニメーション (Cheapest Deal Pulse) ---------- */
 .price-card.is-cheapest {
   border: 1.5px solid var(--brand-primary) !important;

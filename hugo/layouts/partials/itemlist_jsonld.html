@@ -3,7 +3,8 @@
 
   Expects context = dict
     name  … 一覧の名前 (ページの title)
-    items … slice of dict "name" "url" (表示の順)。url は絶対 URL か "/..." の相対
+    items … slice of dict "name" "url" (表示の順)。url は絶対 URL か "/..." の相対。
+            "position" があればそれを使う (/ranking/ は楽天の順位をそのまま入れる)
     max   … 出す件数の上限 (省略時 30)。長い一覧を全部載せても検索側は使わない
 
   /brands/<brand>/ の brand_hub_jsonld.html と同じ形。items が空なら何も出さない。
@@ -14,7 +15,9 @@
   {{- $url := $it.url | default "" -}}
   {{- if hasPrefix $url "/" }}{{ $url = $url | absURL }}{{ end -}}
   {{- if and $url $it.name -}}
-    {{- $list = $list | append (dict "@type" "ListItem" "position" (add (len $list) 1) "url" $url "name" $it.name) -}}
+    {{- $pos := add (len $list) 1 -}}
+    {{- with $it.position }}{{ $pos = int . }}{{ end -}}
+    {{- $list = $list | append (dict "@type" "ListItem" "position" $pos "url" $url "name" $it.name) -}}
   {{- end -}}
 {{- end -}}
 {{- with $list -}}

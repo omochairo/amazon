@@ -1,26 +1,49 @@
 {{- define "main" }}
 
+{{- /* 配信ビルドの時計は UTC なので、日本時間 (UTC+9) に直してから月日を見る (feature.html と同じ判定) */ -}}
+{{- $jst := now.UTC.Add (time.ParseDuration "9h") -}}
+{{- $month := int $jst.Month -}}
+{{- $xmasSeason := or (and (ge $month 10) (lt $month 12)) (and (eq $month 12) (le $jst.Day 25)) -}}
+
 <header class="page-header ranking-header">
   {{- /* navi-brain#213 R6: メニュー・トップのカードと同じ呼び名 (<title>・h1 は変えない) */}}
   <p class="term-header-eyebrow">🔥 売れ筋TOP30</p>
   <h1>{{ .Title }}</h1>
-  {{- /* #5227: 広告表記はファーストビュー (h1 直下)。このページのリンクは
-         楽天アフィリエイトなので network に "rakuten" を渡す。 */ -}}
-  {{- partial "pr_disclosure.html" (dict "network" "rakuten") }}
+  {{- /* #5227: 広告表記はファーストビュー (h1 直下)。上は [PR] だけにする (K の指摘・2026-11-26
+         「PR があるので上に補足文は不要」)。楽天・Amazon の広告であることは下の .ranking-disclaimer に書く。
+         読み上げ用の補足文 (visually-hidden) は、このページが楽天・Amazon の両方へリンクするので "both"。 */ -}}
+  {{- /* 更新日と [PR] を 1 行に並べる (スマホで最初の商品を 1 画面目に入れるため) */}}
+  <div class="rk-header-row">
+  {{- with site.Data.ranking.weekly }}
+    {{- if .generated_at }}
+    {{- /* generated_at は UTC。日本時間の日付で出す */ -}}
+    {{- $gen := (time .generated_at).UTC.Add (time.ParseDuration "9h") }}
+    <p class="ranking-updated"><time datetime="{{ .generated_at }}">{{ int $gen.Month }}月{{ $gen.Day }}日</time>に更新</p>
+    {{- end }}
+  {{- end }}
+  {{- partial "pr_disclosure.html" (dict "network" "both" "short" true) }}
+  </div>
   {{- if .Description }}
   <div class="post-description">
     {{ .Description }}
   </div>
   {{- end }}
-  {{- with site.Data.ranking.weekly }}
-    {{- if .generated_at }}
-    <p class="ranking-updated">最終更新: <time datetime="{{ .generated_at }}">{{ dateFormat "2006-01-02" .generated_at }}</time></p>
-    {{- end }}
-  {{- end }}
 </header>
 
-<div class="post-content ranking-content">
+<div class="post-content ranking-content rk-page">
   {{ .Content }}
+
+  {{- /* 2026-11-26: 冒頭の説明は 2 文だけ見せ、仕組みの説明はここに畳む。
+         <details> の中身も HTML に出ているので検索エンジンには読まれる。 */}}
+  <details class="ip-intro rk-intro">
+    <summary><span class="ip-intro-title">このランキングの見かた</span><span class="ip-intro-hint">タップで読む</span></summary>
+    <div class="ip-intro-body">
+      <p><strong>いつ新しくなるの？</strong><br>楽天市場の「おもちゃ」の売れ筋ランキングをもとに、1日1回新しくしています。前に入ったときより順位が上がったおもちゃには「↑」、新しく TOP30 に入ったおもちゃには「🆕 初登場」、何日も続けて入っているおもちゃには「○日連続」の印が付きます。</p>
+      <p><strong>どんな順番で並んでいるの？</strong><br>はじめは、おもちゃいろで詳しく解説しているおもちゃを先に、そのほかの売れ筋を後に並べています。どちらも楽天での順位が高い順です。「楽天の順位順」を押すと、1位から30位まで順に並べ替わります。</p>
+      <p><strong>知育スコアってなに？</strong><br>おもちゃいろが、学びにつながるか・安全か・長く遊べるか・値段に見合うかの 4 つから付けた 100 点満点の点数です。くわしくは<a href="{{ "about-score/" | relURL }}">知育スコアの付け方</a>へ。</p>
+      <p><strong>ボタンの違い</strong><br>「解説を読む」はおもちゃいろの解説ページへ、「楽天で見る」「Amazonで見る」はそれぞれのお店のページへ進みます。値段や在庫はお店のページで確かめてください。</p>
+    </div>
+  </details>
 
   {{- $data := site.Data.ranking.weekly }}
   {{- $items := and $data $data.items }}
@@ -28,7 +51,7 @@
          1 位を最上段に揃える (/cospa/ /deals/ と統一)。 */}}
   {{- if $items }}{{ $items = sort $items "rank" "asc" }}{{ end }}
   {{- if not $items }}
-  <p class="ranking-empty">現在ランキングデータを更新しています。次回 cron 実行までしばらくお待ちください。</p>
+  <p class="ranking-empty">いまランキングを集めています。次の自動更新までしばらくお待ちください。</p>
   {{- else }}
   {{- /* navi-brain#166 F3 (K の決定 2026-11-14): 記事の無い商品も載せるが、記事の
          ある物を先に見せる。楽天の順位はバッジにそのまま出す。記事ページは
@@ -51,34 +74,74 @@
   {{- range $items }}
     {{- if and .matched_asin .has_article }}{{ $withArticle = $withArticle | append . }}{{ else }}{{ $others = $others | append . }}{{ end }}
   {{- end }}
+
+  {{- /* 2026-11-26 (K の決定): 並びは「解説ありを先に」のまま、楽天の順位順にも並べ替えられる
+         ようにする。並べ替えは ranking_sort.js がカードを動かして行う (JS が無いときはボタンを出さない)。 */}}
+  <div class="rk-tools">
+    <div class="rk-sort" role="group" aria-label="並び順" hidden>
+      <button type="button" class="rk-sort-btn" data-order="article" aria-pressed="true">💡 解説ありを先に</button>
+      <button type="button" class="rk-sort-btn" data-order="rank" aria-pressed="false">🏆 楽天の順位順</button>
+    </div>
+    <nav class="rk-jump" aria-label="ページ内の移動">
+      {{- with $withArticle }}<a class="rk-jump-link" data-jump-group href="#rk-group-article">💡 解説あり（{{ len . }}）</a>{{ end }}
+      {{- with $others }}<a class="rk-jump-link" data-jump-group href="#rk-group-others">🛒 そのほか（{{ len . }}）</a>{{ end }}
+      <a class="rk-jump-link" href="#rk-explore">🔍 年齢・種類から探す</a>
+    </nav>
+  </div>
+  <p class="rk-sort-status visually-hidden" aria-live="polite"></p>
+
+  <div class="rk-groups">
   {{- with $withArticle }}
-  <h2 class="ranking-group-title">おもちゃいろで解説している商品（{{ len . }}件）</h2>
-  <ol class="ranking-list">
-    {{- range . }}
-    {{- $p := index $pages (lower .matched_asin) }}
-    {{- partial "ranking_item.html" (dict "item" . "page" $p) }}
-    {{- end }}
-  </ol>
+  <section class="rk-group" data-group="article">
+    <h2 class="ranking-group-title" id="rk-group-article">おもちゃいろで解説しているおもちゃ<span class="rk-count">（{{ len . }}件）</span></h2>
+    <ol class="ranking-list">
+      {{- range . }}
+      {{- $p := index $pages (lower .matched_asin) }}
+      {{- partial "ranking_item.html" (dict "item" . "page" $p) }}
+      {{- end }}
+    </ol>
+  </section>
+  {{- end }}
+  {{- if $xmasSeason }}
+  {{- /* 10/1〜12/25 だけ、年齢別のクリスマスのページへの入口を 2 つの群の間に出す */ -}}
+  <div class="rk-xmas">{{ partial "xmas_links.html" (dict "type" "" "mode" "siblings") }}</div>
   {{- end }}
   {{- with $others }}
-  <h2 class="ranking-group-title">そのほかの売れ筋（{{ len . }}件・楽天の商品ページへ）</h2>
-  <ol class="ranking-list">
-    {{- range . }}
-    {{- partial "ranking_item.html" (dict "item" . "page" nil) }}
-    {{- end }}
-  </ol>
+  <section class="rk-group" data-group="others">
+    <h2 class="ranking-group-title" id="rk-group-others">そのほかの売れ筋<span class="rk-count">（{{ len . }}件）</span></h2>
+    <p class="rk-group-note">おもちゃいろの解説はまだありません。お店のページで確かめてください。</p>
+    <ol class="ranking-list">
+      {{- range . }}
+      {{- partial "ranking_item.html" (dict "item" . "page" nil) }}
+      {{- end }}
+    </ol>
+  </section>
   {{- end }}
-  {{- /* #166 F13: 並びを検索に伝える ItemList。記事がある物は記事の URL、無い物は
-         楽天の商品ページを指す (表示の順と同じ)。 */}}
+  {{- /* 楽天の順位順に並べたときの入れ物。ranking_sort.js がカードをここへ移す */}}
+  <section class="rk-group rk-group--rank" data-group="rank" hidden>
+    <h2 class="ranking-group-title" id="rk-group-rank">楽天の売れ筋順<span class="rk-count">（{{ len $items }}件）</span></h2>
+    <ol class="ranking-list"></ol>
+  </section>
+  </div>
+
+  {{- /* #166 F13: 並びを検索に伝える ItemList。position は楽天の順位そのもの。
+         url は記事がある物は記事の URL、無い物はこのページの中のその商品の位置
+         (楽天のアフィリエイトの URL を構造化データに入れない)。 */}}
   {{- $ld := slice }}
-  {{- range $withArticle }}{{ $ld = $ld | append (dict "name" (partial "ranking_title.html" .title) "url" (printf "/products/%s/" (lower .matched_asin) | absURL)) }}{{ end }}
-  {{- range $others }}{{ $ld = $ld | append (dict "name" (partial "ranking_title.html" .title) "url" .url) }}{{ end }}
+  {{- range $items }}
+    {{- $u := printf "/ranking/#rank-%d" (int .rank) }}
+    {{- if and .matched_asin .has_article }}{{ $u = printf "/products/%s/" (lower .matched_asin) }}{{ end }}
+    {{- $ld = $ld | append (dict "name" (partial "ranking_title.html" .title) "url" $u "position" (int .rank)) }}
+  {{- end }}
   {{- partial "itemlist_jsonld.html" (dict "name" $.Title "items" $ld) }}
 
-  <p class="ranking-disclaimer">※ 順位・価格・在庫は楽天 API 取得時点のもので、リンク先と異なる場合があります。</p>
+  <p class="ranking-disclaimer">※ 楽天アフィリエイト・Amazon アソシエイトの広告を含みます。順位・値段・在庫は集めた時点のもので、いまのお店のページとちがうことがあります。買う前にお店のページで確かめてください。</p>
   {{- end }}
   {{- /* #166 F12: 特集ページどうしを 1 回で行き来できるようにする */}}
-  {{- partial "explore_links.html" . }}
+  <div id="rk-explore">{{ partial "explore_links.html" . }}</div>
 </div>
+
+{{- $rkSort := resources.Get "js/ranking_sort.js" | resources.Minify | resources.Fingerprint "sha256" }}
+<script defer src="{{ $rkSort.RelPermalink }}" integrity="{{ $rkSort.Data.Integrity }}" crossorigin="anonymous"></script>
 
 {{- end }}

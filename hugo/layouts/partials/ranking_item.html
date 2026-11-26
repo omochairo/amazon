@@ -9,6 +9,14 @@
   ような店の宣伝文句が入る。ranking_title.html で宣伝文句を除いて短くする。記事がある
   商品は、記事の商品名・知育スコア・対象年齢を出す (title が「知育スコアつき」と名乗って
   いるのに 30 件中 0 件だったため)。
+
+  2026-11-26 スマホで 1 件が 814px あり、最初の商品が 1 画面目に入らなかった。
+  - 記事があるカード: いつも見せるのは順位・画像・商品名・順位の動き・ひとこと・値段などの 1 行・ボタン。
+    知育スコアの 4 項目・Amazon の値段の動き・店名は「くわしく見る」(<details>) に畳む
+  - 記事が無いカード (--compact): 画像・商品名・値段・ボタンだけの小さな行にする
+  - 商品名は h3 (群の見出し h2 の下)。見出しに楽天の順位を入れる
+  - li の id="rank-N" はページ内リンクと ItemList の url、data-asin は affiliate_click.js が
+    楽天のクリックでも商品を記録するため、data-has-article / data-order は ranking_sort.js が使う
 */ -}}
 {{- $item := .item -}}
 {{- $page := .page -}}
@@ -21,86 +29,100 @@
        無い ASIN へ内部リンクして 404 になるのを防ぐ (#1149 の意図をテンプレ側で担保)。 */ -}}
 {{- $internal := "" -}}
 {{- if and $asin $item.has_article }}{{ $internal = printf "/products/%s/" (lower $asin) }}{{ end -}}
+{{- $compact := not $internal -}}
 {{- $title := partial "ranking_title.html" $item.title -}}
 {{- with $page }}{{ with .Params.product_name }}{{ $title = . }}{{ end }}{{ end -}}
 {{- $axes := "" -}}
 {{- $ageStr := "" -}}
+{{- $score100 := 0 -}}
 {{- with $page -}}
   {{- $axes = .Params.ivs_axes -}}
+  {{- with .Params.ivs_score_100 }}{{ $score100 = int . }}{{ end -}}
   {{- if isset .Params "age_min_months" -}}
     {{- with .Params.age_min_months -}}{{- $ageStr = partial "age_label.html" . -}}{{- end -}}
     {{- if eq (printf "%v" .Params.age_min_months) "0" -}}{{- $ageStr = partial "age_label.html" 0 -}}{{- end -}}
   {{- end -}}
 {{- end -}}
-<li class="ranking-item ranking-item--rank-{{ $rank }}{{ if not $asin }} ranking-item--external-only{{ end }}" data-rank="{{ $rank }}"{{ with $stage }} data-match-stage="{{ . }}"{{ end }}>
-  <div class="ranking-badge ranking-badge--rank-{{ $rank }}" aria-label="楽天 第 {{ $rank }} 位">
-    {{- if eq $rank 1 }}<span class="ranking-medal">🥇</span>
-    {{- else if eq $rank 2 }}<span class="ranking-medal">🥈</span>
-    {{- else if eq $rank 3 }}<span class="ranking-medal">🥉</span>
-    {{- else }}<span class="ranking-number">{{ $rank }}</span>
+{{- /* #166 F8: 前回からの動き。hugo/data/ranking/movement.json は
+       append_ranking_history.py が楽天の itemCode ごとに毎日書く。無ければ出さない。 */ -}}
+{{- $mv := "" -}}
+{{- with site.Data.ranking.movement }}{{ $mvi := .items }}{{ if and $mvi $item.itemCode }}{{ $mv = index $mvi $item.itemCode }}{{ end }}{{ end -}}
+{{- /* weekly.json だけ更新されて movement.json が古いときは、今の順位と食い違うので出さない。
+       中身が何も無い (初回の記録など) ときも空の段落を出さない。 */ -}}
+{{- if $mv }}{{ if or (ne (int $mv.rank) $rank) (not (or $mv.is_new $mv.prev_rank (ge (int ($mv.streak_days | default 0)) 2))) }}{{ $mv = "" }}{{ end }}{{ end -}}
+{{- $metrics := "" -}}
+{{- if and $asin (not $compact) }}{{ $metrics = partial "card_metrics.html" (dict "axes" $axes "asin" $asin) }}{{ end -}}
+<li class="ranking-item ranking-item--rank-{{ $rank }}{{ if le $rank 3 }} rk-top{{ end }}{{ if $compact }} ranking-item--compact{{ end }}{{ if not $asin }} ranking-item--external-only{{ end }}" id="rank-{{ $rank }}" data-rank="{{ $rank }}"{{ with $asin }} data-asin="{{ upper . }}"{{ end }} data-has-article="{{ if $internal }}1{{ else }}0{{ end }}"{{ with $stage }} data-match-stage="{{ . }}"{{ end }}>
+  <div class="rk-media">
+    <span class="ranking-badge ranking-badge--rank-{{ $rank }}" aria-hidden="true">
+      {{- if eq $rank 1 }}<span class="ranking-medal">🥇</span>
+      {{- else if eq $rank 2 }}<span class="ranking-medal">🥈</span>
+      {{- else if eq $rank 3 }}<span class="ranking-medal">🥉</span>
+      {{- end }}<span class="rk-badge-text">楽天 <b>{{ $rank }}</b>位</span>
+    </span>
+    {{- with $item.image }}
+    {{- if $internal }}
+    {{- /* 記事があるときは画像も商品名と同じ解説ページへ (前は画像だけ楽天へ飛んでいた) */}}
+    <a class="ranking-thumb" href="{{ $internal }}" aria-hidden="true" tabindex="-1">
+      <img src="{{ . }}" alt="" loading="lazy" decoding="async" width="200" height="200">
+    </a>
+    {{- else }}
+    <a class="ranking-thumb" data-cta-slot="ranking-thumb" href="{{ $item.url }}" rel="sponsored nofollow noopener" target="_blank" aria-hidden="true" tabindex="-1">
+      <img src="{{ . }}" alt="" loading="lazy" decoding="async" width="200" height="200">
+    </a>
+    {{- end }}
     {{- end }}
   </div>
 
-  {{- with $item.image }}
-  <a class="ranking-thumb" data-cta-slot="ranking-thumb" href="{{ $item.url }}" rel="sponsored nofollow noopener" target="_blank" aria-hidden="true" tabindex="-1">
-    <img src="{{ . }}" alt="" loading="lazy" decoding="async" width="200" height="200">
-  </a>
-  {{- end }}
-
-  <div class="ranking-body">
-    <h2 class="ranking-title">
+  <div class="rk-head">
+    <h3 class="ranking-title">
+      <span class="visually-hidden">楽天{{ $rank }}位 </span>
       {{- if $internal -}}
       <a href="{{ $internal }}">{{ $title }}</a>
       {{- else -}}
       <a data-cta-slot="ranking-name" href="{{ $item.url }}" rel="sponsored nofollow noopener" target="_blank">{{ $title }}</a>
       {{- end -}}
-    </h2>
-    {{- /* #166 F8: 前回からの動き。hugo/data/ranking/movement.json は
-           append_ranking_history.py が楽天の itemCode ごとに毎日書く。無ければ出さない。 */ -}}
-    {{- $mv := "" -}}
-    {{- with site.Data.ranking.movement }}{{ $mvi := .items }}{{ if and $mvi $item.itemCode }}{{ $mv = index $mvi $item.itemCode }}{{ end }}{{ end -}}
-    {{- /* weekly.json だけ更新されて movement.json が古いときは、今の順位と食い違うので出さない。
-           中身が何も無い (初回の記録など) ときも空の段落を出さない。 */ -}}
-    {{- if $mv }}{{ if or (ne (int $mv.rank) $rank) (not (or $mv.is_new $mv.prev_rank (ge (int ($mv.streak_days | default 0)) 2))) }}{{ $mv = "" }}{{ end }}{{ end -}}
+    </h3>
     {{- with $mv }}
     <p class="ranking-move">
       {{- if .is_new }}<span class="ranking-move-badge ranking-move--new">🆕 初登場</span>
-      {{- else if and .delta (gt (int .delta) 0) }}<span class="ranking-move-badge ranking-move--up">↑{{ int .delta }}（前回{{ int .prev_rank }}位）</span>
+      {{- else if and .delta (gt (int .delta) 0) }}<span class="ranking-move-badge ranking-move--up{{ if ge (int .delta) 5 }} rk-surge{{ end }}">{{ if ge (int .delta) 5 }}🔥 {{ end }}↑{{ int .delta }}（前回{{ int .prev_rank }}位）</span>
       {{- else if and .delta (lt (int .delta) 0) }}<span class="ranking-move-badge ranking-move--down">↓{{ sub 0 (int .delta) }}（前回{{ int .prev_rank }}位）</span>
       {{- else if .prev_rank }}<span class="ranking-move-badge ranking-move--stay">→ 前回と同じ</span>
       {{- end }}
       {{- with .streak_days }}{{ if ge (int .) 2 }}<span class="ranking-move-badge ranking-move--streak">{{ int . }}日連続</span>{{ end }}{{ end -}}
     </p>
     {{- end }}
+    <p class="rk-meta">
+      {{- with $item.price }}<span class="ranking-price">¥{{ lang.FormatNumberCustom 0 . }}</span>{{ end }}
+      {{- with $ageStr }}<span class="ranking-age">対象年齢 {{ . }}</span>{{ end }}
+      {{- if gt $score100 0 }}<span class="rk-score">知育スコア <b>{{ $score100 }}</b>点</span>{{ end }}
+      {{- with $item.reviewCount }}{{ if gt . 0 }}<span class="ranking-reviews">★ レビュー{{ . }}件</span>{{ end }}{{ end }}
+    </p>
+  </div>
+
+  <div class="rk-foot">
     {{- with $page }}{{ with .Params.card_reason }}
     <p class="card-reason">&#128161; {{ . }}</p>
     {{- end }}{{ end }}
-    {{- with $item.shopName }}
-    <p class="ranking-shop">{{ . }}</p>
+    {{- if or $metrics (and (not $compact) $item.shopName) }}
+    <details class="rk-more">
+      <summary>📊 知育スコアと値段の動きを見る</summary>
+      <div class="rk-more-body">
+        {{- with $metrics }}{{ . }}{{ end }}
+        {{- with $item.shopName }}<p class="ranking-shop">楽天のお店: {{ . }}</p>{{ end }}
+      </div>
+    </details>
     {{- end }}
-    {{- with $ageStr }}
-    <p class="ranking-age">対象年齢 {{ . }}</p>
-    {{- end }}
-    {{- with $item.price }}
-    <p class="ranking-price">¥{{ lang.FormatNumberCustom 0 . }}</p>
-    {{- end }}
-    {{- with $item.reviewCount }}
-      {{- if gt . 0 }}
-    <p class="ranking-reviews">★ レビュー {{ . }} 件</p>
-      {{- end }}
-    {{- end }}
-    {{- /* #5225: matched_asin がある = 自社で価格観測している商品なので Amazon 価格の
-           推移を出せる。知育スコアは記事がある商品だけ (#166 F3)。 */ -}}
-    {{- if $asin }}{{ partial "card_metrics.html" (dict "axes" $axes "asin" $asin) }}{{ end }}
-    <div class="ranking-cta">
+    <div class="ranking-cta{{ if $internal }} rk-cta--with-article{{ end }}">
       {{- if $internal }}
-      <a class="ranking-cta-internal" href="{{ $internal }}">💡 徹底解説レビューを見る</a>
+      <a class="ranking-cta-internal" href="{{ $internal }}">💡 解説を読む</a>
       {{- end }}
-      <a data-cta-slot="ranking" class="ranking-cta-external ranking-cta-rakuten" href="{{ $item.url }}" rel="sponsored nofollow noopener" target="_blank">🔴 楽天市場で見る</a>
+      <a data-cta-slot="ranking" class="ranking-cta-external ranking-cta-rakuten" href="{{ $item.url }}" rel="sponsored nofollow noopener" target="_blank">楽天で見る</a>
       {{- /* Issue #600 Phase C: matched_asin がある = 自社で扱っている商品なので
              Amazon CTA を楽天 CTA の隣に並列表示し、読者の EC 選択肢を増やす。 */ -}}
       {{- if $asin }}
-      <a data-cta-slot="ranking" class="ranking-cta-external ranking-cta-amazon" href="https://www.amazon.co.jp/dp/{{ upper $asin }}/?tag={{ site.Params.amazonPartnerTag }}" rel="sponsored nofollow noopener" target="_blank">🟠 Amazonで見る</a>
+      <a data-cta-slot="ranking" class="ranking-cta-external ranking-cta-amazon" href="https://www.amazon.co.jp/dp/{{ upper $asin }}/?tag={{ site.Params.amazonPartnerTag }}" rel="sponsored nofollow noopener" target="_blank">Amazonで見る</a>
       {{- end }}
     </div>
   </div>
