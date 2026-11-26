@@ -31,6 +31,10 @@
 {{- /* navi-brain#216 案 A: 家族で遊べるゲーム (年齢別)。12/1〜1/15 (日本時間) だけお正月遊びの節を上に出す */ -}}
 {{- $gamesFull := and (eq $type "family-games") $data $data.items $data.games_page -}}
 {{- $oshogatsu := or (eq $month 12) (and (eq $month 1) (le $jst.Day 15)) -}}
+{{- /* 年齢 hub・クリスマスのページから /family-games/ の同じ年齢帯へ (partials/games_links.html)。
+       年齢 hub の 2 歳は 3 歳の帯 (2 歳から遊べる物を含む) と名前が合わないので送らない */ -}}
+{{- $gamesBand := index (dict "age-3" "age3" "age-4" "age4" "age-6" "school"
+                              "xmas-age-3" "age3" "xmas-age-4" "age4" "xmas-age-5" "age4" "xmas-age-6" "school") $type | default "" -}}
 {{- $bandFull := or $xmasFull $gamesFull -}}
 {{- $bandFetched := "" -}}
 {{- if $xmasFull }}{{ $bandFetched = $data.xmas_page.price_fetched_at | default $data.generated_at }}{{ end -}}
@@ -116,6 +120,10 @@
          ファイル・age・その年齢のキーのどれが無くても何も出さない (4 件未満の年齢はキーが無い)。 */ -}}
   {{- if and (hasPrefix $type "age-") $xmasSeason }}
     {{- partial "xmas_links.html" (dict "type" $type "mode" "hub") }}
+  {{- end }}
+  {{- /* お正月の時期 (12/1〜1/15) は年齢 hub の先頭に、家族で遊べるゲームの案内 */ -}}
+  {{- if and (hasPrefix $type "age-") $oshogatsu $gamesBand }}
+    {{- partial "games_links.html" (dict "band" $gamesBand "label" "🎍 お正月に家族で遊ぶなら") }}
   {{- end }}
   {{- if and $isXmas $data $data.items }}
   <p class="xmas-season">🎄 {{ if $xmasSeason }}{{ $xmasYear }}年のクリスマスに向けて、いまの価格で選んでいます。{{ else }}次のクリスマス（{{ $xmasYear }}年）に向けて、いまの価格で選んでいます。{{ end }}</p>
@@ -357,9 +365,13 @@
          price には $isInfoHub が false のまま = 出ない。 */ -}}
   {{- if $isXmas }}
   {{- partial "xmas_links.html" (dict "type" $type "mode" "siblings") }}
+  {{- with $gamesBand }}{{ partial "games_links.html" (dict "band" .) }}{{ end }}
   {{- else if and (hasPrefix $type "age-") (not $xmasSeason) }}
   {{- /* 季節外は年齢 hub の下のほうに置く (時期中はページの先頭) */ -}}
   {{- partial "xmas_links.html" (dict "type" $type "mode" "hub") }}
+  {{- end }}
+  {{- if and (hasPrefix $type "age-") (not $oshogatsu) $gamesBand }}
+  {{- partial "games_links.html" (dict "band" $gamesBand) }}
   {{- end }}
   {{- if $isInfoHub }}
   {{- partial "hub_siblings.html" (dict "type" $type) }}

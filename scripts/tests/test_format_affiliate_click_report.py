@@ -231,11 +231,12 @@ def test_nav_tables():
     assert gr[1] == "| `sec:last-diagnosis` | 0 | 0.0% | 条件付き（再訪者のみ表示） |"
     assert gr[2] == "| `sec:spotlight` | 90 | 90.0% |  |"
     assert gr[3] == "| `sec:xmas` | 0 | 0.0% | 時期のみ表示（10/1〜12/25） |"
-    assert gr[4] == "| `sec:characters` | 0 | 0.0% |  |"
-    assert gr[5] == "| `sec:new-arrivals` | 0 | 0.0% |  |"
-    assert gr[7] == "| `sec:latest` | 40 | 40.0% |  |"
-    assert gr[11] == "| `sec:recently-viewed` | 0 | 0.0% | 条件付き（再訪者のみ表示） |"
-    assert gr[12] == "| `sec:reco` | 0 | 0.0% | 条件付き（再訪者のみ表示） |"
+    assert gr[4] == "| `sec:games` | 0 | 0.0% | 時期のみ表示（12/1〜1/15） |"
+    assert gr[5] == "| `sec:characters` | 0 | 0.0% |  |"
+    assert gr[6] == "| `sec:new-arrivals` | 0 | 0.0% |  |"
+    assert gr[8] == "| `sec:latest` | 40 | 40.0% |  |"
+    assert gr[12] == "| `sec:recently-viewed` | 0 | 0.0% | 条件付き（再訪者のみ表示） |"
+    assert gr[13] == "| `sec:reco` | 0 | 0.0% | 条件付き（再訪者のみ表示） |"
     # 分母はトップの home_section_view が最初に出た日 (11-27) から。11-26 の nav_click では決めない
     assert "トップ (`/`) の page_view 100（2026-11-27 以降）" in md
 
@@ -453,8 +454,9 @@ def test_games_table():
     assert ir[0] == "| slot | 位置 | 行き先 | 件数 | page_view あたり |"
     assert ir[1] == "| `games-top3` | 迷ったらこの 3 つ | サイト内 | 3 | 3.0% |"
     assert ir[4] == "| `games-card-open` | カードの「〜を見る」を開く | サイト内 | 5 | 5.0% |"
-    assert ir[7] == "| そのほか | ヘッダー・ページ内のほかのリンク | サイト内 | 2 | 2.0% |"
-    assert ir[8] == "| `games-card-shop` | カード → 店 | 店へ | 2 | 2.0% |"
+    assert ir[7] == "| `games-hub` | 年齢帯の下 → 同じ年齢の年齢別ランキング | サイト内 | 0 | 0.0% |"
+    assert ir[8] == "| そのほか | ヘッダー・ページ内のほかのリンク | サイト内 | 2 | 2.0% |"
+    assert ir[9] == "| `games-card-shop` | カード → 店 | 店へ | 2 | 2.0% |"
     assert "page_view 100・記事へ 4（4.0%）・店へ 2（2.0%）" in md
 
 

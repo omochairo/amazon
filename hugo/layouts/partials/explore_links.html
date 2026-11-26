@@ -37,12 +37,23 @@
     </div>
   </div>
   {{- end }}
-  {{- with $themes }}
+  {{- /* navi-brain#216: 家族で遊べるゲーム (年齢別)。hub_index には入れない (入れると「次に見るなら」の
+         「ほかのテーマ」4 件が押し出される)。データがあってページが出ている日だけ並べる */ -}}
+  {{- $games := false -}}
+  {{- with index site.Data.features "family-games" }}{{ if and .items .games_page }}{{ $games = true }}{{ end }}{{ end -}}
+  {{- if or $themes $games }}
   <div class="explore-links-group">
     <h3 class="explore-links-label">テーマから</h3>
     <div class="tag-chips">
-      {{- range . }}
+      {{- range $themes }}
       <a class="tag-chip" href="{{ .url | relURL }}">{{ .label }}のおもちゃ</a>
+      {{- end }}
+      {{- if $games }}
+      {{- if eq $.RelPermalink ("family-games/" | relURL) }}
+      <span class="tag-chip is-current" aria-current="page">家族で遊べるゲーム（年齢別）</span>
+      {{- else }}
+      <a class="tag-chip" href="{{ "family-games/" | relURL }}">家族で遊べるゲーム（年齢別）</a>
+      {{- end }}
       {{- end }}
     </div>
   </div>

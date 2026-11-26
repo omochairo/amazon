@@ -208,3 +208,23 @@ class WordingTest(unittest.TestCase):
         phrase3 = fg.band_age_phrase(fg.BANDS[0])
         self.assertEqual(phrase3(24, {}), "2歳から遊べて、3歳でも長く使える")
         self.assertIsNone(phrase3(None, {}))
+
+
+class BandForArticleTest(unittest.TestCase):
+    """商品ページのバナー (front matter の family_games_band) の判定。ページの選び方と同じ線引き。"""
+
+    def test_game_gets_band_from_age(self):
+        raw = _raw("どうぶつかるた", ["かるた"])
+        raw["product"]["target_age"] = "3歳以上"
+        self.assertEqual(fg.band_for_article(raw), "age3")
+        raw["product"]["target_age"] = "6歳以上"
+        self.assertEqual(fg.band_for_article(raw), "school")
+
+    def test_not_a_game_or_out_of_range(self):
+        toy = _raw("木製パズル どうぶつ", ["パズル"])
+        toy["product"]["target_age"] = "3歳以上"
+        self.assertIsNone(fg.band_for_article(toy))
+        adult = _raw("大人のボードゲーム", ["ボードゲーム"])
+        adult["product"]["target_age"] = "15歳以上"
+        self.assertIsNone(fg.band_for_article(adult))
+        self.assertIsNone(fg.band_for_article(_raw("年齢不明のすごろく", ["すごろく"])))

@@ -83,6 +83,16 @@
       {{- end }}
     {{- end }}
     {{- $children = $uniq }}
+    {{- /* navi-brain#216: ゲームのグループの先頭に「家族で遊べるゲーム (年齢別)」。タグのページは
+           年齢で選べないので、年齢で選ぶ入口をここに置く (タグのページは消さない・noindex にもしない)。
+           データが無く /family-games/ が空の日は出さない。 */ -}}
+    {{- if eq $g.slug "games" }}
+      {{- with index site.Data.features "family-games" }}
+        {{- if and .items .games_page }}
+          {{- $children = slice (dict "name" "年齢別おすすめ（家族で遊べる）" "count" 0 "url" "/family-games/") | append $children }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
     {{- $groups = $groups | append (dict "emoji" $g.emoji "name" $g.name "slug" $g.slug "children" $children) }}
   {{- end }}
 {{- end }}

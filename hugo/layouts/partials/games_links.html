@@ -1,0 +1,44 @@
+{{- /*
+  games_links.html (navi-brain#216 案 A のサイト内リンク)
+  「家族で遊べるゲーム」(/family-games/) の年齢帯への 1 行の案内。行き先は
+  build_category_hubs.py が作る hugo/data/features/family-games.json の games_page.bands
+  ({key,label,count}) だけを見て、商品が 1 件以上ある年齢帯にだけリンクする
+  (歯止めで出さなかった年齢帯・データが無いビルドでは何も出さない)。
+
+  Expected context: dict
+    "band"  : 年齢帯のキー (age3 / age4 / school)。"" なら商品のある年齢帯を全部並べる
+    "label" : 先頭の太字 (省略時は「🎲 家族みんなで遊ぶなら」)
+
+  呼び出し元:
+    - 年齢 hub (feature.html: toys-age-3 → age3・toys-age-4 → age4・toys-age-6 → school)
+    - クリスマス × 年齢のページ (feature.html: xmas-age-3 → age3・4/5 → age4・6 → school)
+    - ゲームのタグページ (term.html: ボードゲーム・カードゲーム・かるた など)
+  商品ページは related_carousel.html のバナー (front matter の family_games_band) が受け持つ。
+*/ -}}
+{{- $band := .band | default "" -}}
+{{- $label := .label | default "🎲 家族みんなで遊ぶなら" -}}
+{{- $links := slice -}}
+{{- with index site.Data.features "family-games" -}}
+  {{- if and .items .games_page -}}
+    {{- range .games_page.bands -}}
+      {{- if and (gt (int .count) 0) (or (eq $band "") (eq .key $band)) -}}
+        {{- $links = $links | append . -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- with $links }}
+<p class="games-callout">
+  <span class="games-callout-label">{{ $label }}</span>
+  {{- if ne $band "" }}
+  {{- range . }}
+  <a href="{{ printf "/family-games/#games-%s" .key | relURL }}">{{ .label }}と家族で遊べるボードゲーム・かるた {{ .count }}選</a>
+  {{- end }}
+  {{- else }}
+  <span class="games-callout-text">家族で遊べるボードゲーム・かるた</span>
+  {{- range . }}
+  <a href="{{ printf "/family-games/#games-%s" .key | relURL }}">{{ .label }}</a>
+  {{- end }}
+  {{- end }}
+</p>
+{{- end }}
