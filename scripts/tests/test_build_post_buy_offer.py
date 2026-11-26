@@ -43,7 +43,8 @@ def _data(prices: dict, **extra) -> dict:
 
 
 AMZ = {"price": 3000, "url": f"https://www.amazon.co.jp/dp/{_ASIN}/", "availability": "在庫あり。"}
-RKT = {"price": 2800, "url": "https://item.rakuten.co.jp/shop/x/", "verified": True, "is_search": False}
+RKT = {"price": 2800, "url": "https://item.rakuten.co.jp/shop/x/", "verified": True, "is_search": False,
+       "checked_at": "2026-10-01"}
 YHO = {"price": 2900, "url": "https://store.shopping.yahoo.co.jp/shop/x.html", "verified": True,
        "is_search": False}
 RKT_SEARCH = {"price": 0, "url": "https://search.rakuten.co.jp/search/mall/x/", "is_search": True}
@@ -208,7 +209,7 @@ class BuyBoxRenderTest(unittest.TestCase):
                 self.assertIn('href="#price-compare"', body)
                 self.assertNotIn("￥", body)  # ボタンの箱に金額は出さない
         # 金額は冒頭の決める箱の一行にだけ出る
-        self.assertIn('<p class="decide-box-price">🏷️ 最安値 <strong>￥2,800</strong>（楽天市場・2026-11-13 時点）</p>',
+        self.assertIn('<p class="decide-box-price">🏷️ 最安値 <strong>￥2,800</strong>（楽天市場・2026-10-01 時点）</p>',
                       md)
         self.assertNotIn("best-deal", md)
         self.assertIn('id="price-compare"', md)

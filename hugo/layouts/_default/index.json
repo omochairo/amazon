@@ -1,6 +1,8 @@
 {{- /* #3055 E1: 全文 content/summary は /search.json (index.searchindex.json) に分離。
        ここは compare/favorites/posts一覧/term が使う軽量カタログ */ -}}
 {{- /* Scratch は home の複数 output format 間で共有されキー衝突するため、ローカル変数で蓄積する */ -}}
+{{- /* price_*_checked_at: そのショップの価格を取った日 (YYYY-MM-DD)。分からなければ null。
+       ショップごとに違う (楽天・Yahoo は数か月前のこともある)。build_post._price_checked_on */ -}}
 {{- /* #9186 age_min_months は対象年齢が不明なら null (0 は「0ヶ月〜」の意味だけに使う)。default 0 にしない */ -}}
 {{- $idx := slice -}}
 {{- range where site.RegularPages "Section" "posts" -}}
@@ -26,6 +28,9 @@
         "price_amazon" (.Params.price_amazon | default 0)
         "price_rakuten" (.Params.price_rakuten | default 0)
         "price_yahoo"  (.Params.price_yahoo | default 0)
+        "price_amazon_checked_at"  .Params.price_amazon_checked_at
+        "price_rakuten_checked_at" .Params.price_rakuten_checked_at
+        "price_yahoo_checked_at"   .Params.price_yahoo_checked_at
         "date"         (.Date.Format "2006-01-02")
         "unix_time"    .Date.Unix
         "age_range"    (.Params.age_range | default "")
