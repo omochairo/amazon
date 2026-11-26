@@ -28,6 +28,13 @@
 {{- if and (eq $month 12) (gt $jst.Day 25) }}{{ $xmasYear = add $xmasYear 1 }}{{ end -}}
 {{- /* navi-brain#214 v2 第 1 弾: 付加情報 (xmas_page) があるクリスマスページは専用の構成 (partials/xmas_page.html) */ -}}
 {{- $xmasFull := and $isXmas $data $data.items $data.xmas_page -}}
+{{- /* navi-brain#216 案 A: 家族で遊べるゲーム (年齢別)。12/1〜1/15 (日本時間) だけお正月遊びの節を上に出す */ -}}
+{{- $gamesFull := and (eq $type "family-games") $data $data.items $data.games_page -}}
+{{- $oshogatsu := or (eq $month 12) (and (eq $month 1) (le $jst.Day 15)) -}}
+{{- $bandFull := or $xmasFull $gamesFull -}}
+{{- $bandFetched := "" -}}
+{{- if $xmasFull }}{{ $bandFetched = $data.xmas_page.price_fetched_at | default $data.generated_at }}{{ end -}}
+{{- if $gamesFull }}{{ $bandFetched = $data.games_page.price_fetched_at | default $data.generated_at }}{{ end -}}
 
 <header class="page-header ranking-header feature-header feature-header--{{ $type }}">
   {{- /* navi-brain#213 R6: メニュー・トップのカードと同じ呼び名を見出しの上に出す
@@ -35,9 +42,9 @@
   {{- if eq $type "deals" }}<p class="term-header-eyebrow">🏷️ 20%OFF以上の特価</p>{{ end }}
   {{- if eq $type "cospa" }}<p class="term-header-eyebrow">💎 予算別ベスト</p>{{ end }}
   <h1>{{ .Title }}</h1>
-  {{- if $xmasFull }}
+  {{- if $bandFull }}
   {{- /* #214 部品 0: PR 表記・価格の取得日時・署名を 1 行の細い帯にまとめる (説明文は出さず、すぐ結論へ) */ -}}
-  {{- $fetched := $data.xmas_page.price_fetched_at | default $data.generated_at -}}
+  {{- $fetched := $bandFetched -}}
   <div class="xmas-band">{{ partial "pr_disclosure.html" (dict "network" "both" "short" true) }}{{ with $fetched }}<span class="xmas-band-item">価格の取得: <time datetime="{{ . }}">{{ (time.AsTime .).UTC.Add (time.ParseDuration "9h") | time.Format "1月2日 15:04" }}</time></span>{{ end }}<span class="xmas-band-item">おもちゃいろ編集部（データは毎日自動で集計）</span></div>
   {{- else }}
   {{- /* #5227: 広告表記はファーストビュー (h1 直下)。詳細は下部 .ranking-disclaimer。
@@ -64,7 +71,11 @@
 </header>
 
 <div class="post-content ranking-content feature-content feature-content--{{ $type }}">
-  {{- if $xmasFull }}
+  {{- if $gamesFull }}
+  {{- partial "family_games_page.html" (dict "page" . "data" $data "oshogatsu" $oshogatsu) }}
+  {{- $ld := slice -}}{{- range $data.items -}}{{- $ld = $ld | append (dict "name" .name "url" .url_internal) -}}{{- end -}}
+  {{- partial "itemlist_jsonld.html" (dict "name" .Title "items" $ld) }}
+  {{- else if $xmasFull }}
   {{- partial "xmas_page.html" (dict "page" . "data" $data "season" $xmasSeason "year" $xmasYear) }}
   {{- $ld := slice -}}{{- range $data.items -}}{{- $ld = $ld | append (dict "name" .name "url" .url_internal) -}}{{- end -}}
   {{- partial "itemlist_jsonld.html" (dict "name" .Title "items" $ld) }}

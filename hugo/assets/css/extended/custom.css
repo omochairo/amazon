@@ -8669,3 +8669,24 @@ a.sale-notice-main::after {
 .post-content table.xmas-compare .xmas-compare-head { display: flex; align-items: center; gap: .35rem; }
 .post-content table.xmas-compare .xmas-compare-head img { width: 56px; height: 56px; object-fit: contain; border-radius: 6px; background: #fff; margin: 0; }
 .post-content table.xmas-compare .xmas-compare-age { display: inline-block; margin-top: .3rem; padding: .05rem .45rem; border-radius: 999px; font-size: .72rem; font-weight: 700; background: var(--code-bg); color: var(--primary); white-space: nowrap; }
+
+/* 家族で遊べるゲーム (年齢別) /family-games/ (navi-brain#216)。カード・表・結論はクリスマスページの xmas-* を共用 */
+.games-jump { margin: .4rem 0 0; font-size: .9rem; }
+.games-filter[hidden], .games-band [data-games-row][hidden], .games-empty[hidden] { display: none !important; }
+.games-filter { margin: 1rem 0; padding: .7rem .9rem; border: 1px solid var(--border); border-radius: 10px; background: var(--entry); }
+.games-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; margin: .25rem 0; }
+.games-filter-label { font-size: .8rem; font-weight: 700; color: var(--secondary); margin-right: .2rem; min-width: 2.5em; }
+.games-chip { padding: .25rem .65rem; border: 1px solid var(--border); border-radius: 999px; background: var(--theme); color: var(--primary); font-size: .82rem; cursor: pointer; }
+.games-chip.is-active { background: var(--primary); color: var(--theme); border-color: var(--primary); }
+.games-filter-count { font-size: .82rem; font-weight: 700; margin-left: .3rem; }
+.games-filter-note { margin: .3rem 0 0; font-size: .75rem; color: var(--secondary); }
+.games-band { margin-top: 2rem; scroll-margin-top: 4rem; }
+.games-band > h3 { margin-top: 1.4rem; }
+.games-empty { padding: .8rem; border-radius: 8px; background: var(--code-bg); font-size: .9rem; }
+.games-oshogatsu { margin-top: 1.5rem; scroll-margin-top: 4rem; }
+.games-oshogatsu-note { font-size: .88rem; color: var(--secondary); }
+.games-oshogatsu-list dt { margin-top: .9rem; font-weight: 700; }
+.games-oshogatsu-list dd { margin: .2rem 0 0; }
+.games-oshogatsu-list dd p { margin: .15rem 0; }
+.games-where { margin-left: .5rem; padding: .05rem .45rem; border-radius: 999px; font-size: .72rem; font-weight: 700; background: var(--code-bg); color: var(--secondary); }
+.games-osho-items { font-size: .85rem; }

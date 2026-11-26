@@ -433,3 +433,32 @@ def test_main_passes_nav_rows(tmp_path):
     assert f.main(["--rows", str(rows), "--meta", str(meta), "--out", str(out),
                    "--repo-root", str(tmp_path)]) == 0
     assert "`hero:posts`" in out.read_text(encoding="utf-8")
+
+
+def test_games_table():
+    """(i) 家族で遊べるゲーム (navi-brain#216)。記事へ = top3・table・card-article・oshogatsu。"""
+    G = "/family-games/"
+    nav = [
+        nav_row("2026-11-27", G, "nav_click", "games-top3", 3),
+        nav_row("2026-11-27", G, "nav_click", "games-card-open", 5),   # 記事へには入れない
+        nav_row("2026-11-28", G, "nav_click", "games-oshogatsu", 1),
+        nav_row("2026-11-28", G, "nav_click", "menu:ranking", 2),      # そのほか
+        nav_row("2026-11-28", ART, "nav_click", "games-top3", 9),      # このページ以外
+    ]
+    clicks = [click("2026-11-27", G, "games-card-shop", "rakuten", 2)]
+    events = [event("2026-11-27", G, "page_view", 80), event("2026-11-28", G, "page_view", 20),
+              event("2026-11-28", ART, "page_view", 999)]
+    md = f.build_report(clicks, events, META_NAV, nav=nav)
+    ir = _rows_of(md, "### (i)")
+    assert ir[0] == "| slot | 位置 | 行き先 | 件数 | page_view あたり |"
+    assert ir[1] == "| `games-top3` | 迷ったらこの 3 つ | サイト内 | 3 | 3.0% |"
+    assert ir[4] == "| `games-card-open` | カードの「〜を見る」を開く | サイト内 | 5 | 5.0% |"
+    assert ir[7] == "| そのほか | ヘッダー・ページ内のほかのリンク | サイト内 | 2 | 2.0% |"
+    assert ir[8] == "| `games-card-shop` | カード → 店 | 店へ | 2 | 2.0% |"
+    assert "page_view 100・記事へ 4（4.0%）・店へ 2（2.0%）" in md
+
+
+def test_games_no_data():
+    md = f.build_report([click("2026-11-27", ART, "buy-top")], [], META_NAV)
+    assert "### (i)" in md
+    assert "まだデータがありません（`/family-games/` の page_view・クリックが無い）" in md
