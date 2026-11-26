@@ -8664,3 +8664,8 @@ a.sale-notice-main::after {
 .post-content .xmas-pick-main img { width: 48px; height: 48px; }
 .post-content .xmas-answer { margin-bottom: .8rem; padding: .55rem .8rem; }
 .post-content .xmas-picks .xmas-jump { margin: .5rem 0 0; color: var(--secondary); }
+/* 比較表の商品の列: 順位と画像を上に、商品名を下に (対象年齢の列の代わり。K 2026-11-26) */
+.post-content table.xmas-compare .xmas-compare-link { display: flex; flex-direction: column; gap: .3rem; }
+.post-content table.xmas-compare .xmas-compare-head { display: flex; align-items: center; gap: .35rem; }
+.post-content table.xmas-compare .xmas-compare-head img { width: 56px; height: 56px; object-fit: contain; border-radius: 6px; background: #fff; margin: 0; }
+.post-content table.xmas-compare .xmas-compare-age { display: inline-block; margin-top: .3rem; padding: .05rem .45rem; border-radius: 999px; font-size: .72rem; font-weight: 700; background: var(--code-bg); color: var(--primary); white-space: nowrap; }
