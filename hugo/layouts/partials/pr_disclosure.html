@@ -15,14 +15,15 @@
 
   引数 (dict):
     short   — true なら [PR] だけ (特集ページ /deals/ /cospa/ と年齢・テーマ・キャラクターの hub)。
-    network — "amazon" (既定) / "rakuten"。/ranking/ は楽天アフィリエイトなので
-              水平展開時に "rakuten" を渡す。
+    network — "amazon" (既定) / "rakuten" / "both" (楽天と Amazon の両方。/ranking/)。
 */ -}}
 {{- $network := "amazon" -}}
 {{- $short := false -}}
 {{- if reflect.IsMap . -}}{{- $network = .network | default "amazon" -}}{{- $short = .short | default false -}}{{- end -}}
 {{- $text := "Amazon アソシエイトの広告を含みます" -}}
 {{- if eq $network "rakuten" -}}{{- $text = "楽天アフィリエイトの広告を含みます" -}}{{- end -}}
+{{- /* both: 楽天・Amazon の両方へリンクするページ (/ranking/)。2026-11-26 */ -}}
+{{- if eq $network "both" -}}{{- $text = "楽天アフィリエイト・Amazon アソシエイトの広告を含みます" -}}{{- end -}}
 {{- /* span 間の空白は flex コンテナでは無視されるが、CSS 無効時に
        「[PR]Amazon…」と繋がって読めるのを防ぐために入れてある。 */ -}}
 {{- /* short: [PR] だけ出す (特集ページ。K の指摘・2026-11-25「詳しい文は一番下にあるので上は PR だけ、早く本題に」)。

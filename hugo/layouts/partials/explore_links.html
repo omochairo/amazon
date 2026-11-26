@@ -70,7 +70,11 @@
     <div class="tag-chips">
       <a class="tag-chip" href="{{ "brands/" | relURL }}">メーカーから探す</a>
       <a class="tag-chip" href="{{ "diagnosis/" | relURL }}">おもちゃ1分診断</a>
+      {{- if eq $.RelPermalink ("ranking/" | relURL) }}
+      <span class="tag-chip is-current" aria-current="page">楽天の売れ筋TOP30</span>
+      {{- else }}
       <a class="tag-chip" href="{{ "ranking/" | relURL }}">楽天の売れ筋TOP30</a>
+      {{- end }}
     </div>
   </div>
 </nav>
