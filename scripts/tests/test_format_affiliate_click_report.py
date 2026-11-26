@@ -66,6 +66,7 @@ def test_page_type(path, kind):
     ("sticky", "追従バー"),
     ("list-card", "特集・一覧"), ("list-card-thumb", "特集・一覧"), ("list-card-name", "特集・一覧"),
     ("ranking", "特集・一覧"), ("ranking-thumb", "特集・一覧"),
+    ("xmas-card-shop", "特集・一覧"),
     ("diagnosis", "その他"), ("sale-notice", "その他"), ("body", "その他"),
     ("(not set)", "その他"),
 ])
@@ -277,6 +278,70 @@ def test_no_nav_rows_says_no_data_yet():
     # 期間外の nav だけでも同じ
     md2 = f.build_report([], [], META, nav=[nav_row("2026-09-01", "/", "nav_click", "x")])
     assert "まだデータがありません" in md2
+
+
+def test_xmas_tables():
+    X0, X3 = "/xmas-age-0/", "/xmas-age-3/"
+    nav = [
+        nav_row("2026-11-27", X3, "nav_click", "xmas-top3", 4),
+        nav_row("2026-11-27", X3, "nav_click", "xmas-table", 2),
+        nav_row("2026-11-28", X0, "nav_click", "xmas-card-article", 3),
+        nav_row("2026-11-28", X0, "nav_click", "xmas-card-open", 7),  # 記事へには入れない
+        nav_row("2026-11-28", X0, "nav_click", "menu:ranking", 1),    # そのほか
+        nav_row("2026-11-28", ART, "nav_click", "xmas-top3", 9),      # クリスマスページ以外
+    ]
+    clicks = [click("2026-11-27", X3, "xmas-card-shop", "rakuten", 2),
+              click("2026-11-28", X0, "xmas-card-shop", n=1),
+              click("2026-11-28", X0, "list-card", n=1)]           # そのほか (古い HTML の残り)
+    events = [event("2026-11-20", X3, "page_view", 500),             # 作り直す前は分母に入れない
+              event("2026-11-27", X3, "page_view", 100),
+              event("2026-11-28", X0, "page_view", 50),
+              event("2026-11-28", ART, "page_view", 999)]
+    md = f.build_report(clicks, events, META_NAV, nav=nav)
+    hr = _rows_of(md, "### (h)")
+    assert hr[0] == "| slot | 位置 | 行き先 | 件数 | page_view あたり |"
+    assert hr[1] == "| `xmas-top3` | 迷ったらこの 3 つ | サイト内 | 4 | 2.7% |"
+    assert hr[4] == "| `xmas-card-open` | カードの「〜を見る」を開く | サイト内 | 7 | 4.7% |"
+    assert hr[5] == "| そのほか | ヘッダー・ページ内のほかのリンク | サイト内 | 1 | 0.7% |"
+    assert hr[6] == "| `xmas-card-shop` | カード → 店 | 店へ | 3 | 2.0% |"
+    assert hr[7] == "| そのほか | ほかの購入リンク | 店へ | 1 | 0.7% |"
+    # ページごとは年齢の順。記事へ = top3・table・card-article、店へ = affiliate_click ぜんぶ
+    assert hr[8] == "| ページ | page_view | 記事へ | 記事へ率 | 店へ | 店へ率 |"
+    assert hr[9] == "| `/xmas-age-0/` | 50 | 3 | 6.0% | 2 | 4.0% |"
+    assert hr[10] == "| `/xmas-age-3/` | 100 | 6 | 6.0% | 2 | 2.0% |"
+    assert hr[11] == "| **計** | 150 | 9 | 6.0% | 4 | 2.7% |"
+    assert "クリスマスページの page_view 150（2026-11-27 以降）" in md
+    assert "nav_click の行がありません" not in md
+
+
+def test_xmas_denominator_start_uses_whole_fetch():
+    """集計の窓の初日にクリックが無くても、その日の page_view は分母に入る。"""
+    X3 = "/xmas-age-3/"
+    meta = {"range": {"start": "2026-11-20", "end": "2026-12-30"}, "warnings": [],
+            "fetched_at": "2026-12-31T00:30:00+00:00"}  # 窓は 12-03〜12-30
+    nav = [nav_row("2026-11-27", X3, "nav_click", "xmas-top3", 1),   # 窓の外 (開始日を決める)
+           nav_row("2026-12-10", X3, "nav_click", "xmas-top3", 2)]
+    events = [event("2026-12-03", X3, "page_view", 40), event("2026-12-10", X3, "page_view", 60)]
+    md = f.build_report([], events, meta, nav=nav)
+    assert "クリスマスページの page_view 100（2026-11-27 以降）" in md
+
+
+def test_xmas_warns_without_nav_rows_and_skips_bad_dates():
+    X3 = "/xmas-age-3/"
+    clicks = [click("2026-11-27", X3, "xmas-card-shop", n=2)]
+    events = [event("2026-11-27", X3, "page_view", 100), event(None, X3, "page_view", 900)]
+    out = f.table_xmas(clicks, events, [])
+    assert any("nav_click の行がありません" in ln for ln in out)
+    assert any("page_view 100（2026-11-27 以降）" in ln for ln in out)
+
+
+def test_xmas_no_data_before_redesign():
+    """作り直す前の slot (list-card) だけなら、(h) はまだデータなしと言う。"""
+    clicks = [click("2026-11-20", "/xmas-age-3/", "list-card")]
+    events = [event("2026-11-20", "/xmas-age-3/", "page_view", 100)]
+    md = f.build_report(clicks, events, META_NAV)
+    assert "### (h)" in md
+    assert "まだデータがありません（作り直したページの計測を入れた日: 2026-11-26 以降）" in md
 
 
 def test_unknown_network_gets_its_own_column():
