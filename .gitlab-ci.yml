@@ -416,3 +416,33 @@ deploy-nas:
     paths:
       - navi-switch.out
     expire_in: 1 day
+
+# 本文が更新されたページを IndexNow で Bing などへ知らせる (scripts/ci_indexnow.py)。
+# 送るのは「今回の配信で変わった」かつ「sitemap.xml に載っている」かつ
+# 「lastmod が直近 72 時間以内」のページだけ (価格だけ変わったページは送らない)。
+# 鍵は hugo/static/<鍵>.txt (公開して使うもの)。送る前に本番の鍵ファイルを確かめる。
+#
+# cf-purge の後に回す (検索エンジンが取りに来たときにエッジの古いページを返さないため)。
+# cf-purge は CF の変数が無いと作られないので optional にする。
+# 失敗しても配信は済んでいる。失敗は赤で見えるようにし、allow_failure にはしない。
+indexnow:
+  stage: postdeploy
+  image: python:3.11-bookworm
+  dependencies:
+    - build-site
+    - deploy-nas
+  needs:
+    - job: build-site
+    - job: deploy-nas
+    - job: cf-purge
+      optional: true
+      artifacts: false
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main" && $NAS_DEPLOY_KEY && $NAS_HOST'
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - script_failure
+  script:
+    - python3 scripts/ci_indexnow.py --diff navi-switch.out --public public
