@@ -61,7 +61,7 @@ function li(rank, hasArticle) {
   return new El("ranking-item", { "data-rank": String(rank), "data-has-article": hasArticle ? "1" : "0" });
 }
 
-function boot() {
+function boot({ reduce = true, tops = null } = {}) {
   const root = new El("rk-page");
   const sort = root.appendChild(new El("rk-sort"));
   sort.hidden = true;
@@ -82,15 +82,31 @@ function boot() {
   [2, 4].forEach((r) => olO.appendChild(li(r, false)));
 
   const events = [];
+  const animations = [];
+  const Element = { prototype: {} };
+  if (tops) {
+    // 位置は「今いる一覧の中の順番 × 100px」(順位順の一覧は 1000px から) とみなす
+    El.prototype.getBoundingClientRect = function () {
+      const ol = this.parentNode;
+      const base = ol === olR ? 1000 : ol === olO ? 500 : 0;
+      return { top: base + (ol ? ol.children.indexOf(this) : 0) * 100 - tops.scroll };
+    };
+    Element.prototype.animate = function () {};
+    El.prototype.animate = function (kf, opt) {
+      const a = { target: this, kf, opt, cancelled: false, cancel() { this.cancelled = true; } };
+      animations.push(a);
+      return a;
+    };
+  }
   const window = {
     gtag: (_e, name, params) => events.push({ name, params }),
     innerHeight: 800,
     scrollBy: () => {},
-    matchMedia: () => ({ matches: true }), // 動きを減らす = アニメーションの経路は通さない
+    matchMedia: () => ({ matches: reduce }),
   };
   const document = { querySelector: (s) => (root.matches(s) ? root : root.querySelector(s)) };
-  vm.runInNewContext(SRC, { window, document, Element: { prototype: {} } });
-  return { root, sort, bArticle, bRank, jump, status, gA, gO, gR, olA, olO, olR, events };
+  vm.runInNewContext(SRC, { window, document, Element });
+  return { root, sort, bArticle, bRank, jump, status, gA, gO, gR, olA, olO, olR, events, animations };
 }
 
 const ranks = (ol) => ol.children.map((c) => +c.getAttribute("data-rank"));
@@ -138,11 +154,34 @@ test("順位順のときに群へのページ内リンクを押すと、元の�
   assert.deepEqual(ranks(d.olA), [1, 3, 5]);
 });
 
+test("動きを減らす設定でなければ、位置が変わったカードを元の位置から動かす。押し直すと前の動きは止める", () => {
+  const d = boot({ reduce: false, tops: { scroll: 0 } });
+  d.bRank.click();
+  const byRank = Object.fromEntries(d.animations.map((a) => [a.target.getAttribute("data-rank"), a]));
+  // 1 位は 0px → 1000px へ動いたので、-1000px は 1 画面 (800px) に抑えて -800px から戻る
+  assert.equal(byRank["1"].kf[0].transform, "translateY(-800px)");
+  assert.equal(byRank["1"].kf[1].transform, "translateY(0)");
+  assert.equal(byRank["1"].opt.fill, "backwards");
+  assert.ok(d.animations.length > 0);
+  const first = d.animations.slice();
+  d.bArticle.click();
+  assert.ok(first.every((a) => a.cancelled), "前の動きを止める");
+});
+
+test("動きを減らす設定ではカードを動かさない", () => {
+  const d = boot({ reduce: true, tops: { scroll: 0 } });
+  d.bRank.click();
+  assert.equal(d.animations.length, 0);
+});
+
 test("テンプレートが並べ替え・計測・ページ内リンクの前提を出している", () => {
   const item = readFileSync(path.join(LAYOUTS, "partials/ranking_item.html"), "utf8");
   for (const needle of ['id="rank-{{ $rank }}"', 'data-rank="{{ $rank }}"', 'data-asin="{{ upper . }}"', "data-has-article=", '<h3 class="ranking-title">']) {
     assert.ok(item.includes(needle), "ranking_item.html: " + needle);
   }
+  // li に data-asin を付けると compare.js / favorites.js が比較・♡ を足し、記事の無い商品で壊れる
+  const liLine = item.split("\n").find((l) => l.startsWith("<li "));
+  assert.ok(liLine && !liLine.includes("data-asin"), "li に data-asin を付けない");
   const page = readFileSync(path.join(LAYOUTS, "_default/ranking.html"), "utf8");
   for (const needle of ['class="rk-sort" role="group" aria-label="並び順" hidden', 'data-order="rank"', 'class="rk-group rk-group--rank" data-group="rank" hidden', "rk-page", "js/ranking_sort.js", '"short" true']) {
     assert.ok(page.includes(needle), "ranking.html: " + needle);

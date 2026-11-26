@@ -110,7 +110,9 @@
       ], {
         duration: 520,
         easing: 'cubic-bezier(.22,1,.36,1)',
-        delay: Math.min(i, 8) * 18
+        delay: Math.min(i, 8) * 18,
+        // 待ち時間の間も始めの位置に置いておく (無いと、移動後の位置が一瞬見えてから戻る)
+        fill: 'backwards'
       });
       animating.push(a);
     }

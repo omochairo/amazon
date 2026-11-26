@@ -3467,13 +3467,12 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
 .rk-page .rk-foot { grid-area: foot; min-width: 0; }
 .rk-page .ranking-thumb { width: 100%; height: auto; aspect-ratio: 1 / 1; }
 
-/* 順位: 画像の下に「🥇 楽天 1位」の札を重ねる (数字だけだと何の順位か分からなかった)。
-   カードの左上は比較の「＋」(compare.js)、右上は ♡ (favorites.js) が JS で置かれるので、
-   札は画像の下側に、見出しは ♡ の幅だけ右を空ける。 */
-.rk-page .rk-head { padding-right: 44px; }
+/* 順位: 画像の左上に「🥇 楽天 1位」の札を重ねる (数字だけだと何の順位か分からなかった)。
+   li に data-asin を付けないので、比較の「＋」と ♡ (compare.js / favorites.js) はこのページのカードには付かない */
+.rk-page .rk-media { min-height: 28px; }
 .rk-page .ranking-badge {
   position: absolute;
-  bottom: 6px;
+  top: 6px;
   left: 6px;
   z-index: 1;
   width: auto;
@@ -3683,7 +3682,7 @@ html[data-theme="dark"] .post-content .competitor-grid .competitor-card a[href][
   .rk-page .ranking-thumb { max-height: none; }
   .rk-page .ranking-thumb img { max-height: none; }
   .rk-page h3.ranking-title { font-size: .95rem; }
-  .rk-page .ranking-badge { bottom: 4px; left: 4px; font-size: .72rem; padding: 1px 7px 1px 5px; }
+  .rk-page .ranking-badge { top: 4px; left: 4px; font-size: .72rem; padding: 1px 7px 1px 5px; }
   .rk-page .ranking-medal { font-size: .95rem; }
   .rk-page .ranking-cta { max-width: none; }
   .rk-page .ranking-item--compact { grid-template-columns: 80px minmax(0, 1fr); padding: .6rem .7rem; }

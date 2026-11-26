@@ -15,8 +15,10 @@
     知育スコアの 4 項目・Amazon の値段の動き・店名は「くわしく見る」(<details>) に畳む
   - 記事が無いカード (--compact): 画像・商品名・値段・ボタンだけの小さな行にする
   - 商品名は h3 (群の見出し h2 の下)。見出しに楽天の順位を入れる
-  - li の id="rank-N" はページ内リンクと ItemList の url、data-asin は affiliate_click.js が
-    楽天のクリックでも商品を記録するため、data-has-article / data-order は ranking_sort.js が使う
+  - li の id="rank-N" はページ内リンクと ItemList の url、data-rank / data-has-article は ranking_sort.js が使う
+  - data-asin は楽天のリンク (<a>) に付ける。affiliate_click.js が楽天のクリックでも商品を記録するため。
+    li には付けない: compare.js / favorites.js は .ranking-item の data-asin を見て比較・♡ のボタンを足すので、
+    記事の無い商品に「♡」が付き、お気に入りの一覧から存在しない /products/ へリンクしてしまう (agy の指摘)
 */ -}}
 {{- $item := .item -}}
 {{- $page := .page -}}
@@ -52,7 +54,7 @@
 {{- if $mv }}{{ if or (ne (int $mv.rank) $rank) (not (or $mv.is_new $mv.prev_rank (ge (int ($mv.streak_days | default 0)) 2))) }}{{ $mv = "" }}{{ end }}{{ end -}}
 {{- $metrics := "" -}}
 {{- if and $asin (not $compact) }}{{ $metrics = partial "card_metrics.html" (dict "axes" $axes "asin" $asin) }}{{ end -}}
-<li class="ranking-item ranking-item--rank-{{ $rank }}{{ if le $rank 3 }} rk-top{{ end }}{{ if $compact }} ranking-item--compact{{ end }}{{ if not $asin }} ranking-item--external-only{{ end }}" id="rank-{{ $rank }}" data-rank="{{ $rank }}"{{ with $asin }} data-asin="{{ upper . }}"{{ end }} data-has-article="{{ if $internal }}1{{ else }}0{{ end }}"{{ with $stage }} data-match-stage="{{ . }}"{{ end }}>
+<li class="ranking-item ranking-item--rank-{{ $rank }}{{ if le $rank 3 }} rk-top{{ end }}{{ if $compact }} ranking-item--compact{{ end }}{{ if not $asin }} ranking-item--external-only{{ end }}" id="rank-{{ $rank }}" data-rank="{{ $rank }}" data-has-article="{{ if $internal }}1{{ else }}0{{ end }}"{{ with $stage }} data-match-stage="{{ . }}"{{ end }}>
   <div class="rk-media">
     <span class="ranking-badge ranking-badge--rank-{{ $rank }}" aria-hidden="true">
       {{- if eq $rank 1 }}<span class="ranking-medal">🥇</span>
@@ -67,7 +69,7 @@
       <img src="{{ . }}" alt="" loading="lazy" decoding="async" width="200" height="200">
     </a>
     {{- else }}
-    <a class="ranking-thumb" data-cta-slot="ranking-thumb" href="{{ $item.url }}" rel="sponsored nofollow noopener" target="_blank" aria-hidden="true" tabindex="-1">
+    <a class="ranking-thumb" data-cta-slot="ranking-thumb"{{ with $asin }} data-asin="{{ upper . }}"{{ end }} href="{{ $item.url }}" rel="sponsored nofollow noopener" target="_blank" aria-hidden="true" tabindex="-1">
       <img src="{{ . }}" alt="" loading="lazy" decoding="async" width="200" height="200">
     </a>
     {{- end }}
@@ -80,7 +82,7 @@
       {{- if $internal -}}
       <a href="{{ $internal }}">{{ $title }}</a>
       {{- else -}}
-      <a data-cta-slot="ranking-name" href="{{ $item.url }}" rel="sponsored nofollow noopener" target="_blank">{{ $title }}</a>
+      <a data-cta-slot="ranking-name"{{ with $asin }} data-asin="{{ upper . }}"{{ end }} href="{{ $item.url }}" rel="sponsored nofollow noopener" target="_blank">{{ $title }}</a>
       {{- end -}}
     </h3>
     {{- with $mv }}
@@ -105,11 +107,11 @@
     {{- with $page }}{{ with .Params.card_reason }}
     <p class="card-reason">&#128161; {{ . }}</p>
     {{- end }}{{ end }}
-    {{- if or $metrics (and (not $compact) $item.shopName) }}
+    {{- with $metrics }}
     <details class="rk-more">
       <summary>📊 知育スコアと値段の動きを見る</summary>
       <div class="rk-more-body">
-        {{- with $metrics }}{{ . }}{{ end }}
+        {{- . }}
         {{- with $item.shopName }}<p class="ranking-shop">楽天のお店: {{ . }}</p>{{ end }}
       </div>
     </details>
@@ -118,7 +120,7 @@
       {{- if $internal }}
       <a class="ranking-cta-internal" href="{{ $internal }}">💡 解説を読む</a>
       {{- end }}
-      <a data-cta-slot="ranking" class="ranking-cta-external ranking-cta-rakuten" href="{{ $item.url }}" rel="sponsored nofollow noopener" target="_blank">楽天で見る</a>
+      <a data-cta-slot="ranking" class="ranking-cta-external ranking-cta-rakuten"{{ with $asin }} data-asin="{{ upper . }}"{{ end }} href="{{ $item.url }}" rel="sponsored nofollow noopener" target="_blank">楽天で見る</a>
       {{- /* Issue #600 Phase C: matched_asin がある = 自社で扱っている商品なので
              Amazon CTA を楽天 CTA の隣に並列表示し、読者の EC 選択肢を増やす。 */ -}}
       {{- if $asin }}
