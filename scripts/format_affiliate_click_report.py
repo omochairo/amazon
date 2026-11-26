@@ -14,8 +14,9 @@ Actions のログ・job summary には出さない (workflow 23 の冒頭を参�
   (e) 診断の流れ (diagnosis_start → diagnosis_complete → slot=diagnosis のクリック)
   (f) サイト内の移動 (nav_click の slot ごと。navi-brain#213)
   (g) トップの区画の到達 (home_section_view ÷ トップの page_view)
+  (h) クリスマスページ (/xmas-age-N/) の押された位置と、ページごとの記事へ・店へ (navi-brain#214)
 
-(a)〜(c)・(e) は期間の終わりから --summary-days 日、(d) は取得した期間ぜんぶを
+(a)〜(c)・(e)〜(h) は期間の終わりから --summary-days 日、(d) は取得した期間ぜんぶを
 7 日ずつ区切る (期間の終わりにそろえる。7 日に満たない端の週は出さない)。
 """
 from __future__ import annotations
@@ -45,6 +46,20 @@ HOME_SECTIONS_CONDITIONAL = ("last-diagnosis", "recently-viewed", "reco")
 HOME_SECTIONS_SEASONAL = ("xmas",)
 NAV_LAUNCH = "2026-11-25"
 NAV_TOP = 30
+
+# navi-brain#214: 作り直したクリスマス × 年齢ページ (hugo/layouts/partials/xmas_page.html・
+# xmas_card.html) の slot。記事へは nav_click、店へは affiliate_click で飛ぶ。
+XMAS_LAUNCH = "2026-11-26"
+XMAS_NAV_SLOTS = (
+    ("xmas-top3", "迷ったらこの 3 つ"),
+    ("xmas-table", "比較表"),
+    ("xmas-card-article", "カード → 記事"),
+    ("xmas-card-open", "カードの「〜を見る」を開く"),
+)
+XMAS_CTA_SLOTS = (("xmas-card-shop", "カード → 店"),)
+# 記事 (レビュー) へ進む slot。xmas-card-open はページ内でたたみを開くだけなので入れない
+XMAS_TO_ARTICLE = ("xmas-top3", "xmas-table", "xmas-card-article")
+_XMAS_PATH_RE = re.compile(r"^/xmas-age-(\d+)/$")
 
 NETWORKS = ("amazon", "rakuten", "yahoo")
 
@@ -103,7 +118,7 @@ def slot_group(slot: str) -> str:
         return "価格カード"
     if s == "sticky":
         return "追従バー"
-    if s.startswith("list-card") or s.startswith("ranking"):
+    if s.startswith("list-card") or s.startswith("ranking") or s.startswith("xmas-"):
         return "特集・一覧"
     return "その他"
 
@@ -391,6 +406,84 @@ def table_home_sections(nav, events) -> list[str]:
     return out + ["", f"到達率の分母 = トップ (`/`) の page_view {pv}{since}"]
 
 
+def _xmas_first_day(clicks, nav) -> str | None:
+    """作り直したクリスマスページの slot (xmas-*) が最初に現れた日。
+
+    作り直す前のページ (slot は list-card*) の page_view を分母に混ぜないため。
+    (g) と同じく、計測を入れた日ではなく実データに最初に出た日で決める (配信の遅れも除く)。
+    集計の窓 (28 日) ではなく取得した期間ぜんぶの行で決める。窓の初日にクリックが
+    0 件だっただけで、その日の page_view が分母から落ちないように。
+    """
+    days = [str(r.get("date")) for r in list(clicks) + list(nav)
+            if str(r.get("slot", "")).startswith("xmas-")
+            and _XMAS_PATH_RE.match(r.get("pagePath") or "")
+            and _is_iso_date(r.get("date"))]
+    return min(days) if days else None
+
+
+def table_xmas(clicks, events, nav, first: str | None = None) -> list[str]:
+    """first は _xmas_first_day を取得した期間ぜんぶで求めた日 (省略時は渡された行で求める)。"""
+    first = first or _xmas_first_day(clicks, nav)
+    if first is None:
+        return [f"まだデータがありません（作り直したページの計測を入れた日: {XMAS_LAUNCH} 以降）"]
+
+    def on_xmas(r) -> bool:
+        return (bool(_XMAS_PATH_RE.match(r.get("pagePath") or "")) and _is_iso_date(r.get("date"))
+                and str(r.get("date")) >= first)
+
+    pv_by_page: dict[str, int] = defaultdict(int)
+    for r in events:
+        if r.get("eventName") == "page_view" and on_xmas(r):
+            pv_by_page[r["pagePath"]] += int(r.get("eventCount", 0))
+    nav_by_slot: dict[str, int] = defaultdict(int)
+    article_by_page: dict[str, int] = defaultdict(int)
+    for r in nav:
+        if r.get("eventName") != "nav_click" or not on_xmas(r):
+            continue
+        n = int(r.get("eventCount", 0))
+        nav_by_slot[r.get("slot", "")] += n
+        if r.get("slot") in XMAS_TO_ARTICLE:
+            article_by_page[r["pagePath"]] += n
+    cta_by_slot: dict[str, int] = defaultdict(int)
+    shop_by_page: dict[str, int] = defaultdict(int)
+    for r in clicks:
+        if not on_xmas(r):
+            continue
+        n = int(r.get("eventCount", 0))
+        cta_by_slot[r.get("slot", "")] += n
+        shop_by_page[r["pagePath"]] += n
+    pv = sum(pv_by_page.values())
+
+    rows = []
+    for kind, known, counts in (("サイト内", XMAS_NAV_SLOTS, nav_by_slot),
+                                ("店へ", XMAS_CTA_SLOTS, cta_by_slot)):
+        names = {s for s, _ in known}
+        for slot, label in known:
+            rows.append([f"`{slot}`", label, kind, counts.get(slot, 0), _rate(counts.get(slot, 0), pv)])
+        rest = sum(n for s, n in counts.items() if s not in names)
+        if rest:
+            label = "ヘッダー・ページ内のほかのリンク" if kind == "サイト内" else "ほかの購入リンク"
+            rows.append(["そのほか", label, kind, rest, _rate(rest, pv)])
+    out = _table(["slot", "位置", "行き先", "件数", "page_view あたり"], rows, align="lllrr")
+
+    pages = sorted(set(pv_by_page) | set(article_by_page) | set(shop_by_page),
+                   key=lambda p: int(_XMAS_PATH_RE.match(p).group(1)))
+    prow = []
+    for p in pages:
+        a, s, v = article_by_page.get(p, 0), shop_by_page.get(p, 0), pv_by_page.get(p, 0)
+        prow.append([f"`{p}`", v, a, _rate(a, v), s, _rate(s, v)])
+    ta, ts = sum(article_by_page.values()), sum(shop_by_page.values())
+    prow.append(["**計**", pv, ta, _rate(ta, pv), ts, _rate(ts, pv)])
+    out += ["", "ページごと（記事へ = `xmas-top3`・`xmas-table`・`xmas-card-article`、"
+            "店へ = そのページの affiliate_click ぜんぶ）", ""]
+    out += _table(["ページ", "page_view", "記事へ", "記事へ率", "店へ", "店へ率"], prow)
+    out += ["", f"分母 = クリスマスページの page_view {pv}（{first} 以降）。"
+            "`xmas-card-open` はたたみを閉じるときも数える"]
+    if not any(r.get("eventName") == "nav_click" for r in nav):
+        out.append("⚠️ この期間の nav_click の行がありません（取得の失敗を含む）。サイト内の列は 0 になっています")
+    return out
+
+
 # ---------------------------------------------------------------- 全体
 
 def build_report(clicks: list[dict], events: list[dict], meta: dict, *,
@@ -426,7 +519,7 @@ def build_report(clicks: list[dict], events: list[dict], meta: dict, *,
     out += table_page_type_slot(s_clicks)
     out += ["", f"### (d) 週ごとの推移 (直近 {trend_weeks} 週)", "",
             "記事の購入ボタン = `buy-*`・`buy-box` / 価格カード = `price-*` / "
-            "特集・一覧 = `list-card*`・`ranking*`。記事のクリック率 = 記事ページの"
+            "特集・一覧 = `list-card*`・`ranking*`・`xmas-*`。記事のクリック率 = 記事ページの"
             " affiliate_click ÷ 記事ページの page_view", ""]
     out += table_weekly(clicks, events, fetched_start, end, trend_weeks)
     out += ["", "### (e) 診断の流れ (診断ページの分)", ""]
@@ -442,6 +535,8 @@ def build_report(clicks: list[dict], events: list[dict], meta: dict, *,
     else:
         out += ["", "### (f)(g) サイト内の移動・トップの区画の到達", "",
                 f"まだデータがありません（計測を入れた日: {NAV_LAUNCH} 以降）"]
+    out += ["", "### (h) クリスマスページ (`/xmas-age-*/`)", ""]
+    out += table_xmas(s_clicks, s_events, s_nav, first=_xmas_first_day(clicks, nav or []))
     out += ["", f"<sub>fetched_at: {meta.get('fetched_at', '')}</sub>", ""]
     return "\n".join(out)
 
