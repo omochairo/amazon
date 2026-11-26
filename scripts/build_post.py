@@ -2538,6 +2538,59 @@ def _attach_price_freshness(data: dict[str, Any], per_asin_root: pathlib.Path) -
         data["price_checked_at"] = observed[:10]
 
 
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}")
+
+
+def _date_part(value: Any) -> str | None:
+    """ISO 日時の文字列の先頭の YYYY-MM-DD を取る。形が違えば None。
+
+    観測の時刻は UTC で記録されているので、これは UTC の日付になる。同じ価格の節の
+    価格推移 (_load_price_watch_latest の last_checked_date・表の日付) と
+    _attach_price_freshness も先頭 10 文字を取っているので、それにそろえている。
+    日本時間にそろえるなら、それらと一緒に変える (片方だけ変えると同じ節で 1 日ずれる)。
+    """
+    if isinstance(value, str):
+        m = _DATE_RE.match(value)
+        if m:
+            return m.group(0)
+    return None
+
+
+def _price_checked_on(key: str, entry: Any) -> str | None:
+    """そのショップの価格を取った日 (YYYY-MM-DD)。分からなければ None。
+
+    Amazon は _apply_price_overlay が採用した観測の時刻 (price_observed_at)、
+    楽天・Yahoo は照合済みデータの取り直した日 (_attach_market_prices の checked_at)。
+    記事の書き手が写した未確認の価格 (verified=False) には日付が無い。
+    """
+    if not isinstance(entry, dict):
+        return None
+    if key == "amazon":
+        return _date_part(entry.get("price_observed_at"))
+    if entry.get("verified") is False:
+        return None
+    return _date_part(entry.get("checked_at"))
+
+
+def _price_checked_note(data: dict[str, Any]) -> str | None:
+    """価格カードの下の「💹 価格情報: …」の中身。金額が出ていて日付が分かるショップだけを並べる。
+
+    ショップごとに取った日が違う (楽天・Yahoo は数か月前のこともある) ので、
+    1 つの日付で全部の価格を言わない。
+    """
+    product = data.get("product") if isinstance(data.get("product"), dict) else {}
+    prices = product.get("prices") if isinstance(product.get("prices"), dict) else {}
+    parts = []
+    for key, label, _short in _BUY_SITES:
+        entry = prices.get(key)
+        if not isinstance(entry, dict) or not _buy_entry_is_priced(entry):
+            continue
+        day = _price_checked_on(key, entry)
+        if day:
+            parts.append(f"{label} {day} 時点")
+    return "・".join(parts) or None
+
+
 _PRICE_HISTORY_MIN_POINTS = 3
 _PRICE_HISTORY_MIN_SPAN_DAYS = 14
 _PRICE_HISTORY_GAP_DAYS = 14  # #5120: この日数を超える観測間隔は「未観測」として破線で描く
@@ -3519,6 +3572,9 @@ def _attach_market_prices(
                 "availability": matched.get("availability"),
                 "free_shipping": matched.get("free_shipping"),
                 "asuraku": matched.get("asuraku"),
+                # この価格を取った日。_refreshed_at は fetch_cross_search.py が
+                # 照合をやり直して採用したときだけ書くので、価格と同じ時点を指す
+                "checked_at": _date_part(matched.get("_refreshed_at")),
             }
             continue
 
@@ -3632,8 +3688,11 @@ def _resolve_buy_offer(data: dict[str, Any]) -> dict[str, Any]:
     primary: dict[str, Any] | None = None
     if eligible:
         price, _order, key = min(eligible)
+        # checked_at: 冒頭の「最安値 ￥… (ショップ・YYYY-MM-DD 時点)」の日付。
+        # そのショップの価格を取った日を出す (Amazon の日付を楽天の価格に付けない)
         primary = {"site": key, "label": labels[key], "url": entries[key]["url"],
-                   "price": price, "kind": "cheapest", "text": f"{labels[key]}で見る"}
+                   "price": price, "kind": "cheapest", "text": f"{labels[key]}で見る",
+                   "checked_at": _price_checked_on(key, entries[key])}
     elif _direct("amazon"):
         oos = _buy_entry_out_of_stock("amazon", entries["amazon"])
         primary = {"site": "amazon", "label": "Amazon", "url": entries["amazon"]["url"],
@@ -4364,6 +4423,11 @@ def _frontmatter_meta(
                     price_val = int(entry.get("price") or 0)
                     if price_val > 0:
                         meta[f"price_{key}"] = price_val
+                        # その価格を取った日 (index.json で AI などに渡す)。
+                        # Amazon の分は上の price_checked_at と同じ値
+                        checked = _price_checked_on(key, entry)
+                        if checked:
+                            meta[f"price_{key}_checked_at"] = checked
                 except (TypeError, ValueError):
                     pass
 
@@ -4897,6 +4961,8 @@ def main() -> None:
             # navi-brain#165 T3/T4: 購入ボタンの行き先と 💴 の見出し。表示だけに使い、
             # front matter / JSON-LD には入れない。
             data["buy_offer"] = _resolve_buy_offer(data)
+            # 価格カードの下の「💹 価格情報」。ショップごとの価格を取った日を並べる
+            data["price_checked_note"] = _price_checked_note(data)
             # #9217: FAQ が「公式の対象年齢の記載は無い」と答えている記事は、冒頭の
             # 「対象年齢：」を「対象年齢（目安）：」と書く。表示だけに使う。
             data["age_is_estimate"] = age_is_estimate(data)

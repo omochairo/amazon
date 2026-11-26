@@ -84,7 +84,7 @@
     scroll_reveal.js はこの箱をアニメーションさせない。 -#}
 <section class="hero-score decide-box" aria-label="この商品の結論">
 <div class="decide-box-main">{% if product.image %}<figure class="product-hero-image decide-box-image"><img src="{{ product.image }}" alt="{{ product.name }}の商品画像"{% if product.image_width and product.image_height %} width="{{ product.image_width }}" height="{{ product.image_height }}"{% endif %} fetchpriority="high" decoding="async"><figcaption>出典：Amazon商品ページ</figcaption></figure>{% endif %}<div class="hero-total-row">{% if score %}<div class="hero-total-badge"><span class="hero-total-label">🌟 知育スコア</span><span class="hero-total-value">{{ score.total_100 }}<small>/100</small></span></div>{% endif %}{% if verdict and verdict.headline %}<p class="hero-verdict">「{{ verdict.headline }}」</p>{% endif %}</div></div>
-{% if stock_where_to_buy %}<p class="where-to-buy-conclusion">{{ stock_where_to_buy.conclusion }}</p>{% elif buy_offer and not buy_offer.unavailable and buy_offer.primary and buy_offer.primary.kind == 'cheapest' %}<p class="decide-box-price">🏷️ 最安値 <strong>￥{{ "{:,}".format(buy_offer.primary.price) }}</strong>（{{ buy_offer.primary.label }}{% if price_checked_at %}・{{ price_checked_at }} 時点{% endif %}）</p>{% endif %}
+{% if stock_where_to_buy %}<p class="where-to-buy-conclusion">{{ stock_where_to_buy.conclusion }}</p>{% elif buy_offer and not buy_offer.unavailable and buy_offer.primary and buy_offer.primary.kind == 'cheapest' %}<p class="decide-box-price">🏷️ 最安値 <strong>￥{{ "{:,}".format(buy_offer.primary.price) }}</strong>（{{ buy_offer.primary.label }}{% if buy_offer.primary.checked_at %}・{{ buy_offer.primary.checked_at }} 時点{% endif %}）</p>{% endif %}
 {{ buy_box('buy-top', 'top') }}
 </section>
 
@@ -150,8 +150,10 @@
 {% raw %}{{< sale_notice_inline >}}{% endraw %}
 
 {% endif %}
-{% if price_checked_at %}
-<p><small>💹 価格情報: {{ price_checked_at }} 時点</small></p>
+{# 価格はショップごとに取った日が違うので、ショップ名を付けて並べる (build_post._price_checked_note)。
+    Amazon の price_checked_at だけに戻さない: 取り扱い終了・無価格になった Amazon の日付が残るため。 -#}
+{% if price_checked_note %}
+<p><small>💹 価格情報: {{ price_checked_note }}</small></p>
 {% endif %}
 {%- if price_body_stale %}
 <p class="price-body-stale-note"><small>⚠️ 本文中に書かれた価格は執筆時点のものです。その後 Amazon 側で価格が大きく変動したため、上の価格カード（最新観測値）と食い違っています。ご購入前に必ず販売ページで最新価格をご確認ください。</small></p>
