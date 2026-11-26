@@ -1,0 +1,22 @@
+{{- /*
+  games_oshogatsu.html — お正月遊びの一覧と遊び方 (navi-brain#216)。family_games_page.html から呼ぶ。
+  入力 (dict): .list = family-games.json の games_page.oshogatsu
+  遊び方は一般的な説明だけ。由来・歴史は公的な出典が無いので書かない (scripts/family_games_page.py OSHOGATSU_PLAYS)。
+*/ -}}
+{{- with .list }}
+<section class="games-oshogatsu" id="games-oshogatsu" aria-labelledby="games-oshogatsu-title">
+  <h2 id="games-oshogatsu-title">お正月遊びの一覧と遊び方</h2>
+  <p class="games-oshogatsu-note">家族や親戚が集まるお正月に、みんなで遊べる昔からの遊びです。当サイトに記事のある商品は、記事へのリンクを付けています。</p>
+  <dl class="games-oshogatsu-list">
+    {{- range . }}
+    <dt>{{ .name }}<span class="games-where">{{ .where }}</span></dt>
+    <dd>
+      <p>{{ .how }}</p>
+      {{- with .items }}
+      <p class="games-osho-items">記事: {{ range $i, $it := . }}{{ if $i }}・{{ end }}<a href="{{ $it.url }}" data-nav-slot="games-oshogatsu">{{ $it.name }}</a>{{ end }}</p>
+      {{- end }}
+    </dd>
+    {{- end }}
+  </dl>
+</section>
+{{- end }}

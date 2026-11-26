@@ -15,6 +15,7 @@ Actions のログ・job summary には出さない (workflow 23 の冒頭を参�
   (f) サイト内の移動 (nav_click の slot ごと。navi-brain#213)
   (g) トップの区画の到達 (home_section_view ÷ トップの page_view)
   (h) クリスマスページ (/xmas-age-N/) の押された位置と、ページごとの記事へ・店へ (navi-brain#214)
+  (i) 家族で遊べるゲーム (/family-games/) の押された位置と、記事へ・店へ (navi-brain#216)
 
 (a)〜(c)・(e)〜(h) は期間の終わりから --summary-days 日、(d) は取得した期間ぜんぶを
 7 日ずつ区切る (期間の終わりにそろえる。7 日に満たない端の週は出さない)。
@@ -61,10 +62,24 @@ XMAS_CTA_SLOTS = (("xmas-card-shop", "カード → 店"),)
 XMAS_TO_ARTICLE = ("xmas-top3", "xmas-table", "xmas-card-article")
 _XMAS_PATH_RE = re.compile(r"^/xmas-age-(\d+)/$")
 
+# navi-brain#216: 家族で遊べるゲーム (年齢別)。hugo/layouts/partials/family_games_page.html・
+# games_oshogatsu.html・xmas_card.html (slot の頭を games にして共用) の slot
+GAMES_PATH = "/family-games/"
+GAMES_NAV_SLOTS = (
+    ("games-top3", "迷ったらこの 3 つ"),
+    ("games-table", "比較表"),
+    ("games-card-article", "カード → 記事"),
+    ("games-card-open", "カードの「〜を見る」を開く"),
+    ("games-oshogatsu", "お正月遊びの一覧 → 記事"),
+    ("games-oshogatsu-jump", "結論 → お正月遊びの一覧 (12/1〜1/15 だけ)"),
+)
+GAMES_CTA_SLOTS = (("games-card-shop", "カード → 店"),)
+GAMES_TO_ARTICLE = ("games-top3", "games-table", "games-card-article", "games-oshogatsu")
+
 NETWORKS = ("amazon", "rakuten", "yahoo")
 
 PAGE_TYPES = ("記事", "ランキング", "予算別", "おトク", "値下げ", "診断", "年齢別",
-              "クリスマス", "テーマ別", "タグ", "ブランド", "トップ", "その他")
+              "クリスマス", "家族で遊べるゲーム", "テーマ別", "タグ", "ブランド", "トップ", "その他")
 _ARTICLE_RE = re.compile(r"^/products/([a-z0-9]{10})/", re.IGNORECASE)
 
 SLOT_GROUPS = ("記事の購入ボタン", "在庫表", "価格カード", "追従バー", "特集・一覧", "その他")
@@ -94,6 +109,8 @@ def page_type(path: str) -> str:
         return "年齢別"
     if re.fullmatch(r"xmas-age-\d+", first):  # navi-brain#166 F10
         return "クリスマス"
+    if first == "family-games":  # navi-brain#216
+        return "家族で遊べるゲーム"
     if first.endswith("-toys"):
         return "テーマ別"
     if first == "tags":
@@ -118,7 +135,7 @@ def slot_group(slot: str) -> str:
         return "価格カード"
     if s == "sticky":
         return "追従バー"
-    if s.startswith("list-card") or s.startswith("ranking") or s.startswith("xmas-"):
+    if s.startswith("list-card") or s.startswith("ranking") or s.startswith("xmas-") or s.startswith("games-"):
         return "特集・一覧"
     return "その他"
 
@@ -484,6 +501,44 @@ def table_xmas(clicks, events, nav, first: str | None = None) -> list[str]:
     return out
 
 
+def table_games(clicks, events, nav) -> list[str]:
+    """(i) 家族で遊べるゲーム。作り直し前の版が無いページなので、分母は期間のページの page_view ぜんぶ。"""
+    def on_page(r) -> bool:
+        return (r.get("pagePath") or "") == GAMES_PATH and _is_iso_date(r.get("date"))
+
+    pv = sum(int(r.get("eventCount", 0)) for r in events
+             if r.get("eventName") == "page_view" and on_page(r))
+    nav_by_slot: dict[str, int] = defaultdict(int)
+    for r in nav:
+        if r.get("eventName") == "nav_click" and on_page(r):
+            nav_by_slot[r.get("slot", "")] += int(r.get("eventCount", 0))
+    cta_by_slot: dict[str, int] = defaultdict(int)
+    for r in clicks:
+        if on_page(r):
+            cta_by_slot[r.get("slot", "")] += int(r.get("eventCount", 0))
+    if not pv and not nav_by_slot and not cta_by_slot:
+        return [f"まだデータがありません（`{GAMES_PATH}` の page_view・クリックが無い）"]
+    rows = []
+    for kind, known, counts in (("サイト内", GAMES_NAV_SLOTS, nav_by_slot),
+                                ("店へ", GAMES_CTA_SLOTS, cta_by_slot)):
+        names = {s for s, _ in known}
+        for slot, label in known:
+            rows.append([f"`{slot}`", label, kind, counts.get(slot, 0), _rate(counts.get(slot, 0), pv)])
+        rest = sum(n for s, n in counts.items() if s not in names)
+        if rest:
+            label = "ヘッダー・ページ内のほかのリンク" if kind == "サイト内" else "ほかの購入リンク"
+            rows.append(["そのほか", label, kind, rest, _rate(rest, pv)])
+    out = _table(["slot", "位置", "行き先", "件数", "page_view あたり"], rows, align="lllrr")
+    article = sum(nav_by_slot.get(s, 0) for s in GAMES_TO_ARTICLE)
+    shop = sum(cta_by_slot.values())
+    out += ["", f"page_view {pv}・記事へ {article}（{_rate(article, pv)}）・店へ {shop}（{_rate(shop, pv)}）。"
+            "記事へ = `games-top3`・`games-table`・`games-card-article`・`games-oshogatsu`、"
+            "店へ = このページの affiliate_click ぜんぶ。`games-card-open` はたたみを閉じるときも数える"]
+    if not any(r.get("eventName") == "nav_click" for r in nav):
+        out.append("⚠️ この期間の nav_click の行がありません（取得の失敗を含む）。サイト内の列は 0 になっています")
+    return out
+
+
 # ---------------------------------------------------------------- 全体
 
 def build_report(clicks: list[dict], events: list[dict], meta: dict, *,
@@ -519,7 +574,7 @@ def build_report(clicks: list[dict], events: list[dict], meta: dict, *,
     out += table_page_type_slot(s_clicks)
     out += ["", f"### (d) 週ごとの推移 (直近 {trend_weeks} 週)", "",
             "記事の購入ボタン = `buy-*`・`buy-box` / 価格カード = `price-*` / "
-            "特集・一覧 = `list-card*`・`ranking*`・`xmas-*`。記事のクリック率 = 記事ページの"
+            "特集・一覧 = `list-card*`・`ranking*`・`xmas-*`・`games-*`。記事のクリック率 = 記事ページの"
             " affiliate_click ÷ 記事ページの page_view", ""]
     out += table_weekly(clicks, events, fetched_start, end, trend_weeks)
     out += ["", "### (e) 診断の流れ (診断ページの分)", ""]
@@ -537,6 +592,8 @@ def build_report(clicks: list[dict], events: list[dict], meta: dict, *,
                 f"まだデータがありません（計測を入れた日: {NAV_LAUNCH} 以降）"]
     out += ["", "### (h) クリスマスページ (`/xmas-age-*/`)", ""]
     out += table_xmas(s_clicks, s_events, s_nav, first=_xmas_first_day(clicks, nav or []))
+    out += ["", f"### (i) 家族で遊べるゲーム (`{GAMES_PATH}`)", ""]
+    out += table_games(s_clicks, s_events, s_nav)
     out += ["", f"<sub>fetched_at: {meta.get('fetched_at', '')}</sub>", ""]
     return "\n".join(out)
 

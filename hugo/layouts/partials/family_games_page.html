@@ -1,0 +1,200 @@
+{{- /*
+  family_games_page.html — 家族で遊べるゲーム (年齢別) /family-games/ の本文 (navi-brain#216 案 A)。
+
+  入力 (dict):
+    .page      : Page (.Content = content/family-games.md の本文。選び方の節に入れる)
+    .data      : family-games.json (build_category_hubs.py → scripts/family_games_page.py)
+    .oshogatsu : お正月の時期 (12/1〜1/15 日本時間) か。時期は結論にお正月遊びへのリンクを出し、節を商品のすぐ後に置く
+
+  並び: 1 結論 → 3 絞り込み → 年齢帯ごとに [2 迷ったらこの 3 つ・4 比較表・5 ランキング]
+        → (時期は 6 お正月遊び) → 7 選び方 → 8 安全 → 9 よくある質問 → (時期外は 6 お正月遊び) → 10 選び方の基準
+  カードはクリスマスページの xmas_card.html を共用し、計測の slot は games-* にする。
+
+  文章は作らない。数字・声・仕様は JSON にあるものだけ。無い項目は出さない。
+*/ -}}
+{{- $page := .page -}}
+{{- $data := .data -}}
+{{- $gp := $data.games_page | default dict -}}
+{{- $items := $data.items -}}
+{{- $n := len $items -}}
+{{- $osho := .oshogatsu -}}
+{{- $bands := slice -}}
+{{- range $gp.bands }}{{ if gt (int .count) 0 }}{{ $bands = $bands | append . }}{{ end }}{{ end -}}
+{{- $byAsin := dict -}}
+{{- range $items }}{{ $byAsin = merge $byAsin (dict (printf "%s:%s" .band .asin) .) }}{{ end -}}
+
+{{- /* ===== 1. 結論 ===== */}}
+<section class="xmas-answer" aria-label="このページの結論">
+  <p class="xmas-answer-season">{{ if $osho }}🎍 お正月に{{ end }}家族で遊べるボードゲーム・かるた・カードゲームなど{{ $n }}件を、年齢別に選びました（価格は毎日更新）</p>
+  <ul class="xmas-answer-points">
+    {{- range $bands }}
+    <li><a href="#games-{{ .key }}">{{ .label }}</a>: {{ with .type_counts }}多いのは{{ range $i, $t := first 2 . }}{{ if $i }}・{{ end }}「{{ $t.label }}」{{ end }}{{ end }}{{ with .median_price }}／予算の目安 約{{ lang.FormatNumberCustom 0 . }}円{{ end }}</li>
+    {{- end }}
+    {{- with $gp.players_known }}<li>遊べる人数が分かる{{ . }}件は、比較表に人数を書いています</li>{{ end }}
+  </ul>
+  {{- if $osho }}<p class="games-jump"><a class="tag-chip" href="#games-oshogatsu" data-nav-slot="games-oshogatsu-jump">🎍 お正月遊びの一覧と遊び方（福笑い・かるた・すごろく・こま回しなど）</a></p>{{ end }}
+</section>
+
+
+{{- /* ===== 3. 絞り込み (JS が有効なときだけ出す。全件はサーバーで描いてある) ===== */}}
+{{- with $gp.kinds }}
+<div class="games-filter" data-games-filter hidden>
+  <p class="games-filter-row"><span class="games-filter-label">種類</span>
+    <button type="button" class="games-chip" data-gf-kind="">すべて</button>
+    {{- range . }}<button type="button" class="games-chip" data-gf-kind="{{ .key }}">{{ .emoji }} {{ .label }}</button>{{ end }}
+  </p>
+  <p class="games-filter-row"><span class="games-filter-label">予算</span>
+    <button type="button" class="games-chip" data-gf-budget="">すべて</button>
+    {{- range $gp.budgets }}<button type="button" class="games-chip" data-gf-budget="{{ .key }}">{{ .label }}</button>{{ end }}
+    <span class="games-filter-count" data-gf-count aria-live="polite"></span>
+  </p>
+  <p class="games-filter-note">「迷ったらこの 3 つ」は絞り込みの対象外です。比較表とランキングを絞ります。</p>
+</div>
+{{- $js := resources.Get "js/games_filter.js" | resources.Minify | resources.Fingerprint "sha256" }}
+{{- if $js }}<script defer src="{{ $js.RelPermalink }}" integrity="{{ $js.Data.Integrity }}" crossorigin="anonymous"></script>{{ end }}
+{{- end }}
+
+{{- /* ===== 年齢帯ごと: 2 迷ったらこの 3 つ・4 比較表・5 ランキング ===== */}}
+{{- range $bi, $b := $bands }}
+{{- $key := $b.key }}
+{{- $bandItems := where $items "band" $key }}
+<section class="games-band" id="games-{{ $key }}" data-games-band aria-labelledby="games-{{ $key }}-title">
+  <h2 id="games-{{ $key }}-title">{{ $b.label }}と家族で遊べるゲーム {{ len $bandItems }}選</h2>
+
+  {{- with $b.picks }}
+  <div class="xmas-picks">
+    <h3>迷ったらこの 3 つ（{{ $b.label }}）</h3>
+    <ol class="xmas-picks-list">
+      {{- range $p := . }}
+      {{- with $it := index $byAsin (printf "%s:%s" $key $p.asin) }}
+      <li class="xmas-pick xmas-pick--{{ $p.slot }}">
+        <a class="xmas-pick-main" href="{{ $it.url_internal }}" data-nav-slot="games-top3">
+          {{- with $it.image }}<img src="{{ . }}" alt="" loading="lazy" decoding="async" width="56" height="56">{{ end }}
+          <span class="xmas-pick-text">
+            <span class="xmas-pick-label">{{ $p.label }}</span>
+            <span class="xmas-pick-name">{{ $it.name }}</span>
+            <span class="xmas-pick-price">{{ with $it.best_price }}¥{{ lang.FormatNumberCustom 0 . }}{{ end }}{{ with $p.note }} <span class="xmas-pick-note">{{ if eq $p.slot "cheaper" }}Amazon が{{ end }}{{ . }}</span>{{ end }}</span>
+          </span>
+        </a>
+        <a class="xmas-pick-jump" href="#games-{{ $key }}-item-{{ $p.rank }}" aria-label="{{ $b.label }}のランキングの{{ $p.rank }}位へ">{{ $p.rank }}位へ</a>
+      </li>
+      {{- end }}
+      {{- end }}
+    </ol>
+  </div>
+  {{- end }}
+
+  {{- /* 比較表。対象年齢は年齢帯の中でいちばん多い値と違う商品だけ、商品名の下に出す (#12256 と同じ) */}}
+  {{- $ageCount := dict }}
+  {{- range $bandItems }}
+  {{- $a := index . "age_min_months" }}
+  {{- if ne (printf "%v" $a) "<nil>" }}{{ $k := printf "%d" (int $a) }}{{ $ageCount = merge $ageCount (dict $k (add (index $ageCount $k | default 0) 1)) }}{{ end }}
+  {{- end }}
+  {{- $ageMode := "" }}{{ $ageBest := 0 }}
+  {{- range $k, $v := $ageCount }}{{ if or (gt $v $ageBest) (and (eq $v $ageBest) (lt (int $k) (int $ageMode))) }}{{ $ageBest = $v }}{{ $ageMode = $k }}{{ end }}{{ end }}
+  <h3>{{ $b.label }}向け {{ len $bandItems }}件の比較表</h3>
+  <p class="xmas-table-note">表は横にスクロールできます。価格は毎日の記録による集計時点の最安値です。人数と遊ぶ時間は、商品の情報に書いてあるものだけ載せています。{{ with $ageMode }}対象年齢は、商品名の下に書いたもの以外は{{ partial "age_label.html" (int .) }}です。{{ end }}</p>
+  <div class="xmas-table-scroll" tabindex="0" role="region" aria-label="{{ $b.label }}の比較表（横にスクロールできます）">
+    <table class="xmas-compare">
+      <thead>
+        <tr>
+          <th scope="col">順位・商品</th>
+          <th scope="col">最安値</th>
+          <th scope="col">種類</th>
+          <th scope="col">人数・時間</th>
+          <th scope="col">知育スコア</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{- range $bandItems }}
+        {{- $x := .xmas | default dict }}
+        {{- $age := index . "age_min_months" }}
+        <tr data-games-row{{ with $x.play_type }} data-type="{{ .key }}"{{ end }}{{ with .best_price }} data-price="{{ int . }}"{{ end }}>
+          <th scope="row" class="xmas-compare-name">
+            <a class="xmas-compare-link" href="{{ .url_internal }}" data-nav-slot="games-table">
+              <span class="xmas-compare-head"><span class="xmas-compare-rank">{{ .rank }}</span>{{ with .image }}<img src="{{ . }}" alt="" loading="lazy" decoding="async" width="56" height="56">{{ end }}</span>
+              <span class="xmas-compare-title">{{ .name }}</span>
+            </a>
+            {{- if and (ne (printf "%v" $age) "<nil>") (ne (printf "%d" (int $age)) $ageMode) }}
+            <span class="xmas-compare-age">対象 {{ partial "age_label.html" (int $age) }}</span>
+            {{- end }}
+          </th>
+          <td class="xmas-compare-price">{{ with .best_price }}¥{{ lang.FormatNumberCustom 0 . }}{{ end }}{{ with $x.price }}<br><span class="xmas-compare-drop">Amazon がふだんより{{ lang.FormatNumberCustom 0 .drop_yen }}円安い</span>{{ end }}</td>
+          <td>{{ with $x.play_type }}{{ .emoji }} {{ .label }}{{ else }}—{{ end }}</td>
+          <td>{{ $pt := slice }}{{ with $x.players }}{{ $pt = $pt | append . }}{{ end }}{{ with $x.play_time }}{{ $pt = $pt | append . }}{{ end }}{{ with $pt }}{{ delimit . "・" }}{{ else }}—{{ end }}</td>
+          <td class="xmas-compare-num">{{ with .ivs_100 }}{{ int . }}{{ end }}</td>
+        </tr>
+        {{- end }}
+      </tbody>
+    </table>
+  </div>
+
+  <h3>{{ $b.label }}向け おすすめランキング</h3>
+  <ol class="xmas-cards">
+    {{- range $bandItems }}
+    {{- partial "xmas_card.html" (dict "item" . "label" $b.label "slot" "games" "idp" (printf "games-%s-item-" $key) "open" (and (eq $bi 0) (eq (int .rank) 1)) "filterable" true) }}
+    {{- end }}
+  </ol>
+  <p class="games-empty" data-gf-empty hidden>この年齢には、選んだ条件に合う商品がありません。</p>
+</section>
+{{- end }}
+
+{{- /* お正月の時期は商品のすぐ後 (結論のリンクから飛べる)。最初の画面は結論と「迷ったらこの 3 つ」にしたいので、商品より上には置かない */ -}}
+{{- if $osho }}{{ partial "games_oshogatsu.html" (dict "list" $gp.oshogatsu) }}{{ end }}
+
+{{- /* ===== 7. 選び方 ===== */}}
+<section class="xmas-guide" id="games-guide" aria-labelledby="games-guide-title">
+  <h2 id="games-guide-title">年齢に合うゲームの選び方</h2>
+  <p class="xmas-ranking-note">順位は、楽天のおもちゃランキングに直近30日で3日以上入った売れ筋を先に、残りは年齢の合い方と<a href="/about-score/">知育スコア</a>の点の順です。種類が偏らないように、まず種類ごとに1件ずつ入れています。</p>
+  <div class="xmas-guide-body">
+    {{ $page.Content }}
+  </div>
+</section>
+
+{{- /* ===== 8. 安全 (公的な出典) ===== */}}
+{{- with site.Data.toy_safety }}
+{{- $src := .sources }}
+{{- with .choking }}
+<section class="xmas-safety" aria-labelledby="games-safety-title">
+  <h2 id="games-safety-title">小さな部品と誤飲</h2>
+  <p>{{ .small_parts_rule.body }}{{ with index $src .small_parts_rule.source }}（出典: <a href="{{ .url }}" rel="noopener" target="_blank">{{ .publisher }}</a>）{{ end }}</p>
+  {{- with index .by_age 1 }}
+  <p>{{ .stat }}{{ with index $src .source }}（出典: <a href="{{ .url }}" rel="noopener" target="_blank">{{ .publisher }}</a>）{{ end }}</p>
+  {{- end }}
+</section>
+{{- end }}
+{{- end }}
+
+{{- /* ===== 9. よくある質問 ===== */}}
+{{- with $gp.faq }}
+<section class="xmas-faq" id="games-faq" aria-labelledby="games-faq-title">
+  <h2 id="games-faq-title">よくある質問</h2>
+  {{- range . }}
+  <div class="xmas-faq-item">
+    <h3>Q. {{ .q }}</h3>
+    <p>{{ .a }}</p>
+    {{- with .links }}
+    <p class="xmas-faq-links">{{ range $i, $l := . }}{{ if $i }}・{{ end }}<a href="{{ $l.url }}"{{ if hasPrefix $l.url "http" }} rel="noopener" target="_blank"{{ end }}>{{ $l.label }}</a>{{ end }}</p>
+    {{- end }}
+  </div>
+  {{- end }}
+  {{- $qa := slice }}
+  {{- range . }}{{ $qa = $qa | append (dict "@type" "Question" "name" .q "acceptedAnswer" (dict "@type" "Answer" "text" .a)) }}{{ end }}
+  <script type="application/ld+json">
+{{ dict "@context" "https://schema.org" "@type" "FAQPage" "mainEntity" $qa | jsonify (dict "indent" "  ") | safeJS }}
+  </script>
+</section>
+{{- end }}
+
+{{- /* ===== 10. 選び方の基準 ===== */}}
+{{- if not $osho }}{{ partial "games_oshogatsu.html" (dict "list" $gp.oshogatsu) }}{{ end }}
+
+<section class="xmas-basis" aria-labelledby="games-basis-title">
+  <h2 id="games-basis-title">このページの選び方の基準</h2>
+  <ul>
+    <li>当サイトに記事のあるボードゲーム・カードゲーム・かるた・すごろく・バランスゲーム・昔遊びのおもちゃから、最安値が{{ lang.FormatNumberCustom 0 ($data.budget_max | default 10000) }}円までの物を、対象年齢の下限で年齢別に分けています（1 つの商品は 1 つの年齢にだけ載せます）。トレーディングカードのパックや収納用品は入れていません。</li>
+    <li>同じメーカーは各年齢で2件まで、1 つの種類は4件までにして、ほかの候補も見比べられるようにしています。点数は<a href="/about-score/">知育スコア</a>（教育効果・安全性・長く遊べる・コスパの4軸）と年齢の合い方から計算し、価格は毎日自動で集め直しています。</li>
+    <li>評価された点・気になる点は、各商品の記事が集めた購入者の声・レビュー記事・メーカーの情報の要約です。実際に使った体験のレビューは<a href="https://omcha.jp/" rel="noopener" target="_blank">おもちゃいろ本編</a>にあります。</li>
+  </ul>
+  <p class="ranking-disclaimer">※ 知育スコアと価格は集計時点のものです。価格・在庫・配送日はリンク先で必ずご確認ください。このページの店へのリンクには、Amazon アソシエイト・楽天アフィリエイト・バリューコマースの広告を含みます。</p>
+</section>

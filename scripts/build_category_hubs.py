@@ -920,7 +920,7 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
         per_asin_dir: Path | None = None,
         raw_root: Path | None = None,
         age_max_per_brand: int = 0, history_path: Path | None = None,
-        today: date | None = None, xmas: bool = True,
+        today: date | None = None, xmas: bool = True, family_games: bool = True,
         ip_hubs: list[str] | None = None,
         narrative_dir: Path | None = None,
         price_watch_dir: Path | None = None,
@@ -998,7 +998,7 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     counts["new_arrivals_top"] = len(top_payload)
     raw_index = None
-    if xmas or ip_hubs:
+    if xmas or ip_hubs or family_games:
         import ip_hubs as iph
         raw_index = iph.load_raw_articles(articles_dir)
     if xmas:
@@ -1007,6 +1007,11 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
                           ranking_history=ranking_history, today=today, raw_index=raw_index,
                           price_watch_dir=price_watch_dir, price_history_dir=price_history_dir,
                           raw_root=raw_root)
+    if family_games:
+        _write_family_games(records, mm_index, new_brand_index, out_hugo, generated_at, counts,
+                            min_ivs=min_ivs, ranking_history=ranking_history, today=today,
+                            raw_index=raw_index, price_watch_dir=price_watch_dir,
+                            price_history_dir=price_history_dir, raw_root=raw_root)
     if ip_hubs:
         if mm_index is None:
             mm_index = build_min_months_index(articles_dir)
@@ -1114,6 +1119,34 @@ def _write_xmas_pages(records, mm_index, brand_index, age_tops, out_hugo: Path, 
                           "url": f"/{key}/"})
     (out_hugo / "xmas_index.json").write_text(
         json.dumps(index, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _write_family_games(records, mm_index, brand_index, out_hugo: Path, generated_at: str,
+                        counts: dict[str, int], *, min_ivs: float, ranking_history, today,
+                        raw_index: dict[str, dict[str, Any]],
+                        price_watch_dir: Path | None = None, price_history_dir: Path | None = None,
+                        raw_root: Path | None = None) -> None:
+    """navi-brain#216 案 A: 家族で遊べるゲーム (年齢別) /family-games/ の JSON を書く (scripts/family_games_page.py)。"""
+    import family_games_page as fg
+    import market_prices
+    extras: dict[str, Any] = {k: v for k, v in (("price_watch_dir", price_watch_dir),
+                                                ("price_history_dir", price_history_dir)) if v is not None}
+    if raw_root is not None:
+        extras["matched"] = {shop: market_prices.load_matched_index(raw_root / f"{shop}_matched.json")
+                             for shop in ("rakuten", "yahoo")}
+    payload = fg.build_payload(
+        records, raw_index, mm_index, brand_index, min_ivs=min_ivs, generated_at=generated_at,
+        rank_days_threshold=RANK_DAYS_PRIORITY_THRESHOLD,
+        prioritize=lambda items: prioritize_ranked(items, ranking_history, today),
+        serialize=_record_to_payload_common, extras_kwargs=extras)
+    (out_hugo / f"{fg.PAGE_KEY}.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    counts[fg.PAGE_KEY] = payload["count"]
+    for band in payload["games_page"]["bands"]:
+        if band.get("skipped"):
+            logger.warning("%s %s: not built (%s)", fg.PAGE_KEY, band["label"], band["skipped"])
+        else:
+            logger.info("%s %s: %d items", fg.PAGE_KEY, band["label"], band["count"])
 
 
 def main(argv: list[str] | None = None) -> int:

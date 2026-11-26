@@ -347,7 +347,8 @@ def _age_phrase(mm: int | None, page: dict[str, Any]) -> str | None:
 
 
 def rank_reasons(recs, page: dict[str, Any], mm_index: dict[str, int], types: dict[str, PlayType | None],
-                 *, rank_days_threshold: int) -> dict[str, list[str]]:
+                 *, rank_days_threshold: int, scope: str = "このページ",
+                 age_phrase=None) -> dict[str, list[str]]:
     """{asin: 順位の理由の短い文 (2〜3 個)}。並び (recs の順) を決めた要素を先に書く。
 
     並びの決め方 (build_category_hubs): 楽天ランキングに直近 30 日で一定日数入った商品を先に、
@@ -365,7 +366,7 @@ def rank_reasons(recs, page: dict[str, Any], mm_index: dict[str, int], types: di
         days = getattr(rec, "rank_days_30", 0) or 0
         if days >= rank_days_threshold:
             base.append(f"楽天のおもちゃランキングに直近30日で{days}日入った売れ筋")
-        age = _age_phrase(mm_index.get(rec.asin), page)
+        age = (age_phrase or _age_phrase)(mm_index.get(rec.asin), page)
         if age:
             base.append(age)
         if rec.ivs_100 is not None:
@@ -378,8 +379,8 @@ def rank_reasons(recs, page: dict[str, Any], mm_index: dict[str, int], types: di
         t = types.get(rec.asin)
         if t:
             type_seen[t.key] += 1
-            extra.append(f"このページで唯一の「{t.label}」" if type_total[t.key] == 1
-                         else f"「{t.label}」ではこのページ{type_seen[t.key]}番目")
+            extra.append(f"{scope}で唯一の「{t.label}」" if type_total[t.key] == 1
+                         else f"「{t.label}」では{scope}{type_seen[t.key]}番目")
         if isinstance(rec.best_price, (int, float)) and rec.best_price > 0:
             extra.append(f"最安値{int(rec.best_price):,}円")
         candidates = [tuple(base[:3])]
@@ -506,15 +507,22 @@ def build_page_extras(recs, raw_index: dict[str, dict[str, Any]], page: dict[str
                       generated_at: str | None = None,
                       characters_of=None,
                       matched: dict[str, dict[str, dict[str, Any]]] | None = None,
+                      type_of=None, scope: str = "このページ", age_phrase=None,
                       ) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
     """(asin ごとの付加情報, ページの付加情報) を返す。recs は表示の順。
 
     characters_of: raw → [(label, url)] (キャラクター別ページのどれに当たるか)。テストでは省ける。
     matched: {"rakuten": {asin: 照合結果}, "yahoo": {...}} (楽天・Yahoo の URL を価格と揃える)。
+    type_of: raw → PlayType | None。省くと診断の遊びのタイプ (play_type_of)。家族で遊べるゲームの
+    ページ (family_games_page.py) はゲームの種類を渡す。並び順は渡したタイプの出てきた順ではなく件数順。
+    scope / age_phrase: 順位の理由の「このページで唯一の…」の範囲の言い方と、年齢の文を作る関数 (mm, page → str)。
+    1 ページに年齢帯が複数あるページ用。省くとクリスマスページと同じ。
     """
     now = now or datetime.now(timezone.utc)
-    types = {r.asin: play_type_of(raw_index.get(r.asin) or {}) for r in recs}
-    reasons = rank_reasons(recs, page, mm_index, types, rank_days_threshold=rank_days_threshold)
+    type_of = type_of or play_type_of
+    types = {r.asin: type_of(raw_index.get(r.asin) or {}) for r in recs}
+    reasons = rank_reasons(recs, page, mm_index, types, rank_days_threshold=rank_days_threshold,
+                           scope=scope, age_phrase=age_phrase)
     per: dict[str, dict[str, Any]] = {}
     fetched = []
     for rec in recs:
