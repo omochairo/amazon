@@ -1,0 +1,113 @@
+{{- /*
+  xmas_card.html — クリスマス × 年齢ページのランキングの 1 件 (navi-brain#214 v2 第 1 弾)。
+
+  入力 (dict):
+    .item  : xmas-age-N.json の items[] の 1 件。付加情報は .item.xmas
+             (scripts/xmas_page.py build_page_extras が作る)
+    .label : ページの年齢の言い方 (「3歳」「小学生」)
+
+  たたんだ状態 (いつも見える): 順位・画像・商品名 (記事へ)・遊びのタイプ・対象年齢・順位の理由・
+    購入前に確認・最安値とふだんの価格との差・在庫切れの印・ボタン (主: 記事へ / 副: 最安の店)
+  開いた中: 評価された点 2・気になる点 1 (出典の種類と数)・メーカー公式の事実・価格の推移・3 店のボタン
+  1 位だけ開いておく (上位 3 件を開くとスマホで 6〜8 画面になり、4 位以降に届かない)。
+
+  計測: 記事へ = data-nav-slot (nav_click.js)、店へ = data-cta-slot (affiliate_click.js)。
+  slot は xmas-card-article / xmas-card-open / xmas-card-shop (#214 の 6 章)。
+*/ -}}
+{{- $item := .item -}}
+{{- $x := $item.xmas | default dict -}}
+{{- $rank := int ($item.rank | default 0) -}}
+{{- $internal := $item.url_internal -}}
+{{- $ageRaw := index $item "age_min_months" -}}
+{{- $hasAge := ne (printf "%v" $ageRaw) "<nil>" -}}
+{{- $shops := $x.shop_urls | default dict -}}
+{{- $prices := $x.prices | default dict -}}
+{{- /* 最安の店のボタン。楽天・Yahoo の URL が無ければ Amazon に落とす */ -}}
+{{- $bestShop := "amazon" -}}
+{{- with $item.best_platform -}}
+  {{- if and (strings.Contains . "楽天") $shops.rakuten }}{{ $bestShop = "rakuten" }}{{ end -}}
+  {{- if and (strings.Contains . "Yahoo") $shops.yahoo }}{{ $bestShop = "yahoo" }}{{ end -}}
+{{- end -}}
+{{- $shopName := dict "amazon" "Amazon" "rakuten" "楽天市場" "yahoo" "Yahoo!ショッピング" -}}
+{{- $shopShort := dict "amazon" "Amazon" "rakuten" "楽天" "yahoo" "Yahoo!" -}}
+{{- $shopUrl := dict "amazon" (partial "amazon_affiliate_url.html" ($item.amazon_url | default "")) "rakuten" ($shops.rakuten | default "") "yahoo" ($shops.yahoo | default "") -}}
+<li class="xmas-card ranking-item--rank-{{ $rank }}" id="xmas-item-{{ $rank }}" data-rank="{{ $rank }}" data-asin="{{ $item.asin }}"{{ with $item.best_price }} data-price="{{ int . }}"{{ end }}{{ with $x.play_type }} data-type="{{ .key }}"{{ end }}>
+  <div class="xmas-card-head">
+    <span class="xmas-card-rank" aria-label="第 {{ $rank }} 位">{{ if and (ge $rank 1) (le $rank 3) }}{{ index (slice "🥇" "🥈" "🥉") (sub $rank 1) }}{{ else }}{{ $rank }}{{ end }}</span>
+    {{- with $item.image }}
+    <a class="xmas-card-thumb" href="{{ $internal }}" data-nav-slot="xmas-card-article" aria-hidden="true" tabindex="-1"><img src="{{ . }}" alt="" loading="lazy" decoding="async" width="96" height="96"></a>
+    {{- end }}
+    <div class="xmas-card-title">
+      <h3><a href="{{ $internal }}" data-nav-slot="xmas-card-article">{{ $item.name }}</a></h3>
+      <p class="xmas-card-badges">
+        {{- with $x.play_type }}<span class="xmas-type-badge">{{ .emoji }} {{ .label }}</span>{{ end }}
+        {{- if $hasAge }}<span class="xmas-age-badge">対象 {{ partial "age_label.html" (int $ageRaw) }}</span>{{ end }}
+        {{- with $item.ivs_100 }}<span class="xmas-score-badge"><a href="/about-score/">知育スコア</a> <strong>{{ int . }}</strong></span>{{ end }}
+      </p>
+    </div>
+  </div>
+  {{- with $x.rank_reasons }}
+  <p class="xmas-card-why"><span class="xmas-card-why-label">この順位の理由</span>{{ delimit . "／" }}{{ with $item.reason }}。{{ . }}{{ end }}</p>
+  {{- else }}{{ with $item.reason }}
+  <p class="xmas-card-why">{{ . }}</p>
+  {{- end }}{{ end }}
+  {{- with $x.not_for }}
+  <p class="xmas-card-caution"><span class="xmas-card-caution-label">購入前に確認</span>向かない場合: {{ . }}</p>
+  {{- end }}
+  <div class="xmas-card-price">
+    {{- with $item.best_price }}<span class="xmas-card-yen">¥{{ lang.FormatNumberCustom 0 . }}</span>{{ end }}
+    {{- with $item.best_platform }}<span class="xmas-card-shop">{{ . }} 最安</span>{{ end }}
+    {{- with $x.price }}
+    <span class="xmas-mark xmas-mark--drop">Amazon でふだんより {{ lang.FormatNumberCustom 0 .drop_yen }}円安い</span>
+    {{- if .all_time_low }}<span class="xmas-mark xmas-mark--low">Amazon の記録上の最安値</span>{{ end }}
+    {{- end }}
+    {{- if $x.stockout_30d }}<span class="xmas-mark xmas-mark--stock">直近30日に在庫切れを観測</span>{{ end }}
+  </div>
+  <div class="xmas-card-cta">
+    <a class="xmas-btn xmas-btn--article" href="{{ $internal }}" data-nav-slot="xmas-card-article">くわしいレビューを見る</a>
+    {{- with index $shopUrl $bestShop }}
+    <a class="xmas-btn xmas-btn--shop" href="{{ . }}" data-cta-slot="xmas-card-shop" rel="sponsored nofollow noopener" target="_blank">{{ index $shopShort $bestShop }}で見る</a>
+    {{- end }}
+  </div>
+  {{- $parts := slice -}}
+  {{- with $x.fits }}{{ $parts = $parts | append "向く子" }}{{ end -}}
+  {{- with $x.voices }}{{ $parts = $parts | append "評価された点と気になる点" }}{{ end -}}
+  {{- with $x.official }}{{ $parts = $parts | append "メーカー公式" }}{{ end -}}
+  {{- $parts = $parts | append "価格の推移と3店の価格" -}}
+  <details class="xmas-card-more"{{ if eq $rank 1 }} open{{ end }}>
+    <summary data-nav-slot="xmas-card-open">{{ delimit $parts "・" }}を見る</summary>
+    <div class="xmas-card-more-body">
+      {{- with $x.fits }}
+      <p class="xmas-voice-title">🎁 こんな子に向く</p>
+      <ul class="xmas-voices">{{ range . }}<li>{{ . }}</li>{{ end }}</ul>
+      {{- end }}
+      {{- with $x.scene }}<p class="xmas-scene"><strong>使う場面:</strong> {{ . }}</p>{{ end }}
+      {{- with $x.voices }}
+      {{- with .good }}
+      <p class="xmas-voice-title">👍 評価された点</p>
+      <ul class="xmas-voices xmas-voices--good">
+        {{- range . }}<li>{{ .text }}{{ with .sources }}<span class="xmas-voice-src">（{{ . }}）</span>{{ end }}</li>{{ end }}
+      </ul>
+      {{- end }}
+      {{- with .concern }}
+      <p class="xmas-voice-title">🤔 気になる点</p>
+      <ul class="xmas-voices xmas-voices--concern"><li>{{ .text }}{{ with .sources }}<span class="xmas-voice-src">（{{ . }}）</span>{{ end }}</li></ul>
+      {{- end }}
+      {{- end }}
+      {{- with $x.official }}
+      <p class="xmas-official"><span class="xmas-official-label">{{ if .url }}メーカー公式から{{ else }}メーカーの商品説明から{{ end }}</span>{{ .text }}{{ with .url }} <a href="{{ . }}" rel="noopener" target="_blank">{{ $x.official.site }}</a>{{ end }}</p>
+      {{- end }}
+      {{- partial "price_spark_for.html" $item.asin }}
+      {{- if or (index $shopUrl "amazon") (index $shopUrl "rakuten") (index $shopUrl "yahoo") }}
+      <div class="xmas-shops">
+        {{- range slice "amazon" "rakuten" "yahoo" }}
+        {{- $u := index $shopUrl . -}}
+        {{- if $u }}
+        <a class="xmas-btn xmas-btn--shop-{{ . }}" href="{{ $u }}" data-cta-slot="xmas-card-shop" rel="sponsored nofollow noopener" target="_blank">{{ index $shopName . }}{{ with index $prices . }} ¥{{ lang.FormatNumberCustom 0 . }}{{ end }}</a>
+        {{- end }}
+        {{- end }}
+      </div>
+      {{- end }}
+    </div>
+  </details>
+</li>

@@ -26,6 +26,8 @@
 {{- $xmasSeason := or (and (ge $month 10) (lt $month 12)) (and (eq $month 12) (le $jst.Day 25)) -}}
 {{- $xmasYear := $jst.Year -}}
 {{- if and (eq $month 12) (gt $jst.Day 25) }}{{ $xmasYear = add $xmasYear 1 }}{{ end -}}
+{{- /* navi-brain#214 v2 第 1 弾: 付加情報 (xmas_page) があるクリスマスページは専用の構成 (partials/xmas_page.html) */ -}}
+{{- $xmasFull := and $isXmas $data $data.items $data.xmas_page -}}
 
 <header class="page-header ranking-header feature-header feature-header--{{ $type }}">
   {{- /* navi-brain#213 R6: メニュー・トップのカードと同じ呼び名を見出しの上に出す
@@ -33,6 +35,11 @@
   {{- if eq $type "deals" }}<p class="term-header-eyebrow">🏷️ 20%OFF以上の特価</p>{{ end }}
   {{- if eq $type "cospa" }}<p class="term-header-eyebrow">💎 予算別ベスト</p>{{ end }}
   <h1>{{ .Title }}</h1>
+  {{- if $xmasFull }}
+  {{- /* #214 部品 0: PR 表記・価格の取得日時・署名を 1 行の細い帯にまとめる (説明文は出さず、すぐ結論へ) */ -}}
+  {{- $fetched := $data.xmas_page.price_fetched_at | default $data.generated_at -}}
+  <div class="xmas-band">{{ partial "pr_disclosure.html" (dict "network" "both" "short" true) }}{{ with $fetched }}<span class="xmas-band-item">価格の取得: <time datetime="{{ . }}">{{ (time.AsTime .).UTC.Add (time.ParseDuration "9h") | time.Format "1月2日 15:04" }}</time></span>{{ end }}<span class="xmas-band-item">おもちゃいろ編集部（データは毎日自動で集計）</span></div>
+  {{- else }}
   {{- /* #5227: 広告表記はファーストビュー (h1 直下)。詳細は下部 .ranking-disclaimer。
          このヘッダは /deals/ /cospa/ とテーマ/年齢 hub が共有しており、いずれも
          Amazon アソシエイトのリンクを含むため出し分けはしない。 */ -}}
@@ -53,9 +60,15 @@
     <p class="ranking-updated">最終更新: <time datetime="{{ .generated_at }}">{{ dateFormat "2006-01-02" .generated_at }}</time></p>
     {{- end }}
   {{- end }}
+  {{- end }}
 </header>
 
 <div class="post-content ranking-content feature-content feature-content--{{ $type }}">
+  {{- if $xmasFull }}
+  {{- partial "xmas_page.html" (dict "page" . "data" $data "season" $xmasSeason "year" $xmasYear) }}
+  {{- $ld := slice -}}{{- range $data.items -}}{{- $ld = $ld | append (dict "name" .name "url" .url_internal) -}}{{- end -}}
+  {{- partial "itemlist_jsonld.html" (dict "name" .Title "items" $ld) }}
+  {{- else }}
   {{- /* #165 T8: 年齢 hub は予算別の比較表を本文のリード (最初の h2 より前) の直後に
          差し込む。h2 が無い本文なら末尾ではなく先頭に置く (表を必ず上のほうに出す)。 */ -}}
   {{- $content := .Content -}}
@@ -326,6 +339,7 @@
     {{- end }}
     {{- end }}
   {{- end }}
+  {{- end }}{{/* $xmasFull */}}
 
 
   {{- /* #2687 Slice C: info hub 同士の相互リンク (cluster 形成)。cospa/deals/

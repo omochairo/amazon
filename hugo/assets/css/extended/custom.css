@@ -8552,3 +8552,115 @@ a.sale-notice-main::after {
    広告表記の行と離し、行き先のページ名の途中で折り返さない */
 .feature-header .tag-chips { margin-top: 0.6rem; }
 .feature-header .tag-chip strong { white-space: nowrap; }
+
+/* navi-brain#214 v2 第 1 弾: クリスマス × 年齢ページの専用の構成 (partials/xmas_page.html・xmas_card.html)。
+   スマホ 375px で横にはみ出さない (比較表だけ枠の中で横にスクロール)。色はテーマの変数でダークにも合わせる */
+.xmas-band { display: flex; flex-wrap: wrap; align-items: center; gap: .15rem .7rem; margin: .35rem 0 0; font-size: .78rem; color: var(--secondary); }
+.xmas-band .page-pr-notice { margin: 0; }
+.post-content .xmas-answer { margin: .6rem 0 1.2rem; padding: .7rem .9rem; border-left: 4px solid #2f8f4e; border-radius: 8px; background: #f1f8f2; }
+[data-theme="dark"] .post-content .xmas-answer { background: #1c2a20; border-left-color: #5cc27e; }
+.post-content .xmas-answer p, .post-content .xmas-answer ul { margin: 0; font-size: .92rem; }
+.post-content .xmas-answer-season { font-weight: 700; }
+.post-content .xmas-answer-points { padding-left: 1.1rem; margin-top: .35rem; }
+.post-content .xmas-answer-points li { margin: .15rem 0; }
+.post-content .xmas-jump { margin-top: .45rem; font-size: .85rem; }
+.post-content .xmas-jump a { display: inline-block; padding: .2rem .1rem; }
+.post-content .xmas-picks h2, .post-content .xmas-table h2, .post-content .xmas-ranking h2,
+.post-content .xmas-guide h2, .post-content .xmas-safety h2, .post-content .xmas-faq h2, .post-content .xmas-basis h2 { font-size: 1.2rem; margin: 1.8rem 0 .6rem; }
+.post-content .xmas-picks h2 { margin-top: .4rem; }
+.post-content .xmas-picks-list { list-style: none; padding: 0; margin: 0; display: grid; gap: .45rem; }
+.post-content .xmas-pick { display: flex; align-items: center; gap: .5rem; margin: 0; padding: .45rem .6rem; border: 1px solid var(--border); border-radius: 10px; background: var(--entry); }
+.post-content .xmas-pick-main { display: flex; align-items: center; gap: .6rem; flex: 1; min-width: 0; text-decoration: none; color: var(--primary); box-shadow: none; }
+.post-content .xmas-pick-main img { flex: none; width: 56px; height: 56px; object-fit: contain; border-radius: 6px; background: #fff; margin: 0; }
+.post-content .xmas-pick-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
+.post-content .xmas-pick-label { font-size: .74rem; font-weight: 700; color: #23733d; }
+[data-theme="dark"] .post-content .xmas-pick-label { color: #7fd69a; }
+.post-content .xmas-pick-name { font-size: .9rem; font-weight: 600; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.post-content .xmas-pick-price { font-size: .85rem; }
+.post-content .xmas-pick-note { color: #b4232c; font-weight: 600; }
+[data-theme="dark"] .post-content .xmas-pick-note { color: #ff8a8a; }
+.post-content .xmas-pick-jump { flex: none; font-size: .75rem; color: var(--secondary); padding: .3rem 0; }
+.post-content .xmas-table-note, .post-content .xmas-ranking-note, .post-content .xmas-type-note { font-size: .85rem; color: var(--secondary); }
+.post-content .xmas-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border); border-radius: 8px; }
+.post-content table.xmas-compare { display: table; width: 100%; min-width: 600px; margin: 0; border-collapse: collapse; font-size: .84rem; }
+.post-content table.xmas-compare th, .post-content table.xmas-compare td { padding: .45rem .5rem; border-bottom: 1px solid var(--border); vertical-align: top; text-align: left; }
+.post-content table.xmas-compare thead th { background: var(--entry); white-space: nowrap; font-size: .78rem; }
+.post-content table.xmas-compare .xmas-compare-name { min-width: 8.5rem; max-width: 10rem; white-space: normal; font-weight: 500; position: sticky; left: 0; z-index: 1; background: var(--entry); box-shadow: 1px 0 0 var(--border); }
+.post-content table.xmas-compare thead th:first-child { position: sticky; left: 0; z-index: 2; }
+.post-content table.xmas-compare td { white-space: nowrap; }
+.post-content table.xmas-compare .xmas-compare-num { text-align: center; white-space: nowrap; }
+.post-content table.xmas-compare .xmas-compare-rank { display: inline-block; min-width: 1.4rem; margin-right: .25rem; font-weight: 800; color: var(--secondary); }
+.post-content table.xmas-compare .xmas-compare-price { white-space: nowrap; }
+.post-content .xmas-compare-drop { font-size: .75rem; color: #b4232c; }
+[data-theme="dark"] .post-content .xmas-compare-drop { color: #ff8a8a; }
+.post-content .xmas-cards { list-style: none; padding: 0; margin: 0; display: grid; gap: .9rem; }
+.post-content .xmas-card { margin: 0; padding: .8rem .9rem; border: 1px solid var(--border); border-radius: 12px; background: var(--entry); scroll-margin-top: 12px; }
+.post-content .xmas-card.ranking-item--rank-1 { border-color: #e0b100; }
+.post-content .xmas-card-head { display: flex; align-items: flex-start; gap: .6rem; }
+.post-content .xmas-card-rank { flex: none; min-width: 1.9rem; font-size: 1.15rem; font-weight: 800; text-align: center; line-height: 1.9rem; }
+.post-content .xmas-card-thumb { flex: none; box-shadow: none; }
+.post-content .xmas-card-thumb img { width: 84px; height: 84px; object-fit: contain; border-radius: 8px; background: #fff; margin: 0; }
+.post-content .xmas-card-title { min-width: 0; }
+.post-content .xmas-card-title h3 { margin: 0 0 .3rem; font-size: 1rem; line-height: 1.4; }
+.post-content .xmas-card-badges { display: flex; flex-wrap: wrap; gap: .25rem .35rem; margin: 0; font-size: .75rem; }
+.post-content .xmas-card-badges span { padding: .1rem .45rem; border-radius: 999px; border: 1px solid var(--border); white-space: nowrap; }
+.post-content .xmas-card-badges .xmas-type-badge { background: #eef6ff; border-color: #c9defa; }
+[data-theme="dark"] .post-content .xmas-card-badges .xmas-type-badge { background: #1d2a3a; border-color: #34506f; }
+.post-content .xmas-card-why, .post-content .xmas-card-caution { margin: .55rem 0 0; font-size: .88rem; line-height: 1.55; }
+.post-content .xmas-card-why-label, .post-content .xmas-card-caution-label, .post-content .xmas-official-label { display: inline-block; margin-right: .4rem; padding: 0 .4rem; border-radius: 4px; font-size: .72rem; font-weight: 700; vertical-align: .1em; color: #fff; }
+.post-content .xmas-card-why-label { background: #23733d; }
+.post-content .xmas-card-caution-label { background: #8a5a00; }
+.post-content .xmas-official-label { background: #3b5b8c; }
+.post-content .xmas-card-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem .5rem; margin-top: .55rem; }
+.post-content .xmas-card-yen { font-size: 1.15rem; font-weight: 800; }
+.post-content .xmas-card-shop { font-size: .8rem; color: var(--secondary); }
+.post-content .xmas-mark { font-size: .72rem; padding: .05rem .4rem; border-radius: 4px; border: 1px solid currentColor; }
+.post-content .xmas-mark--drop, .post-content .xmas-mark--low { color: #b4232c; }
+.post-content .xmas-mark--stock { color: #8a5a00; }
+[data-theme="dark"] .post-content .xmas-mark--drop, [data-theme="dark"] .post-content .xmas-mark--low { color: #ff8a8a; }
+[data-theme="dark"] .post-content .xmas-mark--stock { color: #f0c060; }
+.post-content .xmas-card-cta, .post-content .xmas-shops { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .6rem; }
+.post-content .xmas-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: .45rem .9rem; border-radius: 999px; font-size: .88rem; font-weight: 700; text-decoration: none; box-shadow: none; }
+.post-content .xmas-btn--article { flex: 1 1 12rem; background: #23733d; color: #fff; }
+.post-content .xmas-card-cta .xmas-btn--shop, .post-content .xmas-shops .xmas-btn { flex: 1 1 9rem; border: 1px solid var(--border); color: var(--primary); background: var(--theme); font-weight: 600; }
+.post-content .xmas-card-more { margin-top: .6rem; border-top: 1px dashed var(--border); padding-top: .2rem; }
+.post-content .xmas-card-more summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-size: .86rem; font-weight: 600; color: #23733d; }
+[data-theme="dark"] .post-content .xmas-card-more summary { color: #7fd69a; }
+.post-content .xmas-card-more-body { font-size: .87rem; }
+.post-content .xmas-voice-title { margin: .4rem 0 .15rem; font-weight: 700; }
+.post-content .xmas-voices { margin: 0; padding-left: 1.1rem; }
+.post-content .xmas-voices li { margin: .15rem 0; line-height: 1.55; }
+.post-content .xmas-voice-src { font-size: .75rem; color: var(--secondary); }
+.post-content .xmas-official { margin: .6rem 0 0; line-height: 1.55; }
+.post-content .xmas-type-list { list-style: none; padding: 0; margin: .3rem 0; }
+.post-content .xmas-type-list li { display: grid; grid-template-columns: minmax(8.5rem, auto) 1fr 3rem; align-items: center; gap: .5rem; margin: .25rem 0; font-size: .88rem; }
+.post-content .xmas-type-bar { display: block; height: .6rem; border-radius: 999px; background: linear-gradient(90deg, #2f8f4e var(--w), transparent var(--w)); border: 1px solid var(--border); }
+.post-content .xmas-type-count { text-align: right; }
+.post-content .xmas-dev-label { font-size: .85rem; color: var(--secondary); margin-bottom: .2rem; }
+.post-content .xmas-faq-item h3 { font-size: 1rem; margin: 1rem 0 .3rem; }
+.post-content .xmas-faq-item p { margin: 0 0 .3rem; }
+.post-content .xmas-faq-links { font-size: .85rem; }
+.post-content .xmas-basis ul { font-size: .9rem; }
+.post-content .xmas-scene { margin: .4rem 0 0; line-height: 1.55; }
+.post-content .xmas-type-groups { margin: .3rem 0; font-size: .88rem; }
+.post-content .xmas-type-groups dt { font-weight: 700; margin-top: .5rem; }
+.post-content .xmas-type-groups dd { margin: .1rem 0 0 1rem; line-height: 1.6; }
+.post-content .xmas-card-cta { flex-wrap: nowrap; }
+.post-content .xmas-card-cta .xmas-btn--article { flex: 1.6 1 0; }
+.post-content .xmas-card-cta .xmas-btn--shop { flex: 1 1 0; white-space: nowrap; }
+.post-content table.xmas-compare .xmas-compare-name { word-break: normal; overflow-wrap: anywhere; line-break: strict; }
+.post-content .xmas-card-cta .xmas-btn { white-space: nowrap; font-size: .84rem; padding: .45rem .6rem; }
+.post-content .xmas-card-more summary { list-style: none; gap: .35rem; }
+.post-content .xmas-card-more summary::-webkit-details-marker { display: none; }
+.post-content .xmas-card-more summary::before { content: "▸"; flex: none; transition: transform .15s; }
+.post-content .xmas-card-more[open] summary::before { transform: rotate(90deg); }
+.post-content .xmas-answer-points li { line-height: 1.5; }
+.post-content table.xmas-compare .xmas-compare-price { white-space: normal; min-width: 6.5rem; }
+.post-content .xmas-guide-body ul, .post-content .xmas-guide-body ol { padding-left: 1.4rem; }
+.post-content .xmas-card-title h3 { border-left: 0; padding-left: 0; }
+.post-content .xmas-card-title h3::before { content: none; display: none; }
+.post-content .xmas-card-more summary::before { font-size: 1.05rem; }
+.post-content .xmas-pick { padding: .35rem .55rem; }
+.post-content .xmas-pick-main img { width: 48px; height: 48px; }
+.post-content .xmas-answer { margin-bottom: .8rem; padding: .55rem .8rem; }
+.post-content .xmas-picks .xmas-jump { margin: .5rem 0 0; color: var(--secondary); }
