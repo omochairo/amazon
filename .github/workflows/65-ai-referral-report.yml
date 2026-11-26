@@ -1,0 +1,127 @@
+name: AI Referral Report (GA4, weekly)
+
+# AI のチャット・検索 (ChatGPT・Perplexity・Gemini・Copilot・Claude など) の回答の中の
+# リンクから navi へ来た訪問を、private の omochairo/amazon-navi-brain#217 に週 1 回コメントする。
+# llms.txt・IndexNow を入れた後に増えるかを見ることと、MCP サーバーを作るかの判断材料にする。
+#
+# 何をどこに出すか:
+#   - 取得と整形: scripts/ai_referrals.py (fetch → format)。GA4 Data API、navi.omcha.jp だけ
+#   - 出し先: navi-brain#217 のコメントだけ。行は $RUNNER_TEMP の一時ファイルに置き、
+#     コミットも artifact の upload もしない
+#
+# 数字を private の issue にだけ出す理由は 23-affiliate-click-report.yml と同じ (このリポジトリは
+# public で、Actions のログ・job summary・artifact は誰でも読める)。dry_run でも job summary には
+# 表の見出しと行数だけを出し、数字は出さない。
+#
+# 必須 secrets (23 と同じ):
+#   - GA4_SA_JSON / GA4_PROPERTY_ID
+#   - NAVI_BRAIN_PAT                  navi-brain への issues:write
+# どれかが無い・届かないときは ::error:: で落とす (黙って緑終了させない。#4793)。
+
+on:
+  schedule:
+    # 日曜 01:00 UTC (= 日曜 10:00 JST)。23 (日曜 00:30 UTC) の後
+    - cron: '0 1 * * 0'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'コメントせず、表の見出しと行数だけを job summary に出す'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-referral-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      REPORT_REPO: omochairo/amazon-navi-brain
+      REPORT_ISSUE: '217'
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-analytics-data google-auth
+
+      # 取得の前に、private 側へ書けることを確かめる (取ってから落ちるのを避ける)。
+      - name: Preflight — navi-brain への書き込み資格を確認
+        if: env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.NAVI_BRAIN_PAT }}
+        run: |
+          set -e
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::NAVI_BRAIN_PAT が未設定です。訪問の実数は public には出せないため停止します。"
+            exit 1
+          fi
+          if ! gh api "repos/${REPORT_REPO}/issues/${REPORT_ISSUE}" --jq .number >/dev/null; then
+            echo "::error::NAVI_BRAIN_PAT で ${REPORT_REPO}#${REPORT_ISSUE} を読めません (PAT の失効かスコープ不足)。"
+            exit 1
+          fi
+
+      - name: Fetch GA4 AI referrals
+        env:
+          GA4_SA_JSON: ${{ secrets.GA4_SA_JSON }}
+          GA4_PROPERTY_ID: ${{ secrets.GA4_PROPERTY_ID }}
+        run: |
+          set -e
+          if [ -z "$GA4_SA_JSON" ] || [ -z "$GA4_PROPERTY_ID" ]; then
+            echo "::error::GA4_SA_JSON または GA4_PROPERTY_ID が未設定です"
+            exit 1
+          fi
+          # 週ごとの推移を 8 週ぶん出すため 56 日。終わりは今日 (日本時間) の 2 日前
+          python scripts/ai_referrals.py fetch --days 56 --out "$RUNNER_TEMP/ai_referrals.json"
+
+      - name: Format report
+        run: |
+          set -e
+          python scripts/ai_referrals.py format --rows "$RUNNER_TEMP/ai_referrals.json" \
+            --out "$RUNNER_TEMP/ai_referral_report.md" --top 20
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          printf '\n<sub>%s</sub>\n' "$RUN_URL" >> "$RUNNER_TEMP/ai_referral_report.md"
+
+      - name: Comment on navi-brain#217
+        if: env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.NAVI_BRAIN_PAT }}
+        run: |
+          set -e
+          gh issue comment "$REPORT_ISSUE" -R "$REPORT_REPO" \
+            --body-file "$RUNNER_TEMP/ai_referral_report.md" >/dev/null
+          echo "${REPORT_REPO}#${REPORT_ISSUE} にコメントしました"
+
+      # dry_run: job summary は public なので、見出しと表の行数だけを出す (数字・ページ名は出さない)。
+      - name: Dry run summary (数字は出さない)
+        if: env.DRY_RUN == 'true'
+        run: |
+          set -e
+          REPORT="$RUNNER_TEMP/ai_referral_report.md"
+          {
+            echo "## AI Referral Report (dry run)"
+            echo
+            echo "コメントはしていません。public の job summary には見出しと表の行数だけを出します。"
+            echo
+            awk '
+              function out() { if (h != "") printf "- %s: %d 行\n", h, (n > 0 ? n - 1 : 0) }
+              /^### / { out(); h = substr($0, 5); n = 0; next }
+              /^\| / && !/^\| *:?---/ { n++ }
+              END { out() }
+            ' "$REPORT"
+          } >> "$GITHUB_STEP_SUMMARY"
