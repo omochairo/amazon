@@ -10,6 +10,12 @@
 <!-- Google Search Console verification -->
 <meta name="google-site-verification" content="P6g6vzSBBm0bNsbjQ8kQgFhMVgo5c3d7pVEMw1UWDNs" />
 
+<!-- AI アシスタント向けのサイト案内 (hugo/static/llms.txt)。中身は Markdown。
+     rel=alternate は「このページの別の形」の意味なので、サイト全体の案内としてトップページだけに出す -->
+{{- if .IsHome }}
+<link rel="alternate" type="text/markdown" href="{{ "llms.txt" | absURL }}" title="llms.txt" />
+{{- end }}
+
 <!-- Issue #1263 ③: PWA / Add to Home Screen -->
 <link rel="manifest" href="/site.webmanifest" />
 
