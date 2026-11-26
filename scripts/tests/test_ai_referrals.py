@@ -18,6 +18,8 @@ import ai_referrals as ar  # noqa: E402
     ("ChatGPT.com", "ChatGPT"),
     ("chat.openai.com", "ChatGPT"),
     ("chatgpt", "ChatGPT"),               # utm_source=chatgpt
+    ("openai", "ChatGPT"),                # utm_source=openai
+    ("copilot.com", "Copilot"),
     ("perplexity.ai", "Perplexity"),
     ("www.perplexity.ai", "Perplexity"),
     ("gemini.google.com", "Gemini"),
