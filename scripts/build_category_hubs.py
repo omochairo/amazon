@@ -205,8 +205,8 @@ XMAS_PAGES: dict[str, dict[str, Any]] = {
     "xmas-age-5": {"label": "5歳", "lo": 60, "hi": 71, "hub": "age-4"},
     "xmas-age-6": {"label": "小学生", "lo": 72, "hi": 155, "hub": "age-6"},
 }
-XMAS_TOP_N = 12
-XMAS_MIN_ITEMS = 8           # これに届かないページは作らない (薄いページを出さない)
+XMAS_TOP_N = 15             # navi-brain#214 v2: 競合の 1 ページの提案数に近づける (12 → 15)
+XMAS_MIN_ITEMS = 12          # これに届かないページは作らない (薄いページを出さない。#214 で 8 → 12)
 XMAS_BUDGET_MAX = 10000      # 診断の「〜10,000円 クリスマス・特別な日に」
 XMAS_MAX_PER_BRAND = 2       # 診断の diversify と同じ
 XMAS_OVERLAP_MAX = 0.6       # 年齢 hub の上位・ほかのクリスマスページとこの割合以上同じなら作らない
@@ -922,7 +922,9 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
         age_max_per_brand: int = 0, history_path: Path | None = None,
         today: date | None = None, xmas: bool = True,
         ip_hubs: list[str] | None = None,
-        narrative_dir: Path | None = None) -> dict[str, int]:
+        narrative_dir: Path | None = None,
+        price_watch_dir: Path | None = None,
+        price_history_dir: Path | None = None) -> dict[str, int]:
     records = _dedupe_by_asin(load_articles(articles_dir))
     # #2812: カード画像も記事ページと同じ amazon.json の検証済み画像に揃える。
     logger.info("amazon image overlay: %d replaced",
@@ -995,16 +997,22 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
         "top": top_payload, "age": age_payload,
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     counts["new_arrivals_top"] = len(top_payload)
+    raw_index = None
+    if xmas or ip_hubs:
+        import ip_hubs as iph
+        raw_index = iph.load_raw_articles(articles_dir)
     if xmas:
         _write_xmas_pages(records, mm_index, new_brand_index, age_tops, out_hugo, generated_at,
                           counts, min_ivs=min_ivs, age_max_per_brand=age_max_per_brand,
-                          ranking_history=ranking_history, today=today)
+                          ranking_history=ranking_history, today=today, raw_index=raw_index,
+                          price_watch_dir=price_watch_dir, price_history_dir=price_history_dir,
+                          raw_root=raw_root)
     if ip_hubs:
         if mm_index is None:
             mm_index = build_min_months_index(articles_dir)
         hub_index += _write_ip_hubs(records, articles_dir, mm_index, out_hugo, generated_at, counts,
                                     ip_hubs, per_asin_dir=per_asin_dir or Path("data/raw/per_asin"),
-                                    narrative_dir=narrative_dir, min_ivs=min_ivs)
+                                    narrative_dir=narrative_dir, min_ivs=min_ivs, raw_index=raw_index)
     if themes or age_hubs or ip_hubs:
         _write_hub_index(out_hugo, hub_index)
     return counts
@@ -1012,10 +1020,12 @@ def run(articles_dir: Path, out_hugo: Path, *, top_n: int, min_ivs: float,
 
 def _write_ip_hubs(records, articles_dir: Path, mm_index, out_hugo: Path, generated_at: str,
                    counts: dict[str, int], keys: list[str], *, per_asin_dir: Path,
-                   narrative_dir: Path | None, min_ivs: float) -> list[dict[str, str]]:
+                   narrative_dir: Path | None, min_ivs: float,
+                   raw_index: dict[str, dict[str, Any]] | None = None) -> list[dict[str, str]]:
     """navi-brain#211: キャラクター別の束ねページ (scripts/ip_hubs.py)。hub_index の行を返す。"""
     import ip_hubs as iph
-    raw_index = iph.load_raw_articles(articles_dir)
+    if raw_index is None:
+        raw_index = iph.load_raw_articles(articles_dir)
 
     def compare_builder(pool):
         # 年齢 hub と同じ予算別の比較表。キャラクターのページは年齢で切らず全年齢で 1 節
@@ -1039,9 +1049,23 @@ def _write_ip_hubs(records, articles_dir: Path, mm_index, out_hugo: Path, genera
     return rows
 
 
+def _xmas_characters_of():
+    """記事 JSON → そのキャラクター別ページの [(呼び名, URL)] を返す関数 (FAQ「キャラクターのおもちゃでもいい？」用)。"""
+    import ip_hubs as iph
+    terms = iph.load_character_terms()
+    hubs = [(h["label"], h["url"], (h["character"], *terms.get(h["character"], ())))
+            for h in iph.IP_HUBS.values()]
+
+    def characters_of(raw: dict[str, Any]) -> list[tuple[str, str]]:
+        return [(label, url) for label, url, aliases in hubs if iph.matches_character(raw, aliases)]
+    return characters_of
+
+
 def _write_xmas_pages(records, mm_index, brand_index, age_tops, out_hugo: Path, generated_at: str,
                       counts: dict[str, int], *, min_ivs: float, age_max_per_brand: int,
-                      ranking_history, today) -> None:
+                      ranking_history, today, raw_index: dict[str, dict[str, Any]] | None = None,
+                      price_watch_dir: Path | None = None, price_history_dir: Path | None = None,
+                      raw_root: Path | None = None) -> None:
     """navi-brain#166 F10: クリスマスページ 7 本分の JSON と xmas_index.json を書く。
 
     作らないページも items を空にして書く (Hugo 側は items が空なら noindex にして
@@ -1056,12 +1080,30 @@ def _write_xmas_pages(records, mm_index, brand_index, age_tops, out_hugo: Path, 
                                   brand_index=brand_index, max_per_brand=age_max_per_brand)
         hub_tops[hub_key] = {r.asin for r in hub_items}
     accepted, skipped = build_xmas_pages(records, mm_index, brand_index, hub_tops, min_ivs=min_ivs)
+    characters_of = _xmas_characters_of()
+    # 楽天・Yahoo のボタンの URL を、カードの価格 (overlay_current_prices) と同じ照合結果から選ぶ
+    import market_prices
+    matched = None
+    if raw_root is not None:
+        matched = {shop: market_prices.load_matched_index(raw_root / f"{shop}_matched.json")
+                   for shop in ("rakuten", "yahoo")}
     index = []
     for key, page in XMAS_PAGES.items():
         items = prioritize_ranked(accepted.get(key, []), ranking_history, today)
         payload = serialize_hub(items, key, generated_at)
         payload["label"] = page["label"]
         payload["budget_max"] = XMAS_BUDGET_MAX
+        if items and raw_index is not None:
+            # navi-brain#214 v2 第 1 弾: 順位の理由・声・公式・ふだんの価格・FAQ (scripts/xmas_page.py)
+            import xmas_page
+            dirs = {k: v for k, v in (("price_watch_dir", price_watch_dir),
+                                      ("price_history_dir", price_history_dir)) if v is not None}
+            per, extra = xmas_page.build_page_extras(
+                items, raw_index, page, mm_index, rank_days_threshold=RANK_DAYS_PRIORITY_THRESHOLD,
+                generated_at=generated_at, characters_of=characters_of, matched=matched, **dirs)
+            for entry in payload["items"]:
+                entry["xmas"] = per.get(entry["asin"])
+            payload["xmas_page"] = extra
         if key in skipped:
             payload["skipped"] = skipped[key]
         (out_hugo / f"{key}.json").write_text(

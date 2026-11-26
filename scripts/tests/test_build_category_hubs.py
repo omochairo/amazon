@@ -16,6 +16,7 @@ import pathlib
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from datetime import date, timedelta
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -761,12 +762,15 @@ class BuildXmasPagesTest(unittest.TestCase):
         self.assertTrue(skipped["xmas-age-3"].startswith("too_few"))
 
     def test_overlap_with_age_hub_is_skipped(self):
-        # 年齢 hub の上位が 6 件、それ以外が 2 件しかない → 8 件中 6 件 (75%) が同じ
+        # 年齢 hub の上位が 6 件、それ以外が 2 件しかない → 8 件中 6 件 (75%) が同じ。
+        # #214 で下限を 12 件にしてからは、hub から 6 件まで (XMAS_MAX_FROM_HUB) の上限があるので
+        # 実際には 5 割を超えない。下限を 8 件に戻したときにも歯止めが効くことをここで見る
         mm = {}
         hub = self._recs(10, "H", 36, mm, ivs100=99)
         others = self._recs(2, "O", 36, mm, ivs100=70)
-        accepted, skipped = bch.build_xmas_pages(
-            hub + others, mm, {}, {"age-3": {r.asin for r in hub}}, min_ivs=0.0)
+        with mock.patch.object(bch, "XMAS_MIN_ITEMS", 8):
+            accepted, skipped = bch.build_xmas_pages(
+                hub + others, mm, {}, {"age-3": {r.asin for r in hub}}, min_ivs=0.0)
         self.assertNotIn("xmas-age-3", accepted)
         self.assertTrue(skipped["xmas-age-3"].startswith("overlap_hub: age-3"))
 
@@ -793,12 +797,12 @@ class RunXmasPagesTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             adir = pathlib.Path(tmp) / "articles"
             adir.mkdir()
-            for i in range(10):
+            for i in range(14):
                 asin = f"B0XMAS3{i:03d}"
                 doc = {
                     "slug": asin, "title": "t",
                     "persona_fit": {"age_range": "3歳〜"},
-                    "product": {"asin": asin, "name": f"三歳のおもちゃ その{i}",
+                    "product": {"asin": asin, "name": f"三歳のおもちゃ {chr(65 + i)}号",  # 「その1」と「その10」は同じ商品とみなされる
                                 "brand": f"メーカー{i}", "ivs_score": 4.5,
                                 "best_price": 4000, "best_platform": "amazon",
                                 "prices": {"amazon": {"url": f"https://amazon/{asin}"}}},
@@ -812,30 +816,36 @@ class RunXmasPagesTest(unittest.TestCase):
             files = {p.name for p in out.glob("xmas-*.json")}
             page3 = json.loads((out / "xmas-age-3.json").read_text(encoding="utf-8"))
             page0 = json.loads((out / "xmas-age-0.json").read_text(encoding="utf-8"))
+            page4_text = (out / "xmas-age-4.json").read_text(encoding="utf-8")
             index = json.loads((out / "xmas_index.json").read_text(encoding="utf-8"))
         self.assertEqual(files, {f"{k}.json" for k in bch.XMAS_PAGES})
-        # 10 件すべてが age-3 の上位 24 件に入るので、3歳のページで選べるのは 6 件 → 8 件に届かず作らない
+        # 14 件すべてが age-3 の上位 24 件に入るので、3歳のページで選べるのは 6 件 → 12 件に届かず作らない
         self.assertEqual(counts["xmas-age-3"], 0)
         self.assertTrue(page3["skipped"].startswith("too_few"))
         self.assertEqual(page3["items"], [])
         self.assertTrue(page0["skipped"].startswith("too_few"))
-        # 4歳のページは「1 歳下から」の 3歳〜 の品で 10 件そろう (比べる age-4 の上位とは重ならない)。
-        # 5歳・小学生は同じ 10 件になるので、先に作った 4歳と重なって作らない
+        # 4歳のページは「1 歳下から」の 3歳〜 の品で 14 件そろう (比べる age-4 の上位とは重ならない)。
+        # 5歳・小学生は同じ 14 件になるので、先に作った 4歳と重なって作らない
         self.assertEqual(index, [{"key": "xmas-age-4", "label": "4歳", "hub": "age-4",
                                   "url": "/xmas-age-4/"}])
-        self.assertEqual(counts["xmas-age-4"], 10)
+        self.assertEqual(counts["xmas-age-4"], 14)
+        page4 = json.loads(page4_text)
+        # navi-brain#214: 作ったページには付加情報が付く (作らないページには付かない)
+        self.assertIn("xmas_page", page4)
+        self.assertTrue(all("xmas" in it for it in page4["items"]))
+        self.assertNotIn("xmas_page", page3)
 
     def test_generated_age_hub_is_used_for_the_cap(self):
         """年齢 hub を作る通常の呼び方でも、作った age-3 の上位と比べて 3歳のページを作らない。"""
         with tempfile.TemporaryDirectory() as tmp:
             adir = pathlib.Path(tmp) / "articles"
             adir.mkdir()
-            for i in range(10):
+            for i in range(14):
                 asin = f"B0XMAS3{i:03d}"
                 doc = {
                     "slug": asin, "title": "t",
                     "persona_fit": {"age_range": "3歳〜"},
-                    "product": {"asin": asin, "name": f"三歳のおもちゃ その{i}",
+                    "product": {"asin": asin, "name": f"三歳のおもちゃ {chr(65 + i)}号",
                                 "brand": f"メーカー{i}", "ivs_score": 4.5,
                                 "best_price": 4000, "best_platform": "amazon",
                                 "prices": {"amazon": {"url": f"https://amazon/{asin}"}}},
@@ -846,9 +856,10 @@ class RunXmasPagesTest(unittest.TestCase):
             counts = bch.run(adir, out, top_n=24, min_ivs=0.0, themes=[], age_hubs=["age-3"],
                              history_path=pathlib.Path(tmp) / "none.json")
             page3 = json.loads((out / "xmas-age-3.json").read_text(encoding="utf-8"))
-        self.assertEqual(counts["age-3"], 10)
+        self.assertEqual(counts["age-3"], 14)
         self.assertEqual(counts["xmas-age-3"], 0)
-        self.assertTrue(page3["skipped"].startswith("too_few"))
+        # 14 件あっても、age-3 の上位から選べるのは XMAS_MAX_FROM_HUB (6) 件まで
+        self.assertEqual(page3["skipped"], f"too_few: {bch.XMAS_MAX_FROM_HUB} < {bch.XMAS_MIN_ITEMS}")
 
     def test_xmas_false_writes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
