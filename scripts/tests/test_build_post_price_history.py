@@ -20,6 +20,14 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from build_post import _attach_price_history  # type: ignore[import-not-found]
 
+_JST = timezone(timedelta(hours=9))
+
+
+def _jst_day(ts) -> str:
+    """観測時刻 (ISO・UTC) か datetime を、表示に使う日本時間の日付にする (#12283)。"""
+    dt = ts if isinstance(ts, datetime) else datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    return dt.astimezone(_JST).strftime("%Y-%m-%d")
+
 
 def _write_jsonl(root: pathlib.Path, asin: str, records: list[dict]) -> None:
     root.mkdir(parents=True, exist_ok=True)
@@ -431,9 +439,9 @@ class SparkGeometryTests(unittest.TestCase):
             self.assertTrue(_attach_price_history(data, root))
             x_labels = data["price_history"]["spark"]["x_labels"]
             self.assertEqual(len(x_labels), 2)
-            self.assertEqual(x_labels[0]["text"], recs[0]["ts"][:10])
+            self.assertEqual(x_labels[0]["text"], _jst_day(recs[0]["ts"]))
             self.assertEqual(x_labels[0]["anchor"], "start")
-            self.assertEqual(x_labels[1]["text"], recs[-1]["ts"][:10])
+            self.assertEqual(x_labels[1]["text"], _jst_day(recs[-1]["ts"]))
             self.assertEqual(x_labels[1]["anchor"], "end")
 
     def test_dots_match_observed_points_not_step_vertices(self):
@@ -634,7 +642,7 @@ class GraphExtensionTests(unittest.TestCase):
             data = {"product": {"asin": "B1"}}
             self.assertTrue(_attach_price_history(data, root, price_watch_latest_path=latest))
             spark = data["price_history"]["spark"]
-            self.assertEqual(spark["x_labels"][-1]["text"], future_ts[:10])
+            self.assertEqual(spark["x_labels"][-1]["text"], _jst_day(future_ts))
             all_xy = " ".join(s["points"] for s in spark["segments"]).split(" ")
             xs = [float(p.split(",")[0]) for p in all_xy]
             self.assertAlmostEqual(max(xs), 296.0, places=1)
@@ -651,7 +659,7 @@ class GraphExtensionTests(unittest.TestCase):
             data = {"product": {"asin": "B1"}}
             self.assertTrue(_attach_price_history(data, root, price_watch_latest_path=latest))
             spark = data["price_history"]["spark"]
-            self.assertEqual(spark["x_labels"][-1]["text"], recs[-1]["ts"][:10])
+            self.assertEqual(spark["x_labels"][-1]["text"], _jst_day(recs[-1]["ts"]))
 
     def test_no_extension_when_watch_price_mismatches_last_record(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -664,7 +672,7 @@ class GraphExtensionTests(unittest.TestCase):
             data = {"product": {"asin": "B1"}}
             self.assertTrue(_attach_price_history(data, root, price_watch_latest_path=latest))
             spark = data["price_history"]["spark"]
-            self.assertEqual(spark["x_labels"][-1]["text"], recs[-1]["ts"][:10])
+            self.assertEqual(spark["x_labels"][-1]["text"], _jst_day(recs[-1]["ts"]))
 
     def test_no_extension_when_not_checked_daily(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -674,7 +682,7 @@ class GraphExtensionTests(unittest.TestCase):
             data = {"product": {"asin": "B1"}}
             self.assertTrue(_attach_price_history(data, root))  # latest_path 省略
             spark = data["price_history"]["spark"]
-            self.assertEqual(spark["x_labels"][-1]["text"], recs[-1]["ts"][:10])
+            self.assertEqual(spark["x_labels"][-1]["text"], _jst_day(recs[-1]["ts"]))
 
     def test_no_extension_when_last_checked_date_not_after_last_record(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -686,7 +694,7 @@ class GraphExtensionTests(unittest.TestCase):
             data = {"product": {"asin": "B1"}}
             self.assertTrue(_attach_price_history(data, root, price_watch_latest_path=latest))
             spark = data["price_history"]["spark"]
-            self.assertEqual(spark["x_labels"][-1]["text"], recs[-1]["ts"][:10])
+            self.assertEqual(spark["x_labels"][-1]["text"], _jst_day(recs[-1]["ts"]))
 
     def test_extension_adds_no_dots_or_table_rows(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -728,8 +736,8 @@ class SpanDaysExtensionTests(unittest.TestCase):
             oldest_dt = datetime.fromisoformat(recs[0]["ts"])
             # span_days は日付どうしの引き算 (x_labels の calendar date 文字列と
             # 機械的に一致させるため、時刻を持つ .days floor は使わない)。
-            end_date = datetime.fromisoformat(f"{future_ts[:10]}T12:00:00+00:00").date()
-            expected_span = (end_date - oldest_dt.date()).days
+            end_date = datetime.fromisoformat(_jst_day(future_ts)).date()
+            expected_span = (end_date - oldest_dt.astimezone(_JST).date()).days
             self.assertEqual(ph["span_days"], expected_span)
             # 記録ベースのスパン (20日) とは異なる = ちゃんと延長後の値になっている
             self.assertNotEqual(ph["span_days"], 20)
@@ -752,7 +760,8 @@ class SpanDaysExtensionTests(unittest.TestCase):
             ph = data["price_history"]
             oldest_dt = datetime.fromisoformat(recs[0]["ts"])
             newest_dt = datetime.fromisoformat(recs[-1]["ts"])
-            self.assertEqual(ph["span_days"], (newest_dt.date() - oldest_dt.date()).days)
+            self.assertEqual(ph["span_days"],
+                             (newest_dt.astimezone(_JST).date() - oldest_dt.astimezone(_JST).date()).days)
 
     def test_span_days_matches_calendar_diff_at_time_of_day_boundary(self):
         """#5120 追補4 の回帰テスト: 実データで 188/503 件が該当した「最古の
@@ -766,9 +775,10 @@ class SpanDaysExtensionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp) / "price_history"
             recs = [
-                {"ts": "2026-07-01T20:00:00+00:00", "source": "amazon", "price": 1000, "availability": None},
-                {"ts": "2026-07-10T12:00:00+00:00", "source": "amazon", "price": 1100, "availability": None},
-                {"ts": "2026-07-20T02:00:00+00:00", "source": "amazon", "price": 1200, "availability": None},
+                # 日本時間で 07-01 20:00 / 07-10 12:00 / 07-20 02:00 (#12283 で x 軸を日本時間にした)
+                {"ts": "2026-07-01T11:00:00+00:00", "source": "amazon", "price": 1000, "availability": None},
+                {"ts": "2026-07-10T03:00:00+00:00", "source": "amazon", "price": 1100, "availability": None},
+                {"ts": "2026-07-19T17:00:00+00:00", "source": "amazon", "price": 1200, "availability": None},
             ]
             _write_jsonl(root, "B1", recs)
             data = {"product": {"asin": "B1"}}
@@ -790,9 +800,10 @@ class SpanDaysExtensionTests(unittest.TestCase):
             root = pathlib.Path(tmp) / "price_history"
             latest = pathlib.Path(tmp) / "price_watch" / "latest.json"
             recs = [
-                {"ts": "2026-07-01T20:00:00+00:00", "source": "amazon", "price": 1000, "availability": None},
-                {"ts": "2026-07-10T12:00:00+00:00", "source": "amazon", "price": 1100, "availability": None},
-                {"ts": "2026-07-20T02:00:00+00:00", "source": "amazon", "price": 1200, "availability": None},
+                # 日本時間で 07-01 20:00 / 07-10 12:00 / 07-20 02:00 (#12283 で x 軸を日本時間にした)
+                {"ts": "2026-07-01T11:00:00+00:00", "source": "amazon", "price": 1000, "availability": None},
+                {"ts": "2026-07-10T03:00:00+00:00", "source": "amazon", "price": 1100, "availability": None},
+                {"ts": "2026-07-19T17:00:00+00:00", "source": "amazon", "price": 1200, "availability": None},
             ]
             _write_jsonl(root, "B1", recs)
             _write_latest_json(latest, {"B1": {"p": 1200, "ts": "2026-08-05T09:00:00+00:00"}})
@@ -832,18 +843,73 @@ class SpanDaysExtensionTests(unittest.TestCase):
         """
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp) / "price_history"
-            # カレンダー日付差: 07-15 - 07-01 = 14日。
-            # exact な経過時間: 07-01 20:00 -> 07-15 10:00 = 13日14時間 (floor=13)。
+            # カレンダー日付差 (日本時間): 07-15 - 07-01 = 14日。
+            # exact な経過時間: 日本時間 07-01 20:00 -> 07-15 10:00 = 13日14時間 (floor=13)。
+            # 表示の日付は日本時間なので、境界も日本時間で作る (#12283)。
             recs = [
-                {"ts": "2026-07-01T20:00:00+00:00", "source": "amazon", "price": 1000, "availability": None},
-                {"ts": "2026-07-08T12:00:00+00:00", "source": "amazon", "price": 1100, "availability": None},
-                {"ts": "2026-07-15T10:00:00+00:00", "source": "amazon", "price": 1200, "availability": None},
+                {"ts": "2026-07-01T11:00:00+00:00", "source": "amazon", "price": 1000, "availability": None},
+                {"ts": "2026-07-08T03:00:00+00:00", "source": "amazon", "price": 1100, "availability": None},
+                {"ts": "2026-07-15T01:00:00+00:00", "source": "amazon", "price": 1200, "availability": None},
             ]
             _write_jsonl(root, "B1", recs)
             data = {"product": {"asin": "B1"}}
             ok = _attach_price_history(data, root)
             self.assertFalse(ok)
             self.assertNotIn("price_history", data)
+
+
+
+class JstDateTests(unittest.TestCase):
+    """価格推移の日付は日本時間 (#12283)。UTC 15 時以降の観測は日本時間では翌日になる。"""
+
+    def test_table_and_min_date_use_jst(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            _write_jsonl(root, "B1", [
+                {"ts": "2026-07-01T20:23:00+00:00", "source": "amazon", "price": 900, "availability": None},
+                {"ts": "2026-07-10T05:00:00+00:00", "source": "amazon", "price": 1100, "availability": None},
+                {"ts": "2026-07-20T20:23:00+00:00", "source": "amazon", "price": 1200, "availability": None},
+            ])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            ph = data["price_history"]
+            self.assertEqual([r["date"] for r in ph["table_rows"]], ["2026-07-02", "2026-07-10", "2026-07-21"])
+            self.assertEqual(ph["min_price_date"], "2026-07-02")
+            self.assertEqual([lb["text"] for lb in ph["spark"]["x_labels"]], ["2026-07-02", "2026-07-21"])
+            self.assertEqual(ph["span_days"], 19)
+
+    def test_no_extension_when_last_check_is_same_jst_day(self):
+        # 最後の記録 UTC 07-20 20:23 (日本時間 07-21 05:23) と最終確認 UTC 07-21 01:00
+        # (日本時間 07-21 10:00) は日本時間では同じ日なので、グラフを伸ばさない
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "price_history"
+            latest = pathlib.Path(tmp) / "price_watch" / "latest.json"
+            _write_jsonl(root, "B1", [
+                {"ts": "2026-07-01T20:23:00+00:00", "source": "amazon", "price": 900, "availability": None},
+                {"ts": "2026-07-10T05:00:00+00:00", "source": "amazon", "price": 1100, "availability": None},
+                {"ts": "2026-07-20T20:23:00+00:00", "source": "amazon", "price": 1200, "availability": None},
+            ])
+            _write_latest_json(latest, {"B1": {"p": 1200, "ts": "2026-07-21T01:00:00+00:00"}})
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root, price_watch_latest_path=latest))
+            ph = data["price_history"]
+            self.assertEqual(ph["last_checked_date"], "2026-07-21")
+            self.assertEqual(ph["spark"]["x_labels"][-1]["text"], "2026-07-21")
+            self.assertEqual(ph["span_days"], 19)
+
+    def test_naive_timestamps_are_utc(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            _write_jsonl(root, "B1", [
+                {"ts": "2026-07-01T20:23:00", "source": "amazon", "price": 900, "availability": None},
+                {"ts": "2026-07-10T05:00:00", "source": "amazon", "price": 1100, "availability": None},
+                {"ts": "2026-07-20T20:23:00", "source": "amazon", "price": 1200, "availability": None},
+            ])
+            data = {"product": {"asin": "B1"}}
+            self.assertTrue(_attach_price_history(data, root))
+            ph = data["price_history"]
+            self.assertEqual(ph["min_price_date"], "2026-07-02")
+            self.assertEqual([lb["text"] for lb in ph["spark"]["x_labels"]], ["2026-07-02", "2026-07-21"])
 
 
 if __name__ == "__main__":
@@ -891,10 +957,10 @@ class OutOfStockContextTests(unittest.TestCase):
             self.assertEqual(ph["out_of_stock_message"], "この商品は現在お取り扱いできません。")
             self.assertEqual(
                 ph["out_of_stock_checked_date"],
-                (datetime.now(timezone.utc) - timedelta(days=2)).strftime("%Y-%m-%d"))
+                _jst_day(datetime.now(timezone.utc) - timedelta(days=2)))
             self.assertEqual(
                 ph["out_of_stock_since"],
-                (datetime.now(timezone.utc) - timedelta(days=6)).strftime("%Y-%m-%d"))
+                _jst_day(datetime.now(timezone.utc) - timedelta(days=6)))
             self.assertTrue(ph["spark"]["has_out_of_stock"])
 
     def test_span_days_matches_the_extended_axis(self):

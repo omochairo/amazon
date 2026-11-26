@@ -152,7 +152,8 @@ class PriceFreshnessSourceTest(unittest.TestCase):
             _apply_price_overlay(data, {"B00000030": _obs()}, root)
             _attach_price_freshness(data, root)
 
-            self.assertEqual(data["price_checked_at"], "2026-07-25")
+            # 観測は 2026-07-25T21:11:27+00:00 = 日本時間 07-26 06:11 (#12283 で日本時間の日付にした)
+            self.assertEqual(data["price_checked_at"], "2026-07-26")
 
     def test_no_overlay_means_no_date_at_all(self):
         """overlay が無いときに snapshot の fetched_at を代用しない (2026-08-09)。

@@ -28,7 +28,7 @@ import re
 import unicodedata
 import tomllib
 import urllib.parse
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 import frontmatter
@@ -2533,27 +2533,38 @@ def _attach_price_freshness(data: dict[str, Any], per_asin_root: pathlib.Path) -
     if not asin:
         return
 
-    observed = ((product.get("prices") or {}).get("amazon") or {}).get("price_observed_at")
-    if isinstance(observed, str) and len(observed) >= 10:
-        data["price_checked_at"] = observed[:10]
+    observed = _date_part(((product.get("prices") or {}).get("amazon") or {}).get("price_observed_at"))
+    if observed:
+        data["price_checked_at"] = observed
 
 
+_JST_TZ = timezone(timedelta(hours=9))
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}")
 
 
 def _date_part(value: Any) -> str | None:
-    """ISO 日時の文字列の先頭の YYYY-MM-DD を取る。形が違えば None。
+    """観測時刻 (ISO 8601) を、日本時間の日付 YYYY-MM-DD にする。形が違えば None。
 
-    観測の時刻は UTC で記録されているので、これは UTC の日付になる。同じ価格の節の
-    価格推移 (_load_price_watch_latest の last_checked_date・表の日付) と
-    _attach_price_freshness も先頭 10 文字を取っているので、それにそろえている。
-    日本時間にそろえるなら、それらと一緒に変える (片方だけ変えると同じ節で 1 日ずれる)。
+    観測の時刻は UTC で記録されている (price_watch の ts・per_asin の fetched_at・
+    *_matched.json の _refreshed_at)。先頭 10 文字をそのまま取ると、日本時間の 0〜9 時の
+    観測が前の日になり、同じページの在庫表 (where_to_buy_format.to_jst_date) と 1 日ずれる
+    (#12283)。価格の節で日付を作るところは全部ここを通す (片方だけ変えると同じ節で 1 日ずれる)。
+
+    - 時差付き (``+00:00`` / ``Z``) → 日本時間に直して日付を取る
+    - 時差の無い日時 → UTC とみなす (このリポジトリの観測時刻はどれも UTC で書いている)
+    - 日付だけ (``YYYY-MM-DD``) → そのまま
     """
-    if isinstance(value, str):
-        m = _DATE_RE.match(value)
-        if m:
-            return m.group(0)
-    return None
+    if not isinstance(value, str) or not _DATE_RE.match(value):
+        return None
+    try:
+        if len(value) == 10:
+            return date.fromisoformat(value).isoformat()   # 2026-02-30 などは None
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(_JST_TZ).strftime("%Y-%m-%d")
 
 
 def _price_checked_on(key: str, entry: Any) -> str | None:
@@ -2733,7 +2744,8 @@ def _load_price_watch_latest(latest_path: pathlib.Path, asin: str) -> tuple[bool
     if not isinstance(rec, dict):
         return False, None, None
     ts = rec.get("ts")
-    last_checked_date = ts[:10] if isinstance(ts, str) and len(ts) >= 10 else None
+    # 日本時間の日付 (#12283。表の日付・在庫表と同じ)
+    last_checked_date = _date_part(ts)
     price = rec.get("p")
     # bool は int のサブクラスなので明示的に弾く (price_overlay._int_or_none と同じ流儀)。
     latest_price = price if isinstance(price, int) and not isinstance(price, bool) and price > 0 else None
@@ -2840,6 +2852,12 @@ def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path
     # 関わらず絶対にこの値のままにする。延長を混ぜると、記録が
     # _PRICE_HISTORY_MIN_SPAN_DAYS 未満のページが延長だけでゲートを通って
     # しまう事故になる (ゲート判定と表示用の値を明確に分ける)。
+    # 時差の無い時刻は UTC とみなす (下の日本時間の日付の計算で、実行マシンの時刻帯に
+    # 解釈されないように。2026-11-27 時点の記録はすべて時差付き。#12283)
+    if oldest_dt.tzinfo is None:
+        oldest_dt = oldest_dt.replace(tzinfo=timezone.utc)
+    if newest_dt.tzinfo is None:
+        newest_dt = newest_dt.replace(tzinfo=timezone.utc)
     gate_span_days = (newest_dt - oldest_dt).days
     if gate_span_days < _PRICE_HISTORY_MIN_SPAN_DAYS:
         return False
@@ -2860,14 +2878,14 @@ def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path
 
     # #5120 追補2: 階段線を最終確認日まで延長してよいかの判定。3条件すべて
     # 満たすときだけ延長する (詳細は docstring)。日付だけの比較で十分
-    # (last_checked_date は YYYY-MM-DD、newest_ts[:10] も同形式なので文字列
-    # 比較で安全)。
+    # (どちらも日本時間の YYYY-MM-DD なので文字列比較で安全。#12283)。
+    # 延長先は最終確認日の日本時間の正午 (x 軸の目盛りも日本時間の日付で出す)。
     extend_to_dt: Optional[datetime] = None
     if (checked_daily and last_checked_date is not None
-            and last_checked_date > newest_ts[:10]
+            and last_checked_date > (_date_part(newest_ts) or newest_ts[:10])
             and watch_latest_price is not None
             and watch_latest_price == latest_price):
-        extend_to_dt = _price_history_parse_ts(f"{last_checked_date}T12:00:00+00:00")
+        extend_to_dt = _price_history_parse_ts(f"{last_checked_date}T12:00:00+09:00")
 
     # #5120 追補3・追補4: 表示用 span_days は、延長の有無によらず常に
     # 「x軸ラベルと同じカレンダー日付どうしの引き算」で数える。ゲート判定
@@ -2894,7 +2912,8 @@ def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path
             oos_tail_dt = dt
             break
     domain_end_dt = oos_tail_dt or (extend_to_dt if extend_to_dt is not None else newest_dt)
-    span_days = (domain_end_dt.date() - oldest_dt.date()).days
+    # x 軸の目盛り (price_spark._format_axis_date) と同じ日本時間の日付どうしで数える (#12283)
+    span_days = (domain_end_dt.astimezone(_JST_TZ).date() - oldest_dt.astimezone(_JST_TZ).date()).days
 
     # #5120 追補: 「N回計測しました」とは書かない。records (jsonl の行数) は
     # _DEDUPE_MIN_DAYS=6 の間引きを通った「記録数」であって「計測回数」では
@@ -2907,7 +2926,7 @@ def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path
     )
 
     table_rows = _dedupe_price_history_table_rows(
-        [{"date": pt["ts"][:10], "price": pt["price"]} for pt in points]
+        [{"date": _date_part(pt["ts"]) or pt["ts"][:10], "price": pt["price"]} for pt in points]
     )
 
     data["price_history"] = {
@@ -2915,13 +2934,13 @@ def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path
         # min_price / max_price と同じ全履歴) にする。切り詰めていた頃は
         # 9.3% のページでグラフが文章より短い期間しか描かず、うち 3.6% は
         # 文中の最安値/最高値がグラフ上に存在しないという不整合があった。
-        "points": [{"date": pt["ts"][:10], "price": pt["price"]} for pt in points],
+        "points": [{"date": _date_part(pt["ts"]) or pt["ts"][:10], "price": pt["price"]} for pt in points],
         # #5120 追補: 表示用テーブルは日付単位に丸めるため、週次/日次2レーン
         # が同日に同じ価格を別時刻で記録すると完全重複行になる。表だけ
         # 間引く (座標・ドットは秒解像度のまま変更しない)。
         "table_rows": table_rows,
         "min_price": min_price,
-        "min_price_date": min_price_point["ts"][:10],
+        "min_price_date": _date_part(min_price_point["ts"]) or min_price_point["ts"][:10],
         "max_price": max_price,
         "latest_price": latest_price,
         "span_days": span_days,
@@ -2938,8 +2957,10 @@ def _attach_price_history(data: dict[str, Any], price_history_root: pathlib.Path
         # メッセージを渡す。区間型 (既に復帰済み) は本文を変える必要が無いので
         # ここでは立てない — グラフの線種だけで足りる。
         "out_of_stock_now": oos_tail_dt is not None,
-        "out_of_stock_since": points[-1]["ts"][:10] if oos_tail_dt is not None else None,
-        "out_of_stock_checked_date": out_of_stock[-1]["ts"][:10] if oos_tail_dt is not None else None,
+        "out_of_stock_since": (_date_part(points[-1]["ts"]) or points[-1]["ts"][:10])
+        if oos_tail_dt is not None else None,
+        "out_of_stock_checked_date": (_date_part(out_of_stock[-1]["ts"]) or out_of_stock[-1]["ts"][:10])
+        if oos_tail_dt is not None else None,
         "out_of_stock_message": out_of_stock[-1]["availability"] if oos_tail_dt is not None else None,
         # #5120 追補: jsonl の記録間隔だけを見ると「週1巡回」に見えるが、
         # 日次レーンは毎日取得している (記録が _DEDUPE_MIN_DAYS で間引かれる
