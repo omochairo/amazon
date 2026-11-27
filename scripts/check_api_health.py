@@ -28,7 +28,18 @@ PERSISTENT_FAIL_RATIO = 0.5
 OUTAGE_MIN_CALLS = 3
 
 
-def _is_persistent_failure(status: int | None) -> bool:
+# 404 が「商品ページが消えた」という正常な答えになる API (#12305 refresh_shop_prices.py)。
+# 確かめ直しは古い順に回すので、消えた商品が多い日もある。これを故障と数えない
+NOT_FOUND_IS_ANSWER = frozenset({"rakuten_ichiba_refresh", "rakuten_books_refresh"})
+
+
+def _is_answer(api: str, status: int | None) -> bool:
+    return status == 200 or (status == 404 and api in NOT_FOUND_IS_ANSWER)
+
+
+def _is_persistent_failure(status: int | None, api: str = "") -> bool:
+    if status == 404 and api in NOT_FOUND_IS_ANSWER:
+        return False
     return status is not None and 400 <= status < 500 and status != 429
 
 
@@ -53,8 +64,8 @@ def evaluate(by_api: dict[str, list[int | None]]) -> list[dict]:
     for api in sorted(by_api):
         statuses = by_api[api]
         total = len(statuses)
-        ok = sum(1 for s in statuses if s == 200)
-        persistent = sum(1 for s in statuses if _is_persistent_failure(s))
+        ok = sum(1 for s in statuses if _is_answer(api, s))
+        persistent = sum(1 for s in statuses if _is_persistent_failure(s, api))
         reason = ""
         if persistent / total >= PERSISTENT_FAIL_RATIO:
             reason = f"429 以外の 4xx が {persistent}/{total}"

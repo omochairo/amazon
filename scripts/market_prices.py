@@ -28,6 +28,7 @@ import pathlib
 import re
 import unicodedata
 import urllib.parse
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 # 前後が英数字でない 10 桁だけ (アフィリエイトのハッシュ等の途中に当てない)
@@ -260,7 +261,12 @@ def matched_passes_quality(
     閾値は keyword-only 引数で上書き可能 (デフォルト = 本番 `PRICE_BAND_*` 定数)。
     analyze_threshold_relaxation の dry-run がこの 1 関数を直接呼ぶことで、
     判定ロジックのコピー drift (#2723) を構造的に排除する。
+
+    ``_gone_at`` (refresh_shop_prices.py が「商品ページが 2 回続けて見つからない」と
+    付けた印) があるものは不合格にする (#12305)。価格・最安値・購入ボタンから外れる。
     """
+    if matched.get("_gone_at"):
+        return False
     title = matched.get("title") or ""
     try:
         price = int(matched.get("price") or 0)
@@ -356,11 +362,64 @@ def matched_passes_quality(
     return True
 
 
+# --- 楽天・Yahoo の価格の鮮度 (#12305) ------------------------------------------------
+# refresh_shop_prices.py がマッチ済みの商品を 7 日で一巡して確かめ直す。確認日が
+# SHOP_PRICE_STALE_DAYS より古い価格は、価格・最安値の表示から外してリンクだけ残す
+# (K の決定 2026-11-27・案 1)。
+# ただし確かめ直しが書き込みで動き始めてから SHOP_REFRESH_WARMUP_DAYS たつまでは隠さない。
+# 導入時点では楽天の約 8 割が 30 日より古く、一巡する前に隠すと大半の価格が消えるため。
+# 動き始めた時刻は data/raw/_shop_refresh_state.json の first_write_at。
+SHOP_PRICE_STALE_DAYS = 14
+SHOP_REFRESH_WARMUP_DAYS = 8
+SHOP_REFRESH_STATE_FILE = "_shop_refresh_state.json"
+
+
+def _parse_utc(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def stale_cutoff(raw_root: pathlib.Path, now: datetime | None = None) -> datetime | None:
+    """これより前に確かめた価格は古いとみなす時刻。まだ隠し始めないときは None。"""
+    path = pathlib.Path(raw_root) / SHOP_REFRESH_STATE_FILE
+    try:
+        state = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    first = _parse_utc(state.get("first_write_at")) if isinstance(state, dict) else None
+    if first is None:
+        return None
+    now = now or datetime.now(timezone.utc)
+    if now - first < timedelta(days=SHOP_REFRESH_WARMUP_DAYS):
+        return None
+    return now - timedelta(days=SHOP_PRICE_STALE_DAYS)
+
+
+def is_gone(matched: dict[str, Any] | None) -> bool:
+    """商品ページが 2 回続けて見つからなかった印があるか。"""
+    return bool(matched) and bool(matched.get("_gone_at"))
+
+
+def is_stale(matched: dict[str, Any] | None, cutoff: datetime | None) -> bool:
+    """確認日が cutoff より古いか (確認日が無いものも古い扱い)。cutoff が None なら False。"""
+    if cutoff is None or not matched:
+        return False
+    checked = _parse_utc(matched.get("_refreshed_at"))
+    return checked is None or checked < cutoff
+
+
 def resolve_price(
     existing_price: int,
     matched: dict[str, Any] | None,
     amazon_price: int,
     amazon_title: str = "",
+    *,
+    cutoff: datetime | None = None,
 ) -> int:
     """楽天/Yahoo の「価格数値」を優先順位に沿って 1 つ解決する (#4007 follow-up 1)。
 
@@ -377,7 +436,12 @@ def resolve_price(
       3. それ以外 (matched が gate 落ち かつ existing が extreme、または
          existing が無い) → 0 (= 最安候補から外れる)。
     """
+    # 消えた商品は、記事に写された古い価格 (たいてい同じ出品) も使わない (#12305)
+    if is_gone(matched):
+        return 0
     if matched and matched_passes_quality(matched, amazon_price, amazon_title=amazon_title):
+        if is_stale(matched, cutoff):
+            return 0
         try:
             return int(matched.get("price") or 0)
         except (TypeError, ValueError):

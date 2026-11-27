@@ -317,8 +317,11 @@ def _apply_market_price(
     index: dict[str, dict[str, Any]] | None,
     amazon_price: int,
     stats: dict[str, int],
+    cutoff: datetime | None = None,
 ) -> bool:
     """1 プラットフォーム分の楽天/Yahoo 価格を matched JSON で解決し ``rec`` を更新する。
+
+    ``cutoff`` より前に確かめた価格・消えた商品の価格は 0 にする (#12305。build_post と同じ)。
 
     build_post._attach_market_prices と同じ優先順位 (market_prices.resolve_price)
     を使う。``index`` が None (raw_root 未指定) のときは何もしない。
@@ -331,11 +334,12 @@ def _apply_market_price(
     existing_price = getattr(rec, field) or 0
     matched = index.get(rec.asin)
     amazon_title = rec.name_full or rec.name or ""
-    new_price = market_prices.resolve_price(existing_price, matched, amazon_price, amazon_title)
+    new_price = market_prices.resolve_price(existing_price, matched, amazon_price, amazon_title,
+                                            cutoff=cutoff)
 
     if matched and market_prices.matched_passes_quality(
         matched, amazon_price, amazon_title=amazon_title
-    ):
+    ) and not market_prices.is_stale(matched, cutoff):
         stats[f"market_{platform}"] += 1
     elif existing_price > 0 and new_price == 0:
         # matched が無い/gate 落ちで、かつ既存値が Amazon 価格の 3.0x 超 / 1/3 未満の
@@ -393,6 +397,7 @@ def overlay_current_prices(
     if raw_root is not None:
         rakuten_index = market_prices.load_matched_index(raw_root / "rakuten_matched.json")
         yahoo_index = market_prices.load_matched_index(raw_root / "yahoo_matched.json")
+    shop_cutoff = market_prices.stale_cutoff(raw_root, now) if raw_root is not None else None
 
     for rec in records:
         obs = price_overlay.resolve(
@@ -419,12 +424,18 @@ def overlay_current_prices(
 
         if rakuten_index is not None or yahoo_index is not None:
             amazon_price = rec.price_amazon or 0
-            if _apply_market_price(rec, "rakuten", rakuten_index, amazon_price, stats):
+            if _apply_market_price(rec, "rakuten", rakuten_index, amazon_price, stats, shop_cutoff):
                 needs_recompute = True
-            if _apply_market_price(rec, "yahoo", yahoo_index, amazon_price, stats):
+            if _apply_market_price(rec, "yahoo", yahoo_index, amazon_price, stats, shop_cutoff):
                 needs_recompute = True
 
         if needs_recompute:
+            # 最安だったショップの価格が 0 になった (消えた・確認日が古い。#12305) ときは、
+            # 候補が空だと _recompute_best_price が何もせず古い最安値が残るので先に落とす
+            best_attr = {label: attr for attr, label in _BEST_PLATFORM_LABELS}.get(rec.best_platform or "")
+            if best_attr and not (getattr(rec, best_attr) or 0) > 0:
+                rec.best_price = 0
+                rec.best_platform = ""
             _recompute_best_price(rec)
 
     return stats
