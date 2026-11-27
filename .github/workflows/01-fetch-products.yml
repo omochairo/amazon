@@ -271,6 +271,21 @@ jobs:
           fi
           git commit -m "data: automated product data update (run ${{ github.run_id }})"
 
+          # 2026-11-27: PR に入れるのは data/ だけなのに、fetch_rakuten.py は tracked の
+          # hugo/data/ranking/{weekly,_match_manifest}.json も手元で書き換える。run の途中で
+          # 別 workflow (ranking-sniper 等) が同じファイルを main に入れると、下の merge が
+          # "Your local changes ... would be overwritten" で MERGE_HEAD 無しに止まり、
+          # run 1 回ぶんのデータが丸ごと捨てられた (run 45925811265)。commit に入らない
+          # 変更はどのみち捨てる物なので、merge の前に作業ツリーを HEAD に揃える。
+          # API health のログは $RUNNER_TEMP にあるので消えない。ignored は git clean の対象外。
+          LEFTOVER=$(git status --porcelain)
+          if [ -n "$LEFTOVER" ]; then
+            echo "Discarding changes outside the data/ commit before merging main:"
+            echo "$LEFTOVER"
+            git reset --hard -q HEAD
+            git clean -fdq
+          fi
+
           # 2026-09-21 (#7892): この時点の親 (main) は checkout 時点 (job 開始、
           # fetch 本体だけで実測60〜90分かかる) のまま止まっている。その間に
           # 別の fetch run が先に PR をマージしていると、この後の push は
