@@ -595,7 +595,8 @@ def create_pr(env, asin, today, article, meta, state_dir):
 
 def record_origin(env, prs, run_id, state_dir):
     """#4964 の出自台帳 (03 と同じ data/analytics/asin_origin.jsonl) を 1 本の PR で足す。"""
-    rows = [{"asin": p["asin"], "pool": p["pool"], "source_keyword": p.get("source_keyword")}
+    rows = [{"asin": p["asin"], "pool": p["pool"], "source_keyword": p.get("source_keyword"),
+             **({"cluster": p["cluster"]} if p.get("cluster") else {})}
             for p in prs if p.get("pool")]
     if not rows:
         return ""
@@ -833,7 +834,8 @@ def process(env, ledger, locks, args, state_dir, run_dir, origin, today, stats, 
                     status[asin] = {"state": "written", "checked_at": today}
                 stats["prs"] += 1
                 prs.append({"asin": asin, "pool": origin.get("pool") or "",
-                            "source_keyword": origin.get("source_keyword")})
+                            "source_keyword": origin.get("source_keyword"),
+                            "cluster": origin.get("cluster")})
                 ledger.add("pr", asin=asin, url=url, branch=branch, score=score, attempts=attempt,
                            pool=origin.get("pool") or "", source_keyword=origin.get("source_keyword"))
                 return ""

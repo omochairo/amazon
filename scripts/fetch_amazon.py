@@ -44,6 +44,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 import _fetch_targets
+import cluster_plan
 import price_history
 import product_image
 import image_dimensions
@@ -1036,17 +1037,45 @@ def extract_browse_nodes(item: dict) -> list:
     return out
 
 
-def classify_keyword_lane(kw: str, user_keywords: list, demand_kws: list) -> str:
+def classify_keyword_lane(kw: str, user_keywords: list, demand_kws: list,
+                          cluster_kws: list = ()) -> str:
     """検索語 kw の出自レーンを判定する (#4964 観察項目3、ASIN 出自台帳)。
 
-    判定順序は user → demand → supply-random。user 指定語が demand 語彙と
+    判定順序は user → cluster → demand → supply-random。user 指定語が demand 語彙と
     重なる場合も、ユーザーが明示指定した事実の方が確度が高いので user を優先する。
+    cluster は data/cluster_plan.yaml の検索語 (navi-brain#218 C2)。
     """
     if kw in user_keywords:
         return "user"
+    if kw in cluster_kws:
+        return "cluster"
     if kw in demand_kws:
         return "demand"
     return "supply-random"
+
+
+def load_cluster_keywords(path: str, slots: int, articles_dir: str,
+                          now: "datetime | None" = None) -> list:
+    """まとめの予定表 (data/cluster_plan.yaml) から、今回の検索に入れる語を slots 個まで返す (navi-brain#218 C2)。
+
+    当たる記事が目標に届いた予定の語は使わない。予定表が無い・壊れている・slots<=0 なら空 (従来動作)。
+    検索語は sample 枠の中に収めるので、SearchItems の総リクエスト数は増えない (需要枠と同じ)。
+    """
+    if slots <= 0 or not path:
+        return []
+    try:
+        now = now or datetime.now(timezone.utc)
+        clusters = cluster_plan.load(path)
+        if not clusters:
+            return []
+        counts = cluster_plan.count_articles(clusters, articles_dir)
+        kws = cluster_plan.search_keywords(clusters, slots, now.date(), counts,
+                                           rotation=cluster_plan.rotation_of(now))
+    except Exception as e:  # 予定表の不具合で取得を止めない
+        logger.warning(f"cluster keywords skipped ({path}): {e}")
+        return []
+    logger.info("cluster keywords: %s (articles per cluster: %s)", kws, counts)
+    return kws
 
 
 def normalize_api_item(it: dict, tag: str, source: str) -> dict:
@@ -1336,6 +1365,10 @@ def main():
                              "0 で無効 (brain#34)" % DEFAULT_DEMAND_MAX_AGE_DAYS)
     parser.add_argument("--demand-slots", type=int, default=0,
                         help="keyword サンプル枠のうち需要側に割り当てる件数 (0=無効・従来動作)")
+    parser.add_argument("--cluster-plan", default="data/cluster_plan.yaml",
+                        help="まとめの予定表 (navi-brain#218 C1)。検索語を --cluster-slots 個まで入れる")
+    parser.add_argument("--cluster-slots", type=int, default=0,
+                        help="keyword サンプル枠のうちまとめの予定表に割り当てる件数 (0=無効・従来動作)")
     parser.add_argument("--search-index", default="Toys",
                         help="PA-API SearchIndex / category (e.g. 'Toys', 'Baby', 'All'). 'All' disables ItemPage on JP marketplace; pick a concrete category to use pagination.")
     parser.add_argument("--competitors-only", action="store_true",
@@ -1524,6 +1557,10 @@ def main():
     # SearchItems の総リクエスト数は増えない (レート的に従来と同じ)。
     demand_kws = load_demand_keywords(args.demand_keywords, args.demand_slots,
                                       max_age_days=args.demand_max_age_days)
+    # navi-brain#218 C2: これから作るまとめページに載せたい商品を候補に入れる。需要枠と同じく
+    # sample 枠の中に収め、需要枠より前に検索する (早めの打ち切りで検索されないことが無いように)
+    cluster_kws = [k for k in load_cluster_keywords(args.cluster_plan, args.cluster_slots, args.articles_dir)
+                   if k not in user_keywords]
 
     sampling_active = not args.keywords and not os.environ.get("AMAZON_SEARCH_KEYWORDS")
     if sampling_active:
@@ -1533,7 +1570,7 @@ def main():
             random_kws = parse_keywords(args.keywords, shuffle=True, sample_size=0)
         else:
             effective_sample_size = max(
-                0, args.keyword_sample_size - len(user_keywords) - len(demand_kws))
+                0, args.keyword_sample_size - len(user_keywords) - len(cluster_kws) - len(demand_kws))
             if effective_sample_size > 0:
                 random_kws = parse_keywords(args.keywords, shuffle=True, sample_size=effective_sample_size)
             else:
@@ -1551,11 +1588,11 @@ def main():
     # keywords (#2686); random supply-side keywords fill the rest. Dedupe keeps
     # the earliest occurrence so the priority order above is what survives.
     keywords = list(user_keywords)
-    for k in demand_kws + list(random_kws):
+    for k in cluster_kws + demand_kws + list(random_kws):
         if k not in keywords:
             keywords.append(k)
-    if demand_kws:
-        logger.info(f"keyword mix: user={len(user_keywords)} demand={len(demand_kws)} "
+    if demand_kws or cluster_kws:
+        logger.info(f"keyword mix: user={len(user_keywords)} cluster={len(cluster_kws)} demand={len(demand_kws)} "
                     f"supply={len([k for k in random_kws if k not in demand_kws])} "
                     f"total={len(keywords)}")
     # Surface the first user keyword as the legacy primary_kw for the
@@ -1600,7 +1637,10 @@ def main():
         # User-supplied keywords are mandatory: search every page regardless
         # of min_new. Early termination only applies to the random/sampled
         # tail (min_new is a floor/target, exceeding it via user keywords is fine).
-        mandatory = idx < len(user_keywords)
+        # まとめの予定表の語 (navi-brain#218 C2) も打ち切らない。先頭の数語で min_new に届くと
+        # 残りのまとめの語が検索されないため。最大 --cluster-slots 語 × --pages で、sample 枠から
+        # 差し引いてあるので、全部の語を検索したときの回数は増えない
+        mandatory = idx < len(user_keywords) + len(cluster_kws)
         for page in range(1, pages + 1):
             if not mandatory and new_for_jules >= args.min_new:
                 done = True
@@ -1645,7 +1685,7 @@ def main():
                 # ASIN 出自台帳 (#4964 観察項目3) 用。この検索ループの外では
                 # kw (検索語) が失われるため、item に残せるのはここだけ。
                 normalized["source_keyword"] = kw
-                normalized["lane"] = classify_keyword_lane(kw, user_keywords, demand_kws)
+                normalized["lane"] = classify_keyword_lane(kw, user_keywords, demand_kws, cluster_kws)
                 items.append(normalized)
                 if _is_jules_eligible(normalized):
                     new_for_jules += 1

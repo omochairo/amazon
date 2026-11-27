@@ -13,6 +13,9 @@ import yaml
 WEIGHTS = {
     "asin_b0h": 2, "asin_b0g": 1, "character": 2, "demand": 2,
     "brand_tier_sa": 1, "price_10000": 1, "similarity": -3,
+    # navi-brain#218 C3: これから作るまとめページ (data/cluster_plan.yaml) に当たる商品。
+    # 公開の目標日が近い (cluster_plan.URGENT_DAYS 以内) ものは 1 足す
+    "cluster": 2, "cluster_urgent": 3,
 }
 DEFAULT_CHARACTER_PATH = pathlib.Path(__file__).resolve().parent.parent / "data" / "character_terms.yaml"
 
@@ -86,8 +89,11 @@ def similar_candidate(item, *, lane, tier, character, existing_class_counts,
 
 
 def score_candidate(item, *, existing_class_counts=None, character_terms=None,
-                    has_browse_nodes=True):
-    """候補を (合計点, 内訳, 正規化キャラクター名) で返す。"""
+                    has_browse_nodes=True, clusters=None, today=None):
+    """候補を (合計点, 内訳, 正規化キャラクター名) で返す。
+
+    clusters: cluster_plan.load() の戻り値 (None/空なら cluster の点は 0)。today: 公開日の近さを測る日。
+    """
     item = item if isinstance(item, dict) else {}
     asin = str(item.get("asin") or "").upper()
     lane = item.get("lane")
@@ -106,6 +112,7 @@ def score_candidate(item, *, existing_class_counts=None, character_terms=None,
         "brand_tier": WEIGHTS["brand_tier_sa"] if tier in ("S", "A") else 0,
         "price": WEIGHTS["price_10000"] if price >= 10000 else 0,
         "similarity": 0,
+        "cluster": cluster_points(item, clusters, today),
     }
     similar = similar_candidate(item, lane=lane, tier=tier, character=character,
                                 existing_class_counts=existing_class_counts or {},
@@ -113,6 +120,18 @@ def score_candidate(item, *, existing_class_counts=None, character_terms=None,
     if similar:
         breakdown["similarity"] = WEIGHTS["similarity"]
     return sum(breakdown.values()), breakdown, character
+
+
+def cluster_points(item, clusters, today=None):
+    """まとめの予定表に当たれば点 (急ぐ予定は高く)。当たらなければ 0。"""
+    if not clusters:
+        return 0
+    import cluster_plan
+    today = today or dt.datetime.now(dt.timezone.utc).date()
+    hit = cluster_plan.match_item(item, clusters, today)
+    if hit is None:
+        return 0
+    return WEIGHTS["cluster_urgent"] if hit.urgent(today) else WEIGHTS["cluster"]
 
 
 def load_recent_character_counts(path="data/analytics/asin_origin.jsonl", *, now=None):

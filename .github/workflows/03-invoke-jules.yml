@@ -220,7 +220,7 @@ jobs:
               if [ -n "$pool" ]; then
                 # 入力は必ずこの行から読む (渡さないと jq がループの stdin = shuffled.jsonl の
                 # 残りを吸い込み、台帳が化けたうえにロック取得のループも途中で終わる)
-                jq -c '{asin, pool, source_keyword, priority_score, priority_breakdown, character}' \
+                jq -c '{asin, pool, source_keyword, priority_score, priority_breakdown, character} + (if .cluster then {cluster} else {} end)' \
                   <<< "$line" >> /tmp/picked_origin.jsonl
               fi
               ACQUIRED=$((ACQUIRED + 1))

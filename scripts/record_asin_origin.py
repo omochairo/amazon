@@ -21,7 +21,8 @@ import json
 import os
 import sys
 
-POOLS = {"demand", "supply-random", "ranking-sniper", "rewrite-queue", "first-party"}
+# cluster = data/cluster_plan.yaml の検索語で見つかった商品 (navi-brain#218 C2)
+POOLS = {"demand", "supply-random", "ranking-sniper", "rewrite-queue", "first-party", "cluster"}
 
 
 def now_iso() -> str:
@@ -30,7 +31,7 @@ def now_iso() -> str:
 
 def make_record(*, ts: str, run_id: str, workflow: str, asin: str,
                  pool: str, source_keyword: str | None, priority_score=None,
-                 priority_breakdown=None, character=None) -> dict:
+                 priority_breakdown=None, character=None, cluster=None) -> dict:
     """1 行分のレコードを組み立てる。pool が不正なら ValueError。"""
     if pool not in POOLS:
         raise ValueError(f"pool must be one of {sorted(POOLS)}, got {pool!r}")
@@ -47,6 +48,9 @@ def make_record(*, ts: str, run_id: str, workflow: str, asin: str,
         "priority_breakdown": dict(priority_breakdown) if priority_breakdown is not None else None,
         "character": character or None,
     }
+    # まとめの予定表に当たった商品だけ、予定の key を残す (navi-brain#218。古い行には無い)
+    if cluster:
+        record["cluster"] = cluster
     return record
 
 
@@ -135,7 +139,8 @@ def main() -> int:
                         source_keyword=c.get("source_keyword"),
                         priority_score=c.get("priority_score"),
                         priority_breakdown=c.get("priority_breakdown"),
-                        character=c.get("character"))
+                        character=c.get("character"),
+                        cluster=c.get("cluster"))
             for c in candidates
         ]
     elif args.asin:
