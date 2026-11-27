@@ -157,6 +157,29 @@ jobs:
           VALUECOMMERCE_SID: ${{ secrets.VALUECOMMERCE_SID }}
           VALUECOMMERCE_PID: ${{ secrets.VALUECOMMERCE_PID }}
 
+      # #12305: マッチ済みの楽天・Yahoo の商品を古い順に 1 件 1 回で確かめ直す (7 日で一巡)。
+      # 1 日 1 回だけ動く (data/raw/_shop_refresh_state.json の日付で判定)。
+      # リポジトリの変数 SHOP_REFRESH_MODE が write のときだけ matched JSON を書き換える。
+      # それ以外は 1 ショップ 20 件を呼ぶだけ (取り方の確認用。何も書かない)。
+      - name: Refresh shop prices (楽天/Yahoo の価格の確かめ直し)
+        if: ${{ always() }}
+        timeout-minutes: 35
+        continue-on-error: true
+        run: |
+          if [ "${SHOP_REFRESH_MODE}" = "write" ]; then
+            python scripts/refresh_shop_prices.py --write --max-minutes 25
+          else
+            python scripts/refresh_shop_prices.py --limit 20 --max-minutes 5
+          fi
+        env:
+          SHOP_REFRESH_MODE: ${{ vars.SHOP_REFRESH_MODE }}
+          RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
+          RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
+          RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}
+          YAHOO_CLIENT_ID: ${{ secrets.YAHOO_CLIENT_ID }}
+          VALUECOMMERCE_SID: ${{ secrets.VALUECOMMERCE_SID }}
+          VALUECOMMERCE_PID: ${{ secrets.VALUECOMMERCE_PID }}
+
       - name: Fetch Reviews (楽天/Yahoo レビュー本文)
         if: ${{ always() }}
         run: python scripts/fetch_reviews.py

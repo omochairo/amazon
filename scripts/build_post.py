@@ -3537,6 +3537,7 @@ def _attach_market_prices(
     data: dict[str, Any],
     rakuten_index: dict[str, dict[str, Any]],
     yahoo_index: dict[str, dict[str, Any]],
+    stale_cutoff: datetime | None = None,
 ) -> None:
     """``product.prices.{rakuten,yahoo}`` を matched JSON で検証/上書きする。
 
@@ -3551,6 +3552,10 @@ def _attach_market_prices(
 
     最後に ``product.best_price`` / ``product.best_platform`` を全プラット
     フォーム最安で再計算する。
+
+    #12305: matched に ``_gone_at`` (商品ページが消えた) があれば、記事に写された価格も
+    使わず検索リンクにする。確認日が ``stale_cutoff`` より古い matched は、金額を出さず
+    (price=0・``stale=True``) 商品ページへのリンクだけ残す (K の決定・案 1)。
     """
     product = data.get("product") if isinstance(data.get("product"), dict) else None
     if not product:
@@ -3571,10 +3576,18 @@ def _attach_market_prices(
     product_name = product.get("name") or ""
     # ピース数ガード (#9244) は切り詰めた name ではなく Amazon の題名全体で見る
     amazon_title = product.get("name_full") or product_name
+    hidden_shop = False  # 消えた・古いで金額を外したショップがあったか (#12305)
 
     for key, index in (("rakuten", rakuten_index), ("yahoo", yahoo_index)):
         existing = prices.get(key) if isinstance(prices.get(key), dict) else None
         matched = index.get(asin)
+        if market_prices.is_gone(matched):
+            hidden_shop = True
+            # 商品ページが消えた。記事に写された URL もたいてい同じ出品なので使わない
+            builder = _SEARCH_URL_BUILDERS.get(key)
+            search_url = builder(product_name) if (product_name and builder) else ""
+            prices[key] = {"price": 0, "url": search_url, "is_search": True}
+            continue
         matched_ok = bool(matched) and _matched_passes_quality(
             matched, amazon_price, amazon_title=amazon_title
         )
@@ -3584,18 +3597,23 @@ def _attach_market_prices(
                 mprice = int(matched.get("price") or 0)
             except (TypeError, ValueError):
                 mprice = 0
+            stale = market_prices.is_stale(matched, stale_cutoff)
+            hidden_shop = hidden_shop or stale
             prices[key] = {
-                "price": mprice,
+                "price": 0 if stale else mprice,
                 "url": matched.get("url") or "",
                 "title": matched.get("title") or "",
                 "is_search": False,
                 "verified": True,
-                "availability": matched.get("availability"),
-                "free_shipping": matched.get("free_shipping"),
-                "asuraku": matched.get("asuraku"),
-                # この価格を取った日。_refreshed_at は fetch_cross_search.py が
-                # 照合をやり直して採用したときだけ書くので、価格と同じ時点を指す
-                "checked_at": _date_part(matched.get("_refreshed_at")),
+                "stale": stale,
+                # 金額を出さないときは、同じ時点の在庫・送料・あす楽のバッジも出さない
+                "availability": None if stale else matched.get("availability"),
+                "free_shipping": None if stale else matched.get("free_shipping"),
+                "asuraku": None if stale else matched.get("asuraku"),
+                # この価格を取った日。_refreshed_at は fetch_cross_search.py が照合を
+                # やり直したときと、refresh_shop_prices.py が確かめ直したときに書く。
+                # 金額を出さない (stale) ときは日付も出さない
+                "checked_at": None if stale else _date_part(matched.get("_refreshed_at")),
             }
             continue
 
@@ -3643,6 +3661,12 @@ def _attach_market_prices(
                     "is_search": True,
                 }
 
+    if hidden_shop:
+        # 外したショップが最安だったとき、_recompute_best_price は候補が空だと何もしない
+        # ので古い最安値 (記事の凍結値) が JSON-LD などに残る。先に 0 に落としてから
+        # 残ったショップで計算し直す (_apply_amazon_discontinued と同じ型)
+        product["best_price"] = 0
+        product["best_platform"] = ""
     _recompute_best_price(product)
 
 
@@ -4535,6 +4559,9 @@ def main() -> None:
     price_watch_latest_path = price_watch_history_root.parent / "latest.json"
     rakuten_matched_index = _load_matched_index(raw_root / "rakuten_matched.json")
     yahoo_matched_index = _load_matched_index(raw_root / "yahoo_matched.json")
+    # #12305: 確認日が古い楽天・Yahoo の価格を隠す境目 (確かめ直しが一巡するまでは None)
+    shop_stale_cutoff = market_prices.stale_cutoff(raw_root)
+    print(f"market_prices: shop stale cutoff = {shop_stale_cutoff.isoformat() if shop_stale_cutoff else 'off'}")
     # #4007: 「現在の Amazon 価格」の日次観測 index。latest.json を 1 回読んで
     # 全記事と関連のおすすめの索引で使い回す (無い/古い場合は per_asin 週次レーンへ自動フォールバック)。
     price_watch_index = price_overlay.load_watch_index()
@@ -4725,7 +4752,7 @@ def main() -> None:
             if data.get("price_body_stale"):
                 price_overlay_stats["body_stale"] += 1
             _attach_price_freshness(data, per_asin_root)
-            _attach_market_prices(data, rakuten_matched_index, yahoo_matched_index)
+            _attach_market_prices(data, rakuten_matched_index, yahoo_matched_index, shop_stale_cutoff)
             amazon_discontinued = _apply_amazon_discontinued(data, per_asin_root, amazon_partner_tag)
             # 最新 snapshot が価格を返さない出品の凍結価格を落とす (2026-08-09)。
             # _attach_market_prices の後・_apply_amazon_discontinued と同じ位置。

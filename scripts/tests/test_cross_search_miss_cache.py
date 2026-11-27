@@ -242,6 +242,22 @@ class MainFlowTest(unittest.TestCase):
             calls = self._run(argv=["--re-search-low-confidence"])
         self.assertIn(("rakuten", self.ART), calls)
 
+    def test_gone_match_is_searched_again_then_held(self):
+        gone = {"matched_asin": self.ART, "title": "古い", "price": 1, "url": "u",
+                "_gone_at": "2026-11-20T00:00:00+00:00"}
+        live = {"matched_asin": self.ART, "title": "生きている", "price": 1, "url": "u"}
+        raw = self.root / "data" / "raw"
+        (raw / "rakuten_matched.json").write_text(json.dumps({"items": [gone]}), encoding="utf-8")
+        (raw / "yahoo_matched.json").write_text(json.dumps({"items": [live]}), encoding="utf-8")
+        first = self._run()
+        self.assertIn(("rakuten", self.ART), first)
+        self.assertNotIn(("yahoo", self.ART), first)  # 生きているマッチは探さない
+        self.assertIn("rakuten", fcs._load_misses(self.miss_path)[self.ART])
+        second = self._run()
+        self.assertNotIn(("rakuten", self.ART), second)  # 空振りの記録で 14 日は止まる
+        kept = json.loads((raw / "rakuten_matched.json").read_text(encoding="utf-8"))["items"]
+        self.assertEqual(kept[0]["_gone_at"], gone["_gone_at"])  # 見つからなくても消さない
+
     def test_record_removed_when_article_disappears(self):
         self._run()
         (self.root / "data" / "articles" / f"{self.ART}.json").unlink()
