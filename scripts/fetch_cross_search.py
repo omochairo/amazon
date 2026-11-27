@@ -397,20 +397,47 @@ RATE_LIMIT_RETRY_WAIT = 1.5
 RAKUTEN_REQUEST_INTERVAL = 1.0
 
 
+# 一時的な失敗 (通信エラー・429・5xx) の通し回数 (#12305)。検索関数は「見つからない」と
+# 「失敗した」をどちらも None で返すので、検索の前後でこの値が増えたかで見分ける。
+# 失敗した検索を空振りとして記録すると、14 日間探し直さなくなるため。
+_TRANSIENT_FAILURES = 0
+
+
+def _is_transient_status(status_code) -> bool:
+    """空振りとして記録してはいけない応答か。
+
+    401/403 は鍵や Referer の不備で全件に出るので、空振りにすると全商品を 14 日
+    止めてしまう。400 (語が不正) と 404 は同じ語なら毎回同じ結果なので空振りに含める。
+    """
+    return status_code is None or status_code in (401, 403, 429) or status_code >= 500
+
+
 def _get(api, url, **kwargs):
     """requests.get して HTTP ステータスを _api_health に記録する (#8272)。
 
     429 のときだけ ``RATE_LIMIT_RETRY_WAIT`` 秒待って 1 回再試行する
     (navi-brain#76)。429 も記録するので、check_api_health の集計には残る。
+    最終的に一時的な失敗で終わったら ``_TRANSIENT_FAILURES`` を 1 増やす (#12305)。
     """
+    global _TRANSIENT_FAILURES
     for attempt in range(2):
         try:
             resp = requests.get(url, **kwargs)
         except requests.exceptions.RequestException:
             _api_health.record(api, None)
+            _TRANSIENT_FAILURES += 1
             raise
         _api_health.record(api, resp.status_code)
         if resp.status_code != 429 or attempt:
+            if _is_transient_status(resp.status_code):
+                _TRANSIENT_FAILURES += 1
+            elif resp.status_code == 200:
+                # 200 でも本文が JSON でなければ (障害ページなど) 失敗に数える。
+                # 呼び出し側の resp.json() の例外は検索関数が握りつぶして None になるため
+                try:
+                    resp.json()
+                except ValueError:
+                    _TRANSIENT_FAILURES += 1
             return resp
         logger.info(f"  {api}: 429, retry in {RATE_LIMIT_RETRY_WAIT}s")
         time.sleep(RATE_LIMIT_RETRY_WAIT)
@@ -960,6 +987,99 @@ def _collect_targets(amazon_items: list, articles_dir: pathlib.Path, per_asin_ro
     return targets
 
 
+# --- 空振りの記録 (#12305) ---------------------------------------------------------
+# マッチの無い記事の ASIN は、記録が無いと 1 日 2 回の実行のたびに検索し直して空振りする
+# (2026-11-26 の run で 234 件・楽天と Yahoo で 1 回あたり数百回の呼び出し)。
+# ショップ別に「最後に探して見つからなかった日時」と「その時の JAN」を残し、
+# MISS_RECHECK_DAYS が過ぎるまで通常の実行では探し直さない。
+#
+# 抑制しないもの (呼び出し側で判定する):
+#   - その日の amazon.json の ASIN (force_refresh)
+#   - --asins / --re-search-low-confidence の実行
+#   - 記録が無い ASIN (新しい記事の初回)
+#   - JAN が付いた・変わった ASIN (記録の JAN と今の JAN が違う)
+MISS_FILE_NAME = "cross_search_misses.json"
+MISS_RECHECK_DAYS = 14
+_MISS_SHOPS = ("rakuten", "yahoo")
+
+
+def _load_misses(path: pathlib.Path) -> dict:
+    """{asin: {shop: {"last_searched_at", "count", "jan_code"}}} を返す。壊れていれば空。"""
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        logger.warning(f"{path} を読めないので空振りの記録なしで進める")
+        return {}
+    items = data.get("items") if isinstance(data, dict) else None
+    if not isinstance(items, dict):
+        return {}
+    # 形の崩れた項目は捨てる (_miss_suppressed で例外にして検索全体を止めないため)
+    clean = {}
+    for asin, shops in items.items():
+        if not isinstance(shops, dict):
+            continue
+        kept = {s: e for s, e in shops.items() if s in _MISS_SHOPS and isinstance(e, dict)}
+        if kept:
+            clean[asin] = kept
+    return clean
+
+
+def _parse_iso(ts: str):
+    try:
+        dt = datetime.fromisoformat(ts)
+    except (TypeError, ValueError):
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _miss_suppressed(misses: dict, asin: str, shop: str, jan_code: str, now: datetime) -> bool:
+    """この ASIN・ショップの検索を、空振りの記録を理由に今回は見送るか。"""
+    entry = (misses.get(asin) or {}).get(shop)
+    if not isinstance(entry, dict):
+        return False
+    if (entry.get("jan_code") or "") != (jan_code or ""):
+        return False
+    last = _parse_iso(entry.get("last_searched_at", ""))
+    if last is None:
+        return False
+    return (now - last).total_seconds() < MISS_RECHECK_DAYS * 86400
+
+
+def _record_miss(misses: dict, asin: str, shop: str, jan_code: str, now_iso: str) -> None:
+    prev = (misses.get(asin) or {}).get(shop) or {}
+    misses.setdefault(asin, {})[shop] = {
+        "last_searched_at": now_iso,
+        "count": int(prev.get("count", 0) or 0) + 1,
+        "jan_code": jan_code or "",
+    }
+
+
+def _clear_miss(misses: dict, asin: str, shop: str) -> None:
+    entry = misses.get(asin)
+    if not entry:
+        return
+    entry.pop(shop, None)
+    if not entry:
+        misses.pop(asin, None)
+
+
+def _save_misses(path: pathlib.Path, misses: dict, keep_asins=None) -> int:
+    """記録を書く。keep_asins を渡すと、そこに無い ASIN (記事の対象から外れた) を消す。"""
+    if keep_asins is not None:
+        for asin in [a for a in misses if a not in keep_asins]:
+            misses.pop(asin, None)
+    payload = {
+        "recheck_days": MISS_RECHECK_DAYS,
+        "items": {a: misses[a] for a in sorted(misses)},
+    }
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
+    return len(payload["items"])
+
+
 def _consumes_re_search_slot(
     r_low: bool, y_low: bool, need_rakuten: bool, need_yahoo: bool
 ) -> bool:
@@ -1117,6 +1237,15 @@ def main():
     low_conf_seen, low_conf_deferred = 0, 0
     r_no_better, y_no_better = 0, 0
 
+    # 空振りの記録 (#12305)。抑制は通常の実行だけ。--asins と低信頼再検索は
+    # 「探し直したい」という指定なので、記録があっても探す (記録の更新はする)
+    miss_path = out_dir / MISS_FILE_NAME
+    misses = _load_misses(miss_path)
+    miss_suppress = not re_search_mode and not only_asins
+    now_dt = _parse_iso(now_iso)
+    r_miss_held, y_miss_held = 0, 0
+    r_miss_recorded, y_miss_recorded = 0, 0
+
     for asin, (title, force_refresh, jan_code) in targets.items():
         # ピース数ガード (#9244) にも Amazon の題名を渡す。build_post / quality_gate と
         # 同じ判定にしないと、表示で外れた行を「低信頼ではない」と見て再検索しない
@@ -1130,6 +1259,16 @@ def main():
         y_has = asin in yahoo_index
         need_rakuten = force_refresh or not r_has
         need_yahoo = force_refresh or not y_has
+
+        # マッチの無い記事の ASIN で、最近探して見つからなかったものは見送る (#12305)。
+        # その日の amazon.json の ASIN (force_refresh) は抑制しない
+        if miss_suppress and not force_refresh:
+            if need_rakuten and not r_has and _miss_suppressed(misses, asin, "rakuten", jan_code, now_dt):
+                need_rakuten = False
+                r_miss_held += 1
+            if need_yahoo and not y_has and _miss_suppressed(misses, asin, "yahoo", jan_code, now_dt):
+                need_yahoo = False
+                y_miss_held += 1
 
         # --re-search-low-confidence: JAN がある低信頼マッチを強制再検索対象に追加
         r_reason = ""
@@ -1182,8 +1321,10 @@ def main():
 
         # 楽天検索
         if rakuten_app_id and need_rakuten:
+            failures_before = _TRANSIENT_FAILURES
             r_result = search_rakuten_tiered(keyword, rakuten_app_id, rakuten_access_key, rakuten_aff_id, jan_code=jan_code, amazon_title=title, asin=asin)
             if r_result:
+                _clear_miss(misses, asin, "rakuten")
                 r_result["matched_asin"] = asin
                 r_result["search_keyword"] = keyword
                 r_result["jan_code"] = jan_code
@@ -1226,15 +1367,22 @@ def main():
                     logger.info(f"  → Rakuten: not found (preserving existing entry)")
                 else:
                     r_skipped += 1
-                    logger.info(f"  → Rakuten: not found")
+                    if _TRANSIENT_FAILURES == failures_before:
+                        _record_miss(misses, asin, "rakuten", jan_code, now_iso)
+                        r_miss_recorded += 1
+                        logger.info(f"  → Rakuten: not found")
+                    else:
+                        logger.info(f"  → Rakuten: not found (一時的な失敗があったので空振りとして記録しない)")
             time.sleep(RAKUTEN_REQUEST_INTERVAL)  # Rate limit
         elif r_has:
             r_kept += 1
 
         # Yahoo検索
         if yahoo_client_id and need_yahoo:
+            failures_before = _TRANSIENT_FAILURES
             y_result = search_yahoo(keyword, yahoo_client_id, vc_sid, vc_pid, jan_code=jan_code, amazon_title=title, asin=asin)
             if y_result:
+                _clear_miss(misses, asin, "yahoo")
                 y_result["matched_asin"] = asin
                 y_result["search_keyword"] = keyword
                 y_result["jan_code"] = jan_code
@@ -1274,13 +1422,34 @@ def main():
                     logger.info(f"  → Yahoo: not found (preserving existing entry)")
                 else:
                     y_skipped += 1
-                    logger.info(f"  → Yahoo: not found")
+                    if _TRANSIENT_FAILURES == failures_before:
+                        _record_miss(misses, asin, "yahoo", jan_code, now_iso)
+                        y_miss_recorded += 1
+                        logger.info(f"  → Yahoo: not found")
+                    else:
+                        logger.info(f"  → Yahoo: not found (一時的な失敗があったので空振りとして記録しない)")
             time.sleep(1.0)  # Yahoo rate limit: 1 query/sec
         elif y_has:
             y_kept += 1
 
     # 保存 (累積マージ後)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # 空振りの記録: マッチが付いたショップの記録は不要なので消す。--asins は対象を
+    # 絞っているので、対象から外れた ASIN の掃除はしない (全部消えてしまう)
+    for asin in list(misses):
+        if asin in rakuten_index:
+            _clear_miss(misses, asin, "rakuten")
+        if asin in yahoo_index:
+            _clear_miss(misses, asin, "yahoo")
+    miss_total = _save_misses(
+        miss_path, misses, keep_asins=None if only_asins else set(targets)
+    )
+    logger.info(
+        f"Miss cache: held(rakuten={r_miss_held}, yahoo={y_miss_held}) "
+        f"recorded(rakuten={r_miss_recorded}, yahoo={y_miss_recorded}) "
+        f"total_asins={miss_total} (recheck after {MISS_RECHECK_DAYS}d)"
+    )
 
     rakuten_results = list(rakuten_index.values())
     yahoo_results = list(yahoo_index.values())

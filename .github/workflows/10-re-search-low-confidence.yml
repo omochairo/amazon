@@ -120,6 +120,8 @@ jobs:
           set -e
 
           git add data/raw/rakuten_matched.json data/raw/yahoo_matched.json || true
+          # 空振りの記録 (#12305)。無いパスがあると git add は全部を足さずに失敗するので分ける
+          git add data/raw/cross_search_misses.json 2>/dev/null || true
 
           if git diff --cached --quiet; then
             echo "No matched.json changes after re-search; skipping PR creation."
