@@ -1080,6 +1080,12 @@ def _save_misses(path: pathlib.Path, misses: dict, keep_asins=None) -> int:
     return len(payload["items"])
 
 
+def _has_live_match(index: dict, asin: str) -> bool:
+    """マッチがあり、商品ページが消えた印 (_gone_at) が付いていないか。"""
+    entry = index.get(asin)
+    return bool(entry) and not entry.get("_gone_at")
+
+
 def _consumes_re_search_slot(
     r_low: bool, y_low: bool, need_rakuten: bool, need_yahoo: bool
 ) -> bool:
@@ -1255,8 +1261,10 @@ def main():
         )
         # 既に matched があり、かつ amazon.json 由来でない (force_refresh=False) ASIN
         # → 既存エントリ保持で API コール節約
-        r_has = asin in rakuten_index
-        y_has = asin in yahoo_index
+        # refresh_shop_prices.py が「商品ページが消えた」と印を付けたもの (_gone_at) は、
+        # マッチ無しと同じに扱って探し直す (#12305)。見つかれば新しい entry で置き換わる
+        r_has = _has_live_match(rakuten_index, asin)
+        y_has = _has_live_match(yahoo_index, asin)
         need_rakuten = force_refresh or not r_has
         need_yahoo = force_refresh or not y_has
 
@@ -1438,9 +1446,9 @@ def main():
     # 空振りの記録: マッチが付いたショップの記録は不要なので消す。--asins は対象を
     # 絞っているので、対象から外れた ASIN の掃除はしない (全部消えてしまう)
     for asin in list(misses):
-        if asin in rakuten_index:
+        if _has_live_match(rakuten_index, asin):
             _clear_miss(misses, asin, "rakuten")
-        if asin in yahoo_index:
+        if _has_live_match(yahoo_index, asin):
             _clear_miss(misses, asin, "yahoo")
     miss_total = _save_misses(
         miss_path, misses, keep_asins=None if only_asins else set(targets)

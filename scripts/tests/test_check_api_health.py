@@ -66,6 +66,15 @@ class TestEvaluate(unittest.TestCase):
     def test_two_transient_failures_are_tolerated(self):
         self.assertEqual(_verdicts({"a": [None, 503]})["a"], "")
 
+    def test_refresh_404_is_an_answer_not_a_failure(self):
+        # #12305: 確かめ直しの 404 は「商品ページが消えた」という正常な答え
+        self.assertEqual(_verdicts({"rakuten_ichiba_refresh": [404] * 10})["rakuten_ichiba_refresh"], "")
+        self.assertEqual(_verdicts({"rakuten_books_refresh": [200, 404, 404]})["rakuten_books_refresh"], "")
+        # ほかの API の 404 は今までどおり故障
+        self.assertTrue(_verdicts({"rakuten_ichiba_search": [404] * 10})["rakuten_ichiba_search"])
+        # 確かめ直しでも 400 が多いのは故障 (パラメータの誤り)
+        self.assertTrue(_verdicts({"rakuten_ichiba_refresh": [400] * 6})["rakuten_ichiba_refresh"])
+
 
 class TestMain(unittest.TestCase):
     def _run(self, rows, summary_path=None):
