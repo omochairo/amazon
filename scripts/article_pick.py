@@ -145,8 +145,12 @@ def select_candidates(items, existing, ranking_pool, first_party_all,
                       first_party_cap: int = 2, rewrite_cap: int = 2,
                       has_amazon_item=None, genre_flagged=None, blocked=None,
                       recent_character_counts=None, character_terms_path=None,
-                      existing_class_counts=None, has_browse_nodes=True) -> list:
+                      existing_class_counts=None, has_browse_nodes=True,
+                      cluster_cap: int = 3, cluster_plan_path=None, now=None) -> list:
     """候補を優先順に並べ、``{"asin", "pool", "source_keyword"}`` のリストで返す。
+
+    cluster_cap: まとめの予定表 (data/cluster_plan.yaml) に当たる商品を、keyword 枠の先頭に
+    置く上限 (navi-brain#218 C3)。超えた分は捨てずに後ろへ回す。cluster_plan_path / now はテスト用。
 
     items: amazon.json の items[]。existing: 除外する ASIN (既存記事・open PR/MR・lock)。
     rewrite_candidates: ``rewrite_queue.pending_rewrite_candidates`` の戻り値
@@ -238,8 +242,17 @@ def select_candidates(items, existing, ranking_pool, first_party_all,
     # keyword 枠のみ優先スコア順。同点は上の seed shuffle 順を保つ。
     remaining_kw = list(dict.fromkeys(remaining_kw))  # 同じ ASIN が重複していても 1 件に
     _zero = (0, {"asin_prefix": 0, "character": 0, "origin_demand": 0,
-                 "brand_tier": 0, "price": 0, "similarity": 0}, None)
+                 "brand_tier": 0, "price": 0, "similarity": 0, "cluster": 0}, None)
     priority = {}
+    # navi-brain#218 C3: まとめの予定表に当たる商品を先に選ぶ (点は candidate_priority の cluster)
+    today = (now or _dt.datetime.now(_dt.timezone.utc)).date()
+    try:
+        import cluster_plan
+        plan = cluster_plan.load(cluster_plan_path or cluster_plan.DEFAULT_PATH)
+    except Exception as e:  # 予定表が読めなくても pick を止めない
+        _warn(f"cluster plan skipped: {e}")
+        plan = []
+    cluster_of = {}
     try:
         terms = candidate_priority.load_character_terms(
             character_terms_path or candidate_priority.DEFAULT_CHARACTER_PATH)
@@ -249,10 +262,17 @@ def select_candidates(items, existing, ranking_pool, first_party_all,
         for a in remaining_kw:
             priority[a] = (candidate_priority.score_candidate(
                 by_asin.get(a) or {}, existing_class_counts=class_counts, character_terms=terms,
-                has_browse_nodes=has_browse_nodes) if terms_file_exists else _zero)
+                has_browse_nodes=has_browse_nodes, clusters=plan, today=today)
+                if terms_file_exists else _zero)
+            # 点を付けないとき (辞書が無い) は上限も掛けない (先頭に来ないのに後ろへ回すことになる)
+            if plan and terms_file_exists:
+                hit = cluster_plan.match_item(by_asin.get(a) or {}, plan, today)
+                if hit is not None:
+                    cluster_of[a] = hit.key
     except Exception as e:  # 点数の計算の失敗で pick を止めない (今までどおりの無作為の順に戻す)
         _warn(f"candidate priority skipped, keeping seeded order: {e}")
         priority = {a: _zero for a in remaining_kw}
+        cluster_of = {}
     remaining_kw.sort(key=lambda a: -priority[a][0])
     # supply-random の類似品は最大1件、同一キャラクターは最大1件に制限。
     # 直近7日の既選出が3件以上あるキャラクターも今回の候補から除外する。
@@ -263,9 +283,14 @@ def select_candidates(items, existing, ranking_pool, first_party_all,
         _warn(f"recent character counts skipped: {e}")
         recent = {}
     selected_chars, similar_kept, capped, cap_examples = set(), False, [], []
-    similar_excluded, character_excluded = [], []
+    similar_excluded, character_excluded, cluster_excluded = [], [], []
+    cluster_kept = 0
     for a in remaining_kw:
         score, breakdown, char = priority[a]
+        # まとめの商品が 1 回の本数を全部取らないように、上限を超えた分は後ろへ回す
+        if a in cluster_of and cluster_kept >= max(cluster_cap, 0):
+            cluster_excluded.append(a)
+            continue
         if char and recent.get(char, 0) >= 3:
             character_excluded.append(a)
             continue
@@ -276,14 +301,21 @@ def select_candidates(items, existing, ranking_pool, first_party_all,
             similar_excluded.append(a)
             continue
         capped.append(a)
+        if a in cluster_of:
+            cluster_kept += 1
         if char:
             selected_chars.add(char)
         if breakdown["similarity"]:
             similar_kept = True
     # 上限に掛かった候補は捨てずに後ろへ回す (点数順のまま)。出典待ちの defer で
     # 前の候補が減ったときに、1 日の本数が落ちないようにするため。
-    demoted = [a for a in remaining_kw if a in set(similar_excluded) | set(character_excluded)]
+    demoted = [a for a in remaining_kw
+               if a in set(similar_excluded) | set(character_excluded) | set(cluster_excluded)]
     remaining_kw = capped + demoted
+    if cluster_of:
+        print(f"cluster candidates (navi-brain#218): {len(cluster_of)} "
+              f"kept={cluster_kept} demoted={len(cluster_excluded)} "
+              f"{sorted(set(cluster_of.values()))}")
     if similar_excluded or character_excluded:
         print(f"priority caps demoted: total={len(similar_excluded) + len(character_excluded)} "
               f"similar={len(similar_excluded)} e.g. {similar_excluded[:5]} "
@@ -325,8 +357,10 @@ def select_candidates(items, existing, ranking_pool, first_party_all,
                  if isinstance(i, dict) and isinstance(i.get("asin"), str)}
 
     def origin_for(a):
+        # まとめの予定表に当たった商品だけ cluster (予定の key) を足す (navi-brain#218)
+        cl = {"cluster": cluster_of[a]} if a in cluster_of else {}
         empty_priority = {"priority_score": None, "priority_breakdown": None,
-                          "character": None}
+                          "character": None, **cl}
         if a in first_party_set:
             return {"asin": a, "pool": "first-party", "source_keyword": None, **empty_priority}
         if a in ranking_set:
@@ -335,11 +369,11 @@ def select_candidates(items, existing, ranking_pool, first_party_all,
             return {"asin": a, "pool": "rewrite-queue", "source_keyword": None, **empty_priority}
         meta = asin_meta.get(a) or {}
         lane = meta.get("lane")
-        if lane in ("demand", "supply-random"):
+        if lane in ("demand", "supply-random", "cluster"):
             score, breakdown, character = priority.get(a, (0, {}, None))
             return {"asin": a, "pool": lane, "source_keyword": meta.get("source_keyword"),
                     "priority_score": score, "priority_breakdown": breakdown,
-                    "character": character}
+                    "character": character, **cl}
         return {"asin": a, "pool": "", "source_keyword": None, **empty_priority}
 
     return [origin_for(a) for a in remaining]
@@ -563,4 +597,5 @@ def pick_from_repo(existing, seed) -> list:
         recent_character_counts=candidate_priority.load_recent_character_counts(),
         existing_class_counts=existing_class_counts,
         has_browse_nodes=any(isinstance(i, dict) and "browse_nodes" in i for i in items),
+        cluster_cap=int(os.environ.get("CLUSTER_PICKS_PER_RUN", "3")),
     )

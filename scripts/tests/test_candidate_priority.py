@@ -21,7 +21,7 @@ def test_score_breakdown_and_character_alias_english():
     }, character_terms=TERMS, existing_class_counts={})
     assert char == "ポケモン"
     assert detail == {"asin_prefix": 2, "character": 2, "origin_demand": 2,
-                      "brand_tier": 1, "price": 1, "similarity": 0}
+                      "brand_tier": 1, "price": 1, "similarity": 0, "cluster": 0}
     assert score == 8
 
 

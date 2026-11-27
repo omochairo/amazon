@@ -83,11 +83,14 @@ jobs:
           # 全面切替にしないのは供給側のロングテール探索を止めないため。
           #   --demand-slots 20 : 60 枠中 20 枠 (残り 40 枠は従来の供給側ランダム)
           # 枠内に収めるので SearchItems の総リクエスト数は増えない。
+          #   --cluster-slots 4 : これから作るまとめページの検索語 (data/cluster_plan.yaml・navi-brain#218 C2)。
+          #                       需要枠より前に検索する。1 日 2 回 × 4 語で、60 枠の中に収める
           python scripts/fetch_amazon.py \
             --asin "$INPUT_ASINS" \
             --keyword "$INPUT_KEYWORD" \
             --keyword-sample-size 60 \
             --demand-slots "$INPUT_DEMAND_SLOTS" \
+            --cluster-slots 4 \
             --pages 3 \
             --min-new 80 \
             --out data/raw/
