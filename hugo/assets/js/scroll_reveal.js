@@ -46,6 +46,9 @@
       // navi-brain#165 T4: 冒頭の決める箱と良い点/気になる点は最初の画面に出す情報なので、
       // フェードインさせない (読み込み直後に透明のまま待たせない)。
       if (target.closest && target.closest('.decide-box, .decide-pros-cons')) return;
+      // 折りたたみ (<details>) の中はフェードインさせない。閉じている間は監視しても交差せず、
+      // 開いたときに画面の下端近くだと透明のまま残ることがある (2026-11-28)
+      if (target.closest && target.closest('details')) return;
       target.classList.add('scroll-reveal');
       observer.observe(target);
     });

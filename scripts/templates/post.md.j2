@@ -355,14 +355,24 @@
 {% if product.features %}
 ### <small>{{ product.name }}の</small>主な特徴
 
-{% for f in product.features %}- {{ f }}
+{# 2026-11-28 (ページを短くする): 先頭 3 件は出したまま (検索にも読者にも要る)、残りは折りたたむ。
+    <details> の開き・閉じタグは空行で区切った独立の HTML ブロックにし、間の箇条書きは Markdown のまま。 #}
+{% for f in product.features[:3] %}- {{ f }}
 {% endfor %}
+{% if product.features|length > 3 %}
+<details class="fold-more features-more" data-wiki-skip><summary>主な特徴をすべて見る（ほか {{ product.features|length - 3 }} 件）</summary>
+
+{% for f in product.features[3:] %}- {{ f }}
+{% endfor %}
+
+</details>
+{% endif %}
 {% endif %}
 
 {% if technical_specs %}
 ### <small>{{ product.name }}の</small>基本スペック
 
-<table class="spec-table"><tbody>
+<details class="fold-more spec-more" data-wiki-skip><summary>サイズ・重さ・素材などの表を見る</summary><table class="spec-table"><tbody>
 {%- if technical_specs.dimensions and (technical_specs.dimensions.width or technical_specs.dimensions.height or technical_specs.dimensions.depth) %}
 <tr><th scope="row">サイズ</th><td>{% if technical_specs.dimensions.width %}幅 {{ technical_specs.dimensions.width }}{% endif %}{% if technical_specs.dimensions.height %} / 高さ {{ technical_specs.dimensions.height }}{% endif %}{% if technical_specs.dimensions.depth %} / 奥行 {{ technical_specs.dimensions.depth }}{% endif %}</td></tr>
 {%- endif %}
@@ -381,7 +391,7 @@
 {%- if technical_specs.other %}
 <tr><th scope="row">その他</th><td>{% for spec in technical_specs.other %}{{ spec }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td></tr>
 {%- endif %}
-</tbody></table>
+</tbody></table></details>
 {% endif %}
 
 {% if omcha_related %}
@@ -400,7 +410,14 @@
 {% if youtube_embeds %}
 ## <small>{{ product.name }}の</small>🎬 関連動画
 
+{# 2026-11-28 (ページを短くする): 1 本目は埋め込みのまま。2 本目以降は折りたたみ、iframe ではなく
+    サムネイル画像の YouTube へのリンクにする (閉じた <details> の中の iframe もブラウザーは読み込むことがある。
+    画像は loading=lazy なら閉じている間は読み込まれない)。 #}
 {% for vid in youtube_embeds %}
+{%- if loop.index == 2 %}
+<details class="fold-more videos-more" data-wiki-skip><summary>ほかの関連動画を見る（{{ youtube_embeds|length - 1 }} 本）</summary>
+
+{% endif -%}
 {%- set _u = vid.url | default('') -%}
 {%- if 'youtube.com/watch?v=' in _u -%}
 {%- set _vid_id = _u.split('v=')[1].split('&')[0].split('#')[0] -%}
@@ -411,7 +428,13 @@
 {%- else -%}
 {%- set _vid_id = '' -%}
 {%- endif -%}
-{% if vid.embed_html %}
+{% if not loop.first %}
+{%- if _vid_id %}
+<a class="yt-thumb-link" href="https://www.youtube.com/watch?v={{ _vid_id }}" target="_blank" rel="noopener"><img src="https://i.ytimg.com/vi/{{ _vid_id }}/mqdefault.jpg" alt="" loading="lazy" decoding="async" width="320" height="180"><span>{{ (vid.title or '動画を YouTube で見る') | e }}</span></a>
+{%- elif vid.title and _u %}
+- [{{ vid.title }}]({{ _u }})
+{%- endif %}
+{% elif vid.embed_html %}
 
 {{ vid.embed_html }}
 
@@ -429,6 +452,9 @@
 {% endif %}
 
 {% endfor %}
+{% if youtube_embeds|length > 1 %}
+</details>
+{% endif %}
 {% endif %}
 
 {#- #7959 (#7955 C 改訂版): official_howto_format.build_official_howto_block()
@@ -563,10 +589,14 @@
 {% if _faq_items %}
 ## ❓ よくある質問（FAQ）
 
+{# 2026-11-28 (ページを短くする): 1 問ずつ <details> にし、1 問目だけ開いておく。答えは Markdown のまま
+    (開き・閉じタグを空行で区切った独立の HTML ブロックにする)。構造化データ (jsonld.faq) は別に出している。 #}
 {% for q in _faq_items %}
-### {{ q.question }}
+<details class="faq-item" data-wiki-skip{% if loop.first %} open{% endif %}><summary>{{ q.question | e }}</summary>
 
 {{ q.answer }}
+
+</details>
 
 {% endfor %}
 {{ buy_box('buy-faq', 'faq') }}
@@ -592,7 +622,11 @@
 
 {{ product.name }}に関する記述は、以下の{{ sources|length }}件のソースをもとにおもちゃロボが整理しました。
 
-<ul class="sources-list">{% for s in sources %}<li>{% if s.url %}<a href="{{ affiliate_url(s.url) }}" target="_blank" rel="noopener noreferrer nofollow sponsored" data-cta-slot="source">{{ s.name }}</a>{% else %}{{ s.name }}{% endif %}{% if s.tier %} <span class="source-tier source-tier--{{ s.tier }}">信頼度：{{ s.tier }}</span>{% endif %}{% if s.author %}<br><small class="source-author">執筆主体：{{ s.author }}{% if s.published_at %} / 確認日：{{ s.published_at }}{% endif %}</small>{% endif %}{% if s.notes %}<br><small class="source-notes">{{ s.notes }}</small>{% endif %}</li>{% endfor %}</ul>
+{# 2026-11-28 (ページを短くする): 先頭 3 件は出したまま、残りを折りたたむ (根拠は信頼を支えるので丸ごとは隠さない)。 #}
+<ul class="sources-list">{% for s in sources[:3] %}<li>{% if s.url %}<a href="{{ affiliate_url(s.url) }}" target="_blank" rel="noopener noreferrer nofollow sponsored" data-cta-slot="source">{{ s.name }}</a>{% else %}{{ s.name }}{% endif %}{% if s.tier %} <span class="source-tier source-tier--{{ s.tier }}">信頼度：{{ s.tier }}</span>{% endif %}{% if s.author %}<br><small class="source-author">執筆主体：{{ s.author }}{% if s.published_at %} / 確認日：{{ s.published_at }}{% endif %}</small>{% endif %}{% if s.notes %}<br><small class="source-notes">{{ s.notes }}</small>{% endif %}</li>{% endfor %}</ul>
+{% if sources|length > 3 %}
+<details class="fold-more sources-more" data-wiki-skip><summary>ほかの参考ソースを見る（{{ sources|length - 3 }} 件）</summary><ul class="sources-list">{% for s in sources[3:] %}<li>{% if s.url %}<a href="{{ affiliate_url(s.url) }}" target="_blank" rel="noopener noreferrer nofollow sponsored" data-cta-slot="source">{{ s.name }}</a>{% else %}{{ s.name }}{% endif %}{% if s.tier %} <span class="source-tier source-tier--{{ s.tier }}">信頼度：{{ s.tier }}</span>{% endif %}{% if s.author %}<br><small class="source-author">執筆主体：{{ s.author }}{% if s.published_at %} / 確認日：{{ s.published_at }}{% endif %}</small>{% endif %}{% if s.notes %}<br><small class="source-notes">{{ s.notes }}</small>{% endif %}</li>{% endfor %}</ul></details>
+{% endif %}
 
 {% if claims %}
 <details class="claims-details"><summary><strong>検証済みの主要な主張（{{ claims|length }}件）を見る</strong></summary><ul>{% for cl in claims %}<li><strong>{{ cl.claim }}</strong> <small class="claim-meta">（{{ cl.category }} / 確度：{{ cl.confidence }}{% if cl.cross_checked %} / <span class="claim-cross-check">2系統以上で確認済み</span>{% endif %}）</small>{% if cl.notes %}<br><small class="claim-notes">{{ cl.notes }}</small>{% endif %}</li>{% endfor %}</ul></details>
