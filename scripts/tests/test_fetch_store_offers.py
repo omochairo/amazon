@@ -130,6 +130,7 @@ class ApplyTest(unittest.TestCase):
 
 class PickTest(unittest.TestCase):
     def test_new_and_jan_changed_first_then_oldest_skip_recent_and_matched(self):
+        # targets の並びは記事の新しい順 (collect_targets が並べる)
         targets = {"A": "1", "B": "2", "C": "3", "D": "4", "E": "5"}
         old = (NOW - timedelta(days=30)).isoformat()
         older = (NOW - timedelta(days=40)).isoformat()
@@ -159,6 +160,23 @@ class PickTest(unittest.TestCase):
                     json.dumps({"item": {"jan_code": jan}}), encoding="utf-8")
             (arts / "x-B0AAAAAAAA.seo.json").write_text("{}", encoding="utf-8")
             self.assertEqual(fso.collect_targets(arts, per), {"B0AAAAAAAA": "4900000000001"})
+
+    def test_collect_targets_newest_article_first(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = pathlib.Path(d)
+            arts, per = root / "articles", root / "per_asin"
+            arts.mkdir()
+            for asin, date in (("B0AAAAAAAA", "2026-09-01"), ("B0BBBBBBBB", "2026-11-20"),
+                               ("B0CCCCCCCC", "2026-10-01"), ("B0DDDDDDDD", "Nov 2026")):
+                (arts / f"x-{asin}.json").write_text(json.dumps({"date": date}), encoding="utf-8")
+                (per / asin).mkdir(parents=True)
+                (per / asin / "amazon.json").write_text(
+                    json.dumps({"item": {"jan_code": "4900000000001"}}), encoding="utf-8")
+            targets = fso.collect_targets(arts, per)
+            self.assertEqual(list(targets), ["B0BBBBBBBB", "B0CCCCCCCC", "B0AAAAAAAA"])
+            # まだ確かめていないものは、この並び (記事の新しい順) のまま取る
+            self.assertEqual(fso.pick({}, "toysrus_rakuten", targets, NOW, 2, fso.MIN_AGE_DAYS),
+                             ["B0BBBBBBBB", "B0CCCCCCCC"])
 
 
 class RunTest(unittest.TestCase):
