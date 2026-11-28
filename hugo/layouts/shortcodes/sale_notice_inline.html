@@ -1,34 +1,37 @@
-{{- /* #9449 第 2 段: 商品ページの Amazon の購入ボタンの直上に出す、セール期間の 1 行。
-       post.md.j2 の Amazon の価格カードと、購入ボタンの箱 (冒頭・まとめの後) から呼ぶ。
-       Usage: {{< sale_notice_inline url="<この商品の Amazon の URL>" slot="price-card" variant="card" >}}
+{{- /* #9449 第 2 段: 商品ページの購入ボタンの直上に出す、そのモールのセール期間の 1 行。
+       post.md.j2 の価格カード (Amazon・楽天・Yahoo) と、購入ボタンの箱 (冒頭・まとめの後) から呼ぶ。
+       Usage: {{< sale_notice_inline shop="amazon" url="<この商品のそのモールの URL>" slot="price-card" variant="card" >}}
 
        - 文言は要素の中に書かず data 属性に置き、sale_notice.js (ヘッダーの告知帯と
          同じもの) が期間中だけ入れる。本文に直接書くと、期間外でも検索インデックスや
          要約 (.Plain) に混ざる
-       - Amazon で買えない商品 (価格なし・在庫切れ・取り扱い終了) に出さない判定は、
-         商品データを持っている post.md.j2 側でやる
+       - そのモールで買えない商品 (価格なし・在庫切れ・取り扱い終了・検索リンク・同一商品と
+         未確認) に出さない判定は、商品データを持っている post.md.j2 側でやる
        - 言ってよいのは「セール期間中である」ことまで。この商品が値引きされているとは
          書かない (#6285)
-       - 1 行そのものを「この商品の Amazon ページ」へのリンクにする (2026-11-28 K 依頼:
-         スマホで購入ボタンから離れていて押せないと意味が薄い)。セール会場へは飛ばさない:
-         購入ボタンの直上で、読者が知りたいのは「この商品は今いくらか」なので。
-         セール会場への送客はヘッダーの帯が受け持つ
-       - 置き場所は Amazon のボタンの直上だけ。スマホでは価格カードが縦 1 列なので、
-         カードの並びの後ろに置くと Yahoo のカードの下になり Amazon から遠い
+       - 1 行そのものを「この商品のそのモールのページ」(隣のボタンと同じ URL) へのリンクにする
+         (2026-11-28 K 依頼: スマホで購入ボタンから離れていて押せないと意味が薄い)。
+         セール会場へは飛ばさない: 購入ボタンの直上で、読者が知りたいのは「この商品は今
+         いくらか」なので。セール会場への送客はヘッダーの帯が受け持つ
+       - 置き場所はそのモールのボタンの直上だけ。スマホでは価格カードが縦 1 列なので、
+         カードの並びの後ろに置くと Amazon・楽天のボタンから遠い
+       - 出すのは shop が一致するセールだけ (楽天のカードに Amazon のセールを出さない)
        - クリックは affiliate_click (data-cta-slot = <slot>-sale) と sale_notice_click
          (data-sale-slot = <slot>) の両方に入る。ヘッダーの帯と同じ流儀
        - 表示はこの要素の直後のインラインのスクリプトで決める。DOMContentLoaded を待つと
          描画のあとで 1 行が開いて、その下 (購入ボタン) がずれる (CLS)。sale_notice.js は
          ヘッダーで読み込み済み (どちらも sale_events_live.html が空でないときだけ出る)
-       - Markdown の HTML ブロックの途中に入るので、改行を出さない
-       - Amazon の価格カード・ボタンの近くなので、Amazon のセール (shop: amazon) だけ出す */ -}}
+       - Markdown の HTML ブロックの途中に入るので、改行を出さない */ -}}
+{{- $shop := .Get "shop" | default "amazon" -}}
 {{- $url := .Get "url" -}}
 {{- $slot := .Get "slot" | default "price-card" -}}
 {{- $variant := .Get "variant" | default "card" -}}
-{{- $live := where (partialCached "sale_events_live.html" .Page) "shop" "amazon" -}}
-{{- if and $url $live -}}
+{{- /* 補足の店名は隣のボタン (「楽天で見る」「Yahoo!で見る」) と同じ短い呼び名。長いとスマホで 2 行に折れる */ -}}
+{{- $label := index (dict "amazon" "Amazon" "rakuten" "楽天" "yahoo" "Yahoo!") $shop -}}
+{{- $live := where (partialCached "sale_events_live.html" .Page) "shop" $shop -}}
+{{- if and $url $label $live -}}
 {{- range $live -}}
-<a class="sale-notice-inline sale-notice-inline--{{ $variant }}" href="{{ $url }}" target="_blank" rel="noopener nofollow sponsored" data-cta-slot="{{ $slot }}-sale" data-sale-notice data-sale-notice-short data-sale-slot="{{ $slot }}" data-sale-id="{{ .id }}" data-phases="{{ .phases | jsonify }}" data-sale-notice-sub="対象か・今の価格を Amazon で確かめる" hidden><strong data-sale-notice-main></strong><span class="sale-notice-inline-sub" data-sale-notice-sub-target></span></a>
+<a class="sale-notice-inline sale-notice-inline--{{ $variant }} sale-notice-inline--{{ $shop }}" href="{{ $url }}" target="_blank" rel="noopener nofollow sponsored" data-cta-slot="{{ $slot }}-sale" data-sale-notice data-sale-notice-short data-sale-slot="{{ $slot }}" data-sale-shop="{{ $shop }}" data-sale-id="{{ .id }}" data-phases="{{ .phases | jsonify }}" data-sale-notice-sub="対象か・今の価格を {{ $label }} で確かめる" hidden><strong data-sale-notice-main></strong><span class="sale-notice-inline-sub" data-sale-notice-sub-target></span></a>
 {{- end -}}
 <script>window.OmochaSaleNotice&&window.OmochaSaleNotice.apply(document,Date.now())</script>
 {{- end -}}
