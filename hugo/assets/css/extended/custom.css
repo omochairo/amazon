@@ -8380,13 +8380,22 @@ a.sale-notice-main::after {
 }
 .post-content .price-compare-anchor { scroll-margin-top: 12px; }
 
-/* [PR] の断り書きは 1 行に縮める (景表法のため最初のアフィリエイトリンクより前に残す) */
+/* [PR] の断り書き (景表法のため最初のアフィリエイトリンクより前に残す)。
+   2026-11-28: 補足文を外して [PR] だけにしたので、枠と背景を消して右寄せの 1 語にする。
+   文字は小さくしすぎず、色は一覧ページ (.page-pr-notice) と同じ AA を満たす赤にする。 */
 .post-content .auto-gen-notice {
-  padding: 4px 10px;
-  margin: 0 0 10px;
-  font-size: 0.74rem;
+  justify-content: flex-start;
+  padding: 0;
+  margin: 0 0 6px;
+  background: none;
+  border: 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
   align-items: center;
 }
+.post-content .auto-gen-notice .pr-badge { color: #b91c1c; }
+[data-theme="dark"] .post-content .auto-gen-notice { background: none; border: 0; }
+[data-theme="dark"] .post-content .auto-gen-notice .pr-badge { color: #fca5a5; }
 @media (max-width: 720px) {
   .post-content .auto-gen-notice { flex-wrap: nowrap; }
 }
