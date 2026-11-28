@@ -8101,25 +8101,58 @@ a.sale-notice-main::after {
   content: " ›";
 }
 
-/* #9449 第 2 段: 商品ページの価格カード下の 1 行 (shortcodes/sale_notice_inline.html) */
-.sale-notice-inline {
+/* #9449 第 2 段: 商品ページの Amazon のボタン直上の 1 行 (shortcodes/sale_notice_inline.html)。
+   押すとこの商品の Amazon ページへ行く。ボタンと同じ幅の札にして、上の 1 行目 (セール名と期限) と
+   下の 1 行目 (確かめる ›) で「押せる」ことを示す */
+.post-content a.sale-notice-inline {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
-  margin: 0.75rem 0;
-  padding: 0.55rem 0.85rem;
-  border-left: 4px solid #dc2626;
-  border-radius: var(--radius-sm);
+  align-items: center;
+  gap: 0.05rem;
+  margin: 0 0 6px;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid #fca5a5;
+  border-radius: 10px;
   background: #fef2f2;
   color: #991b1b;
-  font-size: 0.9rem;
-  line-height: 1.5;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  text-align: center;
+  text-decoration: none;
 }
-.sale-notice-inline[hidden] {
+/* display: flex が hidden 属性を上書きするので明示する (期間外・JS 無しは出さない) */
+.post-content a.sale-notice-inline[hidden] {
   display: none;
 }
-.sale-notice-inline small {
+.post-content a.sale-notice-inline strong {
+  font-weight: 800;
+  /* スマホ幅で 2 行になるとき、文節の切れ目で折る (sale-notice-main と同じ) */
+  word-break: auto-phrase;
+  text-wrap: balance;
+}
+.post-content a.sale-notice-inline .sale-notice-inline-sub {
   font-size: 0.75rem;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+.post-content a.sale-notice-inline .sale-notice-inline-sub::after {
+  content: "\00a0›";
+}
+/* 価格カードの中: カードの下端のボタンとの間を詰めない (カードの縦の並びに合わせる) */
+.post-content .price-card a.sale-notice-inline {
+  /* 下の「Amazonで見る」(.price-card-cta は width: 90%) と幅をそろえる */
+  margin: 8px auto 6px;
+  width: 90%;
+  box-sizing: border-box;
+}
+/* 購入ボタンの箱の中: 箱は gap で間をあけるので外側の余白は要らない */
+.post-content .buy-box a.sale-notice-inline {
+  margin: 0;
+}
+[data-theme="dark"] .post-content a.sale-notice-inline {
+  background: #450a0a;
+  border-color: #991b1b;
+  color: #fecaca;
 }
 
 /* #9781: 前後記事ナビでリンクが片方だけのとき (先頭/末尾の記事)、PaperMod の

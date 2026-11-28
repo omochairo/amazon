@@ -278,5 +278,51 @@ class BuyBoxRenderTest(unittest.TestCase):
         self.assertIn("Amazonで検索 →", md)
 
 
+def _sale_slots(md: str) -> list[str]:
+    return re.findall(r'\{\{< sale_notice_inline url="[^"]+" slot="([\w-]+)" variant="\w+" >\}\}', md)
+
+
+class SaleNoticeInlineRenderTest(unittest.TestCase):
+    """#9449: セール期間の 1 行は Amazon のボタンの直上に出る (スマホで押せる位置)。
+
+    置くのは Amazon の価格カードの中と、主ボタンが Amazon の購入ボタンの箱の冒頭・まとめの後だけ。
+    行き先はこの商品の Amazon ページ (ボタンと同じ URL)。Amazon で買えない商品には出さない。
+    """
+
+    def test_placed_right_above_amazon_buttons(self):
+        md = _render(_data(_prices(AMZ, dict(RKT, price=3000), None)))
+        # 中盤と FAQ の後の箱には出さない (出しすぎ)
+        self.assertEqual(_sale_slots(md), ["buy-top", "price-card", "buy-closing"])
+        # 行き先はこの商品の Amazon ページ (セール会場ではない)
+        for url in re.findall(r'sale_notice_inline url="([^"]+)"', md):
+            self.assertEqual(url, AMZ["url"])
+        # すぐ後ろが Amazon のボタン (間に何も挟まない)
+        self.assertIn('slot="buy-top" variant="box" >}}<a class="buy-box-primary buy-box-primary--amazon', md)
+        self.assertIn('slot="buy-closing" variant="box" >}}<a class="buy-box-primary buy-box-primary--amazon', md)
+        self.assertIn(f'slot="price-card" variant="card" >}}}}<a href="{AMZ["url"]}"', md)
+        card = md.index('slot="price-card"')
+        self.assertLess(md.index("Amazon</div>"), card)
+        self.assertLess(card, md.index("price-card-cta--amazon"))
+        # カードの並びの後ろには出さない (スマホでは Yahoo のカードの下になる)
+        self.assertNotIn("{{< sale_notice_inline >}}", md)
+
+    def test_box_only_when_primary_is_amazon(self):
+        # 楽天が最安で主ボタン → 箱には出さず、Amazon の価格カードの中だけ
+        md = _render(_data(_prices(AMZ, RKT, YHO)))
+        self.assertEqual(_sale_slots(md), ["price-card"])
+
+    def test_not_shown_when_amazon_cannot_be_bought(self):
+        cases = {
+            "在庫切れ": dict(AMZ, availability="一時的に在庫切れ; 入荷時期は未定です。"),
+            "価格なし": dict(AMZ, price=0),
+            "取り扱い終了": {"price": 0, "url": "", "discontinued": True,
+                         "search_url": "https://www.amazon.co.jp/s?k=x&tag=chk01-22"},
+        }
+        for name, amz in cases.items():
+            with self.subTest(name):
+                md = _render(_data(_prices(amz, RKT, YHO)))
+                self.assertEqual(_sale_slots(md), [])
+
+
 if __name__ == "__main__":
     unittest.main()
