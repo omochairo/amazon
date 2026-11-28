@@ -30,7 +30,8 @@ OUTAGE_MIN_CALLS = 3
 
 # 404 が「商品ページが消えた」という正常な答えになる API (#12305 refresh_shop_prices.py)。
 # 確かめ直しは古い順に回すので、消えた商品が多い日もある。これを故障と数えない
-NOT_FOUND_IS_ANSWER = frozenset({"rakuten_ichiba_refresh", "rakuten_books_refresh"})
+# トイザらスの店に無い商品も 404 で返る (fetch_store_offers.py)
+NOT_FOUND_IS_ANSWER = frozenset({"rakuten_ichiba_refresh", "rakuten_books_refresh", "rakuten_store_offer"})
 
 
 def _is_answer(api: str, status: int | None) -> bool:

@@ -180,6 +180,30 @@ jobs:
           VALUECOMMERCE_SID: ${{ secrets.VALUECOMMERCE_SID }}
           VALUECOMMERCE_PID: ${{ secrets.VALUECOMMERCE_PID }}
 
+      # トイザらスの楽天店・Yahoo 店に同じ JAN の商品があるかを確かめ、在庫表に店名の行で出す。
+      # 上の確かめ直しと同じキーを使うので、その後に順に動かす (並べると楽天の 1 秒 1 回を超える)。
+      # 10 日で一巡 (1 店 約 170 回/日・楽天 約 4 分・Yahoo 約 7 分)。1 日 1 回だけ動く
+      # (data/raw/store_offers.json の last_run_jst)。書き込むかは上と同じ SHOP_REFRESH_MODE で決める。
+      # それ以外は 1 店 20 件を呼ぶだけ (見つかる割合の確認用。何も書かない)。
+      - name: Fetch store offers (トイザらスの楽天店・Yahoo 店)
+        if: ${{ always() }}
+        timeout-minutes: 15
+        continue-on-error: true
+        run: |
+          if [ "${SHOP_REFRESH_MODE}" = "write" ]; then
+            python scripts/fetch_store_offers.py --write --max-minutes 12
+          else
+            python scripts/fetch_store_offers.py --limit 20 --max-minutes 3
+          fi
+        env:
+          SHOP_REFRESH_MODE: ${{ vars.SHOP_REFRESH_MODE }}
+          RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
+          RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
+          RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}
+          YAHOO_CLIENT_ID: ${{ secrets.YAHOO_CLIENT_ID }}
+          VALUECOMMERCE_SID: ${{ secrets.VALUECOMMERCE_SID }}
+          VALUECOMMERCE_PID: ${{ secrets.VALUECOMMERCE_PID }}
+
       - name: Fetch Reviews (楽天/Yahoo レビュー本文)
         if: ${{ always() }}
         run: python scripts/fetch_reviews.py
