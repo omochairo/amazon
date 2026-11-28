@@ -1962,9 +1962,31 @@ main.main:has(.card-grid) {
   }
 }
 
+/* 幅の狭いスマホでは 1 列にし、カードを「左に小さい画像・右に題名」の横長にする
+   (2026-11-28: 縦長のカードを 1 列に並べると、この節だけで約 1,000px あった。
+   折りたたむと押されなくなるので、見せたまま高さを詰める) */
 @media (max-width: 420px) {
   .post-content .omcha-card-grid {
     grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .post-content .omcha-card {
+    flex-direction: row;
+    align-items: center;
+  }
+  .post-content .omcha-card-thumb {
+    flex: 0 0 104px;
+    width: 104px;
+    aspect-ratio: 4 / 3;
+  }
+  .post-content .omcha-card-thumb--placeholder {
+    font-size: 1.6rem;
+  }
+  .post-content .omcha-card-title {
+    padding: 8px 12px;
+    font-size: 0.84rem;
+    -webkit-line-clamp: 3;
+    min-height: 0;
   }
 }
 
@@ -8063,6 +8085,13 @@ body:has(#compare-floating-bar) .favorites-wrapper {
 .sale-notice[hidden] {
   display: none;
 }
+/* 商品ページのスマホ幅では帯を出さない (冒頭の購入ボタンを最初の画面に入れるため)。
+   セールは各モールのボタン直上の札 (.sale-notice-inline) で伝える。partials/sale_notice.html 参照 */
+@media (max-width: 720px) {
+  .sale-notice.sale-notice--on-product {
+    display: none;
+  }
+}
 .sale-notice-main {
   font-weight: 700;
 }
@@ -8730,3 +8759,123 @@ a.sale-notice-main::after {
 .games-oshogatsu-list dd p { margin: .15rem 0; }
 .games-where { margin-left: .5rem; padding: .05rem .45rem; border-radius: 999px; font-size: .72rem; font-weight: 700; background: var(--code-bg); color: var(--secondary); }
 .games-osho-items { font-size: .85rem; }
+
+/* ========== 2026-11-28 商品ページを短くする折りたたみ (scripts/templates/post.md.j2) ==========
+   .fold-more   … 主な特徴の 4 件目以降・基本スペックの表・2 本目以降の動画・4 件目以降の参考ソース
+   .faq-item    … FAQ を 1 問ずつ (1 問目だけ開いておく)
+   見出し (H2・H3) は外に出したままで、中身だけを畳む。 */
+.post-content details.fold-more {
+  margin: 10px 0 18px;
+}
+.post-content details.fold-more > summary,
+.post-content details.faq-item > summary {
+  cursor: pointer;
+  list-style: none;
+}
+.post-content details.fold-more > summary::-webkit-details-marker,
+.post-content details.faq-item > summary::-webkit-details-marker {
+  display: none;
+}
+/* 「続きを見る」は押せる行に見せる (指で押せる高さ・矢印で開閉を示す) */
+.post-content details.fold-more > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 6px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  background: #f9fafb;
+  color: #1d4ed8;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+.post-content details.fold-more > summary::after {
+  content: "▾";
+}
+.post-content details.fold-more[open] > summary::after {
+  content: "▴";
+}
+.post-content details.fold-more[open] > summary {
+  margin-bottom: 10px;
+}
+[data-theme="dark"] .post-content details.fold-more > summary {
+  background: #1f2937;
+  border-color: #4b5563;
+  color: #93c5fd;
+}
+
+/* FAQ: 質問の行を押すと答えが開く */
+.post-content details.faq-item {
+  margin: 0 0 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: var(--entry, #fff);
+}
+.post-content details.faq-item > summary {
+  position: relative;
+  padding: 12px 40px 12px 14px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.post-content details.faq-item > summary::before {
+  content: "Q. ";
+  color: #ea580c;
+}
+.post-content details.faq-item > summary::after {
+  content: "＋";
+  position: absolute;
+  right: 14px;
+  top: 12px;
+  color: #6b7280;
+}
+.post-content details.faq-item[open] > summary::after {
+  content: "−";
+}
+.post-content details.faq-item > :not(summary) {
+  margin: 0;
+  padding: 0 14px 12px;
+}
+[data-theme="dark"] .post-content details.faq-item {
+  border-color: #374151;
+}
+
+/* 折りたたんだ 2 本目以降の動画: サムネイル画像と題名の YouTube へのリンク */
+.post-content a.yt-thumb-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+}
+.post-content a.yt-thumb-link img {
+  flex: 0 0 120px;
+  width: 120px;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 6px;
+  margin: 0;
+}
+.post-content a.yt-thumb-link span {
+  font-size: 0.84rem;
+  line-height: 1.5;
+  text-decoration: underline;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 2026-11-28: スマホの最初の画面に冒頭の購入ボタンを入れるため、記事の見出しまわりの余白を詰める
+   (題・更新日の行と本文の間が 30px、題の上が 24px あった。追従バーが画面の下 68px を覆うので、
+   購入ボタンの下に余裕を残したい) */
+@media (max-width: 720px) {
+  .post-single .post-header {
+    margin-top: 12px;
+    margin-bottom: 12px;
+  }
+  .post-single .post-content {
+    margin-top: 12px;
+  }
+}

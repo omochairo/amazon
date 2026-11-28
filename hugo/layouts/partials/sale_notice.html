@@ -20,12 +20,20 @@
        - /price/ が空 (price_dashboard に 1 件も無い) のビルドではリンクを出さない
        - /price/ は Amazon の価格観測なので、リンクは Amazon のセール (shop: amazon) の
          帯にだけ付ける。楽天・Yahoo のセールは帯の文言だけ
-       - クリックは sale_notice.js が sale_notice_click として GA4 に送る */ -}}
+       - クリックは sale_notice.js が sale_notice_click として GA4 に送る
+       - 商品ページ (onProduct) の帯は、スマホ幅では CSS で出さない (2026-11-28 K 依頼)。
+         スマホでは帯 2 本で約 160px を使い、冒頭の購入ボタンが最初の画面から押し出されていた。
+         商品ページでは各モールのボタン直上にそのモールのセールの札 (shortcodes/
+         sale_notice_inline.html) が出るので、帯が無くてもセールは伝わる。帯のリンクは
+         直近ほぼ押されていなかった。一覧・特集・トップとパソコン幅は今のまま。
+         JS (sale_notice.js) は商品ページの札にも要るので、帯を隠すページでも読み込む
+       - 呼び出し: partialCached "sale_notice.html" (dict "onProduct" <bool>) <キャッシュの区別> */ -}}
+{{- $onProduct := .onProduct -}}
 {{- $live := partialCached "sale_events_live.html" . -}}
 {{- if $live }}
 {{- $hasPriceItems := and site.Data.price_dashboard site.Data.price_dashboard.items }}
 {{- range $live }}
-<div class="sale-notice sale-notice--{{ .shop }}" role="note" data-sale-notice data-sale-slot="header-band" data-sale-id="{{ .id }}" data-sale-shop="{{ .shop }}" data-phases="{{ .phases | jsonify }}" hidden>
+<div class="sale-notice sale-notice--{{ .shop }}{{ if $onProduct }} sale-notice--on-product{{ end }}" role="note" data-sale-notice data-sale-slot="header-band" data-sale-id="{{ .id }}" data-sale-shop="{{ .shop }}" data-phases="{{ .phases | jsonify }}" hidden>
   {{- with partial "sale_event_url.html" . }}
   <a class="sale-notice-main" data-sale-notice-main data-cta-slot="sale-notice" href="{{ . }}" rel="sponsored nofollow noopener" target="_blank"></a>
   {{- else }}

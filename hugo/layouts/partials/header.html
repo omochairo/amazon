@@ -118,5 +118,7 @@
     {{- /* category_dropdown.html の出力は site.* のみ依存でページ非依存のため全ページ共通キャッシュが安全。 */}}
     {{- partialCached "category_dropdown.html" . }}
 </header>
-{{- /* #9449 セール期間の告知帯。出力は site.Data のみ依存でページ非依存。 */}}
-{{- partialCached "sale_notice.html" . }}
+{{- /* #9449 セール期間の告知帯。出力は site.Data と「商品ページかどうか」だけに依存するので、
+       その 2 通りでキャッシュする (商品ページの帯はスマホ幅で出さない。sale_notice.html 参照)。 */}}
+{{- $saleNoticeOnProduct := and .IsPage (eq .Section "posts") }}
+{{- partialCached "sale_notice.html" (dict "onProduct" $saleNoticeOnProduct) (cond $saleNoticeOnProduct "product" "other") }}
