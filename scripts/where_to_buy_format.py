@@ -478,6 +478,74 @@ def build_rows(
 
 
 # ---------------------------------------------------------------------------
+# 店名の行 (トイザらスの楽天店・Yahoo 店。fetch_store_offers.py が確かめたもの)
+# ---------------------------------------------------------------------------
+
+# 店名で探しに来る人がいる店だけ。key は data/raw/store_offers.json の中の名前。
+_STORE_ROWS = (
+    ("toysrus_rakuten", "トイザらス（楽天市場店）", "item.rakuten.co.jp/toysrus/"),
+    ("toysrus_yahoo", "トイザらス（Yahoo!ショッピング店）", "store.shopping.yahoo.co.jp/toysrus-babierus/"),
+)
+# 確かめてからこの日数を超えた記録は出さない (#12305 の K の決定 A と同じ 14 日)
+STORE_OFFER_MAX_AGE_DAYS = 14
+
+
+def _unwrapped_url(url: str) -> str:
+    """楽天 hb.afl の pc=・VC の vc_url= の包みを外した URL (比較用)。"""
+    parsed = urllib.parse.urlparse(url or "")
+    key = {"hb.afl.rakuten.co.jp": "pc", "ck.jp.ap.valuecommerce.com": "vc_url"}.get(parsed.netloc.lower())
+    if key:
+        inner = urllib.parse.parse_qs(parsed.query).get(key)
+        if inner:
+            return inner[0]
+    return url or ""
+
+
+def build_store_rows(
+    offers: dict[str, dict] | None,
+    existing_rows: list[dict[str, Any]],
+    *,
+    now: Optional[datetime] = None,
+) -> list[dict[str, Any]]:
+    """在庫表に足す店名の行。見つかっていて、確かめてから 14 日以内のものだけ。
+
+    見つからなかった店は行を出さない (「取扱なし」とは書かない。JAN を商品ページに
+    書いていない出品は見つけられないため)。上の楽天・Yahoo の行がすでにその店の出品なら
+    同じ店の行を重ねない。
+    """
+    if not offers:
+        return []
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    shown = [_unwrapped_url(r.get("url") or "") for r in existing_rows]
+    rows: list[dict[str, Any]] = []
+    for key, label, url_part in _STORE_ROWS:
+        rec = offers.get(key) or {}
+        if rec.get("status") != "found" or not rec.get("url"):
+            continue
+        try:
+            if int(rec.get("price") or 0) <= 0:
+                continue
+        except (TypeError, ValueError):
+            continue
+        checked = _parse_iso(rec.get("checked_at"))
+        if checked is None or now - checked > timedelta(days=STORE_OFFER_MAX_AGE_DAYS):
+            continue
+        if any(url_part in u for u in shown):
+            continue
+        in_stock = rec.get("availability") != "outofstock"
+        rows.append({
+            "site": label,
+            "price": rec.get("price"),
+            "state_label": "在庫あり" if in_stock else "在庫切れ",
+            "observed_at_label": to_jst_datetime(rec.get("checked_at")) or "—",
+            "url": rec["url"],
+        })
+    return rows
+
+
+# ---------------------------------------------------------------------------
 # 価格推移 (過去30日最安値)
 # ---------------------------------------------------------------------------
 
@@ -751,8 +819,12 @@ def build_stock_block(
     asin: str = "",
     now: Optional[datetime] = None,
     sticky_meta: dict[str, Any] | None = None,
+    store_offers: dict[str, dict] | None = None,
 ) -> dict[str, Any]:
     """テンプレート ``stock_where_to_buy`` コンテキストを組み立てる。
+
+    ``store_offers`` は data/raw/store_offers.json のこの ASIN の記録。省略時は
+    店名の行を足さない (従来どおり)。
 
     ``price_watch_root`` (日次レーン) と ``price_history_root`` (週次レーン) は
     両方渡してよく、``build_price_history_note`` 側でマージされる。片方だけを
@@ -761,9 +833,11 @@ def build_stock_block(
     ``sticky_meta`` は ``resolve_effective_observation`` の戻り値をそのまま
     渡す (#7953)。省略時は従来どおり (sticky でない) 扱い。
     """
+    rows = build_rows(stock_obs, purchase_options, sticky_meta=sticky_meta)
+    rows += build_store_rows(store_offers, rows, now=now)
     block: dict[str, Any] = {
         "conclusion": build_conclusion(product_name, stock_obs, purchase_options, sticky_meta=sticky_meta),
-        "rows": build_rows(stock_obs, purchase_options, sticky_meta=sticky_meta),
+        "rows": rows,
         "price_history_note": None,
         "low_stock_note": build_low_stock_note(stock_obs),
         "offline_note": build_offline_note(product_name, purchase_options),

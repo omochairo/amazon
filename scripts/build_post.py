@@ -3377,6 +3377,16 @@ _descriptor_hits_title = market_prices._descriptor_hits_title
 _load_matched_index = market_prices.load_matched_index
 
 
+def _load_store_offers(path: pathlib.Path) -> dict:
+    """data/raw/store_offers.json の {ASIN: {店: 記録}}。無い・壊れているときは空。"""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    items = data.get("items") if isinstance(data, dict) else None
+    return items if isinstance(items, dict) else {}
+
+
 def _load_query_intent_map(path: pathlib.Path) -> dict[str, str]:
     """data/analytics/query_intent.json (A-7, #1980) から
     ``/products/<asin>/`` page path → 主要検索意図 ("commercial"/"informational") の
@@ -4559,6 +4569,8 @@ def main() -> None:
     price_watch_latest_path = price_watch_history_root.parent / "latest.json"
     rakuten_matched_index = _load_matched_index(raw_root / "rakuten_matched.json")
     yahoo_matched_index = _load_matched_index(raw_root / "yahoo_matched.json")
+    # トイザらスの楽天店・Yahoo 店の出品 (fetch_store_offers.py)。在庫表に店名の行として出す
+    store_offers_index = _load_store_offers(raw_root / "store_offers.json")
     # #12305: 確認日が古い楽天・Yahoo の価格を隠す境目 (確かめ直しが一巡するまでは None)
     shop_stale_cutoff = market_prices.stale_cutoff(raw_root)
     print(f"market_prices: shop stale cutoff = {shop_stale_cutoff.isoformat() if shop_stale_cutoff else 'off'}")
@@ -4968,6 +4980,7 @@ def main() -> None:
                     price_history_root=price_history_root,
                     price_watch_root=price_watch_history_root, asin=page_asin,
                     sticky_meta=sticky_meta,
+                    store_offers=store_offers_index.get(page_asin),
                 )
                 stock_title_override = where_to_buy_format.build_title(product_name, purchase_options)
                 stock_title_applied += 1
