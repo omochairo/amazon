@@ -36,6 +36,7 @@ import logging
 import math
 import os
 import pathlib
+import re
 import sys
 import time
 import urllib.parse
@@ -165,12 +166,20 @@ def apply_result(prev: dict | None, outcome: str, item: dict | None, jan: str, n
 
 # --- 対象 --------------------------------------------------------------------------
 
+_ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
 def collect_targets(articles_dir: pathlib.Path, per_asin_root: pathlib.Path,
                     rollout_date: str = ROLLOUT_DATE) -> dict:
-    """{ASIN: JAN}。記事の date がロールアウト日以降で JAN のあるもの。"""
-    out = {}
+    """{ASIN: JAN}。記事の date がロールアウト日以降で JAN のあるもの。
+
+    記事の date の新しい順に並べる (pick はまだ確かめていないものをこの順に取る)。
+    店名で探される新作のキャラクター玩具を先に確かめるため。ASIN 順だと古い定番品から
+    始まり、書き込みの初日も試し運転の 20 件も新作に届かない (2026-11-28 の試し運転)。
+    """
+    found = []
     if not articles_dir.exists():
-        return out
+        return {}
     for p in articles_dir.glob("*.json"):
         if p.stem.endswith(fcs._SIDECAR_SUFFIXES):
             continue
@@ -181,31 +190,38 @@ def collect_targets(articles_dir: pathlib.Path, per_asin_root: pathlib.Path,
             art = json.loads(p.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        if not isinstance(art, dict) or str(art.get("date") or "")[:10] < rollout_date:
+        date = str((art.get("date") if isinstance(art, dict) else "") or "")[:10]
+        # 形の崩れた date (文字列の比較でロールアウト日より後に見え、先頭に並ぶ) は外す
+        if not _ISO_DATE.match(date) or date < rollout_date:
             continue
         asin = m.group(1)
         jan = fcs._load_jan_from_per_asin(per_asin_root, asin)
         if jan:
-            out[asin] = jan
-    return out
+            found.append((date, asin, jan))
+    found.sort(key=lambda t: (t[0], t[1]), reverse=True)
+    return {asin: jan for _d, asin, jan in found}
 
 
 def pick(records: dict, store_key: str, targets: dict, now: datetime,
          limit: int, min_age_days: float) -> list:
-    """確かめる ASIN を limit 件。記録が無い・JAN が変わったものが先、あとは古い順。"""
+    """確かめる ASIN を limit 件。
+
+    記録が無い・JAN が変わったものが先 (targets の並び＝記事の新しい順)、
+    あとは確かめた日の古い順。
+    """
     cutoff = now - timedelta(days=min_age_days)
-    cands = []
+    new, old = [], []
     for asin, jan in targets.items():
         rec = (records.get(asin) or {}).get(store_key)
         if not rec or rec.get("jan") != jan:
-            cands.append(("", asin))
+            new.append(asin)
             continue
         ts = fcs._parse_iso(rec.get("checked_at") or "")
         if ts is not None and ts > cutoff:
             continue
-        cands.append((rec.get("checked_at") or "", asin))
-    cands.sort()
-    return [a for _ts, a in cands[:limit]]
+        old.append((rec.get("checked_at") or "", asin))
+    old.sort()
+    return (new + [a for _ts, a in old])[:limit]
 
 
 # --- 実行 --------------------------------------------------------------------------
